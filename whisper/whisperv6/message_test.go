@@ -36,7 +36,7 @@ func generateMessageParams() (*MessageParams, error) {
 	sz := mrand.Intn(400)
 
 	var p MessageParams
-	p.PoW = 0.01
+	p.PoW = 0.001
 	p.WorkTime = 1
 	p.TTL = uint32(mrand.Intn(1024))
 	p.Payload = make([]byte, sz)

@@ -180,6 +180,7 @@ func (h *clientHandler) handleMsg(p *serverPeer) error {
 			return errResp(ErrRequestRejected, "")
 		}
 		p.updateFlowControl(update)
+		p.updateVtParams()
 
 		if req.Hash != (common.Hash{}) {
 			if p.announceType == announceTypeNone {
@@ -205,6 +206,7 @@ func (h *clientHandler) handleMsg(p *serverPeer) error {
 			return errResp(ErrDecode, "msg %v: %v", msg, err)
 		}
 		p.fcServer.ReceivedReply(resp.ReqID, resp.BV)
+		p.answeredRequest(resp.ReqID)
 		if h.fetcher.requestedID(resp.ReqID) {
 			h.fetcher.deliverHeaders(p, resp.ReqID, resp.Headers)
 		} else {
@@ -222,6 +224,7 @@ func (h *clientHandler) handleMsg(p *serverPeer) error {
 			return errResp(ErrDecode, "msg %v: %v", msg, err)
 		}
 		p.fcServer.ReceivedReply(resp.ReqID, resp.BV)
+		p.answeredRequest(resp.ReqID)
 		deliverMsg = &Msg{
 			MsgType: MsgBlockBodies,
 			ReqID:   resp.ReqID,
@@ -237,6 +240,7 @@ func (h *clientHandler) handleMsg(p *serverPeer) error {
 			return errResp(ErrDecode, "msg %v: %v", msg, err)
 		}
 		p.fcServer.ReceivedReply(resp.ReqID, resp.BV)
+		p.answeredRequest(resp.ReqID)
 		deliverMsg = &Msg{
 			MsgType: MsgCode,
 			ReqID:   resp.ReqID,
@@ -252,6 +256,7 @@ func (h *clientHandler) handleMsg(p *serverPeer) error {
 			return errResp(ErrDecode, "msg %v: %v", msg, err)
 		}
 		p.fcServer.ReceivedReply(resp.ReqID, resp.BV)
+		p.answeredRequest(resp.ReqID)
 		deliverMsg = &Msg{
 			MsgType: MsgReceipts,
 			ReqID:   resp.ReqID,
@@ -267,6 +272,7 @@ func (h *clientHandler) handleMsg(p *serverPeer) error {
 			return errResp(ErrDecode, "msg %v: %v", msg, err)
 		}
 		p.fcServer.ReceivedReply(resp.ReqID, resp.BV)
+		p.answeredRequest(resp.ReqID)
 		deliverMsg = &Msg{
 			MsgType: MsgProofsV2,
 			ReqID:   resp.ReqID,
@@ -282,6 +288,7 @@ func (h *clientHandler) handleMsg(p *serverPeer) error {
 			return errResp(ErrDecode, "msg %v: %v", msg, err)
 		}
 		p.fcServer.ReceivedReply(resp.ReqID, resp.BV)
+		p.answeredRequest(resp.ReqID)
 		deliverMsg = &Msg{
 			MsgType: MsgHelperTrieProofs,
 			ReqID:   resp.ReqID,
@@ -297,6 +304,7 @@ func (h *clientHandler) handleMsg(p *serverPeer) error {
 			return errResp(ErrDecode, "msg %v: %v", msg, err)
 		}
 		p.fcServer.ReceivedReply(resp.ReqID, resp.BV)
+		p.answeredRequest(resp.ReqID)
 		deliverMsg = &Msg{
 			MsgType: MsgTxStatus,
 			ReqID:   resp.ReqID,

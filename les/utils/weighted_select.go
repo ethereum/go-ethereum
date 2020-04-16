@@ -14,43 +14,30 @@
 // You should have received a copy of the GNU Lesser General Public License
 // along with the go-ethereum library. If not, see <http://www.gnu.org/licenses/>.
 
-package les
+package utils
 
-import (
-	"math/rand"
-)
+import "math/rand"
 
 // wrsItem interface should be implemented by any entries that are to be selected from
-// a weightedRandomSelect set. Note that recalculating monotonously decreasing item
-// weights on-demand (without constantly calling update) is allowed
+// a WeightedRandomSelect set. Note that recalculating monotonously decreasing item
+// weights on-demand (without constantly calling Update) is allowed
 type wrsItem interface {
 	Weight() int64
 }
 
-// weightedRandomSelect is capable of weighted random selection from a set of items
-type weightedRandomSelect struct {
+// WeightedRandomSelect is capable of weighted random selection from a set of items
+type WeightedRandomSelect struct {
 	root *wrsNode
 	idx  map[wrsItem]int
 }
 
-// newWeightedRandomSelect returns a new weightedRandomSelect structure
-func newWeightedRandomSelect() *weightedRandomSelect {
-	return &weightedRandomSelect{root: &wrsNode{maxItems: wrsBranches}, idx: make(map[wrsItem]int)}
-}
-
-// update updates an item's weight, adds it if it was non-existent or removes it if
-// the new weight is zero. Note that explicitly updating decreasing weights is not necessary.
-func (w *weightedRandomSelect) update(item wrsItem) {
-	w.setWeight(item, item.Weight())
-}
-
-// remove removes an item from the set
-func (w *weightedRandomSelect) remove(item wrsItem) {
-	w.setWeight(item, 0)
+// NewWeightedRandomSelect returns a new WeightedRandomSelect structure
+func NewWeightedRandomSelect() *WeightedRandomSelect {
+	return &WeightedRandomSelect{root: &wrsNode{maxItems: wrsBranches}, idx: make(map[wrsItem]int)}
 }
 
 // setWeight sets an item's weight to a specific value (removes it if zero)
-func (w *weightedRandomSelect) setWeight(item wrsItem, weight int64) {
+func (w *WeightedRandomSelect) setWeight(item wrsItem, weight int64) {
 	idx, ok := w.idx[item]
 	if ok {
 		w.root.setWeight(idx, weight)
@@ -71,11 +58,22 @@ func (w *weightedRandomSelect) setWeight(item wrsItem, weight int64) {
 	}
 }
 
-// choose randomly selects an item from the set, with a chance proportional to its
+// Update updates an item's weight, adds it if it was non-existent or removes it if
+// the new weight is zero. Note that explicitly updating decreasing weights is not necessary.
+func (w *WeightedRandomSelect) Update(item wrsItem) {
+	w.setWeight(item, item.Weight())
+}
+
+// Remove removes an item from the set
+func (w *WeightedRandomSelect) Remove(item wrsItem) {
+	w.setWeight(item, 0)
+}
+
+// Choose randomly selects an item from the set, with a chance proportional to its
 // current weight. If the weight of the chosen element has been decreased since the
 // last stored value, returns it with a newWeight/oldWeight chance, otherwise just
 // updates its weight and selects another one
-func (w *weightedRandomSelect) choose() wrsItem {
+func (w *WeightedRandomSelect) Choose() wrsItem {
 	for {
 		if w.root.sumWeight == 0 {
 			return nil
@@ -154,7 +152,7 @@ func (n *wrsNode) setWeight(idx int, weight int64) int64 {
 	return diff
 }
 
-// choose recursively selects an item from the tree and returns it along with its weight
+// Choose recursively selects an item from the tree and returns it along with its weight
 func (n *wrsNode) choose(val int64) (wrsItem, int64) {
 	for i, w := range n.weights {
 		if val < w {

@@ -14,35 +14,35 @@
 // You should have received a copy of the GNU Lesser General Public License
 // along with the go-ethereum library. If not, see <http://www.gnu.org/licenses/>.
 
-package les
+package utils
 
 import "sync"
 
-// execQueue implements a queue that executes function calls in a single thread,
+// ExecQueue implements a queue that executes function calls in a single thread,
 // in the same order as they have been queued.
-type execQueue struct {
+type ExecQueue struct {
 	mu        sync.Mutex
 	cond      *sync.Cond
 	funcs     []func()
 	closeWait chan struct{}
 }
 
-// newExecQueue creates a new execution queue.
-func newExecQueue(capacity int) *execQueue {
-	q := &execQueue{funcs: make([]func(), 0, capacity)}
+// NewExecQueue creates a new execution Queue.
+func NewExecQueue(capacity int) *ExecQueue {
+	q := &ExecQueue{funcs: make([]func(), 0, capacity)}
 	q.cond = sync.NewCond(&q.mu)
 	go q.loop()
 	return q
 }
 
-func (q *execQueue) loop() {
+func (q *ExecQueue) loop() {
 	for f := q.waitNext(false); f != nil; f = q.waitNext(true) {
 		f()
 	}
 	close(q.closeWait)
 }
 
-func (q *execQueue) waitNext(drop bool) (f func()) {
+func (q *ExecQueue) waitNext(drop bool) (f func()) {
 	q.mu.Lock()
 	if drop && len(q.funcs) > 0 {
 		// Remove the function that just executed. We do this here instead of when
@@ -60,20 +60,20 @@ func (q *execQueue) waitNext(drop bool) (f func()) {
 	return f
 }
 
-func (q *execQueue) isClosed() bool {
+func (q *ExecQueue) isClosed() bool {
 	return q.closeWait != nil
 }
 
-// canQueue returns true if more function calls can be added to the execution queue.
-func (q *execQueue) canQueue() bool {
+// CanQueue returns true if more function calls can be added to the execution Queue.
+func (q *ExecQueue) CanQueue() bool {
 	q.mu.Lock()
 	ok := !q.isClosed() && len(q.funcs) < cap(q.funcs)
 	q.mu.Unlock()
 	return ok
 }
 
-// queue adds a function call to the execution queue. Returns true if successful.
-func (q *execQueue) queue(f func()) bool {
+// Queue adds a function call to the execution Queue. Returns true if successful.
+func (q *ExecQueue) Queue(f func()) bool {
 	q.mu.Lock()
 	ok := !q.isClosed() && len(q.funcs) < cap(q.funcs)
 	if ok {
@@ -84,16 +84,17 @@ func (q *execQueue) queue(f func()) bool {
 	return ok
 }
 
-// clear drops all queued functions
-func (q *execQueue) clear() {
+// Clear drops all queued functions.
+func (q *ExecQueue) Clear() {
 	q.mu.Lock()
 	q.funcs = q.funcs[:0]
 	q.mu.Unlock()
 }
 
-// quit stops the exec queue.
-// quit waits for the current execution to finish before returning.
-func (q *execQueue) quit() {
+// Quit stops the exec Queue.
+//
+// Quit waits for the current execution to finish before returning.
+func (q *ExecQueue) Quit() {
 	q.mu.Lock()
 	if !q.isClosed() {
 		q.closeWait = make(chan struct{})

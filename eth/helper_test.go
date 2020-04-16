@@ -170,23 +170,14 @@ func newTestPeer(name string, version int, pm *ProtocolManager, shake bool) (*te
 	// Create a message pipe to communicate through
 	app, net := p2p.MsgPipe()
 
-	// Generate a random id and create the peer
+	// Start the peer on a new thread
 	var id enode.ID
 	rand.Read(id[:])
-
 	peer := pm.newPeer(version, p2p.NewPeer(id, name, nil), net, pm.txpool.Get)
-
-	// Start the peer on a new thread
 	errc := make(chan error, 1)
-	go func() {
-		select {
-		case pm.newPeerCh <- peer:
-			errc <- pm.handle(peer)
-		case <-pm.quitSync:
-			errc <- p2p.DiscQuitting
-		}
-	}()
+	go func() { errc <- pm.runPeer(peer) }()
 	tp := &testPeer{app: app, net: net, peer: peer}
+
 	// Execute any implicitly requested handshakes and return
 	if shake {
 		var (

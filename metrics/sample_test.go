@@ -346,6 +346,7 @@ func TestUniformSampleConcurrentUpdateCount(t *testing.T) {
 	quit := make(chan struct{})
 	go func() {
 		t := time.NewTicker(10 * time.Millisecond)
+		defer t.Stop()
 		for {
 			select {
 			case <-t.C:

@@ -385,7 +385,7 @@ func testSyncTransaction(t *testing.T, propagtion bool) {
 	go pmFetcher.handle(pmFetcher.newPeer(65, p2p.NewPeer(enode.ID{}, "fetcher", nil), io1, pmFetcher.txpool.Get))
 
 	time.Sleep(250 * time.Millisecond)
-	pmFetcher.synchronise(pmFetcher.peers.BestPeer())
+	pmFetcher.doSync(peerToSyncOp(downloader.FullSync, pmFetcher.peers.BestPeer()))
 	atomic.StoreUint32(&pmFetcher.acceptTxs, 1)
 
 	newTxs := make(chan core.NewTxsEvent, 1024)

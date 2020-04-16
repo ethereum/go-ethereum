@@ -33,29 +33,24 @@ import (
 
 var dumper = spew.ConfigState{Indent: "    "}
 
-func accountRangeTest(t *testing.T, trie *state.Trie, statedb *state.StateDB, start *common.Hash, requestedNum int, expectedNum int) AccountRangeResult {
-	result, err := accountRange(*trie, start, requestedNum)
-	if err != nil {
-		t.Fatal(err)
-	}
+func accountRangeTest(t *testing.T, trie *state.Trie, statedb *state.StateDB, start common.Hash, requestedNum int, expectedNum int) state.IteratorDump {
+	result := statedb.IteratorDump(true, true, false, start.Bytes(), requestedNum)
 
 	if len(result.Accounts) != expectedNum {
-		t.Fatalf("expected %d results.  Got %d", expectedNum, len(result.Accounts))
+		t.Fatalf("expected %d results, got %d", expectedNum, len(result.Accounts))
 	}
-
-	for _, address := range result.Accounts {
-		if address == nil {
-			t.Fatalf("null address returned")
+	for address := range result.Accounts {
+		if address == (common.Address{}) {
+			t.Fatalf("empty address returned")
 		}
-		if !statedb.Exist(*address) {
+		if !statedb.Exist(address) {
 			t.Fatalf("account not found in state %s", address.Hex())
 		}
 	}
-
 	return result
 }
 
-type resultHash []*common.Hash
+type resultHash []common.Hash
 
 func (h resultHash) Len() int           { return len(h) }
 func (h resultHash) Swap(i, j int)      { h[i], h[j] = h[j], h[i] }
@@ -64,7 +59,7 @@ func (h resultHash) Less(i, j int) bool { return bytes.Compare(h[i].Bytes(), h[j
 func TestAccountRange(t *testing.T) {
 	var (
 		statedb  = state.NewDatabase(rawdb.NewMemoryDatabase())
-		state, _ = state.New(common.Hash{}, statedb)
+		state, _ = state.New(common.Hash{}, statedb, nil)
 		addrs    = [AccountRangeMaxResults * 2]common.Address{}
 		m        = map[common.Address]bool{}
 	)
@@ -80,7 +75,6 @@ func TestAccountRange(t *testing.T) {
 			m[addr] = true
 		}
 	}
-
 	state.Commit(true)
 	root := state.IntermediateRoot(true)
 
@@ -88,68 +82,40 @@ func TestAccountRange(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-
-	t.Logf("test getting number of results less than max")
-	accountRangeTest(t, &trie, state, &common.Hash{0x0}, AccountRangeMaxResults/2, AccountRangeMaxResults/2)
-
-	t.Logf("test getting number of results greater than max %d", AccountRangeMaxResults)
-	accountRangeTest(t, &trie, state, &common.Hash{0x0}, AccountRangeMaxResults*2, AccountRangeMaxResults)
-
-	t.Logf("test with empty 'start' hash")
-	accountRangeTest(t, &trie, state, nil, AccountRangeMaxResults, AccountRangeMaxResults)
-
-	t.Logf("test pagination")
-
+	accountRangeTest(t, &trie, state, common.Hash{}, AccountRangeMaxResults/2, AccountRangeMaxResults/2)
 	// test pagination
-	firstResult := accountRangeTest(t, &trie, state, &common.Hash{0x0}, AccountRangeMaxResults, AccountRangeMaxResults)
-
-	t.Logf("test pagination 2")
-	secondResult := accountRangeTest(t, &trie, state, &firstResult.Next, AccountRangeMaxResults, AccountRangeMaxResults)
+	firstResult := accountRangeTest(t, &trie, state, common.Hash{}, AccountRangeMaxResults, AccountRangeMaxResults)
+	secondResult := accountRangeTest(t, &trie, state, common.BytesToHash(firstResult.Next), AccountRangeMaxResults, AccountRangeMaxResults)
 
 	hList := make(resultHash, 0)
-	for h1, addr1 := range firstResult.Accounts {
-		h := &common.Hash{}
-		h.SetBytes(h1.Bytes())
-		hList = append(hList, h)
-		for h2, addr2 := range secondResult.Accounts {
-			// Make sure that the hashes aren't the same
-			if bytes.Equal(h1.Bytes(), h2.Bytes()) {
-				t.Fatalf("pagination test failed:  results should not overlap")
-			}
-
-			// If either address is nil, then it makes no sense to compare
-			// them as they might be two different accounts.
-			if addr1 == nil || addr2 == nil {
-				continue
-			}
-
-			// Since the two hashes are different, they should not have
-			// the same preimage, but let's check anyway in case there
-			// is a bug in the (hash, addr) map generation code.
-			if bytes.Equal(addr1.Bytes(), addr2.Bytes()) {
-				t.Fatalf("pagination test failed: addresses should not repeat")
-			}
+	for addr1 := range firstResult.Accounts {
+		// If address is empty, then it makes no sense to compare
+		// them as they might be two different accounts.
+		if addr1 == (common.Address{}) {
+			continue
 		}
+		if _, duplicate := secondResult.Accounts[addr1]; duplicate {
+			t.Fatalf("pagination test failed:  results should not overlap")
+		}
+		hList = append(hList, crypto.Keccak256Hash(addr1.Bytes()))
 	}
-
 	// Test to see if it's possible to recover from the middle of the previous
 	// set and get an even split between the first and second sets.
-	t.Logf("test random access pagination")
 	sort.Sort(hList)
 	middleH := hList[AccountRangeMaxResults/2]
 	middleResult := accountRangeTest(t, &trie, state, middleH, AccountRangeMaxResults, AccountRangeMaxResults)
-	innone, infirst, insecond := 0, 0, 0
+	missing, infirst, insecond := 0, 0, 0
 	for h := range middleResult.Accounts {
 		if _, ok := firstResult.Accounts[h]; ok {
 			infirst++
 		} else if _, ok := secondResult.Accounts[h]; ok {
 			insecond++
 		} else {
-			innone++
+			missing++
 		}
 	}
-	if innone != 0 {
-		t.Fatalf("%d hashes in the 'middle' set were neither in the first not the second set", innone)
+	if missing != 0 {
+		t.Fatalf("%d hashes in the 'middle' set were neither in the first not the second set", missing)
 	}
 	if infirst != AccountRangeMaxResults/2 {
 		t.Fatalf("Imbalance in the number of first-test results: %d != %d", infirst, AccountRangeMaxResults/2)
@@ -162,22 +128,12 @@ func TestAccountRange(t *testing.T) {
 func TestEmptyAccountRange(t *testing.T) {
 	var (
 		statedb  = state.NewDatabase(rawdb.NewMemoryDatabase())
-		state, _ = state.New(common.Hash{}, statedb)
+		state, _ = state.New(common.Hash{}, statedb, nil)
 	)
-
 	state.Commit(true)
-	root := state.IntermediateRoot(true)
-
-	trie, err := statedb.OpenTrie(root)
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	results, err := accountRange(trie, &common.Hash{0x0}, AccountRangeMaxResults)
-	if err != nil {
-		t.Fatalf("Empty results should not trigger an error: %v", err)
-	}
-	if results.Next != common.HexToHash("0") {
+	state.IntermediateRoot(true)
+	results := state.IteratorDump(true, true, true, (common.Hash{}).Bytes(), AccountRangeMaxResults)
+	if bytes.Equal(results.Next, (common.Hash{}).Bytes()) {
 		t.Fatalf("Empty results should not return a second page")
 	}
 	if len(results.Accounts) != 0 {
@@ -188,7 +144,7 @@ func TestEmptyAccountRange(t *testing.T) {
 func TestStorageRangeAt(t *testing.T) {
 	// Create a state where account 0x010000... has a few storage entries.
 	var (
-		state, _ = state.New(common.Hash{}, state.NewDatabase(rawdb.NewMemoryDatabase()))
+		state, _ = state.New(common.Hash{}, state.NewDatabase(rawdb.NewMemoryDatabase()), nil)
 		addr     = common.Address{0x01}
 		keys     = []common.Hash{ // hashes of Keys of storage
 			common.HexToHash("340dd630ad21bf010b4e676dbfa9ba9a02175262d1fa356232cfde6cb5b47ef2"),

@@ -77,6 +77,8 @@ func Bind(types []string, abis []string, bytecodes []string, fsigs []map[string]
 			calls     = make(map[string]*tmplMethod)
 			transacts = make(map[string]*tmplMethod)
 			events    = make(map[string]*tmplEvent)
+			fallback  *tmplMethod
+			receive   *tmplMethod
 
 			// identifiers are used to detect duplicated identifier of function
 			// and event. For all calls, transacts and events, abigen will generate
@@ -92,7 +94,7 @@ func Bind(types []string, abis []string, bytecodes []string, fsigs []map[string]
 			normalizedName := methodNormalizer[lang](alias(aliases, original.Name))
 			// Ensure there is no duplicated identifier
 			var identifiers = callIdentifiers
-			if !original.Const {
+			if !original.IsConstant() {
 				identifiers = transactIdentifiers
 			}
 			if identifiers[normalizedName] {
@@ -121,7 +123,7 @@ func Bind(types []string, abis []string, bytecodes []string, fsigs []map[string]
 				}
 			}
 			// Append the methods to the call or transact lists
-			if original.Const {
+			if original.IsConstant() {
 				calls[original.Name] = &tmplMethod{Original: original, Normalized: normalized, Structured: structured(original.Outputs)}
 			} else {
 				transacts[original.Name] = &tmplMethod{Original: original, Normalized: normalized, Structured: structured(original.Outputs)}
@@ -156,7 +158,13 @@ func Bind(types []string, abis []string, bytecodes []string, fsigs []map[string]
 			// Append the event to the accumulator list
 			events[original.Name] = &tmplEvent{Original: original, Normalized: normalized}
 		}
-
+		// Add two special fallback functions if they exist
+		if evmABI.HasFallback() {
+			fallback = &tmplMethod{Original: evmABI.Fallback}
+		}
+		if evmABI.HasReceive() {
+			receive = &tmplMethod{Original: evmABI.Receive}
+		}
 		// There is no easy way to pass arbitrary java objects to the Go side.
 		if len(structs) > 0 && lang == LangJava {
 			return "", errors.New("java binding for tuple arguments is not supported yet")
@@ -169,6 +177,8 @@ func Bind(types []string, abis []string, bytecodes []string, fsigs []map[string]
 			Constructor: evmABI.Constructor,
 			Calls:       calls,
 			Transacts:   transacts,
+			Fallback:    fallback,
+			Receive:     receive,
 			Events:      events,
 			Libraries:   make(map[string]string),
 		}
@@ -619,11 +629,22 @@ func formatMethod(method abi.Method, structs map[string]*tmplStruct) string {
 			outputs[i] += fmt.Sprintf(" %v", output.Name)
 		}
 	}
-	constant := ""
-	if method.Const {
-		constant = "constant "
+	// Extract meaningful state mutability of solidity method.
+	// If it's default value, never print it.
+	state := method.StateMutability
+	if state == "nonpayable" {
+		state = ""
 	}
-	return fmt.Sprintf("function %v(%v) %sreturns(%v)", method.RawName, strings.Join(inputs, ", "), constant, strings.Join(outputs, ", "))
+	if state != "" {
+		state = state + " "
+	}
+	identity := fmt.Sprintf("function %v", method.RawName)
+	if method.IsFallback {
+		identity = "fallback"
+	} else if method.IsReceive {
+		identity = "receive"
+	}
+	return fmt.Sprintf("%s(%v) %sreturns(%v)", identity, strings.Join(inputs, ", "), state, strings.Join(outputs, ", "))
 }
 
 // formatEvent transforms raw event representation into a user friendly one.

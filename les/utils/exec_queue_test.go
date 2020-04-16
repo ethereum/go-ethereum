@@ -14,21 +14,19 @@
 // You should have received a copy of the GNU Lesser General Public License
 // along with the go-ethereum library. If not, see <http://www.gnu.org/licenses/>.
 
-package les
+package utils
 
-import (
-	"testing"
-)
+import "testing"
 
 func TestExecQueue(t *testing.T) {
 	var (
 		N        = 10000
-		q        = newExecQueue(N)
+		q        = NewExecQueue(N)
 		counter  int
 		execd    = make(chan int)
 		testexit = make(chan struct{})
 	)
-	defer q.quit()
+	defer q.Quit()
 	defer close(testexit)
 
 	check := func(state string, wantOK bool) {
@@ -40,11 +38,11 @@ func TestExecQueue(t *testing.T) {
 			case <-testexit:
 			}
 		}
-		if q.canQueue() != wantOK {
-			t.Fatalf("canQueue() == %t for %s", !wantOK, state)
+		if q.CanQueue() != wantOK {
+			t.Fatalf("CanQueue() == %t for %s", !wantOK, state)
 		}
-		if q.queue(qf) != wantOK {
-			t.Fatalf("canQueue() == %t for %s", !wantOK, state)
+		if q.Queue(qf) != wantOK {
+			t.Fatalf("Queue() == %t for %s", !wantOK, state)
 		}
 	}
 
@@ -57,6 +55,6 @@ func TestExecQueue(t *testing.T) {
 			t.Fatal("execution out of order")
 		}
 	}
-	q.quit()
+	q.Quit()
 	check("closed queue", false)
 }

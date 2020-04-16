@@ -37,11 +37,13 @@ import (
 var DefaultConfig = Config{
 	SyncMode: downloader.FastSync,
 	Ethash: ethash.Config{
-		CacheDir:       "ethash",
-		CachesInMem:    2,
-		CachesOnDisk:   3,
-		DatasetsInMem:  1,
-		DatasetsOnDisk: 2,
+		CacheDir:         "ethash",
+		CachesInMem:      2,
+		CachesOnDisk:     3,
+		CachesLockMmap:   false,
+		DatasetsInMem:    1,
+		DatasetsOnDisk:   2,
+		DatasetsLockMmap: false,
 	},
 	NetworkId:          1,
 	LightPeers:         100,
@@ -50,6 +52,7 @@ var DefaultConfig = Config{
 	TrieCleanCache:     256,
 	TrieDirtyCache:     256,
 	TrieTimeout:        60 * time.Minute,
+	SnapshotCache:      256,
 	Miner: miner.Config{
 		GasFloor: 8000000,
 		GasCeil:  8000000,
@@ -125,6 +128,7 @@ type Config struct {
 	TrieCleanCache int
 	TrieDirtyCache int
 	TrieTimeout    time.Duration
+	SnapshotCache  int
 
 	// Mining options
 	Miner miner.Config

@@ -562,7 +562,11 @@ func (srv *Server) setupDiscovery() error {
 	srv.log.Debug("UDP listener up", "addr", realaddr)
 	if srv.NAT != nil {
 		if !realaddr.IP.IsLoopback() {
-			go nat.Map(srv.NAT, srv.quit, "udp", realaddr.Port, realaddr.Port, "ethereum discovery")
+			srv.loopWG.Add(1)
+			go func() {
+				nat.Map(srv.NAT, srv.quit, "udp", realaddr.Port, realaddr.Port, "ethereum discovery")
+				srv.loopWG.Done()
+			}()
 		}
 	}
 	srv.localnode.SetFallbackUDP(realaddr.Port)

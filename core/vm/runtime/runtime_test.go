@@ -98,7 +98,7 @@ func TestExecute(t *testing.T) {
 }
 
 func TestCall(t *testing.T) {
-	state, _ := state.New(common.Hash{}, state.NewDatabase(rawdb.NewMemoryDatabase()))
+	state, _ := state.New(common.Hash{}, state.NewDatabase(rawdb.NewMemoryDatabase()), nil)
 	address := common.HexToAddress("0x0a")
 	state.SetCode(address, []byte{
 		byte(vm.PUSH1), 10,
@@ -154,7 +154,7 @@ func BenchmarkCall(b *testing.B) {
 }
 func benchmarkEVM_Create(bench *testing.B, code string) {
 	var (
-		statedb, _ = state.New(common.Hash{}, state.NewDatabase(rawdb.NewMemoryDatabase()))
+		statedb, _ = state.New(common.Hash{}, state.NewDatabase(rawdb.NewMemoryDatabase()), nil)
 		sender     = common.BytesToAddress([]byte("sender"))
 		receiver   = common.BytesToAddress([]byte("receiver"))
 	)
@@ -314,5 +314,33 @@ func TestBlockhash(t *testing.T) {
 	}
 	if exp, got := 255, chain.counter; exp != got {
 		t.Errorf("suboptimal; too much chain iteration, expected %d, got %d", exp, got)
+	}
+}
+
+// BenchmarkSimpleLoop test a pretty simple loop which loops
+// 1M (1 048 575) times.
+// Takes about 200 ms
+func BenchmarkSimpleLoop(b *testing.B) {
+	// 0xfffff = 1048575 loops
+	code := []byte{
+		byte(vm.PUSH3), 0x0f, 0xff, 0xff,
+		byte(vm.JUMPDEST), //  [ count ]
+		byte(vm.PUSH1), 1, // [count, 1]
+		byte(vm.SWAP1),    // [1, count]
+		byte(vm.SUB),      // [ count -1 ]
+		byte(vm.DUP1),     //  [ count -1 , count-1]
+		byte(vm.PUSH1), 4, // [count-1, count -1, label]
+		byte(vm.JUMPI), // [ 0 ]
+		byte(vm.STOP),
+	}
+	//tracer := vm.NewJSONLogger(nil, os.Stdout)
+	//Execute(code, nil, &Config{
+	//	EVMConfig: vm.Config{
+	//		Debug:  true,
+	//		Tracer: tracer,
+	//	}})
+
+	for i := 0; i < b.N; i++ {
+		Execute(code, nil, nil)
 	}
 }

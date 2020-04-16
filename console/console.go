@@ -340,62 +340,61 @@ func (c *Console) Evaluate(statement string) {
 // the configured user prompter.
 func (c *Console) Interactive() {
 	var (
-		prompt    = c.prompt          // Current prompt line (used for multi-line inputs)
-		indents   = 0                 // Current number of input indents (used for multi-line inputs)
-		input     = ""                // Current user input
-		scheduler = make(chan string) // Channel to send the next prompt on and receive the input
+		prompt      = c.prompt             // the current prompt line (used for multi-line inputs)
+		indents     = 0                    // the current number of input indents (used for multi-line inputs)
+		input       = ""                   // the current user input
+		inputLine   = make(chan string, 1) // receives user input
+		inputErr    = make(chan error, 1)  // receives liner errors
+		requestLine = make(chan string)    // requests a line of input
+		interrupt   = make(chan os.Signal, 1)
 	)
-	// Start a goroutine to listen for prompt requests and send back inputs
-	go func() {
-		for {
-			// Read the next user input
-			line, err := c.prompter.PromptInput(<-scheduler)
-			if err != nil {
-				// In case of an error, either clear the prompt or fail
-				if err == liner.ErrPromptAborted { // ctrl-C
-					prompt, indents, input = c.prompt, 0, ""
-					scheduler <- ""
-					continue
-				}
-				close(scheduler)
-				return
-			}
-			// User input retrieved, send for interpretation and loop
-			scheduler <- line
-		}
-	}()
-	// Monitor Ctrl-C too in case the input is empty and we need to bail
-	abort := make(chan os.Signal, 1)
-	signal.Notify(abort, syscall.SIGINT, syscall.SIGTERM)
 
-	// Start sending prompts to the user and reading back inputs
+	// Monitor Ctrl-C. While liner does turn on the relevant terminal mode bits to avoid
+	// the signal, a signal can still be received for unsupported terminals. Unfortunately
+	// there is no way to cancel the line reader when this happens. The readLines
+	// goroutine will be leaked in this case.
+	signal.Notify(interrupt, syscall.SIGINT, syscall.SIGTERM)
+	defer signal.Stop(interrupt)
+
+	// The line reader runs in a separate goroutine.
+	go c.readLines(inputLine, inputErr, requestLine)
+	defer close(requestLine)
+
 	for {
-		// Send the next prompt, triggering an input read and process the result
-		scheduler <- prompt
+		// Send the next prompt, triggering an input read.
+		requestLine <- prompt
+
 		select {
-		case <-abort:
-			// User forcefully quite the console
+		case <-interrupt:
 			fmt.Fprintln(c.printer, "caught interrupt, exiting")
 			return
 
-		case line, ok := <-scheduler:
-			// User input was returned by the prompter, handle special cases
-			if !ok || (indents <= 0 && exit.MatchString(line)) {
+		case err := <-inputErr:
+			if err == liner.ErrPromptAborted && indents > 0 {
+				// When prompting for multi-line input, the first Ctrl-C resets
+				// the multi-line state.
+				prompt, indents, input = c.prompt, 0, ""
+				continue
+			}
+			return
+
+		case line := <-inputLine:
+			// User input was returned by the prompter, handle special cases.
+			if indents <= 0 && exit.MatchString(line) {
 				return
 			}
 			if onlyWhitespace.MatchString(line) {
 				continue
 			}
-			// Append the line to the input and check for multi-line interpretation
+			// Append the line to the input and check for multi-line interpretation.
 			input += line + "\n"
-
 			indents = countIndents(input)
 			if indents <= 0 {
 				prompt = c.prompt
 			} else {
 				prompt = strings.Repeat(".", indents*3) + " "
 			}
-			// If all the needed lines are present, save the command and run
+			// If all the needed lines are present, save the command and run it.
 			if indents <= 0 {
 				if len(input) > 0 && input[0] != ' ' && !passwordRegexp.MatchString(input) {
 					if command := strings.TrimSpace(input); len(c.history) == 0 || command != c.history[len(c.history)-1] {
@@ -408,6 +407,18 @@ func (c *Console) Interactive() {
 				c.Evaluate(input)
 				input = ""
 			}
+		}
+	}
+}
+
+// readLines runs in its own goroutine, prompting for input.
+func (c *Console) readLines(input chan<- string, errc chan<- error, prompt <-chan string) {
+	for p := range prompt {
+		line, err := c.prompter.PromptInput(p)
+		if err != nil {
+			errc <- err
+		} else {
+			input <- line
 		}
 	}
 }

@@ -317,7 +317,7 @@ func testGetNodeData(t *testing.T, protocol int) {
 	// Fetch for now the entire chain db
 	hashes := []common.Hash{}
 
-	it := db.NewIterator()
+	it := db.NewIterator(nil, nil)
 	for it.Next() {
 		if key := it.Key(); len(key) == common.HashLength {
 			hashes = append(hashes, common.BytesToHash(key))
@@ -349,7 +349,7 @@ func testGetNodeData(t *testing.T, protocol int) {
 	}
 	accounts := []common.Address{testBank, acc1Addr, acc2Addr}
 	for i := uint64(0); i <= pm.blockchain.CurrentBlock().NumberU64(); i++ {
-		trie, _ := state.New(pm.blockchain.GetBlockByNumber(i).Root(), state.NewDatabase(statedb))
+		trie, _ := state.New(pm.blockchain.GetBlockByNumber(i).Root(), state.NewDatabase(statedb), nil)
 
 		for j, acc := range accounts {
 			state, _ := pm.blockchain.State()
@@ -615,7 +615,7 @@ func testBroadcastBlock(t *testing.T, totalPeers, broadcastExpected int) {
 		case <-doneCh:
 			received++
 
-		case <-time.After(100 * time.Millisecond):
+		case <-time.After(time.Second):
 			if received != broadcastExpected {
 				t.Errorf("broadcast count mismatch: have %d, want %d", received, broadcastExpected)
 			}

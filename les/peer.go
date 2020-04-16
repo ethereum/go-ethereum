@@ -32,6 +32,8 @@ import (
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/eth"
 	"github.com/ethereum/go-ethereum/les/flowcontrol"
+	lpc "github.com/ethereum/go-ethereum/les/lespay/client"
+	"github.com/ethereum/go-ethereum/les/utils"
 	"github.com/ethereum/go-ethereum/light"
 	"github.com/ethereum/go-ethereum/p2p"
 	"github.com/ethereum/go-ethereum/p2p/enode"
@@ -135,7 +137,7 @@ type peerCommons struct {
 	headInfo     blockInfo // Latest block information.
 
 	// Background task queue for caching peer tasks and executing in order.
-	sendQueue *execQueue
+	sendQueue *utils.ExecQueue
 
 	// Flow control agreement.
 	fcParams flowcontrol.ServerParams // The config for token bucket.
@@ -153,13 +155,13 @@ func (p *peerCommons) isFrozen() bool {
 
 // canQueue returns an indicator whether the peer can queue a operation.
 func (p *peerCommons) canQueue() bool {
-	return p.sendQueue.canQueue() && !p.isFrozen()
+	return p.sendQueue.CanQueue() && !p.isFrozen()
 }
 
 // queueSend caches a peer operation in the background task queue.
 // Please ensure to check `canQueue` before call this function
 func (p *peerCommons) queueSend(f func()) bool {
-	return p.sendQueue.queue(f)
+	return p.sendQueue.Queue(f)
 }
 
 // mustQueueSend starts a for loop and retry the caching if failed.
@@ -337,7 +339,7 @@ func (p *peerCommons) handshake(td *big.Int, head common.Hash, headNum uint64, g
 // close closes the channel and notifies all background routines to exit.
 func (p *peerCommons) close() {
 	close(p.closeCh)
-	p.sendQueue.quit()
+	p.sendQueue.Quit()
 }
 
 // serverPeer represents each node to which the client is connected.
@@ -355,8 +357,12 @@ type serverPeer struct {
 	checkpointNumber uint64                   // The block height which the checkpoint is registered.
 	checkpoint       params.TrustedCheckpoint // The advertised checkpoint sent by server.
 
-	poolEntry *poolEntry              // Statistic for server peer.
-	fcServer  *flowcontrol.ServerNode // Client side mirror token bucket.
+	poolEntry        *poolEntry              // Statistic for server peer.
+	fcServer         *flowcontrol.ServerNode // Client side mirror token bucket.
+	vtLock           sync.Mutex
+	valueTracker     *lpc.ValueTracker
+	nodeValueTracker *lpc.NodeValueTracker
+	sentReqs         map[uint64]sentReqEntry
 
 	// Statistics
 	errCount    int // Counter the invalid responses server has replied
@@ -375,7 +381,7 @@ func newServerPeer(version int, network uint64, trusted bool, p *p2p.Peer, rw p2
 			id:        peerIdToString(p.ID()),
 			version:   version,
 			network:   network,
-			sendQueue: newExecQueue(100),
+			sendQueue: utils.NewExecQueue(100),
 			closeCh:   make(chan struct{}),
 		},
 		trusted: trusted,
@@ -407,7 +413,7 @@ func (p *serverPeer) rejectUpdate(size uint64) bool {
 // frozen.
 func (p *serverPeer) freeze() {
 	if atomic.CompareAndSwapUint32(&p.frozen, 0, 1) {
-		p.sendQueue.clear()
+		p.sendQueue.Clear()
 	}
 }
 
@@ -427,62 +433,71 @@ func sendRequest(w p2p.MsgWriter, msgcode, reqID uint64, data interface{}) error
 	return p2p.Send(w, msgcode, req{reqID, data})
 }
 
+func (p *serverPeer) sendRequest(msgcode, reqID uint64, data interface{}, amount int) error {
+	p.sentRequest(reqID, uint32(msgcode), uint32(amount))
+	return sendRequest(p.rw, msgcode, reqID, data)
+}
+
 // requestHeadersByHash fetches a batch of blocks' headers corresponding to the
 // specified header query, based on the hash of an origin block.
 func (p *serverPeer) requestHeadersByHash(reqID uint64, origin common.Hash, amount int, skip int, reverse bool) error {
 	p.Log().Debug("Fetching batch of headers", "count", amount, "fromhash", origin, "skip", skip, "reverse", reverse)
-	return sendRequest(p.rw, GetBlockHeadersMsg, reqID, &getBlockHeadersData{Origin: hashOrNumber{Hash: origin}, Amount: uint64(amount), Skip: uint64(skip), Reverse: reverse})
+	return p.sendRequest(GetBlockHeadersMsg, reqID, &getBlockHeadersData{Origin: hashOrNumber{Hash: origin}, Amount: uint64(amount), Skip: uint64(skip), Reverse: reverse}, amount)
 }
 
 // requestHeadersByNumber fetches a batch of blocks' headers corresponding to the
 // specified header query, based on the number of an origin block.
 func (p *serverPeer) requestHeadersByNumber(reqID, origin uint64, amount int, skip int, reverse bool) error {
 	p.Log().Debug("Fetching batch of headers", "count", amount, "fromnum", origin, "skip", skip, "reverse", reverse)
-	return sendRequest(p.rw, GetBlockHeadersMsg, reqID, &getBlockHeadersData{Origin: hashOrNumber{Number: origin}, Amount: uint64(amount), Skip: uint64(skip), Reverse: reverse})
+	return p.sendRequest(GetBlockHeadersMsg, reqID, &getBlockHeadersData{Origin: hashOrNumber{Number: origin}, Amount: uint64(amount), Skip: uint64(skip), Reverse: reverse}, amount)
 }
 
 // requestBodies fetches a batch of blocks' bodies corresponding to the hashes
 // specified.
 func (p *serverPeer) requestBodies(reqID uint64, hashes []common.Hash) error {
 	p.Log().Debug("Fetching batch of block bodies", "count", len(hashes))
-	return sendRequest(p.rw, GetBlockBodiesMsg, reqID, hashes)
+	return p.sendRequest(GetBlockBodiesMsg, reqID, hashes, len(hashes))
 }
 
 // requestCode fetches a batch of arbitrary data from a node's known state
 // data, corresponding to the specified hashes.
 func (p *serverPeer) requestCode(reqID uint64, reqs []CodeReq) error {
 	p.Log().Debug("Fetching batch of codes", "count", len(reqs))
-	return sendRequest(p.rw, GetCodeMsg, reqID, reqs)
+	return p.sendRequest(GetCodeMsg, reqID, reqs, len(reqs))
 }
 
 // requestReceipts fetches a batch of transaction receipts from a remote node.
 func (p *serverPeer) requestReceipts(reqID uint64, hashes []common.Hash) error {
 	p.Log().Debug("Fetching batch of receipts", "count", len(hashes))
-	return sendRequest(p.rw, GetReceiptsMsg, reqID, hashes)
+	return p.sendRequest(GetReceiptsMsg, reqID, hashes, len(hashes))
 }
 
 // requestProofs fetches a batch of merkle proofs from a remote node.
 func (p *serverPeer) requestProofs(reqID uint64, reqs []ProofReq) error {
 	p.Log().Debug("Fetching batch of proofs", "count", len(reqs))
-	return sendRequest(p.rw, GetProofsV2Msg, reqID, reqs)
+	return p.sendRequest(GetProofsV2Msg, reqID, reqs, len(reqs))
 }
 
 // requestHelperTrieProofs fetches a batch of HelperTrie merkle proofs from a remote node.
 func (p *serverPeer) requestHelperTrieProofs(reqID uint64, reqs []HelperTrieReq) error {
 	p.Log().Debug("Fetching batch of HelperTrie proofs", "count", len(reqs))
-	return sendRequest(p.rw, GetHelperTrieProofsMsg, reqID, reqs)
+	return p.sendRequest(GetHelperTrieProofsMsg, reqID, reqs, len(reqs))
 }
 
 // requestTxStatus fetches a batch of transaction status records from a remote node.
 func (p *serverPeer) requestTxStatus(reqID uint64, txHashes []common.Hash) error {
 	p.Log().Debug("Requesting transaction status", "count", len(txHashes))
-	return sendRequest(p.rw, GetTxStatusMsg, reqID, txHashes)
+	return p.sendRequest(GetTxStatusMsg, reqID, txHashes, len(txHashes))
 }
 
 // SendTxStatus creates a reply with a batch of transactions to be added to the remote transaction pool.
-func (p *serverPeer) sendTxs(reqID uint64, txs rlp.RawValue) error {
-	p.Log().Debug("Sending batch of transactions", "size", len(txs))
-	return sendRequest(p.rw, SendTxV2Msg, reqID, txs)
+func (p *serverPeer) sendTxs(reqID uint64, amount int, txs rlp.RawValue) error {
+	p.Log().Debug("Sending batch of transactions", "amount", amount, "size", len(txs))
+	sizeFactor := (len(txs) + txSizeCostLimit/2) / txSizeCostLimit
+	if sizeFactor > amount {
+		amount = sizeFactor
+	}
+	return p.sendRequest(SendTxV2Msg, reqID, txs, amount)
 }
 
 // waitBefore implements distPeer interface
@@ -531,7 +546,6 @@ func (p *serverPeer) getTxRelayCost(amount, size int) uint64 {
 // HasBlock checks if the peer has a given block
 func (p *serverPeer) HasBlock(hash common.Hash, number uint64, hasState bool) bool {
 	p.lock.RLock()
-	defer p.lock.RUnlock()
 
 	head := p.headInfo.Number
 	var since, recent uint64
@@ -543,6 +557,7 @@ func (p *serverPeer) HasBlock(hash common.Hash, number uint64, hasState bool) bo
 		recent = p.chainRecent
 	}
 	hasBlock := p.hasBlock
+	p.lock.RUnlock()
 
 	return head >= number && number >= since && (recent == 0 || number+recent+4 > head) && hasBlock != nil && hasBlock(hash, number, hasState)
 }
@@ -630,6 +645,87 @@ func (p *serverPeer) Handshake(td *big.Int, head common.Hash, headNum uint64, ge
 	})
 }
 
+// setValueTracker sets the value tracker references for connected servers. Note that the
+// references should be removed upon disconnection by setValueTracker(nil, nil).
+func (p *serverPeer) setValueTracker(vt *lpc.ValueTracker, nvt *lpc.NodeValueTracker) {
+	p.vtLock.Lock()
+	p.valueTracker = vt
+	p.nodeValueTracker = nvt
+	if nvt != nil {
+		p.sentReqs = make(map[uint64]sentReqEntry)
+	} else {
+		p.sentReqs = nil
+	}
+	p.vtLock.Unlock()
+}
+
+// updateVtParams updates the server's price table in the value tracker.
+func (p *serverPeer) updateVtParams() {
+	p.vtLock.Lock()
+	defer p.vtLock.Unlock()
+
+	if p.nodeValueTracker == nil {
+		return
+	}
+	reqCosts := make([]uint64, len(requestList))
+	for code, costs := range p.fcCosts {
+		if m, ok := requestMapping[uint32(code)]; ok {
+			reqCosts[m.first] = costs.baseCost + costs.reqCost
+			if m.rest != -1 {
+				reqCosts[m.rest] = costs.reqCost
+			}
+		}
+	}
+	p.valueTracker.UpdateCosts(p.nodeValueTracker, reqCosts)
+}
+
+// sentReqEntry remembers sent requests and their sending times
+type sentReqEntry struct {
+	reqType, amount uint32
+	at              mclock.AbsTime
+}
+
+// sentRequest marks a request sent at the current moment to this server.
+func (p *serverPeer) sentRequest(id uint64, reqType, amount uint32) {
+	p.vtLock.Lock()
+	if p.sentReqs != nil {
+		p.sentReqs[id] = sentReqEntry{reqType, amount, mclock.Now()}
+	}
+	p.vtLock.Unlock()
+}
+
+// answeredRequest marks a request answered at the current moment by this server.
+func (p *serverPeer) answeredRequest(id uint64) {
+	p.vtLock.Lock()
+	if p.sentReqs == nil {
+		p.vtLock.Unlock()
+		return
+	}
+	e, ok := p.sentReqs[id]
+	delete(p.sentReqs, id)
+	vt := p.valueTracker
+	nvt := p.nodeValueTracker
+	p.vtLock.Unlock()
+	if !ok {
+		return
+	}
+	var (
+		vtReqs   [2]lpc.ServedRequest
+		reqCount int
+	)
+	m := requestMapping[e.reqType]
+	if m.rest == -1 || e.amount <= 1 {
+		reqCount = 1
+		vtReqs[0] = lpc.ServedRequest{ReqType: uint32(m.first), Amount: e.amount}
+	} else {
+		reqCount = 2
+		vtReqs[0] = lpc.ServedRequest{ReqType: uint32(m.first), Amount: 1}
+		vtReqs[1] = lpc.ServedRequest{ReqType: uint32(m.rest), Amount: e.amount - 1}
+	}
+	dt := time.Duration(mclock.Now() - e.at)
+	vt.Served(nvt, vtReqs[:reqCount], dt)
+}
+
 // clientPeer represents each node to which the les server is connected.
 // The node here refers to the light client.
 type clientPeer struct {
@@ -653,7 +749,7 @@ func newClientPeer(version int, network uint64, p *p2p.Peer, rw p2p.MsgReadWrite
 			id:        peerIdToString(p.ID()),
 			version:   version,
 			network:   network,
-			sendQueue: newExecQueue(100),
+			sendQueue: utils.NewExecQueue(100),
 			closeCh:   make(chan struct{}),
 		},
 		errCh: make(chan error, 1),

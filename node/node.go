@@ -158,7 +158,7 @@ func (n *Node) Register(constructor ServiceConstructor) error {
 	return nil
 }
 
-// Start create a live P2P node and starts running it.
+// Start creates a live P2P node and starts running it.
 func (n *Node) Start() error {
 	n.lock.Lock()
 	defer n.lock.Unlock()
@@ -235,7 +235,7 @@ func (n *Node) Start() error {
 		// Mark the service started for potential cleanup
 		started = append(started, kind)
 	}
-	// Lastly start the configured RPC interfaces
+	// Lastly, start the configured RPC interfaces
 	if err := n.startRPC(services); err != nil {
 		for _, service := range services {
 			service.Stop()
@@ -274,7 +274,7 @@ func (n *Node) openDataDir() error {
 	return nil
 }
 
-// startRPC is a helper method to start all the various RPC endpoint during node
+// startRPC is a helper method to start all the various RPC endpoints during node
 // startup. It's not meant to be called at any time afterwards as it makes certain
 // assumptions about the state of the node.
 func (n *Node) startRPC(services map[reflect.Type]Service) error {
@@ -291,17 +291,21 @@ func (n *Node) startRPC(services map[reflect.Type]Service) error {
 		n.stopInProc()
 		return err
 	}
-	if err := n.startHTTP(n.httpEndpoint, apis, n.config.HTTPModules, n.config.HTTPCors, n.config.HTTPVirtualHosts, n.config.HTTPTimeouts); err != nil {
+	if err := n.startHTTP(n.httpEndpoint, apis, n.config.HTTPModules, n.config.HTTPCors, n.config.HTTPVirtualHosts, n.config.HTTPTimeouts, n.config.WSOrigins); err != nil {
 		n.stopIPC()
 		n.stopInProc()
 		return err
 	}
-	if err := n.startWS(n.wsEndpoint, apis, n.config.WSModules, n.config.WSOrigins, n.config.WSExposeAll); err != nil {
-		n.stopHTTP()
-		n.stopIPC()
-		n.stopInProc()
-		return err
+	// if endpoints are not the same, start separate servers
+	if n.httpEndpoint != n.wsEndpoint {
+		if err := n.startWS(n.wsEndpoint, apis, n.config.WSModules, n.config.WSOrigins, n.config.WSExposeAll); err != nil {
+			n.stopHTTP()
+			n.stopIPC()
+			n.stopInProc()
+			return err
+		}
 	}
+
 	// All API endpoints started successfully
 	n.rpcAPIs = apis
 	return nil
@@ -359,20 +363,36 @@ func (n *Node) stopIPC() {
 }
 
 // startHTTP initializes and starts the HTTP RPC endpoint.
-func (n *Node) startHTTP(endpoint string, apis []rpc.API, modules []string, cors []string, vhosts []string, timeouts rpc.HTTPTimeouts) error {
+func (n *Node) startHTTP(endpoint string, apis []rpc.API, modules []string, cors []string, vhosts []string, timeouts rpc.HTTPTimeouts, wsOrigins []string) error {
 	// Short circuit if the HTTP endpoint isn't being exposed
 	if endpoint == "" {
 		return nil
 	}
-	listener, handler, err := rpc.StartHTTPEndpoint(endpoint, apis, modules, cors, vhosts, timeouts)
+	// register apis and create handler stack
+	srv := rpc.NewServer()
+	err := RegisterApisFromWhitelist(apis, modules, srv, false)
 	if err != nil {
 		return err
 	}
-	n.log.Info("HTTP endpoint opened", "url", fmt.Sprintf("http://%s", endpoint), "cors", strings.Join(cors, ","), "vhosts", strings.Join(vhosts, ","))
+	handler := NewHTTPHandlerStack(srv, cors, vhosts)
+	// wrap handler in websocket handler only if websocket port is the same as http rpc
+	if n.httpEndpoint == n.wsEndpoint {
+		handler = NewWebsocketUpgradeHandler(handler, srv.WebsocketHandler(wsOrigins))
+	}
+	listener, err := StartHTTPEndpoint(endpoint, timeouts, handler)
+	if err != nil {
+		return err
+	}
+	n.log.Info("HTTP endpoint opened", "url", fmt.Sprintf("http://%v/", listener.Addr()),
+		"cors", strings.Join(cors, ","),
+		"vhosts", strings.Join(vhosts, ","))
+	if n.httpEndpoint == n.wsEndpoint {
+		n.log.Info("WebSocket endpoint opened", "url", fmt.Sprintf("ws://%v", listener.Addr()))
+	}
 	// All listeners booted successfully
 	n.httpEndpoint = endpoint
 	n.httpListener = listener
-	n.httpHandler = handler
+	n.httpHandler = srv
 
 	return nil
 }
@@ -380,10 +400,10 @@ func (n *Node) startHTTP(endpoint string, apis []rpc.API, modules []string, cors
 // stopHTTP terminates the HTTP RPC endpoint.
 func (n *Node) stopHTTP() {
 	if n.httpListener != nil {
+		url := fmt.Sprintf("http://%v/", n.httpListener.Addr())
 		n.httpListener.Close()
 		n.httpListener = nil
-
-		n.log.Info("HTTP endpoint closed", "url", fmt.Sprintf("http://%s", n.httpEndpoint))
+		n.log.Info("HTTP endpoint closed", "url", url)
 	}
 	if n.httpHandler != nil {
 		n.httpHandler.Stop()
@@ -397,7 +417,14 @@ func (n *Node) startWS(endpoint string, apis []rpc.API, modules []string, wsOrig
 	if endpoint == "" {
 		return nil
 	}
-	listener, handler, err := rpc.StartWSEndpoint(endpoint, apis, modules, wsOrigins, exposeAll)
+
+	srv := rpc.NewServer()
+	handler := srv.WebsocketHandler(wsOrigins)
+	err := RegisterApisFromWhitelist(apis, modules, srv, exposeAll)
+	if err != nil {
+		return err
+	}
+	listener, err := startWSEndpoint(endpoint, handler)
 	if err != nil {
 		return err
 	}
@@ -405,7 +432,7 @@ func (n *Node) startWS(endpoint string, apis []rpc.API, modules []string, wsOrig
 	// All listeners booted successfully
 	n.wsEndpoint = endpoint
 	n.wsListener = listener
-	n.wsHandler = handler
+	n.wsHandler = srv
 
 	return nil
 }
@@ -661,4 +688,26 @@ func (n *Node) apis() []rpc.API {
 			Public:    true,
 		},
 	}
+}
+
+// RegisterApisFromWhitelist checks the given modules' availability, generates a whitelist based on the allowed modules,
+// and then registers all of the APIs exposed by the services.
+func RegisterApisFromWhitelist(apis []rpc.API, modules []string, srv *rpc.Server, exposeAll bool) error {
+	if bad, available := checkModuleAvailability(modules, apis); len(bad) > 0 {
+		log.Error("Unavailable modules in HTTP API list", "unavailable", bad, "available", available)
+	}
+	// Generate the whitelist based on the allowed modules
+	whitelist := make(map[string]bool)
+	for _, module := range modules {
+		whitelist[module] = true
+	}
+	// Register all the APIs exposed by the services
+	for _, api := range apis {
+		if exposeAll || whitelist[api.Namespace] || (len(whitelist) == 0 && api.Public) {
+			if err := srv.RegisterName(api.Namespace, api.Service); err != nil {
+				return err
+			}
+		}
+	}
+	return nil
 }

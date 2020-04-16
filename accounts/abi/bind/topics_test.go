@@ -23,6 +23,7 @@ import (
 
 	"github.com/ethereum/go-ethereum/accounts/abi"
 	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/crypto"
 )
 
 func TestMakeTopics(t *testing.T) {
@@ -39,6 +40,80 @@ func TestMakeTopics(t *testing.T) {
 			"support fixed byte types, right padded to 32 bytes",
 			args{[][]interface{}{{[5]byte{1, 2, 3, 4, 5}}}},
 			[][]common.Hash{{common.Hash{1, 2, 3, 4, 5}}},
+			false,
+		},
+		{
+			"support common hash types in topics",
+			args{[][]interface{}{{common.Hash{1, 2, 3, 4, 5}}}},
+			[][]common.Hash{{common.Hash{1, 2, 3, 4, 5}}},
+			false,
+		},
+		{
+			"support address types in topics",
+			args{[][]interface{}{{common.Address{1, 2, 3, 4, 5}}}},
+			[][]common.Hash{{common.Hash{0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 2, 3, 4, 5}}},
+			false,
+		},
+		{
+			"support *big.Int types in topics",
+			args{[][]interface{}{{big.NewInt(1).Lsh(big.NewInt(2), 254)}}},
+			[][]common.Hash{{common.Hash{128}}},
+			false,
+		},
+		{
+			"support boolean types in topics",
+			args{[][]interface{}{
+				{true},
+				{false},
+			}},
+			[][]common.Hash{
+				{common.Hash{0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1}},
+				{common.Hash{0}},
+			},
+			false,
+		},
+		{
+			"support int/uint(8/16/32/64) types in topics",
+			args{[][]interface{}{
+				{int8(-2)},
+				{int16(-3)},
+				{int32(-4)},
+				{int64(-5)},
+				{int8(1)},
+				{int16(256)},
+				{int32(65536)},
+				{int64(4294967296)},
+				{uint8(1)},
+				{uint16(256)},
+				{uint32(65536)},
+				{uint64(4294967296)},
+			}},
+			[][]common.Hash{
+				{common.Hash{255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 254}},
+				{common.Hash{255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 253}},
+				{common.Hash{255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 252}},
+				{common.Hash{255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 251}},
+				{common.Hash{0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1}},
+				{common.Hash{0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0}},
+				{common.Hash{0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0}},
+				{common.Hash{0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0}},
+				{common.Hash{0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1}},
+				{common.Hash{0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0}},
+				{common.Hash{0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0}},
+				{common.Hash{0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0}},
+			},
+			false,
+		},
+		{
+			"support string types in topics",
+			args{[][]interface{}{{"hello world"}}},
+			[][]common.Hash{{crypto.Keccak256Hash([]byte("hello world"))}},
+			false,
+		},
+		{
+			"support byte slice types in topics",
+			args{[][]interface{}{{[]byte{1, 2, 3}}}},
+			[][]common.Hash{{crypto.Keccak256Hash([]byte{1, 2, 3})}},
 			false,
 		},
 	}
@@ -84,6 +159,7 @@ func setupTopicsTests() []topicTest {
 	bytesType, _ := abi.NewType("bytes5", "", nil)
 	int8Type, _ := abi.NewType("int8", "", nil)
 	int256Type, _ := abi.NewType("int256", "", nil)
+	tupleType, _ := abi.NewType("tuple(int256,int8)", "", nil)
 
 	tests := []topicTest{
 		{
@@ -144,6 +220,21 @@ func setupTopicsTests() []topicTest {
 				},
 			},
 			wantErr: false,
+		},
+		{
+			name: "tuple(int256, int8)",
+			args: args{
+				createObj: func() interface{} { return nil },
+				resultObj: func() interface{} { return nil },
+				resultMap: func() map[string]interface{} { return make(map[string]interface{}) },
+				fields: abi.Arguments{abi.Argument{
+					Name:    "tupletype",
+					Type:    tupleType,
+					Indexed: true,
+				}},
+				topics: []common.Hash{},
+			},
+			wantErr: true,
 		},
 	}
 
