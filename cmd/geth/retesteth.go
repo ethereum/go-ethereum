@@ -887,8 +887,8 @@ func retesteth(ctx *cli.Context) error {
 			Version:   "1.0",
 		},
 	}
-	vhosts := splitAndTrim(ctx.GlobalString(utils.RPCVirtualHostsFlag.Name))
-	cors := splitAndTrim(ctx.GlobalString(utils.RPCCORSDomainFlag.Name))
+	vhosts := splitAndTrim(ctx.GlobalString(utils.HTTPVirtualHostsFlag.Name))
+	cors := splitAndTrim(ctx.GlobalString(utils.HTTPCORSDomainFlag.Name))
 
 	// register apis and create handler stack
 	srv := rpc.NewServer()

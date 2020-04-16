@@ -529,32 +529,32 @@ var (
 		Name:  "ipcpath",
 		Usage: "Filename for IPC socket/pipe within the datadir (explicit paths escape it)",
 	}
-	RPCEnabledFlag = cli.BoolFlag{
-		Name:  "rpc",
+	HTTPEnabledFlag = cli.BoolFlag{
+		Name:  "http",
 		Usage: "Enable the HTTP-RPC server",
 	}
-	RPCListenAddrFlag = cli.StringFlag{
-		Name:  "rpcaddr",
+	HTTPListenAddrFlag = cli.StringFlag{
+		Name:  "httpaddr",
 		Usage: "HTTP-RPC server listening interface",
 		Value: node.DefaultHTTPHost,
 	}
-	RPCPortFlag = cli.IntFlag{
-		Name:  "rpcport",
+	HTTPPortFlag = cli.IntFlag{
+		Name:  "httpport",
 		Usage: "HTTP-RPC server listening port",
 		Value: node.DefaultHTTPPort,
 	}
-	RPCCORSDomainFlag = cli.StringFlag{
-		Name:  "rpccorsdomain",
+	HTTPCORSDomainFlag = cli.StringFlag{
+		Name:  "httpcorsdomain",
 		Usage: "Comma separated list of domains from which to accept cross origin requests (browser enforced)",
 		Value: "",
 	}
-	RPCVirtualHostsFlag = cli.StringFlag{
-		Name:  "rpcvhosts",
+	HTTPVirtualHostsFlag = cli.StringFlag{
+		Name:  "httpvhosts",
 		Usage: "Comma separated list of virtual hostnames from which to accept requests (server enforced). Accepts '*' wildcard.",
 		Value: strings.Join(node.DefaultConfig.HTTPVirtualHosts, ","),
 	}
-	RPCApiFlag = cli.StringFlag{
-		Name:  "rpcapi",
+	HTTPApiFlag = cli.StringFlag{
+		Name:  "httpapi",
 		Usage: "API's offered over the HTTP-RPC interface",
 		Value: "",
 	}
@@ -924,23 +924,23 @@ func splitAndTrim(input string) []string {
 // setHTTP creates the HTTP RPC listener interface string from the set
 // command line flags, returning empty if the HTTP endpoint is disabled.
 func setHTTP(ctx *cli.Context, cfg *node.Config) {
-	if ctx.GlobalBool(RPCEnabledFlag.Name) && cfg.HTTPHost == "" {
+	if ctx.GlobalBool(HTTPEnabledFlag.Name) && cfg.HTTPHost == "" {
 		cfg.HTTPHost = "127.0.0.1"
-		if ctx.GlobalIsSet(RPCListenAddrFlag.Name) {
-			cfg.HTTPHost = ctx.GlobalString(RPCListenAddrFlag.Name)
+		if ctx.GlobalIsSet(HTTPListenAddrFlag.Name) {
+			cfg.HTTPHost = ctx.GlobalString(HTTPListenAddrFlag.Name)
 		}
 	}
-	if ctx.GlobalIsSet(RPCPortFlag.Name) {
-		cfg.HTTPPort = ctx.GlobalInt(RPCPortFlag.Name)
+	if ctx.GlobalIsSet(HTTPPortFlag.Name) {
+		cfg.HTTPPort = ctx.GlobalInt(HTTPPortFlag.Name)
 	}
-	if ctx.GlobalIsSet(RPCCORSDomainFlag.Name) {
-		cfg.HTTPCors = splitAndTrim(ctx.GlobalString(RPCCORSDomainFlag.Name))
+	if ctx.GlobalIsSet(HTTPCORSDomainFlag.Name) {
+		cfg.HTTPCors = splitAndTrim(ctx.GlobalString(HTTPCORSDomainFlag.Name))
 	}
-	if ctx.GlobalIsSet(RPCApiFlag.Name) {
-		cfg.HTTPModules = splitAndTrim(ctx.GlobalString(RPCApiFlag.Name))
+	if ctx.GlobalIsSet(HTTPApiFlag.Name) {
+		cfg.HTTPModules = splitAndTrim(ctx.GlobalString(HTTPApiFlag.Name))
 	}
-	if ctx.GlobalIsSet(RPCVirtualHostsFlag.Name) {
-		cfg.HTTPVirtualHosts = splitAndTrim(ctx.GlobalString(RPCVirtualHostsFlag.Name))
+	if ctx.GlobalIsSet(HTTPVirtualHostsFlag.Name) {
+		cfg.HTTPVirtualHosts = splitAndTrim(ctx.GlobalString(HTTPVirtualHostsFlag.Name))
 	}
 }
 
