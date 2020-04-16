@@ -19,7 +19,6 @@ package main
 import (
 	"context"
 	"fmt"
-	"github.com/ethereum/go-ethereum/miner"
 	"io/ioutil"
 	"math/big"
 	"os"
@@ -27,10 +26,13 @@ import (
 	"strings"
 	"time"
 
+	"github.com/ethereum/go-ethereum/common/math"
+	"github.com/ethereum/go-ethereum/core/vm"
+	"github.com/ethereum/go-ethereum/miner"
+	"github.com/ethereum/go-ethereum/trie"
 	"github.com/ethereum/go-ethereum/cmd/utils"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/hexutil"
-	"github.com/ethereum/go-ethereum/consensus"
 	"github.com/ethereum/go-ethereum/consensus/ethash"
 	"github.com/ethereum/go-ethereum/core"
 	"github.com/ethereum/go-ethereum/core/rawdb"
@@ -41,7 +43,6 @@ import (
 	"github.com/ethereum/go-ethereum/internal/ethapi"
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/node"
-	"github.com/ethereum/go-ethereum/params"
 	"github.com/ethereum/go-ethereum/rlp"
 	"github.com/ethereum/go-ethereum/rpc"
 
@@ -65,20 +66,37 @@ var (
 	}
 )
 
+// Main test api
 type RetestethTestAPI interface {
 	SetChainParams(ctx context.Context, chainParams ChainParams) (bool, error)
 	MineBlocks(ctx context.Context, number uint64) (bool, error)
-	ModifyTimestamp(ctx context.Context, interval uint64) (bool, error)
+	ModifyTimestamp(ctx context.Context, interval uint64) (bool, error)    			   //Subject to remove
 	ImportRawBlock(ctx context.Context, rawBlock hexutil.Bytes) (common.Hash, error)
 	RewindToBlock(ctx context.Context, number uint64) (bool, error)
 	GetLogHash(ctx context.Context, txHash common.Hash) (common.Hash, error)
 }
 
+type RetestethDebugAPI interface {
+	StorageRangeAt(ctx context.Context,
+		blockHashOrNumber *math.HexOrDecimal256, txIndex uint64,
+		address common.Address,
+		begin *math.HexOrDecimal256, maxResults uint64,
+	) (StorageRangeResult, error)
+}
+
+type StorageRangeResult struct {
+	Complete bool                   `json:"complete"`
+	Storage  map[common.Hash]SRItem `json:"storage"`
+}
+
+type SRItem struct {
+	Key   string `json:"key"`
+	Value string `json:"value"`
+}
+
 type RetestethAPI struct {
 	testclient	  *tester
 	rpchandler    *rpc.Server
-
-	engine        *NoRewardEngine  // Mining without block reward for state tests support
 	blockInterval uint64
 }
 
@@ -95,89 +113,8 @@ type ChainParams struct {
 	Genesis    core.Genesis	                     `json:"genesis"`
 }
 
-type NoRewardEngine struct {
-	inner     consensus.Engine
-	rewardsOn bool
-}
-
-func (e *NoRewardEngine) Author(header *types.Header) (common.Address, error) {
-	return e.inner.Author(header)
-}
-
-func (e *NoRewardEngine) VerifyHeader(chain consensus.ChainReader, header *types.Header, seal bool) error {
-	return e.inner.VerifyHeader(chain, header, seal)
-}
-
-func (e *NoRewardEngine) VerifyHeaders(chain consensus.ChainReader, headers []*types.Header, seals []bool) (chan<- struct{}, <-chan error) {
-	return e.inner.VerifyHeaders(chain, headers, seals)
-}
-
-func (e *NoRewardEngine) VerifyUncles(chain consensus.ChainReader, block *types.Block) error {
-	return e.inner.VerifyUncles(chain, block)
-}
-
-func (e *NoRewardEngine) VerifySeal(chain consensus.ChainReader, header *types.Header) error {
-	return e.inner.VerifySeal(chain, header)
-}
-
-func (e *NoRewardEngine) Prepare(chain consensus.ChainReader, header *types.Header) error {
-	return e.inner.Prepare(chain, header)
-}
-
-func (e *NoRewardEngine) accumulateRewards(config *params.ChainConfig, state *state.StateDB, header *types.Header, uncles []*types.Header) {
-	// Simply touch miner and uncle coinbase accounts
-	reward := big.NewInt(0)
-	for _, uncle := range uncles {
-		state.AddBalance(uncle.Coinbase, reward)
-	}
-	state.AddBalance(header.Coinbase, reward)
-}
-
-func (e *NoRewardEngine) Finalize(chain consensus.ChainReader, header *types.Header, statedb *state.StateDB, txs []*types.Transaction,
-	uncles []*types.Header) {
-	if e.rewardsOn {
-		e.inner.Finalize(chain, header, statedb, txs, uncles)
-	} else {
-		e.accumulateRewards(chain.Config(), statedb, header, uncles)
-		header.Root = statedb.IntermediateRoot(chain.Config().IsEIP158(header.Number))
-	}
-}
-
-func (e *NoRewardEngine) FinalizeAndAssemble(chain consensus.ChainReader, header *types.Header, statedb *state.StateDB, txs []*types.Transaction,
-	uncles []*types.Header, receipts []*types.Receipt) (*types.Block, error) {
-	if e.rewardsOn {
-		return e.inner.FinalizeAndAssemble(chain, header, statedb, txs, uncles, receipts)
-	} else {
-		e.accumulateRewards(chain.Config(), statedb, header, uncles)
-		header.Root = statedb.IntermediateRoot(chain.Config().IsEIP158(header.Number))
-
-		// Header seems complete, assemble into a block and return
-		return types.NewBlock(header, txs, uncles, receipts), nil
-	}
-}
-
-func (e *NoRewardEngine) Seal(chain consensus.ChainReader, block *types.Block, results chan<- *types.Block, stop <-chan struct{}) error {
-	return e.inner.Seal(chain, block, results, stop)
-}
-
-func (e *NoRewardEngine) SealHash(header *types.Header) common.Hash {
-	return e.inner.SealHash(header)
-}
-
-func (e *NoRewardEngine) CalcDifficulty(chain consensus.ChainReader, time uint64, parent *types.Header) *big.Int {
-	return e.inner.CalcDifficulty(chain, time, parent)
-}
-
-func (e *NoRewardEngine) APIs(chain consensus.ChainReader) []rpc.API {
-	return e.inner.APIs(chain)
-}
-
-func (e *NoRewardEngine) Close() error {
-	return e.inner.Close()
-}
-
+// Restart the client with new genesis. Reset txPool and blockchain info
 func (api *RetestethAPI) SetChainParams(ctx context.Context, chainParams ChainParams) (bool, error) {
-
 	if api.testclient != nil {
 		api.testclient.Close()
 	}
@@ -191,74 +128,125 @@ func (api *RetestethAPI) SetChainParams(ctx context.Context, chainParams ChainPa
 	api.rpchandler.RegisterName("eth", ethapi.NewPublicTransactionPoolAPI(api.testclient.ethereum.APIBackend, nonceLock))
 	api.rpchandler.RegisterName("debug", eth.NewPrivateDebugAPI(api.testclient.ethereum))
 	api.rpchandler.RegisterName("web3", node.NewPublicWeb3API(api.testclient.stack))
-
 	return true, nil
 }
 
+// Seal transactions from txPool, imported by eth_sendRawTransaction, into a block
 func (api *RetestethAPI) MineBlocks(ctx context.Context, number uint64) (bool, error) {
 	currentNumber := api.testclient.ethereum.BlockChain().CurrentBlock().Number().Uint64()
 	startBlock := currentNumber
 	upToBlock := currentNumber + number
+	fakeBlockRemoved := false  // Geth adds empty block immediately with StartMining. need to remove
+
+	// NOT THREAD SAFE!!!
 	api.testclient.ethereum.StartMining(1)
-	api.testclient.ethereum.Miner().SetRecommitInterval(time.Second * 10)
-	fakeBlockRemoved := false
 
 	for currentNumber < upToBlock {
 		currentNumber = api.testclient.ethereum.BlockChain().CurrentBlock().Number().Uint64()
 		if currentNumber == startBlock + 1 && fakeBlockRemoved == false {
-			api.testclient.ethereum.BlockChain().SetHead(startBlock)
+			api.testclient.ethereum.BlockChain().Reset()
 			currentNumber = startBlock
 			fakeBlockRemoved = true
 		}
 	}
+
 	api.testclient.ethereum.StopMining()
-	//time.Sleep(time.Second * 10)
 	api.testclient.ethereum.BlockChain().SetHead(upToBlock)
-	//time.Sleep(time.Second * 10)
-	//var origin types.Block
-	//origin = *api.testclient.ethereum.BlockChain().CurrentBlock()
-	//api.testclient.ethereum.BlockChain().InsertChain([]*types.Block{&origin})
-
-
-	// Override timestamp ??
-	/*
-	var block types.Block
-	var origin *types.Block
-	var header types.Header
-	origin = api.testclient.ethereum.BlockChain().CurrentBlock()
-	header = *origin.Header()
-	header.Time = 1000
-	log.Warn(fmt.Sprintf("Hash %x", origin.Header().Hash()))
-	block = *types.NewBlockWithHeader(&header).WithBody(origin.Transactions(), origin.Uncles())
-
-	api.testclient.ethereum.BlockChain().SetHead(0)
-
-
-	if _, err := api.testclient.ethereum.BlockChain().InsertChain([]*types.Block{&block}); err != nil {
-		return false, err
-	}
-	fmt.Printf("Imported block %d,  head is %d\n", block.NumberU64(), api.testclient.ethereum.BlockChain().CurrentBlock().Header().Number)
-	log.Warn(fmt.Sprintf("Hash %x", api.testclient.ethereum.BlockChain().CurrentBlock().Hash()
-	 */
 	return true, nil
 }
 
-func (api *RetestethAPI) currentNumber() uint64 {
-	if current := api.testclient.ethereum.BlockChain().CurrentBlock(); current != nil {
-		return current.NumberU64()
+// Original storage range implementation. Geth StorageRangeAt has no consensus
+func (api *RetestethAPI) StorageRangeAt2(ctx context.Context,
+	blockHashOrNumber *math.HexOrDecimal256, txIndex uint64,
+	address common.Address,
+	begin *math.HexOrDecimal256, maxResults uint64,
+) (StorageRangeResult, error) {
+	var (
+		header *types.Header
+		block  *types.Block
+	)
+	if (*big.Int)(blockHashOrNumber).Cmp(big.NewInt(math.MaxInt64)) > 0 {
+		blockHash := common.BigToHash((*big.Int)(blockHashOrNumber))
+		header = api.testclient.ethereum.BlockChain().GetHeaderByHash(blockHash)
+		block = api.testclient.ethereum.BlockChain().GetBlockByHash(blockHash)
+	} else {
+		blockNumber := (*big.Int)(blockHashOrNumber).Uint64()
+		header = api.testclient.ethereum.BlockChain().GetHeaderByNumber(blockNumber)
+		block = api.testclient.ethereum.BlockChain().GetBlockByNumber(blockNumber)
 	}
-	return 0
+	parentHeader := api.testclient.ethereum.BlockChain().GetHeaderByHash(header.ParentHash)
+	var root common.Hash
+	var statedb *state.StateDB
+	var err error
+	if parentHeader == nil || int(txIndex) >= len(block.Transactions()) {
+		root = header.Root
+		statedb, err = api.testclient.ethereum.BlockChain().StateAt(root)
+		if err != nil {
+			return StorageRangeResult{}, err
+		}
+	} else {
+		root = parentHeader.Root
+		statedb, err = api.testclient.ethereum.BlockChain().StateAt(root)
+		if err != nil {
+			return StorageRangeResult{}, err
+		}
+		// Recompute transactions up to the target index.
+		signer := types.MakeSigner(api.testclient.ethereum.BlockChain().Config(), block.Number())
+		for idx, tx := range block.Transactions() {
+			// Assemble the transaction call message and return if the requested offset
+			msg, _ := tx.AsMessage(signer)
+			context := core.NewEVMContext(msg, block.Header(), api.testclient.ethereum.BlockChain(), nil)
+			// Not yet the searched for transaction, execute on top of the current state
+			vmenv := vm.NewEVM(context, statedb, api.testclient.ethereum.BlockChain().Config(), vm.Config{})
+			if _, _, _, err := core.ApplyMessage(vmenv, msg, new(core.GasPool).AddGas(tx.Gas())); err != nil {
+				return StorageRangeResult{}, fmt.Errorf("transaction %#x failed: %v", tx.Hash(), err)
+			}
+			// Ensure any modifications are committed to the state
+			// Only delete empty objects if EIP158/161 (a.k.a Spurious Dragon) is in effect
+			_ = statedb.IntermediateRoot(vmenv.ChainConfig().IsEIP158(block.Number()))
+			if idx == int(txIndex) {
+				// This is to make sure root can be opened by OpenTrie
+				_, err = statedb.Commit(vmenv.ChainConfig().IsEIP158(block.Number()))
+				if err != nil {
+					return StorageRangeResult{}, err
+				}
+			}
+		}
+	}
+	storageTrie := statedb.StorageTrie(address)
+	it := trie.NewIterator(storageTrie.NodeIterator(common.BigToHash((*big.Int)(begin)).Bytes()))
+	result := StorageRangeResult{Storage: make(map[common.Hash]SRItem)}
+	for i := 0; /*i < int(maxResults) && */ it.Next(); i++ {
+		if preimage := storageTrie.GetKey(it.Key); preimage != nil {
+			key := (*math.HexOrDecimal256)(big.NewInt(0).SetBytes(preimage))
+			v, _, err := rlp.SplitString(it.Value)
+			if err != nil {
+				return StorageRangeResult{}, err
+			}
+			value := (*math.HexOrDecimal256)(big.NewInt(0).SetBytes(v))
+			ks, _ := key.MarshalText()
+			vs, _ := value.MarshalText()
+			if len(ks)%2 != 0 {
+				ks = append(append(append([]byte{}, ks[:2]...), byte('0')), ks[2:]...)
+			}
+			if len(vs)%2 != 0 {
+				vs = append(append(append([]byte{}, vs[:2]...), byte('0')), vs[2:]...)
+			}
+			result.Storage[common.BytesToHash(it.Key)] = SRItem{
+				Key:   string(ks),
+				Value: string(vs),
+			}
+		}
+	}
+	if it.Next() {
+		result.Complete = false
+	} else {
+		result.Complete = true
+	}
+	return result, nil
 }
 
-
-func (api *RetestethAPI) importBlock(block *types.Block) error {
-	if _, err := api.testclient.ethereum.BlockChain().InsertChain([]*types.Block{block}); err != nil {
-		return err
-	}
-	fmt.Printf("Imported block %d,  head is %d\n", block.NumberU64(), api.testclient.ethereum.BlockChain().CurrentBlock().Number())
-	return nil
-}
-
+// Subject to remove
 func (api *RetestethAPI) ModifyTimestamp(ctx context.Context, interval uint64) (bool, error) {
 	api.blockInterval = interval
 	return true, nil
@@ -274,6 +262,14 @@ func (api *RetestethAPI) ImportRawBlock(ctx context.Context, rawBlock hexutil.By
 		return common.Hash{}, err
 	}
 	return block.Hash(), nil
+}
+
+func (api *RetestethAPI) importBlock(block *types.Block) error {
+	if _, err := api.testclient.ethereum.BlockChain().InsertChain([]*types.Block{block}); err != nil {
+		return err
+	}
+	fmt.Printf("Imported block %d,  head is %d\n", block.NumberU64(), api.testclient.ethereum.BlockChain().CurrentBlock().Number())
+	return nil
 }
 
 func (api *RetestethAPI) RewindToBlock(ctx context.Context, newHead uint64) (bool, error) {
@@ -384,6 +380,12 @@ func retesteth(ctx *cli.Context) error {
 			Service:   apiImpl,
 			Version:   "1.0",
 		},
+		{
+			Namespace: "debug",
+			Public:    true,
+			Service:   apiImpl,
+			Version:   "1.0",
+		},
 	}
 
 	vhosts := splitAndTrim(ctx.GlobalString(utils.RPCVirtualHostsFlag.Name))
@@ -397,7 +399,7 @@ func retesteth(ctx *cli.Context) error {
 	}
 
 	httpEndpoint := fmt.Sprintf("%s:%d", ctx.GlobalString(utils.RPCListenAddrFlag.Name), ctx.Int(rpcPortFlag.Name))
-	listener, rpcHandler, err := rpc.StartHTTPEndpoint(httpEndpoint, rpcAPI, []string{"test"}, cors, vhosts, RetestethHTTPTimeouts)
+	listener, rpcHandler, err := rpc.StartHTTPEndpoint(httpEndpoint, rpcAPI, []string{"test", "debug"}, cors, vhosts, RetestethHTTPTimeouts)
 	if err != nil {
 		utils.Fatalf("Could not start RPC api: %v", err)
 	}
