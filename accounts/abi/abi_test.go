@@ -1046,7 +1046,7 @@ func TestDoubleDuplicateMethodNames(t *testing.T) {
 	}
 }
 
-// TestDoubleDuplicateEventNames checks that an event with unnamed parameters is
+// TestUnnamedEventParam checks that an event with unnamed parameters is
 // correctly handled
 // The test runs the abi of the following contract.
 // 	contract TestEvent {

@@ -103,11 +103,11 @@ func (arguments Arguments) Unpack(v interface{}, data []byte) error {
 	if err != nil {
 		return err
 	}
-	if arguments.isTuple() {
-		return arguments.unpackTuple(v, marshalledValues)
-	}
 	if len(marshalledValues) == 0 {
 		return fmt.Errorf("abi: Unpack(no-values unmarshalled %T)", v)
+	}
+	if arguments.isTuple() {
+		return arguments.unpackTuple(v, marshalledValues)
 	}
 	return arguments.unpackAtomic(v, marshalledValues[0])
 }

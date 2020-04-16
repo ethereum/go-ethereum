@@ -141,10 +141,9 @@ func (abi *ABI) UnmarshalJSON(data []byte) error {
 		case "constructor":
 			abi.Constructor = NewMethod("", "", field.StateMutability, field.Constant, field.Payable, false, false, field.Inputs, nil)
 		// empty defaults to function according to the abi spec
-		case "function", "":
+		case "function":
 			name := abi.methodName(field.Name)
-			isConst := field.Constant || field.StateMutability == "pure" || field.StateMutability == "view"
-			abi.Methods[name] = NewMethod(name, field.Name, field.StateMutability, isConst, field.Payable, false, false, field.Inputs, field.Outputs)
+			abi.Methods[name] = NewMethod(name, field.Name, field.StateMutability, field.Constant, field.Payable, false, false, field.Inputs, field.Outputs)
 		case "fallback":
 			// New introduced function type in v0.6.0, check more detail
 			// here https://solidity.readthedocs.io/en/v0.6.0/contracts.html#fallback-function
@@ -161,7 +160,7 @@ func (abi *ABI) UnmarshalJSON(data []byte) error {
 			if field.StateMutability != "payable" {
 				return errors.New("the statemutability of receive can only be payable")
 			}
-			abi.Receive = NewMethod("", "", "payable", field.Constant, field.Payable, false, true, nil, nil)
+			abi.Receive = NewMethod("", "", field.StateMutability, field.Constant, field.Payable, false, true, nil, nil)
 		case "event":
 			name := abi.eventName(field.Name)
 			abi.Events[name] = NewEvent(name, field.Name, field.Anonymous, field.Inputs)
@@ -171,6 +170,7 @@ func (abi *ABI) UnmarshalJSON(data []byte) error {
 }
 
 // methodName returns the next available name for a given function.
+// Needed since solidity allows for function overload.
 //
 // e.g. if the abi contains Methods send, send1
 // methodName would return send2 for input send.
@@ -185,6 +185,7 @@ func (abi *ABI) methodName(rawName string) string {
 }
 
 // eventName returns the next available name for a given event.
+// Needed since solidity allows for event overload.
 //
 // e.g. if the abi contains events received, received1
 // eventName would return received2 for input received.

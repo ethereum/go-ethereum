@@ -71,6 +71,7 @@ type Method struct {
 }
 
 // NewMethod creates a new Method.
+// A method should always be created using NewMethod.
 // It also precomputes the sig representation and the string representation
 // of the method.
 // A method should always be created using NewMethod.
