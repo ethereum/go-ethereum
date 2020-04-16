@@ -139,18 +139,18 @@ func (abi *ABI) UnmarshalJSON(data []byte) error {
 	for _, field := range fields {
 		switch field.Type {
 		case "constructor":
-			abi.Constructor = NewMethod("", "", field.StateMutability, field.Constant, field.Payable, false, false, field.Inputs, nil)
+			abi.Constructor = NewMethod("", "", Constructor, field.StateMutability, field.Constant, field.Payable, field.Inputs, nil)
 		// empty defaults to function according to the abi spec
 		case "function":
 			name := abi.methodName(field.Name)
-			abi.Methods[name] = NewMethod(name, field.Name, field.StateMutability, field.Constant, field.Payable, false, false, field.Inputs, field.Outputs)
+			abi.Methods[name] = NewMethod(name, field.Name, Function, field.StateMutability, field.Constant, field.Payable, field.Inputs, field.Outputs)
 		case "fallback":
 			// New introduced function type in v0.6.0, check more detail
 			// here https://solidity.readthedocs.io/en/v0.6.0/contracts.html#fallback-function
 			if abi.HasFallback() {
 				return errors.New("only single fallback is allowed")
 			}
-			abi.Fallback = NewMethod("", "", field.StateMutability, field.Constant, field.Payable, true, false, nil, nil)
+			abi.Fallback = NewMethod("", "", Fallback, field.StateMutability, field.Constant, field.Payable, nil, nil)
 		case "receive":
 			// New introduced function type in v0.6.0, check more detail
 			// here https://solidity.readthedocs.io/en/v0.6.0/contracts.html#fallback-function
@@ -160,7 +160,7 @@ func (abi *ABI) UnmarshalJSON(data []byte) error {
 			if field.StateMutability != "payable" {
 				return errors.New("the statemutability of receive can only be payable")
 			}
-			abi.Receive = NewMethod("", "", field.StateMutability, field.Constant, field.Payable, false, true, nil, nil)
+			abi.Receive = NewMethod("", "", Receive, field.StateMutability, field.Constant, field.Payable, nil, nil)
 		case "event":
 			name := abi.eventName(field.Name)
 			abi.Events[name] = NewEvent(name, field.Name, field.Anonymous, field.Inputs)
@@ -226,10 +226,10 @@ func (abi *ABI) EventByID(topic common.Hash) (*Event, error) {
 
 // HasFallback returns an indicator whether a fallback function is included.
 func (abi *ABI) HasFallback() bool {
-	return abi.Fallback.IsFallback
+	return abi.Fallback.Type == Fallback
 }
 
 // HasReceive returns an indicator whether a receive function is included.
 func (abi *ABI) HasReceive() bool {
-	return abi.Receive.IsReceive
+	return abi.Receive.Type == Receive
 }

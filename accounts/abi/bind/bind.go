@@ -639,9 +639,9 @@ func formatMethod(method abi.Method, structs map[string]*tmplStruct) string {
 		state = state + " "
 	}
 	identity := fmt.Sprintf("function %v", method.RawName)
-	if method.IsFallback {
+	if method.Type == abi.Fallback {
 		identity = "fallback"
-	} else if method.IsReceive {
+	} else if method.Type == abi.Receive {
 		identity = "receive"
 	}
 	return fmt.Sprintf("%s(%v) %sreturns(%v)", identity, strings.Join(inputs, ", "), state, strings.Join(outputs, ", "))
