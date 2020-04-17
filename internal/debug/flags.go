@@ -60,27 +60,50 @@ var (
 		Usage: "Enable the pprof HTTP server",
 	}
 	pprofPortFlag = cli.IntFlag{
-		Name:  "pprofport",
+		Name:  "pprof.port",
 		Usage: "pprof HTTP server listening port",
 		Value: 6060,
 	}
+	pprofLegacyPortFlag = cli.IntFlag{
+		Name:  "pprofport",
+		Usage: "pprof HTTP server listening port (deprecated, use --pprof.port)",
+		Value: 6060,
+	}
 	pprofAddrFlag = cli.StringFlag{
-		Name:  "pprofaddr",
+		Name:  "pprof.addr",
 		Usage: "pprof HTTP server listening interface",
 		Value: "127.0.0.1",
 	}
+	pprofLegacyAddrFlag = cli.StringFlag{
+		Name:  "pprofaddr",
+		Usage: "pprof HTTP server listening interface (deprecated, use --pprof.addr)",
+		Value: "127.0.0.1",
+	}
 	memprofilerateFlag = cli.IntFlag{
-		Name:  "memprofilerate",
+		Name:  "pprof.memprofilerate",
 		Usage: "Turn on memory profiling with the given rate",
 		Value: runtime.MemProfileRate,
 	}
+	memprofilerateLegacyFlag = cli.IntFlag{
+		Name:  "memprofilerate",
+		Usage: "Turn on memory profiling with the given rate (deprecated, use --pprof.memprofilerate)",
+		Value: runtime.MemProfileRate,
+	}
 	blockprofilerateFlag = cli.IntFlag{
-		Name:  "blockprofilerate",
+		Name:  "pprof.blockprofilerate",
 		Usage: "Turn on block profiling with the given rate",
 	}
+	blockprofilerateLegacyFlag = cli.IntFlag{
+		Name:  "blockprofilerate",
+		Usage: "Turn on block profiling with the given rate (deprecated, use --pprof.blockprofilerate)",
+	}
 	cpuprofileFlag = cli.StringFlag{
-		Name:  "cpuprofile",
+		Name:  "pprof.cpuprofile",
 		Usage: "Write CPU profile to the given file",
+	}
+	cpuprofileLegacyFlag = cli.StringFlag{
+		Name:  "cpuprofile",
+		Usage: "Write CPU profile to the given file (deprecated, use --pprof.cpuprofile)",
 	}
 	traceFlag = cli.StringFlag{
 		Name:  "trace",
@@ -91,8 +114,12 @@ var (
 // Flags holds all command-line flags required for debugging.
 var Flags = []cli.Flag{
 	verbosityFlag, vmoduleFlag, backtraceAtFlag, debugFlag,
-	pprofFlag, pprofAddrFlag, pprofPortFlag,
-	memprofilerateFlag, blockprofilerateFlag, cpuprofileFlag, traceFlag,
+	pprofFlag, pprofAddrFlag, pprofPortFlag, memprofilerateFlag,
+	blockprofilerateFlag, cpuprofileFlag, traceFlag,
+}
+var DeprecatedFlags = []cli.Flag{
+	pprofLegacyAddrFlag, pprofLegacyPortFlag, memprofilerateLegacyFlag,
+	blockprofilerateLegacyFlag, cpuprofileLegacyFlag,
 }
 
 var (
@@ -121,14 +148,28 @@ func Setup(ctx *cli.Context) error {
 	log.Root().SetHandler(glogger)
 
 	// profiling, tracing
+	if ctx.GlobalIsSet(memprofilerateLegacyFlag.Name) {
+		runtime.MemProfileRate = ctx.GlobalInt(memprofilerateLegacyFlag.Name)
+	}
 	runtime.MemProfileRate = ctx.GlobalInt(memprofilerateFlag.Name)
+
+	if ctx.GlobalIsSet(blockprofilerateLegacyFlag.Name) {
+		Handler.SetBlockProfileRate(ctx.GlobalInt(blockprofilerateLegacyFlag.Name))
+	}
 	Handler.SetBlockProfileRate(ctx.GlobalInt(blockprofilerateFlag.Name))
+
 	if traceFile := ctx.GlobalString(traceFlag.Name); traceFile != "" {
 		if err := Handler.StartGoTrace(traceFile); err != nil {
 			return err
 		}
 	}
+
 	if cpuFile := ctx.GlobalString(cpuprofileFlag.Name); cpuFile != "" {
+		if err := Handler.StartCPUProfile(cpuFile); err != nil {
+			return err
+		}
+	}
+	if cpuFile := ctx.GlobalString(cpuprofileLegacyFlag.Name); cpuFile != "" {
 		if err := Handler.StartCPUProfile(cpuFile); err != nil {
 			return err
 		}
@@ -136,7 +177,17 @@ func Setup(ctx *cli.Context) error {
 
 	// pprof server
 	if ctx.GlobalBool(pprofFlag.Name) {
-		address := fmt.Sprintf("%s:%d", ctx.GlobalString(pprofAddrFlag.Name), ctx.GlobalInt(pprofPortFlag.Name))
+		listenHost := ctx.GlobalString(pprofAddrFlag.Name)
+		if ctx.GlobalIsSet(pprofLegacyAddrFlag.Name) && !ctx.GlobalIsSet(pprofAddrFlag.Name) {
+			listenHost = ctx.GlobalString(pprofLegacyAddrFlag.Name)
+		}
+
+		port := ctx.GlobalInt(pprofPortFlag.Name)
+		if ctx.GlobalIsSet(pprofLegacyPortFlag.Name) && !ctx.GlobalIsSet(pprofPortFlag.Name){
+			port = ctx.GlobalInt(pprofLegacyPortFlag.Name)
+		}
+
+		address := fmt.Sprintf("%s:%d", listenHost, port)
 		StartPProf(address)
 	}
 	return nil
