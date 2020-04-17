@@ -141,7 +141,7 @@ func (abi *ABI) UnmarshalJSON(data []byte) error {
 		case "constructor":
 			abi.Constructor = NewMethod("", "", Constructor, field.StateMutability, field.Constant, field.Payable, field.Inputs, nil)
 		case "function":
-			name := abi.methodName(field.Name)
+			name := abi.overloadedMethodName(field.Name)
 			abi.Methods[name] = NewMethod(name, field.Name, Function, field.StateMutability, field.Constant, field.Payable, field.Inputs, field.Outputs)
 		case "fallback":
 			// New introduced function type in v0.6.0, check more detail
@@ -161,7 +161,7 @@ func (abi *ABI) UnmarshalJSON(data []byte) error {
 			}
 			abi.Receive = NewMethod("", "", Receive, field.StateMutability, field.Constant, field.Payable, nil, nil)
 		case "event":
-			name := abi.eventName(field.Name)
+			name := abi.overloadedEventName(field.Name)
 			abi.Events[name] = NewEvent(name, field.Name, field.Anonymous, field.Inputs)
 		default:
 			return fmt.Errorf("abi: could not recognize type %v of field %v", field.Type, field.Name)
@@ -170,12 +170,12 @@ func (abi *ABI) UnmarshalJSON(data []byte) error {
 	return nil
 }
 
-// methodName returns the next available name for a given function.
+// overloadedMethodName returns the next available name for a given function.
 // Needed since solidity allows for function overload.
 //
 // e.g. if the abi contains Methods send, send1
-// methodName would return send2 for input send.
-func (abi *ABI) methodName(rawName string) string {
+// overloadedMethodName would return send2 for input send.
+func (abi *ABI) overloadedMethodName(rawName string) string {
 	name := rawName
 	_, ok := abi.Methods[name]
 	for idx := 0; ok; idx++ {
@@ -185,12 +185,12 @@ func (abi *ABI) methodName(rawName string) string {
 	return name
 }
 
-// eventName returns the next available name for a given event.
+// overloadedEventName returns the next available name for a given event.
 // Needed since solidity allows for event overload.
 //
 // e.g. if the abi contains events received, received1
-// eventName would return received2 for input received.
-func (abi *ABI) eventName(rawName string) string {
+// overloadedEventName would return received2 for input received.
+func (abi *ABI) overloadedEventName(rawName string) string {
 	name := rawName
 	_, ok := abi.Events[name]
 	for idx := 0; ok; idx++ {
