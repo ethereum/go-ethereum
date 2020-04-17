@@ -90,6 +90,28 @@ func TestBinaryReadPrefix(t *testing.T) {
 	if !bytes.Equal(res, []byte("baguette")) {
 		t.Fatalf("should not have returned err=%v", err)
 	}
+
+	// Same test as above but the break is the last byte
+	// of the boundary
+	trieExtLeaf = &BinaryTrie{
+		prefix:   []byte("crois"),
+		startBit: 0,
+		endBit:   8*len("crois") - 1,
+		right: &BinaryTrie{
+			prefix:   []byte("ssants"),
+			startBit: 8,
+			endBit:   8 * len("ssants"),
+			value:    []byte("baguette"),
+			left:     nil,
+			right:    nil,
+		},
+		left: nil,
+	}
+
+	res, err = trieExtLeaf.TryGet([]byte("croissants"))
+	if !bytes.Equal(res, []byte("baguette")) {
+		t.Fatalf("should not have returned err=%v", err)
+	}
 }
 
 func TestBinaryLeafInsert(t *testing.T) {
