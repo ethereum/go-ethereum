@@ -140,7 +140,6 @@ func (abi *ABI) UnmarshalJSON(data []byte) error {
 		switch field.Type {
 		case "constructor":
 			abi.Constructor = NewMethod("", "", Constructor, field.StateMutability, field.Constant, field.Payable, field.Inputs, nil)
-		// empty defaults to function according to the abi spec
 		case "function":
 			name := abi.methodName(field.Name)
 			abi.Methods[name] = NewMethod(name, field.Name, Function, field.StateMutability, field.Constant, field.Payable, field.Inputs, field.Outputs)
@@ -164,6 +163,8 @@ func (abi *ABI) UnmarshalJSON(data []byte) error {
 		case "event":
 			name := abi.eventName(field.Name)
 			abi.Events[name] = NewEvent(name, field.Name, field.Anonymous, field.Inputs)
+		default:
+			return fmt.Errorf("abi: could not recognize type %v of field %v", field.Type, field.Name)
 		}
 	}
 	return nil

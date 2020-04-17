@@ -92,23 +92,31 @@ type Method struct {
 // It also precomputes the sig representation and the string representation
 // of the method.
 func NewMethod(name string, rawName string, funType FunctionType, mutability string, isConst, isPayable bool, inputs Arguments, outputs Arguments) Method {
-	// inputs
-	inputNames := make([]string, len(inputs))
-	types := make([]string, len(inputs))
+	var (
+		types       = make([]string, len(inputs))
+		inputNames  = make([]string, len(inputs))
+		outputNames = make([]string, len(outputs))
+	)
 	for i, input := range inputs {
 		inputNames[i] = fmt.Sprintf("%v %v", input.Type, input.Name)
 		types[i] = input.Type.String()
 	}
-	// outputs
-	outputNames := make([]string, len(outputs))
 	for i, output := range outputs {
 		outputNames[i] = output.Type.String()
 		if len(output.Name) > 0 {
 			outputNames[i] += fmt.Sprintf(" %v", output.Name)
 		}
 	}
-	// calculate the signature.
-	sig := fmt.Sprintf("%v(%v)", rawName, strings.Join(types, ","))
+	// calculate the signature and method id. Note only function
+	// has meaningful signature and id.
+	var (
+		sig string
+		id  []byte
+	)
+	if funType == Function {
+		sig = fmt.Sprintf("%v(%v)", rawName, strings.Join(types, ","))
+		id = crypto.Keccak256([]byte(sig))[:4]
+	}
 	// Extract meaningful state mutability of solidity method.
 	// If it's default value, never print it.
 	state := mutability
@@ -121,18 +129,14 @@ func NewMethod(name string, rawName string, funType FunctionType, mutability str
 	identity := fmt.Sprintf("function %v", rawName)
 	if funType == Fallback {
 		identity = "fallback"
-		// The fallback function does not have any meaningful signature.
-		sig = ""
 	} else if funType == Receive {
 		identity = "receive"
-		// The receive function does not have any meaningful signature.
-		sig = ""
+	} else if funType == Constructor {
+		identity = "constructor"
 	}
-
 	str := fmt.Sprintf("%v(%v) %sreturns(%v)", identity, strings.Join(inputNames, ", "), state, strings.Join(outputNames, ", "))
-	id := crypto.Keccak256([]byte(sig))[:4]
 
-	method := Method{
+	return Method{
 		Name:            name,
 		RawName:         rawName,
 		Type:            funType,
@@ -145,7 +149,6 @@ func NewMethod(name string, rawName string, funType FunctionType, mutability str
 		Sig:             sig,
 		ID:              id,
 	}
-	return method
 }
 
 func (method Method) String() string {
