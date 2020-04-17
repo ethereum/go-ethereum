@@ -183,7 +183,7 @@ func Setup(ctx *cli.Context) error {
 		}
 
 		port := ctx.GlobalInt(pprofPortFlag.Name)
-		if ctx.GlobalIsSet(pprofLegacyPortFlag.Name) && !ctx.GlobalIsSet(pprofPortFlag.Name){
+		if ctx.GlobalIsSet(pprofLegacyPortFlag.Name) && !ctx.GlobalIsSet(pprofPortFlag.Name) {
 			port = ctx.GlobalInt(pprofLegacyPortFlag.Name)
 		}
 
