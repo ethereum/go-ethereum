@@ -714,13 +714,23 @@ var (
 
 	// Gas price oracle settings
 	GpoBlocksFlag = cli.IntFlag{
-		Name:  "gpoblocks",
+		Name:  "gpo.blocks",
 		Usage: "Number of recent blocks to check for gas prices",
 		Value: eth.DefaultConfig.GPO.Blocks,
 	}
+	GpoLegacyBlocksFlag = cli.IntFlag{
+		Name:  "gpoblocks",
+		Usage: "Number of recent blocks to check for gas prices (deprecated, use --gpo.blocks)",
+		Value: eth.DefaultConfig.GPO.Blocks,
+	}
 	GpoPercentileFlag = cli.IntFlag{
-		Name:  "gpopercentile",
+		Name:  "gpo.percentile",
 		Usage: "Suggested gas price is the given percentile of a set of recent transaction gas prices",
+		Value: eth.DefaultConfig.GPO.Percentile,
+	}
+	GpoLegacyPercentileFlag = cli.IntFlag{
+		Name:  "gpopercentile",
+		Usage: "Suggested gas price is the given percentile of a set of recent transaction gas prices (deprecated, use --gpo.percentile)",
 		Value: eth.DefaultConfig.GPO.Percentile,
 	}
 	WhisperEnabledFlag = cli.BoolFlag{
@@ -1310,8 +1320,15 @@ func setDataDir(ctx *cli.Context, cfg *node.Config) {
 }
 
 func setGPO(ctx *cli.Context, cfg *gasprice.Config) {
+	if ctx.GlobalIsSet(GpoLegacyBlocksFlag.Name) {
+		cfg.Blocks = ctx.GlobalInt(GpoLegacyBlocksFlag.Name)
+	}
 	if ctx.GlobalIsSet(GpoBlocksFlag.Name) {
 		cfg.Blocks = ctx.GlobalInt(GpoBlocksFlag.Name)
+	}
+
+	if ctx.GlobalIsSet(GpoLegacyPercentileFlag.Name) {
+		cfg.Percentile = ctx.GlobalInt(GpoLegacyPercentileFlag.Name)
 	}
 	if ctx.GlobalIsSet(GpoPercentileFlag.Name) {
 		cfg.Percentile = ctx.GlobalInt(GpoPercentileFlag.Name)

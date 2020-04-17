@@ -259,6 +259,8 @@ var AppHelpFlagGroups = []flagGroup{
 			utils.RPCLegacyCORSDomainFlag,
 			utils.RPCLegacyVirtualHostsFlag,
 			utils.RPCLegacyApiFlag,
+			utils.GpoLegacyBlocksFlag,
+			utils.GpoLegacyPercentileFlag,
 		}, debug.DeprecatedFlags...),
 	},
 	{
