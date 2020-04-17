@@ -35,6 +35,63 @@ func TestBinaryLeafReadEmpty(t *testing.T) {
 	}
 }
 
+func TestBinaryReadPrefix(t *testing.T) {
+	trieLeaf := &BinaryTrie{
+		prefix:   []byte("croissants"),
+		startBit: 0,
+		endBit:   8 * len("croissants"),
+		left:     nil,
+		right:    nil,
+		value:    []byte("baguette"),
+	}
+
+	res, err := trieLeaf.TryGet([]byte("croissants"))
+	if !bytes.Equal(res, []byte("baguette")) {
+		t.Fatalf("should have returned an error trying to get from an empty binry trie, err=%v", err)
+	}
+
+	trieExtLeaf := &BinaryTrie{
+		prefix:   []byte("crois"),
+		startBit: 0,
+		endBit:   8 * len("crois"),
+		left: &BinaryTrie{
+			prefix:   []byte("sants"),
+			startBit: 1,
+			endBit:   8 * len("sants"),
+			value:    []byte("baguette"),
+			left:     nil,
+			right:    nil,
+		},
+		right: nil,
+	}
+
+	res, err = trieExtLeaf.TryGet([]byte("croissants"))
+	if !bytes.Equal(res, []byte("baguette")) {
+		t.Fatalf("should not have returned err=%v", err)
+	}
+
+	// Same test as above but the break isn't on a byte boundary
+	trieExtLeaf = &BinaryTrie{
+		prefix:   []byte("crois"),
+		startBit: 0,
+		endBit:   8*len("crois") - 3,
+		left: &BinaryTrie{
+			prefix:   []byte("ssants"),
+			startBit: 6,
+			endBit:   8 * len("ssants"),
+			value:    []byte("baguette"),
+			left:     nil,
+			right:    nil,
+		},
+		right: nil,
+	}
+
+	res, err = trieExtLeaf.TryGet([]byte("croissants"))
+	if !bytes.Equal(res, []byte("baguette")) {
+		t.Fatalf("should not have returned err=%v", err)
+	}
+}
+
 func TestBinaryLeafInsert(t *testing.T) {
 	trie, err := NewBinary(nil)
 	if err != nil {
@@ -134,5 +191,66 @@ func TestBinaryInsertLeftRight(t *testing.T) {
 			t.Fatal("invalid trie structure")
 		}
 		tr = tr.(*BinaryTrie).left
+	}
+}
+
+func TestPrefixBitLen(t *testing.T) {
+	btrie := new(BinaryTrie)
+
+	got := btrie.getPrefixLen()
+	if got != 0 {
+		t.Fatalf("Invalid prefix length, got %d != exp %d", got, 0)
+	}
+
+	btrie.prefix = []byte("croissants")
+	got = btrie.getPrefixLen()
+	if got != 0 {
+		t.Fatalf("Invalid prefix length, got %d != exp %d", got, 0)
+	}
+
+	btrie.endBit = 5
+	got = btrie.getPrefixLen()
+	if got != 5 {
+		t.Fatalf("Invalid prefix length, got %d != exp %d", got, 5)
+	}
+
+	btrie.endBit = 12
+	got = btrie.getPrefixLen()
+	if got != 12 {
+		t.Fatalf("Invalid prefix length, got %d != exp %d", got, 12)
+	}
+
+	btrie.endBit = 27
+	got = btrie.getPrefixLen()
+	if got != 27 {
+		t.Fatalf("Invalid prefix length, got %d != exp %d", got, 27)
+	}
+
+	btrie.startBit = 25
+	got = btrie.getPrefixLen()
+	if got != 2 {
+		t.Fatalf("Invalid prefix length, got %d != exp %d", got, 2)
+	}
+
+	btrie.endBit = 33
+	got = btrie.getPrefixLen()
+	if got != 8 {
+		t.Fatalf("Invalid prefix length, got %d != exp %d", got, 8)
+	}
+}
+
+func TestPrefixBitAccess(t *testing.T) {
+	btrie := new(BinaryTrie)
+	btrie.prefix = []byte{0x55, 0x55}
+	btrie.startBit = 0
+	btrie.endBit = 15
+
+	for i := 0; i < btrie.getPrefixLen(); i += 2 {
+		if btrie.getPrefixBit(i) != false {
+			t.Fatal("Got the wrong bit value")
+		}
+		if btrie.getPrefixBit(i+1) != true {
+			t.Fatal("Got the wrong bit value")
+		}
 	}
 }

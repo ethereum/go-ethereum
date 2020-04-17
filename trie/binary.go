@@ -40,6 +40,15 @@ type (
 		right binaryNode
 		value []byte
 		db    ethdb.Database
+
+		// This is the binary equivalent of "extension nodes":
+		// binary nodes can have a prefix that is common to all
+		// subtrees. The prefix is defined by a series of bytes,
+		// and two offsets marking the start bit and the end bit
+		// of the range.
+		prefix   []byte
+		startBit int
+		endBit   int
 	}
 	hashBinaryNode []byte
 )
@@ -62,26 +71,60 @@ func (t *BinaryTrie) TryGet(key []byte) ([]byte, error) {
 	return value, err
 }
 
-func (t *BinaryTrie) tryGet(key []byte, depth int) ([]byte, error) {
-	by := key[depth/8]
-	bi := (by >> uint(7-depth%8)) & 1
-	if bi == 0 {
-		if t.left == nil {
-			if depth < len(key)*8-1 || t.value == nil {
-				return nil, fmt.Errorf("could not find key %s in trie", common.ToHex(key))
-			}
-			return t.value, nil
-		}
-		return t.left.tryGet(key, depth+1)
-	} else {
-		if t.right == nil {
-			if depth < len(key)*8-1 || t.value == nil {
-				return nil, fmt.Errorf("could not find key 0x%x in trie", key)
-			}
-			return t.value, nil
-		}
-		return t.right.tryGet(key, depth+1)
+func (t *BinaryTrie) getPrefixLen() int {
+	if t.endBit > t.startBit {
+		return t.endBit - t.startBit
 	}
+	return 0
+}
+
+func getBit(key []byte, off int) bool {
+	mask := byte(1) << (7 - uint(off)%8)
+
+	return byte(key[uint(off)/8])&mask != byte(0)
+}
+
+func (t *BinaryTrie) getPrefixBit(bitnum int) bool {
+	if bitnum > t.getPrefixLen() {
+		panic(fmt.Sprintf("Trying to get bit #%d in a %d bit-long bitfield", bitnum, t.getPrefixLen()))
+	}
+	return getBit(t.prefix, t.startBit+bitnum)
+}
+
+func (t *BinaryTrie) tryGet(key []byte, depth int) ([]byte, error) {
+	// Compare the key and the prefix. If they represent the
+	// same bitfield, recurse. Otherwise, raise an error as
+	// the value isn't present in this trie.
+	var i int
+	for i = 0; i < t.getPrefixLen(); i++ {
+		if getBit(key, depth+i) != t.getPrefixBit(i) {
+			return nil, fmt.Errorf("Key %v isn't present in this trie", key)
+		}
+	}
+
+	// Exit condition: has the length of the key been reached?
+	if depth+i == 8*len(key) {
+		if t.value == nil {
+			return nil, fmt.Errorf("Key %v isn't present in this trie", key)
+		}
+		return t.value, nil
+	}
+
+	// End of the key hasn't been reached, recurse into left or right
+	// if the corresponding node is available.
+	child := t.left
+	isRight := getBit(key, depth+i)
+	if isRight {
+		child = t.right
+	}
+
+	if child == nil {
+		if depth+i < len(key)*8-1 || t.value == nil {
+			return nil, fmt.Errorf("could not find key 0x%s in trie %v %v %v", common.ToHex(key), depth+i, len(key), t.value)
+		}
+		return t.value, nil
+	}
+	return child.tryGet(key, depth+i+1)
 }
 
 func (t *BinaryTrie) Update(key, value []byte) {
@@ -135,10 +178,10 @@ func (t *BinaryTrie) insert(depth int, key, value []byte) error {
 				t.value = value
 				return nil
 			case len(key)*8 - 2:
-				t.left = &BinaryTrie{nil, nil, value, t.db}
+				t.left = &BinaryTrie{nil, nil, value, t.db, nil, 0, 0}
 				return nil
 			default:
-				t.left = &BinaryTrie{nil, nil, nil, t.db}
+				t.left = &BinaryTrie{nil, nil, nil, t.db, nil, 0, 0}
 			}
 		}
 		return t.left.insert(depth+1, key, value)
@@ -156,10 +199,10 @@ func (t *BinaryTrie) insert(depth int, key, value []byte) error {
 				t.value = value
 				return nil
 			case len(key)*8 - 2:
-				t.right = &BinaryTrie{nil, nil, value, t.db}
+				t.right = &BinaryTrie{nil, nil, value, t.db, nil, 0, 0}
 				return nil
 			default:
-				t.right = &BinaryTrie{nil, nil, nil, t.db}
+				t.right = &BinaryTrie{nil, nil, nil, t.db, nil, 0, 0}
 			}
 		}
 		return t.right.insert(depth+1, key, value)
