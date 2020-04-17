@@ -538,53 +538,53 @@ var (
 		Usage: "Enable the HTTP-RPC server (deprecated, use --http)",
 	}
 	HTTPListenAddrFlag = cli.StringFlag{
-		Name:  "httpaddr",
+		Name:  "http.addr",
 		Usage: "HTTP-RPC server listening interface",
 		Value: node.DefaultHTTPHost,
 	}
 	RPCLegacyListenAddrFlag = cli.StringFlag{
 		Name:  "rpcaddr",
-		Usage: "HTTP-RPC server listening interface (deprecated, use --httpaddr)",
+		Usage: "HTTP-RPC server listening interface (deprecated, use --http.addr)",
 		Value: node.DefaultHTTPHost,
 	}
 	HTTPPortFlag = cli.IntFlag{
-		Name:  "httpport",
+		Name:  "http.port",
 		Usage: "HTTP-RPC server listening port",
 		Value: node.DefaultHTTPPort,
 	}
 	RPCLegacyPortFlag = cli.IntFlag{
 		Name:  "rpcport",
-		Usage: "HTTP-RPC server listening port (deprecated, use --httpport)",
+		Usage: "HTTP-RPC server listening port (deprecated, use --http.port)",
 		Value: node.DefaultHTTPPort,
 	}
 	HTTPCORSDomainFlag = cli.StringFlag{
-		Name:  "httpcorsdomain",
+		Name:  "http.corsdomain",
 		Usage: "Comma separated list of domains from which to accept cross origin requests (browser enforced)",
 		Value: "",
 	}
 	RPCLegacyCORSDomainFlag = cli.StringFlag{
 		Name:  "rpccorsdomain",
-		Usage: "Comma separated list of domains from which to accept cross origin requests (browser enforced) (deprecated, use --httpcorsdomain)",
+		Usage: "Comma separated list of domains from which to accept cross origin requests (browser enforced) (deprecated, use --http.corsdomain)",
 		Value: "",
 	}
 	HTTPVirtualHostsFlag = cli.StringFlag{
-		Name:  "httpvhosts",
+		Name:  "http.vhosts",
 		Usage: "Comma separated list of virtual hostnames from which to accept requests (server enforced). Accepts '*' wildcard.",
 		Value: strings.Join(node.DefaultConfig.HTTPVirtualHosts, ","),
 	}
 	RPCLegacyVirtualHostsFlag = cli.StringFlag{
 		Name:  "rpcvhosts",
-		Usage: "Comma separated list of virtual hostnames from which to accept requests (server enforced). Accepts '*' wildcard. (deprecated, use --httpvhosts)",
+		Usage: "Comma separated list of virtual hostnames from which to accept requests (server enforced). Accepts '*' wildcard. (deprecated, use --http.vhosts)",
 		Value: strings.Join(node.DefaultConfig.HTTPVirtualHosts, ","),
 	}
 	HTTPApiFlag = cli.StringFlag{
-		Name:  "httpapi",
+		Name:  "http.api",
 		Usage: "API's offered over the HTTP-RPC interface",
 		Value: "",
 	}
 	RPCLegacyApiFlag = cli.StringFlag{
 		Name:  "rpcapi",
-		Usage: "API's offered over the HTTP-RPC interface (deprecated, use --httpapi)",
+		Usage: "API's offered over the HTTP-RPC interface (deprecated, use --http.api)",
 		Value: "",
 	}
 	WSEnabledFlag = cli.BoolFlag{
@@ -592,23 +592,43 @@ var (
 		Usage: "Enable the WS-RPC server",
 	}
 	WSListenAddrFlag = cli.StringFlag{
-		Name:  "wsaddr",
+		Name:  "ws.addr",
 		Usage: "WS-RPC server listening interface",
 		Value: node.DefaultWSHost,
 	}
+	WSLegacyListenAddrFlag = cli.StringFlag{
+		Name:  "wsaddr",
+		Usage: "WS-RPC server listening interface (deprecated, use --ws.addr)",
+		Value: node.DefaultWSHost,
+	}
 	WSPortFlag = cli.IntFlag{
-		Name:  "wsport",
+		Name:  "ws.port",
 		Usage: "WS-RPC server listening port",
 		Value: node.DefaultWSPort,
 	}
+	WSLegacyPortFlag = cli.IntFlag{
+		Name:  "wsport",
+		Usage: "WS-RPC server listening port (deprecated, use --ws.port)",
+		Value: node.DefaultWSPort,
+	}
 	WSApiFlag = cli.StringFlag{
-		Name:  "wsapi",
+		Name:  "ws.api",
 		Usage: "API's offered over the WS-RPC interface",
 		Value: "",
 	}
+	WSLegacyApiFlag = cli.StringFlag{
+		Name:  "wsapi",
+		Usage: "API's offered over the WS-RPC interface (deprecated, use --ws.api)",
+		Value: "",
+	}
 	WSAllowedOriginsFlag = cli.StringFlag{
-		Name:  "wsorigins",
+		Name:  "ws.origins",
 		Usage: "Origins from which to accept websockets requests",
+		Value: "",
+	}
+	WSLegacyAllowedOriginsFlag = cli.StringFlag{
+		Name:  "wsorigins",
+		Usage: "Origins from which to accept websockets requests (deprecated, use --ws.origins)",
 		Value: "",
 	}
 	GraphQLEnabledFlag = cli.BoolFlag{
@@ -1028,15 +1048,29 @@ func setGraphQL(ctx *cli.Context, cfg *node.Config) {
 func setWS(ctx *cli.Context, cfg *node.Config) {
 	if ctx.GlobalBool(WSEnabledFlag.Name) && cfg.WSHost == "" {
 		cfg.WSHost = "127.0.0.1"
+		if ctx.GlobalIsSet(WSLegacyListenAddrFlag.Name) {
+			cfg.WSHost = ctx.GlobalString(WSLegacyListenAddrFlag.Name)
+		}
 		if ctx.GlobalIsSet(WSListenAddrFlag.Name) {
 			cfg.WSHost = ctx.GlobalString(WSListenAddrFlag.Name)
 		}
 	}
+	if ctx.GlobalIsSet(WSLegacyPortFlag.Name) {
+		cfg.WSPort = ctx.GlobalInt(WSLegacyPortFlag.Name)
+	}
 	if ctx.GlobalIsSet(WSPortFlag.Name) {
 		cfg.WSPort = ctx.GlobalInt(WSPortFlag.Name)
 	}
+
+	if ctx.GlobalIsSet(WSLegacyAllowedOriginsFlag.Name) {
+		cfg.WSOrigins = splitAndTrim(ctx.GlobalString(WSLegacyAllowedOriginsFlag.Name))
+	}
 	if ctx.GlobalIsSet(WSAllowedOriginsFlag.Name) {
 		cfg.WSOrigins = splitAndTrim(ctx.GlobalString(WSAllowedOriginsFlag.Name))
+	}
+
+	if ctx.GlobalIsSet(WSLegacyApiFlag.Name) {
+		cfg.WSModules = splitAndTrim(ctx.GlobalString(WSLegacyApiFlag.Name))
 	}
 	if ctx.GlobalIsSet(WSApiFlag.Name) {
 		cfg.WSModules = splitAndTrim(ctx.GlobalString(WSApiFlag.Name))
