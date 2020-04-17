@@ -243,8 +243,14 @@ var AppHelpFlagGroups = []flagGroup{
 		Flags: whisperFlags,
 	},
 	{
-		Name: "DEPRECATED",
+		Name: "ALIASED OPTIONS (deprecated)",
 		Flags: []cli.Flag{
+			utils.RPCLegacyEnabledFlag,
+			utils.RPCLegacyListenAddrFlag,
+			utils.RPCLegacyPortFlag,
+			utils.RPCLegacyCORSDomainFlag,
+			utils.RPCLegacyVirtualHostsFlag,
+			utils.RPCLegacyApiFlag,
 			utils.LegacyTestnetFlag,
 			utils.LightLegacyServFlag,
 			utils.LightLegacyPeersFlag,

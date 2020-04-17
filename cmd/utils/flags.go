@@ -533,8 +533,17 @@ var (
 		Name:  "http",
 		Usage: "Enable the HTTP-RPC server",
 	}
+	RPCLegacyEnabledFlag = cli.BoolFlag{
+		Name:  "rpc",
+		Usage: "Enable the HTTP-RPC server",
+	}
 	HTTPListenAddrFlag = cli.StringFlag{
 		Name:  "httpaddr",
+		Usage: "HTTP-RPC server listening interface",
+		Value: node.DefaultHTTPHost,
+	}
+	RPCLegacyListenAddrFlag = cli.StringFlag{
+		Name:  "rpcaddr",
 		Usage: "HTTP-RPC server listening interface",
 		Value: node.DefaultHTTPHost,
 	}
@@ -543,8 +552,18 @@ var (
 		Usage: "HTTP-RPC server listening port",
 		Value: node.DefaultHTTPPort,
 	}
+	RPCLegacyPortFlag = cli.IntFlag{
+		Name:  "rpcport",
+		Usage: "HTTP-RPC server listening port",
+		Value: node.DefaultHTTPPort,
+	}
 	HTTPCORSDomainFlag = cli.StringFlag{
 		Name:  "httpcorsdomain",
+		Usage: "Comma separated list of domains from which to accept cross origin requests (browser enforced)",
+		Value: "",
+	}
+	RPCLegacyCORSDomainFlag = cli.StringFlag{
+		Name:  "rpccorsdomain",
 		Usage: "Comma separated list of domains from which to accept cross origin requests (browser enforced)",
 		Value: "",
 	}
@@ -553,8 +572,18 @@ var (
 		Usage: "Comma separated list of virtual hostnames from which to accept requests (server enforced). Accepts '*' wildcard.",
 		Value: strings.Join(node.DefaultConfig.HTTPVirtualHosts, ","),
 	}
+	RPCLegacyVirtualHostsFlag = cli.StringFlag{
+		Name:  "rpcvhosts",
+		Usage: "Comma separated list of virtual hostnames from which to accept requests (server enforced). Accepts '*' wildcard.",
+		Value: strings.Join(node.DefaultConfig.HTTPVirtualHosts, ","),
+	}
 	HTTPApiFlag = cli.StringFlag{
 		Name:  "httpapi",
+		Usage: "API's offered over the HTTP-RPC interface",
+		Value: "",
+	}
+	RPCLegacyApiFlag = cli.StringFlag{
+		Name:  "rpcapi",
 		Usage: "API's offered over the HTTP-RPC interface",
 		Value: "",
 	}
@@ -924,20 +953,42 @@ func splitAndTrim(input string) []string {
 // setHTTP creates the HTTP RPC listener interface string from the set
 // command line flags, returning empty if the HTTP endpoint is disabled.
 func setHTTP(ctx *cli.Context, cfg *node.Config) {
+	if ctx.GlobalBool(RPCLegacyEnabledFlag.Name) && cfg.HTTPHost == "" {
+		cfg.HTTPHost = "127.0.0.1"
+		if ctx.GlobalIsSet(RPCLegacyListenAddrFlag.Name) {
+			cfg.HTTPHost = ctx.GlobalString(RPCLegacyListenAddrFlag.Name)
+		}
+	}
 	if ctx.GlobalBool(HTTPEnabledFlag.Name) && cfg.HTTPHost == "" {
 		cfg.HTTPHost = "127.0.0.1"
 		if ctx.GlobalIsSet(HTTPListenAddrFlag.Name) {
 			cfg.HTTPHost = ctx.GlobalString(HTTPListenAddrFlag.Name)
 		}
 	}
+
+	if ctx.GlobalIsSet(RPCLegacyPortFlag.Name) {
+		cfg.HTTPPort = ctx.GlobalInt(RPCLegacyPortFlag.Name)
+	}
 	if ctx.GlobalIsSet(HTTPPortFlag.Name) {
 		cfg.HTTPPort = ctx.GlobalInt(HTTPPortFlag.Name)
+	}
+
+	if ctx.GlobalIsSet(RPCLegacyCORSDomainFlag.Name) {
+		cfg.HTTPCors = splitAndTrim(ctx.GlobalString(RPCLegacyCORSDomainFlag.Name))
 	}
 	if ctx.GlobalIsSet(HTTPCORSDomainFlag.Name) {
 		cfg.HTTPCors = splitAndTrim(ctx.GlobalString(HTTPCORSDomainFlag.Name))
 	}
+
+	if ctx.GlobalIsSet(RPCLegacyApiFlag.Name) {
+		cfg.HTTPModules = splitAndTrim(ctx.GlobalString(RPCLegacyApiFlag.Name))
+	}
 	if ctx.GlobalIsSet(HTTPApiFlag.Name) {
 		cfg.HTTPModules = splitAndTrim(ctx.GlobalString(HTTPApiFlag.Name))
+	}
+
+	if ctx.GlobalIsSet(RPCLegacyVirtualHostsFlag.Name) {
+		cfg.HTTPVirtualHosts = splitAndTrim(ctx.GlobalString(RPCLegacyVirtualHostsFlag.Name))
 	}
 	if ctx.GlobalIsSet(HTTPVirtualHostsFlag.Name) {
 		cfg.HTTPVirtualHosts = splitAndTrim(ctx.GlobalString(HTTPVirtualHostsFlag.Name))
