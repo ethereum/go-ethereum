@@ -25,6 +25,7 @@ import (
 	"runtime"
 
 	"github.com/ethereum/go-ethereum/log"
+	"github.com/ethereum/go-ethereum/log/splunk"
 	"github.com/ethereum/go-ethereum/metrics"
 	"github.com/ethereum/go-ethereum/metrics/exp"
 	"github.com/fjl/memsize/memsizeui"
@@ -87,28 +88,28 @@ var (
 		Usage: "Write execution trace to the given file",
 	}
 	splunkurlFlag = cli.StringFlag{
-		Name:  "splunkurl",
+		Name:  "log.splunkurl",
 		Usage: "URL to Splunk HTTP Event Collector",
 	}
 	splunktokenFlag = cli.StringFlag{
-		Name:  "splunktoken",
+		Name:  "log.splunktoken",
 		Usage: "Splunk HTTP Event Collector token",
 	}
 	splunksourceFlag = cli.StringFlag{
-		Name:  "splunksource",
+		Name:  "log.splunksource",
 		Usage: "Splunk source field value, description of the source of the event",
 		Value: "geth",
 	}
 	splunkindexFlag = cli.StringFlag{
-		Name:  "splunkindex",
+		Name:  "log.splunkindex",
 		Usage: "Splunk Index, optional name of the Splunk index to store the event in",
 	}
 	splunksourcetypeFlag = cli.StringFlag{
-		Name:  "splunksourcetype",
+		Name:  "log.splunksourcetype",
 		Usage: "Splunk source type, optional name of a sourcetype field value",
 	}
 	splunkskiptlsverifyFlag = cli.BoolFlag{
-		Name:  "splunkskiptlsverify",
+		Name:  "log.splunkskiptlsverify",
 		Usage: "Skip verifying the certificate of the HTTP Event Collector",
 	}
 )
@@ -143,21 +144,22 @@ func Setup(ctx *cli.Context) error {
 	// logging
 	splunkURL := ctx.GlobalString(splunkurlFlag.Name)
 	if splunkURL != "" {
-		splunkToken := ctx.GlobalString(splunktokenFlag.Name)
-		splunkSource := ctx.GlobalString(splunksourceFlag.Name)
-		splunkSourceType := ctx.GlobalString(splunksourcetypeFlag.Name)
-		splunkIndex := ctx.GlobalString(splunkindexFlag.Name)
-		splunkSkipTLSVerify := ctx.GlobalBool(splunkskiptlsverifyFlag.Name)
+
 		originalHandler := log.NewGlogHandler(ostream)
 		originalHandler.Verbosity(log.Lvl(ctx.GlobalInt(verbosityFlag.Name)))
 		originalHandler.Vmodule(ctx.GlobalString(vmoduleFlag.Name))
 		originalHandler.BacktraceAt(ctx.GlobalString(backtraceAtFlag.Name))
-		splunkstream, err := log.SplunkHandler(splunkURL, splunkToken, splunkSource, splunkSourceType, splunkIndex,
-			splunkSkipTLSVerify, log.TerminalFormat(false), originalHandler)
-		if err != nil {
-			return err
+
+		splunkHandler := &splunk.Handler{
+			URL:             splunkURL,
+			Token:           ctx.GlobalString(splunktokenFlag.Name),
+			Source:          ctx.GlobalString(splunksourceFlag.Name),
+			SourceType:      ctx.GlobalString(splunksourcetypeFlag.Name),
+			Index:           ctx.GlobalString(splunkindexFlag.Name),
+			SkipTLSVerify:   ctx.GlobalBool(splunkskiptlsverifyFlag.Name),
+			OriginalHandler: originalHandler,
 		}
-		glogger.SetHandler(splunkstream)
+		glogger.SetHandler(log.BufferedHandler(100, splunkHandler))
 	}
 	log.PrintOrigins(ctx.GlobalBool(debugFlag.Name))
 	glogger.Verbosity(log.Lvl(ctx.GlobalInt(verbosityFlag.Name)))

@@ -1,17 +1,13 @@
 package log
 
 import (
-	"crypto/tls"
 	"fmt"
 	"io"
 	"net"
-	"net/http"
 	"os"
 	"reflect"
 	"sync"
-	"time"
 
-	"github.com/ethereum/go-ethereum/log/splunk"
 	"github.com/go-stack/stack"
 )
 
@@ -83,34 +79,6 @@ func NetHandler(network, addr string, fmtr Format) (Handler, error) {
 	}
 
 	return closingHandler{conn, StreamHandler(conn, fmtr)}, nil
-}
-
-// SplunkHandler posts data to Splunk HTTP Event Collector.
-func SplunkHandler(url, token, source, sourcetype, index string, skipTLSVerify bool, fmtr Format,
-	originalHandler Handler) (Handler, error) {
-	originalLogger := logger{[]interface{}{}, new(swapHandler)}
-	originalLogger.SetHandler(originalHandler)
-	tr := &http.Transport{TLSClientConfig: &tls.Config{InsecureSkipVerify: skipTLSVerify}}
-	httpClient := &http.Client{Timeout: time.Second * 20, Transport: tr}
-	splunkClient := splunk.NewClient(
-		httpClient,
-		url,
-		token,
-		source,
-		sourcetype,
-		index,
-	)
-	writer := &splunk.Writer{
-		Client:     splunkClient,
-		MaxRetries: 2,
-	}
-	go func() {
-		for {
-			err := <-writer.Errors()
-			originalLogger.Warn("Error sending info to Splunk", "err", err)
-		}
-	}()
-	return StreamHandler(writer, fmtr), nil
 }
 
 // XXX: closingHandler is essentially unused at the moment
