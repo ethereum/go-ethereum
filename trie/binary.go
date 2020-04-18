@@ -20,6 +20,7 @@ import (
 	"bytes"
 	"fmt"
 	"io"
+	"strings"
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/ethdb"
@@ -204,9 +205,37 @@ func (t *BinaryTrie) insert(depth int, key, value []byte) error {
 			default:
 				t.right = &BinaryTrie{nil, nil, nil, t.db, nil, 0, 0}
 			}
+
+func dotHelper(prefix string, t *BinaryTrie) ([]string, []string) {
+	p := []byte{}
+	for i := 0; i < t.getPrefixLen(); i++ {
+		if t.getPrefixBit(i) {
+			p = append(p, []byte("1")...)
+		} else {
+			p = append(p, []byte("0")...)
 		}
-		return t.right.insert(depth+1, key, value)
 	}
+	nodeName := fmt.Sprintf("binNode%s%s", p, prefix)
+	nodes := []string{nodeName}
+	links := []string{}
+	if t.left != nil {
+		n, l := dotHelper(fmt.Sprintf("%s%s%d", p, prefix, 0), t.left.(*BinaryTrie))
+		nodes = append(nodes, n...)
+		links = append(links, fmt.Sprintf("%s -> %s", nodeName, n[0]))
+		links = append(links, l...)
+	}
+	if t.right != nil {
+		n, l := dotHelper(fmt.Sprintf("%s%s%d", p, prefix, 1), t.right.(*BinaryTrie))
+		nodes = append(nodes, n...)
+		links = append(links, fmt.Sprintf("%s -> %s", nodeName, n[0]))
+		links = append(links, l...)
+	}
+	return nodes, links
+}
+
+func (t *BinaryTrie) toDot() string {
+	nodes, links := dotHelper("", t)
+	return fmt.Sprintf("digraph D {\n%s\n%s\n}", strings.Join(nodes, "\n"), strings.Join(links, "\n"))
 }
 
 func (t *BinaryTrie) Commit() error {
