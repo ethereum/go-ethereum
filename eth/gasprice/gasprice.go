@@ -24,7 +24,6 @@ import (
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/types"
-	"github.com/ethereum/go-ethereum/internal/ethapi"
 	"github.com/ethereum/go-ethereum/params"
 	"github.com/ethereum/go-ethereum/rpc"
 )
@@ -39,10 +38,17 @@ type Config struct {
 	Default    *big.Int `toml:",omitempty"`
 }
 
+// OracleBackend includes all necessary background APIs for oracle.
+type OracleBackend interface {
+	HeaderByNumber(ctx context.Context, number rpc.BlockNumber) (*types.Header, error)
+	BlockByNumber(ctx context.Context, number rpc.BlockNumber) (*types.Block, error)
+	ChainConfig() *params.ChainConfig
+}
+
 // Oracle recommends gas prices based on the content of recent
 // blocks. Suitable for both light and full clients.
 type Oracle struct {
-	backend   ethapi.Backend
+	backend   OracleBackend
 	lastHead  common.Hash
 	lastPrice *big.Int
 	cacheLock sync.RWMutex
@@ -54,7 +60,7 @@ type Oracle struct {
 
 // NewOracle returns a new gasprice oracle which can recommend suitable
 // gasprice for newly created transaction.
-func NewOracle(backend ethapi.Backend, params Config) *Oracle {
+func NewOracle(backend OracleBackend, params Config) *Oracle {
 	blocks := params.Blocks
 	if blocks < 1 {
 		blocks = 1
