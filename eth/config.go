@@ -39,10 +39,10 @@ var DefaultFullGPOConfig = gasprice.Config{
 	Percentile: 60,
 }
 
-// DefaultFullGPOConfig contains default gasprice oracle settings for light client.
+// DefaultLightGPOConfig contains default gasprice oracle settings for light client.
 var DefaultLightGPOConfig = gasprice.Config{
 	Blocks:     2,
-	Percentile: 50,
+	Percentile: 60,
 }
 
 // DefaultConfig contains default settings for use on the Ethereum main net.
