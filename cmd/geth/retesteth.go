@@ -17,8 +17,11 @@
 package main
 
 import (
+	"bytes"
 	"context"
 	"fmt"
+	"github.com/ethereum/go-ethereum/consensus/misc"
+	"github.com/ethereum/go-ethereum/params"
 	"io/ioutil"
 	"math/big"
 	"os"
@@ -97,6 +100,9 @@ type SRItem struct {
 type RetestethAPI struct {
 	testclient	  *tester
 	rpchandler    *rpc.Server
+
+	author        common.Address    // Block coinbase for test_mineBlocks
+	extraData     []byte			// Block extradata for test_mineBlocks
 	blockInterval uint64
 }
 
@@ -120,8 +126,10 @@ func (api *RetestethAPI) SetChainParams(ctx context.Context, chainParams ChainPa
 	}
 
 	api.testclient = newTester(&chainParams.Genesis)
-	api.testclient.ethereum.SetEtherbase(chainParams.Genesis.Coinbase)
-	api.testclient.ethereum.Miner().SetExtra(chainParams.Genesis.ExtraData)
+	//api.testclient.ethereum.SetEtherbase(chainParams.Genesis.Coinbase)
+	//api.testclient.ethereum.Miner().SetExtra(chainParams.Genesis.ExtraData)
+	api.extraData = chainParams.Genesis.ExtraData
+	api.author = chainParams.Genesis.Coinbase
 
 	nonceLock := new(ethapi.AddrLocker) // !!!new
 	api.rpchandler.RegisterName("eth", ethapi.NewPublicBlockChainAPI(api.testclient.ethereum.APIBackend))
@@ -140,19 +148,122 @@ func (api *RetestethAPI) MineBlocks(ctx context.Context, number uint64) (bool, e
 
 	// NOT THREAD SAFE!!!
 	api.testclient.ethereum.StartMining(1)
+	times := 0
 
 	for currentNumber < upToBlock {
 		currentNumber = api.testclient.ethereum.BlockChain().CurrentBlock().Number().Uint64()
+		times += 1
 		if currentNumber == startBlock + 1 && fakeBlockRemoved == false {
-			api.testclient.ethereum.BlockChain().Reset()
-			currentNumber = startBlock
-			fakeBlockRemoved = true
+			if api.testclient.ethereum.BlockChain().CurrentBlock().Transactions().Len() == 0 {
+				api.testclient.ethereum.BlockChain().Reset()
+				currentNumber = startBlock
+				fakeBlockRemoved = true
+			}
 		}
 	}
 
 	api.testclient.ethereum.StopMining()
 	api.testclient.ethereum.BlockChain().SetHead(upToBlock)
+	time.Sleep(time.Second * 1)
 	return true, nil
+}
+
+func (api *RetestethAPI) mineBlock() error {
+	number := api.testclient.ethereum.BlockChain().CurrentBlock().Number().Uint64()
+	parentHash := rawdb.ReadCanonicalHash(api.testclient.ethereum.ChainDb(), number)
+	parent := rawdb.ReadBlock(api.testclient.ethereum.ChainDb(), parentHash, number)
+	var timestamp uint64
+	if api.blockInterval == 0 {
+		timestamp = uint64(time.Now().Unix())
+	} else {
+		timestamp = parent.Time() + api.blockInterval
+	}
+	gasLimit := core.CalcGasLimit(parent, 9223372036854775807, 9223372036854775807)
+	header := &types.Header{
+		ParentHash: parent.Hash(),
+		Number:     big.NewInt(int64(number + 1)),
+		GasLimit:   gasLimit,
+		Extra:      api.extraData,
+		Time:       timestamp,
+	}
+	header.Coinbase = api.author
+
+	api.testclient.ethereum.Engine().Prepare(api.testclient.ethereum.BlockChain(), header)
+
+	// If we are care about TheDAO hard-fork check whether to override the extra-data or not
+	if daoBlock := api.testclient.ethereum.BlockChain().Config().DAOForkBlock; daoBlock != nil {
+		// Check whether the block is among the fork extra-override range
+		limit := new(big.Int).Add(daoBlock, params.DAOForkExtraRange)
+		if header.Number.Cmp(daoBlock) >= 0 && header.Number.Cmp(limit) < 0 {
+			// Depending whether we support or oppose the fork, override differently
+			if api.testclient.ethereum.BlockChain().Config().DAOForkSupport {
+				header.Extra = common.CopyBytes(params.DAOForkBlockExtra)
+			} else if bytes.Equal(header.Extra, params.DAOForkBlockExtra) {
+				header.Extra = []byte{} // If miner opposes, don't let it use the reserved extra-data
+			}
+		}
+	}
+	statedb, err := api.testclient.ethereum.BlockChain().StateAt(parent.Root())
+	if err != nil {
+		return err
+	}
+	if api.testclient.ethereum.BlockChain().Config().DAOForkSupport && api.testclient.ethereum.BlockChain().Config().DAOForkBlock != nil && api.testclient.ethereum.BlockChain().Config().DAOForkBlock.Cmp(header.Number) == 0 {
+		misc.ApplyDAOHardFork(statedb)
+	}
+	gasPool := new(core.GasPool).AddGas(header.GasLimit)
+	txCount := 0
+	var txs []*types.Transaction
+	var receipts []*types.Receipt
+	var blockFull = gasPool.Gas() < params.TxGas
+	var txPending,_ = api.testclient.ethereum.TxPool().Pending()
+	for address := range txPending {
+		if blockFull {
+			break
+		}
+
+		var m = txPending[address]
+
+		for nonce := statedb.GetNonce(address); ; nonce++ {
+			if tx := m[0]; true {
+				// Try to apply transactions to the state
+				statedb.Prepare(tx.Hash(), common.Hash{}, txCount)
+				snap := statedb.Snapshot()
+
+				receipt, err := core.ApplyTransaction(
+					api.testclient.ethereum.BlockChain().Config(),
+					api.testclient.ethereum.BlockChain(),
+					&api.author,
+					gasPool,
+					statedb,
+					header, tx, &header.GasUsed, *api.testclient.ethereum.BlockChain().GetVMConfig(),
+				)
+				if err != nil {
+					statedb.RevertToSnapshot(snap)
+					break
+				}
+				txs = append(txs, tx)
+				receipts = append(receipts, receipt)
+				//delete(m, nonce)
+				if len(m) == 0 {
+					// Last tx for the sender
+					//delete(api.txMap, address)
+					//delete(api.txSenders, address)
+				}
+				txCount++
+				if gasPool.Gas() < params.TxGas {
+					blockFull = true
+					break
+				}
+			} else {
+				break // Gap in the nonces
+			}
+		}
+	}
+	block, err := api.testclient.ethereum.Engine().FinalizeAndAssemble(api.testclient.ethereum.BlockChain(), header, statedb, txs, []*types.Header{}, receipts)
+	if err != nil {
+		return err
+	}
+	return api.importBlock(block)
 }
 
 // Original storage range implementation. Geth StorageRangeAt has no consensus
