@@ -420,6 +420,7 @@ func diffToDisk(bottom *diffLayer) *diskLayer {
 	// Mark the original base as stale as we're going to create a new wrapper
 	base.lock.Lock()
 	if base.stale {
+		base.lock.Unlock()
 		panic("parent disk layer is stale") // we've committed into the same base from two children, boo
 	}
 	base.stale = true
