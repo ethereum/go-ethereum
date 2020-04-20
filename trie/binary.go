@@ -26,6 +26,7 @@ import (
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/ethdb"
 	"github.com/ethereum/go-ethereum/log"
+	"github.com/ethereum/go-ethereum/rlp"
 	"golang.org/x/crypto/sha3"
 )
 
@@ -140,31 +141,31 @@ func (t *BinaryTrie) Update(key, value []byte) {
 	}
 }
 
+// Hash calculates the hash of an expanded (i.e. not already
+// hashed) node.
 func (t *BinaryTrie) Hash() []byte {
+	return t.hash()
+}
+
+func (t *BinaryTrie) hash() []byte {
 	var payload bytes.Buffer
 
-	var lh []byte
+	// Calculate the hash of both subtrees
+	var lh, rh []byte
 	if t.left != nil {
 		lh = t.left.Hash()
 	}
-	payload.Write(lh)
 	t.left = hashBinaryNode(lh)
-
-	var rh []byte
 	if t.right != nil {
 		rh = t.right.Hash()
 	}
-	payload.Write(rh)
 	t.right = hashBinaryNode(rh)
 
-	hasher := sha3.NewLegacyKeccak256()
-	if t.value != nil {
-		hasher.Write(t.value)
-		hv := hasher.Sum(nil)
-		payload.Write(hv)
-	}
+	// Create the "bitprefix" which indicates which are the start and
+	// end bit inside the prefix value.
+	rlp.Encode(&payload, []interface{}{t.bitPrefix(), lh, rh, t.value})
 
-	hasher.Reset()
+	hasher := sha3.NewLegacyKeccak256()
 	io.Copy(hasher, &payload)
 	return hasher.Sum(nil)
 }
@@ -213,7 +214,7 @@ func (t *BinaryTrie) insert(depth int, key, value []byte, hashLeft bool) error {
 			// prefixes.
 
 			// Create the [ d e ... ] part
-			oldChild := new(BinaryTrie)
+			oldChild, _ := NewBinary(t.db)
 			oldChild.prefix = t.prefix
 			oldChild.startBit = depth + i + 1
 			oldChild.endBit = t.endBit
@@ -221,7 +222,7 @@ func (t *BinaryTrie) insert(depth int, key, value []byte, hashLeft bool) error {
 			oldChild.right = t.right
 
 			// Create the child3 part
-			newChild := new(BinaryTrie)
+			newChild, _ := NewBinary(t.db)
 			newChild.prefix = key
 			newChild.startBit = depth + i + 1
 			newChild.endBit = len(key) * 8
@@ -240,6 +241,7 @@ func (t *BinaryTrie) insert(depth int, key, value []byte, hashLeft bool) error {
 				t.right = oldChild
 			} else {
 				if hashLeft {
+					oldChild.Commit()
 					t.left = hashBinaryNode(oldChild.Hash())
 				} else {
 					t.left = oldChild
