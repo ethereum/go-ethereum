@@ -154,8 +154,8 @@ func TestBinaryForkInsertRead(t *testing.T) {
 		t.Fatalf("error creating binary trie: %v", err)
 	}
 
-	for i := byte(0); i < 10; i++ {
-		err = trie.TryUpdate([]byte{i}, common.FromHex("01"))
+	for i := byte(0); i <= 10; i++ {
+		err = trie.insert(0, []byte{i}, common.FromHex("01"), false)
 		if err != nil {
 			t.Fatalf("could not insert (%#x, 0x01) into an empty binary trie, err=%v", i, err)
 		}
@@ -183,13 +183,17 @@ func TestBinaryInsertLeftRight(t *testing.T) {
 
 	// Trie is expected to look like this:
 	//         /\
-	//        / /
-	//       / /
-	//      / /
-	//     / /
-	//    / /
-	//   / /
-	//  / /
+	//        H /
+	//         /
+	//        /
+	//       /
+	//      /
+	//     /
+	//    /
+	//
+	// i.e. the left branch is hashed and the
+	// right branch only contains lefts after
+	// the first right.
 
 	// Check there is a left branch
 	if trie.left == nil {
@@ -198,7 +202,7 @@ func TestBinaryInsertLeftRight(t *testing.T) {
 
 	// Check that the left branch has already been hashed
 	if _, ok := trie.left.(hashBinaryNode); !ok {
-		t.Fatalf("left branch should have been hashed!")
+		t.Fatalf("left branch should have been hashed! %v", trie.left)
 	}
 
 	// Check there is a right branch
@@ -206,13 +210,80 @@ func TestBinaryInsertLeftRight(t *testing.T) {
 		t.Fatal("empty right branch")
 	}
 
-	// Check that the right branch has only lefts after the
+	right := trie.right.(*BinaryTrie)
+
+	// Check that the right branch has only 0s after the
 	// first right.
-	for i, tr := 1, trie.right; i < 8; i++ {
-		if tr == nil {
-			t.Fatal("invalid trie structure")
-		}
-		tr = tr.(*BinaryTrie).left
+	if !bytes.Equal(right.prefix, []byte{128}) {
+		t.Fatalf("invalid right prefix %v", right.prefix)
+	}
+	if right.startBit != 1 {
+		t.Fatalf("invalid right start bit 1 != %d", right.startBit)
+	}
+	if right.endBit != 8 {
+		t.Fatalf("invalid right end bit 8 != %d", right.endBit)
+	}
+}
+
+func TestInsertEnd(t *testing.T) {
+	btrie := &BinaryTrie{
+		right:    &BinaryTrie{},
+		prefix:   []byte{1},
+		startBit: 0,
+		endBit:   7,
+	}
+
+	err := btrie.insert(0, []byte{0}, []byte{1}, false)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+}
+
+func TestInsertLeft(t *testing.T) {
+	btrie := &BinaryTrie{
+		prefix:   []byte{1},
+		startBit: 0,
+		endBit:   8,
+	}
+
+	err := btrie.insert(0, []byte{0}, []byte{1}, false)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+}
+
+func TestInsertIntoNil(t *testing.T) {
+	btrie := &BinaryTrie{
+		right: new(BinaryTrie),
+		left:  nil,
+	}
+	err := btrie.insert(0, []byte{0}, []byte{0}, false)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+}
+
+func TestInsertIntoHash(t *testing.T) {
+	btrie := hashBinaryNode([]byte("croissantscroissantscroissantscr"))
+	err := btrie.insert(0, common.Hex2Bytes("01"), common.Hex2Bytes("01"), false)
+	if err != errInsertIntoHash {
+		t.Fatalf("unexpected error %v", err)
+	}
+}
+
+func TestReadFromHash(t *testing.T) {
+	btrie := hashBinaryNode([]byte("croissantscroissantscroissantscr"))
+	_, err := btrie.tryGet(common.Hex2Bytes("01"), 0)
+	if err != errReadFromEmptyTree {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	data, err := btrie.tryGet(common.Hex2Bytes("01"), 8)
+	if err != nil {
+		t.Fatalf("unexpected error %v", err)
+	}
+	if !bytes.Equal(data, []byte(btrie)) {
+		t.Fatalf("unexpected value returned %v", data)
 	}
 }
 

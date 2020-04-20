@@ -18,6 +18,7 @@ package trie
 
 import (
 	"bytes"
+	"errors"
 	"fmt"
 	"io"
 	"strings"
@@ -31,7 +32,7 @@ import (
 type binaryNode interface {
 	Hash() []byte
 	Commit() error
-	insert(depth int, key, value []byte) error
+	insert(depth int, key, value []byte, hashLeft bool) error
 	tryGet(key []byte, depth int) ([]byte, error)
 }
 
@@ -49,9 +50,14 @@ type (
 		// of the range.
 		prefix   []byte
 		startBit int
-		endBit   int
+		endBit   int // Technically, this is the "1st bit past the end"
 	}
 	hashBinaryNode []byte
+)
+
+var (
+	errInsertIntoHash    = errors.New("trying to insert into a hash")
+	errReadFromEmptyTree = errors.New("reached an empty subtree")
 )
 
 func NewBinary(db ethdb.Database) (*BinaryTrie, error) {
@@ -165,46 +171,112 @@ func (t *BinaryTrie) Hash() []byte {
 
 func (t *BinaryTrie) TryUpdate(key, value []byte) error {
 	// TODO check key depth
-	err := t.insert(0, key, value)
+	err := t.insert(0, key, value, true)
 	return err
 }
 
-func (t *BinaryTrie) insert(depth int, key, value []byte) error {
-	by := key[depth/8]
-	bi := (by >> uint(7-depth%8)) & 1
-	if bi == 0 {
-		if t.left == nil {
-			switch depth {
-			case len(key)*8 - 1:
-				t.value = value
-				return nil
-			case len(key)*8 - 2:
-				t.left = &BinaryTrie{nil, nil, value, t.db, nil, 0, 0}
-				return nil
-			default:
-				t.left = &BinaryTrie{nil, nil, nil, t.db, nil, 0, 0}
-			}
-		}
-		return t.left.insert(depth+1, key, value)
-	} else {
-		if t.right == nil {
-			// Free the space taken by left branch as insert
-			// will no longer visit it.
-			if t.left != nil {
-				h := t.left.Hash()
-				t.left = hashBinaryNode(h)
+func (t *BinaryTrie) insert(depth int, key, value []byte, hashLeft bool) error {
+	// Special case: the trie is empty
+	if depth == 0 && t.left == nil && t.right == nil && len(t.prefix) == 0 {
+		t.prefix = key
+		t.value = value
+		t.startBit = 0
+		t.endBit = 8 * len(key)
+		return nil
+	}
+
+	// Compare the current segment of the key with the prefix,
+	// create an intermediate node if they are different.
+	var i int
+	for i = 0; i < t.getPrefixLen(); i++ {
+		if getBit(key, depth+i) != t.getPrefixBit(i) {
+			// Starting from the following context:
+			//
+			//          ...
+			// parent <                     child1
+			//          [ a b c d e ... ] <
+			//                ^             child2
+			//                |
+			//             cut-off
+			//
+			// This needs to be turned into:
+			//
+			//          ...                    child1
+			// parent <          [ d e ... ] <
+			//          [ a b ] <              child2
+			//                    child3
+			//
+			// where `c` determines which child is left
+			// or right.
+			//
+			// Both [ a b ] and [ d e ... ] can be empty
+			// prefixes.
+
+			// Create the [ d e ... ] part
+			oldChild := new(BinaryTrie)
+			oldChild.prefix = t.prefix
+			oldChild.startBit = depth + i + 1
+			oldChild.endBit = t.endBit
+			oldChild.left = t.left
+			oldChild.right = t.right
+
+			// Create the child3 part
+			newChild := new(BinaryTrie)
+			newChild.prefix = key
+			newChild.startBit = depth + i + 1
+			newChild.endBit = len(key) * 8
+			newChild.value = value
+
+			// reconfigure the [ a b ] part by just specifying
+			// which one is the endbit (which could lead to a
+			// 0-length [ a b ] part) and also which one of the
+			// two children are left and right.
+			t.endBit = depth + i
+			if t.getPrefixBit(i) {
+				// if the prefix is 1 then the new
+				// child goes left and the old one
+				// goes right.
+				t.left = newChild
+				t.right = oldChild
+			} else {
+				if hashLeft {
+					t.left = hashBinaryNode(oldChild.Hash())
+				} else {
+					t.left = oldChild
+				}
+				t.right = newChild
 			}
 
-			switch depth {
-			case len(key)*8 - 1:
-				t.value = value
-				return nil
-			case len(key)*8 - 2:
-				t.right = &BinaryTrie{nil, nil, value, t.db, nil, 0, 0}
-				return nil
-			default:
-				t.right = &BinaryTrie{nil, nil, nil, t.db, nil, 0, 0}
-			}
+			return nil
+		}
+	}
+
+	if depth+i >= 8*len(key)-1 {
+		t.value = value
+		return nil
+	}
+
+	// No break in the middle of the extension prefix,
+	// recurse into one of the children.
+	child := &t.left
+	isRight := getBit(key, depth+i)
+	if isRight {
+		child = &t.right
+
+		// Free the space taken by the left branch as insert
+		// will no longer visit it, this will free memory.
+		if t.left != nil {
+			t.left = hashBinaryNode(t.left.Hash())
+		}
+	}
+
+	// Create the child if it doesn't exist, otherwise recurse
+	if *child == nil {
+		*child = &BinaryTrie{nil, nil, value, t.db, key, depth + i + 1, 8 * len(key)}
+		return nil
+	}
+	return (*child).insert(depth+1+i, key, value, hashLeft)
+}
 
 func dotHelper(prefix string, t *BinaryTrie) ([]string, []string) {
 	p := []byte{}
@@ -215,32 +287,46 @@ func dotHelper(prefix string, t *BinaryTrie) ([]string, []string) {
 			p = append(p, []byte("0")...)
 		}
 	}
-	nodeName := fmt.Sprintf("binNode%s%s", p, prefix)
+	typ := "node"
+	if t.left == nil && t.right == nil {
+		typ = "leaf"
+	}
+	nodeName := fmt.Sprintf("bin%s%s_%s", typ, prefix, p)
 	nodes := []string{nodeName}
 	links := []string{}
 	if t.left != nil {
-		n, l := dotHelper(fmt.Sprintf("%s%s%d", p, prefix, 0), t.left.(*BinaryTrie))
-		nodes = append(nodes, n...)
-		links = append(links, fmt.Sprintf("%s -> %s", nodeName, n[0]))
-		links = append(links, l...)
+		if left, ok := t.left.(*BinaryTrie); ok {
+			n, l := dotHelper(fmt.Sprintf("%s%s%d", prefix, p, 0), left)
+			nodes = append(nodes, n...)
+			links = append(links, fmt.Sprintf("%s -> %s", nodeName, n[0]))
+			links = append(links, l...)
+		} else {
+			nodes = append(nodes, fmt.Sprintf("hash%s", prefix))
+		}
 	}
 	if t.right != nil {
-		n, l := dotHelper(fmt.Sprintf("%s%s%d", p, prefix, 1), t.right.(*BinaryTrie))
-		nodes = append(nodes, n...)
-		links = append(links, fmt.Sprintf("%s -> %s", nodeName, n[0]))
-		links = append(links, l...)
+		if right, ok := t.right.(*BinaryTrie); ok {
+			n, l := dotHelper(fmt.Sprintf("%s%s%d", prefix, p, 1), right)
+			nodes = append(nodes, n...)
+			links = append(links, fmt.Sprintf("%s -> %s", nodeName, n[0]))
+			links = append(links, l...)
+		} else {
+			nodes = append(nodes, fmt.Sprintf("hash%s", prefix))
+		}
 	}
 	return nodes, links
 }
 
 func (t *BinaryTrie) toDot() string {
 	nodes, links := dotHelper("", t)
-	return fmt.Sprintf("digraph D {\n%s\n%s\n}", strings.Join(nodes, "\n"), strings.Join(links, "\n"))
+	return fmt.Sprintf("digraph D {\nnode [shape=rect]\n%s\n%s\n}", strings.Join(nodes, "\n"), strings.Join(links, "\n"))
 }
 
 func (t *BinaryTrie) Commit() error {
 	var payload bytes.Buffer
 	var err error
+
+	payload.Write(t.prefix)
 
 	var lh []byte
 	if t.left != nil {
@@ -288,13 +374,13 @@ func (h hashBinaryNode) Hash() []byte {
 	return h
 }
 
-func (h hashBinaryNode) insert(depth int, key, value []byte) error {
-	return fmt.Errorf("trying to insert into a hash")
+func (h hashBinaryNode) insert(depth int, key, value []byte, hashLeft bool) error {
+	return errInsertIntoHash
 }
 
 func (h hashBinaryNode) tryGet(key []byte, depth int) ([]byte, error) {
-	if depth == 2*len(key) {
+	if depth >= 8*len(key) {
 		return []byte(h), nil
 	}
-	return nil, fmt.Errorf("reached an empty branch")
+	return nil, errReadFromEmptyTree
 }
