@@ -987,6 +987,7 @@ func setHTTP(ctx *cli.Context, cfg *node.Config) {
 		cfg.HTTPHost = "127.0.0.1"
 		if ctx.GlobalIsSet(RPCLegacyListenAddrFlag.Name) {
 			cfg.HTTPHost = ctx.GlobalString(RPCLegacyListenAddrFlag.Name)
+			log.Warn("The flag --rpcaddr is deprecated and will be removed in the future, please use --http.addr")
 		}
 	}
 	if ctx.GlobalBool(HTTPEnabledFlag.Name) && cfg.HTTPHost == "" {
@@ -998,6 +999,7 @@ func setHTTP(ctx *cli.Context, cfg *node.Config) {
 
 	if ctx.GlobalIsSet(RPCLegacyPortFlag.Name) {
 		cfg.HTTPPort = ctx.GlobalInt(RPCLegacyPortFlag.Name)
+		log.Warn("The flag --rpcport is deprecated and will be removed in the future, please use --http.port")
 	}
 	if ctx.GlobalIsSet(HTTPPortFlag.Name) {
 		cfg.HTTPPort = ctx.GlobalInt(HTTPPortFlag.Name)
@@ -1005,6 +1007,7 @@ func setHTTP(ctx *cli.Context, cfg *node.Config) {
 
 	if ctx.GlobalIsSet(RPCLegacyCORSDomainFlag.Name) {
 		cfg.HTTPCors = splitAndTrim(ctx.GlobalString(RPCLegacyCORSDomainFlag.Name))
+		log.Warn("The flag --rpccorsdomain is deprecated and will be removed in the future, please use --http.corsdomain")
 	}
 	if ctx.GlobalIsSet(HTTPCORSDomainFlag.Name) {
 		cfg.HTTPCors = splitAndTrim(ctx.GlobalString(HTTPCORSDomainFlag.Name))
@@ -1012,6 +1015,7 @@ func setHTTP(ctx *cli.Context, cfg *node.Config) {
 
 	if ctx.GlobalIsSet(RPCLegacyApiFlag.Name) {
 		cfg.HTTPModules = splitAndTrim(ctx.GlobalString(RPCLegacyApiFlag.Name))
+		log.Warn("The flag --rpcapi is deprecated and will be removed in the future, please use --http.api")
 	}
 	if ctx.GlobalIsSet(HTTPApiFlag.Name) {
 		cfg.HTTPModules = splitAndTrim(ctx.GlobalString(HTTPApiFlag.Name))
@@ -1019,6 +1023,7 @@ func setHTTP(ctx *cli.Context, cfg *node.Config) {
 
 	if ctx.GlobalIsSet(RPCLegacyVirtualHostsFlag.Name) {
 		cfg.HTTPVirtualHosts = splitAndTrim(ctx.GlobalString(RPCLegacyVirtualHostsFlag.Name))
+		log.Warn("The flag --rpcvhosts is deprecated and will be removed in the future, please use --http.vhosts")
 	}
 	if ctx.GlobalIsSet(HTTPVirtualHostsFlag.Name) {
 		cfg.HTTPVirtualHosts = splitAndTrim(ctx.GlobalString(HTTPVirtualHostsFlag.Name))
@@ -1050,6 +1055,7 @@ func setWS(ctx *cli.Context, cfg *node.Config) {
 		cfg.WSHost = "127.0.0.1"
 		if ctx.GlobalIsSet(WSLegacyListenAddrFlag.Name) {
 			cfg.WSHost = ctx.GlobalString(WSLegacyListenAddrFlag.Name)
+			log.Warn("The flag --wsaddr is deprecated and will be removed in the future, please use --ws.addr")
 		}
 		if ctx.GlobalIsSet(WSListenAddrFlag.Name) {
 			cfg.WSHost = ctx.GlobalString(WSListenAddrFlag.Name)
@@ -1057,6 +1063,7 @@ func setWS(ctx *cli.Context, cfg *node.Config) {
 	}
 	if ctx.GlobalIsSet(WSLegacyPortFlag.Name) {
 		cfg.WSPort = ctx.GlobalInt(WSLegacyPortFlag.Name)
+		log.Warn("The flag --wsport is deprecated and will be removed in the future, please use --ws.port")
 	}
 	if ctx.GlobalIsSet(WSPortFlag.Name) {
 		cfg.WSPort = ctx.GlobalInt(WSPortFlag.Name)
@@ -1064,6 +1071,7 @@ func setWS(ctx *cli.Context, cfg *node.Config) {
 
 	if ctx.GlobalIsSet(WSLegacyAllowedOriginsFlag.Name) {
 		cfg.WSOrigins = splitAndTrim(ctx.GlobalString(WSLegacyAllowedOriginsFlag.Name))
+		log.Warn("The flag --wsorigins is deprecated and will be removed in the future, please use --ws.origins")
 	}
 	if ctx.GlobalIsSet(WSAllowedOriginsFlag.Name) {
 		cfg.WSOrigins = splitAndTrim(ctx.GlobalString(WSAllowedOriginsFlag.Name))
@@ -1071,6 +1079,7 @@ func setWS(ctx *cli.Context, cfg *node.Config) {
 
 	if ctx.GlobalIsSet(WSLegacyApiFlag.Name) {
 		cfg.WSModules = splitAndTrim(ctx.GlobalString(WSLegacyApiFlag.Name))
+		log.Warn("The flag --wsapi is deprecated and will be removed in the future, please use --ws.api")
 	}
 	if ctx.GlobalIsSet(WSApiFlag.Name) {
 		cfg.WSModules = splitAndTrim(ctx.GlobalString(WSApiFlag.Name))
@@ -1356,6 +1365,7 @@ func setDataDir(ctx *cli.Context, cfg *node.Config) {
 func setGPO(ctx *cli.Context, cfg *gasprice.Config) {
 	if ctx.GlobalIsSet(GpoLegacyBlocksFlag.Name) {
 		cfg.Blocks = ctx.GlobalInt(GpoLegacyBlocksFlag.Name)
+		log.Warn("The flag --gpoblocks is deprecated and will be removed in the future, please use --gpo.blocks")
 	}
 	if ctx.GlobalIsSet(GpoBlocksFlag.Name) {
 		cfg.Blocks = ctx.GlobalInt(GpoBlocksFlag.Name)
@@ -1363,6 +1373,7 @@ func setGPO(ctx *cli.Context, cfg *gasprice.Config) {
 
 	if ctx.GlobalIsSet(GpoLegacyPercentileFlag.Name) {
 		cfg.Percentile = ctx.GlobalInt(GpoLegacyPercentileFlag.Name)
+		log.Warn("The flag --gpopercentile is deprecated and will be removed in the future, please use --gpo.percentile")
 	}
 	if ctx.GlobalIsSet(GpoPercentileFlag.Name) {
 		cfg.Percentile = ctx.GlobalInt(GpoPercentileFlag.Name)

@@ -150,11 +150,13 @@ func Setup(ctx *cli.Context) error {
 	// profiling, tracing
 	if ctx.GlobalIsSet(memprofilerateLegacyFlag.Name) {
 		runtime.MemProfileRate = ctx.GlobalInt(memprofilerateLegacyFlag.Name)
+		log.Warn("The flag --memprofilerate is deprecated and will be removed in the future, please use --pprof.memprofilerate")
 	}
 	runtime.MemProfileRate = ctx.GlobalInt(memprofilerateFlag.Name)
 
 	if ctx.GlobalIsSet(blockprofilerateLegacyFlag.Name) {
 		Handler.SetBlockProfileRate(ctx.GlobalInt(blockprofilerateLegacyFlag.Name))
+		log.Warn("The flag --blockprofilerate is deprecated and will be removed in the future, please use --pprof.blockprofilerate")
 	}
 	Handler.SetBlockProfileRate(ctx.GlobalInt(blockprofilerateFlag.Name))
 
@@ -170,6 +172,7 @@ func Setup(ctx *cli.Context) error {
 		}
 	}
 	if cpuFile := ctx.GlobalString(cpuprofileLegacyFlag.Name); cpuFile != "" {
+		log.Warn("The flag --cpuprofile is deprecated and will be removed in the future, please use --pprof.cpuprofile")
 		if err := Handler.StartCPUProfile(cpuFile); err != nil {
 			return err
 		}
@@ -180,11 +183,13 @@ func Setup(ctx *cli.Context) error {
 		listenHost := ctx.GlobalString(pprofAddrFlag.Name)
 		if ctx.GlobalIsSet(pprofLegacyAddrFlag.Name) && !ctx.GlobalIsSet(pprofAddrFlag.Name) {
 			listenHost = ctx.GlobalString(pprofLegacyAddrFlag.Name)
+			log.Warn("The flag --pprofaddr is deprecated and will be removed in the future, please use --pprof.addr")
 		}
 
 		port := ctx.GlobalInt(pprofPortFlag.Name)
 		if ctx.GlobalIsSet(pprofLegacyPortFlag.Name) && !ctx.GlobalIsSet(pprofPortFlag.Name) {
 			port = ctx.GlobalInt(pprofLegacyPortFlag.Name)
+			log.Warn("The flag --pprofport is deprecated and will be removed in the future, please use --pprof.port")
 		}
 
 		address := fmt.Sprintf("%s:%d", listenHost, port)
