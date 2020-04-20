@@ -58,11 +58,6 @@ const jsondata = `
 	{ "type" : "function", "name" : "multipleMixedArrStr", "stateMutability" : "view", "inputs" : [ { "name" : "str", "type" : "string" }, { "name" : "fixedArr1", "type" : "uint256[2]" }, { "name" : "dynArr", "type" : "uint256[]" }, { "name" : "fixedArr2", "type" : "uint256[3]" } ] }
 ]`
 
-const jsondata3 = `
-[
-	{"type":"event","name":"received","anonymous":false,"inputs":[{"indexed":false,"name":"sender","type":"address"},{"indexed":false,"name":"amount","type":"uint256"},{"indexed":false,"name":"memo","type":"bytes"}]},
-]`
-
 var (
 	Uint256, _    = NewType("uint256", "", nil)
 	Uint32, _     = NewType("uint32", "", nil)
