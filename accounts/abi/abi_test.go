@@ -31,31 +31,31 @@ import (
 
 const jsondata = `
 [
-	{ "type" : "function", "name" : "", "constant" : false },
-	{ "type" : "function", "name" : "balance", "constant" : true },
-	{ "type" : "function", "name" : "send", "constant" : false, "inputs" : [ { "name" : "amount", "type" : "uint256" } ] },
-	{ "type" : "function", "name" : "test", "constant" : false, "inputs" : [ { "name" : "number", "type" : "uint32" } ] },
-	{ "type" : "function", "name" : "string", "constant" : false, "inputs" : [ { "name" : "inputs", "type" : "string" } ] },
-	{ "type" : "function", "name" : "bool", "constant" : false, "inputs" : [ { "name" : "inputs", "type" : "bool" } ] },
-	{ "type" : "function", "name" : "address", "constant" : false, "inputs" : [ { "name" : "inputs", "type" : "address" } ] },
-	{ "type" : "function", "name" : "uint64[2]", "constant" : false, "inputs" : [ { "name" : "inputs", "type" : "uint64[2]" } ] },
-	{ "type" : "function", "name" : "uint64[]", "constant" : false, "inputs" : [ { "name" : "inputs", "type" : "uint64[]" } ] },
-	{ "type" : "function", "name" : "int8", "constant" : false, "inputs" : [ { "name" : "inputs", "type" : "int8" } ] },
-	{ "type" : "function", "name" : "foo", "constant" : false, "inputs" : [ { "name" : "inputs", "type" : "uint32" } ] },
-	{ "type" : "function", "name" : "bar", "constant" : false, "inputs" : [ { "name" : "inputs", "type" : "uint32" }, { "name" : "string", "type" : "uint16" } ] },
-	{ "type" : "function", "name" : "slice", "constant" : false, "inputs" : [ { "name" : "inputs", "type" : "uint32[2]" } ] },
-	{ "type" : "function", "name" : "slice256", "constant" : false, "inputs" : [ { "name" : "inputs", "type" : "uint256[2]" } ] },
-	{ "type" : "function", "name" : "sliceAddress", "constant" : false, "inputs" : [ { "name" : "inputs", "type" : "address[]" } ] },
-	{ "type" : "function", "name" : "sliceMultiAddress", "constant" : false, "inputs" : [ { "name" : "a", "type" : "address[]" }, { "name" : "b", "type" : "address[]" } ] },
-	{ "type" : "function", "name" : "nestedArray", "constant" : false, "inputs" : [ { "name" : "a", "type" : "uint256[2][2]" }, { "name" : "b", "type" : "address[]" } ] },
-	{ "type" : "function", "name" : "nestedArray2", "constant" : false, "inputs" : [ { "name" : "a", "type" : "uint8[][2]" } ] },
-	{ "type" : "function", "name" : "nestedSlice", "constant" : false, "inputs" : [ { "name" : "a", "type" : "uint8[][]" } ] },
-	{ "type" : "function", "name" : "receive", "constant" : false, "inputs" : [ { "name" : "memo", "type" : "bytes" }], "outputs" : [], "payable" : true, "stateMutability" : "payable" },
-	{ "type" : "function", "name" : "fixedArrStr", "constant" : true, "inputs" : [ { "name" : "str", "type" : "string" }, { "name" : "fixedArr", "type" : "uint256[2]" } ] },
-	{ "type" : "function", "name" : "fixedArrBytes", "constant" : true, "inputs" : [ { "name" : "bytes", "type" : "bytes" }, { "name" : "fixedArr", "type" : "uint256[2]" } ] },
-	{ "type" : "function", "name" : "mixedArrStr", "constant" : true, "inputs" : [ { "name" : "str", "type" : "string" }, { "name" : "fixedArr", "type" : "uint256[2]" }, { "name" : "dynArr", "type" : "uint256[]" } ] },
-	{ "type" : "function", "name" : "doubleFixedArrStr", "constant" : true, "inputs" : [ { "name" : "str", "type" : "string" }, { "name" : "fixedArr1", "type" : "uint256[2]" }, { "name" : "fixedArr2", "type" : "uint256[3]" } ] },
-	{ "type" : "function", "name" : "multipleMixedArrStr", "constant" : true, "inputs" : [ { "name" : "str", "type" : "string" }, { "name" : "fixedArr1", "type" : "uint256[2]" }, { "name" : "dynArr", "type" : "uint256[]" }, { "name" : "fixedArr2", "type" : "uint256[3]" } ] }
+	{ "type" : "function", "name" : "", "stateMutability" : "view" },
+	{ "type" : "function", "name" : "balance", "stateMutability" : "view" },
+	{ "type" : "function", "name" : "send", "inputs" : [ { "name" : "amount", "type" : "uint256" } ] },
+	{ "type" : "function", "name" : "test", "inputs" : [ { "name" : "number", "type" : "uint32" } ] },
+	{ "type" : "function", "name" : "string", "inputs" : [ { "name" : "inputs", "type" : "string" } ] },
+	{ "type" : "function", "name" : "bool", "inputs" : [ { "name" : "inputs", "type" : "bool" } ] },
+	{ "type" : "function", "name" : "address", "inputs" : [ { "name" : "inputs", "type" : "address" } ] },
+	{ "type" : "function", "name" : "uint64[2]", "inputs" : [ { "name" : "inputs", "type" : "uint64[2]" } ] },
+	{ "type" : "function", "name" : "uint64[]", "inputs" : [ { "name" : "inputs", "type" : "uint64[]" } ] },
+	{ "type" : "function", "name" : "int8", "inputs" : [ { "name" : "inputs", "type" : "int8" } ] },
+	{ "type" : "function", "name" : "foo", "inputs" : [ { "name" : "inputs", "type" : "uint32" } ] },
+	{ "type" : "function", "name" : "bar", "inputs" : [ { "name" : "inputs", "type" : "uint32" }, { "name" : "string", "type" : "uint16" } ] },
+	{ "type" : "function", "name" : "slice", "inputs" : [ { "name" : "inputs", "type" : "uint32[2]" } ] },
+	{ "type" : "function", "name" : "slice256", "inputs" : [ { "name" : "inputs", "type" : "uint256[2]" } ] },
+	{ "type" : "function", "name" : "sliceAddress", "inputs" : [ { "name" : "inputs", "type" : "address[]" } ] },
+	{ "type" : "function", "name" : "sliceMultiAddress", "inputs" : [ { "name" : "a", "type" : "address[]" }, { "name" : "b", "type" : "address[]" } ] },
+	{ "type" : "function", "name" : "nestedArray", "inputs" : [ { "name" : "a", "type" : "uint256[2][2]" }, { "name" : "b", "type" : "address[]" } ] },
+	{ "type" : "function", "name" : "nestedArray2", "inputs" : [ { "name" : "a", "type" : "uint8[][2]" } ] },
+	{ "type" : "function", "name" : "nestedSlice", "inputs" : [ { "name" : "a", "type" : "uint8[][]" } ] },
+	{ "type" : "function", "name" : "receive", "inputs" : [ { "name" : "memo", "type" : "bytes" }], "outputs" : [], "payable" : true, "stateMutability" : "payable" },
+	{ "type" : "function", "name" : "fixedArrStr", "stateMutability" : "view", "inputs" : [ { "name" : "str", "type" : "string" }, { "name" : "fixedArr", "type" : "uint256[2]" } ] },
+	{ "type" : "function", "name" : "fixedArrBytes", "stateMutability" : "view", "inputs" : [ { "name" : "bytes", "type" : "bytes" }, { "name" : "fixedArr", "type" : "uint256[2]" } ] },
+	{ "type" : "function", "name" : "mixedArrStr", "stateMutability" : "view", "inputs" : [ { "name" : "str", "type" : "string" }, { "name" : "fixedArr", "type" : "uint256[2]" }, { "name" : "dynArr", "type" : "uint256[]" } ] },
+	{ "type" : "function", "name" : "doubleFixedArrStr", "stateMutability" : "view", "inputs" : [ { "name" : "str", "type" : "string" }, { "name" : "fixedArr1", "type" : "uint256[2]" }, { "name" : "fixedArr2", "type" : "uint256[3]" } ] },
+	{ "type" : "function", "name" : "multipleMixedArrStr", "stateMutability" : "view", "inputs" : [ { "name" : "str", "type" : "string" }, { "name" : "fixedArr1", "type" : "uint256[2]" }, { "name" : "dynArr", "type" : "uint256[]" }, { "name" : "fixedArr2", "type" : "uint256[3]" } ] }
 ]`
 
 const jsondata3 = `
@@ -86,31 +86,31 @@ var (
 )
 
 var methods = map[string]Method{
-	"":                    NewMethod("", "", false, nil, nil),
-	"balance":             NewMethod("balance", "balance", Function, "view", true, false, nil, nil),
-	"send":                NewMethod("send", "send", false, []Argument{{"amount", Uint256, false}}, nil),
-	"test":                NewMethod("test", "test", false, []Argument{{"number", Uint32, false}}, nil),
-	"string":              NewMethod("string", "string", false, []Argument{{"inputs", String, false}}, nil),
-	"bool":                NewMethod("bool", "bool", false, []Argument{{"inputs", Bool, false}}, nil),
-	"address":             NewMethod("address", "address", false, []Argument{{"inputs", Address, false}}, nil),
-	"uint64[]":            NewMethod("uint64[]", "uint64[]", false, []Argument{{"inputs", Uint64Arr, false}}, nil),
-	"uint64[2]":           NewMethod("uint64[2]", "uint64[2]", false, []Argument{{"inputs", Uint64Arr2, false}}, nil),
-	"int8":                NewMethod("int8", "int8", false, []Argument{{"inputs", Int8, false}}, nil),
-	"foo":                 NewMethod("foo", "foo", false, []Argument{{"inputs", Uint32, false}}, nil),
-	"bar":                 NewMethod("bar", "bar", false, []Argument{{"inputs", Uint32, false}, {"string", Uint16, false}}, nil),
-	"slice":               NewMethod("slice", "slice", false, []Argument{{"inputs", Uint32Arr2, false}}, nil),
-	"slice256":            NewMethod("slice256", "slice256", false, []Argument{{"inputs", Uint256Arr2, false}}, nil),
-	"sliceAddress":        NewMethod("sliceAddress", "sliceAddress", false, []Argument{{"inputs", AddressArr, false}}, nil),
-	"sliceMultiAddress":   NewMethod("sliceMultiAddress", "sliceMultiAddress", false, []Argument{{"a", AddressArr, false}, {"b", AddressArr, false}}, nil),
-	"nestedArray":         NewMethod("nestedArray", "nestedArray", false, []Argument{{"a", Uint256ArrNested, false}, {"b", AddressArr, false}}, nil),
-	"nestedArray2":        NewMethod("nestedArray2", "nestedArray2", false, []Argument{{"a", Uint8ArrNested, false}}, nil),
-	"nestedSlice":         NewMethod("nestedSlice", "nestedSlice", false, []Argument{{"a", Uint8SliceNested, false}}, nil),
-	"receive":             NewMethod("receive", "receive", false, []Argument{{"memo", Bytes, false}}, []Argument{}),
-	"fixedArrStr":         NewMethod("fixedArrStr", "fixedArrStr", true, []Argument{{"str", String, false}, {"fixedArr", Uint256Arr2, false}}, nil),
-	"fixedArrBytes":       NewMethod("fixedArrBytes", "fixedArrBytes", true, []Argument{{"bytes", Bytes, false}, {"fixedArr", Uint256Arr2, false}}, nil),
-	"mixedArrStr":         NewMethod("mixedArrStr", "mixedArrStr", true, []Argument{{"str", String, false}, {"fixedArr", Uint256Arr2, false}, {"dynArr", Uint256Arr, false}}, nil),
-	"doubleFixedArrStr":   NewMethod("doubleFixedArrStr", "doubleFixedArrStr", true, []Argument{{"str", String, false}, {"fixedArr1", Uint256Arr2, false}, {"fixedArr2", Uint256Arr3, false}}, nil),
-	"multipleMixedArrStr": NewMethod("multipleMixedArrStr", "multipleMixedArrStr", true, []Argument{{"str", String, false}, {"fixedArr1", Uint256Arr2, false}, {"dynArr", Uint256Arr, false}, {"fixedArr2", Uint256Arr3, false}}, nil),
+	"":                    NewMethod("", "", Function, "view", false, false, nil, nil),
+	"balance":             NewMethod("balance", "balance", Function, "view", false, false, nil, nil),
+	"send":                NewMethod("send", "send", Function, "", false, false, []Argument{{"amount", Uint256, false}}, nil),
+	"test":                NewMethod("test", "test", Function, "", false, false, []Argument{{"number", Uint32, false}}, nil),
+	"string":              NewMethod("string", "string", Function, "", false, false, []Argument{{"inputs", String, false}}, nil),
+	"bool":                NewMethod("bool", "bool", Function, "", false, false, []Argument{{"inputs", Bool, false}}, nil),
+	"address":             NewMethod("address", "address", Function, "", false, false, []Argument{{"inputs", Address, false}}, nil),
+	"uint64[]":            NewMethod("uint64[]", "uint64[]", Function, "", false, false, []Argument{{"inputs", Uint64Arr, false}}, nil),
+	"uint64[2]":           NewMethod("uint64[2]", "uint64[2]", Function, "", false, false, []Argument{{"inputs", Uint64Arr2, false}}, nil),
+	"int8":                NewMethod("int8", "int8", Function, "", false, false, []Argument{{"inputs", Int8, false}}, nil),
+	"foo":                 NewMethod("foo", "foo", Function, "", false, false, []Argument{{"inputs", Uint32, false}}, nil),
+	"bar":                 NewMethod("bar", "bar", Function, "", false, false, []Argument{{"inputs", Uint32, false}, {"string", Uint16, false}}, nil),
+	"slice":               NewMethod("slice", "slice", Function, "", false, false, []Argument{{"inputs", Uint32Arr2, false}}, nil),
+	"slice256":            NewMethod("slice256", "slice256", Function, "", false, false, []Argument{{"inputs", Uint256Arr2, false}}, nil),
+	"sliceAddress":        NewMethod("sliceAddress", "sliceAddress", Function, "", false, false, []Argument{{"inputs", AddressArr, false}}, nil),
+	"sliceMultiAddress":   NewMethod("sliceMultiAddress", "sliceMultiAddress", Function, "", false, false, []Argument{{"a", AddressArr, false}, {"b", AddressArr, false}}, nil),
+	"nestedArray":         NewMethod("nestedArray", "nestedArray", Function, "", false, false, []Argument{{"a", Uint256ArrNested, false}, {"b", AddressArr, false}}, nil),
+	"nestedArray2":        NewMethod("nestedArray2", "nestedArray2", Function, "", false, false, []Argument{{"a", Uint8ArrNested, false}}, nil),
+	"nestedSlice":         NewMethod("nestedSlice", "nestedSlice", Function, "", false, false, []Argument{{"a", Uint8SliceNested, false}}, nil),
+	"receive":             NewMethod("receive", "receive", Function, "payable", false, true, []Argument{{"memo", Bytes, false}}, []Argument{}),
+	"fixedArrStr":         NewMethod("fixedArrStr", "fixedArrStr", Function, "view", false, false, []Argument{{"str", String, false}, {"fixedArr", Uint256Arr2, false}}, nil),
+	"fixedArrBytes":       NewMethod("fixedArrBytes", "fixedArrBytes", Function, "view", false, false, []Argument{{"bytes", Bytes, false}, {"fixedArr", Uint256Arr2, false}}, nil),
+	"mixedArrStr":         NewMethod("mixedArrStr", "mixedArrStr", Function, "view", false, false, []Argument{{"str", String, false}, {"fixedArr", Uint256Arr2, false}, {"dynArr", Uint256Arr, false}}, nil),
+	"doubleFixedArrStr":   NewMethod("doubleFixedArrStr", "doubleFixedArrStr", Function, "view", false, false, []Argument{{"str", String, false}, {"fixedArr1", Uint256Arr2, false}, {"fixedArr2", Uint256Arr3, false}}, nil),
+	"multipleMixedArrStr": NewMethod("multipleMixedArrStr", "multipleMixedArrStr", Function, "view", false, false, []Argument{{"str", String, false}, {"fixedArr1", Uint256Arr2, false}, {"dynArr", Uint256Arr, false}, {"fixedArr2", Uint256Arr3, false}}, nil),
 }
 
 type PackUnpackTest struct {
@@ -119,23 +119,23 @@ type PackUnpackTest struct {
 }
 
 var tests = map[string]PackUnpackTest{
-	"uint64[2]": PackUnpackTest{
+	"uint64[2]": {
 		input: [2]uint64{12, 44},
 		err:   nil,
 	},
-	"uint64[]": PackUnpackTest{
+	"uint64[]": {
 		input: []uint64{12, 44},
 		err:   nil,
 	},
-	"string": PackUnpackTest{
+	"string": {
 		input: "This is a string",
 		err:   nil,
 	},
-	"int8": PackUnpackTest{
+	"int8": {
 		input: int8(-2),
 		err:   nil,
 	},
-	"bool": PackUnpackTest{
+	"bool": {
 		input: true,
 		err:   nil,
 	},
@@ -220,7 +220,7 @@ func TestInvalidABI(t *testing.T) {
 //	}
 func TestConstructor(t *testing.T) {
 	json := `[{	"inputs": [{"internalType": "uint256","name": "a","type": "uint256"	},{	"internalType": "uint256","name": "b","type": "uint256"}],"stateMutability": "nonpayable","type": "constructor"}]`
-	method := NewMethod("", "", false, []Argument{{"a", Uint256, false}, {"b", Uint256, false}}, nil)
+	method := NewMethod("", "", Constructor, "nonpayable", false, false, []Argument{{"a", Uint256, false}, {"b", Uint256, false}}, nil)
 	// Test from JSON
 	abi, err := JSON(strings.NewReader(json))
 	if err != nil {

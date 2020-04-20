@@ -468,7 +468,7 @@ func TestUnpack(t *testing.T) {
 				// cannot test erroring test cases for proper pack/unpacking
 				return
 			}
-			inDef := fmt.Sprintf(`[{ "name" : "method", "inputs": %s}]`, test.def)
+			inDef := fmt.Sprintf(`[{ "name" : "method", "type": "function", "inputs": %s}]`, test.def)
 			inAbi, err := JSON(strings.NewReader(inDef))
 			if err != nil {
 				t.Fatalf("invalid ABI definition %s, %v", inDef, err)
