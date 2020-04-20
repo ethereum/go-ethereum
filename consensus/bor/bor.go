@@ -205,13 +205,13 @@ func CalcDifficulty(snap *Snapshot, signer common.Address, epoch uint64) *big.In
 	return big.NewInt(0).SetUint64(snap.inturn(snap.Number+1, signer, epoch))
 }
 
-// CalcProducerDelay is the producer delay algorithm based on block time.
-func CalcProducerDelay(snap *Snapshot, signer common.Address, period uint64, epoch uint64, producerDelay uint64) uint64 {
-	// if block is epoch start block, proposer will be inturn signer
-	if (snap.Number+1)%epoch == 0 {
+// CalcProducerDelay is the block delay algorithm based on block time and period / producerDelay values in genesis
+func CalcProducerDelay(number uint64, period uint64, sprint uint64, producerDelay uint64) uint64 {
+	// When the block is the first block of the sprint, it is expected to be delayed by `producerDelay`.
+	// That is to allow time for block propagation in the last sprint
+	if number%sprint == 0 {
 		return producerDelay
 	}
-
 	return period
 }
 
@@ -330,6 +330,17 @@ func (c *Bor) verifyHeader(chain consensus.ChainReader, header *types.Header, pa
 		return errUnknownBlock
 	}
 	number := header.Number.Uint64()
+
+	var parent *types.Header
+	if len(parents) > 0 { // if parents is nil, len(parents) is zero
+		parent = parents[len(parents)-1]
+	} else if number > 0 {
+		parent = chain.GetHeader(header.ParentHash, number-1)
+	}
+
+	if parent != nil && header.Time < parent.Time+CalcProducerDelay(number, c.config.Period, c.config.Sprint, c.config.ProducerDelay) {
+		return consensus.ErrBlockTooSoon
+	}
 
 	// Don't waste time checking blocks from the future
 	if header.Time > uint64(time.Now().Unix()) {
@@ -654,7 +665,7 @@ func (c *Bor) Prepare(chain consensus.ChainReader, header *types.Header) error {
 		return consensus.ErrUnknownAncestor
 	}
 
-	header.Time = parent.Time + CalcProducerDelay(snap, c.signer, c.config.Period, c.config.Sprint, c.config.ProducerDelay)
+	header.Time = parent.Time + CalcProducerDelay(number, c.config.Period, c.config.Sprint, c.config.ProducerDelay)
 	if header.Time < uint64(time.Now().Unix()) {
 		header.Time = uint64(time.Now().Unix())
 	}
@@ -1190,7 +1201,7 @@ func (c *Bor) CommitStates(
 		}
 
 		// check if chain id matches with event record
-		if eventRecord.ChainID != "" && eventRecord.ChainID != c.chainConfig.ChainID.String() {
+		if eventRecord.ChainID != c.chainConfig.ChainID.String() {
 			return fmt.Errorf(
 				"Chain id proposed state in span, %s, and bor chain id, %s, doesn't match",
 				eventRecord.ChainID,

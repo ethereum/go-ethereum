@@ -32,7 +32,7 @@ func TestCommitSpan(t *testing.T) {
 	db := init.ethereum.ChainDb()
 	block := init.genesis.ToBlock(db)
 	// Build 1st block's header
-	header := buildMinimalNextHeader(t, block, init.genesis.Config.Bor.Period)
+	header := buildMinimalNextHeader(t, block, init.genesis.Config.Bor)
 
 	statedb, err := chain.State()
 	if err != nil {
@@ -89,7 +89,7 @@ func TestIsValidatorAction(t *testing.T) {
 	db := init.ethereum.ChainDb()
 	block := init.genesis.ToBlock(db)
 
-	header := buildMinimalNextHeader(t, block, init.genesis.Config.Bor.Period)
+	header := buildMinimalNextHeader(t, block, init.genesis.Config.Bor)
 	statedb, err := chain.State()
 	if err != nil {
 		t.Fatalf("%s", err)
@@ -101,7 +101,7 @@ func TestIsValidatorAction(t *testing.T) {
 
 	var headers []*types.Header
 	for i := int64(2); i <= 255; i++ {
-		header := buildMinimalNextHeader(t, block, init.genesis.Config.Bor.Period)
+		header := buildMinimalNextHeader(t, block, init.genesis.Config.Bor)
 		headers = append(headers, header)
 		block = types.NewBlockWithHeader(header)
 	}

@@ -16,6 +16,7 @@ import (
 	"github.com/maticnetwork/bor/eth"
 	"github.com/maticnetwork/bor/ethdb"
 	"github.com/maticnetwork/bor/node"
+	"github.com/maticnetwork/bor/params"
 )
 
 var (
@@ -99,11 +100,11 @@ func insertNewBlock(t *testing.T, _bor *bor.Bor, chain *core.BlockChain, header 
 	}
 }
 
-func buildMinimalNextHeader(t *testing.T, block *types.Block, period uint64) *types.Header {
+func buildMinimalNextHeader(t *testing.T, block *types.Block, borConfig *params.BorConfig) *types.Header {
 	header := block.Header()
 	header.Number.Add(header.Number, big.NewInt(1))
 	header.ParentHash = block.Hash()
-	header.Time += (period + 1)
+	header.Time += bor.CalcProducerDelay(header.Number.Uint64(), borConfig.Period, borConfig.Sprint, borConfig.ProducerDelay)
 	header.Extra = make([]byte, 97) // vanity (32) + extraSeal (65)
 	_key, _ := hex.DecodeString(privKey)
 	sig, err := secp256k1.Sign(crypto.Keccak256(bor.BorRLP(header)), _key)
