@@ -54,9 +54,9 @@ type Node struct {
 	rpcAPIs       []rpc.API   // List of APIs currently provided by the node
 	inprocHandler *rpc.Server // In-process RPC request handler to process the API requests
 
-	ipcHandler  *httpHandler // TODO
-	httpHandler *httpHandler // TODO
-	wsHandler   *httpHandler // TODO
+	ipcHandler  *httpServer // TODO
+	httpHandler *httpServer // TODO
+	wsHandler   *httpServer // TODO
 
 	stop chan struct{} // Channel to wait for termination notifications
 	lock sync.RWMutex
@@ -103,12 +103,12 @@ func New(conf *Config) (*Node, error) {
 		accman:            am,
 		ephemeralKeystore: ephemeralKeystore,
 		config:            conf,
-		ipcHandler: &httpHandler{
+		ipcHandler: &httpServer{
 			endpoint:           endpoint{
 				endpoint: conf.IPCEndpoint(),
 			},
 		},
-		httpHandler: &httpHandler{
+		httpHandler: &httpServer{
 			endpoint:           endpoint{
 				endpoint: conf.HTTPEndpoint(),
 				host: conf.HTTPHost,
@@ -121,7 +121,7 @@ func New(conf *Config) (*Node, error) {
 			RPCAllowed: true,
 
 		},
-		wsHandler: &httpHandler{
+		wsHandler: &httpServer{
 			endpoint:           endpoint{
 				endpoint: conf.WSEndpoint(),
 				host: conf.WSHost,

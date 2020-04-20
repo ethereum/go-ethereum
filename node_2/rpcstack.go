@@ -30,7 +30,7 @@ import (
 	"github.com/rs/cors"
 )
 
-type httpHandler struct {
+type httpServer struct {
 	handler http.Handler
 	Srv     *rpc.Server
 
