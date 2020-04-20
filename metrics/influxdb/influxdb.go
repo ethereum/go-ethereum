@@ -5,9 +5,9 @@ import (
 	uurl "net/url"
 	"time"
 
+	"github.com/influxdata/influxdb/client"
 	"github.com/maticnetwork/bor/log"
 	"github.com/maticnetwork/bor/metrics"
-	"github.com/influxdata/influxdb/client"
 )
 
 type reporter struct {

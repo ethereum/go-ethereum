@@ -26,6 +26,7 @@ import (
 	"sync/atomic"
 	"time"
 
+	lru "github.com/hashicorp/golang-lru"
 	"github.com/maticnetwork/bor/common"
 	"github.com/maticnetwork/bor/consensus"
 	"github.com/maticnetwork/bor/core/rawdb"
@@ -33,7 +34,6 @@ import (
 	"github.com/maticnetwork/bor/ethdb"
 	"github.com/maticnetwork/bor/log"
 	"github.com/maticnetwork/bor/params"
-	lru "github.com/hashicorp/golang-lru"
 )
 
 const (
