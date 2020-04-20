@@ -76,7 +76,7 @@ func (abi ABI) Pack(name string, args ...interface{}) ([]byte, error) {
 		return nil, err
 	}
 	// Pack up the method ID too if not a constructor and return
-	return append(method.ID(), arguments...), nil
+	return append(method.ID, arguments...), nil
 }
 
 // Unpack output in v according to the abi specification
@@ -139,59 +139,17 @@ func (abi *ABI) UnmarshalJSON(data []byte) error {
 	for _, field := range fields {
 		switch field.Type {
 		case "constructor":
-			abi.Constructor = Method{
-				Inputs: field.Inputs,
-
-				// Note for constructor the `StateMutability` can only
-				// be payable or nonpayable according to the output of
-				// compiler. So constant is always false.
-				StateMutability: field.StateMutability,
-
-				// Legacy fields, keep them for backward compatibility
-				Constant: field.Constant,
-				Payable:  field.Payable,
-			}
+			abi.Constructor = NewMethod("", "", Constructor, field.StateMutability, field.Constant, field.Payable, field.Inputs, nil)
 		case "function":
-			name := field.Name
-			_, ok := abi.Methods[name]
-			for idx := 0; ok; idx++ {
-				name = fmt.Sprintf("%s%d", field.Name, idx)
-				_, ok = abi.Methods[name]
-			}
-			abi.Methods[name] = Method{
-				Name:            name,
-				RawName:         field.Name,
-				StateMutability: field.StateMutability,
-				Inputs:          field.Inputs,
-				Outputs:         field.Outputs,
-
-				// Legacy fields, keep them for backward compatibility
-				Constant: field.Constant,
-				Payable:  field.Payable,
-			}
+			name := abi.overloadedMethodName(field.Name)
+			abi.Methods[name] = NewMethod(name, field.Name, Function, field.StateMutability, field.Constant, field.Payable, field.Inputs, field.Outputs)
 		case "fallback":
 			// New introduced function type in v0.6.0, check more detail
 			// here https://solidity.readthedocs.io/en/v0.6.0/contracts.html#fallback-function
 			if abi.HasFallback() {
 				return errors.New("only single fallback is allowed")
 			}
-			abi.Fallback = Method{
-				Name:    "",
-				RawName: "",
-
-				// The `StateMutability` can only be payable or nonpayable,
-				// so the constant is always false.
-				StateMutability: field.StateMutability,
-				IsFallback:      true,
-
-				// Fallback doesn't have any input or output
-				Inputs:  nil,
-				Outputs: nil,
-
-				// Legacy fields, keep them for backward compatibility
-				Constant: field.Constant,
-				Payable:  field.Payable,
-			}
+			abi.Fallback = NewMethod("", "", Fallback, field.StateMutability, field.Constant, field.Payable, nil, nil)
 		case "receive":
 			// New introduced function type in v0.6.0, check more detail
 			// here https://solidity.readthedocs.io/en/v0.6.0/contracts.html#fallback-function
@@ -201,39 +159,45 @@ func (abi *ABI) UnmarshalJSON(data []byte) error {
 			if field.StateMutability != "payable" {
 				return errors.New("the statemutability of receive can only be payable")
 			}
-			abi.Receive = Method{
-				Name:    "",
-				RawName: "",
-
-				// The `StateMutability` can only be payable, so constant
-				// is always true while payable is always false.
-				StateMutability: field.StateMutability,
-				IsReceive:       true,
-
-				// Receive doesn't have any input or output
-				Inputs:  nil,
-				Outputs: nil,
-
-				// Legacy fields, keep them for backward compatibility
-				Constant: field.Constant,
-				Payable:  field.Payable,
-			}
+			abi.Receive = NewMethod("", "", Receive, field.StateMutability, field.Constant, field.Payable, nil, nil)
 		case "event":
-			name := field.Name
-			_, ok := abi.Events[name]
-			for idx := 0; ok; idx++ {
-				name = fmt.Sprintf("%s%d", field.Name, idx)
-				_, ok = abi.Events[name]
-			}
-			abi.Events[name] = Event{
-				Name:      name,
-				RawName:   field.Name,
-				Anonymous: field.Anonymous,
-				Inputs:    field.Inputs,
-			}
+			name := abi.overloadedEventName(field.Name)
+			abi.Events[name] = NewEvent(name, field.Name, field.Anonymous, field.Inputs)
+		default:
+			return fmt.Errorf("abi: could not recognize type %v of field %v", field.Type, field.Name)
 		}
 	}
 	return nil
+}
+
+// overloadedMethodName returns the next available name for a given function.
+// Needed since solidity allows for function overload.
+//
+// e.g. if the abi contains Methods send, send1
+// overloadedMethodName would return send2 for input send.
+func (abi *ABI) overloadedMethodName(rawName string) string {
+	name := rawName
+	_, ok := abi.Methods[name]
+	for idx := 0; ok; idx++ {
+		name = fmt.Sprintf("%s%d", rawName, idx)
+		_, ok = abi.Methods[name]
+	}
+	return name
+}
+
+// overloadedEventName returns the next available name for a given event.
+// Needed since solidity allows for event overload.
+//
+// e.g. if the abi contains events received, received1
+// overloadedEventName would return received2 for input received.
+func (abi *ABI) overloadedEventName(rawName string) string {
+	name := rawName
+	_, ok := abi.Events[name]
+	for idx := 0; ok; idx++ {
+		name = fmt.Sprintf("%s%d", rawName, idx)
+		_, ok = abi.Events[name]
+	}
+	return name
 }
 
 // MethodById looks up a method by the 4-byte id
@@ -243,7 +207,7 @@ func (abi *ABI) MethodById(sigdata []byte) (*Method, error) {
 		return nil, fmt.Errorf("data too short (%d bytes) for abi method lookup", len(sigdata))
 	}
 	for _, method := range abi.Methods {
-		if bytes.Equal(method.ID(), sigdata[:4]) {
+		if bytes.Equal(method.ID, sigdata[:4]) {
 			return &method, nil
 		}
 	}
@@ -254,7 +218,7 @@ func (abi *ABI) MethodById(sigdata []byte) (*Method, error) {
 // ABI and returns nil if none found.
 func (abi *ABI) EventByID(topic common.Hash) (*Event, error) {
 	for _, event := range abi.Events {
-		if bytes.Equal(event.ID().Bytes(), topic.Bytes()) {
+		if bytes.Equal(event.ID.Bytes(), topic.Bytes()) {
 			return &event, nil
 		}
 	}
@@ -263,10 +227,10 @@ func (abi *ABI) EventByID(topic common.Hash) (*Event, error) {
 
 // HasFallback returns an indicator whether a fallback function is included.
 func (abi *ABI) HasFallback() bool {
-	return abi.Fallback.IsFallback
+	return abi.Fallback.Type == Fallback
 }
 
 // HasReceive returns an indicator whether a receive function is included.
 func (abi *ABI) HasReceive() bool {
-	return abi.Receive.IsReceive
+	return abi.Receive.Type == Receive
 }

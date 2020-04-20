@@ -48,8 +48,8 @@ func TestEmbeddedDatabase(t *testing.T) {
 			t.Errorf("Failed to get method by id (%s): %v", id, err)
 			continue
 		}
-		if m.Sig() != selector {
-			t.Errorf("Selector mismatch: have %v, want %v", m.Sig(), selector)
+		if m.Sig != selector {
+			t.Errorf("Selector mismatch: have %v, want %v", m.Sig, selector)
 		}
 	}
 }

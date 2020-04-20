@@ -58,20 +58,14 @@ const jsondata2 = `
 
 func TestReader(t *testing.T) {
 	Uint256, _ := NewType("uint256", "", nil)
-	exp := ABI{
+	abi := ABI{
 		Methods: map[string]Method{
-			"balance": {
-				"balance", "balance", "view", false, false, false, false, nil, nil,
-			},
-			"send": {
-				"send", "send", "", false, false, false, false, []Argument{
-					{"amount", Uint256, false},
-				}, nil,
-			},
+			"balance": NewMethod("balance", "balance", Function, "view", false, false, nil, nil),
+			"send":    NewMethod("send", "send", Function, "", false, false, []Argument{{"amount", Uint256, false}}, nil),
 		},
 	}
 
-	abi, err := JSON(strings.NewReader(jsondata))
+	exp, err := JSON(strings.NewReader(jsondata))
 	if err != nil {
 		t.Error(err)
 	}
@@ -173,22 +167,22 @@ func TestTestSlice(t *testing.T) {
 
 func TestMethodSignature(t *testing.T) {
 	String, _ := NewType("string", "", nil)
-	m := Method{"foo", "foo", "", false, false, false, false, []Argument{{"bar", String, false}, {"baz", String, false}}, nil}
+	m := NewMethod("foo", "foo", Function, "", false, false, []Argument{{"bar", String, false}, {"baz", String, false}}, nil)
 	exp := "foo(string,string)"
-	if m.Sig() != exp {
-		t.Error("signature mismatch", exp, "!=", m.Sig())
+	if m.Sig != exp {
+		t.Error("signature mismatch", exp, "!=", m.Sig)
 	}
 
 	idexp := crypto.Keccak256([]byte(exp))[:4]
-	if !bytes.Equal(m.ID(), idexp) {
-		t.Errorf("expected ids to match %x != %x", m.ID(), idexp)
+	if !bytes.Equal(m.ID, idexp) {
+		t.Errorf("expected ids to match %x != %x", m.ID, idexp)
 	}
 
 	uintt, _ := NewType("uint256", "", nil)
-	m = Method{"foo", "foo", "", false, false, false, false, []Argument{{"bar", uintt, false}}, nil}
+	m = NewMethod("foo", "foo", Function, "", false, false, []Argument{{"bar", uintt, false}}, nil)
 	exp = "foo(uint256)"
-	if m.Sig() != exp {
-		t.Error("signature mismatch", exp, "!=", m.Sig())
+	if m.Sig != exp {
+		t.Error("signature mismatch", exp, "!=", m.Sig)
 	}
 
 	// Method with tuple arguments
@@ -204,10 +198,10 @@ func TestMethodSignature(t *testing.T) {
 			{Name: "y", Type: "int256"},
 		}},
 	})
-	m = Method{"foo", "foo", "", false, false, false, false, []Argument{{"s", s, false}, {"bar", String, false}}, nil}
+	m = NewMethod("foo", "foo", Function, "", false, false, []Argument{{"s", s, false}, {"bar", String, false}}, nil)
 	exp = "foo((int256,int256[],(int256,int256)[],(int256,int256)[2]),string)"
-	if m.Sig() != exp {
-		t.Error("signature mismatch", exp, "!=", m.Sig())
+	if m.Sig != exp {
+		t.Error("signature mismatch", exp, "!=", m.Sig)
 	}
 }
 
@@ -219,12 +213,12 @@ func TestOverloadedMethodSignature(t *testing.T) {
 	}
 	check := func(name string, expect string, method bool) {
 		if method {
-			if abi.Methods[name].Sig() != expect {
-				t.Fatalf("The signature of overloaded method mismatch, want %s, have %s", expect, abi.Methods[name].Sig())
+			if abi.Methods[name].Sig != expect {
+				t.Fatalf("The signature of overloaded method mismatch, want %s, have %s", expect, abi.Methods[name].Sig)
 			}
 		} else {
-			if abi.Events[name].Sig() != expect {
-				t.Fatalf("The signature of overloaded event mismatch, want %s, have %s", expect, abi.Events[name].Sig())
+			if abi.Events[name].Sig != expect {
+				t.Fatalf("The signature of overloaded event mismatch, want %s, have %s", expect, abi.Events[name].Sig)
 			}
 		}
 	}
@@ -921,13 +915,13 @@ func TestABI_MethodById(t *testing.T) {
 	}
 	for name, m := range abi.Methods {
 		a := fmt.Sprintf("%v", m)
-		m2, err := abi.MethodById(m.ID())
+		m2, err := abi.MethodById(m.ID)
 		if err != nil {
 			t.Fatalf("Failed to look up ABI method: %v", err)
 		}
 		b := fmt.Sprintf("%v", m2)
 		if a != b {
-			t.Errorf("Method %v (id %x) not 'findable' by id in ABI", name, m.ID())
+			t.Errorf("Method %v (id %x) not 'findable' by id in ABI", name, m.ID)
 		}
 	}
 	// Also test empty
@@ -995,8 +989,8 @@ func TestABI_EventById(t *testing.T) {
 			t.Errorf("We should find a event for topic %s, test #%d", topicID.Hex(), testnum)
 		}
 
-		if event.ID() != topicID {
-			t.Errorf("Event id %s does not match topic %s, test #%d", event.ID().Hex(), topicID.Hex(), testnum)
+		if event.ID != topicID {
+			t.Errorf("Event id %s does not match topic %s, test #%d", event.ID.Hex(), topicID.Hex(), testnum)
 		}
 
 		unknowntopicID := crypto.Keccak256Hash([]byte("unknownEvent"))
@@ -1049,5 +1043,30 @@ func TestDoubleDuplicateMethodNames(t *testing.T) {
 	}
 	if _, ok := contractAbi.Methods["transfer2"]; ok {
 		t.Fatalf("Should not have found extra method")
+	}
+}
+
+// TestUnnamedEventParam checks that an event with unnamed parameters is
+// correctly handled
+// The test runs the abi of the following contract.
+// 	contract TestEvent {
+//		event send(uint256, uint256);
+//	}
+func TestUnnamedEventParam(t *testing.T) {
+	abiJSON := `[{ "anonymous": false, "inputs": [{	"indexed": false,"internalType": "uint256",	"name": "","type": "uint256"},{"indexed": false,"internalType": "uint256","name": "","type": "uint256"}],"name": "send","type": "event"}]`
+	contractAbi, err := JSON(strings.NewReader(abiJSON))
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	event, ok := contractAbi.Events["send"]
+	if !ok {
+		t.Fatalf("Could not find event")
+	}
+	if event.Inputs[0].Name != "arg0" {
+		t.Fatalf("Could not find input")
+	}
+	if event.Inputs[1].Name != "arg1" {
+		t.Fatalf("Could not find input")
 	}
 }
