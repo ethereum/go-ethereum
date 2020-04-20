@@ -153,7 +153,7 @@ func (n *Notifier) takeSubscription() *Subscription {
 	return n.sub
 }
 
-// acticate is called after the subscription ID was sent to client. Notifications are
+// activate is called after the subscription ID was sent to client. Notifications are
 // buffered before activation. This prevents notifications being sent to the client before
 // the subscription ID is sent to the client.
 func (n *Notifier) activate() error {
@@ -179,7 +179,7 @@ func (n *Notifier) send(sub *Subscription, data json.RawMessage) error {
 	})
 }
 
-// A Subscription is created by a notifier and tight to that notifier. The client can use
+// A Subscription is created by a notifier and tied to that notifier. The client can use
 // this subscription to wait for an unsubscribe request for the client, see Err().
 type Subscription struct {
 	ID        ID

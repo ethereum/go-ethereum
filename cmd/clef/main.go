@@ -187,6 +187,21 @@ The setpw command stores a password for a given address (keyfile).
 		Description: `
 The delpw command removes a password for a given address (keyfile).
 `}
+	newAccountCommand = cli.Command{
+		Action:    utils.MigrateFlags(newAccount),
+		Name:      "newaccount",
+		Usage:     "Create a new account",
+		ArgsUsage: "",
+		Flags: []cli.Flag{
+			logLevelFlag,
+			keystoreFlag,
+			utils.LightKDFFlag,
+		},
+		Description: `
+The newaccount command creates a new keystore-backed account. It is a convenience-method
+which can be used in lieu of an external UI.`,
+	}
+
 	gendocCommand = cli.Command{
 		Action: GenDoc,
 		Name:   "gendoc",
@@ -222,7 +237,12 @@ func init() {
 		advancedMode,
 	}
 	app.Action = signer
-	app.Commands = []cli.Command{initCommand, attestCommand, setCredentialCommand, delCredentialCommand, gendocCommand}
+	app.Commands = []cli.Command{initCommand,
+		attestCommand,
+		setCredentialCommand,
+		delCredentialCommand,
+		newAccountCommand,
+		gendocCommand}
 	cli.CommandHelpTemplate = utils.OriginCommandHelpTemplate
 }
 
@@ -382,6 +402,31 @@ func removeCredential(ctx *cli.Context) error {
 	return nil
 }
 
+func newAccount(c *cli.Context) error {
+	if err := initialize(c); err != nil {
+		return err
+	}
+	// The newaccount is meant for users using the CLI, since 'real' external
+	// UIs can use the UI-api instead. So we'll just use the native CLI UI here.
+	var (
+		ui                        = core.NewCommandlineUI()
+		pwStorage storage.Storage = &storage.NoStorage{}
+		ksLoc                     = c.GlobalString(keystoreFlag.Name)
+		lightKdf                  = c.GlobalBool(utils.LightKDFFlag.Name)
+	)
+	log.Info("Starting clef", "keystore", ksLoc, "light-kdf", lightKdf)
+	am := core.StartClefAccountManager(ksLoc, true, lightKdf, "")
+	// This gives is us access to the external API
+	apiImpl := core.NewSignerAPI(am, 0, true, ui, nil, false, pwStorage)
+	// This gives us access to the internal API
+	internalApi := core.NewUIServerAPI(apiImpl)
+	addr, err := internalApi.New(context.Background())
+	if err == nil {
+		fmt.Printf("Generated account %v\n", addr.String())
+	}
+	return err
+}
+
 func initialize(c *cli.Context) error {
 	// Set up the logger to print everything
 	logOutput := os.Stdout
@@ -457,7 +502,6 @@ func signer(c *cli.Context) error {
 		api       core.ExternalAPI
 		pwStorage storage.Storage = &storage.NoStorage{}
 	)
-
 	configDir := c.GlobalString(configdirFlag.Name)
 	if stretchedKey, err := readMasterKey(c, ui); err != nil {
 		log.Warn("Failed to open master, rules disabled", "err", err)
@@ -539,18 +583,25 @@ func signer(c *cli.Context) error {
 		vhosts := splitAndTrim(c.GlobalString(utils.RPCVirtualHostsFlag.Name))
 		cors := splitAndTrim(c.GlobalString(utils.RPCCORSDomainFlag.Name))
 
+		srv := rpc.NewServer()
+		err := node.RegisterApisFromWhitelist(rpcAPI, []string{"account"}, srv, false)
+		if err != nil {
+			utils.Fatalf("Could not register API: %w", err)
+		}
+		handler := node.NewHTTPHandlerStack(srv, cors, vhosts)
+
 		// start http server
 		httpEndpoint := fmt.Sprintf("%s:%d", c.GlobalString(utils.RPCListenAddrFlag.Name), c.Int(rpcPortFlag.Name))
-		listener, _, err := rpc.StartHTTPEndpoint(httpEndpoint, rpcAPI, []string{"account"}, cors, vhosts, rpc.DefaultHTTPTimeouts)
+		listener, err := node.StartHTTPEndpoint(httpEndpoint, rpc.DefaultHTTPTimeouts, handler)
 		if err != nil {
 			utils.Fatalf("Could not start RPC api: %v", err)
 		}
-		extapiURL = fmt.Sprintf("http://%s", httpEndpoint)
+		extapiURL = fmt.Sprintf("http://%v/", listener.Addr())
 		log.Info("HTTP endpoint opened", "url", extapiURL)
 
 		defer func() {
 			listener.Close()
-			log.Info("HTTP endpoint closed", "url", httpEndpoint)
+			log.Info("HTTP endpoint closed", "url", extapiURL)
 		}()
 	}
 	if !c.GlobalBool(utils.IPCDisabledFlag.Name) {

@@ -54,7 +54,7 @@ func (eth *Ethereum) startBloomHandlers(sectionSize uint64) {
 		go func() {
 			for {
 				select {
-				case <-eth.shutdownChan:
+				case <-eth.closeBloomHandler:
 					return
 
 				case request := <-eth.bloomRequests:

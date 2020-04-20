@@ -47,10 +47,6 @@ import (
 	"github.com/tyler-smith/go-bip39"
 )
 
-const (
-	defaultGasPrice = params.GWei
-)
-
 // PublicEthereumAPI provides an API to access Ethereum related information.
 // It offers only methods that operate on public data that is freely available to anyone.
 type PublicEthereumAPI struct {
@@ -642,7 +638,7 @@ func (s *PublicBlockChainAPI) GetBlockByNumber(ctx context.Context, number rpc.B
 		response, err := s.rpcMarshalBlock(block, true, fullTx)
 		if err == nil && number == rpc.PendingBlockNumber {
 			// Pending blocks need to nil out a few fields
-			for _, field := range []string{"hash", "nonce", "miner", "number"} {
+			for _, field := range []string{"hash", "nonce", "miner"} {
 				response[field] = nil
 			}
 		}
@@ -743,6 +739,42 @@ type CallArgs struct {
 	Data     *hexutil.Bytes  `json:"data"`
 }
 
+// ToMessage converts CallArgs to the Message type used by the core evm
+func (args *CallArgs) ToMessage(globalGasCap *big.Int) types.Message {
+	// Set sender address or use zero address if none specified.
+	var addr common.Address
+	if args.From != nil {
+		addr = *args.From
+	}
+
+	// Set default gas & gas price if none were set
+	gas := uint64(math.MaxUint64 / 2)
+	if args.Gas != nil {
+		gas = uint64(*args.Gas)
+	}
+	if globalGasCap != nil && globalGasCap.Uint64() < gas {
+		log.Warn("Caller gas above allowance, capping", "requested", gas, "cap", globalGasCap)
+		gas = globalGasCap.Uint64()
+	}
+	gasPrice := new(big.Int)
+	if args.GasPrice != nil {
+		gasPrice = args.GasPrice.ToInt()
+	}
+
+	value := new(big.Int)
+	if args.Value != nil {
+		value = args.Value.ToInt()
+	}
+
+	var data []byte
+	if args.Data != nil {
+		data = []byte(*args.Data)
+	}
+
+	msg := types.NewMessage(addr, args.To, 0, value, gas, gasPrice, data, false)
+	return msg
+}
+
 // account indicates the overriding fields of account during the execution of
 // a message call.
 // Note, state and stateDiff can't be specified at the same time. If state is
@@ -764,17 +796,7 @@ func DoCall(ctx context.Context, b Backend, args CallArgs, blockNrOrHash rpc.Blo
 	if state == nil || err != nil {
 		return nil, 0, false, err
 	}
-	// Set sender address or use a default if none specified
-	var addr common.Address
-	if args.From == nil {
-		if wallets := b.AccountManager().Wallets(); len(wallets) > 0 {
-			if accounts := wallets[0].Accounts(); len(accounts) > 0 {
-				addr = accounts[0].Address
-			}
-		}
-	} else {
-		addr = *args.From
-	}
+
 	// Override the fields of specified contracts before execution.
 	for addr, account := range overrides {
 		// Override account nonce.
@@ -803,32 +825,6 @@ func DoCall(ctx context.Context, b Backend, args CallArgs, blockNrOrHash rpc.Blo
 			}
 		}
 	}
-	// Set default gas & gas price if none were set
-	gas := uint64(math.MaxUint64 / 2)
-	if args.Gas != nil {
-		gas = uint64(*args.Gas)
-	}
-	if globalGasCap != nil && globalGasCap.Uint64() < gas {
-		log.Warn("Caller gas above allowance, capping", "requested", gas, "cap", globalGasCap)
-		gas = globalGasCap.Uint64()
-	}
-	gasPrice := new(big.Int).SetUint64(defaultGasPrice)
-	if args.GasPrice != nil {
-		gasPrice = args.GasPrice.ToInt()
-	}
-
-	value := new(big.Int)
-	if args.Value != nil {
-		value = args.Value.ToInt()
-	}
-
-	var data []byte
-	if args.Data != nil {
-		data = []byte(*args.Data)
-	}
-
-	// Create new call message
-	msg := types.NewMessage(addr, args.To, 0, value, gas, gasPrice, data, false)
 
 	// Setup context so it may be cancelled the call has completed
 	// or, in case of unmetered gas, setup a context with a timeout.
@@ -843,6 +839,7 @@ func DoCall(ctx context.Context, b Backend, args CallArgs, blockNrOrHash rpc.Blo
 	defer cancel()
 
 	// Get a new instance of the EVM.
+	msg := args.ToMessage(globalGasCap)
 	evm, vmError, err := b.GetEVM(ctx, msg, state, header)
 	if err != nil {
 		return nil, 0, false, err
@@ -906,17 +903,9 @@ func DoEstimateGas(ctx context.Context, b Backend, args CallArgs, blockNrOrHash 
 	}
 	cap = hi
 
-	// Set sender address or use a default if none specified
+	// Use zero address if sender unspecified.
 	if args.From == nil {
-		if wallets := b.AccountManager().Wallets(); len(wallets) > 0 {
-			if accounts := wallets[0].Accounts(); len(accounts) > 0 {
-				args.From = &accounts[0].Address
-			}
-		}
-	}
-	// Use zero-address if none other is available
-	if args.From == nil {
-		args.From = &common.Address{}
+		args.From = new(common.Address)
 	}
 	// Create a helper to check if a gas allowance results in an executable transaction
 	executable := func(gas uint64) bool {

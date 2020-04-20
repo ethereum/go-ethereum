@@ -36,6 +36,7 @@ import (
 	"github.com/ethereum/go-ethereum/eth/downloader"
 	"github.com/ethereum/go-ethereum/event"
 	"github.com/ethereum/go-ethereum/log"
+	"github.com/ethereum/go-ethereum/metrics"
 	"github.com/ethereum/go-ethereum/trie"
 	"gopkg.in/urfave/cli.v1"
 )
@@ -57,6 +58,18 @@ participating.
 
 It expects the genesis file as argument.`,
 	}
+	dumpGenesisCommand = cli.Command{
+		Action:    utils.MigrateFlags(dumpGenesis),
+		Name:      "dumpgenesis",
+		Usage:     "Dumps genesis block JSON configuration to stdout",
+		ArgsUsage: "",
+		Flags: []cli.Flag{
+			utils.DataDirFlag,
+		},
+		Category: "BLOCKCHAIN COMMANDS",
+		Description: `
+The dumpgenesis command dumps the genesis block configuration in JSON format to stdout.`,
+	}
 	importCommand = cli.Command{
 		Action:    utils.MigrateFlags(importChain),
 		Name:      "import",
@@ -67,8 +80,17 @@ It expects the genesis file as argument.`,
 			utils.CacheFlag,
 			utils.SyncModeFlag,
 			utils.GCModeFlag,
+			utils.SnapshotFlag,
 			utils.CacheDatabaseFlag,
 			utils.CacheGCFlag,
+			utils.MetricsEnabledFlag,
+			utils.MetricsEnabledExpensiveFlag,
+			utils.MetricsEnableInfluxDBFlag,
+			utils.MetricsInfluxDBEndpointFlag,
+			utils.MetricsInfluxDBDatabaseFlag,
+			utils.MetricsInfluxDBUsernameFlag,
+			utils.MetricsInfluxDBPasswordFlag,
+			utils.MetricsInfluxDBTagsFlag,
 		},
 		Category: "BLOCKCHAIN COMMANDS",
 		Description: `
@@ -134,8 +156,10 @@ The export-preimages command export hash preimages to an RLP encoded stream`,
 			utils.CacheFlag,
 			utils.SyncModeFlag,
 			utils.FakePoWFlag,
-			utils.TestnetFlag,
+			utils.RopstenFlag,
 			utils.RinkebyFlag,
+			utils.GoerliFlag,
+			utils.LegacyTestnetFlag,
 		},
 		Category: "BLOCKCHAIN COMMANDS",
 		Description: `
@@ -181,9 +205,10 @@ Use "ethereum dump 0" to dump the genesis block.`,
 			utils.DataDirFlag,
 			utils.AncientFlag,
 			utils.CacheFlag,
-			utils.TestnetFlag,
+			utils.RopstenFlag,
 			utils.RinkebyFlag,
 			utils.GoerliFlag,
+			utils.LegacyTestnetFlag,
 			utils.SyncModeFlag,
 		},
 		Category: "BLOCKCHAIN COMMANDS",
@@ -227,10 +252,25 @@ func initGenesis(ctx *cli.Context) error {
 	return nil
 }
 
+func dumpGenesis(ctx *cli.Context) error {
+	genesis := utils.MakeGenesis(ctx)
+	if genesis == nil {
+		genesis = core.DefaultGenesisBlock()
+	}
+	if err := json.NewEncoder(os.Stdout).Encode(genesis); err != nil {
+		utils.Fatalf("could not encode genesis")
+	}
+	return nil
+}
+
 func importChain(ctx *cli.Context) error {
 	if len(ctx.Args()) < 1 {
 		utils.Fatalf("This command requires an argument.")
 	}
+	// Start metrics export if enabled
+	utils.SetupMetrics(ctx)
+	// Start system runtime metrics collection
+	go metrics.CollectProcessMetrics(3 * time.Second)
 	stack := makeFullNode(ctx)
 	defer stack.Close()
 
@@ -521,7 +561,7 @@ func dump(ctx *cli.Context) error {
 			fmt.Println("{}")
 			utils.Fatalf("block not found")
 		} else {
-			state, err := state.New(block.Root(), state.NewDatabase(chainDb))
+			state, err := state.New(block.Root(), state.NewDatabase(chainDb), nil)
 			if err != nil {
 				utils.Fatalf("could not create new state: %v", err)
 			}

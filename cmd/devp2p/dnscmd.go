@@ -96,6 +96,11 @@ var (
 	}
 )
 
+const (
+	rootTTL     = 30 * 60              // 30 min
+	treeNodeTTL = 4 * 7 * 24 * 60 * 60 // 4 weeks
+)
+
 // dnsSync performs dnsSyncCommand.
 func dnsSync(ctx *cli.Context) error {
 	var (

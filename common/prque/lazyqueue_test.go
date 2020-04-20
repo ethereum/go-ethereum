@@ -74,17 +74,22 @@ func TestLazyQueue(t *testing.T) {
 		q.Push(&items[i])
 	}
 
-	var lock sync.Mutex
-	stopCh := make(chan chan struct{})
+	var (
+		lock   sync.Mutex
+		wg     sync.WaitGroup
+		stopCh = make(chan chan struct{})
+	)
+	defer wg.Wait()
+	wg.Add(1)
 	go func() {
+		defer wg.Done()
 		for {
 			select {
 			case <-clock.After(testQueueRefresh):
 				lock.Lock()
 				q.Refresh()
 				lock.Unlock()
-			case stop := <-stopCh:
-				close(stop)
+			case <-stopCh:
 				return
 			}
 		}
@@ -104,6 +109,8 @@ func TestLazyQueue(t *testing.T) {
 		if rand.Intn(100) == 0 {
 			p := q.PopItem().(*lazyItem)
 			if p.p != maxPri {
+				lock.Unlock()
+				close(stopCh)
 				t.Fatalf("incorrect item (best known priority %d, popped %d)", maxPri, p.p)
 			}
 			q.Push(p)
@@ -113,7 +120,5 @@ func TestLazyQueue(t *testing.T) {
 		clock.WaitForTimers(1)
 	}
 
-	stop := make(chan struct{})
-	stopCh <- stop
-	<-stop
+	close(stopCh)
 }

@@ -595,7 +595,8 @@ func (rw *rlpxFrameRW) WriteMsg(msg Msg) error {
 	}
 	msg.meterSize = msg.Size
 	if metrics.Enabled && msg.meterCap.Name != "" { // don't meter non-subprotocol messages
-		metrics.GetOrRegisterMeter(fmt.Sprintf("%s/%s/%d/%#02x", MetricsOutboundTraffic, msg.meterCap.Name, msg.meterCap.Version, msg.meterCode), nil).Mark(int64(msg.meterSize))
+		m := fmt.Sprintf("%s/%s/%d/%#02x", egressMeterName, msg.meterCap.Name, msg.meterCap.Version, msg.meterCode)
+		metrics.GetOrRegisterMeter(m, nil).Mark(int64(msg.meterSize))
 	}
 	// write header
 	headbuf := make([]byte, 32)

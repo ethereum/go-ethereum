@@ -28,22 +28,6 @@ var customGenesisTests = []struct {
 	query   string
 	result  string
 }{
-	// Plain genesis file without anything extra
-	{
-		genesis: `{
-			"alloc"      : {},
-			"coinbase"   : "0x0000000000000000000000000000000000000000",
-			"difficulty" : "0x20000",
-			"extraData"  : "",
-			"gasLimit"   : "0x2fefd8",
-			"nonce"      : "0x0000000000000042",
-			"mixhash"    : "0x0000000000000000000000000000000000000000000000000000000000000000",
-			"parentHash" : "0x0000000000000000000000000000000000000000000000000000000000000000",
-			"timestamp"  : "0x00"
-		}`,
-		query:  "eth.getBlock(0).nonce",
-		result: "0x0000000000000042",
-	},
 	// Genesis file with an empty chain configuration (ensure missing fields work)
 	{
 		genesis: `{
@@ -52,14 +36,14 @@ var customGenesisTests = []struct {
 			"difficulty" : "0x20000",
 			"extraData"  : "",
 			"gasLimit"   : "0x2fefd8",
-			"nonce"      : "0x0000000000000042",
+			"nonce"      : "0x0000000000001338",
 			"mixhash"    : "0x0000000000000000000000000000000000000000000000000000000000000000",
 			"parentHash" : "0x0000000000000000000000000000000000000000000000000000000000000000",
 			"timestamp"  : "0x00",
 			"config"     : {}
 		}`,
 		query:  "eth.getBlock(0).nonce",
-		result: "0x0000000000000042",
+		result: "0x0000000000001338",
 	},
 	// Genesis file with specific chain configurations
 	{
@@ -69,7 +53,7 @@ var customGenesisTests = []struct {
 			"difficulty" : "0x20000",
 			"extraData"  : "",
 			"gasLimit"   : "0x2fefd8",
-			"nonce"      : "0x0000000000000042",
+			"nonce"      : "0x0000000000001339",
 			"mixhash"    : "0x0000000000000000000000000000000000000000000000000000000000000000",
 			"parentHash" : "0x0000000000000000000000000000000000000000000000000000000000000000",
 			"timestamp"  : "0x00",
@@ -80,7 +64,7 @@ var customGenesisTests = []struct {
 			}
 		}`,
 		query:  "eth.getBlock(0).nonce",
-		result: "0x0000000000000042",
+		result: "0x0000000000001339",
 	},
 }
 
@@ -97,10 +81,10 @@ func TestCustomGenesis(t *testing.T) {
 		if err := ioutil.WriteFile(json, []byte(tt.genesis), 0600); err != nil {
 			t.Fatalf("test %d: failed to write genesis file: %v", i, err)
 		}
-		runGeth(t, "--datadir", datadir, "init", json).WaitExit()
+		runGeth(t, "--nousb", "--datadir", datadir, "init", json).WaitExit()
 
 		// Query the custom genesis block
-		geth := runGeth(t,
+		geth := runGeth(t, "--nousb",
 			"--datadir", datadir, "--maxpeers", "0", "--port", "0",
 			"--nodiscover", "--nat", "none", "--ipcdisable",
 			"--exec", tt.query, "console")

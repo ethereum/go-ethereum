@@ -27,13 +27,9 @@ import (
 
 var (
 	// MaxUint256 is the maximum value that can be represented by a uint256
-	MaxUint256 = big.NewInt(0).Add(
-		big.NewInt(0).Exp(big.NewInt(2), big.NewInt(256), nil),
-		big.NewInt(-1))
+	MaxUint256 = new(big.Int).Sub(new(big.Int).Lsh(common.Big1, 256), common.Big1)
 	// MaxInt256 is the maximum value that can be represented by a int256
-	MaxInt256 = big.NewInt(0).Add(
-		big.NewInt(0).Exp(big.NewInt(2), big.NewInt(255), nil),
-		big.NewInt(-1))
+	MaxInt256 = new(big.Int).Sub(new(big.Int).Lsh(common.Big1, 255), common.Big1)
 )
 
 // ReadInteger reads the integer based on its kind and returns the appropriate value
@@ -56,17 +52,17 @@ func ReadInteger(typ byte, kind reflect.Kind, b []byte) interface{} {
 	case reflect.Int64:
 		return int64(binary.BigEndian.Uint64(b[len(b)-8:]))
 	default:
-		// the only case lefts for integer is int256/uint256.
-		// big.SetBytes can't tell if a number is negative, positive on itself.
-		// On EVM, if the returned number > max int256, it is negative.
+		// the only case left for integer is int256/uint256.
 		ret := new(big.Int).SetBytes(b)
 		if typ == UintTy {
 			return ret
 		}
-
-		if ret.Cmp(MaxInt256) > 0 {
-			ret.Add(MaxUint256, big.NewInt(0).Neg(ret))
-			ret.Add(ret, big.NewInt(1))
+		// big.SetBytes can't tell if a number is negative or positive in itself.
+		// On EVM, if the returned number > max int256, it is negative.
+		// A number is > max int256 if the bit at position 255 is set.
+		if ret.Bit(255) == 1 {
+			ret.Add(MaxUint256, new(big.Int).Neg(ret))
+			ret.Add(ret, common.Big1)
 			ret.Neg(ret)
 		}
 		return ret
@@ -144,7 +140,7 @@ func forEachUnpack(t Type, output []byte, start, size int) (interface{}, error) 
 	elemSize := getTypeSize(*t.Elem)
 
 	for i, j := start, 0; j < size; i, j = i+elemSize, j+1 {
-		inter, err := toGoType(i, *t.Elem, output)
+		inter, err := ToGoType(i, *t.Elem, output)
 		if err != nil {
 			return nil, err
 		}
@@ -161,7 +157,7 @@ func forTupleUnpack(t Type, output []byte) (interface{}, error) {
 	retval := reflect.New(t.Type).Elem()
 	virtualArgs := 0
 	for index, elem := range t.TupleElems {
-		marshalledValue, err := toGoType((index+virtualArgs)*32, *elem, output)
+		marshalledValue, err := ToGoType((index+virtualArgs)*32, *elem, output)
 		if elem.T == ArrayTy && !isDynamicType(*elem) {
 			// If we have a static array, like [3]uint256, these are coded as
 			// just like uint256,uint256,uint256.
@@ -187,9 +183,9 @@ func forTupleUnpack(t Type, output []byte) (interface{}, error) {
 	return retval.Interface(), nil
 }
 
-// toGoType parses the output bytes and recursively assigns the value of these bytes
+// ToGoType parses the output bytes and recursively assigns the value of these bytes
 // into a go type with accordance with the ABI spec.
-func toGoType(index int, t Type, output []byte) (interface{}, error) {
+func ToGoType(index int, t Type, output []byte) (interface{}, error) {
 	if index+32 > len(output) {
 		return nil, fmt.Errorf("abi: cannot marshal in to go type: length insufficient %d require %d", len(output), index+32)
 	}

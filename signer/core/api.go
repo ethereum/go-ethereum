@@ -43,7 +43,7 @@ const (
 	// ExternalAPIVersion -- see extapi_changelog.md
 	ExternalAPIVersion = "6.0.0"
 	// InternalAPIVersion -- see intapi_changelog.md
-	InternalAPIVersion = "7.0.0"
+	InternalAPIVersion = "7.0.1"
 )
 
 // ExternalAPI defines the external API through which signing requests are made.
@@ -395,8 +395,7 @@ func (api *SignerAPI) List(ctx context.Context) ([]common.Address, error) {
 // the given password. Users are responsible to backup the private key that is stored
 // in the keystore location thas was specified when this API was created.
 func (api *SignerAPI) New(ctx context.Context) (common.Address, error) {
-	be := api.am.Backends(keystore.KeyStoreType)
-	if len(be) == 0 {
+	if be := api.am.Backends(keystore.KeyStoreType); len(be) == 0 {
 		return common.Address{}, errors.New("password based accounts not supported")
 	}
 	if resp, err := api.UI.ApproveNewAccount(&NewAccountRequest{MetadataFromContext(ctx)}); err != nil {
@@ -404,7 +403,16 @@ func (api *SignerAPI) New(ctx context.Context) (common.Address, error) {
 	} else if !resp.Approved {
 		return common.Address{}, ErrRequestDenied
 	}
+	return api.newAccount()
+}
 
+// newAccount is the internal method to create a new account. It should be used
+// _after_ user-approval has been obtained
+func (api *SignerAPI) newAccount() (common.Address, error) {
+	be := api.am.Backends(keystore.KeyStoreType)
+	if len(be) == 0 {
+		return common.Address{}, errors.New("password based accounts not supported")
+	}
 	// Three retries to get a valid password
 	for i := 0; i < 3; i++ {
 		resp, err := api.UI.OnInputRequired(UserInputRequest{

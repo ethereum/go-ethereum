@@ -25,6 +25,7 @@ import (
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/crypto"
+	lpc "github.com/ethereum/go-ethereum/les/lespay/client"
 	"github.com/ethereum/go-ethereum/p2p/enode"
 	"github.com/ethereum/go-ethereum/rlp"
 )
@@ -77,19 +78,59 @@ const (
 )
 
 type requestInfo struct {
-	name     string
-	maxCount uint64
+	name                          string
+	maxCount                      uint64
+	refBasketFirst, refBasketRest float64
 }
 
-var requests = map[uint64]requestInfo{
-	GetBlockHeadersMsg:     {"GetBlockHeaders", MaxHeaderFetch},
-	GetBlockBodiesMsg:      {"GetBlockBodies", MaxBodyFetch},
-	GetReceiptsMsg:         {"GetReceipts", MaxReceiptFetch},
-	GetCodeMsg:             {"GetCode", MaxCodeFetch},
-	GetProofsV2Msg:         {"GetProofsV2", MaxProofsFetch},
-	GetHelperTrieProofsMsg: {"GetHelperTrieProofs", MaxHelperTrieProofsFetch},
-	SendTxV2Msg:            {"SendTxV2", MaxTxSend},
-	GetTxStatusMsg:         {"GetTxStatus", MaxTxStatus},
+// reqMapping maps an LES request to one or two lespay service vector entries.
+// If rest != -1 and the request type is used with amounts larger than one then the
+// first one of the multi-request is mapped to first while the rest is mapped to rest.
+type reqMapping struct {
+	first, rest int
+}
+
+var (
+	// requests describes the available LES request types and their initializing amounts
+	// in the lespay/client.ValueTracker reference basket. Initial values are estimates
+	// based on the same values as the server's default cost estimates (reqAvgTimeCost).
+	requests = map[uint64]requestInfo{
+		GetBlockHeadersMsg:     {"GetBlockHeaders", MaxHeaderFetch, 10, 1000},
+		GetBlockBodiesMsg:      {"GetBlockBodies", MaxBodyFetch, 1, 0},
+		GetReceiptsMsg:         {"GetReceipts", MaxReceiptFetch, 1, 0},
+		GetCodeMsg:             {"GetCode", MaxCodeFetch, 1, 0},
+		GetProofsV2Msg:         {"GetProofsV2", MaxProofsFetch, 10, 0},
+		GetHelperTrieProofsMsg: {"GetHelperTrieProofs", MaxHelperTrieProofsFetch, 10, 100},
+		SendTxV2Msg:            {"SendTxV2", MaxTxSend, 1, 0},
+		GetTxStatusMsg:         {"GetTxStatus", MaxTxStatus, 10, 0},
+	}
+	requestList    []lpc.RequestInfo
+	requestMapping map[uint32]reqMapping
+)
+
+// init creates a request list and mapping between protocol message codes and lespay
+// service vector indices.
+func init() {
+	requestMapping = make(map[uint32]reqMapping)
+	for code, req := range requests {
+		cost := reqAvgTimeCost[code]
+		rm := reqMapping{len(requestList), -1}
+		requestList = append(requestList, lpc.RequestInfo{
+			Name:       req.name + ".first",
+			InitAmount: req.refBasketFirst,
+			InitValue:  float64(cost.baseCost + cost.reqCost),
+		})
+		if req.refBasketRest != 0 {
+			rm.rest = len(requestList)
+			requestList = append(requestList, lpc.RequestInfo{
+				Name:       req.name + ".rest",
+				InitAmount: req.refBasketRest,
+				InitValue:  float64(cost.reqCost),
+			})
+		}
+		requestMapping[uint32(code)] = rm
+	}
+
 }
 
 type errCode int

@@ -74,13 +74,13 @@ func (db *Database) ValidateTransaction(selector *string, tx *core.SendTxArgs) (
 		messages.Crit("Transaction recipient is the zero address")
 	}
 	// Semantic fields validated, try to make heads or tails of the call data
-	db.validateCallData(selector, data, messages)
+	db.ValidateCallData(selector, data, messages)
 	return messages, nil
 }
 
-// validateCallData checks if the ABI call-data + method selector (if given) can
+// ValidateCallData checks if the ABI call-data + method selector (if given) can
 // be parsed and seems to match.
-func (db *Database) validateCallData(selector *string, data []byte, messages *core.ValidationMessages) {
+func (db *Database) ValidateCallData(selector *string, data []byte, messages *core.ValidationMessages) {
 	// If the data is empty, we have a plain value transfer, nothing more to do
 	if len(data) == 0 {
 		return
@@ -110,7 +110,7 @@ func (db *Database) validateCallData(selector *string, data []byte, messages *co
 		return
 	}
 	if info, err := verifySelector(embedded, data); err != nil {
-		messages.Warn(fmt.Sprintf("Transaction contains data, but provided ABI signature could not be varified: %v", err))
+		messages.Warn(fmt.Sprintf("Transaction contains data, but provided ABI signature could not be verified: %v", err))
 	} else {
 		messages.Info(info.String())
 	}

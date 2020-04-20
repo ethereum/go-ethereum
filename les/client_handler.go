@@ -19,6 +19,7 @@ package les
 import (
 	"math/big"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/ethereum/go-ethereum/common"
@@ -65,7 +66,7 @@ func newClientHandler(ulcServers []string, ulcFraction int, checkpoint *params.T
 	}
 	handler.fetcher = newLightFetcher(handler)
 	handler.downloader = downloader.New(height, backend.chainDb, nil, backend.eventMux, nil, backend.blockchain, handler.removePeer)
-	handler.backend.peers.notify((*downloaderPeerNotify)(handler))
+	handler.backend.peers.subscribe((*downloaderPeerNotify)(handler))
 	return handler
 }
 
@@ -82,7 +83,8 @@ func (h *clientHandler) runPeer(version uint, p *p2p.Peer, rw p2p.MsgReadWriter)
 	if h.ulc != nil {
 		trusted = h.ulc.trusted(p.ID())
 	}
-	peer := newPeer(int(version), h.backend.config.NetworkId, trusted, p, newMeteredMsgWriter(rw, int(version)))
+	peer := newServerPeer(int(version), h.backend.config.NetworkId, trusted, p, newMeteredMsgWriter(rw, int(version)))
+	defer peer.close()
 	peer.poolEntry = h.backend.serverPool.connect(peer, peer.Node())
 	if peer.poolEntry == nil {
 		return p2p.DiscRequested
@@ -94,8 +96,8 @@ func (h *clientHandler) runPeer(version uint, p *p2p.Peer, rw p2p.MsgReadWriter)
 	return err
 }
 
-func (h *clientHandler) handle(p *peer) error {
-	if h.backend.peers.Len() >= h.backend.config.LightPeers && !p.Peer.Info().Network.Trusted {
+func (h *clientHandler) handle(p *serverPeer) error {
+	if h.backend.peers.len() >= h.backend.config.LightPeers && !p.Peer.Info().Network.Trusted {
 		return p2p.DiscTooManyPeers
 	}
 	p.Log().Debug("Light Ethereum peer connected", "name", p.Name())
@@ -112,25 +114,29 @@ func (h *clientHandler) handle(p *peer) error {
 		return err
 	}
 	// Register the peer locally
-	if err := h.backend.peers.Register(p); err != nil {
+	if err := h.backend.peers.register(p); err != nil {
 		p.Log().Error("Light Ethereum peer registration failed", "err", err)
 		return err
 	}
-	serverConnectionGauge.Update(int64(h.backend.peers.Len()))
+	serverConnectionGauge.Update(int64(h.backend.peers.len()))
 
 	connectedAt := mclock.Now()
 	defer func() {
-		h.backend.peers.Unregister(p.id)
+		h.backend.peers.unregister(p.id)
 		connectionTimer.Update(time.Duration(mclock.Now() - connectedAt))
-		serverConnectionGauge.Update(int64(h.backend.peers.Len()))
+		serverConnectionGauge.Update(int64(h.backend.peers.len()))
 	}()
 
-	h.fetcher.announce(p, p.headInfo)
+	h.fetcher.announce(p, &announceData{Hash: p.headInfo.Hash, Number: p.headInfo.Number, Td: p.headInfo.Td})
 
 	// pool entry can be nil during the unit test.
 	if p.poolEntry != nil {
 		h.backend.serverPool.registered(p.poolEntry)
 	}
+	// Mark the peer starts to be served.
+	atomic.StoreUint32(&p.serving, 1)
+	defer atomic.StoreUint32(&p.serving, 0)
+
 	// Spawn a main loop to handle all incoming messages.
 	for {
 		if err := h.handleMsg(p); err != nil {
@@ -143,7 +149,7 @@ func (h *clientHandler) handle(p *peer) error {
 
 // handleMsg is invoked whenever an inbound message is received from a remote
 // peer. The remote connection is torn down upon returning any error.
-func (h *clientHandler) handleMsg(p *peer) error {
+func (h *clientHandler) handleMsg(p *serverPeer) error {
 	// Read the next message from the remote peer, and ensure it's fully consumed
 	msg, err := p.rw.ReadMsg()
 	if err != nil {
@@ -174,6 +180,7 @@ func (h *clientHandler) handleMsg(p *peer) error {
 			return errResp(ErrRequestRejected, "")
 		}
 		p.updateFlowControl(update)
+		p.updateVtParams()
 
 		if req.Hash != (common.Hash{}) {
 			if p.announceType == announceTypeNone {
@@ -199,6 +206,7 @@ func (h *clientHandler) handleMsg(p *peer) error {
 			return errResp(ErrDecode, "msg %v: %v", msg, err)
 		}
 		p.fcServer.ReceivedReply(resp.ReqID, resp.BV)
+		p.answeredRequest(resp.ReqID)
 		if h.fetcher.requestedID(resp.ReqID) {
 			h.fetcher.deliverHeaders(p, resp.ReqID, resp.Headers)
 		} else {
@@ -216,6 +224,7 @@ func (h *clientHandler) handleMsg(p *peer) error {
 			return errResp(ErrDecode, "msg %v: %v", msg, err)
 		}
 		p.fcServer.ReceivedReply(resp.ReqID, resp.BV)
+		p.answeredRequest(resp.ReqID)
 		deliverMsg = &Msg{
 			MsgType: MsgBlockBodies,
 			ReqID:   resp.ReqID,
@@ -231,6 +240,7 @@ func (h *clientHandler) handleMsg(p *peer) error {
 			return errResp(ErrDecode, "msg %v: %v", msg, err)
 		}
 		p.fcServer.ReceivedReply(resp.ReqID, resp.BV)
+		p.answeredRequest(resp.ReqID)
 		deliverMsg = &Msg{
 			MsgType: MsgCode,
 			ReqID:   resp.ReqID,
@@ -246,6 +256,7 @@ func (h *clientHandler) handleMsg(p *peer) error {
 			return errResp(ErrDecode, "msg %v: %v", msg, err)
 		}
 		p.fcServer.ReceivedReply(resp.ReqID, resp.BV)
+		p.answeredRequest(resp.ReqID)
 		deliverMsg = &Msg{
 			MsgType: MsgReceipts,
 			ReqID:   resp.ReqID,
@@ -261,6 +272,7 @@ func (h *clientHandler) handleMsg(p *peer) error {
 			return errResp(ErrDecode, "msg %v: %v", msg, err)
 		}
 		p.fcServer.ReceivedReply(resp.ReqID, resp.BV)
+		p.answeredRequest(resp.ReqID)
 		deliverMsg = &Msg{
 			MsgType: MsgProofsV2,
 			ReqID:   resp.ReqID,
@@ -276,6 +288,7 @@ func (h *clientHandler) handleMsg(p *peer) error {
 			return errResp(ErrDecode, "msg %v: %v", msg, err)
 		}
 		p.fcServer.ReceivedReply(resp.ReqID, resp.BV)
+		p.answeredRequest(resp.ReqID)
 		deliverMsg = &Msg{
 			MsgType: MsgHelperTrieProofs,
 			ReqID:   resp.ReqID,
@@ -291,13 +304,14 @@ func (h *clientHandler) handleMsg(p *peer) error {
 			return errResp(ErrDecode, "msg %v: %v", msg, err)
 		}
 		p.fcServer.ReceivedReply(resp.ReqID, resp.BV)
+		p.answeredRequest(resp.ReqID)
 		deliverMsg = &Msg{
 			MsgType: MsgTxStatus,
 			ReqID:   resp.ReqID,
 			Obj:     resp.Status,
 		}
 	case StopMsg:
-		p.freezeServer(true)
+		p.freeze()
 		h.backend.retriever.frozen(p)
 		p.Log().Debug("Service stopped")
 	case ResumeMsg:
@@ -306,7 +320,7 @@ func (h *clientHandler) handleMsg(p *peer) error {
 			return errResp(ErrDecode, "msg %v: %v", msg, err)
 		}
 		p.fcServer.ResumeFreeze(bv)
-		p.freezeServer(false)
+		p.unfreeze()
 		p.Log().Debug("Service resumed")
 	default:
 		p.Log().Trace("Received invalid message", "code", msg.Code)
@@ -315,8 +329,8 @@ func (h *clientHandler) handleMsg(p *peer) error {
 	// Deliver the received response to retriever.
 	if deliverMsg != nil {
 		if err := h.backend.retriever.deliver(p, deliverMsg); err != nil {
-			p.responseErrors++
-			if p.responseErrors > maxResponseErrors {
+			p.errCount++
+			if p.errCount > maxResponseErrors {
 				return err
 			}
 		}
@@ -325,12 +339,12 @@ func (h *clientHandler) handleMsg(p *peer) error {
 }
 
 func (h *clientHandler) removePeer(id string) {
-	h.backend.peers.Unregister(id)
+	h.backend.peers.unregister(id)
 }
 
 type peerConnection struct {
 	handler *clientHandler
-	peer    *peer
+	peer    *serverPeer
 }
 
 func (pc *peerConnection) Head() (common.Hash, *big.Int) {
@@ -340,18 +354,18 @@ func (pc *peerConnection) Head() (common.Hash, *big.Int) {
 func (pc *peerConnection) RequestHeadersByHash(origin common.Hash, amount int, skip int, reverse bool) error {
 	rq := &distReq{
 		getCost: func(dp distPeer) uint64 {
-			peer := dp.(*peer)
-			return peer.GetRequestCost(GetBlockHeadersMsg, amount)
+			peer := dp.(*serverPeer)
+			return peer.getRequestCost(GetBlockHeadersMsg, amount)
 		},
 		canSend: func(dp distPeer) bool {
-			return dp.(*peer) == pc.peer
+			return dp.(*serverPeer) == pc.peer
 		},
 		request: func(dp distPeer) func() {
 			reqID := genReqID()
-			peer := dp.(*peer)
-			cost := peer.GetRequestCost(GetBlockHeadersMsg, amount)
+			peer := dp.(*serverPeer)
+			cost := peer.getRequestCost(GetBlockHeadersMsg, amount)
 			peer.fcServer.QueuedRequest(reqID, cost)
-			return func() { peer.RequestHeadersByHash(reqID, cost, origin, amount, skip, reverse) }
+			return func() { peer.requestHeadersByHash(reqID, origin, amount, skip, reverse) }
 		},
 	}
 	_, ok := <-pc.handler.backend.reqDist.queue(rq)
@@ -364,18 +378,18 @@ func (pc *peerConnection) RequestHeadersByHash(origin common.Hash, amount int, s
 func (pc *peerConnection) RequestHeadersByNumber(origin uint64, amount int, skip int, reverse bool) error {
 	rq := &distReq{
 		getCost: func(dp distPeer) uint64 {
-			peer := dp.(*peer)
-			return peer.GetRequestCost(GetBlockHeadersMsg, amount)
+			peer := dp.(*serverPeer)
+			return peer.getRequestCost(GetBlockHeadersMsg, amount)
 		},
 		canSend: func(dp distPeer) bool {
-			return dp.(*peer) == pc.peer
+			return dp.(*serverPeer) == pc.peer
 		},
 		request: func(dp distPeer) func() {
 			reqID := genReqID()
-			peer := dp.(*peer)
-			cost := peer.GetRequestCost(GetBlockHeadersMsg, amount)
+			peer := dp.(*serverPeer)
+			cost := peer.getRequestCost(GetBlockHeadersMsg, amount)
 			peer.fcServer.QueuedRequest(reqID, cost)
-			return func() { peer.RequestHeadersByNumber(reqID, cost, origin, amount, skip, reverse) }
+			return func() { peer.requestHeadersByNumber(reqID, origin, amount, skip, reverse) }
 		},
 	}
 	_, ok := <-pc.handler.backend.reqDist.queue(rq)
@@ -388,7 +402,7 @@ func (pc *peerConnection) RequestHeadersByNumber(origin uint64, amount int, skip
 // downloaderPeerNotify implements peerSetNotify
 type downloaderPeerNotify clientHandler
 
-func (d *downloaderPeerNotify) registerPeer(p *peer) {
+func (d *downloaderPeerNotify) registerPeer(p *serverPeer) {
 	h := (*clientHandler)(d)
 	pc := &peerConnection{
 		handler: h,
@@ -397,7 +411,7 @@ func (d *downloaderPeerNotify) registerPeer(p *peer) {
 	h.downloader.RegisterLightPeer(p.id, ethVersion, pc)
 }
 
-func (d *downloaderPeerNotify) unregisterPeer(p *peer) {
+func (d *downloaderPeerNotify) unregisterPeer(p *serverPeer) {
 	h := (*clientHandler)(d)
 	h.downloader.UnregisterPeer(p.id)
 }

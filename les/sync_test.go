@@ -109,14 +109,12 @@ func testCheckpointSyncing(t *testing.T, protocol int, syncMode int) {
 	}
 
 	// Create connected peer pair.
-	_, err1, _, err2 := newTestPeerPair("peer", protocol, server.handler, client.handler)
-	select {
-	case <-time.After(time.Millisecond * 100):
-	case err := <-err1:
-		t.Fatalf("peer 1 handshake error: %v", err)
-	case err := <-err2:
-		t.Fatalf("peer 2 handshake error: %v", err)
+	peer1, peer2, err := newTestPeerPair("peer", protocol, server.handler, client.handler)
+	if err != nil {
+		t.Fatalf("Failed to connect testing peers %v", err)
 	}
+	defer peer1.close()
+	defer peer2.close()
 
 	select {
 	case err := <-done:
@@ -206,17 +204,10 @@ func testMissOracleBackend(t *testing.T, hasCheckpoint bool) {
 			done <- fmt.Errorf("blockchain length mismatch, want %d, got %d", expected, header.Number)
 		}
 	}
-
 	// Create connected peer pair.
-	_, err1, _, err2 := newTestPeerPair("peer", 2, server.handler, client.handler)
-	select {
-	case <-time.After(time.Millisecond * 100):
-	case err := <-err1:
-		t.Fatalf("peer 1 handshake error: %v", err)
-	case err := <-err2:
-		t.Fatalf("peer 2 handshake error: %v", err)
+	if _, _, err := newTestPeerPair("peer", 2, server.handler, client.handler); err != nil {
+		t.Fatalf("Failed to connect testing peers %v", err)
 	}
-
 	select {
 	case err := <-done:
 		if err != nil {
