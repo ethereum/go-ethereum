@@ -243,7 +243,7 @@ var AppHelpFlagGroups = []flagGroup{
 		Flags: whisperFlags,
 	},
 	{
-		Name: "ALIASED OPTIONS (deprecated)",
+		Name: "ALIASED (deprecated)",
 		Flags: append([]cli.Flag{
 			utils.LegacyTestnetFlag,
 			utils.LightLegacyServFlag,
