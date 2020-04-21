@@ -92,7 +92,7 @@ func TestUnpackIndexedStringTyLogIntoMap(t *testing.T) {
 		common.HexToHash("0x0"),
 		hash,
 	}
-	mockLog := getMockLog(topics, common.HexToHash("0x0"))
+	mockLog := newMockLog(topics, common.HexToHash("0x0"))
 
 	abiString := `[{"anonymous":false,"inputs":[{"indexed":true,"name":"name","type":"string"},{"indexed":false,"name":"sender","type":"address"},{"indexed":false,"name":"amount","type":"uint256"},{"indexed":false,"name":"memo","type":"bytes"}],"name":"received","type":"event"}]`
 	parsedAbi, _ := abi.JSON(strings.NewReader(abiString))
@@ -117,7 +117,7 @@ func TestUnpackIndexedSliceTyLogIntoMap(t *testing.T) {
 		common.HexToHash("0x0"),
 		hash,
 	}
-	mockLog := getMockLog(topics, common.HexToHash("0x0"))
+	mockLog := newMockLog(topics, common.HexToHash("0x0"))
 
 	abiString := `[{"anonymous":false,"inputs":[{"indexed":true,"name":"names","type":"string[]"},{"indexed":false,"name":"sender","type":"address"},{"indexed":false,"name":"amount","type":"uint256"},{"indexed":false,"name":"memo","type":"bytes"}],"name":"received","type":"event"}]`
 	parsedAbi, _ := abi.JSON(strings.NewReader(abiString))
@@ -142,7 +142,7 @@ func TestUnpackIndexedArrayTyLogIntoMap(t *testing.T) {
 		common.HexToHash("0x0"),
 		hash,
 	}
-	mockLog := getMockLog(topics, common.HexToHash("0x0"))
+	mockLog := newMockLog(topics, common.HexToHash("0x0"))
 
 	abiString := `[{"anonymous":false,"inputs":[{"indexed":true,"name":"addresses","type":"address[2]"},{"indexed":false,"name":"sender","type":"address"},{"indexed":false,"name":"amount","type":"uint256"},{"indexed":false,"name":"memo","type":"bytes"}],"name":"received","type":"event"}]`
 	parsedAbi, _ := abi.JSON(strings.NewReader(abiString))
@@ -169,7 +169,7 @@ func TestUnpackIndexedFuncTyLogIntoMap(t *testing.T) {
 		common.HexToHash("0x99b5620489b6ef926d4518936cfec15d305452712b88bd59da2d9c10fb0953e8"),
 		common.BytesToHash(functionTyBytes),
 	}
-	mockLog := getMockLog(topics, common.HexToHash("0x5c698f13940a2153440c6d19660878bc90219d9298fdcf37365aa8d88d40fc42"))
+	mockLog := newMockLog(topics, common.HexToHash("0x5c698f13940a2153440c6d19660878bc90219d9298fdcf37365aa8d88d40fc42"))
 	abiString := `[{"anonymous":false,"inputs":[{"indexed":true,"name":"function","type":"function"},{"indexed":false,"name":"sender","type":"address"},{"indexed":false,"name":"amount","type":"uint256"},{"indexed":false,"name":"memo","type":"bytes"}],"name":"received","type":"event"}]`
 	parsedAbi, _ := abi.JSON(strings.NewReader(abiString))
 	bc := bind.NewBoundContract(common.HexToAddress("0x0"), parsedAbi, nil, nil, nil)
@@ -190,7 +190,7 @@ func TestUnpackIndexedBytesTyLogIntoMap(t *testing.T) {
 		common.HexToHash("0x99b5620489b6ef926d4518936cfec15d305452712b88bd59da2d9c10fb0953e8"),
 		hash,
 	}
-	mockLog := getMockLog(topics, common.HexToHash("0x5c698f13940a2153440c6d19660878bc90219d9298fdcf37365aa8d88d40fc42"))
+	mockLog := newMockLog(topics, common.HexToHash("0x5c698f13940a2153440c6d19660878bc90219d9298fdcf37365aa8d88d40fc42"))
 
 	abiString := `[{"anonymous":false,"inputs":[{"indexed":true,"name":"content","type":"bytes"},{"indexed":false,"name":"sender","type":"address"},{"indexed":false,"name":"amount","type":"uint256"},{"indexed":false,"name":"memo","type":"bytes"}],"name":"received","type":"event"}]`
 	parsedAbi, _ := abi.JSON(strings.NewReader(abiString))
@@ -221,7 +221,7 @@ func unpackAndCheck(t *testing.T, bc *bind.BoundContract, expected map[string]in
 	}
 }
 
-func getMockLog(topics []common.Hash, txHash common.Hash) types.Log {
+func newMockLog(topics []common.Hash, txHash common.Hash) types.Log {
 	return types.Log{
 		Address:     common.HexToAddress("0x0"),
 		Topics:      topics,
