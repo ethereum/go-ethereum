@@ -346,12 +346,9 @@ func (c *Bor) verifyHeader(chain consensus.ChainReader, header *types.Header, pa
 	if header.Time > uint64(time.Now().Unix()) {
 		return consensus.ErrFutureBlock
 	}
-	// Check that the extra-data contains both the vanity and signature
-	if len(header.Extra) < extraVanity {
-		return errMissingVanity
-	}
-	if len(header.Extra) < extraVanity+extraSeal {
-		return errMissingSignature
+
+	if err := validateHeaderExtraField(header.Extra); err != nil {
+		return err
 	}
 
 	// check extr adata
@@ -385,6 +382,18 @@ func (c *Bor) verifyHeader(chain consensus.ChainReader, header *types.Header, pa
 	}
 	// All basic checks passed, verify cascading fields
 	return c.verifyCascadingFields(chain, header, parents)
+}
+
+// validateHeaderExtraField validates that the extra-data contains both the vanity and signature.
+// header.Extra = header.Vanity + header.ProducerBytes (optional) + header.Seal
+func validateHeaderExtraField(extraBytes []byte) error {
+	if len(extraBytes) < extraVanity {
+		return errMissingVanity
+	}
+	if len(extraBytes) < extraVanity+extraSeal {
+		return errMissingSignature
+	}
+	return nil
 }
 
 // verifyCascadingFields verifies all the header fields that are not standalone,

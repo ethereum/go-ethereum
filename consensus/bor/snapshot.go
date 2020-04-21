@@ -185,6 +185,9 @@ func (s *Snapshot) apply(headers []*types.Header) (*Snapshot, error) {
 
 		// change validator set and change proposer
 		if number > 0 && (number+1)%s.config.Sprint == 0 {
+			if err := validateHeaderExtraField(header.Extra); err != nil {
+				return nil, err
+			}
 			validatorBytes := header.Extra[extraVanity : len(header.Extra)-extraSeal]
 
 			// get validators from headers and use that for new validator set
