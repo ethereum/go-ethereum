@@ -2,7 +2,7 @@ package bor
 
 import (
 	"bytes"
-	"encoding/json"
+	// "encoding/json"
 	"errors"
 	"fmt"
 	"math/big"
@@ -13,8 +13,6 @@ import (
 )
 
 // Validator represets Volatile state for each Validator
-// NOTE: The ProposerPriority is not included in Validator.Hash();
-// make sure to update that method if changes are made here
 type Validator struct {
 	ID               uint64         `json:"ID"`
 	Address          common.Address `json:"signer"`
@@ -78,18 +76,6 @@ func ValidatorListString(vals []*Validator) string {
 	}
 
 	return strings.Join(chunks, ",")
-}
-
-// Bytes computes the unique encoding of a validator with a given voting power.
-// These are the bytes that gets hashed in consensus. It excludes address
-// as its redundant with the pubkey. This also excludes ProposerPriority
-// which changes every round.
-func (v *Validator) Bytes() []byte {
-	b, err := json.Marshal(v)
-	if err != nil {
-		return b
-	}
-	return nil
 }
 
 // HeaderBytes return header bytes
