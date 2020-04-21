@@ -40,10 +40,21 @@ func GenerateBinaryTree(it AccountIterator) common.Hash {
 	if err != nil {
 		panic(fmt.Sprintf("error opening bintrie db, err=%v", err))
 	}
-	btrie, err := trie.NewBinary(db)
+	btrie, err := trie.NewBinary(true)
 	if err != nil {
 		panic(fmt.Sprintf("error creating binary trie, err=%v", err))
 	}
+
+	var nodeCount uint64
+	var wg sync.WaitGroup
+	wg.Add(1)
+	go func() {
+		defer wg.Done()
+		for kv := range btrie.CommitCh {
+			nodeCount++
+			db.Put(kv.Key, kv.Value)
+		}
+	}()
 	counter := 0
 	for it.Next() {
 		counter++
@@ -57,8 +68,13 @@ func GenerateBinaryTree(it AccountIterator) common.Hash {
 	if err != nil {
 		panic(fmt.Sprintf("error committing trie, err=%v", err))
 	}
+	close(btrie.CommitCh)
+	wg.Wait()
+	btrie.CommitCh = nil
+	log.Info("Done writing nodes to the DB", "count", nodeCount)
+	log.Info("Calculated binary hash", "hash", common.ToHex(btrie.Hash()))
 
-	return common.Hash{}
+	return common.BytesToHash(btrie.Hash())
 }
 
 // GenerateTrieRoot takes an account iterator and reproduces the root hash.

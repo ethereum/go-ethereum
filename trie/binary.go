@@ -24,7 +24,6 @@ import (
 	"strings"
 
 	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/ethdb"
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/rlp"
 	"golang.org/x/crypto/sha3"
@@ -37,12 +36,17 @@ type binaryNode interface {
 	tryGet(key []byte, depth int) ([]byte, error)
 }
 
+type binKeyVal struct {
+	Key   []byte
+	Value []byte
+}
+
 type (
 	BinaryTrie struct {
-		left  binaryNode
-		right binaryNode
-		value []byte
-		db    ethdb.Database
+		left     binaryNode
+		right    binaryNode
+		value    []byte
+		CommitCh chan binKeyVal
 
 		// This is the binary equivalent of "extension nodes":
 		// binary nodes can have a prefix that is common to all
@@ -61,9 +65,12 @@ var (
 	errReadFromEmptyTree = errors.New("reached an empty subtree")
 )
 
-func NewBinary(db ethdb.Database) (*BinaryTrie, error) {
-
-	return &BinaryTrie{db: db}, nil
+func NewBinary(committing bool) (*BinaryTrie, error) {
+	var cch chan binKeyVal
+	if committing {
+		cch = make(chan binKeyVal, 100)
+	}
+	return &BinaryTrie{CommitCh: cch}, nil
 }
 
 func (t *BinaryTrie) Get(key []byte) []byte {
@@ -141,6 +148,19 @@ func (t *BinaryTrie) Update(key, value []byte) {
 	}
 }
 
+func (t *BinaryTrie) bitPrefix() []byte {
+	bp := make([]byte, 1+(t.getPrefixLen()+7)/8)
+	for i := 0; i < t.getPrefixLen(); i++ {
+		if t.getPrefixBit(i) {
+			by := i / 8
+			bi := 1 << uint(7-i%8)
+			bp[1+by] |= byte(bi)
+		}
+	}
+
+	return bp
+}
+
 // Hash calculates the hash of an expanded (i.e. not already
 // hashed) node.
 func (t *BinaryTrie) Hash() []byte {
@@ -154,12 +174,12 @@ func (t *BinaryTrie) hash() []byte {
 	var lh, rh []byte
 	if t.left != nil {
 		lh = t.left.Hash()
+		t.left = hashBinaryNode(lh)
 	}
-	t.left = hashBinaryNode(lh)
 	if t.right != nil {
 		rh = t.right.Hash()
+		t.right = hashBinaryNode(rh)
 	}
-	t.right = hashBinaryNode(rh)
 
 	// Create the "bitprefix" which indicates which are the start and
 	// end bit inside the prefix value.
@@ -167,7 +187,11 @@ func (t *BinaryTrie) hash() []byte {
 
 	hasher := sha3.NewLegacyKeccak256()
 	io.Copy(hasher, &payload)
-	return hasher.Sum(nil)
+	h := hasher.Sum(nil)
+	if t.CommitCh != nil {
+		t.CommitCh <- binKeyVal{Key: h, Value: payload.Bytes()}
+	}
+	return h
 }
 
 func (t *BinaryTrie) TryUpdate(key, value []byte) error {
@@ -214,19 +238,21 @@ func (t *BinaryTrie) insert(depth int, key, value []byte, hashLeft bool) error {
 			// prefixes.
 
 			// Create the [ d e ... ] part
-			oldChild, _ := NewBinary(t.db)
+			oldChild, _ := NewBinary(false)
 			oldChild.prefix = t.prefix
 			oldChild.startBit = depth + i + 1
 			oldChild.endBit = t.endBit
 			oldChild.left = t.left
 			oldChild.right = t.right
+			oldChild.CommitCh = t.CommitCh
 
 			// Create the child3 part
-			newChild, _ := NewBinary(t.db)
+			newChild, _ := NewBinary(false)
 			newChild.prefix = key
 			newChild.startBit = depth + i + 1
 			newChild.endBit = len(key) * 8
 			newChild.value = value
+			newChild.CommitCh = t.CommitCh
 
 			// reconfigure the [ a b ] part by just specifying
 			// which one is the endbit (which could lead to a
@@ -274,7 +300,7 @@ func (t *BinaryTrie) insert(depth int, key, value []byte, hashLeft bool) error {
 
 	// Create the child if it doesn't exist, otherwise recurse
 	if *child == nil {
-		*child = &BinaryTrie{nil, nil, value, t.db, key, depth + i + 1, 8 * len(key)}
+		*child = &BinaryTrie{nil, nil, value, nil, key, depth + i + 1, 8 * len(key)}
 		return nil
 	}
 	return (*child).insert(depth+1+i, key, value, hashLeft)
@@ -324,48 +350,17 @@ func (t *BinaryTrie) toDot() string {
 	return fmt.Sprintf("digraph D {\nnode [shape=rect]\n%s\n%s\n}", strings.Join(nodes, "\n"), strings.Join(links, "\n"))
 }
 
+// Commit stores all the values in the binary trie into the database.
+// This version does not perform any caching, it is intended to perform
+// the conversion from hexary to binary.
+// It basically performs a hash, except that it makes sure that there is
+// a channel to stream the intermediate (hash, preimage) values to.
 func (t *BinaryTrie) Commit() error {
-	var payload bytes.Buffer
-	var err error
-
-	payload.Write(t.prefix)
-
-	var lh []byte
-	if t.left != nil {
-		lh = t.left.Hash()
-		err := t.left.Commit()
-		if err != nil {
-			return err
-		}
+	if t.CommitCh == nil {
+		return fmt.Errorf("commit channel missing")
 	}
-	payload.Write(lh)
-	t.left = hashBinaryNode(lh)
-
-	var rh []byte
-	if t.right != nil {
-		rh = t.right.Hash()
-		err := t.right.Commit()
-		if err != nil {
-			return err
-		}
-	}
-	payload.Write(rh)
-	t.right = hashBinaryNode(rh)
-
-	hasher := sha3.NewLegacyKeccak256()
-	if t.value != nil {
-		hasher.Write(t.value)
-		hv := hasher.Sum(nil)
-		payload.Write(hv)
-	}
-
-	hasher.Reset()
-	io.Copy(hasher, &payload)
-	h := hasher.Sum(nil)
-
-	err = t.db.Put(h, payload.Bytes())
-
-	return err
+	t.hash()
+	return nil
 }
 
 func (h hashBinaryNode) Commit() error {
