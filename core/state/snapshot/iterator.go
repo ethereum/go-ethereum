@@ -125,6 +125,7 @@ func (it *diffAccountIterator) Account() []byte {
 	blob, ok := it.layer.accountData[it.curHash]
 	if !ok {
 		if _, ok := it.layer.destructSet[it.curHash]; ok {
+			it.layer.lock.RUnlock()
 			return nil
 		}
 		panic(fmt.Sprintf("iterator referenced non-existent account: %x", it.curHash))
