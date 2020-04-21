@@ -24,23 +24,24 @@ import (
 	"strings"
 )
 
+var ShowDeprecated = cli.Command{
+	Action: showDeprecated,
+	Name:   "show-deprecated-flags",
+	Usage:  "Show flags that have been deprecated",
+	Flags: []cli.Flag{
+		LegacyTestnetFlag,
+		LegacyLightServFlag,
+		LegacyLightPeersFlag,
+		LegacyMinerThreadsFlag,
+		LegacyMinerGasTargetFlag,
+		LegacyMinerGasPriceFlag,
+		LegacyMinerEtherbaseFlag,
+		LegacyMinerExtraDataFlag,
+	},
+	Description: "Show flags that have been deprecated and will soon be removed",
+}
+
 var (
-	ShowDeprecated = cli.Command{
-		Action: showDeprecated,
-		Name: "show-deprecated-flags",
-		Usage: "Show flags that have been deprecated",
-		Flags: []cli.Flag{
-			LegacyTestnetFlag,
-			LegacyLightServFlag,
-			LegacyLightPeersFlag,
-			LegacyMinerThreadsFlag,
-			LegacyMinerGasTargetFlag,
-			LegacyMinerGasPriceFlag,
-			LegacyMinerEtherbaseFlag,
-			LegacyMinerExtraDataFlag,
-		},
-		Description: "Show flags that have been deprecated and will soon be removed",
-	}
 	LegacyTestnetFlag = cli.BoolFlag{ // TODO(q9f): Remove after Ropsten is discontinued.
 		Name:  "testnet",
 		Usage: "Pre-configured test network (Deprecated: Please choose one of --goerli, --rinkeby, or --ropsten.)",
@@ -140,6 +141,7 @@ var (
 	}
 )
 
+// showDeprecated displays deprecated flags that will be soon removed from the codebase.
 func showDeprecated(c *cli.Context) {
 	fmt.Println("--------------------------------------------------------------------")
 	fmt.Println("The following flags are deprecated and will be removed in the future!")
