@@ -29,17 +29,22 @@ func NewValidator(address common.Address, votingPower int64) *Validator {
 	}
 }
 
-// Creates a new copy of the validator so we can mutate ProposerPriority.
+// Copy creates a new copy of the validator so we can mutate ProposerPriority.
 // Panics if the validator is nil.
 func (v *Validator) Copy() *Validator {
 	vCopy := *v
 	return &vCopy
 }
 
-// Returns the one with higher ProposerPriority.
-func (v *Validator) CompareProposerPriority(other *Validator) *Validator {
+// Cmp returns the one validator with a higher ProposerPriority.
+// If ProposerPriority is same, it returns the validator with lexicographically smaller address
+func (v *Validator) Cmp(other *Validator) *Validator {
+	// if both of v and other are nil, nil will be returned and that could possibly lead to nil pointer dereference bubbling up the stack
 	if v == nil {
 		return other
+	}
+	if other == nil {
+		return v
 	}
 	if v.ProposerPriority > other.ProposerPriority {
 		return v
@@ -53,7 +58,6 @@ func (v *Validator) CompareProposerPriority(other *Validator) *Validator {
 			return other
 		} else {
 			panic("Cannot compare identical validators")
-			return nil
 		}
 	}
 }

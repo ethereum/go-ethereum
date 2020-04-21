@@ -182,7 +182,7 @@ func computeMaxMinPriorityDiff(vals *ValidatorSet) int64 {
 func (vals *ValidatorSet) getValWithMostPriority() *Validator {
 	var res *Validator
 	for _, val := range vals.Validators {
-		res = res.CompareProposerPriority(val)
+		res = res.Cmp(val)
 	}
 	return res
 }
@@ -298,7 +298,7 @@ func (vals *ValidatorSet) findProposer() *Validator {
 	var proposer *Validator
 	for _, val := range vals.Validators {
 		if proposer == nil || !bytes.Equal(val.Address.Bytes(), proposer.Address.Bytes()) {
-			proposer = proposer.CompareProposerPriority(val)
+			proposer = proposer.Cmp(val)
 		}
 	}
 	return proposer
