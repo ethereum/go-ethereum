@@ -18,12 +18,14 @@ package snapshot
 
 import (
 	"bytes"
+	"errors"
 	"fmt"
 	"sync"
 	"time"
 
 	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/ethdb/memorydb"
+	"github.com/ethereum/go-ethereum/core/rawdb"
+	"github.com/ethereum/go-ethereum/ethdb"
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/rlp"
 	"github.com/ethereum/go-ethereum/trie"
@@ -38,21 +40,21 @@ type trieKV struct {
 type (
 	// trieGeneratorFn is the interface of trie generation which can
 	// be implemented by different trie algorithm.
-	trieGeneratorFn func(in chan (trieKV), out chan (common.Hash))
+	trieGeneratorFn func(db ethdb.Database, in chan (trieKV), out chan (common.Hash))
 
 	// leafCallbackFn is the callback invoked at the leaves of the trie,
 	// returns the subtrie root with the specified subtrie identifier.
-	leafCallbackFn func(hash common.Hash, stat *generateStats) common.Hash
+	leafCallbackFn func(db ethdb.Database, accountHash, codeHash common.Hash, stat *generateStats) (common.Hash, error)
 )
 
 // GenerateAccountTrieRoot takes an account iterator and reproduces the root hash.
 func GenerateAccountTrieRoot(it AccountIterator) (common.Hash, error) {
-	return generateTrieRoot(it, common.Hash{}, stdGenerate, nil, &generateStats{start: time.Now()}, true)
+	return generateTrieRoot(nil, it, common.Hash{}, stdGenerate, nil, &generateStats{start: time.Now()}, true)
 }
 
 // GenerateStorageTrieRoot takes a storage iterator and reproduces the root hash.
 func GenerateStorageTrieRoot(account common.Hash, it StorageIterator) (common.Hash, error) {
-	return generateTrieRoot(it, account, stdGenerate, nil, &generateStats{start: time.Now()}, true)
+	return generateTrieRoot(nil, it, account, stdGenerate, nil, &generateStats{start: time.Now()}, true)
 }
 
 // VerifyState takes the whole snapshot tree as the input, traverses all the accounts
@@ -65,18 +67,18 @@ func VerifyState(snaptree *Tree, root common.Hash) error {
 	}
 	defer acctIt.Release()
 
-	got, err := generateTrieRoot(acctIt, common.Hash{}, stdGenerate, func(account common.Hash, stat *generateStats) common.Hash {
-		storageIt, err := snaptree.StorageIterator(root, account, common.Hash{})
+	got, err := generateTrieRoot(nil, acctIt, common.Hash{}, stdGenerate, func(db ethdb.Database, accountHash, codeHash common.Hash, stat *generateStats) (common.Hash, error) {
+		storageIt, err := snaptree.StorageIterator(root, accountHash, common.Hash{})
 		if err != nil {
-			return common.Hash{}
+			return common.Hash{}, err
 		}
 		defer storageIt.Release()
 
-		hash, err := generateTrieRoot(storageIt, account, stdGenerate, nil, stat, false)
+		hash, err := generateTrieRoot(nil, storageIt, accountHash, stdGenerate, nil, stat, false)
 		if err != nil {
-			return common.Hash{}
+			return common.Hash{}, err
 		}
-		return hash
+		return hash, nil
 	}, &generateStats{start: time.Now()}, true)
 
 	if err != nil {
@@ -84,6 +86,60 @@ func VerifyState(snaptree *Tree, root common.Hash) error {
 	}
 	if got != root {
 		return fmt.Errorf("state root hash mismatch: got %x, want %x", got, root)
+	}
+	return nil
+}
+
+// CommitAndVerifyState takes the whole snapshot tree as the input, traverses all the
+// accounts as well as the corresponding storages and commits all re-constructed trie
+// nodes to the given database(usually the given db is not the main one used in the
+// system, acts as the temporary storage here).
+//
+// Besides, whenever we meet an account with additional contract code, the code will
+// also be migrated to ensure the integrity of the newly created state.
+func CommitAndVerifyState(snaptree *Tree, root common.Hash, db, commitdb ethdb.Database) error {
+	// Traverse all state by snapshot, re-construct the whole state trie
+	// and commit to the given storage.
+	acctIt, err := snaptree.AccountIterator(root, common.Hash{})
+	if err != nil {
+		return err // The required snapshot might not exist.
+	}
+	defer acctIt.Release()
+
+	got, err := generateTrieRoot(commitdb, acctIt, common.Hash{}, stdGenerate, func(commitdb ethdb.Database, accountHash, codeHash common.Hash, stat *generateStats) (common.Hash, error) {
+		// Migrate the code first, commit the contract code into the tmp db.
+		if codeHash != emptyCode {
+			// todo the notion of contract code should be integrated into snapshot.
+			code, err := db.Get(codeHash.Bytes())
+			if err != nil {
+				return common.Hash{}, err
+			}
+			if len(code) == 0 {
+				return common.Hash{}, errors.New("failed to migrate contract code")
+			}
+			if err := commitdb.Put(codeHash.Bytes(), code); err != nil {
+				return common.Hash{}, err
+			}
+		}
+		// Then migrate all storage trie nodes into the tmp db.
+		storageIt, err := snaptree.StorageIterator(root, accountHash, common.Hash{})
+		if err != nil {
+			return common.Hash{}, err
+		}
+		defer storageIt.Release()
+
+		hash, err := generateTrieRoot(commitdb, storageIt, accountHash, stdGenerate, nil, stat, false)
+		if err != nil {
+			return common.Hash{}, err
+		}
+		return hash, nil
+	}, &generateStats{start: time.Now()}, true)
+
+	if err != nil {
+		return err
+	}
+	if got != root {
+		return fmt.Errorf("State root hash mismatch, got %x, want %x", got, root)
 	}
 	return nil
 }
@@ -130,7 +186,7 @@ func (stat *generateStats) report() {
 		ctx = append(ctx, []interface{}{"slots", stat.slots}...)
 	}
 	ctx = append(ctx, []interface{}{"elapsed", common.PrettyDuration(time.Since(stat.start))}...)
-	log.Info("Generating trie hash from snapshot", ctx...)
+	log.Info("Iterating snapshot", ctx...)
 }
 
 // reportDone prints the last log when the whole generation is finished.
@@ -144,13 +200,13 @@ func (stat *generateStats) reportDone() {
 		ctx = append(ctx, []interface{}{"slots", stat.slots}...)
 	}
 	ctx = append(ctx, []interface{}{"elapsed", common.PrettyDuration(time.Since(stat.start))}...)
-	log.Info("Generated trie hash from snapshot", ctx...)
+	log.Info("Iterated snapshot", ctx...)
 }
 
 // generateTrieRoot generates the trie hash based on the snapshot iterator.
 // It can be used for generating account trie, storage trie or even the
 // whole state which connects the accounts and the corresponding storages.
-func generateTrieRoot(it Iterator, account common.Hash, generatorFn trieGeneratorFn, leafCallback leafCallbackFn, stats *generateStats, report bool) (common.Hash, error) {
+func generateTrieRoot(db ethdb.Database, it Iterator, account common.Hash, generatorFn trieGeneratorFn, leafCallback leafCallbackFn, stats *generateStats, report bool) (common.Hash, error) {
 	var (
 		in      = make(chan trieKV)         // chan to pass leaves
 		out     = make(chan common.Hash, 1) // chan to collect result
@@ -161,7 +217,7 @@ func generateTrieRoot(it Iterator, account common.Hash, generatorFn trieGenerato
 	wg.Add(1)
 	go func() {
 		defer wg.Done()
-		generatorFn(in, out)
+		generatorFn(db, in, out)
 	}()
 
 	// Spin up a go-routine for progress logging
@@ -223,7 +279,11 @@ func generateTrieRoot(it Iterator, account common.Hash, generatorFn trieGenerato
 				}
 				// Apply the leaf callback. Normally the callback is used to traverse
 				// the storage trie and re-generate the subtrie root.
-				subroot := leafCallback(it.Hash(), stats)
+				subroot, err := leafCallback(db, it.Hash(), common.BytesToHash(account.CodeHash), stats)
+				if err != nil {
+					stop(false)
+					return common.Hash{}, err
+				}
 				if !bytes.Equal(account.Root, subroot.Bytes()) {
 					stop(false)
 					return common.Hash{}, fmt.Errorf("invalid subroot(%x), want %x, got %x", it.Hash(), account.Root, subroot)
@@ -265,11 +325,23 @@ func generateTrieRoot(it Iterator, account common.Hash, generatorFn trieGenerato
 }
 
 // stdGenerate is a very basic hexary trie builder which uses the same Trie
-// as the rest of geth, with no enhancements or optimizations
-func stdGenerate(in chan (trieKV), out chan (common.Hash)) {
-	t, _ := trie.New(common.Hash{}, trie.NewDatabase(memorydb.New()))
+// as the rest of geth, with no enhancements or optimizations.
+// If the db handler is given, then it means all constructed trie nodes are
+// required to be committed, otherwise returns the final root hash only.
+func stdGenerate(db ethdb.Database, in chan trieKV, out chan common.Hash) {
+	commit := db != nil
+	if db == nil {
+		db = rawdb.NewMemoryDatabase()
+	}
+	triedb := trie.NewDatabase(db)
+	t, _ := trie.New(common.Hash{}, triedb)
 	for leaf := range in {
 		t.TryUpdate(leaf.key[:], leaf.value)
 	}
-	out <- t.Hash()
+	root := t.Hash()
+	if commit {
+		t.Commit(nil)
+		triedb.Commit(root, false, nil)
+	}
+	out <- root
 }

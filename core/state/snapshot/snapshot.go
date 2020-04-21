@@ -167,7 +167,7 @@ type Tree struct {
 // If the snapshot is missing or inconsistent, the entirety is deleted and will
 // be reconstructed from scratch based on the tries in the key-value store, on a
 // background thread.
-func New(diskdb ethdb.KeyValueStore, triedb *trie.Database, cache int, root common.Hash, async bool) *Tree {
+func New(diskdb ethdb.KeyValueStore, triedb *trie.Database, cache int, root common.Hash, async bool, rebuild bool) (*Tree, error) {
 	// Create a new, empty snapshot tree
 	snap := &Tree{
 		diskdb: diskdb,
@@ -181,20 +181,23 @@ func New(diskdb ethdb.KeyValueStore, triedb *trie.Database, cache int, root comm
 	// Attempt to load a previously persisted snapshot and rebuild one if failed
 	head, err := loadSnapshot(diskdb, triedb, cache, root)
 	if err != nil {
-		log.Warn("Failed to load snapshot, regenerating", "err", err)
-		snap.Rebuild(root)
-		return snap
+		if rebuild {
+			log.Warn("Failed to load snapshot, regenerating", "err", err)
+			snap.Rebuild(root)
+			return snap, nil
+		}
+		return nil, err // Bail out the error, not rebuild automatically.
 	}
 	// Existing snapshot loaded, seed all the layers
 	for head != nil {
 		snap.layers[head.Root()] = head
 		head = head.Parent()
 	}
-	return snap
+	return snap, nil
 }
 
 // waitBuild blocks until the snapshot finishes rebuilding. This method is meant
-// to  be used by tests to ensure we're testing what we believe we are.
+// to be used by tests to ensure we're testing what we believe we are.
 func (t *Tree) waitBuild() {
 	// Find the rebuild termination channel
 	var done chan struct{}

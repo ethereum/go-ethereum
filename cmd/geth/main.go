@@ -248,6 +248,8 @@ func init() {
 		retestethCommand,
 		// See cmd/utils/flags_legacy.go
 		utils.ShowDeprecated,
+		// See pruner.go
+		pruningCommand,
 	}
 	sort.Sort(cli.CommandsByName(app.Commands))
 
