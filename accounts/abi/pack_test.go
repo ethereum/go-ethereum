@@ -30,7 +30,8 @@ import (
 	"github.com/ethereum/go-ethereum/common"
 )
 
-func TestPack_Pack(t *testing.T) {
+// TestPack tests the general pack/unpack tests in packing_test.go
+func TestPack(t *testing.T) {
 	for i, test := range packUnpackTests {
 		t.Run(strconv.Itoa(i), func(t *testing.T) {
 			encb, err := hex.DecodeString(test.packed)

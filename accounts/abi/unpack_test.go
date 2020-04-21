@@ -30,6 +30,34 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
+// TestUnpack tests the general pack/unpack tests in packing_test.go
+func TestUnpack(t *testing.T) {
+	for i, test := range packUnpackTests {
+		t.Run(strconv.Itoa(i), func(t *testing.T) {
+			//Unpack
+			def := fmt.Sprintf(`[{ "name" : "method", "type": "function", "outputs": %s}]`, test.def)
+			abi, err := JSON(strings.NewReader(def))
+			if err != nil {
+				t.Fatalf("invalid ABI definition %s: %v", def, err)
+			}
+			encb, err := hex.DecodeString(test.packed)
+			if err != nil {
+				t.Fatalf("invalid hex %s: %v", test.packed, err)
+			}
+			outptr := reflect.New(reflect.TypeOf(test.unpacked))
+			err = abi.Unpack(outptr.Interface(), "method", encb)
+			if err != nil {
+				t.Errorf("test %d (%v) failed: %v", i, test.def, err)
+				return
+			}
+			out := outptr.Elem().Interface()
+			if !reflect.DeepEqual(test.unpacked, out) {
+				t.Errorf("test %d (%v) failed: expected %v, got %v", i, test.def, test.unpacked, out)
+			}
+		})
+	}
+}
+
 type unpackTest struct {
 	def  string      // ABI definition JSON
 	enc  string      // evm return data
@@ -50,7 +78,7 @@ func (test unpackTest) checkError(err error) error {
 	return nil
 }
 
-var unpackFailTests = []unpackTest{
+var unpackTests = []unpackTest{
 	// Bools
 	{
 		def:  `[{ "type": "bool" }]`,
@@ -155,10 +183,34 @@ var unpackFailTests = []unpackTest{
 		}{},
 		err: "abi: purely underscored output cannot unpack to struct",
 	},
+	// Make sure only the first argument is consumed
+	{
+		def: `[{"name":"int_one","type":"int256"}]`,
+		enc: "00000000000000000000000000000000000000000000000000000000000000010000000000000000000000000000000000000000000000000000000000000002",
+		want: struct {
+			IntOne *big.Int
+		}{big.NewInt(1)},
+	},
+	{
+		def: `[{"name":"int__one","type":"int256"}]`,
+		enc: "00000000000000000000000000000000000000000000000000000000000000010000000000000000000000000000000000000000000000000000000000000002",
+		want: struct {
+			IntOne *big.Int
+		}{big.NewInt(1)},
+	},
+	{
+		def: `[{"name":"int_one_","type":"int256"}]`,
+		enc: "00000000000000000000000000000000000000000000000000000000000000010000000000000000000000000000000000000000000000000000000000000002",
+		want: struct {
+			IntOne *big.Int
+		}{big.NewInt(1)},
+	},
 }
 
-func TestUnpackFails(t *testing.T) {
-	for i, test := range unpackFailTests {
+// TestLocalUnpackTests runs test specially designed only for unpacking.
+// All test cases that can be used to test packing and unpacking should move to packing_test.go
+func TestLocalUnpackTests(t *testing.T) {
+	for i, test := range unpackTests {
 		t.Run(strconv.Itoa(i), func(t *testing.T) {
 			//Unpack
 			def := fmt.Sprintf(`[{ "name" : "method", "type": "function", "outputs": %s}]`, test.def)
@@ -179,33 +231,6 @@ func TestUnpackFails(t *testing.T) {
 			out := outptr.Elem().Interface()
 			if !reflect.DeepEqual(test.want, out) {
 				t.Errorf("test %d (%v) failed: expected %v, got %v", i, test.def, test.want, out)
-			}
-		})
-	}
-}
-
-func TestUnpack(t *testing.T) {
-	for i, test := range packUnpackTests {
-		t.Run(strconv.Itoa(i), func(t *testing.T) {
-			//Unpack
-			def := fmt.Sprintf(`[{ "name" : "method", "type": "function", "outputs": %s}]`, test.def)
-			abi, err := JSON(strings.NewReader(def))
-			if err != nil {
-				t.Fatalf("invalid ABI definition %s: %v", def, err)
-			}
-			encb, err := hex.DecodeString(test.packed)
-			if err != nil {
-				t.Fatalf("invalid hex %s: %v", test.packed, err)
-			}
-			outptr := reflect.New(reflect.TypeOf(test.unpacked))
-			err = abi.Unpack(outptr.Interface(), "method", encb)
-			if err != nil {
-				t.Errorf("test %d (%v) failed: %v", i, test.def, err)
-				return
-			}
-			out := outptr.Elem().Interface()
-			if !reflect.DeepEqual(test.unpacked, out) {
-				t.Errorf("test %d (%v) failed: expected %v, got %v", i, test.def, test.unpacked, out)
 			}
 		})
 	}
