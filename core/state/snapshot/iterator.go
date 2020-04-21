@@ -70,7 +70,7 @@ func (dl *diffLayer) AccountIterator(seek common.Hash) AccountIterator {
 	// Seek out the requested starting account
 	hashes := dl.AccountList()
 	index := sort.Search(len(hashes), func(i int) bool {
-		return bytes.Compare(seek[:], hashes[i][:]) < 0
+		return bytes.Compare(seek[:], hashes[i][:]) <= 0
 	})
 	// Assemble and returned the already seeked iterator
 	return &diffAccountIterator{
