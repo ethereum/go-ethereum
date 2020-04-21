@@ -108,62 +108,6 @@ var methods = map[string]Method{
 	"multipleMixedArrStr": NewMethod("multipleMixedArrStr", "multipleMixedArrStr", Function, "view", false, false, []Argument{{"str", String, false}, {"fixedArr1", Uint256Arr2, false}, {"dynArr", Uint256Arr, false}, {"fixedArr2", Uint256Arr3, false}}, nil),
 }
 
-type PackUnpackTest struct {
-	input interface{}
-	err   error
-}
-
-var tests = map[string]PackUnpackTest{
-	"uint64[2]": {
-		input: [2]uint64{12, 44},
-		err:   nil,
-	},
-	"uint64[]": {
-		input: []uint64{12, 44},
-		err:   nil,
-	},
-	"string": {
-		input: "This is a string",
-		err:   nil,
-	},
-	"int8": {
-		input: int8(-2),
-		err:   nil,
-	},
-	"bool": {
-		input: true,
-		err:   nil,
-	},
-}
-
-func TestPackUnpack(t *testing.T) {
-	abi := ABI{
-		Methods: methods,
-	}
-
-	for name := range tests {
-		t.Run(name, func(t *testing.T) {
-			test := tests[name]
-			data, err := abi.Pack(name, test.input)
-			if err != nil {
-				t.Error(err)
-			}
-			t.Log(data[4:])
-			outptr := reflect.New(reflect.TypeOf(test.input))
-			if err := abi.Methods[name].Inputs.Unpack(outptr.Interface(), data[4:]); err != nil {
-				if err == test.err {
-					return
-				}
-				t.Error(err)
-			}
-			out := outptr.Elem().Interface()
-			if !reflect.DeepEqual(test.input, out) {
-				t.Errorf("test %v failed: expected %v, got %v", name, test.input, out)
-			}
-		})
-	}
-}
-
 func TestReader(t *testing.T) {
 	abi := ABI{
 		Methods: methods,
