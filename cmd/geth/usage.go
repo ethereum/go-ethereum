@@ -245,14 +245,6 @@ var AppHelpFlagGroups = []flagGroup{
 	{
 		Name: "ALIASED (deprecated)",
 		Flags: append([]cli.Flag{
-			utils.LegacyTestnetFlag,
-			utils.LightLegacyServFlag,
-			utils.LightLegacyPeersFlag,
-			utils.MinerLegacyThreadsFlag,
-			utils.MinerLegacyGasTargetFlag,
-			utils.MinerLegacyGasPriceFlag,
-			utils.MinerLegacyEtherbaseFlag,
-			utils.MinerLegacyExtraDataFlag,
 			utils.RPCLegacyEnabledFlag,
 			utils.RPCLegacyListenAddrFlag,
 			utils.RPCLegacyPortFlag,

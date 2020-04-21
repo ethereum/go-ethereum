@@ -240,6 +240,7 @@ func init() {
 		dumpConfigCommand,
 		// See retesteth.go
 		retestethCommand,
+		utils.ShowDeprecated,
 	}
 	sort.Sort(cli.CommandsByName(app.Commands))
 

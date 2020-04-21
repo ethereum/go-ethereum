@@ -165,10 +165,6 @@ var (
 		Usage: "Network identifier (integer, 1=Frontier, 3=Ropsten, 4=Rinkeby, 5=Görli)",
 		Value: eth.DefaultConfig.NetworkId,
 	}
-	LegacyTestnetFlag = cli.BoolFlag{ // TODO(q9f): Remove after Ropsten is discontinued.
-		Name:  "testnet",
-		Usage: "Pre-configured test network (Deprecated: Please choose one of --goerli, --rinkeby, or --ropsten.)",
-	}
 	GoerliFlag = cli.BoolFlag{
 		Name:  "goerli",
 		Usage: "Görli network: pre-configured proof-of-authority test network",
@@ -242,11 +238,6 @@ var (
 		Usage: "Comma separated block number-to-hash mappings to enforce (<number>=<hash>)",
 	}
 	// Light server and client settings
-	LightLegacyServFlag = cli.IntFlag{ // Deprecated in favor of light.serve, remove in 2021
-		Name:  "lightserv",
-		Usage: "Maximum percentage of time allowed for serving LES requests (deprecated, use --light.serve)",
-		Value: eth.DefaultConfig.LightServ,
-	}
 	LightServeFlag = cli.IntFlag{
 		Name:  "light.serve",
 		Usage: "Maximum percentage of time allowed for serving LES requests (multi-threaded processing allows values over 100)",
@@ -261,11 +252,6 @@ var (
 		Name:  "light.egress",
 		Usage: "Outgoing bandwidth limit for serving light clients (kilobytes/sec, 0 = unlimited)",
 		Value: eth.DefaultConfig.LightEgress,
-	}
-	LightLegacyPeersFlag = cli.IntFlag{ // Deprecated in favor of light.maxpeers, remove in 2021
-		Name:  "lightpeers",
-		Usage: "Maximum number of light clients to serve, or light servers to attach to  (deprecated, use --light.maxpeers)",
-		Value: eth.DefaultConfig.LightPeers,
 	}
 	LightMaxPeersFlag = cli.IntFlag{
 		Name:  "light.maxpeers",
@@ -418,11 +404,6 @@ var (
 		Usage: "Number of CPU threads to use for mining",
 		Value: 0,
 	}
-	MinerLegacyThreadsFlag = cli.IntFlag{
-		Name:  "minerthreads",
-		Usage: "Number of CPU threads to use for mining (deprecated, use --miner.threads)",
-		Value: 0,
-	}
 	MinerNotifyFlag = cli.StringFlag{
 		Name:  "miner.notify",
 		Usage: "Comma separated HTTP URL list to notify of new work packages",
@@ -430,11 +411,6 @@ var (
 	MinerGasTargetFlag = cli.Uint64Flag{
 		Name:  "miner.gastarget",
 		Usage: "Target gas floor for mined blocks",
-		Value: eth.DefaultConfig.Miner.GasFloor,
-	}
-	MinerLegacyGasTargetFlag = cli.Uint64Flag{
-		Name:  "targetgaslimit",
-		Usage: "Target gas floor for mined blocks (deprecated, use --miner.gastarget)",
 		Value: eth.DefaultConfig.Miner.GasFloor,
 	}
 	MinerGasLimitFlag = cli.Uint64Flag{
@@ -447,28 +423,14 @@ var (
 		Usage: "Minimum gas price for mining a transaction",
 		Value: eth.DefaultConfig.Miner.GasPrice,
 	}
-	MinerLegacyGasPriceFlag = BigFlag{
-		Name:  "gasprice",
-		Usage: "Minimum gas price for mining a transaction (deprecated, use --miner.gasprice)",
-		Value: eth.DefaultConfig.Miner.GasPrice,
-	}
 	MinerEtherbaseFlag = cli.StringFlag{
 		Name:  "miner.etherbase",
 		Usage: "Public address for block mining rewards (default = first account)",
 		Value: "0",
 	}
-	MinerLegacyEtherbaseFlag = cli.StringFlag{
-		Name:  "etherbase",
-		Usage: "Public address for block mining rewards (default = first account, deprecated, use --miner.etherbase)",
-		Value: "0",
-	}
 	MinerExtraDataFlag = cli.StringFlag{
 		Name:  "miner.extradata",
 		Usage: "Block extra data set by the miner (default = client version)",
-	}
-	MinerLegacyExtraDataFlag = cli.StringFlag{
-		Name:  "extradata",
-		Usage: "Block extra data set by the miner (default = client version, deprecated, use --miner.extradata)",
 	}
 	MinerRecommitIntervalFlag = cli.DurationFlag{
 		Name:  "miner.recommit",
@@ -533,18 +495,9 @@ var (
 		Name:  "http",
 		Usage: "Enable the HTTP-RPC server",
 	}
-	RPCLegacyEnabledFlag = cli.BoolFlag{
-		Name:  "rpc",
-		Usage: "Enable the HTTP-RPC server (deprecated, use --http)",
-	}
 	HTTPListenAddrFlag = cli.StringFlag{
 		Name:  "http.addr",
 		Usage: "HTTP-RPC server listening interface",
-		Value: node.DefaultHTTPHost,
-	}
-	RPCLegacyListenAddrFlag = cli.StringFlag{
-		Name:  "rpcaddr",
-		Usage: "HTTP-RPC server listening interface (deprecated, use --http.addr)",
 		Value: node.DefaultHTTPHost,
 	}
 	HTTPPortFlag = cli.IntFlag{
@@ -552,19 +505,9 @@ var (
 		Usage: "HTTP-RPC server listening port",
 		Value: node.DefaultHTTPPort,
 	}
-	RPCLegacyPortFlag = cli.IntFlag{
-		Name:  "rpcport",
-		Usage: "HTTP-RPC server listening port (deprecated, use --http.port)",
-		Value: node.DefaultHTTPPort,
-	}
 	HTTPCORSDomainFlag = cli.StringFlag{
 		Name:  "http.corsdomain",
 		Usage: "Comma separated list of domains from which to accept cross origin requests (browser enforced)",
-		Value: "",
-	}
-	RPCLegacyCORSDomainFlag = cli.StringFlag{
-		Name:  "rpccorsdomain",
-		Usage: "Comma separated list of domains from which to accept cross origin requests (browser enforced) (deprecated, use --http.corsdomain)",
 		Value: "",
 	}
 	HTTPVirtualHostsFlag = cli.StringFlag{
@@ -572,19 +515,9 @@ var (
 		Usage: "Comma separated list of virtual hostnames from which to accept requests (server enforced). Accepts '*' wildcard.",
 		Value: strings.Join(node.DefaultConfig.HTTPVirtualHosts, ","),
 	}
-	RPCLegacyVirtualHostsFlag = cli.StringFlag{
-		Name:  "rpcvhosts",
-		Usage: "Comma separated list of virtual hostnames from which to accept requests (server enforced). Accepts '*' wildcard. (deprecated, use --http.vhosts)",
-		Value: strings.Join(node.DefaultConfig.HTTPVirtualHosts, ","),
-	}
 	HTTPApiFlag = cli.StringFlag{
 		Name:  "http.api",
 		Usage: "API's offered over the HTTP-RPC interface",
-		Value: "",
-	}
-	RPCLegacyApiFlag = cli.StringFlag{
-		Name:  "rpcapi",
-		Usage: "API's offered over the HTTP-RPC interface (deprecated, use --http.api)",
 		Value: "",
 	}
 	WSEnabledFlag = cli.BoolFlag{
@@ -596,19 +529,9 @@ var (
 		Usage: "WS-RPC server listening interface",
 		Value: node.DefaultWSHost,
 	}
-	WSLegacyListenAddrFlag = cli.StringFlag{
-		Name:  "wsaddr",
-		Usage: "WS-RPC server listening interface (deprecated, use --ws.addr)",
-		Value: node.DefaultWSHost,
-	}
 	WSPortFlag = cli.IntFlag{
 		Name:  "ws.port",
 		Usage: "WS-RPC server listening port",
-		Value: node.DefaultWSPort,
-	}
-	WSLegacyPortFlag = cli.IntFlag{
-		Name:  "wsport",
-		Usage: "WS-RPC server listening port (deprecated, use --ws.port)",
 		Value: node.DefaultWSPort,
 	}
 	WSApiFlag = cli.StringFlag{
@@ -616,19 +539,9 @@ var (
 		Usage: "API's offered over the WS-RPC interface",
 		Value: "",
 	}
-	WSLegacyApiFlag = cli.StringFlag{
-		Name:  "wsapi",
-		Usage: "API's offered over the WS-RPC interface (deprecated, use --ws.api)",
-		Value: "",
-	}
 	WSAllowedOriginsFlag = cli.StringFlag{
 		Name:  "ws.origins",
 		Usage: "Origins from which to accept websockets requests",
-		Value: "",
-	}
-	WSLegacyAllowedOriginsFlag = cli.StringFlag{
-		Name:  "wsorigins",
-		Usage: "Origins from which to accept websockets requests (deprecated, use --ws.origins)",
 		Value: "",
 	}
 	GraphQLEnabledFlag = cli.BoolFlag{
@@ -738,19 +651,9 @@ var (
 		Usage: "Number of recent blocks to check for gas prices",
 		Value: eth.DefaultConfig.GPO.Blocks,
 	}
-	GpoLegacyBlocksFlag = cli.IntFlag{
-		Name:  "gpoblocks",
-		Usage: "Number of recent blocks to check for gas prices (deprecated, use --gpo.blocks)",
-		Value: eth.DefaultConfig.GPO.Blocks,
-	}
 	GpoPercentileFlag = cli.IntFlag{
 		Name:  "gpo.percentile",
 		Usage: "Suggested gas price is the given percentile of a set of recent transaction gas prices",
-		Value: eth.DefaultConfig.GPO.Percentile,
-	}
-	GpoLegacyPercentileFlag = cli.IntFlag{
-		Name:  "gpopercentile",
-		Usage: "Suggested gas price is the given percentile of a set of recent transaction gas prices (deprecated, use --gpo.percentile)",
 		Value: eth.DefaultConfig.GPO.Percentile,
 	}
 	WhisperEnabledFlag = cli.BoolFlag{
