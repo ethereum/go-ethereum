@@ -20,8 +20,6 @@
 package geth
 
 import (
-	"errors"
-
 	"github.com/ethereum/go-ethereum/p2p/discv5"
 )
 
@@ -59,46 +57,4 @@ func NewEnode(rawurl string) (enode *Enode, _ error) {
 		return nil, err
 	}
 	return &Enode{node}, nil
-}
-
-// Enodes represents a slice of accounts.
-type Enodes struct{ nodes []*discv5.Node }
-
-// NewEnodes creates a slice of uninitialized enodes.
-func NewEnodes(size int) *Enodes {
-	return &Enodes{
-		nodes: make([]*discv5.Node, size),
-	}
-}
-
-// NewEnodesEmpty creates an empty slice of Enode values.
-func NewEnodesEmpty() *Enodes {
-	return NewEnodes(0)
-}
-
-// Size returns the number of enodes in the slice.
-func (e *Enodes) Size() int {
-	return len(e.nodes)
-}
-
-// Get returns the enode at the given index from the slice.
-func (e *Enodes) Get(index int) (enode *Enode, _ error) {
-	if index < 0 || index >= len(e.nodes) {
-		return nil, errors.New("index out of bounds")
-	}
-	return &Enode{e.nodes[index]}, nil
-}
-
-// Set sets the enode at the given index in the slice.
-func (e *Enodes) Set(index int, enode *Enode) error {
-	if index < 0 || index >= len(e.nodes) {
-		return errors.New("index out of bounds")
-	}
-	e.nodes[index] = enode.node
-	return nil
-}
-
-// Append adds a new enode element to the end of the slice.
-func (e *Enodes) Append(enode *Enode) {
-	e.nodes = append(e.nodes, enode.node)
 }

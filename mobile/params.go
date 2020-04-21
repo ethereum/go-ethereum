@@ -61,10 +61,10 @@ func GoerliGenesis() string {
 
 // FoundationBootnodes returns the enode URLs of the P2P bootstrap nodes operated
 // by the foundation running the V5 discovery protocol.
-func FoundationBootnodes() *Enodes {
-	nodes := &Enodes{nodes: make([]*discv5.Node, len(params.DiscoveryV5Bootnodes))}
+func FoundationBootnodes() []Enode {
+	nodes := make([]Enode, len(params.DiscoveryV5Bootnodes))
 	for i, url := range params.DiscoveryV5Bootnodes {
-		nodes.nodes[i] = discv5.MustParseNode(url)
+		nodes[i].node = discv5.MustParseNode(url)
 	}
 	return nodes
 }

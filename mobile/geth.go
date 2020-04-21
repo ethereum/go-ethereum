@@ -33,6 +33,7 @@ import (
 	"github.com/ethereum/go-ethereum/les"
 	"github.com/ethereum/go-ethereum/node"
 	"github.com/ethereum/go-ethereum/p2p"
+	"github.com/ethereum/go-ethereum/p2p/discv5"
 	"github.com/ethereum/go-ethereum/p2p/nat"
 	"github.com/ethereum/go-ethereum/params"
 	whisper "github.com/ethereum/go-ethereum/whisper/whisperv6"
@@ -44,7 +45,7 @@ import (
 // complexity.
 type NodeConfig struct {
 	// Bootstrap nodes used to establish connectivity with the rest of the network.
-	BootstrapNodes *Enodes
+	BootstrapNodes []Enode
 
 	// MaxPeers is the maximum number of peers that can be connected. If this is
 	// set to zero, then only the configured static and trusted peers can connect.
@@ -108,12 +109,17 @@ func NewNode(datadir string, config *NodeConfig) (stack *Node, _ error) {
 	if config.MaxPeers == 0 {
 		config.MaxPeers = defaultNodeConfig.MaxPeers
 	}
-	if config.BootstrapNodes == nil || config.BootstrapNodes.Size() == 0 {
+	if config.BootstrapNodes == nil || len(config.BootstrapNodes) == 0 {
 		config.BootstrapNodes = defaultNodeConfig.BootstrapNodes
 	}
 
 	if config.PprofAddress != "" {
 		debug.StartPProf(config.PprofAddress)
+	}
+
+	nodes := make([]*discv5.Node, 0, len(config.BootstrapNodes))
+	for _, node := range config.BootstrapNodes {
+		nodes = append(nodes, node.node)
 	}
 
 	// Create the empty networking stack
@@ -125,7 +131,7 @@ func NewNode(datadir string, config *NodeConfig) (stack *Node, _ error) {
 		P2P: p2p.Config{
 			NoDiscovery:      true,
 			DiscoveryV5:      true,
-			BootstrapNodesV5: config.BootstrapNodes.nodes,
+			BootstrapNodesV5: nodes,
 			ListenAddr:       ":0",
 			NAT:              nat.Any(),
 			MaxPeers:         config.MaxPeers,
