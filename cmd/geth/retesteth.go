@@ -905,7 +905,7 @@ func retesteth(ctx *cli.Context) error {
 		IdleTimeout:  120 * time.Second,
 	}
 	httpEndpoint := fmt.Sprintf("%s:%d", ctx.GlobalString(utils.RPCListenAddrFlag.Name), ctx.Int(rpcPortFlag.Name))
-	listener, err := node.StartHTTPEndpoint(httpEndpoint, RetestethHTTPTimeouts, handler)
+	httpServer, _, err := node.StartHTTPEndpoint(httpEndpoint, RetestethHTTPTimeouts, handler)
 	if err != nil {
 		utils.Fatalf("Could not start RPC api: %v", err)
 	}
@@ -913,7 +913,8 @@ func retesteth(ctx *cli.Context) error {
 	log.Info("HTTP endpoint opened", "url", extapiURL)
 
 	defer func() {
-		listener.Close()
+		// Don't bother imposing a timeout here.
+		httpServer.Shutdown(context.Background())
 		log.Info("HTTP endpoint closed", "url", httpEndpoint)
 	}()
 

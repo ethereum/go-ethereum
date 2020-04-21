@@ -26,14 +26,14 @@ import (
 )
 
 // StartHTTPEndpoint starts the HTTP RPC endpoint.
-func StartHTTPEndpoint(endpoint string, timeouts rpc.HTTPTimeouts, handler http.Handler) (net.Listener, error) {
+func StartHTTPEndpoint(endpoint string, timeouts rpc.HTTPTimeouts, handler http.Handler) (*http.Server, net.Addr, error) {
 	// start the HTTP listener
 	var (
 		listener net.Listener
 		err      error
 	)
 	if listener, err = net.Listen("tcp", endpoint); err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 	// make sure timeout values are meaningful
 	CheckTimeouts(&timeouts)
@@ -45,22 +45,22 @@ func StartHTTPEndpoint(endpoint string, timeouts rpc.HTTPTimeouts, handler http.
 		IdleTimeout:  timeouts.IdleTimeout,
 	}
 	go httpSrv.Serve(listener)
-	return listener, err
+	return httpSrv, listener.Addr(), err
 }
 
 // startWSEndpoint starts a websocket endpoint.
-func startWSEndpoint(endpoint string, handler http.Handler) (net.Listener, error) {
+func startWSEndpoint(endpoint string, handler http.Handler) (*http.Server, net.Addr, error) {
 	// start the HTTP listener
 	var (
 		listener net.Listener
 		err      error
 	)
 	if listener, err = net.Listen("tcp", endpoint); err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 	wsSrv := &http.Server{Handler: handler}
 	go wsSrv.Serve(listener)
-	return listener, err
+	return wsSrv, listener.Addr(), err
 }
 
 // checkModuleAvailability checks that all names given in modules are actually
