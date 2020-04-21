@@ -94,11 +94,11 @@ var (
 		utils.GCModeFlag,
 		utils.SnapshotFlag,
 		utils.LightServeFlag,
-		utils.LightLegacyServFlag,
+		utils.LegacyLightServFlag,
 		utils.LightIngressFlag,
 		utils.LightEgressFlag,
 		utils.LightMaxPeersFlag,
-		utils.LightLegacyPeersFlag,
+		utils.LegacyLightPeersFlag,
 		utils.LightKDFFlag,
 		utils.UltraLightServersFlag,
 		utils.UltraLightFractionFlag,
@@ -115,17 +115,17 @@ var (
 		utils.MaxPendingPeersFlag,
 		utils.MiningEnabledFlag,
 		utils.MinerThreadsFlag,
-		utils.MinerLegacyThreadsFlag,
+		utils.LegacyMinerThreadsFlag,
 		utils.MinerNotifyFlag,
 		utils.MinerGasTargetFlag,
-		utils.MinerLegacyGasTargetFlag,
+		utils.LegacyMinerGasTargetFlag,
 		utils.MinerGasLimitFlag,
 		utils.MinerGasPriceFlag,
-		utils.MinerLegacyGasPriceFlag,
+		utils.LegacyMinerGasPriceFlag,
 		utils.MinerEtherbaseFlag,
-		utils.MinerLegacyEtherbaseFlag,
+		utils.LegacyMinerEtherbaseFlag,
 		utils.MinerExtraDataFlag,
-		utils.MinerLegacyExtraDataFlag,
+		utils.LegacyMinerExtraDataFlag,
 		utils.MinerRecommitIntervalFlag,
 		utils.MinerNoVerfiyFlag,
 		utils.NATFlag,
@@ -147,9 +147,9 @@ var (
 		utils.FakePoWFlag,
 		utils.NoCompactionFlag,
 		utils.GpoBlocksFlag,
-		utils.GpoLegacyBlocksFlag,
+		utils.LegacyGpoBlocksFlag,
 		utils.GpoPercentileFlag,
-		utils.GpoLegacyPercentileFlag,
+		utils.LegacyGpoPercentileFlag,
 		utils.EWASMInterpreterFlag,
 		utils.EVMInterpreterFlag,
 		configFileFlag,
@@ -161,27 +161,27 @@ var (
 		utils.HTTPPortFlag,
 		utils.HTTPCORSDomainFlag,
 		utils.HTTPVirtualHostsFlag,
-		utils.RPCLegacyEnabledFlag,
-		utils.RPCLegacyListenAddrFlag,
-		utils.RPCLegacyPortFlag,
-		utils.RPCLegacyCORSDomainFlag,
-		utils.RPCLegacyVirtualHostsFlag,
+		utils.LegacyRPCEnabledFlag,
+		utils.LegacyRPCListenAddrFlag,
+		utils.LegacyRPCPortFlag,
+		utils.LegacyRPCCORSDomainFlag,
+		utils.LegacyRPCVirtualHostsFlag,
 		utils.GraphQLEnabledFlag,
 		utils.GraphQLListenAddrFlag,
 		utils.GraphQLPortFlag,
 		utils.GraphQLCORSDomainFlag,
 		utils.GraphQLVirtualHostsFlag,
 		utils.HTTPApiFlag,
-		utils.RPCLegacyApiFlag,
+		utils.LegacyRPCApiFlag,
 		utils.WSEnabledFlag,
 		utils.WSListenAddrFlag,
-		utils.WSLegacyListenAddrFlag,
+		utils.LegacyWSListenAddrFlag,
 		utils.WSPortFlag,
-		utils.WSLegacyPortFlag,
+		utils.LegacyWSPortFlag,
 		utils.WSApiFlag,
-		utils.WSLegacyApiFlag,
+		utils.LegacyWSApiFlag,
 		utils.WSAllowedOriginsFlag,
-		utils.WSLegacyAllowedOriginsFlag,
+		utils.LegacyWSAllowedOriginsFlag,
 		utils.IPCDisabledFlag,
 		utils.IPCPathFlag,
 		utils.InsecureUnlockAllowedFlag,
@@ -374,7 +374,7 @@ func startNode(ctx *cli.Context, stack *node.Node) {
 
 	// Set contract backend for ethereum service if local node
 	// is serving LES requests.
-	if ctx.GlobalInt(utils.LightLegacyServFlag.Name) > 0 || ctx.GlobalInt(utils.LightServeFlag.Name) > 0 {
+	if ctx.GlobalInt(utils.LegacyLightServFlag.Name) > 0 || ctx.GlobalInt(utils.LightServeFlag.Name) > 0 {
 		var ethService *eth.Ethereum
 		if err := stack.Service(&ethService); err != nil {
 			utils.Fatalf("Failed to retrieve ethereum service: %v", err)
@@ -460,16 +460,16 @@ func startNode(ctx *cli.Context, stack *node.Node) {
 		}
 		// Set the gas price to the limits from the CLI and start mining
 		var gasprice *big.Int
-		if ctx.IsSet(utils.MinerLegacyGasPriceFlag.Name) {
-			gasprice = utils.GlobalBig(ctx, utils.MinerLegacyGasPriceFlag.Name)
+		if ctx.IsSet(utils.LegacyMinerGasPriceFlag.Name) {
+			gasprice = utils.GlobalBig(ctx, utils.LegacyMinerGasPriceFlag.Name)
 			log.Warn("The flag --gasprice is deprecated and will be removed in the future, please use --miner.gasprice")
 		}
 		gasprice = utils.GlobalBig(ctx, utils.MinerGasPriceFlag.Name)
 		ethereum.TxPool().SetGasPrice(gasprice)
 
 		var threads int
-		if ctx.GlobalIsSet(utils.MinerLegacyThreadsFlag.Name) {
-			threads = ctx.GlobalInt(utils.MinerLegacyThreadsFlag.Name)
+		if ctx.GlobalIsSet(utils.LegacyMinerThreadsFlag.Name) {
+			threads = ctx.GlobalInt(utils.LegacyMinerThreadsFlag.Name)
 			log.Warn("The flag --minerthreads is deprecated and will be removed in the future, please use --miner.threads")
 		}
 		threads = ctx.GlobalInt(utils.MinerThreadsFlag.Name)

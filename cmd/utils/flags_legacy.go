@@ -21,6 +21,7 @@ import (
 	"github.com/ethereum/go-ethereum/eth"
 	"github.com/ethereum/go-ethereum/node"
 	"gopkg.in/urfave/cli.v1"
+	"runtime"
 	"strings"
 )
 
@@ -31,13 +32,13 @@ var (
 		Usage: "Show flags that have been deprecated",
 		Flags: []cli.Flag{
 			LegacyTestnetFlag,
-			LightLegacyServFlag,
-			LightLegacyPeersFlag,
-			MinerLegacyThreadsFlag,
-			MinerLegacyGasTargetFlag,
-			MinerLegacyGasPriceFlag,
-			MinerLegacyEtherbaseFlag,
-			MinerLegacyExtraDataFlag,
+			LegacyLightServFlag,
+			LegacyLightPeersFlag,
+			LegacyMinerThreadsFlag,
+			LegacyMinerGasTargetFlag,
+			LegacyMinerGasPriceFlag,
+			LegacyMinerEtherbaseFlag,
+			LegacyMinerExtraDataFlag,
 		},
 		Description: "Show flags that have been deprecated and will soon be removed",
 	}
@@ -45,98 +46,121 @@ var (
 		Name:  "testnet",
 		Usage: "Pre-configured test network (Deprecated: Please choose one of --goerli, --rinkeby, or --ropsten.)",
 	}
-	LightLegacyServFlag = cli.IntFlag{ // Deprecated in favor of light.serve, remove in 2021
+	LegacyLightServFlag = cli.IntFlag{ // Deprecated in favor of light.serve, remove in 2021
 		Name:  "lightserv",
 		Usage: "Maximum percentage of time allowed for serving LES requests (deprecated, use --light.serve)",
 		Value: eth.DefaultConfig.LightServ,
 	}
-	LightLegacyPeersFlag = cli.IntFlag{ // Deprecated in favor of light.maxpeers, remove in 2021
+	LegacyLightPeersFlag = cli.IntFlag{ // Deprecated in favor of light.maxpeers, remove in 2021
 		Name:  "lightpeers",
 		Usage: "Maximum number of light clients to serve, or light servers to attach to  (deprecated, use --light.maxpeers)",
 		Value: eth.DefaultConfig.LightPeers,
 	}
-	MinerLegacyThreadsFlag = cli.IntFlag{
+	LegacyMinerThreadsFlag = cli.IntFlag{
 		Name:  "minerthreads",
 		Usage: "Number of CPU threads to use for mining (deprecated, use --miner.threads)",
 		Value: 0,
 	}
-	MinerLegacyGasTargetFlag = cli.Uint64Flag{
+	LegacyMinerGasTargetFlag = cli.Uint64Flag{
 		Name:  "targetgaslimit",
 		Usage: "Target gas floor for mined blocks (deprecated, use --miner.gastarget)",
 		Value: eth.DefaultConfig.Miner.GasFloor,
 	}
-	MinerLegacyGasPriceFlag = BigFlag{
+	LegacyMinerGasPriceFlag = BigFlag{
 		Name:  "gasprice",
 		Usage: "Minimum gas price for mining a transaction (deprecated, use --miner.gasprice)",
 		Value: eth.DefaultConfig.Miner.GasPrice,
 	}
-	MinerLegacyEtherbaseFlag = cli.StringFlag{
+	LegacyMinerEtherbaseFlag = cli.StringFlag{
 		Name:  "etherbase",
 		Usage: "Public address for block mining rewards (default = first account, deprecated, use --miner.etherbase)",
 		Value: "0",
 	}
-	MinerLegacyExtraDataFlag = cli.StringFlag{
+	LegacyMinerExtraDataFlag = cli.StringFlag{
 		Name:  "extradata",
 		Usage: "Block extra data set by the miner (default = client version, deprecated, use --miner.extradata)",
 	}
-	RPCLegacyEnabledFlag = cli.BoolFlag{
+	LegacyRPCEnabledFlag = cli.BoolFlag{
 		Name:  "rpc",
 		Usage: "Enable the HTTP-RPC server (deprecated, use --http)",
 	}
-	RPCLegacyListenAddrFlag = cli.StringFlag{
+	LegacyRPCListenAddrFlag = cli.StringFlag{
 		Name:  "rpcaddr",
 		Usage: "HTTP-RPC server listening interface (deprecated, use --http.addr)",
 		Value: node.DefaultHTTPHost,
 	}
-	RPCLegacyPortFlag = cli.IntFlag{
+	LegacyRPCPortFlag = cli.IntFlag{
 		Name:  "rpcport",
 		Usage: "HTTP-RPC server listening port (deprecated, use --http.port)",
 		Value: node.DefaultHTTPPort,
 	}
-	RPCLegacyCORSDomainFlag = cli.StringFlag{
+	LegacyRPCCORSDomainFlag = cli.StringFlag{
 		Name:  "rpccorsdomain",
 		Usage: "Comma separated list of domains from which to accept cross origin requests (browser enforced) (deprecated, use --http.corsdomain)",
 		Value: "",
 	}
-	RPCLegacyVirtualHostsFlag = cli.StringFlag{
+	LegacyRPCVirtualHostsFlag = cli.StringFlag{
 		Name:  "rpcvhosts",
 		Usage: "Comma separated list of virtual hostnames from which to accept requests (server enforced). Accepts '*' wildcard. (deprecated, use --http.vhosts)",
 		Value: strings.Join(node.DefaultConfig.HTTPVirtualHosts, ","),
 	}
-	RPCLegacyApiFlag = cli.StringFlag{
+	LegacyRPCApiFlag = cli.StringFlag{
 		Name:  "rpcapi",
 		Usage: "API's offered over the HTTP-RPC interface (deprecated, use --http.api)",
 		Value: "",
 	}
-	WSLegacyListenAddrFlag = cli.StringFlag{
+	LegacyWSListenAddrFlag = cli.StringFlag{
 		Name:  "wsaddr",
 		Usage: "WS-RPC server listening interface (deprecated, use --ws.addr)",
 		Value: node.DefaultWSHost,
 	}
-	WSLegacyPortFlag = cli.IntFlag{
+	LegacyWSPortFlag = cli.IntFlag{
 		Name:  "wsport",
 		Usage: "WS-RPC server listening port (deprecated, use --ws.port)",
 		Value: node.DefaultWSPort,
 	}
-	WSLegacyApiFlag = cli.StringFlag{
+	LegacyWSApiFlag = cli.StringFlag{
 		Name:  "wsapi",
 		Usage: "API's offered over the WS-RPC interface (deprecated, use --ws.api)",
 		Value: "",
 	}
-	WSLegacyAllowedOriginsFlag = cli.StringFlag{
+	LegacyWSAllowedOriginsFlag = cli.StringFlag{
 		Name:  "wsorigins",
 		Usage: "Origins from which to accept websockets requests (deprecated, use --ws.origins)",
 		Value: "",
 	}
-	GpoLegacyBlocksFlag = cli.IntFlag{
+	LegacyGpoBlocksFlag = cli.IntFlag{
 		Name:  "gpoblocks",
 		Usage: "Number of recent blocks to check for gas prices (deprecated, use --gpo.blocks)",
 		Value: eth.DefaultConfig.GPO.Blocks,
 	}
-	GpoLegacyPercentileFlag = cli.IntFlag{
+	LegacyGpoPercentileFlag = cli.IntFlag{
 		Name:  "gpopercentile",
 		Usage: "Suggested gas price is the given percentile of a set of recent transaction gas prices (deprecated, use --gpo.percentile)",
 		Value: eth.DefaultConfig.GPO.Percentile,
+	}
+	LegacyPprofPortFlag = cli.IntFlag{
+		Name:  "pprofport",
+		Usage: "pprof HTTP server listening port (deprecated, use --pprof.port)",
+		Value: 6060,
+	}
+	LegacyPprofAddrFlag = cli.StringFlag{
+		Name:  "pprofaddr",
+		Usage: "pprof HTTP server listening interface (deprecated, use --pprof.addr)",
+		Value: "127.0.0.1",
+	}
+	LegacyMemprofilerateFlag = cli.IntFlag{
+		Name:  "memprofilerate",
+		Usage: "Turn on memory profiling with the given rate (deprecated, use --pprof.memprofilerate)",
+		Value: runtime.MemProfileRate,
+	}
+	LegacyBlockprofilerateFlag = cli.IntFlag{
+		Name:  "blockprofilerate",
+		Usage: "Turn on block profiling with the given rate (deprecated, use --pprof.blockprofilerate)",
+	}
+	LegacyCpuprofileFlag = cli.StringFlag{
+		Name:  "cpuprofile",
+		Usage: "Write CPU profile to the given file (deprecated, use --pprof.cpuprofile)",
 	}
 )
 
