@@ -20,7 +20,6 @@ package main
 import (
 	"fmt"
 	"math"
-	"math/big"
 	"os"
 	"runtime"
 	godebug "runtime/debug"
@@ -459,24 +458,19 @@ func startNode(ctx *cli.Context, stack *node.Node) {
 			utils.Fatalf("Ethereum service not running: %v", err)
 		}
 		// Set the gas price to the limits from the CLI and start mining
-		var gasprice *big.Int
-		if ctx.IsSet(utils.LegacyMinerGasPriceFlag.Name) {
+		gasprice := utils.GlobalBig(ctx, utils.MinerGasPriceFlag.Name)
+		if ctx.IsSet(utils.LegacyMinerGasPriceFlag.Name) && !ctx.IsSet(utils.MinerGasPriceFlag.Name) {
 			gasprice = utils.GlobalBig(ctx, utils.LegacyMinerGasPriceFlag.Name)
 			log.Warn("The flag --gasprice is deprecated and will be removed in the future, please use --miner.gasprice")
 		}
-		gasprice = utils.GlobalBig(ctx, utils.MinerGasPriceFlag.Name)
 		ethereum.TxPool().SetGasPrice(gasprice)
 
-		var threads int
-		if ctx.GlobalIsSet(utils.LegacyMinerThreadsFlag.Name) {
+		threads := ctx.GlobalInt(utils.MinerThreadsFlag.Name)
+		if ctx.GlobalIsSet(utils.LegacyMinerThreadsFlag.Name) && !ctx.GlobalIsSet(utils.MinerThreadsFlag.Name) {
 			threads = ctx.GlobalInt(utils.LegacyMinerThreadsFlag.Name)
 			log.Warn("The flag --minerthreads is deprecated and will be removed in the future, please use --miner.threads")
 		}
-		threads = ctx.GlobalInt(utils.MinerThreadsFlag.Name)
 
-		if ctx.GlobalIsSet(utils.MinerThreadsFlag.Name) {
-			threads = ctx.GlobalInt(utils.MinerThreadsFlag.Name)
-		}
 		if err := ethereum.StartMining(threads); err != nil {
 			utils.Fatalf("Failed to start mining: %v", err)
 		}

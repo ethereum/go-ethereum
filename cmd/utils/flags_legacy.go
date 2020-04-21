@@ -21,7 +21,6 @@ import (
 	"github.com/ethereum/go-ethereum/eth"
 	"github.com/ethereum/go-ethereum/node"
 	"gopkg.in/urfave/cli.v1"
-	"runtime"
 	"strings"
 )
 
@@ -138,29 +137,6 @@ var (
 		Name:  "gpopercentile",
 		Usage: "Suggested gas price is the given percentile of a set of recent transaction gas prices (deprecated, use --gpo.percentile)",
 		Value: eth.DefaultConfig.GPO.Percentile,
-	}
-	LegacyPprofPortFlag = cli.IntFlag{
-		Name:  "pprofport",
-		Usage: "pprof HTTP server listening port (deprecated, use --pprof.port)",
-		Value: 6060,
-	}
-	LegacyPprofAddrFlag = cli.StringFlag{
-		Name:  "pprofaddr",
-		Usage: "pprof HTTP server listening interface (deprecated, use --pprof.addr)",
-		Value: "127.0.0.1",
-	}
-	LegacyMemprofilerateFlag = cli.IntFlag{
-		Name:  "memprofilerate",
-		Usage: "Turn on memory profiling with the given rate (deprecated, use --pprof.memprofilerate)",
-		Value: runtime.MemProfileRate,
-	}
-	LegacyBlockprofilerateFlag = cli.IntFlag{
-		Name:  "blockprofilerate",
-		Usage: "Turn on block profiling with the given rate (deprecated, use --pprof.blockprofilerate)",
-	}
-	LegacyCpuprofileFlag = cli.StringFlag{
-		Name:  "cpuprofile",
-		Usage: "Write CPU profile to the given file (deprecated, use --pprof.cpuprofile)",
 	}
 )
 

@@ -244,7 +244,7 @@ var AppHelpFlagGroups = []flagGroup{
 	},
 	{
 		Name: "ALIASED (deprecated)",
-		Flags: []cli.Flag{
+		Flags: append([]cli.Flag{
 			utils.LegacyRPCEnabledFlag,
 			utils.LegacyRPCListenAddrFlag,
 			utils.LegacyRPCPortFlag,
@@ -257,12 +257,7 @@ var AppHelpFlagGroups = []flagGroup{
 			utils.LegacyWSApiFlag,
 			utils.LegacyGpoBlocksFlag,
 			utils.LegacyGpoPercentileFlag,
-			utils.LegacyPprofAddrFlag,
-			utils.LegacyPprofPortFlag,
-			utils.LegacyMemprofilerateFlag,
-			utils.LegacyBlockprofilerateFlag,
-			utils.LegacyCpuprofileFlag,
-		},
+		}, debug.DeprecatedFlags...),
 	},
 	{
 		Name: "MISC",
