@@ -86,26 +86,27 @@ var (
 		Name:  "trace",
 		Usage: "Write execution trace to the given file",
 	}
-	legacyPprofPortFlag = cli.IntFlag{ // (Deprecated April 2020)
+	// (Deprecated April 2020)
+	legacyPprofPortFlag = cli.IntFlag{
 		Name:  "pprofport",
 		Usage: "pprof HTTP server listening port (deprecated, use --pprof.port)",
 		Value: 6060,
 	}
-	legacyPprofAddrFlag = cli.StringFlag{ // (Deprecated April 2020)
+	legacyPprofAddrFlag = cli.StringFlag{
 		Name:  "pprofaddr",
 		Usage: "pprof HTTP server listening interface (deprecated, use --pprof.addr)",
 		Value: "127.0.0.1",
 	}
-	legacyMemprofilerateFlag = cli.IntFlag{ // (Deprecated April 2020)
+	legacyMemprofilerateFlag = cli.IntFlag{
 		Name:  "memprofilerate",
 		Usage: "Turn on memory profiling with the given rate (deprecated, use --pprof.memprofilerate)",
 		Value: runtime.MemProfileRate,
 	}
-	legacyBlockprofilerateFlag = cli.IntFlag{ // (Deprecated April 2020)
+	legacyBlockprofilerateFlag = cli.IntFlag{
 		Name:  "blockprofilerate",
 		Usage: "Turn on block profiling with the given rate (deprecated, use --pprof.blockprofilerate)",
 	}
-	legacyCpuprofileFlag = cli.StringFlag{ // (Deprecated April 2020)
+	legacyCpuprofileFlag = cli.StringFlag{
 		Name:  "cpuprofile",
 		Usage: "Write CPU profile to the given file (deprecated, use --pprof.cpuprofile)",
 	}

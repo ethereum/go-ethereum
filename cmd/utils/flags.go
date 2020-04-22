@@ -887,6 +887,7 @@ func splitAndTrim(input string) []string {
 // command line flags, returning empty if the HTTP endpoint is disabled.
 func setHTTP(ctx *cli.Context, cfg *node.Config) {
 	if ctx.GlobalBool(LegacyRPCEnabledFlag.Name) && cfg.HTTPHost == "" {
+		log.Warn("The flag --rpc is deprecated and will be removed in the future, please use --http")
 		cfg.HTTPHost = "127.0.0.1"
 		if ctx.GlobalIsSet(LegacyRPCListenAddrFlag.Name) {
 			cfg.HTTPHost = ctx.GlobalString(LegacyRPCListenAddrFlag.Name)
