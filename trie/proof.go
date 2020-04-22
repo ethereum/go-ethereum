@@ -166,7 +166,7 @@ func proofToPath(rootHash common.Hash, root node, key []byte, proofDb ethdb.KeyV
 		switch cld := child.(type) {
 		case nil:
 			// The trie doesn't contain the key.
-			return nil, fmt.Errorf("the node is not contained in trie")
+			return nil, errors.New("the node is not contained in trie")
 		case *shortNode:
 			key, parent = keyrest, child // Already resolved
 			continue
@@ -198,7 +198,8 @@ func proofToPath(rootHash common.Hash, root node, key []byte, proofDb ethdb.KeyV
 }
 
 // unsetInternal removes all internal node references(hashnode, embedded node).
-// It should be called after a trie is constructed with two edge proofs.
+// It should be called after a trie is constructed with two edge proofs. Also
+// the given boundary keys must be the one used to construct the edge proofs.
 //
 // It's the key step for range proof. All visited nodes should be marked dirty
 // since the node content might be modified. Besides it can happen that some
