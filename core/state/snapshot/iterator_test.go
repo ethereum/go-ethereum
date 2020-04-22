@@ -351,22 +351,30 @@ func TestAccountIteratorSeek(t *testing.T) {
 	snaps.Update(common.HexToHash("0x04"), common.HexToHash("0x03"), nil,
 		randomAccountSet("0xcc", "0xf0", "0xff"), nil)
 
-	// Construct various iterators and ensure their tranversal is correct
+	// Account set is now
+	// 02: aa, ee, f0, ff
+	// 03: aa, bb, dd, ee, f0 (, f0), ff
+	// 04: aa, bb, cc, dd, ee, f0 (, f0), ff (, ff)
+	// Construct various iterators and ensure their traversal is correct
 	it, _ := snaps.AccountIterator(common.HexToHash("0x02"), common.HexToHash("0xdd"))
 	defer it.Release()
 	verifyIterator(t, 3, it) // expected: ee, f0, ff
 
 	it, _ = snaps.AccountIterator(common.HexToHash("0x02"), common.HexToHash("0xaa"))
 	defer it.Release()
-	verifyIterator(t, 3, it) // expected: ee, f0, ff
+	verifyIterator(t, 4, it) // expected: aa, ee, f0, ff
 
 	it, _ = snaps.AccountIterator(common.HexToHash("0x02"), common.HexToHash("0xff"))
+	defer it.Release()
+	verifyIterator(t, 1, it) // expected: ff
+
+	it, _ = snaps.AccountIterator(common.HexToHash("0x02"), common.HexToHash("0xff1"))
 	defer it.Release()
 	verifyIterator(t, 0, it) // expected: nothing
 
 	it, _ = snaps.AccountIterator(common.HexToHash("0x04"), common.HexToHash("0xbb"))
 	defer it.Release()
-	verifyIterator(t, 5, it) // expected: cc, dd, ee, f0, ff
+	verifyIterator(t, 6, it) // expected: bb, cc, dd, ee, f0, ff
 
 	it, _ = snaps.AccountIterator(common.HexToHash("0x04"), common.HexToHash("0xef"))
 	defer it.Release()
@@ -374,11 +382,16 @@ func TestAccountIteratorSeek(t *testing.T) {
 
 	it, _ = snaps.AccountIterator(common.HexToHash("0x04"), common.HexToHash("0xf0"))
 	defer it.Release()
-	verifyIterator(t, 1, it) // expected: ff
+	verifyIterator(t, 2, it) // expected: f0, ff
 
 	it, _ = snaps.AccountIterator(common.HexToHash("0x04"), common.HexToHash("0xff"))
 	defer it.Release()
+	verifyIterator(t, 1, it) // expected: ff
+
+	it, _ = snaps.AccountIterator(common.HexToHash("0x04"), common.HexToHash("0xff1"))
+	defer it.Release()
 	verifyIterator(t, 0, it) // expected: nothing
+
 }
 
 // TestIteratorDeletions tests that the iterator behaves correct when there are
