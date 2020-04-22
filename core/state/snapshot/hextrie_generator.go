@@ -35,8 +35,8 @@ type leaf struct {
 
 type trieGeneratorFn func(in chan (leaf), out chan (common.Hash))
 
-func GenerateBinaryTree(it AccountIterator) common.Hash {
-	db, err := rawdb.NewLevelDBDatabase("./bintrie", 128, 1024, "")
+func GenerateBinaryTree(path string, it AccountIterator) common.Hash {
+	db, err := rawdb.NewLevelDBDatabase(path+"/bintrie", 128, 1024, "")
 	if err != nil {
 		panic(fmt.Sprintf("error opening bintrie db, err=%v", err))
 	}

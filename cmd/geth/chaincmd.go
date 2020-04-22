@@ -697,7 +697,7 @@ func snapToBin(ctx *cli.Context) error {
 		return fmt.Errorf("Could not create iterator for root %x: %v", root, err)
 	}
 	log.Info("Generating binary trie", "root", root)
-	generatedRoot := snapshot.GenerateBinaryTree(it)
+	generatedRoot := snapshot.GenerateBinaryTree(ctx.GlobalString(utils.DataDirFlag.Name), it)
 	log.Info("Generation done", "root", root, "binary root", generatedRoot)
 	return nil
 }
