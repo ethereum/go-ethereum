@@ -24,12 +24,9 @@ import (
 )
 
 func TestBinaryLeafReadEmpty(t *testing.T) {
-	trie, err := NewBinary(nil)
-	if err != nil {
-		t.Fatalf("error creating binary trie: %v", err)
-	}
+	trie := new(BinaryTrie)
 
-	_, err = trie.TryGet(common.FromHex("00"))
+	_, err := trie.TryGet(common.FromHex("00"))
 	if err == nil {
 		t.Fatalf("should have returned an error trying to get from an empty binry trie, err=%v", err)
 	}
@@ -115,12 +112,9 @@ func TestBinaryReadPrefix(t *testing.T) {
 }
 
 func TestBinaryLeafInsert(t *testing.T) {
-	trie, err := NewBinary(nil)
-	if err != nil {
-		t.Fatalf("error creating binary trie: %v", err)
-	}
+	trie := new(BinaryTrie)
 
-	err = trie.TryUpdate(common.FromHex("00"), common.FromHex("00"))
+	err := trie.TryUpdate(common.FromHex("00"), common.FromHex("00"))
 	if err != nil {
 		t.Fatalf("could not insert (0x00, 0x00) into an empty binary trie, err=%v", err)
 	}
@@ -128,12 +122,9 @@ func TestBinaryLeafInsert(t *testing.T) {
 }
 
 func TestBinaryLeafInsertRead(t *testing.T) {
-	trie, err := NewBinary(nil)
-	if err != nil {
-		t.Fatalf("error creating binary trie: %v", err)
-	}
+	trie := new(BinaryTrie)
 
-	err = trie.TryUpdate(common.FromHex("00"), common.FromHex("01"))
+	err := trie.TryUpdate(common.FromHex("00"), common.FromHex("01"))
 	if err != nil {
 		t.Fatalf("could not insert (0x00, 0x01) into an empty binary trie, err=%v", err)
 	}
@@ -149,13 +140,10 @@ func TestBinaryLeafInsertRead(t *testing.T) {
 }
 
 func TestBinaryForkInsertRead(t *testing.T) {
-	trie, err := NewBinary(nil)
-	if err != nil {
-		t.Fatalf("error creating binary trie: %v", err)
-	}
+	trie := new(BinaryTrie)
 
 	for i := byte(0); i <= 10; i++ {
-		err = trie.insert(0, []byte{i}, common.FromHex("01"), false)
+		err := trie.insert(0, []byte{i}, common.FromHex("01"), false)
 		if err != nil {
 			t.Fatalf("could not insert (%#x, 0x01) into an empty binary trie, err=%v", i, err)
 		}
@@ -173,11 +161,7 @@ func TestBinaryForkInsertRead(t *testing.T) {
 }
 
 func TestBinaryInsertLeftRight(t *testing.T) {
-	trie, err := NewBinary(nil)
-	if err != nil {
-		t.Fatalf("error creating binary trie: %v", err)
-	}
-
+	trie := new(BinaryTrie)
 	trie.TryUpdate([]byte{0}, []byte{0})
 	trie.TryUpdate([]byte{128}, []byte{1})
 

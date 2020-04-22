@@ -36,17 +36,24 @@ type binaryNode interface {
 	tryGet(key []byte, depth int) ([]byte, error)
 }
 
-type binKeyVal struct {
+// BinaryHashPreimage represents a tuple of a hash and its preimage
+type BinaryHashPreimage struct {
 	Key   []byte
 	Value []byte
 }
 
+// All known implementations of binaryNode
 type (
+	// BinaryTrie is a node with two children ("left" and "right")
+	// It can be prefixed by bits that are common to all subtrie
+	// keys and it can also hold a value.
 	BinaryTrie struct {
-		left     binaryNode
-		right    binaryNode
-		value    []byte
-		CommitCh chan binKeyVal
+		left  binaryNode
+		right binaryNode
+		value []byte
+
+		// Used to send (hash, preimage) pairs when hashing
+		CommitCh chan BinaryHashPreimage
 
 		// This is the binary equivalent of "extension nodes":
 		// binary nodes can have a prefix that is common to all
@@ -65,14 +72,6 @@ var (
 	errReadFromEmptyTree = errors.New("reached an empty subtree")
 )
 
-func NewBinary(committing bool) (*BinaryTrie, error) {
-	var cch chan binKeyVal
-	if committing {
-		cch = make(chan binKeyVal, 100)
-	}
-	return &BinaryTrie{CommitCh: cch}, nil
-}
-
 func (t *BinaryTrie) Get(key []byte) []byte {
 	res, err := t.TryGet(key)
 	if err != nil {
@@ -86,6 +85,7 @@ func (t *BinaryTrie) TryGet(key []byte) ([]byte, error) {
 	return value, err
 }
 
+// getPrefixLen returns the bit length of the current node's prefix
 func (t *BinaryTrie) getPrefixLen() int {
 	if t.endBit > t.startBit {
 		return t.endBit - t.startBit
@@ -93,12 +93,16 @@ func (t *BinaryTrie) getPrefixLen() int {
 	return 0
 }
 
+// getBit returns the boolean value of bit at offset `off` in
+// the byte key `key`
 func getBit(key []byte, off int) bool {
 	mask := byte(1) << (7 - uint(off)%8)
 
 	return byte(key[uint(off)/8])&mask != byte(0)
 }
 
+// getPrefixBit returns the boolean value of bit number `bitnum`
+// in the prefix of the current node.
 func (t *BinaryTrie) getPrefixBit(bitnum int) bool {
 	if bitnum > t.getPrefixLen() {
 		panic(fmt.Sprintf("Trying to get bit #%d in a %d bit-long bitfield", bitnum, t.getPrefixLen()))
@@ -148,6 +152,7 @@ func (t *BinaryTrie) Update(key, value []byte) {
 	}
 }
 
+// bitPrefix add the "bit prefix" to a key / extension node
 func (t *BinaryTrie) bitPrefix() []byte {
 	bp := make([]byte, 1+(t.getPrefixLen()+7)/8)
 	for i := 0; i < t.getPrefixLen(); i++ {
@@ -167,6 +172,9 @@ func (t *BinaryTrie) Hash() []byte {
 	return t.hash()
 }
 
+// hash is a a helper function that is shared between Hash and
+// Commit. If t.CommitCh is not nil, then its behavior will be
+// that of Commit, and that of Hash otherwise.
 func (t *BinaryTrie) hash() []byte {
 	var payload bytes.Buffer
 
@@ -189,17 +197,23 @@ func (t *BinaryTrie) hash() []byte {
 	io.Copy(hasher, &payload)
 	h := hasher.Sum(nil)
 	if t.CommitCh != nil {
-		t.CommitCh <- binKeyVal{Key: h, Value: payload.Bytes()}
+		t.CommitCh <- BinaryHashPreimage{Key: h, Value: payload.Bytes()}
 	}
 	return h
 }
 
+// TryUpdate inserts a (key, value) pair into the binary trie,
+// and expects values to be inserted in order as inserting to
+// the right of a node will cause the left node to be hashed.
 func (t *BinaryTrie) TryUpdate(key, value []byte) error {
 	// TODO check key depth
 	err := t.insert(0, key, value, true)
 	return err
 }
 
+// insert is a recursive helper function that inserts a (key, value) pair at
+// a given depth. If hashLeft is true, inserting a key into a right subnode
+// will cause the left subnode to be hashed.
 func (t *BinaryTrie) insert(depth int, key, value []byte, hashLeft bool) error {
 	// Special case: the trie is empty
 	if depth == 0 && t.left == nil && t.right == nil && len(t.prefix) == 0 {
@@ -238,7 +252,7 @@ func (t *BinaryTrie) insert(depth int, key, value []byte, hashLeft bool) error {
 			// prefixes.
 
 			// Create the [ d e ... ] part
-			oldChild, _ := NewBinary(false)
+			oldChild := new(BinaryTrie)
 			oldChild.prefix = t.prefix
 			oldChild.startBit = depth + i + 1
 			oldChild.endBit = t.endBit
@@ -247,7 +261,7 @@ func (t *BinaryTrie) insert(depth int, key, value []byte, hashLeft bool) error {
 			oldChild.CommitCh = t.CommitCh
 
 			// Create the child3 part
-			newChild, _ := NewBinary(false)
+			newChild := new(BinaryTrie)
 			newChild.prefix = key
 			newChild.startBit = depth + i + 1
 			newChild.endBit = len(key) * 8
@@ -266,9 +280,10 @@ func (t *BinaryTrie) insert(depth int, key, value []byte, hashLeft bool) error {
 				t.left = newChild
 				t.right = oldChild
 			} else {
+				// if asked to, hash the left subtrie to free
+				// up memory.
 				if hashLeft {
-					oldChild.Commit()
-					t.left = hashBinaryNode(oldChild.Hash())
+					t.left = hashBinaryNode(oldChild.hash())
 				} else {
 					t.left = oldChild
 				}
@@ -345,6 +360,7 @@ func dotHelper(prefix string, t *BinaryTrie) ([]string, []string) {
 	return nodes, links
 }
 
+// toDot creates a graphviz representation of the binary trie
 func (t *BinaryTrie) toDot() string {
 	nodes, links := dotHelper("", t)
 	return fmt.Sprintf("digraph D {\nnode [shape=rect]\n%s\n%s\n}", strings.Join(nodes, "\n"), strings.Join(links, "\n"))
@@ -363,10 +379,13 @@ func (t *BinaryTrie) Commit() error {
 	return nil
 }
 
+// Commit does not commit anything, because a hash doesn't have
+// its accompanying preimage.
 func (h hashBinaryNode) Commit() error {
 	return nil
 }
 
+// Hash returns itself
 func (h hashBinaryNode) Hash() []byte {
 	return h
 }

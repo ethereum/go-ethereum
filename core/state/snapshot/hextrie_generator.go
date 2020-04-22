@@ -40,10 +40,8 @@ func GenerateBinaryTree(it AccountIterator) common.Hash {
 	if err != nil {
 		panic(fmt.Sprintf("error opening bintrie db, err=%v", err))
 	}
-	btrie, err := trie.NewBinary(true)
-	if err != nil {
-		panic(fmt.Sprintf("error creating binary trie, err=%v", err))
-	}
+	btrie := new(trie.BinaryTrie)
+	btrie.CommitCh = make(chan trie.BinaryHashPreimage)
 
 	var nodeCount uint64
 	var wg sync.WaitGroup
