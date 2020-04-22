@@ -164,7 +164,13 @@ func (s *Snapshot) apply(headers []*types.Header) (*Snapshot, error) {
 		// proposer will be the last signer if block is not epoch block
 		proposer := snap.ValidatorSet.GetProposer().Address
 		proposerIndex, _ := snap.ValidatorSet.GetByAddress(proposer)
+		if proposerIndex == -1 {
+			return nil, &ProposerNotFoundError{proposer}
+		}
 		signerIndex, _ := snap.ValidatorSet.GetByAddress(signer)
+		if signerIndex == -1 {
+			return nil, &SignerNotFoundError{signer}
+		}
 		limit := len(validators)/2 + 1
 
 		// temp index
