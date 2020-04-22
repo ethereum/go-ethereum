@@ -36,7 +36,7 @@ func memoryGasCost(mem *Memory, newMemSize uint64) (uint64, error) {
 	// overflow. The constant 0x1FFFFFFFE0 is the highest number that can be used
 	// without overflowing the gas calculation.
 	if newMemSize > 0x1FFFFFFFE0 {
-		return 0, errGasUintOverflow
+		return 0, ErrGasUintOverflow
 	}
 	newMemSizeWords := toWordSize(newMemSize)
 	newMemSize = newMemSizeWords * 32
@@ -72,15 +72,15 @@ func memoryCopierGas(stackpos int) gasFunc {
 		// And gas for copying data, charged per word at param.CopyGas
 		words, overflow := bigUint64(stack.Back(stackpos))
 		if overflow {
-			return 0, errGasUintOverflow
+			return 0, ErrGasUintOverflow
 		}
 
 		if words, overflow = math.SafeMul(toWordSize(words), params.CopyGas); overflow {
-			return 0, errGasUintOverflow
+			return 0, ErrGasUintOverflow
 		}
 
 		if gas, overflow = math.SafeAdd(gas, words); overflow {
-			return 0, errGasUintOverflow
+			return 0, ErrGasUintOverflow
 		}
 		return gas, nil
 	}
@@ -221,7 +221,7 @@ func makeGasLog(n uint64) gasFunc {
 	return func(evm *EVM, contract *Contract, stack *Stack, mem *Memory, memorySize uint64) (uint64, error) {
 		requestedSize, overflow := bigUint64(stack.Back(1))
 		if overflow {
-			return 0, errGasUintOverflow
+			return 0, ErrGasUintOverflow
 		}
 
 		gas, err := memoryGasCost(mem, memorySize)
@@ -230,18 +230,18 @@ func makeGasLog(n uint64) gasFunc {
 		}
 
 		if gas, overflow = math.SafeAdd(gas, params.LogGas); overflow {
-			return 0, errGasUintOverflow
+			return 0, ErrGasUintOverflow
 		}
 		if gas, overflow = math.SafeAdd(gas, n*params.LogTopicGas); overflow {
-			return 0, errGasUintOverflow
+			return 0, ErrGasUintOverflow
 		}
 
 		var memorySizeGas uint64
 		if memorySizeGas, overflow = math.SafeMul(requestedSize, params.LogDataGas); overflow {
-			return 0, errGasUintOverflow
+			return 0, ErrGasUintOverflow
 		}
 		if gas, overflow = math.SafeAdd(gas, memorySizeGas); overflow {
-			return 0, errGasUintOverflow
+			return 0, ErrGasUintOverflow
 		}
 		return gas, nil
 	}
@@ -254,13 +254,13 @@ func gasSha3(evm *EVM, contract *Contract, stack *Stack, mem *Memory, memorySize
 	}
 	wordGas, overflow := bigUint64(stack.Back(1))
 	if overflow {
-		return 0, errGasUintOverflow
+		return 0, ErrGasUintOverflow
 	}
 	if wordGas, overflow = math.SafeMul(toWordSize(wordGas), params.Sha3WordGas); overflow {
-		return 0, errGasUintOverflow
+		return 0, ErrGasUintOverflow
 	}
 	if gas, overflow = math.SafeAdd(gas, wordGas); overflow {
-		return 0, errGasUintOverflow
+		return 0, ErrGasUintOverflow
 	}
 	return gas, nil
 }
@@ -288,13 +288,13 @@ func gasCreate2(evm *EVM, contract *Contract, stack *Stack, mem *Memory, memoryS
 	}
 	wordGas, overflow := bigUint64(stack.Back(2))
 	if overflow {
-		return 0, errGasUintOverflow
+		return 0, ErrGasUintOverflow
 	}
 	if wordGas, overflow = math.SafeMul(toWordSize(wordGas), params.Sha3WordGas); overflow {
-		return 0, errGasUintOverflow
+		return 0, ErrGasUintOverflow
 	}
 	if gas, overflow = math.SafeAdd(gas, wordGas); overflow {
-		return 0, errGasUintOverflow
+		return 0, ErrGasUintOverflow
 	}
 	return gas, nil
 }
@@ -307,7 +307,7 @@ func gasExpFrontier(evm *EVM, contract *Contract, stack *Stack, mem *Memory, mem
 		overflow bool
 	)
 	if gas, overflow = math.SafeAdd(gas, params.ExpGas); overflow {
-		return 0, errGasUintOverflow
+		return 0, ErrGasUintOverflow
 	}
 	return gas, nil
 }
@@ -320,7 +320,7 @@ func gasExpEIP158(evm *EVM, contract *Contract, stack *Stack, mem *Memory, memor
 		overflow bool
 	)
 	if gas, overflow = math.SafeAdd(gas, params.ExpGas); overflow {
-		return 0, errGasUintOverflow
+		return 0, ErrGasUintOverflow
 	}
 	return gas, nil
 }
@@ -347,7 +347,7 @@ func gasCall(evm *EVM, contract *Contract, stack *Stack, mem *Memory, memorySize
 	}
 	var overflow bool
 	if gas, overflow = math.SafeAdd(gas, memoryGas); overflow {
-		return 0, errGasUintOverflow
+		return 0, ErrGasUintOverflow
 	}
 
 	evm.callGasTemp, err = callGas(evm.chainRules.IsEIP150, contract.Gas, gas, stack.Back(0))
@@ -355,7 +355,7 @@ func gasCall(evm *EVM, contract *Contract, stack *Stack, mem *Memory, memorySize
 		return 0, err
 	}
 	if gas, overflow = math.SafeAdd(gas, evm.callGasTemp); overflow {
-		return 0, errGasUintOverflow
+		return 0, ErrGasUintOverflow
 	}
 	return gas, nil
 }
@@ -373,14 +373,14 @@ func gasCallCode(evm *EVM, contract *Contract, stack *Stack, mem *Memory, memory
 		gas += params.CallValueTransferGas
 	}
 	if gas, overflow = math.SafeAdd(gas, memoryGas); overflow {
-		return 0, errGasUintOverflow
+		return 0, ErrGasUintOverflow
 	}
 	evm.callGasTemp, err = callGas(evm.chainRules.IsEIP150, contract.Gas, gas, stack.Back(0))
 	if err != nil {
 		return 0, err
 	}
 	if gas, overflow = math.SafeAdd(gas, evm.callGasTemp); overflow {
-		return 0, errGasUintOverflow
+		return 0, ErrGasUintOverflow
 	}
 	return gas, nil
 }
@@ -396,7 +396,7 @@ func gasDelegateCall(evm *EVM, contract *Contract, stack *Stack, mem *Memory, me
 	}
 	var overflow bool
 	if gas, overflow = math.SafeAdd(gas, evm.callGasTemp); overflow {
-		return 0, errGasUintOverflow
+		return 0, ErrGasUintOverflow
 	}
 	return gas, nil
 }
@@ -412,7 +412,7 @@ func gasStaticCall(evm *EVM, contract *Contract, stack *Stack, mem *Memory, memo
 	}
 	var overflow bool
 	if gas, overflow = math.SafeAdd(gas, evm.callGasTemp); overflow {
-		return 0, errGasUintOverflow
+		return 0, ErrGasUintOverflow
 	}
 	return gas, nil
 }

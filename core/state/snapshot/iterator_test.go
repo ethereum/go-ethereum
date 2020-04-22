@@ -415,7 +415,7 @@ func TestIteratorDeletions(t *testing.T) {
 
 	deleted := common.HexToHash("0x22")
 	destructed := map[common.Hash]struct{}{
-		deleted: struct{}{},
+		deleted: {},
 	}
 	snaps.Update(common.HexToHash("0x03"), common.HexToHash("0x02"),
 		destructed, randomAccountSet("0x11", "0x33"), nil)

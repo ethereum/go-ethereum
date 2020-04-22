@@ -803,16 +803,19 @@ func (b *Block) Call(ctx context.Context, args struct {
 			return nil, err
 		}
 	}
-	result, gas, failed, err := ethapi.DoCall(ctx, b.backend, args.Data, *b.numberOrHash, nil, vm.Config{}, 5*time.Second, b.backend.RPCGasCap())
+	result, err := ethapi.DoCall(ctx, b.backend, args.Data, *b.numberOrHash, nil, vm.Config{}, 5*time.Second, b.backend.RPCGasCap())
+	if err != nil {
+		return nil, err
+	}
 	status := hexutil.Uint64(1)
-	if failed {
+	if result.Failed() {
 		status = 0
 	}
 	return &CallResult{
-		data:    hexutil.Bytes(result),
-		gasUsed: hexutil.Uint64(gas),
+		data:    result.Return(),
+		gasUsed: hexutil.Uint64(result.UsedGas),
 		status:  status,
-	}, err
+	}, nil
 }
 
 func (b *Block) EstimateGas(ctx context.Context, args struct {
@@ -869,16 +872,19 @@ func (p *Pending) Call(ctx context.Context, args struct {
 	Data ethapi.CallArgs
 }) (*CallResult, error) {
 	pendingBlockNr := rpc.BlockNumberOrHashWithNumber(rpc.PendingBlockNumber)
-	result, gas, failed, err := ethapi.DoCall(ctx, p.backend, args.Data, pendingBlockNr, nil, vm.Config{}, 5*time.Second, p.backend.RPCGasCap())
+	result, err := ethapi.DoCall(ctx, p.backend, args.Data, pendingBlockNr, nil, vm.Config{}, 5*time.Second, p.backend.RPCGasCap())
+	if err != nil {
+		return nil, err
+	}
 	status := hexutil.Uint64(1)
-	if failed {
+	if result.Failed() {
 		status = 0
 	}
 	return &CallResult{
-		data:    hexutil.Bytes(result),
-		gasUsed: hexutil.Uint64(gas),
+		data:    result.Return(),
+		gasUsed: hexutil.Uint64(result.UsedGas),
 		status:  status,
-	}, err
+	}, nil
 }
 
 func (p *Pending) EstimateGas(ctx context.Context, args struct {
