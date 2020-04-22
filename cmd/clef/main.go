@@ -82,6 +82,10 @@ var (
 		Name:  "advanced",
 		Usage: "If enabled, issues warnings instead of rejections for suspicious requests. Default off",
 	}
+	acceptFlag = cli.BoolFlag{
+		Name:  "acceptWarn",
+		Usage: "If set, does not show the warning during boot",
+	}
 	keystoreFlag = cli.StringFlag{
 		Name:  "keystore",
 		Value: filepath.Join(node.DefaultDataDir(), "keystore"),
@@ -196,6 +200,7 @@ The delpw command removes a password for a given address (keyfile).
 			logLevelFlag,
 			keystoreFlag,
 			utils.LightKDFFlag,
+			acceptFlag,
 		},
 		Description: `
 The newaccount command creates a new keystore-backed account. It is a convenience-method
@@ -235,6 +240,7 @@ func init() {
 		stdiouiFlag,
 		testFlag,
 		advancedMode,
+		acceptFlag,
 	}
 	app.Action = signer
 	app.Commands = []cli.Command{initCommand,
@@ -433,8 +439,10 @@ func initialize(c *cli.Context) error {
 	if c.GlobalBool(stdiouiFlag.Name) {
 		logOutput = os.Stderr
 		// If using the stdioui, we can't do the 'confirm'-flow
-		fmt.Fprint(logOutput, legalWarning)
-	} else {
+		if !c.GlobalBool(acceptFlag.Name){
+			fmt.Fprint(logOutput, legalWarning)
+		}
+	} else if !c.GlobalBool(acceptFlag.Name){
 		if !confirm(legalWarning) {
 			return fmt.Errorf("aborted by user")
 		}
