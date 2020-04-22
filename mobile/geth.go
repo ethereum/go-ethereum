@@ -45,7 +45,7 @@ import (
 // complexity.
 type NodeConfig struct {
 	// Bootstrap nodes used to establish connectivity with the rest of the network.
-	BootstrapNodes []Enode
+	BootstrapNodes []*Enode
 
 	// MaxPeers is the maximum number of peers that can be connected. If this is
 	// set to zero, then only the configured static and trusted peers can connect.
