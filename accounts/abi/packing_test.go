@@ -29,7 +29,7 @@ type packUnpackTest struct {
 }
 
 var packUnpackTests = []packUnpackTest{
-	// Bools
+	// Booleans
 	{
 		def:      `[{ "type": "bool" }]`,
 		packed:   "0000000000000000000000000000000000000000000000000000000000000001",
