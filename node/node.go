@@ -407,6 +407,7 @@ func (n *Node) stopHTTP() {
 	if n.httpServer != nil {
 		// Don't bother imposing a timeout here.
 		n.httpServer.Shutdown(context.Background())
+		n.log.Info("HTTP endpoint closed", "url", fmt.Sprintf("http://%v/", n.httpListenerAddr))
 	}
 	if n.httpHandler != nil {
 		n.httpHandler.Stop()
@@ -431,7 +432,7 @@ func (n *Node) startWS(endpoint string, apis []rpc.API, modules []string, wsOrig
 	if err != nil {
 		return err
 	}
-	n.log.Info("WebSocket endpoint opened", "url", fmt.Sprintf("ws://%s", addr))
+	n.log.Info("WebSocket endpoint opened", "url", fmt.Sprintf("ws://%v", addr))
 	// All listeners booted successfully
 	n.wsEndpoint = endpoint
 	n.wsListenerAddr = addr
@@ -446,6 +447,7 @@ func (n *Node) stopWS() {
 	if n.wsHTTPServer != nil {
 		// Don't bother imposing a timeout here.
 		n.wsHTTPServer.Shutdown(context.Background())
+		n.log.Info("WebSocket endpoint closed", "url", fmt.Sprintf("ws://%v", n.wsListenerAddr))
 	}
 	if n.wsHandler != nil {
 		n.wsHandler.Stop()
