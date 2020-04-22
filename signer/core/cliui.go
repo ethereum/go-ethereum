@@ -25,7 +25,7 @@ import (
 	"sync"
 
 	"github.com/ethereum/go-ethereum/common/hexutil"
-	"github.com/ethereum/go-ethereum/console"
+	"github.com/ethereum/go-ethereum/console/prompt"
 	"github.com/ethereum/go-ethereum/internal/ethapi"
 	"github.com/ethereum/go-ethereum/log"
 )
@@ -63,7 +63,7 @@ func (ui *CommandlineUI) OnInputRequired(info UserInputRequest) (UserInputRespon
 	fmt.Printf("## %s\n\n%s\n", info.Title, info.Prompt)
 	defer fmt.Println("-----------------------")
 	if info.IsPassword {
-		text, err := console.Stdin.PromptPassword("> ")
+		text, err := prompt.Stdin.PromptPassword("> ")
 		if err != nil {
 			log.Error("Failed to read password", "error", err)
 			return UserInputResponse{}, err

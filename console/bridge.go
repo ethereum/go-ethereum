@@ -28,6 +28,7 @@ import (
 	"github.com/ethereum/go-ethereum/accounts/scwallet"
 	"github.com/ethereum/go-ethereum/accounts/usbwallet"
 	"github.com/ethereum/go-ethereum/common/hexutil"
+	"github.com/ethereum/go-ethereum/console/prompt"
 	"github.com/ethereum/go-ethereum/internal/jsre"
 	"github.com/ethereum/go-ethereum/rpc"
 )
@@ -35,13 +36,13 @@ import (
 // bridge is a collection of JavaScript utility methods to bride the .js runtime
 // environment and the Go RPC connection backing the remote method calls.
 type bridge struct {
-	client   *rpc.Client  // RPC client to execute Ethereum requests through
-	prompter UserPrompter // Input prompter to allow interactive user feedback
-	printer  io.Writer    // Output writer to serialize any display strings to
+	client   *rpc.Client         // RPC client to execute Ethereum requests through
+	prompter prompt.UserPrompter // Input prompter to allow interactive user feedback
+	printer  io.Writer           // Output writer to serialize any display strings to
 }
 
 // newBridge creates a new JavaScript wrapper around an RPC client.
-func newBridge(client *rpc.Client, prompter UserPrompter, printer io.Writer) *bridge {
+func newBridge(client *rpc.Client, prompter prompt.UserPrompter, printer io.Writer) *bridge {
 	return &bridge{
 		client:   client,
 		prompter: prompter,
