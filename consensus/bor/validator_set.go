@@ -11,6 +11,7 @@ import (
 	"strings"
 
 	"github.com/maticnetwork/bor/common"
+	"github.com/maticnetwork/bor/log"
 )
 
 // MaxTotalVotingPower - the maximum allowed total voting power.
@@ -256,28 +257,29 @@ func (vals *ValidatorSet) Size() int {
 }
 
 // Force recalculation of the set's total voting power.
-func (vals *ValidatorSet) updateTotalVotingPower() {
+func (vals *ValidatorSet) updateTotalVotingPower() error {
 
 	sum := int64(0)
 	for _, val := range vals.Validators {
 		// mind overflow
 		sum = safeAddClip(sum, val.VotingPower)
 		if sum > MaxTotalVotingPower {
-			panic(fmt.Sprintf(
-				"Total voting power should be guarded to not exceed %v; got: %v",
-				MaxTotalVotingPower,
-				sum))
+			return &TotalVotingPowerExceededError{sum, vals.Validators}
 		}
 	}
-
 	vals.totalVotingPower = sum
+	return nil
 }
 
 // TotalVotingPower returns the sum of the voting powers of all validators.
 // It recomputes the total voting power if required.
 func (vals *ValidatorSet) TotalVotingPower() int64 {
 	if vals.totalVotingPower == 0 {
-		vals.updateTotalVotingPower()
+		log.Info("invoking updateTotalVotingPower before returning it")
+		if err := vals.updateTotalVotingPower(); err != nil {
+			// Can/should we do better?
+			panic(err)
+		}
 	}
 	return vals.totalVotingPower
 }
@@ -562,7 +564,9 @@ func (vals *ValidatorSet) updateWithChangeSet(changes []*Validator, allowDeletes
 	vals.applyUpdates(updates)
 	vals.applyRemovals(deletes)
 
-	vals.updateTotalVotingPower()
+	if err := vals.updateTotalVotingPower(); err != nil {
+		return err
+	}
 
 	// Scale and center.
 	vals.RescalePriorities(PriorityWindowSizeFactor * vals.TotalVotingPower())

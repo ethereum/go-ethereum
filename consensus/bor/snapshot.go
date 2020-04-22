@@ -87,7 +87,9 @@ func loadSnapshot(config *params.BorConfig, sigcache *lru.ARCCache, db ethdb.Dat
 	snap.ethAPI = ethAPI
 
 	// update total voting power
-	snap.ValidatorSet.updateTotalVotingPower()
+	if err := snap.ValidatorSet.updateTotalVotingPower(); err != nil {
+		return nil, err
+	}
 
 	return snap, nil
 }
