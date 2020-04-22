@@ -72,7 +72,7 @@ func newTestBackend(t *testing.T) *testBackend {
 	// Generate testing blocks
 	blocks, _ := core.GenerateChain(params.TestChainConfig, genesis, engine, db, 32, func(i int, b *core.BlockGen) {
 		b.SetCoinbase(common.Address{1})
-		tx, err := types.SignTx(types.NewTransaction(b.TxNonce(addr), common.HexToAddress("deadbeef"), big.NewInt(100), 21000, big.NewInt(int64(i)*params.GWei), nil), signer, key)
+		tx, err := types.SignTx(types.NewTransaction(b.TxNonce(addr), common.HexToAddress("deadbeef"), big.NewInt(100), 21000, big.NewInt(int64(i+1)*params.GWei), nil), signer, key)
 		if err != nil {
 			t.Fatalf("failed to create tx: %v", err)
 		}
@@ -105,6 +105,8 @@ func TestSuggestPrice(t *testing.T) {
 	}
 	backend := newTestBackend(t)
 	oracle := NewOracle(backend, config)
+
+	// The gas price sampled is: 32G, 31G, 30G, 29G, 28G, 27G
 	got, err := oracle.SuggestPrice(context.Background())
 	if err != nil {
 		t.Fatalf("Failed to retrieve recommended gas price: %v", err)

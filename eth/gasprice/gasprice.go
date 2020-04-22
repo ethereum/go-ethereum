@@ -129,16 +129,15 @@ func (gpo *Oracle) SuggestPrice(ctx context.Context) (*big.Int, error) {
 		// In these cases, use the latest calculated price for samping.
 		if len(res.prices) == 0 {
 			res.prices = []*big.Int{lastPrice}
-
-			// Besides, in order to collect enough data for sampling, if nothing
-			// meaningful returned, try to query more blocks. But the maximum
-			// is 2*checkBlocks.
-			if len(txPrices)+1 < gpo.checkBlocks*2 {
-				go gpo.getBlockPrices(ctx, types.MakeSigner(gpo.backend.ChainConfig(), big.NewInt(int64(number))), number, sampleNumber, result, quit)
-				sent++
-				exp++
-				number--
-			}
+		}
+		// Besides, in order to collect enough data for sampling, if nothing
+		// meaningful returned, try to query more blocks. But the maximum
+		// is 2*checkBlocks.
+		if len(res.prices) == 1 && len(txPrices)+1+exp < gpo.checkBlocks*2 && number > 0 {
+			go gpo.getBlockPrices(ctx, types.MakeSigner(gpo.backend.ChainConfig(), big.NewInt(int64(number))), number, sampleNumber, result, quit)
+			sent++
+			exp++
+			number--
 		}
 		txPrices = append(txPrices, res.prices...)
 	}
