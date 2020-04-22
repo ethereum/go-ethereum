@@ -159,7 +159,7 @@ func Setup(ctx *cli.Context) error {
 			SkipTLSVerify:   ctx.GlobalBool(splunkskiptlsverifyFlag.Name),
 			OriginalHandler: originalHandler,
 		}
-		glogger.SetHandler(log.BufferedHandler(100, splunkHandler))
+		glogger.SetHandler(splunkHandler)
 	}
 	log.PrintOrigins(ctx.GlobalBool(debugFlag.Name))
 	glogger.Verbosity(log.Lvl(ctx.GlobalInt(verbosityFlag.Name)))

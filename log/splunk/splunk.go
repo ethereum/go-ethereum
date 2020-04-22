@@ -30,6 +30,8 @@ type Handler struct {
 	OriginalHandler log.Handler
 	errors          chan error
 	once            sync.Once
+	events          chan event
+	sendQueue       chan []event
 }
 
 func (h *Handler) init() {
@@ -57,6 +59,36 @@ func (h *Handler) init() {
 			}
 		}()
 	}
+	h.sendQueue = make(chan []event)
+	h.events = make(chan event)
+	go func() {
+		eventsToSend := make([]event, 0)
+		ticker := time.NewTicker(1 * time.Second)
+		for {
+			select {
+			case e := <-h.events:
+				eventsToSend = append(eventsToSend, e)
+				if len(eventsToSend) > 50 {
+					oldEvents := eventsToSend
+					eventsToSend = make([]event, 0)
+					h.sendQueue <- oldEvents
+				}
+				break
+			case <-ticker.C:
+				if len(eventsToSend) > 0 {
+					oldEvents := eventsToSend
+					eventsToSend = make([]event, 0)
+					h.sendQueue <- oldEvents
+				}
+			}
+		}
+	}()
+	go func() {
+		for {
+			events := <-h.sendQueue
+			h.logEvents(events)
+		}
+	}()
 }
 
 type eventdata struct {
@@ -66,7 +98,7 @@ type eventdata struct {
 }
 
 type event struct {
-	Time       int64     `json:"time"`                 // epoch time in seconds
+	Time       int64     `json:"time"`                 // epoch time in nano-seconds
 	Host       string    `json:"host"`                 // hostname
 	Source     string    `json:"source,omitempty"`     // optional description of the source of the event; typically the app's name
 	SourceType string    `json:"sourcetype,omitempty"` // optional name of a Splunk parsing configuration; this is usually inferred by Splunk
@@ -76,34 +108,47 @@ type event struct {
 
 func (h *Handler) Log(r *log.Record) error {
 	h.once.Do(h.init)
-
 	context := make(map[string]string)
 	for index := 0; index < len(r.Ctx); index++ {
 		key := fmt.Sprintf("%v", r.Ctx[index])
 		index++
 		if r.Ctx[index] != nil {
-			value := fmt.Sprintf("%v", r.Ctx[index])
-			context[key] = value
+			if stringer, ok := r.Ctx[index].(fmt.Stringer); ok {
+				context[key] = stringer.String()
+			} else {
+				context[key] = fmt.Sprintf("%v", r.Ctx[index])
+			}
 		}
 	}
-	e := &event{
-		Time:       r.Time.Unix(),
+	e := event{
+		Time:       r.Time.UnixNano(),
 		Host:       h.Hostname,
 		Source:     h.Source,
 		SourceType: h.SourceType,
 		Index:      h.Index,
 		Event:      eventdata{Msg: r.Msg, Level: r.Lvl.String(), Ctxt: context},
 	}
-	b, err := json.Marshal(e)
+	h.events <- e
+	return nil
+}
+
+func (h *Handler) logEvents(events []event) {
+	buf := new(bytes.Buffer)
+	for _, e := range events {
+
+		b, err := json.Marshal(e)
+		if err != nil {
+			h.errors <- err
+		} else {
+			buf.Write(b)
+			buf.WriteString("\r\n\r\n")
+		}
+	}
+
+	err := h.doRequest(buf)
 	if err != nil {
 		h.errors <- err
-		return err
 	}
-	err = h.doRequest(bytes.NewBuffer(b))
-	if err != nil {
-		h.errors <- err
-	}
-	return err
 }
 
 func (h *Handler) doRequest(b *bytes.Buffer) error {
