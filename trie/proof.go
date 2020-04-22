@@ -197,7 +197,7 @@ func proofToPath(rootHash common.Hash, root node, key []byte, proofDb ethdb.KeyV
 	}
 }
 
-// unsetInternal removes all internal node references(hashnode, embeded node).
+// unsetInternal removes all internal node references(hashnode, embedded node).
 // It should be called after a trie is constructed with two edge proofs.
 //
 // It's the key step for range proof. All visited nodes should be marked dirty

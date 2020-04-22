@@ -196,8 +196,8 @@ func TestBadRangeProof(t *testing.T) {
 	}
 }
 
-// TestGappedRangeProof focuses on the small trie with embeded nodes.
-// If the gapped node is embeded in the trie, it should be detected too.
+// TestGappedRangeProof focuses on the small trie with embedded nodes.
+// If the gapped node is embedded in the trie, it should be detected too.
 func TestGappedRangeProof(t *testing.T) {
 	trie := new(Trie)
 	var entries []*kv // Sorted entries
