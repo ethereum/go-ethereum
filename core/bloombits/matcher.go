@@ -413,7 +413,8 @@ func (m *Matcher) distributor(dist chan *request, session *MatcherSession) {
 				return
 			}
 			shutdown = nil
-
+		case <-session.quit:
+			return
 		case req := <-dist:
 			// New retrieval request arrived to be distributed to some fetcher process
 			queue := requests[req.bit]
