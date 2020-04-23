@@ -5,6 +5,8 @@ import (
 	"github.com/ethereum/go-ethereum/core"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/common/hexutil"
+	"github.com/ethereum/go-ethereum/internal/ethapi"
 	"github.com/ethereum/go-ethereum/rpc"
 
 )
@@ -15,9 +17,36 @@ type dropNotification struct {
 }
 
 type rejectNotification struct {
-	Tx *types.Transaction `json:"tx"`
+	Tx *ethapi.RPCTransaction `json:"tx"`
 	Reason string `json:"reason"`
 }
+
+// newRPCTransaction returns a transaction that will serialize to the RPC
+// representation, with the given location metadata set (if available).
+func newRPCPendingTransaction(tx *types.Transaction) *ethapi.RPCTransaction {
+	var signer types.Signer = types.FrontierSigner{}
+	if tx.Protected() {
+		signer = types.NewEIP155Signer(tx.ChainId())
+	}
+	from, _ := types.Sender(signer, tx)
+	v, r, s := tx.RawSignatureValues()
+
+	result := &ethapi.RPCTransaction{
+		From:     from,
+		Gas:      hexutil.Uint64(tx.Gas()),
+		GasPrice: (*hexutil.Big)(tx.GasPrice()),
+		Hash:     tx.Hash(),
+		Input:    hexutil.Bytes(tx.Data()),
+		Nonce:    hexutil.Uint64(tx.Nonce()),
+		To:       tx.To(),
+		Value:    (*hexutil.Big)(tx.Value()),
+		V:        (*hexutil.Big)(v),
+		R:        (*hexutil.Big)(r),
+		S:        (*hexutil.Big)(s),
+	}
+	return result
+}
+
 
 // DroppedTransactions send a notification each time a transaction is dropped from the mempool
 func (api *PublicFilterAPI) DroppedTransactions(ctx context.Context) (*rpc.Subscription, error) {
@@ -71,7 +100,7 @@ func (api *PublicFilterAPI) RejectedTransactions(ctx context.Context) (*rpc.Subs
 				if d.Reason != nil {
 					reason = d.Reason.Error()
 				}
-				notifier.Notify(rpcSub.ID, &rejectNotification{Tx: d.Tx, Reason: reason})
+				notifier.Notify(rpcSub.ID, &rejectNotification{Tx: newRPCPendingTransaction(d.Tx), Reason: reason})
 			case <-rpcSub.Err():
 				rejectedSub.Unsubscribe()
 				return
