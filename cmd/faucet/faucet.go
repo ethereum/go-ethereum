@@ -236,7 +236,7 @@ func newFaucet(genesis *core.Genesis, port int, enodes []*discv5.Node, network u
 		return nil, err
 	}
 	// Assemble the Ethereum light client protocol
-	if err := stack.Register(func(ctx *node.ServiceContext) (node.Service, error) {
+	if err := stack.RegisterBackendLifecycle(func(stack *node.Node) (node.Backend, error) {
 		cfg := eth.DefaultConfig
 		cfg.SyncMode = downloader.LightSync
 		cfg.NetworkId = network
@@ -247,10 +247,9 @@ func newFaucet(genesis *core.Genesis, port int, enodes []*discv5.Node, network u
 	}
 	// Assemble the ethstats monitoring and reporting service'
 	if stats != "" {
-		if err := stack.Register(func(ctx *node.ServiceContext) (node.Service, error) {
+		if err := stack.RegisterAuxServiceLifecycle(func(stack *node.Node) (node.AuxiliaryService, error) {
 			var serv *les.LightEthereum
-			ctx.Service(&serv)
-			return ethstats.New(stats, nil, serv)
+			return ethstats.New(stack, stats, nil, serv)
 		}); err != nil {
 			return nil, err
 		}

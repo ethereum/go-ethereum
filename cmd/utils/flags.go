@@ -1725,7 +1725,7 @@ func RegisterShhService(stack *node.Node, cfg *whisper.Config) {
 // RegisterEthStatsService configures the Ethereum Stats daemon and adds it to
 // the given node.
 func RegisterEthStatsService(stack *node.Node, url string) {
-	if err := stack.Register(func(ctx *node.ServiceContext) (node.Service, error) {
+	if err := stack.Register(func(stack *node.Node) (node.AuxiliaryService, error) {
 		// Retrieve both eth and les services
 		var ethServ *eth.Ethereum
 		ctx.Service(&ethServ)
@@ -1742,7 +1742,7 @@ func RegisterEthStatsService(stack *node.Node, url string) {
 
 // RegisterGraphQLService is a utility function to construct a new service and register it against a node.
 func RegisterGraphQLService(stack *node.Node, endpoint string, cors, vhosts []string, timeouts rpc.HTTPTimeouts) {
-	if err := stack.Register(func(ctx *node.ServiceContext) (node.Service, error) {
+	if err := stack.RegisterAuxServiceLifecycle(func(stack *node.Node) (node.AuxiliaryService, error) {
 		// Try to construct the GraphQL service backed by a full node
 		var ethServ *eth.Ethereum
 		if err := ctx.Service(&ethServ); err == nil {

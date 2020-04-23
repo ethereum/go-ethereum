@@ -20,8 +20,6 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"net"
-	"net/http"
 	"os"
 	"path/filepath"
 	"reflect"
@@ -48,29 +46,23 @@ type Node struct {
 	ephemeralKeystore string            // if non-empty, the key directory that will be removed by Stop
 	instanceDirLock   fileutil.Releaser // prevents concurrent use of instance directory
 
-	serverConfig p2p.Config
+	// TODO: removed p2pConfig b/c p2pServer already contains p2pConfig (is there a reason for it to be duplicated?
 	server       *p2p.Server // Currently running P2P networking layer
 
-	serviceFuncs []ServiceConstructor     // Service constructors (in dependency order)
-	services     map[reflect.Type]Service // Currently running services
+	serviceConstructors []ServiceConstructor     // Service constructors (in dependency order)
+	auxServiceConstructors []AuxiliarServiceConstructor // AuxiliaryService constructors
+
+	backend Backend // The registered Backend of the node
+	services map[reflect.Type]Service // Currently running services
+	auxServices map[reflect.Type]AuxiliaryService // Currently running auxiliary services
 
 	rpcAPIs       []rpc.API   // List of APIs currently provided by the node
 	inprocHandler *rpc.Server // In-process RPC request handler to process the API requests
 
-	ipcEndpoint string       // IPC endpoint to listen at (empty = IPC disabled)
-	ipcListener net.Listener // IPC RPC listener socket to serve API requests
-	ipcHandler  *rpc.Server  // IPC RPC request handler to process the API requests
+	ipcHandler  *HttpServer // TODO
+	httpHandler *HttpServer // TODO
+	wsHandler   *HttpServer // TODO
 
-	httpEndpoint     string       // HTTP endpoint (interface + port) to listen at (empty = HTTP disabled)
-	httpWhitelist    []string     // HTTP RPC modules to allow through this endpoint
-	httpListenerAddr net.Addr     // Address of HTTP RPC listener socket serving API requests
-	httpServer       *http.Server // HTTP RPC HTTP server
-	httpHandler      *rpc.Server  // HTTP RPC request handler to process the API requests
-
-	wsEndpoint     string       // WebSocket endpoint (interface + port) to listen at (empty = WebSocket disabled)
-	wsListenerAddr net.Addr     // Address of WebSocket RPC listener socket serving API requests
-	wsHTTPServer   *http.Server // WebSocket RPC HTTP server
-	wsHandler      *rpc.Server  // WebSocket RPC request handler to process the API requests
 
 	stop chan struct{} // Channel to wait for termination notifications
 	lock sync.RWMutex
@@ -149,17 +141,71 @@ func (n *Node) Close() error {
 	}
 }
 
-// Register injects a new service into the node's stack. The service created by
-// the passed constructor must be unique in its type with regard to sibling ones.
-func (n *Node) Register(constructor ServiceConstructor) error {
+// TODO document
+func (n * Node) RegisterBackendLifecycle(constructor BackendConstructor) error {
 	n.lock.Lock()
 	defer n.lock.Unlock()
 
-	if n.server != nil {
+	if n.running() {
 		return ErrNodeRunning
 	}
-	n.serviceFuncs = append(n.serviceFuncs, constructor)
+
+	backend, err := constructor(n)
+	if err != nil {
+		return err
+	}
+	n.backend = backend
 	return nil
+}
+
+// Register injects a new service into the node's stack. The service created by
+// the passed constructor must be unique in its type with regard to sibling ones.
+func (n *Node) RegisterServiceLifecycle(constructor ServiceConstructor) error {
+	n.lock.Lock()
+	defer n.lock.Unlock()
+
+	if n.running() {
+		return ErrNodeRunning
+	}
+
+	service, err := constructor(n)
+	if err != nil {
+		return err
+	}
+	kind := reflect.TypeOf(service)
+	if _, exists := n.services[kind]; exists {
+		return &DuplicateServiceError{Kind: kind}
+	}
+	n.services[kind] = service
+
+	return nil
+}
+
+// TODO document
+func (n *Node) RegisterAuxServiceLifecycle(constructor AuxiliaryServiceConstructor) error {
+	n.lock.Lock()
+	defer n.lock.Unlock()
+
+	if n.running() {
+		return ErrNodeRunning
+	}
+
+	service, err := constructor(n)
+	if err != nil {
+		return err
+	}
+	kind := reflect.TypeOf(service)
+	if _, exists := n.auxServices[kind]; exists {
+		return &DuplicateServiceError{Kind: kind}
+	}
+	n.auxServices[kind] = service
+
+	return nil
+}
+
+// running returns true if the node's p2p server is already running
+func (n *Node) running() bool {
+	return n.server != nil
 }
 
 // Start creates a live P2P node and starts running it.
@@ -195,28 +241,28 @@ func (n *Node) Start() error {
 
 	// Otherwise copy and specialize the P2P configuration
 	services := make(map[reflect.Type]Service)
-	for _, constructor := range n.serviceFuncs {
-		// Create a new context for the particular service
-		ctx := &ServiceContext{
-			Config:         *n.config,
-			services:       make(map[reflect.Type]Service),
-			EventMux:       n.eventmux,
-			AccountManager: n.accman,
-		}
-		for kind, s := range services { // copy needed for threaded access
-			ctx.services[kind] = s
-		}
-		// Construct and save the service
-		service, err := constructor(ctx)
-		if err != nil {
-			return err
-		}
-		kind := reflect.TypeOf(service)
-		if _, exists := services[kind]; exists {
-			return &DuplicateServiceError{Kind: kind}
-		}
-		services[kind] = service
-	}
+	//for _, constructor := range n.serviceFuncs {
+	//	// Create a new context for the particular service
+	//	ctx := &ServiceContext{
+	//		Config:         *n.config,
+	//		services:       make(map[reflect.Type]Service),
+	//		EventMux:       n.eventmux,
+	//		AccountManager: n.accman,
+	//	}
+	//	for kind, s := range services { // copy needed for threaded access
+	//		ctx.services[kind] = s
+	//	}
+	//	// Construct and save the service
+	//	service, err := constructor(ctx)
+	//	if err != nil {
+	//		return err
+	//	}
+	//	kind := reflect.TypeOf(service)
+	//	if _, exists := services[kind]; exists {
+	//		return &DuplicateServiceError{Kind: kind}
+	//	}
+	//	services[kind] = service
+	//}
 	// Gather the protocols and start the freshly assembled P2P server
 	for _, service := range services {
 		running.Protocols = append(running.Protocols, service.Protocols()...)

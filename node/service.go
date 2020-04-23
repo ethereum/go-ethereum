@@ -91,9 +91,23 @@ func (ctx *ServiceContext) ExtRPCEnabled() bool {
 	return ctx.Config.ExtRPCEnabled()
 }
 
+// TODO document
+type BackendConstructor func(node *Node) (Backend, error)
+
 // ServiceConstructor is the function signature of the constructors needed to be
 // registered for service instantiation.
-type ServiceConstructor func(ctx *ServiceContext) (Service, error)
+type ServiceConstructor func(node *Node) (Service, error)
+
+//TODO document
+type AuxiliaryServiceConstructor func(node *Node) (AuxiliaryService, error)
+
+type Backend interface {
+	// Protocols retrieves the P2P protocols the service wishes to start.
+	Protocols() []p2p.Protocol
+
+	// Backend also implements the Service interface.
+	Service
+}
 
 // Service is an individual protocol that can be registered into a node.
 //
@@ -106,15 +120,27 @@ type ServiceConstructor func(ctx *ServiceContext) (Service, error)
 // • Restart logic is not required as the node will create a fresh instance
 // every time a service is started.
 type Service interface {
-	// Protocols retrieves the P2P protocols the service wishes to start.
-	Protocols() []p2p.Protocol
-
 	// APIs retrieves the list of RPC descriptors the service provides
 	APIs() []rpc.API
 
+	// Service also implements Lifecycle
+	Lifecycle
+}
+
+// TODO document
+type AuxiliaryService interface {
+	// TODO document
+	Server() (*HttpServer, error)
+
+	// AuxiliaryService also implements Lifecycle
+	Lifecycle
+}
+
+// TODO, this might be overkill
+type Lifecycle interface {
 	// Start is called after all services have been constructed and the networking
 	// layer was also initialized to spawn any goroutines required by the service.
-	Start(server *p2p.Server) error
+	Start() error
 
 	// Stop terminates all goroutines belonging to the service, blocking until they
 	// are all terminated.

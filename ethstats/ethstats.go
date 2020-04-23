@@ -22,6 +22,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"github.com/ethereum/go-ethereum/node"
 	"math/big"
 	"net/http"
 	"regexp"
@@ -40,7 +41,6 @@ import (
 	"github.com/ethereum/go-ethereum/les"
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/p2p"
-	"github.com/ethereum/go-ethereum/rpc"
 	"github.com/gorilla/websocket"
 )
 
@@ -83,7 +83,7 @@ type Service struct {
 }
 
 // New returns a monitoring service ready for stats reporting.
-func New(url string, ethServ *eth.Ethereum, lesServ *les.LightEthereum) (*Service, error) {
+func New(node *node.Node, url string, ethServ *eth.Ethereum, lesServ *les.LightEthereum) (node.AuxiliaryService, error) {
 	// Parse the netstats connection url
 	re := regexp.MustCompile("([^:@]*)(:([^@]*))?@(.+)")
 	parts := re.FindStringSubmatch(url)
@@ -98,6 +98,7 @@ func New(url string, ethServ *eth.Ethereum, lesServ *les.LightEthereum) (*Servic
 		engine = lesServ.Engine()
 	}
 	return &Service{
+		server: node.Server(),
 		eth:    ethServ,
 		les:    lesServ,
 		engine: engine,
@@ -109,17 +110,8 @@ func New(url string, ethServ *eth.Ethereum, lesServ *les.LightEthereum) (*Servic
 	}, nil
 }
 
-// Protocols implements node.Service, returning the P2P network protocols used
-// by the stats service (nil as it doesn't use the devp2p overlay network).
-func (s *Service) Protocols() []p2p.Protocol { return nil }
-
-// APIs implements node.Service, returning the RPC API endpoints provided by the
-// stats service (nil as it doesn't provide any user callable APIs).
-func (s *Service) APIs() []rpc.API { return nil }
-
 // Start implements node.Service, starting up the monitoring and reporting daemon.
-func (s *Service) Start(server *p2p.Server) error {
-	s.server = server
+func (s *Service) Start() error {
 	go s.loop()
 
 	log.Info("Stats daemon started")
@@ -130,6 +122,10 @@ func (s *Service) Start(server *p2p.Server) error {
 func (s *Service) Stop() error {
 	log.Info("Stats daemon stopped")
 	return nil
+}
+
+func (s *Service) Server() (*node.HttpServer, error) {
+	return nil, nil
 }
 
 // loop keeps trying to connect to the netstats server, reporting chain events
