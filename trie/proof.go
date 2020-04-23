@@ -264,11 +264,13 @@ func unset(root node, rest []byte, removeLeft bool) {
 		unset(rn.Children[rest[0]], rest[1:], removeLeft)
 	case *shortNode:
 		rn.flags = nodeFlag{dirty: true}
+		if _, ok := rn.Val.(valueNode); ok {
+			rn.Val = nil
+			return
+		}
 		unset(rn.Val, rest[len(rn.Key):], removeLeft)
-	case hashNode, nil:
+	case hashNode, nil, valueNode:
 		panic("it shouldn't happen")
-	case valueNode:
-		return
 	}
 }
 

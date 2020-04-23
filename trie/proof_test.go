@@ -164,7 +164,7 @@ func TestBadRangeProof(t *testing.T) {
 			keys = append(keys, entries[i].k)
 			vals = append(vals, entries[i].v)
 		}
-		testcase := mrand.Intn(4)
+		testcase := mrand.Intn(6)
 		var index int
 		switch testcase {
 		case 0:
@@ -188,6 +188,14 @@ func TestBadRangeProof(t *testing.T) {
 			index = mrand.Intn(end - start)
 			keys[index] = entries[len(entries)-1].k
 			vals[index] = entries[len(entries)-1].v
+		case 4:
+			// Set random key to nil
+			index = mrand.Intn(end - start)
+			keys[index] = nil
+		case 5:
+			// Set random value to nil
+			index = mrand.Intn(end - start)
+			vals[index] = nil
 		}
 		err := VerifyRangeProof(trie.Hash(), keys, vals, firstProof, lastProof)
 		if err == nil {
