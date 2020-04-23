@@ -865,16 +865,41 @@ func doAndroidArchive(cmdline []string) {
 		if err != nil {
 			log.Fatal(err)
 		}
-		// Upload the artifacts to Sonatype and/or Maven Central
-		repo := *deploy + "/service/local/staging/deploy/maven2"
-		if meta.Develop {
-			repo = *deploy + "/content/repositories/snapshots"
-		}
+		dir := "./"
 		build.MustRunCommand("mvn", "gpg:sign-and-deploy-file", "-e", "-X",
-			"-settings=build/mvn.settings", "-Durl="+repo, "-DrepositoryId=ossrh",
+			"-settings=build/mvn.settings", "-Durl=file:///"+dir, "-DrepositoryId=ossrh",
 			"-Dgpg.keyname="+keyID,
 			"-DpomFile="+meta.Package+".pom", "-Dfile="+meta.Package+".aar")
+
+		profileID := "1234" // TODO (MariusVanDerWijden) get these configuration parameters
+		repositoryID := "1234"
+		// Upload the artifacts to Maven Central
+		uploadToMaven(deploy, profileID, repositoryID, dir)
 	}
+}
+
+func uploadToMaven(deploy *string, profileID, repositoryID, directory string) {
+	// See: https://support.sonatype.com/hc/en-us/articles/213465868-Uploading-to-a-Staging-Repository-via-REST-API
+
+	// Upload PromoteRequest
+	startReq := "<promoteRequest><data><description>start</description></data></promoteRequest>"
+	startURL := *deploy + "/service/local/staging/profiles/" + profileID + "/start"
+	build.MustRunCommand("curl", "-X POST", "-d", startReq, "-u", "$ANDROID_SONATYPE_USERNAME"+":"+"$ANDROID_SONATYPE_PASSWORD", "-H", "Content-Type:application/xml", "-v", startURL)
+	// Upload Files
+	files, err := ioutil.ReadDir(directory)
+	if err != nil {
+		log.Fatalf("Failed to read directory: %v", err.Error())
+	}
+	for _, f := range files {
+		path := directory + "/" + f.Name()
+		uploadURL := *deploy + "/service/local/staging/deployByRepositoryId/" + repositoryID + "/" + f.Name()
+		build.MustRunCommand("curl", "-X POST", "-d", "@"+path, "-u", "$ANDROID_SONATYPE_USERNAME"+":"+"$ANDROID_SONATYPE_PASSWORD", "-H", "Content-Type:application/x-aar", "-v", uploadURL)
+	}
+
+	// Finish Upload
+	stopReq := "<promoteRequest><data><stagedRepositoryId>" + repositoryID + "</stagedRepositoryId><description>stop</description></data><promoteRequest>"
+	stopURL := *deploy + "/service/local/staging/profiles/" + profileID + "/finish"
+	build.MustRunCommand("curl", "-X POST", "-d", stopReq, "-u", "$ANDROID_SONATYPE_USERNAME"+":"+"$ANDROID_SONATYPE_PASSWORD", "-H", "Content-Type:application/xml", "-v", stopURL)
 }
 
 func gomobileTool(subcmd string, args ...string) *exec.Cmd {
