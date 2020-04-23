@@ -651,7 +651,7 @@ func doHTTPRequest(t *testing.T, req *http.Request) *http.Response {
 	client := &http.Client{}
 	resp, err := client.Do(req)
 	if err != nil {
-		t.Error("could not issue a GET request to the given endpoint", err)
+		t.Error("could not issue a GET request to the given Endpoint", err)
 	}
 	return resp
 }

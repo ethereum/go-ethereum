@@ -32,7 +32,9 @@ import (
 // the protocol stack, that is passed to all constructors to be optionally used;
 // as well as utility methods to operate on the service environment.
 type ServiceContext struct {
-	services       map[reflect.Type]Service // Index of the already constructed services
+	backend        Backend // Copy of the already constructed Backend // TODO update this comment
+	services       map[reflect.Type]Service          // Index of the already constructed services
+	auxServices    map[reflect.Type]AuxiliaryService // Index of the already constructed auxiliary services
 	Config         Config
 	EventMux       *event.TypeMux    // Event multiplexer used for decoupled notifications
 	AccountManager *accounts.Manager // Account manager created by the node.
@@ -130,7 +132,7 @@ type Service interface {
 // TODO document
 type AuxiliaryService interface {
 	// TODO document
-	Server() (*HttpServer, error)
+	Server() *HttpServer
 
 	// AuxiliaryService also implements Lifecycle
 	Lifecycle

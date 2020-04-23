@@ -134,9 +134,7 @@ func (s *Service) Stop() error {
 	return nil
 }
 
-func (s *Service) Server() (*node.HttpServer, error) {
-	return nil, nil
-}
+func (s *Service) Server() *node.HttpServer { return nil }
 
 // loop keeps trying to connect to the netstats server, reporting chain events
 // until termination.

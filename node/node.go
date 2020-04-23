@@ -47,15 +47,12 @@ type Node struct {
 	instanceDirLock   fileutil.Releaser // prevents concurrent use of instance directory
 
 	// TODO: removed p2pConfig b/c p2pServer already contains p2pConfig (is there a reason for it to be duplicated?
-	server       *p2p.Server // Currently running P2P networking layer
+	server *p2p.Server // Currently running P2P networking layer
 
 	ServiceContext *ServiceContext
 
-	serviceConstructors []ServiceConstructor     // Service constructors (in dependency order)
-	auxServiceConstructors []AuxiliaryServiceConstructor // AuxiliaryService constructors
-
-	backend Backend // The registered Backend of the node
-	services map[reflect.Type]Service // Currently running services
+	backend     Backend                           // The registered Backend of the node
+	services    map[reflect.Type]Service          // Currently running services
 	auxServices map[reflect.Type]AuxiliaryService // Currently running auxiliary services
 
 	rpcAPIs       []rpc.API   // List of APIs currently provided by the node
@@ -108,18 +105,25 @@ func New(conf *Config) (*Node, error) {
 	// Note: any interaction with Config that would create/touch files
 	// in the data directory or instance directory is delayed until Start.
 	return &Node{
-		ServiceContext: &ServiceContext{
-			Config:         *conf,
-		},
 		accman:            am,
 		ephemeralKeystore: ephemeralKeystore,
 		config:            conf,
-		serviceFuncs:      []ServiceConstructor{},
-		ipcEndpoint:       conf.IPCEndpoint(),
-		httpEndpoint:      conf.HTTPEndpoint(),
-		wsEndpoint:        conf.WSEndpoint(),
-		eventmux:          new(event.TypeMux),
-		log:               conf.Logger,
+		ServiceContext: &ServiceContext{
+			Config: *conf,
+		},
+		services:    make(map[reflect.Type]Service),
+		auxServices: make(map[reflect.Type]AuxiliaryService),
+		ipcHandler: &HttpServer{
+			endpoint: conf.IPCEndpoint(),
+		},
+		httpHandler: &HttpServer{
+			endpoint: conf.HTTPEndpoint(),
+		},
+		wsHandler: &HttpServer{
+			endpoint: conf.WSEndpoint(),
+		},
+		eventmux: new(event.TypeMux),
+		log:      conf.Logger,
 	}, nil
 }
 
@@ -147,7 +151,7 @@ func (n *Node) Close() error {
 }
 
 // TODO document
-func (n * Node) RegisterBackendLifecycle(constructor BackendConstructor) error {
+func (n *Node) RegisterBackendLifecycle(constructor BackendConstructor) error {
 	n.lock.Lock()
 	defer n.lock.Unlock()
 
@@ -226,85 +230,87 @@ func (n *Node) Start() error {
 		return err
 	}
 
-	// TODO make sure to fill out servicecontext as you go
-
 	// Initialize the p2p server. This creates the node key and
 	// discovery databases.
-	n.serverConfig = n.config.P2P
-	n.serverConfig.PrivateKey = n.config.NodeKey()
-	n.serverConfig.Name = n.config.NodeName()
-	n.serverConfig.Logger = n.log
-	if n.serverConfig.StaticNodes == nil {
-		n.serverConfig.StaticNodes = n.config.StaticNodes()
+	n.server.Config = n.config.P2P
+	n.server.PrivateKey = n.config.NodeKey()
+	n.server.Name = n.config.NodeName()
+	n.server.Logger = n.log
+	if n.server.StaticNodes == nil {
+		n.server.StaticNodes = n.config.StaticNodes()
 	}
-	if n.serverConfig.TrustedNodes == nil {
-		n.serverConfig.TrustedNodes = n.config.TrustedNodes()
+	if n.server.TrustedNodes == nil {
+		n.server.TrustedNodes = n.config.TrustedNodes()
 	}
-	if n.serverConfig.NodeDatabase == "" {
-		n.serverConfig.NodeDatabase = n.config.NodeDB()
+	if n.server.NodeDatabase == "" {
+		n.server.NodeDatabase = n.config.NodeDB()
 	}
-	running := &p2p.Server{Config: n.serverConfig}
-	n.log.Info("Starting peer-to-peer node", "instance", n.serverConfig.Name)
+	running := &p2p.Server{Config: n.server.Config}
+	n.log.Info("Starting peer-to-peer node", "instance", n.server.Name)
 
-	// Otherwise copy and specialize the P2P configuration
-	services := make(map[reflect.Type]Service)
-	//for _, constructor := range n.serviceFuncs {
-	//	// Create a new context for the particular service
-	//	ctx := &ServiceContext{
-	//		Config:         *n.config,
-	//		services:       make(map[reflect.Type]Service),
-	//		EventMux:       n.eventmux,
-	//		AccountManager: n.accman,
-	//	}
-	//	for kind, s := range services { // copy needed for threaded access
-	//		ctx.services[kind] = s
-	//	}
-	//	// Construct and save the service
-	//	service, err := constructor(ctx)
-	//	if err != nil {
-	//		return err
-	//	}
-	//	kind := reflect.TypeOf(service)
-	//	if _, exists := services[kind]; exists {
-	//		return &DuplicateServiceError{Kind: kind}
-	//	}
-	//	services[kind] = service
-	//}
-	// Gather the protocols and start the freshly assembled P2P server
-	for _, service := range services {
-		running.Protocols = append(running.Protocols, service.Protocols()...)
-	}
+	// add backend's protocols to the o2o server
+	running.Protocols = append(running.Protocols, n.backend.Protocols()...)
 	if err := running.Start(); err != nil {
 		return convertFileLockError(err)
 	}
+	// Start the backend
+	if err := n.backend.Start(); err != nil {
+		running.Stop()
+		return err
+	}
 	// Start each of the services
-	var started []reflect.Type
-	for kind, service := range services {
+	var startedServices []reflect.Type
+	for kind, service := range n.services {
 		// Start the next service, stopping all previous upon failure
-		if err := service.Start(running); err != nil {
-			for _, kind := range started {
-				services[kind].Stop()
-			}
+		if err := service.Start(); err != nil {
+			n.stopAllStartedServices(startedServices, nil) // TODO safe to pass nil here?
 			running.Stop()
 
 			return err
 		}
 		// Mark the service started for potential cleanup
-		started = append(started, kind)
+		startedServices = append(startedServices, kind)
+	}
+	// Start each of the auxiliary services
+	var startedAuxServices []reflect.Type
+	for kind, auxService := range n.auxServices {
+		// Start the next auxiliary service, stopping all previous upon failure
+		if err := auxService.Start(); err != nil {
+			n.stopAllStartedServices(startedServices, startedAuxServices)
+			running.Stop()
+
+			return err
+		}
+		// Mark the service started for potential cleanup
+		startedAuxServices = append(startedAuxServices, kind)
 	}
 	// Lastly, start the configured RPC interfaces
-	if err := n.startRPC(services); err != nil {
-		for _, service := range services {
-			service.Stop()
-		}
+	if err := n.startRPC(); err != nil {
+		n.stopAllStartedServices(startedServices, startedAuxServices)
 		running.Stop()
 		return err
 	}
+	// Finish initializing the service context
+	n.ServiceContext.backend = n.backend
+	n.ServiceContext.AccountManager = n.accman
+	n.ServiceContext.EventMux = n.eventmux
+	n.ServiceContext.services = n.services
+	n.ServiceContext.auxServices = n.auxServices
+
 	// Finish initializing the startup
-	n.services = services
 	n.server = running
 	n.stop = make(chan struct{})
 	return nil
+}
+
+func (n *Node) stopAllStartedServices(startedServices []reflect.Type, startedAuxServices []reflect.Type) {
+	n.backend.Stop()
+	for _, kind := range startedServices {
+		n.services[kind].Stop()
+	}
+	for _, kind := range startedAuxServices {
+		n.auxServices[kind].Stop()
+	}
 }
 
 // Config returns the configuration of node.
@@ -334,10 +340,11 @@ func (n *Node) openDataDir() error {
 // startRPC is a helper method to start all the various RPC endpoints during node
 // startup. It's not meant to be called at any time afterwards as it makes certain
 // assumptions about the state of the node.
-func (n *Node) startRPC(services map[reflect.Type]Service) error {
+func (n *Node) startRPC() error {
 	// Gather all the possible APIs to surface
 	apis := n.apis()
-	for _, service := range services {
+	apis = append(apis, n.backend.APIs()...)
+	for _, service := range n.services {
 		apis = append(apis, service.APIs()...)
 	}
 	// Start the various API endpoints, terminating all in case of errors
@@ -348,14 +355,14 @@ func (n *Node) startRPC(services map[reflect.Type]Service) error {
 		n.stopInProc()
 		return err
 	}
-	if err := n.startHTTP(n.httpEndpoint, apis, n.config.HTTPModules, n.config.HTTPCors, n.config.HTTPVirtualHosts, n.config.HTTPTimeouts, n.config.WSOrigins); err != nil {
+	if err := n.startHTTP(n.httpHandler.Endpoint(), apis, n.config.HTTPModules, n.config.HTTPCors, n.config.HTTPVirtualHosts, n.config.HTTPTimeouts, n.config.WSOrigins); err != nil {
 		n.stopIPC()
 		n.stopInProc()
 		return err
 	}
 	// if endpoints are not the same, start separate servers
-	if n.httpEndpoint != n.wsEndpoint {
-		if err := n.startWS(n.wsEndpoint, apis, n.config.WSModules, n.config.WSOrigins, n.config.WSExposeAll); err != nil {
+	if n.httpHandler.Endpoint() != n.wsHandler.Endpoint() {
+		if err := n.startWS(n.wsHandler.Endpoint(), apis, n.config.WSModules, n.config.WSOrigins, n.config.WSExposeAll); err != nil {
 			n.stopHTTP()
 			n.stopIPC()
 			n.stopInProc()
@@ -368,7 +375,7 @@ func (n *Node) startRPC(services map[reflect.Type]Service) error {
 	return nil
 }
 
-// startInProc initializes an in-process RPC endpoint.
+// startInProc initializes an in-process RPC Endpoint.
 func (n *Node) startInProc(apis []rpc.API) error {
 	// Register all the APIs exposed by the services
 	handler := rpc.NewServer()
@@ -382,7 +389,7 @@ func (n *Node) startInProc(apis []rpc.API) error {
 	return nil
 }
 
-// stopInProc terminates the in-process RPC endpoint.
+// stopInProc terminates the in-process RPC Endpoint.
 func (n *Node) stopInProc() {
 	if n.inprocHandler != nil {
 		n.inprocHandler.Stop()
@@ -390,38 +397,38 @@ func (n *Node) stopInProc() {
 	}
 }
 
-// startIPC initializes and starts the IPC RPC endpoint.
+// startIPC initializes and starts the IPC RPC Endpoint.
 func (n *Node) startIPC(apis []rpc.API) error {
-	if n.ipcEndpoint == "" {
+	if n.ipcHandler.Endpoint() == "" {
 		return nil // IPC disabled.
 	}
-	listener, handler, err := rpc.StartIPCEndpoint(n.ipcEndpoint, apis)
+	listener, handler, err := rpc.StartIPCEndpoint(n.ipcHandler.Endpoint(), apis)
 	if err != nil {
 		return err
 	}
-	n.ipcListener = listener
-	n.ipcHandler = handler
-	n.log.Info("IPC endpoint opened", "url", n.ipcEndpoint)
+	n.ipcHandler.Listener = listener
+	n.ipcHandler.handler = handler
+	n.log.Info("IPC Endpoint opened", "url", n.ipcHandler.Endpoint())
 	return nil
 }
 
-// stopIPC terminates the IPC RPC endpoint.
+// stopIPC terminates the IPC RPC Endpoint.
 func (n *Node) stopIPC() {
-	if n.ipcListener != nil {
-		n.ipcListener.Close()
-		n.ipcListener = nil
+	if n.ipcHandler.Listener != nil {
+		n.ipcHandler.Listener.Close()
+		n.ipcHandler.Listener = nil
 
-		n.log.Info("IPC endpoint closed", "url", n.ipcEndpoint)
+		n.log.Info("IPC Endpoint closed", "url", n.ipcHandler.Endpoint())
 	}
-	if n.ipcHandler != nil {
-		n.ipcHandler.Stop()
-		n.ipcHandler = nil
+	if n.ipcHandler.Srv != nil {
+		n.ipcHandler.Srv.Stop()
+		n.ipcHandler.Srv = nil
 	}
 }
 
-// startHTTP initializes and starts the HTTP RPC endpoint.
+// startHTTP initializes and starts the HTTP RPC Endpoint.
 func (n *Node) startHTTP(endpoint string, apis []rpc.API, modules []string, cors []string, vhosts []string, timeouts rpc.HTTPTimeouts, wsOrigins []string) error {
-	// Short circuit if the HTTP endpoint isn't being exposed
+	// Short circuit if the HTTP Endpoint isn't being exposed
 	if endpoint == "" {
 		return nil
 	}
@@ -432,45 +439,45 @@ func (n *Node) startHTTP(endpoint string, apis []rpc.API, modules []string, cors
 		return err
 	}
 	handler := NewHTTPHandlerStack(srv, cors, vhosts)
-	// wrap handler in WebSocket handler only if WebSocket port is the same as http rpc
-	if n.httpEndpoint == n.wsEndpoint {
+	// wrap handler in websocket handler only if websocket port is the same as http rpc
+	if n.httpHandler.Endpoint() == n.wsHandler.Endpoint() {
 		handler = NewWebsocketUpgradeHandler(handler, srv.WebsocketHandler(wsOrigins))
 	}
 	httpServer, addr, err := StartHTTPEndpoint(endpoint, timeouts, handler)
 	if err != nil {
 		return err
 	}
-	n.log.Info("HTTP endpoint opened", "url", fmt.Sprintf("http://%v/", addr),
+	n.log.Info("HTTP Endpoint opened", "url", fmt.Sprintf("http://%v/", listener.Addr()),
 		"cors", strings.Join(cors, ","),
 		"vhosts", strings.Join(vhosts, ","))
-	if n.httpEndpoint == n.wsEndpoint {
-		n.log.Info("WebSocket endpoint opened", "url", fmt.Sprintf("ws://%v", addr))
+	if n.httpHandler.Endpoint() == n.wsHandler.Endpoint() {
+		n.log.Info("WebSocket Endpoint opened", "url", fmt.Sprintf("ws://%v", listener.Addr()))
 	}
 	// All listeners booted successfully
-	n.httpEndpoint = endpoint
-	n.httpListenerAddr = addr
-	n.httpServer = httpServer
-	n.httpHandler = srv
+	n.httpHandler.endpoint = endpoint
+	n.httpHandler.Listener = listener
+	n.httpHandler.Srv = srv
 
 	return nil
 }
 
-// stopHTTP terminates the HTTP RPC endpoint.
+// stopHTTP terminates the HTTP RPC Endpoint.
 func (n *Node) stopHTTP() {
-	if n.httpServer != nil {
-		// Don't bother imposing a timeout here.
-		n.httpServer.Shutdown(context.Background())
-		n.log.Info("HTTP endpoint closed", "url", fmt.Sprintf("http://%v/", n.httpListenerAddr))
+	if n.httpHandler.Listener != nil {
+		url := fmt.Sprintf("http://%v/", n.httpHandler.Listener.Addr())
+		n.httpHandler.Listener.Close()
+		n.httpHandler.Listener = nil
+		n.log.Info("HTTP Endpoint closed", "url", url)
 	}
-	if n.httpHandler != nil {
-		n.httpHandler.Stop()
-		n.httpHandler = nil
+	if n.httpHandler.Srv != nil {
+		n.httpHandler.Srv.Stop()
+		n.httpHandler.Srv = nil
 	}
 }
 
-// startWS initializes and starts the WebSocket RPC endpoint.
+// startWS initializes and starts the websocket RPC Endpoint.
 func (n *Node) startWS(endpoint string, apis []rpc.API, modules []string, wsOrigins []string, exposeAll bool) error {
-	// Short circuit if the WS endpoint isn't being exposed
+	// Short circuit if the WS Endpoint isn't being exposed
 	if endpoint == "" {
 		return nil
 	}
@@ -485,26 +492,26 @@ func (n *Node) startWS(endpoint string, apis []rpc.API, modules []string, wsOrig
 	if err != nil {
 		return err
 	}
-	n.log.Info("WebSocket endpoint opened", "url", fmt.Sprintf("ws://%v", addr))
+	n.log.Info("WebSocket Endpoint opened", "url", fmt.Sprintf("ws://%s", listener.Addr()))
 	// All listeners booted successfully
-	n.wsEndpoint = endpoint
-	n.wsListenerAddr = addr
-	n.wsHTTPServer = httpServer
-	n.wsHandler = srv
+	n.wsHandler.endpoint = endpoint
+	n.wsHandler.Listener = listener
+	n.wsHandler.Srv = srv
 
 	return nil
 }
 
-// stopWS terminates the WebSocket RPC endpoint.
+// stopWS terminates the websocket RPC Endpoint.
 func (n *Node) stopWS() {
-	if n.wsHTTPServer != nil {
-		// Don't bother imposing a timeout here.
-		n.wsHTTPServer.Shutdown(context.Background())
-		n.log.Info("WebSocket endpoint closed", "url", fmt.Sprintf("ws://%v", n.wsListenerAddr))
+	if n.wsHandler.Listener != nil {
+		n.wsHandler.Listener.Close()
+		n.wsHandler.Listener = nil
+
+		n.log.Info("WebSocket Endpoint closed", "url", fmt.Sprintf("ws://%s", n.wsHandler.Endpoint))
 	}
-	if n.wsHandler != nil {
-		n.wsHandler.Stop()
-		n.wsHandler = nil
+	if n.wsHandler.Srv != nil {
+		n.wsHandler.Srv.Stop()
+		n.wsHandler.Srv	= nil
 	}
 }
 
@@ -638,6 +645,24 @@ func (n *Node) Service(service interface{}) error {
 	return ErrServiceUnknown
 }
 
+// Service retrieves a currently running service registered of a specific type.
+func (n *Node) AuxService(auxService interface{}) error {
+	n.lock.RLock()
+	defer n.lock.RUnlock()
+
+	// Short circuit if the node's not running
+	if n.server == nil {
+		return ErrNodeStopped
+	}
+	// Otherwise try to find the service to return
+	element := reflect.ValueOf(auxService).Elem()
+	if running, ok := n.auxServices[element.Type()]; ok {
+		element.Set(reflect.ValueOf(running))
+		return nil
+	}
+	return ErrServiceUnknown
+}
+
 // DataDir retrieves the current datadir used by the protocol stack.
 // Deprecated: No files should be stored in this directory, use InstanceDir instead.
 func (n *Node) DataDir() string {
@@ -654,31 +679,31 @@ func (n *Node) AccountManager() *accounts.Manager {
 	return n.accman
 }
 
-// IPCEndpoint retrieves the current IPC endpoint used by the protocol stack.
+// IPCEndpoint retrieves the current IPC Endpoint used by the protocol stack.
 func (n *Node) IPCEndpoint() string {
-	return n.ipcEndpoint
+	return n.ipcHandler.Endpoint()
 }
 
-// HTTPEndpoint retrieves the current HTTP endpoint used by the protocol stack.
+// HTTPEndpoint retrieves the current HTTP Endpoint used by the protocol stack.
 func (n *Node) HTTPEndpoint() string {
 	n.lock.Lock()
 	defer n.lock.Unlock()
 
-	if n.httpListenerAddr != nil {
-		return n.httpListenerAddr.String()
+	if n.httpHandler.Listener != nil {
+		return n.httpHandler.Listener.Addr().String()
 	}
-	return n.httpEndpoint
+	return n.httpHandler.Endpoint()
 }
 
-// WSEndpoint retrieves the current WS endpoint used by the protocol stack.
+// WSEndpoint retrieves the current WS Endpoint used by the protocol stack.
 func (n *Node) WSEndpoint() string {
 	n.lock.Lock()
 	defer n.lock.Unlock()
 
-	if n.wsListenerAddr != nil {
-		return n.wsListenerAddr.String()
+	if n.wsHandler.Listener != nil {
+		return n.wsHandler.Listener.Addr().String()
 	}
-	return n.wsEndpoint
+	return n.wsHandler.Endpoint()
 }
 
 // EventMux retrieves the event multiplexer used by all the network services in

@@ -18,6 +18,7 @@ package node
 
 import (
 	"compress/gzip"
+	"fmt"
 	"github.com/ethereum/go-ethereum/rpc"
 	"io"
 	"io/ioutil"
@@ -35,7 +36,9 @@ type HttpServer struct {
 	Srv     *rpc.Server
 	Listener net.Listener
 
-	endpoint endpoint
+	endpoint string
+	host     string
+	port     int
 
 	Whitelist []string
 
@@ -48,10 +51,20 @@ type HttpServer struct {
 	WSAllowed  bool
 }
 
-type endpoint struct {
-	endpoint string
-	host     string
-	port     int
+func (h *HttpServer) Handler() http.Handler {
+	return h.handler
+}
+
+func (h *HttpServer) SetHandler(handler http.Handler) {
+	h.handler = handler
+}
+
+func (h *HttpServer) Endpoint() string {
+	return fmt.Sprintf("%s:%d", h.host, h.port)
+}
+
+func (h *HttpServer) SetEndpoint(endpoint string) {
+	h.endpoint = endpoint
 }
 
 // NewHTTPHandlerStack returns wrapped http-related handlers

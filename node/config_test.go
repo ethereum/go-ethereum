@@ -99,7 +99,7 @@ func TestIPCPathResolution(t *testing.T) {
 		// Only run when platform/test match
 		if (runtime.GOOS == "windows") == test.Windows {
 			if endpoint := (&Config{DataDir: test.DataDir, IPCPath: test.IPCPath}).IPCEndpoint(); endpoint != test.Endpoint {
-				t.Errorf("test %d: IPC endpoint mismatch: have %s, want %s", i, endpoint, test.Endpoint)
+				t.Errorf("test %d: IPC Endpoint mismatch: have %s, want %s", i, endpoint, test.Endpoint)
 			}
 		}
 	}
