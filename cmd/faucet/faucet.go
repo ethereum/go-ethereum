@@ -241,7 +241,7 @@ func newFaucet(genesis *core.Genesis, port int, enodes []*discv5.Node, network u
 		cfg.SyncMode = downloader.LightSync
 		cfg.NetworkId = network
 		cfg.Genesis = genesis
-		return les.New(ctx, &cfg)
+		return les.New(stack.ServiceContext, &cfg)
 	}); err != nil {
 		return nil, err
 	}
@@ -249,7 +249,7 @@ func newFaucet(genesis *core.Genesis, port int, enodes []*discv5.Node, network u
 	if stats != "" {
 		if err := stack.RegisterAuxServiceLifecycle(func(stack *node.Node) (node.AuxiliaryService, error) {
 			var serv *les.LightEthereum
-			return ethstats.New(stack, stats, nil, serv)
+			return ethstats.New(stack, stats, serv)
 		}); err != nil {
 			return nil, err
 		}

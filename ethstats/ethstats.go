@@ -83,31 +83,41 @@ type Service struct {
 }
 
 // New returns a monitoring service ready for stats reporting.
-func New(node *node.Node, url string, ethServ *eth.Ethereum, lesServ *les.LightEthereum) (node.AuxiliaryService, error) {
+func New(node *node.Node, url string, backend node.Backend) (node.AuxiliaryService, error) {
 	// Parse the netstats connection url
 	re := regexp.MustCompile("([^:@]*)(:([^@]*))?@(.+)")
 	parts := re.FindStringSubmatch(url)
 	if len(parts) != 5 {
 		return nil, fmt.Errorf("invalid netstats url: \"%s\", should be nodename:secret@host:port", url)
 	}
-	// Assemble and return the stats service
-	var engine consensus.Engine
-	if ethServ != nil {
-		engine = ethServ.Engine()
-	} else {
-		engine = lesServ.Engine()
+
+	// fetch type of Backend
+	if ethBackend, ok := backend.(*eth.Ethereum); ok {
+		return &Service{
+			server: node.Server(),
+			eth:    ethBackend,
+			les:    nil, // TODO is this okay?
+			engine: ethBackend.Engine(),
+			node:   parts[1],
+			pass:   parts[3],
+			host:   parts[4],
+			pongCh: make(chan struct{}),
+			histCh: make(chan []uint64, 1),
+		}, nil
+	} else if lesBackend, ok := backend.(*les.LightEthereum); ok {
+		return &Service{
+			server: node.Server(),
+			eth:    nil, // TODO is this okay?
+			les:    lesBackend,
+			engine: lesBackend.Engine(),
+			node:   parts[1],
+			pass:   parts[3],
+			host:   parts[4],
+			pongCh: make(chan struct{}),
+			histCh: make(chan []uint64, 1),
+		}, nil
 	}
-	return &Service{
-		server: node.Server(),
-		eth:    ethServ,
-		les:    lesServ,
-		engine: engine,
-		node:   parts[1],
-		pass:   parts[3],
-		host:   parts[4],
-		pongCh: make(chan struct{}),
-		histCh: make(chan []uint64, 1),
-	}, nil
+	return nil, errors.New("ethstats backend is of unidentified type") // TODO is this okay to return?
 }
 
 // Start implements node.Service, starting up the monitoring and reporting daemon.

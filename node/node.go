@@ -49,8 +49,10 @@ type Node struct {
 	// TODO: removed p2pConfig b/c p2pServer already contains p2pConfig (is there a reason for it to be duplicated?
 	server       *p2p.Server // Currently running P2P networking layer
 
+	ServiceContext *ServiceContext
+
 	serviceConstructors []ServiceConstructor     // Service constructors (in dependency order)
-	auxServiceConstructors []AuxiliarServiceConstructor // AuxiliaryService constructors
+	auxServiceConstructors []AuxiliaryServiceConstructor // AuxiliaryService constructors
 
 	backend Backend // The registered Backend of the node
 	services map[reflect.Type]Service // Currently running services
@@ -106,6 +108,9 @@ func New(conf *Config) (*Node, error) {
 	// Note: any interaction with Config that would create/touch files
 	// in the data directory or instance directory is delayed until Start.
 	return &Node{
+		ServiceContext: &ServiceContext{
+			Config:         *conf,
+		},
 		accman:            am,
 		ephemeralKeystore: ephemeralKeystore,
 		config:            conf,
@@ -220,6 +225,8 @@ func (n *Node) Start() error {
 	if err := n.openDataDir(); err != nil {
 		return err
 	}
+
+	// TODO make sure to fill out servicecontext as you go
 
 	// Initialize the p2p server. This creates the node key and
 	// discovery databases.

@@ -36,7 +36,7 @@ import (
 )
 
 // Backend wraps all methods required for mining.
-type Backend interface {
+type  Backend interface {
 	BlockChain() *core.BlockChain
 	TxPool() *core.TxPool
 }

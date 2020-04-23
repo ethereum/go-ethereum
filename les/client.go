@@ -72,6 +72,8 @@ type LightEthereum struct {
 	engine         consensus.Engine
 	accountManager *accounts.Manager
 	netRPCService  *ethapi.PublicNetAPI
+
+	p2pServer *p2p.Server
 }
 
 func New(ctx *node.ServiceContext, config *eth.Config) (*LightEthereum, error) {
@@ -278,7 +280,7 @@ func (s *LightEthereum) Protocols() []p2p.Protocol {
 
 // Start implements node.Service, starting all internal goroutines needed by the
 // light ethereum protocol implementation.
-func (s *LightEthereum) Start(srvr *p2p.Server) error {
+func (s *LightEthereum) Start() error {
 	log.Warn("Light client mode is an experimental feature")
 
 	s.serverPool.start()
@@ -287,7 +289,11 @@ func (s *LightEthereum) Start(srvr *p2p.Server) error {
 	s.startBloomHandlers(params.BloomBitsBlocksClient)
 	s.handler.start()
 
-	s.netRPCService = ethapi.NewPublicNetAPI(srvr, s.config.NetworkId)
+	s.netRPCService = ethapi.NewPublicNetAPI(s.p2pServer, s.config.NetworkId)
+
+	// clients are searching for the first advertised protocol in the list
+	protocolVersion := AdvertiseProtocolVersions[0]
+	s.serverPool.start(s.p2pServer, lesTopic(s.blockchain.Genesis().Hash(), protocolVersion))
 	return nil
 }
 
