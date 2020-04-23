@@ -169,6 +169,7 @@ func newDiffLayer(parent snapshot, root common.Hash, destructs map[common.Hash]s
 		destructSet: destructs,
 		accountData: accounts,
 		storageData: storage,
+		storageList: make(map[common.Hash][]common.Hash),
 	}
 	switch parent := parent.(type) {
 	case *diskLayer:
@@ -194,11 +195,6 @@ func newDiffLayer(parent snapshot, root common.Hash, destructs map[common.Hash]s
 		dl.memory += uint64(common.HashLength + len(data))
 		snapshotDirtyAccountWriteMeter.Mark(int64(len(data)))
 	}
-	// Fill the storage hashes and sort them for the iterator
-	dl.storageList = make(map[common.Hash][]common.Hash)
-	for accountHash := range destructs {
-		dl.storageList[accountHash] = nil
-	}
 	// Determine memory size and track the dirty writes
 	for _, slots := range storage {
 		for _, data := range slots {
@@ -206,7 +202,7 @@ func newDiffLayer(parent snapshot, root common.Hash, destructs map[common.Hash]s
 			snapshotDirtyStorageWriteMeter.Mark(int64(len(data)))
 		}
 	}
-	dl.memory += uint64(len(dl.storageList) * common.HashLength)
+	dl.memory += uint64(len(destructs) * common.HashLength)
 	return dl
 }
 
@@ -287,6 +283,8 @@ func (dl *diffLayer) Account(hash common.Hash) (*Account, error) {
 
 // AccountRLP directly retrieves the account RLP associated with a particular
 // hash in the snapshot slim data format.
+//
+// Note the returned account is not a copy, please don't modify it.
 func (dl *diffLayer) AccountRLP(hash common.Hash) ([]byte, error) {
 	// Check the bloom filter first whether there's even a point in reaching into
 	// all the maps in all the layers below
@@ -347,6 +345,8 @@ func (dl *diffLayer) accountRLP(hash common.Hash, depth int) ([]byte, error) {
 // Storage directly retrieves the storage data associated with a particular hash,
 // within a particular account. If the slot is unknown to this diff, it's parent
 // is consulted.
+//
+// Note the returned slot is not a copy, please don't modify it.
 func (dl *diffLayer) Storage(accountHash, storageHash common.Hash) ([]byte, error) {
 	// Check the bloom filter first whether there's even a point in reaching into
 	// all the maps in all the layers below
@@ -502,26 +502,36 @@ func (dl *diffLayer) AccountList() []common.Hash {
 		}
 	}
 	sort.Sort(hashes(dl.accountList))
+	dl.memory += uint64(len(dl.accountList) * common.HashLength)
 	return dl.accountList
 }
 
 // StorageList returns a sorted list of all storage slot hashes in this difflayer
-// for the given account.
+// for the given account. If the whole storage is destructed in this layer, then
+// an additional flag *destructed = true* will be returned, otherwise the flag is
+// false. Besides, the returned list will include the hash of deleted storage slot.
 //
 // Note, the returned slice is not a copy, so do not modify it.
-func (dl *diffLayer) StorageList(accountHash common.Hash) []common.Hash {
+func (dl *diffLayer) StorageList(accountHash common.Hash) ([]common.Hash, bool) {
 	// If an old list already exists, return it
 	dl.lock.RLock()
-	list := dl.storageList[accountHash]
+	if _, exist := dl.destructSet[accountHash]; exist {
+		dl.lock.RUnlock()
+		return nil, true
+	}
+	if list, exist := dl.storageList[accountHash]; exist {
+		dl.lock.RUnlock()
+		return list, false // all cached lists are still alive, even if they are empty.
+	}
 	dl.lock.RUnlock()
 
-	if list != nil {
-		return list
-	}
 	// No old sorted account list exists, generate a new one
 	dl.lock.Lock()
 	defer dl.lock.Unlock()
 
+	// Otherwise allocate the sorted storage and return. Note even there is zero
+	// storage change included in this layer, the returned slice is not **nil**.
+	// Nil slice represents the whole storage is removed.
 	storageMap := dl.storageData[accountHash]
 	storageList := make([]common.Hash, 0, len(storageMap))
 	for k := range storageMap {
@@ -529,5 +539,6 @@ func (dl *diffLayer) StorageList(accountHash common.Hash) []common.Hash {
 	}
 	sort.Sort(hashes(storageList))
 	dl.storageList[accountHash] = storageList
-	return storageList
+	dl.memory += uint64(len(dl.storageList) * common.HashLength)
+	return storageList, false
 }

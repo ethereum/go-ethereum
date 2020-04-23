@@ -69,6 +69,7 @@ func TestMergeBasics(t *testing.T) {
 		accounts[h] = data
 		if rand.Intn(4) == 0 {
 			destructs[h] = struct{}{}
+			delete(destructs, h)
 		}
 		if rand.Intn(2) == 0 {
 			accStorage := make(map[common.Hash][]byte)
@@ -109,7 +110,8 @@ func TestMergeBasics(t *testing.T) {
 			if have, want := len(merged.storageList), i; have != want {
 				t.Errorf("[1] storageList wrong: have %v, want %v", have, want)
 			}
-			if have, want := len(merged.StorageList(aHash)), len(sMap); have != want {
+			list, _ := merged.StorageList(aHash)
+			if have, want := len(list), len(sMap); have != want {
 				t.Errorf("[2] StorageList() wrong: have %v, want %v", have, want)
 			}
 			if have, want := len(merged.storageList[aHash]), len(sMap); have != want {
