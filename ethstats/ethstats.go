@@ -117,7 +117,7 @@ func New(node *node.Node, url string, backend node.Backend) (node.AuxiliaryServi
 			histCh: make(chan []uint64, 1),
 		}, nil
 	}
-	return nil, errors.New("ethstats backend is of unidentified type") // TODO is this okay to return?
+	return nil, errors.New("no Ethereum service") // TODO is this okay to return?
 }
 
 // Start implements node.Service, starting up the monitoring and reporting daemon.

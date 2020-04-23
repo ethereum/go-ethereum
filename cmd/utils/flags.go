@@ -1695,8 +1695,8 @@ func setDNSDiscoveryDefaults(cfg *eth.Config, genesis common.Hash) {
 func RegisterEthService(stack *node.Node, cfg *eth.Config) {
 	var err error
 	if cfg.SyncMode == downloader.LightSync {
-		err = stack.Register(func(ctx *node.ServiceContext) (node.Service, error) {
-			return les.New(ctx, cfg)
+		err = stack.RegisterBackendLifecycle(func(stack *node.Node) (node.Backend, error) {
+			return les.New(stack.ServiceContext, cfg)
 		})
 	} else {
 		err = stack.RegisterBackendLifecycle(func(node *node.Node) (node.Backend, error) {
@@ -1715,7 +1715,7 @@ func RegisterEthService(stack *node.Node, cfg *eth.Config) {
 
 // RegisterShhService configures Whisper and adds it to the given node.
 func RegisterShhService(stack *node.Node, cfg *whisper.Config) {
-	if err := stack.Register(func(n *node.ServiceContext) (node.Service, error) {
+	if err := stack.RegisterServiceLifecycle(func(stack *node.Node) (node.Service, error) {
 		return whisper.New(cfg), nil
 	}); err != nil {
 		Fatalf("Failed to register the Whisper service: %v", err)
@@ -1725,16 +1725,8 @@ func RegisterShhService(stack *node.Node, cfg *whisper.Config) {
 // RegisterEthStatsService configures the Ethereum Stats daemon and adds it to
 // the given node.
 func RegisterEthStatsService(stack *node.Node, url string) {
-	if err := stack.Register(func(stack *node.Node) (node.AuxiliaryService, error) {
-		// Retrieve both eth and les services
-		var ethServ *eth.Ethereum
-		ctx.Service(&ethServ)
-
-		var lesServ *les.LightEthereum
-		ctx.Service(&lesServ)
-
-		// Let ethstats use whichever is not nil
-		return ethstats.New(url, ethServ, lesServ)
+	if err := stack.RegisterAuxServiceLifecycle(func(stack *node.Node) (node.AuxiliaryService, error) {
+		return ethstats.New(stack, url, stack.Backend())
 	}); err != nil {
 		Fatalf("Failed to register the Ethereum Stats service: %v", err)
 	}
@@ -1744,14 +1736,12 @@ func RegisterEthStatsService(stack *node.Node, url string) {
 func RegisterGraphQLService(stack *node.Node, endpoint string, cors, vhosts []string, timeouts rpc.HTTPTimeouts) {
 	if err := stack.RegisterAuxServiceLifecycle(func(stack *node.Node) (node.AuxiliaryService, error) {
 		// Try to construct the GraphQL service backed by a full node
-		var ethServ *eth.Ethereum
-		if err := ctx.Service(&ethServ); err == nil {
-			return graphql.New(ethServ.APIBackend, endpoint, cors, vhosts, timeouts)
+		if ethBackend, ok := stack.Backend().(*eth.Ethereum); ok {
+			return graphql.New(ethBackend.APIBackend, endpoint, cors, vhosts, timeouts)
 		}
 		// Try to construct the GraphQL service backed by a light node
-		var lesServ *les.LightEthereum
-		if err := ctx.Service(&lesServ); err == nil {
-			return graphql.New(lesServ.ApiBackend, endpoint, cors, vhosts, timeouts)
+		if lesBackend, ok := stack.Backend().(*les.LightEthereum); ok {
+			return graphql.New(lesBackend.ApiBackend, endpoint, cors, vhosts, timeouts)
 		}
 		// Well, this should not have happened, bail out
 		return nil, errors.New("no Ethereum service")
