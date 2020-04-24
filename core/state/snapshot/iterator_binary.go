@@ -26,7 +26,7 @@ import (
 // a snapshot, which may or may npt be composed of multiple layers. Performance
 // wise this iterator is slow, it's meant for cross validating the fast one,
 type binaryAccountIterator struct {
-	a     *diffAccountIterator
+	a     AccountIterator
 	b     AccountIterator
 	aDone bool
 	bDone bool
@@ -40,10 +40,16 @@ func (dl *diffLayer) newBinaryAccountIterator() AccountIterator {
 	parent, ok := dl.parent.(*diffLayer)
 	if !ok {
 		// parent is the disk layer
-		return dl.AccountIterator(common.Hash{})
+		l := &binaryAccountIterator{
+			a: dl.AccountIterator(common.Hash{}),
+			b: dl.Parent().AccountIterator(common.Hash{}),
+		}
+		l.aDone = !l.a.Next()
+		l.bDone = !l.b.Next()
+		return l
 	}
 	l := &binaryAccountIterator{
-		a: dl.AccountIterator(common.Hash{}).(*diffAccountIterator),
+		a: dl.AccountIterator(common.Hash{}),
 		b: parent.newBinaryAccountIterator(),
 	}
 	l.aDone = !l.a.Next()
@@ -58,19 +64,18 @@ func (it *binaryAccountIterator) Next() bool {
 	if it.aDone && it.bDone {
 		return false
 	}
-	nextB := it.b.Hash()
 first:
-	nextA := it.a.Hash()
 	if it.aDone {
+		it.k = it.b.Hash()
 		it.bDone = !it.b.Next()
-		it.k = nextB
 		return true
 	}
 	if it.bDone {
+		it.k = it.a.Hash()
 		it.aDone = !it.a.Next()
-		it.k = nextA
 		return true
 	}
+	nextA, nextB := it.a.Hash(), it.b.Hash()
 	if diff := bytes.Compare(nextA[:], nextB[:]); diff < 0 {
 		it.aDone = !it.a.Next()
 		it.k = nextA
@@ -100,7 +105,8 @@ func (it *binaryAccountIterator) Hash() common.Hash {
 // nil if the iterated snapshot stack became stale (you can check Error after
 // to see if it failed or not).
 func (it *binaryAccountIterator) Account() []byte {
-	blob, err := it.a.layer.AccountRLP(it.k)
+	// The topmost iterator must be `diffAccountIterator`
+	blob, err := it.a.(*diffAccountIterator).layer.AccountRLP(it.k)
 	if err != nil {
 		it.fail = err
 		return nil

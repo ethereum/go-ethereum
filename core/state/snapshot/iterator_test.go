@@ -177,9 +177,22 @@ func TestAccountIteratorTraversal(t *testing.T) {
 	verifyIterator(t, 7, head.(*diffLayer).newBinaryAccountIterator())
 
 	it, _ := snaps.AccountIterator(common.HexToHash("0x04"), common.Hash{})
-	defer it.Release()
-
 	verifyIterator(t, 7, it)
+	it.Release()
+
+	// Test after persist some bottom-most layers into the disk,
+	// the functionalities still work.
+	limit := aggregatorMemoryLimit
+	defer func() {
+		aggregatorMemoryLimit = limit
+	}()
+	aggregatorMemoryLimit = 0 // Force pushing the bottom-most layer into disk
+	snaps.Cap(common.HexToHash("0x04"), 2)
+	verifyIterator(t, 7, head.(*diffLayer).newBinaryAccountIterator())
+
+	it, _ = snaps.AccountIterator(common.HexToHash("0x04"), common.Hash{})
+	verifyIterator(t, 7, it)
+	it.Release()
 }
 
 // TestAccountIteratorTraversalValues tests some multi-layer iteration, where we
@@ -242,8 +255,6 @@ func TestAccountIteratorTraversalValues(t *testing.T) {
 	snaps.Update(common.HexToHash("0x09"), common.HexToHash("0x08"), nil, h, nil)
 
 	it, _ := snaps.AccountIterator(common.HexToHash("0x09"), common.Hash{})
-	defer it.Release()
-
 	head := snaps.Snapshot(common.HexToHash("0x09"))
 	for it.Next() {
 		hash := it.Hash()
@@ -255,6 +266,29 @@ func TestAccountIteratorTraversalValues(t *testing.T) {
 			t.Fatalf("hash %x: account mismatch: have %x, want %x", hash, have, want)
 		}
 	}
+	it.Release()
+
+	// Test after persist some bottom-most layers into the disk,
+	// the functionalities still work.
+	limit := aggregatorMemoryLimit
+	defer func() {
+		aggregatorMemoryLimit = limit
+	}()
+	aggregatorMemoryLimit = 0 // Force pushing the bottom-most layer into disk
+	snaps.Cap(common.HexToHash("0x09"), 2)
+
+	it, _ = snaps.AccountIterator(common.HexToHash("0x09"), common.Hash{})
+	for it.Next() {
+		hash := it.Hash()
+		want, err := head.AccountRLP(hash)
+		if err != nil {
+			t.Fatalf("failed to retrieve expected account: %v", err)
+		}
+		if have := it.Account(); !bytes.Equal(want, have) {
+			t.Fatalf("hash %x: account mismatch: have %x, want %x", hash, have, want)
+		}
+	}
+	it.Release()
 }
 
 // This testcase is notorious, all layers contain the exact same 200 accounts.
@@ -289,9 +323,23 @@ func TestAccountIteratorLargeTraversal(t *testing.T) {
 	verifyIterator(t, 200, head.(*diffLayer).newBinaryAccountIterator())
 
 	it, _ := snaps.AccountIterator(common.HexToHash("0x80"), common.Hash{})
-	defer it.Release()
-
 	verifyIterator(t, 200, it)
+	it.Release()
+
+	// Test after persist some bottom-most layers into the disk,
+	// the functionalities still work.
+	limit := aggregatorMemoryLimit
+	defer func() {
+		aggregatorMemoryLimit = limit
+	}()
+	aggregatorMemoryLimit = 0 // Force pushing the bottom-most layer into disk
+	snaps.Cap(common.HexToHash("0x80"), 2)
+
+	verifyIterator(t, 200, head.(*diffLayer).newBinaryAccountIterator())
+
+	it, _ = snaps.AccountIterator(common.HexToHash("0x80"), common.Hash{})
+	verifyIterator(t, 200, it)
+	it.Release()
 }
 
 // TestAccountIteratorFlattening tests what happens when we
