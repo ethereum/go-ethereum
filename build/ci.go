@@ -865,16 +865,17 @@ func doAndroidArchive(cmdline []string) {
 		if err != nil {
 			log.Fatal(err)
 		}
-		dir := "./"
+		buildDir := "build"
 		build.MustRunCommand("mvn", "gpg:sign-and-deploy-file", "-e", "-X",
-			"-settings=build/mvn.settings", "-Durl=file:///"+dir, "-DrepositoryId=ossrh",
+			"-settings=build/mvn.settings", "-Durl=file:///"+buildDir, "-DrepositoryId=ossrh",
 			"-Dgpg.keyname="+keyID,
 			"-DpomFile="+meta.Package+".pom", "-Dfile="+meta.Package+".aar")
 
 		profileID := "1234" // TODO (MariusVanDerWijden) get these configuration parameters
 		repositoryID := "1234"
 		// Upload the artifacts to Maven Central
-		uploadToMaven(deploy, profileID, repositoryID, dir)
+		uploadDir := buildDir + "/org/ethereum/geth/" + meta.Package
+		uploadToMaven(deploy, profileID, repositoryID, uploadDir)
 	}
 }
 
