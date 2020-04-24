@@ -37,10 +37,6 @@ Clef outputs a debug message about `Failed to reload keystore contents`, we fix 
 
 ## Start Geth
 
-<!-- Clef needs a Geth keystore path to start, and Geth needs a running Clef instance to connect to.
-To get around this, we recommend you first start Geth to create the keystore,
-and we will restart it with more options later. -->
-
 ### Networks
 
 You can connect a Geth node to several different networks using the network name as an argument. 
@@ -87,8 +83,6 @@ The command below also enables the [Geth RPC interface](clef/tutorial)
 ```shell
 geth --goerli --syncmode "light" --rpc --signer=<CLEF_LOCATION>/clef.ipc
 ```
-
-<!-- Let Geth run for a few minutes, stop it again, and continue with the rest of this guide. -->
 
 ## Get ETH
 
