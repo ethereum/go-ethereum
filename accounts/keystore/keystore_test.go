@@ -18,6 +18,7 @@ package keystore
 
 import (
 	"io/ioutil"
+	"math/big"
 	"math/rand"
 	"os"
 	"runtime"
@@ -216,6 +217,17 @@ func TestSignRace(t *testing.T) {
 		time.Sleep(1 * time.Millisecond)
 	}
 	t.Errorf("Account did not lock within the timeout")
+}
+
+func TestZeroKey(t *testing.T) {
+	key, err := crypto.GenerateKey()
+	if err != nil {
+		t.Fatalf("failed to generate key: %v", key)
+	}
+	zeroKey(key)
+	if key.D.Cmp(big.NewInt(0)) != 0 {
+		t.Fatalf("failed to zero out key: %v", key)
+	}
 }
 
 // Tests that the wallet notifier loop starts and stops correctly based on the

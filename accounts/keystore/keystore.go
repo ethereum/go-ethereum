@@ -495,5 +495,6 @@ func (ks *KeyStore) ImportPreSaleKey(keyJSON []byte, passphrase string) (account
 
 // zeroKey zeroes a private key in memory.
 func zeroKey(k *ecdsa.PrivateKey) {
+	k.PublicKey = ecdsa.PublicKey{}
 	k.D.SetUint64(uint64(0))
 }
