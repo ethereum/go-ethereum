@@ -860,3 +860,13 @@ func (ns *NodeStateMachine) ForEach(require, disable NodeStateBitMask, cb func(n
 		cb(c.node, c.state)
 	}
 }
+
+func (ns *NodeStateMachine) GetNode(id enode.ID) *enode.Node {
+	ns.lock.Lock()
+	defer ns.lock.Unlock()
+
+	if node := ns.nodes[id]; node != nil {
+		return node.node
+	}
+	return nil
+}

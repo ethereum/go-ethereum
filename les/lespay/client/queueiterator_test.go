@@ -17,7 +17,6 @@
 package client
 
 import (
-	"reflect"
 	"testing"
 	"time"
 
@@ -28,11 +27,11 @@ import (
 )
 
 var (
-	sfTest1 = utils.NewFlag("test1", false, false)
-	sfTest2 = utils.NewFlag("test2", false, false)
-	sfTest3 = utils.NewFlag("test3", false, false)
-	sfTest4 = utils.NewFlag("test4", false, false)
-	sfiEnr  = utils.NewField("enr", reflect.TypeOf(&enr.Record{}), []*utils.NodeStateFlag{sfTest1}, nil, nil)
+	sfTest1   = utils.NewFlag("test1")
+	sfTest2   = utils.NewFlag("test2")
+	sfTest3   = utils.NewFlag("test3")
+	sfTest4   = utils.NewFlag("test4")
+	testSetup = utils.NodeStateSetup{Flags: []*utils.NodeStateFlag{sfTest1, sfTest2, sfTest3, sfTest4}}
 )
 
 const iterTestNodeCount = 6
@@ -48,19 +47,29 @@ func testNodeIndex(id enode.ID) int {
 	return int(id[1]) + int(id[2])*256
 }
 
+type dummyIdentity enode.ID
+
+func (id dummyIdentity) Verify(r *enr.Record, sig []byte) error { return nil }
+func (id dummyIdentity) NodeAddr(r *enr.Record) []byte          { return id[:] }
+
+func testNode(i int) *enode.Node {
+	r := &enr.Record{}
+	identity := dummyIdentity(testNodeID(i))
+	r.SetSig(identity, []byte{42})
+	n, _ := enode.New(identity, r)
+	return n
+}
+
 func TestQueueIterator(t *testing.T) {
-	ns := utils.NewNodeStateMachine(nil, nil, &mclock.Simulated{})
+	ns := utils.NewNodeStateMachine(nil, nil, &mclock.Simulated{}, testSetup)
 	st1 := ns.StateMask(sfTest1)
 	st2 := ns.StateMask(sfTest2)
 	st3 := ns.StateMask(sfTest3)
 	st4 := ns.StateMask(sfTest4)
-	enrField := ns.FieldIndex(sfiEnr)
-	qi := NewQueueIterator(ns, st2, st3, sfTest4, sfiEnr, enode.ValidSchemesForTesting)
+	qi := NewQueueIterator(ns, st2, st3, sfTest4)
 	ns.Start()
 	for i := 1; i <= iterTestNodeCount; i++ {
-		node := enode.SignNull(&enr.Record{}, testNodeID(i))
-		ns.SetState(node.ID(), st1, 0, 0)
-		ns.SetField(node.ID(), enrField, node.Record())
+		ns.SetState(testNode(i), st1, 0, 0)
 	}
 	ch := make(chan *enode.Node)
 	go func() {
@@ -84,25 +93,25 @@ func TestQueueIterator(t *testing.T) {
 		}
 	}
 	exp(0)
-	ns.SetState(testNodeID(1), st2, 0, 0)
-	ns.SetState(testNodeID(2), st2, 0, 0)
-	ns.SetState(testNodeID(3), st2, 0, 0)
+	ns.SetState(testNode(1), st2, 0, 0)
+	ns.SetState(testNode(2), st2, 0, 0)
+	ns.SetState(testNode(3), st2, 0, 0)
 	exp(1)
 	exp(2)
 	exp(3)
 	exp(0)
-	ns.SetState(testNodeID(4), st2, 0, 0)
-	ns.SetState(testNodeID(5), st2, 0, 0)
-	ns.SetState(testNodeID(6), st2, 0, 0)
-	ns.SetState(testNodeID(5), st3, 0, 0)
+	ns.SetState(testNode(4), st2, 0, 0)
+	ns.SetState(testNode(5), st2, 0, 0)
+	ns.SetState(testNode(6), st2, 0, 0)
+	ns.SetState(testNode(5), st3, 0, 0)
 	exp(4)
 	exp(6)
 	exp(0)
-	ns.SetState(testNodeID(1), 0, st4, 0)
-	ns.SetState(testNodeID(2), 0, st4, 0)
-	ns.SetState(testNodeID(3), 0, st4, 0)
-	ns.SetState(testNodeID(2), st3, 0, 0)
-	ns.SetState(testNodeID(2), 0, st3, 0)
+	ns.SetState(testNode(1), 0, st4, 0)
+	ns.SetState(testNode(2), 0, st4, 0)
+	ns.SetState(testNode(3), 0, st4, 0)
+	ns.SetState(testNode(2), st3, 0, 0)
+	ns.SetState(testNode(2), 0, st3, 0)
 	exp(1)
 	exp(3)
 	exp(2)

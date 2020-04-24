@@ -55,20 +55,21 @@ func NewWrsIterator(ns *utils.NodeStateMachine, requireMask, disableMask utils.N
 		ps := (oldState&w.disableMask) == 0 && (oldState&w.requireMask) == w.requireMask
 		ns := (newState&w.disableMask) == 0 && (newState&w.requireMask) == w.requireMask
 
-		w.lock.Lock()
-		defer w.lock.Unlock()
-
 		if ps == ns {
 			return
 		}
+
+		w.lock.Lock()
+		defer w.lock.Unlock()
+
 		if ns {
-			w.wrs.Update(n)
+			w.wrs.Update(n.ID())
 			if w.wakeup != nil && !w.wrs.IsEmpty() {
 				close(w.wakeup)
 				w.wakeup = nil
 			}
 		} else {
-			w.wrs.Remove(n)
+			w.wrs.Remove(n.ID())
 		}
 	})
 	return w
@@ -82,9 +83,12 @@ func (w *WrsIterator) Next() bool {
 			w.lock.Unlock()
 			return false
 		}
-		n := w.wrs.Choose()
-		if n != nil {
-			w.nextNode = n.(*enode.Node)
+		var node *enode.Node
+		if c := w.wrs.Choose(); c != nil {
+			node = w.ns.GetNode(c.(enode.ID))
+		}
+		if node != nil {
+			w.nextNode = node
 			w.lock.Unlock()
 			w.ns.SetState(w.nextNode, w.selected, 0, time.Second*5)
 			return true

@@ -23,32 +23,32 @@ import (
 	"github.com/ethereum/go-ethereum/common/mclock"
 	"github.com/ethereum/go-ethereum/les/utils"
 	"github.com/ethereum/go-ethereum/p2p/enode"
-	"github.com/ethereum/go-ethereum/p2p/enr"
 )
 
 func TestWrsIterator(t *testing.T) {
-	ns := utils.NewNodeStateMachine(nil, nil, &mclock.Simulated{})
+	ns := utils.NewNodeStateMachine(nil, nil, &mclock.Simulated{}, testSetup)
 	st1 := ns.StateMask(sfTest1)
 	st2 := ns.StateMask(sfTest2)
 	st3 := ns.StateMask(sfTest3)
 	st4 := ns.StateMask(sfTest4)
-	enrField := ns.FieldIndex(sfiEnr)
 	weights := make([]uint64, iterTestNodeCount+1)
 	wfn := func(i interface{}) uint64 {
 		id := i.(enode.ID)
-		idx := testNodeIndex(id)
+		n := ns.GetNode(id)
+		if n == nil {
+			return 0
+		}
+		idx := testNodeIndex(n.ID())
 		if idx <= 0 || idx > len(weights) {
-			t.Errorf("Invalid node id %v", id)
+			t.Errorf("Invalid node id %v", n.ID())
 		}
 		return weights[idx]
 	}
-	w := NewWrsIterator(ns, st2, st3, sfTest4, sfiEnr, wfn, enode.ValidSchemesForTesting)
+	w := NewWrsIterator(ns, st2, st3, sfTest4, wfn)
 	ns.Start()
 	for i := 1; i <= iterTestNodeCount; i++ {
 		weights[i] = 1
-		node := enode.SignNull(&enr.Record{}, testNodeID(i))
-		ns.SetState(node.ID(), st1, 0, 0)
-		ns.SetField(node.ID(), enrField, node.Record())
+		ns.SetState(testNode(i), st1, 0, 0)
 	}
 	ch := make(chan *enode.Node)
 	go func() {
@@ -73,52 +73,45 @@ func TestWrsIterator(t *testing.T) {
 	}
 	set := make(map[int]bool)
 	expset := func() {
-		n := next()
-		if !set[n] {
-			t.Errorf("Item returned by iterator not in the expected set (got %d)", n)
+		for len(set) > 0 {
+			n := next()
+			if !set[n] {
+				t.Errorf("Item returned by iterator not in the expected set (got %d)", n)
+			}
+			delete(set, n)
 		}
-		delete(set, n)
+		exp(0)
 	}
 
 	exp(0)
-	ns.SetState(testNodeID(1), st2, 0, 0)
-	ns.SetState(testNodeID(2), st2, 0, 0)
-	ns.SetState(testNodeID(3), st2, 0, 0)
+	ns.SetState(testNode(1), st2, 0, 0)
+	ns.SetState(testNode(2), st2, 0, 0)
+	ns.SetState(testNode(3), st2, 0, 0)
 	set[1] = true
 	set[2] = true
 	set[3] = true
 	expset()
-	expset()
-	expset()
-	exp(0)
-	ns.SetState(testNodeID(4), st2, 0, 0)
-	ns.SetState(testNodeID(5), st2, 0, 0)
-	ns.SetState(testNodeID(6), st2, 0, 0)
-	ns.SetState(testNodeID(5), st3, 0, 0)
+	ns.SetState(testNode(4), st2, 0, 0)
+	ns.SetState(testNode(5), st2, 0, 0)
+	ns.SetState(testNode(6), st2, 0, 0)
+	ns.SetState(testNode(5), st3, 0, 0)
 	set[4] = true
 	set[6] = true
 	expset()
-	expset()
-	exp(0)
-	ns.SetState(testNodeID(1), 0, st4, 0)
-	ns.SetState(testNodeID(2), 0, st4, 0)
-	ns.SetState(testNodeID(3), 0, st4, 0)
+	ns.SetState(testNode(1), 0, st4, 0)
+	ns.SetState(testNode(2), 0, st4, 0)
+	ns.SetState(testNode(3), 0, st4, 0)
 	weights[2] = 0
 	set[1] = true
 	set[3] = true
 	expset()
-	expset()
-	exp(0)
 	weights[2] = 1
-	ns.SetState(testNodeID(2), 0, st2, 0)
-	ns.SetState(testNodeID(1), 0, st4, 0)
-	ns.SetState(testNodeID(2), st2, st4, 0)
-	ns.SetState(testNodeID(3), 0, st4, 0)
+	ns.SetState(testNode(2), 0, st2, 0)
+	ns.SetState(testNode(1), 0, st4, 0)
+	ns.SetState(testNode(2), st2, st4, 0)
+	ns.SetState(testNode(3), 0, st4, 0)
 	set[1] = true
 	set[2] = true
 	set[3] = true
 	expset()
-	expset()
-	expset()
-	exp(0)
 }
