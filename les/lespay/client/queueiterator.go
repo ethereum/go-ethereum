@@ -22,53 +22,47 @@ import (
 
 	"github.com/ethereum/go-ethereum/les/utils"
 	"github.com/ethereum/go-ethereum/p2p/enode"
-	"github.com/ethereum/go-ethereum/p2p/enr"
 )
 
 // QueueIterator returns nodes from the specified selectable set in the same order as
 // they entered the set.
 type QueueIterator struct {
-	lock         sync.Mutex
-	ns           *utils.NodeStateMachine
-	queue        []enode.ID
-	selected     utils.NodeStateBitMask
-	enrFieldID   int
-	validSchemes enr.IdentityScheme
-	wakeup       chan struct{}
-	nextID       enode.ID
-	nextENR      *enr.Record
-	closed       bool
+	lock     sync.Mutex
+	ns       *utils.NodeStateMachine
+	queue    []*enode.Node
+	selected utils.NodeStateBitMask
+	wakeup   chan struct{}
+	nextNode *enode.Node
+	closed   bool
 }
 
 // NewQueueIterator creates a new QueueIterator. Nodes are selectable if they have all the required
 // and none of the disabled flags set. When a node is selected the selectedFlag is set which also
 // disables further selectability until it is removed or times out.
 // The ENR field should be set for all selectable nodes so that the iterator can return complete enodes.
-func NewQueueIterator(ns *utils.NodeStateMachine, requireMask, disableMask utils.NodeStateBitMask,
-	selectedFlag *utils.NodeStateFlag, enrField *utils.NodeField, validSchemes enr.IdentityScheme) *QueueIterator {
+func NewQueueIterator(ns *utils.NodeStateMachine, requireMask, disableMask utils.NodeStateBitMask, selectedFlag *utils.NodeStateFlag) *QueueIterator {
 
 	selected := ns.StateMask(selectedFlag)
 	disableMask |= selected
 	qi := &QueueIterator{
-		ns:           ns,
-		selected:     selected,
-		enrFieldID:   ns.FieldIndex(enrField),
-		validSchemes: validSchemes,
+		ns:       ns,
+		selected: selected,
 	}
-	ns.SubscribeState(requireMask|disableMask, func(id enode.ID, oldState, newState utils.NodeStateBitMask) {
+	ns.SubscribeState(requireMask|disableMask, func(n *enode.Node, oldState, newState utils.NodeStateBitMask) {
 		oldMatch := (oldState&requireMask == requireMask) && (oldState&disableMask == 0)
 		newMatch := (newState&requireMask == requireMask) && (newState&disableMask == 0)
 		if newMatch != oldMatch {
 			qi.lock.Lock()
 			if newMatch {
-				qi.queue = append(qi.queue, id)
+				qi.queue = append(qi.queue, n)
 				if qi.wakeup != nil {
 					close(qi.wakeup)
 					qi.wakeup = nil
 				}
 			} else {
-				for i, qid := range qi.queue {
-					if qid == id {
+				id := n.ID()
+				for i, qn := range qi.queue {
+					if qn.ID() == id {
 						copy(qi.queue[i:len(qi.queue)-1], qi.queue[i+1:])
 						qi.queue = qi.queue[:len(qi.queue)-1]
 						break
@@ -90,16 +84,12 @@ func (qi *QueueIterator) Next() bool {
 			return false
 		}
 		if len(qi.queue) > 0 {
-			qi.nextID = qi.queue[0]
-			e := qi.ns.GetField(qi.nextID, qi.enrFieldID)
-			var ok bool
-			if qi.nextENR, ok = e.(*enr.Record); ok {
-				copy(qi.queue[:len(qi.queue)-1], qi.queue[1:])
-				qi.queue = qi.queue[:len(qi.queue)-1]
-				qi.lock.Unlock()
-				qi.ns.SetState(qi.nextID, qi.selected, 0, time.Second*5)
-				return true
-			}
+			qi.nextNode = qi.queue[0]
+			copy(qi.queue[:len(qi.queue)-1], qi.queue[1:])
+			qi.queue = qi.queue[:len(qi.queue)-1]
+			qi.lock.Unlock()
+			qi.ns.SetState(qi.nextNode, qi.selected, 0, time.Second*5)
+			return true
 		}
 		ch := make(chan struct{})
 		qi.wakeup = ch
@@ -126,6 +116,5 @@ func (qi *QueueIterator) Node() *enode.Node {
 	qi.lock.Lock()
 	defer qi.lock.Unlock()
 
-	node, _ := enode.New(qi.validSchemes, qi.nextENR)
-	return node
+	return qi.nextNode
 }

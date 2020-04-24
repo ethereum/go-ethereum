@@ -51,8 +51,8 @@ type serverPool struct {
 	dialIterator                        enode.Iterator
 	stDialed, stConnected, stRedialWait utils.NodeStateBitMask
 	stHasValue, stAlwaysConnect         utils.NodeStateBitMask
-	enrFieldId, nodeHistoryFieldId      int
-	trusted                             []enode.ID
+	nodeHistoryFieldId                  int
+	trusted                             []*enode.Node
 
 	timeoutLock      sync.RWMutex
 	timeout          time.Duration
@@ -83,21 +83,6 @@ var (
 
 	errInvalidField = errors.New("invalid field type")
 
-	sfiEnr = utils.NewPersistentField("enr", reflect.TypeOf(&enr.Record{}),
-		func(field interface{}) ([]byte, error) {
-			if e, ok := field.(*enr.Record); ok {
-				enc, err := rlp.EncodeToBytes(e)
-				return enc, err
-			} else {
-				return nil, errInvalidField
-			}
-		},
-		func(enc []byte) (interface{}, error) {
-			e := &enr.Record{}
-			err := rlp.DecodeBytes(enc, e)
-			return e, err
-		},
-	)
 	sfiNodeHistory = utils.NewPersistentField("nodeHistory", reflect.TypeOf(&nodeHistory{}),
 		func(field interface{}) ([]byte, error) {
 			if n, ok := field.(*nodeHistory); ok {
@@ -116,7 +101,7 @@ var (
 
 	serverPoolSetup = utils.NodeStateSetup{
 		Flags:  []*utils.NodeStateFlag{sfDiscovered, sfHasValue, sfSelected, sfDialed, sfConnected, sfRedialWait, sfAlwaysConnect},
-		Fields: []*utils.NodeField{sfiEnr, sfiNodeHistory},
+		Fields: []*utils.NodeField{sfiNodeHistory},
 	}
 )
 
@@ -138,7 +123,6 @@ func newServerPool(ns *utils.NodeStateMachine, vt *lpc.ValueTracker, discovery e
 	s.ns.StateMask(sfSelected)
 
 	// Register all serverpool-defined node fields.
-	s.enrFieldId = s.ns.FieldIndex(sfiEnr)
 	s.nodeHistoryFieldId = s.ns.FieldIndex(sfiNodeHistory)
 
 	var (
@@ -154,21 +138,20 @@ func newServerPool(ns *utils.NodeStateMachine, vt *lpc.ValueTracker, discovery e
 
 	for _, url := range trustedURLs {
 		if node, err := enode.Parse(validSchemes, url); err == nil {
-			s.trusted = append(s.trusted, node.ID())
+			s.trusted = append(s.trusted, node)
 		} else {
 			log.Error("Invalid trusted server URL", "url", url, "error", err)
 		}
 	}
 
 	s.mixer = enode.NewFairMix(mixerTimeout)
-	knownSelector := lpc.NewWrsIterator(s.ns, s.stHasValue, s.ns.StatesMask(disableSelection), sfSelected, sfiEnr, s.knownSelectWeight, validSchemes)
-	alwaysConnect := lpc.NewQueueIterator(s.ns, s.stAlwaysConnect, s.ns.StatesMask(disableSelection), sfSelected, sfiEnr, validSchemes)
+	knownSelector := lpc.NewWrsIterator(s.ns, s.stHasValue, s.ns.StatesMask(disableSelection), sfSelected, s.knownSelectWeight)
+	alwaysConnect := lpc.NewQueueIterator(s.ns, s.stAlwaysConnect, s.ns.StatesMask(disableSelection), sfSelected)
 	s.mixSources = append(s.mixSources, knownSelector)
 	s.mixSources = append(s.mixSources, alwaysConnect)
 	if discovery != nil {
 		discEnrStored := enode.Filter(discovery, func(node *enode.Node) bool {
-			s.ns.SetState(node.ID(), stDiscovered, 0, time.Hour)
-			s.ns.SetField(node.ID(), s.enrFieldId, node.Record())
+			s.ns.SetState(node, stDiscovered, 0, time.Hour)
 			return true
 		})
 		s.mixSources = append(s.mixSources, discEnrStored)
@@ -177,15 +160,15 @@ func newServerPool(ns *utils.NodeStateMachine, vt *lpc.ValueTracker, discovery e
 	// preNegotiationFilter will be added in series with iter here when les4 is available
 
 	s.dialIterator = enode.Filter(s.mixer, func(node *enode.Node) bool {
-		n, _ := s.ns.GetField(node.ID(), s.nodeHistoryFieldId).(*nodeHistory)
+		n, _ := s.ns.GetField(node, s.nodeHistoryFieldId).(*nodeHistory)
 		if n == nil {
 			n = &nodeHistory{}
-			s.ns.SetField(node.ID(), s.nodeHistoryFieldId, n)
+			s.ns.SetField(node, s.nodeHistoryFieldId, n)
 		}
 		n.lock.Lock()
 		n.dialCost.Add(dialCost, s.vt.StatsExpirer().LogOffset(s.clock.Now()))
 		n.lock.Unlock()
-		s.ns.SetState(node.ID(), s.stDialed, 0, time.Second*10)
+		s.ns.SetState(node, s.stDialed, 0, time.Second*10)
 		return true
 	})
 	return s
@@ -198,8 +181,8 @@ func (s *serverPool) start() {
 		// which should only happen after NodeStateMachine has been started
 		s.mixer.AddSource(iter)
 	}
-	for _, id := range s.trusted {
-		s.ns.SetState(id, s.stAlwaysConnect, 0, 0)
+	for _, node := range s.trusted {
+		s.ns.SetState(node, s.stAlwaysConnect, 0, 0)
 	}
 }
 
@@ -210,18 +193,18 @@ func (s *serverPool) stop() {
 
 // registerPeer implements serverPeerSubscriber
 func (s *serverPool) registerPeer(p *serverPeer) {
-	s.ns.SetState(p.ID(), s.stConnected, s.stDialed, 0)
+	s.ns.SetState(p.Node(), s.stConnected, s.stDialed, 0)
 	p.setValueTracker(s.vt, s.vt.Register(p.ID()))
 	p.updateVtParams()
 }
 
 // unregisterPeer implements serverPeerSubscriber
 func (s *serverPool) unregisterPeer(p *serverPeer) {
-	if s.nodeWeight(p.ID(), true) >= nodeWeightThreshold {
-		s.ns.SetState(p.ID(), s.stHasValue, 0, 0)
-		s.ns.Persist(p.ID())
+	if s.nodeWeight(p.Node(), true) >= nodeWeightThreshold {
+		s.ns.SetState(p.Node(), s.stHasValue, 0, 0)
+		s.ns.Persist(p.Node())
 	}
-	s.ns.SetState(p.ID(), s.stRedialWait, s.stConnected, time.Second*10)
+	s.ns.SetState(p.Node(), s.stRedialWait, s.stConnected, time.Second*10)
 	s.vt.Unregister(p.ID())
 	p.setValueTracker(nil, nil)
 }
@@ -258,17 +241,17 @@ func (s *serverPool) getTimeout() time.Duration {
 }
 
 // nodeWeight calculates the selection weight of an individual node
-func (s *serverPool) nodeWeight(id enode.ID, forceRecalc bool) uint64 {
-	nn := s.ns.GetField(id, s.nodeHistoryFieldId)
+func (s *serverPool) nodeWeight(node *enode.Node, forceRecalc bool) uint64 {
+	nn := s.ns.GetField(node, s.nodeHistoryFieldId)
 	n, ok := nn.(*nodeHistory)
 	if !ok {
 		return 0
 	}
 	if n == nil {
 		n = &nodeHistory{}
-		s.ns.SetField(id, s.nodeHistoryFieldId, n)
+		s.ns.SetField(node, s.nodeHistoryFieldId, n)
 	}
-	nvt := s.vt.GetNode(id)
+	nvt := s.vt.GetNode(node.ID())
 	if nvt == nil {
 		return 0
 	}
@@ -294,12 +277,12 @@ func (s *serverPool) nodeWeight(id enode.ID, forceRecalc bool) uint64 {
 // knownSelectWeight is the selection weight callback function. It also takes care of
 // removing nodes from the valuable set if their value has been expired.
 func (s *serverPool) knownSelectWeight(i interface{}) uint64 {
-	id := i.(enode.ID)
-	wt := s.nodeWeight(id, false)
+	n := i.(*enode.Node)
+	wt := s.nodeWeight(n, false)
 	if wt < nodeWeightThreshold {
 		go func() {
-			s.ns.SetState(id, 0, s.stHasValue, 0)
-			s.ns.Persist(id)
+			s.ns.SetState(n, 0, s.stHasValue, 0)
+			s.ns.Persist(n)
 		}()
 		return 0
 	}

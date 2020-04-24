@@ -67,9 +67,9 @@ func TestCallback(t *testing.T) {
 	set0 := make(chan struct{}, 1)
 	set1 := make(chan struct{}, 1)
 	set2 := make(chan struct{}, 1)
-	ns.SubscribeState(f0, func(id enode.ID, oldState, newState NodeStateBitMask) { set0 <- struct{}{} })
-	ns.SubscribeState(f1, func(id enode.ID, oldState, newState NodeStateBitMask) { set1 <- struct{}{} })
-	ns.SubscribeState(f2, func(id enode.ID, oldState, newState NodeStateBitMask) { set2 <- struct{}{} })
+	ns.SubscribeState(f0, func(n *enode.Node, oldState, newState NodeStateBitMask) { set0 <- struct{}{} })
+	ns.SubscribeState(f1, func(n *enode.Node, oldState, newState NodeStateBitMask) { set1 <- struct{}{} })
+	ns.SubscribeState(f2, func(n *enode.Node, oldState, newState NodeStateBitMask) { set2 <- struct{}{} })
 
 	ns.Start()
 
@@ -313,7 +313,7 @@ func TestSetState(t *testing.T) {
 
 	type change struct{ old, new NodeStateBitMask }
 	set := make(chan change, 1)
-	ns.SubscribeState(f0|f1, func(id enode.ID, oldState, newState NodeStateBitMask) {
+	ns.SubscribeState(f0|f1, func(n *enode.Node, oldState, newState NodeStateBitMask) {
 		set <- change{
 			old: oldState,
 			new: newState,
@@ -459,7 +459,7 @@ func TestFieldSub(t *testing.T) {
 		lastState                  NodeStateBitMask
 		lastOldValue, lastNewValue interface{}
 	)
-	ns.SubscribeField(fd0, func(id enode.ID, state NodeStateBitMask, oldValue, newValue interface{}) {
+	ns.SubscribeField(fd0, func(n *enode.Node, state NodeStateBitMask, oldValue, newValue interface{}) {
 		lastState, lastOldValue, lastNewValue = state, oldValue, newValue
 	})
 	check := func(state NodeStateBitMask, oldValue, newValue interface{}) {
@@ -477,7 +477,7 @@ func TestFieldSub(t *testing.T) {
 	ns2 := NewNodeStateMachine(mdb, []byte("-ns"), clock)
 	s0, _ = ns2.RegisterState(f0)
 	fd0, _ = ns2.RegisterField(field0)
-	ns2.SubscribeField(fd0, func(id enode.ID, state NodeStateBitMask, oldValue, newValue interface{}) {
+	ns2.SubscribeField(fd0, func(n *enode.Node, state NodeStateBitMask, oldValue, newValue interface{}) {
 		lastState, lastOldValue, lastNewValue = state, oldValue, newValue
 	})
 	ns2.Start()

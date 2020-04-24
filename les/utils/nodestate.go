@@ -28,6 +28,7 @@ import (
 	"github.com/ethereum/go-ethereum/ethdb"
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/p2p/enode"
+	"github.com/ethereum/go-ethereum/p2p/enr"
 	"github.com/ethereum/go-ethereum/rlp"
 )
 
@@ -122,12 +123,13 @@ type (
 	// state flags that is included in the subscription state mask is changed.
 	// Note: oldState and newState are also masked with the subscription mask so only
 	// the relevant bits are included.
-	NodeStateCallback func(id enode.ID, oldState, newState NodeStateBitMask)
+	NodeStateCallback func(n *enode.Node, oldState, newState NodeStateBitMask)
 
-	NodeFieldCallback func(id enode.ID, state NodeStateBitMask, oldValue, newValue interface{})
+	NodeFieldCallback func(n *enode.Node, state NodeStateBitMask, oldValue, newValue interface{})
 
 	// nodeInfo contains node state, fields and state timeouts
 	nodeInfo struct {
+		node      *enode.Node
 		state     NodeStateBitMask
 		timeouts  []*nodeStateTimeout
 		fields    []interface{}
@@ -135,6 +137,7 @@ type (
 	}
 
 	nodeInfoEnc struct {
+		Enr     enr.Record
 		Mapping uint
 		State   NodeStateBitMask
 		Fields  [][]byte
@@ -156,7 +159,7 @@ type (
 	}
 
 	offlineCallback struct {
-		id     enode.ID
+		node   *enode.Node
 		state  NodeStateBitMask
 		fields []interface{}
 	}
@@ -287,8 +290,8 @@ func (ns *NodeStateMachine) SubscribeField(field int, callback NodeFieldCallback
 }
 
 // newNode creates a new nodeInfo
-func (ns *NodeStateMachine) newNode() *nodeInfo {
-	return &nodeInfo{fields: make([]interface{}, len(ns.nodeFields))}
+func (ns *NodeStateMachine) newNode(n *enode.Node) *nodeInfo {
+	return &nodeInfo{node: n, fields: make([]interface{}, len(ns.nodeFields))}
 }
 
 // checkStarted checks whether the state machine has already been started and panics otherwise.
@@ -316,10 +319,10 @@ func (ns *NodeStateMachine) Start() {
 // Stop stops the state machine and saves its state if a database was supplied
 func (ns *NodeStateMachine) Stop() {
 	ns.lock.Lock()
-	for id, node := range ns.nodes {
+	for _, node := range ns.nodes {
 		fields := make([]interface{}, len(node.fields))
 		copy(fields, node.fields)
-		ns.offlineCallbackList = append(ns.offlineCallbackList, offlineCallback{id, node.state, fields})
+		ns.offlineCallbackList = append(ns.offlineCallbackList, offlineCallback{node.node, node.state, fields})
 	}
 	ns.stopped = true
 	if ns.db != nil {
@@ -398,6 +401,11 @@ loop:
 	}
 }
 
+type dummyIdentity enode.ID
+
+func (id dummyIdentity) Verify(r *enr.Record, sig []byte) error { return nil }
+func (id dummyIdentity) NodeAddr(r *enr.Record) []byte          { return id[:] }
+
 // decodeNode decodes a node database entry and adds it to the node set if successful
 func (ns *NodeStateMachine) decodeNode(id enode.ID, data []byte) {
 	var enc nodeInfoEnc
@@ -405,7 +413,8 @@ func (ns *NodeStateMachine) decodeNode(id enode.ID, data []byte) {
 		log.Error("Failed to decode node info", "id", id, "error", err)
 		return
 	}
-	node := ns.newNode()
+	n, _ := enode.New(dummyIdentity(id), &enc.Enr)
+	node := ns.newNode(n)
 	node.db = true
 
 	if int(enc.Mapping) >= len(ns.mappings) {
@@ -471,7 +480,7 @@ func (ns *NodeStateMachine) decodeNode(id enode.ID, data []byte) {
 	node.state = state
 	fields := make([]interface{}, len(node.fields))
 	copy(fields, node.fields)
-	ns.offlineCallbackList = append(ns.offlineCallbackList, offlineCallback{id, state, fields})
+	ns.offlineCallbackList = append(ns.offlineCallbackList, offlineCallback{node.node, state, fields})
 	log.Debug("Loaded node state", "id", id, "state", ns.stateToString(enc.State))
 }
 
@@ -495,6 +504,7 @@ func (ns *NodeStateMachine) saveNode(id enode.ID, node *nodeInfo) error {
 	}
 
 	enc := nodeInfoEnc{
+		Enr:     *node.node.Record(),
 		Mapping: uint(ns.currentMapping),
 		State:   storedState,
 		Fields:  make([][]byte, len(ns.nodeFields)),
@@ -546,12 +556,21 @@ func (ns *NodeStateMachine) saveToDb() {
 	}
 }
 
+func (ns *NodeStateMachine) storeNode(n *enode.Node) (enode.ID, *nodeInfo) {
+	id := n.ID()
+	node := ns.nodes[id]
+	if node != nil {
+		node.node = n //TODO check whether the node has newer ENR than the stored one
+	}
+	return id, node
+}
+
 // Persist saves the state of the given node immediately
-func (ns *NodeStateMachine) Persist(id enode.ID) error {
+func (ns *NodeStateMachine) Persist(n *enode.Node) error {
 	ns.lock.Lock()
 	defer ns.lock.Unlock()
 
-	if node := ns.nodes[id]; node != nil && node.dirty {
+	if id, node := ns.storeNode(n); node != nil && node.dirty {
 		err := ns.saveNode(id, node)
 		if err != nil {
 			log.Error("Failed to save node", "id", id, "error", err)
@@ -564,7 +583,7 @@ func (ns *NodeStateMachine) Persist(id enode.ID) error {
 // SetState updates the given node state flags and processes all resulting callbacks.
 // It only returns after all subsequent immediate changes (including those changed by the
 // callbacks) have been processed.
-func (ns *NodeStateMachine) SetState(id enode.ID, set, reset NodeStateBitMask, timeout time.Duration) {
+func (ns *NodeStateMachine) SetState(n *enode.Node, set, reset NodeStateBitMask, timeout time.Duration) {
 	ns.lock.Lock()
 	ns.checkStarted()
 	if ns.stopped {
@@ -572,9 +591,12 @@ func (ns *NodeStateMachine) SetState(id enode.ID, set, reset NodeStateBitMask, t
 		return
 	}
 
-	node := ns.nodes[id]
+	id, node := ns.storeNode(n)
 	if node == nil {
-		node = ns.newNode()
+		if set == 0 {
+			return
+		}
+		node = ns.newNode(n)
 		ns.nodes[id] = node
 	}
 	oldState := node.state
@@ -588,7 +610,7 @@ func (ns *NodeStateMachine) SetState(id enode.ID, set, reset NodeStateBitMask, t
 		return
 	}
 	if timeout != 0 && newState != 0 {
-		ns.addTimeout(id, newState, timeout)
+		ns.addTimeout(n, newState, timeout)
 	}
 	if newState == 0 {
 		delete(ns.nodes, id)
@@ -604,7 +626,7 @@ func (ns *NodeStateMachine) SetState(id enode.ID, set, reset NodeStateBitMask, t
 	// call state update subscription callbacks without holding the mutex
 	for _, sub := range ns.stateSubs {
 		if changed&sub.mask != 0 {
-			sub.callback(id, oldState&sub.mask, newState&sub.mask)
+			sub.callback(n, oldState&sub.mask, newState&sub.mask)
 		}
 	}
 }
@@ -617,18 +639,18 @@ func (ns *NodeStateMachine) offlineCallbacks(start bool) {
 			onState := cb.state & sub.mask
 			if offState != onState {
 				if start {
-					sub.callback(cb.id, offState, onState)
+					sub.callback(cb.node, offState, onState)
 				} else {
-					sub.callback(cb.id, onState, offState)
+					sub.callback(cb.node, onState, offState)
 				}
 			}
 			for i, f := range cb.fields {
 				if f != nil && ns.nodeFields[i].subs != nil {
 					for _, fsub := range ns.nodeFields[i].subs {
 						if start {
-							fsub(cb.id, OfflineState, nil, f)
+							fsub(cb.node, OfflineState, nil, f)
 						} else {
-							fsub(cb.id, OfflineState, f, nil)
+							fsub(cb.node, OfflineState, f, nil)
 						}
 					}
 				}
@@ -640,7 +662,7 @@ func (ns *NodeStateMachine) offlineCallbacks(start bool) {
 
 // AddTimeout adds a node state timeout associated to the given state flag(s).
 // After the specified time interval, the relevant states will be reset.
-func (ns *NodeStateMachine) AddTimeout(id enode.ID, mask NodeStateBitMask, timeout time.Duration) {
+func (ns *NodeStateMachine) AddTimeout(n *enode.Node, mask NodeStateBitMask, timeout time.Duration) {
 	ns.lock.Lock()
 	defer ns.lock.Unlock()
 
@@ -648,12 +670,12 @@ func (ns *NodeStateMachine) AddTimeout(id enode.ID, mask NodeStateBitMask, timeo
 	if ns.stopped {
 		return
 	}
-	ns.addTimeout(id, mask, timeout)
+	ns.addTimeout(n, mask, timeout)
 }
 
 // addTimeout adds a node state timeout associated to the given state flag(s).
-func (ns *NodeStateMachine) addTimeout(id enode.ID, mask NodeStateBitMask, timeout time.Duration) {
-	node := ns.nodes[id]
+func (ns *NodeStateMachine) addTimeout(n *enode.Node, mask NodeStateBitMask, timeout time.Duration) {
+	_, node := ns.storeNode(n)
 	if node == nil {
 		return
 	}
@@ -664,7 +686,7 @@ func (ns *NodeStateMachine) addTimeout(id enode.ID, mask NodeStateBitMask, timeo
 	ns.removeTimeouts(node, mask)
 	t := &nodeStateTimeout{mask: mask}
 	t.timer = ns.clock.AfterFunc(timeout, func() {
-		ns.SetState(id, 0, t.mask, 0)
+		ns.SetState(n, 0, t.mask, 0)
 	})
 	node.timeouts = append(node.timeouts, t)
 	if mask&ns.saveFlags != 0 {
@@ -698,7 +720,7 @@ func (ns *NodeStateMachine) removeTimeouts(node *nodeInfo, mask NodeStateBitMask
 }
 
 // GetField retrieves the given field of the given node
-func (ns *NodeStateMachine) GetField(id enode.ID, fieldId int) interface{} {
+func (ns *NodeStateMachine) GetField(n *enode.Node, fieldId int) interface{} {
 	ns.lock.Lock()
 	defer ns.lock.Unlock()
 
@@ -706,25 +728,23 @@ func (ns *NodeStateMachine) GetField(id enode.ID, fieldId int) interface{} {
 	if ns.stopped {
 		return nil
 	}
-	if node := ns.nodes[id]; node != nil && fieldId < len(node.fields) {
+	if _, node := ns.storeNode(n); node != nil && fieldId < len(node.fields) {
 		return node.fields[fieldId]
 	}
 	return nil
 }
 
 // SetField sets the given field of the given node
-func (ns *NodeStateMachine) SetField(id enode.ID, fieldId int, value interface{}) error {
+func (ns *NodeStateMachine) SetField(n *enode.Node, fieldId int, value interface{}) error {
 	ns.lock.Lock()
 	ns.checkStarted()
 	if ns.stopped {
 		ns.lock.Unlock()
 		return nil
 	}
-	// Allocate the node if it's non-existent
-	node := ns.nodes[id]
+	_, node := ns.storeNode(n)
 	if node == nil {
-		node = ns.newNode()
-		ns.nodes[id] = node
+		return nil
 	}
 	// Refuse to set field if it's unknown or the relevant state is unset.
 	if fieldId < 0 || fieldId >= len(ns.nodeFields) {
@@ -752,7 +772,7 @@ func (ns *NodeStateMachine) SetField(id enode.ID, fieldId int, value interface{}
 	ns.lock.Unlock()
 	if len(f.subs) > 0 {
 		for _, cb := range f.subs {
-			cb(id, state, oldValue, value)
+			cb(n, state, oldValue, value)
 		}
 	}
 	return nil
@@ -809,20 +829,20 @@ func (mask NodeStateBitMask) String() string {
 	return fmt.Sprintf("%b", mask)
 }
 
-func (ns *NodeStateMachine) ForEach(require, disable NodeStateBitMask, cb func(id enode.ID, state NodeStateBitMask)) {
+func (ns *NodeStateMachine) ForEach(require, disable NodeStateBitMask, cb func(n *enode.Node, state NodeStateBitMask)) {
 	ns.lock.Lock()
 	type callback struct {
-		id    enode.ID
+		node  *enode.Node
 		state NodeStateBitMask
 	}
 	var callbacks []callback
-	for id, node := range ns.nodes {
+	for _, node := range ns.nodes {
 		if node.state&require == require && node.state&disable == 0 {
-			callbacks = append(callbacks, callback{id, node.state & (require | disable)})
+			callbacks = append(callbacks, callback{node.node, node.state & (require | disable)})
 		}
 	}
 	ns.lock.Unlock()
 	for _, c := range callbacks {
-		cb(c.id, c.state)
+		cb(c.node, c.state)
 	}
 }
