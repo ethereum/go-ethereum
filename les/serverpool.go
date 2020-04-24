@@ -72,7 +72,7 @@ type nodeHistory struct {
 
 var (
 	sfDiscovered    = utils.NewFlag("discovered")
-	sfHasValue      = utils.NewPersistentFlag("hasValue") //TODO save immediately
+	sfHasValue      = utils.NewPersistentFlag("hasValue")
 	sfSelected      = utils.NewFlag("selected")
 	sfDialed        = utils.NewFlag("dialed")
 	sfConnected     = utils.NewFlag("connected")
@@ -277,7 +277,10 @@ func (s *serverPool) nodeWeight(node *enode.Node, forceRecalc bool) uint64 {
 // knownSelectWeight is the selection weight callback function. It also takes care of
 // removing nodes from the valuable set if their value has been expired.
 func (s *serverPool) knownSelectWeight(i interface{}) uint64 {
-	n := i.(*enode.Node)
+	n := s.ns.GetNode(i.(enode.ID))
+	if n == nil {
+		return 0
+	}
 	wt := s.nodeWeight(n, false)
 	if wt < nodeWeightThreshold {
 		go func() {

@@ -38,9 +38,9 @@ func TestWrsIterator(t *testing.T) {
 		if n == nil {
 			return 0
 		}
-		idx := testNodeIndex(n.ID())
+		idx := testNodeIndex(id)
 		if idx <= 0 || idx > len(weights) {
-			t.Errorf("Invalid node id %v", n.ID())
+			t.Errorf("Invalid node id %v", id)
 		}
 		return weights[idx]
 	}

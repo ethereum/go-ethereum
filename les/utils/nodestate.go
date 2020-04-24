@@ -604,13 +604,13 @@ func (ns *NodeStateMachine) SetState(n *enode.Node, set, reset NodeStateBitMask,
 	changed := oldState ^ newState
 	node.state = newState
 
-	ns.removeTimeouts(node, oldState|newState)
+	ns.removeTimeouts(node, reset|set)
 	if newState == oldState {
 		ns.lock.Unlock()
 		return
 	}
 	if timeout != 0 && newState != 0 {
-		ns.addTimeout(n, newState, timeout)
+		ns.addTimeout(n, set, timeout)
 	}
 	if newState == 0 {
 		delete(ns.nodes, id)
