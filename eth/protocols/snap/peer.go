@@ -22,6 +22,8 @@ import (
 
 // Peer is a collection of relevant information we have about a `snap` peer.
 type Peer struct {
+	id string // Unique ID for the peer, cached
+
 	*p2p.Peer                   // The embedded P2P package peer
 	rw        p2p.MsgReadWriter // Input/output streams for snap
 	version   uint              // Protocol version negotiated
@@ -31,10 +33,16 @@ type Peer struct {
 // version.
 func newPeer(version uint, p *p2p.Peer, rw p2p.MsgReadWriter) *Peer {
 	return &Peer{
+		id:      p.ID().String(),
 		Peer:    p,
 		rw:      rw,
 		version: version,
 	}
+}
+
+// ID retrieves the peer's unique identifier.
+func (p *Peer) ID() string {
+	return p.id
 }
 
 // PeerInfo represents a short summary of the `snap` sub-protocol metadata known

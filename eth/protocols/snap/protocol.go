@@ -48,8 +48,8 @@ const (
 	accountRangeMsg    = 0x01
 	getStorageRangeMsg = 0x02
 	storageRangeMsg    = 0x03
-	getCodeMsg         = 0x04
-	codeMsg            = 0x05
+	getByteCodesMsg    = 0x04
+	byteCodesMsg       = 0x05
 	getTrieNodesMsg    = 0x06
 	trieNodesMsg       = 0x07
 )
@@ -103,14 +103,15 @@ type storageData struct {
 	Body []byte      // Data content of the slot
 }
 
-// getCodeData represents a contract bytecode query.
-type getCodeData struct {
+// getByteCodesData represents a contract bytecode query.
+type getByteCodesData struct {
 	ID     uint64        // Request ID to match up responses with
 	Hashes []common.Hash // Code hashes to retrieve the code for
+	Bytes  uint64        // Soft limit at which to stop returning data
 }
 
-// codeData represents a contract bytecode query response.
-type codeData struct {
+// byteCodesData represents a contract bytecode query response.
+type byteCodesData struct {
 	ID    uint64   // ID of the request this is a response for
 	Codes [][]byte // Requested contract bytecodes
 }
@@ -119,10 +120,11 @@ type codeData struct {
 type getTrieNodesData struct {
 	ID     uint64        // Request ID to match up responses with
 	Hashes []common.Hash // Trie node hashes to retrieve the nodes for
+	Bytes  uint64        // Soft limit at which to stop returning data
 }
 
 // trieNodesData represents a state trie node query response.
 type trieNodesData struct {
 	ID    uint64   // ID of the request this is a response for
-	Codes [][]byte // Requested state trie nodes
+	Nodes [][]byte // Requested state trie nodes
 }

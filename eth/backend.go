@@ -534,7 +534,7 @@ func (s *Ethereum) ArchiveMode() bool                  { return s.config.NoPruni
 func (s *Ethereum) Protocols() []p2p.Protocol {
 	protos := eth.MakeProtocols((*ethHandler)(s.handler), s.networkID, s.ethDialCandidates)
 	if s.config.SnapshotCache > 0 {
-		protos = append(protos, snap.MakeProtocols(nil /*(*snapHandler)(s.handler)*/, s.snapDialCandidates)...)
+		protos = append(protos, snap.MakeProtocols((*snapHandler)(s.handler), s.snapDialCandidates)...)
 	}
 	if s.lesServer != nil {
 		protos = append(protos, s.lesServer.Protocols()...)

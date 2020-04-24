@@ -21,10 +21,24 @@ import (
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core"
+	"github.com/ethereum/go-ethereum/core/state/snapshot"
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/p2p"
 	"github.com/ethereum/go-ethereum/p2p/enode"
 	"github.com/ethereum/go-ethereum/p2p/enr"
+)
+
+const (
+	// softResponseLimit is the target maximum size of replies to data retrievals.
+	softResponseLimit = 2 * 1024 * 1024
+
+	// maxCodeLookups is the maximum number of bytecodes to serve. This number is
+	// there to limit the number of disk lookups.
+	maxCodeLookups = 1024
+
+	// maxTrieNodeLookups is the maximum number of state trie nodes to serve. This
+	// number is there to limit the number of disk lookups.
+	maxTrieNodeLookups = 1024
 )
 
 // Handler is a callback to invoke from an outside runner after the boilerplate
@@ -45,6 +59,22 @@ type Backend interface {
 
 	// PeerInfo retrieves all known `eth` information about a peer.
 	PeerInfo(id enode.ID) interface{}
+
+	// OnAccounts is a callback method to invoke when a range of accounts are
+	// received from a remote peer.
+	OnAccounts(peer *Peer, id uint64, hashes []common.Hash, accounts [][]byte, proof [][]byte) error
+
+	// OnStorage is a callback method to invoke when a range of storage slots
+	// are received from a remote peer.
+	OnStorage(peer *Peer, id uint64, hashes []common.Hash, slots [][]byte, proof [][]byte) error
+
+	// OnByteCodes is a callback method to invoke when a batch of contract
+	// bytes codes are received from a remote peer.
+	OnByteCodes(peer *Peer, id uint64, bytecodes [][]byte) error
+
+	// OnTrieNodes is a callback method to invoke when a batch of trie nodes
+	// are received from a remote peer.
+	OnTrieNodes(peer *Peer, id uint64, nodes [][]byte) error
 }
 
 // MakeProtocols constructs the P2P protocol definitions for `snap`.
@@ -108,6 +138,9 @@ func handleMessage(backend Backend, peer *Peer) error {
 		if err := msg.Decode(&req); err != nil {
 			return fmt.Errorf("%w: message %v: %v", errDecode, msg, err)
 		}
+		if req.Bytes > softResponseLimit {
+			req.Bytes = softResponseLimit
+		}
 		// Retrieve the requested state and bail out if non existent
 		state, err := backend.Chain().StateAt(req.Root)
 		if err != nil {
@@ -119,7 +152,7 @@ func handleMessage(backend Backend, peer *Peer) error {
 		}
 		defer it.Release()
 
-		// Iterate over the requested range and pile account up
+		// Iterate over the requested range and pile accounts up
 		var (
 			accounts    []*accountData
 			bytes       uint64
@@ -162,14 +195,134 @@ func handleMessage(backend Backend, peer *Peer) error {
 			Proof:    append(firstProof, lastProof...),
 		})
 
+	case msg.Code == accountRangeMsg:
+		// A range of accounts arrived to one of our previous requests
+		var res accountRangeData
+		if err := msg.Decode(&res); err != nil {
+			return fmt.Errorf("%w: message %v: %v", errDecode, msg, err)
+		}
+		// Transform the snap slim format into the consensus representation
+		var (
+			keys = make([]common.Hash, len(res.Accounts))
+			vals = make([][]byte, len(res.Accounts))
+		)
+		for i, acc := range res.Accounts {
+			val, err := snapshot.SlimToFull(acc.Body)
+			if err != nil {
+				return fmt.Errorf("invalid account %x: %v", acc.Body, err)
+			}
+			keys[i] = acc.Hash
+			vals[i] = val
+		}
+		return backend.OnAccounts(peer, res.ID, keys, vals, res.Proof)
+
 	case msg.Code == getStorageRangeMsg:
 		// Decode the storage retrieval request
 		var req getStorageRangeData
 		if err := msg.Decode(&req); err != nil {
 			return fmt.Errorf("%w: message %v: %v", errDecode, msg, err)
 		}
+		if req.Bytes > softResponseLimit {
+			req.Bytes = softResponseLimit
+		}
 		// Not implemented, return an empty reply
 		return p2p.Send(peer.rw, storageRangeMsg, &storageRangeData{ID: req.ID})
+
+	case msg.Code == storageRangeMsg:
+		// A range of accounts arrived to one of our previous requests
+		var res storageRangeData
+		if err := msg.Decode(&res); err != nil {
+			return fmt.Errorf("%w: message %v: %v", errDecode, msg, err)
+		}
+		var (
+			keys = make([]common.Hash, len(res.Slots))
+			vals = make([][]byte, len(res.Slots))
+		)
+		for i, slot := range res.Slots {
+			keys[i] = slot.Hash
+			vals[i] = slot.Body
+		}
+		return backend.OnStorage(peer, res.ID, keys, vals, res.Proof)
+
+	case msg.Code == getByteCodesMsg:
+		// Decode bytecode retrieval request
+		var req getByteCodesData
+		if err := msg.Decode(&req); err != nil {
+			return fmt.Errorf("%w: message %v: %v", errDecode, msg, err)
+		}
+		if req.Bytes > softResponseLimit {
+			req.Bytes = softResponseLimit
+		}
+		if len(req.Hashes) > maxCodeLookups {
+			req.Hashes = req.Hashes[:maxCodeLookups]
+		}
+		// Retrieve bytecodes until the packet size limit is reached
+		var (
+			codes [][]byte
+			bytes uint64
+		)
+		for _, hash := range req.Hashes {
+			if blob, err := backend.Chain().ByteCode(hash); err == nil {
+				codes = append(codes, blob)
+				bytes += uint64(len(blob))
+			}
+			if bytes > req.Bytes {
+				break
+			}
+		}
+		// Send back anything accumulated
+		return p2p.Send(peer.rw, byteCodesMsg, &byteCodesData{
+			ID:    req.ID,
+			Codes: codes,
+		})
+
+	case msg.Code == byteCodesMsg:
+		// A batch of byte codes arrived to one of our previous requests
+		var res byteCodesData
+		if err := msg.Decode(&res); err != nil {
+			return fmt.Errorf("%w: message %v: %v", errDecode, msg, err)
+		}
+		return backend.OnTrieNodes(peer, res.ID, res.Codes)
+
+	case msg.Code == getTrieNodesMsg:
+		// Decode trie node retrieval request
+		var req getTrieNodesData
+		if err := msg.Decode(&req); err != nil {
+			return fmt.Errorf("%w: message %v: %v", errDecode, msg, err)
+		}
+		if req.Bytes > softResponseLimit {
+			req.Bytes = softResponseLimit
+		}
+		if len(req.Hashes) > maxTrieNodeLookups {
+			req.Hashes = req.Hashes[:maxTrieNodeLookups]
+		}
+		// Retrieve bytecodes until the packet size limit is reached
+		var (
+			nodes [][]byte
+			bytes uint64
+		)
+		for _, hash := range req.Hashes {
+			if blob, err := backend.Chain().TrieNode(hash); err == nil {
+				nodes = append(nodes, blob)
+				bytes += uint64(len(blob))
+			}
+			if bytes > req.Bytes {
+				break
+			}
+		}
+		// Send back anything accumulated
+		return p2p.Send(peer.rw, trieNodesMsg, &trieNodesData{
+			ID:    req.ID,
+			Nodes: nodes,
+		})
+
+	case msg.Code == trieNodesMsg:
+		// A batch of trie nodes arrived to one of our previous requests
+		var res trieNodesData
+		if err := msg.Decode(&res); err != nil {
+			return fmt.Errorf("%w: message %v: %v", errDecode, msg, err)
+		}
+		return backend.OnTrieNodes(peer, res.ID, res.Nodes)
 
 	default:
 		return fmt.Errorf("%w: %v", errInvalidMsgCode, msg.Code)

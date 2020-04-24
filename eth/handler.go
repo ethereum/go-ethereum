@@ -31,6 +31,7 @@ import (
 	"github.com/ethereum/go-ethereum/eth/downloader"
 	"github.com/ethereum/go-ethereum/eth/fetcher"
 	"github.com/ethereum/go-ethereum/eth/protocols/eth"
+	"github.com/ethereum/go-ethereum/eth/protocols/snap"
 	"github.com/ethereum/go-ethereum/ethdb"
 	"github.com/ethereum/go-ethereum/event"
 	"github.com/ethereum/go-ethereum/log"
@@ -232,11 +233,6 @@ func (h *handler) runEthPeer(peer *eth.Peer, handler eth.Handler) error {
 	h.peerWG.Add(1)
 	defer h.peerWG.Done()
 
-	return h.handleEthPeer(peer, handler)
-}
-
-// handleEthPeer
-func (h *handler) handleEthPeer(peer *eth.Peer, handler eth.Handler) error {
 	// Execute the Ethereum handshake
 	var (
 		genesis = h.chain.Genesis()
@@ -264,7 +260,7 @@ func (h *handler) handleEthPeer(peer *eth.Peer, handler eth.Handler) error {
 
 	p := h.peers.ethPeer(peer.ID())
 	if p == nil {
-		return errors.New("peers dropped during handling")
+		return errors.New("peer dropped during handling")
 	}
 	// Register the peer in the downloader. If the downloader considers it banned, we disconnect
 	if err := h.downloader.RegisterPeer(peer.ID(), peer.Version(), peer); err != nil {
@@ -305,24 +301,48 @@ func (h *handler) handleEthPeer(peer *eth.Peer, handler eth.Handler) error {
 	return handler(peer)
 }
 
-func (h *handler) removePeer(id string) {
-	// Short circuit if the peer was already removed
-	peer := h.peers.ethPeer(id)
-	if peer == nil {
-		return
+// runSnapPeer
+func (h *handler) runSnapPeer(peer *snap.Peer, handler snap.Handler) error {
+	h.peerWG.Add(1)
+	defer h.peerWG.Done()
+
+	// Register the peer locally
+	if err := h.peers.registerSnapPeer(peer); err != nil {
+		peer.Log().Error("Snapshot peer registration failed", "err", err)
+		return err
 	}
-	log.Debug("Removing Ethereum peer", "peer", id)
+	defer h.removePeer(peer.ID())
 
-	// Unregister the peer from the downloader and Ethereum peer set
-	h.downloader.UnregisterPeer(id)
-	h.txFetcher.Drop(id)
+	// Handle incoming messages until the connection is torn down
+	return handler(peer)
+}
 
-	if err := h.peers.unregisterEthPeer(id); err != nil {
-		log.Error("Peer removal failed", "peer", id, "err", err)
+func (h *handler) removePeer(id string) {
+	// Remove the eth peer if it exists
+	eth := h.peers.ethPeer(id)
+	if eth != nil {
+		log.Debug("Removing Ethereum peer", "peer", id)
+		h.downloader.UnregisterPeer(id)
+		h.txFetcher.Drop(id)
+
+		if err := h.peers.unregisterEthPeer(id); err != nil {
+			log.Error("Peer removal failed", "peer", id, "err", err)
+		}
+	}
+	// Remove the snap peer if it exists
+	snap := h.peers.snapPeer(id)
+	if snap != nil {
+		log.Debug("Removing Snapshot peer", "peer", id)
+		if err := h.peers.unregisterSnapPeer(id); err != nil {
+			log.Error("Peer removal failed", "peer", id, "err", err)
+		}
 	}
 	// Hard disconnect at the networking layer
-	if peer != nil {
-		peer.Peer.Disconnect(p2p.DiscUselessPeer)
+	if eth != nil {
+		eth.Peer.Disconnect(p2p.DiscUselessPeer)
+	}
+	if snap != nil {
+		snap.Peer.Disconnect(p2p.DiscUselessPeer)
 	}
 }
 

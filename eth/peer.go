@@ -22,6 +22,7 @@ import (
 	"time"
 
 	"github.com/ethereum/go-ethereum/eth/protocols/eth"
+	"github.com/ethereum/go-ethereum/eth/protocols/snap"
 )
 
 // ethPeerInfo represents a short summary of the `eth` sub-protocol metadata known
@@ -49,4 +50,12 @@ func (p *ethPeer) info() *ethPeerInfo {
 		Difficulty: td,
 		Head:       hash.Hex(),
 	}
+}
+
+// snapPeer is a wrapper around snap.Peer to maintain a few extra metadata.
+type snapPeer struct {
+	*snap.Peer
+
+	ethDrop *time.Timer  // Connection dropper if `eth` doesn't connect in time
+	lock    sync.RWMutex // Mutex protecting the internal fields
 }

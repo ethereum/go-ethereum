@@ -20,6 +20,7 @@ import (
 	"errors"
 	"math/big"
 	"sync"
+	"time"
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/eth/protocols/eth"
@@ -40,13 +41,16 @@ var (
 	// errPeerNotRegistered is returned if a peer is attempted to be removed from
 	// a peer set, but no peer with teh given id exists.
 	errPeerNotRegistered = errors.New("peer not registered")
+
+	// ethConnectTimeout is the `snap` timeout for `eth` to connect too.
+	ethConnectTimeout = 3 * time.Second
 )
 
 // peerSet represents the collection of active peers currently participating in
 // the `eth` or `snap` protocols.
 type peerSet struct {
-	ethPeers  map[string]*ethPeer   // Peers connected on the `eth` protocol
-	snapPeers map[string]*snap.Peer // Peers connected on the `snap` protocol
+	ethPeers  map[string]*ethPeer  // Peers connected on the `eth` protocol
+	snapPeers map[string]*snapPeer // Peers connected on the `snap` protocol
 
 	ethJoinFeed  event.Feed // Events when an `eth` peer successfully joins
 	ethDropFeed  event.Feed // Events when an `eth` peer gets dropped
@@ -63,7 +67,7 @@ type peerSet struct {
 func newPeerSet() *peerSet {
 	return &peerSet{
 		ethPeers:  make(map[string]*ethPeer),
-		snapPeers: make(map[string]*snap.Peer),
+		snapPeers: make(map[string]*snapPeer),
 	}
 }
 
@@ -97,11 +101,12 @@ func (ps *peerSet) subscribeSnapDrop(ch chan<- *snap.Peer) event.Subscription {
 func (ps *peerSet) registerEthPeer(peer *eth.Peer) error {
 	ps.lock.Lock()
 	if ps.closed {
-		defer ps.lock.Unlock()
+		ps.lock.Unlock()
 		return errPeerSetClosed
 	}
 	id := peer.ID()
 	if _, ok := ps.ethPeers[id]; ok {
+		ps.lock.Unlock()
 		return errPeerAlreadyRegistered
 	}
 	ps.ethPeers[id] = &ethPeer{Peer: peer}
@@ -109,6 +114,15 @@ func (ps *peerSet) registerEthPeer(peer *eth.Peer) error {
 	snap, ok := ps.snapPeers[id]
 	ps.lock.Unlock()
 
+	if ok {
+		// Previously dangling `snap` peer, stop it's timer since `eth` connected
+		snap.lock.Lock()
+		if snap.ethDrop != nil {
+			snap.ethDrop.Stop()
+			snap.ethDrop = nil
+		}
+		snap.lock.Unlock()
+	}
 	ps.ethJoinFeed.Send(peer)
 	if ok {
 		ps.snapJoinFeed.Send(snap)
@@ -123,6 +137,7 @@ func (ps *peerSet) unregisterEthPeer(id string) error {
 	ps.lock.Lock()
 	eth, ok := ps.ethPeers[id]
 	if !ok {
+		ps.lock.Unlock()
 		return errPeerNotRegistered
 	}
 	delete(ps.ethPeers, id)
@@ -140,19 +155,31 @@ func (ps *peerSet) unregisterEthPeer(id string) error {
 // registerSnapPeer injects a new `snap` peer into the working set, or returns
 // an error if the peer is already known. The peer is announced on the `snap`
 // join feed if it completes an existing `eth` peer.
+//
+// If the peer isn't yet connected on `eth` and fails to do so within a given
+// amount of time, it is dropped. This enforces that `snap` is an externsion to
+// `eth`, not a standalone leeching protocol.
 func (ps *peerSet) registerSnapPeer(peer *snap.Peer) error {
 	ps.lock.Lock()
 	if ps.closed {
-		defer ps.lock.Unlock()
+		ps.lock.Unlock()
 		return errPeerSetClosed
 	}
-	id := peer.ID().String()
+	id := peer.ID()
 	if _, ok := ps.snapPeers[id]; ok {
+		ps.lock.Unlock()
 		return errPeerAlreadyRegistered
 	}
-	ps.snapPeers[id] = peer
+	ps.snapPeers[id] = &snapPeer{Peer: peer}
 
 	_, ok := ps.ethPeers[id]
+	if !ok {
+		// Dangling `snap` peer, start a timer to drop if `eth` doesn't connect
+		ps.snapPeers[id].ethDrop = time.AfterFunc(ethConnectTimeout, func() {
+			peer.Log().Warn("Snapshot peer missing eth, dropping", "addr", peer.RemoteAddr(), "type", peer.Name())
+			peer.Disconnect(p2p.DiscUselessPeer)
+		})
+	}
 	ps.lock.Unlock()
 
 	if ok {
@@ -168,10 +195,18 @@ func (ps *peerSet) unregisterSnapPeer(id string) error {
 	ps.lock.Lock()
 	peer, ok := ps.snapPeers[id]
 	if !ok {
+		ps.lock.Unlock()
 		return errPeerNotRegistered
 	}
 	delete(ps.snapPeers, id)
 	ps.lock.Unlock()
+
+	peer.lock.Lock()
+	if peer.ethDrop != nil {
+		peer.ethDrop.Stop()
+		peer.ethDrop = nil
+	}
+	peer.lock.Unlock()
 
 	ps.snapDropFeed.Send(peer)
 	return nil
@@ -186,7 +221,7 @@ func (ps *peerSet) ethPeer(id string) *ethPeer {
 }
 
 // snapPeer retrieves the registered `snap` peer with the given id.
-func (ps *peerSet) snapPeer(id string) *snap.Peer {
+func (ps *peerSet) snapPeer(id string) *snapPeer {
 	ps.lock.RLock()
 	defer ps.lock.RUnlock()
 

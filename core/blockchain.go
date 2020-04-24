@@ -871,8 +871,19 @@ func (bc *BlockChain) GetUnclesInChain(block *types.Block, length int) []*types.
 	return uncles
 }
 
-// TrieNode retrieves a blob of data associated with a trie node (or code hash)
-// either from ephemeral in-memory cache, or from persistent storage.
+// ByteCode retrieves a blob of data associated with a code hash either from
+// ephemeral in-memory cache, or from persistent storage.
+//
+// Note, this method is currently the same as TrieNode because Geth does not
+// store codes and nodes in different namespaces. This needs to be fixed long
+// term however, so having separate methods ensures we can use the correct one
+// now, and only need to swap the impleentation down the road.
+func (bc *BlockChain) ByteCode(hash common.Hash) ([]byte, error) {
+	return bc.stateCache.TrieDB().Node(hash)
+}
+
+// TrieNode retrieves a blob of data associated with a trie node either from
+// ephemeral in-memory cache, or from persistent storage.
 func (bc *BlockChain) TrieNode(hash common.Hash) ([]byte, error) {
 	return bc.stateCache.TrieDB().Node(hash)
 }
