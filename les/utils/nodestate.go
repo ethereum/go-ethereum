@@ -54,36 +54,28 @@ type (
 	// are interested in the given field). Persistent fields should have an encoder and
 	// a decoder function.
 	NodeStateMachine struct {
-		started, stopped                    bool
-		lock                                sync.Mutex
-		clock                               mclock.Clock
-		db                                  ethdb.KeyValueStore
-		dbMappingKey, dbNodeKey, dbClockKey []byte
-		mappings                            []nsMapping
-		currentMapping                      int
-		nodes                               map[enode.ID]*nodeInfo
-		quit                                chan chan struct{}
-		offlineCallbackList                 []offlineCallback
+		started, stopped        bool
+		lock                    sync.Mutex
+		clock                   mclock.Clock
+		db                      ethdb.KeyValueStore
+		dbMappingKey, dbNodeKey []byte
+		mappings                []nsMapping
+		currentMapping          int
+		nodes                   map[enode.ID]*nodeInfo
+		offlineCallbackList     []offlineCallback
 
 		// Registered state flags or fields. Modifications are allowed
 		// only when the node state machine has not been initialized.
-		nodeStates                      map[*NodeStateFlag]int
-		nodeStateNameMap                map[string]int
-		nodeFields                      []*NodeStateField
-		nodeFieldMasks                  []NodeStateBitMask
-		nodeFieldMap                    map[*NodeStateField]int
-		nodeFieldNameMap                map[string]int
-		stateCount                      int
-		stateLimit                      int
-		saveImmediately, saveAtShutdown NodeStateBitMask
+		nodeStates       map[*NodeStateFlag]int
+		nodeStateNameMap map[string]int
+		nodeFields       []*nodeFieldInfo
+		nodeFieldMap     map[*NodeField]int
+		nodeFieldNameMap map[string]int
+		saveFlags        NodeStateBitMask
 
 		// Installed callbacks. Modifications are allowed only when the
 		// node state machine has not been initialized.
 		stateSubs []nodeStateSub
-
-		// clock offset is persisted in order to correctly interpret saved timer expiration
-		clockOffset, clockPersisted mclock.AbsTime
-		clockStart                  uint64
 
 		// Testing hooks, only for testing purposes.
 		saveNodeHook func(*nodeInfo)
@@ -94,20 +86,24 @@ type (
 	// If saveImmediately is true then the node is saved each time the flag is switched on
 	// or off. If saveAtShutdown is true then the node is saved when state machine is shutdown.
 	NodeStateFlag struct {
-		name                            string
-		saveImmediately, saveAtShutdown bool
+		name       string
+		persistent bool
 	}
 
-	// NodeStateField describes an optional node field of the given type. The contents
+	// NodeField describes an optional node field of the given type. The contents
 	// of the field are only retained for each node as long as at least one of the
 	// specified flags is set. If all relevant flags are reset then the field is removed
 	// after all callbacks of the state change are processed.
-	NodeStateField struct {
+	NodeField struct {
 		name   string
 		ftype  reflect.Type
-		flags  []*NodeStateFlag
 		encode func(interface{}) ([]byte, error)
 		decode func([]byte) (interface{}, error)
+	}
+
+	NodeStateSetup struct {
+		Flags  []*NodeStateFlag
+		Fields []*NodeField
 	}
 
 	// nsMapping describes an index mapping of node state flags and fields. Mapping is
@@ -128,20 +124,20 @@ type (
 	// the relevant bits are included.
 	NodeStateCallback func(id enode.ID, oldState, newState NodeStateBitMask)
 
+	NodeFieldCallback func(id enode.ID, state NodeStateBitMask, oldValue, newValue interface{})
+
 	// nodeInfo contains node state, fields and state timeouts
 	nodeInfo struct {
-		state          NodeStateBitMask
-		timeouts       []*nodeStateTimeout
-		fields         []interface{}
-		fieldGcCounter int
-		db, dirty      bool
+		state     NodeStateBitMask
+		timeouts  []*nodeStateTimeout
+		fields    []interface{}
+		db, dirty bool
 	}
 
 	nodeInfoEnc struct {
-		Mapping  uint
-		State    NodeStateBitMask
-		Timeouts []nodeStateTimeoutEnc
-		Fields   [][]byte
+		Mapping uint
+		State   NodeStateBitMask
+		Fields  [][]byte
 	}
 
 	nodeStateSub struct {
@@ -150,20 +146,19 @@ type (
 	}
 
 	nodeStateTimeout struct {
-		id    enode.ID
-		at    mclock.AbsTime
-		timer mclock.Timer
 		mask  NodeStateBitMask
+		timer mclock.Timer
 	}
 
-	nodeStateTimeoutEnc struct {
-		At   uint64
-		Mask NodeStateBitMask
+	nodeFieldInfo struct {
+		*NodeField
+		subs []NodeFieldCallback
 	}
 
 	offlineCallback struct {
-		id    enode.ID
-		state NodeStateBitMask
+		id     enode.ID
+		state  NodeStateBitMask
+		fields []interface{}
 	}
 )
 
@@ -175,7 +170,7 @@ var (
 	errOutOfBound     = errors.New("out of bound")
 	errInvalidField   = errors.New("invalid field type")
 
-	OfflineFlag = NewNodeStateFlag("offline", false, false)
+	OfflineFlag = NewFlag("offline")
 )
 
 // OfflineState is a special state that is assumed to be set before a node is loaded from
@@ -184,57 +179,87 @@ const OfflineState = NodeStateBitMask(1)
 
 // NewNodeStateMachine creates a new node state machine.
 // If db is not nil then the node states, fields and active timeouts are persisted.
-// Persistence can be enabled or disabled for each state flag.
-func NewNodeStateMachine(db ethdb.KeyValueStore, dbKey []byte, clock mclock.Clock) *NodeStateMachine {
+// Persistence can be enabled or disabled for each state flag and field.
+func NewNodeStateMachine(db ethdb.KeyValueStore, dbKey []byte, clock mclock.Clock, setup NodeStateSetup) *NodeStateMachine {
+	// init flag is always mapped to index 0 (OfflineState bit mask)
+	flags := append([]*NodeStateFlag{OfflineFlag}, setup.Flags...)
+	if len(flags) > 8*int(unsafe.Sizeof(NodeStateBitMask(0))) {
+		panic("Too many node state flags")
+	}
 	ns := &NodeStateMachine{
 		db:               db,
 		dbMappingKey:     append(dbKey, []byte("mapping:")...),
 		dbNodeKey:        append(dbKey, []byte("node:")...),
-		dbClockKey:       append(dbKey, []byte("clock:")...),
 		clock:            clock,
 		nodes:            make(map[enode.ID]*nodeInfo),
 		nodeStates:       make(map[*NodeStateFlag]int),
 		nodeStateNameMap: make(map[string]int),
-		nodeFieldMap:     make(map[*NodeStateField]int),
+		nodeFields:       make([]*nodeFieldInfo, len(setup.Fields)),
+		nodeFieldMap:     make(map[*NodeField]int),
 		nodeFieldNameMap: make(map[string]int),
-		stateLimit:       8 * int(unsafe.Sizeof(NodeStateBitMask(0))),
-		quit:             make(chan chan struct{}),
 	}
-	// init flag is always mapped to index 0 (OfflineState bit mask)
-	ns.RegisterState(OfflineFlag)
+	for index, flag := range flags {
+		if _, ok := ns.nodeStateNameMap[flag.name]; ok {
+			panic("Node state flag name collision")
+		}
+		ns.nodeStates[flag] = index
+		ns.nodeStateNameMap[flag.name] = index
+		if flag.persistent {
+			ns.saveFlags |= NodeStateBitMask(1) << index
+		}
+	}
+	for index, field := range setup.Fields {
+		if _, ok := ns.nodeFieldNameMap[field.name]; ok {
+			panic("Node field name collision")
+		}
+		ns.nodeFields[index] = &nodeFieldInfo{NodeField: field}
+		ns.nodeFieldMap[field] = index
+		ns.nodeFieldNameMap[field.name] = index
+	}
 	return ns
 }
 
-// NewNodeStateFlag creates a new node state flag. Mapping happens when it is first passed
-// to NodeStateMachine.RegisterState
-func NewNodeStateFlag(name string, saveImmediately, saveAtShutdown bool) *NodeStateFlag {
+// NewFlag creates a new node state flag
+func NewFlag(name string) *NodeStateFlag {
 	return &NodeStateFlag{
-		name:            name,
-		saveImmediately: saveImmediately,
-		saveAtShutdown:  saveAtShutdown,
+		name: name,
 	}
 }
 
-// NewNodeStateField creates a new node state field. Mapping happens when it is first passed
-// to NodeStateMachine.RegisterField
-func NewNodeStateField(name string, ftype reflect.Type, flags []*NodeStateFlag, encode func(interface{}) ([]byte, error), decode func([]byte) (interface{}, error)) *NodeStateField {
-	return &NodeStateField{
+// NewPersistentFlag creates a new persistent node state flag
+func NewPersistentFlag(name string) *NodeStateFlag {
+	return &NodeStateFlag{
+		name:       name,
+		persistent: true,
+	}
+}
+
+// NewField creates a new node state field
+func NewField(name string, ftype reflect.Type) *NodeField {
+	return &NodeField{
+		name:  name,
+		ftype: ftype,
+	}
+}
+
+// NewPersistentField creates a new persistent node field
+func NewPersistentField(name string, ftype reflect.Type, encode func(interface{}) ([]byte, error), decode func([]byte) (interface{}, error)) *NodeField {
+	return &NodeField{
 		name:   name,
 		ftype:  ftype,
-		flags:  flags,
 		encode: encode,
 		decode: decode,
 	}
 }
 
-// AddStateSub adds a node state subscription. The callback is called while the state
+// SubscribeState adds a node state subscription. The callback is called while the state
 // machine mutex is not held and it is allowed to make further state updates. All immediate
 // changes throughout the system are processed in the same thread/goroutine. It is the
 // responsibility of the implemented state logic to avoid deadlocks caused by the callbacks,
 // infinite toggling of flags or hazardous/non-deterministic state changes.
 // State subscriptions should be installed before loading the node database or making the
 // first state update.
-func (ns *NodeStateMachine) AddStateSub(mask NodeStateBitMask, callback NodeStateCallback) error {
+func (ns *NodeStateMachine) SubscribeState(mask NodeStateBitMask, callback NodeStateCallback) error {
 	ns.lock.Lock()
 	defer ns.lock.Unlock()
 
@@ -242,6 +267,22 @@ func (ns *NodeStateMachine) AddStateSub(mask NodeStateBitMask, callback NodeStat
 		return errAlreadyStarted
 	}
 	ns.stateSubs = append(ns.stateSubs, nodeStateSub{mask, callback})
+	return nil
+}
+
+func (ns *NodeStateMachine) SubscribeField(field int, callback NodeFieldCallback) error {
+	ns.lock.Lock()
+	defer ns.lock.Unlock()
+
+	if ns.started {
+		return errAlreadyStarted
+	}
+	if field >= len(ns.nodeFields) {
+		log.Error("Field index out of bounds", "index", field, "field count", len(ns.nodeFields))
+		return errOutOfBound
+	}
+	f := ns.nodeFields[field]
+	f.subs = append(f.subs, callback)
 	return nil
 }
 
@@ -267,21 +308,6 @@ func (ns *NodeStateMachine) Start() {
 	ns.started = true
 	if ns.db != nil {
 		ns.loadFromDb()
-		go func() {
-			for {
-				select {
-				case <-ns.clock.After(time.Minute * 10):
-					ns.lock.Lock()
-					ns.persistClock()
-					ns.lock.Unlock()
-				case q := <-ns.quit:
-					close(q)
-					return
-				}
-			}
-		}()
-	} else {
-		ns.clockOffset = -ns.clock.Now()
 	}
 	ns.lock.Unlock()
 	ns.offlineCallbacks(true)
@@ -291,15 +317,14 @@ func (ns *NodeStateMachine) Start() {
 func (ns *NodeStateMachine) Stop() {
 	ns.lock.Lock()
 	for id, node := range ns.nodes {
-		ns.offlineCallbackList = append(ns.offlineCallbackList, offlineCallback{id, node.state})
+		fields := make([]interface{}, len(node.fields))
+		copy(fields, node.fields)
+		ns.offlineCallbackList = append(ns.offlineCallbackList, offlineCallback{id, node.state, fields})
 	}
 	ns.stopped = true
 	if ns.db != nil {
 		ns.saveToDb()
 		ns.lock.Unlock()
-		quit := make(chan struct{})
-		ns.quit <- quit
-		<-quit
 	} else {
 		ns.lock.Unlock()
 	}
@@ -308,17 +333,6 @@ func (ns *NodeStateMachine) Stop() {
 
 // loadFromDb loads persisted node states from the database
 func (ns *NodeStateMachine) loadFromDb() {
-	var clockStart uint64
-	if enc, err := ns.db.Get(ns.dbClockKey); err == nil {
-		if err := rlp.DecodeBytes(enc, &clockStart); err != nil {
-			log.Error("Failed to decode persistent clock", "error", err)
-			return
-		}
-	}
-	now := ns.clock.Now()
-	ns.clockOffset = mclock.AbsTime(clockStart) - now
-	ns.clockPersisted = now
-
 	if enc, err := ns.db.Get(ns.dbMappingKey); err == nil {
 		if err := rlp.DecodeBytes(enc, &ns.mappings); err != nil {
 			log.Error("Failed to decode scheme", "error", err)
@@ -380,32 +394,12 @@ loop:
 			continue
 		}
 		copy(id[:], it.Key()[len(ns.dbNodeKey):])
-		ns.decodeNode(id, it.Value(), now)
+		ns.decodeNode(id, it.Value())
 	}
-}
-
-// persistClock stores the current cumulative time in the database
-func (ns *NodeStateMachine) persistClock() {
-	now := ns.clock.Now()
-	if time.Duration(now-ns.clockPersisted) < time.Second*10 {
-		return
-	}
-
-	pclock := uint64(now + ns.clockOffset)
-	enc, err := rlp.EncodeToBytes(&pclock)
-	if err != nil {
-		log.Error("Failed to encode persistent clock", "error", err)
-		return
-	}
-	if err := ns.db.Put(ns.dbClockKey, enc); err != nil {
-		log.Error("Failed to save persistent clock", "error", err)
-		return
-	}
-	ns.clockPersisted = now
 }
 
 // decodeNode decodes a node database entry and adds it to the node set if successful
-func (ns *NodeStateMachine) decodeNode(id enode.ID, data []byte, now mclock.AbsTime) {
+func (ns *NodeStateMachine) decodeNode(id enode.ID, data []byte) {
 	var enc nodeInfoEnc
 	if err := rlp.DecodeBytes(data, &enc); err != nil {
 		log.Error("Failed to decode node info", "id", id, "error", err)
@@ -472,25 +466,12 @@ func (ns *NodeStateMachine) decodeNode(id enode.ID, data []byte, now mclock.AbsT
 	if !success {
 		return
 	}
-	var masks []NodeStateBitMask
-	for _, et := range enc.Timeouts {
-		if mask, success := convertMask(int(enc.Mapping), encMapping.States, et.Mask); success {
-			masks = append(masks, mask)
-		} else {
-			return
-		}
-	}
 	// It's a compatible node record, add it to set.
 	ns.nodes[id] = node
 	node.state = state
-	ns.offlineCallbackList = append(ns.offlineCallbackList, offlineCallback{id, state})
-	for index, et := range enc.Timeouts {
-		dt := time.Duration(et.At - uint64(now+ns.clockOffset))
-		if dt < 0 {
-			dt = 0
-		}
-		ns.addTimeout(id, masks[index], dt)
-	}
+	fields := make([]interface{}, len(node.fields))
+	copy(fields, node.fields)
+	ns.offlineCallbackList = append(ns.offlineCallbackList, offlineCallback{id, state, fields})
 	log.Debug("Loaded node state", "id", id, "state", ns.stateToString(enc.State))
 }
 
@@ -499,9 +480,12 @@ func (ns *NodeStateMachine) saveNode(id enode.ID, node *nodeInfo) error {
 	if ns.db == nil {
 		return nil
 	}
-	saveStates := ns.saveImmediately | ns.saveAtShutdown
-	newState := node.state & saveStates
-	if newState == 0 {
+
+	storedState := node.state & ns.saveFlags
+	for _, t := range node.timeouts {
+		storedState &= ^t.mask
+	}
+	if storedState == 0 {
 		if node.db {
 			node.db = false
 			ns.deleteNode(id)
@@ -512,18 +496,10 @@ func (ns *NodeStateMachine) saveNode(id enode.ID, node *nodeInfo) error {
 
 	enc := nodeInfoEnc{
 		Mapping: uint(ns.currentMapping),
-		State:   newState,
+		State:   storedState,
 		Fields:  make([][]byte, len(ns.nodeFields)),
 	}
 	log.Debug("Saved node state", "id", id, "state", ns.stateToString(enc.State))
-	for _, t := range node.timeouts {
-		if mask := t.mask & saveStates; mask != 0 {
-			enc.Timeouts = append(enc.Timeouts, nodeStateTimeoutEnc{
-				At:   uint64(t.at + ns.clockOffset),
-				Mask: mask,
-			})
-		}
-	}
 	for i, f := range node.fields {
 		if f == nil {
 			continue
@@ -546,7 +522,6 @@ func (ns *NodeStateMachine) saveNode(id enode.ID, node *nodeInfo) error {
 		return err
 	}
 	node.dirty, node.db = false, true
-	ns.persistClock()
 
 	if ns.saveNodeHook != nil {
 		ns.saveNodeHook(node)
@@ -561,7 +536,6 @@ func (ns *NodeStateMachine) deleteNode(id enode.ID) {
 
 // saveToDb saves all nodes that have been changed but not saved immediately
 func (ns *NodeStateMachine) saveToDb() {
-	ns.persistClock()
 	for id, node := range ns.nodes {
 		if node.dirty {
 			err := ns.saveNode(id, node)
@@ -572,45 +546,49 @@ func (ns *NodeStateMachine) saveToDb() {
 	}
 }
 
-// UpdateState updates the given node state flags and processes all resulting callbacks.
+// Persist saves the state of the given node immediately
+func (ns *NodeStateMachine) Persist(id enode.ID) error {
+	ns.lock.Lock()
+	defer ns.lock.Unlock()
+
+	if node := ns.nodes[id]; node != nil && node.dirty {
+		err := ns.saveNode(id, node)
+		if err != nil {
+			log.Error("Failed to save node", "id", id, "error", err)
+		}
+		return err
+	}
+	return nil
+}
+
+// SetState updates the given node state flags and processes all resulting callbacks.
 // It only returns after all subsequent immediate changes (including those changed by the
 // callbacks) have been processed.
-func (ns *NodeStateMachine) UpdateState(id enode.ID, set, reset NodeStateBitMask, timeout time.Duration) {
+func (ns *NodeStateMachine) SetState(id enode.ID, set, reset NodeStateBitMask, timeout time.Duration) {
 	ns.lock.Lock()
 	ns.checkStarted()
 	if ns.stopped {
 		ns.lock.Unlock()
 		return
 	}
-	cb := ns.updateState(id, set, reset, timeout)
-	ns.lock.Unlock()
-	if cb != nil {
-		cb()
-	}
-}
 
-// updateState performs a node state update and returns a function that processes state
-// subscription callbacks and should be called while the mutex is not held.
-// If the timeout is specified, it means the set states will be reset after the specified
-// time interval.
-func (ns *NodeStateMachine) updateState(id enode.ID, set, reset NodeStateBitMask, timeout time.Duration) func() {
 	node := ns.nodes[id]
 	if node == nil {
 		node = ns.newNode()
 		ns.nodes[id] = node
 	}
-	newState := (node.state & (^reset)) | set
-	if newState == node.state {
-		return nil
-	}
 	oldState := node.state
+	newState := (node.state & (^reset)) | set
 	changed := oldState ^ newState
 	node.state = newState
 
-	ns.removeTimeouts(node, oldState&(^newState))
-	setStates := newState & (^oldState)
-	if timeout != 0 && setStates != 0 {
-		ns.addTimeout(id, setStates, timeout)
+	ns.removeTimeouts(node, oldState|newState)
+	if newState == node.state {
+		ns.lock.Unlock()
+		return
+	}
+	if timeout != 0 && newState != 0 {
+		ns.addTimeout(id, newState, timeout)
 	}
 	if newState == 0 {
 		delete(ns.nodes, id)
@@ -618,37 +596,15 @@ func (ns *NodeStateMachine) updateState(id enode.ID, set, reset NodeStateBitMask
 			ns.deleteNode(id)
 		}
 	} else {
-		if changed&ns.saveImmediately != 0 {
-			err := ns.saveNode(id, node)
-			if err != nil {
-				log.Error("Failed to save node", "id", id, "error", err)
-			}
-		} else if changed&ns.saveAtShutdown != 0 {
+		if changed&ns.saveFlags != 0 {
 			node.dirty = true
 		}
-		node.fieldGcCounter++
 	}
-	return func() {
-		// call state update subscription callbacks without holding the mutex
-		for _, sub := range ns.stateSubs {
-			if changed&sub.mask != 0 {
-				sub.callback(id, oldState&sub.mask, newState&sub.mask)
-			}
-		}
-		if newState != 0 {
-			ns.lock.Lock()
-			node.fieldGcCounter--
-			if node.fieldGcCounter == 0 {
-				// remove all fields that are not needed any more after reaching the final state
-				for i, f := range node.fields {
-					if f != nil {
-						if ns.nodeFieldMasks[i]&node.state == 0 {
-							node.fields[i] = nil
-						}
-					}
-				}
-			}
-			ns.lock.Unlock()
+	ns.lock.Unlock()
+	// call state update subscription callbacks without holding the mutex
+	for _, sub := range ns.stateSubs {
+		if changed&sub.mask != 0 {
+			sub.callback(id, oldState&sub.mask, newState&sub.mask)
 		}
 	}
 }
@@ -664,6 +620,17 @@ func (ns *NodeStateMachine) offlineCallbacks(start bool) {
 					sub.callback(cb.id, offState, onState)
 				} else {
 					sub.callback(cb.id, onState, offState)
+				}
+			}
+			for i, f := range cb.fields {
+				if f != nil && ns.nodeFields[i].subs != nil {
+					for _, fsub := range ns.nodeFields[i].subs {
+						if start {
+							fsub(cb.id, OfflineState, nil, f)
+						} else {
+							fsub(cb.id, OfflineState, f, nil)
+						}
+					}
 				}
 			}
 		}
@@ -695,21 +662,12 @@ func (ns *NodeStateMachine) addTimeout(id enode.ID, mask NodeStateBitMask, timeo
 		return
 	}
 	ns.removeTimeouts(node, mask)
-	t := &nodeStateTimeout{
-		id:   id,
-		at:   ns.clock.Now() + mclock.AbsTime(timeout),
-		mask: mask,
-	}
+	t := &nodeStateTimeout{mask: mask}
 	t.timer = ns.clock.AfterFunc(timeout, func() {
-		ns.lock.Lock()
-		cb := ns.updateState(id, 0, t.mask, 0)
-		ns.lock.Unlock()
-		if cb != nil {
-			cb()
-		}
+		ns.SetState(id, 0, t.mask, 0)
 	})
 	node.timeouts = append(node.timeouts, t)
-	if mask&ns.saveAtShutdown != 0 {
+	if mask&ns.saveFlags != 0 {
 		node.dirty = true
 	}
 }
@@ -733,43 +691,10 @@ func (ns *NodeStateMachine) removeTimeouts(node *nodeInfo, mask NodeStateBitMask
 		node.timeouts[i] = node.timeouts[len(node.timeouts)-1]
 		node.timeouts = node.timeouts[:len(node.timeouts)-1]
 		i--
+		if match&ns.saveFlags != 0 {
+			node.dirty = true
+		}
 	}
-}
-
-// RegisterField adds the node field if it has not been added before and returns the field index.
-// Node fields should be mapped before loading the node database or making the first state update.
-func (ns *NodeStateMachine) RegisterField(field *NodeStateField) (int, error) {
-	mask := ns.StatesMask(field.flags)
-	ns.lock.Lock()
-	defer ns.lock.Unlock()
-
-	// Short circuit if it's already registered.
-	if index, ok := ns.nodeFieldMap[field]; ok {
-		return index, nil
-	}
-	// Ensure the registration time window is still opened.
-	if ns.started {
-		return 0, errAlreadyStarted
-	}
-	// Ensure the field name is still available.
-	if _, ok := ns.nodeFieldNameMap[field.name]; ok {
-		return 0, errNameCollision
-	}
-	index := len(ns.nodeFields)
-	ns.nodeFields = append(ns.nodeFields, field)
-	ns.nodeFieldMasks = append(ns.nodeFieldMasks, mask)
-	ns.nodeFieldMap[field] = index
-	ns.nodeFieldNameMap[field.name] = index
-	return index, nil
-}
-
-// MustRegisterField calls RegisterField and panics if an error was returned.
-func (ns *NodeStateMachine) MustRegisterField(field *NodeStateField) int {
-	i, err := ns.RegisterField(field)
-	if err != nil {
-		panic(err)
-	}
-	return i
 }
 
 // GetField retrieves the given field of the given node
@@ -790,98 +715,51 @@ func (ns *NodeStateMachine) GetField(id enode.ID, fieldId int) interface{} {
 // SetField sets the given field of the given node
 func (ns *NodeStateMachine) SetField(id enode.ID, fieldId int, value interface{}) error {
 	ns.lock.Lock()
-	defer ns.lock.Unlock()
-
 	ns.checkStarted()
 	if ns.stopped {
+		ns.lock.Unlock()
 		return nil
 	}
 	// Allocate the node if it's non-existent
 	node := ns.nodes[id]
 	if node == nil {
 		node = ns.newNode()
+		ns.nodes[id] = node
 	}
 	// Refuse to set field if it's unknown or the relevant state is unset.
-	if fieldId >= len(ns.nodeFields) {
+	if fieldId < 0 || fieldId >= len(ns.nodeFields) {
 		log.Error("Field index out of bounds", "index", fieldId, "field count", len(ns.nodeFields))
+		ns.lock.Unlock()
 		return errOutOfBound
 	}
-	if reflect.TypeOf(value) != ns.nodeFields[fieldId].ftype {
-		log.Error("Invalid field type", "type", reflect.TypeOf(value), "required", ns.nodeFields[fieldId].ftype)
+	f := ns.nodeFields[fieldId]
+	if value != nil && reflect.TypeOf(value) != f.ftype {
+		log.Error("Invalid field type", "type", reflect.TypeOf(value), "required", f.ftype)
+		ns.lock.Unlock()
 		return errInvalidField
 	}
-	fieldMask := ns.nodeFieldMasks[fieldId]
-	if fieldMask&node.state == 0 {
+	oldValue := node.fields[fieldId]
+	if value == oldValue {
+		ns.lock.Unlock()
 		return nil
 	}
 	node.fields[fieldId] = value
-	ns.nodes[id] = node
-
-	// Persist node after change if necessary
-	if fieldMask&ns.saveImmediately != 0 {
-		err := ns.saveNode(id, node)
-		if err != nil {
-			log.Error("Failed to save node", "id", id, "error", err)
-		}
-	} else if fieldMask&ns.saveAtShutdown != 0 {
+	if f.encode != nil {
 		node.dirty = true
+	}
+
+	state := node.state
+	ns.lock.Unlock()
+	if len(f.subs) > 0 {
+		for _, cb := range f.subs {
+			cb(id, state, oldValue, value)
+		}
 	}
 	return nil
 }
 
-// RegisterState assigns a bit index to the given flag if it has not been mapped
-// before and returns the node state bit mask. State flags should be mapped before
-// loading the node database or making the first state update.
-func (ns *NodeStateMachine) RegisterState(flag *NodeStateFlag) (NodeStateBitMask, error) {
-	ns.lock.Lock()
-	defer ns.lock.Unlock()
-
-	// Short circuit if it's already registered.
-	if state, ok := ns.nodeStates[flag]; ok {
-		return NodeStateBitMask(1) << state, nil
-	}
-	// Ensure the registration time window is still opened.
-	if ns.started {
-		return NodeStateBitMask(0), errAlreadyStarted
-	}
-	// Ensure the registered states is under the limitation.
-	if len(ns.nodeStates) >= ns.stateLimit {
-		return NodeStateBitMask(0), errStateOverflow
-	}
-	// Ensure the flag name is still available.
-	if _, ok := ns.nodeStateNameMap[flag.name]; ok {
-		return NodeStateBitMask(0), errNameCollision
-	}
-	// Pass all checking, register it now
-	index := ns.stateCount
-	mask := NodeStateBitMask(1) << index
-	ns.stateCount++
-	ns.nodeStates[flag] = index
-	ns.nodeStateNameMap[flag.name] = index
-
-	if flag.saveImmediately {
-		ns.saveImmediately |= mask
-	}
-	if flag.saveAtShutdown {
-		ns.saveAtShutdown |= mask
-	}
-	return mask, nil
-}
-
-// MustRegisterState calls RegisterState and panics if an error was returned.
-func (ns *NodeStateMachine) MustRegisterState(flag *NodeStateFlag) NodeStateBitMask {
-	mask, err := ns.RegisterState(flag)
-	if err != nil {
-		panic(err)
-	}
-	return mask
-}
-
 // StateMask returns the state mask associated with given flag.
 func (ns *NodeStateMachine) StateMask(flag *NodeStateFlag) NodeStateBitMask {
-	ns.lock.Lock()
-	defer ns.lock.Unlock()
-
 	if state, ok := ns.nodeStates[flag]; ok {
 		return NodeStateBitMask(1) << state
 	}
@@ -898,6 +776,15 @@ func (ns *NodeStateMachine) StatesMask(flags []*NodeStateFlag) NodeStateBitMask 
 		mask |= ns.StateMask(flag)
 	}
 	return mask
+}
+
+// FieldIndex returns the index of the given field
+func (ns *NodeStateMachine) FieldIndex(field *NodeField) int {
+	if index, ok := ns.nodeFieldMap[field]; ok {
+		return index
+	}
+	log.Error("Unknown field", "name", field.name)
+	return -1
 }
 
 // stateToString returns a list of the names of the flags specified in the bit mask
@@ -920,4 +807,22 @@ func (ns *NodeStateMachine) stateToString(states NodeStateBitMask) string {
 // String returns the 2-based format to better represent "bits"
 func (mask NodeStateBitMask) String() string {
 	return fmt.Sprintf("%b", mask)
+}
+
+func (ns *NodeStateMachine) ForEach(require, disable NodeStateBitMask, cb func(id enode.ID, state NodeStateBitMask)) {
+	ns.lock.Lock()
+	type callback struct {
+		id    enode.ID
+		state NodeStateBitMask
+	}
+	var callbacks []callback
+	for id, node := range ns.nodes {
+		if node.state&require == require && node.state&disable == 0 {
+			callbacks = append(callbacks, callback{id, node.state & (require | disable)})
+		}
+	}
+	ns.lock.Unlock()
+	for _, c := range callbacks {
+		cb(c.id, c.state)
+	}
 }

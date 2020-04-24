@@ -45,9 +45,9 @@ type WrsIterator struct {
 // disables further selectability until it is removed or times out.
 // The ENR field should be set for all selectable nodes so that the iterator can return complete enodes.
 func NewWrsIterator(ns *utils.NodeStateMachine, requireMask, disableMask utils.NodeStateBitMask, selectedFlag *utils.NodeStateFlag,
-	enrField *utils.NodeStateField, wfn func(interface{}) uint64, validSchemes enr.IdentityScheme) *WrsIterator {
+	enrField *utils.NodeField, wfn func(interface{}) uint64, validSchemes enr.IdentityScheme) *WrsIterator {
 
-	selected := ns.MustRegisterState(selectedFlag)
+	selected := ns.StateMask(selectedFlag)
 	disableMask |= selected
 	w := &WrsIterator{
 		ns:           ns,
@@ -55,10 +55,10 @@ func NewWrsIterator(ns *utils.NodeStateMachine, requireMask, disableMask utils.N
 		requireMask:  requireMask,
 		disableMask:  disableMask,
 		selected:     selected,
-		enrFieldID:   ns.MustRegisterField(enrField),
+		enrFieldID:   ns.FieldIndex(enrField),
 		validSchemes: validSchemes,
 	}
-	ns.AddStateSub(requireMask|disableMask, func(id enode.ID, oldState, newState utils.NodeStateBitMask) {
+	ns.SubscribeState(requireMask|disableMask, func(id enode.ID, oldState, newState utils.NodeStateBitMask) {
 		ps := (oldState&w.disableMask) == 0 && (oldState&w.requireMask) == w.requireMask
 		ns := (newState&w.disableMask) == 0 && (newState&w.requireMask) == w.requireMask
 
@@ -96,7 +96,7 @@ func (w *WrsIterator) Next() bool {
 			var ok bool
 			if w.nextENR, ok = e.(*enr.Record); ok {
 				w.lock.Unlock()
-				w.ns.UpdateState(w.nextID, w.selected, 0, time.Second*5)
+				w.ns.SetState(w.nextID, w.selected, 0, time.Second*5)
 				return true
 			}
 		}

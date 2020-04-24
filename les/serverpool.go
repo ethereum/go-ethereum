@@ -71,20 +71,19 @@ type nodeHistory struct {
 }
 
 var (
-	sfDiscovered    = utils.NewNodeStateFlag("discovered", false, false)
-	sfHasValue      = utils.NewNodeStateFlag("hasValue", true, false)
-	sfSelected      = utils.NewNodeStateFlag("selected", false, false)
-	sfDialed        = utils.NewNodeStateFlag("dialed", false, false)
-	sfConnected     = utils.NewNodeStateFlag("connected", false, false)
-	sfRedialWait    = utils.NewNodeStateFlag("redialWait", false, true)
-	sfAlwaysConnect = utils.NewNodeStateFlag("alwaysConnect", false, false)
+	sfDiscovered    = utils.NewFlag("discovered")
+	sfHasValue      = utils.NewPersistentFlag("hasValue") //TODO save immediately
+	sfSelected      = utils.NewFlag("selected")
+	sfDialed        = utils.NewFlag("dialed")
+	sfConnected     = utils.NewFlag("connected")
+	sfRedialWait    = utils.NewFlag("redialWait")
+	sfAlwaysConnect = utils.NewFlag("alwaysConnect")
 
-	keepNodeRecord   = []*utils.NodeStateFlag{sfDiscovered, sfHasValue, sfAlwaysConnect}
 	disableSelection = []*utils.NodeStateFlag{sfSelected, sfDialed, sfConnected, sfRedialWait}
 
 	errInvalidField = errors.New("invalid field type")
 
-	sfiEnr = utils.NewNodeStateField("enr", reflect.TypeOf(&enr.Record{}), keepNodeRecord,
+	sfiEnr = utils.NewPersistentField("enr", reflect.TypeOf(&enr.Record{}),
 		func(field interface{}) ([]byte, error) {
 			if e, ok := field.(*enr.Record); ok {
 				enc, err := rlp.EncodeToBytes(e)
@@ -99,7 +98,7 @@ var (
 			return e, err
 		},
 	)
-	sfiNodeHistory = utils.NewNodeStateField("nodeHistory", reflect.TypeOf(&nodeHistory{}), []*utils.NodeStateFlag{sfDiscovered, sfHasValue},
+	sfiNodeHistory = utils.NewPersistentField("nodeHistory", reflect.TypeOf(&nodeHistory{}),
 		func(field interface{}) ([]byte, error) {
 			if n, ok := field.(*nodeHistory); ok {
 				enc, err := rlp.EncodeToBytes(&n.dialCost)
@@ -114,6 +113,11 @@ var (
 			return n, err
 		},
 	)
+
+	serverPoolSetup = utils.NodeStateSetup{
+		Flags:  []*utils.NodeStateFlag{sfDiscovered, sfHasValue, sfSelected, sfDialed, sfConnected, sfRedialWait, sfAlwaysConnect},
+		Fields: []*utils.NodeField{sfiEnr, sfiNodeHistory},
+	}
 )
 
 // newServerPool creates a new server pool
@@ -125,17 +129,17 @@ func newServerPool(ns *utils.NodeStateMachine, vt *lpc.ValueTracker, discovery e
 	}
 	s.getTimeout()
 	// Register all serverpool-defined states
-	stDiscovered := s.ns.MustRegisterState(sfDiscovered)
-	s.stHasValue = s.ns.MustRegisterState(sfHasValue)
-	s.stDialed = s.ns.MustRegisterState(sfDialed)
-	s.stConnected = s.ns.MustRegisterState(sfConnected)
-	s.stRedialWait = s.ns.MustRegisterState(sfRedialWait)
-	s.stAlwaysConnect = s.ns.MustRegisterState(sfAlwaysConnect)
-	s.ns.MustRegisterState(sfSelected)
+	stDiscovered := s.ns.StateMask(sfDiscovered)
+	s.stHasValue = s.ns.StateMask(sfHasValue)
+	s.stDialed = s.ns.StateMask(sfDialed)
+	s.stConnected = s.ns.StateMask(sfConnected)
+	s.stRedialWait = s.ns.StateMask(sfRedialWait)
+	s.stAlwaysConnect = s.ns.StateMask(sfAlwaysConnect)
+	s.ns.StateMask(sfSelected)
 
 	// Register all serverpool-defined node fields.
-	s.enrFieldId = s.ns.MustRegisterField(sfiEnr)
-	s.nodeHistoryFieldId = s.ns.MustRegisterField(sfiNodeHistory)
+	s.enrFieldId = s.ns.FieldIndex(sfiEnr)
+	s.nodeHistoryFieldId = s.ns.FieldIndex(sfiNodeHistory)
 
 	var (
 		validSchemes enr.IdentityScheme
@@ -163,7 +167,7 @@ func newServerPool(ns *utils.NodeStateMachine, vt *lpc.ValueTracker, discovery e
 	s.mixSources = append(s.mixSources, alwaysConnect)
 	if discovery != nil {
 		discEnrStored := enode.Filter(discovery, func(node *enode.Node) bool {
-			s.ns.UpdateState(node.ID(), stDiscovered, 0, time.Hour)
+			s.ns.SetState(node.ID(), stDiscovered, 0, time.Hour)
 			s.ns.SetField(node.ID(), s.enrFieldId, node.Record())
 			return true
 		})
@@ -181,7 +185,7 @@ func newServerPool(ns *utils.NodeStateMachine, vt *lpc.ValueTracker, discovery e
 		n.lock.Lock()
 		n.dialCost.Add(dialCost, s.vt.StatsExpirer().LogOffset(s.clock.Now()))
 		n.lock.Unlock()
-		s.ns.UpdateState(node.ID(), s.stDialed, 0, time.Second*10)
+		s.ns.SetState(node.ID(), s.stDialed, 0, time.Second*10)
 		return true
 	})
 	return s
@@ -195,7 +199,7 @@ func (s *serverPool) start() {
 		s.mixer.AddSource(iter)
 	}
 	for _, id := range s.trusted {
-		s.ns.UpdateState(id, s.stAlwaysConnect, 0, 0)
+		s.ns.SetState(id, s.stAlwaysConnect, 0, 0)
 	}
 }
 
@@ -206,7 +210,7 @@ func (s *serverPool) stop() {
 
 // registerPeer implements serverPeerSubscriber
 func (s *serverPool) registerPeer(p *serverPeer) {
-	s.ns.UpdateState(p.ID(), s.stConnected, s.stDialed, 0)
+	s.ns.SetState(p.ID(), s.stConnected, s.stDialed, 0)
 	p.setValueTracker(s.vt, s.vt.Register(p.ID()))
 	p.updateVtParams()
 }
@@ -214,9 +218,10 @@ func (s *serverPool) registerPeer(p *serverPeer) {
 // unregisterPeer implements serverPeerSubscriber
 func (s *serverPool) unregisterPeer(p *serverPeer) {
 	if s.nodeWeight(p.ID(), true) >= nodeWeightThreshold {
-		s.ns.UpdateState(p.ID(), s.stHasValue, 0, 0)
+		s.ns.SetState(p.ID(), s.stHasValue, 0, 0)
+		s.ns.Persist(p.ID())
 	}
-	s.ns.UpdateState(p.ID(), s.stRedialWait, s.stConnected, time.Second*10)
+	s.ns.SetState(p.ID(), s.stRedialWait, s.stConnected, time.Second*10)
 	s.vt.Unregister(p.ID())
 	p.setValueTracker(nil, nil)
 }
@@ -292,7 +297,10 @@ func (s *serverPool) knownSelectWeight(i interface{}) uint64 {
 	id := i.(enode.ID)
 	wt := s.nodeWeight(id, false)
 	if wt < nodeWeightThreshold {
-		go s.ns.UpdateState(id, 0, s.stHasValue, 0)
+		go func() {
+			s.ns.SetState(id, 0, s.stHasValue, 0)
+			s.ns.Persist(id)
+		}()
 		return 0
 	}
 	return wt

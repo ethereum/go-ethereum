@@ -28,11 +28,11 @@ import (
 
 func TestWrsIterator(t *testing.T) {
 	ns := utils.NewNodeStateMachine(nil, nil, &mclock.Simulated{})
-	st1 := ns.MustRegisterState(sfTest1)
-	st2 := ns.MustRegisterState(sfTest2)
-	st3 := ns.MustRegisterState(sfTest3)
-	st4 := ns.MustRegisterState(sfTest4)
-	enrField := ns.MustRegisterField(sfiEnr)
+	st1 := ns.StateMask(sfTest1)
+	st2 := ns.StateMask(sfTest2)
+	st3 := ns.StateMask(sfTest3)
+	st4 := ns.StateMask(sfTest4)
+	enrField := ns.FieldIndex(sfiEnr)
 	weights := make([]uint64, iterTestNodeCount+1)
 	wfn := func(i interface{}) uint64 {
 		id := i.(enode.ID)
@@ -47,7 +47,7 @@ func TestWrsIterator(t *testing.T) {
 	for i := 1; i <= iterTestNodeCount; i++ {
 		weights[i] = 1
 		node := enode.SignNull(&enr.Record{}, testNodeID(i))
-		ns.UpdateState(node.ID(), st1, 0, 0)
+		ns.SetState(node.ID(), st1, 0, 0)
 		ns.SetField(node.ID(), enrField, node.Record())
 	}
 	ch := make(chan *enode.Node)
@@ -81,9 +81,9 @@ func TestWrsIterator(t *testing.T) {
 	}
 
 	exp(0)
-	ns.UpdateState(testNodeID(1), st2, 0, 0)
-	ns.UpdateState(testNodeID(2), st2, 0, 0)
-	ns.UpdateState(testNodeID(3), st2, 0, 0)
+	ns.SetState(testNodeID(1), st2, 0, 0)
+	ns.SetState(testNodeID(2), st2, 0, 0)
+	ns.SetState(testNodeID(3), st2, 0, 0)
 	set[1] = true
 	set[2] = true
 	set[3] = true
@@ -91,18 +91,18 @@ func TestWrsIterator(t *testing.T) {
 	expset()
 	expset()
 	exp(0)
-	ns.UpdateState(testNodeID(4), st2, 0, 0)
-	ns.UpdateState(testNodeID(5), st2, 0, 0)
-	ns.UpdateState(testNodeID(6), st2, 0, 0)
-	ns.UpdateState(testNodeID(5), st3, 0, 0)
+	ns.SetState(testNodeID(4), st2, 0, 0)
+	ns.SetState(testNodeID(5), st2, 0, 0)
+	ns.SetState(testNodeID(6), st2, 0, 0)
+	ns.SetState(testNodeID(5), st3, 0, 0)
 	set[4] = true
 	set[6] = true
 	expset()
 	expset()
 	exp(0)
-	ns.UpdateState(testNodeID(1), 0, st4, 0)
-	ns.UpdateState(testNodeID(2), 0, st4, 0)
-	ns.UpdateState(testNodeID(3), 0, st4, 0)
+	ns.SetState(testNodeID(1), 0, st4, 0)
+	ns.SetState(testNodeID(2), 0, st4, 0)
+	ns.SetState(testNodeID(3), 0, st4, 0)
 	weights[2] = 0
 	set[1] = true
 	set[3] = true
@@ -110,10 +110,10 @@ func TestWrsIterator(t *testing.T) {
 	expset()
 	exp(0)
 	weights[2] = 1
-	ns.UpdateState(testNodeID(2), 0, st2, 0)
-	ns.UpdateState(testNodeID(1), 0, st4, 0)
-	ns.UpdateState(testNodeID(2), st2, st4, 0)
-	ns.UpdateState(testNodeID(3), 0, st4, 0)
+	ns.SetState(testNodeID(2), 0, st2, 0)
+	ns.SetState(testNodeID(1), 0, st4, 0)
+	ns.SetState(testNodeID(2), st2, st4, 0)
+	ns.SetState(testNodeID(3), 0, st4, 0)
 	set[1] = true
 	set[2] = true
 	set[3] = true

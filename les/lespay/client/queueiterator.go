@@ -45,17 +45,17 @@ type QueueIterator struct {
 // disables further selectability until it is removed or times out.
 // The ENR field should be set for all selectable nodes so that the iterator can return complete enodes.
 func NewQueueIterator(ns *utils.NodeStateMachine, requireMask, disableMask utils.NodeStateBitMask,
-	selectedFlag *utils.NodeStateFlag, enrField *utils.NodeStateField, validSchemes enr.IdentityScheme) *QueueIterator {
+	selectedFlag *utils.NodeStateFlag, enrField *utils.NodeField, validSchemes enr.IdentityScheme) *QueueIterator {
 
-	selected := ns.MustRegisterState(selectedFlag)
+	selected := ns.StateMask(selectedFlag)
 	disableMask |= selected
 	qi := &QueueIterator{
 		ns:           ns,
 		selected:     selected,
-		enrFieldID:   ns.MustRegisterField(enrField),
+		enrFieldID:   ns.FieldIndex(enrField),
 		validSchemes: validSchemes,
 	}
-	ns.AddStateSub(requireMask|disableMask, func(id enode.ID, oldState, newState utils.NodeStateBitMask) {
+	ns.SubscribeState(requireMask|disableMask, func(id enode.ID, oldState, newState utils.NodeStateBitMask) {
 		oldMatch := (oldState&requireMask == requireMask) && (oldState&disableMask == 0)
 		newMatch := (newState&requireMask == requireMask) && (newState&disableMask == 0)
 		if newMatch != oldMatch {
@@ -97,7 +97,7 @@ func (qi *QueueIterator) Next() bool {
 				copy(qi.queue[:len(qi.queue)-1], qi.queue[1:])
 				qi.queue = qi.queue[:len(qi.queue)-1]
 				qi.lock.Unlock()
-				qi.ns.UpdateState(qi.nextID, qi.selected, 0, time.Second*5)
+				qi.ns.SetState(qi.nextID, qi.selected, 0, time.Second*5)
 				return true
 			}
 		}

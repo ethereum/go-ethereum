@@ -168,7 +168,7 @@ func New(ctx *node.ServiceContext, config *eth.Config) (*LightEthereum, error) {
 		enr.Load(ethEntry)
 		return forkFilter(ethEntry.ForkID) == nil && enr.Load(&lesEntry{}) == nil
 	})
-	leth.ns = utils.NewNodeStateMachine(lespayDb, []byte("serverpool:"), &mclock.System{})
+	leth.ns = utils.NewNodeStateMachine(lespayDb, []byte("serverpool:"), &mclock.System{}, serverPoolSetup)
 	leth.serverPool = newServerPool(leth.ns, leth.valueTracker, dnsFiltered, &mclock.System{}, config.UltraLightServers, false)
 	peers.subscribe(leth.serverPool)
 	leth.dialCandidates = leth.serverPool.dialIterator
