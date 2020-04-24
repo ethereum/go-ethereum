@@ -18,7 +18,7 @@ package bind
 
 import (
 	"context"
-	"fmt"
+	"errors"
 	"time"
 
 	"github.com/ethereum/go-ethereum/common"
@@ -56,14 +56,14 @@ func WaitMined(ctx context.Context, b DeployBackend, tx *types.Transaction) (*ty
 // contract address when it is mined. It stops waiting when ctx is canceled.
 func WaitDeployed(ctx context.Context, b DeployBackend, tx *types.Transaction) (common.Address, error) {
 	if tx.To() != nil {
-		return common.Address{}, fmt.Errorf("tx is not contract creation")
+		return common.Address{}, errors.New("tx is not contract creation")
 	}
 	receipt, err := WaitMined(ctx, b, tx)
 	if err != nil {
 		return common.Address{}, err
 	}
 	if receipt.ContractAddress == (common.Address{}) {
-		return common.Address{}, fmt.Errorf("zero address")
+		return common.Address{}, errors.New("zero address")
 	}
 	// Check that code has indeed been deployed at the address.
 	// This matters on pre-Homestead chains: OOG in the constructor
