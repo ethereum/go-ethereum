@@ -605,7 +605,7 @@ func (ns *NodeStateMachine) SetState(n *enode.Node, set, reset NodeStateBitMask,
 	node.state = newState
 
 	ns.removeTimeouts(node, oldState|newState)
-	if newState == node.state {
+	if newState == oldState {
 		ns.lock.Unlock()
 		return
 	}
@@ -629,6 +629,19 @@ func (ns *NodeStateMachine) SetState(n *enode.Node, set, reset NodeStateBitMask,
 			sub.callback(n, oldState&sub.mask, newState&sub.mask)
 		}
 	}
+	if newState == 0 {
+		// call field subscriptions for discarded fields
+		for i, v := range node.fields {
+			if v != nil {
+				f := ns.nodeFields[i]
+				if len(f.subs) > 0 {
+					for _, cb := range f.subs {
+						cb(n, 0, v, nil)
+					}
+				}
+			}
+		}
+	}
 }
 
 // offlineCallbacks calls state update callbacks at startup or shutdown
@@ -644,14 +657,14 @@ func (ns *NodeStateMachine) offlineCallbacks(start bool) {
 					sub.callback(cb.node, onState, offState)
 				}
 			}
-			for i, f := range cb.fields {
-				if f != nil && ns.nodeFields[i].subs != nil {
-					for _, fsub := range ns.nodeFields[i].subs {
-						if start {
-							fsub(cb.node, OfflineState, nil, f)
-						} else {
-							fsub(cb.node, OfflineState, f, nil)
-						}
+		}
+		for i, f := range cb.fields {
+			if f != nil && ns.nodeFields[i].subs != nil {
+				for _, fsub := range ns.nodeFields[i].subs {
+					if start {
+						fsub(cb.node, OfflineState, nil, f)
+					} else {
+						fsub(cb.node, OfflineState, f, nil)
 					}
 				}
 			}
@@ -744,6 +757,7 @@ func (ns *NodeStateMachine) SetField(n *enode.Node, fieldId int, value interface
 	}
 	_, node := ns.storeNode(n)
 	if node == nil {
+		ns.lock.Unlock()
 		return nil
 	}
 	// Refuse to set field if it's unknown or the relevant state is unset.

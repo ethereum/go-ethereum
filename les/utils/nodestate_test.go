@@ -18,7 +18,6 @@ package utils
 
 import (
 	"fmt"
-	"math/rand"
 	"reflect"
 	"testing"
 	"time"
@@ -30,52 +29,67 @@ import (
 	"github.com/ethereum/go-ethereum/rlp"
 )
 
-func indexToMask(index int) NodeStateBitMask {
-	return NodeStateBitMask(1) << index
+func testSetup(flagPersist []bool, fieldType []reflect.Type) NodeStateSetup {
+	flags := make([]*NodeStateFlag, len(flagPersist))
+	for i, persist := range flagPersist {
+		if persist {
+			flags[i] = NewPersistentFlag(fmt.Sprintf("flag-%d", i))
+		} else {
+			flags[i] = NewFlag(fmt.Sprintf("flag-%d", i))
+		}
+	}
+	fields := make([]*NodeField, len(fieldType))
+	for i, ftype := range fieldType {
+		switch ftype {
+		case reflect.TypeOf(uint64(0)):
+			fields[i] = NewPersistentField(fmt.Sprintf("field-%d", i), ftype, uint64FieldEnc, uint64FieldDec)
+		case reflect.TypeOf(""):
+			fields[i] = NewPersistentField(fmt.Sprintf("field-%d", i), ftype, stringFieldEnc, stringFieldDec)
+		default:
+			fields[i] = NewField(fmt.Sprintf("field-%d", i), ftype)
+		}
+	}
+	return NodeStateSetup{flags, fields}
 }
 
-func registerTestFlags(ns *NodeStateMachine, n int) []*NodeStateFlag {
-	var flags []*NodeStateFlag
-	for i := 0; i < n; i++ {
-		flag := NewFlag(fmt.Sprintf("flag-%d", i), false, true)
-		flags = append(flags, flag)
-		ns.RegisterState(flag)
+func regSetup(ns *NodeStateMachine, setup NodeStateSetup) ([]NodeStateBitMask, []int) {
+	masks := make([]NodeStateBitMask, len(setup.Flags))
+	for i, flag := range setup.Flags {
+		masks[i] = ns.StateMask(flag)
 	}
-	return flags
+	fieldIndex := make([]int, len(setup.Fields))
+	for i, field := range setup.Fields {
+		fieldIndex[i] = ns.FieldIndex(field)
+	}
+	return masks, fieldIndex
 }
 
-func registerTestFields(ns *NodeStateMachine, n int, flags []*NodeStateFlag) []*NodeField {
-	var fields []*NodeField
-	for i := 0; i < n; i++ {
-		f := flags[rand.Intn(len(flags))]
-		field := NewField(fmt.Sprintf("field-%d", i), reflect.TypeOf(enr.Record{}), []*NodeStateFlag{f}, false, nil, nil)
-		fields = append(fields, field)
-		ns.RegisterField(field)
-	}
-	return fields
+func testNode(b byte) *enode.Node {
+	r := &enr.Record{}
+	r.SetSig(dummyIdentity{b}, []byte{42})
+	n, _ := enode.New(dummyIdentity{b}, r)
+	return n
 }
 
 func TestCallback(t *testing.T) {
 	mdb, clock := rawdb.NewMemoryDatabase(), &mclock.Simulated{}
-	ns := NewNodeStateMachine(mdb, []byte("-ns"), clock)
 
-	// Register order flag 0-2
-	f0, _ := ns.RegisterState(NewFlag("flag0", true, true))
-	f1, _ := ns.RegisterState(NewFlag("flag1", true, true))
-	f2, _ := ns.RegisterState(NewFlag("flag2", true, true))
+	s := testSetup([]bool{false, false, false}, nil)
+	ns := NewNodeStateMachine(mdb, []byte("-ns"), clock, s)
+	flags, _ := regSetup(ns, s)
 
 	set0 := make(chan struct{}, 1)
 	set1 := make(chan struct{}, 1)
 	set2 := make(chan struct{}, 1)
-	ns.SubscribeState(f0, func(n *enode.Node, oldState, newState NodeStateBitMask) { set0 <- struct{}{} })
-	ns.SubscribeState(f1, func(n *enode.Node, oldState, newState NodeStateBitMask) { set1 <- struct{}{} })
-	ns.SubscribeState(f2, func(n *enode.Node, oldState, newState NodeStateBitMask) { set2 <- struct{}{} })
+	ns.SubscribeState(flags[0], func(n *enode.Node, oldState, newState NodeStateBitMask) { set0 <- struct{}{} })
+	ns.SubscribeState(flags[1], func(n *enode.Node, oldState, newState NodeStateBitMask) { set1 <- struct{}{} })
+	ns.SubscribeState(flags[2], func(n *enode.Node, oldState, newState NodeStateBitMask) { set2 <- struct{}{} })
 
 	ns.Start()
 
-	ns.SetState(enode.ID{0x01}, f0, 0, 0)
-	ns.SetState(enode.ID{0x01}, f1, 0, time.Second)
-	ns.SetState(enode.ID{0x01}, f2, 0, 2*time.Second)
+	ns.SetState(testNode(1), flags[0], 0, 0)
+	ns.SetState(testNode(1), flags[1], 0, time.Second)
+	ns.SetState(testNode(1), flags[2], 0, 2*time.Second)
 
 	for i := 0; i < 3; i++ {
 		select {
@@ -88,74 +102,31 @@ func TestCallback(t *testing.T) {
 	}
 }
 
-func TestSaveImmediately(t *testing.T) {
+func TestPersistentFlags(t *testing.T) {
 	mdb, clock := rawdb.NewMemoryDatabase(), &mclock.Simulated{}
-	ns := NewNodeStateMachine(mdb, []byte("-ns"), clock)
 
-	saveNode := make(chan *nodeInfo, 1)
+	s := testSetup([]bool{true, true, true, false}, nil)
+	ns := NewNodeStateMachine(mdb, []byte("-ns"), clock, s)
+	flags, _ := regSetup(ns, s)
+
+	saveNode := make(chan *nodeInfo, 5)
 	ns.saveNodeHook = func(node *nodeInfo) {
 		saveNode <- node
 	}
-	// Register order flag 0-2
-	flag0 := NewFlag("flag0", true, true)
-	flag1 := NewFlag("flag1", true, true)
-	flag2 := NewFlag("flag2", true, true)
-	f0, _ := ns.RegisterState(flag0)
-	f1, _ := ns.RegisterState(flag1)
-	f2, _ := ns.RegisterState(flag2)
-	fd, _ := ns.RegisterField(NewField("field", reflect.TypeOf(""), []*NodeStateFlag{flag0, flag1, flag2}, true, stringFieldEnc, stringFieldDec))
 
 	ns.Start()
 
-	check := func(expectStatus NodeStateBitMask, expectFields []interface{}) {
-		var node *nodeInfo
-		select {
-		case node = <-saveNode:
-		case <-time.After(time.Second):
-			t.Fatalf("Timeout")
-		}
-		if node == nil {
-			t.Fatalf("Empty node")
-		}
-		if node.state != expectStatus {
-			t.Fatalf("Status mismatch, want %v, got %v", node.state, expectStatus)
-		}
-		if !reflect.DeepEqual(node.fields, expectFields) {
-			t.Fatalf("Field mismatch, want %v, got %v", expectFields, node.fields)
-		}
+	ns.SetState(testNode(1), flags[0], 0, time.Second) // state with timeout should not be saved
+	ns.SetState(testNode(2), flags[1], 0, 0)
+	ns.SetState(testNode(3), flags[2], 0, 0)
+	ns.SetState(testNode(4), flags[3], 0, 0)
+	ns.SetState(testNode(5), flags[0], 0, 0)
+	ns.Persist(testNode(5))
+	select {
+	case <-saveNode:
+	case <-time.After(time.Second):
+		t.Fatalf("Timeout")
 	}
-	// Set status
-	ns.SetState(enode.ID{0x01}, f0, 0, 0)
-	check(f0, []interface{}{nil})
-	ns.SetState(enode.ID{0x01}, f1, 0, 0)
-	check(f0|f1, []interface{}{nil})
-
-	// Set fields
-	ns.SetField(enode.ID{0x01}, fd, "hello world")
-	check(f0|f1, []interface{}{"hello world"})
-
-	ns.SetState(enode.ID{0x01}, f2, 0, 0)
-	check(f0|f1|f2, []interface{}{"hello world"})
-}
-
-func TestSaveAtShutdown(t *testing.T) {
-	mdb, clock := rawdb.NewMemoryDatabase(), &mclock.Simulated{}
-	ns := NewNodeStateMachine(mdb, []byte("-ns"), clock)
-
-	saveNode := make(chan *nodeInfo, 2)
-	ns.saveNodeHook = func(node *nodeInfo) {
-		saveNode <- node
-	}
-	// Register order flag 0-2
-	f0, _ := ns.RegisterState(NewFlag("flag0", false, true))
-	f1, _ := ns.RegisterState(NewFlag("flag1", false, true))
-	f2, _ := ns.RegisterState(NewFlag("flag2", false, false)) // flag2 shouldn't be saved
-
-	ns.Start()
-
-	ns.SetState(enode.ID{0x01}, f0, 0, time.Second)
-	ns.SetState(enode.ID{0x02}, f1, 0, time.Second)
-	ns.SetState(enode.ID{0x03}, f2, 0, time.Second)
 	ns.Stop()
 
 	for i := 0; i < 2; i++ {
@@ -165,114 +136,41 @@ func TestSaveAtShutdown(t *testing.T) {
 			t.Fatalf("Timeout")
 		}
 	}
-}
-
-func TestRegistrationProtection(t *testing.T) {
-	mdb, clock := rawdb.NewMemoryDatabase(), &mclock.Simulated{}
-	ns := NewNodeStateMachine(mdb, []byte("-ns"), clock)
-	flags := registerTestFlags(ns, 60)
-	fields := registerTestFields(ns, 30, flags)
-
-	// Before initialization, register flags
-	var cases = []struct {
-		flag      *NodeStateFlag
-		mask      NodeStateBitMask
-		expectErr error
-	}{
-		{flags[0], indexToMask(1), nil},
-		{flags[59], indexToMask(60), nil},
-		{NewFlag("flag-0", false, true), 0, errNameCollision},
-		{NewFlag("flag-59", false, true), 0, errNameCollision},
-		{NewFlag("flag-60", false, true), indexToMask(61), nil},
-	}
-	for id, c := range cases {
-		mask, err := ns.RegisterState(c.flag)
-		if c.expectErr != nil {
-			if err == nil {
-				t.Fatalf("Expect error => case (%d) %v", id, c.expectErr)
-			}
-			if err != c.expectErr {
-				t.Fatalf("Error mismatch => case (%d), want %v, got %v", id, c.expectErr, err)
-			}
-			continue
-		}
-		if mask != c.mask {
-			t.Fatalf("Mask mismatch => case (%d), want %v, got %v", id, c.mask, mask)
-		}
-	}
-	// Before initialization, register fields
-	var cases2 = []struct {
-		field     *NodeField
-		fieldId   int
-		expectErr error
-	}{
-		{fields[0], 0, nil},
-		{fields[29], 29, nil},
-		{NewField("field-0", reflect.TypeOf(enr.Record{}), nil, false, nil, nil), 0, errNameCollision},
-		{NewField("field-29", reflect.TypeOf(enr.Record{}), nil, false, nil, nil), 0, errNameCollision},
-		{NewField("field-30", reflect.TypeOf(enr.Record{}), nil, false, nil, nil), 30, nil},
-	}
-	for id, c := range cases2 {
-		index, err := ns.RegisterField(c.field)
-		if c.expectErr != nil {
-			if err == nil {
-				t.Fatalf("Expect error => case (%d) %v", id, c.expectErr)
-			}
-			if err != c.expectErr {
-				t.Fatalf("Error mismatch => case (%d), want %v, got %v", id, c.expectErr, err)
-			}
-			continue
-		}
-		if index != c.fieldId {
-			t.Fatalf("Field id mismatch => case (%d), want %v, got %v", id, c.fieldId, index)
-		}
-	}
-
-	ns.Start()
-
-	ns.SetState(enode.ID{0x1}, indexToMask(1), 0, 0)
-	_, err := ns.RegisterState(NewFlag("flag-61", false, true))
-	if err != errAlreadyStarted {
-		t.Fatalf("Expect already init error")
-	}
-	_, err = ns.RegisterField(NewField("field-31", reflect.TypeOf(enr.Record{}), nil, false, nil, nil))
-	if err != errAlreadyStarted {
-		t.Fatalf("Expect already init error")
-	}
-	err = ns.SubscribeState(indexToMask(1), nil)
-	if err != errAlreadyStarted {
-		t.Fatalf("Expect already init error")
+	select {
+	case <-saveNode:
+		t.Fatalf("Unexpected saveNode")
+	case <-time.After(time.Millisecond * 100):
 	}
 }
 
 func TestSetField(t *testing.T) {
 	mdb, clock := rawdb.NewMemoryDatabase(), &mclock.Simulated{}
-	ns := NewNodeStateMachine(mdb, []byte("-ns"), clock)
+
+	s := testSetup([]bool{true}, []reflect.Type{reflect.TypeOf("")})
+	ns := NewNodeStateMachine(mdb, []byte("-ns"), clock, s)
+	flags, fields := regSetup(ns, s)
 
 	saveNode := make(chan *nodeInfo, 1)
 	ns.saveNodeHook = func(node *nodeInfo) {
 		saveNode <- node
 	}
-	flag := NewFlag("flag", false, true)
-	f, _ := ns.RegisterState(flag)
-	fd, _ := ns.RegisterField(NewField("field", reflect.TypeOf(""), []*NodeStateFlag{flag}, false, nil, nil))
 
 	ns.Start()
 
 	// Set field before setting state
-	ns.SetField(enode.ID{0x01}, fd, "hello world")
-	field := ns.GetField(enode.ID{0x01}, fd)
+	ns.SetField(testNode(1), fields[0], "hello world")
+	field := ns.GetField(testNode(1), fields[0])
 	if field != nil {
 		t.Fatalf("Field shouldn't be set before setting states")
 	}
 	// Set field after setting state
-	ns.SetState(enode.ID{0x01}, f, 0, time.Second)
-	ns.SetField(enode.ID{0x01}, fd, "hello world")
-	field = ns.GetField(enode.ID{0x01}, fd)
+	ns.SetState(testNode(1), flags[0], 0, 0)
+	ns.SetField(testNode(1), fields[0], "hello world")
+	field = ns.GetField(testNode(1), fields[0])
 	if field == nil {
 		t.Fatalf("Field should be set after setting states")
 	}
-	if err := ns.SetField(enode.ID{0x01}, fd, 123); err != errInvalidField {
+	if err := ns.SetField(testNode(1), fields[0], 123); err != errInvalidField {
 		t.Fatalf("Invalid field should be rejected")
 	}
 	// Dirty node should be written back
@@ -286,34 +184,32 @@ func TestSetField(t *testing.T) {
 
 func TestUnsetField(t *testing.T) {
 	mdb, clock := rawdb.NewMemoryDatabase(), &mclock.Simulated{}
-	ns := NewNodeStateMachine(mdb, []byte("-ns"), clock)
 
-	flag := NewFlag("flag", false, true)
-	f, _ := ns.RegisterState(flag)
-	fd, _ := ns.RegisterField(NewField("field", reflect.TypeOf(""), []*NodeStateFlag{flag}, false, nil, nil))
+	s := testSetup([]bool{false}, []reflect.Type{reflect.TypeOf("")})
+	ns := NewNodeStateMachine(mdb, []byte("-ns"), clock, s)
+	flags, fields := regSetup(ns, s)
 
 	ns.Start()
 
-	ns.SetState(enode.ID{0x01}, f, 0, time.Second)
-	ns.SetField(enode.ID{0x01}, fd, "hello world")
+	ns.SetState(testNode(1), flags[0], 0, time.Second)
+	ns.SetField(testNode(1), fields[0], "hello world")
 
-	ns.SetState(enode.ID{0x01}, 0, f, 0)
-	if field := ns.GetField(enode.ID{0x01}, fd); field != nil {
+	ns.SetState(testNode(1), 0, flags[0], 0)
+	if field := ns.GetField(testNode(1), fields[0]); field != nil {
 		t.Fatalf("Field should be unset")
 	}
 }
 
 func TestSetState(t *testing.T) {
 	mdb, clock := rawdb.NewMemoryDatabase(), &mclock.Simulated{}
-	ns := NewNodeStateMachine(mdb, []byte("-ns"), clock)
 
-	f0, _ := ns.RegisterState(NewFlag("flag0", false, false))
-	f1, _ := ns.RegisterState(NewFlag("flag1", false, false))
-	f2, _ := ns.RegisterState(NewFlag("flag2", false, false))
+	s := testSetup([]bool{false, false, false}, nil)
+	ns := NewNodeStateMachine(mdb, []byte("-ns"), clock, s)
+	flags, _ := regSetup(ns, s)
 
 	type change struct{ old, new NodeStateBitMask }
 	set := make(chan change, 1)
-	ns.SubscribeState(f0|f1, func(n *enode.Node, oldState, newState NodeStateBitMask) {
+	ns.SubscribeState(flags[0]|flags[1], func(n *enode.Node, oldState, newState NodeStateBitMask) {
 		set <- change{
 			old: oldState,
 			new: newState,
@@ -343,28 +239,28 @@ func TestSetState(t *testing.T) {
 			return
 		}
 	}
-	ns.SetState(enode.ID{0x01}, f0, 0, 0)
-	check(0, f0, true)
+	ns.SetState(testNode(1), flags[0], 0, 0)
+	check(0, flags[0], true)
 
-	ns.SetState(enode.ID{0x01}, f1, 0, 0)
-	check(f0, f0|f1, true)
+	ns.SetState(testNode(1), flags[1], 0, 0)
+	check(flags[0], flags[0]|flags[1], true)
 
-	ns.SetState(enode.ID{0x01}, f2, 0, 0)
+	ns.SetState(testNode(1), flags[2], 0, 0)
 	check(0, 0, false)
 
-	ns.SetState(enode.ID{0x01}, 0, f0, 0)
-	check(f0|f1, f1, true)
+	ns.SetState(testNode(1), 0, flags[0], 0)
+	check(flags[0]|flags[1], flags[1], true)
 
-	ns.SetState(enode.ID{0x01}, 0, f1, 0)
-	check(f1, 0, true)
+	ns.SetState(testNode(1), 0, flags[1], 0)
+	check(flags[1], 0, true)
 
-	ns.SetState(enode.ID{0x01}, 0, f2, 0)
+	ns.SetState(testNode(1), 0, flags[2], 0)
 	check(0, 0, false)
 
-	ns.SetState(enode.ID{0x01}, f0|f1, 0, time.Second)
-	check(0, f0|f1, true)
+	ns.SetState(testNode(1), flags[0]|flags[1], 0, time.Second)
+	check(0, flags[0]|flags[1], true)
 	clock.Run(time.Second)
-	check(f0|f1, 0, true)
+	check(flags[0]|flags[1], 0, true)
 }
 
 func uint64FieldEnc(field interface{}) ([]byte, error) {
@@ -394,54 +290,45 @@ func stringFieldDec(enc []byte) (interface{}, error) {
 	return string(enc), nil
 }
 
-func TestPersistent(t *testing.T) {
+func TestPersistentFields(t *testing.T) {
 	mdb, clock := rawdb.NewMemoryDatabase(), &mclock.Simulated{}
-	ns := NewNodeStateMachine(mdb, []byte("-ns"), clock)
 
-	f0 := NewFlag("flag0", false, true)
-	f1 := NewFlag("flag1", false, true)
-	s0, _ := ns.RegisterState(f0)
-	s1, _ := ns.RegisterState(f1)
-	fd0, _ := ns.RegisterField(NewField("field0", reflect.TypeOf(uint64(0)), []*NodeStateFlag{f0}, false, uint64FieldEnc, uint64FieldDec))
-	fd1, _ := ns.RegisterField(NewField("field1", reflect.TypeOf(""), []*NodeStateFlag{f1}, false, stringFieldEnc, stringFieldDec))
+	s := testSetup([]bool{true}, []reflect.Type{reflect.TypeOf(uint64(0)), reflect.TypeOf("")})
+	ns := NewNodeStateMachine(mdb, []byte("-ns"), clock, s)
+	flags, fields := regSetup(ns, s)
+
 	ns.Start()
-	ns.SetState(enode.ID{0x01}, s0, 0, time.Second)
-	ns.SetState(enode.ID{0x01}, s1, 0, time.Second)
-	ns.SetField(enode.ID{0x01}, fd0, uint64(100))
-	ns.SetField(enode.ID{0x01}, fd1, "hello world")
+	ns.SetState(testNode(1), flags[0], 0, 0)
+	ns.SetField(testNode(1), fields[0], uint64(100))
+	ns.SetField(testNode(1), fields[1], "hello world")
 	ns.Stop()
 
-	ns2 := NewNodeStateMachine(mdb, []byte("-ns"), clock)
-	ns2.RegisterState(f0)
-	ns2.RegisterState(f1)
-	fd0, _ = ns2.RegisterField(NewField("field0", reflect.TypeOf(uint64(0)), []*NodeStateFlag{f0}, false, uint64FieldEnc, uint64FieldDec))
-	fd1, _ = ns2.RegisterField(NewField("field1", reflect.TypeOf(""), []*NodeStateFlag{f1}, false, stringFieldEnc, stringFieldDec))
+	ns2 := NewNodeStateMachine(mdb, []byte("-ns"), clock, s)
+
 	ns2.Start()
-	field0 := ns2.GetField(enode.ID{0x01}, fd0)
+	field0 := ns2.GetField(testNode(1), fields[0])
 	if !reflect.DeepEqual(field0, uint64(100)) {
 		t.Fatalf("Field changed")
 	}
-	field1 := ns2.GetField(enode.ID{0x01}, fd1)
+	field1 := ns2.GetField(testNode(1), fields[1])
 	if !reflect.DeepEqual(field1, "hello world") {
 		t.Fatalf("Field changed")
 	}
 
-	ns3 := NewNodeStateMachine(mdb, []byte("-ns"), clock)
+	// additional registration
+	s = testSetup([]bool{true, true}, []reflect.Type{reflect.TypeOf(uint64(0)), reflect.TypeOf(""), reflect.TypeOf(uint32(0))})
 	// Different order
-	ns3.RegisterState(f1)
-	ns3.RegisterState(f0)
-	fd1, _ = ns3.RegisterField(NewField("field1", reflect.TypeOf(""), []*NodeStateFlag{f1}, false, stringFieldEnc, stringFieldDec))
-	fd0, _ = ns3.RegisterField(NewField("field0", reflect.TypeOf(uint64(0)), []*NodeStateFlag{f0}, false, uint64FieldEnc, uint64FieldDec))
-	// additional registeration
-	ns3.RegisterState(NewFlag("flag2", false, true))
-	ns3.RegisterField(NewField("field2", reflect.TypeOf(uint32(0)), []*NodeStateFlag{f0}, false, nil, nil))
+	s.Flags[0], s.Flags[1] = s.Flags[1], s.Flags[0]
+	s.Fields[0], s.Fields[1] = s.Fields[1], s.Fields[0]
+	ns3 := NewNodeStateMachine(mdb, []byte("-ns"), clock, s)
+	flags, fields = regSetup(ns3, s)
 
 	ns3.Start()
-	field0 = ns3.GetField(enode.ID{0x01}, fd0)
+	field0 = ns3.GetField(testNode(1), fields[1])
 	if !reflect.DeepEqual(field0, uint64(100)) {
 		t.Fatalf("Field changed")
 	}
-	field1 = ns3.GetField(enode.ID{0x01}, fd1)
+	field1 = ns3.GetField(testNode(1), fields[0])
 	if !reflect.DeepEqual(field1, "hello world") {
 		t.Fatalf("Field changed")
 	}
@@ -449,17 +336,16 @@ func TestPersistent(t *testing.T) {
 
 func TestFieldSub(t *testing.T) {
 	mdb, clock := rawdb.NewMemoryDatabase(), &mclock.Simulated{}
-	ns := NewNodeStateMachine(mdb, []byte("-ns"), clock)
 
-	f0 := NewFlag("flag0", false, true)
-	field0 := NewField("field0", reflect.TypeOf(uint64(0)), []*NodeStateFlag{f0}, false, uint64FieldEnc, uint64FieldDec)
-	s0, _ := ns.RegisterState(f0)
-	fd0, _ := ns.RegisterField(field0)
+	s := testSetup([]bool{true}, []reflect.Type{reflect.TypeOf(uint64(0))})
+	ns := NewNodeStateMachine(mdb, []byte("-ns"), clock, s)
+	flags, fields := regSetup(ns, s)
+
 	var (
 		lastState                  NodeStateBitMask
 		lastOldValue, lastNewValue interface{}
 	)
-	ns.SubscribeField(fd0, func(n *enode.Node, state NodeStateBitMask, oldValue, newValue interface{}) {
+	ns.SubscribeField(fields[0], func(n *enode.Node, state NodeStateBitMask, oldValue, newValue interface{}) {
 		lastState, lastOldValue, lastNewValue = state, oldValue, newValue
 	})
 	check := func(state NodeStateBitMask, oldValue, newValue interface{}) {
@@ -468,21 +354,19 @@ func TestFieldSub(t *testing.T) {
 		}
 	}
 	ns.Start()
-	ns.SetState(enode.ID{0x01}, s0, 0, 0)
-	ns.SetField(enode.ID{0x01}, fd0, uint64(100))
-	check(s0, nil, uint64(100))
+	ns.SetState(testNode(1), flags[0], 0, 0)
+	ns.SetField(testNode(1), fields[0], uint64(100))
+	check(flags[0], nil, uint64(100))
 	ns.Stop()
 	check(OfflineState, uint64(100), nil)
 
-	ns2 := NewNodeStateMachine(mdb, []byte("-ns"), clock)
-	s0, _ = ns2.RegisterState(f0)
-	fd0, _ = ns2.RegisterField(field0)
-	ns2.SubscribeField(fd0, func(n *enode.Node, state NodeStateBitMask, oldValue, newValue interface{}) {
+	ns2 := NewNodeStateMachine(mdb, []byte("-ns"), clock, s)
+	ns2.SubscribeField(fields[0], func(n *enode.Node, state NodeStateBitMask, oldValue, newValue interface{}) {
 		lastState, lastOldValue, lastNewValue = state, oldValue, newValue
 	})
 	ns2.Start()
 	check(OfflineState, nil, uint64(100))
-	ns2.SetState(enode.ID{0x01}, 0, s0, 0)
+	ns2.SetState(testNode(1), 0, flags[0], 0)
 	check(0, uint64(100), nil)
 	ns2.Stop()
 }
