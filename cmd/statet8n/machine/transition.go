@@ -19,13 +19,13 @@ package machine
 import (
 	"encoding/json"
 	"fmt"
-	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/core"
-	"github.com/ethereum/go-ethereum/core/state"
 	"io/ioutil"
 	"math/big"
 	"os"
 
+	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/core"
+	"github.com/ethereum/go-ethereum/core/state"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/core/vm"
 	"github.com/ethereum/go-ethereum/log"
@@ -42,8 +42,7 @@ const (
 	ErrorJson = 10
 	ErrorIO   = 11
 
-	stdinSelector  = "stdin"
-	stdoutSelector = "stdout"
+	stdinSelector = "stdin"
 )
 
 type NumberedError struct {
@@ -193,7 +192,7 @@ func (g Alloc) OnRoot(common.Hash) {}
 
 func (g Alloc) OnAccount(addr common.Address, dumpAccount state.DumpAccount) {
 
-	balance,_ := new(big.Int).SetString(dumpAccount.Balance, 10)
+	balance, _ := new(big.Int).SetString(dumpAccount.Balance, 10)
 	var storage map[common.Hash]common.Hash
 	if dumpAccount.Storage != nil {
 		storage = make(map[common.Hash]common.Hash)

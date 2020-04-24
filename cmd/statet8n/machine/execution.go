@@ -72,7 +72,6 @@ func (pre *Prestate) Apply(vmConfig vm.Config, chainConfig *params.ChainConfig, 
 	getHash := func(num uint64) common.Hash {
 		panic(fmt.Sprintf("getHash(%d) invoked", num))
 	}
-
 	statedb := MakePreState(rawdb.NewMemoryDatabase(), pre.Pre)
 	// Configure a signer with chainid 99
 	signer := types.NewEIP155Signer(chainConfig.ChainID)
@@ -134,14 +133,8 @@ func (pre *Prestate) Apply(vmConfig vm.Config, chainConfig *params.ChainConfig, 
 		receipt.Bloom = types.CreateBloom(types.Receipts{receipt})
 		receipts = append(receipts, receipt)
 	}
-
+	statedb.IntermediateRoot(chainConfig.IsEIP158(vmContext.BlockNumber))
 	// Add mining reward?
-	// Commit block
-	root, err := statedb.Commit(chainConfig.IsEIP158(vmContext.BlockNumber))
-	if err != nil {
-		fmt.Fprintf(os.Stderr, "Could not commit state: %v", err)
-		return nil, nil, NewError(ErrorEVM, fmt.Errorf("could not commit state: %v", err))
-	}
 	if miningReward > 0 {
 		// Add mining reward. The mining reward may be `0`, which only makes a difference in the cases
 		// where
@@ -149,7 +142,12 @@ func (pre *Prestate) Apply(vmConfig vm.Config, chainConfig *params.ChainConfig, 
 		// - there are only 'bad' transactions, which aren't executed. In those cases,
 		//   the coinbase gets no txfee, so isn't created, and thus needs to be touched
 		statedb.AddBalance(pre.Env.Coinbase, big.NewInt(miningReward))
-		root = statedb.IntermediateRoot(chainConfig.IsEIP158(vmContext.BlockNumber))
+	}
+	// Commit block
+	root, err := statedb.Commit(chainConfig.IsEIP158(vmContext.BlockNumber))
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "Could not commit state: %v", err)
+		return nil, nil, NewError(ErrorEVM, fmt.Errorf("could not commit state: %v", err))
 	}
 	execRs := &ExecutionResult{
 		StateRoot:   root,
