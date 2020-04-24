@@ -15,11 +15,31 @@ The guide shows you how to create accounts, sync to a network, and then send tra
 This guide uses [Clef](clef/tutorial), which is our preferred tool for signing transactions with Geth, 
 and will replace Geth's account management.
 
+## Initialize Clef
+
+First, initialize Clef with a random master seed, which is also encrypted with the password you define.
+The password must be at least 10 characters.
+
+```shell
+clef init
+```
+
+![Clef init command](../../static/images/clef-init.gif)
+
+## Create accounts
+
+Create two accounts with the `clef newaccount` command,
+set a password for each of them, and note the public address for each.
+
+![Create new account command](../../static/images/clef-account-new.gif)
+
+Clef outputs a debug message about `Failed to reload keystore contents`, we fix that in a later step.
+
 ## Start Geth
 
-Clef needs a Geth keystore path to start, and Geth needs a running Clef instance to connect to.
+<!-- Clef needs a Geth keystore path to start, and Geth needs a running Clef instance to connect to.
 To get around this, we recommend you first start Geth to create the keystore,
-and we will restart it with more options later.
+and we will restart it with more options later. -->
 
 ### Networks
 
@@ -47,24 +67,9 @@ These are:
     headers.
 -   **Light**: Downloads all block headers, block data, and verifies some randomly.
 
-For this first step, connect to the `goerli` network and use a `light` sync:
+For this tutorial, we use a `light` sync:
 
-```shell
-geth --goerli --syncmode "light"
-```
-
-Let Geth run for a few minutes, stop it again, and continue with the rest of this guide.
-
-## Initialize and start Clef
-
-First, initialize Clef with a random master seed, which is also encrypted with the password you define.
-The password must be at least 10 characters.
-
-```shell
-clef init
-```
-
-![Clef init command](../../static/images/clef-init.gif)
+## Start Clef
 
 Start Clef, setting the keystore and chain id (goerli is 5) for the network we want to connect to:
 
@@ -74,26 +79,16 @@ clef --keystore <GETH_LOCATION>/keystore --chainid 5
 
 To begin with, you see errors about a missing keystore, and we fix that soon.
 
-## Sync your local node to a test network
+## Start Geth
 
-Restart your Geth node. The command below also enables the [Geth RPC interface](clef/tutorial) 
+The command below also enables the [Geth RPC interface](clef/tutorial) 
 (which we cover below), and sets Clef as the transaction signer.
 
 ```shell
 geth --goerli --syncmode "light" --rpc --signer=<CLEF_LOCATION>/clef.ipc
 ```
 
-## Create accounts
-
-In another terminal, create two accounts with the `geth account new` command,
-set a password for each of them, and note the public address for each.
-
-![Create new account command](../../static/images/geth-account-new.gif)
-
-Notice that the Clef window that displayed an error about a missing keystore now starts to work.
-
-_[Read this guide](./interface/managing-your-accounts) for more details on importing
-existing Ethereum accounts and other uses of the `account` command._
+<!-- Let Geth run for a few minutes, stop it again, and continue with the rest of this guide. -->
 
 ## Get ETH
 
