@@ -236,6 +236,24 @@ func setupTopicsTests() []topicTest {
 			},
 			wantErr: true,
 		},
+		{
+			name: "error on unindexed arguments",
+			args: args{
+				createObj: func() interface{} { return &int256Struct{} },
+				resultObj: func() interface{} { return &int256Struct{} },
+				resultMap: func() map[string]interface{} { return make(map[string]interface{}) },
+				fields: abi.Arguments{abi.Argument{
+					Name:    "int256Value",
+					Type:    int256Type,
+					Indexed: false,
+				}},
+				topics: []common.Hash{
+					{255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255,
+						255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255},
+				},
+			},
+			wantErr: true,
+		},
 	}
 
 	return tests
