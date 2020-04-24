@@ -29,17 +29,20 @@ var ShowDeprecated = cli.Command{
 	Action: showDeprecated,
 	Name:   "show-deprecated-flags",
 	Usage:  "Show flags that have been deprecated",
-	Flags: []cli.Flag{
-		LegacyTestnetFlag,
-		LegacyLightServFlag,
-		LegacyLightPeersFlag,
-		LegacyMinerThreadsFlag,
-		LegacyMinerGasTargetFlag,
-		LegacyMinerGasPriceFlag,
-		LegacyMinerEtherbaseFlag,
-		LegacyMinerExtraDataFlag,
-	},
+	ArgsUsage: " ",
+	Category:  "MISCELLANEOUS COMMANDS",
 	Description: "Show flags that have been deprecated and will soon be removed",
+}
+
+var deprecatedFlags = []cli.Flag{
+	LegacyTestnetFlag,
+	LegacyLightServFlag,
+	LegacyLightPeersFlag,
+	LegacyMinerThreadsFlag,
+	LegacyMinerGasTargetFlag,
+	LegacyMinerGasPriceFlag,
+	LegacyMinerEtherbaseFlag,
+	LegacyMinerExtraDataFlag,
 }
 
 var (
@@ -148,13 +151,13 @@ var (
 )
 
 // showDeprecated displays deprecated flags that will be soon removed from the codebase.
-func showDeprecated(c *cli.Context) {
+func showDeprecated(*cli.Context) {
 	fmt.Println("--------------------------------------------------------------------")
 	fmt.Println("The following flags are deprecated and will be removed in the future!")
 	fmt.Println("--------------------------------------------------------------------")
 	fmt.Println()
 
-	for _, flag := range c.Command.Flags {
+	for _, flag := range deprecatedFlags {
 		fmt.Println(flag.String())
 	}
 }

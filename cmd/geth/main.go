@@ -239,6 +239,7 @@ func init() {
 		dumpConfigCommand,
 		// See retesteth.go
 		retestethCommand,
+		// See cmd/utils/flags_legacy.go
 		utils.ShowDeprecated,
 	}
 	sort.Sort(cli.CommandsByName(app.Commands))
@@ -462,7 +463,6 @@ func startNode(ctx *cli.Context, stack *node.Node) {
 		gasprice := utils.GlobalBig(ctx, utils.MinerGasPriceFlag.Name)
 		if ctx.IsSet(utils.LegacyMinerGasPriceFlag.Name) && !ctx.IsSet(utils.MinerGasPriceFlag.Name) {
 			gasprice = utils.GlobalBig(ctx, utils.LegacyMinerGasPriceFlag.Name)
-			log.Warn("The flag --gasprice is deprecated and will be removed in the future, please use --miner.gasprice")
 		}
 		ethereum.TxPool().SetGasPrice(gasprice)
 
