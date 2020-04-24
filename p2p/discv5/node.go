@@ -106,7 +106,10 @@ func (n *Node) String() string {
 	return u.String()
 }
 
-var incompleteNodeURL = regexp.MustCompile("(?i)^(?:enode://)?([0-9a-f]+)$")
+var (
+	incompleteNodeURL = regexp.MustCompile("(?i)^(?:enode://)?([0-9a-f]+)$")
+	lookupIPFunc      = net.LookupIP
+)
 
 // ParseNode parses a node designator.
 //
@@ -168,7 +171,11 @@ func parseComplete(rawurl string) (*Node, error) {
 		return nil, fmt.Errorf("invalid host: %v", err)
 	}
 	if ip = net.ParseIP(host); ip == nil {
-		return nil, errors.New("invalid IP address")
+		ips, err := lookupIPFunc(u.Hostname())
+		if err != nil {
+			return nil, errors.New("no such host")
+		}
+		ip = ips[0]
 	}
 	// Ensure the IP is 4 bytes long for IPv4 addresses.
 	if ipv4 := ip.To4(); ipv4 != nil {
