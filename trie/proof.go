@@ -265,7 +265,7 @@ func unset(root node, rest []byte, removeLeft bool) {
 	case *shortNode:
 		rn.flags = nodeFlag{dirty: true}
 		if _, ok := rn.Val.(valueNode); ok {
-			rn.Val = nil
+			rn.Val = nilValueNode
 			return
 		}
 		unset(rn.Val, rest[len(rn.Key):], removeLeft)
