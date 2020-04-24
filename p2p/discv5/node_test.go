@@ -17,6 +17,7 @@
 package discv5
 
 import (
+	"errors"
 	"fmt"
 	"math/big"
 	"math/rand"
@@ -30,6 +31,15 @@ import (
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/crypto"
 )
+
+func init() {
+	lookupIPFunc = func(name string) ([]net.IP, error) {
+		if name == "node.example.org" {
+			return []net.IP{{33, 44, 55, 66}}, nil
+		}
+		return nil, errors.New("no such host")
+	}
+}
 
 func ExampleNewNode() {
 	id := MustHexID("1dd9d65c4552b5eb43d5ad55a2ee3f56c6cbc1c64a5c8d659f51fcd51bace24351232b8d7821617d2b29b54b81cdefb9b3e9c37d7fd5f63270bcc9e1a6f6a439")
@@ -68,7 +78,7 @@ var parseNodeTests = []struct {
 	// Complete nodes with IP address.
 	{
 		rawurl:    "enode://1dd9d65c4552b5eb43d5ad55a2ee3f56c6cbc1c64a5c8d659f51fcd51bace24351232b8d7821617d2b29b54b81cdefb9b3e9c37d7fd5f63270bcc9e1a6f6a439@hostname:3",
-		wantError: `invalid IP address`,
+		wantError: `no such host`,
 	},
 	{
 		rawurl:    "enode://1dd9d65c4552b5eb43d5ad55a2ee3f56c6cbc1c64a5c8d659f51fcd51bace24351232b8d7821617d2b29b54b81cdefb9b3e9c37d7fd5f63270bcc9e1a6f6a439@127.0.0.1:foo",
@@ -123,10 +133,12 @@ var parseNodeTests = []struct {
 		),
 	},
 	{
-		rawurl: "enode://1dd9d65c4552b5eb43d5ad55a2ee3f56c6cbc1c64a5c8d659f51fcd51bace24351232b8d7821617d2b29b54b81cdefb9b3e9c37d7fd5f63270bcc9e1a6f6a439",
+		rawurl: "enode://1dd9d65c4552b5eb43d5ad55a2ee3f56c6cbc1c64a5c8d659f51fcd51bace24351232b8d7821617d2b29b54b81cdefb9b3e9c37d7fd5f63270bcc9e1a6f6a439@node.example.org:52150?discport=22334",
 		wantResult: NewNode(
 			MustHexID("0x1dd9d65c4552b5eb43d5ad55a2ee3f56c6cbc1c64a5c8d659f51fcd51bace24351232b8d7821617d2b29b54b81cdefb9b3e9c37d7fd5f63270bcc9e1a6f6a439"),
-			nil, 0, 0,
+			net.IP{0x21, 0x2C, 0x37, 0x42},
+			22334,
+			52150,
 		),
 	},
 	// Invalid URLs
@@ -142,6 +154,15 @@ var parseNodeTests = []struct {
 		// This test checks that errors from url.Parse are handled.
 		rawurl:    "://foo",
 		wantError: `missing protocol scheme`,
+	},
+	{
+		rawurl: "enode://1dd9d65c4552b5eb43d5ad55a2ee3f56c6cbc1c64a5c8d659f51fcd51bace24351232b8d7821617d2b29b54b81cdefb9b3e9c37d7fd5f63270bcc9e1a6f6a439@127.0.0.1:52150?discport=22334",
+		wantResult: NewNode(
+			MustHexID("0x1dd9d65c4552b5eb43d5ad55a2ee3f56c6cbc1c64a5c8d659f51fcd51bace24351232b8d7821617d2b29b54b81cdefb9b3e9c37d7fd5f63270bcc9e1a6f6a439"),
+			net.IP{0x7f, 0x0, 0x0, 0x1},
+			22334,
+			52150,
+		),
 	},
 }
 
@@ -173,7 +194,14 @@ func TestNodeString(t *testing.T) {
 		if test.wantError == "" && strings.HasPrefix(test.rawurl, "enode://") {
 			str := test.wantResult.String()
 			if str != test.rawurl {
-				t.Errorf("test %d: Node.String() mismatch:\ngot:  %s\nwant: %s", i, str, test.rawurl)
+				if strings.Contains(test.rawurl, "node.example.org") {
+					resolvedurl := strings.Replace(test.rawurl, "node.example.org", "33.44.55.66", 1)
+					if str != resolvedurl {
+						t.Errorf("test %d: Node.String() mismatch:\ngot:  %s\nwant: %s", i, str, resolvedurl)
+					}
+				} else {
+					t.Errorf("test %d: Node.String() mismatch:\ngot:  %s\nwant: %s", i, str, test.rawurl)
+				}
 			}
 		}
 	}
