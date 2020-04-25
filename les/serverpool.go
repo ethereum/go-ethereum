@@ -18,6 +18,7 @@ package les
 
 import (
 	"errors"
+	"fmt"
 	"reflect"
 	"sync"
 	"time"
@@ -64,14 +65,13 @@ type serverPool struct {
 // service value calculated by lpc.ValueTracker.
 type nodeHistory struct {
 	// only dialCost is saved
-	lock        sync.Mutex
 	dialCost    utils.ExpiredValue
 	lastTimeout time.Duration
 	totalValue  float64
 }
 
 var (
-	sfDiscovered    = utils.NewFlag("discovered")
+	//sfDiscovered    = utils.NewFlag("discovered")
 	sfHasValue      = utils.NewPersistentFlag("hasValue")
 	sfSelected      = utils.NewFlag("selected")
 	sfDialed        = utils.NewFlag("dialed")
@@ -83,24 +83,26 @@ var (
 
 	errInvalidField = errors.New("invalid field type")
 
-	sfiNodeHistory = utils.NewPersistentField("nodeHistory", reflect.TypeOf(&nodeHistory{}),
+	sfiNodeHistory = utils.NewPersistentField("nodeHistory", reflect.TypeOf(nodeHistory{}),
 		func(field interface{}) ([]byte, error) {
-			if n, ok := field.(*nodeHistory); ok {
+			if n, ok := field.(nodeHistory); ok {
 				enc, err := rlp.EncodeToBytes(&n.dialCost)
+				fmt.Println("enc nh", err)
 				return enc, err
 			} else {
 				return nil, errInvalidField
 			}
 		},
 		func(enc []byte) (interface{}, error) {
-			n := &nodeHistory{}
+			n := nodeHistory{}
 			err := rlp.DecodeBytes(enc, &n.dialCost)
+			fmt.Println("dec nh", err)
 			return n, err
 		},
 	)
 
 	serverPoolSetup = utils.NodeStateSetup{
-		Flags:  []*utils.NodeStateFlag{sfDiscovered, sfHasValue, sfSelected, sfDialed, sfConnected, sfRedialWait, sfAlwaysConnect},
+		Flags:  []*utils.NodeStateFlag{ /*sfDiscovered, */ sfHasValue, sfSelected, sfDialed, sfConnected, sfRedialWait, sfAlwaysConnect},
 		Fields: []*utils.NodeField{sfiNodeHistory},
 	}
 )
@@ -114,13 +116,12 @@ func newServerPool(ns *utils.NodeStateMachine, vt *lpc.ValueTracker, discovery e
 	}
 	s.getTimeout()
 	// Register all serverpool-defined states
-	stDiscovered := s.ns.StateMask(sfDiscovered)
+	//stDiscovered := s.ns.StateMask(sfDiscovered)
 	s.stHasValue = s.ns.StateMask(sfHasValue)
 	s.stDialed = s.ns.StateMask(sfDialed)
 	s.stConnected = s.ns.StateMask(sfConnected)
 	s.stRedialWait = s.ns.StateMask(sfRedialWait)
 	s.stAlwaysConnect = s.ns.StateMask(sfAlwaysConnect)
-	s.ns.StateMask(sfSelected)
 
 	// Register all serverpool-defined node fields.
 	s.nodeHistoryFieldId = s.ns.FieldIndex(sfiNodeHistory)
@@ -150,27 +151,29 @@ func newServerPool(ns *utils.NodeStateMachine, vt *lpc.ValueTracker, discovery e
 	s.mixSources = append(s.mixSources, knownSelector)
 	s.mixSources = append(s.mixSources, alwaysConnect)
 	if discovery != nil {
-		discEnrStored := enode.Filter(discovery, func(node *enode.Node) bool {
-			s.ns.SetState(node, stDiscovered, 0, time.Hour)
-			return true
-		})
-		s.mixSources = append(s.mixSources, discEnrStored)
+		/*		discEnrStored := enode.Filter(discovery, func(node *enode.Node) bool {
+					s.ns.SetState(node, stDiscovered, 0, time.Hour)
+					return true
+				})
+				s.mixSources = append(s.mixSources, discEnrStored)*/
+		s.mixSources = append(s.mixSources, discovery)
 	}
 
 	// preNegotiationFilter will be added in series with iter here when les4 is available
 
 	s.dialIterator = enode.Filter(s.mixer, func(node *enode.Node) bool {
-		n, _ := s.ns.GetField(node, s.nodeHistoryFieldId).(*nodeHistory)
-		if n == nil {
-			n = &nodeHistory{}
-			s.ns.SetField(node, s.nodeHistoryFieldId, n)
-		}
-		n.lock.Lock()
-		n.dialCost.Add(dialCost, s.vt.StatsExpirer().LogOffset(s.clock.Now()))
-		n.lock.Unlock()
 		s.ns.SetState(node, s.stDialed, 0, time.Second*10)
+		n, _ := s.ns.GetField(node, s.nodeHistoryFieldId).(nodeHistory)
+		n.dialCost.Add(dialCost, s.vt.StatsExpirer().LogOffset(s.clock.Now()))
+		s.ns.SetField(node, s.nodeHistoryFieldId, n)
 		return true
 	})
+
+	ns.AddLogMetrics(s.stHasValue, s.ns.StatesMask(disableSelection), "wrs", nil, nil, nil)
+	//ns.AddLogMetrics(stDiscovered, 0, "discovered", nil, nil, nil)
+	ns.AddLogMetrics(s.stDialed, 0, "dialed", nil, nil, nil)
+	ns.AddLogMetrics(s.stConnected, 0, "connected", nil, nil, nil)
+	ns.AddLogMetrics(s.stHasValue, 0, "hasValue", nil, nil, nil)
 	return s
 }
 
@@ -189,6 +192,12 @@ func (s *serverPool) start() {
 // stop stops the server pool
 func (s *serverPool) stop() {
 	s.dialIterator.Close()
+	s.ns.ForEach(s.stConnected, 0, func(n *enode.Node, state utils.NodeStateBitMask) {
+		if s.nodeWeight(n, true) >= nodeWeightThreshold {
+			s.ns.SetState(n, s.stHasValue, 0, 0)
+			s.ns.Persist(n)
+		}
+	})
 }
 
 // registerPeer implements serverPeerSubscriber
@@ -242,27 +251,19 @@ func (s *serverPool) getTimeout() time.Duration {
 
 // nodeWeight calculates the selection weight of an individual node
 func (s *serverPool) nodeWeight(node *enode.Node, forceRecalc bool) uint64 {
-	nn := s.ns.GetField(node, s.nodeHistoryFieldId)
-	n, ok := nn.(*nodeHistory)
-	if !ok {
-		return 0
-	}
-	if n == nil {
-		n = &nodeHistory{}
-		s.ns.SetField(node, s.nodeHistoryFieldId, n)
-	}
+	fmt.Println("nodeWeight", node.ID())
+	n, _ := s.ns.GetField(node, s.nodeHistoryFieldId).(nodeHistory)
 	nvt := s.vt.GetNode(node.ID())
 	if nvt == nil {
+		fmt.Println("no vt entry")
 		return 0
 	}
 	div := n.dialCost.Value(s.vt.StatsExpirer().LogOffset(s.clock.Now()))
+	fmt.Println(" dialCost", div)
 	if div < dialCost {
 		div = dialCost
 	}
 	timeout := s.getTimeout()
-
-	n.lock.Lock()
-	defer n.lock.Unlock()
 
 	if forceRecalc || timeout < n.lastTimeout-timeoutChangeThreshold || timeout > n.lastTimeout+timeoutChangeThreshold {
 		s.timeoutLock.RLock()
@@ -270,7 +271,10 @@ func (s *serverPool) nodeWeight(node *enode.Node, forceRecalc bool) uint64 {
 		s.timeoutLock.RUnlock()
 		n.totalValue = s.vt.TotalServiceValue(nvt, timeWeights)
 		n.lastTimeout = timeout
+		s.ns.SetField(node, s.nodeHistoryFieldId, n)
 	}
+	fmt.Println(" value", n.totalValue)
+	fmt.Println(" weight", uint64(n.totalValue*nodeWeightMul/float64(div)))
 	return uint64(n.totalValue * nodeWeightMul / float64(div))
 }
 

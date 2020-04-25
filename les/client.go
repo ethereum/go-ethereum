@@ -302,7 +302,9 @@ func (s *LightEthereum) Start(srvr *p2p.Server) error {
 // Ethereum protocol.
 func (s *LightEthereum) Stop() error {
 	close(s.closeCh)
-	s.ns.Stop() // stop before subscribers
+	s.serverPool.stop()
+	s.valueTracker.Stop()
+	s.ns.Stop() // stop after the server pool
 	s.peers.close()
 	s.reqDist.close()
 	s.odr.Stop()
@@ -314,8 +316,6 @@ func (s *LightEthereum) Stop() error {
 	s.txPool.Stop()
 	s.engine.Close()
 	s.eventMux.Stop()
-	s.serverPool.stop()
-	s.valueTracker.Stop()
 	s.chainDb.Close()
 	s.wg.Wait()
 	log.Info("Light ethereum stopped")
