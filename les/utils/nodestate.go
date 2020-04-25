@@ -43,17 +43,15 @@ type (
 	// (deadlocks should be avoided by design of the implemented state logic). The caller
 	// can also add timeouts assigned to a certain node and a subset of state flags.
 	// If the timeout elapses, the flags are reset. If all relevant flags are reset then
-	// the timer is dropped. The state flags and the associated timers are persisted in
-	// the database if the flag descriptor enables saving.
+	// the timer is dropped. State flags with no timeout are persisted in the database
+	// if the flag descriptor enables saving. If a node has no state flags set at any
+	// moment then it is discarded.
 	//
 	// Extra node fields can also be registered so system components can also store more
 	// complex state for each node that is relevant to them, without creating a custom
 	// peer set. Fields can be shared across multiple components if they all know the
-	// field ID. Fields are also assigned to a set of state flags and the contents of
-	// each field is only retained for a certain node as long as at least one of these
-	// flags is set (meaning that the node is still interesting to the component(s) which
-	// are interested in the given field). Persistent fields should have an encoder and
-	// a decoder function.
+	// field ID. Subscription to fields is also possible. Persistent fields should have
+	// an encoder and a decoder function.
 	NodeStateMachine struct {
 		started, stopped        bool
 		lock                    sync.Mutex
@@ -66,7 +64,7 @@ type (
 		offlineCallbackList     []offlineCallback
 
 		// Registered state flags or fields. Modifications are allowed
-		// only when the node state machine has not been initialized.
+		// only when the node state machine has not been started.
 		nodeStates       map[*NodeStateFlag]int
 		nodeStateNameMap map[string]int
 		nodeFields       []*nodeFieldInfo
@@ -75,7 +73,7 @@ type (
 		saveFlags        NodeStateBitMask
 
 		// Installed callbacks. Modifications are allowed only when the
-		// node state machine has not been initialized.
+		// node state machine has not been started.
 		stateSubs []nodeStateSub
 
 		// Testing hooks, only for testing purposes.
@@ -84,8 +82,7 @@ type (
 
 	// NodeStateFlag describes a node state flag. Each registered instance is automatically
 	// mapped to a bit of the 64 bit node states.
-	// If saveImmediately is true then the node is saved each time the flag is switched on
-	// or off. If saveAtShutdown is true then the node is saved when state machine is shutdown.
+	// If persistent is true then the node is saved when state machine is shutdown.
 	NodeStateFlag struct {
 		name       string
 		persistent bool
@@ -93,8 +90,7 @@ type (
 
 	// NodeField describes an optional node field of the given type. The contents
 	// of the field are only retained for each node as long as at least one of the
-	// specified flags is set. If all relevant flags are reset then the field is removed
-	// after all callbacks of the state change are processed.
+	// state flags is set.
 	NodeField struct {
 		name   string
 		ftype  reflect.Type
@@ -102,6 +98,7 @@ type (
 		decode func([]byte) (interface{}, error)
 	}
 
+	// NodeStateSetup contains the list of flags and fields used by the application
 	NodeStateSetup struct {
 		Flags  []*NodeStateFlag
 		Fields []*NodeField
@@ -125,6 +122,8 @@ type (
 	// the relevant bits are included.
 	NodeStateCallback func(n *enode.Node, oldState, newState NodeStateBitMask)
 
+	// NodeFieldCallback is a subscription callback which is called when the value of
+	// a specific field is changed.
 	NodeFieldCallback func(n *enode.Node, state NodeStateBitMask, oldValue, newValue interface{})
 
 	// nodeInfo contains node state, fields and state timeouts
@@ -173,6 +172,7 @@ var (
 	errOutOfBound     = errors.New("out of bound")
 	errInvalidField   = errors.New("invalid field type")
 
+	// OfflineFlag enables subscriptions to distinguish callbacks caused be startup or shutdown.
 	OfflineFlag = NewFlag("offline")
 )
 
@@ -273,6 +273,7 @@ func (ns *NodeStateMachine) SubscribeState(mask NodeStateBitMask, callback NodeS
 	return nil
 }
 
+// SubscribeField adds a node field subscription. Same rules apply as for SubscribeState.
 func (ns *NodeStateMachine) SubscribeField(field int, callback NodeFieldCallback) error {
 	ns.lock.Lock()
 	defer ns.lock.Unlock()
@@ -302,7 +303,7 @@ func (ns *NodeStateMachine) checkStarted() {
 }
 
 // Start starts the state machine, enabling state and field operations and disabling
-// further setup operations (flag and field registrations).
+// further subscriptions.
 func (ns *NodeStateMachine) Start() {
 	ns.lock.Lock()
 	if ns.started {
@@ -544,7 +545,7 @@ func (ns *NodeStateMachine) deleteNode(id enode.ID) {
 	ns.db.Delete(append(ns.dbNodeKey, id[:]...))
 }
 
-// saveToDb saves all nodes that have been changed but not saved immediately
+// saveToDb saves the persistent flags and fields of all nodes that have been changed
 func (ns *NodeStateMachine) saveToDb() {
 	for id, node := range ns.nodes {
 		if node.dirty {
@@ -556,21 +557,22 @@ func (ns *NodeStateMachine) saveToDb() {
 	}
 }
 
-func (ns *NodeStateMachine) storeNode(n *enode.Node) (enode.ID, *nodeInfo) {
+// updateEnode updates the enode entry belonging to the given node if it already exists
+func (ns *NodeStateMachine) updateEnode(n *enode.Node) (enode.ID, *nodeInfo) {
 	id := n.ID()
 	node := ns.nodes[id]
-	if node != nil {
-		node.node = n //TODO check whether the node has newer ENR than the stored one
+	if node != nil && n.Seq() > node.node.Seq() {
+		node.node = n
 	}
 	return id, node
 }
 
-// Persist saves the state of the given node immediately
+// Persist saves the persistent state and fields of the given node immediately
 func (ns *NodeStateMachine) Persist(n *enode.Node) error {
 	ns.lock.Lock()
 	defer ns.lock.Unlock()
 
-	if id, node := ns.storeNode(n); node != nil && node.dirty {
+	if id, node := ns.updateEnode(n); node != nil && node.dirty {
 		err := ns.saveNode(id, node)
 		if err != nil {
 			log.Error("Failed to save node", "id", id, "error", err)
@@ -582,7 +584,8 @@ func (ns *NodeStateMachine) Persist(n *enode.Node) error {
 
 // SetState updates the given node state flags and processes all resulting callbacks.
 // It only returns after all subsequent immediate changes (including those changed by the
-// callbacks) have been processed.
+// callbacks) have been processed. If a flag with a timeout is set again, the operation
+// removes or replaces the existing timeout.
 func (ns *NodeStateMachine) SetState(n *enode.Node, set, reset NodeStateBitMask, timeout time.Duration) {
 	ns.lock.Lock()
 	ns.checkStarted()
@@ -591,7 +594,7 @@ func (ns *NodeStateMachine) SetState(n *enode.Node, set, reset NodeStateBitMask,
 		return
 	}
 
-	id, node := ns.storeNode(n)
+	id, node := ns.updateEnode(n)
 	if node == nil {
 		if set == 0 {
 			return
@@ -688,7 +691,7 @@ func (ns *NodeStateMachine) AddTimeout(n *enode.Node, mask NodeStateBitMask, tim
 
 // addTimeout adds a node state timeout associated to the given state flag(s).
 func (ns *NodeStateMachine) addTimeout(n *enode.Node, mask NodeStateBitMask, timeout time.Duration) {
-	_, node := ns.storeNode(n)
+	_, node := ns.updateEnode(n)
 	if node == nil {
 		return
 	}
@@ -741,7 +744,7 @@ func (ns *NodeStateMachine) GetField(n *enode.Node, fieldId int) interface{} {
 	if ns.stopped {
 		return nil
 	}
-	if _, node := ns.storeNode(n); node != nil && fieldId < len(node.fields) {
+	if _, node := ns.updateEnode(n); node != nil && fieldId < len(node.fields) {
 		return node.fields[fieldId]
 	}
 	return nil
@@ -755,7 +758,7 @@ func (ns *NodeStateMachine) SetField(n *enode.Node, fieldId int, value interface
 		ns.lock.Unlock()
 		return nil
 	}
-	_, node := ns.storeNode(n)
+	_, node := ns.updateEnode(n)
 	if node == nil {
 		ns.lock.Unlock()
 		return nil
@@ -843,6 +846,8 @@ func (mask NodeStateBitMask) String() string {
 	return fmt.Sprintf("%b", mask)
 }
 
+// ForEach calls the callback for each node having all of the required and none of the
+// disabled flags set
 func (ns *NodeStateMachine) ForEach(require, disable NodeStateBitMask, cb func(n *enode.Node, state NodeStateBitMask)) {
 	ns.lock.Lock()
 	type callback struct {
@@ -861,6 +866,7 @@ func (ns *NodeStateMachine) ForEach(require, disable NodeStateBitMask, cb func(n
 	}
 }
 
+// GetNode returns the enode currently associated with the given ID
 func (ns *NodeStateMachine) GetNode(id enode.ID) *enode.Node {
 	ns.lock.Lock()
 	defer ns.lock.Unlock()
