@@ -321,7 +321,7 @@ func TestPersistentFields(t *testing.T) {
 	s.Flags[0], s.Flags[1] = s.Flags[1], s.Flags[0]
 	s.Fields[0], s.Fields[1] = s.Fields[1], s.Fields[0]
 	ns3 := NewNodeStateMachine(mdb, []byte("-ns"), clock, s)
-	flags, fields = regSetup(ns3, s)
+	_, fields = regSetup(ns3, s)
 
 	ns3.Start()
 	field0 = ns3.GetField(testNode(1), fields[1])

@@ -167,9 +167,7 @@ type (
 var (
 	errAlreadyStarted = errors.New("state machine already started")
 	errNotStarted     = errors.New("state machine not started yet")
-	errStateOverflow  = errors.New("registered state flag exceeds the limit")
-	errNameCollision  = errors.New("state flag or node field name collision")
-	errOutOfBound     = errors.New("out of bound")
+	errOutOfBound     = errors.New("field index out of bound")
 	errInvalidField   = errors.New("invalid field type")
 
 	// OfflineFlag enables subscriptions to distinguish callbacks caused be startup or shutdown.
