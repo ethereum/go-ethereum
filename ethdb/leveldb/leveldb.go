@@ -252,7 +252,7 @@ func (db *Database) meter(refresh time.Duration) {
 		stats, err := db.db.GetProperty("leveldb.stats")
 		if err != nil {
 			db.log.Error("Failed to read database stats", "err", err)
-			continue
+			return
 		}
 		// Find the compaction table, skip the header
 		lines := strings.Split(stats, "\n")
@@ -261,7 +261,7 @@ func (db *Database) meter(refresh time.Duration) {
 		}
 		if len(lines) <= 3 {
 			db.log.Error("Compaction leveldbTable not found")
-			continue
+			return
 		}
 		lines = lines[3:]
 
@@ -278,7 +278,7 @@ func (db *Database) meter(refresh time.Duration) {
 				value, err := strconv.ParseFloat(strings.TrimSpace(counter), 64)
 				if err != nil {
 					db.log.Error("Compaction entry parsing failed", "err", err)
-					continue
+					return
 				}
 				compactions[i%2][idx] += value
 			}
@@ -300,7 +300,7 @@ func (db *Database) meter(refresh time.Duration) {
 		writedelay, err := db.db.GetProperty("leveldb.writedelay")
 		if err != nil {
 			db.log.Error("Failed to read database write delay statistic", "err", err)
-			continue
+			return
 		}
 		var (
 			delayN        int64
@@ -310,12 +310,12 @@ func (db *Database) meter(refresh time.Duration) {
 		)
 		if n, err := fmt.Sscanf(writedelay, "DelayN:%d Delay:%s Paused:%t", &delayN, &delayDuration, &paused); n != 3 || err != nil {
 			db.log.Error("Write delay statistic not found")
-			continue
+			return
 		}
 		duration, err = time.ParseDuration(delayDuration)
 		if err != nil {
 			db.log.Error("Failed to parse delay duration", "err", err)
-			continue
+			return
 		}
 		if db.writeDelayNMeter != nil {
 			db.writeDelayNMeter.Mark(delayN - delaystats[0])
@@ -336,21 +336,21 @@ func (db *Database) meter(refresh time.Duration) {
 		ioStats, err := db.db.GetProperty("leveldb.iostats")
 		if err != nil {
 			db.log.Error("Failed to read database iostats", "err", err)
-			continue
+			return
 		}
 		var nRead, nWrite float64
 		parts := strings.Split(ioStats, " ")
 		if len(parts) < 2 {
 			db.log.Error("Bad syntax of ioStats", "ioStats", ioStats)
-			continue
+			return
 		}
 		if n, err := fmt.Sscanf(parts[0], "Read(MB):%f", &nRead); n != 1 || err != nil {
 			db.log.Error("Bad syntax of read entry", "entry", parts[0])
-			continue
+			return
 		}
 		if n, err := fmt.Sscanf(parts[1], "Write(MB):%f", &nWrite); n != 1 || err != nil {
 			db.log.Error("Bad syntax of write entry", "entry", parts[1])
-			continue
+			return
 		}
 		if db.diskReadMeter != nil {
 			db.diskReadMeter.Mark(int64((nRead - iostats[0]) * 1024 * 1024))
@@ -363,7 +363,7 @@ func (db *Database) meter(refresh time.Duration) {
 		compCount, err := db.db.GetProperty("leveldb.compcount")
 		if err != nil {
 			db.log.Error("Failed to read database iostats", "err", err)
-			continue
+			return
 		}
 
 		var (
@@ -374,7 +374,7 @@ func (db *Database) meter(refresh time.Duration) {
 		)
 		if n, err := fmt.Sscanf(compCount, "MemComp:%d Level0Comp:%d NonLevel0Comp:%d SeekComp:%d", &memComp, &level0Comp, &nonLevel0Comp, &seekComp); n != 4 || err != nil {
 			db.log.Error("Compaction count statistic not found")
-			continue
+			return
 		}
 		db.memCompGauge.Update(int64(memComp))
 		db.level0CompGauge.Update(int64(level0Comp))
