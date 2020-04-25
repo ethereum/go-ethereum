@@ -88,8 +88,7 @@ func (ui *CommandlineUI) confirm() bool {
 // sanitize quotes and truncates 'txt' if longer than 'limit'. If truncated,
 // and ellipsis is added after the quoted string
 func sanitize(txt string, limit int) string {
-	size := len(txt)
-	if size > limit {
+	if len(txt) > limit {
 		return fmt.Sprintf("%q...", txt[:limit])
 	}
 	return fmt.Sprintf("%q", txt)

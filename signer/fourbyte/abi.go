@@ -98,7 +98,7 @@ func parseSelector(unescapedSelector string) ([]byte, error) {
 	// Validate the unescapedSelector and extract it's components
 	groups := selectorRegexp.FindStringSubmatch(unescapedSelector)
 	if len(groups) != 3 {
-		return nil, fmt.Errorf("invalid unescapedSelector %q (%v matches)", unescapedSelector, len(groups))
+		return nil, fmt.Errorf("invalid selector %q (%v matches)", unescapedSelector, len(groups))
 	}
 	name := groups[1]
 	args := groups[2]
