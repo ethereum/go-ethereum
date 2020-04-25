@@ -79,6 +79,8 @@ type Database struct {
 	quitChan chan chan error // Quit channel to stop the metrics collection before closing the database
 
 	log log.Logger // Contextual logger tracking the database path
+
+	wg sync.WaitGroup
 }
 
 // New returns a wrapped LevelDB object. The namespace is the prefix that the
@@ -129,7 +131,11 @@ func New(file string, cache int, handles int, namespace string) (*Database, erro
 	ldb.seekCompGauge = metrics.NewRegisteredGauge(namespace+"compact/seek", nil)
 
 	// Start up the metrics gathering and return
-	go ldb.meter(metricsGatheringInterval)
+	ldb.wg.Add(1)
+	go func() {
+		defer ldb.wg.Done()
+		ldb.meter(metricsGatheringInterval)
+	}()
 	return ldb, nil
 }
 
@@ -147,6 +153,7 @@ func (db *Database) Close() error {
 		}
 		db.quitChan = nil
 	}
+	db.wg.Wait()
 	return db.db.Close()
 }
 
