@@ -17,6 +17,7 @@
 package snapshot
 
 import (
+	"fmt"
 	"sync"
 	"time"
 
@@ -37,14 +38,20 @@ type conversionAccount struct {
 	CodeHash []byte
 }
 
-// SlimToFull converts data on the 'slim RLP' format into the full RLP-format
-func SlimToFull(data []byte) ([]byte, error) {
+// SlimToFull converts data on the 'slim RLP' format into the full RLP-format.
+// Besides, this function accepts another parameter "subRoot". If the root is
+// not empty, apply it to account. Usually the subRoot is specified if we want
+// to verify the whole state or re-generate state root with different trie algo.
+func SlimToFull(data []byte, subRoot common.Hash) ([]byte, error) {
 	acc := &conversionAccount{}
 	if err := rlp.DecodeBytes(data, acc); err != nil {
 		return nil, err
 	}
 	if len(acc.Root) == 0 {
 		acc.Root = emptyRoot[:]
+	}
+	if subRoot != (common.Hash{}) {
+		acc.Root = subRoot.Bytes()
 	}
 	if len(acc.CodeHash) == 0 {
 		acc.CodeHash = emptyCode[:]
@@ -62,14 +69,49 @@ type trieKV struct {
 	value []byte
 }
 
-type trieGeneratorFn func(in chan (trieKV), out chan (common.Hash))
+type (
+	// trieGeneratorFn is the interface of trie generation which can
+	// be implemented by different trie algorithm.
+	trieGeneratorFn func(in chan (trieKV), out chan (common.Hash))
 
-// GenerateTrieRoot takes an account iterator and reproduces the root hash.
-func GenerateTrieRoot(it AccountIterator) common.Hash {
-	return generateTrieRoot(it, stdGenerate)
+	// leafCallbackFn is the callback invoked at the leaves of the trie,
+	// returns the subtrie root with the specified subtrie identifier.
+	leafCallbackFn func(hash common.Hash) common.Hash
+)
+
+// GenerateAccountTrieRoot takes an account iterator and reproduces the root hash.
+func GenerateAccountTrieRoot(it AccountIterator) common.Hash {
+	return generateTrieRoot(it, true, stdGenerate, nil, true)
 }
 
-func generateTrieRoot(it AccountIterator, generatorFn trieGeneratorFn) common.Hash {
+// GenerateStorageTrieRoot takes a storage iterator and reproduces the root hash.
+func GenerateStorageTrieRoot(it StorageIterator) common.Hash {
+	return generateTrieRoot(it, false, stdGenerate, nil, true)
+}
+
+// VerifyState takes the whole snapshot tree as the input, traverses all the accounts
+// as well as the corresponding storages and compares the re-computed hash with the
+// original one(state root and the storage root).
+func VerifyState(snaptree *Tree, root common.Hash) error {
+	acctIt, err := snaptree.AccountIterator(root, common.Hash{})
+	if err != nil {
+		return err
+	}
+	got := generateTrieRoot(acctIt, true, stdGenerate, func(account common.Hash) common.Hash {
+		storageIt, err := snaptree.StorageIterator(root, account, common.Hash{})
+		if err != nil {
+			return common.Hash{}
+		}
+		return generateTrieRoot(storageIt, false, stdGenerate, nil, false)
+	}, true)
+
+	if got != root {
+		return fmt.Errorf("State root hash mismatch, got %x, want %x", got, root)
+	}
+	return nil
+}
+
+func generateTrieRoot(it Iterator, accountIterator bool, generatorFn trieGeneratorFn, leafCallback leafCallbackFn, report bool) common.Hash {
 	var (
 		in  = make(chan trieKV)      // chan to pass leaves
 		out = make(chan common.Hash) // chan to collect result
@@ -80,26 +122,43 @@ func generateTrieRoot(it AccountIterator, generatorFn trieGeneratorFn) common.Ha
 		generatorFn(in, out)
 		wg.Done()
 	}()
-	// Feed leaves
-	start := time.Now()
-	logged := time.Now()
-	accounts := 0
+
+	var (
+		start   = time.Now()
+		logged  = time.Now()
+		entries = 0
+	)
+	// Start to feed leaves
 	for it.Next() {
-		slimData := it.Account()
-		fullData, _ := SlimToFull(slimData)
-		l := trieKV{it.Hash(), fullData}
+		// Apply the leaf callback first. Normally the callback is used
+		// to traverse the storage trie and re-generate the subtrie root.
+		// If the callback is specified, then replace the original storage
+		// root hash with new one.
+		var subRoot common.Hash
+		if leafCallback != nil {
+			subRoot = leafCallback(it.Hash())
+		}
+		var l trieKV
+		if accountIterator {
+			fullData, _ := SlimToFull(it.(AccountIterator).Account(), subRoot)
+			l = trieKV{it.Hash(), fullData}
+		} else {
+			l = trieKV{it.Hash(), it.(StorageIterator).Slot()}
+		}
 		in <- l
-		if time.Since(logged) > 8*time.Second {
-			log.Info("Generating trie hash from snapshot",
-				"at", l.key, "accounts", accounts, "elapsed", time.Since(start))
+		if time.Since(logged) > 8*time.Second && report {
+			log.Info("Generating trie hash from snapshot", "at", l.key, "entries", entries, "elapsed", time.Since(start))
 			logged = time.Now()
 		}
-		accounts++
+		entries++
 	}
 	close(in)
 	result := <-out
-	log.Info("Generated trie hash from snapshot", "accounts", accounts, "elapsed", time.Since(start))
 	wg.Wait()
+
+	if report {
+		log.Info("Generated trie hash from snapshot", "entries", entries, "elapsed", time.Since(start))
+	}
 	return result
 }
 
