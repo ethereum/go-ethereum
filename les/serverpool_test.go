@@ -87,9 +87,9 @@ func (s *serverPoolTest) addTrusted(i int) {
 }
 
 func (s *serverPoolTest) start() {
-	s.ns = utils.NewNodeStateMachine(s.db, []byte("serverpool:"), s.clock, serverPoolSetup)
+	s.ns = utils.NewNodeStateMachine(s.db, []byte("nodestate:"), s.clock, serverPoolSetup)
 	s.vt = lpc.NewValueTracker(s.db, s.clock, requestList, time.Minute, 1/float64(time.Hour), 1/float64(time.Hour*100), 1/float64(time.Hour*1000))
-	s.sp = newServerPool(s.ns, s.vt, s.input, s.clock, s.trusted, true)
+	s.sp = newServerPool(s.db, []byte("serverpool:"), s.ns, s.vt, s.input, s.clock, s.trusted, true)
 	s.disconnect = make(map[int][]int)
 	s.ns.Start()
 	s.sp.start()

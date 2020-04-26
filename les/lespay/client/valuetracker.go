@@ -216,8 +216,8 @@ func (vt *ValueTracker) StatsExpirer() *utils.Expirer {
 // StatsExpirer returns the current expiration factor so that other values can be expired
 // with the same rate as the service value statistics.
 func (vt *ValueTracker) StatsExpFactor() utils.ExpirationFactor {
-	vt.lock.Lock()
-	defer vt.lock.Unlock()
+	vt.statsExpLock.RLock()
+	defer vt.statsExpLock.RUnlock()
 
 	return vt.statsExpFactor
 }
@@ -508,17 +508,4 @@ func (vt *ValueTracker) RequestStats() []RequestStatsItem {
 		res[i].ReqValue = vt.refBasket.reqValues[i]
 	}
 	return res
-}
-
-// TotalServiceValue returns the total service value provided by the given node (as
-// a function of the weights which are calculated from the request timeout value).
-func (vt *ValueTracker) TotalServiceValue(nv *NodeValueTracker, weights ResponseTimeWeights) float64 {
-	vt.statsExpLock.RLock()
-	expFactor := vt.statsExpFactor
-	vt.statsExpLock.RUnlock()
-
-	nv.lock.Lock()
-	defer nv.lock.Unlock()
-
-	return nv.rtStats.Value(weights, expFactor)
 }
