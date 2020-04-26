@@ -40,8 +40,8 @@ const (
 	dialCost               = 10000                  // cost of a TCP dial (used for known node selection weight calculation)
 	nodeWeightMul          = 1000000                // multiplier constant for node weight calculation
 	nodeWeightThreshold    = 100                    // minimum weight for keeping a node in the the known (valuable) set
-	redialWaitStep         = 2
-	minRedialWait          = time.Second * 10
+	redialWaitStep         = 2                      // exponential multiplier of redial wait time when no value was provided by the server
+	minRedialWait          = time.Second * 10       // minimum redial wait time
 )
 
 // serverPool provides a node iterator for dial candidates. The output is a mix of newly discovered
@@ -194,10 +194,9 @@ func newServerPool(db ethdb.KeyValueStore, dbKey []byte, ns *utils.NodeStateMach
 		}
 	})
 
-	ns.AddLogMetrics(s.stHasValue, s.ns.StatesMask(disableSelection), "wrs", nil, nil, nil)
-	ns.AddLogMetrics(s.stDialed, 0, "dialed", nil, nil, nil)
-	ns.AddLogMetrics(s.stConnected, 0, "connected", nil, nil, nil)
-	ns.AddLogMetrics(s.stHasValue, 0, "hasValue", nil, nil, nil)
+	ns.AddLogMetrics(s.stHasValue, s.ns.StatesMask(disableSelection), "selectable", nil, nil, serverSelectableGauge)
+	ns.AddLogMetrics(s.stDialed, 0, "dialed", serverDialedMeter, nil, nil)
+	ns.AddLogMetrics(s.stConnected, 0, "connected", nil, nil, serverConnectedGauge)
 	return s
 }
 
@@ -225,8 +224,13 @@ func (s *serverPool) start() {
 	go func() {
 		for {
 			select {
-			case <-time.After(time.Minute * 10):
+			case <-time.After(time.Minute * 5):
 				s.persistClock()
+				suggestedTimeoutGauge.Update(int64(s.getTimeout() / time.Millisecond))
+				s.timeoutLock.RLock()
+				timeWeights := s.timeWeights
+				s.timeoutLock.RUnlock()
+				totalValueGauge.Update(int64(s.vt.RtStats().Value(timeWeights, s.vt.StatsExpFactor())))
 			case <-s.quit:
 				return
 			}
@@ -248,6 +252,7 @@ func (s *serverPool) stop() {
 	s.persistClock()
 }
 
+// persistClock stores the persistent absolute time into the database
 func (s *serverPool) persistClock() {
 	var clockEnc [8]byte
 	binary.BigEndian.PutUint64(clockEnc[:], uint64(s.clock.Now()+s.clockOffset))
@@ -315,17 +320,19 @@ func (s *serverPool) calculateNode(node *enode.Node, failedConnection, remoteDis
 		return 0, 0
 	}
 	currentStats := nvt.RtStats()
+	timeout := s.getTimeout()
 	s.timeoutLock.RLock()
 	timeWeights := s.timeWeights
 	s.timeoutLock.RUnlock()
 	expFactor := s.vt.StatsExpFactor()
 
-	var currentValue float64
+	var sessionValue float64
 	if remoteDisconnect {
 		if connStats, ok := s.ns.GetField(node, s.connStatsField).(lpc.ResponseTimeStats); ok {
 			diff := currentStats
 			diff.SubStats(&connStats)
-			currentValue = diff.Value(timeWeights, expFactor)
+			sessionValue = diff.Value(timeWeights, expFactor)
+			sessionValueMeter.Mark(int64(sessionValue))
 		}
 	}
 
@@ -339,7 +346,6 @@ func (s *serverPool) calculateNode(node *enode.Node, failedConnection, remoteDis
 	}
 
 	var storeField bool
-	timeout := s.getTimeout()
 	if remoteDisconnect || timeout < n.lastTimeout-timeoutChangeThreshold || timeout > n.lastTimeout+timeoutChangeThreshold {
 		n.totalValue = currentStats.Value(timeWeights, expFactor)
 		n.lastTimeout = timeout
@@ -349,7 +355,7 @@ func (s *serverPool) calculateNode(node *enode.Node, failedConnection, remoteDis
 	var wait time.Duration
 	if failedConnection || remoteDisconnect {
 		a := n.totalValue * dialCost
-		b := float64(totalDialCost) * currentValue
+		b := float64(totalDialCost) * sessionValue
 		if n.waitFactor < 1 {
 			n.waitFactor = 1
 		}
