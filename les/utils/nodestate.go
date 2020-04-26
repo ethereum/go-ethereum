@@ -546,9 +546,7 @@ func (ns *NodeStateMachine) deleteNode(id enode.ID) {
 
 // saveToDb saves the persistent flags and fields of all nodes that have been changed
 func (ns *NodeStateMachine) saveToDb() {
-	fmt.Println("saveToDb")
 	for id, node := range ns.nodes {
-		fmt.Println(" dirty", id, node.dirty)
 		if node.dirty {
 			err := ns.saveNode(id, node)
 			if err != nil {
@@ -573,7 +571,6 @@ func (ns *NodeStateMachine) Persist(n *enode.Node) error {
 	ns.lock.Lock()
 	defer ns.lock.Unlock()
 
-	fmt.Println("Persist", n.ID())
 	if id, node := ns.updateEnode(n); node != nil && node.dirty {
 		err := ns.saveNode(id, node)
 		if err != nil {
@@ -638,7 +635,6 @@ func (ns *NodeStateMachine) SetState(n *enode.Node, set, reset NodeStateBitMask,
 		// call field subscriptions for discarded fields
 		for i, v := range node.fields {
 			if v != nil {
-				fmt.Println("dropped field", n.ID(), v, ns.stateToString(oldState), ns.stateToString(set), ns.stateToString(reset))
 				f := ns.nodeFields[i]
 				if len(f.subs) > 0 {
 					for _, cb := range f.subs {
@@ -880,6 +876,8 @@ func (ns *NodeStateMachine) GetNode(id enode.ID) *enode.Node {
 	return nil
 }
 
+// AddLogMetrics adds logging and/or metrics for nodes entering, exiting and currently
+// being in a given set specified by required and disabled state flags
 func (ns *NodeStateMachine) AddLogMetrics(requireMask, disableMask NodeStateBitMask, name string, inMeter, outMeter metrics.Meter, gauge metrics.Gauge) {
 	var count int64
 	ns.SubscribeState(requireMask|disableMask, func(n *enode.Node, oldState, newState NodeStateBitMask) {
@@ -888,13 +886,17 @@ func (ns *NodeStateMachine) AddLogMetrics(requireMask, disableMask NodeStateBitM
 		if newMatch != oldMatch {
 			if newMatch {
 				count++
-				log.Info("Node entered", "set", name, "id", n.ID(), "count", count)
+				if name != "" {
+					log.Debug("Node entered", "set", name, "id", n.ID(), "count", count)
+				}
 				if inMeter != nil {
 					inMeter.Mark(1)
 				}
 			} else {
 				count--
-				log.Info("Node left", "set", name, "id", n.ID(), "count", count)
+				if name != "" {
+					log.Debug("Node left", "set", name, "id", n.ID(), "count", count)
+				}
 				if outMeter != nil {
 					outMeter.Mark(1)
 				}

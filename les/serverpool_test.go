@@ -251,9 +251,10 @@ func TestServerPoolRestartNoDiscovery(t *testing.T) {
 
 func TestServerPoolTrustedNoDiscovery(t *testing.T) {
 	s := newServerPoolTest()
-	trusted := s.setNodes(2, 300, 10, false, true)
+	trusted := s.setNodes(200, 200, 200, true, true)
+	s.input = nil
 	s.start()
 	s.run(10000)
 	s.stop()
-	s.checkNodes(t, trusted, 16000, 20000)
+	s.checkNodes(t, trusted, 40000, 50000)
 }

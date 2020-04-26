@@ -19,7 +19,6 @@ package les
 import (
 	"encoding/binary"
 	"errors"
-	"fmt"
 	"reflect"
 	"sync"
 	"time"
@@ -106,7 +105,6 @@ var (
 					WaitUntil:  uint64(n.waitUntil),
 				}
 				enc, err := rlp.EncodeToBytes(&ne)
-				fmt.Println("enc nh", err)
 				return enc, err
 			} else {
 				return nil, errInvalidField
@@ -120,7 +118,6 @@ var (
 				waitFactor: float64(ne.WaitFactor) / 256,
 				waitUntil:  mclock.AbsTime(ne.WaitUntil),
 			}
-			fmt.Println("dec nh", err)
 			return n, err
 		},
 	)
@@ -312,11 +309,9 @@ func (s *serverPool) getTimeout() time.Duration {
 
 // calculateNode calculates the selection weight and the proposed redial wait time of the given node
 func (s *serverPool) calculateNode(node *enode.Node, failedConnection, remoteDisconnect bool) (uint64, time.Duration) {
-	fmt.Println("nodeWeight", node.ID())
 	n, _ := s.ns.GetField(node, s.nodeHistoryField).(nodeHistory)
 	nvt := s.vt.GetNode(node.ID())
 	if nvt == nil {
-		fmt.Println("no vt entry")
 		return 0, 0
 	}
 	currentStats := nvt.RtStats()
@@ -331,8 +326,6 @@ func (s *serverPool) calculateNode(node *enode.Node, failedConnection, remoteDis
 			diff := currentStats
 			diff.SubStats(&connStats)
 			currentValue = diff.Value(timeWeights, expFactor)
-		} else {
-			log.Error("Missing connected statistics field", "id", node.ID())
 		}
 	}
 
@@ -341,7 +334,6 @@ func (s *serverPool) calculateNode(node *enode.Node, failedConnection, remoteDis
 		n.dialCost.Add(dialCost, logOffset)
 	}
 	totalDialCost := n.dialCost.Value(logOffset)
-	fmt.Println(" dialCost", totalDialCost)
 	if totalDialCost < dialCost {
 		totalDialCost = dialCost
 	}
@@ -368,7 +360,6 @@ func (s *serverPool) calculateNode(node *enode.Node, failedConnection, remoteDis
 		if n.waitFactor < 1 {
 			n.waitFactor = 1
 		}
-		fmt.Println(" waitFactor", n.waitFactor)
 		wait = time.Duration(float64(minRedialWait) * n.waitFactor)
 		n.waitUntil = s.clock.Now() + s.clockOffset + mclock.AbsTime(wait)
 		storeField = true
@@ -377,9 +368,6 @@ func (s *serverPool) calculateNode(node *enode.Node, failedConnection, remoteDis
 	if storeField {
 		s.ns.SetField(node, s.nodeHistoryField, n)
 	}
-
-	fmt.Println(" value", n.totalValue)
-	fmt.Println(" weight", uint64(n.totalValue*nodeWeightMul/float64(totalDialCost)))
 	return uint64(n.totalValue * nodeWeightMul / float64(totalDialCost)), wait
 }
 
