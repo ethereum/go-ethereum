@@ -158,34 +158,9 @@ func (s *Snapshot) apply(headers []*types.Header) (*Snapshot, error) {
 			return nil, errUnauthorizedSigner
 		}
 
-		//
-		// Check validator
-		//
-
-		validators := snap.ValidatorSet.Validators
-		// proposer will be the last signer if block is not epoch block
 		proposer := snap.ValidatorSet.GetProposer().Address
-		proposerIndex, _ := snap.ValidatorSet.GetByAddress(proposer)
-		if proposerIndex == -1 {
-			return nil, &ProposerNotFoundError{proposer}
-		}
-		signerIndex, _ := snap.ValidatorSet.GetByAddress(signer)
-		if signerIndex == -1 {
-			return nil, &SignerNotFoundError{signer}
-		}
-		limit := len(validators)/2 + 1
-
-		// temp index
-		tempIndex := signerIndex
-		if proposerIndex != tempIndex && limit > 0 {
-			if tempIndex < proposerIndex {
-				tempIndex = tempIndex + len(validators)
-			}
-
-			if tempIndex-proposerIndex > limit {
-				log.Info("Invalid signer: error while applying headers", "proposerIndex", validators[proposerIndex].Address.Hex(), "signerIndex", validators[signerIndex].Address.Hex())
-				return nil, errRecentlySigned
-			}
+		if _, err = snap.getSignerSuccessionNumber(signer, proposer); err != nil {
+			return nil, err
 		}
 
 		// add recents
@@ -209,6 +184,40 @@ func (s *Snapshot) apply(headers []*types.Header) (*Snapshot, error) {
 	snap.Hash = headers[len(headers)-1].Hash()
 
 	return snap, nil
+}
+
+// getSignerSuccessionNumber returns the relative position of signer in terms of the in-turn proposer
+func (s *Snapshot) getSignerSuccessionNumber(signer common.Address, proposer common.Address) (int, error) {
+	validators := s.ValidatorSet.Validators
+	// bor.verifySeal and bor.Seal has the following commented out.
+	// TODO DISCUSS WITH JD if this is required
+	// If it is, we will also need to send in header.Number as parameter
+	// if number%c.config.Sprint != 0 {
+	// 	proposer = snap.Recents[number-1]
+	// }
+
+	proposerIndex, _ := s.ValidatorSet.GetByAddress(proposer)
+	if proposerIndex == -1 {
+		return -1, &ProposerNotFoundError{proposer}
+	}
+	signerIndex, _ := s.ValidatorSet.GetByAddress(signer)
+	if signerIndex == -1 {
+		return -1, &SignerNotFoundError{signer}
+	}
+	limit := len(validators)/2 + 1
+
+	tempIndex := signerIndex
+	if proposerIndex != tempIndex && limit > 0 {
+		if tempIndex < proposerIndex {
+			tempIndex = tempIndex + len(validators)
+		}
+
+		if tempIndex-proposerIndex > limit {
+			log.Info("errRecentlySigned", "proposerIndex", validators[proposerIndex].Address.Hex(), "signerIndex", validators[signerIndex].Address.Hex())
+			return -1, errRecentlySigned
+		}
+	}
+	return tempIndex - proposerIndex, nil
 }
 
 // signers retrieves the list of authorized signers in ascending order.

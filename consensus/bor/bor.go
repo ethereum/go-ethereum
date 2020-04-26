@@ -201,8 +201,8 @@ func encodeSigHeader(w io.Writer, header *types.Header) {
 // CalcDifficulty is the difficulty adjustment algorithm. It returns the difficulty
 // that a new block should have based on the previous blocks in the chain and the
 // current signer.
-func CalcDifficulty(snap *Snapshot, signer common.Address, epoch uint64) *big.Int {
-	return big.NewInt(0).SetUint64(snap.inturn(snap.Number+1, signer, epoch))
+func CalcDifficulty(snap *Snapshot, signer common.Address, sprint uint64) *big.Int {
+	return big.NewInt(0).SetUint64(snap.inturn(snap.Number+1, signer, sprint))
 }
 
 // CalcProducerDelay is the block delay algorithm based on block time and period / producerDelay values in genesis
@@ -439,15 +439,6 @@ func (c *Bor) verifyCascadingFields(chain consensus.ChainReader, header *types.H
 		for i, validator := range currentValidators {
 			copy(validatorsBytes[i*validatorHeaderBytesLength:], validator.HeaderBytes())
 		}
-
-		extraSuffix := len(header.Extra) - extraSeal
-
-		// fmt.Println("validatorsBytes ==> verify seal ==> ", hex.EncodeToString(validatorsBytes))
-		// fmt.Println("header.Extra ==> verify seal ==> ", hex.EncodeToString(header.Extra[extraVanity:extraSuffix]))
-
-		if !bytes.Equal(header.Extra[extraVanity:extraSuffix], validatorsBytes) {
-			// return errMismatchingSprintValidators
-		}
 	}
 
 	// All basic checks passed, verify the seal and return
@@ -591,27 +582,9 @@ func (c *Bor) verifySeal(chain consensus.ChainReader, header *types.Header, pare
 		return errUnauthorizedSigner
 	}
 
-	// check if signer is correct
-	validators := snap.ValidatorSet.Validators
-	// proposer will be the last signer if block is not epoch block
 	proposer := snap.ValidatorSet.GetProposer().Address
-	if number%c.config.Sprint != 0 {
-		// proposer = snap.Recents[number-1]
-	}
-	proposerIndex, _ := snap.ValidatorSet.GetByAddress(proposer)
-	signerIndex, _ := snap.ValidatorSet.GetByAddress(signer)
-	limit := len(validators)/2 + 1
-
-	// temp index
-	tempIndex := signerIndex
-	if proposerIndex != tempIndex && limit > 0 {
-		if tempIndex < proposerIndex {
-			tempIndex = tempIndex + len(validators)
-		}
-
-		if tempIndex-proposerIndex > limit {
-			return errRecentlySigned
-		}
+	if _, err = snap.getSignerSuccessionNumber(signer, proposer); err != nil {
+		return err
 	}
 
 	// Ensure that the difficulty corresponds to the turn-ness of the signer
@@ -775,31 +748,15 @@ func (c *Bor) Seal(chain consensus.ChainReader, block *types.Block, results chan
 		return errUnauthorizedSigner
 	}
 
-	validators := snap.ValidatorSet.Validators
-	// proposer will be the last signer if block is not epoch block
 	proposer := snap.ValidatorSet.GetProposer().Address
-	if number%c.config.Sprint != 0 {
-		// proposer = snap.Recents[number-1]
-	}
-
-	proposerIndex, _ := snap.ValidatorSet.GetByAddress(proposer)
-	signerIndex, _ := snap.ValidatorSet.GetByAddress(signer)
-	limit := len(validators)/2 + 1
-
-	// temp index
-	tempIndex := signerIndex
-	if tempIndex < proposerIndex {
-		tempIndex = tempIndex + len(validators)
-	}
-
-	if limit > 0 && tempIndex-proposerIndex > limit {
-		log.Info("Signed recently, must wait for others")
-		return nil
+	successionNumber, err := snap.getSignerSuccessionNumber(signer, proposer)
+	if err != nil {
+		return err
 	}
 
 	// Sweet, the protocol permits us to sign the block, wait for our time
 	delay := time.Unix(int64(header.Time), 0).Sub(time.Now()) // nolint: gosimple
-	wiggle := time.Duration(2*c.config.Period) * time.Second * time.Duration(tempIndex-proposerIndex)
+	wiggle := time.Duration(2*c.config.Period) * time.Second * time.Duration(successionNumber)
 	delay += wiggle
 
 	log.Info("Out-of-turn signing requested", "wiggle", common.PrettyDuration(wiggle))
@@ -863,7 +820,7 @@ func (c *Bor) Close() error {
 	return nil
 }
 
-// Checks if new span is pending
+// Checks if "force" proposeSpan has been set
 func (c *Bor) isSpanPending(snapshotNumber uint64) (bool, error) {
 	blockNr := rpc.BlockNumber(snapshotNumber)
 	method := "spanProposalPending"
@@ -875,14 +832,10 @@ func (c *Bor) isSpanPending(snapshotNumber uint64) (bool, error) {
 		return false, err
 	}
 
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel() // cancel when we are finished consuming integers
-
-	// call
 	msgData := (hexutil.Bytes)(data)
 	toAddress := common.HexToAddress(c.config.ValidatorContract)
 	gas := (hexutil.Uint64)(uint64(math.MaxUint64 / 2))
-	result, err := c.ethAPI.Call(ctx, ethapi.CallArgs{
+	result, err := c.ethAPI.Call(context.Background(), ethapi.CallArgs{
 		Gas:  &gas,
 		To:   &toAddress,
 		Data: &msgData,
@@ -913,14 +866,10 @@ func (c *Bor) GetCurrentSpan(snapshotNumber uint64) (*Span, error) {
 		return nil, err
 	}
 
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel() // cancel when we are finished consuming integers
-
-	// call
 	msgData := (hexutil.Bytes)(data)
 	toAddress := common.HexToAddress(c.config.ValidatorContract)
 	gas := (hexutil.Uint64)(uint64(math.MaxUint64 / 2))
-	result, err := c.ethAPI.Call(ctx, ethapi.CallArgs{
+	result, err := c.ethAPI.Call(context.Background(), ethapi.CallArgs{
 		Gas:  &gas,
 		To:   &toAddress,
 		Data: &msgData,
@@ -963,14 +912,11 @@ func (c *Bor) GetCurrentValidators(snapshotNumber uint64, blockNumber uint64) ([
 		return nil, err
 	}
 
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel() // cancel when we are finished consuming integers
-
 	// call
 	msgData := (hexutil.Bytes)(data)
 	toAddress := common.HexToAddress(c.config.ValidatorContract)
 	gas := (hexutil.Uint64)(uint64(math.MaxUint64 / 2))
-	result, err := c.ethAPI.Call(ctx, ethapi.CallArgs{
+	result, err := c.ethAPI.Call(context.Background(), ethapi.CallArgs{
 		Gas:  &gas,
 		To:   &toAddress,
 		Data: &msgData,
@@ -1153,13 +1099,10 @@ func (c *Bor) GetPendingStateProposals(snapshotNumber uint64) ([]*big.Int, error
 		return nil, err
 	}
 
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel() // cancel when we are finished consuming integers
-
 	msgData := (hexutil.Bytes)(data)
 	toAddress := common.HexToAddress(c.config.StateReceiverContract)
 	gas := (hexutil.Uint64)(uint64(math.MaxUint64 / 2))
-	result, err := c.ethAPI.Call(ctx, ethapi.CallArgs{
+	result, err := c.ethAPI.Call(context.Background(), ethapi.CallArgs{
 		Gas:  &gas,
 		To:   &toAddress,
 		Data: &msgData,
