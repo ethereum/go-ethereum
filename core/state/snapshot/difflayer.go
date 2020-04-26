@@ -105,6 +105,13 @@ type diffLayer struct {
 	root  common.Hash // Root hash to which this snapshot diff belongs to
 	stale uint32      // Signals that the layer became stale (state progressed)
 
+	// destructSet is a very special helper marker. If an account is marked as
+	// deleted, then it's recorded in this set. However it's allowed that an account
+	// is included here but still available in other sets(e.g. storageData). The
+	// reason is the diff layer includes all the changes in a *block*. It can
+	// happen that in the tx_1, account A is self-destructed while in the tx_2
+	// it's recreated. But we still need this marker to indicate the "old" A is
+	// deleted, all data in other set belongs to the "new" A.
 	destructSet map[common.Hash]struct{}               // Keyed markers for deleted (and potentially) recreated accounts
 	accountList []common.Hash                          // List of account for iteration. If it exists, it's sorted, otherwise it's nil
 	accountData map[common.Hash][]byte                 // Keyed accounts for direct retrival (nil means deleted)
@@ -510,18 +517,18 @@ func (dl *diffLayer) AccountList() []common.Hash {
 // for the given account. If the whole storage is destructed in this layer, then
 // an additional flag *destructed = true* will be returned, otherwise the flag is
 // false. Besides, the returned list will include the hash of deleted storage slot.
+// Note a special case is an account is deleted in a prior tx but is recreated in
+// the following tx with some storage slots set. In this case the returned list is
+// not empty but the flag is true.
 //
 // Note, the returned slice is not a copy, so do not modify it.
 func (dl *diffLayer) StorageList(accountHash common.Hash) ([]common.Hash, bool) {
 	// If an old list already exists, return it
 	dl.lock.RLock()
-	if _, exist := dl.destructSet[accountHash]; exist {
-		dl.lock.RUnlock()
-		return nil, true
-	}
+	_, destructed := dl.destructSet[accountHash]
 	if list, exist := dl.storageList[accountHash]; exist {
 		dl.lock.RUnlock()
-		return list, false // all cached lists are still alive, even if they are empty.
+		return list, destructed // The list might be nil
 	}
 	dl.lock.RUnlock()
 
@@ -529,9 +536,6 @@ func (dl *diffLayer) StorageList(accountHash common.Hash) ([]common.Hash, bool) 
 	dl.lock.Lock()
 	defer dl.lock.Unlock()
 
-	// Otherwise allocate the sorted storage and return. Note even there is zero
-	// storage change included in this layer, the returned slice is not **nil**.
-	// Nil slice represents the whole storage is removed.
 	storageMap := dl.storageData[accountHash]
 	storageList := make([]common.Hash, 0, len(storageMap))
 	for k := range storageMap {
@@ -539,6 +543,6 @@ func (dl *diffLayer) StorageList(accountHash common.Hash) ([]common.Hash, bool) 
 	}
 	sort.Sort(hashes(storageList))
 	dl.storageList[accountHash] = storageList
-	dl.memory += uint64(len(dl.storageList) * common.HashLength)
-	return storageList, false
+	dl.memory += uint64(len(dl.storageList)*common.HashLength + common.HashLength)
+	return storageList, destructed
 }

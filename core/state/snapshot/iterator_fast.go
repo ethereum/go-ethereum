@@ -97,15 +97,17 @@ func newFastIterator(tree *Tree, root common.Hash, account common.Hash, seek com
 			})
 		} else {
 			// If the whole storage is destructed in this layer, don't
-			// bother deeper layer anymore.
+			// bother deeper layer anymore. But we should still keep
+			// the iterator for this layer, since the iterator can contain
+			// some valid slots which belongs to the re-created account.
 			it, destructed := current.StorageIterator(account, seek)
-			if destructed {
-				break
-			}
 			fi.iterators = append(fi.iterators, &weightedIterator{
 				it:       it,
 				priority: depth,
 			})
+			if destructed {
+				break
+			}
 		}
 		current = current.Parent()
 	}

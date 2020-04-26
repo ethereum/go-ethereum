@@ -67,20 +67,9 @@ func (dl *diffLayer) initBinaryAccountIterator() Iterator {
 func (dl *diffLayer) initBinaryStorageIterator(account common.Hash) Iterator {
 	parent, ok := dl.parent.(*diffLayer)
 	if !ok {
-		// If the storage in this layer is already destructed, discard
-		// all deeper layers and return an exhausted iterator.
+		// If the storage in this layer is already destructed, discard all
+		// deeper layers but still return an valid single-branch iterator.
 		a, destructed := dl.StorageIterator(account, common.Hash{})
-		if destructed {
-			return &binaryIterator{
-				aDone:   true,
-				bDone:   true,
-				account: account,
-			}
-		}
-		// If the storage in the parent layer is destructed,
-		// return a single-branch iterator with another branch
-		// set as exhausted.
-		b, destructed := dl.Parent().StorageIterator(account, common.Hash{})
 		if destructed {
 			l := &binaryIterator{
 				a:       a,
@@ -90,7 +79,9 @@ func (dl *diffLayer) initBinaryStorageIterator(account common.Hash) Iterator {
 			l.bDone = true
 			return l
 		}
-		// Both branches are still available, return the binary iterator.
+		// Even if the storage in the parent layer is destructed,
+		// still return the normal iterator with both-branch enabled.
+		b, _ := dl.Parent().StorageIterator(account, common.Hash{})
 		l := &binaryIterator{
 			a:       a,
 			b:       b,
@@ -100,15 +91,17 @@ func (dl *diffLayer) initBinaryStorageIterator(account common.Hash) Iterator {
 		l.bDone = !l.b.Next()
 		return l
 	}
-	// If the storage in this layer is already destructed, discard
-	// all deeper layers and return an exhausted iterator.
+	// If the storage in this layer is already destructed, discard all
+	// deeper layers but still return an valid single-branch iterator.
 	a, destructed := dl.StorageIterator(account, common.Hash{})
 	if destructed {
-		return &binaryIterator{
-			aDone:   true,
-			bDone:   true,
+		l := &binaryIterator{
+			a:       a,
 			account: account,
 		}
+		l.aDone = !l.a.Next()
+		l.bDone = true
+		return l
 	}
 	l := &binaryIterator{
 		a:       a,

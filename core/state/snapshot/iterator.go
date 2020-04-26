@@ -243,15 +243,13 @@ type diffStorageIterator struct {
 // StorageIterator creates a storage iterator over a single diff layer.
 // Execept the storage iterator is returned, there is an additional flag
 // "destructed" returned. If it's true then it means the whole storage is
-// destructed.
+// destructed in this layer(maybe recreated too), don't bother deeper layer
+// for storage retrieval.
 func (dl *diffLayer) StorageIterator(account common.Hash, seek common.Hash) (StorageIterator, bool) {
-	// If the storage is destructed, return nil iterator.
+	// Create the storage for this account even it's marked
+	// as destructed. The iterator is for the new one which
+	// just has the same adddress as the deleted one.
 	hashes, destructed := dl.StorageList(account)
-	if destructed {
-		return nil, true
-	}
-	// Otherwise, create the storage iterator even there is
-	// zero storage change included(the exhausted iterator).
 	index := sort.Search(len(hashes), func(i int) bool {
 		return bytes.Compare(seek[:], hashes[i][:]) <= 0
 	})
@@ -260,7 +258,7 @@ func (dl *diffLayer) StorageIterator(account common.Hash, seek common.Hash) (Sto
 		layer:   dl,
 		account: account,
 		keys:    hashes[index:],
-	}, false
+	}, destructed
 }
 
 // Next steps the iterator forward one element, returning false if exhausted.

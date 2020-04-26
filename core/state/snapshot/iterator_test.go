@@ -806,6 +806,14 @@ func TestStorageIteratorDeletions(t *testing.T) {
 	it, _ = snaps.StorageIterator(common.HexToHash("0x05"), common.HexToHash("0xaa"), common.Hash{})
 	verifyIterator(t, 3, it, verifyStorage)
 	it.Release()
+
+	// Destruct the whole storage but re-create the account in the same layer
+	snaps.Update(common.HexToHash("0x06"), common.HexToHash("0x05"), destructed, randomAccountSet("0xaa"), randomStorageSet([]string{"0xaa"}, [][]string{{"0x11", "0x12"}}, nil))
+	it, _ = snaps.StorageIterator(common.HexToHash("0x06"), common.HexToHash("0xaa"), common.Hash{})
+	verifyIterator(t, 2, it, verifyStorage) // The output should be 11,12
+	it.Release()
+
+	verifyIterator(t, 2, snaps.Snapshot(common.HexToHash("0x06")).(*diffLayer).newBinaryStorageIterator(common.HexToHash("0xaa")), verifyStorage)
 }
 
 // BenchmarkAccountIteratorTraversal is a bit a bit notorious -- all layers contain the
