@@ -345,53 +345,60 @@ func (st *ReStackTrie) insert(key, value []byte) {
 			// Ext key and key segment are identical, recurse into
 			// the child node.
 			st.children[0].insert(key, value)
-		} else {
-			// Save the original part. Depending if the break is
-			// at the extension's last byte or not, create an
-			// intermediate extension or use the extension's child
-			// node directly.
-			var n *ReStackTrie
-			if diffidx < len(st.key)-1 {
-				n = NewReStackTrie()
-				n.key = st.key[diffidx+1:]
-				n.children[0] = st.children[0]
-				n.nodeType = 1
-			} else {
-				// Break on the last byte, no need to insert
-				// an extension node: reuse the current node
-				n = st.children[0]
-			}
-			n.keyOffset = st.keyOffset + diffidx + 1
-
-			// Create a leaf for the inserted part
-			o := NewReStackTrie()
-			o.keyOffset = st.keyOffset + diffidx + 1
-			o.key = key[o.keyOffset:]
-			o.val = value
-			o.nodeType = leafNode
-
-			// Insert both child leaves where they belong:
-			if diffidx == 0 {
-				// the break is on the first byte, so
-				// the current node is converted into
-				// a branch node.
-				st.children[0] = nil
-				st.children[st.key[diffidx]] = n
-				st.children[key[st.keyOffset+diffidx]] = o
-				st.nodeType = branchNode
-				st.key = nil
-			} else {
-				// the common prefix is at least one byte
-				// long, insert a new intermediate branch
-				// node.
-				st.children[0] = NewReStackTrie()
-				st.children[0].nodeType = branchNode
-				st.children[0].children[st.key[diffidx]] = n
-				st.children[0].children[key[st.keyOffset+diffidx]] = o
-				st.children[0].keyOffset = st.keyOffset + diffidx
-				st.key = st.key[:diffidx]
-			}
+			return
 		}
+		// Save the original part. Depending if the break is
+		// at the extension's last byte or not, create an
+		// intermediate extension or use the extension's child
+		// node directly.
+		var n *ReStackTrie
+		if diffidx < len(st.key)-1 {
+			n = NewReStackTrie()
+			n.key = st.key[diffidx+1:]
+			n.children[0] = st.children[0]
+			n.nodeType = extNode
+		} else {
+			// Break on the last byte, no need to insert
+			// an extension node: reuse the current node
+			n = st.children[0]
+		}
+		n.keyOffset = st.keyOffset + diffidx + 1
+
+		var p *ReStackTrie
+		if diffidx == 0 {
+			// the break is on the first byte, so
+			// the current node is converted into
+			// a branch node.
+			st.children[0] = nil
+			p = st
+			st.nodeType = branchNode
+		} else {
+			// the common prefix is at least one byte
+			// long, insert a new intermediate branch
+			// node.
+			st.children[0] = NewReStackTrie()
+			st.children[0].nodeType = branchNode
+			st.children[0].keyOffset = st.keyOffset + diffidx
+			p = st.children[0]
+		}
+
+		n.val = n.hash()
+		n.nodeType = hashedNode
+		n.key = nil
+
+		// Create a leaf for the inserted part
+		o := NewReStackTrie()
+		o.keyOffset = st.keyOffset + diffidx + 1
+		o.key = key[o.keyOffset:]
+		o.val = value
+		o.nodeType = leafNode
+
+		// Insert both child leaves where they belong:
+		origIdx := st.key[diffidx]
+		newIdx := key[diffidx+st.keyOffset]
+		p.children[origIdx] = n
+		p.children[newIdx] = o
+		st.key = st.key[:diffidx]
 
 	case leafNode: /* Leaf */
 		// Compare both key chunks and see where they differ
