@@ -29,17 +29,22 @@ import (
 	"github.com/ethereum/go-ethereum/ethdb/memorydb"
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/olekukonko/tablewriter"
+
+	"sync"
 )
 
 // freezerdb is a database wrapper that enabled freezer data retrievals.
 type freezerdb struct {
 	ethdb.KeyValueStore
 	ethdb.AncientStore
+	quitChan chan struct{}
+	wg       sync.WaitGroup
 }
 
 // Close implements io.Closer, closing both the fast key-value store as well as
 // the slow ancient tables.
 func (frdb *freezerdb) Close() error {
+	close(frdb.quitChan)
 	var errs []error
 	if err := frdb.KeyValueStore.Close(); err != nil {
 		errs = append(errs, err)
@@ -171,13 +176,22 @@ func NewDatabaseWithFreezer(db ethdb.KeyValueStore, freezer string, namespace st
 			// feezer.
 		}
 	}
-	// Freezer is consistent with the key-value database, permit combining the two
-	go frdb.freeze(db)
 
-	return &freezerdb{
+	fdb := &freezerdb{
 		KeyValueStore: db,
-		AncientStore:  frdb,
-	}, nil
+		//AncientStore:  frdb,
+		quitChan: make(chan struct{}),
+	}
+	// Freezer is consistent with the key-value database, permit combining the two
+	fdb.wg.Add(1)
+	go func() {
+		defer fdb.wg.Done()
+		frdb.freeze(db, fdb.quitChan)
+	}()
+
+	fdb.AncientStore = frdb
+
+	return fdb, nil
 }
 
 // NewMemoryDatabase creates an ephemeral in-memory key-value database without a
