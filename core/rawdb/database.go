@@ -45,6 +45,7 @@ type freezerdb struct {
 // the slow ancient tables.
 func (frdb *freezerdb) Close() error {
 	close(frdb.quitChan)
+	frdb.wg.Wait()
 	var errs []error
 	if err := frdb.KeyValueStore.Close(); err != nil {
 		errs = append(errs, err)
