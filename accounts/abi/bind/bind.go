@@ -588,11 +588,11 @@ func hasStruct(t abi.Type) bool {
 }
 
 // formatMethod transforms raw method representation into a user friendly one.
-func formatMethod(method abi.Method, structs map[string]*tmplStruct) string {
+func formatMethod(method abi.Method) string {
 	return method.String()
 }
 
 // formatEvent transforms raw event representation into a user friendly one.
-func formatEvent(event abi.Event, structs map[string]*tmplStruct) string {
+func formatEvent(event abi.Event) string {
 	return event.String()
 }
