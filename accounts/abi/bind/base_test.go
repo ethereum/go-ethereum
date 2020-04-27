@@ -17,9 +17,9 @@
 package bind_test
 
 import (
-	"bytes"
 	"context"
 	"math/big"
+	"reflect"
 	"strings"
 	"testing"
 
@@ -88,51 +88,23 @@ const hexData = "0x000000000000000000000000376c47978271565f56deb45495afa69e59c16
 
 func TestUnpackIndexedStringTyLogIntoMap(t *testing.T) {
 	hash := crypto.Keccak256Hash([]byte("testName"))
-	mockLog := types.Log{
-		Address: common.HexToAddress("0x0"),
-		Topics: []common.Hash{
-			common.HexToHash("0x0"),
-			hash,
-		},
-		Data:        hexutil.MustDecode(hexData),
-		BlockNumber: uint64(26),
-		TxHash:      common.HexToHash("0x0"),
-		TxIndex:     111,
-		BlockHash:   common.BytesToHash([]byte{1, 2, 3, 4, 5}),
-		Index:       7,
-		Removed:     false,
+	topics := []common.Hash{
+		common.HexToHash("0x0"),
+		hash,
 	}
+	mockLog := newMockLog(topics, common.HexToHash("0x0"))
 
 	abiString := `[{"anonymous":false,"inputs":[{"indexed":true,"name":"name","type":"string"},{"indexed":false,"name":"sender","type":"address"},{"indexed":false,"name":"amount","type":"uint256"},{"indexed":false,"name":"memo","type":"bytes"}],"name":"received","type":"event"}]`
 	parsedAbi, _ := abi.JSON(strings.NewReader(abiString))
 	bc := bind.NewBoundContract(common.HexToAddress("0x0"), parsedAbi, nil, nil, nil)
 
-	receivedMap := make(map[string]interface{})
 	expectedReceivedMap := map[string]interface{}{
 		"name":   hash,
 		"sender": common.HexToAddress("0x376c47978271565f56DEB45495afa69E59c16Ab2"),
 		"amount": big.NewInt(1),
 		"memo":   []byte{88},
 	}
-	if err := bc.UnpackLogIntoMap(receivedMap, "received", mockLog); err != nil {
-		t.Error(err)
-	}
-
-	if len(receivedMap) != 4 {
-		t.Fatal("unpacked map expected to have length 4")
-	}
-	if receivedMap["name"] != expectedReceivedMap["name"] {
-		t.Error("unpacked map does not match expected map")
-	}
-	if receivedMap["sender"] != expectedReceivedMap["sender"] {
-		t.Error("unpacked map does not match expected map")
-	}
-	if receivedMap["amount"].(*big.Int).Cmp(expectedReceivedMap["amount"].(*big.Int)) != 0 {
-		t.Error("unpacked map does not match expected map")
-	}
-	if !bytes.Equal(receivedMap["memo"].([]byte), expectedReceivedMap["memo"].([]byte)) {
-		t.Error("unpacked map does not match expected map")
-	}
+	unpackAndCheck(t, bc, expectedReceivedMap, mockLog)
 }
 
 func TestUnpackIndexedSliceTyLogIntoMap(t *testing.T) {
@@ -141,51 +113,23 @@ func TestUnpackIndexedSliceTyLogIntoMap(t *testing.T) {
 		t.Fatal(err)
 	}
 	hash := crypto.Keccak256Hash(sliceBytes)
-	mockLog := types.Log{
-		Address: common.HexToAddress("0x0"),
-		Topics: []common.Hash{
-			common.HexToHash("0x0"),
-			hash,
-		},
-		Data:        hexutil.MustDecode(hexData),
-		BlockNumber: uint64(26),
-		TxHash:      common.HexToHash("0x0"),
-		TxIndex:     111,
-		BlockHash:   common.BytesToHash([]byte{1, 2, 3, 4, 5}),
-		Index:       7,
-		Removed:     false,
+	topics := []common.Hash{
+		common.HexToHash("0x0"),
+		hash,
 	}
+	mockLog := newMockLog(topics, common.HexToHash("0x0"))
 
 	abiString := `[{"anonymous":false,"inputs":[{"indexed":true,"name":"names","type":"string[]"},{"indexed":false,"name":"sender","type":"address"},{"indexed":false,"name":"amount","type":"uint256"},{"indexed":false,"name":"memo","type":"bytes"}],"name":"received","type":"event"}]`
 	parsedAbi, _ := abi.JSON(strings.NewReader(abiString))
 	bc := bind.NewBoundContract(common.HexToAddress("0x0"), parsedAbi, nil, nil, nil)
 
-	receivedMap := make(map[string]interface{})
 	expectedReceivedMap := map[string]interface{}{
 		"names":  hash,
 		"sender": common.HexToAddress("0x376c47978271565f56DEB45495afa69E59c16Ab2"),
 		"amount": big.NewInt(1),
 		"memo":   []byte{88},
 	}
-	if err := bc.UnpackLogIntoMap(receivedMap, "received", mockLog); err != nil {
-		t.Error(err)
-	}
-
-	if len(receivedMap) != 4 {
-		t.Fatal("unpacked map expected to have length 4")
-	}
-	if receivedMap["names"] != expectedReceivedMap["names"] {
-		t.Error("unpacked map does not match expected map")
-	}
-	if receivedMap["sender"] != expectedReceivedMap["sender"] {
-		t.Error("unpacked map does not match expected map")
-	}
-	if receivedMap["amount"].(*big.Int).Cmp(expectedReceivedMap["amount"].(*big.Int)) != 0 {
-		t.Error("unpacked map does not match expected map")
-	}
-	if !bytes.Equal(receivedMap["memo"].([]byte), expectedReceivedMap["memo"].([]byte)) {
-		t.Error("unpacked map does not match expected map")
-	}
+	unpackAndCheck(t, bc, expectedReceivedMap, mockLog)
 }
 
 func TestUnpackIndexedArrayTyLogIntoMap(t *testing.T) {
@@ -194,51 +138,23 @@ func TestUnpackIndexedArrayTyLogIntoMap(t *testing.T) {
 		t.Fatal(err)
 	}
 	hash := crypto.Keccak256Hash(arrBytes)
-	mockLog := types.Log{
-		Address: common.HexToAddress("0x0"),
-		Topics: []common.Hash{
-			common.HexToHash("0x0"),
-			hash,
-		},
-		Data:        hexutil.MustDecode(hexData),
-		BlockNumber: uint64(26),
-		TxHash:      common.HexToHash("0x0"),
-		TxIndex:     111,
-		BlockHash:   common.BytesToHash([]byte{1, 2, 3, 4, 5}),
-		Index:       7,
-		Removed:     false,
+	topics := []common.Hash{
+		common.HexToHash("0x0"),
+		hash,
 	}
+	mockLog := newMockLog(topics, common.HexToHash("0x0"))
 
 	abiString := `[{"anonymous":false,"inputs":[{"indexed":true,"name":"addresses","type":"address[2]"},{"indexed":false,"name":"sender","type":"address"},{"indexed":false,"name":"amount","type":"uint256"},{"indexed":false,"name":"memo","type":"bytes"}],"name":"received","type":"event"}]`
 	parsedAbi, _ := abi.JSON(strings.NewReader(abiString))
 	bc := bind.NewBoundContract(common.HexToAddress("0x0"), parsedAbi, nil, nil, nil)
 
-	receivedMap := make(map[string]interface{})
 	expectedReceivedMap := map[string]interface{}{
 		"addresses": hash,
 		"sender":    common.HexToAddress("0x376c47978271565f56DEB45495afa69E59c16Ab2"),
 		"amount":    big.NewInt(1),
 		"memo":      []byte{88},
 	}
-	if err := bc.UnpackLogIntoMap(receivedMap, "received", mockLog); err != nil {
-		t.Error(err)
-	}
-
-	if len(receivedMap) != 4 {
-		t.Fatal("unpacked map expected to have length 4")
-	}
-	if receivedMap["addresses"] != expectedReceivedMap["addresses"] {
-		t.Error("unpacked map does not match expected map")
-	}
-	if receivedMap["sender"] != expectedReceivedMap["sender"] {
-		t.Error("unpacked map does not match expected map")
-	}
-	if receivedMap["amount"].(*big.Int).Cmp(expectedReceivedMap["amount"].(*big.Int)) != 0 {
-		t.Error("unpacked map does not match expected map")
-	}
-	if !bytes.Equal(receivedMap["memo"].([]byte), expectedReceivedMap["memo"].([]byte)) {
-		t.Error("unpacked map does not match expected map")
-	}
+	unpackAndCheck(t, bc, expectedReceivedMap, mockLog)
 }
 
 func TestUnpackIndexedFuncTyLogIntoMap(t *testing.T) {
@@ -249,99 +165,72 @@ func TestUnpackIndexedFuncTyLogIntoMap(t *testing.T) {
 	functionTyBytes := append(addrBytes, functionSelector...)
 	var functionTy [24]byte
 	copy(functionTy[:], functionTyBytes[0:24])
-	mockLog := types.Log{
-		Address: common.HexToAddress("0x0"),
-		Topics: []common.Hash{
-			common.HexToHash("0x99b5620489b6ef926d4518936cfec15d305452712b88bd59da2d9c10fb0953e8"),
-			common.BytesToHash(functionTyBytes),
-		},
-		Data:        hexutil.MustDecode(hexData),
-		BlockNumber: uint64(26),
-		TxHash:      common.HexToHash("0x5c698f13940a2153440c6d19660878bc90219d9298fdcf37365aa8d88d40fc42"),
-		TxIndex:     111,
-		BlockHash:   common.BytesToHash([]byte{1, 2, 3, 4, 5}),
-		Index:       7,
-		Removed:     false,
+	topics := []common.Hash{
+		common.HexToHash("0x99b5620489b6ef926d4518936cfec15d305452712b88bd59da2d9c10fb0953e8"),
+		common.BytesToHash(functionTyBytes),
 	}
-
+	mockLog := newMockLog(topics, common.HexToHash("0x5c698f13940a2153440c6d19660878bc90219d9298fdcf37365aa8d88d40fc42"))
 	abiString := `[{"anonymous":false,"inputs":[{"indexed":true,"name":"function","type":"function"},{"indexed":false,"name":"sender","type":"address"},{"indexed":false,"name":"amount","type":"uint256"},{"indexed":false,"name":"memo","type":"bytes"}],"name":"received","type":"event"}]`
 	parsedAbi, _ := abi.JSON(strings.NewReader(abiString))
 	bc := bind.NewBoundContract(common.HexToAddress("0x0"), parsedAbi, nil, nil, nil)
 
-	receivedMap := make(map[string]interface{})
 	expectedReceivedMap := map[string]interface{}{
 		"function": functionTy,
 		"sender":   common.HexToAddress("0x376c47978271565f56DEB45495afa69E59c16Ab2"),
 		"amount":   big.NewInt(1),
 		"memo":     []byte{88},
 	}
-	if err := bc.UnpackLogIntoMap(receivedMap, "received", mockLog); err != nil {
-		t.Error(err)
-	}
-
-	if len(receivedMap) != 4 {
-		t.Fatal("unpacked map expected to have length 4")
-	}
-	if receivedMap["function"] != expectedReceivedMap["function"] {
-		t.Error("unpacked map does not match expected map")
-	}
-	if receivedMap["sender"] != expectedReceivedMap["sender"] {
-		t.Error("unpacked map does not match expected map")
-	}
-	if receivedMap["amount"].(*big.Int).Cmp(expectedReceivedMap["amount"].(*big.Int)) != 0 {
-		t.Error("unpacked map does not match expected map")
-	}
-	if !bytes.Equal(receivedMap["memo"].([]byte), expectedReceivedMap["memo"].([]byte)) {
-		t.Error("unpacked map does not match expected map")
-	}
+	unpackAndCheck(t, bc, expectedReceivedMap, mockLog)
 }
 
 func TestUnpackIndexedBytesTyLogIntoMap(t *testing.T) {
-	byts := []byte{1, 2, 3, 4, 5}
-	hash := crypto.Keccak256Hash(byts)
-	mockLog := types.Log{
-		Address: common.HexToAddress("0x0"),
-		Topics: []common.Hash{
-			common.HexToHash("0x99b5620489b6ef926d4518936cfec15d305452712b88bd59da2d9c10fb0953e8"),
-			hash,
-		},
-		Data:        hexutil.MustDecode(hexData),
-		BlockNumber: uint64(26),
-		TxHash:      common.HexToHash("0x5c698f13940a2153440c6d19660878bc90219d9298fdcf37365aa8d88d40fc42"),
-		TxIndex:     111,
-		BlockHash:   common.BytesToHash([]byte{1, 2, 3, 4, 5}),
-		Index:       7,
-		Removed:     false,
+	bytes := []byte{1, 2, 3, 4, 5}
+	hash := crypto.Keccak256Hash(bytes)
+	topics := []common.Hash{
+		common.HexToHash("0x99b5620489b6ef926d4518936cfec15d305452712b88bd59da2d9c10fb0953e8"),
+		hash,
 	}
+	mockLog := newMockLog(topics, common.HexToHash("0x5c698f13940a2153440c6d19660878bc90219d9298fdcf37365aa8d88d40fc42"))
 
 	abiString := `[{"anonymous":false,"inputs":[{"indexed":true,"name":"content","type":"bytes"},{"indexed":false,"name":"sender","type":"address"},{"indexed":false,"name":"amount","type":"uint256"},{"indexed":false,"name":"memo","type":"bytes"}],"name":"received","type":"event"}]`
 	parsedAbi, _ := abi.JSON(strings.NewReader(abiString))
 	bc := bind.NewBoundContract(common.HexToAddress("0x0"), parsedAbi, nil, nil, nil)
 
-	receivedMap := make(map[string]interface{})
 	expectedReceivedMap := map[string]interface{}{
 		"content": hash,
 		"sender":  common.HexToAddress("0x376c47978271565f56DEB45495afa69E59c16Ab2"),
 		"amount":  big.NewInt(1),
 		"memo":    []byte{88},
 	}
-	if err := bc.UnpackLogIntoMap(receivedMap, "received", mockLog); err != nil {
+	unpackAndCheck(t, bc, expectedReceivedMap, mockLog)
+}
+
+func unpackAndCheck(t *testing.T, bc *bind.BoundContract, expected map[string]interface{}, mockLog types.Log) {
+	received := make(map[string]interface{})
+	if err := bc.UnpackLogIntoMap(received, "received", mockLog); err != nil {
 		t.Error(err)
 	}
 
-	if len(receivedMap) != 4 {
-		t.Fatal("unpacked map expected to have length 4")
+	if len(received) != len(expected) {
+		t.Fatalf("unpacked map length %v not equal expected length of %v", len(received), len(expected))
 	}
-	if receivedMap["content"] != expectedReceivedMap["content"] {
-		t.Error("unpacked map does not match expected map")
+	for name, elem := range expected {
+		if !reflect.DeepEqual(elem, received[name]) {
+			t.Errorf("field %v does not match expected, want %v, got %v", name, elem, received[name])
+		}
 	}
-	if receivedMap["sender"] != expectedReceivedMap["sender"] {
-		t.Error("unpacked map does not match expected map")
-	}
-	if receivedMap["amount"].(*big.Int).Cmp(expectedReceivedMap["amount"].(*big.Int)) != 0 {
-		t.Error("unpacked map does not match expected map")
-	}
-	if !bytes.Equal(receivedMap["memo"].([]byte), expectedReceivedMap["memo"].([]byte)) {
-		t.Error("unpacked map does not match expected map")
+}
+
+func newMockLog(topics []common.Hash, txHash common.Hash) types.Log {
+	return types.Log{
+		Address:     common.HexToAddress("0x0"),
+		Topics:      topics,
+		Data:        hexutil.MustDecode(hexData),
+		BlockNumber: uint64(26),
+		TxHash:      txHash,
+		TxIndex:     111,
+		BlockHash:   common.BytesToHash([]byte{1, 2, 3, 4, 5}),
+		Index:       7,
+		Removed:     false,
 	}
 }
