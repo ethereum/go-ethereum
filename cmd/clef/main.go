@@ -83,7 +83,7 @@ var (
 		Usage: "If enabled, issues warnings instead of rejections for suspicious requests. Default off",
 	}
 	acceptFlag = cli.BoolFlag{
-		Name:  "acceptWarn",
+		Name:  "suppress-bootwarn",
 		Usage: "If set, does not show the warning during boot",
 	}
 	keystoreFlag = cli.StringFlag{
