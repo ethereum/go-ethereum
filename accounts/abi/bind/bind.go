@@ -22,7 +22,6 @@ package bind
 
 import (
 	"bytes"
-	"errors"
 	"fmt"
 	"go/format"
 	"regexp"
@@ -164,10 +163,6 @@ func Bind(types []string, abis []string, bytecodes []string, fsigs []map[string]
 		}
 		if evmABI.HasReceive() {
 			receive = &tmplMethod{Original: evmABI.Receive}
-		}
-		// There is no easy way to pass arbitrary java objects to the Go side.
-		if len(structs) > 0 && lang == LangJava {
-			return "", errors.New("java binding for tuple arguments is not supported yet")
 		}
 
 		contracts[types[i]] = &tmplContract{

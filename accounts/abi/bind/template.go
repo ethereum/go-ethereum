@@ -613,6 +613,14 @@ import java.util.*;
 		this(Geth.bindContract(address, ABI, client));
 	}
 
+	{{range $structs}}
+	// {{capitalise .Name}} is an auto generated low-level Java binding around an user-defined struct.
+	public class {{capitalise .Name}} {
+		{{range $index, $item := .Fields}}public {{$item.Type}} {{if ne .Name ""}}{{.Name}}{{else}}Return{{$index}}{{end}};
+		{{end}}
+	}
+	{{end}}
+
 	{{range .Calls}}
 	{{if gt (len .Normalized.Outputs) 1}}
 	// {{capitalise .Normalized.Name}}Results is the output of a call to {{.Normalized.Name}}.
