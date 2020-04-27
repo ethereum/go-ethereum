@@ -116,7 +116,7 @@ func (s *Ethereum) SetContractBackend(backend bind.ContractBackend) {
 
 // New creates a new Ethereum object (including the
 // initialisation of the common Ethereum object)
-func New(ctx *node.ServiceContext, config *Config, p2pServer *p2p.Server) (*Ethereum, error) {
+func New(ctx *node.ServiceContext, config *Config) (*Ethereum, error) {
 	// Ensure configuration values are compatible and sane
 	if config.SyncMode == downloader.LightSync {
 		return nil, errors.New("can't run eth.Ethereum in light sync mode, use les.LightEthereum")
@@ -162,7 +162,6 @@ func New(ctx *node.ServiceContext, config *Config, p2pServer *p2p.Server) (*Ethe
 		etherbase:         config.Miner.Etherbase,
 		bloomRequests:     make(chan chan *bloombits.Retrieval),
 		bloomIndexer:      NewBloomIndexer(chainDb, params.BloomBitsBlocks, params.BloomConfirms),
-		p2pServer:         p2pServer,
 	}
 
 	bcVersion := rawdb.ReadDatabaseVersion(chainDb)
@@ -523,7 +522,7 @@ func (s *Ethereum) Downloader() *downloader.Downloader { return s.protocolManage
 func (s *Ethereum) Synced() bool                       { return atomic.LoadUint32(&s.protocolManager.acceptTxs) == 1 }
 func (s *Ethereum) ArchiveMode() bool                  { return s.config.NoPruning }
 
-// Protocols implements node.Service, returning all the currently configured
+// Protocols implements node.Backend, returning all the currently configured
 // network protocols to start.
 func (s *Ethereum) Protocols() []p2p.Protocol {
 	protos := make([]p2p.Protocol, len(ProtocolVersions))
@@ -536,6 +535,15 @@ func (s *Ethereum) Protocols() []p2p.Protocol {
 		protos = append(protos, s.lesServer.Protocols()...)
 	}
 	return protos
+}
+
+// P2PServer implements node.Backend, registering the node's running p2p server with the Backend.
+func (s *Ethereum) P2PServer(server *p2p.Server) error {
+	if server == nil {
+		return errors.New("p2p server is not running, cannot register with eth backend") // TODO is this error message okay?
+	}
+	s.p2pServer = server
+	return nil
 }
 
 // Start implements node.Service, starting all internal goroutines needed by the

@@ -104,7 +104,7 @@ func New(conf *Config) (*Node, error) {
 	}
 	// Note: any interaction with Config that would create/touch files
 	// in the data directory or instance directory is delayed until Start.
-	return &Node{
+	node := &Node{
 		accman:            am,
 		ephemeralKeystore: ephemeralKeystore,
 		config:            conf,
@@ -124,7 +124,10 @@ func New(conf *Config) (*Node, error) {
 		},
 		eventmux: new(event.TypeMux),
 		log:      conf.Logger,
-	}, nil
+	}
+	node.ServiceContext.EventMux = node.eventmux
+	node.ServiceContext.AccountManager = node.accman
+	return node, nil
 }
 
 // Close stops the Node and releases resources acquired in
@@ -232,32 +235,40 @@ func (n *Node) Start() error {
 
 	// Initialize the p2p server. This creates the node key and
 	// discovery databases.
-	n.server.Config = n.config.P2P
-	n.server.PrivateKey = n.config.NodeKey()
-	n.server.Name = n.config.NodeName()
-	n.server.Logger = n.log
-	if n.server.StaticNodes == nil {
-		n.server.StaticNodes = n.config.StaticNodes()
+	running := &p2p.Server{Config: n.config.P2P}
+
+	running.Config.PrivateKey = n.config.NodeKey()
+	running.Config.Name = n.config.NodeName()
+	running.Config.Logger = n.log
+	if running.Config.StaticNodes == nil {
+		running.Config.StaticNodes = n.config.StaticNodes()
 	}
-	if n.server.TrustedNodes == nil {
-		n.server.TrustedNodes = n.config.TrustedNodes()
+	if running.Config.TrustedNodes == nil {
+		running.Config.TrustedNodes = n.config.TrustedNodes()
 	}
-	if n.server.NodeDatabase == "" {
-		n.server.NodeDatabase = n.config.NodeDB()
+	if running.Config.NodeDatabase == "" {
+		running.Config.NodeDatabase = n.config.NodeDB()
 	}
-	running := &p2p.Server{Config: n.server.Config}
-	n.log.Info("Starting peer-to-peer node", "instance", n.server.Name)
+	n.log.Info("Starting peer-to-peer node", "instance", running.Name)
 
 	// add backend's protocols to the o2o server
 	running.Protocols = append(running.Protocols, n.backend.Protocols()...)
 	if err := running.Start(); err != nil {
 		return convertFileLockError(err)
 	}
+
+	// Register the running p2p server with the Backend
+	if err := n.backend.P2PServer(running); err != nil {
+		running.Stop()
+		return err
+	}
+
 	// Start the backend
 	if err := n.backend.Start(); err != nil {
 		running.Stop()
 		return err
 	}
+
 	// Start each of the services
 	var startedServices []reflect.Type
 	for kind, service := range n.services {
@@ -271,6 +282,7 @@ func (n *Node) Start() error {
 		// Mark the service started for potential cleanup
 		startedServices = append(startedServices, kind)
 	}
+
 	// Start each of the auxiliary services
 	var startedAuxServices []reflect.Type
 	for kind, auxService := range n.auxServices {
@@ -284,6 +296,7 @@ func (n *Node) Start() error {
 		// Mark the service started for potential cleanup
 		startedAuxServices = append(startedAuxServices, kind)
 	}
+	
 	// Lastly, start the configured RPC interfaces
 	if err := n.startRPC(); err != nil {
 		n.stopAllStartedServices(startedServices, startedAuxServices)
@@ -300,6 +313,7 @@ func (n *Node) Start() error {
 	// Finish initializing the startup
 	n.server = running
 	n.stop = make(chan struct{})
+	log.Error("HERE")
 	return nil
 }
 

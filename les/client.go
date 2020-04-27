@@ -18,6 +18,7 @@
 package les
 
 import (
+	"errors"
 	"fmt"
 	"time"
 
@@ -276,6 +277,15 @@ func (s *LightEthereum) Protocols() []p2p.Protocol {
 		}
 		return nil
 	}, s.dialCandidates)
+}
+
+// P2PServer implements node.Backend, registering the node's running p2p server with the Backend.
+func (s *LightEthereum) P2PServer(server *p2p.Server) error {
+	if server == nil {
+		return errors.New("p2p server is not running, cannot register with les backend") // TODO is this error message okay?
+	}
+	s.p2pServer = server
+	return nil
 }
 
 // Start implements node.Service, starting all internal goroutines needed by the

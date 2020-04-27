@@ -107,6 +107,9 @@ type Backend interface {
 	// Protocols retrieves the P2P protocols the service wishes to start.
 	Protocols() []p2p.Protocol
 
+	// Backend can register a P2P Server
+	P2PServer(server *p2p.Server) error
+
 	// Backend also implements the Service interface.
 	Service
 }

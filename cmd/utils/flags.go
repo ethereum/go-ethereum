@@ -1700,7 +1700,7 @@ func RegisterEthService(stack *node.Node, cfg *eth.Config) {
 		})
 	} else {
 		err = stack.RegisterBackendLifecycle(func(node *node.Node) (node.Backend, error) {
-			fullNode, err := eth.New(node.ServiceContext, cfg, node.Server())
+			fullNode, err := eth.New(node.ServiceContext, cfg)
 			if fullNode != nil && cfg.LightServ > 0 {
 				ls, _ := les.NewLesServer(fullNode, cfg)
 				fullNode.AddLesServer(ls)
