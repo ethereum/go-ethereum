@@ -86,8 +86,6 @@ func (c Config) MarshalTOML() (interface{}, error) {
 	enc.RPCGasCap = c.RPCGasCap
 	enc.Checkpoint = c.Checkpoint
 	enc.CheckpointOracle = c.CheckpointOracle
-	enc.OverrideIstanbul = c.OverrideIstanbul
-	enc.OverrideMuirGlacier = c.OverrideMuirGlacier
 	return &enc, nil
 }
 
@@ -228,12 +226,6 @@ func (c *Config) UnmarshalTOML(unmarshal func(interface{}) error) error {
 	}
 	if dec.CheckpointOracle != nil {
 		c.CheckpointOracle = dec.CheckpointOracle
-	}
-	if dec.OverrideIstanbul != nil {
-		c.OverrideIstanbul = dec.OverrideIstanbul
-	}
-	if dec.OverrideMuirGlacier != nil {
-		c.OverrideMuirGlacier = dec.OverrideMuirGlacier
 	}
 	return nil
 }

@@ -137,7 +137,7 @@ func TestMethodSig(t *testing.T) {
 	}
 
 	for _, test := range cases {
-		got := abi.Methods[test.method].Sig()
+		got := abi.Methods[test.method].Sig
 		if got != test.expect {
 			t.Errorf("expected string to be %s, got %s", test.expect, got)
 		}

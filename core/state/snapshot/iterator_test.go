@@ -177,9 +177,22 @@ func TestAccountIteratorTraversal(t *testing.T) {
 	verifyIterator(t, 7, head.(*diffLayer).newBinaryAccountIterator())
 
 	it, _ := snaps.AccountIterator(common.HexToHash("0x04"), common.Hash{})
-	defer it.Release()
-
 	verifyIterator(t, 7, it)
+	it.Release()
+
+	// Test after persist some bottom-most layers into the disk,
+	// the functionalities still work.
+	limit := aggregatorMemoryLimit
+	defer func() {
+		aggregatorMemoryLimit = limit
+	}()
+	aggregatorMemoryLimit = 0 // Force pushing the bottom-most layer into disk
+	snaps.Cap(common.HexToHash("0x04"), 2)
+	verifyIterator(t, 7, head.(*diffLayer).newBinaryAccountIterator())
+
+	it, _ = snaps.AccountIterator(common.HexToHash("0x04"), common.Hash{})
+	verifyIterator(t, 7, it)
+	it.Release()
 }
 
 // TestAccountIteratorTraversalValues tests some multi-layer iteration, where we
@@ -242,8 +255,6 @@ func TestAccountIteratorTraversalValues(t *testing.T) {
 	snaps.Update(common.HexToHash("0x09"), common.HexToHash("0x08"), nil, h, nil)
 
 	it, _ := snaps.AccountIterator(common.HexToHash("0x09"), common.Hash{})
-	defer it.Release()
-
 	head := snaps.Snapshot(common.HexToHash("0x09"))
 	for it.Next() {
 		hash := it.Hash()
@@ -255,6 +266,29 @@ func TestAccountIteratorTraversalValues(t *testing.T) {
 			t.Fatalf("hash %x: account mismatch: have %x, want %x", hash, have, want)
 		}
 	}
+	it.Release()
+
+	// Test after persist some bottom-most layers into the disk,
+	// the functionalities still work.
+	limit := aggregatorMemoryLimit
+	defer func() {
+		aggregatorMemoryLimit = limit
+	}()
+	aggregatorMemoryLimit = 0 // Force pushing the bottom-most layer into disk
+	snaps.Cap(common.HexToHash("0x09"), 2)
+
+	it, _ = snaps.AccountIterator(common.HexToHash("0x09"), common.Hash{})
+	for it.Next() {
+		hash := it.Hash()
+		want, err := head.AccountRLP(hash)
+		if err != nil {
+			t.Fatalf("failed to retrieve expected account: %v", err)
+		}
+		if have := it.Account(); !bytes.Equal(want, have) {
+			t.Fatalf("hash %x: account mismatch: have %x, want %x", hash, have, want)
+		}
+	}
+	it.Release()
 }
 
 // This testcase is notorious, all layers contain the exact same 200 accounts.
@@ -289,9 +323,23 @@ func TestAccountIteratorLargeTraversal(t *testing.T) {
 	verifyIterator(t, 200, head.(*diffLayer).newBinaryAccountIterator())
 
 	it, _ := snaps.AccountIterator(common.HexToHash("0x80"), common.Hash{})
-	defer it.Release()
-
 	verifyIterator(t, 200, it)
+	it.Release()
+
+	// Test after persist some bottom-most layers into the disk,
+	// the functionalities still work.
+	limit := aggregatorMemoryLimit
+	defer func() {
+		aggregatorMemoryLimit = limit
+	}()
+	aggregatorMemoryLimit = 0 // Force pushing the bottom-most layer into disk
+	snaps.Cap(common.HexToHash("0x80"), 2)
+
+	verifyIterator(t, 200, head.(*diffLayer).newBinaryAccountIterator())
+
+	it, _ = snaps.AccountIterator(common.HexToHash("0x80"), common.Hash{})
+	verifyIterator(t, 200, it)
+	it.Release()
 }
 
 // TestAccountIteratorFlattening tests what happens when we
@@ -351,22 +399,30 @@ func TestAccountIteratorSeek(t *testing.T) {
 	snaps.Update(common.HexToHash("0x04"), common.HexToHash("0x03"), nil,
 		randomAccountSet("0xcc", "0xf0", "0xff"), nil)
 
-	// Construct various iterators and ensure their tranversal is correct
+	// Account set is now
+	// 02: aa, ee, f0, ff
+	// 03: aa, bb, dd, ee, f0 (, f0), ff
+	// 04: aa, bb, cc, dd, ee, f0 (, f0), ff (, ff)
+	// Construct various iterators and ensure their traversal is correct
 	it, _ := snaps.AccountIterator(common.HexToHash("0x02"), common.HexToHash("0xdd"))
 	defer it.Release()
 	verifyIterator(t, 3, it) // expected: ee, f0, ff
 
 	it, _ = snaps.AccountIterator(common.HexToHash("0x02"), common.HexToHash("0xaa"))
 	defer it.Release()
-	verifyIterator(t, 3, it) // expected: ee, f0, ff
+	verifyIterator(t, 4, it) // expected: aa, ee, f0, ff
 
 	it, _ = snaps.AccountIterator(common.HexToHash("0x02"), common.HexToHash("0xff"))
+	defer it.Release()
+	verifyIterator(t, 1, it) // expected: ff
+
+	it, _ = snaps.AccountIterator(common.HexToHash("0x02"), common.HexToHash("0xff1"))
 	defer it.Release()
 	verifyIterator(t, 0, it) // expected: nothing
 
 	it, _ = snaps.AccountIterator(common.HexToHash("0x04"), common.HexToHash("0xbb"))
 	defer it.Release()
-	verifyIterator(t, 5, it) // expected: cc, dd, ee, f0, ff
+	verifyIterator(t, 6, it) // expected: bb, cc, dd, ee, f0, ff
 
 	it, _ = snaps.AccountIterator(common.HexToHash("0x04"), common.HexToHash("0xef"))
 	defer it.Release()
@@ -374,11 +430,16 @@ func TestAccountIteratorSeek(t *testing.T) {
 
 	it, _ = snaps.AccountIterator(common.HexToHash("0x04"), common.HexToHash("0xf0"))
 	defer it.Release()
-	verifyIterator(t, 1, it) // expected: ff
+	verifyIterator(t, 2, it) // expected: f0, ff
 
 	it, _ = snaps.AccountIterator(common.HexToHash("0x04"), common.HexToHash("0xff"))
 	defer it.Release()
+	verifyIterator(t, 1, it) // expected: ff
+
+	it, _ = snaps.AccountIterator(common.HexToHash("0x04"), common.HexToHash("0xff1"))
+	defer it.Release()
 	verifyIterator(t, 0, it) // expected: nothing
+
 }
 
 // TestIteratorDeletions tests that the iterator behaves correct when there are
@@ -402,7 +463,7 @@ func TestIteratorDeletions(t *testing.T) {
 
 	deleted := common.HexToHash("0x22")
 	destructed := map[common.Hash]struct{}{
-		deleted: struct{}{},
+		deleted: {},
 	}
 	snaps.Update(common.HexToHash("0x03"), common.HexToHash("0x02"),
 		destructed, randomAccountSet("0x11", "0x33"), nil)

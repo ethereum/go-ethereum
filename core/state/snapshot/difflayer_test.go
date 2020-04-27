@@ -131,7 +131,7 @@ func TestMergeDelete(t *testing.T) {
 
 	flipDrops := func() map[common.Hash]struct{} {
 		return map[common.Hash]struct{}{
-			h2: struct{}{},
+			h2: {},
 		}
 	}
 	flipAccs := func() map[common.Hash][]byte {
@@ -141,7 +141,7 @@ func TestMergeDelete(t *testing.T) {
 	}
 	flopDrops := func() map[common.Hash]struct{} {
 		return map[common.Hash]struct{}{
-			h1: struct{}{},
+			h1: {},
 		}
 	}
 	flopAccs := func() map[common.Hash][]byte {
