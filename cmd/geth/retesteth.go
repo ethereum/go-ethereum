@@ -904,7 +904,7 @@ func retesteth(ctx *cli.Context) error {
 		WriteTimeout: 120 * time.Second,
 		IdleTimeout:  120 * time.Second,
 	}
-	httpEndpoint := fmt.Sprintf("%s:%d", ctx.GlobalString(utils.RPCListenAddrFlag.Name), ctx.Int(rpcPortFlag.Name))
+	httpEndpoint := fmt.Sprintf("%s:%d", ctx.GlobalString(utils.HTTPListenAddrFlag.Name), ctx.Int(rpcPortFlag.Name))
 	httpServer, _, err := node.StartHTTPEndpoint(httpEndpoint, RetestethHTTPTimeouts, handler)
 	if err != nil {
 		utils.Fatalf("Could not start RPC api: %v", err)
