@@ -464,9 +464,13 @@ func startNode(ctx *cli.Context, stack *node.Node) {
 		if ctx.GlobalString(utils.SyncModeFlag.Name) == "light" {
 			utils.Fatalf("Light clients do not support mining")
 		}
-		var ethereum *eth.Ethereum
-		if err := stack.Service(&ethereum); err != nil {
-			utils.Fatalf("Ethereum service not running: %v", err)
+		// Check if node's backend is eth and that it exists // TODO fix this section up -- not sure if it's doing what it's supposed to.
+		ethereum, ok := stack.Backend().(*eth.Ethereum)
+		if !ok {
+			if stack.Backend() == nil {
+				utils.Fatalf("Ethereum service not running: backend is nil")
+			}
+			utils.Fatalf("Ethereum service not running: backend is not an eth backend")
 		}
 		// Set the gas price to the limits from the CLI and start mining
 		gasprice := utils.GlobalBig(ctx, utils.MinerGasPriceFlag.Name)

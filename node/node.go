@@ -296,7 +296,7 @@ func (n *Node) Start() error {
 		// Mark the service started for potential cleanup
 		startedAuxServices = append(startedAuxServices, kind)
 	}
-	
+
 	// Lastly, start the configured RPC interfaces
 	if err := n.startRPC(); err != nil {
 		n.stopAllStartedServices(startedServices, startedAuxServices)
@@ -313,7 +313,6 @@ func (n *Node) Start() error {
 	// Finish initializing the startup
 	n.server = running
 	n.stop = make(chan struct{})
-	log.Error("HERE")
 	return nil
 }
 
