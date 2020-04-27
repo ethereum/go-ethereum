@@ -75,8 +75,8 @@ type Database struct {
 	nonlevel0CompGauge metrics.Gauge // Gauge for tracking the number of table compaction in non0 level
 	seekCompGauge      metrics.Gauge // Gauge for tracking the number of table compaction caused by read opt
 
-	quitLock sync.Mutex      // Mutex protecting the quit channel access
-	quitChan chan chan error // Quit channel to stop the metrics collection before closing the database
+	quitLock sync.Mutex    // Mutex protecting the quit channel access
+	quitChan chan struct{} // Quit channel to stop the metrics collection before closing the database
 
 	log log.Logger // Contextual logger tracking the database path
 
@@ -115,7 +115,7 @@ func New(file string, cache int, handles int, namespace string) (*Database, erro
 		fn:       file,
 		db:       db,
 		log:      logger,
-		quitChan: make(chan chan error),
+		quitChan: make(chan struct{}),
 	}
 	ldb.compTimeMeter = metrics.NewRegisteredMeter(namespace+"compact/time", nil)
 	ldb.compReadMeter = metrics.NewRegisteredMeter(namespace+"compact/input", nil)
