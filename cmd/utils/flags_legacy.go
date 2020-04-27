@@ -26,11 +26,11 @@ import (
 )
 
 var ShowDeprecated = cli.Command{
-	Action: showDeprecated,
-	Name:   "show-deprecated-flags",
-	Usage:  "Show flags that have been deprecated",
-	ArgsUsage: " ",
-	Category:  "MISCELLANEOUS COMMANDS",
+	Action:      showDeprecated,
+	Name:        "show-deprecated-flags",
+	Usage:       "Show flags that have been deprecated",
+	ArgsUsage:   " ",
+	Category:    "MISCELLANEOUS COMMANDS",
 	Description: "Show flags that have been deprecated and will soon be removed",
 }
 
