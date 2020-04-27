@@ -77,6 +77,10 @@ terminal and using the following command to open a JavaScript console:
 ```shell
 geth attach
 ```
+If you get the error 'unable to attach to remote geth', try including the path to localhost as shown below:
+```shell
+geth attach http://127.0.0.1:8545
+```
 
 In the console you can issue any of the Geth commands, for example, to list all the
 accounts on the node, use:
