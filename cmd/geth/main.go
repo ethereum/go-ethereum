@@ -461,7 +461,7 @@ func startNode(ctx *cli.Context, stack *node.Node) {
 		}
 		// Set the gas price to the limits from the CLI and start mining
 		gasprice := utils.GlobalBig(ctx, utils.MinerGasPriceFlag.Name)
-		if ctx.IsSet(utils.LegacyMinerGasPriceFlag.Name) && !ctx.IsSet(utils.MinerGasPriceFlag.Name) {
+		if ctx.GlobalIsSet(utils.LegacyMinerGasPriceFlag.Name) && !ctx.GlobalIsSet(utils.MinerGasPriceFlag.Name) {
 			gasprice = utils.GlobalBig(ctx, utils.LegacyMinerGasPriceFlag.Name)
 		}
 		ethereum.TxPool().SetGasPrice(gasprice)
