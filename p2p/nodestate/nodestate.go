@@ -498,7 +498,7 @@ loop:
 		}
 	}
 
-	it := ns.db.NewIteratorWithPrefix(ns.dbNodeKey)
+	it := ns.db.NewIterator(ns.dbNodeKey, nil)
 	for it.Next() {
 		var id enode.ID
 		if len(it.Key()) != len(ns.dbNodeKey)+len(id) {
