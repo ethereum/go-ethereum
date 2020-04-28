@@ -14,7 +14,7 @@
 // You should have received a copy of the GNU Lesser General Public License
 // along with the go-ethereum library. If not, see <http://www.gnu.org/licenses/>.
 
-package utils
+package nodestate
 
 import (
 	"fmt"
@@ -29,8 +29,8 @@ import (
 	"github.com/ethereum/go-ethereum/rlp"
 )
 
-func testSetup(flagPersist []bool, fieldType []reflect.Type) NodeStateSetup {
-	flags := make([]*NodeStateFlag, len(flagPersist))
+func testSetup(flagPersist []bool, fieldType []reflect.Type) Setup {
+	flags := make([]*flagDefinition, len(flagPersist))
 	for i, persist := range flagPersist {
 		if persist {
 			flags[i] = NewPersistentFlag(fmt.Sprintf("flag-%d", i))
@@ -38,7 +38,7 @@ func testSetup(flagPersist []bool, fieldType []reflect.Type) NodeStateSetup {
 			flags[i] = NewFlag(fmt.Sprintf("flag-%d", i))
 		}
 	}
-	fields := make([]*NodeField, len(fieldType))
+	fields := make([]*fieldDefinition, len(fieldType))
 	for i, ftype := range fieldType {
 		switch ftype {
 		case reflect.TypeOf(uint64(0)):
@@ -49,11 +49,11 @@ func testSetup(flagPersist []bool, fieldType []reflect.Type) NodeStateSetup {
 			fields[i] = NewField(fmt.Sprintf("field-%d", i), ftype)
 		}
 	}
-	return NodeStateSetup{flags, fields}
+	return Setup{flags, fields}
 }
 
-func regSetup(ns *NodeStateMachine, setup NodeStateSetup) ([]NodeStateBitMask, []int) {
-	masks := make([]NodeStateBitMask, len(setup.Flags))
+func regSetup(ns *NodeStateMachine, setup Setup) ([]bitMask, []int) {
+	masks := make([]bitMask, len(setup.Flags))
 	for i, flag := range setup.Flags {
 		masks[i] = ns.StateMask(flag)
 	}
@@ -81,9 +81,9 @@ func TestCallback(t *testing.T) {
 	set0 := make(chan struct{}, 1)
 	set1 := make(chan struct{}, 1)
 	set2 := make(chan struct{}, 1)
-	ns.SubscribeState(flags[0], func(n *enode.Node, oldState, newState NodeStateBitMask) { set0 <- struct{}{} })
-	ns.SubscribeState(flags[1], func(n *enode.Node, oldState, newState NodeStateBitMask) { set1 <- struct{}{} })
-	ns.SubscribeState(flags[2], func(n *enode.Node, oldState, newState NodeStateBitMask) { set2 <- struct{}{} })
+	ns.SubscribeState(flags[0], func(n *enode.Node, oldState, newState bitMask) { set0 <- struct{}{} })
+	ns.SubscribeState(flags[1], func(n *enode.Node, oldState, newState bitMask) { set1 <- struct{}{} })
+	ns.SubscribeState(flags[2], func(n *enode.Node, oldState, newState bitMask) { set2 <- struct{}{} })
 
 	ns.Start()
 
@@ -207,9 +207,9 @@ func TestSetState(t *testing.T) {
 	ns := NewNodeStateMachine(mdb, []byte("-ns"), clock, s)
 	flags, _ := regSetup(ns, s)
 
-	type change struct{ old, new NodeStateBitMask }
+	type change struct{ old, new bitMask }
 	set := make(chan change, 1)
-	ns.SubscribeState(flags[0]|flags[1], func(n *enode.Node, oldState, newState NodeStateBitMask) {
+	ns.SubscribeState(flags[0]|flags[1], func(n *enode.Node, oldState, newState bitMask) {
 		set <- change{
 			old: oldState,
 			new: newState,
@@ -218,7 +218,7 @@ func TestSetState(t *testing.T) {
 
 	ns.Start()
 
-	check := func(expectOld, expectNew NodeStateBitMask, expectChange bool) {
+	check := func(expectOld, expectNew bitMask, expectChange bool) {
 		if expectChange {
 			select {
 			case c := <-set:
@@ -342,13 +342,13 @@ func TestFieldSub(t *testing.T) {
 	flags, fields := regSetup(ns, s)
 
 	var (
-		lastState                  NodeStateBitMask
+		lastState                  bitMask
 		lastOldValue, lastNewValue interface{}
 	)
-	ns.SubscribeField(fields[0], func(n *enode.Node, state NodeStateBitMask, oldValue, newValue interface{}) {
+	ns.SubscribeField(fields[0], func(n *enode.Node, state bitMask, oldValue, newValue interface{}) {
 		lastState, lastOldValue, lastNewValue = state, oldValue, newValue
 	})
-	check := func(state NodeStateBitMask, oldValue, newValue interface{}) {
+	check := func(state bitMask, oldValue, newValue interface{}) {
 		if lastState != state || lastOldValue != oldValue || lastNewValue != newValue {
 			t.Fatalf("Incorrect field sub callback (expected [%v %v %v], got [%v %v %v])", state, oldValue, newValue, lastState, lastOldValue, lastNewValue)
 		}
@@ -358,14 +358,14 @@ func TestFieldSub(t *testing.T) {
 	ns.SetField(testNode(1), fields[0], uint64(100))
 	check(flags[0], nil, uint64(100))
 	ns.Stop()
-	check(OfflineState, uint64(100), nil)
+	check(offlineState, uint64(100), nil)
 
 	ns2 := NewNodeStateMachine(mdb, []byte("-ns"), clock, s)
-	ns2.SubscribeField(fields[0], func(n *enode.Node, state NodeStateBitMask, oldValue, newValue interface{}) {
+	ns2.SubscribeField(fields[0], func(n *enode.Node, state bitMask, oldValue, newValue interface{}) {
 		lastState, lastOldValue, lastNewValue = state, oldValue, newValue
 	})
 	ns2.Start()
-	check(OfflineState, nil, uint64(100))
+	check(offlineState, nil, uint64(100))
 	ns2.SetState(testNode(1), 0, flags[0], 0)
 	check(0, uint64(100), nil)
 	ns2.Stop()

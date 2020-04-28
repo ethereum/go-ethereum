@@ -40,12 +40,12 @@ import (
 	"github.com/ethereum/go-ethereum/internal/ethapi"
 	"github.com/ethereum/go-ethereum/les/checkpointoracle"
 	lpc "github.com/ethereum/go-ethereum/les/lespay/client"
-	"github.com/ethereum/go-ethereum/les/utils"
 	"github.com/ethereum/go-ethereum/light"
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/node"
 	"github.com/ethereum/go-ethereum/p2p"
 	"github.com/ethereum/go-ethereum/p2p/enode"
+	"github.com/ethereum/go-ethereum/p2p/nodestate"
 	"github.com/ethereum/go-ethereum/params"
 	"github.com/ethereum/go-ethereum/rpc"
 )
@@ -61,7 +61,7 @@ type LightEthereum struct {
 	handler        *clientHandler
 	txPool         *light.TxPool
 	blockchain     *light.LightChain
-	ns             *utils.NodeStateMachine
+	ns             *nodestate.NodeStateMachine
 	serverPool     *serverPool
 	valueTracker   *lpc.ValueTracker
 	dialCandidates enode.Iterator
@@ -168,7 +168,7 @@ func New(ctx *node.ServiceContext, config *eth.Config) (*LightEthereum, error) {
 		enr.Load(ethEntry)
 		return forkFilter(ethEntry.ForkID) == nil && enr.Load(&lesEntry{}) == nil
 	})
-	leth.ns = utils.NewNodeStateMachine(lespayDb, []byte("nodestate:"), &mclock.System{}, serverPoolSetup)
+	leth.ns = nodestate.NewNodeStateMachine(lespayDb, []byte("nodestate:"), &mclock.System{}, serverPoolSetup)
 	leth.serverPool = newServerPool(lespayDb, []byte("serverpool:"), leth.ns, leth.valueTracker, dnsFiltered, &mclock.System{}, config.UltraLightServers, false)
 	peers.subscribe(leth.serverPool)
 	leth.dialCandidates = leth.serverPool.dialIterator

@@ -31,7 +31,7 @@ var (
 	sfTest2   = utils.NewFlag("test2")
 	sfTest3   = utils.NewFlag("test3")
 	sfTest4   = utils.NewFlag("test4")
-	testSetup = utils.NodeStateSetup{Flags: []*utils.NodeStateFlag{sfTest1, sfTest2, sfTest3, sfTest4}}
+	testSetup = utils.NodeStateSetup{Flags: []nodestate.Flags{sfTest1, sfTest2, sfTest3, sfTest4}}
 )
 
 const iterTestNodeCount = 6

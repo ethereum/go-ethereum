@@ -22,47 +22,41 @@ import (
 
 	"github.com/ethereum/go-ethereum/les/utils"
 	"github.com/ethereum/go-ethereum/p2p/enode"
+	"github.com/ethereum/go-ethereum/p2p/nodestate"
 )
 
 // WrsIterator returns nodes from the specified selectable set with a weighted random
 // selection. Selection weights are provided by a callback function.
 type WrsIterator struct {
-	lock                               sync.Mutex
-	ns                                 *utils.NodeStateMachine
-	wrs                                *utils.WeightedRandomSelect
-	requireMask, disableMask, selected utils.NodeStateBitMask
-	wakeup                             chan struct{}
-	nextNode                           *enode.Node
-	closed                             bool
+	lock     sync.Mutex
+	ns       *nodestate.NodeStateMachine
+	wrs      *utils.WeightedRandomSelect
+	selected nodestate.Flags
+	wakeup   chan struct{}
+	nextNode *enode.Node
+	closed   bool
 }
 
 // NewWrsIterator creates a new WrsIterator. Nodes are selectable if they have all the required
 // and none of the disabled flags set. When a node is selected the selectedFlag is set which also
 // disables further selectability until it is removed or times out.
 // The ENR field should be set for all selectable nodes so that the iterator can return complete enodes.
-func NewWrsIterator(ns *utils.NodeStateMachine, requireMask, disableMask utils.NodeStateBitMask, selectedFlag *utils.NodeStateFlag, wfn func(interface{}) uint64) *WrsIterator {
-
-	selected := ns.StateMask(selectedFlag)
-	disableMask |= selected
+func NewWrsIterator(ns *nodestate.NodeStateMachine, requireFlags, disableFlags, selectedFlag nodestate.Flags, wfn func(interface{}) uint64) *WrsIterator {
+	disableFlags = disableFlags.Or(selectedFlag)
 	w := &WrsIterator{
-		ns:          ns,
-		wrs:         utils.NewWeightedRandomSelect(wfn),
-		requireMask: requireMask,
-		disableMask: disableMask,
-		selected:    selected,
+		ns:       ns,
+		wrs:      utils.NewWeightedRandomSelect(wfn),
+		selected: selectedFlag,
 	}
-	ns.SubscribeState(requireMask|disableMask, func(n *enode.Node, oldState, newState utils.NodeStateBitMask) {
-		ps := (oldState&w.disableMask) == 0 && (oldState&w.requireMask) == w.requireMask
-		ns := (newState&w.disableMask) == 0 && (newState&w.requireMask) == w.requireMask
-
-		if ps == ns {
+	ns.SubscribeState(requireFlags.Or(disableFlags), func(n *enode.Node, oldState, newState nodestate.Flags) {
+		oldMatch := oldState.HasAll(requireFlags) && oldState.HasNone(disableFlags)
+		newMatch := newState.HasAll(requireFlags) && newState.HasNone(disableFlags)
+		if newMatch == oldMatch {
 			return
 		}
 
 		w.lock.Lock()
-		defer w.lock.Unlock()
-
-		if ns {
+		if newMatch {
 			w.wrs.Update(n.ID())
 			if w.wakeup != nil && !w.wrs.IsEmpty() {
 				close(w.wakeup)
@@ -71,6 +65,7 @@ func NewWrsIterator(ns *utils.NodeStateMachine, requireMask, disableMask utils.N
 		} else {
 			w.wrs.Remove(n.ID())
 		}
+		w.lock.Unlock()
 	})
 	return w
 }
@@ -90,7 +85,7 @@ func (w *WrsIterator) Next() bool {
 		if node != nil {
 			w.nextNode = node
 			w.lock.Unlock()
-			w.ns.SetState(w.nextNode, w.selected, 0, time.Second*5)
+			w.ns.SetState(w.nextNode, w.selected, nodestate.Flags{}, time.Second*5)
 			return true
 		}
 		ch := make(chan struct{})

@@ -50,7 +50,7 @@ func testNodeIndex(id enode.ID) int {
 type serverPoolTest struct {
 	db        ethdb.KeyValueStore
 	clock     *mclock.Simulated
-	ns        *utils.NodeStateMachine
+	ns        *nodestate.NodeStateMachine
 	vt        *lpc.ValueTracker
 	sp        *serverPool
 	input     enode.Iterator

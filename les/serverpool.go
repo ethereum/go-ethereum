@@ -30,6 +30,7 @@ import (
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/p2p/enode"
 	"github.com/ethereum/go-ethereum/p2p/enr"
+	"github.com/ethereum/go-ethereum/p2p/nodestate"
 	"github.com/ethereum/go-ethereum/rlp"
 )
 
@@ -53,15 +54,12 @@ type serverPool struct {
 	dbClockKey  []byte
 	quit        chan struct{}
 
-	ns                                  *utils.NodeStateMachine
-	vt                                  *lpc.ValueTracker
-	mixer                               *enode.FairMix
-	mixSources                          []enode.Iterator
-	dialIterator                        enode.Iterator
-	stDialed, stConnected, stRedialWait utils.NodeStateBitMask
-	stHasValue, stAlwaysConnect         utils.NodeStateBitMask
-	nodeHistoryField, connStatsField    int
-	trusted                             []*enode.Node
+	ns           *nodestate.NodeStateMachine
+	vt           *lpc.ValueTracker
+	mixer        *enode.FairMix
+	mixSources   []enode.Iterator
+	dialIterator enode.Iterator
+	trusted      []*enode.Node
 
 	timeoutLock      sync.RWMutex
 	timeout          time.Duration
@@ -85,18 +83,20 @@ type nodeHistoryEnc struct {
 }
 
 var (
-	sfHasValue      = utils.NewPersistentFlag("hasValue")
-	sfSelected      = utils.NewFlag("selected")
-	sfDialed        = utils.NewFlag("dialed")
-	sfConnected     = utils.NewFlag("connected")
-	sfRedialWait    = utils.NewFlag("redialWait")
-	sfAlwaysConnect = utils.NewFlag("alwaysConnect")
+	serverPoolSetup = &nodestate.Setup{}
 
-	disableSelection = []*utils.NodeStateFlag{sfSelected, sfDialed, sfConnected, sfRedialWait}
+	sfHasValue      = serverPoolSetup.NewPersistentFlag("hasValue")
+	sfSelected      = serverPoolSetup.NewFlag("selected")
+	sfDialed        = serverPoolSetup.NewFlag("dialed")
+	sfConnected     = serverPoolSetup.NewFlag("connected")
+	sfRedialWait    = serverPoolSetup.NewFlag("redialWait")
+	sfAlwaysConnect = serverPoolSetup.NewFlag("alwaysConnect")
+
+	sfDisableSelection = nodestate.MergeFlags(sfSelected, sfDialed, sfConnected, sfRedialWait)
 
 	errInvalidField = errors.New("invalid field type")
 
-	sfiNodeHistory = utils.NewPersistentField("nodeHistory", reflect.TypeOf(nodeHistory{}),
+	sfiNodeHistory = serverPoolSetup.NewPersistentField("nodeHistory", reflect.TypeOf(nodeHistory{}),
 		func(field interface{}) ([]byte, error) {
 			if n, ok := field.(nodeHistory); ok {
 				ne := nodeHistoryEnc{
@@ -121,16 +121,11 @@ var (
 			return n, err
 		},
 	)
-	sfiConnectedStats = utils.NewField("connectedStats", reflect.TypeOf(lpc.ResponseTimeStats{}))
-
-	serverPoolSetup = utils.NodeStateSetup{
-		Flags:  []*utils.NodeStateFlag{sfHasValue, sfSelected, sfDialed, sfConnected, sfRedialWait, sfAlwaysConnect},
-		Fields: []*utils.NodeField{sfiNodeHistory, sfiConnectedStats},
-	}
+	sfiConnectedStats = serverPoolSetup.NewField("connectedStats", reflect.TypeOf(lpc.ResponseTimeStats{}))
 )
 
 // newServerPool creates a new server pool
-func newServerPool(db ethdb.KeyValueStore, dbKey []byte, ns *utils.NodeStateMachine, vt *lpc.ValueTracker, discovery enode.Iterator, clock mclock.Clock, trustedURLs []string, testing bool) *serverPool {
+func newServerPool(db ethdb.KeyValueStore, dbKey []byte, ns *nodestate.NodeStateMachine, vt *lpc.ValueTracker, discovery enode.Iterator, clock mclock.Clock, trustedURLs []string, testing bool) *serverPool {
 	s := &serverPool{
 		db:         db,
 		dbClockKey: append(dbKey, []byte("persistentClock")...),
@@ -140,17 +135,6 @@ func newServerPool(db ethdb.KeyValueStore, dbKey []byte, ns *utils.NodeStateMach
 		quit:       make(chan struct{}),
 	}
 	s.getTimeout()
-	// Register all serverpool-defined states
-	s.stHasValue = s.ns.StateMask(sfHasValue)
-	s.stDialed = s.ns.StateMask(sfDialed)
-	s.stConnected = s.ns.StateMask(sfConnected)
-	s.stRedialWait = s.ns.StateMask(sfRedialWait)
-	s.stAlwaysConnect = s.ns.StateMask(sfAlwaysConnect)
-
-	// Register all serverpool-defined node fields.
-	s.nodeHistoryField = s.ns.FieldIndex(sfiNodeHistory)
-	s.connStatsField = s.ns.FieldIndex(sfiConnectedStats)
-
 	var (
 		validSchemes enr.IdentityScheme
 		mixerTimeout time.Duration
@@ -171,8 +155,8 @@ func newServerPool(db ethdb.KeyValueStore, dbKey []byte, ns *utils.NodeStateMach
 	}
 
 	s.mixer = enode.NewFairMix(mixerTimeout)
-	knownSelector := lpc.NewWrsIterator(s.ns, s.stHasValue, s.ns.StatesMask(disableSelection), sfSelected, s.knownSelectWeight)
-	alwaysConnect := lpc.NewQueueIterator(s.ns, s.stAlwaysConnect, s.ns.StatesMask(disableSelection), sfSelected)
+	knownSelector := lpc.NewWrsIterator(s.ns, sfHasValue, sfDisableSelection, sfSelected, s.knownSelectWeight)
+	alwaysConnect := lpc.NewQueueIterator(s.ns, sfAlwaysConnect, sfDisableSelection, sfSelected)
 	s.mixSources = append(s.mixSources, knownSelector)
 	s.mixSources = append(s.mixSources, alwaysConnect)
 	if discovery != nil {
@@ -182,21 +166,21 @@ func newServerPool(db ethdb.KeyValueStore, dbKey []byte, ns *utils.NodeStateMach
 	// preNegotiationFilter will be added in series with iter here when les4 is available
 
 	s.dialIterator = enode.Filter(s.mixer, func(node *enode.Node) bool {
-		s.ns.SetState(node, s.stDialed, 0, time.Second*10)
+		s.ns.SetState(node, sfDialed, nodestate.Flags{}, time.Second*10)
 		return true
 	})
 
-	ns.SubscribeState(s.stDialed|s.stConnected, func(n *enode.Node, oldState, newState utils.NodeStateBitMask) {
-		if oldState == s.stDialed && newState == 0 {
+	ns.SubscribeState(sfDialed.Or(sfConnected), func(n *enode.Node, oldState, newState nodestate.Flags) {
+		if oldState.Equals(sfDialed) && newState.IsEmpty() {
 			// dial timeout, no connection
 			_, wait := s.calculateNode(n, true, false)
-			s.ns.SetState(n, s.stRedialWait, 0, wait)
+			s.ns.SetState(n, sfRedialWait, nodestate.Flags{}, wait)
 		}
 	})
 
-	ns.AddLogMetrics(s.stHasValue, s.ns.StatesMask(disableSelection), "selectable", nil, nil, serverSelectableGauge)
-	ns.AddLogMetrics(s.stDialed, 0, "dialed", serverDialedMeter, nil, nil)
-	ns.AddLogMetrics(s.stConnected, 0, "connected", nil, nil, serverConnectedGauge)
+	ns.AddLogMetrics(sfHasValue, sfDisableSelection, "selectable", nil, nil, serverSelectableGauge)
+	ns.AddLogMetrics(sfDialed, nodestate.Flags{}, "dialed", serverDialedMeter, nil, nil)
+	ns.AddLogMetrics(sfConnected, nodestate.Flags{}, "connected", nil, nil, serverConnectedGauge)
 	return s
 }
 
@@ -208,7 +192,7 @@ func (s *serverPool) start() {
 		s.mixer.AddSource(iter)
 	}
 	for _, node := range s.trusted {
-		s.ns.SetState(node, s.stAlwaysConnect, 0, 0)
+		s.ns.SetState(node, sfAlwaysConnect, nodestate.Flags{}, 0)
 	}
 	clockEnc, _ := s.db.Get(s.dbClockKey)
 	var clockStart mclock.AbsTime
@@ -216,9 +200,9 @@ func (s *serverPool) start() {
 		clockStart = mclock.AbsTime(binary.BigEndian.Uint64(clockEnc))
 	}
 	s.clockOffset = clockStart - s.clock.Now()
-	s.ns.ForEach(s.stHasValue, 0, func(node *enode.Node, state utils.NodeStateBitMask) {
-		if n, ok := s.ns.GetField(node, s.nodeHistoryField).(nodeHistory); ok && n.waitUntil > clockStart {
-			s.ns.SetState(node, s.stRedialWait, 0, time.Duration(n.waitUntil-clockStart))
+	s.ns.ForEach(sfHasValue, nodestate.Flags{}, func(node *enode.Node, state nodestate.Flags) {
+		if n, ok := s.ns.GetField(node, sfiNodeHistory).(nodeHistory); ok && n.waitUntil > clockStart {
+			s.ns.SetState(node, sfRedialWait, nodestate.Flags{}, time.Duration(n.waitUntil-clockStart))
 		}
 	})
 	go func() {
@@ -241,10 +225,10 @@ func (s *serverPool) start() {
 // stop stops the server pool
 func (s *serverPool) stop() {
 	s.dialIterator.Close()
-	s.ns.ForEach(s.stConnected, 0, func(n *enode.Node, state utils.NodeStateBitMask) {
+	s.ns.ForEach(sfConnected, nodestate.Flags{}, func(n *enode.Node, state nodestate.Flags) {
 		wt, _ := s.calculateNode(n, false, false)
 		if wt >= nodeWeightThreshold {
-			s.ns.SetState(n, s.stHasValue, 0, 0)
+			s.ns.SetState(n, sfHasValue, nodestate.Flags{}, 0)
 			s.ns.Persist(n)
 		}
 	})
@@ -261,9 +245,9 @@ func (s *serverPool) persistClock() {
 
 // registerPeer implements serverPeerSubscriber
 func (s *serverPool) registerPeer(p *serverPeer) {
-	s.ns.SetState(p.Node(), s.stConnected, s.stDialed, 0)
+	s.ns.SetState(p.Node(), sfConnected, sfDialed, 0)
 	nvt := s.vt.Register(p.ID())
-	s.ns.SetField(p.Node(), s.connStatsField, nvt.RtStats())
+	s.ns.SetField(p.Node(), sfiConnectedStats, nvt.RtStats())
 	p.setValueTracker(s.vt, nvt)
 	p.updateVtParams()
 }
@@ -271,10 +255,10 @@ func (s *serverPool) registerPeer(p *serverPeer) {
 // unregisterPeer implements serverPeerSubscriber
 func (s *serverPool) unregisterPeer(p *serverPeer) {
 	wt, wait := s.calculateNode(p.Node(), false, true)
-	s.ns.SetField(p.Node(), s.connStatsField, nil)
-	s.ns.SetState(p.Node(), s.stRedialWait, s.stConnected, wait)
+	s.ns.SetField(p.Node(), sfiConnectedStats, nil)
+	s.ns.SetState(p.Node(), sfRedialWait, sfConnected, wait)
 	if wt >= nodeWeightThreshold {
-		s.ns.SetState(p.Node(), s.stHasValue, 0, 0)
+		s.ns.SetState(p.Node(), sfHasValue, nodestate.Flags{}, 0)
 		s.ns.Persist(p.Node())
 	}
 	s.vt.Unregister(p.ID())
@@ -314,7 +298,7 @@ func (s *serverPool) getTimeout() time.Duration {
 
 // calculateNode calculates the selection weight and the proposed redial wait time of the given node
 func (s *serverPool) calculateNode(node *enode.Node, failedConnection, remoteDisconnect bool) (uint64, time.Duration) {
-	n, _ := s.ns.GetField(node, s.nodeHistoryField).(nodeHistory)
+	n, _ := s.ns.GetField(node, sfiNodeHistory).(nodeHistory)
 	nvt := s.vt.GetNode(node.ID())
 	if nvt == nil {
 		return 0, 0
@@ -328,7 +312,7 @@ func (s *serverPool) calculateNode(node *enode.Node, failedConnection, remoteDis
 
 	var sessionValue float64
 	if remoteDisconnect {
-		if connStats, ok := s.ns.GetField(node, s.connStatsField).(lpc.ResponseTimeStats); ok {
+		if connStats, ok := s.ns.GetField(node, sfiConnectedStats).(lpc.ResponseTimeStats); ok {
 			diff := currentStats
 			diff.SubStats(&connStats)
 			sessionValue = diff.Value(timeWeights, expFactor)
@@ -372,7 +356,7 @@ func (s *serverPool) calculateNode(node *enode.Node, failedConnection, remoteDis
 	}
 
 	if storeField {
-		s.ns.SetField(node, s.nodeHistoryField, n)
+		s.ns.SetField(node, sfiNodeHistory, n)
 	}
 	return uint64(n.totalValue * nodeWeightMul / float64(totalDialCost)), wait
 }
@@ -387,7 +371,7 @@ func (s *serverPool) knownSelectWeight(i interface{}) uint64 {
 	wt, _ := s.calculateNode(n, false, false)
 	if wt < nodeWeightThreshold {
 		go func() {
-			s.ns.SetState(n, 0, s.stHasValue, 0)
+			s.ns.SetState(n, nodestate.Flags{}, sfHasValue, 0)
 			s.ns.Persist(n)
 		}()
 		return 0

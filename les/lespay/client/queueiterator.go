@@ -20,17 +20,17 @@ import (
 	"sync"
 	"time"
 
-	"github.com/ethereum/go-ethereum/les/utils"
 	"github.com/ethereum/go-ethereum/p2p/enode"
+	"github.com/ethereum/go-ethereum/p2p/nodestate"
 )
 
 // QueueIterator returns nodes from the specified selectable set in the same order as
 // they entered the set.
 type QueueIterator struct {
 	lock     sync.Mutex
-	ns       *utils.NodeStateMachine
+	ns       *nodestate.NodeStateMachine
 	queue    []*enode.Node
-	selected utils.NodeStateBitMask
+	selected nodestate.Flags
 	wakeup   chan struct{}
 	nextNode *enode.Node
 	closed   bool
@@ -40,37 +40,37 @@ type QueueIterator struct {
 // and none of the disabled flags set. When a node is selected the selectedFlag is set which also
 // disables further selectability until it is removed or times out.
 // The ENR field should be set for all selectable nodes so that the iterator can return complete enodes.
-func NewQueueIterator(ns *utils.NodeStateMachine, requireMask, disableMask utils.NodeStateBitMask, selectedFlag *utils.NodeStateFlag) *QueueIterator {
-
-	selected := ns.StateMask(selectedFlag)
-	disableMask |= selected
+func NewQueueIterator(ns *nodestate.NodeStateMachine, requireFlags, disableFlags, selectedFlag nodestate.Flags) *QueueIterator {
+	disableFlags = disableFlags.Or(selectedFlag)
 	qi := &QueueIterator{
 		ns:       ns,
-		selected: selected,
+		selected: selectedFlag,
 	}
-	ns.SubscribeState(requireMask|disableMask, func(n *enode.Node, oldState, newState utils.NodeStateBitMask) {
-		oldMatch := (oldState&requireMask == requireMask) && (oldState&disableMask == 0)
-		newMatch := (newState&requireMask == requireMask) && (newState&disableMask == 0)
-		if newMatch != oldMatch {
-			qi.lock.Lock()
-			if newMatch {
-				qi.queue = append(qi.queue, n)
-				if qi.wakeup != nil {
-					close(qi.wakeup)
-					qi.wakeup = nil
-				}
-			} else {
-				id := n.ID()
-				for i, qn := range qi.queue {
-					if qn.ID() == id {
-						copy(qi.queue[i:len(qi.queue)-1], qi.queue[i+1:])
-						qi.queue = qi.queue[:len(qi.queue)-1]
-						break
-					}
+	ns.SubscribeState(requireFlags.Or(disableFlags), func(n *enode.Node, oldState, newState nodestate.Flags) {
+		oldMatch := oldState.HasAll(requireFlags) && oldState.HasNone(disableFlags)
+		newMatch := newState.HasAll(requireFlags) && newState.HasNone(disableFlags)
+		if newMatch == oldMatch {
+			return
+		}
+
+		qi.lock.Lock()
+		if newMatch {
+			qi.queue = append(qi.queue, n)
+			if qi.wakeup != nil {
+				close(qi.wakeup)
+				qi.wakeup = nil
+			}
+		} else {
+			id := n.ID()
+			for i, qn := range qi.queue {
+				if qn.ID() == id {
+					copy(qi.queue[i:len(qi.queue)-1], qi.queue[i+1:])
+					qi.queue = qi.queue[:len(qi.queue)-1]
+					break
 				}
 			}
-			qi.lock.Unlock()
 		}
+		qi.lock.Unlock()
 	})
 	return qi
 }
@@ -88,7 +88,7 @@ func (qi *QueueIterator) Next() bool {
 			copy(qi.queue[:len(qi.queue)-1], qi.queue[1:])
 			qi.queue = qi.queue[:len(qi.queue)-1]
 			qi.lock.Unlock()
-			qi.ns.SetState(qi.nextNode, qi.selected, 0, time.Second*5)
+			qi.ns.SetState(qi.nextNode, qi.selected, nodestate.Flags{}, time.Second*5)
 			return true
 		}
 		ch := make(chan struct{})
