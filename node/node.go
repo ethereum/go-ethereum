@@ -215,6 +215,24 @@ func (n *Node) RegisterAuxServiceLifecycle(constructor AuxiliaryServiceConstruct
 	return nil
 }
 
+func (n *Node) RegisterProtocols(protocols []p2p.Protocol) error {
+	if !n.running() {
+		return ErrNodeStopped
+	}
+	// add backend's protocols to the o2o server
+	n.server.Protocols = append(n.server.Protocols, protocols...)
+	return nil
+}
+
+func (n *Node) RegisterRPC(apis []rpc.API) {
+	// Gather all the possible APIs to surface
+	apis = append(apis, n.backend.APIs()...)
+	for _, service := range n.services {
+		apis = append(apis, service.APIs()...)
+	}
+	n.rpcAPIs = apis
+}
+
 // running returns true if the node's p2p server is already running
 func (n *Node) running() bool {
 	return n.server != nil
@@ -226,7 +244,7 @@ func (n *Node) Start() error {
 	defer n.lock.Unlock()
 
 	// Short circuit if the node's already running
-	if n.server != nil {
+	if n.running() {
 		return ErrNodeRunning
 	}
 	if err := n.openDataDir(); err != nil {
@@ -235,37 +253,39 @@ func (n *Node) Start() error {
 
 	// Initialize the p2p server. This creates the node key and
 	// discovery databases.
-	running := &p2p.Server{Config: n.config.P2P}
+	n.server = &p2p.Server{Config: n.config.P2P}
+	n.server.Config.PrivateKey = n.config.NodeKey()
+	n.server.Config.Name = n.config.NodeName()
+	n.server.Config.Logger = n.log
+	if n.server.Config.StaticNodes == nil {
+		n.server.Config.StaticNodes = n.config.StaticNodes()
+	}
+	if n.server.Config.TrustedNodes == nil {
+		n.server.Config.TrustedNodes = n.config.TrustedNodes()
+	}
+	if n.server.Config.NodeDatabase == "" {
+		n.server.Config.NodeDatabase = n.config.NodeDB()
+	}
 
-	running.Config.PrivateKey = n.config.NodeKey()
-	running.Config.Name = n.config.NodeName()
-	running.Config.Logger = n.log
-	if running.Config.StaticNodes == nil {
-		running.Config.StaticNodes = n.config.StaticNodes()
-	}
-	if running.Config.TrustedNodes == nil {
-		running.Config.TrustedNodes = n.config.TrustedNodes()
-	}
-	if running.Config.NodeDatabase == "" {
-		running.Config.NodeDatabase = n.config.NodeDB()
-	}
-	n.log.Info("Starting peer-to-peer node", "instance", running.Name)
-
-	// add backend's protocols to the o2o server
-	running.Protocols = append(running.Protocols, n.backend.Protocols()...)
-	if err := running.Start(); err != nil {
+	// Start the p2p node
+	if err := n.server.Start(); err != nil {
 		return convertFileLockError(err)
 	}
+	n.log.Info("Starting peer-to-peer node", "instance", n.server.Name)
 
 	// Register the running p2p server with the Backend
-	if err := n.backend.P2PServer(running); err != nil {
-		running.Stop()
+	if err := n.backend.P2PServer(n.server); err != nil {
+		n.server.Stop()
 		return err
 	}
-
+	// Register the Backend's protocols with the p2p server
+	if err := n.RegisterProtocols(n.backend.Protocols()); err != nil {
+		n.server.Stop()
+		return err
+	}
 	// Start the backend
 	if err := n.backend.Start(); err != nil {
-		running.Stop()
+		n.server.Stop()
 		return err
 	}
 
@@ -275,7 +295,7 @@ func (n *Node) Start() error {
 		// Start the next service, stopping all previous upon failure
 		if err := service.Start(); err != nil {
 			n.stopAllStartedServices(startedServices, nil) // TODO safe to pass nil here?
-			running.Stop()
+			n.server.Stop()
 
 			return err
 		}
@@ -289,7 +309,7 @@ func (n *Node) Start() error {
 		// Start the next auxiliary service, stopping all previous upon failure
 		if err := auxService.Start(); err != nil {
 			n.stopAllStartedServices(startedServices, startedAuxServices)
-			running.Stop()
+			n.server.Stop()
 
 			return err
 		}
@@ -300,7 +320,7 @@ func (n *Node) Start() error {
 	// Lastly, start the configured RPC interfaces
 	if err := n.startRPC(); err != nil {
 		n.stopAllStartedServices(startedServices, startedAuxServices)
-		running.Stop()
+		n.server.Stop()
 		return err
 	}
 	// Finish initializing the service context
@@ -311,7 +331,6 @@ func (n *Node) Start() error {
 	n.ServiceContext.auxServices = n.auxServices
 
 	// Finish initializing the startup
-	n.server = running
 	n.stop = make(chan struct{})
 	return nil
 }
@@ -354,28 +373,24 @@ func (n *Node) openDataDir() error {
 // startup. It's not meant to be called at any time afterwards as it makes certain
 // assumptions about the state of the node.
 func (n *Node) startRPC() error {
-	// Gather all the possible APIs to surface
-	apis := n.apis()
-	apis = append(apis, n.backend.APIs()...)
-	for _, service := range n.services {
-		apis = append(apis, service.APIs()...)
-	}
+	n.RegisterRPC(n.apis())
+
 	// Start the various API endpoints, terminating all in case of errors
-	if err := n.startInProc(apis); err != nil {
+	if err := n.startInProc(); err != nil {
 		return err
 	}
-	if err := n.startIPC(apis); err != nil {
+	if err := n.startIPC(); err != nil {
 		n.stopInProc()
 		return err
 	}
-	if err := n.startHTTP(n.httpHandler.Endpoint(), apis, n.config.HTTPModules, n.config.HTTPCors, n.config.HTTPVirtualHosts, n.config.HTTPTimeouts, n.config.WSOrigins); err != nil {
+	if err := n.startHTTP(n.httpHandler.Endpoint(), n.config.HTTPModules, n.config.HTTPCors, n.config.HTTPVirtualHosts, n.config.HTTPTimeouts, n.config.WSOrigins); err != nil {
 		n.stopIPC()
 		n.stopInProc()
 		return err
 	}
 	// if endpoints are not the same, start separate servers
 	if n.httpHandler.Endpoint() != n.wsHandler.Endpoint() {
-		if err := n.startWS(n.wsHandler.Endpoint(), apis, n.config.WSModules, n.config.WSOrigins, n.config.WSExposeAll); err != nil {
+		if err := n.startWS(n.wsHandler.Endpoint(), n.config.WSModules, n.config.WSOrigins, n.config.WSExposeAll); err != nil {
 			n.stopHTTP()
 			n.stopIPC()
 			n.stopInProc()
@@ -384,15 +399,14 @@ func (n *Node) startRPC() error {
 	}
 
 	// All API endpoints started successfully
-	n.rpcAPIs = apis
 	return nil
 }
 
 // startInProc initializes an in-process RPC Endpoint.
-func (n *Node) startInProc(apis []rpc.API) error {
+func (n *Node) startInProc() error {
 	// Register all the APIs exposed by the services
 	handler := rpc.NewServer()
-	for _, api := range apis {
+	for _, api := range n.rpcAPIs {
 		if err := handler.RegisterName(api.Namespace, api.Service); err != nil {
 			return err
 		}
@@ -411,11 +425,11 @@ func (n *Node) stopInProc() {
 }
 
 // startIPC initializes and starts the IPC RPC Endpoint.
-func (n *Node) startIPC(apis []rpc.API) error {
+func (n *Node) startIPC() error {
 	if n.ipcHandler.Endpoint() == "" {
 		return nil // IPC disabled.
 	}
-	listener, handler, err := rpc.StartIPCEndpoint(n.ipcHandler.Endpoint(), apis)
+	listener, handler, err := rpc.StartIPCEndpoint(n.ipcHandler.Endpoint(), n.rpcAPIs)
 	if err != nil {
 		return err
 	}
@@ -440,14 +454,14 @@ func (n *Node) stopIPC() {
 }
 
 // startHTTP initializes and starts the HTTP RPC Endpoint.
-func (n *Node) startHTTP(endpoint string, apis []rpc.API, modules []string, cors []string, vhosts []string, timeouts rpc.HTTPTimeouts, wsOrigins []string) error {
+func (n *Node) startHTTP(endpoint string, modules []string, cors []string, vhosts []string, timeouts rpc.HTTPTimeouts, wsOrigins []string) error {
 	// Short circuit if the HTTP Endpoint isn't being exposed
 	if endpoint == "" {
 		return nil
 	}
 	// register apis and create handler stack
 	srv := rpc.NewServer()
-	err := RegisterApisFromWhitelist(apis, modules, srv, false)
+	err := RegisterApisFromWhitelist(n.rpcAPIs, modules, srv, false)
 	if err != nil {
 		return err
 	}
@@ -489,7 +503,7 @@ func (n *Node) stopHTTP() {
 }
 
 // startWS initializes and starts the websocket RPC Endpoint.
-func (n *Node) startWS(endpoint string, apis []rpc.API, modules []string, wsOrigins []string, exposeAll bool) error {
+func (n *Node) startWS(endpoint string, modules []string, wsOrigins []string, exposeAll bool) error {
 	// Short circuit if the WS Endpoint isn't being exposed
 	if endpoint == "" {
 		return nil
@@ -497,7 +511,7 @@ func (n *Node) startWS(endpoint string, apis []rpc.API, modules []string, wsOrig
 
 	srv := rpc.NewServer()
 	handler := srv.WebsocketHandler(wsOrigins)
-	err := RegisterApisFromWhitelist(apis, modules, srv, exposeAll)
+	err := RegisterApisFromWhitelist(n.rpcAPIs, modules, srv, exposeAll)
 	if err != nil {
 		return err
 	}
@@ -524,7 +538,7 @@ func (n *Node) stopWS() {
 	}
 	if n.wsHandler.Srv != nil {
 		n.wsHandler.Srv.Stop()
-		n.wsHandler.Srv	= nil
+		n.wsHandler.Srv = nil
 	}
 }
 
