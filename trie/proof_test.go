@@ -130,7 +130,7 @@ func TestRangeProof(t *testing.T) {
 			keys = append(keys, entries[i].k)
 			vals = append(vals, entries[i].v)
 		}
-		err := VerifyRangeProof(trie.Hash(), keys, vals, firstProof, lastProof)
+		err := VerifyRangeProof(trie.Hash(), keys[0], keys, vals, firstProof, lastProof)
 		if err != nil {
 			t.Fatalf("Case %d(%d->%d) expect no error, got %v", i, start, end-1, err)
 		}
@@ -208,7 +208,7 @@ func TestBadRangeProof(t *testing.T) {
 			index = mrand.Intn(end - start)
 			vals[index] = nil
 		}
-		err := VerifyRangeProof(trie.Hash(), keys, vals, firstProof, lastProof)
+		err := VerifyRangeProof(trie.Hash(), keys[0], keys, vals, firstProof, lastProof)
 		if err == nil {
 			t.Fatalf("%d Case %d index %d range: (%d->%d) expect error, got nil", i, testcase, index, start, end-1)
 		}
@@ -242,7 +242,7 @@ func TestGappedRangeProof(t *testing.T) {
 		keys = append(keys, entries[i].k)
 		vals = append(vals, entries[i].v)
 	}
-	err := VerifyRangeProof(trie.Hash(), keys, vals, firstProof, lastProof)
+	err := VerifyRangeProof(trie.Hash(), keys[0], keys, vals, firstProof, lastProof)
 	if err == nil {
 		t.Fatal("expect error, got nil")
 	}
@@ -379,7 +379,7 @@ func benchmarkVerifyRangeProof(b *testing.B, size int) {
 
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
-		err := VerifyRangeProof(trie.Hash(), keys, values, firstProof, lastProof)
+		err := VerifyRangeProof(trie.Hash(), keys[0], keys, values, firstProof, lastProof)
 		if err != nil {
 			b.Fatalf("Case %d(%d->%d) expect no error, got %v", i, start, end-1, err)
 		}

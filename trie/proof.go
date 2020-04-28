@@ -133,7 +133,7 @@ func VerifyProof(rootHash common.Hash, key []byte, proofDb ethdb.KeyValueReader)
 // The main purpose of this function is recovering a node
 // path from the merkle proof stream. All necessary nodes
 // will be resolved and leave the remaining as hashnode.
-func proofToPath(rootHash common.Hash, root node, key []byte, proofDb ethdb.KeyValueReader) (node, error) {
+func proofToPath(rootHash common.Hash, root node, key []byte, proofDb ethdb.KeyValueReader, allowNonExistent bool) (node, error) {
 	// resolveNode retrieves and resolves trie node from merkle proof stream
 	resolveNode := func(hash common.Hash) (node, error) {
 		buf, _ := proofDb.Get(hash[:])
@@ -146,7 +146,8 @@ func proofToPath(rootHash common.Hash, root node, key []byte, proofDb ethdb.KeyV
 		}
 		return n, err
 	}
-	// If the root node is empty, resolve it first
+	// If the root node is empty, resolve it first.
+	// Root node must be included in the proof.
 	if root == nil {
 		n, err := resolveNode(rootHash)
 		if err != nil {
@@ -165,7 +166,13 @@ func proofToPath(rootHash common.Hash, root node, key []byte, proofDb ethdb.KeyV
 		keyrest, child = get(parent, key, false)
 		switch cld := child.(type) {
 		case nil:
-			// The trie doesn't contain the key.
+			// The trie doesn't contain the key. It's possible
+			// the proof is an non-existing proof, but at least
+			// we can prove all resolved nodes are correct, it's
+			// enough for us to prove range.
+			if allowNonExistent {
+				return root, nil
+			}
 			return nil, errors.New("the node is not contained in trie")
 		case *shortNode:
 			key, parent = keyrest, child // Already resolved
@@ -241,50 +248,103 @@ func unsetInternal(node node, left []byte, right []byte) error {
 		fn.Children[i] = nil
 	}
 	fn.flags = nodeFlag{dirty: true}
-	unset(fn.Children[left[prefix]], left[prefix+1:], false)
-	unset(fn.Children[right[prefix]], right[prefix+1:], true)
+	if err := unset(fn, fn.Children[left[prefix]], left[prefix:], 1, false); err != nil {
+		return err
+	}
+	if err := unset(fn, fn.Children[right[prefix]], right[prefix:], 1, true); err != nil {
+		return err
+	}
 	return nil
 }
 
 // unset removes all internal node references either the left most or right most.
-func unset(root node, rest []byte, removeLeft bool) {
-	switch rn := root.(type) {
+// If we try to unset all right most references, it can meet these scenarios:
+//
+// - The given path is existent in the trie, unset the final associated
+//   valuenode as nil.
+// - The given path is non-existent in the trie
+//   - the fork point is a fullnode, the corresponding child pointed by path
+//     is nil, return
+//   - the fork point is a shortnode, the key of shortnode is less than path,
+//     keep the entire branch and return.
+//   - the fork point is a shortnode, the key of shortnode is greater than path,
+//     unset the entire branch.
+//
+// If we try to unset all left most references, then the given path should
+// be existent.
+func unset(parent node, child node, key []byte, pos int, removeLeft bool) error {
+	switch cld := child.(type) {
 	case *fullNode:
 		if removeLeft {
-			for i := 0; i < int(rest[0]); i++ {
-				rn.Children[i] = nil
+			for i := 0; i < int(key[pos]); i++ {
+				cld.Children[i] = nil
 			}
-			rn.flags = nodeFlag{dirty: true}
+			cld.flags = nodeFlag{dirty: true}
 		} else {
-			for i := rest[0] + 1; i < 16; i++ {
-				rn.Children[i] = nil
+			for i := key[pos] + 1; i < 16; i++ {
+				cld.Children[i] = nil
 			}
-			rn.flags = nodeFlag{dirty: true}
+			cld.flags = nodeFlag{dirty: true}
 		}
-		unset(rn.Children[rest[0]], rest[1:], removeLeft)
+		return unset(cld, cld.Children[key[pos]], key, pos+1, removeLeft)
 	case *shortNode:
-		rn.flags = nodeFlag{dirty: true}
-		if _, ok := rn.Val.(valueNode); ok {
-			rn.Val = nilValueNode
-			return
+		if len(key[pos:]) < len(cld.Key) || !bytes.Equal(cld.Key, key[pos:pos+len(cld.Key)]) {
+			// Find the fork point, it's an non-existent branch.
+			if removeLeft {
+				return errors.New("invalid last edge proof")
+			}
+			if bytes.Compare(cld.Key, key[pos:]) > 0 {
+				// The key of fork shortnode is greater than the
+				// path(it belongs to the range), unset the entrie
+				// branch. The parent must be a fullnode.
+				fn := parent.(*fullNode)
+				fn.Children[key[pos-1]] = nil
+			} else {
+				// The key of fork shortnode is less than the
+				// path(it doesn't belong to the range), keep
+				// it with the cached hash available.
+				return nil
+			}
 		}
-		unset(rn.Val, rest[len(rn.Key):], removeLeft)
-	case hashNode, nil, valueNode:
-		panic("it shouldn't happen")
+		if _, ok := cld.Val.(valueNode); ok {
+			fn := parent.(*fullNode)
+			fn.Children[key[pos-1]] = nil
+			return nil
+		}
+		cld.flags = nodeFlag{dirty: true}
+		return unset(cld, cld.Val, key, pos+len(cld.Key), removeLeft)
+	case nil:
+		// If the node is nil, it's a child of the fork point
+		// fullnode(it's an non-existent branch).
+		if removeLeft {
+			return errors.New("invalid last edge proof")
+		}
+		return nil
+	default:
+		panic("it shouldn't happen") // hashNode, valueNode
 	}
 }
 
 // VerifyRangeProof checks whether the given leave nodes and edge proofs
 // can prove the given trie leaves range is matched with given root hash
 // and the range is consecutive(no gap inside).
-func VerifyRangeProof(rootHash common.Hash, keys [][]byte, values [][]byte, firstProof ethdb.KeyValueReader, lastProof ethdb.KeyValueReader) error {
+//
+// Note the given first edge proof can be non-existing proof. For example
+// the first proof is for an non-existent values 0x03. The given batch
+// leaves are [0x04, 0x05, .. 0x09]. It's still feasible to prove. But the
+// last edge proof should always be an existent proof.
+//
+// Note the firstKey is paired with firstProof, not necessarily the same
+// as keys[0](unless firstProof is an existent proof).
+func VerifyRangeProof(rootHash common.Hash, firstKey []byte, keys [][]byte, values [][]byte, firstProof ethdb.KeyValueReader, lastProof ethdb.KeyValueReader) error {
 	if len(keys) != len(values) {
 		return fmt.Errorf("inconsistent proof data, keys: %d, values: %d", len(keys), len(values))
 	}
 	if len(keys) == 0 {
 		return fmt.Errorf("nothing to verify")
 	}
-	if len(keys) == 1 {
+	// If we only have one leaf to prove, checkt the first edge proof
+	if len(keys) == 1 && bytes.Equal(keys[0], firstKey) {
 		value, err := VerifyProof(rootHash, keys[0], firstProof)
 		if err != nil {
 			return err
@@ -296,19 +356,21 @@ func VerifyRangeProof(rootHash common.Hash, keys [][]byte, values [][]byte, firs
 	}
 	// Convert the edge proofs to edge trie paths. Then we can
 	// have the same tree architecture with the original one.
-	root, err := proofToPath(rootHash, nil, keys[0], firstProof)
+	// For the first edge proof, non-existent proof is allowed.
+	root, err := proofToPath(rootHash, nil, firstKey, firstProof, true)
 	if err != nil {
 		return err
 	}
 	// Pass the root node here, the second path will be merged
-	// with the first one.
-	root, err = proofToPath(rootHash, root, keys[len(keys)-1], lastProof)
+	// with the first one. For the last edge proof, non-existent
+	// proof is not allowed.
+	root, err = proofToPath(rootHash, root, keys[len(keys)-1], lastProof, false)
 	if err != nil {
 		return err
 	}
 	// Remove all internal references. All the removed parts should
 	// be re-filled(or re-constructed) by the given leaves range.
-	if err := unsetInternal(root, keys[0], keys[len(keys)-1]); err != nil {
+	if err := unsetInternal(root, firstKey, keys[len(keys)-1]); err != nil {
 		return err
 	}
 	// Rebuild the trie with the leave stream, the shape of trie
