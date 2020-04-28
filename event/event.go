@@ -196,9 +196,9 @@ func (s *TypeMuxSubscription) closewait() {
 	s.closed = true
 
 	s.postMu.Lock()
+	defer s.postMu.Unlock()
 	close(s.postC)
 	s.postC = nil
-	s.postMu.Unlock()
 }
 
 func (s *TypeMuxSubscription) deliver(event *TypeMuxEvent) {
