@@ -602,7 +602,8 @@ func (d *Downloader) fetchHeight(p *peerConnection) (*types.Header, error) {
 
 	// Request the advertised remote head block and wait for the response
 	head, _ := p.peer.Head()
-	go p.peer.RequestHeadersByHash(head, 1, 0, false)
+	d.cancelWg.Add(1)
+	go func() { defer d.cancelWg.Done(); p.peer.RequestHeadersByHash(head, 1, 0, false) }()
 
 	ttl := d.requestTTL()
 	timeout := time.After(ttl)
@@ -744,7 +745,8 @@ func (d *Downloader) findAncestor(p *peerConnection, remoteHeader *types.Header)
 	from, count, skip, max := calculateRequestSpan(remoteHeight, localHeight)
 
 	p.log.Trace("Span searching for common ancestor", "count", count, "from", from, "skip", skip)
-	go p.peer.RequestHeadersByNumber(uint64(from), count, skip, false)
+	d.cancelWg.Add(1)
+	go func() { defer d.cancelWg.Done(); p.peer.RequestHeadersByNumber(uint64(from), count, skip, false) }()
 
 	// Wait for the remote response to the head fetch
 	number, hash := uint64(0), common.Hash{}
@@ -834,8 +836,8 @@ func (d *Downloader) findAncestor(p *peerConnection, remoteHeader *types.Header)
 
 		ttl := d.requestTTL()
 		timeout := time.After(ttl)
-
-		go p.peer.RequestHeadersByNumber(check, 1, 0, false)
+		d.cancelWg.Add(1)
+		go func() { defer d.cancelWg.Done(); p.peer.RequestHeadersByNumber(check, 1, 0, false) }()
 
 		// Wait until a reply arrives to this request
 		for arrived := false; !arrived; {
@@ -929,10 +931,15 @@ func (d *Downloader) fetchHeaders(p *peerConnection, from uint64, pivot uint64) 
 
 		if skeleton {
 			p.log.Trace("Fetching skeleton headers", "count", MaxHeaderFetch, "from", from)
-			go p.peer.RequestHeadersByNumber(from+uint64(MaxHeaderFetch)-1, MaxSkeletonSize, MaxHeaderFetch-1, false)
+			d.cancelWg.Add(1)
+			go func() {
+				defer d.cancelWg.Done()
+				p.peer.RequestHeadersByNumber(from+uint64(MaxHeaderFetch)-1, MaxSkeletonSize, MaxHeaderFetch-1, false)
+			}()
 		} else {
 			p.log.Trace("Fetching full headers", "count", MaxHeaderFetch, "from", from)
-			go p.peer.RequestHeadersByNumber(from, MaxHeaderFetch, 0, false)
+			d.cancelWg.Add(1)
+			go func() { defer d.cancelWg.Done(); p.peer.RequestHeadersByNumber(from, MaxHeaderFetch, 0, false) }()
 		}
 	}
 	// Start pulling the header chain skeleton until all is done
