@@ -325,7 +325,7 @@ func formatJSONValue(value interface{}) interface{} {
 
 // formatValue formats a value for serialization
 func formatLogfmtValue(value interface{}, term bool) string {
-	if value == nil || (reflect.ValueOf(value).Kind() == reflect.Ptr && reflect.ValueOf(value).IsNil()) {
+	if value == nil {
 		return "nil"
 	}
 
