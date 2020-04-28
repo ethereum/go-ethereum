@@ -98,6 +98,57 @@ func TestOneElementProof(t *testing.T) {
 	}
 }
 
+func TestBadProof(t *testing.T) {
+	trie, vals := randomTrie(800)
+	root := trie.Hash()
+	for i, prover := range makeProvers(trie) {
+		for _, kv := range vals {
+			proof := prover(kv.k)
+			if proof == nil {
+				t.Fatalf("prover %d: nil proof", i)
+			}
+			it := proof.NewIterator(nil, nil)
+			for i, d := 0, mrand.Intn(proof.Len()); i <= d; i++ {
+				it.Next()
+			}
+			key := it.Key()
+			val, _ := proof.Get(key)
+			proof.Delete(key)
+			it.Release()
+
+			mutateByte(val)
+			proof.Put(crypto.Keccak256(val), val)
+
+			if _, err := VerifyProof(root, kv.k, proof); err == nil {
+				t.Fatalf("prover %d: expected proof to fail for key %x", i, kv.k)
+			}
+		}
+	}
+}
+
+// Tests that missing keys can also be proven. The test explicitly uses a single
+// entry trie and checks for missing keys both before and after the single entry.
+func TestMissingKeyProof(t *testing.T) {
+	trie := new(Trie)
+	updateString(trie, "k", "v")
+
+	for i, key := range []string{"a", "j", "l", "z"} {
+		proof := memorydb.New()
+		trie.Prove([]byte(key), 0, proof)
+
+		if proof.Len() != 1 {
+			t.Errorf("test %d: proof should have one element", i)
+		}
+		val, err := VerifyProof(trie.Hash(), []byte(key), proof)
+		if err != nil {
+			t.Fatalf("test %d: failed to verify proof: %v\nraw proof: %x", i, err, proof)
+		}
+		if val != nil {
+			t.Fatalf("test %d: verified value mismatch: have %x, want nil", i, val)
+		}
+	}
+}
+
 type entrySlice []*kv
 
 func (p entrySlice) Len() int           { return len(p) }
@@ -134,6 +185,138 @@ func TestRangeProof(t *testing.T) {
 		if err != nil {
 			t.Fatalf("Case %d(%d->%d) expect no error, got %v", i, start, end-1, err)
 		}
+	}
+}
+
+func TestRangeProofWithNonExistentProof(t *testing.T) {
+	trie, vals := randomTrie(4096)
+	var entries entrySlice
+	for _, kv := range vals {
+		entries = append(entries, kv)
+	}
+	sort.Sort(entries)
+	for i := 0; i < 500; i++ {
+		start := mrand.Intn(len(entries))
+		end := mrand.Intn(len(entries)-start) + start
+		if start == end {
+			continue
+		}
+		firstProof, lastProof := memorydb.New(), memorydb.New()
+
+		first := decreseKey(common.CopyBytes(entries[start].k))
+		if start != 0 && bytes.Equal(first, entries[start-1].k) {
+			continue
+		}
+		if err := trie.Prove(first, 0, firstProof); err != nil {
+			t.Fatalf("Failed to prove the first node %v", err)
+		}
+		if err := trie.Prove(entries[end-1].k, 0, lastProof); err != nil {
+			t.Fatalf("Failed to prove the last node %v", err)
+		}
+		var keys [][]byte
+		var vals [][]byte
+		for i := start; i < end; i++ {
+			keys = append(keys, entries[i].k)
+			vals = append(vals, entries[i].v)
+		}
+		err := VerifyRangeProof(trie.Hash(), first, keys, vals, firstProof, lastProof)
+		if err != nil {
+			t.Fatalf("Case %d(%d->%d) expect no error, got %v", i, start, end-1, err)
+		}
+	}
+}
+
+// TestRangeProofWithInvalidNonExistentProof tests such scenarios:
+// - The last edge proof is an non-existent proof
+// - There exist the gap between the first leaf and first non-existent proof
+func TestRangeProofWithInvalidNonExistentProof(t *testing.T) {
+	trie, vals := randomTrie(4096)
+	var entries entrySlice
+	for _, kv := range vals {
+		entries = append(entries, kv)
+	}
+	sort.Sort(entries)
+
+	// Case 1
+	start, end := 100, 200
+	first, last := decreseKey(common.CopyBytes(entries[start].k)), increseKey(common.CopyBytes(entries[end].k))
+	firstProof, lastProof := memorydb.New(), memorydb.New()
+	if err := trie.Prove(first, 0, firstProof); err != nil {
+		t.Fatalf("Failed to prove the first node %v", err)
+	}
+	if err := trie.Prove(last, 0, lastProof); err != nil {
+		t.Fatalf("Failed to prove the last node %v", err)
+	}
+	var k [][]byte
+	var v [][]byte
+	for i := start; i < end; i++ {
+		k = append(k, entries[i].k)
+		v = append(v, entries[i].v)
+	}
+	err := VerifyRangeProof(trie.Hash(), first, k, v, firstProof, lastProof)
+	if err == nil {
+		t.Fatalf("Expected to detect the error, got nil")
+	}
+
+	// Case 2
+	start, end = 100, 200
+	first = decreseKey(common.CopyBytes(entries[start].k))
+
+	firstProof, lastProof = memorydb.New(), memorydb.New()
+	if err := trie.Prove(first, 0, firstProof); err != nil {
+		t.Fatalf("Failed to prove the first node %v", err)
+	}
+	if err := trie.Prove(entries[end-1].k, 0, lastProof); err != nil {
+		t.Fatalf("Failed to prove the last node %v", err)
+	}
+	start = 105 // Gap created
+	k = make([][]byte, 0)
+	v = make([][]byte, 0)
+	for i := start; i < end; i++ {
+		k = append(k, entries[i].k)
+		v = append(v, entries[i].v)
+	}
+	err = VerifyRangeProof(trie.Hash(), first, k, v, firstProof, lastProof)
+	if err == nil {
+		t.Fatalf("Expected to detect the error, got nil")
+	}
+}
+
+func TestOneElementRangeProof(t *testing.T) {
+	trie, vals := randomTrie(4096)
+	var entries entrySlice
+	for _, kv := range vals {
+		entries = append(entries, kv)
+	}
+	sort.Sort(entries)
+
+	// One element with existent edge proof
+	start := 1000
+	firstProof, lastProof := memorydb.New(), memorydb.New()
+	if err := trie.Prove(entries[start].k, 0, firstProof); err != nil {
+		t.Fatalf("Failed to prove the first node %v", err)
+	}
+	if err := trie.Prove(entries[start].k, 0, lastProof); err != nil {
+		t.Fatalf("Failed to prove the last node %v", err)
+	}
+	err := VerifyRangeProof(trie.Hash(), entries[start].k, [][]byte{entries[start].k}, [][]byte{entries[start].v}, firstProof, lastProof)
+	if err != nil {
+		t.Fatalf("Expected no error, got %v", err)
+	}
+
+	// One element with non-existent edge proof
+	start = 1000
+	first := decreseKey(common.CopyBytes(entries[start].k))
+	firstProof, lastProof = memorydb.New(), memorydb.New()
+	if err := trie.Prove(first, 0, firstProof); err != nil {
+		t.Fatalf("Failed to prove the first node %v", err)
+	}
+	if err := trie.Prove(entries[start].k, 0, lastProof); err != nil {
+		t.Fatalf("Failed to prove the last node %v", err)
+	}
+	err = VerifyRangeProof(trie.Hash(), first, [][]byte{entries[start].k}, [][]byte{entries[start].v}, firstProof, lastProof)
+	if err != nil {
+		t.Fatalf("Expected no error, got %v", err)
 	}
 }
 
@@ -248,57 +431,6 @@ func TestGappedRangeProof(t *testing.T) {
 	}
 }
 
-func TestBadProof(t *testing.T) {
-	trie, vals := randomTrie(800)
-	root := trie.Hash()
-	for i, prover := range makeProvers(trie) {
-		for _, kv := range vals {
-			proof := prover(kv.k)
-			if proof == nil {
-				t.Fatalf("prover %d: nil proof", i)
-			}
-			it := proof.NewIterator(nil, nil)
-			for i, d := 0, mrand.Intn(proof.Len()); i <= d; i++ {
-				it.Next()
-			}
-			key := it.Key()
-			val, _ := proof.Get(key)
-			proof.Delete(key)
-			it.Release()
-
-			mutateByte(val)
-			proof.Put(crypto.Keccak256(val), val)
-
-			if _, err := VerifyProof(root, kv.k, proof); err == nil {
-				t.Fatalf("prover %d: expected proof to fail for key %x", i, kv.k)
-			}
-		}
-	}
-}
-
-// Tests that missing keys can also be proven. The test explicitly uses a single
-// entry trie and checks for missing keys both before and after the single entry.
-func TestMissingKeyProof(t *testing.T) {
-	trie := new(Trie)
-	updateString(trie, "k", "v")
-
-	for i, key := range []string{"a", "j", "l", "z"} {
-		proof := memorydb.New()
-		trie.Prove([]byte(key), 0, proof)
-
-		if proof.Len() != 1 {
-			t.Errorf("test %d: proof should have one element", i)
-		}
-		val, err := VerifyProof(trie.Hash(), []byte(key), proof)
-		if err != nil {
-			t.Fatalf("test %d: failed to verify proof: %v\nraw proof: %x", i, err, proof)
-		}
-		if val != nil {
-			t.Fatalf("test %d: verified value mismatch: have %x, want nil", i, val)
-		}
-	}
-}
-
 // mutateByte changes one byte in b.
 func mutateByte(b []byte) {
 	for r := mrand.Intn(len(b)); ; {
@@ -308,6 +440,26 @@ func mutateByte(b []byte) {
 			break
 		}
 	}
+}
+
+func increseKey(key []byte) []byte {
+	for i := len(key) - 1; i >= 0; i-- {
+		key[i]++
+		if key[i] != 0x0 {
+			break
+		}
+	}
+	return key
+}
+
+func decreseKey(key []byte) []byte {
+	for i := len(key) - 1; i >= 0; i-- {
+		key[i]--
+		if key[i] != 0xff {
+			break
+		}
+	}
+	return key
 }
 
 func BenchmarkProve(b *testing.B) {

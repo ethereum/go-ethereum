@@ -212,7 +212,7 @@ func proofToPath(rootHash common.Hash, root node, key []byte, proofDb ethdb.KeyV
 // since the node content might be modified. Besides it can happen that some
 // fullnodes only have one child which is disallowed. But if the proof is valid,
 // the missing children will be filled, otherwise it will be thrown anyway.
-func unsetInternal(node node, left []byte, right []byte) error {
+func unsetInternal(n node, left []byte, right []byte) error {
 	left, right = keybytesToHex(left), keybytesToHex(right)
 
 	// todo(rjl493456442) different length edge keys should be supported
@@ -221,25 +221,37 @@ func unsetInternal(node node, left []byte, right []byte) error {
 	}
 	// Step down to the fork point
 	prefix, pos := prefixLen(left, right), 0
+	var parent node
 	for {
 		if pos >= prefix {
 			break
 		}
-		switch n := (node).(type) {
+		switch rn := (n).(type) {
 		case *shortNode:
-			if len(left)-pos < len(n.Key) || !bytes.Equal(n.Key, left[pos:pos+len(n.Key)]) {
+			if len(right)-pos < len(rn.Key) || !bytes.Equal(rn.Key, right[pos:pos+len(rn.Key)]) {
 				return errors.New("invalid edge path")
 			}
-			n.flags = nodeFlag{dirty: true}
-			node, pos = n.Val, pos+len(n.Key)
+			// Special case, the non-existent proof points to the same path
+			// as the existent proof, but the path of existent proof is longer.
+			// In this case, truncate the extra path(it should be recovered
+			// by data insertion).
+			if len(left)-pos < len(rn.Key) || !bytes.Equal(rn.Key, left[pos:pos+len(rn.Key)]) {
+				fn := parent.(*fullNode)
+				fn.Children[left[pos-1]] = nil
+				return nil
+			}
+			rn.flags = nodeFlag{dirty: true}
+			parent = n
+			n, pos = rn.Val, pos+len(rn.Key)
 		case *fullNode:
-			n.flags = nodeFlag{dirty: true}
-			node, pos = n.Children[left[pos]], pos+1
+			rn.flags = nodeFlag{dirty: true}
+			parent = n
+			n, pos = rn.Children[right[pos]], pos+1
 		default:
-			panic(fmt.Sprintf("%T: invalid node: %v", node, node))
+			panic(fmt.Sprintf("%T: invalid node: %v", n, n))
 		}
 	}
-	fn, ok := node.(*fullNode)
+	fn, ok := n.(*fullNode)
 	if !ok {
 		return errors.New("the fork point must be a fullnode")
 	}
@@ -343,7 +355,7 @@ func VerifyRangeProof(rootHash common.Hash, firstKey []byte, keys [][]byte, valu
 	if len(keys) == 0 {
 		return fmt.Errorf("nothing to verify")
 	}
-	// If we only have one leaf to prove, checkt the first edge proof
+	// If we only have one leaf to prove, check the first edge proof
 	if len(keys) == 1 && bytes.Equal(keys[0], firstKey) {
 		value, err := VerifyProof(rootHash, keys[0], firstProof)
 		if err != nil {
