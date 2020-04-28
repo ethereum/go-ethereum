@@ -384,6 +384,7 @@ func (db *Database) meter(refresh time.Duration) {
 		// Sleep a bit, then repeat the stats collection
 		select {
 		case <-db.quitChan:
+			log.Info("Leveldb meter already quit")
 			return
 			// Quit requesting, stop hammering the database
 		case <-timer.C:
