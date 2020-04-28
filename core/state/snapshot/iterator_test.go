@@ -31,10 +31,9 @@ import (
 // TestAccountIteratorBasics tests some simple single-layer(diff and disk) iteration
 func TestAccountIteratorBasics(t *testing.T) {
 	var (
-		nilAccount int
-		destructs  = make(map[common.Hash]struct{})
-		accounts   = make(map[common.Hash][]byte)
-		storage    = make(map[common.Hash]map[common.Hash][]byte)
+		destructs = make(map[common.Hash]struct{})
+		accounts  = make(map[common.Hash][]byte)
+		storage   = make(map[common.Hash]map[common.Hash][]byte)
 	)
 	// Fill up a parent
 	for i := 0; i < 100; i++ {
@@ -44,8 +43,6 @@ func TestAccountIteratorBasics(t *testing.T) {
 		accounts[h] = data
 		if rand.Intn(4) == 0 {
 			destructs[h] = struct{}{}
-			delete(accounts, h)
-			nilAccount += 1
 		}
 		if rand.Intn(2) == 0 {
 			accStorage := make(map[common.Hash][]byte)
@@ -62,7 +59,7 @@ func TestAccountIteratorBasics(t *testing.T) {
 
 	diskLayer := diffToDisk(diffLayer)
 	it = diskLayer.AccountIterator(common.Hash{})
-	verifyIterator(t, 100-nilAccount, it, verifyNothing) // Nil is allowed for single layer iterator
+	verifyIterator(t, 100, it, verifyNothing) // Nil is allowed for single layer iterator
 }
 
 // TestStorageIteratorBasics tests some simple single-layer(diff and disk) iteration for storage
@@ -195,9 +192,9 @@ func verifyIterator(t *testing.T, expCount int, it Iterator, verify verifyConten
 			t.Errorf("wrong order: %x >= %x", last, hash)
 		}
 		count++
-		if verify == verifyAccount && it.(AccountIterator).Account() == nil {
+		if verify == verifyAccount && len(it.(AccountIterator).Account()) == 0 {
 			t.Errorf("iterator returned nil-value for hash %x", hash)
-		} else if verify == verifyStorage && it.(StorageIterator).Slot() == nil {
+		} else if verify == verifyStorage && len(it.(StorageIterator).Slot()) == 0 {
 			t.Errorf("iterator returned nil-value for hash %x", hash)
 		}
 	}

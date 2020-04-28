@@ -160,6 +160,8 @@ func (it *binaryIterator) Hash() common.Hash {
 // Account returns the RLP encoded slim account the iterator is currently at, or
 // nil if the iterated snapshot stack became stale (you can check Error after
 // to see if it failed or not).
+//
+// Note the returned account is not a copy, please don't modify it.
 func (it *binaryIterator) Account() []byte {
 	if !it.accountIterator {
 		return nil
@@ -170,12 +172,14 @@ func (it *binaryIterator) Account() []byte {
 		it.fail = err
 		return nil
 	}
-	return common.CopyBytes(blob)
+	return blob
 }
 
 // Slot returns the raw storage slot data the iterator is currently at, or
 // nil if the iterated snapshot stack became stale (you can check Error after
 // to see if it failed or not).
+//
+// Note the returned slot is not a copy, please don't modify it.
 func (it *binaryIterator) Slot() []byte {
 	if it.accountIterator {
 		return nil
@@ -185,7 +189,7 @@ func (it *binaryIterator) Slot() []byte {
 		it.fail = err
 		return nil
 	}
-	return common.CopyBytes(blob)
+	return blob
 }
 
 // Release recursively releases all the iterators in the stack.

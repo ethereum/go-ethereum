@@ -137,6 +137,8 @@ func (it *diffAccountIterator) Hash() common.Hash {
 // This method assumes that flattening does not delete elements from
 // the accountdata mapping (writing nil into it is fine though), and will panic
 // if elements have been deleted.
+//
+// Note the returned account is not a copy, please don't modify it.
 func (it *diffAccountIterator) Account() []byte {
 	it.layer.lock.RLock()
 	blob, ok := it.layer.accountData[it.curHash]
@@ -151,7 +153,7 @@ func (it *diffAccountIterator) Account() []byte {
 	if it.layer.Stale() {
 		it.fail, it.keys = ErrSnapshotStale, nil
 	}
-	return common.CopyBytes(blob)
+	return blob
 }
 
 // Release is a noop for diff account iterators as there are no held resources.
@@ -181,7 +183,7 @@ func (it *diskAccountIterator) Next() bool {
 	}
 	// Try to advance the iterator and release it if we reached the end
 	for {
-		if !it.it.Next() || !bytes.HasPrefix(it.it.Key(), rawdb.SnapshotAccountPrefix) {
+		if !it.it.Next() {
 			it.it.Release()
 			it.it = nil
 			return false
@@ -212,7 +214,7 @@ func (it *diskAccountIterator) Hash() common.Hash {
 
 // Account returns the RLP encoded slim account the iterator is currently at.
 func (it *diskAccountIterator) Account() []byte {
-	return common.CopyBytes(it.it.Value())
+	return it.it.Value()
 }
 
 // Release releases the database snapshot held during iteration.
@@ -302,6 +304,8 @@ func (it *diffStorageIterator) Hash() common.Hash {
 // This method assumes that flattening does not delete elements from
 // the storage mapping (writing nil into it is fine though), and will panic
 // if elements have been deleted.
+//
+// Note the returned slot is not a copy, please don't modify it.
 func (it *diffStorageIterator) Slot() []byte {
 	it.layer.lock.RLock()
 	storage, ok := it.layer.storageData[it.account]
@@ -317,7 +321,7 @@ func (it *diffStorageIterator) Slot() []byte {
 	if it.layer.Stale() {
 		it.fail, it.keys = ErrSnapshotStale, nil
 	}
-	return common.CopyBytes(blob)
+	return blob
 }
 
 // Release is a noop for diff account iterators as there are no held resources.
@@ -351,9 +355,8 @@ func (it *diskStorageIterator) Next() bool {
 		return false
 	}
 	// Try to advance the iterator and release it if we reached the end
-	prefix := append(rawdb.SnapshotStoragePrefix, it.account.Bytes()...)
 	for {
-		if !it.it.Next() || !bytes.HasPrefix(it.it.Key(), prefix) {
+		if !it.it.Next() {
 			it.it.Release()
 			it.it = nil
 			return false
@@ -384,7 +387,7 @@ func (it *diskStorageIterator) Hash() common.Hash {
 
 // Slot returns the raw strorage slot content the iterator is currently at.
 func (it *diskStorageIterator) Slot() []byte {
-	return common.CopyBytes(it.it.Value())
+	return it.it.Value()
 }
 
 // Release releases the database snapshot held during iteration.

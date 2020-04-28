@@ -307,11 +307,13 @@ func (fi *fastIterator) Hash() common.Hash {
 }
 
 // Account returns the current account blob.
+// Note the returned account is not a copy, please don't modify it.
 func (fi *fastIterator) Account() []byte {
 	return fi.curAccount
 }
 
 // Slot returns the current storage slot.
+// Note the returned slot is not a copy, please don't modify it.
 func (fi *fastIterator) Slot() []byte {
 	return fi.curSlot
 }
