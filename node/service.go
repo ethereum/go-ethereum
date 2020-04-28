@@ -93,16 +93,6 @@ func (ctx *ServiceContext) ExtRPCEnabled() bool {
 	return ctx.Config.ExtRPCEnabled()
 }
 
-// TODO document
-type BackendConstructor func(node *Node) (Backend, error)
-
-// ServiceConstructor is the function signature of the constructors needed to be
-// registered for service instantiation.
-type ServiceConstructor func(node *Node) (Service, error)
-
-//TODO document
-type AuxiliaryServiceConstructor func(node *Node) (AuxiliaryService, error)
-
 type Backend interface {
 	// Protocols retrieves the P2P protocols the service wishes to start.
 	Protocols() []p2p.Protocol
