@@ -78,11 +78,13 @@ type (
 		saveNodeHook func(*nodeInfo)
 	}
 
+	// Flags represents a set of flags from a certain setup
 	Flags struct {
 		mask  bitMask
 		setup *Setup
 	}
 
+	// Field represents a field from a certain setup
 	Field struct {
 		index int
 		setup *Setup
@@ -172,12 +174,7 @@ type (
 	}
 )
 
-var (
-	errAlreadyStarted = errors.New("state machine already started")
-	errNotStarted     = errors.New("state machine not started yet")
-	errOutOfBound     = errors.New("field index out of bound")
-	errInvalidField   = errors.New("invalid field type")
-)
+var errInvalidField = errors.New("invalid field type")
 
 // offlineState is a special state that is assumed to be set before a node is loaded from
 // the database and after it is shut down.
@@ -203,6 +200,7 @@ func (s *Setup) NewPersistentFlag(name string) Flags {
 	return f
 }
 
+// OfflineFlag returns the system-defined offline flag belonging to the given setup
 func (s *Setup) OfflineFlag() Flags {
 	return Flags{mask: offlineState, setup: s}
 }
@@ -229,6 +227,7 @@ func (s *Setup) NewPersistentField(name string, ftype reflect.Type, encode func(
 	return f
 }
 
+// flagOp implements binary flag operations and also checks whether the operands belong to the same setup
 func flagOp(a, b Flags, trueIfA, trueIfB, trueIfBoth bool) Flags {
 	if a.setup == nil {
 		if a.mask != 0 {
@@ -258,17 +257,31 @@ func flagOp(a, b Flags, trueIfA, trueIfB, trueIfBoth bool) Flags {
 	return res
 }
 
-func (a Flags) And(b Flags) Flags    { return flagOp(a, b, false, false, true) }
+// And returns the set of flags present in both a and b
+func (a Flags) And(b Flags) Flags { return flagOp(a, b, false, false, true) }
+
+// AndNot returns the set of flags present in a but not in b
 func (a Flags) AndNot(b Flags) Flags { return flagOp(a, b, true, false, false) }
-func (a Flags) Or(b Flags) Flags     { return flagOp(a, b, true, true, true) }
-func (a Flags) Xor(b Flags) Flags    { return flagOp(a, b, true, true, false) }
 
-func (a Flags) HasAll(b Flags) bool  { return flagOp(a, b, false, true, false).mask == 0 }
+// Or returns the set of flags present in either a or b
+func (a Flags) Or(b Flags) Flags { return flagOp(a, b, true, true, true) }
+
+// Xor returns the set of flags present in either a or b but not both
+func (a Flags) Xor(b Flags) Flags { return flagOp(a, b, true, true, false) }
+
+// HasAll returns true if b is a subset of a
+func (a Flags) HasAll(b Flags) bool { return flagOp(a, b, false, true, false).mask == 0 }
+
+// HasNone returns true if a and b have no shared flags
 func (a Flags) HasNone(b Flags) bool { return flagOp(a, b, false, false, true).mask == 0 }
-func (a Flags) Equals(b Flags) bool  { return flagOp(a, b, true, true, false).mask == 0 }
 
+// Equals returns true if a and b have the same flags set
+func (a Flags) Equals(b Flags) bool { return flagOp(a, b, true, true, false).mask == 0 }
+
+// IsEmpty returns true if a has no flags set
 func (a Flags) IsEmpty() bool { return a.mask == 0 }
 
+// MergeFlags merges multiple sets of state flags
 func MergeFlags(list ...Flags) Flags {
 	if len(list) == 0 {
 		return Flags{}
@@ -340,14 +353,16 @@ func NewNodeStateMachine(db ethdb.KeyValueStore, dbKey []byte, clock mclock.Cloc
 	return ns
 }
 
-func (ns *NodeStateMachine) mask(flags Flags) bitMask {
+// stateMask checks whether the set of flags belongs to the same setup and returns its internal bit mask
+func (ns *NodeStateMachine) stateMask(flags Flags) bitMask {
 	if flags.setup != ns.setup && flags.mask != 0 {
 		panic("Node state flags belong to a different setup")
 	}
 	return flags.mask
 }
 
-func (ns *NodeStateMachine) index(field Field) int {
+// fieldIndex checks whether the field belongs to the same setup and returns its internal index
+func (ns *NodeStateMachine) fieldIndex(field Field) int {
 	if field.setup != ns.setup {
 		panic("Node field belongs to a different setup")
 	}
@@ -361,28 +376,26 @@ func (ns *NodeStateMachine) index(field Field) int {
 // infinite toggling of flags or hazardous/non-deterministic state changes.
 // State subscriptions should be installed before loading the node database or making the
 // first state update.
-func (ns *NodeStateMachine) SubscribeState(flags Flags, callback StateCallback) error {
+func (ns *NodeStateMachine) SubscribeState(flags Flags, callback StateCallback) {
 	ns.lock.Lock()
 	defer ns.lock.Unlock()
 
 	if ns.started {
-		return errAlreadyStarted
+		panic("state machine already started")
 	}
-	ns.stateSubs = append(ns.stateSubs, stateSub{ns.mask(flags), callback})
-	return nil
+	ns.stateSubs = append(ns.stateSubs, stateSub{ns.stateMask(flags), callback})
 }
 
 // SubscribeField adds a node field subscription. Same rules apply as for SubscribeState.
-func (ns *NodeStateMachine) SubscribeField(field Field, callback FieldCallback) error {
+func (ns *NodeStateMachine) SubscribeField(field Field, callback FieldCallback) {
 	ns.lock.Lock()
 	defer ns.lock.Unlock()
 
 	if ns.started {
-		return errAlreadyStarted
+		panic("state machine already started")
 	}
-	f := ns.fields[ns.index(field)]
+	f := ns.fields[ns.fieldIndex(field)]
 	f.subs = append(f.subs, callback)
-	return nil
 }
 
 // newNode creates a new nodeInfo
@@ -393,7 +406,7 @@ func (ns *NodeStateMachine) newNode(n *enode.Node) *nodeInfo {
 // checkStarted checks whether the state machine has already been started and panics otherwise.
 func (ns *NodeStateMachine) checkStarted() {
 	if !ns.started {
-		panic(errNotStarted)
+		panic("state machine not started yet")
 	}
 }
 
@@ -402,7 +415,7 @@ func (ns *NodeStateMachine) checkStarted() {
 func (ns *NodeStateMachine) Start() {
 	ns.lock.Lock()
 	if ns.started {
-		panic(errAlreadyStarted)
+		panic("state machine already started")
 	}
 	ns.started = true
 	if ns.db != nil {
@@ -689,7 +702,7 @@ func (ns *NodeStateMachine) SetState(n *enode.Node, setFlags, resetFlags Flags, 
 		return
 	}
 
-	set, reset := ns.mask(setFlags), ns.mask(resetFlags)
+	set, reset := ns.stateMask(setFlags), ns.stateMask(resetFlags)
 	id, node := ns.updateEnode(n)
 	if node == nil {
 		if set == 0 {
@@ -782,7 +795,7 @@ func (ns *NodeStateMachine) AddTimeout(n *enode.Node, flags Flags, timeout time.
 	if ns.stopped {
 		return
 	}
-	ns.addTimeout(n, ns.mask(flags), timeout)
+	ns.addTimeout(n, ns.stateMask(flags), timeout)
 }
 
 // addTimeout adds a node state timeout associated to the given state flag(s).
@@ -841,7 +854,7 @@ func (ns *NodeStateMachine) GetField(n *enode.Node, field Field) interface{} {
 		return nil
 	}
 	if _, node := ns.updateEnode(n); node != nil {
-		return node.fields[ns.index(field)]
+		return node.fields[ns.fieldIndex(field)]
 	}
 	return nil
 }
@@ -859,7 +872,7 @@ func (ns *NodeStateMachine) SetField(n *enode.Node, field Field, value interface
 		ns.lock.Unlock()
 		return nil
 	}
-	fieldIndex := ns.index(field)
+	fieldIndex := ns.fieldIndex(field)
 	f := ns.fields[fieldIndex]
 	if value != nil && reflect.TypeOf(value) != f.ftype {
 		log.Error("Invalid field type", "type", reflect.TypeOf(value), "required", f.ftype)
@@ -894,7 +907,7 @@ func (ns *NodeStateMachine) ForEach(requireFlags, disableFlags Flags, cb func(n 
 		node  *enode.Node
 		state bitMask
 	}
-	require, disable := ns.mask(requireFlags), ns.mask(disableFlags)
+	require, disable := ns.stateMask(requireFlags), ns.stateMask(disableFlags)
 	var callbacks []callback
 	for _, node := range ns.nodes {
 		if node.state&require == require && node.state&disable == 0 {
