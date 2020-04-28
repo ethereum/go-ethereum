@@ -34,7 +34,7 @@ var ShowDeprecated = cli.Command{
 	Description: "Show flags that have been deprecated and will soon be removed",
 }
 
-var deprecatedFlags = []cli.Flag{
+var DeprecatedFlags = []cli.Flag{
 	LegacyTestnetFlag,
 	LegacyLightServFlag,
 	LegacyLightPeersFlag,
@@ -157,7 +157,7 @@ func showDeprecated(*cli.Context) {
 	fmt.Println("--------------------------------------------------------------------")
 	fmt.Println()
 
-	for _, flag := range deprecatedFlags {
+	for _, flag := range DeprecatedFlags {
 		fmt.Println(flag.String())
 	}
 }

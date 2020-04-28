@@ -315,6 +315,36 @@ func init() {
 	originalHelpPrinter := cli.HelpPrinter
 	cli.HelpPrinter = func(w io.Writer, tmpl string, data interface{}) {
 		if tmpl == AppHelpTemplate {
+			// Iterate over all the flags and add any uncategorized ones
+			categorized := make(map[string]struct{})
+			for _, group := range AppHelpFlagGroups {
+				for _, flag := range group.Flags {
+					categorized[flag.String()] = struct{}{}
+				}
+			}
+			deprecated := make(map[string]struct{})
+			for _, flag := range utils.DeprecatedFlags {
+				deprecated[flag.String()] = struct{}{}
+			}
+			// Only add uncategorized flags if they are not deprecated
+			var uncategorized []cli.Flag
+			for _, flag := range data.(*cli.App).Flags {
+				if _, ok := categorized[flag.String()]; !ok {
+					if _, ok := deprecated[flag.String()]; !ok {
+						uncategorized = append(uncategorized, flag)
+					}
+				}
+			}
+			if len(uncategorized) > 0 {
+				// Append all ungategorized options to the misc group
+				miscs := len(AppHelpFlagGroups[len(AppHelpFlagGroups)-1].Flags)
+				AppHelpFlagGroups[len(AppHelpFlagGroups)-1].Flags = append(AppHelpFlagGroups[len(AppHelpFlagGroups)-1].Flags, uncategorized...)
+
+				// Make sure they are removed afterwards
+				defer func() {
+					AppHelpFlagGroups[len(AppHelpFlagGroups)-1].Flags = AppHelpFlagGroups[len(AppHelpFlagGroups)-1].Flags[:miscs]
+				}()
+			}
 			// Render out custom usage screen
 			originalHelpPrinter(w, tmpl, helpData{data, AppHelpFlagGroups})
 		} else if tmpl == utils.CommandHelpTemplate {
