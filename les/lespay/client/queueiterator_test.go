@@ -21,17 +21,17 @@ import (
 	"time"
 
 	"github.com/ethereum/go-ethereum/common/mclock"
-	"github.com/ethereum/go-ethereum/les/utils"
 	"github.com/ethereum/go-ethereum/p2p/enode"
 	"github.com/ethereum/go-ethereum/p2p/enr"
+	"github.com/ethereum/go-ethereum/p2p/nodestate"
 )
 
 var (
-	sfTest1   = utils.NewFlag("test1")
-	sfTest2   = utils.NewFlag("test2")
-	sfTest3   = utils.NewFlag("test3")
-	sfTest4   = utils.NewFlag("test4")
-	testSetup = utils.NodeStateSetup{Flags: []nodestate.Flags{sfTest1, sfTest2, sfTest3, sfTest4}}
+	testSetup = &nodestate.Setup{}
+	sfTest1   = testSetup.NewFlag("test1")
+	sfTest2   = testSetup.NewFlag("test2")
+	sfTest3   = testSetup.NewFlag("test3")
+	sfTest4   = testSetup.NewFlag("test4")
 )
 
 const iterTestNodeCount = 6
@@ -61,15 +61,11 @@ func testNode(i int) *enode.Node {
 }
 
 func TestQueueIterator(t *testing.T) {
-	ns := utils.NewNodeStateMachine(nil, nil, &mclock.Simulated{}, testSetup)
-	st1 := ns.StateMask(sfTest1)
-	st2 := ns.StateMask(sfTest2)
-	st3 := ns.StateMask(sfTest3)
-	st4 := ns.StateMask(sfTest4)
-	qi := NewQueueIterator(ns, st2, st3, sfTest4)
+	ns := nodestate.NewNodeStateMachine(nil, nil, &mclock.Simulated{}, testSetup)
+	qi := NewQueueIterator(ns, sfTest2, sfTest3, sfTest4)
 	ns.Start()
 	for i := 1; i <= iterTestNodeCount; i++ {
-		ns.SetState(testNode(i), st1, 0, 0)
+		ns.SetState(testNode(i), sfTest1, nodestate.Flags{}, 0)
 	}
 	ch := make(chan *enode.Node)
 	go func() {
@@ -93,25 +89,25 @@ func TestQueueIterator(t *testing.T) {
 		}
 	}
 	exp(0)
-	ns.SetState(testNode(1), st2, 0, 0)
-	ns.SetState(testNode(2), st2, 0, 0)
-	ns.SetState(testNode(3), st2, 0, 0)
+	ns.SetState(testNode(1), sfTest2, nodestate.Flags{}, 0)
+	ns.SetState(testNode(2), sfTest2, nodestate.Flags{}, 0)
+	ns.SetState(testNode(3), sfTest2, nodestate.Flags{}, 0)
 	exp(1)
 	exp(2)
 	exp(3)
 	exp(0)
-	ns.SetState(testNode(4), st2, 0, 0)
-	ns.SetState(testNode(5), st2, 0, 0)
-	ns.SetState(testNode(6), st2, 0, 0)
-	ns.SetState(testNode(5), st3, 0, 0)
+	ns.SetState(testNode(4), sfTest2, nodestate.Flags{}, 0)
+	ns.SetState(testNode(5), sfTest2, nodestate.Flags{}, 0)
+	ns.SetState(testNode(6), sfTest2, nodestate.Flags{}, 0)
+	ns.SetState(testNode(5), sfTest3, nodestate.Flags{}, 0)
 	exp(4)
 	exp(6)
 	exp(0)
-	ns.SetState(testNode(1), 0, st4, 0)
-	ns.SetState(testNode(2), 0, st4, 0)
-	ns.SetState(testNode(3), 0, st4, 0)
-	ns.SetState(testNode(2), st3, 0, 0)
-	ns.SetState(testNode(2), 0, st3, 0)
+	ns.SetState(testNode(1), nodestate.Flags{}, sfTest4, 0)
+	ns.SetState(testNode(2), nodestate.Flags{}, sfTest4, 0)
+	ns.SetState(testNode(3), nodestate.Flags{}, sfTest4, 0)
+	ns.SetState(testNode(2), sfTest3, nodestate.Flags{}, 0)
+	ns.SetState(testNode(2), nodestate.Flags{}, sfTest3, 0)
 	exp(1)
 	exp(3)
 	exp(2)

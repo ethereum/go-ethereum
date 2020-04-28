@@ -282,6 +282,9 @@ func MergeFlags(list ...Flags) Flags {
 
 // String returns a list of the names of the flags specified in the bit mask
 func (f Flags) String() string {
+	if f.mask == 0 {
+		return "[]"
+	}
 	s := "["
 	comma := false
 	for index, flag := range f.setup.flags {

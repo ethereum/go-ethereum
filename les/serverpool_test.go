@@ -25,10 +25,10 @@ import (
 	"github.com/ethereum/go-ethereum/ethdb"
 	"github.com/ethereum/go-ethereum/ethdb/memorydb"
 	lpc "github.com/ethereum/go-ethereum/les/lespay/client"
-	"github.com/ethereum/go-ethereum/les/utils"
 	"github.com/ethereum/go-ethereum/p2p"
 	"github.com/ethereum/go-ethereum/p2p/enode"
 	"github.com/ethereum/go-ethereum/p2p/enr"
+	"github.com/ethereum/go-ethereum/p2p/nodestate"
 )
 
 const (
@@ -87,7 +87,7 @@ func (s *serverPoolTest) addTrusted(i int) {
 }
 
 func (s *serverPoolTest) start() {
-	s.ns = utils.NewNodeStateMachine(s.db, []byte("nodestate:"), s.clock, serverPoolSetup)
+	s.ns = nodestate.NewNodeStateMachine(s.db, []byte("nodestate:"), s.clock, serverPoolSetup)
 	s.vt = lpc.NewValueTracker(s.db, s.clock, requestList, time.Minute, 1/float64(time.Hour), 1/float64(time.Hour*100), 1/float64(time.Hour*1000))
 	s.sp = newServerPool(s.db, []byte("serverpool:"), s.ns, s.vt, s.input, s.clock, s.trusted, true)
 	s.disconnect = make(map[int][]int)
