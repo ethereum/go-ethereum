@@ -25,7 +25,7 @@ import (
 	"github.com/ethereum/go-ethereum/rpc"
 )
 
-// StartHTTPEndpoint starts the HTTP RPC Endpoint.
+// StartHTTPEndpoint starts the HTTP RPC endpoint.
 func StartHTTPEndpoint(endpoint string, timeouts rpc.HTTPTimeouts, handler http.Handler) (net.Listener, error) {
 	// start the HTTP listener
 	var (
@@ -48,7 +48,7 @@ func StartHTTPEndpoint(endpoint string, timeouts rpc.HTTPTimeouts, handler http.
 	return httpSrv, listener.Addr(), err
 }
 
-// startWSEndpoint starts a websocket Endpoint.
+// startWSEndpoint starts a websocket endpoint.
 func startWSEndpoint(endpoint string, handler http.Handler) (net.Listener, error) {
 	// start the HTTP listener
 	var (

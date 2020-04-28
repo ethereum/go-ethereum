@@ -371,7 +371,7 @@ func (n *Node) startRPC() error {
 	return nil
 }
 
-// startInProc initializes an in-process RPC Endpoint.
+// startInProc initializes an in-process RPC endpoint.
 func (n *Node) startInProc() error {
 	// Register all the APIs exposed by the services
 	handler := rpc.NewServer()
@@ -385,7 +385,7 @@ func (n *Node) startInProc() error {
 	return nil
 }
 
-// stopInProc terminates the in-process RPC Endpoint.
+// stopInProc terminates the in-process RPC endpoint.
 func (n *Node) stopInProc() {
 	if n.inprocHandler != nil {
 		n.inprocHandler.Stop()
@@ -393,7 +393,7 @@ func (n *Node) stopInProc() {
 	}
 }
 
-// startIPC initializes and starts the IPC RPC Endpoint.
+// startIPC initializes and starts the IPC RPC endpoint.
 func (n *Node) startIPC() error {
 	if n.ipcHandler.Endpoint() == "" {
 		return nil // IPC disabled.
@@ -404,17 +404,17 @@ func (n *Node) startIPC() error {
 	}
 	n.ipcHandler.Listener = listener
 	n.ipcHandler.handler = handler
-	n.log.Info("IPC Endpoint opened", "url", n.ipcHandler.Endpoint())
+	n.log.Info("IPC endpoint opened", "url", n.ipcHandler.Endpoint())
 	return nil
 }
 
-// stopIPC terminates the IPC RPC Endpoint.
+// stopIPC terminates the IPC RPC endpoint.
 func (n *Node) stopIPC() {
 	if n.ipcHandler.Listener != nil {
 		n.ipcHandler.Listener.Close()
 		n.ipcHandler.Listener = nil
 
-		n.log.Info("IPC Endpoint closed", "url", n.ipcHandler.Endpoint())
+		n.log.Info("IPC endpoint closed", "url", n.ipcHandler.Endpoint())
 	}
 	if n.ipcHandler.Srv != nil {
 		n.ipcHandler.Srv.Stop()
@@ -422,9 +422,9 @@ func (n *Node) stopIPC() {
 	}
 }
 
-// startHTTP initializes and starts the HTTP RPC Endpoint.
+// startHTTP initializes and starts the HTTP RPC endpoint.
 func (n *Node) startHTTP(endpoint string, modules []string, cors []string, vhosts []string, timeouts rpc.HTTPTimeouts, wsOrigins []string) error {
-	// Short circuit if the HTTP Endpoint isn't being exposed
+	// Short circuit if the HTTP endpoint isn't being exposed
 	if endpoint == "" {
 		return nil
 	}
@@ -443,11 +443,11 @@ func (n *Node) startHTTP(endpoint string, modules []string, cors []string, vhost
 	if err != nil {
 		return err
 	}
-	n.log.Info("HTTP Endpoint opened", "url", fmt.Sprintf("http://%v/", listener.Addr()),
+	n.log.Info("HTTP endpoint opened", "url", fmt.Sprintf("http://%v/", listener.Addr()),
 		"cors", strings.Join(cors, ","),
 		"vhosts", strings.Join(vhosts, ","))
 	if n.httpHandler.Endpoint() == n.wsHandler.Endpoint() {
-		n.log.Info("WebSocket Endpoint opened", "url", fmt.Sprintf("ws://%v", listener.Addr()))
+		n.log.Info("WebSocket endpoint opened", "url", fmt.Sprintf("ws://%v", listener.Addr()))
 	}
 	// All listeners booted successfully
 	n.httpHandler.endpoint = endpoint
@@ -457,7 +457,7 @@ func (n *Node) startHTTP(endpoint string, modules []string, cors []string, vhost
 	return nil
 }
 
-// stopHTTP terminates the HTTP RPC Endpoint.
+// stopHTTP terminates the HTTP RPC endpoint.
 func (n *Node) stopHTTP() {
 	if n.httpHandler.Listener != nil {
 		url := fmt.Sprintf("http://%v/", n.httpHandler.Listener.Addr())
@@ -471,9 +471,9 @@ func (n *Node) stopHTTP() {
 	}
 }
 
-// startWS initializes and starts the websocket RPC Endpoint.
+// startWS initializes and starts the websocket RPC endpoint.
 func (n *Node) startWS(endpoint string, modules []string, wsOrigins []string, exposeAll bool) error {
-	// Short circuit if the WS Endpoint isn't being exposed
+	// Short circuit if the WS endpoint isn't being exposed
 	if endpoint == "" {
 		return nil
 	}
@@ -488,7 +488,7 @@ func (n *Node) startWS(endpoint string, modules []string, wsOrigins []string, ex
 	if err != nil {
 		return err
 	}
-	n.log.Info("WebSocket Endpoint opened", "url", fmt.Sprintf("ws://%s", listener.Addr()))
+	n.log.Info("WebSocket endpoint opened", "url", fmt.Sprintf("ws://%s", listener.Addr()))
 	// All listeners booted successfully
 	n.wsHandler.endpoint = endpoint
 	n.wsHandler.Listener = listener
@@ -497,13 +497,13 @@ func (n *Node) startWS(endpoint string, modules []string, wsOrigins []string, ex
 	return nil
 }
 
-// stopWS terminates the websocket RPC Endpoint.
+// stopWS terminates the websocket RPC endpoint.
 func (n *Node) stopWS() {
 	if n.wsHandler.Listener != nil {
 		n.wsHandler.Listener.Close()
 		n.wsHandler.Listener = nil
 
-		n.log.Info("WebSocket Endpoint closed", "url", fmt.Sprintf("ws://%s", n.wsHandler.Endpoint))
+		n.log.Info("WebSocket endpoint closed", "url", fmt.Sprintf("ws://%s", n.wsHandler.Endpoint))
 	}
 	if n.wsHandler.Srv != nil {
 		n.wsHandler.Srv.Stop()
@@ -679,12 +679,12 @@ func (n *Node) AccountManager() *accounts.Manager {
 	return n.accman
 }
 
-// IPCEndpoint retrieves the current IPC Endpoint used by the protocol stack.
+// IPCEndpoint retrieves the current IPC endpoint used by the protocol stack.
 func (n *Node) IPCEndpoint() string {
 	return n.ipcHandler.Endpoint()
 }
 
-// HTTPEndpoint retrieves the current HTTP Endpoint used by the protocol stack.
+// HTTPEndpoint retrieves the current HTTP endpoint used by the protocol stack.
 func (n *Node) HTTPEndpoint() string {
 	n.lock.Lock()
 	defer n.lock.Unlock()
@@ -695,7 +695,8 @@ func (n *Node) HTTPEndpoint() string {
 	return n.httpHandler.Endpoint()
 }
 
-// WSEndpoint retrieves the current WS Endpoint used by the protocol stack.
+// WSEndpoint retrieves the current WS endpoint
+// used by the protocol stack.
 func (n *Node) WSEndpoint() string {
 	n.lock.Lock()
 	defer n.lock.Unlock()

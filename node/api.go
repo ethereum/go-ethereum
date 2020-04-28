@@ -192,7 +192,7 @@ func (api *PrivateAdminAPI) StartRPC(host *string, port *int, cors *string, apis
 	return true, nil
 }
 
-// StopRPC terminates an already running HTTP RPC API Endpoint.
+// StopRPC terminates an already running HTTP RPC API endpoint.
 func (api *PrivateAdminAPI) StopRPC() (bool, error) {
 	api.node.lock.Lock()
 	defer api.node.lock.Unlock()
@@ -246,7 +246,7 @@ func (api *PrivateAdminAPI) StartWS(host *string, port *int, allowedOrigins *str
 	return true, nil
 }
 
-// StopWS terminates an already running websocket RPC API Endpoint.
+// StopWS terminates an already running websocket RPC API endpoint.
 func (api *PrivateAdminAPI) StopWS() (bool, error) {
 	api.node.lock.Lock()
 	defer api.node.lock.Unlock()

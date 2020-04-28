@@ -36,7 +36,7 @@ about other hosts is persisted.
 
 JSON-RPC servers which run HTTP, WebSocket or IPC can be started on a Node. RPC modules
 offered by registered services will be offered on those endpoints. Users can restrict any
-Endpoint to a subset of RPC modules. Node itself offers the "debug", "admin" and "web3"
+endpoint to a subset of RPC modules. Node itself offers the "debug", "admin" and "web3"
 modules.
 
 Service implementations can open LevelDB databases through the service context. Package
@@ -77,14 +77,14 @@ directory. Node instance A opens the database "db", node instance B opens the da
             nodekey            -- devp2p node key of instance A
             nodes/             -- devp2p discovery knowledge database of instance A
             db/                -- LevelDB content for "db"
-        A.ipc                  -- JSON-RPC UNIX domain socket Endpoint of instance A
+        A.ipc                  -- JSON-RPC UNIX domain socket endpoint of instance A
         B/
             nodekey            -- devp2p node key of node B
             nodes/             -- devp2p discovery knowledge database of instance B
             static-nodes.json  -- devp2p static node list of instance B
             db/                -- LevelDB content for "db"
             db-2/              -- LevelDB content for "db-2"
-        B.ipc                  -- JSON-RPC UNIX domain socket Endpoint of instance B
+        B.ipc                  -- JSON-RPC UNIX domain socket endpoint of instance B
         keystore/              -- account key store, used by both instances
 */
 package node
