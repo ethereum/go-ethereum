@@ -51,6 +51,8 @@ type Node struct {
 
 	ServiceContext *ServiceContext
 
+	lifecycles []Lifecycle // All registered backends, services, and auxiliary services that have a lifecycle
+
 	backend     Backend                           // The registered Backend of the node
 	services    map[reflect.Type]Service          // Currently running services
 	auxServices map[reflect.Type]AuxiliaryService // Currently running auxiliary services
@@ -153,18 +155,21 @@ func (n *Node) Close() error {
 	}
 }
 
+func (n *Node) RegisterLifecycle(lifecycle Lifecycle) {
+	n.lifecycles = append(n.lifecycles, lifecycle)
+}
+
 // TODO document
-func (n *Node) RegisterBackendLifecycle(constructor BackendConstructor) error {
+func (n *Node) RegisterBackend(backend Backend) error {
 	n.lock.Lock()
 	defer n.lock.Unlock()
-
+	// check if p2p node is already running
 	if n.running() {
 		return ErrNodeRunning
 	}
-
-	backend, err := constructor(n)
-	if err != nil {
-		return err
+	// check that there is not already a backend registered on the node
+	if n.backend != nil {
+		return errors.New("a backend has already been registered on the node") // TODO is this error okay?
 	}
 	n.backend = backend
 	return nil
@@ -172,7 +177,7 @@ func (n *Node) RegisterBackendLifecycle(constructor BackendConstructor) error {
 
 // Register injects a new service into the node's stack. The service created by
 // the passed constructor must be unique in its type with regard to sibling ones.
-func (n *Node) RegisterServiceLifecycle(constructor ServiceConstructor) error {
+func (n *Node) RegisterService(service Service) error {
 	n.lock.Lock()
 	defer n.lock.Unlock()
 
@@ -180,10 +185,6 @@ func (n *Node) RegisterServiceLifecycle(constructor ServiceConstructor) error {
 		return ErrNodeRunning
 	}
 
-	service, err := constructor(n)
-	if err != nil {
-		return err
-	}
 	kind := reflect.TypeOf(service)
 	if _, exists := n.services[kind]; exists {
 		return &DuplicateServiceError{Kind: kind}
@@ -194,23 +195,19 @@ func (n *Node) RegisterServiceLifecycle(constructor ServiceConstructor) error {
 }
 
 // TODO document
-func (n *Node) RegisterAuxServiceLifecycle(constructor AuxiliaryServiceConstructor) error {
+func (n *Node) RegisterAuxService(auxService AuxiliaryService) error {
 	n.lock.Lock()
 	defer n.lock.Unlock()
 
 	if n.running() {
 		return ErrNodeRunning
 	}
-
-	service, err := constructor(n)
-	if err != nil {
-		return err
-	}
-	kind := reflect.TypeOf(service)
+	// make sure auxiliary service is not duplicated
+	kind := reflect.TypeOf(auxService)
 	if _, exists := n.auxServices[kind]; exists {
 		return &DuplicateServiceError{Kind: kind}
 	}
-	n.auxServices[kind] = service
+	n.auxServices[kind] = auxService
 
 	return nil
 }
@@ -283,43 +280,19 @@ func (n *Node) Start() error {
 		n.server.Stop()
 		return err
 	}
-	// Start the backend
-	if err := n.backend.Start(); err != nil {
-		n.server.Stop()
-		return err
-	}
 
-	// Start each of the services
-	var startedServices []reflect.Type
-	for kind, service := range n.services {
-		// Start the next service, stopping all previous upon failure
-		if err := service.Start(); err != nil {
-			n.stopAllStartedServices(startedServices, nil) // TODO safe to pass nil here?
-			n.server.Stop()
-
-			return err
+	// Start all registered lifecycles
+	var started []Lifecycle
+	for _, lifecycle := range n.lifecycles {
+		if err := lifecycle.Start(); err != nil {
+			n.stopLifecycles(started)
 		}
-		// Mark the service started for potential cleanup
-		startedServices = append(startedServices, kind)
-	}
-
-	// Start each of the auxiliary services
-	var startedAuxServices []reflect.Type
-	for kind, auxService := range n.auxServices {
-		// Start the next auxiliary service, stopping all previous upon failure
-		if err := auxService.Start(); err != nil {
-			n.stopAllStartedServices(startedServices, startedAuxServices)
-			n.server.Stop()
-
-			return err
-		}
-		// Mark the service started for potential cleanup
-		startedAuxServices = append(startedAuxServices, kind)
+		started = append(started, lifecycle)
 	}
 
 	// Lastly, start the configured RPC interfaces
 	if err := n.startRPC(); err != nil {
-		n.stopAllStartedServices(startedServices, startedAuxServices)
+		n.stopLifecycles(n.lifecycles)
 		n.server.Stop()
 		return err
 	}
@@ -335,13 +308,9 @@ func (n *Node) Start() error {
 	return nil
 }
 
-func (n *Node) stopAllStartedServices(startedServices []reflect.Type, startedAuxServices []reflect.Type) {
-	n.backend.Stop()
-	for _, kind := range startedServices {
-		n.services[kind].Stop()
-	}
-	for _, kind := range startedAuxServices {
-		n.auxServices[kind].Stop()
+func (n *Node) stopLifecycles(started []Lifecycle) {
+	for _, lifecycle := range started {
+		lifecycle.Stop()
 	}
 }
 

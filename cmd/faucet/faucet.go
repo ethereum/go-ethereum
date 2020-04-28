@@ -235,24 +235,30 @@ func newFaucet(genesis *core.Genesis, port int, enodes []*discv5.Node, network u
 	if err != nil {
 		return nil, err
 	}
+
 	// Assemble the Ethereum light client protocol
-	if err := stack.RegisterBackendLifecycle(func(stack *node.Node) (node.Backend, error) {
-		cfg := eth.DefaultConfig
-		cfg.SyncMode = downloader.LightSync
-		cfg.NetworkId = network
-		cfg.Genesis = genesis
-		return les.New(stack.ServiceContext, &cfg)
-	}); err != nil {
+	cfg := eth.DefaultConfig
+	cfg.SyncMode = downloader.LightSync
+	cfg.NetworkId = network
+	cfg.Genesis = genesis
+	lesBackend, err := les.New(stack.ServiceContext, &cfg)
+	// register the backend and lifecycle
+	if err := stack.RegisterBackend(lesBackend); err != nil {
 		return nil, err
 	}
+	stack.RegisterLifecycle(lesBackend)
+
 	// Assemble the ethstats monitoring and reporting service'
 	if stats != "" {
-		if err := stack.RegisterAuxServiceLifecycle(func(stack *node.Node) (node.AuxiliaryService, error) {
-			var serv *les.LightEthereum
-			return ethstats.New(stack, stats, serv)
-		}); err != nil {
+		var serv *les.LightEthereum
+		ethstatsAuxService, err := ethstats.New(stack, stats, serv)
+		if err != nil {
 			return nil, err
 		}
+		if err := stack.RegisterAuxService(ethstatsAuxService); err != nil {
+			return nil, err
+		}
+		stack.RegisterLifecycle(ethstatsAuxService)
 	}
 	// Boot up the client and ensure it connects to bootnodes
 	if err := stack.Start(); err != nil {

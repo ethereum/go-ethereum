@@ -19,7 +19,6 @@ package utils
 
 import (
 	"crypto/ecdsa"
-	"errors"
 	"fmt"
 	"io"
 	"io/ioutil"
@@ -1693,61 +1692,79 @@ func setDNSDiscoveryDefaults(cfg *eth.Config, genesis common.Hash) {
 
 // RegisterEthService adds an Ethereum client to the stack.
 func RegisterEthService(stack *node.Node, cfg *eth.Config) {
-	var err error
 	if cfg.SyncMode == downloader.LightSync {
-		err = stack.RegisterBackendLifecycle(func(stack *node.Node) (node.Backend, error) {
-			return les.New(stack.ServiceContext, cfg)
-		})
+		lesBackend, err := les.New(stack.ServiceContext, cfg)
+		if err != nil {
+			Fatalf("Failed to register the Ethereum service: %v", err)
+		}
+		stack.RegisterLifecycle(lesBackend)
+		if err := stack.RegisterBackend(lesBackend); err != nil {
+			Fatalf("Failed to register the Ethereum service: %v", err)
+		}
 	} else {
-		err = stack.RegisterBackendLifecycle(func(node *node.Node) (node.Backend, error) {
-			fullNode, err := eth.New(node.ServiceContext, cfg)
-			if fullNode != nil && cfg.LightServ > 0 {
-				ls, _ := les.NewLesServer(fullNode, cfg)
-				fullNode.AddLesServer(ls)
-			}
-			return fullNode, err
-		})
-	}
-	if err != nil {
-		Fatalf("Failed to register the Ethereum service: %v", err)
+		fullNode, err := eth.New(stack.ServiceContext, cfg)
+		if err != nil {
+			Fatalf("Failed to register the Ethereum service: %v", err)
+		}
+		if fullNode != nil && cfg.LightServ > 0 {
+			ls, _ := les.NewLesServer(fullNode, cfg)
+			fullNode.AddLesServer(ls)
+		}
+		if err := stack.RegisterBackend(fullNode); err != nil {
+			Fatalf("Failed to register the Ethereum service: %v", err)
+		}
+		stack.RegisterLifecycle(fullNode)
 	}
 }
 
 // RegisterShhService configures Whisper and adds it to the given node.
 func RegisterShhService(stack *node.Node, cfg *whisper.Config) {
-	if err := stack.RegisterServiceLifecycle(func(stack *node.Node) (node.Service, error) {
-		return whisper.New(cfg), nil
-	}); err != nil {
+	whisperService := whisper.New(cfg)
+	if err := stack.RegisterService(whisperService); err != nil {
 		Fatalf("Failed to register the Whisper service: %v", err)
 	}
+	stack.RegisterLifecycle(whisperService)
 }
 
 // RegisterEthStatsService configures the Ethereum Stats daemon and adds it to
 // the given node.
 func RegisterEthStatsService(stack *node.Node, url string) {
-	if err := stack.RegisterAuxServiceLifecycle(func(stack *node.Node) (node.AuxiliaryService, error) {
-		return ethstats.New(stack, url, stack.Backend())
-	}); err != nil {
+	ethstatsAuxService, err := ethstats.New(stack, url, stack.Backend())
+	if err != nil {
 		Fatalf("Failed to register the Ethereum Stats service: %v", err)
 	}
+	if err := stack.RegisterAuxService(ethstatsAuxService); err != nil {
+		Fatalf("Failed to register the Ethereum Stats service: %v", err)
+	}
+	stack.RegisterLifecycle(ethstatsAuxService)
 }
 
 // RegisterGraphQLService is a utility function to construct a new service and register it against a node.
 func RegisterGraphQLService(stack *node.Node, endpoint string, cors, vhosts []string, timeouts rpc.HTTPTimeouts) {
-	if err := stack.RegisterAuxServiceLifecycle(func(stack *node.Node) (node.AuxiliaryService, error) {
-		// Try to construct the GraphQL service backed by a full node
-		if ethBackend, ok := stack.Backend().(*eth.Ethereum); ok {
-			return graphql.New(ethBackend.APIBackend, endpoint, cors, vhosts, timeouts)
+	// Try to construct the GraphQL service backed by a full node
+	if ethBackend, ok := stack.Backend().(*eth.Ethereum); ok {
+		graphqlAuxService, err := graphql.New(ethBackend.APIBackend, endpoint, cors, vhosts, timeouts)
+		if err != nil {
+			Fatalf("Failed to register the GraphQL service: %v", err)
 		}
-		// Try to construct the GraphQL service backed by a light node
-		if lesBackend, ok := stack.Backend().(*les.LightEthereum); ok {
-			return graphql.New(lesBackend.ApiBackend, endpoint, cors, vhosts, timeouts)
+		if err := stack.RegisterAuxService(graphqlAuxService); err != nil {
+			Fatalf("Failed to register the GraphQL service: %v", err)
 		}
-		// Well, this should not have happened, bail out
-		return nil, errors.New("no Ethereum service")
-	}); err != nil {
-		Fatalf("Failed to register the GraphQL service: %v", err)
+		stack.RegisterLifecycle(graphqlAuxService)
 	}
+	// Try to construct the GraphQL service backed by a light node
+	if lesBackend, ok := stack.Backend().(*les.LightEthereum); ok {
+		graphqlAuxService, err := graphql.New(lesBackend.ApiBackend, endpoint, cors, vhosts, timeouts)
+		if err != nil {
+			Fatalf("Failed to register the GraphQL service: %v", err)
+		}
+		if err := stack.RegisterAuxService(graphqlAuxService); err != nil {
+			Fatalf("Failed to register the GraphQL service: %v", err)
+		}
+		stack.RegisterLifecycle(graphqlAuxService)
+	}
+	// Well, this should not have happened, bail out
+	Fatalf("no Ethereum service")
 }
 
 func SetupMetrics(ctx *cli.Context) {

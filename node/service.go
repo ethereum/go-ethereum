@@ -141,7 +141,7 @@ type AuxiliaryService interface {
 	Lifecycle
 }
 
-// TODO, this might be overkill
+// TODO document
 type Lifecycle interface {
 	// Start is called after all services have been constructed and the networking
 	// layer was also initialized to spawn any goroutines required by the service.
