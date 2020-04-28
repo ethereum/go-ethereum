@@ -131,6 +131,12 @@ func (api *ExternalSigner) Accounts() []accounts.Account {
 func (api *ExternalSigner) Contains(account accounts.Account) bool {
 	api.cacheMu.RLock()
 	defer api.cacheMu.RUnlock()
+	if api.cache == nil {
+		// If we haven't already fetched the accounts, it's time to do so now
+		api.cacheMu.RUnlock()
+		api.Accounts()
+		api.cacheMu.RLock()
+	}
 	for _, a := range api.cache {
 		if a.Address == account.Address && (account.URL == (accounts.URL{}) || account.URL == api.URL()) {
 			return true
