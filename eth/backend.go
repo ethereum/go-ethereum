@@ -65,8 +65,6 @@ type LesServer interface {
 
 // Ethereum implements the Ethereum full node service.
 type Ethereum struct {
-	// TODO needs a p2pServer
-
 	config *Config
 
 	// Handlers
