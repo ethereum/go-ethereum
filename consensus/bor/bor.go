@@ -582,8 +582,7 @@ func (c *Bor) verifySeal(chain consensus.ChainReader, header *types.Header, pare
 		return errUnauthorizedSigner
 	}
 
-	proposer := snap.ValidatorSet.GetProposer().Address
-	if _, err = snap.getSignerSuccessionNumber(signer, proposer); err != nil {
+	if _, err = snap.GetSignerSuccessionNumber(signer); err != nil {
 		return err
 	}
 
@@ -748,8 +747,7 @@ func (c *Bor) Seal(chain consensus.ChainReader, block *types.Block, results chan
 		return errUnauthorizedSigner
 	}
 
-	proposer := snap.ValidatorSet.GetProposer().Address
-	successionNumber, err := snap.getSignerSuccessionNumber(signer, proposer)
+	successionNumber, err := snap.GetSignerSuccessionNumber(signer)
 	if err != nil {
 		return err
 	}
@@ -760,7 +758,7 @@ func (c *Bor) Seal(chain consensus.ChainReader, block *types.Block, results chan
 	delay += wiggle
 
 	log.Info("Out-of-turn signing requested", "wiggle", common.PrettyDuration(wiggle))
-	log.Info("Sealing block with", "number", number, "delay", delay, "headerDifficulty", header.Difficulty, "signer", signer.Hex(), "proposer", proposer.Hex())
+	log.Info("Sealing block with", "number", number, "delay", delay, "headerDifficulty", header.Difficulty, "signer", signer.Hex(), "proposer", snap.ValidatorSet.GetProposer().Address.Hex())
 
 	// Sign all the things!
 	sighash, err := signFn(accounts.Account{Address: signer}, accounts.MimetypeBor, BorRLP(header))

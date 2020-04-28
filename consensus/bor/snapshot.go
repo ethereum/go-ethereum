@@ -158,8 +158,7 @@ func (s *Snapshot) apply(headers []*types.Header) (*Snapshot, error) {
 			return nil, errUnauthorizedSigner
 		}
 
-		proposer := snap.ValidatorSet.GetProposer().Address
-		if _, err = snap.getSignerSuccessionNumber(signer, proposer); err != nil {
+		if _, err = snap.GetSignerSuccessionNumber(signer); err != nil {
 			return nil, err
 		}
 
@@ -186,16 +185,10 @@ func (s *Snapshot) apply(headers []*types.Header) (*Snapshot, error) {
 	return snap, nil
 }
 
-// getSignerSuccessionNumber returns the relative position of signer in terms of the in-turn proposer
-func (s *Snapshot) getSignerSuccessionNumber(signer common.Address, proposer common.Address) (int, error) {
+// GetSignerSuccessionNumber returns the relative position of signer in terms of the in-turn proposer
+func (s *Snapshot) GetSignerSuccessionNumber(signer common.Address) (int, error) {
 	validators := s.ValidatorSet.Validators
-	// bor.verifySeal and bor.Seal has the following commented out.
-	// TODO DISCUSS WITH JD if this is required
-	// If it is, we will also need to send in header.Number as parameter
-	// if number%c.config.Sprint != 0 {
-	// 	proposer = snap.Recents[number-1]
-	// }
-
+	proposer := s.ValidatorSet.GetProposer().Address
 	proposerIndex, _ := s.ValidatorSet.GetByAddress(proposer)
 	if proposerIndex == -1 {
 		return -1, &ProposerNotFoundError{proposer}
