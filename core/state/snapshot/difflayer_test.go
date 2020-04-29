@@ -69,7 +69,6 @@ func TestMergeBasics(t *testing.T) {
 		accounts[h] = data
 		if rand.Intn(4) == 0 {
 			destructs[h] = struct{}{}
-			delete(destructs, h)
 		}
 		if rand.Intn(2) == 0 {
 			accStorage := make(map[common.Hash][]byte)

@@ -130,7 +130,7 @@ func (stat *generateStats) report() {
 		ctx = append(ctx, []interface{}{"slots", stat.slots}...)
 	}
 	ctx = append(ctx, []interface{}{"elapsed", common.PrettyDuration(time.Since(stat.start))}...)
-	log.Info("Generating trie hash from snapshot", ctx)
+	log.Info("Generating trie hash from snapshot", ctx...)
 }
 
 // reportDone prints the last log when the whole generation is finished.
@@ -144,7 +144,7 @@ func (stat *generateStats) reportDone() {
 		ctx = append(ctx, []interface{}{"slots", stat.slots}...)
 	}
 	ctx = append(ctx, []interface{}{"elapsed", common.PrettyDuration(time.Since(stat.start))}...)
-	log.Info("Generated trie hash from snapshot", ctx)
+	log.Info("Generated trie hash from snapshot", ctx...)
 }
 
 // generateTrieRoot generates the trie hash based on the snapshot iterator.
@@ -152,9 +152,10 @@ func (stat *generateStats) reportDone() {
 // whole state which connects the accounts and the corresponding storages.
 func generateTrieRoot(it Iterator, account common.Hash, generatorFn trieGeneratorFn, leafCallback leafCallbackFn, stats *generateStats, report bool) (common.Hash, error) {
 	var (
-		in  = make(chan trieKV)         // chan to pass leaves
-		out = make(chan common.Hash, 1) // chan to collect result
-		wg  sync.WaitGroup
+		in      = make(chan trieKV)         // chan to pass leaves
+		out     = make(chan common.Hash, 1) // chan to collect result
+		stoplog = make(chan bool, 1)        // 1-size buffer, works when logging is not enabled
+		wg      sync.WaitGroup
 	)
 	// Spin up a go-routine for trie hash re-generation
 	wg.Add(1)
@@ -165,27 +166,35 @@ func generateTrieRoot(it Iterator, account common.Hash, generatorFn trieGenerato
 
 	// Spin up a go-routine for progress logging
 	if report && stats != nil {
-		stopLogging := make(chan struct{})
-		defer close(stopLogging)
-
+		wg.Add(1)
 		go func() {
 			defer wg.Done()
 
 			timer := time.NewTimer(0)
 			defer timer.Stop()
-			<-timer.C // discard the initial tick
 
 			for {
 				select {
 				case <-timer.C:
 					stats.report()
 					timer.Reset(time.Second * 8)
-				case <-stopLogging:
-					stats.reportDone()
+				case success := <-stoplog:
+					if success {
+						stats.reportDone()
+					}
 					return
 				}
 			}
 		}()
+	}
+	// stop is a helper function to shutdown the background threads
+	// and return the re-generated trie hash.
+	stop := func(success bool) common.Hash {
+		close(in)
+		result := <-out
+		stoplog <- success
+		wg.Wait()
+		return result
 	}
 	var (
 		logged    = time.Now()
@@ -203,31 +212,31 @@ func generateTrieRoot(it Iterator, account common.Hash, generatorFn trieGenerato
 			if leafCallback == nil {
 				fullData, err = FullAccountRLP(it.(AccountIterator).Account())
 				if err != nil {
-					close(in)
+					stop(false)
 					return common.Hash{}, err
 				}
 			} else {
 				account, err := FullAccount(it.(AccountIterator).Account())
 				if err != nil {
-					close(in)
+					stop(false)
 					return common.Hash{}, err
 				}
 				// Apply the leaf callback. Normally the callback is used to traverse
 				// the storage trie and re-generate the subtrie root.
 				subroot := leafCallback(it.Hash(), stats)
 				if !bytes.Equal(account.Root, subroot.Bytes()) {
-					close(in)
+					stop(false)
 					return common.Hash{}, fmt.Errorf("invalid subroot(%x), want %x, got %x", it.Hash(), account.Root, subroot)
 				}
 				fullData, err = rlp.EncodeToBytes(account)
 				if err != nil {
-					close(in)
+					stop(false)
 					return common.Hash{}, err
 				}
 			}
 			leaf = trieKV{it.Hash(), fullData}
 		} else {
-			leaf = trieKV{it.Hash(), it.(StorageIterator).Slot()}
+			leaf = trieKV{it.Hash(), common.CopyBytes(it.(StorageIterator).Slot())}
 		}
 		in <- leaf
 
@@ -251,9 +260,7 @@ func generateTrieRoot(it Iterator, account common.Hash, generatorFn trieGenerato
 			stats.progress(0, processed, account, last)
 		}
 	}
-	close(in)
-	result := <-out
-	wg.Wait()
+	result := stop(true)
 	return result, nil
 }
 

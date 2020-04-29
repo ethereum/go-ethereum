@@ -79,8 +79,8 @@ func (dl *diffLayer) initBinaryStorageIterator(account common.Hash) Iterator {
 			l.bDone = true
 			return l
 		}
-		// Even if the storage in the parent layer is destructed,
-		// still return the normal iterator with both-branch enabled.
+		// The parent is disk layer, don't need to take care "destructed"
+		// anymore.
 		b, _ := dl.Parent().StorageIterator(account, common.Hash{})
 		l := &binaryIterator{
 			a:       a,
