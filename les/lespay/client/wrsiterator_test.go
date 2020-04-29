@@ -88,16 +88,15 @@ func TestWrsIterator(t *testing.T) {
 	set[3] = true
 	expset()
 	ns.SetState(testNode(4), sfTest2, nodestate.Flags{}, 0)
-	ns.SetState(testNode(5), sfTest2, nodestate.Flags{}, 0)
+	ns.SetState(testNode(5), sfTest2.Or(sfTest3), nodestate.Flags{}, 0)
 	ns.SetState(testNode(6), sfTest2, nodestate.Flags{}, 0)
-	ns.SetState(testNode(5), sfTest3, nodestate.Flags{}, 0)
 	set[4] = true
 	set[6] = true
 	expset()
+	weights[2] = 0
 	ns.SetState(testNode(1), nodestate.Flags{}, sfTest4, 0)
 	ns.SetState(testNode(2), nodestate.Flags{}, sfTest4, 0)
 	ns.SetState(testNode(3), nodestate.Flags{}, sfTest4, 0)
-	weights[2] = 0
 	set[1] = true
 	set[3] = true
 	expset()
