@@ -429,8 +429,9 @@ func (c *Bor) verifyCascadingFields(chain consensus.ChainReader, header *types.H
 		return err
 	}
 
-	// If the block is a sprint end block, verify the validator list
-	if number%c.config.Sprint == 0 {
+	isSprintEnd := (number+1)%c.config.Sprint == 0
+	// verify the validator list in the last sprint block
+	if isSprintEnd {
 		validatorsBytes := make([]byte, len(snap.ValidatorSet.Validators)*validatorHeaderBytesLength)
 
 		currentValidators := snap.ValidatorSet.Copy().Validators
@@ -438,6 +439,10 @@ func (c *Bor) verifyCascadingFields(chain consensus.ChainReader, header *types.H
 		sort.Sort(ValidatorsByAddress(currentValidators))
 		for i, validator := range currentValidators {
 			copy(validatorsBytes[i*validatorHeaderBytesLength:], validator.HeaderBytes())
+		}
+		// len(header.Extra) >= extraVanity+extraSeal has already been validated in validateHeaderExtraField, so this won't result in a panic
+		if !bytes.Equal(header.Extra[extraVanity : len(header.Extra)-extraSeal], validatorsBytes) {
+			return errMismatchingSprintValidators
 		}
 	}
 
@@ -474,7 +479,7 @@ func (c *Bor) snapshot(chain consensus.ChainReader, number uint64, hash common.H
 		// up more headers than allowed to be reorged (chain reinit from a freezer),
 		// consider the checkpoint trusted and snapshot it.
 		// TODO fix this
-		if number == 0 /* || (number%c.config.Sprint == 0 && (len(headers) > params.ImmutabilityThreshold || chain.GetHeaderByNumber(number-1) == nil)) */ {
+		if number == 0 {
 			checkpoint := chain.GetHeaderByNumber(number)
 			if checkpoint != nil {
 				// get checkpoint data
