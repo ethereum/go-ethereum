@@ -24,23 +24,23 @@ import (
 	"github.com/ethereum/go-ethereum/common"
 )
 
-// weightedAccountIterator is an account iterator with an assigned weight. It is
-// used to prioritise which account is the correct one if multiple iterators find
-// the same one (modified in multiple consecutive blocks).
-type weightedAccountIterator struct {
-	it       AccountIterator
+// weightedIterator is a iterator with an assigned weight. It is used to prioritise
+// which account or storage slot is the correct one if multiple iterators find the
+// same one (modified in multiple consecutive blocks).
+type weightedIterator struct {
+	it       Iterator
 	priority int
 }
 
-// weightedAccountIterators is a set of iterators implementing the sort.Interface.
-type weightedAccountIterators []*weightedAccountIterator
+// weightedIterators is a set of iterators implementing the sort.Interface.
+type weightedIterators []*weightedIterator
 
 // Len implements sort.Interface, returning the number of active iterators.
-func (its weightedAccountIterators) Len() int { return len(its) }
+func (its weightedIterators) Len() int { return len(its) }
 
 // Less implements sort.Interface, returning which of two iterators in the stack
 // is before the other.
-func (its weightedAccountIterators) Less(i, j int) bool {
+func (its weightedIterators) Less(i, j int) bool {
 	// Order the iterators primarily by the account hashes
 	hashI := its[i].it.Hash()
 	hashJ := its[j].it.Hash()
@@ -51,45 +51,64 @@ func (its weightedAccountIterators) Less(i, j int) bool {
 	case 1:
 		return false
 	}
-	// Same account in multiple layers, split by priority
+	// Same account/storage-slot in multiple layers, split by priority
 	return its[i].priority < its[j].priority
 }
 
 // Swap implements sort.Interface, swapping two entries in the iterator stack.
-func (its weightedAccountIterators) Swap(i, j int) {
+func (its weightedIterators) Swap(i, j int) {
 	its[i], its[j] = its[j], its[i]
 }
 
-// fastAccountIterator is a more optimized multi-layer iterator which maintains a
+// fastIterator is a more optimized multi-layer iterator which maintains a
 // direct mapping of all iterators leading down to the bottom layer.
-type fastAccountIterator struct {
-	tree       *Tree       // Snapshot tree to reinitialize stale sub-iterators with
-	root       common.Hash // Root hash to reinitialize stale sub-iterators through
-	curAccount []byte
+type fastIterator struct {
+	tree *Tree       // Snapshot tree to reinitialize stale sub-iterators with
+	root common.Hash // Root hash to reinitialize stale sub-iterators through
 
-	iterators weightedAccountIterators
+	curAccount []byte
+	curSlot    []byte
+
+	iterators weightedIterators
 	initiated bool
+	account   bool
 	fail      error
 }
 
-// newFastAccountIterator creates a new hierarhical account iterator with one
+// newFastIterator creates a new hierarhical account or storage iterator with one
 // element per diff layer. The returned combo iterator can be used to walk over
 // the entire snapshot diff stack simultaneously.
-func newFastAccountIterator(tree *Tree, root common.Hash, seek common.Hash) (AccountIterator, error) {
+func newFastIterator(tree *Tree, root common.Hash, account common.Hash, seek common.Hash, accountIterator bool) (*fastIterator, error) {
 	snap := tree.Snapshot(root)
 	if snap == nil {
 		return nil, fmt.Errorf("unknown snapshot: %x", root)
 	}
-	fi := &fastAccountIterator{
-		tree: tree,
-		root: root,
+	fi := &fastIterator{
+		tree:    tree,
+		root:    root,
+		account: accountIterator,
 	}
 	current := snap.(snapshot)
 	for depth := 0; current != nil; depth++ {
-		fi.iterators = append(fi.iterators, &weightedAccountIterator{
-			it:       current.AccountIterator(seek),
-			priority: depth,
-		})
+		if accountIterator {
+			fi.iterators = append(fi.iterators, &weightedIterator{
+				it:       current.AccountIterator(seek),
+				priority: depth,
+			})
+		} else {
+			// If the whole storage is destructed in this layer, don't
+			// bother deeper layer anymore. But we should still keep
+			// the iterator for this layer, since the iterator can contain
+			// some valid slots which belongs to the re-created account.
+			it, destructed := current.StorageIterator(account, seek)
+			fi.iterators = append(fi.iterators, &weightedIterator{
+				it:       it,
+				priority: depth,
+			})
+			if destructed {
+				break
+			}
+		}
 		current = current.Parent()
 	}
 	fi.init()
@@ -98,7 +117,7 @@ func newFastAccountIterator(tree *Tree, root common.Hash, seek common.Hash) (Acc
 
 // init walks over all the iterators and resolves any clashes between them, after
 // which it prepares the stack for step-by-step iteration.
-func (fi *fastAccountIterator) init() {
+func (fi *fastIterator) init() {
 	// Track which account hashes are iterators positioned on
 	var positioned = make(map[common.Hash]int)
 
@@ -153,7 +172,7 @@ func (fi *fastAccountIterator) init() {
 }
 
 // Next steps the iterator forward one element, returning false if exhausted.
-func (fi *fastAccountIterator) Next() bool {
+func (fi *fastIterator) Next() bool {
 	if len(fi.iterators) == 0 {
 		return false
 	}
@@ -161,21 +180,25 @@ func (fi *fastAccountIterator) Next() bool {
 		// Don't forward first time -- we had to 'Next' once in order to
 		// do the sorting already
 		fi.initiated = true
-		fi.curAccount = fi.iterators[0].it.Account()
+		if fi.account {
+			fi.curAccount = fi.iterators[0].it.(AccountIterator).Account()
+		} else {
+			fi.curSlot = fi.iterators[0].it.(StorageIterator).Slot()
+		}
 		if innerErr := fi.iterators[0].it.Error(); innerErr != nil {
 			fi.fail = innerErr
 			return false
 		}
-		if fi.curAccount != nil {
+		if fi.curAccount != nil || fi.curSlot != nil {
 			return true
 		}
-		// Implicit else: we've hit a nil-account, and need to fall through to the
-		// loop below to land on something non-nil
+		// Implicit else: we've hit a nil-account or nil-slot, and need to
+		// fall through to the loop below to land on something non-nil
 	}
-	// If an account is deleted in one of the layers, the key will still be there,
-	// but the actual value will be nil. However, the iterator should not
-	// export nil-values (but instead simply omit the key), so we need to loop
-	// here until we either
+	// If an account or a slot is deleted in one of the layers, the key will
+	// still be there, but the actual value will be nil. However, the iterator
+	// should not export nil-values (but instead simply omit the key), so we
+	// need to loop here until we either
 	//  - get a non-nil value,
 	//  - hit an error,
 	//  - or exhaust the iterator
@@ -183,12 +206,16 @@ func (fi *fastAccountIterator) Next() bool {
 		if !fi.next(0) {
 			return false // exhausted
 		}
-		fi.curAccount = fi.iterators[0].it.Account()
+		if fi.account {
+			fi.curAccount = fi.iterators[0].it.(AccountIterator).Account()
+		} else {
+			fi.curSlot = fi.iterators[0].it.(StorageIterator).Slot()
+		}
 		if innerErr := fi.iterators[0].it.Error(); innerErr != nil {
 			fi.fail = innerErr
 			return false // error
 		}
-		if fi.curAccount != nil {
+		if fi.curAccount != nil || fi.curSlot != nil {
 			break // non-nil value found
 		}
 	}
@@ -201,7 +228,7 @@ func (fi *fastAccountIterator) Next() bool {
 // For example, if the iterated hashes become [2,3,5,5,8,9,10], then we should
 // invoke next(3), which will call Next on elem 3 (the second '5') and will
 // cascade along the list, applying the same operation if needed.
-func (fi *fastAccountIterator) next(idx int) bool {
+func (fi *fastIterator) next(idx int) bool {
 	// If this particular iterator got exhausted, remove it and return true (the
 	// next one is surely not exhausted yet, otherwise it would have been removed
 	// already).
@@ -262,7 +289,7 @@ func (fi *fastAccountIterator) next(idx int) bool {
 }
 
 // move advances an iterator to another position in the list.
-func (fi *fastAccountIterator) move(index, newpos int) {
+func (fi *fastIterator) move(index, newpos int) {
 	elem := fi.iterators[index]
 	copy(fi.iterators[index:], fi.iterators[index+1:newpos+1])
 	fi.iterators[newpos] = elem
@@ -270,23 +297,30 @@ func (fi *fastAccountIterator) move(index, newpos int) {
 
 // Error returns any failure that occurred during iteration, which might have
 // caused a premature iteration exit (e.g. snapshot stack becoming stale).
-func (fi *fastAccountIterator) Error() error {
+func (fi *fastIterator) Error() error {
 	return fi.fail
 }
 
 // Hash returns the current key
-func (fi *fastAccountIterator) Hash() common.Hash {
+func (fi *fastIterator) Hash() common.Hash {
 	return fi.iterators[0].it.Hash()
 }
 
-// Account returns the current key
-func (fi *fastAccountIterator) Account() []byte {
+// Account returns the current account blob.
+// Note the returned account is not a copy, please don't modify it.
+func (fi *fastIterator) Account() []byte {
 	return fi.curAccount
+}
+
+// Slot returns the current storage slot.
+// Note the returned slot is not a copy, please don't modify it.
+func (fi *fastIterator) Slot() []byte {
+	return fi.curSlot
 }
 
 // Release iterates over all the remaining live layer iterators and releases each
 // of thme individually.
-func (fi *fastAccountIterator) Release() {
+func (fi *fastIterator) Release() {
 	for _, it := range fi.iterators {
 		it.it.Release()
 	}
@@ -294,9 +328,23 @@ func (fi *fastAccountIterator) Release() {
 }
 
 // Debug is a convencience helper during testing
-func (fi *fastAccountIterator) Debug() {
+func (fi *fastIterator) Debug() {
 	for _, it := range fi.iterators {
 		fmt.Printf("[p=%v v=%v] ", it.priority, it.it.Hash()[0])
 	}
 	fmt.Println()
+}
+
+// newFastAccountIterator creates a new hierarhical account iterator with one
+// element per diff layer. The returned combo iterator can be used to walk over
+// the entire snapshot diff stack simultaneously.
+func newFastAccountIterator(tree *Tree, root common.Hash, seek common.Hash) (AccountIterator, error) {
+	return newFastIterator(tree, root, common.Hash{}, seek, true)
+}
+
+// newFastStorageIterator creates a new hierarhical storage iterator with one
+// element per diff layer. The returned combo iterator can be used to walk over
+// the entire snapshot diff stack simultaneously.
+func newFastStorageIterator(tree *Tree, root common.Hash, account common.Hash, seek common.Hash) (StorageIterator, error) {
+	return newFastIterator(tree, root, account, seek, false)
 }

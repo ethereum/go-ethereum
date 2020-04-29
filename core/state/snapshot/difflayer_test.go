@@ -109,7 +109,8 @@ func TestMergeBasics(t *testing.T) {
 			if have, want := len(merged.storageList), i; have != want {
 				t.Errorf("[1] storageList wrong: have %v, want %v", have, want)
 			}
-			if have, want := len(merged.StorageList(aHash)), len(sMap); have != want {
+			list, _ := merged.StorageList(aHash)
+			if have, want := len(list), len(sMap); have != want {
 				t.Errorf("[2] StorageList() wrong: have %v, want %v", have, want)
 			}
 			if have, want := len(merged.storageList[aHash]), len(sMap); have != want {

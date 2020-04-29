@@ -105,6 +105,13 @@ type diffLayer struct {
 	root  common.Hash // Root hash to which this snapshot diff belongs to
 	stale uint32      // Signals that the layer became stale (state progressed)
 
+	// destructSet is a very special helper marker. If an account is marked as
+	// deleted, then it's recorded in this set. However it's allowed that an account
+	// is included here but still available in other sets(e.g. storageData). The
+	// reason is the diff layer includes all the changes in a *block*. It can
+	// happen that in the tx_1, account A is self-destructed while in the tx_2
+	// it's recreated. But we still need this marker to indicate the "old" A is
+	// deleted, all data in other set belongs to the "new" A.
 	destructSet map[common.Hash]struct{}               // Keyed markers for deleted (and potentially) recreated accounts
 	accountList []common.Hash                          // List of account for iteration. If it exists, it's sorted, otherwise it's nil
 	accountData map[common.Hash][]byte                 // Keyed accounts for direct retrival (nil means deleted)
@@ -169,6 +176,7 @@ func newDiffLayer(parent snapshot, root common.Hash, destructs map[common.Hash]s
 		destructSet: destructs,
 		accountData: accounts,
 		storageData: storage,
+		storageList: make(map[common.Hash][]common.Hash),
 	}
 	switch parent := parent.(type) {
 	case *diskLayer:
@@ -194,11 +202,6 @@ func newDiffLayer(parent snapshot, root common.Hash, destructs map[common.Hash]s
 		dl.memory += uint64(common.HashLength + len(data))
 		snapshotDirtyAccountWriteMeter.Mark(int64(len(data)))
 	}
-	// Fill the storage hashes and sort them for the iterator
-	dl.storageList = make(map[common.Hash][]common.Hash)
-	for accountHash := range destructs {
-		dl.storageList[accountHash] = nil
-	}
 	// Determine memory size and track the dirty writes
 	for _, slots := range storage {
 		for _, data := range slots {
@@ -206,7 +209,7 @@ func newDiffLayer(parent snapshot, root common.Hash, destructs map[common.Hash]s
 			snapshotDirtyStorageWriteMeter.Mark(int64(len(data)))
 		}
 	}
-	dl.memory += uint64(len(dl.storageList) * common.HashLength)
+	dl.memory += uint64(len(destructs) * common.HashLength)
 	return dl
 }
 
@@ -287,6 +290,8 @@ func (dl *diffLayer) Account(hash common.Hash) (*Account, error) {
 
 // AccountRLP directly retrieves the account RLP associated with a particular
 // hash in the snapshot slim data format.
+//
+// Note the returned account is not a copy, please don't modify it.
 func (dl *diffLayer) AccountRLP(hash common.Hash) ([]byte, error) {
 	// Check the bloom filter first whether there's even a point in reaching into
 	// all the maps in all the layers below
@@ -347,6 +352,8 @@ func (dl *diffLayer) accountRLP(hash common.Hash, depth int) ([]byte, error) {
 // Storage directly retrieves the storage data associated with a particular hash,
 // within a particular account. If the slot is unknown to this diff, it's parent
 // is consulted.
+//
+// Note the returned slot is not a copy, please don't modify it.
 func (dl *diffLayer) Storage(accountHash, storageHash common.Hash) ([]byte, error) {
 	// Check the bloom filter first whether there's even a point in reaching into
 	// all the maps in all the layers below
@@ -502,22 +509,29 @@ func (dl *diffLayer) AccountList() []common.Hash {
 		}
 	}
 	sort.Sort(hashes(dl.accountList))
+	dl.memory += uint64(len(dl.accountList) * common.HashLength)
 	return dl.accountList
 }
 
 // StorageList returns a sorted list of all storage slot hashes in this difflayer
-// for the given account.
+// for the given account. If the whole storage is destructed in this layer, then
+// an additional flag *destructed = true* will be returned, otherwise the flag is
+// false. Besides, the returned list will include the hash of deleted storage slot.
+// Note a special case is an account is deleted in a prior tx but is recreated in
+// the following tx with some storage slots set. In this case the returned list is
+// not empty but the flag is true.
 //
 // Note, the returned slice is not a copy, so do not modify it.
-func (dl *diffLayer) StorageList(accountHash common.Hash) []common.Hash {
+func (dl *diffLayer) StorageList(accountHash common.Hash) ([]common.Hash, bool) {
 	// If an old list already exists, return it
 	dl.lock.RLock()
-	list := dl.storageList[accountHash]
+	_, destructed := dl.destructSet[accountHash]
+	if list, exist := dl.storageList[accountHash]; exist {
+		dl.lock.RUnlock()
+		return list, destructed // The list might be nil
+	}
 	dl.lock.RUnlock()
 
-	if list != nil {
-		return list
-	}
 	// No old sorted account list exists, generate a new one
 	dl.lock.Lock()
 	defer dl.lock.Unlock()
@@ -529,5 +543,6 @@ func (dl *diffLayer) StorageList(accountHash common.Hash) []common.Hash {
 	}
 	sort.Sort(hashes(storageList))
 	dl.storageList[accountHash] = storageList
-	return storageList
+	dl.memory += uint64(len(dl.storageList)*common.HashLength + common.HashLength)
+	return storageList, destructed
 }
