@@ -125,12 +125,12 @@ var (
 )
 
 // newServerPool creates a new server pool
-func newServerPool(db ethdb.KeyValueStore, dbKey []byte, ns *nodestate.NodeStateMachine, vt *lpc.ValueTracker, discovery enode.Iterator, clock mclock.Clock, trustedURLs []string, testing bool) *serverPool {
+func newServerPool(db ethdb.KeyValueStore, dbKey []byte, vt *lpc.ValueTracker, discovery enode.Iterator, clock mclock.Clock, trustedURLs []string, testing bool) *serverPool {
 	s := &serverPool{
 		db:         db,
 		dbClockKey: append(dbKey, []byte("persistentClock")...),
 		clock:      clock,
-		ns:         ns,
+		ns:         nodestate.NewNodeStateMachine(db, []byte(string(dbKey)+"ns:"), clock, serverPoolSetup),
 		vt:         vt,
 		quit:       make(chan struct{}),
 	}
@@ -170,7 +170,7 @@ func newServerPool(db ethdb.KeyValueStore, dbKey []byte, ns *nodestate.NodeState
 		return true
 	})
 
-	ns.SubscribeState(sfDialed.Or(sfConnected), func(n *enode.Node, oldState, newState nodestate.Flags) {
+	s.ns.SubscribeState(sfDialed.Or(sfConnected), func(n *enode.Node, oldState, newState nodestate.Flags) {
 		if oldState.Equals(sfDialed) && newState.IsEmpty() {
 			// dial timeout, no connection
 			_, wait := s.calculateNode(n, true, false)
@@ -178,14 +178,15 @@ func newServerPool(db ethdb.KeyValueStore, dbKey []byte, ns *nodestate.NodeState
 		}
 	})
 
-	ns.AddLogMetrics(sfHasValue, sfDisableSelection, "selectable", nil, nil, serverSelectableGauge)
-	ns.AddLogMetrics(sfDialed, nodestate.Flags{}, "dialed", serverDialedMeter, nil, nil)
-	ns.AddLogMetrics(sfConnected, nodestate.Flags{}, "connected", nil, nil, serverConnectedGauge)
+	s.ns.AddLogMetrics(sfHasValue, sfDisableSelection, "selectable", nil, nil, serverSelectableGauge)
+	s.ns.AddLogMetrics(sfDialed, nodestate.Flags{}, "dialed", serverDialedMeter, nil, nil)
+	s.ns.AddLogMetrics(sfConnected, nodestate.Flags{}, "connected", nil, nil, serverConnectedGauge)
 	return s
 }
 
 // start starts the server pool. Note that NodeStateMachine should be started first.
 func (s *serverPool) start() {
+	s.ns.Start()
 	for _, iter := range s.mixSources {
 		// add sources to mixer at startup because the mixer instantly tries to read them
 		// which should only happen after NodeStateMachine has been started
@@ -234,6 +235,7 @@ func (s *serverPool) stop() {
 	})
 	close(s.quit)
 	s.persistClock()
+	s.ns.Stop()
 }
 
 // persistClock stores the persistent absolute time into the database

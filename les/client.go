@@ -44,7 +44,6 @@ import (
 	"github.com/ethereum/go-ethereum/node"
 	"github.com/ethereum/go-ethereum/p2p"
 	"github.com/ethereum/go-ethereum/p2p/enode"
-	"github.com/ethereum/go-ethereum/p2p/nodestate"
 	"github.com/ethereum/go-ethereum/params"
 	"github.com/ethereum/go-ethereum/rpc"
 )
@@ -60,7 +59,6 @@ type LightEthereum struct {
 	handler        *clientHandler
 	txPool         *light.TxPool
 	blockchain     *light.LightChain
-	ns             *nodestate.NodeStateMachine
 	serverPool     *serverPool
 	valueTracker   *lpc.ValueTracker
 	dialCandidates enode.Iterator
@@ -160,8 +158,7 @@ func New(ctx *node.ServiceContext, config *eth.Config) (*LightEthereum, error) {
 	if err != nil {
 		return nil, err
 	}
-	leth.ns = nodestate.NewNodeStateMachine(lespayDb, []byte("nodestate:"), &mclock.System{}, serverPoolSetup)
-	leth.serverPool = newServerPool(lespayDb, []byte("serverpool:"), leth.ns, leth.valueTracker, dnsdisc, &mclock.System{}, config.UltraLightServers, false)
+	leth.serverPool = newServerPool(lespayDb, []byte("serverpool:"), leth.valueTracker, dnsdisc, &mclock.System{}, config.UltraLightServers, false)
 	peers.subscribe(leth.serverPool)
 	leth.dialCandidates = leth.serverPool.dialIterator
 	leth.retriever.setTimeoutCallback(leth.serverPool.getTimeout)
@@ -280,7 +277,6 @@ func (s *LightEthereum) Protocols() []p2p.Protocol {
 func (s *LightEthereum) Start(srvr *p2p.Server) error {
 	log.Warn("Light client mode is an experimental feature")
 
-	s.ns.Start() // start before subscribers
 	s.serverPool.start()
 	// Start bloom request workers.
 	s.wg.Add(bloomServiceThreads)
@@ -296,7 +292,6 @@ func (s *LightEthereum) Stop() error {
 	close(s.closeCh)
 	s.serverPool.stop()
 	s.valueTracker.Stop()
-	s.ns.Stop() // stop after the server pool
 	s.peers.close()
 	s.reqDist.close()
 	s.odr.Stop()

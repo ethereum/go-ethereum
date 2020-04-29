@@ -28,7 +28,6 @@ import (
 	"github.com/ethereum/go-ethereum/p2p"
 	"github.com/ethereum/go-ethereum/p2p/enode"
 	"github.com/ethereum/go-ethereum/p2p/enr"
-	"github.com/ethereum/go-ethereum/p2p/nodestate"
 )
 
 const (
@@ -50,7 +49,6 @@ func testNodeIndex(id enode.ID) int {
 type serverPoolTest struct {
 	db        ethdb.KeyValueStore
 	clock     *mclock.Simulated
-	ns        *nodestate.NodeStateMachine
 	vt        *lpc.ValueTracker
 	sp        *serverPool
 	input     enode.Iterator
@@ -87,16 +85,13 @@ func (s *serverPoolTest) addTrusted(i int) {
 }
 
 func (s *serverPoolTest) start() {
-	s.ns = nodestate.NewNodeStateMachine(s.db, []byte("nodestate:"), s.clock, serverPoolSetup)
 	s.vt = lpc.NewValueTracker(s.db, s.clock, requestList, time.Minute, 1/float64(time.Hour), 1/float64(time.Hour*100), 1/float64(time.Hour*1000))
-	s.sp = newServerPool(s.db, []byte("serverpool:"), s.ns, s.vt, s.input, s.clock, s.trusted, true)
+	s.sp = newServerPool(s.db, []byte("serverpool:"), s.vt, s.input, s.clock, s.trusted, true)
 	s.disconnect = make(map[int][]int)
-	s.ns.Start()
 	s.sp.start()
 }
 
 func (s *serverPoolTest) stop() {
-	s.ns.Stop()
 	s.sp.stop()
 	s.vt.Stop()
 	for i := range s.testNodes {

@@ -325,8 +325,8 @@ func NewNodeStateMachine(db ethdb.KeyValueStore, dbKey []byte, clock mclock.Cloc
 	}
 	ns := &NodeStateMachine{
 		db:           db,
-		dbMappingKey: append(dbKey, []byte("mapping:")...),
-		dbNodeKey:    append(dbKey, []byte("node:")...),
+		dbMappingKey: []byte(string(dbKey) + "mapping:"),
+		dbNodeKey:    []byte(string(dbKey) + "node:"),
 		clock:        clock,
 		setup:        setup,
 		nodes:        make(map[enode.ID]*nodeInfo),
