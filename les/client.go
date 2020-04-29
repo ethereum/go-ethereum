@@ -29,7 +29,6 @@ import (
 	"github.com/ethereum/go-ethereum/consensus"
 	"github.com/ethereum/go-ethereum/core"
 	"github.com/ethereum/go-ethereum/core/bloombits"
-	"github.com/ethereum/go-ethereum/core/forkid"
 	"github.com/ethereum/go-ethereum/core/rawdb"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/eth"
@@ -161,15 +160,8 @@ func New(ctx *node.ServiceContext, config *eth.Config) (*LightEthereum, error) {
 	if err != nil {
 		return nil, err
 	}
-	forkFilter := forkid.NewFilter(leth.blockchain)
-	dnsFiltered := enode.Filter(dnsdisc, func(node *enode.Node) bool {
-		enr := node.Record()
-		ethEntry := &eth.EthEntry{}
-		enr.Load(ethEntry)
-		return forkFilter(ethEntry.ForkID) == nil && enr.Load(&lesEntry{}) == nil
-	})
 	leth.ns = nodestate.NewNodeStateMachine(lespayDb, []byte("nodestate:"), &mclock.System{}, serverPoolSetup)
-	leth.serverPool = newServerPool(lespayDb, []byte("serverpool:"), leth.ns, leth.valueTracker, dnsFiltered, &mclock.System{}, config.UltraLightServers, false)
+	leth.serverPool = newServerPool(lespayDb, []byte("serverpool:"), leth.ns, leth.valueTracker, dnsdisc, &mclock.System{}, config.UltraLightServers, false)
 	peers.subscribe(leth.serverPool)
 	leth.dialCandidates = leth.serverPool.dialIterator
 	leth.retriever.setTimeoutCallback(leth.serverPool.getTimeout)
