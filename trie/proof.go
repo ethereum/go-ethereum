@@ -234,7 +234,7 @@ func unsetInternal(n node, left []byte, right []byte) error {
 			// Special case, the non-existent proof points to the same path
 			// as the existent proof, but the path of existent proof is longer.
 			// In this case, truncate the extra path(it should be recovered
-			// by data insertion).
+			// by node insertion).
 			if len(left)-pos < len(rn.Key) || !bytes.Equal(rn.Key, left[pos:pos+len(rn.Key)]) {
 				fn := parent.(*fullNode)
 				fn.Children[left[pos-1]] = nil
@@ -272,8 +272,7 @@ func unsetInternal(n node, left []byte, right []byte) error {
 // unset removes all internal node references either the left most or right most.
 // If we try to unset all right most references, it can meet these scenarios:
 //
-// - The given path is existent in the trie, unset the final associated
-//   valuenode as nil.
+// - The given path is existent in the trie, unset the associated shortnode
 // - The given path is non-existent in the trie
 //   - the fork point is a fullnode, the corresponding child pointed by path
 //     is nil, return
@@ -303,7 +302,7 @@ func unset(parent node, child node, key []byte, pos int, removeLeft bool) error 
 		if len(key[pos:]) < len(cld.Key) || !bytes.Equal(cld.Key, key[pos:pos+len(cld.Key)]) {
 			// Find the fork point, it's an non-existent branch.
 			if removeLeft {
-				return errors.New("invalid last edge proof")
+				return errors.New("invalid right edge proof")
 			}
 			if bytes.Compare(cld.Key, key[pos:]) > 0 {
 				// The key of fork shortnode is greater than the
@@ -329,7 +328,7 @@ func unset(parent node, child node, key []byte, pos int, removeLeft bool) error 
 		// If the node is nil, it's a child of the fork point
 		// fullnode(it's an non-existent branch).
 		if removeLeft {
-			return errors.New("invalid last edge proof")
+			return errors.New("invalid right edge proof")
 		}
 		return nil
 	default:
@@ -337,7 +336,7 @@ func unset(parent node, child node, key []byte, pos int, removeLeft bool) error 
 	}
 }
 
-// VerifyRangeProof checks whether the given leave nodes and edge proofs
+// VerifyRangeProof checks whether the given leaf nodes and edge proofs
 // can prove the given trie leaves range is matched with given root hash
 // and the range is consecutive(no gap inside).
 //
@@ -352,10 +351,44 @@ func VerifyRangeProof(rootHash common.Hash, firstKey []byte, keys [][]byte, valu
 	if len(keys) != len(values) {
 		return fmt.Errorf("inconsistent proof data, keys: %d, values: %d", len(keys), len(values))
 	}
+	// Special case, there is a provided non-existent proof and
+	// zero leaf, it means no more leaf we can get in the trie.
 	if len(keys) == 0 {
-		return fmt.Errorf("nothing to verify")
+		// Recover the non-existent proof to a path, ensure there
+		// is nothing left
+		root, err := proofToPath(rootHash, nil, firstKey, firstProof, true)
+		if err != nil {
+			return err
+		}
+		node, pos, firstKey := root, 0, keybytesToHex(firstKey)
+		for node != nil {
+			switch rn := node.(type) {
+			case *fullNode:
+				for i := firstKey[pos] + 1; i < 16; i++ {
+					if rn.Children[i] != nil {
+						return errors.New("more leaves available")
+					}
+				}
+				node, pos = rn.Children[firstKey[pos]], pos+1
+			case *shortNode:
+				if len(firstKey)-pos < len(rn.Key) || !bytes.Equal(rn.Key, firstKey[pos:pos+len(rn.Key)]) {
+					if bytes.Compare(rn.Key, firstKey[pos:]) < 0 {
+						node = nil
+						continue
+					} else {
+						return errors.New("more leaves available")
+					}
+				}
+				node, pos = rn.Val, pos+len(rn.Key)
+			case valueNode, hashNode:
+				return errors.New("more leaves available")
+			}
+		}
+		// Yeah, although we receive nothing, but we can prove
+		// there is no more leaf in the trie, return nil.
+		return nil
 	}
-	// If we only have one leaf to prove, check the first edge proof
+	// Special case, there is only one leaf and an existent proof.
 	if len(keys) == 1 && bytes.Equal(keys[0], firstKey) {
 		value, err := VerifyProof(rootHash, keys[0], firstProof)
 		if err != nil {

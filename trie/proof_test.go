@@ -155,6 +155,8 @@ func (p entrySlice) Len() int           { return len(p) }
 func (p entrySlice) Less(i, j int) bool { return bytes.Compare(p[i].k, p[j].k) < 0 }
 func (p entrySlice) Swap(i, j int)      { p[i], p[j] = p[j], p[i] }
 
+// TestRangeProof tests normal range proof with both edge proofs as the
+// existent proof. The test cases are generated randomly.
 func TestRangeProof(t *testing.T) {
 	trie, vals := randomTrie(4096)
 	var entries entrySlice
@@ -188,6 +190,8 @@ func TestRangeProof(t *testing.T) {
 	}
 }
 
+// TestRangeProof tests normal range proof with the first edge proof as the
+// non-existent proof. The test cases are generated randomly.
 func TestRangeProofWithNonExistentProof(t *testing.T) {
 	trie, vals := randomTrie(4096)
 	var entries entrySlice
@@ -282,6 +286,9 @@ func TestRangeProofWithInvalidNonExistentProof(t *testing.T) {
 	}
 }
 
+// TestOneElementRangeProof tests the proof with only one
+// element. The first edge proof can be existent one or
+// non-existent one.
 func TestOneElementRangeProof(t *testing.T) {
 	trie, vals := randomTrie(4096)
 	var entries entrySlice
@@ -320,6 +327,41 @@ func TestOneElementRangeProof(t *testing.T) {
 	}
 }
 
+// TestEmptyRangeProof tests the range proof with "no" element.
+// The first edge proof must be an non-existent proof.
+func TestEmptyRangeProof(t *testing.T) {
+	trie, vals := randomTrie(4096)
+	var entries entrySlice
+	for _, kv := range vals {
+		entries = append(entries, kv)
+	}
+	sort.Sort(entries)
+
+	var cases = []struct {
+		pos int
+		err bool
+	}{
+		{len(entries) - 1, false},
+		{500, true},
+	}
+	for _, c := range cases {
+		firstProof := memorydb.New()
+		first := increseKey(common.CopyBytes(entries[c.pos].k))
+		if err := trie.Prove(first, 0, firstProof); err != nil {
+			t.Fatalf("Failed to prove the first node %v", err)
+		}
+		err := VerifyRangeProof(trie.Hash(), first, nil, nil, firstProof, nil)
+		if c.err && err == nil {
+			t.Fatalf("Expected error, got nil")
+		}
+		if !c.err && err != nil {
+			t.Fatalf("Expected no error, got %v", err)
+		}
+	}
+}
+
+// TestBadRangeProof tests a few cases which the proof is wrong.
+// The prover is expected to detect the error.
 func TestBadRangeProof(t *testing.T) {
 	trie, vals := randomTrie(4096)
 	var entries entrySlice
