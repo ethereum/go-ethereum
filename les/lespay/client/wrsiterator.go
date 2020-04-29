@@ -28,11 +28,12 @@ import (
 // WrsIterator returns nodes from the specified selectable set with a weighted random
 // selection. Selection weights are provided by a callback function.
 type WrsIterator struct {
-	lock     sync.Mutex
+	lock sync.Mutex
+	cond *sync.Cond
+
 	ns       *nodestate.NodeStateMachine
 	wrs      *utils.WeightedRandomSelect
 	selected nodestate.Flags
-	wakeup   chan struct{}
 	nextNode *enode.Node
 	closed   bool
 }
@@ -40,14 +41,15 @@ type WrsIterator struct {
 // NewWrsIterator creates a new WrsIterator. Nodes are selectable if they have all the required
 // and none of the disabled flags set. When a node is selected the selectedFlag is set which also
 // disables further selectability until it is removed or times out.
-// The ENR field should be set for all selectable nodes so that the iterator can return complete enodes.
 func NewWrsIterator(ns *nodestate.NodeStateMachine, requireFlags, disableFlags, selectedFlag nodestate.Flags, wfn func(interface{}) uint64) *WrsIterator {
-	disableFlags = disableFlags.Or(selectedFlag)
 	w := &WrsIterator{
 		ns:       ns,
 		wrs:      utils.NewWeightedRandomSelect(wfn),
 		selected: selectedFlag,
 	}
+	w.cond = sync.NewCond(&w.lock)
+
+	disableFlags = disableFlags.Or(selectedFlag)
 	ns.SubscribeState(requireFlags.Or(disableFlags), func(n *enode.Node, oldState, newState nodestate.Flags) {
 		oldMatch := oldState.HasAll(requireFlags) && oldState.HasNone(disableFlags)
 		newMatch := newState.HasAll(requireFlags) && newState.HasNone(disableFlags)
@@ -58,60 +60,48 @@ func NewWrsIterator(ns *nodestate.NodeStateMachine, requireFlags, disableFlags, 
 		w.lock.Lock()
 		if newMatch {
 			w.wrs.Update(n.ID())
-			if w.wakeup != nil && !w.wrs.IsEmpty() {
-				close(w.wakeup)
-				w.wakeup = nil
-			}
 		} else {
 			w.wrs.Remove(n.ID())
 		}
 		w.lock.Unlock()
+		w.cond.Signal()
 	})
 	return w
 }
 
-// Next implements enode.Iterator
+// Next selects the next node.
 func (w *WrsIterator) Next() bool {
 	w.lock.Lock()
-	for {
-		if w.closed {
-			w.lock.Unlock()
-			return false
-		}
-		var node *enode.Node
-		if c := w.wrs.Choose(); c != nil {
-			node = w.ns.GetNode(c.(enode.ID))
-		}
-		if node != nil {
-			w.nextNode = node
-			w.lock.Unlock()
-			w.ns.SetState(w.nextNode, w.selected, nodestate.Flags{}, time.Second*5)
-			return true
-		}
-		ch := make(chan struct{})
-		w.wakeup = ch
-		w.lock.Unlock()
-		<-ch
-		w.lock.Lock()
+	for !w.closed && w.wrs.IsEmpty() {
+		w.cond.Wait()
 	}
+	if w.closed {
+		w.nextNode = nil
+		w.lock.Unlock()
+		return false
+	}
+	// Move the iterator to the selected node.
+	// TODO: this is not quite correct yet because the WRS chooses
+	// nil sometimes
+	w.nextNode = w.ns.GetNode(w.wrs.Choose().(enode.ID))
+	w.lock.Unlock()
+	// Mark the node selected. This can't happen while
+	// holding the lock because it invokes our state change callback.
+	w.ns.SetState(w.nextNode, w.selected, nodestate.Flags{}, time.Second*5)
+	return true
 }
 
-// Close implements enode.Iterator
+// Close ends the iterator.
 func (w *WrsIterator) Close() {
 	w.lock.Lock()
-	defer w.lock.Unlock()
-
 	w.closed = true
-	if w.wakeup != nil {
-		close(w.wakeup)
-		w.wakeup = nil
-	}
+	w.lock.Unlock()
+	w.cond.Signal()
 }
 
-// Node implements enode.Iterator
+// Node returns the current node.
 func (w *WrsIterator) Node() *enode.Node {
 	w.lock.Lock()
 	defer w.lock.Unlock()
-
 	return w.nextNode
 }
