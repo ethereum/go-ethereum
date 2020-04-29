@@ -235,15 +235,16 @@ func (db *Database) meter(refresh time.Duration) {
 	for i := 0; i < 2; i++ {
 		compactions[i] = make([]float64, 4)
 	}
-	// Create storage for iostats.
-	var iostats [2]float64
 
-	// Create storage and warning log tracer for write delay.
 	var (
+		// Create storage for iostats.
+		iostats [2]float64
+		// Create storage and warning log tracer for write delay.
 		delaystats      [2]int64
 		lastWritePaused time.Time
+
+		timer = time.NewTimer(refresh)
 	)
-	timer := time.NewTimer(refresh)
 	defer timer.Stop()
 
 	// Iterate ad infinitum and collect the stats
