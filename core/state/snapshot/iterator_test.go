@@ -197,6 +197,7 @@ func verifyIterator(t *testing.T, expCount int, it Iterator, verify verifyConten
 		} else if verify == verifyStorage && len(it.(StorageIterator).Slot()) == 0 {
 			t.Errorf("iterator returned nil-value for hash %x", hash)
 		}
+		last = hash
 	}
 	if count != expCount {
 		t.Errorf("iterator count mismatch: have %d, want %d", count, expCount)
