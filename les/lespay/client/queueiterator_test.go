@@ -47,17 +47,8 @@ func testNodeIndex(id enode.ID) int {
 	return int(id[1]) + int(id[2])*256
 }
 
-type dummyIdentity enode.ID
-
-func (id dummyIdentity) Verify(r *enr.Record, sig []byte) error { return nil }
-func (id dummyIdentity) NodeAddr(r *enr.Record) []byte          { return id[:] }
-
 func testNode(i int) *enode.Node {
-	r := &enr.Record{}
-	identity := dummyIdentity(testNodeID(i))
-	r.SetSig(identity, []byte{42})
-	n, _ := enode.New(identity, r)
-	return n
+	return enode.SignNull(new(enr.Record), testNodeID(i))
 }
 
 func TestQueueIterator(t *testing.T) {
