@@ -41,7 +41,7 @@ type WrsIterator struct {
 // NewWrsIterator creates a new WrsIterator. Nodes are selectable if they have all the required
 // and none of the disabled flags set. When a node is selected the selectedFlag is set which also
 // disables further selectability until it is removed or times out.
-func NewWrsIterator(ns *nodestate.NodeStateMachine, requireFlags, disableFlags, selectedFlag nodestate.Flags, wfn func(interface{}) uint64) *WrsIterator {
+func NewWrsIterator(ns *nodestate.NodeStateMachine, requireFlags, disableFlags, selectedFlag nodestate.Flags, wfn utils.WeightFn) *WrsIterator {
 	w := &WrsIterator{
 		ns:       ns,
 		wrs:      utils.NewWeightedRandomSelect(wfn),
@@ -71,24 +71,33 @@ func NewWrsIterator(ns *nodestate.NodeStateMachine, requireFlags, disableFlags, 
 
 // Next selects the next node.
 func (w *WrsIterator) Next() bool {
-	w.lock.Lock()
-	for !w.closed && w.wrs.IsEmpty() {
-		w.cond.Wait()
-	}
-	if w.closed {
-		w.nextNode = nil
-		w.lock.Unlock()
+	w.nextNode = w.chooseNode()
+	if w.nextNode == nil {
 		return false
 	}
-	// Move the iterator to the selected node.
-	// TODO: this is not quite correct yet because the WRS chooses
-	// nil sometimes
-	w.nextNode = w.ns.GetNode(w.wrs.Choose().(enode.ID))
-	w.lock.Unlock()
-	// Mark the node selected. This can't happen while
-	// holding the lock because it invokes our state change callback.
 	w.ns.SetState(w.nextNode, w.selected, nodestate.Flags{}, time.Second*5)
 	return true
+}
+
+func (w *WrsIterator) chooseNode() *enode.Node {
+	w.lock.Lock()
+	defer w.lock.Unlock()
+
+	for {
+		for !w.closed && w.wrs.IsEmpty() {
+			w.cond.Wait()
+		}
+		if w.closed {
+			return nil
+		}
+		// Choose the next node at random. Even though w.wrs is guaranteed
+		// non-empty here, Choose might return nil if all items have weight
+		// zero.
+		if c := w.wrs.Choose(); c != nil {
+			return w.ns.GetNode(c.(enode.ID))
+		}
+	}
+
 }
 
 // Close ends the iterator.
