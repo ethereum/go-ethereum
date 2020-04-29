@@ -370,10 +370,8 @@ func (s *serverPool) knownSelectWeight(i interface{}) uint64 {
 	}
 	wt, _ := s.calculateNode(n, false, false)
 	if wt < nodeWeightThreshold {
-		go func() {
-			s.ns.SetState(n, nodestate.Flags{}, sfHasValue, 0)
-			s.ns.Persist(n)
-		}()
+		s.ns.SetState(n, nodestate.Flags{}, sfHasValue, 0)
+		s.ns.Persist(n)
 		return 0
 	}
 	return wt
