@@ -26,7 +26,7 @@ import (
 )
 
 // StartHTTPEndpoint starts the HTTP RPC endpoint.
-func StartHTTPEndpoint(endpoint string, timeouts rpc.HTTPTimeouts, handler http.Handler) (net.Listener, error) {
+func StartHTTPEndpoint(endpoint string, timeouts rpc.HTTPTimeouts, handler http.Handler) (*http.Server, net.Addr, error) {
 	// start the HTTP listener
 	var (
 		listener net.Listener
@@ -49,7 +49,7 @@ func StartHTTPEndpoint(endpoint string, timeouts rpc.HTTPTimeouts, handler http.
 }
 
 // startWSEndpoint starts a websocket endpoint.
-func startWSEndpoint(endpoint string, handler http.Handler) (net.Listener, error) {
+func startWSEndpoint(endpoint string, handler http.Handler) (*http.Server, net.Addr, error) {
 	// start the HTTP listener
 	var (
 		listener net.Listener

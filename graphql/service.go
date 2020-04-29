@@ -17,6 +17,7 @@
 package graphql
 
 import (
+	"context"
 	"fmt"
 	"net"
 	"net/http"
@@ -76,7 +77,8 @@ func (s *Service) Start() error {
 	go httpSrv.Serve(listener)
 	log.Info("GraphQL endpoint opened", "url", fmt.Sprintf("http://%s", s.graphqlServer.Endpoint))
 	// add information to graphql http server
-	s.graphqlServer.Listener = listener
+	s.graphqlServer.Server = httpSrv
+	s.graphqlServer.ListenerAddr = listener.Addr()
 	s.graphqlServer.SetHandler(handler)
 	return nil
 }
@@ -102,10 +104,9 @@ func newHandler(backend ethapi.Backend) (http.Handler, error) {
 // Stop terminates all goroutines belonging to the service, blocking until they
 // are all terminated.
 func (s *Service) Stop() error {
-	if s.graphqlServer.Listener != nil {
-		s.graphqlServer.Listener.Close()
-		s.graphqlServer.Listener = nil
-		log.Info("GraphQL endpoint closed", "url", fmt.Sprintf("http://%s", s.graphqlServer.Endpoint))
+	if s.graphqlServer.Server != nil {
+		s.graphqlServer.Server.Shutdown(context.Background())
+		log.Info("GraphQL endpoint closed", "url", fmt.Sprintf("http://%v", s.graphqlServer.ListenerAddr))
 	}
 	return nil
 }

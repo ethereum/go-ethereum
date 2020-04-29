@@ -60,9 +60,9 @@ type Node struct {
 	rpcAPIs       []rpc.API   // List of APIs currently provided by the node
 	inprocHandler *rpc.Server // In-process RPC request handler to process the API requests
 
-	ipcHandler  *HttpServer // TODO
-	httpHandler *HttpServer // TODO
-	wsHandler   *HttpServer // TODO
+	ipc  *HttpServer // TODO
+	http *HttpServer // TODO
+	ws   *HttpServer // TODO
 
 
 	stop chan struct{} // Channel to wait for termination notifications
@@ -115,14 +115,18 @@ func New(conf *Config) (*Node, error) {
 		},
 		services:    make(map[reflect.Type]Service),
 		auxServices: make(map[reflect.Type]AuxiliaryService),
-		ipcHandler: &HttpServer{
+		ipc: &HttpServer{
 			endpoint: conf.IPCEndpoint(),
 		},
-		httpHandler: &HttpServer{
+		http: &HttpServer{
 			endpoint: conf.HTTPEndpoint(),
+			host: conf.HTTPHost,
+			port: conf.HTTPPort,
 		},
-		wsHandler: &HttpServer{
+		ws: &HttpServer{
 			endpoint: conf.WSEndpoint(),
+			host: conf.WSHost,
+			port: conf.WSPort,
 		},
 		eventmux: new(event.TypeMux),
 		log:      conf.Logger,
@@ -352,14 +356,14 @@ func (n *Node) startRPC() error {
 		n.stopInProc()
 		return err
 	}
-	if err := n.startHTTP(n.httpHandler.Endpoint(), n.config.HTTPModules, n.config.HTTPCors, n.config.HTTPVirtualHosts, n.config.HTTPTimeouts, n.config.WSOrigins); err != nil {
+	if err := n.startHTTP(n.http.Endpoint(), n.config.HTTPModules, n.config.HTTPCors, n.config.HTTPVirtualHosts, n.config.HTTPTimeouts, n.config.WSOrigins); err != nil {
 		n.stopIPC()
 		n.stopInProc()
 		return err
 	}
 	// if endpoints are not the same, start separate servers
-	if n.httpHandler.Endpoint() != n.wsHandler.Endpoint() {
-		if err := n.startWS(n.wsHandler.Endpoint(), n.config.WSModules, n.config.WSOrigins, n.config.WSExposeAll); err != nil {
+	if n.http.Endpoint() != n.ws.Endpoint() {
+		if err := n.startWS(n.ws.Endpoint(), n.config.WSModules, n.config.WSOrigins, n.config.WSExposeAll); err != nil {
 			n.stopHTTP()
 			n.stopIPC()
 			n.stopInProc()
@@ -395,30 +399,30 @@ func (n *Node) stopInProc() {
 
 // startIPC initializes and starts the IPC RPC endpoint.
 func (n *Node) startIPC() error {
-	if n.ipcHandler.Endpoint() == "" {
+	if n.ipc.Endpoint() == "" {
 		return nil // IPC disabled.
 	}
-	listener, handler, err := rpc.StartIPCEndpoint(n.ipcHandler.Endpoint(), n.rpcAPIs)
+	listener, handler, err := rpc.StartIPCEndpoint(n.ipc.Endpoint(), n.rpcAPIs)
 	if err != nil {
 		return err
 	}
-	n.ipcHandler.Listener = listener
-	n.ipcHandler.handler = handler
-	n.log.Info("IPC endpoint opened", "url", n.ipcHandler.Endpoint())
+	n.ipc.Listener = listener
+	n.ipc.handler = handler
+	n.log.Info("IPC endpoint opened", "url", n.ipc.Endpoint())
 	return nil
 }
 
 // stopIPC terminates the IPC RPC endpoint.
 func (n *Node) stopIPC() {
-	if n.ipcHandler.Listener != nil {
-		n.ipcHandler.Listener.Close()
-		n.ipcHandler.Listener = nil
+	if n.ipc.Listener != nil {
+		n.ipc.Listener.Close()
+		n.ipc.Listener = nil
 
-		n.log.Info("IPC endpoint closed", "url", n.ipcHandler.Endpoint())
+		n.log.Info("IPC endpoint closed", "url", n.ipc.Endpoint())
 	}
-	if n.ipcHandler.Srv != nil {
-		n.ipcHandler.Srv.Stop()
-		n.ipcHandler.Srv = nil
+	if n.ipc.Srv != nil {
+		n.ipc.Srv.Stop()
+		n.ipc.Srv = nil
 	}
 }
 
@@ -436,38 +440,39 @@ func (n *Node) startHTTP(endpoint string, modules []string, cors []string, vhost
 	}
 	handler := NewHTTPHandlerStack(srv, cors, vhosts)
 	// wrap handler in websocket handler only if websocket port is the same as http rpc
-	if n.httpHandler.Endpoint() == n.wsHandler.Endpoint() {
+	if n.http.Endpoint() == n.ws.Endpoint() {
 		handler = NewWebsocketUpgradeHandler(handler, srv.WebsocketHandler(wsOrigins))
 	}
 	httpServer, addr, err := StartHTTPEndpoint(endpoint, timeouts, handler)
 	if err != nil {
 		return err
 	}
-	n.log.Info("HTTP endpoint opened", "url", fmt.Sprintf("http://%v/", listener.Addr()),
+	n.log.Info("HTTP endpoint opened", "url", fmt.Sprintf("http://%v/", addr),
 		"cors", strings.Join(cors, ","),
 		"vhosts", strings.Join(vhosts, ","))
-	if n.httpHandler.Endpoint() == n.wsHandler.Endpoint() {
-		n.log.Info("WebSocket endpoint opened", "url", fmt.Sprintf("ws://%v", listener.Addr()))
+	if n.http.Endpoint() == n.ws.Endpoint() {
+		n.log.Info("WebSocket endpoint opened", "url", fmt.Sprintf("ws://%v", addr))
 	}
 	// All listeners booted successfully
-	n.httpHandler.endpoint = endpoint
-	n.httpHandler.Listener = listener
-	n.httpHandler.Srv = srv
+	n.http.endpoint = endpoint
+	n.http.Server = httpServer
+	n.http.ListenerAddr = addr
+	n.http.Srv = srv
 
 	return nil
 }
 
 // stopHTTP terminates the HTTP RPC endpoint.
 func (n *Node) stopHTTP() {
-	if n.httpHandler.Listener != nil {
-		url := fmt.Sprintf("http://%v/", n.httpHandler.Listener.Addr())
-		n.httpHandler.Listener.Close()
-		n.httpHandler.Listener = nil
+	if n.http.Server != nil {
+		url := fmt.Sprintf("http://%v/", n.http.ListenerAddr)
+		// Don't bother imposing a timeout here.
+		n.http.Server.Shutdown(context.Background())
 		n.log.Info("HTTP Endpoint closed", "url", url)
 	}
-	if n.httpHandler.Srv != nil {
-		n.httpHandler.Srv.Stop()
-		n.httpHandler.Srv = nil
+	if n.http.Srv != nil {
+		n.http.Srv.Stop()
+		n.http.Srv = nil
 	}
 }
 
@@ -488,26 +493,27 @@ func (n *Node) startWS(endpoint string, modules []string, wsOrigins []string, ex
 	if err != nil {
 		return err
 	}
-	n.log.Info("WebSocket endpoint opened", "url", fmt.Sprintf("ws://%s", listener.Addr()))
+	n.log.Info("WebSocket endpoint opened", "url", fmt.Sprintf("ws://%s", addr))
 	// All listeners booted successfully
-	n.wsHandler.endpoint = endpoint
-	n.wsHandler.Listener = listener
-	n.wsHandler.Srv = srv
+	n.ws.endpoint = endpoint
+	n.ws.ListenerAddr = addr
+	n.ws.Server = httpServer
+	n.ws.Srv = srv
 
 	return nil
 }
 
 // stopWS terminates the websocket RPC endpoint.
 func (n *Node) stopWS() {
-	if n.wsHandler.Listener != nil {
-		n.wsHandler.Listener.Close()
-		n.wsHandler.Listener = nil
-
-		n.log.Info("WebSocket endpoint closed", "url", fmt.Sprintf("ws://%s", n.wsHandler.Endpoint))
+	if n.ws.Server != nil {
+		url := fmt.Sprintf("http://%v/", n.ws.ListenerAddr)
+		// Don't bother imposing a timeout here.
+		n.ws.Server.Shutdown(context.Background())
+		n.log.Info("HTTP Endpoint closed", "url", url)
 	}
-	if n.wsHandler.Srv != nil {
-		n.wsHandler.Srv.Stop()
-		n.wsHandler.Srv = nil
+	if n.ws.Srv != nil {
+		n.ws.Srv.Stop()
+		n.ws.Srv = nil
 	}
 }
 
@@ -681,7 +687,7 @@ func (n *Node) AccountManager() *accounts.Manager {
 
 // IPCEndpoint retrieves the current IPC endpoint used by the protocol stack.
 func (n *Node) IPCEndpoint() string {
-	return n.ipcHandler.Endpoint()
+	return n.ipc.Endpoint()
 }
 
 // HTTPEndpoint retrieves the current HTTP endpoint used by the protocol stack.
@@ -689,10 +695,10 @@ func (n *Node) HTTPEndpoint() string {
 	n.lock.Lock()
 	defer n.lock.Unlock()
 
-	if n.httpHandler.Listener != nil {
-		return n.httpHandler.Listener.Addr().String()
+	if n.http.Server != nil {
+		return n.http.ListenerAddr.String()
 	}
-	return n.httpHandler.Endpoint()
+	return n.http.Endpoint()
 }
 
 // WSEndpoint retrieves the current WS endpoint
@@ -701,10 +707,10 @@ func (n *Node) WSEndpoint() string {
 	n.lock.Lock()
 	defer n.lock.Unlock()
 
-	if n.wsHandler.Listener != nil {
-		return n.wsHandler.Listener.Addr().String()
+	if n.ws.Server != nil {
+		return n.ws.ListenerAddr.String()
 	}
-	return n.wsHandler.Endpoint()
+	return n.ws.Endpoint()
 }
 
 // EventMux retrieves the event multiplexer used by all the network services in

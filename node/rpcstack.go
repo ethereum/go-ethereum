@@ -34,7 +34,10 @@ import (
 type HttpServer struct {
 	handler http.Handler
 	Srv     *rpc.Server
-	Listener net.Listener
+	Server *http.Server
+
+	Listener     net.Listener
+	ListenerAddr net.Addr
 
 	endpoint string
 	host     string
