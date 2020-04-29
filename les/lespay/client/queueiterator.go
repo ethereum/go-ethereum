@@ -27,11 +27,12 @@ import (
 // QueueIterator returns nodes from the specified selectable set in the same order as
 // they entered the set.
 type QueueIterator struct {
-	lock     sync.Mutex
+	lock sync.Mutex
+	cond *sync.Cond
+
 	ns       *nodestate.NodeStateMachine
 	queue    []*enode.Node
 	selected nodestate.Flags
-	wakeup   chan struct{}
 	nextNode *enode.Node
 	closed   bool
 }
@@ -39,13 +40,14 @@ type QueueIterator struct {
 // NewQueueIterator creates a new QueueIterator. Nodes are selectable if they have all the required
 // and none of the disabled flags set. When a node is selected the selectedFlag is set which also
 // disables further selectability until it is removed or times out.
-// The ENR field should be set for all selectable nodes so that the iterator can return complete enodes.
 func NewQueueIterator(ns *nodestate.NodeStateMachine, requireFlags, disableFlags, selectedFlag nodestate.Flags) *QueueIterator {
-	disableFlags = disableFlags.Or(selectedFlag)
 	qi := &QueueIterator{
 		ns:       ns,
 		selected: selectedFlag,
 	}
+	qi.cond = sync.NewCond(&qi.lock)
+
+	disableFlags = disableFlags.Or(selectedFlag)
 	ns.SubscribeState(requireFlags.Or(disableFlags), func(n *enode.Node, oldState, newState nodestate.Flags) {
 		oldMatch := oldState.HasAll(requireFlags) && oldState.HasNone(disableFlags)
 		newMatch := newState.HasAll(requireFlags) && newState.HasNone(disableFlags)
@@ -54,12 +56,10 @@ func NewQueueIterator(ns *nodestate.NodeStateMachine, requireFlags, disableFlags
 		}
 
 		qi.lock.Lock()
+		defer qi.lock.Unlock()
+
 		if newMatch {
 			qi.queue = append(qi.queue, n)
-			if qi.wakeup != nil {
-				close(qi.wakeup)
-				qi.wakeup = nil
-			}
 		} else {
 			id := n.ID()
 			for i, qn := range qi.queue {
@@ -70,48 +70,42 @@ func NewQueueIterator(ns *nodestate.NodeStateMachine, requireFlags, disableFlags
 				}
 			}
 		}
-		qi.lock.Unlock()
+		qi.cond.Signal()
 	})
 	return qi
 }
 
-// Next implements enode.Iterator
+// Next moves to the next selectable node.
 func (qi *QueueIterator) Next() bool {
 	qi.lock.Lock()
-	for {
-		if qi.closed {
-			qi.lock.Unlock()
-			return false
-		}
-		if len(qi.queue) > 0 {
-			qi.nextNode = qi.queue[0]
-			copy(qi.queue[:len(qi.queue)-1], qi.queue[1:])
-			qi.queue = qi.queue[:len(qi.queue)-1]
-			qi.lock.Unlock()
-			qi.ns.SetState(qi.nextNode, qi.selected, nodestate.Flags{}, time.Second*5)
-			return true
-		}
-		ch := make(chan struct{})
-		qi.wakeup = ch
-		qi.lock.Unlock()
-		<-ch
-		qi.lock.Lock()
+	for !qi.closed && len(qi.queue) == 0 {
+		qi.cond.Wait()
 	}
+	if qi.closed {
+		qi.nextNode = nil
+		qi.lock.Unlock()
+		return false
+	}
+	// Move to the next node in queue.
+	qi.nextNode = qi.queue[0]
+	copy(qi.queue[:len(qi.queue)-1], qi.queue[1:])
+	qi.queue = qi.queue[:len(qi.queue)-1]
+	qi.lock.Unlock()
+	// Mark the node selected. This can't happen while
+	// holding the lock because it invokes our state change callback.
+	qi.ns.SetState(qi.nextNode, qi.selected, nodestate.Flags{}, time.Second*5)
+	return true
 }
 
-// Close implements enode.Iterator
+// Close ends the iterator.
 func (qi *QueueIterator) Close() {
 	qi.lock.Lock()
-	defer qi.lock.Unlock()
-
 	qi.closed = true
-	if qi.wakeup != nil {
-		close(qi.wakeup)
-		qi.wakeup = nil
-	}
+	qi.lock.Unlock()
+	qi.cond.Signal()
 }
 
-// Node implements enode.Iterator
+// Node returns the current node.
 func (qi *QueueIterator) Node() *enode.Node {
 	qi.lock.Lock()
 	defer qi.lock.Unlock()
