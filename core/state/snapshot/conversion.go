@@ -102,12 +102,8 @@ func (stat *generateStats) progress(accounts, slots uint64, curAccount common.Ha
 
 	stat.accounts += accounts
 	stat.slots += slots
-	if curAccount != (common.Hash{}) {
-		stat.curAccount = curAccount
-	}
-	if curSlot != (common.Hash{}) {
-		stat.curSlot = curSlot
-	}
+	stat.curAccount = curAccount
+	stat.curSlot = curSlot
 }
 
 // report prints the cumulative progress statistic smartly.
