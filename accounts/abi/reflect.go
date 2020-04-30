@@ -39,32 +39,32 @@ func indirectInterfaceOrPtr(v reflect.Value) reflect.Value {
 	return v
 }
 
-// reflectIntKind returns the reflect using the given size and
+// reflectIntType returns the reflect using the given size and
 // unsignedness.
-func reflectIntKindAndType(unsigned bool, size int) (reflect.Kind, reflect.Type) {
+func reflectIntType(unsigned bool, size int) reflect.Type {
 	if unsigned {
 		switch size {
 		case 8:
-			return reflect.Uint8, uint8T
+			return uint8T
 		case 16:
-			return reflect.Uint16, uint16T
+			return uint16T
 		case 32:
-			return reflect.Uint32, uint32T
+			return uint32T
 		case 64:
-			return reflect.Uint64, uint64T
+			return uint64T
 		}
 	}
 	switch size {
 	case 8:
-		return reflect.Int8, int8T
+		return int8T
 	case 16:
-		return reflect.Int16, int16T
+		return int16T
 	case 32:
-		return reflect.Int32, int32T
+		return int32T
 	case 64:
-		return reflect.Int64, int64T
+		return int64T
 	}
-	return reflect.Ptr, bigT
+	return bigT
 }
 
 // mustArrayToBytesSlice creates a new byte slice with the exact same size as value
