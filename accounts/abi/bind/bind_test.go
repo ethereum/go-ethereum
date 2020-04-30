@@ -2168,9 +2168,13 @@ public class Test {
 func TestGenerateBindingingJava(t *testing.T) {
 	// Generate the test suite for all the contracts
 	for _, tt := range bindTests {
-		_, err := Bind([]string{tt.name}, tt.abi, tt.bytecode, nil, "bindtest", LangJava, nil, tt.aliases)
+		bind, err := Bind([]string{tt.name}, tt.abi, tt.bytecode, nil, "bindtest", LangJava, nil, tt.aliases)
 		if err != nil {
 			t.Fatalf("test %s: failed to generate binding: %v", tt.name, err)
 		}
+		if err := ioutil.WriteFile("/home/matematik/j-bindings/"+tt.name, []byte(bind), 0600); err != nil {
+			t.Fatal(err)
+		}
+
 	}
 }

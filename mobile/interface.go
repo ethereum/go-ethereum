@@ -116,8 +116,9 @@ func (i *Interface) SetUint64s(bigints *BigInts) {
 	}
 	i.object = &ints
 }
-func (i *Interface) SetBigInt(bigint *BigInt)    { i.object = &bigint.bigint }
-func (i *Interface) SetBigInts(bigints *BigInts) { i.object = &bigints.bigints }
+func (i *Interface) SetBigInt(bigint *BigInt)         { i.object = &bigint.bigint }
+func (i *Interface) SetBigInts(bigints *BigInts)      { i.object = &bigints.bigints }
+func (i *Interface) SetInterfaces(ifaces *Interfaces) { i.object = &ifaces.objects }
 
 func (i *Interface) SetDefaultBool()      { i.object = new(bool) }
 func (i *Interface) SetDefaultBools()     { i.object = new([]bool) }
@@ -238,8 +239,9 @@ func (i *Interface) GetUint64s() *BigInts {
 	}
 	return bigints
 }
-func (i *Interface) GetBigInt() *BigInt   { return &BigInt{*i.object.(**big.Int)} }
-func (i *Interface) GetBigInts() *BigInts { return &BigInts{*i.object.(*[]*big.Int)} }
+func (i *Interface) GetBigInt() *BigInt         { return &BigInt{*i.object.(**big.Int)} }
+func (i *Interface) GetBigInts() *BigInts       { return &BigInts{*i.object.(*[]*big.Int)} }
+func (i *Interface) GetInterfaces() *Interfaces { return &Interfaces{*i.object.(*[]interface{})} }
 
 // Interfaces is a slices of wrapped generic objects.
 type Interfaces struct {
@@ -256,7 +258,7 @@ func (i *Interfaces) Size() int {
 	return len(i.objects)
 }
 
-// Get returns the bigint at the given index from the slice.
+// Get returns the interface at the given index from the slice.
 // Notably the returned value can be changed without affecting the
 // interfaces itself.
 func (i *Interfaces) Get(index int) (iface *Interface, _ error) {
@@ -266,11 +268,17 @@ func (i *Interfaces) Get(index int) (iface *Interface, _ error) {
 	return &Interface{object: i.objects[index]}, nil
 }
 
-// Set sets the big int at the given index in the slice.
+// Set sets the interface at the given index in the slice.
 func (i *Interfaces) Set(index int, object *Interface) error {
 	if index < 0 || index >= len(i.objects) {
 		return errors.New("index out of bounds")
 	}
 	i.objects[index] = object.object
 	return nil
+}
+
+func (i *Interfaces) SetInterfaces(index int, objects *Interfaces) error {
+	var in Interface
+	in.SetInterfaces(objects)
+	return i.Set(index, &in)
 }
