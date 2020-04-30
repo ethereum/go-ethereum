@@ -607,8 +607,11 @@ func (b *SimulatedBackend) SendTransaction(ctx context.Context, tx *types.Transa
 	defer b.mu.Unlock()
 
 	// EIP1559 guards
-	eip1559 := b.config.IsEIP1559(b.blockchain.CurrentBlock().Number())
-	eip1559Finalized := b.config.IsEIP1559Finalized(b.blockchain.CurrentBlock().Number())
+	eip1559 := b.config.IsEIP1559(b.pendingBlock.Number())
+	eip1559Finalized := b.config.IsEIP1559Finalized(b.pendingBlock.Number())
+	if eip1559 && b.pendingBlock.BaseFee() == nil {
+		return core.ErrNoBaseFee
+	}
 	if eip1559Finalized && (tx.GasPremium() == nil || tx.FeeCap() == nil || tx.GasPrice() != nil) {
 		return core.ErrTxNotEIP1559
 	}

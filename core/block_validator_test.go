@@ -90,7 +90,7 @@ func TestHeaderVerificationEIP1559(t *testing.T) {
 		testdb  = rawdb.NewMemoryDatabase()
 		gspec   = &Genesis{
 			Config:  params.EIP1559ChainConfig,
-			Alloc:   GenesisAlloc{addr1: {Balance: big.NewInt(1000000)}},
+			Alloc:   GenesisAlloc{addr1: {Balance: big.NewInt(1000000)}, addr2: {Balance: new(big.Int).SetUint64((params.EIP1559InitialBaseFee * params.TxGas) + 1000)}},
 			BaseFee: new(big.Int).SetUint64(params.EIP1559InitialBaseFee)}
 		genesis   = gspec.MustCommit(testdb)
 		signer    = types.HomesteadSigner{}
@@ -104,7 +104,7 @@ func TestHeaderVerificationEIP1559(t *testing.T) {
 				// In block 2, addr1 sends some more ether to addr2.
 				// addr2 attempts to pass it on to addr3 using a EIP1559 transaction
 				tx1, _ := types.SignTx(types.NewTransaction(gen.TxNonce(addr1), addr2, big.NewInt(1000), params.TxGas, new(big.Int), nil, nil, nil), signer, key1)
-				tx2, _ := types.SignTx(types.NewTransaction(gen.TxNonce(addr2), addr3, big.NewInt(1000), params.TxGas, nil, nil, new(big.Int), new(big.Int)), signer, key2)
+				tx2, _ := types.SignTx(types.NewTransaction(gen.TxNonce(addr2), addr3, big.NewInt(1000), params.TxGas, nil, nil, new(big.Int), new(big.Int).SetUint64(params.EIP1559InitialBaseFee)), signer, key2)
 				gen.AddTx(tx1)
 				gen.AddTx(tx2)
 			case 2:
@@ -172,8 +172,9 @@ func TestHeaderVerificationEIP1559Finalized(t *testing.T) {
 		addr3   = crypto.PubkeyToAddress(key3.PublicKey)
 		testdb  = rawdb.NewMemoryDatabase()
 		gspec   = &Genesis{
-			Config:  params.EIP1559FinalizedChainConfig,
-			Alloc:   GenesisAlloc{addr1: {Balance: new(big.Int).SetUint64((params.EIP1559InitialBaseFee * params.TxGas) + 1000000)}},
+			Config: params.EIP1559FinalizedChainConfig,
+			Alloc: GenesisAlloc{addr1: {Balance: new(big.Int).SetUint64((params.EIP1559InitialBaseFee * params.TxGas * 2) + 11000)},
+				addr2: {Balance: new(big.Int).SetUint64((params.EIP1559InitialBaseFee * params.TxGas) + 1000)}},
 			BaseFee: new(big.Int).SetUint64(params.EIP1559InitialBaseFee)}
 		genesis   = gspec.MustCommit(testdb)
 		signer    = types.HomesteadSigner{}
@@ -186,8 +187,8 @@ func TestHeaderVerificationEIP1559Finalized(t *testing.T) {
 			case 1:
 				// In block 2, addr1 sends some more ether to addr2.
 				// addr2 attempts to pass it on to addr3 using a EIP1559 transaction
-				tx1, _ := types.SignTx(types.NewTransaction(gen.TxNonce(addr1), addr2, big.NewInt(1000), params.TxGas, nil, nil, new(big.Int), new(big.Int)), signer, key1)
-				tx2, _ := types.SignTx(types.NewTransaction(gen.TxNonce(addr2), addr3, big.NewInt(1000), params.TxGas, nil, nil, new(big.Int), new(big.Int)), signer, key2)
+				tx1, _ := types.SignTx(types.NewTransaction(gen.TxNonce(addr1), addr2, big.NewInt(1000), params.TxGas, nil, nil, new(big.Int), new(big.Int).SetUint64(params.EIP1559InitialBaseFee)), signer, key1)
+				tx2, _ := types.SignTx(types.NewTransaction(gen.TxNonce(addr2), addr3, big.NewInt(1000), params.TxGas, nil, nil, new(big.Int), new(big.Int).SetUint64(params.EIP1559InitialBaseFee)), signer, key2)
 				gen.AddTx(tx1)
 				gen.AddTx(tx2)
 			case 2:
@@ -645,7 +646,7 @@ func TestCalcGasLimitAndBaseFee(t *testing.T) {
 			big.NewInt(1059276716),
 			new(big.Int).SetUint64(params.EIP1559ForkFinalizedBlockNumber + 10000),
 			params.MaxGasEIP1559,
-			new(big.Int).SetUint64(1138722469),
+			new(big.Int).SetUint64(1191686305),
 		},
 		{
 			params.EIP1559FinalizedChainConfig,

@@ -193,7 +193,7 @@ func generateChainDuringTransition(t *testing.T) {
 	// Ensure that key1 has some funds in the genesis block.
 	gspec := &Genesis{
 		Config:  params.EIP1559ChainConfig,
-		Alloc:   GenesisAlloc{addr1: {Balance: big.NewInt(1000000)}},
+		Alloc:   GenesisAlloc{addr1: {Balance: big.NewInt(1000000)}, addr2: {Balance: new(big.Int).SetUint64((params.EIP1559InitialBaseFee * params.TxGas) + 1000)}},
 		BaseFee: new(big.Int).SetUint64(params.EIP1559InitialBaseFee),
 	}
 	genesis := gspec.MustCommit(db)
@@ -212,7 +212,7 @@ func generateChainDuringTransition(t *testing.T) {
 			// In block 2, addr1 sends some more ether to addr2.
 			// addr2 attempts to pass it on to addr3 using a EIP1559 transaction
 			tx1, _ := types.SignTx(types.NewTransaction(gen.TxNonce(addr1), addr2, big.NewInt(1000), params.TxGas, new(big.Int), nil, nil, nil), signer, key1)
-			tx2, _ := types.SignTx(types.NewTransaction(gen.TxNonce(addr2), addr3, big.NewInt(1000), params.TxGas, nil, nil, new(big.Int), new(big.Int)), signer, key2)
+			tx2, _ := types.SignTx(types.NewTransaction(gen.TxNonce(addr2), addr3, big.NewInt(1000), params.TxGas, nil, nil, new(big.Int), new(big.Int).SetUint64(params.EIP1559InitialBaseFee)), signer, key2)
 			gen.AddTx(tx1)
 			gen.AddTx(tx2)
 		case 2:
@@ -245,7 +245,7 @@ func generateChainDuringTransition(t *testing.T) {
 	if state.GetBalance(addr1).Uint64() != 989000 {
 		t.Fatalf("expected balance of addr1 to equal %d got %d", 989000, state.GetBalance(addr1).Uint64())
 	}
-	if state.GetBalance(addr2).Uint64() != 10000 {
+	if state.GetBalance(addr2).Uint64() != 4917051584000 {
 		t.Fatalf("expected balance of addr2 to equal %d got %d", 10000, state.GetBalance(addr2).Uint64())
 	}
 	// This value is different because the test config we use has Constantinople active (uses ConstantinopleBlockReward)
@@ -338,8 +338,9 @@ func generateChainAfterFinalization2(t *testing.T) {
 
 	// Ensure that key1 has some funds in the genesis block.
 	gspec := &Genesis{
-		Config:  params.EIP1559FinalizedChainConfig,
-		Alloc:   GenesisAlloc{addr1: {Balance: new(big.Int).SetUint64((params.EIP1559InitialBaseFee * params.TxGas) + 1000000)}},
+		Config: params.EIP1559FinalizedChainConfig,
+		Alloc: GenesisAlloc{addr1: {Balance: new(big.Int).SetUint64((params.EIP1559InitialBaseFee * params.TxGas * 2) + 11000)},
+			addr2: {Balance: new(big.Int).SetUint64((params.EIP1559InitialBaseFee * params.TxGas) + 1000)}},
 		BaseFee: new(big.Int).SetUint64(params.EIP1559InitialBaseFee),
 	}
 	genesis := gspec.MustCommit(db)
@@ -357,8 +358,8 @@ func generateChainAfterFinalization2(t *testing.T) {
 		case 1:
 			// In block 2, addr1 sends some more ether to addr2.
 			// addr2 attempts to pass it on to addr3 using a EIP1559 transaction
-			tx1, _ := types.SignTx(types.NewTransaction(gen.TxNonce(addr1), addr2, big.NewInt(1000), params.TxGas, nil, nil, new(big.Int), new(big.Int)), signer, key1)
-			tx2, _ := types.SignTx(types.NewTransaction(gen.TxNonce(addr2), addr3, big.NewInt(1000), params.TxGas, nil, nil, new(big.Int), new(big.Int)), signer, key2)
+			tx1, _ := types.SignTx(types.NewTransaction(gen.TxNonce(addr1), addr2, big.NewInt(1000), params.TxGas, nil, nil, new(big.Int), new(big.Int).SetUint64(params.EIP1559InitialBaseFee)), signer, key1)
+			tx2, _ := types.SignTx(types.NewTransaction(gen.TxNonce(addr2), addr3, big.NewInt(1000), params.TxGas, nil, nil, new(big.Int), new(big.Int).SetUint64(params.EIP1559InitialBaseFee)), signer, key2)
 			gen.AddTx(tx1)
 			gen.AddTx(tx2)
 		case 2:
@@ -388,11 +389,11 @@ func generateChainAfterFinalization2(t *testing.T) {
 	if blockchain.CurrentBlock().Number().Uint64() != 5 {
 		t.Fatalf("expected last block to equal %d got %d", 5, blockchain.CurrentBlock().Number().Uint64())
 	}
-	if state.GetBalance(addr1).Uint64() != 2625000989000 {
-		t.Fatalf("expected balance of addr1 to equal %d got %d", 989000, state.GetBalance(addr1).Uint64())
+	if state.GetBalance(addr1).Uint64() != 7542051573000 {
+		t.Fatalf("expected balance of addr1 to equal %d got %d", 7542051573000, state.GetBalance(addr1).Uint64())
 	}
-	if state.GetBalance(addr2).Uint64() != 10000 {
-		t.Fatalf("expected balance of addr2 to equal %d got %d", 10000, state.GetBalance(addr2).Uint64())
+	if state.GetBalance(addr2).Uint64() != 4917051584000 {
+		t.Fatalf("expected balance of addr2 to equal %d got %d", 4917051584000, state.GetBalance(addr2).Uint64())
 	}
 	// This value is different than in TestGenerateChain because the test config we use has Constantinople active (uses ConstantinopleBlockReward)
 	bal, _ := new(big.Int).SetString("7875000000000001000", 10)

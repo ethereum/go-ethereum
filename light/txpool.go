@@ -397,6 +397,17 @@ func (pool *TxPool) validateTx(ctx context.Context, tx *types.Transaction) error
 		return core.ErrEIP1559GasLimit
 	}
 
+	// Derive the gasPrice from the tx.GasPremium() and tx.FeeCap() (EIP1559 transaction) to ensure it is greater than BaseFee
+	if tx.GasPremium() != nil {
+		gasPrice := new(big.Int).Add(pool.chain.CurrentHeader().BaseFee, tx.GasPremium())
+		if gasPrice.Cmp(tx.FeeCap()) > 0 {
+			gasPrice.Set(tx.FeeCap())
+		}
+		if gasPrice.Cmp(pool.chain.CurrentHeader().BaseFee) < 0 {
+			return core.ErrEIP1559GasPriceLessThanBaseFee
+		}
+	}
+
 	// Transactions can't be negative. This may never happen
 	// using RLP decoded transactions but may occur if you create
 	// a transaction using the RPC for example.

@@ -26,8 +26,8 @@ import (
 )
 
 var (
-	errInsufficientBalanceForGas   = errors.New("insufficient balance to pay for gas")
-	errInsufficientCoinbaseBalance = errors.New("insufficient coinbase balance to apply a negative coinbase credit")
+	errInsufficientBalanceForGas      = errors.New("insufficient balance to pay for gas")
+	ErrEIP1559GasPriceLessThanBaseFee = errors.New("EIP11559 GasPrice is less than the current BaseFee")
 )
 
 /*
@@ -262,6 +262,12 @@ func (st *StateTransition) preCheck() error {
 	if st.msg.GasPrice() == nil && (st.msg.GasPremium() == nil || st.msg.FeeCap() == nil) {
 		return ErrMissingGasFields
 	}
+	// If it is an EIp1559 transaction, make sure the derived gasPrice is >= baseFee
+	if st.isEIP1559 {
+		if st.eip1559GasPrice.Cmp(st.evm.BaseFee) < 0 {
+			return ErrEIP1559GasPriceLessThanBaseFee
+		}
+	}
 	return st.buyGas()
 }
 
@@ -328,15 +334,7 @@ func (st *StateTransition) TransitionDb() (*ExecutionResult, error) {
 	if st.isEIP1559 {
 		// block.coinbase gains (gasprice - BASEFEE) * gasused
 		coinBaseCredit := new(big.Int).Mul(new(big.Int).Sub(st.eip1559GasPrice, st.evm.BaseFee), new(big.Int).SetUint64(st.gasUsed()))
-		//  If gasprice < BASEFEE (due to the fee_cap), this means that the block.coinbase loses funds from this operation;
-		//  in this case, check that the post-balance is non-negative and throw an exception if it is negative.
-		if coinBaseCredit.Sign() < 0 {
-			coinbaseBal := st.state.GetBalance(st.evm.Coinbase)
-			postBalance := new(big.Int).Add(coinbaseBal, coinBaseCredit)
-			if postBalance.Sign() < 0 {
-				return nil, 0, vmerr != nil, errInsufficientCoinbaseBalance
-			}
-		}
+		// coinbaseCredit cannot be negative since we precheck that eip1559GasPrice >= st.evm.BaseFee
 		st.state.AddBalance(st.evm.Coinbase, coinBaseCredit)
 
 		return ret, st.gasUsed(), vmerr != nil, err
