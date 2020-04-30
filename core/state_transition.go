@@ -28,8 +28,8 @@ import (
 )
 
 var (
-	errInsufficientBalanceForGas   = errors.New("insufficient balance to pay for gas")
-	errInsufficientCoinbaseBalance = errors.New("insufficient coinbase balance to apply a negative coinbase credit")
+	errInsufficientBalanceForGas      = errors.New("insufficient balance to pay for gas")
+	ErrEIP1559GasPriceLessThanBaseFee = errors.New("EIP11559 GasPrice is less than the current BaseFee")
 )
 
 /*
@@ -266,6 +266,12 @@ func (st *StateTransition) preCheck() error {
 	if st.msg.GasPrice() == nil && (st.msg.GasPremium() == nil || st.msg.FeeCap() == nil) {
 		return ErrMissingGasFields
 	}
+	// If it is an EIp1559 transaction, make sure the derived gasPrice is >= baseFee
+	if st.isEIP1559 {
+		if st.eip1559GasPrice.Cmp(st.evm.BaseFee) < 0 {
+			return ErrEIP1559GasPriceLessThanBaseFee
+		}
+	}
 	return st.buyGas()
 }
 
@@ -331,7 +337,7 @@ func (st *StateTransition) TransitionDb() (*ExecutionResult, error) {
 	st.refundGas()
 	if st.isEIP1559 {
 		// block.coinbase gains (gasprice - BASEFEE) * gasused
-		coinBaseCredit := new(big.Int).Mul(new(big.Int).Sub(st.eip1559GasPrice, st.evm.BaseFee), new(big.Int).SetUint64(st.gasUsed()))
+		coinBaseCredit := new(big.Int).Mul(new(big.Int).Sub(st.eip1559GasPrice, st.evm.Context.BaseFee), new(big.Int).SetUint64(st.gasUsed()))
 		// coinbaseCredit cannot be negative since we precheck that eip1559GasPrice >= st.evm.BaseFee
 		st.state.AddBalance(st.evm.Context.Coinbase, coinBaseCredit)
 		return &ExecutionResult{

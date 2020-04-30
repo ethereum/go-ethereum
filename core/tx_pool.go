@@ -595,6 +595,9 @@ func (pool *TxPool) validateTx(tx *types.Transaction, local bool) error {
 		if gasPrice.Cmp(tx.FeeCap()) > 0 {
 			gasPrice.Set(tx.FeeCap())
 		}
+		if gasPrice.Cmp(pool.chain.CurrentBlock().BaseFee()) < 0 {
+			return ErrEIP1559GasPriceLessThanBaseFee
+		}
 	}
 
 	// Heuristic limit, reject transactions over 32KB to prevent DOS attacks

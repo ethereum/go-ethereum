@@ -834,6 +834,9 @@ func DoCall(ctx context.Context, b Backend, args CallArgs, blockNrOrHash rpc.Blo
 	// EIP1559 guards
 	eip1559 := b.ChainConfig().IsEIP1559(b.CurrentBlock().Number())
 	eip1559Finalized := b.ChainConfig().IsEIP1559Finalized(b.CurrentBlock().Number())
+	if eip1559 && b.CurrentBlock().BaseFee() == nil {
+		return nil, 0, false, core.ErrNoBaseFee
+	}
 	if eip1559Finalized && (args.GasPremium == nil || args.FeeCap == nil || args.GasPrice != nil) {
 		return nil, 0, false, core.ErrTxNotEIP1559
 	}
@@ -846,8 +849,17 @@ func DoCall(ctx context.Context, b Backend, args CallArgs, blockNrOrHash rpc.Blo
 	if args.FeeCap != nil && args.GasPremium == nil {
 		return nil, 0, false, errors.New("if FeeCap is set, GasPremium must be set")
 	}
-	if args.GasPremium != nil && args.FeeCap == nil {
-		return nil, 0, false, errors.New("if GasPremium is set, FeeCap must be set")
+	if args.GasPremium != nil {
+		if args.FeeCap == nil {
+			return nil, 0, false, errors.New("if GasPremium is set, FeeCap must be set")
+		}
+		gasPrice := new(big.Int).Add(b.CurrentBlock().BaseFee(), args.GasPremium.ToInt())
+		if gasPrice.Cmp(args.FeeCap.ToInt()) > 0 {
+			gasPrice.Set(args.FeeCap.ToInt())
+		}
+		if gasPrice.Cmp(b.CurrentBlock().BaseFee()) < 0 {
+			return nil, 0, false, core.ErrEIP1559GasPriceLessThanBaseFee
+		}
 	}
 
 	state, header, err := b.StateAndHeaderByNumberOrHash(ctx, blockNrOrHash)
@@ -1530,6 +1542,9 @@ func (args *SendTxArgs) setDefaults(ctx context.Context, b Backend) error {
 	// EIP1559 guards
 	eip1559 := b.ChainConfig().IsEIP1559(b.CurrentBlock().Number())
 	eip1559Finalized := b.ChainConfig().IsEIP1559Finalized(b.CurrentBlock().Number())
+	if eip1559 && b.CurrentBlock().BaseFee() == nil {
+		return core.ErrNoBaseFee
+	}
 	if eip1559Finalized && (args.GasPremium == nil || args.FeeCap == nil || args.GasPrice != nil) {
 		return core.ErrTxNotEIP1559
 	}
@@ -1542,9 +1557,19 @@ func (args *SendTxArgs) setDefaults(ctx context.Context, b Backend) error {
 	if args.FeeCap != nil && args.GasPremium == nil {
 		return errors.New("if FeeCap is set, GasPremium must be set")
 	}
-	if args.GasPremium != nil && args.FeeCap == nil {
-		return errors.New("if GasPremium is set, FeeCap must be set")
+	if args.GasPremium != nil {
+		if args.FeeCap == nil {
+			return errors.New("if GasPremium is set, FeeCap must be set")
+		}
+		gasPrice := new(big.Int).Add(b.CurrentBlock().BaseFee(), args.GasPremium.ToInt())
+		if gasPrice.Cmp(args.FeeCap.ToInt()) > 0 {
+			gasPrice.Set(args.FeeCap.ToInt())
+		}
+		if gasPrice.Cmp(b.CurrentBlock().BaseFee()) < 0 {
+			return core.ErrEIP1559GasPriceLessThanBaseFee
+		}
 	}
+
 	// If EIP1559 is activated but not finalized and neither a GasPrice, GasPremium, or FeeCap are provided default to suggesting a GasPrice
 	if args.GasPrice == nil && args.GasPremium == nil {
 		price, err := b.SuggestPrice(ctx)
@@ -1701,6 +1726,9 @@ func (s *PublicTransactionPoolAPI) SendRawTransaction(ctx context.Context, encod
 	// EIP1559 guards
 	eip1559 := s.b.ChainConfig().IsEIP1559(s.b.CurrentBlock().Number())
 	eip1559Finalized := s.b.ChainConfig().IsEIP1559Finalized(s.b.CurrentBlock().Number())
+	if eip1559 && s.b.CurrentBlock().BaseFee() == nil {
+		return common.Hash{}, core.ErrNoBaseFee
+	}
 	if eip1559Finalized && (tx.GasPremium() == nil || tx.FeeCap() == nil || tx.GasPrice() != nil) {
 		return common.Hash{}, core.ErrTxNotEIP1559
 	}
@@ -1712,6 +1740,15 @@ func (s *PublicTransactionPoolAPI) SendRawTransaction(ctx context.Context, encod
 	}
 	if tx.GasPrice() == nil && (tx.GasPremium() == nil || tx.FeeCap() == nil) {
 		return common.Hash{}, core.ErrMissingGasFields
+	}
+	if tx.GasPremium() != nil {
+		gasPrice := new(big.Int).Add(s.b.CurrentBlock().BaseFee(), tx.GasPremium())
+		if gasPrice.Cmp(tx.FeeCap()) > 0 {
+			gasPrice.Set(tx.FeeCap())
+		}
+		if gasPrice.Cmp(s.b.CurrentBlock().BaseFee()) < 0 {
+			return common.Hash{}, core.ErrEIP1559GasPriceLessThanBaseFee
+		}
 	}
 	return SubmitTransaction(ctx, s.b, tx)
 }
