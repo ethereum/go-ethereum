@@ -148,6 +148,14 @@ type int256Struct struct {
 	Int256Value *big.Int
 }
 
+type hashStruct struct {
+	HashValue common.Hash
+}
+
+type funcStruct struct {
+	FuncValue [24]byte
+}
+
 type topicTest struct {
 	name    string
 	args    args
@@ -159,6 +167,8 @@ func setupTopicsTests() []topicTest {
 	int8Type, _ := NewType("int8", "", nil)
 	int256Type, _ := NewType("int256", "", nil)
 	tupleType, _ := NewType("tuple(int256,int8)", "", nil)
+	stringType, _ := NewType("string", "", nil)
+	funcType, _ := NewType("function", "", nil)
 
 	tests := []topicTest{
 		{
@@ -221,7 +231,50 @@ func setupTopicsTests() []topicTest {
 			wantErr: false,
 		},
 		{
-			name: "tuple(int256, int8)",
+			name: "hash type",
+			args: args{
+				createObj: func() interface{} { return &hashStruct{} },
+				resultObj: func() interface{} { return &hashStruct{crypto.Keccak256Hash([]byte("stringtopic"))} },
+				resultMap: func() map[string]interface{} {
+					return map[string]interface{}{"hashValue": crypto.Keccak256Hash([]byte("stringtopic"))}
+				},
+				fields: Arguments{Argument{
+					Name:    "hashValue",
+					Type:    stringType,
+					Indexed: true,
+				}},
+				topics: []common.Hash{
+					crypto.Keccak256Hash([]byte("stringtopic")),
+				},
+			},
+			wantErr: false,
+		},
+		{
+			name: "function type",
+			args: args{
+				createObj: func() interface{} { return &funcStruct{} },
+				resultObj: func() interface{} {
+					return &funcStruct{[24]byte{255, 255, 255, 255, 255, 255, 255, 255,
+						255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255}}
+				},
+				resultMap: func() map[string]interface{} {
+					return map[string]interface{}{"funcValue": [24]byte{255, 255, 255, 255, 255, 255, 255, 255,
+						255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255}}
+				},
+				fields: Arguments{Argument{
+					Name:    "funcValue",
+					Type:    funcType,
+					Indexed: true,
+				}},
+				topics: []common.Hash{
+					{0, 0, 0, 0, 0, 0, 0, 0, 255, 255, 255, 255, 255, 255, 255, 255,
+						255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255},
+				},
+			},
+			wantErr: false,
+		},
+		{
+			name: "error on topic/field count mismatch",
 			args: args{
 				createObj: func() interface{} { return nil },
 				resultObj: func() interface{} { return nil },
@@ -248,6 +301,41 @@ func setupTopicsTests() []topicTest {
 				}},
 				topics: []common.Hash{
 					{255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255,
+						255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255},
+				},
+			},
+			wantErr: true,
+		},
+		{
+			name: "error on tuple in topic reconstruction",
+			args: args{
+				createObj: func() interface{} { return &tupleType },
+				resultObj: func() interface{} { return &tupleType },
+				resultMap: func() map[string]interface{} { return make(map[string]interface{}) },
+				fields: Arguments{Argument{
+					Name:    "tupletype",
+					Type:    tupleType,
+					Indexed: true,
+				}},
+				topics: []common.Hash{{0}},
+			},
+			wantErr: true,
+		},
+		{
+			name: "error on improper encoded function",
+			args: args{
+				createObj: func() interface{} { return &funcStruct{} },
+				resultObj: func() interface{} { return &funcStruct{} },
+				resultMap: func() map[string]interface{} {
+					return make(map[string]interface{})
+				},
+				fields: Arguments{Argument{
+					Name:    "funcValue",
+					Type:    funcType,
+					Indexed: true,
+				}},
+				topics: []common.Hash{
+					{0, 0, 0, 0, 0, 0, 0, 128, 255, 255, 255, 255, 255, 255, 255, 255,
 						255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255},
 				},
 			},

@@ -214,9 +214,8 @@ func toGoType(index int, t Type, output []byte) (interface{}, error) {
 				return nil, err
 			}
 			return forTupleUnpack(t, output[begin:])
-		} else {
-			return forTupleUnpack(t, output[index:])
 		}
+		return forTupleUnpack(t, output[index:])
 	case SliceTy:
 		return forEachUnpack(t, output[begin:], 0, length)
 	case ArrayTy:
