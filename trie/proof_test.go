@@ -155,8 +155,8 @@ func (p entrySlice) Len() int           { return len(p) }
 func (p entrySlice) Less(i, j int) bool { return bytes.Compare(p[i].k, p[j].k) < 0 }
 func (p entrySlice) Swap(i, j int)      { p[i], p[j] = p[j], p[i] }
 
-// TestRangeProof tests normal range proof with both edge proofs as the
-// existent proof. The test cases are generated randomly.
+// TestRangeProof tests normal range proof with both edge proofs
+// as the existent proof. The test cases are generated randomly.
 func TestRangeProof(t *testing.T) {
 	trie, vals := randomTrie(4096)
 	var entries entrySlice
@@ -190,8 +190,8 @@ func TestRangeProof(t *testing.T) {
 	}
 }
 
-// TestRangeProof tests normal range proof with the first edge proof as the
-// non-existent proof. The test cases are generated randomly.
+// TestRangeProof tests normal range proof with the first edge proof
+// as the non-existent proof. The test cases are generated randomly.
 func TestRangeProofWithNonExistentProof(t *testing.T) {
 	trie, vals := randomTrie(4096)
 	var entries entrySlice
@@ -232,7 +232,7 @@ func TestRangeProofWithNonExistentProof(t *testing.T) {
 
 // TestRangeProofWithInvalidNonExistentProof tests such scenarios:
 // - The last edge proof is an non-existent proof
-// - There exist the gap between the first leaf and first non-existent proof
+// - There exists a gap between the first element and the left edge proof
 func TestRangeProofWithInvalidNonExistentProof(t *testing.T) {
 	trie, vals := randomTrie(4096)
 	var entries entrySlice
@@ -328,7 +328,7 @@ func TestOneElementRangeProof(t *testing.T) {
 }
 
 // TestEmptyRangeProof tests the range proof with "no" element.
-// The first edge proof must be an non-existent proof.
+// The first edge proof must be a non-existent proof.
 func TestEmptyRangeProof(t *testing.T) {
 	trie, vals := randomTrie(4096)
 	var entries entrySlice

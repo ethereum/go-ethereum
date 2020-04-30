@@ -167,7 +167,7 @@ func proofToPath(rootHash common.Hash, root node, key []byte, proofDb ethdb.KeyV
 		switch cld := child.(type) {
 		case nil:
 			// The trie doesn't contain the key. It's possible
-			// the proof is an non-existing proof, but at least
+			// the proof is a non-existing proof, but at least
 			// we can prove all resolved nodes are correct, it's
 			// enough for us to prove range.
 			if allowNonExistent {
@@ -355,7 +355,7 @@ func unset(parent node, child node, key []byte, pos int, removeLeft bool) error 
 //   range should be all the leaves in the trie.
 //
 // - Zero element proof(left edge proof should be a non-existent proof). In this
-//   case if there are still some other leaves available in the right side, then
+//   case if there are still some other leaves available on the right side, then
 //   an error will be returned.
 //
 // - One element proof. In this case no matter the left edge proof is a non-existent
