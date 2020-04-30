@@ -360,6 +360,74 @@ func TestEmptyRangeProof(t *testing.T) {
 	}
 }
 
+// TestAllElementsProof tests the range proof with all elements.
+// The edge proofs can be nil.
+func TestAllElementsProof(t *testing.T) {
+	trie, vals := randomTrie(4096)
+	var entries entrySlice
+	for _, kv := range vals {
+		entries = append(entries, kv)
+	}
+	sort.Sort(entries)
+
+	var k [][]byte
+	var v [][]byte
+	for i := 0; i < len(entries); i++ {
+		k = append(k, entries[i].k)
+		v = append(v, entries[i].v)
+	}
+	err := VerifyRangeProof(trie.Hash(), k[0], k, v, nil, nil)
+	if err != nil {
+		t.Fatalf("Expected no error, got %v", err)
+	}
+
+	// Even with edge proofs, it should still work.
+	firstProof, lastProof := memorydb.New(), memorydb.New()
+	if err := trie.Prove(entries[0].k, 0, firstProof); err != nil {
+		t.Fatalf("Failed to prove the first node %v", err)
+	}
+	if err := trie.Prove(entries[len(entries)-1].k, 0, lastProof); err != nil {
+		t.Fatalf("Failed to prove the last node %v", err)
+	}
+	err = VerifyRangeProof(trie.Hash(), k[0], k, v, firstProof, lastProof)
+	if err != nil {
+		t.Fatalf("Expected no error, got %v", err)
+	}
+}
+
+// TestSingleSideRangeProof tests the range starts from zero.
+func TestSingleSideRangeProof(t *testing.T) {
+	trie := new(Trie)
+	var entries entrySlice
+	for i := 0; i < 4096; i++ {
+		value := &kv{randBytes(32), randBytes(20), false}
+		trie.Update(value.k, value.v)
+		entries = append(entries, value)
+	}
+	sort.Sort(entries)
+
+	var cases = []int{0, 1, 50, 100, 1000, 2000, len(entries) - 1}
+	for _, pos := range cases {
+		firstProof, lastProof := memorydb.New(), memorydb.New()
+		if err := trie.Prove(common.Hash{}.Bytes(), 0, firstProof); err != nil {
+			t.Fatalf("Failed to prove the first node %v", err)
+		}
+		if err := trie.Prove(entries[pos].k, 0, lastProof); err != nil {
+			t.Fatalf("Failed to prove the first node %v", err)
+		}
+		k := make([][]byte, 0)
+		v := make([][]byte, 0)
+		for i := 0; i <= pos; i++ {
+			k = append(k, entries[i].k)
+			v = append(v, entries[i].v)
+		}
+		err := VerifyRangeProof(trie.Hash(), common.Hash{}.Bytes(), k, v, firstProof, lastProof)
+		if err != nil {
+			t.Fatalf("Expected no error, got %v", err)
+		}
+	}
+}
+
 // TestBadRangeProof tests a few cases which the proof is wrong.
 // The prover is expected to detect the error.
 func TestBadRangeProof(t *testing.T) {
@@ -470,39 +538,6 @@ func TestGappedRangeProof(t *testing.T) {
 	err := VerifyRangeProof(trie.Hash(), keys[0], keys, vals, firstProof, lastProof)
 	if err == nil {
 		t.Fatal("expect error, got nil")
-	}
-}
-
-// TestSingleSideRangeProof tests the range starts from zero.
-func TestSingleSideRangeProof(t *testing.T) {
-	trie := new(Trie)
-	var entries entrySlice
-	for i := 0; i < 4096; i++ {
-		value := &kv{randBytes(32), randBytes(20), false}
-		trie.Update(value.k, value.v)
-		entries = append(entries, value)
-	}
-	sort.Sort(entries)
-
-	var cases = []int{0, 1, 50, 100, 1000, 2000, len(entries) - 1}
-	for _, pos := range cases {
-		firstProof, lastProof := memorydb.New(), memorydb.New()
-		if err := trie.Prove(common.Hash{}.Bytes(), 0, firstProof); err != nil {
-			t.Fatalf("Failed to prove the first node %v", err)
-		}
-		if err := trie.Prove(entries[pos].k, 0, lastProof); err != nil {
-			t.Fatalf("Failed to prove the first node %v", err)
-		}
-		k := make([][]byte, 0)
-		v := make([][]byte, 0)
-		for i := 0; i <= pos; i++ {
-			k = append(k, entries[i].k)
-			v = append(v, entries[i].v)
-		}
-		err := VerifyRangeProof(trie.Hash(), common.Hash{}.Bytes(), k, v, firstProof, lastProof)
-		if err != nil {
-			t.Fatalf("Expected no error, got %v", err)
-		}
 	}
 }
 

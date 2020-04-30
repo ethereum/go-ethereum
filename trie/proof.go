@@ -345,11 +345,39 @@ func unset(parent node, child node, key []byte, pos int, removeLeft bool) error 
 // leaves are [0x04, 0x05, .. 0x09]. It's still feasible to prove. But the
 // last edge proof should always be an existent proof.
 //
-// Note the firstKey is paired with firstProof, not necessarily the same
-// as keys[0](unless firstProof is an existent proof).
+// The firstKey is paired with firstProof, not necessarily the same as keys[0]
+// (unless firstProof is an existent proof).
+//
+// Expect the normal case, this function can also be used to verify the following
+// range proofs:
+//
+// - All elements proof. In this case the left and right proof can be nil, but the
+//   range should be all the leaves in the trie.
+//
+// - Zero element proof(left edge proof should be a non-existent proof). In this
+//   case if there are still some other leaves available in the right side, then
+//   an error will be returned.
+//
+// - One element proof. In this case no matter the left edge proof is a non-existent
+//   proof or not, we can always verify the correctness of the proof.
 func VerifyRangeProof(rootHash common.Hash, firstKey []byte, keys [][]byte, values [][]byte, firstProof ethdb.KeyValueReader, lastProof ethdb.KeyValueReader) error {
 	if len(keys) != len(values) {
 		return fmt.Errorf("inconsistent proof data, keys: %d, values: %d", len(keys), len(values))
+	}
+	// Speical case, there is no edge proof at all. Then the
+	// given range is expected to be the whole set in the trie.
+	if firstProof == nil && lastProof == nil {
+		emptytrie, err := New(common.Hash{}, NewDatabase(memorydb.New()))
+		if err != nil {
+			return err
+		}
+		for index, key := range keys {
+			emptytrie.TryUpdate(key, values[index])
+		}
+		if emptytrie.Hash() != rootHash {
+			return fmt.Errorf("invalid proof, wanthash %x, got %x", rootHash, emptytrie.Hash())
+		}
+		return nil
 	}
 	// Special case, there is a provided non-existent proof and
 	// zero leaf, it means no more leaf we can get in the trie.
@@ -388,7 +416,8 @@ func VerifyRangeProof(rootHash common.Hash, firstKey []byte, keys [][]byte, valu
 		// there is no more leaf in the trie, return nil.
 		return nil
 	}
-	// Special case, there is only one leaf and an existent proof.
+	// Special case, there is only one element and left edge
+	// proof is an existent one.
 	if len(keys) == 1 && bytes.Equal(keys[0], firstKey) {
 		value, err := VerifyProof(rootHash, keys[0], firstProof)
 		if err != nil {
