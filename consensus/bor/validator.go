@@ -2,7 +2,7 @@ package bor
 
 import (
 	"bytes"
-	"encoding/json"
+	// "encoding/json"
 	"errors"
 	"fmt"
 	"math/big"
@@ -13,8 +13,6 @@ import (
 )
 
 // Validator represets Volatile state for each Validator
-// NOTE: The ProposerPriority is not included in Validator.Hash();
-// make sure to update that method if changes are made here
 type Validator struct {
 	ID               uint64         `json:"ID"`
 	Address          common.Address `json:"signer"`
@@ -31,17 +29,22 @@ func NewValidator(address common.Address, votingPower int64) *Validator {
 	}
 }
 
-// Creates a new copy of the validator so we can mutate ProposerPriority.
+// Copy creates a new copy of the validator so we can mutate ProposerPriority.
 // Panics if the validator is nil.
 func (v *Validator) Copy() *Validator {
 	vCopy := *v
 	return &vCopy
 }
 
-// Returns the one with higher ProposerPriority.
-func (v *Validator) CompareProposerPriority(other *Validator) *Validator {
+// Cmp returns the one validator with a higher ProposerPriority.
+// If ProposerPriority is same, it returns the validator with lexicographically smaller address
+func (v *Validator) Cmp(other *Validator) *Validator {
+	// if both of v and other are nil, nil will be returned and that could possibly lead to nil pointer dereference bubbling up the stack
 	if v == nil {
 		return other
+	}
+	if other == nil {
+		return v
 	}
 	if v.ProposerPriority > other.ProposerPriority {
 		return v
@@ -55,7 +58,6 @@ func (v *Validator) CompareProposerPriority(other *Validator) *Validator {
 			return other
 		} else {
 			panic("Cannot compare identical validators")
-			return nil
 		}
 	}
 }
@@ -78,18 +80,6 @@ func ValidatorListString(vals []*Validator) string {
 	}
 
 	return strings.Join(chunks, ",")
-}
-
-// Bytes computes the unique encoding of a validator with a given voting power.
-// These are the bytes that gets hashed in consensus. It excludes address
-// as its redundant with the pubkey. This also excludes ProposerPriority
-// which changes every round.
-func (v *Validator) Bytes() []byte {
-	b, err := json.Marshal(v)
-	if err != nil {
-		return b
-	}
-	return nil
 }
 
 // HeaderBytes return header bytes

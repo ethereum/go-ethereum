@@ -201,8 +201,8 @@ func encodeSigHeader(w io.Writer, header *types.Header) {
 // CalcDifficulty is the difficulty adjustment algorithm. It returns the difficulty
 // that a new block should have based on the previous blocks in the chain and the
 // current signer.
-func CalcDifficulty(snap *Snapshot, signer common.Address, epoch uint64) *big.Int {
-	return big.NewInt(0).SetUint64(snap.inturn(snap.Number+1, signer, epoch))
+func CalcDifficulty(snap *Snapshot, signer common.Address, sprint uint64) *big.Int {
+	return big.NewInt(0).SetUint64(snap.inturn(snap.Number+1, signer, sprint))
 }
 
 // CalcProducerDelay is the block delay algorithm based on block time and period / producerDelay values in genesis
@@ -346,12 +346,9 @@ func (c *Bor) verifyHeader(chain consensus.ChainReader, header *types.Header, pa
 	if header.Time > uint64(time.Now().Unix()) {
 		return consensus.ErrFutureBlock
 	}
-	// Check that the extra-data contains both the vanity and signature
-	if len(header.Extra) < extraVanity {
-		return errMissingVanity
-	}
-	if len(header.Extra) < extraVanity+extraSeal {
-		return errMissingSignature
+
+	if err := validateHeaderExtraField(header.Extra); err != nil {
+		return err
 	}
 
 	// check extr adata
@@ -387,6 +384,18 @@ func (c *Bor) verifyHeader(chain consensus.ChainReader, header *types.Header, pa
 	return c.verifyCascadingFields(chain, header, parents)
 }
 
+// validateHeaderExtraField validates that the extra-data contains both the vanity and signature.
+// header.Extra = header.Vanity + header.ProducerBytes (optional) + header.Seal
+func validateHeaderExtraField(extraBytes []byte) error {
+	if len(extraBytes) < extraVanity {
+		return errMissingVanity
+	}
+	if len(extraBytes) < extraVanity+extraSeal {
+		return errMissingSignature
+	}
+	return nil
+}
+
 // verifyCascadingFields verifies all the header fields that are not standalone,
 // rather depend on a batch of previous headers. The caller may optionally pass
 // in a batch of parents (ascending order) to avoid looking those up from the
@@ -420,8 +429,9 @@ func (c *Bor) verifyCascadingFields(chain consensus.ChainReader, header *types.H
 		return err
 	}
 
-	// If the block is a sprint end block, verify the validator list
-	if number%c.config.Sprint == 0 {
+	isSprintEnd := (number+1)%c.config.Sprint == 0
+	// verify the validator list in the last sprint block
+	if isSprintEnd {
 		validatorsBytes := make([]byte, len(snap.ValidatorSet.Validators)*validatorHeaderBytesLength)
 
 		currentValidators := snap.ValidatorSet.Copy().Validators
@@ -430,14 +440,9 @@ func (c *Bor) verifyCascadingFields(chain consensus.ChainReader, header *types.H
 		for i, validator := range currentValidators {
 			copy(validatorsBytes[i*validatorHeaderBytesLength:], validator.HeaderBytes())
 		}
-
-		extraSuffix := len(header.Extra) - extraSeal
-
-		// fmt.Println("validatorsBytes ==> verify seal ==> ", hex.EncodeToString(validatorsBytes))
-		// fmt.Println("header.Extra ==> verify seal ==> ", hex.EncodeToString(header.Extra[extraVanity:extraSuffix]))
-
-		if !bytes.Equal(header.Extra[extraVanity:extraSuffix], validatorsBytes) {
-			// return errMismatchingSprintValidators
+		// len(header.Extra) >= extraVanity+extraSeal has already been validated in validateHeaderExtraField, so this won't result in a panic
+		if !bytes.Equal(header.Extra[extraVanity : len(header.Extra)-extraSeal], validatorsBytes) {
+			return errMismatchingSprintValidators
 		}
 	}
 
@@ -474,7 +479,7 @@ func (c *Bor) snapshot(chain consensus.ChainReader, number uint64, hash common.H
 		// up more headers than allowed to be reorged (chain reinit from a freezer),
 		// consider the checkpoint trusted and snapshot it.
 		// TODO fix this
-		if number == 0 /* || (number%c.config.Sprint == 0 && (len(headers) > params.ImmutabilityThreshold || chain.GetHeaderByNumber(number-1) == nil)) */ {
+		if number == 0 {
 			checkpoint := chain.GetHeaderByNumber(number)
 			if checkpoint != nil {
 				// get checkpoint data
@@ -582,27 +587,8 @@ func (c *Bor) verifySeal(chain consensus.ChainReader, header *types.Header, pare
 		return errUnauthorizedSigner
 	}
 
-	// check if signer is correct
-	validators := snap.ValidatorSet.Validators
-	// proposer will be the last signer if block is not epoch block
-	proposer := snap.ValidatorSet.GetProposer().Address
-	if number%c.config.Sprint != 0 {
-		// proposer = snap.Recents[number-1]
-	}
-	proposerIndex, _ := snap.ValidatorSet.GetByAddress(proposer)
-	signerIndex, _ := snap.ValidatorSet.GetByAddress(signer)
-	limit := len(validators)/2 + 1
-
-	// temp index
-	tempIndex := signerIndex
-	if proposerIndex != tempIndex && limit > 0 {
-		if tempIndex < proposerIndex {
-			tempIndex = tempIndex + len(validators)
-		}
-
-		if tempIndex-proposerIndex > limit {
-			return errRecentlySigned
-		}
+	if _, err = snap.GetSignerSuccessionNumber(signer); err != nil {
+		return err
 	}
 
 	// Ensure that the difficulty corresponds to the turn-ness of the signer
@@ -766,35 +752,18 @@ func (c *Bor) Seal(chain consensus.ChainReader, block *types.Block, results chan
 		return errUnauthorizedSigner
 	}
 
-	validators := snap.ValidatorSet.Validators
-	// proposer will be the last signer if block is not epoch block
-	proposer := snap.ValidatorSet.GetProposer().Address
-	if number%c.config.Sprint != 0 {
-		// proposer = snap.Recents[number-1]
-	}
-
-	proposerIndex, _ := snap.ValidatorSet.GetByAddress(proposer)
-	signerIndex, _ := snap.ValidatorSet.GetByAddress(signer)
-	limit := len(validators)/2 + 1
-
-	// temp index
-	tempIndex := signerIndex
-	if tempIndex < proposerIndex {
-		tempIndex = tempIndex + len(validators)
-	}
-
-	if limit > 0 && tempIndex-proposerIndex > limit {
-		log.Info("Signed recently, must wait for others")
-		return nil
+	successionNumber, err := snap.GetSignerSuccessionNumber(signer)
+	if err != nil {
+		return err
 	}
 
 	// Sweet, the protocol permits us to sign the block, wait for our time
 	delay := time.Unix(int64(header.Time), 0).Sub(time.Now()) // nolint: gosimple
-	wiggle := time.Duration(2*c.config.Period) * time.Second * time.Duration(tempIndex-proposerIndex)
+	wiggle := time.Duration(2*c.config.Period) * time.Second * time.Duration(successionNumber)
 	delay += wiggle
 
 	log.Info("Out-of-turn signing requested", "wiggle", common.PrettyDuration(wiggle))
-	log.Info("Sealing block with", "number", number, "delay", delay, "headerDifficulty", header.Difficulty, "signer", signer.Hex(), "proposer", proposer.Hex())
+	log.Info("Sealing block with", "number", number, "delay", delay, "headerDifficulty", header.Difficulty, "signer", signer.Hex(), "proposer", snap.ValidatorSet.GetProposer().Address.Hex())
 
 	// Sign all the things!
 	sighash, err := signFn(accounts.Account{Address: signer}, accounts.MimetypeBor, BorRLP(header))
@@ -854,7 +823,7 @@ func (c *Bor) Close() error {
 	return nil
 }
 
-// Checks if new span is pending
+// Checks if "force" proposeSpan has been set
 func (c *Bor) isSpanPending(snapshotNumber uint64) (bool, error) {
 	blockNr := rpc.BlockNumber(snapshotNumber)
 	method := "spanProposalPending"
@@ -866,14 +835,10 @@ func (c *Bor) isSpanPending(snapshotNumber uint64) (bool, error) {
 		return false, err
 	}
 
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel() // cancel when we are finished consuming integers
-
-	// call
 	msgData := (hexutil.Bytes)(data)
 	toAddress := common.HexToAddress(c.config.ValidatorContract)
 	gas := (hexutil.Uint64)(uint64(math.MaxUint64 / 2))
-	result, err := c.ethAPI.Call(ctx, ethapi.CallArgs{
+	result, err := c.ethAPI.Call(context.Background(), ethapi.CallArgs{
 		Gas:  &gas,
 		To:   &toAddress,
 		Data: &msgData,
@@ -904,14 +869,10 @@ func (c *Bor) GetCurrentSpan(snapshotNumber uint64) (*Span, error) {
 		return nil, err
 	}
 
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel() // cancel when we are finished consuming integers
-
-	// call
 	msgData := (hexutil.Bytes)(data)
 	toAddress := common.HexToAddress(c.config.ValidatorContract)
 	gas := (hexutil.Uint64)(uint64(math.MaxUint64 / 2))
-	result, err := c.ethAPI.Call(ctx, ethapi.CallArgs{
+	result, err := c.ethAPI.Call(context.Background(), ethapi.CallArgs{
 		Gas:  &gas,
 		To:   &toAddress,
 		Data: &msgData,
@@ -954,14 +915,11 @@ func (c *Bor) GetCurrentValidators(snapshotNumber uint64, blockNumber uint64) ([
 		return nil, err
 	}
 
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel() // cancel when we are finished consuming integers
-
 	// call
 	msgData := (hexutil.Bytes)(data)
 	toAddress := common.HexToAddress(c.config.ValidatorContract)
 	gas := (hexutil.Uint64)(uint64(math.MaxUint64 / 2))
-	result, err := c.ethAPI.Call(ctx, ethapi.CallArgs{
+	result, err := c.ethAPI.Call(context.Background(), ethapi.CallArgs{
 		Gas:  &gas,
 		To:   &toAddress,
 		Data: &msgData,
@@ -1144,13 +1102,10 @@ func (c *Bor) GetPendingStateProposals(snapshotNumber uint64) ([]*big.Int, error
 		return nil, err
 	}
 
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel() // cancel when we are finished consuming integers
-
 	msgData := (hexutil.Bytes)(data)
 	toAddress := common.HexToAddress(c.config.StateReceiverContract)
 	gas := (hexutil.Uint64)(uint64(math.MaxUint64 / 2))
-	result, err := c.ethAPI.Call(ctx, ethapi.CallArgs{
+	result, err := c.ethAPI.Call(context.Background(), ethapi.CallArgs{
 		Gas:  &gas,
 		To:   &toAddress,
 		Data: &msgData,

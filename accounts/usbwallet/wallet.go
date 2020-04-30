@@ -25,13 +25,13 @@ import (
 	"sync"
 	"time"
 
+	"github.com/karalabe/usb"
 	ethereum "github.com/maticnetwork/bor"
 	"github.com/maticnetwork/bor/accounts"
 	"github.com/maticnetwork/bor/common"
 	"github.com/maticnetwork/bor/core/types"
 	"github.com/maticnetwork/bor/crypto"
 	"github.com/maticnetwork/bor/log"
-	"github.com/karalabe/usb"
 )
 
 // Maximum time between wallet health checks to detect USB unplugs.

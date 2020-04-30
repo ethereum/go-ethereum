@@ -105,7 +105,16 @@ func buildMinimalNextHeader(t *testing.T, block *types.Block, borConfig *params.
 	header.Number.Add(header.Number, big.NewInt(1))
 	header.ParentHash = block.Hash()
 	header.Time += bor.CalcProducerDelay(header.Number.Uint64(), borConfig.Period, borConfig.Sprint, borConfig.ProducerDelay)
-	header.Extra = make([]byte, 97) // vanity (32) + extraSeal (65)
+	isSprintEnd := (header.Number.Uint64()+1)%borConfig.Sprint == 0
+	if isSprintEnd {
+		header.Extra = make([]byte, 32 + 40 + 65) // vanity + validatorBytes + extraSeal
+		// the genesis file was initialized with a validator 0x71562b71999873db5b286df957af199ec94617f7 with power 10
+		// So, if you change ./genesis.json, do change the following as well
+		validatorBytes, _ := hex.DecodeString("71562b71999873db5b286df957af199ec94617f7000000000000000000000000000000000000000a")
+		copy(header.Extra[32:72], validatorBytes)
+	} else {
+		header.Extra = make([]byte, 32 + 65) // vanity + extraSeal
+	}
 	_key, _ := hex.DecodeString(privKey)
 	sig, err := secp256k1.Sign(crypto.Keccak256(bor.BorRLP(header)), _key)
 	if err != nil {

@@ -26,6 +26,7 @@ import (
 	"sync"
 	"time"
 
+	lru "github.com/hashicorp/golang-lru"
 	"github.com/maticnetwork/bor/accounts"
 	"github.com/maticnetwork/bor/common"
 	"github.com/maticnetwork/bor/common/hexutil"
@@ -39,7 +40,6 @@ import (
 	"github.com/maticnetwork/bor/params"
 	"github.com/maticnetwork/bor/rlp"
 	"github.com/maticnetwork/bor/rpc"
-	lru "github.com/hashicorp/golang-lru"
 	"golang.org/x/crypto/sha3"
 )
 

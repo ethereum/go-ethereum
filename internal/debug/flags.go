@@ -24,10 +24,10 @@ import (
 	"os"
 	"runtime"
 
+	"github.com/fjl/memsize/memsizeui"
 	"github.com/maticnetwork/bor/log"
 	"github.com/maticnetwork/bor/metrics"
 	"github.com/maticnetwork/bor/metrics/exp"
-	"github.com/fjl/memsize/memsizeui"
 	colorable "github.com/mattn/go-colorable"
 	"github.com/mattn/go-isatty"
 	"gopkg.in/urfave/cli.v1"

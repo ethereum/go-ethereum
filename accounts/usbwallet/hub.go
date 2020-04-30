@@ -23,10 +23,10 @@ import (
 	"sync/atomic"
 	"time"
 
+	"github.com/karalabe/usb"
 	"github.com/maticnetwork/bor/accounts"
 	"github.com/maticnetwork/bor/event"
 	"github.com/maticnetwork/bor/log"
-	"github.com/karalabe/usb"
 )
 
 // LedgerScheme is the protocol scheme prefixing account and wallet URLs.
