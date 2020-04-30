@@ -36,7 +36,6 @@ var (
 	int32T    = reflect.TypeOf(int32(0))
 	int64T    = reflect.TypeOf(int64(0))
 	addressT  = reflect.TypeOf(common.Address{})
-	functionT = reflect.ArrayOf(24, reflect.TypeOf(byte(0)))
 )
 
 // U256 converts a big Int into a 256bit EVM number.
