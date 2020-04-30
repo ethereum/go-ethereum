@@ -257,6 +257,7 @@ func (f *freezer) Sync() error {
 func (f *freezer) freeze(db ethdb.KeyValueStore) {
 	nfdb := &nofreezedb{KeyValueStore: db}
 
+	backoff := false
 	for {
 		select {
 		case <-f.quit:
@@ -264,55 +265,42 @@ func (f *freezer) freeze(db ethdb.KeyValueStore) {
 			return
 		default:
 		}
+		if backoff {
+			select {
+			case <-time.NewTimer(freezerRecheckInterval).C:
+				backoff = false
+			case <-f.quit:
+				return
+			}
+		}
 		// Retrieve the freezing threshold.
 		hash := ReadHeadBlockHash(nfdb)
 		if hash == (common.Hash{}) {
 			log.Debug("Current full block hash unavailable") // new chain, empty database
-			select {
-			case <-time.NewTimer(freezerRecheckInterval).C:
-				continue
-			case <-f.quit:
-				return
-			}
+
 		}
 		number := ReadHeaderNumber(nfdb, hash)
 		switch {
 		case number == nil:
 			log.Error("Current full block number unavailable", "hash", hash)
-			select {
-			case <-time.NewTimer(freezerRecheckInterval).C:
-				continue
-			case <-f.quit:
-				return
-			}
+			backoff = true
+			continue
 
 		case *number < params.ImmutabilityThreshold:
 			log.Debug("Current full block not old enough", "number", *number, "hash", hash, "delay", params.ImmutabilityThreshold)
-			select {
-			case <-time.NewTimer(freezerRecheckInterval).C:
-				continue
-			case <-f.quit:
-				return
-			}
+			backoff = true
+			continue
 
 		case *number-params.ImmutabilityThreshold <= f.frozen:
 			log.Debug("Ancient blocks frozen already", "number", *number, "hash", hash, "frozen", f.frozen)
-			select {
-			case <-time.NewTimer(freezerRecheckInterval).C:
-				continue
-			case <-f.quit:
-				return
-			}
+			backoff = true
+			continue
 		}
 		head := ReadHeader(nfdb, hash, *number)
 		if head == nil {
 			log.Error("Current full block unavailable", "number", *number, "hash", hash)
-			select {
-			case <-time.NewTimer(freezerRecheckInterval).C:
-				continue
-			case <-f.quit:
-				return
-			}
+			backoff = true
+			continue
 		}
 		// Seems we have data ready to be frozen, process in usable batches
 		limit := *number - params.ImmutabilityThreshold
@@ -398,12 +386,7 @@ func (f *freezer) freeze(db ethdb.KeyValueStore) {
 
 		// Avoid database thrashing with tiny writes
 		if f.frozen-first < freezerBatchLimit {
-			select {
-			case <-time.NewTimer(freezerRecheckInterval).C:
-				continue
-			case <-f.quit:
-				return
-			}
+			backoff = true
 		}
 	}
 }
