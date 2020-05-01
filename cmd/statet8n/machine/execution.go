@@ -1,4 +1,4 @@
-// Copyright 2012 The go-ethereum Authors
+// Copyright 2020 The go-ethereum Authors
 // This file is part of the go-ethereum library.
 //
 // The go-ethereum library is free software: you can redistribute it and/or modify
@@ -32,6 +32,8 @@ import (
 	"github.com/ethereum/go-ethereum/ethdb"
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/params"
+	"github.com/ethereum/go-ethereum/rlp"
+	"golang.org/x/crypto/sha3"
 )
 
 type Prestate struct {
@@ -42,20 +44,22 @@ type Prestate struct {
 // ExecutionResult contains the execution status after running a state test, any
 // error that might have occurred and a dump of the final state if requested.
 type ExecutionResult struct {
-	StateRoot   common.Hash    `json:"postState"`
-	TxHash      common.Hash    `json:"txHash"`
+	StateRoot   common.Hash    `json:"stateRoot"`
+	TxRoot      common.Hash    `json:"txRoot"`
 	ReceiptRoot common.Hash    `json:"receiptRoot"`
-	Receipts    types.Receipts `json:"receipts,omitempty"`
+	LogsHash    common.Hash    `json:"logsHash"`
+	Receipts    types.Receipts `json:"receipts"`
 	Rejected    []int          `json:"rejected,omitempty"`
 }
 
 //go:generate gencodec -type stEnv -field-override stEnvMarshaling -out gen_stenv.go
 type stEnv struct {
-	Coinbase   common.Address `json:"currentCoinbase"   gencodec:"required"`
-	Difficulty *big.Int       `json:"currentDifficulty" gencodec:"required"`
-	GasLimit   uint64         `json:"currentGasLimit"   gencodec:"required"`
-	Number     uint64         `json:"currentNumber"     gencodec:"required"`
-	Timestamp  uint64         `json:"currentTimestamp"  gencodec:"required"`
+	Coinbase    common.Address                      `json:"currentCoinbase"   gencodec:"required"`
+	Difficulty  *big.Int                            `json:"currentDifficulty" gencodec:"required"`
+	GasLimit    uint64                              `json:"currentGasLimit"   gencodec:"required"`
+	Number      uint64                              `json:"currentNumber"     gencodec:"required"`
+	Timestamp   uint64                              `json:"currentTimestamp"  gencodec:"required"`
+	BlockHashes map[math.HexOrDecimal64]common.Hash `json:"blockHashes,omitempty"`
 }
 
 type stEnvMarshaling struct {
@@ -67,21 +71,35 @@ type stEnvMarshaling struct {
 }
 
 // Apply applies a set of transactions to a pre-state
-func (pre *Prestate) Apply(vmConfig vm.Config, chainConfig *params.ChainConfig, txs types.Transactions, miningReward int64) (*state.StateDB, *ExecutionResult, error) {
+func (pre *Prestate) Apply(vmConfig vm.Config, chainConfig *params.ChainConfig,
+	txs types.Transactions, miningReward int64,
+	getTracerFn func(txIndex int) (tracer vm.Tracer, err error)) (*state.StateDB, *ExecutionResult, error) {
 
+	// Capture errors for BLOCKHASH operation, if we haven't been supplied the
+	// required blockhashes
+	var hashError error
 	getHash := func(num uint64) common.Hash {
-		panic(fmt.Sprintf("getHash(%d) invoked", num))
+		if pre.Env.BlockHashes == nil {
+			hashError = fmt.Errorf("getHash(%d) invoked, no blockhashes provided", num)
+			return common.Hash{}
+		}
+		h, ok := pre.Env.BlockHashes[math.HexOrDecimal64(num)]
+		if !ok {
+			hashError = fmt.Errorf("getHash(%d) invoked, blockhash for that block not provided", num)
+		}
+		return h
 	}
-	statedb := MakePreState(rawdb.NewMemoryDatabase(), pre.Pre)
-	// Configure a signer with chainid 99
-	signer := types.NewEIP155Signer(chainConfig.ChainID)
-
-	//block := t.genesis(config).ToBlock(nil)
-	gaspool := new(core.GasPool)
+	var (
+		statedb   = MakePreState(rawdb.NewMemoryDatabase(), pre.Pre)
+		signer    = types.NewEIP155Signer(chainConfig.ChainID)
+		gaspool   = new(core.GasPool)
+		blockHash = common.Hash{0x13, 0x37}
+		rejected  []int
+		gasUsed   = uint64(0)
+		receipts  = make(types.Receipts, 0)
+		txIndex   = 0
+	)
 	gaspool.AddGas(pre.Env.GasLimit)
-
-	blockHash := common.Hash{0x13, 0x37}
-
 	vmContext := vm.Context{
 		CanTransfer: core.CanTransfer,
 		Transfer:    core.Transfer,
@@ -90,13 +108,10 @@ func (pre *Prestate) Apply(vmConfig vm.Config, chainConfig *params.ChainConfig, 
 		Time:        new(big.Int).SetUint64(pre.Env.Timestamp),
 		Difficulty:  pre.Env.Difficulty,
 		GasLimit:    pre.Env.GasLimit,
-		// This will cause a panic
-		GetHash: getHash,
+		GetHash:     getHash,
 		// GasPrice and Origin needs to be set per transaction
 	}
-	var rejected []int
-	gasUsed := uint64(0)
-	var receipts types.Receipts
+
 	for i, tx := range txs {
 		msg, err := tx.AsMessage(signer)
 		if err != nil {
@@ -104,7 +119,13 @@ func (pre *Prestate) Apply(vmConfig vm.Config, chainConfig *params.ChainConfig, 
 			rejected = append(rejected, i)
 			continue
 		}
-		statedb.Prepare(tx.Hash(), blockHash, i)
+		tracer, err := getTracerFn(txIndex)
+		if err != nil {
+			return nil, nil, err
+		}
+		vmConfig.Tracer = tracer
+		vmConfig.Debug = (tracer != nil)
+		statedb.Prepare(tx.Hash(), blockHash, txIndex)
 		vmContext.GasPrice = msg.GasPrice()
 		vmContext.Origin = msg.From()
 
@@ -118,20 +139,36 @@ func (pre *Prestate) Apply(vmConfig vm.Config, chainConfig *params.ChainConfig, 
 			rejected = append(rejected, i)
 			continue
 		}
+		if hashError != nil {
+			return nil, nil, NewError(ErrorMissingBlockhash, hashError)
+		}
 		gasUsed += msgResult.UsedGas
 		// Create a new receipt for the transaction, storing the intermediate root and gas used by the tx
-		var root []byte
-		receipt := types.NewReceipt(root, msgResult.Failed(), gasUsed)
-		receipt.TxHash = tx.Hash()
-		receipt.GasUsed = msgResult.UsedGas
-		// if the transaction created a contract, store the creation address in the receipt.
-		if msg.To() == nil {
-			receipt.ContractAddress = crypto.CreateAddress(evm.Context.Origin, tx.Nonce())
+		{
+			var root []byte
+			if chainConfig.IsByzantium(vmContext.BlockNumber) {
+				statedb.Finalise(true)
+			} else {
+				root = statedb.IntermediateRoot(chainConfig.IsEIP158(vmContext.BlockNumber)).Bytes()
+			}
+
+			receipt := types.NewReceipt(root, msgResult.Failed(), gasUsed)
+			receipt.TxHash = tx.Hash()
+			receipt.GasUsed = msgResult.UsedGas
+			// if the transaction created a contract, store the creation address in the receipt.
+			if msg.To() == nil {
+				receipt.ContractAddress = crypto.CreateAddress(evm.Context.Origin, tx.Nonce())
+			}
+			// Set the receipt logs and create a bloom for filtering
+			receipt.Logs = statedb.GetLogs(tx.Hash())
+			receipt.Bloom = types.CreateBloom(types.Receipts{receipt})
+			// These three are non-consensus fields
+			//receipt.BlockHash
+			//receipt.BlockNumber =
+			receipt.TransactionIndex = uint(txIndex)
+			receipts = append(receipts, receipt)
 		}
-		// Set the receipt logs and create a bloom for filtering
-		receipt.Logs = statedb.GetLogs(tx.Hash())
-		receipt.Bloom = types.CreateBloom(types.Receipts{receipt})
-		receipts = append(receipts, receipt)
+		txIndex++
 	}
 	statedb.IntermediateRoot(chainConfig.IsEIP158(vmContext.BlockNumber))
 	// Add mining reward?
@@ -151,8 +188,9 @@ func (pre *Prestate) Apply(vmConfig vm.Config, chainConfig *params.ChainConfig, 
 	}
 	execRs := &ExecutionResult{
 		StateRoot:   root,
-		TxHash:      types.DeriveSha(txs),
+		TxRoot:      types.DeriveSha(txs),
 		ReceiptRoot: types.DeriveSha(receipts),
+		LogsHash:    rlpHash(statedb.Logs()),
 		Receipts:    receipts,
 		Rejected:    rejected,
 	}
@@ -174,4 +212,11 @@ func MakePreState(db ethdb.Database, accounts core.GenesisAlloc) *state.StateDB 
 	root, _ := statedb.Commit(false)
 	statedb, _ = state.New(root, sdb, nil)
 	return statedb
+}
+
+func rlpHash(x interface{}) (h common.Hash) {
+	hw := sha3.NewLegacyKeccak256()
+	rlp.Encode(hw, x)
+	hw.Sum(h[:0])
+	return h
 }

@@ -78,6 +78,7 @@ func StateTransition(ctx *cli.Context) error {
 		err    error
 		tracer vm.Tracer
 	)
+	var getTracer func(txIndex int) (vm.Tracer, error)
 
 	if ctx.GlobalBool(TraceFlag.Name) {
 		// Configure the EVM logger
@@ -86,16 +87,29 @@ func StateTransition(ctx *cli.Context) error {
 			DisableMemory: ctx.GlobalBool(TraceDisableMemoryFlag.Name),
 			Debug:         true,
 		}
-		//logConfig.Debug = true
-		// TODO, one tracefile per tx
-		if traceFile, err := os.Open("traces.jsonl"); err != nil {
-			return NewError(ErrorIO, fmt.Errorf("failed creating trace-file: %v", err))
-
-		} else {
-			tracer = vm.NewJSONLogger(logConfig, traceFile)
+		var prevFile *os.File
+		// This one closes the last file
+		defer func() {
+			if prevFile != nil {
+				prevFile.Close()
+			}
+		}()
+		getTracer = func(txIndex int) (vm.Tracer, error) {
+			if prevFile != nil {
+				prevFile.Close()
+			}
+			traceFile, err := os.Create(fmt.Sprintf("trace-%d.jsonl", txIndex))
+			if err != nil {
+				return nil, NewError(ErrorIO, fmt.Errorf("failed creating trace-file: %v", err))
+			}
+			prevFile = traceFile
+			return vm.NewJSONLogger(logConfig, traceFile), nil
+		}
+	} else {
+		getTracer = func(txIndex int) (tracer vm.Tracer, err error) {
+			return nil, nil
 		}
 	}
-
 	// We need to load three things: alloc, env and transactions. May be either in
 	// stdin input or in files.
 	// Check if anything needs to be read from stdin
@@ -174,7 +188,7 @@ func StateTransition(ctx *cli.Context) error {
 	chainConfig.ChainID = big.NewInt(ctx.GlobalInt64(ChainIDFlag.Name))
 
 	// Run the test and aggregate the result
-	state, result, err := prestate.Apply(vmConfig, chainConfig, txs, ctx.GlobalInt64(RewardFlag.Name))
+	state, result, err := prestate.Apply(vmConfig, chainConfig, txs, ctx.GlobalInt64(RewardFlag.Name), getTracer)
 	if err != nil {
 		return err
 	}

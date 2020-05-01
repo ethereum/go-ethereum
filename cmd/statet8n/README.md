@@ -1,76 +1,74 @@
 ## `statet8n`
 
 The `statet8n` tool is a stateless state transition utility. It is a utility which
-can 
+can
+
 1. Take a prestate, including
- - Accounts, 
- - Block context information, 
- - Previous blockshashes (*optional)
-2. Apply a set of transactions, 
-3. Apply a mining-reward (*optional), 
+  - Accounts,
+  - Block context information,
+  - Previous blockshashes (*optional)
+2. Apply a set of transactions,
+3. Apply a mining-reward (*optional),
 4. And generate a post-state, including
-  - State root, transaction root, receipt root, 
-  - Information about rejected transactions, 
+  - State root, transaction root, receipt root,
+  - Information about rejected transactions,
   - Optionally: a full or partial post-state dump
 
 ## Specification
 
-The idea is to specify the behaviour of this binary very _strict_, so that other 
-node implementors can build replicas based on their own state-machines, and the 
-state generators can swap between a `geth`-based implementation and a `parityvm`-based 
-implementation. 
+The idea is to specify the behaviour of this binary very _strict_, so that other
+node implementors can build replicas based on their own state-machines, and the
+state generators can swap between a `geth`-based implementation and a `parityvm`-based
+implementation.
 
 ### Command line params
 
 Command line params that has to be supported are
+```
 
-* `--trace` (boolean) Output full trace logs to files <txhash>.jsonl
-* `--trace.nostack` (boolean) Disable stack output in traces
-* `--trace` (boolean) Output full trace logs to files <txhash>.jsonl
-* `--trace.nomemory` (boolean) Disable full memory dump in traces
-* `--trace.nostack` (boolean) Disable stack output in traces
-* `--output.alloc` (`stdout` or `stderr` or a filename). Determine how to output the poststate alloc section
-* `--output.result` (`stdout` or `stderr` or a filename). Determine how to output the poststate result section
-* `--state.pre` <string>` (boolean) File name of where to find the pre-state json. Use '-' to read from stdin (default: "prestate.json")
-* `--state.reward <int>` (boolean) Mining reward. Set to -1 to disable (default: 0)
-* `--state.fork <string>` (boolean) Name of ruleset to use.
+   --trace                            Output full trace logs to files <txhash>.jsonl
+   --trace.nomemory                   Disable full memory dump in traces
+   --trace.nostack                    Disable stack output in traces
+   --output.alloc alloc               Determines where to put the alloc of the post-state.
+                                      `stdout` - into the stdout output
+                                      `stderr` - into the stderr output
+   --output.result result             Determines where to put the result (stateroot, txroot etc) of the post-state.
+                                      `stdout` - into the stdout output
+                                      `stderr` - into the stderr output
+   --state.fork value                 Name of ruleset to use.
+   --state.chainid value              ChainID to use (default: 1)
+   --state.reward value               Mining reward. Set to -1 to disable (default: 0)
+
+```
 
 ### Error codes and output
 
 All logging should happen against the `stderr`.
-There are a few (not many) errors that can occur, those are defined below. 
+There are a few (not many) errors that can occur, those are defined below.
 
 #### EVM-based errors (`2` to `9`)
 
 - Other EVM error. Exit code `2`
-- Failed configuration: when a non-supported or invalid fork was specified. Exit code `3`. 
+- Failed configuration: when a non-supported or invalid fork was specified. Exit code `3`.
 - Block history is not supplied, but needed for a `BLOCKHASH` operation. If `BLOCKHASH`
   is invoked targeting a block which history has not been provided for, the program will
-  exit with code `4`. 
-
-Example:
-```
-./statet8n --input.alloc=./testdata/alloc.json --input.txs=./testdata/txs.json --input.env=./testdata/env.json --state.fork=Frontier+1346 2>/dev/null
-ERROR(3): Failed constructing chain configuration: syntax error, invalid eip number 1346
-[user@work statet8n]$ printf '%d\n' $?
-3
-```
+  exit with code `4`.
 
 #### IO errors (`10`-`20`)
 
-- Invalid input json: the supplied data could not be marshalled. 
+- Invalid input json: the supplied data could not be marshalled.
   The program will exit with code `10`
 - IO problems: failure to load or save files, the program will exit with code `11`
 
-Ok
 ## Examples
 ### Basic usage
 
 Invoking it with the provided example files
 ```
-./statet8n --input.alloc=./testdata/alloc.json --input.txs=./testdata/txs.json --input.env=./testdata/env.json
+./statet8n --input.alloc=./testdata/1/alloc.json --input.txs=./testdata/1/txs.json --input.env=./testdata/1/env.json
 ```
 Two resulting files:
+
 `alloc.json`:
 ```json
 {
@@ -90,9 +88,10 @@ Two resulting files:
 `result.json`:
 ```json
 {
- "postState": "0x84208a19bc2b46ada7445180c1db162be5b39b9abc8c0a54b05d32943eae4e13",
- "txHash": "0xe9bd66ea8f932b2b610632074c8b2c10bd3a1de96365a31568b1c776d80779b8",
+ "stateRoot": "0x84208a19bc2b46ada7445180c1db162be5b39b9abc8c0a54b05d32943eae4e13",
+ "txRoot": "0xe9bd66ea8f932b2b610632074c8b2c10bd3a1de96365a31568b1c776d80779b8",
  "receiptRoot": "0x056b23fbba480696b65fe5a59b8f2148a1299103c4f57df839233af2cf4ca2d2",
+ "logsHash": "0x1dcc4de8dec75d7aab85b567b6ccd41ad312451b948a7413f0a142fd40d49347",
  "receipts": [
   {
    "root": "0x",
@@ -115,7 +114,7 @@ Two resulting files:
 
 We can make them spit out the data to e.g. `stdout` like this:
 ```
-./statet8n --input.alloc=./testdata/alloc.json --input.txs=./testdata/txs.json --input.env=./testdata/env.json --output.result=stdout --output.alloc=stdout
+./statet8n --input.alloc=./testdata/1/alloc.json --input.txs=./testdata/1/txs.json --input.env=./testdata/1/env.json --output.result=stdout --output.alloc=stdout
 ```
 Output:
 ```json
@@ -134,9 +133,10 @@ Output:
   }
  },
  "result": {
-  "postState": "0x84208a19bc2b46ada7445180c1db162be5b39b9abc8c0a54b05d32943eae4e13",
-  "txHash": "0xe9bd66ea8f932b2b610632074c8b2c10bd3a1de96365a31568b1c776d80779b8",
+  "stateRoot": "0x84208a19bc2b46ada7445180c1db162be5b39b9abc8c0a54b05d32943eae4e13",
+  "txRoot": "0xe9bd66ea8f932b2b610632074c8b2c10bd3a1de96365a31568b1c776d80779b8",
   "receiptRoot": "0x056b23fbba480696b65fe5a59b8f2148a1299103c4f57df839233af2cf4ca2d2",
+  "logsHash": "0x1dcc4de8dec75d7aab85b567b6ccd41ad312451b948a7413f0a142fd40d49347",
   "receipts": [
    {
     "root": "0x",
@@ -161,7 +161,7 @@ Output:
 
 Adding a mining reward: 
 ```
-./statet8n --input.alloc=./testdata/alloc.json --input.txs=./testdata/txs.json --input.env=./testdata/env.json  --output.alloc=stdout
+./statet8n --input.alloc=./testdata/1/alloc.json --input.txs=./testdata/1/txs.json --input.env=./testdata/1/env.json  --output.alloc=stdout
 ```
 Output:
 ```json
@@ -186,14 +186,43 @@ Output:
 It is also possible to experiment with future eips that are not yet defined in a hard fork.
 Example, putting EIP-1344 into Frontier: 
 ```
-./statet8n --state.fork=Frontier+1344 --input.pre=./testdata/pre.json --input.txs=./testdata/txs.json --input.env=/testdata/env.json
+./statet8n --state.fork=Frontier+1344 --input.pre=./testdata/1/pre.json --input.txs=./testdata/1/txs.json --input.env=/testdata/1/env.json
 ```
 
+### Block history
+
+The `BLOCKHASH` opcode requires blockhashes to be provided by the caller, inside the `env`.
+If a required blockhash is not provided, the exit code should be `4`:
+Example where blockhashes are provided: 
+```
+./statet8n --input.alloc=./testdata/3/alloc.json --input.txs=./testdata/3/txs.json --input.env=./testdata/3/env.json --trace
+```
+```
+cat trace-0.jsonl | grep BLOCKHASH -C2
+```
+```
+{"pc":0,"op":96,"gas":"0x5f58ef8","gasCost":"0x3","memory":"0x","memSize":0,"stack":[],"depth":1,"refund":0,"opName":"PUSH1","error":""}
+{"pc":2,"op":64,"gas":"0x5f58ef5","gasCost":"0x14","memory":"0x","memSize":0,"stack":["0x1"],"depth":1,"refund":0,"opName":"BLOCKHASH","error":""}
+{"pc":3,"op":0,"gas":"0x5f58ee1","gasCost":"0x0","memory":"0x","memSize":0,"stack":["0xdac58aa524e50956d0c0bae7f3f8bb9d35381365d07804dd5b48a5a297c06af4"],"depth":1,"refund":0,"opName":"STOP","error":""}
+{"output":"","gasUsed":"0x17","time":109297}
+```
+
+In this example, the caller has not provided the required blockhash:
+```
+./statet8n --input.alloc=./testdata/4/alloc.json --input.txs=./testdata/4/txs.json --input.env=./testdata/4/env.json --trace
+```
+```
+ERROR(4): getHash(3) invoked, blockhash for that block not provided
+```
+Error code: 4
 ### Chaining
 
 Another thing that can be done, is to chain invocations:
 ```
-./statet8n --input.alloc=./testdata/alloc.json --input.txs=./testdata/txs.json --input.env=./testdata/env.json --output.alloc=stdout | ./statet8n --input.alloc=stdin --input.env=./testdata/env.json --input.txs=./testdata/txs.json
+./statet8n --input.alloc=./testdata/1/alloc.json --input.txs=./testdata/1/txs.json --input.env=./testdata/1/env.json --output.alloc=stdout | ./statet8n --input.alloc=stdin --input.env=./testdata/1/env.json --input.txs=./testdata/1/txs.json
+INFO [05-12|09:05:50.042] rejected tx                              index=1 hash="0557ba…18d673" from=0x8A8eAFb1cf62BfBeb1741769DAE1a9dd47996192 error="nonce too low"
+INFO [05-12|09:05:50.055] rejected tx                              index=0 hash="0557ba…18d673" from=0x8A8eAFb1cf62BfBeb1741769DAE1a9dd47996192 error="nonce too low"
+INFO [05-12|09:05:50.056] rejected tx                              index=1 hash="0557ba…18d673" from=0x8A8eAFb1cf62BfBeb1741769DAE1a9dd47996192 error="nonce too low"
 
 ```
 What happened here, is that we first applied two identical transactions, so the second one was rejected. 
@@ -203,14 +232,3 @@ the same two transactions: this time, both failed due to too low nonce.
 In order to meaningfully chain invocations, one would need to provide meaningful new `env`, otherwise the
 actual blocknumber (exposed to the EVM) would not increase.
 
-
-
-## TODO
-
-This specification and implementation is still draft, and subject to change. Some 
-implementation leftovers are: 
-
-- Make traces use different output files, right now it stores all traces in the same file (traces.jsonl)
-- Make the machine accept rlp-encoded transactions, 
-- Right now, a missing `BLOCKHASH` lead to `panic`, and does not exit with the right exit code
-- It's not possible to provide blockhashes yet (not even specified how)
