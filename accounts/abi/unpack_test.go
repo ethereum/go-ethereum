@@ -33,7 +33,7 @@ import (
 // TestUnpack tests the general pack/unpack tests in packing_test.go
 func TestUnpack(t *testing.T) {
 	for i, test := range packUnpackTests {
-		t.Run(strconv.Itoa(i), func(t *testing.T) {
+		t.Run(strconv.Itoa(i)+" "+test.def, func(t *testing.T) {
 			//Unpack
 			def := fmt.Sprintf(`[{ "name" : "method", "type": "function", "outputs": %s}]`, test.def)
 			abi, err := JSON(strings.NewReader(def))
