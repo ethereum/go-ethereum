@@ -257,6 +257,9 @@ func (dl *diskLayer) generate(stats *generatorStats) {
 	dl.lock.Unlock()
 
 	// Someone will be looking for us, wait it out
-	abort := <-dl.genAbort
-	abort <- nil
+	select {
+	case abort := <-dl.genAbort:
+		abort <- nil
+	default:
+	}
 }
