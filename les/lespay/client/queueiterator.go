@@ -18,7 +18,6 @@ package client
 
 import (
 	"sync"
-	"time"
 
 	"github.com/ethereum/go-ethereum/p2p/enode"
 	"github.com/ethereum/go-ethereum/p2p/nodestate"
@@ -30,24 +29,23 @@ type QueueIterator struct {
 	lock sync.Mutex
 	cond *sync.Cond
 
-	ns       *nodestate.NodeStateMachine
-	queue    []*enode.Node
-	selected nodestate.Flags
-	nextNode *enode.Node
-	closed   bool
+	ns           *nodestate.NodeStateMachine
+	queue        []*enode.Node
+	selected     nodestate.Flags
+	nextNode     *enode.Node
+	fifo, closed bool
 }
 
 // NewQueueIterator creates a new QueueIterator. Nodes are selectable if they have all the required
 // and none of the disabled flags set. When a node is selected the selectedFlag is set which also
 // disables further selectability until it is removed or times out.
-func NewQueueIterator(ns *nodestate.NodeStateMachine, requireFlags, disableFlags, selectedFlag nodestate.Flags) *QueueIterator {
+func NewQueueIterator(ns *nodestate.NodeStateMachine, requireFlags, disableFlags nodestate.Flags, fifo bool) *QueueIterator {
 	qi := &QueueIterator{
-		ns:       ns,
-		selected: selectedFlag,
+		ns:   ns,
+		fifo: fifo,
 	}
 	qi.cond = sync.NewCond(&qi.lock)
 
-	disableFlags = disableFlags.Or(selectedFlag)
 	ns.SubscribeState(requireFlags.Or(disableFlags), func(n *enode.Node, oldState, newState nodestate.Flags) {
 		oldMatch := oldState.HasAll(requireFlags) && oldState.HasNone(disableFlags)
 		newMatch := newState.HasAll(requireFlags) && newState.HasNone(disableFlags)
@@ -87,13 +85,15 @@ func (qi *QueueIterator) Next() bool {
 		return false
 	}
 	// Move to the next node in queue.
-	qi.nextNode = qi.queue[0]
-	copy(qi.queue[:len(qi.queue)-1], qi.queue[1:])
-	qi.queue = qi.queue[:len(qi.queue)-1]
+	if qi.fifo {
+		qi.nextNode = qi.queue[0]
+		copy(qi.queue[:len(qi.queue)-1], qi.queue[1:])
+		qi.queue = qi.queue[:len(qi.queue)-1]
+	} else {
+		qi.nextNode = qi.queue[len(qi.queue)-1]
+		qi.queue = qi.queue[:len(qi.queue)-1]
+	}
 	qi.lock.Unlock()
-	// Mark the node selected. This can't happen while
-	// holding the lock because it invokes our state change callback.
-	qi.ns.SetState(qi.nextNode, qi.selected, nodestate.Flags{}, time.Second*5)
 	return true
 }
 

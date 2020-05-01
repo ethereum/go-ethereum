@@ -49,6 +49,7 @@ func testNodeIndex(id enode.ID) int {
 type serverPoolTest struct {
 	db        ethdb.KeyValueStore
 	clock     *mclock.Simulated
+	preNeg    bool
 	vt        *lpc.ValueTracker
 	sp        *serverPool
 	input     enode.Iterator
@@ -67,7 +68,7 @@ type spTestNode struct {
 	peer                      *serverPeer
 }
 
-func newServerPoolTest() *serverPoolTest {
+func newServerPoolTest(preNeg bool) *serverPoolTest {
 	nodes := make([]*enode.Node, testNodes)
 	for i := range nodes {
 		nodes[i] = enode.SignNull(&enr.Record{}, testNodeID(i))
@@ -77,6 +78,7 @@ func newServerPoolTest() *serverPoolTest {
 		db:        memorydb.New(),
 		input:     enode.CycleNodes(nodes),
 		testNodes: make([]spTestNode, testNodes),
+		preNeg:    preNeg,
 	}
 }
 
@@ -85,8 +87,36 @@ func (s *serverPoolTest) addTrusted(i int) {
 }
 
 func (s *serverPoolTest) start() {
+
+	var testQuery lpc.PreNegQuery
+	if s.preNeg {
+		testQuery = func(node *enode.Node, result func(canDial bool)) (start, cancel func()) {
+			idx := testNodeIndex(node.ID())
+			n := &s.testNodes[idx]
+			canConnect := !n.connected && n.connectCycles != 0 && s.cycle >= n.nextConnCycle
+			switch idx % 2 {
+			case 0:
+				// pre-neg returns true only if connection is possible
+				return func() { result(canConnect) }, func() {}
+			case 1:
+				// pre-neg returns true but connection might still fail
+				return func() { result(true) }, func() {}
+			case 2:
+				// pre-neg returns true if connection is possible, otherwise timeout (node unresponsive)
+				if canConnect {
+					return func() { result(true) }, func() {}
+				} else {
+					return func() {}, func() {
+						result(false)
+					}
+				}
+			}
+			return nil, nil
+		}
+	}
+
 	s.vt = lpc.NewValueTracker(s.db, s.clock, requestList, time.Minute, 1/float64(time.Hour), 1/float64(time.Hour*100), 1/float64(time.Hour*1000))
-	s.sp = newServerPool(s.db, []byte("serverpool:"), s.vt, s.input, s.clock, s.trusted, true)
+	s.sp = newServerPool(s.db, []byte("serverpool:"), s.vt, s.input, testQuery, s.clock, s.trusted, true)
 	s.disconnect = make(map[int][]int)
 	s.sp.start()
 }
@@ -202,8 +232,10 @@ func (s *serverPoolTest) checkNodes(t *testing.T, nodes []int, minTotal, maxTota
 	}
 }
 
-func TestServerPool(t *testing.T) {
-	s := newServerPoolTest()
+func TestServerPool(t *testing.T)           { testServerPool(t, false) }
+func TestServerPoolWithPreNeg(t *testing.T) { testServerPool(t, true) }
+func testServerPool(t *testing.T, preNeg bool) {
+	s := newServerPoolTest(preNeg)
 	nodes := s.setNodes(20, 200, 200, true, false)
 	s.setNodes(20, 20, 20, false, false)
 	s.start()
@@ -212,8 +244,10 @@ func TestServerPool(t *testing.T) {
 	s.checkNodes(t, nodes, 40000, 50000)
 }
 
-func TestServerPoolChangedNodes(t *testing.T) {
-	s := newServerPoolTest()
+func TestServerPoolChangedNodes(t *testing.T)           { testServerPoolChangedNodes(t, false) }
+func TestServerPoolChangedNodesWithPreNeg(t *testing.T) { testServerPoolChangedNodes(t, true) }
+func testServerPoolChangedNodes(t *testing.T, preNeg bool) {
+	s := newServerPoolTest(preNeg)
 	nodes := s.setNodes(20, 200, 200, true, false)
 	s.setNodes(20, 20, 20, false, false)
 	s.start()
@@ -229,8 +263,12 @@ func TestServerPoolChangedNodes(t *testing.T) {
 	s.stop()
 }
 
-func TestServerPoolRestartNoDiscovery(t *testing.T) {
-	s := newServerPoolTest()
+func TestServerPoolRestartNoDiscovery(t *testing.T) { testServerPoolRestartNoDiscovery(t, false) }
+func TestServerPoolRestartNoDiscoveryWithPreNeg(t *testing.T) {
+	testServerPoolRestartNoDiscovery(t, true)
+}
+func testServerPoolRestartNoDiscovery(t *testing.T, preNeg bool) {
+	s := newServerPoolTest(preNeg)
 	nodes := s.setNodes(20, 200, 200, true, false)
 	s.setNodes(20, 20, 20, false, false)
 	s.start()
@@ -244,8 +282,12 @@ func TestServerPoolRestartNoDiscovery(t *testing.T) {
 	s.checkNodes(t, nodes, 40000, 50000)
 }
 
-func TestServerPoolTrustedNoDiscovery(t *testing.T) {
-	s := newServerPoolTest()
+func TestServerPoolTrustedNoDiscovery(t *testing.T) { testServerPoolTrustedNoDiscovery(t, false) }
+func TestServerPoolTrustedNoDiscoveryWithPreNeg(t *testing.T) {
+	testServerPoolTrustedNoDiscovery(t, true)
+}
+func testServerPoolTrustedNoDiscovery(t *testing.T, preNeg bool) {
+	s := newServerPoolTest(preNeg)
 	trusted := s.setNodes(200, 200, 200, true, true)
 	s.input = nil
 	s.start()

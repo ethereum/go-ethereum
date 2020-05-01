@@ -18,7 +18,6 @@ package client
 
 import (
 	"sync"
-	"time"
 
 	"github.com/ethereum/go-ethereum/les/utils"
 	"github.com/ethereum/go-ethereum/p2p/enode"
@@ -33,7 +32,6 @@ type WrsIterator struct {
 
 	ns       *nodestate.NodeStateMachine
 	wrs      *utils.WeightedRandomSelect
-	selected nodestate.Flags
 	nextNode *enode.Node
 	closed   bool
 }
@@ -41,15 +39,13 @@ type WrsIterator struct {
 // NewWrsIterator creates a new WrsIterator. Nodes are selectable if they have all the required
 // and none of the disabled flags set. When a node is selected the selectedFlag is set which also
 // disables further selectability until it is removed or times out.
-func NewWrsIterator(ns *nodestate.NodeStateMachine, requireFlags, disableFlags, selectedFlag nodestate.Flags, wfn utils.WeightFn) *WrsIterator {
+func NewWrsIterator(ns *nodestate.NodeStateMachine, requireFlags, disableFlags nodestate.Flags, wfn utils.WeightFn) *WrsIterator {
 	w := &WrsIterator{
-		ns:       ns,
-		wrs:      utils.NewWeightedRandomSelect(wfn),
-		selected: selectedFlag,
+		ns:  ns,
+		wrs: utils.NewWeightedRandomSelect(wfn),
 	}
 	w.cond = sync.NewCond(&w.lock)
 
-	disableFlags = disableFlags.Or(selectedFlag)
 	ns.SubscribeState(requireFlags.Or(disableFlags), func(n *enode.Node, oldState, newState nodestate.Flags) {
 		oldMatch := oldState.HasAll(requireFlags) && oldState.HasNone(disableFlags)
 		newMatch := newState.HasAll(requireFlags) && newState.HasNone(disableFlags)
@@ -72,11 +68,7 @@ func NewWrsIterator(ns *nodestate.NodeStateMachine, requireFlags, disableFlags, 
 // Next selects the next node.
 func (w *WrsIterator) Next() bool {
 	w.nextNode = w.chooseNode()
-	if w.nextNode == nil {
-		return false
-	}
-	w.ns.SetState(w.nextNode, w.selected, nodestate.Flags{}, time.Second*5)
-	return true
+	return w.nextNode != nil
 }
 
 func (w *WrsIterator) chooseNode() *enode.Node {
