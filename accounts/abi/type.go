@@ -47,7 +47,6 @@ const (
 // Type is the reflection of the supported argument type
 type Type struct {
 	Elem *Type
-	Type reflect.Type
 	Size int
 	T    byte // Our own type checking
 
@@ -97,7 +96,6 @@ func NewType(t string, internalType string, components []ArgumentMarshaling) (ty
 			// is a slice
 			typ.T = SliceTy
 			typ.Elem = &embeddedType
-			typ.Type = reflect.SliceOf(embeddedType.Type)
 			typ.stringKind = embeddedType.stringKind + sliced
 		} else if len(intz) == 1 {
 			// is a array
@@ -107,7 +105,6 @@ func NewType(t string, internalType string, components []ArgumentMarshaling) (ty
 			if err != nil {
 				return Type{}, fmt.Errorf("abi: error parsing variable size: %v", err)
 			}
-			typ.Type = reflect.ArrayOf(typ.Size, embeddedType.Type)
 			typ.stringKind = embeddedType.stringKind + sliced
 		} else {
 			return Type{}, fmt.Errorf("invalid formatting of array type")
@@ -139,31 +136,24 @@ func NewType(t string, internalType string, components []ArgumentMarshaling) (ty
 	// varType is the parsed abi type
 	switch varType := parsedType[1]; varType {
 	case "int":
-		typ.Type = reflectIntType(false, varSize)
 		typ.Size = varSize
 		typ.T = IntTy
 	case "uint":
-		typ.Type = reflectIntType(true, varSize)
 		typ.Size = varSize
 		typ.T = UintTy
 	case "bool":
 		typ.T = BoolTy
-		typ.Type = reflect.TypeOf(bool(false))
 	case "address":
-		typ.Type = addressT
 		typ.Size = 20
 		typ.T = AddressTy
 	case "string":
-		typ.Type = reflect.TypeOf("")
 		typ.T = StringTy
 	case "bytes":
 		if varSize == 0 {
 			typ.T = BytesTy
-			typ.Type = reflect.SliceOf(reflect.TypeOf(byte(0)))
 		} else {
 			typ.T = FixedBytesTy
 			typ.Size = varSize
-			typ.Type = reflect.ArrayOf(varSize, reflect.TypeOf(byte(0)))
 		}
 	case "tuple":
 		var (
@@ -196,7 +186,6 @@ func NewType(t string, internalType string, components []ArgumentMarshaling) (ty
 		expression += ")"
 
 		typ.TupelType = reflect.StructOf(fields)
-		typ.Type = reflect.StructOf(fields)
 		typ.TupleElems = elems
 		typ.TupleRawNames = names
 		typ.T = TupleTy
@@ -215,7 +204,6 @@ func NewType(t string, internalType string, components []ArgumentMarshaling) (ty
 	case "function":
 		typ.T = FunctionTy
 		typ.Size = 24
-		typ.Type = reflect.ArrayOf(24, reflect.TypeOf(byte(0)))
 	default:
 		return Type{}, fmt.Errorf("unsupported arg type: %s", t)
 	}
