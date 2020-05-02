@@ -53,10 +53,10 @@ type Type struct {
 	stringKind string // holds the unparsed string for deriving signatures
 
 	// Tuple relative fields
-	TupleRawName  string   // Raw struct name defined in source code, may be empty.
-	TupleElems    []*Type  // Type information of all tuple fields
-	TupleRawNames []string // Raw field name of all tuple fields
-	TupelType     reflect.Type
+	TupleRawName  string       // Raw struct name defined in source code, may be empty.
+	TupleElems    []*Type      // Type information of all tuple fields
+	TupleRawNames []string     // Raw field name of all tuple fields
+	TupelType     reflect.Type // Underlying struct of the tuple
 }
 
 var (
