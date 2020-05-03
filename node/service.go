@@ -93,6 +93,7 @@ func (ctx *ServiceContext) ExtRPCEnabled() bool {
 	return ctx.Config.ExtRPCEnabled()
 }
 
+// TODO document
 type Backend interface {
 	// Protocols retrieves the P2P protocols the service wishes to start.
 	Protocols() []p2p.Protocol
@@ -125,7 +126,7 @@ type Service interface {
 // TODO document
 type AuxiliaryService interface {
 	// TODO document
-	Server() *HttpServer
+	Server() *HTTPServer
 
 	// AuxiliaryService also implements Lifecycle
 	Lifecycle

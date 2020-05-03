@@ -33,14 +33,14 @@ import (
 // Service encapsulates a GraphQL service.
 type Service struct {
 	backend  ethapi.Backend   // The backend that queries will operate on.
-	graphqlServer *node.HttpServer
+	graphqlServer *node.HTTPServer
 }
 
 // New constructs a new GraphQL service instance.
 func New(backend ethapi.Backend, endpoint string, cors, vhosts []string, timeouts rpc.HTTPTimeouts) (*Service, error) {
 	service := &Service{
 		backend:  backend,
-		graphqlServer: &node.HttpServer{
+		graphqlServer: &node.HTTPServer{
 			Timeouts: timeouts,
 			Vhosts: vhosts,
 			CorsAllowedOrigins: cors,
@@ -111,6 +111,6 @@ func (s *Service) Stop() error {
 	return nil
 }
 
-func (s *Service) Server() *node.HttpServer {
+func (s *Service) Server() *node.HTTPServer {
 	return s.graphqlServer
 }

@@ -18,6 +18,7 @@ package node
 
 import (
 	"compress/gzip"
+	"context"
 	"fmt"
 	"github.com/ethereum/go-ethereum/rpc"
 	"io"
@@ -31,7 +32,7 @@ import (
 	"github.com/rs/cors"
 )
 
-type HttpServer struct {
+type HTTPServer struct {
 	handler http.Handler
 	Srv     *rpc.Server
 	Server *http.Server
@@ -54,19 +55,42 @@ type HttpServer struct {
 	WSAllowed  bool
 }
 
-func (h *HttpServer) Handler() http.Handler {
+// TODO document
+func (h *HTTPServer) Start() {
+	go h.Server.Serve(h.Listener)
+}
+
+// TODO document
+func (h *HTTPServer) Stop() {
+	if h.Server != nil {
+		//url := fmt.Sprintf("http://%v/", h.ListenerAddr)
+		// Don't bother imposing a timeout here.
+		h.Server.Shutdown(context.Background())
+		//n.log.Info("HTTP Endpoint closed", "url", url) // TODO log wherever this is called instead
+	}
+	if h.Srv != nil {
+		h.Srv.Stop()
+		h.Srv = nil
+	}
+}
+
+// Handler returns the handler of the HTTPServer
+func (h *HTTPServer) Handler() http.Handler {
 	return h.handler
 }
 
-func (h *HttpServer) SetHandler(handler http.Handler) {
+// TODO document
+func (h *HTTPServer) SetHandler(handler http.Handler) {
 	h.handler = handler
 }
 
-func (h *HttpServer) Endpoint() string {
+// TODO is this really necessary?
+func (h *HTTPServer) Endpoint() string {
 	return fmt.Sprintf("%s:%d", h.host, h.port)
 }
 
-func (h *HttpServer) SetEndpoint(endpoint string) {
+// TODO is this necessary?
+func (h *HTTPServer) SetEndpoint(endpoint string) {
 	h.endpoint = endpoint
 }
 

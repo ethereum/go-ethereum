@@ -20,6 +20,8 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"net"
+	"net/http"
 	"os"
 	"path/filepath"
 	"reflect"
@@ -60,9 +62,9 @@ type Node struct {
 	rpcAPIs       []rpc.API   // List of APIs currently provided by the node
 	inprocHandler *rpc.Server // In-process RPC request handler to process the API requests
 
-	ipc  *HttpServer // TODO
-	http *HttpServer // TODO
-	ws   *HttpServer // TODO
+	ipc  *HTTPServer // TODO
+	http *HTTPServer // TODO
+	ws   *HTTPServer // TODO
 
 
 	stop chan struct{} // Channel to wait for termination notifications
@@ -115,15 +117,23 @@ func New(conf *Config) (*Node, error) {
 		},
 		services:    make(map[reflect.Type]Service),
 		auxServices: make(map[reflect.Type]AuxiliaryService),
-		ipc: &HttpServer{
+		ipc: &HTTPServer{
 			endpoint: conf.IPCEndpoint(),
 		},
-		http: &HttpServer{
+		http: &HTTPServer{
+			CorsAllowedOrigins: conf.HTTPCors,
+			Vhosts: conf.HTTPVirtualHosts,
+			Whitelist: conf.HTTPModules,
+			Timeouts: conf.HTTPTimeouts,
+			Srv: rpc.NewServer(),
 			endpoint: conf.HTTPEndpoint(),
 			host: conf.HTTPHost,
 			port: conf.HTTPPort,
 		},
-		ws: &HttpServer{
+		ws: &HTTPServer{
+			CorsAllowedOrigins: conf.WSOrigins,
+			Whitelist: conf.WSModules,
+			Srv: rpc.NewServer(),
 			endpoint: conf.WSEndpoint(),
 			host: conf.WSHost,
 			port: conf.WSPort,
@@ -159,6 +169,7 @@ func (n *Node) Close() error {
 	}
 }
 
+// TODO document
 func (n *Node) RegisterLifecycle(lifecycle Lifecycle) {
 	n.lifecycles = append(n.lifecycles, lifecycle)
 }
@@ -232,6 +243,36 @@ func (n *Node) RegisterRPC(apis []rpc.API) {
 		apis = append(apis, service.APIs()...)
 	}
 	n.rpcAPIs = apis
+}
+
+// TODO what is the purpose of this function? Define it and document it.
+func (n *Node) RegisterHTTP(h *HTTPServer, exposeAll bool) error {
+	// register apis and create handler stack
+	err := RegisterApisFromWhitelist(n.rpcAPIs, h.Whitelist, h.Srv, exposeAll)
+	if err != nil {
+		return err
+	}
+
+	// start the HTTP listener
+	listener, err := net.Listen("tcp", h.endpoint)
+	if err != nil {
+		return err
+	}
+	// create the HTTP server
+	httpSrv := &http.Server{Handler: h.handler}
+	// check timeouts if they exist
+	if h.Timeouts != (rpc.HTTPTimeouts{}) {
+		CheckTimeouts(&h.Timeouts)
+		httpSrv.ReadTimeout = h.Timeouts.ReadTimeout
+		httpSrv.WriteTimeout = h.Timeouts.WriteTimeout
+		httpSrv.IdleTimeout = h.Timeouts.IdleTimeout
+	}
+	// complete the HTTPServer
+	h.Listener = listener
+	h.ListenerAddr = listener.Addr()
+	h.Server = httpSrv
+
+	return nil
 }
 
 // running returns true if the node's p2p server is already running
@@ -312,6 +353,7 @@ func (n *Node) Start() error {
 	return nil
 }
 
+// TODO document
 func (n *Node) stopLifecycles(started []Lifecycle) {
 	for _, lifecycle := range started {
 		lifecycle.Stop()
@@ -347,7 +389,6 @@ func (n *Node) openDataDir() error {
 // assumptions about the state of the node.
 func (n *Node) startRPC() error {
 	n.RegisterRPC(n.apis())
-
 	// Start the various API endpoints, terminating all in case of errors
 	if err := n.startInProc(); err != nil {
 		return err
@@ -356,21 +397,37 @@ func (n *Node) startRPC() error {
 		n.stopInProc()
 		return err
 	}
-	if err := n.startHTTP(n.http.Endpoint(), n.config.HTTPModules, n.config.HTTPCors, n.config.HTTPVirtualHosts, n.config.HTTPTimeouts, n.config.WSOrigins); err != nil {
-		n.stopIPC()
-		n.stopInProc()
-		return err
-	}
-	// if endpoints are not the same, start separate servers
-	if n.http.Endpoint() != n.ws.Endpoint() {
-		if err := n.startWS(n.ws.Endpoint(), n.config.WSModules, n.config.WSOrigins, n.config.WSExposeAll); err != nil {
-			n.stopHTTP()
+	// create and start http server if the endpoint exists
+	if n.http.endpoint != "" {
+		// wrap handler in websocket handler only if websocket port is the same as http rpc
+		n.http.handler = NewHTTPHandlerStack(n.http.Srv, n.http.CorsAllowedOrigins, n.http.Vhosts)
+		if n.http.endpoint == n.ws.endpoint {
+			n.http.handler = NewWebsocketUpgradeHandler(n.http.handler, n.http.Srv.WebsocketHandler(n.ws.CorsAllowedOrigins))
+		}
+		if err := n.RegisterHTTP(n.http, false); err != nil {
 			n.stopIPC()
 			n.stopInProc()
 			return err
 		}
+		n.http.Start()
+		n.log.Info("HTTP endpoint opened", "url", fmt.Sprintf("http://%v/", n.http.ListenerAddr),
+			"cors", strings.Join(n.http.CorsAllowedOrigins, ","),
+			"vhosts", strings.Join(n.http.Vhosts, ","))
+		if n.http.Endpoint() == n.ws.Endpoint() {
+			n.log.Info("WebSocket endpoint opened", "url", fmt.Sprintf("ws://%v", n.http.ListenerAddr))
+		}
 	}
-
+	//  create and start ws server if the endpoint exists
+	if n.ws.endpoint != "" && n.http.endpoint != n.ws.endpoint {
+		n.ws.handler = n.ws.Srv.WebsocketHandler(n.ws.CorsAllowedOrigins)
+		if err := n.RegisterHTTP(n.ws, n.config.WSExposeAll); err != nil {
+			n.stopIPC()
+			n.stopInProc()
+			return err
+		}
+		n.ws.Start()
+		n.log.Info("WebSocket endpoint opened", "url", fmt.Sprintf("ws://%s", n.ws.ListenerAddr))
+	}
 	// All API endpoints started successfully
 	return nil
 }
