@@ -27,6 +27,7 @@ import (
 	"testing"
 
 	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/common/math"
 	"github.com/ethereum/go-ethereum/crypto"
 )
 
@@ -601,7 +602,7 @@ func TestInputFixedArrayAndVariableInputLength(t *testing.T) {
 	strvalue = common.RightPadBytes([]byte(strin), 32)
 	fixedarrin1value1 = common.LeftPadBytes(fixedarrin1[0].Bytes(), 32)
 	fixedarrin1value2 = common.LeftPadBytes(fixedarrin1[1].Bytes(), 32)
-	dynarroffset = U256(big.NewInt(int64(256 + ((len(strin)/32)+1)*32)))
+	dynarroffset = math.U256Bytes(big.NewInt(int64(256 + ((len(strin)/32)+1)*32)))
 	dynarrlength = make([]byte, 32)
 	dynarrlength[31] = byte(len(dynarrin))
 	dynarrinvalue1 = common.LeftPadBytes(dynarrin[0].Bytes(), 32)
