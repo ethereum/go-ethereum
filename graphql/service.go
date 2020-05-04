@@ -44,45 +44,28 @@ func New(backend ethapi.Backend, endpoint string, cors, vhosts []string, timeout
 			Timeouts: timeouts,
 			Vhosts: vhosts,
 			CorsAllowedOrigins: cors,
+			GQLAllowed: true,
 		},
 	}
 	service.graphqlServer.SetEndpoint(endpoint)
+	// create handler
+	handler, err := service.CreateHandler()
+	if err != nil {
+		return nil, err
+	}
+	service.graphqlServer.SetHandler(handler)
+
 	return service, nil
 }
 
-// Start is called after all services have been constructed and the networking
-// layer was also initialized to spawn any goroutines required by the service.
-func (s *Service) Start() error {
+func (s *Service) CreateHandler() (http.Handler, error) {
 	// create handler stack and wrap the graphql handler
 	handler, err := newHandler(s.backend)
 	if err != nil {
-		return err
-	}
-	handler = node.NewHTTPHandlerStack(handler, s.graphqlServer.CorsAllowedOrigins, s.graphqlServer.Vhosts)
-	s.graphqlServer.SetHandler(handler)
-
-	listener, err := net.Listen("tcp", s.graphqlServer.Endpoint())
-	if err != nil {
-		return err
+		return nil, err
 	}
 
-	// make sure timeout values are meaningful
-	node.CheckTimeouts(&s.graphqlServer.Timeouts)
-	// create http server
-	httpSrv := &http.Server{
-		Handler:      handler,
-		ReadTimeout:  s.graphqlServer.Timeouts.ReadTimeout,
-		WriteTimeout: s.graphqlServer.Timeouts.WriteTimeout,
-		IdleTimeout:  s.graphqlServer.Timeouts.IdleTimeout,
-	}
-	go httpSrv.Serve(listener)
-	log.Info("GraphQL endpoint opened", "url", fmt.Sprintf("http://%s", s.graphqlServer.Endpoint))
-	// add information to graphql http server
-	s.graphqlServer.Server = httpSrv
-	s.graphqlServer.ListenerAddr = listener.Addr()
-	s.graphqlServer.SetHandler(handler)
-
-	return nil
+	return handler, nil
 }
 
 // newHandler returns a new `http.Handler` that will answer GraphQL queries.
@@ -101,6 +84,40 @@ func newHandler(backend ethapi.Backend) (http.Handler, error) {
 	mux.Handle("/graphql", h)
 	mux.Handle("/graphql/", h)
 	return mux, nil
+}
+
+// Start is called after all services have been constructed and the networking
+// layer was also initialized to spawn any goroutines required by the service.
+func (s *Service) Start() error {
+	handler, err := s.CreateHandler()
+	if err != nil {
+		return err
+	}
+	handler = node.NewHTTPHandlerStack(handler, s.graphqlServer.CorsAllowedOrigins, s.graphqlServer.Vhosts)
+	s.graphqlServer.SetHandler(handler)
+
+	// start listening on given endpoint
+	listener, err := net.Listen("tcp", s.graphqlServer.Endpoint())
+	if err != nil {
+		return err
+	}
+	// make sure timeout values are meaningful
+	node.CheckTimeouts(&s.graphqlServer.Timeouts)
+	// create http server
+	httpSrv := &http.Server{
+		Handler:      handler,
+		ReadTimeout:  s.graphqlServer.Timeouts.ReadTimeout,
+		WriteTimeout: s.graphqlServer.Timeouts.WriteTimeout,
+		IdleTimeout:  s.graphqlServer.Timeouts.IdleTimeout,
+	}
+	go httpSrv.Serve(listener)
+	log.Info("GraphQL endpoint opened", "url", fmt.Sprintf("http://%v", listener.Addr()))
+	// add information to graphql http server
+	s.graphqlServer.Server = httpSrv
+	s.graphqlServer.ListenerAddr = listener.Addr()
+	s.graphqlServer.SetHandler(handler)
+
+	return nil
 }
 
 // Stop terminates all goroutines belonging to the service, blocking until they

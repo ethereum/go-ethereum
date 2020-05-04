@@ -20,6 +20,7 @@ package utils
 import (
 	"crypto/ecdsa"
 	"fmt"
+	"github.com/ethereum/go-ethereum/internal/ethapi"
 	"io"
 	"io/ioutil"
 	"math/big"
@@ -1741,30 +1742,27 @@ func RegisterEthStatsService(stack *node.Node, url string) {
 
 // RegisterGraphQLService is a utility function to construct a new service and register it against a node.
 func RegisterGraphQLService(stack *node.Node, endpoint string, cors, vhosts []string, timeouts rpc.HTTPTimeouts) {
-	// Try to construct the GraphQL service backed by a full node
-	if ethBackend, ok := stack.Backend().(*eth.Ethereum); ok {
-		graphqlAuxService, err := graphql.New(ethBackend.APIBackend, endpoint, cors, vhosts, timeouts)
-		if err != nil {
-			Fatalf("Failed to register the GraphQL service: %v", err)
-		}
-		if err := stack.RegisterAuxService(graphqlAuxService); err != nil {
-			Fatalf("Failed to register the GraphQL service: %v", err)
-		}
+	var backend ethapi.Backend
+	switch stack.Backend() {
+	case stack.Backend().(*eth.Ethereum):
+		backend = stack.Backend().(*eth.Ethereum).APIBackend
+	case stack.Backend().(*les.LightEthereum):
+		backend = stack.Backend().(*les.LightEthereum).ApiBackend
+	default:
+		// Well, this should not have happened, bail out
+		Fatalf("no Ethereum service")
+	}
+
+	graphqlAuxService, err := graphql.New(backend, endpoint, cors, vhosts, timeouts)
+	if err != nil {
+		Fatalf("Failed to register the GraphQL service: %v", err)
+	}
+	if err := stack.RegisterAuxService(graphqlAuxService); err != nil {
+		Fatalf("Failed to register the GraphQL service: %v", err)
+	}
+	if graphqlAuxService.Server().Endpoint() != stack.Config().HTTPEndpoint() {
 		stack.RegisterLifecycle(graphqlAuxService)
 	}
-	// Try to construct the GraphQL service backed by a light node
-	if lesBackend, ok := stack.Backend().(*les.LightEthereum); ok {
-		graphqlAuxService, err := graphql.New(lesBackend.ApiBackend, endpoint, cors, vhosts, timeouts)
-		if err != nil {
-			Fatalf("Failed to register the GraphQL service: %v", err)
-		}
-		if err := stack.RegisterAuxService(graphqlAuxService); err != nil {
-			Fatalf("Failed to register the GraphQL service: %v", err)
-		}
-		stack.RegisterLifecycle(graphqlAuxService)
-	}
-	// Well, this should not have happened, bail out
-	Fatalf("no Ethereum service")
 }
 
 func SetupMetrics(ctx *cli.Context) {

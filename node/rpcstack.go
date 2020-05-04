@@ -19,7 +19,6 @@ package node
 import (
 	"compress/gzip"
 	"context"
-	"fmt"
 	"github.com/ethereum/go-ethereum/rpc"
 	"io"
 	"io/ioutil"
@@ -53,6 +52,7 @@ type HTTPServer struct {
 
 	RPCAllowed bool
 	WSAllowed  bool
+	GQLAllowed bool
 }
 
 // TODO document
@@ -86,7 +86,7 @@ func (h *HTTPServer) SetHandler(handler http.Handler) {
 
 // TODO is this really necessary?
 func (h *HTTPServer) Endpoint() string {
-	return fmt.Sprintf("%s:%d", h.host, h.port)
+	return h.endpoint
 }
 
 // TODO is this necessary?
@@ -221,4 +221,22 @@ func NewWebsocketUpgradeHandler(h http.Handler, ws http.Handler) http.Handler {
 func isWebsocket(r *http.Request) bool {
 	return strings.ToLower(r.Header.Get("Upgrade")) == "websocket" &&
 		strings.ToLower(r.Header.Get("Connection")) == "upgrade"
+}
+
+// TODO document
+func NewGQLUpgradeHandler(h http.Handler, gql http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if isGQL(r) {
+			gql.ServeHTTP(w, r)
+			log.Debug("serving graphql request")
+			return
+		}
+
+		h.ServeHTTP(w, r)
+	})
+}
+
+// TODO document
+func isGQL(r *http.Request) bool {
+	return r.URL.Path == "/graphql" || r.URL.Path == "/graphql/"
 }

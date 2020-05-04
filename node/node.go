@@ -129,6 +129,7 @@ func New(conf *Config) (*Node, error) {
 			endpoint: conf.HTTPEndpoint(),
 			host: conf.HTTPHost,
 			port: conf.HTTPPort,
+			RPCAllowed: true,
 		},
 		ws: &HTTPServer{
 			CorsAllowedOrigins: conf.WSOrigins,
@@ -137,6 +138,7 @@ func New(conf *Config) (*Node, error) {
 			endpoint: conf.WSEndpoint(),
 			host: conf.WSHost,
 			port: conf.WSPort,
+			WSAllowed: true,
 		},
 		eventmux: new(event.TypeMux),
 		log:      conf.Logger,
@@ -245,8 +247,24 @@ func (n *Node) RegisterRPC(apis []rpc.API) {
 	n.rpcAPIs = apis
 }
 
-// TODO what is the purpose of this function? Define it and document it.
-func (n *Node) RegisterHTTP(h *HTTPServer, exposeAll bool) error {
+// TODO document
+func (n *Node) RegisterHTTP(dest *HTTPServer, toRegister *HTTPServer) {
+	  // takes in default existing http server
+		    // enables ____ on it
+	if toRegister.WSAllowed {
+		dest.handler = NewWebsocketUpgradeHandler(dest.handler, toRegister.handler)
+		dest.WSAllowed = true
+		log.Info("WebSocket endpoint opened", "url", fmt.Sprintf("ws://%v", toRegister.endpoint))
+	}
+	if toRegister.GQLAllowed {
+		dest.handler = NewGQLUpgradeHandler(dest.handler, toRegister.handler)
+		dest.GQLAllowed = true
+		log.Info("GraphQL endpoint opened", "url", fmt.Sprintf("http://%v", toRegister.endpoint))
+	}
+}
+
+// CreateHTTPServer creates an http.Server and adds it to the given HTTPServer // TODO improve?
+func (n *Node) CreateHTTPServer(h *HTTPServer, exposeAll bool) error {
 	// register apis and create handler stack
 	err := RegisterApisFromWhitelist(n.rpcAPIs, h.Whitelist, h.Srv, exposeAll)
 	if err != nil {
@@ -325,7 +343,6 @@ func (n *Node) Start() error {
 		n.server.Stop()
 		return err
 	}
-
 	// Start all registered lifecycles
 	var started []Lifecycle
 	for _, lifecycle := range n.lifecycles {
@@ -398,31 +415,40 @@ func (n *Node) startRPC() error {
 		return err
 	}
 	// create and start http server if the endpoint exists
+	// TODO CLEAN THIS UP!!!!!!!!!
 	if n.http.endpoint != "" {
+		var exposeAll bool
+
 		// wrap handler in websocket handler only if websocket port is the same as http rpc
 		n.http.handler = NewHTTPHandlerStack(n.http.Srv, n.http.CorsAllowedOrigins, n.http.Vhosts)
 		if n.http.endpoint == n.ws.endpoint {
-			n.http.handler = NewWebsocketUpgradeHandler(n.http.handler, n.http.Srv.WebsocketHandler(n.ws.CorsAllowedOrigins))
+			n.ws.handler = n.ws.Srv.WebsocketHandler(n.ws.CorsAllowedOrigins)
+			n.RegisterHTTP(n.http, n.ws)
+			exposeAll = n.config.WSExposeAll
 		}
-		if err := n.RegisterHTTP(n.http, false); err != nil {
+
+		for _, auxServices := range n.auxServices {
+			if auxServices.Server().endpoint == n.http.endpoint {
+				n.RegisterHTTP(n.http, auxServices.Server())
+			}
+		}
+
+		if err := n.CreateHTTPServer(n.http, exposeAll); err != nil {
 			n.stopIPC()
 			n.stopInProc()
 			return err
 		}
+
 		n.http.Start()
 		n.http.RPCAllowed = true
 		n.log.Info("HTTP endpoint opened", "url", fmt.Sprintf("http://%v/", n.http.ListenerAddr),
 			"cors", strings.Join(n.http.CorsAllowedOrigins, ","),
 			"vhosts", strings.Join(n.http.Vhosts, ","))
-		if n.http.Endpoint() == n.ws.Endpoint() {
-			n.http.WSAllowed = true
-			n.log.Info("WebSocket endpoint opened", "url", fmt.Sprintf("ws://%v", n.http.ListenerAddr))
-		}
 	}
 	//  create and start ws server if the endpoint exists
 	if n.ws.endpoint != "" && n.http.endpoint != n.ws.endpoint {
 		n.ws.handler = n.ws.Srv.WebsocketHandler(n.ws.CorsAllowedOrigins)
-		if err := n.RegisterHTTP(n.ws, n.config.WSExposeAll); err != nil {
+		if err := n.CreateHTTPServer(n.ws, n.config.WSExposeAll); err != nil {
 			n.stopIPC()
 			n.stopInProc()
 			return err
