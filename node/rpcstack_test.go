@@ -10,9 +10,8 @@ import (
 )
 
 func TestNewWebsocketUpgradeHandler_websocket(t *testing.T) {
-	srv := rpc.NewServer()
-
-	handler := NewWebsocketUpgradeHandler(nil, srv.WebsocketHandler([]string{}))
+	h := &HTTPServer{Srv: rpc.NewServer()}
+	handler := h.NewWebsocketUpgradeHandler(nil, h.Srv.WebsocketHandler([]string{}))
 	ts := httptest.NewServer(handler)
 	defer ts.Close()
 

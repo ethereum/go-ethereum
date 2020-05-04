@@ -224,8 +224,10 @@ func (api *PrivateAdminAPI) StartWS(host *string, port *int, allowedOrigins *str
 
 	if api.node.ws.Server != nil {
 		return false, fmt.Errorf("WebSocket RPC already running on %v", api.node.ws.ListenerAddr)
+	} else if api.node.http.WSAllowed {
+		return false, fmt.Errorf("WebSocket RPC already running on %v", api.node.http.ListenerAddr)
 	}
-
+	// set host, port and endpoint
 	if host == nil {
 		h := DefaultWSHost
 		if api.node.config.WSHost != "" {
@@ -236,6 +238,15 @@ func (api *PrivateAdminAPI) StartWS(host *string, port *int, allowedOrigins *str
 	if port == nil {
 		port = &api.node.config.WSPort
 	}
+	api.node.ws.host = *host
+	api.node.ws.port = *port
+	api.node.ws.endpoint = fmt.Sprintf("%s:%d", *host, *port)
+
+	if api.node.ws.endpoint == api.node.http.endpoint && api.node.http.Server != nil {
+		api.node.http.WSAllowed = true
+		api.node.log.Info("WebSocket endpoint opened", "url", fmt.Sprintf("ws://%v", api.node.http.ListenerAddr))
+		return true, nil
+	}
 
 	origins := api.node.config.WSOrigins
 	if allowedOrigins != nil {
@@ -244,6 +255,7 @@ func (api *PrivateAdminAPI) StartWS(host *string, port *int, allowedOrigins *str
 			origins = append(origins, strings.TrimSpace(origin))
 		}
 	}
+	api.node.ws.WsOrigins = origins
 
 	modules := api.node.config.WSModules
 	if apis != nil {
@@ -252,10 +264,15 @@ func (api *PrivateAdminAPI) StartWS(host *string, port *int, allowedOrigins *str
 			modules = append(modules, strings.TrimSpace(m))
 		}
 	}
+	api.node.ws.Whitelist = modules
 
-	if err := api.node.startWS(fmt.Sprintf("%s:%d", *host, *port), modules, origins, api.node.config.WSExposeAll); err != nil {
+	api.node.ws.handler = api.node.ws.Srv.WebsocketHandler(api.node.ws.WsOrigins)
+	if err := api.node.CreateHTTPServer(api.node.ws, api.node.config.WSExposeAll); err != nil {
 		return false, err
 	}
+
+	api.node.ws.Start()
+	api.node.log.Info("WebSocket endpoint opened", "url", fmt.Sprintf("ws://%v", api.node.ws.ListenerAddr))
 	return true, nil
 }
 
@@ -264,9 +281,14 @@ func (api *PrivateAdminAPI) StopWS() (bool, error) {
 	api.node.lock.Lock()
 	defer api.node.lock.Unlock()
 
-	if api.node.ws == nil {
+	if api.node.ws.Server == nil && !api.node.http.WSAllowed {
 		return false, fmt.Errorf("WebSocket RPC not running")
 	}
+	if api.node.http.WSAllowed {
+		api.node.http.WSAllowed = false
+		return true, nil
+	}
+
 	api.node.stopWS()
 	return true, nil
 }

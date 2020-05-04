@@ -129,7 +129,6 @@ func New(conf *Config) (*Node, error) {
 			endpoint: conf.HTTPEndpoint(),
 			host: conf.HTTPHost,
 			port: conf.HTTPPort,
-			RPCAllowed: true,
 		},
 		ws: &HTTPServer{
 			CorsAllowedOrigins: conf.WSOrigins,
@@ -138,11 +137,17 @@ func New(conf *Config) (*Node, error) {
 			endpoint: conf.WSEndpoint(),
 			host: conf.WSHost,
 			port: conf.WSPort,
-			WSAllowed: true,
 		},
 		eventmux: new(event.TypeMux),
 		log:      conf.Logger,
 	}
+	if conf.HTTPHost != "" {
+		node.http.RPCAllowed = true
+	}
+	if conf.WSHost != "" {
+		node.ws.WSAllowed = true
+	}
+
 	node.ServiceContext.EventMux = node.eventmux
 	node.ServiceContext.AccountManager = node.accman
 	return node, nil
@@ -251,15 +256,15 @@ func (n *Node) RegisterRPC(apis []rpc.API) {
 func (n *Node) RegisterHTTP(dest *HTTPServer, toRegister *HTTPServer) {
 	// takes in default existing http server
 	// enables ____ on it
-	if toRegister.WSAllowed {
-		dest.handler = NewWebsocketUpgradeHandler(dest.handler, toRegister.handler)
-		dest.WSAllowed = true
-		log.Info("WebSocket endpoint opened", "url", fmt.Sprintf("ws://%v", toRegister.endpoint))
-	}
 	if toRegister.GQLAllowed {
 		dest.handler = NewGQLUpgradeHandler(dest.handler, toRegister.handler)
 		dest.GQLAllowed = true
 		log.Info("GraphQL endpoint opened", "url", fmt.Sprintf("http://%v", toRegister.endpoint))
+		return
+	}
+	dest.handler = dest.NewWebsocketUpgradeHandler(dest.handler, toRegister.handler)
+	if toRegister.WSAllowed {
+		log.Info("WebSocket endpoint opened", "url", fmt.Sprintf("ws://%s", toRegister.endpoint))
 	}
 }
 
@@ -414,33 +419,6 @@ func (n *Node) startRPC() error {
 		n.stopInProc()
 		return err
 	}
-	// create and start http server if the endpoint exists // TODO CLEAN THIS UP!!!!!!!!!
-	if n.http.endpoint != "" {
-		var exposeAll bool
-		// wrap handler in websocket handler only if websocket port is the same as http rpc
-		n.http.handler = NewHTTPHandlerStack(n.http.Srv, n.http.CorsAllowedOrigins, n.http.Vhosts)
-		if n.http.endpoint == n.ws.endpoint {
-			n.ws.handler = n.ws.Srv.WebsocketHandler(n.ws.CorsAllowedOrigins)
-			n.RegisterHTTP(n.http, n.ws)
-			exposeAll = n.config.WSExposeAll
-		}
-		// if an auxiliary service has not been started, check if it has the same endpoint, then start
-		for _, auxServices := range n.auxServices {
-			if auxServices.Server().endpoint == n.http.endpoint { // TODO maybe also check that auxServices.Server().Server == nil? or is it unnecessary?
-				n.RegisterHTTP(n.http, auxServices.Server())
-			}
-		}
-		// create the HTTP Server
-		if err := n.CreateHTTPServer(n.http, exposeAll); err != nil {
-			n.stopIPC()
-			n.stopInProc()
-			return err
-		}
-		n.http.Start()
-		n.log.Info("HTTP endpoint opened", "url", fmt.Sprintf("http://%v/", n.http.ListenerAddr),
-			"cors", strings.Join(n.http.CorsAllowedOrigins, ","),
-			"vhosts", strings.Join(n.http.Vhosts, ","))
-	}
 	//  create and start ws server if the endpoint exists
 	if n.ws.endpoint != "" && n.http.endpoint != n.ws.endpoint {
 		n.ws.handler = n.ws.Srv.WebsocketHandler(n.ws.CorsAllowedOrigins)
@@ -452,6 +430,41 @@ func (n *Node) startRPC() error {
 		n.ws.Start()
 		n.ws.WSAllowed = true
 		n.log.Info("WebSocket endpoint opened", "url", fmt.Sprintf("ws://%s", n.ws.ListenerAddr))
+	}
+	// create and start http server if the endpoint exists // TODO CLEAN THIS UP!!!!!!!!!
+	if n.http.endpoint != "" {
+		// wrap handler in websocket handler only if websocket port is the same as http rpc
+		n.http.handler = NewHTTPHandlerStack(n.http.Srv, n.http.CorsAllowedOrigins, n.http.Vhosts)
+		// if websocket server is not already started, or is specified on the same endpoint as http,
+		// register websocket on the http server
+		if n.ws.Server == nil {
+			if n.http.endpoint == n.ws.endpoint {
+				n.http.WSAllowed = true
+			}
+			n.ws.handler = n.ws.Srv.WebsocketHandler(n.ws.CorsAllowedOrigins)
+			n.RegisterHTTP(n.http, n.ws)
+		}
+		// if an auxiliary service has not been started, check if it has the same endpoint, then start
+		for _, auxServices := range n.auxServices {
+			if auxServices.Server().endpoint == n.http.endpoint { // TODO maybe also check that auxServices.Server().Server == nil? or is it unnecessary?
+				n.RegisterHTTP(n.http, auxServices.Server())
+			}
+		}
+		// only set exposeAll if websocket is enabled
+		var exposeAll bool
+		if n.http.WSAllowed {
+			exposeAll = n.config.WSExposeAll
+		}
+		// create the HTTP Server
+		if err := n.CreateHTTPServer(n.http, exposeAll); err != nil {
+			n.stopIPC()
+			n.stopInProc()
+			return err
+		}
+		n.http.Start()
+		n.log.Info("HTTP endpoint opened", "url", fmt.Sprintf("http://%v/", n.http.ListenerAddr),
+			"cors", strings.Join(n.http.CorsAllowedOrigins, ","),
+			"vhosts", strings.Join(n.http.Vhosts, ","))
 	}
 	// All API endpoints started successfully
 	return nil
@@ -523,7 +536,7 @@ func (n *Node) startHTTP(endpoint string, modules []string, cors []string, vhost
 	handler := NewHTTPHandlerStack(srv, cors, vhosts)
 	// wrap handler in websocket handler only if websocket port is the same as http rpc
 	if n.http.Endpoint() == n.ws.Endpoint() {
-		handler = NewWebsocketUpgradeHandler(handler, srv.WebsocketHandler(wsOrigins))
+		handler = n.http.NewWebsocketUpgradeHandler(handler, srv.WebsocketHandler(wsOrigins))
 	}
 	httpServer, addr, err := StartHTTPEndpoint(endpoint, timeouts, handler)
 	if err != nil {
