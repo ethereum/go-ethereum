@@ -147,8 +147,8 @@ func (api *PrivateAdminAPI) StartRPC(host *string, port *int, cors *string, apis
 	api.node.lock.Lock()
 	defer api.node.lock.Unlock()
 
-	if api.node.http != nil {
-		return false, fmt.Errorf("HTTP RPC already running on %s", api.node.http.Endpoint)
+	if api.node.http.Server != nil {
+		return false, fmt.Errorf("HTTP RPC already running on %v", api.node.http.ListenerAddr)
 	}
 
 	if host == nil {
@@ -161,6 +161,9 @@ func (api *PrivateAdminAPI) StartRPC(host *string, port *int, cors *string, apis
 	if port == nil {
 		port = &api.node.config.HTTPPort
 	}
+	api.node.http.host = *host
+	api.node.http.port = *port
+	api.node.http.endpoint = fmt.Sprintf("%s:%d", *host, *port)
 
 	allowedOrigins := api.node.config.HTTPCors
 	if cors != nil {
@@ -169,6 +172,7 @@ func (api *PrivateAdminAPI) StartRPC(host *string, port *int, cors *string, apis
 			allowedOrigins = append(allowedOrigins, strings.TrimSpace(origin))
 		}
 	}
+	api.node.http.CorsAllowedOrigins = allowedOrigins
 
 	allowedVHosts := api.node.config.HTTPVirtualHosts
 	if vhosts != nil {
@@ -177,6 +181,7 @@ func (api *PrivateAdminAPI) StartRPC(host *string, port *int, cors *string, apis
 			allowedVHosts = append(allowedVHosts, strings.TrimSpace(vhost))
 		}
 	}
+	api.node.http.Vhosts = allowedVHosts
 
 	modules := api.node.http.Whitelist
 	if apis != nil {
@@ -185,10 +190,18 @@ func (api *PrivateAdminAPI) StartRPC(host *string, port *int, cors *string, apis
 			modules = append(modules, strings.TrimSpace(m))
 		}
 	}
-
-	if err := api.node.startHTTP(fmt.Sprintf("%s:%d", *host, *port), modules, allowedOrigins, allowedVHosts, api.node.config.HTTPTimeouts, api.node.config.WSOrigins); err != nil {
+	api.node.http.Whitelist = modules
+	// create handler
+	api.node.http.handler = NewHTTPHandlerStack(api.node.http.Srv, api.node.http.CorsAllowedOrigins, api.node.http.Vhosts)
+	// create HTTP server
+	if err := api.node.CreateHTTPServer(api.node.http, false); err != nil {
 		return false, err
 	}
+	// start the HTTP server
+	api.node.http.Start()
+	api.node.log.Info("HTTP endpoint opened", "url", fmt.Sprintf("http://%v/", api.node.http.ListenerAddr),
+		"cors", strings.Join(api.node.http.CorsAllowedOrigins, ","),
+		"vhosts", strings.Join(api.node.http.Vhosts, ","))
 	return true, nil
 }
 
@@ -209,8 +222,8 @@ func (api *PrivateAdminAPI) StartWS(host *string, port *int, allowedOrigins *str
 	api.node.lock.Lock()
 	defer api.node.lock.Unlock()
 
-	if api.node.ws != nil {
-		return false, fmt.Errorf("WebSocket RPC already running on %s", api.node.ws.Endpoint)
+	if api.node.ws.Server != nil {
+		return false, fmt.Errorf("WebSocket RPC already running on %v", api.node.ws.ListenerAddr)
 	}
 
 	if host == nil {

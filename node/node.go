@@ -426,7 +426,7 @@ func (n *Node) startRPC() error {
 		}
 		// if an auxiliary service has not been started, check if it has the same endpoint, then start
 		for _, auxServices := range n.auxServices {
-			if auxServices.Server().endpoint == n.http.endpoint {
+			if auxServices.Server().endpoint == n.http.endpoint { // TODO maybe also check that auxServices.Server().Server == nil? or is it unnecessary?
 				n.RegisterHTTP(n.http, auxServices.Server())
 			}
 		}
@@ -436,9 +436,7 @@ func (n *Node) startRPC() error {
 			n.stopInProc()
 			return err
 		}
-
 		n.http.Start()
-		n.http.RPCAllowed = true
 		n.log.Info("HTTP endpoint opened", "url", fmt.Sprintf("http://%v/", n.http.ListenerAddr),
 			"cors", strings.Join(n.http.CorsAllowedOrigins, ","),
 			"vhosts", strings.Join(n.http.Vhosts, ","))
