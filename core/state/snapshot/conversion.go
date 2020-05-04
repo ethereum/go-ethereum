@@ -63,11 +63,15 @@ func VerifyState(snaptree *Tree, root common.Hash) error {
 	if err != nil {
 		return err
 	}
+	defer acctIt.Release()
+
 	got, err := generateTrieRoot(acctIt, common.Hash{}, stdGenerate, func(account common.Hash, stat *generateStats) common.Hash {
 		storageIt, err := snaptree.StorageIterator(root, account, common.Hash{})
 		if err != nil {
 			return common.Hash{}
 		}
+		defer storageIt.Release()
+
 		hash, err := generateTrieRoot(storageIt, account, stdGenerate, nil, stat, false)
 		if err != nil {
 			return common.Hash{}
@@ -79,7 +83,7 @@ func VerifyState(snaptree *Tree, root common.Hash) error {
 		return err
 	}
 	if got != root {
-		return fmt.Errorf("State root hash mismatch, got %x, want %x", got, root)
+		return fmt.Errorf("state root hash mismatch: got %x, want %x", got, root)
 	}
 	return nil
 }
