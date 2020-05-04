@@ -17,55 +17,47 @@
 package client
 
 import (
+	"reflect"
 	"testing"
 	"time"
 
 	"github.com/ethereum/go-ethereum/common/mclock"
-	"github.com/ethereum/go-ethereum/p2p/enode"
 	"github.com/ethereum/go-ethereum/p2p/nodestate"
 )
 
+var (
+	testSetup     = &nodestate.Setup{}
+	sfTest1       = testSetup.NewFlag("test1")
+	sfTest2       = testSetup.NewFlag("test2")
+	sfTest3       = testSetup.NewFlag("test3")
+	sfTest4       = testSetup.NewFlag("test4")
+	sfiTestWeight = testSetup.NewField("nodeWeight", reflect.TypeOf(uint64(0)))
+)
+
+const iterTestNodeCount = 6
+
 func TestWrsIterator(t *testing.T) {
 	ns := nodestate.NewNodeStateMachine(nil, nil, &mclock.Simulated{}, testSetup)
-	weights := make([]uint64, iterTestNodeCount+1)
-	wfn := func(i interface{}) uint64 {
-		id := i.(enode.ID)
-		n := ns.GetNode(id)
-		if n == nil {
-			return 0
-		}
-		idx := testNodeIndex(id)
-		if idx <= 0 || idx > len(weights) {
-			t.Errorf("Invalid node id %v", id)
-		}
-		return weights[idx]
-	}
-	w := NewWrsIterator(ns, sfTest2, sfTest3, sfTest4, wfn)
+	w := NewWrsIterator(ns, sfTest2, sfTest3.Or(sfTest4), sfiTestWeight)
 	ns.Start()
 	for i := 1; i <= iterTestNodeCount; i++ {
-		weights[i] = 1
 		ns.SetState(testNode(i), sfTest1, nodestate.Flags{}, 0)
+		ns.SetField(testNode(i), sfiTestWeight, uint64(1))
 	}
-	ch := make(chan *enode.Node)
-	go func() {
-		for w.Next() {
-			ch <- w.Node()
-		}
-		close(ch)
-	}()
 	next := func() int {
+		ch := make(chan struct{})
+		go func() {
+			w.Next()
+			close(ch)
+		}()
 		select {
-		case node := <-ch:
-			return testNodeIndex(node.ID())
-		case <-time.After(time.Millisecond * 200):
-			return 0
+		case <-ch:
+		case <-time.After(time.Second * 5):
+			t.Fatalf("Iterator.Next() timeout")
 		}
-	}
-	exp := func(i int) {
-		n := next()
-		if n != i {
-			t.Errorf("Wrong item returned by iterator (expected %d, got %d)", i, n)
-		}
+		node := w.Node()
+		ns.SetState(node, sfTest4, nodestate.Flags{}, 0)
+		return testNodeIndex(node.ID())
 	}
 	set := make(map[int]bool)
 	expset := func() {
@@ -76,10 +68,8 @@ func TestWrsIterator(t *testing.T) {
 			}
 			delete(set, n)
 		}
-		exp(0)
 	}
 
-	exp(0)
 	ns.SetState(testNode(1), sfTest2, nodestate.Flags{}, 0)
 	ns.SetState(testNode(2), sfTest2, nodestate.Flags{}, 0)
 	ns.SetState(testNode(3), sfTest2, nodestate.Flags{}, 0)
@@ -93,14 +83,14 @@ func TestWrsIterator(t *testing.T) {
 	set[4] = true
 	set[6] = true
 	expset()
-	weights[2] = 0
+	ns.SetField(testNode(2), sfiTestWeight, uint64(0))
 	ns.SetState(testNode(1), nodestate.Flags{}, sfTest4, 0)
 	ns.SetState(testNode(2), nodestate.Flags{}, sfTest4, 0)
 	ns.SetState(testNode(3), nodestate.Flags{}, sfTest4, 0)
 	set[1] = true
 	set[3] = true
 	expset()
-	weights[2] = 1
+	ns.SetField(testNode(2), sfiTestWeight, uint64(1))
 	ns.SetState(testNode(2), nodestate.Flags{}, sfTest2, 0)
 	ns.SetState(testNode(1), nodestate.Flags{}, sfTest4, 0)
 	ns.SetState(testNode(2), sfTest2, sfTest4, 0)

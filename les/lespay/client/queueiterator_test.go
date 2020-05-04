@@ -26,16 +26,6 @@ import (
 	"github.com/ethereum/go-ethereum/p2p/nodestate"
 )
 
-var (
-	testSetup = &nodestate.Setup{}
-	sfTest1   = testSetup.NewFlag("test1")
-	sfTest2   = testSetup.NewFlag("test2")
-	sfTest3   = testSetup.NewFlag("test3")
-	sfTest4   = testSetup.NewFlag("test4")
-)
-
-const iterTestNodeCount = 6
-
 func testNodeID(i int) enode.ID {
 	return enode.ID{42, byte(i % 256), byte(i / 256)}
 }
@@ -51,27 +41,35 @@ func testNode(i int) *enode.Node {
 	return enode.SignNull(new(enr.Record), testNodeID(i))
 }
 
-func TestQueueIterator(t *testing.T) {
+func TestQueueIteratorFIFO(t *testing.T) {
+	testQueueIterator(t, true)
+}
+
+func TestQueueIteratorLIFO(t *testing.T) {
+	testQueueIterator(t, false)
+}
+
+func testQueueIterator(t *testing.T, fifo bool) {
 	ns := nodestate.NewNodeStateMachine(nil, nil, &mclock.Simulated{}, testSetup)
-	qi := NewQueueIterator(ns, sfTest2, sfTest3, sfTest4)
+	qi := NewQueueIterator(ns, sfTest2, sfTest3.Or(sfTest4), fifo)
 	ns.Start()
 	for i := 1; i <= iterTestNodeCount; i++ {
 		ns.SetState(testNode(i), sfTest1, nodestate.Flags{}, 0)
 	}
-	ch := make(chan *enode.Node)
-	go func() {
-		for qi.Next() {
-			ch <- qi.Node()
-		}
-		close(ch)
-	}()
 	next := func() int {
+		ch := make(chan struct{})
+		go func() {
+			qi.Next()
+			close(ch)
+		}()
 		select {
-		case node := <-ch:
-			return testNodeIndex(node.ID())
-		case <-time.After(time.Millisecond * 200):
-			return 0
+		case <-ch:
+		case <-time.After(time.Second * 5):
+			t.Fatalf("Iterator.Next() timeout")
 		}
+		node := qi.Node()
+		ns.SetState(node, sfTest4, nodestate.Flags{}, 0)
+		return testNodeIndex(node.ID())
 	}
 	exp := func(i int) {
 		n := next()
@@ -79,28 +77,29 @@ func TestQueueIterator(t *testing.T) {
 			t.Errorf("Wrong item returned by iterator (expected %d, got %d)", i, n)
 		}
 	}
-	exp(0)
+	explist := func(list []int) {
+		for i := range list {
+			if fifo {
+				exp(list[i])
+			} else {
+				exp(list[len(list)-1-i])
+			}
+		}
+	}
+
 	ns.SetState(testNode(1), sfTest2, nodestate.Flags{}, 0)
 	ns.SetState(testNode(2), sfTest2, nodestate.Flags{}, 0)
 	ns.SetState(testNode(3), sfTest2, nodestate.Flags{}, 0)
-	exp(1)
-	exp(2)
-	exp(3)
-	exp(0)
+	explist([]int{1, 2, 3})
 	ns.SetState(testNode(4), sfTest2, nodestate.Flags{}, 0)
 	ns.SetState(testNode(5), sfTest2, nodestate.Flags{}, 0)
 	ns.SetState(testNode(6), sfTest2, nodestate.Flags{}, 0)
 	ns.SetState(testNode(5), sfTest3, nodestate.Flags{}, 0)
-	exp(4)
-	exp(6)
-	exp(0)
+	explist([]int{4, 6})
 	ns.SetState(testNode(1), nodestate.Flags{}, sfTest4, 0)
 	ns.SetState(testNode(2), nodestate.Flags{}, sfTest4, 0)
 	ns.SetState(testNode(3), nodestate.Flags{}, sfTest4, 0)
 	ns.SetState(testNode(2), sfTest3, nodestate.Flags{}, 0)
 	ns.SetState(testNode(2), nodestate.Flags{}, sfTest3, 0)
-	exp(1)
-	exp(3)
-	exp(2)
-	exp(0)
+	explist([]int{1, 3, 2})
 }
