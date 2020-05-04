@@ -65,6 +65,7 @@ func (s *Service) CreateHandler() (http.Handler, error) {
 		return nil, err
 	}
 
+	handler = node.NewHTTPHandlerStack(handler, s.graphqlServer.CorsAllowedOrigins, s.graphqlServer.Vhosts)
 	return handler, nil
 }
 
@@ -93,7 +94,6 @@ func (s *Service) Start() error {
 	if err != nil {
 		return err
 	}
-	handler = node.NewHTTPHandlerStack(handler, s.graphqlServer.CorsAllowedOrigins, s.graphqlServer.Vhosts)
 	s.graphqlServer.SetHandler(handler)
 
 	// start listening on given endpoint

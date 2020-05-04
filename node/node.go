@@ -249,8 +249,8 @@ func (n *Node) RegisterRPC(apis []rpc.API) {
 
 // TODO document
 func (n *Node) RegisterHTTP(dest *HTTPServer, toRegister *HTTPServer) {
-	  // takes in default existing http server
-		    // enables ____ on it
+	// takes in default existing http server
+	// enables ____ on it
 	if toRegister.WSAllowed {
 		dest.handler = NewWebsocketUpgradeHandler(dest.handler, toRegister.handler)
 		dest.WSAllowed = true
@@ -414,11 +414,9 @@ func (n *Node) startRPC() error {
 		n.stopInProc()
 		return err
 	}
-	// create and start http server if the endpoint exists
-	// TODO CLEAN THIS UP!!!!!!!!!
+	// create and start http server if the endpoint exists // TODO CLEAN THIS UP!!!!!!!!!
 	if n.http.endpoint != "" {
 		var exposeAll bool
-
 		// wrap handler in websocket handler only if websocket port is the same as http rpc
 		n.http.handler = NewHTTPHandlerStack(n.http.Srv, n.http.CorsAllowedOrigins, n.http.Vhosts)
 		if n.http.endpoint == n.ws.endpoint {
@@ -426,13 +424,13 @@ func (n *Node) startRPC() error {
 			n.RegisterHTTP(n.http, n.ws)
 			exposeAll = n.config.WSExposeAll
 		}
-
+		// if an auxiliary service has not been started, check if it has the same endpoint, then start
 		for _, auxServices := range n.auxServices {
 			if auxServices.Server().endpoint == n.http.endpoint {
 				n.RegisterHTTP(n.http, auxServices.Server())
 			}
 		}
-
+		// create the HTTP Server
 		if err := n.CreateHTTPServer(n.http, exposeAll); err != nil {
 			n.stopIPC()
 			n.stopInProc()
