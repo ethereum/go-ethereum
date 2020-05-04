@@ -198,21 +198,6 @@ func newServerPool(db ethdb.KeyValueStore, dbKey []byte, vt *lpc.ValueTracker, d
 	return s
 }
 
-func dummyQuery(n *enode.Node, result func(canDial bool)) (cancel func()) { //TODO remove, for testing only
-	cancelCh := make(chan struct{})
-	go func() {
-		select {
-		case <-time.After(time.Second):
-			result(true)
-		case <-cancelCh:
-			result(false)
-		}
-	}()
-	return func() {
-		close(cancelCh)
-	}
-}
-
 // start starts the server pool. Note that NodeStateMachine should be started first.
 func (s *serverPool) start() {
 	s.ns.Start()
