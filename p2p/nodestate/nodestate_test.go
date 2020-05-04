@@ -17,6 +17,7 @@
 package nodestate
 
 import (
+	"errors"
 	"fmt"
 	"reflect"
 	"testing"
@@ -156,7 +157,7 @@ func TestSetField(t *testing.T) {
 	if field == nil {
 		t.Fatalf("Field should be set after setting states")
 	}
-	if err := ns.SetField(testNode(1), fields[0], 123); err != errInvalidField {
+	if err := ns.SetField(testNode(1), fields[0], 123); err == nil {
 		t.Fatalf("Invalid field should be rejected")
 	}
 	// Dirty node should be written back
@@ -252,7 +253,7 @@ func uint64FieldEnc(field interface{}) ([]byte, error) {
 		enc, err := rlp.EncodeToBytes(&u)
 		return enc, err
 	} else {
-		return nil, errInvalidField
+		return nil, errors.New("invalid field type")
 	}
 }
 
@@ -266,7 +267,7 @@ func stringFieldEnc(field interface{}) ([]byte, error) {
 	if s, ok := field.(string); ok {
 		return []byte(s), nil
 	} else {
-		return nil, errInvalidField
+		return nil, errors.New("invalid field type")
 	}
 }
 

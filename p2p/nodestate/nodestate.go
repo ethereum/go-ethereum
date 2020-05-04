@@ -174,8 +174,6 @@ type (
 	}
 )
 
-var errInvalidField = errors.New("invalid field type")
-
 // offlineState is a special state that is assumed to be set before a node is loaded from
 // the database and after it is shut down.
 const offlineState = bitMask(1)
@@ -535,24 +533,6 @@ func (ns *NodeStateMachine) decodeNode(id enode.ID, data []byte) {
 		log.Error("Invalid node field count", "id", id, "stored", len(enc.Fields), "mapping", len(encMapping.Fields))
 		return
 	}
-	// convertMask converts a old format state/mask to the latest version.
-	convertMask := func(schemeID int, scheme []string, state bitMask) (bitMask, bool) {
-		if schemeID == ns.currentMapping {
-			return state, true // Nothing need to be changed
-		}
-		var converted bitMask
-		for i, name := range scheme {
-			if (state & (bitMask(1) << i)) != 0 {
-				if index, ok := ns.stateNameMap[name]; ok {
-					converted |= bitMask(1) << index
-				} else {
-					log.Error("Unknown state flag", "name", name)
-					return bitMask(0), false // unknown flag
-				}
-			}
-		}
-		return converted, true
-	}
 	// Resolve persisted node fields
 	for i, encField := range enc.Fields {
 		if len(encField) == 0 {
@@ -579,11 +559,25 @@ func (ns *NodeStateMachine) decodeNode(id enode.ID, data []byte) {
 			return
 		}
 	}
-	// Resolve node state
-	state, success := convertMask(int(enc.Mapping), encMapping.States, enc.State)
-	if !success {
-		return
+
+	var state bitMask
+	if int(enc.Mapping) == ns.currentMapping {
+		// saved node has the same mapping
+		state = enc.State
+	} else {
+		// convert bit mapping from saved scheme to current one
+		for i, name := range encMapping.States {
+			if (enc.State & (bitMask(1) << i)) != 0 {
+				if index, ok := ns.stateNameMap[name]; ok {
+					state |= bitMask(1) << index
+				} else {
+					log.Error("Unknown state flag", "name", name)
+					return
+				}
+			}
+		}
 	}
+
 	// It's a compatible node record, add it to set.
 	ns.nodes[id] = node
 	node.state = state
@@ -680,6 +674,7 @@ func (ns *NodeStateMachine) Persist(n *enode.Node) error {
 	ns.lock.Lock()
 	defer ns.lock.Unlock()
 
+	ns.checkStarted()
 	if id, node := ns.updateEnode(n); node != nil && node.dirty {
 		err := ns.saveNode(id, node)
 		if err != nil {
@@ -878,7 +873,7 @@ func (ns *NodeStateMachine) SetField(n *enode.Node, field Field, value interface
 	if value != nil && reflect.TypeOf(value) != f.ftype {
 		log.Error("Invalid field type", "type", reflect.TypeOf(value), "required", f.ftype)
 		ns.lock.Unlock()
-		return errInvalidField
+		return errors.New("invalid field type")
 	}
 	oldValue := node.fields[fieldIndex]
 	if value == oldValue {
@@ -904,6 +899,7 @@ func (ns *NodeStateMachine) SetField(n *enode.Node, field Field, value interface
 // disabled flags set
 func (ns *NodeStateMachine) ForEach(requireFlags, disableFlags Flags, cb func(n *enode.Node, state Flags)) {
 	ns.lock.Lock()
+	ns.checkStarted()
 	type callback struct {
 		node  *enode.Node
 		state bitMask
@@ -926,6 +922,7 @@ func (ns *NodeStateMachine) GetNode(id enode.ID) *enode.Node {
 	ns.lock.Lock()
 	defer ns.lock.Unlock()
 
+	ns.checkStarted()
 	if node := ns.nodes[id]; node != nil {
 		return node.node
 	}
