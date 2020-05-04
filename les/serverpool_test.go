@@ -31,8 +31,11 @@ import (
 )
 
 const (
-	testNodes  = 1000
-	testTarget = 5
+	spTestNodes  = 1000
+	spTestTarget = 5
+	spTestLength = 10000
+	spMinTotal   = 40000
+	spMaxTotal   = 50000
 )
 
 func testNodeID(i int) enode.ID {
@@ -69,7 +72,7 @@ type spTestNode struct {
 }
 
 func newServerPoolTest(preNeg bool) *serverPoolTest {
-	nodes := make([]*enode.Node, testNodes)
+	nodes := make([]*enode.Node, spTestNodes)
 	for i := range nodes {
 		nodes[i] = enode.SignNull(&enr.Record{}, testNodeID(i))
 	}
@@ -77,7 +80,7 @@ func newServerPoolTest(preNeg bool) *serverPoolTest {
 		clock:     &mclock.Simulated{},
 		db:        memorydb.New(),
 		input:     enode.CycleNodes(nodes),
-		testNodes: make([]spTestNode, testNodes),
+		testNodes: make([]spTestNode, spTestNodes),
 		preNeg:    preNeg,
 	}
 }
@@ -134,8 +137,8 @@ func (s *serverPoolTest) stop() {
 	s.conn, s.servedConn = 0, 0
 }
 
-func (s *serverPoolTest) run(count int) {
-	for ; count > 0; count-- {
+func (s *serverPoolTest) run() {
+	for count := spTestLength; count > 0; count-- {
 		if dcList := s.disconnect[s.cycle]; dcList != nil {
 			for _, idx := range dcList {
 				n := &s.testNodes[idx]
@@ -151,7 +154,7 @@ func (s *serverPoolTest) run(count int) {
 			}
 			delete(s.disconnect, s.cycle)
 		}
-		if s.conn < testTarget {
+		if s.conn < spTestTarget {
 			s.dialCount++
 			s.sp.dialIterator.Next()
 			dial := s.sp.dialIterator.Node()
@@ -182,9 +185,9 @@ func (s *serverPoolTest) run(count int) {
 
 func (s *serverPoolTest) setNodes(count, conn, wait int, service, trusted bool) (res []int) {
 	for ; count > 0; count-- {
-		idx := rand.Intn(testNodes)
+		idx := rand.Intn(spTestNodes)
 		for s.testNodes[idx].connectCycles != 0 || s.testNodes[idx].connected {
-			idx = rand.Intn(testNodes)
+			idx = rand.Intn(spTestNodes)
 		}
 		res = append(res, idx)
 		s.testNodes[idx] = spTestNode{
@@ -212,7 +215,7 @@ func (s *serverPoolTest) resetNodes() {
 	s.trusted = nil
 }
 
-func (s *serverPoolTest) checkNodes(t *testing.T, nodes []int, minTotal, maxTotal int) {
+func (s *serverPoolTest) checkNodes(t *testing.T, nodes []int) {
 	var sum int
 	for _, idx := range nodes {
 		n := &s.testNodes[idx]
@@ -225,8 +228,8 @@ func (s *serverPoolTest) checkNodes(t *testing.T, nodes []int, minTotal, maxTota
 			n.totalConn -= s.cycle
 		}
 	}
-	if sum < minTotal || sum > maxTotal {
-		t.Errorf("Total connection amount %d outside expected range %d to %d", sum, minTotal, maxTotal)
+	if sum < spMinTotal || sum > spMaxTotal {
+		t.Errorf("Total connection amount %d outside expected range %d to %d", sum, spMinTotal, spMaxTotal)
 	}
 }
 
@@ -234,29 +237,29 @@ func TestServerPool(t *testing.T)           { testServerPool(t, false) }
 func TestServerPoolWithPreNeg(t *testing.T) { testServerPool(t, true) }
 func testServerPool(t *testing.T, preNeg bool) {
 	s := newServerPoolTest(preNeg)
-	nodes := s.setNodes(20, 200, 200, true, false)
-	s.setNodes(20, 20, 20, false, false)
+	nodes := s.setNodes(50, 200, 200, true, false)
+	s.setNodes(50, 20, 20, false, false)
 	s.start()
-	s.run(10000)
+	s.run()
 	s.stop()
-	s.checkNodes(t, nodes, 40000, 50000)
+	s.checkNodes(t, nodes)
 }
 
 func TestServerPoolChangedNodes(t *testing.T)           { testServerPoolChangedNodes(t, false) }
 func TestServerPoolChangedNodesWithPreNeg(t *testing.T) { testServerPoolChangedNodes(t, true) }
 func testServerPoolChangedNodes(t *testing.T, preNeg bool) {
 	s := newServerPoolTest(preNeg)
-	nodes := s.setNodes(20, 200, 200, true, false)
-	s.setNodes(20, 20, 20, false, false)
+	nodes := s.setNodes(50, 200, 200, true, false)
+	s.setNodes(50, 20, 20, false, false)
 	s.start()
-	s.run(10000)
-	s.checkNodes(t, nodes, 40000, 50000)
+	s.run()
+	s.checkNodes(t, nodes)
 	for i := 0; i < 3; i++ {
 		s.resetNodes()
-		nodes := s.setNodes(20, 200, 200, true, false)
-		s.setNodes(20, 20, 20, false, false)
-		s.run(10000)
-		s.checkNodes(t, nodes, 40000, 50000)
+		nodes := s.setNodes(50, 200, 200, true, false)
+		s.setNodes(50, 20, 20, false, false)
+		s.run()
+		s.checkNodes(t, nodes)
 	}
 	s.stop()
 }
@@ -267,17 +270,17 @@ func TestServerPoolRestartNoDiscoveryWithPreNeg(t *testing.T) {
 }
 func testServerPoolRestartNoDiscovery(t *testing.T, preNeg bool) {
 	s := newServerPoolTest(preNeg)
-	nodes := s.setNodes(20, 200, 200, true, false)
-	s.setNodes(20, 20, 20, false, false)
+	nodes := s.setNodes(50, 200, 200, true, false)
+	s.setNodes(50, 20, 20, false, false)
 	s.start()
-	s.run(10000)
+	s.run()
 	s.stop()
-	s.checkNodes(t, nodes, 40000, 50000)
+	s.checkNodes(t, nodes)
 	s.input = nil
 	s.start()
-	s.run(10000)
+	s.run()
 	s.stop()
-	s.checkNodes(t, nodes, 40000, 50000)
+	s.checkNodes(t, nodes)
 }
 
 func TestServerPoolTrustedNoDiscovery(t *testing.T) { testServerPoolTrustedNoDiscovery(t, false) }
@@ -289,7 +292,7 @@ func testServerPoolTrustedNoDiscovery(t *testing.T, preNeg bool) {
 	trusted := s.setNodes(200, 200, 200, true, true)
 	s.input = nil
 	s.start()
-	s.run(10000)
+	s.run()
 	s.stop()
-	s.checkNodes(t, trusted, 40000, 50000)
+	s.checkNodes(t, trusted)
 }

@@ -20,6 +20,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/ethereum/go-ethereum/common/mclock"
 	"github.com/ethereum/go-ethereum/p2p/enode"
 	"github.com/ethereum/go-ethereum/p2p/nodestate"
 )
@@ -31,16 +32,17 @@ type PreNegFilter struct {
 	sfQueried, sfCanDial            nodestate.Flags
 	input, canDialIter              enode.Iterator
 	query                           PreNegQuery
-	cancel                          map[*enode.Node]func()
+	pending                         map[*enode.Node]func()
 	pendingQueries, needQueries     int
 	maxPendingQueries, canDialCount int
 	waitingForNext, closed          bool
+	testClock                       *mclock.Simulated
 }
 
 // The result callback function should always be called, even if the query is cancelled.
 type PreNegQuery func(n *enode.Node, result func(canDial bool)) (start, cancel func())
 
-func NewPreNegFilter(ns *nodestate.NodeStateMachine, input enode.Iterator, query PreNegQuery, sfQueried, sfCanDial nodestate.Flags, maxPendingQueries int) *PreNegFilter {
+func NewPreNegFilter(ns *nodestate.NodeStateMachine, input enode.Iterator, query PreNegQuery, sfQueried, sfCanDial nodestate.Flags, maxPendingQueries int, testClock *mclock.Simulated) *PreNegFilter {
 	pf := &PreNegFilter{
 		ns:                ns,
 		input:             input,
@@ -49,7 +51,8 @@ func NewPreNegFilter(ns *nodestate.NodeStateMachine, input enode.Iterator, query
 		sfCanDial:         sfCanDial,
 		maxPendingQueries: maxPendingQueries,
 		canDialIter:       NewQueueIterator(ns, sfCanDial, nodestate.Flags{}, false),
-		cancel:            make(map[*enode.Node]func()),
+		pending:           make(map[*enode.Node]func()),
+		testClock:         testClock,
 	}
 	pf.cond = sync.NewCond(&pf.lock)
 	ns.SubscribeState(sfQueried.Or(sfCanDial), func(n *enode.Node, oldState, newState nodestate.Flags) {
@@ -64,7 +67,7 @@ func NewPreNegFilter(ns *nodestate.NodeStateMachine, input enode.Iterator, query
 		pf.checkQuery()
 		if oldState.HasAll(sfQueried) && newState.HasNone(sfQueried.Or(sfCanDial)) {
 			// query timeout, call cancel function
-			cancel = pf.cancel[n]
+			cancel = pf.pending[n]
 		}
 		pf.lock.Unlock()
 		if cancel != nil {
@@ -87,6 +90,18 @@ func (pf *PreNegFilter) checkQuery() {
 func (pf *PreNegFilter) readLoop() {
 	for {
 		pf.lock.Lock()
+		if pf.testClock != nil {
+			for pf.pendingQueries == pf.maxPendingQueries {
+				pf.lock.Unlock()
+				pf.testClock.Run(time.Second)
+				pf.lock.Lock()
+				if pf.closed {
+					pf.lock.Unlock()
+					return
+				}
+			}
+			pf.checkQuery()
+		}
 		for pf.needQueries <= pf.pendingQueries {
 			pf.cond.Wait()
 			if pf.closed {
@@ -95,31 +110,40 @@ func (pf *PreNegFilter) readLoop() {
 			}
 		}
 		pf.lock.Unlock()
-		if !pf.input.Next() {
-			return
+		var node *enode.Node
+		for {
+			if !pf.input.Next() {
+				return
+			}
+			node = pf.input.Node()
+			pf.lock.Lock()
+			_, pending := pf.pending[node]
+			pf.lock.Unlock()
+			if !pending {
+				break
+			}
 		}
-		node := pf.input.Node()
 		pf.ns.SetState(node, pf.sfQueried, nodestate.Flags{}, time.Second*5)
 		start, cancel := pf.query(node, func(canDial bool) {
 			if canDial {
 				pf.lock.Lock()
 				pf.needQueries = 0
 				pf.pendingQueries--
-				delete(pf.cancel, node)
+				delete(pf.pending, node)
 				pf.lock.Unlock()
 				pf.ns.SetState(node, pf.sfCanDial, pf.sfQueried, time.Second*10)
 			} else {
 				pf.ns.SetState(node, nodestate.Flags{}, pf.sfQueried, 0)
 				pf.lock.Lock()
 				pf.pendingQueries--
-				delete(pf.cancel, node)
+				delete(pf.pending, node)
 				pf.checkQuery()
 				pf.lock.Unlock()
 			}
 		})
 		pf.lock.Lock()
 		pf.pendingQueries++
-		pf.cancel[node] = cancel
+		pf.pending[node] = cancel
 		pf.lock.Unlock()
 		start()
 	}

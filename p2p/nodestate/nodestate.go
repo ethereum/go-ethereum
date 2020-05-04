@@ -706,6 +706,7 @@ func (ns *NodeStateMachine) SetState(n *enode.Node, setFlags, resetFlags Flags, 
 	id, node := ns.updateEnode(n)
 	if node == nil {
 		if set == 0 {
+			ns.lock.Unlock()
 			return
 		}
 		node = ns.newNode(n)
