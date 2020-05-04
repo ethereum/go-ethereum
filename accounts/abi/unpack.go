@@ -33,28 +33,28 @@ var (
 )
 
 // ReadInteger reads the integer based on its kind and returns the appropriate value
-func ReadInteger(typ byte, kind reflect.Kind, b []byte) interface{} {
-	switch kind {
-	case reflect.Uint8:
+func ReadInteger(typ Type, b []byte) interface{} {
+	switch typ.Type {
+	case uint8T:
 		return b[len(b)-1]
-	case reflect.Uint16:
+	case uint16T:
 		return binary.BigEndian.Uint16(b[len(b)-2:])
-	case reflect.Uint32:
+	case uint32T:
 		return binary.BigEndian.Uint32(b[len(b)-4:])
-	case reflect.Uint64:
+	case uint64T:
 		return binary.BigEndian.Uint64(b[len(b)-8:])
-	case reflect.Int8:
+	case int8T:
 		return int8(b[len(b)-1])
-	case reflect.Int16:
+	case int16T:
 		return int16(binary.BigEndian.Uint16(b[len(b)-2:]))
-	case reflect.Int32:
+	case int32T:
 		return int32(binary.BigEndian.Uint32(b[len(b)-4:]))
-	case reflect.Int64:
+	case int64T:
 		return int64(binary.BigEndian.Uint64(b[len(b)-8:]))
 	default:
 		// the only case left for integer is int256/uint256.
 		ret := new(big.Int).SetBytes(b)
-		if typ == UintTy {
+		if typ.T == UintTy {
 			return ret
 		}
 		// big.SetBytes can't tell if a number is negative or positive in itself.
@@ -228,7 +228,7 @@ func ToGoType(index int, t Type, output []byte) (interface{}, error) {
 	case StringTy: // variable arrays are written at the end of the return bytes
 		return string(output[begin : begin+length]), nil
 	case IntTy, UintTy:
-		return ReadInteger(t.T, t.Kind, returnOutput), nil
+		return ReadInteger(t, returnOutput), nil
 	case BoolTy:
 		return readBool(returnOutput)
 	case AddressTy:
