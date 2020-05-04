@@ -104,7 +104,9 @@ func (w *WrsIterator) chooseNode() *enode.Node {
 		// non-empty here, Choose might return nil if all items have weight
 		// zero.
 		if c := w.wrs.Choose(); c != nil {
-			return w.ns.GetNode(c.(enode.ID))
+			id := c.(enode.ID)
+			w.wrs.Remove(id)
+			return w.ns.GetNode(id)
 		}
 	}
 
