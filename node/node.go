@@ -410,10 +410,12 @@ func (n *Node) startRPC() error {
 			return err
 		}
 		n.http.Start()
+		n.http.RPCAllowed = true
 		n.log.Info("HTTP endpoint opened", "url", fmt.Sprintf("http://%v/", n.http.ListenerAddr),
 			"cors", strings.Join(n.http.CorsAllowedOrigins, ","),
 			"vhosts", strings.Join(n.http.Vhosts, ","))
 		if n.http.Endpoint() == n.ws.Endpoint() {
+			n.http.WSAllowed = true
 			n.log.Info("WebSocket endpoint opened", "url", fmt.Sprintf("ws://%v", n.http.ListenerAddr))
 		}
 	}
@@ -426,6 +428,7 @@ func (n *Node) startRPC() error {
 			return err
 		}
 		n.ws.Start()
+		n.ws.WSAllowed = true
 		n.log.Info("WebSocket endpoint opened", "url", fmt.Sprintf("ws://%s", n.ws.ListenerAddr))
 	}
 	// All API endpoints started successfully

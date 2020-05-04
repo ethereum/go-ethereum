@@ -53,18 +53,19 @@ func New(backend ethapi.Backend, endpoint string, cors, vhosts []string, timeout
 // Start is called after all services have been constructed and the networking
 // layer was also initialized to spawn any goroutines required by the service.
 func (s *Service) Start() error {
-	var err error
+	// create handler stack and wrap the graphql handler
 	handler, err := newHandler(s.backend)
 	if err != nil {
 		return err
 	}
+	handler = node.NewHTTPHandlerStack(handler, s.graphqlServer.CorsAllowedOrigins, s.graphqlServer.Vhosts)
+	s.graphqlServer.SetHandler(handler)
 
 	listener, err := net.Listen("tcp", s.graphqlServer.Endpoint())
 	if err != nil {
 		return err
 	}
-	// create handler stack and wrap the graphql handler
-	handler = node.NewHTTPHandlerStack(handler, s.graphqlServer.CorsAllowedOrigins, s.graphqlServer.Vhosts)
+
 	// make sure timeout values are meaningful
 	node.CheckTimeouts(&s.graphqlServer.Timeouts)
 	// create http server
@@ -80,6 +81,7 @@ func (s *Service) Start() error {
 	s.graphqlServer.Server = httpSrv
 	s.graphqlServer.ListenerAddr = listener.Addr()
 	s.graphqlServer.SetHandler(handler)
+
 	return nil
 }
 
