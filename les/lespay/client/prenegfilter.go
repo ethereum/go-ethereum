@@ -25,11 +25,14 @@ import (
 	"github.com/ethereum/go-ethereum/p2p/nodestate"
 )
 
+// PreNegFilter is a filter on an enode.Iterator that performs connection pre-negotiation
+// using the provided callback and only returns nodes that gave a positive answer recently.
 type PreNegFilter struct {
 	lock                            sync.Mutex
 	cond                            *sync.Cond
 	ns                              *nodestate.NodeStateMachine
 	sfQueried, sfCanDial            nodestate.Flags
+	queryTimeout, canDialTimeout    time.Duration
 	input, canDialIter              enode.Iterator
 	query                           PreNegQuery
 	pending                         map[*enode.Node]func()
@@ -39,16 +42,30 @@ type PreNegFilter struct {
 	testClock                       *mclock.Simulated
 }
 
-// The result callback function should always be called, even if the query is cancelled.
+// PreNegQuery callback performs connection pre-negotiation.
+// Note: the result callback function should always be called, if it has not been called
+// before then cancel should call it.
 type PreNegQuery func(n *enode.Node, result func(canDial bool)) (start, cancel func())
 
-func NewPreNegFilter(ns *nodestate.NodeStateMachine, input enode.Iterator, query PreNegQuery, sfQueried, sfCanDial nodestate.Flags, maxPendingQueries int, testClock *mclock.Simulated) *PreNegFilter {
+// NewPreNegFilter creates a new PreNegFilter. sfQueried is set for each queried node, sfCanDial
+// is set together with sfQueried being reset if the callback returned a positive answer. The output
+// iterator returns nodes with an active sfCanDial flag but does not automatically reset the flag
+// (the dialer can do that together with setting the dialed flag).
+// The filter starts at most the specified number of simultaneous queries if there are no nodes
+// with an active sfCanDial flag and the output iterator is already being read. Note that until
+// sfCanDial is reset or times out the filter won't start more queries even if the dial candidate
+// has been returned by the output iterator.
+// If a simulated clock is used for testing then it should be provided in order to advance
+// clock when waiting for query results.
+func NewPreNegFilter(ns *nodestate.NodeStateMachine, input enode.Iterator, query PreNegQuery, sfQueried, sfCanDial nodestate.Flags, maxPendingQueries int, queryTimeout, canDialTimeout time.Duration, testClock *mclock.Simulated) *PreNegFilter {
 	pf := &PreNegFilter{
 		ns:                ns,
 		input:             input,
 		query:             query,
 		sfQueried:         sfQueried,
 		sfCanDial:         sfCanDial,
+		queryTimeout:      queryTimeout,
+		canDialTimeout:    canDialTimeout,
 		maxPendingQueries: maxPendingQueries,
 		canDialIter:       NewQueueIterator(ns, sfCanDial, nodestate.Flags{}, false),
 		pending:           make(map[*enode.Node]func()),
@@ -66,7 +83,7 @@ func NewPreNegFilter(ns *nodestate.NodeStateMachine, input enode.Iterator, query
 		}
 		pf.checkQuery()
 		if oldState.HasAll(sfQueried) && newState.HasNone(sfQueried.Or(sfCanDial)) {
-			// query timeout, call cancel function
+			// query timeout, call cancel function (the query result callback will remove it from the map)
 			cancel = pf.pending[n]
 		}
 		pf.lock.Unlock()
@@ -78,6 +95,7 @@ func NewPreNegFilter(ns *nodestate.NodeStateMachine, input enode.Iterator, query
 	return pf
 }
 
+// checkQuery checks whether we need more queries and signals readLoop if necessary
 func (pf *PreNegFilter) checkQuery() {
 	if pf.waitingForNext && pf.canDialCount == 0 {
 		pf.needQueries = pf.maxPendingQueries
@@ -87,11 +105,13 @@ func (pf *PreNegFilter) checkQuery() {
 	}
 }
 
+// readLoop reads nodes from the input iterator and starts new queries if necessary
 func (pf *PreNegFilter) readLoop() {
 	for {
 		pf.lock.Lock()
 		if pf.testClock != nil {
 			for pf.pendingQueries == pf.maxPendingQueries {
+				// advance simulated clock until our queries are finished or timed out
 				pf.lock.Unlock()
 				pf.testClock.Run(time.Second)
 				pf.lock.Lock()
@@ -100,9 +120,10 @@ func (pf *PreNegFilter) readLoop() {
 					return
 				}
 			}
-			pf.checkQuery()
 		}
 		for pf.needQueries <= pf.pendingQueries {
+			// either no queries are needed or we have enough pending; wait until more
+			// are needed
 			pf.cond.Wait()
 			if pf.closed {
 				pf.lock.Unlock()
@@ -110,9 +131,11 @@ func (pf *PreNegFilter) readLoop() {
 			}
 		}
 		pf.lock.Unlock()
+		// fetch a node from the input that is not pending at the moment
 		var node *enode.Node
 		for {
 			if !pf.input.Next() {
+				pf.canDialIter.Close()
 				return
 			}
 			node = pf.input.Node()
@@ -123,7 +146,8 @@ func (pf *PreNegFilter) readLoop() {
 				break
 			}
 		}
-		pf.ns.SetState(node, pf.sfQueried, nodestate.Flags{}, time.Second*5)
+		// set sfQueried and start the query
+		pf.ns.SetState(node, pf.sfQueried, nodestate.Flags{}, pf.queryTimeout)
 		start, cancel := pf.query(node, func(canDial bool) {
 			if canDial {
 				pf.lock.Lock()
@@ -131,7 +155,7 @@ func (pf *PreNegFilter) readLoop() {
 				pf.pendingQueries--
 				delete(pf.pending, node)
 				pf.lock.Unlock()
-				pf.ns.SetState(node, pf.sfCanDial, pf.sfQueried, time.Second*10)
+				pf.ns.SetState(node, pf.sfCanDial, pf.sfQueried, pf.canDialTimeout)
 			} else {
 				pf.ns.SetState(node, nodestate.Flags{}, pf.sfQueried, 0)
 				pf.lock.Lock()
@@ -141,6 +165,7 @@ func (pf *PreNegFilter) readLoop() {
 				pf.lock.Unlock()
 			}
 		})
+		// add pending entry before actually starting
 		pf.lock.Lock()
 		pf.pendingQueries++
 		pf.pending[node] = cancel
@@ -153,8 +178,10 @@ func (pf *PreNegFilter) readLoop() {
 func (pf *PreNegFilter) Next() bool {
 	pf.lock.Lock()
 	pf.waitingForNext = true
+	// start queries if we cannot give a result immediately
 	pf.checkQuery()
 	pf.lock.Unlock()
+	// get a result from the LIFO queue that returns nodes with active sfCanDial
 	next := pf.canDialIter.Next()
 	pf.lock.Lock()
 	pf.needQueries = 0
