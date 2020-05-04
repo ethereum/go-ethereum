@@ -94,7 +94,7 @@ func (s *serverPoolTest) start() {
 			idx := testNodeIndex(node.ID())
 			n := &s.testNodes[idx]
 			canConnect := !n.connected && n.connectCycles != 0 && s.cycle >= n.nextConnCycle
-			switch idx % 2 {
+			switch idx % 3 {
 			case 0:
 				// pre-neg returns true only if connection is possible
 				return func() { result(canConnect) }, func() {}
@@ -106,9 +106,7 @@ func (s *serverPoolTest) start() {
 				if canConnect {
 					return func() { result(true) }, func() {}
 				} else {
-					return func() {}, func() {
-						result(false)
-					}
+					return func() {}, func() { result(false) }
 				}
 			}
 			return nil, nil
