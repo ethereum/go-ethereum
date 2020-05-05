@@ -56,7 +56,7 @@ type Type struct {
 	TupleRawName  string       // Raw struct name defined in source code, may be empty.
 	TupleElems    []*Type      // Type information of all tuple fields
 	TupleRawNames []string     // Raw field name of all tuple fields
-	TupelType     reflect.Type // Underlying struct of the tuple
+	TupleType     reflect.Type // Underlying struct of the tuple
 }
 
 var (
@@ -185,7 +185,7 @@ func NewType(t string, internalType string, components []ArgumentMarshaling) (ty
 		}
 		expression += ")"
 
-		typ.TupelType = reflect.StructOf(fields)
+		typ.TupleType = reflect.StructOf(fields)
 		typ.TupleElems = elems
 		typ.TupleRawNames = names
 		typ.T = TupleTy
@@ -226,7 +226,7 @@ func (t Type) getType() reflect.Type {
 	case ArrayTy:
 		return reflect.ArrayOf(t.Size, t.Elem.getType())
 	case TupleTy:
-		return t.TupelType
+		return t.TupleType
 	case AddressTy:
 		return reflect.TypeOf(common.Address{})
 	case FixedBytesTy:
