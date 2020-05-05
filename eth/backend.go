@@ -123,6 +123,9 @@ func New(stack *node.Node, config *Config) (*Ethereum, error) {
 	if _, ok := genesisErr.(*params.ConfigCompatError); genesisErr != nil && !ok {
 		return nil, genesisErr
 	}
+	if chainConfig.EIP1559 == nil {
+		chainConfig.EIP1559 = params.DefaultEIP1559Config
+	}
 	log.Info("Initialised chain configuration", "config", chainConfig)
 
 	eth := &Ethereum{
