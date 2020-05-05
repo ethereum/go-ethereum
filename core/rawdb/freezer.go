@@ -277,7 +277,8 @@ func (f *freezer) freeze(db ethdb.KeyValueStore) {
 		hash := ReadHeadBlockHash(nfdb)
 		if hash == (common.Hash{}) {
 			log.Debug("Current full block hash unavailable") // new chain, empty database
-
+			backoff = true
+			continue
 		}
 		number := ReadHeaderNumber(nfdb, hash)
 		switch {
