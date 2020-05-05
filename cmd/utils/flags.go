@@ -729,42 +729,42 @@ var (
 
 	// EIP1559 Flags
 	EIP1559CLIConfigure = cli.BoolFlag{
-		Name:  "EIP1559.cliConfig",
+		Name:  "eip1559.config",
 		Usage: "Set to true to turn on CLI-configuration of EIP1559 params",
 	}
 	EIP1559InitialBaseFee = cli.Uint64Flag{
-		Name:  "EIP1559.initialBaseFee",
-		Usage: "External configuration of EIP1559 initial BaseFee (default = 1000000000)",
+		Name:  "eip1559.initialbasefee",
+		Usage: "External configuration of EIP1559 initial BaseFee",
 		Value: params.EIP1559InitialBaseFee,
 	}
 	EIP1559ForkBlockNumber = cli.Uint64Flag{
-		Name:  "EIP1559.forkBlockNumber",
-		Usage: "External configuration of EIP1559 ForkBlockNumber (default = 110000000)",
+		Name:  "eip1559.forkblocknumber",
+		Usage: "External configuration of EIP1559 ForkBlockNumber",
 		Value: params.EIP1559ForkBlockNumber,
 	}
 	EIP1559BaseFeeMaxChangeDenominator = cli.Uint64Flag{
-		Name:  "EIP1559.baseFeeMaxChangeDenominator",
-		Usage: "External configuration of EIP1559 BaseFeeMaxChangeDenominator (default = 8)",
+		Name:  "eip1559.basefeemaxchangedenominator",
+		Usage: "External configuration of EIP1559 BaseFeeMaxChangeDenominator",
 		Value: params.BaseFeeMaxChangeDenominator,
 	}
 	EIP1559TargetGasUsed = cli.Uint64Flag{
-		Name:  "EIP1559.targetGasUsed",
-		Usage: "External configuration of EIP1559 TargetGasUsed (default = 10000000)",
+		Name:  "eip1559.targetgasused",
+		Usage: "External configuration of EIP1559 TargetGasUsed",
 		Value: params.TargetGasUsed,
 	}
 	EIP1559SlackCoefficient = cli.Uint64Flag{
-		Name:  "EIP1559.slackCoefficient",
-		Usage: "External configuration of EIP1559 SlackCoefficient (default = 2)",
+		Name:  "eip1559.slackcoefficient",
+		Usage: "External configuration of EIP1559 SlackCoefficient",
 		Value: params.SlackCoefficient,
 	}
 	EIP1559PerTransactionGasLimit = cli.Uint64Flag{
-		Name:  "EIP1559.perTxGasLimit",
-		Usage: "External configuration of EIP1559 PerTransactionGasLimit (default = 8000000)",
+		Name:  "eip1559.pertxgaslimit",
+		Usage: "External configuration of EIP1559 PerTransactionGasLimit",
 		Value: params.PerTransactionGasLimit,
 	}
 	EIP1559DecayRange = cli.Uint64Flag{
-		Name:  "EIP1559.transitionPeriod",
-		Usage: "External configuration of EIP1559 DecayRange (default = 100000)",
+		Name:  "eip1559.decayrange",
+		Usage: "External configuration of EIP1559 DecayRange",
 		Value: params.EIP1559DecayRange,
 	}
 )
