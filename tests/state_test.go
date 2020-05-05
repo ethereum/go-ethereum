@@ -37,12 +37,14 @@ func TestState(t *testing.T) {
 	st.slow(`^stQuadraticComplexityTest/`)
 	st.slow(`^stStaticCall/static_Call50000`)
 	st.slow(`^stStaticCall/static_Return50000`)
-	st.slow(`^stStaticCall/static_Call1MB`)
 	st.slow(`^stSystemOperationsTest/CallRecursiveBomb`)
 	st.slow(`^stTransactionTest/Opcodes_TransactionInit`)
 
 	// Very time consuming
 	st.skipLoad(`^stTimeConsuming/`)
+
+	// Uses 1GB RAM per tested fork
+	st.skipLoad(`^stStaticCall/static_Call1MB`)
 
 	// Broken tests:
 	// Expected failures:
