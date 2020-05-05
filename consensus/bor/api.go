@@ -17,10 +17,16 @@
 package bor
 
 import (
+	"math/big"
+	"sync"
+
 	"github.com/maticnetwork/bor/common"
 	"github.com/maticnetwork/bor/consensus"
 	"github.com/maticnetwork/bor/core/types"
+	"github.com/maticnetwork/bor/crypto"
 	"github.com/maticnetwork/bor/rpc"
+	"github.com/xsleonard/go-merkle"
+	"golang.org/x/crypto/sha3"
 )
 
 // API is a user facing RPC API to allow controlling the signer and voting
@@ -104,4 +110,42 @@ func (api *API) GetCurrentValidators() ([]*Validator, error) {
 		return make([]*Validator, 0), err
 	}
 	return snap.ValidatorSet.Validators, nil
+}
+
+// GetRootHash gets the current validators
+func (api *API) GetRootHash(start uint64, end uint64) ([]byte, error) {
+	blockHeaders := make([]*types.Header, end-start+1)
+	wg := new(sync.WaitGroup)
+	// do we want to limit the # of concurrent go routines?
+	for i := start; i <= end; i++ {
+		wg.Add(1)
+		go func(number uint64) {
+			blockHeaders[number-start] = api.chain.GetHeaderByNumber(number)
+			wg.Done()
+		}(i)
+	}
+	wg.Wait()
+
+	expectedLength := nextPowerOfTwo(end - start + 1)
+	headers := make([][32]byte, expectedLength)
+	for i := 0; i < len(blockHeaders); i++ {
+		blockHeader := blockHeaders[i]
+		header := crypto.Keccak256(appendBytes32(
+			blockHeader.Number.Bytes(),
+			new(big.Int).SetUint64(blockHeader.Time).Bytes(),
+			blockHeader.TxHash.Bytes(),
+			blockHeader.ReceiptHash.Bytes(),
+		))
+
+		var arr [32]byte
+		copy(arr[:], header)
+		headers[i] = arr
+	}
+
+	tree := merkle.NewTreeWithOpts(merkle.TreeOptions{EnableHashSorting: false, DisableHashLeaves: true})
+	if err := tree.Generate(convert(headers), sha3.NewLegacyKeccak256()); err != nil {
+		return nil, err
+	}
+
+	return tree.Root().Hash, nil
 }
