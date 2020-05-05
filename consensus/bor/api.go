@@ -17,9 +17,12 @@
 package bor
 
 import (
+	"math"
 	"math/big"
+	"strconv"
 	"sync"
 
+	lru "github.com/hashicorp/golang-lru"
 	"github.com/maticnetwork/bor/common"
 	"github.com/maticnetwork/bor/consensus"
 	"github.com/maticnetwork/bor/core/types"
@@ -29,11 +32,17 @@ import (
 	"golang.org/x/crypto/sha3"
 )
 
+var (
+	// MaxCheckpointLength is the maximum number of blocks that can be requested for constructing a checkpoint root hash
+	MaxCheckpointLength = uint64(math.Pow(2, 15))
+)
+
 // API is a user facing RPC API to allow controlling the signer and voting
 // mechanisms of the proof-of-authority scheme.
 type API struct {
-	chain consensus.ChainReader
-	bor   *Bor
+	chain         consensus.ChainReader
+	bor           *Bor
+	rootHashCache *lru.ARCCache
 }
 
 // GetSnapshot retrieves the state snapshot at a given block.
@@ -112,22 +121,38 @@ func (api *API) GetCurrentValidators() ([]*Validator, error) {
 	return snap.ValidatorSet.Validators, nil
 }
 
-// GetRootHash gets the current validators
-func (api *API) GetRootHash(start uint64, end uint64) ([]byte, error) {
+// GetRootHash returns the merkle root of the start to end block headers
+func (api *API) GetRootHash(start int64, end int64) ([]byte, error) {
+	key := getKey(start, end)
+	if root, err := api.lookupCache(key); err != nil {
+		return nil, err
+	} else if root != nil {
+		return root, nil
+	}
+	length := uint64(end - start + 1)
+	if length > MaxCheckpointLength {
+		return nil, &MaxCheckpointLengthExceededError{start, end}
+	}
+	currentHeaderNumber := api.chain.CurrentHeader().Number.Int64()
+	if start > end || end > currentHeaderNumber {
+		return nil, &InvalidStartEndBlockError{start, end, currentHeaderNumber}
+	}
 	blockHeaders := make([]*types.Header, end-start+1)
 	wg := new(sync.WaitGroup)
-	// do we want to limit the # of concurrent go routines?
+	concurrent := make(chan bool, 20)
 	for i := start; i <= end; i++ {
 		wg.Add(1)
-		go func(number uint64) {
-			blockHeaders[number-start] = api.chain.GetHeaderByNumber(number)
+		concurrent <- true
+		go func(number int64) {
+			blockHeaders[number-start] = api.chain.GetHeaderByNumber(uint64(number))
+			<-concurrent
 			wg.Done()
 		}(i)
 	}
 	wg.Wait()
+	close(concurrent)
 
-	expectedLength := nextPowerOfTwo(end - start + 1)
-	headers := make([][32]byte, expectedLength)
+	headers := make([][32]byte, nextPowerOfTwo(length))
 	for i := 0; i < len(blockHeaders); i++ {
 		blockHeader := blockHeaders[i]
 		header := crypto.Keccak256(appendBytes32(
@@ -146,6 +171,24 @@ func (api *API) GetRootHash(start uint64, end uint64) ([]byte, error) {
 	if err := tree.Generate(convert(headers), sha3.NewLegacyKeccak256()); err != nil {
 		return nil, err
 	}
+	root := tree.Root().Hash
+	api.rootHashCache.Add(key, root)
+	return root, nil
+}
 
-	return tree.Root().Hash, nil
+func (api *API) lookupCache(key string) ([]byte, error) {
+	var err error
+	if api.rootHashCache == nil {
+		if api.rootHashCache, err = lru.NewARC(10); err != nil {
+			return nil, err
+		}
+	}
+	if root, known := api.rootHashCache.Get(key); known {
+		return root.([]byte), nil
+	}
+	return nil, nil
+}
+
+func getKey(start int64, end int64) string {
+	return strconv.FormatInt(start, 10) + "-" + strconv.FormatInt(end, 10)
 }
