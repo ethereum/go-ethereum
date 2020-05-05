@@ -162,14 +162,33 @@ func (t *BinaryTrie) bitPrefix() []byte {
 			bp[1+by] |= byte(bi)
 		}
 	}
+	if t.getPrefixLen() > 0 {
+		bp[0] = byte(t.endBit+t.startBit) / 8
+	}
 
 	return bp
+}
+
+func Prefix2Bitfield(payload []byte) *BinaryTrie {
+	return &BinaryTrie{
+		prefix: payload[1:],
+		endBit: int(payload[0]),
+	}
 }
 
 // Hash calculates the hash of an expanded (i.e. not already
 // hashed) node.
 func (t *BinaryTrie) Hash() []byte {
 	return t.hash()
+}
+
+// BinaryDBNode represents a binary node as it is stored
+// inside the DB.
+type BinaryDBNode struct {
+	Bitprefix []byte
+	Left      []byte
+	Right     []byte
+	Value     []byte
 }
 
 // hash is a a helper function that is shared between Hash and
@@ -179,25 +198,29 @@ func (t *BinaryTrie) hash() []byte {
 	var payload bytes.Buffer
 
 	// Calculate the hash of both subtrees
-	var lh, rh []byte
+	var dbnode BinaryDBNode
 	if t.left != nil {
-		lh = t.left.Hash()
-		t.left = hashBinaryNode(lh)
+		dbnode.Left = t.left.Hash()
+		t.left = hashBinaryNode(dbnode.Left)
 	}
 	if t.right != nil {
-		rh = t.right.Hash()
-		t.right = hashBinaryNode(rh)
+		dbnode.Right = t.right.Hash()
+		t.right = hashBinaryNode(dbnode.Right)
 	}
+
+	dbnode.Value = t.value
+	dbnode.Bitprefix = t.bitPrefix()
 
 	// Create the "bitprefix" which indicates which are the start and
 	// end bit inside the prefix value.
-	rlp.Encode(&payload, []interface{}{t.bitPrefix(), lh, rh, t.value})
+	rlp.Encode(&payload, dbnode)
+	value := payload.Bytes()
 
 	hasher := sha3.NewLegacyKeccak256()
 	io.Copy(hasher, &payload)
 	h := hasher.Sum(nil)
 	if t.CommitCh != nil {
-		t.CommitCh <- BinaryHashPreimage{Key: h, Value: payload.Bytes()}
+		t.CommitCh <- BinaryHashPreimage{Key: h, Value: value}
 	}
 	return h
 }
