@@ -1277,7 +1277,7 @@ func (pool *TxPool) reset(oldHead, newHead *types.Header) {
 	pool.pendingNonces = newTxNoncer(statedb)
 
 	if pool.chainconfig.IsEIP1559(newHead.Number) {
-		pool.currentLegacyMaxGas = params.MaxGasEIP1559 - newHead.GasLimit
+		pool.currentLegacyMaxGas = pool.chainconfig.EIP1559.MaxGas - newHead.GasLimit
 		pool.currentEIP1559MaxGas = newHead.GasLimit
 	} else {
 		pool.currentLegacyMaxGas = newHead.GasLimit

@@ -236,6 +236,19 @@ var AppHelpFlagGroups = []flags.FlagGroup{
 		}, debug.DeprecatedFlags...),
 	},
 	{
+		Name: "EIP1559",
+		Flags: []cli.Flag{
+			utils.EIP1559CLIConfigure,
+			utils.EIP1559ForkBlockNumber,
+			utils.EIP1559InitialBaseFee,
+			utils.EIP1559BaseFeeMaxChangeDenominator,
+			utils.EIP1559PerTransactionGasLimit,
+			utils.EIP1559SlackCoefficient,
+			utils.EIP1559TargetGasUsed,
+			utils.EIP1559DecayRange,
+		},
+	},
+	{
 		Name: "MISC",
 		Flags: []cli.Flag{
 			utils.SnapshotFlag,

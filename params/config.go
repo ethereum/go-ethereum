@@ -73,6 +73,7 @@ var (
 		EIP1559FinalizedBlock: nil,
 		EWASMBlock:            nil,
 		Ethash:                new(EthashConfig),
+		EIP1559:               DefaultEIP1559Config,
 	}
 
 	// MainnetTrustedCheckpoint contains the light client trusted checkpoint for the main network.
@@ -116,6 +117,7 @@ var (
 		EIP1559FinalizedBlock: nil,
 		EWASMBlock:            nil,
 		Ethash:                new(EthashConfig),
+		EIP1559:               DefaultEIP1559Config,
 	}
 
 	// RopstenTrustedCheckpoint contains the light client trusted checkpoint for the Ropsten test network.
@@ -162,6 +164,7 @@ var (
 			Period: 15,
 			Epoch:  30000,
 		},
+		EIP1559: DefaultEIP1559Config,
 	}
 
 	// RinkebyTrustedCheckpoint contains the light client trusted checkpoint for the Rinkeby test network.
@@ -206,6 +209,7 @@ var (
 			Period: 15,
 			Epoch:  30000,
 		},
+		EIP1559: DefaultEIP1559Config,
 	}
 
 	// GoerliTrustedCheckpoint contains the light client trusted checkpoint for the Görli test network.
@@ -255,22 +259,22 @@ var (
 	//
 	// This configuration is intentionally not using keyed fields to force anyone
 	// adding flags to the config to also have to set these fields.
-	AllEthashProtocolChanges = &ChainConfig{big.NewInt(1337), big.NewInt(0), nil, false, big.NewInt(0), common.Hash{}, big.NewInt(0), big.NewInt(0), big.NewInt(0), big.NewInt(0), big.NewInt(0), big.NewInt(0), nil, nil, nil, nil, new(EthashConfig), nil}
+	AllEthashProtocolChanges = &ChainConfig{big.NewInt(1337), big.NewInt(0), nil, false, big.NewInt(0), common.Hash{}, big.NewInt(0), big.NewInt(0), big.NewInt(0), big.NewInt(0), big.NewInt(0), big.NewInt(0), nil, nil, nil, nil, new(EthashConfig), nil, DefaultEIP1559Config}
 
 	// AllCliqueProtocolChanges contains every protocol change (EIPs) introduced
 	// and accepted by the Ethereum core developers into the Clique consensus.
 	//
 	// This configuration is intentionally not using keyed fields to force anyone
 	// adding flags to the config to also have to set these fields.
-	AllCliqueProtocolChanges = &ChainConfig{big.NewInt(1337), big.NewInt(0), nil, false, big.NewInt(0), common.Hash{}, big.NewInt(0), big.NewInt(0), big.NewInt(0), big.NewInt(0), big.NewInt(0), big.NewInt(0), nil, nil, nil, nil, nil, &CliqueConfig{Period: 0, Epoch: 30000}}
+	AllCliqueProtocolChanges = &ChainConfig{big.NewInt(1337), big.NewInt(0), nil, false, big.NewInt(0), common.Hash{}, big.NewInt(0), big.NewInt(0), big.NewInt(0), big.NewInt(0), big.NewInt(0), big.NewInt(0), nil, nil, nil, nil, nil, &CliqueConfig{Period: 0, Epoch: 30000}, DefaultEIP1559Config}
 
-	TestChainConfig = &ChainConfig{big.NewInt(1), big.NewInt(0), nil, false, big.NewInt(0), common.Hash{}, big.NewInt(0), big.NewInt(0), big.NewInt(0), big.NewInt(0), big.NewInt(0), big.NewInt(0), nil, nil, nil, nil, new(EthashConfig), nil}
+	TestChainConfig = &ChainConfig{big.NewInt(1), big.NewInt(0), nil, false, big.NewInt(0), common.Hash{}, big.NewInt(0), big.NewInt(0), big.NewInt(0), big.NewInt(0), big.NewInt(0), big.NewInt(0), nil, nil, nil, nil, new(EthashConfig), nil, DefaultEIP1559Config}
 
 	TestRules = TestChainConfig.Rules(new(big.Int))
 
 	// EIP1559 test configs
-	EIP1559ChainConfig          = &ChainConfig{big.NewInt(1), big.NewInt(0), nil, false, big.NewInt(0), common.Hash{}, big.NewInt(0), big.NewInt(0), big.NewInt(0), big.NewInt(0), big.NewInt(0), big.NewInt(0), nil, nil, big.NewInt(0), nil, nil, new(EthashConfig), nil}
-	EIP1559FinalizedChainConfig = &ChainConfig{big.NewInt(1), big.NewInt(0), nil, false, big.NewInt(0), common.Hash{}, big.NewInt(0), big.NewInt(0), big.NewInt(0), big.NewInt(0), big.NewInt(0), big.NewInt(0), nil, nil, big.NewInt(0), big.NewInt(0), nil, new(EthashConfig), nil}
+	EIP1559ChainConfig          = &ChainConfig{big.NewInt(1), big.NewInt(0), nil, false, big.NewInt(0), common.Hash{}, big.NewInt(0), big.NewInt(0), big.NewInt(0), big.NewInt(0), big.NewInt(0), big.NewInt(0), nil, nil, big.NewInt(0), nil, nil, new(EthashConfig), nil, DefaultEIP1559Config}
+	EIP1559FinalizedChainConfig = &ChainConfig{big.NewInt(1), big.NewInt(0), nil, false, big.NewInt(0), common.Hash{}, big.NewInt(0), big.NewInt(0), big.NewInt(0), big.NewInt(0), big.NewInt(0), big.NewInt(0), nil, nil, big.NewInt(0), big.NewInt(0), nil, new(EthashConfig), nil, DefaultEIP1559Config}
 
 	EIP1559TestRules          = EIP1559ChainConfig.Rules(new(big.Int))
 	EIP1559FinalizedTestRules = EIP1559FinalizedChainConfig.Rules(new(big.Int))
@@ -353,6 +357,35 @@ type ChainConfig struct {
 	// Various consensus engines
 	Ethash *EthashConfig `json:"ethash,omitempty"`
 	Clique *CliqueConfig `json:"clique,omitempty"`
+
+	// EIP1559 params
+	EIP1559 *EIP1559Config
+}
+
+type EIP1559Config struct {
+	InitialBaseFee              uint64
+	ForkBlockNumber             uint64
+	ForkFinalizedBlockNumber    uint64
+	DecayRange                  uint64
+	GasIncrementAmount          uint64
+	BaseFeeMaxChangeDenominator uint64
+	TargetGasUsed               uint64
+	MaxGas                      uint64
+	SlackCoefficient            uint64
+	PerTransactionGasLimit      uint64
+}
+
+var DefaultEIP1559Config = &EIP1559Config{
+	InitialBaseFee:              EIP1559InitialBaseFee,
+	ForkBlockNumber:             EIP1559ForkBlockNumber,
+	ForkFinalizedBlockNumber:    EIP1559ForkFinalizedBlockNumber,
+	DecayRange:                  EIP1559DecayRange,
+	GasIncrementAmount:          EIP1559GasIncrementAmount,
+	BaseFeeMaxChangeDenominator: BaseFeeMaxChangeDenominator,
+	TargetGasUsed:               TargetGasUsed,
+	MaxGas:                      MaxGasEIP1559,
+	SlackCoefficient:            SlackCoefficient,
+	PerTransactionGasLimit:      PerTransactionGasLimit,
 }
 
 // EthashConfig is the consensus engine configs for proof-of-work based sealing.

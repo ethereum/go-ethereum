@@ -201,7 +201,7 @@ func (t *StateTest) RunNoVerify(subtest StateSubtest, vmconfig vm.Config, snapsh
 	var gp1559 *core.GasPool
 	var gaspool *core.GasPool
 	if config.IsEIP1559(block.Number()) {
-		gaspool = new(core.GasPool).AddGas(params.MaxGasEIP1559 - block.GasLimit())
+		gaspool = new(core.GasPool).AddGas(config.EIP1559.MaxGas - block.GasLimit())
 		gp1559 = new(core.GasPool).AddGas(block.GasLimit())
 	} else {
 		gaspool = new(core.GasPool).AddGas(block.GasLimit())

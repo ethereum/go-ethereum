@@ -766,7 +766,7 @@ func (w *worker) commitTransactions(txs *types.TransactionsByPriceAndNonce, coin
 	var legacyGasLimit uint64
 	if w.chainConfig.IsEIP1559(w.current.header.Number) {
 		if w.current.gasPool == nil {
-			legacyGasLimit = params.MaxGasEIP1559 - w.current.header.GasLimit
+			legacyGasLimit = w.chainConfig.EIP1559.MaxGas - w.current.header.GasLimit
 			w.current.gasPool = new(core.GasPool).AddGas(legacyGasLimit)
 		}
 		if w.current.gp1559 == nil {

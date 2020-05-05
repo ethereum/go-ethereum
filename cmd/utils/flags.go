@@ -726,6 +726,47 @@ var (
 		Usage: "External EVM configuration (default = built-in interpreter)",
 		Value: "",
 	}
+
+	// EIP1559 Flags
+	EIP1559CLIConfigure = cli.BoolFlag{
+		Name:  "EIP1559.cliConfig",
+		Usage: "Set to true to turn on CLI-configuration of EIP1559 params",
+	}
+	EIP1559InitialBaseFee = cli.Uint64Flag{
+		Name:  "EIP1559.initialBaseFee",
+		Usage: "External configuration of EIP1559 initial BaseFee (default = 1000000000)",
+		Value: params.EIP1559InitialBaseFee,
+	}
+	EIP1559ForkBlockNumber = cli.Uint64Flag{
+		Name:  "EIP1559.forkBlockNumber",
+		Usage: "External configuration of EIP1559 ForkBlockNumber (default = 110000000)",
+		Value: params.EIP1559ForkBlockNumber,
+	}
+	EIP1559BaseFeeMaxChangeDenominator = cli.Uint64Flag{
+		Name:  "EIP1559.baseFeeMaxChangeDenominator",
+		Usage: "External configuration of EIP1559 BaseFeeMaxChangeDenominator (default = 8)",
+		Value: params.BaseFeeMaxChangeDenominator,
+	}
+	EIP1559TargetGasUsed = cli.Uint64Flag{
+		Name:  "EIP1559.targetGasUsed",
+		Usage: "External configuration of EIP1559 TargetGasUsed (default = 10000000)",
+		Value: params.TargetGasUsed,
+	}
+	EIP1559SlackCoefficient = cli.Uint64Flag{
+		Name:  "EIP1559.slackCoefficient",
+		Usage: "External configuration of EIP1559 SlackCoefficient (default = 2)",
+		Value: params.SlackCoefficient,
+	}
+	EIP1559PerTransactionGasLimit = cli.Uint64Flag{
+		Name:  "EIP1559.perTxGasLimit",
+		Usage: "External configuration of EIP1559 PerTransactionGasLimit (default = 8000000)",
+		Value: params.PerTransactionGasLimit,
+	}
+	EIP1559DecayRange = cli.Uint64Flag{
+		Name:  "EIP1559.transitionPeriod",
+		Usage: "External configuration of EIP1559 DecayRange (default = 100000)",
+		Value: params.EIP1559DecayRange,
+	}
 )
 
 // MakeDataDir retrieves the currently requested data directory, terminating
@@ -1687,6 +1728,45 @@ func SetDNSDiscoveryDefaults(cfg *eth.Config, genesis common.Hash) {
 	if url := params.KnownDNSNetwork(genesis, protocol); url != "" {
 		cfg.DiscoveryURLs = []string{url}
 	}
+
+	// If we are configuring custom EIP1559 params, do so now
+	if ctx.GlobalBool(EIP1559CLIConfigure.Name) {
+		if cfg.Genesis == nil {
+			cfg.Genesis = core.DefaultGenesisBlock()
+		}
+		setEIP1559Params(ctx, cfg)
+	}
+}
+
+func setEIP1559Params(ctx *cli.Context, config *eth.Config) {
+	if ctx.GlobalIsSet(EIP1559ForkBlockNumber.Name) {
+		config.Genesis.Config.EIP1559.ForkBlockNumber = ctx.GlobalUint64(EIP1559ForkBlockNumber.Name)
+	}
+	if ctx.GlobalIsSet(EIP1559InitialBaseFee.Name) {
+		config.Genesis.Config.EIP1559.InitialBaseFee = ctx.GlobalUint64(EIP1559InitialBaseFee.Name)
+	}
+	if ctx.GlobalIsSet(EIP1559TargetGasUsed.Name) {
+		config.Genesis.Config.EIP1559.TargetGasUsed = ctx.GlobalUint64(EIP1559TargetGasUsed.Name)
+	}
+	if ctx.GlobalIsSet(EIP1559SlackCoefficient.Name) {
+		config.Genesis.Config.EIP1559.SlackCoefficient = ctx.GlobalUint64(EIP1559SlackCoefficient.Name)
+	}
+	if ctx.GlobalIsSet(EIP1559PerTransactionGasLimit.Name) {
+		config.Genesis.Config.EIP1559.PerTransactionGasLimit = ctx.GlobalUint64(EIP1559PerTransactionGasLimit.Name)
+	}
+	if ctx.GlobalIsSet(EIP1559BaseFeeMaxChangeDenominator.Name) {
+		config.Genesis.Config.EIP1559.BaseFeeMaxChangeDenominator = ctx.GlobalUint64(EIP1559BaseFeeMaxChangeDenominator.Name)
+	}
+	if ctx.GlobalIsSet(EIP1559DecayRange.Name) {
+		config.Genesis.Config.EIP1559.DecayRange = ctx.GlobalUint64(EIP1559DecayRange.Name)
+	}
+	// Re-calculate the derived config params
+	config.Genesis.Config.EIP1559.ForkFinalizedBlockNumber = config.Genesis.Config.EIP1559.ForkBlockNumber + config.Genesis.Config.EIP1559.DecayRange
+	config.Genesis.Config.EIP1559.MaxGas = config.Genesis.Config.EIP1559.SlackCoefficient * config.Genesis.Config.EIP1559.TargetGasUsed
+	config.Genesis.Config.EIP1559.GasIncrementAmount = (config.Genesis.Config.EIP1559.MaxGas / 2) / config.Genesis.Config.EIP1559.DecayRange
+	config.Genesis.Config.EIP1559Block = new(big.Int).SetUint64(config.Genesis.Config.EIP1559.ForkBlockNumber)
+	config.Genesis.Config.EIP1559FinalizedBlock = new(big.Int).SetUint64(config.Genesis.Config.EIP1559.ForkFinalizedBlockNumber)
+	config.Miner.PerTxGasLimit = config.Genesis.Config.EIP1559.PerTransactionGasLimit
 }
 
 // RegisterEthService adds an Ethereum client to the stack.

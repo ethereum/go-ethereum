@@ -214,7 +214,7 @@ func New(stack *node.Node, config *Config) (*Ethereum, error) {
 	if gpoParams.DefaultGasPremium == nil {
 		baseFee := eth.blockchain.CurrentHeader().BaseFee
 		if baseFee == nil {
-			baseFee = new(big.Int).SetUint64(params.EIP1559InitialBaseFee)
+			baseFee = new(big.Int).SetUint64(chainConfig.EIP1559.InitialBaseFee)
 		}
 		gasPremium := new(big.Int).Sub(config.Miner.GasPrice, baseFee)
 		if gasPremium.Cmp(big.NewInt(0)) < 0 {
