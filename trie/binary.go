@@ -26,6 +26,7 @@ import (
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/rlp"
+	"github.com/syndtr/goleveldb/leveldb"
 	"golang.org/x/crypto/sha3"
 )
 
@@ -163,7 +164,7 @@ func (t *BinaryTrie) bitPrefix() []byte {
 		}
 	}
 	if t.getPrefixLen() > 0 {
-		bp[0] = byte(t.endBit+t.startBit) / 8
+		bp[0] = byte(t.endBit-t.startBit) / 8
 	}
 
 	return bp
@@ -174,6 +175,45 @@ func Prefix2Bitfield(payload []byte) *BinaryTrie {
 		prefix: payload[1:],
 		endBit: int(payload[0]),
 	}
+}
+
+func CheckKey(db *leveldb.DB, key, root []byte, depth int, value []byte) bool {
+	node, err := db.Get(root, nil)
+	if err != nil {
+		log.Error("could not find the node!", "error", err)
+		return false
+	}
+
+	var out BinaryDBNode
+	err = rlp.DecodeBytes(node, &out)
+
+	bt := Prefix2Bitfield(out.Bitprefix)
+	fulldepth := depth
+	if len(bt.prefix) > 0 {
+		fulldepth += 8*len(bt.prefix) - (8-bt.endBit)%8
+	}
+
+	if fulldepth < 8*len(key) {
+		by := key[fulldepth/8]
+		bi := (by>>uint(7-(fulldepth%8)))&1 == 0
+		if bi {
+			if len(out.Left) == 0 {
+				log.Error("key could not be found !")
+				return false
+			}
+
+			return CheckKey(db, key, out.Left, fulldepth+1, value)
+		} else {
+			if len(out.Right) == 0 {
+				log.Error("key could not be found ?")
+				return false
+			}
+
+			return CheckKey(db, key, out.Right, fulldepth+1, value)
+		}
+	}
+
+	return true // bytes.Equal(out.Value, value)
 }
 
 // Hash calculates the hash of an expanded (i.e. not already

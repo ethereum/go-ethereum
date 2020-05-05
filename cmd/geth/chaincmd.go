@@ -39,6 +39,7 @@ import (
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/metrics"
 	"github.com/ethereum/go-ethereum/trie"
+	"github.com/syndtr/goleveldb/leveldb"
 	"gopkg.in/urfave/cli.v1"
 )
 
@@ -699,6 +700,18 @@ func snapToBin(ctx *cli.Context) error {
 	log.Info("Generating binary trie", "root", root)
 	generatedRoot := snapshot.GenerateBinaryTree(ctx.GlobalString(utils.DataDirFlag.Name), it)
 	log.Info("Generation done", "root", root, "binary root", generatedRoot)
+
+	db, err := leveldb.OpenFile(ctx.GlobalString(utils.DataDirFlag.Name)+"/bintrie", nil)
+	it, _ = snapTree.AccountIterator(root, common.Hash{})
+	found := 0
+	total := 0
+	for it.Next() {
+		if trie.CheckKey(db, it.Hash().Bytes(), generatedRoot[:], 0, it.Account()) {
+			found++
+		}
+	}
+	log.Info("Read check finished", "total", total, "found", found)
+	db.Close()
 	return nil
 }
 

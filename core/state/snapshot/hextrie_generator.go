@@ -22,10 +22,10 @@ import (
 	"time"
 
 	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/core/rawdb"
 	"github.com/ethereum/go-ethereum/ethdb/memorydb"
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/trie"
+	"github.com/syndtr/goleveldb/leveldb"
 )
 
 type leaf struct {
@@ -36,10 +36,11 @@ type leaf struct {
 type trieGeneratorFn func(in chan (leaf), out chan (common.Hash))
 
 func GenerateBinaryTree(path string, it AccountIterator) common.Hash {
-	db, err := rawdb.NewLevelDBDatabase(path+"/bintrie", 128, 1024, "")
+	db, err := leveldb.OpenFile(path+"/bintrie", nil)
 	if err != nil {
 		panic(fmt.Sprintf("error opening bintrie db, err=%v", err))
 	}
+	defer db.Close()
 	btrie := new(trie.BinaryTrie)
 	btrie.CommitCh = make(chan trie.BinaryHashPreimage)
 
@@ -50,7 +51,8 @@ func GenerateBinaryTree(path string, it AccountIterator) common.Hash {
 		defer wg.Done()
 		for kv := range btrie.CommitCh {
 			nodeCount++
-			db.Put(kv.Key, kv.Value)
+			log.Info("inserting key", "count", nodeCount, "key", common.ToHex(kv.Key), "value", common.ToHex(kv.Value))
+			db.Put(kv.Key, kv.Value, nil)
 		}
 	}()
 	counter := 0
