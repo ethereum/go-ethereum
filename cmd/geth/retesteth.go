@@ -508,7 +508,7 @@ func (api *RetestethAPI) mineBlock() error {
 	var gp1559 *core.GasPool
 	var gasPool *core.GasPool
 	if api.chainConfig.IsEIP1559(header.Number) {
-		gasPool = new(core.GasPool).AddGas(params.MaxGasEIP1559 - header.GasLimit)
+		gasPool = new(core.GasPool).AddGas(api.chainConfig.EIP1559.MaxGas - header.GasLimit)
 		gp1559 = new(core.GasPool).AddGas(header.GasLimit)
 	} else {
 		gasPool = new(core.GasPool).AddGas(header.GasLimit)

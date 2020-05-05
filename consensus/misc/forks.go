@@ -57,7 +57,7 @@ func VerifyForkHashes(config *params.ChainConfig, header *types.Header, uncle bo
 func VerifyEIP1559BaseFee(config *params.ChainConfig, header, parent *types.Header) error {
 	// If we are at the EIP1559 fork block the BaseFee needs to be equal to params.EIP1559InitialBaseFee
 	if config.EIP1559Block != nil && config.EIP1559Block.Cmp(header.Number) == 0 {
-		if header.BaseFee == nil || header.BaseFee.Cmp(new(big.Int).SetUint64(params.EIP1559InitialBaseFee)) != 0 {
+		if header.BaseFee == nil || header.BaseFee.Cmp(new(big.Int).SetUint64(config.EIP1559.InitialBaseFee)) != 0 {
 			return errInvalidInitialBaseFee
 		}
 		return nil
@@ -71,10 +71,10 @@ func VerifyEIP1559BaseFee(config *params.ChainConfig, header, parent *types.Head
 		if header.BaseFee == nil {
 			return errMissingBaseFee
 		}
-		delta := new(big.Int).Sub(new(big.Int).SetUint64(parent.GasUsed), new(big.Int).SetUint64(params.TargetGasUsed))
+		delta := new(big.Int).Sub(new(big.Int).SetUint64(parent.GasUsed), new(big.Int).SetUint64(config.EIP1559.TargetGasUsed))
 		mul := new(big.Int).Mul(parent.BaseFee, delta)
-		div := new(big.Int).Div(mul, new(big.Int).SetUint64(params.TargetGasUsed))
-		div2 := new(big.Int).Div(div, new(big.Int).SetUint64(params.BaseFeeMaxChangeDenominator))
+		div := new(big.Int).Div(mul, new(big.Int).SetUint64(config.EIP1559.TargetGasUsed))
+		div2 := new(big.Int).Div(div, new(big.Int).SetUint64(config.EIP1559.BaseFeeMaxChangeDenominator))
 		expectedBaseFee := new(big.Int).Add(parent.BaseFee, div2)
 		diff := new(big.Int).Sub(expectedBaseFee, parent.BaseFee)
 		neg := false
@@ -82,7 +82,7 @@ func VerifyEIP1559BaseFee(config *params.ChainConfig, header, parent *types.Head
 			neg = true
 			diff.Neg(diff)
 		}
-		max := new(big.Int).Div(parent.BaseFee, new(big.Int).SetUint64(params.BaseFeeMaxChangeDenominator))
+		max := new(big.Int).Div(parent.BaseFee, new(big.Int).SetUint64(config.EIP1559.BaseFeeMaxChangeDenominator))
 		if max.Cmp(common.Big1) < 0 {
 			max = common.Big1
 		}
@@ -109,14 +109,14 @@ func VerifyEIP1559BaseFee(config *params.ChainConfig, header, parent *types.Head
 func VerifyEIP1559GasLimit(config *params.ChainConfig, header *types.Header) error {
 	// If EIP1559 has been finalized then header.GasLimit should be equal to the MaxGasEIP1559 (entire limit is in EIP1559 pool)
 	if config.IsEIP1559Finalized(header.Number) {
-		if header.GasLimit != params.MaxGasEIP1559 {
+		if header.GasLimit != config.EIP1559.MaxGas {
 			return errInvalidEIP1559FinalizedGasLimit
 		}
 		return nil
 	}
 	// Else if we are between activation and finalization, header.GasLimit must be valid based on the decay function
 	numOfIncrements := new(big.Int).Sub(header.Number, config.EIP1559Block).Uint64()
-	expectedGasLimit := (params.MaxGasEIP1559 / 2) + (numOfIncrements * params.EIP1559GasIncrementAmount)
+	expectedGasLimit := (config.EIP1559.MaxGas / 2) + (numOfIncrements * config.EIP1559.GasIncrementAmount)
 	if header.GasLimit != expectedGasLimit {
 		return fmt.Errorf("invalid GasLimit: have %d, need %d", header.GasLimit, expectedGasLimit)
 	}
