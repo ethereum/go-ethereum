@@ -25,7 +25,13 @@ mkdir test-chain-dir
 For this guide, start geth in dev mode, and enable [RPC](../_rpc/server.md) so you can connect other applications to geth. For this guide, we use Remix, the web-based Ethereum IDE, so also allow its domains to accept cross-origin requests.
 
 ```shell
-geth --datadir test-chain-dir --rpc --dev --rpccorsdomain "https://remix.ethereum.org,http://remix.ethereum.org" console
+geth --datadir test-chain-dir --rpc --dev --rpccorsdomain "https://remix.ethereum.org,http://remix.ethereum.org"
+```
+
+Connect to the IPC console on the node from another terminal window:
+
+```shell
+geth attach <IPC_LOCATION>
 ```
 
 Once geth is running in dev mode, you can interact with it in the same way as when geth is running in other ways.
@@ -52,4 +58,4 @@ If you want to test your dapps with a realistic block time use the `--dev.period
 
 ## Connect Remix to Geth
 
-With geth now running, open <http://remix.ethereum.org> (Yes, use `http` when connecting to your local machine). Compile the contract as normal, but when you deploy and run a contract, select _Web3 Provider_ from the _Environment_ dropdown, and add "http://127.0.0.1:8545" to the popup box. Click _Deploy_, and interact with the contract. You should see contract creation, mining, and transaction activity.
+With geth now running, open <https://remix.ethereum.org>. Compile the contract as normal, but when you deploy and run a contract, select _Web3 Provider_ from the _Environment_ dropdown, and add "http://127.0.0.1:8545" to the popup box. Click _Deploy_, and interact with the contract. You should see contract creation, mining, and transaction activity.
