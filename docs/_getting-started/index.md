@@ -105,15 +105,7 @@ namespaces. Find out how to override this setting [in the RPC docs](rpc/server#h
 
 ### Connect to console
 
-You can connect to the IPC console in two ways. First, when you start the node:
-
-```shell
-geth --goerli --syncmode "light" --rpc --signer=<CLEF_LOCATION>/clef.ipc console
-```
-
-The node also outputs sync information, so using the console in the same terminal can be difficult.
-
-You can also open a console on the node from another terminal using:
+Connect to the IPC console on a node from another terminal window:
 
 ```shell
 geth attach <IPC_LOCATION>
@@ -155,10 +147,7 @@ You can use standard HTTP requests to connect to a Geth node using the RPC APIs,
 
 ```shell
 curl -X POST http://<GETH_IP_ADDRESS>:8545 --data \
-    '{"jsonrpc":"2.0",
-    "method":"<API_METHOD>",
-    "params":[],
-    "id":1}' \
+    '{"jsonrpc":"2.0", "method":"<API_METHOD>", "params":[], "id":1}' \
     -H "Content-Type:application/json"
 ```
 
@@ -166,10 +155,7 @@ curl -X POST http://<GETH_IP_ADDRESS>:8545 --data \
 
 ```shell
 curl -X POST http://<GETH_IP_ADDRESS>:8545 --data \
-    '{"jsonrpc":"2.0",
-    "method":"eth_getBalance",
-    "params":["<ADDRESS_1>","latest"],
-    "id":1}' \
+    '{"jsonrpc":"2.0", "method":"eth_getBalance", "params":["<ADDRESS_1>","latest"], "id":1}' \
     -H "Content-Type:application/json"
 ```
 
@@ -182,10 +168,7 @@ Send 0.01 ETH from the account that you added ETH to with the Görli faucet, to 
 
 ```shell
 curl -X POST http://<GETH_IP_ADDRESS>:8545 --data \
-    '{"jsonrpc":"2.0",
-    "method":"eth_sendTransaction",
-    "params":[{"from": "<ADDRESS_0>","to": "<ADDRESS_1>","value": "0x9184e72a"}],
-    "id":1}' 
+    '{"jsonrpc":"2.0", "method":"eth_sendTransaction", "params":[{"from": "<ADDRESS_0>","to": "<ADDRESS_1>","value": "0x9184e72a"}], "id":1}'
     -H "Content-Type:application/json"
 ```
 
@@ -197,9 +180,6 @@ To check, get the account balance of the second account:
 
 ```shell
 curl -X POST http://<GETH_IP_ADDRESS>:8545 --data \
-    '{"jsonrpc":"2.0",
-    "method":"eth_getBalance",
-    "params":["<ADDRESS_1>","latest"],
-    "id":1}'
+    '{"jsonrpc":"2.0", "method":"eth_getBalance", "params":["<ADDRESS_1>","latest"], "id":1}'
     -H "Content-Type:application/json"
 ```
