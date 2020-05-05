@@ -110,6 +110,10 @@ github.com/karalabe/usb v0.0.0-20190919080040-51dc0efba356 h1:I/yrLt2WilKxlQKCM5
 github.com/karalabe/usb v0.0.0-20190919080040-51dc0efba356/go.mod h1:Od972xHfMJowv7NGVDiWVxk2zxnWgjLlJzE+F4F7AGU=
 github.com/kilic/bls12-381 v0.0.0-20200429194728-f68242f46180 h1:xEyKa0fW9qhjCkALj1eSUiE3UORbqwLIxmLgn6eivQE=
 github.com/kilic/bls12-381 v0.0.0-20200429194728-f68242f46180/go.mod h1:INznczsRc7ASFbWFUI9GnIvpi9s2FhenKE+24rdTmBQ=
+github.com/kilic/bls12-381 v0.0.0-20200505162258-9b553b340e3a h1:kOOUWvDDqoWe99YziLOKZRYE4yJJUYHcaVCMN8V4BGk=
+github.com/kilic/bls12-381 v0.0.0-20200505162258-9b553b340e3a/go.mod h1:INznczsRc7ASFbWFUI9GnIvpi9s2FhenKE+24rdTmBQ=
+github.com/kilic/bls12-381 v0.0.0-20200505190543-eacd6b778e02 h1:6yrp5HXbvIovsG4U73EciVrm/Y4gh12mlpyl0y+7C9w=
+github.com/kilic/bls12-381 v0.0.0-20200505190543-eacd6b778e02/go.mod h1:INznczsRc7ASFbWFUI9GnIvpi9s2FhenKE+24rdTmBQ=
 github.com/kr/logfmt v0.0.0-20140226030751-b84e30acd515 h1:T+h1c/A9Gawja4Y9mFVWj2vyii2bbUNDw3kt9VxK2EY=
 github.com/kr/logfmt v0.0.0-20140226030751-b84e30acd515/go.mod h1:+0opPa2QZZtGFBFZlji/RkVcI2GknAs/DXo4wKdlNEc=
 github.com/kr/pretty v0.1.0 h1:L/CwN0zerZDmRFUapSPitk6f+Q3+0za1rQkzVuMiMFI=

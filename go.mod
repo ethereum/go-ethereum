@@ -36,7 +36,7 @@ require (
 	github.com/jackpal/go-nat-pmp v1.0.2-0.20160603034137-1fa385a6f458
 	github.com/julienschmidt/httprouter v1.1.1-0.20170430222011-975b5c4c7c21
 	github.com/karalabe/usb v0.0.0-20190919080040-51dc0efba356
-	github.com/kilic/bls12-381 v0.0.0-20200429194728-f68242f46180
+	github.com/kilic/bls12-381 v0.0.0-20200505190543-eacd6b778e02
 	github.com/kr/pretty v0.1.0 // indirect
 	github.com/kylelemons/godebug v1.1.0 // indirect
 	github.com/mattn/go-colorable v0.1.0
