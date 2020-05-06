@@ -149,6 +149,11 @@ web3._extend({
 			call: 'bor_getCurrentValidators',
 			params: 0
 		}),
+		new web3._extend.Method({
+			name: 'getRootHash',
+			call: 'bor_getRootHash',
+			params: 2,
+		}),
 	]
 });
 `

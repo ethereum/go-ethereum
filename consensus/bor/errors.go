@@ -40,3 +40,31 @@ func (e *TotalVotingPowerExceededError) Error() string {
 		e.Validators,
 	)
 }
+
+type InvalidStartEndBlockError struct {
+	Start         int64
+	End           int64
+	CurrentHeader int64
+}
+
+func (e *InvalidStartEndBlockError) Error() string {
+	return fmt.Sprintf(
+		"Invalid parameters start: %d and end block: %d params",
+		e.Start,
+		e.End,
+	)
+}
+
+type MaxCheckpointLengthExceededError struct {
+	Start int64
+	End   int64
+}
+
+func (e *MaxCheckpointLengthExceededError) Error() string {
+	return fmt.Sprintf(
+		"Start: %d and end block: %d exceed max allowed checkpoint length: %d",
+		e.Start,
+		e.End,
+		MaxCheckpointLength,
+	)
+}

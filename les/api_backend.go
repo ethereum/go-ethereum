@@ -223,3 +223,7 @@ func (b *LesApiBackend) ServiceFilter(ctx context.Context, session *bloombits.Ma
 		go session.Multiplex(bloomRetrievalBatch, bloomRetrievalWait, b.eth.bloomRequests)
 	}
 }
+
+func (b *LesApiBackend) GetRootHash(ctx context.Context, starBlockNr rpc.BlockNumber, endBlockNr rpc.BlockNumber) ([]byte, error) {
+	return nil, errors.New("Not implemented")
+}

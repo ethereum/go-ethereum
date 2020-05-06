@@ -716,6 +716,14 @@ func (s *PublicBlockChainAPI) GetStorageAt(ctx context.Context, address common.A
 	return res[:], state.Error()
 }
 
+func (s *PublicBlockChainAPI) GetRootHash(ctx context.Context, starBlockNr rpc.BlockNumber, endBlockNr rpc.BlockNumber) ([]byte, error) {
+	root, err := s.b.GetRootHash(ctx, starBlockNr, endBlockNr)
+	if err != nil {
+		return nil, err
+	}
+	return root, nil
+}
+
 // CallArgs represents the arguments for a call.
 type CallArgs struct {
 	From     *common.Address `json:"from"`
