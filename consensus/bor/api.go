@@ -35,7 +35,6 @@ import (
 var (
 	// MaxCheckpointLength is the maximum number of blocks that can be requested for constructing a checkpoint root hash
 	MaxCheckpointLength = uint64(math.Pow(2, 15))
-	once                sync.Once
 )
 
 // API is a user facing RPC API to allow controlling the signer and voting
@@ -124,13 +123,7 @@ func (api *API) GetCurrentValidators() ([]*Validator, error) {
 
 // GetRootHash returns the merkle root of the start to end block headers
 func (api *API) GetRootHash(start int64, end int64) ([]byte, error) {
-	var err error
-	once.Do(func() {
-		if api.rootHashCache == nil {
-			api.rootHashCache, err = lru.NewARC(10)
-		}
-	})
-	if err != nil {
+	if err := api.initializeRootHashCache(); err != nil {
 		return nil, err
 	}
 	key := getRootHashKey(start, end)
@@ -182,6 +175,14 @@ func (api *API) GetRootHash(start int64, end int64) ([]byte, error) {
 	root := tree.Root().Hash
 	api.rootHashCache.Add(key, root)
 	return root, nil
+}
+
+func (api *API) initializeRootHashCache() error {
+	var err error
+	if api.rootHashCache == nil {
+		api.rootHashCache, err = lru.NewARC(10)
+	}
+	return err
 }
 
 func getRootHashKey(start int64, end int64) string {
