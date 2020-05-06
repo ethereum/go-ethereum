@@ -234,8 +234,7 @@ func (q *queue) ShouldThrottleReceipts() bool {
 }
 
 // resultSlots calculates the number of results slots available for requests
-// whilst adhering to both the item and the memory limit too of the results
-// cache.
+// whilst adhering to both the item and the memory limits of the result cache.
 func (q *queue) resultSlots(pendPool map[string]*fetchRequest, donePool map[common.Hash]struct{}) int {
 	// Calculate the maximum length capped by the memory limit
 	limit := len(q.resultCache)
@@ -348,7 +347,7 @@ func (q *queue) Schedule(headers []*types.Header, from uint64) []*types.Header {
 }
 
 // Results retrieves and permanently removes a batch of fetch results from
-// the cache. the result slice will be empty if the queue has been closed.
+// the cache. The result slice will be empty if the queue has been closed.
 func (q *queue) Results(block bool) []*fetchResult {
 	q.lock.Lock()
 	defer q.lock.Unlock()

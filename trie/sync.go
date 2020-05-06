@@ -174,8 +174,8 @@ func (s *Sync) Missing(max int) []common.Hash {
 }
 
 // Process injects a batch of retrieved trie nodes data, returning if something
-// was committed to the database and also the index of an entry if processing of
-// it failed.
+// was committed to the database and also the index of an entry if its processing
+// failed.
 func (s *Sync) Process(results []SyncResult) (bool, int, error) {
 	committed := false
 
