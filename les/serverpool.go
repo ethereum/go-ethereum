@@ -17,7 +17,6 @@
 package les
 
 import (
-	"encoding/binary"
 	"errors"
 	"reflect"
 	"sync"
@@ -48,11 +47,9 @@ const (
 // serverPool provides a node iterator for dial candidates. The output is a mix of newly discovered
 // nodes, a weighted random selection of known (previously valuable) nodes and trusted/paid nodes.
 type serverPool struct {
-	clock       mclock.Clock
-	clockOffset mclock.AbsTime
-	db          ethdb.KeyValueStore
-	dbClockKey  []byte
-	quit        chan struct{}
+	clock mclock.Clock
+	db    ethdb.KeyValueStore
+	quit  chan struct{}
 
 	ns           *nodestate.NodeStateMachine
 	vt           *lpc.ValueTracker
@@ -127,12 +124,11 @@ var (
 // newServerPool creates a new server pool
 func newServerPool(db ethdb.KeyValueStore, dbKey []byte, vt *lpc.ValueTracker, discovery enode.Iterator, query lpc.PreNegQuery, clock mclock.Clock, trustedURLs []string, testing bool) *serverPool {
 	s := &serverPool{
-		db:         db,
-		dbClockKey: append(dbKey, []byte("persistentClock")...),
-		clock:      clock,
-		ns:         nodestate.NewNodeStateMachine(db, []byte(string(dbKey)+"ns:"), clock, serverPoolSetup),
-		vt:         vt,
-		quit:       make(chan struct{}),
+		db:    db,
+		clock: clock,
+		ns:    nodestate.NewNodeStateMachine(db, []byte(string(dbKey)+"ns:"), clock, serverPoolSetup),
+		vt:    vt,
+		quit:  make(chan struct{}),
 	}
 	s.getTimeout()
 	var (
@@ -209,23 +205,16 @@ func (s *serverPool) start() {
 	for _, node := range s.trusted {
 		s.ns.SetState(node, sfAlwaysConnect, nodestate.Flags{}, 0)
 	}
-	clockEnc, _ := s.db.Get(s.dbClockKey)
-	var clockStart mclock.AbsTime
-	if len(clockEnc) == 8 {
-		clockStart = mclock.AbsTime(binary.BigEndian.Uint64(clockEnc))
-	}
-	s.clockOffset = clockStart - s.clock.Now()
 	s.ns.ForEach(sfHasValue, nodestate.Flags{}, func(node *enode.Node, state nodestate.Flags) {
 		s.updateNode(node, false, false, 0) // set weight flag
-		if n, ok := s.ns.GetField(node, sfiNodeHistory).(nodeHistory); ok && n.waitUntil > clockStart {
-			s.ns.SetState(node, sfRedialWait, nodestate.Flags{}, time.Duration(n.waitUntil-clockStart))
+		if n, ok := s.ns.GetField(node, sfiNodeHistory).(nodeHistory); ok && n.waitUntil > s.clock.Now() {
+			s.ns.SetState(node, sfRedialWait, nodestate.Flags{}, time.Duration(n.waitUntil-s.clock.Now()))
 		}
 	})
 	go func() {
 		for {
 			select {
 			case <-time.After(time.Minute * 5):
-				s.persistClock()
 				suggestedTimeoutGauge.Update(int64(s.getTimeout() / time.Millisecond))
 				s.timeoutLock.RLock()
 				timeWeights := s.timeWeights
@@ -245,15 +234,7 @@ func (s *serverPool) stop() {
 		s.updateNode(n, true, false, 0)
 	})
 	close(s.quit)
-	s.persistClock()
 	s.ns.Stop()
-}
-
-// persistClock stores the persistent absolute time into the database
-func (s *serverPool) persistClock() {
-	var clockEnc [8]byte
-	binary.BigEndian.PutUint64(clockEnc[:], uint64(s.clock.Now()+s.clockOffset))
-	s.db.Put(s.dbClockKey, clockEnc[:])
 }
 
 // registerPeer implements serverPeerSubscriber
@@ -353,7 +334,7 @@ func (s *serverPool) updateNode(node *enode.Node, calculateSessionValue, redialW
 			n.waitFactor = 1
 		}
 		wait := time.Duration(float64(minRedialWait) * n.waitFactor)
-		n.waitUntil = s.clock.Now() + s.clockOffset + mclock.AbsTime(wait)
+		n.waitUntil = s.clock.Now() + mclock.AbsTime(wait)
 		s.ns.SetField(node, sfiNodeHistory, n)
 		s.ns.SetState(node, sfRedialWait, nodestate.Flags{}, wait)
 	}
