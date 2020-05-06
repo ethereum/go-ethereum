@@ -177,12 +177,23 @@ func TestBadRangeProof(t *testing.T) {
 			vals[index] = randBytes(20) // In theory it can't be same
 		case 2:
 			// Gapped entry slice
-			index = mrand.Intn(end - start)
-			keys = append(keys[:index], keys[index+1:]...)
-			vals = append(vals[:index], vals[index+1:]...)
-			if len(keys) <= 1 {
+
+			// There are only two elements, skip it. Dropped any element
+			// will lead to single edge proof which is always correct.
+			if end-start <= 2 {
 				continue
 			}
+			// If the dropped element is the first or last one and it's a
+			// batch of small size elements. In this special case, it can
+			// happen that the proof for the edge element is exactly same
+			// with the first/last second element(since small values are
+			// embedded in the parent). Avoid this case.
+			index = mrand.Intn(end - start)
+			if (index == end-start-1 || index == 0) && end <= 100 {
+				continue
+			}
+			keys = append(keys[:index], keys[index+1:]...)
+			vals = append(vals[:index], vals[index+1:]...)
 		case 3:
 			// Switched entry slice, same effect with gapped
 			index = mrand.Intn(end - start)
