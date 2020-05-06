@@ -314,7 +314,7 @@ func (st *ReStackTrie) getDiffIndex(key []byte) int {
 func (st *ReStackTrie) insert(key, value []byte) {
 	switch st.nodeType {
 	case branchNode: /* Branch */
-		idx := key[st.keyOffset]
+		idx := int(key[st.keyOffset])
 		if st.children[idx] == nil {
 			st.children[idx] = NewReStackTrie()
 			st.children[idx].keyOffset = st.keyOffset + 1
@@ -514,6 +514,11 @@ func writeHPRLP(writer io.Writer, key, val []byte, leaf bool) {
 	// value part will be two bytes as the leaf is more than 56 bytes
 	// long.
 	valHeaderLen := 1
+	if len(val) == 1 && val[0] < 128 {
+		// Don't reserve space for the header if this
+		// is an integer < 128
+		valHeaderLen = 0
+	}
 	if len(val) > 56 {
 		valHeaderLen = 2
 	}
@@ -550,9 +555,10 @@ func writeHPRLP(writer io.Writer, key, val []byte, leaf bool) {
 		}
 	}
 
-	if leaf {
+	// Write the RLP prefix to the value if needed
+	if len(val) > 56 {
 		writer.Write([]byte{0xb8, byte(len(val))})
-	} else {
+	} else if len(val) > 1 || val[0] >= 128 {
 		writer.Write([]byte{0x80 + byte(len(val))})
 	}
 	writer.Write(val)
