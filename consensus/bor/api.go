@@ -35,6 +35,7 @@ import (
 var (
 	// MaxCheckpointLength is the maximum number of blocks that can be requested for constructing a checkpoint root hash
 	MaxCheckpointLength = uint64(math.Pow(2, 15))
+	once                sync.Once
 )
 
 // API is a user facing RPC API to allow controlling the signer and voting
@@ -123,11 +124,18 @@ func (api *API) GetCurrentValidators() ([]*Validator, error) {
 
 // GetRootHash returns the merkle root of the start to end block headers
 func (api *API) GetRootHash(start int64, end int64) ([]byte, error) {
-	key := getKey(start, end)
-	if root, err := api.lookupCache(key); err != nil {
+	var err error
+	once.Do(func() {
+		if api.rootHashCache == nil {
+			api.rootHashCache, err = lru.NewARC(10)
+		}
+	})
+	if err != nil {
 		return nil, err
-	} else if root != nil {
-		return root, nil
+	}
+	key := getRootHashKey(start, end)
+	if root, known := api.rootHashCache.Get(key); known {
+		return root.([]byte), nil
 	}
 	length := uint64(end - start + 1)
 	if length > MaxCheckpointLength {
@@ -176,19 +184,6 @@ func (api *API) GetRootHash(start int64, end int64) ([]byte, error) {
 	return root, nil
 }
 
-func (api *API) lookupCache(key string) ([]byte, error) {
-	var err error
-	if api.rootHashCache == nil {
-		if api.rootHashCache, err = lru.NewARC(10); err != nil {
-			return nil, err
-		}
-	}
-	if root, known := api.rootHashCache.Get(key); known {
-		return root.([]byte), nil
-	}
-	return nil, nil
-}
-
-func getKey(start int64, end int64) string {
+func getRootHashKey(start int64, end int64) string {
 	return strconv.FormatInt(start, 10) + "-" + strconv.FormatInt(end, 10)
 }
