@@ -526,6 +526,11 @@ func (dl *diffLayer) StorageList(accountHash common.Hash) ([]common.Hash, bool) 
 	// If an old list already exists, return it
 	dl.lock.RLock()
 	_, destructed := dl.destructSet[accountHash]
+	if _, ok := dl.storageData[accountHash]; !ok {
+		// Account not tracked by this layer
+		dl.lock.RUnlock()
+		return nil, destructed
+	}
 	if list, exist := dl.storageList[accountHash]; exist {
 		dl.lock.RUnlock()
 		return list, destructed // The list might be nil
