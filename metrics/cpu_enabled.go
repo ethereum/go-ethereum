@@ -18,14 +18,19 @@
 
 package metrics
 
-import "github.com/elastic/gosigar"
+import "github.com/shirou/gopsutil/cpu"
 
 // ReadCPUStats retrieves the current CPU stats.
 func ReadCPUStats(stats *CPUStats) {
-	global := gosigar.Cpu{}
-	global.Get()
+	// passing false to request all cpu times
+	timeStats, err := cpu.Times(false)
+	if err != nil {
+		return // TODO is it okay to just return if cpu.Times errors out? Or should it be a fatal error
+	}
+	// requesting all cpu times will always return an array with only one time stats entry
+	timeStat := timeStats[0]
 
-	stats.GlobalTime = int64(global.User + global.Nice + global.Sys)
-	stats.GlobalWait = int64(global.Wait)
+	stats.GlobalTime = int64(timeStat.User + timeStat.Nice + timeStat.System)
+	stats.GlobalWait = int64(timeStat.Iowait)
 	stats.LocalTime = getProcessCPUTime()
 }

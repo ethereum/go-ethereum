@@ -28,7 +28,8 @@ import (
 	"strings"
 	"time"
 
-	"github.com/elastic/gosigar"
+	gopsutil "github.com/shirou/gopsutil/mem"
+
 	"github.com/ethereum/go-ethereum/accounts"
 	"github.com/ethereum/go-ethereum/accounts/keystore"
 	"github.com/ethereum/go-ethereum/cmd/utils"
@@ -310,11 +311,9 @@ func prepare(ctx *cli.Context) {
 		ctx.GlobalSet(utils.CacheFlag.Name, strconv.Itoa(128))
 	}
 	// Cap the cache allowance and tune the garbage collector
-	var mem gosigar.Mem
-	// Workaround until OpenBSD support lands into gosigar
-	// Check https://github.com/elastic/gosigar#supported-platforms
 	if runtime.GOOS != "openbsd" {
-		if err := mem.Get(); err == nil {
+		mem, err := gopsutil.VirtualMemory()
+		if err == nil {
 			if 32<<(^uintptr(0)>>63) == 32 && mem.Total > 2*1024*1024*1024 {
 				log.Warn("Lowering memory allowance on 32bit arch", "available", mem.Total/1024/1024, "addressable", 2*1024)
 				mem.Total = 2 * 1024 * 1024 * 1024
