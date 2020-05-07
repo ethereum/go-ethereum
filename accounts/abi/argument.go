@@ -134,75 +134,6 @@ func (arguments Arguments) UnpackIntoMap(v map[string]interface{}, data []byte) 
 	return nil
 }
 
-// unpack sets the unmarshalled value to go format.
-// Note the dst here must be settable.
-func unpack(t *Type, dst interface{}, src interface{}) error {
-	var (
-		dstVal = reflect.ValueOf(dst).Elem()
-		srcVal = reflect.ValueOf(src)
-	)
-	tuple, typ := false, t
-	for {
-		if typ.T == SliceTy || typ.T == ArrayTy {
-			typ = typ.Elem
-			continue
-		}
-		tuple = typ.T == TupleTy
-		break
-	}
-	if !tuple {
-		return set(dstVal, srcVal)
-	}
-
-	// Dereferences interface or pointer wrapper
-	dstVal = indirectInterfaceOrPtr(dstVal)
-
-	switch t.T {
-	case TupleTy:
-		if dstVal.Kind() != reflect.Struct {
-			return fmt.Errorf("abi: invalid dst value for unpack, want struct, got %s", dstVal.Kind())
-		}
-		fieldmap, err := mapArgNamesToStructFields(t.TupleRawNames, dstVal)
-		if err != nil {
-			return err
-		}
-		for i, elem := range t.TupleElems {
-			fname := fieldmap[t.TupleRawNames[i]]
-			field := dstVal.FieldByName(fname)
-			if !field.IsValid() {
-				return fmt.Errorf("abi: field %s can't found in the given value", t.TupleRawNames[i])
-			}
-			if err := unpack(elem, field.Addr().Interface(), srcVal.Field(i).Interface()); err != nil {
-				return err
-			}
-		}
-		return nil
-	case SliceTy:
-		if dstVal.Kind() != reflect.Slice {
-			return fmt.Errorf("abi: invalid dst value for unpack, want slice, got %s", dstVal.Kind())
-		}
-		slice := reflect.MakeSlice(dstVal.Type(), srcVal.Len(), srcVal.Len())
-		for i := 0; i < slice.Len(); i++ {
-			if err := unpack(t.Elem, slice.Index(i).Addr().Interface(), srcVal.Index(i).Interface()); err != nil {
-				return err
-			}
-		}
-		dstVal.Set(slice)
-	case ArrayTy:
-		if dstVal.Kind() != reflect.Array {
-			return fmt.Errorf("abi: invalid dst value for unpack, want array, got %s", dstVal.Kind())
-		}
-		array := reflect.New(dstVal.Type()).Elem()
-		for i := 0; i < array.Len(); i++ {
-			if err := unpack(t.Elem, array.Index(i).Addr().Interface(), srcVal.Index(i).Interface()); err != nil {
-				return err
-			}
-		}
-		dstVal.Set(array)
-	}
-	return nil
-}
-
 // unpackAtomic unpacks ( hexdata -> go ) a single value
 func (arguments Arguments) unpackAtomic(v interface{}, marshalledValues interface{}) error {
 	elem := reflect.ValueOf(v).Elem()
@@ -217,26 +148,31 @@ func (arguments Arguments) unpackAtomic(v interface{}, marshalledValues interfac
 // unpackTuple unpacks ( hexdata -> go ) a batch of values.
 func (arguments Arguments) unpackTuple(v interface{}, marshalledValues []interface{}) error {
 	var (
-		value = reflect.ValueOf(v).Elem()
-		typ   = value.Type()
-		kind  = value.Kind()
+		value          = reflect.ValueOf(v).Elem()
+		typ            = value.Type()
+		kind           = value.Kind()
+		nonIndexedArgs = arguments.NonIndexed()
 	)
 
 	switch kind {
 	case reflect.Struct:
-		k := 0
-		for i := 0; i < len(arguments); i++ {
-			// Skip indexed fields
-			if arguments[i].Indexed {
-				continue
+		var abi2struct map[string]string
+		argNames := make([]string, len(nonIndexedArgs))
+		for i, arg := range nonIndexedArgs {
+			argNames[i] = arg.Name
+		}
+		var err error
+		if abi2struct, err = mapArgNamesToStructFields(argNames, value); err != nil {
+			return err
+		}
+		for i, arg := range nonIndexedArgs {
+			field := value.FieldByName(abi2struct[arg.Name])
+			if !field.IsValid() {
+				return fmt.Errorf("abi: field %s can't be found in the given value", arg.Name)
 			}
-			if i >= value.NumField() {
-				return fmt.Errorf("Invalid field length while unpacking: %v", i)
-			}
-			if err := set(value.Field(i), reflect.ValueOf(marshalledValues[k])); err != nil {
+			if err := set(field, reflect.ValueOf(marshalledValues[i])); err != nil {
 				return err
 			}
-			k++
 		}
 	case reflect.Slice, reflect.Array:
 		for i := 0; i < value.Len(); i++ {

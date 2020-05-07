@@ -167,8 +167,6 @@ func TestEventMultiValueWithArrayUnpack(t *testing.T) {
 func TestEventTupleUnpack(t *testing.T) {
 
 	type EventTransfer struct {
-		From  common.Address
-		To    common.Address
 		Value *big.Int
 	}
 
