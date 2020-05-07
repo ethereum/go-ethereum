@@ -32,14 +32,6 @@ func indirect(v reflect.Value) reflect.Value {
 	return v
 }
 
-// indirectInterfaceOrPtr recursively dereferences the value until value is not interface.
-func indirectInterfaceOrPtr(v reflect.Value) reflect.Value {
-	if (v.Kind() == reflect.Interface || v.Kind() == reflect.Ptr) && v.Elem().IsValid() {
-		return indirect(v.Elem())
-	}
-	return v
-}
-
 // reflectIntType returns the reflect using the given size and
 // unsignedness.
 func reflectIntType(unsigned bool, size int) reflect.Type {
@@ -106,24 +98,17 @@ func set(dst, src reflect.Value) error {
 // setSlice ignores if we cannot copy all of src' elements.
 func setSlice(dst, src reflect.Value) error {
 	slice := reflect.MakeSlice(dst.Type(), src.Len(), src.Len())
-	if src.Type() != dst.Type() {
-		fmt.Printf(" %v %v ", src.Type(), dst.Type())
-		for i := 0; i < src.Len(); i++ {
-			if src.Index(i).Kind() == reflect.Struct {
-				if err := set(slice.Index(i), src.Index(i)); err != nil {
-					return err
-				}
-			} else {
-				// e.g. [][32]uint8 to []common.Hash
-				//reflect.Copy(slice.Index(i), src.Index(i).Convert(slice.Index(i).Type()))
-				if err := set(slice.Index(i), src.Index(i)); err != nil {
-					return err
-				}
+	for i := 0; i < src.Len(); i++ {
+		if src.Index(i).Kind() == reflect.Struct {
+			if err := set(slice.Index(i), src.Index(i)); err != nil {
+				return err
 			}
-		}
-	} else {
-		for i := 0; i < src.Len(); i++ {
-			reflect.Copy(slice.Index(i), src.Index(i))
+		} else {
+			// e.g. [][32]uint8 to []common.Hash
+			//reflect.Copy(slice.Index(i), src.Index(i).Convert(slice.Index(i).Type()))
+			if err := set(slice.Index(i), src.Index(i)); err != nil {
+				return err
+			}
 		}
 	}
 	dst.Set(slice)
@@ -152,29 +137,6 @@ func setStruct(dst, src reflect.Value) error {
 		if err := set(dstField, srcField); err != nil {
 			return err
 		}
-	}
-	return nil
-}
-
-// requireAssignable assures that `dest` is a pointer and it's not an interface.
-func requireAssignable(dst, src reflect.Value) error {
-	if dst.Kind() != reflect.Ptr && dst.Kind() != reflect.Interface {
-		return fmt.Errorf("abi: cannot unmarshal %v into %v", src.Type(), dst.Type())
-	}
-	return nil
-}
-
-// requireUnpackKind verifies preconditions for unpacking `args` into `kind`
-func requireUnpackKind(v reflect.Value, minLength int, args Arguments) error {
-	switch v.Kind() {
-	case reflect.Struct:
-	case reflect.Slice, reflect.Array:
-		if v.Len() < minLength {
-			return fmt.Errorf("abi: insufficient number of elements in the list/array for unpack, want %d, got %d",
-				minLength, v.Len())
-		}
-	default:
-		return fmt.Errorf("abi: cannot unmarshal tuple into %v", v.Type())
 	}
 	return nil
 }
