@@ -55,7 +55,7 @@ type Node struct {
 
 	lifecycles []Lifecycle // All registered backends, services, and auxiliary services that have a lifecycle
 
-	backend     Backend                           // The registered Backend of the node
+	backend     Backend                           // The registered Backend of the node // TODO unnecessary
 	services    map[reflect.Type]Service          // Currently running services
 	auxServices map[reflect.Type]AuxiliaryService // Currently running auxiliary services
 
@@ -318,7 +318,7 @@ func (n *Node) Start() error {
 
 	// Initialize the p2p server. This creates the node key and
 	// discovery databases.
-	n.server = &p2p.Server{Config: n.config.P2P}
+	n.server = &p2p.Server{Config: n.config.P2P} // TODO add init step for p2p server
 	n.server.Config.PrivateKey = n.config.NodeKey()
 	n.server.Config.Name = n.config.NodeName()
 	n.server.Config.Logger = n.log

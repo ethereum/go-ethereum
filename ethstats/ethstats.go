@@ -83,7 +83,7 @@ type Service struct {
 }
 
 // New returns a monitoring service ready for stats reporting.
-func New(node *node.Node, url string, backend node.Backend) (node.AuxiliaryService, error) {
+func New(node *node.Node, url string, backend node.Backend) (node.AuxiliaryService, error) { // TODO, this thing receives the backend explicitly, does whatever, registers itself
 	// Parse the netstats connection url
 	re := regexp.MustCompile("([^:@]*)(:([^@]*))?@(.+)")
 	parts := re.FindStringSubmatch(url)

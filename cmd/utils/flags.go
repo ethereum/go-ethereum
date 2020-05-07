@@ -1711,10 +1711,10 @@ func RegisterEthService(stack *node.Node, cfg *eth.Config) {
 			ls, _ := les.NewLesServer(fullNode, cfg)
 			fullNode.AddLesServer(ls)
 		}
-		if err := stack.RegisterBackend(fullNode); err != nil {
+		if err := stack.RegisterBackend(fullNode); err != nil { // TODO this stuff should be handled by eth package (cause eth package only knows that it's a backend)
 			Fatalf("Failed to register the Ethereum service: %v", err)
 		}
-		stack.RegisterLifecycle(fullNode)
+		stack.RegisterLifecycle(fullNode) // TODO this too (node should call this stuff so it register itself)
 	}
 }
 
