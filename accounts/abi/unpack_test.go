@@ -367,7 +367,7 @@ func TestMethodMultiReturn(t *testing.T) {
 	}, {
 		&[]interface{}{new(int)},
 		&[]interface{}{},
-		"abi: insufficient number of elements in the list/array for unpack, want 2, got 1",
+		"abi: insufficient number of arguments for unpack, want 2, got 1",
 		"Can not unpack into a slice with wrong types",
 	}}
 	for _, tc := range testCases {

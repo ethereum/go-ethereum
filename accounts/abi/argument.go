@@ -159,6 +159,9 @@ func (arguments Arguments) unpackTuple(v interface{}, marshalledValues []interfa
 			}
 		}
 	case reflect.Slice, reflect.Array:
+		if value.Len() < len(marshalledValues) {
+			return fmt.Errorf("abi: insufficient number of arguments for unpack, want %d, got %d", len(arguments), value.Len())
+		}
 		for i := 0; i < value.Len(); i++ {
 			// Skip indexed fields
 			if arguments[i].Indexed {
