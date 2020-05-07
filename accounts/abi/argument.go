@@ -59,10 +59,6 @@ func (argument *Argument) UnmarshalJSON(data []byte) error {
 	return nil
 }
 
-func (argument *Argument) set(dst interface{}, src interface{}) {
-
-}
-
 // NonIndexed returns the arguments with indexed arguments filtered out
 func (arguments Arguments) NonIndexed() Arguments {
 	var ret []Argument
@@ -101,7 +97,6 @@ func (arguments Arguments) Unpack(v interface{}, data []byte) error {
 	if arguments.isTuple() {
 		return arguments.unpackTuple(v, marshalledValues)
 	}
-
 	return arguments.unpackAtomic(v, marshalledValues[0])
 }
 
@@ -129,13 +124,13 @@ func (arguments Arguments) UnpackIntoMap(v map[string]interface{}, data []byte) 
 
 // unpackAtomic unpacks ( hexdata -> go ) a single value
 func (arguments Arguments) unpackAtomic(v interface{}, marshalledValues interface{}) error {
-	elem := reflect.ValueOf(v).Elem()
+	dst := reflect.ValueOf(v).Elem()
+	src := reflect.ValueOf(marshalledValues)
 
-	if elem.Kind() == reflect.Struct && reflect.ValueOf(marshalledValues).Kind() != reflect.Struct {
-		return set(elem.Field(0), reflect.ValueOf(marshalledValues))
+	if dst.Kind() == reflect.Struct && src.Kind() != reflect.Struct {
+		return set(dst.Field(0), src)
 	}
-
-	return set(elem, reflect.ValueOf(marshalledValues))
+	return set(dst, src)
 }
 
 // unpackTuple unpacks ( hexdata -> go ) a batch of values.
