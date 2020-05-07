@@ -18,19 +18,22 @@
 
 package metrics
 
-import "github.com/shirou/gopsutil/cpu"
+import (
+	"github.com/ethereum/go-ethereum/log"
+	"github.com/shirou/gopsutil/cpu"
+)
 
 // ReadCPUStats retrieves the current CPU stats.
 func ReadCPUStats(stats *CPUStats) {
 	// passing false to request all cpu times
 	timeStats, err := cpu.Times(false)
 	if err != nil {
-		return // TODO is it okay to just return if cpu.Times errors out? Or should it be a fatal error
+		log.Error("Could not read cpu stats", "err", err)
+		return
 	}
 	// requesting all cpu times will always return an array with only one time stats entry
 	timeStat := timeStats[0]
-
-	stats.GlobalTime = int64(timeStat.User + timeStat.Nice + timeStat.System)
-	stats.GlobalWait = int64(timeStat.Iowait)
+	stats.GlobalTime = int64((timeStat.User + timeStat.Nice + timeStat.System)*128)
+	stats.GlobalWait = int64((timeStat.Iowait)*128)
 	stats.LocalTime = getProcessCPUTime()
 }
