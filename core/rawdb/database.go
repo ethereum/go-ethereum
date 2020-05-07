@@ -347,15 +347,24 @@ func InspectDatabase(db ethdb.Database) error {
 			preimages.Add(size)
 		case bytes.HasPrefix(key, bloomBitsPrefix) && len(key) == (len(bloomBitsPrefix)+10+common.HashLength):
 			bloomBits.Add(size)
+		case bytes.HasPrefix(key, BloomBitsIndexPrefix):
+			bloomBits.Add(size)
 		case bytes.HasPrefix(key, []byte("clique-")) && len(key) == 7+common.HashLength:
 			cliqueSnaps.Add(size)
-		case bytes.HasPrefix(key, []byte("cht-")) && len(key) == 4+common.HashLength:
+		case bytes.HasPrefix(key, []byte("cht-")) ||
+			bytes.HasPrefix(key, []byte("chtIndexV2-")) ||
+			bytes.HasPrefix(key, []byte("chtRootV2-")): // Canonical hash trie
 			chtTrieNodes.Add(size)
-		case bytes.HasPrefix(key, []byte("blt-")) && len(key) == 4+common.HashLength:
+		case bytes.HasPrefix(key, []byte("blt-")) ||
+			bytes.HasPrefix(key, []byte("bltIndex-")) ||
+			bytes.HasPrefix(key, []byte("bltRoot-")): // Bloomtrie sub
 			bloomTrieNodes.Add(size)
 		default:
 			var accounted bool
-			for _, meta := range [][]byte{databaseVerisionKey, headHeaderKey, headBlockKey, headFastBlockKey, fastTrieProgressKey} {
+			for _, meta := range [][]byte{
+				databaseVerisionKey, headHeaderKey, headBlockKey, headFastBlockKey,
+				fastTrieProgressKey, snapshotRootKey, snapshotJournalKey,
+			} {
 				if bytes.Equal(key, meta) {
 					metadata.Add(size)
 					accounted = true

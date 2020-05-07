@@ -72,6 +72,7 @@ func (p *Pruner) Prune(root common.Hash) error {
 			return errors.New("no target state specified")
 		}
 	}
+	start := time.Now()
 	// Traverse the target state, re-construct the whole state trie and
 	// commit to the given temporary database.
 	if err := snapshot.CommitAndVerifyState(p.snaptree, root, p.db, p.tmpdb); err != nil {
@@ -86,12 +87,11 @@ func (p *Pruner) Prune(root common.Hash) error {
 	var (
 		count  int
 		size   common.StorageSize
-		start  = time.Now()
+		pstart = time.Now()
 		logged = time.Now()
 		batch  = p.db.NewBatch()
 		iter   = p.db.NewIterator(nil, nil)
 	)
-	defer iter.Release()
 	for iter.Next() {
 		key := iter.Key()
 
@@ -107,7 +107,7 @@ func (p *Pruner) Prune(root common.Hash) error {
 			}
 			count += 1
 			if count%1000 == 0 && time.Since(logged) > 8*time.Second {
-				log.Info("Pruning state data", "count", count, "size", size, "elapsed", common.PrettyDuration(time.Since(start)))
+				log.Info("Pruning state data", "count", count, "size", size, "elapsed", common.PrettyDuration(time.Since(pstart)))
 				logged = time.Now()
 			}
 		}
@@ -116,13 +116,13 @@ func (p *Pruner) Prune(root common.Hash) error {
 		batch.Write()
 		batch.Reset()
 	}
-	log.Info("Pruned state data", "count", count, "size", size, "elapsed", common.PrettyDuration(time.Since(start)))
+	iter.Release() // Please release the iterator here, otherwise will block the compactor
+	log.Info("Pruned state data", "count", count, "size", size, "elapsed", common.PrettyDuration(time.Since(pstart)))
 
 	// Migrate the state from the temporary db to main one.
-	committed, err := migrateState(p.db, p.tmpdb, p.homedir)
-	if err != nil {
-		return err
-	}
+	committed := migrateState(p.db, p.tmpdb, p.homedir)
+	wipeTemporaryDatabase(p.homedir, p.tmpdb)
+
 	// Start compactions, will remove the deleted data from the disk immediately.
 	cstart := time.Now()
 	log.Info("Start compacting the database")
@@ -130,6 +130,7 @@ func (p *Pruner) Prune(root common.Hash) error {
 		log.Error("Failed to compact the whole database", "error", err)
 	}
 	log.Info("Compacted the whole database", "elapsed", common.PrettyDuration(time.Since(cstart)))
+
 	log.Info("Successfully prune the state", "committed", committed, "pruned", size, "released", size-committed, "elasped", common.PrettyDuration(time.Since(start)))
 	return nil
 }
@@ -139,7 +140,22 @@ func (p *Pruner) Prune(root common.Hash) error {
 func openTemporaryDatabase(homedir string) (ethdb.Database, error) {
 	dir := filepath.Join(homedir, temporaryStateDatabase)
 	if _, err := os.Stat(dir); !os.IsNotExist(err) {
-		return nil, fmt.Errorf("temporary state database is occupied: %v", err)
+		db, err := rawdb.NewLevelDBDatabase(dir, 256, 256, "pruning/tmp")
+		if err != nil {
+			return nil, err
+		}
+		// If there is already one complete backup database, abort. Since
+		// in the main db the state may be removed already.
+		if isComplete(db) {
+			db.Close()
+			return nil, fmt.Errorf("backup state database<%s> is existed: %v", dir, err)
+		}
+		// Wipe the incomplete state backup database, it's useless anyway
+		db.Close()
+		err = os.RemoveAll(dir)
+		if err != nil {
+			return nil, err
+		}
 	}
 	return rawdb.NewLevelDBDatabase(dir, 256, 256, "pruning/tmp")
 }
@@ -152,7 +168,7 @@ func wipeTemporaryDatabase(homedir string, db ethdb.Database) {
 
 // migrateState moves all states in temporary database to main db.
 // Wipe the whole temporary db if success.
-func migrateState(db, tmpdb ethdb.Database, homedir string) (common.StorageSize, error) {
+func migrateState(db, tmpdb ethdb.Database, homedir string) common.StorageSize {
 	var (
 		count  int
 		size   common.StorageSize
@@ -163,9 +179,6 @@ func migrateState(db, tmpdb ethdb.Database, homedir string) (common.StorageSize,
 	)
 	defer iter.Release()
 
-	if !isComplete(tmpdb) {
-		return size, errors.New("incomplete state")
-	}
 	for iter.Next() {
 		key := iter.Key()
 		if bytes.Equal(key, stateMarker) {
@@ -194,8 +207,7 @@ func migrateState(db, tmpdb ethdb.Database, homedir string) (common.StorageSize,
 		batch.Reset()
 	}
 	log.Info("Migrated state data", "count", count, "size", size, "elapsed", common.PrettyDuration(time.Since(start)))
-	wipeTemporaryDatabase(homedir, tmpdb)
-	return size, nil
+	return size
 }
 
 // RecoverTemporaryDatabase migrates all state data from temporary database to
@@ -213,9 +225,13 @@ func RecoverTemporaryDatabase(homedir string, db ethdb.Database) error {
 	if err != nil {
 		return err
 	}
-	if _, err := migrateState(db, recoverdb, homedir); err != nil {
-		return err
+	// If it's a incomplete database, wipe it and return.
+	if !isComplete(recoverdb) {
+		wipeTemporaryDatabase(homedir, recoverdb)
+		return nil
 	}
+	migrateState(db, recoverdb, homedir)
+	wipeTemporaryDatabase(homedir, recoverdb)
 	return nil
 }
 

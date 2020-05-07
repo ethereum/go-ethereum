@@ -17,8 +17,6 @@
 package main
 
 import (
-	"fmt"
-
 	"github.com/ethereum/go-ethereum/cmd/utils"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/state/pruner"
@@ -26,16 +24,16 @@ import (
 )
 
 var (
-	pruningCommand = cli.Command{
-		Name:        "prune",
-		Usage:       "Prune ethereum historical or stale data",
+	snapshotCommand = cli.Command{
+		Name:        "snapshot",
+		Usage:       "A command collection which based on the snapshot",
 		ArgsUsage:   "",
 		Category:    "MISCELLANEOUS COMMANDS",
 		Description: "",
 		Subcommands: []cli.Command{
 			{
-				Name:      "state",
-				Usage:     "Prune stale ethereum state data",
+				Name:      "prune-state",
+				Usage:     "Prune stale ethereum state data based on snapshot",
 				ArgsUsage: "<root>",
 				Action:    utils.MigrateFlags(pruneState),
 				Category:  "MISCELLANEOUS COMMANDS",
@@ -47,22 +45,11 @@ var (
 					utils.LegacyTestnetFlag,
 				},
 				Description: `
-geth prune state <state-root>
+geth snapshot prune-state <state-root>
 will prune historical state data with the help of state snapshot.
 All trie nodes which not belong to the state snapshot will be delete
 from the database.
 `,
-			},
-			{
-				Name:      "chain",
-				Usage:     "Prune historical ethereum chain data",
-				ArgsUsage: "",
-				Action:    utils.MigrateFlags(pruneChain),
-				Category:  "MISCELLANEOUS COMMANDS",
-				Flags: []cli.Flag{
-					utils.DataDirFlag,
-				},
-				Description: ``,
 			},
 		},
 	}
@@ -76,7 +63,6 @@ func pruneState(ctx *cli.Context) error {
 	defer chaindb.Close()
 
 	pruner, err := pruner.NewPruner(chaindb, chain.CurrentBlock().Root(), stack.ResolvePath(""))
-	fmt.Println(stack.ResolvePath(""))
 	if err != nil {
 		utils.Fatalf("Failed to open snapshot tree %v", err)
 	}
@@ -91,9 +77,5 @@ func pruneState(ctx *cli.Context) error {
 	if err != nil {
 		utils.Fatalf("Failed to prune state", "error", err)
 	}
-	return nil
-}
-
-func pruneChain(ctx *cli.Context) error {
 	return nil
 }
