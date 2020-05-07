@@ -42,9 +42,9 @@ func (e *TotalVotingPowerExceededError) Error() string {
 }
 
 type InvalidStartEndBlockError struct {
-	Start         int64
-	End           int64
-	CurrentHeader int64
+	Start         uint64
+	End           uint64
+	CurrentHeader uint64
 }
 
 func (e *InvalidStartEndBlockError) Error() string {
@@ -56,8 +56,8 @@ func (e *InvalidStartEndBlockError) Error() string {
 }
 
 type MaxCheckpointLengthExceededError struct {
-	Start int64
-	End   int64
+	Start uint64
+	End   uint64
 }
 
 func (e *MaxCheckpointLengthExceededError) Error() string {

@@ -17,6 +17,7 @@
 package bor
 
 import (
+	"encoding/hex"
 	"math"
 	"math/big"
 	"strconv"
@@ -122,21 +123,21 @@ func (api *API) GetCurrentValidators() ([]*Validator, error) {
 }
 
 // GetRootHash returns the merkle root of the start to end block headers
-func (api *API) GetRootHash(start int64, end int64) ([]byte, error) {
+func (api *API) GetRootHash(start uint64, end uint64) (string, error) {
 	if err := api.initializeRootHashCache(); err != nil {
-		return nil, err
+		return "", err
 	}
 	key := getRootHashKey(start, end)
 	if root, known := api.rootHashCache.Get(key); known {
-		return root.([]byte), nil
+		return root.(string), nil
 	}
 	length := uint64(end - start + 1)
 	if length > MaxCheckpointLength {
-		return nil, &MaxCheckpointLengthExceededError{start, end}
+		return "", &MaxCheckpointLengthExceededError{start, end}
 	}
-	currentHeaderNumber := api.chain.CurrentHeader().Number.Int64()
+	currentHeaderNumber := api.chain.CurrentHeader().Number.Uint64()
 	if start > end || end > currentHeaderNumber {
-		return nil, &InvalidStartEndBlockError{start, end, currentHeaderNumber}
+		return "", &InvalidStartEndBlockError{start, end, currentHeaderNumber}
 	}
 	blockHeaders := make([]*types.Header, end-start+1)
 	wg := new(sync.WaitGroup)
@@ -144,7 +145,7 @@ func (api *API) GetRootHash(start int64, end int64) ([]byte, error) {
 	for i := start; i <= end; i++ {
 		wg.Add(1)
 		concurrent <- true
-		go func(number int64) {
+		go func(number uint64) {
 			blockHeaders[number-start] = api.chain.GetHeaderByNumber(uint64(number))
 			<-concurrent
 			wg.Done()
@@ -170,9 +171,9 @@ func (api *API) GetRootHash(start int64, end int64) ([]byte, error) {
 
 	tree := merkle.NewTreeWithOpts(merkle.TreeOptions{EnableHashSorting: false, DisableHashLeaves: true})
 	if err := tree.Generate(convert(headers), sha3.NewLegacyKeccak256()); err != nil {
-		return nil, err
+		return "", err
 	}
-	root := tree.Root().Hash
+	root := hex.EncodeToString(tree.Root().Hash)
 	api.rootHashCache.Add(key, root)
 	return root, nil
 }
@@ -185,6 +186,6 @@ func (api *API) initializeRootHashCache() error {
 	return err
 }
 
-func getRootHashKey(start int64, end int64) string {
-	return strconv.FormatInt(start, 10) + "-" + strconv.FormatInt(end, 10)
+func getRootHashKey(start uint64, end uint64) string {
+	return strconv.FormatUint(start, 10) + "-" + strconv.FormatUint(end, 10)
 }
