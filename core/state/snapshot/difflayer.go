@@ -523,7 +523,6 @@ func (dl *diffLayer) AccountList() []common.Hash {
 //
 // Note, the returned slice is not a copy, so do not modify it.
 func (dl *diffLayer) StorageList(accountHash common.Hash) ([]common.Hash, bool) {
-	// If an old list already exists, return it
 	dl.lock.RLock()
 	_, destructed := dl.destructSet[accountHash]
 	if _, ok := dl.storageData[accountHash]; !ok {
@@ -531,9 +530,10 @@ func (dl *diffLayer) StorageList(accountHash common.Hash) ([]common.Hash, bool) 
 		dl.lock.RUnlock()
 		return nil, destructed
 	}
+	// If an old list already exists, return it
 	if list, exist := dl.storageList[accountHash]; exist {
 		dl.lock.RUnlock()
-		return list, destructed // The list might be nil
+		return list, destructed // the cached list can't be nil
 	}
 	dl.lock.RUnlock()
 
