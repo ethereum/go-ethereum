@@ -338,10 +338,20 @@ func stdGenerate(db ethdb.Database, in chan trieKV, out chan common.Hash) {
 	for leaf := range in {
 		t.TryUpdate(leaf.key[:], leaf.value)
 	}
-	root := t.Hash()
-	if commit {
-		t.Commit(nil)
-		triedb.Commit(root, false, nil)
+	var (
+		err  error
+		root common.Hash
+	)
+	if !commit {
+		root = t.Hash()
+	} else {
+		root, err = t.Commit(nil)
+		if err != nil {
+			panic(err)
+		}
+		if err := triedb.Commit(root, false); err != nil {
+			panic(err)
+		}
 	}
 	out <- root
 }

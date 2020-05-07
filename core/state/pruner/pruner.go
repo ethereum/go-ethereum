@@ -91,6 +91,8 @@ func (p *Pruner) Prune(root common.Hash) error {
 		logged = time.Now()
 		batch  = p.db.NewBatch()
 		iter   = p.db.NewIterator(nil, nil)
+
+		rangestart, rangelimit []byte
 	)
 	for iter.Next() {
 		key := iter.Key()
@@ -110,6 +112,18 @@ func (p *Pruner) Prune(root common.Hash) error {
 				log.Info("Pruning state data", "count", count, "size", size, "elapsed", common.PrettyDuration(time.Since(pstart)))
 				logged = time.Now()
 			}
+			if rangestart == nil || bytes.Compare(rangestart, key) > 0 {
+				if rangestart == nil {
+					rangestart = make([]byte, common.HashLength)
+				}
+				copy(rangestart, key)
+			}
+			if rangelimit == nil || bytes.Compare(rangelimit, key) < 0 {
+				if rangelimit == nil {
+					rangelimit = make([]byte, common.HashLength)
+				}
+				copy(rangelimit, key)
+			}
 		}
 	}
 	if batch.ValueSize() > 0 {
@@ -126,7 +140,7 @@ func (p *Pruner) Prune(root common.Hash) error {
 	// Start compactions, will remove the deleted data from the disk immediately.
 	cstart := time.Now()
 	log.Info("Start compacting the database")
-	if err := p.db.Compact(nil, nil); err != nil {
+	if err := p.db.Compact(rangestart, rangelimit); err != nil {
 		log.Error("Failed to compact the whole database", "error", err)
 	}
 	log.Info("Compacted the whole database", "elapsed", common.PrettyDuration(time.Since(cstart)))
