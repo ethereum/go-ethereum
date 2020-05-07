@@ -59,6 +59,10 @@ func (argument *Argument) UnmarshalJSON(data []byte) error {
 	return nil
 }
 
+func (argument *Argument) set(dst interface{}, src interface{}) {
+
+}
+
 // NonIndexed returns the arguments with indexed arguments filtered out
 func (arguments Arguments) NonIndexed() Arguments {
 	var ret []Argument
@@ -97,6 +101,14 @@ func (arguments Arguments) Unpack(v interface{}, data []byte) error {
 	if arguments.isTuple() {
 		return arguments.unpackTuple(v, marshalledValues)
 	}
+	/*
+		var result interface{}
+		fmt.Println(marshalledValues...)
+		for i, args := range arguments.NonIndexed() {
+			args.set(result, marshalledValues[i])
+		}
+		v = result
+		return nil*/
 	return arguments.unpackAtomic(v, marshalledValues[0])
 }
 
@@ -193,25 +205,13 @@ func unpack(t *Type, dst interface{}, src interface{}) error {
 
 // unpackAtomic unpacks ( hexdata -> go ) a single value
 func (arguments Arguments) unpackAtomic(v interface{}, marshalledValues interface{}) error {
-	nonIndexedArgs := arguments.NonIndexed()
-	if len(nonIndexedArgs) == 0 {
-		return nil
-	}
-	argument := nonIndexedArgs[0]
 	elem := reflect.ValueOf(v).Elem()
 
-	if elem.Kind() == reflect.Struct && argument.Type.T != TupleTy {
-		fieldmap, err := mapArgNamesToStructFields([]string{argument.Name}, elem)
-		if err != nil {
-			return err
-		}
-		field := elem.FieldByName(fieldmap[argument.Name])
-		if !field.IsValid() {
-			return fmt.Errorf("abi: field %s can't be found in the given value", argument.Name)
-		}
-		return unpack(&argument.Type, field.Addr().Interface(), marshalledValues)
+	if elem.Kind() == reflect.Struct && reflect.ValueOf(marshalledValues).Kind() != reflect.Struct {
+		return set(elem.Field(0), reflect.ValueOf(marshalledValues))
 	}
-	return unpack(&argument.Type, elem.Addr().Interface(), marshalledValues)
+
+	return set(elem, reflect.ValueOf(marshalledValues))
 }
 
 // unpackTuple unpacks ( hexdata -> go ) a batch of values.

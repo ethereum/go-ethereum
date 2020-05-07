@@ -90,7 +90,11 @@ func set(dst, src reflect.Value) error {
 	case srcType.AssignableTo(dstType) && dst.CanSet():
 		dst.Set(src)
 	case dstType.Kind() == reflect.Slice && srcType.Kind() == reflect.Slice && dst.CanSet():
-		setSlice(dst, src)
+		return setSlice(dst, src)
+	case dstType.Kind() == reflect.Array:
+		return setArray(dst, src)
+	case dstType.Kind() == reflect.Struct:
+		return setStruct(dst, src)
 	default:
 		return fmt.Errorf("abi: cannot unmarshal %v in to %v", src.Type(), dst.Type())
 	}
@@ -100,12 +104,56 @@ func set(dst, src reflect.Value) error {
 // setSlice attempts to assign src to dst when slices are not assignable by default
 // e.g. src: [][]byte -> dst: [][15]byte
 // setSlice ignores if we cannot copy all of src' elements.
-func setSlice(dst, src reflect.Value) {
+func setSlice(dst, src reflect.Value) error {
 	slice := reflect.MakeSlice(dst.Type(), src.Len(), src.Len())
-	for i := 0; i < src.Len(); i++ {
-		reflect.Copy(slice.Index(i), src.Index(i))
+	if src.Type() != dst.Type() {
+		fmt.Printf(" %v %v ", src.Type(), dst.Type())
+		for i := 0; i < src.Len(); i++ {
+			if src.Index(i).Kind() == reflect.Struct {
+				if err := set(slice.Index(i), src.Index(i)); err != nil {
+					return err
+				}
+			} else {
+				// e.g. [][32]uint8 to []common.Hash
+				//reflect.Copy(slice.Index(i), src.Index(i).Convert(slice.Index(i).Type()))
+				if err := set(slice.Index(i), src.Index(i)); err != nil {
+					return err
+				}
+			}
+		}
+	} else {
+		for i := 0; i < src.Len(); i++ {
+			reflect.Copy(slice.Index(i), src.Index(i))
+		}
 	}
 	dst.Set(slice)
+	return nil
+}
+
+func setArray(dst, src reflect.Value) error {
+	array := reflect.New(dst.Type()).Elem()
+	for i := 0; i < min(src.Len(), dst.Len()); i++ {
+		if err := set(array.Index(i), src.Index(i)); err != nil {
+			return err
+		}
+	}
+	dst.Set(array)
+	return nil
+}
+
+func setStruct(dst, src reflect.Value) error {
+	for i := 0; i < src.NumField(); i++ {
+		fmt.Printf(" %v %v ", src, dst)
+		srcField := src.Field(i)
+		dstField := dst.Field(i)
+		if !dstField.IsValid() || !srcField.IsValid() {
+			return fmt.Errorf("Could not find src field: %v value: %v in destination", srcField.Type().Name(), srcField)
+		}
+		if err := set(dstField, srcField); err != nil {
+			return err
+		}
+	}
+	return nil
 }
 
 // requireAssignable assures that `dest` is a pointer and it's not an interface.
@@ -219,4 +267,11 @@ func mapArgNamesToStructFields(argNames []string, value reflect.Value) (map[stri
 		}
 	}
 	return abi2struct, nil
+}
+
+func min(a, b int) int {
+	if a < b {
+		return a
+	}
+	return b
 }
