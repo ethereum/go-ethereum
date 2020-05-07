@@ -62,7 +62,7 @@ type Backend interface {
 	SubscribeStateEvent(ch chan<- core.NewStateChangeEvent) event.Subscription
 	SubscribeChainHeadEvent(ch chan<- core.ChainHeadEvent) event.Subscription
 	SubscribeChainSideEvent(ch chan<- core.ChainSideEvent) event.Subscription
-	GetRootHash(ctx context.Context, starBlockNr rpc.BlockNumber, endBlockNr rpc.BlockNumber) ([]byte, error)
+	GetRootHash(ctx context.Context, starBlockNr uint64, endBlockNr uint64) (string, error)
 
 	// Transaction pool API
 	SendTx(ctx context.Context, signedTx *types.Transaction) error
