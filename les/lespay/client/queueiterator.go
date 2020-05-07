@@ -31,7 +31,6 @@ type QueueIterator struct {
 
 	ns           *nodestate.NodeStateMachine
 	queue        []*enode.Node
-	selected     nodestate.Flags
 	nextNode     *enode.Node
 	fifo, closed bool
 }

@@ -49,7 +49,6 @@ const (
 type serverPool struct {
 	clock mclock.Clock
 	db    ethdb.KeyValueStore
-	quit  chan struct{}
 
 	ns           *nodestate.NodeStateMachine
 	vt           *lpc.ValueTracker
@@ -78,19 +77,15 @@ type nodeHistoryEnc struct {
 }
 
 var (
-	serverPoolSetup = &nodestate.Setup{}
-
-	sfHasValue      = serverPoolSetup.NewPersistentFlag("hasValue")
-	sfQueried       = serverPoolSetup.NewFlag("queried")
-	sfCanDial       = serverPoolSetup.NewFlag("canDial")
-	sfDialed        = serverPoolSetup.NewFlag("dialed")
-	sfConnected     = serverPoolSetup.NewFlag("connected")
-	sfRedialWait    = serverPoolSetup.NewFlag("redialWait")
-	sfAlwaysConnect = serverPoolSetup.NewFlag("alwaysConnect")
-
+	serverPoolSetup    = &nodestate.Setup{}
+	sfHasValue         = serverPoolSetup.NewPersistentFlag("hasValue")
+	sfQueried          = serverPoolSetup.NewFlag("queried")
+	sfCanDial          = serverPoolSetup.NewFlag("canDial")
+	sfDialed           = serverPoolSetup.NewFlag("dialed")
+	sfConnected        = serverPoolSetup.NewFlag("connected")
+	sfRedialWait       = serverPoolSetup.NewFlag("redialWait")
+	sfAlwaysConnect    = serverPoolSetup.NewFlag("alwaysConnect")
 	sfDisableSelection = nodestate.MergeFlags(sfQueried, sfCanDial, sfDialed, sfConnected, sfRedialWait)
-
-	errInvalidField = errors.New("invalid field type")
 
 	sfiNodeWeight  = serverPoolSetup.NewField("nodeWeight", reflect.TypeOf(uint64(0)))
 	sfiNodeHistory = serverPoolSetup.NewPersistentField("nodeHistory", reflect.TypeOf(nodeHistory{}),
@@ -104,7 +99,7 @@ var (
 				enc, err := rlp.EncodeToBytes(&ne)
 				return enc, err
 			} else {
-				return nil, errInvalidField
+				return nil, errors.New("invalid field type")
 			}
 		},
 		func(enc []byte) (interface{}, error) {
@@ -126,11 +121,10 @@ func newServerPool(db ethdb.KeyValueStore, dbKey []byte, vt *lpc.ValueTracker, d
 	s := &serverPool{
 		db:    db,
 		clock: clock,
-		ns:    nodestate.NewNodeStateMachine(db, []byte(string(dbKey)+"ns:"), clock, serverPoolSetup),
 		vt:    vt,
-		quit:  make(chan struct{}),
+		ns:    nodestate.NewNodeStateMachine(db, []byte(string(dbKey)+"ns:"), clock, serverPoolSetup),
 	}
-	s.getTimeout()
+	s.recalTimeout()
 	var (
 		validSchemes enr.IdentityScheme
 		mixerTimeout time.Duration
@@ -211,20 +205,6 @@ func (s *serverPool) start() {
 			s.ns.SetState(node, sfRedialWait, nodestate.Flags{}, time.Duration(n.waitUntil-s.clock.Now()))
 		}
 	})
-	go func() {
-		for {
-			select {
-			case <-time.After(time.Minute * 5):
-				suggestedTimeoutGauge.Update(int64(s.getTimeout() / time.Millisecond))
-				s.timeoutLock.RLock()
-				timeWeights := s.timeWeights
-				s.timeoutLock.RUnlock()
-				totalValueGauge.Update(int64(s.vt.RtStats().Value(timeWeights, s.vt.StatsExpFactor())))
-			case <-s.quit:
-				return
-			}
-		}
-	}()
 }
 
 // stop stops the server pool
@@ -233,7 +213,6 @@ func (s *serverPool) stop() {
 	s.ns.ForEach(sfConnected, nodestate.Flags{}, func(n *enode.Node, state nodestate.Flags) {
 		s.updateNode(n, true, false, 0)
 	})
-	close(s.quit)
 	s.ns.Stop()
 }
 
@@ -255,21 +234,29 @@ func (s *serverPool) unregisterPeer(p *serverPeer) {
 	p.setValueTracker(nil, nil)
 }
 
-// getTimeout calculates the current recommended timeout. This value is used by
+// recalTimeout calculates the current recommended timeout. This value is used by
 // the client as a "soft timeout" value. It also affects the service value calculation
 // of individual nodes.
-func (s *serverPool) getTimeout() time.Duration {
-	now := s.clock.Now()
+func (s *serverPool) recalTimeout() {
+	// Use cached result if possible, avoid recalculating too frequently.
 	s.timeoutLock.RLock()
-	timeout := s.timeout
 	refreshed := s.timeoutRefreshed
 	s.timeoutLock.RUnlock()
+	now := s.clock.Now()
 	if refreshed != 0 && time.Duration(now-refreshed) < timeoutRefresh {
-		return timeout
+		return
 	}
+	// Cached result is stale, recalculate a new one.
 	rts := s.vt.RtStats()
+
+	// Add a fake statistic here. It is an easy way to initialize with some
+	// conservative values when the database is new. As soon as we have a
+	// considerable amount of real stats this small value won't matter.
 	rts.Add(time.Second*2, 10, s.vt.StatsExpFactor())
-	timeout = minTimeout
+
+	// Use either 10% failure rate timeout or twice the median response time
+	// as the recommended timeout.
+	timeout := minTimeout
 	if t := rts.Timeout(0.1); t > timeout {
 		timeout = t
 	}
@@ -279,11 +266,30 @@ func (s *serverPool) getTimeout() time.Duration {
 	s.timeoutLock.Lock()
 	if s.timeout != timeout {
 		s.timeout = timeout
-		s.timeWeights = lpc.TimeoutWeights(timeout)
+		s.timeWeights = lpc.TimeoutWeights(s.timeout)
+
+		suggestedTimeoutGauge.Update(int64(s.timeout / time.Millisecond))
+		totalValueGauge.Update(int64(rts.Value(s.timeWeights, s.vt.StatsExpFactor())))
 	}
 	s.timeoutRefreshed = now
 	s.timeoutLock.Unlock()
-	return timeout
+}
+
+// getTimeout returns the recommended request timeout.
+func (s *serverPool) getTimeout() time.Duration {
+	s.recalTimeout()
+	s.timeoutLock.RLock()
+	defer s.timeoutLock.RUnlock()
+	return s.timeout
+}
+
+// getTimeoutAndWeight returns the recommended request timeout as well as the
+// response time weight which is necessary to calculate service value.
+func (s *serverPool) getTimeoutAndWeight() (time.Duration, lpc.ResponseTimeWeights) {
+	s.recalTimeout()
+	s.timeoutLock.RLock()
+	defer s.timeoutLock.RUnlock()
+	return s.timeout, s.timeWeights
 }
 
 // updateNode calculates the selection weight and the proposed redial wait time of the given node
@@ -294,10 +300,7 @@ func (s *serverPool) updateNode(node *enode.Node, calculateSessionValue, redialW
 		return
 	}
 	currentStats := nvt.RtStats()
-	s.getTimeout() // updates s.timeWeights
-	s.timeoutLock.RLock()
-	timeWeights := s.timeWeights
-	s.timeoutLock.RUnlock()
+	_, timeWeights := s.getTimeoutAndWeight()
 	expFactor := s.vt.StatsExpFactor()
 
 	var sessionValue float64
