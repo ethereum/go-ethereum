@@ -101,14 +101,7 @@ func (arguments Arguments) Unpack(v interface{}, data []byte) error {
 	if arguments.isTuple() {
 		return arguments.unpackTuple(v, marshalledValues)
 	}
-	/*
-		var result interface{}
-		fmt.Println(marshalledValues...)
-		for i, args := range arguments.NonIndexed() {
-			args.set(result, marshalledValues[i])
-		}
-		v = result
-		return nil*/
+
 	return arguments.unpackAtomic(v, marshalledValues[0])
 }
 
@@ -147,22 +140,18 @@ func (arguments Arguments) unpackAtomic(v interface{}, marshalledValues interfac
 
 // unpackTuple unpacks ( hexdata -> go ) a batch of values.
 func (arguments Arguments) unpackTuple(v interface{}, marshalledValues []interface{}) error {
-	var (
-		value          = reflect.ValueOf(v).Elem()
-		typ            = value.Type()
-		kind           = value.Kind()
-		nonIndexedArgs = arguments.NonIndexed()
-	)
+	value := reflect.ValueOf(v).Elem()
 
-	switch kind {
+	switch value.Kind() {
 	case reflect.Struct:
-		var abi2struct map[string]string
+		nonIndexedArgs := arguments.NonIndexed()
 		argNames := make([]string, len(nonIndexedArgs))
 		for i, arg := range nonIndexedArgs {
 			argNames[i] = arg.Name
 		}
 		var err error
-		if abi2struct, err = mapArgNamesToStructFields(argNames, value); err != nil {
+		abi2struct, err := mapArgNamesToStructFields(argNames, value)
+		if err != nil {
 			return err
 		}
 		for i, arg := range nonIndexedArgs {
@@ -185,7 +174,7 @@ func (arguments Arguments) unpackTuple(v interface{}, marshalledValues []interfa
 			}
 		}
 	default:
-		return fmt.Errorf("abi:[2] cannot unmarshal tuple in to %v", typ)
+		return fmt.Errorf("abi:[2] cannot unmarshal tuple in to %v", value.Type())
 	}
 	return nil
 }
