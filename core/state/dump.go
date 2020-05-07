@@ -126,7 +126,7 @@ func (s *StateDB) dump(c collector, excludeCode, excludeStorage, excludeMissingP
 			if excludeMissingPreimages {
 				continue
 			}
-			account.SecureKey = it.Key			
+			account.SecureKey = it.Key
 		}
 		addr := common.BytesToAddress(addrBytes)
 		obj := newObject(nil, addr, data)
