@@ -804,6 +804,9 @@ func (s *StateDB) clearJournalAndRefund() {
 
 // Commit writes the state to the underlying in-memory trie database.
 func (s *StateDB) Commit(deleteEmptyObjects bool) (common.Hash, error) {
+	if s.dbErr != nil {
+		return common.Hash{}, fmt.Errorf("commit aborted due to earlier error: %v", s.dbErr)
+	}
 	// Finalize any pending changes and merge everything into the tries
 	s.IntermediateRoot(deleteEmptyObjects)
 
