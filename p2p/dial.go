@@ -78,7 +78,7 @@ var (
 	errAlreadyConnected = errors.New("already connected")
 	errRecentlyDialed   = errors.New("recently dialed")
 	errNotWhitelisted   = errors.New("not contained in netrestrict whitelist")
-	errLowPort          = errors.New("TCP port too low")
+	errNoPort           = errors.New("node does not provide TCP port")
 )
 
 // dialer creates outbound connections and submits them into Server.
@@ -389,8 +389,8 @@ func (d *dialScheduler) checkDial(n *enode.Node) error {
 	if n.ID() == d.self {
 		return errSelf
 	}
-	if n.IP() != nil && n.TCP() < 1024 {
-		return errLowPort
+	if n.IP() != nil && n.TCP() == 0 {
+		return errNoPort
 	}
 	if _, ok := d.dialing[n.ID()]; ok {
 		return errAlreadyDialing
