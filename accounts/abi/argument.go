@@ -217,54 +217,41 @@ func (arguments Arguments) unpackAtomic(v interface{}, marshalledValues interfac
 // unpackTuple unpacks ( hexdata -> go ) a batch of values.
 func (arguments Arguments) unpackTuple(v interface{}, marshalledValues []interface{}) error {
 	var (
-		value          = reflect.ValueOf(v).Elem()
-		typ            = value.Type()
-		kind           = value.Kind()
-		nonIndexedArgs = arguments.NonIndexed()
+		value = reflect.ValueOf(v).Elem()
+		typ   = value.Type()
+		kind  = value.Kind()
 	)
-	if err := requireUnpackKind(value, len(nonIndexedArgs), arguments); err != nil {
-		return err
-	}
 
-	// If the interface is a struct, get of abi->struct_field mapping
-	var abi2struct map[string]string
-	if kind == reflect.Struct {
-		argNames := make([]string, len(nonIndexedArgs))
-		for i, arg := range nonIndexedArgs {
-			argNames[i] = arg.Name
-		}
-		var err error
-		if abi2struct, err = mapArgNamesToStructFields(argNames, value); err != nil {
-			return err
-		}
-	}
-	for i, arg := range nonIndexedArgs {
-		switch kind {
-		case reflect.Struct:
-			field := value.FieldByName(abi2struct[arg.Name])
-			if !field.IsValid() {
-				return fmt.Errorf("abi: field %s can't be found in the given value", arg.Name)
+	switch kind {
+	case reflect.Struct:
+		k := 0
+		for i := 0; i < len(arguments); i++ {
+			// Skip indexed fields
+			if arguments[i].Indexed {
+				continue
 			}
-			if err := unpack(&arg.Type, field.Addr().Interface(), marshalledValues[i]); err != nil {
+			if i >= value.NumField() {
+				return fmt.Errorf("Invalid field length while unpacking: %v", i)
+			}
+			if err := set(value.Field(i), reflect.ValueOf(marshalledValues[k])); err != nil {
 				return err
 			}
-		case reflect.Slice, reflect.Array:
-			if value.Len() < i {
-				return fmt.Errorf("abi: insufficient number of arguments for unpack, want %d, got %d", len(arguments), value.Len())
-			}
-			v := value.Index(i)
-			if err := requireAssignable(v, reflect.ValueOf(marshalledValues[i])); err != nil {
-				return err
-			}
-			if err := unpack(&arg.Type, v.Addr().Interface(), marshalledValues[i]); err != nil {
-				return err
-			}
-		default:
-			return fmt.Errorf("abi:[2] cannot unmarshal tuple in to %v", typ)
+			k++
 		}
+	case reflect.Slice, reflect.Array:
+		for i := 0; i < value.Len(); i++ {
+			// Skip indexed fields
+			if arguments[i].Indexed {
+				continue
+			}
+			if err := set(value.Index(i), reflect.ValueOf(marshalledValues[i])); err != nil {
+				return err
+			}
+		}
+	default:
+		return fmt.Errorf("abi:[2] cannot unmarshal tuple in to %v", typ)
 	}
 	return nil
-
 }
 
 // UnpackValues can be used to unpack ABI-encoded hexdata according to the ABI-specification,
