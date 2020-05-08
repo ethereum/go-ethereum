@@ -921,7 +921,7 @@ func DoEstimateGas(ctx context.Context, b Backend, args CallArgs, blockNrOrHash 
 		}
 		hi = block.GasLimit()
 	}
-	// Recap the highest gas limit with account's avaliable balance.
+	// Recap the highest gas limit with account's available balance.
 	if args.GasPrice != nil && args.GasPrice.ToInt().Uint64() != 0 {
 		state, _, err := b.StateAndHeaderByNumberOrHash(ctx, blockNrOrHash)
 		if err != nil {
@@ -938,6 +938,7 @@ func DoEstimateGas(ctx context.Context, b Backend, args CallArgs, blockNrOrHash 
 		allowance := new(big.Int).Div(balance, args.GasPrice.ToInt())
 		if hi > allowance.Uint64() {
 			hi = allowance.Uint64()
+			log.Warn("Gas estimation capped by limited funds", "original", hi, "fundable", allowance)
 		}
 	}
 	// Recap the highest gas allowance with specified gascap.

@@ -39,6 +39,7 @@ import (
 	"github.com/ethereum/go-ethereum/eth/filters"
 	"github.com/ethereum/go-ethereum/ethdb"
 	"github.com/ethereum/go-ethereum/event"
+	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/params"
 	"github.com/ethereum/go-ethereum/rpc"
 )
@@ -414,6 +415,7 @@ func (b *SimulatedBackend) EstimateGas(ctx context.Context, call ethereum.CallMs
 		allowance := new(big.Int).Div(balance, call.GasPrice)
 		if hi > allowance.Uint64() {
 			hi = allowance.Uint64()
+			log.Warn("Gas estimation capped by limited funds", "original", hi, "fundable", allowance)
 		}
 	}
 	cap = hi
