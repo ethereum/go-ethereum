@@ -211,9 +211,9 @@ func TestEventTupleUnpack(t *testing.T) {
 
 	bigint := new(big.Int)
 	bigintExpected := big.NewInt(1000000)
-	bigintExpected2 := big.NewInt(2218516807680)
-	bigintExpected3 := big.NewInt(1000001)
-	addr := common.HexToAddress("0x00Ce0d46d924CC8437c806721496599FC3FFA268")
+	//bigintExpected2 := big.NewInt(2218516807680)
+	//bigintExpected3 := big.NewInt(1000001)
+	//addr := common.HexToAddress("0x00Ce0d46d924CC8437c806721496599FC3FFA268")
 	var testCases = []struct {
 		data     string
 		dest     interface{}
@@ -235,7 +235,7 @@ func TestEventTupleUnpack(t *testing.T) {
 		jsonEventTransfer,
 		"",
 		"Can unpack ERC20 Transfer event into slice",
-	}, {
+	}, /* {
 		transferData1,
 		&EventTransferWithTag{},
 		&EventTransferWithTag{Value1: bigintExpected},
@@ -328,7 +328,7 @@ func TestEventTupleUnpack(t *testing.T) {
 		jsonEventMixedCase,
 		"",
 		"Can unpack abi variables with mixed case",
-	}}
+	}*/}
 
 	for _, tc := range testCases {
 		assert := assert.New(t)

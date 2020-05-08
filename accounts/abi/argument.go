@@ -136,10 +136,10 @@ func (arguments Arguments) unpackAtomic(v interface{}, marshalledValues interfac
 // unpackTuple unpacks ( hexdata -> go ) a batch of values.
 func (arguments Arguments) unpackTuple(v interface{}, marshalledValues []interface{}) error {
 	value := reflect.ValueOf(v).Elem()
+	nonIndexedArgs := arguments.NonIndexed()
 
 	switch value.Kind() {
 	case reflect.Struct:
-		nonIndexedArgs := arguments.NonIndexed()
 		argNames := make([]string, len(nonIndexedArgs))
 		for i, arg := range nonIndexedArgs {
 			argNames[i] = arg.Name
@@ -162,11 +162,7 @@ func (arguments Arguments) unpackTuple(v interface{}, marshalledValues []interfa
 		if value.Len() < len(marshalledValues) {
 			return fmt.Errorf("abi: insufficient number of arguments for unpack, want %d, got %d", len(arguments), value.Len())
 		}
-		for i := 0; i < value.Len(); i++ {
-			// Skip indexed fields
-			if arguments[i].Indexed {
-				continue
-			}
+		for i := range nonIndexedArgs {
 			if err := set(value.Index(i), reflect.ValueOf(marshalledValues[i])); err != nil {
 				return err
 			}
