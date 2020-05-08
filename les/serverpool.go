@@ -47,8 +47,8 @@ const (
 // serverPool provides a node iterator for dial candidates. The output is a mix of newly discovered
 // nodes, a weighted random selection of known (previously valuable) nodes and trusted/paid nodes.
 type serverPool struct {
-	clock mclock.Clock
-	db    ethdb.KeyValueStore
+	mono, rtc mclock.Clock
+	db        ethdb.KeyValueStore
 
 	ns           *nodestate.NodeStateMachine
 	vt           *lpc.ValueTracker
@@ -117,12 +117,13 @@ var (
 )
 
 // newServerPool creates a new server pool
-func newServerPool(db ethdb.KeyValueStore, dbKey []byte, vt *lpc.ValueTracker, discovery enode.Iterator, query lpc.PreNegQuery, clock mclock.Clock, trustedURLs []string, testing bool) *serverPool {
+func newServerPool(db ethdb.KeyValueStore, dbKey []byte, vt *lpc.ValueTracker, discovery enode.Iterator, query lpc.PreNegQuery, mono, rtc mclock.Clock, trustedURLs []string, testing bool) *serverPool {
 	s := &serverPool{
-		db:    db,
-		clock: clock,
-		vt:    vt,
-		ns:    nodestate.NewNodeStateMachine(db, []byte(string(dbKey)+"ns:"), clock, serverPoolSetup),
+		db:   db,
+		mono: mono,
+		rtc:  rtc,
+		vt:   vt,
+		ns:   nodestate.NewNodeStateMachine(db, []byte(string(dbKey)+"ns:"), mono, serverPoolSetup),
 	}
 	s.recalTimeout()
 	var (
@@ -157,7 +158,7 @@ func newServerPool(db ethdb.KeyValueStore, dbKey []byte, vt *lpc.ValueTracker, d
 	if query != nil {
 		var testClock *mclock.Simulated
 		if testing {
-			testClock = clock.(*mclock.Simulated)
+			testClock = mono.(*mclock.Simulated)
 		}
 		iter = lpc.NewPreNegFilter(s.ns, iter, query, sfQueried, sfCanDial, 5, time.Second*5, time.Second*10, testClock)
 	}
@@ -201,8 +202,8 @@ func (s *serverPool) start() {
 	}
 	s.ns.ForEach(sfHasValue, nodestate.Flags{}, func(node *enode.Node, state nodestate.Flags) {
 		s.updateNode(node, false, false, 0) // set weight flag
-		if n, ok := s.ns.GetField(node, sfiNodeHistory).(nodeHistory); ok && n.waitUntil > s.clock.Now() {
-			s.ns.SetState(node, sfRedialWait, nodestate.Flags{}, time.Duration(n.waitUntil-s.clock.Now()))
+		if n, ok := s.ns.GetField(node, sfiNodeHistory).(nodeHistory); ok && n.waitUntil > s.rtc.Now() {
+			s.ns.SetState(node, sfRedialWait, nodestate.Flags{}, time.Duration(n.waitUntil-s.rtc.Now()))
 		}
 	})
 }
@@ -242,7 +243,7 @@ func (s *serverPool) recalTimeout() {
 	s.timeoutLock.RLock()
 	refreshed := s.timeoutRefreshed
 	s.timeoutLock.RUnlock()
-	now := s.clock.Now()
+	now := s.mono.Now()
 	if refreshed != 0 && time.Duration(now-refreshed) < timeoutRefresh {
 		return
 	}
@@ -313,7 +314,7 @@ func (s *serverPool) updateNode(node *enode.Node, calculateSessionValue, redialW
 		}
 	}
 
-	logOffset := s.vt.StatsExpirer().LogOffset(s.clock.Now())
+	logOffset := s.vt.StatsExpirer().LogOffset(s.mono.Now())
 	if addDialCost > 0 {
 		n.dialCost.Add(addDialCost, logOffset)
 	}
@@ -337,7 +338,7 @@ func (s *serverPool) updateNode(node *enode.Node, calculateSessionValue, redialW
 			n.waitFactor = 1
 		}
 		wait := time.Duration(float64(minRedialWait) * n.waitFactor)
-		n.waitUntil = s.clock.Now() + mclock.AbsTime(wait)
+		n.waitUntil = s.rtc.Now() + mclock.AbsTime(wait)
 		s.ns.SetField(node, sfiNodeHistory, n)
 		s.ns.SetState(node, sfRedialWait, nodestate.Flags{}, wait)
 	}

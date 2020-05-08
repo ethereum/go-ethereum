@@ -158,7 +158,7 @@ func New(ctx *node.ServiceContext, config *eth.Config) (*LightEthereum, error) {
 	if err != nil {
 		return nil, err
 	}
-	leth.serverPool = newServerPool(lespayDb, []byte("serverpool:"), leth.valueTracker, dnsdisc, nil, &mclock.System{}, config.UltraLightServers, false)
+	leth.serverPool = newServerPool(lespayDb, []byte("serverpool:"), leth.valueTracker, dnsdisc, nil, &mclock.System{}, &mclock.System{RTC: true}, config.UltraLightServers, false)
 	peers.subscribe(leth.serverPool)
 	leth.dialCandidates = leth.serverPool.dialIterator
 	leth.retriever.setTimeoutCallback(leth.serverPool.getTimeout)
