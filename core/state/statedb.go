@@ -548,7 +548,7 @@ func (s *StateDB) getDeletedStateObject(addr common.Address) *stateObject {
 			s.setError(fmt.Errorf("getDeleteStateObject (%x) error: %v", addr[:], err))
 			return nil
 		}
-		if len(enc) == 0{
+		if len(enc) == 0 {
 			return nil
 		}
 		if err := rlp.DecodeBytes(enc, &data); err != nil {
