@@ -105,7 +105,6 @@ func setSlice(dst, src reflect.Value) error {
 			}
 		} else {
 			// e.g. [][32]uint8 to []common.Hash
-			//reflect.Copy(slice.Index(i), src.Index(i).Convert(slice.Index(i).Type()))
 			if err := set(slice.Index(i), src.Index(i)); err != nil {
 				return err
 			}
@@ -128,7 +127,6 @@ func setArray(dst, src reflect.Value) error {
 
 func setStruct(dst, src reflect.Value) error {
 	for i := 0; i < src.NumField(); i++ {
-		fmt.Printf(" %v %v ", src, dst)
 		srcField := src.Field(i)
 		dstField := dst.Field(i)
 		if !dstField.IsValid() || !srcField.IsValid() {
