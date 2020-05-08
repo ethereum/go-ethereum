@@ -183,7 +183,7 @@ func (s *Setup) NewFlag(name string) Flags {
 	if s.flags == nil {
 		s.flags = []flagDefinition{{name: "offline"}}
 	}
-	f := Flags{mask: bitMask(1) << len(s.flags), setup: s}
+	f := Flags{mask: bitMask(1) << uint(len(s.flags)), setup: s}
 	s.flags = append(s.flags, flagDefinition{name: name})
 	return f
 }
@@ -193,7 +193,7 @@ func (s *Setup) NewPersistentFlag(name string) Flags {
 	if s.flags == nil {
 		s.flags = []flagDefinition{{name: "offline"}}
 	}
-	f := Flags{mask: bitMask(1) << len(s.flags), setup: s}
+	f := Flags{mask: bitMask(1) << uint(len(s.flags)), setup: s}
 	s.flags = append(s.flags, flagDefinition{name: name, persistent: true})
 	return f
 }
@@ -299,7 +299,7 @@ func (f Flags) String() string {
 	s := "["
 	comma := false
 	for index, flag := range f.setup.flags {
-		if f.mask&(bitMask(1)<<index) != 0 {
+		if f.mask&(bitMask(1)<<uint(index)) != 0 {
 			if comma {
 				s = s + ", "
 			}
@@ -338,7 +338,7 @@ func NewNodeStateMachine(db ethdb.KeyValueStore, dbKey []byte, clock mclock.Cloc
 		}
 		ns.stateNameMap[flag.name] = index
 		if flag.persistent {
-			ns.saveFlags |= bitMask(1) << index
+			ns.saveFlags |= bitMask(1) << uint(index)
 		}
 	}
 	for index, field := range setup.fields {
@@ -567,9 +567,9 @@ func (ns *NodeStateMachine) decodeNode(id enode.ID, data []byte) {
 	} else {
 		// convert bit mapping from saved scheme to current one
 		for i, name := range encMapping.States {
-			if (enc.State & (bitMask(1) << i)) != 0 {
+			if (enc.State & (bitMask(1) << uint(i))) != 0 {
 				if index, ok := ns.stateNameMap[name]; ok {
-					state |= bitMask(1) << index
+					state |= bitMask(1) << uint(index)
 				} else {
 					log.Error("Unknown state flag", "name", name)
 					return
