@@ -37,10 +37,11 @@ const (
 	minTimeout          = time.Millisecond * 500 // minimum request timeout suggested by the server pool
 	timeoutRefresh      = time.Second * 5        // recalculate timeout if older than this
 	dialCost            = 10000                  // cost of a TCP dial (used for known node selection weight calculation)
+	dialWaitStep        = 1.5                    // exponential multiplier of redial wait time when no value was provided by the server
 	queryCost           = 500                    // cost of a UDP pre-negotiation query
+	queryWaitStep       = 1.02                   // exponential multiplier of redial wait time when no value was provided by the server
 	nodeWeightMul       = 1000000                // multiplier constant for node weight calculation
 	nodeWeightThreshold = 100                    // minimum weight for keeping a node in the the known (valuable) set
-	redialWaitStep      = 2                      // exponential multiplier of redial wait time when no value was provided by the server
 	minRedialWait       = time.Second * 10       // minimum redial wait time
 )
 
@@ -170,7 +171,7 @@ func newServerPool(db ethdb.KeyValueStore, dbKey []byte, vt *lpc.ValueTracker, d
 	s.ns.SubscribeState(nodestate.MergeFlags(sfDialed, sfConnected), func(n *enode.Node, oldState, newState nodestate.Flags) {
 		if oldState.Equals(sfDialed) && newState.IsEmpty() {
 			// dial timeout, no connection
-			s.updateNode(n, false, true, dialCost)
+			s.setRedialWait(n, dialCost, dialWaitStep)
 		}
 	})
 
@@ -178,7 +179,7 @@ func newServerPool(db ethdb.KeyValueStore, dbKey []byte, vt *lpc.ValueTracker, d
 		s.ns.SubscribeState(nodestate.MergeFlags(sfQueried, sfCanDial), func(n *enode.Node, oldState, newState nodestate.Flags) {
 			if oldState.Equals(sfQueried) && newState.IsEmpty() {
 				// query timeout, no connection
-				s.updateNode(n, false, true, queryCost)
+				s.setRedialWait(n, queryCost, queryWaitStep)
 			}
 		})
 	}
@@ -200,10 +201,18 @@ func (s *serverPool) start() {
 	for _, node := range s.trusted {
 		s.ns.SetState(node, sfAlwaysConnect, nodestate.Flags{}, 0)
 	}
+	now := s.rtc.Now()
 	s.ns.ForEach(sfHasValue, nodestate.Flags{}, func(node *enode.Node, state nodestate.Flags) {
-		s.updateNode(node, false, false, 0) // set weight flag
-		if n, ok := s.ns.GetField(node, sfiNodeHistory).(nodeHistory); ok && n.waitUntil > s.rtc.Now() {
-			s.ns.SetState(node, sfRedialWait, nodestate.Flags{}, time.Duration(n.waitUntil-s.rtc.Now()))
+		s.calculateWeight(node)
+		if n, ok := s.ns.GetField(node, sfiNodeHistory).(nodeHistory); ok && n.waitUntil > now {
+			wait := time.Duration(n.waitUntil - now)
+			maxWait := n.redialWait()
+			if wait > maxWait {
+				// if the time until expiration is larger than the last suggested
+				// waiting time then the system clock was probably adjusted
+				wait = maxWait
+			}
+			s.ns.SetState(node, sfRedialWait, nodestate.Flags{}, wait)
 		}
 	})
 }
@@ -212,7 +221,8 @@ func (s *serverPool) start() {
 func (s *serverPool) stop() {
 	s.dialIterator.Close()
 	s.ns.ForEach(sfConnected, nodestate.Flags{}, func(n *enode.Node, state nodestate.Flags) {
-		s.updateNode(n, true, false, 0)
+		// recalculate weight of connected nodes in order to update hasValue flag if necessary
+		s.calculateWeight(n)
 	})
 	s.ns.Stop()
 }
@@ -228,7 +238,7 @@ func (s *serverPool) registerPeer(p *serverPeer) {
 
 // unregisterPeer implements serverPeerSubscriber
 func (s *serverPool) unregisterPeer(p *serverPeer) {
-	s.updateNode(p.Node(), true, true, dialCost)
+	s.setRedialWait(p.Node(), dialCost, dialWaitStep)
 	s.ns.SetState(p.Node(), nodestate.Flags{}, sfConnected, 0)
 	s.ns.SetField(p.Node(), sfiConnectedStats, nil)
 	s.vt.Unregister(p.ID())
@@ -293,56 +303,44 @@ func (s *serverPool) getTimeoutAndWeight() (time.Duration, lpc.ResponseTimeWeigh
 	return s.timeout, s.timeWeights
 }
 
-// updateNode calculates the selection weight and the proposed redial wait time of the given node
-func (s *serverPool) updateNode(node *enode.Node, calculateSessionValue, redialWait bool, addDialCost int64) {
-	n, _ := s.ns.GetField(node, sfiNodeHistory).(nodeHistory)
-	nvt := s.vt.GetNode(node.ID())
-	if nvt == nil {
-		return
-	}
-	currentStats := nvt.RtStats()
-	_, timeWeights := s.getTimeoutAndWeight()
-	expFactor := s.vt.StatsExpFactor()
-
-	var sessionValue float64
-	if calculateSessionValue {
-		if connStats, ok := s.ns.GetField(node, sfiConnectedStats).(lpc.ResponseTimeStats); ok {
-			diff := currentStats
-			diff.SubStats(&connStats)
-			sessionValue = diff.Value(timeWeights, expFactor)
-			sessionValueMeter.Mark(int64(sessionValue))
-		}
-	}
-
+// addDialCost adds the given amount of dial cost to the node history and returns the current
+// amount of total dial cost
+func (s *serverPool) addDialCost(n *nodeHistory, amount int64) uint64 {
 	logOffset := s.vt.StatsExpirer().LogOffset(s.mono.Now())
-	if addDialCost > 0 {
-		n.dialCost.Add(addDialCost, logOffset)
+	if amount > 0 {
+		n.dialCost.Add(amount, logOffset)
 	}
 	totalDialCost := n.dialCost.Value(logOffset)
 	if totalDialCost < dialCost {
 		totalDialCost = dialCost
 	}
+	return totalDialCost
+}
 
-	totalValue := currentStats.Value(timeWeights, expFactor)
-	if redialWait {
-		a := totalValue * dialCost
-		b := float64(totalDialCost) * sessionValue
-		if n.waitFactor < 1 {
-			n.waitFactor = 1
-		}
-		n.waitFactor *= redialWaitStep
-		if a < b*n.waitFactor {
-			n.waitFactor = a / b
-		}
-		if n.waitFactor < 1 {
-			n.waitFactor = 1
-		}
-		wait := time.Duration(float64(minRedialWait) * n.waitFactor)
-		n.waitUntil = s.rtc.Now() + mclock.AbsTime(wait)
-		s.ns.SetField(node, sfiNodeHistory, n)
-		s.ns.SetState(node, sfRedialWait, nodestate.Flags{}, wait)
+// serviceValue returns the service value accumulated in this session and in total
+func (s *serverPool) serviceValue(node *enode.Node) (sessionValue, totalValue float64) {
+	nvt := s.vt.GetNode(node.ID())
+	if nvt == nil {
+		return 0, 0
 	}
+	currentStats := nvt.RtStats()
+	_, timeWeights := s.getTimeoutAndWeight()
+	expFactor := s.vt.StatsExpFactor()
 
+	totalValue = currentStats.Value(timeWeights, expFactor)
+	if connStats, ok := s.ns.GetField(node, sfiConnectedStats).(lpc.ResponseTimeStats); ok {
+		diff := currentStats
+		diff.SubStats(&connStats)
+		sessionValue = diff.Value(timeWeights, expFactor)
+		sessionValueMeter.Mark(int64(sessionValue))
+		s.ns.SetField(node, sfiConnectedStats, nil)
+	}
+	return
+}
+
+// updateWeight calculates the node weight and updates the nodeWeight field and the
+// hasValue flag. It also saves the node state if necessary.
+func (s *serverPool) updateWeight(node *enode.Node, totalValue float64, totalDialCost uint64) {
 	weight := uint64(totalValue * nodeWeightMul / float64(totalDialCost))
 	if weight >= nodeWeightThreshold {
 		s.ns.SetState(node, sfHasValue, nodestate.Flags{}, 0)
@@ -352,4 +350,61 @@ func (s *serverPool) updateNode(node *enode.Node, calculateSessionValue, redialW
 		s.ns.SetField(node, sfiNodeWeight, nil)
 	}
 	s.ns.Persist(node) // saved if node history or hasValue changed
+}
+
+// redialWait returns the suggested waiting time before the node should be queried or
+// dialed again
+func (n *nodeHistory) redialWait() time.Duration {
+	return time.Duration(float64(minRedialWait) * n.waitFactor)
+}
+
+// setRedialWait calculates and sets the redialWait timeout based on the service value
+// and dial cost accumulated during the last session/attempt and in total.
+// The waiting time is raised exponentially if no service value has been received in order
+// to prevent dialing an unresponsive node frequently for a very long time just because it
+// was useful in the past. It can still be occasionally dialed though and once it provides
+// a significant amount of service value again its waiting time is quickly reduced or reset
+// to the minimum.
+// Note: node weight is also recalculated and updated by this function.
+func (s *serverPool) setRedialWait(node *enode.Node, addDialCost int64, waitStep float64) {
+	n, _ := s.ns.GetField(node, sfiNodeHistory).(nodeHistory)
+	sessionValue, totalValue := s.serviceValue(node)
+	totalDialCost := s.addDialCost(&n, addDialCost)
+
+	// if the current dial session has yielded at least the average value/dial cost ratio
+	// then waitFactor should be reset to 1 (the minimum value). If the session value
+	// is below average but still positive then waitFactor is limited to the ration of
+	// average / current service value. If the attempt was unsuccessful then waitFactor
+	// is raised exponentially without limitation.
+	// Note: dialCost is used in the formula below even if dial was not attempted at all
+	// because the pre-negotiation query did not return a positive result. In this case
+	// the ratio has no meaning anyway and waitFactor is always raised, though in smaller
+	// steps because queries are cheaper and therefore we can allow more failed attempts.
+	a := totalValue * dialCost
+	b := float64(totalDialCost) * sessionValue
+	if n.waitFactor < 1 {
+		n.waitFactor = 1
+	}
+	n.waitFactor *= waitStep
+	if a < b*n.waitFactor {
+		n.waitFactor = a / b
+	}
+	if n.waitFactor < 1 {
+		n.waitFactor = 1
+	}
+	wait := n.redialWait()
+	n.waitUntil = s.rtc.Now() + mclock.AbsTime(wait)
+	s.ns.SetField(node, sfiNodeHistory, n)
+	s.ns.SetState(node, sfRedialWait, nodestate.Flags{}, wait)
+	s.updateWeight(node, totalValue, totalDialCost)
+}
+
+// calculateWeight calculates and sets the node weight without altering the node history.
+// This function should be called during startup and shutdown only, otherwise setRedialWait
+// will keep the weights updated as the underlying statistics are adjusted.
+func (s *serverPool) calculateWeight(node *enode.Node) {
+	n, _ := s.ns.GetField(node, sfiNodeHistory).(nodeHistory)
+	_, totalValue := s.serviceValue(node)
+	totalDialCost := s.addDialCost(&n, 0)
+	s.updateWeight(node, totalValue, totalDialCost)
 }
