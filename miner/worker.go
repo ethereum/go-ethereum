@@ -289,7 +289,6 @@ func (w *worker) close() {
 }
 
 // recalcRecommit recalculates the resubmitting interval upon feedback.
-// @target is the dration vale (time.Duration as floating point) where we want to go.
 func recalcRecommit(minRecommit, prev time.Duration, target float64, inc bool) time.Duration {
 	var (
 		prevF = float64(prev.Nanoseconds())
@@ -985,8 +984,9 @@ func (w *worker) commit(uncles []*types.Header, interval func(), update bool, st
 	return nil
 }
 
-// deep copy current receipts. This is should be used whene an asynchronus process can modify
-// current context.
+// copyCurrentReceipts makes a deep copy of worker receipts in the current context.
+// Worker operates with many asynchronous processes, and whenever we want to use current
+// receipts we risk that they could be modified in a meantime.
 func (w *worker) copyCurrentReceipts() []*types.Receipt {
 	receipts := make([]*types.Receipt, len(w.current.receipts))
 	for i, l := range w.current.receipts {
@@ -1004,7 +1004,7 @@ func (w *worker) postSideBlock(event core.ChainSideEvent) {
 	}
 }
 
-// computes total consumed fees in ETH. Block transactions and receipts have to have the same order.
+// totalFees computes total consumed fees in ETH. Block transactions and receipts have to have the same order.
 func totalFees(block *types.Block, receipts []*types.Receipt) *big.Float {
 	feesWei := new(big.Int)
 	for i, tx := range block.Transactions() {
