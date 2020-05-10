@@ -909,7 +909,7 @@ func (d *Downloader) findAncestor(p *peerConnection, remoteHeader *types.Header)
 // other peers are only accepted if they map cleanly to the skeleton. If no one
 // can fill in the skeleton - not even the origin peer - it's assumed invalid and
 // the origin is dropped.
-func (d *Downloader) fetchHeaders(p *peerConnection, from uint64, pivot uint64) error {
+func (d *Downloader) fetchHeaders(p *peerConnection, from, pivot uint64) error {
 	p.log.Debug("Directing header downloads", "origin", from)
 	defer p.log.Debug("Header download terminated")
 
@@ -1184,7 +1184,7 @@ func (d *Downloader) fetchReceipts(from uint64) error {
 //  - setIdle:     network callback to set a peer back to idle and update its estimated capacity (traffic shaping)
 //  - kind:        textual label of the type being downloaded to display in log mesages
 func (d *Downloader) fetchParts(deliveryCh chan dataPack, deliver func(dataPack) (int, error), wakeCh chan bool,
-	expire func() map[string]int, pending func() int, inFlight func() bool, throttle func() bool, reserve func(*peerConnection, int) (*fetchRequest, bool, error),
+	expire func() map[string]int, pending func() int, inFlight, throttle func() bool, reserve func(*peerConnection, int) (*fetchRequest, bool, error),
 	fetchHook func([]*types.Header), fetch func(*peerConnection, *fetchRequest) error, cancel func(*fetchRequest), capacity func(*peerConnection) int,
 	idle func() ([]*peerConnection, int), setIdle func(*peerConnection, int), kind string) error {
 
@@ -1357,7 +1357,7 @@ func (d *Downloader) fetchParts(deliveryCh chan dataPack, deliver func(dataPack)
 // processHeaders takes batches of retrieved headers from an input channel and
 // keeps processing and scheduling them into the header chain and downloader's
 // queue until the stream ends or a failure occurs.
-func (d *Downloader) processHeaders(origin uint64, pivot uint64, td *big.Int) error {
+func (d *Downloader) processHeaders(origin, pivot uint64, td *big.Int) error {
 	// Keep a count of uncertain headers to roll back
 	var rollback []*types.Header
 	defer func() {
