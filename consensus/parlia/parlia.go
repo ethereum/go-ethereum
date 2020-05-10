@@ -265,7 +265,7 @@ func (p *Parlia) IsSystemTransaction(tx *types.Transaction, header *types.Header
 	if err != nil {
 		return false, errors.New("UnAuthorized transaction")
 	}
-	if sender == header.Coinbase && isToSystemContract(*tx.To()) {
+	if sender == header.Coinbase && isToSystemContract(*tx.To()) && tx.GasPrice().Cmp(big.NewInt(0)) == 0 {
 		return true, nil
 	}
 	return false, nil
