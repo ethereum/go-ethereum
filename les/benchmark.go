@@ -191,7 +191,7 @@ func (b *benchmarkTxSend) init(h *serverHandler, count int) error {
 
 func (b *benchmarkTxSend) request(peer *serverPeer, index int) error {
 	enc, _ := rlp.EncodeToBytes(types.Transactions{b.txs[index]})
-	return peer.sendTxs(0, enc)
+	return peer.sendTxs(0, 1, enc)
 }
 
 // benchmarkTxStatus implements requestBenchmark

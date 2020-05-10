@@ -109,7 +109,8 @@ func TestMergeBasics(t *testing.T) {
 			if have, want := len(merged.storageList), i; have != want {
 				t.Errorf("[1] storageList wrong: have %v, want %v", have, want)
 			}
-			if have, want := len(merged.StorageList(aHash)), len(sMap); have != want {
+			list, _ := merged.StorageList(aHash)
+			if have, want := len(list), len(sMap); have != want {
 				t.Errorf("[2] StorageList() wrong: have %v, want %v", have, want)
 			}
 			if have, want := len(merged.storageList[aHash]), len(sMap); have != want {
@@ -131,7 +132,7 @@ func TestMergeDelete(t *testing.T) {
 
 	flipDrops := func() map[common.Hash]struct{} {
 		return map[common.Hash]struct{}{
-			h2: struct{}{},
+			h2: {},
 		}
 	}
 	flipAccs := func() map[common.Hash][]byte {
@@ -141,7 +142,7 @@ func TestMergeDelete(t *testing.T) {
 	}
 	flopDrops := func() map[common.Hash]struct{} {
 		return map[common.Hash]struct{}{
-			h1: struct{}{},
+			h1: {},
 		}
 	}
 	flopAccs := func() map[common.Hash][]byte {

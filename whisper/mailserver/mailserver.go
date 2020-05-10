@@ -27,6 +27,7 @@ import (
 	"github.com/ethereum/go-ethereum/rlp"
 	whisper "github.com/ethereum/go-ethereum/whisper/whisperv6"
 	"github.com/syndtr/goleveldb/leveldb"
+	"github.com/syndtr/goleveldb/leveldb/errors"
 	"github.com/syndtr/goleveldb/leveldb/opt"
 	"github.com/syndtr/goleveldb/leveldb/util"
 )
@@ -70,6 +71,9 @@ func (s *WMailServer) Init(shh *whisper.Whisper, path string, password string, p
 	}
 
 	s.db, err = leveldb.OpenFile(path, &opt.Options{OpenFilesCacheCapacity: 32})
+	if _, iscorrupted := err.(*errors.ErrCorrupted); iscorrupted {
+		s.db, err = leveldb.RecoverFile(path, nil)
+	}
 	if err != nil {
 		return fmt.Errorf("open DB file: %s", err)
 	}
@@ -169,7 +173,7 @@ func (s *WMailServer) validateRequest(peerID []byte, request *whisper.Envelope) 
 	f := whisper.Filter{KeySym: s.key}
 	decrypted := request.Open(&f)
 	if decrypted == nil {
-		log.Warn(fmt.Sprintf("Failed to decrypt p2p request"))
+		log.Warn("Failed to decrypt p2p request")
 		return false, 0, 0, nil
 	}
 
@@ -181,19 +185,19 @@ func (s *WMailServer) validateRequest(peerID []byte, request *whisper.Envelope) 
 	// if you want to check the signature, you can do it here. e.g.:
 	// if !bytes.Equal(peerID, src) {
 	if src == nil {
-		log.Warn(fmt.Sprintf("Wrong signature of p2p request"))
+		log.Warn("Wrong signature of p2p request")
 		return false, 0, 0, nil
 	}
 
 	var bloom []byte
 	payloadSize := len(decrypted.Payload)
 	if payloadSize < 8 {
-		log.Warn(fmt.Sprintf("Undersized p2p request"))
+		log.Warn("Undersized p2p request")
 		return false, 0, 0, nil
 	} else if payloadSize == 8 {
 		bloom = whisper.MakeFullNodeBloom()
 	} else if payloadSize < 8+whisper.BloomFilterSize {
-		log.Warn(fmt.Sprintf("Undersized bloom filter in p2p request"))
+		log.Warn("Undersized bloom filter in p2p request")
 		return false, 0, 0, nil
 	} else {
 		bloom = decrypted.Payload[8 : 8+whisper.BloomFilterSize]

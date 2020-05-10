@@ -317,7 +317,7 @@ func testGetNodeData(t *testing.T, protocol int) {
 	// Fetch for now the entire chain db
 	hashes := []common.Hash{}
 
-	it := db.NewIterator()
+	it := db.NewIterator(nil, nil)
 	for it.Next() {
 		if key := it.Key(); len(key) == common.HashLength {
 			hashes = append(hashes, common.BytesToHash(key))

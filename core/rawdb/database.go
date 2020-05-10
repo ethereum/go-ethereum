@@ -221,7 +221,7 @@ func NewLevelDBDatabaseWithFreezer(file string, cache int, handles int, freezer 
 // InspectDatabase traverses the entire database and checks the size
 // of all different categories of data.
 func InspectDatabase(db ethdb.Database) error {
-	it := db.NewIterator()
+	it := db.NewIterator(nil, nil)
 	defer it.Release()
 
 	var (

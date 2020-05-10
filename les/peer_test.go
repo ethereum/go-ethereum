@@ -18,6 +18,7 @@ package les
 
 import (
 	"crypto/rand"
+	"errors"
 	"math/big"
 	"reflect"
 	"sort"
@@ -121,10 +122,10 @@ func TestHandshake(t *testing.T) {
 			var reqType uint64
 			err := recv.get("announceType", &reqType)
 			if err != nil {
-				t.Fatal(err)
+				return err
 			}
 			if reqType != announceTypeSigned {
-				t.Fatal("Expected announceTypeSigned")
+				return errors.New("Expected announceTypeSigned")
 			}
 			return nil
 		})

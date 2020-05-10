@@ -17,8 +17,6 @@
 package vm
 
 import (
-	"errors"
-
 	"github.com/ethereum/go-ethereum/params"
 )
 
@@ -28,8 +26,6 @@ type (
 	// memorySizeFunc returns the required size, and whether the operation overflowed a uint64
 	memorySizeFunc func(*Stack) (size uint64, overflow bool)
 )
-
-var errGasUintOverflow = errors.New("gas uint64 overflow")
 
 type operation struct {
 	// execute is the operation function

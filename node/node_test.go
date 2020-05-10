@@ -19,6 +19,7 @@ package node
 import (
 	"errors"
 	"io/ioutil"
+	"net/http"
 	"os"
 	"reflect"
 	"testing"
@@ -27,6 +28,8 @@ import (
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/p2p"
 	"github.com/ethereum/go-ethereum/rpc"
+
+	"github.com/stretchr/testify/assert"
 )
 
 var (
@@ -596,4 +599,59 @@ func TestAPIGather(t *testing.T) {
 			t.Fatalf("test %d: rpc execution timeout", i)
 		}
 	}
+}
+
+func TestWebsocketHTTPOnSamePort_WebsocketRequest(t *testing.T) {
+	node := startHTTP(t)
+	defer node.stopHTTP()
+
+	wsReq, err := http.NewRequest(http.MethodGet, "http://127.0.0.1:7453", nil)
+	if err != nil {
+		t.Error("could not issue new http request ", err)
+	}
+	wsReq.Header.Set("Connection", "upgrade")
+	wsReq.Header.Set("Upgrade", "websocket")
+	wsReq.Header.Set("Sec-WebSocket-Version", "13")
+	wsReq.Header.Set("Sec-Websocket-Key", "SGVsbG8sIHdvcmxkIQ==")
+
+	resp := doHTTPRequest(t, wsReq)
+	assert.Equal(t, "websocket", resp.Header.Get("Upgrade"))
+}
+
+func TestWebsocketHTTPOnSamePort_HTTPRequest(t *testing.T) {
+	node := startHTTP(t)
+	defer node.stopHTTP()
+
+	httpReq, err := http.NewRequest(http.MethodGet, "http://127.0.0.1:7453", nil)
+	if err != nil {
+		t.Error("could not issue new http request ", err)
+	}
+	httpReq.Header.Set("Accept-Encoding", "gzip")
+
+	resp := doHTTPRequest(t, httpReq)
+	assert.Equal(t, "gzip", resp.Header.Get("Content-Encoding"))
+}
+
+func startHTTP(t *testing.T) *Node {
+	conf := &Config{HTTPPort: 7453, WSPort: 7453}
+	node, err := New(conf)
+	if err != nil {
+		t.Error("could not create a new node ", err)
+	}
+
+	err = node.startHTTP("127.0.0.1:7453", []rpc.API{}, []string{}, []string{}, []string{}, rpc.HTTPTimeouts{}, []string{})
+	if err != nil {
+		t.Error("could not start http service on node ", err)
+	}
+
+	return node
+}
+
+func doHTTPRequest(t *testing.T, req *http.Request) *http.Response {
+	client := &http.Client{}
+	resp, err := client.Do(req)
+	if err != nil {
+		t.Error("could not issue a GET request to the given endpoint", err)
+	}
+	return resp
 }

@@ -69,7 +69,7 @@ func ReadAllHashes(db ethdb.Iteratee, number uint64) []common.Hash {
 	prefix := headerKeyPrefix(number)
 
 	hashes := make([]common.Hash, 0, 1)
-	it := db.NewIteratorWithPrefix(prefix)
+	it := db.NewIterator(prefix, nil)
 	defer it.Release()
 
 	for it.Next() {

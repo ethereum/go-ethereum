@@ -691,6 +691,14 @@ func (db *nodeDB) close() {
 	close(db.closeCh)
 }
 
+func (db *nodeDB) getPrefix(neg bool) []byte {
+	prefix := positiveBalancePrefix
+	if neg {
+		prefix = negativeBalancePrefix
+	}
+	return append(db.verbuf[:], prefix...)
+}
+
 func (db *nodeDB) key(id []byte, neg bool) []byte {
 	prefix := positiveBalancePrefix
 	if neg {
@@ -761,7 +769,8 @@ func (db *nodeDB) getPosBalanceIDs(start, stop enode.ID, maxCount int) (result [
 	if maxCount <= 0 {
 		return
 	}
-	it := db.db.NewIteratorWithStart(db.key(start.Bytes(), false))
+	prefix := db.getPrefix(false)
+	it := db.db.NewIterator(prefix, start.Bytes())
 	defer it.Release()
 	for i := len(stop[:]) - 1; i >= 0; i-- {
 		stop[i]--
@@ -840,8 +849,9 @@ func (db *nodeDB) expireNodes() {
 		visited int
 		deleted int
 		start   = time.Now()
+		prefix  = db.getPrefix(true)
 	)
-	iter := db.db.NewIteratorWithPrefix(append(db.verbuf[:], negativeBalancePrefix...))
+	iter := db.db.NewIterator(prefix, nil)
 	for iter.Next() {
 		visited += 1
 		var balance negBalance

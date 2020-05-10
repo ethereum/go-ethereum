@@ -35,6 +35,8 @@ type tmplContract struct {
 	Constructor abi.Method             // Contract constructor for deploy parametrization
 	Calls       map[string]*tmplMethod // Contract calls that only read state data
 	Transacts   map[string]*tmplMethod // Contract calls that write state data
+	Fallback    *tmplMethod            // Additional special fallback function
+	Receive     *tmplMethod            // Additional special receive function
 	Events      map[string]*tmplEvent  // Contract events accessors
 	Libraries   map[string]string      // Same as tmplData, but filtered to only keep what the contract needs
 	Library     bool                   // Indicator whether the contract is a library
@@ -101,7 +103,6 @@ var (
 	_ = big.NewInt
 	_ = strings.NewReader
 	_ = ethereum.NotFound
-	_ = abi.U256
 	_ = bind.Bind
 	_ = common.Big1
 	_ = types.BloomLookup
@@ -351,6 +352,52 @@ var (
 		}
 	{{end}}
 
+	{{if .Fallback}} 
+		// Fallback is a paid mutator transaction binding the contract fallback function.
+		//
+		// Solidity: {{formatmethod .Fallback.Original $structs}}
+		func (_{{$contract.Type}} *{{$contract.Type}}Transactor) Fallback(opts *bind.TransactOpts, calldata []byte) (*types.Transaction, error) {
+			return _{{$contract.Type}}.contract.RawTransact(opts, calldata)
+		}
+
+		// Fallback is a paid mutator transaction binding the contract fallback function.
+		//
+		// Solidity: {{formatmethod .Fallback.Original $structs}}
+		func (_{{$contract.Type}} *{{$contract.Type}}Session) Fallback(calldata []byte) (*types.Transaction, error) {
+		  return _{{$contract.Type}}.Contract.Fallback(&_{{$contract.Type}}.TransactOpts, calldata)
+		}
+	
+		// Fallback is a paid mutator transaction binding the contract fallback function.
+		// 
+		// Solidity: {{formatmethod .Fallback.Original $structs}}
+		func (_{{$contract.Type}} *{{$contract.Type}}TransactorSession) Fallback(calldata []byte) (*types.Transaction, error) {
+		  return _{{$contract.Type}}.Contract.Fallback(&_{{$contract.Type}}.TransactOpts, calldata)
+		}
+	{{end}}
+
+	{{if .Receive}} 
+		// Receive is a paid mutator transaction binding the contract receive function.
+		//
+		// Solidity: {{formatmethod .Receive.Original $structs}}
+		func (_{{$contract.Type}} *{{$contract.Type}}Transactor) Receive(opts *bind.TransactOpts) (*types.Transaction, error) {
+			return _{{$contract.Type}}.contract.RawTransact(opts, nil) // calldata is disallowed for receive function
+		}
+
+		// Receive is a paid mutator transaction binding the contract receive function.
+		//
+		// Solidity: {{formatmethod .Receive.Original $structs}}
+		func (_{{$contract.Type}} *{{$contract.Type}}Session) Receive() (*types.Transaction, error) {
+		  return _{{$contract.Type}}.Contract.Receive(&_{{$contract.Type}}.TransactOpts)
+		}
+	
+		// Receive is a paid mutator transaction binding the contract receive function.
+		// 
+		// Solidity: {{formatmethod .Receive.Original $structs}}
+		func (_{{$contract.Type}} *{{$contract.Type}}TransactorSession) Receive() (*types.Transaction, error) {
+		  return _{{$contract.Type}}.Contract.Receive(&_{{$contract.Type}}.TransactOpts)
+		}
+	{{end}}
+
 	{{range .Events}}
 		// {{$contract.Type}}{{.Normalized.Name}}Iterator is returned from Filter{{.Normalized.Name}} and is used to iterate over the raw logs and unpacked data for {{.Normalized.Name}} events raised by the {{$contract.Type}} contract.
 		type {{$contract.Type}}{{.Normalized.Name}}Iterator struct {
@@ -577,7 +624,7 @@ import java.util.*;
 	// {{.Normalized.Name}} is a free data retrieval call binding the contract method 0x{{printf "%x" .Original.ID}}.
 	//
 	// Solidity: {{.Original.String}}
-	public {{if gt (len .Normalized.Outputs) 1}}{{capitalise .Normalized.Name}}Results{{else}}{{range .Normalized.Outputs}}{{bindtype .Type $structs}}{{end}}{{end}} {{.Normalized.Name}}(CallOpts opts{{range .Normalized.Inputs}}, {{bindtype .Type $structs}} {{.Name}}{{end}}) throws Exception {
+	public {{if gt (len .Normalized.Outputs) 1}}{{capitalise .Normalized.Name}}Results{{else if eq (len .Normalized.Outputs) 0}}void{{else}}{{range .Normalized.Outputs}}{{bindtype .Type $structs}}{{end}}{{end}} {{.Normalized.Name}}(CallOpts opts{{range .Normalized.Inputs}}, {{bindtype .Type $structs}} {{.Name}}{{end}}) throws Exception {
 		Interfaces args = Geth.newInterfaces({{(len .Normalized.Inputs)}});
 		{{range $index, $item := .Normalized.Inputs}}Interface arg{{$index}} = Geth.newInterface();arg{{$index}}.set{{namedtype (bindtype .Type $structs) .Type}}({{.Name}});args.set({{$index}},arg{{$index}});
 		{{end}}
@@ -611,6 +658,24 @@ import java.util.*;
 		return this.Contract.transact(opts, "{{.Original.Name}}"	, args);
 	}
 	{{end}}
+
+    {{if .Fallback}}
+	// Fallback is a paid mutator transaction binding the contract fallback function.
+	//
+	// Solidity: {{formatmethod .Fallback.Original $structs}}
+	public Transaction Fallback(TransactOpts opts, byte[] calldata) throws Exception { 
+		return this.Contract.rawTransact(opts, calldata);
+	}
+    {{end}}
+
+    {{if .Receive}}
+	// Receive is a paid mutator transaction binding the contract receive function.
+	//
+	// Solidity: {{formatmethod .Receive.Original $structs}}
+	public Transaction Receive(TransactOpts opts) throws Exception { 
+		return this.Contract.rawTransact(opts, null);
+	}
+    {{end}}
 }
 {{end}}
 `

@@ -361,7 +361,7 @@ func (d *Downloader) synchronise(id string, hash common.Hash, td *big.Int, mode 
 		log.Info("Block synchronisation started")
 	}
 	// If we are already full syncing, but have a fast-sync bloom filter laying
-	// around, make sure it does't use memory any more. This is a special case
+	// around, make sure it doesn't use memory any more. This is a special case
 	// when the user attempts to fast sync a new empty network.
 	if mode == FullSync && d.stateBloom != nil {
 		d.stateBloom.Close()
@@ -557,6 +557,8 @@ func (d *Downloader) spawnSync(fetchers []func() error) error {
 func (d *Downloader) cancel() {
 	// Close the current cancel channel
 	d.cancelLock.Lock()
+	defer d.cancelLock.Unlock()
+
 	if d.cancelCh != nil {
 		select {
 		case <-d.cancelCh:
@@ -565,7 +567,6 @@ func (d *Downloader) cancel() {
 			close(d.cancelCh)
 		}
 	}
-	d.cancelLock.Unlock()
 }
 
 // Cancel aborts all of the operations and waits for all download goroutines to
@@ -664,7 +665,7 @@ func calculateRequestSpan(remoteHeight, localHeight uint64) (int64, int, int, ui
 		requestHead = 0
 	}
 	// requestBottom is the lowest block we want included in the query
-	// Ideally, we want to include just below own head
+	// Ideally, we want to include the one just below our own head
 	requestBottom := int(localHeight - 1)
 	if requestBottom < 0 {
 		requestBottom = 0
