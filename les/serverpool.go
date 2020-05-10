@@ -333,7 +333,6 @@ func (s *serverPool) serviceValue(node *enode.Node) (sessionValue, totalValue fl
 		diff.SubStats(&connStats)
 		sessionValue = diff.Value(timeWeights, expFactor)
 		sessionValueMeter.Mark(int64(sessionValue))
-		s.ns.SetField(node, sfiConnectedStats, nil)
 	}
 	return
 }
