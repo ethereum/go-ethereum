@@ -927,18 +927,19 @@ func DoEstimateGas(ctx context.Context, b Backend, args CallArgs, blockNrOrHash 
 		if err != nil {
 			return 0, err
 		}
-		balance := new(big.Int)
-		balance.Set(state.GetBalance(*args.From)) // from can't be nil
+		balance := state.GetBalance(*args.From) // from can't be nil
+		available := new(big.Int).Set(balance)
 		if args.Value != nil {
-			if args.Value.ToInt().Cmp(balance) >= 0 {
+			if args.Value.ToInt().Cmp(available) >= 0 {
 				return 0, errors.New("insufficient funds for transfer")
 			}
-			balance.Sub(balance, args.Value.ToInt())
+			available.Sub(available, args.Value.ToInt())
 		}
-		allowance := new(big.Int).Div(balance, args.GasPrice.ToInt())
+		allowance := new(big.Int).Div(available, args.GasPrice.ToInt())
 		if hi > allowance.Uint64() {
+			log.Warn("Gas estimation capped by limited funds", "original", hi, "balance", balance,
+				"sent", args.Value, "gasprice", args.GasPrice, "fundable", allowance)
 			hi = allowance.Uint64()
-			log.Warn("Gas estimation capped by limited funds", "original", hi, "fundable", allowance)
 		}
 	}
 	// Recap the highest gas allowance with specified gascap.

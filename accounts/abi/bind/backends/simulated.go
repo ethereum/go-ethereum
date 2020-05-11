@@ -404,18 +404,19 @@ func (b *SimulatedBackend) EstimateGas(ctx context.Context, call ethereum.CallMs
 	}
 	// Recap the highest gas allowance with account's balance.
 	if call.GasPrice != nil && call.GasPrice.Uint64() != 0 {
-		balance := new(big.Int)
-		balance.Set(b.pendingState.GetBalance(call.From)) // from can't be nil
+		balance := b.pendingState.GetBalance(call.From) // from can't be nil
+		available := new(big.Int).Set(balance)
 		if call.Value != nil {
-			if call.Value.Cmp(balance) >= 0 {
+			if call.Value.Cmp(available) >= 0 {
 				return 0, errors.New("insufficient funds for transfer")
 			}
-			balance.Sub(balance, call.Value)
+			available.Sub(available, call.Value)
 		}
-		allowance := new(big.Int).Div(balance, call.GasPrice)
+		allowance := new(big.Int).Div(available, call.GasPrice)
 		if hi > allowance.Uint64() {
+			log.Warn("Gas estimation capped by limited funds", "original", hi, "balance", balance,
+				"sent", call.Value, "gasprice", call.GasPrice, "fundable", allowance)
 			hi = allowance.Uint64()
-			log.Warn("Gas estimation capped by limited funds", "original", hi, "fundable", allowance)
 		}
 	}
 	cap = hi
