@@ -68,3 +68,14 @@ func (e *MaxCheckpointLengthExceededError) Error() string {
 		MaxCheckpointLength,
 	)
 }
+
+type SealingInFlightError struct {
+	Number uint64
+}
+
+func (e *SealingInFlightError) Error() string {
+	return fmt.Sprintf(
+		"Requested concurrent block sealing. Sealing for block %d is already in progress",
+		e.Number,
+	)
+}

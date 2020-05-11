@@ -116,6 +116,13 @@ type Engine interface {
 	Close() error
 }
 
+// Bor is a consensus engine developed by folks at Matic Network
+type Bor interface {
+	Engine
+	IsValidatorAction(chain ChainReader, from common.Address, tx *types.Transaction) bool
+	CancelActiveSealingOp()
+}
+
 // PoW is a consensus engine based on proof-of-work.
 type PoW interface {
 	Engine
