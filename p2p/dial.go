@@ -390,6 +390,9 @@ func (d *dialScheduler) checkDial(n *enode.Node) error {
 		return errSelf
 	}
 	if n.IP() != nil && n.TCP() == 0 {
+		// This check can trigger if a non-TCP node is found
+		// by discovery. If there is no IP, the node is a static
+		// node and the actual endpoint will be resolved later in dialTask.
 		return errNoPort
 	}
 	if _, ok := d.dialing[n.ID()]; ok {
