@@ -1680,7 +1680,12 @@ func (bc *BlockChain) insertChain(chain types.Blocks, verifySeals bool) (int, er
 			// as the canonical chain eventually, it needs to be reexecuted for missing
 			// state, but if it's this special case here(skip reexecution) we will lose
 			// the empty receipt entry.
-			rawdb.WriteReceipts(bc.db, block.Hash(), block.NumberU64(), nil)
+			if len(block.Transactions()) == 0 {
+				rawdb.WriteReceipts(bc.db, block.Hash(), block.NumberU64(), nil)
+			} else {
+				log.Error("Please file an issue, skip known block execution without receipt",
+					"hash", block.Hash(), "number", block.NumberU64())
+			}
 			if err := bc.writeKnownBlock(block); err != nil {
 				return it.index, err
 			}
