@@ -1486,7 +1486,7 @@ func SetEthConfig(ctx *cli.Context, stack *node.Node, cfg *eth.Config) {
 	// todo(rjl493456442) make it available for les server
 	// Ancient tx indices pruning is not available for les server now
 	// since light client relies on the server for transaction status query.
-	CheckExclusive(ctx, LightLegacyServFlag, LightServeFlag, TxLookupLimitFlag)
+	CheckExclusive(ctx, LegacyLightServFlag, LightServeFlag, TxLookupLimitFlag)
 	var ks *keystore.KeyStore
 	if keystores := stack.AccountManager().Backends(keystore.KeyStoreType); len(keystores) > 0 {
 		ks = keystores[0].(*keystore.KeyStore)
