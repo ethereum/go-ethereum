@@ -170,6 +170,9 @@ func NewType(t string, internalType string, components []ArgumentMarshaling) (ty
 				return Type{}, err
 			}
 			fieldName, err := overloadedArgName(c.Name, overloadedNames)
+			if err != nil {
+				return Type{}, err
+			}
 			overloadedNames[fieldName] = fieldName
 			fields = append(fields, reflect.StructField{
 				Name: fieldName, // reflect.StructOf will panic for any exported field.
