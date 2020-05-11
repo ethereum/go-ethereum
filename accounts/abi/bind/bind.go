@@ -220,8 +220,6 @@ func Bind(types []string, abis []string, bytecodes []string, fsigs []map[string]
 		"bindtype":      bindType[lang],
 		"bindtopictype": bindTopicType[lang],
 		"namedtype":     namedType[lang],
-		"formatmethod":  formatMethod,
-		"formatevent":   formatEvent,
 		"capitalise":    capitalise,
 		"decapitalise":  decapitalise,
 	}
@@ -585,14 +583,4 @@ func hasStruct(t abi.Type) bool {
 	default:
 		return false
 	}
-}
-
-// formatMethod transforms raw method representation into a user friendly one.
-func formatMethod(method abi.Method) string {
-	return method.String()
-}
-
-// formatEvent transforms raw event representation into a user friendly one.
-func formatEvent(event abi.Event) string {
-	return event.String()
 }
