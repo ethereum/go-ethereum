@@ -441,10 +441,18 @@ func (d *Downloader) syncWithPeer(p *peerConnection, hash common.Hash, td *big.I
 	}
 	height := latest.Number.Uint64()
 
-	origin, err := d.findAncestor(p, latest)
-	if err != nil {
-		return err
+	var origin = uint64(0)
+
+	if d.blockchain != nil &&
+		d.blockchain.CurrentHeader() != nil &&
+		d.blockchain.CurrentHeader().Number != nil &&
+		d.blockchain.CurrentHeader().Number.Uint64() > 0 {
+		origin, err = d.findAncestor(p, latest)
+		if err != nil {
+			return err
+		}
 	}
+
 	d.syncStatsLock.Lock()
 	if d.syncStatsChainHeight <= origin || d.syncStatsChainOrigin > origin {
 		d.syncStatsChainOrigin = origin
