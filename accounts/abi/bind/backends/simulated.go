@@ -414,8 +414,12 @@ func (b *SimulatedBackend) EstimateGas(ctx context.Context, call ethereum.CallMs
 		}
 		allowance := new(big.Int).Div(available, call.GasPrice)
 		if hi > allowance.Uint64() {
+			transfer := call.Value
+			if transfer == nil {
+				transfer = new(big.Int)
+			}
 			log.Warn("Gas estimation capped by limited funds", "original", hi, "balance", balance,
-				"sent", call.Value, "gasprice", call.GasPrice, "fundable", allowance)
+				"sent", transfer, "gasprice", call.GasPrice, "fundable", allowance)
 			hi = allowance.Uint64()
 		}
 	}

@@ -937,8 +937,12 @@ func DoEstimateGas(ctx context.Context, b Backend, args CallArgs, blockNrOrHash 
 		}
 		allowance := new(big.Int).Div(available, args.GasPrice.ToInt())
 		if hi > allowance.Uint64() {
+			transfer := args.Value
+			if transfer == nil {
+				transfer = new(hexutil.Big)
+			}
 			log.Warn("Gas estimation capped by limited funds", "original", hi, "balance", balance,
-				"sent", args.Value, "gasprice", args.GasPrice, "fundable", allowance)
+				"sent", transfer.ToInt(), "gasprice", args.GasPrice.ToInt(), "fundable", allowance)
 			hi = allowance.Uint64()
 		}
 	}
