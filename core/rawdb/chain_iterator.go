@@ -202,7 +202,7 @@ func IndexTransactions(db ethdb.Database, from uint64, to uint64) {
 		lastNum = to
 		queue   = prque.New(nil)
 		// for stats reporting
-		blockCount, txCount = 0, 0
+		blocks, txs = 0, 0
 	)
 	defer close(abortCh)
 
@@ -220,8 +220,8 @@ func IndexTransactions(db ethdb.Database, from uint64, to uint64) {
 			delivery := queue.PopItem().(*blockTxHashes)
 			lastNum = delivery.number
 			WriteTxLookupEntriesByHash(batch, delivery.number, delivery.hashes)
-			blockCount++
-			txCount += len(delivery.hashes)
+			blocks++
+			txs += len(delivery.hashes)
 			// If enough data was accumulated in memory or we're at the last block, dump to disk
 			if batch.ValueSize() > ethdb.IdealBatchSize {
 				// Also write the tail there
@@ -234,7 +234,7 @@ func IndexTransactions(db ethdb.Database, from uint64, to uint64) {
 			}
 			// If we've spent too much time already, notify the user of what we're doing
 			if time.Since(logged) > 8*time.Second {
-				log.Info("Indexing transactions", "blocks", blockCount, "txs", txCount, "current", lastNum, "total", to-from, "elapsed", common.PrettyDuration(time.Since(start)))
+				log.Info("Indexing transactions", "blocks", blocks, "txs", txs, "tail", lastNum, "total", to-from, "elapsed", common.PrettyDuration(time.Since(start)))
 				logged = time.Now()
 			}
 		}
@@ -247,7 +247,7 @@ func IndexTransactions(db ethdb.Database, from uint64, to uint64) {
 			return
 		}
 	}
-	log.Info("Indexed transactions", "blocks", blockCount, "txs", txCount, "elapsed", common.PrettyDuration(time.Since(start)))
+	log.Info("Indexed transactions", "blocks", blocks, "txs", txs, "tail", lastNum, "elapsed", common.PrettyDuration(time.Since(start)))
 }
 
 // UnindexTransactions removes txlookup indices of the specified block range.
@@ -275,14 +275,16 @@ func UnindexTransactions(db ethdb.Database, from uint64, to uint64) {
 	)
 	defer close(abortCh)
 	// Otherwise spin up the concurrent iterator and unindexer
-	count := 0
+	blocks, txs := 0, 0
 	for delivery := range hashesCh {
 		DeleteTxLookupEntriesByHash(batch, delivery.hashes)
+		txs += len(delivery.hashes)
+		blocks++
+
 		// If enough data was accumulated in memory or we're at the last block, dump to disk
 		// A batch counts the size of deletion as '1', so we need to flush more
 		// often than that.
-		count++
-		if count%1000 == 0 {
+		if blocks%1000 == 0 {
 			if err := batch.Write(); err != nil {
 				log.Crit("Failed writing batch to db", "error", err)
 				return
@@ -291,7 +293,7 @@ func UnindexTransactions(db ethdb.Database, from uint64, to uint64) {
 		}
 		// If we've spent too much time already, notify the user of what we're doing
 		if time.Since(logged) > 8*time.Second {
-			log.Info("Unindexing transactions", "blocks", int64(math.Abs(float64(delivery.number-from))), "total", to-from, "elapsed", common.PrettyDuration(time.Since(start)))
+			log.Info("Unindexing transactions", "blocks", "txs", txs, int64(math.Abs(float64(delivery.number-from))), "total", to-from, "elapsed", common.PrettyDuration(time.Since(start)))
 			logged = time.Now()
 		}
 	}
@@ -299,5 +301,5 @@ func UnindexTransactions(db ethdb.Database, from uint64, to uint64) {
 		log.Crit("Failed writing batch to db", "error", err)
 		return
 	}
-	log.Info("Indexed transactions", "blocks", int64(math.Abs(float64(to-from))), "total", to-from, "elapsed", common.PrettyDuration(time.Since(start)))
+	log.Info("Unindexed transactions", "blocks", blocks, "txs", txs, "tail", to, "elapsed", common.PrettyDuration(time.Since(start)))
 }
