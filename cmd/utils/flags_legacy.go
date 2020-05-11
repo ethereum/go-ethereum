@@ -148,6 +148,16 @@ var (
 		Usage: "Suggested gas price is the given percentile of a set of recent transaction gas prices (deprecated, use --gpo.percentile)",
 		Value: eth.DefaultConfig.GPO.Percentile,
 	}
+	LegacyBootnodesV4Flag = cli.StringFlag{
+		Name:  "bootnodesv4",
+		Usage: "Comma separated enode URLs for P2P v4 discovery bootstrap (light server, full nodes) (deprecated, use --bootnodes)",
+		Value: "",
+	}
+	LegacyBootnodesV5Flag = cli.StringFlag{
+		Name:  "bootnodesv5",
+		Usage: "Comma separated enode URLs for P2P v5 discovery bootstrap (light server, light nodes) (deprecated, use --bootnodes)",
+		Value: "",
+	}
 )
 
 // showDeprecated displays deprecated flags that will be soon removed from the codebase.

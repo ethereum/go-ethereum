@@ -18,7 +18,6 @@
 package state
 
 import (
-	"bytes"
 	"errors"
 	"fmt"
 	"math/big"
@@ -289,20 +288,10 @@ func (s *StateDB) GetCode(addr common.Address) []byte {
 
 func (s *StateDB) GetCodeSize(addr common.Address) int {
 	stateObject := s.getStateObject(addr)
-	if stateObject == nil {
-		return 0
+	if stateObject != nil {
+		return stateObject.CodeSize(s.db)
 	}
-	if stateObject.code != nil {
-		return len(stateObject.code)
-	}
-	if bytes.Equal(stateObject.CodeHash(), emptyCode[:]) {
-		return 0
-	}
-	size, err := s.db.ContractCodeSize(stateObject.addrHash, common.BytesToHash(stateObject.CodeHash()))
-	if err != nil {
-		s.setError(fmt.Errorf("GetCodeSize (%x) error: %v", addr[:], err))
-	}
-	return size
+	return 0
 }
 
 func (s *StateDB) GetCodeHash(addr common.Address) common.Hash {
