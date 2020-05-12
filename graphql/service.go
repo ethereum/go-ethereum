@@ -18,7 +18,10 @@ package graphql
 
 import (
 	"context"
+	"errors"
 	"fmt"
+	"github.com/ethereum/go-ethereum/eth"
+	"github.com/ethereum/go-ethereum/les"
 	"net"
 	"net/http"
 
@@ -37,9 +40,8 @@ type Service struct {
 }
 
 // New constructs a new GraphQL service instance.
-func New(backend ethapi.Backend, endpoint string, cors, vhosts []string, timeouts rpc.HTTPTimeouts) (*Service, error) {
+func New(stack *node.Node, ethBackend *eth.Ethereum, lesBackend *les.LightEthereum, endpoint string, cors, vhosts []string, timeouts rpc.HTTPTimeouts) error {
 	service := &Service{
-		backend:  backend,
 		graphqlServer: &node.HTTPServer{
 			Timeouts: timeouts,
 			Vhosts: vhosts,
@@ -47,15 +49,25 @@ func New(backend ethapi.Backend, endpoint string, cors, vhosts []string, timeout
 			GQLAllowed: true,
 		},
 	}
+	// add backend
+	if ethBackend != nil {
+		service.backend = ethBackend.APIBackend
+	} else if lesBackend != nil {
+		service.backend = lesBackend.ApiBackend
+	} else {
+		return errors.New("no Ethereum service")
+	}
+
 	service.graphqlServer.SetEndpoint(endpoint)
 	// create handler
 	handler, err := service.CreateHandler()
 	if err != nil {
-		return nil, err
+		return err
 	}
 	service.graphqlServer.SetHandler(handler)
 
-	return service, nil
+	// TODO register http
+	return stack.RegisterLifecycle(service)
 }
 
 func (s *Service) CreateHandler() (http.Handler, error) {

@@ -21,6 +21,7 @@ import (
 	"crypto/ecdsa"
 	"crypto/sha256"
 	"fmt"
+	"github.com/ethereum/go-ethereum/node"
 	"math"
 	"runtime"
 	"sync"
@@ -93,7 +94,7 @@ type Whisper struct {
 }
 
 // New creates a Whisper client ready to communicate through the Ethereum P2P network.
-func New(cfg *Config) *Whisper {
+func New(stack *node.Node, cfg *Config) error {
 	if cfg == nil {
 		cfg = &DefaultConfig
 	}
@@ -132,7 +133,11 @@ func New(cfg *Config) *Whisper {
 		},
 	}
 
-	return whisper
+	stack.RegisterAPIs(whisper.APIs())
+	if err := stack.RegisterProtocols(whisper.Protocols()); err != nil {
+		return err
+	}
+	return stack.RegisterLifecycle(whisper)
 }
 
 // MinPow returns the PoW value required by this node.

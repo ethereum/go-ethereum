@@ -24,17 +24,12 @@ import (
 	"github.com/ethereum/go-ethereum/core/rawdb"
 	"github.com/ethereum/go-ethereum/ethdb"
 	"github.com/ethereum/go-ethereum/event"
-	"github.com/ethereum/go-ethereum/p2p"
-	"github.com/ethereum/go-ethereum/rpc"
 )
 
 // ServiceContext is a collection of service independent options inherited from
 // the protocol stack, that is passed to all constructors to be optionally used;
 // as well as utility methods to operate on the service environment.
 type ServiceContext struct {
-	backend        Backend // Copy of the already constructed Backend // TODO update this comment
-	services       map[reflect.Type]Service          // Index of the already constructed services
-	auxServices    map[reflect.Type]AuxiliaryService // Index of the already constructed auxiliary services
 	Config         Config
 	EventMux       *event.TypeMux    // Event multiplexer used for decoupled notifications
 	AccountManager *accounts.Manager // Account manager created by the node.
@@ -91,45 +86,6 @@ func (ctx *ServiceContext) Service(service interface{}) error {
 // RPC(http, ws or graphql).
 func (ctx *ServiceContext) ExtRPCEnabled() bool {
 	return ctx.Config.ExtRPCEnabled()
-}
-
-// TODO document
-type Backend interface {
-	// Protocols retrieves the P2P protocols the service wishes to start.
-	Protocols() []p2p.Protocol
-
-	// Backend can register a P2P Server
-	P2PServer(server *p2p.Server) error
-
-	// Backend also implements the Service interface.
-	Service
-}
-
-// Service is an individual protocol that can be registered into a node.
-//
-// Notes:
-//
-// • Service life-cycle management is delegated to the node. The service is allowed to
-// initialize itself upon creation, but no goroutines should be spun up outside of the
-// Start method.
-//
-// • Restart logic is not required as the node will create a fresh instance
-// every time a service is started.
-type Service interface {
-	// APIs retrieves the list of RPC descriptors the service provides
-	APIs() []rpc.API
-
-	// Service also implements Lifecycle
-	Lifecycle
-}
-
-// TODO document
-type AuxiliaryService interface {
-	// TODO document
-	Server() *HTTPServer
-
-	// AuxiliaryService also implements Lifecycle
-	Lifecycle
 }
 
 // TODO document

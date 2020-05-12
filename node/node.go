@@ -20,6 +20,8 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"github.com/ethereum/go-ethereum/eth"
+	"github.com/ethereum/go-ethereum/les"
 	"net"
 	"net/http"
 	"os"
@@ -55,17 +57,12 @@ type Node struct {
 
 	lifecycles []Lifecycle // All registered backends, services, and auxiliary services that have a lifecycle
 
-	backend     Backend                           // The registered Backend of the node // TODO unnecessary
-	services    map[reflect.Type]Service          // Currently running services
-	auxServices map[reflect.Type]AuxiliaryService // Currently running auxiliary services
-
 	rpcAPIs       []rpc.API   // List of APIs currently provided by the node
 	inprocHandler *rpc.Server // In-process RPC request handler to process the API requests
 
 	ipc  *HTTPServer // TODO
 	http *HTTPServer // TODO
 	ws   *HTTPServer // TODO
-
 
 	stop chan struct{} // Channel to wait for termination notifications
 	lock sync.RWMutex
@@ -115,8 +112,6 @@ func New(conf *Config) (*Node, error) {
 		ServiceContext: &ServiceContext{
 			Config: *conf,
 		},
-		services:    make(map[reflect.Type]Service),
-		auxServices: make(map[reflect.Type]AuxiliaryService),
 		ipc: &HTTPServer{
 			endpoint: conf.IPCEndpoint(),
 		},
@@ -177,60 +172,14 @@ func (n *Node) Close() error {
 }
 
 // TODO document
-func (n *Node) RegisterLifecycle(lifecycle Lifecycle) {
+func (n *Node) RegisterLifecycle(lifecycle Lifecycle) error {
+	for _, existing := range n.lifecycles { // TODO is checking for duplicates a good idea?
+		if existing == lifecycle {
+			return errors.New("Lifecycle already registered")
+		}
+	}
+
 	n.lifecycles = append(n.lifecycles, lifecycle)
-}
-
-// TODO document
-func (n *Node) RegisterBackend(backend Backend) error {
-	n.lock.Lock()
-	defer n.lock.Unlock()
-	// check if p2p node is already running
-	if n.running() {
-		return ErrNodeRunning
-	}
-	// check that there is not already a backend registered on the node
-	if n.backend != nil {
-		return errors.New("a backend has already been registered on the node") // TODO is this error okay?
-	}
-	n.backend = backend
-	return nil
-}
-
-// Register injects a new service into the node's stack. The service created by
-// the passed constructor must be unique in its type with regard to sibling ones.
-func (n *Node) RegisterService(service Service) error {
-	n.lock.Lock()
-	defer n.lock.Unlock()
-
-	if n.running() {
-		return ErrNodeRunning
-	}
-
-	kind := reflect.TypeOf(service)
-	if _, exists := n.services[kind]; exists {
-		return &DuplicateServiceError{Kind: kind}
-	}
-	n.services[kind] = service
-
-	return nil
-}
-
-// TODO document
-func (n *Node) RegisterAuxService(auxService AuxiliaryService) error {
-	n.lock.Lock()
-	defer n.lock.Unlock()
-
-	if n.running() {
-		return ErrNodeRunning
-	}
-	// make sure auxiliary service is not duplicated
-	kind := reflect.TypeOf(auxService)
-	if _, exists := n.auxServices[kind]; exists {
-		return &DuplicateServiceError{Kind: kind}
-	}
-	n.auxServices[kind] = auxService
-
 	return nil
 }
 
@@ -238,18 +187,17 @@ func (n *Node) RegisterProtocols(protocols []p2p.Protocol) error {
 	if !n.running() {
 		return ErrNodeStopped
 	}
-	// add backend's protocols to the o2o server
+	// TODO check for duplicates?
+
+	// add backend's protocols to the p2p server
 	n.server.Protocols = append(n.server.Protocols, protocols...)
 	return nil
 }
 
-func (n *Node) RegisterRPC(apis []rpc.API) {
-	// Gather all the possible APIs to surface
-	apis = append(apis, n.backend.APIs()...)
-	for _, service := range n.services {
-		apis = append(apis, service.APIs()...)
-	}
-	n.rpcAPIs = apis
+func (n *Node) RegisterAPIs(apis []rpc.API) {
+	// TODO check for duplicates?
+
+	n.rpcAPIs = append(n.rpcAPIs, apis...)
 }
 
 // TODO document
@@ -364,11 +312,8 @@ func (n *Node) Start() error {
 		return err
 	}
 	// Finish initializing the service context
-	n.ServiceContext.backend = n.backend
 	n.ServiceContext.AccountManager = n.accman
 	n.ServiceContext.EventMux = n.eventmux
-	n.ServiceContext.services = n.services
-	n.ServiceContext.auxServices = n.auxServices
 
 	// Finish initializing the startup
 	n.stop = make(chan struct{})
@@ -714,8 +659,15 @@ func (n *Node) RPCHandler() (*rpc.Server, error) {
 	return n.inprocHandler, nil
 }
 
-func (n *Node) Backend() Backend {
-	return n.backend
+func (n *Node) Backend() (*eth.Ethereum, *les.LightEthereum)  {
+	if n.ethBackend != nil && n.lesBackend == nil {
+		return n.ethBackend, nil
+	}
+	if n.ethBackend == nil && n.lesBackend != nil {
+		return nil, n.lesBackend
+	}
+
+	return nil, nil
 }
 
 // Server retrieves the currently running P2P network layer. This method is meant
@@ -726,42 +678,6 @@ func (n *Node) Server() *p2p.Server {
 	defer n.lock.RUnlock()
 
 	return n.server
-}
-
-// Service retrieves a currently running service registered of a specific type.
-func (n *Node) Service(service interface{}) error {
-	n.lock.RLock()
-	defer n.lock.RUnlock()
-
-	// Short circuit if the node's not running
-	if n.server == nil {
-		return ErrNodeStopped
-	}
-	// Otherwise try to find the service to return
-	element := reflect.ValueOf(service).Elem()
-	if running, ok := n.services[element.Type()]; ok {
-		element.Set(reflect.ValueOf(running))
-		return nil
-	}
-	return ErrServiceUnknown
-}
-
-// Service retrieves a currently running service registered of a specific type.
-func (n *Node) AuxService(auxService interface{}) error {
-	n.lock.RLock()
-	defer n.lock.RUnlock()
-
-	// Short circuit if the node's not running
-	if n.server == nil {
-		return ErrNodeStopped
-	}
-	// Otherwise try to find the service to return
-	element := reflect.ValueOf(auxService).Elem()
-	if running, ok := n.auxServices[element.Type()]; ok {
-		element.Set(reflect.ValueOf(running))
-		return nil
-	}
-	return ErrServiceUnknown
 }
 
 // DataDir retrieves the current datadir used by the protocol stack.

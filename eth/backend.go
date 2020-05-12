@@ -20,6 +20,7 @@ package eth
 import (
 	"errors"
 	"fmt"
+	"github.com/ethereum/go-ethereum/les"
 	"math/big"
 	"runtime"
 	"sync"
@@ -114,7 +115,7 @@ func (s *Ethereum) SetContractBackend(backend bind.ContractBackend) {
 
 // New creates a new Ethereum object (including the
 // initialisation of the common Ethereum object)
-func New(ctx *node.ServiceContext, config *Config) (*Ethereum, error) {
+func New(stack *node.Node, config *Config) (*Ethereum, error) {
 	// Ensure configuration values are compatible and sane
 	if config.SyncMode == downloader.LightSync {
 		return nil, errors.New("can't run eth.Ethereum in light sync mode, use les.LightEthereum")
@@ -138,7 +139,7 @@ func New(ctx *node.ServiceContext, config *Config) (*Ethereum, error) {
 	log.Info("Allocated trie memory caches", "clean", common.StorageSize(config.TrieCleanCache)*1024*1024, "dirty", common.StorageSize(config.TrieDirtyCache)*1024*1024)
 
 	// Assemble the Ethereum object
-	chainDb, err := ctx.OpenDatabaseWithFreezer("chaindata", config.DatabaseCache, config.DatabaseHandles, config.DatabaseFreezer, "eth/db/chaindata/")
+	chainDb, err := stack.ServiceContext.OpenDatabaseWithFreezer("chaindata", config.DatabaseCache, config.DatabaseHandles, config.DatabaseFreezer, "eth/db/chaindata/")
 	if err != nil {
 		return nil, err
 	}
@@ -151,9 +152,9 @@ func New(ctx *node.ServiceContext, config *Config) (*Ethereum, error) {
 	eth := &Ethereum{
 		config:            config,
 		chainDb:           chainDb,
-		eventMux:          ctx.EventMux,
-		accountManager:    ctx.AccountManager,
-		engine:            CreateConsensusEngine(ctx, chainConfig, &config.Ethash, config.Miner.Notify, config.Miner.Noverify, chainDb),
+		eventMux:          stack.ServiceContext.EventMux,
+		accountManager:    stack.ServiceContext.AccountManager,
+		engine:            CreateConsensusEngine(stack.ServiceContext, chainConfig, &config.Ethash, config.Miner.Notify, config.Miner.Noverify, chainDb),
 		closeBloomHandler: make(chan struct{}),
 		networkID:         config.NetworkId,
 		gasPrice:          config.Miner.GasPrice,
@@ -207,7 +208,7 @@ func New(ctx *node.ServiceContext, config *Config) (*Ethereum, error) {
 	eth.bloomIndexer.Start(eth.blockchain)
 
 	if config.TxPool.Journal != "" {
-		config.TxPool.Journal = ctx.ResolvePath(config.TxPool.Journal)
+		config.TxPool.Journal = stack.ServiceContext.ResolvePath(config.TxPool.Journal)
 	}
 	eth.txPool = core.NewTxPool(config.TxPool, chainConfig, eth.blockchain)
 
@@ -223,19 +224,32 @@ func New(ctx *node.ServiceContext, config *Config) (*Ethereum, error) {
 	eth.miner = miner.New(eth, &config.Miner, chainConfig, eth.EventMux(), eth.engine, eth.isLocalBlock)
 	eth.miner.SetExtra(makeExtraData(config.Miner.ExtraData))
 
-	eth.APIBackend = &EthAPIBackend{ctx.ExtRPCEnabled(), eth, nil}
+	eth.APIBackend = &EthAPIBackend{stack.ServiceContext.ExtRPCEnabled(), eth, nil}
 	gpoParams := config.GPO
 	if gpoParams.Default == nil {
 		gpoParams.Default = config.Miner.GasPrice
 	}
 	eth.APIBackend.gpo = gasprice.NewOracle(eth.APIBackend, gpoParams)
 
-	eth.dialCandidates, err = eth.setupDiscovery(&ctx.Config.P2P)
+	eth.dialCandiates, err = eth.setupDiscovery(&stack.ServiceContext.Config.P2P)
 	if err != nil {
 		return nil, err
 	}
 
-	return eth, nil
+	if config.LightServ > 0 {
+		ls, _ := les.NewLesServer(eth, config)
+		eth.AddLesServer(ls)
+	}
+
+	// Register the backend on the node
+	stack.RegisterAPIs(eth.APIs())
+	if err := stack.RegisterProtocols(eth.Protocols()); err != nil {
+		return nil, err
+	}
+	if err := stack.RegisterBackend(eth, nil); err != nil {
+		return nil, err
+	}
+	return eth, stack.RegisterLifecycle(eth)
 }
 
 func makeExtraData(extra []byte) []byte {

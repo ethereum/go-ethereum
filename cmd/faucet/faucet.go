@@ -241,24 +241,15 @@ func newFaucet(genesis *core.Genesis, port int, enodes []*discv5.Node, network u
 	cfg.SyncMode = downloader.LightSync
 	cfg.NetworkId = network
 	cfg.Genesis = genesis
-	lesBackend, err := les.New(stack.ServiceContext, &cfg)
-	// register the backend and lifecycle
-	if err := stack.RegisterBackend(lesBackend); err != nil {
-		return nil, err
+	if err := les.New(stack, &cfg); err != nil {
+		return nil, fmt.Errorf("Failed to register the Ethereum service: %w", err)
 	}
-	stack.RegisterLifecycle(lesBackend)
 
 	// Assemble the ethstats monitoring and reporting service'
 	if stats != "" {
-		var serv *les.LightEthereum
-		ethstatsAuxService, err := ethstats.New(stack, stats, serv)
-		if err != nil {
+		if err := ethstats.New(stack, stats); err != nil {
 			return nil, err
 		}
-		if err := stack.RegisterAuxService(ethstatsAuxService); err != nil {
-			return nil, err
-		}
-		stack.RegisterLifecycle(ethstatsAuxService)
 	}
 	// Boot up the client and ensure it connects to bootnodes
 	if err := stack.Start(); err != nil {

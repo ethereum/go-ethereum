@@ -83,41 +83,31 @@ type Service struct {
 }
 
 // New returns a monitoring service ready for stats reporting.
-func New(node *node.Node, url string, backend node.Backend) (node.AuxiliaryService, error) { // TODO, this thing receives the backend explicitly, does whatever, registers itself
+func New(node *node.Node, ethBackend *eth.Ethereum, lesBackend *les.LightEthereum, url string) error { // TODO, this thing receives the backend explicitly, does whatever, registers itself
 	// Parse the netstats connection url
 	re := regexp.MustCompile("([^:@]*)(:([^@]*))?@(.+)")
 	parts := re.FindStringSubmatch(url)
 	if len(parts) != 5 {
-		return nil, fmt.Errorf("invalid netstats url: \"%s\", should be nodename:secret@host:port", url)
+		return fmt.Errorf("invalid netstats url: \"%s\", should be nodename:secret@host:port", url)
 	}
 
 	// fetch type of Backend
-	if ethBackend, ok := backend.(*eth.Ethereum); ok {
-		return &Service{
-			server: node.Server(),
-			eth:    ethBackend,
-			les:    nil, // TODO is this okay?
-			engine: ethBackend.Engine(),
-			node:   parts[1],
-			pass:   parts[3],
-			host:   parts[4],
-			pongCh: make(chan struct{}),
-			histCh: make(chan []uint64, 1),
-		}, nil
-	} else if lesBackend, ok := backend.(*les.LightEthereum); ok {
-		return &Service{
-			server: node.Server(),
-			eth:    nil, // TODO is this okay?
-			les:    lesBackend,
-			engine: lesBackend.Engine(),
-			node:   parts[1],
-			pass:   parts[3],
-			host:   parts[4],
-			pongCh: make(chan struct{}),
-			histCh: make(chan []uint64, 1),
-		}, nil
+	if ethBackend == nil && lesBackend == nil {
+		return errors.New("no Ethereum service") // TODO is this okay to return?
 	}
-	return nil, errors.New("no Ethereum service") // TODO is this okay to return?
+	ethstats := &Service{
+		server: node.Server(),
+		eth:    ethBackend,
+		les:    lesBackend,
+		engine: ethBackend.Engine(),
+		node:   parts[1],
+		pass:   parts[3],
+		host:   parts[4],
+		pongCh: make(chan struct{}),
+		histCh: make(chan []uint64, 1),
+	}
+
+	return node.RegisterLifecycle(ethstats)
 }
 
 // Start implements node.Service, starting up the monitoring and reporting daemon.
