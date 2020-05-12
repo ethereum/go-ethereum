@@ -275,7 +275,7 @@ func (arguments Arguments) UnpackValues(data []byte) ([]interface{}, error) {
 	retval := make([]interface{}, 0, len(nonIndexedArgs))
 	virtualArgs := 0
 	for index, arg := range nonIndexedArgs {
-		marshalledValue, err := ToGoType((index+virtualArgs)*32, arg.Type, data)
+		marshalledValue, err := toGoType((index+virtualArgs)*32, arg.Type, data)
 		if arg.Type.T == ArrayTy && !isDynamicType(arg.Type) {
 			// If we have a static array, like [3]uint256, these are coded as
 			// just like uint256,uint256,uint256.
@@ -312,7 +312,7 @@ func (arguments Arguments) Pack(args ...interface{}) ([]byte, error) {
 	// Make sure arguments match up and pack them
 	abiArgs := arguments
 	if len(args) != len(abiArgs) {
-		return nil, fmt.Errorf("argument count mismatch: %d for %d", len(args), len(abiArgs))
+		return nil, fmt.Errorf("argument count mismatch: got %d for %d", len(args), len(abiArgs))
 	}
 	// variable input is the output appended at the end of packed
 	// output. This is used for strings and bytes types input.
