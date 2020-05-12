@@ -206,8 +206,6 @@ func (n *Node) RegisterProtocols(protocols []p2p.Protocol) error {
 }
 
 func (n *Node) RegisterAPIs(apis []rpc.API) {
-	// TODO check for duplicates?
-
 	n.rpcAPIs = append(n.rpcAPIs, apis...)
 }
 
@@ -342,6 +340,8 @@ func (n *Node) openDataDir() error {
 // startup. It's not meant to be called at any time afterwards as it makes certain
 // assumptions about the state of the node.
 func (n *Node) startRPC() error {
+	n.RegisterAPIs(n.apis())
+
 	// Start the various API endpoints, terminating all in case of errors
 	if err := n.startInProc(); err != nil {
 		return err
