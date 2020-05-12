@@ -39,7 +39,7 @@ type collector struct {
 	buff *bytes.Buffer
 }
 
-// newCollector createa a new Prometheus metric aggregator.
+// newCollector creates a new Prometheus metric aggregator.
 func newCollector() *collector {
 	return &collector{
 		buff: &bytes.Buffer{},
