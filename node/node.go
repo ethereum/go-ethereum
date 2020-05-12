@@ -20,8 +20,6 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"github.com/ethereum/go-ethereum/eth"
-	"github.com/ethereum/go-ethereum/les"
 	"net"
 	"net/http"
 	"os"
@@ -117,21 +115,21 @@ func New(conf *Config) (*Node, error) {
 		},
 		http: &HTTPServer{
 			CorsAllowedOrigins: conf.HTTPCors,
-			Vhosts: conf.HTTPVirtualHosts,
-			Whitelist: conf.HTTPModules,
-			Timeouts: conf.HTTPTimeouts,
-			Srv: rpc.NewServer(),
-			endpoint: conf.HTTPEndpoint(),
-			host: conf.HTTPHost,
-			port: conf.HTTPPort,
+			Vhosts:             conf.HTTPVirtualHosts,
+			Whitelist:          conf.HTTPModules,
+			Timeouts:           conf.HTTPTimeouts,
+			Srv:                rpc.NewServer(),
+			endpoint:           conf.HTTPEndpoint(),
+			host:               conf.HTTPHost,
+			port:               conf.HTTPPort,
 		},
 		ws: &HTTPServer{
 			CorsAllowedOrigins: conf.WSOrigins,
-			Whitelist: conf.WSModules,
-			Srv: rpc.NewServer(),
-			endpoint: conf.WSEndpoint(),
-			host: conf.WSHost,
-			port: conf.WSPort,
+			Whitelist:          conf.WSModules,
+			Srv:                rpc.NewServer(),
+			endpoint:           conf.WSEndpoint(),
+			host:               conf.WSHost,
+			port:               conf.WSPort,
 		},
 		eventmux: new(event.TypeMux),
 		log:      conf.Logger,
@@ -141,6 +139,22 @@ func New(conf *Config) (*Node, error) {
 	}
 	if conf.WSHost != "" {
 		node.ws.WSAllowed = true
+	}
+
+	// Initialize the p2p server. This creates the node key and
+	// discovery databases.
+	node.server = &p2p.Server{Config: conf.P2P} // TODO add init step for p2p server
+	node.server.Config.PrivateKey = node.config.NodeKey()
+	node.server.Config.Name = node.config.NodeName()
+	node.server.Config.Logger = node.log
+	if node.server.Config.StaticNodes == nil {
+		node.server.Config.StaticNodes = node.config.StaticNodes()
+	}
+	if node.server.Config.TrustedNodes == nil {
+		node.server.Config.TrustedNodes = node.config.TrustedNodes()
+	}
+	if node.server.Config.NodeDatabase == "" {
+		node.server.Config.NodeDatabase = node.config.NodeDB()
 	}
 
 	node.ServiceContext.EventMux = node.eventmux
@@ -184,9 +198,6 @@ func (n *Node) RegisterLifecycle(lifecycle Lifecycle) error {
 }
 
 func (n *Node) RegisterProtocols(protocols []p2p.Protocol) error {
-	if !n.running() {
-		return ErrNodeStopped
-	}
 	// TODO check for duplicates?
 
 	// add backend's protocols to the p2p server
@@ -248,7 +259,7 @@ func (n *Node) CreateHTTPServer(h *HTTPServer, exposeAll bool) error {
 
 // running returns true if the node's p2p server is already running
 func (n *Node) running() bool {
-	return n.server != nil
+	return n.server.Listening()
 }
 
 // Start creates a live P2P node and starts running it.
@@ -264,38 +275,14 @@ func (n *Node) Start() error {
 		return err
 	}
 
-	// Initialize the p2p server. This creates the node key and
-	// discovery databases.
-	n.server = &p2p.Server{Config: n.config.P2P} // TODO add init step for p2p server
-	n.server.Config.PrivateKey = n.config.NodeKey()
-	n.server.Config.Name = n.config.NodeName()
-	n.server.Config.Logger = n.log
-	if n.server.Config.StaticNodes == nil {
-		n.server.Config.StaticNodes = n.config.StaticNodes()
-	}
-	if n.server.Config.TrustedNodes == nil {
-		n.server.Config.TrustedNodes = n.config.TrustedNodes()
-	}
-	if n.server.Config.NodeDatabase == "" {
-		n.server.Config.NodeDatabase = n.config.NodeDB()
-	}
-
 	// Start the p2p node
 	if err := n.server.Start(); err != nil {
 		return convertFileLockError(err)
 	}
 	n.log.Info("Starting peer-to-peer node", "instance", n.server.Name)
 
-	// Register the running p2p server with the Backend
-	if err := n.backend.P2PServer(n.server); err != nil {
-		n.server.Stop()
-		return err
-	}
-	// Register the Backend's protocols with the p2p server
-	if err := n.RegisterProtocols(n.backend.Protocols()); err != nil {
-		n.server.Stop()
-		return err
-	}
+	// TODO running p2p server needs to somehow be added to the backend
+
 	// Start all registered lifecycles
 	var started []Lifecycle
 	for _, lifecycle := range n.lifecycles {
@@ -355,7 +342,6 @@ func (n *Node) openDataDir() error {
 // startup. It's not meant to be called at any time afterwards as it makes certain
 // assumptions about the state of the node.
 func (n *Node) startRPC() error {
-	n.RegisterRPC(n.apis())
 	// Start the various API endpoints, terminating all in case of errors
 	if err := n.startInProc(); err != nil {
 		return err
@@ -388,12 +374,6 @@ func (n *Node) startRPC() error {
 			}
 			n.ws.handler = n.ws.Srv.WebsocketHandler(n.ws.CorsAllowedOrigins)
 			n.RegisterHTTP(n.http, n.ws)
-		}
-		// if an auxiliary service has not been started, check if it has the same endpoint, then start
-		for _, auxServices := range n.auxServices {
-			if auxServices.Server().endpoint == n.http.endpoint { // TODO maybe also check that auxServices.Server().Server == nil? or is it unnecessary?
-				n.RegisterHTTP(n.http, auxServices.Server())
-			}
 		}
 		// only set exposeAll if websocket is enabled
 		var exposeAll bool
@@ -576,13 +556,12 @@ func (n *Node) Stop() error {
 	failure := &StopError{
 		Services: make(map[reflect.Type]error),
 	}
-	for kind, service := range n.services {
-		if err := service.Stop(); err != nil {
-			failure.Services[kind] = err
+	for _, lifecycle := range n.lifecycles {
+		if err := lifecycle.Stop(); err != nil {
+			failure.Services[reflect.TypeOf(lifecycle)] = err
 		}
 	}
 	n.server.Stop()
-	n.services = nil
 	n.server = nil
 
 	// Release instance directory lock.
@@ -657,17 +636,6 @@ func (n *Node) RPCHandler() (*rpc.Server, error) {
 		return nil, ErrNodeStopped
 	}
 	return n.inprocHandler, nil
-}
-
-func (n *Node) Backend() (*eth.Ethereum, *les.LightEthereum)  {
-	if n.ethBackend != nil && n.lesBackend == nil {
-		return n.ethBackend, nil
-	}
-	if n.ethBackend == nil && n.lesBackend != nil {
-		return nil, n.lesBackend
-	}
-
-	return nil, nil
 }
 
 // Server retrieves the currently running P2P network layer. This method is meant

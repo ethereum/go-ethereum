@@ -1703,7 +1703,10 @@ func RegisterEthService(stack *node.Node, cfg *eth.Config) (*eth.Ethereum, *les.
 		if err != nil {
 			Fatalf("Failed to register the Ethereum service: %w", err)
 		}
-
+		if cfg.LightServ > 0 {
+			ls, _ := les.NewLesServer(backend, cfg)
+			backend.AddLesServer(ls)
+		}
 		return backend, nil
 	}
 }

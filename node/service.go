@@ -18,7 +18,6 @@ package node
 
 import (
 	"path/filepath"
-	"reflect"
 
 	"github.com/ethereum/go-ethereum/accounts"
 	"github.com/ethereum/go-ethereum/core/rawdb"
@@ -72,15 +71,15 @@ func (ctx *ServiceContext) ResolvePath(path string) string {
 	return ctx.Config.ResolvePath(path)
 }
 
-// Service retrieves a currently running service registered of a specific type.
-func (ctx *ServiceContext) Service(service interface{}) error {
-	element := reflect.ValueOf(service).Elem()
-	if running, ok := ctx.services[element.Type()]; ok {
-		element.Set(reflect.ValueOf(running))
-		return nil
-	}
-	return ErrServiceUnknown
-}
+//// Service retrieves a currently running service registered of a specific type.
+//func (ctx *ServiceContext) Service(service interface{}) error {
+//	element := reflect.ValueOf(service).Elem()
+//	if running, ok := ctx.services[element.Type()]; ok {
+//		element.Set(reflect.ValueOf(running))
+//		return nil
+//	}
+//	return ErrServiceUnknown
+//}
 
 // ExtRPCEnabled returns the indicator whether node enables the external
 // RPC(http, ws or graphql).

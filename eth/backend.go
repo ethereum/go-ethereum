@@ -20,7 +20,6 @@ package eth
 import (
 	"errors"
 	"fmt"
-	"github.com/ethereum/go-ethereum/les"
 	"math/big"
 	"runtime"
 	"sync"
@@ -161,6 +160,7 @@ func New(stack *node.Node, config *Config) (*Ethereum, error) {
 		etherbase:         config.Miner.Etherbase,
 		bloomRequests:     make(chan chan *bloombits.Retrieval),
 		bloomIndexer:      NewBloomIndexer(chainDb, params.BloomBitsBlocks, params.BloomConfirms),
+		p2pServer:         stack.Server(),
 	}
 
 	bcVersion := rawdb.ReadDatabaseVersion(chainDb)
@@ -221,6 +221,7 @@ func New(stack *node.Node, config *Config) (*Ethereum, error) {
 	if eth.protocolManager, err = NewProtocolManager(chainConfig, checkpoint, config.SyncMode, config.NetworkId, eth.eventMux, eth.txPool, eth.engine, eth.blockchain, chainDb, cacheLimit, config.Whitelist); err != nil {
 		return nil, err
 	}
+
 	eth.miner = miner.New(eth, &config.Miner, chainConfig, eth.EventMux(), eth.engine, eth.isLocalBlock)
 	eth.miner.SetExtra(makeExtraData(config.Miner.ExtraData))
 
@@ -236,17 +237,9 @@ func New(stack *node.Node, config *Config) (*Ethereum, error) {
 		return nil, err
 	}
 
-	if config.LightServ > 0 {
-		ls, _ := les.NewLesServer(eth, config)
-		eth.AddLesServer(ls)
-	}
-
 	// Register the backend on the node
 	stack.RegisterAPIs(eth.APIs())
 	if err := stack.RegisterProtocols(eth.Protocols()); err != nil {
-		return nil, err
-	}
-	if err := stack.RegisterBackend(eth, nil); err != nil {
 		return nil, err
 	}
 	return eth, stack.RegisterLifecycle(eth)

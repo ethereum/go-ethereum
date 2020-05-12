@@ -20,6 +20,7 @@ import (
 	"bufio"
 	"errors"
 	"fmt"
+	"github.com/ethereum/go-ethereum/les"
 	"os"
 	"reflect"
 	"unicode"
@@ -144,7 +145,7 @@ func enableWhisper(ctx *cli.Context) bool {
 	return false
 }
 
-func makeFullNode(ctx *cli.Context) *node.Node {
+func makeFullNode(ctx *cli.Context) (*node.Node, *eth.Ethereum, *les.LightEthereum) {
 	stack, cfg := makeConfigNode(ctx)
 	ethBackend, lesBackend := utils.RegisterEthService(stack, &cfg.Eth)
 
@@ -172,7 +173,7 @@ func makeFullNode(ctx *cli.Context) *node.Node {
 		utils.RegisterEthStatsService(stack, ethBackend, lesBackend, cfg.Ethstats.URL)
 	}
 
-	return stack
+	return stack, ethBackend, lesBackend
 }
 
 // dumpConfig is the dumpconfig command.

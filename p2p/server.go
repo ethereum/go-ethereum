@@ -1119,3 +1119,7 @@ func (srv *Server) PeersInfo() []*PeerInfo {
 	}
 	return infos
 }
+
+func (srv *Server) Listening() bool {
+	return srv.listener != nil
+}

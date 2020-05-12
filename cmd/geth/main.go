@@ -351,9 +351,9 @@ func geth(ctx *cli.Context) error {
 		return fmt.Errorf("invalid command: %q", args[0])
 	}
 	prepare(ctx)
-	node := makeFullNode(ctx)
+	node, ethBackend, lesBackend := makeFullNode(ctx)
 	defer node.Close()
-	startNode(ctx, node)
+	startNode(ctx, node, ethBackend, lesBackend)
 
 	node.Wait()
 	return nil
@@ -362,7 +362,7 @@ func geth(ctx *cli.Context) error {
 // startNode boots up the system node and all registered protocols, after which
 // it unlocks any requested accounts, and starts the RPC/IPC interfaces and the
 // miner.
-func startNode(ctx *cli.Context, stack *node.Node) {
+func startNode(ctx *cli.Context, stack *node.Node, ethBackend *eth.Ethereum, lesBackend *les.LightEthereum) {
 	debug.Memsize.Add("node", stack)
 
 	// Start up the node itself
@@ -385,20 +385,18 @@ func startNode(ctx *cli.Context, stack *node.Node) {
 	// Set contract backend for ethereum service if local node
 	// is serving LES requests.
 	if ctx.GlobalInt(utils.LegacyLightServFlag.Name) > 0 || ctx.GlobalInt(utils.LightServeFlag.Name) > 0 {
-		var ethService *eth.Ethereum
-		if err := stack.Service(&ethService); err != nil {
+		if ethBackend == nil {
 			utils.Fatalf("Failed to retrieve ethereum service: %v", err)
 		}
-		ethService.SetContractBackend(ethClient)
+		ethBackend.SetContractBackend(ethClient)
 	}
 	// Set contract backend for les service if local node is
 	// running as a light client.
 	if ctx.GlobalString(utils.SyncModeFlag.Name) == "light" {
-		var lesService *les.LightEthereum
-		if err := stack.Service(&lesService); err != nil {
+		if lesBackend == nil {
 			utils.Fatalf("Failed to retrieve light ethereum service: %v", err)
 		}
-		lesService.SetContractBackend(ethClient)
+		lesBackend.SetContractBackend(ethClient)
 	}
 
 	go func() {
@@ -465,11 +463,7 @@ func startNode(ctx *cli.Context, stack *node.Node) {
 			utils.Fatalf("Light clients do not support mining")
 		}
 		// Check if node's backend is eth and that it exists // TODO fix this section up -- not sure if it's doing what it's supposed to.
-		ethereum, ok := stack.Backend().(*eth.Ethereum)
-		if !ok {
-			if stack.Backend() == nil {
-				utils.Fatalf("Ethereum service not running: backend is nil")
-			}
+		if ethBackend == nil {
 			utils.Fatalf("Ethereum service not running: backend is not an eth backend")
 		}
 		// Set the gas price to the limits from the CLI and start mining
@@ -477,15 +471,14 @@ func startNode(ctx *cli.Context, stack *node.Node) {
 		if ctx.GlobalIsSet(utils.LegacyMinerGasPriceFlag.Name) && !ctx.GlobalIsSet(utils.MinerGasPriceFlag.Name) {
 			gasprice = utils.GlobalBig(ctx, utils.LegacyMinerGasPriceFlag.Name)
 		}
-		ethereum.TxPool().SetGasPrice(gasprice)
+		ethBackend.TxPool().SetGasPrice(gasprice)
 
 		threads := ctx.GlobalInt(utils.MinerThreadsFlag.Name)
 		if ctx.GlobalIsSet(utils.LegacyMinerThreadsFlag.Name) && !ctx.GlobalIsSet(utils.MinerThreadsFlag.Name) {
 			threads = ctx.GlobalInt(utils.LegacyMinerThreadsFlag.Name)
 			log.Warn("The flag --minerthreads is deprecated and will be removed in the future, please use --miner.threads")
 		}
-
-		if err := ethereum.StartMining(threads); err != nil {
+		if err := ethBackend.StartMining(threads); err != nil {
 			utils.Fatalf("Failed to start mining: %v", err)
 		}
 	}
