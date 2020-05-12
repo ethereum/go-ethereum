@@ -33,7 +33,7 @@ func ReadCPUStats(stats *CPUStats) {
 	}
 	// requesting all cpu times will always return an array with only one time stats entry
 	timeStat := timeStats[0]
-	stats.GlobalTime = int64((timeStat.User + timeStat.Nice + timeStat.System) * 128)
-	stats.GlobalWait = int64((timeStat.Iowait) * 128)
+	stats.GlobalTime = int64((timeStat.User + timeStat.Nice + timeStat.System))
+	stats.GlobalWait = int64((timeStat.Iowait))
 	stats.LocalTime = getProcessCPUTime()
 }
