@@ -65,9 +65,6 @@ const (
 
 	// handshakeTimeout is the timeout LES handshake will be treated as failed.
 	handshakeTimeout = 5 * time.Second
-
-	// retrySendCachePeriod is the time interval a caching retry is performed.
-	retrySendCachePeriod = time.Millisecond * 100
 )
 
 const (
