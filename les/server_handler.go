@@ -262,7 +262,7 @@ func (h *serverHandler) handleMsg(p *clientPeer, wg *sync.WaitGroup) error {
 			h.server.clientPool.requestCost(p, realCost)
 		}
 		if reply != nil {
-			p.mustQueueSend(func() {
+			p.queueSend(func() {
 				if err := reply.send(bv); err != nil {
 					select {
 					case p.errCh <- err:
