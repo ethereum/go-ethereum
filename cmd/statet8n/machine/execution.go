@@ -52,6 +52,11 @@ type ExecutionResult struct {
 	Rejected    []int          `json:"rejected,omitempty"`
 }
 
+type ommer struct {
+	Delta   uint64         `json:"delta"`
+	Address common.Address `json:"address"`
+}
+
 //go:generate gencodec -type stEnv -field-override stEnvMarshaling -out gen_stenv.go
 type stEnv struct {
 	Coinbase    common.Address                      `json:"currentCoinbase"   gencodec:"required"`
@@ -60,6 +65,7 @@ type stEnv struct {
 	Number      uint64                              `json:"currentNumber"     gencodec:"required"`
 	Timestamp   uint64                              `json:"currentTimestamp"  gencodec:"required"`
 	BlockHashes map[math.HexOrDecimal64]common.Hash `json:"blockHashes,omitempty"`
+	Ommers      []ommer                             `json:"ommers,omitempty"`
 }
 
 type stEnvMarshaling struct {
@@ -178,7 +184,22 @@ func (pre *Prestate) Apply(vmConfig vm.Config, chainConfig *params.ChainConfig,
 		// - the coinbase suicided, or
 		// - there are only 'bad' transactions, which aren't executed. In those cases,
 		//   the coinbase gets no txfee, so isn't created, and thus needs to be touched
-		statedb.AddBalance(pre.Env.Coinbase, big.NewInt(miningReward))
+		var (
+			blockReward = big.NewInt(miningReward)
+			minerReward = new(big.Int).Set(blockReward)
+			perOmmer    = new(big.Int).Div(blockReward, big.NewInt(32))
+		)
+		for _, ommer := range pre.Env.Ommers {
+			// Add 1/32th for each ommer included
+			minerReward.Add(minerReward, perOmmer)
+			// Add (8-delta)/8
+			reward := big.NewInt(8)
+			reward.Sub(reward, big.NewInt(0).SetUint64(ommer.Delta))
+			reward.Mul(reward, blockReward)
+			reward.Div(reward, big.NewInt(8))
+			statedb.AddBalance(ommer.Address, reward)
+		}
+		statedb.AddBalance(pre.Env.Coinbase, minerReward)
 	}
 	// Commit block
 	root, err := statedb.Commit(chainConfig.IsEIP158(vmContext.BlockNumber))

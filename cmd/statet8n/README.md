@@ -157,26 +157,45 @@ Output:
  }
 }
 ```
-### Mining reward
 
-Adding a mining reward: 
+## About Ommers
+
+Mining rewards and ommer rewards might need to be added. This is how those are applied:
+
+- `mining_reward` is the block minig reward for the miner, `0xaa`, of a block at height `N`.
+- For each ommer, mined by `0xbb`, with blocknumber `N-delta`
+   - (where `delta` is the difference between the current block and the ommer)
+   - The account `0xbb` (ommer miner) is awarded `delta * reward) / 8`
+   - The account `0xaa` (block miner) is awarded `mining_reward / 32`
+
+To make `state_t8n` apply these, the following inputs are required:
+
+- `state.reward`
+  - For ethash, it is `5000000000000000000` `wei`,
+  - If this is not defined, mining rewards are not applied,
+  - A value of `0` is valid, and causes accounts to be 'touched'.
+- For each ommer, the tool needs to be given an `address` and a `delta`. This
+  is done via the `env`.
+
+Example:
+`./1/env.json`:
+```json
+cat: ./1/env.json: No such file or directory
+
 ```
-./statet8n --input.alloc=./testdata/1/alloc.json --input.txs=./testdata/1/txs.json --input.env=./testdata/1/env.json  --output.alloc=stdout
-```
+When applying this, using a reward of `0x08`
 Output:
 ```json
 {
  "alloc": {
-  "0x8a8eafb1cf62bfbeb1741769dae1a9dd47996192": {
-   "balance": "0xfeed1a9d",
-   "nonce": "0x1"
+  "0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa": {
+   "balance": "0x88"
   },
-  "0xa94f5374fce5edbc8e2a8697c15331677e6ebf0b": {
-   "balance": "0x5ffd4878be161d74",
-   "nonce": "0xac"
+  "0xbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb": {
+   "balance": "0x70"
   },
-  "0xc94f5374fce5edbc8e2a8697c15331677e6ebf0b": {
-   "balance": "0xa410"
+  "0xcccccccccccccccccccccccccccccccccccccccc": {
+   "balance": "0x60"
   }
  }
 }
@@ -204,7 +223,7 @@ cat trace-0.jsonl | grep BLOCKHASH -C2
 {"pc":0,"op":96,"gas":"0x5f58ef8","gasCost":"0x3","memory":"0x","memSize":0,"stack":[],"depth":1,"refund":0,"opName":"PUSH1","error":""}
 {"pc":2,"op":64,"gas":"0x5f58ef5","gasCost":"0x14","memory":"0x","memSize":0,"stack":["0x1"],"depth":1,"refund":0,"opName":"BLOCKHASH","error":""}
 {"pc":3,"op":0,"gas":"0x5f58ee1","gasCost":"0x0","memory":"0x","memSize":0,"stack":["0xdac58aa524e50956d0c0bae7f3f8bb9d35381365d07804dd5b48a5a297c06af4"],"depth":1,"refund":0,"opName":"STOP","error":""}
-{"output":"","gasUsed":"0x17","time":109297}
+{"output":"","gasUsed":"0x17","time":110890}
 ```
 
 In this example, the caller has not provided the required blockhash:
@@ -220,9 +239,9 @@ Error code: 4
 Another thing that can be done, is to chain invocations:
 ```
 ./statet8n --input.alloc=./testdata/1/alloc.json --input.txs=./testdata/1/txs.json --input.env=./testdata/1/env.json --output.alloc=stdout | ./statet8n --input.alloc=stdin --input.env=./testdata/1/env.json --input.txs=./testdata/1/txs.json
-INFO [05-12|09:05:50.042] rejected tx                              index=1 hash="0557ba…18d673" from=0x8A8eAFb1cf62BfBeb1741769DAE1a9dd47996192 error="nonce too low"
-INFO [05-12|09:05:50.055] rejected tx                              index=0 hash="0557ba…18d673" from=0x8A8eAFb1cf62BfBeb1741769DAE1a9dd47996192 error="nonce too low"
-INFO [05-12|09:05:50.056] rejected tx                              index=1 hash="0557ba…18d673" from=0x8A8eAFb1cf62BfBeb1741769DAE1a9dd47996192 error="nonce too low"
+INFO [05-12|10:37:05.785] rejected tx                              index=1 hash="0557ba…18d673" from=0x8A8eAFb1cf62BfBeb1741769DAE1a9dd47996192 error="nonce too low"
+INFO [05-12|10:37:05.790] rejected tx                              index=0 hash="0557ba…18d673" from=0x8A8eAFb1cf62BfBeb1741769DAE1a9dd47996192 error="nonce too low"
+INFO [05-12|10:37:05.790] rejected tx                              index=1 hash="0557ba…18d673" from=0x8A8eAFb1cf62BfBeb1741769DAE1a9dd47996192 error="nonce too low"
 
 ```
 What happened here, is that we first applied two identical transactions, so the second one was rejected. 
