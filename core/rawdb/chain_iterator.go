@@ -17,7 +17,6 @@
 package rawdb
 
 import (
-	"math"
 	"runtime"
 	"sync/atomic"
 	"time"
