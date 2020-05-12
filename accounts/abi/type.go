@@ -163,16 +163,19 @@ func NewType(t string, internalType string, components []ArgumentMarshaling) (ty
 			expression string // canonical parameter expression
 		)
 		expression += "("
+		overloadedNames := make(map[string]string)
 		for idx, c := range components {
 			cType, err := NewType(c.Type, c.InternalType, c.Components)
 			if err != nil {
 				return Type{}, err
 			}
-			if ToCamelCase(c.Name) == "" {
-				return Type{}, errors.New("abi: purely anonymous or underscored field is not supported")
+			fieldName, err := overloadedArgName(c.Name, overloadedNames)
+			if err != nil {
+				return Type{}, err
 			}
+			overloadedNames[fieldName] = fieldName
 			fields = append(fields, reflect.StructField{
-				Name: ToCamelCase(c.Name), // reflect.StructOf will panic for any exported field.
+				Name: fieldName, // reflect.StructOf will panic for any exported field.
 				Type: cType.getType(),
 				Tag:  reflect.StructTag("json:\"" + c.Name + "\""),
 			})
@@ -244,6 +247,20 @@ func (t Type) getType() reflect.Type {
 	default:
 		panic("Invalid type")
 	}
+}
+
+func overloadedArgName(rawName string, names map[string]string) (string, error) {
+	fieldName := ToCamelCase(rawName)
+	if fieldName == "" {
+		return "", errors.New("abi: purely anonymous or underscored field is not supported")
+	}
+	// Handle overloaded fieldNames
+	_, ok := names[fieldName]
+	for idx := 0; ok; idx++ {
+		fieldName = fmt.Sprintf("%s%d", ToCamelCase(rawName), idx)
+		_, ok = names[fieldName]
+	}
+	return fieldName, nil
 }
 
 // String implements Stringer
