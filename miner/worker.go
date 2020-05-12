@@ -497,7 +497,7 @@ func (w *worker) mainLoop() {
 					w.updateSnapshot()
 				}
 			} else {
-				// Speical case, if the consensus engine is 0 period clique(dev mode),
+				// Special case, if the consensus engine is 0 period clique(dev mode),
 				// submit mining work here since all empty submission will be rejected
 				// by clique. Of course the advance sealing(empty submission) is disabled.
 				if w.chainConfig.Clique != nil && w.chainConfig.Clique.Period == 0 {
