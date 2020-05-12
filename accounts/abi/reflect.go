@@ -116,7 +116,11 @@ func setSlice(dst, src reflect.Value) error {
 
 func setArray(dst, src reflect.Value) error {
 	array := reflect.New(dst.Type()).Elem()
-	for i := 0; i < min(src.Len(), dst.Len()); i++ {
+	min := src.Len()
+	if src.Len() > dst.Len() {
+		min = dst.Len()
+	}
+	for i := 0; i < min; i++ {
 		if err := set(array.Index(i), src.Index(i)); err != nil {
 			return err
 		}
@@ -227,11 +231,4 @@ func mapArgNamesToStructFields(argNames []string, value reflect.Value) (map[stri
 		}
 	}
 	return abi2struct, nil
-}
-
-func min(a, b int) int {
-	if a < b {
-		return a
-	}
-	return b
 }
