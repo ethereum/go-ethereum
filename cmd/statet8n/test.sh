@@ -107,11 +107,11 @@ cat << EOF
 
 Mining rewards and ommer rewards might need to be added. This is how those are applied:
 
-- \`mining_reward\` is the block minig reward for the miner, \`0xaa\`, of a block at height \`N\`.
-- For each ommer, mined by \`0xbb\`, with blocknumber \`N-delta\`
+- \`block_reward\` is the block mining reward for the miner (\`0xaa\`), of a block at height \`N\`.
+- For each ommer (mined by \`0xbb\`), with blocknumber \`N-delta\`
    - (where \`delta\` is the difference between the current block and the ommer)
-   - The account \`0xbb\` (ommer miner) is awarded \`delta * reward) / 8\`
-   - The account \`0xaa\` (block miner) is awarded \`mining_reward / 32\`
+   - The account \`0xbb\` (ommer miner) is awarded \`(8-delta)/ 8 * block_reward\`
+   - The account \`0xaa\` (block miner) is awarded \`block_reward / 32\`
 
 To make \`state_t8n\` apply these, the following inputs are required:
 
@@ -121,6 +121,10 @@ To make \`state_t8n\` apply these, the following inputs are required:
   - A value of \`0\` is valid, and causes accounts to be 'touched'.
 - For each ommer, the tool needs to be given an \`address\` and a \`delta\`. This
   is done via the \`env\`.
+
+Note: the tool does not verify that e.g. the normal uncle rules apply,
+and allows e.g two uncles at the same height, or the uncle-distance. This means that
+the tool allows for negative uncle reward (distance > 8)
 
 Example:
 EOF
