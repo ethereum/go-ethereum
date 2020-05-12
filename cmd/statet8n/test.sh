@@ -125,7 +125,7 @@ To make \`state_t8n\` apply these, the following inputs are required:
 Example:
 EOF
 
-showjson ./1/env.json
+showjson ./testdata/5/env.json
 
 echo "When applying this, using a reward of \`0x08\`"
 cmd="./statet8n --input.alloc=./testdata/5/alloc.json -input.txs=./testdata/5/txs.json --input.env=./testdata/5/env.json  --output.alloc=stdout --state.reward=0x80"
