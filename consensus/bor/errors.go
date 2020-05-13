@@ -79,3 +79,20 @@ func (e *SealingInFlightError) Error() string {
 		e.Number,
 	)
 }
+
+// MismatchingValidatorsError is returned if a last block in sprint contains a
+// list of validators different from the one that local node calculated
+type MismatchingValidatorsError struct {
+	Number             uint64
+	ValidatorSetSnap   []byte
+	ValidatorSetHeader []byte
+}
+
+func (e *MismatchingValidatorsError) Error() string {
+	return fmt.Sprintf(
+		"Mismatching validators at block %d\nValidatorBytes from snapshot: %x\nValidatorBytes in Header: %x\n",
+		e.Number,
+		e.ValidatorSetSnap,
+		e.ValidatorSetHeader,
+	)
+}

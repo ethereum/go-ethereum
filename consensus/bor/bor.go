@@ -105,10 +105,6 @@ var (
 	// invalid list of validators (i.e. non divisible by 40 bytes).
 	errInvalidSpanValidators = errors.New("invalid validator list on sprint end block")
 
-	// errMismatchingSprintValidators is returned if a sprint block contains a
-	// list of validators different than the one the local node calculated.
-	errMismatchingSprintValidators = errors.New("mismatching validator list on sprint block")
-
 	// errInvalidMixDigest is returned if a block's mix digest is non-zero.
 	errInvalidMixDigest = errors.New("non-zero mix digest")
 
@@ -436,9 +432,9 @@ func (c *Bor) verifyCascadingFields(chain consensus.ChainReader, header *types.H
 		return err
 	}
 
-	isSprintEnd := (number+1)%c.config.Sprint == 0
 	// verify the validator list in the last sprint block
-	if isSprintEnd {
+	if isSprintStart(number, c.config.Sprint) {
+		parentValidatorBytes := parent.Extra[extraVanity : len(parent.Extra)-extraSeal]
 		validatorsBytes := make([]byte, len(snap.ValidatorSet.Validators)*validatorHeaderBytesLength)
 
 		currentValidators := snap.ValidatorSet.Copy().Validators
@@ -448,8 +444,8 @@ func (c *Bor) verifyCascadingFields(chain consensus.ChainReader, header *types.H
 			copy(validatorsBytes[i*validatorHeaderBytesLength:], validator.HeaderBytes())
 		}
 		// len(header.Extra) >= extraVanity+extraSeal has already been validated in validateHeaderExtraField, so this won't result in a panic
-		if !bytes.Equal(header.Extra[extraVanity:len(header.Extra)-extraSeal], validatorsBytes) {
-			return errMismatchingSprintValidators
+		if !bytes.Equal(parentValidatorBytes, validatorsBytes) {
+			return &MismatchingValidatorsError{number - 1, validatorsBytes, parentValidatorBytes}
 		}
 	}
 
@@ -1416,4 +1412,8 @@ func getUpdatedValidatorSet(oldValidatorSet *ValidatorSet, newVals []*Validator)
 
 	v.UpdateWithChangeSet(changes)
 	return v
+}
+
+func isSprintStart(number, sprint uint64) bool {
+	return number%sprint == 0
 }

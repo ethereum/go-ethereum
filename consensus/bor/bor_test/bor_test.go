@@ -24,31 +24,34 @@ func TestCommitSpan(t *testing.T) {
 	// Mock HeimdallClient.FetchWithRetry to return span data from span.json
 	res, heimdallSpan := loadSpanFromFile(t)
 	h := &mocks.IHeimdallClient{}
-	h.On("FetchWithRetry", "bor", "span", "1").
-		Return(res, nil).
-		Times(2) // both FinalizeAndAssemble and chain.InsertChain call HeimdallClient.FetchWithRetry. @todo Investigate this in depth
+	// FetchWithRetry is invoked 3 times
+	// 1. bor.FinalizeAndAssemble to prepare a new block when calling insertNewBlock
+	// 2. bor.Finalize via(bc.insertChain => bc.processor.Process)
+	// 3. bor.FinalizeAndAssemble via worker.commit
+	h.On("FetchWithRetry", "bor", "span", "1").Return(res, nil).Times(3)
 	_bor.SetHeimdallClient(h)
 
 	db := init.ethereum.ChainDb()
-	block := init.genesis.ToBlock(db)
-	// Build 1st block's header
-	header := buildMinimalNextHeader(t, block, init.genesis.Config.Bor)
-
 	statedb, err := chain.State()
 	if err != nil {
 		t.Fatalf("%s", err)
 	}
-
 	_key, _ := hex.DecodeString(privKey)
-	insertNewBlock(t, _bor, chain, header, statedb, _key)
 
-	assert.True(t, h.AssertNumberOfCalls(t, "FetchWithRetry", 2))
-	validators, err := _bor.GetCurrentValidators(1, 256) // new span starts at 256
+	block := init.genesis.ToBlock(db)
+	// Insert sprintSize # of blocks so that span is fetched at the start of a new sprint
+	for i := uint64(1); i <= sprintSize; i++ {
+		header := buildMinimalNextHeader(t, block, init.genesis.Config.Bor)
+		block = insertNewBlock(t, _bor, chain, header, statedb, _key)
+	}
+
+	assert.True(t, h.AssertNumberOfCalls(t, "FetchWithRetry", 3))
+	validators, err := _bor.GetCurrentValidators(sprintSize, 256) // new span starts at 256
 	if err != nil {
 		t.Fatalf("%s", err)
 	}
 
-	assert.Equal(t, len(validators), 3)
+	assert.Equal(t, 3, len(validators))
 	for i, validator := range validators {
 		assert.Equal(t, validator.Address.Bytes(), heimdallSpan.SelectedProducers[i].Address.Bytes())
 		assert.Equal(t, validator.VotingPower, heimdallSpan.SelectedProducers[i].VotingPower)
@@ -85,29 +88,17 @@ func TestIsValidatorAction(t *testing.T) {
 	h.On("FetchWithRetry", "bor", "span", "1").Return(res, nil)
 	_bor.SetHeimdallClient(h)
 
-	// Build 1st block's header
 	db := init.ethereum.ChainDb()
-	block := init.genesis.ToBlock(db)
-
-	header := buildMinimalNextHeader(t, block, init.genesis.Config.Bor)
 	statedb, err := chain.State()
 	if err != nil {
 		t.Fatalf("%s", err)
 	}
-
 	_key, _ := hex.DecodeString(privKey)
-	insertNewBlock(t, _bor, chain, header, statedb, _key)
-	block = types.NewBlockWithHeader(header)
 
-	var headers []*types.Header
-	for i := int64(2); i <= 255; i++ {
+	block := init.genesis.ToBlock(db)
+	for i := uint64(1); i <= spanSize; i++ {
 		header := buildMinimalNextHeader(t, block, init.genesis.Config.Bor)
-		headers = append(headers, header)
-		block = types.NewBlockWithHeader(header)
-	}
-	t.Logf("inserting %v headers", len(headers))
-	if _, err := chain.InsertHeaderChain(headers, 0); err != nil {
-		t.Fatalf("%s", err)
+		block = insertNewBlock(t, _bor, chain, header, statedb, _key)
 	}
 
 	for _, validator := range heimdallSpan.SelectedProducers {
