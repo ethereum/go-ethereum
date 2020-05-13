@@ -237,6 +237,8 @@ func New(stack *node.Node, config *Config) (*Ethereum, error) {
 		return nil, err
 	}
 
+	// TODO don't forget to RegisterName on rpc.Server!!!!!!!!
+
 	// Register the backend on the node
 	stack.RegisterAPIs(eth.APIs())
 	if err := stack.RegisterProtocols(eth.Protocols()); err != nil {
