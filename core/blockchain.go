@@ -77,6 +77,9 @@ var (
 	blockPrefetchInterruptMeter = metrics.NewRegisteredMeter("chain/prefetch/interrupts", nil)
 
 	errInsertionInterrupted = errors.New("insertion is interrupted")
+
+	errReorgFinalizedBlock   = errors.New("can not reorg finalized block")
+	errFinalizedBlockMissing = errors.New("finalized block missing")
 )
 
 const (
@@ -193,6 +196,8 @@ type BlockChain struct {
 	badBlocks       *lru.Cache                     // Bad block cache
 	shouldPreserve  func(*types.Block) bool        // Function used to determine whether should preserve the given block.
 	terminateInsert func(common.Hash, uint64) bool // Testing hook used to terminate ancient receipt chain insertion.
+
+	finalizedBlock *types.Block // Last finalized block
 }
 
 // NewBlockChain returns a fully initialised block chain using information
@@ -246,6 +251,10 @@ func NewBlockChain(db ethdb.Database, cacheConfig *CacheConfig, chainConfig *par
 	bc.genesisBlock = bc.GetBlockByNumber(0)
 	if bc.genesisBlock == nil {
 		return nil, ErrNoGenesis
+	}
+	bc.finalizedBlock = bc.GetBlockByHash(rawdb.ReadFinalizedBlockHash(bc.db))
+	if bc.finalizedBlock == nil {
+		bc.finalizedBlock = bc.genesisBlock
 	}
 
 	var nilBlock *types.Block
@@ -404,6 +413,17 @@ func (bc *BlockChain) loadLastState() error {
 			headFastBlockGauge.Update(int64(block.NumberU64()))
 		}
 	}
+
+	finalizedHash := rawdb.ReadFinalizedBlockHash(bc.db)
+	if (common.Hash{}) != finalizedHash {
+		bc.finalizedBlock = bc.GetBlockByHash(finalizedHash)
+		if bc.finalizedBlock == nil {
+			return errFinalizedBlockMissing
+		}
+	} else {
+		bc.finalizedBlock = bc.genesisBlock
+	}
+
 	// Issue a status log for the user
 	currentFastBlock := bc.CurrentFastBlock()
 
@@ -427,6 +447,11 @@ func (bc *BlockChain) SetHead(head uint64) error {
 
 	bc.chainmu.Lock()
 	defer bc.chainmu.Unlock()
+
+	// Check that the head isn't before the last finalized block
+	if head < bc.finalizedBlock.NumberU64() {
+		return errReorgFinalizedBlock
+	}
 
 	updateFn := func(db ethdb.KeyValueWriter, header *types.Header) {
 		// Rewind the block chain, ensuring we don't end up with a stateless head block
@@ -581,7 +606,7 @@ func (bc *BlockChain) StateCache() state.Database {
 
 // Reset purges the entire blockchain, restoring it to its genesis state.
 func (bc *BlockChain) Reset() error {
-	return bc.ResetWithGenesisBlock(bc.genesisBlock)
+	return bc.ResetWithFinalizedBlock()
 }
 
 // ResetWithGenesisBlock purges the entire blockchain, restoring it to the
@@ -614,6 +639,37 @@ func (bc *BlockChain) ResetWithGenesisBlock(genesis *types.Block) error {
 	return nil
 }
 
+// ResetWithFinalizedBlock purges the entire blockchain, restoring it to the
+// specified genesis state.
+func (bc *BlockChain) ResetWithFinalizedBlock() error {
+	fbh := rawdb.ReadFinalizedBlockHash(bc.db)
+	fb := bc.GetBlockByHash(fbh)
+
+	// Dump the entire block chain and purge the caches
+	if err := bc.SetHead(fb.NumberU64()); err != nil {
+		return err
+	}
+	bc.chainmu.Lock()
+	defer bc.chainmu.Unlock()
+
+	// Prepare the genesis block and reinitialise the chain
+	batch := bc.db.NewBatch()
+	rawdb.WriteTd(batch, fb.Hash(), fb.NumberU64(), fb.Difficulty())
+	if err := batch.Write(); err != nil {
+		log.Crit("Failed to write genesis block", "err", err)
+	}
+	bc.writeHeadBlock(fb)
+
+	// Last update all in-memory chain markers
+	bc.currentBlock.Store(fb)
+	headBlockGauge.Update(int64(fb.NumberU64()))
+	bc.hc.SetGenesis(fb.Header())
+	bc.hc.SetCurrentHeader(fb.Header())
+	bc.currentFastBlock.Store(fb)
+	headFastBlockGauge.Update(int64(fb.NumberU64()))
+	return nil
+}
+
 // repair tries to repair the current blockchain by rolling back the current block
 // until one with associated state is found. This is needed to fix incomplete db
 // writes caused either by crashes/power outages, or simply non-committed tries.
@@ -631,6 +687,9 @@ func (bc *BlockChain) repair(head **types.Block) error {
 		block := bc.GetBlock((*head).ParentHash(), (*head).NumberU64()-1)
 		if block == nil {
 			return fmt.Errorf("missing block %d [%x]", (*head).NumberU64()-1, (*head).ParentHash())
+		}
+		if block.Hash() == bc.finalizedBlock.Hash() {
+			return errReorgFinalizedBlock
 		}
 		*head = block
 	}
@@ -2096,6 +2155,12 @@ func (bc *BlockChain) reorg(oldBlock, newBlock *types.Block) error {
 			commonBlock = oldBlock
 			break
 		}
+
+		// Ensure the reorg doesn't occur pas the last finalized block
+		if oldBlock.Hash() == bc.finalizedBlock.Hash() {
+			return fmt.Errorf("trying to reorg past the last finalized block")
+		}
+
 		// Remove an old block as well as stash away a new block
 		oldChain = append(oldChain, oldBlock)
 		deletedTxs = append(deletedTxs, oldBlock.Transactions()...)
@@ -2323,6 +2388,15 @@ func (bc *BlockChain) InsertHeaderChain(chain []*types.Header, checkFreq int) (i
 		return i, err
 	}
 
+	for idx, header := range chain {
+		if header.Hash() == bc.finalizedBlock.Hash() {
+			if idx == 0 {
+				break
+			}
+			return idx, errReorgFinalizedBlock
+		}
+	}
+
 	// Make sure only one thread manipulates the chain at once
 	bc.chainmu.Lock()
 	defer bc.chainmu.Unlock()
@@ -2450,4 +2524,40 @@ func (bc *BlockChain) SubscribeLogsEvent(ch chan<- []*types.Log) event.Subscript
 // block processing has started while false means it has stopped.
 func (bc *BlockChain) SubscribeBlockProcessingEvent(ch chan<- bool) event.Subscription {
 	return bc.scope.Track(bc.blockProcFeed.Subscribe(ch))
+}
+
+// FinalizeBlock performs block finalization by inserting the hash of the
+// latest finalized block in the db.
+func (bc *BlockChain) FinalizeBlock(fbh common.Hash) error {
+	bc.chainmu.Lock()
+	defer bc.chainmu.Unlock()
+
+	// TODO check that the finalized block is on the canonical head,
+	// and reorg if not.
+
+	newFinal := bc.GetBlockByHash(fbh)
+	if newFinal.NumberU64() <= bc.finalizedBlock.NumberU64() {
+		return errReorgFinalizedBlock
+	}
+
+	// TODO remove all the previous blocks
+	//batch := bc.db.NewBatch()
+
+	//for h := newFinal.NumberU64() - 1; h >= oldFinal.NumberU64(); h-- {
+	//b := bc.GetBlockByNumber(h)
+	//for _, uncle := range b.Uncles() {
+	//rawdb.DeleteBlock(batch, uncle.Hash(), uncle.Number.Uint64())
+	//}
+	//rawdb.DeleteBlock(batch, b.Hash(), h)
+	//}
+	//batch.Write()
+	//if err = batch.Write(); err != nil {
+	//return err
+	//}
+
+	err := rawdb.WriteFinalizedBlockHash(bc.db, fbh)
+	if err == nil {
+		bc.finalizedBlock = newFinal
+	}
+	return err
 }
