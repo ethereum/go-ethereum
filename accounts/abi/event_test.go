@@ -104,8 +104,8 @@ func TestEventId(t *testing.T) {
 		}
 
 		for name, event := range abi.Events {
-			if event.ID() != test.expectations[name] {
-				t.Errorf("expected id to be %x, got %x", test.expectations[name], event.ID())
+			if event.ID != test.expectations[name] {
+				t.Errorf("expected id to be %x, got %x", test.expectations[name], event.ID)
 			}
 		}
 	}

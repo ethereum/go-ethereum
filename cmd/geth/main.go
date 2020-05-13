@@ -61,16 +61,14 @@ var (
 		utils.UnlockedAccountFlag,
 		utils.PasswordFileFlag,
 		utils.BootnodesFlag,
-		utils.BootnodesV4Flag,
-		utils.BootnodesV5Flag,
+		utils.LegacyBootnodesV4Flag,
+		utils.LegacyBootnodesV5Flag,
 		utils.DataDirFlag,
 		utils.AncientFlag,
 		utils.KeyStoreDirFlag,
 		utils.ExternalSignerFlag,
 		utils.NoUSBFlag,
 		utils.SmartCardDaemonPathFlag,
-		utils.OverrideIstanbulFlag,
-		utils.OverrideMuirGlacierFlag,
 		utils.EthashCacheDirFlag,
 		utils.EthashCachesInMemoryFlag,
 		utils.EthashCachesOnDiskFlag,
@@ -94,12 +92,13 @@ var (
 		utils.ExitWhenSyncedFlag,
 		utils.GCModeFlag,
 		utils.SnapshotFlag,
+		utils.TxLookupLimitFlag,
 		utils.LightServeFlag,
-		utils.LightLegacyServFlag,
+		utils.LegacyLightServFlag,
 		utils.LightIngressFlag,
 		utils.LightEgressFlag,
 		utils.LightMaxPeersFlag,
-		utils.LightLegacyPeersFlag,
+		utils.LegacyLightPeersFlag,
 		utils.LightKDFFlag,
 		utils.UltraLightServersFlag,
 		utils.UltraLightFractionFlag,
@@ -116,17 +115,17 @@ var (
 		utils.MaxPendingPeersFlag,
 		utils.MiningEnabledFlag,
 		utils.MinerThreadsFlag,
-		utils.MinerLegacyThreadsFlag,
+		utils.LegacyMinerThreadsFlag,
 		utils.MinerNotifyFlag,
 		utils.MinerGasTargetFlag,
-		utils.MinerLegacyGasTargetFlag,
+		utils.LegacyMinerGasTargetFlag,
 		utils.MinerGasLimitFlag,
 		utils.MinerGasPriceFlag,
-		utils.MinerLegacyGasPriceFlag,
+		utils.LegacyMinerGasPriceFlag,
 		utils.MinerEtherbaseFlag,
-		utils.MinerLegacyEtherbaseFlag,
+		utils.LegacyMinerEtherbaseFlag,
 		utils.MinerExtraDataFlag,
-		utils.MinerLegacyExtraDataFlag,
+		utils.LegacyMinerExtraDataFlag,
 		utils.MinerRecommitIntervalFlag,
 		utils.MinerNoVerfiyFlag,
 		utils.NATFlag,
@@ -148,29 +147,41 @@ var (
 		utils.FakePoWFlag,
 		utils.NoCompactionFlag,
 		utils.GpoBlocksFlag,
+		utils.LegacyGpoBlocksFlag,
 		utils.GpoPercentileFlag,
+		utils.LegacyGpoPercentileFlag,
 		utils.EWASMInterpreterFlag,
 		utils.EVMInterpreterFlag,
 		configFileFlag,
 	}
 
 	rpcFlags = []cli.Flag{
-		utils.RPCEnabledFlag,
-		utils.RPCListenAddrFlag,
-		utils.RPCPortFlag,
-		utils.RPCCORSDomainFlag,
-		utils.RPCVirtualHostsFlag,
+		utils.HTTPEnabledFlag,
+		utils.HTTPListenAddrFlag,
+		utils.HTTPPortFlag,
+		utils.HTTPCORSDomainFlag,
+		utils.HTTPVirtualHostsFlag,
+		utils.LegacyRPCEnabledFlag,
+		utils.LegacyRPCListenAddrFlag,
+		utils.LegacyRPCPortFlag,
+		utils.LegacyRPCCORSDomainFlag,
+		utils.LegacyRPCVirtualHostsFlag,
 		utils.GraphQLEnabledFlag,
 		utils.GraphQLListenAddrFlag,
 		utils.GraphQLPortFlag,
 		utils.GraphQLCORSDomainFlag,
 		utils.GraphQLVirtualHostsFlag,
-		utils.RPCApiFlag,
+		utils.HTTPApiFlag,
+		utils.LegacyRPCApiFlag,
 		utils.WSEnabledFlag,
 		utils.WSListenAddrFlag,
+		utils.LegacyWSListenAddrFlag,
 		utils.WSPortFlag,
+		utils.LegacyWSPortFlag,
 		utils.WSApiFlag,
+		utils.LegacyWSApiFlag,
 		utils.WSAllowedOriginsFlag,
+		utils.LegacyWSAllowedOriginsFlag,
 		utils.IPCDisabledFlag,
 		utils.IPCPathFlag,
 		utils.InsecureUnlockAllowedFlag,
@@ -229,6 +240,8 @@ func init() {
 		dumpConfigCommand,
 		// See retesteth.go
 		retestethCommand,
+		// See cmd/utils/flags_legacy.go
+		utils.ShowDeprecated,
 	}
 	sort.Sort(cli.CommandsByName(app.Commands))
 
@@ -236,6 +249,7 @@ func init() {
 	app.Flags = append(app.Flags, rpcFlags...)
 	app.Flags = append(app.Flags, consoleFlags...)
 	app.Flags = append(app.Flags, debug.Flags...)
+	app.Flags = append(app.Flags, debug.DeprecatedFlags...)
 	app.Flags = append(app.Flags, whisperFlags...)
 	app.Flags = append(app.Flags, metricsFlags...)
 
@@ -301,6 +315,10 @@ func prepare(ctx *cli.Context) {
 	// Check https://github.com/elastic/gosigar#supported-platforms
 	if runtime.GOOS != "openbsd" {
 		if err := mem.Get(); err == nil {
+			if 32<<(^uintptr(0)>>63) == 32 && mem.Total > 2*1024*1024*1024 {
+				log.Warn("Lowering memory allowance on 32bit arch", "available", mem.Total/1024/1024, "addressable", 2*1024)
+				mem.Total = 2 * 1024 * 1024 * 1024
+			}
 			allowance := int(mem.Total / 1024 / 1024 / 3)
 			if cache := ctx.GlobalInt(utils.CacheFlag.Name); cache > allowance {
 				log.Warn("Sanitizing cache to Go's GC limits", "provided", cache, "updated", allowance)
@@ -362,7 +380,7 @@ func startNode(ctx *cli.Context, stack *node.Node) {
 
 	// Set contract backend for ethereum service if local node
 	// is serving LES requests.
-	if ctx.GlobalInt(utils.LightLegacyServFlag.Name) > 0 || ctx.GlobalInt(utils.LightServeFlag.Name) > 0 {
+	if ctx.GlobalInt(utils.LegacyLightServFlag.Name) > 0 || ctx.GlobalInt(utils.LightServeFlag.Name) > 0 {
 		var ethService *eth.Ethereum
 		if err := stack.Service(&ethService); err != nil {
 			utils.Fatalf("Failed to retrieve ethereum service: %v", err)
@@ -447,16 +465,18 @@ func startNode(ctx *cli.Context, stack *node.Node) {
 			utils.Fatalf("Ethereum service not running: %v", err)
 		}
 		// Set the gas price to the limits from the CLI and start mining
-		gasprice := utils.GlobalBig(ctx, utils.MinerLegacyGasPriceFlag.Name)
-		if ctx.IsSet(utils.MinerGasPriceFlag.Name) {
-			gasprice = utils.GlobalBig(ctx, utils.MinerGasPriceFlag.Name)
+		gasprice := utils.GlobalBig(ctx, utils.MinerGasPriceFlag.Name)
+		if ctx.GlobalIsSet(utils.LegacyMinerGasPriceFlag.Name) && !ctx.GlobalIsSet(utils.MinerGasPriceFlag.Name) {
+			gasprice = utils.GlobalBig(ctx, utils.LegacyMinerGasPriceFlag.Name)
 		}
 		ethereum.TxPool().SetGasPrice(gasprice)
 
-		threads := ctx.GlobalInt(utils.MinerLegacyThreadsFlag.Name)
-		if ctx.GlobalIsSet(utils.MinerThreadsFlag.Name) {
-			threads = ctx.GlobalInt(utils.MinerThreadsFlag.Name)
+		threads := ctx.GlobalInt(utils.MinerThreadsFlag.Name)
+		if ctx.GlobalIsSet(utils.LegacyMinerThreadsFlag.Name) && !ctx.GlobalIsSet(utils.MinerThreadsFlag.Name) {
+			threads = ctx.GlobalInt(utils.LegacyMinerThreadsFlag.Name)
+			log.Warn("The flag --minerthreads is deprecated and will be removed in the future, please use --miner.threads")
 		}
+
 		if err := ethereum.StartMining(threads); err != nil {
 			utils.Fatalf("Failed to start mining: %v", err)
 		}

@@ -85,10 +85,19 @@ func (ui *CommandlineUI) confirm() bool {
 	return false
 }
 
+// sanitize quotes and truncates 'txt' if longer than 'limit'. If truncated,
+// and ellipsis is added after the quoted string
+func sanitize(txt string, limit int) string {
+	if len(txt) > limit {
+		return fmt.Sprintf("%q...", txt[:limit])
+	}
+	return fmt.Sprintf("%q", txt)
+}
+
 func showMetadata(metadata Metadata) {
 	fmt.Printf("Request context:\n\t%v -> %v -> %v\n", metadata.Remote, metadata.Scheme, metadata.Local)
 	fmt.Printf("\nAdditional HTTP header data, provided by the external caller:\n")
-	fmt.Printf("\tUser-Agent: %v\n\tOrigin: %v\n", metadata.UserAgent, metadata.Origin)
+	fmt.Printf("\tUser-Agent: %v\n\tOrigin: %v\n", sanitize(metadata.UserAgent, 200), sanitize(metadata.Origin, 100))
 }
 
 // ApproveTx prompt the user for confirmation to request to sign Transaction
@@ -113,7 +122,6 @@ func (ui *CommandlineUI) ApproveTx(request *SignTxRequest) (SignTxResponse, erro
 	if request.Transaction.Data != nil {
 		d := *request.Transaction.Data
 		if len(d) > 0 {
-
 			fmt.Printf("data:     %v\n", hexutil.Encode(d))
 		}
 	}
@@ -145,7 +153,7 @@ func (ui *CommandlineUI) ApproveSignData(request *SignDataRequest) (SignDataResp
 	for _, nvt := range request.Messages {
 		fmt.Printf("\u00a0\u00a0%v\n", strings.TrimSpace(nvt.Pprint(1)))
 	}
-	fmt.Printf("raw data:  \n%q\n", request.Rawdata)
+	fmt.Printf("raw data:  \n\t%q\n", request.Rawdata)
 	fmt.Printf("data hash:  %v\n", request.Hash)
 	fmt.Printf("-------------------------------------------\n")
 	showMetadata(request.Meta)

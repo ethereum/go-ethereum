@@ -59,18 +59,6 @@ func (argument *Argument) UnmarshalJSON(data []byte) error {
 	return nil
 }
 
-// LengthNonIndexed returns the number of arguments when not counting 'indexed' ones. Only events
-// can ever have 'indexed' arguments, it should always be false on arguments for method input/output
-func (arguments Arguments) LengthNonIndexed() int {
-	out := 0
-	for _, arg := range arguments {
-		if !arg.Indexed {
-			out++
-		}
-	}
-	return out
-}
-
 // NonIndexed returns the arguments with indexed arguments filtered out
 func (arguments Arguments) NonIndexed() Arguments {
 	var ret []Argument
@@ -92,9 +80,8 @@ func (arguments Arguments) Unpack(v interface{}, data []byte) error {
 	if len(data) == 0 {
 		if len(arguments) != 0 {
 			return fmt.Errorf("abi: attempting to unmarshall an empty string while arguments are expected")
-		} else {
-			return nil // Nothing to unmarshal, return
 		}
+		return nil // Nothing to unmarshal, return
 	}
 	// make sure the passed value is arguments pointer
 	if reflect.Ptr != reflect.ValueOf(v).Kind() {
@@ -104,6 +91,9 @@ func (arguments Arguments) Unpack(v interface{}, data []byte) error {
 	if err != nil {
 		return err
 	}
+	if len(marshalledValues) == 0 {
+		return fmt.Errorf("abi: Unpack(no-values unmarshalled %T)", v)
+	}
 	if arguments.isTuple() {
 		return arguments.unpackTuple(v, marshalledValues)
 	}
@@ -112,18 +102,24 @@ func (arguments Arguments) Unpack(v interface{}, data []byte) error {
 
 // UnpackIntoMap performs the operation hexdata -> mapping of argument name to argument value
 func (arguments Arguments) UnpackIntoMap(v map[string]interface{}, data []byte) error {
+	// Make sure map is not nil
+	if v == nil {
+		return fmt.Errorf("abi: cannot unpack into a nil map")
+	}
 	if len(data) == 0 {
 		if len(arguments) != 0 {
 			return fmt.Errorf("abi: attempting to unmarshall an empty string while arguments are expected")
-		} else {
-			return nil // Nothing to unmarshal, return
 		}
+		return nil // Nothing to unmarshal, return
 	}
 	marshalledValues, err := arguments.UnpackValues(data)
 	if err != nil {
 		return err
 	}
-	return arguments.unpackIntoMap(v, marshalledValues)
+	for i, arg := range arguments.NonIndexed() {
+		v[arg.Name] = marshalledValues[i]
+	}
+	return nil
 }
 
 // unpack sets the unmarshalled value to go format.
@@ -195,25 +191,13 @@ func unpack(t *Type, dst interface{}, src interface{}) error {
 	return nil
 }
 
-// unpackIntoMap unpacks marshalledValues into the provided map[string]interface{}
-func (arguments Arguments) unpackIntoMap(v map[string]interface{}, marshalledValues []interface{}) error {
-	// Make sure map is not nil
-	if v == nil {
-		return fmt.Errorf("abi: cannot unpack into a nil map")
-	}
-
-	for i, arg := range arguments.NonIndexed() {
-		v[arg.Name] = marshalledValues[i]
-	}
-	return nil
-}
-
 // unpackAtomic unpacks ( hexdata -> go ) a single value
 func (arguments Arguments) unpackAtomic(v interface{}, marshalledValues interface{}) error {
-	if arguments.LengthNonIndexed() == 0 {
+	nonIndexedArgs := arguments.NonIndexed()
+	if len(nonIndexedArgs) == 0 {
 		return nil
 	}
-	argument := arguments.NonIndexed()[0]
+	argument := nonIndexedArgs[0]
 	elem := reflect.ValueOf(v).Elem()
 
 	if elem.Kind() == reflect.Struct && argument.Type.T != TupleTy {
@@ -233,30 +217,28 @@ func (arguments Arguments) unpackAtomic(v interface{}, marshalledValues interfac
 // unpackTuple unpacks ( hexdata -> go ) a batch of values.
 func (arguments Arguments) unpackTuple(v interface{}, marshalledValues []interface{}) error {
 	var (
-		value = reflect.ValueOf(v).Elem()
-		typ   = value.Type()
-		kind  = value.Kind()
+		value          = reflect.ValueOf(v).Elem()
+		typ            = value.Type()
+		kind           = value.Kind()
+		nonIndexedArgs = arguments.NonIndexed()
 	)
-	if err := requireUnpackKind(value, typ, kind, arguments); err != nil {
+	if err := requireUnpackKind(value, len(nonIndexedArgs), arguments); err != nil {
 		return err
 	}
 
 	// If the interface is a struct, get of abi->struct_field mapping
 	var abi2struct map[string]string
 	if kind == reflect.Struct {
-		var (
-			argNames []string
-			err      error
-		)
-		for _, arg := range arguments.NonIndexed() {
-			argNames = append(argNames, arg.Name)
+		argNames := make([]string, len(nonIndexedArgs))
+		for i, arg := range nonIndexedArgs {
+			argNames[i] = arg.Name
 		}
-		abi2struct, err = mapArgNamesToStructFields(argNames, value)
-		if err != nil {
+		var err error
+		if abi2struct, err = mapArgNamesToStructFields(argNames, value); err != nil {
 			return err
 		}
 	}
-	for i, arg := range arguments.NonIndexed() {
+	for i, arg := range nonIndexedArgs {
 		switch kind {
 		case reflect.Struct:
 			field := value.FieldByName(abi2struct[arg.Name])
@@ -289,10 +271,11 @@ func (arguments Arguments) unpackTuple(v interface{}, marshalledValues []interfa
 // without supplying a struct to unpack into. Instead, this method returns a list containing the
 // values. An atomic argument will be a list with one element.
 func (arguments Arguments) UnpackValues(data []byte) ([]interface{}, error) {
-	retval := make([]interface{}, 0, arguments.LengthNonIndexed())
+	nonIndexedArgs := arguments.NonIndexed()
+	retval := make([]interface{}, 0, len(nonIndexedArgs))
 	virtualArgs := 0
-	for index, arg := range arguments.NonIndexed() {
-		marshalledValue, err := ToGoType((index+virtualArgs)*32, arg.Type, data)
+	for index, arg := range nonIndexedArgs {
+		marshalledValue, err := toGoType((index+virtualArgs)*32, arg.Type, data)
 		if arg.Type.T == ArrayTy && !isDynamicType(arg.Type) {
 			// If we have a static array, like [3]uint256, these are coded as
 			// just like uint256,uint256,uint256.
@@ -329,7 +312,7 @@ func (arguments Arguments) Pack(args ...interface{}) ([]byte, error) {
 	// Make sure arguments match up and pack them
 	abiArgs := arguments
 	if len(args) != len(abiArgs) {
-		return nil, fmt.Errorf("argument count mismatch: %d for %d", len(args), len(abiArgs))
+		return nil, fmt.Errorf("argument count mismatch: got %d for %d", len(args), len(abiArgs))
 	}
 	// variable input is the output appended at the end of packed
 	// output. This is used for strings and bytes types input.

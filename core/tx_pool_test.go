@@ -117,7 +117,7 @@ func validateTxPoolInternals(pool *TxPool) error {
 				last = nonce
 			}
 		}
-		if nonce := pool.Nonce(addr); nonce != last+1 {
+		if nonce := pool.pendingNonces.get(addr); nonce != last+1 {
 			return fmt.Errorf("pending nonce mismatch: have %v, want %v", nonce, last+1)
 		}
 	}

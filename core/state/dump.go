@@ -103,7 +103,6 @@ func (d iterativeDump) onRoot(root common.Hash) {
 }
 
 func (s *StateDB) dump(c collector, excludeCode, excludeStorage, excludeMissingPreimages bool, start []byte, maxResults int) (nextKey []byte) {
-	emptyAddress := (common.Address{})
 	missingPreimages := 0
 	c.onRoot(s.trie.Hash())
 
@@ -114,15 +113,14 @@ func (s *StateDB) dump(c collector, excludeCode, excludeStorage, excludeMissingP
 		if err := rlp.DecodeBytes(it.Value, &data); err != nil {
 			panic(err)
 		}
-		addr := common.BytesToAddress(s.trie.GetKey(it.Key))
-		obj := newObject(nil, addr, data)
 		account := DumpAccount{
 			Balance:  data.Balance.String(),
 			Nonce:    data.Nonce,
 			Root:     common.Bytes2Hex(data.Root[:]),
 			CodeHash: common.Bytes2Hex(data.CodeHash),
 		}
-		if emptyAddress == addr {
+		addrBytes := s.trie.GetKey(it.Key)
+		if addrBytes == nil {
 			// Preimage missing
 			missingPreimages++
 			if excludeMissingPreimages {
@@ -130,6 +128,8 @@ func (s *StateDB) dump(c collector, excludeCode, excludeStorage, excludeMissingP
 			}
 			account.SecureKey = it.Key
 		}
+		addr := common.BytesToAddress(addrBytes)
+		obj := newObject(nil, addr, data)
 		if !excludeCode {
 			account.Code = common.Bytes2Hex(obj.Code(s.db))
 		}
