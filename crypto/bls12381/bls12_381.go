@@ -26,8 +26,12 @@ func Init() {
 
 var modulus fe = fe{0xb9feffffffffaaab, 0x1eabfffeb153ffff, 0x6730d2a0f6b0f624, 0x64774b84f38512bf, 0x4b1ba7b6434bacd7, 0x1a0111ea397fe69a}
 
-// inp = -p^(-1) mod 2^64
-var inp uint64 = 0x89f3fffcfffcfffd
+var (
+	// inp = -p^(-1) mod 2^64
+	inp uint64 = 0x89f3fffcfffcfffd
+	// this value is used in assembly code
+	_ = inp
+)
 
 // r1  = r mod p
 var r1 = &fe{0x760900000002fffd, 0xebf4000bc40c0002, 0x5f48985753c758ba, 0x77ce585370525745, 0x5c071a97a256ec6d, 0x15f65ec3fa80e493}
@@ -110,11 +114,6 @@ var g2One = PointG2{
 /*
 	Frobenious Coeffs
 */
-
-var frobeniusCoeffs2 = [2]fe{
-	fe{0x760900000002fffd, 0xebf4000bc40c0002, 0x5f48985753c758ba, 0x77ce585370525745, 0x5c071a97a256ec6d, 0x15f65ec3fa80e493},
-	fe{0x43f5fffffffcaaae, 0x32b7fff2ed47fffd, 0x07e83a49a2e99d69, 0xeca8f3318332bb7a, 0xef148d1ea0f4c069, 0x040ab3263eff0206},
-}
 
 var frobeniusCoeffs61 = [6]fe2{
 	fe2{
