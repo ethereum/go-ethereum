@@ -387,7 +387,7 @@ func (f *TxFetcher) loop() {
 					if announces := f.announces[ann.origin]; announces != nil {
 						announces[hash] = struct{}{}
 					} else {
-						f.announces[ann.origin] = map[common.Hash]struct{}{hash: struct{}{}}
+						f.announces[ann.origin] = map[common.Hash]struct{}{hash: {}}
 					}
 					continue
 				}
@@ -400,7 +400,7 @@ func (f *TxFetcher) loop() {
 					if announces := f.announces[ann.origin]; announces != nil {
 						announces[hash] = struct{}{}
 					} else {
-						f.announces[ann.origin] = map[common.Hash]struct{}{hash: struct{}{}}
+						f.announces[ann.origin] = map[common.Hash]struct{}{hash: {}}
 					}
 					continue
 				}
@@ -413,18 +413,18 @@ func (f *TxFetcher) loop() {
 					if waitslots := f.waitslots[ann.origin]; waitslots != nil {
 						waitslots[hash] = struct{}{}
 					} else {
-						f.waitslots[ann.origin] = map[common.Hash]struct{}{hash: struct{}{}}
+						f.waitslots[ann.origin] = map[common.Hash]struct{}{hash: {}}
 					}
 					continue
 				}
 				// Transaction unknown to the fetcher, insert it into the waiting list
-				f.waitlist[hash] = map[string]struct{}{ann.origin: struct{}{}}
+				f.waitlist[hash] = map[string]struct{}{ann.origin: {}}
 				f.waittime[hash] = f.clock.Now()
 
 				if waitslots := f.waitslots[ann.origin]; waitslots != nil {
 					waitslots[hash] = struct{}{}
 				} else {
-					f.waitslots[ann.origin] = map[common.Hash]struct{}{hash: struct{}{}}
+					f.waitslots[ann.origin] = map[common.Hash]struct{}{hash: {}}
 				}
 			}
 			// If a new item was added to the waitlist, schedule it into the fetcher
@@ -434,7 +434,7 @@ func (f *TxFetcher) loop() {
 			// If this peer is new and announced something already queued, maybe
 			// request transactions from them
 			if !oldPeer && len(f.announces[ann.origin]) > 0 {
-				f.scheduleFetches(timeoutTimer, timeoutTrigger, map[string]struct{}{ann.origin: struct{}{}})
+				f.scheduleFetches(timeoutTimer, timeoutTrigger, map[string]struct{}{ann.origin: {}})
 			}
 
 		case <-waitTrigger:
@@ -452,7 +452,7 @@ func (f *TxFetcher) loop() {
 						if announces := f.announces[peer]; announces != nil {
 							announces[hash] = struct{}{}
 						} else {
-							f.announces[peer] = map[common.Hash]struct{}{hash: struct{}{}}
+							f.announces[peer] = map[common.Hash]struct{}{hash: {}}
 						}
 						delete(f.waitslots[peer], hash)
 						if len(f.waitslots[peer]) == 0 {
