@@ -19,6 +19,8 @@ var funcs = map[string]stateManagerFunction{
 	"getStorage(address,bytes32)":                getStorage,
 	"setStorage(address,bytes32,bytes32)":        setStorage,
 	"deployContract(address,bytes,bool,address)": deployContract,
+	"getOvmContractNonce(address)":               getOvmContractNonce,
+	"incrementOvmContractNonce(address)":         incrementOvmContractNonce,
 }
 var methodIds map[[4]byte]stateManagerFunction
 var executionMangerBytecode []byte
@@ -56,6 +58,21 @@ func getStorage(evm *EVM, contract *Contract, input []byte) (ret []byte, err err
 	key := common.BytesToHash(input[36:68])
 	val := evm.StateDB.GetState(address, key)
 	return val.Bytes(), nil
+}
+
+func getOvmContractNonce(evm *EVM, contract *Contract, input []byte) (ret []byte, err error) {
+	address := common.BytesToAddress(input[4:36])
+	b := make([]byte, 8)
+	binary.BigEndian.PutUint64(b, evm.StateDB.GetNonce(address))
+	val := append(make([]byte, 24), b[:]...)
+	return val, nil
+}
+
+func incrementOvmContractNonce(evm *EVM, contract *Contract, input []byte) (ret []byte, err error) {
+	address := common.BytesToAddress(input[4:36])
+	oldNonce := evm.StateDB.GetNonce(address)
+	evm.StateDB.SetNonce(address, oldNonce+1)
+	return nil, nil
 }
 
 func deployContract(evm *EVM, contract *Contract, input []byte) (ret []byte, err error) {

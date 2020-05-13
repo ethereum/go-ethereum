@@ -2,6 +2,7 @@ package tests
 
 import (
 	"bytes"
+	"encoding/binary"
 	"encoding/hex"
 	"io/ioutil"
 	"math/big"
@@ -67,8 +68,41 @@ func TestCreate(t *testing.T) {
 	deployContractCalldata, _ := stateManagerAbi.Pack("deployContract", address, initCode, true, callerAddress)
 	createdContractAddr, _ := call(t, state, vm.StateManagerAddress, deployContractCalldata)
 	if !bytes.Equal(createdContractAddr, []byte{}) {
-		t.Errorf("Expected %020x; got %020x", createdContractAddr, []byte{})
+		t.Errorf("Expected %020x; got %020x", []byte{}, createdContractAddr)
 	}
+}
+
+func TestGetAndIncrementNonce(t *testing.T) {
+	rawStateManagerAbi, _ := ioutil.ReadFile("./StateManagerABI.json")
+	stateManagerAbi, _ := abi.JSON(strings.NewReader(string(rawStateManagerAbi)))
+	state := newState()
+
+	address := common.HexToAddress("9999999999999999999999999999999999999999")
+
+	getNonceCalldata, _ := stateManagerAbi.Pack("getOvmContractNonce", address)
+	incrementNonceCalldata, _ := stateManagerAbi.Pack("incrementOvmContractNonce", address)
+
+	getStorageReturnValue1, _ := call(t, state, vm.StateManagerAddress, getNonceCalldata)
+
+	expectedReturnValue1 := makeUint256WithUint64(0)
+	if !bytes.Equal(getStorageReturnValue1, expectedReturnValue1) {
+		t.Errorf("Expected %020x; got %020x", expectedReturnValue1, getStorageReturnValue1)
+	}
+
+	call(t, state, vm.StateManagerAddress, incrementNonceCalldata)
+	getStorageReturnValue2, _ := call(t, state, vm.StateManagerAddress, getNonceCalldata)
+
+	expectedReturnValue2 := makeUint256WithUint64(1)
+	if !bytes.Equal(getStorageReturnValue2, expectedReturnValue2) {
+		t.Errorf("Expected %020x; got %020x", expectedReturnValue2, getStorageReturnValue2)
+	}
+}
+
+func makeUint256WithUint64(num uint64) []byte {
+	b := make([]byte, 8)
+	binary.BigEndian.PutUint64(b, num)
+	val := append(make([]byte, 24), b[:]...)
+	return val
 }
 
 func newState() *state.StateDB {
