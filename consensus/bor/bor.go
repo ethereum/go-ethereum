@@ -728,9 +728,9 @@ func (c *Bor) Authorize(signer common.Address, signFn SignerFn) {
 // Seal implements consensus.Engine, attempting to create a sealed block using
 // the local signing credentials.
 func (c *Bor) Seal(chain consensus.ChainReader, block *types.Block, results chan<- *types.Block, stop <-chan struct{}) error {
-	if c.activeSealingOp != nil {
-		return &SealingInFlightError{c.activeSealingOp.number}
-	}
+	// if c.activeSealingOp != nil {
+	// 	return &SealingInFlightError{c.activeSealingOp.number}
+	// }
 	header := block.Header()
 
 	// Sealing the genesis block is not supported
