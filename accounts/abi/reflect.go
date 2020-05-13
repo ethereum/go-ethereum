@@ -83,7 +83,7 @@ func set(dst, src reflect.Value) error {
 		dst.Set(src)
 	case dstType.Kind() == reflect.Slice && srcType.Kind() == reflect.Slice && dst.CanSet():
 		return setSlice(dst, src)
-	case dstType.Kind() == reflect.Array && dst.CanSet():
+	case dstType.Kind() == reflect.Array:
 		return setArray(dst, src)
 	case dstType.Kind() == reflect.Struct:
 		return setStruct(dst, src)
