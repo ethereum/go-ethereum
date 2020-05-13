@@ -39,17 +39,33 @@ func init() {
 	for _, arg := range os.Args {
 		flag := strings.TrimLeft(arg, "-")
 
-		for _, enabler := range enablerFlags {
-			if !Enabled && flag == enabler {
-				log.Info("Enabling metrics collection")
-				Enabled = true
+		if !Enabled {
+			// only compare enablerFlags when Enable is not set.
+			for _, enabler := range enablerFlags {
+				if flag == enabler {
+					log.Info("Enabling metrics collection")
+					Enabled = true
+					// break loop if Enabled flag is already set.
+					break
+				}
 			}
 		}
-		for _, enabler := range expensiveEnablerFlags {
-			if !EnabledExpensive && flag == enabler {
-				log.Info("Enabling expensive metrics collection")
-				EnabledExpensive = true
+
+		if !EnabledExpensive {
+			// only compare expensiveEnablerFlags when EnabledExpensive is not set.
+			for _, enabler := range expensiveEnablerFlags {
+				if flag == enabler {
+					log.Info("Enabling expensive metrics collection")
+					EnabledExpensive = true
+					// break loop if EnabledExpensive flag is already set.
+					break
+				}
 			}
+		}
+
+		// break loop as all flags have been set.
+		if Enabled && EnabledExpensive {
+			break
 		}
 	}
 }
