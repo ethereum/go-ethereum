@@ -68,8 +68,9 @@ func TestCreate(t *testing.T) {
 
 	deployContractCalldata, _ := stateManagerAbi.Pack("deployContract", address, initCode, true, callerAddress)
 	createdContractAddr, _ := call(t, state, vm.StateManagerAddress, deployContractCalldata)
-	if !bytes.Equal(createdContractAddr, []byte{}) {
-		t.Errorf("Expected %020x; got %020x", []byte{}, createdContractAddr)
+	deployedByteCode := common.FromHex("6080604052348015600f57600080fd5b506004361060285760003560e01c80639b0b0fda14602d575b600080fd5b606060048036036040811015604157600080fd5b8101908080359060200190929190803590602001909291905050506062565b005b8060008084815260200190815260200160002081905550505056fea265627a7a7231582053ac32a8b70d1cf87fb4ebf5a538ea9d9e773351e6c8afbc4bf6a6c273187f4a64736f6c63430005110032")
+	if !bytes.Equal(createdContractAddr, deployedByteCode) {
+		t.Errorf("Expected %020x; got %020x", deployedByteCode, createdContractAddr)
 	}
 }
 
@@ -110,8 +111,8 @@ func TestGetCodeContractAddress(t *testing.T) {
 
 	getCodeContractAddressReturnValue, _ := call(t, state, vm.StateManagerAddress, getCodeContractAddressCalldata)
 
-	if !bytes.Equal(getCodeContractAddressReturnValue, address.Bytes()) {
-		t.Errorf("Expected %020x; got %020x", getCodeContractAddressReturnValue, address.Bytes())
+  if !bytes.Equal(getCodeContractAddressReturnValue[12:], address.Bytes()) {
+    t.Errorf("Expected %020x; got %020x", getCodeContractAddressReturnValue[12:], address.Bytes())
 	}
 }
 
@@ -141,9 +142,9 @@ func TestGetCodeContractBytecode(t *testing.T) {
 	call(t, state, vm.StateManagerAddress, deployContractCalldata)
 	getCodeContractBytecodeCalldata, _ := stateManagerAbi.Pack("getCodeContractBytecode", address)
 	getCodeContractBytecodeReturnValue, _ := call(t, state, vm.StateManagerAddress, getCodeContractBytecodeCalldata)
-	expectedCreatedCode := common.FromHex("6080604052348015600f57600080fd5b506004361060285760003560e01c80639b0b0fda14602d575b600080fd5b606060048036036040811015604157600080fd5b8101908080359060200190929190803590602001909291905050506062565b005b8060008084815260200190815260200160002081905550505056fea265627a7a7231582053ac32a8b70d1cf87fb4ebf5a538ea9d9e773351e6c8afbc4bf6a6c273187f4a64736f6c63430005110032")
-	if !bytes.Equal(getCodeContractBytecodeReturnValue, expectedCreatedCode) {
-		t.Errorf("Expected %020x; got %020x", getCodeContractBytecodeReturnValue, expectedCreatedCode)
+	deployedByteCode := common.FromHex("6080604052348015600f57600080fd5b506004361060285760003560e01c80639b0b0fda14602d575b600080fd5b606060048036036040811015604157600080fd5b8101908080359060200190929190803590602001909291905050506062565b005b8060008084815260200190815260200160002081905550505056fea265627a7a7231582053ac32a8b70d1cf87fb4ebf5a538ea9d9e773351e6c8afbc4bf6a6c273187f4a64736f6c63430005110032")
+	if !bytes.Equal(getCodeContractBytecodeReturnValue, deployedByteCode) {
+		t.Errorf("Expected %020x; got %020x", getCodeContractBytecodeReturnValue, deployedByteCode)
 	}
 }
 
