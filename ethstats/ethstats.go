@@ -154,7 +154,7 @@ func (s *Service) loop() {
 	txSub := txpool.SubscribeNewTxsEvent(txEventCh)
 	defer txSub.Unsubscribe()
 
-	// Start a goroutine that exhausts the subsciptions to avoid events piling up
+	// Start a goroutine that exhausts the subscriptions to avoid events piling up
 	var (
 		quitCh = make(chan struct{})
 		headCh = make(chan *types.Block, 1)
@@ -194,16 +194,17 @@ func (s *Service) loop() {
 		}
 		close(quitCh)
 	}()
+
+	// Resolve the URL, defaulting to TLS, but falling back to none too
+	path := fmt.Sprintf("%s/api", s.host)
+	urls := []string{path}
+
+	// url.Parse and url.IsAbs is unsuitable (https://github.com/golang/go/issues/19779)
+	if !strings.Contains(path, "://") {
+		urls = []string{"wss://" + path, "ws://" + path}
+	}
 	// Loop reporting until termination
 	for {
-		// Resolve the URL, defaulting to TLS, but falling back to none too
-		path := fmt.Sprintf("%s/api", s.host)
-		urls := []string{path}
-
-		// url.Parse and url.IsAbs is unsuitable (https://github.com/golang/go/issues/19779)
-		if !strings.Contains(path, "://") {
-			urls = []string{"wss://" + path, "ws://" + path}
-		}
 		// Establish a websocket connection to the server on any supported URL
 		var (
 			conn *websocket.Conn
@@ -240,11 +241,12 @@ func (s *Service) loop() {
 		}
 		// Keep sending status updates until the connection breaks
 		fullReport := time.NewTicker(15 * time.Second)
-		defer fullReport.Stop()
 
 		for err == nil {
 			select {
 			case <-quitCh:
+				fullReport.Stop()
+				// Make sure the connection is closed
 				conn.Close()
 				return
 
@@ -269,6 +271,7 @@ func (s *Service) loop() {
 				}
 			}
 		}
+		fullReport.Stop()
 		// Make sure the connection is closed
 		conn.Close()
 	}
