@@ -23,6 +23,7 @@ var funcs = map[string]stateManagerFunction{
 	"getCodeContractBytecode(address)":           getCodeContractBytecode,
 	"getCodeContractHash(address)":               getCodeContractHash,
 	"getCodeContractAddress(address)":            getCodeContractAddress,
+	"associateCodeContract(address,address)":     associateCodeContract,
 	"incrementOvmContractNonce(address)":         incrementOvmContractNonce,
 }
 var methodIds map[[4]byte]stateManagerFunction
@@ -73,6 +74,10 @@ func getCodeContractHash(evm *EVM, contract *Contract, input []byte) (ret []byte
 	address := common.BytesToAddress(input[4:36])
 	codeHash := evm.StateDB.GetCodeHash(address)
 	return codeHash.Bytes(), nil
+}
+
+func associateCodeContract(evm *EVM, contract *Contract, input []byte) (ret []byte, err error) {
+	return nil, nil
 }
 
 func getCodeContractAddress(evm *EVM, contract *Contract, input []byte) (ret []byte, err error) {

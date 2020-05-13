@@ -115,6 +115,21 @@ func TestGetCodeContractAddress(t *testing.T) {
 	}
 }
 
+func TestAssociateCodeContract(t *testing.T) {
+	rawStateManagerAbi, _ := ioutil.ReadFile("./StateManagerABI.json")
+	stateManagerAbi, _ := abi.JSON(strings.NewReader(string(rawStateManagerAbi)))
+	state := newState()
+
+	address := common.HexToAddress("9999999999999999999999999999999999999999")
+
+	getCodeContractAddressCalldata, _ := stateManagerAbi.Pack("associateCodeContract", address, address)
+
+	_, err := call(t, state, vm.StateManagerAddress, getCodeContractAddressCalldata)
+	if err != nil {
+		t.Errorf("Failed to call associateCodeContract: %s", err)
+	}
+}
+
 func TestGetCodeContractBytecode(t *testing.T) {
 	state := newState()
 	initCode, _ := hex.DecodeString("6080604052348015600f57600080fd5b5060b28061001e6000396000f3fe6080604052348015600f57600080fd5b506004361060285760003560e01c80639b0b0fda14602d575b600080fd5b606060048036036040811015604157600080fd5b8101908080359060200190929190803590602001909291905050506062565b005b8060008084815260200190815260200160002081905550505056fea265627a7a7231582053ac32a8b70d1cf87fb4ebf5a538ea9d9e773351e6c8afbc4bf6a6c273187f4a64736f6c63430005110032")
