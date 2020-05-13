@@ -1,6 +1,7 @@
 package vm
 
 import (
+	"encoding/binary"
 	"os"
 
 	"github.com/ethereum/go-ethereum/common"
@@ -15,8 +16,9 @@ type stateManagerFunction func(*EVM, *Contract, []byte) ([]byte, error)
 type methodId [4]byte
 
 var funcs = map[string]stateManagerFunction{
-	"getStorage(address,bytes32)":         getStorage,
-	"setStorage(address,bytes32,bytes32)": setStorage,
+	"getStorage(address,bytes32)":                getStorage,
+	"setStorage(address,bytes32,bytes32)":        setStorage,
+	"deployContract(address,bytes,bool,address)": deployContract,
 }
 var methodIds map[[4]byte]stateManagerFunction
 var executionMangerBytecode []byte
@@ -54,4 +56,14 @@ func getStorage(evm *EVM, contract *Contract, input []byte) (ret []byte, err err
 	key := common.BytesToHash(input[36:68])
 	val := evm.StateDB.GetState(address, key)
 	return val.Bytes(), nil
+}
+
+func deployContract(evm *EVM, contract *Contract, input []byte) (ret []byte, err error) {
+	address := common.BytesToAddress(input[4:36])
+	callerAddress := common.BytesToAddress(input[100:132])
+	initCodeLength := binary.BigEndian.Uint32(input[160:164])
+	initCode := input[164 : 164+initCodeLength]
+	callerContractRef := &Contract{self: AccountRef(callerAddress)}
+	returnVal, _, _, _ := evm.OvmCreate(callerContractRef, address, initCode, 0, bigZero)
+	return returnVal, nil
 }
