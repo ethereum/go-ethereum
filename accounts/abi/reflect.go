@@ -17,6 +17,7 @@
 package abi
 
 import (
+	"errors"
 	"fmt"
 	"math/big"
 	"reflect"
@@ -110,8 +111,11 @@ func setSlice(dst, src reflect.Value) error {
 			}
 		}
 	}
-	dst.Set(slice)
-	return nil
+	if dst.CanSet() {
+		dst.Set(slice)
+		return nil
+	}
+	return errors.New("Cannot set slice, destination not settable")
 }
 
 func setArray(dst, src reflect.Value) error {
@@ -125,8 +129,11 @@ func setArray(dst, src reflect.Value) error {
 			return err
 		}
 	}
-	dst.Set(array)
-	return nil
+	if dst.CanSet() {
+		dst.Set(array)
+		return nil
+	}
+	return errors.New("Cannot set array, destination not settable")
 }
 
 func setStruct(dst, src reflect.Value) error {
