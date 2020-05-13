@@ -20,6 +20,7 @@ var funcs = map[string]stateManagerFunction{
 	"setStorage(address,bytes32,bytes32)":        setStorage,
 	"deployContract(address,bytes,bool,address)": deployContract,
 	"getOvmContractNonce(address)":               getOvmContractNonce,
+	"getCodeContractBytecode(address)":           getCodeContractBytecode,
 	"incrementOvmContractNonce(address)":         incrementOvmContractNonce,
 }
 var methodIds map[[4]byte]stateManagerFunction
@@ -60,6 +61,12 @@ func getStorage(evm *EVM, contract *Contract, input []byte) (ret []byte, err err
 	return val.Bytes(), nil
 }
 
+func getCodeContractBytecode(evm *EVM, contract *Contract, input []byte) (ret []byte, err error) {
+	address := common.BytesToAddress(input[4:36])
+	code := evm.StateDB.GetCode(address)
+	return code, nil
+}
+
 func getOvmContractNonce(evm *EVM, contract *Contract, input []byte) (ret []byte, err error) {
 	address := common.BytesToAddress(input[4:36])
 	b := make([]byte, 8)
@@ -81,6 +88,6 @@ func deployContract(evm *EVM, contract *Contract, input []byte) (ret []byte, err
 	initCodeLength := binary.BigEndian.Uint32(input[160:164])
 	initCode := input[164 : 164+initCodeLength]
 	callerContractRef := &Contract{self: AccountRef(callerAddress)}
-	returnVal, _, _, _ := evm.OvmCreate(callerContractRef, address, initCode, 0, bigZero)
+	returnVal, _, _, err := evm.OvmCreate(callerContractRef, address, initCode, contract.Gas, bigZero)
 	return returnVal, nil
 }
