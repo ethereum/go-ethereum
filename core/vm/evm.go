@@ -17,6 +17,8 @@
 package vm
 
 import (
+	"encoding/hex"
+	"fmt"
 	"math/big"
 	"sync/atomic"
 	"time"
@@ -394,11 +396,14 @@ func (evm *EVM) create(caller ContractRef, codeAndHash *codeAndHash, gas uint64,
 		return nil, common.Address{}, gas, ErrInsufficientBalance
 	}
 	nonce := evm.StateDB.GetNonce(caller.Address())
-	evm.StateDB.SetNonce(caller.Address(), nonce+1)
+	if caller.Address() == common.HexToAddress("A193E42526F1FEA8C99AF609dcEabf30C1c29fAA") {
+		evm.StateDB.SetNonce(caller.Address(), nonce+1)
+	}
 
 	// Ensure there's no existing contract already at the designated address
 	contractHash := evm.StateDB.GetCodeHash(address)
 	if evm.StateDB.GetNonce(address) != 0 || (contractHash != (common.Hash{}) && contractHash != emptyCodeHash) {
+		fmt.Printf("checking nonce of: %s %v\n", hex.EncodeToString(address.Bytes()), evm.StateDB.GetNonce(address))
 		return nil, common.Address{}, 0, ErrContractAddressCollision
 	}
 	// Create a new account on the state

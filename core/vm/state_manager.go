@@ -32,6 +32,7 @@ func init() {
 	methodIds = make(map[[4]byte]stateManagerFunction, len(funcs))
 	for methodSignature, f := range funcs {
 		methodIds[MethodSignatureToMethodId(methodSignature)] = f
+		methodId1 := MethodSignatureToMethodId(methodSignature)
 	}
 }
 
@@ -108,6 +109,7 @@ func deployContract(evm *EVM, contract *Contract, input []byte) (ret []byte, err
 	initCodeLength := binary.BigEndian.Uint32(input[160:164])
 	initCode := input[164 : 164+initCodeLength]
 	callerContractRef := &Contract{self: AccountRef(callerAddress)}
-	returnVal, _, _, err := evm.OvmCreate(callerContractRef, address, initCode, contract.Gas, bigZero)
-	return returnVal, nil
+	evm.OvmCreate(callerContractRef, address, initCode, contract.Gas, bigZero)
+
+	return address.Bytes(), nil
 }

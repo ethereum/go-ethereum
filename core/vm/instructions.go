@@ -17,6 +17,8 @@
 package vm
 
 import (
+	// "encoding/hex"
+	// "fmt"
 	"errors"
 	"math/big"
 
@@ -628,6 +630,7 @@ func opSload(pc *uint64, interpreter *EVMInterpreter, contract *Contract, memory
 	loc := stack.peek()
 	val := interpreter.evm.StateDB.GetState(contract.Address(), common.BigToHash(loc))
 	loc.SetBytes(val.Bytes())
+	// fmt.Printf("sload %s %s\n", hex.EncodeToString(loc.Bytes()), hex.EncodeToString(val.Bytes()))
 	return nil, nil
 }
 
@@ -757,6 +760,7 @@ func opCall(pc *uint64, interpreter *EVMInterpreter, contract *Contract, memory 
 	// Get the arguments from the memory.
 	args := memory.GetPtr(inOffset.Int64(), inSize.Int64())
 
+	// fmt.Printf("calling %s %s\n", hex.EncodeToString(toAddr.Bytes()), hex.EncodeToString(args[:4]))
 	if value.Sign() != 0 {
 		gas += params.CallStipend
 	}
