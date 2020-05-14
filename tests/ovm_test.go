@@ -11,6 +11,8 @@ import (
 
 	"github.com/ethereum/go-ethereum/accounts/abi"
 	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/core"
+	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/core/rawdb"
 	"github.com/ethereum/go-ethereum/core/state"
 	"github.com/ethereum/go-ethereum/core/vm"
@@ -33,6 +35,26 @@ func init() {
 		EIP155Block:         new(big.Int),
 		EIP158Block:         new(big.Int),
 	}
+}
+
+func TestSetExecutionContext(t *testing.T) {
+  to := common.HexToAddress("999999999999999999999999999999999999       9999")
+  from := common.HexToAddress("8888888888888888888888888888888888888888")
+	state := newState()
+  evm := vm.NewEVM(vm.Context{}, state, &chainConfig, vm.Config{})
+  gasPool := core.GasPool(9999999)
+  message := types.NewMessage(
+    from,
+    &to,
+    0,
+    big.NewInt(0),
+    100000000,
+    big.NewInt(0),
+    common.FromHex(""),
+    true,
+  )
+  stateTransition := core.NewStateTransition(evm, &message, &gasPool)
+  stateTransition.TransitionDb()
 }
 
 func TestSloadAndStore(t *testing.T) {
