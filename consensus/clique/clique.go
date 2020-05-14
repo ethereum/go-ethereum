@@ -138,9 +138,9 @@ var (
 )
 
 // SignerFn hashes and signs the data to be signed by a backing account. It should point to the
-// accounts.Wallet.SignData method.
-// The function arguments are: current address, mimeType and data to be hashed and signed.
-type SignerFn func(accounts.Account, string, []byte) ([]byte, error)
+// accounts.Wallet.SignData method - current implementation relay on the SignData behaviour
+// (it must hash the message before signing).
+type SignerFn func(signer accounts.Account, mimeType string, message []byte) ([]byte, error)
 
 // ecrecover extracts the Ethereum account address from a signed header.
 func ecrecover(header *types.Header, sigcache *lru.ARCCache) (common.Address, error) {
