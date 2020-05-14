@@ -18,9 +18,12 @@ package core
 
 import (
 	"errors"
+	"io/ioutil"
 	"math"
 	"math/big"
+	"strings"
 
+	"github.com/ethereum/go-ethereum/accounts/abi"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/vm"
 	"github.com/ethereum/go-ethereum/log"
@@ -29,7 +32,13 @@ import (
 
 var (
 	errInsufficientBalanceForGas = errors.New("insufficient balance to pay for gas")
+	executionManagerAbi          abi.ABI
 )
+
+func init() {
+	rawExecutionManagerAbi, _ := ioutil.ReadFile("./ExecutionManagerABI.json")
+	executionManagerAbi, _ = abi.JSON(strings.NewReader(string(rawExecutionManagerAbi)))
+}
 
 /*
 The State Transitioning Model
@@ -211,7 +220,17 @@ func (st *StateTransition) TransitionDb() (ret []byte, usedGas uint64, failed bo
 		vmerr error
 	)
 	if contractCreation {
-		ret, _, st.gas, vmerr = evm.Create(sender, st.data, st.gas, st.value)
+		deployContractCalldata, _ := executionManagerAbi.Pack(
+			"executeTransaction",
+			evm.Time,
+			0,
+			common.HexToAddress(""),
+			st.data,
+			sender,
+			common.HexToAddress(""),
+			true,
+		)
+		ret, _, st.gas, vmerr = evm.Create(sender, deployContractCalldata, st.gas, st.value)
 	} else {
 		// Increment the nonce for the next transaction
 		st.state.SetNonce(msg.From(), st.state.GetNonce(sender.Address())+1)
