@@ -21,15 +21,16 @@ import (
 	"encoding/binary"
 	"fmt"
 
+	"github.com/syndtr/goleveldb/leveldb"
+	"github.com/syndtr/goleveldb/leveldb/errors"
+	"github.com/syndtr/goleveldb/leveldb/opt"
+	"github.com/syndtr/goleveldb/leveldb/util"
+
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/rlp"
 	whisper "github.com/ethereum/go-ethereum/whisper/whisperv6"
-	"github.com/syndtr/goleveldb/leveldb"
-	"github.com/syndtr/goleveldb/leveldb/errors"
-	"github.com/syndtr/goleveldb/leveldb/opt"
-	"github.com/syndtr/goleveldb/leveldb/util"
 )
 
 // WMailServer represents the state data of the mailserver.
@@ -122,9 +123,28 @@ func (s *WMailServer) DeliverMail(peer *whisper.Peer, request *whisper.Envelope)
 	}
 
 	ok, lower, upper, bloom := s.validateRequest(peer.ID(), request)
-	if ok {
-		s.processRequest(peer, lower, upper, bloom)
+	if !ok {
+		return
 	}
+
+	s.processRequest(peer, lower, upper, bloom)
+}
+
+
+// DeliverMail responds with saved messages upon request by the
+// messages' owner.
+func (s *WMailServer) DeliverResponsiveMail(peer *whisper.Peer, request *whisper.Envelope) []*whisper.Envelope {
+	if peer == nil {
+		log.Error("Whisper peer is nil")
+		return nil
+	}
+
+	ok, lower, upper, bloom := s.validateRequest(peer.ID(), request)
+	if !ok {
+		return nil
+	}
+
+	return s.processRequest(nil, lower, upper, bloom)
 }
 
 func (s *WMailServer) processRequest(peer *whisper.Peer, lower, upper uint32, bloom []byte) []*whisper.Envelope {

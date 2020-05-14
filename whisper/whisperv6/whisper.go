@@ -768,6 +768,17 @@ func (whisper *Whisper) runMessageLoop(p *Peer, rw p2p.MsgReadWriter) error {
 				}
 				whisper.mailServer.DeliverMail(p, &request)
 			}
+		case requestMessages:
+			if whisper.mailServer != nil {
+				var request Envelope
+				if err := packet.Decode(&request); err != nil {
+					log.Warn("failed to decode p2p request message, peer will be disconnected", "peer", p.peer.ID(), "err", err)
+					return errors.New("invalid p2p request")
+				}
+				r := whisper.mailServer.DeliverResponsiveMail(p, &request)
+
+				p2p.Send(p.ws, messagesCode, r)
+			}
 		default:
 			// New message types might be implemented in the future versions of Whisper.
 			// For forward compatibility, just ignore.
