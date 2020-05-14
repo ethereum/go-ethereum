@@ -34,6 +34,7 @@ import (
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/params"
 	"github.com/ethereum/go-ethereum/rlp"
+	"github.com/ethereum/go-ethereum/trie"
 	"golang.org/x/crypto/sha3"
 )
 
@@ -220,8 +221,8 @@ func (pre *Prestate) Apply(vmConfig vm.Config, chainConfig *params.ChainConfig,
 	}
 	execRs := &ExecutionResult{
 		StateRoot:   root,
-		TxRoot:      types.DeriveSha(includedTxs),
-		ReceiptRoot: types.DeriveSha(receipts),
+		TxRoot:      types.DeriveSha(includedTxs, new(trie.Trie)),
+		ReceiptRoot: types.DeriveSha(receipts, new(trie.Trie)),
 		Bloom:       types.CreateBloom(receipts),
 		LogsHash:    rlpHash(statedb.Logs()),
 		Receipts:    receipts,

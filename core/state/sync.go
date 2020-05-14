@@ -34,7 +34,7 @@ func NewStateSync(root common.Hash, database ethdb.KeyValueReader, bloom *trie.S
 			return err
 		}
 		syncer.AddSubTrie(obj.Root, 64, parent, nil)
-		syncer.AddRawEntry(common.BytesToHash(obj.CodeHash), 64, parent)
+		syncer.AddCodeEntry(common.BytesToHash(obj.CodeHash), 64, parent)
 		return nil
 	}
 	syncer = trie.NewSync(root, database, callback, bloom)
