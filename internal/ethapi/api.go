@@ -861,6 +861,7 @@ func DoCall(ctx context.Context, b Backend, args CallArgs, blockNrOrHash rpc.Blo
 	if evm.Cancelled() {
 		return nil, fmt.Errorf("execution aborted (timeout = %v)", timeout)
 	}
+
 	return result, err
 }
 
@@ -878,6 +879,13 @@ func (s *PublicBlockChainAPI) Call(ctx context.Context, args CallArgs, blockNrOr
 	result, err := DoCall(ctx, s.b, args, blockNrOrHash, accounts, vm.Config{}, 5*time.Second, s.b.RPCGasCap())
 	if err != nil {
 		return nil, err
+	}
+	if result.Err != nil {
+		reason, err := abi.UnpackRevert(result.Revert())
+		if err != nil {
+			return result.Return(), err
+		}
+		return result.Return(), errors.New(reason)
 	}
 	return result.Return(), nil
 }
