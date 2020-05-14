@@ -153,7 +153,7 @@ func bindCheckpointOracle(address common.Address, caller bind.ContractCaller, tr
 // sets the output to result. The result type might be a single field for simple
 // returns, a slice of interfaces for anonymous returns and a struct for named
 // returns.
-func (_CheckpointOracle *CheckpointOracleRaw) Call(opts *bind.CallOpts, result interface{}, method string, params ...interface{}) error {
+func (_CheckpointOracle *CheckpointOracleRaw) Call(opts *bind.CallOpts, result *[]interface{}, method string, params ...interface{}) error {
 	return _CheckpointOracle.Contract.CheckpointOracleCaller.contract.Call(opts, result, method, params...)
 }
 
@@ -172,7 +172,7 @@ func (_CheckpointOracle *CheckpointOracleRaw) Transact(opts *bind.TransactOpts, 
 // sets the output to result. The result type might be a single field for simple
 // returns, a slice of interfaces for anonymous returns and a struct for named
 // returns.
-func (_CheckpointOracle *CheckpointOracleCallerRaw) Call(opts *bind.CallOpts, result interface{}, method string, params ...interface{}) error {
+func (_CheckpointOracle *CheckpointOracleCallerRaw) Call(opts *bind.CallOpts, result *[]interface{}, method string, params ...interface{}) error {
 	return _CheckpointOracle.Contract.contract.Call(opts, result, method, params...)
 }
 
@@ -191,12 +191,9 @@ func (_CheckpointOracle *CheckpointOracleTransactorRaw) Transact(opts *bind.Tran
 //
 // Solidity: function GetAllAdmin() constant returns(address[])
 func (_CheckpointOracle *CheckpointOracleCaller) GetAllAdmin(opts *bind.CallOpts) ([]common.Address, error) {
-	var (
-		ret0 = new([]common.Address)
-	)
-	out := ret0
-	err := _CheckpointOracle.contract.Call(opts, out, "GetAllAdmin")
-	return *ret0, err
+	var out []interface{}
+	err := _CheckpointOracle.contract.Call(opts, &out, "GetAllAdmin")
+	return out[0].([]common.Address), err
 }
 
 // GetAllAdmin is a free data retrieval call binding the contract method 0x45848dfc.
@@ -217,18 +214,9 @@ func (_CheckpointOracle *CheckpointOracleCallerSession) GetAllAdmin() ([]common.
 //
 // Solidity: function GetLatestCheckpoint() constant returns(uint64, bytes32, uint256)
 func (_CheckpointOracle *CheckpointOracleCaller) GetLatestCheckpoint(opts *bind.CallOpts) (uint64, [32]byte, *big.Int, error) {
-	var (
-		ret0 = new(uint64)
-		ret1 = new([32]byte)
-		ret2 = new(*big.Int)
-	)
-	out := &[]interface{}{
-		ret0,
-		ret1,
-		ret2,
-	}
-	err := _CheckpointOracle.contract.Call(opts, out, "GetLatestCheckpoint")
-	return *ret0, *ret1, *ret2, err
+	var out []interface{}
+	err := _CheckpointOracle.contract.Call(opts, &out, "GetLatestCheckpoint")
+	return out[0].(uint64), out[1].([32]byte), out[2].(*big.Int), err
 }
 
 // GetLatestCheckpoint is a free data retrieval call binding the contract method 0x4d6a304c.
