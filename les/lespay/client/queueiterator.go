@@ -32,16 +32,18 @@ type QueueIterator struct {
 	ns           *nodestate.NodeStateMachine
 	queue        []*enode.Node
 	nextNode     *enode.Node
+	waitCallback func(bool)
 	fifo, closed bool
 }
 
 // NewQueueIterator creates a new QueueIterator. Nodes are selectable if they have all the required
 // and none of the disabled flags set. When a node is selected the selectedFlag is set which also
 // disables further selectability until it is removed or times out.
-func NewQueueIterator(ns *nodestate.NodeStateMachine, requireFlags, disableFlags nodestate.Flags, fifo bool) *QueueIterator {
+func NewQueueIterator(ns *nodestate.NodeStateMachine, requireFlags, disableFlags nodestate.Flags, fifo bool, waitCallback func(bool)) *QueueIterator {
 	qi := &QueueIterator{
-		ns:   ns,
-		fifo: fifo,
+		ns:           ns,
+		fifo:         fifo,
+		waitCallback: waitCallback,
 	}
 	qi.cond = sync.NewCond(&qi.lock)
 
@@ -75,8 +77,16 @@ func NewQueueIterator(ns *nodestate.NodeStateMachine, requireFlags, disableFlags
 // Next moves to the next selectable node.
 func (qi *QueueIterator) Next() bool {
 	qi.lock.Lock()
-	for !qi.closed && len(qi.queue) == 0 {
-		qi.cond.Wait()
+	if !qi.closed && len(qi.queue) == 0 {
+		if qi.waitCallback != nil {
+			qi.waitCallback(true)
+		}
+		for !qi.closed && len(qi.queue) == 0 {
+			qi.cond.Wait()
+		}
+		if qi.waitCallback != nil {
+			qi.waitCallback(false)
+		}
 	}
 	if qi.closed {
 		qi.nextNode = nil

@@ -99,4 +99,5 @@ func TestWrsIterator(t *testing.T) {
 	set[2] = true
 	set[3] = true
 	expset()
+	ns.Stop()
 }

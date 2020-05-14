@@ -51,7 +51,7 @@ func TestQueueIteratorLIFO(t *testing.T) {
 
 func testQueueIterator(t *testing.T, fifo bool) {
 	ns := nodestate.NewNodeStateMachine(nil, nil, &mclock.Simulated{}, testSetup)
-	qi := NewQueueIterator(ns, sfTest2, sfTest3.Or(sfTest4), fifo)
+	qi := NewQueueIterator(ns, sfTest2, sfTest3.Or(sfTest4), fifo, nil)
 	ns.Start()
 	for i := 1; i <= iterTestNodeCount; i++ {
 		ns.SetState(testNode(i), sfTest1, nodestate.Flags{}, 0)
@@ -102,4 +102,5 @@ func testQueueIterator(t *testing.T, fifo bool) {
 	ns.SetState(testNode(2), sfTest3, nodestate.Flags{}, 0)
 	ns.SetState(testNode(2), nodestate.Flags{}, sfTest3, 0)
 	explist([]int{1, 3, 2})
+	ns.Stop()
 }

@@ -43,6 +43,7 @@ const (
 	nodeWeightMul       = 1000000                // multiplier constant for node weight calculation
 	nodeWeightThreshold = 100                    // minimum weight for keeping a node in the the known (valuable) set
 	minRedialWait       = time.Second * 10       // minimum redial wait time
+	preNegLimit         = 5                      // maximum number of simultaneous pre-negotiation queries
 )
 
 // serverPool provides a node iterator for dial candidates. The output is a mix of newly discovered
@@ -57,6 +58,7 @@ type serverPool struct {
 	mixSources   []enode.Iterator
 	dialIterator enode.Iterator
 	trusted      []*enode.Node
+	fillSet      *lpc.FillSet
 
 	timeoutLock      sync.RWMutex
 	timeout          time.Duration
@@ -76,6 +78,10 @@ type nodeHistoryEnc struct {
 	DialCost              utils.ExpiredValue
 	WaitFactor, WaitUntil uint64
 }
+
+// queryFunc sends a pre-negotiation query and returns true if connection is possible.
+// The function should block until a response arrives or timeout occurs.
+type queryFunc func(*enode.Node) bool
 
 var (
 	serverPoolSetup    = &nodestate.Setup{}
@@ -118,7 +124,7 @@ var (
 )
 
 // newServerPool creates a new server pool
-func newServerPool(db ethdb.KeyValueStore, dbKey []byte, vt *lpc.ValueTracker, discovery enode.Iterator, query lpc.PreNegQuery, mono, rtc mclock.Clock, trustedURLs []string, testing bool) *serverPool {
+func newServerPool(db ethdb.KeyValueStore, dbKey []byte, vt *lpc.ValueTracker, discovery enode.Iterator, query queryFunc, mono, rtc mclock.Clock, trustedURLs []string, testing bool) *serverPool {
 	s := &serverPool{
 		db:   db,
 		mono: mono,
@@ -148,7 +154,7 @@ func newServerPool(db ethdb.KeyValueStore, dbKey []byte, vt *lpc.ValueTracker, d
 
 	s.mixer = enode.NewFairMix(mixerTimeout)
 	knownSelector := lpc.NewWrsIterator(s.ns, sfHasValue, sfDisableSelection, sfiNodeWeight)
-	alwaysConnect := lpc.NewQueueIterator(s.ns, sfAlwaysConnect, sfDisableSelection, true)
+	alwaysConnect := lpc.NewQueueIterator(s.ns, sfAlwaysConnect, sfDisableSelection, true, nil)
 	s.mixSources = append(s.mixSources, knownSelector)
 	s.mixSources = append(s.mixSources, alwaysConnect)
 	if discovery != nil {
@@ -157,11 +163,7 @@ func newServerPool(db ethdb.KeyValueStore, dbKey []byte, vt *lpc.ValueTracker, d
 
 	iter := enode.Iterator(s.mixer)
 	if query != nil {
-		var testClock *mclock.Simulated
-		if testing {
-			testClock = mono.(*mclock.Simulated)
-		}
-		iter = lpc.NewPreNegFilter(s.ns, iter, query, sfQueried, sfCanDial, 5, time.Second*5, time.Second*10, testClock)
+		iter = s.addPreNegFilter(iter, query)
 	}
 	s.dialIterator = enode.Filter(iter, func(node *enode.Node) bool {
 		s.ns.SetState(node, sfDialed, sfCanDial, time.Second*10)
@@ -175,19 +177,36 @@ func newServerPool(db ethdb.KeyValueStore, dbKey []byte, vt *lpc.ValueTracker, d
 		}
 	})
 
-	if query != nil {
-		s.ns.SubscribeState(nodestate.MergeFlags(sfQueried, sfCanDial), func(n *enode.Node, oldState, newState nodestate.Flags) {
-			if oldState.Equals(sfQueried) && newState.IsEmpty() {
-				// query timeout, no connection
-				s.setRedialWait(n, queryCost, queryWaitStep)
-			}
-		})
-	}
-
 	s.ns.AddLogMetrics(sfHasValue, sfDisableSelection, "selectable", nil, nil, serverSelectableGauge)
 	s.ns.AddLogMetrics(sfDialed, nodestate.Flags{}, "dialed", serverDialedMeter, nil, nil)
 	s.ns.AddLogMetrics(sfConnected, nodestate.Flags{}, "connected", nil, nil, serverConnectedGauge)
 	return s
+}
+
+// addPreNegFilter installs a node filter mechanism that performs a pre-negotiation query.
+// Nodes that are filtered out and does not appear on the output iterator are put back
+// into redialWait state.
+func (s *serverPool) addPreNegFilter(input enode.Iterator, query queryFunc) enode.Iterator {
+	s.fillSet = lpc.NewFillSet(s.ns, input, sfQueried)
+	s.ns.SubscribeState(sfQueried, func(n *enode.Node, oldState, newState nodestate.Flags) {
+		if newState.Equals(sfQueried) {
+			go func() {
+				if query(n) {
+					s.ns.SetState(n, sfCanDial, nodestate.Flags{}, time.Second*10)
+				} else {
+					s.setRedialWait(n, queryCost, queryWaitStep)
+				}
+				s.ns.SetState(n, nodestate.Flags{}, sfQueried, 0)
+			}()
+		}
+	})
+	return lpc.NewQueueIterator(s.ns, sfCanDial, nodestate.Flags{}, false, func(waiting bool) {
+		if waiting {
+			s.fillSet.SetTarget(preNegLimit)
+		} else {
+			s.fillSet.SetTarget(0)
+		}
+	})
 }
 
 // start starts the server pool. Note that NodeStateMachine should be started first.
@@ -220,6 +239,9 @@ func (s *serverPool) start() {
 // stop stops the server pool
 func (s *serverPool) stop() {
 	s.dialIterator.Close()
+	if s.fillSet != nil {
+		s.fillSet.Close()
+	}
 	s.ns.ForEach(sfConnected, nodestate.Flags{}, func(n *enode.Node, state nodestate.Flags) {
 		// recalculate weight of connected nodes in order to update hasValue flag if necessary
 		s.calculateWeight(n)

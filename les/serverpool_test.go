@@ -18,6 +18,7 @@ package les
 
 import (
 	"math/rand"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -58,6 +59,7 @@ type serverPoolTest struct {
 	input     enode.Iterator
 	testNodes []spTestNode
 	trusted   []string
+	waitCount int32
 
 	cycle, conn, servedConn  int
 	serviceCycles, dialCount int
@@ -85,34 +87,49 @@ func newServerPoolTest(preNeg bool) *serverPoolTest {
 	}
 }
 
+func (s *serverPoolTest) beginWait() {
+	// ensure that dialIterator and the maximal number of pre-neg queries are not all stuck in a waiting state
+	for atomic.AddInt32(&s.waitCount, 1) > preNegLimit {
+		atomic.AddInt32(&s.waitCount, -1)
+		s.clock.Run(time.Second)
+	}
+}
+
+func (s *serverPoolTest) endWait() {
+	atomic.AddInt32(&s.waitCount, -1)
+}
+
 func (s *serverPoolTest) addTrusted(i int) {
 	s.trusted = append(s.trusted, enode.SignNull(&enr.Record{}, testNodeID(i)).String())
 }
 
 func (s *serverPoolTest) start() {
 
-	var testQuery lpc.PreNegQuery
+	var testQuery queryFunc
 	if s.preNeg {
-		testQuery = func(node *enode.Node, result func(canDial bool)) (start, cancel func()) {
+		testQuery = func(node *enode.Node) bool {
 			idx := testNodeIndex(node.ID())
 			n := &s.testNodes[idx]
 			canConnect := !n.connected && n.connectCycles != 0 && s.cycle >= n.nextConnCycle
 			switch idx % 3 {
 			case 0:
 				// pre-neg returns true only if connection is possible
-				return func() { result(canConnect) }, func() {}
+				return canConnect
 			case 1:
 				// pre-neg returns true but connection might still fail
-				return func() { result(true) }, func() {}
+				return true
 			case 2:
 				// pre-neg returns true if connection is possible, otherwise timeout (node unresponsive)
 				if canConnect {
-					return func() { result(true) }, func() {}
+					return true
 				} else {
-					return func() {}, func() { result(false) }
+					s.beginWait()
+					s.clock.Sleep(time.Second * 5)
+					s.endWait()
+					return false
 				}
 			}
-			return nil, nil
+			return false
 		}
 	}
 
@@ -156,7 +173,9 @@ func (s *serverPoolTest) run() {
 		}
 		if s.conn < spTestTarget {
 			s.dialCount++
+			s.beginWait()
 			s.sp.dialIterator.Next()
+			s.endWait()
 			dial := s.sp.dialIterator.Node()
 			id := dial.ID()
 			idx := testNodeIndex(id)
