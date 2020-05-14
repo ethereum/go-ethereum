@@ -111,8 +111,8 @@ func TestGetCodeContractAddress(t *testing.T) {
 
 	getCodeContractAddressReturnValue, _ := call(t, state, vm.StateManagerAddress, getCodeContractAddressCalldata)
 
-  if !bytes.Equal(getCodeContractAddressReturnValue[12:], address.Bytes()) {
-    t.Errorf("Expected %020x; got %020x", getCodeContractAddressReturnValue[12:], address.Bytes())
+	if !bytes.Equal(getCodeContractAddressReturnValue[12:], address.Bytes()) {
+		t.Errorf("Expected %020x; got %020x", getCodeContractAddressReturnValue[12:], address.Bytes())
 	}
 }
 
