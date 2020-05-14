@@ -271,13 +271,28 @@ func (pm *ProtocolManager) Start(maxPeers int) {
 }
 
 func (pm *ProtocolManager) Stop() {
-	pm.txsSub.Unsubscribe()        // quits txBroadcastLoop
-	pm.minedBlockSub.Unsubscribe() // quits blockBroadcastLoop
+	pm.txsSub.Unsubscribe()        // quits txBroadcastLoop (OK)
+	pm.minedBlockSub.Unsubscribe() // quits blockBroadcastLoop (OK)
 
-	// Quit chainSync and txsync64.
+	// Quit chainSync (Not OK) and txsync64 (OK).
 	// After this is done, no new peers will be accepted.
 	close(pm.quitSync)
-	pm.wg.Wait()
+
+	// Terminating the downloader can be tricky. If the node is catching up on sync,
+	// the downloader may have delivered up to 2048 blocks to it. In this case,
+	// the downloader will be stuck waiting for the blockchain to slog through
+	// them all, which can take quite some time. At 200ms, it's still > 400s.
+	// Therefore, we give it up to 10s to terminate, after that we move on
+	wgTimeCh := make(chan struct{})
+	go func() {
+		pm.wg.Wait()
+		close(wgTimeCh)
+	}()
+	select {
+	case <-wgTimeCh:
+	case <-time.After(10 * time.Second):
+		log.Warn("Protocol handler shutdown deadline exceeded, proceeding anyway")
+	}
 
 	// Disconnect existing sessions.
 	// This also closes the gate for any new registrations on the peer set.

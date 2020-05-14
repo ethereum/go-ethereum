@@ -590,7 +590,6 @@ func (d *Downloader) Terminate() {
 		close(d.quitCh)
 	}
 	d.quitLock.Unlock()
-
 	// Cancel any pending download requests
 	d.Cancel()
 }
@@ -1392,7 +1391,6 @@ func (d *Downloader) processHeaders(origin uint64, pivot uint64, td *big.Int) er
 		select {
 		case <-d.cancelCh:
 			return errCanceled
-
 		case headers := <-d.headerProcCh:
 			// Terminate header processing if we synced up
 			if len(headers) == 0 {
@@ -1521,11 +1519,18 @@ func (d *Downloader) processHeaders(origin uint64, pivot uint64, td *big.Int) er
 
 // processFullSyncContent takes fetch results from the queue and imports them into the chain.
 func (d *Downloader) processFullSyncContent() error {
+
 	for {
+		select {
+		case <-d.quitCh:
+			return errCancelContentProcessing
+		default:
+		}
 		results := d.queue.Results(true)
 		if len(results) == 0 {
 			return nil
 		}
+
 		if d.chainInsertHook != nil {
 			d.chainInsertHook(results)
 		}
