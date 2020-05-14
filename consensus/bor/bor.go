@@ -114,10 +114,6 @@ var (
 	// errInvalidDifficulty is returned if the difficulty of a block neither 1 or 2.
 	errInvalidDifficulty = errors.New("invalid difficulty")
 
-	// errWrongDifficulty is returned if the difficulty of a block doesn't match the
-	// turn of the signer.
-	errWrongDifficulty = errors.New("wrong difficulty")
-
 	// ErrInvalidTimestamp is returned if the timestamp of a block is lower than
 	// the previous block's timestamp + the minimum block period.
 	ErrInvalidTimestamp = errors.New("invalid timestamp")
@@ -125,9 +121,6 @@ var (
 	// errOutOfRangeChain is returned if an authorization list is attempted to
 	// be modified via out-of-range or non-contiguous headers.
 	errOutOfRangeChain = errors.New("out of range or non-contiguous chain")
-
-	// errUnauthorizedSigner is returned if a header is signed by a non-authorized entity.
-	errUnauthorizedSigner = errors.New("unauthorized signer")
 
 	// errRecentlySigned is returned if a header is signed by an authorized entity
 	// that already signed a header recently, thus is temporarily not allowed to.
@@ -198,13 +191,6 @@ func encodeSigHeader(w io.Writer, header *types.Header) {
 	if err != nil {
 		panic("can't encode: " + err.Error())
 	}
-}
-
-// CalcDifficulty is the difficulty adjustment algorithm. It returns the difficulty
-// that a new block should have based on the previous blocks in the chain and the
-// current signer.
-func CalcDifficulty(snap *Snapshot, signer common.Address, sprint uint64) *big.Int {
-	return big.NewInt(0).SetUint64(snap.inturn(snap.Number+1, signer, sprint))
 }
 
 // CalcProducerDelay is the block delay algorithm based on block time, period, producerDelay and turn-ness of a signer
@@ -580,7 +566,7 @@ func (c *Bor) verifySeal(chain consensus.ChainReader, header *types.Header, pare
 		return err
 	}
 	if !snap.ValidatorSet.HasAddress(signer.Bytes()) {
-		return errUnauthorizedSigner
+		return &UnauthorizedSignerError{number, signer.Bytes()}
 	}
 
 	succession, err := snap.GetSignerSuccessionNumber(signer)
@@ -601,9 +587,9 @@ func (c *Bor) verifySeal(chain consensus.ChainReader, header *types.Header, pare
 
 	// Ensure that the difficulty corresponds to the turn-ness of the signer
 	if !c.fakeDiff {
-		difficulty := snap.inturn(header.Number.Uint64(), signer, c.config.Sprint)
+		difficulty := snap.Difficulty(signer)
 		if header.Difficulty.Uint64() != difficulty {
-			return errWrongDifficulty
+			return &WrongDifficultyError{number, difficulty, header.Difficulty.Uint64(), signer.Bytes()}
 		}
 	}
 
@@ -625,7 +611,7 @@ func (c *Bor) Prepare(chain consensus.ChainReader, header *types.Header) error {
 	}
 
 	// Set the correct difficulty
-	header.Difficulty = CalcDifficulty(snap, c.signer, c.config.Sprint)
+	header.Difficulty = new(big.Int).SetUint64(snap.Difficulty(c.signer))
 
 	// Ensure the extra data has all it's components
 	if len(header.Extra) < extraVanity {
@@ -659,10 +645,15 @@ func (c *Bor) Prepare(chain consensus.ChainReader, header *types.Header) error {
 		return consensus.ErrUnknownAncestor
 	}
 
-	succession, err := snap.GetSignerSuccessionNumber(c.signer)
-	if err != nil {
-		return err
+	var succession int
+	// if signer is not empty
+	if bytes.Compare(c.signer.Bytes(), common.Address{}.Bytes()) != 0 {
+		succession, err = snap.GetSignerSuccessionNumber(c.signer)
+		if err != nil {
+			return err
+		}
 	}
+
 	header.Time = parent.Time + CalcProducerDelay(number, succession, c.config)
 	if header.Time < uint64(time.Now().Unix()) {
 		header.Time = uint64(time.Now().Unix())
@@ -764,7 +755,7 @@ func (c *Bor) Seal(chain consensus.ChainReader, block *types.Block, results chan
 
 	// Bail out if we're unauthorized to sign a block
 	if !snap.ValidatorSet.HasAddress(signer.Bytes()) {
-		return errUnauthorizedSigner
+		return &UnauthorizedSignerError{number, signer.Bytes()}
 	}
 
 	successionNumber, err := snap.GetSignerSuccessionNumber(signer)
@@ -852,7 +843,7 @@ func (c *Bor) CalcDifficulty(chain consensus.ChainReader, time uint64, parent *t
 	if err != nil {
 		return nil
 	}
-	return CalcDifficulty(snap, c.signer, c.config.Sprint)
+	return new(big.Int).SetUint64(snap.Difficulty(c.signer))
 }
 
 // SealHash returns the hash of a block prior to it being sealed.

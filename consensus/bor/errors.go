@@ -90,7 +90,7 @@ type MismatchingValidatorsError struct {
 
 func (e *MismatchingValidatorsError) Error() string {
 	return fmt.Sprintf(
-		"Mismatching validators at block %d\nValidatorBytes from snapshot: %x\nValidatorBytes in Header: %x\n",
+		"Mismatching validators at block %d\nValidatorBytes from snapshot: 0x%x\nValidatorBytes in Header: 0x%x\n",
 		e.Number,
 		e.ValidatorSetSnap,
 		e.ValidatorSetHeader,
@@ -107,5 +107,38 @@ func (e *BlockTooSoonError) Error() string {
 		"Block %d was created too soon. Signer turn-ness number is %d\n",
 		e.Number,
 		e.Succession,
+	)
+}
+
+// UnauthorizedSignerError is returned if a header is signed by a non-authorized entity.
+type UnauthorizedSignerError struct {
+	Number uint64
+	Signer []byte
+}
+
+func (e *UnauthorizedSignerError) Error() string {
+	return fmt.Sprintf(
+		"Validator set for block %d doesn't contain the signer 0x%x\n",
+		e.Number,
+		e.Signer,
+	)
+}
+
+// WrongDifficultyError is returned if the difficulty of a block doesn't match the
+// turn of the signer.
+type WrongDifficultyError struct {
+	Number   uint64
+	Expected uint64
+	Actual   uint64
+	Signer   []byte
+}
+
+func (e *WrongDifficultyError) Error() string {
+	return fmt.Sprintf(
+		"Wrong difficulty at block %d, expected: %d, actual %d. Signer was %x\n",
+		e.Number,
+		e.Expected,
+		e.Actual,
+		e.Signer,
 	)
 }

@@ -155,7 +155,7 @@ func (s *Snapshot) apply(headers []*types.Header) (*Snapshot, error) {
 
 		// check if signer is in validator set
 		if !snap.ValidatorSet.HasAddress(signer.Bytes()) {
-			return nil, errUnauthorizedSigner
+			return nil, &UnauthorizedSignerError{number, signer.Bytes()}
 		}
 
 		if _, err = snap.GetSignerSuccessionNumber(signer); err != nil {
@@ -222,8 +222,8 @@ func (s *Snapshot) signers() []common.Address {
 	return sigs
 }
 
-// inturn returns if a signer at a given block height is in-turn or not.
-func (s *Snapshot) inturn(number uint64, signer common.Address, epoch uint64) uint64 {
+// Difficulty returns the difficulty for a particular signer at the current snapshot number
+func (s *Snapshot) Difficulty(signer common.Address) uint64 {
 	// if signer is empty
 	if bytes.Compare(signer.Bytes(), common.Address{}.Bytes()) == 0 {
 		return 1
