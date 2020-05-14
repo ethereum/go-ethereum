@@ -696,6 +696,10 @@ func (w *worker) updateSnapshot() {
 }
 
 func (w *worker) commitTransaction(tx *types.Transaction, coinbase common.Address) ([]*types.Log, error) {
+	// Make sure there's only one tx per block
+	if w.current != nil && len(w.current.txs) > 0 {
+		return nil, core.ErrGasLimitReached
+	}
 	snap := w.current.state.Snapshot()
 
 	receipt, err := core.ApplyTransaction(w.chainConfig, w.chain, &coinbase, w.current.gasPool, w.current.state, w.current.header, tx, &w.current.header.GasUsed, *w.chain.GetVMConfig())

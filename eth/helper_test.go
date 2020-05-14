@@ -23,10 +23,12 @@ import (
 	"crypto/ecdsa"
 	"crypto/rand"
 	"fmt"
+	"github.com/ethereum/go-ethereum/rollup"
 	"math/big"
 	"sort"
 	"sync"
 	"testing"
+	"time"
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/consensus/ethash"
@@ -68,7 +70,12 @@ func newTestProtocolManager(mode downloader.SyncMode, blocks int, generator func
 	if _, err := blockchain.InsertChain(chain); err != nil {
 		panic(err)
 	}
-	pm, err := NewProtocolManager(gspec.Config, nil, mode, DefaultConfig.NetworkId, evmux, &testTxPool{added: newtx}, engine, blockchain, db, 1, nil)
+	blockSubmitter := rollup.NewBlockSubmitter()
+	rollupBlockBuilder, err := rollup.NewTransitionBatchBuilder(db, blockchain, blockSubmitter, 5 * time.Minute, 9_000_000_000, 200)
+	if err != nil {
+		panic(fmt.Errorf("failed to create Rollup Block Builder: %v", err)
+	}
+	pm, err := NewProtocolManager(gspec.Config, nil, mode, DefaultConfig.NetworkId, evmux, &testTxPool{added: newtx}, engine, blockchain, db, 1, nil, rollupBlockBuilder)
 	if err != nil {
 		return nil, nil, err
 	}

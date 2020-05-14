@@ -18,6 +18,7 @@ package eth
 
 import (
 	"fmt"
+	"github.com/ethereum/go-ethereum/rollup"
 	"math"
 	"math/big"
 	"math/rand"
@@ -495,7 +496,12 @@ func testCheckpointChallenge(t *testing.T, syncmode downloader.SyncMode, checkpo
 	if err != nil {
 		t.Fatalf("failed to create new blockchain: %v", err)
 	}
-	pm, err := NewProtocolManager(config, cht, syncmode, DefaultConfig.NetworkId, new(event.TypeMux), new(testTxPool), ethash.NewFaker(), blockchain, db, 1, nil)
+	blockSubmitter := rollup.NewBlockSubmitter()
+	rollupBlockBuilder, err := rollup.NewTransitionBatchBuilder(db, blockchain, blockSubmitter, 5 * time.Minute, 9_000_000_000, 200)
+	if err != nil {
+		t.Fatalf("failed to create Rollup Block Builder: %v", err)
+	}
+	pm, err := NewProtocolManager(config, cht, syncmode, DefaultConfig.NetworkId, new(event.TypeMux), new(testTxPool), ethash.NewFaker(), blockchain, db, 1, nil, rollupBlockBuilder)
 	if err != nil {
 		t.Fatalf("failed to start test protocol manager: %v", err)
 	}
@@ -582,7 +588,12 @@ func testBroadcastBlock(t *testing.T, totalPeers, broadcastExpected int) {
 	if err != nil {
 		t.Fatalf("failed to create new blockchain: %v", err)
 	}
-	pm, err := NewProtocolManager(config, nil, downloader.FullSync, DefaultConfig.NetworkId, evmux, new(testTxPool), pow, blockchain, db, 1, nil)
+	blockSubmitter := rollup.NewBlockSubmitter()
+	rollupBlockBuilder, err := rollup.NewTransitionBatchBuilder(db, blockchain, blockSubmitter, 5 * time.Minute, 9_000_000_000, 200)
+	if err != nil {
+		t.Fatalf("failed to create Rollup Block Builder: %v", err)
+	}
+	pm, err := NewProtocolManager(config, nil, downloader.FullSync, DefaultConfig.NetworkId, evmux, new(testTxPool), pow, blockchain, db, 1, nil, rollupBlockBuilder)
 	if err != nil {
 		t.Fatalf("failed to start test protocol manager: %v", err)
 	}
@@ -650,7 +661,12 @@ func TestBroadcastMalformedBlock(t *testing.T) {
 	if err != nil {
 		t.Fatalf("failed to create new blockchain: %v", err)
 	}
-	pm, err := NewProtocolManager(config, nil, downloader.FullSync, DefaultConfig.NetworkId, new(event.TypeMux), new(testTxPool), engine, blockchain, db, 1, nil)
+	blockSubmitter := rollup.NewBlockSubmitter()
+	rollupBlockBuilder, err := rollup.NewTransitionBatchBuilder(db, blockchain, blockSubmitter, 5 * time.Minute, 9_000_000_000, 200)
+	if err != nil {
+		t.Fatalf("failed to create Rollup Block Builder: %v", err)
+	}
+	pm, err := NewProtocolManager(config, nil, downloader.FullSync, DefaultConfig.NetworkId, new(event.TypeMux), new(testTxPool), engine, blockchain, db, 1, nil, rollupBlockBuilder)
 	if err != nil {
 		t.Fatalf("failed to start test protocol manager: %v", err)
 	}

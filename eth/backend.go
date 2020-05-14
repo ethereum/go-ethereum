@@ -20,10 +20,12 @@ package eth
 import (
 	"errors"
 	"fmt"
+	"github.com/ethereum/go-ethereum/rollup"
 	"math/big"
 	"runtime"
 	"sync"
 	"sync/atomic"
+	"time"
 
 	"github.com/ethereum/go-ethereum/accounts"
 	"github.com/ethereum/go-ethereum/accounts/abi/bind"
@@ -207,7 +209,13 @@ func New(ctx *node.ServiceContext, config *Config) (*Ethereum, error) {
 	if checkpoint == nil {
 		checkpoint = params.TrustedCheckpoints[genesisHash]
 	}
-	if eth.protocolManager, err = NewProtocolManager(chainConfig, checkpoint, config.SyncMode, config.NetworkId, eth.eventMux, eth.txPool, eth.engine, eth.blockchain, chainDb, cacheLimit, config.Whitelist); err != nil {
+	blockSubmitter := rollup.NewBlockSubmitter()
+	rollupBlockBuilder, e := rollup.NewTransitionBatchBuilder(chainDb, eth.blockchain, blockSubmitter, 5 * time.Minute, 100_000_000_000, 200)
+	if e != nil {
+		return nil, e
+	}
+
+	if eth.protocolManager, err = NewProtocolManager(chainConfig, checkpoint, config.SyncMode, config.NetworkId, eth.eventMux, eth.txPool, eth.engine, eth.blockchain, chainDb, cacheLimit, config.Whitelist, rollupBlockBuilder); err != nil {
 		return nil, err
 	}
 	eth.miner = miner.New(eth, &config.Miner, chainConfig, eth.EventMux(), eth.engine, eth.isLocalBlock)
