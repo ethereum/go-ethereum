@@ -24,11 +24,7 @@ func TestCommitSpan(t *testing.T) {
 	// Mock HeimdallClient.FetchWithRetry to return span data from span.json
 	res, heimdallSpan := loadSpanFromFile(t)
 	h := &mocks.IHeimdallClient{}
-	// FetchWithRetry is invoked 3 times
-	// 1. bor.FinalizeAndAssemble to prepare a new block when calling insertNewBlock
-	// 2. bor.Finalize via(bc.insertChain => bc.processor.Process)
-	// 3. bor.FinalizeAndAssemble via worker.commit
-	h.On("FetchWithRetry", "bor", "span", "1").Return(res, nil).Times(3)
+	h.On("FetchWithRetry", "bor", "span", "1").Return(res, nil)
 	_bor.SetHeimdallClient(h)
 
 	db := init.ethereum.ChainDb()
@@ -45,7 +41,10 @@ func TestCommitSpan(t *testing.T) {
 		block = insertNewBlock(t, _bor, chain, header, statedb, _key)
 	}
 
-	assert.True(t, h.AssertNumberOfCalls(t, "FetchWithRetry", 3))
+	// FetchWithRetry is invoked 2 times
+	// 1. bor.FinalizeAndAssemble to prepare a new block when calling insertNewBlock
+	// 2. bor.Finalize via(bc.insertChain => bc.processor.Process)
+	assert.True(t, h.AssertNumberOfCalls(t, "FetchWithRetry", 2))
 	validators, err := _bor.GetCurrentValidators(sprintSize, 256) // new span starts at 256
 	if err != nil {
 		t.Fatalf("%s", err)

@@ -11,6 +11,7 @@
     "bor": {
       "period": 1,
       "producerDelay": 4,
+      "backupMultiplier": 1,
       "sprint": 4,
       "validatorContract": "0x0000000000000000000000000000000000001000",
       "stateReceiverContract": "0x0000000000000000000000000000000000001001"

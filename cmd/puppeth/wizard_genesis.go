@@ -111,6 +111,7 @@ func (w *wizard) makeGenesis() {
 			Period:                1,
 			ProducerDelay:         5,
 			Sprint:                60,
+			BackupMultiplier:      1,
 			ValidatorContract:     "0x0000000000000000000000000000000000001000",
 			StateReceiverContract: "0x0000000000000000000000000000000000001001",
 		}

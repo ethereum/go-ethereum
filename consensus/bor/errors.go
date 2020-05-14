@@ -96,3 +96,16 @@ func (e *MismatchingValidatorsError) Error() string {
 		e.ValidatorSetHeader,
 	)
 }
+
+type BlockTooSoonError struct {
+	Number     uint64
+	Succession int
+}
+
+func (e *BlockTooSoonError) Error() string {
+	return fmt.Sprintf(
+		"Block %d was created too soon. Signer turn-ness number is %d\n",
+		e.Number,
+		e.Succession,
+	)
+}

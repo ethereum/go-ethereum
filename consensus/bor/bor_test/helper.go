@@ -111,7 +111,7 @@ func buildMinimalNextHeader(t *testing.T, block *types.Block, borConfig *params.
 	header := block.Header()
 	header.Number.Add(header.Number, big.NewInt(1))
 	header.ParentHash = block.Hash()
-	header.Time += bor.CalcProducerDelay(header.Number.Uint64(), borConfig.Period, borConfig.Sprint, borConfig.ProducerDelay)
+	header.Time += bor.CalcProducerDelay(header.Number.Uint64(), 0, borConfig)
 	header.Extra = make([]byte, 32+65) // vanity + extraSeal
 
 	currentValidators := []*bor.Validator{bor.NewValidator(addr, 10)}

@@ -207,14 +207,18 @@ func CalcDifficulty(snap *Snapshot, signer common.Address, sprint uint64) *big.I
 	return big.NewInt(0).SetUint64(snap.inturn(snap.Number+1, signer, sprint))
 }
 
-// CalcProducerDelay is the block delay algorithm based on block time and period / producerDelay values in genesis
-func CalcProducerDelay(number uint64, period uint64, sprint uint64, producerDelay uint64) uint64 {
+// CalcProducerDelay is the block delay algorithm based on block time, period, producerDelay and turn-ness of a signer
+func CalcProducerDelay(number uint64, succession int, c *params.BorConfig) uint64 {
 	// When the block is the first block of the sprint, it is expected to be delayed by `producerDelay`.
 	// That is to allow time for block propagation in the last sprint
-	if number%sprint == 0 {
-		return producerDelay
+	delay := c.Period
+	if number%c.Sprint == 0 {
+		delay = c.ProducerDelay
 	}
-	return period
+	if succession > 0 {
+		delay += uint64(succession) * c.BackupMultiplier
+	}
+	return delay
 }
 
 // BorRLP returns the rlp bytes which needs to be signed for the bor
@@ -333,17 +337,6 @@ func (c *Bor) verifyHeader(chain consensus.ChainReader, header *types.Header, pa
 		return errUnknownBlock
 	}
 	number := header.Number.Uint64()
-
-	var parent *types.Header
-	if len(parents) > 0 { // if parents is nil, len(parents) is zero
-		parent = parents[len(parents)-1]
-	} else if number > 0 {
-		parent = chain.GetHeader(header.ParentHash, number-1)
-	}
-
-	if parent != nil && header.Time < parent.Time+CalcProducerDelay(number, c.config.Period, c.config.Sprint, c.config.ProducerDelay) {
-		return consensus.ErrBlockTooSoon
-	}
 
 	// Don't waste time checking blocks from the future
 	if header.Time > uint64(time.Now().Unix()) {
@@ -590,8 +583,20 @@ func (c *Bor) verifySeal(chain consensus.ChainReader, header *types.Header, pare
 		return errUnauthorizedSigner
 	}
 
-	if _, err = snap.GetSignerSuccessionNumber(signer); err != nil {
+	succession, err := snap.GetSignerSuccessionNumber(signer)
+	if err != nil {
 		return err
+	}
+
+	var parent *types.Header
+	if len(parents) > 0 { // if parents is nil, len(parents) is zero
+		parent = parents[len(parents)-1]
+	} else if number > 0 {
+		parent = chain.GetHeader(header.ParentHash, number-1)
+	}
+
+	if parent != nil && header.Time < parent.Time+CalcProducerDelay(number, succession, c.config) {
+		return &BlockTooSoonError{number, succession}
 	}
 
 	// Ensure that the difficulty corresponds to the turn-ness of the signer
@@ -654,7 +659,11 @@ func (c *Bor) Prepare(chain consensus.ChainReader, header *types.Header) error {
 		return consensus.ErrUnknownAncestor
 	}
 
-	header.Time = parent.Time + CalcProducerDelay(number, c.config.Period, c.config.Sprint, c.config.ProducerDelay)
+	succession, err := snap.GetSignerSuccessionNumber(c.signer)
+	if err != nil {
+		return err
+	}
+	header.Time = parent.Time + CalcProducerDelay(number, succession, c.config)
 	if header.Time < uint64(time.Now().Unix()) {
 		header.Time = uint64(time.Now().Unix())
 	}
@@ -765,8 +774,8 @@ func (c *Bor) Seal(chain consensus.ChainReader, block *types.Block, results chan
 
 	// Sweet, the protocol permits us to sign the block, wait for our time
 	delay := time.Unix(int64(header.Time), 0).Sub(time.Now()) // nolint: gosimple
-	wiggle := time.Duration(2*c.config.Period) * time.Second * time.Duration(successionNumber)
-	delay += wiggle
+	// wiggle was already accounted for in header.Time, this is just for logging
+	wiggle := time.Duration(successionNumber) * time.Duration(c.config.BackupMultiplier) * time.Second
 
 	// Sign all the things!
 	sighash, err := signFn(accounts.Account{Address: signer}, accounts.MimetypeBor, BorRLP(header))

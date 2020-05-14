@@ -319,6 +319,7 @@ type BorConfig struct {
 	Period                uint64 `json:"period"`                // Number of seconds between blocks to enforce
 	ProducerDelay         uint64 `json:"producerDelay"`         // Number of seconds delay between two producer interval
 	Sprint                uint64 `json:"sprint"`                // Epoch length to proposer
+	BackupMultiplier      uint64 `json:"backupMultiplier"`      // Backup multiplier to determine the wiggle time
 	ValidatorContract     string `json:"validatorContract"`     // Validator set contract
 	StateReceiverContract string `json:"stateReceiverContract"` // State receiver contract
 }
