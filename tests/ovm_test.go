@@ -8,6 +8,7 @@ import (
 	"math/big"
 	"strings"
 	"testing"
+	"fmt"
 
 	"github.com/ethereum/go-ethereum/accounts/abi"
 	"github.com/ethereum/go-ethereum/common"
@@ -38,23 +39,34 @@ func init() {
 }
 
 func TestSetExecutionContext(t *testing.T) {
-  to := common.HexToAddress("999999999999999999999999999999999999       9999")
+  // to := common.HexToAddress("999999999999999999999999999999999999")
   from := common.HexToAddress("8888888888888888888888888888888888888888")
+	initCode, _ := hex.DecodeString("6080604052348015600f57600080fd5b5060b28061001e6000396000f3fe6080604052348015600f57600080fd5b506004361060285760003560e01c80639b0b0fda14602d575b600080fd5b606060048036036040811015604157600080fd5b8101908080359060200190929190803590602001909291905050506062565b005b8060008084815260200190815260200160002081905550505056fea265627a7a7231582053ac32a8b70d1cf87fb4ebf5a538ea9d9e773351e6c8afbc4bf6a6c273187f4a64736f6c63430005110032")
 	state := newState()
-  evm := vm.NewEVM(vm.Context{}, state, &chainConfig, vm.Config{})
-  gasPool := core.GasPool(9999999)
+  gasPool := core.GasPool(10000000000)
   message := types.NewMessage(
     from,
-    &to,
+    nil,
     0,
     big.NewInt(0),
     100000000,
     big.NewInt(0),
-    common.FromHex(""),
-    true,
+    initCode,
+    false,
   )
+	header := &types.Header{
+    Number: big.NewInt(0),
+	  Difficulty: big.NewInt(0),
+  }
+  context := core.NewEVMContext(message, header, nil, &from)
+  evm := vm.NewEVM(context, state, &chainConfig, vm.Config{})
   stateTransition := core.NewStateTransition(evm, &message, &gasPool)
-  stateTransition.TransitionDb()
+  r1, r2, r3, r4 := stateTransition.TransitionDb()
+  fmt.Printf("%+v\n%+v\n%+v\n%+v\n", r1, r2, r3, r4)
+  // Check the address
+  code := evm.StateDB.GetCode(common.HexToAddress("65486c8ec9167565ebd93c94ed04f0f71d1b5137"))
+  fmt.Println("Woot!")
+  fmt.Println(code)
 }
 
 func TestSloadAndStore(t *testing.T) {
