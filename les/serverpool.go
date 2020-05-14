@@ -18,8 +18,10 @@ package les
 
 import (
 	"errors"
+	"math/rand"
 	"reflect"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/ethereum/go-ethereum/common/mclock"
@@ -44,6 +46,7 @@ const (
 	nodeWeightThreshold = 100                    // minimum weight for keeping a node in the the known (valuable) set
 	minRedialWait       = time.Second * 10       // minimum redial wait time
 	preNegLimit         = 5                      // maximum number of simultaneous pre-negotiation queries
+	maxQueryFails       = 100                    // number of consecutive UDP query failures before we print a warning
 )
 
 // serverPool provides a node iterator for dial candidates. The output is a mix of newly discovered
@@ -59,6 +62,7 @@ type serverPool struct {
 	dialIterator enode.Iterator
 	trusted      []*enode.Node
 	fillSet      *lpc.FillSet
+	queryFails   uint32
 
 	timeoutLock      sync.RWMutex
 	timeout          time.Duration
@@ -79,9 +83,10 @@ type nodeHistoryEnc struct {
 	WaitFactor, WaitUntil uint64
 }
 
-// queryFunc sends a pre-negotiation query and returns true if connection is possible.
-// The function should block until a response arrives or timeout occurs.
-type queryFunc func(*enode.Node) bool
+// queryFunc sends a pre-negotiation query and blocks until a response arrives or timeout occurs.
+// It returns 1 if the remote node has confirmed that connection is possible, 0 if not
+// possible and -1 if no response arrived (timeout).
+type queryFunc func(*enode.Node) int
 
 var (
 	serverPoolSetup    = &nodestate.Setup{}
@@ -190,8 +195,30 @@ func (s *serverPool) addPreNegFilter(input enode.Iterator, query queryFunc) enod
 	s.fillSet = lpc.NewFillSet(s.ns, input, sfQueried)
 	s.ns.SubscribeState(sfQueried, func(n *enode.Node, oldState, newState nodestate.Flags) {
 		if newState.Equals(sfQueried) {
+			fails := atomic.LoadUint32(&s.queryFails)
+			if fails == maxQueryFails {
+				log.Warn("UDP pre-negotiation query does not seem to work")
+			}
+			if fails > maxQueryFails {
+				fails = maxQueryFails
+			}
+			if rand.Intn(maxQueryFails*2) < int(fails) {
+				// skip pre-negotiation with increasing chance, max 50%
+				// this ensures that the client can operate even if UDP is not working at all
+				s.ns.SetState(n, sfCanDial, nodestate.Flags{}, time.Second*10)
+				// set canDial before resetting queried so that FillSet will not read more
+				// candidates unnecessarily
+				s.ns.SetState(n, nodestate.Flags{}, sfQueried, 0)
+				return
+			}
 			go func() {
-				if query(n) {
+				q := query(n)
+				if q == -1 {
+					atomic.AddUint32(&s.queryFails, 1)
+				} else {
+					atomic.StoreUint32(&s.queryFails, 0)
+				}
+				if q == 1 {
 					s.ns.SetState(n, sfCanDial, nodestate.Flags{}, time.Second*10)
 				} else {
 					s.setRedialWait(n, queryCost, queryWaitStep)
