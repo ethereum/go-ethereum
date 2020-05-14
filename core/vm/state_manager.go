@@ -2,6 +2,8 @@ package vm
 
 import (
 	"encoding/binary"
+	"encoding/hex"
+	"fmt"
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/crypto"
@@ -32,7 +34,6 @@ func init() {
 	methodIds = make(map[[4]byte]stateManagerFunction, len(funcs))
 	for methodSignature, f := range funcs {
 		methodIds[MethodSignatureToMethodId(methodSignature)] = f
-		methodId1 := MethodSignatureToMethodId(methodSignature)
 	}
 }
 
@@ -111,5 +112,6 @@ func deployContract(evm *EVM, contract *Contract, input []byte) (ret []byte, err
 	callerContractRef := &Contract{self: AccountRef(callerAddress)}
 	evm.OvmCreate(callerContractRef, address, initCode, contract.Gas, bigZero)
 
+	fmt.Println("%s", hex.EncodeToString(address.Bytes()))
 	return address.Bytes(), nil
 }
