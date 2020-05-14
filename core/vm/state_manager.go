@@ -2,14 +2,13 @@ package vm
 
 import (
 	"encoding/binary"
-	"os"
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/crypto"
 )
 
 var (
-	StateManagerAddress = common.HexToAddress(os.Getenv("STATE_MANAGER_ADDRESS"))
+	StateManagerAddress = common.HexToAddress("b0229ed527b40a36bc00eab1a29390a9bc1417a6")
 )
 
 type stateManagerFunction func(*EVM, *Contract, []byte) ([]byte, error)
@@ -44,6 +43,9 @@ func MethodSignatureToMethodId(methodSignature string) [4]byte {
 
 func callStateManager(input []byte, evm *EVM, contract *Contract) (ret []byte, err error) {
 	var methodId [4]byte
+	if len(input) == 0 {
+		return nil, nil
+	}
 	copy(methodId[:], input[:4])
 	ret, err = methodIds[methodId](evm, contract, input)
 	return ret, err
