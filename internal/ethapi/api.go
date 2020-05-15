@@ -869,7 +869,7 @@ func DoCall(ctx context.Context, b Backend, args CallArgs, blockNrOrHash rpc.Blo
 		}
 		return nil, fmt.Errorf("execution reverted: %v", reason)
 	}
-	return result, nil
+	return result, err
 }
 
 // Call executes the given transaction on the state for the given block number.
