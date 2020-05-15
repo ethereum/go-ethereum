@@ -53,6 +53,8 @@ type HTTPServer struct {
 	RPCAllowed bool
 	WSAllowed  bool
 	GQLAllowed bool
+
+	GQLHandler http.Handler
 }
 
 // TODO document

@@ -17,16 +17,12 @@
 package graphql
 
 import (
-	"context"
 	"errors"
-	"fmt"
 	"github.com/ethereum/go-ethereum/eth"
 	"github.com/ethereum/go-ethereum/les"
-	"net"
 	"net/http"
 
 	"github.com/ethereum/go-ethereum/internal/ethapi"
-	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/node"
 	"github.com/ethereum/go-ethereum/rpc"
 	"github.com/graph-gophers/graphql-go"
@@ -41,14 +37,7 @@ type Service struct {
 
 // New constructs a new GraphQL service instance.
 func New(stack *node.Node, ethBackend *eth.Ethereum, lesBackend *les.LightEthereum, endpoint string, cors, vhosts []string, timeouts rpc.HTTPTimeouts) error {
-	service := &Service{
-		graphqlServer: &node.HTTPServer{
-			Timeouts: timeouts,
-			Vhosts: vhosts,
-			CorsAllowedOrigins: cors,
-			GQLAllowed: true,
-		},
-	}
+	service := new(Service)
 	// add backend
 	if ethBackend != nil {
 		service.backend = ethBackend.APIBackend
@@ -58,26 +47,52 @@ func New(stack *node.Node, ethBackend *eth.Ethereum, lesBackend *les.LightEthere
 		return errors.New("no Ethereum service")
 	}
 
-	service.graphqlServer.SetEndpoint(endpoint)
-	// create handler
-	handler, err := service.CreateHandler()
+	// check if http server with given endpoint exists and enable graphQL on it
+	server := stack.ExistingHTTPServer(endpoint)
+	if server != nil {
+		server.GQLAllowed = true
+		server.Vhosts = append(server.Vhosts, vhosts...)
+		server.CorsAllowedOrigins = append(server.CorsAllowedOrigins, cors...)
+		server.Timeouts = timeouts
+		// create handler
+		handler, err := createHandler(service.backend, cors, vhosts)
+		if err != nil {
+			return err
+		}
+		server.GQLHandler = handler
+		// don't register lifecycle if registering on existing http server
+		return nil
+	}
+	// otherwise create a new server
+	handler, err := createHandler(service.backend, cors, vhosts)
 	if err != nil {
 		return err
 	}
-	service.graphqlServer.SetHandler(handler)
+	// create the http server
+	gqlServer := &node.HTTPServer{
+		Vhosts: vhosts,
+		CorsAllowedOrigins: cors,
+		Timeouts: timeouts,
+		GQLAllowed: true,
+		GQLHandler: handler,
+		Srv: rpc.NewServer(),
+	}
+	gqlServer.SetEndpoint(endpoint)
+	stack.RegisterHTTPServer(gqlServer)
 
-	// TODO register http
-	return stack.RegisterLifecycle(service)
+	service.graphqlServer = gqlServer
+
+	return nil
 }
 
-func (s *Service) CreateHandler() (http.Handler, error) {
+func createHandler(backend ethapi.Backend, cors, vhosts []string) (http.Handler, error) {
 	// create handler stack and wrap the graphql handler
-	handler, err := newHandler(s.backend)
+	handler, err := newHandler(backend)
 	if err != nil {
 		return nil, err
 	}
+	handler = node.NewHTTPHandlerStack(handler, cors, vhosts)
 
-	handler = node.NewHTTPHandlerStack(handler, s.graphqlServer.CorsAllowedOrigins, s.graphqlServer.Vhosts)
 	return handler, nil
 }
 
@@ -102,32 +117,6 @@ func newHandler(backend ethapi.Backend) (http.Handler, error) {
 // Start is called after all services have been constructed and the networking
 // layer was also initialized to spawn any goroutines required by the service.
 func (s *Service) Start() error {
-	handler, err := s.CreateHandler()
-	if err != nil {
-		return err
-	}
-	s.graphqlServer.SetHandler(handler)
-
-	// start listening on given endpoint
-	listener, err := net.Listen("tcp", s.graphqlServer.Endpoint())
-	if err != nil {
-		return err
-	}
-	// make sure timeout values are meaningful
-	node.CheckTimeouts(&s.graphqlServer.Timeouts)
-	// create http server
-	httpSrv := &http.Server{
-		Handler:      handler,
-		ReadTimeout:  s.graphqlServer.Timeouts.ReadTimeout,
-		WriteTimeout: s.graphqlServer.Timeouts.WriteTimeout,
-		IdleTimeout:  s.graphqlServer.Timeouts.IdleTimeout,
-	}
-	go httpSrv.Serve(listener)
-	log.Info("GraphQL endpoint opened", "url", fmt.Sprintf("http://%v", listener.Addr()))
-	// add information to graphql http server
-	s.graphqlServer.Server = httpSrv
-	s.graphqlServer.ListenerAddr = listener.Addr()
-	s.graphqlServer.SetHandler(handler)
 
 	return nil
 }
@@ -135,10 +124,10 @@ func (s *Service) Start() error {
 // Stop terminates all goroutines belonging to the service, blocking until they
 // are all terminated.
 func (s *Service) Stop() error {
-	if s.graphqlServer.Server != nil {
-		s.graphqlServer.Server.Shutdown(context.Background())
-		log.Info("GraphQL endpoint closed", "url", fmt.Sprintf("http://%v", s.graphqlServer.ListenerAddr))
-	}
+	//if s.graphqlServer.Server != nil {
+	//	s.graphqlServer.Server.Shutdown(context.Background())
+	//	log.Info("GraphQL endpoint closed", "url", fmt.Sprintf("http://%v", s.graphqlServer.ListenerAddr))
+	//}
 	return nil
 }
 
