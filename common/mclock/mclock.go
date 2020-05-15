@@ -42,7 +42,7 @@ func (t AbsTime) Sub(t2 AbsTime) time.Duration {
 }
 
 // The Clock interface makes it possible to replace the monotonic system clock with
-// a simulated clock or the real-time system clock.
+// a simulated clock.
 type Clock interface {
 	Now() AbsTime
 	Sleep(time.Duration)
@@ -70,17 +70,11 @@ type ChanTimer interface {
 }
 
 // System implements Clock using the system clock.
-type System struct {
-	RTC bool
-}
+type System struct{}
 
-// Now returns the current time.
+// Now returns the current monotonic time.
 func (c System) Now() AbsTime {
-	if c.RTC {
-		return AbsTime(time.Now().UnixNano())
-	} else {
-		return AbsTime(monotime.Now())
-	}
+	return AbsTime(monotime.Now())
 }
 
 // Sleep blocks for the given duration.

@@ -52,15 +52,17 @@ const (
 // serverPool provides a node iterator for dial candidates. The output is a mix of newly discovered
 // nodes, a weighted random selection of known (previously valuable) nodes and trusted/paid nodes.
 type serverPool struct {
-	mono, rtc mclock.Clock
-	db        ethdb.KeyValueStore
+	clock    mclock.Clock
+	unixTime func() int64
+	db       ethdb.KeyValueStore
 
 	ns           *nodestate.NodeStateMachine
 	vt           *lpc.ValueTracker
 	mixer        *enode.FairMix
 	mixSources   []enode.Iterator
 	dialIterator enode.Iterator
-	trusted      []*enode.Node
+	validSchemes enr.IdentityScheme
+	trustedURLs  []string
 	fillSet      *lpc.FillSet
 	queryFails   uint32
 
@@ -74,7 +76,7 @@ type serverPool struct {
 // service value calculated by lpc.ValueTracker.
 type nodeHistory struct {
 	dialCost   utils.ExpiredValue
-	waitUntil  mclock.AbsTime
+	waitUntil  int64 // unix time (seconds)
 	waitFactor float64
 }
 
@@ -120,7 +122,7 @@ var (
 			n := nodeHistory{
 				dialCost:   ne.DialCost,
 				waitFactor: float64(ne.WaitFactor) / 256,
-				waitUntil:  mclock.AbsTime(ne.WaitUntil),
+				waitUntil:  int64(ne.WaitUntil),
 			}
 			return n, err
 		},
@@ -129,35 +131,18 @@ var (
 )
 
 // newServerPool creates a new server pool
-func newServerPool(db ethdb.KeyValueStore, dbKey []byte, vt *lpc.ValueTracker, discovery enode.Iterator, query queryFunc, mono, rtc mclock.Clock, trustedURLs []string, testing bool) *serverPool {
+func newServerPool(db ethdb.KeyValueStore, dbKey []byte, vt *lpc.ValueTracker, discovery enode.Iterator, query queryFunc, clock mclock.Clock, trustedURLs []string) *serverPool {
 	s := &serverPool{
-		db:   db,
-		mono: mono,
-		rtc:  rtc,
-		vt:   vt,
-		ns:   nodestate.NewNodeStateMachine(db, []byte(string(dbKey)+"ns:"), mono, serverPoolSetup),
+		db:           db,
+		clock:        clock,
+		unixTime:     func() int64 { return time.Now().Unix() },
+		validSchemes: enode.ValidSchemes,
+		trustedURLs:  trustedURLs,
+		vt:           vt,
+		ns:           nodestate.NewNodeStateMachine(db, []byte(string(dbKey)+"ns:"), clock, serverPoolSetup),
 	}
 	s.recalTimeout()
-	var (
-		validSchemes enr.IdentityScheme
-		mixerTimeout time.Duration
-	)
-	if testing {
-		validSchemes = enode.ValidSchemesForTesting
-	} else {
-		validSchemes = enode.ValidSchemes
-		mixerTimeout = time.Second
-	}
-
-	for _, url := range trustedURLs {
-		if node, err := enode.Parse(validSchemes, url); err == nil {
-			s.trusted = append(s.trusted, node)
-		} else {
-			log.Error("Invalid trusted server URL", "url", url, "error", err)
-		}
-	}
-
-	s.mixer = enode.NewFairMix(mixerTimeout)
+	s.mixer = enode.NewFairMix(0)
 	knownSelector := lpc.NewWrsIterator(s.ns, sfHasValue, sfDisableSelection, sfiNodeWeight)
 	alwaysConnect := lpc.NewQueueIterator(s.ns, sfAlwaysConnect, sfDisableSelection, true, nil)
 	s.mixSources = append(s.mixSources, knownSelector)
@@ -244,14 +229,18 @@ func (s *serverPool) start() {
 		// which should only happen after NodeStateMachine has been started
 		s.mixer.AddSource(iter)
 	}
-	for _, node := range s.trusted {
-		s.ns.SetState(node, sfAlwaysConnect, nodestate.Flags{}, 0)
+	for _, url := range s.trustedURLs {
+		if node, err := enode.Parse(s.validSchemes, url); err == nil {
+			s.ns.SetState(node, sfAlwaysConnect, nodestate.Flags{}, 0)
+		} else {
+			log.Error("Invalid trusted server URL", "url", url, "error", err)
+		}
 	}
-	now := s.rtc.Now()
+	unixTime := s.unixTime()
 	s.ns.ForEach(sfHasValue, nodestate.Flags{}, func(node *enode.Node, state nodestate.Flags) {
 		s.calculateWeight(node)
-		if n, ok := s.ns.GetField(node, sfiNodeHistory).(nodeHistory); ok && n.waitUntil > now {
-			wait := time.Duration(n.waitUntil - now)
+		if n, ok := s.ns.GetField(node, sfiNodeHistory).(nodeHistory); ok && n.waitUntil > unixTime {
+			wait := time.Duration(n.waitUntil-unixTime) * time.Second
 			maxWait := n.redialWait()
 			if wait > maxWait {
 				// if the time until expiration is larger than the last suggested
@@ -302,7 +291,7 @@ func (s *serverPool) recalTimeout() {
 	s.timeoutLock.RLock()
 	refreshed := s.timeoutRefreshed
 	s.timeoutLock.RUnlock()
-	now := s.mono.Now()
+	now := s.clock.Now()
 	if refreshed != 0 && time.Duration(now-refreshed) < timeoutRefresh {
 		return
 	}
@@ -355,7 +344,7 @@ func (s *serverPool) getTimeoutAndWeight() (time.Duration, lpc.ResponseTimeWeigh
 // addDialCost adds the given amount of dial cost to the node history and returns the current
 // amount of total dial cost
 func (s *serverPool) addDialCost(n *nodeHistory, amount int64) uint64 {
-	logOffset := s.vt.StatsExpirer().LogOffset(s.mono.Now())
+	logOffset := s.vt.StatsExpirer().LogOffset(s.clock.Now())
 	if amount > 0 {
 		n.dialCost.Add(amount, logOffset)
 	}
@@ -441,7 +430,7 @@ func (s *serverPool) setRedialWait(node *enode.Node, addDialCost int64, waitStep
 		n.waitFactor = 1
 	}
 	wait := n.redialWait()
-	n.waitUntil = s.rtc.Now() + mclock.AbsTime(wait)
+	n.waitUntil = s.unixTime() + int64(wait/time.Second)
 	s.ns.SetField(node, sfiNodeHistory, n)
 	s.ns.SetState(node, sfRedialWait, nodestate.Flags{}, wait)
 	s.updateWeight(node, totalValue, totalDialCost)
