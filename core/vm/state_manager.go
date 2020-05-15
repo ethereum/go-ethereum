@@ -8,7 +8,9 @@ import (
 )
 
 var (
+	ExecutionManagerAddress = common.HexToAddress("A193E42526F1FEA8C99AF609dcEabf30C1c29fAA")
 	StateManagerAddress = common.HexToAddress("b0229ed527b40a36bc00eab1a29390a9bc1417a6")
+  WORD_SIZE = 32
 )
 
 type stateManagerFunction func(*EVM, *Contract, []byte) ([]byte, error)
@@ -69,15 +71,9 @@ func getStorage(evm *EVM, contract *Contract, input []byte) (ret []byte, err err
 func getCodeContractBytecode(evm *EVM, contract *Contract, input []byte) (ret []byte, err error) {
 	address := common.BytesToAddress(input[4:36])
 	code := evm.StateDB.GetCode(address)
-	encodedCode := make([]byte, 32)
-	binary.BigEndian.PutUint64(encodedCode[24:], uint64(len(code)))
-	padding := make([]byte, 18)
-	codeWithLength := append(append(encodedCode, code...), padding...)
-	offset := make([]byte, 34)
-	binary.BigEndian.PutUint32(offset[30:], uint32(2))
-	code = append(offset, codeWithLength...)
-	return code, nil
+	return simpleAbiEncode(code), nil
 }
+
 
 func getCodeContractHash(evm *EVM, contract *Contract, input []byte) (ret []byte, err error) {
 	address := common.BytesToAddress(input[4:36])
@@ -117,7 +113,15 @@ func deployContract(evm *EVM, contract *Contract, input []byte) (ret []byte, err
 	callerContractRef := &Contract{self: AccountRef(callerAddress)}
 	_, _, _, err = evm.OvmCreate(callerContractRef, address, initCode, contract.Gas, bigZero)
 
-	// addressPadded :=
 	return common.BytesToHash(address.Bytes()).Bytes(), nil
-	// return address.Bytes() , nil
+}
+
+func simpleAbiEncode(bytes []byte) ([]byte) {
+	encodedCode := make([]byte, WORD_SIZE)
+	binary.BigEndian.PutUint64(encodedCode[WORD_SIZE-8:], uint64(len(bytes)))
+	padding := make([]byte, len(bytes) % WORD_SIZE)
+	codeWithLength := append(append(encodedCode, bytes...), padding...)
+	offset := make([]byte, WORD_SIZE)
+	binary.BigEndian.PutUint64(offset[WORD_SIZE-8:], uint64(2))
+	return append([]byte{0, 0}, append(offset, codeWithLength...)...)
 }

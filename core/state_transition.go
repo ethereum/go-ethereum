@@ -222,15 +222,14 @@ func (st *StateTransition) TransitionDb() (ret []byte, usedGas uint64, failed bo
 	if contractCreation {
 		deployContractCalldata, _ := executionManagerAbi.Pack(
 			"executeTransaction",
-			big.NewInt(99),
-			big.NewInt(99),
+			big.NewInt(1),
+			new(big.Int),
 			common.HexToAddress(""),
 			st.data,
 			sender,
 			common.HexToAddress(""),
-			false,
+			true,
 		)
-		// ret, _, st.gas, vmerr = evm.Create(sender, deployContractCalldata, st.gas, st.value)
 		executeManagerAddress := common.HexToAddress("A193E42526F1FEA8C99AF609dcEabf30C1c29fAA")
 		ret, st.gas, vmerr = evm.Call(sender, executeManagerAddress, deployContractCalldata, st.gas, st.value)
 	} else {

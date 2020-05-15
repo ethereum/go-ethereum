@@ -395,7 +395,7 @@ func (evm *EVM) create(caller ContractRef, codeAndHash *codeAndHash, gas uint64,
 		return nil, common.Address{}, gas, ErrInsufficientBalance
 	}
 	nonce := evm.StateDB.GetNonce(caller.Address())
-	if caller.Address() == common.HexToAddress("A193E42526F1FEA8C99AF609dcEabf30C1c29fAA") {
+	if caller.Address() == ExecutionManagerAddress {
 		evm.StateDB.SetNonce(caller.Address(), nonce+1)
 	}
 
