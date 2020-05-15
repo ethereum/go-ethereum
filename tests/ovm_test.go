@@ -72,8 +72,8 @@ func TestSetExecutionContext(t *testing.T) {
 	r1, r2, r3, r4 := stateTransition.TransitionDb()
 	fmt.Printf("%+v\n%+v\n%+v\n%+v\n", r1, r2, r3, r4)
 	// Check the address
-	// code := evm.StateDB.GetCode(common.HexToAddress("a21724f878c748196a0c0f13a9e0aa908e328c4b"))
-	fmt.Println("Woot!")
+	code := evm.StateDB.GetCode(common.HexToAddress("65486c8ec9167565ebd93c94ed04f0f71d1b5137"))
+  fmt.Printf("code: %+v", code)
 }
 
 func TestSloadAndStore(t *testing.T) {
