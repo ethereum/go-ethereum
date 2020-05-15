@@ -18,13 +18,10 @@ package core
 
 import (
 	"errors"
-	"fmt"
-  "encoding/hex"
 	"io/ioutil"
 	"math"
 	"math/big"
 	"strings"
-	// "encoding/hex"
 
 	"github.com/ethereum/go-ethereum/accounts/abi"
 	"github.com/ethereum/go-ethereum/common"
@@ -235,9 +232,7 @@ func (st *StateTransition) TransitionDb() (ret []byte, usedGas uint64, failed bo
 		)
 		// ret, _, st.gas, vmerr = evm.Create(sender, deployContractCalldata, st.gas, st.value)
 		executeManagerAddress := common.HexToAddress("A193E42526F1FEA8C99AF609dcEabf30C1c29fAA")
-		fmt.Printf("%+v", hex.EncodeToString(deployContractCalldata))
 		ret, st.gas, vmerr = evm.Call(sender, executeManagerAddress, deployContractCalldata, st.gas, st.value)
-		fmt.Printf("\nret: >%+v< >%+v<\n", ret, vmerr)
 	} else {
 		// Increment the nonce for the next transaction
 		st.state.SetNonce(msg.From(), st.state.GetNonce(sender.Address())+1)

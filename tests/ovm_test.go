@@ -4,7 +4,6 @@ import (
 	"bytes"
 	"encoding/binary"
 	"encoding/hex"
-	"fmt"
 	"io/ioutil"
 	"math/big"
 	"strings"
@@ -42,7 +41,6 @@ func TestSetExecutionContext(t *testing.T) {
 	deployExecutionManagerCalldataHex, _ := ioutil.ReadFile("./ExecutionManagerDeployCalldata.hex")
 	deployExecutionManagerCalldata, _ := hex.DecodeString(strings.TrimSuffix(string(deployExecutionManagerCalldataHex), "\n"))
 
-	// fmt.Printf("%+v", deployExecutionManagerCalldata)
 	// to := common.HexToAddress("999999999999999999999999999999999999")
 	executionManagerFrom := common.HexToAddress("999999999999999999999999999999999999")
 	from := common.HexToAddress("8888888888888888888888888888888888888888")
@@ -67,13 +65,14 @@ func TestSetExecutionContext(t *testing.T) {
 	evm := vm.NewEVM(context, state, &chainConfig, vm.Config{})
 	evm.OvmCreate(vm.AccountRef(executionManagerFrom), common.HexToAddress("A193E42526F1FEA8C99AF609dcEabf30C1c29fAA"), deployExecutionManagerCalldata, 100000000, big.NewInt(0))
 	// code2 := evm.StateDB.GetCode(common.HexToAddress("b0229ed527b40a36bc00eab1a29390a9bc1417a6"))
-	fmt.Printf("before NewStateTransition\n")
 	stateTransition := core.NewStateTransition(evm, &message, &gasPool)
-	r1, r2, r3, r4 := stateTransition.TransitionDb()
-	fmt.Printf("%+v\n%+v\n%+v\n%+v\n", r1, r2, r3, r4)
+	stateTransition.TransitionDb()
 	// Check the address
 	code := evm.StateDB.GetCode(common.HexToAddress("65486c8ec9167565ebd93c94ed04f0f71d1b5137"))
-  fmt.Printf("code: %+v", code)
+	deployedByteCode := common.FromHex("6080604052348015600f57600080fd5b506004361060285760003560e01c80639b0b0fda14602d575b600080fd5b606060048036036040811015604157600080fd5b8101908080359060200190929190803590602001909291905050506062565b005b8060008084815260200190815260200160002081905550505056fea265627a7a7231582053ac32a8b70d1cf87fb4ebf5a538ea9d9e773351e6c8afbc4bf6a6c273187f4a64736f6c63430005110032")
+	if !bytes.Equal(code[:], deployedByteCode) {
+		t.Errorf("Expected %020x; got %020x", code[:], deployedByteCode)
+	}
 }
 
 func TestSloadAndStore(t *testing.T) {

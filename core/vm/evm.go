@@ -17,8 +17,6 @@
 package vm
 
 import (
-	"encoding/hex"
-	"fmt"
 	"math/big"
 	"sync/atomic"
 	"time"
@@ -45,9 +43,7 @@ type (
 // run runs the given contract and takes care of running precompiles with a fallback to the byte code interpreter.
 func run(evm *EVM, contract *Contract, input []byte, readOnly bool) ([]byte, error) {
 	if contract.Address() == StateManagerAddress && len(input) > 0 {
-    ret, err:= callStateManager(input, evm, contract)
-    fmt.Printf("input: %+v\n", hex.EncodeToString(input))
-    fmt.Printf("run: %+v %+v\n", ret, err)
+		ret, err := callStateManager(input, evm, contract)
 		return ret, err
 	}
 
@@ -248,9 +244,7 @@ func (evm *EVM) Call(caller ContractRef, addr common.Address, input []byte, gas 
 			evm.vmConfig.Tracer.CaptureEnd(ret, gas-contract.Gas, time.Since(start), err)
 		}()
 	}
-  fmt.Printf("calling %s  %s\n", hex.EncodeToString(contract.Address().Bytes()), hex.EncodeToString(input))
 	ret, err = run(evm, contract, input, false)
-  fmt.Printf("returned: %+v\n", err)
 
 	// When an error was returned by the EVM or when setting the creation code
 	// above we revert to the snapshot and consume any gas remaining. Additionally
@@ -408,7 +402,6 @@ func (evm *EVM) create(caller ContractRef, codeAndHash *codeAndHash, gas uint64,
 	// Ensure there's no existing contract already at the designated address
 	contractHash := evm.StateDB.GetCodeHash(address)
 	if evm.StateDB.GetNonce(address) != 0 || (contractHash != (common.Hash{}) && contractHash != emptyCodeHash) {
-		fmt.Printf("checking nonce of: %s %v\n", hex.EncodeToString(address.Bytes()), evm.StateDB.GetNonce(address))
 		return nil, common.Address{}, 0, ErrContractAddressCollision
 	}
 	// Create a new account on the state
