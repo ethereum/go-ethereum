@@ -42,6 +42,7 @@ const (
 	dialWaitStep        = 1.5                    // exponential multiplier of redial wait time when no value was provided by the server
 	queryCost           = 500                    // cost of a UDP pre-negotiation query
 	queryWaitStep       = 1.02                   // exponential multiplier of redial wait time when no value was provided by the server
+	waitThreshold       = time.Hour * 2000       // drop node if waiting time is over the threshold
 	nodeWeightMul       = 1000000                // multiplier constant for node weight calculation
 	nodeWeightThreshold = 100                    // minimum weight for keeping a node in the the known (valuable) set
 	minRedialWait       = time.Second * 10       // minimum redial wait time
@@ -430,10 +431,16 @@ func (s *serverPool) setRedialWait(node *enode.Node, addDialCost int64, waitStep
 		n.waitFactor = 1
 	}
 	wait := n.redialWait()
-	n.waitUntil = s.unixTime() + int64(wait/time.Second)
-	s.ns.SetField(node, sfiNodeHistory, n)
-	s.ns.SetState(node, sfRedialWait, nodestate.Flags{}, wait)
-	s.updateWeight(node, totalValue, totalDialCost)
+	if wait < waitThreshold {
+		n.waitUntil = s.unixTime() + int64(wait/time.Second)
+		s.ns.SetField(node, sfiNodeHistory, n)
+		s.ns.SetState(node, sfRedialWait, nodestate.Flags{}, wait)
+		s.updateWeight(node, totalValue, totalDialCost)
+	} else {
+		s.ns.SetField(node, sfiNodeHistory, nil)
+		s.ns.SetField(node, sfiNodeWeight, nil)
+		s.ns.SetState(node, nodestate.Flags{}, sfHasValue, 0)
+	}
 }
 
 // calculateWeight calculates and sets the node weight without altering the node history.
