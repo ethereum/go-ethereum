@@ -216,6 +216,9 @@ func (_CheckpointOracle *CheckpointOracleCallerSession) GetAllAdmin() ([]common.
 func (_CheckpointOracle *CheckpointOracleCaller) GetLatestCheckpoint(opts *bind.CallOpts) (uint64, [32]byte, *big.Int, error) {
 	var out []interface{}
 	err := _CheckpointOracle.contract.Call(opts, &out, "GetLatestCheckpoint")
+	if err != nil || len(out) != 3 {
+		return uint64(0), [32]byte{}, nil, err
+	}
 	return out[0].(uint64), out[1].([32]byte), out[2].(*big.Int), err
 }
 
