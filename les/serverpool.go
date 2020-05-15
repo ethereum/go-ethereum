@@ -45,7 +45,7 @@ const (
 	waitThreshold       = time.Hour * 2000       // drop node if waiting time is over the threshold
 	nodeWeightMul       = 1000000                // multiplier constant for node weight calculation
 	nodeWeightThreshold = 100                    // minimum weight for keeping a node in the the known (valuable) set
-	minRedialWait       = time.Second * 10       // minimum redial wait time
+	minRedialWait       = 10                     // minimum redial wait time in seconds
 	preNegLimit         = 5                      // maximum number of simultaneous pre-negotiation queries
 	maxQueryFails       = 100                    // number of consecutive UDP query failures before we print a warning
 )
@@ -76,14 +76,13 @@ type serverPool struct {
 // nodeHistory keeps track of dial costs which determine node weight together with the
 // service value calculated by lpc.ValueTracker.
 type nodeHistory struct {
-	dialCost   utils.ExpiredValue
-	waitUntil  int64 // unix time (seconds)
-	waitFactor float64
+	dialCost           utils.ExpiredValue
+	lastDial, nextDial int64 // unix time (seconds)
 }
 
 type nodeHistoryEnc struct {
-	DialCost              utils.ExpiredValue
-	WaitFactor, WaitUntil uint64
+	DialCost           utils.ExpiredValue
+	LastDial, NextDial uint64
 }
 
 // queryFunc sends a pre-negotiation query and blocks until a response arrives or timeout occurs.
@@ -106,9 +105,9 @@ var (
 		func(field interface{}) ([]byte, error) {
 			if n, ok := field.(nodeHistory); ok {
 				ne := nodeHistoryEnc{
-					DialCost:   n.dialCost,
-					WaitFactor: uint64(n.waitFactor * 256),
-					WaitUntil:  uint64(n.waitUntil),
+					DialCost: n.dialCost,
+					LastDial: uint64(n.lastDial),
+					NextDial: uint64(n.nextDial),
 				}
 				enc, err := rlp.EncodeToBytes(&ne)
 				return enc, err
@@ -120,9 +119,9 @@ var (
 			var ne nodeHistoryEnc
 			err := rlp.DecodeBytes(enc, &ne)
 			n := nodeHistory{
-				dialCost:   ne.DialCost,
-				waitFactor: float64(ne.WaitFactor) / 256,
-				waitUntil:  int64(ne.WaitUntil),
+				dialCost: ne.DialCost,
+				lastDial: int64(ne.LastDial),
+				nextDial: int64(ne.NextDial),
 			}
 			return n, err
 		},
@@ -240,15 +239,15 @@ func (s *serverPool) start() {
 	unixTime := s.unixTime()
 	s.ns.ForEach(sfHasValue, nodestate.Flags{}, func(node *enode.Node, state nodestate.Flags) {
 		s.calculateWeight(node)
-		if n, ok := s.ns.GetField(node, sfiNodeHistory).(nodeHistory); ok && n.waitUntil > unixTime {
-			wait := time.Duration(n.waitUntil-unixTime) * time.Second
-			maxWait := n.redialWait()
-			if wait > maxWait {
+		if n, ok := s.ns.GetField(node, sfiNodeHistory).(nodeHistory); ok && n.nextDial > unixTime {
+			wait := n.nextDial - unixTime
+			lastWait := n.nextDial - n.lastDial
+			if wait > lastWait {
 				// if the time until expiration is larger than the last suggested
 				// waiting time then the system clock was probably adjusted
-				wait = maxWait
+				wait = lastWait
 			}
-			s.ns.SetState(node, sfRedialWait, nodestate.Flags{}, wait)
+			s.ns.SetState(node, sfRedialWait, nodestate.Flags{}, time.Duration(wait)*time.Second)
 		}
 	})
 }
@@ -390,12 +389,6 @@ func (s *serverPool) updateWeight(node *enode.Node, totalValue float64, totalDia
 	s.ns.Persist(node) // saved if node history or hasValue changed
 }
 
-// redialWait returns the suggested waiting time before the node should be queried or
-// dialed again
-func (n *nodeHistory) redialWait() time.Duration {
-	return time.Duration(float64(minRedialWait) * n.waitFactor)
-}
-
 // setRedialWait calculates and sets the redialWait timeout based on the service value
 // and dial cost accumulated during the last session/attempt and in total.
 // The waiting time is raised exponentially if no service value has been received in order
@@ -420,23 +413,41 @@ func (s *serverPool) setRedialWait(node *enode.Node, addDialCost int64, waitStep
 	// steps because queries are cheaper and therefore we can allow more failed attempts.
 	a := totalValue * dialCost
 	b := float64(totalDialCost) * sessionValue
-	if n.waitFactor < 1 {
-		n.waitFactor = 1
+	unixTime := s.unixTime()
+	lastWaitFactor := float64(n.nextDial-n.lastDial) / minRedialWait
+	waitFactor := float64(unixTime-n.lastDial) / minRedialWait
+	// It is possible that the node has been dialed before the previously calculated
+	// nextDial time. In this case we either keep the last calculated waiting time or
+	// take the actual time elapsed since the last dial and increase it exponentially,
+	// whichever is larger.
+	if waitFactor > lastWaitFactor {
+		waitFactor = lastWaitFactor
 	}
-	n.waitFactor *= waitStep
-	if a < b*n.waitFactor {
-		n.waitFactor = a / b
+	if waitFactor < 1 {
+		waitFactor = 1
 	}
-	if n.waitFactor < 1 {
-		n.waitFactor = 1
+	waitFactor *= waitStep
+	if lastWaitFactor > waitFactor {
+		waitFactor = lastWaitFactor
 	}
-	wait := n.redialWait()
+	// we reduce the waiting time if the server has provided service value during the
+	// connection (but never under the minimum)
+	if a < b*waitFactor {
+		waitFactor = a / b
+	}
+	if waitFactor < 1 {
+		waitFactor = 1
+	}
+	wait := time.Duration(float64(time.Second) * minRedialWait * waitFactor)
 	if wait < waitThreshold {
-		n.waitUntil = s.unixTime() + int64(wait/time.Second)
+		n.lastDial = unixTime
+		n.nextDial = unixTime + int64(wait/time.Second)
 		s.ns.SetField(node, sfiNodeHistory, n)
 		s.ns.SetState(node, sfRedialWait, nodestate.Flags{}, wait)
 		s.updateWeight(node, totalValue, totalDialCost)
 	} else {
+		// discard known node statistics if waiting time is very long because the node
+		// hasn't been responsive for a very long time
 		s.ns.SetField(node, sfiNodeHistory, nil)
 		s.ns.SetField(node, sfiNodeWeight, nil)
 		s.ns.SetState(node, nodestate.Flags{}, sfHasValue, 0)
