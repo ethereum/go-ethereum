@@ -862,7 +862,7 @@ func DoCall(ctx context.Context, b Backend, args CallArgs, blockNrOrHash rpc.Blo
 		return nil, fmt.Errorf("execution aborted (timeout = %v)", timeout)
 	}
 	// If the result contains a revert reason, unpack and return it.
-	if result.Err != nil {
+	if result.Err != nil && len(result.Revert()) > 0 {
 		reason, err := abi.UnpackRevert(result.Revert())
 		if err != nil {
 			return nil, err

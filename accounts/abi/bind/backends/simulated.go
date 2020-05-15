@@ -361,7 +361,7 @@ func (b *SimulatedBackend) CallContract(ctx context.Context, call ethereum.CallM
 		return nil, err
 	}
 	// If the result contains a revert reason, unpack and return it.
-	if res.Err != nil {
+	if res.Err != nil && len(res.Revert()) > 0 {
 		reason, err := abi.UnpackRevert(res.Revert())
 		if err != nil {
 			return nil, err
@@ -382,7 +382,7 @@ func (b *SimulatedBackend) PendingCallContract(ctx context.Context, call ethereu
 		return nil, err
 	}
 	// If the result contains a revert reason, unpack and return it.
-	if res.Err != nil {
+	if res.Err != nil && len(res.Revert()) > 0 {
 		reason, err := abi.UnpackRevert(res.Revert())
 		if err != nil {
 			return nil, err
