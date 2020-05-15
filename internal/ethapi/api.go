@@ -861,8 +861,15 @@ func DoCall(ctx context.Context, b Backend, args CallArgs, blockNrOrHash rpc.Blo
 	if evm.Cancelled() {
 		return nil, fmt.Errorf("execution aborted (timeout = %v)", timeout)
 	}
-
-	return result, err
+	// If the result contains a revert reason, unpack and return it.
+	if result.Err != nil {
+		reason, err := abi.UnpackRevert(result.Revert())
+		if err != nil {
+			return nil, err
+		}
+		return nil, fmt.Errorf("execution reverted: %v", reason)
+	}
+	return result, nil
 }
 
 // Call executes the given transaction on the state for the given block number.
@@ -879,13 +886,6 @@ func (s *PublicBlockChainAPI) Call(ctx context.Context, args CallArgs, blockNrOr
 	result, err := DoCall(ctx, s.b, args, blockNrOrHash, accounts, vm.Config{}, 5*time.Second, s.b.RPCGasCap())
 	if err != nil {
 		return nil, err
-	}
-	if result.Err != nil {
-		reason, err := abi.UnpackRevert(result.Revert())
-		if err != nil {
-			return result.Return(), err
-		}
-		return result.Return(), errors.New(reason)
 	}
 	return result.Return(), nil
 }
