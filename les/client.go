@@ -108,7 +108,16 @@ func New(ctx *node.ServiceContext, config *eth.Config) (*LightEthereum, error) {
 		valueTracker:   lpc.NewValueTracker(lespayDb, &mclock.System{}, requestList, time.Minute, 1/float64(time.Hour), 1/float64(time.Hour*100), 1/float64(time.Hour*1000)),
 	}
 	peers.subscribe((*vtSubscription)(leth.valueTracker))
-	leth.retriever = newRetrieveManager(peers, leth.reqDist)
+
+	dnsdisc, err := leth.setupDiscovery(&ctx.Config.P2P)
+	if err != nil {
+		return nil, err
+	}
+	leth.serverPool = newServerPool(lespayDb, []byte("serverpool:"), leth.valueTracker, dnsdisc, nil, &mclock.System{}, config.UltraLightServers)
+	peers.subscribe(leth.serverPool)
+	leth.dialCandidates = leth.serverPool.dialIterator
+
+	leth.retriever = newRetrieveManager(peers, leth.reqDist, leth.serverPool.getTimeout)
 	leth.relay = newLesTxRelay(peers, leth.retriever)
 
 	leth.odr = NewLesOdr(chainDb, light.DefaultClientIndexerConfig, leth.retriever)
@@ -153,15 +162,6 @@ func New(ctx *node.ServiceContext, config *eth.Config) (*LightEthereum, error) {
 		gpoParams.Default = config.Miner.GasPrice
 	}
 	leth.ApiBackend.gpo = gasprice.NewOracle(leth.ApiBackend, gpoParams)
-
-	dnsdisc, err := leth.setupDiscovery(&ctx.Config.P2P)
-	if err != nil {
-		return nil, err
-	}
-	leth.serverPool = newServerPool(lespayDb, []byte("serverpool:"), leth.valueTracker, dnsdisc, nil, &mclock.System{}, config.UltraLightServers)
-	peers.subscribe(leth.serverPool)
-	leth.dialCandidates = leth.serverPool.dialIterator
-	leth.retriever.setTimeoutCallback(leth.serverPool.getTimeout)
 
 	leth.handler = newClientHandler(config.UltraLightServers, config.UltraLightFraction, checkpoint, leth)
 	if leth.handler.ulc != nil {
