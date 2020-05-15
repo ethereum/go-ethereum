@@ -91,7 +91,7 @@ type nodeHistoryEnc struct {
 type queryFunc func(*enode.Node) int
 
 var (
-	serverPoolSetup    = &nodestate.Setup{}
+	serverPoolSetup    = &nodestate.Setup{Version: 1}
 	sfHasValue         = serverPoolSetup.NewPersistentFlag("hasValue")
 	sfQueried          = serverPoolSetup.NewFlag("queried")
 	sfCanDial          = serverPoolSetup.NewFlag("canDial")
@@ -101,7 +101,6 @@ var (
 	sfAlwaysConnect    = serverPoolSetup.NewFlag("alwaysConnect")
 	sfDisableSelection = nodestate.MergeFlags(sfQueried, sfCanDial, sfDialed, sfConnected, sfRedialWait)
 
-	sfiNodeWeight  = serverPoolSetup.NewField("nodeWeight", reflect.TypeOf(uint64(0)))
 	sfiNodeHistory = serverPoolSetup.NewPersistentField("nodeHistory", reflect.TypeOf(nodeHistory{}),
 		func(field interface{}) ([]byte, error) {
 			if n, ok := field.(nodeHistory); ok {
@@ -127,6 +126,7 @@ var (
 			return n, err
 		},
 	)
+	sfiNodeWeight     = serverPoolSetup.NewField("nodeWeight", reflect.TypeOf(uint64(0)))
 	sfiConnectedStats = serverPoolSetup.NewField("connectedStats", reflect.TypeOf(lpc.ResponseTimeStats{}))
 )
 

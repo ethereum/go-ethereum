@@ -53,22 +53,19 @@ type (
 	// field ID. Subscription to fields is also possible. Persistent fields should have
 	// an encoder and a decoder function.
 	NodeStateMachine struct {
-		started, stopped        bool
-		lock                    sync.Mutex
-		clock                   mclock.Clock
-		db                      ethdb.KeyValueStore
-		dbMappingKey, dbNodeKey []byte
-		mappings                []nsMapping
-		currentMapping          int
-		nodes                   map[enode.ID]*nodeInfo
-		offlineCallbackList     []offlineCallback
+		started, stopped    bool
+		lock                sync.Mutex
+		clock               mclock.Clock
+		db                  ethdb.KeyValueStore
+		dbNodeKey           []byte
+		nodes               map[enode.ID]*nodeInfo
+		offlineCallbackList []offlineCallback
 
 		// Registered state flags or fields. Modifications are allowed
 		// only when the node state machine has not been started.
-		setup                      *Setup
-		fields                     []*fieldInfo
-		stateNameMap, fieldNameMap map[string]int
-		saveFlags                  bitMask
+		setup     *Setup
+		fields    []*fieldInfo
+		saveFlags bitMask
 
 		// Installed callbacks. Modifications are allowed only when the
 		// node state machine has not been started.
@@ -110,16 +107,9 @@ type (
 
 	// stateSetup contains the list of flags and fields used by the application
 	Setup struct {
-		flags  []flagDefinition
-		fields []fieldDefinition
-	}
-
-	// nsMapping describes an index mapping of node state flags and fields. Mapping is
-	// determined during startup, before loading node data from the database. The used
-	// mapping is saved for each node and is converted upon loading if it has changed
-	// since the last time it was saved.
-	nsMapping struct {
-		States, Fields []string
+		Version uint
+		flags   []flagDefinition
+		fields  []fieldDefinition
 	}
 
 	// bitMask describes a node state or state mask. It represents a subset
@@ -147,7 +137,7 @@ type (
 
 	nodeInfoEnc struct {
 		Enr     enr.Record
-		Mapping uint
+		Version uint
 		State   bitMask
 		Fields  [][]byte
 	}
@@ -322,31 +312,30 @@ func NewNodeStateMachine(db ethdb.KeyValueStore, dbKey []byte, clock mclock.Cloc
 		panic("Too many node state flags")
 	}
 	ns := &NodeStateMachine{
-		db:           db,
-		dbMappingKey: []byte(string(dbKey) + "mapping:"),
-		dbNodeKey:    []byte(string(dbKey) + "node:"),
-		clock:        clock,
-		setup:        setup,
-		nodes:        make(map[enode.ID]*nodeInfo),
-		stateNameMap: make(map[string]int),
-		fields:       make([]*fieldInfo, len(setup.fields)),
-		fieldNameMap: make(map[string]int),
+		db:        db,
+		dbNodeKey: dbKey,
+		clock:     clock,
+		setup:     setup,
+		nodes:     make(map[enode.ID]*nodeInfo),
+		fields:    make([]*fieldInfo, len(setup.fields)),
 	}
+	stateNameMap := make(map[string]int)
 	for index, flag := range setup.flags {
-		if _, ok := ns.stateNameMap[flag.name]; ok {
+		if _, ok := stateNameMap[flag.name]; ok {
 			panic("Node state flag name collision")
 		}
-		ns.stateNameMap[flag.name] = index
+		stateNameMap[flag.name] = index
 		if flag.persistent {
 			ns.saveFlags |= bitMask(1) << uint(index)
 		}
 	}
+	fieldNameMap := make(map[string]int)
 	for index, field := range setup.fields {
-		if _, ok := ns.fieldNameMap[field.name]; ok {
+		if _, ok := fieldNameMap[field.name]; ok {
 			panic("Node field name collision")
 		}
 		ns.fields[index] = &fieldInfo{fieldDefinition: field}
-		ns.fieldNameMap[field.name] = index
+		fieldNameMap[field.name] = index
 	}
 	return ns
 }
@@ -443,59 +432,6 @@ func (ns *NodeStateMachine) Stop() {
 
 // loadFromDb loads persisted node states from the database
 func (ns *NodeStateMachine) loadFromDb() {
-	if enc, err := ns.db.Get(ns.dbMappingKey); err == nil {
-		if err := rlp.DecodeBytes(enc, &ns.mappings); err != nil {
-			log.Error("Failed to decode scheme", "error", err)
-			return
-		}
-	}
-	mapping := nsMapping{
-		States: make([]string, len(ns.setup.flags)),
-		Fields: make([]string, len(ns.setup.fields)),
-	}
-	for index, flag := range ns.setup.flags {
-		mapping.States[index] = flag.name
-	}
-	for index, field := range ns.setup.fields {
-		mapping.Fields[index] = field.name
-	}
-	ns.currentMapping = -1
-loop:
-	for i, m := range ns.mappings {
-		if len(m.States) != len(mapping.States) {
-			continue loop
-		}
-		if len(m.Fields) != len(mapping.Fields) {
-			continue loop
-		}
-		for j, s := range mapping.States {
-			if m.States[j] != s {
-				continue loop
-			}
-		}
-		for j, s := range mapping.Fields {
-			if m.Fields[j] != s {
-				continue loop
-			}
-		}
-		ns.currentMapping = i
-		break
-	}
-	if ns.currentMapping == -1 {
-		ns.currentMapping = len(ns.mappings)
-		ns.mappings = append(ns.mappings, mapping)
-
-		// Scheme should be persisted properly, otherwise
-		// all persisted data can't be resolved next time.
-		enc, err := rlp.EncodeToBytes(ns.mappings)
-		if err != nil {
-			panic("Failed to encode scheme")
-		}
-		if err := ns.db.Put(ns.dbMappingKey, enc); err != nil {
-			panic("Failed to save scheme")
-		}
-	}
-
 	it := ns.db.NewIterator(ns.dbNodeKey, nil)
 	for it.Next() {
 		var id enode.ID
@@ -524,13 +460,13 @@ func (ns *NodeStateMachine) decodeNode(id enode.ID, data []byte) {
 	node := ns.newNode(n)
 	node.db = true
 
-	if int(enc.Mapping) >= len(ns.mappings) {
-		log.Error("Unknown scheme", "id", id, "index", enc.Mapping, "len", len(ns.mappings))
+	if enc.Version != ns.setup.Version {
+		log.Debug("Removing stored node with unknown version", "current", ns.setup.Version, "stored", enc.Version)
+		ns.deleteNode(id)
 		return
 	}
-	encMapping := ns.mappings[int(enc.Mapping)]
-	if len(enc.Fields) != len(encMapping.Fields) {
-		log.Error("Invalid node field count", "id", id, "stored", len(enc.Fields), "mapping", len(encMapping.Fields))
+	if len(enc.Fields) > len(ns.setup.fields) {
+		log.Error("Invalid node field count", "id", id, "stored", len(enc.Fields))
 		return
 	}
 	// Resolve persisted node fields
@@ -538,52 +474,24 @@ func (ns *NodeStateMachine) decodeNode(id enode.ID, data []byte) {
 		if len(encField) == 0 {
 			continue
 		}
-		index := i
-		if int(enc.Mapping) != ns.currentMapping {
-			name := encMapping.Fields[i]
-			var ok bool
-			if index, ok = ns.fieldNameMap[name]; !ok {
-				log.Error("Unknown node field", "id", id, "field name", name)
-				return
-			}
-		}
-		if decode := ns.fields[index].decode; decode != nil {
+		if decode := ns.fields[i].decode; decode != nil {
 			if field, err := decode(encField); err == nil {
-				node.fields[index] = field
+				node.fields[i] = field
 			} else {
-				log.Error("Failed to decode node field", "id", id, "field name", ns.fields[index].name, "error", err)
+				log.Error("Failed to decode node field", "id", id, "field name", ns.fields[i].name, "error", err)
 				return
 			}
 		} else {
-			log.Error("Cannot decode node field", "id", id, "field name", ns.fields[index].name)
+			log.Error("Cannot decode node field", "id", id, "field name", ns.fields[i].name)
 			return
 		}
 	}
-
-	var state bitMask
-	if int(enc.Mapping) == ns.currentMapping {
-		// saved node has the same mapping
-		state = enc.State
-	} else {
-		// convert bit mapping from saved scheme to current one
-		for i, name := range encMapping.States {
-			if (enc.State & (bitMask(1) << uint(i))) != 0 {
-				if index, ok := ns.stateNameMap[name]; ok {
-					state |= bitMask(1) << uint(index)
-				} else {
-					log.Error("Unknown state flag", "name", name)
-					return
-				}
-			}
-		}
-	}
-
 	// It's a compatible node record, add it to set.
 	ns.nodes[id] = node
-	node.state = state
+	node.state = enc.State
 	fields := make([]interface{}, len(node.fields))
 	copy(fields, node.fields)
-	ns.offlineCallbackList = append(ns.offlineCallbackList, offlineCallback{node.node, state, fields})
+	ns.offlineCallbackList = append(ns.offlineCallbackList, offlineCallback{node.node, node.state, fields})
 	log.Debug("Loaded node state", "id", id, "state", Flags{mask: enc.State, setup: ns.setup})
 }
 
@@ -608,11 +516,12 @@ func (ns *NodeStateMachine) saveNode(id enode.ID, node *nodeInfo) error {
 
 	enc := nodeInfoEnc{
 		Enr:     *node.node.Record(),
-		Mapping: uint(ns.currentMapping),
+		Version: ns.setup.Version,
 		State:   storedState,
 		Fields:  make([][]byte, len(ns.fields)),
 	}
 	log.Debug("Saved node state", "id", id, "state", Flags{mask: enc.State, setup: ns.setup})
+	lastIndex := -1
 	for i, f := range node.fields {
 		if f == nil {
 			continue
@@ -626,7 +535,9 @@ func (ns *NodeStateMachine) saveNode(id enode.ID, node *nodeInfo) error {
 			return err
 		}
 		enc.Fields[i] = blob
+		lastIndex = i
 	}
+	enc.Fields = enc.Fields[:lastIndex+1]
 	data, err := rlp.EncodeToBytes(&enc)
 	if err != nil {
 		return err

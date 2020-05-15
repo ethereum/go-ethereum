@@ -299,21 +299,11 @@ func TestPersistentFields(t *testing.T) {
 		t.Fatalf("Field changed")
 	}
 
-	// additional registration
-	s, _, fields = testSetup([]bool{true, true}, []reflect.Type{reflect.TypeOf(uint64(0)), reflect.TypeOf(""), reflect.TypeOf(uint32(0))})
-	// Different order
-	s.flags[0], s.flags[1] = s.flags[1], s.flags[0]
-	s.fields[0], s.fields[1] = s.fields[1], s.fields[0]
+	s.Version++
 	ns3 := NewNodeStateMachine(mdb, []byte("-ns"), clock, s)
-
 	ns3.Start()
-	field0 = ns3.GetField(testNode(1), fields[1])
-	if !reflect.DeepEqual(field0, uint64(100)) {
-		t.Fatalf("Field changed")
-	}
-	field1 = ns3.GetField(testNode(1), fields[0])
-	if !reflect.DeepEqual(field1, "hello world") {
-		t.Fatalf("Field changed")
+	if ns3.GetField(testNode(1), fields[0]) != nil {
+		t.Fatalf("Old field version should have been discarded")
 	}
 }
 
