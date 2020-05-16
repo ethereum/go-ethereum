@@ -122,6 +122,7 @@ func simpleAbiEncode(bytes []byte) ([]byte) {
 	padding := make([]byte, len(bytes) % WORD_SIZE)
 	codeWithLength := append(append(encodedCode, bytes...), padding...)
 	offset := make([]byte, WORD_SIZE)
+  // Hardcode a 2 because we will only return dynamic bytes with a single element
 	binary.BigEndian.PutUint64(offset[WORD_SIZE-8:], uint64(2))
 	return append([]byte{0, 0}, append(offset, codeWithLength...)...)
 }
