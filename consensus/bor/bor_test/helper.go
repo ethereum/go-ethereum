@@ -156,7 +156,7 @@ func sign(t *testing.T, header *types.Header, signer []byte) {
 	copy(header.Extra[len(header.Extra)-extraSeal:], sig)
 }
 
-func zeroResultPayload(t *testing.T) *bor.ResponseWithHeight {
+func stateSyncEventsPayload(t *testing.T) *bor.ResponseWithHeight {
 	stateData, err := ioutil.ReadFile("states.json")
 	if err != nil {
 		t.Fatalf("%s", err)

@@ -3,8 +3,6 @@ package bortest
 import (
 	"encoding/hex"
 	"fmt"
-	// "encoding/json"
-	// "fmt"
 	"math/big"
 	"testing"
 
@@ -165,7 +163,7 @@ func getMockedHeimdallClient(t *testing.T) (*mocks.IHeimdallClient, *bor.Heimdal
 	h := &mocks.IHeimdallClient{}
 	h.On("FetchWithRetry", "bor", "span", "1").Return(res, nil)
 
-	res = zeroResultPayload(t)
+	res = stateSyncEventsPayload(t)
 	// query := fmt.Sprintf("clerk/event-record/list?from-time=%d&to-time=%d&page=1&limit=50", 1, 1589709047)
 	h.On("FetchWithRetry", mock.AnythingOfType("string")).Return(res, nil)
 	return h, heimdallSpan

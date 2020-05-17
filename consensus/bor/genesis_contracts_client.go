@@ -5,7 +5,6 @@ import (
 	"math"
 	"math/big"
 
-	// "math/big"
 	"strings"
 	"time"
 
@@ -65,8 +64,6 @@ func (gc *GenesisContractsClient) CommitState(
 	method := "commitState"
 	t := event.Time.Unix()
 	data, err := gc.stateReceiverABI.Pack(method, recordBytes, big.NewInt(0).SetInt64(t))
-	// t, err := time.Parse(event.Time, time.RFC3339)
-	// data, err := gc.stateReceiverABI.Pack(method, recordBytes, t.Unix())
 	if err != nil {
 		log.Error("Unable to pack tx for commitState", "error", err)
 		return err

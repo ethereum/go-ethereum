@@ -1118,10 +1118,6 @@ func (c *Bor) CommitStates(
 	chain chainContext,
 ) error {
 	number := header.Number.Uint64()
-	if number < c.config.Sprint {
-		return errors.New("Requested to commit states too soon")
-	}
-
 	lastSync, err := c.genesisContractsClient.LastStateSyncTime(number - 1)
 	if err != nil {
 		return err
