@@ -119,7 +119,6 @@ type Engine interface {
 // Bor is a consensus engine developed by folks at Matic Network
 type Bor interface {
 	Engine
-	IsValidatorAction(chain ChainReader, from common.Address, tx *types.Transaction) bool
 	CancelActiveSealingOp()
 }
 

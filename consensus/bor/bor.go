@@ -1204,26 +1204,6 @@ func (c *Bor) SetHeimdallClient(h IHeimdallClient) {
 	c.HeimdallClient = h
 }
 
-func (c *Bor) IsValidatorAction(chain consensus.ChainReader, from common.Address, tx *types.Transaction) bool {
-	header := chain.CurrentHeader()
-	validators, err := c.GetCurrentValidators(header.Number.Uint64(), header.Number.Uint64()+1)
-	if err != nil {
-		log.Error("Failed fetching snapshot", err)
-		return false
-	}
-
-	isValidator := false
-	for _, validator := range validators {
-		if bytes.Compare(validator.Address.Bytes(), from.Bytes()) == 0 {
-			isValidator = true
-			break
-		}
-	}
-
-	return isValidator && (isProposeSpanAction(tx, chain.Config().Bor.ValidatorContract) ||
-		isProposeStateAction(tx, chain.Config().Bor.StateReceiverContract))
-}
-
 func isProposeSpanAction(tx *types.Transaction, validatorContract string) bool {
 	// keccak256('proposeSpan()').slice(0, 4)
 	proposeSpanSig, _ := hex.DecodeString("4b0e4d17")

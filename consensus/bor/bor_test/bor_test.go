@@ -6,7 +6,6 @@ import (
 	"math/big"
 	"testing"
 
-	"github.com/maticnetwork/bor/common"
 	"github.com/maticnetwork/bor/consensus/bor"
 	"github.com/maticnetwork/bor/core/rawdb"
 	"github.com/maticnetwork/bor/crypto"
@@ -18,7 +17,7 @@ import (
 	"github.com/maticnetwork/bor/mocks"
 )
 
-func TestCommitSpan(t *testing.T) {
+func TestInsertingSpanSizeBlocks(t *testing.T) {
 	init := buildEthereumInstance(t, rawdb.NewMemoryDatabase())
 	chain := init.ethereum.BlockChain()
 	engine := init.ethereum.Engine()
@@ -31,7 +30,7 @@ func TestCommitSpan(t *testing.T) {
 	var to int64
 
 	// Insert sprintSize # of blocks so that span is fetched at the start of a new sprint
-	for i := uint64(1); i <= sprintSize; i++ {
+	for i := uint64(1); i <= spanSize; i++ {
 		block = buildNextBlock(t, _bor, chain, block, nil, init.genesis.Config.Bor)
 		insertNewBlock(t, chain, block)
 		if i == sprintSize-1 {
@@ -52,61 +51,6 @@ func TestCommitSpan(t *testing.T) {
 	for i, validator := range validators {
 		assert.Equal(t, validator.Address.Bytes(), heimdallSpan.SelectedProducers[i].Address.Bytes())
 		assert.Equal(t, validator.VotingPower, heimdallSpan.SelectedProducers[i].VotingPower)
-	}
-}
-
-func TestIsValidatorAction(t *testing.T) {
-	init := buildEthereumInstance(t, rawdb.NewMemoryDatabase())
-	chain := init.ethereum.BlockChain()
-	engine := init.ethereum.Engine()
-	_bor := engine.(*bor.Bor)
-	h, heimdallSpan := getMockedHeimdallClient(t)
-	_bor.SetHeimdallClient(h)
-
-	proposeStateData, _ := hex.DecodeString("ede01f170000000000000000000000000000000000000000000000000000000000000000")
-	proposeSpanData, _ := hex.DecodeString("4b0e4d17")
-	var tx *types.Transaction
-	tx = types.NewTransaction(
-		0,
-		common.HexToAddress(chain.Config().Bor.StateReceiverContract),
-		big.NewInt(0), 0, big.NewInt(0),
-		proposeStateData,
-	)
-	assert.True(t, _bor.IsValidatorAction(chain, addr, tx))
-
-	tx = types.NewTransaction(
-		0,
-		common.HexToAddress(chain.Config().Bor.ValidatorContract),
-		big.NewInt(0), 0, big.NewInt(0),
-		proposeSpanData,
-	)
-	assert.True(t, _bor.IsValidatorAction(chain, addr, tx))
-
-	db := init.ethereum.ChainDb()
-	block := init.genesis.ToBlock(db)
-
-	for i := uint64(1); i <= spanSize; i++ {
-		block = buildNextBlock(t, _bor, chain, block, nil, init.genesis.Config.Bor)
-		insertNewBlock(t, chain, block)
-	}
-
-	for _, validator := range heimdallSpan.SelectedProducers {
-		_addr := validator.Address
-		tx = types.NewTransaction(
-			0,
-			common.HexToAddress(chain.Config().Bor.StateReceiverContract),
-			big.NewInt(0), 0, big.NewInt(0),
-			proposeStateData,
-		)
-		assert.True(t, _bor.IsValidatorAction(chain, _addr, tx))
-
-		tx = types.NewTransaction(
-			0,
-			common.HexToAddress(chain.Config().Bor.ValidatorContract),
-			big.NewInt(0), 0, big.NewInt(0),
-			proposeSpanData,
-		)
-		assert.True(t, _bor.IsValidatorAction(chain, _addr, tx))
 	}
 }
 
