@@ -2,6 +2,9 @@ package bortest
 
 import (
 	"encoding/hex"
+	"fmt"
+	// "encoding/json"
+	// "fmt"
 	"math/big"
 	"testing"
 
@@ -10,6 +13,7 @@ import (
 	"github.com/maticnetwork/bor/core/rawdb"
 	"github.com/maticnetwork/bor/crypto"
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/mock"
 
 	"github.com/maticnetwork/bor/core/types"
 
@@ -21,26 +25,27 @@ func TestCommitSpan(t *testing.T) {
 	chain := init.ethereum.BlockChain()
 	engine := init.ethereum.Engine()
 	_bor := engine.(*bor.Bor)
-
-	// Mock HeimdallClient.FetchWithRetry to return span data from span.json
-	res, heimdallSpan := loadSpanFromFile(t)
-	h := &mocks.IHeimdallClient{}
-	h.On("FetchWithRetry", "bor", "span", "1").Return(res, nil)
+	h, heimdallSpan := getMockedHeimdallClient(t)
 	_bor.SetHeimdallClient(h)
 
 	db := init.ethereum.ChainDb()
 	block := init.genesis.ToBlock(db)
+	var to int64
+
 	// Insert sprintSize # of blocks so that span is fetched at the start of a new sprint
 	for i := uint64(1); i <= sprintSize; i++ {
 		block = buildNextBlock(t, _bor, chain, block, nil, init.genesis.Config.Bor)
 		insertNewBlock(t, chain, block)
+		if i == sprintSize-1 {
+			// at # sprintSize, events are fetched for the internal [from, (block-1).Time)
+			to = int64(block.Header().Time)
+		}
 	}
 
-	// FetchWithRetry is invoked 2 times
-	// 1. bor.FinalizeAndAssemble to prepare a new block when calling buildNextBlock
-	// 2. bor.Finalize via(bc.insertChain => bc.processor.Process)
 	assert.True(t, h.AssertCalled(t, "FetchWithRetry", "bor", "span", "1"))
-	validators, err := _bor.GetCurrentValidators(sprintSize, 256) // new span starts at 256
+	query := fmt.Sprintf("clerk/event-record/list?from-time=%d&to-time=%d&page=1&limit=50", 1, to)
+	assert.True(t, h.AssertCalled(t, "FetchWithRetry", query))
+	validators, err := _bor.GetCurrentValidators(sprintSize, spanSize) // new span starts at 256
 	if err != nil {
 		t.Fatalf("%s", err)
 	}
@@ -57,6 +62,8 @@ func TestIsValidatorAction(t *testing.T) {
 	chain := init.ethereum.BlockChain()
 	engine := init.ethereum.Engine()
 	_bor := engine.(*bor.Bor)
+	h, heimdallSpan := getMockedHeimdallClient(t)
+	_bor.SetHeimdallClient(h)
 
 	proposeStateData, _ := hex.DecodeString("ede01f170000000000000000000000000000000000000000000000000000000000000000")
 	proposeSpanData, _ := hex.DecodeString("4b0e4d17")
@@ -76,11 +83,6 @@ func TestIsValidatorAction(t *testing.T) {
 		proposeSpanData,
 	)
 	assert.True(t, _bor.IsValidatorAction(chain, addr, tx))
-
-	res, heimdallSpan := loadSpanFromFile(t)
-	h := &mocks.IHeimdallClient{}
-	h.On("FetchWithRetry", "bor", "span", "1").Return(res, nil)
-	_bor.SetHeimdallClient(h)
 
 	db := init.ethereum.ChainDb()
 	block := init.genesis.ToBlock(db)
@@ -115,10 +117,7 @@ func TestOutOfTurnSigning(t *testing.T) {
 	chain := init.ethereum.BlockChain()
 	engine := init.ethereum.Engine()
 	_bor := engine.(*bor.Bor)
-
-	res, _ := loadSpanFromFile(t)
-	h := &mocks.IHeimdallClient{}
-	h.On("FetchWithRetry", "bor", "span", "1").Return(res, nil)
+	h, _ := getMockedHeimdallClient(t)
 	_bor.SetHeimdallClient(h)
 
 	db := init.ethereum.ChainDb()
@@ -159,4 +158,15 @@ func TestOutOfTurnSigning(t *testing.T) {
 	block = types.NewBlockWithHeader(header)
 	_, err = chain.InsertChain([]*types.Block{block})
 	assert.Nil(t, err)
+}
+
+func getMockedHeimdallClient(t *testing.T) (*mocks.IHeimdallClient, *bor.HeimdallSpan) {
+	res, heimdallSpan := loadSpanFromFile(t)
+	h := &mocks.IHeimdallClient{}
+	h.On("FetchWithRetry", "bor", "span", "1").Return(res, nil)
+
+	res = zeroResultPayload(t)
+	// query := fmt.Sprintf("clerk/event-record/list?from-time=%d&to-time=%d&page=1&limit=50", 1, 1589709047)
+	h.On("FetchWithRetry", mock.AnythingOfType("string")).Return(res, nil)
+	return h, heimdallSpan
 }
