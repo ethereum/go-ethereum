@@ -18,7 +18,6 @@ package core
 
 import (
 	"errors"
-	"io/ioutil"
 	"math"
 	"math/big"
 	"strings"
@@ -36,8 +35,7 @@ var (
 )
 
 func init() {
-	rawExecutionManagerAbi, _ := ioutil.ReadFile("./ExecutionManagerABI.json")
-	executionManagerAbi, _ = abi.JSON(strings.NewReader(string(rawExecutionManagerAbi)))
+	executionManagerAbi, _ = abi.JSON(strings.NewReader(vm.RawExecutionManagerAbi))
 }
 
 /*
@@ -230,12 +228,21 @@ func (st *StateTransition) TransitionDb() (ret []byte, usedGas uint64, failed bo
 			common.HexToAddress(""),
 			true,
 		)
-		executeManagerAddress := common.HexToAddress("A193E42526F1FEA8C99AF609dcEabf30C1c29fAA")
-		ret, st.gas, vmerr = evm.Call(sender, executeManagerAddress, deployContractCalldata, st.gas, st.value)
+		executionManagerAddress := common.HexToAddress("A193E42526F1FEA8C99AF609dcEabf30C1c29fAA")
+		ret, st.gas, vmerr = evm.Call(sender, executionManagerAddress, deployContractCalldata, st.gas, st.value)
 	} else {
-		// Increment the nonce for the next transaction
-		st.state.SetNonce(msg.From(), st.state.GetNonce(sender.Address())+1)
-		ret, st.gas, vmerr = evm.Call(sender, st.to(), st.data, st.gas, st.value)
+		callContractCalldata, _ := executionManagerAbi.Pack(
+			"executeTransaction",
+			big.NewInt(1),
+			new(big.Int),
+			st.to(),
+			st.data,
+			sender,
+			common.HexToAddress(""),
+			true,
+		)
+		executionManagerAddress := common.HexToAddress("A193E42526F1FEA8C99AF609dcEabf30C1c29fAA")
+		ret, st.gas, vmerr = evm.Call(sender, executionManagerAddress, callContractCalldata, st.gas, st.value)
 	}
 	if vmerr != nil {
 		log.Debug("VM returned with error", "err", vmerr)

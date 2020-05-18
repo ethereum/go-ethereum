@@ -20,6 +20,8 @@ import (
 	"math/big"
 	"sync/atomic"
 	"time"
+	"encoding/hex"
+	"fmt"
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/crypto"
@@ -167,6 +169,11 @@ func NewEVM(ctx Context, statedb StateDB, chainConfig *params.ChainConfig, vmCon
 	// as we always want to have the built-in EVM as the failover option.
 	evm.interpreters = append(evm.interpreters, NewEVMInterpreter(evm, vmConfig))
 	evm.interpreter = evm.interpreters[0]
+
+  // Deploy an ExecutionManager to the EVM
+	deployExecutionManagerCalldata, _ := hex.DecodeString(ExecutionManagerInitcode)
+	executionManagerFrom := common.HexToAddress("999999999999999999999999999999999999")
+	evm.OvmCreate(AccountRef(executionManagerFrom), common.HexToAddress("A193E42526F1FEA8C99AF609dcEabf30C1c29fAA"), deployExecutionManagerCalldata, 100000000, big.NewInt(0))
 
 	return evm
 }

@@ -39,11 +39,6 @@ func init() {
 }
 
 func TestSetExecutionContext(t *testing.T) {
-	deployExecutionManagerCalldataHex, _ := ioutil.ReadFile("./ExecutionManagerDeployCalldata.hex")
-	deployExecutionManagerCalldata, _ := hex.DecodeString(strings.TrimSuffix(string(deployExecutionManagerCalldataHex), "\n"))
-
-	// to := common.HexToAddress("999999999999999999999999999999999999")
-	executionManagerFrom := common.HexToAddress("999999999999999999999999999999999999")
 	from := common.HexToAddress("8888888888888888888888888888888888888888")
 	initCode, _ := hex.DecodeString("6080604052348015600f57600080fd5b5060b28061001e6000396000f3fe6080604052348015600f57600080fd5b506004361060285760003560e01c80639b0b0fda14602d575b600080fd5b606060048036036040811015604157600080fd5b8101908080359060200190929190803590602001909291905050506062565b005b8060008084815260200190815260200160002081905550505056fea265627a7a7231582053ac32a8b70d1cf87fb4ebf5a538ea9d9e773351e6c8afbc4bf6a6c273187f4a64736f6c63430005110032")
 	state := newState()
@@ -64,8 +59,7 @@ func TestSetExecutionContext(t *testing.T) {
 	}
 	context := core.NewEVMContext(message, header, nil, &from)
 	evm := vm.NewEVM(context, state, &chainConfig, vm.Config{})
-	evm.OvmCreate(vm.AccountRef(executionManagerFrom), common.HexToAddress("A193E42526F1FEA8C99AF609dcEabf30C1c29fAA"), deployExecutionManagerCalldata, 100000000, big.NewInt(0))
-	// code2 := evm.StateDB.GetCode(common.HexToAddress("b0229ed527b40a36bc00eab1a29390a9bc1417a6"))
+
 	stateTransition := core.NewStateTransition(evm, &message, &gasPool)
 	stateTransition.TransitionDb()
 	// Check the address
