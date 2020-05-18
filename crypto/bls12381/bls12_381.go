@@ -24,45 +24,52 @@ func Init() {
 	Field Constants
 */
 
+// Base field modulus
+// p = 0x1a0111ea397fe69a4b1ba7b6434bacd764774b84f38512bf6730d2a0f6b0f6241eabfffeb153ffffb9feffffffffaaab
+
+// Size of six words
+// r = 2 ^ 384
+
+// modulus = p
 var modulus fe = fe{0xb9feffffffffaaab, 0x1eabfffeb153ffff, 0x6730d2a0f6b0f624, 0x64774b84f38512bf, 0x4b1ba7b6434bacd7, 0x1a0111ea397fe69a}
 
 var (
-	// inp = -p^(-1) mod 2^64
+	// -p^(-1) mod 2^64
 	inp uint64 = 0x89f3fffcfffcfffd
-	// this value is used in assembly code
+	// This value is used in assembly code
 	_ = inp
 )
 
-// r1  = r mod p
+// r mod p
 var r1 = &fe{0x760900000002fffd, 0xebf4000bc40c0002, 0x5f48985753c758ba, 0x77ce585370525745, 0x5c071a97a256ec6d, 0x15f65ec3fa80e493}
 
-// r2  = r^2 mod p
+// r^2 mod p
 var r2 = &fe{
 	0xf4df1f341c341746, 0x0a76e6a609d104f1, 0x8de5476c4c95b6d5, 0x67eb88a9939d83c0, 0x9a793e85b519952d, 0x11988fe592cae3aa,
 }
 
-// -1 + 0*u
+// -1 + 0 * u
 var negativeOne2 = &fe2{
 	fe{0x43f5fffffffcaaae, 0x32b7fff2ed47fffd, 0x07e83a49a2e99d69, 0xeca8f3318332bb7a, 0xef148d1ea0f4c069, 0x040ab3263eff0206},
 	fe{0x0000000000000000, 0x0000000000000000, 0x0000000000000000, 0x0000000000000000, 0x0000000000000000, 0x0000000000000000},
 }
 
-// 2^-1
+// 2 ^ (-1)
 var twoInv = &fe{0x1804000000015554, 0x855000053ab00001, 0x633cb57c253c276f, 0x6e22d1ec31ebb502, 0xd3916126f2d14ca2, 0x17fbb8571a006596}
 
-// (p-3) / 4
+// (p - 3) / 4
 var pMinus3Over4 = bigFromHex("0x680447a8e5ff9a692c6e9ed90d2eb35d91dd2e13ce144afd9cc34a83dac3d8907aaffffac54ffffee7fbfffffffeaaa")
 
-// (p-3) / 4
+// (p + 1) / 4
 var pPlus1Over4 = bigFromHex("0x680447a8e5ff9a692c6e9ed90d2eb35d91dd2e13ce144afd9cc34a83dac3d8907aaffffac54ffffee7fbfffffffeaab")
 
-// (p-1) / 2
+// (p - 1) / 2
 var pMinus1Over2 = bigFromHex("0xd0088f51cbff34d258dd3db21a5d66bb23ba5c279c2895fb39869507b587b120f55ffff58a9ffffdcff7fffffffd555")
 
 // -1
 var nonResidue1 = &fe{0x43f5fffffffcaaae, 0x32b7fff2ed47fffd, 0x07e83a49a2e99d69, 0xeca8f3318332bb7a, 0xef148d1ea0f4c069, 0x040ab3263eff0206}
 
-// (u + 1)
+// (1 + 1 * u)
 var nonResidue2 = &fe2{
 	fe{0x760900000002fffd, 0xebf4000bc40c0002, 0x5f48985753c758ba, 0x77ce585370525745, 0x5c071a97a256ec6d, 0x15f65ec3fa80e493},
 	fe{0x760900000002fffd, 0xebf4000bc40c0002, 0x5f48985753c758ba, 0x77ce585370525745, 0x5c071a97a256ec6d, 0x15f65ec3fa80e493},
@@ -81,7 +88,7 @@ var b2 = &fe2{
 	fe{0xaa270000000cfff3, 0x53cc0032fc34000a, 0x478fe97a6b0a807f, 0xb1d37ebee6ba24d7, 0x8ec9733bbf78ab2f, 0x09d645513d83de7e},
 }
 
-// curve order
+// Curve order
 var q = bigFromHex("0x73eda753299d7d483339d80809a1d80553bda402fffe5bfeffffffff00000001")
 
 // Efficient cofactor of G1
