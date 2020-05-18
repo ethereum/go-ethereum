@@ -603,7 +603,7 @@ func (c *bls12381G1Mul) Run(input []byte) ([]byte, error) {
 	// Decode scalar value
 	e := new(big.Int).SetBytes(input[128:])
 
-	// Compute r = p_0 + p_1
+	// Compute r = e * p_0
 	r := g.New()
 	g.MulScalar(r, p0, e)
 
@@ -652,7 +652,7 @@ func (c *bls12381G1MultiExp) Run(input []byte) ([]byte, error) {
 		scalars[i] = new(big.Int).SetBytes(input[t1:t2])
 	}
 
-	// Compute r = e_0 * p_0 + e_0 * p_0 + ... + e_(k-1) * p_(k-1)
+	// Compute r = e_0 * p_0 + e_1 * p_1 + ... + e_(k-1) * p_(k-1)
 	r := g.New()
 	_, _ = g.MultiExp(r, points, scalars)
 
@@ -726,7 +726,7 @@ func (c *bls12381G2Mul) Run(input []byte) ([]byte, error) {
 	// Decode scalar value
 	e := new(big.Int).SetBytes(input[256:])
 
-	// Compute r = p_0 + p_1
+	// Compute r = e * p_0
 	r := g.New()
 	g.MulScalar(r, p0, e)
 
@@ -775,7 +775,7 @@ func (c *bls12381G2MultiExp) Run(input []byte) ([]byte, error) {
 		scalars[i] = new(big.Int).SetBytes(input[t1:t2])
 	}
 
-	// Compute r = e_0 * p_0 + e_0 * p_0 + ... + e_(k-1) * p_(k-1)
+	// Compute r = e_0 * p_0 + e_1 * p_1 + ... + e_(k-1) * p_(k-1)
 	r := g.New()
 	_, _ = g.MultiExp(r, points, scalars)
 
