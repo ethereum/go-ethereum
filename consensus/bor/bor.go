@@ -127,12 +127,6 @@ var (
 	errRecentlySigned = errors.New("recently signed")
 )
 
-// ActiveSealingOp keeps the context of the active sealing operation
-type ActiveSealingOp struct {
-	number uint64
-	cancel context.CancelFunc
-}
-
 // SignerFn is a signer callback function to request a header to be signed by a
 // backing account.
 type SignerFn func(accounts.Account, string, []byte) ([]byte, error)
@@ -238,9 +232,8 @@ type Bor struct {
 	stateReceiverABI abi.ABI
 	HeimdallClient   IHeimdallClient
 
-	stateDataFeed   event.Feed
-	scope           event.SubscriptionScope
-	activeSealingOp *ActiveSealingOp
+	stateDataFeed event.Feed
+	scope         event.SubscriptionScope
 	// The fields below are for testing only
 	fakeDiff bool // Skip difficulty verifications
 }
@@ -728,9 +721,6 @@ func (c *Bor) Authorize(signer common.Address, signFn SignerFn) {
 // Seal implements consensus.Engine, attempting to create a sealed block using
 // the local signing credentials.
 func (c *Bor) Seal(chain consensus.ChainReader, block *types.Block, results chan<- *types.Block, stop <-chan struct{}) error {
-	// if c.activeSealingOp != nil {
-	// 	return &SealingInFlightError{c.activeSealingOp.number}
-	// }
 	header := block.Header()
 
 	// Sealing the genesis block is not supported
@@ -777,17 +767,12 @@ func (c *Bor) Seal(chain consensus.ChainReader, block *types.Block, results chan
 
 	// Wait until sealing is terminated or delay timeout.
 	log.Trace("Waiting for slot to sign and propagate", "delay", common.PrettyDuration(delay))
-	shouldSeal := make(chan bool)
-	go c.WaitForSealingOp(number, shouldSeal, delay, stop)
 	go func() {
-		defer func() {
-			close(shouldSeal)
-			c.activeSealingOp = nil
-		}()
-		switch <-shouldSeal {
-		case false:
+		select {
+		case <-stop:
+			log.Debug("Discarding sealing operation for block", "number", number)
 			return
-		case true:
+		case <-time.After(delay):
 			if wiggle > 0 {
 				log.Info(
 					"Sealing out-of-turn",
@@ -803,36 +788,13 @@ func (c *Bor) Seal(chain consensus.ChainReader, block *types.Block, results chan
 				"headerDifficulty", header.Difficulty,
 			)
 		}
-
 		select {
 		case results <- block.WithSeal(header):
 		default:
-			log.Warn("Sealing result was not read by miner", "sealhash", SealHash(header))
+			log.Warn("Sealing result was not read by miner", "number", number, "sealhash", SealHash(header))
 		}
 	}()
 	return nil
-}
-
-// WaitForSealingOp blocks until delay elapses or stop signal is received
-func (c *Bor) WaitForSealingOp(number uint64, shouldSeal chan bool, delay time.Duration, stop <-chan struct{}) {
-	ctx, cancel := context.WithCancel(context.Background())
-	c.activeSealingOp = &ActiveSealingOp{number, cancel}
-	select {
-	case <-stop:
-		shouldSeal <- false
-	case <-ctx.Done():
-		shouldSeal <- false
-	case <-time.After(delay):
-		shouldSeal <- true
-	}
-}
-
-// CancelActiveSealingOp cancels in-flight sealing process
-func (c *Bor) CancelActiveSealingOp() {
-	if c.activeSealingOp != nil {
-		log.Debug("Discarding active sealing operation", "number", c.activeSealingOp.number)
-		c.activeSealingOp.cancel()
-	}
 }
 
 // CalcDifficulty is the difficulty adjustment algorithm. It returns the difficulty

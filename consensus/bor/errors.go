@@ -69,17 +69,6 @@ func (e *MaxCheckpointLengthExceededError) Error() string {
 	)
 }
 
-type SealingInFlightError struct {
-	Number uint64
-}
-
-func (e *SealingInFlightError) Error() string {
-	return fmt.Sprintf(
-		"Requested concurrent block sealing. Sealing for block %d is already in progress",
-		e.Number,
-	)
-}
-
 // MismatchingValidatorsError is returned if a last block in sprint contains a
 // list of validators different from the one that local node calculated
 type MismatchingValidatorsError struct {
