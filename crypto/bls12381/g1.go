@@ -90,7 +90,7 @@ func (g *G1) fromBytesUnchecked(in []byte) (*PointG1, error) {
 // First 96 bytes should be concatenation of x and y values.
 // Point (0, 0) is considered as infinity.
 func (g *G1) FromBytes(in []byte) (*PointG1, error) {
-	if len(in) < 96 {
+	if len(in) != 96 {
 		return nil, errors.New("input string should be equal or larger than 96")
 	}
 	p0, err := fromBytes(in[:48])
