@@ -146,16 +146,6 @@ func verifyHasher(it AccountIterator, generatorFn trieGeneratorFn, begin, end in
 	return resultA == resultB
 }
 
-// StackGenerate is a hexary trie builder which is built from the bottom-up as
-// keys are added.
-func StackGenerate(in chan (leaf), out chan (common.Hash)) {
-	t := trie.NewStackTrie()
-	for leaf := range in {
-		t.TryUpdate(leaf.key[:], leaf.value)
-	}
-	out <- t.Hash()
-}
-
 // PruneGenerate is a hexary trie builder which collapses old nodes, but is still
 // based on more or less the ordinary trie builder
 func PruneGenerate(in chan (leaf), out chan (common.Hash)) {
