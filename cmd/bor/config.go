@@ -151,7 +151,7 @@ func enableWhisper(ctx *cli.Context) bool {
 
 func makeFullNode(ctx *cli.Context) *node.Node {
 	stack, cfg := makeConfigNode(ctx)
-	cfg.Eth.HeimdallURL = ctx.String(utils.HeimdallURLFlag.Name)
+	cfg.Eth.HeimdallURL = ctx.GlobalString(utils.HeimdallURLFlag.Name)
 	log.Info("Connecting to heimdall service on...", "heimdallURL", cfg.Eth.HeimdallURL)
 	utils.RegisterEthService(stack, &cfg.Eth)
 

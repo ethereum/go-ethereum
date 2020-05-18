@@ -1694,7 +1694,7 @@ func MakeChain(ctx *cli.Context, stack *node.Node) (chain *core.BlockChain, chai
 	if config.Clique != nil {
 		engine = clique.New(config.Clique, chainDb)
 	} else if config.Bor != nil {
-		cfg := &eth.Config{Genesis: genesis}
+		cfg := &eth.Config{Genesis: genesis, HeimdallURL: ctx.GlobalString(HeimdallURLFlag.Name)}
 		workspace, err := ioutil.TempDir("", "console-tester-")
 		if err != nil {
 			Fatalf("failed to create temporary keystore: %v", err)

@@ -84,9 +84,9 @@ func TestGetSignerSuccessionNumber_ProposerNotFound(t *testing.T) {
 	signer := snap.ValidatorSet.Validators[3].Address
 	_, err := snap.GetSignerSuccessionNumber(signer)
 	assert.NotNil(t, err)
-	e, ok := err.(*bor.ProposerNotFoundError)
+	e, ok := err.(*bor.UnauthorizedProposerError)
 	assert.True(t, ok)
-	assert.Equal(t, dummyProposerAddress, e.Address)
+	assert.Equal(t, dummyProposerAddress.Bytes(), e.Proposer)
 }
 
 func TestGetSignerSuccessionNumber_SignerNotFound(t *testing.T) {
@@ -97,9 +97,9 @@ func TestGetSignerSuccessionNumber_SignerNotFound(t *testing.T) {
 	dummySignerAddress := randomAddress()
 	_, err := snap.GetSignerSuccessionNumber(dummySignerAddress)
 	assert.NotNil(t, err)
-	e, ok := err.(*bor.SignerNotFoundError)
+	e, ok := err.(*bor.UnauthorizedSignerError)
 	assert.True(t, ok)
-	assert.Equal(t, dummySignerAddress, e.Address)
+	assert.Equal(t, dummySignerAddress.Bytes(), e.Signer)
 }
 
 func buildRandomValidatorSet(numVals int) []*bor.Validator {

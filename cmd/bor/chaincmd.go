@@ -64,6 +64,7 @@ It expects the genesis file as argument.`,
 		ArgsUsage: "<filename> (<filename 2> ... <filename N>) <genesisPath>",
 		Flags: []cli.Flag{
 			utils.DataDirFlag,
+			utils.HeimdallURLFlag,
 			utils.CacheFlag,
 			utils.SyncModeFlag,
 			utils.GCModeFlag,

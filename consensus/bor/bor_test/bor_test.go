@@ -102,6 +102,30 @@ func TestOutOfTurnSigning(t *testing.T) {
 	assert.Nil(t, err)
 }
 
+func TestSignerNotFound(t *testing.T) {
+	init := buildEthereumInstance(t, rawdb.NewMemoryDatabase())
+	chain := init.ethereum.BlockChain()
+	engine := init.ethereum.Engine()
+	_bor := engine.(*bor.Bor)
+	h, _ := getMockedHeimdallClient(t)
+	_bor.SetHeimdallClient(h)
+
+	db := init.ethereum.ChainDb()
+	block := init.genesis.ToBlock(db)
+
+	// random signer account that is not a part of the validator set
+	signer := "3714d99058cd64541433d59c6b391555b2fd9b54629c2b717a6c9c00d1127b6b"
+	signerKey, _ := hex.DecodeString(signer)
+	key, _ = crypto.HexToECDSA(signer)
+	addr = crypto.PubkeyToAddress(key.PublicKey)
+
+	block = buildNextBlock(t, _bor, chain, block, signerKey, init.genesis.Config.Bor)
+	_, err := chain.InsertChain([]*types.Block{block})
+	assert.Equal(t,
+		*err.(*bor.UnauthorizedSignerError),
+		bor.UnauthorizedSignerError{Number: 0, Signer: addr.Bytes()})
+}
+
 func getMockedHeimdallClient(t *testing.T) (*mocks.IHeimdallClient, *bor.HeimdallSpan) {
 	res, heimdallSpan := loadSpanFromFile(t)
 	h := &mocks.IHeimdallClient{}
