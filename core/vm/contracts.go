@@ -637,7 +637,7 @@ func (c *bls12381G1MultiExp) Run(input []byte) ([]byte, error) {
 	// G1 multiplication call expects `160*k` bytes as an input that is interpreted as byte concatenation of `k` slices each of them being a byte concatenation of encoding of G1 point (`128` bytes) and encoding of a scalar value (`32` bytes).
 	// Output is an encoding of multiexponentiation operation result - single G1 point (`128` bytes).
 	k := len(input) / 160
-	if len(input) != k*160 || k == 0 {
+	if len(input) == 0 || len(input)%160 != 0 {
 		return nil, errBLS12381InvalidInputLength
 	}
 	var err error
@@ -767,7 +767,7 @@ func (c *bls12381G2MultiExp) Run(input []byte) ([]byte, error) {
 	// > G2 multiplication call expects `288*k` bytes as an input that is interpreted as byte concatenation of `k` slices each of them being a byte concatenation of encoding of G2 point (`256` bytes) and encoding of a scalar value (`32` bytes).
 	// > Output is an encoding of multiexponentiation operation result - single G2 point (`256` bytes).
 	k := len(input) / 288
-	if len(input) != k*288 || k == 0 {
+	if len(input) == 0 || len(input)%288 != 0 {
 		return nil, errBLS12381InvalidInputLength
 	}
 	var err error
@@ -812,9 +812,8 @@ func (c *bls12381Pairing) Run(input []byte) ([]byte, error) {
 	// > - `256` bytes of G2 point encoding
 	// > Output is a `32` bytes where last single byte is `0x01` if pairing result is equal to multiplicative identity in a pairing target field and `0x00` otherwise
 	// > (which is equivalent of Big Endian encoding of Solidity values `uint256(1)` and `uin256(0)` respectively).
-	L := 384
-	k := len(input) / L
-	if len(input) != k*L || k == 0 {
+	k := len(input) / 384
+	if len(input) == 0 || len(input)%384 != 0 {
 		return nil, errBLS12381InvalidInputLength
 	}
 
@@ -824,8 +823,8 @@ func (c *bls12381Pairing) Run(input []byte) ([]byte, error) {
 
 	// Decode pairs
 	for i := 0; i < k; i++ {
-		off := L * i
-		t0, t1, t2 := off, off+128, off+L
+		off := 384 * i
+		t0, t1, t2 := off, off+128, off+384
 
 		// Decode G1 point
 		p1, err := g1.DecodePoint(input[t0:t1])
