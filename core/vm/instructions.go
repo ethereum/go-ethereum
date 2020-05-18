@@ -453,7 +453,7 @@ func opCoinbase(pc *uint64, interpreter *EVMInterpreter, callContext *callCtx) (
 }
 
 func opTimestamp(pc *uint64, interpreter *EVMInterpreter, callContext *callCtx) ([]byte, error) {
-	v, _ := uint256.FromBig(interpreter.evm.Difficulty)
+	v, _ := uint256.FromBig(interpreter.evm.Time)
 	callContext.stack.push(v)
 	return nil, nil
 }
