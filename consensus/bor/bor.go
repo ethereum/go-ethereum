@@ -555,7 +555,8 @@ func (c *Bor) verifySeal(chain consensus.ChainReader, header *types.Header, pare
 		return err
 	}
 	if !snap.ValidatorSet.HasAddress(signer.Bytes()) {
-		return &UnauthorizedSignerError{number, signer.Bytes()}
+		// Check the UnauthorizedSignerError.Error() msg to see why we pass number-1
+		return &UnauthorizedSignerError{number - 1, signer.Bytes()}
 	}
 
 	succession, err := snap.GetSignerSuccessionNumber(signer)
@@ -741,7 +742,8 @@ func (c *Bor) Seal(chain consensus.ChainReader, block *types.Block, results chan
 
 	// Bail out if we're unauthorized to sign a block
 	if !snap.ValidatorSet.HasAddress(signer.Bytes()) {
-		return &UnauthorizedSignerError{number, signer.Bytes()}
+		// Check the UnauthorizedSignerError.Error() msg to see why we pass number-1
+		return &UnauthorizedSignerError{number - 1, signer.Bytes()}
 	}
 
 	successionNumber, err := snap.GetSignerSuccessionNumber(signer)

@@ -185,5 +185,5 @@ func TestSignerNotFound(t *testing.T) {
 	_, err := chain.InsertChain([]*types.Block{block})
 	assert.Equal(t,
 		*err.(*bor.UnauthorizedSignerError),
-		bor.UnauthorizedSignerError{Number: 1, Signer: addr.Bytes()})
+		bor.UnauthorizedSignerError{Number: 0, Signer: addr.Bytes()})
 }
