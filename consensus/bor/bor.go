@@ -12,7 +12,6 @@ import (
 	"math/big"
 
 	"sort"
-	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -967,7 +966,7 @@ func (c *Bor) fetchAndCommitSpan(
 	header *types.Header,
 	chain core.ChainContext,
 ) error {
-	response, err := c.HeimdallClient.FetchWithRetry("bor", "span", strconv.FormatUint(newSpanID, 10))
+	response, err := c.HeimdallClient.FetchWithRetry(fmt.Sprintf("bor/span/%d", newSpanID), "")
 
 	if err != nil {
 		return err
@@ -1092,9 +1091,9 @@ func (c *Bor) CommitStates(
 	page := 1
 	eventRecords := make([]*EventRecordWithTime, 0)
 	for {
-		query := fmt.Sprintf("clerk/event-record/list?from-time=%d&to-time=%d&page=%d&limit=%d", from.Unix(), to.Unix(), page, stateFetchLimit)
-		log.Info("Fetching state events", "query", query)
-		response, err := c.HeimdallClient.FetchWithRetry(query)
+		queryParams := fmt.Sprintf("from-time=%d&to-time=%d&page=%d&limit=%d", from.Unix(), to.Unix(), page, stateFetchLimit)
+		log.Info("Fetching state sync events", "queryParams", queryParams)
+		response, err := c.HeimdallClient.FetchWithRetry("clerk/event-record/list", queryParams)
 		if err != nil {
 			return err
 		}
@@ -1119,7 +1118,7 @@ func (c *Bor) CommitStates(
 	for _, eventRecord := range eventRecords {
 		// if chanId doesn't match with the record, simply ignore it
 		if eventRecord.ChainID != chainID {
-			log.Error(fmt.Sprintln("Chain Id in received event %s and bor chain Id %s, don't match", eventRecord, chainID))
+			log.Error(fmt.Sprintf("Chain Id in received event %s and bor chain Id %s, don't match", eventRecord, chainID))
 			continue
 		}
 		// validateEventRecord checks whether an event lies in the specified time range

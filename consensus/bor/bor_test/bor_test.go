@@ -20,6 +20,12 @@ import (
 	"github.com/maticnetwork/bor/mocks"
 )
 
+var (
+	spanPath         = "bor/span/1"
+	clerkPath        = "clerk/event-record/list"
+	clerkQueryParams = "from-time=%d&to-time=%d&page=%d&limit=50"
+)
+
 func TestInsertingSpanSizeBlocks(t *testing.T) {
 	init := buildEthereumInstance(t, rawdb.NewMemoryDatabase())
 	chain := init.ethereum.BlockChain()
@@ -42,10 +48,9 @@ func TestInsertingSpanSizeBlocks(t *testing.T) {
 		}
 	}
 
-	assert.True(t, h.AssertCalled(t, "FetchWithRetry", "bor", "span", "1"))
-	query := fmt.Sprintf("clerk/event-record/list?from-time=%d&to-time=%d&page=1&limit=50", 1, to)
-	assert.True(t, h.AssertCalled(t, "FetchWithRetry", query))
-	validators, err := _bor.GetCurrentValidators(sprintSize, spanSize) // new span starts at 256
+	assert.True(t, h.AssertCalled(t, "FetchWithRetry", spanPath, ""))
+	assert.True(t, h.AssertCalled(t, "FetchWithRetry", clerkPath, fmt.Sprintf(clerkQueryParams, 1, to, 1)))
+	validators, err := _bor.GetCurrentValidators(sprintSize, spanSize) // check validator set at the first block of new span
 	if err != nil {
 		t.Fatalf("%s", err)
 	}
@@ -77,7 +82,7 @@ func TestFetchStateSyncEvents(t *testing.T) {
 	// B.1 Mock /bor/span/1
 	res, _ := loadSpanFromFile(t)
 	h := &mocks.IHeimdallClient{}
-	h.On("FetchWithRetry", "bor", "span", "1").Return(res, nil)
+	h.On("FetchWithRetry", spanPath, "").Return(res, nil)
 
 	// B.2 Mock State Sync events
 	// read heimdall api response from file
@@ -99,20 +104,20 @@ func TestFetchStateSyncEvents(t *testing.T) {
 	from := 1
 	to := int64(block.Header().Time)
 	page := 1
-	query1 := fmt.Sprintf("clerk/event-record/list?from-time=%d&to-time=%d&page=%d&limit=50", from, to, page)
-	h.On("FetchWithRetry", query1).Return(&response, nil)
+	query1Params := fmt.Sprintf(clerkQueryParams, from, to, page)
+	h.On("FetchWithRetry", clerkPath, query1Params).Return(&response, nil)
 
 	page = 2
-	query2 := fmt.Sprintf("clerk/event-record/list?from-time=%d&to-time=%d&page=%d&limit=50", from, to, page)
-	h.On("FetchWithRetry", query2).Return(&bor.ResponseWithHeight{}, nil)
+	query2Params := fmt.Sprintf(clerkQueryParams, from, to, page)
+	h.On("FetchWithRetry", clerkPath, query2Params).Return(&bor.ResponseWithHeight{}, nil)
 	_bor.SetHeimdallClient(h)
 
 	block = buildNextBlock(t, _bor, chain, block, nil, init.genesis.Config.Bor)
 	insertNewBlock(t, chain, block)
 
-	assert.True(t, h.AssertCalled(t, "FetchWithRetry", "bor", "span", "1"))
-	assert.True(t, h.AssertCalled(t, "FetchWithRetry", query1))
-	assert.True(t, h.AssertCalled(t, "FetchWithRetry", query2))
+	assert.True(t, h.AssertCalled(t, "FetchWithRetry", spanPath, ""))
+	assert.True(t, h.AssertCalled(t, "FetchWithRetry", clerkPath, query1Params))
+	assert.True(t, h.AssertCalled(t, "FetchWithRetry", clerkPath, query2Params))
 }
 
 func TestOutOfTurnSigning(t *testing.T) {
@@ -190,8 +195,8 @@ func TestSignerNotFound(t *testing.T) {
 func getMockedHeimdallClient(t *testing.T) (*mocks.IHeimdallClient, *bor.HeimdallSpan) {
 	res, heimdallSpan := loadSpanFromFile(t)
 	h := &mocks.IHeimdallClient{}
-	h.On("FetchWithRetry", "bor", "span", "1").Return(res, nil)
-	h.On("FetchWithRetry", mock.AnythingOfType("string")).Return(stateSyncEventsPayload(t), nil)
+	h.On("FetchWithRetry", "bor/span/1", "").Return(res, nil)
+	h.On("FetchWithRetry", mock.AnythingOfType("string"), mock.AnythingOfType("string")).Return(stateSyncEventsPayload(t), nil)
 	return h, heimdallSpan
 }
 
