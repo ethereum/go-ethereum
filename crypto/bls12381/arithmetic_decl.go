@@ -22,15 +22,15 @@ import (
 	"golang.org/x/sys/cpu"
 )
 
-var isX86CharacretisticSet bool = false
+var isX86CharacteristicSet bool = false
 
 func cfgArch() {
-	if !isX86CharacretisticSet {
+	if !isX86CharacteristicSet {
 		if !(cpu.X86.HasADX && cpu.X86.HasBMI2) {
 			mul = mulNoADX
 			mulAssign = mulAssignNoADX
 		}
-		isX86CharacretisticSet = true
+		isX86CharacteristicSet = true
 	}
 }
 
