@@ -1718,7 +1718,6 @@ func (bc *BlockChain) insertChain(chain types.Blocks, verifySeals bool) (int, []
 	if lastCanon != nil && bc.CurrentBlock().Hash() == lastCanon.Hash() {
 		events = append(events, ChainHeadEvent{lastCanon})
 	}
-	bc.engine.(consensus.Bor).CancelActiveSealingOp()
 	return it.index, events, coalescedLogs, err
 }
 

@@ -120,7 +120,6 @@ type Engine interface {
 type Bor interface {
 	Engine
 	IsValidatorAction(chain ChainReader, from common.Address, tx *types.Transaction) bool
-	CancelActiveSealingOp()
 }
 
 // PoW is a consensus engine based on proof-of-work.

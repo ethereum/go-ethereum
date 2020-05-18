@@ -26,7 +26,6 @@ import (
 	"github.com/maticnetwork/bor/core/types"
 	"github.com/maticnetwork/bor/ethdb"
 	"github.com/maticnetwork/bor/internal/ethapi"
-	"github.com/maticnetwork/bor/log"
 	"github.com/maticnetwork/bor/params"
 )
 
@@ -191,23 +190,17 @@ func (s *Snapshot) GetSignerSuccessionNumber(signer common.Address) (int, error)
 	proposer := s.ValidatorSet.GetProposer().Address
 	proposerIndex, _ := s.ValidatorSet.GetByAddress(proposer)
 	if proposerIndex == -1 {
-		return -1, &ProposerNotFoundError{proposer}
+		return -1, &UnauthorizedProposerError{s.Number, proposer.Bytes()}
 	}
 	signerIndex, _ := s.ValidatorSet.GetByAddress(signer)
 	if signerIndex == -1 {
-		return -1, &SignerNotFoundError{signer}
+		return -1, &UnauthorizedSignerError{s.Number, signer.Bytes()}
 	}
-	limit := len(validators)/2 + 1
 
 	tempIndex := signerIndex
-	if proposerIndex != tempIndex && limit > 0 {
+	if proposerIndex != tempIndex {
 		if tempIndex < proposerIndex {
 			tempIndex = tempIndex + len(validators)
-		}
-
-		if tempIndex-proposerIndex > limit {
-			log.Info("errRecentlySigned", "proposerIndex", validators[proposerIndex].Address.Hex(), "signerIndex", validators[signerIndex].Address.Hex())
-			return -1, errRecentlySigned
 		}
 	}
 	return tempIndex - proposerIndex, nil

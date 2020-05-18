@@ -2,29 +2,7 @@ package bor
 
 import (
 	"fmt"
-
-	"github.com/maticnetwork/bor/common"
 )
-
-// Will include any new bor consensus errors here in an attempt to make error messages more descriptive
-
-// ProposerNotFoundError is returned if the given proposer address is not present in the validator set
-type ProposerNotFoundError struct {
-	Address common.Address
-}
-
-func (e *ProposerNotFoundError) Error() string {
-	return fmt.Sprintf("Proposer: %s not found", e.Address.Hex())
-}
-
-// SignerNotFoundError is returned when the signer address is not present in the validator set
-type SignerNotFoundError struct {
-	Address common.Address
-}
-
-func (e *SignerNotFoundError) Error() string {
-	return fmt.Sprintf("Signer: %s not found", e.Address.Hex())
-}
 
 // TotalVotingPowerExceededError is returned when the maximum allowed total voting power is exceeded
 type TotalVotingPowerExceededError struct {
@@ -69,17 +47,6 @@ func (e *MaxCheckpointLengthExceededError) Error() string {
 	)
 }
 
-type SealingInFlightError struct {
-	Number uint64
-}
-
-func (e *SealingInFlightError) Error() string {
-	return fmt.Sprintf(
-		"Requested concurrent block sealing. Sealing for block %d is already in progress",
-		e.Number,
-	)
-}
-
 // MismatchingValidatorsError is returned if a last block in sprint contains a
 // list of validators different from the one that local node calculated
 type MismatchingValidatorsError struct {
@@ -110,7 +77,21 @@ func (e *BlockTooSoonError) Error() string {
 	)
 }
 
-// UnauthorizedSignerError is returned if a header is signed by a non-authorized entity.
+// UnauthorizedProposerError is returned if a header is [being] signed by an unauthorized entity.
+type UnauthorizedProposerError struct {
+	Number   uint64
+	Proposer []byte
+}
+
+func (e *UnauthorizedProposerError) Error() string {
+	return fmt.Sprintf(
+		"Proposer 0x%x is not a part of the producer set at block %d",
+		e.Proposer,
+		e.Number,
+	)
+}
+
+// UnauthorizedSignerError is returned if a header is [being] signed by an unauthorized entity.
 type UnauthorizedSignerError struct {
 	Number uint64
 	Signer []byte
@@ -118,9 +99,9 @@ type UnauthorizedSignerError struct {
 
 func (e *UnauthorizedSignerError) Error() string {
 	return fmt.Sprintf(
-		"Validator set for block %d doesn't contain the signer 0x%x\n",
-		e.Number,
+		"Signer 0x%x is not a part of the producer set at block %d",
 		e.Signer,
+		e.Number,
 	)
 }
 
