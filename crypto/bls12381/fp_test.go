@@ -15,10 +15,10 @@ func TestFpSerialization(t *testing.T) {
 			t.Fatal(err)
 		}
 		if !fe.isZero() {
-			t.Fatal("bad serialization\n")
+			t.Fatal("bad serialization")
 		}
 		if !bytes.Equal(in, toBytes(fe)) {
-			t.Fatal("bad serialization\n")
+			t.Fatal("bad serialization")
 		}
 	})
 	t.Run("bytes", func(t *testing.T) {
@@ -29,7 +29,7 @@ func TestFpSerialization(t *testing.T) {
 				t.Fatal(err)
 			}
 			if !a.equal(b) {
-				t.Fatal("bad serialization\n")
+				t.Fatal("bad serialization")
 			}
 		}
 	})
@@ -41,7 +41,7 @@ func TestFpSerialization(t *testing.T) {
 				t.Fatal(err)
 			}
 			if !a.equal(b) {
-				t.Fatal("bad encoding or decoding\n")
+				t.Fatal("bad encoding or decoding")
 			}
 		}
 	})
@@ -53,7 +53,7 @@ func TestFpSerialization(t *testing.T) {
 				t.Fatal(err)
 			}
 			if !a.equal(b) {
-				t.Fatal("bad encoding or decoding\n")
+				t.Fatal("bad encoding or decoding")
 			}
 		}
 	})
@@ -526,7 +526,7 @@ func TestFp2Serialization(t *testing.T) {
 			t.Fatal(err)
 		}
 		if !a.equal(b) {
-			t.Fatal("bad serialization\n")
+			t.Fatal("bad serialization")
 		}
 	}
 }
@@ -909,7 +909,7 @@ func TestFp6Serialization(t *testing.T) {
 			t.Fatal(err)
 		}
 		if !a.equal(b) {
-			t.Fatal("bad serialization\n")
+			t.Fatal("bad serialization")
 		}
 	}
 }
@@ -1218,7 +1218,7 @@ func TestFp12Serialization(t *testing.T) {
 			t.Fatal(err)
 		}
 		if !a.equal(b) {
-			t.Fatal("bad serialization\n")
+			t.Fatal("bad serialization")
 		}
 	}
 }
