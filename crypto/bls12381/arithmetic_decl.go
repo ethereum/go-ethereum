@@ -24,7 +24,7 @@ import (
 
 var isX86CharacteristicSet bool = false
 
-func cfgArch() {
+func init() {
 	if !isX86CharacteristicSet {
 		if !(cpu.X86.HasADX && cpu.X86.HasBMI2) {
 			mul = mulNoADX

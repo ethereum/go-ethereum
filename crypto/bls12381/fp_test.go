@@ -8,7 +8,6 @@ import (
 )
 
 func TestFpSerialization(t *testing.T) {
-	Init()
 	t.Run("zero", func(t *testing.T) {
 		in := make([]byte, 48)
 		fe, err := fromBytes(in)
@@ -61,7 +60,6 @@ func TestFpSerialization(t *testing.T) {
 }
 
 func TestFpAdditionCrossAgainstBigInt(t *testing.T) {
-	Init()
 	for i := 0; i < fuz; i++ {
 		a, _ := new(fe).rand(rand.Reader)
 		b, _ := new(fe).rand(rand.Reader)
@@ -97,7 +95,6 @@ func TestFpAdditionCrossAgainstBigInt(t *testing.T) {
 }
 
 func TestFpAdditionCrossAgainstBigIntAssigned(t *testing.T) {
-	Init()
 	for i := 0; i < fuz; i++ {
 		a, _ := new(fe).rand(rand.Reader)
 		b, _ := new(fe).rand(rand.Reader)
@@ -129,7 +126,6 @@ func TestFpAdditionCrossAgainstBigIntAssigned(t *testing.T) {
 }
 
 func TestFpAdditionProperties(t *testing.T) {
-	Init()
 	for i := 0; i < fuz; i++ {
 		zero := new(fe).zero()
 		a, _ := new(fe).rand(rand.Reader)
@@ -191,7 +187,6 @@ func TestFpAdditionProperties(t *testing.T) {
 }
 
 func TestFpAdditionPropertiesAssigned(t *testing.T) {
-	Init()
 	for i := 0; i < fuz; i++ {
 		zero := new(fe).zero()
 		a, b := new(fe), new(fe)
@@ -267,7 +262,6 @@ func TestFpAdditionPropertiesAssigned(t *testing.T) {
 }
 
 func TestFpLazyOperations(t *testing.T) {
-	Init()
 	for i := 0; i < fuz; i++ {
 		a, _ := new(fe).rand(rand.Reader)
 		b, _ := new(fe).rand(rand.Reader)
@@ -305,7 +299,6 @@ func TestFpLazyOperations(t *testing.T) {
 }
 
 func TestFpMultiplicationCrossAgainstBigInt(t *testing.T) {
-	Init()
 	for i := 0; i < fuz; i++ {
 		a, _ := new(fe).rand(rand.Reader)
 		b, _ := new(fe).rand(rand.Reader)
@@ -323,7 +316,6 @@ func TestFpMultiplicationCrossAgainstBigInt(t *testing.T) {
 }
 
 func TestFpMultiplicationCrossAgainstBigIntAssigned(t *testing.T) {
-	Init()
 	for i := 0; i < fuz; i++ {
 		a, _ := new(fe).rand(rand.Reader)
 		b, _ := new(fe).rand(rand.Reader)
@@ -339,7 +331,6 @@ func TestFpMultiplicationCrossAgainstBigIntAssigned(t *testing.T) {
 }
 
 func TestFpMultiplicationProperties(t *testing.T) {
-	Init()
 	for i := 0; i < fuz; i++ {
 		a, _ := new(fe).rand(rand.Reader)
 		b, _ := new(fe).rand(rand.Reader)
@@ -384,7 +375,6 @@ func TestFpMultiplicationProperties(t *testing.T) {
 }
 
 func TestFpMultiplicationPropertiesAssigned(t *testing.T) {
-	Init()
 	for i := 0; i < fuz; i++ {
 		a, _ := new(fe).rand(rand.Reader)
 		zero, one := new(fe).zero(), new(fe).one()
@@ -419,7 +409,6 @@ func TestFpMultiplicationPropertiesAssigned(t *testing.T) {
 }
 
 func TestFpExponentiation(t *testing.T) {
-	Init()
 	for i := 0; i < fuz; i++ {
 		a, _ := new(fe).rand(rand.Reader)
 		u := new(fe)
@@ -452,7 +441,6 @@ func TestFpExponentiation(t *testing.T) {
 }
 
 func TestFpInversion(t *testing.T) {
-	Init()
 	for i := 0; i < fuz; i++ {
 		u := new(fe)
 		zero, one := new(fe).zero(), new(fe).one()
@@ -481,7 +469,6 @@ func TestFpInversion(t *testing.T) {
 }
 
 func TestFpSquareRoot(t *testing.T) {
-	Init()
 	r := new(fe)
 	if sqrt(r, nonResidue1) {
 		t.Fatal("non residue cannot have a sqrt")
@@ -501,7 +488,6 @@ func TestFpSquareRoot(t *testing.T) {
 }
 
 func TestFpNonResidue(t *testing.T) {
-	Init()
 	if !isQuadraticNonResidue(nonResidue1) {
 		t.Fatal("element is quadratic non residue, 1")
 	}

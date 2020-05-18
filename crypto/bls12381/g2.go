@@ -60,7 +60,6 @@ func NewG2() *G2 {
 }
 
 func newG2(f *fp2) *G2 {
-	Init()
 	if f == nil {
 		f = newFp2()
 	}
