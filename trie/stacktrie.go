@@ -228,6 +228,66 @@ func (st *ReStackTrie) insert(key, value []byte) {
 	}
 }
 
+// rawHPRLP is called when the length of the RLP of a node is
+// less than 32. It will return the un-hashed payload.
+func rawHPRLP(key, val []byte, leaf bool) []byte {
+	payload := [32]byte{}
+
+	// payload size - none of the components are larger
+	// than 56 since the whole size is smaller than 32
+	val_header_len := 1
+	if len(val) == 1 && val[0] < 128 {
+		val_header_len = 0
+	}
+	var key_header_len int
+	if len(key) < 2 {
+		// Key is 0 or 1 byte long, so the whole byte
+		// will be less than 128, no header needed.
+		key_header_len = 0
+	} else {
+		// Key is longer than 1 byte, and including
+		// the hex prefix that's more than 2 bytes.
+		// And of course it's less than 56 bytes.
+		key_header_len = 1
+	}
+	payload[0] = byte(1 + key_header_len + len(key)/2 + val_header_len + len(val))
+
+	pos := 1
+	// add length prefix if needed
+	if key_header_len == 1 {
+		payload[1] = byte(1 + len(key)/2)
+		pos++
+	}
+
+	// hex prefix
+	payload[pos] = byte(16 * (len(key) % 2))
+	if leaf {
+		payload[pos] |= 32
+	}
+	if len(key)%2 == 0 {
+		// Advance to next byte iff the key has an odd length
+		// of nibbles.
+		pos++
+	}
+
+	// copy key data
+	for i, nibble := range key {
+		offset := 1 - uint((len(key)+i)%2)
+		payload[pos] |= byte(int(nibble) << (4 * offset))
+		if offset == 0 {
+			pos++
+		}
+	}
+
+	// copy value data
+	payload[pos] = byte(len(val))
+	pos += 1
+	copy(payload[pos:], val)
+	pos += len(val)
+
+	return payload[:pos]
+}
+
 // writeEvenHP writes a key with its hex prefix into a writer (presumably, the
 // input of a hasher) and then writes the value. The value can be a maximum of
 // 256 bytes, as it is only concerned with writing account leaves and optimize
@@ -379,12 +439,20 @@ func (st *ReStackTrie) hash() []byte {
 			payload[0] = 0xf9
 			start = 0
 		}
+
+		// Do not hash if the payload length is less than 32 bytes
+		if pos-start < 32 {
+			return payload[start:pos]
+		}
 		d.Write(payload[start:pos])
 	case extNode:
 		ch := st.children[0].hash()
 		writeHPRLP(d, st.key, ch, false)
 		st.children[0] = nil // Reclaim mem from subtree
 	case leafNode:
+		if (len(st.key)/2)+1+len(st.val) < 29 {
+			return rawHPRLP(st.key, st.val, true)
+		}
 		writeHPRLP(d, st.key, st.val, true)
 	case emptyNode:
 		return emptyRoot[:]
