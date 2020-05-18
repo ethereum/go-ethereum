@@ -2,12 +2,15 @@ package bortest
 
 import (
 	"encoding/hex"
+	"encoding/json"
 	"fmt"
 	"math/big"
 	"testing"
+	"time"
 
 	"github.com/maticnetwork/bor/consensus/bor"
 	"github.com/maticnetwork/bor/core/rawdb"
+
 	"github.com/maticnetwork/bor/crypto"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/mock"
@@ -52,6 +55,64 @@ func TestInsertingSpanSizeBlocks(t *testing.T) {
 		assert.Equal(t, validator.Address.Bytes(), heimdallSpan.SelectedProducers[i].Address.Bytes())
 		assert.Equal(t, validator.VotingPower, heimdallSpan.SelectedProducers[i].VotingPower)
 	}
+}
+
+func TestFetchStateSyncEvents(t *testing.T) {
+	init := buildEthereumInstance(t, rawdb.NewMemoryDatabase())
+	chain := init.ethereum.BlockChain()
+	engine := init.ethereum.Engine()
+	_bor := engine.(*bor.Bor)
+
+	// A. Insert blocks for 0th sprint
+	db := init.ethereum.ChainDb()
+	block := init.genesis.ToBlock(db)
+
+	// Insert sprintSize # of blocks so that span is fetched at the start of a new sprint
+	for i := uint64(1); i < sprintSize; i++ {
+		block = buildNextBlock(t, _bor, chain, block, nil, init.genesis.Config.Bor)
+		insertNewBlock(t, chain, block)
+	}
+
+	// B. Before inserting 1st block of the next sprint, mock heimdall deps
+	// B.1 Mock /bor/span/1
+	res, _ := loadSpanFromFile(t)
+	h := &mocks.IHeimdallClient{}
+	h.On("FetchWithRetry", "bor", "span", "1").Return(res, nil)
+
+	// B.2 Mock State Sync events
+	// read heimdall api response from file
+	res = stateSyncEventsPayload(t)
+	var _eventRecords []*bor.EventRecordWithTime
+	if err := json.Unmarshal(res.Result, &_eventRecords); err != nil {
+		t.Fatalf("%s", err)
+	}
+
+	// use that as a sample to generate bor.stateFetchLimit events
+	eventRecords := generateFakeStateSyncEvents(_eventRecords[0], 50)
+	_res, _ := json.Marshal(eventRecords)
+	response := bor.ResponseWithHeight{Height: "0"}
+	if err := json.Unmarshal(_res, &response.Result); err != nil {
+		t.Fatalf("%s", err)
+	}
+
+	// at # sprintSize, events are fetched for the internal [from, (block-1).Time)
+	from := 1
+	to := int64(block.Header().Time)
+	page := 1
+	query1 := fmt.Sprintf("clerk/event-record/list?from-time=%d&to-time=%d&page=%d&limit=50", from, to, page)
+	h.On("FetchWithRetry", query1).Return(&response, nil)
+
+	page = 2
+	query2 := fmt.Sprintf("clerk/event-record/list?from-time=%d&to-time=%d&page=%d&limit=50", from, to, page)
+	h.On("FetchWithRetry", query2).Return(&bor.ResponseWithHeight{}, nil)
+	_bor.SetHeimdallClient(h)
+
+	block = buildNextBlock(t, _bor, chain, block, nil, init.genesis.Config.Bor)
+	insertNewBlock(t, chain, block)
+
+	assert.True(t, h.AssertCalled(t, "FetchWithRetry", "bor", "span", "1"))
+	assert.True(t, h.AssertCalled(t, "FetchWithRetry", query1))
+	assert.True(t, h.AssertCalled(t, "FetchWithRetry", query2))
 }
 
 func TestOutOfTurnSigning(t *testing.T) {
@@ -130,9 +191,22 @@ func getMockedHeimdallClient(t *testing.T) (*mocks.IHeimdallClient, *bor.Heimdal
 	res, heimdallSpan := loadSpanFromFile(t)
 	h := &mocks.IHeimdallClient{}
 	h.On("FetchWithRetry", "bor", "span", "1").Return(res, nil)
-
-	res = stateSyncEventsPayload(t)
-	// query := fmt.Sprintf("clerk/event-record/list?from-time=%d&to-time=%d&page=1&limit=50", 1, 1589709047)
-	h.On("FetchWithRetry", mock.AnythingOfType("string")).Return(res, nil)
+	h.On("FetchWithRetry", mock.AnythingOfType("string")).Return(stateSyncEventsPayload(t), nil)
 	return h, heimdallSpan
+}
+
+func generateFakeStateSyncEvents(sample *bor.EventRecordWithTime, count int) []*bor.EventRecordWithTime {
+	events := make([]*bor.EventRecordWithTime, count)
+	event := *sample
+	event.ID = 0
+	event.Time = time.Now()
+	events[0] = &bor.EventRecordWithTime{}
+	*events[0] = event
+	for i := 1; i < count; i++ {
+		event.ID = uint64(i)
+		event.Time = event.Time.Add(1 * time.Second)
+		events[i] = &bor.EventRecordWithTime{}
+		*events[i] = event
+	}
+	return events
 }

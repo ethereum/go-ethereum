@@ -1099,6 +1099,9 @@ func (c *Bor) CommitStates(
 			return err
 		}
 		var _eventRecords []*EventRecordWithTime
+		if response.Result == nil { // status 204
+			break
+		}
 		if err := json.Unmarshal(response.Result, &_eventRecords); err != nil {
 			return err
 		}
