@@ -48,16 +48,12 @@ func swuMapG1(u *fe) (*fe, *fe) {
 	gx2 := new(fe)
 	mul(gx2, gx1, tv[1])
 	e2 := !isQuadraticNonResidue(gx1)
-	x := new(fe)
+	x, y2 := new(fe), new(fe)
 	if e2 {
 		x.set(x1)
-	} else {
-		x.set(x2)
-	}
-	y2 := new(fe)
-	if e2 {
 		y2.set(gx1)
 	} else {
+		x.set(x2)
 		y2.set(gx2)
 	}
 	y := new(fe)
@@ -102,16 +98,12 @@ func swuMapG2(e *fp2, u *fe2) (*fe2, *fe2) {
 	gx2 := e.new()
 	e.mul(gx2, gx1, tv[1])
 	e2 := !e.isQuadraticNonResidue(gx1)
-	x := e.new()
+	x, y2 := e.new(), e.new()
 	if e2 {
 		x.set(x1)
-	} else {
-		x.set(x2)
-	}
-	y2 := e.new()
-	if e2 {
 		y2.set(gx1)
 	} else {
+		x.set(x2)
 		y2.set(gx2)
 	}
 	y := e.new()
