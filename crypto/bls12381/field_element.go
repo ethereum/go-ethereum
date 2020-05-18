@@ -134,7 +134,7 @@ func (fe *fe) rand(r io.Reader) (*fe, error) {
 }
 
 func (fe *fe) isValid() bool {
-	return fe.cmp(&modulus) == -1
+	return fe.cmp(&modulus) < 0
 }
 
 func (fe *fe) isOdd() bool {
@@ -156,7 +156,7 @@ func (fe *fe) isOne() bool {
 }
 
 func (fe *fe) cmp(fe2 *fe) int {
-	for i := 5; i > -1; i-- {
+	for i := 5; i >= 0; i-- {
 		if fe[i] > fe2[i] {
 			return 1
 		} else if fe[i] < fe2[i] {
