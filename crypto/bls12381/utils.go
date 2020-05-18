@@ -19,14 +19,12 @@ package bls12381
 import (
 	"errors"
 	"math/big"
+
+	"github.com/ethereum/go-ethereum/common"
 )
 
 func bigFromHex(hex string) *big.Int {
-	if len(hex) > 1 && hex[:2] == "0x" {
-		hex = hex[2:]
-	}
-	n, _ := new(big.Int).SetString(hex, 16)
-	return n
+	return new(big.Int).SetBytes(common.FromHex(hex))
 }
 
 // decodeFieldElement expects 64 byte input with zero top 16 bytes,
