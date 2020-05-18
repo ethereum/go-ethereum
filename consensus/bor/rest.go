@@ -86,8 +86,14 @@ func (h *HeimdallClient) internalFetch(u *url.URL) (*ResponseWithHeight, error) 
 	defer res.Body.Close()
 
 	// check status code
-	if res.StatusCode != 200 {
+	if res.StatusCode != 200 && res.StatusCode != 204 {
 		return nil, fmt.Errorf("Error while fetching data from Heimdall")
+	}
+
+	// unmarshall data from buffer
+	var response ResponseWithHeight
+	if res.StatusCode == 204 {
+		return &response, nil
 	}
 
 	// get response
@@ -96,8 +102,6 @@ func (h *HeimdallClient) internalFetch(u *url.URL) (*ResponseWithHeight, error) 
 		return nil, err
 	}
 
-	// unmarshall data from buffer
-	var response ResponseWithHeight
 	if err := json.Unmarshal(body, &response); err != nil {
 		return nil, err
 	}
