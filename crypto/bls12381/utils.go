@@ -39,7 +39,6 @@ func decodeFieldElement(in []byte) ([]byte, error) {
 	for i := 0; i < 16; i++ {
 		if in[i] != byte(0x00) {
 			return nil, errors.New("invalid field element top bytes")
-
 		}
 	}
 	out := make([]byte, 48)
