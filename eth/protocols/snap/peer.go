@@ -17,6 +17,7 @@
 package snap
 
 import (
+	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/p2p"
 )
 
@@ -43,6 +44,42 @@ func newPeer(version uint, p *p2p.Peer, rw p2p.MsgReadWriter) *Peer {
 // ID retrieves the peer's unique identifier.
 func (p *Peer) ID() string {
 	return p.id
+}
+
+// RequestAccountRange fetches a batch of accounts rooted in a specific account
+// trie, starting with the origin.
+func (p *Peer) RequestAccountRange(id uint64, root common.Hash, origin common.Hash, bytes uint64) error {
+	p.Log().Trace("Fetching range of accounts", "root", root, "origin", origin, "bytes", common.StorageSize(bytes))
+	return p2p.Send(p.rw, getAccountRangeMsg, &getAccountRangeData{
+		ID:     id,
+		Root:   root,
+		Origin: origin,
+		Bytes:  bytes,
+	})
+}
+
+// RequestStorageRange fetches a batch of accounts rooted in a specific account
+// trie, starting with the origin.
+func (p *Peer) RequestStorageRange(id uint64, root common.Hash, account common.Hash, origin common.Hash, bytes uint64) error {
+	p.Log().Trace("Fetching range of storage", "root", root, "account", account, "origin", origin, "bytes", common.StorageSize(bytes))
+	return p2p.Send(p.rw, getStorageRangeMsg, &getStorageRangeData{
+		ID:      id,
+		Root:    root,
+		Account: account,
+		Origin:  origin,
+		Bytes:   bytes,
+	})
+}
+
+// RequestByteCodes fetches a batch of accounts rooted in a specific account
+// trie, starting with the origin.
+func (p *Peer) RequestByteCodes(id uint64, hashes []common.Hash, bytes uint64) error {
+	p.Log().Trace("Fetching set of byte codes", "hashes", len(hashes), "bytes", common.StorageSize(bytes))
+	return p2p.Send(p.rw, getByteCodesMsg, &getByteCodesData{
+		ID:     id,
+		Hashes: hashes,
+		Bytes:  bytes,
+	})
 }
 
 // PeerInfo represents a short summary of the `snap` sub-protocol metadata known

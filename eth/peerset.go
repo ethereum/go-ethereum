@@ -125,7 +125,7 @@ func (ps *peerSet) registerEthPeer(peer *eth.Peer) error {
 	}
 	ps.ethJoinFeed.Send(peer)
 	if ok {
-		ps.snapJoinFeed.Send(snap)
+		ps.snapJoinFeed.Send(snap.Peer)
 	}
 	return nil
 }

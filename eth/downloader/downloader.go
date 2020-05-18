@@ -29,6 +29,7 @@ import (
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/rawdb"
 	"github.com/ethereum/go-ethereum/core/types"
+	"github.com/ethereum/go-ethereum/eth/protocols/snap"
 	"github.com/ethereum/go-ethereum/ethdb"
 	"github.com/ethereum/go-ethereum/event"
 	"github.com/ethereum/go-ethereum/log"
@@ -137,7 +138,8 @@ type Downloader struct {
 	receiptWakeCh chan bool            // [eth/63] Channel to signal the receipt fetcher of new tasks
 	headerProcCh  chan []*types.Header // [eth/62] Channel to feed the header processor new tasks
 
-	// for stateFetcher
+	// Stat sync
+	SnapSyncer     *snap.Syncer // TODO(karalabe): make private! hack for now
 	stateSyncStart chan *stateSync
 	trackStateReq  chan *stateReq
 	stateCh        chan dataPack // [eth/63] Channel receiving inbound node state data
@@ -233,6 +235,7 @@ func New(checkpoint uint64, stateDb ethdb.Database, stateBloom *trie.SyncBloom, 
 		headerProcCh:   make(chan []*types.Header, 1),
 		quitCh:         make(chan struct{}),
 		stateCh:        make(chan dataPack),
+		SnapSyncer:     snap.NewSyncer(stateDb, stateBloom),
 		stateSyncStart: make(chan *stateSync),
 		syncStatsState: stateSyncStats{
 			processed: rawdb.ReadFastTrieProgress(stateDb),
@@ -1751,23 +1754,47 @@ func (d *Downloader) commitPivotBlock(result *fetchResult) error {
 
 // DeliverHeaders injects a new batch of block headers received from a remote
 // node into the download schedule.
-func (d *Downloader) DeliverHeaders(id string, headers []*types.Header) (err error) {
+func (d *Downloader) DeliverHeaders(id string, headers []*types.Header) error {
 	return d.deliver(id, d.headerCh, &headerPack{id, headers}, headerInMeter, headerDropMeter)
 }
 
 // DeliverBodies injects a new batch of block bodies received from a remote node.
-func (d *Downloader) DeliverBodies(id string, transactions [][]*types.Transaction, uncles [][]*types.Header) (err error) {
+func (d *Downloader) DeliverBodies(id string, transactions [][]*types.Transaction, uncles [][]*types.Header) error {
 	return d.deliver(id, d.bodyCh, &bodyPack{id, transactions, uncles}, bodyInMeter, bodyDropMeter)
 }
 
 // DeliverReceipts injects a new batch of receipts received from a remote node.
-func (d *Downloader) DeliverReceipts(id string, receipts [][]*types.Receipt) (err error) {
+func (d *Downloader) DeliverReceipts(id string, receipts [][]*types.Receipt) error {
 	return d.deliver(id, d.receiptCh, &receiptPack{id, receipts}, receiptInMeter, receiptDropMeter)
 }
 
 // DeliverNodeData injects a new batch of node state data received from a remote node.
-func (d *Downloader) DeliverNodeData(id string, data [][]byte) (err error) {
+func (d *Downloader) DeliverNodeData(id string, data [][]byte) error {
 	return d.deliver(id, d.stateCh, &statePack{id, data}, stateInMeter, stateDropMeter)
+}
+
+// DeliverSnapshotAccounts is invoked from a peer's message handler when it transmits a range
+// of accounts for the local node to process.
+func (d *Downloader) DeliverSnapshotAccounts(peer *snap.Peer, id uint64, keys []common.Hash, accounts [][]byte, proof [][]byte) error {
+	return d.SnapSyncer.OnAccounts(peer, id, keys, accounts, proof)
+}
+
+// DeliverSnapshotStorage is invoked from a peer's message handler when it transmits a range
+// of storage slots for the local node to process.
+func (d *Downloader) DeliverSnapshotStorage(peer *snap.Peer, id uint64, keys []common.Hash, slots [][]byte, proof [][]byte) error {
+	return d.SnapSyncer.OnStorage(peer, id, keys, slots, proof)
+}
+
+// DeliverSnapshotByteCodes is invoked from a peer's message handler when it transmits a batch
+// of byte codes for the local node to process.
+func (d *Downloader) DeliverSnapshotByteCodes(peer *snap.Peer, id uint64, codes [][]byte) error {
+	return d.SnapSyncer.OnByteCodes(peer, id, codes)
+}
+
+// DeliverSnapshotTrieNodes is invoked from a peer's message handler when it transmits a batch
+// of trie nodes for the local node to process.
+func (d *Downloader) DeliverSnapshotTrieNodes(peer *snap.Peer, id uint64, nodes [][]byte) error {
+	return d.SnapSyncer.OnTrieNodes(peer, id, nodes)
 }
 
 // deliver injects a new batch of data received from a remote node.

@@ -45,23 +45,23 @@ func (h *snapHandler) PeerInfo(id enode.ID) interface{} {
 // OnAccounts is invoked from a peer's message handler when it transmits a range
 // of accounts for the local node to process.
 func (h *snapHandler) OnAccounts(peer *snap.Peer, id uint64, keys []common.Hash, accounts [][]byte, proof [][]byte) error {
-	return nil
+	return h.downloader.DeliverSnapshotAccounts(peer, id, keys, accounts, proof)
 }
 
 // OnStorage is invoked from a peer's message handler when it transmits a range
 // of storage slots for the local node to process.
 func (h *snapHandler) OnStorage(peer *snap.Peer, id uint64, keys []common.Hash, slots [][]byte, proof [][]byte) error {
-	return nil
+	return h.downloader.DeliverSnapshotStorage(peer, id, keys, slots, proof)
 }
 
 // OnByteCodes is invoked from a peer's message handler when it transmits a batch
 // of byte codes for the local node to process.
 func (h *snapHandler) OnByteCodes(peer *snap.Peer, id uint64, codes [][]byte) error {
-	return nil
+	return h.downloader.DeliverSnapshotByteCodes(peer, id, codes)
 }
 
 // OnTrieNodes is invoked from a peer's message handler when it transmits a batch
 // of trie nodes for the local node to process.
 func (h *snapHandler) OnTrieNodes(peer *snap.Peer, id uint64, nodes [][]byte) error {
-	return nil
+	return h.downloader.DeliverSnapshotTrieNodes(peer, id, nodes)
 }

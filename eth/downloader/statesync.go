@@ -17,6 +17,7 @@
 package downloader
 
 import (
+	"context"
 	"fmt"
 	"hash"
 	"sync"
@@ -103,9 +104,21 @@ func (d *Downloader) runStateSync(s *stateSync) *stateSync {
 			req.peer.SetNodeDataIdle(len(req.items))
 		}
 	}()
+	// Start the snapshot sync concurrently
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	go func() {
+		if err := d.SnapSyncer.Sync(ctx, s.root); err != nil {
+			panic(err)
+		}
+		s.run()
+		defer s.Cancel()
+	}()
+
 	// Run the state sync.
-	go s.run()
-	defer s.Cancel()
+	//go s.run()
+	//defer s.Cancel()
 
 	// Listen for peer departure events to cancel assigned tasks
 	peerDrop := make(chan *peerConnection, 1024)
@@ -215,6 +228,7 @@ func (d *Downloader) runStateSync(s *stateSync) *stateSync {
 type stateSync struct {
 	d *Downloader // Downloader instance to access and manage current peerset
 
+	root   common.Hash                // State root currently being synced
 	sched  *trie.Sync                 // State trie sync scheduler defining the tasks
 	keccak hash.Hash                  // Keccak256 hasher to verify deliveries with
 	tasks  map[common.Hash]*stateTask // Set of tasks currently queued for retrieval
@@ -240,6 +254,7 @@ type stateTask struct {
 func newStateSync(d *Downloader, root common.Hash) *stateSync {
 	return &stateSync{
 		d:       d,
+		root:    root,
 		sched:   state.NewStateSync(root, d.stateDB, d.stateBloom),
 		keccak:  sha3.NewLegacyKeccak256(),
 		tasks:   make(map[common.Hash]*stateTask),

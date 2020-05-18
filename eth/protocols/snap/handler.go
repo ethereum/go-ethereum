@@ -21,11 +21,15 @@ import (
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core"
+	"github.com/ethereum/go-ethereum/core/state"
 	"github.com/ethereum/go-ethereum/core/state/snapshot"
+	"github.com/ethereum/go-ethereum/light"
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/p2p"
 	"github.com/ethereum/go-ethereum/p2p/enode"
 	"github.com/ethereum/go-ethereum/p2p/enr"
+	"github.com/ethereum/go-ethereum/rlp"
+	"github.com/ethereum/go-ethereum/trie"
 )
 
 const (
@@ -146,7 +150,7 @@ func handleMessage(backend Backend, peer *Peer) error {
 		if err != nil {
 			return p2p.Send(peer.rw, accountRangeMsg, &accountRangeData{ID: req.ID})
 		}
-		it, err := backend.Chain().AccountIterator(req.Root, req.Origin)
+		it, err := backend.Chain().Snapshot().AccountIterator(req.Root, req.Origin)
 		if err != nil {
 			return p2p.Send(peer.rw, accountRangeMsg, &accountRangeData{ID: req.ID})
 		}
@@ -154,12 +158,13 @@ func handleMessage(backend Backend, peer *Peer) error {
 
 		// Iterate over the requested range and pile accounts up
 		var (
-			accounts    []*accountData
-			bytes       uint64
-			first, last common.Hash
+			accounts []*accountData
+			bytes    uint64
+			first    common.Hash
+			last     common.Hash
 		)
 		for it.Next() && bytes < req.Bytes && bytes < 1<<20 {
-			hash, account := it.Hash(), it.Account()
+			hash, account := it.Hash(), common.CopyBytes(it.Account())
 
 			// Track the returned interval for the Merkle proofs
 			if first == (common.Hash{}) {
@@ -207,7 +212,7 @@ func handleMessage(backend Backend, peer *Peer) error {
 			vals = make([][]byte, len(res.Accounts))
 		)
 		for i, acc := range res.Accounts {
-			val, err := snapshot.SlimToFull(acc.Body)
+			val, err := snapshot.FullAccountRLP(acc.Body)
 			if err != nil {
 				return fmt.Errorf("invalid account %x: %v", acc.Body, err)
 			}
@@ -225,8 +230,78 @@ func handleMessage(backend Backend, peer *Peer) error {
 		if req.Bytes > softResponseLimit {
 			req.Bytes = softResponseLimit
 		}
-		// Not implemented, return an empty reply
-		return p2p.Send(peer.rw, storageRangeMsg, &storageRangeData{ID: req.ID})
+		// Retrieve the requested state and bail out if non existent
+		it, err := backend.Chain().Snapshot().StorageIterator(req.Root, req.Account, req.Origin)
+		if err != nil {
+			return p2p.Send(peer.rw, storageRangeMsg, &storageRangeData{ID: req.ID})
+		}
+		defer it.Release()
+
+		// Iterate over the requested range and pile slots up
+		var (
+			slots []*storageData
+			bytes uint64
+			first common.Hash
+			last  common.Hash
+		)
+		for it.Next() && bytes < req.Bytes && bytes < 1<<20 {
+			hash, slot := it.Hash(), common.CopyBytes(it.Slot())
+
+			// Track the returned interval for the Merkle proofs
+			if first == (common.Hash{}) {
+				first = hash
+			}
+			last = hash
+
+			// Assemble the reply item
+			bytes += uint64(len(slot))
+			slots = append(slots, &storageData{
+				Hash: hash,
+				Body: slot,
+			})
+		}
+		if first == (common.Hash{}) {
+			return p2p.Send(peer.rw, storageRangeMsg, &storageRangeData{ID: req.ID})
+		}
+		// Generate the Merkle proofs for the first and last storage slot, but
+		// only if the response was capped. If the entire storage trie included
+		// in the response, no need for any proofs.
+		var proofs [][]byte
+
+		if req.Origin != (common.Hash{}) || bytes >= req.Bytes || bytes >= 1<<20 {
+			// Request started at a non-zero hash or was capped prematurely, add
+			// the endpoint Merkle proofs
+			accTrie, err := trie.New(req.Root, backend.Chain().StateCache().TrieDB())
+			if err != nil {
+				return p2p.Send(peer.rw, storageRangeMsg, &storageRangeData{ID: req.ID})
+			}
+			var acc state.Account
+			if err := rlp.DecodeBytes(accTrie.Get(req.Account[:]), &acc); err != nil {
+				return p2p.Send(peer.rw, storageRangeMsg, &storageRangeData{ID: req.ID})
+			}
+			stTrie, err := trie.New(acc.Root, backend.Chain().StateCache().TrieDB())
+			if err != nil {
+				return p2p.Send(peer.rw, storageRangeMsg, &storageRangeData{ID: req.ID})
+			}
+			proof := light.NewNodeSet()
+			if err := stTrie.Prove(first[:], 0, proof); err != nil {
+				log.Warn("Failed to prove storage range", "first", first, "err", err)
+				return p2p.Send(peer.rw, storageRangeMsg, &storageRangeData{ID: req.ID})
+			}
+			if err := stTrie.Prove(last[:], 0, proof); err != nil {
+				log.Warn("Failed to prove storage range", "last", last, "err", err)
+				return p2p.Send(peer.rw, storageRangeMsg, &storageRangeData{ID: req.ID})
+			}
+			for _, blob := range proof.NodeList() {
+				proofs = append(proofs, blob)
+			}
+		}
+		// Send back anything accumulated
+		return p2p.Send(peer.rw, storageRangeMsg, &storageRangeData{
+			ID:    req.ID,
+			Slots: slots,
+			Proof: proofs,
+		})
 
 	case msg.Code == storageRangeMsg:
 		// A range of accounts arrived to one of our previous requests
@@ -282,7 +357,7 @@ func handleMessage(backend Backend, peer *Peer) error {
 		if err := msg.Decode(&res); err != nil {
 			return fmt.Errorf("%w: message %v: %v", errDecode, msg, err)
 		}
-		return backend.OnTrieNodes(peer, res.ID, res.Codes)
+		return backend.OnByteCodes(peer, res.ID, res.Codes)
 
 	case msg.Code == getTrieNodesMsg:
 		// Decode trie node retrieval request

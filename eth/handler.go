@@ -313,6 +313,9 @@ func (h *handler) runSnapPeer(peer *snap.Peer, handler snap.Handler) error {
 	}
 	defer h.removePeer(peer.ID())
 
+	if err := h.downloader.SnapSyncer.Register(peer); err != nil {
+		return err
+	}
 	// Handle incoming messages until the connection is torn down
 	return handler(peer)
 }
@@ -333,6 +336,7 @@ func (h *handler) removePeer(id string) {
 	snap := h.peers.snapPeer(id)
 	if snap != nil {
 		log.Debug("Removing Snapshot peer", "peer", id)
+		h.downloader.SnapSyncer.Unregister(id)
 		if err := h.peers.unregisterSnapPeer(id); err != nil {
 			log.Error("Peer removal failed", "peer", id, "err", err)
 		}

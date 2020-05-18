@@ -83,18 +83,18 @@ type accountData struct {
 
 // getStorageRangeData represents an storage slot query.
 type getStorageRangeData struct {
-	ID          uint64      // Request ID to match up responses with
-	TrieRoot    common.Hash // Root hash of the account trie to serve
-	AccountRoot common.Hash // Account hash of the storage trie to serve
-	Origin      common.Hash // Storage slot hash of the first to retrieve
-	Bytes       uint64      // Soft limit at which to stop returning data
+	ID      uint64      // Request ID to match up responses with
+	Root    common.Hash // Root hash of the account trie to serve
+	Account common.Hash // Account hash of the storage trie to serve
+	Origin  common.Hash // Storage slot hash of the first to retrieve
+	Bytes   uint64      // Soft limit at which to stop returning data
 }
 
 // storageRangeData represents a storage slot query response.
 type storageRangeData struct {
-	ID    uint64        // ID of the request this is a response for
-	Slots []storageData // LList of consecutive slots from the trie
-	Proof [][]byte      // List of trie nodes proving the slot range
+	ID    uint64         // ID of the request this is a response for
+	Slots []*storageData // LList of consecutive slots from the trie
+	Proof [][]byte       // List of trie nodes proving the slot range
 }
 
 // storageData represents a single storage slot in a query response.
