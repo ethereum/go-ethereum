@@ -1086,7 +1086,7 @@ func (c *Bor) CommitStates(
 	}
 
 	from := *lastSync
-	to := time.Unix(int64(chain.Chain.GetHeaderByNumber(number-1).Time), 0)
+	to := time.Unix(int64(chain.Chain.GetHeaderByNumber(number-c.config.Sprint).Time), 0)
 	lastStateID := _lastStateID.Uint64()
 	if !from.Before(to) {
 		return nil
