@@ -228,9 +228,39 @@ func (st *ReStackTrie) insert(key, value []byte) {
 	}
 }
 
-// rawHPRLP is called when the length of the RLP of a node is
+func rawExtHPRLP(key, val []byte) []byte {
+	rlp := [32]byte{}
+	nkeybytes := len(key) / 2
+	oddkeylength := len(key) % 2
+
+	pos := 1
+	if nkeybytes > 0 || key[0] > 128 {
+		rlp[pos] = byte(128 + 1 + nkeybytes)
+		pos++
+	}
+
+	// Copy key data, including hex prefix
+	if oddkeylength == 1 {
+		rlp[pos] = 16
+	} else {
+		pos++
+	}
+	for i := 0; i < len(key); i++ {
+		rlp[pos+(i+oddkeylength)/2] |= key[i] << uint(4*((i+1+len(key))%2))
+	}
+	pos += (len(key) + oddkeylength) / 2
+
+	copy(rlp[pos:], val)
+
+	// RLP header
+	rlp[0] = byte(192 + pos + len(val) - 1)
+
+	return rlp[:pos+len(val)]
+}
+
+// rawLeafHPRLP is called when the length of the RLP of a node is
 // less than 32. It will return the un-hashed payload.
-func rawHPRLP(key, val []byte, leaf bool) []byte {
+func rawLeafHPRLP(key, val []byte, leaf bool) []byte {
 	payload := [32]byte{}
 
 	// payload size - none of the components are larger
@@ -435,9 +465,7 @@ func (st *ReStackTrie) hash() []byte {
 			if v != nil {
 				// Write a 32 byte list to the sponge
 				childhash := v.hash()
-				if len(childhash) == 1 && childhash[0] < 128 {
-					payload[pos] = childhash[0]
-				} else {
+				if len(childhash) == 32 {
 					payload[pos] = 128 + byte(len(childhash))
 					pos++
 				}
@@ -480,29 +508,13 @@ func (st *ReStackTrie) hash() []byte {
 	case extNode:
 		ch := st.children[0].hash()
 		if (len(st.key)/2)+1+len(ch) < 29 {
-			rlp := [32]byte{}
-
-			// Copy key data, including hex prefix
-			if len(st.key)%2 == 0 {
-				rlp[2] = 0
-			} else {
-				rlp[2] = 16 + st.key[0]
-			}
-			rlp[1] = byte(128 + 1 + len(st.key)/2)
-			for i := 0; i < len(st.key); i++ {
-				rlp[3-len(st.key)%2+i/2] = st.key[i] << uint(4*((i+1+len(st.key))%2))
-			}
-
-			copy(rlp[3+len(st.key)/2:], ch)
-			rlp[0] = byte(192 + 2 + len(st.key)/2 + len(ch))
-
-			return rlp[:3+len(st.key)/2+len(ch)]
+			return rawExtHPRLP(st.key, st.val)
 		}
 		writeHPRLP(d, st.key, ch, false)
 		st.children[0] = nil // Reclaim mem from subtree
 	case leafNode:
 		if (len(st.key)/2)+1+len(st.val) < 29 {
-			return rawHPRLP(st.key, st.val, true)
+			return rawLeafHPRLP(st.key, st.val, false)
 		}
 		writeHPRLP(d, st.key, st.val, true)
 	case emptyNode:

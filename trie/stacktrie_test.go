@@ -25,29 +25,29 @@ import (
 )
 
 func TestRawHPRLP(t *testing.T) {
-	got := rawHPRLP([]byte{0x00, 0x01}, []byte{0x02, 0x03}, true)
-	exp := []byte{6, 2, 32, 1, 2, 2, 3}
+	got := rawLeafHPRLP([]byte{0x00, 0x01}, []byte{0x02, 0x03}, true)
+	exp := []byte{198, 2, 32, 1, 130, 2, 3}
 
 	if !bytes.Equal(exp, got) {
 		t.Fatalf("invalid RLP generated for leaf with even length key: got %v, expected %v", common.ToHex(got), common.ToHex(exp))
 	}
 
-	got = rawHPRLP([]byte{0x01}, []byte{0x02, 0x03}, true)
-	exp = []byte{4, 49, 2, 2, 3}
+	got = rawLeafHPRLP([]byte{0x01}, []byte{0x02, 0x03}, true)
+	exp = []byte{196, 49, 130, 2, 3}
 
 	if !bytes.Equal(exp, got) {
 		t.Fatalf("invalid RLP generated for leaf with odd length key: got %v, expected %v", common.ToHex(got), common.ToHex(exp))
 	}
 
-	got = rawHPRLP([]byte{0x00, 0x01}, []byte{0x02, 0x03}, false)
-	exp = []byte{6, 2, 0, 1, 2, 2, 3}
+	got = rawLeafHPRLP([]byte{0x00, 0x01}, []byte{0x02, 0x03}, false)
+	exp = []byte{198, 2, 0, 1, 130, 2, 3}
 
 	if !bytes.Equal(exp, got) {
 		t.Fatalf("invalid RLP generated for ext with even length key: got %v, expected %v", common.ToHex(got), common.ToHex(exp))
 	}
 
-	got = rawHPRLP([]byte{0x01}, []byte{0x02, 0x03}, false)
-	exp = []byte{4, 17, 2, 2, 3}
+	got = rawLeafHPRLP([]byte{0x01}, []byte{0x02, 0x03}, false)
+	exp = []byte{196, 17, 130, 2, 3}
 
 	if !bytes.Equal(exp, got) {
 		t.Fatalf("invalid RLP generated for ext with odd length key: got %v, expected %v", common.ToHex(got), common.ToHex(exp))
@@ -70,5 +70,22 @@ func TestHashWithSmallRLP(t *testing.T) {
 
 	if !bytes.Equal(got, exp[:]) {
 		t.Fatalf("error calculating hash of ext-node-leaves < 32: %v != %v", common.ToHex(exp[:]), common.ToHex(got))
+	}
+
+	trie = NewReStackTrie()
+	trie.insert([]byte{0, 1, 2}, []byte("ba"))
+	trie.insert([]byte{0, 2, 3}, []byte("cr"))
+
+	aotrie = NewAppendOnlyTrie()
+	aotrie.root = aotrie.insert(aotrie.root, nil, []byte{0, 1, 2}, valueNode([]byte("ba")))
+	aotrie.root = aotrie.insert(aotrie.root, nil, []byte{0, 2, 3}, valueNode([]byte("cr")))
+
+	d.Reset()
+	d.Write(trie.hash())
+	got = d.Sum(nil)
+	exph := aotrie.Hash()
+
+	if !bytes.Equal(got, exph[:]) {
+		t.Fatalf("error calculating hash of node-leaves < 32: %v != %v", common.ToHex(exph[:]), common.ToHex(got))
 	}
 }
