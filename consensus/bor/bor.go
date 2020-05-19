@@ -1112,21 +1112,17 @@ func (c *Bor) CommitStates(
 		}
 		page++
 	}
+
 	sort.SliceStable(eventRecords, func(i, j int) bool {
-		return eventRecords[i].Time.Before(eventRecords[j].Time)
+		return eventRecords[i].ID < eventRecords[j].ID
 	})
 
 	chainID := c.chainConfig.ChainID.String()
 	for _, eventRecord := range eventRecords {
-		// if chanId doesn't match with the record, simply ignore it
-		if eventRecord.ChainID != chainID {
-			log.Error(fmt.Sprintf("Chain Id in received event %s and bor chain Id %s, don't match", eventRecord, chainID))
-			continue
-		}
 		// validateEventRecord checks whether an event lies in the specified time range
 		// since the events are sorted by time and if it turns out that event i lies outside the time range,
 		// it would mean all subsequent events lie outside of the time range. Hence we don't probe any further and break the loop
-		if err := validateEventRecord(eventRecord, number, from, to); err != nil {
+		if err := validateEventRecord(eventRecord, number, from, to, chainID); err != nil {
 			log.Error(
 				fmt.Sprintf(
 					"Received event %s does not lie in the time range, from %s, to %s",
@@ -1151,9 +1147,9 @@ func (c *Bor) CommitStates(
 	return nil
 }
 
-func validateEventRecord(eventRecord *EventRecordWithTime, number uint64, from, to time.Time) error {
+func validateEventRecord(eventRecord *EventRecordWithTime, number uint64, from, to time.Time, chainID string) error {
 	// event should lie in the range [from, to)
-	if eventRecord.Time.Before(from) || !eventRecord.Time.Before(to) {
+	if eventRecord.ChainID != chainID || eventRecord.Time.Before(from) || !eventRecord.Time.Before(to) {
 		return &InvalidStateReceivedError{number, &from, &to, eventRecord}
 	}
 	return nil
