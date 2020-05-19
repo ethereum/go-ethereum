@@ -385,8 +385,6 @@ func DefaultGoerliGenesisBlock() *Genesis {
 
 // DeveloperGenesisBlock returns the 'geth --dev' genesis block.
 func DeveloperGenesisBlock(period uint64, faucet common.Address) *Genesis {
-  fmt.Println("\n\n\nHello from Karl! SANITY CHECKING NOW")
-  fmt.Println("\n\n\nHello from Karl! SANITY CHECKING NOW")
 
 	// Override the default period to the user requested one
 	config := *params.AllCliqueProtocolChanges

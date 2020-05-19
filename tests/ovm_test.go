@@ -8,7 +8,6 @@ import (
 	"math/big"
 	"strings"
 	"testing"
-	// "fmt"
 
 	"github.com/ethereum/go-ethereum/accounts/abi"
 	"github.com/ethereum/go-ethereum/common"
