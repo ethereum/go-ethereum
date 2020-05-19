@@ -136,7 +136,7 @@ func (b *SimulatedBackend) stateByBlockNumber(ctx context.Context, blockNumber *
 	if err != nil {
 		return nil, err
 	}
-	return b.blockchain.StateAt(block.Hash())
+	return b.blockchain.StateAt(block.Root())
 }
 
 // CodeAt returns the code associated with a certain account in the blockchain.
