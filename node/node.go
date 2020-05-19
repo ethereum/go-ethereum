@@ -235,22 +235,6 @@ func (n *Node) RegisterHTTPServer(server *HTTPServer) {
 	n.httpServers = append(n.httpServers, server)
 }
 
-// TODO document
-func (n *Node) RegisterHTTP(dest *HTTPServer, toRegister *HTTPServer) {
-	// takes in default existing http server
-	// enables ____ on it
-	if toRegister.GQLAllowed {
-		dest.handler = NewGQLUpgradeHandler(dest.handler, toRegister.handler)
-		dest.GQLAllowed = true
-		log.Info("GraphQL endpoint opened", "url", fmt.Sprintf("http://%v", toRegister.endpoint))
-		return
-	}
-	dest.handler = dest.NewWebsocketUpgradeHandler(dest.handler, toRegister.handler)
-	if toRegister.WSAllowed {
-		log.Info("WebSocket endpoint opened", "url", fmt.Sprintf("ws://%s", toRegister.endpoint))
-	}
-}
-
 // CreateHTTPServer creates an http.Server and adds it to the given HTTPServer // TODO improve?
 func (n *Node) CreateHTTPServer(h *HTTPServer, exposeAll bool) error {
 	// register apis and create handler stack
