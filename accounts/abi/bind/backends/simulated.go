@@ -133,11 +133,11 @@ func (b *SimulatedBackend) stateByBlockNumber(ctx context.Context, blockNumber *
 	if blockNumber == nil || blockNumber.Cmp(b.blockchain.CurrentBlock().Number()) == 0 {
 		return b.blockchain.State()
 	}
-	block, err := b.BlockByNumber(ctx, blockNumber)
+	block, err := b.blockByNumberNoLock(ctx, blockNumber)
 	if err != nil {
 		return nil, err
 	}
-	return b.blockchain.StateAt(block.Hash())
+	return b.blockchain.StateAt(block.Root())
 }
 
 // CodeAt returns the code associated with a certain account in the blockchain.
@@ -244,6 +244,12 @@ func (b *SimulatedBackend) BlockByNumber(ctx context.Context, number *big.Int) (
 	b.mu.Lock()
 	defer b.mu.Unlock()
 
+	return b.blockByNumberNoLock(ctx, number)
+}
+
+// blockByNumberNoLock retrieves a block from the database by number, caching it
+// (associated with its hash) if found without Lock.
+func (b *SimulatedBackend) blockByNumberNoLock(ctx context.Context, number *big.Int) (*types.Block, error) {
 	if number == nil || number.Cmp(b.pendingBlock.Number()) == 0 {
 		return b.blockchain.CurrentBlock(), nil
 	}
