@@ -6,7 +6,6 @@ import (
 	"io/ioutil"
 	"net/http"
 	"net/url"
-	"path"
 	"time"
 
 	"github.com/maticnetwork/bor/log"
@@ -20,8 +19,8 @@ type ResponseWithHeight struct {
 }
 
 type IHeimdallClient interface {
-	Fetch(paths ...string) (*ResponseWithHeight, error)
-	FetchWithRetry(paths ...string) (*ResponseWithHeight, error)
+	Fetch(path string, query string) (*ResponseWithHeight, error)
+	FetchWithRetry(path string, query string) (*ResponseWithHeight, error)
 }
 
 type HeimdallClient struct {
@@ -39,33 +38,28 @@ func NewHeimdallClient(urlString string) (*HeimdallClient, error) {
 	return h, nil
 }
 
-func (h *HeimdallClient) Fetch(paths ...string) (*ResponseWithHeight, error) {
+// Fetch fetches response from heimdall
+func (h *HeimdallClient) Fetch(rawPath string, rawQuery string) (*ResponseWithHeight, error) {
 	u, err := url.Parse(h.urlString)
 	if err != nil {
 		return nil, err
 	}
 
-	for _, e := range paths {
-		if e != "" {
-			u.Path = path.Join(u.Path, e)
-		}
-	}
+	u.Path = rawPath
+	u.RawQuery = rawQuery
 
 	return h.internalFetch(u)
 }
 
 // FetchWithRetry returns data from heimdall with retry
-func (h *HeimdallClient) FetchWithRetry(paths ...string) (*ResponseWithHeight, error) {
+func (h *HeimdallClient) FetchWithRetry(rawPath string, rawQuery string) (*ResponseWithHeight, error) {
 	u, err := url.Parse(h.urlString)
 	if err != nil {
 		return nil, err
 	}
 
-	for _, e := range paths {
-		if e != "" {
-			u.Path = path.Join(u.Path, e)
-		}
-	}
+	u.Path = rawPath
+	u.RawQuery = rawQuery
 
 	for {
 		res, err := h.internalFetch(u)

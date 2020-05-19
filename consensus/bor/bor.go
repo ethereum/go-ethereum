@@ -12,7 +12,6 @@ import (
 	"math/big"
 
 	"sort"
-	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -41,9 +40,6 @@ import (
 	"golang.org/x/crypto/sha3"
 )
 
-const validatorsetABI = `[{"constant":true,"inputs":[{"name":"span","type":"uint256"}],"name":"getSpan","outputs":[{"name":"number","type":"uint256"},{"name":"startBlock","type":"uint256"},{"name":"endBlock","type":"uint256"}],"payable":false,"stateMutability":"view","type":"function"},{"constant":true,"inputs":[{"name":"number","type":"uint256"}],"name":"getBorValidators","outputs":[{"name":"","type":"address[]"},{"name":"","type":"uint256[]"}],"payable":false,"stateMutability":"view","type":"function"},{"constant":true,"inputs":[{"name":"span","type":"uint256"},{"name":"signer","type":"address"}],"name":"isProducer","outputs":[{"name":"","type":"bool"}],"payable":false,"stateMutability":"view","type":"function"},{"constant":false,"inputs":[{"name":"newSpan","type":"uint256"},{"name":"startBlock","type":"uint256"},{"name":"endBlock","type":"uint256"},{"name":"validatorBytes","type":"bytes"},{"name":"producerBytes","type":"bytes"}],"name":"commitSpan","outputs":[],"payable":false,"stateMutability":"nonpayable","type":"function"},{"constant":true,"inputs":[{"name":"span","type":"uint256"},{"name":"signer","type":"address"}],"name":"isValidator","outputs":[{"name":"","type":"bool"}],"payable":false,"stateMutability":"view","type":"function"},{"constant":false,"inputs":[],"name":"proposeSpan","outputs":[],"payable":false,"stateMutability":"nonpayable","type":"function"},{"constant":true,"inputs":[],"name":"currentSpanNumber","outputs":[{"name":"","type":"uint256"}],"payable":false,"stateMutability":"view","type":"function"},{"constant":true,"inputs":[],"name":"getNextSpan","outputs":[{"name":"number","type":"uint256"},{"name":"startBlock","type":"uint256"},{"name":"endBlock","type":"uint256"}],"payable":false,"stateMutability":"view","type":"function"},{"constant":true,"inputs":[],"name":"getInitialValidators","outputs":[{"name":"","type":"address[]"},{"name":"","type":"uint256[]"}],"payable":false,"stateMutability":"view","type":"function"},{"constant":true,"inputs":[],"name":"spanProposalPending","outputs":[{"name":"","type":"bool"}],"payable":false,"stateMutability":"view","type":"function"},{"constant":true,"inputs":[],"name":"getCurrentSpan","outputs":[{"name":"number","type":"uint256"},{"name":"startBlock","type":"uint256"},{"name":"endBlock","type":"uint256"}],"payable":false,"stateMutability":"view","type":"function"},{"constant":true,"inputs":[{"name":"number","type":"uint256"}],"name":"getSpanByBlock","outputs":[{"name":"","type":"uint256"}],"payable":false,"stateMutability":"view","type":"function"},{"constant":true,"inputs":[],"name":"getValidators","outputs":[{"name":"","type":"address[]"},{"name":"","type":"uint256[]"}],"payable":false,"stateMutability":"view","type":"function"},{"constant":false,"inputs":[{"name":"vote","type":"bytes"},{"name":"sigs","type":"bytes"},{"name":"txBytes","type":"bytes"},{"name":"proof","type":"bytes"}],"name":"validateValidatorSet","outputs":[],"payable":false,"stateMutability":"nonpayable","type":"function"}]`
-const stateReceiverABI = `[{"constant":true,"inputs":[{"name":"","type":"uint256"}],"name":"states","outputs":[{"name":"","type":"bool"}],"payable":false,"stateMutability":"view","type":"function"},{"constant":false,"inputs":[{"name":"recordBytes","type":"bytes"}],"name":"commitState","outputs":[],"payable":false,"stateMutability":"nonpayable","type":"function"},{"constant":true,"inputs":[],"name":"getPendingStates","outputs":[{"name":"","type":"uint256[]"}],"payable":false,"stateMutability":"view","type":"function"},{"constant":true,"inputs":[],"name":"SYSTEM_ADDRESS","outputs":[{"name":"","type":"address"}],"payable":false,"stateMutability":"view","type":"function"},{"constant":true,"inputs":[],"name":"validatorSet","outputs":[{"name":"","type":"address"}],"payable":false,"stateMutability":"view","type":"function"},{"constant":false,"inputs":[{"name":"vote","type":"bytes"},{"name":"sigs","type":"bytes"},{"name":"txBytes","type":"bytes"},{"name":"proof","type":"bytes"}],"name":"validateValidatorSet","outputs":[],"payable":false,"stateMutability":"nonpayable","type":"function"},{"constant":true,"inputs":[],"name":"isValidatorSetContract","outputs":[{"name":"","type":"bool"}],"payable":false,"stateMutability":"view","type":"function"},{"constant":false,"inputs":[{"name":"stateId","type":"uint256"}],"name":"proposeState","outputs":[],"payable":false,"stateMutability":"nonpayable","type":"function"},{"constant":true,"inputs":[{"name":"signer","type":"address"}],"name":"isProducer","outputs":[{"name":"","type":"bool"}],"payable":false,"stateMutability":"view","type":"function"},{"constant":true,"inputs":[{"name":"signer","type":"address"}],"name":"isValidator","outputs":[{"name":"","type":"bool"}],"payable":false,"stateMutability":"view","type":"function"}]`
-
 const (
 	checkpointInterval = 1024 // Number of blocks after which to save the vote snapshot to the database
 	inmemorySnapshots  = 128  // Number of recent vote snapshots to keep in memory
@@ -66,6 +62,7 @@ var (
 
 	validatorHeaderBytesLength = common.AddressLength + 20 // address + power
 	systemAddress              = common.HexToAddress("0xffffFFFfFFffffffffffffffFfFFFfffFFFfFFfE")
+	stateFetchLimit            = 50
 )
 
 // Various error messages to mark blocks invalid. These should be private to
@@ -223,10 +220,11 @@ type Bor struct {
 	signFn SignerFn       // Signer function to authorize hashes with
 	lock   sync.RWMutex   // Protects the signer fields
 
-	ethAPI           *ethapi.PublicBlockChainAPI
-	validatorSetABI  abi.ABI
-	stateReceiverABI abi.ABI
-	HeimdallClient   IHeimdallClient
+	ethAPI                 *ethapi.PublicBlockChainAPI
+	genesisContractsClient *GenesisContractsClient
+	validatorSetABI        abi.ABI
+	stateReceiverABI       abi.ABI
+	HeimdallClient         IHeimdallClient
 
 	stateDataFeed event.Feed
 	scope         event.SubscriptionScope
@@ -255,17 +253,18 @@ func New(
 	vABI, _ := abi.JSON(strings.NewReader(validatorsetABI))
 	sABI, _ := abi.JSON(strings.NewReader(stateReceiverABI))
 	heimdallClient, _ := NewHeimdallClient(heimdallURL)
-
+	genesisContractsClient := NewGenesisContractsClient(chainConfig, borConfig.ValidatorContract, borConfig.StateReceiverContract, ethAPI)
 	c := &Bor{
-		chainConfig:      chainConfig,
-		config:           borConfig,
-		db:               db,
-		ethAPI:           ethAPI,
-		recents:          recents,
-		signatures:       signatures,
-		validatorSetABI:  vABI,
-		stateReceiverABI: sABI,
-		HeimdallClient:   heimdallClient,
+		chainConfig:            chainConfig,
+		config:                 borConfig,
+		db:                     db,
+		ethAPI:                 ethAPI,
+		recents:                recents,
+		signatures:             signatures,
+		validatorSetABI:        vABI,
+		stateReceiverABI:       sABI,
+		genesisContractsClient: genesisContractsClient,
+		HeimdallClient:         heimdallClient,
 	}
 
 	return c
@@ -654,9 +653,7 @@ func (c *Bor) Prepare(chain consensus.ChainReader, header *types.Header) error {
 // Finalize implements consensus.Engine, ensuring no uncles are set, nor block
 // rewards given.
 func (c *Bor) Finalize(chain consensus.ChainReader, header *types.Header, state *state.StateDB, txs []*types.Transaction, uncles []*types.Header) {
-	// commit span
 	headerNumber := header.Number.Uint64()
-
 	if headerNumber%c.config.Sprint == 0 {
 		cx := chainContext{Chain: chain, Bor: c}
 		// check and commit span
@@ -664,6 +661,7 @@ func (c *Bor) Finalize(chain consensus.ChainReader, header *types.Header, state 
 			log.Error("Error while committing span", "error", err)
 			return
 		}
+
 		// commit statees
 		if err := c.CommitStates(state, header, cx); err != nil {
 			log.Error("Error while committing states", "error", err)
@@ -679,8 +677,8 @@ func (c *Bor) Finalize(chain consensus.ChainReader, header *types.Header, state 
 // FinalizeAndAssemble implements consensus.Engine, ensuring no uncles are set,
 // nor block rewards given, and returns the final block.
 func (c *Bor) FinalizeAndAssemble(chain consensus.ChainReader, header *types.Header, state *state.StateDB, txs []*types.Transaction, uncles []*types.Header, receipts []*types.Receipt) (*types.Block, error) {
-	// commit span
-	if header.Number.Uint64()%c.config.Sprint == 0 {
+	headerNumber := header.Number.Uint64()
+	if headerNumber%c.config.Sprint == 0 {
 		cx := chainContext{Chain: chain, Bor: c}
 
 		// check and commit span
@@ -693,7 +691,7 @@ func (c *Bor) FinalizeAndAssemble(chain consensus.ChainReader, header *types.Hea
 		// commit statees
 		if err := c.CommitStates(state, header, cx); err != nil {
 			log.Error("Error while committing states", "error", err)
-			// return nil, err
+			return nil, err
 		}
 	}
 
@@ -827,38 +825,6 @@ func (c *Bor) Close() error {
 	return nil
 }
 
-// Checks if "force" proposeSpan has been set
-func (c *Bor) isSpanPending(snapshotNumber uint64) (bool, error) {
-	blockNr := rpc.BlockNumber(snapshotNumber)
-	method := "spanProposalPending"
-
-	// get packed data
-	data, err := c.validatorSetABI.Pack(method)
-	if err != nil {
-		log.Error("Unable to pack tx for spanProposalPending", "error", err)
-		return false, err
-	}
-
-	msgData := (hexutil.Bytes)(data)
-	toAddress := common.HexToAddress(c.config.ValidatorContract)
-	gas := (hexutil.Uint64)(uint64(math.MaxUint64 / 2))
-	result, err := c.ethAPI.Call(context.Background(), ethapi.CallArgs{
-		Gas:  &gas,
-		To:   &toAddress,
-		Data: &msgData,
-	}, blockNr)
-	if err != nil {
-		return false, err
-	}
-
-	var ret0 = new(bool)
-	if err := c.validatorSetABI.Unpack(ret0, method, result); err != nil {
-		return false, err
-	}
-
-	return *ret0, nil
-}
-
 // GetCurrentSpan get current span from contract
 func (c *Bor) GetCurrentSpan(snapshotNumber uint64) (*Span, error) {
 	// block
@@ -963,37 +929,14 @@ func (c *Bor) checkAndCommitSpan(
 	chain core.ChainContext,
 ) error {
 	headerNumber := header.Number.Uint64()
-	pending := false
-	var span *Span = nil
-	errors := make(chan error)
-	go func() {
-		var err error
-		pending, err = c.isSpanPending(headerNumber - 1)
-		errors <- err
-	}()
-
-	go func() {
-		var err error
-		span, err = c.GetCurrentSpan(headerNumber - 1)
-		errors <- err
-	}()
-
-	var err error
-	for i := 0; i < 2; i++ {
-		err = <-errors
-		if err != nil {
-			close(errors)
-			return err
-		}
+	span, err := c.GetCurrentSpan(headerNumber - 1)
+	if err != nil {
+		return err
 	}
-	close(errors)
-
-	// commit span if there is new span pending or span is ending or end block is not set
-	if pending || c.needToCommitSpan(span, headerNumber) {
+	if c.needToCommitSpan(span, headerNumber) {
 		err := c.fetchAndCommitSpan(span.ID+1, state, header, chain)
 		return err
 	}
-
 	return nil
 }
 
@@ -1022,7 +965,7 @@ func (c *Bor) fetchAndCommitSpan(
 	header *types.Header,
 	chain core.ChainContext,
 ) error {
-	response, err := c.HeimdallClient.FetchWithRetry("bor", "span", strconv.FormatUint(newSpanID, 10))
+	response, err := c.HeimdallClient.FetchWithRetry(fmt.Sprintf("bor/span/%d", newSpanID), "")
 
 	if err != nil {
 		return err
@@ -1130,83 +1073,85 @@ func (c *Bor) GetPendingStateProposals(snapshotNumber uint64) ([]*big.Int, error
 func (c *Bor) CommitStates(
 	state *state.StateDB,
 	header *types.Header,
-	chain core.ChainContext,
+	chain chainContext,
 ) error {
-	// get pending state proposals
-	stateIds, err := c.GetPendingStateProposals(header.Number.Uint64() - 1)
+	number := header.Number.Uint64()
+	lastSync, err := c.genesisContractsClient.LastStateSyncTime(number - 1)
 	if err != nil {
 		return err
 	}
-
-	// state ids
-	if len(stateIds) > 0 {
-		log.Debug("Found new proposed states", "numberOfStates", len(stateIds))
+	from := lastSync.Add(time.Second * 1) // querying the interval [from, to)
+	to := time.Unix(int64(chain.Chain.GetHeaderByNumber(number-c.config.Sprint).Time), 0)
+	if !from.Before(to) {
+		return nil
 	}
+	log.Info(
+		"Fetching state updates from Heimdall",
+		"from", from.Format(time.RFC3339),
+		"to", to.Format(time.RFC3339))
 
-	method := "commitState"
-
-	// itereate through state ids
-	for _, stateID := range stateIds {
-		// fetch from heimdall
-		response, err := c.HeimdallClient.FetchWithRetry("clerk", "event-record", strconv.FormatUint(stateID.Uint64(), 10))
+	page := 1
+	eventRecords := make([]*EventRecordWithTime, 0)
+	for {
+		queryParams := fmt.Sprintf("from-time=%d&to-time=%d&page=%d&limit=%d", from.Unix(), to.Unix(), page, stateFetchLimit)
+		log.Info("Fetching state sync events", "queryParams", queryParams)
+		response, err := c.HeimdallClient.FetchWithRetry("clerk/event-record/list", queryParams)
 		if err != nil {
 			return err
 		}
-
-		// get event record
-		var eventRecord EventRecord
-		if err := json.Unmarshal(response.Result, &eventRecord); err != nil {
+		var _eventRecords []*EventRecordWithTime
+		if response.Result == nil { // status 204
+			break
+		}
+		if err := json.Unmarshal(response.Result, &_eventRecords); err != nil {
 			return err
 		}
+		eventRecords = append(eventRecords, _eventRecords...)
+		if len(_eventRecords) < stateFetchLimit {
+			break
+		}
+		page++
+	}
 
-		// check if chain id matches with event record
-		if eventRecord.ChainID != c.chainConfig.ChainID.String() {
-			return fmt.Errorf(
-				"Chain id proposed state in span, %s, and bor chain id, %s, doesn't match",
-				eventRecord.ChainID,
-				c.chainConfig.ChainID,
-			)
+	sort.SliceStable(eventRecords, func(i, j int) bool {
+		return eventRecords[i].ID < eventRecords[j].ID
+	})
+
+	chainID := c.chainConfig.ChainID.String()
+	for _, eventRecord := range eventRecords {
+		// validateEventRecord checks whether an event lies in the specified time range
+		// since the events are sorted by time and if it turns out that event i lies outside the time range,
+		// it would mean all subsequent events lie outside of the time range. Hence we don't probe any further and break the loop
+		if err := validateEventRecord(eventRecord, number, from, to, chainID); err != nil {
+			log.Error(
+				fmt.Sprintf(
+					"Received event %s does not lie in the time range, from %s, to %s",
+					eventRecord, from.Format(time.RFC3339), to.Format(time.RFC3339)))
+			break
 		}
 
-		log.Info("→ committing new state",
-			"id", eventRecord.ID,
-			"contract", eventRecord.Contract,
-			"data", hex.EncodeToString(eventRecord.Data),
-			"txHash", eventRecord.TxHash,
-			"chainID", eventRecord.ChainID,
-		)
 		stateData := types.StateData{
 			Did:      eventRecord.ID,
 			Contract: eventRecord.Contract,
 			Data:     hex.EncodeToString(eventRecord.Data),
 			TxHash:   eventRecord.TxHash,
 		}
-
 		go func() {
 			c.stateDataFeed.Send(core.NewStateChangeEvent{StateData: &stateData})
 		}()
 
-		recordBytes, err := rlp.EncodeToBytes(eventRecord)
-		if err != nil {
-			return err
-		}
-
-		// get packed data for commit state
-		data, err := c.stateReceiverABI.Pack(method, recordBytes)
-		if err != nil {
-			log.Error("Unable to pack tx for commitState", "error", err)
-			return err
-		}
-
-		// get system message
-		msg := getSystemMessage(common.HexToAddress(c.config.StateReceiverContract), data)
-
-		// apply message
-		if err := applyMessage(msg, state, header, c.chainConfig, chain); err != nil {
+		if err := c.genesisContractsClient.CommitState(eventRecord, state, header, chain); err != nil {
 			return err
 		}
 	}
+	return nil
+}
 
+func validateEventRecord(eventRecord *EventRecordWithTime, number uint64, from, to time.Time, chainID string) error {
+	// event should lie in the range [from, to)
+	if eventRecord.ChainID != chainID || eventRecord.Time.Before(from) || !eventRecord.Time.Before(to) {
+		return &InvalidStateReceivedError{number, &from, &to, eventRecord}
+	}
 	return nil
 }
 
@@ -1217,26 +1162,6 @@ func (c *Bor) SubscribeStateEvent(ch chan<- core.NewStateChangeEvent) event.Subs
 
 func (c *Bor) SetHeimdallClient(h IHeimdallClient) {
 	c.HeimdallClient = h
-}
-
-func (c *Bor) IsValidatorAction(chain consensus.ChainReader, from common.Address, tx *types.Transaction) bool {
-	header := chain.CurrentHeader()
-	validators, err := c.GetCurrentValidators(header.Number.Uint64(), header.Number.Uint64()+1)
-	if err != nil {
-		log.Error("Failed fetching snapshot", err)
-		return false
-	}
-
-	isValidator := false
-	for _, validator := range validators {
-		if bytes.Compare(validator.Address.Bytes(), from.Bytes()) == 0 {
-			isValidator = true
-			break
-		}
-	}
-
-	return isValidator && (isProposeSpanAction(tx, chain.Config().Bor.ValidatorContract) ||
-		isProposeStateAction(tx, chain.Config().Bor.StateReceiverContract))
 }
 
 func isProposeSpanAction(tx *types.Transaction, validatorContract string) bool {

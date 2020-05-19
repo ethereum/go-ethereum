@@ -156,6 +156,18 @@ func sign(t *testing.T, header *types.Header, signer []byte) {
 	copy(header.Extra[len(header.Extra)-extraSeal:], sig)
 }
 
+func stateSyncEventsPayload(t *testing.T) *bor.ResponseWithHeight {
+	stateData, err := ioutil.ReadFile("states.json")
+	if err != nil {
+		t.Fatalf("%s", err)
+	}
+	res := &bor.ResponseWithHeight{}
+	if err := json.Unmarshal(stateData, res); err != nil {
+		t.Fatalf("%s", err)
+	}
+	return res
+}
+
 func loadSpanFromFile(t *testing.T) (*bor.ResponseWithHeight, *bor.HeimdallSpan) {
 	spanData, err := ioutil.ReadFile("span.json")
 	if err != nil {
