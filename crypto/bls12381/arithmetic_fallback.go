@@ -39,10 +39,6 @@ import (
 	"math/bits"
 )
 
-func cfgArch() {
-	// no special configuration is needed
-}
-
 func add(z, x, y *fe) {
 	var carry uint64
 
