@@ -986,7 +986,7 @@ func (w *worker) commit(uncles []*types.Header, interval func(), update bool, st
 
 // copyReceipts makes a deep copy of the given receipts.
 func copyReceipts(receipts []*types.Receipt) []*types.Receipt {
-	result := make([]*types.Receipt, len(r))
+	result := make([]*types.Receipt, len(receipts))
 	for i, l := range receipts {
 		cpy := *l
 		result[i] = &cpy
