@@ -952,6 +952,7 @@ TEXT ·mulNoADX(SB), NOSPLIT, $16-24
 	MOVQ $0, R13
 	MOVQ ·modulus+0(SB), AX
 	MULQ BX
+	ADDQ AX, SI
 	ADCQ DX, R13
 	// | SI is idle now
 
@@ -1017,6 +1018,7 @@ TEXT ·mulNoADX(SB), NOSPLIT, $16-24
 	MOVQ $0, R13
 	MOVQ ·modulus+0(SB), AX
 	MULQ BX
+	ADDQ AX, DI
 	ADCQ DX, R13
 	// | DI is idle now
 
@@ -1084,6 +1086,7 @@ TEXT ·mulNoADX(SB), NOSPLIT, $16-24
 	MOVQ $0, R13
 	MOVQ ·modulus+0(SB), AX
 	MULQ BX
+	ADDQ AX, CX
 	ADCQ DX, R13
 	// CX is idle now
 
@@ -1148,6 +1151,7 @@ TEXT ·mulNoADX(SB), NOSPLIT, $16-24
 	MOVQ $0, R13
 	MOVQ ·modulus+0(SB), AX
 	MULQ BX
+	ADDQ AX, R14
 	ADCQ DX, R13
 	// R14 is idle now
 
@@ -1212,6 +1216,7 @@ TEXT ·mulNoADX(SB), NOSPLIT, $16-24
 	MOVQ $0, R13
 	MOVQ ·modulus+0(SB), AX
 	MULQ BX
+	ADDQ AX, R15
 	ADCQ DX, R13
 	// R15 is idle now
 
@@ -1284,6 +1289,7 @@ TEXT ·mulNoADX(SB), NOSPLIT, $16-24
 	MOVQ $0, R13
 	MOVQ ·modulus+0(SB), AX
 	MULQ BX
+	ADDQ AX, R8
 	ADCQ DX, R13
 	// R8 is idle now
 
@@ -1807,6 +1813,7 @@ TEXT ·mulAssignNoADX(SB), NOSPLIT, $16-16
 	MOVQ $0, R13
 	MOVQ ·modulus+0(SB), AX
 	MULQ BX
+	ADDQ AX, SI
 	ADCQ DX, R13
 	// | SI is idle now
 
@@ -1872,6 +1879,7 @@ TEXT ·mulAssignNoADX(SB), NOSPLIT, $16-16
 	MOVQ $0, R13
 	MOVQ ·modulus+0(SB), AX
 	MULQ BX
+	ADDQ AX, DI
 	ADCQ DX, R13
 	// | DI is idle now
 
@@ -1939,6 +1947,7 @@ TEXT ·mulAssignNoADX(SB), NOSPLIT, $16-16
 	MOVQ $0, R13
 	MOVQ ·modulus+0(SB), AX
 	MULQ BX
+	ADDQ AX, CX
 	ADCQ DX, R13
 	// CX is idle now
 
@@ -2003,6 +2012,7 @@ TEXT ·mulAssignNoADX(SB), NOSPLIT, $16-16
 	MOVQ $0, R13
 	MOVQ ·modulus+0(SB), AX
 	MULQ BX
+	ADDQ AX, R14
 	ADCQ DX, R13
 	// R14 is idle now
 
@@ -2067,6 +2077,7 @@ TEXT ·mulAssignNoADX(SB), NOSPLIT, $16-16
 	MOVQ $0, R13
 	MOVQ ·modulus+0(SB), AX
 	MULQ BX
+	ADDQ AX, R15
 	ADCQ DX, R13
 	// R15 is idle now
 
@@ -2139,6 +2150,7 @@ TEXT ·mulAssignNoADX(SB), NOSPLIT, $16-16
 	MOVQ $0, R13
 	MOVQ ·modulus+0(SB), AX
 	MULQ BX
+	ADDQ AX, R8
 	ADCQ DX, R13
 	// R8 is idle now
 
