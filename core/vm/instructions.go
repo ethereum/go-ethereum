@@ -665,7 +665,7 @@ func opJumpdest(pc *uint64, interpreter *EVMInterpreter, callContext *callCtx) (
 }
 
 func opBeginSub(pc *uint64, interpreter *EVMInterpreter, callContext *callCtx) ([]byte, error) {
-	return nil, nil
+	return nil, ErrInvalidSubroutineEntry
 }
 
 func opJumpSub(pc *uint64, interpreter *EVMInterpreter, callContext *callCtx) ([]byte, error) {
@@ -681,7 +681,7 @@ func opJumpSub(pc *uint64, interpreter *EVMInterpreter, callContext *callCtx) ([
 		return nil, ErrInvalidJump
 	}
 	callContext.rstack.push(*pc)
-	*pc = posU64
+	*pc = posU64+1
 	interpreter.intPool.put(pos)
 	return nil, nil
 }

@@ -538,7 +538,7 @@ func TestEipExampleCases(t *testing.T) {
 		prettyPrint("This should fail at first opcode, due to shallow `return_stack`", code)
 
 	}
-	{ // First eip testcase
+	{
 		code := []byte{
 			byte(vm.PUSH1), 5, // Jump past the subroutine
 			byte(vm.JUMP),
@@ -553,4 +553,13 @@ func TestEipExampleCases(t *testing.T) {
 			"and not exit with error", code)
 	}
 
+	{
+		code := []byte{
+			byte(vm.BEGINSUB),
+			byte(vm.RETURNSUB),
+			byte(vm.STOP),
+		}
+		prettyPrint("In this example, the code 'walks' into a subroutine, which is not "+
+			"allowed, and causes an error", code)
+	}
 }
