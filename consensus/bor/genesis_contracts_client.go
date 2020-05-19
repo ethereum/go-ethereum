@@ -76,12 +76,12 @@ func (gc *GenesisContractsClient) CommitState(
 	return nil
 }
 
-func (gc *GenesisContractsClient) LastStateSyncTime(snapshotNumber uint64) (*time.Time, error) {
+func (gc *GenesisContractsClient) LastStateSyncTime(snapshotNumber uint64) (time.Time, error) {
 	method := "lastStateSyncTime"
 	data, err := gc.stateReceiverABI.Pack(method)
 	if err != nil {
 		log.Error("Unable to pack tx for getLastSyncTime", "error", err)
-		return nil, err
+		return time.Time{}, err
 	}
 
 	msgData := (hexutil.Bytes)(data)
@@ -93,15 +93,14 @@ func (gc *GenesisContractsClient) LastStateSyncTime(snapshotNumber uint64) (*tim
 		Data: &msgData,
 	}, rpc.BlockNumber(snapshotNumber))
 	if err != nil {
-		return nil, err
+		return time.Time{}, err
 	}
 
 	var ret = new(*big.Int)
 	if err := gc.stateReceiverABI.Unpack(ret, method, result); err != nil {
-		return nil, err
+		return time.Time{}, err
 	}
-	_time := time.Unix((*ret).Int64(), 0)
-	return &_time, nil
+	return time.Unix((*ret).Int64(), 0), nil
 }
 
 func (gc *GenesisContractsClient) LastStateId(snapshotNumber uint64) (*big.Int, error) {
