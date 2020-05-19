@@ -137,7 +137,9 @@ func New(stack *node.Node, cfg *Config) error {
 	if err := stack.RegisterProtocols(whisper.Protocols()); err != nil {
 		return err
 	}
-	return stack.RegisterLifecycle(whisper)
+	stack.RegisterLifecycle(whisper)
+
+	return nil
 }
 
 // MinPow returns the PoW value required by this node.

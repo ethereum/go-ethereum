@@ -242,7 +242,9 @@ func New(stack *node.Node, config *Config) (*Ethereum, error) {
 	if err := stack.RegisterProtocols(eth.Protocols()); err != nil {
 		return nil, err
 	}
-	return eth, stack.RegisterLifecycle(eth)
+	stack.RegisterLifecycle(eth)
+
+	return eth, nil
 }
 
 func makeExtraData(extra []byte) []byte {

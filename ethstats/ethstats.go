@@ -106,8 +106,9 @@ func New(node *node.Node, ethBackend *eth.Ethereum, lesBackend *les.LightEthereu
 		pongCh: make(chan struct{}),
 		histCh: make(chan []uint64, 1),
 	}
+	node.RegisterLifecycle(ethstats)
 
-	return node.RegisterLifecycle(ethstats)
+	return nil
 }
 
 // Start implements node.Service, starting up the monitoring and reporting daemon.

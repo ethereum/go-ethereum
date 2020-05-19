@@ -177,7 +177,9 @@ func New(stack *node.Node, config *eth.Config) (*LightEthereum, error) {
 	if err := stack.RegisterProtocols(leth.Protocols()); err != nil {
 		return nil, err
 	}
-	return leth, stack.RegisterLifecycle(leth)
+	stack.RegisterLifecycle(leth)
+
+	return leth, nil
 }
 
 // vtSubscription implements serverPeerSubscriber

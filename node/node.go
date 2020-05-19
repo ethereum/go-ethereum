@@ -20,6 +20,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"github.com/ethereum/go-ethereum/cmd/utils"
 	"net"
 	"net/http"
 	"os"
@@ -48,7 +49,6 @@ type Node struct {
 	ephemeralKeystore string            // if non-empty, the key directory that will be removed by Stop
 	instanceDirLock   fileutil.Releaser // prevents concurrent use of instance directory
 
-	// TODO: removed p2pConfig b/c p2pServer already contains p2pConfig (is there a reason for it to be duplicated?
 	server *p2p.Server // Currently running P2P networking layer
 
 	ServiceContext *ServiceContext
@@ -60,7 +60,7 @@ type Node struct {
 
 	httpServers []*HTTPServer // Stores information about all http servers (if any), including http, ws, and graphql
 
-	ipc  *HTTPServer // TODO
+	ipc *HTTPServer // Stores information about the ipc http server
 
 	stop chan struct{} // Channel to wait for termination notifications
 	lock sync.RWMutex
@@ -147,7 +147,7 @@ func New(conf *Config) (*Node, error) {
 			endpoint:           conf.HTTPEndpoint(),
 			host:               conf.HTTPHost,
 			port:               conf.HTTPPort,
-			RPCAllowed:			true,
+			RPCAllowed:         true,
 		}
 		// check if ws is enabled and if ws port is the same as http port
 		if conf.WSHost != "" && conf.WSPort == conf.HTTPPort {
@@ -162,12 +162,12 @@ func New(conf *Config) (*Node, error) {
 	if conf.WSHost != "" {
 		node.httpServers = append(node.httpServers, &HTTPServer{
 			WsOrigins: conf.WSOrigins,
-			Whitelist:          conf.WSModules,
-			Srv:                rpc.NewServer(),
-			endpoint:           conf.WSEndpoint(),
-			host:               conf.WSHost,
-			port:               conf.WSPort,
-			WSAllowed:			true,
+			Whitelist: conf.WSModules,
+			Srv:       rpc.NewServer(),
+			endpoint:  conf.WSEndpoint(),
+			host:      conf.WSHost,
+			port:      conf.WSPort,
+			WSAllowed: true,
 		})
 	}
 
@@ -197,42 +197,40 @@ func (n *Node) Close() error {
 	}
 }
 
-// TODO document
-func (n *Node) RegisterLifecycle(lifecycle Lifecycle) error {
-	for _, existing := range n.lifecycles { // TODO is checking for duplicates a good idea?
+// RegisterLifecycle registers the given Lifecycle on the node
+func (n *Node) RegisterLifecycle(lifecycle Lifecycle) {
+	for _, existing := range n.lifecycles {
 		if existing == lifecycle {
-			return errors.New("Lifecycle already registered")
+			utils.Fatalf("Lifecycle cannot be registered more than once", lifecycle)
 		}
 	}
-
 	n.lifecycles = append(n.lifecycles, lifecycle)
-	return nil
 }
 
+// RegisterProtocols adds backend's protocols to the node's p2p server
 func (n *Node) RegisterProtocols(protocols []p2p.Protocol) error {
-	// TODO check for duplicates?
-
-	// add backend's protocols to the p2p server
 	n.server.Protocols = append(n.server.Protocols, protocols...)
 	return nil
 }
 
+// RegisterAPIs registers the APIs a service provides on the node
 func (n *Node) RegisterAPIs(apis []rpc.API) {
 	n.rpcAPIs = append(n.rpcAPIs, apis...)
 }
 
+// RegisterHTTPServer registers the given HTTP server on the node
+func (n *Node) RegisterHTTPServer(server *HTTPServer) {
+	n.httpServers = append(n.httpServers, server)
+}
+
+// ExistingHTTPServer checks if an HTTP server is already configured on the given endpoint
 func (n *Node) ExistingHTTPServer(endpoint string) *HTTPServer {
 	for _, httpServer := range n.httpServers {
 		if endpoint == httpServer.endpoint {
 			return httpServer
 		}
 	}
-
 	return nil
-}
-
-func (n *Node) RegisterHTTPServer(server *HTTPServer) {
-	n.httpServers = append(n.httpServers, server)
 }
 
 // CreateHTTPServer creates an http.Server and adds it to the given HTTPServer // TODO improve?
@@ -302,7 +300,7 @@ func (n *Node) Start() error {
 	}
 
 	// Lastly, start the configured RPC interfaces
-	if err := n.startRPC(); err != nil {
+	if err := n.configureRPC(); err != nil {
 		n.stopLifecycles(n.lifecycles)
 		n.server.Stop()
 		return err
@@ -316,7 +314,7 @@ func (n *Node) Start() error {
 	return nil
 }
 
-// TODO document
+// stopLifecycles stops the node's running Lifecycles
 func (n *Node) stopLifecycles(started []Lifecycle) {
 	for _, lifecycle := range started {
 		lifecycle.Stop()
@@ -347,10 +345,10 @@ func (n *Node) openDataDir() error {
 	return nil
 }
 
-// startRPC is a helper method to start all the various RPC endpoints during node
+// configureRPC is a helper method to configure all the various RPC endpoints during node
 // startup. It's not meant to be called at any time afterwards as it makes certain
 // assumptions about the state of the node.
-func (n *Node) startRPC() error {
+func (n *Node) configureRPC() error {
 	n.RegisterAPIs(n.apis())
 
 	// Start the various API endpoints, terminating all in case of errors
@@ -496,7 +494,6 @@ func (n *Node) stopServer(server *HTTPServer) {
 		server.Srv = nil
 	}
 }
-
 
 //// stopHTTP terminates the HTTP RPC endpoint.
 //func (n *Node) stopHTTP() {
