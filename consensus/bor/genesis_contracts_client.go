@@ -103,3 +103,30 @@ func (gc *GenesisContractsClient) LastStateSyncTime(snapshotNumber uint64) (*tim
 	_time := time.Unix((*ret).Int64(), 0)
 	return &_time, nil
 }
+
+func (gc *GenesisContractsClient) LastStateId(snapshotNumber uint64) (*big.Int, error) {
+	method := "lastStateId"
+	data, err := gc.stateReceiverABI.Pack(method)
+	if err != nil {
+		log.Error("Unable to pack tx for getLastSyncTime", "error", err)
+		return nil, err
+	}
+
+	msgData := (hexutil.Bytes)(data)
+	toAddress := common.HexToAddress(gc.StateReceiverContract)
+	gas := (hexutil.Uint64)(uint64(math.MaxUint64 / 2))
+	result, err := gc.ethAPI.Call(context.Background(), ethapi.CallArgs{
+		Gas:  &gas,
+		To:   &toAddress,
+		Data: &msgData,
+	}, rpc.BlockNumber(snapshotNumber))
+	if err != nil {
+		return nil, err
+	}
+
+	var ret = new(*big.Int)
+	if err := gc.stateReceiverABI.Unpack(ret, method, result); err != nil {
+		return nil, err
+	}
+	return *ret, nil
+}

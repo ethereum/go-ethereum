@@ -1080,8 +1080,14 @@ func (c *Bor) CommitStates(
 	if err != nil {
 		return err
 	}
-	from := lastSync.Add(time.Second * 1) // querying the interval [from, to)
-	to := time.Unix(int64(chain.Chain.GetHeaderByNumber(number-c.config.Sprint).Time), 0)
+	_lastStateID, err := c.genesisContractsClient.LastStateId(number - 1)
+	if err != nil {
+		return err
+	}
+
+	from := *lastSync
+	to := time.Unix(int64(chain.Chain.GetHeaderByNumber(number-1).Time), 0)
+	lastStateID := _lastStateID.Uint64()
 	if !from.Before(to) {
 		return nil
 	}
@@ -1119,14 +1125,11 @@ func (c *Bor) CommitStates(
 
 	chainID := c.chainConfig.ChainID.String()
 	for _, eventRecord := range eventRecords {
-		// validateEventRecord checks whether an event lies in the specified time range
-		// since the events are sorted by time and if it turns out that event i lies outside the time range,
-		// it would mean all subsequent events lie outside of the time range. Hence we don't probe any further and break the loop
-		if err := validateEventRecord(eventRecord, number, from, to, chainID); err != nil {
-			log.Error(
-				fmt.Sprintf(
-					"Received event %s does not lie in the time range, from %s, to %s",
-					eventRecord, from.Format(time.RFC3339), to.Format(time.RFC3339)))
+		if eventRecord.ID <= lastStateID {
+			continue
+		}
+		if err := validateEventRecord(eventRecord, number, from, to, lastStateID, chainID); err != nil {
+			log.Error(err.Error())
 			break
 		}
 
@@ -1144,13 +1147,14 @@ func (c *Bor) CommitStates(
 			return err
 		}
 	}
+	lastStateID++
 	return nil
 }
 
-func validateEventRecord(eventRecord *EventRecordWithTime, number uint64, from, to time.Time, chainID string) error {
-	// event should lie in the range [from, to)
-	if eventRecord.ChainID != chainID || eventRecord.Time.Before(from) || !eventRecord.Time.Before(to) {
-		return &InvalidStateReceivedError{number, &from, &to, eventRecord}
+func validateEventRecord(eventRecord *EventRecordWithTime, number uint64, from, to time.Time, lastStateID uint64, chainID string) error {
+	// event id should be sequential and event.Time should lie in the range [from, to)
+	if lastStateID+1 != eventRecord.ID || eventRecord.ChainID != chainID || eventRecord.Time.Before(from) || !eventRecord.Time.Before(to) {
+		return &InvalidStateReceivedError{number, lastStateID, &from, &to, eventRecord}
 	}
 	return nil
 }
