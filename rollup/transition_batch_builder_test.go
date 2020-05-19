@@ -78,7 +78,7 @@ func createBlocks(number int, startIndex int, withTx bool) types.Blocks {
 		header := &types.Header{Number: big.NewInt(int64(i + startIndex))}
 		txs := make(types.Transactions, 0)
 		if withTx {
-			tx, _ := types.SignTx(types.NewTransaction(uint64(i), testUserAddress, big.NewInt(1), params.TxGas, big.NewInt(0), nil), types.HomesteadSigner{}, testBankKey)
+			tx, _ := types.SignTx(types.NewTransaction(uint64(i), testUserAddress, big.NewInt(1), params.TxGas, big.NewInt(0), nil, &testUserAddress), types.HomesteadSigner{}, testBankKey)
 			txs = append(txs, tx)
 		}
 		block := types.NewBlock(header, txs, make([]*types.Header, 0), make([]*types.Receipt, 0))

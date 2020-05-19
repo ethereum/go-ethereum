@@ -409,6 +409,7 @@ func makeStructDecoder(typ reflect.Type) (decoder, error) {
 
 // makePtrDecoder creates a decoder that decodes into the pointer's element type.
 func makePtrDecoder(typ reflect.Type, tag tags) (decoder, error) {
+
 	etype := typ.Elem()
 	etypeinfo := cachedTypeInfo1(etype, tags{})
 	switch {

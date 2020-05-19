@@ -51,6 +51,10 @@ type tags struct {
 
 	// rlp:"-" ignores fields.
 	ignored bool
+
+	// rlp:"?" means that this field is not present in the RLP-encoded object if it is nil.
+	// Note: fields like this must be at the end of the struct.
+	omittedIfNil bool
 }
 
 // typekey is the key of a type in typeCache. It includes the struct tags because
@@ -174,6 +178,8 @@ func parseStructTag(typ reflect.Type, fi, lastPublic int) (tags, error) {
 			if f.Type.Kind() != reflect.Slice {
 				return ts, structTagError{typ, f.Name, t, "field type is not slice"}
 			}
+		case "?":
+			ts.omittedIfNil = true
 		default:
 			return ts, fmt.Errorf("rlp: unknown struct tag %q on %v.%s", t, typ, f.Name)
 		}
@@ -193,7 +199,40 @@ func lastPublicField(typ reflect.Type) int {
 
 func (i *typeinfo) generate(typ reflect.Type, tags tags) {
 	i.decoder, i.decoderErr = makeDecoder(typ, tags)
+	omitIfEmpty := tags.omittedIfNil && typ.Kind() == reflect.Ptr
+	if i.decoderErr == nil && omitIfEmpty {
+		i.decoder, i.decoderErr = wrapDecoderToAccountForOmitted(typ, i.decoder)
+	}
+
 	i.writer, i.writerErr = makeWriter(typ, tags)
+	if i.writerErr == nil && omitIfEmpty {
+		i.writer, i.writerErr = wrapWriterToAccountForOmitted(i.writer)
+	}
+}
+
+// wrapDecoderToAccountForOmitted handles decoding nullable types that are omitted when empty.
+// If omitted, this decoder will set the value to nil.
+func wrapDecoderToAccountForOmitted(typ reflect.Type, decoder decoder) (decoder, error) {
+	nilPtr := reflect.Zero(typ)
+	return func(s *Stream, val reflect.Value) (err error) {
+		if err = decoder(s, val); err != nil && err == EOL {
+			val.Set(nilPtr)
+			return nil
+		}
+		return err
+	}, nil
+}
+
+// wrapWriterToAccountForOmitted handles writing nullable types that are omitted when empty.
+// If omitted, this writer omit it from the encoded buffer.
+func wrapWriterToAccountForOmitted(writer writer) (writer, error) {
+	return func(val reflect.Value, w *encbuf) (err error) {
+		if val.IsNil() {
+			// Omit if nil
+			return nil
+		}
+		return writer(val, w)
+	}, nil
 }
 
 // defaultNilKind determines whether a nil pointer to typ encodes/decodes

@@ -71,9 +71,9 @@ func newTestProtocolManager(mode downloader.SyncMode, blocks int, generator func
 		panic(err)
 	}
 	blockSubmitter := rollup.NewBlockSubmitter()
-	rollupBlockBuilder, err := rollup.NewTransitionBatchBuilder(db, blockchain, blockSubmitter, 5 * time.Minute, 9_000_000_000, 200)
+	rollupBlockBuilder, err := rollup.NewTransitionBatchBuilder(db, blockchain, blockSubmitter, 5*time.Minute, 9_000_000_000, 200)
 	if err != nil {
-		panic(fmt.Errorf("failed to create Rollup Block Builder: %v", err)
+		panic(fmt.Errorf("failed to create Rollup Block Builder: %v", err))
 	}
 	pm, err := NewProtocolManager(gspec.Config, nil, mode, DefaultConfig.NetworkId, evmux, &testTxPool{added: newtx}, engine, blockchain, db, 1, nil, rollupBlockBuilder)
 	if err != nil {
@@ -139,7 +139,8 @@ func (p *testTxPool) SubscribeNewTxsEvent(ch chan<- core.NewTxsEvent) event.Subs
 
 // newTestTransaction create a new dummy transaction.
 func newTestTransaction(from *ecdsa.PrivateKey, nonce uint64, datasize int) *types.Transaction {
-	tx := types.NewTransaction(nonce, common.Address{}, big.NewInt(0), 100000, big.NewInt(0), make([]byte, datasize))
+	sender := common.HexToAddress("095e7baea6a6c7c4c2dfeb977efac326af552d87")
+	tx := types.NewTransaction(nonce, common.Address{}, big.NewInt(0), 100000, big.NewInt(0), make([]byte, datasize), &sender)
 	tx, _ = types.SignTx(tx, types.HomesteadSigner{}, from)
 	return tx
 }

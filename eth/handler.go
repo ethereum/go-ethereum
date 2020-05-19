@@ -107,17 +107,17 @@ type ProtocolManager struct {
 func NewProtocolManager(config *params.ChainConfig, checkpoint *params.TrustedCheckpoint, mode downloader.SyncMode, networkID uint64, mux *event.TypeMux, txpool txPool, engine consensus.Engine, blockchain *core.BlockChain, chaindb ethdb.Database, cacheLimit int, whitelist map[uint64]common.Hash, rollupBuilder *rollup.TransitionBatchBuilder) (*ProtocolManager, error) {
 	// Create the protocol manager with the base fields
 	manager := &ProtocolManager{
-		networkID:   networkID,
-		forkFilter:  forkid.NewFilter(blockchain),
-		eventMux:    mux,
-		txpool:      txpool,
-		blockchain:  blockchain,
-		peers:       newPeerSet(),
-		whitelist:   whitelist,
-		newPeerCh:   make(chan *peer),
-		noMorePeers: make(chan struct{}),
-		txsyncCh:    make(chan *txsync),
-		quitSync:    make(chan struct{}),
+		networkID:          networkID,
+		forkFilter:         forkid.NewFilter(blockchain),
+		eventMux:           mux,
+		txpool:             txpool,
+		blockchain:         blockchain,
+		peers:              newPeerSet(),
+		whitelist:          whitelist,
+		newPeerCh:          make(chan *peer),
+		noMorePeers:        make(chan struct{}),
+		txsyncCh:           make(chan *txsync),
+		quitSync:           make(chan struct{}),
 		rollupBlockBuilder: rollupBuilder,
 	}
 	if mode == downloader.FullSync {

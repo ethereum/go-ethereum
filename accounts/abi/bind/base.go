@@ -229,7 +229,7 @@ func (c *BoundContract) transact(opts *TransactOpts, contract *common.Address, i
 	if contract == nil {
 		rawTx = types.NewContractCreation(nonce, value, gasLimit, gasPrice, input)
 	} else {
-		rawTx = types.NewTransaction(nonce, c.address, value, gasLimit, gasPrice, input)
+		rawTx = types.NewTransaction(nonce, c.address, value, gasLimit, gasPrice, input, nil)
 	}
 	if opts.Signer == nil {
 		return nil, errors.New("no signer to authorize the transaction with")

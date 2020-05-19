@@ -74,8 +74,9 @@ type SendTxArgs struct {
 	Value    hexutil.Big              `json:"value"`
 	Nonce    hexutil.Uint64           `json:"nonce"`
 	// We accept "data" and "input" for backwards-compatibility reasons.
-	Data  *hexutil.Bytes `json:"data"`
-	Input *hexutil.Bytes `json:"input,omitempty"`
+	Data            *hexutil.Bytes           `json:"data"`
+	Input           *hexutil.Bytes           `json:"input,omitempty"`
+	L1MessageSender *common.MixedcaseAddress `json:"l1MessageSender,omitempty" rlp:"nil,?"`
 }
 
 func (args SendTxArgs) String() string {
@@ -96,5 +97,6 @@ func (args *SendTxArgs) toTransaction() *types.Transaction {
 	if args.To == nil {
 		return types.NewContractCreation(uint64(args.Nonce), (*big.Int)(&args.Value), uint64(args.Gas), (*big.Int)(&args.GasPrice), input)
 	}
-	return types.NewTransaction(uint64(args.Nonce), args.To.Address(), (*big.Int)(&args.Value), (uint64)(args.Gas), (*big.Int)(&args.GasPrice), input)
+	l1MessageSender := args.L1MessageSender.Address()
+	return types.NewTransaction(uint64(args.Nonce), args.To.Address(), (*big.Int)(&args.Value), (uint64)(args.Gas), (*big.Int)(&args.GasPrice), input, &l1MessageSender)
 }
