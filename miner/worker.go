@@ -956,7 +956,7 @@ func (w *worker) commitNewWork(interrupt *int32, noempty bool, timestamp int64) 
 // and commits new work if consensus engine is running.
 func (w *worker) commit(uncles []*types.Header, interval func(), update bool, start time.Time) error {
 	// Deep copy receipts here to avoid interaction between different tasks.
-	receipts := w.copyCurrentReceipts()
+	receipts := copyReceipts(w.current.receipts)
 	s := w.current.state.Copy()
 	block, err := w.engine.FinalizeAndAssemble(w.chain, w.current.header, s, w.current.txs, uncles, receipts)
 	if err != nil {
@@ -984,16 +984,14 @@ func (w *worker) commit(uncles []*types.Header, interval func(), update bool, st
 	return nil
 }
 
-// copyCurrentReceipts makes a deep copy of worker receipts in the current context.
-// Worker operates with many asynchronous processes, and whenever we want to use current
-// receipts we risk that they could be modified in a meantime.
-func (w *worker) copyCurrentReceipts() []*types.Receipt {
-	receipts := make([]*types.Receipt, len(w.current.receipts))
-	for i, l := range w.current.receipts {
+// copyReceipts makes a deep copy of the given receipts.
+func copyReceipts(receipts []*types.Receipt) []*types.Receipt {
+	result := make([]*types.Receipt, len(r))
+	for i, l := range receipts {
 		cpy := *l
-		receipts[i] = &cpy
+		result[i] = &cpy
 	}
-	return receipts
+	return result
 }
 
 // postSideBlock fires a side chain event, only use it for testing.
