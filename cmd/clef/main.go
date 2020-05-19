@@ -40,7 +40,7 @@ import (
 	"github.com/ethereum/go-ethereum/cmd/utils"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/hexutil"
-	"github.com/ethereum/go-ethereum/console"
+	"github.com/ethereum/go-ethereum/console/prompt"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/internal/ethapi"
@@ -81,6 +81,10 @@ var (
 	advancedMode = cli.BoolFlag{
 		Name:  "advanced",
 		Usage: "If enabled, issues warnings instead of rejections for suspicious requests. Default off",
+	}
+	acceptFlag = cli.BoolFlag{
+		Name:  "suppress-bootwarn",
+		Usage: "If set, does not show the warning during boot",
 	}
 	keystoreFlag = cli.StringFlag{
 		Name:  "keystore",
@@ -196,6 +200,7 @@ The delpw command removes a password for a given address (keyfile).
 			logLevelFlag,
 			keystoreFlag,
 			utils.LightKDFFlag,
+			acceptFlag,
 		},
 		Description: `
 The newaccount command creates a new keystore-backed account. It is a convenience-method
@@ -235,6 +240,7 @@ func init() {
 		stdiouiFlag,
 		testFlag,
 		advancedMode,
+		acceptFlag,
 	}
 	app.Action = signer
 	app.Commands = []cli.Command{initCommand,
@@ -433,8 +439,10 @@ func initialize(c *cli.Context) error {
 	if c.GlobalBool(stdiouiFlag.Name) {
 		logOutput = os.Stderr
 		// If using the stdioui, we can't do the 'confirm'-flow
-		fmt.Fprint(logOutput, legalWarning)
-	} else {
+		if !c.GlobalBool(acceptFlag.Name) {
+			fmt.Fprint(logOutput, legalWarning)
+		}
+	} else if !c.GlobalBool(acceptFlag.Name) {
 		if !confirm(legalWarning) {
 			return fmt.Errorf("aborted by user")
 		}
@@ -910,14 +918,14 @@ func testExternalUI(api *core.SignerAPI) {
 // getPassPhrase retrieves the password associated with clef, either fetched
 // from a list of preloaded passphrases, or requested interactively from the user.
 // TODO: there are many `getPassPhrase` functions, it will be better to abstract them into one.
-func getPassPhrase(prompt string, confirmation bool) string {
-	fmt.Println(prompt)
-	password, err := console.Stdin.PromptPassword("Password: ")
+func getPassPhrase(query string, confirmation bool) string {
+	fmt.Println(query)
+	password, err := prompt.Stdin.PromptPassword("Password: ")
 	if err != nil {
 		utils.Fatalf("Failed to read password: %v", err)
 	}
 	if confirmation {
-		confirm, err := console.Stdin.PromptPassword("Repeat password: ")
+		confirm, err := prompt.Stdin.PromptPassword("Repeat password: ")
 		if err != nil {
 			utils.Fatalf("Failed to read password confirmation: %v", err)
 		}

@@ -25,9 +25,9 @@ import (
 	"sync"
 
 	"github.com/ethereum/go-ethereum/common/hexutil"
+	"github.com/ethereum/go-ethereum/console/prompt"
 	"github.com/ethereum/go-ethereum/internal/ethapi"
 	"github.com/ethereum/go-ethereum/log"
-	"golang.org/x/crypto/ssh/terminal"
 )
 
 type CommandlineUI struct {
@@ -61,17 +61,16 @@ func (ui *CommandlineUI) readString() string {
 func (ui *CommandlineUI) OnInputRequired(info UserInputRequest) (UserInputResponse, error) {
 
 	fmt.Printf("## %s\n\n%s\n", info.Title, info.Prompt)
+	defer fmt.Println("-----------------------")
 	if info.IsPassword {
-		fmt.Printf("> ")
-		text, err := terminal.ReadPassword(int(os.Stdin.Fd()))
+		text, err := prompt.Stdin.PromptPassword("> ")
 		if err != nil {
-			log.Error("Failed to read password", "err", err)
+			log.Error("Failed to read password", "error", err)
+			return UserInputResponse{}, err
 		}
-		fmt.Println("-----------------------")
-		return UserInputResponse{string(text)}, err
+		return UserInputResponse{text}, nil
 	}
 	text := ui.readString()
-	fmt.Println("-----------------------")
 	return UserInputResponse{text}, nil
 }
 
