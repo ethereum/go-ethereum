@@ -462,6 +462,31 @@ func (n *Node) stopServer(server *HTTPServer) {
 		server.Srv.Stop()
 		server.Srv = nil
 	}
+	// remove stopped http server from node's http servers // TODO is this preferable?
+	remainingServers := make([]*HTTPServer, len(n.httpServers)-1)
+	index := 0
+	for _, remaining := range n.httpServers {
+		if remaining.Server != nil && remaining.Srv != nil {
+			remainingServers[index] = remaining
+			index ++
+		}
+	}
+	n.httpServers = remainingServers
+	// remove stopped http server from node's lifecycles
+	n.removeLifecycle(server)
+}
+
+// removeLifecycle removes a stopped Lifecycle from the running node's Lifecycles
+func (n *Node) removeLifecycle(lifecycle Lifecycle) {
+	remainingLifecycles := make([]Lifecycle, len(n.lifecycles)-1)
+	index := 0
+	for _, remaining := range n.lifecycles {
+		if remaining != lifecycle {
+			remainingLifecycles[index] = remaining
+			index ++
+		}
+	}
+	n.lifecycles = remainingLifecycles
 }
 
 // Stop terminates a running node along with all it's services. In the node was
