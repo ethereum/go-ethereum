@@ -492,11 +492,11 @@ func testSim(t *testing.T, serverCount, clientCount int, serverDir, clientDir []
 	return test(ctx, net, servers, clients)
 }
 
-func newLesClientService(ctx *adapters.ServiceContext) (node.Service, error) {
+func newLesClientService(ctx *adapters.ServiceContext, stack *node.Node) (*LightEthereum, error) {
 	config := eth.DefaultConfig
 	config.SyncMode = downloader.LightSync
 	config.Ethash.PowMode = ethash.ModeFake
-	return New(ctx.NodeContext, &config)
+	return New(stack, &config)
 }
 
 func newLesServerService(ctx *adapters.ServiceContext) (node.Service, error) {

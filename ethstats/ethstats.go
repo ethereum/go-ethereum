@@ -111,7 +111,7 @@ func New(node *node.Node, ethBackend *eth.Ethereum, lesBackend *les.LightEthereu
 	return nil
 }
 
-// Start implements node.Service, starting up the monitoring and reporting daemon.
+// Start implements node.Lifecycle, starting up the monitoring and reporting daemon.
 func (s *Service) Start() error {
 	go s.loop()
 
@@ -119,7 +119,7 @@ func (s *Service) Start() error {
 	return nil
 }
 
-// Stop implements node.Service, terminating the monitoring and reporting daemon.
+// Stop implements node.Lifecycle, terminating the monitoring and reporting daemon.
 func (s *Service) Stop() error {
 	log.Info("Stats daemon stopped")
 	return nil

@@ -188,15 +188,19 @@ func newTestBackend(t *testing.T) (*node.Node, []*types.Block) {
 	// Generate test chain.
 	genesis, blocks := generateTestChain()
 
-	// Start Ethereum service.
-	var ethservice *eth.Ethereum
+	// Create node
 	n, err := node.New(&node.Config{})
-	n.Register(func(ctx *node.ServiceContext) (node.Service, error) {
-		config := &eth.Config{Genesis: genesis}
-		config.Ethash.PowMode = ethash.ModeFake
-		ethservice, err = eth.New(ctx, config)
-		return ethservice, err
-	})
+	if err != nil {
+		t.Fatalf("can't create new node: %v", err)
+	}
+
+	// Create Ethereum Service
+	config := &eth.Config{Genesis: genesis}
+	config.Ethash.PowMode = ethash.ModeFake
+	ethservice, err := eth.New(n, config)
+	if err != nil {
+		t.Fatalf("can't create new ethereum service: %v", err)
+	}
 
 	// Import the test chain.
 	if err := n.Start(); err != nil {
