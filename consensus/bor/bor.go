@@ -653,9 +653,7 @@ func (c *Bor) Prepare(chain consensus.ChainReader, header *types.Header) error {
 // Finalize implements consensus.Engine, ensuring no uncles are set, nor block
 // rewards given.
 func (c *Bor) Finalize(chain consensus.ChainReader, header *types.Header, state *state.StateDB, txs []*types.Transaction, uncles []*types.Header) {
-	// commit span
 	headerNumber := header.Number.Uint64()
-
 	if headerNumber%c.config.Sprint == 0 {
 		cx := chainContext{Chain: chain, Bor: c}
 		// check and commit span
@@ -663,6 +661,7 @@ func (c *Bor) Finalize(chain consensus.ChainReader, header *types.Header, state 
 			log.Error("Error while committing span", "error", err)
 			return
 		}
+
 		// commit statees
 		if err := c.CommitStates(state, header, cx); err != nil {
 			log.Error("Error while committing states", "error", err)
@@ -678,8 +677,8 @@ func (c *Bor) Finalize(chain consensus.ChainReader, header *types.Header, state 
 // FinalizeAndAssemble implements consensus.Engine, ensuring no uncles are set,
 // nor block rewards given, and returns the final block.
 func (c *Bor) FinalizeAndAssemble(chain consensus.ChainReader, header *types.Header, state *state.StateDB, txs []*types.Transaction, uncles []*types.Header, receipts []*types.Receipt) (*types.Block, error) {
-	// commit span
-	if header.Number.Uint64()%c.config.Sprint == 0 {
+	headerNumber := header.Number.Uint64()
+	if headerNumber%c.config.Sprint == 0 {
 		cx := chainContext{Chain: chain, Bor: c}
 
 		// check and commit span
@@ -1082,7 +1081,10 @@ func (c *Bor) CommitStates(
 		return err
 	}
 	from := lastSync.Add(time.Second * 1) // querying the interval [from, to)
-	to := time.Unix(int64(chain.Chain.GetHeaderByNumber(number-1).Time), 0)
+	to := time.Unix(int64(chain.Chain.GetHeaderByNumber(number-c.config.Sprint).Time), 0)
+	if !from.Before(to) {
+		return nil
+	}
 	log.Info(
 		"Fetching state updates from Heimdall",
 		"from", from.Format(time.RFC3339),
@@ -1150,8 +1152,8 @@ func (c *Bor) CommitStates(
 }
 
 func validateEventRecord(eventRecord *EventRecordWithTime, number uint64, from, to time.Time) error {
-	inRange := (eventRecord.Time.Equal(from) || eventRecord.Time.After(from)) && eventRecord.Time.Before(to)
-	if !inRange {
+	// event should lie in the range [from, to)
+	if eventRecord.Time.Before(from) || !eventRecord.Time.Before(to) {
 		return &InvalidStateReceivedError{number, &from, &to, eventRecord}
 	}
 	return nil

@@ -36,16 +36,12 @@ func TestInsertingSpanSizeBlocks(t *testing.T) {
 
 	db := init.ethereum.ChainDb()
 	block := init.genesis.ToBlock(db)
-	var to int64
+	to := int64(block.Header().Time)
 
 	// Insert sprintSize # of blocks so that span is fetched at the start of a new sprint
 	for i := uint64(1); i <= spanSize; i++ {
 		block = buildNextBlock(t, _bor, chain, block, nil, init.genesis.Config.Bor)
 		insertNewBlock(t, chain, block)
-		if i == sprintSize-1 {
-			// at # sprintSize, events are fetched for the internal [from, (block-1).Time)
-			to = int64(block.Header().Time)
-		}
 	}
 
 	assert.True(t, h.AssertCalled(t, "FetchWithRetry", spanPath, ""))
@@ -71,7 +67,6 @@ func TestFetchStateSyncEvents(t *testing.T) {
 	// A. Insert blocks for 0th sprint
 	db := init.ethereum.ChainDb()
 	block := init.genesis.ToBlock(db)
-
 	// Insert sprintSize # of blocks so that span is fetched at the start of a new sprint
 	for i := uint64(1); i < sprintSize; i++ {
 		block = buildNextBlock(t, _bor, chain, block, nil, init.genesis.Config.Bor)
@@ -100,9 +95,9 @@ func TestFetchStateSyncEvents(t *testing.T) {
 		t.Fatalf("%s", err)
 	}
 
-	// at # sprintSize, events are fetched for the internal [from, (block-1).Time)
+	// at # sprintSize, events are fetched for the interval [from, (block-sprint).Time)
 	from := 1
-	to := int64(block.Header().Time)
+	to := int64(chain.GetHeaderByNumber(0).Time)
 	page := 1
 	query1Params := fmt.Sprintf(clerkQueryParams, from, to, page)
 	h.On("FetchWithRetry", clerkPath, query1Params).Return(&response, nil)
