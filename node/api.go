@@ -221,7 +221,9 @@ func (api *PrivateAdminAPI) StopRPC() (bool, error) {
 
 	for _, httpServer := range api.node.httpServers {
 		if httpServer.RPCAllowed {
-			api.node.stopServer(httpServer)
+			if err := httpServer.Stop(); err != nil {
+				return false, err
+			}
 			return true, nil
 		}
 	}
@@ -308,7 +310,9 @@ func (api *PrivateAdminAPI) StopWS() (bool, error) {
 			httpServer.WSAllowed = false
 			// if RPC is not enabled on the WS http server, shut it down
 			if !httpServer.RPCAllowed {
-				api.node.stopServer(httpServer)
+				if err := httpServer.Stop(); err != nil {
+					return false, err
+				}
 			}
 
 			return true, nil

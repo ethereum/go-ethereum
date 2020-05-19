@@ -19,6 +19,7 @@ package node
 import (
 	"compress/gzip"
 	"context"
+	"fmt"
 	"github.com/ethereum/go-ethereum/rpc"
 	"io"
 	"io/ioutil"
@@ -58,22 +59,24 @@ type HTTPServer struct {
 }
 
 // TODO document
-func (h *HTTPServer) Start() {
+func (h *HTTPServer) Start() error {
 	go h.Server.Serve(h.Listener)
+	return nil
 }
 
-// TODO document
-func (h *HTTPServer) Stop() {
+func (h *HTTPServer) Stop() error {
 	if h.Server != nil {
-		//url := fmt.Sprintf("http://%v/", h.ListenerAddr)
+		url := fmt.Sprintf("http://%v/", h.ListenerAddr)
 		// Don't bother imposing a timeout here.
 		h.Server.Shutdown(context.Background())
-		//n.log.Info("HTTP Endpoint closed", "url", url) // TODO log wherever this is called instead
+		log.Info("HTTP Endpoint closed", "url", url)
 	}
 	if h.Srv != nil {
 		h.Srv.Stop()
 		h.Srv = nil
 	}
+
+	return nil
 }
 
 // Handler returns the handler of the HTTPServer
