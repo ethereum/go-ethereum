@@ -21,6 +21,7 @@ import (
 	"testing"
 
 	"github.com/ethereum/go-ethereum/common"
+	"golang.org/x/crypto/sha3"
 )
 
 func TestRawHPRLP(t *testing.T) {
@@ -50,5 +51,24 @@ func TestRawHPRLP(t *testing.T) {
 
 	if !bytes.Equal(exp, got) {
 		t.Fatalf("invalid RLP generated for ext with odd length key: got %v, expected %v", common.ToHex(got), common.ToHex(exp))
+	}
+}
+
+func TestHashWithSmallRLP(t *testing.T) {
+	trie := NewReStackTrie()
+	trie.insert([]byte{0, 1, 2}, []byte("b"))
+	trie.insert([]byte{0, 1, 3}, []byte("c"))
+
+	aotrie := NewAppendOnlyTrie()
+	aotrie.root = aotrie.insert(aotrie.root, nil, []byte{0, 1, 2}, valueNode([]byte("b")))
+	aotrie.root = aotrie.insert(aotrie.root, nil, []byte{0, 1, 3}, valueNode([]byte("c")))
+
+	d := sha3.NewLegacyKeccak256()
+	d.Write(trie.hash())
+	got := d.Sum(nil)
+	exp := aotrie.Hash()
+
+	if !bytes.Equal(got, exp[:]) {
+		t.Fatalf("error calculating hash of ext-node-leaves < 32: %v != %v", common.ToHex(exp[:]), common.ToHex(got))
 	}
 }

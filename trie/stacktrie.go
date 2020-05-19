@@ -239,51 +239,78 @@ func rawHPRLP(key, val []byte, leaf bool) []byte {
 	if len(val) == 1 && val[0] < 128 {
 		val_header_len = 0
 	}
-	var key_header_len int
-	if len(key) < 2 {
-		// Key is 0 or 1 byte long, so the whole byte
-		// will be less than 128, no header needed.
+	var key_header_len int // Length taken by the size header
+	var hplen int          // Length taken by the hex prefix (0 or 1)
+	switch len(key) {
+	case 0:
+		// Key is 0 byte long, so the whole byte will
+		// be less than 128, no header needed. No HP
+		// will be present either.
 		key_header_len = 0
-	} else {
+		hplen = 0
+	case 1:
+		// Key is 1 byte long, so the whole byte will
+		// be less than 128, no header needed. The HP
+		// will be present, however.
+		key_header_len = 0
+		hplen = 1
+	default:
 		// Key is longer than 1 byte, and including
 		// the hex prefix that's more than 2 bytes.
 		// And of course it's less than 56 bytes.
 		key_header_len = 1
+		hplen = 1
 	}
-	payload[0] = byte(1 + key_header_len + len(key)/2 + val_header_len + len(val))
+	payload[0] = 192 + byte(hplen+key_header_len+len(key)/2+val_header_len+len(val))
 
 	pos := 1
-	// add length prefix if needed
-	if key_header_len == 1 {
-		payload[1] = byte(1 + len(key)/2)
-		pos++
-	}
-
-	// hex prefix
-	payload[pos] = byte(16 * (len(key) % 2))
-	if leaf {
-		payload[pos] |= 32
-	}
-	if len(key)%2 == 0 {
-		// Advance to next byte iff the key has an odd length
-		// of nibbles.
-		pos++
-	}
-
-	// copy key data
-	for i, nibble := range key {
-		offset := 1 - uint((len(key)+i)%2)
-		payload[pos] |= byte(int(nibble) << (4 * offset))
-		if offset == 0 {
+	// Add key, if present
+	if len(key) > 0 {
+		// add length prefix if needed
+		if key_header_len == 1 {
+			payload[1] = byte(1 + len(key)/2)
 			pos++
+		}
+
+		// hex prefix
+		payload[pos] = byte(16 * (len(key) % 2))
+		if leaf {
+			payload[pos] |= 32
+		}
+		if len(key)%2 == 0 {
+			// Advance to next byte iff the key has an odd length
+			// of nibbles.
+			pos++
+		}
+
+		// copy key data
+		for i, nibble := range key {
+			offset := 1 - uint((len(key)+i)%2)
+			payload[pos] |= byte(int(nibble) << (4 * offset))
+			if offset == 0 {
+				pos++
+			}
 		}
 	}
 
-	// copy value data
-	payload[pos] = byte(len(val))
-	pos += 1
+	// copy value data. If the payload isn't a single byte
+	// lower than 128, also add the header.
+	if len(val) > 1 || val[0] >= 128 {
+		payload[pos] = byte(len(val))
+		if len(val) > 1 {
+			payload[pos] += 128
+		}
+		pos += 1
+
+	}
 	copy(payload[pos:], val)
 	pos += len(val)
+
+	// In case the payload is only one byte,
+	// no header is needed.
+	if pos == 2 {
+		return payload[1:pos]
+	}
 
 	return payload[:pos]
 }
@@ -407,10 +434,15 @@ func (st *ReStackTrie) hash() []byte {
 		for i, v := range st.children {
 			if v != nil {
 				// Write a 32 byte list to the sponge
-				payload[pos] = 0xa0
-				pos++
-				copy(payload[pos:pos+32], v.hash())
-				pos += 32
+				childhash := v.hash()
+				if len(childhash) == 1 && childhash[0] < 128 {
+					payload[pos] = childhash[0]
+				} else {
+					payload[pos] = 128 + byte(len(childhash))
+					pos++
+				}
+				copy(payload[pos:pos+len(childhash)], childhash)
+				pos += len(childhash)
 				st.children[i] = nil // Reclaim mem from subtree
 			} else {
 				// Write an empty list to the sponge
@@ -418,7 +450,7 @@ func (st *ReStackTrie) hash() []byte {
 				pos++
 			}
 		}
-		// Add empty 17th value
+		// Add an empty 17th value
 		payload[pos] = 0x80
 		pos++
 
@@ -447,6 +479,25 @@ func (st *ReStackTrie) hash() []byte {
 		d.Write(payload[start:pos])
 	case extNode:
 		ch := st.children[0].hash()
+		if (len(st.key)/2)+1+len(ch) < 29 {
+			rlp := [32]byte{}
+
+			// Copy key data, including hex prefix
+			if len(st.key)%2 == 0 {
+				rlp[2] = 0
+			} else {
+				rlp[2] = 16 + st.key[0]
+			}
+			rlp[1] = byte(128 + 1 + len(st.key)/2)
+			for i := 0; i < len(st.key); i++ {
+				rlp[3-len(st.key)%2+i/2] = st.key[i] << uint(4*((i+1+len(st.key))%2))
+			}
+
+			copy(rlp[3+len(st.key)/2:], ch)
+			rlp[0] = byte(192 + 2 + len(st.key)/2 + len(ch))
+
+			return rlp[:3+len(st.key)/2+len(ch)]
+		}
 		writeHPRLP(d, st.key, ch, false)
 		st.children[0] = nil // Reclaim mem from subtree
 	case leafNode:
