@@ -19,12 +19,13 @@ package node
 import (
 	"errors"
 	"fmt"
-	"github.com/ethereum/go-ethereum/cmd/utils"
+	"io"
 	"net"
 	"net/http"
 	"os"
 	"path/filepath"
 	"reflect"
+	"runtime"
 	"strings"
 	"sync"
 
@@ -200,7 +201,7 @@ func (n *Node) Close() error {
 func (n *Node) RegisterLifecycle(lifecycle Lifecycle) {
 	for _, existing := range n.lifecycles {
 		if existing == lifecycle {
-			utils.Fatalf("Lifecycle cannot be registered more than once", lifecycle)
+			Fatalf("Lifecycle cannot be registered more than once", lifecycle)
 		}
 	}
 	n.lifecycles = append(n.lifecycles, lifecycle)
@@ -257,7 +258,6 @@ func (n *Node) CreateHTTPServer(h *HTTPServer, exposeAll bool) error {
 
 	// complete the HTTPServer
 	h.Listener = listener
-	h.ListenerAddr = listener.Addr()
 	h.Server = httpSrv
 
 	return nil
@@ -450,6 +450,19 @@ func (n *Node) stopIPC() {
 	}
 }
 
+// stopServers terminates the given HTTP servers' endpoints
+func (n *Node) stopServer(server *HTTPServer) {
+	if server.Server != nil {
+		url := fmt.Sprintf("http://%v/", server.Listener.Addr())
+		// Don't bother imposing a timeout here.
+		server.Server.Shutdown(context.Background())
+		n.log.Info("HTTP Endpoint closed", "url", url)
+	}
+	if server.Srv != nil {
+		server.Srv.Stop()
+		server.Srv = nil
+	}
+}
 
 // Stop terminates a running node along with all it's services. In the node was
 // not started, an error is returned.
@@ -589,7 +602,7 @@ func (n *Node) HTTPEndpoint() string {
 	for _, httpServer := range n.httpServers {
 		if httpServer.RPCAllowed {
 			if httpServer.Listener != nil {
-				return httpServer.ListenerAddr.String()
+				return httpServer.Listener.Addr().String()
 			}
 			return httpServer.endpoint
 		}
@@ -607,7 +620,7 @@ func (n *Node) WSEndpoint() string {
 	for _, httpServer := range n.httpServers {
 		if httpServer.WSAllowed {
 			if httpServer.Listener != nil {
-				return httpServer.ListenerAddr.String()
+				return httpServer.Listener.Addr().String()
 			}
 			return httpServer.endpoint
 		}
@@ -702,4 +715,25 @@ func RegisterApisFromWhitelist(apis []rpc.API, modules []string, srv *rpc.Server
 		}
 	}
 	return nil
+}
+
+// TODO change this when you figure out how else to do a nice fatal err
+// Fatalf formats a message to standard error and exits the program.
+// The message is also printed to standard output if standard error
+// is redirected to a different file.
+func Fatalf(format string, args ...interface{}) {
+	w := io.MultiWriter(os.Stdout, os.Stderr)
+	if runtime.GOOS == "windows" {
+		// The SameFile check below doesn't work on Windows.
+		// stdout is unlikely to get redirected though, so just print there.
+		w = os.Stdout
+	} else {
+		outf, _ := os.Stdout.Stat()
+		errf, _ := os.Stderr.Stat()
+		if outf != nil && errf != nil && os.SameFile(outf, errf) {
+			w = os.Stderr
+		}
+	}
+	fmt.Fprintf(w, "Fatal: "+format+"\n", args...)
+	os.Exit(1)
 }

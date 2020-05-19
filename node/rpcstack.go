@@ -38,7 +38,6 @@ type HTTPServer struct {
 	Server *http.Server
 
 	Listener     net.Listener
-	ListenerAddr net.Addr
 
 	endpoint string
 	host     string
@@ -61,12 +60,13 @@ type HTTPServer struct {
 // TODO document
 func (h *HTTPServer) Start() error {
 	go h.Server.Serve(h.Listener)
+	log.Info("HTTP endpoint successfully opened", "url", fmt.Sprintf("http://%v/", h.Listener.Addr()))
 	return nil
 }
 
 func (h *HTTPServer) Stop() error {
 	if h.Server != nil {
-		url := fmt.Sprintf("http://%v/", h.ListenerAddr)
+		url := fmt.Sprintf("http://%v/", h.Listener.Addr())
 		// Don't bother imposing a timeout here.
 		h.Server.Shutdown(context.Background())
 		log.Info("HTTP Endpoint closed", "url", url)

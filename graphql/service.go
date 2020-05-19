@@ -123,13 +123,7 @@ func (s *Service) Start() error {
 
 // Stop terminates all goroutines belonging to the service, blocking until they
 // are all terminated.
-func (s *Service) Stop() error {
-	//if s.graphqlServer.Server != nil {
-	//	s.graphqlServer.Server.Shutdown(context.Background())
-	//	log.Info("GraphQL endpoint closed", "url", fmt.Sprintf("http://%v", s.graphqlServer.ListenerAddr))
-	//}
-	return nil
-}
+func (s *Service) Stop() error { return nil }
 
 func (s *Service) Server() *node.HTTPServer {
 	return s.graphqlServer

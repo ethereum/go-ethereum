@@ -149,7 +149,7 @@ func (api *PrivateAdminAPI) StartRPC(host *string, port *int, cors *string, apis
 	// check if HTTP server already exists
 	for _, httpServer := range api.node.httpServers {
 		if httpServer.RPCAllowed {
-			return false, fmt.Errorf("HTTP RPC already running on %v", httpServer.ListenerAddr)
+			return false, fmt.Errorf("HTTP RPC already running on %v", httpServer.Listener.Addr())
 		}
 	}
 
@@ -206,7 +206,7 @@ func (api *PrivateAdminAPI) StartRPC(host *string, port *int, cors *string, apis
 	}
 	// start the HTTP server
 	httpServer.Start()
-	api.node.log.Info("HTTP endpoint opened", "url", fmt.Sprintf("http://%v/", httpServer.ListenerAddr),
+	api.node.log.Info("HTTP endpoint opened", "url", fmt.Sprintf("http://%v/", httpServer.Listener.Addr()),
 		"cors", strings.Join(httpServer.CorsAllowedOrigins, ","),
 		"vhosts", strings.Join(httpServer.Vhosts, ","))
 
@@ -238,7 +238,7 @@ func (api *PrivateAdminAPI) StartWS(host *string, port *int, allowedOrigins *str
 	// check if an existing HTTP server already handles websocket
 	for _, httpServer := range api.node.httpServers {
 		if httpServer.WSAllowed {
-			return false, fmt.Errorf("WebSocket RPC already running on %v", httpServer.ListenerAddr)
+			return false, fmt.Errorf("WebSocket RPC already running on %v", httpServer.Listener.Addr())
 		}
 	}
 	// set host, port and endpoint
@@ -266,7 +266,7 @@ func (api *PrivateAdminAPI) StartWS(host *string, port *int, allowedOrigins *str
 	if existingServer != nil {
 		existingServer.WSAllowed = true
 		existingServer.WsOrigins = origins
-		api.node.log.Info("WebSocket endpoint opened", "url", fmt.Sprintf("ws://%v", existingServer.ListenerAddr))
+		api.node.log.Info("WebSocket endpoint opened", "url", fmt.Sprintf("ws://%v", existingServer.Listener.Addr()))
 		return true, nil
 	}
 
@@ -294,7 +294,7 @@ func (api *PrivateAdminAPI) StartWS(host *string, port *int, allowedOrigins *str
 	}
 
 	wsServer.Start()
-	api.node.log.Info("WebSocket endpoint opened", "url", fmt.Sprintf("ws://%v", wsServer.ListenerAddr))
+	api.node.log.Info("WebSocket endpoint opened", "url", fmt.Sprintf("ws://%v", wsServer.Listener.Addr()))
 
 	api.node.RegisterHTTPServer(wsServer)
 	return true, nil
