@@ -94,7 +94,7 @@ func main() {
 
 	for _, node := range nodes {
 		var ethereum *eth.Ethereum
-		if err := node.Service(&ethereum); err != nil {
+		if err := node.Lifecycle(&ethereum); err != nil { // TODO does this work?
 			panic(err)
 		}
 		if err := ethereum.StartMining(1); err != nil {
@@ -165,31 +165,32 @@ func makeMiner(genesis *core.Genesis) (*node.Node, error) {
 		NoUSB:             true,
 		UseLightweightKDF: true,
 	}
-	// Start the node and configure a full Ethereum node on it
+	// Create the node and configure a full Ethereum node on it
 	stack, err := node.New(config)
 	if err != nil {
 		return nil, err
 	}
-	if err := stack.Register(func(ctx *node.ServiceContext) (node.Service, error) {
-		return eth.New(ctx, &eth.Config{
-			Genesis:         genesis,
-			NetworkId:       genesis.Config.ChainID.Uint64(),
-			SyncMode:        downloader.FullSync,
-			DatabaseCache:   256,
-			DatabaseHandles: 256,
-			TxPool:          core.DefaultTxPoolConfig,
-			GPO:             eth.DefaultConfig.GPO,
-			Ethash:          eth.DefaultConfig.Ethash,
-			Miner: miner.Config{
-				GasFloor: genesis.GasLimit * 9 / 10,
-				GasCeil:  genesis.GasLimit * 11 / 10,
-				GasPrice: big.NewInt(1),
-				Recommit: time.Second,
-			},
-		})
-	}); err != nil {
+	ethBackend, err := eth.New(ctx, &eth.Config{
+		Genesis:         genesis,
+		NetworkId:       genesis.Config.ChainID.Uint64(),
+		SyncMode:        downloader.FullSync,
+		DatabaseCache:   256,
+		DatabaseHandles: 256,
+		TxPool:          core.DefaultTxPoolConfig,
+		GPO:             eth.DefaultConfig.GPO,
+		Ethash:          eth.DefaultConfig.Ethash,
+		Miner: miner.Config{
+			GasFloor: genesis.GasLimit * 9 / 10,
+			GasCeil:  genesis.GasLimit * 11 / 10,
+			GasPrice: big.NewInt(1),
+			Recommit: time.Second,
+		},
+	})
+	if err != nil {
 		return nil, err
 	}
+	stack.RegisterLifecycle(ethBackend)
+
 	// Start the node and return if successful
 	return stack, stack.Start()
 }

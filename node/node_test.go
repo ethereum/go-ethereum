@@ -121,12 +121,8 @@ func TestServiceRegistry(t *testing.T) {
 	defer stack.Close()
 
 	// Register a batch of unique services and ensure they start successfully
-	services := []ServiceConstructor{NewNoopServiceA, NewNoopServiceB, NewNoopServiceC}
-	for i, constructor := range services {
-		if err := stack.Register(constructor); err != nil {
-			t.Fatalf("service #%d: registration failed: %v", i, err)
-		}
-	}
+	noop, err := NewNoop(stack)
+
 	if err := stack.Start(); err != nil {
 		t.Fatalf("failed to start original service stack: %v", err)
 	}
@@ -134,9 +130,10 @@ func TestServiceRegistry(t *testing.T) {
 		t.Fatalf("failed to stop original service stack: %v", err)
 	}
 	// Duplicate one of the services and retry starting the node
-	if err := stack.Register(NewNoopServiceB); err != nil {
-		t.Fatalf("duplicate registration failed: %v", err)
-	}
+	stack.RegisterLifecycle(noop) // TODO how to test for a fatal err ?
+	//err != nil {
+	//	t.Fatalf("duplicate registration failed: %v", err)
+	//}
 	if err := stack.Start(); err == nil {
 		t.Fatalf("duplicate service started")
 	} else {

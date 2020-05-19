@@ -641,7 +641,7 @@ func (whisper *Whisper) Send(envelope *Envelope) error {
 	return err
 }
 
-// Start implements node.Service, starting the background data propagation thread
+// Start implements node.Lifecycle, starting the background data propagation thread
 // of the Whisper protocol.
 func (whisper *Whisper) Start() error {
 	log.Info("started whisper v." + ProtocolVersionStr)
@@ -657,7 +657,7 @@ func (whisper *Whisper) Start() error {
 	return nil
 }
 
-// Stop implements node.Service, stopping the background data propagation thread
+// Stop implements node.Lifecycle, stopping the background data propagation thread
 // of the Whisper protocol.
 func (whisper *Whisper) Stop() error {
 	close(whisper.quit)

@@ -35,9 +35,7 @@ import (
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/eth"
-	"github.com/ethereum/go-ethereum/eth/downloader"
 	"github.com/ethereum/go-ethereum/log"
-	"github.com/ethereum/go-ethereum/miner"
 	"github.com/ethereum/go-ethereum/node"
 	"github.com/ethereum/go-ethereum/p2p"
 	"github.com/ethereum/go-ethereum/p2p/enode"
@@ -98,7 +96,7 @@ func main() {
 
 	for _, node := range nodes {
 		var ethereum *eth.Ethereum
-		if err := node.Service(&ethereum); err != nil {
+		if err := node.Lifecycle(&ethereum); err != nil { // TODO does this work?
 			panic(err)
 		}
 		if err := ethereum.StartMining(1); err != nil {
@@ -191,25 +189,27 @@ func makeSealer(genesis *core.Genesis) (*node.Node, error) {
 	if err != nil {
 		return nil, err
 	}
-	if err := stack.Register(func(ctx *node.ServiceContext) (node.Service, error) {
-		return eth.New(ctx, &eth.Config{
-			Genesis:         genesis,
-			NetworkId:       genesis.Config.ChainID.Uint64(),
-			SyncMode:        downloader.FullSync,
-			DatabaseCache:   256,
-			DatabaseHandles: 256,
-			TxPool:          core.DefaultTxPoolConfig,
-			GPO:             eth.DefaultConfig.GPO,
-			Miner: miner.Config{
-				GasFloor: genesis.GasLimit * 9 / 10,
-				GasCeil:  genesis.GasLimit * 11 / 10,
-				GasPrice: big.NewInt(1),
-				Recommit: time.Second,
-			},
-		})
-	}); err != nil {
+	// Create and register the backend
+	ethBackend, err := eth.New(ctx, &eth.Config{
+		Genesis:         genesis,
+		NetworkId:       genesis.Config.ChainID.Uint64(),
+		SyncMode:        downloader.FullSync,
+		DatabaseCache:   256,
+		DatabaseHandles: 256,
+		TxPool:          core.DefaultTxPoolConfig,
+		GPO:             eth.DefaultConfig.GPO,
+		Miner: miner.Config{
+			GasFloor: genesis.GasLimit * 9 / 10,
+			GasCeil:  genesis.GasLimit * 11 / 10,
+			GasPrice: big.NewInt(1),
+			Recommit: time.Second,
+		},
+	})
+	if err != nil {
 		return nil, err
 	}
+	stack.RegisterLifecycle(ethBackend)
+
 	// Start the node and return if successful
 	return stack, stack.Start()
 }

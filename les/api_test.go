@@ -499,12 +499,12 @@ func newLesClientService(ctx *adapters.ServiceContext, stack *node.Node) (*Light
 	return New(stack, &config)
 }
 
-func newLesServerService(ctx *adapters.ServiceContext) (node.Service, error) {
+func newLesServerService(ctx *adapters.ServiceContext, stack *node.Node) (*eth.Ethereum, error) {
 	config := eth.DefaultConfig
 	config.SyncMode = downloader.FullSync
 	config.LightServ = testServerCapacity
 	config.LightPeers = testMaxClients
-	ethereum, err := eth.New(ctx.NodeContext, &config)
+	ethereum, err := eth.New(stack, &config)
 	if err != nil {
 		return nil, err
 	}
