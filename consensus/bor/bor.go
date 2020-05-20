@@ -221,7 +221,7 @@ type Bor struct {
 	lock   sync.RWMutex   // Protects the signer fields
 
 	ethAPI                 *ethapi.PublicBlockChainAPI
-	genesisContractsClient *GenesisContractsClient
+	GenesisContractsClient *GenesisContractsClient
 	validatorSetABI        abi.ABI
 	stateReceiverABI       abi.ABI
 	HeimdallClient         IHeimdallClient
@@ -263,7 +263,7 @@ func New(
 		signatures:             signatures,
 		validatorSetABI:        vABI,
 		stateReceiverABI:       sABI,
-		genesisContractsClient: genesisContractsClient,
+		GenesisContractsClient: genesisContractsClient,
 		HeimdallClient:         heimdallClient,
 	}
 
@@ -1076,11 +1076,11 @@ func (c *Bor) CommitStates(
 	chain chainContext,
 ) error {
 	number := header.Number.Uint64()
-	lastSync, err := c.genesisContractsClient.LastStateSyncTime(number - 1)
+	lastSync, err := c.GenesisContractsClient.LastStateSyncTime(number - 1)
 	if err != nil {
 		return err
 	}
-	_lastStateID, err := c.genesisContractsClient.LastStateId(number - 1)
+	_lastStateID, err := c.GenesisContractsClient.LastStateId(number - 1)
 	if err != nil {
 		return err
 	}
@@ -1088,6 +1088,7 @@ func (c *Bor) CommitStates(
 	from := lastSync
 	to := time.Unix(int64(chain.Chain.GetHeaderByNumber(number-c.config.Sprint).Time), 0)
 	lastStateID := _lastStateID.Uint64()
+	fmt.Println("to Uint64", lastStateID)
 	if !from.Before(to) {
 		return nil
 	}
@@ -1123,12 +1124,19 @@ func (c *Bor) CommitStates(
 		return eventRecords[i].ID < eventRecords[j].ID
 	})
 
+	for _, e := range eventRecords {
+		fmt.Println("here", e.ID)
+	}
+
 	chainID := c.chainConfig.ChainID.String()
 	for _, eventRecord := range eventRecords {
+		fmt.Println(eventRecord.ID, lastStateID)
 		if eventRecord.ID <= lastStateID {
+			fmt.Println("continuiing", lastStateID)
 			continue
 		}
 		if err := validateEventRecord(eventRecord, number, from, to, lastStateID, chainID); err != nil {
+			fmt.Println("breaking", err.Error())
 			log.Error(err.Error())
 			break
 		}
@@ -1143,11 +1151,13 @@ func (c *Bor) CommitStates(
 			c.stateDataFeed.Send(core.NewStateChangeEvent{StateData: &stateData})
 		}()
 
-		if err := c.genesisContractsClient.CommitState(eventRecord, state, header, chain); err != nil {
+		if err := c.GenesisContractsClient.CommitState(eventRecord, state, header, chain); err != nil {
+			fmt.Println("erred", err)
 			return err
 		}
+		lastStateID++
 	}
-	lastStateID++
+	fmt.Println("lastStateID is", lastStateID)
 	return nil
 }
 

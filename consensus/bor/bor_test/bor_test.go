@@ -115,6 +115,72 @@ func TestFetchStateSyncEvents(t *testing.T) {
 	assert.True(t, h.AssertCalled(t, "FetchWithRetry", clerkPath, query2Params))
 }
 
+func TestFetchStateSyncEvents_2(t *testing.T) {
+	init := buildEthereumInstance(t, rawdb.NewMemoryDatabase())
+	chain := init.ethereum.BlockChain()
+	engine := init.ethereum.Engine()
+	_bor := engine.(*bor.Bor)
+
+	// A. Insert blocks for 0th sprint
+	db := init.ethereum.ChainDb()
+	block := init.genesis.ToBlock(db)
+	// Insert sprintSize # of blocks so that span is fetched at the start of a new sprint
+	for i := uint64(1); i < sprintSize; i++ {
+		block = buildNextBlock(t, _bor, chain, block, nil, init.genesis.Config.Bor)
+		insertNewBlock(t, chain, block)
+	}
+
+	// B. Before inserting 1st block of the next sprint, mock heimdall deps
+	// B.1 Mock /bor/span/1
+	res, _ := loadSpanFromFile(t)
+	h := &mocks.IHeimdallClient{}
+	h.On("FetchWithRetry", spanPath, "").Return(res, nil)
+
+	// B.2 Mock State Sync events
+	// read heimdall api response from file
+	res = stateSyncEventsPayload(t)
+	var _eventRecords []*bor.EventRecordWithTime
+	if err := json.Unmarshal(res.Result, &_eventRecords); err != nil {
+		t.Fatalf("%s", err)
+	}
+	sample := _eventRecords[0]
+
+	// First query will be from [0, (block-sprint).Time]
+	// Insert 4 events are in this time range
+	eventRecords := []*bor.EventRecordWithTime{
+		buildStateEvent(sample, 2, 3), // id = 2, time = 3
+		buildStateEvent(sample, 3, 2), // id = 3, time = 2
+		buildStateEvent(sample, 1, 1), // id = 1, time = 1
+		// event with id 4 is missing
+		buildStateEvent(sample, 5, 4), // id = 5, time = 4
+	}
+	_res, _ := json.Marshal(eventRecords)
+	response := bor.ResponseWithHeight{Height: "0"}
+	if err := json.Unmarshal(_res, &response.Result); err != nil {
+		t.Fatalf("%s", err)
+	}
+
+	from := 0
+	to := int64(chain.GetHeaderByNumber(0).Time)
+	page := 1
+	queryParams := fmt.Sprintf(clerkQueryParams, from, to, page)
+	h.On("FetchWithRetry", clerkPath, queryParams).Return(&response, nil)
+
+	page = 2
+	query2Params := fmt.Sprintf(clerkQueryParams, from, to, page)
+	h.On("FetchWithRetry", clerkPath, query2Params).Return(&bor.ResponseWithHeight{}, nil)
+	_bor.SetHeimdallClient(h)
+
+	block = buildNextBlock(t, _bor, chain, block, nil, init.genesis.Config.Bor)
+	insertNewBlock(t, chain, block)
+
+	assert.True(t, h.AssertCalled(t, "FetchWithRetry", spanPath, ""))
+	assert.True(t, h.AssertCalled(t, "FetchWithRetry", clerkPath, queryParams))
+	lastStateID, _ := _bor.GenesisContractsClient.LastStateId(sprintSize)
+	assert.Equal(t, uint64(3), lastStateID.Uint64())
+	fmt.Println("lastStateId after", lastStateID)
+}
+
 func TestOutOfTurnSigning(t *testing.T) {
 	init := buildEthereumInstance(t, rawdb.NewMemoryDatabase())
 	chain := init.ethereum.BlockChain()
@@ -209,4 +275,11 @@ func generateFakeStateSyncEvents(sample *bor.EventRecordWithTime, count int) []*
 		*events[i] = event
 	}
 	return events
+}
+
+func buildStateEvent(sample *bor.EventRecordWithTime, id uint64, timeStamp int64) *bor.EventRecordWithTime {
+	event := *sample
+	event.ID = id
+	event.Time = time.Unix(timeStamp, 0)
+	return &event
 }
