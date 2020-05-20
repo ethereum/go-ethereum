@@ -62,7 +62,6 @@ var (
 
 	validatorHeaderBytesLength = common.AddressLength + 20 // address + power
 	systemAddress              = common.HexToAddress("0xffffFFFfFFffffffffffffffFfFFFfffFFFfFFfE")
-	stateFetchLimit            = 50
 )
 
 // Various error messages to mark blocks invalid. These should be private to
@@ -221,7 +220,7 @@ type Bor struct {
 	lock   sync.RWMutex   // Protects the signer fields
 
 	ethAPI                 *ethapi.PublicBlockChainAPI
-	genesisContractsClient *GenesisContractsClient
+	GenesisContractsClient *GenesisContractsClient
 	validatorSetABI        abi.ABI
 	stateReceiverABI       abi.ABI
 	HeimdallClient         IHeimdallClient
@@ -263,7 +262,7 @@ func New(
 		signatures:             signatures,
 		validatorSetABI:        vABI,
 		stateReceiverABI:       sABI,
-		genesisContractsClient: genesisContractsClient,
+		GenesisContractsClient: genesisContractsClient,
 		HeimdallClient:         heimdallClient,
 	}
 
@@ -1076,57 +1075,26 @@ func (c *Bor) CommitStates(
 	chain chainContext,
 ) error {
 	number := header.Number.Uint64()
-	lastSync, err := c.genesisContractsClient.LastStateSyncTime(number - 1)
+	_lastStateID, err := c.GenesisContractsClient.LastStateId(number - 1)
 	if err != nil {
 		return err
 	}
-	from := lastSync.Add(time.Second * 1) // querying the interval [from, to)
+
 	to := time.Unix(int64(chain.Chain.GetHeaderByNumber(number-c.config.Sprint).Time), 0)
-	if !from.Before(to) {
-		return nil
-	}
+	lastStateID := _lastStateID.Uint64()
 	log.Info(
 		"Fetching state updates from Heimdall",
-		"from", from.Format(time.RFC3339),
+		"fromID", lastStateID+1,
 		"to", to.Format(time.RFC3339))
-
-	page := 1
-	eventRecords := make([]*EventRecordWithTime, 0)
-	for {
-		queryParams := fmt.Sprintf("from-time=%d&to-time=%d&page=%d&limit=%d", from.Unix(), to.Unix(), page, stateFetchLimit)
-		log.Info("Fetching state sync events", "queryParams", queryParams)
-		response, err := c.HeimdallClient.FetchWithRetry("clerk/event-record/list", queryParams)
-		if err != nil {
-			return err
-		}
-		var _eventRecords []*EventRecordWithTime
-		if response.Result == nil { // status 204
-			break
-		}
-		if err := json.Unmarshal(response.Result, &_eventRecords); err != nil {
-			return err
-		}
-		eventRecords = append(eventRecords, _eventRecords...)
-		if len(_eventRecords) < stateFetchLimit {
-			break
-		}
-		page++
-	}
-
-	sort.SliceStable(eventRecords, func(i, j int) bool {
-		return eventRecords[i].ID < eventRecords[j].ID
-	})
+	eventRecords, err := c.HeimdallClient.FetchStateSyncEvents(lastStateID+1, to.Unix())
 
 	chainID := c.chainConfig.ChainID.String()
 	for _, eventRecord := range eventRecords {
-		// validateEventRecord checks whether an event lies in the specified time range
-		// since the events are sorted by time and if it turns out that event i lies outside the time range,
-		// it would mean all subsequent events lie outside of the time range. Hence we don't probe any further and break the loop
-		if err := validateEventRecord(eventRecord, number, from, to, chainID); err != nil {
-			log.Error(
-				fmt.Sprintf(
-					"Received event %s does not lie in the time range, from %s, to %s",
-					eventRecord, from.Format(time.RFC3339), to.Format(time.RFC3339)))
+		if eventRecord.ID <= lastStateID {
+			continue
+		}
+		if err := validateEventRecord(eventRecord, number, to, lastStateID, chainID); err != nil {
+			log.Error(err.Error())
 			break
 		}
 
@@ -1140,17 +1108,18 @@ func (c *Bor) CommitStates(
 			c.stateDataFeed.Send(core.NewStateChangeEvent{StateData: &stateData})
 		}()
 
-		if err := c.genesisContractsClient.CommitState(eventRecord, state, header, chain); err != nil {
+		if err := c.GenesisContractsClient.CommitState(eventRecord, state, header, chain); err != nil {
 			return err
 		}
+		lastStateID++
 	}
 	return nil
 }
 
-func validateEventRecord(eventRecord *EventRecordWithTime, number uint64, from, to time.Time, chainID string) error {
-	// event should lie in the range [from, to)
-	if eventRecord.ChainID != chainID || eventRecord.Time.Before(from) || !eventRecord.Time.Before(to) {
-		return &InvalidStateReceivedError{number, &from, &to, eventRecord}
+func validateEventRecord(eventRecord *EventRecordWithTime, number uint64, to time.Time, lastStateID uint64, chainID string) error {
+	// event id should be sequential and event.Time should lie in the range [from, to)
+	if lastStateID+1 != eventRecord.ID || eventRecord.ChainID != chainID || !eventRecord.Time.Before(to) {
+		return &InvalidStateReceivedError{number, lastStateID, &to, eventRecord}
 	}
 	return nil
 }
@@ -1162,28 +1131,6 @@ func (c *Bor) SubscribeStateEvent(ch chan<- core.NewStateChangeEvent) event.Subs
 
 func (c *Bor) SetHeimdallClient(h IHeimdallClient) {
 	c.HeimdallClient = h
-}
-
-func isProposeSpanAction(tx *types.Transaction, validatorContract string) bool {
-	// keccak256('proposeSpan()').slice(0, 4)
-	proposeSpanSig, _ := hex.DecodeString("4b0e4d17")
-	if tx.Data() == nil || len(tx.Data()) < 4 {
-		return false
-	}
-
-	return bytes.Compare(proposeSpanSig, tx.Data()[:4]) == 0 &&
-		tx.To().String() == validatorContract
-}
-
-func isProposeStateAction(tx *types.Transaction, stateReceiverContract string) bool {
-	// keccak256('proposeState(uint256)').slice(0, 4)
-	proposeStateSig, _ := hex.DecodeString("ede01f17")
-	if tx.Data() == nil || len(tx.Data()) < 4 {
-		return false
-	}
-
-	return bytes.Compare(proposeStateSig, tx.Data()[:4]) == 0 &&
-		tx.To().String() == stateReceiverContract
 }
 
 //
