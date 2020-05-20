@@ -82,6 +82,8 @@ var (
 
 	noauthFlag = flag.Bool("noauth", false, "Enables funding requests without authentication")
 	logFlag    = flag.Int("loglevel", 3, "Log level to use for Ethereum and the faucet")
+
+	fixGasPrice = flag.Int64("faucet.fixedprice", 0, "Will use fixed gas price if specified")
 )
 
 var (
@@ -100,30 +102,15 @@ func main() {
 
 	// Construct the payout tiers
 	amounts := make([]string, *tiersFlag)
-	periods := make([]string, *tiersFlag)
 	for i := 0; i < *tiersFlag; i++ {
 		// Calculate the amount for the next tier and format it
 		amount := float64(*payoutFlag) * math.Pow(2.5, float64(i))
-		amounts[i] = fmt.Sprintf("%s Ethers", strconv.FormatFloat(amount, 'f', -1, 64))
+		amounts[i] = fmt.Sprintf("%s BNBs", strconv.FormatFloat(amount, 'f', -1, 64))
 		if amount == 1 {
 			amounts[i] = strings.TrimSuffix(amounts[i], "s")
 		}
-		// Calculate the period for the next tier and format it
-		period := *minutesFlag * int(math.Pow(3, float64(i)))
-		periods[i] = fmt.Sprintf("%d mins", period)
-		if period%60 == 0 {
-			period /= 60
-			periods[i] = fmt.Sprintf("%d hours", period)
-
-			if period%24 == 0 {
-				period /= 24
-				periods[i] = fmt.Sprintf("%d days", period)
-			}
-		}
-		if period == 1 {
-			periods[i] = strings.TrimSuffix(periods[i], "s")
-		}
 	}
+
 	// Load up and render the faucet website
 	tmpl, err := Asset("faucet.html")
 	if err != nil {
@@ -133,7 +120,6 @@ func main() {
 	err = template.Must(template.New("").Parse(string(tmpl))).Execute(website, map[string]interface{}{
 		"Network":   *netnameFlag,
 		"Amounts":   amounts,
-		"Periods":   periods,
 		"Recaptcha": *captchaToken,
 		"NoAuth":    *noauthFlag,
 	})
@@ -223,6 +209,7 @@ func newFaucet(genesis *core.Genesis, port int, enodes []*discv5.Node, network u
 		Name:    "geth",
 		Version: params.VersionWithCommit(gitCommit, gitDate),
 		DataDir: filepath.Join(os.Getenv("HOME"), ".faucet"),
+		NoUSB:   true,
 		P2P: p2p.Config{
 			NAT:              nat.Any(),
 			NoDiscovery:      true,
@@ -297,6 +284,7 @@ func (f *faucet) listenAndServe(port int) error {
 
 	http.HandleFunc("/", f.webHandler)
 	http.HandleFunc("/api", f.apiHandler)
+	http.HandleFunc("/faucet-smart/api", f.apiHandler)
 	return http.ListenAndServe(fmt.Sprintf(":%d", port), nil)
 }
 
@@ -571,8 +559,12 @@ func (f *faucet) refresh(head *types.Header) error {
 	if nonce, err = f.client.NonceAt(ctx, f.account.Address, head.Number); err != nil {
 		return err
 	}
-	if price, err = f.client.SuggestGasPrice(ctx); err != nil {
-		return err
+	if fixGasPrice != nil && *fixGasPrice > 0 {
+		price = big.NewInt(*fixGasPrice)
+	} else {
+		if price, err = f.client.SuggestGasPrice(ctx); err != nil {
+			return err
+		}
 	}
 	// Everything succeeded, update the cached stats and eject old requests
 	f.lock.Lock()
@@ -717,7 +709,7 @@ func authTwitter(url string) (string, string, common.Address, error) {
 	address := common.HexToAddress(string(regexp.MustCompile("0x[0-9a-fA-F]{40}").Find(body)))
 	if address == (common.Address{}) {
 		//lint:ignore ST1005 This error is to be displayed in the browser
-		return "", "", common.Address{}, errors.New("No Ethereum address found to fund")
+		return "", "", common.Address{}, errors.New("No Binance Smart Chain address found to fund")
 	}
 	var avatar string
 	if parts = regexp.MustCompile("src=\"([^\"]+twimg.com/profile_images[^\"]+)\"").FindStringSubmatch(string(body)); len(parts) == 2 {
@@ -753,7 +745,7 @@ func authFacebook(url string) (string, string, common.Address, error) {
 	address := common.HexToAddress(string(regexp.MustCompile("0x[0-9a-fA-F]{40}").Find(body)))
 	if address == (common.Address{}) {
 		//lint:ignore ST1005 This error is to be displayed in the browser
-		return "", "", common.Address{}, errors.New("No Ethereum address found to fund")
+		return "", "", common.Address{}, errors.New("No Binance Smart Chain address found to fund")
 	}
 	var avatar string
 	if parts = regexp.MustCompile("src=\"([^\"]+fbcdn.net[^\"]+)\"").FindStringSubmatch(string(body)); len(parts) == 2 {
@@ -769,7 +761,7 @@ func authNoAuth(url string) (string, string, common.Address, error) {
 	address := common.HexToAddress(regexp.MustCompile("0x[0-9a-fA-F]{40}").FindString(url))
 	if address == (common.Address{}) {
 		//lint:ignore ST1005 This error is to be displayed in the browser
-		return "", "", common.Address{}, errors.New("No Ethereum address found to fund")
+		return "", "", common.Address{}, errors.New("No Binance Smart Chain address found to fund")
 	}
 	return address.Hex() + "@noauth", "", address, nil
 }
