@@ -364,8 +364,8 @@ func VerifyRangeProof(rootHash common.Hash, firstKey []byte, keys [][]byte, valu
 	if len(keys) != len(values) {
 		return fmt.Errorf("inconsistent proof data, keys: %d, values: %d", len(keys), len(values))
 	}
-	// Speical case, there is no edge proof at all. Then the
-	// given range is expected to be the whole set in the trie.
+	// Special case, there is no edge proof at all. The given range is expected
+	// to be the whole leaf-set in the trie.
 	if firstProof == nil && lastProof == nil {
 		emptytrie, err := New(common.Hash{}, NewDatabase(memorydb.New()))
 		if err != nil {
@@ -375,15 +375,14 @@ func VerifyRangeProof(rootHash common.Hash, firstKey []byte, keys [][]byte, valu
 			emptytrie.TryUpdate(key, values[index])
 		}
 		if emptytrie.Hash() != rootHash {
-			return fmt.Errorf("invalid proof, wanthash %x, got %x", rootHash, emptytrie.Hash())
+			return fmt.Errorf("invalid proof, want hash %x, got %x", rootHash, emptytrie.Hash())
 		}
 		return nil
 	}
-	// Special case, there is a provided non-existent proof and
-	// zero leaf, it means no more leaf we can get in the trie.
+	// Special case, there is a provided non-existence proof and zero key/value
+	// pairs, meaning there are no more accounts / slots in the trie.
 	if len(keys) == 0 {
-		// Recover the non-existent proof to a path, ensure there
-		// is nothing left
+		// Recover the non-existent proof to a path, ensure there is nothing left
 		root, err := proofToPath(rootHash, nil, firstKey, firstProof, true)
 		if err != nil {
 			return err
@@ -454,7 +453,7 @@ func VerifyRangeProof(rootHash common.Hash, firstKey []byte, keys [][]byte, valu
 		newtrie.TryUpdate(key, values[index])
 	}
 	if newtrie.Hash() != rootHash {
-		return fmt.Errorf("invalid proof, wanthash %x, got %x", rootHash, newtrie.Hash())
+		return fmt.Errorf("invalid proof, want hash %x, got %x", rootHash, newtrie.Hash())
 	}
 	return nil
 }
