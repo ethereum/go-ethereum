@@ -1044,7 +1044,6 @@ func (s *PublicBlockChainAPI) EstimateGas(ctx context.Context, argsInterface int
 		json.Unmarshal(marshalled, &callArgs)
 		return callArgs
 	}
-	log.Info(fmt.Sprintf("%T", argsInterface))
 	switch args := argsInterface.(type) {
 	case map[string]interface{}:
 		gas, _, err = DoEstimateGas(ctx, s.b, getCallArgs(args), stateData, blockNrOrHash, s.b.RPCGasCap())
@@ -1060,7 +1059,7 @@ func (s *PublicBlockChainAPI) EstimateGas(ctx context.Context, argsInterface int
 		}
 		return returnVals, nil
 	default:
-		return nil, estimateGasError{error: fmt.Sprintf("unknown input")}
+		return nil, estimateGasError{error: "unknown input"}
 	}
 }
 
