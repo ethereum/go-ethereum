@@ -231,25 +231,30 @@ func TestDecodeErrorsV5(t *testing.T) {
 
 	net.nodeA.expectDecodeErr(t, errTooShort, []byte{})
 	// TODO some more tests would be nice :)
+	// - check invalid authdata sizes
+	// - check invalid handshake data sizes
 }
 
-// This benchmark checks performance of authHeader decoding, verification and key derivation.
-func BenchmarkV5_DecodeAuthSecp256k1(b *testing.B) {
+// This benchmark checks performance of handshake packet decoding.
+func BenchmarkV5_DecodeHandshakePingSecp256k1(b *testing.B) {
 	net := newHandshakeTest()
 	defer net.close()
 
 	var (
 		idA       = net.nodeA.id()
-		addrA     = net.nodeA.addr()
-		challenge = &whoareyouV5{AuthTag: []byte("authresp"), RecordSeq: 0, node: net.nodeB.n()}
-		nonce     = make([]byte, gcmNonceSize)
+		challenge = &whoareyouV5{AuthTag: []byte("authresp"), node: net.nodeB.n()}
+		message   = &pingV5{ReqID: []byte("reqid")}
 	)
-	header, _, _ := net.nodeA.c.makeAuthHeader(nonce, challenge)
+	packet, _, err := net.nodeA.c.encode(net.nodeB.id(), "", message, challenge)
+	if err != nil {
+		b.Fatal("can't encode handshake packet")
+	}
 	challenge.node = nil // force ENR signature verification in decoder
 	b.ResetTimer()
 
 	for i := 0; i < b.N; i++ {
-		_, _, err := net.nodeB.c.decodeAuthResp(idA, addrA, header, challenge)
+		net.nodeB.c.sc.storeSentHandshake(idA, "", challenge)
+		_, _, _, err := net.nodeB.c.decode(packet, "")
 		if err != nil {
 			b.Fatal(err)
 		}

@@ -58,9 +58,8 @@ func newSessionCache(maxItems int, clock mclock.Clock) *sessionCache {
 }
 
 // nextNonce creates a nonce for encrypting a message to the given session.
-func (sc *sessionCache) nextNonce(id enode.ID, addr string) []byte {
-	n := make([]byte, gcmNonceSize)
-	crand.Read(n)
+func (sc *sessionCache) nextNonce(id enode.ID, addr string) (n [gcmNonceSize]byte) {
+	crand.Read(n[:])
 	return n
 }
 
