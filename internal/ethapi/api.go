@@ -19,6 +19,7 @@ package ethapi
 import (
 	"bytes"
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"math/big"
@@ -1034,18 +1035,28 @@ func (s *PublicBlockChainAPI) EstimateGas(ctx context.Context, argsInterface int
 		err       error
 		stateData *PreviousState
 	)
+	if stateData == nil {
+		stateData = &PreviousState{}
+	}
+	getCallArgs := func(inter map[string]interface{}) CallArgs {
+		marshalled, _ := json.Marshal(inter)
+		callArgs := CallArgs{}
+		json.Unmarshal(marshalled, &callArgs)
+		return callArgs
+	}
+	log.Info(fmt.Sprintf("%T", argsInterface))
 	switch args := argsInterface.(type) {
-	case CallArgs:
-		gas, _, err = DoEstimateGas(ctx, s.b, args, stateData, blockNrOrHash, s.b.RPCGasCap())
+	case map[string]interface{}:
+		gas, _, err = DoEstimateGas(ctx, s.b, getCallArgs(args), stateData, blockNrOrHash, s.b.RPCGasCap())
 		return gas, err
-	case []CallArgs:
-		returnVals := make([]interface{}, len(args))
-		for _, argData := range args {
-			gas, stateData, err = DoEstimateGas(ctx, s.b, argData, stateData, blockNrOrHash, s.b.RPCGasCap())
-			returnVals = append(returnVals, map[string]interface{}{
-				"result": gas,
-				"error":  err,
-			})
+	case []interface{}:
+		returnVals := make([]hexutil.Uint64, len(args))
+		for idx, argData := range args {
+			gas, stateData, err = DoEstimateGas(ctx, s.b, getCallArgs(argData.(map[string]interface{})), stateData, blockNrOrHash, s.b.RPCGasCap())
+			if err != nil {
+				return nil, err
+			}
+			returnVals[idx] = gas
 		}
 		return returnVals, nil
 	default:
