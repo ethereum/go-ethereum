@@ -134,7 +134,7 @@ type Config struct {
 	Miner miner.Config
 
 	// Ethash options
-	Ethash ethash.Config
+	Ethash ethash.Config `toml:",omitempty"`
 
 	// Transaction pool options
 	TxPool core.TxPoolConfig

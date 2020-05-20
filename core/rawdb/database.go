@@ -244,6 +244,7 @@ func InspectDatabase(db ethdb.Database) error {
 		preimageSize    common.StorageSize
 		bloomBitsSize   common.StorageSize
 		cliqueSnapsSize common.StorageSize
+		parliaSnapsSize common.StorageSize
 
 		// Ancient store statistics
 		ancientHeaders  common.StorageSize
@@ -292,6 +293,8 @@ func InspectDatabase(db ethdb.Database) error {
 			bloomBitsSize += size
 		case bytes.HasPrefix(key, []byte("clique-")) && len(key) == 7+common.HashLength:
 			cliqueSnapsSize += size
+		case bytes.HasPrefix(key, []byte("parlia-")) && len(key) == 7+common.HashLength:
+			parliaSnapsSize += size
 		case bytes.HasPrefix(key, []byte("cht-")) && len(key) == 4+common.HashLength:
 			chtTrieNodes += size
 		case bytes.HasPrefix(key, []byte("blt-")) && len(key) == 4+common.HashLength:
@@ -340,6 +343,7 @@ func InspectDatabase(db ethdb.Database) error {
 		{"Key-Value store", "Account snapshot", accountSnapSize.String()},
 		{"Key-Value store", "Storage snapshot", storageSnapSize.String()},
 		{"Key-Value store", "Clique snapshots", cliqueSnapsSize.String()},
+		{"Key-Value store", "Parlia snapshots", parliaSnapsSize.String()},
 		{"Key-Value store", "Singleton metadata", metadata.String()},
 		{"Ancient store", "Headers", ancientHeaders.String()},
 		{"Ancient store", "Bodies", ancientBodies.String()},

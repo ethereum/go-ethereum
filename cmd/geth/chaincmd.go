@@ -19,10 +19,13 @@ package main
 import (
 	"encoding/json"
 	"fmt"
+	"net"
 	"os"
+	"path"
 	"path/filepath"
 	"runtime"
 	"strconv"
+	"strings"
 	"sync/atomic"
 	"time"
 
@@ -36,6 +39,8 @@ import (
 	"github.com/ethereum/go-ethereum/eth/downloader"
 	"github.com/ethereum/go-ethereum/event"
 	"github.com/ethereum/go-ethereum/log"
+	"github.com/ethereum/go-ethereum/node"
+	"github.com/ethereum/go-ethereum/p2p/enode"
 	"github.com/ethereum/go-ethereum/metrics"
 	"github.com/ethereum/go-ethereum/trie"
 	"gopkg.in/urfave/cli.v1"
@@ -56,6 +61,23 @@ The init command initializes a new genesis block and definition for the network.
 This is a destructive action and changes the network in which you will be
 participating.
 
+It expects the genesis file as argument.`,
+	}
+	initNetworkCommand = cli.Command{
+		Action:    utils.MigrateFlags(initNetwork),
+		Name:      "init-network",
+		Usage:     "Bootstrap and initialize a new genesis block, and nodekey, config files for network nodes",
+		ArgsUsage: "<genesisPath>",
+		Flags: []cli.Flag{
+			utils.InitNetworkDir,
+			utils.InitNetworkPort,
+			utils.InitNetworkSize,
+			utils.InitNetworkIps,
+			configFileFlag,
+		},
+		Category: "BLOCKCHAIN COMMANDS",
+		Description: `
+The init-network command initializes a new genesis block, definition for the network, config files for network nodes.
 It expects the genesis file as argument.`,
 	}
 	dumpGenesisCommand = cli.Command{
@@ -250,6 +272,98 @@ func initGenesis(ctx *cli.Context) error {
 		log.Info("Successfully wrote genesis state", "database", name, "hash", hash)
 	}
 	return nil
+}
+
+// initNetwork will bootstrap and initialize a new genesis block, and nodekey, config files for network nodes
+func initNetwork(ctx *cli.Context) error {
+	initDir := ctx.String(utils.InitNetworkDir.Name)
+	if len(initDir) == 0 {
+		utils.Fatalf("init.dir is required")
+	}
+	size := ctx.Int(utils.InitNetworkSize.Name)
+	port := ctx.Int(utils.InitNetworkPort.Name)
+	ipStr := ctx.String(utils.InitNetworkIps.Name)
+	cfgFile := ctx.String(configFileFlag.Name)
+
+	if len(cfgFile) == 0 {
+		utils.Fatalf("config file is required")
+	}
+	var ips []string
+	if len(ipStr) != 0 {
+		ips = strings.Split(ipStr, ",")
+		if len(ips) != size {
+			utils.Fatalf("mismatch of size and length of ips")
+		}
+		for i := 0; i < size; i++ {
+			_, err := net.ResolveIPAddr("", ips[i])
+			if err != nil {
+				utils.Fatalf("invalid format of ip")
+				return err
+			}
+		}
+	} else {
+		ips = make([]string, size)
+		for i := 0; i < size; i++ {
+			ips[i] = "127.0.0.1"
+		}
+	}
+
+	// Make sure we have a valid genesis JSON
+	genesisPath := ctx.Args().First()
+	if len(genesisPath) == 0 {
+		utils.Fatalf("Must supply path to genesis JSON file")
+	}
+	file, err := os.Open(genesisPath)
+	if err != nil {
+		utils.Fatalf("Failed to read genesis file: %v", err)
+	}
+	defer file.Close()
+
+	genesis := new(core.Genesis)
+	if err := json.NewDecoder(file).Decode(genesis); err != nil {
+		utils.Fatalf("invalid genesis file: %v", err)
+	}
+	enodes := make([]*enode.Node, size)
+
+	// load config
+	var config gethConfig
+	err = loadConfig(cfgFile, &config)
+	if err != nil {
+		return err
+	}
+	config.Eth.Genesis = genesis
+
+	for i := 0; i < size; i++ {
+		stack, err := node.New(&config.Node)
+		if err != nil {
+			return err
+		}
+		stack.Config().DataDir = path.Join(initDir, fmt.Sprintf("node%d", i))
+		pk := stack.Config().NodeKey()
+		enodes[i] = enode.NewV4(&pk.PublicKey, net.ParseIP(ips[i]), port, port)
+	}
+
+	for i := 0; i < size; i++ {
+		config.Node.HTTPHost = ips[i]
+		config.Node.P2P.StaticNodes = make([]*enode.Node, size-1)
+		for j := 0; j < i; j++ {
+			config.Node.P2P.StaticNodes[j] = enodes[j]
+		}
+		for j := i + 1; j < size; j++ {
+			config.Node.P2P.StaticNodes[j-1] = enodes[j]
+		}
+		out, err := tomlSettings.Marshal(config)
+		if err != nil {
+			return err
+		}
+		dump, err := os.OpenFile(path.Join(initDir, fmt.Sprintf("node%d", i), "config.toml"), os.O_RDWR|os.O_CREATE|os.O_TRUNC, 0644)
+		if err != nil {
+			return err
+		}
+		defer dump.Close()
+		dump.Write(out)
+	}
+        return nil
 }
 
 func dumpGenesis(ctx *cli.Context) error {

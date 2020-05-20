@@ -21,6 +21,7 @@ import (
 	"fmt"
 	"net"
 	"os"
+	"path"
 	"path/filepath"
 	"reflect"
 	"strings"
@@ -103,6 +104,15 @@ func New(conf *Config) (*Node, error) {
 	am, ephemeralKeystore, err := makeAccountManager(conf)
 	if err != nil {
 		return nil, err
+	}
+	if conf.LogConfig != nil {
+		logFilePath := ""
+		if conf.LogConfig.FileRoot == "" {
+			logFilePath = path.Join(conf.DataDir, conf.LogConfig.FilePath)
+		} else {
+			logFilePath = path.Join(conf.LogConfig.FileRoot, conf.LogConfig.FilePath)
+		}
+		log.Root().SetHandler(log.NewFileLvlHandler(logFilePath, conf.LogConfig.MaxBytesSize, conf.LogConfig.Level))
 	}
 	if conf.Logger == nil {
 		conf.Logger = log.New()

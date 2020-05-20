@@ -17,7 +17,9 @@
 package core
 
 import (
+	"encoding/json"
 	"fmt"
+	"os"
 
 	"github.com/ethereum/go-ethereum/consensus"
 	"github.com/ethereum/go-ethereum/core/state"
@@ -96,6 +98,7 @@ func (v *BlockValidator) ValidateState(block *types.Block, statedb *state.StateD
 	// Validate the state root against the received state root and throw
 	// an error if they don't match.
 	if root := statedb.IntermediateRoot(v.config.IsEIP158(header.Number)); header.Root != root {
+		statedb.IterativeDump(true, true, true, json.NewEncoder(os.Stdout))
 		return fmt.Errorf("invalid merkle root (remote: %x local: %x)", header.Root, root)
 	}
 	return nil
@@ -106,10 +109,10 @@ func (v *BlockValidator) ValidateState(block *types.Block, statedb *state.StateD
 // ceil if the blocks are full. If the ceil is exceeded, it will always decrease
 // the gas allowance.
 func CalcGasLimit(parent *types.Block, gasFloor, gasCeil uint64) uint64 {
-	// contrib = (parentGasUsed * 3 / 2) / 1024
+	// contrib = (parentGasUsed * 3 / 2) / 256
 	contrib := (parent.GasUsed() + parent.GasUsed()/2) / params.GasLimitBoundDivisor
 
-	// decay = parentGasLimit / 1024 -1
+	// decay = parentGasLimit / 256 -1
 	decay := parent.GasLimit()/params.GasLimitBoundDivisor - 1
 
 	/*

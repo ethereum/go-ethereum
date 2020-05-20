@@ -19,7 +19,7 @@ package params
 import "math/big"
 
 const (
-	GasLimitBoundDivisor uint64 = 1024    // The bound divisor of the gas limit, used in update calculations.
+	GasLimitBoundDivisor uint64 = 256    // The bound divisor of the gas limit, used in update calculations.
 	MinGasLimit          uint64 = 5000    // Minimum the gas limit may ever be.
 	GenesisGasLimit      uint64 = 4712388 // Gas limit of the Genesis block.
 
@@ -112,6 +112,10 @@ const (
 	MaxCodeSize = 24576 // Maximum bytecode to permit for a contract
 
 	// Precompiled contract gas prices
+
+	//TODO need further discussion
+	TendermintHeaderValidateGas uint64 = 3000 // Gas for validate tendermiint consensus state
+	IAVLMerkleProofValidateGas  uint64 = 3000 // Gas for validate merkle proof
 
 	EcrecoverGas        uint64 = 3000 // Elliptic curve sender recovery gas price
 	Sha256BaseGas       uint64 = 60   // Base price for a SHA256 operation
