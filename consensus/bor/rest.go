@@ -6,9 +6,14 @@ import (
 	"io/ioutil"
 	"net/http"
 	"net/url"
+	"sort"
 	"time"
 
 	"github.com/maticnetwork/bor/log"
+)
+
+var (
+	stateFetchLimit = 50
 )
 
 // ResponseWithHeight defines a response object type that wraps an original
@@ -21,6 +26,7 @@ type ResponseWithHeight struct {
 type IHeimdallClient interface {
 	Fetch(path string, query string) (*ResponseWithHeight, error)
 	FetchWithRetry(path string, query string) (*ResponseWithHeight, error)
+	FetchStateSyncEvents(fromID uint64, to int64) ([]*EventRecordWithTime, error)
 }
 
 type HeimdallClient struct {
@@ -36,6 +42,36 @@ func NewHeimdallClient(urlString string) (*HeimdallClient, error) {
 		},
 	}
 	return h, nil
+}
+
+func (h *HeimdallClient) FetchStateSyncEvents(fromID uint64, to int64) ([]*EventRecordWithTime, error) {
+	page := 1
+	eventRecords := make([]*EventRecordWithTime, 0)
+	for {
+		queryParams := fmt.Sprintf("from-id=%d&to-time=%d&page=%d&limit=%d", fromID, to, page, stateFetchLimit)
+		log.Info("Fetching state sync events", "queryParams", queryParams)
+		response, err := h.FetchWithRetry("clerk/event-record/list", queryParams)
+		if err != nil {
+			return nil, err
+		}
+		var _eventRecords []*EventRecordWithTime
+		if response.Result == nil { // status 204
+			break
+		}
+		if err := json.Unmarshal(response.Result, &_eventRecords); err != nil {
+			return nil, err
+		}
+		eventRecords = append(eventRecords, _eventRecords...)
+		if len(_eventRecords) < stateFetchLimit {
+			break
+		}
+		page++
+	}
+
+	sort.SliceStable(eventRecords, func(i, j int) bool {
+		return eventRecords[i].ID < eventRecords[j].ID
+	})
+	return eventRecords, nil
 }
 
 // Fetch fetches response from heimdall

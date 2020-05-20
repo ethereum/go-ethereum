@@ -128,17 +128,15 @@ func (e *WrongDifficultyError) Error() string {
 type InvalidStateReceivedError struct {
 	Number      uint64
 	LastStateID uint64
-	From        *time.Time
 	To          *time.Time
 	Event       *EventRecordWithTime
 }
 
 func (e *InvalidStateReceivedError) Error() string {
 	return fmt.Sprintf(
-		"Received invalid event %s at block %d. Requested events from %s to %s. lastStateID was %d.",
+		"Received invalid event %s at block %d. Requested events until %s. Last state id was %d",
 		e.Event,
 		e.Number,
-		e.From.Format(time.RFC3339),
 		e.To.Format(time.RFC3339),
 		e.LastStateID,
 	)

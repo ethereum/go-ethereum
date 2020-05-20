@@ -3,20 +3,17 @@ package bortest
 import (
 	"encoding/hex"
 	"encoding/json"
-	"fmt"
 	"math/big"
 	"testing"
 	"time"
 
-	"github.com/maticnetwork/bor/consensus/bor"
-	"github.com/maticnetwork/bor/core/rawdb"
-
-	"github.com/maticnetwork/bor/crypto"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/mock"
 
+	"github.com/maticnetwork/bor/consensus/bor"
+	"github.com/maticnetwork/bor/core/rawdb"
 	"github.com/maticnetwork/bor/core/types"
-
+	"github.com/maticnetwork/bor/crypto"
 	"github.com/maticnetwork/bor/mocks"
 )
 
@@ -36,7 +33,7 @@ func TestInsertingSpanSizeBlocks(t *testing.T) {
 
 	db := init.ethereum.ChainDb()
 	block := init.genesis.ToBlock(db)
-	to := int64(block.Header().Time)
+	// to := int64(block.Header().Time)
 
 	// Insert sprintSize # of blocks so that span is fetched at the start of a new sprint
 	for i := uint64(1); i <= spanSize; i++ {
@@ -45,7 +42,6 @@ func TestInsertingSpanSizeBlocks(t *testing.T) {
 	}
 
 	assert.True(t, h.AssertCalled(t, "FetchWithRetry", spanPath, ""))
-	assert.True(t, h.AssertCalled(t, "FetchWithRetry", clerkPath, fmt.Sprintf(clerkQueryParams, 0, to, 1)))
 	validators, err := _bor.GetCurrentValidators(sprintSize, spanSize) // check validator set at the first block of new span
 	if err != nil {
 		t.Fatalf("%s", err)
@@ -80,39 +76,22 @@ func TestFetchStateSyncEvents(t *testing.T) {
 	h.On("FetchWithRetry", spanPath, "").Return(res, nil)
 
 	// B.2 Mock State Sync events
-	// read heimdall api response from file
-	res = stateSyncEventsPayload(t)
-	var _eventRecords []*bor.EventRecordWithTime
-	if err := json.Unmarshal(res.Result, &_eventRecords); err != nil {
-		t.Fatalf("%s", err)
-	}
-
-	// use that as a sample to generate bor.stateFetchLimit events
-	eventRecords := generateFakeStateSyncEvents(_eventRecords[0], 50)
-	_res, _ := json.Marshal(eventRecords)
-	response := bor.ResponseWithHeight{Height: "0"}
-	if err := json.Unmarshal(_res, &response.Result); err != nil {
-		t.Fatalf("%s", err)
-	}
-
-	// at # sprintSize, events are fetched for the interval [from, (block-sprint).Time)
-	from := 0
+	fromID := uint64(1)
+	// at # sprintSize, events are fetched for [fromID, (block-sprint).Time)
 	to := int64(chain.GetHeaderByNumber(0).Time)
-	page := 1
-	query1Params := fmt.Sprintf(clerkQueryParams, from, to, page)
-	h.On("FetchWithRetry", clerkPath, query1Params).Return(&response, nil)
+	eventCount := 50
 
-	page = 2
-	query2Params := fmt.Sprintf(clerkQueryParams, from, to, page)
-	h.On("FetchWithRetry", clerkPath, query2Params).Return(&bor.ResponseWithHeight{}, nil)
+	sample := getSampleEventRecord(t)
+	sample.Time = time.Unix(to-int64(eventCount+1), 0) // last event.Time will be just < to
+	eventRecords := generateFakeStateSyncEvents(sample, eventCount)
+	h.On("FetchStateSyncEvents", fromID, to).Return(eventRecords, nil)
 	_bor.SetHeimdallClient(h)
 
 	block = buildNextBlock(t, _bor, chain, block, nil, init.genesis.Config.Bor)
 	insertNewBlock(t, chain, block)
 
 	assert.True(t, h.AssertCalled(t, "FetchWithRetry", spanPath, ""))
-	assert.True(t, h.AssertCalled(t, "FetchWithRetry", clerkPath, query1Params))
-	assert.True(t, h.AssertCalled(t, "FetchWithRetry", clerkPath, query2Params))
+	assert.True(t, h.AssertCalled(t, "FetchStateSyncEvents", fromID, to))
 }
 
 func TestFetchStateSyncEvents_2(t *testing.T) {
@@ -121,64 +100,58 @@ func TestFetchStateSyncEvents_2(t *testing.T) {
 	engine := init.ethereum.Engine()
 	_bor := engine.(*bor.Bor)
 
-	// A. Insert blocks for 0th sprint
-	db := init.ethereum.ChainDb()
-	block := init.genesis.ToBlock(db)
-	// Insert sprintSize # of blocks so that span is fetched at the start of a new sprint
-	for i := uint64(1); i < sprintSize; i++ {
-		block = buildNextBlock(t, _bor, chain, block, nil, init.genesis.Config.Bor)
-		insertNewBlock(t, chain, block)
-	}
-
-	// B. Before inserting 1st block of the next sprint, mock heimdall deps
-	// B.1 Mock /bor/span/1
+	// Mock /bor/span/1
 	res, _ := loadSpanFromFile(t)
 	h := &mocks.IHeimdallClient{}
 	h.On("FetchWithRetry", spanPath, "").Return(res, nil)
 
-	// B.2 Mock State Sync events
-	// read heimdall api response from file
-	res = stateSyncEventsPayload(t)
-	var _eventRecords []*bor.EventRecordWithTime
-	if err := json.Unmarshal(res.Result, &_eventRecords); err != nil {
-		t.Fatalf("%s", err)
-	}
-	sample := _eventRecords[0]
-
-	// First query will be from [0, (block-sprint).Time]
-	// Insert 4 events are in this time range
-	eventRecords := []*bor.EventRecordWithTime{
-		buildStateEvent(sample, 2, 3), // id = 2, time = 3
-		buildStateEvent(sample, 3, 2), // id = 3, time = 2
-		buildStateEvent(sample, 1, 1), // id = 1, time = 1
-		// event with id 4 is missing
-		buildStateEvent(sample, 5, 4), // id = 5, time = 4
-	}
-	_res, _ := json.Marshal(eventRecords)
-	response := bor.ResponseWithHeight{Height: "0"}
-	if err := json.Unmarshal(_res, &response.Result); err != nil {
-		t.Fatalf("%s", err)
-	}
-
-	from := 0
+	// Mock State Sync events
+	// at # sprintSize, events are fetched for [fromID, (block-sprint).Time)
+	fromID := uint64(1)
 	to := int64(chain.GetHeaderByNumber(0).Time)
-	page := 1
-	queryParams := fmt.Sprintf(clerkQueryParams, from, to, page)
-	h.On("FetchWithRetry", clerkPath, queryParams).Return(&response, nil)
+	sample := getSampleEventRecord(t)
 
-	page = 2
-	query2Params := fmt.Sprintf(clerkQueryParams, from, to, page)
-	h.On("FetchWithRetry", clerkPath, query2Params).Return(&bor.ResponseWithHeight{}, nil)
+	// First query will be from [id=1, (block-sprint).Time]
+	// Insert 5 events in this time range
+	eventRecords := []*bor.EventRecordWithTime{
+		buildStateEvent(sample, 1, 3), // id = 1, time = 1
+		buildStateEvent(sample, 2, 1), // id = 2, time = 3
+		buildStateEvent(sample, 3, 2), // id = 3, time = 2
+		// event with id 5 is missing
+		buildStateEvent(sample, 4, 5), // id = 4, time = 5
+		buildStateEvent(sample, 6, 4), // id = 6, time = 4
+	}
+	h.On("FetchStateSyncEvents", fromID, to).Return(eventRecords, nil)
 	_bor.SetHeimdallClient(h)
 
-	block = buildNextBlock(t, _bor, chain, block, nil, init.genesis.Config.Bor)
-	insertNewBlock(t, chain, block)
-
+	// Insert blocks for 0th sprint
+	db := init.ethereum.ChainDb()
+	block := init.genesis.ToBlock(db)
+	for i := uint64(1); i <= sprintSize; i++ {
+		block = buildNextBlock(t, _bor, chain, block, nil, init.genesis.Config.Bor)
+		insertNewBlock(t, chain, block)
+	}
 	assert.True(t, h.AssertCalled(t, "FetchWithRetry", spanPath, ""))
-	assert.True(t, h.AssertCalled(t, "FetchWithRetry", clerkPath, queryParams))
+	assert.True(t, h.AssertCalled(t, "FetchStateSyncEvents", fromID, to))
 	lastStateID, _ := _bor.GenesisContractsClient.LastStateId(sprintSize)
-	assert.Equal(t, uint64(3), lastStateID.Uint64())
-	fmt.Println("lastStateId after", lastStateID)
+	// state 6 was not written
+	assert.Equal(t, uint64(4), lastStateID.Uint64())
+
+	//
+	fromID = uint64(5)
+	to = int64(chain.GetHeaderByNumber(sprintSize).Time)
+	eventRecords = []*bor.EventRecordWithTime{
+		buildStateEvent(sample, 5, 7),
+		buildStateEvent(sample, 6, 4),
+	}
+	h.On("FetchStateSyncEvents", fromID, to).Return(eventRecords, nil)
+	for i := sprintSize + 1; i <= spanSize; i++ {
+		block = buildNextBlock(t, _bor, chain, block, nil, init.genesis.Config.Bor)
+		insertNewBlock(t, chain, block)
+	}
+	assert.True(t, h.AssertCalled(t, "FetchStateSyncEvents", fromID, to))
+	lastStateID, _ = _bor.GenesisContractsClient.LastStateId(spanSize)
+	assert.Equal(t, uint64(6), lastStateID.Uint64())
 }
 
 func TestOutOfTurnSigning(t *testing.T) {
@@ -257,15 +230,17 @@ func getMockedHeimdallClient(t *testing.T) (*mocks.IHeimdallClient, *bor.Heimdal
 	res, heimdallSpan := loadSpanFromFile(t)
 	h := &mocks.IHeimdallClient{}
 	h.On("FetchWithRetry", "bor/span/1", "").Return(res, nil)
-	h.On("FetchWithRetry", mock.AnythingOfType("string"), mock.AnythingOfType("string")).Return(stateSyncEventsPayload(t), nil)
+	h.On(
+		"FetchStateSyncEvents",
+		mock.AnythingOfType("uint64"),
+		mock.AnythingOfType("int64")).Return([]*bor.EventRecordWithTime{getSampleEventRecord(t)}, nil)
 	return h, heimdallSpan
 }
 
 func generateFakeStateSyncEvents(sample *bor.EventRecordWithTime, count int) []*bor.EventRecordWithTime {
 	events := make([]*bor.EventRecordWithTime, count)
 	event := *sample
-	event.ID = 0
-	event.Time = time.Now()
+	event.ID = 1
 	events[0] = &bor.EventRecordWithTime{}
 	*events[0] = event
 	for i := 1; i < count; i++ {
@@ -282,4 +257,14 @@ func buildStateEvent(sample *bor.EventRecordWithTime, id uint64, timeStamp int64
 	event.ID = id
 	event.Time = time.Unix(timeStamp, 0)
 	return &event
+}
+
+func getSampleEventRecord(t *testing.T) *bor.EventRecordWithTime {
+	res := stateSyncEventsPayload(t)
+	var _eventRecords []*bor.EventRecordWithTime
+	if err := json.Unmarshal(res.Result, &_eventRecords); err != nil {
+		t.Fatalf("%s", err)
+	}
+	_eventRecords[0].Time = time.Unix(1, 0)
+	return _eventRecords[0]
 }
