@@ -45,7 +45,7 @@ func TestInsertingSpanSizeBlocks(t *testing.T) {
 	}
 
 	assert.True(t, h.AssertCalled(t, "FetchWithRetry", spanPath, ""))
-	assert.True(t, h.AssertCalled(t, "FetchWithRetry", clerkPath, fmt.Sprintf(clerkQueryParams, 1, to, 1)))
+	assert.True(t, h.AssertCalled(t, "FetchWithRetry", clerkPath, fmt.Sprintf(clerkQueryParams, 0, to, 1)))
 	validators, err := _bor.GetCurrentValidators(sprintSize, spanSize) // check validator set at the first block of new span
 	if err != nil {
 		t.Fatalf("%s", err)
@@ -96,7 +96,7 @@ func TestFetchStateSyncEvents(t *testing.T) {
 	}
 
 	// at # sprintSize, events are fetched for the interval [from, (block-sprint).Time)
-	from := 1
+	from := 0
 	to := int64(chain.GetHeaderByNumber(0).Time)
 	page := 1
 	query1Params := fmt.Sprintf(clerkQueryParams, from, to, page)

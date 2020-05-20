@@ -107,7 +107,7 @@ func (gc *GenesisContractsClient) LastStateId(snapshotNumber uint64) (*big.Int, 
 	method := "lastStateId"
 	data, err := gc.stateReceiverABI.Pack(method)
 	if err != nil {
-		log.Error("Unable to pack tx for getLastSyncTime", "error", err)
+		log.Error("Unable to pack tx for LastStateId", "error", err)
 		return nil, err
 	}
 
