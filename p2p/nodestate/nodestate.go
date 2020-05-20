@@ -623,13 +623,18 @@ func (ns *NodeStateMachine) SetState(n *enode.Node, setFlags, resetFlags Flags, 
 	changed := oldState ^ newState
 	node.state = newState
 
-	ns.removeTimeouts(node, reset|set)
+	// Remove the timeout callbacks for all reset and set flags,
+	// even they are not existent(it's noop).
+	ns.removeTimeouts(node, set|reset)
+
+	// Register the timeout callback if the new state is not empty
+	// and timeout itself is required.
+	if timeout != 0 && newState != 0 {
+		ns.addTimeout(n, set, timeout)
+	}
 	if newState == oldState {
 		ns.lock.Unlock()
 		return
-	}
-	if timeout != 0 && newState != 0 {
-		ns.addTimeout(n, set, timeout)
 	}
 	if newState == 0 {
 		delete(ns.nodes, id)

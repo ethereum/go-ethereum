@@ -342,3 +342,48 @@ func TestFieldSub(t *testing.T) {
 	check(Flags{}, uint64(100), nil)
 	ns2.Stop()
 }
+
+func TestDuplicatedFlags(t *testing.T) {
+	mdb, clock := rawdb.NewMemoryDatabase(), &mclock.Simulated{}
+
+	s, flags, _ := testSetup([]bool{true}, nil)
+	ns := NewNodeStateMachine(mdb, []byte("-ns"), clock, s)
+
+	type change struct{ old, new Flags }
+	set := make(chan change, 1)
+	ns.SubscribeState(flags[0], func(n *enode.Node, oldState, newState Flags) {
+		set <- change{oldState, newState}
+	})
+
+	ns.Start()
+	defer ns.Stop()
+
+	check := func(expectOld, expectNew Flags, expectChange bool) {
+		if expectChange {
+			select {
+			case c := <-set:
+				if !c.old.Equals(expectOld) {
+					t.Fatalf("Old state mismatch")
+				}
+				if !c.new.Equals(expectNew) {
+					t.Fatalf("New state mismatch")
+				}
+			case <-time.After(time.Second):
+			}
+			return
+		}
+		select {
+		case <-set:
+			t.Fatalf("Unexpected change")
+		case <-time.After(time.Millisecond * 100):
+			return
+		}
+	}
+	ns.SetState(testNode(1), flags[0], Flags{}, time.Second)
+	check(Flags{}, flags[0], true)
+	ns.SetState(testNode(1), flags[0], Flags{}, 2*time.Second) // extend the timeout to 2s
+	check(Flags{}, flags[0], false)
+
+	clock.Run(2 * time.Second)
+	check(flags[0], Flags{}, true)
+}
