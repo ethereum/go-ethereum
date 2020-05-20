@@ -5,6 +5,7 @@ import (
 	"io"
 	"net"
 	"os"
+	"path"
 	"reflect"
 	"sync"
 
@@ -68,6 +69,21 @@ func FileHandler(path string, fmtr Format) (Handler, error) {
 		return nil, err
 	}
 	return closingHandler{f, StreamHandler(f, fmtr)}, nil
+}
+
+// RotatingFileHandler returns a handler which writes log records to file chunks
+// at the given path. When a file's size reaches the limit, the handler creates
+// a new file named after the timestamp of the first log record it will contain.
+func RotatingFileHandler(filePath string, limit uint, formatter Format) (Handler, error) {
+	if _, err := os.Stat(path.Dir(filePath)); os.IsNotExist(err) {
+		err := os.MkdirAll(path.Dir(filePath), 0755)
+		if err != nil {
+			return nil, fmt.Errorf("could not create directory %s, %v", path.Dir(filePath), err)
+		}
+	}
+	fileWriter := NewAsyncFileWriter(filePath, int64(limit))
+	fileWriter.Start()
+	return StreamHandler(fileWriter, formatter), nil
 }
 
 // NetHandler opens a socket to the given address and writes records
