@@ -20,7 +20,7 @@ import (
 	"bytes"
 	"context"
 	"errors"
-	"fmt"
+	"math/big"
 	"math/rand"
 	"sync"
 
@@ -331,13 +331,12 @@ func (s *Syncer) syncAccounts(ctx context.Context, root common.Hash, peer *Peer)
 		batch.Reset()
 
 		// Account range processed, step to the next chunk
-		log.Info("Persisted range of accounts", "at", res.last, "nodes", nodes, "bytes", common.StorageSize(size))
+		log.Info("Persisted range of accounts", "account", res.last, "nodes", nodes, "bytes", common.StorageSize(size))
 
-		/*nextAccount = common.BigToHash(new(big.Int).Add(res.last.Big(), big.NewInt(1)))
-		if nextAccount == (common.Hash{}) {
+		next = common.BigToHash(new(big.Int).Add(res.last.Big(), big.NewInt(1)))
+		if next == (common.Hash{}) {
 			break // Overflow, someone created 0xff...f, oh well
-		}*/
-		next = res.last
+		}
 	}
 	return nil
 }
@@ -402,18 +401,17 @@ func (s *Syncer) syncStorage(ctx context.Context, root common.Hash, account comm
 		batch.Reset()
 
 		// Storage range processed, step to the next chunk
-		log.Debug("Persisted range of storage slots", "account", account, "at", res.last, "nodes", nodes, "bytes", common.StorageSize(size))
+		log.Debug("Persisted range of storage slots", "account", account, "slot", res.last, "nodes", nodes, "bytes", common.StorageSize(size))
 
-		/*nextAccount = common.BigToHash(new(big.Int).Add(res.last.Big(), big.NewInt(1)))
-		if nextAccount == (common.Hash{}) {
-			break // Overflow, someone created 0xff...f, oh well
-		}*/
 		// If the response contained all the data in one shot (no proofs), there
 		// is no reason to continue the sync, report immediate success.
 		if len(res.bounds) == 0 {
 			return nodes, size, true, nil
 		}
-		next = res.last
+		next = common.BigToHash(new(big.Int).Add(res.last.Big(), big.NewInt(1)))
+		if next == (common.Hash{}) {
+			break // Overflow, someone created 0xff...f, oh well
+		}
 	}
 	return nodes, size, false, nil
 }
@@ -446,19 +444,9 @@ func (s *Syncer) OnAccounts(peer *Peer, id uint64, hashes []common.Hash, account
 	}
 	proofdb := nodes.NodeSet()
 
-	db, tr, err := trie.VerifyRangeProof(root, keys, accounts, proofdb, proofdb)
+	db, tr, err := trie.VerifyRangeProof(root, req.origin[:], keys, accounts, proofdb, proofdb)
 	if err != nil {
 		return err
-	}
-	// The returned data checks out, ensure there are no malicious prefix gaps
-	if len(hashes) == 0 || hashes[0] != req.origin {
-		// Prefix looks funky, make sure the response is what we asked for
-		if val, err := trie.VerifyProof(root, req.origin[:], proofdb); err != nil {
-			return err
-		} else if val != nil {
-			peer.Log().Warn("Skipped origin account proof", "req", id)
-			return fmt.Errorf("skipped origin proof: %x -> %x", req.origin, val)
-		}
 	}
 	// Partial trie reconstructed, send it to the scheduler for storage filling
 	bounds := make(map[common.Hash]struct{})
@@ -469,13 +457,17 @@ func (s *Syncer) OnAccounts(peer *Peer, id uint64, hashes []common.Hash, account
 		hasher.Write(node)
 		bounds[common.BytesToHash(hasher.Sum(nil))] = struct{}{}
 	}
+	last := req.origin
+	if len(hashes) > 0 {
+		last = hashes[len(hashes)-1]
+	}
 	response := &accountResponse{
 		hashes:   hashes,
 		accounts: accounts,
 		nodes:    db,
 		trie:     tr,
 		bounds:   bounds,
-		last:     hashes[len(hashes)-1], // TODO(karalabe): bounds check
+		last:     last,
 	}
 	select {
 	case <-req.ctx.Done():
@@ -516,7 +508,7 @@ func (s *Syncer) OnStorage(peer *Peer, id uint64, hashes []common.Hash, slots []
 	if len(nodes) == 0 {
 		// No proof has been attached, the response must cover the entire key
 		// space and hash to the origin root.
-		db, _, err = trie.VerifyRange(req.root, keys, slots)
+		db, _, err = trie.VerifyRangeProof(req.root, req.origin[:], keys, slots, nil, nil)
 		if err != nil {
 			return err
 		}
@@ -525,19 +517,9 @@ func (s *Syncer) OnStorage(peer *Peer, id uint64, hashes []common.Hash, slots []
 		// returned data is indeed part of the storage trie
 		proofdb := nodes.NodeSet()
 
-		db, _, err = trie.VerifyRangeProof(req.root, keys, slots, proofdb, proofdb)
+		db, _, err = trie.VerifyRangeProof(req.root, req.origin[:], keys, slots, proofdb, proofdb)
 		if err != nil {
 			return err
-		}
-		// The returned data checks out, ensure there are no malicious prefix gaps
-		if len(hashes) == 0 || hashes[0] != req.origin {
-			// Prefix looks funky, make sure the response is what we asked for
-			if val, err := trie.VerifyProof(req.root, req.origin[:], proofdb); err != nil {
-				return err
-			} else if val != nil {
-				peer.Log().Warn("Skipped origin slot proof")
-				return fmt.Errorf("skipped origin proof: %x -> %x", req.origin, val)
-			}
 		}
 	}
 	// Partial trie reconstructed, send it to the scheduler for storage filling
@@ -549,10 +531,14 @@ func (s *Syncer) OnStorage(peer *Peer, id uint64, hashes []common.Hash, slots []
 		hasher.Write(node)
 		bounds[common.BytesToHash(hasher.Sum(nil))] = struct{}{}
 	}
+	last := req.origin
+	if len(hashes) > 0 {
+		last = hashes[len(hashes)-1]
+	}
 	response := &storageResponse{
 		nodes:  db,
 		bounds: bounds,
-		last:   hashes[len(hashes)-1], // TODO(karalabe): bounds check
+		last:   last,
 	}
 	select {
 	case <-req.ctx.Done():

@@ -146,7 +146,7 @@ func handleMessage(backend Backend, peer *Peer) error {
 			req.Bytes = softResponseLimit
 		}
 		// Retrieve the requested state and bail out if non existent
-		state, err := backend.Chain().StateAt(req.Root)
+		tr, err := trie.New(req.Root, backend.Chain().StateCache().TrieDB())
 		if err != nil {
 			return p2p.Send(peer.rw, accountRangeMsg, &accountRangeData{ID: req.ID})
 		}
@@ -160,16 +160,12 @@ func handleMessage(backend Backend, peer *Peer) error {
 		var (
 			accounts []*accountData
 			bytes    uint64
-			first    common.Hash
 			last     common.Hash
 		)
 		for it.Next() && bytes < req.Bytes && bytes < 1<<20 {
 			hash, account := it.Hash(), common.CopyBytes(it.Account())
 
 			// Track the returned interval for the Merkle proofs
-			if first == (common.Hash{}) {
-				first = hash
-			}
 			last = hash
 
 			// Assemble the reply item
@@ -179,25 +175,27 @@ func handleMessage(backend Backend, peer *Peer) error {
 				Body: account,
 			})
 		}
-		if first == (common.Hash{}) {
-			return p2p.Send(peer.rw, accountRangeMsg, &accountRangeData{ID: req.ID})
-		}
 		// Generate the Merkle proofs for the first and last account
-		firstProof, err := state.GetProofByHash(first)
-		if err != nil {
-			log.Warn("Failed to prove account range", "first", first, "err", err)
+		proof := light.NewNodeSet()
+		if err := tr.Prove(req.Origin[:], 0, proof); err != nil {
+			log.Warn("Failed to prove account range", "origin", req.Origin, "err", err)
 			return p2p.Send(peer.rw, accountRangeMsg, &accountRangeData{ID: req.ID})
 		}
-		lastProof, err := state.GetProofByHash(last)
-		if err != nil {
-			log.Warn("Failed to prove account range", "last", last, "err", err)
-			return p2p.Send(peer.rw, accountRangeMsg, &accountRangeData{ID: req.ID})
+		if last != (common.Hash{}) {
+			if err := tr.Prove(last[:], 0, proof); err != nil {
+				log.Warn("Failed to prove account range", "last", last, "err", err)
+				return p2p.Send(peer.rw, accountRangeMsg, &accountRangeData{ID: req.ID})
+			}
+		}
+		var proofs [][]byte
+		for _, blob := range proof.NodeList() {
+			proofs = append(proofs, blob)
 		}
 		// Send back anything accumulated
 		return p2p.Send(peer.rw, accountRangeMsg, &accountRangeData{
 			ID:       req.ID,
 			Accounts: accounts,
-			Proof:    append(firstProof, lastProof...),
+			Proof:    proofs,
 		})
 
 	case msg.Code == accountRangeMsg:
@@ -241,16 +239,12 @@ func handleMessage(backend Backend, peer *Peer) error {
 		var (
 			slots []*storageData
 			bytes uint64
-			first common.Hash
 			last  common.Hash
 		)
 		for it.Next() && bytes < req.Bytes && bytes < 1<<20 {
 			hash, slot := it.Hash(), common.CopyBytes(it.Slot())
 
 			// Track the returned interval for the Merkle proofs
-			if first == (common.Hash{}) {
-				first = hash
-			}
 			last = hash
 
 			// Assemble the reply item
@@ -259,9 +253,6 @@ func handleMessage(backend Backend, peer *Peer) error {
 				Hash: hash,
 				Body: slot,
 			})
-		}
-		if first == (common.Hash{}) {
-			return p2p.Send(peer.rw, storageRangeMsg, &storageRangeData{ID: req.ID})
 		}
 		// Generate the Merkle proofs for the first and last storage slot, but
 		// only if the response was capped. If the entire storage trie included
@@ -284,13 +275,15 @@ func handleMessage(backend Backend, peer *Peer) error {
 				return p2p.Send(peer.rw, storageRangeMsg, &storageRangeData{ID: req.ID})
 			}
 			proof := light.NewNodeSet()
-			if err := stTrie.Prove(first[:], 0, proof); err != nil {
-				log.Warn("Failed to prove storage range", "first", first, "err", err)
+			if err := stTrie.Prove(req.Origin[:], 0, proof); err != nil {
+				log.Warn("Failed to prove storage range", "origin", req.Origin, "err", err)
 				return p2p.Send(peer.rw, storageRangeMsg, &storageRangeData{ID: req.ID})
 			}
-			if err := stTrie.Prove(last[:], 0, proof); err != nil {
-				log.Warn("Failed to prove storage range", "last", last, "err", err)
-				return p2p.Send(peer.rw, storageRangeMsg, &storageRangeData{ID: req.ID})
+			if last != (common.Hash{}) {
+				if err := stTrie.Prove(last[:], 0, proof); err != nil {
+					log.Warn("Failed to prove storage range", "last", last, "err", err)
+					return p2p.Send(peer.rw, storageRangeMsg, &storageRangeData{ID: req.ID})
+				}
 			}
 			for _, blob := range proof.NodeList() {
 				proofs = append(proofs, blob)
