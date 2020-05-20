@@ -799,6 +799,9 @@ type PreviousState struct {
 
 func DoCall(ctx context.Context, b Backend, args CallArgs, prevState *PreviousState, blockNrOrHash rpc.BlockNumberOrHash, overrides map[common.Address]account, vmCfg vm.Config, timeout time.Duration, globalGasCap *big.Int) (*core.ExecutionResult, *PreviousState, error) {
 	defer func(start time.Time) { log.Debug("Executing EVM call finished", "runtime", time.Since(start)) }(time.Now())
+	if prevState == nil {
+		prevState = &PreviousState{}
+	}
 	if (prevState.header != nil && prevState.header == nil) || (prevState.header == nil && prevState.header != nil) {
 		return nil, nil, fmt.Errorf("both header and state must be set to use previous staate")
 	}
@@ -1035,9 +1038,6 @@ func (s *PublicBlockChainAPI) EstimateGas(ctx context.Context, argsInterface int
 		err       error
 		stateData *PreviousState
 	)
-	if stateData == nil {
-		stateData = &PreviousState{}
-	}
 	getCallArgs := func(inter map[string]interface{}) CallArgs {
 		marshalled, _ := json.Marshal(inter)
 		callArgs := CallArgs{}
