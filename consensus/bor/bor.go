@@ -1075,10 +1075,6 @@ func (c *Bor) CommitStates(
 	chain chainContext,
 ) error {
 	number := header.Number.Uint64()
-	// lastSync, err := c.GenesisContractsClient.LastStateSyncTime(number - 1)
-	// if err != nil {
-	// 	return err
-	// }
 	_lastStateID, err := c.GenesisContractsClient.LastStateId(number - 1)
 	if err != nil {
 		return err
