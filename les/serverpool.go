@@ -76,13 +76,13 @@ type serverPool struct {
 // nodeHistory keeps track of dial costs which determine node weight together with the
 // service value calculated by lpc.ValueTracker.
 type nodeHistory struct {
-	dialCost           utils.ExpiredValue
-	lastDial, nextDial int64 // unix time (seconds)
+	dialCost                       utils.ExpiredValue
+	redialWaitStart, redialWaitEnd int64 // unix time (seconds)
 }
 
 type nodeHistoryEnc struct {
-	DialCost           utils.ExpiredValue
-	LastDial, NextDial uint64
+	DialCost                       utils.ExpiredValue
+	RedialWaitStart, RedialWaitEnd uint64
 }
 
 // queryFunc sends a pre-negotiation query and blocks until a response arrives or timeout occurs.
@@ -106,9 +106,9 @@ var (
 		func(field interface{}) ([]byte, error) {
 			if n, ok := field.(nodeHistory); ok {
 				ne := nodeHistoryEnc{
-					DialCost: n.dialCost,
-					LastDial: uint64(n.lastDial),
-					NextDial: uint64(n.nextDial),
+					DialCost:        n.dialCost,
+					RedialWaitStart: uint64(n.redialWaitStart),
+					RedialWaitEnd:   uint64(n.redialWaitEnd),
 				}
 				enc, err := rlp.EncodeToBytes(&ne)
 				return enc, err
@@ -120,9 +120,9 @@ var (
 			var ne nodeHistoryEnc
 			err := rlp.DecodeBytes(enc, &ne)
 			n := nodeHistory{
-				dialCost: ne.DialCost,
-				lastDial: int64(ne.LastDial),
-				nextDial: int64(ne.NextDial),
+				dialCost:        ne.DialCost,
+				redialWaitStart: int64(ne.RedialWaitStart),
+				redialWaitEnd:   int64(ne.RedialWaitEnd),
 			}
 			return n, err
 		},
@@ -242,9 +242,9 @@ func (s *serverPool) start() {
 	unixTime := s.unixTime()
 	s.ns.ForEach(sfHasValue, nodestate.Flags{}, func(node *enode.Node, state nodestate.Flags) {
 		s.calculateWeight(node)
-		if n, ok := s.ns.GetField(node, sfiNodeHistory).(nodeHistory); ok && n.nextDial > unixTime {
-			wait := n.nextDial - unixTime
-			lastWait := n.nextDial - n.lastDial
+		if n, ok := s.ns.GetField(node, sfiNodeHistory).(nodeHistory); ok && n.redialWaitEnd > unixTime {
+			wait := n.redialWaitEnd - unixTime
+			lastWait := n.redialWaitEnd - n.redialWaitStart
 			if wait > lastWait {
 				// if the time until expiration is larger than the last suggested
 				// waiting time then the system clock was probably adjusted
@@ -406,45 +406,50 @@ func (s *serverPool) setRedialWait(node *enode.Node, addDialCost int64, waitStep
 	totalDialCost := s.addDialCost(&n, addDialCost)
 
 	// if the current dial session has yielded at least the average value/dial cost ratio
-	// then waitFactor should be reset to 1 (the minimum value). If the session value
-	// is below average but still positive then waitFactor is limited to the ration of
-	// average / current service value. If the attempt was unsuccessful then waitFactor
-	// is raised exponentially without limitation.
+	// then the waiting time should be reset to the minimum. If the session value
+	// is below average but still positive then timeout is limited to the ratio of
+	// average / current service value multiplied by the minimum timeout. If the attempt
+	// was unsuccessful then timeout is raised exponentially without limitation.
 	// Note: dialCost is used in the formula below even if dial was not attempted at all
 	// because the pre-negotiation query did not return a positive result. In this case
 	// the ratio has no meaning anyway and waitFactor is always raised, though in smaller
 	// steps because queries are cheaper and therefore we can allow more failed attempts.
-	a := totalValue * dialCost
-	b := float64(totalDialCost) * sessionValue
 	unixTime := s.unixTime()
-	lastWaitFactor := float64(n.nextDial-n.lastDial) / minRedialWait
-	waitFactor := float64(unixTime-n.lastDial) / minRedialWait
-	// It is possible that the node has been dialed before the previously calculated
-	// nextDial time. In this case we either keep the last calculated waiting time or
-	// take the actual time elapsed since the last dial and increase it exponentially,
-	// whichever is larger.
-	if waitFactor > lastWaitFactor {
-		waitFactor = lastWaitFactor
+	plannedTimeout := float64(n.redialWaitEnd - n.redialWaitStart) // last planned redialWait timeout
+	var actualWait float64                                         // actual waiting time elapsed
+	if unixTime > n.redialWaitEnd {
+		// the planned timeout has elapsed
+		actualWait = plannedTimeout
+	} else {
+		// if the node was redialed earlier then we do not raise the planned timeout
+		// exponentially because that could lead to the timeout rising very high in
+		// a short amount of time
+		// Note that in case of an early redial actualWait also includes the dial
+		// timeout or connection time of the last attempt but it still serves its
+		// purpose of preventing the timeout rising quicker than linearly as a function
+		// of total time elapsed without a successful connection.
+		actualWait = float64(unixTime - n.redialWaitStart)
 	}
-	if waitFactor < 1 {
-		waitFactor = 1
-	}
-	waitFactor *= waitStep
-	if lastWaitFactor > waitFactor {
-		waitFactor = lastWaitFactor
+	// raise timeout exponentially if the last planned timeout has elapsed
+	// (use at least the last planned timeout otherwise)
+	nextTimeout := actualWait * waitStep
+	if plannedTimeout > nextTimeout {
+		nextTimeout = plannedTimeout
 	}
 	// we reduce the waiting time if the server has provided service value during the
 	// connection (but never under the minimum)
-	if a < b*waitFactor {
-		waitFactor = a / b
+	a := totalValue * dialCost * float64(minRedialWait)
+	b := float64(totalDialCost) * sessionValue
+	if a < b*nextTimeout {
+		nextTimeout = a / b
 	}
-	if waitFactor < 1 {
-		waitFactor = 1
+	if nextTimeout < minRedialWait {
+		nextTimeout = minRedialWait
 	}
-	wait := time.Duration(float64(time.Second) * minRedialWait * waitFactor)
+	wait := time.Duration(float64(time.Second) * nextTimeout)
 	if wait < waitThreshold {
-		n.lastDial = unixTime
-		n.nextDial = unixTime + int64(wait/time.Second)
+		n.redialWaitStart = unixTime
+		n.redialWaitEnd = unixTime + int64(nextTimeout)
 		s.ns.SetField(node, sfiNodeHistory, n)
 		s.ns.SetState(node, sfRedialWait, nodestate.Flags{}, wait)
 		s.updateWeight(node, totalValue, totalDialCost)
