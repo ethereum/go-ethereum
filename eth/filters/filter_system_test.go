@@ -17,6 +17,7 @@
 package filters
 
 import (
+	"bytes"
 	"context"
 	"fmt"
 	"math/big"
@@ -25,16 +26,18 @@ import (
 	"testing"
 	"time"
 
-	ethereum "github.com/ethereum/go-ethereum"
+	"github.com/ethereum/go-ethereum"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/consensus/ethash"
 	"github.com/ethereum/go-ethereum/core"
 	"github.com/ethereum/go-ethereum/core/bloombits"
 	"github.com/ethereum/go-ethereum/core/rawdb"
+	"github.com/ethereum/go-ethereum/core/state"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/ethdb"
 	"github.com/ethereum/go-ethereum/event"
 	"github.com/ethereum/go-ethereum/params"
+	"github.com/ethereum/go-ethereum/rlp"
 	"github.com/ethereum/go-ethereum/rpc"
 )
 
@@ -612,4 +615,173 @@ func flattenLogs(pl [][]*types.Log) []*types.Log {
 		logs = append(logs, l...)
 	}
 	return logs
+}
+
+func TestStateChangeSubscription(t *testing.T) {
+	var (
+		db             = rawdb.NewMemoryDatabase()
+		backend        = &testBackend{db: db}
+		api            = NewPublicFilterAPI(backend, false)
+		genesis        = new(core.Genesis).MustCommit(db)
+		numberOfBlocks = 3
+		chain, _       = core.GenerateChain(params.TestChainConfig, genesis, ethash.NewFaker(), db, numberOfBlocks, func(i int, gen *core.BlockGen) {})
+
+		address1 = common.HexToAddress("0x1")
+		address2 = common.HexToAddress("0x2")
+
+		modifiedAccount1 = state.ModifiedAccount{
+			Account: state.Account{
+				Nonce:   0,
+				Balance: big.NewInt(100),
+				Root:    common.HexToHash("0x01"),
+			},
+			Storage: nil,
+		}
+
+		modifiedAccount2 = state.ModifiedAccount{
+			Account: state.Account{
+				Nonce:   0,
+				Balance: big.NewInt(200),
+				Root:    common.HexToHash("0x02"),
+			},
+			Storage: state.Storage{common.HexToHash("0x0002"): common.HexToHash("0x00002")},
+		}
+
+		accountDiff1 = getAccountDiff(address1, modifiedAccount1, t)
+		accountDiff2 = getAccountDiff(address2, modifiedAccount2, t)
+
+		block0 = chain[0]
+		block1 = chain[1]
+		block2 = chain[2]
+
+		emptyStateChangeEvent    = core.StateChangeEvent{Block: block0}
+		blockOneStateChangeEvent = core.StateChangeEvent{
+			Block: block1,
+			StateChanges: state.StateChanges{
+				address1: modifiedAccount1,
+				address2: modifiedAccount2,
+			},
+		}
+		blockTwoStateChangeEvent = core.StateChangeEvent{
+			Block: block2,
+			StateChanges: state.StateChanges{
+				address1: modifiedAccount1,
+				address2: modifiedAccount2,
+			},
+		}
+		testCases = []struct {
+			description       string
+			stateChangeEvents []core.StateChangeEvent
+			expectedPayloads  []Payload
+			crit              ethereum.FilterQuery
+		}{
+			{
+				"when block 0 has no state changes no payload for that block is returned",
+				[]core.StateChangeEvent{emptyStateChangeEvent, blockOneStateChangeEvent, blockTwoStateChangeEvent},
+				getExpectedPayloads([]*types.Block{block1, block2}, []AccountDiff{accountDiff1, accountDiff2}, t),
+				ethereum.FilterQuery{},
+			},
+			{
+				"when watching state changes from specific contracts",
+				[]core.StateChangeEvent{blockOneStateChangeEvent, blockTwoStateChangeEvent, emptyStateChangeEvent},
+				getExpectedPayloads([]*types.Block{block1, block2}, []AccountDiff{accountDiff1}, t),
+				ethereum.FilterQuery{Addresses: []common.Address{address1}},
+			},
+			{
+				"when no specific addresses are configured all state changes are returned",
+				[]core.StateChangeEvent{blockOneStateChangeEvent, blockTwoStateChangeEvent, emptyStateChangeEvent},
+				getExpectedPayloads([]*types.Block{block1, block2}, []AccountDiff{accountDiff1, accountDiff2}, t),
+				ethereum.FilterQuery{},
+			},
+		}
+	)
+
+	for _, test := range testCases {
+		chan0 := make(chan Payload)
+		sub0 := api.events.SubscribeStateChanges(test.crit, chan0)
+
+		var payloads = make(map[int]Payload)
+		go func() {
+			// simulate client
+			// keep this loop open for numberOfBlocks - 1 because the first block has no StateChangeEvents and should
+			// not send an event to the client via the subscription
+			for index := 0; index < numberOfBlocks-1; index++ {
+				payload := <-chan0
+				payloads[index] = payload
+			}
+
+			sub0.Unsubscribe()
+		}()
+
+		time.Sleep(1 * time.Second)
+		// send the state change events to the subscriber
+		for _, e := range test.stateChangeEvents {
+			backend.stateChangeFeed.Send(e)
+		}
+
+		<-sub0.Err()
+
+		expectedNumberOfPayloads := len(test.expectedPayloads)
+		if len(payloads) != expectedNumberOfPayloads {
+			t.Errorf("Test failure: %s: %s", t.Name(), test.description)
+			t.Logf("Actual number of payloads does not equal expected.\nactual: %+v\nexpected: %+v", len(payloads), expectedNumberOfPayloads)
+		}
+
+		for index, payload := range payloads {
+			actualRLP := payload.StateDiffRlp
+			expectedRLP := test.expectedPayloads[index].StateDiffRlp
+			if !bytes.Equal(actualRLP, expectedRLP) {
+				t.Errorf("Test failure: %s: %s", t.Name(), test.description)
+				t.Logf("Actual payload equal expected.\nactual:%+v\nexpected: %+v", actualRLP, expectedRLP)
+			}
+		}
+	}
+}
+
+func getAccountDiff(accountAddress common.Address, modifedAccount state.ModifiedAccount, t *testing.T) AccountDiff {
+	accountRlp, accountRlpErr := rlp.EncodeToBytes(modifedAccount.Account)
+	if accountRlpErr != nil {
+		t.Error("Test failure:", t.Name())
+		t.Logf("Failed to encode account diff")
+	}
+
+	var storageDiffs []StorageDiff
+	for key, value := range modifedAccount.Storage {
+		storageValueRlp, storageRlpErr := rlp.EncodeToBytes(value)
+		if storageRlpErr != nil {
+			t.Error("Test failure:", t.Name())
+			t.Logf("Failed to encode storgae diff")
+		}
+		storageDiff := StorageDiff{
+			Key:   key[:],
+			Value: storageValueRlp,
+		}
+
+		storageDiffs = append(storageDiffs, storageDiff)
+	}
+
+	return AccountDiff{
+		Key:     accountAddress[:],
+		Value:   accountRlp,
+		Storage: storageDiffs,
+	}
+}
+
+func getExpectedPayloads(blocks []*types.Block, updatedAccounts []AccountDiff, t *testing.T) []Payload {
+	var payloads []Payload
+	for _, block := range blocks {
+		expectedStateDiff := StateDiff{
+			BlockNumber:     block.Number(),
+			BlockHash:       block.Hash(),
+			UpdatedAccounts: updatedAccounts,
+		}
+		expectedStateDiffRLP, err := rlp.EncodeToBytes(expectedStateDiff)
+		if err != nil {
+			t.Error("Test failure:", t.Name())
+			t.Logf("Failed to encode state diff to bytes")
+			return payloads
+		}
+		payloads = append(payloads, Payload{StateDiffRlp: expectedStateDiffRLP})
+	}
+	return payloads
 }

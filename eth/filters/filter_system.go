@@ -52,6 +52,8 @@ const (
 	PendingTransactionsSubscription
 	// BlocksSubscription queries hashes for blocks that are imported
 	BlocksSubscription
+	// StateChangeSubscription queries for state changes between blocks being imported
+	StateChangeSubscription
 	// LastSubscription keeps track of the last index
 	LastIndexSubscription
 )
@@ -74,7 +76,7 @@ type subscription struct {
 	id                  rpc.ID
 	typ                 Type
 	created             time.Time
-	logsCrit            ethereum.FilterQuery
+	filterCrit          ethereum.FilterQuery
 	logs                chan []*types.Log
 	hashes              chan []common.Hash
 	headers             chan *types.Header
@@ -237,7 +239,7 @@ func (es *EventSystem) subscribeMinedPendingLogs(crit ethereum.FilterQuery, logs
 	sub := &subscription{
 		id:                  rpc.NewID(),
 		typ:                 MinedAndPendingLogsSubscription,
-		logsCrit:            crit,
+		filterCrit:          crit,
 		created:             time.Now(),
 		logs:                logs,
 		hashes:              make(chan []common.Hash),
@@ -255,7 +257,7 @@ func (es *EventSystem) subscribeLogs(crit ethereum.FilterQuery, logs chan []*typ
 	sub := &subscription{
 		id:                  rpc.NewID(),
 		typ:                 LogsSubscription,
-		logsCrit:            crit,
+		filterCrit:          crit,
 		created:             time.Now(),
 		logs:                logs,
 		hashes:              make(chan []common.Hash),
@@ -273,7 +275,7 @@ func (es *EventSystem) subscribePendingLogs(crit ethereum.FilterQuery, logs chan
 	sub := &subscription{
 		id:                  rpc.NewID(),
 		typ:                 PendingLogsSubscription,
-		logsCrit:            crit,
+		filterCrit:          crit,
 		created:             time.Now(),
 		logs:                logs,
 		hashes:              make(chan []common.Hash),
@@ -316,6 +318,23 @@ func (es *EventSystem) SubscribePendingTxs(hashes chan []common.Hash) *Subscript
 		installed:           make(chan struct{}),
 		err:                 make(chan error),
 	}
+	return es.subscribe(sub)
+}
+
+// SubscribeStateChanges creates a subscription that writes new state changes that are identified
+// for each new block.
+func (es *EventSystem) SubscribeStateChanges(crit ethereum.FilterQuery, stateChanges chan Payload) *Subscription {
+	sub := &subscription{
+		id:                  rpc.NewID(),
+		typ:                 StateChangeSubscription,
+		filterCrit:          crit,
+		created:             time.Now(),
+		logs:                make(chan []*types.Log),
+		hashes:              make(chan []common.Hash),
+		headers:             make(chan *types.Header),
+		stateChangePayloads: stateChanges,
+		installed:           make(chan struct{}),
+		err:                 make(chan error),
 	}
 	return es.subscribe(sub)
 }
@@ -327,7 +346,7 @@ func (es *EventSystem) handleLogs(filters filterIndex, ev []*types.Log) {
 		return
 	}
 	for _, f := range filters[LogsSubscription] {
-		matchedLogs := filterLogs(ev, f.logsCrit.FromBlock, f.logsCrit.ToBlock, f.logsCrit.Addresses, f.logsCrit.Topics)
+		matchedLogs := filterLogs(ev, f.filterCrit.FromBlock, f.filterCrit.ToBlock, f.filterCrit.Addresses, f.filterCrit.Topics)
 		if len(matchedLogs) > 0 {
 			f.logs <- matchedLogs
 		}
@@ -339,7 +358,7 @@ func (es *EventSystem) handlePendingLogs(filters filterIndex, ev []*types.Log) {
 		return
 	}
 	for _, f := range filters[PendingLogsSubscription] {
-		matchedLogs := filterLogs(ev, nil, f.logsCrit.ToBlock, f.logsCrit.Addresses, f.logsCrit.Topics)
+		matchedLogs := filterLogs(ev, nil, f.filterCrit.ToBlock, f.filterCrit.Addresses, f.filterCrit.Topics)
 		if len(matchedLogs) > 0 {
 			f.logs <- matchedLogs
 		}
@@ -348,7 +367,7 @@ func (es *EventSystem) handlePendingLogs(filters filterIndex, ev []*types.Log) {
 
 func (es *EventSystem) handleRemovedLogs(filters filterIndex, ev core.RemovedLogsEvent) {
 	for _, f := range filters[LogsSubscription] {
-		matchedLogs := filterLogs(ev.Logs, f.logsCrit.FromBlock, f.logsCrit.ToBlock, f.logsCrit.Addresses, f.logsCrit.Topics)
+		matchedLogs := filterLogs(ev.Logs, f.filterCrit.FromBlock, f.filterCrit.ToBlock, f.filterCrit.Addresses, f.filterCrit.Topics)
 		if len(matchedLogs) > 0 {
 			f.logs <- matchedLogs
 		}
@@ -372,7 +391,7 @@ func (es *EventSystem) handleChainEvent(filters filterIndex, ev core.ChainEvent)
 	if es.lightMode && len(filters[LogsSubscription]) > 0 {
 		es.lightFilterNewHead(ev.Block.Header(), func(header *types.Header, remove bool) {
 			for _, f := range filters[LogsSubscription] {
-				if matchedLogs := es.lightFilterLogs(header, f.logsCrit.Addresses, f.logsCrit.Topics, remove); len(matchedLogs) > 0 {
+				if matchedLogs := es.lightFilterLogs(header, f.filterCrit.Addresses, f.filterCrit.Topics, remove); len(matchedLogs) > 0 {
 					f.logs <- matchedLogs
 				}
 			}
@@ -382,7 +401,7 @@ func (es *EventSystem) handleChainEvent(filters filterIndex, ev core.ChainEvent)
 
 func (es *EventSystem) handleStateChangeEvent(filters filterIndex, ev core.StateChangeEvent) {
 	for _, f := range filters[StateChangeSubscription] {
-		payload, processingErr := processStateChanges(ev, f.logsCrit)
+		payload, processingErr := processStateChanges(ev, f.filterCrit)
 		if processingErr != nil {
 			f.err <- processingErr
 		}

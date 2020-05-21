@@ -28,6 +28,7 @@ import (
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/ethereum/go-ethereum/core/types"
+	"github.com/ethereum/go-ethereum/eth/filters"
 	"github.com/ethereum/go-ethereum/rlp"
 	"github.com/ethereum/go-ethereum/rpc"
 )
@@ -369,6 +370,15 @@ func (ec *Client) NonceAt(ctx context.Context, account common.Address, blockNumb
 	var result hexutil.Uint64
 	err := ec.c.CallContext(ctx, &result, "eth_getTransactionCount", account, toBlockNumArg(blockNumber))
 	return uint64(result), err
+}
+
+// SubscribeNewStateChanges subscribes to notifications about the state change events on the given channel.
+func (ec *Client) SubscribeNewStateChanges(ctx context.Context, q ethereum.FilterQuery, ch chan<- filters.Payload) (ethereum.Subscription, error) {
+	arg, err := toFilterArg(q)
+	if err != nil {
+		return nil, err
+	}
+	return ec.c.EthSubscribe(ctx, ch, "newStateChanges", arg)
 }
 
 // Filters
