@@ -221,7 +221,7 @@ func unsetInternal(n node, left []byte, right []byte) error {
 	}
 	// Step down to the fork point. There are two scenarios can happen:
 	// - the fork point is a shortnode: the left proof MUST point to a
-	//   non-existent key and the key can't match with the shortnode
+	//   non-existent key and the key doesn't match with the shortnode
 	// - the fork point is a fullnode: the left proof can point to an
 	//   existent key or not.
 	var (
@@ -232,7 +232,7 @@ findFork:
 	for {
 		switch rn := (n).(type) {
 		case *shortNode:
-			// The right proof must points to an existent key.
+			// The right proof must point to an existent key.
 			if len(right)-pos < len(rn.Key) || !bytes.Equal(rn.Key, right[pos:pos+len(rn.Key)]) {
 				return errors.New("invalid edge path")
 			}
@@ -247,7 +247,7 @@ findFork:
 			n, pos = rn.Val, pos+len(rn.Key)
 		case *fullNode:
 			leftnode, rightnode := rn.Children[left[pos]], rn.Children[right[pos]]
-			// The right proof must points to an existent key.
+			// The right proof must point to an existent key.
 			if rightnode == nil {
 				return errors.New("invalid edge path")
 			}
