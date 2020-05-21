@@ -220,8 +220,6 @@ func Bind(types []string, abis []string, bytecodes []string, fsigs []map[string]
 		"bindtype":      bindType[lang],
 		"bindtopictype": bindTopicType[lang],
 		"namedtype":     namedType[lang],
-		"formatmethod":  formatMethod,
-		"formatevent":   formatEvent,
 		"capitalise":    capitalise,
 		"decapitalise":  decapitalise,
 	}
@@ -537,9 +535,7 @@ var methodNormalizer = map[Lang]func(string) string{
 }
 
 // capitalise makes a camel-case string which starts with an upper case character.
-func capitalise(input string) string {
-	return abi.ToCamelCase(input)
-}
+var capitalise = abi.ToCamelCase
 
 // decapitalise makes a camel-case string which starts with a lower case character.
 func decapitalise(input string) string {
@@ -587,75 +583,4 @@ func hasStruct(t abi.Type) bool {
 	default:
 		return false
 	}
-}
-
-// resolveArgName converts a raw argument representation into a user friendly format.
-func resolveArgName(arg abi.Argument, structs map[string]*tmplStruct) string {
-	var (
-		prefix   string
-		embedded string
-		typ      = &arg.Type
-	)
-loop:
-	for {
-		switch typ.T {
-		case abi.SliceTy:
-			prefix += "[]"
-		case abi.ArrayTy:
-			prefix += fmt.Sprintf("[%d]", typ.Size)
-		default:
-			embedded = typ.TupleRawName + typ.String()
-			break loop
-		}
-		typ = typ.Elem
-	}
-	if s, exist := structs[embedded]; exist {
-		return prefix + s.Name
-	} else {
-		return arg.Type.String()
-	}
-}
-
-// formatMethod transforms raw method representation into a user friendly one.
-func formatMethod(method abi.Method, structs map[string]*tmplStruct) string {
-	inputs := make([]string, len(method.Inputs))
-	for i, input := range method.Inputs {
-		inputs[i] = fmt.Sprintf("%v %v", resolveArgName(input, structs), input.Name)
-	}
-	outputs := make([]string, len(method.Outputs))
-	for i, output := range method.Outputs {
-		outputs[i] = resolveArgName(output, structs)
-		if len(output.Name) > 0 {
-			outputs[i] += fmt.Sprintf(" %v", output.Name)
-		}
-	}
-	// Extract meaningful state mutability of solidity method.
-	// If it's default value, never print it.
-	state := method.StateMutability
-	if state == "nonpayable" {
-		state = ""
-	}
-	if state != "" {
-		state = state + " "
-	}
-	identity := fmt.Sprintf("function %v", method.RawName)
-	if method.Type == abi.Fallback {
-		identity = "fallback"
-	} else if method.Type == abi.Receive {
-		identity = "receive"
-	}
-	return fmt.Sprintf("%s(%v) %sreturns(%v)", identity, strings.Join(inputs, ", "), state, strings.Join(outputs, ", "))
-}
-
-// formatEvent transforms raw event representation into a user friendly one.
-func formatEvent(event abi.Event, structs map[string]*tmplStruct) string {
-	inputs := make([]string, len(event.Inputs))
-	for i, input := range event.Inputs {
-		if input.Indexed {
-			inputs[i] = fmt.Sprintf("%v indexed %v", resolveArgName(input, structs), input.Name)
-		} else {
-			inputs[i] = fmt.Sprintf("%v %v", resolveArgName(input, structs), input.Name)
-		}
-	}
-	return fmt.Sprintf("event %v(%v)", event.RawName, strings.Join(inputs, ", "))
 }

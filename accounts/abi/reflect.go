@@ -17,7 +17,9 @@
 package abi
 
 import (
+	"errors"
 	"fmt"
+	"math/big"
 	"reflect"
 	"strings"
 )
@@ -25,46 +27,38 @@ import (
 // indirect recursively dereferences the value until it either gets the value
 // or finds a big.Int
 func indirect(v reflect.Value) reflect.Value {
-	if v.Kind() == reflect.Ptr && v.Elem().Type() != derefbigT {
+	if v.Kind() == reflect.Ptr && v.Elem().Type() != reflect.TypeOf(big.Int{}) {
 		return indirect(v.Elem())
 	}
 	return v
 }
 
-// indirectInterfaceOrPtr recursively dereferences the value until value is not interface.
-func indirectInterfaceOrPtr(v reflect.Value) reflect.Value {
-	if (v.Kind() == reflect.Interface || v.Kind() == reflect.Ptr) && v.Elem().IsValid() {
-		return indirect(v.Elem())
-	}
-	return v
-}
-
-// reflectIntKind returns the reflect using the given size and
+// reflectIntType returns the reflect using the given size and
 // unsignedness.
-func reflectIntKindAndType(unsigned bool, size int) (reflect.Kind, reflect.Type) {
+func reflectIntType(unsigned bool, size int) reflect.Type {
+	if unsigned {
+		switch size {
+		case 8:
+			return reflect.TypeOf(uint8(0))
+		case 16:
+			return reflect.TypeOf(uint16(0))
+		case 32:
+			return reflect.TypeOf(uint32(0))
+		case 64:
+			return reflect.TypeOf(uint64(0))
+		}
+	}
 	switch size {
 	case 8:
-		if unsigned {
-			return reflect.Uint8, uint8T
-		}
-		return reflect.Int8, int8T
+		return reflect.TypeOf(int8(0))
 	case 16:
-		if unsigned {
-			return reflect.Uint16, uint16T
-		}
-		return reflect.Int16, int16T
+		return reflect.TypeOf(int16(0))
 	case 32:
-		if unsigned {
-			return reflect.Uint32, uint32T
-		}
-		return reflect.Int32, int32T
+		return reflect.TypeOf(int32(0))
 	case 64:
-		if unsigned {
-			return reflect.Uint64, uint64T
-		}
-		return reflect.Int64, int64T
+		return reflect.TypeOf(int64(0))
 	}
-	return reflect.Ptr, bigT
+	return reflect.TypeOf(&big.Int{})
 }
 
 // mustArrayToBytesSlice creates a new byte slice with the exact same size as value
@@ -84,12 +78,16 @@ func set(dst, src reflect.Value) error {
 	switch {
 	case dstType.Kind() == reflect.Interface && dst.Elem().IsValid():
 		return set(dst.Elem(), src)
-	case dstType.Kind() == reflect.Ptr && dstType.Elem() != derefbigT:
+	case dstType.Kind() == reflect.Ptr && dstType.Elem() != reflect.TypeOf(big.Int{}):
 		return set(dst.Elem(), src)
 	case srcType.AssignableTo(dstType) && dst.CanSet():
 		dst.Set(src)
-	case dstType.Kind() == reflect.Slice && srcType.Kind() == reflect.Slice:
+	case dstType.Kind() == reflect.Slice && srcType.Kind() == reflect.Slice && dst.CanSet():
 		return setSlice(dst, src)
+	case dstType.Kind() == reflect.Array:
+		return setArray(dst, src)
+	case dstType.Kind() == reflect.Struct:
+		return setStruct(dst, src)
 	default:
 		return fmt.Errorf("abi: cannot unmarshal %v in to %v", src.Type(), dst.Type())
 	}
@@ -98,36 +96,56 @@ func set(dst, src reflect.Value) error {
 
 // setSlice attempts to assign src to dst when slices are not assignable by default
 // e.g. src: [][]byte -> dst: [][15]byte
+// setSlice ignores if we cannot copy all of src' elements.
 func setSlice(dst, src reflect.Value) error {
 	slice := reflect.MakeSlice(dst.Type(), src.Len(), src.Len())
 	for i := 0; i < src.Len(); i++ {
-		v := src.Index(i)
-		reflect.Copy(slice.Index(i), v)
-	}
-
-	dst.Set(slice)
-	return nil
-}
-
-// requireAssignable assures that `dest` is a pointer and it's not an interface.
-func requireAssignable(dst, src reflect.Value) error {
-	if dst.Kind() != reflect.Ptr && dst.Kind() != reflect.Interface {
-		return fmt.Errorf("abi: cannot unmarshal %v into %v", src.Type(), dst.Type())
-	}
-	return nil
-}
-
-// requireUnpackKind verifies preconditions for unpacking `args` into `kind`
-func requireUnpackKind(v reflect.Value, minLength int, args Arguments) error {
-	switch v.Kind() {
-	case reflect.Struct:
-	case reflect.Slice, reflect.Array:
-		if v.Len() < minLength {
-			return fmt.Errorf("abi: insufficient number of elements in the list/array for unpack, want %d, got %d",
-				minLength, v.Len())
+		if src.Index(i).Kind() == reflect.Struct {
+			if err := set(slice.Index(i), src.Index(i)); err != nil {
+				return err
+			}
+		} else {
+			// e.g. [][32]uint8 to []common.Hash
+			if err := set(slice.Index(i), src.Index(i)); err != nil {
+				return err
+			}
 		}
-	default:
-		return fmt.Errorf("abi: cannot unmarshal tuple into %v", v.Type())
+	}
+	if dst.CanSet() {
+		dst.Set(slice)
+		return nil
+	}
+	return errors.New("Cannot set slice, destination not settable")
+}
+
+func setArray(dst, src reflect.Value) error {
+	array := reflect.New(dst.Type()).Elem()
+	min := src.Len()
+	if src.Len() > dst.Len() {
+		min = dst.Len()
+	}
+	for i := 0; i < min; i++ {
+		if err := set(array.Index(i), src.Index(i)); err != nil {
+			return err
+		}
+	}
+	if dst.CanSet() {
+		dst.Set(array)
+		return nil
+	}
+	return errors.New("Cannot set array, destination not settable")
+}
+
+func setStruct(dst, src reflect.Value) error {
+	for i := 0; i < src.NumField(); i++ {
+		srcField := src.Field(i)
+		dstField := dst.Field(i)
+		if !dstField.IsValid() || !srcField.IsValid() {
+			return fmt.Errorf("Could not find src field: %v value: %v in destination", srcField.Type().Name(), srcField)
+		}
+		if err := set(dstField, srcField); err != nil {
+			return err
+		}
 	}
 	return nil
 }

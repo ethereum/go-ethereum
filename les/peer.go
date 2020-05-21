@@ -65,9 +65,6 @@ const (
 
 	// handshakeTimeout is the timeout LES handshake will be treated as failed.
 	handshakeTimeout = 5 * time.Second
-
-	// retrySendCachePeriod is the time interval a caching retry is performed.
-	retrySendCachePeriod = time.Millisecond * 100
 )
 
 const (
@@ -162,24 +159,6 @@ func (p *peerCommons) canQueue() bool {
 // Please ensure to check `canQueue` before call this function
 func (p *peerCommons) queueSend(f func()) bool {
 	return p.sendQueue.Queue(f)
-}
-
-// mustQueueSend starts a for loop and retry the caching if failed.
-// If the stopCh is closed, then it returns.
-func (p *peerCommons) mustQueueSend(f func()) {
-	for {
-		// Check whether the stopCh is closed.
-		select {
-		case <-p.closeCh:
-			return
-		default:
-		}
-		// If the function is successfully cached, return.
-		if p.canQueue() && p.queueSend(f) {
-			return
-		}
-		time.Sleep(retrySendCachePeriod)
-	}
 }
 
 // String implements fmt.Stringer.
@@ -899,7 +878,7 @@ func (p *clientPeer) updateCapacity(cap uint64) {
 	var kvList keyValueList
 	kvList = kvList.add("flowControl/MRR", cap)
 	kvList = kvList.add("flowControl/BL", cap*bufLimitRatio)
-	p.mustQueueSend(func() { p.sendAnnounce(announceData{Update: kvList}) })
+	p.queueSend(func() { p.sendAnnounce(announceData{Update: kvList}) })
 }
 
 // freezeClient temporarily puts the client in a frozen state which means all

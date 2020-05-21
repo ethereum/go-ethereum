@@ -28,6 +28,7 @@ import (
 	"github.com/ethereum/go-ethereum/accounts/scwallet"
 	"github.com/ethereum/go-ethereum/accounts/usbwallet"
 	"github.com/ethereum/go-ethereum/common/hexutil"
+	"github.com/ethereum/go-ethereum/console/prompt"
 	"github.com/ethereum/go-ethereum/internal/jsre"
 	"github.com/ethereum/go-ethereum/rpc"
 )
@@ -35,13 +36,13 @@ import (
 // bridge is a collection of JavaScript utility methods to bride the .js runtime
 // environment and the Go RPC connection backing the remote method calls.
 type bridge struct {
-	client   *rpc.Client  // RPC client to execute Ethereum requests through
-	prompter UserPrompter // Input prompter to allow interactive user feedback
-	printer  io.Writer    // Output writer to serialize any display strings to
+	client   *rpc.Client         // RPC client to execute Ethereum requests through
+	prompter prompt.UserPrompter // Input prompter to allow interactive user feedback
+	printer  io.Writer           // Output writer to serialize any display strings to
 }
 
 // newBridge creates a new JavaScript wrapper around an RPC client.
-func newBridge(client *rpc.Client, prompter UserPrompter, printer io.Writer) *bridge {
+func newBridge(client *rpc.Client, prompter prompt.UserPrompter, printer io.Writer) *bridge {
 	return &bridge{
 		client:   client,
 		prompter: prompter,
@@ -229,6 +230,9 @@ func (b *bridge) readPinAndReopenWallet(call jsre.Call) (goja.Value, error) {
 // original RPC method (saved in jeth.unlockAccount) with it to actually execute
 // the RPC call.
 func (b *bridge) UnlockAccount(call jsre.Call) (goja.Value, error) {
+	if len(call.Arguments) < 1 {
+		return nil, fmt.Errorf("usage: unlockAccount(account, [ password, duration ])")
+	}
 	// Make sure we have an account specified to unlock.
 	if call.Argument(0).ExportType().Kind() != reflect.String {
 		return nil, fmt.Errorf("first argument must be the account to unlock")
@@ -272,6 +276,9 @@ func (b *bridge) UnlockAccount(call jsre.Call) (goja.Value, error) {
 // prompt to acquire the passphrase and executes the original RPC method (saved in
 // jeth.sign) with it to actually execute the RPC call.
 func (b *bridge) Sign(call jsre.Call) (goja.Value, error) {
+	if nArgs := len(call.Arguments); nArgs < 2 {
+		return nil, fmt.Errorf("usage: sign(message, account, [ password ])")
+	}
 	var (
 		message = call.Argument(0)
 		account = call.Argument(1)
@@ -307,6 +314,9 @@ func (b *bridge) Sign(call jsre.Call) (goja.Value, error) {
 
 // Sleep will block the console for the specified number of seconds.
 func (b *bridge) Sleep(call jsre.Call) (goja.Value, error) {
+	if nArgs := len(call.Arguments); nArgs < 1 {
+		return nil, fmt.Errorf("usage: sleep(<number of seconds>)")
+	}
 	if !isNumber(call.Argument(0)) {
 		return nil, fmt.Errorf("usage: sleep(<number of seconds>)")
 	}
@@ -334,7 +344,7 @@ func (b *bridge) SleepBlocks(call jsre.Call) (goja.Value, error) {
 		blocks = call.Argument(0).ToInteger()
 	}
 	if nArgs >= 2 {
-		if isNumber(call.Argument(1)) {
+		if !isNumber(call.Argument(1)) {
 			return nil, fmt.Errorf("expected number as second argument")
 		}
 		sleep = call.Argument(1).ToInteger()

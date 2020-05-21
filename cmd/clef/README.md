@@ -46,6 +46,7 @@ GLOBAL OPTIONS:
    --stdio-ui              Use STDIN/STDOUT as a channel for an external UI. This means that an STDIN/STDOUT is used for RPC-communication with a e.g. a graphical user interface, and can be used when Clef is started by an external process.
    --stdio-ui-test         Mechanism to test interface between Clef and UI. Requires 'stdio-ui'.
    --advanced              If enabled, issues warnings instead of rejections for suspicious requests. Default off
+   --suppress-bootwarn     If set, does not show the warning during boot
    --help, -h              show help
    --version, -v           print the version
 ```

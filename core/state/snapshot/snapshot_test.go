@@ -60,6 +60,29 @@ func randomAccountSet(hashes ...string) map[common.Hash][]byte {
 	return accounts
 }
 
+// randomStorageSet generates a set of random slots with the given strings as
+// the slot addresses.
+func randomStorageSet(accounts []string, hashes [][]string, nilStorage [][]string) map[common.Hash]map[common.Hash][]byte {
+	storages := make(map[common.Hash]map[common.Hash][]byte)
+	for index, account := range accounts {
+		storages[common.HexToHash(account)] = make(map[common.Hash][]byte)
+
+		if index < len(hashes) {
+			hashes := hashes[index]
+			for _, hash := range hashes {
+				storages[common.HexToHash(account)][common.HexToHash(hash)] = randomHash().Bytes()
+			}
+		}
+		if index < len(nilStorage) {
+			nils := nilStorage[index]
+			for _, hash := range nils {
+				storages[common.HexToHash(account)][common.HexToHash(hash)] = nil
+			}
+		}
+	}
+	return storages
+}
+
 // Tests that if a disk layer becomes stale, no active external references will
 // be returned with junk data. This version of the test flattens every diff layer
 // to check internal corner case around the bottom-most memory accumulator.

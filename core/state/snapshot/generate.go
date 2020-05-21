@@ -42,7 +42,7 @@ var (
 )
 
 // generatorStats is a collection of statistics gathered by the snapshot generator
-// for  logging purposes.
+// for logging purposes.
 type generatorStats struct {
 	wiping   chan struct{}      // Notification channel if wiping is in progress
 	origin   uint64             // Origin prefix where generation started
@@ -167,7 +167,7 @@ func (dl *diskLayer) generate(stats *generatorStats) {
 		if err := rlp.DecodeBytes(accIt.Value, &acc); err != nil {
 			log.Crit("Invalid account encountered during snapshot creation", "err", err)
 		}
-		data := AccountRLP(acc.Nonce, acc.Balance, acc.Root, acc.CodeHash)
+		data := SlimAccountRLP(acc.Nonce, acc.Balance, acc.Root, acc.CodeHash)
 
 		// If the account is not yet in-progress, write it out
 		if accMarker == nil || !bytes.Equal(accountHash[:], accMarker) {

@@ -23,6 +23,8 @@ import (
 	"regexp"
 	"strconv"
 	"strings"
+
+	"github.com/ethereum/go-ethereum/common"
 )
 
 // Type enumerator
@@ -45,17 +47,16 @@ const (
 // Type is the reflection of the supported argument type
 type Type struct {
 	Elem *Type
-	Kind reflect.Kind
-	Type reflect.Type
 	Size int
 	T    byte // Our own type checking
 
 	stringKind string // holds the unparsed string for deriving signatures
 
 	// Tuple relative fields
-	TupleRawName  string   // Raw struct name defined in source code, may be empty.
-	TupleElems    []*Type  // Type information of all tuple fields
-	TupleRawNames []string // Raw field name of all tuple fields
+	TupleRawName  string       // Raw struct name defined in source code, may be empty.
+	TupleElems    []*Type      // Type information of all tuple fields
+	TupleRawNames []string     // Raw field name of all tuple fields
+	TupleType     reflect.Type // Underlying struct of the tuple
 }
 
 var (
@@ -94,20 +95,16 @@ func NewType(t string, internalType string, components []ArgumentMarshaling) (ty
 		if len(intz) == 0 {
 			// is a slice
 			typ.T = SliceTy
-			typ.Kind = reflect.Slice
 			typ.Elem = &embeddedType
-			typ.Type = reflect.SliceOf(embeddedType.Type)
 			typ.stringKind = embeddedType.stringKind + sliced
 		} else if len(intz) == 1 {
 			// is a array
 			typ.T = ArrayTy
-			typ.Kind = reflect.Array
 			typ.Elem = &embeddedType
 			typ.Size, err = strconv.Atoi(intz[0])
 			if err != nil {
 				return Type{}, fmt.Errorf("abi: error parsing variable size: %v", err)
 			}
-			typ.Type = reflect.ArrayOf(typ.Size, embeddedType.Type)
 			typ.stringKind = embeddedType.stringKind + sliced
 		} else {
 			return Type{}, fmt.Errorf("invalid formatting of array type")
@@ -139,36 +136,24 @@ func NewType(t string, internalType string, components []ArgumentMarshaling) (ty
 	// varType is the parsed abi type
 	switch varType := parsedType[1]; varType {
 	case "int":
-		typ.Kind, typ.Type = reflectIntKindAndType(false, varSize)
 		typ.Size = varSize
 		typ.T = IntTy
 	case "uint":
-		typ.Kind, typ.Type = reflectIntKindAndType(true, varSize)
 		typ.Size = varSize
 		typ.T = UintTy
 	case "bool":
-		typ.Kind = reflect.Bool
 		typ.T = BoolTy
-		typ.Type = reflect.TypeOf(bool(false))
 	case "address":
-		typ.Kind = reflect.Array
-		typ.Type = addressT
 		typ.Size = 20
 		typ.T = AddressTy
 	case "string":
-		typ.Kind = reflect.String
-		typ.Type = reflect.TypeOf("")
 		typ.T = StringTy
 	case "bytes":
 		if varSize == 0 {
 			typ.T = BytesTy
-			typ.Kind = reflect.Slice
-			typ.Type = reflect.SliceOf(reflect.TypeOf(byte(0)))
 		} else {
 			typ.T = FixedBytesTy
-			typ.Kind = reflect.Array
 			typ.Size = varSize
-			typ.Type = reflect.ArrayOf(varSize, reflect.TypeOf(byte(0)))
 		}
 	case "tuple":
 		var (
@@ -178,17 +163,20 @@ func NewType(t string, internalType string, components []ArgumentMarshaling) (ty
 			expression string // canonical parameter expression
 		)
 		expression += "("
+		overloadedNames := make(map[string]string)
 		for idx, c := range components {
 			cType, err := NewType(c.Type, c.InternalType, c.Components)
 			if err != nil {
 				return Type{}, err
 			}
-			if ToCamelCase(c.Name) == "" {
-				return Type{}, errors.New("abi: purely anonymous or underscored field is not supported")
+			fieldName, err := overloadedArgName(c.Name, overloadedNames)
+			if err != nil {
+				return Type{}, err
 			}
+			overloadedNames[fieldName] = fieldName
 			fields = append(fields, reflect.StructField{
-				Name: ToCamelCase(c.Name), // reflect.StructOf will panic for any exported field.
-				Type: cType.Type,
+				Name: fieldName, // reflect.StructOf will panic for any exported field.
+				Type: cType.getType(),
 				Tag:  reflect.StructTag("json:\"" + c.Name + "\""),
 			})
 			elems = append(elems, &cType)
@@ -199,8 +187,8 @@ func NewType(t string, internalType string, components []ArgumentMarshaling) (ty
 			}
 		}
 		expression += ")"
-		typ.Kind = reflect.Struct
-		typ.Type = reflect.StructOf(fields)
+
+		typ.TupleType = reflect.StructOf(fields)
 		typ.TupleElems = elems
 		typ.TupleRawNames = names
 		typ.T = TupleTy
@@ -217,15 +205,62 @@ func NewType(t string, internalType string, components []ArgumentMarshaling) (ty
 		}
 
 	case "function":
-		typ.Kind = reflect.Array
 		typ.T = FunctionTy
 		typ.Size = 24
-		typ.Type = reflect.ArrayOf(24, reflect.TypeOf(byte(0)))
 	default:
 		return Type{}, fmt.Errorf("unsupported arg type: %s", t)
 	}
 
 	return
+}
+
+func (t Type) getType() reflect.Type {
+	switch t.T {
+	case IntTy:
+		return reflectIntType(false, t.Size)
+	case UintTy:
+		return reflectIntType(true, t.Size)
+	case BoolTy:
+		return reflect.TypeOf(false)
+	case StringTy:
+		return reflect.TypeOf("")
+	case SliceTy:
+		return reflect.SliceOf(t.Elem.getType())
+	case ArrayTy:
+		return reflect.ArrayOf(t.Size, t.Elem.getType())
+	case TupleTy:
+		return t.TupleType
+	case AddressTy:
+		return reflect.TypeOf(common.Address{})
+	case FixedBytesTy:
+		return reflect.ArrayOf(t.Size, reflect.TypeOf(byte(0)))
+	case BytesTy:
+		return reflect.SliceOf(reflect.TypeOf(byte(0)))
+	case HashTy:
+		// hashtype currently not used
+		return reflect.ArrayOf(32, reflect.TypeOf(byte(0)))
+	case FixedPointTy:
+		// fixedpoint type currently not used
+		return reflect.ArrayOf(32, reflect.TypeOf(byte(0)))
+	case FunctionTy:
+		return reflect.ArrayOf(24, reflect.TypeOf(byte(0)))
+	default:
+		panic("Invalid type")
+	}
+}
+
+func overloadedArgName(rawName string, names map[string]string) (string, error) {
+	fieldName := ToCamelCase(rawName)
+	if fieldName == "" {
+		return "", errors.New("abi: purely anonymous or underscored field is not supported")
+	}
+	// Handle overloaded fieldNames
+	_, ok := names[fieldName]
+	for idx := 0; ok; idx++ {
+		fieldName = fmt.Sprintf("%s%d", ToCamelCase(rawName), idx)
+		_, ok = names[fieldName]
+	}
+	return fieldName, nil
 }
 
 // String implements Stringer

@@ -389,7 +389,7 @@ var opCodeToString = map[OpCode]string{
 func (op OpCode) String() string {
 	str := opCodeToString[op]
 	if len(str) == 0 {
-		return fmt.Sprintf("Missing opcode 0x%x", int(op))
+		return fmt.Sprintf("opcode 0x%x not defined", int(op))
 	}
 
 	return str

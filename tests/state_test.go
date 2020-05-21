@@ -37,12 +37,14 @@ func TestState(t *testing.T) {
 	st.slow(`^stQuadraticComplexityTest/`)
 	st.slow(`^stStaticCall/static_Call50000`)
 	st.slow(`^stStaticCall/static_Return50000`)
-	st.slow(`^stStaticCall/static_Call1MB`)
 	st.slow(`^stSystemOperationsTest/CallRecursiveBomb`)
 	st.slow(`^stTransactionTest/Opcodes_TransactionInit`)
 
 	// Very time consuming
 	st.skipLoad(`^stTimeConsuming/`)
+
+	// Uses 1GB RAM per tested fork
+	st.skipLoad(`^stStaticCall/static_Call1MB`)
 
 	// Broken tests:
 	// Expected failures:
@@ -66,13 +68,16 @@ func TestState(t *testing.T) {
 
 				t.Run(key+"/trie", func(t *testing.T) {
 					withTrace(t, test.gasLimit(subtest), func(vmconfig vm.Config) error {
-						_, err := test.Run(subtest, vmconfig, false)
+						_, _, err := test.Run(subtest, vmconfig, false)
 						return st.checkFailure(t, name+"/trie", err)
 					})
 				})
 				t.Run(key+"/snap", func(t *testing.T) {
 					withTrace(t, test.gasLimit(subtest), func(vmconfig vm.Config) error {
-						_, err := test.Run(subtest, vmconfig, true)
+						snaps, statedb, err := test.Run(subtest, vmconfig, true)
+						if _, err := snaps.Journal(statedb.IntermediateRoot(false)); err != nil {
+							return err
+						}
 						return st.checkFailure(t, name+"/snap", err)
 					})
 				})

@@ -31,7 +31,6 @@ import (
 	"unicode"
 
 	"github.com/ethereum/go-ethereum/accounts"
-	"github.com/ethereum/go-ethereum/accounts/abi"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/ethereum/go-ethereum/common/math"
@@ -587,7 +586,7 @@ func (typedData *TypedData) EncodePrimitiveValue(encType string, encValue interf
 		if err != nil {
 			return nil, err
 		}
-		return abi.U256(b), nil
+		return math.U256Bytes(b), nil
 	}
 	return nil, fmt.Errorf("unrecognized type '%s'", encType)
 
@@ -827,23 +826,23 @@ func (t Types) validate() error {
 		}
 		for i, typeObj := range typeArr {
 			if len(typeObj.Type) == 0 {
-				return fmt.Errorf("type %v:%d: empty Type", typeKey, i)
+				return fmt.Errorf("type %q:%d: empty Type", typeKey, i)
 			}
 			if len(typeObj.Name) == 0 {
-				return fmt.Errorf("type %v:%d: empty Name", typeKey, i)
+				return fmt.Errorf("type %q:%d: empty Name", typeKey, i)
 			}
 			if typeKey == typeObj.Type {
-				return fmt.Errorf("type '%s' cannot reference itself", typeObj.Type)
+				return fmt.Errorf("type %q cannot reference itself", typeObj.Type)
 			}
 			if typeObj.isReferenceType() {
 				if _, exist := t[typeObj.typeName()]; !exist {
-					return fmt.Errorf("reference type '%s' is undefined", typeObj.Type)
+					return fmt.Errorf("reference type %q is undefined", typeObj.Type)
 				}
 				if !typedDataReferenceTypeRegexp.MatchString(typeObj.Type) {
-					return fmt.Errorf("unknown reference type '%s", typeObj.Type)
+					return fmt.Errorf("unknown reference type %q", typeObj.Type)
 				}
 			} else if !isPrimitiveTypeValid(typeObj.Type) {
-				return fmt.Errorf("unknown type '%s'", typeObj.Type)
+				return fmt.Errorf("unknown type %q", typeObj.Type)
 			}
 		}
 	}
