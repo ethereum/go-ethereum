@@ -862,13 +862,13 @@ func DoCall(ctx context.Context, b Backend, args CallArgs, blockNrOrHash rpc.Blo
 		return nil, fmt.Errorf("execution aborted (timeout = %v)", timeout)
 	}
 	// If the result contains a revert reason, try to unpack and return it.
-	if res.Err != nil && len(res.Revert()) > 0 {
-		reason, err := abi.UnpackRevert(res.Revert())
+	if len(result.Revert()) > 0 {
+		reason, err := abi.UnpackRevert(result.Revert())
 		if err == nil {
 			return nil, fmt.Errorf("execution reverted: %v", reason)
 		}
 	}
-	return result, res.Err
+	return result, result.Err
 }
 
 // Call executes the given transaction on the state for the given block number.
