@@ -51,15 +51,16 @@ func testNodeIndex(id enode.ID) int {
 }
 
 type serverPoolTest struct {
-	db                 ethdb.KeyValueStore
-	clock              *mclock.Simulated
-	preNeg, preNegFail bool
-	vt                 *lpc.ValueTracker
-	sp                 *serverPool
-	input              enode.Iterator
-	testNodes          []spTestNode
-	trusted            []string
-	waitCount          int32
+	db                   ethdb.KeyValueStore
+	clock                *mclock.Simulated
+	quit                 chan struct{}
+	preNeg, preNegFail   bool
+	vt                   *lpc.ValueTracker
+	sp                   *serverPool
+	input                enode.Iterator
+	testNodes            []spTestNode
+	trusted              []string
+	waitCount, waitEnded int32
 
 	cycle, conn, servedConn  int
 	serviceCycles, dialCount int
@@ -98,6 +99,7 @@ func (s *serverPoolTest) beginWait() {
 
 func (s *serverPoolTest) endWait() {
 	atomic.AddInt32(&s.waitCount, -1)
+	atomic.AddInt32(&s.waitEnded, 1)
 }
 
 func (s *serverPoolTest) addTrusted(i int) {
@@ -105,7 +107,6 @@ func (s *serverPoolTest) addTrusted(i int) {
 }
 
 func (s *serverPoolTest) start() {
-
 	var testQuery queryFunc
 	if s.preNeg {
 		testQuery = func(node *enode.Node) int {
@@ -152,9 +153,27 @@ func (s *serverPoolTest) start() {
 	s.sp.unixTime = func() int64 { return int64(s.clock.Now()) / int64(time.Second) }
 	s.disconnect = make(map[int][]int)
 	s.sp.start()
+	s.quit = make(chan struct{})
+	go func() {
+		last := int32(-1)
+		for {
+			select {
+			case <-time.After(time.Millisecond * 100):
+				c := atomic.LoadInt32(&s.waitEnded)
+				if c == last {
+					// advance clock if test is stuck (might happen in rare cases)
+					s.clock.Run(time.Second)
+				}
+				last = c
+			case <-s.quit:
+				return
+			}
+		}
+	}()
 }
 
 func (s *serverPoolTest) stop() {
+	close(s.quit)
 	s.sp.stop()
 	s.vt.Stop()
 	for i := range s.testNodes {
@@ -272,8 +291,8 @@ func TestServerPoolWithPreNeg(t *testing.T)     { testServerPool(t, true, false)
 func TestServerPoolWithPreNegFail(t *testing.T) { testServerPool(t, true, true) }
 func testServerPool(t *testing.T, preNeg, fail bool) {
 	s := newServerPoolTest(preNeg, fail)
-	nodes := s.setNodes(50, 200, 200, true, false)
-	s.setNodes(50, 20, 20, false, false)
+	nodes := s.setNodes(100, 200, 200, true, false)
+	s.setNodes(100, 20, 20, false, false)
 	s.start()
 	s.run()
 	s.stop()
@@ -284,15 +303,15 @@ func TestServerPoolChangedNodes(t *testing.T)           { testServerPoolChangedN
 func TestServerPoolChangedNodesWithPreNeg(t *testing.T) { testServerPoolChangedNodes(t, true) }
 func testServerPoolChangedNodes(t *testing.T, preNeg bool) {
 	s := newServerPoolTest(preNeg, false)
-	nodes := s.setNodes(50, 200, 200, true, false)
-	s.setNodes(50, 20, 20, false, false)
+	nodes := s.setNodes(100, 200, 200, true, false)
+	s.setNodes(100, 20, 20, false, false)
 	s.start()
 	s.run()
 	s.checkNodes(t, nodes)
 	for i := 0; i < 3; i++ {
 		s.resetNodes()
-		nodes := s.setNodes(50, 200, 200, true, false)
-		s.setNodes(50, 20, 20, false, false)
+		nodes := s.setNodes(100, 200, 200, true, false)
+		s.setNodes(100, 20, 20, false, false)
 		s.run()
 		s.checkNodes(t, nodes)
 	}
@@ -305,8 +324,8 @@ func TestServerPoolRestartNoDiscoveryWithPreNeg(t *testing.T) {
 }
 func testServerPoolRestartNoDiscovery(t *testing.T, preNeg bool) {
 	s := newServerPoolTest(preNeg, false)
-	nodes := s.setNodes(50, 200, 200, true, false)
-	s.setNodes(50, 20, 20, false, false)
+	nodes := s.setNodes(100, 200, 200, true, false)
+	s.setNodes(100, 20, 20, false, false)
 	s.start()
 	s.run()
 	s.stop()
