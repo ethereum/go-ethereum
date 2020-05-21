@@ -44,6 +44,10 @@ func TestState(t *testing.T) {
 	// Very time consuming
 	st.skipLoad(`^stTimeConsuming/`)
 
+	// OVM changes break these tests
+	st.skipLoad(`stCreateTest/CREATE_ContractRETURNBigOffset.json`)
+	st.skipLoad(`stCodeSizeLimit/codesizeOOGInvalidSize.json`)
+
 	// Broken tests:
 	// Expected failures:
 	//st.fails(`^stRevertTest/RevertPrecompiledTouch(_storage)?\.json/Byzantium/0`, "bug in test")

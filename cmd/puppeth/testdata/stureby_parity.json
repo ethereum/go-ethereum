@@ -24,11 +24,11 @@
   "params": {
     "accountStartNonce": "0x0",
     "maximumExtraDataSize": "0x20",
-    "minGasLimit": "0x1388",
+    "minGasLimit": "0xee6b2800",
     "gasLimitBoundDivisor": "0x400",
     "networkID": "0x4cb2e",
     "chainID": "0x4cb2e",
-    "maxCodeSize": "0x6000",
+    "maxCodeSize": "0x258000",
     "maxCodeSizeTransition": "0x0",
     "eip98Transition": "0x7fffffffffffffff",
     "eip150Transition": "0x3a98",

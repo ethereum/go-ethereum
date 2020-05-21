@@ -4,13 +4,14 @@ import (
 	"encoding/binary"
 	"errors"
 	"fmt"
+	"sync"
+	"time"
+
 	"github.com/ethereum/go-ethereum/core"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/ethdb"
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/params"
-	"sync"
-	"time"
 )
 
 var (
@@ -19,6 +20,17 @@ var (
 	ErrMoreThanOneTxInBlock    = errors.New("block contains more than one transaction")
 	LastProcessedDBKey         = []byte("lastProcessedRollupBlock")
 )
+
+type RollupTransitionBatchBuilder interface {
+	Stop()
+	NewBlock(block *types.Block)
+}
+
+type DummyBatchBuilder struct{}
+
+func NewDummyBatchBuilder() *DummyBatchBuilder           { return &DummyBatchBuilder{} }
+func (d *DummyBatchBuilder) Stop()                       {}
+func (d *DummyBatchBuilder) NewBlock(block *types.Block) {}
 
 type ActiveBatch struct {
 	firstBlockNumber uint64
@@ -142,7 +154,7 @@ func (b *TransitionBatchBuilder) buildLoop(maxBlockTime time.Duration) {
 		case <-timer.C:
 			if lastProcessed != b.lastProcessedBlockNumber && b.activeBatch.firstBlockNumber != 0 {
 				if _, err := b.buildRollupBlock(true); err != nil {
-					panic(fmt.Errorf("error buidling block: %v", err))
+					panic(fmt.Errorf("error building block: %v", err))
 				}
 			}
 

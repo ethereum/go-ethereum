@@ -1,26 +1,23 @@
 package rollup
 
 import (
-	"github.com/ethereum/go-ethereum/core"
+	"math/big"
+	"testing"
+	"time"
+
 	"github.com/ethereum/go-ethereum/core/rawdb"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/params"
-	"math/big"
-	"testing"
-	"time"
 )
 
 var (
 	timeoutDuration = time.Millisecond * 100
 
-	testTxPoolConfig  core.TxPoolConfig
 	cliqueChainConfig *params.ChainConfig
 
 	// Test accounts
-	testBankKey, _  = crypto.GenerateKey()
-	testBankAddress = crypto.PubkeyToAddress(testBankKey.PublicKey)
-	testBankFunds   = big.NewInt(1000000000000000000)
+	testBankKey, _ = crypto.GenerateKey()
 
 	testUserKey, _  = crypto.GenerateKey()
 	testUserAddress = crypto.PubkeyToAddress(testUserKey.PublicKey)

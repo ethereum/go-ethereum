@@ -97,6 +97,10 @@ func (args *SendTxArgs) toTransaction() *types.Transaction {
 	if args.To == nil {
 		return types.NewContractCreation(uint64(args.Nonce), (*big.Int)(&args.Value), uint64(args.Gas), (*big.Int)(&args.GasPrice), input)
 	}
-	l1MessageSender := args.L1MessageSender.Address()
-	return types.NewTransaction(uint64(args.Nonce), args.To.Address(), (*big.Int)(&args.Value), (uint64)(args.Gas), (*big.Int)(&args.GasPrice), input, &l1MessageSender)
+	var l1MessageSender *common.Address = nil
+	if args.L1MessageSender != nil {
+		l1MessageSender = new(common.Address)
+		*l1MessageSender = args.L1MessageSender.Address()
+	}
+	return types.NewTransaction(uint64(args.Nonce), args.To.Address(), (*big.Int)(&args.Value), (uint64)(args.Gas), (*big.Int)(&args.GasPrice), input, l1MessageSender)
 }

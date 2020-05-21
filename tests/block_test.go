@@ -17,6 +17,7 @@
 package tests
 
 import (
+	"fmt"
 	"testing"
 )
 
@@ -28,6 +29,8 @@ func TestBlockchain(t *testing.T) {
 	bt.skipLoad(`^GeneralStateTests/`)
 	// Skip random failures due to selfish mining test
 	bt.skipLoad(`.*bcForgedTest/bcForkUncle\.json`)
+	// Skip these tests because the OVM gas limit will be different
+	bt.skipLoad(`InvalidBlocks/bcInvalidHeaderTest/wrongGasLimit.json`)
 
 	// Slow tests
 	bt.slow(`.*bcExploitTest/DelegateCallSpam.json`)
@@ -46,6 +49,7 @@ func TestBlockchain(t *testing.T) {
 
 	bt.walk(t, blockTestDir, func(t *testing.T, name string, test *BlockTest) {
 		if err := bt.checkFailure(t, name, test.Run()); err != nil {
+			fmt.Println("******* NAME: ", name)
 			t.Error(err)
 		}
 	})

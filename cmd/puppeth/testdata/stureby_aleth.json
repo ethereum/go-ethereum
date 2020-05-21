@@ -11,7 +11,7 @@
     "constantinopleForkBlock": "0x9c40",
     "constantinopleFixForkBlock": "0x9c40",
     "istanbulForkBlock": "0xc350",
-    "minGasLimit": "0x1388",
+    "minGasLimit": "0xee6b2800",
     "maxGasLimit": "0x7fffffffffffffff",
     "tieBreakingGas": false,
     "gasLimitBoundDivisor": "0x400",
