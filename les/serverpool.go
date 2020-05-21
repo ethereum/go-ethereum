@@ -96,6 +96,7 @@ var (
 	sfQueried          = serverPoolSetup.NewFlag("queried")
 	sfCanDial          = serverPoolSetup.NewFlag("canDial")
 	sfDialed           = serverPoolSetup.NewFlag("dialed")
+	sfDialTimeout      = serverPoolSetup.NewFlag("dialTimeout")
 	sfConnected        = serverPoolSetup.NewFlag("connected")
 	sfRedialWait       = serverPoolSetup.NewFlag("redialWait")
 	sfAlwaysConnect    = serverPoolSetup.NewFlag("alwaysConnect")
@@ -156,14 +157,16 @@ func newServerPool(db ethdb.KeyValueStore, dbKey []byte, vt *lpc.ValueTracker, d
 		iter = s.addPreNegFilter(iter, query)
 	}
 	s.dialIterator = enode.Filter(iter, func(node *enode.Node) bool {
-		s.ns.SetState(node, sfDialed, sfCanDial, time.Second*10)
+		s.ns.SetState(node, sfDialed, sfCanDial, 0)
+		s.ns.SetState(node, sfDialTimeout, nodestate.Flags{}, time.Second*10)
 		return true
 	})
 
-	s.ns.SubscribeState(nodestate.MergeFlags(sfDialed, sfConnected), func(n *enode.Node, oldState, newState nodestate.Flags) {
-		if oldState.Equals(sfDialed) && newState.IsEmpty() {
+	s.ns.SubscribeState(nodestate.MergeFlags(sfDialTimeout, sfConnected), func(n *enode.Node, oldState, newState nodestate.Flags) {
+		if oldState.Equals(sfDialTimeout) && newState.IsEmpty() {
 			// dial timeout, no connection
 			s.setRedialWait(n, dialCost, dialWaitStep)
+			s.ns.SetState(n, nodestate.Flags{}, sfDialed, 0)
 		}
 	})
 
@@ -267,7 +270,7 @@ func (s *serverPool) stop() {
 
 // registerPeer implements serverPeerSubscriber
 func (s *serverPool) registerPeer(p *serverPeer) {
-	s.ns.SetState(p.Node(), sfConnected, sfDialed, 0)
+	s.ns.SetState(p.Node(), sfConnected, sfDialed.Or(sfDialTimeout), 0)
 	nvt := s.vt.Register(p.ID())
 	s.ns.SetField(p.Node(), sfiConnectedStats, nvt.RtStats())
 	p.setValueTracker(s.vt, nvt)
