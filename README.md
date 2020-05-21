@@ -1,17 +1,19 @@
 ## Disclaimer
 
 **The software and related documentation are under active development, 
-all subjected to potential future change without notification and not ready for production use. 
+all subject to potential future change without notification and not ready for production use. 
 The code and security audit have not been fully completed and not ready for any bug bounty.
 We advise you to be careful and experiment on the network at your own risk. Stay safe out there.**
 
 ## Binance Smart Chain
 
-Binance Smart Chain client is based on the go-ethereum fork so that it stays compatible with all the existing smart contracts and Ethereum tooling.
+The goal of Binance Smart Chain is to bring programmability and interoperability to Binance Chain. In order to embrace the existing popular community and advanced technology, it will bring huge benefits by staying compatible with all the existing smart contracts on Ethereum and Ethereum tooling. And to achieve that, the easiest solution is to develop based on go-ethereum fork, as we respect the great work of Ethereum very much.
 
-Binance Smart Chain is an innovative solution to bring programmability and interoperability to Binance Chain. Binance Smart Chain relies on a system of 21 validators with Proof of Staked Authority (PoSA) consensus that can support short block time and lower fees. The most bonded validator candidates of staking will become validators and produce blocks. The double-sign detection and other slashing logic guarantee security, stability, and chain finality.
+Binance Smart Chain starts its development based on go-ethereum fork. So you may see many toolings, binaries and also docs are based on Ethereum ones, such as the name “geth”.
 
-The Binance Smart Chain also supports EVM-compatible smart contracts and protocols. Cross-chain transfer and other communication are possible due to native support of interoperability. Binance DEX remains a liquid venue of the exchange of assets on both chains. This dual-chain architecture will be ideal for users to take advantage of the fast trading on one side and build their decentralized apps on the other side. **The Binance Smart Chain** will be:
+But from that baseline of EVM compatible, Binance Smart Chain introduces  a system of 21 validators with Proof of Staked Authority (PoSA) consensus that can support short block time and lower fees. The most bonded validator candidates of staking will become validators and produce blocks. The double-sign detection and other slashing logic guarantee security, stability, and chain finality.
+
+Cross-chain transfer and other communication are possible due to native support of interoperability. Relayers and on-chain contracts are developed to support that. Binance DEX remains a liquid venue of the exchange of assets on both chains. This dual-chain architecture will be ideal for users to take advantage of the fast trading on one side and build their decentralized apps on the other side. **The Binance Smart Chain** will be:
 
 - **A self-sovereign blockchain**: Provides security and safety with elected validators.
 - **EVM-compatible**: Supports all the existing Ethereum tooling along with faster finality and cheaper transaction fees.
@@ -20,7 +22,44 @@ The Binance Smart Chain also supports EVM-compatible smart contracts and protoco
 
 More details in [White Paper](http://binance.org/en#smartChain).
 
+## Key features
+
+### Proof of Staked Authority 
+Although Proof-of-Work (PoW) has been approved as a practical mechanism to implement a decentralized network, it is not friendly to the environment and also requires a large size of participants to maintain the security. 
+
+Proof-of-Authority(PoA) provides some defense to 51% attack, with improved efficiency and tolerance to certain levels of Byzantine players (malicious or hacked). 
+Meanwhile, the PoA protocol is most criticized for being not as decentralized as PoW, as the validators, i.e. the nodes that take turns to produce blocks, have all the authorities and are prone to corruption and security attacks.
+
+Other blockchains, such as EOS and Cosmos both, introduce different types of Deputy Proof of Stake (DPoS) to allow the token holders to vote and elect the validator set. It increases the decentralization and favors community governance. 
+
+To combine DPoS and PoA for consensus, Binance Smart Chain implement a novel consensus engine called Parlia that:
+
+1. Blocks are produced by a limited set of validators.
+2. Validators take turns to produce blocks in a PoA manner, similar to Ethereum's Clique consensus engine.
+3. Validator set are elected in and out based on a staking based governance on Binance Chain.
+4. The validator set change is relayed via a cross-chain communication mechanism.
+5. Parlia consensus engine will interact with a set of [system contracts](https://github.com/binance-chain/docs-site/blob/add-bsc/docs/smart-chain/guides/concepts/system-contract.md) to achieve liveness slash, revenue distributing and validator set renewing func.
+
+ 
+### Light Client of Binance Chain  
+
+To achieve the cross-chain communication from Binance Chain to Binance Smart Chain, need introduce a on-chain light client verification algorithm.
+It contains two parts:
+
+1. [Stateless Precompiled contracts](https://github.com/binance-chain/bsc/blob/master/core/vm/contracts_lightclient.go) to do tendermint header verification and Merkle Proof verification.
+2. [Stateful solidity contracts](https://github.com/binance-chain/bsc-genesis-contract/blob/master/contracts/TendermintLightClient.sol) to store validator set and trusted appHash.  
+
+## Native Token
+
+BNB will run on Binance Smart Chain in the same way as ETH runs on Ethereum so that it remains as `native token` for BSC. This means, 
+BNB will be used to:
+
+1. pay `gas` to deploy or invoke Smart Contract on BSC
+2. perform cross-chain operations, such as transfer token assets across Binance Smart Chain and Binance Chain.
+
 ## Building the source
+
+Many of the below are the same as or similar to go-ethereum.
 
 For prerequisites and detailed build instructions please read the [Installation Instructions](https://github.com/ethereum/go-ethereum/wiki/Building-Ethereum) on the wiki.
 
@@ -44,20 +83,15 @@ directory.
 
 |    Command    | Description                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                          |
 | :-----------: | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-|  **`geth`**   | Our main Binance Smart Chain client. It is the entry point into the BSC network (main-, test- or private net), capable of running as a full node (default), archive node (retaining all historical state) or a light node (retrieving data live). It can be used by other processes as a gateway into the BSC network via JSON RPC endpoints exposed on top of HTTP, WebSocket and/or IPC transports. `geth --help` and the [CLI Wiki page](https://github.com/ethereum/go-ethereum/wiki/Command-Line-Options) for command line options.          |
-|   `abigen`    | Source code generator to convert Ethereum contract definitions into easy to use, compile-time type-safe Go packages. It operates on plain [Ethereum contract ABIs](https://github.com/ethereum/wiki/wiki/Ethereum-Contract-ABI) with expanded functionality if the contract bytecode is also available. However, it also accepts Solidity source files, making development much more streamlined. Please see our [Native DApps](https://github.com/ethereum/go-ethereum/wiki/Native-DApps:-Go-bindings-to-Ethereum-contracts) wiki page for details. |
-|  `bootnode`   | Stripped down version of our Binance Smart Chain client implementation that only takes part in the network node discovery protocol, but does not run any of the higher level application protocols. It can be used as a lightweight bootstrap node to aid in finding peers in private networks.                                                                                                                                                                                                                                                                 |
-|     `evm`     | Developer utility version of the EVM (Ethereum Virtual Machine) that is capable of running bytecode snippets within a configurable environment and execution mode. Its purpose is to allow isolated, fine-grained debugging of EVM opcodes (e.g. `evm --code 60ff60ff --debug run`).                                                                                                                                                                                                                                                                     |
-| `gethrpctest` | Developer utility tool to support our [ethereum/rpc-test](https://github.com/ethereum/rpc-tests) test suite which validates baseline conformity to the [Ethereum JSON RPC](https://github.com/ethereum/wiki/wiki/JSON-RPC) specs. Please see the [test suite's readme](https://github.com/ethereum/rpc-tests/blob/master/README.md) for details.                                                                                                                                                                                                     |
-|   `rlpdump`   | Developer utility tool to convert binary RLP ([Recursive Length Prefix](https://github.com/ethereum/wiki/wiki/RLP)) dumps (data encoding used by the Ethereum protocol both network as well as consensus wise) to user-friendlier hierarchical representation (e.g. `rlpdump --hex CE0183FFFFFFC4C304050583616263`).                                                                                                                                                                                                                                 |
-|   `puppeth`   | a CLI wizard that aids in creating a new network.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                           |
+|  **`geth`**   | Main Binance Smart Chain client binary. It is the entry point into the BSC network (main-, test- or private net), capable of running as a full node (default), archive node (retaining all historical state) or a light node (retrieving data live). It has the same and more RPC and other interface as go-ethereum and can be used by other processes as a gateway into the BSC network via JSON RPC endpoints exposed on top of HTTP, WebSocket and/or IPC transports. `geth --help` and the [CLI Wiki page](https://github.com/ethereum/go-ethereum/wiki/Command-Line-Options) for command line options.          |
+|   `abigen`,`bootnode`,`evm`, `gethrpctest`,`rlpdump`,`puppeth`     | **These binaries are exactly the same as the binaries built in go-ethereum repo.**|
 
 ## Running `geth`
 
 Going through all the possible command line flags is out of scope here (please consult our
 [CLI Wiki page](https://github.com/ethereum/go-ethereum/wiki/Command-Line-Options)).
 
-### Minimum Requirements
+### Hardware Requirements
 
 The hardware must meet certain requirements to run a full node.
 - VPS running recent versions of Mac OS X or Linux.
@@ -68,18 +102,14 @@ The hardware must meet certain requirements to run a full node.
 
 ### A Full node on the Rialto test network
 
-Transitioning towards developers, if you'd like to play around with creating smart
-contracts, you almost certainly would like to do that without any real money involved until
-you get the hang of the entire system. In other words, instead of attaching to the main
-network, you want to join the **test** network with your node, which is fully equivalent to
-the main network, but with play-BNB only.
-
 Steps:
 
 1. Download the config and genesis files. You need to have [genesis.json](https://github.com/binance-chain/smart-chain-binary/blob/pre-release/bsc/fullnode/config/genesis.json) and [config.toml](https://github.com/binance-chain/smart-chain-binary/blob/pre-release/bsc/fullnode/config/config.toml)
 2. Init genesis state: `./geth --datadir node init genesis.json`.
 3. Start your fullnode: `./geth --config ./config.toml --datadir ./node`.
 4. Or start a validator node: `./geth --config ./config.toml --datadir ./node -unlock ${validatorAddr} --mine --allow-insecure-unlock`. The ${validatorAddr} is the wallet account address of your running validator node. 
+
+*Note: The default p2p port is 30311 and the RPC port is 8575 which is different from Ethereum.*
 
 More details about [running a node](https://github.com/binance-chain/docs-site/blob/add-bsc/docs/smart-chain/developer/fullnode.md) and [becoming a validator](https://github.com/binance-chain/docs-site/blob/add-bsc/docs/guides/concepts/bc-staking.md).
 
