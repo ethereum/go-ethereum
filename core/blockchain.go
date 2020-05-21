@@ -2463,6 +2463,7 @@ func (bc *BlockChain) SubscribeBlockProcessingEvent(ch chan<- bool) event.Subscr
 	return bc.scope.Track(bc.blockProcFeed.Subscribe(ch))
 }
 
-func (bc *BlockChain) SubscribeStateChangeEvents(ch chan<- StateChangeEvent) event.Subscription {
+// SubscribeStateChangeEvent registers a subscription StateChangeEvent.
+func (bc *BlockChain) SubscribeStateChangeEvent(ch chan<- StateChangeEvent) event.Subscription {
 	return bc.scope.Track(bc.stateChangeEventFeed.Subscribe(ch))
 }

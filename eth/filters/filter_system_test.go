@@ -47,6 +47,7 @@ type testBackend struct {
 	rmLogsFeed      event.Feed
 	pendingLogsFeed event.Feed
 	chainFeed       event.Feed
+	stateChangeFeed event.Feed
 }
 
 func (b *testBackend) ChainDb() ethdb.Database {
@@ -119,6 +120,10 @@ func (b *testBackend) SubscribePendingLogsEvent(ch chan<- []*types.Log) event.Su
 
 func (b *testBackend) SubscribeChainEvent(ch chan<- core.ChainEvent) event.Subscription {
 	return b.chainFeed.Subscribe(ch)
+}
+
+func (b *testBackend) SubscribeStateChangeEvent(ch chan<- core.StateChangeEvent) event.Subscription {
+	return b.stateChangeFeed.Subscribe(ch)
 }
 
 func (b *testBackend) BloomStatus() (uint64, uint64) {

@@ -3048,7 +3048,7 @@ func testSendingStateChangeEvents(t *testing.T, numberOfEventsToSend int) {
 	defer blockchain.Stop()
 
 	stateChangeCh := make(chan StateChangeEvent)
-	blockchain.SubscribeStateChangeEvents(stateChangeCh)
+	blockchain.SubscribeStateChangeEvent(stateChangeCh)
 
 	// create numberOfEventsToSend blocks that include State Changes
 	chain, _ := GenerateChain(params.TestChainConfig, genesis, ethash.NewFaker(), db, numberOfEventsToSend, func(i int, block *BlockGen) {

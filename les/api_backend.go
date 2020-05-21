@@ -234,6 +234,10 @@ func (b *LesApiBackend) SubscribeRemovedLogsEvent(ch chan<- core.RemovedLogsEven
 	return b.eth.blockchain.SubscribeRemovedLogsEvent(ch)
 }
 
+func (b *LesApiBackend) SubscribeStateChangeEvent(ch chan<- core.StateChangeEvent) event.Subscription {
+	return b.eth.blockchain.SubscribeStateChangeEvent(ch)
+}
+
 func (b *LesApiBackend) Downloader() *downloader.Downloader {
 	return b.eth.Downloader()
 }
