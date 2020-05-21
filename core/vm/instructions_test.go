@@ -223,7 +223,7 @@ func TestAddMod(t *testing.T) {
 		opAddmod(&pc, evmInterpreter, &callCtx{nil, stack, nil, nil})
 		actual := stack.pop()
 		if actual.Cmp(expected) != 0 {
-			t.Errorf("Testcase %d, expected  %v, got %v", i, expected.Hex(), actual.Hex())
+			t.Errorf("Testcase %d, expected  %x, got %x", i, expected, actual)
 		}
 	}
 }

@@ -50,7 +50,7 @@ func opDiv(pc *uint64, interpreter *EVMInterpreter, callContext *callCtx) ([]byt
 
 func opSdiv(pc *uint64, interpreter *EVMInterpreter, callContext *callCtx) ([]byte, error) {
 	x, y := callContext.stack.pop(), callContext.stack.peek()
-	y.Sdiv(&x, y)
+	y.SDiv(&x, y)
 	return nil, nil
 }
 
@@ -62,7 +62,7 @@ func opMod(pc *uint64, interpreter *EVMInterpreter, callContext *callCtx) ([]byt
 
 func opSmod(pc *uint64, interpreter *EVMInterpreter, callContext *callCtx) ([]byte, error) {
 	x, y := callContext.stack.pop(), callContext.stack.peek()
-	y.Smod(&x, y)
+	y.SMod(&x, y)
 	return nil, nil
 }
 
@@ -74,12 +74,13 @@ func opExp(pc *uint64, interpreter *EVMInterpreter, callContext *callCtx) ([]byt
 
 func opSignExtend(pc *uint64, interpreter *EVMInterpreter, callContext *callCtx) ([]byte, error) {
 	back, num := callContext.stack.pop(), callContext.stack.peek()
-	num.SignExtend(&back, num)
+	num.ExtendSign(num, &back)
 	return nil, nil
 }
 
 func opNot(pc *uint64, interpreter *EVMInterpreter, callContext *callCtx) ([]byte, error) {
-	callContext.stack.peek().Not()
+	x := callContext.stack.peek()
+	x.Not(x)
 	return nil, nil
 }
 
@@ -125,7 +126,11 @@ func opSgt(pc *uint64, interpreter *EVMInterpreter, callContext *callCtx) ([]byt
 
 func opEq(pc *uint64, interpreter *EVMInterpreter, callContext *callCtx) ([]byte, error) {
 	x, y := callContext.stack.pop(), callContext.stack.peek()
-	y.SetIfEq(&x)
+	if x.Eq(y) {
+		y.SetOne()
+	} else {
+		y.Clear()
+	}
 	return nil, nil
 }
 
@@ -222,13 +227,13 @@ func opSAR(pc *uint64, interpreter *EVMInterpreter, callContext *callCtx) ([]byt
 		return nil, nil
 	}
 	n := uint(shift.Uint64())
-	value.Srsh(value, n)
+	value.SRsh(value, n)
 	return nil, nil
 }
 
 func opSha3(pc *uint64, interpreter *EVMInterpreter, callContext *callCtx) ([]byte, error) {
 	offset, size := callContext.stack.pop(), callContext.stack.peek()
-	data := callContext.memory.GetPtr(offset.Int64(), size.Int64())
+	data := callContext.memory.GetPtr(int64(offset.Uint64()), int64(size.Uint64()))
 
 	if interpreter.hasher == nil {
 		interpreter.hasher = sha3.NewLegacyKeccak256().(keccakState)
@@ -482,7 +487,7 @@ func opPop(pc *uint64, interpreter *EVMInterpreter, callContext *callCtx) ([]byt
 
 func opMload(pc *uint64, interpreter *EVMInterpreter, callContext *callCtx) ([]byte, error) {
 	v := callContext.stack.peek()
-	offset := v.Int64()
+	offset := int64(v.Uint64())
 	v.SetBytes(callContext.memory.GetPtr(offset, 32))
 	return nil, nil
 }
@@ -496,7 +501,7 @@ func opMstore(pc *uint64, interpreter *EVMInterpreter, callContext *callCtx) ([]
 
 func opMstore8(pc *uint64, interpreter *EVMInterpreter, callContext *callCtx) ([]byte, error) {
 	off, val := callContext.stack.pop(), callContext.stack.pop()
-	callContext.memory.store[off.Int64()] = byte(val.Int64() & 0xff)
+	callContext.memory.store[off.Uint64()] = byte(val.Uint64())
 	return nil, nil
 }
 
@@ -593,7 +598,7 @@ func opCreate(pc *uint64, interpreter *EVMInterpreter, callContext *callCtx) ([]
 	var (
 		value        = callContext.stack.pop()
 		offset, size = callContext.stack.pop(), callContext.stack.pop()
-		input        = callContext.memory.GetCopy(offset.Int64(), size.Int64())
+		input        = callContext.memory.GetCopy(int64(offset.Uint64()), int64(size.Uint64()))
 		gas          = callContext.contract.Gas
 	)
 	if interpreter.evm.chainRules.IsEIP150 {
@@ -629,7 +634,7 @@ func opCreate2(pc *uint64, interpreter *EVMInterpreter, callContext *callCtx) ([
 		endowment    = callContext.stack.pop()
 		offset, size = callContext.stack.pop(), callContext.stack.pop()
 		salt         = callContext.stack.pop()
-		input        = callContext.memory.GetCopy(offset.Int64(), size.Int64())
+		input        = callContext.memory.GetCopy(int64(offset.Uint64()), int64(size.Uint64()))
 		gas          = callContext.contract.Gas
 	)
 
@@ -665,7 +670,7 @@ func opCall(pc *uint64, interpreter *EVMInterpreter, callContext *callCtx) ([]by
 	addr, value, inOffset, inSize, retOffset, retSize := stack.pop(), stack.pop(), stack.pop(), stack.pop(), stack.pop(), stack.pop()
 	toAddr := common.Address(addr.Bytes20())
 	// Get the arguments from the memory.
-	args := callContext.memory.GetPtr(inOffset.Int64(), inSize.Int64())
+	args := callContext.memory.GetPtr(int64(inOffset.Uint64()), int64(inSize.Uint64()))
 
 	if !value.IsZero() {
 		gas += params.CallStipend
@@ -695,7 +700,7 @@ func opCallCode(pc *uint64, interpreter *EVMInterpreter, callContext *callCtx) (
 	addr, value, inOffset, inSize, retOffset, retSize := stack.pop(), stack.pop(), stack.pop(), stack.pop(), stack.pop(), stack.pop()
 	toAddr := common.Address(addr.Bytes20())
 	// Get arguments from the memory.
-	args := callContext.memory.GetPtr(inOffset.Int64(), inSize.Int64())
+	args := callContext.memory.GetPtr(int64(inOffset.Uint64()), int64(inSize.Uint64()))
 
 	if !value.IsZero() {
 		gas += params.CallStipend
@@ -725,7 +730,7 @@ func opDelegateCall(pc *uint64, interpreter *EVMInterpreter, callContext *callCt
 	addr, inOffset, inSize, retOffset, retSize := stack.pop(), stack.pop(), stack.pop(), stack.pop(), stack.pop()
 	toAddr := common.Address(addr.Bytes20())
 	// Get arguments from the memory.
-	args := callContext.memory.GetPtr(inOffset.Int64(), inSize.Int64())
+	args := callContext.memory.GetPtr(int64(inOffset.Uint64()), int64(inSize.Uint64()))
 
 	ret, returnGas, err := interpreter.evm.DelegateCall(callContext.contract, toAddr, args, gas)
 	if err != nil {
@@ -752,7 +757,7 @@ func opStaticCall(pc *uint64, interpreter *EVMInterpreter, callContext *callCtx)
 	addr, inOffset, inSize, retOffset, retSize := stack.pop(), stack.pop(), stack.pop(), stack.pop(), stack.pop()
 	toAddr := common.Address(addr.Bytes20())
 	// Get arguments from the memory.
-	args := callContext.memory.GetPtr(inOffset.Int64(), inSize.Int64())
+	args := callContext.memory.GetPtr(int64(inOffset.Uint64()), int64(inSize.Uint64()))
 
 	ret, returnGas, err := interpreter.evm.StaticCall(callContext.contract, toAddr, args, gas)
 	if err != nil {
@@ -771,14 +776,14 @@ func opStaticCall(pc *uint64, interpreter *EVMInterpreter, callContext *callCtx)
 
 func opReturn(pc *uint64, interpreter *EVMInterpreter, callContext *callCtx) ([]byte, error) {
 	offset, size := callContext.stack.pop(), callContext.stack.pop()
-	ret := callContext.memory.GetPtr(offset.Int64(), size.Int64())
+	ret := callContext.memory.GetPtr(int64(offset.Uint64()), int64(size.Uint64()))
 
 	return ret, nil
 }
 
 func opRevert(pc *uint64, interpreter *EVMInterpreter, callContext *callCtx) ([]byte, error) {
 	offset, size := callContext.stack.pop(), callContext.stack.pop()
-	ret := callContext.memory.GetPtr(offset.Int64(), size.Int64())
+	ret := callContext.memory.GetPtr(int64(offset.Uint64()), int64(size.Uint64()))
 
 	return ret, nil
 }
@@ -808,7 +813,7 @@ func makeLog(size int) executionFunc {
 			topics[i] = common.Hash(addr.Bytes32())
 		}
 
-		d := callContext.memory.GetCopy(mStart.Int64(), mSize.Int64())
+		d := callContext.memory.GetCopy(int64(mStart.Uint64()), int64(mSize.Uint64()))
 		interpreter.evm.StateDB.AddLog(&types.Log{
 			Address: callContext.contract.Address(),
 			Topics:  topics,
