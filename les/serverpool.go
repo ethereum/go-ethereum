@@ -1,4 +1,4 @@
-// Copyright 2016 The go-ethereum Authors
+// Copyright 2020 The go-ethereum Authors
 // This file is part of the go-ethereum library.
 //
 // The go-ethereum library is free software: you can redistribute it and/or modify
@@ -17,904 +17,457 @@
 package les
 
 import (
-	"crypto/ecdsa"
-	"fmt"
-	"io"
-	"math"
+	"errors"
 	"math/rand"
-	"net"
-	"strconv"
+	"reflect"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/ethereum/go-ethereum/common/mclock"
-	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/ethdb"
+	lpc "github.com/ethereum/go-ethereum/les/lespay/client"
 	"github.com/ethereum/go-ethereum/les/utils"
 	"github.com/ethereum/go-ethereum/log"
-	"github.com/ethereum/go-ethereum/p2p"
-	"github.com/ethereum/go-ethereum/p2p/discv5"
 	"github.com/ethereum/go-ethereum/p2p/enode"
+	"github.com/ethereum/go-ethereum/p2p/enr"
+	"github.com/ethereum/go-ethereum/p2p/nodestate"
 	"github.com/ethereum/go-ethereum/rlp"
 )
 
 const (
-	// After a connection has been ended or timed out, there is a waiting period
-	// before it can be selected for connection again.
-	// waiting period = base delay * (1 + random(1))
-	// base delay = shortRetryDelay for the first shortRetryCnt times after a
-	// successful connection, after that longRetryDelay is applied
-	shortRetryCnt   = 5
-	shortRetryDelay = time.Second * 5
-	longRetryDelay  = time.Minute * 10
-	// maxNewEntries is the maximum number of newly discovered (never connected) nodes.
-	// If the limit is reached, the least recently discovered one is thrown out.
-	maxNewEntries = 1000
-	// maxKnownEntries is the maximum number of known (already connected) nodes.
-	// If the limit is reached, the least recently connected one is thrown out.
-	// (not that unlike new entries, known entries are persistent)
-	maxKnownEntries = 1000
-	// target for simultaneously connected servers
-	targetServerCount = 5
-	// target for servers selected from the known table
-	// (we leave room for trying new ones if there is any)
-	targetKnownSelect = 3
-	// after dialTimeout, consider the server unavailable and adjust statistics
-	dialTimeout = time.Second * 30
-	// targetConnTime is the minimum expected connection duration before a server
-	// drops a client without any specific reason
-	targetConnTime = time.Minute * 10
-	// new entry selection weight calculation based on most recent discovery time:
-	// unity until discoverExpireStart, then exponential decay with discoverExpireConst
-	discoverExpireStart = time.Minute * 20
-	discoverExpireConst = time.Minute * 20
-	// known entry selection weight is dropped by a factor of exp(-failDropLn) after
-	// each unsuccessful connection (restored after a successful one)
-	failDropLn = 0.1
-	// known node connection success and quality statistics have a long term average
-	// and a short term value which is adjusted exponentially with a factor of
-	// pstatRecentAdjust with each dial/connection and also returned exponentially
-	// to the average with the time constant pstatReturnToMeanTC
-	pstatReturnToMeanTC = time.Hour
-	// node address selection weight is dropped by a factor of exp(-addrFailDropLn) after
-	// each unsuccessful connection (restored after a successful one)
-	addrFailDropLn = math.Ln2
-	// responseScoreTC and delayScoreTC are exponential decay time constants for
-	// calculating selection chances from response times and block delay times
-	responseScoreTC = time.Millisecond * 100
-	delayScoreTC    = time.Second * 5
-	timeoutPow      = 10
-	// initStatsWeight is used to initialize previously unknown peers with good
-	// statistics to give a chance to prove themselves
-	initStatsWeight = 1
+	minTimeout          = time.Millisecond * 500 // minimum request timeout suggested by the server pool
+	timeoutRefresh      = time.Second * 5        // recalculate timeout if older than this
+	dialCost            = 10000                  // cost of a TCP dial (used for known node selection weight calculation)
+	dialWaitStep        = 1.5                    // exponential multiplier of redial wait time when no value was provided by the server
+	queryCost           = 500                    // cost of a UDP pre-negotiation query
+	queryWaitStep       = 1.02                   // exponential multiplier of redial wait time when no value was provided by the server
+	waitThreshold       = time.Hour * 2000       // drop node if waiting time is over the threshold
+	nodeWeightMul       = 1000000                // multiplier constant for node weight calculation
+	nodeWeightThreshold = 100                    // minimum weight for keeping a node in the the known (valuable) set
+	minRedialWait       = 10                     // minimum redial wait time in seconds
+	preNegLimit         = 5                      // maximum number of simultaneous pre-negotiation queries
+	maxQueryFails       = 100                    // number of consecutive UDP query failures before we print a warning
 )
 
-// connReq represents a request for peer connection.
-type connReq struct {
-	p      *serverPeer
-	node   *enode.Node
-	result chan *poolEntry
-}
-
-// disconnReq represents a request for peer disconnection.
-type disconnReq struct {
-	entry   *poolEntry
-	stopped bool
-	done    chan struct{}
-}
-
-// registerReq represents a request for peer registration.
-type registerReq struct {
-	entry *poolEntry
-	done  chan struct{}
-}
-
-// serverPool implements a pool for storing and selecting newly discovered and already
-// known light server nodes. It received discovered nodes, stores statistics about
-// known nodes and takes care of always having enough good quality servers connected.
+// serverPool provides a node iterator for dial candidates. The output is a mix of newly discovered
+// nodes, a weighted random selection of known (previously valuable) nodes and trusted/paid nodes.
 type serverPool struct {
-	db     ethdb.Database
-	dbKey  []byte
-	server *p2p.Server
-	connWg sync.WaitGroup
+	clock    mclock.Clock
+	unixTime func() int64
+	db       ethdb.KeyValueStore
 
-	topic discv5.Topic
+	ns           *nodestate.NodeStateMachine
+	vt           *lpc.ValueTracker
+	mixer        *enode.FairMix
+	mixSources   []enode.Iterator
+	dialIterator enode.Iterator
+	validSchemes enr.IdentityScheme
+	trustedURLs  []string
+	fillSet      *lpc.FillSet
+	queryFails   uint32
 
-	discSetPeriod chan time.Duration
-	discNodes     chan *enode.Node
-	discLookups   chan bool
-
-	trustedNodes         map[enode.ID]*enode.Node
-	entries              map[enode.ID]*poolEntry
-	timeout, enableRetry chan *poolEntry
-	adjustStats          chan poolStatAdjust
-
-	knownQueue, newQueue       poolEntryQueue
-	knownSelect, newSelect     *utils.WeightedRandomSelect
-	knownSelected, newSelected int
-	fastDiscover               bool
-	connCh                     chan *connReq
-	disconnCh                  chan *disconnReq
-	registerCh                 chan *registerReq
-
-	closeCh chan struct{}
-	wg      sync.WaitGroup
+	timeoutLock      sync.RWMutex
+	timeout          time.Duration
+	timeWeights      lpc.ResponseTimeWeights
+	timeoutRefreshed mclock.AbsTime
 }
 
-// newServerPool creates a new serverPool instance
-func newServerPool(db ethdb.Database, ulcServers []string) *serverPool {
-	pool := &serverPool{
+// nodeHistory keeps track of dial costs which determine node weight together with the
+// service value calculated by lpc.ValueTracker.
+type nodeHistory struct {
+	dialCost                       utils.ExpiredValue
+	redialWaitStart, redialWaitEnd int64 // unix time (seconds)
+}
+
+type nodeHistoryEnc struct {
+	DialCost                       utils.ExpiredValue
+	RedialWaitStart, RedialWaitEnd uint64
+}
+
+// queryFunc sends a pre-negotiation query and blocks until a response arrives or timeout occurs.
+// It returns 1 if the remote node has confirmed that connection is possible, 0 if not
+// possible and -1 if no response arrived (timeout).
+type queryFunc func(*enode.Node) int
+
+var (
+	serverPoolSetup    = &nodestate.Setup{Version: 1}
+	sfHasValue         = serverPoolSetup.NewPersistentFlag("hasValue")
+	sfQueried          = serverPoolSetup.NewFlag("queried")
+	sfCanDial          = serverPoolSetup.NewFlag("canDial")
+	sfDialing          = serverPoolSetup.NewFlag("dialed")
+	sfWaitDialTimeout  = serverPoolSetup.NewFlag("dialTimeout")
+	sfConnected        = serverPoolSetup.NewFlag("connected")
+	sfRedialWait       = serverPoolSetup.NewFlag("redialWait")
+	sfAlwaysConnect    = serverPoolSetup.NewFlag("alwaysConnect")
+	sfDisableSelection = nodestate.MergeFlags(sfQueried, sfCanDial, sfDialing, sfConnected, sfRedialWait)
+
+	sfiNodeHistory = serverPoolSetup.NewPersistentField("nodeHistory", reflect.TypeOf(nodeHistory{}),
+		func(field interface{}) ([]byte, error) {
+			if n, ok := field.(nodeHistory); ok {
+				ne := nodeHistoryEnc{
+					DialCost:        n.dialCost,
+					RedialWaitStart: uint64(n.redialWaitStart),
+					RedialWaitEnd:   uint64(n.redialWaitEnd),
+				}
+				enc, err := rlp.EncodeToBytes(&ne)
+				return enc, err
+			} else {
+				return nil, errors.New("invalid field type")
+			}
+		},
+		func(enc []byte) (interface{}, error) {
+			var ne nodeHistoryEnc
+			err := rlp.DecodeBytes(enc, &ne)
+			n := nodeHistory{
+				dialCost:        ne.DialCost,
+				redialWaitStart: int64(ne.RedialWaitStart),
+				redialWaitEnd:   int64(ne.RedialWaitEnd),
+			}
+			return n, err
+		},
+	)
+	sfiNodeWeight     = serverPoolSetup.NewField("nodeWeight", reflect.TypeOf(uint64(0)))
+	sfiConnectedStats = serverPoolSetup.NewField("connectedStats", reflect.TypeOf(lpc.ResponseTimeStats{}))
+)
+
+// newServerPool creates a new server pool
+func newServerPool(db ethdb.KeyValueStore, dbKey []byte, vt *lpc.ValueTracker, discovery enode.Iterator, mixTimeout time.Duration, query queryFunc, clock mclock.Clock, trustedURLs []string) *serverPool {
+	s := &serverPool{
 		db:           db,
-		entries:      make(map[enode.ID]*poolEntry),
-		timeout:      make(chan *poolEntry, 1),
-		adjustStats:  make(chan poolStatAdjust, 100),
-		enableRetry:  make(chan *poolEntry, 1),
-		connCh:       make(chan *connReq),
-		disconnCh:    make(chan *disconnReq),
-		registerCh:   make(chan *registerReq),
-		closeCh:      make(chan struct{}),
-		knownSelect:  utils.NewWeightedRandomSelect(),
-		newSelect:    utils.NewWeightedRandomSelect(),
-		fastDiscover: true,
-		trustedNodes: parseTrustedNodes(ulcServers),
+		clock:        clock,
+		unixTime:     func() int64 { return time.Now().Unix() },
+		validSchemes: enode.ValidSchemes,
+		trustedURLs:  trustedURLs,
+		vt:           vt,
+		ns:           nodestate.NewNodeStateMachine(db, []byte(string(dbKey)+"ns:"), clock, serverPoolSetup),
+	}
+	s.recalTimeout()
+	s.mixer = enode.NewFairMix(mixTimeout)
+	knownSelector := lpc.NewWrsIterator(s.ns, sfHasValue, sfDisableSelection, sfiNodeWeight)
+	alwaysConnect := lpc.NewQueueIterator(s.ns, sfAlwaysConnect, sfDisableSelection, true, nil)
+	s.mixSources = append(s.mixSources, knownSelector)
+	s.mixSources = append(s.mixSources, alwaysConnect)
+	if discovery != nil {
+		s.mixSources = append(s.mixSources, discovery)
 	}
 
-	pool.knownQueue = newPoolEntryQueue(maxKnownEntries, pool.removeEntry)
-	pool.newQueue = newPoolEntryQueue(maxNewEntries, pool.removeEntry)
-	return pool
+	iter := enode.Iterator(s.mixer)
+	if query != nil {
+		iter = s.addPreNegFilter(iter, query)
+	}
+	s.dialIterator = enode.Filter(iter, func(node *enode.Node) bool {
+		s.ns.SetState(node, sfDialing, sfCanDial, 0)
+		s.ns.SetState(node, sfWaitDialTimeout, nodestate.Flags{}, time.Second*10)
+		return true
+	})
+
+	s.ns.SubscribeState(nodestate.MergeFlags(sfWaitDialTimeout, sfConnected), func(n *enode.Node, oldState, newState nodestate.Flags) {
+		if oldState.Equals(sfWaitDialTimeout) && newState.IsEmpty() {
+			// dial timeout, no connection
+			s.setRedialWait(n, dialCost, dialWaitStep)
+			s.ns.SetState(n, nodestate.Flags{}, sfDialing, 0)
+		}
+	})
+
+	s.ns.AddLogMetrics(sfHasValue, sfDisableSelection, "selectable", nil, nil, serverSelectableGauge)
+	s.ns.AddLogMetrics(sfDialing, nodestate.Flags{}, "dialed", serverDialedMeter, nil, nil)
+	s.ns.AddLogMetrics(sfConnected, nodestate.Flags{}, "connected", nil, nil, serverConnectedGauge)
+	return s
 }
 
-func (pool *serverPool) start(server *p2p.Server, topic discv5.Topic) {
-	pool.server = server
-	pool.topic = topic
-	pool.dbKey = append([]byte("serverPool/"), []byte(topic)...)
-	pool.loadNodes()
-	pool.connectToTrustedNodes()
-
-	if pool.server.DiscV5 != nil {
-		pool.discSetPeriod = make(chan time.Duration, 1)
-		pool.discNodes = make(chan *enode.Node, 100)
-		pool.discLookups = make(chan bool, 100)
-		go pool.discoverNodes()
-	}
-	pool.checkDial()
-	pool.wg.Add(1)
-	go pool.eventLoop()
-
-	// Inject the bootstrap nodes as initial dial candiates.
-	pool.wg.Add(1)
-	go func() {
-		defer pool.wg.Done()
-		for _, n := range server.BootstrapNodes {
-			select {
-			case pool.discNodes <- n:
-			case <-pool.closeCh:
+// addPreNegFilter installs a node filter mechanism that performs a pre-negotiation query.
+// Nodes that are filtered out and does not appear on the output iterator are put back
+// into redialWait state.
+func (s *serverPool) addPreNegFilter(input enode.Iterator, query queryFunc) enode.Iterator {
+	s.fillSet = lpc.NewFillSet(s.ns, input, sfQueried)
+	s.ns.SubscribeState(sfQueried, func(n *enode.Node, oldState, newState nodestate.Flags) {
+		if newState.Equals(sfQueried) {
+			fails := atomic.LoadUint32(&s.queryFails)
+			if fails == maxQueryFails {
+				log.Warn("UDP pre-negotiation query does not seem to work")
+			}
+			if fails > maxQueryFails {
+				fails = maxQueryFails
+			}
+			if rand.Intn(maxQueryFails*2) < int(fails) {
+				// skip pre-negotiation with increasing chance, max 50%
+				// this ensures that the client can operate even if UDP is not working at all
+				s.ns.SetState(n, sfCanDial, nodestate.Flags{}, time.Second*10)
+				// set canDial before resetting queried so that FillSet will not read more
+				// candidates unnecessarily
+				s.ns.SetState(n, nodestate.Flags{}, sfQueried, 0)
 				return
 			}
-		}
-	}()
-}
-
-func (pool *serverPool) stop() {
-	close(pool.closeCh)
-	pool.wg.Wait()
-}
-
-// discoverNodes wraps SearchTopic, converting result nodes to enode.Node.
-func (pool *serverPool) discoverNodes() {
-	ch := make(chan *discv5.Node)
-	go func() {
-		pool.server.DiscV5.SearchTopic(pool.topic, pool.discSetPeriod, ch, pool.discLookups)
-		close(ch)
-	}()
-	for n := range ch {
-		pubkey, err := decodePubkey64(n.ID[:])
-		if err != nil {
-			continue
-		}
-		pool.discNodes <- enode.NewV4(pubkey, n.IP, int(n.TCP), int(n.UDP))
-	}
-}
-
-// connect should be called upon any incoming connection. If the connection has been
-// dialed by the server pool recently, the appropriate pool entry is returned.
-// Otherwise, the connection should be rejected.
-// Note that whenever a connection has been accepted and a pool entry has been returned,
-// disconnect should also always be called.
-func (pool *serverPool) connect(p *serverPeer, node *enode.Node) *poolEntry {
-	log.Debug("Connect new entry", "enode", p.id)
-	req := &connReq{p: p, node: node, result: make(chan *poolEntry, 1)}
-	select {
-	case pool.connCh <- req:
-	case <-pool.closeCh:
-		return nil
-	}
-	return <-req.result
-}
-
-// registered should be called after a successful handshake
-func (pool *serverPool) registered(entry *poolEntry) {
-	log.Debug("Registered new entry", "enode", entry.node.ID())
-	req := &registerReq{entry: entry, done: make(chan struct{})}
-	select {
-	case pool.registerCh <- req:
-	case <-pool.closeCh:
-		return
-	}
-	<-req.done
-}
-
-// disconnect should be called when ending a connection. Service quality statistics
-// can be updated optionally (not updated if no registration happened, in this case
-// only connection statistics are updated, just like in case of timeout)
-func (pool *serverPool) disconnect(entry *poolEntry) {
-	stopped := false
-	select {
-	case <-pool.closeCh:
-		stopped = true
-	default:
-	}
-	log.Debug("Disconnected old entry", "enode", entry.node.ID())
-	req := &disconnReq{entry: entry, stopped: stopped, done: make(chan struct{})}
-
-	// Block until disconnection request is served.
-	pool.disconnCh <- req
-	<-req.done
-}
-
-const (
-	pseBlockDelay = iota
-	pseResponseTime
-	pseResponseTimeout
-)
-
-// poolStatAdjust records are sent to adjust peer block delay/response time statistics
-type poolStatAdjust struct {
-	adjustType int
-	entry      *poolEntry
-	time       time.Duration
-}
-
-// adjustBlockDelay adjusts the block announce delay statistics of a node
-func (pool *serverPool) adjustBlockDelay(entry *poolEntry, time time.Duration) {
-	if entry == nil {
-		return
-	}
-	pool.adjustStats <- poolStatAdjust{pseBlockDelay, entry, time}
-}
-
-// adjustResponseTime adjusts the request response time statistics of a node
-func (pool *serverPool) adjustResponseTime(entry *poolEntry, time time.Duration, timeout bool) {
-	if entry == nil {
-		return
-	}
-	if timeout {
-		pool.adjustStats <- poolStatAdjust{pseResponseTimeout, entry, time}
-	} else {
-		pool.adjustStats <- poolStatAdjust{pseResponseTime, entry, time}
-	}
-}
-
-// eventLoop handles pool events and mutex locking for all internal functions
-func (pool *serverPool) eventLoop() {
-	defer pool.wg.Done()
-	lookupCnt := 0
-	var convTime mclock.AbsTime
-	if pool.discSetPeriod != nil {
-		pool.discSetPeriod <- time.Millisecond * 100
-	}
-
-	// disconnect updates service quality statistics depending on the connection time
-	// and disconnection initiator.
-	disconnect := func(req *disconnReq, stopped bool) {
-		// Handle peer disconnection requests.
-		entry := req.entry
-		if entry.state == psRegistered {
-			connAdjust := float64(mclock.Now()-entry.regTime) / float64(targetConnTime)
-			if connAdjust > 1 {
-				connAdjust = 1
-			}
-			if stopped {
-				// disconnect requested by ourselves.
-				entry.connectStats.add(1, connAdjust)
-			} else {
-				// disconnect requested by server side.
-				entry.connectStats.add(connAdjust, 1)
-			}
-		}
-		entry.state = psNotConnected
-
-		if entry.knownSelected {
-			pool.knownSelected--
-		} else {
-			pool.newSelected--
-		}
-		pool.setRetryDial(entry)
-		pool.connWg.Done()
-		close(req.done)
-	}
-
-	for {
-		select {
-		case entry := <-pool.timeout:
-			if !entry.removed {
-				pool.checkDialTimeout(entry)
-			}
-
-		case entry := <-pool.enableRetry:
-			if !entry.removed {
-				entry.delayedRetry = false
-				pool.updateCheckDial(entry)
-			}
-
-		case adj := <-pool.adjustStats:
-			switch adj.adjustType {
-			case pseBlockDelay:
-				adj.entry.delayStats.add(float64(adj.time), 1)
-			case pseResponseTime:
-				adj.entry.responseStats.add(float64(adj.time), 1)
-				adj.entry.timeoutStats.add(0, 1)
-			case pseResponseTimeout:
-				adj.entry.timeoutStats.add(1, 1)
-			}
-
-		case node := <-pool.discNodes:
-			if pool.trustedNodes[node.ID()] == nil {
-				entry := pool.findOrNewNode(node)
-				pool.updateCheckDial(entry)
-			}
-
-		case conv := <-pool.discLookups:
-			if conv {
-				if lookupCnt == 0 {
-					convTime = mclock.Now()
-				}
-				lookupCnt++
-				if pool.fastDiscover && (lookupCnt == 50 || time.Duration(mclock.Now()-convTime) > time.Minute) {
-					pool.fastDiscover = false
-					if pool.discSetPeriod != nil {
-						pool.discSetPeriod <- time.Minute
-					}
-				}
-			}
-
-		case req := <-pool.connCh:
-			if pool.trustedNodes[req.p.ID()] != nil {
-				// ignore trusted nodes
-				req.result <- &poolEntry{trusted: true}
-			} else {
-				// Handle peer connection requests.
-				entry := pool.entries[req.p.ID()]
-				if entry == nil {
-					entry = pool.findOrNewNode(req.node)
-				}
-				if entry.state == psConnected || entry.state == psRegistered {
-					req.result <- nil
-					continue
-				}
-				pool.connWg.Add(1)
-				entry.peer = req.p
-				entry.state = psConnected
-				addr := &poolEntryAddress{
-					ip:       req.node.IP(),
-					port:     uint16(req.node.TCP()),
-					lastSeen: mclock.Now(),
-				}
-				entry.lastConnected = addr
-				entry.addr = make(map[string]*poolEntryAddress)
-				entry.addr[addr.strKey()] = addr
-				entry.addrSelect = *utils.NewWeightedRandomSelect()
-				entry.addrSelect.Update(addr)
-				req.result <- entry
-			}
-
-		case req := <-pool.registerCh:
-			if req.entry.trusted {
-				continue
-			}
-			// Handle peer registration requests.
-			entry := req.entry
-			entry.state = psRegistered
-			entry.regTime = mclock.Now()
-			if !entry.known {
-				pool.newQueue.remove(entry)
-				entry.known = true
-			}
-			pool.knownQueue.setLatest(entry)
-			entry.shortRetry = shortRetryCnt
-			close(req.done)
-
-		case req := <-pool.disconnCh:
-			if req.entry.trusted {
-				continue
-			}
-			// Handle peer disconnection requests.
-			disconnect(req, req.stopped)
-
-		case <-pool.closeCh:
-			if pool.discSetPeriod != nil {
-				close(pool.discSetPeriod)
-			}
-
-			// Spawn a goroutine to close the disconnCh after all connections are disconnected.
 			go func() {
-				pool.connWg.Wait()
-				close(pool.disconnCh)
+				q := query(n)
+				if q == -1 {
+					atomic.AddUint32(&s.queryFails, 1)
+				} else {
+					atomic.StoreUint32(&s.queryFails, 0)
+				}
+				if q == 1 {
+					s.ns.SetState(n, sfCanDial, nodestate.Flags{}, time.Second*10)
+				} else {
+					s.setRedialWait(n, queryCost, queryWaitStep)
+				}
+				s.ns.SetState(n, nodestate.Flags{}, sfQueried, 0)
 			}()
-
-			// Handle all remaining disconnection requests before exit.
-			for req := range pool.disconnCh {
-				disconnect(req, true)
-			}
-			pool.saveNodes()
-			return
 		}
-	}
-}
-
-func (pool *serverPool) findOrNewNode(node *enode.Node) *poolEntry {
-	now := mclock.Now()
-	entry := pool.entries[node.ID()]
-	if entry == nil {
-		log.Debug("Discovered new entry", "id", node.ID())
-		entry = &poolEntry{
-			node:       node,
-			addr:       make(map[string]*poolEntryAddress),
-			addrSelect: *utils.NewWeightedRandomSelect(),
-			shortRetry: shortRetryCnt,
+	})
+	return lpc.NewQueueIterator(s.ns, sfCanDial, nodestate.Flags{}, false, func(waiting bool) {
+		if waiting {
+			s.fillSet.SetTarget(preNegLimit)
+		} else {
+			s.fillSet.SetTarget(0)
 		}
-		pool.entries[node.ID()] = entry
-		// initialize previously unknown peers with good statistics to give a chance to prove themselves
-		entry.connectStats.add(1, initStatsWeight)
-		entry.delayStats.add(0, initStatsWeight)
-		entry.responseStats.add(0, initStatsWeight)
-		entry.timeoutStats.add(0, initStatsWeight)
-	}
-	entry.lastDiscovered = now
-	addr := &poolEntryAddress{ip: node.IP(), port: uint16(node.TCP())}
-	if a, ok := entry.addr[addr.strKey()]; ok {
-		addr = a
-	} else {
-		entry.addr[addr.strKey()] = addr
-	}
-	addr.lastSeen = now
-	entry.addrSelect.Update(addr)
-	if !entry.known {
-		pool.newQueue.setLatest(entry)
-	}
-	return entry
-}
-
-// loadNodes loads known nodes and their statistics from the database
-func (pool *serverPool) loadNodes() {
-	enc, err := pool.db.Get(pool.dbKey)
-	if err != nil {
-		return
-	}
-	var list []*poolEntry
-	err = rlp.DecodeBytes(enc, &list)
-	if err != nil {
-		log.Debug("Failed to decode node list", "err", err)
-		return
-	}
-	for _, e := range list {
-		log.Debug("Loaded server stats", "id", e.node.ID(), "fails", e.lastConnected.fails,
-			"conn", fmt.Sprintf("%v/%v", e.connectStats.avg, e.connectStats.weight),
-			"delay", fmt.Sprintf("%v/%v", time.Duration(e.delayStats.avg), e.delayStats.weight),
-			"response", fmt.Sprintf("%v/%v", time.Duration(e.responseStats.avg), e.responseStats.weight),
-			"timeout", fmt.Sprintf("%v/%v", e.timeoutStats.avg, e.timeoutStats.weight))
-		pool.entries[e.node.ID()] = e
-		if pool.trustedNodes[e.node.ID()] == nil {
-			pool.knownQueue.setLatest(e)
-			pool.knownSelect.Update((*knownEntry)(e))
-		}
-	}
-}
-
-// connectToTrustedNodes adds trusted server nodes as static trusted peers.
-//
-// Note: trusted nodes are not handled by the server pool logic, they are not
-// added to either the known or new selection pools. They are connected/reconnected
-// by p2p.Server whenever possible.
-func (pool *serverPool) connectToTrustedNodes() {
-	//connect to trusted nodes
-	for _, node := range pool.trustedNodes {
-		pool.server.AddTrustedPeer(node)
-		pool.server.AddPeer(node)
-		log.Debug("Added trusted node", "id", node.ID().String())
-	}
-}
-
-// parseTrustedNodes returns valid and parsed enodes
-func parseTrustedNodes(trustedNodes []string) map[enode.ID]*enode.Node {
-	nodes := make(map[enode.ID]*enode.Node)
-
-	for _, node := range trustedNodes {
-		node, err := enode.Parse(enode.ValidSchemes, node)
-		if err != nil {
-			log.Warn("Trusted node URL invalid", "enode", node, "err", err)
-			continue
-		}
-		nodes[node.ID()] = node
-	}
-	return nodes
-}
-
-// saveNodes saves known nodes and their statistics into the database. Nodes are
-// ordered from least to most recently connected.
-func (pool *serverPool) saveNodes() {
-	list := make([]*poolEntry, len(pool.knownQueue.queue))
-	for i := range list {
-		list[i] = pool.knownQueue.fetchOldest()
-	}
-	enc, err := rlp.EncodeToBytes(list)
-	if err == nil {
-		pool.db.Put(pool.dbKey, enc)
-	}
-}
-
-// removeEntry removes a pool entry when the entry count limit is reached.
-// Note that it is called by the new/known queues from which the entry has already
-// been removed so removing it from the queues is not necessary.
-func (pool *serverPool) removeEntry(entry *poolEntry) {
-	pool.newSelect.Remove((*discoveredEntry)(entry))
-	pool.knownSelect.Remove((*knownEntry)(entry))
-	entry.removed = true
-	delete(pool.entries, entry.node.ID())
-}
-
-// setRetryDial starts the timer which will enable dialing a certain node again
-func (pool *serverPool) setRetryDial(entry *poolEntry) {
-	delay := longRetryDelay
-	if entry.shortRetry > 0 {
-		entry.shortRetry--
-		delay = shortRetryDelay
-	}
-	delay += time.Duration(rand.Int63n(int64(delay) + 1))
-	entry.delayedRetry = true
-	go func() {
-		select {
-		case <-pool.closeCh:
-		case <-time.After(delay):
-			select {
-			case <-pool.closeCh:
-			case pool.enableRetry <- entry:
-			}
-		}
-	}()
-}
-
-// updateCheckDial is called when an entry can potentially be dialed again. It updates
-// its selection weights and checks if new dials can/should be made.
-func (pool *serverPool) updateCheckDial(entry *poolEntry) {
-	pool.newSelect.Update((*discoveredEntry)(entry))
-	pool.knownSelect.Update((*knownEntry)(entry))
-	pool.checkDial()
-}
-
-// checkDial checks if new dials can/should be made. It tries to select servers both
-// based on good statistics and recent discovery.
-func (pool *serverPool) checkDial() {
-	fillWithKnownSelects := !pool.fastDiscover
-	for pool.knownSelected < targetKnownSelect {
-		entry := pool.knownSelect.Choose()
-		if entry == nil {
-			fillWithKnownSelects = false
-			break
-		}
-		pool.dial((*poolEntry)(entry.(*knownEntry)), true)
-	}
-	for pool.knownSelected+pool.newSelected < targetServerCount {
-		entry := pool.newSelect.Choose()
-		if entry == nil {
-			break
-		}
-		pool.dial((*poolEntry)(entry.(*discoveredEntry)), false)
-	}
-	if fillWithKnownSelects {
-		// no more newly discovered nodes to select and since fast discover period
-		// is over, we probably won't find more in the near future so select more
-		// known entries if possible
-		for pool.knownSelected < targetServerCount {
-			entry := pool.knownSelect.Choose()
-			if entry == nil {
-				break
-			}
-			pool.dial((*poolEntry)(entry.(*knownEntry)), true)
-		}
-	}
-}
-
-// dial initiates a new connection
-func (pool *serverPool) dial(entry *poolEntry, knownSelected bool) {
-	if pool.server == nil || entry.state != psNotConnected {
-		return
-	}
-	entry.state = psDialed
-	entry.knownSelected = knownSelected
-	if knownSelected {
-		pool.knownSelected++
-	} else {
-		pool.newSelected++
-	}
-	addr := entry.addrSelect.Choose().(*poolEntryAddress)
-	log.Debug("Dialing new peer", "lesaddr", entry.node.ID().String()+"@"+addr.strKey(), "set", len(entry.addr), "known", knownSelected)
-	entry.dialed = addr
-	go func() {
-		pool.server.AddPeer(entry.node)
-		select {
-		case <-pool.closeCh:
-		case <-time.After(dialTimeout):
-			select {
-			case <-pool.closeCh:
-			case pool.timeout <- entry:
-			}
-		}
-	}()
-}
-
-// checkDialTimeout checks if the node is still in dialed state and if so, resets it
-// and adjusts connection statistics accordingly.
-func (pool *serverPool) checkDialTimeout(entry *poolEntry) {
-	if entry.state != psDialed {
-		return
-	}
-	log.Debug("Dial timeout", "lesaddr", entry.node.ID().String()+"@"+entry.dialed.strKey())
-	entry.state = psNotConnected
-	if entry.knownSelected {
-		pool.knownSelected--
-	} else {
-		pool.newSelected--
-	}
-	entry.connectStats.add(0, 1)
-	entry.dialed.fails++
-	pool.setRetryDial(entry)
-}
-
-const (
-	psNotConnected = iota
-	psDialed
-	psConnected
-	psRegistered
-)
-
-// poolEntry represents a server node and stores its current state and statistics.
-type poolEntry struct {
-	peer                  *serverPeer
-	pubkey                [64]byte // secp256k1 key of the node
-	addr                  map[string]*poolEntryAddress
-	node                  *enode.Node
-	lastConnected, dialed *poolEntryAddress
-	addrSelect            utils.WeightedRandomSelect
-
-	lastDiscovered                mclock.AbsTime
-	known, knownSelected, trusted bool
-	connectStats, delayStats      poolStats
-	responseStats, timeoutStats   poolStats
-	state                         int
-	regTime                       mclock.AbsTime
-	queueIdx                      int
-	removed                       bool
-
-	delayedRetry bool
-	shortRetry   int
-}
-
-// poolEntryEnc is the RLP encoding of poolEntry.
-type poolEntryEnc struct {
-	Pubkey                     []byte
-	IP                         net.IP
-	Port                       uint16
-	Fails                      uint
-	CStat, DStat, RStat, TStat poolStats
-}
-
-func (e *poolEntry) EncodeRLP(w io.Writer) error {
-	return rlp.Encode(w, &poolEntryEnc{
-		Pubkey: encodePubkey64(e.node.Pubkey()),
-		IP:     e.lastConnected.ip,
-		Port:   e.lastConnected.port,
-		Fails:  e.lastConnected.fails,
-		CStat:  e.connectStats,
-		DStat:  e.delayStats,
-		RStat:  e.responseStats,
-		TStat:  e.timeoutStats,
 	})
 }
 
-func (e *poolEntry) DecodeRLP(s *rlp.Stream) error {
-	var entry poolEntryEnc
-	if err := s.Decode(&entry); err != nil {
-		return err
+// start starts the server pool. Note that NodeStateMachine should be started first.
+func (s *serverPool) start() {
+	s.ns.Start()
+	for _, iter := range s.mixSources {
+		// add sources to mixer at startup because the mixer instantly tries to read them
+		// which should only happen after NodeStateMachine has been started
+		s.mixer.AddSource(iter)
 	}
-	pubkey, err := decodePubkey64(entry.Pubkey)
-	if err != nil {
-		return err
-	}
-	addr := &poolEntryAddress{ip: entry.IP, port: entry.Port, fails: entry.Fails, lastSeen: mclock.Now()}
-	e.node = enode.NewV4(pubkey, entry.IP, int(entry.Port), int(entry.Port))
-	e.addr = make(map[string]*poolEntryAddress)
-	e.addr[addr.strKey()] = addr
-	e.addrSelect = *utils.NewWeightedRandomSelect()
-	e.addrSelect.Update(addr)
-	e.lastConnected = addr
-	e.connectStats = entry.CStat
-	e.delayStats = entry.DStat
-	e.responseStats = entry.RStat
-	e.timeoutStats = entry.TStat
-	e.shortRetry = shortRetryCnt
-	e.known = true
-	return nil
-}
-
-func encodePubkey64(pub *ecdsa.PublicKey) []byte {
-	return crypto.FromECDSAPub(pub)[1:]
-}
-
-func decodePubkey64(b []byte) (*ecdsa.PublicKey, error) {
-	return crypto.UnmarshalPubkey(append([]byte{0x04}, b...))
-}
-
-// discoveredEntry implements wrsItem
-type discoveredEntry poolEntry
-
-// Weight calculates random selection weight for newly discovered entries
-func (e *discoveredEntry) Weight() int64 {
-	if e.state != psNotConnected || e.delayedRetry {
-		return 0
-	}
-	t := time.Duration(mclock.Now() - e.lastDiscovered)
-	if t <= discoverExpireStart {
-		return 1000000000
-	}
-	return int64(1000000000 * math.Exp(-float64(t-discoverExpireStart)/float64(discoverExpireConst)))
-}
-
-// knownEntry implements wrsItem
-type knownEntry poolEntry
-
-// Weight calculates random selection weight for known entries
-func (e *knownEntry) Weight() int64 {
-	if e.state != psNotConnected || !e.known || e.delayedRetry {
-		return 0
-	}
-	return int64(1000000000 * e.connectStats.recentAvg() * math.Exp(-float64(e.lastConnected.fails)*failDropLn-e.responseStats.recentAvg()/float64(responseScoreTC)-e.delayStats.recentAvg()/float64(delayScoreTC)) * math.Pow(1-e.timeoutStats.recentAvg(), timeoutPow))
-}
-
-// poolEntryAddress is a separate object because currently it is necessary to remember
-// multiple potential network addresses for a pool entry. This will be removed after
-// the final implementation of v5 discovery which will retrieve signed and serial
-// numbered advertisements, making it clear which IP/port is the latest one.
-type poolEntryAddress struct {
-	ip       net.IP
-	port     uint16
-	lastSeen mclock.AbsTime // last time it was discovered, connected or loaded from db
-	fails    uint           // connection failures since last successful connection (persistent)
-}
-
-func (a *poolEntryAddress) Weight() int64 {
-	t := time.Duration(mclock.Now() - a.lastSeen)
-	return int64(1000000*math.Exp(-float64(t)/float64(discoverExpireConst)-float64(a.fails)*addrFailDropLn)) + 1
-}
-
-func (a *poolEntryAddress) strKey() string {
-	return a.ip.String() + ":" + strconv.Itoa(int(a.port))
-}
-
-// poolStats implement statistics for a certain quantity with a long term average
-// and a short term value which is adjusted exponentially with a factor of
-// pstatRecentAdjust with each update and also returned exponentially to the
-// average with the time constant pstatReturnToMeanTC
-type poolStats struct {
-	sum, weight, avg, recent float64
-	lastRecalc               mclock.AbsTime
-}
-
-// init initializes stats with a long term sum/update count pair retrieved from the database
-func (s *poolStats) init(sum, weight float64) {
-	s.sum = sum
-	s.weight = weight
-	var avg float64
-	if weight > 0 {
-		avg = s.sum / weight
-	}
-	s.avg = avg
-	s.recent = avg
-	s.lastRecalc = mclock.Now()
-}
-
-// recalc recalculates recent value return-to-mean and long term average
-func (s *poolStats) recalc() {
-	now := mclock.Now()
-	s.recent = s.avg + (s.recent-s.avg)*math.Exp(-float64(now-s.lastRecalc)/float64(pstatReturnToMeanTC))
-	if s.sum == 0 {
-		s.avg = 0
-	} else {
-		if s.sum > s.weight*1e30 {
-			s.avg = 1e30
+	for _, url := range s.trustedURLs {
+		if node, err := enode.Parse(s.validSchemes, url); err == nil {
+			s.ns.SetState(node, sfAlwaysConnect, nodestate.Flags{}, 0)
 		} else {
-			s.avg = s.sum / s.weight
+			log.Error("Invalid trusted server URL", "url", url, "error", err)
 		}
 	}
-	s.lastRecalc = now
-}
-
-// add updates the stats with a new value
-func (s *poolStats) add(value, weight float64) {
-	s.weight += weight
-	s.sum += value * weight
-	s.recalc()
-}
-
-// recentAvg returns the short-term adjusted average
-func (s *poolStats) recentAvg() float64 {
-	s.recalc()
-	return s.recent
-}
-
-func (s *poolStats) EncodeRLP(w io.Writer) error {
-	return rlp.Encode(w, []interface{}{math.Float64bits(s.sum), math.Float64bits(s.weight)})
-}
-
-func (s *poolStats) DecodeRLP(st *rlp.Stream) error {
-	var stats struct {
-		SumUint, WeightUint uint64
-	}
-	if err := st.Decode(&stats); err != nil {
-		return err
-	}
-	s.init(math.Float64frombits(stats.SumUint), math.Float64frombits(stats.WeightUint))
-	return nil
-}
-
-// poolEntryQueue keeps track of its least recently accessed entries and removes
-// them when the number of entries reaches the limit
-type poolEntryQueue struct {
-	queue                  map[int]*poolEntry // known nodes indexed by their latest lastConnCnt value
-	newPtr, oldPtr, maxCnt int
-	removeFromPool         func(*poolEntry)
-}
-
-// newPoolEntryQueue returns a new poolEntryQueue
-func newPoolEntryQueue(maxCnt int, removeFromPool func(*poolEntry)) poolEntryQueue {
-	return poolEntryQueue{queue: make(map[int]*poolEntry), maxCnt: maxCnt, removeFromPool: removeFromPool}
-}
-
-// fetchOldest returns and removes the least recently accessed entry
-func (q *poolEntryQueue) fetchOldest() *poolEntry {
-	if len(q.queue) == 0 {
-		return nil
-	}
-	for {
-		if e := q.queue[q.oldPtr]; e != nil {
-			delete(q.queue, q.oldPtr)
-			q.oldPtr++
-			return e
+	unixTime := s.unixTime()
+	s.ns.ForEach(sfHasValue, nodestate.Flags{}, func(node *enode.Node, state nodestate.Flags) {
+		s.calculateWeight(node)
+		if n, ok := s.ns.GetField(node, sfiNodeHistory).(nodeHistory); ok && n.redialWaitEnd > unixTime {
+			wait := n.redialWaitEnd - unixTime
+			lastWait := n.redialWaitEnd - n.redialWaitStart
+			if wait > lastWait {
+				// if the time until expiration is larger than the last suggested
+				// waiting time then the system clock was probably adjusted
+				wait = lastWait
+			}
+			s.ns.SetState(node, sfRedialWait, nodestate.Flags{}, time.Duration(wait)*time.Second)
 		}
-		q.oldPtr++
-	}
+	})
 }
 
-// remove removes an entry from the queue
-func (q *poolEntryQueue) remove(entry *poolEntry) {
-	if q.queue[entry.queueIdx] == entry {
-		delete(q.queue, entry.queueIdx)
+// stop stops the server pool
+func (s *serverPool) stop() {
+	s.dialIterator.Close()
+	if s.fillSet != nil {
+		s.fillSet.Close()
 	}
+	s.ns.ForEach(sfConnected, nodestate.Flags{}, func(n *enode.Node, state nodestate.Flags) {
+		// recalculate weight of connected nodes in order to update hasValue flag if necessary
+		s.calculateWeight(n)
+	})
+	s.ns.Stop()
 }
 
-// setLatest adds or updates a recently accessed entry. It also checks if an old entry
-// needs to be removed and removes it from the parent pool too with a callback function.
-func (q *poolEntryQueue) setLatest(entry *poolEntry) {
-	if q.queue[entry.queueIdx] == entry {
-		delete(q.queue, entry.queueIdx)
+// registerPeer implements serverPeerSubscriber
+func (s *serverPool) registerPeer(p *serverPeer) {
+	s.ns.SetState(p.Node(), sfConnected, sfDialing.Or(sfWaitDialTimeout), 0)
+	nvt := s.vt.Register(p.ID())
+	s.ns.SetField(p.Node(), sfiConnectedStats, nvt.RtStats())
+	p.setValueTracker(s.vt, nvt)
+	p.updateVtParams()
+}
+
+// unregisterPeer implements serverPeerSubscriber
+func (s *serverPool) unregisterPeer(p *serverPeer) {
+	s.setRedialWait(p.Node(), dialCost, dialWaitStep)
+	s.ns.SetState(p.Node(), nodestate.Flags{}, sfConnected, 0)
+	s.ns.SetField(p.Node(), sfiConnectedStats, nil)
+	s.vt.Unregister(p.ID())
+	p.setValueTracker(nil, nil)
+}
+
+// recalTimeout calculates the current recommended timeout. This value is used by
+// the client as a "soft timeout" value. It also affects the service value calculation
+// of individual nodes.
+func (s *serverPool) recalTimeout() {
+	// Use cached result if possible, avoid recalculating too frequently.
+	s.timeoutLock.RLock()
+	refreshed := s.timeoutRefreshed
+	s.timeoutLock.RUnlock()
+	now := s.clock.Now()
+	if refreshed != 0 && time.Duration(now-refreshed) < timeoutRefresh {
+		return
+	}
+	// Cached result is stale, recalculate a new one.
+	rts := s.vt.RtStats()
+
+	// Add a fake statistic here. It is an easy way to initialize with some
+	// conservative values when the database is new. As soon as we have a
+	// considerable amount of real stats this small value won't matter.
+	rts.Add(time.Second*2, 10, s.vt.StatsExpFactor())
+
+	// Use either 10% failure rate timeout or twice the median response time
+	// as the recommended timeout.
+	timeout := minTimeout
+	if t := rts.Timeout(0.1); t > timeout {
+		timeout = t
+	}
+	if t := rts.Timeout(0.5) * 2; t > timeout {
+		timeout = t
+	}
+	s.timeoutLock.Lock()
+	if s.timeout != timeout {
+		s.timeout = timeout
+		s.timeWeights = lpc.TimeoutWeights(s.timeout)
+
+		suggestedTimeoutGauge.Update(int64(s.timeout / time.Millisecond))
+		totalValueGauge.Update(int64(rts.Value(s.timeWeights, s.vt.StatsExpFactor())))
+	}
+	s.timeoutRefreshed = now
+	s.timeoutLock.Unlock()
+}
+
+// getTimeout returns the recommended request timeout.
+func (s *serverPool) getTimeout() time.Duration {
+	s.recalTimeout()
+	s.timeoutLock.RLock()
+	defer s.timeoutLock.RUnlock()
+	return s.timeout
+}
+
+// getTimeoutAndWeight returns the recommended request timeout as well as the
+// response time weight which is necessary to calculate service value.
+func (s *serverPool) getTimeoutAndWeight() (time.Duration, lpc.ResponseTimeWeights) {
+	s.recalTimeout()
+	s.timeoutLock.RLock()
+	defer s.timeoutLock.RUnlock()
+	return s.timeout, s.timeWeights
+}
+
+// addDialCost adds the given amount of dial cost to the node history and returns the current
+// amount of total dial cost
+func (s *serverPool) addDialCost(n *nodeHistory, amount int64) uint64 {
+	logOffset := s.vt.StatsExpirer().LogOffset(s.clock.Now())
+	if amount > 0 {
+		n.dialCost.Add(amount, logOffset)
+	}
+	totalDialCost := n.dialCost.Value(logOffset)
+	if totalDialCost < dialCost {
+		totalDialCost = dialCost
+	}
+	return totalDialCost
+}
+
+// serviceValue returns the service value accumulated in this session and in total
+func (s *serverPool) serviceValue(node *enode.Node) (sessionValue, totalValue float64) {
+	nvt := s.vt.GetNode(node.ID())
+	if nvt == nil {
+		return 0, 0
+	}
+	currentStats := nvt.RtStats()
+	_, timeWeights := s.getTimeoutAndWeight()
+	expFactor := s.vt.StatsExpFactor()
+
+	totalValue = currentStats.Value(timeWeights, expFactor)
+	if connStats, ok := s.ns.GetField(node, sfiConnectedStats).(lpc.ResponseTimeStats); ok {
+		diff := currentStats
+		diff.SubStats(&connStats)
+		sessionValue = diff.Value(timeWeights, expFactor)
+		sessionValueMeter.Mark(int64(sessionValue))
+	}
+	return
+}
+
+// updateWeight calculates the node weight and updates the nodeWeight field and the
+// hasValue flag. It also saves the node state if necessary.
+func (s *serverPool) updateWeight(node *enode.Node, totalValue float64, totalDialCost uint64) {
+	weight := uint64(totalValue * nodeWeightMul / float64(totalDialCost))
+	if weight >= nodeWeightThreshold {
+		s.ns.SetState(node, sfHasValue, nodestate.Flags{}, 0)
+		s.ns.SetField(node, sfiNodeWeight, weight)
 	} else {
-		if len(q.queue) == q.maxCnt {
-			e := q.fetchOldest()
-			q.remove(e)
-			q.removeFromPool(e)
-		}
+		s.ns.SetState(node, nodestate.Flags{}, sfHasValue, 0)
+		s.ns.SetField(node, sfiNodeWeight, nil)
 	}
-	entry.queueIdx = q.newPtr
-	q.queue[entry.queueIdx] = entry
-	q.newPtr++
+	s.ns.Persist(node) // saved if node history or hasValue changed
+}
+
+// setRedialWait calculates and sets the redialWait timeout based on the service value
+// and dial cost accumulated during the last session/attempt and in total.
+// The waiting time is raised exponentially if no service value has been received in order
+// to prevent dialing an unresponsive node frequently for a very long time just because it
+// was useful in the past. It can still be occasionally dialed though and once it provides
+// a significant amount of service value again its waiting time is quickly reduced or reset
+// to the minimum.
+// Note: node weight is also recalculated and updated by this function.
+func (s *serverPool) setRedialWait(node *enode.Node, addDialCost int64, waitStep float64) {
+	n, _ := s.ns.GetField(node, sfiNodeHistory).(nodeHistory)
+	sessionValue, totalValue := s.serviceValue(node)
+	totalDialCost := s.addDialCost(&n, addDialCost)
+
+	// if the current dial session has yielded at least the average value/dial cost ratio
+	// then the waiting time should be reset to the minimum. If the session value
+	// is below average but still positive then timeout is limited to the ratio of
+	// average / current service value multiplied by the minimum timeout. If the attempt
+	// was unsuccessful then timeout is raised exponentially without limitation.
+	// Note: dialCost is used in the formula below even if dial was not attempted at all
+	// because the pre-negotiation query did not return a positive result. In this case
+	// the ratio has no meaning anyway and waitFactor is always raised, though in smaller
+	// steps because queries are cheaper and therefore we can allow more failed attempts.
+	unixTime := s.unixTime()
+	plannedTimeout := float64(n.redialWaitEnd - n.redialWaitStart) // last planned redialWait timeout
+	var actualWait float64                                         // actual waiting time elapsed
+	if unixTime > n.redialWaitEnd {
+		// the planned timeout has elapsed
+		actualWait = plannedTimeout
+	} else {
+		// if the node was redialed earlier then we do not raise the planned timeout
+		// exponentially because that could lead to the timeout rising very high in
+		// a short amount of time
+		// Note that in case of an early redial actualWait also includes the dial
+		// timeout or connection time of the last attempt but it still serves its
+		// purpose of preventing the timeout rising quicker than linearly as a function
+		// of total time elapsed without a successful connection.
+		actualWait = float64(unixTime - n.redialWaitStart)
+	}
+	// raise timeout exponentially if the last planned timeout has elapsed
+	// (use at least the last planned timeout otherwise)
+	nextTimeout := actualWait * waitStep
+	if plannedTimeout > nextTimeout {
+		nextTimeout = plannedTimeout
+	}
+	// we reduce the waiting time if the server has provided service value during the
+	// connection (but never under the minimum)
+	a := totalValue * dialCost * float64(minRedialWait)
+	b := float64(totalDialCost) * sessionValue
+	if a < b*nextTimeout {
+		nextTimeout = a / b
+	}
+	if nextTimeout < minRedialWait {
+		nextTimeout = minRedialWait
+	}
+	wait := time.Duration(float64(time.Second) * nextTimeout)
+	if wait < waitThreshold {
+		n.redialWaitStart = unixTime
+		n.redialWaitEnd = unixTime + int64(nextTimeout)
+		s.ns.SetField(node, sfiNodeHistory, n)
+		s.ns.SetState(node, sfRedialWait, nodestate.Flags{}, wait)
+		s.updateWeight(node, totalValue, totalDialCost)
+	} else {
+		// discard known node statistics if waiting time is very long because the node
+		// hasn't been responsive for a very long time
+		s.ns.SetField(node, sfiNodeHistory, nil)
+		s.ns.SetField(node, sfiNodeWeight, nil)
+		s.ns.SetState(node, nodestate.Flags{}, sfHasValue, 0)
+	}
+}
+
+// calculateWeight calculates and sets the node weight without altering the node history.
+// This function should be called during startup and shutdown only, otherwise setRedialWait
+// will keep the weights updated as the underlying statistics are adjusted.
+func (s *serverPool) calculateWeight(node *enode.Node) {
+	n, _ := s.ns.GetField(node, sfiNodeHistory).(nodeHistory)
+	_, totalValue := s.serviceValue(node)
+	totalDialCost := s.addDialCost(&n, 0)
+	s.updateWeight(node, totalValue, totalDialCost)
 }
