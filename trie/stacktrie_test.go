@@ -18,6 +18,7 @@ package trie
 
 import (
 	"bytes"
+	"fmt"
 	"testing"
 
 	"github.com/ethereum/go-ethereum/common"
@@ -66,6 +67,7 @@ func TestHashWithSmallRLP(t *testing.T) {
 	d := sha3.NewLegacyKeccak256()
 	d.Write(trie.hash())
 	got := d.Sum(nil)
+	fmt.Println(got)
 	exp := aotrie.Hash()
 
 	if !bytes.Equal(got, exp[:]) {
