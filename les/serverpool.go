@@ -95,12 +95,12 @@ var (
 	sfHasValue         = serverPoolSetup.NewPersistentFlag("hasValue")
 	sfQueried          = serverPoolSetup.NewFlag("queried")
 	sfCanDial          = serverPoolSetup.NewFlag("canDial")
-	sfDialed           = serverPoolSetup.NewFlag("dialed")
-	sfDialTimeout      = serverPoolSetup.NewFlag("dialTimeout")
+	sfDialing          = serverPoolSetup.NewFlag("dialed")
+	sfWaitDialTimeout  = serverPoolSetup.NewFlag("dialTimeout")
 	sfConnected        = serverPoolSetup.NewFlag("connected")
 	sfRedialWait       = serverPoolSetup.NewFlag("redialWait")
 	sfAlwaysConnect    = serverPoolSetup.NewFlag("alwaysConnect")
-	sfDisableSelection = nodestate.MergeFlags(sfQueried, sfCanDial, sfDialed, sfConnected, sfRedialWait)
+	sfDisableSelection = nodestate.MergeFlags(sfQueried, sfCanDial, sfDialing, sfConnected, sfRedialWait)
 
 	sfiNodeHistory = serverPoolSetup.NewPersistentField("nodeHistory", reflect.TypeOf(nodeHistory{}),
 		func(field interface{}) ([]byte, error) {
@@ -157,21 +157,21 @@ func newServerPool(db ethdb.KeyValueStore, dbKey []byte, vt *lpc.ValueTracker, d
 		iter = s.addPreNegFilter(iter, query)
 	}
 	s.dialIterator = enode.Filter(iter, func(node *enode.Node) bool {
-		s.ns.SetState(node, sfDialed, sfCanDial, 0)
-		s.ns.SetState(node, sfDialTimeout, nodestate.Flags{}, time.Second*10)
+		s.ns.SetState(node, sfDialing, sfCanDial, 0)
+		s.ns.SetState(node, sfWaitDialTimeout, nodestate.Flags{}, time.Second*10)
 		return true
 	})
 
-	s.ns.SubscribeState(nodestate.MergeFlags(sfDialTimeout, sfConnected), func(n *enode.Node, oldState, newState nodestate.Flags) {
-		if oldState.Equals(sfDialTimeout) && newState.IsEmpty() {
+	s.ns.SubscribeState(nodestate.MergeFlags(sfWaitDialTimeout, sfConnected), func(n *enode.Node, oldState, newState nodestate.Flags) {
+		if oldState.Equals(sfWaitDialTimeout) && newState.IsEmpty() {
 			// dial timeout, no connection
 			s.setRedialWait(n, dialCost, dialWaitStep)
-			s.ns.SetState(n, nodestate.Flags{}, sfDialed, 0)
+			s.ns.SetState(n, nodestate.Flags{}, sfDialing, 0)
 		}
 	})
 
 	s.ns.AddLogMetrics(sfHasValue, sfDisableSelection, "selectable", nil, nil, serverSelectableGauge)
-	s.ns.AddLogMetrics(sfDialed, nodestate.Flags{}, "dialed", serverDialedMeter, nil, nil)
+	s.ns.AddLogMetrics(sfDialing, nodestate.Flags{}, "dialed", serverDialedMeter, nil, nil)
 	s.ns.AddLogMetrics(sfConnected, nodestate.Flags{}, "connected", nil, nil, serverConnectedGauge)
 	return s
 }
@@ -270,7 +270,7 @@ func (s *serverPool) stop() {
 
 // registerPeer implements serverPeerSubscriber
 func (s *serverPool) registerPeer(p *serverPeer) {
-	s.ns.SetState(p.Node(), sfConnected, sfDialed.Or(sfDialTimeout), 0)
+	s.ns.SetState(p.Node(), sfConnected, sfDialing.Or(sfWaitDialTimeout), 0)
 	nvt := s.vt.Register(p.ID())
 	s.ns.SetField(p.Node(), sfiConnectedStats, nvt.RtStats())
 	p.setValueTracker(s.vt, nvt)
