@@ -861,13 +861,6 @@ func DoCall(ctx context.Context, b Backend, args CallArgs, blockNrOrHash rpc.Blo
 	if evm.Cancelled() {
 		return nil, fmt.Errorf("execution aborted (timeout = %v)", timeout)
 	}
-	// If the result contains a revert reason, try to unpack and return it.
-	if len(result.Revert()) > 0 {
-		reason, err := abi.UnpackRevert(result.Revert())
-		if err == nil {
-			return nil, fmt.Errorf("execution reverted: %v", reason)
-		}
-	}
 	return result, err
 }
 
@@ -885,6 +878,13 @@ func (s *PublicBlockChainAPI) Call(ctx context.Context, args CallArgs, blockNrOr
 	result, err := DoCall(ctx, s.b, args, blockNrOrHash, accounts, vm.Config{}, 5*time.Second, s.b.RPCGasCap())
 	if err != nil {
 		return nil, err
+	}
+	// If the result contains a revert reason, try to unpack and return it.
+	if len(result.Revert()) > 0 {
+		reason, err := abi.UnpackRevert(result.Revert())
+		if err == nil {
+			return nil, fmt.Errorf("execution reverted: %v", reason)
+		}
 	}
 	return result.Return(), nil
 }

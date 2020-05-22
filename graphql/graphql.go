@@ -23,6 +23,7 @@ import (
 	"time"
 
 	"github.com/ethereum/go-ethereum"
+	"github.com/ethereum/go-ethereum/accounts/abi"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/ethereum/go-ethereum/core/rawdb"
@@ -811,8 +812,16 @@ func (b *Block) Call(ctx context.Context, args struct {
 	if result.Failed() {
 		status = 0
 	}
+	data := result.Return()
+	// If the result contains a revert reason, try to unpack and return it.
+	if len(result.Revert()) > 0 {
+		reason, err := abi.UnpackRevert(result.Revert())
+		if err == nil {
+			data = []byte(reason)
+		}
+	}
 	return &CallResult{
-		data:    result.Return(),
+		data:    data,
 		gasUsed: hexutil.Uint64(result.UsedGas),
 		status:  status,
 	}, nil
@@ -880,8 +889,16 @@ func (p *Pending) Call(ctx context.Context, args struct {
 	if result.Failed() {
 		status = 0
 	}
+	data := result.Return()
+	// If the result contains a revert reason, try to unpack and return it.
+	if len(result.Revert()) > 0 {
+		reason, err := abi.UnpackRevert(result.Revert())
+		if err == nil {
+			data = []byte(reason)
+		}
+	}
 	return &CallResult{
-		data:    result.Return(),
+		data:    data,
 		gasUsed: hexutil.Uint64(result.UsedGas),
 		status:  status,
 	}, nil
