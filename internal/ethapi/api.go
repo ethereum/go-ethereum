@@ -792,51 +792,41 @@ type account struct {
 	StateDiff *map[common.Hash]common.Hash `json:"stateDiff"`
 }
 
-type PreviousState struct {
-	state  *state.StateDB
-	header *types.Header
-}
-
-func DoCall(ctx context.Context, b Backend, args CallArgs, prevState *PreviousState, blockNrOrHash rpc.BlockNumberOrHash, overrides map[common.Address]account, vmCfg vm.Config, timeout time.Duration, globalGasCap *big.Int) (*core.ExecutionResult, *PreviousState, error) {
+func DoCall(ctx context.Context, b Backend, args CallArgs, prevState *state.StateDB, blockNrOrHash rpc.BlockNumberOrHash, overrides map[common.Address]account, vmCfg vm.Config, timeout time.Duration, globalGasCap *big.Int) (*core.ExecutionResult, *state.StateDB, error) {
 	defer func(start time.Time) { log.Debug("Executing EVM call finished", "runtime", time.Since(start)) }(time.Now())
-	if prevState == nil {
-		prevState = &PreviousState{}
+	state, header, err := b.StateAndHeaderByNumberOrHash(ctx, blockNrOrHash)
+	if state == nil || err != nil {
+		return nil, nil, err
 	}
-	if (prevState.header != nil && prevState.header == nil) || (prevState.header == nil && prevState.header != nil) {
-		return nil, nil, fmt.Errorf("both header and state must be set to use previous staate")
-	}
-	if prevState.header == nil && prevState.state == nil {
-		var err error
-		prevState.state, prevState.header, err = b.StateAndHeaderByNumberOrHash(ctx, blockNrOrHash)
-		if prevState.state == nil || err != nil {
-			return nil, nil, err
-		}
+	if prevState != nil {
+		state = prevState.Copy()
+		header.Root = state.IntermediateRoot(b.ChainConfig().IsEIP158(header.Number))
 	}
 	// Override the fields of specified contracts before execution.
 	for addr, account := range overrides {
 		// Override account nonce.
 		if account.Nonce != nil {
-			prevState.state.SetNonce(addr, uint64(*account.Nonce))
+			state.SetNonce(addr, uint64(*account.Nonce))
 		}
 		// Override account(contract) code.
 		if account.Code != nil {
-			prevState.state.SetCode(addr, *account.Code)
+			state.SetCode(addr, *account.Code)
 		}
 		// Override account balance.
 		if account.Balance != nil {
-			prevState.state.SetBalance(addr, (*big.Int)(*account.Balance))
+			state.SetBalance(addr, (*big.Int)(*account.Balance))
 		}
 		if account.State != nil && account.StateDiff != nil {
 			return nil, nil, fmt.Errorf("account %s has both 'state' and 'stateDiff'", addr.Hex())
 		}
 		// Replace entire state if caller requires.
 		if account.State != nil {
-			prevState.state.SetStorage(addr, *account.State)
+			state.SetStorage(addr, *account.State)
 		}
 		// Apply state diff into specified accounts.
 		if account.StateDiff != nil {
 			for key, value := range *account.StateDiff {
-				prevState.state.SetState(addr, key, value)
+				state.SetState(addr, key, value)
 			}
 		}
 	}
@@ -854,7 +844,7 @@ func DoCall(ctx context.Context, b Backend, args CallArgs, prevState *PreviousSt
 
 	// Get a new instance of the EVM.
 	msg := args.ToMessage(globalGasCap)
-	evm, vmError, err := b.GetEVM(ctx, msg, prevState.state, prevState.header)
+	evm, vmError, err := b.GetEVM(ctx, msg, state, header)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -876,8 +866,7 @@ func DoCall(ctx context.Context, b Backend, args CallArgs, prevState *PreviousSt
 	if evm.Cancelled() {
 		return nil, nil, fmt.Errorf("execution aborted (timeout = %v)", timeout)
 	}
-	prevState.header.Root = prevState.state.IntermediateRoot(b.ChainConfig().IsEIP158(prevState.header.Number))
-	return result, prevState, err
+	return result, state, err
 }
 
 // Call executes the given transaction on the state for the given block number.
@@ -915,13 +904,13 @@ func (e estimateGasError) Error() string {
 	return errMsg
 }
 
-func DoEstimateGas(ctx context.Context, b Backend, args CallArgs, prevState *PreviousState, blockNrOrHash rpc.BlockNumberOrHash, gasCap *big.Int) (hexutil.Uint64, *PreviousState, error) {
+func DoEstimateGas(ctx context.Context, b Backend, args CallArgs, prevState *state.StateDB, blockNrOrHash rpc.BlockNumberOrHash, gasCap *big.Int) (hexutil.Uint64, *state.StateDB, error) {
 	// Binary search the gas requirement, as it may be higher than the amount used
 	var (
-		lo        uint64 = params.TxGas - 1
-		hi        uint64
-		cap       uint64
-		stateData *PreviousState
+		lo         uint64 = params.TxGas - 1
+		hi         uint64
+		cap        uint64
+		validState *state.StateDB
 	)
 	// Use zero address if sender unspecified.
 	if args.From == nil {
@@ -971,23 +960,21 @@ func DoEstimateGas(ctx context.Context, b Backend, args CallArgs, prevState *Pre
 	cap = hi
 
 	// Create a helper to check if a gas allowance results in an executable transaction
-	executable := func(gas uint64) (bool, *core.ExecutionResult, error) {
+	executable := func(gas uint64) (bool, *core.ExecutionResult, *state.StateDB, error) {
 		args.Gas = (*hexutil.Uint64)(&gas)
-
 		result, prevS, err := DoCall(ctx, b, args, prevState, blockNrOrHash, nil, vm.Config{}, 0, gasCap)
-		stateData = prevS
 		if err != nil {
 			if err == core.ErrIntrinsicGas {
-				return true, nil, nil // Special case, raise gas limit
+				return true, nil, nil, nil // Special case, raise gas limit
 			}
-			return true, nil, err // Bail out
+			return true, nil, nil, err // Bail out
 		}
-		return result.Failed(), result, nil
+		return result.Failed(), result, prevS, nil
 	}
 	// Execute the binary search and hone in on an executable gas limit
 	for lo+1 < hi {
 		mid := (hi + lo) / 2
-		failed, _, err := executable(mid)
+		failed, _, prevS, err := executable(mid)
 
 		// If the error is not nil(consensus error), it means the provided message
 		// call or transaction will never be accepted no matter how much gas it is
@@ -998,12 +985,13 @@ func DoEstimateGas(ctx context.Context, b Backend, args CallArgs, prevState *Pre
 		if failed {
 			lo = mid
 		} else {
+			validState = prevS
 			hi = mid
 		}
 	}
 	// Reject the transaction as invalid if it still fails at the highest allowance
 	if hi == cap {
-		failed, result, err := executable(hi)
+		failed, result, prevS, err := executable(hi)
 		if err != nil {
 			return 0, nil, err
 		}
@@ -1027,8 +1015,9 @@ func DoEstimateGas(ctx context.Context, b Backend, args CallArgs, prevState *Pre
 			// Otherwise, the specified gas cap is too low
 			return 0, nil, estimateGasError{error: fmt.Sprintf("gas required exceeds allowance (%d)", cap)}
 		}
+		validState = prevS
 	}
-	return hexutil.Uint64(hi), stateData, nil
+	return hexutil.Uint64(hi), validState, nil
 }
 
 func (s *PublicBlockChainAPI) EstimateGas(ctx context.Context, argsInterface interface{}) (interface{}, error) {
@@ -1036,7 +1025,7 @@ func (s *PublicBlockChainAPI) EstimateGas(ctx context.Context, argsInterface int
 	var (
 		gas       hexutil.Uint64
 		err       error
-		stateData *PreviousState
+		prevState *state.StateDB
 	)
 	getCallArgs := func(inter map[string]interface{}) CallArgs {
 		marshalled, _ := json.Marshal(inter)
@@ -1046,12 +1035,12 @@ func (s *PublicBlockChainAPI) EstimateGas(ctx context.Context, argsInterface int
 	}
 	switch args := argsInterface.(type) {
 	case map[string]interface{}:
-		gas, _, err = DoEstimateGas(ctx, s.b, getCallArgs(args), stateData, blockNrOrHash, s.b.RPCGasCap())
+		gas, _, err = DoEstimateGas(ctx, s.b, getCallArgs(args), nil, blockNrOrHash, s.b.RPCGasCap())
 		return gas, err
 	case []interface{}:
 		returnVals := make([]hexutil.Uint64, len(args))
 		for idx, argData := range args {
-			gas, stateData, err = DoEstimateGas(ctx, s.b, getCallArgs(argData.(map[string]interface{})), stateData, blockNrOrHash, s.b.RPCGasCap())
+			gas, prevState, err = DoEstimateGas(ctx, s.b, getCallArgs(argData.(map[string]interface{})), prevState, blockNrOrHash, s.b.RPCGasCap())
 			if err != nil {
 				return nil, err
 			}
