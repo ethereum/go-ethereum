@@ -882,8 +882,7 @@ func (bc *BlockChain) Stop() {
 	// Unsubscribe all subscriptions registered from blockchain
 	bc.scope.Close()
 	close(bc.quit)
-	atomic.StoreInt32(&bc.procInterrupt, 1)
-
+	bc.InterruptInsert()
 	bc.wg.Wait()
 
 	// Ensure that the entirety of the state snapshot is journalled to disk.
@@ -926,6 +925,11 @@ func (bc *BlockChain) Stop() {
 		}
 	}
 	log.Info("Blockchain stopped")
+}
+
+// InterruptInsert causes all data insertion methods to return as soon as possible.
+func (bc *BlockChain) InterruptInsert() {
+	atomic.StoreInt32(&bc.procInterrupt, 1)
 }
 
 func (bc *BlockChain) procFutureBlocks() {

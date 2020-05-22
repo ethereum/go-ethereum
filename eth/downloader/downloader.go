@@ -178,6 +178,9 @@ type LightChain interface {
 
 	// Rollback removes a few recently added elements from the local chain.
 	Rollback([]common.Hash)
+
+	// InterruptInsert stops all insertion.
+	InterruptInsert()
 }
 
 // BlockChain encapsulates functions required to sync a (full or fast) blockchain.
@@ -541,6 +544,7 @@ func (d *Downloader) spawnSync(fetchers []func() error) error {
 			// This will cause the block processor to end when
 			// it has processed the queue.
 			d.queue.Close()
+			d.blockchain.InterruptInsert()
 		}
 		if err = <-errc; err != nil && err != errCanceled {
 			break
