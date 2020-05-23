@@ -237,7 +237,7 @@ func (cs *chainSyncer) nextSyncOp() *chainSyncOp {
 		return nil // Sync already running.
 	}
 
-	// Ensure we're at mininum peer count.
+	// Ensure we're at minimum peer count.
 	minPeers := defaultMinSyncPeers
 	if cs.forced {
 		minPeers = 1

@@ -64,7 +64,7 @@ type SimulatedBackend struct {
 
 	mu           sync.Mutex
 	pendingBlock *types.Block   // Currently pending block that will be imported on request
-	pendingState *state.StateDB // Currently pending state that will be the active on on request
+	pendingState *state.StateDB // Currently pending state that will be the active on request
 
 	events *filters.EventSystem // Event system for filtering log events live
 

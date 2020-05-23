@@ -238,7 +238,7 @@ func (fi *fastIterator) next(idx int) bool {
 		fi.iterators = append(fi.iterators[:idx], fi.iterators[idx+1:]...)
 		return len(fi.iterators) > 0
 	}
-	// If there's noone left to cascade into, return
+	// If there's no one left to cascade into, return
 	if idx == len(fi.iterators)-1 {
 		return true
 	}

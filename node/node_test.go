@@ -352,7 +352,7 @@ func TestServiceStartupAbortion(t *testing.T) {
 }
 
 // Tests that even if a registered service fails to shut down cleanly, it does
-// not influece the rest of the shutdown invocations.
+// not influence the rest of the shutdown invocations.
 func TestServiceTerminationGuarantee(t *testing.T) {
 	stack, err := New(testNodeConfig())
 	if err != nil {

@@ -98,7 +98,7 @@ func (t *Type) isReferenceType() bool {
 	if len(t.Type) == 0 {
 		return false
 	}
-	// Reference types must have a leading uppercase characer
+	// Reference types must have a leading uppercase character
 	return unicode.IsUpper([]rune(t.Type)[0])
 }
 
