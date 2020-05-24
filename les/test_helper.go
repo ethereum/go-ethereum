@@ -223,6 +223,7 @@ func newTestClientHandler(backend *backends.SimulatedBackend, odr *LesOdr, index
 	if client.oracle != nil {
 		client.oracle.Start(backend)
 	}
+	client.handler.start()
 	return client.handler
 }
 
