@@ -129,7 +129,7 @@ func (e *fp2) mul(c, a, b *fe2) {
 	add(t[3], &b[0], &b[1])
 	sub(&c[0], t[1], t[2])
 	addAssign(t[1], t[2])
-	mulAssign(t[0], t[3])
+	mul(t[0], t[0], t[3])
 	sub(&c[1], t[0], t[1])
 }
 
@@ -141,7 +141,7 @@ func (e *fp2) mulAssign(a, b *fe2) {
 	add(t[3], &b[0], &b[1])
 	sub(&a[0], t[1], t[2])
 	addAssign(t[1], t[2])
-	mulAssign(t[0], t[3])
+	mul(t[0], t[0], t[3])
 	sub(&a[1], t[0], t[1])
 }
 
@@ -187,7 +187,7 @@ func (e *fp2) inverse(c, a *fe2) {
 	addAssign(t[0], t[1])
 	inverse(t[0], t[0])
 	mul(&c[0], &a[0], t[0])
-	mulAssign(t[0], &a[1])
+	mul(t[0], t[0], &a[1])
 	neg(&c[1], t[0])
 }
 

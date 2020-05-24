@@ -270,8 +270,8 @@ func TestFpLazyOperations(t *testing.T) {
 		c1 := new(fe)
 		ladd(c0, a, b)
 		add(c1, a, b)
-		mulAssign(c0, c)
-		mulAssign(c1, c)
+		mul(c0, c0, c)
+		mul(c1, c1, c)
 		if !c0.equal(c1) {
 			// l+ operator stands for lazy addition
 			t.Fatal("(a + b) * c == (a l+ b) * c")
@@ -289,9 +289,9 @@ func TestFpLazyOperations(t *testing.T) {
 		a0 := new(fe).set(a)
 		lsubAssign(a, b)
 		laddAssign(a, &modulus)
-		mulAssign(a, c)
+		mul(a, a, c)
 		subAssign(a0, b)
-		mulAssign(a0, c)
+		mul(a0, a0, c)
 		if !a.equal(a0) {
 			t.Fatal("((a l- b) + p) * c = (a-b) * c")
 		}
@@ -309,21 +309,6 @@ func TestFpMultiplicationCrossAgainstBigInt(t *testing.T) {
 		mul(c, a, b)
 		out_1 := toBytes(c)
 		out_2 := padBytes(big_c.Mul(big_a, big_b).Mod(big_c, modulus.big()).Bytes(), 48)
-		if !bytes.Equal(out_1, out_2) {
-			t.Fatal("cross test against big.Int is not satisfied")
-		}
-	}
-}
-
-func TestFpMultiplicationCrossAgainstBigIntAssigned(t *testing.T) {
-	for i := 0; i < fuz; i++ {
-		a, _ := new(fe).rand(rand.Reader)
-		b, _ := new(fe).rand(rand.Reader)
-		big_a := toBig(a)
-		big_b := toBig(b)
-		mulAssign(a, b)
-		out_1 := toBytes(a)
-		out_2 := padBytes(big_a.Mul(big_a, big_b).Mod(big_a, modulus.big()).Bytes(), 48)
 		if !bytes.Equal(out_1, out_2) {
 			t.Fatal("cross test against big.Int is not satisfied")
 		}
@@ -370,40 +355,6 @@ func TestFpMultiplicationProperties(t *testing.T) {
 		mul(c_2, a, a)
 		if !c_1.equal(c_1) {
 			t.Fatal("a^2 == a*a")
-		}
-	}
-}
-
-func TestFpMultiplicationPropertiesAssigned(t *testing.T) {
-	for i := 0; i < fuz; i++ {
-		a, _ := new(fe).rand(rand.Reader)
-		zero, one := new(fe).zero(), new(fe).one()
-		mulAssign(a, zero)
-		if !a.equal(zero) {
-			t.Fatal("a * 0 == 0")
-		}
-		_, _ = a.rand(rand.Reader)
-		a0 := new(fe).set(a)
-		mulAssign(a, one)
-		if !a.equal(a0) {
-			t.Fatal("a * 1 == a")
-		}
-		_, _ = a.rand(rand.Reader)
-		b, _ := new(fe).rand(rand.Reader)
-		a0.set(a)
-		mulAssign(a, b)
-		mulAssign(b, a0)
-		if !a.equal(b) {
-			t.Fatal("a * b == b * a")
-		}
-		c, _ := new(fe).rand(rand.Reader)
-		a0.set(a)
-		mulAssign(a, b)
-		mulAssign(a, c)
-		mulAssign(a0, c)
-		mulAssign(a0, b)
-		if !a.equal(a0) {
-			t.Fatal("(a * b) * c == (a * c) * b")
 		}
 	}
 }
