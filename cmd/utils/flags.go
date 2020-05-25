@@ -1727,8 +1727,8 @@ func RegisterEthStatsService(stack *node.Node, ethBackend *eth.Ethereum, lesBack
 }
 
 // RegisterGraphQLService is a utility function to construct a new service and register it against a node.
-func RegisterGraphQLService(stack *node.Node, ethBackend *eth.Ethereum, lesBackend *les.LightEthereum, host string, port int, cors, vhosts []string, timeouts rpc.HTTPTimeouts) {
-	if err := graphql.New(stack, ethBackend, lesBackend, host, port, cors, vhosts, timeouts); err != nil {
+func RegisterGraphQLService(stack *node.Node, ethBackend *eth.Ethereum, lesBackend *les.LightEthereum, endpoint string, cors, vhosts []string, timeouts rpc.HTTPTimeouts) {
+	if err := graphql.New(stack, ethBackend, lesBackend, endpoint, cors, vhosts, timeouts); err != nil {
 		Fatalf("Failed to register the GraphQL service: %w", err)
 	}
 }

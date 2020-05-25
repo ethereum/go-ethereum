@@ -18,7 +18,6 @@ package graphql
 
 import (
 	"errors"
-	"fmt"
 	"github.com/ethereum/go-ethereum/eth"
 	"github.com/ethereum/go-ethereum/les"
 	"net/http"
@@ -37,7 +36,7 @@ type Service struct {
 }
 
 // New constructs a new GraphQL service instance.
-func New(stack *node.Node, ethBackend *eth.Ethereum, lesBackend *les.LightEthereum, host string, port int, cors, vhosts []string, timeouts rpc.HTTPTimeouts) error {
+func New(stack *node.Node, ethBackend *eth.Ethereum, lesBackend *les.LightEthereum, endpoint string, cors, vhosts []string, timeouts rpc.HTTPTimeouts) error {
 	service := new(Service)
 	// add backend
 	if ethBackend != nil {
@@ -47,8 +46,6 @@ func New(stack *node.Node, ethBackend *eth.Ethereum, lesBackend *les.LightEthere
 	} else {
 		return errors.New("no Ethereum service")
 	}
-
-	endpoint := fmt.Sprintf("%s:%d", host, port)
 
 	// check if http server with given endpoint exists and enable graphQL on it
 	server := stack.ExistingHTTPServer(endpoint)
