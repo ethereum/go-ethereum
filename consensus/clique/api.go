@@ -170,7 +170,7 @@ func (api *API) Status() (*status, error) {
 		signStatus[sealer]++
 	}
 	return &status{
-		InturnPercent: float64((100 * optimals)) / float64(numBlocks),
+		InturnPercent: float64(100*optimals) / float64(numBlocks),
 		SigningStatus: signStatus,
 		NumBlocks:     numBlocks,
 	}, nil
