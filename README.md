@@ -104,14 +104,14 @@ The hardware must meet certain requirements to run a full node.
 
 Steps:
 
-1. Download the config and genesis files. You need to have [genesis.json](https://github.com/binance-chain/smart-chain-binary/blob/pre-release/bsc/fullnode/config/genesis.json) and [config.toml](https://github.com/binance-chain/smart-chain-binary/blob/pre-release/bsc/fullnode/config/config.toml)
+1. Download the binary, config and genesis files from [release](https://github.com/binance-chain/bsc/releases/download/v1.0.0-alpha.0/binary.zip), or compile the binary by `make geth`. 
 2. Init genesis state: `./geth --datadir node init genesis.json`.
 3. Start your fullnode: `./geth --config ./config.toml --datadir ./node`.
 4. Or start a validator node: `./geth --config ./config.toml --datadir ./node -unlock ${validatorAddr} --mine --allow-insecure-unlock`. The ${validatorAddr} is the wallet account address of your running validator node. 
 
 *Note: The default p2p port is 30311 and the RPC port is 8575 which is different from Ethereum.*
 
-More details about [running a node](https://github.com/binance-chain/docs-site/blob/add-bsc/docs/smart-chain/developer/fullnode.md) and [becoming a validator](https://github.com/binance-chain/docs-site/blob/add-bsc/docs/guides/concepts/bc-staking.md).
+More details about [running a node](https://docs.binance.org/smart-chain/developer/fullnode.html) and [becoming a validator](https://docs.binance.org/smart-chain/validator/candidate.html).
 
 *Note: Although there are some internal protective measures to prevent transactions from
 crossing over between the main network and test network, you should make sure to always
