@@ -314,13 +314,15 @@ func (lc *LightChain) Stop() {
 		return
 	}
 	close(lc.quit)
-	lc.InterruptInsert()
+	lc.StopInsert()
 	lc.wg.Wait()
 	log.Info("Blockchain stopped")
 }
 
-// InterruptInsert causes all data insertion methods to return as soon as possible.
-func (lc *LightChain) InterruptInsert() {
+// StopInsert interrupts all insertion methods, causing them to return
+// errInsertionInterrupted as soon as possible. Insertion is permanently disabled after
+// calling this method.
+func (lc *LightChain) StopInsert() {
 	atomic.StoreInt32(&lc.procInterrupt, 1)
 }
 
