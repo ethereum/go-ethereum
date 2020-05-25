@@ -123,19 +123,12 @@ type Syncer struct {
 	storageResps  chan *storageResponse       // Storage sub-tries to integrate into the database
 	bytecodeResps chan *bytecodeResponse      // Bytecodes to integrate into the database
 
-	accountRequests  uint64             // Number of account range requests
-	accountSynced    uint64             // Number of accounts downloaded
-	accountProofs    uint64             // Number of trie nodes received for account proofs
-	accountNodes     uint64             // Number of account trie nodes persisted to disk
-	accountBytes     common.StorageSize // Number of account trie bytes persisted to disk
-	storageRequests  uint64             // Number of storage range requests
-	storageSynced    uint64             // Number of storage slots downloaded
-	storageProofs    uint64             // Number of trie nodes received for storage proofs
-	storageNodes     uint64             // Number of storage trie nodes persisted to disk
-	storageBytes     common.StorageSize // Number of storage trie bytes persisted to disk
-	bytecodeRequests uint64             // Number of bytecode set requests
-	bytecodeSynced   uint64             // Number of bytecodes downloaded
-	bytecodeBytes    common.StorageSize // Number of bytecodes downloaded
+	accountSynced  uint64             // Number of accounts downloaded
+	accountBytes   common.StorageSize // Number of account trie bytes persisted to disk
+	storageSynced  uint64             // Number of storage slots downloaded
+	storageBytes   common.StorageSize // Number of storage trie bytes persisted to disk
+	bytecodeSynced uint64             // Number of bytecodes downloaded
+	bytecodeBytes  common.StorageSize // Number of bytecode bytes downloaded
 
 	startTime time.Time   // Time instance when snapshot sync started
 	startAcc  common.Hash // Account hash where sync started from
@@ -268,15 +261,12 @@ func (s *Syncer) syncAccounts(root common.Hash, peer *Peer, cancel chan struct{}
 		if err := peer.RequestAccountRange(id, root, s.nextAcc, maxRequestSize); err != nil {
 			return err
 		}
-		s.accountRequests++
-
 		// Wait for the reply to arrive
 		res := <-s.accountResps
 		if res == nil {
 			return errors.New("unfulfilled request")
 		}
 		s.accountSynced += uint64(len(res.accounts))
-		s.accountProofs += uint64(len(res.bounds))
 
 		// Hack
 		if res.nodes == nil {
@@ -312,8 +302,6 @@ func (s *Syncer) syncAccounts(root common.Hash, peer *Peer, cancel chan struct{}
 					if err := peer.RequestByteCodes(id, []common.Hash{common.BytesToHash(acc.CodeHash)}, maxRequestSize); err != nil {
 						return err
 					}
-					s.bytecodeRequests++
-
 					// Wait for the reply to arrive
 					res := <-s.bytecodeResps
 					s.bytecodeSynced += uint64(len(res.codes))
@@ -383,7 +371,6 @@ func (s *Syncer) syncAccounts(root common.Hash, peer *Peer, cancel chan struct{}
 			batch.Put(it.Key(), it.Value())
 			s.bloom.Add(it.Key())
 
-			s.accountNodes++
 			s.accountBytes += common.StorageSize(common.HashLength + len(it.Value()))
 		}
 		it.Release()
@@ -431,15 +418,12 @@ func (s *Syncer) syncStorage(root common.Hash, account common.Hash, stroot commo
 		if err := peer.RequestStorageRange(id, root, account, s.nextSlot, maxRequestSize); err != nil {
 			return false, err
 		}
-		s.storageRequests++
-
 		// Wait for the reply to arrive
 		res := <-s.storageResps
 		if res == nil {
 			return false, errors.New("unfulfilled request")
 		}
 		s.storageSynced += uint64(len(res.slots))
-		s.storageProofs += uint64(len(res.bounds))
 
 		// Hack
 		if res.nodes == nil {
@@ -456,7 +440,6 @@ func (s *Syncer) syncStorage(root common.Hash, account common.Hash, stroot commo
 			batch.Put(it.Key(), it.Value())
 			s.bloom.Add(it.Key())
 
-			s.storageNodes++
 			s.storageBytes += common.StorageSize(common.HashLength + len(it.Value()))
 		}
 		it.Release()
@@ -713,6 +696,6 @@ func (s *Syncer) report(force bool) {
 		storage  = fmt.Sprintf("%d@%v", s.storageSynced, s.storageBytes.TerminalString())
 		bytecode = fmt.Sprintf("%d@%v", s.bytecodeSynced, s.bytecodeBytes.TerminalString())
 	)
-	log.Info("State sync progress report", "synced", progress, "bytes", synced,
+	log.Info("State sync progress", "synced", progress, "bytes", synced,
 		"accounts", accounts, "storage", storage, "code", bytecode, "eta", common.PrettyDuration(estTime-elapsed))
 }
