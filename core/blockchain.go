@@ -928,8 +928,8 @@ func (bc *BlockChain) Stop() {
 }
 
 // StopInsert interrupts all insertion methods, causing them to return
-// errInsertionInterrupted as soon as possible. All future insert calls will also return
-// that error.
+// errInsertionInterrupted as soon as possible. Insertion is permanently disabled after
+// calling this method.
 func (bc *BlockChain) StopInsert() {
 	atomic.StoreInt32(&bc.procInterrupt, 1)
 }
