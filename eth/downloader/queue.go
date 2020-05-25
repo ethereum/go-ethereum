@@ -352,7 +352,7 @@ func (q *queue) Results(block bool) []*fetchResult {
 	q.lock.Lock()
 	defer q.lock.Unlock()
 
-	// Count the number of items available for processing
+	// Wait for processable items or queue close.
 	nproc := q.countProcessableItems()
 	for nproc == 0 && !q.closed {
 		if !block {
@@ -361,6 +361,10 @@ func (q *queue) Results(block bool) []*fetchResult {
 		q.active.Wait()
 		nproc = q.countProcessableItems()
 	}
+	if q.closed {
+		return nil
+	}
+
 	// Since we have a batch limit, don't pull more into "dangling" memory
 	if nproc > maxResultsProcess {
 		nproc = maxResultsProcess
