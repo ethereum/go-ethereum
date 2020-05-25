@@ -146,13 +146,7 @@ func (api *PrivateAdminAPI) PeerEvents(ctx context.Context) (*rpc.Subscription, 
 func (api *PrivateAdminAPI) StartRPC(host *string, port *int, cors *string, apis *string, vhosts *string) (bool, error) {
 	api.node.lock.Lock()
 	defer api.node.lock.Unlock()
-	// check if HTTP server already exists
-	for _, httpServer := range api.node.httpServers {
-		if httpServer.RPCAllowed {
-			return false, fmt.Errorf("HTTP RPC already running on %v", httpServer.Listener.Addr())
-		}
-	}
-
+	// set host, port, and endpoint
 	if host == nil {
 		h := DefaultHTTPHost
 		if api.node.config.HTTPHost != "" {
@@ -164,6 +158,12 @@ func (api *PrivateAdminAPI) StartRPC(host *string, port *int, cors *string, apis
 		port = &api.node.config.HTTPPort
 	}
 	endpoint := fmt.Sprintf("%s:%d", *host, *port)
+	// check if HTTP server already exists
+	if server, exists := api.node.httpServerMap[endpoint]; exists {
+		if server.RPCAllowed {
+			return false, fmt.Errorf("HTTP RPC already running on %v", server.Listener.Addr())
+		}
+	}
 
 	allowedOrigins := api.node.config.HTTPCors
 	if cors != nil {
@@ -210,7 +210,7 @@ func (api *PrivateAdminAPI) StartRPC(host *string, port *int, cors *string, apis
 		"cors", strings.Join(httpServer.CorsAllowedOrigins, ","),
 		"vhosts", strings.Join(httpServer.Vhosts, ","))
 
-	api.node.RegisterHTTPServer(httpServer)
+	api.node.RegisterHTTPServer(endpoint, httpServer)
 	return true, nil
 }
 
@@ -219,7 +219,7 @@ func (api *PrivateAdminAPI) StopRPC() (bool, error) {
 	api.node.lock.Lock()
 	defer api.node.lock.Unlock()
 
-	for _, httpServer := range api.node.httpServers {
+	for _, httpServer := range api.node.httpServerMap {
 		if httpServer.RPCAllowed {
 			api.node.stopServer(httpServer)
 			return true, nil
@@ -233,10 +233,10 @@ func (api *PrivateAdminAPI) StopRPC() (bool, error) {
 func (api *PrivateAdminAPI) StartWS(host *string, port *int, allowedOrigins *string, apis *string) (bool, error) {
 	api.node.lock.Lock()
 	defer api.node.lock.Unlock()
-	// check if an existing HTTP server already handles websocket
-	for _, httpServer := range api.node.httpServers {
-		if httpServer.WSAllowed {
-			return false, fmt.Errorf("WebSocket RPC already running on %v", httpServer.Listener.Addr())
+	// check if an existing WS server already exists
+	for _, server := range api.node.httpServerMap {
+		if server.WSAllowed {
+			return false, fmt.Errorf("WebSocket RPC already running on %v", server.Listener.Addr())
 		}
 	}
 	// set host, port and endpoint
@@ -251,6 +251,24 @@ func (api *PrivateAdminAPI) StartWS(host *string, port *int, allowedOrigins *str
 		port = &api.node.config.WSPort
 	}
 	endpoint := fmt.Sprintf("%s:%d", *host, *port)
+	// check if there is an existing server on the specified port, and if there is, enable ws on it
+	if server, exists := api.node.httpServerMap[endpoint]; exists {
+		// else configure ws on the existing server
+		server.WSAllowed = true
+		// configure origins
+		origins := api.node.config.WSOrigins
+		if allowedOrigins != nil {
+			origins = nil
+			for _, origin := range strings.Split(*allowedOrigins, ",") {
+				origins = append(origins, strings.TrimSpace(origin))
+			}
+		}
+		server.WsOrigins = origins
+
+		api.node.log.Info("WebSocket endpoint opened", "url", fmt.Sprintf("ws://%v", server.Listener.Addr()))
+		return true, nil
+	}
+
 
 	origins := api.node.config.WSOrigins
 	if allowedOrigins != nil {
@@ -264,8 +282,7 @@ func (api *PrivateAdminAPI) StartWS(host *string, port *int, allowedOrigins *str
 	if existingServer != nil {
 		existingServer.WSAllowed = true
 		existingServer.WsOrigins = origins
-		api.node.log.Info("WebSocket endpoint opened", "url", fmt.Sprintf("ws://%v", existingServer.Listener.Addr()))
-		return true, nil
+
 	}
 
 	modules := api.node.config.WSModules
@@ -294,7 +311,7 @@ func (api *PrivateAdminAPI) StartWS(host *string, port *int, allowedOrigins *str
 	wsServer.Start()
 	api.node.log.Info("WebSocket endpoint opened", "url", fmt.Sprintf("ws://%v", wsServer.Listener.Addr()))
 
-	api.node.RegisterHTTPServer(wsServer)
+	api.node.RegisterHTTPServer(endpoint, wsServer)
 	return true, nil
 }
 
@@ -303,7 +320,7 @@ func (api *PrivateAdminAPI) StopWS() (bool, error) {
 	api.node.lock.Lock()
 	defer api.node.lock.Unlock()
 
-	for _, httpServer := range api.node.httpServers {
+	for _, httpServer := range api.node.httpServerMap {
 		if httpServer.WSAllowed {
 			httpServer.WSAllowed = false
 			// if RPC is not enabled on the WS http server, shut it down
