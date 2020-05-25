@@ -169,7 +169,7 @@ func handleMessage(backend Backend, peer *Peer) error {
 			last = hash
 
 			// Assemble the reply item
-			bytes += uint64(len(account))
+			bytes += uint64(common.HashLength + len(account))
 			accounts = append(accounts, &accountData{
 				Hash: hash,
 				Body: account,
@@ -248,7 +248,7 @@ func handleMessage(backend Backend, peer *Peer) error {
 			last = hash
 
 			// Assemble the reply item
-			bytes += uint64(len(slot))
+			bytes += uint64(common.HashLength + len(slot))
 			slots = append(slots, &storageData{
 				Hash: hash,
 				Body: slot,

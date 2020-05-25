@@ -18,11 +18,12 @@ package snap
 
 import (
 	"bytes"
-	"context"
 	"errors"
+	"fmt"
 	"math/big"
 	"math/rand"
 	"sync"
+	"time"
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/state"
@@ -51,9 +52,9 @@ const (
 // accountRequest tracks a pending account range request to ensure responses are
 // to actual requests and to validate any security constraints.
 type accountRequest struct {
-	ctx    context.Context // Context to track cancellations
-	id     uint64          // Request ID to drop stale replies
-	origin common.Hash     // Origin account to guarantee overlaps
+	id     uint64        // Request ID to drop stale replies
+	origin common.Hash   // Origin account to guarantee overlaps
+	cancel chan struct{} // Channel to track sync cancellation
 }
 
 // accountResponse is an already Merkle-verified remote response to an account
@@ -65,22 +66,23 @@ type accountResponse struct {
 	nodes    ethdb.KeyValueStore      // Database containing the reconstructed trie nodes
 	trie     *trie.Trie               // Reconstructed trie to reject incomplete account paths
 	bounds   map[common.Hash]struct{} // Boundary nodes to avoid persisting (incomplete)
-	last     common.Hash              // Last returned account, acts as the next query origin
 }
 
 // storageRequest tracks a pending storage range request to ensure responses are
 // to actual requests and to validate any security constraints.
 type storageRequest struct {
-	ctx    context.Context // Context to track cancellations
-	id     uint64          // Request ID to drop stale replies
-	root   common.Hash     // Storage trie root hash to prove
-	origin common.Hash     // Origin slot to guarantee overlaps
+	id     uint64        // Request ID to drop stale replies
+	root   common.Hash   // Storage trie root hash to prove
+	origin common.Hash   // Origin slot to guarantee overlaps
+	cancel chan struct{} // Channel to track sync cancellation
 }
 
 // storageResponse is an already Merkle-verified remote response to a storage
 // range request. It contains the subtrie for the requested storage range and
 // the database that's going to be filled with the internal nodes on commit.
 type storageResponse struct {
+	hashes []common.Hash            // Storage slot hashes in the returned range
+	slots  [][]byte                 // Storage slot values in the returned range
 	nodes  ethdb.KeyValueStore      // Database containing the reconstructed trie nodes
 	bounds map[common.Hash]struct{} // Boundary nodes to avoid persisting (incomplete)
 	last   common.Hash              // Last returned slot, acts as the next query origin
@@ -89,9 +91,9 @@ type storageResponse struct {
 // byteCodesRequest tracks a pending bytecode request to ensure responses are to
 // actual requests and to validate any security constraints.
 type bytecodeRequest struct {
-	ctx    context.Context // Context to track cancellations
-	id     uint64          // Request ID to drop stale replies
-	hashes []common.Hash   // Bytecode hashes to validate responses
+	id     uint64        // Request ID to drop stale replies
+	hashes []common.Hash // Bytecode hashes to validate responses
+	cancel chan struct{} // Channel to track sync cancellation
 }
 
 // bytecodeResponse is an already verified remote response to a bytecode request.
@@ -108,9 +110,11 @@ type Syncer struct {
 	db    ethdb.KeyValueStore // Database to store the trie nodes into (and dedup)
 	bloom *trie.SyncBloom     // Bloom filter to deduplicate nodes for state fixup
 
-	root  common.Hash      // Current state trie root being synced
-	done  bool             // Flag whether sync has already completed
-	peers map[string]*Peer // Currently active peers to download from
+	root     common.Hash      // Current state trie root being synced
+	nextAcc  common.Hash      // Next account to sync after a restart
+	nextSlot common.Hash      // Next storage slot to sync after a restart
+	done     bool             // Flag whether sync has already completed
+	peers    map[string]*Peer // Currently active peers to download from
 
 	accountReqs   map[string]*accountRequest  // Account requests currently running for a peer
 	storageReqs   map[string]*storageRequest  // Storage requests currently running for a peer
@@ -118,6 +122,24 @@ type Syncer struct {
 	accountResps  chan *accountResponse       // Account sub-tries to integrate into the database
 	storageResps  chan *storageResponse       // Storage sub-tries to integrate into the database
 	bytecodeResps chan *bytecodeResponse      // Bytecodes to integrate into the database
+
+	accountRequests  uint64             // Number of account range requests
+	accountSynced    uint64             // Number of accounts downloaded
+	accountProofs    uint64             // Number of trie nodes received for account proofs
+	accountNodes     uint64             // Number of account trie nodes persisted to disk
+	accountBytes     common.StorageSize // Number of account trie bytes persisted to disk
+	storageRequests  uint64             // Number of storage range requests
+	storageSynced    uint64             // Number of storage slots downloaded
+	storageProofs    uint64             // Number of trie nodes received for storage proofs
+	storageNodes     uint64             // Number of storage trie nodes persisted to disk
+	storageBytes     common.StorageSize // Number of storage trie bytes persisted to disk
+	bytecodeRequests uint64             // Number of bytecode set requests
+	bytecodeSynced   uint64             // Number of bytecodes downloaded
+	bytecodeBytes    common.StorageSize // Number of bytecodes downloaded
+
+	startTime time.Time   // Time instance when snapshot sync started
+	startAcc  common.Hash // Account hash where sync started from
+	logTime   time.Time   // Time instance when status was last reported
 
 	lock sync.RWMutex //
 }
@@ -166,17 +188,23 @@ func (s *Syncer) Unregister(id string) error {
 // with the given root and reconstruct the nodes based on the snapshot leaves.
 // Previously downloaded segments will not be redownloaded of fixed, rather any
 // errors will be healed after the leaves are fully accumulated.
-func (s *Syncer) Sync(ctx context.Context, root common.Hash) error {
-
+func (s *Syncer) Sync(root common.Hash, cancel chan struct{}) error {
 	// Move the trie root from any previous value
 	s.lock.Lock()
 	s.root = root
 	done := s.done
+
+	if s.startTime == (time.Time{}) {
+		s.startTime = time.Now()
+	}
 	s.lock.Unlock()
 
 	if done {
 		return nil
 	}
+	defer s.report(true)
+	log.Debug("Starting snapshot sync cycle", "root", root, "account", s.nextAcc, "slot", s.nextSlot)
+
 	// Whether sync completed or not, disregard any future packets
 	defer func() {
 		s.lock.Lock()
@@ -196,13 +224,17 @@ func (s *Syncer) Sync(ctx context.Context, root common.Hash) error {
 	}
 	s.lock.RUnlock()
 
-	if err := s.syncAccounts(ctx, root, peer); err != nil {
+	if err := s.syncAccounts(root, peer, cancel); err != nil {
 		return err
 	}
-	s.lock.Lock()
-	s.done = true
-	s.lock.Unlock()
-
+	// If sync completed without errors and interruptions, disable it
+	select {
+	case <-cancel:
+	default:
+		s.lock.Lock()
+		s.done = true
+		s.lock.Unlock()
+	}
 	return nil
 }
 
@@ -210,36 +242,43 @@ func (s *Syncer) Sync(ctx context.Context, root common.Hash) error {
 // with the given root and reconstruct the nodes based on the snapshot leaves.
 // Previously downloaded segments will not be redownloaded of fixed, rather any
 // errors will be healed after the leaves are fully accumulated.
-func (s *Syncer) syncAccounts(ctx context.Context, root common.Hash, peer *Peer) error {
+func (s *Syncer) syncAccounts(root common.Hash, peer *Peer, cancel chan struct{}) error {
 	// For now simply iterate over the state iteratively
-	next := common.Hash{}
+	batch := s.db.NewBatch()
 
-	var (
-		batch = s.db.NewBatch()
-
-		nodes = uint64(0)
-		size  = uint64(0)
-	)
 	for {
+		// If the sync was cancelled, abort
+		select {
+		case <-cancel:
+			return nil
+		default:
+		}
 		// Generate a random request ID (clash probability is insignificant)
 		id := uint64(rand.Int63())
 
 		// Track the request and send it to the peer
 		s.lock.Lock()
 		s.accountReqs[peer.id] = &accountRequest{
-			ctx:    ctx,
 			id:     id,
-			origin: next,
+			origin: s.nextAcc,
+			cancel: cancel,
 		}
 		s.lock.Unlock()
 
-		if err := peer.RequestAccountRange(id, root, next, maxRequestSize); err != nil {
+		if err := peer.RequestAccountRange(id, root, s.nextAcc, maxRequestSize); err != nil {
 			return err
 		}
+		s.accountRequests++
+
 		// Wait for the reply to arrive
 		res := <-s.accountResps
+		if res == nil {
+			return errors.New("unfulfilled request")
+		}
+		s.accountSynced += uint64(len(res.accounts))
+		s.accountProofs += uint64(len(res.bounds))
 
-		// HAck
+		// Hack
 		if res.nodes == nil {
 			break
 		}
@@ -264,21 +303,25 @@ func (s *Syncer) syncAccounts(ctx context.Context, root common.Hash, peer *Peer)
 					// Track the request and send it to the peer
 					s.lock.Lock()
 					s.bytecodeReqs[peer.id] = &bytecodeRequest{
-						ctx:    ctx,
 						id:     id,
 						hashes: []common.Hash{common.BytesToHash(acc.CodeHash)},
+						cancel: cancel,
 					}
 					s.lock.Unlock()
 
 					if err := peer.RequestByteCodes(id, []common.Hash{common.BytesToHash(acc.CodeHash)}, maxRequestSize); err != nil {
 						return err
 					}
+					s.bytecodeRequests++
+
 					// Wait for the reply to arrive
 					res := <-s.bytecodeResps
+					s.bytecodeSynced += uint64(len(res.codes))
 
 					if len(res.codes) != 1 || res.codes[0] == nil {
 						return errors.New("protocol violation")
 					}
+					s.bytecodeBytes += common.StorageSize(len(res.codes[0]))
 					s.db.Put(acc.CodeHash, res.codes[0])
 				}
 			}
@@ -286,13 +329,10 @@ func (s *Syncer) syncAccounts(ctx context.Context, root common.Hash, peer *Peer)
 			if acc.Root != emptyRoot {
 				if node, err := s.db.Get(acc.Root[:]); err != nil || node == nil {
 					// Sync the contract's storage trie
-					snodes, ssize, complete, err := s.syncStorage(ctx, root, res.hashes[i], acc.Root, peer)
+					complete, err := s.syncStorage(root, res.hashes[i], acc.Root, peer, cancel)
 					if err != nil {
 						return err
 					}
-					nodes += snodes
-					size += ssize
-
 					// If the storage sync is incomplete (missing boundary nodes
 					// across multiple requests), mark the account as incomplete
 					// to force self healing at the end,
@@ -303,7 +343,30 @@ func (s *Syncer) syncAccounts(ctx context.Context, root common.Hash, peer *Peer)
 					}
 				}
 			}
-			// TODO(karalabe): if the snapshot moved during contact sync, nuke the account path
+			// If the snapshot moved during contract sync, nuke out all remaining accounts
+			var interrupted bool
+			select {
+			case <-cancel:
+				for j := i + 1; j < len(res.hashes); j++ {
+					if err := res.trie.Prove(res.hashes[j][:], 0, incompletes); err != nil {
+						panic(err) // Account range was already proven, what happened
+					}
+				}
+				interrupted = true
+			default:
+			}
+			if interrupted {
+				// Sync was interrupted, restart next cycle at the current account,
+				// but leave next slot at wherever we were.
+				//
+				// TODO(karalabe): Special case account deletion in the next cycle or proof-lessness, musn't write
+				s.nextAcc = res.hashes[i]
+				break
+			}
+			// Account processed fully (may still be incomplete, but that's for
+			// trie node sync to complete), push the next account marker
+			s.nextAcc = common.BigToHash(new(big.Int).Add(res.hashes[i].Big(), big.NewInt(1)))
+			s.nextSlot = common.Hash{}
 		}
 		// Persist every finalized trie node that's not on the boundary
 		it := res.nodes.NewIterator(nil, nil)
@@ -320,8 +383,8 @@ func (s *Syncer) syncAccounts(ctx context.Context, root common.Hash, peer *Peer)
 			batch.Put(it.Key(), it.Value())
 			s.bloom.Add(it.Key())
 
-			size += uint64(common.HashLength + len(it.Value()))
-			nodes++
+			s.accountNodes++
+			s.accountBytes += common.StorageSize(common.HashLength + len(it.Value()))
 		}
 		it.Release()
 
@@ -331,12 +394,8 @@ func (s *Syncer) syncAccounts(ctx context.Context, root common.Hash, peer *Peer)
 		batch.Reset()
 
 		// Account range processed, step to the next chunk
-		log.Info("Persisted range of accounts", "account", res.last, "nodes", nodes, "bytes", common.StorageSize(size))
-
-		next = common.BigToHash(new(big.Int).Add(res.last.Big(), big.NewInt(1)))
-		if next == (common.Hash{}) {
-			break // Overflow, someone created 0xff...f, oh well
-		}
+		log.Debug("Persisted range of accounts", "next", s.nextAcc)
+		s.report(false)
 	}
 	return nil
 }
@@ -345,35 +404,42 @@ func (s *Syncer) syncAccounts(ctx context.Context, root common.Hash, peer *Peer)
 // trie with the given root and reconstruct the nodes based on the snapshot leaves.
 // Previously downloaded segments will not be redownloaded of fixed, rather any
 // errors will be healed after the leaves are fully accumulated.
-func (s *Syncer) syncStorage(ctx context.Context, root common.Hash, account common.Hash, stroot common.Hash, peer *Peer) (uint64, uint64, bool, error) {
+func (s *Syncer) syncStorage(root common.Hash, account common.Hash, stroot common.Hash, peer *Peer, cancel chan struct{}) (bool, error) {
 	// For now simply iterate over the state iteratively
-	next := common.Hash{}
+	batch := s.db.NewBatch()
 
-	var (
-		batch = s.db.NewBatch()
-
-		nodes = uint64(0)
-		size  = uint64(0)
-	)
 	for {
+		// If the sync was cancelled, abort
+		select {
+		case <-cancel:
+			return false, nil
+		default:
+		}
 		// Generate a random request ID (clash probability is insignificant)
 		id := uint64(rand.Int63())
 
 		// Track the request and send it to the peer
 		s.lock.Lock()
 		s.storageReqs[peer.id] = &storageRequest{
-			ctx:    ctx,
 			id:     id,
 			root:   stroot,
-			origin: next,
+			origin: s.nextSlot,
+			cancel: cancel,
 		}
 		s.lock.Unlock()
 
-		if err := peer.RequestStorageRange(id, root, account, next, maxRequestSize); err != nil {
-			return 0, 0, false, err
+		if err := peer.RequestStorageRange(id, root, account, s.nextSlot, maxRequestSize); err != nil {
+			return false, err
 		}
+		s.storageRequests++
+
 		// Wait for the reply to arrive
 		res := <-s.storageResps
+		if res == nil {
+			return false, errors.New("unfulfilled request")
+		}
+		s.storageSynced += uint64(len(res.slots))
+		s.storageProofs += uint64(len(res.bounds))
 
 		// Hack
 		if res.nodes == nil {
@@ -390,30 +456,28 @@ func (s *Syncer) syncStorage(ctx context.Context, root common.Hash, account comm
 			batch.Put(it.Key(), it.Value())
 			s.bloom.Add(it.Key())
 
-			size += uint64(common.HashLength + len(it.Value()))
-			nodes++
+			s.storageNodes++
+			s.storageBytes += common.StorageSize(common.HashLength + len(it.Value()))
 		}
 		it.Release()
 
 		if err := batch.Write(); err != nil {
-			return 0, 0, false, err
+			return false, err
 		}
 		batch.Reset()
 
 		// Storage range processed, step to the next chunk
-		log.Debug("Persisted range of storage slots", "account", account, "slot", res.last, "nodes", nodes, "bytes", common.StorageSize(size))
+		log.Debug("Persisted range of storage slots", "account", account, "slot", res.last)
+		s.report(false)
 
 		// If the response contained all the data in one shot (no proofs), there
 		// is no reason to continue the sync, report immediate success.
 		if len(res.bounds) == 0 {
-			return nodes, size, true, nil
+			return true, nil
 		}
-		next = common.BigToHash(new(big.Int).Add(res.last.Big(), big.NewInt(1)))
-		if next == (common.Hash{}) {
-			break // Overflow, someone created 0xff...f, oh well
-		}
+		s.nextSlot = common.BigToHash(new(big.Int).Add(res.last.Big(), big.NewInt(1)))
 	}
-	return nodes, size, false, nil
+	return false, nil
 }
 
 // OnAccounts is a callback method to invoke when a range of accounts are
@@ -433,6 +497,14 @@ func (s *Syncer) OnAccounts(peer *Peer, id uint64, hashes []common.Hash, account
 	root := s.root
 	s.lock.Unlock()
 
+	// If the response is unavailable snapshot, forward to the requester
+	if len(hashes) == 0 && len(accounts) == 0 && len(proof) == 0 {
+		select {
+		//case <-req.cancel:
+		case s.accountResps <- nil:
+		}
+		return nil
+	}
 	// Reconstruct a partial trie from the response and verify it
 	keys := make([][]byte, len(hashes))
 	for i, key := range hashes {
@@ -457,20 +529,15 @@ func (s *Syncer) OnAccounts(peer *Peer, id uint64, hashes []common.Hash, account
 		hasher.Write(node)
 		bounds[common.BytesToHash(hasher.Sum(nil))] = struct{}{}
 	}
-	last := req.origin
-	if len(hashes) > 0 {
-		last = hashes[len(hashes)-1]
-	}
 	response := &accountResponse{
 		hashes:   hashes,
 		accounts: accounts,
 		nodes:    db,
 		trie:     tr,
 		bounds:   bounds,
-		last:     last,
 	}
 	select {
-	case <-req.ctx.Done():
+	//case <-req.cancel:
 	case s.accountResps <- response:
 	}
 	return nil
@@ -492,6 +559,14 @@ func (s *Syncer) OnStorage(peer *Peer, id uint64, hashes []common.Hash, slots []
 	delete(s.storageReqs, peer.id)
 	s.lock.Unlock()
 
+	// If the response is unavailable snapshot, forward to the requester
+	if len(hashes) == 0 && len(slots) == 0 && len(proof) == 0 {
+		select {
+		//case <-req.cancel:
+		case s.storageResps <- nil:
+		}
+		return nil
+	}
 	// Reconstruct a partial trie from the response and verify it
 	keys := make([][]byte, len(hashes))
 	for i, key := range hashes {
@@ -536,12 +611,14 @@ func (s *Syncer) OnStorage(peer *Peer, id uint64, hashes []common.Hash, slots []
 		last = hashes[len(hashes)-1]
 	}
 	response := &storageResponse{
+		hashes: hashes,
+		slots:  slots,
 		nodes:  db,
 		bounds: bounds,
 		last:   last,
 	}
 	select {
-	case <-req.ctx.Done():
+	//case <-req.cancel:
 	case s.storageResps <- response:
 	}
 	return nil
@@ -593,7 +670,7 @@ func (s *Syncer) OnByteCodes(peer *Peer, id uint64, bytecodes [][]byte) error {
 		codes:  codes,
 	}
 	select {
-	case <-req.ctx.Done():
+	//case <-req.cancel:
 	case s.bytecodeResps <- response:
 	}
 	return nil
@@ -603,4 +680,39 @@ func (s *Syncer) OnByteCodes(peer *Peer, id uint64, bytecodes [][]byte) error {
 // are received from a remote peer.
 func (s *Syncer) OnTrieNodes(peer *Peer, id uint64, nodes [][]byte) error {
 	return errors.New("not implemented")
+}
+
+// report calculates various status reports and provides it to the user.
+func (s *Syncer) report(force bool) {
+	// Don't report all the events, just occasionally
+	if !force && time.Since(s.logTime) < 3*time.Second {
+		return
+	}
+	// Don't report anything until we have a meaningful progress
+	synced := s.accountBytes + s.bytecodeBytes + s.storageBytes
+	if synced == 0 || bytes.Compare(s.nextAcc[:], s.startAcc[:]) <= 0 {
+		return
+	}
+	s.logTime = time.Now()
+
+	estBytes := float64(new(big.Int).Div(
+		new(big.Int).Exp(common.Big2, common.Big256, nil),
+		new(big.Int).Div(
+			new(big.Int).Sub(s.nextAcc.Big(), s.startAcc.Big()),
+			new(big.Int).SetUint64(uint64(synced)),
+		),
+	).Uint64())
+
+	elapsed := time.Since(s.startTime)
+	estTime := elapsed / time.Duration(synced) * time.Duration(estBytes)
+
+	// Create a mega progress report
+	var (
+		progress = fmt.Sprintf("%.2f%%", float64(synced)*100/estBytes)
+		accounts = fmt.Sprintf("%d@%v", s.accountSynced, s.accountBytes.TerminalString())
+		storage  = fmt.Sprintf("%d@%v", s.storageSynced, s.storageBytes.TerminalString())
+		bytecode = fmt.Sprintf("%d@%v", s.bytecodeSynced, s.bytecodeBytes.TerminalString())
+	)
+	log.Info("State sync progress report", "synced", progress, "bytes", synced,
+		"accounts", accounts, "storage", storage, "code", bytecode, "eta", common.PrettyDuration(estTime-elapsed))
 }

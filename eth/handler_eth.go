@@ -148,8 +148,8 @@ func (h *ethHandler) OnReceipts(peer *eth.Peer, receipts [][]*types.Receipt) err
 func (h *ethHandler) OnBlockAnnounces(peer *eth.Peer, hashes []common.Hash, numbers []uint64) error {
 	// Schedule all the unknown hashes for retrieval
 	var (
-		unknownHashes  = make([]common.Hash, len(hashes))
-		unknownNumbers = make([]uint64, len(numbers))
+		unknownHashes  = make([]common.Hash, 0, len(hashes))
+		unknownNumbers = make([]uint64, 0, len(numbers))
 	)
 	for i := 0; i < len(hashes); i++ {
 		if !h.chain.HasBlock(hashes[i], numbers[i]) {

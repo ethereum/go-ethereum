@@ -17,7 +17,6 @@
 package downloader
 
 import (
-	"context"
 	"fmt"
 	"hash"
 	"sync"
@@ -104,21 +103,9 @@ func (d *Downloader) runStateSync(s *stateSync) *stateSync {
 			req.peer.SetNodeDataIdle(len(req.items))
 		}
 	}()
-	// Start the snapshot sync concurrently
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
-
-	go func() {
-		if err := d.SnapSyncer.Sync(ctx, s.root); err != nil {
-			panic(err)
-		}
-		s.run()
-		defer s.Cancel()
-	}()
-
-	// Run the state sync.
-	//go s.run()
-	//defer s.Cancel()
+	// Run the state sync
+	go s.run()
+	defer s.Cancel()
 
 	// Listen for peer departure events to cancel assigned tasks
 	peerDrop := make(chan *peerConnection, 1024)
@@ -268,7 +255,9 @@ func newStateSync(d *Downloader, root common.Hash) *stateSync {
 // it finishes, and finally notifying any goroutines waiting for the loop to
 // finish.
 func (s *stateSync) run() {
-	s.err = s.loop()
+	if s.err = s.d.SnapSyncer.Sync(s.root, s.cancel); s.err == nil {
+		s.err = s.loop()
+	}
 	close(s.done)
 }
 
@@ -280,7 +269,9 @@ func (s *stateSync) Wait() error {
 
 // Cancel cancels the sync and waits until it has shut down.
 func (s *stateSync) Cancel() error {
-	s.cancelOnce.Do(func() { close(s.cancel) })
+	s.cancelOnce.Do(func() {
+		close(s.cancel)
+	})
 	return s.Wait()
 }
 
