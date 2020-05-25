@@ -17,6 +17,11 @@
 package graphql
 
 import (
+	"fmt"
+	"github.com/ethereum/go-ethereum/eth"
+	"github.com/ethereum/go-ethereum/node"
+	"github.com/ethereum/go-ethereum/rpc"
+	"github.com/stretchr/testify/assert"
 	"testing"
 )
 
@@ -25,4 +30,38 @@ func TestBuildSchema(t *testing.T) {
 	if _, err := newHandler(nil); err != nil {
 		t.Errorf("Could not construct GraphQL handler: %v", err)
 	}
+}
+
+// Tests that a graphql handler can be added to an existing HTTPServer
+func TestGQLAllowed(t *testing.T) {
+	stack, err := node.New(&node.Config{
+		HTTPHost:              node.DefaultHTTPHost,
+		HTTPPort:              9393,
+	})
+	if err != nil {
+		t.Fatalf("could not create node: %v", err)
+	}
+	defer stack.Close()
+	// create backend
+	ethBackend, err  := eth.New(stack, &eth.DefaultConfig)
+	if err != nil {
+		t.Fatalf("could not create eth backend: %v", err)
+	}
+	// set endpoint and create new gql service
+	endpoint := fmt.Sprintf("%s:%d", node.DefaultHTTPHost, 9393)
+	err = New(stack,ethBackend,nil, endpoint, []string{}, []string{}, rpc.DefaultHTTPTimeouts)
+	if err != nil {
+		t.Fatalf("could not create graphql service: %v", err)
+	}
+	// start node
+	if err = stack.Start(); err != nil {
+		t.Fatalf("could not start node: %v", err)
+	}
+	// check that server was created
+	server := stack.ExistingHTTPServer(endpoint)
+	if server == nil {
+		t.Errorf("server was not created on the given endpoint: %v", err)
+	}
+	// assert that server allows GQL requests
+	assert.True(t, server.GQLAllowed)
 }

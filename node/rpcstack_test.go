@@ -1,6 +1,7 @@
 package node
 
 import (
+	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"testing"
@@ -37,4 +38,31 @@ func TestNewWebsocketUpgradeHandler_websocket(t *testing.T) {
 
 	response := <-responses
 	assert.Equal(t, "websocket", response.Header.Get("Upgrade"))
+}
+
+// Tests that a ws handler can be added to and enabled on an existing HTTPServer
+func TestWSAllowed(t *testing.T) {
+	stack, err := New(&Config{
+		HTTPHost:              DefaultHTTPHost,
+		HTTPPort:              9393,
+		WSHost: DefaultHTTPHost,
+		WSPort: 9393,
+	})
+	if err != nil {
+		t.Fatalf("could not create node: %v", err)
+	}
+	defer stack.Close()
+	// start node
+	err = stack.Start()
+	if err != nil {
+		t.Fatalf("could not start node: %v", err)
+	}
+	// check that server was configured on the given endpoint
+	server := stack.ExistingHTTPServer(fmt.Sprintf("%s:%d", DefaultHTTPHost, 9393))
+	if server == nil {
+		t.Fatalf("server was not started on the given endpoint: %v", err)
+	}
+	// assert that both RPC and WS are allowed on the HTTP Server
+	assert.True(t, server.RPCAllowed)
+	assert.True(t, server.WSAllowed)
 }

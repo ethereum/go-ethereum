@@ -362,7 +362,7 @@ func TestLifecycleRetrieval(t *testing.T) {
 // Tests whether websocket requests can be handled on the same port as a regular http server
 func TestWebsocketHTTPOnSamePort_WebsocketRequest(t *testing.T) {
 	node := startHTTP(t)
-	defer node.Stop()
+	defer node.Close()
 
 	wsReq, err := http.NewRequest(http.MethodGet, "http://127.0.0.1:7453", nil)
 	if err != nil {
@@ -377,10 +377,23 @@ func TestWebsocketHTTPOnSamePort_WebsocketRequest(t *testing.T) {
 	assert.Equal(t, "websocket", resp.Header.Get("Upgrade"))
 }
 
+// Tests whether graphQL requests can be handled on the same port as a regular http server
+func TestGraphQLHTTPOnSamePort_GQLRequest(t *testing.T) {
+	node := startHTTP(t)
+	defer node.Close()
+
+	gqlReq, err := http.NewRequest(http.MethodGet, "http://127.0.0.1:7453/graphql", nil)
+	if err != nil {
+		t.Error("could not issue new http request ", err)
+	}
+	resp := doHTTPRequest(t, gqlReq)
+	assert.Equal(t, resp.StatusCode, 200)
+}
+
 // Tests whether http requests can be handled successfully
 func TestWebsocketHTTPOnSamePort_HTTPRequest(t *testing.T) {
 	node := startHTTP(t)
-	defer node.Stop()
+	defer node.Close()
 
 	httpReq, err := http.NewRequest(http.MethodGet, "http://127.0.0.1:7453", nil)
 	if err != nil {
@@ -398,6 +411,8 @@ func startHTTP(t *testing.T) *Node {
 		HTTPPort: 7453,
 		WSHost: "127.0.0.1",
 		WSPort: 7453,
+		GraphQLHost: "127.0.0.1",
+		GraphQLPort: 7453,
 	}
 	node, err := New(conf)
 	if err != nil {
