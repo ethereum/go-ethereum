@@ -17,7 +17,6 @@
 package node
 
 import (
-	"fmt"
 	"io/ioutil"
 	"os"
 	"path/filepath"
@@ -61,38 +60,42 @@ func TestContextDatabases(t *testing.T) {
 	}
 }
 
-// Tests that already constructed services can be retrieves by later ones.
-func TestContextServices(t *testing.T) {
+// Tests that already constructed Lifecycles can be retrieved by later ones.
+func TestContextLifecycles(t *testing.T) {
 	stack, err := New(testNodeConfig())
 	if err != nil {
 		t.Fatalf("failed to create protocol stack: %v", err)
 	}
 	defer stack.Close()
 	// Define a verifier that ensures a NoopA is before it and NoopB after
-	verifier := func(ctx *ServiceContext) (Service, error) {
-		var objA *NoopServiceA
-		if ctx.Service(&objA) != nil {
-			return nil, fmt.Errorf("former service not found")
+
+	noop := NewNoop()
+	stack.RegisterLifecycle(noop)
+
+	isC, err := NewInstrumentedService()
+	if err != nil {
+		t.Fatalf("could not create instrumented service %v", err)
+	}
+
+	isB, err := NewInstrumentedService()
+	if err != nil {
+		t.Fatalf("could not create instrumented service %v", err)
+
+	}
+	isB.startHook = func() {
+		if err := stack.ServiceContext.Lifecycle(&noop); err != nil {
+			t.Errorf("former service not found: %v", err)
 		}
-		var objB *NoopServiceB
-		if err := ctx.Service(&objB); err != ErrServiceUnknown {
-			return nil, fmt.Errorf("latters lookup error mismatch: have %v, want %v", err, ErrServiceUnknown)
+		if err := stack.ServiceContext.Lifecycle(&isC); err != ErrServiceUnknown {
+			t.Errorf("latters lookup error mismatch: have %v, want %v", err, ErrServiceUnknown)
 		}
-		return new(NoopService), nil
 	}
-	// Register the collection of services
-	if err := stack.Register(NewNoopServiceA); err != nil {
-		t.Fatalf("former failed to register service: %v", err)
-	}
-	if err := stack.Register(verifier); err != nil {
-		t.Fatalf("failed to register service verifier: %v", err)
-	}
-	if err := stack.Register(NewNoopServiceB); err != nil {
-		t.Fatalf("latter failed to register service: %v", err)
-	}
+	stack.RegisterLifecycle(isB)
+
 	// Start the protocol stack and ensure services are constructed in order
 	if err := stack.Start(); err != nil {
 		t.Fatalf("failed to start stack: %v", err)
 	}
+
 	defer stack.Stop()
 }

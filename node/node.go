@@ -53,7 +53,7 @@ type Node struct {
 
 	ServiceContext *ServiceContext
 
-	lifecycles []Lifecycle // All registered backends, services, and auxiliary services that have a lifecycle
+	lifecycles map[reflect.Type]Lifecycle // All registered backends, services, and auxiliary services that have a lifecycle
 
 	rpcAPIs       []rpc.API   // List of APIs currently provided by the node
 	inprocHandler *rpc.Server // In-process RPC request handler to process the API requests
@@ -107,8 +107,10 @@ func New(conf *Config) (*Node, error) {
 		accman:            am,
 		ephemeralKeystore: ephemeralKeystore,
 		config:            conf,
+		lifecycles:        make(map[reflect.Type]Lifecycle),
 		ServiceContext: &ServiceContext{
 			Config: *conf,
+			Lifecycles: make(map[reflect.Type]Lifecycle),
 		},
 		httpServers: make([]*HTTPServer, 0),
 		ipc: &HTTPServer{
@@ -199,12 +201,12 @@ func (n *Node) Close() error {
 
 // RegisterLifecycle registers the given Lifecycle on the node
 func (n *Node) RegisterLifecycle(lifecycle Lifecycle) {
-	for _, existing := range n.lifecycles {
-		if existing == lifecycle {
-			Fatalf("Lifecycle cannot be registered more than once", lifecycle)
-		}
+	kind := reflect.TypeOf(lifecycle)
+	if _, exists := n.lifecycles[kind]; exists {
+		Fatalf("Lifecycle cannot be registered more than once", kind)
 	}
-	n.lifecycles = append(n.lifecycles, lifecycle)
+
+	n.lifecycles[kind] = lifecycle
 }
 
 // RegisterProtocols adds backend's protocols to the node's p2p server
@@ -265,7 +267,7 @@ func (n *Node) CreateHTTPServer(h *HTTPServer, exposeAll bool) error {
 
 // running returns true if the node's p2p server is already running
 func (n *Node) running() bool {
-	return n.server.Listening()
+	return n.server.Running()
 }
 
 // Start creates a live P2P node and starts running it.
@@ -289,9 +291,8 @@ func (n *Node) Start() error {
 
 	// TODO running p2p server needs to somehow be added to the backend
 
-	// Start the configured RPC interfaces
-	if err := n.startRPC(); err != nil {
-		n.stopLifecycles(n.lifecycles)
+	// Configure the RPC interfaces
+	if err := n.configureRPC(); err != nil {
 		n.server.Stop()
 		return err
 	}
@@ -301,8 +302,11 @@ func (n *Node) Start() error {
 	for _, lifecycle := range n.lifecycles {
 		if err := lifecycle.Start(); err != nil {
 			n.stopLifecycles(started)
+			n.server.Stop()
+			return err
 		}
 		started = append(started, lifecycle)
+		n.ServiceContext.Lifecycles[reflect.TypeOf(lifecycle)] = lifecycle
 	}
 
 	// Finish initializing the service context
@@ -478,15 +482,7 @@ func (n *Node) stopServer(server *HTTPServer) {
 
 // removeLifecycle removes a stopped Lifecycle from the running node's Lifecycles
 func (n *Node) removeLifecycle(lifecycle Lifecycle) {
-	remainingLifecycles := make([]Lifecycle, len(n.lifecycles)-1)
-	index := 0
-	for _, remaining := range n.lifecycles {
-		if remaining != lifecycle {
-			remainingLifecycles[index] = remaining
-			index ++
-		}
-	}
-	n.lifecycles = remainingLifecycles
+	delete(n.lifecycles, reflect.TypeOf(lifecycle))
 }
 
 // Stop terminates a running node along with all it's services. In the node was
@@ -496,7 +492,7 @@ func (n *Node) Stop() error {
 	defer n.lock.Unlock()
 
 	// Short circuit if the node's not running
-	if n.server == nil {
+	if n.server == nil || !n.running() {
 		return ErrNodeStopped
 	}
 
@@ -506,10 +502,11 @@ func (n *Node) Stop() error {
 	failure := &StopError{
 		Services: make(map[reflect.Type]error),
 	}
-	for _, lifecycle := range n.lifecycles {
+	for kind, lifecycle := range n.lifecycles {
 		if err := lifecycle.Stop(); err != nil {
 			failure.Services[reflect.TypeOf(lifecycle)] = err
 		}
+		delete(n.lifecycles, kind)
 	}
 	n.server.Stop()
 	n.server = nil
@@ -552,18 +549,6 @@ func (n *Node) Wait() {
 	n.lock.RUnlock()
 
 	<-stop
-}
-
-// Restart terminates a running node and boots up a new one in its place. If the
-// node isn't running, an error is returned.
-func (n *Node) Restart() error {
-	if err := n.Stop(); err != nil {
-		return err
-	}
-	if err := n.Start(); err != nil {
-		return err
-	}
-	return nil
 }
 
 // Attach creates an RPC client attached to an in-process API handler.
@@ -693,6 +678,24 @@ func (n *Node) OpenDatabaseWithFreezer(name string, cache, handles int, freezer,
 // ResolvePath returns the absolute path of a resource in the instance directory.
 func (n *Node) ResolvePath(x string) string {
 	return n.config.ResolvePath(x)
+}
+
+// Lifecycle retrieves a currently running Lifecycle registered of a specific type.
+func (n *Node) Lifecycle(lifecycle interface{}) error {
+	n.lock.RLock()
+	defer n.lock.RUnlock()
+
+	// Short circuit if the node's not running
+	if !n.running() {
+		return ErrNodeStopped
+	}
+	// Otherwise try to find the service to return
+	element := reflect.ValueOf(lifecycle).Elem()
+	if running, ok := n.lifecycles[element.Type()]; ok {
+		element.Set(reflect.ValueOf(running))
+		return nil
+	}
+	return ErrServiceUnknown
 }
 
 // apis returns the collection of RPC descriptors this node offers.

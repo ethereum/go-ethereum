@@ -19,65 +19,47 @@
 
 package node
 
-import (
-	"github.com/ethereum/go-ethereum/p2p"
-	"github.com/ethereum/go-ethereum/rpc"
-)
+import "github.com/ethereum/go-ethereum/p2p"
 
-// NoopService is a trivial implementation of the Service interface.
+// NoopLifecycle is a trivial implementation of the Service interface.
 type NoopLifecycle struct{}
 
 func (s *NoopLifecycle) Start() error   				{ return nil }
 func (s *NoopLifecycle) Stop() error               	{ return nil }
 
-func NewNoop(stack *Node) (*Noop, error) {
+func NewNoop() *Noop {
 	noop := new(Noop)
-	stack.RegisterLifecycle(noop)
-	return noop, nil
+	return noop
 }
 
-// Set of services all wrapping the base NoopService resulting in the same method
+// Set of services all wrapping the base NoopLifecycle resulting in the same method
 // signatures but different outer types.
 type Noop struct{ NoopLifecycle }
 
-//func NewNoopServiceA(*ServiceContext) (Lifecycle, error) { return new(NoopServiceA), nil }
-//func NewNoopServiceB(*ServiceContext) (Lifecycle, error) { return new(NoopServiceB), nil }
-//func NewNoopServiceC(*ServiceContext) (Lifecycle, error) { return new(NoopServiceC), nil }
 
-// InstrumentedService is an implementation of Service for which all interface
+// InstrumentedService is an implementation of Lifecycle for which all interface
 // methods can be instrumented both return value as well as event hook wise.
 type InstrumentedService struct {
-	protocols []p2p.Protocol
-	apis      []rpc.API
 	start     error
 	stop      error
 
-	server	*p2p.Server
-
-	protocolsHook func()
-	startHook     func(*p2p.Server)
+	startHook     func()
 	stopHook      func()
+
+	protocols []p2p.Protocol
 }
 
-func NewInstrumentedService(server *p2p.Server) (Lifecycle, error) {
-	is := &InstrumentedService{ server: server }
-	return is, nil
-}
+type InstrumentedServiceA struct { InstrumentedService }
+type InstrumentedServiceB struct { InstrumentedService }
+type InstrumentedServiceC struct { InstrumentedService }
 
-func (s *InstrumentedService) Protocols() []p2p.Protocol {
-	if s.protocolsHook != nil {
-		s.protocolsHook()
-	}
-	return s.protocols
-}
-
-func (s *InstrumentedService) APIs() []rpc.API {
-	return s.apis
+func NewInstrumentedService() (*InstrumentedService, error) {
+	return new(InstrumentedService), nil
 }
 
 func (s *InstrumentedService) Start() error {
 	if s.startHook != nil {
-		s.startHook(s.server)
+		s.startHook()
 	}
 	return s.start
 }

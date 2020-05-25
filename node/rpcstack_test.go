@@ -10,7 +10,10 @@ import (
 )
 
 func TestNewWebsocketUpgradeHandler_websocket(t *testing.T) {
-	h := &HTTPServer{Srv: rpc.NewServer()}
+	h := &HTTPServer{
+		Srv: rpc.NewServer(),
+		WSAllowed: true,
+	}
 	handler := h.NewWebsocketUpgradeHandler(nil, h.Srv.WebsocketHandler([]string{}))
 	ts := httptest.NewServer(handler)
 	defer ts.Close()
@@ -27,7 +30,7 @@ func TestNewWebsocketUpgradeHandler_websocket(t *testing.T) {
 
 		resp, err := client.Do(req)
 		if err != nil {
-			t.Error("could not issue a GET request to the test http server", err)
+			t.Fatalf("could not issue a GET request to the test http server  %v", err)
 		}
 		responses <- resp
 	}(responses)

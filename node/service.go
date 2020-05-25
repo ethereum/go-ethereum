@@ -18,6 +18,7 @@ package node
 
 import (
 	"path/filepath"
+	"reflect"
 
 	"github.com/ethereum/go-ethereum/accounts"
 	"github.com/ethereum/go-ethereum/core/rawdb"
@@ -30,6 +31,7 @@ import (
 // as well as utility methods to operate on the service environment.
 type ServiceContext struct {
 	Config         Config
+	Lifecycles		map[reflect.Type]Lifecycle // TODO should this be in the service context or should it be on the node itself .. ?
 	EventMux       *event.TypeMux    // Event multiplexer used for decoupled notifications
 	AccountManager *accounts.Manager // Account manager created by the node.
 }
@@ -71,15 +73,15 @@ func (ctx *ServiceContext) ResolvePath(path string) string {
 	return ctx.Config.ResolvePath(path)
 }
 
-//// Service retrieves a currently running service registered of a specific type.
-//func (ctx *ServiceContext) Service(service interface{}) error {
-//	element := reflect.ValueOf(service).Elem()
-//	if running, ok := ctx.services[element.Type()]; ok {
-//		element.Set(reflect.ValueOf(running))
-//		return nil
-//	}
-//	return ErrServiceUnknown
-//}
+// Lifecycle retrieves a currently running lifecycle registered of a specific type.
+func (ctx *ServiceContext) Lifecycle(lifecycle interface{}) error {
+	element := reflect.ValueOf(lifecycle).Elem()
+	if running, ok := ctx.Lifecycles[element.Type()]; ok {
+		element.Set(reflect.ValueOf(running))
+		return nil
+	}
+	return ErrServiceUnknown
+}
 
 // ExtRPCEnabled returns the indicator whether node enables the external
 // RPC(http, ws or graphql).

@@ -34,7 +34,7 @@ type SampleLifecycle struct{}
 func (s *SampleLifecycle) Start() error   { fmt.Println("Service starting..."); return nil }
 func (s *SampleLifecycle) Stop() error               { fmt.Println("Service stopping..."); return nil }
 
-func ExampleService() {
+func ExampleLifecycle() {
 	// Create a network node to run protocols with the default values.
 	stack, err := node.New(&node.Config{})
 	if err != nil {
@@ -50,15 +50,10 @@ func ExampleService() {
 	if err := stack.Start(); err != nil {
 		log.Fatalf("Failed to start the protocol stack: %v", err)
 	}
-	if err := stack.Restart(); err != nil {
-		log.Fatalf("Failed to restart the protocol stack: %v", err)
-	}
 	if err := stack.Stop(); err != nil {
 		log.Fatalf("Failed to stop the protocol stack: %v", err)
 	}
 	// Output:
-	// Service starting...
-	// Service stopping...
 	// Service starting...
 	// Service stopping...
 }
