@@ -40,7 +40,7 @@ jobs:
           WorkingDirectory=/etc/bor/
           EnvironmentFile=/etc/bor/metadata
           ExecStartPre=/bin/mkdir -p /var/log/matic-logs/
-          ExecStart=/bin/bash -c "/usr/bin/bor --datadir /etc/bor/dataDir --port '30303' --rpc --rpcaddr '0.0.0.0' --rpcvhosts '*' --rpccorsdomain '*' --rpcport '8545' --ipcpath /etc/bor/geth.ipc --rpcapi 'bor,db,eth,net,web3,txpool,bor' --networkid ${NETWORK_ID} --miner.gaslimit '2000000000' --txpool.nolocals --txpool.accountslots '128' --txpool.globalslots '20000' --txpool.lifetime '0h16m0s' --keystore /etc/bor/dataDir/keystore --unlock ${VALIDATOR_ADDRESS} --password /etc/bor/dataDir/password.txt --allow-insecure-unlock --maxpeers 150 --mine > /var/log/matic-logs/bor.log 2>&1"
+          ExecStart=/bin/bash -c "/usr/bin/bor --datadir /etc/bor/dataDir --port '30303' --rpc --rpcaddr '0.0.0.0' --rpcvhosts '*' --rpccorsdomain '*' --rpcport '8545' --ipcpath /etc/bor/bor.ipc --rpcapi 'db,eth,net,web3,txpool,bor' --networkid ${NETWORK_ID} --miner.gaslimit '20000000' --txpool.nolocals --txpool.accountslots '128' --txpool.globalslots '20000' --txpool.lifetime '0h16m0s' --keystore /etc/bor/dataDir/keystore --unlock ${VALIDATOR_ADDRESS} --password /etc/bor/dataDir/password.txt --allow-insecure-unlock --maxpeers 150 --mine > /var/log/matic-logs/bor.log 2>&1"
           Type=simple
           User=root
           EOF
