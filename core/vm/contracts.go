@@ -465,7 +465,7 @@ var (
 )
 
 func (c *blake2F) Run(input []byte) ([]byte, error) {
-	// Make sure the input is valid (correct lenth and final flag)
+	// Make sure the input is valid (correct length and final flag)
 	if len(input) != blake2FInputLength {
 		return nil, errBlake2FInvalidInputLength
 	}

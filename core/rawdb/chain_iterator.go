@@ -125,7 +125,7 @@ func iterateTransactions(db ethdb.Database, from uint64, to uint64, reverse bool
 			}
 		}
 	}
-	// process runs in parallell
+	// process runs in parallel
 	nThreadsAlive := int32(threads)
 	process := func() {
 		defer func() {

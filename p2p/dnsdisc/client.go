@@ -251,7 +251,7 @@ func (it *randomIterator) Next() bool {
 	return it.cur != nil
 }
 
-// addTree adds a enrtree:// URL to the iterator.
+// addTree adds an enrtree:// URL to the iterator.
 func (it *randomIterator) addTree(url string) error {
 	le, err := parseLink(url)
 	if err != nil {

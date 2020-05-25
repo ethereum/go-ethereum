@@ -61,7 +61,7 @@ func TestHDPathParsing(t *testing.T) {
 		// Weird inputs just to ensure they work
 		{"	m  /   44			'\n/\n   60	\n\n\t'   /\n0 ' /\t\t	0", DerivationPath{0x80000000 + 44, 0x80000000 + 60, 0x80000000 + 0, 0}},
 
-		// Invaid derivation paths
+		// Invalid derivation paths
 		{"", nil},              // Empty relative derivation path
 		{"m", nil},             // Empty absolute derivation path
 		{"m/", nil},            // Missing last derivation component

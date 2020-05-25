@@ -9,7 +9,7 @@ Clef can run as a daemon on the same machine, off a usb-stick like [USB armory](
 Check out the
 
 * [CLI tutorial](tutorial.md) for some concrete examples on how Clef works.
-* [Setup docs](docs/setup.md) for infos on how to configure Clef on QubesOS or USB Armory.
+* [Setup docs](docs/setup.md) for information on how to configure Clef on QubesOS or USB Armory.
 * [Data types](datatypes.md) for details on the communication messages between Clef and an external UI.
 
 ## Command line flags
@@ -882,7 +882,7 @@ TLDR; Use this method to keep track of signed transactions, instead of using the
 
 ### OnSignerStartup / `ui_onSignerStartup`
 
-This method provide the UI with information about what API version the signer uses (both internal and external) aswell as build-info and external API,
+This method provide the UI with information about what API version the signer uses (both internal and external) as well as build-info and external API,
 in k/v-form.
 
 Example call:

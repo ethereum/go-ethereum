@@ -27,7 +27,7 @@ import (
 )
 
 // leafChanSize is the size of the leafCh. It's a pretty arbitrary number, to allow
-// some paralellism but not incur too much memory overhead.
+// some parallelism but not incur too much memory overhead.
 const leafChanSize = 200
 
 // leaf represents a trie leaf value
@@ -41,7 +41,7 @@ type leaf struct {
 // committer is a type used for the trie Commit operation. A committer has some
 // internal preallocated temp space, and also a callback that is invoked when
 // leaves are committed. The leafs are passed through the `leafCh`,  to allow
-// some level of paralellism.
+// some level of parallelism.
 // By 'some level' of parallelism, it's still the case that all leaves will be
 // processed sequentially - onleaf will never be called in parallel or out of order.
 type committer struct {
