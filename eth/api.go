@@ -380,8 +380,9 @@ func (api *Eth2API) makeEnv(parent *types.Block, header *types.Header) error {
 		return err
 	}
 	api.env = &eth2bpenv{
-		state:  state,
-		header: header,
+		state:   state,
+		header:  header,
+		gasPool: new(core.GasPool).AddGas(header.GasLimit),
 	}
 	return nil
 }

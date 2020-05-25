@@ -26,9 +26,15 @@ import (
 
 	"github.com/davecgh/go-spew/spew"
 	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/consensus/ethash"
+	"github.com/ethereum/go-ethereum/core"
 	"github.com/ethereum/go-ethereum/core/rawdb"
 	"github.com/ethereum/go-ethereum/core/state"
+	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/crypto"
+	"github.com/ethereum/go-ethereum/node"
+	"github.com/ethereum/go-ethereum/params"
+	"github.com/ethereum/go-ethereum/rlp"
 )
 
 var dumper = spew.ConfigState{Indent: "    "}
@@ -199,5 +205,92 @@ func TestStorageRangeAt(t *testing.T) {
 			t.Fatalf("wrong result for range 0x%x.., limit %d:\ngot %s\nwant %s",
 				test.start, test.limit, dumper.Sdump(result), dumper.Sdump(&test.want))
 		}
+	}
+}
+
+var (
+	testKey, _  = crypto.HexToECDSA("b71c71a67e1177ad4e901695e1b4b9ee17ae16c6668d313eac2f96dbcda3f291")
+	testAddr    = crypto.PubkeyToAddress(testKey.PublicKey)
+	testBalance = big.NewInt(2e10)
+)
+
+func generateTestChain() (*core.Genesis, []*types.Block) {
+	db := rawdb.NewMemoryDatabase()
+	config := params.AllEthashProtocolChanges
+	genesis := &core.Genesis{
+		Config:    config,
+		Alloc:     core.GenesisAlloc{testAddr: {Balance: testBalance}},
+		ExtraData: []byte("test genesis"),
+		Timestamp: 9000,
+	}
+	generate := func(i int, g *core.BlockGen) {
+		g.OffsetTime(5)
+		g.SetExtra([]byte("test"))
+	}
+	gblock := genesis.ToBlock(db)
+	engine := ethash.NewFaker()
+	blocks, _ := core.GenerateChain(config, gblock, engine, db, 10, generate)
+	blocks = append([]*types.Block{gblock}, blocks...)
+	return genesis, blocks
+}
+
+func TestEth2ValidateBlock(t *testing.T) {
+	genesis, blocks := generateTestChain()
+
+	n, err := node.New(&node.Config{})
+	if err != nil {
+		t.Fatalf("could not get node: %v", err)
+	}
+	var eth *Ethereum
+	n.Register(func(ctx *node.ServiceContext) (node.Service, error) {
+		config := &Config{Genesis: genesis}
+		config.Ethash.PowMode = ethash.ModeFake
+		eth, err = New(ctx, config)
+		return eth, err
+	})
+	if err := n.Start(); err != nil {
+		t.Fatalf("can't start test node: %v", err)
+	}
+	if _, err := eth.BlockChain().InsertChain(blocks[1:9]); err != nil {
+		t.Fatalf("can't import test blocks: %v", err)
+	}
+
+	api := NewEth2API(eth)
+	var blockRLP bytes.Buffer
+	rlp.Encode(&blockRLP, blocks[9])
+	valid, err := api.ValidateBlock(blockRLP.Bytes())
+	if err != nil || !valid {
+		t.Fatalf("block could not be validated, err=%v, valid=%v", err, valid)
+	}
+}
+
+func TestEth2ProduceBlock(t *testing.T) {
+	genesis, blocks := generateTestChain()
+
+	n, err := node.New(&node.Config{})
+	if err != nil {
+		t.Fatalf("could not get node: %v", err)
+	}
+	var eth *Ethereum
+	n.Register(func(ctx *node.ServiceContext) (node.Service, error) {
+		config := &Config{Genesis: genesis}
+		config.Ethash.PowMode = ethash.ModeFake
+		eth, err = New(ctx, config)
+		return eth, err
+	})
+	if err := n.Start(); err != nil {
+		t.Fatalf("can't start test node: %v", err)
+	}
+	if _, err := eth.BlockChain().InsertChain(blocks[1:9]); err != nil {
+		t.Fatalf("can't import test blocks: %v", err)
+	}
+
+	api := NewEth2API(eth)
+	var blockRLP bytes.Buffer
+	rlp.Encode(&blockRLP, blocks[9])
+	data, err := api.ProduceBlock(common.HexToAddress("63726f697373616e747363726f697373616e7473"))
+
+	if err != nil {
+		t.Fatalf("error producing block, err=%v", err)
 	}
 }
