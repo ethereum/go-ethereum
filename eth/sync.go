@@ -201,6 +201,11 @@ func (cs *chainSyncer) loop() {
 	defer cs.pm.txFetcher.Stop()
 	defer cs.pm.downloader.Terminate()
 
+	// Disable all insertion on the blockchain. This needs to happen before terminating the
+	// downloader because the downloader waits for blockchain inserts to finish and these
+	// can take a long time to finish.
+	defer cs.pm.blockchain.StopInsert()
+
 	// The force timer lowers the peer count threshold down to one when it fires.
 	// This ensures we'll always start sync even if there aren't enough peers.
 	cs.force = time.NewTimer(forceSyncCycle)
