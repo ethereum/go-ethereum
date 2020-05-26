@@ -377,19 +377,6 @@ func TestWebsocketHTTPOnSamePort_WebsocketRequest(t *testing.T) {
 	assert.Equal(t, "websocket", resp.Header.Get("Upgrade"))
 }
 
-// Tests whether graphQL requests can be handled on the same port as a regular http server
-func TestGraphQLHTTPOnSamePort_GQLRequest(t *testing.T) {
-	node := startHTTP(t)
-	defer node.Close()
-
-	gqlReq, err := http.NewRequest(http.MethodGet, "http://127.0.0.1:7453/graphql", nil)
-	if err != nil {
-		t.Error("could not issue new http request ", err)
-	}
-	resp := doHTTPRequest(t, gqlReq)
-	assert.Equal(t, resp.StatusCode, 200)
-}
-
 // Tests whether http requests can be handled successfully
 func TestWebsocketHTTPOnSamePort_HTTPRequest(t *testing.T) {
 	node := startHTTP(t)
@@ -405,14 +392,14 @@ func TestWebsocketHTTPOnSamePort_HTTPRequest(t *testing.T) {
 	assert.Equal(t, "gzip", resp.Header.Get("Content-Encoding"))
 }
 
+// TODO why is GQL still served successfully if the server doesn't have GQL enabled
+
 func startHTTP(t *testing.T) *Node {
 	conf := &Config{
 		HTTPHost: "127.0.0.1",
 		HTTPPort: 7453,
 		WSHost: "127.0.0.1",
 		WSPort: 7453,
-		GraphQLHost: "127.0.0.1",
-		GraphQLPort: 7453,
 	}
 	node, err := New(conf)
 	if err != nil {
