@@ -245,16 +245,18 @@ func BenchmarkV5_DecodeHandshakePingSecp256k1(b *testing.B) {
 		challenge = &whoareyouV5{AuthTag: []byte("authresp"), node: net.nodeB.n()}
 		message   = &pingV5{ReqID: []byte("reqid")}
 	)
-	packet, _, err := net.nodeA.c.encode(net.nodeB.id(), "", message, challenge)
+	enc, _, err := net.nodeA.c.encode(net.nodeB.id(), "", message, challenge)
 	if err != nil {
 		b.Fatal("can't encode handshake packet")
 	}
 	challenge.node = nil // force ENR signature verification in decoder
 	b.ResetTimer()
 
+	input := make([]byte, len(enc))
 	for i := 0; i < b.N; i++ {
+		copy(input, enc)
 		net.nodeB.c.sc.storeSentHandshake(idA, "", challenge)
-		_, _, _, err := net.nodeB.c.decode(packet, "")
+		_, _, _, err := net.nodeB.c.decode(input, "")
 		if err != nil {
 			b.Fatal(err)
 		}
@@ -278,10 +280,12 @@ func BenchmarkV5_DecodePing(b *testing.B) {
 	}
 	b.ResetTimer()
 
+	input := make([]byte, len(enc))
 	for i := 0; i < b.N; i++ {
-		_, _, p, _ := net.nodeB.c.decode(enc, addrB)
-		if _, ok := p.(*pingV5); !ok {
-			b.Fatalf("wrong packet type %T", p)
+		copy(input, enc)
+		_, _, packet, _ := net.nodeB.c.decode(input, addrB)
+		if _, ok := packet.(*pingV5); !ok {
+			b.Fatalf("wrong packet type %T", packet)
 		}
 	}
 }
