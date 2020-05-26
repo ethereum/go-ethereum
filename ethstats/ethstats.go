@@ -321,12 +321,10 @@ func (s *Service) readLoop(conn *websocket.Conn) {
 			if !ok {
 				log.Warn("Invalid stats history request", "msg", msg["emit"][1])
 				select {
-				// treat it as an no indexes request in which we will return top ones block histories
-				case s.histCh <- nil:
-					continue
+				case s.histCh <- nil: // Treat it as an no indexes request
 				default:
-					continue
 				}
+				continue
 			}
 			list, ok := request["list"].([]interface{})
 			if !ok {
