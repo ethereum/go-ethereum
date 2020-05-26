@@ -314,10 +314,16 @@ func (lc *LightChain) Stop() {
 		return
 	}
 	close(lc.quit)
-	atomic.StoreInt32(&lc.procInterrupt, 1)
-
+	lc.StopInsert()
 	lc.wg.Wait()
-	log.Info("Blockchain manager stopped")
+	log.Info("Blockchain stopped")
+}
+
+// StopInsert interrupts all insertion methods, causing them to return
+// errInsertionInterrupted as soon as possible. Insertion is permanently disabled after
+// calling this method.
+func (lc *LightChain) StopInsert() {
+	atomic.StoreInt32(&lc.procInterrupt, 1)
 }
 
 // Rollback is designed to remove a chain of links from the database that aren't
