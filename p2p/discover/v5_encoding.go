@@ -295,7 +295,8 @@ func (c *wireCodec) encodeRandom(toID enode.ID) ([]byte, []byte, error) {
 	c.buf.Reset()
 	binary.Write(&c.buf, binary.BigEndian, c.makeHeader(toID, flagMessage, 0))
 	binary.Write(&c.buf, binary.BigEndian, &auth)
-	return c.buf.Bytes(), auth.Nonce[:], nil
+	output := maskOutputPacket(toID, c.buf.Bytes(), c.buf.Len())
+	return output, auth.Nonce[:], nil
 }
 
 // encodeWhoareyou encodes a WHOAREYOU packet.
@@ -314,7 +315,8 @@ func (c *wireCodec) encodeWhoareyou(toID enode.ID, packet *whoareyouV5) ([]byte,
 	c.buf.Reset()
 	binary.Write(&c.buf, binary.BigEndian, head)
 	binary.Write(&c.buf, binary.BigEndian, auth)
-	return c.buf.Bytes(), nil
+	output := maskOutputPacket(toID, c.buf.Bytes(), c.buf.Len())
+	return output, nil
 }
 
 // encodeHandshakeMessage encodes an encrypted message with a handshake
@@ -356,6 +358,9 @@ func (c *wireCodec) encodeHandshakeMessage(toID enode.ID, addr string, packet pa
 	messagePT := c.msgbuf.Bytes()
 	headerData := output
 	output, err = encryptGCM(output, sec.writeKey, auth.h.Nonce[:], messagePT, headerData)
+	if err == nil {
+		output = maskOutputPacket(toID, output, len(headerData))
+	}
 	return output, auth.h.Nonce[:], err
 }
 
@@ -425,6 +430,9 @@ func (c *wireCodec) encodeMessage(toID enode.ID, addr string, packet packetV5, w
 	// Encrypt message data.
 	headerData := output
 	output, err = encryptGCM(output, writeKey, auth.Nonce[:], messagePT, headerData)
+	if err == nil {
+		output = maskOutputPacket(toID, output, len(headerData))
+	}
 	return output, auth.Nonce[:], err
 }
 
@@ -434,12 +442,18 @@ func (c *wireCodec) decode(input []byte, addr string) (src enode.ID, n *enode.No
 	// processing the same handshake twice.
 	c.sc.handshakeGC()
 
+	// Unmask the header.
+	if len(input) < sizeofPacketHeaderV5+maskIVSize {
+		return enode.ID{}, nil, nil, errTooShort
+	}
+	mask := headerMask(c.localnode.ID(), input)
+	input = input[maskIVSize:]
+	headerData := input[:sizeofPacketHeaderV5]
+	mask.XORKeyStream(headerData, headerData)
+
 	// Decode and verify the header.
 	var head packetHeaderV5
 	c.reader.Reset(input)
-	if c.reader.Len() < sizeofPacketHeaderV5 {
-		return enode.ID{}, nil, nil, errTooShort
-	}
 	binary.Read(&c.reader, binary.BigEndian, &head)
 	if head.Checksum != c.myChecksum {
 		return enode.ID{}, nil, nil, errBadHash
@@ -448,6 +462,10 @@ func (c *wireCodec) decode(input []byte, addr string) (src enode.ID, n *enode.No
 		return enode.ID{}, nil, nil, errInvalidHeader
 	}
 	src = head.SrcID
+
+	// Unmask auth data.
+	authData := input[sizeofPacketHeaderV5 : sizeofPacketHeaderV5+int(head.AuthSize)]
+	mask.XORKeyStream(authData, authData)
 
 	// Decode auth part and message.
 	switch {
@@ -778,4 +796,25 @@ func decryptGCM(key, nonce, ct, authData []byte) ([]byte, error) {
 	}
 	pt := make([]byte, 0, len(ct))
 	return aesgcm.Open(pt, nonce, ct, authData)
+}
+
+// header masking
+
+const maskIVSize = 16
+
+func headerMask(destID enode.ID, input []byte) cipher.Stream {
+	block, err := aes.NewCipher(destID[:16])
+	if err != nil {
+		panic("can't create cipher")
+	}
+	return cipher.NewCTR(block, input[:maskIVSize])
+}
+
+func maskOutputPacket(destID enode.ID, output []byte, headerDataLen int) []byte {
+	masked := make([]byte, maskIVSize+len(output))
+	crand.Read(masked[:maskIVSize])
+	mask := headerMask(destID, masked)
+	copy(masked[maskIVSize:], output)
+	mask.XORKeyStream(masked[maskIVSize:], output[:headerDataLen])
+	return masked
 }
