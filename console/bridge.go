@@ -435,6 +435,8 @@ func (b *bridge) Send(call jsre.Call) (goja.Value, error) {
 			}
 		case rpc.Error:
 			setError(resp, err.ErrorCode(), err.Error())
+		case rpc.DataError:
+			resp.Set("error", map[string]interface{}{"code": -32603, "message": err.Error(), "data": err.ErrorData()})
 		default:
 			setError(resp, -32603, err.Error())
 		}

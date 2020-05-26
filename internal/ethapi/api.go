@@ -864,6 +864,21 @@ func DoCall(ctx context.Context, b Backend, args CallArgs, blockNrOrHash rpc.Blo
 	return result, err
 }
 
+var _ rpc.DataError = (*revertError)(nil)
+
+type revertError struct {
+	err     string      // The error string
+	errData interface{} // additional data
+}
+
+func (e revertError) Error() string {
+	return e.err
+}
+
+func (e revertError) ErrorData() interface{} {
+	return e.errData
+}
+
 // Call executes the given transaction on the state for the given block number.
 //
 // Additionally, the caller can specify a batch of contract for fields overriding.
@@ -883,11 +898,16 @@ func (s *PublicBlockChainAPI) Call(ctx context.Context, args CallArgs, blockNrOr
 	if len(result.Revert()) > 0 {
 		reason, err := abi.UnpackRevert(result.Revert())
 		if err == nil {
-			return nil, fmt.Errorf("execution reverted: %v", reason)
+			return nil, &revertError{
+				err:     "execution reverted",
+				errData: reason,
+			}
 		}
 	}
-	return result.Return(), nil
+	return result.Return(), result.Err
 }
+
+var _ rpc.DataError = (*estimateGasError)(nil)
 
 type estimateGasError struct {
 	error  string // Concrete error type if it's failed to estimate gas usage
@@ -904,6 +924,10 @@ func (e estimateGasError) Error() string {
 		errMsg += fmt.Sprintf(" (%s)", e.revert)
 	}
 	return errMsg
+}
+
+func (e estimateGasError) ErrorData() interface{} {
+	return e.revert
 }
 
 func DoEstimateGas(ctx context.Context, b Backend, args CallArgs, blockNrOrHash rpc.BlockNumberOrHash, gasCap *big.Int) (hexutil.Uint64, error) {
