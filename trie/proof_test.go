@@ -19,6 +19,7 @@ package trie
 import (
 	"bytes"
 	crand "crypto/rand"
+	"encoding/binary"
 	mrand "math/rand"
 	"sort"
 	"testing"
@@ -55,6 +56,146 @@ func makeProvers(trie *Trie) []func(key []byte) *memorydb.Database {
 		return proof
 	})
 	return provers
+}
+
+// TestStuffedProofDeletion tests a malicious proof, which contains extra elements and
+// also deletion-elements.
+func TestStuffedProofDeletion(t *testing.T) {
+	// Use a small trie
+	trie, kvs := randomTrie(10)
+	var entries entrySlice
+	for _, kv := range kvs {
+		entries = append(entries, kv)
+	}
+	sort.Sort(entries)
+	var keys [][]byte
+	var vals [][]byte
+	for _, entry := range entries {
+		keys = append(keys, entry.k)
+		vals = append(vals, entry.v)
+	}
+	// Now stuff it with extra stuff
+	for i := 0; i < 10; i++ {
+		// Add some data
+		keys = append(keys, []byte{0x13, 0x37, byte(i)})
+		vals = append(vals, []byte{0x13, 0x37})
+		// And delete it again
+		keys = append(keys, []byte{0x13, 0x37, byte(i)})
+		vals = append(vals, []byte{})
+	}
+	err := VerifyRangeProof(trie.Hash(), keys[0], keys, vals, nil, nil)
+	if err == nil {
+		t.Fatalf("expected some kind of error, but the proof was accepted")
+	}
+}
+
+// TestStuffedProofOverwrite tests a malicious proof, which contains multiple versions of
+// each value.
+func TestStuffedProofOverwrite(t *testing.T) {
+	// Use a small trie
+	trie, kvs := randomTrie(10)
+	var entries entrySlice
+	for _, kv := range kvs {
+		entries = append(entries, kv)
+	}
+	sort.Sort(entries)
+	var keys [][]byte
+	var vals [][]byte
+	for _, entry := range entries {
+		// A malicious attacker tries to insert a random haiku into the db
+		keys = append(keys, entry.k)
+		vals = append(vals, []byte("the first cold shower"))
+		keys = append(keys, entry.k)
+		vals = append(vals, []byte("even the monkey seems to want"))
+		keys = append(keys, entry.k)
+		vals = append(vals, []byte("a little coat of straw"))
+		// And then use the 'real' proven value
+		keys = append(keys, entry.k)
+		vals = append(vals, entry.v)
+	}
+	err := VerifyRangeProof(trie.Hash(), keys[0], keys, vals, nil, nil)
+	if err == nil {
+		t.Fatalf("expected some kind of error, but the proof was accepted")
+	}
+}
+
+// TestOutOfOrderProof tests a malicious proof where elements are not in order
+func TestOutOfOrderProof(t *testing.T) {
+	// Use a small trie
+	trie, kvs := randomTrie(10)
+	var entries entrySlice
+	for _, kv := range kvs {
+		entries = append(entries, kv)
+	}
+	sort.Reverse(entries)
+	var keys [][]byte
+	var vals [][]byte
+	for _, entry := range entries {
+		keys = append(keys, entry.k)
+		vals = append(vals, entry.v)
+	}
+	err := VerifyRangeProof(trie.Hash(), keys[0], keys, vals, nil, nil)
+	if err == nil {
+		t.Fatalf("expected some kind of error, but the proof was accepted")
+	}
+}
+
+// TestBloatedProof tests a malicious proof, where the proof is more or less the
+// whole trie.
+func TestBloatedProof(t *testing.T) {
+	// Use a small trie
+	trie, kvs := nonRandomTrie(100)
+	var entries entrySlice
+	for _, kv := range kvs {
+		entries = append(entries, kv)
+	}
+	sort.Sort(entries)
+	var keys [][]byte
+	var vals [][]byte
+	firstProof, lastProof := memorydb.New(), memorydb.New()
+	for i, entry := range entries {
+		trie.Prove(entry.k, 0, firstProof)
+		if i == 50 {
+			keys = append(keys, entry.k)
+			vals = append(vals, entry.v)
+		}
+	}
+	err := VerifyRangeProof(trie.Hash(), keys[0], keys, vals, firstProof, lastProof)
+	if err == nil {
+		t.Fatalf("expected some kind of error, but the proof was accepted")
+	}
+}
+
+// TestBloatedProof2 tests a malicious proof, where the proof contains a lot of
+// extra data
+func TestBloatedProof2(t *testing.T) {
+	// Use a small trie
+	trie, kvs := nonRandomTrie(100)
+	var entries entrySlice
+	for _, kv := range kvs {
+		entries = append(entries, kv)
+	}
+	sort.Sort(entries)
+	var keys [][]byte
+	var vals [][]byte
+	firstProof, lastProof := memorydb.New(), memorydb.New()
+	// prove the leftmost element
+	trie.Prove(entries[10].k, 0, firstProof)
+	// prove the rightmost element
+	trie.Prove(entries[19].k, 0, lastProof)
+	for _, entry := range entries[10:20] {
+		keys = append(keys, entry.k)
+		vals = append(vals, entry.v)
+	}
+	// Now, store some junk in there too
+	firstProof.Put([]byte("donald duck"), []byte("minnie mouse"))
+	lastProof.Put([]byte("foobar"), []byte("gazonk"))
+	err := VerifyRangeProof(trie.Hash(), keys[0], keys, vals, firstProof, lastProof)
+	if err == nil {
+		t.Fatalf("expected some kind of error, but the proof was accepted")
+	} else {
+		t.Logf("got error: %v", err)
+	}
 }
 
 func TestProof(t *testing.T) {
@@ -863,6 +1004,23 @@ func benchmarkVerifyRangeProof(b *testing.B, size int) {
 			b.Fatalf("Case %d(%d->%d) expect no error, got %v", i, start, end-1, err)
 		}
 	}
+}
+
+func nonRandomTrie(n int) (*Trie, map[string]*kv) {
+	trie := new(Trie)
+	vals := make(map[string]*kv)
+	max := uint64(0xffffffffffffffff)
+	for i := uint64(0); i < uint64(n); i++ {
+		value := make([]byte, 32)
+		key := make([]byte, 32)
+		binary.LittleEndian.PutUint64(key, i)
+		binary.LittleEndian.PutUint64(value, i-max)
+		//value := &kv{common.LeftPadBytes([]byte{i}, 32), []byte{i}, false}
+		elem := &kv{key, value, false}
+		trie.Update(elem.k, elem.v)
+		vals[string(elem.k)] = elem
+	}
+	return trie, vals
 }
 
 func randomTrie(n int) (*Trie, map[string]*kv) {
