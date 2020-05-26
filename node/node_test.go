@@ -392,8 +392,6 @@ func TestWebsocketHTTPOnSamePort_HTTPRequest(t *testing.T) {
 	assert.Equal(t, "gzip", resp.Header.Get("Content-Encoding"))
 }
 
-// TODO why is GQL still served successfully if the server doesn't have GQL enabled
-
 func startHTTP(t *testing.T) *Node {
 	conf := &Config{
 		HTTPHost: "127.0.0.1",
