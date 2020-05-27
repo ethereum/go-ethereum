@@ -20,6 +20,7 @@ package downloader
 import (
 	"errors"
 	"fmt"
+	"math"
 	"math/big"
 	"sync"
 	"sync/atomic"
@@ -753,7 +754,7 @@ func (d *Downloader) findAncestor(p *peerConnection, remoteHeader *types.Header)
 	}
 
 	// Only attempt span search if local head is "close" to reported remote
-	if remoteHeight-localHeight <= uint64(MaxHeaderFetch) {
+	if math.Abs(float64(remoteHeight-localHeight)) <= float64(MaxHeaderFetch) {
 		a, err := d.findAncestorSpanSearch(p, remoteHeight, localHeight, floor)
 		if err == nil {
 			if a > localHeight {
