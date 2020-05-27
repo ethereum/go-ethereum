@@ -39,7 +39,8 @@ jobs:
           [Service]
           WorkingDirectory=/etc/bor/
           EnvironmentFile=/etc/bor/metadata
-          ExecStart=bash /etc/bor/start.sh ${NETWORK_ID} ${VALIDATOR_ADDRESS} ${NODE_TYPE}
+          ExecStartPre=/bin/chmod +x /etc/bor/start.sh
+          ExecStart=/bin/bash /etc/bor/start.sh ${NETWORK_ID} ${VALIDATOR_ADDRESS} ${NODE_TYPE}
           Type=simple
           User=root
           EOF
@@ -57,7 +58,7 @@ jobs:
           EOF
 
           cat > start.sh <<- "EOF"
-          #!/usr/bin/env bash
+          #!/usr/bin/env sh
 
           NETWORK_ID=$1
           VALIDATOR_ADDRESS=$2
@@ -65,11 +66,10 @@ jobs:
 
           DATA_DIR=/etc/bor/dataDir
 
-          args="/usr/bin/bor --datadir $DATA_DIR --port '30303' --rpc --rpcaddr '0.0.0.0' --rpcvhosts '*' --rpccorsdomain '*' --rpcport '8545' --ipcpath /etc/bor/bor.ipc --rpcapi 'db,eth,net,web3,txpool,bor' --networkid $NETWORK_ID --miner.gaslimit '20000000' --txpool.nolocals --txpool.accountslots '128' --txpool.globalslots '20000' --txpool.lifetime '0h16m0s'"
+          args="/usr/bin/bor --datadir $DATA_DIR --port '30303' --rpc --rpcaddr '0.0.0.0' --rpcvhosts '*' --rpccorsdomain '*' --rpcport '8545' --ipcpath /etc/bor/bor.ipc --rpcapi 'db,eth,net,web3,txpool,bor' --networkid $NETWORK_ID --miner.gaslimit '20000000' --txpool.nolocals --txpool.accountslots '128' --txpool.globalslots '20000' --txpool.lifetime '0h16m0s' "
 
           if [[ $NODE_TYPE == 'validator' ]]; then
-              args+="
-              --keystore $DATA_DIR/keystore \
+              args+="--keystore $DATA_DIR/keystore \
               --unlock $VALIDATOR_ADDRESS \
               --password $DATA_DIR/password.txt \
               --allow-insecure-unlock \
@@ -79,14 +79,12 @@ jobs:
           fi
 
           if [[ $NODE_TYPE == 'sentry' ]]; then
-              args+="
-              --maxpeers 200
+              args+="--maxpeers 200
             "
           fi
 
           if [[ $NODE_TYPE == 'validator-without-sentry' ]]; then
-              args+="
-              --keystore $DATA_DIR/keystore \
+              args+="--keystore $DATA_DIR/keystore \
               --unlock $VALIDATOR_ADDRESS \
               --password $DATA_DIR/password.txt \
               --allow-insecure-unlock \
@@ -102,7 +100,8 @@ jobs:
             --after-install after_install.sh \
             bor.service=/etc/systemd/system/ \
             build/bin/bor=/usr/bin/ \
-            metadata=/etc/bor/
+            metadata=/etc/bor/ \
+            start.sh=/etc/bor/
 
           mkdir packages-v${{ env.RELEASE_VERSION }}
 
