@@ -382,7 +382,7 @@ func hasRightElement(node node, key []byte) bool {
 
 // VerifyRangeProof checks whether the given leaf nodes and edge proofs
 // can prove the given trie leaves range is matched with given root hash
-// and the range is consecutive(no gap inside).
+// and the range is consecutive(no gap inside) and monotonic increasing.
 //
 // Note the given first edge proof can be non-existing proof. For example
 // the first proof is for an non-existent values 0x03. The given batch
@@ -408,7 +408,16 @@ func VerifyRangeProof(rootHash common.Hash, firstKey []byte, keys [][]byte, valu
 		return fmt.Errorf("inconsistent proof data, keys: %d, values: %d", len(keys), len(values)), false
 	}
 	if len(keys) == 0 {
-		return fmt.Errorf("empty proof"), false
+		return errors.New("empty proof"), false
+	}
+	// Ensure the received batch is monotonic increasing.
+	for i := 0; i < len(keys); i++ {
+		if i+1 == len(keys) {
+			break
+		}
+		if bytes.Compare(keys[i], keys[i+1]) >= 0 {
+			return errors.New("non-monotonic increasing range"), false
+		}
 	}
 	// Special case, there is no edge proof at all. The given range is expected
 	// to be the whole leaf-set in the trie.
