@@ -416,7 +416,7 @@ func VerifyRangeProof(rootHash common.Hash, firstKey []byte, keys [][]byte, valu
 			break
 		}
 		if bytes.Compare(keys[i], keys[i+1]) >= 0 {
-			return errors.New("non-monotonic increasing range"), false
+			return errors.New("range is not monotonically increasing"), false
 		}
 	}
 	// Special case, there is no edge proof at all. The given range is expected

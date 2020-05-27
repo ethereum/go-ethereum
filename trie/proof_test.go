@@ -526,7 +526,7 @@ func TestHasRightElement(t *testing.T) {
 		hasMore bool
 	}{
 		{-1, 1, true}, // single element with non-existent left proof
-		{0, 1, true},  // single element with exsitent left proof
+		{0, 1, true},  // single element with existent left proof
 		{0, 10, true},
 		{50, 100, true},
 		{50, len(entries), false},               // No more element expected
