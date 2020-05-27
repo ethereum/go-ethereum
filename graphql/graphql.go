@@ -813,7 +813,7 @@ func (b *Block) Call(ctx context.Context, args struct {
 	}
 	//TODO(rjl493456442, MariusVanDerWijden) return revert reason here once the spec supports an error reason.
 	return &CallResult{
-		data:    result.Return(),
+		data:    result.ReturnData,
 		gasUsed: hexutil.Uint64(result.UsedGas),
 		status:  status,
 	}, nil
@@ -883,7 +883,7 @@ func (p *Pending) Call(ctx context.Context, args struct {
 	}
 	//TODO(rjl493456442, MariusVanDerWijden) return revert reason here once the spec supports an error reason.
 	return &CallResult{
-		data:    result.Return(),
+		data:    result.ReturnData,
 		gasUsed: hexutil.Uint64(result.UsedGas),
 		status:  status,
 	}, nil
