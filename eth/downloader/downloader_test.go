@@ -683,8 +683,8 @@ func testBoundedForkedSync(t *testing.T, protocol int, mode SyncMode) {
 	assertOwnChain(t, tester, chainA.len())
 
 	// Synchronise with the second peer and ensure that the fork is rejected to being too old
-	if err := tester.sync("rewriter", nil, mode); err != errInvalidAncestor {
-		t.Fatalf("sync failure mismatch: have %v, want %v", err, errInvalidAncestor)
+	if err := tester.sync("rewriter", nil, mode); err != errInvalidChain {
+		t.Fatalf("sync failure mismatch: have %v, want %v", err, errInvalidChain)
 	}
 }
 
@@ -717,8 +717,8 @@ func testBoundedHeavyForkedSync(t *testing.T, protocol int, mode SyncMode) {
 	assertOwnChain(t, tester, chainA.len())
 
 	// Synchronise with the second peer and ensure that the fork is rejected to being too old
-	if err := tester.sync("heavy-rewriter", nil, mode); err != errInvalidAncestor {
-		t.Fatalf("sync failure mismatch: have %v, want %v", err, errInvalidAncestor)
+	if err := tester.sync("heavy-rewriter", nil, mode); err != errInvalidChain {
+		t.Fatalf("sync failure mismatch: have %v, want %v", err, errInvalidChain)
 	}
 }
 
