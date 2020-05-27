@@ -27,7 +27,7 @@ import (
 	"strings"
 	"time"
 
-	gopsutil "github.com/shirou/gopsutil/mem"
+	gopsutil "github.com/renaynay/gopsutil/mem"
 
 	"github.com/ethereum/go-ethereum/accounts"
 	"github.com/ethereum/go-ethereum/accounts/keystore"
