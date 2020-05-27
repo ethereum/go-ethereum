@@ -760,7 +760,8 @@ func (d *Downloader) findAncestor(p *peerConnection, remoteHeader *types.Header)
 				a = localHeight
 			}
 			return a, nil
-		} else if err != errNoAncestor {
+		}
+		if err != errNoAncestor {
 			return 0, err
 		}
 	}
