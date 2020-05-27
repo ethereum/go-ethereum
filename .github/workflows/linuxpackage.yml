@@ -39,7 +39,7 @@ jobs:
           [Service]
           WorkingDirectory=/etc/bor/
           EnvironmentFile=/etc/bor/metadata
-          ExecStart=/etc/bor/start.sh ${NETWORK_ID} ${VALIDATOR_ADDRESS} ${NODE_TYPE}
+          ExecStart=bash /etc/bor/start.sh ${NETWORK_ID} ${VALIDATOR_ADDRESS} ${NODE_TYPE}
           Type=simple
           User=root
           EOF
@@ -57,6 +57,8 @@ jobs:
           EOF
 
           cat > start.sh <<- "EOF"
+          #!/usr/bin/env bash
+
           NETWORK_ID=$1
           VALIDATOR_ADDRESS=$2
           NODE_TYPE=$3
