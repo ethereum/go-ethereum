@@ -170,7 +170,7 @@ func main() {
 		log.Crit("Failed to read account key contents", "file", *accJSONFlag, "err", err)
 	}
 	acc, err := ks.Import(blob, pass, pass)
-	if err != nil {
+	if err != nil && err != keystore.ErrAlreadyExists {
 		log.Crit("Failed to import faucet signer account", "err", err)
 	}
 	ks.Unlock(acc, pass)
