@@ -353,7 +353,7 @@ func unset(parent node, child node, key []byte, pos int, removeLeft bool) error 
 
 // hasRightElement returns the indicator whether there exists more elements
 // in the right side of the given path. The given path can point to an existent
-// key or a non-exsitent one. This function has the assumption that the whole
+// key or a non-existent one. This function has the assumption that the whole
 // path should already be resolved.
 func hasRightElement(node node, key []byte) bool {
 	pos, key := 0, keybytesToHex(key)
