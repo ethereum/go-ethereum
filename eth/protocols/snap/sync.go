@@ -353,9 +353,9 @@ type Syncer struct {
 	healer *healTask      // Current state healing task being executed
 	update chan struct{}  // Notification channel for possible sync progression
 
-	peers    map[string]*Peer // Currently active peers to download from
-	peerJoin *event.Feed      // Event feed to react to peers joining
-	peerDrop *event.Feed      // Event feed to react to peers dropping
+	peers    map[string]PeerIF // Currently active peers to download from
+	peerJoin *event.Feed       // Event feed to react to peers joining
+	peerDrop *event.Feed       // Event feed to react to peers dropping
 
 	// Request tracking during syncing phase
 	statelessPeers map[string]struct{} // Peers that failed to deliver state data
@@ -417,7 +417,7 @@ func NewSyncer(db ethdb.KeyValueStore, bloom *trie.SyncBloom) *Syncer {
 		db:    db,
 		bloom: bloom,
 
-		peers:    make(map[string]*Peer),
+		peers:    make(map[string]PeerIF),
 		peerJoin: new(event.Feed),
 		peerDrop: new(event.Feed),
 		update:   make(chan struct{}, 1),
@@ -449,27 +449,28 @@ func NewSyncer(db ethdb.KeyValueStore, bloom *trie.SyncBloom) *Syncer {
 }
 
 // Register injects a new data source into the syncer's peerset.
-func (s *Syncer) Register(peer *Peer) error {
+func (s *Syncer) Register(peer PeerIF) error {
 	// Make sure the peer is not registered yet
 	s.lock.Lock()
-	if _, ok := s.peers[peer.id]; ok {
-		log.Error("Snap peer already registered", "id", peer.id)
+	pId := peer.ID()
+	if _, ok := s.peers[pId]; ok {
+		log.Error("Snap peer already registered", "id", pId)
 
 		s.lock.Unlock()
 		return errors.New("already registered")
 	}
-	s.peers[peer.id] = peer
+	s.peers[pId] = peer
 
 	// Mark the peer as idle, even if no sync is running
-	s.accountIdlers[peer.id] = struct{}{}
-	s.storageIdlers[peer.id] = struct{}{}
-	s.bytecodeIdlers[peer.id] = struct{}{}
-	s.trienodeHealIdlers[peer.id] = struct{}{}
-	s.bytecodeHealIdlers[peer.id] = struct{}{}
+	s.accountIdlers[pId] = struct{}{}
+	s.storageIdlers[pId] = struct{}{}
+	s.bytecodeIdlers[pId] = struct{}{}
+	s.trienodeHealIdlers[pId] = struct{}{}
+	s.bytecodeHealIdlers[pId] = struct{}{}
 	s.lock.Unlock()
 
 	// Notify any active syncs that a new peer can be assigned data
-	s.peerJoin.Send(peer.id)
+	s.peerJoin.Send(pId)
 	return nil
 }
 
@@ -800,7 +801,7 @@ func (s *Syncer) assignAccountTasks(cancel chan struct{}) {
 		delete(s.accountIdlers, idle)
 
 		s.pend.Add(1)
-		go func(peer *Peer, root common.Hash) {
+		go func(peer PeerIF, root common.Hash) {
 			defer s.pend.Done()
 
 			// Attempt to send the remote request and revert if it fails
@@ -887,7 +888,7 @@ func (s *Syncer) assignBytecodeTasks(cancel chan struct{}) {
 		delete(s.bytecodeIdlers, idle)
 
 		s.pend.Add(1)
-		go func(peer *Peer) {
+		go func(peer PeerIF) {
 			defer s.pend.Done()
 
 			// Attempt to send the remote request and revert if it fails
@@ -1012,7 +1013,7 @@ func (s *Syncer) assignStorageTasks(cancel chan struct{}) {
 		delete(s.storageIdlers, idle)
 
 		s.pend.Add(1)
-		go func(peer *Peer, root common.Hash) {
+		go func(peer PeerIF, root common.Hash) {
 			defer s.pend.Done()
 
 			// Attempt to send the remote request and revert if it fails
@@ -1127,7 +1128,7 @@ func (s *Syncer) assignTrienodeHealTasks(cancel chan struct{}) {
 		delete(s.trienodeHealIdlers, idle)
 
 		s.pend.Add(1)
-		go func(peer *Peer, root common.Hash) {
+		go func(peer PeerIF, root common.Hash) {
 			defer s.pend.Done()
 
 			// Attempt to send the remote request and revert if it fails
@@ -1225,7 +1226,7 @@ func (s *Syncer) assignBytecodeHealTasks(cancel chan struct{}) {
 		delete(s.bytecodeHealIdlers, idle)
 
 		s.pend.Add(1)
-		go func(peer *Peer) {
+		go func(peer PeerIF) {
 			defer s.pend.Done()
 
 			// Attempt to send the remote request and revert if it fails
@@ -1943,7 +1944,7 @@ func (s *Syncer) forwardAccountTask(task *accountTask) {
 
 // OnAccounts is a callback method to invoke when a range of accounts are
 // received from a remote peer.
-func (s *Syncer) OnAccounts(peer *Peer, id uint64, hashes []common.Hash, accounts [][]byte, proof [][]byte) error {
+func (s *Syncer) OnAccounts(peer PeerIF, id uint64, hashes []common.Hash, accounts [][]byte, proof [][]byte) error {
 	size := common.StorageSize(len(hashes) * common.HashLength)
 	for _, account := range accounts {
 		size += common.StorageSize(len(account))
@@ -1951,15 +1952,15 @@ func (s *Syncer) OnAccounts(peer *Peer, id uint64, hashes []common.Hash, account
 	for _, node := range proof {
 		size += common.StorageSize(len(node))
 	}
-	logger := peer.logger.New("reqid", id)
+	logger := peer.Log().New("reqid", peer.ID())
 	logger.Trace("Delivering range of accounts", "hashes", len(hashes), "accounts", len(accounts), "proofs", len(proof), "bytes", size)
 
 	// Whether or not the response is valid, we can mark the peer as idle and
 	// notify the scheduler to assign a new task. If the response is invalid,
 	// we'll drop the peer in a bit.
 	s.lock.Lock()
-	if _, ok := s.peers[peer.id]; ok {
-		s.accountIdlers[peer.id] = struct{}{}
+	if _, ok := s.peers[peer.ID()]; ok {
+		s.accountIdlers[peer.ID()] = struct{}{}
 	}
 	select {
 	case s.update <- struct{}{}:
@@ -1985,7 +1986,7 @@ func (s *Syncer) OnAccounts(peer *Peer, id uint64, hashes []common.Hash, account
 	// synced to our head.
 	if len(hashes) == 0 && len(accounts) == 0 && len(proof) == 0 {
 		logger.Debug("Peer rejected account range request", "root", s.root)
-		s.statelessPeers[peer.id] = struct{}{}
+		s.statelessPeers[peer.ID()] = struct{}{}
 		s.lock.Unlock()
 
 		// Signal this request as failed, and ready for rescheduling
@@ -2052,7 +2053,7 @@ func (s *Syncer) OnAccounts(peer *Peer, id uint64, hashes []common.Hash, account
 
 // OnByteCodes is a callback method to invoke when a batch of contract
 // bytes codes are received from a remote peer.
-func (s *Syncer) OnByteCodes(peer *Peer, id uint64, bytecodes [][]byte) error {
+func (s *Syncer) OnByteCodes(peer PeerIF, id uint64, bytecodes [][]byte) error {
 	s.lock.RLock()
 	syncing := len(s.tasks) > 0
 	s.lock.RUnlock()
@@ -2065,20 +2066,20 @@ func (s *Syncer) OnByteCodes(peer *Peer, id uint64, bytecodes [][]byte) error {
 
 // onByteCodes is a callback method to invoke when a batch of contract
 // bytes codes are received from a remote peer in the syncing phase.
-func (s *Syncer) onByteCodes(peer *Peer, id uint64, bytecodes [][]byte) error {
+func (s *Syncer) onByteCodes(peer PeerIF, id uint64, bytecodes [][]byte) error {
 	var size common.StorageSize
 	for _, code := range bytecodes {
 		size += common.StorageSize(len(code))
 	}
-	logger := peer.logger.New("reqid", id)
+	logger := peer.Log().New("reqid", id)
 	logger.Trace("Delivering set of bytecodes", "bytecodes", len(bytecodes), "bytes", size)
 
 	// Whether or not the response is valid, we can mark the peer as idle and
 	// notify the scheduler to assign a new task. If the response is invalid,
 	// we'll drop the peer in a bit.
 	s.lock.Lock()
-	if _, ok := s.peers[peer.id]; ok {
-		s.bytecodeIdlers[peer.id] = struct{}{}
+	if _, ok := s.peers[peer.ID()]; ok {
+		s.bytecodeIdlers[peer.ID()] = struct{}{}
 	}
 	select {
 	case s.update <- struct{}{}:
@@ -2103,7 +2104,7 @@ func (s *Syncer) onByteCodes(peer *Peer, id uint64, bytecodes [][]byte) error {
 	// yet synced.
 	if len(bytecodes) == 0 {
 		logger.Debug("Peer rejected bytecode request")
-		s.statelessPeers[peer.id] = struct{}{}
+		s.statelessPeers[peer.ID()] = struct{}{}
 		s.lock.Unlock()
 
 		// Signal this request as failed, and ready for rescheduling
@@ -2152,7 +2153,7 @@ func (s *Syncer) onByteCodes(peer *Peer, id uint64, bytecodes [][]byte) error {
 
 // OnStorage is a callback method to invoke when ranges of storage slots
 // are received from a remote peer.
-func (s *Syncer) OnStorage(peer *Peer, id uint64, hashes [][]common.Hash, slots [][][]byte, proof [][]byte) error {
+func (s *Syncer) OnStorage(peer PeerIF, id uint64, hashes [][]common.Hash, slots [][][]byte, proof [][]byte) error {
 	// Gather some trace stats to aid in debugging issues
 	var (
 		hashCount int
@@ -2172,15 +2173,15 @@ func (s *Syncer) OnStorage(peer *Peer, id uint64, hashes [][]common.Hash, slots 
 	for _, node := range proof {
 		size += common.StorageSize(len(node))
 	}
-	logger := peer.logger.New("reqid", id)
+	logger := peer.Log().New("reqid", id)
 	logger.Trace("Delivering ranges of storage slots", "accounts", len(hashes), "hashes", hashCount, "slots", slotCount, "proofs", len(proof), "size", size)
 
 	// Whether or not the response is valid, we can mark the peer as idle and
 	// notify the scheduler to assign a new task. If the response is invalid,
 	// we'll drop the peer in a bit.
 	s.lock.Lock()
-	if _, ok := s.peers[peer.id]; ok {
-		s.storageIdlers[peer.id] = struct{}{}
+	if _, ok := s.peers[peer.ID()]; ok {
+		s.storageIdlers[peer.ID()] = struct{}{}
 	}
 	select {
 	case s.update <- struct{}{}:
@@ -2218,7 +2219,7 @@ func (s *Syncer) OnStorage(peer *Peer, id uint64, hashes [][]common.Hash, slots 
 	// synced to our head.
 	if len(hashes) == 0 {
 		logger.Debug("Peer rejected storage request")
-		s.statelessPeers[peer.id] = struct{}{}
+		s.statelessPeers[peer.ID()] = struct{}{}
 		s.lock.Unlock()
 
 		// Signal this request as failed, and ready for rescheduling
@@ -2304,20 +2305,20 @@ func (s *Syncer) OnStorage(peer *Peer, id uint64, hashes [][]common.Hash, slots 
 
 // OnTrieNodes is a callback method to invoke when a batch of trie nodes
 // are received from a remote peer.
-func (s *Syncer) OnTrieNodes(peer *Peer, id uint64, trienodes [][]byte) error {
+func (s *Syncer) OnTrieNodes(peer PeerIF, id uint64, trienodes [][]byte) error {
 	var size common.StorageSize
 	for _, node := range trienodes {
 		size += common.StorageSize(len(node))
 	}
-	logger := peer.logger.New("reqid", id)
+	logger := peer.Log().New("reqid", id)
 	logger.Trace("Delivering set of healing trienodes", "trienodes", len(trienodes), "bytes", size)
 
 	// Whether or not the response is valid, we can mark the peer as idle and
 	// notify the scheduler to assign a new task. If the response is invalid,
 	// we'll drop the peer in a bit.
 	s.lock.Lock()
-	if _, ok := s.peers[peer.id]; ok {
-		s.trienodeHealIdlers[peer.id] = struct{}{}
+	if _, ok := s.peers[peer.ID()]; ok {
+		s.trienodeHealIdlers[peer.ID()] = struct{}{}
 	}
 	select {
 	case s.update <- struct{}{}:
@@ -2342,7 +2343,7 @@ func (s *Syncer) OnTrieNodes(peer *Peer, id uint64, trienodes [][]byte) error {
 	// yet synced.
 	if len(trienodes) == 0 {
 		logger.Debug("Peer rejected trienode heal request")
-		s.statelessPeers[peer.id] = struct{}{}
+		s.statelessPeers[peer.ID()] = struct{}{}
 		s.lock.Unlock()
 
 		// Signal this request as failed, and ready for rescheduling
@@ -2392,20 +2393,20 @@ func (s *Syncer) OnTrieNodes(peer *Peer, id uint64, trienodes [][]byte) error {
 
 // onHealByteCodes is a callback method to invoke when a batch of contract
 // bytes codes are received from a remote peer in the healing phase.
-func (s *Syncer) onHealByteCodes(peer *Peer, id uint64, bytecodes [][]byte) error {
+func (s *Syncer) onHealByteCodes(peer PeerIF, id uint64, bytecodes [][]byte) error {
 	var size common.StorageSize
 	for _, code := range bytecodes {
 		size += common.StorageSize(len(code))
 	}
-	logger := peer.logger.New("reqid", id)
+	logger := peer.Log().New("reqid", id)
 	logger.Trace("Delivering set of healing bytecodes", "bytecodes", len(bytecodes), "bytes", size)
 
 	// Whether or not the response is valid, we can mark the peer as idle and
 	// notify the scheduler to assign a new task. If the response is invalid,
 	// we'll drop the peer in a bit.
 	s.lock.Lock()
-	if _, ok := s.peers[peer.id]; ok {
-		s.bytecodeHealIdlers[peer.id] = struct{}{}
+	if _, ok := s.peers[peer.ID()]; ok {
+		s.bytecodeHealIdlers[peer.ID()] = struct{}{}
 	}
 	select {
 	case s.update <- struct{}{}:
@@ -2430,7 +2431,7 @@ func (s *Syncer) onHealByteCodes(peer *Peer, id uint64, bytecodes [][]byte) erro
 	// yet synced.
 	if len(bytecodes) == 0 {
 		logger.Debug("Peer rejected bytecode heal request")
-		s.statelessPeers[peer.id] = struct{}{}
+		s.statelessPeers[peer.ID()] = struct{}{}
 		s.lock.Unlock()
 
 		// Signal this request as failed, and ready for rescheduling

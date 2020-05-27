@@ -22,6 +22,17 @@ import (
 	"github.com/ethereum/go-ethereum/p2p"
 )
 
+// PeerIF exists so we can mock peers in testing, and not deal with
+// the actual protocol marshalling
+type PeerIF interface {
+	ID() string
+	RequestAccountRange(id uint64, root, origin, limit common.Hash, bytes uint64) error
+	RequestStorageRanges(id uint64, root common.Hash, accounts []common.Hash, origin, limit []byte, bytes uint64) error
+	RequestByteCodes(id uint64, hashes []common.Hash, bytes uint64) error
+	RequestTrieNodes(id uint64, root common.Hash, paths []TrieNodePathSet, bytes uint64) error
+	Log() log.Logger
+}
+
 // Peer is a collection of relevant information we have about a `snap` peer.
 type Peer struct {
 	id string // Unique ID for the peer, cached
