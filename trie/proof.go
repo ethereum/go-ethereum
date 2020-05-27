@@ -411,10 +411,7 @@ func VerifyRangeProof(rootHash common.Hash, firstKey []byte, keys [][]byte, valu
 		return errors.New("empty proof"), false
 	}
 	// Ensure the received batch is monotonic increasing.
-	for i := 0; i < len(keys); i++ {
-		if i+1 == len(keys) {
-			break
-		}
+	for i := 0; i < len(keys)-1; i++ {
 		if bytes.Compare(keys[i], keys[i+1]) >= 0 {
 			return errors.New("range is not monotonically increasing"), false
 		}
