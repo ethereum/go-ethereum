@@ -39,7 +39,7 @@ jobs:
           [Service]
           WorkingDirectory=/etc/bor/
           EnvironmentFile=/etc/bor/metadata
-          ExecStart=/bin/bash -c "/usr/bin/bor --datadir /etc/bor/dataDir --port '30303' --rpc --rpcaddr '0.0.0.0' --rpcvhosts '*' --rpccorsdomain '*' --rpcport '8545' --ipcpath /etc/bor/bor.ipc --rpcapi 'db,eth,net,web3,txpool,bor' --networkid ${NETWORK_ID} --miner.gaslimit '20000000' --txpool.nolocals --txpool.accountslots '128' --txpool.globalslots '20000' --txpool.lifetime '0h16m0s' --keystore /etc/bor/dataDir/keystore --unlock ${VALIDATOR_ADDRESS} --password /etc/bor/dataDir/password.txt --allow-insecure-unlock --maxpeers 150 --mine"
+          ExecStart=/etc/bor/start.sh ${NETWORK_ID} ${VALIDATOR_ADDRESS} ${NODE_TYPE}
           Type=simple
           User=root
           EOF
@@ -47,11 +47,51 @@ jobs:
           cat > after_install.sh <<- "EOF"
           #!/bin/bash
           touch /etc/bor/metadata
+          touch /etc/bor/start.sh
           EOF
 
           cat > metadata <<- "EOF"
           NETWORK_ID=
           VALIDATOR_ADDRESS=
+          NODE_TYPE=sentry
+          EOF
+
+          cat > start.sh <<- "EOF"
+          NETWORK_ID=$1
+          VALIDATOR_ADDRESS=$2
+          NODE_TYPE=$3
+
+          args="/usr/bin/bor --datadir /etc/bor/dataDir --port '30303' --rpc --rpcaddr '0.0.0.0' --rpcvhosts '*' --rpccorsdomain '*' --rpcport '8545' --ipcpath /etc/bor/bor.ipc --rpcapi 'db,eth,net,web3,txpool,bor' --networkid $NETWORK_ID --miner.gaslimit '20000000' --txpool.nolocals --txpool.accountslots '128' --txpool.globalslots '20000' --txpool.lifetime '0h16m0s'"
+
+          if [[ $NODE_TYPE == 'validator' ]]; then
+              args+="
+              --keystore $BOR_DIR/keystore \
+              --unlock $VALIDATOR_ADDRESS \
+              --password $BOR_DIR/password.txt \
+              --allow-insecure-unlock \
+              --nodiscover --maxpeers 1 \
+              --mine
+            "
+          fi
+
+          if [[ $NODE_TYPE == 'sentry' ]]; then
+              args+="
+              --maxpeers 200
+            "
+          fi
+
+          if [[ $NODE_TYPE == 'validator-without-sentry' ]]; then
+              args+="
+              --keystore $BOR_DIR/keystore \
+              --unlock $VALIDATOR_ADDRESS \
+              --password $BOR_DIR/password.txt \
+              --allow-insecure-unlock \
+              --maxpeers 200 \
+              --mine
+            "
+          fi
+
+          ${args[@]}
           EOF
 
           fpm -s dir -t deb --deb-user root --deb-group root -n matic-bor -v ${{ env.RELEASE_VERSION }} \
