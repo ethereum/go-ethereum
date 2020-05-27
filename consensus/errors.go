@@ -31,6 +31,9 @@ var (
 	// to the current node.
 	ErrFutureBlock = errors.New("block in the future")
 
+	// ErrBlockTooSoon is returned when the period / producerDelay values in the genesis were not respected
+	ErrBlockTooSoon = errors.New("block was produced sooner than expected")
+
 	// ErrInvalidNumber is returned if a block's number doesn't equal it's parent's
 	// plus one.
 	ErrInvalidNumber = errors.New("invalid block number")

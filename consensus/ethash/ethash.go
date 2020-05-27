@@ -34,13 +34,13 @@ import (
 	"unsafe"
 
 	mmap "github.com/edsrzf/mmap-go"
+	"github.com/hashicorp/golang-lru/simplelru"
 	"github.com/maticnetwork/bor/common"
 	"github.com/maticnetwork/bor/consensus"
 	"github.com/maticnetwork/bor/core/types"
 	"github.com/maticnetwork/bor/log"
 	"github.com/maticnetwork/bor/metrics"
 	"github.com/maticnetwork/bor/rpc"
-	"github.com/hashicorp/golang-lru/simplelru"
 )
 
 var ErrInvalidDumpMagic = errors.New("invalid dump magic")

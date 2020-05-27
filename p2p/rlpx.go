@@ -35,11 +35,11 @@ import (
 	"sync"
 	"time"
 
+	"github.com/golang/snappy"
 	"github.com/maticnetwork/bor/common/bitutil"
 	"github.com/maticnetwork/bor/crypto"
 	"github.com/maticnetwork/bor/crypto/ecies"
 	"github.com/maticnetwork/bor/rlp"
-	"github.com/golang/snappy"
 	"golang.org/x/crypto/sha3"
 )
 

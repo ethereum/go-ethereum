@@ -12,7 +12,6 @@ import (
 	"math/big"
 
 	"sort"
-	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -40,9 +39,6 @@ import (
 	lru "github.com/hashicorp/golang-lru"
 	"golang.org/x/crypto/sha3"
 )
-
-const validatorsetABI = `[{"constant":true,"inputs":[{"name":"span","type":"uint256"}],"name":"getSpan","outputs":[{"name":"number","type":"uint256"},{"name":"startBlock","type":"uint256"},{"name":"endBlock","type":"uint256"}],"payable":false,"stateMutability":"view","type":"function"},{"constant":true,"inputs":[{"name":"number","type":"uint256"}],"name":"getBorValidators","outputs":[{"name":"","type":"address[]"},{"name":"","type":"uint256[]"}],"payable":false,"stateMutability":"view","type":"function"},{"constant":true,"inputs":[{"name":"span","type":"uint256"},{"name":"signer","type":"address"}],"name":"isProducer","outputs":[{"name":"","type":"bool"}],"payable":false,"stateMutability":"view","type":"function"},{"constant":false,"inputs":[{"name":"newSpan","type":"uint256"},{"name":"startBlock","type":"uint256"},{"name":"endBlock","type":"uint256"},{"name":"validatorBytes","type":"bytes"},{"name":"producerBytes","type":"bytes"}],"name":"commitSpan","outputs":[],"payable":false,"stateMutability":"nonpayable","type":"function"},{"constant":true,"inputs":[{"name":"span","type":"uint256"},{"name":"signer","type":"address"}],"name":"isValidator","outputs":[{"name":"","type":"bool"}],"payable":false,"stateMutability":"view","type":"function"},{"constant":false,"inputs":[],"name":"proposeSpan","outputs":[],"payable":false,"stateMutability":"nonpayable","type":"function"},{"constant":true,"inputs":[],"name":"currentSpanNumber","outputs":[{"name":"","type":"uint256"}],"payable":false,"stateMutability":"view","type":"function"},{"constant":true,"inputs":[],"name":"getNextSpan","outputs":[{"name":"number","type":"uint256"},{"name":"startBlock","type":"uint256"},{"name":"endBlock","type":"uint256"}],"payable":false,"stateMutability":"view","type":"function"},{"constant":true,"inputs":[],"name":"getInitialValidators","outputs":[{"name":"","type":"address[]"},{"name":"","type":"uint256[]"}],"payable":false,"stateMutability":"view","type":"function"},{"constant":true,"inputs":[],"name":"spanProposalPending","outputs":[{"name":"","type":"bool"}],"payable":false,"stateMutability":"view","type":"function"},{"constant":true,"inputs":[],"name":"getCurrentSpan","outputs":[{"name":"number","type":"uint256"},{"name":"startBlock","type":"uint256"},{"name":"endBlock","type":"uint256"}],"payable":false,"stateMutability":"view","type":"function"},{"constant":true,"inputs":[{"name":"number","type":"uint256"}],"name":"getSpanByBlock","outputs":[{"name":"","type":"uint256"}],"payable":false,"stateMutability":"view","type":"function"},{"constant":true,"inputs":[],"name":"getValidators","outputs":[{"name":"","type":"address[]"},{"name":"","type":"uint256[]"}],"payable":false,"stateMutability":"view","type":"function"},{"constant":false,"inputs":[{"name":"vote","type":"bytes"},{"name":"sigs","type":"bytes"},{"name":"txBytes","type":"bytes"},{"name":"proof","type":"bytes"}],"name":"validateValidatorSet","outputs":[],"payable":false,"stateMutability":"nonpayable","type":"function"}]`
-const stateReceiverABI = `[{"constant":true,"inputs":[{"name":"","type":"uint256"}],"name":"states","outputs":[{"name":"","type":"bool"}],"payable":false,"stateMutability":"view","type":"function"},{"constant":false,"inputs":[{"name":"recordBytes","type":"bytes"}],"name":"commitState","outputs":[],"payable":false,"stateMutability":"nonpayable","type":"function"},{"constant":true,"inputs":[],"name":"getPendingStates","outputs":[{"name":"","type":"uint256[]"}],"payable":false,"stateMutability":"view","type":"function"},{"constant":true,"inputs":[],"name":"SYSTEM_ADDRESS","outputs":[{"name":"","type":"address"}],"payable":false,"stateMutability":"view","type":"function"},{"constant":true,"inputs":[],"name":"validatorSet","outputs":[{"name":"","type":"address"}],"payable":false,"stateMutability":"view","type":"function"},{"constant":false,"inputs":[{"name":"vote","type":"bytes"},{"name":"sigs","type":"bytes"},{"name":"txBytes","type":"bytes"},{"name":"proof","type":"bytes"}],"name":"validateValidatorSet","outputs":[],"payable":false,"stateMutability":"nonpayable","type":"function"},{"constant":true,"inputs":[],"name":"isValidatorSetContract","outputs":[{"name":"","type":"bool"}],"payable":false,"stateMutability":"view","type":"function"},{"constant":false,"inputs":[{"name":"stateId","type":"uint256"}],"name":"proposeState","outputs":[],"payable":false,"stateMutability":"nonpayable","type":"function"},{"constant":true,"inputs":[{"name":"signer","type":"address"}],"name":"isProducer","outputs":[{"name":"","type":"bool"}],"payable":false,"stateMutability":"view","type":"function"},{"constant":true,"inputs":[{"name":"signer","type":"address"}],"name":"isValidator","outputs":[{"name":"","type":"bool"}],"payable":false,"stateMutability":"view","type":"function"}]`
 
 const (
 	checkpointInterval = 1024 // Number of blocks after which to save the vote snapshot to the database
@@ -105,10 +101,6 @@ var (
 	// invalid list of validators (i.e. non divisible by 40 bytes).
 	errInvalidSpanValidators = errors.New("invalid validator list on sprint end block")
 
-	// errMismatchingSprintValidators is returned if a sprint block contains a
-	// list of validators different than the one the local node calculated.
-	errMismatchingSprintValidators = errors.New("mismatching validator list on sprint block")
-
 	// errInvalidMixDigest is returned if a block's mix digest is non-zero.
 	errInvalidMixDigest = errors.New("non-zero mix digest")
 
@@ -118,10 +110,6 @@ var (
 	// errInvalidDifficulty is returned if the difficulty of a block neither 1 or 2.
 	errInvalidDifficulty = errors.New("invalid difficulty")
 
-	// errWrongDifficulty is returned if the difficulty of a block doesn't match the
-	// turn of the signer.
-	errWrongDifficulty = errors.New("wrong difficulty")
-
 	// ErrInvalidTimestamp is returned if the timestamp of a block is lower than
 	// the previous block's timestamp + the minimum block period.
 	ErrInvalidTimestamp = errors.New("invalid timestamp")
@@ -129,13 +117,6 @@ var (
 	// errOutOfRangeChain is returned if an authorization list is attempted to
 	// be modified via out-of-range or non-contiguous headers.
 	errOutOfRangeChain = errors.New("out of range or non-contiguous chain")
-
-	// errUnauthorizedSigner is returned if a header is signed by a non-authorized entity.
-	errUnauthorizedSigner = errors.New("unauthorized signer")
-
-	// errRecentlySigned is returned if a header is signed by an authorized entity
-	// that already signed a header recently, thus is temporarily not allowed to.
-	errRecentlySigned = errors.New("recently signed")
 )
 
 // SignerFn is a signer callback function to request a header to be signed by a
@@ -198,21 +179,18 @@ func encodeSigHeader(w io.Writer, header *types.Header) {
 	}
 }
 
-// CalcDifficulty is the difficulty adjustment algorithm. It returns the difficulty
-// that a new block should have based on the previous blocks in the chain and the
-// current signer.
-func CalcDifficulty(snap *Snapshot, signer common.Address, epoch uint64) *big.Int {
-	return big.NewInt(0).SetUint64(snap.inturn(snap.Number+1, signer, epoch))
-}
-
-// CalcProducerDelay is the producer delay algorithm based on block time.
-func CalcProducerDelay(snap *Snapshot, signer common.Address, period uint64, epoch uint64, producerDelay uint64) uint64 {
-	// if block is epoch start block, proposer will be inturn signer
-	if (snap.Number+1)%epoch == 0 {
-		return producerDelay
+// CalcProducerDelay is the block delay algorithm based on block time, period, producerDelay and turn-ness of a signer
+func CalcProducerDelay(number uint64, succession int, c *params.BorConfig) uint64 {
+	// When the block is the first block of the sprint, it is expected to be delayed by `producerDelay`.
+	// That is to allow time for block propagation in the last sprint
+	delay := c.Period
+	if number%c.Sprint == 0 {
+		delay = c.ProducerDelay
 	}
-
-	return period
+	if succession > 0 {
+		delay += uint64(succession) * c.BackupMultiplier
+	}
+	return delay
 }
 
 // BorRLP returns the rlp bytes which needs to be signed for the bor
@@ -241,10 +219,11 @@ type Bor struct {
 	signFn SignerFn       // Signer function to authorize hashes with
 	lock   sync.RWMutex   // Protects the signer fields
 
-	ethAPI           *ethapi.PublicBlockChainAPI
-	validatorSetABI  abi.ABI
-	stateReceiverABI abi.ABI
-	HeimdallClient   IHeimdallClient
+	ethAPI                 *ethapi.PublicBlockChainAPI
+	GenesisContractsClient *GenesisContractsClient
+	validatorSetABI        abi.ABI
+	stateReceiverABI       abi.ABI
+	HeimdallClient         IHeimdallClient
 
 	stateDataFeed event.Feed
 	scope         event.SubscriptionScope
@@ -273,17 +252,18 @@ func New(
 	vABI, _ := abi.JSON(strings.NewReader(validatorsetABI))
 	sABI, _ := abi.JSON(strings.NewReader(stateReceiverABI))
 	heimdallClient, _ := NewHeimdallClient(heimdallURL)
-
+	genesisContractsClient := NewGenesisContractsClient(chainConfig, borConfig.ValidatorContract, borConfig.StateReceiverContract, ethAPI)
 	c := &Bor{
-		chainConfig:      chainConfig,
-		config:           borConfig,
-		db:               db,
-		ethAPI:           ethAPI,
-		recents:          recents,
-		signatures:       signatures,
-		validatorSetABI:  vABI,
-		stateReceiverABI: sABI,
-		HeimdallClient:   heimdallClient,
+		chainConfig:            chainConfig,
+		config:                 borConfig,
+		db:                     db,
+		ethAPI:                 ethAPI,
+		recents:                recents,
+		signatures:             signatures,
+		validatorSetABI:        vABI,
+		stateReceiverABI:       sABI,
+		GenesisContractsClient: genesisContractsClient,
+		HeimdallClient:         heimdallClient,
 	}
 
 	return c
@@ -335,12 +315,9 @@ func (c *Bor) verifyHeader(chain consensus.ChainReader, header *types.Header, pa
 	if header.Time > uint64(time.Now().Unix()) {
 		return consensus.ErrFutureBlock
 	}
-	// Check that the extra-data contains both the vanity and signature
-	if len(header.Extra) < extraVanity {
-		return errMissingVanity
-	}
-	if len(header.Extra) < extraVanity+extraSeal {
-		return errMissingSignature
+
+	if err := validateHeaderExtraField(header.Extra); err != nil {
+		return err
 	}
 
 	// check extr adata
@@ -376,6 +353,18 @@ func (c *Bor) verifyHeader(chain consensus.ChainReader, header *types.Header, pa
 	return c.verifyCascadingFields(chain, header, parents)
 }
 
+// validateHeaderExtraField validates that the extra-data contains both the vanity and signature.
+// header.Extra = header.Vanity + header.ProducerBytes (optional) + header.Seal
+func validateHeaderExtraField(extraBytes []byte) error {
+	if len(extraBytes) < extraVanity {
+		return errMissingVanity
+	}
+	if len(extraBytes) < extraVanity+extraSeal {
+		return errMissingSignature
+	}
+	return nil
+}
+
 // verifyCascadingFields verifies all the header fields that are not standalone,
 // rather depend on a batch of previous headers. The caller may optionally pass
 // in a batch of parents (ascending order) to avoid looking those up from the
@@ -409,8 +398,9 @@ func (c *Bor) verifyCascadingFields(chain consensus.ChainReader, header *types.H
 		return err
 	}
 
-	// If the block is a sprint end block, verify the validator list
-	if number%c.config.Sprint == 0 {
+	// verify the validator list in the last sprint block
+	if isSprintStart(number, c.config.Sprint) {
+		parentValidatorBytes := parent.Extra[extraVanity : len(parent.Extra)-extraSeal]
 		validatorsBytes := make([]byte, len(snap.ValidatorSet.Validators)*validatorHeaderBytesLength)
 
 		currentValidators := snap.ValidatorSet.Copy().Validators
@@ -419,14 +409,9 @@ func (c *Bor) verifyCascadingFields(chain consensus.ChainReader, header *types.H
 		for i, validator := range currentValidators {
 			copy(validatorsBytes[i*validatorHeaderBytesLength:], validator.HeaderBytes())
 		}
-
-		extraSuffix := len(header.Extra) - extraSeal
-
-		// fmt.Println("validatorsBytes ==> verify seal ==> ", hex.EncodeToString(validatorsBytes))
-		// fmt.Println("header.Extra ==> verify seal ==> ", hex.EncodeToString(header.Extra[extraVanity:extraSuffix]))
-
-		if !bytes.Equal(header.Extra[extraVanity:extraSuffix], validatorsBytes) {
-			// return errMismatchingSprintValidators
+		// len(header.Extra) >= extraVanity+extraSeal has already been validated in validateHeaderExtraField, so this won't result in a panic
+		if !bytes.Equal(parentValidatorBytes, validatorsBytes) {
+			return &MismatchingValidatorsError{number - 1, validatorsBytes, parentValidatorBytes}
 		}
 	}
 
@@ -463,7 +448,7 @@ func (c *Bor) snapshot(chain consensus.ChainReader, number uint64, hash common.H
 		// up more headers than allowed to be reorged (chain reinit from a freezer),
 		// consider the checkpoint trusted and snapshot it.
 		// TODO fix this
-		if number == 0 /* || (number%c.config.Sprint == 0 && (len(headers) > params.ImmutabilityThreshold || chain.GetHeaderByNumber(number-1) == nil)) */ {
+		if number == 0 {
 			checkpoint := chain.GetHeaderByNumber(number)
 			if checkpoint != nil {
 				// get checkpoint data
@@ -568,37 +553,31 @@ func (c *Bor) verifySeal(chain consensus.ChainReader, header *types.Header, pare
 		return err
 	}
 	if !snap.ValidatorSet.HasAddress(signer.Bytes()) {
-		return errUnauthorizedSigner
+		// Check the UnauthorizedSignerError.Error() msg to see why we pass number-1
+		return &UnauthorizedSignerError{number - 1, signer.Bytes()}
 	}
 
-	// check if signer is correct
-	validators := snap.ValidatorSet.Validators
-	// proposer will be the last signer if block is not epoch block
-	proposer := snap.ValidatorSet.GetProposer().Address
-	if number%c.config.Sprint != 0 {
-		// proposer = snap.Recents[number-1]
+	succession, err := snap.GetSignerSuccessionNumber(signer)
+	if err != nil {
+		return err
 	}
-	proposerIndex, _ := snap.ValidatorSet.GetByAddress(proposer)
-	signerIndex, _ := snap.ValidatorSet.GetByAddress(signer)
-	limit := len(validators)/2 + 1
 
-	// temp index
-	tempIndex := signerIndex
-	if proposerIndex != tempIndex && limit > 0 {
-		if tempIndex < proposerIndex {
-			tempIndex = tempIndex + len(validators)
-		}
+	var parent *types.Header
+	if len(parents) > 0 { // if parents is nil, len(parents) is zero
+		parent = parents[len(parents)-1]
+	} else if number > 0 {
+		parent = chain.GetHeader(header.ParentHash, number-1)
+	}
 
-		if tempIndex-proposerIndex > limit {
-			return errRecentlySigned
-		}
+	if parent != nil && header.Time < parent.Time+CalcProducerDelay(number, succession, c.config) {
+		return &BlockTooSoonError{number, succession}
 	}
 
 	// Ensure that the difficulty corresponds to the turn-ness of the signer
 	if !c.fakeDiff {
-		difficulty := snap.inturn(header.Number.Uint64(), signer, c.config.Sprint)
+		difficulty := snap.Difficulty(signer)
 		if header.Difficulty.Uint64() != difficulty {
-			return errWrongDifficulty
+			return &WrongDifficultyError{number, difficulty, header.Difficulty.Uint64(), signer.Bytes()}
 		}
 	}
 
@@ -620,7 +599,7 @@ func (c *Bor) Prepare(chain consensus.ChainReader, header *types.Header) error {
 	}
 
 	// Set the correct difficulty
-	header.Difficulty = CalcDifficulty(snap, c.signer, c.config.Sprint)
+	header.Difficulty = new(big.Int).SetUint64(snap.Difficulty(c.signer))
 
 	// Ensure the extra data has all it's components
 	if len(header.Extra) < extraVanity {
@@ -654,7 +633,16 @@ func (c *Bor) Prepare(chain consensus.ChainReader, header *types.Header) error {
 		return consensus.ErrUnknownAncestor
 	}
 
-	header.Time = parent.Time + CalcProducerDelay(snap, c.signer, c.config.Period, c.config.Sprint, c.config.ProducerDelay)
+	var succession int
+	// if signer is not empty
+	if bytes.Compare(c.signer.Bytes(), common.Address{}.Bytes()) != 0 {
+		succession, err = snap.GetSignerSuccessionNumber(c.signer)
+		if err != nil {
+			return err
+		}
+	}
+
+	header.Time = parent.Time + CalcProducerDelay(number, succession, c.config)
 	if header.Time < uint64(time.Now().Unix()) {
 		header.Time = uint64(time.Now().Unix())
 	}
@@ -664,9 +652,7 @@ func (c *Bor) Prepare(chain consensus.ChainReader, header *types.Header) error {
 // Finalize implements consensus.Engine, ensuring no uncles are set, nor block
 // rewards given.
 func (c *Bor) Finalize(chain consensus.ChainReader, header *types.Header, state *state.StateDB, txs []*types.Transaction, uncles []*types.Header) {
-	// commit span
 	headerNumber := header.Number.Uint64()
-
 	if headerNumber%c.config.Sprint == 0 {
 		cx := chainContext{Chain: chain, Bor: c}
 		// check and commit span
@@ -674,6 +660,7 @@ func (c *Bor) Finalize(chain consensus.ChainReader, header *types.Header, state 
 			log.Error("Error while committing span", "error", err)
 			return
 		}
+
 		// commit statees
 		if err := c.CommitStates(state, header, cx); err != nil {
 			log.Error("Error while committing states", "error", err)
@@ -689,8 +676,8 @@ func (c *Bor) Finalize(chain consensus.ChainReader, header *types.Header, state 
 // FinalizeAndAssemble implements consensus.Engine, ensuring no uncles are set,
 // nor block rewards given, and returns the final block.
 func (c *Bor) FinalizeAndAssemble(chain consensus.ChainReader, header *types.Header, state *state.StateDB, txs []*types.Transaction, uncles []*types.Header, receipts []*types.Receipt) (*types.Block, error) {
-	// commit span
-	if header.Number.Uint64()%c.config.Sprint == 0 {
+	headerNumber := header.Number.Uint64()
+	if headerNumber%c.config.Sprint == 0 {
 		cx := chainContext{Chain: chain, Bor: c}
 
 		// check and commit span
@@ -703,7 +690,7 @@ func (c *Bor) FinalizeAndAssemble(chain consensus.ChainReader, header *types.Hea
 		// commit statees
 		if err := c.CommitStates(state, header, cx); err != nil {
 			log.Error("Error while committing states", "error", err)
-			// return nil, err
+			return nil, err
 		}
 	}
 
@@ -752,38 +739,19 @@ func (c *Bor) Seal(chain consensus.ChainReader, block *types.Block, results chan
 
 	// Bail out if we're unauthorized to sign a block
 	if !snap.ValidatorSet.HasAddress(signer.Bytes()) {
-		return errUnauthorizedSigner
+		// Check the UnauthorizedSignerError.Error() msg to see why we pass number-1
+		return &UnauthorizedSignerError{number - 1, signer.Bytes()}
 	}
 
-	validators := snap.ValidatorSet.Validators
-	// proposer will be the last signer if block is not epoch block
-	proposer := snap.ValidatorSet.GetProposer().Address
-	if number%c.config.Sprint != 0 {
-		// proposer = snap.Recents[number-1]
-	}
-
-	proposerIndex, _ := snap.ValidatorSet.GetByAddress(proposer)
-	signerIndex, _ := snap.ValidatorSet.GetByAddress(signer)
-	limit := len(validators)/2 + 1
-
-	// temp index
-	tempIndex := signerIndex
-	if tempIndex < proposerIndex {
-		tempIndex = tempIndex + len(validators)
-	}
-
-	if limit > 0 && tempIndex-proposerIndex > limit {
-		log.Info("Signed recently, must wait for others")
-		return nil
+	successionNumber, err := snap.GetSignerSuccessionNumber(signer)
+	if err != nil {
+		return err
 	}
 
 	// Sweet, the protocol permits us to sign the block, wait for our time
 	delay := time.Unix(int64(header.Time), 0).Sub(time.Now()) // nolint: gosimple
-	wiggle := time.Duration(2*c.config.Period) * time.Second * time.Duration(tempIndex-proposerIndex)
-	delay += wiggle
-
-	log.Info("Out-of-turn signing requested", "wiggle", common.PrettyDuration(wiggle))
-	log.Info("Sealing block with", "number", number, "delay", delay, "headerDifficulty", header.Difficulty, "signer", signer.Hex(), "proposer", proposer.Hex())
+	// wiggle was already accounted for in header.Time, this is just for logging
+	wiggle := time.Duration(successionNumber) * time.Duration(c.config.BackupMultiplier) * time.Second
 
 	// Sign all the things!
 	sighash, err := signFn(accounts.Account{Address: signer}, accounts.MimetypeBor, BorRLP(header))
@@ -797,17 +765,30 @@ func (c *Bor) Seal(chain consensus.ChainReader, block *types.Block, results chan
 	go func() {
 		select {
 		case <-stop:
+			log.Debug("Discarding sealing operation for block", "number", number)
 			return
 		case <-time.After(delay):
+			if wiggle > 0 {
+				log.Info(
+					"Sealing out-of-turn",
+					"number", number,
+					"wiggle", common.PrettyDuration(wiggle),
+					"in-turn-signer", snap.ValidatorSet.GetProposer().Address.Hex(),
+				)
+			}
+			log.Info(
+				"Sealing successful",
+				"number", number,
+				"delay", delay,
+				"headerDifficulty", header.Difficulty,
+			)
 		}
-
 		select {
 		case results <- block.WithSeal(header):
 		default:
-			log.Warn("Sealing result is not read by miner", "sealhash", SealHash(header))
+			log.Warn("Sealing result was not read by miner", "number", number, "sealhash", SealHash(header))
 		}
 	}()
-
 	return nil
 }
 
@@ -819,7 +800,7 @@ func (c *Bor) CalcDifficulty(chain consensus.ChainReader, time uint64, parent *t
 	if err != nil {
 		return nil
 	}
-	return CalcDifficulty(snap, c.signer, c.config.Sprint)
+	return new(big.Int).SetUint64(snap.Difficulty(c.signer))
 }
 
 // SealHash returns the hash of a block prior to it being sealed.
@@ -843,42 +824,6 @@ func (c *Bor) Close() error {
 	return nil
 }
 
-// Checks if new span is pending
-func (c *Bor) isSpanPending(snapshotNumber uint64) (bool, error) {
-	blockNr := rpc.BlockNumber(snapshotNumber)
-	method := "spanProposalPending"
-
-	// get packed data
-	data, err := c.validatorSetABI.Pack(method)
-	if err != nil {
-		log.Error("Unable to pack tx for spanProposalPending", "error", err)
-		return false, err
-	}
-
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel() // cancel when we are finished consuming integers
-
-	// call
-	msgData := (hexutil.Bytes)(data)
-	toAddress := common.HexToAddress(c.config.ValidatorContract)
-	gas := (hexutil.Uint64)(uint64(math.MaxUint64 / 2))
-	result, err := c.ethAPI.Call(ctx, ethapi.CallArgs{
-		Gas:  &gas,
-		To:   &toAddress,
-		Data: &msgData,
-	}, blockNr)
-	if err != nil {
-		return false, err
-	}
-
-	var ret0 = new(bool)
-	if err := c.validatorSetABI.Unpack(ret0, method, result); err != nil {
-		return false, err
-	}
-
-	return *ret0, nil
-}
-
 // GetCurrentSpan get current span from contract
 func (c *Bor) GetCurrentSpan(snapshotNumber uint64) (*Span, error) {
 	// block
@@ -893,14 +838,10 @@ func (c *Bor) GetCurrentSpan(snapshotNumber uint64) (*Span, error) {
 		return nil, err
 	}
 
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel() // cancel when we are finished consuming integers
-
-	// call
 	msgData := (hexutil.Bytes)(data)
 	toAddress := common.HexToAddress(c.config.ValidatorContract)
 	gas := (hexutil.Uint64)(uint64(math.MaxUint64 / 2))
-	result, err := c.ethAPI.Call(ctx, ethapi.CallArgs{
+	result, err := c.ethAPI.Call(context.Background(), ethapi.CallArgs{
 		Gas:  &gas,
 		To:   &toAddress,
 		Data: &msgData,
@@ -943,14 +884,11 @@ func (c *Bor) GetCurrentValidators(snapshotNumber uint64, blockNumber uint64) ([
 		return nil, err
 	}
 
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel() // cancel when we are finished consuming integers
-
 	// call
 	msgData := (hexutil.Bytes)(data)
 	toAddress := common.HexToAddress(c.config.ValidatorContract)
 	gas := (hexutil.Uint64)(uint64(math.MaxUint64 / 2))
-	result, err := c.ethAPI.Call(ctx, ethapi.CallArgs{
+	result, err := c.ethAPI.Call(context.Background(), ethapi.CallArgs{
 		Gas:  &gas,
 		To:   &toAddress,
 		Data: &msgData,
@@ -990,37 +928,14 @@ func (c *Bor) checkAndCommitSpan(
 	chain core.ChainContext,
 ) error {
 	headerNumber := header.Number.Uint64()
-	pending := false
-	var span *Span = nil
-	errors := make(chan error)
-	go func() {
-		var err error
-		pending, err = c.isSpanPending(headerNumber - 1)
-		errors <- err
-	}()
-
-	go func() {
-		var err error
-		span, err = c.GetCurrentSpan(headerNumber - 1)
-		errors <- err
-	}()
-
-	var err error
-	for i := 0; i < 2; i++ {
-		err = <-errors
-		if err != nil {
-			close(errors)
-			return err
-		}
+	span, err := c.GetCurrentSpan(headerNumber - 1)
+	if err != nil {
+		return err
 	}
-	close(errors)
-
-	// commit span if there is new span pending or span is ending or end block is not set
-	if pending || c.needToCommitSpan(span, headerNumber) {
+	if c.needToCommitSpan(span, headerNumber) {
 		err := c.fetchAndCommitSpan(span.ID+1, state, header, chain)
 		return err
 	}
-
 	return nil
 }
 
@@ -1049,7 +964,7 @@ func (c *Bor) fetchAndCommitSpan(
 	header *types.Header,
 	chain core.ChainContext,
 ) error {
-	response, err := c.HeimdallClient.FetchWithRetry("bor", "span", strconv.FormatUint(newSpanID, 10))
+	response, err := c.HeimdallClient.FetchWithRetry(fmt.Sprintf("bor/span/%d", newSpanID), "")
 
 	if err != nil {
 		return err
@@ -1133,13 +1048,10 @@ func (c *Bor) GetPendingStateProposals(snapshotNumber uint64) ([]*big.Int, error
 		return nil, err
 	}
 
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel() // cancel when we are finished consuming integers
-
 	msgData := (hexutil.Bytes)(data)
 	toAddress := common.HexToAddress(c.config.StateReceiverContract)
 	gas := (hexutil.Uint64)(uint64(math.MaxUint64 / 2))
-	result, err := c.ethAPI.Call(ctx, ethapi.CallArgs{
+	result, err := c.ethAPI.Call(context.Background(), ethapi.CallArgs{
 		Gas:  &gas,
 		To:   &toAddress,
 		Data: &msgData,
@@ -1160,83 +1072,55 @@ func (c *Bor) GetPendingStateProposals(snapshotNumber uint64) ([]*big.Int, error
 func (c *Bor) CommitStates(
 	state *state.StateDB,
 	header *types.Header,
-	chain core.ChainContext,
+	chain chainContext,
 ) error {
-	// get pending state proposals
-	stateIds, err := c.GetPendingStateProposals(header.Number.Uint64() - 1)
+	number := header.Number.Uint64()
+	_lastStateID, err := c.GenesisContractsClient.LastStateId(number - 1)
 	if err != nil {
 		return err
 	}
 
-	// state ids
-	if len(stateIds) > 0 {
-		log.Debug("Found new proposed states", "numberOfStates", len(stateIds))
-	}
+	to := time.Unix(int64(chain.Chain.GetHeaderByNumber(number-c.config.Sprint).Time), 0)
+	lastStateID := _lastStateID.Uint64()
+	log.Info(
+		"Fetching state updates from Heimdall",
+		"fromID", lastStateID+1,
+		"to", to.Format(time.RFC3339))
+	eventRecords, err := c.HeimdallClient.FetchStateSyncEvents(lastStateID+1, to.Unix())
 
-	method := "commitState"
-
-	// itereate through state ids
-	for _, stateID := range stateIds {
-		// fetch from heimdall
-		response, err := c.HeimdallClient.FetchWithRetry("clerk", "event-record", strconv.FormatUint(stateID.Uint64(), 10))
-		if err != nil {
-			return err
+	chainID := c.chainConfig.ChainID.String()
+	for _, eventRecord := range eventRecords {
+		if eventRecord.ID <= lastStateID {
+			continue
+		}
+		if err := validateEventRecord(eventRecord, number, to, lastStateID, chainID); err != nil {
+			log.Error(err.Error())
+			break
 		}
 
-		// get event record
-		var eventRecord EventRecord
-		if err := json.Unmarshal(response.Result, &eventRecord); err != nil {
-			return err
-		}
-
-		// check if chain id matches with event record
-		if eventRecord.ChainID != "" && eventRecord.ChainID != c.chainConfig.ChainID.String() {
-			return fmt.Errorf(
-				"Chain id proposed state in span, %s, and bor chain id, %s, doesn't match",
-				eventRecord.ChainID,
-				c.chainConfig.ChainID,
-			)
-		}
-
-		log.Info("→ committing new state",
-			"id", eventRecord.ID,
-			"contract", eventRecord.Contract,
-			"data", hex.EncodeToString(eventRecord.Data),
-			"txHash", eventRecord.TxHash,
-			"chainID", eventRecord.ChainID,
-		)
 		stateData := types.StateData{
 			Did:      eventRecord.ID,
 			Contract: eventRecord.Contract,
 			Data:     hex.EncodeToString(eventRecord.Data),
 			TxHash:   eventRecord.TxHash,
 		}
-
 		go func() {
 			c.stateDataFeed.Send(core.NewStateChangeEvent{StateData: &stateData})
 		}()
 
-		recordBytes, err := rlp.EncodeToBytes(eventRecord)
-		if err != nil {
+		if err := c.GenesisContractsClient.CommitState(eventRecord, state, header, chain); err != nil {
 			return err
 		}
-
-		// get packed data for commit state
-		data, err := c.stateReceiverABI.Pack(method, recordBytes)
-		if err != nil {
-			log.Error("Unable to pack tx for commitState", "error", err)
-			return err
-		}
-
-		// get system message
-		msg := getSystemMessage(common.HexToAddress(c.config.StateReceiverContract), data)
-
-		// apply message
-		if err := applyMessage(msg, state, header, c.chainConfig, chain); err != nil {
-			return err
-		}
+		lastStateID++
 	}
+	return nil
+}
 
+func validateEventRecord(eventRecord *EventRecordWithTime, number uint64, to time.Time, lastStateID uint64, chainID string) error {
+	// event id should be sequential and event.Time should lie in the range [from, to)
+	if lastStateID+1 != eventRecord.ID || eventRecord.ChainID != chainID || !eventRecord.Time.Before(to) {
+		return &InvalidStateReceivedError{number, lastStateID, &to, eventRecord}
+	}
 	return nil
 }
 
@@ -1247,48 +1131,6 @@ func (c *Bor) SubscribeStateEvent(ch chan<- core.NewStateChangeEvent) event.Subs
 
 func (c *Bor) SetHeimdallClient(h IHeimdallClient) {
 	c.HeimdallClient = h
-}
-
-func (c *Bor) IsValidatorAction(chain consensus.ChainReader, from common.Address, tx *types.Transaction) bool {
-	header := chain.CurrentHeader()
-	validators, err := c.GetCurrentValidators(header.Number.Uint64(), header.Number.Uint64()+1)
-	if err != nil {
-		log.Error("Failed fetching snapshot", err)
-		return false
-	}
-
-	isValidator := false
-	for _, validator := range validators {
-		if bytes.Compare(validator.Address.Bytes(), from.Bytes()) == 0 {
-			isValidator = true
-			break
-		}
-	}
-
-	return isValidator && (isProposeSpanAction(tx, chain.Config().Bor.ValidatorContract) ||
-		isProposeStateAction(tx, chain.Config().Bor.StateReceiverContract))
-}
-
-func isProposeSpanAction(tx *types.Transaction, validatorContract string) bool {
-	// keccak256('proposeSpan()').slice(0, 4)
-	proposeSpanSig, _ := hex.DecodeString("4b0e4d17")
-	if tx.Data() == nil || len(tx.Data()) < 4 {
-		return false
-	}
-
-	return bytes.Compare(proposeSpanSig, tx.Data()[:4]) == 0 &&
-		tx.To().String() == validatorContract
-}
-
-func isProposeStateAction(tx *types.Transaction, stateReceiverContract string) bool {
-	// keccak256('proposeState(uint256)').slice(0, 4)
-	proposeStateSig, _ := hex.DecodeString("ede01f17")
-	if tx.Data() == nil || len(tx.Data()) < 4 {
-		return false
-	}
-
-	return bytes.Compare(proposeStateSig, tx.Data()[:4]) == 0 &&
-		tx.To().String() == stateReceiverContract
 }
 
 //
@@ -1402,4 +1244,8 @@ func getUpdatedValidatorSet(oldValidatorSet *ValidatorSet, newVals []*Validator)
 
 	v.UpdateWithChangeSet(changes)
 	return v
+}
+
+func isSprintStart(number, sprint uint64) bool {
+	return number%sprint == 0
 }

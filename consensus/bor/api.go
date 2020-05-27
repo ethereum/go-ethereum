@@ -17,17 +17,33 @@
 package bor
 
 import (
+	"encoding/hex"
+	"math"
+	"math/big"
+	"strconv"
+	"sync"
+
+	lru "github.com/hashicorp/golang-lru"
 	"github.com/maticnetwork/bor/common"
 	"github.com/maticnetwork/bor/consensus"
 	"github.com/maticnetwork/bor/core/types"
+	"github.com/maticnetwork/bor/crypto"
 	"github.com/maticnetwork/bor/rpc"
+	"github.com/xsleonard/go-merkle"
+	"golang.org/x/crypto/sha3"
+)
+
+var (
+	// MaxCheckpointLength is the maximum number of blocks that can be requested for constructing a checkpoint root hash
+	MaxCheckpointLength = uint64(math.Pow(2, 15))
 )
 
 // API is a user facing RPC API to allow controlling the signer and voting
 // mechanisms of the proof-of-authority scheme.
 type API struct {
-	chain consensus.ChainReader
-	bor   *Bor
+	chain         consensus.ChainReader
+	bor           *Bor
+	rootHashCache *lru.ARCCache
 }
 
 // GetSnapshot retrieves the state snapshot at a given block.
@@ -104,4 +120,72 @@ func (api *API) GetCurrentValidators() ([]*Validator, error) {
 		return make([]*Validator, 0), err
 	}
 	return snap.ValidatorSet.Validators, nil
+}
+
+// GetRootHash returns the merkle root of the start to end block headers
+func (api *API) GetRootHash(start uint64, end uint64) (string, error) {
+	if err := api.initializeRootHashCache(); err != nil {
+		return "", err
+	}
+	key := getRootHashKey(start, end)
+	if root, known := api.rootHashCache.Get(key); known {
+		return root.(string), nil
+	}
+	length := uint64(end - start + 1)
+	if length > MaxCheckpointLength {
+		return "", &MaxCheckpointLengthExceededError{start, end}
+	}
+	currentHeaderNumber := api.chain.CurrentHeader().Number.Uint64()
+	if start > end || end > currentHeaderNumber {
+		return "", &InvalidStartEndBlockError{start, end, currentHeaderNumber}
+	}
+	blockHeaders := make([]*types.Header, end-start+1)
+	wg := new(sync.WaitGroup)
+	concurrent := make(chan bool, 20)
+	for i := start; i <= end; i++ {
+		wg.Add(1)
+		concurrent <- true
+		go func(number uint64) {
+			blockHeaders[number-start] = api.chain.GetHeaderByNumber(uint64(number))
+			<-concurrent
+			wg.Done()
+		}(i)
+	}
+	wg.Wait()
+	close(concurrent)
+
+	headers := make([][32]byte, nextPowerOfTwo(length))
+	for i := 0; i < len(blockHeaders); i++ {
+		blockHeader := blockHeaders[i]
+		header := crypto.Keccak256(appendBytes32(
+			blockHeader.Number.Bytes(),
+			new(big.Int).SetUint64(blockHeader.Time).Bytes(),
+			blockHeader.TxHash.Bytes(),
+			blockHeader.ReceiptHash.Bytes(),
+		))
+
+		var arr [32]byte
+		copy(arr[:], header)
+		headers[i] = arr
+	}
+
+	tree := merkle.NewTreeWithOpts(merkle.TreeOptions{EnableHashSorting: false, DisableHashLeaves: true})
+	if err := tree.Generate(convert(headers), sha3.NewLegacyKeccak256()); err != nil {
+		return "", err
+	}
+	root := hex.EncodeToString(tree.Root().Hash)
+	api.rootHashCache.Add(key, root)
+	return root, nil
+}
+
+func (api *API) initializeRootHashCache() error {
+	var err error
+	if api.rootHashCache == nil {
+		api.rootHashCache, err = lru.NewARC(10)
+	}
+	return err
+}
+
+func getRootHashKey(start uint64, end uint64) string {
+	return strconv.FormatUint(start, 10) + "-" + strconv.FormatUint(end, 10)
 }

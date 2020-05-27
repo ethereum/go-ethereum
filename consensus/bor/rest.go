@@ -6,10 +6,14 @@ import (
 	"io/ioutil"
 	"net/http"
 	"net/url"
-	"path"
+	"sort"
 	"time"
 
 	"github.com/maticnetwork/bor/log"
+)
+
+var (
+	stateFetchLimit = 50
 )
 
 // ResponseWithHeight defines a response object type that wraps an original
@@ -20,8 +24,9 @@ type ResponseWithHeight struct {
 }
 
 type IHeimdallClient interface {
-	Fetch(paths ...string) (*ResponseWithHeight, error)
-	FetchWithRetry(paths ...string) (*ResponseWithHeight, error)
+	Fetch(path string, query string) (*ResponseWithHeight, error)
+	FetchWithRetry(path string, query string) (*ResponseWithHeight, error)
+	FetchStateSyncEvents(fromID uint64, to int64) ([]*EventRecordWithTime, error)
 }
 
 type HeimdallClient struct {
@@ -39,33 +44,57 @@ func NewHeimdallClient(urlString string) (*HeimdallClient, error) {
 	return h, nil
 }
 
-func (h *HeimdallClient) Fetch(paths ...string) (*ResponseWithHeight, error) {
+func (h *HeimdallClient) FetchStateSyncEvents(fromID uint64, to int64) ([]*EventRecordWithTime, error) {
+	eventRecords := make([]*EventRecordWithTime, 0)
+	for {
+		queryParams := fmt.Sprintf("from-id=%d&to-time=%d&limit=%d", fromID, to, stateFetchLimit)
+		log.Info("Fetching state sync events", "queryParams", queryParams)
+		response, err := h.FetchWithRetry("clerk/event-record/list", queryParams)
+		if err != nil {
+			return nil, err
+		}
+		var _eventRecords []*EventRecordWithTime
+		if response.Result == nil { // status 204
+			break
+		}
+		if err := json.Unmarshal(response.Result, &_eventRecords); err != nil {
+			return nil, err
+		}
+		eventRecords = append(eventRecords, _eventRecords...)
+		if len(_eventRecords) < stateFetchLimit {
+			break
+		}
+		fromID += uint64(stateFetchLimit)
+	}
+
+	sort.SliceStable(eventRecords, func(i, j int) bool {
+		return eventRecords[i].ID < eventRecords[j].ID
+	})
+	return eventRecords, nil
+}
+
+// Fetch fetches response from heimdall
+func (h *HeimdallClient) Fetch(rawPath string, rawQuery string) (*ResponseWithHeight, error) {
 	u, err := url.Parse(h.urlString)
 	if err != nil {
 		return nil, err
 	}
 
-	for _, e := range paths {
-		if e != "" {
-			u.Path = path.Join(u.Path, e)
-		}
-	}
+	u.Path = rawPath
+	u.RawQuery = rawQuery
 
 	return h.internalFetch(u)
 }
 
 // FetchWithRetry returns data from heimdall with retry
-func (h *HeimdallClient) FetchWithRetry(paths ...string) (*ResponseWithHeight, error) {
+func (h *HeimdallClient) FetchWithRetry(rawPath string, rawQuery string) (*ResponseWithHeight, error) {
 	u, err := url.Parse(h.urlString)
 	if err != nil {
 		return nil, err
 	}
 
-	for _, e := range paths {
-		if e != "" {
-			u.Path = path.Join(u.Path, e)
-		}
-	}
+	u.Path = rawPath
+	u.RawQuery = rawQuery
 
 	for {
 		res, err := h.internalFetch(u)
@@ -86,8 +115,14 @@ func (h *HeimdallClient) internalFetch(u *url.URL) (*ResponseWithHeight, error) 
 	defer res.Body.Close()
 
 	// check status code
-	if res.StatusCode != 200 {
+	if res.StatusCode != 200 && res.StatusCode != 204 {
 		return nil, fmt.Errorf("Error while fetching data from Heimdall")
+	}
+
+	// unmarshall data from buffer
+	var response ResponseWithHeight
+	if res.StatusCode == 204 {
+		return &response, nil
 	}
 
 	// get response
@@ -96,8 +131,6 @@ func (h *HeimdallClient) internalFetch(u *url.URL) (*ResponseWithHeight, error) 
 		return nil, err
 	}
 
-	// unmarshall data from buffer
-	var response ResponseWithHeight
 	if err := json.Unmarshal(body, &response); err != nil {
 		return nil, err
 	}

@@ -248,3 +248,17 @@ func (b *EthAPIBackend) ServiceFilter(ctx context.Context, session *bloombits.Ma
 		go session.Multiplex(bloomRetrievalBatch, bloomRetrievalWait, b.eth.bloomRequests)
 	}
 }
+
+func (b *EthAPIBackend) GetRootHash(ctx context.Context, starBlockNr uint64, endBlockNr uint64) (string, error) {
+	var api *bor.API
+	for _, _api := range b.eth.Engine().APIs(b.eth.BlockChain()) {
+		if _api.Namespace == "bor" {
+			api = _api.Service.(*bor.API)
+		}
+	}
+	root, err := api.GetRootHash(starBlockNr, endBlockNr)
+	if err != nil {
+		return "", err
+	}
+	return root, nil
+}

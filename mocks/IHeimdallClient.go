@@ -12,19 +12,13 @@ type IHeimdallClient struct {
 	mock.Mock
 }
 
-// Fetch provides a mock function with given fields: paths
-func (_m *IHeimdallClient) Fetch(paths ...string) (*bor.ResponseWithHeight, error) {
-	_va := make([]interface{}, len(paths))
-	for _i := range paths {
-		_va[_i] = paths[_i]
-	}
-	var _ca []interface{}
-	_ca = append(_ca, _va...)
-	ret := _m.Called(_ca...)
+// Fetch provides a mock function with given fields: path, query
+func (_m *IHeimdallClient) Fetch(path string, query string) (*bor.ResponseWithHeight, error) {
+	ret := _m.Called(path, query)
 
 	var r0 *bor.ResponseWithHeight
-	if rf, ok := ret.Get(0).(func(...string) *bor.ResponseWithHeight); ok {
-		r0 = rf(paths...)
+	if rf, ok := ret.Get(0).(func(string, string) *bor.ResponseWithHeight); ok {
+		r0 = rf(path, query)
 	} else {
 		if ret.Get(0) != nil {
 			r0 = ret.Get(0).(*bor.ResponseWithHeight)
@@ -32,8 +26,8 @@ func (_m *IHeimdallClient) Fetch(paths ...string) (*bor.ResponseWithHeight, erro
 	}
 
 	var r1 error
-	if rf, ok := ret.Get(1).(func(...string) error); ok {
-		r1 = rf(paths...)
+	if rf, ok := ret.Get(1).(func(string, string) error); ok {
+		r1 = rf(path, query)
 	} else {
 		r1 = ret.Error(1)
 	}
@@ -41,19 +35,36 @@ func (_m *IHeimdallClient) Fetch(paths ...string) (*bor.ResponseWithHeight, erro
 	return r0, r1
 }
 
-// FetchWithRetry provides a mock function with given fields: paths
-func (_m *IHeimdallClient) FetchWithRetry(paths ...string) (*bor.ResponseWithHeight, error) {
-	_va := make([]interface{}, len(paths))
-	for _i := range paths {
-		_va[_i] = paths[_i]
+// FetchStateSyncEvents provides a mock function with given fields: fromID, to
+func (_m *IHeimdallClient) FetchStateSyncEvents(fromID uint64, to int64) ([]*bor.EventRecordWithTime, error) {
+	ret := _m.Called(fromID, to)
+
+	var r0 []*bor.EventRecordWithTime
+	if rf, ok := ret.Get(0).(func(uint64, int64) []*bor.EventRecordWithTime); ok {
+		r0 = rf(fromID, to)
+	} else {
+		if ret.Get(0) != nil {
+			r0 = ret.Get(0).([]*bor.EventRecordWithTime)
+		}
 	}
-	var _ca []interface{}
-	_ca = append(_ca, _va...)
-	ret := _m.Called(_ca...)
+
+	var r1 error
+	if rf, ok := ret.Get(1).(func(uint64, int64) error); ok {
+		r1 = rf(fromID, to)
+	} else {
+		r1 = ret.Error(1)
+	}
+
+	return r0, r1
+}
+
+// FetchWithRetry provides a mock function with given fields: path, query
+func (_m *IHeimdallClient) FetchWithRetry(path string, query string) (*bor.ResponseWithHeight, error) {
+	ret := _m.Called(path, query)
 
 	var r0 *bor.ResponseWithHeight
-	if rf, ok := ret.Get(0).(func(...string) *bor.ResponseWithHeight); ok {
-		r0 = rf(paths...)
+	if rf, ok := ret.Get(0).(func(string, string) *bor.ResponseWithHeight); ok {
+		r0 = rf(path, query)
 	} else {
 		if ret.Get(0) != nil {
 			r0 = ret.Get(0).(*bor.ResponseWithHeight)
@@ -61,8 +72,8 @@ func (_m *IHeimdallClient) FetchWithRetry(paths ...string) (*bor.ResponseWithHei
 	}
 
 	var r1 error
-	if rf, ok := ret.Get(1).(func(...string) error); ok {
-		r1 = rf(paths...)
+	if rf, ok := ret.Get(1).(func(string, string) error); ok {
+		r1 = rf(path, query)
 	} else {
 		r1 = ret.Error(1)
 	}

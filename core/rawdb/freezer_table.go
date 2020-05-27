@@ -26,10 +26,10 @@ import (
 	"sync"
 	"sync/atomic"
 
+	"github.com/golang/snappy"
 	"github.com/maticnetwork/bor/common"
 	"github.com/maticnetwork/bor/log"
 	"github.com/maticnetwork/bor/metrics"
-	"github.com/golang/snappy"
 )
 
 var (
