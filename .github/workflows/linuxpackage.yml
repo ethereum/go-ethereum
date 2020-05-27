@@ -93,7 +93,7 @@ jobs:
             "
           fi
 
-          ${args[@]}
+          eval $args
           EOF
 
           fpm -s dir -t deb --deb-user root --deb-group root -n matic-bor -v ${{ env.RELEASE_VERSION }} \
