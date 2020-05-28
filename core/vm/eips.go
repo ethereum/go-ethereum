@@ -100,7 +100,7 @@ func enable2315(jt *JumpTable) {
 	// New opcode
 	jt[BEGINSUB] = operation{
 		execute:     opBeginSub,
-		constantGas: params.JumpdestGas,
+		constantGas: GasQuickStep,
 		minStack:    minStack(0, 0),
 		maxStack:    maxStack(0, 0),
 		valid:       true,
@@ -108,7 +108,7 @@ func enable2315(jt *JumpTable) {
 	// New opcode
 	jt[JUMPSUB] = operation{
 		execute:     opJumpSub,
-		constantGas: GasMidStep,
+		constantGas: GasSlowStep,
 		minStack:    minStack(1, 0),
 		maxStack:    maxStack(1, 0),
 		jumps:       true,
@@ -117,7 +117,7 @@ func enable2315(jt *JumpTable) {
 	// New opcode
 	jt[RETURNSUB] = operation{
 		execute:     opReturnSub,
-		constantGas: GasQuickStep,
+		constantGas: GasFastStep,
 		minStack:    minStack(0, 0),
 		maxStack:    maxStack(0, 0),
 		valid:       true,
