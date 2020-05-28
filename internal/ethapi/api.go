@@ -868,11 +868,16 @@ var _ rpc.DataError = (*revertError)(nil)
 
 type revertError struct {
 	err     string      // The error string
+	code    int         // optional error code
 	errData interface{} // additional data
 }
 
 func (e revertError) Error() string {
 	return e.err
+}
+
+func (e revertError) ErrorCode() int {
+	return e.code
 }
 
 func (e revertError) ErrorData() interface{} {
