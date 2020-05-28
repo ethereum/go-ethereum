@@ -425,8 +425,12 @@ func (db *Database) meter(refresh time.Duration) {
 			merr = err
 			continue
 		}
-		db.dataCacheHitRateGauge.Update(int64(100 * dataCacheHit / (dataCacheHit + dataDiskHit)))
-		db.metaCacheHitRateGauge.Update(int64(100 * metaCacheHit / (metaCacheHit + metaDiskHit)))
+		if dataCacheHit + dataDiskHit != 0 {
+			db.dataCacheHitRateGauge.Update(int64(100 * dataCacheHit / (dataCacheHit + dataDiskHit)))
+		}
+		if metaCacheHit + metaDiskHit != 0 {
+			db.metaCacheHitRateGauge.Update(int64(100 * metaCacheHit / (metaCacheHit + metaDiskHit)))
+		}
 
 		filterStats, err := db.db.GetProperty("leveldb.filterstats")
 		if err != nil {
@@ -439,7 +443,9 @@ func (db *Database) meter(refresh time.Duration) {
 			merr = err
 			continue
 		}
-		db.falsePositiveRateGauge.Update(int64(100 * filterMiss / (filterHit + filterMiss)))
+		if filterHit + filterMiss != 0 {
+			db.falsePositiveRateGauge.Update(int64(100 * filterMiss / (filterHit + filterMiss)))
+		}
 
 		// Sleep a bit, then repeat the stats collection
 		select {
