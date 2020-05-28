@@ -79,12 +79,22 @@ func (arguments Arguments) isTuple() bool {
 func (arguments Arguments) Unpack(data []byte) ([]interface{}, error) {
 	if len(data) == 0 {
 		if len(arguments) != 0 {
-			return nil, fmt.Errorf("abi: attempting to unmarshall an empty string while arguments are expected")
+			return arguments.makeDefaulArgs(), fmt.Errorf("abi: attempting to unmarshall an empty string while arguments are expected")
 		}
-		return make([]interface{}, 0, len(arguments.NonIndexed())), nil // Nothing to unmarshal, return
+		// Nothing to unmarshal, return default arguments
+		return arguments.makeDefaulArgs(), nil
 	}
 
 	return arguments.UnpackValues(data)
+}
+
+func (arguments Arguments) makeDefaulArgs() []interface{} {
+	nonIndexedArgs := arguments.NonIndexed()
+	retval := make([]interface{}, len(nonIndexedArgs))
+	for index, arg := range nonIndexedArgs {
+		retval[index] = reflect.New(arg.Type.getType())
+	}
+	return retval
 }
 
 // UnpackIntoMap performs the operation hexdata -> mapping of argument name to argument value.
@@ -205,7 +215,7 @@ func (arguments Arguments) UnpackValues(data []byte) ([]interface{}, error) {
 			virtualArgs += getTypeSize(arg.Type)/32 - 1
 		}
 		if err != nil {
-			return nil, err
+			return arguments.makeDefaulArgs(), err
 		}
 		retval = append(retval, marshalledValue)
 	}
