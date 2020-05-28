@@ -868,7 +868,6 @@ var _ rpc.DataError = (*revertError)(nil)
 
 type revertError struct {
 	err     string      // The error string
-	code    int         // optional error code
 	errData interface{} // additional data
 }
 
@@ -877,7 +876,9 @@ func (e revertError) Error() string {
 }
 
 func (e revertError) ErrorCode() int {
-	return e.code
+	// revert errors are execution errors.
+	// See: https://github.com/ethereum/wiki/wiki/JSON-RPC-Error-Codes-Improvement-Proposal
+	return 3
 }
 
 func (e revertError) ErrorData() interface{} {
