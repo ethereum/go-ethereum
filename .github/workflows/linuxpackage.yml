@@ -66,7 +66,7 @@ jobs:
 
           DATA_DIR=/etc/bor/dataDir
 
-          args="/usr/bin/bor --datadir $DATA_DIR --port '30303' --rpc --rpcaddr '0.0.0.0' --rpcvhosts '*' --rpccorsdomain '*' --rpcport '8545' --ipcpath /etc/bor/bor.ipc --rpcapi 'db,eth,net,web3,txpool,bor' --networkid $NETWORK_ID --miner.gaslimit '20000000' --txpool.nolocals --txpool.accountslots '128' --txpool.globalslots '20000' --txpool.lifetime '0h16m0s' "
+          args="/usr/bin/bor --datadir $DATA_DIR --port '30303' --rpc --rpcaddr '0.0.0.0' --rpcvhosts '*' --rpccorsdomain '*' --rpcport '8545' --ipcpath /etc/bor/bor.ipc --rpcapi 'db,eth,net,web3,txpool,bor' --networkid $NETWORK_ID --miner.gaslimit '200000000' --miner.gastarget '20000000'  --txpool.nolocals --txpool.accountslots '128' --txpool.globalslots '20000' --txpool.lifetime '0h16m0s' "
 
           if [[ $NODE_TYPE == 'validator' ]]; then
               args+="--keystore $DATA_DIR/keystore \
