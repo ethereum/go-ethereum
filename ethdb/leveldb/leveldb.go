@@ -62,18 +62,21 @@ type Database struct {
 	fn string      // filename for reporting
 	db *leveldb.DB // LevelDB instance
 
-	compTimeMeter      metrics.Meter // Meter for measuring the total time spent in database compaction
-	compReadMeter      metrics.Meter // Meter for measuring the data read during compaction
-	compWriteMeter     metrics.Meter // Meter for measuring the data written during compaction
-	writeDelayNMeter   metrics.Meter // Meter for measuring the write delay number due to database compaction
-	writeDelayMeter    metrics.Meter // Meter for measuring the write delay duration due to database compaction
-	diskSizeGauge      metrics.Gauge // Gauge for tracking the size of all the levels in the database
-	diskReadMeter      metrics.Meter // Meter for measuring the effective amount of data read
-	diskWriteMeter     metrics.Meter // Meter for measuring the effective amount of data written
-	memCompGauge       metrics.Gauge // Gauge for tracking the number of memory compaction
-	level0CompGauge    metrics.Gauge // Gauge for tracking the number of table compaction in level0
-	nonlevel0CompGauge metrics.Gauge // Gauge for tracking the number of table compaction in non0 level
-	seekCompGauge      metrics.Gauge // Gauge for tracking the number of table compaction caused by read opt
+	compTimeMeter          metrics.Meter // Meter for measuring the total time spent in database compaction
+	compReadMeter          metrics.Meter // Meter for measuring the data read during compaction
+	compWriteMeter         metrics.Meter // Meter for measuring the data written during compaction
+	writeDelayNMeter       metrics.Meter // Meter for measuring the write delay number due to database compaction
+	writeDelayMeter        metrics.Meter // Meter for measuring the write delay duration due to database compaction
+	diskSizeGauge          metrics.Gauge // Gauge for tracking the size of all the levels in the database
+	diskReadMeter          metrics.Meter // Meter for measuring the effective amount of data read
+	diskWriteMeter         metrics.Meter // Meter for measuring the effective amount of data written
+	memCompGauge           metrics.Gauge // Gauge for tracking the number of memory compaction
+	level0CompGauge        metrics.Gauge // Gauge for tracking the number of table compaction in level0
+	nonlevel0CompGauge     metrics.Gauge // Gauge for tracking the number of table compaction in non0 level
+	seekCompGauge          metrics.Gauge // Gauge for tracking the number of table compaction caused by read opt
+	dataCacheHitRateGauge  metrics.Gauge // Gauge for tracking the user data cache hit rate by read opt
+	metaCacheHitRateGauge  metrics.Gauge // Gauge for tracking the meta data cache hit rate by read opt
+	falsePositiveRateGauge metrics.Gauge // Gauge for tracking the false positive rate from bloom filter
 
 	quitLock sync.Mutex      // Mutex protecting the quit channel access
 	quitChan chan chan error // Quit channel to stop the metrics collection before closing the database
@@ -97,10 +100,12 @@ func New(file string, cache int, handles int, namespace string) (*Database, erro
 	// Open the db and recover any potential corruptions
 	db, err := leveldb.OpenFile(file, &opt.Options{
 		OpenFilesCacheCapacity: handles,
-		BlockCacheCapacity:     cache / 2 * opt.MiB,
+		MetadataCacheCapacity:  cache / 2 * opt.MiB,
 		WriteBuffer:            cache / 4 * opt.MiB, // Two of these are used internally
 		Filter:                 filter.NewBloomFilter(10),
 		DisableSeeksCompaction: true,
+		CacheEvictRemoved:      true,
+		CacheAddCreated:        true,
 	})
 	if _, corrupted := err.(*errors.ErrCorrupted); corrupted {
 		db, err = leveldb.RecoverFile(file, nil)
@@ -127,6 +132,9 @@ func New(file string, cache int, handles int, namespace string) (*Database, erro
 	ldb.level0CompGauge = metrics.NewRegisteredGauge(namespace+"compact/level0", nil)
 	ldb.nonlevel0CompGauge = metrics.NewRegisteredGauge(namespace+"compact/nonlevel0", nil)
 	ldb.seekCompGauge = metrics.NewRegisteredGauge(namespace+"compact/seek", nil)
+	ldb.dataCacheHitRateGauge = metrics.NewRegisteredGauge(namespace+"read/cache/data", nil)
+	ldb.metaCacheHitRateGauge = metrics.NewRegisteredGauge(namespace+"read/cache/meta", nil)
+	ldb.falsePositiveRateGauge = metrics.NewRegisteredGauge(namespace+"read/filter/fpr", nil)
 
 	// Start up the metrics gathering and return
 	go ldb.meter(metricsGatheringInterval)
@@ -397,6 +405,41 @@ func (db *Database) meter(refresh time.Duration) {
 		db.level0CompGauge.Update(int64(level0Comp))
 		db.nonlevel0CompGauge.Update(int64(nonLevel0Comp))
 		db.seekCompGauge.Update(int64(seekComp))
+
+		cacheStats, err := db.db.GetProperty("leveldb.cachestats")
+		if err != nil {
+			db.log.Error("Failed to read database cache stats", "err", err)
+			merr = err
+			continue
+		}
+		var (
+			dataCacheHit uint64
+			dataDiskHit  uint64
+			metaCacheHit uint64
+			metaDiskHit  uint64
+			filterHit    uint64
+			filterMiss   uint64
+		)
+		if n, err := fmt.Sscanf(cacheStats, "DataCacheHit:%d DataDiskHit:%d MetaCacheHit:%d MetaDiskHit:%d", &dataCacheHit, &dataDiskHit, &metaCacheHit, &metaDiskHit); n != 4 || err != nil {
+			db.log.Error("Cache stats not found")
+			merr = err
+			continue
+		}
+		db.dataCacheHitRateGauge.Update(int64(100 * dataCacheHit / (dataCacheHit + dataDiskHit)))
+		db.metaCacheHitRateGauge.Update(int64(100 * metaCacheHit / (metaCacheHit + metaDiskHit)))
+
+		filterStats, err := db.db.GetProperty("leveldb.filterstats")
+		if err != nil {
+			db.log.Error("Failed to read database filter stats", "err", err)
+			merr = err
+			continue
+		}
+		if n, err := fmt.Sscanf(filterStats, "Hit:%d, Miss:%d", &filterHit, &filterMiss); n != 2 || err != nil {
+			db.log.Error("Filter stats not found")
+			merr = err
+			continue
+		}
+		db.falsePositiveRateGauge.Update(int64(100 * filterMiss / (filterHit + filterMiss)))
 
 		// Sleep a bit, then repeat the stats collection
 		select {
