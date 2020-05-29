@@ -299,6 +299,9 @@ func rawLeafHPRLP(key, val []byte, leaf bool) []byte {
 		// add length prefix if needed
 		if key_header_len == 1 {
 			payload[1] = byte(1 + len(key)/2)
+			if len(key) > 1 || key[0] > 128 {
+				payload[1] += 128
+			}
 			pos++
 		}
 
@@ -340,6 +343,14 @@ func rawLeafHPRLP(key, val []byte, leaf bool) []byte {
 	// no header is needed.
 	if pos == 2 {
 		return payload[1:pos]
+	}
+
+	// If the payload reaches exactly 32 bytes, then
+	// it needs to be hashed.
+	if pos == 32 {
+		d := sha3.NewLegacyKeccak256()
+		d.Write(payload[:pos])
+		return d.Sum(nil)
 	}
 
 	return payload[:pos]
@@ -406,7 +417,7 @@ func writeHPRLP(writer io.Writer, key, val []byte, leaf bool) {
 	payloadSize := int(keyByteSize) + (len(header) - headerPos - 1) +
 		valHeaderLen + len(val) /* value + rlp header */
 	var start int
-	if payloadSize > 56 {
+	if payloadSize >= 56 {
 		header[headerPos] = byte(payloadSize)
 		headerPos--
 		header[headerPos] = 0xf8
@@ -513,8 +524,8 @@ func (st *ReStackTrie) hash() []byte {
 		writeHPRLP(d, st.key, ch, false)
 		st.children[0] = nil // Reclaim mem from subtree
 	case leafNode:
-		if (len(st.key)/2)+1+len(st.val) < 29 {
-			return rawLeafHPRLP(st.key, st.val, false)
+		if (len(st.key)/2)+1+len(st.val) < 30 {
+			return rawLeafHPRLP(st.key, st.val, true)
 		}
 		writeHPRLP(d, st.key, st.val, true)
 	case emptyNode:
