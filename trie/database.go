@@ -54,6 +54,8 @@ var (
 	memcacheCommitTimeTimer  = metrics.NewRegisteredResettingTimer("trie/memcache/commit/time", nil)
 	memcacheCommitNodesMeter = metrics.NewRegisteredMeter("trie/memcache/commit/nodes", nil)
 	memcacheCommitSizeMeter  = metrics.NewRegisteredMeter("trie/memcache/commit/size", nil)
+
+	diskReadTimeTimer = metrics.NewRegisteredTimer("trie/disk/read/time", nil)
 )
 
 // secureKeyPrefix is the database key prefix used to store trie node preimages.
@@ -384,10 +386,12 @@ func (db *Database) node(hash common.Hash) node {
 	memcacheDirtyMissMeter.Mark(1)
 
 	// Content unavailable in memory, attempt to retrieve from disk
+	ds := time.Now()
 	enc, err := db.diskdb.Get(hash[:])
 	if err != nil || enc == nil {
 		return nil
 	}
+	diskReadTimeTimer.UpdateSince(ds)
 	if db.cleans != nil {
 		db.cleans.Set(hash[:], enc)
 		memcacheCleanMissMeter.Mark(1)
@@ -424,8 +428,10 @@ func (db *Database) Node(hash common.Hash) ([]byte, error) {
 	memcacheDirtyMissMeter.Mark(1)
 
 	// Content unavailable in memory, attempt to retrieve from disk
+	ds := time.Now()
 	enc, err := db.diskdb.Get(hash[:])
 	if err == nil && enc != nil {
+		diskReadTimeTimer.UpdateSince(ds)
 		if db.cleans != nil {
 			db.cleans.Set(hash[:], enc)
 			memcacheCleanMissMeter.Mark(1)
