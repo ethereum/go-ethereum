@@ -107,18 +107,21 @@ const (
 
 // 0x50 range - 'storage' and execution.
 const (
-	POP OpCode = 0x50 + iota
-	MLOAD
-	MSTORE
-	MSTORE8
-	SLOAD
-	SSTORE
-	JUMP
-	JUMPI
-	PC
-	MSIZE
-	GAS
-	JUMPDEST
+	POP       OpCode = 0x50
+	MLOAD     OpCode = 0x51
+	MSTORE    OpCode = 0x52
+	MSTORE8   OpCode = 0x53
+	SLOAD     OpCode = 0x54
+	SSTORE    OpCode = 0x55
+	JUMP      OpCode = 0x56
+	JUMPI     OpCode = 0x57
+	PC        OpCode = 0x58
+	MSIZE     OpCode = 0x59
+	GAS       OpCode = 0x5a
+	JUMPDEST  OpCode = 0x5b
+	BEGINSUB  OpCode = 0x5c
+	RETURNSUB OpCode = 0x5d
+	JUMPSUB   OpCode = 0x5e
 )
 
 // 0x60 range.
@@ -196,13 +199,6 @@ const (
 	LOG2
 	LOG3
 	LOG4
-)
-
-// 0xb0 range - subroutine ops.
-const (
-	BEGINSUB  OpCode = 0xb2
-	JUMPSUB   OpCode = 0xb3
-	RETURNSUB OpCode = 0xb7
 )
 
 // unofficial opcodes used for parsing.

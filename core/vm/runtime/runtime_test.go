@@ -28,6 +28,7 @@ import (
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/consensus"
 	"github.com/ethereum/go-ethereum/core"
+	"github.com/ethereum/go-ethereum/core/asm"
 	"github.com/ethereum/go-ethereum/core/rawdb"
 	"github.com/ethereum/go-ethereum/core/state"
 	"github.com/ethereum/go-ethereum/core/types"
@@ -465,7 +466,6 @@ func TestReturnCases(t *testing.T) {
 		byte(vm.BEGINSUB),
 		byte(vm.RETURNSUB),
 	}, nil, cfg)
-
 }
 
 // TestEipExampleCases contains various testcases that are used for the
@@ -479,9 +479,20 @@ func TestEipExampleCases(t *testing.T) {
 		},
 	}
 	prettyPrint := func(comment string, code []byte) {
-		fmt.Printf("%v\nBytecode: `0x%x`\n",
+		instrs := make([]string, 0)
+		it := asm.NewInstructionIterator(code)
+		for it.Next() {
+			if it.Arg() != nil && 0 < len(it.Arg()) {
+				instrs = append(instrs, fmt.Sprintf("%v 0x%x", it.Op(), it.Arg()))
+			} else {
+				instrs = append(instrs, fmt.Sprintf("%v", it.Op()))
+			}
+		}
+		ops := strings.Join(instrs, ", ")
+
+		fmt.Printf("%v\nBytecode: `0x%x` (`%v`)\n",
 			comment,
-			code)
+			code, ops)
 		Execute(code, nil, cfg)
 	}
 
