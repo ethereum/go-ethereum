@@ -105,7 +105,7 @@ func testGappedAnnouncements(t *testing.T, protocol int) {
 
 	// Create connected peer pair.
 	c.handler.fetcher.noAnnounce = true // Ignore the first announce from peer which can trigger a resync.
-	p1, _, err := newTestPeerPair("peer", protocol, s.handler, c.handler)
+	peer, _, err := newTestPeerPair("peer", protocol, s.handler, c.handler)
 	if err != nil {
 		t.Fatalf("Failed to create peer pair %v", err)
 	}
@@ -121,30 +121,38 @@ func testGappedAnnouncements(t *testing.T, protocol int) {
 
 	// Sign the announcement if necessary.
 	announce := announceData{hash, number, td, 0, nil}
-	if p1.cpeer.announceType == announceTypeSigned {
+	if peer.cpeer.announceType == announceTypeSigned {
 		announce.sign(s.handler.server.privateKey)
 	}
-	p1.cpeer.sendAnnounce(announce)
+	peer.cpeer.sendAnnounce(announce)
 
 	<-done // Wait syncing
 	verifyChainHeight(t, c.handler.fetcher, 4)
 
 	// Send a reorged announcement
+	var newAnno = make(chan struct{}, 1)
+	c.handler.fetcher.noAnnounce = true
+	c.handler.fetcher.newAnnounce = func(*serverPeer, *announceData) {
+		newAnno <- struct{}{}
+	}
 	blocks, _ := core.GenerateChain(rawdb.ReadChainConfig(s.db, s.backend.Blockchain().Genesis().Hash()), s.backend.Blockchain().GetBlockByNumber(3),
 		ethash.NewFaker(), s.db, 2, func(i int, gen *core.BlockGen) {
 			gen.OffsetTime(-9) // higher block difficulty
 		})
 	s.backend.Blockchain().InsertChain(blocks)
+	<-newAnno
+	c.handler.fetcher.noAnnounce = false
+	c.handler.fetcher.newAnnounce = nil
 
 	latest = blocks[len(blocks)-1].Header()
 	hash, number = latest.Hash(), latest.Number.Uint64()
 	td = rawdb.ReadTd(s.db, hash, number)
 
 	announce = announceData{hash, number, td, 1, nil}
-	if p1.cpeer.announceType == announceTypeSigned {
+	if peer.cpeer.announceType == announceTypeSigned {
 		announce.sign(s.handler.server.privateKey)
 	}
-	p1.cpeer.sendAnnounce(announce)
+	peer.cpeer.sendAnnounce(announce)
 
 	<-done // Wait syncing
 	verifyChainHeight(t, c.handler.fetcher, 5)
@@ -219,8 +227,7 @@ func testTrustedAnnouncement(t *testing.T, protocol int) {
 		}
 		verifyChainHeight(t, c.handler.fetcher, expected)
 	}
-	check([]uint64{1}, 1, func() { <-newHead })    // Sequential announcements
-	check([]uint64{4}, 4, func() { <-newHead })    // ULC-style light syncing, rollback untrusted headers
-	check([]uint64{6, 8}, 8, func() { <-newHead }) // ULC-style light syncing, keep the later trusted announces.
-	check([]uint64{10}, 10, func() { <-newHead })  // Sync the whole chain.
+	check([]uint64{1}, 1, func() { <-newHead })   // Sequential announcements
+	check([]uint64{4}, 4, func() { <-newHead })   // ULC-style light syncing, rollback untrusted headers
+	check([]uint64{10}, 10, func() { <-newHead }) // Sync the whole chain.
 }

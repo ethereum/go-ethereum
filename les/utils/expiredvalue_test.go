@@ -119,32 +119,36 @@ func TestExpiredValueSubtraction(t *testing.T) {
 
 func TestLinearExpiredValue(t *testing.T) {
 	var cases = []struct {
-		value      LinearExpiredValue
-		timeOffset uint64
-		expect     uint64
+		value     LinearExpiredValue
+		timestamp uint64
+		expect    uint64
 	}{
 		{LinearExpiredValue{
 			Offset: 0,
 			Val:    0,
+			Rate:   1,
 		}, 0, 0},
 
 		{LinearExpiredValue{
 			Offset: 1,
 			Val:    1,
+			Rate:   1,
 		}, 0, 1},
 
 		{LinearExpiredValue{
 			Offset: 1,
 			Val:    1,
+			Rate:   1,
 		}, 2, 0},
 
 		{LinearExpiredValue{
 			Offset: 1,
 			Val:    1,
+			Rate:   1,
 		}, 3, 0},
 	}
 	for _, c := range cases {
-		if value := c.value.Value(c.timeOffset); value != c.expect {
+		if value := c.value.Value(c.timestamp); value != c.expect {
 			t.Fatalf("Value mismatch, want=%d, got=%d", c.expect, value)
 		}
 	}
@@ -152,33 +156,37 @@ func TestLinearExpiredValue(t *testing.T) {
 
 func TestLinearExpiredAddition(t *testing.T) {
 	var cases = []struct {
-		value      LinearExpiredValue
-		amount     int64
-		timeOffset uint64
-		expect     uint64
+		value     LinearExpiredValue
+		amount    int64
+		timestamp uint64
+		expect    uint64
 	}{
 		{LinearExpiredValue{
 			Offset: 0,
 			Val:    0,
+			Rate:   1,
 		}, -1, 0, 0},
 
 		{LinearExpiredValue{
 			Offset: 1,
 			Val:    1,
+			Rate:   1,
 		}, -1, 0, 0},
 
 		{LinearExpiredValue{
 			Offset: 1,
 			Val:    2,
+			Rate:   1,
 		}, -1, 2, 0},
 
 		{LinearExpiredValue{
 			Offset: 1,
 			Val:    2,
+			Rate:   1,
 		}, -2, 2, 0},
 	}
 	for _, c := range cases {
-		if value := c.value.Add(c.amount, c.timeOffset); value != c.expect {
+		if value := c.value.Add(c.amount, c.timestamp); value != c.expect {
 			t.Fatalf("Value mismatch, want=%d, got=%d", c.expect, value)
 		}
 	}

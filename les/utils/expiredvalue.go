@@ -17,9 +17,8 @@
 package utils
 
 import (
-	"math"
-
 	"github.com/ethereum/go-ethereum/common/mclock"
+	"math"
 )
 
 // ExpiredValue is a scalar value that is continuously expired (decreased
@@ -129,13 +128,15 @@ func (e *ExpiredValue) SubExp(a ExpiredValue) {
 type LinearExpiredValue struct {
 	Offset uint64 // The latest time offset
 	Val    uint64 // The remaining value, can never be negative
+	Rate   uint64 `rlp:"-"` // Expiration rate(by nanosecond), will ignored by RLP
 }
 
 // value calculates the value at the given moment. This function always has the
-// assumption that the given time offset shouldn't less than the recorded one.
-func (e LinearExpiredValue) Value(timeOffset uint64) uint64 {
-	if e.Offset < timeOffset {
-		diff := timeOffset - e.Offset
+// assumption that the given timestamp shouldn't less than the recorded one.
+func (e LinearExpiredValue) Value(timestamp uint64) uint64 {
+	offset := timestamp / e.Rate
+	if e.Offset < offset {
+		diff := offset - e.Offset
 		if e.Val >= diff {
 			e.Val -= diff
 		} else {
@@ -146,16 +147,17 @@ func (e LinearExpiredValue) Value(timeOffset uint64) uint64 {
 }
 
 // add adds a signed value at the given moment. This function always has the
-// assumption that the given time offset shouldn't less than the recorded one.
-func (e *LinearExpiredValue) Add(amount int64, timeOffset uint64) uint64 {
-	if e.Offset < timeOffset {
-		diff := timeOffset - e.Offset
+// assumption that the given timestamp shouldn't less than the recorded one.
+func (e *LinearExpiredValue) Add(amount int64, timestamp uint64) uint64 {
+	offset := timestamp / e.Rate
+	if e.Offset < offset {
+		diff := offset - e.Offset
 		if e.Val >= diff {
 			e.Val -= diff
 		} else {
 			e.Val = 0
 		}
-		e.Offset = timeOffset
+		e.Offset = offset
 	}
 	if amount < 0 && uint64(-amount) > e.Val {
 		e.Val = 0
