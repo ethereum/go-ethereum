@@ -40,8 +40,9 @@ const (
 // ODR system to ensure that we only request data related to a certain block from peers who have already processed
 // and announced that block.
 type lightFetcher struct {
-	handler *clientHandler
-	chain   *light.LightChain
+	handler            *clientHandler
+	chain              *light.LightChain
+	softRequestTimeout func() time.Duration
 
 	lock            sync.Mutex // lock protects access to the fetcher's internal state variables except sent requests
 	maxConfirmedTd  *big.Int
@@ -109,18 +110,19 @@ type fetchResponse struct {
 }
 
 // newLightFetcher creates a new light fetcher
-func newLightFetcher(h *clientHandler) *lightFetcher {
+func newLightFetcher(h *clientHandler, softRequestTimeout func() time.Duration) *lightFetcher {
 	f := &lightFetcher{
-		handler:        h,
-		chain:          h.backend.blockchain,
-		peers:          make(map[*serverPeer]*fetcherPeerInfo),
-		deliverChn:     make(chan fetchResponse, 100),
-		requested:      make(map[uint64]fetchRequest),
-		timeoutChn:     make(chan uint64),
-		requestTrigger: make(chan struct{}, 1),
-		syncDone:       make(chan *serverPeer),
-		closeCh:        make(chan struct{}),
-		maxConfirmedTd: big.NewInt(0),
+		handler:            h,
+		chain:              h.backend.blockchain,
+		peers:              make(map[*serverPeer]*fetcherPeerInfo),
+		deliverChn:         make(chan fetchResponse, 100),
+		requested:          make(map[uint64]fetchRequest),
+		timeoutChn:         make(chan uint64),
+		requestTrigger:     make(chan struct{}, 1),
+		syncDone:           make(chan *serverPeer),
+		closeCh:            make(chan struct{}),
+		maxConfirmedTd:     big.NewInt(0),
+		softRequestTimeout: softRequestTimeout,
 	}
 	h.backend.peers.subscribe(f)
 
@@ -163,7 +165,7 @@ func (f *lightFetcher) syncLoop() {
 						f.lock.Unlock()
 					} else {
 						go func() {
-							time.Sleep(softRequestTimeout)
+							time.Sleep(f.softRequestTimeout())
 							f.reqMu.Lock()
 							req, ok := f.requested[reqID]
 							if ok {
@@ -187,7 +189,6 @@ func (f *lightFetcher) syncLoop() {
 			}
 			f.reqMu.Unlock()
 			if ok {
-				f.handler.backend.serverPool.adjustResponseTime(req.peer.poolEntry, time.Duration(mclock.Now()-req.sent), true)
 				req.peer.Log().Debug("Fetching data timed out hard")
 				go f.handler.removePeer(req.peer.id)
 			}
@@ -201,9 +202,6 @@ func (f *lightFetcher) syncLoop() {
 				delete(f.requested, resp.reqID)
 			}
 			f.reqMu.Unlock()
-			if ok {
-				f.handler.backend.serverPool.adjustResponseTime(req.peer.poolEntry, time.Duration(mclock.Now()-req.sent), req.timeout)
-			}
 			f.lock.Lock()
 			if !ok || !(f.syncing || f.processResponse(req, resp)) {
 				resp.peer.Log().Debug("Failed processing response")
@@ -879,12 +877,10 @@ func (f *lightFetcher) checkUpdateStats(p *serverPeer, newEntry *updateStatsEntr
 		fp.firstUpdateStats = newEntry
 	}
 	for fp.firstUpdateStats != nil && fp.firstUpdateStats.time <= now-mclock.AbsTime(blockDelayTimeout) {
-		f.handler.backend.serverPool.adjustBlockDelay(p.poolEntry, blockDelayTimeout)
 		fp.firstUpdateStats = fp.firstUpdateStats.next
 	}
 	if fp.confirmedTd != nil {
 		for fp.firstUpdateStats != nil && fp.firstUpdateStats.td.Cmp(fp.confirmedTd) <= 0 {
-			f.handler.backend.serverPool.adjustBlockDelay(p.poolEntry, time.Duration(now-fp.firstUpdateStats.time))
 			fp.firstUpdateStats = fp.firstUpdateStats.next
 		}
 	}

@@ -26,7 +26,7 @@ import (
 	"github.com/ethereum/go-ethereum/ethdb"
 )
 
-// Iterator is a iterator to step over all the accounts or the specific
+// Iterator is an iterator to step over all the accounts or the specific
 // storage in a snapshot which may or may not be composed of multiple layers.
 type Iterator interface {
 	// Next steps the iterator forward one element, returning false if exhausted,
@@ -47,7 +47,7 @@ type Iterator interface {
 	Release()
 }
 
-// AccountIterator is a iterator to step over all the accounts in a snapshot,
+// AccountIterator is an iterator to step over all the accounts in a snapshot,
 // which may or may not be composed of multiple layers.
 type AccountIterator interface {
 	Iterator
@@ -57,7 +57,7 @@ type AccountIterator interface {
 	Account() []byte
 }
 
-// StorageIterator is a iterator to step over the specific storage in a snapshot,
+// StorageIterator is an iterator to step over the specific storage in a snapshot,
 // which may or may not be composed of multiple layers.
 type StorageIterator interface {
 	Iterator
@@ -250,7 +250,7 @@ type diffStorageIterator struct {
 func (dl *diffLayer) StorageIterator(account common.Hash, seek common.Hash) (StorageIterator, bool) {
 	// Create the storage for this account even it's marked
 	// as destructed. The iterator is for the new one which
-	// just has the same adddress as the deleted one.
+	// just has the same address as the deleted one.
 	hashes, destructed := dl.StorageList(account)
 	index := sort.Search(len(hashes), func(i int) bool {
 		return bytes.Compare(seek[:], hashes[i][:]) <= 0

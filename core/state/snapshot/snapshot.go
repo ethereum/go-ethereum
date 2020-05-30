@@ -330,7 +330,7 @@ func (t *Tree) Cap(root common.Hash, layers int) error {
 			remove(root)
 		}
 	}
-	// If the disk layer was modified, regenerate all the cummulative blooms
+	// If the disk layer was modified, regenerate all the cumulative blooms
 	if persisted != nil {
 		var rebloom func(root common.Hash)
 		rebloom = func(root common.Hash) {
