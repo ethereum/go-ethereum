@@ -335,7 +335,7 @@ func accountUpdate(ctx *cli.Context) error {
 	for _, addr := range ctx.Args() {
 		//for non-interactive use reading old password from first line and new password from second line
 		account, oldPassword := unlockAccount(ks, addr, 0, utils.MakePasswordList(ctx))
-		newPassword := getPassPhrase("Please give a new password. Do not forget this password.", true, 1,utils.MakePasswordList(ctx))
+		newPassword := getPassPhrase("Please give a new password. Do not forget this password.", true, 1, utils.MakePasswordList(ctx))
 		if err := ks.Update(account, oldPassword, newPassword); err != nil {
 			utils.Fatalf("Could not update the account: %v", err)
 		}
