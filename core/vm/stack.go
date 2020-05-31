@@ -30,7 +30,7 @@ type Stack struct {
 }
 
 func newstack() *Stack {
-	return &Stack{data: make([]uint256.Int, 0, 1024)}
+	return &Stack{data: make([]uint256.Int, 0, 16)}
 }
 
 // Data returns the underlying uint256.Int array.
