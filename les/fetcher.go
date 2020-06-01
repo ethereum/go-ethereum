@@ -371,6 +371,7 @@ func (f *lightFetcher) mainloop() {
 				// Discard the entire packet no matter it's a timeout response or unexpected one.
 				resp.remain <- resp.headers
 			}
+			f.rescheduleTimer(fetching, requestTimer)
 
 		case ev := <-headCh:
 			// Short circuit if we are still syncing.
@@ -516,6 +517,7 @@ func (f *lightFetcher) deliverHeaders(peer *serverPeer, reqid uint64, headers []
 func (f *lightFetcher) rescheduleTimer(requests map[uint64]*request, timer *time.Timer) {
 	// Short circuit if no inflight requests
 	if len(requests) == 0 {
+		timer.Stop()
 		return
 	}
 	// Otherwise find the earliest expiring request
