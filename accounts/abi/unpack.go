@@ -110,7 +110,7 @@ func ReadFixedBytes(t Type, word []byte) (interface{}, error) {
 		return nil, fmt.Errorf("abi: invalid type in call to make fixed byte array")
 	}
 	// convert
-	array := reflect.New(t.getType()).Elem()
+	array := reflect.New(t.GetType()).Elem()
 
 	reflect.Copy(array, reflect.ValueOf(word[0:t.Size]))
 	return array.Interface(), nil
@@ -131,10 +131,10 @@ func forEachUnpack(t Type, output []byte, start, size int) (interface{}, error) 
 
 	if t.T == SliceTy {
 		// declare our slice
-		refSlice = reflect.MakeSlice(t.getType(), size, size)
+		refSlice = reflect.MakeSlice(t.GetType(), size, size)
 	} else if t.T == ArrayTy {
 		// declare our array
-		refSlice = reflect.New(t.getType()).Elem()
+		refSlice = reflect.New(t.GetType()).Elem()
 	} else {
 		return nil, fmt.Errorf("abi: invalid type in array/slice unpacking stage")
 	}
@@ -158,7 +158,7 @@ func forEachUnpack(t Type, output []byte, start, size int) (interface{}, error) 
 }
 
 func forTupleUnpack(t Type, output []byte) (interface{}, error) {
-	retval := reflect.New(t.getType()).Elem()
+	retval := reflect.New(t.GetType()).Elem()
 	virtualArgs := 0
 	for index, elem := range t.TupleElems {
 		marshalledValue, err := toGoType((index+virtualArgs)*32, *elem, output)
