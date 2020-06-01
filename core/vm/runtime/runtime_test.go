@@ -722,3 +722,83 @@ func BenchmarkSimpleLoop(b *testing.B) {
 	//benchmarkNonModifyingCode(10000000, staticCallIdentity, "staticcall-identity-10M", b)
 	//benchmarkNonModifyingCode(10000000, loopingCode, "loop-10M", b)
 }
+
+// BenchmarkPushPopLoop is a simple loop which does PUSH1..PUSH32 within the loop
+func BenchmarkPushPopLoop(b *testing.B) {
+
+	code := []byte{
+		byte(vm.JUMPDEST),
+	}
+	// ADD PUSH1 .. PUSH32 plus pushargs
+	for i := 0; i < 32; i++ {
+		code = append(code, byte(vm.PUSH1)+byte(i))
+		for a := 0; a < i+1; a++ {
+			code = append(code, byte(a))
+		}
+	}
+	// Now pop it off
+	for i := 0; i < 32; i++ {
+		code = append(code, byte(vm.POP))
+	}
+	// jump target
+	code = append(code, byte(vm.PUSH1), 0, byte(vm.JUMP))
+	//tracer := vm.NewJSONLogger(nil, os.Stdout)
+	//Execute(code, nil, &Config{
+	//	EVMConfig: vm.Config{
+	//		Debug:  true,
+	//		Tracer: tracer,
+	//	}})
+	//
+
+	// BenchmarkPushPopLoop-6   	       8	 145173286 ns/op	   42821 B/op	      73 allocs/op
+	// with leaner push:
+	//	   BenchmarkPushPopLoop-6   	       7	 144822711 ns/op	   42833 B/op	      74 allocs/op
+	// Generated (compiled) code
+	// 	   BenchmarkPushPopLoop-6   	      12	  83375944 ns/op	   42622 B/op	      72 allocs/op
+	// With further improvements in compiler hints:
+	//     BenchmarkPushPopLoop-6   	      16	  68827841 ns/op	   42653 B/op	      71 allocs/op
+	cfg := &Config{}
+	setDefaults(cfg)
+	cfg.GasLimit = 10000000
+	b.ReportAllocs()
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		Execute(code, nil, cfg)
+	}
+
+}
+
+// BenchmarkSwapDupLoop is a simple loop which does a lot of SWAP and DUP within the loop
+func BenchmarkSwapDupLoop(b *testing.B) {
+
+	code := []byte{
+		byte(vm.JUMPDEST),
+		byte(vm.PUSH1), 0xef,
+	}
+	// ADD DUP1 .. DUP16 plus pushargs
+	for i := 0; i < 16; i++ {
+		code = append(code, byte(vm.DUP1)+byte(i))
+		code = append(code, byte(vm.SWAP1)+byte(i))
+	}
+
+	for i := 0; i < 16; i++ {
+		code = append(code, byte(vm.DUP1)+byte(i))
+		code = append(code, byte(vm.SWAP1)+byte(i))
+	}
+
+	// Now pop it off
+	for i := 0; i < 33; i++ {
+		code = append(code, byte(vm.POP))
+	}
+	// jump target
+	code = append(code, byte(vm.PUSH1), 0, byte(vm.JUMP))
+
+	cfg := &Config{}
+	setDefaults(cfg)
+	cfg.GasLimit = 10000000
+	b.ReportAllocs()
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		Execute(code, nil, cfg)
+	}
+}
