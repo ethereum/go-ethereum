@@ -54,11 +54,14 @@ const (
 	systemRewardPercent = 4 // it means 1/2^4 = 1/16 percentage of gas fee incoming will be distributed to system
 
 	// genesis contracts
-	ValidatorContract    = "0x0000000000000000000000000000000000001000"
-	SlashContract        = "0x0000000000000000000000000000000000001001"
-	SystemRewardContract = "0x0000000000000000000000000000000000001002"
-	LightClientContract  = "0x0000000000000000000000000000000000001003"
-	RelayerHubContract   = "0x0000000000000000000000000000000000001006"
+	ValidatorContract          = "0x0000000000000000000000000000000000001000"
+	SlashContract              = "0x0000000000000000000000000000000000001001"
+	SystemRewardContract       = "0x0000000000000000000000000000000000001002"
+	LightClientContract        = "0x0000000000000000000000000000000000001003"
+	TokenHubContract           = "0x0000000000000000000000000000000000001004"
+	RelayerIncentivizeContract = "0x0000000000000000000000000000000000001005"
+	RelayerHubContract         = "0x0000000000000000000000000000000000001006"
+	GovHubContract             = "0x0000000000000000000000000000000000001007"
 )
 
 var (
@@ -69,11 +72,14 @@ var (
 	maxSystemBalance = new(big.Int).Mul(big.NewInt(100), big.NewInt(params.Ether))
 
 	systemContracts = map[common.Address]bool{
-		common.HexToAddress(ValidatorContract):    true,
-		common.HexToAddress(SlashContract):        true,
-		common.HexToAddress(SystemRewardContract): true,
-		common.HexToAddress(LightClientContract):  true,
-		common.HexToAddress(RelayerHubContract):   true,
+		common.HexToAddress(ValidatorContract):          true,
+		common.HexToAddress(SlashContract):              true,
+		common.HexToAddress(SystemRewardContract):       true,
+		common.HexToAddress(LightClientContract):        true,
+		common.HexToAddress(RelayerHubContract):         true,
+		common.HexToAddress(GovHubContract):             true,
+		common.HexToAddress(TokenHubContract):           true,
+		common.HexToAddress(RelayerIncentivizeContract): true,
 	}
 )
 
@@ -265,7 +271,7 @@ func (p *Parlia) IsSystemTransaction(tx *types.Transaction, header *types.Header
 	if err != nil {
 		return false, errors.New("UnAuthorized transaction")
 	}
-	if sender == header.Coinbase && isToSystemContract(*tx.To()) {
+	if sender == header.Coinbase && isToSystemContract(*tx.To()) && tx.GasPrice().Cmp(big.NewInt(0)) == 0 {
 		return true, nil
 	}
 	return false, nil
@@ -975,7 +981,7 @@ func (p *Parlia) initContract(state *state.StateDB, header *types.Header, chain 
 	// method
 	method := "init"
 	// contracts
-	contracts := []string{ValidatorContract, SlashContract, LightClientContract, RelayerHubContract}
+	contracts := []string{ValidatorContract, SlashContract, LightClientContract, RelayerHubContract, GovHubContract, TokenHubContract, RelayerIncentivizeContract}
 	// get packed data
 	data, err := p.validatorSetABI.Pack(method)
 	if err != nil {

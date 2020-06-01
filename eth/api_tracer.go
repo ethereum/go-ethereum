@@ -502,12 +502,13 @@ func (api *PrivateDebugAPI) traceBlock(ctx context.Context, block *types.Block, 
 		// Generate the next state snapshot fast without tracing
 		msg, _ := tx.AsMessage(signer)
 		vmctx := core.NewEVMContext(msg, block.Header(), api.eth.blockchain, nil)
-		if posa, ok := api.eth.engine.(consensus.PoSA); ok && msg.From() == block.Header().Coinbase &&
-			posa.IsSystemContract(msg.To()) {
-			balance := statedb.GetBalance(consensus.SystemAddress)
-			if balance.Cmp(common.Big0) > 0 {
-				statedb.SetBalance(consensus.SystemAddress, big.NewInt(0))
-				statedb.AddBalance(block.Header().Coinbase, balance)
+		if posa, ok := api.eth.engine.(consensus.PoSA); ok {
+			if isSystem, _ := posa.IsSystemTransaction(tx, block.Header()); isSystem {
+				balance := statedb.GetBalance(consensus.SystemAddress)
+				if balance.Cmp(common.Big0) > 0 {
+					statedb.SetBalance(consensus.SystemAddress, big.NewInt(0))
+					statedb.AddBalance(block.Header().Coinbase, balance)
+				}
 			}
 		}
 		vmenv := vm.NewEVM(vmctx, statedb, api.eth.blockchain.Config(), vm.Config{})
@@ -767,7 +768,7 @@ func (api *PrivateDebugAPI) traceTx(ctx context.Context, message core.Message, v
 	// Run the transaction with tracing enabled.
 	vmenv := vm.NewEVM(vmctx, statedb, api.eth.blockchain.Config(), vm.Config{Debug: true, Tracer: tracer})
 	if posa, ok := api.eth.engine.(consensus.PoSA); ok && message.From() == vmctx.Coinbase &&
-		posa.IsSystemContract(message.To()) {
+		posa.IsSystemContract(message.To()) && message.GasPrice().Cmp(big.NewInt(0)) == 0 {
 		balance := statedb.GetBalance(consensus.SystemAddress)
 		if balance.Cmp(common.Big0) > 0 {
 			statedb.SetBalance(consensus.SystemAddress, big.NewInt(0))
@@ -822,12 +823,13 @@ func (api *PrivateDebugAPI) computeTxEnv(blockHash common.Hash, txIndex int, ree
 	for idx, tx := range block.Transactions() {
 		// Assemble the transaction call message and return if the requested offset
 		msg, _ := tx.AsMessage(signer)
-		if posa, ok := api.eth.engine.(consensus.PoSA); ok && msg.From() == block.Header().Coinbase &&
-			posa.IsSystemContract(msg.To()) {
-			balance := statedb.GetBalance(consensus.SystemAddress)
-			if balance.Cmp(common.Big0) > 0 {
-				statedb.SetBalance(consensus.SystemAddress, big.NewInt(0))
-				statedb.AddBalance(block.Header().Coinbase, balance)
+		if posa, ok := api.eth.engine.(consensus.PoSA); ok {
+			if isSystem, _ := posa.IsSystemTransaction(tx, block.Header()); isSystem {
+				balance := statedb.GetBalance(consensus.SystemAddress)
+				if balance.Cmp(common.Big0) > 0 {
+					statedb.SetBalance(consensus.SystemAddress, big.NewInt(0))
+					statedb.AddBalance(block.Header().Coinbase, balance)
+				}
 			}
 		}
 		context := core.NewEVMContext(msg, block.Header(), api.eth.blockchain, nil)
