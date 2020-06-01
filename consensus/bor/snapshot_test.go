@@ -1,4 +1,4 @@
-package bortest
+package bor
 
 import (
 	"math/rand"
@@ -9,7 +9,6 @@ import (
 	"github.com/stretchr/testify/assert"
 
 	"github.com/maticnetwork/bor/common"
-	"github.com/maticnetwork/bor/consensus/bor"
 )
 
 const (
@@ -18,8 +17,8 @@ const (
 
 func TestGetSignerSuccessionNumber_ProposerIsSigner(t *testing.T) {
 	validators := buildRandomValidatorSet(numVals)
-	validatorSet := bor.NewValidatorSet(validators)
-	snap := bor.Snapshot{
+	validatorSet := NewValidatorSet(validators)
+	snap := Snapshot{
 		ValidatorSet: validatorSet,
 	}
 
@@ -35,14 +34,14 @@ func TestGetSignerSuccessionNumber_ProposerIsSigner(t *testing.T) {
 func TestGetSignerSuccessionNumber_SignerIndexIsLarger(t *testing.T) {
 	validators := buildRandomValidatorSet(numVals)
 
-	// sort validators by address, which is what bor.NewValidatorSet also does
-	sort.Sort(bor.ValidatorsByAddress(validators))
+	// sort validators by address, which is what NewValidatorSet also does
+	sort.Sort(ValidatorsByAddress(validators))
 	proposerIndex := 32
 	signerIndex := 56
 	// give highest ProposerPriority to a particular val, so that they become the proposer
 	validators[proposerIndex].VotingPower = 200
-	snap := bor.Snapshot{
-		ValidatorSet: bor.NewValidatorSet(validators),
+	snap := Snapshot{
+		ValidatorSet: NewValidatorSet(validators),
 	}
 
 	// choose a signer at an index greater than proposer index
@@ -60,8 +59,8 @@ func TestGetSignerSuccessionNumber_SignerIndexIsSmaller(t *testing.T) {
 	signerIndex := 11
 	// give highest ProposerPriority to a particular val, so that they become the proposer
 	validators[proposerIndex].VotingPower = 200
-	snap := bor.Snapshot{
-		ValidatorSet: bor.NewValidatorSet(validators),
+	snap := Snapshot{
+		ValidatorSet: NewValidatorSet(validators),
 	}
 
 	// choose a signer at an index greater than proposer index
@@ -75,46 +74,46 @@ func TestGetSignerSuccessionNumber_SignerIndexIsSmaller(t *testing.T) {
 
 func TestGetSignerSuccessionNumber_ProposerNotFound(t *testing.T) {
 	validators := buildRandomValidatorSet(numVals)
-	snap := bor.Snapshot{
-		ValidatorSet: bor.NewValidatorSet(validators),
+	snap := Snapshot{
+		ValidatorSet: NewValidatorSet(validators),
 	}
 	dummyProposerAddress := randomAddress()
-	snap.ValidatorSet.Proposer = &bor.Validator{Address: dummyProposerAddress}
+	snap.ValidatorSet.Proposer = &Validator{Address: dummyProposerAddress}
 	// choose any signer
 	signer := snap.ValidatorSet.Validators[3].Address
 	_, err := snap.GetSignerSuccessionNumber(signer)
 	assert.NotNil(t, err)
-	e, ok := err.(*bor.UnauthorizedProposerError)
+	e, ok := err.(*UnauthorizedProposerError)
 	assert.True(t, ok)
 	assert.Equal(t, dummyProposerAddress.Bytes(), e.Proposer)
 }
 
 func TestGetSignerSuccessionNumber_SignerNotFound(t *testing.T) {
 	validators := buildRandomValidatorSet(numVals)
-	snap := bor.Snapshot{
-		ValidatorSet: bor.NewValidatorSet(validators),
+	snap := Snapshot{
+		ValidatorSet: NewValidatorSet(validators),
 	}
 	dummySignerAddress := randomAddress()
 	_, err := snap.GetSignerSuccessionNumber(dummySignerAddress)
 	assert.NotNil(t, err)
-	e, ok := err.(*bor.UnauthorizedSignerError)
+	e, ok := err.(*UnauthorizedSignerError)
 	assert.True(t, ok)
 	assert.Equal(t, dummySignerAddress.Bytes(), e.Signer)
 }
 
-func buildRandomValidatorSet(numVals int) []*bor.Validator {
+func buildRandomValidatorSet(numVals int) []*Validator {
 	rand.Seed(time.Now().Unix())
-	validators := make([]*bor.Validator, numVals)
+	validators := make([]*Validator, numVals)
 	for i := 0; i < numVals; i++ {
-		validators[i] = &bor.Validator{
+		validators[i] = &Validator{
 			Address: randomAddress(),
 			// cannot process validators with voting power 0, hence +1
 			VotingPower: int64(rand.Intn(99) + 1),
 		}
 	}
 
-	// sort validators by address, which is what bor.NewValidatorSet also does
-	sort.Sort(bor.ValidatorsByAddress(validators))
+	// sort validators by address, which is what NewValidatorSet also does
+	sort.Sort(ValidatorsByAddress(validators))
 	return validators
 }
 

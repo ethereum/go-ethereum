@@ -1,4 +1,4 @@
-package bortest
+package bor
 
 import (
 	"encoding/hex"

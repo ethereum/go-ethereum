@@ -36,7 +36,8 @@ ios:
 	@echo "Import \"$(GOBIN)/bor.framework\" to use the library."
 
 test: bor
-	go test github.com/maticnetwork/bor/consensus/bor/bor_test
+	go test github.com/maticnetwork/bor/consensus/bor
+	go test github.com/maticnetwork/bor/tests/bor
 
 lint: ## Run linters.
 	$(GORUN) build/ci.go lint

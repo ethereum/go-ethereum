@@ -1,4 +1,4 @@
-package bortest
+package bor
 
 import (
 	"encoding/hex"
@@ -45,7 +45,7 @@ type initializeData struct {
 }
 
 func buildEthereumInstance(t *testing.T, db ethdb.Database) *initializeData {
-	genesisData, err := ioutil.ReadFile("genesis.json")
+	genesisData, err := ioutil.ReadFile("./testdata/genesis.json")
 	if err != nil {
 		t.Fatalf("%s", err)
 	}
@@ -157,7 +157,7 @@ func sign(t *testing.T, header *types.Header, signer []byte) {
 }
 
 func stateSyncEventsPayload(t *testing.T) *bor.ResponseWithHeight {
-	stateData, err := ioutil.ReadFile("states.json")
+	stateData, err := ioutil.ReadFile("./testdata/states.json")
 	if err != nil {
 		t.Fatalf("%s", err)
 	}
@@ -169,7 +169,7 @@ func stateSyncEventsPayload(t *testing.T) *bor.ResponseWithHeight {
 }
 
 func loadSpanFromFile(t *testing.T) (*bor.ResponseWithHeight, *bor.HeimdallSpan) {
-	spanData, err := ioutil.ReadFile("span.json")
+	spanData, err := ioutil.ReadFile("./testdata/span.json")
 	if err != nil {
 		t.Fatalf("%s", err)
 	}
