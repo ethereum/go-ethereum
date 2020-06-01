@@ -377,6 +377,11 @@ func DefaultGoerliGenesisBlock() *Genesis {
 	}
 }
 
+func DefaultYoloV1GenesisBlock() *Genesis {
+	// TODO (@karalabe) fix this
+	return DefaultGoerliGenesisBlock()
+}
+
 // DeveloperGenesisBlock returns the 'geth --dev' genesis block.
 func DeveloperGenesisBlock(period uint64, faucet common.Address) *Genesis {
 	// Override the default period to the user requested one
