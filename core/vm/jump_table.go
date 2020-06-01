@@ -57,10 +57,20 @@ var (
 	byzantiumInstructionSet        = newByzantiumInstructionSet()
 	constantinopleInstructionSet   = newConstantinopleInstructionSet()
 	istanbulInstructionSet         = newIstanbulInstructionSet()
+	yoloV1InstructionSet           = newYoloV1InstructionSet()
 )
 
 // JumpTable contains the EVM opcodes supported at a given fork.
 type JumpTable [256]operation
+
+func newYoloV1InstructionSet() JumpTable {
+	instructionSet := newIstanbulInstructionSet()
+
+	// TODO fix this after merging subroutines
+	//enable2315(&instructionSet) // Subroutines
+
+	return instructionSet
+}
 
 // newIstanbulInstructionSet returns the frontier, homestead
 // byzantium, contantinople and petersburg instructions.

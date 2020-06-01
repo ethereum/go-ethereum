@@ -51,6 +51,9 @@ func run(evm *EVM, contract *Contract, input []byte, readOnly bool) ([]byte, err
 		if evm.chainRules.IsIstanbul {
 			precompiles = PrecompiledContractsIstanbul
 		}
+		if evm.chainRules.IsYoloV1 {
+			precompiles = PrecompiledContractsYoloV1
+		}
 		if p := precompiles[*contract.CodeAddr]; p != nil {
 			return RunPrecompiledContract(p, input, contract)
 		}
