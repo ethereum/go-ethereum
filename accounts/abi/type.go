@@ -214,6 +214,7 @@ func NewType(t string, internalType string, components []ArgumentMarshaling) (ty
 	return
 }
 
+// GetType returns the reflection type of the ABI type.
 func (t Type) GetType() reflect.Type {
 	switch t.T {
 	case IntTy:
