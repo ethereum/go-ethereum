@@ -728,11 +728,45 @@ func TestStateChangeSubscription(t *testing.T) {
 		}
 
 		for index, payload := range payloads {
+			var actualStateDiff, expectedStateDiff StateDiff
 			actualRLP := payload.StateDiffRlp
+			err := rlp.DecodeBytes(actualRLP, &actualStateDiff)
+			if err != nil {
+				t.Errorf("error decoding state diff RLP into state diff: %s: %s", err, test.description)
+			}
 			expectedRLP := test.expectedPayloads[index].StateDiffRlp
-			if !bytes.Equal(actualRLP, expectedRLP) {
+			err = rlp.DecodeBytes(expectedRLP, &expectedStateDiff)
+			if err != nil {
+				t.Errorf("error decoding state diff RLP into state diff: %s: %s", err, test.description)
+			}
+			if expectedStateDiff.BlockNumber.Cmp(actualStateDiff.BlockNumber) != 0 {
 				t.Errorf("Test failure: %s: %s", t.Name(), test.description)
-				t.Logf("Actual payload equal expected.\nactual:%+v\nexpected: %+v", actualRLP, expectedRLP)
+				t.Logf("Actual payload block number equal expected.\nactual:%+v\nexpected: %+v", actualStateDiff.BlockNumber, expectedStateDiff.BlockNumber)
+			}
+			if expectedStateDiff.BlockHash != actualStateDiff.BlockHash {
+				t.Errorf("Test failure: %s: %s", t.Name(), test.description)
+				t.Logf("Actual payload block hash equal expected.\nactual:%+v\nexpected: %+v", actualStateDiff.BlockHash, expectedStateDiff.BlockHash)
+			}
+			for i, e := range expectedStateDiff.UpdatedAccounts {
+				if !bytes.Equal(actualStateDiff.UpdatedAccounts[i].Key, e.Key) {
+					t.Errorf("Test failure: %s: %s", t.Name(), test.description)
+					t.Logf("Actual payload updated account key equal expected.\nactual:%+v\nexpected: %+v", actualStateDiff.UpdatedAccounts[i].Key, e.Key)
+				}
+				if !bytes.Equal(actualStateDiff.UpdatedAccounts[i].Value, e.Value) {
+					t.Errorf("Test failure: %s: %s", t.Name(), test.description)
+					t.Logf("Actual payload updated account value equal expected.\nactual:%+v\nexpected: %+v", actualStateDiff.UpdatedAccounts[i].Value, e.Value)
+				}
+				for si, se := range e.Storage {
+					if !bytes.Equal(actualStateDiff.UpdatedAccounts[i].Storage[si].Key, se.Key) {
+						t.Errorf("Test failure: %s: %s", t.Name(), test.description)
+						t.Logf("Actual payload updated account storage key equal expected.\nactual:%+v\nexpected: %+v", actualStateDiff.UpdatedAccounts[i].Storage[si].Key, se.Key)
+					}
+					if !bytes.Equal(actualStateDiff.UpdatedAccounts[i].Storage[si].Value, se.Value) {
+						t.Errorf("Test failure: %s: %s", t.Name(), test.description)
+						t.Logf("Actual payload updated account storage value equal expected.\nactual:%+v\nexpected: %+v", actualStateDiff.UpdatedAccounts[i].Storage[si].Value, se.Value)
+					}
+				}
+
 			}
 		}
 	}
