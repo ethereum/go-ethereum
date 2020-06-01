@@ -22,6 +22,7 @@ import (
 	"os"
 	"strings"
 	"testing"
+	"text/template"
 	"time"
 
 	"github.com/ethereum/go-ethereum/accounts/abi"
@@ -801,4 +802,70 @@ func BenchmarkSwapDupLoop(b *testing.B) {
 	for i := 0; i < b.N; i++ {
 		Execute(code, nil, cfg)
 	}
+}
+
+const (
+	pushTxt = `
+{{ range . }}
+// auto-generated, do not edit
+func opPush{{.}}(pc *uint64, interpreter *EVMInterpreter, callContext *callCtx) ([]byte, error) {
+		end := int(*pc + 1 + {{.}})
+		integer := new(uint256.Int)
+		if code := callContext.contract.Code; end < len(code) {
+			integer.SetBytes{{.}}(code[int(*pc + 1):end])
+		}
+		callContext.stack.push(integer)
+		*pc += {{.}}
+		return nil, nil
+}
+{{ end }}
+`
+
+	swapTxt = `
+{{ range . }}
+// auto-generated, do not edit
+func opSwap{{.}}(pc *uint64, interpreter *EVMInterpreter, callContext *callCtx) ([]byte, error) {
+		callContext.stack.swap({{ . }}+1)
+		return nil, nil
+}
+{{ end }}
+`
+	dupTxt = `
+{{ range . }}
+// auto-generated, do not edit
+func opDup{{.}}(pc *uint64, interpreter *EVMInterpreter, callContext *callCtx) ([]byte, error) {
+		callContext.stack.dup({{ . }})
+		return nil, nil
+}
+{{ end }}
+
+`
+)
+
+func Test2GenerateCode(t *testing.T) {
+	nums := func(start, end int) []int {
+		var n []int
+		for i := start; i < end; i++ {
+			n = append(n, i)
+		}
+		return n
+	}
+
+	pushTmpl, err := template.New("test").Parse(pushTxt)
+	if err != nil {
+		t.Fatal(err)
+	}
+	pushTmpl.Execute(os.Stdout, nums(1, 33))
+
+	swapTmpl, err := template.New("test").Parse(swapTxt)
+	if err != nil {
+		t.Fatal(err)
+	}
+	swapTmpl.Execute(os.Stdout, nums(1, 17))
+
+	dupTmpl, err := template.New("test").Parse(dupTxt)
+	if err != nil {
+		t.Fatal(err)
+	}
+	dupTmpl.Execute(os.Stdout, nums(1, 17))
 }
