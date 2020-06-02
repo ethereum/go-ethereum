@@ -1,4 +1,4 @@
-// +build amd64,!generic
+// +build amd64,blsasm amd64,blsadx
 
 #include "textflag.h"
 
@@ -513,7 +513,7 @@ TEXT ·_neg(SB), NOSPLIT, $0-16
 // multiplication without using MULX/ADX
 // c = a * b % p
 TEXT ·mulNoADX(SB), NOSPLIT, $24-24
-	// | 
+	// |
 
 /* inputs                                  */
 
@@ -527,50 +527,50 @@ TEXT ·mulNoADX(SB), NOSPLIT, $24-24
 	MOVQ $0x00, R14
 	MOVQ $0x00, R15
 
-	// | 
+	// |
 
 /* i0                                   */
 
 	// | a0 @ CX
 	MOVQ (DI), CX
 
-	// | a0 * b0 
+	// | a0 * b0
 	MOVQ (SI), AX
 	MULQ CX
 	MOVQ AX, (SP)
 	MOVQ DX, R8
 
-	// | a0 * b1 
+	// | a0 * b1
 	MOVQ 8(SI), AX
 	MULQ CX
 	ADDQ AX, R8
 	ADCQ DX, R9
 
-	// | a0 * b2 
+	// | a0 * b2
 	MOVQ 16(SI), AX
 	MULQ CX
 	ADDQ AX, R9
 	ADCQ DX, R10
 
-	// | a0 * b3 
+	// | a0 * b3
 	MOVQ 24(SI), AX
 	MULQ CX
 	ADDQ AX, R10
 	ADCQ DX, R11
 
-	// | a0 * b4 
+	// | a0 * b4
 	MOVQ 32(SI), AX
 	MULQ CX
 	ADDQ AX, R11
 	ADCQ DX, R12
 
-	// | a0 * b5 
+	// | a0 * b5
 	MOVQ 40(SI), AX
 	MULQ CX
 	ADDQ AX, R12
 	ADCQ DX, R13
 
-	// | 
+	// |
 
 /* i1                                   */
 
@@ -578,7 +578,7 @@ TEXT ·mulNoADX(SB), NOSPLIT, $24-24
 	MOVQ 8(DI), CX
 	MOVQ $0x00, BX
 
-	// | a1 * b0 
+	// | a1 * b0
 	MOVQ (SI), AX
 	MULQ CX
 	ADDQ AX, R8
@@ -588,7 +588,7 @@ TEXT ·mulNoADX(SB), NOSPLIT, $24-24
 	MOVQ R8, 8(SP)
 	MOVQ $0x00, R8
 
-	// | a1 * b1 
+	// | a1 * b1
 	MOVQ 8(SI), AX
 	MULQ CX
 	ADDQ AX, R9
@@ -597,7 +597,7 @@ TEXT ·mulNoADX(SB), NOSPLIT, $24-24
 	MOVQ $0x00, BX
 	ADCQ $0x00, BX
 
-	// | a1 * b2 
+	// | a1 * b2
 	MOVQ 16(SI), AX
 	MULQ CX
 	ADDQ AX, R10
@@ -606,7 +606,7 @@ TEXT ·mulNoADX(SB), NOSPLIT, $24-24
 	MOVQ $0x00, BX
 	ADCQ $0x00, BX
 
-	// | a1 * b3 
+	// | a1 * b3
 	MOVQ 24(SI), AX
 	MULQ CX
 	ADDQ AX, R11
@@ -615,20 +615,20 @@ TEXT ·mulNoADX(SB), NOSPLIT, $24-24
 	MOVQ $0x00, BX
 	ADCQ $0x00, BX
 
-	// | a1 * b4 
+	// | a1 * b4
 	MOVQ 32(SI), AX
 	MULQ CX
 	ADDQ AX, R12
 	ADCQ DX, R13
 	ADCQ BX, R14
 
-	// | a1 * b5 
+	// | a1 * b5
 	MOVQ 40(SI), AX
 	MULQ CX
 	ADDQ AX, R13
 	ADCQ DX, R14
 
-	// | 
+	// |
 
 /* i2                                   */
 
@@ -636,7 +636,7 @@ TEXT ·mulNoADX(SB), NOSPLIT, $24-24
 	MOVQ 16(DI), CX
 	MOVQ $0x00, BX
 
-	// | a2 * b0 
+	// | a2 * b0
 	MOVQ (SI), AX
 	MULQ CX
 	ADDQ AX, R9
@@ -646,7 +646,7 @@ TEXT ·mulNoADX(SB), NOSPLIT, $24-24
 	MOVQ R9, 16(SP)
 	MOVQ $0x00, R9
 
-	// | a2 * b1 
+	// | a2 * b1
 	MOVQ 8(SI), AX
 	MULQ CX
 	ADDQ AX, R10
@@ -655,7 +655,7 @@ TEXT ·mulNoADX(SB), NOSPLIT, $24-24
 	MOVQ $0x00, BX
 	ADCQ $0x00, BX
 
-	// | a2 * b2 
+	// | a2 * b2
 	MOVQ 16(SI), AX
 	MULQ CX
 	ADDQ AX, R11
@@ -664,7 +664,7 @@ TEXT ·mulNoADX(SB), NOSPLIT, $24-24
 	MOVQ $0x00, BX
 	ADCQ $0x00, BX
 
-	// | a2 * b3 
+	// | a2 * b3
 	MOVQ 24(SI), AX
 	MULQ CX
 	ADDQ AX, R12
@@ -673,20 +673,20 @@ TEXT ·mulNoADX(SB), NOSPLIT, $24-24
 	MOVQ $0x00, BX
 	ADCQ $0x00, BX
 
-	// | a2 * b4 
+	// | a2 * b4
 	MOVQ 32(SI), AX
 	MULQ CX
 	ADDQ AX, R13
 	ADCQ DX, R14
 	ADCQ BX, R15
 
-	// | a2 * b5 
+	// | a2 * b5
 	MOVQ 40(SI), AX
 	MULQ CX
 	ADDQ AX, R14
 	ADCQ DX, R15
 
-	// | 
+	// |
 
 /* i3                                   */
 
@@ -694,7 +694,7 @@ TEXT ·mulNoADX(SB), NOSPLIT, $24-24
 	MOVQ 24(DI), CX
 	MOVQ $0x00, BX
 
-	// | a3 * b0 
+	// | a3 * b0
 	MOVQ (SI), AX
 	MULQ CX
 	ADDQ AX, R10
@@ -702,7 +702,7 @@ TEXT ·mulNoADX(SB), NOSPLIT, $24-24
 	ADCQ $0x00, R12
 	ADCQ $0x00, BX
 
-	// | a3 * b1 
+	// | a3 * b1
 	MOVQ 8(SI), AX
 	MULQ CX
 	ADDQ AX, R11
@@ -711,7 +711,7 @@ TEXT ·mulNoADX(SB), NOSPLIT, $24-24
 	MOVQ $0x00, BX
 	ADCQ $0x00, BX
 
-	// | a3 * b2 
+	// | a3 * b2
 	MOVQ 16(SI), AX
 	MULQ CX
 	ADDQ AX, R12
@@ -720,7 +720,7 @@ TEXT ·mulNoADX(SB), NOSPLIT, $24-24
 	MOVQ $0x00, BX
 	ADCQ $0x00, BX
 
-	// | a3 * b3 
+	// | a3 * b3
 	MOVQ 24(SI), AX
 	MULQ CX
 	ADDQ AX, R13
@@ -729,20 +729,20 @@ TEXT ·mulNoADX(SB), NOSPLIT, $24-24
 	MOVQ $0x00, BX
 	ADCQ $0x00, BX
 
-	// | a3 * b4 
+	// | a3 * b4
 	MOVQ 32(SI), AX
 	MULQ CX
 	ADDQ AX, R14
 	ADCQ DX, R15
 	ADCQ BX, R8
 
-	// | a3 * b5 
+	// | a3 * b5
 	MOVQ 40(SI), AX
 	MULQ CX
 	ADDQ AX, R15
 	ADCQ DX, R8
 
-	// | 
+	// |
 
 /* i4                                   */
 
@@ -750,7 +750,7 @@ TEXT ·mulNoADX(SB), NOSPLIT, $24-24
 	MOVQ 32(DI), CX
 	MOVQ $0x00, BX
 
-	// | a4 * b0 
+	// | a4 * b0
 	MOVQ (SI), AX
 	MULQ CX
 	ADDQ AX, R11
@@ -758,7 +758,7 @@ TEXT ·mulNoADX(SB), NOSPLIT, $24-24
 	ADCQ $0x00, R13
 	ADCQ $0x00, BX
 
-	// | a4 * b1 
+	// | a4 * b1
 	MOVQ 8(SI), AX
 	MULQ CX
 	ADDQ AX, R12
@@ -767,7 +767,7 @@ TEXT ·mulNoADX(SB), NOSPLIT, $24-24
 	MOVQ $0x00, BX
 	ADCQ $0x00, BX
 
-	// | a4 * b2 
+	// | a4 * b2
 	MOVQ 16(SI), AX
 	MULQ CX
 	ADDQ AX, R13
@@ -776,7 +776,7 @@ TEXT ·mulNoADX(SB), NOSPLIT, $24-24
 	MOVQ $0x00, BX
 	ADCQ $0x00, BX
 
-	// | a4 * b3 
+	// | a4 * b3
 	MOVQ 24(SI), AX
 	MULQ CX
 	ADDQ AX, R14
@@ -785,20 +785,20 @@ TEXT ·mulNoADX(SB), NOSPLIT, $24-24
 	MOVQ $0x00, BX
 	ADCQ $0x00, BX
 
-	// | a4 * b4 
+	// | a4 * b4
 	MOVQ 32(SI), AX
 	MULQ CX
 	ADDQ AX, R15
 	ADCQ DX, R8
 	ADCQ BX, R9
 
-	// | a4 * b5 
+	// | a4 * b5
 	MOVQ 40(SI), AX
 	MULQ CX
 	ADDQ AX, R8
 	ADCQ DX, R9
 
-	// | 
+	// |
 
 /* i5                                   */
 
@@ -806,7 +806,7 @@ TEXT ·mulNoADX(SB), NOSPLIT, $24-24
 	MOVQ 40(DI), CX
 	MOVQ $0x00, BX
 
-	// | a5 * b0 
+	// | a5 * b0
 	MOVQ (SI), AX
 	MULQ CX
 	ADDQ AX, R12
@@ -814,7 +814,7 @@ TEXT ·mulNoADX(SB), NOSPLIT, $24-24
 	ADCQ $0x00, R14
 	ADCQ $0x00, BX
 
-	// | a5 * b1 
+	// | a5 * b1
 	MOVQ 8(SI), AX
 	MULQ CX
 	ADDQ AX, R13
@@ -823,7 +823,7 @@ TEXT ·mulNoADX(SB), NOSPLIT, $24-24
 	MOVQ $0x00, BX
 	ADCQ $0x00, BX
 
-	// | a5 * b2 
+	// | a5 * b2
 	MOVQ 16(SI), AX
 	MULQ CX
 	ADDQ AX, R14
@@ -832,7 +832,7 @@ TEXT ·mulNoADX(SB), NOSPLIT, $24-24
 	MOVQ $0x00, BX
 	ADCQ $0x00, BX
 
-	// | a5 * b3 
+	// | a5 * b3
 	MOVQ 24(SI), AX
 	MULQ CX
 	ADDQ AX, R15
@@ -841,27 +841,27 @@ TEXT ·mulNoADX(SB), NOSPLIT, $24-24
 	MOVQ $0x00, BX
 	ADCQ $0x00, BX
 
-	// | a5 * b4 
+	// | a5 * b4
 	MOVQ 32(SI), AX
 	MULQ CX
 	ADDQ AX, R8
 	ADCQ DX, R9
 	ADCQ $0x00, BX
 
-	// | a5 * b5 
+	// | a5 * b5
 	MOVQ 40(SI), AX
 	MULQ CX
 	ADDQ AX, R9
 	ADCQ DX, BX
 
-	// | 
+	// |
 
 /* 			                                     */
 
-	// | 
+	// |
 	// | W
-	// | 0   (SP)      | 1   8(SP)     | 2   16(SP)    | 3   R10       | 4   R11       | 5   R12       
-	// | 6   R13       | 7   R14       | 8   R15       | 9   R8        | 10  R9        | 11  BX        
+	// | 0   (SP)      | 1   8(SP)     | 2   16(SP)    | 3   R10       | 4   R11       | 5   R12
+	// | 6   R13       | 7   R14       | 8   R15       | 9   R8        | 10  R9        | 11  BX
 
 
 	MOVQ (SP), CX
@@ -870,18 +870,18 @@ TEXT ·mulNoADX(SB), NOSPLIT, $24-24
 	MOVQ BX, (SP)
 	MOVQ R9, 8(SP)
 
-	// | 
+	// |
 
 /* montgomery reduction                    */
 
-	// | 
+	// |
 
 /* i0                                   */
 
-	// | 
+	// |
 	// | W
-	// | 0   CX        | 1   DI        | 2   SI        | 3   R10       | 4   R11       | 5   R12       
-	// | 6   R13       | 7   R14       | 8   R15       | 9   R8        | 10  8(SP)     | 11  (SP)      
+	// | 0   CX        | 1   DI        | 2   SI        | 3   R10       | 4   R11       | 5   R12
+	// | 6   R13       | 7   R14       | 8   R15       | 9   R8        | 10  8(SP)     | 11  (SP)
 
 
 	// | | u0 = w0 * inp
@@ -890,7 +890,7 @@ TEXT ·mulNoADX(SB), NOSPLIT, $24-24
 	MOVQ AX, R9
 	MOVQ $0x00, BX
 
-	// | 
+	// |
 
 /*                                         */
 
@@ -959,14 +959,14 @@ TEXT ·mulNoADX(SB), NOSPLIT, $24-24
 	ADCQ DX, R13
 	ADCQ $0x00, CX
 
-	// | 
+	// |
 
 /* i1                                   */
 
-	// | 
+	// |
 	// | W
-	// | 0   -         | 1   DI        | 2   SI        | 3   R10       | 4   R11       | 5   R12       
-	// | 6   R13       | 7   R14       | 8   R15       | 9   R8        | 10  8(SP)     | 11  (SP)      
+	// | 0   -         | 1   DI        | 2   SI        | 3   R10       | 4   R11       | 5   R12
+	// | 6   R13       | 7   R14       | 8   R15       | 9   R8        | 10  8(SP)     | 11  (SP)
 
 
 	// | | u1 = w1 * inp
@@ -975,7 +975,7 @@ TEXT ·mulNoADX(SB), NOSPLIT, $24-24
 	MOVQ AX, R9
 	MOVQ $0x00, BX
 
-	// | 
+	// |
 
 /*                                         */
 
@@ -1045,14 +1045,14 @@ TEXT ·mulNoADX(SB), NOSPLIT, $24-24
 	MOVQ $0x00, CX
 	ADCQ $0x00, CX
 
-	// | 
+	// |
 
 /* i2                                   */
 
-	// | 
+	// |
 	// | W
-	// | 0   -         | 1   -         | 2   SI        | 3   R10       | 4   R11       | 5   R12       
-	// | 6   R13       | 7   R14       | 8   R15       | 9   R8        | 10  8(SP)     | 11  (SP)      
+	// | 0   -         | 1   -         | 2   SI        | 3   R10       | 4   R11       | 5   R12
+	// | 6   R13       | 7   R14       | 8   R15       | 9   R8        | 10  8(SP)     | 11  (SP)
 
 
 	// | | u2 = w2 * inp
@@ -1061,7 +1061,7 @@ TEXT ·mulNoADX(SB), NOSPLIT, $24-24
 	MOVQ AX, R9
 	MOVQ $0x00, BX
 
-	// | 
+	// |
 
 /*                                         */
 
@@ -1131,14 +1131,14 @@ TEXT ·mulNoADX(SB), NOSPLIT, $24-24
 	MOVQ $0x00, CX
 	ADCQ $0x00, CX
 
-	// | 
+	// |
 
 /* i3                                   */
 
-	// | 
+	// |
 	// | W
-	// | 0   -         | 1   -         | 2   -         | 3   R10       | 4   R11       | 5   R12       
-	// | 6   R13       | 7   R14       | 8   R15       | 9   R8        | 10  8(SP)     | 11  (SP)      
+	// | 0   -         | 1   -         | 2   -         | 3   R10       | 4   R11       | 5   R12
+	// | 6   R13       | 7   R14       | 8   R15       | 9   R8        | 10  8(SP)     | 11  (SP)
 
 
 	// | | u3 = w3 * inp
@@ -1147,7 +1147,7 @@ TEXT ·mulNoADX(SB), NOSPLIT, $24-24
 	MOVQ AX, R9
 	MOVQ $0x00, BX
 
-	// | 
+	// |
 
 /*                                         */
 
@@ -1217,14 +1217,14 @@ TEXT ·mulNoADX(SB), NOSPLIT, $24-24
 	MOVQ $0x00, CX
 	ADCQ $0x00, CX
 
-	// | 
+	// |
 
 /* i4                                   */
 
-	// | 
+	// |
 	// | W
-	// | 0   -         | 1   -         | 2   -         | 3   -         | 4   R11       | 5   R12       
-	// | 6   R13       | 7   R14       | 8   R15       | 9   R8        | 10  8(SP)     | 11  (SP)      
+	// | 0   -         | 1   -         | 2   -         | 3   -         | 4   R11       | 5   R12
+	// | 6   R13       | 7   R14       | 8   R15       | 9   R8        | 10  8(SP)     | 11  (SP)
 
 
 	// | | u4 = w4 * inp
@@ -1233,7 +1233,7 @@ TEXT ·mulNoADX(SB), NOSPLIT, $24-24
 	MOVQ AX, R9
 	MOVQ $0x00, BX
 
-	// | 
+	// |
 
 /*                                         */
 
@@ -1306,14 +1306,14 @@ TEXT ·mulNoADX(SB), NOSPLIT, $24-24
 	MOVQ $0x00, CX
 	ADCQ $0x00, CX
 
-	// | 
+	// |
 
 /* i5                                   */
 
-	// | 
+	// |
 	// | W
-	// | 0   -         | 1   -         | 2   -         | 3   -         | 4   -         | 5   R12       
-	// | 6   R13       | 7   R14       | 8   R15       | 9   R8        | 10  DI        | 11  (SP)      
+	// | 0   -         | 1   -         | 2   -         | 3   -         | 4   -         | 5   R12
+	// | 6   R13       | 7   R14       | 8   R15       | 9   R8        | 10  DI        | 11  (SP)
 
 
 	// | | u5 = w5 * inp
@@ -1322,7 +1322,7 @@ TEXT ·mulNoADX(SB), NOSPLIT, $24-24
 	MOVQ AX, R9
 	MOVQ $0x00, BX
 
-	// | 
+	// |
 
 /*                                         */
 
@@ -1390,13 +1390,13 @@ TEXT ·mulNoADX(SB), NOSPLIT, $24-24
 	// | w11 @ CX
 	ADCQ (SP), CX
 
-	// | 
+	// |
 	// | W montgomerry reduction ends
-	// | 0   -         | 1   -         | 2   -         | 3   -         | 4   -         | 5   -         
-	// | 6   R13       | 7   R14       | 8   R15       | 9   R8        | 10  DI        | 11  CX        
+	// | 0   -         | 1   -         | 2   -         | 3   -         | 4   -         | 5   -
+	// | 6   R13       | 7   R14       | 8   R15       | 9   R8        | 10  DI        | 11  CX
 
 
-	// | 
+	// |
 
 
 /* modular reduction                       */
@@ -1413,7 +1413,7 @@ TEXT ·mulNoADX(SB), NOSPLIT, $24-24
 	SBBQ ·modulus+32(SB), BX
 	MOVQ CX, R9
 	SBBQ ·modulus+40(SB), R9
-	// | 
+	// |
 
 /* out                                     */
 
@@ -1432,7 +1432,7 @@ TEXT ·mulNoADX(SB), NOSPLIT, $24-24
 	MOVQ    CX, 40(SI)
 	RET
 
-	// | 
+	// |
 
 /* end                                     */
 
@@ -1440,7 +1440,7 @@ TEXT ·mulNoADX(SB), NOSPLIT, $24-24
 // multiplication
 // c = a * b % p
 TEXT ·mulADX(SB), NOSPLIT, $16-24
-	// | 
+	// |
 
 /* inputs                                  */
 
@@ -1448,39 +1448,39 @@ TEXT ·mulADX(SB), NOSPLIT, $16-24
 	MOVQ b+16(FP), SI
 	XORQ AX, AX
 
-	// | 
+	// |
 
 /* i0                                   */
 
 	// | a0 @ DX
 	MOVQ (DI), DX
 
-	// | a0 * b0 
+	// | a0 * b0
 	MULXQ (SI), AX, CX
 	MOVQ  AX, (SP)
 
-	// | a0 * b1 
+	// | a0 * b1
 	MULXQ 8(SI), AX, R8
 	ADCXQ AX, CX
 
-	// | a0 * b2 
+	// | a0 * b2
 	MULXQ 16(SI), AX, R9
 	ADCXQ AX, R8
 
-	// | a0 * b3 
+	// | a0 * b3
 	MULXQ 24(SI), AX, R10
 	ADCXQ AX, R9
 
-	// | a0 * b4 
+	// | a0 * b4
 	MULXQ 32(SI), AX, R11
 	ADCXQ AX, R10
 
-	// | a0 * b5 
+	// | a0 * b5
 	MULXQ 40(SI), AX, R12
 	ADCXQ AX, R11
 	ADCQ  $0x00, R12
 
-	// | 
+	// |
 
 /* i1                                   */
 
@@ -1488,39 +1488,39 @@ TEXT ·mulADX(SB), NOSPLIT, $16-24
 	MOVQ 8(DI), DX
 	XORQ R13, R13
 
-	// | a1 * b0 
+	// | a1 * b0
 	MULXQ (SI), AX, BX
 	ADOXQ AX, CX
 	ADCXQ BX, R8
 	MOVQ  CX, 8(SP)
 
-	// | a1 * b1 
+	// | a1 * b1
 	MULXQ 8(SI), AX, BX
 	ADOXQ AX, R8
 	ADCXQ BX, R9
 
-	// | a1 * b2 
+	// | a1 * b2
 	MULXQ 16(SI), AX, BX
 	ADOXQ AX, R9
 	ADCXQ BX, R10
 
-	// | a1 * b3 
+	// | a1 * b3
 	MULXQ 24(SI), AX, BX
 	ADOXQ AX, R10
 	ADCXQ BX, R11
 
-	// | a1 * b4 
+	// | a1 * b4
 	MULXQ 32(SI), AX, BX
 	ADOXQ AX, R11
 	ADCXQ BX, R12
 
-	// | a1 * b5 
+	// | a1 * b5
 	MULXQ 40(SI), AX, BX
 	ADOXQ AX, R12
 	ADOXQ R13, R13
 	ADCXQ BX, R13
 
-	// | 
+	// |
 
 /* i2                                   */
 
@@ -1528,38 +1528,38 @@ TEXT ·mulADX(SB), NOSPLIT, $16-24
 	MOVQ 16(DI), DX
 	XORQ R14, R14
 
-	// | a2 * b0 
+	// | a2 * b0
 	MULXQ (SI), AX, BX
 	ADOXQ AX, R8
 	ADCXQ BX, R9
 
-	// | a2 * b1 
+	// | a2 * b1
 	MULXQ 8(SI), AX, BX
 	ADOXQ AX, R9
 	ADCXQ BX, R10
 
-	// | a2 * b2 
+	// | a2 * b2
 	MULXQ 16(SI), AX, BX
 	ADOXQ AX, R10
 	ADCXQ BX, R11
 
-	// | a2 * b3 
+	// | a2 * b3
 	MULXQ 24(SI), AX, BX
 	ADOXQ AX, R11
 	ADCXQ BX, R12
 
-	// | a2 * b4 
+	// | a2 * b4
 	MULXQ 32(SI), AX, BX
 	ADOXQ AX, R12
 	ADCXQ BX, R13
 
-	// | a2 * b5 
+	// | a2 * b5
 	MULXQ 40(SI), AX, BX
 	ADOXQ AX, R13
 	ADOXQ R14, R14
 	ADCXQ BX, R14
 
-	// | 
+	// |
 
 /* i3                                   */
 
@@ -1567,38 +1567,38 @@ TEXT ·mulADX(SB), NOSPLIT, $16-24
 	MOVQ 24(DI), DX
 	XORQ R15, R15
 
-	// | a3 * b0 
+	// | a3 * b0
 	MULXQ (SI), AX, BX
 	ADOXQ AX, R9
 	ADCXQ BX, R10
 
-	// | a3 * b1 
+	// | a3 * b1
 	MULXQ 8(SI), AX, BX
 	ADOXQ AX, R10
 	ADCXQ BX, R11
 
-	// | a3 * b2 
+	// | a3 * b2
 	MULXQ 16(SI), AX, BX
 	ADOXQ AX, R11
 	ADCXQ BX, R12
 
-	// | a3 * b3 
+	// | a3 * b3
 	MULXQ 24(SI), AX, BX
 	ADOXQ AX, R12
 	ADCXQ BX, R13
 
-	// | a3 * b4 
+	// | a3 * b4
 	MULXQ 32(SI), AX, BX
 	ADOXQ AX, R13
 	ADCXQ BX, R14
 
-	// | a3 * b5 
+	// | a3 * b5
 	MULXQ 40(SI), AX, BX
 	ADOXQ AX, R14
 	ADOXQ R15, R15
 	ADCXQ BX, R15
 
-	// | 
+	// |
 
 /* i4                                   */
 
@@ -1606,38 +1606,38 @@ TEXT ·mulADX(SB), NOSPLIT, $16-24
 	MOVQ 32(DI), DX
 	XORQ CX, CX
 
-	// | a4 * b0 
+	// | a4 * b0
 	MULXQ (SI), AX, BX
 	ADOXQ AX, R10
 	ADCXQ BX, R11
 
-	// | a4 * b1 
+	// | a4 * b1
 	MULXQ 8(SI), AX, BX
 	ADOXQ AX, R11
 	ADCXQ BX, R12
 
-	// | a4 * b2 
+	// | a4 * b2
 	MULXQ 16(SI), AX, BX
 	ADOXQ AX, R12
 	ADCXQ BX, R13
 
-	// | a4 * b3 
+	// | a4 * b3
 	MULXQ 24(SI), AX, BX
 	ADOXQ AX, R13
 	ADCXQ BX, R14
 
-	// | a4 * b4 
+	// | a4 * b4
 	MULXQ 32(SI), AX, BX
 	ADOXQ AX, R14
 	ADCXQ BX, R15
 
-	// | a4 * b5 
+	// | a4 * b5
 	MULXQ 40(SI), AX, BX
 	ADOXQ AX, R15
 	ADOXQ CX, CX
 	ADCXQ BX, CX
 
-	// | 
+	// |
 
 /* i5                                   */
 
@@ -1645,79 +1645,79 @@ TEXT ·mulADX(SB), NOSPLIT, $16-24
 	MOVQ 40(DI), DX
 	XORQ DI, DI
 
-	// | a5 * b0 
+	// | a5 * b0
 	MULXQ (SI), AX, BX
 	ADOXQ AX, R11
 	ADCXQ BX, R12
 
-	// | a5 * b1 
+	// | a5 * b1
 	MULXQ 8(SI), AX, BX
 	ADOXQ AX, R12
 	ADCXQ BX, R13
 
-	// | a5 * b2 
+	// | a5 * b2
 	MULXQ 16(SI), AX, BX
 	ADOXQ AX, R13
 	ADCXQ BX, R14
 
-	// | a5 * b3 
+	// | a5 * b3
 	MULXQ 24(SI), AX, BX
 	ADOXQ AX, R14
 	ADCXQ BX, R15
 
-	// | a5 * b4 
+	// | a5 * b4
 	MULXQ 32(SI), AX, BX
 	ADOXQ AX, R15
 	ADCXQ BX, CX
 
-	// | a5 * b5 
+	// | a5 * b5
 	MULXQ 40(SI), AX, BX
 	ADOXQ AX, CX
 	ADOXQ BX, DI
 	ADCQ  $0x00, DI
 
-	// | 
+	// |
 
 /* 			                                     */
 
-	// | 
+	// |
 	// | W
-	// | 0   (SP)      | 1   8(SP)     | 2   R8        | 3   R9        | 4   R10       | 5   R11       
-	// | 6   R12       | 7   R13       | 8   R14       | 9   R15       | 10  CX        | 11  DI        
+	// | 0   (SP)      | 1   8(SP)     | 2   R8        | 3   R9        | 4   R10       | 5   R11
+	// | 6   R12       | 7   R13       | 8   R14       | 9   R15       | 10  CX        | 11  DI
 
 
 	MOVQ (SP), BX
 	MOVQ 8(SP), SI
 	MOVQ DI, (SP)
 
-	// | 
+	// |
 	// | W ready to mont
-	// | 0   BX        | 1   SI        | 2   R8        | 3   R9        | 4   R10       | 5   R11       
-	// | 6   R12       | 7   R13       | 8   R14       | 9   R15       | 10  CX        | 11  (SP)      
+	// | 0   BX        | 1   SI        | 2   R8        | 3   R9        | 4   R10       | 5   R11
+	// | 6   R12       | 7   R13       | 8   R14       | 9   R15       | 10  CX        | 11  (SP)
 
 
-	// | 
+	// |
 
 /* montgomery reduction                    */
 
 	// | clear flags
 	XORQ AX, AX
 
-	// | 
+	// |
 
 /* i0                                   */
 
-	// | 
+	// |
 	// | W
-	// | 0   BX        | 1   SI        | 2   R8        | 3   R9        | 4   R10       | 5   R11       
-	// | 6   R12       | 7   R13       | 8   R14       | 9   R15       | 10  CX        | 11  (SP)      
+	// | 0   BX        | 1   SI        | 2   R8        | 3   R9        | 4   R10       | 5   R11
+	// | 6   R12       | 7   R13       | 8   R14       | 9   R15       | 10  CX        | 11  (SP)
 
 
 	// | | u0 = w0 * inp
 	MOVQ  BX, DX
 	MULXQ ·inp+0(SB), DX, DI
 
-	// | 
+	// |
 
 /*                                         */
 
@@ -1770,21 +1770,21 @@ TEXT ·mulADX(SB), NOSPLIT, $16-24
 	// | clear flags
 	XORQ AX, AX
 
-	// | 
+	// |
 
 /* i1                                   */
 
-	// | 
+	// |
 	// | W
-	// | 0   -         | 1   SI        | 2   R8        | 3   R9        | 4   R10       | 5   R11       
-	// | 6   R12       | 7   R13       | 8   R14       | 9   R15       | 10  CX        | 11  (SP)      
+	// | 0   -         | 1   SI        | 2   R8        | 3   R9        | 4   R10       | 5   R11
+	// | 6   R12       | 7   R13       | 8   R14       | 9   R15       | 10  CX        | 11  (SP)
 
 
 	// | | u1 = w1 * inp
 	MOVQ  SI, DX
 	MULXQ ·inp+0(SB), DX, DI
 
-	// | 
+	// |
 
 /*                                         */
 
@@ -1837,21 +1837,21 @@ TEXT ·mulADX(SB), NOSPLIT, $16-24
 	// | clear flags
 	XORQ AX, AX
 
-	// | 
+	// |
 
 /* i2                                   */
 
-	// | 
+	// |
 	// | W
-	// | 0   -         | 1   -         | 2   R8        | 3   R9        | 4   R10       | 5   R11       
-	// | 6   R12       | 7   R13       | 8   R14       | 9   R15       | 10  CX        | 11  (SP)      
+	// | 0   -         | 1   -         | 2   R8        | 3   R9        | 4   R10       | 5   R11
+	// | 6   R12       | 7   R13       | 8   R14       | 9   R15       | 10  CX        | 11  (SP)
 
 
 	// | | u2 = w2 * inp
 	MOVQ  R8, DX
 	MULXQ ·inp+0(SB), DX, DI
 
-	// | 
+	// |
 
 /*                                         */
 
@@ -1904,21 +1904,21 @@ TEXT ·mulADX(SB), NOSPLIT, $16-24
 	// | clear flags
 	XORQ AX, AX
 
-	// | 
+	// |
 
 /* i3                                   */
 
-	// | 
+	// |
 	// | W
-	// | 0   -         | 1   -         | 2   -         | 3   R9        | 4   R10       | 5   R11       
-	// | 6   R12       | 7   R13       | 8   R14       | 9   R15       | 10  CX        | 11  (SP)      
+	// | 0   -         | 1   -         | 2   -         | 3   R9        | 4   R10       | 5   R11
+	// | 6   R12       | 7   R13       | 8   R14       | 9   R15       | 10  CX        | 11  (SP)
 
 
 	// | | u3 = w3 * inp
 	MOVQ  R9, DX
 	MULXQ ·inp+0(SB), DX, DI
 
-	// | 
+	// |
 
 /*                                         */
 
@@ -1971,21 +1971,21 @@ TEXT ·mulADX(SB), NOSPLIT, $16-24
 	// | clear flags
 	XORQ AX, AX
 
-	// | 
+	// |
 
 /* i4                                   */
 
-	// | 
+	// |
 	// | W
-	// | 0   -         | 1   -         | 2   -         | 3   -         | 4   R10       | 5   R11       
-	// | 6   R12       | 7   R13       | 8   R14       | 9   R15       | 10  CX        | 11  (SP)      
+	// | 0   -         | 1   -         | 2   -         | 3   -         | 4   R10       | 5   R11
+	// | 6   R12       | 7   R13       | 8   R14       | 9   R15       | 10  CX        | 11  (SP)
 
 
 	// | | u4 = w4 * inp
 	MOVQ  R10, DX
 	MULXQ ·inp+0(SB), DX, DI
 
-	// | 
+	// |
 
 /*                                         */
 
@@ -2038,21 +2038,21 @@ TEXT ·mulADX(SB), NOSPLIT, $16-24
 	// | clear flags
 	XORQ AX, AX
 
-	// | 
+	// |
 
 /* i5                                   */
 
-	// | 
+	// |
 	// | W
-	// | 0   -         | 1   -         | 2   -         | 3   -         | 4   -         | 5   R11       
-	// | 6   R12       | 7   R13       | 8   R14       | 9   R15       | 10  CX        | 11  (SP)      
+	// | 0   -         | 1   -         | 2   -         | 3   -         | 4   -         | 5   R11
+	// | 6   R12       | 7   R13       | 8   R14       | 9   R15       | 10  CX        | 11  (SP)
 
 
 	// | | u5 = w5 * inp
 	MOVQ  R11, DX
 	MULXQ ·inp+0(SB), DX, DI
 
-	// | 
+	// |
 
 /*                                         */
 
@@ -2103,13 +2103,13 @@ TEXT ·mulADX(SB), NOSPLIT, $16-24
 	ADCXQ DI, BX
 	ADOXQ R10, BX
 
-	// | 
+	// |
 	// | W montgomery reduction ends
-	// | 0   -         | 1   -         | 2   -         | 3   -         | 4   -         | 5   -         
-	// | 6   R12       | 7   R13       | 8   R14       | 9   R15       | 10  CX        | 11  BX        
+	// | 0   -         | 1   -         | 2   -         | 3   -         | 4   -         | 5   -
+	// | 6   R12       | 7   R13       | 8   R14       | 9   R15       | 10  CX        | 11  BX
 
 
-	// | 
+	// |
 
 /* modular reduction                       */
 
@@ -2126,7 +2126,7 @@ TEXT ·mulADX(SB), NOSPLIT, $16-24
 	MOVQ BX, R10
 	SBBQ ·modulus+40(SB), R10
 
-	// | 
+	// |
 
 /* out                                     */
 
@@ -2145,6 +2145,6 @@ TEXT ·mulADX(SB), NOSPLIT, $16-24
 	MOVQ    BX, 40(R11)
 	RET
 
-	// | 
+	// |
 
 /* end 																			*/

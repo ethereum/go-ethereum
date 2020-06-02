@@ -1,5 +1,3 @@
-// +build amd64,!generic
-
 // Copyright 2020 The go-ethereum Authors
 // This file is part of the go-ethereum library.
 //
@@ -16,20 +14,17 @@
 // You should have received a copy of the GNU Lesser General Public License
 // along with the go-ethereum library. If not, see <http://www.gnu.org/licenses/>.
 
+// +build amd64,blsasm amd64,blsadx
+
 package bls12381
 
 import (
 	"golang.org/x/sys/cpu"
 )
 
-var isX86CharacteristicSet bool = false
-
 func init() {
-	if !isX86CharacteristicSet {
-		if !(cpu.X86.HasADX && cpu.X86.HasBMI2) {
-			mul = mulNoADX
-		}
-		isX86CharacteristicSet = true
+	if !enableADX || !cpu.X86.HasADX || !cpu.X86.HasBMI2 {
+		mul = mulNoADX
 	}
 }
 
