@@ -999,19 +999,16 @@ func DoEstimateGas(ctx context.Context, b Backend, args CallArgs, blockNrOrHash 
 		}
 		if failed {
 			if result != nil && result.Err != vm.ErrOutOfGas {
-				var revert string
 				if len(result.Revert()) > 0 {
-					ret, err := abi.UnpackRevert(result.Revert())
-					if err != nil {
-						revert = hexutil.Encode(result.Revert())
-					} else {
-						revert = ret
+					reason, err := abi.UnpackRevert(result.Revert())
+					if err == nil {
+						return 0, &revertError{
+							error:   errors.New("execution reverted"),
+							errData: reason,
+						}
 					}
 				}
-				return 0, revertError{
-					error:   errors.New("always failing transaction"),
-					errData: revert,
-				}
+				return 0, result.Err
 			}
 			// Otherwise, the specified gas cap is too low
 			return 0, fmt.Errorf("gas required exceeds allowance (%d)", cap)
