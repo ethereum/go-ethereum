@@ -83,7 +83,7 @@ func NewContract(caller ContractRef, object ContractRef, value *big.Int, gas uin
 
 func (c *Contract) validJumpdest(dest *big.Int) bool {
 	udest := dest.Uint64()
-	// PC cannot go beyond len(code) and certainly can't be bigger than 63bits.
+	// PC cannot go beyond len(code) and certainly can't be bigger than 63 bits.
 	// Don't bother checking for JUMPDEST in that case.
 	if dest.BitLen() >= 63 || udest >= uint64(len(c.Code)) {
 		return false
@@ -92,16 +92,32 @@ func (c *Contract) validJumpdest(dest *big.Int) bool {
 	if OpCode(c.Code[udest]) != JUMPDEST {
 		return false
 	}
-	// Do we have it locally already?
-	if c.analysis != nil {
-		return c.analysis.codeSegment(udest)
+	return c.isCode(udest)
+}
+
+func (c *Contract) validJumpSubdest(udest uint64) bool {
+	// PC cannot go beyond len(code) and certainly can't be bigger than 63 bits.
+	// Don't bother checking for BEGINSUB in that case.
+	if int64(udest) < 0 || udest >= uint64(len(c.Code)) {
+		return false
 	}
-	// If we have the code hash (but no analysis), we should look into the
-	// parent analysis map and see if the analysis has been made previously
+	// Only BEGINSUBs allowed for destinations
+	if OpCode(c.Code[udest]) != BEGINSUB {
+		return false
+	}
+	return c.isCode(udest)
+}
+
+// isCode returns true if the provided PC location is an actual opcode, as
+// opposed to a data-segment following a PUSHN operation.
+func (c *Contract) isCode(udest uint64) bool {
+	// Do we have a contract hash already?
 	if c.CodeHash != (common.Hash{}) {
+		// Does parent context have the analysis?
 		analysis, exist := c.jumpdests[c.CodeHash]
 		if !exist {
 			// Do the analysis and save in parent context
+			// We do not need to store it in c.analysis
 			analysis = codeBitmap(c.Code)
 			c.jumpdests[c.CodeHash] = analysis
 		}
@@ -113,7 +129,9 @@ func (c *Contract) validJumpdest(dest *big.Int) bool {
 	// in state trie. In that case, we do an analysis, and save it locally, so
 	// we don't have to recalculate it for every JUMP instruction in the execution
 	// However, we don't save it within the parent context
-	c.analysis = codeBitmap(c.Code)
+	if c.analysis == nil {
+		c.analysis = codeBitmap(c.Code)
+	}
 	return c.analysis.codeSegment(udest)
 }
 
