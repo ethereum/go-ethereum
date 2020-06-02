@@ -28,7 +28,6 @@ import (
 	"time"
 
 	gopsutil "github.com/shirou/gopsutil/mem"
-
 	"github.com/ethereum/go-ethereum/accounts"
 	"github.com/ethereum/go-ethereum/accounts/keystore"
 	"github.com/ethereum/go-ethereum/cmd/utils"
