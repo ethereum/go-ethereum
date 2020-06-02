@@ -19,7 +19,6 @@ package main
 
 import (
 	"fmt"
-	"github.com/ethereum/go-ethereum/ethdb/leveldb"
 	"math"
 	"os"
 	godebug "runtime/debug"
@@ -263,16 +262,6 @@ func init() {
 		return debug.Setup(ctx)
 	}
 	app.After = func(ctx *cli.Context) error {
-		unsafeShutdownDb, err := leveldb.New(utils.DataDirFlag.Value.String()+"/unsafe-shutdown", 0, 0, "")
-		if err != nil {
-			log.Warn("failed to access unsafe shutdown database", "time", err)
-		}
-		// safe shutdown deletes unsafe shutdown from unsafe-shutdown-db
-		err = unsafeShutdownDb.Delete([]byte("unsafe-shutdown"))
-		if err != nil {
-			log.Error("err", err)
-		}
-		unsafeShutdownDb.Close()
 		debug.Exit()
 		prompt.Stdin.Close() // Resets terminal mode.
 		return nil
@@ -374,22 +363,6 @@ func geth(ctx *cli.Context) error {
 // miner.
 func startNode(ctx *cli.Context, stack *node.Node, backend ethapi.Backend) {
 	debug.Memsize.Add("node", stack)
-
-	// Create a db to hold invalid shutdowns
-	unsafeShutdownDb, err := leveldb.New(utils.DataDirFlag.Value.String()+"/unsafe-shutdown", 0, 0, "")
-	if err != nil {
-		log.Warn("failed to access unsafe shutdown database", "time", err)
-	}
-	// Check for invalid shutdown
-	invalidShutdown, _ := unsafeShutdownDb.Get([]byte("unsafe-shutdown"))
-	if invalidShutdown != nil {
-		log.Error("unsafe shutdown detected", "time", string(invalidShutdown))
-	}
-	// Create an invalid shutdown in database in case the app crashed
-	if err = unsafeShutdownDb.Put([]byte("unsafe-shutdown"), []byte(time.Now().String())); err != nil {
-		log.Warn("Failed to record possible future unsafe shutdown", "err", err)
-	}
-	unsafeShutdownDb.Close()
 	// Start up the node itself
 	utils.StartNode(stack)
 

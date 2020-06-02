@@ -24,6 +24,7 @@ import (
 	"runtime"
 	"sync"
 	"sync/atomic"
+	"time"
 
 	"github.com/ethereum/go-ethereum/accounts"
 	"github.com/ethereum/go-ethereum/common"
@@ -220,6 +221,15 @@ func New(stack *node.Node, config *Config) (*Ethereum, error) {
 	stack.RegisterAPIs(eth.APIs())
 	stack.RegisterProtocols(eth.Protocols())
 	stack.RegisterLifecycle(eth)
+	// Check for invalid shutdown
+	invalidShutdown, _ := chainDb.Get([]byte("unsafe-shutdown"))
+	if invalidShutdown != nil {
+		log.Error("unsafe shutdown detected", "time", string(invalidShutdown))
+	}
+	// Create an invalid shutdown in database in case the app crashed
+	if err = chainDb.Put([]byte("unsafe-shutdown"), []byte(time.Now().String())); err != nil {
+		log.Warn("Failed to record possible future unsafe shutdown", "err", err)
+	}
 	return eth, nil
 }
 
@@ -536,6 +546,9 @@ func (s *Ethereum) Stop() error {
 	// Stop all the peer-related stuff first.
 	s.protocolManager.Stop()
 
+	if err := s.chainDb.Delete([]byte("unsafe-shutdown")); err != nil {
+		log.Error("err", err)
+	}
 	// Then stop everything else.
 	s.bloomIndexer.Close()
 	close(s.closeBloomHandler)

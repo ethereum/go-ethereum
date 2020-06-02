@@ -178,6 +178,15 @@ func New(stack *node.Node, config *eth.Config) (*LightEthereum, error) {
 	stack.RegisterProtocols(leth.Protocols())
 	stack.RegisterLifecycle(leth)
 
+	// Check for invalid shutdown
+	invalidShutdown, _ := chainDb.Get([]byte("unsafe-shutdown"))
+	if invalidShutdown != nil {
+		log.Error("unsafe shutdown detected", "time", string(invalidShutdown))
+	}
+	// Create an invalid shutdown in database in case the app crashed
+	if err = chainDb.Put([]byte("unsafe-shutdown"), []byte(time.Now().String())); err != nil {
+		log.Warn("Failed to record possible future unsafe shutdown", "err", err)
+	}
 	return leth, nil
 }
 
@@ -313,6 +322,11 @@ func (s *LightEthereum) Stop() error {
 	s.engine.Close()
 	s.pruner.close()
 	s.eventMux.Stop()
+	// Delete the unsafe shutdown from DB if shutting down safely
+	if err := s.chainDb.Delete([]byte("unsafe-shutdown")); err != nil {
+		log.Error("err", err)
+	}
+
 	s.chainDb.Close()
 	s.wg.Wait()
 	log.Info("Light ethereum stopped")
