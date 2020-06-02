@@ -811,7 +811,7 @@ func (b *Block) Call(ctx context.Context, args struct {
 	if result.Failed() {
 		status = 0
 	}
-	//TODO(rjl493456442, MariusVanDerWijden) return revert reason here once the spec supports an error reason.
+
 	return &CallResult{
 		data:    result.ReturnData,
 		gasUsed: hexutil.Uint64(result.UsedGas),
@@ -881,7 +881,7 @@ func (p *Pending) Call(ctx context.Context, args struct {
 	if result.Failed() {
 		status = 0
 	}
-	//TODO(rjl493456442, MariusVanDerWijden) return revert reason here once the spec supports an error reason.
+
 	return &CallResult{
 		data:    result.ReturnData,
 		gasUsed: hexutil.Uint64(result.UsedGas),

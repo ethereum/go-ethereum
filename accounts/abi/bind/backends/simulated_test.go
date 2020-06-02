@@ -960,6 +960,31 @@ func TestSimulatedBackend_PendingAndCallContract(t *testing.T) {
 	}
 }
 
+// This test is based on the following contract:
+/*
+contract Reverter {
+    function revertString() public pure{
+        require(false, "some error");
+    }
+    function revertNoString() public pure {
+        require(false, "");
+    }
+    function revertASM() public pure {
+        assembly {
+            revert(0x0, 0x0)
+        }
+    }
+    function noRevert() public pure {
+        assembly {
+            // Assembles something that looks like require(false, "some error") but is not reverted
+            mstore(0x0, 0x08c379a000000000000000000000000000000000000000000000000000000000)
+            mstore(0x4, 0x0000000000000000000000000000000000000000000000000000000000000020)
+            mstore(0x24, 0x000000000000000000000000000000000000000000000000000000000000000a)
+            mstore(0x44, 0x736f6d65206572726f7200000000000000000000000000000000000000000000)
+            return(0x0, 0x64)
+        }
+    }
+}*/
 func TestSimulatedBackend_CallContractRevert(t *testing.T) {
 	testAddr := crypto.PubkeyToAddress(testKey.PublicKey)
 	sim := simTestBackend(testAddr)

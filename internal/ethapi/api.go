@@ -864,15 +864,9 @@ func DoCall(ctx context.Context, b Backend, args CallArgs, blockNrOrHash rpc.Blo
 	return result, err
 }
 
-var _ rpc.DataError = (*revertError)(nil)
-
 type revertError struct {
-	err     string      // The error string
+	error
 	errData interface{} // additional data
-}
-
-func (e revertError) Error() string {
-	return e.err
 }
 
 func (e revertError) ErrorCode() int {
@@ -905,35 +899,12 @@ func (s *PublicBlockChainAPI) Call(ctx context.Context, args CallArgs, blockNrOr
 		reason, err := abi.UnpackRevert(result.Revert())
 		if err == nil {
 			return nil, &revertError{
-				err:     "execution reverted",
+				error:   errors.New("execution reverted"),
 				errData: reason,
 			}
 		}
 	}
 	return result.Return(), result.Err
-}
-
-var _ rpc.DataError = (*estimateGasError)(nil)
-
-type estimateGasError struct {
-	error  string // Concrete error type if it's failed to estimate gas usage
-	vmerr  error  // Additional field, it's non-nil if the given transaction is invalid
-	revert string // Additional field, it's non-empty if the transaction is reverted and reason is provided
-}
-
-func (e estimateGasError) Error() string {
-	errMsg := e.error
-	if e.vmerr != nil {
-		errMsg += fmt.Sprintf(" (%v)", e.vmerr)
-	}
-	if e.revert != "" {
-		errMsg += fmt.Sprintf(" (%s)", e.revert)
-	}
-	return errMsg
-}
-
-func (e estimateGasError) ErrorData() interface{} {
-	return e.revert
 }
 
 func DoEstimateGas(ctx context.Context, b Backend, args CallArgs, blockNrOrHash rpc.BlockNumberOrHash, gasCap *big.Int) (hexutil.Uint64, error) {
@@ -1037,14 +1008,13 @@ func DoEstimateGas(ctx context.Context, b Backend, args CallArgs, blockNrOrHash 
 						revert = ret
 					}
 				}
-				return 0, estimateGasError{
-					error:  "always failing transaction",
-					vmerr:  result.Err,
-					revert: revert,
+				return 0, revertError{
+					error:   errors.New("always failing transaction"),
+					errData: revert,
 				}
 			}
 			// Otherwise, the specified gas cap is too low
-			return 0, estimateGasError{error: fmt.Sprintf("gas required exceeds allowance (%d)", cap)}
+			return 0, fmt.Errorf("gas required exceeds allowance (%d)", cap)
 		}
 	}
 	return hexutil.Uint64(hi), nil

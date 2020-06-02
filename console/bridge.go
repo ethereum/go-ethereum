@@ -428,19 +428,19 @@ func (b *bridge) Send(call jsre.Call) (goja.Value, error) {
 				}
 				resultVal, err := parse(goja.Null(), call.VM.ToValue(string(result)))
 				if err != nil {
-					setError(resp, -32603, err.Error())
+					setError(resp, -32603, err.Error(), nil)
 				} else {
 					resp.Set("result", resultVal)
 				}
 			}
 		case rpc.Error:
-			errMap := map[string]interface{}{"code": err.ErrorCode(), "message": err.Error()}
 			if dataErr, ok := err.(rpc.DataError); ok {
-				errMap["data"] = dataErr.ErrorData()
+				setError(resp, err.ErrorCode(), err.Error(), dataErr.ErrorData())
+			} else {
+				setError(resp, err.ErrorCode(), err.Error(), nil)
 			}
-			resp.Set("error", errMap)
 		default:
-			setError(resp, -32603, err.Error())
+			setError(resp, -32603, err.Error(), nil)
 		}
 		resps = append(resps, resp)
 	}
@@ -460,8 +460,14 @@ func (b *bridge) Send(call jsre.Call) (goja.Value, error) {
 	return result, nil
 }
 
-func setError(resp *goja.Object, code int, msg string) {
-	resp.Set("error", map[string]interface{}{"code": code, "message": msg})
+func setError(resp *goja.Object, code int, msg string, data interface{}) {
+	err := make(map[string]interface{})
+	err["code"] = code
+	err["message"] = msg
+	if data != nil {
+		err["data"] = data
+	}
+	resp.Set("error", err)
 }
 
 // isNumber returns true if input value is a JS number.
