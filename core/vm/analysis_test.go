@@ -17,7 +17,9 @@
 package vm
 
 import (
+	"bytes"
 	"fmt"
+	"github.com/ethereum/go-ethereum/common"
 	"testing"
 
 	"github.com/ethereum/go-ethereum/crypto"
@@ -67,11 +69,74 @@ func codeFill(size int, op OpCode) []byte {
 	return code
 }
 
+func TestLEB(t *testing.T) {
+	inputs := []uint16{0, 1, 31, 64, 1023, 1024, 0xc000, 0xffff}
+	exp := []string{"000000", "010000", "1f0000", "400100", "7f0f00", "401000", "40400c", "7f7f0f"}
+	for i, num := range inputs {
+		bitmap := make([]byte, 3)
+		lebEncode(num, bitmap)
+		if expb := common.FromHex(exp[i]); !bytes.Equal(bitmap, expb) {
+			t.Errorf("testcase %d: expected %x, got %x", i, expb, bitmap)
+		}
+	}
+}
+
+func TestLebEncodeDecode(t *testing.T) {
+	data := make([]byte, 3)
+	zero := make([]byte, 3)
+	for i := 0; i < 65536; i++ {
+		// clear buf
+		copy(data, zero)
+		exp := uint16(i)
+		lebEncode(exp, data)
+		got := lebDecode(data)
+		if exp != got {
+			t.Fatalf("exp %d, got %d: %x", exp, got, data)
+		}
+	}
+}
+
+//BenchmarkLEB/encode-6         	346602476	         3.06 ns/op	       0 B/op	       0 allocs/op
+//BenchmarkLEB/decode-6         	362383606	         3.48 ns/op	       0 B/op	       0 allocs/op
+func BenchmarkLEB(b *testing.B) {
+	bitmap := make([]byte, 20)
+	b.Run("encode", func(b *testing.B) {
+		b.ReportAllocs()
+		for i := 0; i < b.N; i++ {
+			lebEncode(0xffff, bitmap)
+			lebEncode(0xff, bitmap)
+			lebEncode(0x0, bitmap)
+		}
+	})
+	var (
+		x = make([]byte, 20)
+		y = make([]byte, 20)
+		z = make([]byte, 20)
+	)
+	lebEncode(0xffff, x)
+	lebEncode(0xff, y)
+	lebEncode(0x0, z)
+	b.Run("decode", func(b *testing.B) {
+		b.ReportAllocs()
+		for i := 0; i < b.N; i++ {
+			lebDecode(x)
+			lebDecode(y)
+			lebDecode(z)
+		}
+	})
+}
+
 // BenchmarkJumpdestHashing_1200k benchmarks a segment of code consisting of
 // 1.2M bytes
-func BenchmarkJumpdestAnalysis_1200k(bench *testing.B) {
+func BenchmarkJumpdestAnalysis_1200k(b *testing.B) {
+	benchJumpdestAnalysis(1200000, b)
+}
+
+func BenchmarkJumpdestAnalysis_49152(b *testing.B) {
+	benchJumpdestAnalysis(49152, b)
+}
+func benchJumpdestAnalysis(size int, bench *testing.B) {
 	// 1.4 ms
-	size := 1200000
 	bench.Run("zeroes", func(b *testing.B) {
 		code := codeFill(size, STOP)
 		b.ResetTimer()
@@ -129,6 +194,69 @@ func BenchmarkJumpdestAnalysis_1200k(bench *testing.B) {
 	})
 }
 
+func BenchmarkShadowAnalysis_49152(b *testing.B) {
+	benchShadowAnalysis(49152, b)
+}
+
+func benchShadowAnalysis(size int, bench *testing.B) {
+	// 1.4 ms
+	bench.Run("zeroes", func(b *testing.B) {
+		code := codeFill(size, STOP)
+		b.ResetTimer()
+		for i := 0; i < b.N; i++ {
+			shadowMap(code)
+		}
+		b.StopTimer()
+	})
+
+	bench.Run("jumpdests", func(b *testing.B) {
+		code := codeFill(size, JUMPDEST)
+		b.ResetTimer()
+		for i := 0; i < b.N; i++ {
+			shadowMap(code)
+		}
+		b.StopTimer()
+	})
+
+	bench.Run("push32", func(b *testing.B) {
+		code := codeFill(size, PUSH32)
+		b.ResetTimer()
+		for i := 0; i < b.N; i++ {
+			shadowMap(code)
+		}
+		b.StopTimer()
+	})
+	// This is the worst case for current implementation
+	bench.Run("push1", func(b *testing.B) {
+		code := codeFill(size, PUSH1)
+		b.ResetTimer()
+		for i := 0; i < b.N; i++ {
+			shadowMap(code)
+		}
+		b.StopTimer()
+	})
+	bench.Run("beginsub", func(b *testing.B) {
+		code := codeFill(size, BEGINSUB)
+		b.ResetTimer()
+		for i := 0; i < b.N; i++ {
+			shadowMap(code)
+		}
+		b.StopTimer()
+	})
+	bench.Run("beginsub_push", func(b *testing.B) {
+		// Combine both worst cases
+		code := codeFill(size, PUSH1)
+		for index := 0; index < len(code); index += 32 {
+			code[index] = byte(BEGINSUB)
+		}
+		b.ResetTimer()
+		for i := 0; i < b.N; i++ {
+			shadowMap(code)
+		}
+		b.StopTimer()
+	})
+}
+
 func BenchmarkJumpdestValidation(b *testing.B) {
 	size := 24000
 	b.Run("jumpdests", func(b *testing.B) {
@@ -149,6 +277,16 @@ func BenchmarkJumpdestValidation(b *testing.B) {
 func BenchmarkHashing_1200k(bench *testing.B) {
 	// 4 ms
 	code := make([]byte, 1200000)
+	bench.ResetTimer()
+	for i := 0; i < bench.N; i++ {
+		crypto.Keccak256Hash(code)
+	}
+	bench.StopTimer()
+}
+
+func BenchmarkHashing_49152(bench *testing.B) {
+	// 4 ms
+	code := make([]byte, 49152)
 	bench.ResetTimer()
 	for i := 0; i < bench.N; i++ {
 		crypto.Keccak256Hash(code)
