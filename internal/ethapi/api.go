@@ -1046,13 +1046,15 @@ func (s *PublicBlockChainAPI) EstimateGasList(ctx context.Context, argsList []Ca
 		gas       hexutil.Uint64
 		err       error
 		stateData *PreviousState
+		gasCap    = s.b.RPCGasCap()
 	)
 	returnVals := make([]hexutil.Uint64, len(argsList))
 	for idx, args := range argsList {
-		gas, stateData, err = DoEstimateGas(ctx, s.b, args, stateData, blockNrOrHash, s.b.RPCGasCap())
+		gas, stateData, err = DoEstimateGas(ctx, s.b, args, stateData, blockNrOrHash, gasCap)
 		if err != nil {
 			return nil, err
 		}
+		gasCap.Sub(gasCap, new(big.Int).SetUint64(uint64(gas)))
 		returnVals[idx] = gas
 	}
 	return returnVals, nil
