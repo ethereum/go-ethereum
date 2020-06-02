@@ -1038,6 +1038,8 @@ func (s *PublicBlockChainAPI) EstimateGas(ctx context.Context, args CallArgs) (h
 	return gas, err
 }
 
+// EstimateGasList returns an estimate of the amount of gas needed to execute list of
+// given transactions against the current pending block.
 func (s *PublicBlockChainAPI) EstimateGasList(ctx context.Context, argsList []CallArgs) ([]hexutil.Uint64, error) {
 	blockNrOrHash := rpc.BlockNumberOrHashWithNumber(rpc.PendingBlockNumber)
 	var (
