@@ -121,5 +121,6 @@ func enable2315(jt *JumpTable) {
 		minStack:    minStack(0, 0),
 		maxStack:    maxStack(0, 0),
 		valid:       true,
+		jumps:       true,
 	}
 }

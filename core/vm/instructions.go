@@ -681,7 +681,7 @@ func opJumpSub(pc *uint64, interpreter *EVMInterpreter, callContext *callCtx) ([
 		return nil, ErrInvalidJump
 	}
 	callContext.rstack.push(*pc)
-	*pc = posU64+1
+	*pc = posU64 + 1
 	interpreter.intPool.put(pos)
 	return nil, nil
 }
@@ -693,7 +693,7 @@ func opReturnSub(pc *uint64, interpreter *EVMInterpreter, callContext *callCtx) 
 	// Other than the check that the return stack is not empty, there is no
 	// need to validate the pc from 'returns', since we only ever push valid
 	//values onto it via jumpsub.
-	*pc = callContext.rstack.pop()
+	*pc = callContext.rstack.pop() + 1
 	return nil, nil
 }
 

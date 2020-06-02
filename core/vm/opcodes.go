@@ -203,7 +203,7 @@ const (
 
 // unofficial opcodes used for parsing.
 const (
-	PUSH OpCode = 0xc0 + iota
+	PUSH OpCode = 0xb0 + iota
 	DUP
 	SWAP
 )
@@ -300,6 +300,10 @@ var opCodeToString = map[OpCode]string{
 	GAS:      "GAS",
 	JUMPDEST: "JUMPDEST",
 
+	BEGINSUB:  "BEGINSUB",
+	JUMPSUB:   "JUMPSUB",
+	RETURNSUB: "RETURNSUB",
+
 	// 0x60 range - push.
 	PUSH1:  "PUSH1",
 	PUSH2:  "PUSH2",
@@ -372,11 +376,6 @@ var opCodeToString = map[OpCode]string{
 	LOG2:   "LOG2",
 	LOG3:   "LOG3",
 	LOG4:   "LOG4",
-
-	// 0xb0 range
-	BEGINSUB:  "BEGINSUB",
-	JUMPSUB:   "JUMPSUB",
-	RETURNSUB: "RETURNSUB",
 
 	// 0xf0 range.
 	CREATE:       "CREATE",
@@ -469,6 +468,9 @@ var stringToOp = map[string]OpCode{
 	"MSIZE":          MSIZE,
 	"GAS":            GAS,
 	"JUMPDEST":       JUMPDEST,
+	"BEGINSUB":       BEGINSUB,
+	"RETURNSUB":      RETURNSUB,
+	"JUMPSUB":        JUMPSUB,
 	"PUSH1":          PUSH1,
 	"PUSH2":          PUSH2,
 	"PUSH3":          PUSH3,
@@ -538,8 +540,6 @@ var stringToOp = map[string]OpCode{
 	"LOG2":           LOG2,
 	"LOG3":           LOG3,
 	"LOG4":           LOG4,
-	"JUMPSUB":        JUMPSUB,
-	"RETURNSUB":      RETURNSUB,
 	"CREATE":         CREATE,
 	"CREATE2":        CREATE2,
 	"CALL":           CALL,

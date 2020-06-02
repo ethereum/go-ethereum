@@ -384,8 +384,10 @@ func TestJumpSub1024Limit(t *testing.T) {
 	// The code recursively calls itself. It should error when the returns-stack
 	// grows above 1023
 	state.SetCode(address, []byte{
+		byte(vm.PUSH1), 3,
+		byte(vm.JUMPSUB),
 		byte(vm.BEGINSUB),
-		byte(vm.PUSH1), 0,
+		byte(vm.PUSH1), 3,
 		byte(vm.JUMPSUB),
 	})
 	tracer := stepCounter{inner: vm.NewJSONLogger(nil, os.Stdout)}
@@ -399,11 +401,11 @@ func TestJumpSub1024Limit(t *testing.T) {
 			//Tracer:    vm.NewJSONLogger(nil, os.Stdout),
 			Tracer: &tracer,
 		}})
-	exp := "evm: return stack limit reached"
+	exp := "return stack limit reached"
 	if err.Error() != exp {
 		t.Fatalf("expected %v, got %v", exp, err)
 	}
-	if exp, got := 3072, tracer.steps; exp != got {
+	if exp, got := 2048, tracer.steps; exp != got {
 		t.Fatalf("expected %d steps, got %d", exp, got)
 	}
 }
@@ -414,8 +416,12 @@ func TestReturnSubShallow(t *testing.T) {
 	// The code does returnsub without having anything on the returnstack.
 	// It should not panic, but just fail after one step
 	state.SetCode(address, []byte{
+		byte(vm.PUSH1), 5,
+		byte(vm.JUMPSUB),
 		byte(vm.RETURNSUB),
 		byte(vm.PC),
+		byte(vm.BEGINSUB),
+		byte(vm.RETURNSUB),
 		byte(vm.PC),
 	})
 	tracer := stepCounter{}
@@ -430,16 +436,17 @@ func TestReturnSubShallow(t *testing.T) {
 			Tracer:    &tracer,
 		}})
 
-	exp := "evm: invalid retsub"
+	exp := "invalid retsub"
 	if err.Error() != exp {
 		t.Fatalf("expected %v, got %v", exp, err)
 	}
-	if exp, got := 1, tracer.steps; exp != got {
+	if exp, got := 4, tracer.steps; exp != got {
 		t.Fatalf("expected %d steps, got %d", exp, got)
 	}
 }
 
-func TestReturnCases(t *testing.T) {
+// disabled -- only used for generating markdown
+func DisabledTestReturnCases(t *testing.T) {
 	cfg := &Config{
 		EVMConfig: vm.Config{
 			Debug:     true,
@@ -451,6 +458,17 @@ func TestReturnCases(t *testing.T) {
 	Execute([]byte{
 		byte(vm.RETURNSUB),
 		byte(vm.PC),
+		byte(vm.PC),
+	}, nil, cfg)
+
+	// Should also fail
+	Execute([]byte{
+		byte(vm.PUSH1), 5,
+		byte(vm.JUMPSUB),
+		byte(vm.RETURNSUB),
+		byte(vm.PC),
+		byte(vm.BEGINSUB),
+		byte(vm.RETURNSUB),
 		byte(vm.PC),
 	}, nil, cfg)
 
@@ -468,9 +486,10 @@ func TestReturnCases(t *testing.T) {
 	}, nil, cfg)
 }
 
-// TestEipExampleCases contains various testcases that are used for the
+// DisabledTestEipExampleCases contains various testcases that are used for the
 // EIP examples
-func TestEipExampleCases(t *testing.T) {
+// This test is disabled, as it's only used for generating markdown
+func DisabledTestEipExampleCases(t *testing.T) {
 	cfg := &Config{
 		EVMConfig: vm.Config{
 			Debug:     true,
