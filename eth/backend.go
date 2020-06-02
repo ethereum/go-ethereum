@@ -24,6 +24,7 @@ import (
 	"runtime"
 	"sync"
 	"sync/atomic"
+	"time"
 
 	"github.com/ethereum/go-ethereum/accounts"
 	"github.com/ethereum/go-ethereum/accounts/abi/bind"
@@ -231,6 +232,15 @@ func New(ctx *node.ServiceContext, config *Config) (*Ethereum, error) {
 		return nil, err
 	}
 
+	// Check for invalid shutdown
+	invalidShutdown, _ := chainDb.Get([]byte("unsafe-shutdown"))
+	if invalidShutdown != nil {
+		log.Error("unsafe shutdown detected", "time", string(invalidShutdown))
+	}
+	// Create an invalid shutdown in database in case the app crashed
+	if err = chainDb.Put([]byte("unsafe-shutdown"), []byte(time.Now().String())); err != nil {
+		log.Warn("Failed to record possible future unsafe shutdown", "err", err)
+	}
 	return eth, nil
 }
 
@@ -567,6 +577,9 @@ func (s *Ethereum) Stop() error {
 		s.lesServer.Stop()
 	}
 
+	if err := s.chainDb.Delete([]byte("unsafe-shutdown")); err != nil {
+		log.Error("err", err)
+	}
 	// Then stop everything else.
 	s.bloomIndexer.Close()
 	close(s.closeBloomHandler)
