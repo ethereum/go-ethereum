@@ -141,6 +141,7 @@ func benchmarkPrecompiled(addr string, test precompiledTest, bench *testing.B) {
 	)
 
 	bench.Run(fmt.Sprintf("%s-Gas=%d", test.Name, contract.Gas), func(bench *testing.B) {
+		bench.ReportAllocs()
 		bench.ResetTimer()
 		for i := 0; i < bench.N; i++ {
 			contract.Gas = reqGas
@@ -148,6 +149,7 @@ func benchmarkPrecompiled(addr string, test precompiledTest, bench *testing.B) {
 			res, err = RunPrecompiledContract(p, data, contract)
 		}
 		bench.StopTimer()
+		bench.ReportMetric(float64(reqGas), "gas/op")
 		//Check if it is correct
 		if err != nil {
 			bench.Error(err)
@@ -202,14 +204,10 @@ func BenchmarkPrecompiledIdentity(bench *testing.B) {
 
 // Tests the sample inputs from the ModExp EIP 198.
 func TestPrecompiledModExp(t *testing.T) { testJson("modexp", "05", t) }
-
-// Benchmarks the sample inputs from the ModExp EIP 198.
 func BenchmarkPrecompiledModExp(b *testing.B) { benchJson("modexp", "05", b) }
 
 // Tests the sample inputs from the elliptic curve addition EIP 213.
 func TestPrecompiledBn256Add(t *testing.T) { testJson("bn256Add", "06", t) }
-
-// Benchmarks the sample inputs from the elliptic curve addition EIP 213.
 func BenchmarkPrecompiledBn256Add(b *testing.B) { benchJson("bn256Add", "06", b) }
 
 // Tests OOG
