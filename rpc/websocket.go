@@ -184,7 +184,7 @@ func newWebsocketCodec(conn *websocket.Conn) ServerCodec {
 	wc := &websocketCodec{
 		jsonCodec: NewFuncCodec(conn, conn.WriteJSON, conn.ReadJSON).(*jsonCodec),
 		conn:      conn,
-		pingReset: make(chan struct{}),
+		pingReset: make(chan struct{}, 1),
 	}
 	wc.wg.Add(1)
 	go wc.pingLoop()
@@ -199,10 +199,10 @@ func (wc *websocketCodec) close() {
 func (wc *websocketCodec) writeJSON(ctx context.Context, v interface{}) error {
 	err := wc.jsonCodec.writeJSON(ctx, v)
 	if err == nil {
-		// Delay the next idle ping.
+		// Notify pingLoop to delay the next idle ping.
 		select {
 		case wc.pingReset <- struct{}{}:
-		case <-wc.jsonCodec.closed():
+		default:
 		}
 	}
 	return err
