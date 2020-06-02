@@ -1058,6 +1058,7 @@ func (pool *TxPool) runReorg(done chan struct{}, reset *txpoolResetRequest, dirt
 	}
 	pool.mu.Unlock()
 
+	// Notify subsystems for newly added transactions
 	for _, tx := range promoted {
 		addr, _ := types.Sender(pool.signer, tx)
 		if _, ok := events[addr]; !ok {
@@ -1065,8 +1066,6 @@ func (pool *TxPool) runReorg(done chan struct{}, reset *txpoolResetRequest, dirt
 		}
 		events[addr].Put(tx)
 	}
-
-	// Notify subsystems for newly added transactions
 	if len(events) > 0 {
 		var txs []*types.Transaction
 		for _, set := range events {
