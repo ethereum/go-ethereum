@@ -17,6 +17,7 @@
 package runtime
 
 import (
+	"encoding/binary"
 	"fmt"
 	"math/big"
 	"os"
@@ -591,5 +592,48 @@ func DisabledTestEipExampleCases(t *testing.T) {
 		}
 		prettyPrint("In this example, the code 'walks' into a subroutine, which is not "+
 			"allowed, and causes an error", code)
+	}
+}
+
+// BenchmarkJumperLoop test a contract which jumps back and forth across a
+// pretty large area. This jumping could cause heavy swapping of processor cache lines
+// ~80ms on master
+func BenchmarkJumperLoop(b *testing.B) {
+	// We use a 'full' contract of size  24576.
+	// Fill it with jumpdests to begin with
+	code := make([]byte, 0x6000)
+	jumpSize := 2000
+	for i, _ := range code {
+		code[i] = byte(vm.JUMPDEST)
+	}
+	// Add jumps
+	addJump := func(i, next int) {
+		code[i] = byte(vm.JUMPDEST)
+		code[i+1] = byte(vm.PUSH2)
+		binary.BigEndian.PutUint16(code[i+2:], uint16(next))
+		code[i+4] = byte(vm.JUMP)
+	}
+	i := 0
+	for ; i < 0x6000-jumpSize; i += jumpSize {
+		addJump(i, i+jumpSize)
+	}
+	// Add a jump back to zero
+	addJump(i, 0)
+
+	cfg := new(Config)
+	setDefaults(cfg)
+	cfg.GasLimit = 10000000
+
+	cfg.State, _ = state.New(common.Hash{}, state.NewDatabase(rawdb.NewMemoryDatabase()), nil)
+	var (
+		address = common.BytesToAddress([]byte("contract"))
+		sender  = vm.AccountRef(cfg.Origin)
+		value   = big.NewInt(0)
+	)
+	cfg.State.CreateAccount(address)
+	cfg.State.SetCode(address, code)
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		NewEnv(cfg).Call(sender, common.BytesToAddress([]byte("contract")), nil, 10000000, value)
 	}
 }
