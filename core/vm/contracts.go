@@ -78,9 +78,9 @@ var PrecompiledContractsIstanbul = map[common.Address]PrecompiledContract{
 	common.BytesToAddress([]byte{9}): &blake2F{},
 }
 
-// PrecompiledContractsBerlin contains the default set of pre-compiled Ethereum
-// contracts used in the Berlin release.
-var PrecompiledContractsBerlin = map[common.Address]PrecompiledContract{
+// PrecompiledContractsYoloV1 contains the default set of pre-compiled Ethereum
+// contracts used in the Yolo v1 test release.
+var PrecompiledContractsYoloV1 = map[common.Address]PrecompiledContract{
 	common.BytesToAddress([]byte{1}):  &ecrecover{},
 	common.BytesToAddress([]byte{2}):  &sha256hash{},
 	common.BytesToAddress([]byte{3}):  &ripemd160hash{},

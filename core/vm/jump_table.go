@@ -66,8 +66,7 @@ type JumpTable [256]operation
 func newYoloV1InstructionSet() JumpTable {
 	instructionSet := newIstanbulInstructionSet()
 
-	// TODO fix this after merging subroutines
-	//enable2315(&instructionSet) // Subroutines
+	enable2315(&instructionSet) // Subroutines - https://eips.ethereum.org/EIPS/eip-2315
 
 	return instructionSet
 }

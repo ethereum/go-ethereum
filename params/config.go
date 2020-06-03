@@ -31,6 +31,7 @@ var (
 	RopstenGenesisHash = common.HexToHash("0x41941023680923e0fe4d74a34bdac8141f2540e3ae90623718e47d66d1ca4a2d")
 	RinkebyGenesisHash = common.HexToHash("0x6341fd3daf94b748c72ced5a5b26028f2474f5f00d824504e4fa37a75767e177")
 	GoerliGenesisHash  = common.HexToHash("0xbf7e331f7f7c1dd2e05159666b3bf8bc7a8a3a9eb1d518969eab529dd9b88c1a")
+	YoloV1GenesisHash  = common.HexToHash("0xc3fd235071f24f93865b0850bd2a2119b30f7224d18a0e34c7bbf549ad7e3d36")
 )
 
 // TrustedCheckpoints associates each known checkpoint with the genesis hash of
@@ -144,6 +145,7 @@ var (
 		ConstantinopleBlock: big.NewInt(3660663),
 		PetersburgBlock:     big.NewInt(4321234),
 		IstanbulBlock:       big.NewInt(5435345),
+		MuirGlacierBlock:    nil,
 		Clique: &CliqueConfig{
 			Period: 15,
 			Epoch:  30000,
@@ -183,6 +185,7 @@ var (
 		ConstantinopleBlock: big.NewInt(0),
 		PetersburgBlock:     big.NewInt(0),
 		IstanbulBlock:       big.NewInt(1561651),
+		MuirGlacierBlock:    nil,
 		Clique: &CliqueConfig{
 			Period: 15,
 			Epoch:  30000,
@@ -208,6 +211,27 @@ var (
 			common.HexToAddress("0x0DF8fa387C602AE62559cC4aFa4972A7045d6707"), // Guillaume
 		},
 		Threshold: 2,
+	}
+
+	// YoloV1ChainConfig contains the chain parameters to run a node on the YOLOv1 test network.
+	YoloV1ChainConfig = &ChainConfig{
+		ChainID:             big.NewInt(133519467574833),
+		HomesteadBlock:      big.NewInt(0),
+		DAOForkBlock:        nil,
+		DAOForkSupport:      true,
+		EIP150Block:         big.NewInt(0),
+		EIP155Block:         big.NewInt(0),
+		EIP158Block:         big.NewInt(0),
+		ByzantiumBlock:      big.NewInt(0),
+		ConstantinopleBlock: big.NewInt(0),
+		PetersburgBlock:     big.NewInt(0),
+		IstanbulBlock:       big.NewInt(0),
+		MuirGlacierBlock:    nil,
+		YoloV1Block:         big.NewInt(0),
+		Clique: &CliqueConfig{
+			Period: 15,
+			Epoch:  30000,
+		},
 	}
 
 	// AllEthashProtocolChanges contains every protocol change (EIPs) introduced
@@ -296,9 +320,8 @@ type ChainConfig struct {
 	IstanbulBlock       *big.Int `json:"istanbulBlock,omitempty"`       // Istanbul switch block (nil = no fork, 0 = already on istanbul)
 	MuirGlacierBlock    *big.Int `json:"muirGlacierBlock,omitempty"`    // Eip-2384 (bomb delay) switch block (nil = no fork, 0 = already activated)
 
-	YoloV1Block *big.Int `json:"yoloV1Block,omitempty"` // Yolo-V1: https://github.com/ethereum/EIPs/pull/2657 (Ephemeral testnet)
-
-	EWASMBlock *big.Int `json:"ewasmBlock,omitempty"` // EWASM switch block (nil = no fork, 0 = already activated)
+	YoloV1Block *big.Int `json:"yoloV1Block,omitempty"` // YOLO v1: https://github.com/ethereum/EIPs/pull/2657 (Ephemeral testnet)
+	EWASMBlock  *big.Int `json:"ewasmBlock,omitempty"`  // EWASM switch block (nil = no fork, 0 = already activated)
 
 	// Various consensus engines
 	Ethash *EthashConfig `json:"ethash,omitempty"`
@@ -335,7 +358,7 @@ func (c *ChainConfig) String() string {
 	default:
 		engine = "unknown"
 	}
-	return fmt.Sprintf("{ChainID: %v Homestead: %v DAO: %v DAOSupport: %v EIP150: %v EIP155: %v EIP158: %v Byzantium: %v Constantinople: %v Petersburg: %v Istanbul: %v, Muir Glacier: %v, Yolo-V1: %v, Engine: %v}",
+	return fmt.Sprintf("{ChainID: %v Homestead: %v DAO: %v DAOSupport: %v EIP150: %v EIP155: %v EIP158: %v Byzantium: %v Constantinople: %v Petersburg: %v Istanbul: %v, Muir Glacier: %v, YOLO v1: %v, Engine: %v}",
 		c.ChainID,
 		c.HomesteadBlock,
 		c.DAOForkBlock,
@@ -444,6 +467,7 @@ func (c *ChainConfig) CheckConfigForkOrder() error {
 	var lastFork fork
 	for _, cur := range []fork{
 		{name: "homesteadBlock", block: c.HomesteadBlock},
+		{name: "daoForkBlock", block: c.DAOForkBlock, optional: true},
 		{name: "eip150Block", block: c.EIP150Block},
 		{name: "eip155Block", block: c.EIP155Block},
 		{name: "eip158Block", block: c.EIP158Block},
@@ -468,7 +492,7 @@ func (c *ChainConfig) CheckConfigForkOrder() error {
 			}
 		}
 		// If it was optional and not set, then ignore it
-		if !(lastFork.optional && lastFork.block == nil) {
+		if !cur.optional || cur.block != nil {
 			lastFork = cur
 		}
 	}
@@ -513,7 +537,7 @@ func (c *ChainConfig) checkCompatible(newcfg *ChainConfig, head *big.Int) *Confi
 		return newCompatError("Muir Glacier fork block", c.MuirGlacierBlock, newcfg.MuirGlacierBlock)
 	}
 	if isForkIncompatible(c.YoloV1Block, newcfg.YoloV1Block, head) {
-		return newCompatError("Yolo-V1 fork block", c.YoloV1Block, newcfg.YoloV1Block)
+		return newCompatError("YOLOv1 fork block", c.YoloV1Block, newcfg.YoloV1Block)
 	}
 	if isForkIncompatible(c.EWASMBlock, newcfg.EWASMBlock, head) {
 		return newCompatError("ewasm fork block", c.EWASMBlock, newcfg.EWASMBlock)

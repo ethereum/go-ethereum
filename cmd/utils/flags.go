@@ -171,7 +171,7 @@ var (
 	}
 	YoloV1Flag = cli.BoolFlag{
 		Name:  "yolov1",
-		Usage: "Yolo-V1 network: pre-configured proof-of-authority shortlived test network.",
+		Usage: "YOLOv1 network: pre-configured proof-of-authority shortlived test network.",
 	}
 	RinkebyFlag = cli.BoolFlag{
 		Name:  "rinkeby",
@@ -807,6 +807,8 @@ func setBootstrapNodes(ctx *cli.Context, cfg *p2p.Config) {
 		urls = params.RinkebyBootnodes
 	case ctx.GlobalBool(GoerliFlag.Name):
 		urls = params.GoerliBootnodes
+	case ctx.GlobalBool(YoloV1Flag.Name):
+		urls = params.YoloV1Bootnodes
 	case cfg.BootstrapNodes != nil:
 		return // already set, don't apply defaults.
 	}
@@ -841,6 +843,8 @@ func setBootstrapNodesV5(ctx *cli.Context, cfg *p2p.Config) {
 		urls = params.RinkebyBootnodes
 	case ctx.GlobalBool(GoerliFlag.Name):
 		urls = params.GoerliBootnodes
+	case ctx.GlobalBool(YoloV1Flag.Name):
+		urls = params.YoloV1Bootnodes
 	case cfg.BootstrapNodesV5 != nil:
 		return // already set, don't apply defaults.
 	}
@@ -1587,12 +1591,9 @@ func SetEthConfig(ctx *cli.Context, stack *node.Node, cfg *eth.Config) {
 		setDNSDiscoveryDefaults(cfg, params.GoerliGenesisHash)
 	case ctx.GlobalBool(YoloV1Flag.Name):
 		if !ctx.GlobalIsSet(NetworkIdFlag.Name) {
-			// TODO @karalabe, fill the right network id
-			cfg.NetworkId = 5
+			cfg.NetworkId = 133519467574833 // "yolov1"
 		}
 		cfg.Genesis = core.DefaultYoloV1GenesisBlock()
-		// TODO @karalabe
-		//setDNSDiscoveryDefaults(cfg, params.GoerliGenesisHash)
 	case ctx.GlobalBool(DeveloperFlag.Name):
 		if !ctx.GlobalIsSet(NetworkIdFlag.Name) {
 			cfg.NetworkId = 1337
