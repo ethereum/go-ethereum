@@ -126,15 +126,15 @@ func (e *ExpiredValue) SubExp(a ExpiredValue) {
 // LinearExpiredValue is very similiar with the expiredValue which the value
 // will continuously expired. But the different part is it's expired linearly.
 type LinearExpiredValue struct {
-	Offset uint64 // The latest time offset
-	Val    uint64 // The remaining value, can never be negative
-	Rate   uint64 `rlp:"-"` // Expiration rate(by nanosecond), will ignored by RLP
+	Offset uint64         // The latest time offset
+	Val    uint64         // The remaining value, can never be negative
+	Rate   mclock.AbsTime `rlp:"-"` // Expiration rate(by nanosecond), will ignored by RLP
 }
 
 // value calculates the value at the given moment. This function always has the
 // assumption that the given timestamp shouldn't less than the recorded one.
 func (e LinearExpiredValue) Value(now mclock.AbsTime) uint64 {
-	offset := uint64(now) / e.Rate
+	offset := uint64(now / e.Rate)
 	if e.Offset < offset {
 		diff := offset - e.Offset
 		if e.Val >= diff {
@@ -149,7 +149,7 @@ func (e LinearExpiredValue) Value(now mclock.AbsTime) uint64 {
 // add adds a signed value at the given moment. This function always has the
 // assumption that the given timestamp shouldn't less than the recorded one.
 func (e *LinearExpiredValue) Add(amount int64, now mclock.AbsTime) uint64 {
-	offset := uint64(now) / e.Rate
+	offset := uint64(now / e.Rate)
 	if e.Offset < offset {
 		diff := offset - e.Offset
 		if e.Val >= diff {

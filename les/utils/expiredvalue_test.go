@@ -127,25 +127,25 @@ func TestLinearExpiredValue(t *testing.T) {
 		{LinearExpiredValue{
 			Offset: 0,
 			Val:    0,
-			Rate:   1,
+			Rate:   mclock.AbsTime(1),
 		}, 0, 0},
 
 		{LinearExpiredValue{
 			Offset: 1,
 			Val:    1,
-			Rate:   1,
+			Rate:   mclock.AbsTime(1),
 		}, 0, 1},
 
 		{LinearExpiredValue{
 			Offset: 1,
 			Val:    1,
-			Rate:   1,
+			Rate:   mclock.AbsTime(1),
 		}, mclock.AbsTime(2), 0},
 
 		{LinearExpiredValue{
 			Offset: 1,
 			Val:    1,
-			Rate:   1,
+			Rate:   mclock.AbsTime(1),
 		}, mclock.AbsTime(3), 0},
 	}
 	for _, c := range cases {
@@ -165,25 +165,25 @@ func TestLinearExpiredAddition(t *testing.T) {
 		{LinearExpiredValue{
 			Offset: 0,
 			Val:    0,
-			Rate:   1,
+			Rate:   mclock.AbsTime(1),
 		}, -1, 0, 0},
 
 		{LinearExpiredValue{
 			Offset: 1,
 			Val:    1,
-			Rate:   1,
+			Rate:   mclock.AbsTime(1),
 		}, -1, 0, 0},
 
 		{LinearExpiredValue{
 			Offset: 1,
 			Val:    2,
-			Rate:   1,
+			Rate:   mclock.AbsTime(1),
 		}, -1, mclock.AbsTime(2), 0},
 
 		{LinearExpiredValue{
 			Offset: 1,
 			Val:    2,
-			Rate:   1,
+			Rate:   mclock.AbsTime(1),
 		}, -2, mclock.AbsTime(2), 0},
 	}
 	for _, c := range cases {

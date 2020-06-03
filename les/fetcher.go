@@ -400,7 +400,7 @@ func (f *lightFetcher) mainloop() {
 						}
 						// In theory td should exists.
 						td := f.chain.GetTd(anno.data.Hash, anno.data.Number)
-						if td != nil && td.Cmp(anno.data.Td) != 0  {
+						if td != nil && td.Cmp(anno.data.Td) != 0 {
 							droplist = append(droplist, id)
 							break
 						}

@@ -337,7 +337,7 @@ type serverPeer struct {
 	sentReqs         map[uint64]sentReqEntry
 
 	// Statistics
-	errCount    int // Counter the invalid responses server has replied
+	errCount    utils.LinearExpiredValue // Counter the invalid responses server has replied
 	updateCount uint64
 	updateTime  mclock.AbsTime
 
@@ -356,7 +356,8 @@ func newServerPeer(version int, network uint64, trusted bool, p *p2p.Peer, rw p2
 			sendQueue: utils.NewExecQueue(100),
 			closeCh:   make(chan struct{}),
 		},
-		trusted: trusted,
+		trusted:  trusted,
+		errCount: utils.LinearExpiredValue{Rate: mclock.AbsTime(time.Hour)},
 	}
 }
 
@@ -716,11 +717,15 @@ type clientPeer struct {
 	// responseLock ensures that responses are queued in the same order as
 	// RequestProcessed is called
 	responseLock  sync.Mutex
-	server        bool
-	invalidCount  uint32 // Counter the invalid request the client peer has made.
 	responseCount uint64 // Counter to generate an unique id for request processing.
-	errCh         chan error
-	fcClient      *flowcontrol.ClientNode // Server side mirror token bucket.
+
+	// invalidLock is used for protecting invalidCount.
+	invalidLock  sync.Mutex
+	invalidCount utils.LinearExpiredValue // Counter the invalid request the client peer has made.
+
+	server   bool
+	errCh    chan error
+	fcClient *flowcontrol.ClientNode // Server side mirror token bucket.
 }
 
 func newClientPeer(version int, network uint64, p *p2p.Peer, rw p2p.MsgReadWriter) *clientPeer {
@@ -734,7 +739,8 @@ func newClientPeer(version int, network uint64, p *p2p.Peer, rw p2p.MsgReadWrite
 			sendQueue: utils.NewExecQueue(100),
 			closeCh:   make(chan struct{}),
 		},
-		errCh: make(chan error, 1),
+		invalidCount: utils.LinearExpiredValue{Rate: mclock.AbsTime(time.Hour)},
+		errCh:        make(chan error, 1),
 	}
 }
 

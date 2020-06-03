@@ -331,8 +331,7 @@ func (h *clientHandler) handleMsg(p *serverPeer) error {
 	// Deliver the received response to retriever.
 	if deliverMsg != nil {
 		if err := h.backend.retriever.deliver(p, deliverMsg); err != nil {
-			p.errCount++
-			if p.errCount > maxResponseErrors {
+			if val := p.errCount.Add(1, mclock.Now()); val > maxRequestErrors {
 				return err
 			}
 		}
