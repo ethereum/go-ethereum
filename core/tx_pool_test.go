@@ -1884,7 +1884,7 @@ func benchmarkFuturePromotion(b *testing.B, size int) {
 	// Benchmark the speed of pool validation
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
-		pool.promoteExecutables(nil)
+		pool.promoteExecutables([]common.Address{account})
 	}
 }
 

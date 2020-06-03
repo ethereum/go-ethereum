@@ -205,6 +205,16 @@ func (config *TxPoolConfig) sanitize() TxPoolConfig {
 	return conf
 }
 
+// txsInsert is the wrapper of transaction batch but with an additional
+// flag to indicate whether the transactions if local or not.
+type txsInsert struct {
+	txs   []*types.Transaction
+	errs  []error
+	local bool
+	sync  bool
+	done  chan struct{}
+}
+
 // TxPool contains all currently known transactions. Transactions
 // enter the pool when they are received from the network or submitted
 // locally. They exit the pool when they are included in the blockchain.
@@ -237,14 +247,15 @@ type TxPool struct {
 	all     *txLookup                    // All transactions to allow lookups
 	priced  *txPricedList                // All transactions sorted by price
 
-	chainHeadCh     chan ChainHeadEvent
-	chainHeadSub    event.Subscription
-	reqResetCh      chan *txpoolResetRequest
-	reqPromoteCh    chan *accountSet
-	queueTxEventCh  chan *types.Transaction
-	reorgDoneCh     chan chan struct{}
-	reorgShutdownCh chan struct{}  // requests shutdown of scheduleReorgLoop
-	wg              sync.WaitGroup // tracks loop, scheduleReorgLoop
+	chainHeadCh    chan ChainHeadEvent
+	chainHeadSub   event.Subscription
+	reqResetCh     chan *txpoolResetRequest
+	reqPromoteCh   chan *accountSet
+	queueTxEventCh chan *types.Transaction
+	reorgDoneCh    chan chan struct{}
+	insertTxsCh    chan *txsInsert
+	shutdownCh     chan struct{}
+	wg             sync.WaitGroup // tracks loop, scheduleReorgLoop, insertLopp
 }
 
 type txpoolResetRequest struct {
@@ -259,21 +270,22 @@ func NewTxPool(config TxPoolConfig, chainconfig *params.ChainConfig, chain block
 
 	// Create the transaction pool with its initial settings
 	pool := &TxPool{
-		config:          config,
-		chainconfig:     chainconfig,
-		chain:           chain,
-		signer:          types.NewEIP155Signer(chainconfig.ChainID),
-		pending:         make(map[common.Address]*txList),
-		queue:           make(map[common.Address]*txList),
-		beats:           make(map[common.Address]time.Time),
-		all:             newTxLookup(),
-		chainHeadCh:     make(chan ChainHeadEvent, chainHeadChanSize),
-		reqResetCh:      make(chan *txpoolResetRequest),
-		reqPromoteCh:    make(chan *accountSet),
-		queueTxEventCh:  make(chan *types.Transaction),
-		reorgDoneCh:     make(chan chan struct{}),
-		reorgShutdownCh: make(chan struct{}),
-		gasPrice:        new(big.Int).SetUint64(config.PriceLimit),
+		config:         config,
+		chainconfig:    chainconfig,
+		chain:          chain,
+		signer:         types.NewEIP155Signer(chainconfig.ChainID),
+		pending:        make(map[common.Address]*txList),
+		queue:          make(map[common.Address]*txList),
+		beats:          make(map[common.Address]time.Time),
+		all:            newTxLookup(),
+		chainHeadCh:    make(chan ChainHeadEvent, chainHeadChanSize),
+		reqResetCh:     make(chan *txpoolResetRequest),
+		reqPromoteCh:   make(chan *accountSet),
+		queueTxEventCh: make(chan *types.Transaction),
+		reorgDoneCh:    make(chan chan struct{}),
+		insertTxsCh:    make(chan *txsInsert),
+		shutdownCh:     make(chan struct{}),
+		gasPrice:       new(big.Int).SetUint64(config.PriceLimit),
 	}
 	pool.locals = newAccountSet(pool.signer)
 	for _, addr := range config.Locals {
@@ -286,6 +298,10 @@ func NewTxPool(config TxPoolConfig, chainconfig *params.ChainConfig, chain block
 	// Start the reorg loop early so it can handle requests generated during journal loading.
 	pool.wg.Add(1)
 	go pool.scheduleReorgLoop()
+
+	// Start the insertion loop
+	pool.wg.Add(1)
+	go pool.insertTxLoop()
 
 	// If local transactions and journaling is enabled, load from disk
 	if !config.NoLocals && config.Journal != "" {
@@ -337,7 +353,7 @@ func (pool *TxPool) loop() {
 
 		// System shutdown.
 		case <-pool.chainHeadSub.Err():
-			close(pool.reorgShutdownCh)
+			close(pool.shutdownCh)
 			return
 
 		// Handle stats reporting ticks
@@ -379,6 +395,76 @@ func (pool *TxPool) loop() {
 				pool.mu.Unlock()
 			}
 		}
+	}
+}
+
+// insertTxLoop is the loop which is responsble for caching all local and remote
+// new transactions and organize them for batch insertion. Usually local transactions
+// have higher priority for insertion.
+func (pool *TxPool) insertTxLoop() {
+	defer pool.wg.Done()
+
+	var (
+		done   chan struct{}
+		local  []*txsInsert
+		remote []*txsInsert
+	)
+	for {
+		if done == nil {
+			if len(local) > 0 {
+				done = make(chan struct{})
+				go pool.insertTxs(done, local, true)
+				local = local[:0]
+			} else if len(remote) > 0 {
+				done = make(chan struct{})
+				go pool.insertTxs(done, []*txsInsert{remote[0]}, false)
+				remote = remote[1:]
+			}
+		}
+		select {
+		case insert := <-pool.insertTxsCh:
+			if insert.local {
+				local = append(local, insert)
+			} else {
+				remote = append(remote, insert)
+			}
+		case <-done:
+			done = nil
+		case <-pool.shutdownCh:
+			for _, insert := range append(local, remote...) {
+				close(insert.done)
+			}
+			return
+		}
+	}
+}
+
+// insertTxs inserts a batch of transactions into txpool and assign back the errors.
+func (pool *TxPool) insertTxs(done chan struct{}, txsInserts []*txsInsert, local bool) {
+	defer close(done)
+
+	var (
+		waitlist   []*txsInsert
+		totalDirty = newAccountSet(pool.signer)
+	)
+	pool.mu.Lock()
+	for _, insert := range txsInserts {
+		errs, dirty := pool.addTxsLocked(insert.txs, local)
+		insert.errs = errs
+		totalDirty.merge(dirty)
+
+		if !insert.sync {
+			close(insert.done)
+		} else {
+			waitlist = append(waitlist, insert)
+		}
+	}
+	pool.mu.Unlock()
+
+	// Reorg the pool internals if needed and return
+	<-pool.requestPromoteExecutables(totalDirty)
+	for _, insert := range waitlist {
+		close(insert.done)
 	}
 }
 
@@ -767,6 +853,15 @@ func (pool *TxPool) AddRemote(tx *types.Transaction) error {
 	return errs[0]
 }
 
+// closedErrs returns a batch of txpool closed errors.
+func (pool *TxPool) closedErrs(n int) []error {
+	var errs []error
+	for i := 0; i < n; i++ {
+		errs = append(errs, errors.New("txpool closed"))
+	}
+	return errs
+}
+
 // addTxs attempts to queue a batch of transactions if they are valid.
 func (pool *TxPool) addTxs(txs []*types.Transaction, local, sync bool) []error {
 	// Filter out known ones without obtaining the pool lock or recovering signatures
@@ -792,21 +887,27 @@ func (pool *TxPool) addTxs(txs []*types.Transaction, local, sync bool) []error {
 		types.Sender(pool.signer, tx)
 	}
 	// Process all the new transaction and merge any errors into the original slice
-	pool.mu.Lock()
-	newErrs, dirtyAddrs := pool.addTxsLocked(news, local)
-	pool.mu.Unlock()
-
+	insertOp := &txsInsert{
+		txs:   news,
+		local: local,
+		sync:  sync,
+		done:  make(chan struct{}),
+	}
+	select {
+	case pool.insertTxsCh <- insertOp:
+		<-insertOp.done
+	case <-pool.shutdownCh:
+		return pool.closedErrs(len(txs))
+	}
+	if insertOp.errs == nil {
+		return pool.closedErrs(len(txs))
+	}
 	var nilSlot = 0
-	for _, err := range newErrs {
+	for _, err := range insertOp.errs {
 		for errs[nilSlot] != nil {
 			nilSlot++
 		}
 		errs[nilSlot] = err
-	}
-	// Reorg the pool internals if needed and return
-	done := pool.requestPromoteExecutables(dirtyAddrs)
-	if sync {
-		<-done
 	}
 	return errs
 }
@@ -916,8 +1017,8 @@ func (pool *TxPool) requestReset(oldHead *types.Header, newHead *types.Header) c
 	select {
 	case pool.reqResetCh <- &txpoolResetRequest{oldHead, newHead}:
 		return <-pool.reorgDoneCh
-	case <-pool.reorgShutdownCh:
-		return pool.reorgShutdownCh
+	case <-pool.shutdownCh:
+		return pool.shutdownCh
 	}
 }
 
@@ -927,8 +1028,8 @@ func (pool *TxPool) requestPromoteExecutables(set *accountSet) chan struct{} {
 	select {
 	case pool.reqPromoteCh <- set:
 		return <-pool.reorgDoneCh
-	case <-pool.reorgShutdownCh:
-		return pool.reorgShutdownCh
+	case <-pool.shutdownCh:
+		return pool.shutdownCh
 	}
 }
 
@@ -936,7 +1037,7 @@ func (pool *TxPool) requestPromoteExecutables(set *accountSet) chan struct{} {
 func (pool *TxPool) queueTxEvent(tx *types.Transaction) {
 	select {
 	case pool.queueTxEventCh <- tx:
-	case <-pool.reorgShutdownCh:
+	case <-pool.shutdownCh:
 	}
 }
 
@@ -1001,7 +1102,7 @@ func (pool *TxPool) scheduleReorgLoop() {
 		case <-curDone:
 			curDone = nil
 
-		case <-pool.reorgShutdownCh:
+		case <-pool.shutdownCh:
 			// Wait for current run to finish.
 			if curDone != nil {
 				<-curDone
