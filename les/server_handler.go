@@ -833,7 +833,7 @@ func (h *serverHandler) handleMsg(p *clientPeer, wg *sync.WaitGroup) error {
 		clientErrorMeter.Mark(1)
 		return errResp(ErrInvalidMsgCode, "%v", msg.Code)
 	}
-	// If the client has made too much invalid request(e.g. request a non-exist data),
+	// If the client has made too much invalid request(e.g. request a non-existent data),
 	// reject them to prevent SPAM attack.
 	if atomic.LoadUint32(&p.invalidCount) > maxRequestErrors {
 		clientErrorMeter.Mark(1)

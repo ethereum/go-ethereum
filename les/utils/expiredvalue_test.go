@@ -17,6 +17,7 @@
 package utils
 
 import (
+	"github.com/ethereum/go-ethereum/common/mclock"
 	"testing"
 )
 
@@ -119,9 +120,9 @@ func TestExpiredValueSubtraction(t *testing.T) {
 
 func TestLinearExpiredValue(t *testing.T) {
 	var cases = []struct {
-		value     LinearExpiredValue
-		timestamp uint64
-		expect    uint64
+		value  LinearExpiredValue
+		now    mclock.AbsTime
+		expect uint64
 	}{
 		{LinearExpiredValue{
 			Offset: 0,
@@ -139,16 +140,16 @@ func TestLinearExpiredValue(t *testing.T) {
 			Offset: 1,
 			Val:    1,
 			Rate:   1,
-		}, 2, 0},
+		}, mclock.AbsTime(2), 0},
 
 		{LinearExpiredValue{
 			Offset: 1,
 			Val:    1,
 			Rate:   1,
-		}, 3, 0},
+		}, mclock.AbsTime(3), 0},
 	}
 	for _, c := range cases {
-		if value := c.value.Value(c.timestamp); value != c.expect {
+		if value := c.value.Value(c.now); value != c.expect {
 			t.Fatalf("Value mismatch, want=%d, got=%d", c.expect, value)
 		}
 	}
@@ -156,10 +157,10 @@ func TestLinearExpiredValue(t *testing.T) {
 
 func TestLinearExpiredAddition(t *testing.T) {
 	var cases = []struct {
-		value     LinearExpiredValue
-		amount    int64
-		timestamp uint64
-		expect    uint64
+		value  LinearExpiredValue
+		amount int64
+		now    mclock.AbsTime
+		expect uint64
 	}{
 		{LinearExpiredValue{
 			Offset: 0,
@@ -177,16 +178,16 @@ func TestLinearExpiredAddition(t *testing.T) {
 			Offset: 1,
 			Val:    2,
 			Rate:   1,
-		}, -1, 2, 0},
+		}, -1, mclock.AbsTime(2), 0},
 
 		{LinearExpiredValue{
 			Offset: 1,
 			Val:    2,
 			Rate:   1,
-		}, -2, 2, 0},
+		}, -2, mclock.AbsTime(2), 0},
 	}
 	for _, c := range cases {
-		if value := c.value.Add(c.amount, c.timestamp); value != c.expect {
+		if value := c.value.Add(c.amount, c.now); value != c.expect {
 			t.Fatalf("Value mismatch, want=%d, got=%d", c.expect, value)
 		}
 	}

@@ -133,8 +133,8 @@ type LinearExpiredValue struct {
 
 // value calculates the value at the given moment. This function always has the
 // assumption that the given timestamp shouldn't less than the recorded one.
-func (e LinearExpiredValue) Value(timestamp uint64) uint64 {
-	offset := timestamp / e.Rate
+func (e LinearExpiredValue) Value(now mclock.AbsTime) uint64 {
+	offset := uint64(now) / e.Rate
 	if e.Offset < offset {
 		diff := offset - e.Offset
 		if e.Val >= diff {
@@ -148,8 +148,8 @@ func (e LinearExpiredValue) Value(timestamp uint64) uint64 {
 
 // add adds a signed value at the given moment. This function always has the
 // assumption that the given timestamp shouldn't less than the recorded one.
-func (e *LinearExpiredValue) Add(amount int64, timestamp uint64) uint64 {
-	offset := timestamp / e.Rate
+func (e *LinearExpiredValue) Add(amount int64, now mclock.AbsTime) uint64 {
+	offset := uint64(now) / e.Rate
 	if e.Offset < offset {
 		diff := offset - e.Offset
 		if e.Val >= diff {

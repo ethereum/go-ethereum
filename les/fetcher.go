@@ -365,13 +365,13 @@ func (f *lightFetcher) mainloop() {
 		case resp := <-f.deliverCh:
 			if req := fetching[resp.reqid]; req != nil {
 				delete(fetching, resp.reqid)
+				f.rescheduleTimer(fetching, requestTimer)
 
 				resp.remain <- f.fetcher.FilterHeaders(resp.peerid.String(), resp.headers, time.Now())
 			} else {
 				// Discard the entire packet no matter it's a timeout response or unexpected one.
 				resp.remain <- resp.headers
 			}
-			f.rescheduleTimer(fetching, requestTimer)
 
 		case ev := <-headCh:
 			// Short circuit if we are still syncing.
