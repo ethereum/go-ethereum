@@ -19,6 +19,7 @@ package main
 import (
 	"bytes"
 	"encoding/json"
+	"fmt"
 	"io/ioutil"
 	"reflect"
 	"strings"
@@ -92,4 +93,33 @@ func TestParitySturebyConverter(t *testing.T) {
 	if !bytes.Equal(expBlob, enc) {
 		t.Fatalf("chainspec mismatch")
 	}
+}
+
+func TestParityYoloConverter(t *testing.T) {
+	blob, err := ioutil.ReadFile("testdata/yolo_geth.json")
+	if err != nil {
+		t.Fatalf("could not read file: %v", err)
+	}
+	var genesis core.Genesis
+	if err := json.Unmarshal(blob, &genesis); err != nil {
+		t.Fatalf("failed parsing genesis: %v", err)
+	}
+	spec, err := newParityChainSpec("yolo", &genesis, []string{})
+	if err != nil {
+		t.Fatalf("failed creating chainspec: %v", err)
+	}
+	enc, err := json.MarshalIndent(spec, "", "  ")
+	if err != nil {
+		t.Fatalf("failed encoding chainspec: %v", err)
+	}
+	fmt.Println(string(enc))
+	// TODO add reference config here
+	//expBlob, err := ioutil.ReadFile("testdata/yolo_parity.json")
+	//if err != nil {
+	//	t.Fatalf("could not read file: %v", err)
+	//}
+	//if !bytes.Equal(expBlob, enc) {
+	//	t.Fatalf("chainspec mismatch")
+	//}
+
 }

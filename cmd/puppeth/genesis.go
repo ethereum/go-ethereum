@@ -225,22 +225,31 @@ func (spec *alethGenesisSpec) setAccount(address common.Address, account core.Ge
 
 }
 
+type parityEthashConfig struct {
+	Params struct {
+		MinimumDifficulty      *hexutil.Big      `json:"minimumDifficulty"`
+		DifficultyBoundDivisor *hexutil.Big      `json:"difficultyBoundDivisor"`
+		DurationLimit          *hexutil.Big      `json:"durationLimit"`
+		BlockReward            map[string]string `json:"blockReward"`
+		DifficultyBombDelays   map[string]string `json:"difficultyBombDelays"`
+		HomesteadTransition    hexutil.Uint64    `json:"homesteadTransition"`
+		EIP100bTransition      hexutil.Uint64    `json:"eip100bTransition"`
+	} `json:"params"`
+}
+type parityCliqueConfig struct {
+	Params struct {
+		Period uint64 `json:"period"`
+		Epoch  uint64 `json:"epoch"`
+	} `json:"params"`
+}
+
 // parityChainSpec is the chain specification format used by Parity.
 type parityChainSpec struct {
 	Name    string `json:"name"`
 	Datadir string `json:"dataDir"`
 	Engine  struct {
-		Ethash struct {
-			Params struct {
-				MinimumDifficulty      *hexutil.Big      `json:"minimumDifficulty"`
-				DifficultyBoundDivisor *hexutil.Big      `json:"difficultyBoundDivisor"`
-				DurationLimit          *hexutil.Big      `json:"durationLimit"`
-				BlockReward            map[string]string `json:"blockReward"`
-				DifficultyBombDelays   map[string]string `json:"difficultyBombDelays"`
-				HomesteadTransition    hexutil.Uint64    `json:"homesteadTransition"`
-				EIP100bTransition      hexutil.Uint64    `json:"eip100bTransition"`
-			} `json:"params"`
-		} `json:"Ethash"`
+		Ethash *parityEthashConfig `json:"Ethash,omitempty"`
+		Clique *parityCliqueConfig `json:"clique,omitempty"`
 	} `json:"engine"`
 
 	Params struct {
@@ -316,10 +325,21 @@ type parityChainSpecPricing struct {
 
 	// Before the https://github.com/paritytech/parity-ethereum/pull/11039,
 	// Parity uses this format to config bn pairing price policy.
-	AltBnPairing *parityChainSepcAltBnPairingPricing `json:"alt_bn128_pairing,omitempty"`
+	AltBnPairing *parityChainSpecPairingPricing `json:"alt_bn128_pairing,omitempty"`
 
 	// Blake2F is the price per round of Blake2 compression
 	Blake2F *parityChainSpecBlakePricing `json:"blake2_f,omitempty"`
+
+	G1Add      *parityChainSpecConstOperationPricing `json:"bls12_381_g1_add,omitempty"`
+	G1Mul      *parityChainSpecConstOperationPricing `json:"bls12_381_g1_mul,omitempty"`
+	G1MultiExp *parityChainSpecBasePricePricing      `json:"bls12_381_g1_multiexp,omitempty"`
+	G2Add      *parityChainSpecConstOperationPricing `json:"bls12_381_g2_add,omitempty"`
+	G2Mul      *parityChainSpecConstOperationPricing `json:"bls12_381_g2_mul,omitempty"`
+	G2MultiExp *parityChainSpecBasePricePricing      `json:"bls12_381_g2_multiexp,omitempty"`
+
+	Bls12Pairing *parityChainSpecPairingPricing        `json:"bls12_381_pairing,omitempty"`
+	Bls12FpToG1  *parityChainSpecConstOperationPricing `json:"bls12_381_fp_to_g1,omitempty"`
+	Bls12FpToG2  *parityChainSpecConstOperationPricing `json:"bls12_381_fp2_to_g2,omitempty"`
 }
 
 type parityChainSpecLinearPricing struct {
@@ -331,15 +351,20 @@ type parityChainSpecModExpPricing struct {
 	Divisor uint64 `json:"divisor"`
 }
 
-// parityChainSpecAltBnConstOperationPricing defines the price
+// parityChainSpecConstOperationPricing defines the price
 // policy for bn const operation(used after istanbul)
-type parityChainSpecAltBnConstOperationPricing struct {
+type parityChainSpecConstOperationPricing struct {
 	Price uint64 `json:"price"`
 }
 
-// parityChainSepcAltBnPairingPricing defines the price policy
+//
+type parityChainSpecBasePricePricing struct {
+	BasePrice uint64 `json:"base_price"`
+}
+
+// parityChainSpecPairingPricing defines the price policy
 // for bn pairing.
-type parityChainSepcAltBnPairingPricing struct {
+type parityChainSpecPairingPricing struct {
 	Base uint64 `json:"base"`
 	Pair uint64 `json:"pair"`
 }
@@ -351,8 +376,8 @@ type parityChainSpecBlakePricing struct {
 }
 
 type parityChainSpecAlternativePrice struct {
-	AltBnConstOperationPrice *parityChainSpecAltBnConstOperationPricing `json:"alt_bn128_const_operations,omitempty"`
-	AltBnPairingPrice        *parityChainSepcAltBnPairingPricing        `json:"alt_bn128_pairing,omitempty"`
+	AltBnConstOperationPrice *parityChainSpecConstOperationPricing `json:"alt_bn128_const_operations,omitempty"`
+	AltBnPairingPrice        *parityChainSpecPairingPricing        `json:"alt_bn128_pairing,omitempty"`
 }
 
 // parityChainSpecVersionedPricing represents a single version price policy.
@@ -364,8 +389,8 @@ type parityChainSpecVersionedPricing struct {
 // newParityChainSpec converts a go-ethereum genesis block into a Parity specific
 // chain specification format.
 func newParityChainSpec(network string, genesis *core.Genesis, bootnodes []string) (*parityChainSpec, error) {
-	// Only ethash is currently supported between go-ethereum and Parity
-	if genesis.Config.Ethash == nil {
+	// Ethash and clique are currently supported in both go-ethereum and Parity
+	if genesis.Config.Ethash == nil && genesis.Config.Clique == nil {
 		return nil, errors.New("unsupported consensus engine")
 	}
 	// Reconstruct the chain spec in Parity's format
@@ -374,16 +399,24 @@ func newParityChainSpec(network string, genesis *core.Genesis, bootnodes []strin
 		Nodes:   bootnodes,
 		Datadir: strings.ToLower(network),
 	}
-	spec.Engine.Ethash.Params.BlockReward = make(map[string]string)
-	spec.Engine.Ethash.Params.DifficultyBombDelays = make(map[string]string)
-	// Frontier
-	spec.Engine.Ethash.Params.MinimumDifficulty = (*hexutil.Big)(params.MinimumDifficulty)
-	spec.Engine.Ethash.Params.DifficultyBoundDivisor = (*hexutil.Big)(params.DifficultyBoundDivisor)
-	spec.Engine.Ethash.Params.DurationLimit = (*hexutil.Big)(params.DurationLimit)
-	spec.Engine.Ethash.Params.BlockReward["0x0"] = hexutil.EncodeBig(ethash.FrontierBlockReward)
 
-	// Homestead
-	spec.Engine.Ethash.Params.HomesteadTransition = hexutil.Uint64(genesis.Config.HomesteadBlock.Uint64())
+	if genesis.Config.Ethash != nil {
+		spec.Engine.Ethash = &parityEthashConfig{}
+		spec.Engine.Ethash.Params.BlockReward = make(map[string]string)
+		spec.Engine.Ethash.Params.DifficultyBombDelays = make(map[string]string)
+		// Frontier
+		spec.Engine.Ethash.Params.MinimumDifficulty = (*hexutil.Big)(params.MinimumDifficulty)
+		spec.Engine.Ethash.Params.DifficultyBoundDivisor = (*hexutil.Big)(params.DifficultyBoundDivisor)
+		spec.Engine.Ethash.Params.DurationLimit = (*hexutil.Big)(params.DurationLimit)
+		spec.Engine.Ethash.Params.BlockReward["0x0"] = hexutil.EncodeBig(ethash.FrontierBlockReward)
+		// Homestead
+		spec.Engine.Ethash.Params.HomesteadTransition = hexutil.Uint64(genesis.Config.HomesteadBlock.Uint64())
+
+	} else if genesis.Config.Clique != nil {
+		spec.Engine.Clique = &parityCliqueConfig{}
+		spec.Engine.Clique.Params.Epoch = genesis.Config.Clique.Epoch
+		spec.Engine.Clique.Params.Period = genesis.Config.Clique.Period
+	}
 
 	// Tangerine Whistle : 150
 	// https://github.com/ethereum/EIPs/blob/master/EIPS/eip-608.md
@@ -480,7 +513,7 @@ func newParityChainSpec(network string, genesis *core.Genesis, bootnodes []strin
 			Name:       "alt_bn128_pairing",
 			ActivateAt: (*hexutil.Big)(genesis.Config.ByzantiumBlock),
 			Pricing: &parityChainSpecPricing{
-				AltBnPairing: &parityChainSepcAltBnPairingPricing{Base: 100000, Pair: 80000},
+				AltBnPairing: &parityChainSpecPairingPricing{Base: 100000, Pair: 80000},
 			},
 		})
 	}
@@ -494,12 +527,12 @@ func newParityChainSpec(network string, genesis *core.Genesis, bootnodes []strin
 			Pricing: map[*hexutil.Big]*parityChainSpecVersionedPricing{
 				(*hexutil.Big)(big.NewInt(0)): {
 					Price: &parityChainSpecAlternativePrice{
-						AltBnConstOperationPrice: &parityChainSpecAltBnConstOperationPricing{Price: 500},
+						AltBnConstOperationPrice: &parityChainSpecConstOperationPricing{Price: 500},
 					},
 				},
 				(*hexutil.Big)(genesis.Config.IstanbulBlock): {
 					Price: &parityChainSpecAlternativePrice{
-						AltBnConstOperationPrice: &parityChainSpecAltBnConstOperationPricing{Price: 150},
+						AltBnConstOperationPrice: &parityChainSpecConstOperationPricing{Price: 150},
 					},
 				},
 			},
@@ -510,12 +543,12 @@ func newParityChainSpec(network string, genesis *core.Genesis, bootnodes []strin
 			Pricing: map[*hexutil.Big]*parityChainSpecVersionedPricing{
 				(*hexutil.Big)(big.NewInt(0)): {
 					Price: &parityChainSpecAlternativePrice{
-						AltBnConstOperationPrice: &parityChainSpecAltBnConstOperationPricing{Price: 40000},
+						AltBnConstOperationPrice: &parityChainSpecConstOperationPricing{Price: 40000},
 					},
 				},
 				(*hexutil.Big)(genesis.Config.IstanbulBlock): {
 					Price: &parityChainSpecAlternativePrice{
-						AltBnConstOperationPrice: &parityChainSpecAltBnConstOperationPricing{Price: 6000},
+						AltBnConstOperationPrice: &parityChainSpecConstOperationPricing{Price: 6000},
 					},
 				},
 			},
@@ -526,12 +559,12 @@ func newParityChainSpec(network string, genesis *core.Genesis, bootnodes []strin
 			Pricing: map[*hexutil.Big]*parityChainSpecVersionedPricing{
 				(*hexutil.Big)(big.NewInt(0)): {
 					Price: &parityChainSpecAlternativePrice{
-						AltBnPairingPrice: &parityChainSepcAltBnPairingPricing{Base: 100000, Pair: 80000},
+						AltBnPairingPrice: &parityChainSpecPairingPricing{Base: 100000, Pair: 80000},
 					},
 				},
 				(*hexutil.Big)(genesis.Config.IstanbulBlock): {
 					Price: &parityChainSpecAlternativePrice{
-						AltBnPairingPrice: &parityChainSepcAltBnPairingPricing{Base: 45000, Pair: 34000},
+						AltBnPairingPrice: &parityChainSpecPairingPricing{Base: 45000, Pair: 34000},
 					},
 				},
 			},
@@ -543,6 +576,75 @@ func newParityChainSpec(network string, genesis *core.Genesis, bootnodes []strin
 				Blake2F: &parityChainSpecBlakePricing{GasPerRound: 1},
 			},
 		})
+	}
+	if genesis.Config.YoloV1Block != nil {
+		spec.setPrecompile(10, &parityChainSpecBuiltin{
+			Name:       "bls12_381_g1_add",
+			ActivateAt: (*hexutil.Big)(genesis.Config.YoloV1Block),
+			Pricing: &parityChainSpecPricing{
+				G1Add: &parityChainSpecConstOperationPricing{Price: 600},
+			},
+		})
+		spec.setPrecompile(11, &parityChainSpecBuiltin{
+			Name:       "bls12_381_g1_mul",
+			ActivateAt: (*hexutil.Big)(genesis.Config.YoloV1Block),
+			Pricing: &parityChainSpecPricing{
+				G1Mul: &parityChainSpecConstOperationPricing{Price: 12000},
+			},
+		})
+		spec.setPrecompile(12, &parityChainSpecBuiltin{
+			Name:       "bls12_381_g1_multiexp",
+			ActivateAt: (*hexutil.Big)(genesis.Config.YoloV1Block),
+			Pricing: &parityChainSpecPricing{
+				G1MultiExp: &parityChainSpecBasePricePricing{BasePrice: 12000},
+			},
+		})
+		spec.setPrecompile(13, &parityChainSpecBuiltin{
+			Name:       "bls12_381_g2_add",
+			ActivateAt: (*hexutil.Big)(genesis.Config.YoloV1Block),
+			Pricing: &parityChainSpecPricing{
+				G2Add: &parityChainSpecConstOperationPricing{Price: 4500},
+			},
+		})
+		spec.setPrecompile(14, &parityChainSpecBuiltin{
+			Name:       "bls12_381_g2_mul",
+			ActivateAt: (*hexutil.Big)(genesis.Config.YoloV1Block),
+			Pricing: &parityChainSpecPricing{
+				G2Mul: &parityChainSpecConstOperationPricing{Price: 55000},
+			},
+		})
+		spec.setPrecompile(15, &parityChainSpecBuiltin{
+			Name:       "bls12_381_g2_multiexp",
+			ActivateAt: (*hexutil.Big)(genesis.Config.YoloV1Block),
+			Pricing: &parityChainSpecPricing{
+				G2MultiExp: &parityChainSpecBasePricePricing{BasePrice: 55000},
+			},
+		})
+		spec.setPrecompile(16, &parityChainSpecBuiltin{
+			Name:       "bls12_381_pairing",
+			ActivateAt: (*hexutil.Big)(genesis.Config.YoloV1Block),
+			Pricing: &parityChainSpecPricing{
+				Bls12Pairing: &parityChainSpecPairingPricing{
+					Base: 115000,
+					Pair: 23000,
+				},
+			},
+		})
+		spec.setPrecompile(17, &parityChainSpecBuiltin{
+			Name:       "bls12_381_fp_to_g1",
+			ActivateAt: (*hexutil.Big)(genesis.Config.YoloV1Block),
+			Pricing: &parityChainSpecPricing{
+				Bls12FpToG1: &parityChainSpecConstOperationPricing{Price: 600},
+			},
+		})
+		spec.setPrecompile(18, &parityChainSpecBuiltin{
+			Name:       "bls12_381_fp2_to_g2",
+			ActivateAt: (*hexutil.Big)(genesis.Config.YoloV1Block),
+			Pricing: &parityChainSpecPricing{
+				Bls12FpToG2: &parityChainSpecConstOperationPricing{Price: 600},
+			},
+		})
+
 	}
 	return spec, nil
 }
@@ -559,10 +661,13 @@ func (spec *parityChainSpec) setPrecompile(address byte, data *parityChainSpecBu
 }
 
 func (spec *parityChainSpec) setByzantium(num *big.Int) {
-	spec.Engine.Ethash.Params.BlockReward[hexutil.EncodeBig(num)] = hexutil.EncodeBig(ethash.ByzantiumBlockReward)
-	spec.Engine.Ethash.Params.DifficultyBombDelays[hexutil.EncodeBig(num)] = hexutil.EncodeUint64(3000000)
 	n := hexutil.Uint64(num.Uint64())
-	spec.Engine.Ethash.Params.EIP100bTransition = n
+
+	if spec.Engine.Ethash != nil {
+		spec.Engine.Ethash.Params.BlockReward[hexutil.EncodeBig(num)] = hexutil.EncodeBig(ethash.ByzantiumBlockReward)
+		spec.Engine.Ethash.Params.DifficultyBombDelays[hexutil.EncodeBig(num)] = hexutil.EncodeUint64(3000000)
+		spec.Engine.Ethash.Params.EIP100bTransition = n
+	}
 	spec.Params.EIP140Transition = n
 	spec.Params.EIP211Transition = n
 	spec.Params.EIP214Transition = n
@@ -570,9 +675,11 @@ func (spec *parityChainSpec) setByzantium(num *big.Int) {
 }
 
 func (spec *parityChainSpec) setConstantinople(num *big.Int) {
-	spec.Engine.Ethash.Params.BlockReward[hexutil.EncodeBig(num)] = hexutil.EncodeBig(ethash.ConstantinopleBlockReward)
-	spec.Engine.Ethash.Params.DifficultyBombDelays[hexutil.EncodeBig(num)] = hexutil.EncodeUint64(2000000)
 	n := hexutil.Uint64(num.Uint64())
+	if spec.Engine.Ethash != nil {
+		spec.Engine.Ethash.Params.BlockReward[hexutil.EncodeBig(num)] = hexutil.EncodeBig(ethash.ConstantinopleBlockReward)
+		spec.Engine.Ethash.Params.DifficultyBombDelays[hexutil.EncodeBig(num)] = hexutil.EncodeUint64(2000000)
+	}
 	spec.Params.EIP145Transition = n
 	spec.Params.EIP1014Transition = n
 	spec.Params.EIP1052Transition = n
