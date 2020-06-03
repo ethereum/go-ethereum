@@ -1046,16 +1046,19 @@ func (pool *TxPool) runReorg(done chan struct{}, reset *txpoolResetRequest, dirt
 	// because of another transaction (e.g. higher gas price).
 	if reset != nil {
 		pool.demoteUnexecutables()
+
+		// Update all accounts to the latest known pending nonce
+		nonces := make(map[common.Address]uint64)
+		for addr, list := range pool.pending {
+			txs := list.Flatten() // Heavy but will be cached and is needed by the miner anyway
+			nonces[addr] = txs[len(txs)-1].Nonce()+1
+		}
+		pool.pendingNonces.resetAll(nonces)
 	}
 	// Ensure pool.queue and pool.pending sizes stay within the configured limits.
 	pool.truncatePending()
 	pool.truncateQueue()
 
-	// Update all accounts to the latest known pending nonce
-	for addr, list := range pool.pending {
-		txs := list.Flatten() // Heavy but will be cached and is needed by the miner anyway
-		pool.pendingNonces.set(addr, txs[len(txs)-1].Nonce()+1)
-	}
 	pool.mu.Unlock()
 
 	// Notify subsystems for newly added transactions
