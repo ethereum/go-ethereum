@@ -20,8 +20,8 @@ import (
 	"bytes"
 	"context"
 	"errors"
-	"fmt"
 	"math/big"
+	"reflect"
 	"strings"
 	"testing"
 	"time"
@@ -388,6 +388,7 @@ func TestSimulatedBackend_EstimateGas(t *testing.T) {
 		message     ethereum.CallMsg
 		expect      uint64
 		expectError error
+		expectData  interface{}
 	}{
 		{"plain transfer(valid)", ethereum.CallMsg{
 			From:     addr,
@@ -396,7 +397,7 @@ func TestSimulatedBackend_EstimateGas(t *testing.T) {
 			GasPrice: big.NewInt(0),
 			Value:    big.NewInt(1),
 			Data:     nil,
-		}, params.TxGas, nil},
+		}, params.TxGas, nil, nil},
 
 		{"plain transfer(invalid)", ethereum.CallMsg{
 			From:     addr,
@@ -405,7 +406,7 @@ func TestSimulatedBackend_EstimateGas(t *testing.T) {
 			GasPrice: big.NewInt(0),
 			Value:    big.NewInt(1),
 			Data:     nil,
-		}, 0, errors.New("always failing transaction (execution reverted)")},
+		}, 0, errors.New("execution reverted"), nil},
 
 		{"Revert", ethereum.CallMsg{
 			From:     addr,
@@ -414,7 +415,7 @@ func TestSimulatedBackend_EstimateGas(t *testing.T) {
 			GasPrice: big.NewInt(0),
 			Value:    nil,
 			Data:     common.Hex2Bytes("d8b98391"),
-		}, 0, errors.New("always failing transaction (execution reverted) (revert reason)")},
+		}, 0, errors.New("execution reverted"), "revert reason"},
 
 		{"PureRevert", ethereum.CallMsg{
 			From:     addr,
@@ -423,7 +424,7 @@ func TestSimulatedBackend_EstimateGas(t *testing.T) {
 			GasPrice: big.NewInt(0),
 			Value:    nil,
 			Data:     common.Hex2Bytes("aa8b1d30"),
-		}, 0, errors.New("always failing transaction (execution reverted)")},
+		}, 0, errors.New("execution reverted"), nil},
 
 		{"OOG", ethereum.CallMsg{
 			From:     addr,
@@ -432,7 +433,7 @@ func TestSimulatedBackend_EstimateGas(t *testing.T) {
 			GasPrice: big.NewInt(0),
 			Value:    nil,
 			Data:     common.Hex2Bytes("50f6fe34"),
-		}, 0, errors.New("gas required exceeds allowance (100000)")},
+		}, 0, errors.New("gas required exceeds allowance (100000)"), nil},
 
 		{"Assert", ethereum.CallMsg{
 			From:     addr,
@@ -441,7 +442,7 @@ func TestSimulatedBackend_EstimateGas(t *testing.T) {
 			GasPrice: big.NewInt(0),
 			Value:    nil,
 			Data:     common.Hex2Bytes("b9b046f9"),
-		}, 0, errors.New("always failing transaction (invalid opcode: opcode 0xfe not defined)")},
+		}, 0, errors.New("invalid opcode: opcode 0xfe not defined"), nil},
 
 		{"Valid", ethereum.CallMsg{
 			From:     addr,
@@ -450,7 +451,7 @@ func TestSimulatedBackend_EstimateGas(t *testing.T) {
 			GasPrice: big.NewInt(0),
 			Value:    nil,
 			Data:     common.Hex2Bytes("e09fface"),
-		}, 21275, nil},
+		}, 21275, nil, nil},
 	}
 	for _, c := range cases {
 		got, err := sim.EstimateGas(context.Background(), c.message)
@@ -460,6 +461,13 @@ func TestSimulatedBackend_EstimateGas(t *testing.T) {
 			}
 			if c.expectError.Error() != err.Error() {
 				t.Fatalf("Expect error, want %v, got %v", c.expectError, err)
+			}
+			if c.expectData != nil {
+				if rerr, ok := err.(*revertError); !ok {
+					t.Fatalf("Expect revert error, got %T", err)
+				} else if !reflect.DeepEqual(rerr.ErrorData(), c.expectData) {
+					t.Fatalf("Error data mismatch, want %v, got %v", c.expectData, rerr.ErrorData())
+				}
 			}
 			continue
 		}
@@ -1041,8 +1049,12 @@ func TestSimulatedBackend_CallContractRevert(t *testing.T) {
 				t.Errorf("result from %v was not nil: %v", key, res)
 			}
 			if val != nil {
-				if err.Error() != fmt.Sprintf("execution reverted: %v", val) {
-					t.Errorf("error was malformed: got %v want %v", err, fmt.Errorf("execution reverted: %v", val))
+				rerr, ok := err.(*revertError)
+				if !ok {
+					t.Errorf("expect revert error")
+				}
+				if !reflect.DeepEqual(rerr.ErrorData(), val) {
+					t.Errorf("error was malformed: got %v want %v", rerr.ErrorData(), val)
 				}
 			} else {
 				// revert(0x0,0x0)

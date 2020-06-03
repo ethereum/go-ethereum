@@ -344,6 +344,21 @@ func (b *SimulatedBackend) PendingCodeAt(ctx context.Context, contract common.Ad
 	return b.pendingState.GetCode(contract), nil
 }
 
+type revertError struct {
+	error
+	errData interface{} // additional data
+}
+
+func (e revertError) ErrorCode() int {
+	// revert errors are execution errors.
+	// See: https://github.com/ethereum/wiki/wiki/JSON-RPC-Error-Codes-Improvement-Proposal
+	return 3
+}
+
+func (e revertError) ErrorData() interface{} {
+	return e.errData
+}
+
 // CallContract executes a contract call.
 func (b *SimulatedBackend) CallContract(ctx context.Context, call ethereum.CallMsg, blockNumber *big.Int) ([]byte, error) {
 	b.mu.Lock()
@@ -364,7 +379,10 @@ func (b *SimulatedBackend) CallContract(ctx context.Context, call ethereum.CallM
 	if len(res.Revert()) > 0 {
 		reason, err := abi.UnpackRevert(res.Revert())
 		if err == nil {
-			return nil, fmt.Errorf("execution reverted: %v", reason)
+			return nil, &revertError{
+				error:   errors.New("execution reverted"),
+				errData: reason,
+			}
 		}
 	}
 	return res.Return(), res.Err
@@ -384,7 +402,10 @@ func (b *SimulatedBackend) PendingCallContract(ctx context.Context, call ethereu
 	if len(res.Revert()) > 0 {
 		reason, err := abi.UnpackRevert(res.Revert())
 		if err == nil {
-			return nil, fmt.Errorf("execution reverted: %v", reason)
+			return nil, &revertError{
+				error:   errors.New("execution reverted"),
+				errData: reason,
+			}
 		}
 	}
 	return res.Return(), res.Err
@@ -486,16 +507,16 @@ func (b *SimulatedBackend) EstimateGas(ctx context.Context, call ethereum.CallMs
 		}
 		if failed {
 			if result != nil && result.Err != vm.ErrOutOfGas {
-				errMsg := fmt.Sprintf("always failing transaction (%v)", result.Err)
 				if len(result.Revert()) > 0 {
-					ret, err := abi.UnpackRevert(result.Revert())
-					if err != nil {
-						errMsg += fmt.Sprintf(" (%#x)", result.Revert())
-					} else {
-						errMsg += fmt.Sprintf(" (%s)", ret)
+					reason, err := abi.UnpackRevert(result.Revert())
+					if err == nil {
+						return 0, &revertError{
+							error:   errors.New("execution reverted"),
+							errData: reason,
+						}
 					}
 				}
-				return 0, errors.New(errMsg)
+				return 0, result.Err
 			}
 			// Otherwise, the specified gas cap is too low
 			return 0, fmt.Errorf("gas required exceeds allowance (%d)", cap)
