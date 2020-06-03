@@ -205,8 +205,9 @@ func (config *TxPoolConfig) sanitize() TxPoolConfig {
 	return conf
 }
 
-// txsInsert is the wrapper of transaction batch but with an additional
-// flag to indicate whether the transactions if local or not.
+// txsInsert is the wrapper of transaction batch but with some additional
+// flags to indicate whether the transactions if local or not, whether we
+// need to performs synchronous pool reorganization and event propagation.
 type txsInsert struct {
 	txs   []*types.Transaction
 	errs  []error
@@ -441,8 +442,6 @@ func (pool *TxPool) insertTxLoop() {
 
 // insertTxs inserts a batch of transactions into txpool and assign back the errors.
 func (pool *TxPool) insertTxs(done chan struct{}, txsInserts []*txsInsert, local bool) {
-	defer close(done)
-
 	var (
 		waitlist   []*txsInsert
 		totalDirty = newAccountSet(pool.signer)
@@ -460,6 +459,9 @@ func (pool *TxPool) insertTxs(done chan struct{}, txsInserts []*txsInsert, local
 		}
 	}
 	pool.mu.Unlock()
+
+	// Close the done channel here to release the lock in insertLoop
+	close(done)
 
 	// Reorg the pool internals if needed and return
 	<-pool.requestPromoteExecutables(totalDirty)
