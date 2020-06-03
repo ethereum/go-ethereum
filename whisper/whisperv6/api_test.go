@@ -23,7 +23,10 @@ import (
 )
 
 func TestMultipleTopicCopyInNewMessageFilter(t *testing.T) {
-	w := New(nil)
+	stack := newNode(t)
+	defer stack.Close()
+
+	w := getWhisperFromNode(stack, t)
 
 	keyID, err := w.GenerateSymKey()
 	if err != nil {

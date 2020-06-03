@@ -20,6 +20,7 @@ import (
 	"bytes"
 	"crypto/ecdsa"
 	"crypto/sha256"
+	"github.com/ethereum/go-ethereum/node"
 	mrand "math/rand"
 	"testing"
 	"time"
@@ -29,9 +30,11 @@ import (
 )
 
 func TestWhisperBasic(t *testing.T) {
-	w := New(&DefaultConfig)
-	p := w.Protocols()
-	shh := p[0]
+	stack := newNode(t)
+	defer stack.Close()
+	// get whisper service from node
+	w := getWhisperFromNode(stack, t)
+	shh := w.Protocols()[0]
 	if shh.Name != ProtocolName {
 		t.Fatalf("failed Protocol Name: %v.", shh.Name)
 	}
@@ -111,11 +114,11 @@ func TestWhisperBasic(t *testing.T) {
 }
 
 func TestWhisperAsymmetricKeyImport(t *testing.T) {
-	var (
-		w           = New(&DefaultConfig)
-		privateKeys []*ecdsa.PrivateKey
-	)
+	stack := newNode(t)
+	defer stack.Close()
 
+	var privateKeys []*ecdsa.PrivateKey
+	w := getWhisperFromNode(stack, t)
 	for i := 0; i < 50; i++ {
 		id, err := w.NewKeyPair()
 		if err != nil {
@@ -142,7 +145,10 @@ func TestWhisperAsymmetricKeyImport(t *testing.T) {
 }
 
 func TestWhisperIdentityManagement(t *testing.T) {
-	w := New(&DefaultConfig)
+	stack := newNode(t)
+	defer stack.Close()
+
+	w := getWhisperFromNode(stack, t)
 	id1, err := w.NewKeyPair()
 	if err != nil {
 		t.Fatalf("failed to generate new key pair: %s.", err)
@@ -261,12 +267,16 @@ func TestWhisperIdentityManagement(t *testing.T) {
 
 func TestWhisperSymKeyManagement(t *testing.T) {
 	InitSingleTest()
-
 	var (
 		k1, k2 []byte
-		w      = New(&DefaultConfig)
 		id2    = string("arbitrary-string-2")
 	)
+
+	stack := newNode(t)
+	defer stack.Close()
+
+	w := getWhisperFromNode(stack, t)
+
 	id1, err := w.GenerateSymKey()
 	if err != nil {
 		t.Fatalf("failed GenerateSymKey with seed %d: %s.", seed, err)
@@ -365,7 +375,7 @@ func TestWhisperSymKeyManagement(t *testing.T) {
 	w.DeleteSymKey(id1)
 	k1, err = w.GetSymKey(id1)
 	if err == nil {
-		t.Fatalf("failed w.GetSymKey(id1): false positive.")
+		t.Fatal("failed w.GetSymKey(id1): false positive.")
 	}
 	if k1 != nil {
 		t.Fatalf("failed GetSymKey(id1): false positive. key=%v", k1)
@@ -451,11 +461,14 @@ func TestWhisperSymKeyManagement(t *testing.T) {
 func TestExpiry(t *testing.T) {
 	InitSingleTest()
 
-	w := New(&DefaultConfig)
+	stack := newNode(t)
+	defer stack.Close()
+
+	w := getWhisperFromNode(stack, t)
+
 	w.SetMinimumPowTest(0.0000001)
 	defer w.SetMinimumPowTest(DefaultMinimumPoW)
-	w.Start(nil)
-	defer w.Stop()
+	w.Start()
 
 	params, err := generateMessageParams()
 	if err != nil {
@@ -517,11 +530,15 @@ func TestExpiry(t *testing.T) {
 func TestCustomization(t *testing.T) {
 	InitSingleTest()
 
-	w := New(&DefaultConfig)
+	stack := newNode(t)
+	defer stack.Close()
+
+	w := getWhisperFromNode(stack, t)
+
 	defer w.SetMinimumPowTest(DefaultMinimumPoW)
 	defer w.SetMaxMessageSize(DefaultMaxMessageSize)
-	w.Start(nil)
-	defer w.Stop()
+	w.Start()
+	
 
 	const smallPoW = 0.00001
 
@@ -610,11 +627,15 @@ func TestCustomization(t *testing.T) {
 func TestSymmetricSendCycle(t *testing.T) {
 	InitSingleTest()
 
-	w := New(&DefaultConfig)
+	stack := newNode(t)
+	defer stack.Close()
+
+	w := getWhisperFromNode(stack, t)
+
 	defer w.SetMinimumPowTest(DefaultMinimumPoW)
 	defer w.SetMaxMessageSize(DefaultMaxMessageSize)
-	w.Start(nil)
-	defer w.Stop()
+	w.Start()
+	
 
 	filter1, err := generateFilter(t, true)
 	if err != nil {
@@ -701,11 +722,15 @@ func TestSymmetricSendCycle(t *testing.T) {
 func TestSymmetricSendWithoutAKey(t *testing.T) {
 	InitSingleTest()
 
-	w := New(&DefaultConfig)
+	stack := newNode(t)
+	defer stack.Close()
+
+	w := getWhisperFromNode(stack, t)
+
 	defer w.SetMinimumPowTest(DefaultMinimumPoW)
 	defer w.SetMaxMessageSize(DefaultMaxMessageSize)
-	w.Start(nil)
-	defer w.Stop()
+	w.Start()
+	
 
 	filter, err := generateFilter(t, true)
 	if err != nil {
@@ -771,11 +796,15 @@ func TestSymmetricSendWithoutAKey(t *testing.T) {
 func TestSymmetricSendKeyMismatch(t *testing.T) {
 	InitSingleTest()
 
-	w := New(&DefaultConfig)
+	stack := newNode(t)
+	defer stack.Close()
+
+	w := getWhisperFromNode(stack, t)
+
 	defer w.SetMinimumPowTest(DefaultMinimumPoW)
 	defer w.SetMaxMessageSize(DefaultMaxMessageSize)
-	w.Start(nil)
-	defer w.Stop()
+	w.Start()
+	
 
 	filter, err := generateFilter(t, true)
 	if err != nil {
@@ -882,17 +911,46 @@ func TestBloom(t *testing.T) {
 		t.Fatal("bloomFilterMatch false negative")
 	}
 
-	w := New(&DefaultConfig)
+	stack := newNode(t)
+	defer stack.Close()
+
+	w := getWhisperFromNode(stack, t)
+
 	f := w.BloomFilter()
 	if f != nil {
 		t.Fatal("wrong bloom on creation")
 	}
 	err = w.SetBloomFilter(x)
 	if err != nil {
-		t.Fatalf("failed to set bloom filter: %s", err)
+		t.Fatalf("failed to set bloom filter: %v", err)
 	}
 	f = w.BloomFilter()
 	if !BloomFilterMatch(f, x) || !BloomFilterMatch(x, f) {
 		t.Fatal("retireved wrong bloom filter")
 	}
+}
+
+func newNode(t *testing.T) *node.Node {
+	stack, err := node.New(&node.DefaultConfig)
+	if err != nil {
+		t.Fatalf("could not create new node: %v", err)
+	}
+	err = New(stack, &DefaultConfig)
+	if err != nil {
+		t.Fatalf("could not create new whisper service: %v", err)
+	}
+	err = stack.Start()
+	if err != nil {
+		t.Fatalf("could not start node: %v", err)
+	}
+	return stack
+}
+
+func getWhisperFromNode(stack *node.Node, t *testing.T) *Whisper {
+	var w *Whisper
+	err := stack.Lifecycle(&w)
+	if err != nil {
+		t.Fatalf("could not get whisper service from node: %v", err)
+	}
+	return w
 }
