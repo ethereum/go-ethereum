@@ -1914,3 +1914,66 @@ func benchmarkPoolBatchInsert(b *testing.B, size int) {
 		pool.AddRemotes(batch)
 	}
 }
+
+func BenchmarkLocalInsert(b *testing.B) {
+	// Allocate keys for testing
+	key, _ := crypto.GenerateKey()
+	account := crypto.PubkeyToAddress(key.PublicKey)
+
+	var remoteKeys []*ecdsa.PrivateKey
+	for i := 0; i < 4; i++ {
+		key, _ := crypto.GenerateKey()
+		remoteKeys = append(remoteKeys, key)
+	}
+	// The reason for picking these numbers is ~4000 txs/s is a reasonable peak value
+	// in the real mainnet. It's valueable to benchmark with these parameters.
+	locals := make([]*types.Transaction, 50)
+	for i := 0; i < 50; i++ {
+		locals[i] = transaction(uint64(i), 100000, key)
+	}
+	remotes := make([][]*types.Transaction, 4)
+	for i := 0; i < 4; i++ {
+		remotes[i] = make(types.Transactions, 1000)
+		for j := 0; j < 1000; j++ {
+			remotes[i][j] = transaction(uint64(j), 100000, remoteKeys[i])
+		}
+	}
+	// Benchmark importing the transactions into the queue
+	b.ResetTimer()
+
+	for i := 0; i < b.N; i++ {
+		// Assign a high enough balance for testing
+		pool, _ := setupTxPool()
+		pool.currentState.AddBalance(account, big.NewInt(100000000))
+		for i := 0; i < len(remoteKeys); i++ {
+			account := crypto.PubkeyToAddress(remoteKeys[i].PublicKey)
+			pool.currentState.AddBalance(account, big.NewInt(100000000))
+		}
+		// Spin up go-routines to simulate pressure of inserting remote txs
+		done := make(chan struct{})
+		defer close(done)
+
+		for i := 0; i < 4; i++ {
+			go func(keyIndex int) {
+				var index int
+				for {
+					pool.AddRemotes([]*types.Transaction{remotes[keyIndex][index]})
+					index += 1
+					if index >= len(remotes[keyIndex]) {
+						return
+					}
+					select {
+					case <-done:
+						return
+					default:
+					}
+				}
+			}(i)
+		}
+		for i := 0; i < len(locals); i++ {
+			pool.AddLocal(locals[i])
+		}
+		pool.Stop()
+	}
+}
+
