@@ -5,11 +5,18 @@ import (
 	"crypto/ecdsa"
 	"flag"
 	"github.com/ethereum/go-ethereum/crypto"
+	"github.com/ethereum/go-ethereum/p2p/discover/v4wire"
 	"github.com/ethereum/go-ethereum/p2p/enode"
 	"github.com/ethereum/go-ethereum/p2p/enr"
 	"github.com/ethereum/go-ethereum/rlp"
 	"net"
 	"testing"
+	"time"
+)
+
+const (
+	expiration = 20 * time.Second
+	sigSize    = 520 / 8
 )
 
 var (
@@ -20,13 +27,18 @@ var (
 	priv              *ecdsa.PrivateKey
 	versionPrefix     = []byte("v4")
 	versionPrefixSize = len(versionPrefix)
-	sigSize           = 520 / 8
 	headSize          = versionPrefixSize + sigSize // space of packet frame data
 )
 
 func init() {
 	flag.StringVar(&enodeID, "enode", "", "enode:... as per `admin.nodeInfo.enode`")
 	flag.StringVar(&listenPort, "listenPort", ":30304", "")
+
+	var err error
+	priv, err = crypto.GenerateKey()
+	if err != nil {
+		panic(err)
+	}
 }
 
 //ripped out from the urlv4 code
@@ -44,6 +56,10 @@ type v4CompatID struct {
 type MacENREntry string
 
 func (v MacENREntry) ENRKey() string { return "mac" }
+
+func futureExpiration() uint64 {
+	return uint64(time.Now().Add(expiration).Unix())
+}
 
 func MakeNode(pubkey *ecdsa.PublicKey, ip net.IP, tcp, udp int, mac *string) *enode.Node {
 	var r enr.Record
@@ -92,11 +108,15 @@ func sendPacket(toid enode.ID, toaddr *net.UDPAddr, packet []byte) error {
 	return nil
 }
 
-func SourceUnknownPingKnownEnode(t *testing.T) {
-	//req := v4wire.Ping{}
-	//packet, _, err := encodePacket(priv, v4wire.PingPacket, req)
-	packet := make([]byte, 42)
-	var err error
+func SimplePing(t *testing.T) {
+	ipAddr := net.ParseIP("127.0.0.1")
+	req := v4wire.Ping{
+		Version:    4,
+		From:       v4wire.Endpoint{IP: ipAddr},
+		To:         v4wire.Endpoint{IP: ipAddr},
+		Expiration: futureExpiration(),
+	}
+	packet, _, err := encodePacket(priv, v4wire.PingPacket, &req)
 	if err != nil {
 		t.Error(err)
 	}
@@ -104,6 +124,7 @@ func SourceUnknownPingKnownEnode(t *testing.T) {
 	sendPacket(toID, toAddr, packet)
 }
 
+func SourceUnknownPingKnownEnode(t *testing.T)          {}
 func SourceUnknownPingWrongTo(t *testing.T)             {}
 func SourceUnknownPingWrongFrom(t *testing.T)           {}
 func SourceUnknownPingExtraData(t *testing.T)           {}
@@ -120,6 +141,7 @@ func FindNeighboursOnRecentlyBondedTarget(t *testing.T) {}
 func FindNeighboursPastExpiration(t *testing.T)         {}
 
 func TestPing(t *testing.T) {
+	t.Run("Ping-Simple", SimplePing)
 	t.Run("Ping-BasicTest(v4001)", SourceUnknownPingKnownEnode)
 	t.Run("Ping-SourceUnknownrongTo(v4002)", SourceUnknownPingWrongTo)
 	t.Run("Ping-SourceUnknownWrongFrom(v4003)", SourceUnknownPingWrongFrom)
