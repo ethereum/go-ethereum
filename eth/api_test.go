@@ -286,8 +286,9 @@ func TestEth2ProduceBlock(t *testing.T) {
 	}
 
 	api := NewEth2API(eth)
-	var blockRLP bytes.Buffer
-	rlp.Encode(&blockRLP, blocks[9])
+	signer := types.NewEIP155Signer(eth.BlockChain().Config().ChainID)
+	tx, err := types.SignTx(types.NewTransaction(0, blocks[8].Coinbase(), big.NewInt(1000), params.TxGas, nil, nil), signer, testKey)
+	eth.txPool.AddLocal(tx)
 	data, err := api.ProduceBlock(common.HexToAddress("63726f697373616e747363726f697373616e7473"))
 
 	if err != nil {
