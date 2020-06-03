@@ -28,6 +28,7 @@ var (
 	versionPrefix     = []byte("v4")
 	versionPrefixSize = len(versionPrefix)
 	headSize          = versionPrefixSize + sigSize // space of packet frame data
+	conn              *net.UDPConn
 )
 
 func init() {
@@ -39,6 +40,17 @@ func init() {
 	if err != nil {
 		panic(err)
 	}
+
+	var addr *net.UDPAddr
+	addr, err = net.ResolveUDPAddr("udp", listenPort)
+	if err != nil {
+		panic(err)
+	}
+	conn, err = net.ListenUDP("udp", addr)
+	if err != nil {
+		panic(err)
+	}
+	defer conn.Close()
 }
 
 //ripped out from the urlv4 code
@@ -105,7 +117,8 @@ func encodePacket(priv *ecdsa.PrivateKey, ptype byte, req interface{}) (p, hash 
 }
 
 func sendPacket(toid enode.ID, toaddr *net.UDPAddr, packet []byte) error {
-	return nil
+	_, err := conn.WriteToUDP(packet, toaddr)
+	return err
 }
 
 func SimplePing(t *testing.T) {
@@ -118,10 +131,12 @@ func SimplePing(t *testing.T) {
 	}
 	packet, _, err := encodePacket(priv, v4wire.PingPacket, &req)
 	if err != nil {
-		t.Error(err)
+		t.Error("Encoding", err)
 	}
 
-	sendPacket(toID, toAddr, packet)
+	if err := sendPacket(toID, toAddr, packet); err != nil {
+		t.Error("Sending", err)
+	}
 }
 
 func SourceUnknownPingKnownEnode(t *testing.T)          {}
