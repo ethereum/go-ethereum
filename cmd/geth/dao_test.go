@@ -39,7 +39,9 @@ var daoOldGenesis = `{
 	"mixhash"    : "0x0000000000000000000000000000000000000000000000000000000000000000",
 	"parentHash" : "0x0000000000000000000000000000000000000000000000000000000000000000",
 	"timestamp"  : "0x00",
-	"config"     : {}
+	"config"     : {
+		"homesteadBlock" : 0
+	}
 }`
 
 // Genesis block for nodes which actively oppose the DAO fork
@@ -54,6 +56,7 @@ var daoNoForkGenesis = `{
 	"parentHash" : "0x0000000000000000000000000000000000000000000000000000000000000000",
 	"timestamp"  : "0x00",
 	"config"     : {
+		"homesteadBlock" : 0,
 		"daoForkBlock"   : 314,
 		"daoForkSupport" : false
 	}
@@ -71,6 +74,7 @@ var daoProForkGenesis = `{
 	"parentHash" : "0x0000000000000000000000000000000000000000000000000000000000000000",
 	"timestamp"  : "0x00",
 	"config"     : {
+		"homesteadBlock" : 0,
 		"daoForkBlock"   : 314,
 		"daoForkSupport" : true
 	}
