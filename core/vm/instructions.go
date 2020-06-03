@@ -680,7 +680,7 @@ func opJumpSub(pc *uint64, interpreter *EVMInterpreter, callContext *callCtx) ([
 	if !callContext.contract.validJumpSubdest(posU64) {
 		return nil, ErrInvalidJump
 	}
-	callContext.rstack.push(*pc)
+	callContext.rstack.push(*pc, posU64)
 	*pc = posU64 + 1
 	interpreter.intPool.put(pos)
 	return nil, nil

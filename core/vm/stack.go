@@ -88,20 +88,30 @@ func (st *Stack) Print() {
 }
 
 // ReturnStack is an object for basic return stack operations.
+// The returnstack also keeps track of the current subroutine
 type ReturnStack struct {
 	data []uint64
+	currentSub uint64
 }
 
 func newReturnStack() *ReturnStack {
-	return &ReturnStack{data: make([]uint64, 0, 1024)}
+	return &ReturnStack{data: make([]uint64, 0, 4)}
 }
 
-func (st *ReturnStack) push(d uint64) {
-	st.data = append(st.data, d)
+func (st *ReturnStack) push(pc, target uint64) {
+	combo := pc << 32 | st.currentSub
+	st.data = append(st.data, combo)
+	st.currentSub = target
 }
 
 func (st *ReturnStack) pop() (ret uint64) {
-	ret = st.data[len(st.data)-1]
+	combo := st.data[len(st.data)-1]
 	st.data = st.data[:len(st.data)-1]
-	return
+	st.currentSub = combo  & 0xFFFFFFFF
+	return combo >> 32
+}
+
+// Returns the location where of the current subroutine start
+func (st *ReturnStack) currentSubroutine() uint64{
+	return st.currentSub
 }
