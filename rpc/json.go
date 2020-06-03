@@ -139,6 +139,10 @@ func (err *jsonError) ErrorCode() int {
 	return err.Code
 }
 
+func (err *jsonError) ErrorData() interface{} {
+	return err.Data
+}
+
 // Conn is a subset of the methods of net.Conn which are sufficient for ServerCodec.
 type Conn interface {
 	io.ReadWriteCloser
