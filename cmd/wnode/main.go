@@ -221,8 +221,7 @@ func initialize() {
 		MaxMessageSize:     uint32(*argMaxSize),
 		MinimumAcceptedPOW: *argPoW,
 	}
-
-	shh = whisper.New(cfg)
+	shh = whisper.StandaloneWhisperService(cfg)
 
 	if *argPoW != whisper.DefaultMinimumPoW {
 		err := shh.SetMinimumPoW(*argPoW)
@@ -433,7 +432,7 @@ func run() {
 		return
 	}
 	defer server.Stop()
-	shh.Start(nil)
+	shh.Start()
 	defer shh.Stop()
 
 	if !*forwarderMode {

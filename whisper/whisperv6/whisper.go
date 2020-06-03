@@ -1099,3 +1099,45 @@ func addBloom(a, b []byte) []byte {
 	}
 	return c
 }
+
+func StandaloneWhisperService(cfg *Config) *Whisper {
+	if cfg == nil {
+		cfg = &DefaultConfig
+	}
+
+	whisper := &Whisper{
+		privateKeys:   make(map[string]*ecdsa.PrivateKey),
+		symKeys:       make(map[string][]byte),
+		envelopes:     make(map[common.Hash]*Envelope),
+		expirations:   make(map[uint32]mapset.Set),
+		peers:         make(map[*Peer]struct{}),
+		messageQueue:  make(chan *Envelope, messageQueueLimit),
+		p2pMsgQueue:   make(chan *Envelope, messageQueueLimit),
+		quit:          make(chan struct{}),
+		syncAllowance: DefaultSyncAllowance,
+	}
+
+	whisper.filters = NewFilters(whisper)
+
+	whisper.settings.Store(minPowIdx, cfg.MinimumAcceptedPOW)
+	whisper.settings.Store(maxMsgSizeIdx, cfg.MaxMessageSize)
+	whisper.settings.Store(overflowIdx, false)
+	whisper.settings.Store(restrictConnectionBetweenLightClientsIdx, cfg.RestrictConnectionBetweenLightClients)
+
+	// p2p whisper sub protocol handler
+	whisper.protocol = p2p.Protocol{
+		Name:    ProtocolName,
+		Version: uint(ProtocolVersion),
+		Length:  NumberOfMessageCodes,
+		Run:     whisper.HandlePeer,
+		NodeInfo: func() interface{} {
+			return map[string]interface{}{
+				"version":        ProtocolVersionStr,
+				"maxMessageSize": whisper.MaxMessageSize(),
+				"minimumPoW":     whisper.MinPow(),
+			}
+		},
+	}
+
+	return whisper
+}
