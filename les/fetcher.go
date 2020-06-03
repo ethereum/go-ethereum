@@ -35,9 +35,9 @@ import (
 )
 
 const (
-	blockDelayTimeout     = 10 * time.Second       // Timeout for retrieving the headers from the peer
-	gatherSlack           = 100 * time.Millisecond // Interval used to collate almost-expired requests
-	trustedItemsThreshold = 64                     // The maximum queued trusted announcements
+	blockDelayTimeout    = 10 * time.Second       // Timeout for retrieving the headers from the peer
+	gatherSlack          = 100 * time.Millisecond // Interval used to collate almost-expired requests
+	cachedAnnosThreshold = 64                     // The maximum queued announcements
 )
 
 // announce represents an new block announcement from the les server.
@@ -65,42 +65,49 @@ type response struct {
 
 // fetcherPeer holds the fetcher-specific information for each active peer
 type fetcherPeer struct {
-	latest       *announceData          // The latest announcement sent from the peer
-	trustedMap   map[common.Hash]uint64 // Trusted announces map
-	trustedQueue *prque.Prque           // Trusted announces queue
+	latest *announceData // The latest announcement sent from the peer
+
+	// These following two fields can track the latest announces
+	// from the peer with limited size for caching.
+	announces     map[common.Hash]*announce // Announcement map
+	announceQueue *prque.Prque              // Announcement queue
 }
 
-// addTrustedAnno enqueues an new trusted announcement. If the queued
-// announces overflow, evict from the oldest.
-func (fp *fetcherPeer) addTrustedAnno(number uint64, hash common.Hash) {
+// addAnno enqueues an new trusted announcement. If the queued announces overflow,
+// evict from the oldest.
+func (fp *fetcherPeer) addAnno(announce *announce) {
 	// Short circuit if the announce already exists. In normal case it should
 	// never happen since only monotonic announce is accepted. But the adversary
 	// may feed us fake announces with higher td but same hash. In this case,
 	// ignore the announce anyway.
-	if _, exist := fp.trustedMap[hash]; exist {
+	hash, number := announce.data.Hash, announce.data.Number
+	if _, exist := fp.announces[hash]; exist {
 		return
 	}
-	fp.trustedMap[hash] = number
-	fp.trustedQueue.Push(hash, -int64(number))
+	fp.announces[hash] = announce
+	fp.announceQueue.Push(hash, -int64(number))
 
 	// Evict oldest if the announces are oversized.
-	for fp.trustedQueue.Size() > trustedItemsThreshold {
-		item, _ := fp.trustedQueue.Pop()
-		delete(fp.trustedMap, item.(common.Hash))
+	for fp.announceQueue.Size() > cachedAnnosThreshold {
+		item, _ := fp.announceQueue.Pop()
+		delete(fp.announces, item.(common.Hash))
 	}
 }
 
-// forwardTrustedAnno removes all announces from the map with a number lower than
+// forwardAnno removes all announces from the map with a number lower than
 // the provided threshold.
-func (fp *fetcherPeer) forwardTrustedAnno(number uint64) {
-	for !fp.trustedQueue.Empty() {
-		item, priority := fp.trustedQueue.Pop()
+func (fp *fetcherPeer) forwardAnno(number uint64) []*announce {
+	var ret []*announce
+	for !fp.announceQueue.Empty() {
+		item, priority := fp.announceQueue.Pop()
 		if uint64(-priority) > number {
-			fp.trustedQueue.Push(item, priority)
-			return
+			fp.announceQueue.Push(item, priority)
+			break
 		}
-		delete(fp.trustedMap, item.(common.Hash))
+		ret = append(ret, fp.announces[item.(common.Hash)])
+		delete(fp.announces, item.(common.Hash))
 	}
+	return ret
 }
 
 // lightFetcher implements retrieval of newly announced headers. It reuses
@@ -191,8 +198,8 @@ func (f *lightFetcher) registerPeer(p *serverPeer) {
 	defer f.plock.Unlock()
 
 	f.peers[p.ID()] = &fetcherPeer{
-		trustedMap:   make(map[common.Hash]uint64),
-		trustedQueue: prque.New(nil),
+		announces:     make(map[common.Hash]*announce),
+		announceQueue: prque.New(nil),
 	}
 }
 
@@ -271,7 +278,7 @@ func (f *lightFetcher) mainloop() {
 			trusted bool
 		)
 		f.forEachPeer(func(id enode.ID, p *fetcherPeer) bool {
-			if n := p.trustedMap[hash]; n == number {
+			if anno := p.announces[hash]; anno != nil && anno.trust && anno.data.Number == number {
 				agreed = append(agreed, id)
 				if 100*len(agreed)/len(f.ulc.keys) >= f.ulc.fraction {
 					trusted = true
@@ -294,7 +301,7 @@ func (f *lightFetcher) mainloop() {
 				continue
 			}
 			// Announced tds should be strictly monotonic, drop the peer if
-			// there are too many out-of-order announces accumulated.
+			// the announce is out-of-order.
 			if peer.latest != nil && data.Td.Cmp(peer.latest.Td) <= 0 {
 				f.peerset.unregister(peerid.String())
 				log.Debug("Non-monotonic td", "peer", peerid, "current", data.Td, "previous", peer.latest.Td)
@@ -306,6 +313,8 @@ func (f *lightFetcher) mainloop() {
 			if localTd != nil && data.Td.Cmp(localTd) <= 0 {
 				continue
 			}
+			peer.addAnno(anno)
+
 			// If we are not syncing, try to trigger a single retrieval or re-sync
 			if !ulc && !syncing {
 				// Two scenarios lead to re-sync:
@@ -326,8 +335,6 @@ func (f *lightFetcher) mainloop() {
 			}
 			// Keep collecting announces from trusted server even we are syncing.
 			if ulc && anno.trust {
-				peer.addTrustedAnno(data.Number, data.Hash)
-
 				// Notify underlying fetcher to retrieve header or trigger a resync if
 				// we have receive enough announcements from trusted server.
 				trusted, agreed := trustedHeader(data.Hash, data.Number)
@@ -381,12 +388,29 @@ func (f *lightFetcher) mainloop() {
 			reset(ev.Block.Header())
 			number := localHead.Number.Uint64()
 
-			// Clean stale announcements from trusted server.
-			if ulc {
-				f.forEachPeer(func(id enode.ID, p *fetcherPeer) bool {
-					p.forwardTrustedAnno(number)
-					return true
-				})
+			// Clean stale announcements from les-servers.
+			var droplist []enode.ID
+			f.forEachPeer(func(id enode.ID, p *fetcherPeer) bool {
+				removed := p.forwardAnno(number)
+				for _, anno := range removed {
+					if header := f.chain.GetHeaderByHash(anno.data.Hash); header != nil {
+						if header.Number.Uint64() != anno.data.Number {
+							droplist = append(droplist, id)
+							break
+						}
+						// In theory td should exists.
+						td := f.chain.GetTd(anno.data.Hash, anno.data.Number)
+						if td != nil && td.Cmp(anno.data.Td) != 0  {
+							droplist = append(droplist, id)
+							break
+						}
+					}
+				}
+				return true
+			})
+			for _, id := range droplist {
+				f.peerset.unregister(id.String())
+				log.Debug("Kicked out peer for invalid announcement")
 			}
 			if f.newHeadHook != nil {
 				f.newHeadHook(localHead)

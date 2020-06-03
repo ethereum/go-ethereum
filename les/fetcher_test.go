@@ -17,6 +17,7 @@
 package les
 
 import (
+	"math/big"
 	"testing"
 	"time"
 
@@ -230,4 +231,38 @@ func testTrustedAnnouncement(t *testing.T, protocol int) {
 	check([]uint64{1}, 1, func() { <-newHead })   // Sequential announcements
 	check([]uint64{4}, 4, func() { <-newHead })   // ULC-style light syncing, rollback untrusted headers
 	check([]uint64{10}, 10, func() { <-newHead }) // Sync the whole chain.
+}
+
+func TestInvalidAnnounces(t *testing.T) {
+	s, c, teardown := newClientServerEnv(t, 4, lpv3, nil, nil, 0, false, false)
+	defer teardown()
+
+	// Create connected peer pair.
+	c.handler.fetcher.noAnnounce = true // Ignore the first announce from peer which can trigger a resync.
+	peer, _, err := newTestPeerPair("peer", lpv3, s.handler, c.handler)
+	if err != nil {
+		t.Fatalf("Failed to create peer pair %v", err)
+	}
+	c.handler.fetcher.noAnnounce = false
+
+	done := make(chan *types.Header, 1)
+	c.handler.fetcher.newHeadHook = func(header *types.Header) { done <- header }
+
+	// Prepare announcement by latest header.
+	headerOne := s.backend.Blockchain().GetHeaderByNumber(1)
+	hash, number := headerOne.Hash(), headerOne.Number.Uint64()
+	td := big.NewInt(200) // bad td
+
+	// Sign the announcement if necessary.
+	announce := announceData{hash, number, td, 0, nil}
+	if peer.cpeer.announceType == announceTypeSigned {
+		announce.sign(s.handler.server.privateKey)
+	}
+	peer.cpeer.sendAnnounce(announce)
+	<-done // Wait syncing
+
+	// Ensure the bad peer is evicited
+	if c.handler.backend.peers.len() != 0 {
+		t.Fatalf("Failed to evict invalid peer")
+	}
 }
