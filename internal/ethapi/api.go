@@ -899,8 +899,8 @@ func (s *PublicBlockChainAPI) Call(ctx context.Context, args CallArgs, blockNrOr
 		reason, err := abi.UnpackRevert(result.Revert())
 		if err == nil {
 			return nil, &revertError{
-				error:   errors.New("execution reverted"),
-				errData: reason,
+				error:   fmt.Errorf("execution reverted: %v", reason),
+				errData: result.Revert(),
 			}
 		}
 	}
@@ -1003,8 +1003,8 @@ func DoEstimateGas(ctx context.Context, b Backend, args CallArgs, blockNrOrHash 
 					reason, err := abi.UnpackRevert(result.Revert())
 					if err == nil {
 						return 0, &revertError{
-							error:   errors.New("execution reverted"),
-							errData: reason,
+							error:   fmt.Errorf("execution reverted: %v", reason),
+							errData: result.Revert(),
 						}
 					}
 				}

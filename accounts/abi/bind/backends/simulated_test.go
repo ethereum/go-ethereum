@@ -1053,8 +1053,8 @@ func TestSimulatedBackend_CallContractRevert(t *testing.T) {
 				if !ok {
 					t.Errorf("expect revert error")
 				}
-				if !reflect.DeepEqual(rerr.ErrorData(), val) {
-					t.Errorf("error was malformed: got %v want %v", rerr.ErrorData(), val)
+				if rerr.Error() != "execution reverted: "+val.(string) {
+					t.Errorf("error was malformed: got %v want %v", rerr.Error(), val)
 				}
 			} else {
 				// revert(0x0,0x0)
