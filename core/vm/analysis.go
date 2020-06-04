@@ -16,6 +16,13 @@
 
 package vm
 
+import "github.com/ethereum/go-ethereum/common"
+
+// A lookup is a byte array, and implemented either as
+// - a 'bitvec', where each bit corresponds to an op, or
+// - a 'shadowmap', where each byte corresponds to an op.
+//type lookup []byte
+
 // bitvec is a bit vector which maps bytes in a program.
 // An unset bit means the byte is an opcode, a set bit means
 // it's data (i.e. argument of PUSHxx).
@@ -29,13 +36,13 @@ func (bits *bitvec) set8(pos uint64) {
 	(*bits)[pos/8+1] |= ^(0xFF >> (pos % 8))
 }
 
-// codeSegment checks if the position is in a code segment.
-func (bits *bitvec) codeSegment(pos uint64) bool {
+// isCode checks if the position is in a code segment.
+func (bits *bitvec) isCode(pos uint64) bool {
 	return ((*bits)[pos/8] & (0x80 >> (pos % 8))) == 0
 }
 
-// codeBitmap collects data locations in code.
-func codeBitmap(code []byte) bitvec {
+// makeCodeBitmap collects data locations in code.
+func makeCodeBitmap(code []byte) bitvec {
 	// The bitmap is 4 bytes longer than necessary, in case the code
 	// ends with a PUSH32, the algorithm will push zeroes onto the
 	// bitvector outside the bounds of the actual code.
@@ -61,9 +68,17 @@ func codeBitmap(code []byte) bitvec {
 	return bits
 }
 
+// shadowmap is a structure where each byte in the map represents one op in the code.
+// The shadowmap is an implementation of
+// the analysis to verify JUMP restructions for subroutines. It uses a backing
+// array of the same size as the analyzed code.
+// - The MSB in each byte is `0` if the opcode is 'code', `1` for 'data'.
+// - If the op is a BEGINSUB, the size of the subroutines is LEB-encoded, starting
+//   at 'loc', possibly covering a span of 3 bytes. This is encoded into the
+//   7 least significant bits of the bytes in question.
 type shadowmap []byte
 
-func (shadow *shadowmap) IsCode(pos uint16) bool {
+func (shadow *shadowmap) isCode(pos uint16) bool {
 	return (*shadow)[pos]&0x80 == 0
 }
 
@@ -92,14 +107,8 @@ func (shadow *shadowmap) isSameSubroutine(subStart, loc uint16) bool {
 	return loc < subStart+srSize
 }
 
-// shadowMap creates a 'shadow map' of the code. The shadow-map is an implementation of
-// the analysis to verify JUMP restructions for subroutines. It uses a backing
-// array of the same size as the analyzed code.
-// - The MSB in each byte is `0` if the opcode is 'code', `1` for 'data'.
-// - If the op is a BEGINSUB, the size of the subroutines is LEB-encoded, starting
-//   at 'loc', possibly covering a span of 3 bytes. This is encoded into the
-//   7 least significant bits of the bytes in question.
-func shadowMap(code []byte) shadowmap {
+// makeShadowMap creates a 'shadow map' of the code.
+func makeShadowMap(code []byte) shadowmap {
 	shadow := make(shadowmap, len(code)+32)
 	// TODO: Check if we need to make it longer than the code, in case it
 	// ends on a PUSHX
@@ -175,4 +184,47 @@ func lebDecode(in []byte) uint16 {
 	b = in[2]
 	res |= (uint16(0x3f&b) << 12)
 	return res
+}
+
+type analysisRegistry struct {
+	subroutinesActive bool                   // true if shadowmaps are used
+	jumpdests         map[common.Hash][]byte // Aggregated result of JUMPDEST analysis.
+}
+
+func newRegistry(subroutinesActive bool) *analysisRegistry {
+	return &analysisRegistry{
+		subroutinesActive: subroutinesActive,
+		jumpdests:         make(map[common.Hash][]byte),
+	}
+}
+
+func (reg *analysisRegistry) Get(h common.Hash) []byte {
+	return reg.jumpdests[h]
+}
+
+func (reg *analysisRegistry) Generate(h common.Hash, code []byte) []byte {
+	var analysis []byte
+	if reg.subroutinesActive {
+		analysis = makeShadowMap(code)
+	} else {
+		analysis = makeCodeBitmap(code)
+	}
+	if h != (common.Hash{}) {
+		reg.jumpdests[h] = analysis
+	}
+	return analysis
+}
+
+func (reg *analysisRegistry) IsCode(analysis []byte, loc uint64) bool {
+	if reg.subroutinesActive {
+		return (*shadowmap)(&analysis).isCode(uint16(loc))
+	}
+	return (*bitvec)(&analysis).isCode(loc)
+}
+
+func (reg *analysisRegistry) isSameSubroutine(analysis []byte, from, to uint64) bool {
+	if !reg.subroutinesActive {
+		panic("subroutine check done while not active!")
+	}
+	return (*shadowmap)(&analysis).isSameSubroutine(uint16(from), uint16(to))
 }

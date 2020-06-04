@@ -123,4 +123,64 @@ func enable2315(jt *JumpTable) {
 		valid:       true,
 		jumps:       true,
 	}
+	// redefine opcode
+	jt[JUMP] = operation{
+		execute:     opJumpEip2315,
+		constantGas: GasMidStep,
+		minStack:    minStack(1, 0),
+		maxStack:    maxStack(1, 0),
+		jumps:       true,
+		valid:       true,
+	}
+	jt[JUMPI] = operation{
+		execute:     opJumpiEip2315,
+		constantGas: GasSlowStep,
+		minStack:    minStack(2, 0),
+		maxStack:    maxStack(2, 0),
+		jumps:       true,
+		valid:       true,
+	}
+
+}
+
+// opJumpEip2315 implements JUMP when restricted subroutines are active
+func opJumpEip2315(pc *uint64, interpreter *EVMInterpreter, callContext *callCtx) ([]byte, error) {
+	pos := callContext.stack.pop()
+	if !callContext.contract.validJumpdest(pos) {
+		return nil, ErrInvalidJump
+	}
+	// A this point, we know that
+	// 1. The destination is _code_
+	// 2. The destination is JUMPDEST
+	// Remains to find out if destination is within the same subroutine
+	cur := callContext.rstack.currentSubroutine()
+	dest := pos.Uint64()
+	if !callContext.contract.isSameSubroutine(cur, dest) {
+		return nil, ErrJumpAcrossRoutine
+	}
+	*pc = dest
+
+	interpreter.intPool.putOne(pos)
+	return nil, nil
+}
+
+// opJumpiEip2315 implements JUMPI when restricted subroutines are active
+func opJumpiEip2315(pc *uint64, interpreter *EVMInterpreter, callContext *callCtx) ([]byte, error) {
+	pos, cond := callContext.stack.pop(), callContext.stack.pop()
+	if cond.Sign() != 0 {
+		if !callContext.contract.validJumpdest(pos) {
+			return nil, ErrInvalidJump
+		}
+		cur := callContext.rstack.currentSubroutine()
+		dest := pos.Uint64()
+		if !callContext.contract.isSameSubroutine(cur, dest) {
+			return nil, ErrJumpAcrossRoutine
+		}
+		*pc = dest
+	} else {
+		*pc++
+	}
+
+	interpreter.intPool.put(pos, cond)
+	return nil, nil
 }

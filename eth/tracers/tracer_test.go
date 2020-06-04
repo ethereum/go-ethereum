@@ -53,7 +53,7 @@ func (*dummyStatedb) GetRefund() uint64 { return 1337 }
 func runTrace(tracer *Tracer) (json.RawMessage, error) {
 	env := vm.NewEVM(vm.Context{BlockNumber: big.NewInt(1)}, &dummyStatedb{}, params.TestChainConfig, vm.Config{Debug: true, Tracer: tracer})
 
-	contract := vm.NewContract(account{}, account{}, big.NewInt(0), 10000)
+	contract := vm.NewContract(account{}, account{}, big.NewInt(0), 10000, env.chainRules.IsEIP2315)
 	contract.Code = []byte{byte(vm.PUSH1), 0x1, byte(vm.PUSH1), 0x1, 0x0}
 
 	_, err := env.Interpreter().Run(contract, []byte{}, false)
@@ -167,7 +167,7 @@ func TestHaltBetweenSteps(t *testing.T) {
 	}
 
 	env := vm.NewEVM(vm.Context{BlockNumber: big.NewInt(1)}, &dummyStatedb{}, params.TestChainConfig, vm.Config{Debug: true, Tracer: tracer})
-	contract := vm.NewContract(&account{}, &account{}, big.NewInt(0), 0)
+	contract := vm.NewContract(&account{}, &account{}, big.NewInt(0), 0, false)
 
 	tracer.CaptureState(env, 0, 0, 0, 0, nil, nil, nil, contract, 0, nil)
 	timeout := errors.New("stahp")

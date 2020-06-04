@@ -598,6 +598,7 @@ func DisabledTestEipExampleCases(t *testing.T) {
 // BenchmarkJumperLoop test a contract which jumps back and forth across a
 // pretty large area. This jumping could cause heavy swapping of processor cache lines
 // ~80ms on master
+// ~90ms with strict subroutine checking
 func BenchmarkJumperLoop(b *testing.B) {
 	// We use a 'full' contract of size  24576.
 	// Fill it with jumpdests to begin with
@@ -621,6 +622,29 @@ func BenchmarkJumperLoop(b *testing.B) {
 	addJump(i, 0)
 
 	cfg := new(Config)
+	cfg.ChainConfig = &params.ChainConfig{
+		ChainID:             big.NewInt(1),
+		HomesteadBlock:      new(big.Int),
+		DAOForkBlock:        new(big.Int),
+		DAOForkSupport:      false,
+		EIP150Block:         new(big.Int),
+		EIP155Block:         new(big.Int),
+		EIP158Block:         new(big.Int),
+		ByzantiumBlock:      new(big.Int),
+		ConstantinopleBlock: new(big.Int),
+		PetersburgBlock:     new(big.Int),
+		IstanbulBlock:       new(big.Int),
+		MuirGlacierBlock:    new(big.Int),
+		EWASMBlock:          nil,
+	}
+	cfg.EVMConfig = vm.Config{
+		Debug:                   false,
+		Tracer:                  nil,
+		NoRecursion:             false,
+		EnablePreimageRecording: false,
+		ExtraEips:               []int{2315},
+	}
+
 	setDefaults(cfg)
 	cfg.GasLimit = 10000000
 

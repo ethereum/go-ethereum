@@ -34,6 +34,7 @@ var (
 	ErrExecutionReverted        = errors.New("execution reverted")
 	ErrMaxCodeSizeExceeded      = errors.New("max code size exceeded")
 	ErrInvalidJump              = errors.New("invalid jump destination")
+	ErrJumpAcrossRoutine        = errors.New("invalid jump across boundary")
 	ErrWriteProtection          = errors.New("write protection")
 	ErrReturnDataOutOfBounds    = errors.New("return data out of bounds")
 	ErrGasUintOverflow          = errors.New("gas uint64 overflow")

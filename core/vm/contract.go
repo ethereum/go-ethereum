@@ -49,8 +49,8 @@ type Contract struct {
 	caller        ContractRef
 	self          ContractRef
 
-	jumpdests map[common.Hash]bitvec // Aggregated result of JUMPDEST analysis.
-	analysis  bitvec                 // Locally cached result of JUMPDEST analysis
+	jumpdests *analysisRegistry // Aggregated result of JUMPDEST analysis.
+	analysis  []byte            // Locally cached result of JUMPDEST analysis
 
 	Code     []byte
 	CodeHash common.Hash
@@ -62,14 +62,14 @@ type Contract struct {
 }
 
 // NewContract returns a new contract environment for the execution of EVM.
-func NewContract(caller ContractRef, object ContractRef, value *big.Int, gas uint64) *Contract {
+func NewContract(caller ContractRef, object ContractRef, value *big.Int, gas uint64, strictSubroutines bool) *Contract {
 	c := &Contract{CallerAddress: caller.Address(), caller: caller, self: object}
 
 	if parent, ok := caller.(*Contract); ok {
 		// Reuse JUMPDEST analysis from parent context if available.
 		c.jumpdests = parent.jumpdests
 	} else {
-		c.jumpdests = make(map[common.Hash]bitvec)
+		c.jumpdests = newRegistry(strictSubroutines)
 	}
 
 	// Gas should be a pointer so it can safely be reduced through the run
@@ -108,31 +108,33 @@ func (c *Contract) validJumpSubdest(udest uint64) bool {
 	return c.isCode(udest)
 }
 
+func (c *Contract) isSameSubroutine(from, to uint64) bool {
+	return c.jumpdests.isSameSubroutine(c.analysis, from, to)
+}
+
 // isCode returns true if the provided PC location is an actual opcode, as
 // opposed to a data-segment following a PUSHN operation.
 func (c *Contract) isCode(udest uint64) bool {
 	// Do we have a contract hash already?
 	if c.CodeHash != (common.Hash{}) {
 		// Does parent context have the analysis?
-		analysis, exist := c.jumpdests[c.CodeHash]
-		if !exist {
-			// Do the analysis and save in parent context
-			// We do not need to store it in c.analysis
-			analysis = codeBitmap(c.Code)
-			c.jumpdests[c.CodeHash] = analysis
+		analysis := c.jumpdests.Get(c.CodeHash)
+		if analysis == nil {
+			// Do the analysis and save in the registry
+			analysis = c.jumpdests.Generate(c.CodeHash, c.Code)
 		}
 		// Also stash it in current contract for faster access
 		c.analysis = analysis
-		return analysis.codeSegment(udest)
+		return c.jumpdests.IsCode(analysis, udest)
 	}
 	// We don't have the code hash, most likely a piece of initcode not already
 	// in state trie. In that case, we do an analysis, and save it locally, so
 	// we don't have to recalculate it for every JUMP instruction in the execution
 	// However, we don't save it within the parent context
 	if c.analysis == nil {
-		c.analysis = codeBitmap(c.Code)
+		c.analysis = c.jumpdests.Generate(c.CodeHash, c.Code)
 	}
-	return c.analysis.codeSegment(udest)
+	return c.jumpdests.IsCode(c.analysis, udest)
 }
 
 // AsDelegate sets the contract to be a delegate call and returns the current

@@ -52,7 +52,7 @@ var codeVsDataTests = []struct {
 
 func TestJumpDestAnalysis(t *testing.T) {
 	for _, test := range codeVsDataTests {
-		ret := codeBitmap(test.code)
+		ret := makeCodeBitmap(test.code)
 		if ret[test.which] != test.exp {
 			t.Fatalf("expected %x, got %02x", test.exp, ret[test.which])
 		}
@@ -61,11 +61,11 @@ func TestJumpDestAnalysis(t *testing.T) {
 
 func TestShadowAnalysisCodeAndData(t *testing.T) {
 	for i, test := range codeVsDataTests {
-		shadow := shadowMap(test.code)
-		ret := codeBitmap(test.code)
+		shadow := makeShadowMap(test.code)
+		ret := makeCodeBitmap(test.code)
 		for c, _ := range test.code {
-			exp := ret.codeSegment(uint64(c))
-			got := shadow.IsCode(uint16(c))
+			exp := ret.isCode(uint64(c))
+			got := shadow.isCode(uint16(c))
 			if got != exp {
 				t.Fatalf("test %d: loc %d: expected %v, got %v", i, c, exp, got)
 			}
@@ -137,7 +137,7 @@ func TestShadowAnalysis(t *testing.T) {
 	}
 	for i, tc := range cases {
 		code := common.FromHex(tc.code)
-		shadow := shadowMap(code)
+		shadow := makeShadowMap(code)
 		routines := common.FromHex(tc.rout)
 		substart := 0
 		prev := byte(0)
@@ -203,7 +203,7 @@ func benchJumpdestAnalysis(size int, bench *testing.B) {
 		code := codeFill(size, STOP)
 		b.ResetTimer()
 		for i := 0; i < b.N; i++ {
-			codeBitmap(code)
+			makeCodeBitmap(code)
 		}
 		b.StopTimer()
 	})
@@ -212,7 +212,7 @@ func benchJumpdestAnalysis(size int, bench *testing.B) {
 		code := codeFill(size, JUMPDEST)
 		b.ResetTimer()
 		for i := 0; i < b.N; i++ {
-			codeBitmap(code)
+			makeCodeBitmap(code)
 		}
 		b.StopTimer()
 	})
@@ -221,7 +221,7 @@ func benchJumpdestAnalysis(size int, bench *testing.B) {
 		code := codeFill(size, PUSH32)
 		b.ResetTimer()
 		for i := 0; i < b.N; i++ {
-			codeBitmap(code)
+			makeCodeBitmap(code)
 		}
 		b.StopTimer()
 	})
@@ -230,7 +230,7 @@ func benchJumpdestAnalysis(size int, bench *testing.B) {
 		code := codeFill(size, PUSH1)
 		b.ResetTimer()
 		for i := 0; i < b.N; i++ {
-			codeBitmap(code)
+			makeCodeBitmap(code)
 		}
 		b.StopTimer()
 	})
@@ -238,7 +238,7 @@ func benchJumpdestAnalysis(size int, bench *testing.B) {
 		code := codeFill(size, BEGINSUB)
 		b.ResetTimer()
 		for i := 0; i < b.N; i++ {
-			codeBitmap(code)
+			makeCodeBitmap(code)
 		}
 		b.StopTimer()
 	})
@@ -250,7 +250,7 @@ func benchJumpdestAnalysis(size int, bench *testing.B) {
 		}
 		b.ResetTimer()
 		for i := 0; i < b.N; i++ {
-			codeBitmap(code)
+			makeCodeBitmap(code)
 		}
 		b.StopTimer()
 	})
@@ -266,7 +266,7 @@ func benchShadowAnalysis(size int, bench *testing.B) {
 		code := codeFill(size, STOP)
 		b.ResetTimer()
 		for i := 0; i < b.N; i++ {
-			shadowMap(code)
+			makeShadowMap(code)
 		}
 		b.StopTimer()
 	})
@@ -275,7 +275,7 @@ func benchShadowAnalysis(size int, bench *testing.B) {
 		code := codeFill(size, JUMPDEST)
 		b.ResetTimer()
 		for i := 0; i < b.N; i++ {
-			shadowMap(code)
+			makeShadowMap(code)
 		}
 		b.StopTimer()
 	})
@@ -284,7 +284,7 @@ func benchShadowAnalysis(size int, bench *testing.B) {
 		code := codeFill(size, PUSH32)
 		b.ResetTimer()
 		for i := 0; i < b.N; i++ {
-			shadowMap(code)
+			makeShadowMap(code)
 		}
 		b.StopTimer()
 	})
@@ -293,7 +293,7 @@ func benchShadowAnalysis(size int, bench *testing.B) {
 		code := codeFill(size, PUSH1)
 		b.ResetTimer()
 		for i := 0; i < b.N; i++ {
-			shadowMap(code)
+			makeShadowMap(code)
 		}
 		b.StopTimer()
 	})
@@ -301,7 +301,7 @@ func benchShadowAnalysis(size int, bench *testing.B) {
 		code := codeFill(size, BEGINSUB)
 		b.ResetTimer()
 		for i := 0; i < b.N; i++ {
-			shadowMap(code)
+			makeShadowMap(code)
 		}
 		b.StopTimer()
 	})
@@ -313,7 +313,7 @@ func benchShadowAnalysis(size int, bench *testing.B) {
 		}
 		b.ResetTimer()
 		for i := 0; i < b.N; i++ {
-			shadowMap(code)
+			makeShadowMap(code)
 		}
 		b.StopTimer()
 	})
@@ -323,13 +323,13 @@ func BenchmarkJumpdestValidation(b *testing.B) {
 	size := 24000
 	b.Run("jumpdests", func(b *testing.B) {
 		code := codeFill(size, JUMPDEST)
-		analysis := codeBitmap(code)
+		analysis := makeCodeBitmap(code)
 		//dest := new(big.Int)
 		b.ResetTimer()
 		for i := 0; i < b.N; i++ {
 			for index, _ := range code {
 				//dest.SetUint64(uint64(len(code)))
-				analysis.codeSegment(uint64(index))
+				analysis.isCode(uint64(index))
 			}
 		}
 		b.StopTimer()
