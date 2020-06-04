@@ -282,6 +282,9 @@ func toBlockNumArg(number *big.Int) string {
 	if number == nil {
 		return "latest"
 	}
+	if number.Sign() < 0 {
+		return "pending"
+	}
 	return hexutil.EncodeBig(number)
 }
 
