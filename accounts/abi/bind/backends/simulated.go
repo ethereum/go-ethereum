@@ -28,6 +28,7 @@ import (
 	"github.com/ethereum/go-ethereum/accounts/abi"
 	"github.com/ethereum/go-ethereum/accounts/abi/bind"
 	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/ethereum/go-ethereum/common/math"
 	"github.com/ethereum/go-ethereum/consensus/ethash"
 	"github.com/ethereum/go-ethereum/core"
@@ -344,6 +345,18 @@ func (b *SimulatedBackend) PendingCodeAt(ctx context.Context, contract common.Ad
 	return b.pendingState.GetCode(contract), nil
 }
 
+func newRevertError(result *core.ExecutionResult) *revertError {
+	reason, errUnpack := abi.UnpackRevert(result.Revert())
+	err := errors.New("execution reverted")
+	if errUnpack == nil {
+		err = fmt.Errorf("execution reverted: %v", reason)
+	}
+	return &revertError{
+		error:   err,
+		errData: hexutil.Encode(result.Revert()),
+	}
+}
+
 type revertError struct {
 	error
 	errData interface{} // additional data
@@ -377,13 +390,7 @@ func (b *SimulatedBackend) CallContract(ctx context.Context, call ethereum.CallM
 	}
 	// If the result contains a revert reason, try to unpack and return it.
 	if len(res.Revert()) > 0 {
-		reason, err := abi.UnpackRevert(res.Revert())
-		if err == nil {
-			return nil, &revertError{
-				error:   fmt.Errorf("execution reverted: %v", reason),
-				errData: res.Revert(),
-			}
-		}
+		return nil, newRevertError(res)
 	}
 	return res.Return(), res.Err
 }
@@ -400,13 +407,7 @@ func (b *SimulatedBackend) PendingCallContract(ctx context.Context, call ethereu
 	}
 	// If the result contains a revert reason, try to unpack and return it.
 	if len(res.Revert()) > 0 {
-		reason, err := abi.UnpackRevert(res.Revert())
-		if err == nil {
-			return nil, &revertError{
-				error:   fmt.Errorf("execution reverted: %v", reason),
-				errData: res.Revert(),
-			}
-		}
+		return nil, newRevertError(res)
 	}
 	return res.Return(), res.Err
 }

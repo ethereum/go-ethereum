@@ -864,6 +864,18 @@ func DoCall(ctx context.Context, b Backend, args CallArgs, blockNrOrHash rpc.Blo
 	return result, err
 }
 
+func newRevertError(result *core.ExecutionResult) *revertError {
+	reason, errUnpack := abi.UnpackRevert(result.Revert())
+	err := errors.New("execution reverted")
+	if errUnpack == nil {
+		err = fmt.Errorf("execution reverted: %v", reason)
+	}
+	return &revertError{
+		error:   err,
+		errData: hexutil.Encode(result.Revert()),
+	}
+}
+
 type revertError struct {
 	error
 	errData interface{} // additional data
@@ -896,13 +908,7 @@ func (s *PublicBlockChainAPI) Call(ctx context.Context, args CallArgs, blockNrOr
 	}
 	// If the result contains a revert reason, try to unpack and return it.
 	if len(result.Revert()) > 0 {
-		reason, err := abi.UnpackRevert(result.Revert())
-		if err == nil {
-			return nil, &revertError{
-				error:   fmt.Errorf("execution reverted: %v", reason),
-				errData: result.Revert(),
-			}
-		}
+		return nil, newRevertError(result)
 	}
 	return result.Return(), result.Err
 }
@@ -1000,13 +1006,7 @@ func DoEstimateGas(ctx context.Context, b Backend, args CallArgs, blockNrOrHash 
 		if failed {
 			if result != nil && result.Err != vm.ErrOutOfGas {
 				if len(result.Revert()) > 0 {
-					reason, err := abi.UnpackRevert(result.Revert())
-					if err == nil {
-						return 0, &revertError{
-							error:   fmt.Errorf("execution reverted: %v", reason),
-							errData: result.Revert(),
-						}
-					}
+					return 0, newRevertError(result)
 				}
 				return 0, result.Err
 			}
