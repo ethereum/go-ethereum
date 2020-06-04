@@ -22,12 +22,11 @@ import (
 	"testing"
 
 	"github.com/ethereum/go-ethereum/common"
-	"golang.org/x/crypto/sha3"
 )
 
 func TestRawHPRLP(t *testing.T) {
 	got := rawLeafHPRLP([]byte{0x00, 0x01}, []byte{0x02, 0x03}, true)
-	exp := []byte{198, 2, 32, 1, 130, 2, 3}
+	exp := []byte{198, 130, 32, 1, 130, 2, 3}
 
 	if !bytes.Equal(exp, got) {
 		t.Fatalf("invalid RLP generated for leaf with even length key: got %v, expected %v", common.ToHex(got), common.ToHex(exp))
@@ -41,7 +40,7 @@ func TestRawHPRLP(t *testing.T) {
 	}
 
 	got = rawLeafHPRLP([]byte{0x00, 0x01}, []byte{0x02, 0x03}, false)
-	exp = []byte{198, 2, 0, 1, 130, 2, 3}
+	exp = []byte{198, 130, 0, 1, 130, 2, 3}
 
 	if !bytes.Equal(exp, got) {
 		t.Fatalf("invalid RLP generated for ext with even length key: got %v, expected %v", common.ToHex(got), common.ToHex(exp))
@@ -55,39 +54,51 @@ func TestRawHPRLP(t *testing.T) {
 	}
 }
 
+// smallRLPTrie encodes a list of key, value pairs that will not
+type smallRLPTrie []struct {
+	Key, Value string
+}
+
+var smallRLPTests = []smallRLPTrie{
+	smallRLPTrie{
+		{
+			"2ba639a09a19480b3290299aa982d38c688871e70b0734ac8aa69b9d59492fb3",
+			"8181",
+		},
+		{
+			"2ba639a09acf0edbf01831ef3366124dece00d7e4c498f46126d214a8bca7436",
+			"a03330333335343331333033613332333333613330333732653330333033303561",
+		},
+	},
+	smallRLPTrie{
+		{
+			"2ba639a09a19480b3290299aa982d38c688871e70b0734ac8aa69b9d59492fb3",
+			"8181",
+		},
+		{
+			"2ba639a09acf0edbf01831ef3366124dece00d7e4c498f46126d214a8bca7436",
+			"a033",
+		},
+	},
+}
+
 func TestHashWithSmallRLP(t *testing.T) {
-	trie := NewReStackTrie()
-	trie.insert([]byte{0, 1, 2}, []byte("b"))
-	trie.insert([]byte{0, 1, 3}, []byte("c"))
+	for _, test := range smallRLPTests {
+		trie := NewReStackTrie()
+		for _, kv := range test {
+			trie.TryUpdate(common.FromHex(kv.Key), common.FromHex(kv.Value))
+		}
 
-	aotrie := NewAppendOnlyTrie()
-	aotrie.root = aotrie.insert(aotrie.root, nil, []byte{0, 1, 2}, valueNode([]byte("b")))
-	aotrie.root = aotrie.insert(aotrie.root, nil, []byte{0, 1, 3}, valueNode([]byte("c")))
+		aotrie := NewAppendOnlyTrie()
+		for _, kv := range test {
+			aotrie.TryUpdate(common.FromHex(kv.Key), common.FromHex(kv.Value))
+		}
 
-	d := sha3.NewLegacyKeccak256()
-	d.Write(trie.hash())
-	got := d.Sum(nil)
-	fmt.Println(got)
-	exp := aotrie.Hash()
+		got := trie.Hash()
+		exp := aotrie.Hash()
 
-	if !bytes.Equal(got, exp[:]) {
-		t.Fatalf("error calculating hash of ext-node-leaves < 32: %v != %v", common.ToHex(exp[:]), common.ToHex(got))
-	}
-
-	trie = NewReStackTrie()
-	trie.insert([]byte{0, 1, 2}, []byte("ba"))
-	trie.insert([]byte{0, 2, 3}, []byte("cr"))
-
-	aotrie = NewAppendOnlyTrie()
-	aotrie.root = aotrie.insert(aotrie.root, nil, []byte{0, 1, 2}, valueNode([]byte("ba")))
-	aotrie.root = aotrie.insert(aotrie.root, nil, []byte{0, 2, 3}, valueNode([]byte("cr")))
-
-	d.Reset()
-	d.Write(trie.hash())
-	got = d.Sum(nil)
-	exph := aotrie.Hash()
-
-	if !bytes.Equal(got, exph[:]) {
-		t.Fatalf("error calculating hash of node-leaves < 32: %v != %v", common.ToHex(exph[:]), common.ToHex(got))
+		if !bytes.Equal(got[:], exp[:]) {
+			t.Fatalf("error calculating hash for embedded RLP: %v != %v", common.ToHex(exp[:]), common.ToHex(got[:]))
+		}
 	}
 }
