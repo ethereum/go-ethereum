@@ -9,25 +9,16 @@ import (
 
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/p2p/discover/v4wire"
-	"github.com/ethereum/go-ethereum/p2p/enode"
-	"github.com/ethereum/go-ethereum/p2p/enr"
 )
 
 const (
 	expiration = 20 * time.Second
-	sigSize    = 520 / 8
 )
 
 var (
-	enodeID           string
-	remoteAddr        string
-	toID              enode.ID
-	toAddr            *net.UDPAddr
-	priv              *ecdsa.PrivateKey
-	versionPrefix     = []byte("v4")
-	versionPrefixSize = len(versionPrefix)
-	headSize          = versionPrefixSize + sigSize // space of packet frame data
-	conn              *net.UDPConn
+	enodeID    string
+	remoteAddr string
+	priv       *ecdsa.PrivateKey
 )
 
 func init() {
@@ -51,50 +42,9 @@ func init() {
 	defer conn.Close()
 }
 
-//ripped out from the urlv4 code
-func signV4Compat(r *enr.Record, pubkey *ecdsa.PublicKey) {
-	r.Set((*enode.Secp256k1)(pubkey))
-	if err := r.SetSig(v4CompatID{}, []byte{}); err != nil {
-		panic(err)
-	}
-}
-
-type v4CompatID struct {
-	enode.V4ID
-}
-
-type MacENREntry string
-
-func (v MacENREntry) ENRKey() string { return "mac" }
-
 func futureExpiration() uint64 {
 	return uint64(time.Now().Add(expiration).Unix())
 }
-
-func MakeNode(pubkey *ecdsa.PublicKey, ip net.IP, tcp, udp int, mac *string) *enode.Node {
-	var r enr.Record
-	if ip != nil {
-		r.Set(enr.IP(ip))
-	}
-	if udp != 0 {
-		r.Set(enr.UDP(udp))
-	}
-	if tcp != 0 {
-		r.Set(enr.TCP(tcp))
-	}
-	if mac != nil {
-		r.Set(MacENREntry(*mac))
-	}
-
-	signV4Compat(&r, pubkey)
-	n, err := enode.New(v4CompatID{}, &r)
-	if err != nil {
-		panic(err)
-	}
-	return n
-}
-
-var headSpace = make([]byte, headSize)
 
 func sendPacket(packet []byte) (v4wire.Packet, error) {
 	raddr, err := net.ResolveUDPAddr("udp", remoteAddr)
@@ -112,6 +62,7 @@ func sendPacket(packet []byte) (v4wire.Packet, error) {
 	}
 
 	buf := make([]byte, 2048)
+	conn.SetReadDeadline(time.Now().Add(2 * time.Second))
 	n, err = conn.Read(buf)
 	if err != nil {
 		return nil, err
