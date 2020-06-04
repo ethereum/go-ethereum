@@ -1,7 +1,6 @@
 package test
 
 import (
-	"bytes"
 	"crypto/ecdsa"
 	"flag"
 	"fmt"
@@ -13,7 +12,6 @@ import (
 	"github.com/ethereum/go-ethereum/p2p/discover/v4wire"
 	"github.com/ethereum/go-ethereum/p2p/enode"
 	"github.com/ethereum/go-ethereum/p2p/enr"
-	"github.com/ethereum/go-ethereum/rlp"
 )
 
 const (
@@ -35,7 +33,7 @@ var (
 
 func init() {
 	flag.StringVar(&enodeID, "enode", "", "enode:... as per `admin.nodeInfo.enode`")
-	flag.StringVar(&remoteAddr, "remoteAddr", "127.0.0.1:30304", "")
+	flag.StringVar(&remoteAddr, "remoteAddr", "127.0.0.1:30303", "")
 
 	var err error
 	priv, err = crypto.GenerateKey()
@@ -99,24 +97,6 @@ func MakeNode(pubkey *ecdsa.PublicKey, ip net.IP, tcp, udp int, mac *string) *en
 
 var headSpace = make([]byte, headSize)
 
-func encodePacket(priv *ecdsa.PrivateKey, ptype byte, req interface{}) (p, hash []byte, err error) {
-	b := new(bytes.Buffer)
-	b.Write(headSpace)
-	b.WriteByte(ptype)
-	if err := rlp.Encode(b, req); err != nil {
-		return nil, nil, err
-	}
-	packet := b.Bytes()
-	sig, err := crypto.Sign(crypto.Keccak256(packet[headSize:]), priv)
-	if err != nil {
-		return nil, nil, err
-	}
-	copy(packet, versionPrefix)
-	copy(packet[versionPrefixSize:], sig)
-	hash = crypto.Keccak256(packet[versionPrefixSize:])
-	return packet, hash, nil
-}
-
 func sendPacket(packet []byte) error {
 	raddr, err := net.ResolveUDPAddr("udp", remoteAddr)
 	if err != nil {
@@ -128,10 +108,10 @@ func sendPacket(packet []byte) error {
 	}
 	defer conn.Close()
 	n, err := conn.Write(packet)
+	fmt.Println("written", n)
 	if err != nil {
 		return err
 	}
-	fmt.Println("written", n)
 	return nil
 }
 
@@ -143,7 +123,7 @@ func SimplePing(t *testing.T) {
 		To:         v4wire.Endpoint{IP: ipAddr},
 		Expiration: futureExpiration(),
 	}
-	packet, _, err := encodePacket(priv, v4wire.PingPacket, &req)
+	packet, _, err := v4wire.Encode(priv, &req)
 	if err != nil {
 		t.Error("Encoding", err)
 	}
