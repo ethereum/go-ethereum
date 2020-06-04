@@ -3,7 +3,6 @@ package test
 import (
 	"crypto/ecdsa"
 	"flag"
-	"fmt"
 	"net"
 	"testing"
 	"time"
@@ -97,22 +96,31 @@ func MakeNode(pubkey *ecdsa.PublicKey, ip net.IP, tcp, udp int, mac *string) *en
 
 var headSpace = make([]byte, headSize)
 
-func sendPacket(packet []byte) error {
+func sendPacket(packet []byte) (v4wire.Packet, error) {
 	raddr, err := net.ResolveUDPAddr("udp", remoteAddr)
 	if err != nil {
-		return err
+		return nil, err
 	}
 	conn, err := net.DialUDP("udp", nil, raddr)
 	if err != nil {
-		return err
+		return nil, err
 	}
 	defer conn.Close()
 	n, err := conn.Write(packet)
-	fmt.Println("written", n)
 	if err != nil {
-		return err
+		return nil, err
 	}
-	return nil
+
+	buf := make([]byte, 2048)
+	n, err = conn.Read(buf)
+	if err != nil {
+		return nil, err
+	}
+	p, _, _, err := v4wire.Decode(buf[:n])
+	if err != nil {
+		return nil, err
+	}
+	return p, nil
 }
 
 func SimplePing(t *testing.T) {
@@ -128,8 +136,12 @@ func SimplePing(t *testing.T) {
 		t.Error("Encoding", err)
 	}
 
-	if err := sendPacket(packet); err != nil {
+	reply, err := sendPacket(packet)
+	if err != nil {
 		t.Error("Sending", err)
+	}
+	if reply.Kind() != v4wire.PongPacket {
+		t.Error("Reply is not a Pong", reply.Name())
 	}
 }
 
