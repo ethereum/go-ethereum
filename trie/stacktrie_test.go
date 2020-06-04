@@ -96,6 +96,18 @@ var smallRLPTests = []smallRLPTrie{
 			"81",
 		},
 	},
+	// Two leaves whose size is < 32 and one of them has a one-byte value
+	// bigger than 128.
+	smallRLPTrie{
+		{
+			"2ba639a09a19480b3290299aa982d38c688871e70b0734ac8aa69b9d59492fb3",
+			"8181",
+		},
+		{
+			"2ba639a09acf0edbf01831ef3366124dece00d7e4c498f46126d214a8bca7436",
+			"a0",
+		},
+	},
 }
 
 func TestHashWithSmallRLP(t *testing.T) {

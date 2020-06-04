@@ -263,7 +263,8 @@ func rawExtHPRLP(key, val []byte) []byte {
 	// in that case `pos` wasn't incremented.
 	pos += (len(key) + oddkeylength) / 2
 
-	// Copy the value
+	// Copy the value, no need for a header because the child is
+	// already RLP and directly embedded.
 	copy(rlp[pos:], val)
 
 	// RLP header
@@ -348,7 +349,7 @@ func rawLeafHPRLP(key, val []byte, leaf bool) []byte {
 	// lower than 128, also add the header.
 	if len(val) > 1 || val[0] >= 128 {
 		payload[pos] = byte(len(val))
-		if len(val) > 1 {
+		if len(val) > 1 || val[0] > 128 {
 			payload[pos] += 128
 		}
 		pos += 1
