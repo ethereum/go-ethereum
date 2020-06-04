@@ -509,13 +509,7 @@ func (b *SimulatedBackend) EstimateGas(ctx context.Context, call ethereum.CallMs
 		if failed {
 			if result != nil && result.Err != vm.ErrOutOfGas {
 				if len(result.Revert()) > 0 {
-					reason, err := abi.UnpackRevert(result.Revert())
-					if err == nil {
-						return 0, &revertError{
-							error:   errors.New("execution reverted"),
-							errData: reason,
-						}
-					}
+					return 0, newRevertError(result)
 				}
 				return 0, result.Err
 			}

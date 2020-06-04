@@ -415,7 +415,7 @@ func TestSimulatedBackend_EstimateGas(t *testing.T) {
 			GasPrice: big.NewInt(0),
 			Value:    nil,
 			Data:     common.Hex2Bytes("d8b98391"),
-		}, 0, errors.New("execution reverted"), "revert reason"},
+		}, 0, errors.New("execution reverted: revert reason"), "0x08c379a00000000000000000000000000000000000000000000000000000000000000020000000000000000000000000000000000000000000000000000000000000000d72657665727420726561736f6e00000000000000000000000000000000000000"},
 
 		{"PureRevert", ethereum.CallMsg{
 			From:     addr,
