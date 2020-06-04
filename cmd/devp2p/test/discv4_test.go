@@ -4,14 +4,16 @@ import (
 	"bytes"
 	"crypto/ecdsa"
 	"flag"
+	"fmt"
+	"net"
+	"testing"
+	"time"
+
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/p2p/discover/v4wire"
 	"github.com/ethereum/go-ethereum/p2p/enode"
 	"github.com/ethereum/go-ethereum/p2p/enr"
 	"github.com/ethereum/go-ethereum/rlp"
-	"net"
-	"testing"
-	"time"
 )
 
 const (
@@ -21,7 +23,7 @@ const (
 
 var (
 	enodeID           string
-	listenPort        string
+	remoteAddr        string
 	toID              enode.ID
 	toAddr            *net.UDPAddr
 	priv              *ecdsa.PrivateKey
@@ -33,7 +35,7 @@ var (
 
 func init() {
 	flag.StringVar(&enodeID, "enode", "", "enode:... as per `admin.nodeInfo.enode`")
-	flag.StringVar(&listenPort, "listenPort", ":30304", "")
+	flag.StringVar(&remoteAddr, "remoteAddr", "127.0.0.1:30304", "")
 
 	var err error
 	priv, err = crypto.GenerateKey()
@@ -41,12 +43,11 @@ func init() {
 		panic(err)
 	}
 
-	var addr *net.UDPAddr
-	addr, err = net.ResolveUDPAddr("udp", listenPort)
+	raddr, err := net.ResolveUDPAddr("udp", remoteAddr)
 	if err != nil {
 		panic(err)
 	}
-	conn, err = net.ListenUDP("udp", addr)
+	conn, err := net.DialUDP("udp", nil, raddr)
 	if err != nil {
 		panic(err)
 	}
@@ -116,9 +117,22 @@ func encodePacket(priv *ecdsa.PrivateKey, ptype byte, req interface{}) (p, hash 
 	return packet, hash, nil
 }
 
-func sendPacket(toid enode.ID, toaddr *net.UDPAddr, packet []byte) error {
-	_, err := conn.WriteToUDP(packet, toaddr)
-	return err
+func sendPacket(packet []byte) error {
+	raddr, err := net.ResolveUDPAddr("udp", remoteAddr)
+	if err != nil {
+		return err
+	}
+	conn, err := net.DialUDP("udp", nil, raddr)
+	if err != nil {
+		return err
+	}
+	defer conn.Close()
+	n, err := conn.Write(packet)
+	if err != nil {
+		return err
+	}
+	fmt.Println("written", n)
+	return nil
 }
 
 func SimplePing(t *testing.T) {
@@ -134,7 +148,7 @@ func SimplePing(t *testing.T) {
 		t.Error("Encoding", err)
 	}
 
-	if err := sendPacket(toID, toAddr, packet); err != nil {
+	if err := sendPacket(packet); err != nil {
 		t.Error("Sending", err)
 	}
 }
