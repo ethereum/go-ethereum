@@ -449,19 +449,25 @@ func (ks *KeyStore) Import(keyJSON []byte, passphrase, newPassphrase string) (ac
 	}
 	ks.importMu.Lock()
 	defer ks.importMu.Unlock()
+
 	if ks.cache.hasAddress(key.Address) {
-		return accounts.Account{}, ErrAccountAlreadyExists
+		return accounts.Account{
+			Address: key.Address,
+		}, ErrAccountAlreadyExists
 	}
 	return ks.importKey(key, newPassphrase)
 }
 
 // ImportECDSA stores the given key into the key directory, encrypting it with the passphrase.
 func (ks *KeyStore) ImportECDSA(priv *ecdsa.PrivateKey, passphrase string) (accounts.Account, error) {
-	key := newKeyFromECDSA(priv)
 	ks.importMu.Lock()
 	defer ks.importMu.Unlock()
+
+	key := newKeyFromECDSA(priv)
 	if ks.cache.hasAddress(key.Address) {
-		return accounts.Account{}, ErrAccountAlreadyExists
+		return accounts.Account{
+			Address: key.Address,
+		}, ErrAccountAlreadyExists
 	}
 	return ks.importKey(key, passphrase)
 }

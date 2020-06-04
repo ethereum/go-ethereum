@@ -162,7 +162,6 @@ func main() {
 	if blob, err = ioutil.ReadFile(*accPassFlag); err != nil {
 		log.Crit("Failed to read account password contents", "file", *accPassFlag, "err", err)
 	}
-	// Delete trailing newline in password
 	pass := strings.TrimSuffix(string(blob), "\n")
 
 	ks := keystore.NewKeyStore(filepath.Join(os.Getenv("HOME"), ".faucet", "keys"), keystore.StandardScryptN, keystore.StandardScryptP)
@@ -173,8 +172,9 @@ func main() {
 	if err != nil && err != keystore.ErrAccountAlreadyExists {
 		log.Crit("Failed to import faucet signer account", "err", err)
 	}
-	ks.Unlock(acc, pass)
-
+	if err := ks.Unlock(acc, pass); err != nil {
+		log.Crit("Failed to unlock faucet signer account", "err", err)
+	}
 	// Assemble and start the faucet light service
 	faucet, err := newFaucet(genesis, *ethPortFlag, enodes, *netFlag, *statsFlag, ks, website.Bytes())
 	if err != nil {
