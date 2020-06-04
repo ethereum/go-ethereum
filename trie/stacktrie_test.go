@@ -60,6 +60,7 @@ type smallRLPTrie []struct {
 }
 
 var smallRLPTests = []smallRLPTrie{
+	// One leaf will have a size > 32, the other not.
 	smallRLPTrie{
 		{
 			"2ba639a09a19480b3290299aa982d38c688871e70b0734ac8aa69b9d59492fb3",
@@ -70,6 +71,7 @@ var smallRLPTests = []smallRLPTrie{
 			"a03330333335343331333033613332333333613330333732653330333033303561",
 		},
 	},
+	// Both leaves have sizes smaller than 32.
 	smallRLPTrie{
 		{
 			"2ba639a09a19480b3290299aa982d38c688871e70b0734ac8aa69b9d59492fb3",
@@ -78,6 +80,20 @@ var smallRLPTests = []smallRLPTrie{
 		{
 			"2ba639a09acf0edbf01831ef3366124dece00d7e4c498f46126d214a8bca7436",
 			"a033",
+		},
+	},
+	// Only one leaf
+	smallRLPTrie{
+		{
+			"2ba639a09a19480b3290299aa982d38c688871e70b0734ac8aa69b9d59492fb3",
+			"8181",
+		},
+	},
+	// Leaf with an odd-length value and a size < 32
+	smallRLPTrie{
+		{
+			"2ba639a09a19480b3290299aa982d38c688871e70b0734ac8aa69b9d59492fb3",
+			"81",
 		},
 	},
 }

@@ -228,18 +228,29 @@ func (st *ReStackTrie) insert(key, value []byte) {
 	}
 }
 
+// rawExtHPRLP is called when the length of the RLP of
+// an extension is less than 32. It will return the
+// un-hashed payload.
 func rawExtHPRLP(key, val []byte) []byte {
 	rlp := [32]byte{}
 	nkeybytes := len(key) / 2
 	oddkeylength := len(key) % 2
 
+	// This is the position at which RLP data is written.
+	// The first byte is initially skipped because its final
+	// value will be fully known by the end of the process.
 	pos := 1
+
+	// Write key size if it should be present
 	if nkeybytes > 0 || key[0] > 128 {
 		rlp[pos] = byte(128 + 1 + nkeybytes)
 		pos++
 	}
 
-	// Copy key data, including hex prefix
+	// Copy key data, including hex prefix. If the key length
+	// is odd, write the oddness marker, and otherwise skip the
+	// HP byte altogether since the leaf marker isn't set (i.e.
+	// this is an ext) and no odd-nibble needs to be stored.
 	if oddkeylength == 1 {
 		rlp[pos] = 16
 	} else {
@@ -248,8 +259,11 @@ func rawExtHPRLP(key, val []byte) []byte {
 	for i := 0; i < len(key); i++ {
 		rlp[pos+(i+oddkeylength)/2] |= key[i] << uint(4*((i+1+len(key))%2))
 	}
+	// `+oddkeylength` adds the accounting for the HP byte, since
+	// in that case `pos` wasn't incremented.
 	pos += (len(key) + oddkeylength) / 2
 
+	// Copy the value
 	copy(rlp[pos:], val)
 
 	// RLP header
@@ -258,7 +272,7 @@ func rawExtHPRLP(key, val []byte) []byte {
 	return rlp[:pos+len(val)]
 }
 
-// rawLeafHPRLP is called when the length of the RLP of a node is
+// rawLeafHPRLP is called when the length of the RLP of a leaf is
 // less than 32. It will return the un-hashed payload.
 func rawLeafHPRLP(key, val []byte, leaf bool) []byte {
 	payload := [32]byte{}
@@ -293,7 +307,11 @@ func rawLeafHPRLP(key, val []byte, leaf bool) []byte {
 	}
 	payload[0] = 192 + byte(hplen+key_header_len+len(key)/2+val_header_len+len(val))
 
+	// This is the position at which RLP data is written.
+	// The first byte is initially skipped because its final
+	// value will be fully known by the end of the process.
 	pos := 1
+
 	// Add key, if present
 	if len(key) > 0 {
 		// add length prefix if needed
