@@ -492,14 +492,14 @@ func testSim(t *testing.T, serverCount, clientCount int, serverDir, clientDir []
 	return test(ctx, net, servers, clients)
 }
 
-func newLesClientService(stack *node.Node) (node.Lifecycle, error) {
+func newLesClientService(ctx *adapters.ServiceContext, stack *node.Node) (node.Lifecycle, error) {
 	config := eth.DefaultConfig
 	config.SyncMode = downloader.LightSync
 	config.Ethash.PowMode = ethash.ModeFake
 	return New(stack, &config)
 }
 
-func newLesServerService(stack *node.Node) (node.Lifecycle, error) {
+func newLesServerService(ctx *adapters.ServiceContext, stack *node.Node) (node.Lifecycle, error) {
 	config := eth.DefaultConfig
 	config.SyncMode = downloader.FullSync
 	config.LightServ = testServerCapacity
