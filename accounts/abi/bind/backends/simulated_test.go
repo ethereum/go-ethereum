@@ -463,10 +463,10 @@ func TestSimulatedBackend_EstimateGas(t *testing.T) {
 				t.Fatalf("Expect error, want %v, got %v", c.expectError, err)
 			}
 			if c.expectData != nil {
-				if err, ok := err.(*revertError); !ok {
+				if rerr, ok := err.(*revertError); !ok {
 					t.Fatalf("Expect revert error, got %T", err)
-				} else if !reflect.DeepEqual(err.Data(), c.expectData) {
-					t.Fatalf("Error data mismatch, want %v, got %v", c.expectData, err.Data())
+				} else if !reflect.DeepEqual(rerr.ErrorData(), c.expectData) {
+					t.Fatalf("Error data mismatch, want %v, got %v", c.expectData, rerr.ErrorData())
 				}
 			}
 			continue

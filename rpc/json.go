@@ -111,13 +111,13 @@ func errorMessage(err error) *jsonrpcMessage {
 		Code:    defaultErrorCode,
 		Message: err.Error(),
 	}}
-	ec, ok := err.(ErrorWithCode)
+	ec, ok := err.(Error)
 	if ok {
-		msg.Error.Code = ec.Code()
+		msg.Error.Code = ec.ErrorCode()
 	}
-	de, ok := err.(ErrorWithData)
+	de, ok := err.(DataError)
 	if ok {
-		msg.Error.Data = de.Data()
+		msg.Error.Data = de.ErrorData()
 	}
 	return msg
 }
@@ -133,6 +133,14 @@ func (err *jsonError) Error() string {
 		return fmt.Sprintf("json-rpc error %d", err.Code)
 	}
 	return err.Message
+}
+
+func (err *jsonError) ErrorCode() int {
+	return err.Code
+}
+
+func (err *jsonError) ErrorData() interface{} {
+	return err.Data
 }
 
 // Conn is a subset of the methods of net.Conn which are sufficient for ServerCodec.

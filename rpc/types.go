@@ -35,14 +35,16 @@ type API struct {
 	Public    bool        // indication if the methods must be considered safe for public use
 }
 
-// ErrorWithCode defines an error code in addition to the message.
-type ErrorWithCode interface {
-	Code() int // returns the code
+// Error wraps RPC errors, which contain an error code in addition to the message.
+type Error interface {
+	Error() string  // returns the message
+	ErrorCode() int // returns the code
 }
 
-// ErrorWithData defines a data item in addition to the message.
-type ErrorWithData interface {
-	Data() interface{} // returns the error data
+// A DataError contains some data in addition to the error message.
+type DataError interface {
+	Error() string          // returns the message
+	ErrorData() interface{} // returns the error data
 }
 
 // ServerCodec implements reading, parsing and writing RPC messages for the server side of
