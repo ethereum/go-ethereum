@@ -94,18 +94,18 @@ func sendPacket(packet []byte) (v4wire.Packet, error) {
 	return p, nil
 }
 
-func sendRequest(t *testing.T, req v4wire.Packet) v4wire.Packet {
+func sendRequest(t *testing.T, req v4wire.Packet) (v4wire.Packet, error) {
 	packet, _, err := v4wire.Encode(priv, req)
 	if err != nil {
-		t.Fatal("Encoding", err)
+		return nil, err
 	}
 
 	var reply v4wire.Packet
 	reply, err = sendPacket(packet)
 	if err != nil {
-		t.Fatal("Sending", err)
+		return nil, err
 	}
-	return reply
+	return reply, nil
 }
 
 func PingKnownEnode(t *testing.T) {
@@ -115,7 +115,10 @@ func PingKnownEnode(t *testing.T) {
 		To:         remoteEndpoint,
 		Expiration: futureExpiration(),
 	}
-	reply := sendRequest(t, &req)
+	reply, err := sendRequest(t, &req)
+	if err != nil {
+		t.Fatal(err)
+	}
 	if reply.Kind() != v4wire.PongPacket {
 		t.Error("Reply is not a Pong", reply.Name())
 	}
@@ -128,7 +131,10 @@ func PingWrongTo(t *testing.T) {
 		To:         wrongEndpoint,
 		Expiration: futureExpiration(),
 	}
-	reply := sendRequest(t, &req)
+	reply, err := sendRequest(t, &req)
+	if err != nil {
+		t.Fatal(err)
+	}
 	if reply.Kind() != v4wire.PongPacket {
 		t.Error("Reply is not a Pong", reply.Name())
 	}
@@ -141,7 +147,10 @@ func PingWrongFrom(t *testing.T) {
 		To:         remoteEndpoint,
 		Expiration: futureExpiration(),
 	}
-	reply := sendRequest(t, &req)
+	reply, err := sendRequest(t, &req)
+	if err != nil {
+		t.Fatal(err)
+	}
 	if reply.Kind() != v4wire.PongPacket {
 		t.Error("Reply is not a Pong", reply.Name())
 	}
@@ -156,7 +165,10 @@ func PingExtraData(t *testing.T) {
 		JunkData1:  42,
 		JunkData2:  []byte{9, 8, 7, 6, 5, 4, 3, 2, 1},
 	}
-	reply := sendRequest(t, &req)
+	reply, err := sendRequest(t, &req)
+	if err != nil {
+		t.Fatal(err)
+	}
 	if reply.Kind() != v4wire.PongPacket {
 		t.Error("Reply is not a Pong", reply.Name())
 	}
@@ -171,7 +183,10 @@ func PingExtraDataWrongFrom(t *testing.T) {
 		JunkData1:  42,
 		JunkData2:  []byte{9, 8, 7, 6, 5, 4, 3, 2, 1},
 	}
-	reply := sendRequest(t, &req)
+	reply, err := sendRequest(t, &req)
+	if err != nil {
+		t.Fatal(err)
+	}
 	if reply.Kind() != v4wire.PongPacket {
 		t.Error("Reply is not a Pong", reply.Name())
 	}
@@ -184,11 +199,10 @@ func PingPastExpiration(t *testing.T) {
 		To:         remoteEndpoint,
 		Expiration: -futureExpiration(),
 	}
-	reply := sendRequest(t, &req)
-	if reply.Kind() != v4wire.PongPacket {
-		t.Error("Reply is not a Pong", reply.Name())
+	reply, _ := sendRequest(t, &req)
+	if reply != nil {
+		t.Fatal("Expected no reply, got", reply)
 	}
-
 }
 
 func WrongPacketType(t *testing.T)                      {}
