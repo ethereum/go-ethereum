@@ -114,7 +114,7 @@ func New(stack *node.Node, config *eth.Config) (*LightEthereum, error) {
 	}
 	peers.subscribe((*vtSubscription)(leth.valueTracker))
 
-	dnsdisc, err := leth.setupDiscovery(&ctx.Config.P2P)
+	dnsdisc, err := leth.setupDiscovery(&stack.ServiceContext.Config.P2P)
 	if err != nil {
 		return nil, err
 	}
@@ -304,9 +304,6 @@ func (s *LightEthereum) Start() error {
 
 	s.netRPCService = ethapi.NewPublicNetAPI(s.p2pServer, s.config.NetworkId)
 
-	// clients are searching for the first advertised protocol in the list
-	protocolVersion := AdvertiseProtocolVersions[0]
-	s.serverPool.start(s.p2pServer, lesTopic(s.blockchain.Genesis().Hash(), protocolVersion))
 	return nil
 }
 

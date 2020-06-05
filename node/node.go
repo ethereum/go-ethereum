@@ -17,6 +17,7 @@
 package node
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"io"
@@ -51,7 +52,7 @@ type Node struct {
 
 	server *p2p.Server // Currently running P2P networking layer
 
-	ServiceContext *ServiceContext
+	ServiceContext *ServiceContext // TODO
 
 	lifecycles map[reflect.Type]Lifecycle // All registered backends, services, and auxiliary services that have a lifecycle
 
@@ -109,7 +110,7 @@ func New(conf *Config) (*Node, error) {
 		config:            conf,
 		lifecycles:        make(map[reflect.Type]Lifecycle),
 		ServiceContext: &ServiceContext{
-			Config: *conf,
+			Config:     *conf,
 			Lifecycles: make(map[reflect.Type]Lifecycle),
 		},
 		httpServerMap: make(map[string]*HTTPServer),
@@ -392,10 +393,7 @@ func (n *Node) configureRPC() error {
 			return err
 		}
 		// start HTTP server
-		if err := n.RegisterLifecycle(server); err != nil {
-			return err
-		}
-		n.log.Info("HTTP endpoint successfully opened", "url", fmt.Sprintf("http://%v/", server.ListenerAddr))
+		n.RegisterLifecycle(server)
 	}
 	// All API endpoints started successfully
 	return nil

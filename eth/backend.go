@@ -232,7 +232,7 @@ func New(stack *node.Node, config *Config) (*Ethereum, error) {
 	}
 	eth.APIBackend.gpo = gasprice.NewOracle(eth.APIBackend, gpoParams)
 
-	eth.dialCandiates, err = eth.setupDiscovery(&stack.ServiceContext.Config.P2P)
+	eth.dialCandidates, err = eth.setupDiscovery(&stack.ServiceContext.Config.P2P)
 	if err != nil {
 		return nil, err
 	}
