@@ -213,7 +213,11 @@ func CheckKey(db *leveldb.DB, key, root []byte, depth int, value []byte) bool {
 		}
 	}
 
-	return true // bytes.Equal(out.Value, value)
+	if !bytes.Equal(out.Value, value) {
+		log.Error("invalid value found", "got", out.Value, "expected", value, "fulldepth", fulldepth, "depth", depth, "key", key)
+		return false
+	}
+	return true
 }
 
 // Hash calculates the hash of an expanded (i.e. not already
@@ -281,7 +285,8 @@ func (t *BinaryTrie) insert(depth int, key, value []byte, hashLeft bool) error {
 	// Special case: the trie is empty
 	if depth == 0 && t.left == nil && t.right == nil && len(t.prefix) == 0 {
 		t.prefix = key
-		t.value = value
+		t.value = make([]byte, len(value))
+		copy(t.value, value)
 		t.startBit = 0
 		t.endBit = 8 * len(key)
 		return nil
@@ -329,7 +334,8 @@ func (t *BinaryTrie) insert(depth int, key, value []byte, hashLeft bool) error {
 			newChild.prefix = key
 			newChild.startBit = depth + i + 1
 			newChild.endBit = len(key) * 8
-			newChild.value = value
+			newChild.value = make([]byte, len(value))
+			copy(newChild.value, value)
 			newChild.CommitCh = t.CommitCh
 
 			// reconfigure the [ a b ] part by just specifying
