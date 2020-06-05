@@ -280,6 +280,8 @@ type parityChainSpec struct {
 		EIP1344Transition         hexutil.Uint64       `json:"eip1344Transition"`
 		EIP1884Transition         hexutil.Uint64       `json:"eip1884Transition"`
 		EIP2028Transition         hexutil.Uint64       `json:"eip2028Transition"`
+		EIP2315Transition         hexutil.Uint64       `json:"eip2315Transition"`
+		EIP2537Transition         hexutil.Uint64       `json:"eip2537ransition"`
 	} `json:"params"`
 
 	Genesis struct {
@@ -441,6 +443,7 @@ func newParityChainSpec(network string, genesis *core.Genesis, bootnodes []strin
 	if num := genesis.Config.IstanbulBlock; num != nil {
 		spec.setIstanbul(num)
 	}
+
 	spec.Params.MaximumExtraDataSize = (hexutil.Uint64)(params.MaximumExtraDataSize)
 	spec.Params.MinGasLimit = (hexutil.Uint64)(params.MinGasLimit)
 	spec.Params.GasLimitBoundDivisor = (math2.HexOrDecimal64)(params.GasLimitBoundDivisor)
@@ -574,6 +577,8 @@ func newParityChainSpec(network string, genesis *core.Genesis, bootnodes []strin
 		})
 	}
 	if genesis.Config.YoloV1Block != nil {
+		spec.setYoloV1(genesis.Config.YoloV1Block)
+
 		spec.setPrecompile(10, &parityChainSpecBuiltin{
 			Name:       "bls12_381_g1_add",
 			ActivateAt: (*hexutil.Big)(genesis.Config.YoloV1Block),
@@ -691,6 +696,12 @@ func (spec *parityChainSpec) setIstanbul(num *big.Int) {
 	spec.Params.EIP1884Transition = hexutil.Uint64(num.Uint64())
 	spec.Params.EIP2028Transition = hexutil.Uint64(num.Uint64())
 	spec.Params.EIP1283ReenableTransition = hexutil.Uint64(num.Uint64())
+}
+
+func (spec *parityChainSpec) setYoloV1(num *big.Int) {
+	n := hexutil.Uint64(num.Uint64())
+	spec.Params.EIP2315Transition = n
+	spec.Params.EIP2537Transition = n
 }
 
 // pyEthereumGenesisSpec represents the genesis specification format used by the
