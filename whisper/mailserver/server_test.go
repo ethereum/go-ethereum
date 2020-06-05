@@ -20,6 +20,7 @@ import (
 	"bytes"
 	"crypto/ecdsa"
 	"encoding/binary"
+	"github.com/ethereum/go-ethereum/node"
 	"io/ioutil"
 	"math/rand"
 	"testing"
@@ -89,7 +90,11 @@ func TestMailServer(t *testing.T) {
 	}
 
 	var server WMailServer
-	shh = whisper.New(&whisper.DefaultConfig)
+
+	stack := newNode(t)
+	defer stack.Close()
+
+	shh = getWhisperFromNode(stack, t)
 	shh.RegisterServer(&server)
 
 	err = server.Init(shh, dir, password, powRequirement)
@@ -209,4 +214,32 @@ func createRequest(t *testing.T, p *ServerTestParams) *whisper.Envelope {
 		t.Fatalf("failed to wrap with seed %d: %s.", seed, err)
 	}
 	return env
+}
+
+// newNode creates a new node using a default config and
+// creates and registers a new Whisper service on it.
+func newNode(t *testing.T) *node.Node {
+	stack, err := node.New(&node.DefaultConfig)
+	if err != nil {
+		t.Fatalf("could not create new node: %v", err)
+	}
+	err = whisper.New(stack, &whisper.DefaultConfig)
+	if err != nil {
+		t.Fatalf("could not create new whisper service: %v", err)
+	}
+	err = stack.Start()
+	if err != nil {
+		t.Fatalf("could not start node: %v", err)
+	}
+	return stack
+}
+
+// getWhisperFromNode retrieves the Whisper service from the running node.
+func getWhisperFromNode(stack *node.Node, t *testing.T) *whisper.Whisper {
+	var w *whisper.Whisper
+	err := stack.Lifecycle(&w)
+	if err != nil {
+		t.Fatalf("could not get whisper service from node: %v", err)
+	}
+	return w
 }

@@ -930,7 +930,8 @@ func TestBloom(t *testing.T) {
 	}
 }
 
-// newNode creates a new node using a default config.
+// newNode creates a new node using a default config and
+// creates and registers a new Whisper service on it.
 func newNode(t *testing.T) *node.Node {
 	stack, err := node.New(&node.DefaultConfig)
 	if err != nil {
