@@ -321,6 +321,7 @@ func (t *BinaryTrie) insert(depth int, key, value []byte, hashLeft bool) error {
 			oldChild.endBit = t.endBit
 			oldChild.left = t.left
 			oldChild.right = t.right
+			oldChild.value = t.value
 			oldChild.CommitCh = t.CommitCh
 
 			// Create the child3 part
@@ -352,6 +353,7 @@ func (t *BinaryTrie) insert(depth int, key, value []byte, hashLeft bool) error {
 				}
 				t.right = newChild
 			}
+			t.value = nil
 
 			return nil
 		}
