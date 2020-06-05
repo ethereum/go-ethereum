@@ -19,6 +19,7 @@ const (
 var (
 	enodeID           string
 	remoteAddr        string
+	timeout           int
 	priv              *ecdsa.PrivateKey
 	localhost         = net.ParseIP("127.0.0.1")
 	localhostEndpoint = v4wire.Endpoint{IP: localhost}
@@ -49,6 +50,7 @@ func (req *pingWrongType) Kind() byte   { return wrongPacket }
 func init() {
 	flag.StringVar(&enodeID, "enode", "", "enode:... as per `admin.nodeInfo.enode`")
 	flag.StringVar(&remoteAddr, "remoteAddr", "127.0.0.1:30303", "")
+	flag.IntVar(&timeout, "timeout", 500, "ms to wait for response")
 
 	var err error
 	priv, err = crypto.GenerateKey()
@@ -87,7 +89,7 @@ func sendPacket(packet []byte) (v4wire.Packet, error) {
 	}
 
 	buf := make([]byte, 2048)
-	if err = conn.SetReadDeadline(time.Now().Add(2 * time.Second)); err != nil {
+	if err = conn.SetReadDeadline(time.Now().Add(time.Duration(timeout) * time.Millisecond)); err != nil {
 		return nil, err
 	}
 	n, err := conn.Read(buf)
