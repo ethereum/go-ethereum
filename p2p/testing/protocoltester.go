@@ -53,11 +53,11 @@ type ProtocolTester struct {
 // it takes as argument the pivot node id, the number of dummy peers and the
 // protocol run function called on a peer connection by the p2p server
 func NewProtocolTester(prvkey *ecdsa.PrivateKey, nodeCount int, run func(*p2p.Peer, p2p.MsgReadWriter) error) *ProtocolTester {
-	services := adapters.Services{
-		"test": func(ctx *adapters.ServiceContext) (node.Service, error) {
+	services := adapters.LifecycleConstructors{
+		"test": func(ctx *adapters.ServiceContext, stack *node.Node) (node.Lifecycle, error) {
 			return &testNode{run}, nil
 		},
-		"mock": func(ctx *adapters.ServiceContext) (node.Service, error) {
+		"mock": func(ctx *adapters.ServiceContext, stack *node.Node) (node.Lifecycle, error) {
 			return newMockNode(), nil
 		},
 	}
@@ -66,7 +66,7 @@ func NewProtocolTester(prvkey *ecdsa.PrivateKey, nodeCount int, run func(*p2p.Pe
 	nodeConfig := &adapters.NodeConfig{
 		PrivateKey:      prvkey,
 		EnableMsgEvents: true,
-		Services:        []string{"test"},
+		Lifecycles:        []string{"test"},
 	}
 	if _, err := net.NewNodeWithConfig(nodeConfig); err != nil {
 		panic(err.Error())
@@ -80,7 +80,7 @@ func NewProtocolTester(prvkey *ecdsa.PrivateKey, nodeCount int, run func(*p2p.Pe
 	nodes := make([]*enode.Node, nodeCount)
 	for i := 0; i < nodeCount; i++ {
 		peers[i] = adapters.RandomNodeConfig()
-		peers[i].Services = []string{"mock"}
+		peers[i].Lifecycles = []string{"mock"}
 		if _, err := net.NewNodeWithConfig(peers[i]); err != nil {
 			panic(fmt.Sprintf("error initializing peer %v: %v", peers[i].ID, err))
 		}
@@ -142,7 +142,7 @@ func (t *testNode) APIs() []rpc.API {
 	return nil
 }
 
-func (t *testNode) Start(server *p2p.Server) error {
+func (t *testNode) Start() error {
 	return nil
 }
 
