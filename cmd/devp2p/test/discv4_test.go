@@ -9,6 +9,7 @@ import (
 
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/p2p/discover/v4wire"
+	"github.com/ethereum/go-ethereum/rlp"
 )
 
 const (
@@ -24,6 +25,19 @@ var (
 	remoteEndpoint    = v4wire.Endpoint{IP: net.ParseIP(remoteAddr)}
 	wrongEndpoint     = v4wire.Endpoint{IP: net.ParseIP("192.0.2.0")}
 )
+
+type pingWithJunk struct {
+	Version    uint
+	From, To   v4wire.Endpoint
+	Expiration uint64
+	JunkData1  uint
+	JunkData2  []byte
+	// Ignore additional fields (for forward compatibility).
+	Rest []rlp.RawValue `rlp:"tail"`
+}
+
+func (req *pingWithJunk) Name() string { return "PING/v4" }
+func (req *pingWithJunk) Kind() byte   { return v4wire.PingPacket }
 
 func init() {
 	flag.StringVar(&enodeID, "enode", "", "enode:... as per `admin.nodeInfo.enode`")
@@ -83,13 +97,13 @@ func sendPacket(packet []byte) (v4wire.Packet, error) {
 func sendRequest(t *testing.T, req v4wire.Packet) v4wire.Packet {
 	packet, _, err := v4wire.Encode(priv, req)
 	if err != nil {
-		t.Error("Encoding", err)
+		t.Fatal("Encoding", err)
 	}
 
 	var reply v4wire.Packet
 	reply, err = sendPacket(packet)
 	if err != nil {
-		t.Error("Sending", err)
+		t.Fatal("Sending", err)
 	}
 	return reply
 }
@@ -133,12 +147,53 @@ func PingWrongFrom(t *testing.T) {
 	}
 }
 
-func PingExtraData(t *testing.T)                        {}
-func PingExtraDataWrongFrom(t *testing.T)               {}
+func PingExtraData(t *testing.T) {
+	req := pingWithJunk{
+		Version:    4,
+		From:       localhostEndpoint,
+		To:         remoteEndpoint,
+		Expiration: futureExpiration(),
+		JunkData1:  42,
+		JunkData2:  []byte{9, 8, 7, 6, 5, 4, 3, 2, 1},
+	}
+	reply := sendRequest(t, &req)
+	if reply.Kind() != v4wire.PongPacket {
+		t.Error("Reply is not a Pong", reply.Name())
+	}
+}
+
+func PingExtraDataWrongFrom(t *testing.T) {
+	req := pingWithJunk{
+		Version:    4,
+		From:       wrongEndpoint,
+		To:         remoteEndpoint,
+		Expiration: futureExpiration(),
+		JunkData1:  42,
+		JunkData2:  []byte{9, 8, 7, 6, 5, 4, 3, 2, 1},
+	}
+	reply := sendRequest(t, &req)
+	if reply.Kind() != v4wire.PongPacket {
+		t.Error("Reply is not a Pong", reply.Name())
+	}
+}
+
+func PingPastExpiration(t *testing.T) {
+	req := v4wire.Ping{
+		Version:    4,
+		From:       localhostEndpoint,
+		To:         remoteEndpoint,
+		Expiration: -futureExpiration(),
+	}
+	reply := sendRequest(t, &req)
+	if reply.Kind() != v4wire.PongPacket {
+		t.Error("Reply is not a Pong", reply.Name())
+	}
+
+}
+
 func WrongPacketType(t *testing.T)                      {}
 func FindNeighbours(t *testing.T)                       {}
 func SourceKnownPingFromSignatureMismatch(t *testing.T) {}
-func PingPastExpiration(t *testing.T)                   {}
 
 func SpoofSanityCheck(t *testing.T)              {}
 func SpoofAmplificationAttackCheck(t *testing.T) {}
@@ -148,13 +203,13 @@ func FindNeighboursPastExpiration(t *testing.T)         {}
 
 func TestPing(t *testing.T) {
 	t.Run("Ping-BasicTest(v4001)", PingKnownEnode)
-	t.Run("Ping-rongTo(v4002)", PingWrongTo)
+	t.Run("Ping-WrongTo(v4002)", PingWrongTo)
 	t.Run("Ping-WrongFrom(v4003)", PingWrongFrom)
 	t.Run("Ping-ExtraData(v4004)", PingExtraData)
 	t.Run("Ping-ExtraDataWrongFrom(v4005)", PingExtraDataWrongFrom)
+	t.Run("Ping-PastExpiration(v4011)", PingPastExpiration)
 	t.Run("Ping-WrongPacketType(v4006)", WrongPacketType)
 	t.Run("Ping-BondedFromSignatureMismatch(v4009)", SourceKnownPingFromSignatureMismatch)
-	t.Run("Ping-PastExpiration(v4011)", PingPastExpiration)
 }
 
 func TestSpoofing(t *testing.T) {
