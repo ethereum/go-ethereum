@@ -330,16 +330,12 @@ type parityChainSpecPricing struct {
 	// Blake2F is the price per round of Blake2 compression
 	Blake2F *parityChainSpecBlakePricing `json:"blake2_f,omitempty"`
 
-	G1Add      *parityChainSpecConstOperationPricing `json:"bls12_381_g1_add,omitempty"`
-	G1Mul      *parityChainSpecConstOperationPricing `json:"bls12_381_g1_mul,omitempty"`
-	G1MultiExp *parityChainSpecBasePricePricing      `json:"bls12_381_g1_multiexp,omitempty"`
-	G2Add      *parityChainSpecConstOperationPricing `json:"bls12_381_g2_add,omitempty"`
-	G2Mul      *parityChainSpecConstOperationPricing `json:"bls12_381_g2_mul,omitempty"`
-	G2MultiExp *parityChainSpecBasePricePricing      `json:"bls12_381_g2_multiexp,omitempty"`
+	Bls12ConstPricing *parityChainSpecConstOperationPricing `json:"bls12_const_operations,omitempty"`
 
-	Bls12Pairing *parityChainSpecPairingPricing        `json:"bls12_381_pairing,omitempty"`
-	Bls12FpToG1  *parityChainSpecConstOperationPricing `json:"bls12_381_fp_to_g1,omitempty"`
-	Bls12FpToG2  *parityChainSpecConstOperationPricing `json:"bls12_381_fp2_to_g2,omitempty"`
+	G1MultiExp *parityChainSpecBasePricePricing `json:"bls12_g1_multiexp,omitempty"`
+	G2MultiExp *parityChainSpecBasePricePricing `json:"bls12_g2_multiexp,omitempty"`
+
+	Bls12Pairing *parityChainSpecPairingPricing `json:"bls12_pairing,omitempty"`
 }
 
 type parityChainSpecLinearPricing struct {
@@ -359,7 +355,7 @@ type parityChainSpecConstOperationPricing struct {
 
 //
 type parityChainSpecBasePricePricing struct {
-	BasePrice uint64 `json:"base_price"`
+	Base uint64 `json:"base"`
 }
 
 // parityChainSpecPairingPricing defines the price policy
@@ -582,42 +578,42 @@ func newParityChainSpec(network string, genesis *core.Genesis, bootnodes []strin
 			Name:       "bls12_381_g1_add",
 			ActivateAt: (*hexutil.Big)(genesis.Config.YoloV1Block),
 			Pricing: &parityChainSpecPricing{
-				G1Add: &parityChainSpecConstOperationPricing{Price: 600},
+				Bls12ConstPricing: &parityChainSpecConstOperationPricing{Price: 600},
 			},
 		})
 		spec.setPrecompile(11, &parityChainSpecBuiltin{
 			Name:       "bls12_381_g1_mul",
 			ActivateAt: (*hexutil.Big)(genesis.Config.YoloV1Block),
 			Pricing: &parityChainSpecPricing{
-				G1Mul: &parityChainSpecConstOperationPricing{Price: 12000},
+				Bls12ConstPricing: &parityChainSpecConstOperationPricing{Price: 12000},
 			},
 		})
 		spec.setPrecompile(12, &parityChainSpecBuiltin{
 			Name:       "bls12_381_g1_multiexp",
 			ActivateAt: (*hexutil.Big)(genesis.Config.YoloV1Block),
 			Pricing: &parityChainSpecPricing{
-				G1MultiExp: &parityChainSpecBasePricePricing{BasePrice: 12000},
+				G1MultiExp: &parityChainSpecBasePricePricing{Base: 12000},
 			},
 		})
 		spec.setPrecompile(13, &parityChainSpecBuiltin{
 			Name:       "bls12_381_g2_add",
 			ActivateAt: (*hexutil.Big)(genesis.Config.YoloV1Block),
 			Pricing: &parityChainSpecPricing{
-				G2Add: &parityChainSpecConstOperationPricing{Price: 4500},
+				Bls12ConstPricing: &parityChainSpecConstOperationPricing{Price: 4500},
 			},
 		})
 		spec.setPrecompile(14, &parityChainSpecBuiltin{
 			Name:       "bls12_381_g2_mul",
 			ActivateAt: (*hexutil.Big)(genesis.Config.YoloV1Block),
 			Pricing: &parityChainSpecPricing{
-				G2Mul: &parityChainSpecConstOperationPricing{Price: 55000},
+				Bls12ConstPricing: &parityChainSpecConstOperationPricing{Price: 55000},
 			},
 		})
 		spec.setPrecompile(15, &parityChainSpecBuiltin{
 			Name:       "bls12_381_g2_multiexp",
 			ActivateAt: (*hexutil.Big)(genesis.Config.YoloV1Block),
 			Pricing: &parityChainSpecPricing{
-				G2MultiExp: &parityChainSpecBasePricePricing{BasePrice: 55000},
+				G2MultiExp: &parityChainSpecBasePricePricing{Base: 55000},
 			},
 		})
 		spec.setPrecompile(16, &parityChainSpecBuiltin{
@@ -634,14 +630,14 @@ func newParityChainSpec(network string, genesis *core.Genesis, bootnodes []strin
 			Name:       "bls12_381_fp_to_g1",
 			ActivateAt: (*hexutil.Big)(genesis.Config.YoloV1Block),
 			Pricing: &parityChainSpecPricing{
-				Bls12FpToG1: &parityChainSpecConstOperationPricing{Price: 600},
+				Bls12ConstPricing: &parityChainSpecConstOperationPricing{Price: 600},
 			},
 		})
 		spec.setPrecompile(18, &parityChainSpecBuiltin{
 			Name:       "bls12_381_fp2_to_g2",
 			ActivateAt: (*hexutil.Big)(genesis.Config.YoloV1Block),
 			Pricing: &parityChainSpecPricing{
-				Bls12FpToG2: &parityChainSpecConstOperationPricing{Price: 600},
+				Bls12ConstPricing: &parityChainSpecConstOperationPricing{Price: 600},
 			},
 		})
 
