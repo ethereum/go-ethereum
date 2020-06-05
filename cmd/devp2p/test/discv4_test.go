@@ -16,9 +16,13 @@ const (
 )
 
 var (
-	enodeID    string
-	remoteAddr string
-	priv       *ecdsa.PrivateKey
+	enodeID           string
+	remoteAddr        string
+	priv              *ecdsa.PrivateKey
+	localhost         = net.ParseIP("127.0.0.1")
+	localhostEndpoint = v4wire.Endpoint{IP: localhost}
+	remoteEndpoint    = v4wire.Endpoint{IP: net.ParseIP(remoteAddr)}
+	wrongEndpoint     = v4wire.Endpoint{IP: net.ParseIP("192.0.2.0")}
 )
 
 func init() {
@@ -74,29 +78,46 @@ func sendPacket(packet []byte) (v4wire.Packet, error) {
 	return p, nil
 }
 
-func SimplePing(t *testing.T) {
-	ipAddr := net.ParseIP("127.0.0.1")
-	req := v4wire.Ping{
-		Version:    4,
-		From:       v4wire.Endpoint{IP: ipAddr},
-		To:         v4wire.Endpoint{IP: ipAddr},
-		Expiration: futureExpiration(),
-	}
-	packet, _, err := v4wire.Encode(priv, &req)
+func sendRequest(t *testing.T, req v4wire.Packet) v4wire.Packet {
+	packet, _, err := v4wire.Encode(priv, req)
 	if err != nil {
 		t.Error("Encoding", err)
 	}
 
-	reply, err := sendPacket(packet)
+	var reply v4wire.Packet
+	reply, err = sendPacket(packet)
 	if err != nil {
 		t.Error("Sending", err)
 	}
+	return reply
+}
+
+func SimplePing(t *testing.T) {
+	req := v4wire.Ping{
+		Version:    4,
+		From:       localhostEndpoint,
+		To:         remoteEndpoint,
+		Expiration: futureExpiration(),
+	}
+	reply := sendRequest(t, &req)
 	if reply.Kind() != v4wire.PongPacket {
 		t.Error("Reply is not a Pong", reply.Name())
 	}
 }
 
-func SourceUnknownPingKnownEnode(t *testing.T)          {}
+func SourceUnknownPingKnownEnode(t *testing.T) {
+	req := v4wire.Ping{
+		Version:    4,
+		From:       wrongEndpoint,
+		To:         remoteEndpoint,
+		Expiration: futureExpiration(),
+	}
+	reply := sendRequest(t, &req)
+	if reply.Kind() != v4wire.PongPacket {
+		t.Error("Reply is not a Pong", reply.Name())
+	}
+}
+
 func SourceUnknownPingWrongTo(t *testing.T)             {}
 func SourceUnknownPingWrongFrom(t *testing.T)           {}
 func SourceUnknownPingExtraData(t *testing.T)           {}
