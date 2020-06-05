@@ -94,7 +94,7 @@ func sendRequest(t *testing.T, req v4wire.Packet) v4wire.Packet {
 	return reply
 }
 
-func SimplePing(t *testing.T) {
+func PingKnownEnode(t *testing.T) {
 	req := v4wire.Ping{
 		Version:    4,
 		From:       localhostEndpoint,
@@ -107,7 +107,20 @@ func SimplePing(t *testing.T) {
 	}
 }
 
-func SourceUnknownPingKnownEnode(t *testing.T) {
+func PingWrongTo(t *testing.T) {
+	req := v4wire.Ping{
+		Version:    4,
+		From:       localhostEndpoint,
+		To:         wrongEndpoint,
+		Expiration: futureExpiration(),
+	}
+	reply := sendRequest(t, &req)
+	if reply.Kind() != v4wire.PongPacket {
+		t.Error("Reply is not a Pong", reply.Name())
+	}
+}
+
+func PingWrongFrom(t *testing.T) {
 	req := v4wire.Ping{
 		Version:    4,
 		From:       wrongEndpoint,
@@ -120,24 +133,10 @@ func SourceUnknownPingKnownEnode(t *testing.T) {
 	}
 }
 
-func SourceUnknownPingWrongTo(t *testing.T) {
-	req := v4wire.Ping{
-		Version:    4,
-		From:       wrongEndpoint,
-		To:         wrongEndpoint,
-		Expiration: futureExpiration(),
-	}
-	reply := sendRequest(t, &req)
-	if reply.Kind() != v4wire.PongPacket {
-		t.Error("Reply is not a Pong", reply.Name())
-	}
-}
-
-func SourceUnknownPingWrongFrom(t *testing.T)           {}
-func SourceUnknownPingExtraData(t *testing.T)           {}
-func SourceUnknownPingExtraDataWrongFrom(t *testing.T)  {}
-func SourceUnknownWrongPacketType(t *testing.T)         {}
-func SourceUnknownFindNeighbours(t *testing.T)          {}
+func PingExtraData(t *testing.T)                        {}
+func PingExtraDataWrongFrom(t *testing.T)               {}
+func WrongPacketType(t *testing.T)                      {}
+func FindNeighbours(t *testing.T)                       {}
 func SourceKnownPingFromSignatureMismatch(t *testing.T) {}
 func PingPastExpiration(t *testing.T)                   {}
 
@@ -148,13 +147,12 @@ func FindNeighboursOnRecentlyBondedTarget(t *testing.T) {}
 func FindNeighboursPastExpiration(t *testing.T)         {}
 
 func TestPing(t *testing.T) {
-	t.Run("Ping-Simple", SimplePing)
-	t.Run("Ping-BasicTest(v4001)", SourceUnknownPingKnownEnode)
-	t.Run("Ping-SourceUnknownrongTo(v4002)", SourceUnknownPingWrongTo)
-	t.Run("Ping-SourceUnknownWrongFrom(v4003)", SourceUnknownPingWrongFrom)
-	t.Run("Ping-SourceUnknownExtraData(v4004)", SourceUnknownPingExtraData)
-	t.Run("Ping-SourceUnknownExtraDataWrongFrom(v4005)", SourceUnknownPingExtraDataWrongFrom)
-	t.Run("Ping-SourceUnknownWrongPacketType(v4006)", SourceUnknownWrongPacketType)
+	t.Run("Ping-BasicTest(v4001)", PingKnownEnode)
+	t.Run("Ping-rongTo(v4002)", PingWrongTo)
+	t.Run("Ping-WrongFrom(v4003)", PingWrongFrom)
+	t.Run("Ping-ExtraData(v4004)", PingExtraData)
+	t.Run("Ping-ExtraDataWrongFrom(v4005)", PingExtraDataWrongFrom)
+	t.Run("Ping-WrongPacketType(v4006)", WrongPacketType)
 	t.Run("Ping-BondedFromSignatureMismatch(v4009)", SourceKnownPingFromSignatureMismatch)
 	t.Run("Ping-PastExpiration(v4011)", PingPastExpiration)
 }
@@ -165,7 +163,7 @@ func TestSpoofing(t *testing.T) {
 }
 
 func TestFindNode(t *testing.T) {
-	t.Run("Findnode-UnbondedFindNeighbours(v4007)", SourceUnknownFindNeighbours)
+	t.Run("Findnode-UnbondedFindNeighbours(v4007)", FindNeighbours)
 	t.Run("FindNode-UnsolicitedPollution(v4010)", FindNeighboursOnRecentlyBondedTarget)
 	t.Run("FindNode-PastExpiration(v4012)", FindNeighboursPastExpiration)
 }
