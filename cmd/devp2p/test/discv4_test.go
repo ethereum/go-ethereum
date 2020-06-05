@@ -60,13 +60,16 @@ func sendPacket(packet []byte) (v4wire.Packet, error) {
 		return nil, err
 	}
 	defer conn.Close()
-	n, err := conn.Write(packet)
+	var n int
+	n, err = conn.Write(packet)
 	if err != nil {
 		return nil, err
 	}
 
 	buf := make([]byte, 2048)
-	conn.SetReadDeadline(time.Now().Add(2 * time.Second))
+	if err = conn.SetReadDeadline(time.Now().Add(2 * time.Second)); err != nil {
+		return nil, err
+	}
 	n, err = conn.Read(buf)
 	if err != nil {
 		return nil, err
@@ -118,7 +121,19 @@ func SourceUnknownPingKnownEnode(t *testing.T) {
 	}
 }
 
-func SourceUnknownPingWrongTo(t *testing.T)             {}
+func SourceUnknownPingWrongTo(t *testing.T) {
+	req := v4wire.Ping{
+		Version:    4,
+		From:       wrongEndpoint,
+		To:         wrongEndpoint,
+		Expiration: futureExpiration(),
+	}
+	reply := sendRequest(t, &req)
+	if reply.Kind() != v4wire.PongPacket {
+		t.Error("Reply is not a Pong", reply.Name())
+	}
+}
+
 func SourceUnknownPingWrongFrom(t *testing.T)           {}
 func SourceUnknownPingExtraData(t *testing.T)           {}
 func SourceUnknownPingExtraDataWrongFrom(t *testing.T)  {}
