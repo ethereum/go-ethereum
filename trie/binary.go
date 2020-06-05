@@ -164,7 +164,7 @@ func (t *BinaryTrie) bitPrefix() []byte {
 		}
 	}
 	if t.getPrefixLen() > 0 {
-		bp[0] = byte(t.endBit-t.startBit) / 8
+		bp[0] = byte(t.endBit-t.startBit) % 8
 	}
 
 	return bp
