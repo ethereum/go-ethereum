@@ -324,9 +324,7 @@ func (f *lightFetcher) mainloop() {
 				// in both cases, so resync is necessary.
 				if data.Number > localHead.Number.Uint64()+syncInterval || data.ReorgDepth > 0 {
 					syncing = true
-					if !f.requestResync(peerid) {
-						syncing = false
-					}
+					go f.startSync(peerid)
 					log.Debug("Trigger light sync", "peer", peerid, "local", localHead.Number, "localhash", localHead.Hash(), "remote", data.Number, "remotehash", data.Hash)
 					continue
 				}
@@ -341,9 +339,7 @@ func (f *lightFetcher) mainloop() {
 				if trusted && !syncing {
 					if data.Number > localHead.Number.Uint64()+syncInterval || data.ReorgDepth > 0 {
 						syncing = true
-						if !f.requestResync(peerid) {
-							syncing = false
-						}
+						go f.startSync(peerid)
 						log.Debug("Trigger trusted light sync", "local", localHead.Number, "localhash", localHead.Hash(), "remote", data.Number, "remotehash", data.Hash)
 						continue
 					}
@@ -491,8 +487,10 @@ func (f *lightFetcher) requestHeaderByHash(peerid enode.ID) func(common.Hash) er
 				cost := peer.getRequestCost(GetBlockHeadersMsg, 1)
 				peer.fcServer.QueuedRequest(id, cost)
 
-				f.trackRequest(peer.ID(), id)
-				return func() { peer.requestHeadersByHash(id, hash, 1, 0, false) }
+				return func() {
+					f.trackRequest(peer.ID(), id)
+					peer.requestHeadersByHash(id, hash, 1, 0, false)
+				}
 			},
 		}
 		f.reqDist.queue(req)
@@ -500,30 +498,17 @@ func (f *lightFetcher) requestHeaderByHash(peerid enode.ID) func(common.Hash) er
 	}
 }
 
-// requestResync constructs a re-sync request based on a given block hash.
-func (f *lightFetcher) requestResync(peerid enode.ID) bool {
-	req := &distReq{
-		getCost: func(dp distPeer) uint64 { return 0 },
-		canSend: func(dp distPeer) bool {
-			p := dp.(*serverPeer)
-			if p.onlyAnnounce {
-				return false
-			}
-			return p.ID() == peerid
-		},
-		request: func(dp distPeer) func() {
-			go func() {
-				defer func(header *types.Header) {
-					f.syncDone <- header
-				}(f.chain.CurrentHeader())
+// requestResync invokes synchronisation callback to start syncing.
+func (f *lightFetcher) startSync(id enode.ID) {
+	defer func(header *types.Header) {
+		f.syncDone <- header
+	}(f.chain.CurrentHeader())
 
-				f.synchronise(dp.(*serverPeer))
-			}()
-			return nil
-		},
+	peer := f.peerset.peer(id.String())
+	if peer == nil || peer.onlyAnnounce {
+		return
 	}
-	_, ok := <-f.reqDist.queue(req)
-	return ok
+	f.synchronise(peer)
 }
 
 // deliverHeaders delivers header download request responses for processing
