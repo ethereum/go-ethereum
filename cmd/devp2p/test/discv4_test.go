@@ -9,11 +9,11 @@ import (
 
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/p2p/discover/v4wire"
-	"github.com/ethereum/go-ethereum/rlp"
 )
 
 const (
-	expiration = 20 * time.Second
+	expiration  = 20 * time.Second
+	wrongPacket = 66
 )
 
 var (
@@ -32,12 +32,19 @@ type pingWithJunk struct {
 	Expiration uint64
 	JunkData1  uint
 	JunkData2  []byte
-	// Ignore additional fields (for forward compatibility).
-	Rest []rlp.RawValue `rlp:"tail"`
 }
 
 func (req *pingWithJunk) Name() string { return "PING/v4" }
 func (req *pingWithJunk) Kind() byte   { return v4wire.PingPacket }
+
+type pingWrongType struct {
+	Version    uint
+	From, To   v4wire.Endpoint
+	Expiration uint64
+}
+
+func (req *pingWrongType) Name() string { return "WRONG/v4" }
+func (req *pingWrongType) Kind() byte   { return wrongPacket }
 
 func init() {
 	flag.StringVar(&enodeID, "enode", "", "enode:... as per `admin.nodeInfo.enode`")
@@ -205,7 +212,19 @@ func PingPastExpiration(t *testing.T) {
 	}
 }
 
-func WrongPacketType(t *testing.T)                      {}
+func WrongPacketType(t *testing.T) {
+	req := pingWrongType{
+		Version:    4,
+		From:       localhostEndpoint,
+		To:         remoteEndpoint,
+		Expiration: futureExpiration(),
+	}
+	reply, _ := sendRequest(t, &req)
+	if reply != nil {
+		t.Fatal("Expected no reply, got", reply)
+	}
+}
+
 func FindNeighbours(t *testing.T)                       {}
 func SourceKnownPingFromSignatureMismatch(t *testing.T) {}
 
