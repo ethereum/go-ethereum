@@ -60,8 +60,7 @@ func sendPacket(packet []byte) (v4wire.Packet, error) {
 		return nil, err
 	}
 	defer conn.Close()
-	var n int
-	n, err = conn.Write(packet)
+	_, err = conn.Write(packet)
 	if err != nil {
 		return nil, err
 	}
@@ -70,7 +69,7 @@ func sendPacket(packet []byte) (v4wire.Packet, error) {
 	if err = conn.SetReadDeadline(time.Now().Add(2 * time.Second)); err != nil {
 		return nil, err
 	}
-	n, err = conn.Read(buf)
+	n, err := conn.Read(buf)
 	if err != nil {
 		return nil, err
 	}
