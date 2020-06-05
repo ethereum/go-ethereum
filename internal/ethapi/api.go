@@ -871,24 +871,27 @@ func newRevertError(result *core.ExecutionResult) *revertError {
 		err = fmt.Errorf("execution reverted: %v", reason)
 	}
 	return &revertError{
-		error:   err,
-		errData: hexutil.Encode(result.Revert()),
+		error:  err,
+		reason: hexutil.Encode(result.Revert()),
 	}
 }
 
+// revertError is an API error that encompassas an EVM revertal with JSON error
+// code and a binary data blob.
 type revertError struct {
 	error
-	errData interface{} // additional data
+	reason string // revert reason hex encoded
 }
 
-func (e revertError) ErrorCode() int {
-	// revert errors are execution errors.
-	// See: https://github.com/ethereum/wiki/wiki/JSON-RPC-Error-Codes-Improvement-Proposal
+// Core returns the JSON error code for a revertal.
+// See: https://github.com/ethereum/wiki/wiki/JSON-RPC-Error-Codes-Improvement-Proposal
+func (e *revertError) Code() int {
 	return 3
 }
 
-func (e revertError) ErrorData() interface{} {
-	return e.errData
+// Data returns the hex encoded revert reason.
+func (e *revertError) Data() interface{} {
+	return e.reason
 }
 
 // Call executes the given transaction on the state for the given block number.

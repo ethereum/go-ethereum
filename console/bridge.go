@@ -413,9 +413,7 @@ func (b *bridge) Send(call jsre.Call) (goja.Value, error) {
 		resp.Set("id", req.ID)
 
 		var result json.RawMessage
-		err = b.client.Call(&result, req.Method, req.Params...)
-		switch err := err.(type) {
-		case nil:
+		if err = b.client.Call(&result, req.Method, req.Params...); err == nil {
 			if result == nil {
 				// Special case null because it is decoded as an empty
 				// raw message for some reason.
@@ -433,18 +431,21 @@ func (b *bridge) Send(call jsre.Call) (goja.Value, error) {
 					resp.Set("result", resultVal)
 				}
 			}
-		case rpc.Error:
-			if dataErr, ok := err.(rpc.DataError); ok {
-				setError(resp, err.ErrorCode(), err.Error(), dataErr.ErrorData())
-			} else {
-				setError(resp, err.ErrorCode(), err.Error(), nil)
+		} else {
+			var (
+				code int         = -32603
+				data interface{} = nil
+			)
+			if err, ok := err.(rpc.ErrorWithCode); ok {
+				code = err.Code()
 			}
-		default:
-			setError(resp, -32603, err.Error(), nil)
+			if err, ok := err.(rpc.ErrorWithData); ok {
+				data = err.Data()
+			}
+			setError(resp, code, err.Error(), data)
 		}
 		resps = append(resps, resp)
 	}
-
 	// Return the responses either to the callback (if supplied)
 	// or directly as the return value.
 	var result goja.Value
