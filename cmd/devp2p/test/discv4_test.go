@@ -103,7 +103,7 @@ func sendPacket(packet []byte) (v4wire.Packet, error) {
 	return p, nil
 }
 
-func sendRequest(t *testing.T, req v4wire.Packet) (v4wire.Packet, error) {
+func sendRequest(req v4wire.Packet) (v4wire.Packet, error) {
 	packet, _, err := v4wire.Encode(priv, req)
 	if err != nil {
 		return nil, err
@@ -124,7 +124,7 @@ func PingKnownEnode(t *testing.T) {
 		To:         remoteEndpoint,
 		Expiration: futureExpiration(),
 	}
-	reply, err := sendRequest(t, &req)
+	reply, err := sendRequest(&req)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -140,7 +140,7 @@ func PingWrongTo(t *testing.T) {
 		To:         wrongEndpoint,
 		Expiration: futureExpiration(),
 	}
-	reply, err := sendRequest(t, &req)
+	reply, err := sendRequest(&req)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -156,7 +156,7 @@ func PingWrongFrom(t *testing.T) {
 		To:         remoteEndpoint,
 		Expiration: futureExpiration(),
 	}
-	reply, err := sendRequest(t, &req)
+	reply, err := sendRequest(&req)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -174,7 +174,7 @@ func PingExtraData(t *testing.T) {
 		JunkData1:  42,
 		JunkData2:  []byte{9, 8, 7, 6, 5, 4, 3, 2, 1},
 	}
-	reply, err := sendRequest(t, &req)
+	reply, err := sendRequest(&req)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -192,7 +192,7 @@ func PingExtraDataWrongFrom(t *testing.T) {
 		JunkData1:  42,
 		JunkData2:  []byte{9, 8, 7, 6, 5, 4, 3, 2, 1},
 	}
-	reply, err := sendRequest(t, &req)
+	reply, err := sendRequest(&req)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -208,7 +208,7 @@ func PingPastExpiration(t *testing.T) {
 		To:         remoteEndpoint,
 		Expiration: -futureExpiration(),
 	}
-	reply, _ := sendRequest(t, &req)
+	reply, _ := sendRequest(&req)
 	if reply != nil {
 		t.Fatal("Expected no reply, got", reply)
 	}
@@ -221,7 +221,7 @@ func WrongPacketType(t *testing.T) {
 		To:         remoteEndpoint,
 		Expiration: futureExpiration(),
 	}
-	reply, _ := sendRequest(t, &req)
+	reply, _ := sendRequest(&req)
 	if reply != nil {
 		t.Fatal("Expected no reply, got", reply)
 	}
@@ -236,7 +236,7 @@ func SourceKnownPingFromSignatureMismatch(t *testing.T) {
 		To:         remoteEndpoint,
 		Expiration: futureExpiration(),
 	}
-	reply, err = sendRequest(t, &req)
+	reply, err = sendRequest(&req)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -253,7 +253,7 @@ func SourceKnownPingFromSignatureMismatch(t *testing.T) {
 		To:         remoteEndpoint,
 		Expiration: futureExpiration(),
 	}
-	reply, err = sendRequest(t, &req2)
+	reply, err = sendRequest(&req2)
 	if err != nil {
 		t.Fatal(err)
 	}
