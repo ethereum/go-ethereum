@@ -227,8 +227,42 @@ func WrongPacketType(t *testing.T) {
 	}
 }
 
-func FindNeighbours(t *testing.T)                       {}
-func SourceKnownPingFromSignatureMismatch(t *testing.T) {}
+func SourceKnownPingFromSignatureMismatch(t *testing.T) {
+	var reply v4wire.Packet
+	var err error
+	req := v4wire.Ping{
+		Version:    4,
+		From:       localhostEndpoint,
+		To:         remoteEndpoint,
+		Expiration: futureExpiration(),
+	}
+	reply, err = sendRequest(t, &req)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if reply.Kind() != v4wire.PongPacket {
+		t.Error("Reply is not a Pong", reply.Name())
+	}
+
+	//hang around for a bit (we don't know if the target was already bonded or not)
+	time.Sleep(2 * time.Second)
+
+	req2 := v4wire.Ping{
+		Version:    4,
+		From:       wrongEndpoint,
+		To:         remoteEndpoint,
+		Expiration: futureExpiration(),
+	}
+	reply, err = sendRequest(t, &req2)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if reply.Kind() != v4wire.PongPacket {
+		t.Error("Reply is not a Pong after bonding", reply.Name())
+	}
+}
+
+func FindNeighbours(t *testing.T) {}
 
 func SpoofSanityCheck(t *testing.T)              {}
 func SpoofAmplificationAttackCheck(t *testing.T) {}
