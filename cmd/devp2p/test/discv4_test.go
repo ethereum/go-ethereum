@@ -9,6 +9,7 @@ import (
 
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/p2p/discover/v4wire"
+	"github.com/ethereum/go-ethereum/p2p/enode"
 )
 
 const (
@@ -267,8 +268,57 @@ func FindNeighbours(t *testing.T) {}
 func SpoofSanityCheck(t *testing.T)              {}
 func SpoofAmplificationAttackCheck(t *testing.T) {}
 
-func FindNeighboursOnRecentlyBondedTarget(t *testing.T) {}
-func FindNeighboursPastExpiration(t *testing.T)         {}
+func FindNeighboursOnRecentlyBondedTarget(t *testing.T) {
+	//try to bond with the target
+	pingReq := v4wire.Ping{
+		Version:    4,
+		From:       localhostEndpoint,
+		To:         remoteEndpoint,
+		Expiration: futureExpiration(),
+	}
+	_, err := sendRequest(&pingReq)
+	if err != nil {
+		t.Fatal("First ping failed", err)
+	}
+
+	//hang around for a bit (we don't know if the target was already bonded or not)
+	time.Sleep(2 * time.Second)
+
+	//send an unsolicited neighbours packet
+	var fakeKey *ecdsa.PrivateKey
+	fakeKey, err = crypto.GenerateKey()
+	if err != nil {
+		t.Fatal(err)
+	}
+	fakePub := fakeKey.PublicKey
+	encFakeKey := v4wire.EncodePubkey(&fakePub)
+	fakeNeighbor := v4wire.Node{ID: encFakeKey, IP: net.IP{1, 2, 3, 4}, UDP: 123, TCP: 123}
+	neighborsReq := v4wire.Neighbors{
+		Nodes:      []v4wire.Node{fakeNeighbor},
+		Expiration: futureExpiration(),
+	}
+	reply, err := sendRequest(&neighborsReq)
+	if err != nil {
+		t.Fatal("NeighborsReq", err)
+	}
+
+	//now call find neighbours
+	targetNode := enode.MustParseV4(enodeID)
+	targetEncKey := v4wire.EncodePubkey(targetNode.Pubkey())
+	findReq := v4wire.Findnode{
+		Target:     targetEncKey,
+		Expiration: futureExpiration(),
+	}
+	reply, err = sendRequest(&findReq)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if reply.Kind() != v4wire.PongPacket {
+		t.Fatal("Expected pong, got", reply.Name())
+	}
+}
+
+func FindNeighboursPastExpiration(t *testing.T) {}
 
 func TestPing(t *testing.T) {
 	t.Run("Ping-BasicTest(v4001)", PingKnownEnode)
