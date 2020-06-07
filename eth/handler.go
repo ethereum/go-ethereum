@@ -897,6 +897,8 @@ func (pm *ProtocolManager) txBroadcastLoop() {
 
 	for {
 		select {
+		case <-pm.quitSync:
+			return
 		case event := <-pm.txsCh:
 			// For testing purpose only, disable propagation
 			if pm.broadcastTxAnnouncesOnly {
