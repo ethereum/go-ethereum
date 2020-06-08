@@ -83,9 +83,9 @@ func localConsole(ctx *cli.Context) error {
 	stack := makeFullNode(ctx)
 	// fetch backend
 	var ethBackend *eth.Ethereum
-	stack.Lifecycle(&ethBackend)
+	stack.ServiceContext.Lifecycle(&ethBackend)
 	var lesBackend *les.LightEthereum
-	stack.Lifecycle(&lesBackend)
+	stack.ServiceContext.Lifecycle(&lesBackend)
 
 	startNode(ctx, stack, ethBackend, lesBackend)
 	defer stack.Close()
@@ -201,9 +201,9 @@ func ephemeralConsole(ctx *cli.Context) error {
 	stack := makeFullNode(ctx)
 	// fetch backend
 	var ethBackend *eth.Ethereum
-	stack.Lifecycle(&ethBackend)
+	stack.ServiceContext.Lifecycle(&ethBackend)
 	var lesBackend *les.LightEthereum
-	stack.Lifecycle(&lesBackend)
+	stack.ServiceContext.Lifecycle(&lesBackend)
 
 	startNode(ctx, stack, ethBackend, lesBackend)
 	defer stack.Close()

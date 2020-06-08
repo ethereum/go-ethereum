@@ -620,7 +620,7 @@ func (n *Node) Lifecycle(lifecycle interface{}) error {
 	n.lock.RLock()
 	defer n.lock.RUnlock()
 
-	// Short circuit if the node's not running // TODO can i ignore this?
+	// Short circuit if the node's not running
 	if !n.running() {
 		return ErrNodeStopped
 	}

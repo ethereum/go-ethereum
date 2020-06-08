@@ -94,7 +94,7 @@ func main() {
 
 	for _, node := range nodes {
 		var ethereum *eth.Ethereum
-		if err := node.Lifecycle(&ethereum); err != nil { // TODO does this work?
+		if err := node.ServiceContext.Lifecycle(&ethereum); err != nil {
 			panic(err)
 		}
 		if err := ethereum.StartMining(1); err != nil {
