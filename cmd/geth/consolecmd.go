@@ -18,6 +18,8 @@ package main
 
 import (
 	"fmt"
+	"github.com/ethereum/go-ethereum/eth"
+	"github.com/ethereum/go-ethereum/les"
 	"os"
 	"os/signal"
 	"path/filepath"
@@ -78,12 +80,18 @@ JavaScript API. See https://github.com/ethereum/go-ethereum/wiki/JavaScript-Cons
 func localConsole(ctx *cli.Context) error {
 	// Create and start the node based on the CLI flags
 	prepare(ctx)
-	node, ethBackend, lesBackend := makeFullNode(ctx)
-	startNode(ctx, node, ethBackend, lesBackend)
-	defer node.Close()
+	stack := makeFullNode(ctx)
+	// fetch backends
+	var ethBackend *eth.Ethereum
+	stack.Lifecycle(&ethBackend)
+	var lesBackend *les.LightEthereum
+	stack.Lifecycle(&lesBackend)
+
+	startNode(ctx, stack, ethBackend, lesBackend)
+	defer stack.Close()
 
 	// Attach to the newly started node and start the JavaScript console
-	client, err := node.Attach()
+	client, err := stack.Attach()
 	if err != nil {
 		utils.Fatalf("Failed to attach to the inproc geth: %v", err)
 	}
@@ -190,12 +198,18 @@ func dialRPC(endpoint string) (*rpc.Client, error) {
 // everything down.
 func ephemeralConsole(ctx *cli.Context) error {
 	// Create and start the node based on the CLI flags
-	node, ethBackend, lesBackend := makeFullNode(ctx)
-	startNode(ctx, node, ethBackend, lesBackend)
-	defer node.Close()
+	stack := makeFullNode(ctx)
+	// fetch backends
+	var ethBackend *eth.Ethereum
+	stack.Lifecycle(&ethBackend)
+	var lesBackend *les.LightEthereum
+	stack.Lifecycle(&lesBackend)
+
+	startNode(ctx, stack, ethBackend, lesBackend)
+	defer stack.Close()
 
 	// Attach to the newly started node and start the JavaScript console
-	client, err := node.Attach()
+	client, err := stack.Attach()
 	if err != nil {
 		utils.Fatalf("Failed to attach to the inproc geth: %v", err)
 	}

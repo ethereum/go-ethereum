@@ -351,11 +351,17 @@ func geth(ctx *cli.Context) error {
 		return fmt.Errorf("invalid command: %q", args[0])
 	}
 	prepare(ctx)
-	node, ethBackend, lesBackend := makeFullNode(ctx)
-	defer node.Close()
-	startNode(ctx, node, ethBackend, lesBackend)
+	stack := makeFullNode(ctx)
+	// fetch backends
+	var ethBackend *eth.Ethereum
+	stack.ServiceContext.Lifecycle(&ethBackend)
+	var lesBackend *les.LightEthereum
+	stack.ServiceContext.Lifecycle(&lesBackend)
 
-	node.Wait()
+	defer stack.Close()
+	startNode(ctx, stack, ethBackend, lesBackend)
+
+	stack.Wait()
 	return nil
 }
 

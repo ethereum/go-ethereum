@@ -83,31 +83,36 @@ type Service struct {
 }
 
 // New returns a monitoring service ready for stats reporting.
-func New(node *node.Node, ethBackend *eth.Ethereum, lesBackend *les.LightEthereum, url string) error { // TODO, this thing receives the backend explicitly, does whatever, registers itself
+func New(node *node.Node, url string) error {
 	// Parse the netstats connection url
 	re := regexp.MustCompile("([^:@]*)(:([^@]*))?@(.+)")
 	parts := re.FindStringSubmatch(url)
 	if len(parts) != 5 {
 		return fmt.Errorf("invalid netstats url: \"%s\", should be nodename:secret@host:port", url)
 	}
-
-	// fetch type of Backend
-	if ethBackend == nil && lesBackend == nil {
-		return errors.New("no Ethereum service") // TODO is this okay to return?
-	}
 	ethstats := &Service{
 		server: node.Server(),
-		eth:    ethBackend,
-		les:    lesBackend,
-		engine: ethBackend.Engine(),
 		node:   parts[1],
 		pass:   parts[3],
 		host:   parts[4],
 		pongCh: make(chan struct{}),
 		histCh: make(chan []uint64, 1),
 	}
-	node.RegisterLifecycle(ethstats)
 
+	// fetch backend
+	var ethServ *eth.Ethereum
+	if err := node.ServiceContext.Lifecycle(&ethServ); err == nil {
+		ethstats.eth = ethServ
+		ethstats.engine = ethServ.Engine()
+	}
+	var lesServ *les.LightEthereum
+	if err := node.ServiceContext.Lifecycle(&lesServ); err == nil {
+		ethstats.les = lesServ
+		ethstats.engine = lesServ.Engine()
+	}
+	// TODO check to make sure at least one backend is not nil?
+
+	node.RegisterLifecycle(ethstats)
 	return nil
 }
 

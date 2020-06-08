@@ -208,6 +208,7 @@ func (n *Node) RegisterLifecycle(lifecycle Lifecycle) {
 	}
 
 	n.lifecycles[kind] = lifecycle
+	n.ServiceContext.Lifecycles[kind] = lifecycle
 }
 
 // RegisterProtocols adds backend's protocols to the node's p2p server
@@ -305,7 +306,6 @@ func (n *Node) Start() error {
 			return err
 		}
 		started = append(started, lifecycle)
-		n.ServiceContext.Lifecycles[reflect.TypeOf(lifecycle)] = lifecycle
 	}
 
 	// Finish initializing the service context
@@ -620,7 +620,7 @@ func (n *Node) Lifecycle(lifecycle interface{}) error {
 	n.lock.RLock()
 	defer n.lock.RUnlock()
 
-	// Short circuit if the node's not running
+	// Short circuit if the node's not running // TODO can i ignore this?
 	if !n.running() {
 		return ErrNodeStopped
 	}

@@ -148,7 +148,7 @@ func createNode(t *testing.T, gqlEnabled bool) *node.Node {
 	}
 
 	// create gql service
-	err = New(stack,ethBackend,nil, testEndpoint, []string{}, []string{}, rpc.DefaultHTTPTimeouts)
+	err = New(stack, ethBackend.APIBackend, testEndpoint, []string{}, []string{}, rpc.DefaultHTTPTimeouts)
 	if err != nil {
 		t.Fatalf("could not create graphql service: %v", err)
 	}

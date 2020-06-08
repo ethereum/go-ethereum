@@ -20,7 +20,6 @@ import (
 	"bufio"
 	"errors"
 	"fmt"
-	"github.com/ethereum/go-ethereum/les"
 	"os"
 	"reflect"
 	"unicode"
@@ -145,9 +144,9 @@ func enableWhisper(ctx *cli.Context) bool {
 	return false
 }
 
-func makeFullNode(ctx *cli.Context) (*node.Node, *eth.Ethereum, *les.LightEthereum) {
+func makeFullNode(ctx *cli.Context) *node.Node {
 	stack, cfg := makeConfigNode(ctx)
-	ethBackend, lesBackend := utils.RegisterEthService(stack, &cfg.Eth)
+	utils.RegisterEthService(stack, &cfg.Eth)
 
 	// Whisper must be explicitly enabled by specifying at least 1 whisper flag or in dev mode
 	shhEnabled := enableWhisper(ctx)
@@ -166,14 +165,14 @@ func makeFullNode(ctx *cli.Context) (*node.Node, *eth.Ethereum, *les.LightEthere
 	}
 	// Configure GraphQL if requested
 	if ctx.GlobalIsSet(utils.GraphQLEnabledFlag.Name) {
-		utils.RegisterGraphQLService(stack, ethBackend, lesBackend, cfg.Node.GraphQLEndpoint(), cfg.Node.GraphQLCors, cfg.Node.GraphQLVirtualHosts, cfg.Node.HTTPTimeouts)
+		utils.RegisterGraphQLService(stack, cfg.Node.GraphQLEndpoint(), cfg.Node.GraphQLCors, cfg.Node.GraphQLVirtualHosts, cfg.Node.HTTPTimeouts)
 	}
 	// Add the Ethereum Stats daemon if requested.
 	if cfg.Ethstats.URL != "" {
-		utils.RegisterEthStatsService(stack, ethBackend, lesBackend, cfg.Ethstats.URL)
+		utils.RegisterEthStatsService(stack, cfg.Ethstats.URL)
 	}
 
-	return stack, ethBackend, lesBackend
+	return stack
 }
 
 // dumpConfig is the dumpconfig command.

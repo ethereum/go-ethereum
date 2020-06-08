@@ -20,6 +20,7 @@ package utils
 import (
 	"crypto/ecdsa"
 	"fmt"
+	"github.com/ethereum/go-ethereum/internal/ethapi"
 	"io"
 	"io/ioutil"
 	"math/big"
@@ -1691,13 +1692,12 @@ func setDNSDiscoveryDefaults(cfg *eth.Config, genesis common.Hash) {
 }
 
 // RegisterEthService adds an Ethereum client to the stack.
-func RegisterEthService(stack *node.Node, cfg *eth.Config) (*eth.Ethereum, *les.LightEthereum) {
+func RegisterEthService(stack *node.Node, cfg *eth.Config) {
 	if cfg.SyncMode == downloader.LightSync {
-		backend, err := les.New(stack, cfg)
+		_, err := les.New(stack, cfg)
 		if err != nil {
 			Fatalf("Failed to register the Ethereum service: %w", err)
 		}
-		return nil, backend
 	} else {
 		backend, err := eth.New(stack, cfg)
 		if err != nil {
@@ -1707,7 +1707,6 @@ func RegisterEthService(stack *node.Node, cfg *eth.Config) (*eth.Ethereum, *les.
 			ls, _ := les.NewLesServer(backend, cfg)
 			backend.AddLesServer(ls)
 		}
-		return backend, nil
 	}
 }
 
@@ -1720,16 +1719,27 @@ func RegisterShhService(stack *node.Node, cfg *whisper.Config) {
 
 // RegisterEthStatsService configures the Ethereum Stats daemon and adds it to
 // the given node.
-func RegisterEthStatsService(stack *node.Node, ethBackend *eth.Ethereum, lesBackend *les.LightEthereum, url string) {
-	if err := ethstats.New(stack, ethBackend, lesBackend, url); err != nil {
+func RegisterEthStatsService(stack *node.Node, url string) {
+	if err := ethstats.New(stack, url); err != nil {
 		Fatalf("Failed to register the Ethereum Stats service: %w", err)
 	}
 }
 
 // RegisterGraphQLService is a utility function to construct a new service and register it against a node.
-func RegisterGraphQLService(stack *node.Node, ethBackend *eth.Ethereum, lesBackend *les.LightEthereum, endpoint string, cors, vhosts []string, timeouts rpc.HTTPTimeouts) {
-	if err := graphql.New(stack, ethBackend, lesBackend, endpoint, cors, vhosts, timeouts); err != nil {
-		Fatalf("Failed to register the GraphQL service: %w", err)
+func RegisterGraphQLService(stack *node.Node, endpoint string, cors, vhosts []string, timeouts rpc.HTTPTimeouts) {
+	var backend ethapi.Backend
+	// fetch backend
+	var ethServ *eth.Ethereum
+	if err := stack.ServiceContext.Lifecycle(&ethServ); err == nil {
+		backend = ethServ.APIBackend
+	}
+	var lesServ *les.LightEthereum
+	if err := stack.ServiceContext.Lifecycle(&lesServ); err == nil {
+		backend = lesServ.ApiBackend
+	}
+	// create new graphQL service
+	if err := graphql.New(stack, backend, endpoint, cors, vhosts, timeouts); err != nil {
+		Fatalf("Failed to register the GraphQL service: %v", err)
 	}
 }
 
