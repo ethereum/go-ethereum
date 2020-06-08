@@ -234,7 +234,7 @@ func (NilSample) Variance() float64 { return 0.0 }
 
 // SampleMax returns the maximum value of the slice of int64.
 func SampleMax(values []int64) int64 {
-	if 0 == len(values) {
+	if len(values) == 0 {
 		return 0
 	}
 	var max int64 = math.MinInt64
@@ -248,7 +248,7 @@ func SampleMax(values []int64) int64 {
 
 // SampleMean returns the mean value of the slice of int64.
 func SampleMean(values []int64) float64 {
-	if 0 == len(values) {
+	if len(values) == 0 {
 		return 0.0
 	}
 	return float64(SampleSum(values)) / float64(len(values))
@@ -256,7 +256,7 @@ func SampleMean(values []int64) float64 {
 
 // SampleMin returns the minimum value of the slice of int64.
 func SampleMin(values []int64) int64 {
-	if 0 == len(values) {
+	if len(values) == 0 {
 		return 0
 	}
 	var min int64 = math.MaxInt64
@@ -382,7 +382,7 @@ func SampleSum(values []int64) int64 {
 
 // SampleVariance returns the variance of the slice of int64.
 func SampleVariance(values []int64) float64 {
-	if 0 == len(values) {
+	if len(values) == 0 {
 		return 0.0
 	}
 	m := SampleMean(values)

@@ -1,18 +1,18 @@
-// Copyright 2018 The go-ethereum Authors
-// This file is part of go-ethereum.
+// Copyright 2019 The go-ethereum Authors
+// This file is part of the go-ethereum library.
 //
-// go-ethereum is free software: you can redistribute it and/or modify
-// it under the terms of the GNU General Public License as published by
+// The go-ethereum library is free software: you can redistribute it and/or modify
+// it under the terms of the GNU Lesser General Public License as published by
 // the Free Software Foundation, either version 3 of the License, or
 // (at your option) any later version.
 //
-// go-ethereum is distributed in the hope that it will be useful,
+// The go-ethereum library is distributed in the hope that it will be useful,
 // but WITHOUT ANY WARRANTY; without even the implied warranty of
 // MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
-// GNU General Public License for more details.
+// GNU Lesser General Public License for more details.
 //
-// You should have received a copy of the GNU General Public License
-// along with go-ethereum. If not, see <http://www.gnu.org/licenses/>.
+// You should have received a copy of the GNU Lesser General Public License
+// along with the go-ethereum library. If not, see <http://www.gnu.org/licenses/>.
 
 package fourbyte
 
@@ -53,16 +53,16 @@ func (db *Database) ValidateTransaction(selector *string, tx *core.SendTxArgs) (
 		if len(data) == 0 {
 			// Prevent sending ether into black hole (show stopper)
 			if tx.Value.ToInt().Cmp(big.NewInt(0)) > 0 {
-				return nil, errors.New("tx will create contract with value but empty code")
+				return nil, errors.New("transaction will create a contract with value but empty code")
 			}
 			// No value submitted at least, critically Warn, but don't blow up
-			messages.Crit("Transaction will create contract with empty code")
+			messages.Crit("Transaction will create a contract with empty code")
 		} else if len(data) < 40 { // arbitrary heuristic limit
-			messages.Warn(fmt.Sprintf("Transaction will create contract, but payload is suspiciously small (%d bytes)", len(data)))
+			messages.Warn(fmt.Sprintf("Transaction will create a contract, but the payload is suspiciously small (%d bytes)", len(data)))
 		}
 		// Method selector should be nil for contract creation
 		if selector != nil {
-			messages.Warn("Transaction will create contract, but method selector supplied, indicating intent to call a method")
+			messages.Warn("Transaction will create a contract, but method selector supplied, indicating an intent to call a method")
 		}
 		return messages, nil
 	}
@@ -74,13 +74,13 @@ func (db *Database) ValidateTransaction(selector *string, tx *core.SendTxArgs) (
 		messages.Crit("Transaction recipient is the zero address")
 	}
 	// Semantic fields validated, try to make heads or tails of the call data
-	db.validateCallData(selector, data, messages)
+	db.ValidateCallData(selector, data, messages)
 	return messages, nil
 }
 
-// validateCallData checks if the ABI call-data + method selector (if given) can
+// ValidateCallData checks if the ABI call-data + method selector (if given) can
 // be parsed and seems to match.
-func (db *Database) validateCallData(selector *string, data []byte, messages *core.ValidationMessages) {
+func (db *Database) ValidateCallData(selector *string, data []byte, messages *core.ValidationMessages) {
 	// If the data is empty, we have a plain value transfer, nothing more to do
 	if len(data) == 0 {
 		return
@@ -98,7 +98,7 @@ func (db *Database) validateCallData(selector *string, data []byte, messages *co
 		if info, err := verifySelector(*selector, data); err != nil {
 			messages.Warn(fmt.Sprintf("Transaction contains data, but provided ABI signature could not be matched: %v", err))
 		} else {
-			messages.Info(info.String())
+			messages.Info(fmt.Sprintf("Transaction invokes the following method: %q", info.String()))
 			db.AddSelector(*selector, data[:4])
 		}
 		return
@@ -110,8 +110,8 @@ func (db *Database) validateCallData(selector *string, data []byte, messages *co
 		return
 	}
 	if info, err := verifySelector(embedded, data); err != nil {
-		messages.Warn(fmt.Sprintf("Transaction contains data, but provided ABI signature could not be varified: %v", err))
+		messages.Warn(fmt.Sprintf("Transaction contains data, but provided ABI signature could not be verified: %v", err))
 	} else {
-		messages.Info(info.String())
+		messages.Info(fmt.Sprintf("Transaction invokes the following method: %q", info.String()))
 	}
 }

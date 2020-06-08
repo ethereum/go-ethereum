@@ -68,7 +68,7 @@ func TestSubscriptions(t *testing.T) {
 			t.Fatalf("unable to register test service %v", err)
 		}
 	}
-	go server.ServeCodec(NewJSONCodec(serverConn), OptionMethodInvocation|OptionSubscriptions)
+	go server.ServeCodec(NewCodec(serverConn), 0)
 	defer server.Stop()
 
 	// wait for message and write them to the given channels
@@ -125,22 +125,25 @@ func TestSubscriptions(t *testing.T) {
 
 // This test checks that unsubscribing works.
 func TestServerUnsubscribe(t *testing.T) {
+	p1, p2 := net.Pipe()
+	defer p2.Close()
+
 	// Start the server.
 	server := newTestServer()
-	service := &notificationTestService{unsubscribed: make(chan string)}
+	service := &notificationTestService{unsubscribed: make(chan string, 1)}
 	server.RegisterName("nftest2", service)
-	p1, p2 := net.Pipe()
-	go server.ServeCodec(NewJSONCodec(p1), OptionMethodInvocation|OptionSubscriptions)
-
-	p2.SetDeadline(time.Now().Add(10 * time.Second))
+	go server.ServeCodec(NewCodec(p1), 0)
 
 	// Subscribe.
+	p2.SetDeadline(time.Now().Add(10 * time.Second))
 	p2.Write([]byte(`{"jsonrpc":"2.0","id":1,"method":"nftest2_subscribe","params":["someSubscription",0,10]}`))
 
 	// Handle received messages.
-	resps := make(chan subConfirmation)
-	notifications := make(chan subscriptionResult)
-	errors := make(chan error)
+	var (
+		resps         = make(chan subConfirmation)
+		notifications = make(chan subscriptionResult)
+		errors        = make(chan error, 1)
+	)
 	go waitForMessages(json.NewDecoder(p2), resps, notifications, errors)
 
 	// Receive the subscription ID.
@@ -173,34 +176,45 @@ type subConfirmation struct {
 	subid ID
 }
 
+// waitForMessages reads RPC messages from 'in' and dispatches them into the given channels.
+// It stops if there is an error.
 func waitForMessages(in *json.Decoder, successes chan subConfirmation, notifications chan subscriptionResult, errors chan error) {
 	for {
-		var msg jsonrpcMessage
-		if err := in.Decode(&msg); err != nil {
-			errors <- fmt.Errorf("decode error: %v", err)
+		resp, notification, err := readAndValidateMessage(in)
+		if err != nil {
+			errors <- err
 			return
+		} else if resp != nil {
+			successes <- *resp
+		} else {
+			notifications <- *notification
 		}
-		switch {
-		case msg.isNotification():
-			var res subscriptionResult
-			if err := json.Unmarshal(msg.Params, &res); err != nil {
-				errors <- fmt.Errorf("invalid subscription result: %v", err)
-			} else {
-				notifications <- res
-			}
-		case msg.isResponse():
-			var c subConfirmation
-			if msg.Error != nil {
-				errors <- msg.Error
-			} else if err := json.Unmarshal(msg.Result, &c.subid); err != nil {
-				errors <- fmt.Errorf("invalid response: %v", err)
-			} else {
-				json.Unmarshal(msg.ID, &c.reqid)
-				successes <- c
-			}
-		default:
-			errors <- fmt.Errorf("unrecognized message: %v", msg)
-			return
+	}
+}
+
+func readAndValidateMessage(in *json.Decoder) (*subConfirmation, *subscriptionResult, error) {
+	var msg jsonrpcMessage
+	if err := in.Decode(&msg); err != nil {
+		return nil, nil, fmt.Errorf("decode error: %v", err)
+	}
+	switch {
+	case msg.isNotification():
+		var res subscriptionResult
+		if err := json.Unmarshal(msg.Params, &res); err != nil {
+			return nil, nil, fmt.Errorf("invalid subscription result: %v", err)
 		}
+		return nil, &res, nil
+	case msg.isResponse():
+		var c subConfirmation
+		if msg.Error != nil {
+			return nil, nil, msg.Error
+		} else if err := json.Unmarshal(msg.Result, &c.subid); err != nil {
+			return nil, nil, fmt.Errorf("invalid response: %v", err)
+		} else {
+			json.Unmarshal(msg.ID, &c.reqid)
+			return &c, nil, nil
+		}
+	default:
+		return nil, nil, fmt.Errorf("unrecognized message: %v", msg)
 	}
 }

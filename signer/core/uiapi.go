@@ -1,19 +1,18 @@
 // Copyright 2019 The go-ethereum Authors
-// This file is part of go-ethereum.
+// This file is part of the go-ethereum library.
 //
-// go-ethereum is free software: you can redistribute it and/or modify
-// it under the terms of the GNU General Public License as published by
+// The go-ethereum library is free software: you can redistribute it and/or modify
+// it under the terms of the GNU Lesser General Public License as published by
 // the Free Software Foundation, either version 3 of the License, or
 // (at your option) any later version.
 //
-// go-ethereum is distributed in the hope that it will be useful,
+// The go-ethereum library is distributed in the hope that it will be useful,
 // but WITHOUT ANY WARRANTY; without even the implied warranty of
 // MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
-// GNU General Public License for more details.
+// GNU Lesser General Public License for more details.
 //
-// You should have received a copy of the GNU General Public License
-// along with go-ethereum. If not, see <http://www.gnu.org/licenses/>.
-//
+// You should have received a copy of the GNU Lesser General Public License
+// along with the go-ethereum library. If not, see <http://www.gnu.org/licenses/>.
 
 package core
 
@@ -174,7 +173,7 @@ func (s *UIServerAPI) Export(ctx context.Context, addr common.Address) (json.Raw
 		return nil, err
 	}
 	if wallet.URL().Scheme != keystore.KeyStoreScheme {
-		return nil, fmt.Errorf("Account is not a keystore-account")
+		return nil, fmt.Errorf("account is not a keystore-account")
 	}
 	return ioutil.ReadFile(wallet.URL().Path)
 }
@@ -194,6 +193,16 @@ func (api *UIServerAPI) Import(ctx context.Context, keyJSON json.RawMessage, old
 		return accounts.Account{}, fmt.Errorf("password requirements not met: %v", err)
 	}
 	return be[0].(*keystore.KeyStore).Import(keyJSON, oldPassphrase, newPassphrase)
+}
+
+// New creates a new password protected Account. The private key is protected with
+// the given password. Users are responsible to backup the private key that is stored
+// in the keystore location that was specified when this API was created.
+// This method is the same as New on the external API, the difference being that
+// this implementation does not ask for confirmation, since it's initiated by
+// the user
+func (api *UIServerAPI) New(ctx context.Context) (common.Address, error) {
+	return api.extApi.newAccount()
 }
 
 // Other methods to be added, not yet implemented are:

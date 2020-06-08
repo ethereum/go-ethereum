@@ -63,6 +63,39 @@ func runTrace(tracer *Tracer) (json.RawMessage, error) {
 	return tracer.GetResult()
 }
 
+// TestRegressionPanicSlice tests that we don't panic on bad arguments to memory access
+func TestRegressionPanicSlice(t *testing.T) {
+	tracer, err := New("{depths: [], step: function(log) { this.depths.push(log.memory.slice(-1,-2)); }, fault: function() {}, result: function() { return this.depths; }}")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err = runTrace(tracer); err != nil {
+		t.Fatal(err)
+	}
+}
+
+// TestRegressionPanicSlice tests that we don't panic on bad arguments to stack peeks
+func TestRegressionPanicPeek(t *testing.T) {
+	tracer, err := New("{depths: [], step: function(log) { this.depths.push(log.stack.peek(-1)); }, fault: function() {}, result: function() { return this.depths; }}")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err = runTrace(tracer); err != nil {
+		t.Fatal(err)
+	}
+}
+
+// TestRegressionPanicSlice tests that we don't panic on bad arguments to memory getUint
+func TestRegressionPanicGetUint(t *testing.T) {
+	tracer, err := New("{ depths: [], step: function(log, db) { this.depths.push(log.memory.getUint(-64));}, fault: function() {}, result: function() { return this.depths; }}")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err = runTrace(tracer); err != nil {
+		t.Fatal(err)
+	}
+}
+
 func TestTracing(t *testing.T) {
 	tracer, err := New("{count: 0, step: function() { this.count += 1; }, fault: function() {}, result: function() { return this.count; }}")
 	if err != nil {

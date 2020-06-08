@@ -182,11 +182,11 @@ func checkWallet(client *sshClient, network string) (*walletInfos, error) {
 	// Run a sanity check to see if the devp2p and RPC ports are reachable
 	nodePort := infos.portmap[infos.envvars["NODE_PORT"]]
 	if err = checkPort(client.server, nodePort); err != nil {
-		log.Warn(fmt.Sprintf("Wallet devp2p port seems unreachable"), "server", client.server, "port", nodePort, "err", err)
+		log.Warn("Wallet devp2p port seems unreachable", "server", client.server, "port", nodePort, "err", err)
 	}
 	rpcPort := infos.portmap["8545/tcp"]
 	if err = checkPort(client.server, rpcPort); err != nil {
-		log.Warn(fmt.Sprintf("Wallet RPC port seems unreachable"), "server", client.server, "port", rpcPort, "err", err)
+		log.Warn("Wallet RPC port seems unreachable", "server", client.server, "port", rpcPort, "err", err)
 	}
 	// Assemble and return the useful infos
 	stats := &walletInfos{

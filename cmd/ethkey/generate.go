@@ -52,6 +52,10 @@ If you want to encrypt an existing private key, it can be specified by setting
 			Name:  "privatekey",
 			Usage: "file containing a raw private key to encrypt",
 		},
+		cli.BoolFlag{
+			Name:  "lightkdf",
+			Usage: "use less secure scrypt parameters",
+		},
 	},
 	Action: func(ctx *cli.Context) error {
 		// Check if keyfile path given and make sure it doesn't already exist.
@@ -91,7 +95,11 @@ If you want to encrypt an existing private key, it can be specified by setting
 
 		// Encrypt key with passphrase.
 		passphrase := promptPassphrase(true)
-		keyjson, err := keystore.EncryptKey(key, passphrase, keystore.StandardScryptN, keystore.StandardScryptP)
+		scryptN, scryptP := keystore.StandardScryptN, keystore.StandardScryptP
+		if ctx.Bool("lightkdf") {
+			scryptN, scryptP = keystore.LightScryptN, keystore.LightScryptP
+		}
+		keyjson, err := keystore.EncryptKey(key, passphrase, scryptN, scryptP)
 		if err != nil {
 			utils.Fatalf("Error encrypting key: %v", err)
 		}

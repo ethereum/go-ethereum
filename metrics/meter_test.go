@@ -16,7 +16,7 @@ func BenchmarkMeter(b *testing.B) {
 func TestGetOrRegisterMeter(t *testing.T) {
 	r := NewRegistry()
 	NewRegisteredMeter("foo", r).Mark(47)
-	if m := GetOrRegisterMeter("foo", r); 47 != m.Count() {
+	if m := GetOrRegisterMeter("foo", r); m.Count() != 47 {
 		t.Fatal(m)
 	}
 }
@@ -26,6 +26,7 @@ func TestMeterDecay(t *testing.T) {
 		ticker: time.NewTicker(time.Millisecond),
 		meters: make(map[*StandardMeter]struct{}),
 	}
+	defer ma.ticker.Stop()
 	m := newStandardMeter()
 	ma.meters[m] = struct{}{}
 	go ma.tick()
@@ -40,7 +41,7 @@ func TestMeterDecay(t *testing.T) {
 func TestMeterNonzero(t *testing.T) {
 	m := NewMeter()
 	m.Mark(3)
-	if count := m.Count(); 3 != count {
+	if count := m.Count(); count != 3 {
 		t.Errorf("m.Count(): 3 != %v\n", count)
 	}
 }
@@ -48,11 +49,11 @@ func TestMeterNonzero(t *testing.T) {
 func TestMeterStop(t *testing.T) {
 	l := len(arbiter.meters)
 	m := NewMeter()
-	if len(arbiter.meters) != l+1 {
+	if l+1 != len(arbiter.meters) {
 		t.Errorf("arbiter.meters: %d != %d\n", l+1, len(arbiter.meters))
 	}
 	m.Stop()
-	if len(arbiter.meters) != l {
+	if l != len(arbiter.meters) {
 		t.Errorf("arbiter.meters: %d != %d\n", l, len(arbiter.meters))
 	}
 }
@@ -67,7 +68,7 @@ func TestMeterSnapshot(t *testing.T) {
 
 func TestMeterZero(t *testing.T) {
 	m := NewMeter()
-	if count := m.Count(); 0 != count {
+	if count := m.Count(); count != 0 {
 		t.Errorf("m.Count(): 0 != %v\n", count)
 	}
 }

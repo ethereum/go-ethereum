@@ -104,6 +104,7 @@ func (mux *TypeMux) Post(ev interface{}) error {
 // Stop blocks until all current deliveries have finished.
 func (mux *TypeMux) Stop() {
 	mux.mutex.Lock()
+	defer mux.mutex.Unlock()
 	for _, subs := range mux.subm {
 		for _, sub := range subs {
 			sub.closewait()
@@ -111,11 +112,11 @@ func (mux *TypeMux) Stop() {
 	}
 	mux.subm = nil
 	mux.stopped = true
-	mux.mutex.Unlock()
 }
 
 func (mux *TypeMux) del(s *TypeMuxSubscription) {
 	mux.mutex.Lock()
+	defer mux.mutex.Unlock()
 	for typ, subs := range mux.subm {
 		if pos := find(subs, s); pos >= 0 {
 			if len(subs) == 1 {
@@ -125,7 +126,6 @@ func (mux *TypeMux) del(s *TypeMuxSubscription) {
 			}
 		}
 	}
-	s.mux.mutex.Unlock()
 }
 
 func find(slice []*TypeMuxSubscription, item *TypeMuxSubscription) int {
@@ -196,9 +196,9 @@ func (s *TypeMuxSubscription) closewait() {
 	s.closed = true
 
 	s.postMu.Lock()
+	defer s.postMu.Unlock()
 	close(s.postC)
 	s.postC = nil
-	s.postMu.Unlock()
 }
 
 func (s *TypeMuxSubscription) deliver(event *TypeMuxEvent) {

@@ -58,12 +58,11 @@ var (
 	nodeDBVersionKey = []byte("version") // Version of the database to flush if changes
 	nodeDBItemPrefix = []byte("n:")      // Identifier to prefix node entries with
 
-	nodeDBDiscoverRoot          = ":discover"
-	nodeDBDiscoverPing          = nodeDBDiscoverRoot + ":lastping"
-	nodeDBDiscoverPong          = nodeDBDiscoverRoot + ":lastpong"
-	nodeDBDiscoverFindFails     = nodeDBDiscoverRoot + ":findfail"
-	nodeDBDiscoverLocalEndpoint = nodeDBDiscoverRoot + ":localendpoint"
-	nodeDBTopicRegTickets       = ":tickets"
+	nodeDBDiscoverRoot      = ":discover"
+	nodeDBDiscoverPing      = nodeDBDiscoverRoot + ":lastping"
+	nodeDBDiscoverPong      = nodeDBDiscoverRoot + ":lastpong"
+	nodeDBDiscoverFindFails = nodeDBDiscoverRoot + ":findfail"
+	nodeDBTopicRegTickets   = ":tickets"
 )
 
 // newNodeDB creates a new node database for storing and retrieving infos about
@@ -309,20 +308,6 @@ func (db *nodeDB) findFails(id NodeID) int {
 // updateFindFails updates the number of findnode failures since bonding.
 func (db *nodeDB) updateFindFails(id NodeID, fails int) error {
 	return db.storeInt64(makeKey(id, nodeDBDiscoverFindFails), int64(fails))
-}
-
-// localEndpoint returns the last local endpoint communicated to the
-// given remote node.
-func (db *nodeDB) localEndpoint(id NodeID) *rpcEndpoint {
-	var ep rpcEndpoint
-	if err := db.fetchRLP(makeKey(id, nodeDBDiscoverLocalEndpoint), &ep); err != nil {
-		return nil
-	}
-	return &ep
-}
-
-func (db *nodeDB) updateLocalEndpoint(id NodeID, ep rpcEndpoint) error {
-	return db.storeRLP(makeKey(id, nodeDBDiscoverLocalEndpoint), &ep)
 }
 
 // querySeeds retrieves random nodes to be used as potential seed nodes

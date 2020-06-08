@@ -38,7 +38,7 @@ var (
 // matching replies by request ID and handles timeouts and resends if necessary.
 type retrieveManager struct {
 	dist       *requestDistributor
-	peers      *peerSet
+	peers      *serverPeerSet
 	serverPool peerSelector
 
 	lock     sync.RWMutex
@@ -99,7 +99,7 @@ const (
 )
 
 // newRetrieveManager creates the retrieve manager
-func newRetrieveManager(peers *peerSet, dist *requestDistributor, serverPool peerSelector) *retrieveManager {
+func newRetrieveManager(peers *serverPeerSet, dist *requestDistributor, serverPool peerSelector) *retrieveManager {
 	return &retrieveManager{
 		peers:      peers,
 		dist:       dist,
@@ -119,7 +119,7 @@ func (rm *retrieveManager) retrieve(ctx context.Context, reqID uint64, req *dist
 	case <-ctx.Done():
 		sentReq.stop(ctx.Err())
 	case <-shutdown:
-		sentReq.stop(fmt.Errorf("Client is shutting down"))
+		sentReq.stop(fmt.Errorf("client is shutting down"))
 	}
 	return sentReq.getError()
 }
@@ -337,7 +337,7 @@ func (r *sentReq) tryRequest() {
 
 	defer func() {
 		// send feedback to server pool and remove peer if hard timeout happened
-		pp, ok := p.(*peer)
+		pp, ok := p.(*serverPeer)
 		if ok && r.rm.serverPool != nil {
 			respTime := time.Duration(mclock.Now() - reqSent)
 			r.rm.serverPool.adjustResponseTime(pp.poolEntry, respTime, srto)
@@ -345,7 +345,7 @@ func (r *sentReq) tryRequest() {
 		if hrto {
 			pp.Log().Debug("Request timed out hard")
 			if r.rm.peers != nil {
-				r.rm.peers.Unregister(pp.id)
+				r.rm.peers.unregister(pp.id)
 			}
 		}
 

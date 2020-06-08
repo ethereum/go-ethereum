@@ -49,7 +49,7 @@ func TestTestMode(t *testing.T) {
 		if err := ethash.VerifySeal(nil, header); err != nil {
 			t.Fatalf("unexpected verification error: %v", err)
 		}
-	case <-time.NewTimer(time.Second).C:
+	case <-time.NewTimer(2 * time.Second).C:
 		t.Error("sealing result timeout")
 	}
 }

@@ -17,6 +17,7 @@
 package main
 
 import (
+	"bytes"
 	"encoding/json"
 	"fmt"
 	"io/ioutil"
@@ -24,6 +25,7 @@ import (
 	"os"
 	goruntime "runtime"
 	"runtime/pprof"
+	"testing"
 	"time"
 
 	"github.com/maticnetwork/bor/cmd/evm/internal/compiler"
@@ -68,6 +70,39 @@ func readGenesis(genesisPath string) *core.Genesis {
 	return genesis
 }
 
+type execStats struct {
+	time           time.Duration // The execution time.
+	allocs         int64         // The number of heap allocations during execution.
+	bytesAllocated int64         // The cumulative number of bytes allocated during execution.
+}
+
+func timedExec(bench bool, execFunc func() ([]byte, uint64, error)) (output []byte, gasLeft uint64, stats execStats, err error) {
+	if bench {
+		result := testing.Benchmark(func(b *testing.B) {
+			for i := 0; i < b.N; i++ {
+				output, gasLeft, err = execFunc()
+			}
+		})
+
+		// Get the average execution time from the benchmarking result.
+		// There are other useful stats here that could be reported.
+		stats.time = time.Duration(result.NsPerOp())
+		stats.allocs = result.AllocsPerOp()
+		stats.bytesAllocated = result.AllocedBytesPerOp()
+	} else {
+		var memStatsBefore, memStatsAfter goruntime.MemStats
+		goruntime.ReadMemStats(&memStatsBefore)
+		startTime := time.Now()
+		output, gasLeft, err = execFunc()
+		stats.time = time.Since(startTime)
+		goruntime.ReadMemStats(&memStatsAfter)
+		stats.allocs = int64(memStatsAfter.Mallocs - memStatsBefore.Mallocs)
+		stats.bytesAllocated = int64(memStatsAfter.TotalAlloc - memStatsBefore.TotalAlloc)
+	}
+
+	return output, gasLeft, stats, err
+}
+
 func runCmd(ctx *cli.Context) error {
 	glogger := log.NewGlogHandler(log.StreamHandler(os.Stderr, log.TerminalFormat(false)))
 	glogger.Verbosity(log.Lvl(ctx.GlobalInt(VerbosityFlag.Name)))
@@ -100,10 +135,10 @@ func runCmd(ctx *cli.Context) error {
 		genesisConfig = gen
 		db := rawdb.NewMemoryDatabase()
 		genesis := gen.ToBlock(db)
-		statedb, _ = state.New(genesis.Root(), state.NewDatabase(db))
+		statedb, _ = state.New(genesis.Root(), state.NewDatabase(db), nil)
 		chainConfig = gen.Config
 	} else {
-		statedb, _ = state.New(common.Hash{}, state.NewDatabase(rawdb.NewMemoryDatabase()))
+		statedb, _ = state.New(common.Hash{}, state.NewDatabase(rawdb.NewMemoryDatabase()), nil)
 		genesisConfig = new(core.Genesis)
 	}
 	if ctx.GlobalString(SenderFlag.Name) != "" {
@@ -115,11 +150,7 @@ func runCmd(ctx *cli.Context) error {
 		receiver = common.HexToAddress(ctx.GlobalString(ReceiverFlag.Name))
 	}
 
-	var (
-		code []byte
-		ret  []byte
-		err  error
-	)
+	var code []byte
 	codeFileFlag := ctx.GlobalString(CodeFileFlag.Name)
 	codeFlag := ctx.GlobalString(CodeFlag.Name)
 
@@ -145,6 +176,7 @@ func runCmd(ctx *cli.Context) error {
 		} else {
 			hexcode = []byte(codeFlag)
 		}
+		hexcode = bytes.TrimSpace(hexcode)
 		if len(hexcode)%2 != 0 {
 			fmt.Printf("Invalid input length for hex data (%d)\n", len(hexcode))
 			os.Exit(1)
@@ -198,19 +230,40 @@ func runCmd(ctx *cli.Context) error {
 
 	if chainConfig != nil {
 		runtimeConfig.ChainConfig = chainConfig
+	} else {
+		runtimeConfig.ChainConfig = params.AllEthashProtocolChanges
 	}
-	tstart := time.Now()
-	var leftOverGas uint64
+
+	var hexInput []byte
+	if inputFileFlag := ctx.GlobalString(InputFileFlag.Name); inputFileFlag != "" {
+		var err error
+		if hexInput, err = ioutil.ReadFile(inputFileFlag); err != nil {
+			fmt.Printf("could not load input from file: %v\n", err)
+			os.Exit(1)
+		}
+	} else {
+		hexInput = []byte(ctx.GlobalString(InputFlag.Name))
+	}
+	input := common.FromHex(string(bytes.TrimSpace(hexInput)))
+
+	var execFunc func() ([]byte, uint64, error)
 	if ctx.GlobalBool(CreateFlag.Name) {
-		input := append(code, common.Hex2Bytes(ctx.GlobalString(InputFlag.Name))...)
-		ret, _, leftOverGas, err = runtime.Create(input, &runtimeConfig)
+		input = append(code, input...)
+		execFunc = func() ([]byte, uint64, error) {
+			output, _, gasLeft, err := runtime.Create(input, &runtimeConfig)
+			return output, gasLeft, err
+		}
 	} else {
 		if len(code) > 0 {
 			statedb.SetCode(receiver, code)
 		}
-		ret, leftOverGas, err = runtime.Call(receiver, common.Hex2Bytes(ctx.GlobalString(InputFlag.Name)), &runtimeConfig)
+		execFunc = func() ([]byte, uint64, error) {
+			return runtime.Call(receiver, input, &runtimeConfig)
+		}
 	}
-	execTime := time.Since(tstart)
+
+	bench := ctx.GlobalBool(BenchFlag.Name)
+	output, leftOverGas, stats, err := timedExec(bench, execFunc)
 
 	if ctx.GlobalBool(DumpFlag.Name) {
 		statedb.Commit(true)
@@ -240,20 +293,15 @@ func runCmd(ctx *cli.Context) error {
 		vm.WriteLogs(os.Stderr, statedb.Logs())
 	}
 
-	if ctx.GlobalBool(StatDumpFlag.Name) {
-		var mem goruntime.MemStats
-		goruntime.ReadMemStats(&mem)
-		fmt.Fprintf(os.Stderr, `evm execution time: %v
-heap objects:       %d
-allocations:        %d
-total allocations:  %d
-GC calls:           %d
-Gas used:           %d
-
-`, execTime, mem.HeapObjects, mem.Alloc, mem.TotalAlloc, mem.NumGC, initialGas-leftOverGas)
+	if bench || ctx.GlobalBool(StatDumpFlag.Name) {
+		fmt.Fprintf(os.Stderr, `EVM gas used:    %d
+execution time:  %v
+allocations:     %d
+allocated bytes: %d
+`, initialGas-leftOverGas, stats.time, stats.allocs, stats.bytesAllocated)
 	}
 	if tracer == nil {
-		fmt.Printf("0x%x\n", ret)
+		fmt.Printf("0x%x\n", output)
 		if err != nil {
 			fmt.Printf(" error: %v\n", err)
 		}

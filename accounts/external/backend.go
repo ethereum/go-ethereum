@@ -1,18 +1,18 @@
-// Copyright 2018 The go-ethereum Authors
-// This file is part of go-ethereum.
+// Copyright 2019 The go-ethereum Authors
+// This file is part of the go-ethereum library.
 //
-// go-ethereum is free software: you can redistribute it and/or modify
-// it under the terms of the GNU General Public License as published by
+// The go-ethereum library is free software: you can redistribute it and/or modify
+// it under the terms of the GNU Lesser General Public License as published by
 // the Free Software Foundation, either version 3 of the License, or
 // (at your option) any later version.
 //
-// go-ethereum is distributed in the hope that it will be useful,
+// The go-ethereum library is distributed in the hope that it will be useful,
 // but WITHOUT ANY WARRANTY; without even the implied warranty of
 // MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
-// GNU General Public License for more details.
+// GNU Lesser General Public License for more details.
 //
-// You should have received a copy of the GNU General Public License
-// along with go-ethereum. If not, see <http://www.gnu.org/licenses/>.
+// You should have received a copy of the GNU Lesser General Public License
+// along with the go-ethereum library. If not, see <http://www.gnu.org/licenses/>.
 
 package external
 
@@ -131,6 +131,12 @@ func (api *ExternalSigner) Accounts() []accounts.Account {
 func (api *ExternalSigner) Contains(account accounts.Account) bool {
 	api.cacheMu.RLock()
 	defer api.cacheMu.RUnlock()
+	if api.cache == nil {
+		// If we haven't already fetched the accounts, it's time to do so now
+		api.cacheMu.RUnlock()
+		api.Accounts()
+		api.cacheMu.RLock()
+	}
 	for _, a := range api.cache {
 		if a.Address == account.Address && (account.URL == (accounts.URL{}) || account.URL == api.URL()) {
 			return true
@@ -169,15 +175,20 @@ func (api *ExternalSigner) SignData(account accounts.Account, mimeType string, d
 }
 
 func (api *ExternalSigner) SignText(account accounts.Account, text []byte) ([]byte, error) {
-	var res hexutil.Bytes
+	var signature hexutil.Bytes
 	var signAddress = common.NewMixedcaseAddress(account.Address)
-	if err := api.client.Call(&res, "account_signData",
+	if err := api.client.Call(&signature, "account_signData",
 		accounts.MimetypeTextPlain,
 		&signAddress, // Need to use the pointer here, because of how MarshalJSON is defined
 		hexutil.Encode(text)); err != nil {
 		return nil, err
 	}
-	return res, nil
+	if signature[64] == 27 || signature[64] == 28 {
+		// If clef is used as a backend, it may already have transformed
+		// the signature to ethereum-type signature.
+		signature[64] -= 27 // Transform V from Ethereum-legacy to 0/1
+	}
+	return signature, nil
 }
 
 func (api *ExternalSigner) SignTx(account accounts.Account, tx *types.Transaction, chainID *big.Int) (*types.Transaction, error) {
@@ -204,14 +215,14 @@ func (api *ExternalSigner) SignTx(account accounts.Account, tx *types.Transactio
 }
 
 func (api *ExternalSigner) SignTextWithPassphrase(account accounts.Account, passphrase string, text []byte) ([]byte, error) {
-	return []byte{}, fmt.Errorf("passphrase-operations not supported on external signers")
+	return []byte{}, fmt.Errorf("password-operations not supported on external signers")
 }
 
 func (api *ExternalSigner) SignTxWithPassphrase(account accounts.Account, passphrase string, tx *types.Transaction, chainID *big.Int) (*types.Transaction, error) {
-	return nil, fmt.Errorf("passphrase-operations not supported on external signers")
+	return nil, fmt.Errorf("password-operations not supported on external signers")
 }
 func (api *ExternalSigner) SignDataWithPassphrase(account accounts.Account, passphrase, mimeType string, data []byte) ([]byte, error) {
-	return nil, fmt.Errorf("passphrase-operations not supported on external signers")
+	return nil, fmt.Errorf("password-operations not supported on external signers")
 }
 
 func (api *ExternalSigner) listAccounts() ([]common.Address, error) {

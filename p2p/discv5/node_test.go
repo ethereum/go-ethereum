@@ -141,7 +141,7 @@ var parseNodeTests = []struct {
 	{
 		// This test checks that errors from url.Parse are handled.
 		rawurl:    "://foo",
-		wantError: `parse ://foo: missing protocol scheme`,
+		wantError: `missing protocol scheme`,
 	},
 }
 
@@ -152,7 +152,7 @@ func TestParseNode(t *testing.T) {
 			if err == nil {
 				t.Errorf("test %q:\n  got nil error, expected %#q", test.rawurl, test.wantError)
 				continue
-			} else if err.Error() != test.wantError {
+			} else if !strings.Contains(err.Error(), test.wantError) {
 				t.Errorf("test %q:\n  got error %#q, expected %#q", test.rawurl, err.Error(), test.wantError)
 				continue
 			}

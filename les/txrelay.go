@@ -27,14 +27,13 @@ import (
 
 type ltrInfo struct {
 	tx     *types.Transaction
-	sentTo map[*peer]struct{}
+	sentTo map[*serverPeer]struct{}
 }
 
 type lesTxRelay struct {
 	txSent       map[common.Hash]*ltrInfo
 	txPending    map[common.Hash]struct{}
-	ps           *peerSet
-	peerList     []*peer
+	peerList     []*serverPeer
 	peerStartPos int
 	lock         sync.RWMutex
 	stop         chan struct{}
@@ -42,63 +41,72 @@ type lesTxRelay struct {
 	retriever *retrieveManager
 }
 
-func newLesTxRelay(ps *peerSet, retriever *retrieveManager) *lesTxRelay {
+func newLesTxRelay(ps *serverPeerSet, retriever *retrieveManager) *lesTxRelay {
 	r := &lesTxRelay{
 		txSent:    make(map[common.Hash]*ltrInfo),
 		txPending: make(map[common.Hash]struct{}),
-		ps:        ps,
 		retriever: retriever,
 		stop:      make(chan struct{}),
 	}
-	ps.notify(r)
+	ps.subscribe(r)
 	return r
 }
 
-func (self *lesTxRelay) Stop() {
-	close(self.stop)
+func (ltrx *lesTxRelay) Stop() {
+	close(ltrx.stop)
 }
 
-func (self *lesTxRelay) registerPeer(p *peer) {
-	self.lock.Lock()
-	defer self.lock.Unlock()
+func (ltrx *lesTxRelay) registerPeer(p *serverPeer) {
+	ltrx.lock.Lock()
+	defer ltrx.lock.Unlock()
 
-	self.peerList = self.ps.AllPeers()
+	// Short circuit if the peer is announce only.
+	if p.onlyAnnounce {
+		return
+	}
+	ltrx.peerList = append(ltrx.peerList, p)
 }
 
-func (self *lesTxRelay) unregisterPeer(p *peer) {
-	self.lock.Lock()
-	defer self.lock.Unlock()
+func (ltrx *lesTxRelay) unregisterPeer(p *serverPeer) {
+	ltrx.lock.Lock()
+	defer ltrx.lock.Unlock()
 
-	self.peerList = self.ps.AllPeers()
+	for i, peer := range ltrx.peerList {
+		if peer == p {
+			// Remove from the peer list
+			ltrx.peerList = append(ltrx.peerList[:i], ltrx.peerList[i+1:]...)
+			return
+		}
+	}
 }
 
 // send sends a list of transactions to at most a given number of peers at
 // once, never resending any particular transaction to the same peer twice
-func (self *lesTxRelay) send(txs types.Transactions, count int) {
-	sendTo := make(map[*peer]types.Transactions)
+func (ltrx *lesTxRelay) send(txs types.Transactions, count int) {
+	sendTo := make(map[*serverPeer]types.Transactions)
 
-	self.peerStartPos++ // rotate the starting position of the peer list
-	if self.peerStartPos >= len(self.peerList) {
-		self.peerStartPos = 0
+	ltrx.peerStartPos++ // rotate the starting position of the peer list
+	if ltrx.peerStartPos >= len(ltrx.peerList) {
+		ltrx.peerStartPos = 0
 	}
 
 	for _, tx := range txs {
 		hash := tx.Hash()
-		ltr, ok := self.txSent[hash]
+		ltr, ok := ltrx.txSent[hash]
 		if !ok {
 			ltr = &ltrInfo{
 				tx:     tx,
-				sentTo: make(map[*peer]struct{}),
+				sentTo: make(map[*serverPeer]struct{}),
 			}
-			self.txSent[hash] = ltr
-			self.txPending[hash] = struct{}{}
+			ltrx.txSent[hash] = ltr
+			ltrx.txPending[hash] = struct{}{}
 		}
 
-		if len(self.peerList) > 0 {
+		if len(ltrx.peerList) > 0 {
 			cnt := count
-			pos := self.peerStartPos
+			pos := ltrx.peerStartPos
 			for {
-				peer := self.peerList[pos]
+				peer := ltrx.peerList[pos]
 				if _, ok := ltr.sentTo[peer]; !ok {
 					sendTo[peer] = append(sendTo[peer], tx)
 					ltr.sentTo[peer] = struct{}{}
@@ -108,10 +116,10 @@ func (self *lesTxRelay) send(txs types.Transactions, count int) {
 					break // sent it to the desired number of peers
 				}
 				pos++
-				if pos == len(self.peerList) {
+				if pos == len(ltrx.peerList) {
 					pos = 0
 				}
-				if pos == self.peerStartPos {
+				if pos == ltrx.peerStartPos {
 					break // tried all available peers
 				}
 			}
@@ -126,59 +134,59 @@ func (self *lesTxRelay) send(txs types.Transactions, count int) {
 		reqID := genReqID()
 		rq := &distReq{
 			getCost: func(dp distPeer) uint64 {
-				peer := dp.(*peer)
-				return peer.GetTxRelayCost(len(ll), len(enc))
+				peer := dp.(*serverPeer)
+				return peer.getTxRelayCost(len(ll), len(enc))
 			},
 			canSend: func(dp distPeer) bool {
-				return !dp.(*peer).onlyAnnounce && dp.(*peer) == pp
+				return !dp.(*serverPeer).onlyAnnounce && dp.(*serverPeer) == pp
 			},
 			request: func(dp distPeer) func() {
-				peer := dp.(*peer)
-				cost := peer.GetTxRelayCost(len(ll), len(enc))
+				peer := dp.(*serverPeer)
+				cost := peer.getTxRelayCost(len(ll), len(enc))
 				peer.fcServer.QueuedRequest(reqID, cost)
-				return func() { peer.SendTxs(reqID, cost, enc) }
+				return func() { peer.sendTxs(reqID, len(ll), enc) }
 			},
 		}
-		go self.retriever.retrieve(context.Background(), reqID, rq, func(p distPeer, msg *Msg) error { return nil }, self.stop)
+		go ltrx.retriever.retrieve(context.Background(), reqID, rq, func(p distPeer, msg *Msg) error { return nil }, ltrx.stop)
 	}
 }
 
-func (self *lesTxRelay) Send(txs types.Transactions) {
-	self.lock.Lock()
-	defer self.lock.Unlock()
+func (ltrx *lesTxRelay) Send(txs types.Transactions) {
+	ltrx.lock.Lock()
+	defer ltrx.lock.Unlock()
 
-	self.send(txs, 3)
+	ltrx.send(txs, 3)
 }
 
-func (self *lesTxRelay) NewHead(head common.Hash, mined []common.Hash, rollback []common.Hash) {
-	self.lock.Lock()
-	defer self.lock.Unlock()
+func (ltrx *lesTxRelay) NewHead(head common.Hash, mined []common.Hash, rollback []common.Hash) {
+	ltrx.lock.Lock()
+	defer ltrx.lock.Unlock()
 
 	for _, hash := range mined {
-		delete(self.txPending, hash)
+		delete(ltrx.txPending, hash)
 	}
 
 	for _, hash := range rollback {
-		self.txPending[hash] = struct{}{}
+		ltrx.txPending[hash] = struct{}{}
 	}
 
-	if len(self.txPending) > 0 {
-		txs := make(types.Transactions, len(self.txPending))
+	if len(ltrx.txPending) > 0 {
+		txs := make(types.Transactions, len(ltrx.txPending))
 		i := 0
-		for hash := range self.txPending {
-			txs[i] = self.txSent[hash].tx
+		for hash := range ltrx.txPending {
+			txs[i] = ltrx.txSent[hash].tx
 			i++
 		}
-		self.send(txs, 1)
+		ltrx.send(txs, 1)
 	}
 }
 
-func (self *lesTxRelay) Discard(hashes []common.Hash) {
-	self.lock.Lock()
-	defer self.lock.Unlock()
+func (ltrx *lesTxRelay) Discard(hashes []common.Hash) {
+	ltrx.lock.Lock()
+	defer ltrx.lock.Unlock()
 
 	for _, hash := range hashes {
-		delete(self.txSent, hash)
-		delete(self.txPending, hash)
+		delete(ltrx.txSent, hash)
+		delete(ltrx.txPending, hash)
 	}
 }

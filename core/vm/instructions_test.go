@@ -109,7 +109,7 @@ func testTwoOperandOp(t *testing.T, tests []TwoOperandTestcase, opFn executionFu
 		expected := new(big.Int).SetBytes(common.Hex2Bytes(test.Expected))
 		stack.push(x)
 		stack.push(y)
-		opFn(&pc, evmInterpreter, nil, nil, stack)
+		opFn(&pc, evmInterpreter, &callCtx{nil, stack, nil})
 		actual := stack.pop()
 
 		if actual.Cmp(expected) != 0 {
@@ -223,7 +223,7 @@ func getResult(args []*twoOperandParams, opFn executionFunc) []TwoOperandTestcas
 		y := new(big.Int).SetBytes(common.Hex2Bytes(param.y))
 		stack.push(x)
 		stack.push(y)
-		opFn(&pc, interpreter, nil, nil, stack)
+		opFn(&pc, interpreter, &callCtx{nil, stack, nil})
 		actual := stack.pop()
 		result[i] = TwoOperandTestcase{param.x, param.y, fmt.Sprintf("%064x", actual)}
 	}
@@ -232,7 +232,9 @@ func getResult(args []*twoOperandParams, opFn executionFunc) []TwoOperandTestcas
 
 // utility function to fill the json-file with testcases
 // Enable this test to generate the 'testcases_xx.json' files
-func xTestWriteExpectedValues(t *testing.T) {
+func TestWriteExpectedValues(t *testing.T) {
+	t.Skip("Enable this test to create json test cases.")
+
 	for name, method := range twoOpMethods {
 		data, err := json.Marshal(getResult(commonParams, method))
 		if err != nil {
@@ -243,7 +245,6 @@ func xTestWriteExpectedValues(t *testing.T) {
 			t.Fatal(err)
 		}
 	}
-	t.Fatal("This test should not be activated")
 }
 
 // TestJsonTestcases runs through all the testcases defined as json-files
@@ -259,7 +260,7 @@ func TestJsonTestcases(t *testing.T) {
 	}
 }
 
-func opBenchmark(bench *testing.B, op func(pc *uint64, interpreter *EVMInterpreter, contract *Contract, memory *Memory, stack *Stack) ([]byte, error), args ...string) {
+func opBenchmark(bench *testing.B, op executionFunc, args ...string) {
 	var (
 		env            = NewEVM(Context{}, nil, params.TestChainConfig, Config{})
 		stack          = newstack()
@@ -280,7 +281,7 @@ func opBenchmark(bench *testing.B, op func(pc *uint64, interpreter *EVMInterpret
 			a := new(big.Int).SetBytes(arg)
 			stack.push(a)
 		}
-		op(&pc, evmInterpreter, nil, nil, stack)
+		op(&pc, evmInterpreter, &callCtx{nil, stack, nil})
 		stack.pop()
 	}
 	poolOfIntPools.put(evmInterpreter.intPool)
@@ -508,13 +509,13 @@ func TestOpMstore(t *testing.T) {
 	pc := uint64(0)
 	v := "abcdef00000000000000abba000000000deaf000000c0de00100000000133700"
 	stack.pushN(new(big.Int).SetBytes(common.Hex2Bytes(v)), big.NewInt(0))
-	opMstore(&pc, evmInterpreter, nil, mem, stack)
-	if got := common.Bytes2Hex(mem.Get(0, 32)); got != v {
+	opMstore(&pc, evmInterpreter, &callCtx{mem, stack, nil})
+	if got := common.Bytes2Hex(mem.GetCopy(0, 32)); got != v {
 		t.Fatalf("Mstore fail, got %v, expected %v", got, v)
 	}
 	stack.pushN(big.NewInt(0x1), big.NewInt(0))
-	opMstore(&pc, evmInterpreter, nil, mem, stack)
-	if common.Bytes2Hex(mem.Get(0, 32)) != "0000000000000000000000000000000000000000000000000000000000000001" {
+	opMstore(&pc, evmInterpreter, &callCtx{mem, stack, nil})
+	if common.Bytes2Hex(mem.GetCopy(0, 32)) != "0000000000000000000000000000000000000000000000000000000000000001" {
 		t.Fatalf("Mstore failed to overwrite previous value")
 	}
 	poolOfIntPools.put(evmInterpreter.intPool)
@@ -538,7 +539,7 @@ func BenchmarkOpMstore(bench *testing.B) {
 	bench.ResetTimer()
 	for i := 0; i < bench.N; i++ {
 		stack.pushN(value, memStart)
-		opMstore(&pc, evmInterpreter, nil, mem, stack)
+		opMstore(&pc, evmInterpreter, &callCtx{mem, stack, nil})
 	}
 	poolOfIntPools.put(evmInterpreter.intPool)
 }
@@ -559,7 +560,7 @@ func BenchmarkOpSHA3(bench *testing.B) {
 	bench.ResetTimer()
 	for i := 0; i < bench.N; i++ {
 		stack.pushN(big.NewInt(32), start)
-		opSha3(&pc, evmInterpreter, nil, mem, stack)
+		opSha3(&pc, evmInterpreter, &callCtx{mem, stack, nil})
 	}
 	poolOfIntPools.put(evmInterpreter.intPool)
 }

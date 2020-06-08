@@ -141,6 +141,11 @@ type Conn interface {
 	SetWriteDeadline(time.Time) error
 }
 
+type deadlineCloser interface {
+	io.Closer
+	SetWriteDeadline(time.Time) error
+}
+
 // ConnRemoteAddr wraps the RemoteAddr operation, which returns a description
 // of the peer address of a connection. If a Conn also implements ConnRemoteAddr, this
 // description is used in log messages.
@@ -148,54 +153,48 @@ type ConnRemoteAddr interface {
 	RemoteAddr() string
 }
 
-// connWithRemoteAddr overrides the remote address of a connection.
-type connWithRemoteAddr struct {
-	Conn
-	addr string
-}
-
-func (c connWithRemoteAddr) RemoteAddr() string { return c.addr }
-
 // jsonCodec reads and writes JSON-RPC messages to the underlying connection. It also has
 // support for parsing arguments and serializing (result) objects.
 type jsonCodec struct {
-	remoteAddr string
-	closer     sync.Once                 // close closed channel once
-	closed     chan interface{}          // closed on Close
-	decode     func(v interface{}) error // decoder to allow multiple transports
-	encMu      sync.Mutex                // guards the encoder
-	encode     func(v interface{}) error // encoder to allow multiple transports
-	conn       Conn
+	remote  string
+	closer  sync.Once                 // close closed channel once
+	closeCh chan interface{}          // closed on Close
+	decode  func(v interface{}) error // decoder to allow multiple transports
+	encMu   sync.Mutex                // guards the encoder
+	encode  func(v interface{}) error // encoder to allow multiple transports
+	conn    deadlineCloser
 }
 
-// NewCodec creates a new RPC server codec with support for JSON-RPC 2.0 based
-// on explicitly given encoding and decoding methods.
-func NewCodec(conn Conn, encode, decode func(v interface{}) error) ServerCodec {
+// NewFuncCodec creates a codec which uses the given functions to read and write. If conn
+// implements ConnRemoteAddr, log messages will use it to include the remote address of
+// the connection.
+func NewFuncCodec(conn deadlineCloser, encode, decode func(v interface{}) error) ServerCodec {
 	codec := &jsonCodec{
-		closed: make(chan interface{}),
-		encode: encode,
-		decode: decode,
-		conn:   conn,
+		closeCh: make(chan interface{}),
+		encode:  encode,
+		decode:  decode,
+		conn:    conn,
 	}
 	if ra, ok := conn.(ConnRemoteAddr); ok {
-		codec.remoteAddr = ra.RemoteAddr()
+		codec.remote = ra.RemoteAddr()
 	}
 	return codec
 }
 
-// NewJSONCodec creates a new RPC server codec with support for JSON-RPC 2.0.
-func NewJSONCodec(conn Conn) ServerCodec {
+// NewCodec creates a codec on the given connection. If conn implements ConnRemoteAddr, log
+// messages will use it to include the remote address of the connection.
+func NewCodec(conn Conn) ServerCodec {
 	enc := json.NewEncoder(conn)
 	dec := json.NewDecoder(conn)
 	dec.UseNumber()
-	return NewCodec(conn, enc.Encode, dec.Decode)
+	return NewFuncCodec(conn, enc.Encode, dec.Decode)
 }
 
-func (c *jsonCodec) RemoteAddr() string {
-	return c.remoteAddr
+func (c *jsonCodec) remoteAddr() string {
+	return c.remote
 }
 
-func (c *jsonCodec) Read() (msg []*jsonrpcMessage, batch bool, err error) {
+func (c *jsonCodec) readBatch() (msg []*jsonrpcMessage, batch bool, err error) {
 	// Decode the next JSON object in the input stream.
 	// This verifies basic syntax, etc.
 	var rawmsg json.RawMessage
@@ -206,8 +205,7 @@ func (c *jsonCodec) Read() (msg []*jsonrpcMessage, batch bool, err error) {
 	return msg, batch, nil
 }
 
-// Write sends a message to client.
-func (c *jsonCodec) Write(ctx context.Context, v interface{}) error {
+func (c *jsonCodec) writeJSON(ctx context.Context, v interface{}) error {
 	c.encMu.Lock()
 	defer c.encMu.Unlock()
 
@@ -219,17 +217,16 @@ func (c *jsonCodec) Write(ctx context.Context, v interface{}) error {
 	return c.encode(v)
 }
 
-// Close the underlying connection
-func (c *jsonCodec) Close() {
+func (c *jsonCodec) close() {
 	c.closer.Do(func() {
-		close(c.closed)
+		close(c.closeCh)
 		c.conn.Close()
 	})
 }
 
 // Closed returns a channel which will be closed when Close is called
-func (c *jsonCodec) Closed() <-chan interface{} {
-	return c.closed
+func (c *jsonCodec) closed() <-chan interface{} {
+	return c.closeCh
 }
 
 // parseMessage parses raw bytes as a (batch of) JSON-RPC message(s). There are no error

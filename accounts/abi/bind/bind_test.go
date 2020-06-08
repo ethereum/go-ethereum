@@ -38,6 +38,7 @@ var bindTests = []struct {
 	tester   string
 	fsigs    []map[string]string
 	libs     map[string]string
+	aliases  map[string]string
 	types    []string
 }{
 	// Test that the binding is available in combined and separate forms too
@@ -61,6 +62,7 @@ var bindTests = []struct {
 		nil,
 		nil,
 		nil,
+		nil,
 	},
 	// Test that all the official sample contracts bind correctly
 	{
@@ -74,6 +76,7 @@ var bindTests = []struct {
 				t.Fatalf("binding (%v) nil or error (%v) not nil", b, nil)
 			}
 		`,
+		nil,
 		nil,
 		nil,
 		nil,
@@ -92,6 +95,7 @@ var bindTests = []struct {
 		nil,
 		nil,
 		nil,
+		nil,
 	},
 	{
 		`DAO`,
@@ -104,6 +108,7 @@ var bindTests = []struct {
 				t.Fatalf("binding (%v) nil or error (%v) not nil", b, nil)
 			}
 		`,
+		nil,
 		nil,
 		nil,
 		nil,
@@ -140,6 +145,7 @@ var bindTests = []struct {
 
 			 fmt.Println(err)
 		 }`,
+		nil,
 		nil,
 		nil,
 		nil,
@@ -182,6 +188,7 @@ var bindTests = []struct {
 		nil,
 		nil,
 		nil,
+		nil,
 	},
 	// Tests that named, anonymous and indexed events are handled correctly
 	{
@@ -192,7 +199,8 @@ var bindTests = []struct {
 				{"type":"event","name":"indexed","inputs":[{"name":"addr","type":"address","indexed":true},{"name":"num","type":"int256","indexed":true}]},
 				{"type":"event","name":"mixed","inputs":[{"name":"addr","type":"address","indexed":true},{"name":"num","type":"int256"}]},
 				{"type":"event","name":"anonymous","anonymous":true,"inputs":[]},
-				{"type":"event","name":"dynamic","inputs":[{"name":"idxStr","type":"string","indexed":true},{"name":"idxDat","type":"bytes","indexed":true},{"name":"str","type":"string"},{"name":"dat","type":"bytes"}]}
+				{"type":"event","name":"dynamic","inputs":[{"name":"idxStr","type":"string","indexed":true},{"name":"idxDat","type":"bytes","indexed":true},{"name":"str","type":"string"},{"name":"dat","type":"bytes"}]},
+				{"type":"event","name":"unnamed","inputs":[{"name":"","type":"uint256","indexed": true},{"name":"","type":"uint256","indexed":true}]}
 			]
 		`},
 		`
@@ -242,11 +250,18 @@ var bindTests = []struct {
 			 fmt.Println(event.Addr)          // Make sure the reconstructed indexed fields are present
 
 			 fmt.Println(res, str, dat, hash, err)
+
+			 oit, err := e.FilterUnnamed(nil, []*big.Int{}, []*big.Int{})
+
+			 arg0  := oit.Event.Arg0    // Make sure unnamed arguments are handled correctly
+			 arg1  := oit.Event.Arg1    // Make sure unnamed arguments are handled correctly
+			 fmt.Println(arg0, arg1)
 		 }
 		 // Run a tiny reflection test to ensure disallowed methods don't appear
 		 if _, ok := reflect.TypeOf(&EventChecker{}).MethodByName("FilterAnonymous"); ok {
 		 	t.Errorf("binding has disallowed method (FilterAnonymous)")
 		 }`,
+		nil,
 		nil,
 		nil,
 		nil,
@@ -282,7 +297,9 @@ var bindTests = []struct {
 			// Generate a new random account and a funded simulator
 			key, _ := crypto.GenerateKey()
 			auth := bind.NewKeyedTransactor(key)
+
 			sim := backends.NewSimulatedBackend(core.GenesisAlloc{auth.From: {Balance: big.NewInt(10000000000)}}, 10000000)
+			defer sim.Close()
 
 			// Deploy an interaction tester contract and call a transaction on it
 			_, _, interactor, err := DeployInteractor(auth, sim, "Deploy string")
@@ -306,6 +323,7 @@ var bindTests = []struct {
 				t.Fatalf("Transact string mismatch: have '%s', want 'Transact string'", str)
 			}
 		`,
+		nil,
 		nil,
 		nil,
 		nil,
@@ -334,7 +352,9 @@ var bindTests = []struct {
 			// Generate a new random account and a funded simulator
 			key, _ := crypto.GenerateKey()
 			auth := bind.NewKeyedTransactor(key)
+
 			sim := backends.NewSimulatedBackend(core.GenesisAlloc{auth.From: {Balance: big.NewInt(10000000000)}}, 10000000)
+			defer sim.Close()
 
 			// Deploy a tuple tester contract and execute a structured call on it
 			_, _, getter, err := DeployGetter(auth, sim)
@@ -349,6 +369,7 @@ var bindTests = []struct {
 				t.Fatalf("Retrieved value mismatch: have %v/%v, want %v/%v", str, num, "Hi", 1)
 			}
 		`,
+		nil,
 		nil,
 		nil,
 		nil,
@@ -377,7 +398,9 @@ var bindTests = []struct {
 			// Generate a new random account and a funded simulator
 			key, _ := crypto.GenerateKey()
 			auth := bind.NewKeyedTransactor(key)
+
 			sim := backends.NewSimulatedBackend(core.GenesisAlloc{auth.From: {Balance: big.NewInt(10000000000)}}, 10000000)
+			defer sim.Close()
 
 			// Deploy a tuple tester contract and execute a structured call on it
 			_, _, tupler, err := DeployTupler(auth, sim)
@@ -392,6 +415,7 @@ var bindTests = []struct {
 				t.Fatalf("Retrieved value mismatch: have %v/%v, want %v/%v", res.A, res.B, "Hi", 1)
 			}
 		`,
+		nil,
 		nil,
 		nil,
 		nil,
@@ -432,7 +456,9 @@ var bindTests = []struct {
 			// Generate a new random account and a funded simulator
 			key, _ := crypto.GenerateKey()
 			auth := bind.NewKeyedTransactor(key)
+
 			sim := backends.NewSimulatedBackend(core.GenesisAlloc{auth.From: {Balance: big.NewInt(10000000000)}}, 10000000)
+			defer sim.Close()
 
 			// Deploy a slice tester contract and execute a n array call on it
 			_, _, slicer, err := DeploySlicer(auth, sim)
@@ -447,6 +473,7 @@ var bindTests = []struct {
 					t.Fatalf("Slice return mismatch: have %v, want %v", out, []common.Address{auth.From, common.Address{}})
 			}
 		`,
+		nil,
 		nil,
 		nil,
 		nil,
@@ -477,7 +504,9 @@ var bindTests = []struct {
 			// Generate a new random account and a funded simulator
 			key, _ := crypto.GenerateKey()
 			auth := bind.NewKeyedTransactor(key)
+
 			sim := backends.NewSimulatedBackend(core.GenesisAlloc{auth.From: {Balance: big.NewInt(10000000000)}}, 10000000)
+			defer sim.Close()
 
 			// Deploy a default method invoker contract and execute its default method
 			_, _, defaulter, err := DeployDefaulter(auth, sim)
@@ -495,6 +524,7 @@ var bindTests = []struct {
 				t.Fatalf("Address mismatch: have %v, want %v", caller, auth.From)
 			}
 		`,
+		nil,
 		nil,
 		nil,
 		nil,
@@ -519,7 +549,9 @@ var bindTests = []struct {
 		`,
 		`
 			// Create a simulator and wrap a non-deployed contract
+
 			sim := backends.NewSimulatedBackend(core.GenesisAlloc{}, uint64(10000000000))
+			defer sim.Close()
 
 			nonexistent, err := NewNonExistent(common.Address{}, sim)
 			if err != nil {
@@ -532,6 +564,7 @@ var bindTests = []struct {
 				t.Fatalf("Error mismatch: have %v, want %v", err, bind.ErrNoCode)
 			}
 		`,
+		nil,
 		nil,
 		nil,
 		nil,
@@ -566,7 +599,9 @@ var bindTests = []struct {
 			// Generate a new random account and a funded simulator
 			key, _ := crypto.GenerateKey()
 			auth := bind.NewKeyedTransactor(key)
+
 			sim := backends.NewSimulatedBackend(core.GenesisAlloc{auth.From: {Balance: big.NewInt(10000000000)}}, 10000000)
+			defer sim.Close()
 
 			// Deploy a funky gas pattern contract
 			_, _, limiter, err := DeployFunkyGasPattern(auth, sim)
@@ -585,6 +620,7 @@ var bindTests = []struct {
 				t.Fatalf("Field mismatch: have %v, want %v", field, "automatic")
 			}
 		`,
+		nil,
 		nil,
 		nil,
 		nil,
@@ -613,7 +649,9 @@ var bindTests = []struct {
 			// Generate a new random account and a funded simulator
 			key, _ := crypto.GenerateKey()
 			auth := bind.NewKeyedTransactor(key)
+
 			sim := backends.NewSimulatedBackend(core.GenesisAlloc{auth.From: {Balance: big.NewInt(10000000000)}}, 10000000)
+			defer sim.Close()
 
 			// Deploy a sender tester contract and execute a structured call on it
 			_, _, callfrom, err := DeployCallFrom(auth, sim)
@@ -636,6 +674,7 @@ var bindTests = []struct {
 				}
 			}
 		`,
+		nil,
 		nil,
 		nil,
 		nil,
@@ -685,7 +724,9 @@ var bindTests = []struct {
 			// Generate a new random account and a funded simulator
 			key, _ := crypto.GenerateKey()
 			auth := bind.NewKeyedTransactor(key)
+
 			sim := backends.NewSimulatedBackend(core.GenesisAlloc{auth.From: {Balance: big.NewInt(10000000000)}}, 10000000)
+			defer sim.Close()
 
 			// Deploy a underscorer tester contract and execute a structured call on it
 			_, _, underscorer, err := DeployUnderscorer(auth, sim)
@@ -713,6 +754,7 @@ var bindTests = []struct {
 
 			fmt.Println(a, b, err)
 		`,
+		nil,
 		nil,
 		nil,
 		nil,
@@ -776,7 +818,9 @@ var bindTests = []struct {
 			// Generate a new random account and a funded simulator
 			key, _ := crypto.GenerateKey()
 			auth := bind.NewKeyedTransactor(key)
+
 			sim := backends.NewSimulatedBackend(core.GenesisAlloc{auth.From: {Balance: big.NewInt(10000000000)}}, 10000000)
+			defer sim.Close()
 
 			// Deploy an eventer contract
 			_, _, eventer, err := DeployEventer(auth, sim)
@@ -935,6 +979,7 @@ var bindTests = []struct {
 		nil,
 		nil,
 		nil,
+		nil,
 	},
 	{
 		`DeeplyNestedArray`,
@@ -963,7 +1008,9 @@ var bindTests = []struct {
 			// Generate a new random account and a funded simulator
 			key, _ := crypto.GenerateKey()
 			auth := bind.NewKeyedTransactor(key)
+
 			sim := backends.NewSimulatedBackend(core.GenesisAlloc{auth.From: {Balance: big.NewInt(10000000000)}}, 10000000)
+			defer sim.Close()
 
 			//deploy the test contract
 			_, _, testContract, err := DeployDeeplyNestedArray(auth, sim)
@@ -1013,6 +1060,7 @@ var bindTests = []struct {
 		nil,
 		nil,
 		nil,
+		nil,
 	},
 	{
 		`CallbackParam`,
@@ -1054,34 +1102,38 @@ var bindTests = []struct {
 		},
 		nil,
 		nil,
+		nil,
 	}, {
 		`Tuple`,
 		`
 		pragma solidity >=0.4.19 <0.6.0;
 		pragma experimental ABIEncoderV2;
-		
+
 		contract Tuple {
 			struct S { uint a; uint[] b; T[] c; }
 			struct T { uint x; uint y; }
+			struct P { uint8 x; uint8 y; }
+			struct Q { uint16 x; uint16 y; }
 			event TupleEvent(S a, T[2][] b, T[][2] c, S[] d, uint[] e);
-		
+			event TupleEvent2(P[]);
+
 			function func1(S memory a, T[2][] memory b, T[][2] memory c, S[] memory d, uint[] memory e) public pure returns (S memory, T[2][] memory, T[][2] memory, S[] memory, uint[] memory) {
 				return (a, b, c, d, e);
 			}
 			function func2(S memory a, T[2][] memory b, T[][2] memory c, S[] memory d, uint[] memory e) public {
 				emit TupleEvent(a, b, c, d, e);
 			}
+			function func3(Q[] memory) public pure {} // call function, nothing to return
 		}
-
 		`,
-		[]string{`608060405234801561001057600080fd5b50610eb2806100206000396000f3fe608060405234801561001057600080fd5b50600436106100365760003560e01c8063443c79b41461003b578063d0062cdd1461006f575b600080fd5b61005560048036036100509190810190610624565b61008b565b604051610066959493929190610b28565b60405180910390f35b61008960048036036100849190810190610624565b6100bc565b005b610093610102565b606061009d610123565b6060808989898989945094509450945094509550955095509550959050565b7f18d6e66efa53739ca6d13626f35ebc700b31cced3eddb50c70bbe9c082c6cd0085858585856040516100f3959493929190610b28565b60405180910390a15050505050565b60405180606001604052806000815260200160608152602001606081525090565b60405180604001604052806002905b60608152602001906001900390816101325790505090565b600082601f83011261015b57600080fd5b813561016e61016982610bcb565b610b9e565b9150818183526020840193506020810190508385608084028201111561019357600080fd5b60005b838110156101c357816101a988826102a6565b845260208401935060808301925050600181019050610196565b5050505092915050565b600082601f8301126101de57600080fd5b60026101f16101ec82610bf3565b610b9e565b9150818360005b83811015610228578135860161020e888261031a565b8452602084019350602083019250506001810190506101f8565b5050505092915050565b600082601f83011261024357600080fd5b813561025661025182610c15565b610b9e565b9150818183526020840193506020810190508360005b8381101561029c578135860161028288826104a3565b84526020840193506020830192505060018101905061026c565b5050505092915050565b600082601f8301126102b757600080fd5b60026102ca6102c582610c3d565b610b9e565b915081838560408402820111156102e057600080fd5b60005b8381101561031057816102f688826105c3565b8452602084019350604083019250506001810190506102e3565b5050505092915050565b600082601f83011261032b57600080fd5b813561033e61033982610c5f565b610b9e565b9150818183526020840193506020810190508385604084028201111561036357600080fd5b60005b83811015610393578161037988826105c3565b845260208401935060408301925050600181019050610366565b5050505092915050565b600082601f8301126103ae57600080fd5b81356103c16103bc82610c87565b610b9e565b915081818352602084019350602081019050838560208402820111156103e657600080fd5b60005b8381101561041657816103fc888261060f565b8452602084019350602083019250506001810190506103e9565b5050505092915050565b600082601f83011261043157600080fd5b813561044461043f82610caf565b610b9e565b9150818183526020840193506020810190508385602084028201111561046957600080fd5b60005b83811015610499578161047f888261060f565b84526020840193506020830192505060018101905061046c565b5050505092915050565b6000606082840312156104b557600080fd5b6104bf6060610b9e565b905060006104cf8482850161060f565b600083015250602082013567ffffffffffffffff8111156104ef57600080fd5b6104fb8482850161039d565b602083015250604082013567ffffffffffffffff81111561051b57600080fd5b6105278482850161031a565b60408301525092915050565b60006060828403121561054557600080fd5b61054f6060610b9e565b9050600061055f8482850161060f565b600083015250602082013567ffffffffffffffff81111561057f57600080fd5b61058b8482850161039d565b602083015250604082013567ffffffffffffffff8111156105ab57600080fd5b6105b78482850161031a565b60408301525092915050565b6000604082840312156105d557600080fd5b6105df6040610b9e565b905060006105ef8482850161060f565b60008301525060206106038482850161060f565b60208301525092915050565b60008135905061061e81610e58565b92915050565b600080600080600060a0868803121561063c57600080fd5b600086013567ffffffffffffffff81111561065657600080fd5b61066288828901610533565b955050602086013567ffffffffffffffff81111561067f57600080fd5b61068b8882890161014a565b945050604086013567ffffffffffffffff8111156106a857600080fd5b6106b4888289016101cd565b935050606086013567ffffffffffffffff8111156106d157600080fd5b6106dd88828901610232565b925050608086013567ffffffffffffffff8111156106fa57600080fd5b61070688828901610420565b9150509295509295909350565b600061071f83836108cb565b60808301905092915050565b60006107378383610922565b905092915050565b600061074b8383610a93565b905092915050565b600061075f8383610aea565b60408301905092915050565b60006107778383610b19565b60208301905092915050565b600061078e82610d3b565b6107988185610de3565b93506107a383610cd7565b8060005b838110156107d45781516107bb8882610713565b97506107c683610d88565b9250506001810190506107a7565b5085935050505092915050565b60006107ec82610d46565b6107f68185610df4565b93508360208202850161080885610ce7565b8060005b858110156108445784840389528151610825858261072b565b945061083083610d95565b925060208a0199505060018101905061080c565b50829750879550505050505092915050565b600061086182610d51565b61086b8185610dff565b93508360208202850161087d85610cf1565b8060005b858110156108b9578484038952815161089a858261073f565b94506108a583610da2565b925060208a01995050600181019050610881565b50829750879550505050505092915050565b6108d481610d5c565b6108de8184610e10565b92506108e982610d01565b8060005b8381101561091a5781516109018782610753565b965061090c83610daf565b9250506001810190506108ed565b505050505050565b600061092d82610d67565b6109378185610e1b565b935061094283610d0b565b8060005b8381101561097357815161095a8882610753565b975061096583610dbc565b925050600181019050610946565b5085935050505092915050565b600061098b82610d7d565b6109958185610e3d565b93506109a083610d2b565b8060005b838110156109d15781516109b8888261076b565b97506109c383610dd6565b9250506001810190506109a4565b5085935050505092915050565b60006109e982610d72565b6109f38185610e2c565b93506109fe83610d1b565b8060005b83811015610a2f578151610a16888261076b565b9750610a2183610dc9565b925050600181019050610a02565b5085935050505092915050565b6000606083016000830151610a546000860182610b19565b5060208301518482036020860152610a6c82826109de565b91505060408301518482036040860152610a868282610922565b9150508091505092915050565b6000606083016000830151610aab6000860182610b19565b5060208301518482036020860152610ac382826109de565b91505060408301518482036040860152610add8282610922565b9150508091505092915050565b604082016000820151610b006000850182610b19565b506020820151610b136020850182610b19565b50505050565b610b2281610e4e565b82525050565b600060a0820190508181036000830152610b428188610a3c565b90508181036020830152610b568187610783565b90508181036040830152610b6a81866107e1565b90508181036060830152610b7e8185610856565b90508181036080830152610b928184610980565b90509695505050505050565b6000604051905081810181811067ffffffffffffffff82111715610bc157600080fd5b8060405250919050565b600067ffffffffffffffff821115610be257600080fd5b602082029050602081019050919050565b600067ffffffffffffffff821115610c0a57600080fd5b602082029050919050565b600067ffffffffffffffff821115610c2c57600080fd5b602082029050602081019050919050565b600067ffffffffffffffff821115610c5457600080fd5b602082029050919050565b600067ffffffffffffffff821115610c7657600080fd5b602082029050602081019050919050565b600067ffffffffffffffff821115610c9e57600080fd5b602082029050602081019050919050565b600067ffffffffffffffff821115610cc657600080fd5b602082029050602081019050919050565b6000819050602082019050919050565b6000819050919050565b6000819050602082019050919050565b6000819050919050565b6000819050602082019050919050565b6000819050602082019050919050565b6000819050602082019050919050565b600081519050919050565b600060029050919050565b600081519050919050565b600060029050919050565b600081519050919050565b600081519050919050565b600081519050919050565b6000602082019050919050565b6000602082019050919050565b6000602082019050919050565b6000602082019050919050565b6000602082019050919050565b6000602082019050919050565b6000602082019050919050565b600082825260208201905092915050565b600081905092915050565b600082825260208201905092915050565b600081905092915050565b600082825260208201905092915050565b600082825260208201905092915050565b600082825260208201905092915050565b6000819050919050565b610e6181610e4e565b8114610e6c57600080fd5b5056fea365627a7a72305820405a6336d8c302cee779de6788527018e5a2393892328fbf12b96065df2de00a6c6578706572696d656e74616cf564736f6c634300050a0040`},
+		[]string{`60806040523480156100115760006000fd5b50610017565b6110b2806100266000396000f3fe60806040523480156100115760006000fd5b50600436106100465760003560e01c8063443c79b41461004c578063d0062cdd14610080578063e4d9a43b1461009c57610046565b60006000fd5b610066600480360361006191908101906107b8565b6100b8565b604051610077959493929190610ccb565b60405180910390f35b61009a600480360361009591908101906107b8565b6100ef565b005b6100b660048036036100b19190810190610775565b610136565b005b6100c061013a565b60606100ca61015e565b606060608989898989945094509450945094506100e2565b9550955095509550959050565b7f18d6e66efa53739ca6d13626f35ebc700b31cced3eddb50c70bbe9c082c6cd008585858585604051610126959493929190610ccb565b60405180910390a15b5050505050565b5b50565b60405180606001604052806000815260200160608152602001606081526020015090565b60405180604001604052806002905b606081526020019060019003908161016d57905050905661106e565b600082601f830112151561019d5760006000fd5b81356101b06101ab82610d6f565b610d41565b915081818352602084019350602081019050838560808402820111156101d65760006000fd5b60005b8381101561020757816101ec888261037a565b8452602084019350608083019250505b6001810190506101d9565b5050505092915050565b600082601f83011215156102255760006000fd5b600261023861023382610d98565b610d41565b9150818360005b83811015610270578135860161025588826103f3565b8452602084019350602083019250505b60018101905061023f565b5050505092915050565b600082601f830112151561028e5760006000fd5b81356102a161029c82610dbb565b610d41565b915081818352602084019350602081019050838560408402820111156102c75760006000fd5b60005b838110156102f857816102dd888261058b565b8452602084019350604083019250505b6001810190506102ca565b5050505092915050565b600082601f83011215156103165760006000fd5b813561032961032482610de4565b610d41565b9150818183526020840193506020810190508360005b83811015610370578135860161035588826105d8565b8452602084019350602083019250505b60018101905061033f565b5050505092915050565b600082601f830112151561038e5760006000fd5b60026103a161039c82610e0d565b610d41565b915081838560408402820111156103b85760006000fd5b60005b838110156103e957816103ce88826106fe565b8452602084019350604083019250505b6001810190506103bb565b5050505092915050565b600082601f83011215156104075760006000fd5b813561041a61041582610e30565b610d41565b915081818352602084019350602081019050838560408402820111156104405760006000fd5b60005b83811015610471578161045688826106fe565b8452602084019350604083019250505b600181019050610443565b5050505092915050565b600082601f830112151561048f5760006000fd5b81356104a261049d82610e59565b610d41565b915081818352602084019350602081019050838560208402820111156104c85760006000fd5b60005b838110156104f957816104de8882610760565b8452602084019350602083019250505b6001810190506104cb565b5050505092915050565b600082601f83011215156105175760006000fd5b813561052a61052582610e82565b610d41565b915081818352602084019350602081019050838560208402820111156105505760006000fd5b60005b8381101561058157816105668882610760565b8452602084019350602083019250505b600181019050610553565b5050505092915050565b60006040828403121561059e5760006000fd5b6105a86040610d41565b905060006105b88482850161074b565b60008301525060206105cc8482850161074b565b60208301525092915050565b6000606082840312156105eb5760006000fd5b6105f56060610d41565b9050600061060584828501610760565b600083015250602082013567ffffffffffffffff8111156106265760006000fd5b6106328482850161047b565b602083015250604082013567ffffffffffffffff8111156106535760006000fd5b61065f848285016103f3565b60408301525092915050565b60006060828403121561067e5760006000fd5b6106886060610d41565b9050600061069884828501610760565b600083015250602082013567ffffffffffffffff8111156106b95760006000fd5b6106c58482850161047b565b602083015250604082013567ffffffffffffffff8111156106e65760006000fd5b6106f2848285016103f3565b60408301525092915050565b6000604082840312156107115760006000fd5b61071b6040610d41565b9050600061072b84828501610760565b600083015250602061073f84828501610760565b60208301525092915050565b60008135905061075a8161103a565b92915050565b60008135905061076f81611054565b92915050565b6000602082840312156107885760006000fd5b600082013567ffffffffffffffff8111156107a35760006000fd5b6107af8482850161027a565b91505092915050565b6000600060006000600060a086880312156107d35760006000fd5b600086013567ffffffffffffffff8111156107ee5760006000fd5b6107fa8882890161066b565b955050602086013567ffffffffffffffff8111156108185760006000fd5b61082488828901610189565b945050604086013567ffffffffffffffff8111156108425760006000fd5b61084e88828901610211565b935050606086013567ffffffffffffffff81111561086c5760006000fd5b61087888828901610302565b925050608086013567ffffffffffffffff8111156108965760006000fd5b6108a288828901610503565b9150509295509295909350565b60006108bb8383610a6a565b60808301905092915050565b60006108d38383610ac2565b905092915050565b60006108e78383610c36565b905092915050565b60006108fb8383610c8d565b60408301905092915050565b60006109138383610cbc565b60208301905092915050565b600061092a82610f0f565b6109348185610fb7565b935061093f83610eab565b8060005b8381101561097157815161095788826108af565b975061096283610f5c565b9250505b600181019050610943565b5085935050505092915050565b600061098982610f1a565b6109938185610fc8565b9350836020820285016109a585610ebb565b8060005b858110156109e257848403895281516109c285826108c7565b94506109cd83610f69565b925060208a019950505b6001810190506109a9565b50829750879550505050505092915050565b60006109ff82610f25565b610a098185610fd3565b935083602082028501610a1b85610ec5565b8060005b85811015610a585784840389528151610a3885826108db565b9450610a4383610f76565b925060208a019950505b600181019050610a1f565b50829750879550505050505092915050565b610a7381610f30565b610a7d8184610fe4565b9250610a8882610ed5565b8060005b83811015610aba578151610aa087826108ef565b9650610aab83610f83565b9250505b600181019050610a8c565b505050505050565b6000610acd82610f3b565b610ad78185610fef565b9350610ae283610edf565b8060005b83811015610b14578151610afa88826108ef565b9750610b0583610f90565b9250505b600181019050610ae6565b5085935050505092915050565b6000610b2c82610f51565b610b368185611011565b9350610b4183610eff565b8060005b83811015610b73578151610b598882610907565b9750610b6483610faa565b9250505b600181019050610b45565b5085935050505092915050565b6000610b8b82610f46565b610b958185611000565b9350610ba083610eef565b8060005b83811015610bd2578151610bb88882610907565b9750610bc383610f9d565b9250505b600181019050610ba4565b5085935050505092915050565b6000606083016000830151610bf76000860182610cbc565b5060208301518482036020860152610c0f8282610b80565b91505060408301518482036040860152610c298282610ac2565b9150508091505092915050565b6000606083016000830151610c4e6000860182610cbc565b5060208301518482036020860152610c668282610b80565b91505060408301518482036040860152610c808282610ac2565b9150508091505092915050565b604082016000820151610ca36000850182610cbc565b506020820151610cb66020850182610cbc565b50505050565b610cc581611030565b82525050565b600060a0820190508181036000830152610ce58188610bdf565b90508181036020830152610cf9818761091f565b90508181036040830152610d0d818661097e565b90508181036060830152610d2181856109f4565b90508181036080830152610d358184610b21565b90509695505050505050565b6000604051905081810181811067ffffffffffffffff82111715610d655760006000fd5b8060405250919050565b600067ffffffffffffffff821115610d875760006000fd5b602082029050602081019050919050565b600067ffffffffffffffff821115610db05760006000fd5b602082029050919050565b600067ffffffffffffffff821115610dd35760006000fd5b602082029050602081019050919050565b600067ffffffffffffffff821115610dfc5760006000fd5b602082029050602081019050919050565b600067ffffffffffffffff821115610e255760006000fd5b602082029050919050565b600067ffffffffffffffff821115610e485760006000fd5b602082029050602081019050919050565b600067ffffffffffffffff821115610e715760006000fd5b602082029050602081019050919050565b600067ffffffffffffffff821115610e9a5760006000fd5b602082029050602081019050919050565b6000819050602082019050919050565b6000819050919050565b6000819050602082019050919050565b6000819050919050565b6000819050602082019050919050565b6000819050602082019050919050565b6000819050602082019050919050565b600081519050919050565b600060029050919050565b600081519050919050565b600060029050919050565b600081519050919050565b600081519050919050565b600081519050919050565b6000602082019050919050565b6000602082019050919050565b6000602082019050919050565b6000602082019050919050565b6000602082019050919050565b6000602082019050919050565b6000602082019050919050565b600082825260208201905092915050565b600081905092915050565b600082825260208201905092915050565b600081905092915050565b600082825260208201905092915050565b600082825260208201905092915050565b600082825260208201905092915050565b600061ffff82169050919050565b6000819050919050565b61104381611022565b811415156110515760006000fd5b50565b61105d81611030565b8114151561106b5760006000fd5b50565bfea365627a7a72315820d78c6ba7ee332581e6c4d9daa5fc07941841230f7ce49edf6e05b1b63853e8746c6578706572696d656e74616cf564736f6c634300050c0040`},
 		[]string{`
-		[{"constant":true,"inputs":[{"components":[{"name":"a","type":"uint256"},{"name":"b","type":"uint256[]"},{"components":[{"name":"x","type":"uint256"},{"name":"y","type":"uint256"}],"name":"c","type":"tuple[]"}],"name":"a","type":"tuple"},{"components":[{"name":"x","type":"uint256"},{"name":"y","type":"uint256"}],"name":"b","type":"tuple[2][]"},{"components":[{"name":"x","type":"uint256"},{"name":"y","type":"uint256"}],"name":"c","type":"tuple[][2]"},{"components":[{"name":"a","type":"uint256"},{"name":"b","type":"uint256[]"},{"components":[{"name":"x","type":"uint256"},{"name":"y","type":"uint256"}],"name":"c","type":"tuple[]"}],"name":"d","type":"tuple[]"},{"name":"e","type":"uint256[]"}],"name":"func1","outputs":[{"components":[{"name":"a","type":"uint256"},{"name":"b","type":"uint256[]"},{"components":[{"name":"x","type":"uint256"},{"name":"y","type":"uint256"}],"name":"c","type":"tuple[]"}],"name":"","type":"tuple"},{"components":[{"name":"x","type":"uint256"},{"name":"y","type":"uint256"}],"name":"","type":"tuple[2][]"},{"components":[{"name":"x","type":"uint256"},{"name":"y","type":"uint256"}],"name":"","type":"tuple[][2]"},{"components":[{"name":"a","type":"uint256"},{"name":"b","type":"uint256[]"},{"components":[{"name":"x","type":"uint256"},{"name":"y","type":"uint256"}],"name":"c","type":"tuple[]"}],"name":"","type":"tuple[]"},{"name":"","type":"uint256[]"}],"payable":false,"stateMutability":"pure","type":"function"},{"constant":false,"inputs":[{"components":[{"name":"a","type":"uint256"},{"name":"b","type":"uint256[]"},{"components":[{"name":"x","type":"uint256"},{"name":"y","type":"uint256"}],"name":"c","type":"tuple[]"}],"name":"a","type":"tuple"},{"components":[{"name":"x","type":"uint256"},{"name":"y","type":"uint256"}],"name":"b","type":"tuple[2][]"},{"components":[{"name":"x","type":"uint256"},{"name":"y","type":"uint256"}],"name":"c","type":"tuple[][2]"},{"components":[{"name":"a","type":"uint256"},{"name":"b","type":"uint256[]"},{"components":[{"name":"x","type":"uint256"},{"name":"y","type":"uint256"}],"name":"c","type":"tuple[]"}],"name":"d","type":"tuple[]"},{"name":"e","type":"uint256[]"}],"name":"func2","outputs":[],"payable":false,"stateMutability":"nonpayable","type":"function"},{"anonymous":false,"inputs":[{"components":[{"name":"a","type":"uint256"},{"name":"b","type":"uint256[]"},{"components":[{"name":"x","type":"uint256"},{"name":"y","type":"uint256"}],"name":"c","type":"tuple[]"}],"indexed":false,"name":"a","type":"tuple"},{"components":[{"name":"x","type":"uint256"},{"name":"y","type":"uint256"}],"indexed":false,"name":"b","type":"tuple[2][]"},{"components":[{"name":"x","type":"uint256"},{"name":"y","type":"uint256"}],"indexed":false,"name":"c","type":"tuple[][2]"},{"components":[{"name":"a","type":"uint256"},{"name":"b","type":"uint256[]"},{"components":[{"name":"x","type":"uint256"},{"name":"y","type":"uint256"}],"name":"c","type":"tuple[]"}],"indexed":false,"name":"d","type":"tuple[]"},{"indexed":false,"name":"e","type":"uint256[]"}],"name":"TupleEvent","type":"event"}]
+[{"anonymous":false,"inputs":[{"components":[{"internalType":"uint256","name":"a","type":"uint256"},{"internalType":"uint256[]","name":"b","type":"uint256[]"},{"components":[{"internalType":"uint256","name":"x","type":"uint256"},{"internalType":"uint256","name":"y","type":"uint256"}],"internalType":"struct Tuple.T[]","name":"c","type":"tuple[]"}],"indexed":false,"internalType":"struct Tuple.S","name":"a","type":"tuple"},{"components":[{"internalType":"uint256","name":"x","type":"uint256"},{"internalType":"uint256","name":"y","type":"uint256"}],"indexed":false,"internalType":"struct Tuple.T[2][]","name":"b","type":"tuple[2][]"},{"components":[{"internalType":"uint256","name":"x","type":"uint256"},{"internalType":"uint256","name":"y","type":"uint256"}],"indexed":false,"internalType":"struct Tuple.T[][2]","name":"c","type":"tuple[][2]"},{"components":[{"internalType":"uint256","name":"a","type":"uint256"},{"internalType":"uint256[]","name":"b","type":"uint256[]"},{"components":[{"internalType":"uint256","name":"x","type":"uint256"},{"internalType":"uint256","name":"y","type":"uint256"}],"internalType":"struct Tuple.T[]","name":"c","type":"tuple[]"}],"indexed":false,"internalType":"struct Tuple.S[]","name":"d","type":"tuple[]"},{"indexed":false,"internalType":"uint256[]","name":"e","type":"uint256[]"}],"name":"TupleEvent","type":"event"},{"anonymous":false,"inputs":[{"components":[{"internalType":"uint8","name":"x","type":"uint8"},{"internalType":"uint8","name":"y","type":"uint8"}],"indexed":false,"internalType":"struct Tuple.P[]","name":"","type":"tuple[]"}],"name":"TupleEvent2","type":"event"},{"constant":true,"inputs":[{"components":[{"internalType":"uint256","name":"a","type":"uint256"},{"internalType":"uint256[]","name":"b","type":"uint256[]"},{"components":[{"internalType":"uint256","name":"x","type":"uint256"},{"internalType":"uint256","name":"y","type":"uint256"}],"internalType":"struct Tuple.T[]","name":"c","type":"tuple[]"}],"internalType":"struct Tuple.S","name":"a","type":"tuple"},{"components":[{"internalType":"uint256","name":"x","type":"uint256"},{"internalType":"uint256","name":"y","type":"uint256"}],"internalType":"struct Tuple.T[2][]","name":"b","type":"tuple[2][]"},{"components":[{"internalType":"uint256","name":"x","type":"uint256"},{"internalType":"uint256","name":"y","type":"uint256"}],"internalType":"struct Tuple.T[][2]","name":"c","type":"tuple[][2]"},{"components":[{"internalType":"uint256","name":"a","type":"uint256"},{"internalType":"uint256[]","name":"b","type":"uint256[]"},{"components":[{"internalType":"uint256","name":"x","type":"uint256"},{"internalType":"uint256","name":"y","type":"uint256"}],"internalType":"struct Tuple.T[]","name":"c","type":"tuple[]"}],"internalType":"struct Tuple.S[]","name":"d","type":"tuple[]"},{"internalType":"uint256[]","name":"e","type":"uint256[]"}],"name":"func1","outputs":[{"components":[{"internalType":"uint256","name":"a","type":"uint256"},{"internalType":"uint256[]","name":"b","type":"uint256[]"},{"components":[{"internalType":"uint256","name":"x","type":"uint256"},{"internalType":"uint256","name":"y","type":"uint256"}],"internalType":"struct Tuple.T[]","name":"c","type":"tuple[]"}],"internalType":"struct Tuple.S","name":"","type":"tuple"},{"components":[{"internalType":"uint256","name":"x","type":"uint256"},{"internalType":"uint256","name":"y","type":"uint256"}],"internalType":"struct Tuple.T[2][]","name":"","type":"tuple[2][]"},{"components":[{"internalType":"uint256","name":"x","type":"uint256"},{"internalType":"uint256","name":"y","type":"uint256"}],"internalType":"struct Tuple.T[][2]","name":"","type":"tuple[][2]"},{"components":[{"internalType":"uint256","name":"a","type":"uint256"},{"internalType":"uint256[]","name":"b","type":"uint256[]"},{"components":[{"internalType":"uint256","name":"x","type":"uint256"},{"internalType":"uint256","name":"y","type":"uint256"}],"internalType":"struct Tuple.T[]","name":"c","type":"tuple[]"}],"internalType":"struct Tuple.S[]","name":"","type":"tuple[]"},{"internalType":"uint256[]","name":"","type":"uint256[]"}],"payable":false,"stateMutability":"pure","type":"function"},{"constant":false,"inputs":[{"components":[{"internalType":"uint256","name":"a","type":"uint256"},{"internalType":"uint256[]","name":"b","type":"uint256[]"},{"components":[{"internalType":"uint256","name":"x","type":"uint256"},{"internalType":"uint256","name":"y","type":"uint256"}],"internalType":"struct Tuple.T[]","name":"c","type":"tuple[]"}],"internalType":"struct Tuple.S","name":"a","type":"tuple"},{"components":[{"internalType":"uint256","name":"x","type":"uint256"},{"internalType":"uint256","name":"y","type":"uint256"}],"internalType":"struct Tuple.T[2][]","name":"b","type":"tuple[2][]"},{"components":[{"internalType":"uint256","name":"x","type":"uint256"},{"internalType":"uint256","name":"y","type":"uint256"}],"internalType":"struct Tuple.T[][2]","name":"c","type":"tuple[][2]"},{"components":[{"internalType":"uint256","name":"a","type":"uint256"},{"internalType":"uint256[]","name":"b","type":"uint256[]"},{"components":[{"internalType":"uint256","name":"x","type":"uint256"},{"internalType":"uint256","name":"y","type":"uint256"}],"internalType":"struct Tuple.T[]","name":"c","type":"tuple[]"}],"internalType":"struct Tuple.S[]","name":"d","type":"tuple[]"},{"internalType":"uint256[]","name":"e","type":"uint256[]"}],"name":"func2","outputs":[],"payable":false,"stateMutability":"nonpayable","type":"function"},{"constant":true,"inputs":[{"components":[{"internalType":"uint16","name":"x","type":"uint16"},{"internalType":"uint16","name":"y","type":"uint16"}],"internalType":"struct Tuple.Q[]","name":"","type":"tuple[]"}],"name":"func3","outputs":[],"payable":false,"stateMutability":"pure","type":"function"}]
 		`},
 		`
 			"math/big"
 			"reflect"
-		
+
 			"github.com/maticnetwork/bor/accounts/abi/bind"
 			"github.com/maticnetwork/bor/accounts/abi/bind/backends"
 			"github.com/maticnetwork/bor/core"
@@ -1091,13 +1143,15 @@ var bindTests = []struct {
 		`
 			key, _ := crypto.GenerateKey()
 			auth := bind.NewKeyedTransactor(key)
-			backend := backends.NewSimulatedBackend(core.GenesisAlloc{auth.From: {Balance: big.NewInt(10000000000)}}, 10000000)
 
-			_, _, contract, err := DeployTuple(auth, backend)
+			sim := backends.NewSimulatedBackend(core.GenesisAlloc{auth.From: {Balance: big.NewInt(10000000000)}}, 10000000)
+			defer sim.Close()
+
+			_, _, contract, err := DeployTuple(auth, sim)
 			if err != nil {
 				t.Fatalf("deploy contract failed %v", err)
 			}
-			backend.Commit()
+			sim.Commit()
 
 			check := func(a, b interface{}, errMsg string) {
 				if !reflect.DeepEqual(a, b) {
@@ -1105,10 +1159,10 @@ var bindTests = []struct {
 				}
 			}
 
-			a := Struct1{
+			a := TupleS{
 				A: big.NewInt(1),
 				B: []*big.Int{big.NewInt(2), big.NewInt(3)},
-				C: []Struct0{
+				C: []TupleT{
 					{
 						X: big.NewInt(4),
 						Y: big.NewInt(5),
@@ -1120,7 +1174,7 @@ var bindTests = []struct {
 				},
 			}
 
-			b := [][2]Struct0{
+			b := [][2]TupleT{
 				{
 					{
 						X: big.NewInt(8),
@@ -1133,7 +1187,7 @@ var bindTests = []struct {
 				},
 			}
 
-			c := [2][]Struct0{
+			c := [2][]TupleT{
 				{
 					{
 						X: big.NewInt(12),
@@ -1152,7 +1206,7 @@ var bindTests = []struct {
 				},
 			}
 
-			d := []Struct1{a}
+			d := []TupleS{a}
 
 			e := []*big.Int{big.NewInt(18), big.NewInt(19)}
 			ret1, ret2, ret3, ret4, ret5, err := contract.Func1(nil, a, b, c, d, e)
@@ -1169,7 +1223,7 @@ var bindTests = []struct {
 			if err != nil {
 				t.Fatalf("invoke contract failed, err %v", err)
 			}
-			backend.Commit()
+			sim.Commit()
 
 			iter, err := contract.FilterTupleEvent(nil)
 			if err != nil {
@@ -1183,7 +1237,13 @@ var bindTests = []struct {
 			check(iter.Event.C, c, "field3 mismatch")
 			check(iter.Event.D, d, "field4 mismatch")
 			check(iter.Event.E, e, "field5 mismatch")
+
+			err = contract.Func3(nil, nil)
+			if err != nil {
+				t.Fatalf("failed to call function which has no return, err %v", err)
+			}
 		`,
+		nil,
 		nil,
 		nil,
 		nil,
@@ -1225,7 +1285,9 @@ var bindTests = []struct {
 			// Generate a new random account and a funded simulator
 			key, _ := crypto.GenerateKey()
 			auth := bind.NewKeyedTransactor(key)
+
 			sim := backends.NewSimulatedBackend(core.GenesisAlloc{auth.From: {Balance: big.NewInt(10000000000)}}, 10000000)
+			defer sim.Close()
 
 			//deploy the test contract
 			_, _, testContract, err := DeployUseLibrary(auth, sim)
@@ -1253,7 +1315,375 @@ var bindTests = []struct {
 		map[string]string{
 			"b98c933f0a6ececcd167bd4f9d3299b1a0": "Math",
 		},
+		nil,
 		[]string{"UseLibrary", "Math"},
+	}, {
+		"Overload",
+		`
+		pragma solidity ^0.5.10;
+
+		contract overload {
+		  mapping(address => uint256) balances;
+
+		  event bar(uint256 i);
+		  event bar(uint256 i, uint256 j);
+
+		  function foo(uint256 i) public {
+			  emit bar(i);
+		  }
+		  function foo(uint256 i, uint256 j) public {
+			  emit bar(i, j);
+		  }
+		}
+		`,
+		[]string{`608060405234801561001057600080fd5b50610153806100206000396000f3fe608060405234801561001057600080fd5b50600436106100365760003560e01c806304bc52f81461003b5780632fbebd3814610073575b600080fd5b6100716004803603604081101561005157600080fd5b8101908080359060200190929190803590602001909291905050506100a1565b005b61009f6004803603602081101561008957600080fd5b81019080803590602001909291905050506100e4565b005b7fae42e9514233792a47a1e4554624e83fe852228e1503f63cd383e8a431f4f46d8282604051808381526020018281526020019250505060405180910390a15050565b7f0423a1321222a0a8716c22b92fac42d85a45a612b696a461784d9fa537c81e5c816040518082815260200191505060405180910390a15056fea265627a7a72305820e22b049858b33291cbe67eeaece0c5f64333e439d27032ea8337d08b1de18fe864736f6c634300050a0032`},
+		[]string{`[{"constant":false,"inputs":[{"name":"i","type":"uint256"},{"name":"j","type":"uint256"}],"name":"foo","outputs":[],"payable":false,"stateMutability":"nonpayable","type":"function"},{"constant":false,"inputs":[{"name":"i","type":"uint256"}],"name":"foo","outputs":[],"payable":false,"stateMutability":"nonpayable","type":"function"},{"anonymous":false,"inputs":[{"indexed":false,"name":"i","type":"uint256"}],"name":"bar","type":"event"},{"anonymous":false,"inputs":[{"indexed":false,"name":"i","type":"uint256"},{"indexed":false,"name":"j","type":"uint256"}],"name":"bar","type":"event"}]`},
+		`
+		"math/big"
+		"time"
+
+		"github.com/maticnetwork/bor/accounts/abi/bind"
+		"github.com/maticnetwork/bor/accounts/abi/bind/backends"
+		"github.com/maticnetwork/bor/core"
+		"github.com/maticnetwork/bor/crypto"
+		`,
+		`
+		// Initialize test accounts
+		key, _ := crypto.GenerateKey()
+		auth := bind.NewKeyedTransactor(key)
+		sim := backends.NewSimulatedBackend(core.GenesisAlloc{auth.From: {Balance: big.NewInt(10000000000)}}, 10000000)
+		defer sim.Close()
+
+		// deploy the test contract
+		_, _, contract, err := DeployOverload(auth, sim)
+		if err != nil {
+			t.Fatalf("Failed to deploy contract: %v", err)
+		}
+		// Finish deploy.
+		sim.Commit()
+
+		resCh, stopCh := make(chan uint64), make(chan struct{})
+
+		go func() {
+			barSink := make(chan *OverloadBar)
+			sub, _ := contract.WatchBar(nil, barSink)
+			defer sub.Unsubscribe()
+
+			bar0Sink := make(chan *OverloadBar0)
+			sub0, _ := contract.WatchBar0(nil, bar0Sink)
+			defer sub0.Unsubscribe()
+
+			for {
+				select {
+				case ev := <-barSink:
+					resCh <- ev.I.Uint64()
+				case ev := <-bar0Sink:
+					resCh <- ev.I.Uint64() + ev.J.Uint64()
+				case <-stopCh:
+					return
+				}
+			}
+		}()
+		contract.Foo(auth, big.NewInt(1), big.NewInt(2))
+		sim.Commit()
+		select {
+		case n := <-resCh:
+			if n != 3 {
+				t.Fatalf("Invalid bar0 event")
+			}
+		case <-time.NewTimer(3 * time.Second).C:
+			t.Fatalf("Wait bar0 event timeout")
+		}
+
+		contract.Foo0(auth, big.NewInt(1))
+		sim.Commit()
+		select {
+		case n := <-resCh:
+			if n != 1 {
+				t.Fatalf("Invalid bar event")
+			}
+		case <-time.NewTimer(3 * time.Second).C:
+			t.Fatalf("Wait bar event timeout")
+		}
+		close(stopCh)
+		`,
+		nil,
+		nil,
+		nil,
+		nil,
+	},
+	{
+		"IdentifierCollision",
+		`
+		pragma solidity >=0.4.19 <0.6.0;
+
+		contract IdentifierCollision {
+			uint public _myVar;
+
+			function MyVar() public view returns (uint) {
+				return _myVar;
+			}
+		}
+		`,
+		[]string{"60806040523480156100115760006000fd5b50610017565b60c3806100256000396000f3fe608060405234801560105760006000fd5b506004361060365760003560e01c806301ad4d8714603c5780634ef1f0ad146058576036565b60006000fd5b60426074565b6040518082815260200191505060405180910390f35b605e607d565b6040518082815260200191505060405180910390f35b60006000505481565b60006000600050549050608b565b9056fea265627a7a7231582067c8d84688b01c4754ba40a2a871cede94ea1f28b5981593ab2a45b46ac43af664736f6c634300050c0032"},
+		[]string{`[{"constant":true,"inputs":[],"name":"MyVar","outputs":[{"internalType":"uint256","name":"","type":"uint256"}],"payable":false,"stateMutability":"view","type":"function"},{"constant":true,"inputs":[],"name":"_myVar","outputs":[{"internalType":"uint256","name":"","type":"uint256"}],"payable":false,"stateMutability":"view","type":"function"}]`},
+		`
+		"math/big"
+
+		"github.com/maticnetwork/bor/accounts/abi/bind"
+		"github.com/maticnetwork/bor/accounts/abi/bind/backends"
+		"github.com/maticnetwork/bor/crypto"
+		"github.com/maticnetwork/bor/core"
+		`,
+		`
+		// Initialize test accounts
+		key, _ := crypto.GenerateKey()
+		addr := crypto.PubkeyToAddress(key.PublicKey)
+
+		// Deploy registrar contract
+		sim := backends.NewSimulatedBackend(core.GenesisAlloc{addr: {Balance: big.NewInt(1000000000)}}, 10000000)
+		defer sim.Close()
+
+		transactOpts := bind.NewKeyedTransactor(key)
+		_, _, _, err := DeployIdentifierCollision(transactOpts, sim)
+		if err != nil {
+			t.Fatalf("failed to deploy contract: %v", err)
+		}
+		`,
+		nil,
+		nil,
+		map[string]string{"_myVar": "pubVar"}, // alias MyVar to PubVar
+		nil,
+	},
+	{
+		"MultiContracts",
+		`
+		pragma solidity ^0.5.11;
+		pragma experimental ABIEncoderV2;
+
+		library ExternalLib {
+			struct SharedStruct{
+				uint256 f1;
+				bytes32 f2;
+			}
+		}
+
+		contract ContractOne {
+			function foo(ExternalLib.SharedStruct memory s) pure public {
+				// Do stuff
+			}
+		}
+
+		contract ContractTwo {
+			function bar(ExternalLib.SharedStruct memory s) pure public {
+				// Do stuff
+			}
+		}
+        `,
+		[]string{
+			`60806040523480156100115760006000fd5b50610017565b6101b5806100266000396000f3fe60806040523480156100115760006000fd5b50600436106100305760003560e01c80639d8a8ba81461003657610030565b60006000fd5b610050600480360361004b91908101906100d1565b610052565b005b5b5056610171565b6000813590506100698161013d565b92915050565b6000604082840312156100825760006000fd5b61008c60406100fb565b9050600061009c848285016100bc565b60008301525060206100b08482850161005a565b60208301525092915050565b6000813590506100cb81610157565b92915050565b6000604082840312156100e45760006000fd5b60006100f28482850161006f565b91505092915050565b6000604051905081810181811067ffffffffffffffff8211171561011f5760006000fd5b8060405250919050565b6000819050919050565b6000819050919050565b61014681610129565b811415156101545760006000fd5b50565b61016081610133565b8114151561016e5760006000fd5b50565bfea365627a7a72315820749274eb7f6c01010d5322af4e1668b0a154409eb7968bd6cae5524c7ed669bb6c6578706572696d656e74616cf564736f6c634300050c0040`,
+			`60806040523480156100115760006000fd5b50610017565b6101b5806100266000396000f3fe60806040523480156100115760006000fd5b50600436106100305760003560e01c8063db8ba08c1461003657610030565b60006000fd5b610050600480360361004b91908101906100d1565b610052565b005b5b5056610171565b6000813590506100698161013d565b92915050565b6000604082840312156100825760006000fd5b61008c60406100fb565b9050600061009c848285016100bc565b60008301525060206100b08482850161005a565b60208301525092915050565b6000813590506100cb81610157565b92915050565b6000604082840312156100e45760006000fd5b60006100f28482850161006f565b91505092915050565b6000604051905081810181811067ffffffffffffffff8211171561011f5760006000fd5b8060405250919050565b6000819050919050565b6000819050919050565b61014681610129565b811415156101545760006000fd5b50565b61016081610133565b8114151561016e5760006000fd5b50565bfea365627a7a723158209bc28ee7ea97c131a13330d77ec73b4493b5c59c648352da81dd288b021192596c6578706572696d656e74616cf564736f6c634300050c0040`,
+			`606c6026600b82828239805160001a6073141515601857fe5b30600052607381538281f350fe73000000000000000000000000000000000000000030146080604052600436106023575b60006000fdfea365627a7a72315820518f0110144f5b3de95697d05e456a064656890d08e6f9cff47f3be710cc46a36c6578706572696d656e74616cf564736f6c634300050c0040`,
+		},
+		[]string{
+			`[{"constant":true,"inputs":[{"components":[{"internalType":"uint256","name":"f1","type":"uint256"},{"internalType":"bytes32","name":"f2","type":"bytes32"}],"internalType":"struct ExternalLib.SharedStruct","name":"s","type":"tuple"}],"name":"foo","outputs":[],"payable":false,"stateMutability":"pure","type":"function"}]`,
+			`[{"constant":true,"inputs":[{"components":[{"internalType":"uint256","name":"f1","type":"uint256"},{"internalType":"bytes32","name":"f2","type":"bytes32"}],"internalType":"struct ExternalLib.SharedStruct","name":"s","type":"tuple"}],"name":"bar","outputs":[],"payable":false,"stateMutability":"pure","type":"function"}]`,
+			`[]`,
+		},
+		`
+		"math/big"
+
+		"github.com/maticnetwork/bor/accounts/abi/bind"
+		"github.com/maticnetwork/bor/accounts/abi/bind/backends"
+		"github.com/maticnetwork/bor/crypto"
+		"github.com/maticnetwork/bor/core"
+        `,
+		`
+		key, _ := crypto.GenerateKey()
+		addr := crypto.PubkeyToAddress(key.PublicKey)
+
+		// Deploy registrar contract
+		sim := backends.NewSimulatedBackend(core.GenesisAlloc{addr: {Balance: big.NewInt(1000000000)}}, 10000000)
+		defer sim.Close()
+
+		transactOpts := bind.NewKeyedTransactor(key)
+		_, _, c1, err := DeployContractOne(transactOpts, sim)
+		if err != nil {
+			t.Fatal("Failed to deploy contract")
+		}
+		sim.Commit()
+		err = c1.Foo(nil, ExternalLibSharedStruct{
+			F1: big.NewInt(100),
+			F2: [32]byte{0x01, 0x02, 0x03},
+		})
+		if err != nil {
+			t.Fatal("Failed to invoke function")
+		}
+		_, _, c2, err := DeployContractTwo(transactOpts, sim)
+		if err != nil {
+			t.Fatal("Failed to deploy contract")
+		}
+		sim.Commit()
+		err = c2.Bar(nil, ExternalLibSharedStruct{
+			F1: big.NewInt(100),
+			F2: [32]byte{0x01, 0x02, 0x03},
+		})
+		if err != nil {
+			t.Fatal("Failed to invoke function")
+		}
+        `,
+		nil,
+		nil,
+		nil,
+		[]string{"ContractOne", "ContractTwo", "ExternalLib"},
+	},
+	// Test the existence of the free retrieval calls
+	{
+		`PureAndView`,
+		`pragma solidity >=0.6.0;
+		contract PureAndView {
+			function PureFunc() public pure returns (uint) {
+				return 42;
+			}
+			function ViewFunc() public view returns (uint) {
+				return block.number;
+			}
+		}
+		`,
+		[]string{`608060405234801561001057600080fd5b5060b68061001f6000396000f3fe6080604052348015600f57600080fd5b506004361060325760003560e01c806376b5686a146037578063bb38c66c146053575b600080fd5b603d606f565b6040518082815260200191505060405180910390f35b60596077565b6040518082815260200191505060405180910390f35b600043905090565b6000602a90509056fea2646970667358221220d158c2ab7fdfce366a7998ec79ab84edd43b9815630bbaede2c760ea77f29f7f64736f6c63430006000033`},
+		[]string{`[{"inputs": [],"name": "PureFunc","outputs": [{"internalType": "uint256","name": "","type": "uint256"}],"stateMutability": "pure","type": "function"},{"inputs": [],"name": "ViewFunc","outputs": [{"internalType": "uint256","name": "","type": "uint256"}],"stateMutability": "view","type": "function"}]`},
+		`
+			"math/big"
+
+			"github.com/maticnetwork/bor/accounts/abi/bind"
+			"github.com/maticnetwork/bor/accounts/abi/bind/backends"
+			"github.com/maticnetwork/bor/core"
+			"github.com/maticnetwork/bor/crypto"
+		`,
+		`
+			// Generate a new random account and a funded simulator
+			key, _ := crypto.GenerateKey()
+			auth := bind.NewKeyedTransactor(key)
+
+			sim := backends.NewSimulatedBackend(core.GenesisAlloc{auth.From: {Balance: big.NewInt(10000000000)}}, 10000000)
+			defer sim.Close()
+
+			// Deploy a tester contract and execute a structured call on it
+			_, _, pav, err := DeployPureAndView(auth, sim)
+			if err != nil {
+				t.Fatalf("Failed to deploy PureAndView contract: %v", err)
+			}
+			sim.Commit()
+
+			// This test the existence of the free retreiver call for view and pure functions
+			if num, err := pav.PureFunc(nil); err != nil {
+				t.Fatalf("Failed to call anonymous field retriever: %v", err)
+			} else if num.Cmp(big.NewInt(42)) != 0 {
+				t.Fatalf("Retrieved value mismatch: have %v, want %v", num, 42)
+			}
+			if num, err := pav.ViewFunc(nil); err != nil {
+				t.Fatalf("Failed to call anonymous field retriever: %v", err)
+			} else if num.Cmp(big.NewInt(1)) != 0 {
+				t.Fatalf("Retrieved value mismatch: have %v, want %v", num, 1)
+			}
+		`,
+		nil,
+		nil,
+		nil,
+		nil,
+	},
+	// Test fallback separation introduced in v0.6.0
+	{
+		`NewFallbacks`,
+		`
+		pragma solidity >=0.6.0 <0.7.0;
+	
+		contract NewFallbacks {
+			event Fallback(bytes data);
+			fallback() external {
+				bytes memory data;
+				assembly {
+					calldatacopy(data, 0, calldatasize())
+				}
+				emit Fallback(data);
+			}
+	
+			event Received(address addr, uint value);
+			receive() external payable {
+				emit Received(msg.sender, msg.value);
+			}
+		}
+	   `,
+		[]string{"60806040523480156100115760006000fd5b50610017565b61016e806100266000396000f3fe60806040526004361061000d575b36610081575b7f88a5966d370b9919b20f3e2c13ff65706f196a4e32cc2c12bf57088f885258743334604051808373ffffffffffffffffffffffffffffffffffffffff1673ffffffffffffffffffffffffffffffffffffffff1681526020018281526020019250505060405180910390a15b005b34801561008e5760006000fd5b505b606036600082377f9043988963722edecc2099c75b0af0ff76af14ffca42ed6bce059a20a2a9f986816040518080602001828103825283818151815260200191508051906020019080838360005b838110156100fa5780820151818401525b6020810190506100de565b50505050905090810190601f1680156101275780820380516001836020036101000a031916815260200191505b509250505060405180910390a1505b00fea26469706673582212205643ca37f40c2b352dc541f42e9e6720de065de756324b7fcc9fb1d67eda4a7d64736f6c63430006040033"},
+		[]string{`[{"anonymous":false,"inputs":[{"indexed":false,"internalType":"bytes","name":"data","type":"bytes"}],"name":"Fallback","type":"event"},{"anonymous":false,"inputs":[{"indexed":false,"internalType":"address","name":"addr","type":"address"},{"indexed":false,"internalType":"uint256","name":"value","type":"uint256"}],"name":"Received","type":"event"},{"stateMutability":"nonpayable","type":"fallback"},{"stateMutability":"payable","type":"receive"}]`},
+		`
+			"bytes"
+			"math/big"
+	
+			"github.com/maticnetwork/bor/accounts/abi/bind"
+			"github.com/maticnetwork/bor/accounts/abi/bind/backends"
+			"github.com/maticnetwork/bor/core"
+			"github.com/maticnetwork/bor/crypto"
+	   `,
+		`
+			key, _ := crypto.GenerateKey()
+			addr := crypto.PubkeyToAddress(key.PublicKey)
+	
+			sim := backends.NewSimulatedBackend(core.GenesisAlloc{addr: {Balance: big.NewInt(1000000000)}}, 1000000)
+			defer sim.Close()
+	
+			opts := bind.NewKeyedTransactor(key)
+			_, _, c, err := DeployNewFallbacks(opts, sim)
+			if err != nil {
+				t.Fatalf("Failed to deploy contract: %v", err)
+			}
+			sim.Commit()
+	
+			// Test receive function
+			opts.Value = big.NewInt(100)
+			c.Receive(opts)
+			sim.Commit()
+	
+			var gotEvent bool
+			iter, _ := c.FilterReceived(nil)
+			defer iter.Close()
+			for iter.Next() {
+				if iter.Event.Addr != addr {
+					t.Fatal("Msg.sender mismatch")
+				}
+				if iter.Event.Value.Uint64() != 100 {
+					t.Fatal("Msg.value mismatch")
+				}
+				gotEvent = true
+				break
+			}
+			if !gotEvent {
+				t.Fatal("Expect to receive event emitted by receive")
+			}
+	
+			// Test fallback function
+			opts.Value = nil
+			calldata := []byte{0x01, 0x02, 0x03}
+			c.Fallback(opts, calldata)
+			sim.Commit()
+	
+			iter2, _ := c.FilterFallback(nil)
+			defer iter2.Close()
+			for iter2.Next() {
+				if !bytes.Equal(iter2.Event.Data, calldata) {
+					t.Fatal("calldata mismatch")
+				}
+				gotEvent = true
+				break
+			}
+			if !gotEvent {
+				t.Fatal("Expect to receive event emitted by fallback")
+			}
+	   `,
+		nil,
+		nil,
+		nil,
+		nil,
 	},
 }
 
@@ -1285,7 +1715,7 @@ func TestGolangBindings(t *testing.T) {
 			types = []string{tt.name}
 		}
 		// Generate the binding and create a Go source file in the workspace
-		bind, err := Bind(types, tt.abi, tt.bytecode, tt.fsigs, "bindtest", LangGo, tt.libs)
+		bind, err := Bind(types, tt.abi, tt.bytecode, tt.fsigs, "bindtest", LangGo, tt.libs, tt.aliases)
 		if err != nil {
 			t.Fatalf("test %d: failed to generate binding: %v", i, err)
 		}
@@ -1308,6 +1738,18 @@ func TestGolangBindings(t *testing.T) {
 		if err := ioutil.WriteFile(filepath.Join(pkg, strings.ToLower(tt.name)+"_test.go"), []byte(code), 0600); err != nil {
 			t.Fatalf("test %d: failed to write tests: %v", i, err)
 		}
+	}
+	// Convert the package to go modules and use the current source for go-ethereum
+	moder := exec.Command(gocmd, "mod", "init", "bindtest")
+	moder.Dir = pkg
+	if out, err := moder.CombinedOutput(); err != nil {
+		t.Fatalf("failed to convert binding test to modules: %v\n%s", err, out)
+	}
+	pwd, _ := os.Getwd()
+	replacer := exec.Command(gocmd, "mod", "edit", "-replace", "github.com/maticnetwork/bor="+filepath.Join(pwd, "..", "..", "..")) // Repo root
+	replacer.Dir = pkg
+	if out, err := replacer.CombinedOutput(); err != nil {
+		t.Fatalf("failed to replace binding test dependency to current source tree: %v\n%s", err, out)
 	}
 	// Test the entire package and report any failures
 	cmd := exec.Command(gocmd, "test", "-v", "-count", "1")
@@ -1378,12 +1820,9 @@ package bindtest;
 import org.ethereum.geth.*;
 import java.util.*;
 
-
-
 public class Test {
 	// ABI is the input ABI used to generate the binding from.
 	public final static String ABI = "[{\"constant\":false,\"inputs\":[{\"name\":\"u16\",\"type\":\"uint16\"}],\"name\":\"setUint16\",\"outputs\":[{\"name\":\"\",\"type\":\"uint16\"}],\"payable\":false,\"stateMutability\":\"nonpayable\",\"type\":\"function\"},{\"constant\":false,\"inputs\":[{\"name\":\"b_a\",\"type\":\"bool[2]\"}],\"name\":\"setBoolArray\",\"outputs\":[{\"name\":\"\",\"type\":\"bool[2]\"}],\"payable\":false,\"stateMutability\":\"nonpayable\",\"type\":\"function\"},{\"constant\":false,\"inputs\":[{\"name\":\"a_a\",\"type\":\"address[2]\"}],\"name\":\"setAddressArray\",\"outputs\":[{\"name\":\"\",\"type\":\"address[2]\"}],\"payable\":false,\"stateMutability\":\"nonpayable\",\"type\":\"function\"},{\"constant\":false,\"inputs\":[{\"name\":\"bs_l\",\"type\":\"bytes[]\"}],\"name\":\"setBytesList\",\"outputs\":[{\"name\":\"\",\"type\":\"bytes[]\"}],\"payable\":false,\"stateMutability\":\"nonpayable\",\"type\":\"function\"},{\"constant\":false,\"inputs\":[{\"name\":\"u8\",\"type\":\"uint8\"}],\"name\":\"setUint8\",\"outputs\":[{\"name\":\"\",\"type\":\"uint8\"}],\"payable\":false,\"stateMutability\":\"nonpayable\",\"type\":\"function\"},{\"constant\":false,\"inputs\":[{\"name\":\"u32\",\"type\":\"uint32\"}],\"name\":\"setUint32\",\"outputs\":[{\"name\":\"\",\"type\":\"uint32\"}],\"payable\":false,\"stateMutability\":\"nonpayable\",\"type\":\"function\"},{\"constant\":false,\"inputs\":[{\"name\":\"b\",\"type\":\"bool\"}],\"name\":\"setBool\",\"outputs\":[{\"name\":\"\",\"type\":\"bool\"}],\"payable\":false,\"stateMutability\":\"nonpayable\",\"type\":\"function\"},{\"constant\":false,\"inputs\":[{\"name\":\"i256_l\",\"type\":\"int256[]\"}],\"name\":\"setInt256List\",\"outputs\":[{\"name\":\"\",\"type\":\"int256[]\"}],\"payable\":false,\"stateMutability\":\"nonpayable\",\"type\":\"function\"},{\"constant\":false,\"inputs\":[{\"name\":\"u256_a\",\"type\":\"uint256[2]\"}],\"name\":\"setUint256Array\",\"outputs\":[{\"name\":\"\",\"type\":\"uint256[2]\"}],\"payable\":false,\"stateMutability\":\"nonpayable\",\"type\":\"function\"},{\"constant\":false,\"inputs\":[{\"name\":\"b_l\",\"type\":\"bool[]\"}],\"name\":\"setBoolList\",\"outputs\":[{\"name\":\"\",\"type\":\"bool[]\"}],\"payable\":false,\"stateMutability\":\"nonpayable\",\"type\":\"function\"},{\"constant\":false,\"inputs\":[{\"name\":\"bs_a\",\"type\":\"bytes[2]\"}],\"name\":\"setBytesArray\",\"outputs\":[{\"name\":\"\",\"type\":\"bytes[2]\"}],\"payable\":false,\"stateMutability\":\"nonpayable\",\"type\":\"function\"},{\"constant\":false,\"inputs\":[{\"name\":\"a_l\",\"type\":\"address[]\"}],\"name\":\"setAddressList\",\"outputs\":[{\"name\":\"\",\"type\":\"address[]\"}],\"payable\":false,\"stateMutability\":\"nonpayable\",\"type\":\"function\"},{\"constant\":false,\"inputs\":[{\"name\":\"i256_a\",\"type\":\"int256[2]\"}],\"name\":\"setInt256Array\",\"outputs\":[{\"name\":\"\",\"type\":\"int256[2]\"}],\"payable\":false,\"stateMutability\":\"nonpayable\",\"type\":\"function\"},{\"constant\":false,\"inputs\":[{\"name\":\"s_a\",\"type\":\"string[2]\"}],\"name\":\"setStringArray\",\"outputs\":[{\"name\":\"\",\"type\":\"string[2]\"}],\"payable\":false,\"stateMutability\":\"nonpayable\",\"type\":\"function\"},{\"constant\":false,\"inputs\":[{\"name\":\"s\",\"type\":\"string\"}],\"name\":\"setString\",\"outputs\":[{\"name\":\"\",\"type\":\"string\"}],\"payable\":false,\"stateMutability\":\"nonpayable\",\"type\":\"function\"},{\"constant\":false,\"inputs\":[{\"name\":\"u64\",\"type\":\"uint64\"}],\"name\":\"setUint64\",\"outputs\":[{\"name\":\"\",\"type\":\"uint64\"}],\"payable\":false,\"stateMutability\":\"nonpayable\",\"type\":\"function\"},{\"constant\":false,\"inputs\":[{\"name\":\"i16\",\"type\":\"int16\"}],\"name\":\"setInt16\",\"outputs\":[{\"name\":\"\",\"type\":\"int16\"}],\"payable\":false,\"stateMutability\":\"nonpayable\",\"type\":\"function\"},{\"constant\":false,\"inputs\":[{\"name\":\"i8\",\"type\":\"int8\"}],\"name\":\"setInt8\",\"outputs\":[{\"name\":\"\",\"type\":\"int8\"}],\"payable\":false,\"stateMutability\":\"nonpayable\",\"type\":\"function\"},{\"constant\":false,\"inputs\":[{\"name\":\"u256_l\",\"type\":\"uint256[]\"}],\"name\":\"setUint256List\",\"outputs\":[{\"name\":\"\",\"type\":\"uint256[]\"}],\"payable\":false,\"stateMutability\":\"nonpayable\",\"type\":\"function\"},{\"constant\":false,\"inputs\":[{\"name\":\"i256\",\"type\":\"int256\"}],\"name\":\"setInt256\",\"outputs\":[{\"name\":\"\",\"type\":\"int256\"}],\"payable\":false,\"stateMutability\":\"nonpayable\",\"type\":\"function\"},{\"constant\":false,\"inputs\":[{\"name\":\"i32\",\"type\":\"int32\"}],\"name\":\"setInt32\",\"outputs\":[{\"name\":\"\",\"type\":\"int32\"}],\"payable\":false,\"stateMutability\":\"nonpayable\",\"type\":\"function\"},{\"constant\":false,\"inputs\":[{\"name\":\"b32\",\"type\":\"bytes32\"}],\"name\":\"setBytes32\",\"outputs\":[{\"name\":\"\",\"type\":\"bytes32\"}],\"payable\":false,\"stateMutability\":\"nonpayable\",\"type\":\"function\"},{\"constant\":false,\"inputs\":[{\"name\":\"s_l\",\"type\":\"string[]\"}],\"name\":\"setStringList\",\"outputs\":[{\"name\":\"\",\"type\":\"string[]\"}],\"payable\":false,\"stateMutability\":\"nonpayable\",\"type\":\"function\"},{\"constant\":false,\"inputs\":[{\"name\":\"u256\",\"type\":\"uint256\"}],\"name\":\"setUint256\",\"outputs\":[{\"name\":\"\",\"type\":\"uint256\"}],\"payable\":false,\"stateMutability\":\"nonpayable\",\"type\":\"function\"},{\"constant\":false,\"inputs\":[{\"name\":\"bs\",\"type\":\"bytes\"}],\"name\":\"setBytes\",\"outputs\":[{\"name\":\"\",\"type\":\"bytes\"}],\"payable\":false,\"stateMutability\":\"nonpayable\",\"type\":\"function\"},{\"constant\":false,\"inputs\":[{\"name\":\"a\",\"type\":\"address\"}],\"name\":\"setAddress\",\"outputs\":[{\"name\":\"\",\"type\":\"address\"}],\"payable\":false,\"stateMutability\":\"nonpayable\",\"type\":\"function\"},{\"constant\":false,\"inputs\":[{\"name\":\"i64\",\"type\":\"int64\"}],\"name\":\"setInt64\",\"outputs\":[{\"name\":\"\",\"type\":\"int64\"}],\"payable\":false,\"stateMutability\":\"nonpayable\",\"type\":\"function\"},{\"constant\":false,\"inputs\":[{\"name\":\"b1\",\"type\":\"bytes1\"}],\"name\":\"setBytes1\",\"outputs\":[{\"name\":\"\",\"type\":\"bytes1\"}],\"payable\":false,\"stateMutability\":\"nonpayable\",\"type\":\"function\"}]";
-	
 	
 	// BYTECODE is the compiled bytecode used for deploying new contracts.
 	public final static String BYTECODE = "0x608060405234801561001057600080fd5b5061265a806100206000396000f3fe608060405234801561001057600080fd5b50600436106101e1576000357c0100000000000000000000000000000000000000000000000000000000900480637fcaf66611610116578063c2b12a73116100b4578063da359dc81161008e578063da359dc814610666578063e30081a014610696578063e673eb32146106c6578063fba1a1c3146106f6576101e1565b8063c2b12a73146105d6578063c577796114610606578063d2282dc514610636576101e1565b80639a19a953116100f05780639a19a95314610516578063a0709e1914610546578063a53b1c1e14610576578063b7d5df31146105a6576101e1565b80637fcaf66614610486578063822cba69146104b657806386114cea146104e6576101e1565b806322722302116101835780635119655d1161015d5780635119655d146103c65780635be6b37e146103f65780636aa482fc146104265780637173b69514610456576101e1565b806322722302146103365780632766a755146103665780634d5ee6da14610396576101e1565b806316c105e2116101bf57806316c105e2146102765780631774e646146102a65780631c9352e2146102d65780631e26fd3314610306576101e1565b80630477988a146101e6578063118a971814610216578063151f547114610246575b600080fd5b61020060048036036101fb9190810190611599565b610726565b60405161020d9190611f01565b60405180910390f35b610230600480360361022b919081019061118d565b61072d565b60405161023d9190611ca6565b60405180910390f35b610260600480360361025b9190810190611123565b61073a565b60405161026d9190611c69565b60405180910390f35b610290600480360361028b9190810190611238565b610747565b60405161029d9190611d05565b60405180910390f35b6102c060048036036102bb919081019061163d565b61074e565b6040516102cd9190611f6d565b60405180910390f35b6102f060048036036102eb91908101906115eb565b610755565b6040516102fd9190611f37565b60405180910390f35b610320600480360361031b91908101906113cf565b61075c565b60405161032d9190611de5565b60405180910390f35b610350600480360361034b91908101906112a2565b610763565b60405161035d9190611d42565b60405180910390f35b610380600480360361037b9190810190611365565b61076a565b60405161038d9190611da8565b60405180910390f35b6103b060048036036103ab91908101906111b6565b610777565b6040516103bd9190611cc1565b60405180910390f35b6103e060048036036103db91908101906111f7565b61077e565b6040516103ed9190611ce3565b60405180910390f35b610410600480360361040b919081019061114c565b61078b565b60405161041d9190611c84565b60405180910390f35b610440600480360361043b9190810190611279565b610792565b60405161044d9190611d27565b60405180910390f35b610470600480360361046b91908101906112e3565b61079f565b60405161047d9190611d64565b60405180910390f35b6104a0600480360361049b9190810190611558565b6107ac565b6040516104ad9190611edf565b60405180910390f35b6104d060048036036104cb9190810190611614565b6107b3565b6040516104dd9190611f52565b60405180910390f35b61050060048036036104fb919081019061148b565b6107ba565b60405161050d9190611e58565b60405180910390f35b610530600480360361052b919081019061152f565b6107c1565b60405161053d9190611ec4565b60405180910390f35b610560600480360361055b919081019061138e565b6107c8565b60405161056d9190611dc3565b60405180910390f35b610590600480360361058b91908101906114b4565b6107cf565b60405161059d9190611e73565b60405180910390f35b6105c060048036036105bb91908101906114dd565b6107d6565b6040516105cd9190611e8e565b60405180910390f35b6105f060048036036105eb9190810190611421565b6107dd565b6040516105fd9190611e1b565b60405180910390f35b610620600480360361061b9190810190611324565b6107e4565b60405161062d9190611d86565b60405180910390f35b610650600480360361064b91908101906115c2565b6107eb565b60405161065d9190611f1c565b60405180910390f35b610680600480360361067b919081019061144a565b6107f2565b60405161068d9190611e36565b60405180910390f35b6106b060048036036106ab91908101906110fa565b6107f9565b6040516106bd9190611c4e565b60405180910390f35b6106e060048036036106db9190810190611506565b610800565b6040516106ed9190611ea9565b60405180910390f35b610710600480360361070b91908101906113f8565b610807565b60405161071d9190611e00565b60405180910390f35b6000919050565b61073561080e565b919050565b610742610830565b919050565b6060919050565b6000919050565b6000919050565b6000919050565b6060919050565b610772610852565b919050565b6060919050565b610786610874565b919050565b6060919050565b61079a61089b565b919050565b6107a76108bd565b919050565b6060919050565b6000919050565b6000919050565b6000919050565b6060919050565b6000919050565b6000919050565b6000919050565b6060919050565b6000919050565b6060919050565b6000919050565b6000919050565b6000919050565b6040805190810160405280600290602082028038833980820191505090505090565b6040805190810160405280600290602082028038833980820191505090505090565b6040805190810160405280600290602082028038833980820191505090505090565b60408051908101604052806002905b60608152602001906001900390816108835790505090565b6040805190810160405280600290602082028038833980820191505090505090565b60408051908101604052806002905b60608152602001906001900390816108cc5790505090565b60006108f082356124f2565b905092915050565b600082601f830112151561090b57600080fd5b600261091e61091982611fb5565b611f88565b9150818385602084028201111561093457600080fd5b60005b83811015610964578161094a88826108e4565b845260208401935060208301925050600181019050610937565b5050505092915050565b600082601f830112151561098157600080fd5b813561099461098f82611fd7565b611f88565b915081818352602084019350602081019050838560208402820111156109b957600080fd5b60005b838110156109e957816109cf88826108e4565b8452602084019350602083019250506001810190506109bc565b5050505092915050565b600082601f8301121515610a0657600080fd5b6002610a19610a1482611fff565b611f88565b91508183856020840282011115610a2f57600080fd5b60005b83811015610a5f5781610a458882610e9e565b845260208401935060208301925050600181019050610a32565b5050505092915050565b600082601f8301121515610a7c57600080fd5b8135610a8f610a8a82612021565b611f88565b91508181835260208401935060208101905083856020840282011115610ab457600080fd5b60005b83811015610ae45781610aca8882610e9e565b845260208401935060208301925050600181019050610ab7565b5050505092915050565b600082601f8301121515610b0157600080fd5b6002610b14610b0f82612049565b611f88565b9150818360005b83811015610b4b5781358601610b318882610eda565b845260208401935060208301925050600181019050610b1b565b5050505092915050565b600082601f8301121515610b6857600080fd5b8135610b7b610b768261206b565b611f88565b9150818183526020840193506020810190508360005b83811015610bc15781358601610ba78882610eda565b845260208401935060208301925050600181019050610b91565b5050505092915050565b600082601f8301121515610bde57600080fd5b6002610bf1610bec82612093565b611f88565b91508183856020840282011115610c0757600080fd5b60005b83811015610c375781610c1d8882610f9a565b845260208401935060208301925050600181019050610c0a565b5050505092915050565b600082601f8301121515610c5457600080fd5b8135610c67610c62826120b5565b611f88565b91508181835260208401935060208101905083856020840282011115610c8c57600080fd5b60005b83811015610cbc5781610ca28882610f9a565b845260208401935060208301925050600181019050610c8f565b5050505092915050565b600082601f8301121515610cd957600080fd5b6002610cec610ce7826120dd565b611f88565b9150818360005b83811015610d235781358601610d098882610fea565b845260208401935060208301925050600181019050610cf3565b5050505092915050565b600082601f8301121515610d4057600080fd5b8135610d53610d4e826120ff565b611f88565b9150818183526020840193506020810190508360005b83811015610d995781358601610d7f8882610fea565b845260208401935060208301925050600181019050610d69565b5050505092915050565b600082601f8301121515610db657600080fd5b6002610dc9610dc482612127565b611f88565b91508183856020840282011115610ddf57600080fd5b60005b83811015610e0f5781610df588826110aa565b845260208401935060208301925050600181019050610de2565b5050505092915050565b600082601f8301121515610e2c57600080fd5b8135610e3f610e3a82612149565b611f88565b91508181835260208401935060208101905083856020840282011115610e6457600080fd5b60005b83811015610e945781610e7a88826110aa565b845260208401935060208301925050600181019050610e67565b5050505092915050565b6000610eaa8235612504565b905092915050565b6000610ebe8235612510565b905092915050565b6000610ed2823561253c565b905092915050565b600082601f8301121515610eed57600080fd5b8135610f00610efb82612171565b611f88565b91508082526020830160208301858383011115610f1c57600080fd5b610f278382846125cd565b50505092915050565b600082601f8301121515610f4357600080fd5b8135610f56610f518261219d565b611f88565b91508082526020830160208301858383011115610f7257600080fd5b610f7d8382846125cd565b50505092915050565b6000610f928235612546565b905092915050565b6000610fa68235612553565b905092915050565b6000610fba823561255d565b905092915050565b6000610fce823561256a565b905092915050565b6000610fe28235612577565b905092915050565b600082601f8301121515610ffd57600080fd5b813561101061100b826121c9565b611f88565b9150808252602083016020830185838301111561102c57600080fd5b6110378382846125cd565b50505092915050565b600082601f830112151561105357600080fd5b8135611066611061826121f5565b611f88565b9150808252602083016020830185838301111561108257600080fd5b61108d8382846125cd565b50505092915050565b60006110a28235612584565b905092915050565b60006110b68235612592565b905092915050565b60006110ca823561259c565b905092915050565b60006110de82356125ac565b905092915050565b60006110f282356125c0565b905092915050565b60006020828403121561110c57600080fd5b600061111a848285016108e4565b91505092915050565b60006040828403121561113557600080fd5b6000611143848285016108f8565b91505092915050565b60006020828403121561115e57600080fd5b600082013567ffffffffffffffff81111561117857600080fd5b6111848482850161096e565b91505092915050565b60006040828403121561119f57600080fd5b60006111ad848285016109f3565b91505092915050565b6000602082840312156111c857600080fd5b600082013567ffffffffffffffff8111156111e257600080fd5b6111ee84828501610a69565b91505092915050565b60006020828403121561120957600080fd5b600082013567ffffffffffffffff81111561122357600080fd5b61122f84828501610aee565b91505092915050565b60006020828403121561124a57600080fd5b600082013567ffffffffffffffff81111561126457600080fd5b61127084828501610b55565b91505092915050565b60006040828403121561128b57600080fd5b600061129984828501610bcb565b91505092915050565b6000602082840312156112b457600080fd5b600082013567ffffffffffffffff8111156112ce57600080fd5b6112da84828501610c41565b91505092915050565b6000602082840312156112f557600080fd5b600082013567ffffffffffffffff81111561130f57600080fd5b61131b84828501610cc6565b91505092915050565b60006020828403121561133657600080fd5b600082013567ffffffffffffffff81111561135057600080fd5b61135c84828501610d2d565b91505092915050565b60006040828403121561137757600080fd5b600061138584828501610da3565b91505092915050565b6000602082840312156113a057600080fd5b600082013567ffffffffffffffff8111156113ba57600080fd5b6113c684828501610e19565b91505092915050565b6000602082840312156113e157600080fd5b60006113ef84828501610e9e565b91505092915050565b60006020828403121561140a57600080fd5b600061141884828501610eb2565b91505092915050565b60006020828403121561143357600080fd5b600061144184828501610ec6565b91505092915050565b60006020828403121561145c57600080fd5b600082013567ffffffffffffffff81111561147657600080fd5b61148284828501610f30565b91505092915050565b60006020828403121561149d57600080fd5b60006114ab84828501610f86565b91505092915050565b6000602082840312156114c657600080fd5b60006114d484828501610f9a565b91505092915050565b6000602082840312156114ef57600080fd5b60006114fd84828501610fae565b91505092915050565b60006020828403121561151857600080fd5b600061152684828501610fc2565b91505092915050565b60006020828403121561154157600080fd5b600061154f84828501610fd6565b91505092915050565b60006020828403121561156a57600080fd5b600082013567ffffffffffffffff81111561158457600080fd5b61159084828501611040565b91505092915050565b6000602082840312156115ab57600080fd5b60006115b984828501611096565b91505092915050565b6000602082840312156115d457600080fd5b60006115e2848285016110aa565b91505092915050565b6000602082840312156115fd57600080fd5b600061160b848285016110be565b91505092915050565b60006020828403121561162657600080fd5b6000611634848285016110d2565b91505092915050565b60006020828403121561164f57600080fd5b600061165d848285016110e6565b91505092915050565b61166f816123f7565b82525050565b61167e816122ab565b61168782612221565b60005b828110156116b95761169d858351611666565b6116a68261235b565b915060208501945060018101905061168a565b5050505050565b60006116cb826122b6565b8084526020840193506116dd8361222b565b60005b8281101561170f576116f3868351611666565b6116fc82612368565b91506020860195506001810190506116e0565b50849250505092915050565b611724816122c1565b61172d82612238565b60005b8281101561175f57611743858351611ab3565b61174c82612375565b9150602085019450600181019050611730565b5050505050565b6000611771826122cc565b80845260208401935061178383612242565b60005b828110156117b557611799868351611ab3565b6117a282612382565b9150602086019550600181019050611786565b50849250505092915050565b60006117cc826122d7565b836020820285016117dc8561224f565b60005b848110156118155783830388526117f7838351611b16565b92506118028261238f565b91506020880197506001810190506117df565b508196508694505050505092915050565b6000611831826122e2565b8084526020840193508360208202850161184a85612259565b60005b84811015611883578383038852611865838351611b16565b92506118708261239c565b915060208801975060018101905061184d565b508196508694505050505092915050565b61189d816122ed565b6118a682612266565b60005b828110156118d8576118bc858351611b5b565b6118c5826123a9565b91506020850194506001810190506118a9565b5050505050565b60006118ea826122f8565b8084526020840193506118fc83612270565b60005b8281101561192e57611912868351611b5b565b61191b826123b6565b91506020860195506001810190506118ff565b50849250505092915050565b600061194582612303565b836020820285016119558561227d565b60005b8481101561198e578383038852611970838351611bcd565b925061197b826123c3565b9150602088019750600181019050611958565b508196508694505050505092915050565b60006119aa8261230e565b808452602084019350836020820285016119c385612287565b60005b848110156119fc5783830388526119de838351611bcd565b92506119e9826123d0565b91506020880197506001810190506119c6565b508196508694505050505092915050565b611a1681612319565b611a1f82612294565b60005b82811015611a5157611a35858351611c12565b611a3e826123dd565b9150602085019450600181019050611a22565b5050505050565b6000611a6382612324565b808452602084019350611a758361229e565b60005b82811015611aa757611a8b868351611c12565b611a94826123ea565b9150602086019550600181019050611a78565b50849250505092915050565b611abc81612409565b82525050565b611acb81612415565b82525050565b611ada81612441565b82525050565b6000611aeb8261233a565b808452611aff8160208601602086016125dc565b611b088161260f565b602085010191505092915050565b6000611b218261232f565b808452611b358160208601602086016125dc565b611b3e8161260f565b602085010191505092915050565b611b558161244b565b82525050565b611b6481612458565b82525050565b611b7381612462565b82525050565b611b828161246f565b82525050565b611b918161247c565b82525050565b6000611ba282612350565b808452611bb68160208601602086016125dc565b611bbf8161260f565b602085010191505092915050565b6000611bd882612345565b808452611bec8160208601602086016125dc565b611bf58161260f565b602085010191505092915050565b611c0c81612489565b82525050565b611c1b816124b7565b82525050565b611c2a816124c1565b82525050565b611c39816124d1565b82525050565b611c48816124e5565b82525050565b6000602082019050611c636000830184611666565b92915050565b6000604082019050611c7e6000830184611675565b92915050565b60006020820190508181036000830152611c9e81846116c0565b905092915050565b6000604082019050611cbb600083018461171b565b92915050565b60006020820190508181036000830152611cdb8184611766565b905092915050565b60006020820190508181036000830152611cfd81846117c1565b905092915050565b60006020820190508181036000830152611d1f8184611826565b905092915050565b6000604082019050611d3c6000830184611894565b92915050565b60006020820190508181036000830152611d5c81846118df565b905092915050565b60006020820190508181036000830152611d7e818461193a565b905092915050565b60006020820190508181036000830152611da0818461199f565b905092915050565b6000604082019050611dbd6000830184611a0d565b92915050565b60006020820190508181036000830152611ddd8184611a58565b905092915050565b6000602082019050611dfa6000830184611ab3565b92915050565b6000602082019050611e156000830184611ac2565b92915050565b6000602082019050611e306000830184611ad1565b92915050565b60006020820190508181036000830152611e508184611ae0565b905092915050565b6000602082019050611e6d6000830184611b4c565b92915050565b6000602082019050611e886000830184611b5b565b92915050565b6000602082019050611ea36000830184611b6a565b92915050565b6000602082019050611ebe6000830184611b79565b92915050565b6000602082019050611ed96000830184611b88565b92915050565b60006020820190508181036000830152611ef98184611b97565b905092915050565b6000602082019050611f166000830184611c03565b92915050565b6000602082019050611f316000830184611c12565b92915050565b6000602082019050611f4c6000830184611c21565b92915050565b6000602082019050611f676000830184611c30565b92915050565b6000602082019050611f826000830184611c3f565b92915050565b6000604051905081810181811067ffffffffffffffff82111715611fab57600080fd5b8060405250919050565b600067ffffffffffffffff821115611fcc57600080fd5b602082029050919050565b600067ffffffffffffffff821115611fee57600080fd5b602082029050602081019050919050565b600067ffffffffffffffff82111561201657600080fd5b602082029050919050565b600067ffffffffffffffff82111561203857600080fd5b602082029050602081019050919050565b600067ffffffffffffffff82111561206057600080fd5b602082029050919050565b600067ffffffffffffffff82111561208257600080fd5b602082029050602081019050919050565b600067ffffffffffffffff8211156120aa57600080fd5b602082029050919050565b600067ffffffffffffffff8211156120cc57600080fd5b602082029050602081019050919050565b600067ffffffffffffffff8211156120f457600080fd5b602082029050919050565b600067ffffffffffffffff82111561211657600080fd5b602082029050602081019050919050565b600067ffffffffffffffff82111561213e57600080fd5b602082029050919050565b600067ffffffffffffffff82111561216057600080fd5b602082029050602081019050919050565b600067ffffffffffffffff82111561218857600080fd5b601f19601f8301169050602081019050919050565b600067ffffffffffffffff8211156121b457600080fd5b601f19601f8301169050602081019050919050565b600067ffffffffffffffff8211156121e057600080fd5b601f19601f8301169050602081019050919050565b600067ffffffffffffffff82111561220c57600080fd5b601f19601f8301169050602081019050919050565b6000819050919050565b6000602082019050919050565b6000819050919050565b6000602082019050919050565b6000819050919050565b6000602082019050919050565b6000819050919050565b6000602082019050919050565b6000819050919050565b6000602082019050919050565b6000819050919050565b6000602082019050919050565b600060029050919050565b600081519050919050565b600060029050919050565b600081519050919050565b600060029050919050565b600081519050919050565b600060029050919050565b600081519050919050565b600060029050919050565b600081519050919050565b600060029050919050565b600081519050919050565b600081519050919050565b600081519050919050565b600081519050919050565b600081519050919050565b6000602082019050919050565b6000602082019050919050565b6000602082019050919050565b6000602082019050919050565b6000602082019050919050565b6000602082019050919050565b6000602082019050919050565b6000602082019050919050565b6000602082019050919050565b6000602082019050919050565b6000602082019050919050565b6000602082019050919050565b600061240282612497565b9050919050565b60008115159050919050565b60007fff0000000000000000000000000000000000000000000000000000000000000082169050919050565b6000819050919050565b60008160010b9050919050565b6000819050919050565b60008160030b9050919050565b60008160070b9050919050565b60008160000b9050919050565b600061ffff82169050919050565b600073ffffffffffffffffffffffffffffffffffffffff82169050919050565b6000819050919050565b600063ffffffff82169050919050565b600067ffffffffffffffff82169050919050565b600060ff82169050919050565b60006124fd82612497565b9050919050565b60008115159050919050565b60007fff0000000000000000000000000000000000000000000000000000000000000082169050919050565b6000819050919050565b60008160010b9050919050565b6000819050919050565b60008160030b9050919050565b60008160070b9050919050565b60008160000b9050919050565b600061ffff82169050919050565b6000819050919050565b600063ffffffff82169050919050565b600067ffffffffffffffff82169050919050565b600060ff82169050919050565b82818337600083830152505050565b60005b838110156125fa5780820151818401526020810190506125df565b83811115612609576000848401525b50505050565b6000601f19601f830116905091905056fea265627a7a723058206fe37171cf1b10ebd291cfdca61d67e7fc3c208795e999c833c42a14d86cf00d6c6578706572696d656e74616cf50037";
@@ -1392,8 +1831,6 @@ public class Test {
 	public static Test deploy(TransactOpts auth, EthereumClient client) throws Exception {
 		Interfaces args = Geth.newInterfaces(0);
 		String bytecode = BYTECODE;
-		
-		
 		return new Test(Geth.deployContract(auth, ABI, Geth.decodeFromHex(bytecode), client, args));
 	}
 
@@ -1404,7 +1841,6 @@ public class Test {
 		this.Contract = deployment;
 	}
 	
-
 	// Ethereum address where this contract is located at.
 	public final Address Address;
 
@@ -1419,9 +1855,6 @@ public class Test {
 		this(Geth.bindContract(address, ABI, client));
 	}
 
-	
-
-	
 	// setAddress is a paid mutator transaction binding the contract method 0xe30081a0.
 	//
 	// Solidity: function setAddress(address a) returns(address)
@@ -1701,18 +2134,31 @@ public class Test {
 		
 		return this.Contract.transact(opts, "setUint8"	, args);
 	}
-	
 }
-
 `,
 		},
 	}
 	for i, c := range cases {
-		binding, err := Bind([]string{c.name}, []string{c.abi}, []string{c.bytecode}, nil, "bindtest", LangJava, nil)
+		binding, err := Bind([]string{c.name}, []string{c.abi}, []string{c.bytecode}, nil, "bindtest", LangJava, nil, nil)
 		if err != nil {
 			t.Fatalf("test %d: failed to generate binding: %v", i, err)
 		}
-		if binding != c.expected {
+		// Remove empty lines
+		removeEmptys := func(input string) string {
+			lines := strings.Split(input, "\n")
+			var index int
+			for _, line := range lines {
+				if strings.TrimSpace(line) != "" {
+					lines[index] = line
+					index += 1
+				}
+			}
+			lines = lines[:index]
+			return strings.Join(lines, "\n")
+		}
+		binding = removeEmptys(binding)
+		expect := removeEmptys(c.expected)
+		if binding != expect {
 			t.Fatalf("test %d: generated binding mismatch, has %s, want %s", i, binding, c.expected)
 		}
 	}

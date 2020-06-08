@@ -845,7 +845,7 @@ func (c *Bor) GetCurrentSpan(snapshotNumber uint64) (*Span, error) {
 		Gas:  &gas,
 		To:   &toAddress,
 		Data: &msgData,
-	}, blockNr)
+	}, rpc.BlockNumberOrHash{BlockNumber: &blockNr} , nil)
 	if err != nil {
 		return nil, err
 	}
@@ -892,7 +892,7 @@ func (c *Bor) GetCurrentValidators(snapshotNumber uint64, blockNumber uint64) ([
 		Gas:  &gas,
 		To:   &toAddress,
 		Data: &msgData,
-	}, blockNr)
+	}, rpc.BlockNumberOrHash{BlockNumber: &blockNr}, nil)
 	if err != nil {
 		panic(err)
 		// return nil, err
@@ -1055,7 +1055,7 @@ func (c *Bor) GetPendingStateProposals(snapshotNumber uint64) ([]*big.Int, error
 		Gas:  &gas,
 		To:   &toAddress,
 		Data: &msgData,
-	}, blockNr)
+	}, rpc.BlockNumberOrHash{BlockNumber: &blockNr}, nil)
 	if err != nil {
 		return nil, err
 	}

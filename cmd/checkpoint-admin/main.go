@@ -1,4 +1,4 @@
-// Copyright 2018 The go-ethereum Authors
+// Copyright 2019 The go-ethereum Authors
 // This file is part of go-ethereum.
 //
 // go-ethereum is free software: you can redistribute it and/or modify
@@ -28,19 +28,6 @@ import (
 	"gopkg.in/urfave/cli.v1"
 )
 
-const (
-	commandHelperTemplate = `{{.Name}}{{if .Subcommands}} command{{end}}{{if .Flags}} [command options]{{end}} [arguments...]
-{{if .Description}}{{.Description}}
-{{end}}{{if .Subcommands}}
-SUBCOMMANDS:
-	{{range .Subcommands}}{{.Name}}{{with .ShortName}}, {{.}}{{end}}{{ "\t" }}{{.Usage}}
-	{{end}}{{end}}{{if .Flags}}
-OPTIONS:
-{{range $.Flags}}{{"\t"}}{{.}}
-{{end}}
-{{end}}`
-)
-
 var (
 	// Git SHA1 commit hash of the release (set via linker flags)
 	gitCommit = ""
@@ -61,7 +48,7 @@ func init() {
 		oracleFlag,
 		nodeURLFlag,
 	}
-	cli.CommandHelpTemplate = commandHelperTemplate
+	cli.CommandHelpTemplate = utils.OriginCommandHelpTemplate
 }
 
 // Commonly used command line flags.

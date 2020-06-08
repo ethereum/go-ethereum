@@ -70,7 +70,7 @@ const (
 	SHR
 	SAR
 
-	SHA3 = 0x20
+	SHA3 OpCode = 0x20
 )
 
 // 0x30 range - closure state.
@@ -101,6 +101,8 @@ const (
 	NUMBER
 	DIFFICULTY
 	GASLIMIT
+	CHAINID     OpCode = 0x46
+	SELFBALANCE OpCode = 0x47
 )
 
 // 0x50 range - 'storage' and execution.
@@ -211,10 +213,9 @@ const (
 	RETURN
 	DELEGATECALL
 	CREATE2
-	STATICCALL = 0xfa
-
-	REVERT       = 0xfd
-	SELFDESTRUCT = 0xff
+	STATICCALL   OpCode = 0xfa
+	REVERT       OpCode = 0xfd
+	SELFDESTRUCT OpCode = 0xff
 )
 
 // Since the opcodes aren't all in order we can't use a regular slice.
@@ -271,12 +272,14 @@ var opCodeToString = map[OpCode]string{
 	EXTCODEHASH:    "EXTCODEHASH",
 
 	// 0x40 range - block operations.
-	BLOCKHASH:  "BLOCKHASH",
-	COINBASE:   "COINBASE",
-	TIMESTAMP:  "TIMESTAMP",
-	NUMBER:     "NUMBER",
-	DIFFICULTY: "DIFFICULTY",
-	GASLIMIT:   "GASLIMIT",
+	BLOCKHASH:   "BLOCKHASH",
+	COINBASE:    "COINBASE",
+	TIMESTAMP:   "TIMESTAMP",
+	NUMBER:      "NUMBER",
+	DIFFICULTY:  "DIFFICULTY",
+	GASLIMIT:    "GASLIMIT",
+	CHAINID:     "CHAINID",
+	SELFBALANCE: "SELFBALANCE",
 
 	// 0x50 range - 'storage' and execution.
 	POP: "POP",
@@ -386,7 +389,7 @@ var opCodeToString = map[OpCode]string{
 func (op OpCode) String() string {
 	str := opCodeToString[op]
 	if len(str) == 0 {
-		return fmt.Sprintf("Missing opcode 0x%x", int(op))
+		return fmt.Sprintf("opcode 0x%x not defined", int(op))
 	}
 
 	return str
@@ -428,6 +431,7 @@ var stringToOp = map[string]OpCode{
 	"CALLDATALOAD":   CALLDATALOAD,
 	"CALLDATASIZE":   CALLDATASIZE,
 	"CALLDATACOPY":   CALLDATACOPY,
+	"CHAINID":        CHAINID,
 	"DELEGATECALL":   DELEGATECALL,
 	"STATICCALL":     STATICCALL,
 	"CODESIZE":       CODESIZE,
@@ -444,6 +448,7 @@ var stringToOp = map[string]OpCode{
 	"NUMBER":         NUMBER,
 	"DIFFICULTY":     DIFFICULTY,
 	"GASLIMIT":       GASLIMIT,
+	"SELFBALANCE":    SELFBALANCE,
 	"POP":            POP,
 	"MLOAD":          MLOAD,
 	"MSTORE":         MSTORE,
