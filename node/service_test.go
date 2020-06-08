@@ -72,25 +72,17 @@ func TestContextLifecycles(t *testing.T) {
 	noop := NewNoop()
 	stack.RegisterLifecycle(noop)
 
-	isC, err := NewInstrumentedService()
-	if err != nil {
-		t.Fatalf("could not create instrumented service %v", err)
-	}
-
-	isB, err := NewInstrumentedService()
+	is, err := NewInstrumentedService()
 	if err != nil {
 		t.Fatalf("could not create instrumented service %v", err)
 
 	}
-	isB.startHook = func() {
+	is.startHook = func() {
 		if err := stack.ServiceContext.Lifecycle(&noop); err != nil {
 			t.Errorf("former service not found: %v", err)
 		}
-		if err := stack.ServiceContext.Lifecycle(&isC); err != ErrServiceUnknown {
-			t.Errorf("latters lookup error mismatch: have %v, want %v", err, ErrServiceUnknown)
-		}
 	}
-	stack.RegisterLifecycle(isB)
+	stack.RegisterLifecycle(is)
 
 	// Start the protocol stack and ensure services are constructed in order
 	if err := stack.Start(); err != nil {
