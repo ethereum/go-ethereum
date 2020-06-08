@@ -3,6 +3,7 @@ package test
 import (
 	"crypto/ecdsa"
 	"flag"
+	"fmt"
 	"net"
 	"os"
 	"testing"
@@ -24,12 +25,14 @@ var (
 	waitTime = flag.Int("waitTime", 500, "ms to wait for response")
 
 	remoteAddr        *net.UDPAddr
-	priv              *ecdsa.PrivateKey
 	localhost         = net.ParseIP("127.0.0.1")
 	localhostEndpoint = v4wire.Endpoint{IP: localhost}
 	remoteEndpoint    v4wire.Endpoint
 	wrongEndpoint     = v4wire.Endpoint{IP: net.ParseIP("192.0.2.0")}
+	priv              *ecdsa.PrivateKey
 )
+
+type conn net.UDPConn
 
 type pingWithJunk struct {
 	Version    uint
@@ -73,7 +76,7 @@ func futureExpiration() uint64 {
 	return uint64(time.Now().Add(expiration).Unix())
 }
 
-func sendPacket(packet []byte, read bool) (v4wire.Packet, error) {
+func sendBytes(packet []byte, read bool) (v4wire.Packet, error) {
 	conn, err := net.DialUDP("udp", nil, remoteAddr)
 	if err != nil {
 		return nil, err
@@ -102,30 +105,72 @@ func sendPacket(packet []byte, read bool) (v4wire.Packet, error) {
 	return p, nil
 }
 
-func sendRequest(req v4wire.Packet, read bool) (v4wire.Packet, error) {
+func sendPacketAndRead(req v4wire.Packet, read bool) (v4wire.Packet, error) {
 	packet, _, err := v4wire.Encode(priv, req)
 	if err != nil {
 		return nil, err
 	}
 
 	var reply v4wire.Packet
-	reply, err = sendPacket(packet, read)
+	reply, err = sendBytes(packet, read)
 	if err != nil {
 		return nil, err
 	}
 	return reply, nil
 }
 
+func sendPacket(c *net.UDPConn, req v4wire.Packet) error {
+	packet, _, err := v4wire.Encode(priv, req)
+	if err != nil {
+		return err
+	}
+
+	n, err := c.Write(packet)
+	if err != nil {
+		return err
+	}
+	if n == 0 {
+		return fmt.Errorf("0 byte written")
+	}
+	return nil
+}
+
+func readPacket(c *net.UDPConn) (v4wire.Packet, error) {
+	buf := make([]byte, 2048)
+	var err error
+	if err = c.SetReadDeadline(time.Now().Add(time.Duration(*waitTime) * time.Millisecond)); err != nil {
+		return nil, err
+	}
+	n, err := c.Read(buf)
+	if err != nil {
+		return nil, err
+	}
+	p, _, _, err := v4wire.Decode(buf[:n])
+	if err != nil {
+		return nil, err
+	}
+	return p, nil
+}
+
 func PingKnownEnode(t *testing.T) {
+	c, err := net.DialUDP("udp", nil, remoteAddr)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer c.Close()
+
 	req := v4wire.Ping{
 		Version:    4,
 		From:       localhostEndpoint,
 		To:         remoteEndpoint,
 		Expiration: futureExpiration(),
 	}
-	reply, err := sendRequest(&req, true)
+	if err := sendPacket(c, &req); err != nil {
+		t.Fatal("send", err)
+	}
+	reply, err := readPacket(c)
 	if err != nil {
-		t.Fatal(err)
+		t.Fatal("read", err)
 	}
 	if reply.Kind() != v4wire.PongPacket {
 		t.Error("Reply is not a Pong", reply.Name())
@@ -139,7 +184,7 @@ func PingWrongTo(t *testing.T) {
 		To:         wrongEndpoint,
 		Expiration: futureExpiration(),
 	}
-	reply, err := sendRequest(&req, true)
+	reply, err := sendPacketAndRead(&req, true)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -155,7 +200,7 @@ func PingWrongFrom(t *testing.T) {
 		To:         remoteEndpoint,
 		Expiration: futureExpiration(),
 	}
-	reply, err := sendRequest(&req, true)
+	reply, err := sendPacketAndRead(&req, true)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -173,7 +218,7 @@ func PingExtraData(t *testing.T) {
 		JunkData1:  42,
 		JunkData2:  []byte{9, 8, 7, 6, 5, 4, 3, 2, 1},
 	}
-	reply, err := sendRequest(&req, true)
+	reply, err := sendPacketAndRead(&req, true)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -191,7 +236,7 @@ func PingExtraDataWrongFrom(t *testing.T) {
 		JunkData1:  42,
 		JunkData2:  []byte{9, 8, 7, 6, 5, 4, 3, 2, 1},
 	}
-	reply, err := sendRequest(&req, true)
+	reply, err := sendPacketAndRead(&req, true)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -207,7 +252,7 @@ func PingPastExpiration(t *testing.T) {
 		To:         remoteEndpoint,
 		Expiration: -futureExpiration(),
 	}
-	reply, _ := sendRequest(&req, true)
+	reply, _ := sendPacketAndRead(&req, true)
 	if reply != nil {
 		t.Fatal("Expected no reply, got", reply)
 	}
@@ -220,7 +265,7 @@ func WrongPacketType(t *testing.T) {
 		To:         remoteEndpoint,
 		Expiration: futureExpiration(),
 	}
-	reply, _ := sendRequest(&req, true)
+	reply, _ := sendPacketAndRead(&req, true)
 	if reply != nil {
 		t.Fatal("Expected no reply, got", reply)
 	}
@@ -235,7 +280,7 @@ func SourceKnownPingFromSignatureMismatch(t *testing.T) {
 		To:         remoteEndpoint,
 		Expiration: futureExpiration(),
 	}
-	reply, err = sendRequest(&req, true)
+	reply, err = sendPacketAndRead(&req, true)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -252,7 +297,7 @@ func SourceKnownPingFromSignatureMismatch(t *testing.T) {
 		To:         remoteEndpoint,
 		Expiration: futureExpiration(),
 	}
-	reply, err = sendRequest(&req2, true)
+	reply, err = sendPacketAndRead(&req2, true)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -274,7 +319,7 @@ func FindNeighboursOnRecentlyBondedTarget(t *testing.T) {
 		To:         remoteEndpoint,
 		Expiration: futureExpiration(),
 	}
-	_, err := sendRequest(&pingReq, true)
+	_, err := sendPacketAndRead(&pingReq, true)
 	if err != nil {
 		t.Fatal("First ping failed", err)
 	}
@@ -295,7 +340,7 @@ func FindNeighboursOnRecentlyBondedTarget(t *testing.T) {
 		Nodes:      []v4wire.Node{fakeNeighbor},
 		Expiration: futureExpiration(),
 	}
-	reply, err := sendRequest(&neighborsReq, false)
+	reply, err := sendPacketAndRead(&neighborsReq, false)
 	if err != nil {
 		t.Fatal("NeighborsReq", err)
 	}
@@ -307,7 +352,7 @@ func FindNeighboursOnRecentlyBondedTarget(t *testing.T) {
 		Target:     targetEncKey,
 		Expiration: futureExpiration(),
 	}
-	reply, err = sendRequest(&findReq, true)
+	reply, err = sendPacketAndRead(&findReq, true)
 	if err != nil {
 		t.Fatal(err)
 	}
