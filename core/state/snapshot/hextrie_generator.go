@@ -51,7 +51,7 @@ func GenerateBinaryTree(path string, it AccountIterator) common.Hash {
 		defer wg.Done()
 		for kv := range btrie.CommitCh {
 			nodeCount++
-			log.Info("inserting key", "count", nodeCount, "key", common.ToHex(kv.Key), "value", common.ToHex(kv.Value))
+			log.Debug("inserting key", "count", nodeCount, "key", common.ToHex(kv.Key), "value", common.ToHex(kv.Value))
 			db.Put(kv.Key, kv.Value, nil)
 		}
 	}()

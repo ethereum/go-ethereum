@@ -706,6 +706,7 @@ func snapToBin(ctx *cli.Context) error {
 	found := 0
 	total := 0
 	for it.Next() {
+		total++
 		if trie.CheckKey(db, it.Hash().Bytes(), generatedRoot[:], 0, it.Account()) {
 			found++
 		}
