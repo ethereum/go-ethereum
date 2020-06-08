@@ -52,7 +52,7 @@ type Node struct {
 
 	server *p2p.Server // Currently running P2P networking layer
 
-	ServiceContext *ServiceContext // TODO
+	ServiceContext *ServiceContext // TODO rename to LifecycleContext or just NodeContext?
 
 	lifecycles map[reflect.Type]Lifecycle // All registered backends, services, and auxiliary services that have a lifecycle
 
@@ -592,25 +592,7 @@ func (n *Node) IPCEndpoint() string {
 	return n.ipc.endpoint
 }
 
-// HTTPEndpoint retrieves the current HTTP endpoint used by the protocol stack.
-func (n *Node) HTTPEndpoint() string {
-	n.lock.Lock()
-	defer n.lock.Unlock()
-
-	for _, httpServer := range n.httpServerMap {
-		if httpServer.RPCAllowed {
-			if httpServer.Listener != nil {
-				return httpServer.Listener.Addr().String()
-			}
-			return httpServer.endpoint
-		}
-	}
-
-	return "" // TODO should return an empty string if http server not configured?
-}
-
-// WSEndpoint retrieves the current WS endpoint
-// used by the protocol stack.
+// WSEndpoint retrieves the current WS endpoint used by the protocol stack.
 func (n *Node) WSEndpoint() string {
 	n.lock.Lock()
 	defer n.lock.Unlock()
@@ -624,13 +606,31 @@ func (n *Node) WSEndpoint() string {
 		}
 	}
 
-	return "" // TODO should return an empty string if ws server not configured?
+	return n.config.WSEndpoint() // TODO should it return the endpoint from the node's config? Or just an empty string?
 }
 
 // EventMux retrieves the event multiplexer used by all the network services in
 // the current protocol stack.
 func (n *Node) EventMux() *event.TypeMux {
 	return n.eventmux
+}
+
+// Lifecycle retrieves a currently running Lifecycle registered of a specific type.
+func (n *Node) Lifecycle(lifecycle interface{}) error {
+	n.lock.RLock()
+	defer n.lock.RUnlock()
+
+	// Short circuit if the node's not running
+	if !n.running() {
+		return ErrNodeStopped
+	}
+	// Otherwise try to find the service to return
+	element := reflect.ValueOf(lifecycle).Elem()
+	if running, ok := n.lifecycles[element.Type()]; ok {
+		element.Set(reflect.ValueOf(running))
+		return nil
+	}
+	return ErrServiceUnknown
 }
 
 // OpenDatabase opens an existing database with the given name (or creates one if no
@@ -666,24 +666,6 @@ func (n *Node) OpenDatabaseWithFreezer(name string, cache, handles int, freezer,
 // ResolvePath returns the absolute path of a resource in the instance directory.
 func (n *Node) ResolvePath(x string) string {
 	return n.config.ResolvePath(x)
-}
-
-// Lifecycle retrieves a currently running Lifecycle registered of a specific type.
-func (n *Node) Lifecycle(lifecycle interface{}) error {
-	n.lock.RLock()
-	defer n.lock.RUnlock()
-
-	// Short circuit if the node's not running
-	if !n.running() {
-		return ErrNodeStopped
-	}
-	// Otherwise try to find the service to return
-	element := reflect.ValueOf(lifecycle).Elem()
-	if running, ok := n.lifecycles[element.Type()]; ok {
-		element.Set(reflect.ValueOf(running))
-		return nil
-	}
-	return ErrServiceUnknown
 }
 
 // apis returns the collection of RPC descriptors this node offers.
