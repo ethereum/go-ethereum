@@ -325,7 +325,30 @@ func SourceKnownPingFromSignatureMismatch(t *testing.T) {
 }
 
 func FindNeighbours(t *testing.T) {
-	t.Fatal("Not implemented")
+	var err error
+	var c *net.UDPConn
+	var reply v4wire.Packet
+
+	c, err = net.DialUDP("udp", nil, remoteAddr)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer c.Close()
+
+	targetNode := enode.MustParseV4(*enodeID)
+	targetEncKey := v4wire.EncodePubkey(targetNode.Pubkey())
+	findReq := v4wire.Findnode{
+		Target:     targetEncKey,
+		Expiration: futureExpiration(),
+	}
+	if err = sendPacket(c, &findReq); err != nil {
+		t.Fatal("sending find nodes", err)
+	}
+
+	reply, err = readPacket(c)
+	if reply != nil && reply.Kind() != v4wire.PingPacket {
+		t.Fatal("Expected timeout or ping, got", reply)
+	}
 }
 
 func SpoofSanityCheck(t *testing.T) {
