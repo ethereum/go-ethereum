@@ -365,6 +365,10 @@ func geth(ctx *cli.Context) error {
 func startNode(ctx *cli.Context, stack *node.Node, ethBackend *eth.Ethereum, lesBackend *les.LightEthereum) {
 	debug.Memsize.Add("node", stack)
 
+	if ethBackend == nil && lesBackend == nil {
+		utils.Fatalf("No backend service found") // TODO is this error okay?
+	}
+
 	// Start up the node itself
 	utils.StartNode(stack)
 
@@ -462,7 +466,7 @@ func startNode(ctx *cli.Context, stack *node.Node, ethBackend *eth.Ethereum, les
 		if ctx.GlobalString(utils.SyncModeFlag.Name) == "light" {
 			utils.Fatalf("Light clients do not support mining")
 		}
-		// Check if node's backend is eth and that it exists // TODO fix this section up -- not sure if it's doing what it's supposed to.
+		// Check if node's backend is eth and that it exists
 		if ethBackend == nil {
 			utils.Fatalf("Ethereum service not running: backend is not an eth backend")
 		}

@@ -57,13 +57,14 @@ type HTTPServer struct {
 	GQLHandler http.Handler
 }
 
-// TODO document
+// Start starts the HTTPServer's HTTP server. // TODO I don't like the way this is written
 func (h *HTTPServer) Start() error {
 	go h.Server.Serve(h.Listener)
 	log.Info("HTTP endpoint successfully opened", "url", fmt.Sprintf("http://%v/", h.Listener.Addr()))
 	return nil
 }
 
+// Stop shuts down the HTTPServer's HTTP server. // TODO I don't like the way this is written
 func (h *HTTPServer) Stop() error {
 	if h.Server != nil {
 		url := fmt.Sprintf("http://%v/", h.Listener.Addr())
@@ -79,22 +80,12 @@ func (h *HTTPServer) Stop() error {
 	return nil
 }
 
-// Handler returns the handler of the HTTPServer
-func (h *HTTPServer) Handler() http.Handler {
-	return h.handler
-}
-
-// TODO document
+// SetHandler assigns the given handler to the HTTPServer.
 func (h *HTTPServer) SetHandler(handler http.Handler) {
 	h.handler = handler
 }
 
-// TODO is this really necessary?
-func (h *HTTPServer) Endpoint() string {
-	return h.endpoint
-}
-
-// TODO is this necessary?
+// SetEndpoints assigns the given endpoint to the HTTPServer.
 func (h *HTTPServer) SetEndpoint(endpoint string) {
 	h.endpoint = endpoint
 }

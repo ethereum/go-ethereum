@@ -423,16 +423,16 @@ func (n *Node) stopInProc() {
 
 // startIPC initializes and starts the IPC RPC endpoint.
 func (n *Node) startIPC() error {
-	if n.ipc.Endpoint() == "" {
+	if n.ipc.endpoint == "" {
 		return nil // IPC disabled.
 	}
-	listener, handler, err := rpc.StartIPCEndpoint(n.ipc.Endpoint(), n.rpcAPIs)
+	listener, handler, err := rpc.StartIPCEndpoint(n.ipc.endpoint, n.rpcAPIs)
 	if err != nil {
 		return err
 	}
 	n.ipc.Listener = listener
 	n.ipc.handler = handler
-	n.log.Info("IPC endpoint opened", "url", n.ipc.Endpoint())
+	n.log.Info("IPC endpoint opened", "url", n.ipc.endpoint)
 	return nil
 }
 
@@ -442,7 +442,7 @@ func (n *Node) stopIPC() {
 		n.ipc.Listener.Close()
 		n.ipc.Listener = nil
 
-		n.log.Info("IPC endpoint closed", "url", n.ipc.Endpoint())
+		n.log.Info("IPC endpoint closed", "url", n.ipc.endpoint)
 	}
 	if n.ipc.Srv != nil {
 		n.ipc.Srv.Stop()
@@ -589,7 +589,7 @@ func (n *Node) AccountManager() *accounts.Manager {
 
 // IPCEndpoint retrieves the current IPC endpoint used by the protocol stack.
 func (n *Node) IPCEndpoint() string {
-	return n.ipc.Endpoint()
+	return n.ipc.endpoint
 }
 
 // HTTPEndpoint retrieves the current HTTP endpoint used by the protocol stack.
