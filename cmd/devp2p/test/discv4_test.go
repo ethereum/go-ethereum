@@ -79,7 +79,7 @@ func futureExpiration() uint64 {
 	return uint64(time.Now().Add(expiration).Unix())
 }
 
-func sendPacket(packet []byte) (v4wire.Packet, error) {
+func sendPacket(packet []byte, read bool) (v4wire.Packet, error) {
 	raddr, err := net.ResolveUDPAddr("udp", *remoteAddr)
 	if err != nil {
 		return nil, err
@@ -94,6 +94,9 @@ func sendPacket(packet []byte) (v4wire.Packet, error) {
 		return nil, err
 	}
 
+	if !read {
+		return nil, nil
+	}
 	buf := make([]byte, 2048)
 	if err = conn.SetReadDeadline(time.Now().Add(time.Duration(*waitTime) * time.Millisecond)); err != nil {
 		return nil, err
@@ -109,14 +112,14 @@ func sendPacket(packet []byte) (v4wire.Packet, error) {
 	return p, nil
 }
 
-func sendRequest(req v4wire.Packet) (v4wire.Packet, error) {
+func sendRequest(req v4wire.Packet, read bool) (v4wire.Packet, error) {
 	packet, _, err := v4wire.Encode(priv, req)
 	if err != nil {
 		return nil, err
 	}
 
 	var reply v4wire.Packet
-	reply, err = sendPacket(packet)
+	reply, err = sendPacket(packet, read)
 	if err != nil {
 		return nil, err
 	}
@@ -130,7 +133,7 @@ func PingKnownEnode(t *testing.T) {
 		To:         remoteEndpoint,
 		Expiration: futureExpiration(),
 	}
-	reply, err := sendRequest(&req)
+	reply, err := sendRequest(&req, true)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -146,7 +149,7 @@ func PingWrongTo(t *testing.T) {
 		To:         wrongEndpoint,
 		Expiration: futureExpiration(),
 	}
-	reply, err := sendRequest(&req)
+	reply, err := sendRequest(&req, true)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -162,7 +165,7 @@ func PingWrongFrom(t *testing.T) {
 		To:         remoteEndpoint,
 		Expiration: futureExpiration(),
 	}
-	reply, err := sendRequest(&req)
+	reply, err := sendRequest(&req, true)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -180,7 +183,7 @@ func PingExtraData(t *testing.T) {
 		JunkData1:  42,
 		JunkData2:  []byte{9, 8, 7, 6, 5, 4, 3, 2, 1},
 	}
-	reply, err := sendRequest(&req)
+	reply, err := sendRequest(&req, true)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -198,7 +201,7 @@ func PingExtraDataWrongFrom(t *testing.T) {
 		JunkData1:  42,
 		JunkData2:  []byte{9, 8, 7, 6, 5, 4, 3, 2, 1},
 	}
-	reply, err := sendRequest(&req)
+	reply, err := sendRequest(&req, true)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -214,7 +217,7 @@ func PingPastExpiration(t *testing.T) {
 		To:         remoteEndpoint,
 		Expiration: -futureExpiration(),
 	}
-	reply, _ := sendRequest(&req)
+	reply, _ := sendRequest(&req, true)
 	if reply != nil {
 		t.Fatal("Expected no reply, got", reply)
 	}
@@ -227,7 +230,7 @@ func WrongPacketType(t *testing.T) {
 		To:         remoteEndpoint,
 		Expiration: futureExpiration(),
 	}
-	reply, _ := sendRequest(&req)
+	reply, _ := sendRequest(&req, true)
 	if reply != nil {
 		t.Fatal("Expected no reply, got", reply)
 	}
@@ -242,7 +245,7 @@ func SourceKnownPingFromSignatureMismatch(t *testing.T) {
 		To:         remoteEndpoint,
 		Expiration: futureExpiration(),
 	}
-	reply, err = sendRequest(&req)
+	reply, err = sendRequest(&req, true)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -259,7 +262,7 @@ func SourceKnownPingFromSignatureMismatch(t *testing.T) {
 		To:         remoteEndpoint,
 		Expiration: futureExpiration(),
 	}
-	reply, err = sendRequest(&req2)
+	reply, err = sendRequest(&req2, true)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -281,7 +284,7 @@ func FindNeighboursOnRecentlyBondedTarget(t *testing.T) {
 		To:         remoteEndpoint,
 		Expiration: futureExpiration(),
 	}
-	_, err := sendRequest(&pingReq)
+	_, err := sendRequest(&pingReq, true)
 	if err != nil {
 		t.Fatal("First ping failed", err)
 	}
@@ -302,7 +305,7 @@ func FindNeighboursOnRecentlyBondedTarget(t *testing.T) {
 		Nodes:      []v4wire.Node{fakeNeighbor},
 		Expiration: futureExpiration(),
 	}
-	reply, err := sendRequest(&neighborsReq)
+	reply, err := sendRequest(&neighborsReq, true)
 	if err != nil {
 		t.Fatal("NeighborsReq", err)
 	}
@@ -314,7 +317,7 @@ func FindNeighboursOnRecentlyBondedTarget(t *testing.T) {
 		Target:     targetEncKey,
 		Expiration: futureExpiration(),
 	}
-	reply, err = sendRequest(&findReq)
+	reply, err = sendRequest(&findReq, true)
 	if err != nil {
 		t.Fatal(err)
 	}
