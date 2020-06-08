@@ -203,77 +203,86 @@ func (s *Service) loop() {
 	if !strings.Contains(path, "://") {
 		urls = []string{"wss://" + path, "ws://" + path}
 	}
+
+	errTimer := time.NewTimer(0)
+	defer errTimer.Stop()
 	// Loop reporting until termination
 	for {
-		// Establish a websocket connection to the server on any supported URL
-		var (
-			conn *websocket.Conn
-			err  error
-		)
-		dialer := websocket.Dialer{HandshakeTimeout: 5 * time.Second}
-		header := make(http.Header)
-		header.Set("origin", "http://localhost")
-		for _, url := range urls {
-			conn, _, err = dialer.Dial(url, header)
-			if err == nil {
-				break
+		select {
+		case <-quitCh:
+			return
+		case <-errTimer.C:
+			// Establish a websocket connection to the server on any supported URL
+			var (
+				conn *websocket.Conn
+				err  error
+			)
+			dialer := websocket.Dialer{HandshakeTimeout: 5 * time.Second}
+			header := make(http.Header)
+			header.Set("origin", "http://localhost")
+			for _, url := range urls {
+				conn, _, err = dialer.Dial(url, header)
+				if err == nil {
+					break
+				}
 			}
-		}
-		if err != nil {
-			log.Warn("Stats server unreachable", "err", err)
-			time.Sleep(10 * time.Second)
-			continue
-		}
-		// Authenticate the client with the server
-		if err = s.login(conn); err != nil {
-			log.Warn("Stats login failed", "err", err)
-			conn.Close()
-			time.Sleep(10 * time.Second)
-			continue
-		}
-		go s.readLoop(conn)
-
-		// Send the initial stats so our node looks decent from the get go
-		if err = s.report(conn); err != nil {
-			log.Warn("Initial stats report failed", "err", err)
-			conn.Close()
-			continue
-		}
-		// Keep sending status updates until the connection breaks
-		fullReport := time.NewTicker(15 * time.Second)
-
-		for err == nil {
-			select {
-			case <-quitCh:
-				fullReport.Stop()
-				// Make sure the connection is closed
+			if err != nil {
+				log.Warn("Stats server unreachable", "err", err)
+				errTimer.Reset(10 * time.Second)
+				continue
+			}
+			// Authenticate the client with the server
+			if err = s.login(conn); err != nil {
+				log.Warn("Stats login failed", "err", err)
 				conn.Close()
-				return
+				errTimer.Reset(10 * time.Second)
+				continue
+			}
+			go s.readLoop(conn)
 
-			case <-fullReport.C:
-				if err = s.report(conn); err != nil {
-					log.Warn("Full stats report failed", "err", err)
-				}
-			case list := <-s.histCh:
-				if err = s.reportHistory(conn, list); err != nil {
-					log.Warn("Requested history report failed", "err", err)
-				}
-			case head := <-headCh:
-				if err = s.reportBlock(conn, head); err != nil {
-					log.Warn("Block stats report failed", "err", err)
-				}
-				if err = s.reportPending(conn); err != nil {
-					log.Warn("Post-block transaction stats report failed", "err", err)
-				}
-			case <-txCh:
-				if err = s.reportPending(conn); err != nil {
-					log.Warn("Transaction stats report failed", "err", err)
+			// Send the initial stats so our node looks decent from the get go
+			if err = s.report(conn); err != nil {
+				log.Warn("Initial stats report failed", "err", err)
+				conn.Close()
+				errTimer.Reset(0)
+				continue
+			}
+			// Keep sending status updates until the connection breaks
+			fullReport := time.NewTicker(15 * time.Second)
+
+			for err == nil {
+				select {
+				case <-quitCh:
+					fullReport.Stop()
+					// Make sure the connection is closed
+					conn.Close()
+					return
+
+				case <-fullReport.C:
+					if err = s.report(conn); err != nil {
+						log.Warn("Full stats report failed", "err", err)
+					}
+				case list := <-s.histCh:
+					if err = s.reportHistory(conn, list); err != nil {
+						log.Warn("Requested history report failed", "err", err)
+					}
+				case head := <-headCh:
+					if err = s.reportBlock(conn, head); err != nil {
+						log.Warn("Block stats report failed", "err", err)
+					}
+					if err = s.reportPending(conn); err != nil {
+						log.Warn("Post-block transaction stats report failed", "err", err)
+					}
+				case <-txCh:
+					if err = s.reportPending(conn); err != nil {
+						log.Warn("Transaction stats report failed", "err", err)
+					}
 				}
 			}
+			fullReport.Stop()
+			// Make sure the connection is closed
+			conn.Close()
 		}
-		fullReport.Stop()
-		// Make sure the connection is closed
-		conn.Close()
 	}
 }
 
