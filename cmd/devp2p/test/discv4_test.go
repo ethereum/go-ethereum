@@ -420,7 +420,49 @@ func FindNeighboursOnRecentlyBondedTarget(t *testing.T) {
 }
 
 func FindNeighboursPastExpiration(t *testing.T) {
-	t.Fatal("Not implemented")
+	var err error
+	var c *net.UDPConn
+	var reply v4wire.Packet
+
+	c, err = net.DialUDP("udp", nil, remoteAddr)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer c.Close()
+
+	//try to bond with the target
+	pingReq := v4wire.Ping{
+		Version:    4,
+		From:       localhostEndpoint,
+		To:         remoteEndpoint,
+		Expiration: futureExpiration(),
+	}
+	if err = sendPacket(c, &pingReq); err != nil {
+		t.Fatal("First ping failed", err)
+	}
+	// read reply to make the queue empty
+	_, err = readPacket(c)
+	if err != nil {
+		t.Fatal("read after ping", err)
+	}
+
+	//hang around for a bit (we don't know if the target was already bonded or not)
+	time.Sleep(2 * time.Second)
+
+	//now call find neighbours
+	targetNode := enode.MustParseV4(*enodeID)
+	targetEncKey := v4wire.EncodePubkey(targetNode.Pubkey())
+	findReq := v4wire.Findnode{
+		Target:     targetEncKey,
+		Expiration: -futureExpiration(),
+	}
+	if err = sendPacket(c, &findReq); err != nil {
+		t.Fatal("sending find nodes", err)
+	}
+	reply, err = readPacket(c)
+	if reply.Kind() == v4wire.NeighborsPacket {
+		t.Fatal("Expected no reply")
+	}
 }
 
 func TestPing(t *testing.T) {
