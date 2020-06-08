@@ -277,7 +277,7 @@ func rawExtHPRLP(key, val []byte) []byte {
 func rawLeafHPRLP(key, val []byte, leaf bool) []byte {
 	// payload size - none of the components are larger
 	// than 56 since the whole size is smaller than 32
-	payload := [32]byte{}
+	rlp := [32]byte{}
 	oddkeylength := len(key) % 2
 
 	// This is the position at which RLP data is written.
@@ -290,14 +290,14 @@ func rawLeafHPRLP(key, val []byte, leaf bool) []byte {
 		// add length prefix if needed. If len(key) == 1,
 		// then no size prefix is needed as 1 < 128.
 		if len(key) > 1 {
-			payload[1] = 128 + byte(1+len(key)/2)
+			rlp[1] = 128 + byte(1+len(key)/2)
 			pos++
 		}
 
 		// hex prefix
-		payload[pos] = byte(16 * (len(key) % 2))
+		rlp[pos] = byte(16 * (len(key) % 2))
 		if leaf {
-			payload[pos] |= 32
+			rlp[pos] |= 32
 		}
 		// Advance to next byte iff the key has an even nibble length
 		pos += 1 - oddkeylength
@@ -305,7 +305,7 @@ func rawLeafHPRLP(key, val []byte, leaf bool) []byte {
 		// copy key data
 		for i, nibble := range key {
 			offset := 1 - uint((len(key)+i)%2)
-			payload[pos] |= byte(int(nibble) << (4 * offset))
+			rlp[pos] |= byte(int(nibble) << (4 * offset))
 			if offset == 0 {
 				pos++
 			}
@@ -315,32 +315,32 @@ func rawLeafHPRLP(key, val []byte, leaf bool) []byte {
 	// copy value data. If the payload isn't a single byte
 	// lower than 128, also add the header.
 	if len(val) > 1 || val[0] >= 128 {
-		payload[pos] = byte(len(val))
+		rlp[pos] = byte(len(val))
 		if len(val) > 1 || val[0] > 128 {
-			payload[pos] += 128
+			rlp[pos] += 128
 		}
 		pos += 1
 
 	}
-	copy(payload[pos:], val)
+	copy(rlp[pos:], val)
 	pos += len(val)
 
 	// In case the payload is only one byte,
 	// no header is needed.
 	if pos == 2 {
-		return payload[1:pos]
+		return rlp[1:pos]
 	}
-	payload[0] = 192 + byte(pos) - 1
+	rlp[0] = 192 + byte(pos) - 1
 
 	// If the payload reaches exactly 32 bytes, then
 	// it needs to be hashed.
 	if pos == 32 {
 		d := sha3.NewLegacyKeccak256()
-		d.Write(payload[:pos])
+		d.Write(rlp[:pos])
 		return d.Sum(nil)
 	}
 
-	return payload[:pos]
+	return rlp[:pos]
 }
 
 // writeEvenHP writes a key with its hex prefix into a writer (presumably, the
