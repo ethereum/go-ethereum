@@ -312,7 +312,7 @@ var (
 			}
 			{{end}}
 			
-			return {{if .Structured}}*outstruct,{{else}}{{range $i, $t := .Normalized.Outputs}}out[{{$i}}].({{bindtype .Type $structs}}),{{end}}{{end}} err
+			return {{if .Structured}}*outstruct,{{else}}{{range $i, $t := .Normalized.Outputs}}bind.ToStruct(out[{{$i}}], *new({{bindtype .Type $structs}})).({{bindtype .Type $structs}}),{{end}}{{end}} err
 		}
 
 		// {{.Normalized.Name}} is a free data retrieval call binding the contract method 0x{{printf "%x" .Original.ID}}.
