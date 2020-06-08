@@ -305,7 +305,7 @@ func FindNeighboursOnRecentlyBondedTarget(t *testing.T) {
 		Nodes:      []v4wire.Node{fakeNeighbor},
 		Expiration: futureExpiration(),
 	}
-	reply, err := sendRequest(&neighborsReq, true)
+	reply, err := sendRequest(&neighborsReq, false)
 	if err != nil {
 		t.Fatal("NeighborsReq", err)
 	}
