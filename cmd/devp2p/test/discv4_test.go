@@ -3,7 +3,6 @@ package test
 import (
 	"crypto/ecdsa"
 	"flag"
-	"fmt"
 	"net"
 	"os"
 	"testing"
@@ -20,14 +19,15 @@ const (
 )
 
 var (
-	enodeID    = flag.String("enode", "", "enode:... as per `admin.nodeInfo.enode`")
-	remoteAddr = flag.String("remoteAddr", "127.0.0.1:30303", "")
-	waitTime   = flag.Int("waitTime", 500, "ms to wait for response")
+	enodeID  = flag.String("enode", "", "enode:... as per `admin.nodeInfo.enode`")
+	remote   = flag.String("remote", "127.0.0.1:30303", "")
+	waitTime = flag.Int("waitTime", 500, "ms to wait for response")
 
+	remoteAddr        *net.UDPAddr
 	priv              *ecdsa.PrivateKey
 	localhost         = net.ParseIP("127.0.0.1")
 	localhostEndpoint = v4wire.Endpoint{IP: localhost}
-	remoteEndpoint    = v4wire.Endpoint{IP: net.ParseIP(*remoteAddr)}
+	remoteEndpoint    v4wire.Endpoint
 	wrongEndpoint     = v4wire.Endpoint{IP: net.ParseIP("192.0.2.0")}
 )
 
@@ -54,23 +54,17 @@ func (req *pingWrongType) Kind() byte   { return wrongPacket }
 func TestMain(m *testing.M) {
 	flag.Parse()
 
-	fmt.Println(*enodeID, *remoteAddr, *waitTime)
-
 	var err error
+	remoteAddr, err = net.ResolveUDPAddr("udp", *remote)
+	if err != nil {
+		panic(err)
+	}
+	remoteEndpoint = v4wire.Endpoint{IP: remoteAddr.IP}
+
 	priv, err = crypto.GenerateKey()
 	if err != nil {
 		panic(err)
 	}
-
-	raddr, err := net.ResolveUDPAddr("udp", *remoteAddr)
-	if err != nil {
-		panic(err)
-	}
-	conn, err := net.DialUDP("udp", nil, raddr)
-	if err != nil {
-		panic(err)
-	}
-	defer conn.Close()
 
 	os.Exit(m.Run())
 }
@@ -80,11 +74,7 @@ func futureExpiration() uint64 {
 }
 
 func sendPacket(packet []byte, read bool) (v4wire.Packet, error) {
-	raddr, err := net.ResolveUDPAddr("udp", *remoteAddr)
-	if err != nil {
-		return nil, err
-	}
-	conn, err := net.DialUDP("udp", nil, raddr)
+	conn, err := net.DialUDP("udp", nil, remoteAddr)
 	if err != nil {
 		return nil, err
 	}
