@@ -720,7 +720,7 @@ type clientPeer struct {
 	responseCount uint64 // Counter to generate an unique id for request processing.
 
 	// invalidLock is used for protecting invalidCount.
-	invalidLock  sync.Mutex
+	invalidLock  sync.RWMutex
 	invalidCount utils.LinearExpiredValue // Counter the invalid request the client peer has made.
 
 	server   bool
@@ -978,6 +978,18 @@ func (p *clientPeer) Handshake(td *big.Int, head common.Hash, headNum uint64, ge
 		}
 		return nil
 	})
+}
+
+func (p *clientPeer) bumpInvalid() {
+	p.invalidLock.Lock()
+	p.invalidCount.Add(1, mclock.Now())
+	p.invalidLock.Unlock()
+}
+
+func (p *clientPeer) getInvalid() uint64 {
+	p.invalidLock.RLock()
+	defer p.invalidLock.RUnlock()
+	return p.invalidCount.Value(mclock.Now())
 }
 
 // serverPeerSubscriber is an interface to notify services about added or

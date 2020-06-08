@@ -322,9 +322,7 @@ func (h *serverHandler) handleMsg(p *clientPeer, wg *sync.WaitGroup) error {
 						origin = h.blockchain.GetHeaderByNumber(query.Origin.Number)
 					}
 					if origin == nil {
-						p.invalidLock.Lock()
-						p.invalidCount.Add(1, mclock.Now())
-						p.invalidLock.Unlock()
+						p.bumpInvalid()
 						break
 					}
 					headers = append(headers, origin)
@@ -421,9 +419,7 @@ func (h *serverHandler) handleMsg(p *clientPeer, wg *sync.WaitGroup) error {
 					}
 					body := h.blockchain.GetBodyRLP(hash)
 					if body == nil {
-						p.invalidLock.Lock()
-						p.invalidCount.Add(1, mclock.Now())
-						p.invalidLock.Unlock()
+						p.bumpInvalid()
 						continue
 					}
 					bodies = append(bodies, body)
@@ -471,9 +467,7 @@ func (h *serverHandler) handleMsg(p *clientPeer, wg *sync.WaitGroup) error {
 					header := h.blockchain.GetHeaderByHash(request.BHash)
 					if header == nil {
 						p.Log().Warn("Failed to retrieve associate header for code", "hash", request.BHash)
-						p.invalidLock.Lock()
-						p.invalidCount.Add(1, mclock.Now())
-						p.invalidLock.Unlock()
+						p.bumpInvalid()
 						continue
 					}
 					// Refuse to search stale state data in the database since looking for
@@ -481,9 +475,7 @@ func (h *serverHandler) handleMsg(p *clientPeer, wg *sync.WaitGroup) error {
 					local := h.blockchain.CurrentHeader().Number.Uint64()
 					if !h.server.archiveMode && header.Number.Uint64()+core.TriesInMemory <= local {
 						p.Log().Debug("Reject stale code request", "number", header.Number.Uint64(), "head", local)
-						p.invalidLock.Lock()
-						p.invalidCount.Add(1, mclock.Now())
-						p.invalidLock.Unlock()
+						p.bumpInvalid()
 						continue
 					}
 					triedb := h.blockchain.StateCache().TrieDB()
@@ -491,9 +483,7 @@ func (h *serverHandler) handleMsg(p *clientPeer, wg *sync.WaitGroup) error {
 					account, err := h.getAccount(triedb, header.Root, common.BytesToHash(request.AccKey))
 					if err != nil {
 						p.Log().Warn("Failed to retrieve account for code", "block", header.Number, "hash", header.Hash(), "account", common.BytesToHash(request.AccKey), "err", err)
-						p.invalidLock.Lock()
-						p.invalidCount.Add(1, mclock.Now())
-						p.invalidLock.Unlock()
+						p.bumpInvalid()
 						continue
 					}
 					code, err := triedb.Node(common.BytesToHash(account.CodeHash))
@@ -552,9 +542,7 @@ func (h *serverHandler) handleMsg(p *clientPeer, wg *sync.WaitGroup) error {
 					results := h.blockchain.GetReceiptsByHash(hash)
 					if results == nil {
 						if header := h.blockchain.GetHeaderByHash(hash); header == nil || header.ReceiptHash != types.EmptyRootHash {
-							p.invalidLock.Lock()
-							p.invalidCount.Add(1, mclock.Now())
-							p.invalidLock.Unlock()
+							p.bumpInvalid()
 							continue
 						}
 					}
@@ -617,9 +605,7 @@ func (h *serverHandler) handleMsg(p *clientPeer, wg *sync.WaitGroup) error {
 
 						if header = h.blockchain.GetHeaderByHash(request.BHash); header == nil {
 							p.Log().Warn("Failed to retrieve header for proof", "hash", request.BHash)
-							p.invalidLock.Lock()
-							p.invalidCount.Add(1, mclock.Now())
-							p.invalidLock.Unlock()
+							p.bumpInvalid()
 							continue
 						}
 						// Refuse to search stale state data in the database since looking for
@@ -627,18 +613,14 @@ func (h *serverHandler) handleMsg(p *clientPeer, wg *sync.WaitGroup) error {
 						local := h.blockchain.CurrentHeader().Number.Uint64()
 						if !h.server.archiveMode && header.Number.Uint64()+core.TriesInMemory <= local {
 							p.Log().Debug("Reject stale trie request", "number", header.Number.Uint64(), "head", local)
-							p.invalidLock.Lock()
-							p.invalidCount.Add(1, mclock.Now())
-							p.invalidLock.Unlock()
+							p.bumpInvalid()
 							continue
 						}
 						root = header.Root
 					}
 					// If a header lookup failed (non existent), ignore subsequent requests for the same header
 					if root == (common.Hash{}) {
-						p.invalidLock.Lock()
-						p.invalidCount.Add(1, mclock.Now())
-						p.invalidLock.Unlock()
+						p.bumpInvalid()
 						continue
 					}
 					// Open the account or storage trie for the request
@@ -657,9 +639,7 @@ func (h *serverHandler) handleMsg(p *clientPeer, wg *sync.WaitGroup) error {
 						account, err := h.getAccount(statedb.TrieDB(), root, common.BytesToHash(request.AccKey))
 						if err != nil {
 							p.Log().Warn("Failed to retrieve account for proof", "block", header.Number, "hash", header.Hash(), "account", common.BytesToHash(request.AccKey), "err", err)
-							p.invalidLock.Lock()
-							p.invalidCount.Add(1, mclock.Now())
-							p.invalidLock.Unlock()
+							p.bumpInvalid()
 							continue
 						}
 						trie, err = statedb.OpenStorageTrie(common.BytesToHash(request.AccKey), account.Root)
@@ -855,9 +835,7 @@ func (h *serverHandler) handleMsg(p *clientPeer, wg *sync.WaitGroup) error {
 	}
 	// If the client has made too much invalid request(e.g. request a non-existent data),
 	// reject them to prevent SPAM attack.
-	p.invalidLock.Lock()
-	defer p.invalidLock.Unlock()
-	if p.invalidCount.Value(mclock.Now()) > maxRequestErrors {
+	if p.getInvalid() > maxRequestErrors {
 		clientErrorMeter.Mark(1)
 		return errTooManyInvalidRequest
 	}
