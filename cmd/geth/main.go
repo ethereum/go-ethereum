@@ -352,7 +352,7 @@ func geth(ctx *cli.Context) error {
 	}
 	prepare(ctx)
 	stack := makeFullNode(ctx)
-	// fetch backends
+	// fetch backend
 	var ethBackend *eth.Ethereum
 	stack.ServiceContext.Lifecycle(&ethBackend)
 	var lesBackend *les.LightEthereum

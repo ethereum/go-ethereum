@@ -81,7 +81,7 @@ func localConsole(ctx *cli.Context) error {
 	// Create and start the node based on the CLI flags
 	prepare(ctx)
 	stack := makeFullNode(ctx)
-	// fetch backends
+	// fetch backend
 	var ethBackend *eth.Ethereum
 	stack.Lifecycle(&ethBackend)
 	var lesBackend *les.LightEthereum
@@ -199,7 +199,7 @@ func dialRPC(endpoint string) (*rpc.Client, error) {
 func ephemeralConsole(ctx *cli.Context) error {
 	// Create and start the node based on the CLI flags
 	stack := makeFullNode(ctx)
-	// fetch backends
+	// fetch backend
 	var ethBackend *eth.Ethereum
 	stack.Lifecycle(&ethBackend)
 	var lesBackend *les.LightEthereum
