@@ -3,7 +3,9 @@ package test
 import (
 	"crypto/ecdsa"
 	"flag"
+	"fmt"
 	"net"
+	"os"
 	"testing"
 	"time"
 
@@ -18,13 +20,14 @@ const (
 )
 
 var (
-	enodeID           string
-	remoteAddr        string
-	timeout           int
+	enodeID    = flag.String("enode", "", "enode:... as per `admin.nodeInfo.enode`")
+	remoteAddr = flag.String("remoteAddr", "127.0.0.1:30303", "")
+	waitTime   = flag.Int("waitTime", 500, "ms to wait for response")
+
 	priv              *ecdsa.PrivateKey
 	localhost         = net.ParseIP("127.0.0.1")
 	localhostEndpoint = v4wire.Endpoint{IP: localhost}
-	remoteEndpoint    = v4wire.Endpoint{IP: net.ParseIP(remoteAddr)}
+	remoteEndpoint    = v4wire.Endpoint{IP: net.ParseIP(*remoteAddr)}
 	wrongEndpoint     = v4wire.Endpoint{IP: net.ParseIP("192.0.2.0")}
 )
 
@@ -48,10 +51,10 @@ type pingWrongType struct {
 func (req *pingWrongType) Name() string { return "WRONG/v4" }
 func (req *pingWrongType) Kind() byte   { return wrongPacket }
 
-func init() {
-	flag.StringVar(&enodeID, "enode", "", "enode:... as per `admin.nodeInfo.enode`")
-	flag.StringVar(&remoteAddr, "remoteAddr", "127.0.0.1:30303", "")
-	flag.IntVar(&timeout, "timeout", 500, "ms to wait for response")
+func TestMain(m *testing.M) {
+	flag.Parse()
+
+	fmt.Println(*enodeID, *remoteAddr, *waitTime)
 
 	var err error
 	priv, err = crypto.GenerateKey()
@@ -59,7 +62,7 @@ func init() {
 		panic(err)
 	}
 
-	raddr, err := net.ResolveUDPAddr("udp", remoteAddr)
+	raddr, err := net.ResolveUDPAddr("udp", *remoteAddr)
 	if err != nil {
 		panic(err)
 	}
@@ -68,6 +71,8 @@ func init() {
 		panic(err)
 	}
 	defer conn.Close()
+
+	os.Exit(m.Run())
 }
 
 func futureExpiration() uint64 {
@@ -75,7 +80,7 @@ func futureExpiration() uint64 {
 }
 
 func sendPacket(packet []byte) (v4wire.Packet, error) {
-	raddr, err := net.ResolveUDPAddr("udp", remoteAddr)
+	raddr, err := net.ResolveUDPAddr("udp", *remoteAddr)
 	if err != nil {
 		return nil, err
 	}
@@ -90,7 +95,7 @@ func sendPacket(packet []byte) (v4wire.Packet, error) {
 	}
 
 	buf := make([]byte, 2048)
-	if err = conn.SetReadDeadline(time.Now().Add(time.Duration(timeout) * time.Millisecond)); err != nil {
+	if err = conn.SetReadDeadline(time.Now().Add(time.Duration(*waitTime) * time.Millisecond)); err != nil {
 		return nil, err
 	}
 	n, err := conn.Read(buf)
@@ -303,7 +308,7 @@ func FindNeighboursOnRecentlyBondedTarget(t *testing.T) {
 	}
 
 	//now call find neighbours
-	targetNode := enode.MustParseV4(enodeID)
+	targetNode := enode.MustParseV4(*enodeID)
 	targetEncKey := v4wire.EncodePubkey(targetNode.Pubkey())
 	findReq := v4wire.Findnode{
 		Target:     targetEncKey,
