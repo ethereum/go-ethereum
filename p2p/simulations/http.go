@@ -698,7 +698,7 @@ func (s *Server) JSON(w http.ResponseWriter, status int, data interface{}) {
 	json.NewEncoder(w).Encode(data)
 }
 
-// wrapHandler returns a httprouter.Handle which wraps a http.HandlerFunc by
+// wrapHandler returns an httprouter.Handle which wraps an http.HandlerFunc by
 // populating request.Context with any objects from the URL params
 func (s *Server) wrapHandler(handler http.HandlerFunc) httprouter.Handle {
 	return func(w http.ResponseWriter, req *http.Request, params httprouter.Params) {

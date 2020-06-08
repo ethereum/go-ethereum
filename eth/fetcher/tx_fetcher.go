@@ -515,7 +515,7 @@ func (f *TxFetcher) loop() {
 			// Schedule a new transaction retrieval
 			f.scheduleFetches(timeoutTimer, timeoutTrigger, nil)
 
-			// No idea if we sheduled something or not, trigger the timer if needed
+			// No idea if we scheduled something or not, trigger the timer if needed
 			// TODO(karalabe): this is kind of lame, can't we dump it into scheduleFetches somehow?
 			f.rescheduleTimeout(timeoutTimer, timeoutTrigger)
 

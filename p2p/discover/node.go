@@ -61,17 +61,6 @@ func (e encPubkey) id() enode.ID {
 	return enode.ID(crypto.Keccak256Hash(e[:]))
 }
 
-// recoverNodeKey computes the public key used to sign the
-// given hash from the signature.
-func recoverNodeKey(hash, sig []byte) (key encPubkey, err error) {
-	pubkey, err := crypto.Ecrecover(hash, sig)
-	if err != nil {
-		return key, err
-	}
-	copy(key[:], pubkey[1:])
-	return key, nil
-}
-
 func wrapNode(n *enode.Node) *node {
 	return &node{Node: *n}
 }

@@ -24,6 +24,7 @@ import (
 	"testing"
 
 	"github.com/ethereum/go-ethereum/crypto"
+	"github.com/ethereum/go-ethereum/p2p/discover/v4wire"
 	"github.com/ethereum/go-ethereum/p2p/enode"
 	"github.com/ethereum/go-ethereum/p2p/enr"
 )
@@ -135,15 +136,15 @@ func TestUDPv4_LookupIteratorClose(t *testing.T) {
 
 func serveTestnet(test *udpTest, testnet *preminedTestnet) {
 	for done := false; !done; {
-		done = test.waitPacketOut(func(p packetV4, to *net.UDPAddr, hash []byte) {
+		done = test.waitPacketOut(func(p v4wire.Packet, to *net.UDPAddr, hash []byte) {
 			n, key := testnet.nodeByAddr(to)
 			switch p.(type) {
-			case *pingV4:
-				test.packetInFrom(nil, key, to, &pongV4{Expiration: futureExp, ReplyTok: hash})
-			case *findnodeV4:
+			case *v4wire.Ping:
+				test.packetInFrom(nil, key, to, &v4wire.Pong{Expiration: futureExp, ReplyTok: hash})
+			case *v4wire.Findnode:
 				dist := enode.LogDist(n.ID(), testnet.target.id())
 				nodes := testnet.nodesAtDistance(dist - 1)
-				test.packetInFrom(nil, key, to, &neighborsV4{Expiration: futureExp, Nodes: nodes})
+				test.packetInFrom(nil, key, to, &v4wire.Neighbors{Expiration: futureExp, Nodes: nodes})
 			}
 		})
 	}
@@ -270,8 +271,8 @@ func (tn *preminedTestnet) nodeByAddr(addr *net.UDPAddr) (*enode.Node, *ecdsa.Pr
 	return tn.node(dist, index), key
 }
 
-func (tn *preminedTestnet) nodesAtDistance(dist int) []rpcNode {
-	result := make([]rpcNode, len(tn.dists[dist]))
+func (tn *preminedTestnet) nodesAtDistance(dist int) []v4wire.Node {
+	result := make([]v4wire.Node, len(tn.dists[dist]))
 	for i := range result {
 		result[i] = nodeToRPC(wrapNode(tn.node(dist, i)))
 	}

@@ -83,7 +83,7 @@ func NewContract(caller ContractRef, object ContractRef, value *big.Int, gas uin
 
 func (c *Contract) validJumpdest(dest *big.Int) bool {
 	udest := dest.Uint64()
-	// PC cannot go beyond len(code) and certainly can't be bigger than 63bits.
+	// PC cannot go beyond len(code) and certainly can't be bigger than 63 bits.
 	// Don't bother checking for JUMPDEST in that case.
 	if dest.BitLen() >= 63 || udest >= uint64(len(c.Code)) {
 		return false
@@ -92,6 +92,25 @@ func (c *Contract) validJumpdest(dest *big.Int) bool {
 	if OpCode(c.Code[udest]) != JUMPDEST {
 		return false
 	}
+	return c.isCode(udest)
+}
+
+func (c *Contract) validJumpSubdest(udest uint64) bool {
+	// PC cannot go beyond len(code) and certainly can't be bigger than 63 bits.
+	// Don't bother checking for BEGINSUB in that case.
+	if int64(udest) < 0 || udest >= uint64(len(c.Code)) {
+		return false
+	}
+	// Only BEGINSUBs allowed for destinations
+	if OpCode(c.Code[udest]) != BEGINSUB {
+		return false
+	}
+	return c.isCode(udest)
+}
+
+// isCode returns true if the provided PC location is an actual opcode, as
+// opposed to a data-segment following a PUSHN operation.
+func (c *Contract) isCode(udest uint64) bool {
 	// Do we have a contract hash already?
 	if c.CodeHash != (common.Hash{}) {
 		// Does parent context have the analysis?
@@ -102,6 +121,8 @@ func (c *Contract) validJumpdest(dest *big.Int) bool {
 			analysis = codeBitmap(c.Code)
 			c.jumpdests[c.CodeHash] = analysis
 		}
+		// Also stash it in current contract for faster access
+		c.analysis = analysis
 		return analysis.codeSegment(udest)
 	}
 	// We don't have the code hash, most likely a piece of initcode not already

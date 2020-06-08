@@ -86,3 +86,22 @@ func (st *Stack) Print() {
 	}
 	fmt.Println("#############")
 }
+
+// ReturnStack is an object for basic return stack operations.
+type ReturnStack struct {
+	data []uint64
+}
+
+func newReturnStack() *ReturnStack {
+	return &ReturnStack{data: make([]uint64, 0, 1024)}
+}
+
+func (st *ReturnStack) push(d uint64) {
+	st.data = append(st.data, d)
+}
+
+func (st *ReturnStack) pop() (ret uint64) {
+	ret = st.data[len(st.data)-1]
+	st.data = st.data[:len(st.data)-1]
+	return
+}
