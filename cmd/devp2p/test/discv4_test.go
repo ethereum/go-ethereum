@@ -324,10 +324,16 @@ func SourceKnownPingFromSignatureMismatch(t *testing.T) {
 	}
 }
 
-func FindNeighbours(t *testing.T) {}
+func FindNeighbours(t *testing.T) {
+	t.Fatal("Not implemented")
+}
 
-func SpoofSanityCheck(t *testing.T)              {}
-func SpoofAmplificationAttackCheck(t *testing.T) {}
+func SpoofSanityCheck(t *testing.T) {
+	t.Fatal("Not implemented")
+}
+func SpoofAmplificationAttackCheck(t *testing.T) {
+	t.Fatal("Not implemented")
+}
 
 func FindNeighboursOnRecentlyBondedTarget(t *testing.T) {
 	var err error
@@ -390,7 +396,9 @@ func FindNeighboursOnRecentlyBondedTarget(t *testing.T) {
 	}
 }
 
-func FindNeighboursPastExpiration(t *testing.T) {}
+func FindNeighboursPastExpiration(t *testing.T) {
+	t.Fatal("Not implemented")
+}
 
 func TestPing(t *testing.T) {
 	t.Run("Ping-BasicTest(v4001)", PingKnownEnode)
