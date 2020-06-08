@@ -21,6 +21,7 @@ import (
 	"context"
 	"errors"
 	"math/big"
+	"reflect"
 	"strings"
 	"testing"
 	"time"
@@ -106,14 +107,18 @@ const deployedCode = `60806040526004361061003b576000357c010000000000000000000000
 // expected return value contains "hello world"
 var expectedReturn = []byte{0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 32, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 11, 104, 101, 108, 108, 111, 32, 119, 111, 114, 108, 100, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0}
 
+func simTestBackend(testAddr common.Address) *SimulatedBackend {
+	return NewSimulatedBackend(
+		core.GenesisAlloc{
+			testAddr: {Balance: big.NewInt(10000000000)},
+		}, 10000000,
+	)
+}
+
 func TestNewSimulatedBackend(t *testing.T) {
 	testAddr := crypto.PubkeyToAddress(testKey.PublicKey)
 	expectedBal := big.NewInt(10000000000)
-	sim := NewSimulatedBackend(
-		core.GenesisAlloc{
-			testAddr: {Balance: expectedBal},
-		}, 10000000,
-	)
+	sim := simTestBackend(testAddr)
 	defer sim.Close()
 
 	if sim.config != params.AllEthashProtocolChanges {
@@ -152,11 +157,7 @@ func TestSimulatedBackend_AdjustTime(t *testing.T) {
 func TestSimulatedBackend_BalanceAt(t *testing.T) {
 	testAddr := crypto.PubkeyToAddress(testKey.PublicKey)
 	expectedBal := big.NewInt(10000000000)
-	sim := NewSimulatedBackend(
-		core.GenesisAlloc{
-			testAddr: {Balance: expectedBal},
-		}, 10000000,
-	)
+	sim := simTestBackend(testAddr)
 	defer sim.Close()
 	bgCtx := context.Background()
 
@@ -229,11 +230,7 @@ func TestSimulatedBackend_BlockByNumber(t *testing.T) {
 func TestSimulatedBackend_NonceAt(t *testing.T) {
 	testAddr := crypto.PubkeyToAddress(testKey.PublicKey)
 
-	sim := NewSimulatedBackend(
-		core.GenesisAlloc{
-			testAddr: {Balance: big.NewInt(10000000000)},
-		}, 10000000,
-	)
+	sim := simTestBackend(testAddr)
 	defer sim.Close()
 	bgCtx := context.Background()
 
@@ -283,11 +280,7 @@ func TestSimulatedBackend_NonceAt(t *testing.T) {
 func TestSimulatedBackend_SendTransaction(t *testing.T) {
 	testAddr := crypto.PubkeyToAddress(testKey.PublicKey)
 
-	sim := NewSimulatedBackend(
-		core.GenesisAlloc{
-			testAddr: {Balance: big.NewInt(10000000000)},
-		}, 10000000,
-	)
+	sim := simTestBackend(testAddr)
 	defer sim.Close()
 	bgCtx := context.Background()
 
@@ -395,6 +388,7 @@ func TestSimulatedBackend_EstimateGas(t *testing.T) {
 		message     ethereum.CallMsg
 		expect      uint64
 		expectError error
+		expectData  interface{}
 	}{
 		{"plain transfer(valid)", ethereum.CallMsg{
 			From:     addr,
@@ -403,7 +397,7 @@ func TestSimulatedBackend_EstimateGas(t *testing.T) {
 			GasPrice: big.NewInt(0),
 			Value:    big.NewInt(1),
 			Data:     nil,
-		}, params.TxGas, nil},
+		}, params.TxGas, nil, nil},
 
 		{"plain transfer(invalid)", ethereum.CallMsg{
 			From:     addr,
@@ -412,7 +406,7 @@ func TestSimulatedBackend_EstimateGas(t *testing.T) {
 			GasPrice: big.NewInt(0),
 			Value:    big.NewInt(1),
 			Data:     nil,
-		}, 0, errors.New("always failing transaction (execution reverted)")},
+		}, 0, errors.New("execution reverted"), nil},
 
 		{"Revert", ethereum.CallMsg{
 			From:     addr,
@@ -421,7 +415,7 @@ func TestSimulatedBackend_EstimateGas(t *testing.T) {
 			GasPrice: big.NewInt(0),
 			Value:    nil,
 			Data:     common.Hex2Bytes("d8b98391"),
-		}, 0, errors.New("always failing transaction (execution reverted) (revert reason)")},
+		}, 0, errors.New("execution reverted: revert reason"), "0x08c379a00000000000000000000000000000000000000000000000000000000000000020000000000000000000000000000000000000000000000000000000000000000d72657665727420726561736f6e00000000000000000000000000000000000000"},
 
 		{"PureRevert", ethereum.CallMsg{
 			From:     addr,
@@ -430,7 +424,7 @@ func TestSimulatedBackend_EstimateGas(t *testing.T) {
 			GasPrice: big.NewInt(0),
 			Value:    nil,
 			Data:     common.Hex2Bytes("aa8b1d30"),
-		}, 0, errors.New("always failing transaction (execution reverted)")},
+		}, 0, errors.New("execution reverted"), nil},
 
 		{"OOG", ethereum.CallMsg{
 			From:     addr,
@@ -439,7 +433,7 @@ func TestSimulatedBackend_EstimateGas(t *testing.T) {
 			GasPrice: big.NewInt(0),
 			Value:    nil,
 			Data:     common.Hex2Bytes("50f6fe34"),
-		}, 0, errors.New("gas required exceeds allowance (100000)")},
+		}, 0, errors.New("gas required exceeds allowance (100000)"), nil},
 
 		{"Assert", ethereum.CallMsg{
 			From:     addr,
@@ -448,7 +442,7 @@ func TestSimulatedBackend_EstimateGas(t *testing.T) {
 			GasPrice: big.NewInt(0),
 			Value:    nil,
 			Data:     common.Hex2Bytes("b9b046f9"),
-		}, 0, errors.New("always failing transaction (invalid opcode: opcode 0xfe not defined)")},
+		}, 0, errors.New("invalid opcode: opcode 0xfe not defined"), nil},
 
 		{"Valid", ethereum.CallMsg{
 			From:     addr,
@@ -457,7 +451,7 @@ func TestSimulatedBackend_EstimateGas(t *testing.T) {
 			GasPrice: big.NewInt(0),
 			Value:    nil,
 			Data:     common.Hex2Bytes("e09fface"),
-		}, 21275, nil},
+		}, 21275, nil, nil},
 	}
 	for _, c := range cases {
 		got, err := sim.EstimateGas(context.Background(), c.message)
@@ -467,6 +461,13 @@ func TestSimulatedBackend_EstimateGas(t *testing.T) {
 			}
 			if c.expectError.Error() != err.Error() {
 				t.Fatalf("Expect error, want %v, got %v", c.expectError, err)
+			}
+			if c.expectData != nil {
+				if err, ok := err.(*revertError); !ok {
+					t.Fatalf("Expect revert error, got %T", err)
+				} else if !reflect.DeepEqual(err.ErrorData(), c.expectData) {
+					t.Fatalf("Error data mismatch, want %v, got %v", c.expectData, err.ErrorData())
+				}
 			}
 			continue
 		}
@@ -546,11 +547,7 @@ func TestSimulatedBackend_EstimateGasWithPrice(t *testing.T) {
 func TestSimulatedBackend_HeaderByHash(t *testing.T) {
 	testAddr := crypto.PubkeyToAddress(testKey.PublicKey)
 
-	sim := NewSimulatedBackend(
-		core.GenesisAlloc{
-			testAddr: {Balance: big.NewInt(10000000000)},
-		}, 10000000,
-	)
+	sim := simTestBackend(testAddr)
 	defer sim.Close()
 	bgCtx := context.Background()
 
@@ -571,11 +568,7 @@ func TestSimulatedBackend_HeaderByHash(t *testing.T) {
 func TestSimulatedBackend_HeaderByNumber(t *testing.T) {
 	testAddr := crypto.PubkeyToAddress(testKey.PublicKey)
 
-	sim := NewSimulatedBackend(
-		core.GenesisAlloc{
-			testAddr: {Balance: big.NewInt(10000000000)},
-		}, 10000000,
-	)
+	sim := simTestBackend(testAddr)
 	defer sim.Close()
 	bgCtx := context.Background()
 
@@ -622,11 +615,7 @@ func TestSimulatedBackend_HeaderByNumber(t *testing.T) {
 func TestSimulatedBackend_TransactionCount(t *testing.T) {
 	testAddr := crypto.PubkeyToAddress(testKey.PublicKey)
 
-	sim := NewSimulatedBackend(
-		core.GenesisAlloc{
-			testAddr: {Balance: big.NewInt(10000000000)},
-		}, 10000000,
-	)
+	sim := simTestBackend(testAddr)
 	defer sim.Close()
 	bgCtx := context.Background()
 	currentBlock, err := sim.BlockByNumber(bgCtx, nil)
@@ -676,11 +665,7 @@ func TestSimulatedBackend_TransactionCount(t *testing.T) {
 func TestSimulatedBackend_TransactionInBlock(t *testing.T) {
 	testAddr := crypto.PubkeyToAddress(testKey.PublicKey)
 
-	sim := NewSimulatedBackend(
-		core.GenesisAlloc{
-			testAddr: {Balance: big.NewInt(10000000000)},
-		}, 10000000,
-	)
+	sim := simTestBackend(testAddr)
 	defer sim.Close()
 	bgCtx := context.Background()
 
@@ -743,11 +728,7 @@ func TestSimulatedBackend_TransactionInBlock(t *testing.T) {
 func TestSimulatedBackend_PendingNonceAt(t *testing.T) {
 	testAddr := crypto.PubkeyToAddress(testKey.PublicKey)
 
-	sim := NewSimulatedBackend(
-		core.GenesisAlloc{
-			testAddr: {Balance: big.NewInt(10000000000)},
-		}, 10000000,
-	)
+	sim := simTestBackend(testAddr)
 	defer sim.Close()
 	bgCtx := context.Background()
 
@@ -809,11 +790,7 @@ func TestSimulatedBackend_PendingNonceAt(t *testing.T) {
 func TestSimulatedBackend_TransactionReceipt(t *testing.T) {
 	testAddr := crypto.PubkeyToAddress(testKey.PublicKey)
 
-	sim := NewSimulatedBackend(
-		core.GenesisAlloc{
-			testAddr: {Balance: big.NewInt(10000000000)},
-		}, 10000000,
-	)
+	sim := simTestBackend(testAddr)
 	defer sim.Close()
 	bgCtx := context.Background()
 
@@ -859,12 +836,7 @@ func TestSimulatedBackend_SuggestGasPrice(t *testing.T) {
 
 func TestSimulatedBackend_PendingCodeAt(t *testing.T) {
 	testAddr := crypto.PubkeyToAddress(testKey.PublicKey)
-	sim := NewSimulatedBackend(
-		core.GenesisAlloc{
-			testAddr: {Balance: big.NewInt(10000000000)},
-		},
-		10000000,
-	)
+	sim := simTestBackend(testAddr)
 	defer sim.Close()
 	bgCtx := context.Background()
 	code, err := sim.CodeAt(bgCtx, testAddr, nil)
@@ -900,12 +872,7 @@ func TestSimulatedBackend_PendingCodeAt(t *testing.T) {
 
 func TestSimulatedBackend_CodeAt(t *testing.T) {
 	testAddr := crypto.PubkeyToAddress(testKey.PublicKey)
-	sim := NewSimulatedBackend(
-		core.GenesisAlloc{
-			testAddr: {Balance: big.NewInt(10000000000)},
-		},
-		10000000,
-	)
+	sim := simTestBackend(testAddr)
 	defer sim.Close()
 	bgCtx := context.Background()
 	code, err := sim.CodeAt(bgCtx, testAddr, nil)
@@ -944,12 +911,7 @@ func TestSimulatedBackend_CodeAt(t *testing.T) {
 //   receipt{status=1 cgas=23949 bloom=00000000004000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000800000000000000000000000000000000000040200000000000000000000000000000000001000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000080000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000 logs=[log: b6818c8064f645cd82d99b59a1a267d6d61117ef [75fd880d39c1daf53b6547ab6cb59451fc6452d27caa90e5b6649dd8293b9eed] 000000000000000000000000376c47978271565f56deb45495afa69e59c16ab200000000000000000000000000000000000000000000000000000000000000010000000000000000000000000000000000000000000000000000000000000060000000000000000000000000000000000000000000000000000000000000000158 9ae378b6d4409eada347a5dc0c180f186cb62dc68fcc0f043425eb917335aa28 0 95d429d309bb9d753954195fe2d69bd140b4ae731b9b5b605c34323de162cf00 0]}
 func TestSimulatedBackend_PendingAndCallContract(t *testing.T) {
 	testAddr := crypto.PubkeyToAddress(testKey.PublicKey)
-	sim := NewSimulatedBackend(
-		core.GenesisAlloc{
-			testAddr: {Balance: big.NewInt(10000000000)},
-		},
-		10000000,
-	)
+	sim := simTestBackend(testAddr)
 	defer sim.Close()
 	bgCtx := context.Background()
 
@@ -965,7 +927,7 @@ func TestSimulatedBackend_PendingAndCallContract(t *testing.T) {
 
 	input, err := parsed.Pack("receive", []byte("X"))
 	if err != nil {
-		t.Errorf("could pack receive function on contract: %v", err)
+		t.Errorf("could not pack receive function on contract: %v", err)
 	}
 
 	// make sure you can call the contract in pending state
@@ -1003,5 +965,115 @@ func TestSimulatedBackend_PendingAndCallContract(t *testing.T) {
 
 	if !bytes.Equal(res, expectedReturn) || !strings.Contains(string(res), "hello world") {
 		t.Errorf("response from calling contract was expected to be 'hello world' instead received %v", string(res))
+	}
+}
+
+// This test is based on the following contract:
+/*
+contract Reverter {
+    function revertString() public pure{
+        require(false, "some error");
+    }
+    function revertNoString() public pure {
+        require(false, "");
+    }
+    function revertASM() public pure {
+        assembly {
+            revert(0x0, 0x0)
+        }
+    }
+    function noRevert() public pure {
+        assembly {
+            // Assembles something that looks like require(false, "some error") but is not reverted
+            mstore(0x0, 0x08c379a000000000000000000000000000000000000000000000000000000000)
+            mstore(0x4, 0x0000000000000000000000000000000000000000000000000000000000000020)
+            mstore(0x24, 0x000000000000000000000000000000000000000000000000000000000000000a)
+            mstore(0x44, 0x736f6d65206572726f7200000000000000000000000000000000000000000000)
+            return(0x0, 0x64)
+        }
+    }
+}*/
+func TestSimulatedBackend_CallContractRevert(t *testing.T) {
+	testAddr := crypto.PubkeyToAddress(testKey.PublicKey)
+	sim := simTestBackend(testAddr)
+	defer sim.Close()
+	bgCtx := context.Background()
+
+	reverterABI := `[{"inputs": [],"name": "noRevert","outputs": [],"stateMutability": "pure","type": "function"},{"inputs": [],"name": "revertASM","outputs": [],"stateMutability": "pure","type": "function"},{"inputs": [],"name": "revertNoString","outputs": [],"stateMutability": "pure","type": "function"},{"inputs": [],"name": "revertString","outputs": [],"stateMutability": "pure","type": "function"}]`
+	reverterBin := "608060405234801561001057600080fd5b506101d3806100206000396000f3fe608060405234801561001057600080fd5b506004361061004c5760003560e01c80634b409e01146100515780639b340e361461005b5780639bd6103714610065578063b7246fc11461006f575b600080fd5b610059610079565b005b6100636100ca565b005b61006d6100cf565b005b610077610145565b005b60006100c8576040517f08c379a0000000000000000000000000000000000000000000000000000000008152600401808060200182810382526000815260200160200191505060405180910390fd5b565b600080fd5b6000610143576040517f08c379a000000000000000000000000000000000000000000000000000000000815260040180806020018281038252600a8152602001807f736f6d65206572726f720000000000000000000000000000000000000000000081525060200191505060405180910390fd5b565b7f08c379a0000000000000000000000000000000000000000000000000000000006000526020600452600a6024527f736f6d65206572726f720000000000000000000000000000000000000000000060445260646000f3fea2646970667358221220cdd8af0609ec4996b7360c7c780bad5c735740c64b1fffc3445aa12d37f07cb164736f6c63430006070033"
+
+	parsed, err := abi.JSON(strings.NewReader(reverterABI))
+	if err != nil {
+		t.Errorf("could not get code at test addr: %v", err)
+	}
+	contractAuth := bind.NewKeyedTransactor(testKey)
+	addr, _, _, err := bind.DeployContract(contractAuth, parsed, common.FromHex(reverterBin), sim)
+	if err != nil {
+		t.Errorf("could not deploy contract: %v", err)
+	}
+
+	inputs := make(map[string]interface{}, 3)
+	inputs["revertASM"] = nil
+	inputs["revertNoString"] = ""
+	inputs["revertString"] = "some error"
+
+	call := make([]func([]byte) ([]byte, error), 2)
+	call[0] = func(input []byte) ([]byte, error) {
+		return sim.PendingCallContract(bgCtx, ethereum.CallMsg{
+			From: testAddr,
+			To:   &addr,
+			Data: input,
+		})
+	}
+	call[1] = func(input []byte) ([]byte, error) {
+		return sim.CallContract(bgCtx, ethereum.CallMsg{
+			From: testAddr,
+			To:   &addr,
+			Data: input,
+		}, nil)
+	}
+
+	// Run pending calls then commit
+	for _, cl := range call {
+		for key, val := range inputs {
+			input, err := parsed.Pack(key)
+			if err != nil {
+				t.Errorf("could not pack %v function on contract: %v", key, err)
+			}
+
+			res, err := cl(input)
+			if err == nil {
+				t.Errorf("call to %v was not reverted", key)
+			}
+			if res != nil {
+				t.Errorf("result from %v was not nil: %v", key, res)
+			}
+			if val != nil {
+				rerr, ok := err.(*revertError)
+				if !ok {
+					t.Errorf("expect revert error")
+				}
+				if rerr.Error() != "execution reverted: "+val.(string) {
+					t.Errorf("error was malformed: got %v want %v", rerr.Error(), val)
+				}
+			} else {
+				// revert(0x0,0x0)
+				if err.Error() != "execution reverted" {
+					t.Errorf("error was malformed: got %v want %v", err, "execution reverted")
+				}
+			}
+		}
+		input, err := parsed.Pack("noRevert")
+		if err != nil {
+			t.Errorf("could not pack noRevert function on contract: %v", err)
+		}
+		res, err := cl(input)
+		if err != nil {
+			t.Error("call to noRevert was reverted")
+		}
+		if res == nil {
+			t.Errorf("result from noRevert was nil")
+		}
+		sim.Commit()
 	}
 }
