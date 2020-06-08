@@ -904,7 +904,7 @@ func (c *bls12381MapG1) Run(input []byte) ([]byte, error) {
 		return nil, err
 	}
 
-	// Encode the G1 point to 256 bytes
+	// Encode the G1 point to 128 bytes
 	return g.EncodePoint(r), nil
 }
 
