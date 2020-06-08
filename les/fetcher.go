@@ -17,12 +17,12 @@
 package les
 
 import (
+	"math/big"
 	"math/rand"
 	"sync"
 	"time"
 
 	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/common/prque"
 	"github.com/ethereum/go-ethereum/consensus"
 	"github.com/ethereum/go-ethereum/core"
 	"github.com/ethereum/go-ethereum/core/rawdb"
@@ -68,46 +68,47 @@ type fetcherPeer struct {
 	latest *announceData // The latest announcement sent from the peer
 
 	// These following two fields can track the latest announces
-	// from the peer with limited size for caching.
+	// from the peer with limited size for caching. We hold the
+	// assumption that all enqueued announces are td-monotonic.
 	announces     map[common.Hash]*announce // Announcement map
-	announceQueue *prque.Prque              // Announcement queue
+	announcesList []common.Hash             // FIFO announces list
 }
 
 // addAnno enqueues an new trusted announcement. If the queued announces overflow,
 // evict from the oldest.
-func (fp *fetcherPeer) addAnno(announce *announce) {
-	// Short circuit if the announce already exists. In normal case it should
-	// never happen since only monotonic announce is accepted. But the adversary
+func (fp *fetcherPeer) addAnno(anno *announce) {
+	// Short circuit if the anno already exists. In normal case it should
+	// never happen since only monotonic anno is accepted. But the adversary
 	// may feed us fake announces with higher td but same hash. In this case,
-	// ignore the announce anyway.
-	hash, number := announce.data.Hash, announce.data.Number
+	// ignore the anno anyway.
+	hash := anno.data.Hash
 	if _, exist := fp.announces[hash]; exist {
 		return
 	}
-	fp.announces[hash] = announce
-	fp.announceQueue.Push(hash, -int64(number))
+	fp.announces[hash] = anno
+	fp.announcesList = append(fp.announcesList, hash)
 
 	// Evict oldest if the announces are oversized.
-	for fp.announceQueue.Size() > cachedAnnosThreshold {
-		item, _ := fp.announceQueue.Pop()
-		delete(fp.announces, item.(common.Hash))
+	for len(fp.announcesList) > cachedAnnosThreshold {
+		delete(fp.announces, fp.announcesList[0])
+		fp.announcesList = fp.announcesList[1:]
 	}
 }
 
 // forwardAnno removes all announces from the map with a number lower than
 // the provided threshold.
-func (fp *fetcherPeer) forwardAnno(number uint64) []*announce {
-	var ret []*announce
-	for !fp.announceQueue.Empty() {
-		item, priority := fp.announceQueue.Pop()
-		if uint64(-priority) > number {
-			fp.announceQueue.Push(item, priority)
+func (fp *fetcherPeer) forwardAnno(td *big.Int) []*announce {
+	var evicted []*announce
+	for len(fp.announcesList) > 0 {
+		anno := fp.announces[fp.announcesList[0]]
+		if anno.data.Td.Cmp(td) > 0 {
 			break
 		}
-		ret = append(ret, fp.announces[item.(common.Hash)])
-		delete(fp.announces, item.(common.Hash))
+		evicted = append(evicted, anno)
+		delete(fp.announces, anno.data.Hash)
+		fp.announcesList = fp.announcesList[1:]
 	}
-	return ret
+	return evicted
 }
 
 // lightFetcher implements retrieval of newly announced headers. It reuses
@@ -197,10 +198,7 @@ func (f *lightFetcher) registerPeer(p *serverPeer) {
 	f.plock.Lock()
 	defer f.plock.Unlock()
 
-	f.peers[p.ID()] = &fetcherPeer{
-		announces:     make(map[common.Hash]*announce),
-		announceQueue: prque.New(nil),
-	}
+	f.peers[p.ID()] = &fetcherPeer{announces: make(map[common.Hash]*announce)}
 }
 
 // unregisterPeer removes the specified peer from the fetcher's peer set
@@ -382,12 +380,11 @@ func (f *lightFetcher) mainloop() {
 				continue
 			}
 			reset(ev.Block.Header())
-			number := localHead.Number.Uint64()
 
 			// Clean stale announcements from les-servers.
 			var droplist []enode.ID
 			f.forEachPeer(func(id enode.ID, p *fetcherPeer) bool {
-				removed := p.forwardAnno(number)
+				removed := p.forwardAnno(localTd)
 				for _, anno := range removed {
 					if header := f.chain.GetHeaderByHash(anno.data.Hash); header != nil {
 						if header.Number.Uint64() != anno.data.Number {
