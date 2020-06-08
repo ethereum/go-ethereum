@@ -12,7 +12,7 @@ import (
 
 func TestNewWebsocketUpgradeHandler_websocket(t *testing.T) {
 	h := &HTTPServer{
-		Srv: rpc.NewServer(),
+		Srv:       rpc.NewServer(),
 		WSAllowed: true,
 	}
 	handler := h.NewWebsocketUpgradeHandler(nil, h.Srv.WebsocketHandler([]string{}))
@@ -43,10 +43,10 @@ func TestNewWebsocketUpgradeHandler_websocket(t *testing.T) {
 // Tests that a ws handler can be added to and enabled on an existing HTTPServer
 func TestWSAllowed(t *testing.T) {
 	stack, err := New(&Config{
-		HTTPHost:              DefaultHTTPHost,
-		HTTPPort:              9393,
-		WSHost: DefaultHTTPHost,
-		WSPort: 9393,
+		HTTPHost: DefaultHTTPHost,
+		HTTPPort: 9393,
+		WSHost:   DefaultHTTPHost,
+		WSPort:   9393,
 	})
 	if err != nil {
 		t.Fatalf("could not create node: %v", err)

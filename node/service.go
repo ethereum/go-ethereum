@@ -31,9 +31,9 @@ import (
 // as well as utility methods to operate on the service environment.
 type ServiceContext struct {
 	Config         Config
-	Lifecycles		map[reflect.Type]Lifecycle // TODO should this be in the service context or should it be on the node itself .. ?
-	EventMux       *event.TypeMux    // Event multiplexer used for decoupled notifications
-	AccountManager *accounts.Manager // Account manager created by the node.
+	Lifecycles     map[reflect.Type]Lifecycle // TODO should this be in the service context or should it be on the node itself .. ?
+	EventMux       *event.TypeMux             // Event multiplexer used for decoupled notifications
+	AccountManager *accounts.Manager          // Account manager created by the node.
 }
 
 // OpenDatabase opens an existing database with the given name (or creates one

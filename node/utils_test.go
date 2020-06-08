@@ -24,8 +24,8 @@ import "github.com/ethereum/go-ethereum/p2p"
 // NoopLifecycle is a trivial implementation of the Service interface.
 type NoopLifecycle struct{}
 
-func (s *NoopLifecycle) Start() error   				{ return nil }
-func (s *NoopLifecycle) Stop() error               	{ return nil }
+func (s *NoopLifecycle) Start() error { return nil }
+func (s *NoopLifecycle) Stop() error  { return nil }
 
 func NewNoop() *Noop {
 	noop := new(Noop)
@@ -36,22 +36,21 @@ func NewNoop() *Noop {
 // signatures but different outer types.
 type Noop struct{ NoopLifecycle }
 
-
 // InstrumentedService is an implementation of Lifecycle for which all interface
 // methods can be instrumented both return value as well as event hook wise.
 type InstrumentedService struct {
-	start     error
-	stop      error
+	start error
+	stop  error
 
-	startHook     func()
-	stopHook      func()
+	startHook func()
+	stopHook  func()
 
 	protocols []p2p.Protocol
 }
 
-type InstrumentedServiceA struct { InstrumentedService }
-type InstrumentedServiceB struct { InstrumentedService }
-type InstrumentedServiceC struct { InstrumentedService }
+type InstrumentedServiceA struct{ InstrumentedService }
+type InstrumentedServiceB struct{ InstrumentedService }
+type InstrumentedServiceC struct{ InstrumentedService }
 
 func NewInstrumentedService() (*InstrumentedService, error) {
 	return new(InstrumentedService), nil

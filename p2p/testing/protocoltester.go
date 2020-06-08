@@ -66,7 +66,7 @@ func NewProtocolTester(prvkey *ecdsa.PrivateKey, nodeCount int, run func(*p2p.Pe
 	nodeConfig := &adapters.NodeConfig{
 		PrivateKey:      prvkey,
 		EnableMsgEvents: true,
-		Lifecycles:        []string{"test"},
+		Lifecycles:      []string{"test"},
 	}
 	if _, err := net.NewNodeWithConfig(nodeConfig); err != nil {
 		panic(err.Error())

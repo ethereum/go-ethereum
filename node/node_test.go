@@ -132,23 +132,23 @@ func TestLifecycleLifeCycle(t *testing.T) {
 	stopped := make(map[string]bool)
 
 	// Create a batch of instrumented services
-	lifecycles :=  map[string]Lifecycle{
+	lifecycles := map[string]Lifecycle{
 		"A": &InstrumentedServiceA{
 			InstrumentedService{
 				startHook: func() { started["A"] = true },
-				stopHook: func() { stopped["A"] = true },
+				stopHook:  func() { stopped["A"] = true },
 			},
 		},
 		"B": &InstrumentedServiceB{
 			InstrumentedService{
 				startHook: func() { started["B"] = true },
-				stopHook: func() { stopped["B"] = true },
+				stopHook:  func() { stopped["B"] = true },
 			},
 		},
 		"C": &InstrumentedServiceC{
 			InstrumentedService{
 				startHook: func() { started["C"] = true },
-				stopHook: func() { stopped["C"] = true },
+				stopHook:  func() { stopped["C"] = true },
 			},
 		},
 	}
@@ -192,23 +192,23 @@ func TestLifecycleStartupAbortion(t *testing.T) {
 	stopped := make(map[string]bool)
 
 	// Create a batch of instrumented services
-	lifecycles :=  map[string]Lifecycle{
+	lifecycles := map[string]Lifecycle{
 		"A": &InstrumentedServiceA{
 			InstrumentedService{
 				startHook: func() { started["A"] = true },
-				stopHook: func() { stopped["A"] = true },
+				stopHook:  func() { stopped["A"] = true },
 			},
 		},
 		"B": &InstrumentedServiceB{
 			InstrumentedService{
 				startHook: func() { started["B"] = true },
-				stopHook: func() { stopped["B"] = true },
+				stopHook:  func() { stopped["B"] = true },
 			},
 		},
 		"C": &InstrumentedServiceC{
 			InstrumentedService{
 				startHook: func() { started["C"] = true },
-				stopHook: func() { stopped["C"] = true },
+				stopHook:  func() { stopped["C"] = true },
 			},
 		},
 	}
@@ -219,7 +219,7 @@ func TestLifecycleStartupAbortion(t *testing.T) {
 
 	// Register a service that fails to construct itself
 	failure := errors.New("fail")
-	failer := &InstrumentedService{ start: failure }
+	failer := &InstrumentedService{start: failure}
 	stack.RegisterLifecycle(failer)
 
 	// Start the protocol stack and ensure all started services stop
@@ -250,23 +250,23 @@ func TestLifecycleTerminationGuarantee(t *testing.T) {
 	stopped := make(map[string]bool)
 
 	// Create a batch of instrumented services
-	lifecycles :=  map[string]Lifecycle{
+	lifecycles := map[string]Lifecycle{
 		"A": &InstrumentedServiceA{
 			InstrumentedService{
 				startHook: func() { started["A"] = true },
-				stopHook: func() { stopped["A"] = true },
+				stopHook:  func() { stopped["A"] = true },
 			},
 		},
 		"B": &InstrumentedServiceB{
 			InstrumentedService{
 				startHook: func() { started["B"] = true },
-				stopHook: func() { stopped["B"] = true },
+				stopHook:  func() { stopped["B"] = true },
 			},
 		},
 		"C": &InstrumentedServiceC{
 			InstrumentedService{
 				startHook: func() { started["C"] = true },
-				stopHook: func() { stopped["C"] = true },
+				stopHook:  func() { stopped["C"] = true },
 			},
 		},
 	}
@@ -277,7 +277,7 @@ func TestLifecycleTerminationGuarantee(t *testing.T) {
 
 	// Register a service that fails to shot down cleanly
 	failure := errors.New("fail")
-	failer := &InstrumentedService{ stop: failure }
+	failer := &InstrumentedService{stop: failure}
 	stack.RegisterLifecycle(failer)
 
 	// Start the protocol stack, and ensure that a failing shut down terminates all // TODO, deleting loop because constructors no longer stored on node.
@@ -396,8 +396,8 @@ func startHTTP(t *testing.T) *Node {
 	conf := &Config{
 		HTTPHost: "127.0.0.1",
 		HTTPPort: 7453,
-		WSHost: "127.0.0.1",
-		WSPort: 7453,
+		WSHost:   "127.0.0.1",
+		WSPort:   7453,
 	}
 	node, err := New(conf)
 	if err != nil {

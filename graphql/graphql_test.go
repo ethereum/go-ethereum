@@ -18,14 +18,16 @@ package graphql
 
 import (
 	"fmt"
-	"github.com/ethereum/go-ethereum/eth"
-	"github.com/ethereum/go-ethereum/node"
-	"github.com/ethereum/go-ethereum/rpc"
-	"github.com/stretchr/testify/assert"
 	"io/ioutil"
 	"net/http"
 	"strings"
 	"testing"
+
+	"github.com/ethereum/go-ethereum/eth"
+	"github.com/ethereum/go-ethereum/node"
+	"github.com/ethereum/go-ethereum/rpc"
+
+	"github.com/stretchr/testify/assert"
 )
 
 var testEndpoint = "127.0.0.1:9393"
@@ -73,7 +75,7 @@ func TestMultiplexedServer(t *testing.T) {
 
 // Tests that a graphQL request is successfully handled when graphql is enabled on the specified endpoint
 func TestGraphQLHTTPOnSamePort_GQLRequest_Successful(t *testing.T) {
-	stack := createNode(t,true)
+	stack := createNode(t, true)
 	defer stack.Close()
 	// start node
 	if err := stack.Start(); err != nil {
@@ -93,7 +95,7 @@ func TestGraphQLHTTPOnSamePort_GQLRequest_Successful(t *testing.T) {
 		t.Fatalf("could not read from response body: %v", err)
 	}
 	expected := "{\"data\":{\"block\":{\"number\":\"0x0\"}}}"
-	assert.Equal(t, expected,string(bodyBytes))
+	assert.Equal(t, expected, string(bodyBytes))
 }
 
 // Tests that a graphQL request is not handled successfully when graphql is not enabled on the specified endpoint
@@ -130,10 +132,10 @@ func TestGraphQLHTTPOnSamePort_GQLRequest_Unsuccessful(t *testing.T) {
 
 func createNode(t *testing.T, gqlEnabled bool) *node.Node {
 	stack, err := node.New(&node.Config{
-		HTTPHost:              "127.0.0.1",
-		HTTPPort:              9393,
-		WSHost:              "127.0.0.1",
-		WSPort:              9393,
+		HTTPHost: "127.0.0.1",
+		HTTPPort: 9393,
+		WSHost:   "127.0.0.1",
+		WSPort:   9393,
 	})
 	if err != nil {
 		t.Fatalf("could not create node: %v", err)
@@ -142,7 +144,7 @@ func createNode(t *testing.T, gqlEnabled bool) *node.Node {
 		return stack
 	}
 	// create backend
-	ethBackend, err  := eth.New(stack, &eth.DefaultConfig)
+	ethBackend, err := eth.New(stack, &eth.DefaultConfig)
 	if err != nil {
 		t.Fatalf("could not create eth backend: %v", err)
 	}

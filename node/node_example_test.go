@@ -31,8 +31,8 @@ import (
 //  - Stop() error               - method invoked when the node terminates the service
 type SampleLifecycle struct{}
 
-func (s *SampleLifecycle) Start() error   { fmt.Println("Service starting..."); return nil }
-func (s *SampleLifecycle) Stop() error               { fmt.Println("Service stopping..."); return nil }
+func (s *SampleLifecycle) Start() error { fmt.Println("Service starting..."); return nil }
+func (s *SampleLifecycle) Stop() error  { fmt.Println("Service stopping..."); return nil }
 
 func ExampleLifecycle() {
 	// Create a network node to run protocols with the default values.

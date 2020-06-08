@@ -29,7 +29,7 @@ import (
 
 // Service encapsulates a GraphQL service.
 type Service struct {
-	backend  ethapi.Backend   // The backend that queries will operate on.
+	backend       ethapi.Backend // The backend that queries will operate on.
 	graphqlServer *node.HTTPServer
 }
 
@@ -63,12 +63,12 @@ func New(stack *node.Node, backend ethapi.Backend, endpoint string, cors, vhosts
 	}
 	// create the http server
 	gqlServer := &node.HTTPServer{
-		Vhosts: vhosts,
+		Vhosts:             vhosts,
 		CorsAllowedOrigins: cors,
-		Timeouts: timeouts,
-		GQLAllowed: true,
-		GQLHandler: handler,
-		Srv: rpc.NewServer(),
+		Timeouts:           timeouts,
+		GQLAllowed:         true,
+		GQLHandler:         handler,
+		Srv:                rpc.NewServer(),
 	}
 	gqlServer.SetEndpoint(endpoint)
 	stack.RegisterHTTPServer(endpoint, gqlServer)

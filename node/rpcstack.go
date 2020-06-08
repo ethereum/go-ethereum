@@ -20,7 +20,6 @@ import (
 	"compress/gzip"
 	"context"
 	"fmt"
-	"github.com/ethereum/go-ethereum/rpc"
 	"io"
 	"io/ioutil"
 	"net"
@@ -29,15 +28,16 @@ import (
 	"sync"
 
 	"github.com/ethereum/go-ethereum/log"
+	"github.com/ethereum/go-ethereum/rpc"
 	"github.com/rs/cors"
 )
 
 type HTTPServer struct {
 	handler http.Handler
 	Srv     *rpc.Server
-	Server *http.Server
+	Server  *http.Server
 
-	Listener     net.Listener
+	Listener net.Listener
 
 	endpoint string
 	host     string

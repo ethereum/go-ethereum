@@ -20,7 +20,6 @@ import (
 	"bytes"
 	"crypto/ecdsa"
 	"encoding/binary"
-	"github.com/ethereum/go-ethereum/node"
 	"io/ioutil"
 	"math/rand"
 	"testing"
@@ -28,6 +27,7 @@ import (
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/crypto"
+	"github.com/ethereum/go-ethereum/node"
 	whisper "github.com/ethereum/go-ethereum/whisper/whisperv6"
 )
 

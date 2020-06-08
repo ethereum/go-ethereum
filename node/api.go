@@ -190,13 +190,13 @@ func (api *PrivateAdminAPI) StartRPC(host *string, port *int, cors *string, apis
 	}
 	// configure http server
 	httpServer := &HTTPServer{
-		host: *host,
-		port: *port,
-		endpoint: endpoint,
-		Srv: rpc.NewServer(),
+		host:               *host,
+		port:               *port,
+		endpoint:           endpoint,
+		Srv:                rpc.NewServer(),
 		CorsAllowedOrigins: allowedOrigins,
-		Vhosts: allowedVHosts,
-		Whitelist: modules,
+		Vhosts:             allowedVHosts,
+		Whitelist:          modules,
 	}
 	// create handler
 	httpServer.handler = NewHTTPHandlerStack(httpServer.Srv, httpServer.CorsAllowedOrigins, httpServer.Vhosts)
@@ -269,7 +269,6 @@ func (api *PrivateAdminAPI) StartWS(host *string, port *int, allowedOrigins *str
 		return true, nil
 	}
 
-
 	origins := api.node.config.WSOrigins
 	if allowedOrigins != nil {
 		origins = nil
@@ -294,13 +293,13 @@ func (api *PrivateAdminAPI) StartWS(host *string, port *int, allowedOrigins *str
 	}
 
 	wsServer := &HTTPServer{
-		Srv:                rpc.NewServer(),
-		endpoint:           endpoint,
-		host:               *host,
-		port:               *port,
-		Whitelist:          modules,
-		WsOrigins:          origins,
-		WSAllowed:          true,
+		Srv:       rpc.NewServer(),
+		endpoint:  endpoint,
+		host:      *host,
+		port:      *port,
+		Whitelist: modules,
+		WsOrigins: origins,
+		WSAllowed: true,
 	}
 
 	wsServer.handler = wsServer.Srv.WebsocketHandler(wsServer.WsOrigins)
