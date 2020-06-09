@@ -237,6 +237,13 @@ func (dl *downloadTester) GetTd(hash common.Hash, number uint64) *big.Int {
 	dl.lock.RLock()
 	defer dl.lock.RUnlock()
 
+	return dl.getTd(hash)
+}
+
+// getTd retrieves the block's total difficulty if found either within
+// ancients or own blocks).
+// This method assumes that the caller holds at least the read-lock (dl.lock)
+func (dl *downloadTester) getTd(hash common.Hash) *big.Int {
 	if td := dl.ancientChainTd[hash]; td != nil {
 		return td
 	}
@@ -272,7 +279,9 @@ func (dl *downloadTester) InsertHeaderChain(headers []*types.Header, checkFreq i
 		}
 		dl.ownHashes = append(dl.ownHashes, hash)
 		dl.ownHeaders[hash] = header
-		dl.ownChainTd[hash] = new(big.Int).Add(dl.ownChainTd[header.ParentHash], header.Difficulty)
+
+		td := dl.getTd(header.ParentHash)
+		dl.ownChainTd[hash] = new(big.Int).Add(td, header.Difficulty)
 	}
 	return len(headers), nil
 }
@@ -294,7 +303,9 @@ func (dl *downloadTester) InsertChain(blocks types.Blocks) (i int, err error) {
 		dl.ownBlocks[block.Hash()] = block
 		dl.ownReceipts[block.Hash()] = make(types.Receipts, 0)
 		dl.stateDb.Put(block.Root().Bytes(), []byte{0x00})
-		dl.ownChainTd[block.Hash()] = new(big.Int).Add(dl.ownChainTd[block.ParentHash()], block.Difficulty())
+
+		td := dl.getTd(block.ParentHash())
+		dl.ownChainTd[block.Hash()] = new(big.Int).Add(td, block.Difficulty())
 	}
 	return len(blocks), nil
 }
@@ -321,6 +332,7 @@ func (dl *downloadTester) InsertReceiptChain(blocks types.Blocks, receipts []typ
 			dl.ancientHeaders[blocks[i].Hash()] = blocks[i].Header()
 			dl.ancientChainTd[blocks[i].Hash()] = new(big.Int).Add(dl.ancientChainTd[blocks[i].ParentHash()], blocks[i].Difficulty())
 			delete(dl.ownHeaders, blocks[i].Hash())
+			delete(dl.ownChainTd, blocks[i].Hash())
 		} else {
 			dl.ownBlocks[blocks[i].Hash()] = blocks[i]
 			dl.ownReceipts[blocks[i].Hash()] = receipts[i]
