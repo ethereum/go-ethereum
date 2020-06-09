@@ -48,7 +48,8 @@
     "eip1283ReenableTransition": "0xc350",
     "eip1344Transition": "0xc350",
     "eip1884Transition": "0xc350",
-    "eip2028Transition": "0xc350"
+    "eip2028Transition": "0xc350",
+    "eip2315Transition": "0x7fffffffffffffff"
   },
   "genesis": {
     "seal": {

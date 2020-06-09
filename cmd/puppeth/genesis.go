@@ -281,7 +281,7 @@ type parityChainSpec struct {
 		EIP1884Transition         hexutil.Uint64       `json:"eip1884Transition"`
 		EIP2028Transition         hexutil.Uint64       `json:"eip2028Transition"`
 		EIP2315Transition         hexutil.Uint64       `json:"eip2315Transition"`
-		EIP2537Transition         hexutil.Uint64       `json:"eip2537ransition"`
+		//EIP2537Transition         hexutil.Uint64       `json:"eip2537ransition"`
 	} `json:"params"`
 
 	Genesis struct {
@@ -428,23 +428,36 @@ func newParityChainSpec(network string, genesis *core.Genesis, bootnodes []strin
 	spec.Params.EIP161abcTransition = hexutil.Uint64(genesis.Config.EIP158Block.Uint64())
 	spec.Params.EIP161dTransition = hexutil.Uint64(genesis.Config.EIP158Block.Uint64())
 
+	future := big.NewInt(0x7fffffffffffffff)
 	// Byzantium
 	if num := genesis.Config.ByzantiumBlock; num != nil {
-		spec.setByzantium(num)
+		spec.setByzantium(genesis.Config.ByzantiumBlock)
+	} else {
+		spec.setByzantium(future)
 	}
 	// Constantinople
 	if num := genesis.Config.ConstantinopleBlock; num != nil {
-		spec.setConstantinople(num)
+		spec.setConstantinople(genesis.Config.ConstantinopleBlock)
+	} else {
+		spec.setConstantinople(future)
 	}
 	// ConstantinopleFix (remove eip-1283)
 	if num := genesis.Config.PetersburgBlock; num != nil {
-		spec.setConstantinopleFix(num)
+		spec.setConstantinopleFix(genesis.Config.PetersburgBlock)
+	} else {
+		spec.setConstantinopleFix(future)
 	}
 	// Istanbul
 	if num := genesis.Config.IstanbulBlock; num != nil {
-		spec.setIstanbul(num)
+		spec.setIstanbul(genesis.Config.IstanbulBlock)
+	} else {
+		spec.setIstanbul(future)
 	}
-
+	if genesis.Config.YoloV1Block != nil {
+		spec.setYoloV1(genesis.Config.YoloV1Block)
+	} else {
+		spec.setYoloV1(future)
+	}
 	spec.Params.MaximumExtraDataSize = (hexutil.Uint64)(params.MaximumExtraDataSize)
 	spec.Params.MinGasLimit = (hexutil.Uint64)(params.MinGasLimit)
 	spec.Params.GasLimitBoundDivisor = (math2.HexOrDecimal64)(params.GasLimitBoundDivisor)
@@ -578,7 +591,6 @@ func newParityChainSpec(network string, genesis *core.Genesis, bootnodes []strin
 		})
 	}
 	if genesis.Config.YoloV1Block != nil {
-		spec.setYoloV1(genesis.Config.YoloV1Block)
 
 		spec.setPrecompile(10, &parityChainSpecBuiltin{
 			Name:       "bls12_381_g1_add",
@@ -702,7 +714,7 @@ func (spec *parityChainSpec) setIstanbul(num *big.Int) {
 func (spec *parityChainSpec) setYoloV1(num *big.Int) {
 	n := hexutil.Uint64(num.Uint64())
 	spec.Params.EIP2315Transition = n
-	spec.Params.EIP2537Transition = n
+	//spec.Params.EIP2537Transition = n
 }
 
 // pyEthereumGenesisSpec represents the genesis specification format used by the
