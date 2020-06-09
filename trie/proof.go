@@ -393,7 +393,7 @@ func hasRightElement(node node, key []byte) bool {
 // (unless firstProof is an existent proof).
 //
 // Expect the normal case, this function can also be used to verify the following
-// range proofs(note this function doesn't accept zero element proof):
+// range proofs:
 //
 // - All elements proof. In this case the left and right proof can be nil, but the
 //   range should be all the leaves in the trie.
@@ -401,14 +401,15 @@ func hasRightElement(node node, key []byte) bool {
 // - One element proof. In this case no matter the left edge proof is a non-existent
 //   proof or not, we can always verify the correctness of the proof.
 //
+// - Zero element proof(left edge proof should be a non-existent proof). In this
+//   case if there are still some other leaves available on the right side, then
+//   an error will be returned.
+//
 // Except returning the error to indicate the proof is valid or not, the function will
 // also return a flag to indicate whether there exists more accounts/slots in the trie.
 func VerifyRangeProof(rootHash common.Hash, firstKey []byte, keys [][]byte, values [][]byte, firstProof ethdb.KeyValueReader, lastProof ethdb.KeyValueReader) (error, bool) {
 	if len(keys) != len(values) {
 		return fmt.Errorf("inconsistent proof data, keys: %d, values: %d", len(keys), len(values)), false
-	}
-	if len(keys) == 0 {
-		return errors.New("empty proof"), false
 	}
 	// Ensure the received batch is monotonic increasing.
 	for i := 0; i < len(keys)-1; i++ {
@@ -430,6 +431,18 @@ func VerifyRangeProof(rootHash common.Hash, firstKey []byte, keys [][]byte, valu
 			return fmt.Errorf("invalid proof, want hash %x, got %x", rootHash, emptytrie.Hash()), false
 		}
 		return nil, false // no more element.
+	}
+	// Special case, there is a provided left edge proof and zero key/value
+	// pairs, ensure there are no more accounts / slots in the trie.
+	if len(keys) == 0 {
+		root, val, err := proofToPath(rootHash, nil, firstKey, firstProof, true)
+		if err != nil {
+			return err, false
+		}
+		if val != nil || hasRightElement(root, firstKey) {
+			return errors.New("more entries available"), false
+		}
+		return nil, false
 	}
 	// Special case, there is only one element and left edge
 	// proof is an existent one.

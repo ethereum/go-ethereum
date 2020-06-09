@@ -571,6 +571,39 @@ func TestHasRightElement(t *testing.T) {
 	}
 }
 
+// TestEmptyRangeProof tests the range proof with "no" element.
+// The first edge proof must be a non-existent proof.
+func TestEmptyRangeProof(t *testing.T) {
+	trie, vals := randomTrie(4096)
+	var entries entrySlice
+	for _, kv := range vals {
+		entries = append(entries, kv)
+	}
+	sort.Sort(entries)
+
+	var cases = []struct {
+		pos int
+		err bool
+	}{
+		{len(entries) - 1, false},
+		{500, true},
+	}
+	for _, c := range cases {
+		firstProof := memorydb.New()
+		first := increseKey(common.CopyBytes(entries[c.pos].k))
+		if err := trie.Prove(first, 0, firstProof); err != nil {
+			t.Fatalf("Failed to prove the first node %v", err)
+		}
+		err, _ := VerifyRangeProof(trie.Hash(), first, nil, nil, firstProof, nil)
+		if c.err && err == nil {
+			t.Fatalf("Expected error, got nil")
+		}
+		if !c.err && err != nil {
+			t.Fatalf("Expected no error, got %v", err)
+		}
+	}
+}
+
 // mutateByte changes one byte in b.
 func mutateByte(b []byte) {
 	for r := mrand.Intn(len(b)); ; {
