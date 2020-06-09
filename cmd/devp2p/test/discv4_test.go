@@ -20,9 +20,10 @@ const (
 )
 
 var (
-	enodeID  = flag.String("enode", "", "enode:... as per `admin.nodeInfo.enode`")
-	remote   = flag.String("remote", "127.0.0.1:30303", "")
-	waitTime = flag.Int("waitTime", 500, "ms to wait for response")
+	enodeID          = flag.String("enode", "", "enode:... as per `admin.nodeInfo.enode`")
+	remote           = flag.String("remote", "127.0.0.1:30303", "")
+	waitTime         = flag.Int("waitTime", 500, "ms to wait for response")
+	networkInterface = flag.String("network", "eth0", "network interface")
 
 	remoteAddr        *net.UDPAddr
 	localhost         = net.ParseIP("127.0.0.1")
@@ -352,8 +353,46 @@ func FindNeighbours(t *testing.T) {
 }
 
 func SpoofSanityCheck(t *testing.T) {
-	t.Fatal("Not implemented")
+	var err error
+	var c *net.UDPConn
+
+	c, err = net.DialUDP("udp", nil, remoteAddr)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer c.Close()
+	req := v4wire.Ping{
+		Version:    4,
+		From:       localhostEndpoint,
+		To:         remoteEndpoint,
+		Expiration: futureExpiration(),
+	}
+
+	packetBytes, _, err := v4wire.Encode(priv, &req)
+	if err != nil {
+		t.Fatal(err)
+	}
+	localAddr := c.LocalAddr().(*net.UDPAddr)
+	macAddresses, err := getMacAddr()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(macAddresses) == 0 {
+		t.Fatal("no mac address")
+	}
+	if err := spoofedWrite(remoteAddr, localAddr, req.Name(), packetBytes, macAddresses[0], *networkInterface); err != nil {
+		t.Fatal("write", err)
+	}
+
+	reply, err := readPacket(c)
+	if err != nil {
+		t.Fatal("read", err)
+	}
+	if reply.Kind() != v4wire.PongPacket {
+		t.Error("Reply is not a Pong", reply.Name())
+	}
 }
+
 func SpoofAmplificationAttackCheck(t *testing.T) {
 	t.Fatal("Not implemented")
 }
