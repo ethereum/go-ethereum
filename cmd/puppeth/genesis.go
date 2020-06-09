@@ -414,6 +414,7 @@ func newParityChainSpec(network string, genesis *core.Genesis, bootnodes []strin
 		spec.Engine.Clique = &parityCliqueConfig{}
 		spec.Engine.Clique.Params.Epoch = genesis.Config.Clique.Epoch
 		spec.Engine.Clique.Params.Period = genesis.Config.Clique.Period
+		spec.Params.MaximumExtraDataSize = 0xffff
 	}
 
 	// Tangerine Whistle : 150
@@ -635,14 +636,14 @@ func newParityChainSpec(network string, genesis *core.Genesis, bootnodes []strin
 			Name:       "bls12_381_fp_to_g1",
 			ActivateAt: (*hexutil.Big)(genesis.Config.YoloV1Block),
 			Pricing: &parityChainSpecPricing{
-				Bls12ConstPricing: &parityChainSpecConstOperationPricing{Price: 600},
+				Bls12ConstPricing: &parityChainSpecConstOperationPricing{Price: 5500},
 			},
 		})
 		spec.setPrecompile(18, &parityChainSpecBuiltin{
 			Name:       "bls12_381_fp2_to_g2",
 			ActivateAt: (*hexutil.Big)(genesis.Config.YoloV1Block),
 			Pricing: &parityChainSpecPricing{
-				Bls12ConstPricing: &parityChainSpecConstOperationPricing{Price: 600},
+				Bls12ConstPricing: &parityChainSpecConstOperationPricing{Price: 110000},
 			},
 		})
 
