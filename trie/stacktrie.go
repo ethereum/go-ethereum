@@ -38,16 +38,16 @@ type ReStackTrie struct {
 // NewReStackTrie allocates and initializes an empty trie.
 func NewReStackTrie() *ReStackTrie {
 	return &ReStackTrie{
-		nodeType: 3,
+		nodeType: emptyNode,
 	}
 }
 
 // List all values that ReStackTrie#nodeType can hold
 const (
-	branchNode = iota
+	emptyNode = iota
+	branchNode
 	extNode
 	leafNode
-	emptyNode
 	hashedNode
 )
 
