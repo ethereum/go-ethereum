@@ -1040,15 +1040,17 @@ type ExecutionResult struct {
 // StructLogRes stores a structured log emitted by the EVM while replaying a
 // transaction in debug mode
 type StructLogRes struct {
-	Pc      uint64             `json:"pc"`
-	Op      string             `json:"op"`
-	Gas     uint64             `json:"gas"`
-	GasCost uint64             `json:"gasCost"`
-	Depth   int                `json:"depth"`
-	Error   error              `json:"error,omitempty"`
-	Stack   *[]string          `json:"stack,omitempty"`
-	Memory  *[]string          `json:"memory,omitempty"`
-	Storage *map[string]string `json:"storage,omitempty"`
+	Pc             uint64             `json:"pc"`
+	Op             string             `json:"op"`
+	Gas            uint64             `json:"gas"`
+	GasCost        uint64             `json:"gasCost"`
+	Depth          int                `json:"depth"`
+	Error          error              `json:"error,omitempty"`
+	Stack          *[]string          `json:"stack,omitempty"`
+	Memory         *[]string          `json:"memory,omitempty"`
+	Storage        *map[string]string `json:"storage,omitempty"`
+	StorageRead    *map[string]string `json:"storageRead,omitempty"`
+	StorageWritten *map[string]string `json:"storageWritten,omitempty"`
 }
 
 // FormatLogs formats EVM returned structured logs for json output
@@ -1083,6 +1085,20 @@ func FormatLogs(logs []vm.StructLog) []StructLogRes {
 				storage[fmt.Sprintf("%x", i)] = fmt.Sprintf("%x", storageValue)
 			}
 			formatted[index].Storage = &storage
+		}
+		if trace.StorageRead != nil {
+			storage := make(map[string]string)
+			for i, storageValue := range trace.StorageRead {
+				storage[fmt.Sprintf("%x", i)] = fmt.Sprintf("%x", storageValue)
+			}
+			formatted[index].StorageRead = &storage
+		}
+		if trace.StorageWritten != nil {
+			storage := make(map[string]string)
+			for i, storageValue := range trace.StorageWritten {
+				storage[fmt.Sprintf("%x", i)] = fmt.Sprintf("%x", storageValue)
+			}
+			formatted[index].StorageWritten = &storage
 		}
 	}
 	return formatted

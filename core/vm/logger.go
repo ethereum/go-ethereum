@@ -42,7 +42,6 @@ func (s Storage) Copy() Storage {
 	for key, value := range s {
 		cpy[key] = value
 	}
-
 	return cpy
 }
 
@@ -60,18 +59,24 @@ type LogConfig struct {
 // StructLog is emitted to the EVM each cycle and lists information about the current internal state
 // prior to the execution of the statement.
 type StructLog struct {
-	Pc            uint64                      `json:"pc"`
-	Op            OpCode                      `json:"op"`
-	Gas           uint64                      `json:"gas"`
-	GasCost       uint64                      `json:"gasCost"`
-	Memory        []byte                      `json:"memory"`
-	MemorySize    int                         `json:"memSize"`
-	Stack         []*big.Int                  `json:"stack"`
-	ReturnStack   []uint64                    `json:"returnStack"`
-	Storage       map[common.Hash]common.Hash `json:"-"`
-	Depth         int                         `json:"depth"`
-	RefundCounter uint64                      `json:"refund"`
-	Err           error                       `json:"-"`
+	Pc          uint64     `json:"pc"`
+	Op          OpCode     `json:"op"`
+	Gas         uint64     `json:"gas"`
+	GasCost     uint64     `json:"gasCost"`
+	Memory      []byte     `json:"memory"`
+	MemorySize  int        `json:"memSize"`
+	Stack       []*big.Int `json:"stack"`
+	ReturnStack []uint64   `json:"returnStack"`
+
+	// Deprecated but keep it here for backward compatibility.
+	// Use `StorageRead` and `StorageWritten` instead.
+	Storage        map[common.Hash]common.Hash `json:"-"`
+	StorageRead    map[common.Hash]common.Hash `json:"-"`
+	StorageWritten map[common.Hash]common.Hash `json:"-"`
+
+	Depth         int    `json:"depth"`
+	RefundCounter uint64 `json:"refund"`
+	Err           error  `json:"-"`
 }
 
 // overrides for gencodec
@@ -118,16 +123,22 @@ type Tracer interface {
 type StructLogger struct {
 	cfg LogConfig
 
-	logs          []StructLog
-	changedValues map[common.Address]Storage
-	output        []byte
-	err           error
+	logs   []StructLog
+	output []byte
+	err    error
+
+	// storageRead and storageWritten is all the storage read from/written to
+	// so far during the current call. The value might be overwritten by the
+	// following instructions.
+	storageRead    map[common.Address]Storage
+	storageWritten map[common.Address]Storage
 }
 
 // NewStructLogger returns a new logger
 func NewStructLogger(cfg *LogConfig) *StructLogger {
 	logger := &StructLogger{
-		changedValues: make(map[common.Address]Storage),
+		storageRead:    make(map[common.Address]Storage),
+		storageWritten: make(map[common.Address]Storage),
 	}
 	if cfg != nil {
 		logger.cfg = *cfg
@@ -142,27 +153,32 @@ func (l *StructLogger) CaptureStart(from common.Address, to common.Address, crea
 
 // CaptureState logs a new structured log message and pushes it out to the environment
 //
-// CaptureState also tracks SSTORE ops to track dirty values.
+// CaptureState also tracks SLOAD/SSTORE ops to track storage change.
 func (l *StructLogger) CaptureState(env *EVM, pc uint64, op OpCode, gas, cost uint64, memory *Memory, stack *Stack, rStack *ReturnStack, contract *Contract, depth int, err error) error {
 	// check if already accumulated the specified number of logs
 	if l.cfg.Limit != 0 && l.cfg.Limit <= len(l.logs) {
 		return errTraceLimitReached
 	}
-
 	// initialise new changed values storage container for this contract
 	// if not present.
-	if l.changedValues[contract.Address()] == nil {
-		l.changedValues[contract.Address()] = make(Storage)
+	if l.storageRead[contract.Address()] == nil {
+		l.storageRead[contract.Address()] = make(Storage)
 	}
-
-	// capture SSTORE opcodes and determine the changed value and store
-	// it in the local storage container.
+	if l.storageWritten[contract.Address()] == nil {
+		l.storageWritten[contract.Address()] = make(Storage)
+	}
+	// capture SLOAD opcodes and record the read entry in the local storage
+	if op == SLOAD && stack.len() >= 1 {
+		var address = common.Hash(stack.data[stack.len()-1].Bytes32())
+		l.storageRead[contract.Address()][address] = env.StateDB.GetState(contract.Address(), address)
+	}
+	// capture SSTORE opcodes and record the written entry in the local storage.
 	if op == SSTORE && stack.len() >= 2 {
 		var (
 			value   = common.Hash(stack.data[stack.len()-2].Bytes32())
 			address = common.Hash(stack.data[stack.len()-1].Bytes32())
 		)
-		l.changedValues[contract.Address()][address] = value
+		l.storageWritten[contract.Address()][address] = value
 	}
 	// Copy a snapshot of the current memory state to a new buffer
 	var mem []byte
@@ -179,9 +195,12 @@ func (l *StructLogger) CaptureState(env *EVM, pc uint64, op OpCode, gas, cost ui
 		}
 	}
 	// Copy a snapshot of the current storage to a new container
-	var storage Storage
+	var (
+		storageRead    Storage
+		storageWritten Storage
+	)
 	if !l.cfg.DisableStorage {
-		storage = l.changedValues[contract.Address()].Copy()
+		storageRead, storageWritten = l.storageRead[contract.Address()].Copy(), l.storageWritten[contract.Address()].Copy()
 	}
 	var rstack []uint64
 	if !l.cfg.DisableStack && rStack != nil {
@@ -189,8 +208,7 @@ func (l *StructLogger) CaptureState(env *EVM, pc uint64, op OpCode, gas, cost ui
 		copy(rstck, rStack.data)
 	}
 	// create a new snapshot of the EVM.
-	log := StructLog{pc, op, gas, cost, mem, memory.Len(), stck, rstack, storage, depth, env.StateDB.GetRefund(), err}
-
+	log := StructLog{pc, op, gas, cost, mem, memory.Len(), stck, rstack, storageWritten /* backward compatibility*/, storageRead, storageWritten, depth, env.StateDB.GetRefund(), err}
 	l.logs = append(l.logs, log)
 	return nil
 }
@@ -248,9 +266,22 @@ func WriteTrace(writer io.Writer, logs []StructLog) {
 			fmt.Fprintln(writer, "Memory:")
 			fmt.Fprint(writer, hex.Dump(log.Memory))
 		}
+		// For backward compatibility, still print storage here.
 		if len(log.Storage) > 0 {
 			fmt.Fprintln(writer, "Storage:")
 			for h, item := range log.Storage {
+				fmt.Fprintf(writer, "%x: %x\n", h, item)
+			}
+		}
+		if len(log.StorageRead) > 0 {
+			fmt.Fprintln(writer, "StorageRead:")
+			for h, item := range log.StorageRead {
+				fmt.Fprintf(writer, "%x: %x\n", h, item)
+			}
+		}
+		if len(log.StorageWritten) > 0 {
+			fmt.Fprintln(writer, "StorageWritten:")
+			for h, item := range log.StorageWritten {
 				fmt.Fprintf(writer, "%x: %x\n", h, item)
 			}
 		}
