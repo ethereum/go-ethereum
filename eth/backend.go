@@ -529,7 +529,7 @@ func (s *Ethereum) Downloader() *downloader.Downloader { return s.protocolManage
 func (s *Ethereum) Synced() bool                       { return atomic.LoadUint32(&s.protocolManager.acceptTxs) == 1 }
 func (s *Ethereum) ArchiveMode() bool                  { return s.config.NoPruning }
 
-// Protocols implements node.Backend, returning all the currently configured
+// Protocols returns all the currently configured
 // network protocols to start.
 func (s *Ethereum) Protocols() []p2p.Protocol {
 	protos := make([]p2p.Protocol, len(ProtocolVersions))
@@ -544,7 +544,7 @@ func (s *Ethereum) Protocols() []p2p.Protocol {
 	return protos
 }
 
-// P2PServer implements node.Backend, registering the node's running p2p server with the Backend.
+// P2PServer registers the node's running p2p server with the Backend.
 func (s *Ethereum) P2PServer(server *p2p.Server) error {
 	if server == nil {
 		return errors.New("p2p server is not running, cannot register with eth backend") // TODO is this error message okay?
