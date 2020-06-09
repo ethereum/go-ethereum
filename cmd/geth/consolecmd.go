@@ -26,8 +26,6 @@ import (
 
 	"github.com/ethereum/go-ethereum/cmd/utils"
 	"github.com/ethereum/go-ethereum/console"
-	"github.com/ethereum/go-ethereum/eth"
-	"github.com/ethereum/go-ethereum/les"
 	"github.com/ethereum/go-ethereum/node"
 	"github.com/ethereum/go-ethereum/rpc"
 	"gopkg.in/urfave/cli.v1"
@@ -81,13 +79,7 @@ func localConsole(ctx *cli.Context) error {
 	// Create and start the node based on the CLI flags
 	prepare(ctx)
 	stack := makeFullNode(ctx)
-	// fetch backend
-	var ethBackend *eth.Ethereum
-	stack.ServiceContext.Lifecycle(&ethBackend)
-	var lesBackend *les.LightEthereum
-	stack.ServiceContext.Lifecycle(&lesBackend)
-
-	startNode(ctx, stack, ethBackend, lesBackend)
+	startNode(ctx, stack)
 	defer stack.Close()
 
 	// Attach to the newly started node and start the JavaScript console
@@ -199,13 +191,7 @@ func dialRPC(endpoint string) (*rpc.Client, error) {
 func ephemeralConsole(ctx *cli.Context) error {
 	// Create and start the node based on the CLI flags
 	stack := makeFullNode(ctx)
-	// fetch backend
-	var ethBackend *eth.Ethereum
-	stack.ServiceContext.Lifecycle(&ethBackend)
-	var lesBackend *les.LightEthereum
-	stack.ServiceContext.Lifecycle(&lesBackend)
-
-	startNode(ctx, stack, ethBackend, lesBackend)
+	startNode(ctx, stack)
 	defer stack.Close()
 
 	// Attach to the newly started node and start the JavaScript console
