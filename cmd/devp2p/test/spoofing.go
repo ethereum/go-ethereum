@@ -8,7 +8,7 @@ import (
 	"github.com/google/gopacket/pcap"
 )
 
-func spoofedWrite(sourcePort int, targetPort int, payload []byte) error {
+func spoofedWrite(source *net.UDPAddr, target *net.UDPAddr, payload []byte) error {
 	device := "lo0"
 	handle, err := pcap.OpenLive(device, 1500, false, pcap.BlockForever)
 	if err != nil {
@@ -22,14 +22,14 @@ func spoofedWrite(sourcePort int, targetPort int, payload []byte) error {
 	ip := layers.IPv4{
 		Version:  4,
 		TTL:      64,
-		SrcIP:    net.IP{127, 0, 0, 1},
-		DstIP:    net.IP{127, 0, 0, 1},
+		SrcIP:    source.IP,
+		DstIP:    target.IP,
 		Protocol: layers.IPProtocolUDP,
 	}
 
 	udp := layers.UDP{
-		SrcPort: layers.UDPPort(sourcePort),
-		DstPort: layers.UDPPort(targetPort),
+		SrcPort: layers.UDPPort(source.Port),
+		DstPort: layers.UDPPort(target.Port),
 	}
 	udp.SetNetworkLayerForChecksum(&ip)
 

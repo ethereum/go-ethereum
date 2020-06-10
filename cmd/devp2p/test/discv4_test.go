@@ -358,14 +358,16 @@ func SpoofSanityCheck(t *testing.T) {
 	var conn, relayConn *net.UDPConn
 	var reply v4wire.Packet
 
-	conn, err = net.DialUDP("udp", nil, remoteAddr)
+	localAddr := &net.UDPAddr{IP: net.ParseIP("127.0.0.1")}
+	conn, err = net.DialUDP("udp", localAddr, remoteAddr)
 	if err != nil {
 		t.Fatal(err)
 	}
 	defer conn.Close()
 
 	// Make another connection that will act as relay
-	relayConn, err = net.DialUDP("udp", nil, remoteAddr)
+	relayAddr := &net.UDPAddr{IP: net.ParseIP("127.0.0.2")}
+	relayConn, err = net.DialUDP("udp", relayAddr, remoteAddr)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -382,10 +384,8 @@ func SpoofSanityCheck(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	sourcePort := relayConn.LocalAddr().(*net.UDPAddr).Port
-	targetPort := remoteAddr.Port
 
-	if err := spoofedWrite(sourcePort, targetPort, packetBytes); err != nil {
+	if err := spoofedWrite(relayAddr, remoteAddr, packetBytes); err != nil {
 		t.Fatal("write", err)
 	}
 
