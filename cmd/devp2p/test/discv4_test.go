@@ -20,10 +20,9 @@ const (
 )
 
 var (
-	enodeID          = flag.String("enode", "", "enode:... as per `admin.nodeInfo.enode`")
-	remote           = flag.String("remote", "127.0.0.1:30303", "")
-	waitTime         = flag.Int("waitTime", 500, "ms to wait for response")
-	networkInterface = flag.String("network", "lo0", "network interface")
+	enodeID  = flag.String("enode", "", "enode:... as per `admin.nodeInfo.enode`")
+	remote   = flag.String("remote", "127.0.0.1:30303", "")
+	waitTime = flag.Int("waitTime", 500, "ms to wait for response")
 
 	remoteAddr        *net.UDPAddr
 	localhost         = net.ParseIP("127.0.0.1")
@@ -357,6 +356,7 @@ func FindNeighbours(t *testing.T) {
 func SpoofSanityCheck(t *testing.T) {
 	var err error
 	var c *net.UDPConn
+	var reply v4wire.Packet
 
 	c, err = net.DialUDP("udp", nil, remoteAddr)
 	if err != nil {
@@ -382,7 +382,7 @@ func SpoofSanityCheck(t *testing.T) {
 		t.Fatal("write", err)
 	}
 
-	reply, err := readPacket(c)
+	reply, err = readPacket(c)
 	if err != nil {
 		t.Fatal("read", err)
 	}
