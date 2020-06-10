@@ -26,7 +26,7 @@ import (
 )
 
 // AzureBlobstoreConfig is an authentication and configuration struct containing
-// the data needed by the Azure SDK to interact with a speicifc container in the
+// the data needed by the Azure SDK to interact with a specific container in the
 // blobstore.
 type AzureBlobstoreConfig struct {
 	Account   string // Account name to authorize API requests with
