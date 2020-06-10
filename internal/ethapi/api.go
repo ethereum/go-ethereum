@@ -1051,6 +1051,7 @@ type StructLogRes struct {
 	Storage        *map[string]string `json:"storage,omitempty"`
 	StorageRead    *map[string]string `json:"storageRead,omitempty"`
 	StorageWritten *map[string]string `json:"storageWritten,omitempty"`
+	StorageView    *map[string]string `json:"storageView,omitempty"`
 }
 
 // FormatLogs formats EVM returned structured logs for json output
@@ -1099,6 +1100,13 @@ func FormatLogs(logs []vm.StructLog) []StructLogRes {
 				storage[fmt.Sprintf("%x", i)] = fmt.Sprintf("%x", storageValue)
 			}
 			formatted[index].StorageWritten = &storage
+		}
+		if trace.StorageView != nil {
+			storage := make(map[string]string)
+			for i, storageValue := range trace.StorageView {
+				storage[fmt.Sprintf("%x", i)] = fmt.Sprintf("%x", storageValue)
+			}
+			formatted[index].StorageView = &storage
 		}
 	}
 	return formatted

@@ -27,6 +27,7 @@ func (s StructLog) MarshalJSON() ([]byte, error) {
 		Storage        map[common.Hash]common.Hash `json:"-"`
 		StorageRead    map[common.Hash]common.Hash `json:"-"`
 		StorageWritten map[common.Hash]common.Hash `json:"-"`
+		StorageView    map[common.Hash]common.Hash `json:"-"`
 		Depth          int                         `json:"depth"`
 		RefundCounter  uint64                      `json:"refund"`
 		Err            error                       `json:"-"`
@@ -55,6 +56,7 @@ func (s StructLog) MarshalJSON() ([]byte, error) {
 	enc.Storage = s.Storage
 	enc.StorageRead = s.StorageRead
 	enc.StorageWritten = s.StorageWritten
+	enc.StorageView = s.StorageView
 	enc.Depth = s.Depth
 	enc.RefundCounter = s.RefundCounter
 	enc.Err = s.Err
@@ -77,6 +79,7 @@ func (s *StructLog) UnmarshalJSON(input []byte) error {
 		Storage        map[common.Hash]common.Hash `json:"-"`
 		StorageRead    map[common.Hash]common.Hash `json:"-"`
 		StorageWritten map[common.Hash]common.Hash `json:"-"`
+		StorageView    map[common.Hash]common.Hash `json:"-"`
 		Depth          *int                        `json:"depth"`
 		RefundCounter  *uint64                     `json:"refund"`
 		Err            error                       `json:"-"`
@@ -123,6 +126,9 @@ func (s *StructLog) UnmarshalJSON(input []byte) error {
 	}
 	if dec.StorageWritten != nil {
 		s.StorageWritten = dec.StorageWritten
+	}
+	if dec.StorageView != nil {
+		s.StorageView = dec.StorageView
 	}
 	if dec.Depth != nil {
 		s.Depth = *dec.Depth
