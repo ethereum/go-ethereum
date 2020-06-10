@@ -25,7 +25,7 @@ import (
 
 func newTestFullNode(v []byte) []interface{} {
 	fullNodeData := []interface{}{}
-	for i := 0; i < 16; i++ {
+	for i := 0; i < 2; i++ {
 		k := bytes.Repeat([]byte{byte(i + 1)}, 32)
 		fullNodeData = append(fullNodeData, k)
 	}
@@ -37,11 +37,11 @@ func TestDecodeNestedNode(t *testing.T) {
 	fullNodeData := newTestFullNode([]byte("fullnode"))
 
 	data := [][]byte{}
-	for i := 0; i < 16; i++ {
+	for i := 0; i < 2; i++ {
 		data = append(data, nil)
 	}
 	data = append(data, []byte("subnode"))
-	fullNodeData[15] = data
+	fullNodeData[1] = data
 
 	buf := bytes.NewBuffer([]byte{})
 	rlp.Encode(buf, fullNodeData)
@@ -67,11 +67,11 @@ func TestDecodeFullNodeWrongNestedFullNode(t *testing.T) {
 	fullNodeData := newTestFullNode([]byte("fullnode"))
 
 	data := [][]byte{}
-	for i := 0; i < 16; i++ {
+	for i := 0; i < 2; i++ {
 		data = append(data, []byte("123456"))
 	}
 	data = append(data, []byte("subnode"))
-	fullNodeData[15] = data
+	fullNodeData[1] = data
 
 	buf := bytes.NewBuffer([]byte{})
 	rlp.Encode(buf, fullNodeData)

@@ -133,14 +133,14 @@ func TestNodeIteratorCoverage(t *testing.T) {
 type kvs struct{ k, v string }
 
 var testdata1 = []kvs{
-	{"barb", "ba"},
-	{"bard", "bc"},
-	{"bars", "bb"},
-	{"bar", "b"},
-	{"fab", "z"},
-	{"food", "ab"},
-	{"foos", "aa"},
-	{"foo", "a"},
+	{"barb", "ba"}, // 01100010 01100001 01110010 01100010
+	{"bard", "bc"}, // 01100010 01100001 01110010 01100100
+	{"bars", "bb"}, // 01100010 01100001 01110010 01110011
+	{"bar", "b"},   // 01100010 01100001 01110010
+	{"fab", "z"},   // 01100110 01100001 01100010
+	{"food", "ab"}, // 01100110 01101111 01101111 01100100
+	{"foos", "aa"}, // 01100110 01101111 01101111 01110011
+	{"foo", "a"},   // 01100110 01101111 01101111
 }
 
 var testdata2 = []kvs{
@@ -394,17 +394,18 @@ func testIteratorContinueAfterSeekError(t *testing.T, memonly bool) {
 	if !memonly {
 		triedb.Commit(root, true)
 	}
-	barNodeHash := common.HexToHash("05041990364eb72fcb1127652ce40d8bab765f2bfe53225b1170d276cc101c2e")
+	// This hash corresponds to key 0110 0, which is the first part of "b"
+	bNodeHash := common.HexToHash("36f732c3c96ff910fac7e6797006d03bc2dda8f160612b0c4d51bd44d1635d82")
 	var (
-		barNodeBlob []byte
-		barNodeObj  *cachedNode
+		bNodeBlob []byte
+		bNodeObj  *cachedNode
 	)
 	if memonly {
-		barNodeObj = triedb.dirties[barNodeHash]
-		delete(triedb.dirties, barNodeHash)
+		bNodeObj = triedb.dirties[bNodeHash]
+		delete(triedb.dirties, bNodeHash)
 	} else {
-		barNodeBlob, _ = diskdb.Get(barNodeHash[:])
-		diskdb.Delete(barNodeHash[:])
+		bNodeBlob, _ = diskdb.Get(bNodeHash[:])
+		diskdb.Delete(bNodeHash[:])
 	}
 	// Create a new iterator that seeks to "bars". Seeking can't proceed because
 	// the node is missing.
@@ -413,14 +414,14 @@ func testIteratorContinueAfterSeekError(t *testing.T, memonly bool) {
 	missing, ok := it.Error().(*MissingNodeError)
 	if !ok {
 		t.Fatal("want MissingNodeError, got", it.Error())
-	} else if missing.NodeHash != barNodeHash {
+	} else if missing.NodeHash != bNodeHash {
 		t.Fatal("wrong node missing")
 	}
 	// Reinsert the missing node.
 	if memonly {
-		triedb.dirties[barNodeHash] = barNodeObj
+		triedb.dirties[bNodeHash] = bNodeObj
 	} else {
-		diskdb.Put(barNodeHash[:], barNodeBlob)
+		diskdb.Put(bNodeHash[:], bNodeBlob)
 	}
 	// Check that iteration produces the right set of values.
 	if err := checkIteratorOrder(testdata1[2:], NewIterator(it)); err != nil {

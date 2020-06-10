@@ -25,7 +25,7 @@ import (
 	"github.com/ethereum/go-ethereum/rlp"
 )
 
-var indices = []string{"0", "1", "2", "3", "4", "5", "6", "7", "8", "9", "a", "b", "c", "d", "e", "f", "[17]"}
+var indices = []string{"0", "1", "[3]"}
 
 type node interface {
 	fstring(string) string
@@ -34,7 +34,7 @@ type node interface {
 
 type (
 	fullNode struct {
-		Children [17]node // Actual trie node data to encode/decode (needs custom encoder)
+		Children [3]node // Actual trie node data to encode/decode (needs custom encoder)
 		flags    nodeFlag
 	}
 	shortNode struct {
@@ -52,7 +52,7 @@ var nilValueNode = valueNode(nil)
 
 // EncodeRLP encodes a full node into the consensus RLP format.
 func (n *fullNode) EncodeRLP(w io.Writer) error {
-	var nodes [17]node
+	var nodes [3]node
 
 	for i, child := range &n.Children {
 		if child != nil {
@@ -126,7 +126,7 @@ func decodeNode(hash, buf []byte) (node, error) {
 	case 2:
 		n, err := decodeShort(hash, elems)
 		return n, wrapError(err, "short")
-	case 17:
+	case 3:
 		n, err := decodeFull(hash, elems)
 		return n, wrapError(err, "full")
 	default:
@@ -140,8 +140,8 @@ func decodeShort(hash, elems []byte) (node, error) {
 		return nil, err
 	}
 	flag := nodeFlag{hash: hash}
-	key := compactToHex(kbuf)
-	if hasTerm(key) {
+	key := compactKeyToBinaryKey(kbuf)
+	if hasBinaryKeyTerminator(key) {
 		// value node
 		val, _, err := rlp.SplitString(rest)
 		if err != nil {
@@ -158,7 +158,7 @@ func decodeShort(hash, elems []byte) (node, error) {
 
 func decodeFull(hash, elems []byte) (*fullNode, error) {
 	n := &fullNode{flags: nodeFlag{hash: hash}}
-	for i := 0; i < 16; i++ {
+	for i := 0; i < 2; i++ {
 		cld, rest, err := decodeRef(elems)
 		if err != nil {
 			return n, wrapError(err, fmt.Sprintf("[%d]", i))
@@ -170,7 +170,7 @@ func decodeFull(hash, elems []byte) (*fullNode, error) {
 		return n, err
 	}
 	if len(val) > 0 {
-		n.Children[16] = append(valueNode{}, val...)
+		n.Children[2] = append(valueNode{}, val...)
 	}
 	return n, nil
 }

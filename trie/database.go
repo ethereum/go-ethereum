@@ -107,13 +107,13 @@ func (n rawNode) fstring(ind string) string { panic("this should never end up in
 // rawFullNode represents only the useful data content of a full node, with the
 // caches and flags stripped out to minimize its data storage. This type honors
 // the same RLP encoding as the original parent.
-type rawFullNode [17]node
+type rawFullNode [3]node
 
 func (n rawFullNode) cache() (hashNode, bool)   { panic("this should never end up in a live trie") }
 func (n rawFullNode) fstring(ind string) string { panic("this should never end up in a live trie") }
 
 func (n rawFullNode) EncodeRLP(w io.Writer) error {
-	var nodes [17]node
+	var nodes [3]node
 
 	for i, child := range n {
 		if child != nil {
@@ -199,7 +199,7 @@ func forGatherChildren(n node, onChild func(hash common.Hash)) {
 	case *rawShortNode:
 		forGatherChildren(n.Val, onChild)
 	case rawFullNode:
-		for i := 0; i < 16; i++ {
+		for i := 0; i < 2; i++ {
 			forGatherChildren(n[i], onChild)
 		}
 	case hashNode:
@@ -243,7 +243,7 @@ func expandNode(hash hashNode, n node) node {
 	case *rawShortNode:
 		// Short nodes need key and child expansion
 		return &shortNode{
-			Key: compactToHex(n.Key),
+			Key: compactKeyToBinaryKey(n.Key),
 			Val: expandNode(nil, n.Val),
 			flags: nodeFlag{
 				hash: hash,

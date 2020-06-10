@@ -158,13 +158,13 @@ func (it *nodeIterator) Parent() common.Hash {
 }
 
 func (it *nodeIterator) Leaf() bool {
-	return hasTerm(it.path)
+	return hasBinaryKeyTerminator(it.path)
 }
 
 func (it *nodeIterator) LeafKey() []byte {
 	if len(it.stack) > 0 {
 		if _, ok := it.stack[len(it.stack)-1].node.(valueNode); ok {
-			return hexToKeybytes(it.path)
+			return binaryKeyToKeyBytes(it.path)
 		}
 	}
 	panic("not at leaf")
@@ -240,8 +240,8 @@ func (it *nodeIterator) Next(descend bool) bool {
 }
 
 func (it *nodeIterator) seek(prefix []byte) error {
-	// The path we're looking for is the hex encoded key without terminator.
-	key := keybytesToHex(prefix)
+	// The path we're looking for is the binary-encoded key without terminator.
+	key := keyBytesToBinaryKey(prefix)
 	key = key[:len(key)-1]
 	// Move forward until we're just before the closest match to key.
 	for {

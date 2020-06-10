@@ -125,7 +125,7 @@ func (h *hasher) hashChildren(original node, db *Database) (node, node, error) {
 	case *shortNode:
 		// Hash the short node's child, caching the newly hashed subtree
 		collapsed, cached := n.copy(), n.copy()
-		collapsed.Key = hexToCompact(n.Key)
+		collapsed.Key = binaryKeyToCompactKey(n.Key)
 		cached.Key = common.CopyBytes(n.Key)
 
 		if _, ok := n.Val.(valueNode); !ok {
@@ -140,7 +140,7 @@ func (h *hasher) hashChildren(original node, db *Database) (node, node, error) {
 		// Hash the full node's children, caching the newly hashed subtrees
 		collapsed, cached := n.copy(), n.copy()
 
-		for i := 0; i < 16; i++ {
+		for i := 0; i < 2; i++ {
 			if n.Children[i] != nil {
 				collapsed.Children[i], cached.Children[i], err = h.hash(n.Children[i], db, false)
 				if err != nil {
@@ -148,7 +148,7 @@ func (h *hasher) hashChildren(original node, db *Database) (node, node, error) {
 				}
 			}
 		}
-		cached.Children[16] = n.Children[16]
+		cached.Children[2] = n.Children[2]
 		return collapsed, cached, nil
 
 	default:
@@ -195,7 +195,7 @@ func (h *hasher) store(n node, db *Database, force bool) (node, error) {
 					h.onleaf(child, hash)
 				}
 			case *fullNode:
-				for i := 0; i < 16; i++ {
+				for i := 0; i < 2; i++ {
 					if child, ok := n.Children[i].(valueNode); ok {
 						h.onleaf(child, hash)
 					}
