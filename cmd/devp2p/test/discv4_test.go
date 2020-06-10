@@ -376,7 +376,7 @@ func SpoofSanityCheck(t *testing.T) {
 		t.Fatal(err)
 	}
 	localAddr := c.LocalAddr().(*net.UDPAddr)
-	if err := sppofedWrite(localAddr, remoteAddr, packetBytes); err != nil {
+	if err := spoofedWrite(localAddr, remoteAddr, packetBytes); err != nil {
 		t.Fatal("write", err)
 	}
 
