@@ -916,12 +916,13 @@ func (s *PublicBlockChainAPI) Call(ctx context.Context, args CallArgs, blockNrOr
 	return result.Return(), result.Err
 }
 
-func DoEstimateGas(ctx context.Context, b Backend, args CallArgs, blockNrOrHash rpc.BlockNumberOrHash, gasCap *big.Int) (hexutil.Uint64, error) {
+func DoEstimateGas(ctx context.Context, b Backend, args CallArgs, blockNrOrHash rpc.BlockNumberOrHash, gasCap *big.Int) (*EstimationResult, error) {
 	// Binary search the gas requirement, as it may be higher than the amount used
 	var (
-		lo  uint64 = params.TxGas - 1
-		hi  uint64
-		cap uint64
+		lo         uint64 = params.TxGas - 1
+		hi         uint64
+		cap        uint64
+		returnData []byte
 	)
 	// Use zero address if sender unspecified.
 	if args.From == nil {
@@ -934,7 +935,7 @@ func DoEstimateGas(ctx context.Context, b Backend, args CallArgs, blockNrOrHash 
 		// Retrieve the block to act as the gas ceiling
 		block, err := b.BlockByNumberOrHash(ctx, blockNrOrHash)
 		if err != nil {
-			return 0, err
+			return nil, err
 		}
 		hi = block.GasLimit()
 	}
@@ -942,13 +943,13 @@ func DoEstimateGas(ctx context.Context, b Backend, args CallArgs, blockNrOrHash 
 	if args.GasPrice != nil && args.GasPrice.ToInt().Uint64() != 0 {
 		state, _, err := b.StateAndHeaderByNumberOrHash(ctx, blockNrOrHash)
 		if err != nil {
-			return 0, err
+			return nil, err
 		}
 		balance := state.GetBalance(*args.From) // from can't be nil
 		available := new(big.Int).Set(balance)
 		if args.Value != nil {
 			if args.Value.ToInt().Cmp(available) >= 0 {
-				return 0, errors.New("insufficient funds for transfer")
+				return nil, errors.New("insufficient funds for transfer")
 			}
 			available.Sub(available, args.Value.ToInt())
 		}
@@ -986,45 +987,54 @@ func DoEstimateGas(ctx context.Context, b Backend, args CallArgs, blockNrOrHash 
 	// Execute the binary search and hone in on an executable gas limit
 	for lo+1 < hi {
 		mid := (hi + lo) / 2
-		failed, _, err := executable(mid)
+		failed, result, err := executable(mid)
 
 		// If the error is not nil(consensus error), it means the provided message
 		// call or transaction will never be accepted no matter how much gas it is
 		// assigened. Return the error directly, don't struggle any more.
 		if err != nil {
-			return 0, err
+			return nil, err
 		}
 		if failed {
 			lo = mid
 		} else {
 			hi = mid
+			returnData = result.Return()
 		}
 	}
 	// Reject the transaction as invalid if it still fails at the highest allowance
 	if hi == cap {
 		failed, result, err := executable(hi)
 		if err != nil {
-			return 0, err
+			return nil, err
 		}
 		if failed {
 			if result != nil && result.Err != vm.ErrOutOfGas {
 				if len(result.Revert()) > 0 {
-					return 0, newRevertError(result)
+					return nil, newRevertError(result)
 				}
-				return 0, result.Err
+				return nil, result.Err
 			}
 			// Otherwise, the specified gas cap is too low
-			return 0, fmt.Errorf("gas required exceeds allowance (%d)", cap)
+			return nil, fmt.Errorf("gas required exceeds allowance (%d)", cap)
 		}
 	}
-	return hexutil.Uint64(hi), nil
+	return &EstimationResult{
+		UsedGas:    hexutil.Uint64(hi),
+		ReturnData: returnData,
+	}, nil
 }
 
 // EstimateGas returns an estimate of the amount of gas needed to execute the
 // given transaction against the current pending block.
-func (s *PublicBlockChainAPI) EstimateGas(ctx context.Context, args CallArgs) (hexutil.Uint64, error) {
+func (s *PublicBlockChainAPI) EstimateGas(ctx context.Context, args CallArgs) (*EstimationResult, error) {
 	blockNrOrHash := rpc.BlockNumberOrHashWithNumber(rpc.PendingBlockNumber)
 	return DoEstimateGas(ctx, s.b, args, blockNrOrHash, s.b.RPCGasCap())
+}
+
+type EstimationResult struct {
+	UsedGas    hexutil.Uint64 `json:"usedGas"`
+	ReturnData hexutil.Bytes  `json:"returnData"`
 }
 
 // ExecutionResult groups all structured logs emitted by the EVM
@@ -1499,7 +1509,7 @@ func (args *SendTxArgs) setDefaults(ctx context.Context, b Backend) error {
 		if err != nil {
 			return err
 		}
-		args.Gas = &estimated
+		args.Gas = &estimated.UsedGas
 		log.Trace("Estimate gas usage automatically", "gas", args.Gas)
 	}
 	return nil

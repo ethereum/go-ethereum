@@ -821,15 +821,14 @@ func (b *Block) Call(ctx context.Context, args struct {
 
 func (b *Block) EstimateGas(ctx context.Context, args struct {
 	Data ethapi.CallArgs
-}) (hexutil.Uint64, error) {
+}) (*ethapi.EstimationResult, error) {
 	if b.numberOrHash == nil {
 		_, err := b.resolveHeader(ctx)
 		if err != nil {
-			return hexutil.Uint64(0), err
+			return nil, err
 		}
 	}
-	gas, err := ethapi.DoEstimateGas(ctx, b.backend, args.Data, *b.numberOrHash, b.backend.RPCGasCap())
-	return gas, err
+	return ethapi.DoEstimateGas(ctx, b.backend, args.Data, *b.numberOrHash, b.backend.RPCGasCap())
 }
 
 type Pending struct {
@@ -891,7 +890,7 @@ func (p *Pending) Call(ctx context.Context, args struct {
 
 func (p *Pending) EstimateGas(ctx context.Context, args struct {
 	Data ethapi.CallArgs
-}) (hexutil.Uint64, error) {
+}) (*ethapi.EstimationResult, error) {
 	pendingBlockNr := rpc.BlockNumberOrHashWithNumber(rpc.PendingBlockNumber)
 	return ethapi.DoEstimateGas(ctx, p.backend, args.Data, pendingBlockNr, p.backend.RPCGasCap())
 }
