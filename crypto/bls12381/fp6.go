@@ -314,9 +314,9 @@ func (e *fp6) inverse(c, a *fe6) {
 
 func (e *fp6) frobeniusMap(c, a *fe6, power uint) {
 	fp2 := e.fp2
-	fp2.frobeniousMap(&c[0], &a[0], power)
-	fp2.frobeniousMap(&c[1], &a[1], power)
-	fp2.frobeniousMap(&c[2], &a[2], power)
+	fp2.frobeniusMap(&c[0], &a[0], power)
+	fp2.frobeniusMap(&c[1], &a[1], power)
+	fp2.frobeniusMap(&c[2], &a[2], power)
 	switch power % 6 {
 	case 0:
 		return
@@ -332,9 +332,9 @@ func (e *fp6) frobeniusMap(c, a *fe6, power uint) {
 
 func (e *fp6) frobeniusMapAssign(a *fe6, power uint) {
 	fp2 := e.fp2
-	fp2.frobeniousMapAssign(&a[0], power)
-	fp2.frobeniousMapAssign(&a[1], power)
-	fp2.frobeniousMapAssign(&a[2], power)
+	fp2.frobeniusMapAssign(&a[0], power)
+	fp2.frobeniusMapAssign(&a[1], power)
+	fp2.frobeniusMapAssign(&a[2], power)
 	t := e.t
 	switch power % 6 {
 	case 0:

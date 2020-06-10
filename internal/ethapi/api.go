@@ -990,7 +990,7 @@ func DoEstimateGas(ctx context.Context, b Backend, args CallArgs, blockNrOrHash 
 
 		// If the error is not nil(consensus error), it means the provided message
 		// call or transaction will never be accepted no matter how much gas it is
-		// assigened. Return the error directly, don't struggle any more.
+		// assigned. Return the error directly, don't struggle any more.
 		if err != nil {
 			return 0, err
 		}
