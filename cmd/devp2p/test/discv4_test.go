@@ -355,18 +355,25 @@ func FindNeighbours(t *testing.T) {
 
 func SpoofSanityCheck(t *testing.T) {
 	var err error
-	var c *net.UDPConn
+	var conn, relayConn *net.UDPConn
 	var reply v4wire.Packet
 
-	c, err = net.DialUDP("udp", nil, remoteAddr)
+	conn, err = net.DialUDP("udp", nil, remoteAddr)
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer c.Close()
+	defer conn.Close()
+
+	// Make another connection that will act as relay
+	relayConn, err = net.DialUDP("udp", nil, remoteAddr)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer relayConn.Close()
 
 	req := v4wire.Ping{
 		Version:    4,
-		From:       wrongEndpoint,
+		From:       localhostEndpoint,
 		To:         remoteEndpoint,
 		Expiration: futureExpiration(),
 	}
@@ -375,14 +382,15 @@ func SpoofSanityCheck(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	sourcePort := c.LocalAddr().(*net.UDPAddr).Port
+	sourcePort := relayConn.LocalAddr().(*net.UDPAddr).Port
 	targetPort := remoteAddr.Port
 
 	if err := spoofedWrite(sourcePort, targetPort, packetBytes); err != nil {
 		t.Fatal("write", err)
 	}
 
-	reply, err = readPacket(c)
+	// We expect the relayConn to receive a pong
+	reply, err = readPacket(relayConn)
 	if err != nil {
 		t.Fatal("read", err)
 	}
