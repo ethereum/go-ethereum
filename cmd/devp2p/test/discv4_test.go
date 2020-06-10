@@ -23,7 +23,7 @@ var (
 	enodeID          = flag.String("enode", "", "enode:... as per `admin.nodeInfo.enode`")
 	remote           = flag.String("remote", "127.0.0.1:30303", "")
 	waitTime         = flag.Int("waitTime", 500, "ms to wait for response")
-	networkInterface = flag.String("network", "eth0", "network interface")
+	networkInterface = flag.String("network", "lo0", "network interface")
 
 	remoteAddr        *net.UDPAddr
 	localhost         = net.ParseIP("127.0.0.1")
@@ -358,6 +358,7 @@ func SpoofSanityCheck(t *testing.T) {
 	var err error
 	var c *net.UDPConn
 
+	// Connect to get local address
 	c, err = net.DialUDP("udp", nil, remoteAddr)
 	if err != nil {
 		t.Fatal(err)
@@ -375,14 +376,7 @@ func SpoofSanityCheck(t *testing.T) {
 		t.Fatal(err)
 	}
 	localAddr := c.LocalAddr().(*net.UDPAddr)
-	macAddresses, err := getMacAddr()
-	if err != nil {
-		t.Fatal(err)
-	}
-	if len(macAddresses) == 0 {
-		t.Fatal("no mac address")
-	}
-	if err := spoofedWrite(remoteAddr, localAddr, req.Name(), packetBytes, macAddresses[0], *networkInterface); err != nil {
+	if err := sppofedWrite(localAddr, remoteAddr, packetBytes); err != nil {
 		t.Fatal("write", err)
 	}
 

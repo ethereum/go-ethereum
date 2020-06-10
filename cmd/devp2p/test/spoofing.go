@@ -4,7 +4,6 @@ import (
 	"fmt"
 	"net"
 
-	"github.com/ethereum/go-ethereum/log"
 	"github.com/google/gopacket"
 	"github.com/google/gopacket/layers"
 	"github.com/google/gopacket/pcap"
@@ -52,119 +51,45 @@ type udpFrameOptions struct {
 	payloadBytes         []byte
 }
 
-func spoofedWrite(toaddr *net.UDPAddr, fromaddr *net.UDPAddr, what string, packet []byte, macAddr string, netInterface string) error {
-
-	mac, err := net.ParseMAC(macAddr)
+func sppofedWrite(fromAddr *net.UDPAddr, toAddr *net.UDPAddr, payload []byte) error {
+	device := "lo0"
+	handle, err := pcap.OpenLive(device, 1500, false, pcap.BlockForever)
 	if err != nil {
 		return err
 	}
 
-	iface, err := GetNetworkInterface(netInterface)
-	if err != nil {
-		return err
+	lo := layers.Loopback{
+		Family: layers.ProtocolFamilyIPv4,
 	}
 
-	if nil == iface {
-		return fmt.Errorf("interface not found: " + netInterface)
+	ip := layers.IPv4{
+		Version:  4,
+		TTL:      64,
+		SrcIP:    net.IP{127, 0, 0, 1},
+		DstIP:    net.IP{127, 0, 0, 1},
+		Protocol: layers.IPProtocolUDP,
 	}
 
-	opts := udpFrameOptions{
-		sourceIP:     fromaddr.IP.To4(),
-		destIP:       toaddr.IP.To4(),
-		sourcePort:   uint16(fromaddr.Port),
-		destPort:     uint16(toaddr.Port),
-		sourceMac:    iface.HardwareAddr,
-		destMac:      mac,
-		isIPv6:       false,
-		payloadBytes: packet,
+	udp := layers.UDP{
+		SrcPort: layers.UDPPort(fromAddr.Port),
+		DstPort: layers.UDPPort(toAddr.Port),
 	}
+	udp.SetNetworkLayerForChecksum(&ip)
 
-	handle, err := pcap.OpenLive(iface.Name, 65536, true, pcap.BlockForever)
-	if err != nil {
-		return err
-	}
-
-	defer handle.Close()
-
-	rawPacket, err := createSerializedUDPFrame(opts)
-	if err != nil {
-		return err
-	}
-
-	if err := handle.WritePacketData(rawPacket); err != nil {
-		return err
-	}
-
-	log.Trace(">> "+what, "from", fromaddr, "addr", toaddr, "err", err)
-	return err
-}
-
-// createSerializedUDPFrame creates an Ethernet frame encapsulating our UDP
-// packet for injection to the local network
-func createSerializedUDPFrame(opts udpFrameOptions) ([]byte, error) {
-
-	buf := gopacket.NewSerializeBuffer()
-	serializeOpts := gopacket.SerializeOptions{
-		FixLengths:       true,
+	options := gopacket.SerializeOptions{
 		ComputeChecksums: true,
-	}
-	ethernetType := layers.EthernetTypeIPv4
-	if opts.isIPv6 {
-		ethernetType = layers.EthernetTypeIPv6
-	}
-	eth := &layers.Ethernet{
-		SrcMAC:       opts.sourceMac,
-		DstMAC:       opts.destMac,
-		EthernetType: ethernetType,
-	}
-	udp := &layers.UDP{
-		SrcPort: layers.UDPPort(opts.sourcePort),
-		DstPort: layers.UDPPort(opts.destPort),
-		// we configured "Length" and "Checksum" to be set for us
-	}
-	if !opts.isIPv6 {
-		ip := &layers.IPv4{
-			SrcIP:    opts.sourceIP,
-			DstIP:    opts.destIP,
-			Protocol: layers.IPProtocolUDP,
-			Version:  4,
-			TTL:      32,
-		}
-		udp.SetNetworkLayerForChecksum(ip)
-		err := gopacket.SerializeLayers(buf, serializeOpts, eth, ip, udp, gopacket.Payload(opts.payloadBytes))
-		if err != nil {
-			return nil, err
-		}
-	} else {
-		ip := &layers.IPv6{
-			SrcIP:      opts.sourceIP,
-			DstIP:      opts.destIP,
-			NextHeader: layers.IPProtocolUDP,
-			Version:    6,
-			HopLimit:   32,
-		}
-		ip.LayerType()
-		udp.SetNetworkLayerForChecksum(ip)
-		err := gopacket.SerializeLayers(buf, serializeOpts, eth, ip, udp, gopacket.Payload(opts.payloadBytes))
-		if err != nil {
-			return nil, err
-		}
+		FixLengths:       true,
 	}
 
-	return buf.Bytes(), nil
-}
+	buffer := gopacket.NewSerializeBuffer()
 
-func getMacAddr() ([]string, error) {
-	interfaces, err := net.Interfaces()
-	if err != nil {
-		return nil, err
+	if err = gopacket.SerializeLayers(buffer, options, &lo, &ip, &udp, gopacket.Payload(payload)); err != nil {
+		return err
 	}
-	var as []string
-	for _, ifa := range interfaces {
-		a := ifa.HardwareAddr.String()
-		if a != "" {
-			as = append(as, a)
-		}
+	outgoingPacket := buffer.Bytes()
+
+	if err = handle.WritePacketData(outgoingPacket); err != nil {
+		return err
 	}
-	return as, nil
+	return nil
 }
