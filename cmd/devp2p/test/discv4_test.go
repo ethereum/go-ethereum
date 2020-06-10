@@ -33,8 +33,6 @@ var (
 	priv              *ecdsa.PrivateKey
 )
 
-type conn net.UDPConn
-
 type pingWithJunk struct {
 	Version    uint
 	From, To   v4wire.Endpoint
@@ -350,7 +348,7 @@ func FindNeighbours(t *testing.T) {
 		t.Fatal("sending find nodes", err)
 	}
 
-	reply, err = readPacket(c)
+	reply, _ = readPacket(c)
 	if reply != nil && reply.Kind() != v4wire.PingPacket {
 		t.Fatal("Expected timeout or ping, got", reply)
 	}
@@ -502,7 +500,7 @@ func FindNeighboursPastExpiration(t *testing.T) {
 	if err = sendPacket(c, &findReq); err != nil {
 		t.Fatal("sending find nodes", err)
 	}
-	reply, err = readPacket(c)
+	reply, _ = readPacket(c)
 	if reply.Kind() == v4wire.NeighborsPacket {
 		t.Fatal("Expected no reply")
 	}
