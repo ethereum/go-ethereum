@@ -52,6 +52,7 @@ type request struct {
 	reqid  uint64
 	peerid enode.ID
 	sendAt time.Time
+	hash   common.Hash
 }
 
 // response represents a response packet from network as well as a channel
@@ -94,6 +95,7 @@ func (fp *fetcherPeer) addAnno(anno *announce) {
 			delete(fp.announces, fp.announcesList[i])
 		}
 		copy(fp.announcesList, fp.announcesList[len(fp.announcesList)-cachedAnnosThreshold:])
+		fp.announcesList = fp.announcesList[:cachedAnnosThreshold]
 	}
 }
 
@@ -106,6 +108,9 @@ func (fp *fetcherPeer) forwardAnno(td *big.Int) []*announce {
 	)
 	for ; cutset < len(fp.announcesList); cutset++ {
 		anno := fp.announces[fp.announcesList[cutset]]
+		if anno == nil {
+			continue // In theory it should never ever happen
+		}
 		if anno.data.Td.Cmp(td) > 0 {
 			break
 		}
@@ -114,6 +119,7 @@ func (fp *fetcherPeer) forwardAnno(td *big.Int) []*announce {
 	}
 	if cutset > 0 {
 		copy(fp.announcesList, fp.announcesList[cutset:])
+		fp.announcesList = fp.announcesList[:len(fp.announcesList)-cutset]
 	}
 	return evicted
 }
@@ -365,7 +371,7 @@ func (f *lightFetcher) mainloop() {
 				if time.Since(request.sendAt) > blockDelayTimeout-gatherSlack {
 					delete(fetching, reqid)
 					f.peerset.unregister(request.peerid.String())
-					log.Debug("request timeout", "peer", request.peerid, "reqid", reqid)
+					log.Debug("Request timeout", "peer", request.peerid, "reqid", reqid)
 				}
 			}
 			f.rescheduleTimer(fetching, requestTimer)
@@ -375,6 +381,20 @@ func (f *lightFetcher) mainloop() {
 				delete(fetching, resp.reqid)
 				f.rescheduleTimer(fetching, requestTimer)
 
+				// The underlying fetcher does not check the consistency of request and response.
+				// The adversary can send the fake announces with invalid hash and number but always
+				// delivery some mismatched header. So it can't be punished by the underlying fetcher.
+				// We have to add two more rules here to detect.
+				if len(resp.headers) != 1 {
+					f.peerset.unregister(req.peerid.String())
+					log.Debug("Deliver more than requested", "peer", req.peerid, "reqid", req.reqid)
+					continue
+				}
+				if resp.headers[0].Hash() != req.hash {
+					f.peerset.unregister(req.peerid.String())
+					log.Debug("Deliver more than requested", "peer", req.peerid, "reqid", req.reqid)
+					continue
+				}
 				resp.remain <- f.fetcher.FilterHeaders(resp.peerid.String(), resp.headers, time.Now())
 			} else {
 				// Discard the entire packet no matter it's a timeout response or unexpected one.
@@ -468,9 +488,9 @@ func (f *lightFetcher) announce(p *serverPeer, head *announceData) {
 }
 
 // trackRequest sends a reqID to main loop for in-flight request tracking.
-func (f *lightFetcher) trackRequest(peerid enode.ID, reqid uint64) {
+func (f *lightFetcher) trackRequest(peerid enode.ID, reqid uint64, hash common.Hash) {
 	select {
-	case f.requestCh <- &request{reqid: reqid, peerid: peerid, sendAt: time.Now()}:
+	case f.requestCh <- &request{reqid: reqid, peerid: peerid, sendAt: time.Now(), hash: hash}:
 	case <-f.closeCh:
 	}
 }
@@ -492,7 +512,7 @@ func (f *lightFetcher) requestHeaderByHash(peerid enode.ID) func(common.Hash) er
 				peer.fcServer.QueuedRequest(id, cost)
 
 				return func() {
-					f.trackRequest(peer.ID(), id)
+					f.trackRequest(peer.ID(), id, hash)
 					peer.requestHeadersByHash(id, hash, 1, 0, false)
 				}
 			},
