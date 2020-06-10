@@ -147,27 +147,6 @@ func (l *StructLogger) CaptureState(env *EVM, pc uint64, op OpCode, gas, cost ui
 	if l.cfg.Limit != 0 && l.cfg.Limit <= len(l.logs) {
 		return errTraceLimitReached
 	}
-	// initialise new changed values storage container for this contract
-	// if not present.
-	if l.storage[contract.Address()] == nil {
-		l.storage[contract.Address()] = make(Storage)
-	}
-	// capture SLOAD opcodes and record the read entry in the local storage
-	if op == SLOAD && stack.len() >= 1 {
-		var (
-			address = common.Hash(stack.data[stack.len()-1].Bytes32())
-			value   = env.StateDB.GetState(contract.Address(), address)
-		)
-		l.storage[contract.Address()][address] = value
-	}
-	// capture SSTORE opcodes and record the written entry in the local storage.
-	if op == SSTORE && stack.len() >= 2 {
-		var (
-			value   = common.Hash(stack.data[stack.len()-2].Bytes32())
-			address = common.Hash(stack.data[stack.len()-1].Bytes32())
-		)
-		l.storage[contract.Address()][address] = value
-	}
 	// Copy a snapshot of the current memory state to a new buffer
 	var mem []byte
 	if !l.cfg.DisableMemory {
@@ -182,15 +161,36 @@ func (l *StructLogger) CaptureState(env *EVM, pc uint64, op OpCode, gas, cost ui
 			stck[i] = new(big.Int).Set(item.ToBig())
 		}
 	}
-	// Copy a snapshot of the current storage to a new container
-	var storage Storage
-	if !l.cfg.DisableStorage {
-		storage = l.storage[contract.Address()].Copy()
-	}
 	var rstack []uint64
 	if !l.cfg.DisableStack && rStack != nil {
 		rstck := make([]uint64, len(rStack.data))
 		copy(rstck, rStack.data)
+	}
+	// Copy a snapshot of the current storage to a new container
+	var storage Storage
+	if !l.cfg.DisableStorage {
+		// initialise new changed values storage container for this contract
+		// if not present.
+		if l.storage[contract.Address()] == nil {
+			l.storage[contract.Address()] = make(Storage)
+		}
+		// capture SLOAD opcodes and record the read entry in the local storage
+		if op == SLOAD && stack.len() >= 1 {
+			var (
+				address = common.Hash(stack.data[stack.len()-1].Bytes32())
+				value   = env.StateDB.GetState(contract.Address(), address)
+			)
+			l.storage[contract.Address()][address] = value
+		}
+		// capture SSTORE opcodes and record the written entry in the local storage.
+		if op == SSTORE && stack.len() >= 2 {
+			var (
+				value   = common.Hash(stack.data[stack.len()-2].Bytes32())
+				address = common.Hash(stack.data[stack.len()-1].Bytes32())
+			)
+			l.storage[contract.Address()][address] = value
+		}
+		storage = l.storage[contract.Address()].Copy()
 	}
 	// create a new snapshot of the EVM.
 	log := StructLog{pc, op, gas, cost, mem, memory.Len(), stck, rstack, storage, depth, env.StateDB.GetRefund(), err}
