@@ -358,15 +358,15 @@ func SpoofSanityCheck(t *testing.T) {
 	var err error
 	var c *net.UDPConn
 
-	// Connect to get local address
 	c, err = net.DialUDP("udp", nil, remoteAddr)
 	if err != nil {
 		t.Fatal(err)
 	}
 	defer c.Close()
+
 	req := v4wire.Ping{
 		Version:    4,
-		From:       localhostEndpoint,
+		From:       wrongEndpoint,
 		To:         remoteEndpoint,
 		Expiration: futureExpiration(),
 	}
@@ -375,8 +375,10 @@ func SpoofSanityCheck(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	localAddr := c.LocalAddr().(*net.UDPAddr)
-	if err := spoofedWrite(localAddr, remoteAddr, packetBytes); err != nil {
+	sourcePort := c.LocalAddr().(*net.UDPAddr).Port
+	targetPort := remoteAddr.Port
+
+	if err := spoofedWrite(sourcePort, targetPort, packetBytes); err != nil {
 		t.Fatal("write", err)
 	}
 
