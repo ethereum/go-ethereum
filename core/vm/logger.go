@@ -183,7 +183,7 @@ func (l *StructLogger) CaptureState(env *EVM, pc uint64, op OpCode, gas, cost ui
 		}
 	}
 	// Copy a snapshot of the current storage to a new container
-	var storage Storage // legacy storage which contains all reads/writes
+	var storage Storage
 	if !l.cfg.DisableStorage {
 		storage = l.storage[contract.Address()].Copy()
 	}
@@ -251,7 +251,6 @@ func WriteTrace(writer io.Writer, logs []StructLog) {
 			fmt.Fprintln(writer, "Memory:")
 			fmt.Fprint(writer, hex.Dump(log.Memory))
 		}
-		// For backward compatibility, still print storage here.
 		if len(log.Storage) > 0 {
 			fmt.Fprintln(writer, "Storage:")
 			for h, item := range log.Storage {
