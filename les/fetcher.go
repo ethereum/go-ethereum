@@ -89,24 +89,31 @@ func (fp *fetcherPeer) addAnno(anno *announce) {
 	fp.announcesList = append(fp.announcesList, hash)
 
 	// Evict oldest if the announces are oversized.
-	for len(fp.announcesList) > cachedAnnosThreshold {
-		delete(fp.announces, fp.announcesList[0])
-		fp.announcesList = fp.announcesList[1:]
+	if len(fp.announcesList)-cachedAnnosThreshold > 0 {
+		for i := 0; i < len(fp.announcesList)-cachedAnnosThreshold; i++ {
+			delete(fp.announces, fp.announcesList[i])
+		}
+		copy(fp.announcesList, fp.announcesList[len(fp.announcesList)-cachedAnnosThreshold:])
 	}
 }
 
 // forwardAnno removes all announces from the map with a number lower than
 // the provided threshold.
 func (fp *fetcherPeer) forwardAnno(td *big.Int) []*announce {
-	var evicted []*announce
-	for len(fp.announcesList) > 0 {
-		anno := fp.announces[fp.announcesList[0]]
+	var (
+		cutset  int
+		evicted []*announce
+	)
+	for ; cutset < len(fp.announcesList); cutset++ {
+		anno := fp.announces[fp.announcesList[cutset]]
 		if anno.data.Td.Cmp(td) > 0 {
 			break
 		}
 		evicted = append(evicted, anno)
 		delete(fp.announces, anno.data.Hash)
-		fp.announcesList = fp.announcesList[1:]
+	}
+	if cutset > 0 {
+		copy(fp.announcesList, fp.announcesList[cutset:])
 	}
 	return evicted
 }
