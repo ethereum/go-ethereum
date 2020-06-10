@@ -50,14 +50,8 @@ type LogConfig struct {
 	DisableMemory  bool // disable memory capture
 	DisableStack   bool // disable stack capture
 	DisableStorage bool // disable storage capture
-
-	// These options only work when `DisableStorage` is false
-	EnableStorageRead    bool // enable capture storage read for all steps
-	EnableStorageWritten bool // enable capture storage written for all steps
-	EnableStorageView    bool // enable capture storage view(visited partial storage) for all steps
-
-	Debug bool // print output during capture end
-	Limit int  // maximum length of output, but zero means unlimited
+	Debug          bool // print output during capture end
+	Limit          int  // maximum length of output, but zero means unlimited
 }
 
 //go:generate gencodec -type StructLog -field-override structLogMarshaling -out gen_structlog.go
@@ -65,25 +59,18 @@ type LogConfig struct {
 // StructLog is emitted to the EVM each cycle and lists information about the current internal state
 // prior to the execution of the statement.
 type StructLog struct {
-	Pc          uint64     `json:"pc"`
-	Op          OpCode     `json:"op"`
-	Gas         uint64     `json:"gas"`
-	GasCost     uint64     `json:"gasCost"`
-	Memory      []byte     `json:"memory"`
-	MemorySize  int        `json:"memSize"`
-	Stack       []*big.Int `json:"stack"`
-	ReturnStack []uint64   `json:"returnStack"`
-
-	// Deprecated but keep it here for backward compatibility.
-	// Use `StorageRead`, `StorageWritten` or `StorageView` instead.
-	Storage        map[common.Hash]common.Hash `json:"-"`
-	StorageRead    map[common.Hash]common.Hash `json:"-"`
-	StorageWritten map[common.Hash]common.Hash `json:"-"`
-	StorageView    map[common.Hash]common.Hash `json:"-"`
-
-	Depth         int    `json:"depth"`
-	RefundCounter uint64 `json:"refund"`
-	Err           error  `json:"-"`
+	Pc            uint64                      `json:"pc"`
+	Op            OpCode                      `json:"op"`
+	Gas           uint64                      `json:"gas"`
+	GasCost       uint64                      `json:"gasCost"`
+	Memory        []byte                      `json:"memory"`
+	MemorySize    int                         `json:"memSize"`
+	Stack         []*big.Int                  `json:"stack"`
+	ReturnStack   []uint64                    `json:"returnStack"`
+	Storage       map[common.Hash]common.Hash `json:"-"`
+	Depth         int                         `json:"depth"`
+	RefundCounter uint64                      `json:"refund"`
+	Err           error                       `json:"-"`
 }
 
 // overrides for gencodec
@@ -130,27 +117,16 @@ type Tracer interface {
 type StructLogger struct {
 	cfg LogConfig
 
-	logs   []StructLog
-	output []byte
-	err    error
-
-	// storageRead and storageWritten is all the storage read from/written to
-	// so far during the current call. The value might be overwritten by the
-	// following instructions.
-	storageRead    map[common.Address]Storage
-	storageWritten map[common.Address]Storage
-
-	// storageView is the partial storage which has been visited during the
-	// current call. It represents the current status of the storage.
-	storageView map[common.Address]Storage
+	storage map[common.Address]Storage
+	logs    []StructLog
+	output  []byte
+	err     error
 }
 
 // NewStructLogger returns a new logger
 func NewStructLogger(cfg *LogConfig) *StructLogger {
 	logger := &StructLogger{
-		storageRead:    make(map[common.Address]Storage),
-		storageWritten: make(map[common.Address]Storage),
-		storageView:    make(map[common.Address]Storage),
+		storage: make(map[common.Address]Storage),
 	}
 	if cfg != nil {
 		logger.cfg = *cfg
@@ -173,14 +149,8 @@ func (l *StructLogger) CaptureState(env *EVM, pc uint64, op OpCode, gas, cost ui
 	}
 	// initialise new changed values storage container for this contract
 	// if not present.
-	if l.storageRead[contract.Address()] == nil {
-		l.storageRead[contract.Address()] = make(Storage)
-	}
-	if l.storageWritten[contract.Address()] == nil {
-		l.storageWritten[contract.Address()] = make(Storage)
-	}
-	if l.storageView[contract.Address()] == nil {
-		l.storageView[contract.Address()] = make(Storage)
+	if l.storage[contract.Address()] == nil {
+		l.storage[contract.Address()] = make(Storage)
 	}
 	// capture SLOAD opcodes and record the read entry in the local storage
 	if op == SLOAD && stack.len() >= 1 {
@@ -188,8 +158,7 @@ func (l *StructLogger) CaptureState(env *EVM, pc uint64, op OpCode, gas, cost ui
 			address = common.Hash(stack.data[stack.len()-1].Bytes32())
 			value   = env.StateDB.GetState(contract.Address(), address)
 		)
-		l.storageRead[contract.Address()][address] = value
-		l.storageView[contract.Address()][address] = value
+		l.storage[contract.Address()][address] = value
 	}
 	// capture SSTORE opcodes and record the written entry in the local storage.
 	if op == SSTORE && stack.len() >= 2 {
@@ -197,8 +166,7 @@ func (l *StructLogger) CaptureState(env *EVM, pc uint64, op OpCode, gas, cost ui
 			value   = common.Hash(stack.data[stack.len()-2].Bytes32())
 			address = common.Hash(stack.data[stack.len()-1].Bytes32())
 		)
-		l.storageWritten[contract.Address()][address] = value
-		l.storageView[contract.Address()][address] = value
+		l.storage[contract.Address()][address] = value
 	}
 	// Copy a snapshot of the current memory state to a new buffer
 	var mem []byte
@@ -215,23 +183,9 @@ func (l *StructLogger) CaptureState(env *EVM, pc uint64, op OpCode, gas, cost ui
 		}
 	}
 	// Copy a snapshot of the current storage to a new container
-	var (
-		storage        Storage // legacy storage which contains all writes
-		storageRead    Storage // storage container for all reads
-		storageWritten Storage // storage container for all writes
-		storageView    Storage // storage container for all reads and writes
-	)
+	var storage Storage // legacy storage which contains all reads/writes
 	if !l.cfg.DisableStorage {
-		storage = l.storageWritten[contract.Address()].Copy()
-		if l.cfg.EnableStorageRead {
-			storageRead = l.storageRead[contract.Address()].Copy()
-		}
-		if l.cfg.EnableStorageWritten {
-			storageWritten = l.storageWritten[contract.Address()].Copy()
-		}
-		if l.cfg.EnableStorageView {
-			storageView = l.storageView[contract.Address()].Copy()
-		}
+		storage = l.storage[contract.Address()].Copy()
 	}
 	var rstack []uint64
 	if !l.cfg.DisableStack && rStack != nil {
@@ -239,7 +193,7 @@ func (l *StructLogger) CaptureState(env *EVM, pc uint64, op OpCode, gas, cost ui
 		copy(rstck, rStack.data)
 	}
 	// create a new snapshot of the EVM.
-	log := StructLog{pc, op, gas, cost, mem, memory.Len(), stck, rstack, storage /* backward compatibility*/, storageRead, storageWritten, storageView, depth, env.StateDB.GetRefund(), err}
+	log := StructLog{pc, op, gas, cost, mem, memory.Len(), stck, rstack, storage, depth, env.StateDB.GetRefund(), err}
 	l.logs = append(l.logs, log)
 	return nil
 }
@@ -301,18 +255,6 @@ func WriteTrace(writer io.Writer, logs []StructLog) {
 		if len(log.Storage) > 0 {
 			fmt.Fprintln(writer, "Storage:")
 			for h, item := range log.Storage {
-				fmt.Fprintf(writer, "%x: %x\n", h, item)
-			}
-		}
-		if len(log.StorageRead) > 0 {
-			fmt.Fprintln(writer, "StorageRead:")
-			for h, item := range log.StorageRead {
-				fmt.Fprintf(writer, "%x: %x\n", h, item)
-			}
-		}
-		if len(log.StorageWritten) > 0 {
-			fmt.Fprintln(writer, "StorageWritten:")
-			for h, item := range log.StorageWritten {
 				fmt.Fprintf(writer, "%x: %x\n", h, item)
 			}
 		}
