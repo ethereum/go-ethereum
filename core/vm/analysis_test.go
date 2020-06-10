@@ -89,7 +89,7 @@ func TestLEB(t *testing.T) {
 	exp := []string{"000000", "010000", "1f0000", "400100", "7f0f00", "401000", "40400c", "7f7f0f"}
 	for i, num := range inputs {
 		bitmap := make([]byte, 3)
-		lebEncode(num, bitmap)
+		leb64Encode(num, bitmap)
 		if expb := common.FromHex(exp[i]); !bytes.Equal(bitmap, expb) {
 			t.Errorf("testcase %d: expected %x, got %x", i, expb, bitmap)
 		}
@@ -103,8 +103,8 @@ func TestLebEncodeDecode(t *testing.T) {
 		// clear buf
 		copy(data, zero)
 		exp := uint16(i)
-		lebEncode(exp, data)
-		got := lebDecode(data)
+		leb64Encode(exp, data)
+		got := leb64Decode(data)
 		if exp != got {
 			t.Fatalf("exp %d, got %d: %x", exp, got, data)
 		}
@@ -162,28 +162,46 @@ func TestShadowAnalysis(t *testing.T) {
 //BenchmarkLEB/decode-6         	362383606	         3.48 ns/op	       0 B/op	       0 allocs/op
 func BenchmarkLEB(b *testing.B) {
 	bitmap := make([]byte, 20)
-	b.Run("encode", func(b *testing.B) {
+	b.Run("encode-64", func(b *testing.B) {
 		b.ReportAllocs()
 		for i := 0; i < b.N; i++ {
-			lebEncode(0xffff, bitmap)
-			lebEncode(0xff, bitmap)
-			lebEncode(0x0, bitmap)
+			leb64Encode(0xffff, bitmap)
+			leb64Encode(0xff, bitmap)
+			leb64Encode(0x1, bitmap)
 		}
 	})
+	b.Run("encode-2-v1", func(b *testing.B) {
+		b.ReportAllocs()
+		for i := 0; i < b.N; i++ {
+			leb4Encodev1(0xffff, bitmap)
+			leb4Encodev1(0xff, bitmap)
+			leb4Encodev1(0x1, bitmap)
+		}
+	})
+	b.Run("encode-2-v2", func(b *testing.B) {
+		b.ReportAllocs()
+		for i := 0; i < b.N; i++ {
+			leb4Encodev2(0xffff, bitmap)
+			leb4Encodev2(0xff, bitmap)
+			leb4Encodev2(0x1, bitmap)
+
+		}
+	})
+
 	var (
 		x = make([]byte, 20)
 		y = make([]byte, 20)
 		z = make([]byte, 20)
 	)
-	lebEncode(0xffff, x)
-	lebEncode(0xff, y)
-	lebEncode(0x0, z)
+	leb64Encode(0xffff, x)
+	leb64Encode(0xff, y)
+	leb64Encode(0x0, z)
 	b.Run("decode", func(b *testing.B) {
 		b.ReportAllocs()
 		for i := 0; i < b.N; i++ {
-			lebDecode(x)
-			lebDecode(y)
-			lebDecode(z)
+			leb64Decode(x)
+			leb64Decode(y)
+			leb64Decode(z)
 		}
 	})
 }

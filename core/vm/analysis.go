@@ -103,7 +103,7 @@ func (shadow *shadowmap) isSameSubroutine(subStart, loc uint16) bool {
 	if loc < subStart {
 		return false
 	}
-	srSize := lebDecode((*shadow)[subStart:])
+	srSize := leb64Decode((*shadow)[subStart:])
 	return loc < subStart+srSize
 }
 
@@ -130,7 +130,7 @@ func makeShadowMap(code []byte) shadowmap {
 			if op == BEGINSUB {
 				srSize := uint16(pc) - curStart
 				// encode the size of the subroutine into the shadowmap
-				lebEncode(srSize, shadow[curStart:])
+				leb64Encode(srSize, shadow[curStart:])
 				curStart = uint16(pc)
 			}
 			pc++
@@ -138,52 +138,8 @@ func makeShadowMap(code []byte) shadowmap {
 	}
 	// Also need to set the final size
 	srSize := uint16((uint16(len(code)) - curStart))
-	lebEncode(srSize, shadow[curStart:])
+	leb64Encode(srSize, shadow[curStart:])
 	return shadow
-}
-
-// lebEncode writes n into the out slice, as 7-bit LEB-encoded values.
-// All writes are OR:ed into the destination buffer
-// https://en.wikipedia.org/wiki/LEB128
-// This encoding differs from the one on wikipedia: we use 6+1 bits for encoding,
-// to allow the MSB bit to be used as a code/or/data-marker
-func lebEncode(n uint16, out []byte) {
-	var (
-		b1 = byte(n & 0x3F)
-		b2 = byte(n >> 6 & 0x3f)
-		b3 = byte(n >> 12)
-	)
-	if b3 != 0 {
-		out[2] |= byte(b3)
-		out[1] |= b2 | 0x40
-		out[0] |= b1 | 0x40
-		return
-	}
-	if b2 != 0 {
-		out[1] |= b2
-		out[0] |= b1 | 0x40
-		return
-	}
-	out[0] |= b1
-	return
-}
-
-// lebDecode decodes the LEB-encoded int16.
-func lebDecode(in []byte) uint16 {
-	var res uint16
-	b := in[0]
-	res |= uint16(0x3f & b)
-	if b&0x40 == 0 {
-		return res
-	}
-	b = in[1]
-	res |= (uint16(0x3f&b) << 6)
-	if b&0x40 == 0 {
-		return res
-	}
-	b = in[2]
-	res |= (uint16(0x3f&b) << 12)
-	return res
 }
 
 type analysisRegistry struct {
