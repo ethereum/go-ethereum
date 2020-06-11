@@ -17,10 +17,11 @@
 package params
 
 import (
-	"github.com/ethereum/go-ethereum/common"
 	"math/big"
 	"reflect"
 	"testing"
+
+	"github.com/ethereum/go-ethereum/common"
 )
 
 func TestCheckCompatible(t *testing.T) {
@@ -82,11 +83,11 @@ func TestCheckCompatible(t *testing.T) {
 }
 
 func TestSortedForkList(t *testing.T) {
-	var cases = []struct{
+	var cases = []struct {
 		config *ChainConfig
 		blocks []uint64
 		hashes []common.Hash
-	} {
+	}{
 		{
 			MainnetChainConfig,
 			[]uint64{1150000, 2463000, 2675000, 4370000, 7280000, 9069000, 9200000},

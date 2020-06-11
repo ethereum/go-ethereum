@@ -57,16 +57,16 @@ var CheckpointOracles = map[common.Hash]*CheckpointOracleConfig{
 var (
 	// MainnetChainConfig is the chain parameters to run a node on the main network.
 	MainnetChainConfig = &ChainConfig{
-		ChainID:             big.NewInt(1),
-		HomesteadBlock:      big.NewInt(1150000),
-		HomesteadHash:       common.HexToHash("0x584bdb5d4e74fe97f5a5222b533fe1322fd0b6ad3eb03f02c3221984e2c0b430"),
-		DAOForkBlock:        big.NewInt(1920000),
-		DAOForkSupport:      true,
-		EIP150Block:         big.NewInt(2463000),
-		EIP150Hash:          common.HexToHash("0x2086799aeebeae135c246c65021c82b4e15a2c451340993aacfd2751886514f0"),
-		EIP155Block:         big.NewInt(2675000),
-		EIP155Hash:          common.HexToHash("0x58eff9265aedf8a54da8121de1324e1e0d9aac99f694d16c6a41afffe3817d73"),
-		EIP158Block:         big.NewInt(2675000),
+		ChainID:        big.NewInt(1),
+		HomesteadBlock: big.NewInt(1150000),
+		HomesteadHash:  common.HexToHash("0x584bdb5d4e74fe97f5a5222b533fe1322fd0b6ad3eb03f02c3221984e2c0b430"),
+		DAOForkBlock:   big.NewInt(1920000),
+		DAOForkSupport: true,
+		EIP150Block:    big.NewInt(2463000),
+		EIP150Hash:     common.HexToHash("0x2086799aeebeae135c246c65021c82b4e15a2c451340993aacfd2751886514f0"),
+		EIP155Block:    big.NewInt(2675000),
+		EIP155Hash:     common.HexToHash("0x58eff9265aedf8a54da8121de1324e1e0d9aac99f694d16c6a41afffe3817d73"),
+		EIP158Block:    big.NewInt(2675000),
 		/* EIP158Hash is skipped since it's same with EIP155 */
 		ByzantiumBlock:      big.NewInt(4370000),
 		ByzantiumHash:       common.HexToHash("0xb1fcff633029ee18ab6482b58ff8b6e95dd7c82a954c852157152a7a6d32785e"),
@@ -74,11 +74,11 @@ var (
 		ConstantinopleHash:  common.HexToHash("0xeddb0590e1095fbe51205a51a297daef7259e229af0432214ae6cb2c1f750750"),
 		PetersburgBlock:     big.NewInt(7280000),
 		/* PetersburgHash is skipped since it's same with Constantinople */
-		IstanbulBlock:       big.NewInt(9069000),
-		IstanbulHash:        common.HexToHash("0x451226b98bf4f784314e9ca2daaa30dc664a387c342ef775ba2d88682a27c084"),
-		MuirGlacierBlock:    big.NewInt(9200000),
-		MuirGlacierHash:     common.HexToHash("0x6ba9486095de7d96a75b67954cfe2581234eae1ef2a92ab03b84fc2eae2deb8a"),
-		Ethash:              new(EthashConfig),
+		IstanbulBlock:    big.NewInt(9069000),
+		IstanbulHash:     common.HexToHash("0x451226b98bf4f784314e9ca2daaa30dc664a387c342ef775ba2d88682a27c084"),
+		MuirGlacierBlock: big.NewInt(9200000),
+		MuirGlacierHash:  common.HexToHash("0x6ba9486095de7d96a75b67954cfe2581234eae1ef2a92ab03b84fc2eae2deb8a"),
+		Ethash:           new(EthashConfig),
 	}
 
 	// MainnetTrustedCheckpoint contains the light client trusted checkpoint for the main network.

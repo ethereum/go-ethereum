@@ -20,6 +20,7 @@ import (
 	"fmt"
 	"sort"
 
+	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/params"
 )
@@ -28,6 +29,12 @@ import (
 // the correct hashes, to avoid clients going off on different chains. This is an
 // optional feature.
 func VerifyForkHashes(config *params.ChainConfig, header *types.Header, uncle bool) error {
+	return verifyForkHashes(config, header.Number.Uint64(), header.Hash(), uncle)
+}
+
+// verifyForkHashes is the inner version of VerifyForkHashes. The main purpose is
+// it's easier for testing.
+func verifyForkHashes(config *params.ChainConfig, number uint64, hash common.Hash, uncle bool) error {
 	// We don't care about uncles
 	if uncle {
 		return nil
@@ -37,16 +44,16 @@ func VerifyForkHashes(config *params.ChainConfig, header *types.Header, uncle bo
 		return nil
 	}
 	index := sort.Search(len(forkBlocks), func(i int) bool {
-		return forkBlocks[i] > header.Number.Uint64()
+		return forkBlocks[i] > number
 	})
 	if index == 0 {
 		return nil
 	}
-	if forkBlocks[index-1] != header.Number.Uint64() {
+	if forkBlocks[index-1] != number {
 		return nil
 	}
-	if forkHashes[index-1] != header.Hash() {
-		return fmt.Errorf("invalid fork block: have 0x%x, want 0x%x", header.Hash(), forkHashes[index-1])
+	if forkHashes[index-1] != hash {
+		return fmt.Errorf("invalid fork block: have 0x%x, want 0x%x", hash, forkHashes[index-1])
 	}
 	// All ok, return
 	return nil
