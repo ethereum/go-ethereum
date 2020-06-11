@@ -102,12 +102,18 @@ var PrecompiledContractsYoloV1 = map[common.Address]PrecompiledContract{
 }
 
 // RunPrecompiledContract runs and evaluates the output of a precompiled contract.
-func RunPrecompiledContract(p PrecompiledContract, input []byte, contract *Contract) (ret []byte, err error) {
-	gas := p.RequiredGas(input)
-	if contract.UseGas(gas) {
-		return p.Run(input)
+// It returns
+// - the returned bytes,
+// - the _remaining_ gas,
+// - any error that occurred
+func RunPrecompiledContract(p PrecompiledContract, input []byte, suppliedGas uint64) (ret []byte, remainingGas uint64, err error) {
+	gasCost := p.RequiredGas(input)
+	if suppliedGas < gasCost {
+		return nil, 0, ErrOutOfGas
 	}
-	return nil, ErrOutOfGas
+	suppliedGas -= gasCost
+	output, err := p.Run(input)
+	return output, suppliedGas, err
 }
 
 // ECRECOVER implemented as a native contract.
