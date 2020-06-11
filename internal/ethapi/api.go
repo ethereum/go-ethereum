@@ -1033,7 +1033,7 @@ func (s *PublicBlockChainAPI) EstimateGas(ctx context.Context, args CallArgs) (*
 }
 
 type EstimationResult struct {
-	GasUsed    hexutil.Uint64 `json:"usedGas"`
+	GasUsed    hexutil.Uint64 `json:"gasUsed"`
 	ReturnData hexutil.Bytes  `json:"returnData"`
 }
 
