@@ -49,7 +49,7 @@ func (p *Peer) ID() string {
 // RequestAccountRange fetches a batch of accounts rooted in a specific account
 // trie, starting with the origin.
 func (p *Peer) RequestAccountRange(id uint64, root common.Hash, origin common.Hash, bytes uint64) error {
-	p.Log().Trace("Fetching range of accounts", "root", root, "origin", origin, "bytes", common.StorageSize(bytes))
+	p.Log().Trace("Fetching range of accounts", "reqid", id, "root", root, "origin", origin, "bytes", common.StorageSize(bytes))
 	return p2p.Send(p.rw, getAccountRangeMsg, &getAccountRangeData{
 		ID:     id,
 		Root:   root,
@@ -60,21 +60,21 @@ func (p *Peer) RequestAccountRange(id uint64, root common.Hash, origin common.Ha
 
 // RequestStorageRange fetches a batch of accounts rooted in a specific account
 // trie, starting with the origin.
-func (p *Peer) RequestStorageRange(id uint64, root common.Hash, account common.Hash, origin common.Hash, bytes uint64) error {
-	p.Log().Trace("Fetching range of storage", "root", root, "account", account, "origin", origin, "bytes", common.StorageSize(bytes))
-	return p2p.Send(p.rw, getStorageRangeMsg, &getStorageRangeData{
-		ID:      id,
-		Root:    root,
-		Account: account,
-		Origin:  origin,
-		Bytes:   bytes,
+func (p *Peer) RequestStorageRanges(id uint64, root common.Hash, accounts []common.Hash, origin []byte, bytes uint64) error {
+	p.Log().Trace("Fetching ranges of storage slots", "reqid", id, "root", root, "accounts", len(accounts), "origin", origin, "bytes", common.StorageSize(bytes))
+	return p2p.Send(p.rw, getStorageRangesMsg, &getStorageRangesData{
+		ID:       id,
+		Root:     root,
+		Accounts: accounts,
+		Origin:   origin,
+		Bytes:    bytes,
 	})
 }
 
 // RequestByteCodes fetches a batch of accounts rooted in a specific account
 // trie, starting with the origin.
 func (p *Peer) RequestByteCodes(id uint64, hashes []common.Hash, bytes uint64) error {
-	p.Log().Trace("Fetching set of byte codes", "hashes", len(hashes), "bytes", common.StorageSize(bytes))
+	p.Log().Trace("Fetching set of byte codes", "reqid", id, "hashes", len(hashes), "bytes", common.StorageSize(bytes))
 	return p2p.Send(p.rw, getByteCodesMsg, &getByteCodesData{
 		ID:     id,
 		Hashes: hashes,

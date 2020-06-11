@@ -40,6 +40,11 @@ const (
 	// there to limit the number of disk lookups.
 	maxCodeLookups = 1024
 
+	// stateLookupSlack defines the ratio by how much a state response can exceed
+	// the requested limit in order to try and avoid breaking up contracts into
+	// multiple packages and proving them.
+	stateLookupSlack = 0.1
+
 	// maxTrieNodeLookups is the maximum number of state trie nodes to serve. This
 	// number is there to limit the number of disk lookups.
 	maxTrieNodeLookups = 1024
@@ -68,9 +73,10 @@ type Backend interface {
 	// received from a remote peer.
 	OnAccounts(peer *Peer, id uint64, hashes []common.Hash, accounts [][]byte, proof [][]byte) error
 
-	// OnStorage is a callback method to invoke when a range of storage slots
-	// are received from a remote peer.
-	OnStorage(peer *Peer, id uint64, hashes []common.Hash, slots [][]byte, proof [][]byte) error
+	// OnStorage is a callback method to invoke when ranges of storage slots
+	// are received from a remote peer. The data might contain multiple storage
+	// tries, but proofs can only be attached for the last one.
+	OnStorage(peer *Peer, id uint64, hashes [][]common.Hash, slots [][][]byte, proof [][]byte) error
 
 	// OnByteCodes is a callback method to invoke when a batch of contract
 	// bytes codes are received from a remote peer.
@@ -162,7 +168,7 @@ func handleMessage(backend Backend, peer *Peer) error {
 			bytes    uint64
 			last     common.Hash
 		)
-		for it.Next() && bytes < req.Bytes && bytes < 1<<20 {
+		for it.Next() && bytes < req.Bytes {
 			hash, account := it.Hash(), common.CopyBytes(it.Account())
 
 			// Track the returned interval for the Merkle proofs
@@ -219,96 +225,123 @@ func handleMessage(backend Backend, peer *Peer) error {
 		}
 		return backend.OnAccounts(peer, res.ID, keys, vals, res.Proof)
 
-	case msg.Code == getStorageRangeMsg:
+	case msg.Code == getStorageRangesMsg:
 		// Decode the storage retrieval request
-		var req getStorageRangeData
+		var req getStorageRangesData
 		if err := msg.Decode(&req); err != nil {
 			return fmt.Errorf("%w: message %v: %v", errDecode, msg, err)
 		}
 		if req.Bytes > softResponseLimit {
 			req.Bytes = softResponseLimit
 		}
-		// Retrieve the requested state and bail out if non existent
-		it, err := backend.Chain().Snapshot().StorageIterator(req.Root, req.Account, req.Origin)
-		if err != nil {
-			return p2p.Send(peer.rw, storageRangeMsg, &storageRangeData{ID: req.ID})
-		}
-		defer it.Release()
+		// Calculate the hard limit at which to abort, even if mid storage trie
+		hardLimit := uint64(float64(req.Bytes) * (1 + stateLookupSlack))
 
-		// Iterate over the requested range and pile slots up
+		// Retrieve storage ranges until the packet limit is reached
 		var (
-			slots []*storageData
-			bytes uint64
-			last  common.Hash
+			slots  [][]*storageData
+			proofs [][]byte
+			bytes  uint64
 		)
-		for it.Next() && bytes < req.Bytes && bytes < 1<<20 {
-			hash, slot := it.Hash(), common.CopyBytes(it.Slot())
-
-			// Track the returned interval for the Merkle proofs
-			last = hash
-
-			// Assemble the reply item
-			bytes += uint64(common.HashLength + len(slot))
-			slots = append(slots, &storageData{
-				Hash: hash,
-				Body: slot,
-			})
-		}
-		// Generate the Merkle proofs for the first and last storage slot, but
-		// only if the response was capped. If the entire storage trie included
-		// in the response, no need for any proofs.
-		var proofs [][]byte
-
-		if req.Origin != (common.Hash{}) || bytes >= req.Bytes || bytes >= 1<<20 {
-			// Request started at a non-zero hash or was capped prematurely, add
-			// the endpoint Merkle proofs
-			accTrie, err := trie.New(req.Root, backend.Chain().StateCache().TrieDB())
+		for _, account := range req.Accounts {
+			// If we've exceeded the requested data limit, abort without opening
+			// a new storage range (that we'd need to prove due to exceeded size)
+			if bytes >= req.Bytes {
+				break
+			}
+			// The first account might start from a different origin
+			var origin common.Hash
+			if len(req.Origin) > 0 {
+				origin, req.Origin = common.BytesToHash(req.Origin), nil
+			}
+			// Retrieve the requested state and bail out if non existent
+			it, err := backend.Chain().Snapshot().StorageIterator(req.Root, account, origin)
 			if err != nil {
-				return p2p.Send(peer.rw, storageRangeMsg, &storageRangeData{ID: req.ID})
+				return p2p.Send(peer.rw, storageRangesMsg, &storageRangesData{ID: req.ID})
 			}
-			var acc state.Account
-			if err := rlp.DecodeBytes(accTrie.Get(req.Account[:]), &acc); err != nil {
-				return p2p.Send(peer.rw, storageRangeMsg, &storageRangeData{ID: req.ID})
+			// Iterate over the requested range and pile slots up
+			var (
+				storage []*storageData
+				last    common.Hash
+			)
+			for it.Next() && bytes < hardLimit {
+				hash, slot := it.Hash(), common.CopyBytes(it.Slot())
+
+				// Track the returned interval for the Merkle proofs
+				last = hash
+
+				// Assemble the reply item
+				bytes += uint64(common.HashLength + len(slot))
+				storage = append(storage, &storageData{
+					Hash: hash,
+					Body: slot,
+				})
 			}
-			stTrie, err := trie.New(acc.Root, backend.Chain().StateCache().TrieDB())
-			if err != nil {
-				return p2p.Send(peer.rw, storageRangeMsg, &storageRangeData{ID: req.ID})
-			}
-			proof := light.NewNodeSet()
-			if err := stTrie.Prove(req.Origin[:], 0, proof); err != nil {
-				log.Warn("Failed to prove storage range", "origin", req.Origin, "err", err)
-				return p2p.Send(peer.rw, storageRangeMsg, &storageRangeData{ID: req.ID})
-			}
-			if last != (common.Hash{}) {
-				if err := stTrie.Prove(last[:], 0, proof); err != nil {
-					log.Warn("Failed to prove storage range", "last", last, "err", err)
-					return p2p.Send(peer.rw, storageRangeMsg, &storageRangeData{ID: req.ID})
+			slots = append(slots, storage)
+			it.Release()
+
+			// Generate the Merkle proofs for the first and last storage slot, but
+			// only if the response was capped. If the entire storage trie included
+			// in the response, no need for any proofs.
+			if origin != (common.Hash{}) || bytes >= hardLimit {
+				// Request started at a non-zero hash or was capped prematurely, add
+				// the endpoint Merkle proofs
+				accTrie, err := trie.New(req.Root, backend.Chain().StateCache().TrieDB())
+				if err != nil {
+					return p2p.Send(peer.rw, storageRangesMsg, &storageRangesData{ID: req.ID})
 				}
-			}
-			for _, blob := range proof.NodeList() {
-				proofs = append(proofs, blob)
+				var acc state.Account
+				if err := rlp.DecodeBytes(accTrie.Get(account[:]), &acc); err != nil {
+					return p2p.Send(peer.rw, storageRangesMsg, &storageRangesData{ID: req.ID})
+				}
+				stTrie, err := trie.New(acc.Root, backend.Chain().StateCache().TrieDB())
+				if err != nil {
+					return p2p.Send(peer.rw, storageRangesMsg, &storageRangesData{ID: req.ID})
+				}
+				proof := light.NewNodeSet()
+				if err := stTrie.Prove(origin[:], 0, proof); err != nil {
+					log.Warn("Failed to prove storage range", "origin", req.Origin, "err", err)
+					return p2p.Send(peer.rw, storageRangesMsg, &storageRangesData{ID: req.ID})
+				}
+				if last != (common.Hash{}) {
+					if err := stTrie.Prove(last[:], 0, proof); err != nil {
+						log.Warn("Failed to prove storage range", "last", last, "err", err)
+						return p2p.Send(peer.rw, storageRangesMsg, &storageRangesData{ID: req.ID})
+					}
+				}
+				for _, blob := range proof.NodeList() {
+					proofs = append(proofs, blob)
+				}
+				// Proof terminates the reply as proofs are only added if a node
+				// refuses to serve more data (exception when a contract fetch is
+				// finishing, but that's that).
+				break
 			}
 		}
 		// Send back anything accumulated
-		return p2p.Send(peer.rw, storageRangeMsg, &storageRangeData{
+		return p2p.Send(peer.rw, storageRangesMsg, &storageRangesData{
 			ID:    req.ID,
 			Slots: slots,
 			Proof: proofs,
 		})
 
-	case msg.Code == storageRangeMsg:
+	case msg.Code == storageRangesMsg:
 		// A range of accounts arrived to one of our previous requests
-		var res storageRangeData
+		var res storageRangesData
 		if err := msg.Decode(&res); err != nil {
 			return fmt.Errorf("%w: message %v: %v", errDecode, msg, err)
 		}
 		var (
-			keys = make([]common.Hash, len(res.Slots))
-			vals = make([][]byte, len(res.Slots))
+			keys = make([][]common.Hash, len(res.Slots))
+			vals = make([][][]byte, len(res.Slots))
 		)
-		for i, slot := range res.Slots {
-			keys[i] = slot.Hash
-			vals[i] = slot.Body
+		for i, slots := range res.Slots {
+			keys[i] = make([]common.Hash, len(slots))
+			vals[i] = make([][]byte, len(slots))
+			for j, slot := range slots {
+				keys[i][j] = slot.Hash
+				vals[i][j] = slot.Body
+			}
 		}
 		return backend.OnStorage(peer, res.ID, keys, vals, res.Proof)
 

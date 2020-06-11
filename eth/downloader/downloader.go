@@ -1779,9 +1779,9 @@ func (d *Downloader) DeliverSnapshotAccounts(peer *snap.Peer, id uint64, keys []
 	return d.SnapSyncer.OnAccounts(peer, id, keys, accounts, proof)
 }
 
-// DeliverSnapshotStorage is invoked from a peer's message handler when it transmits a range
+// DeliverSnapshotStorage is invoked from a peer's message handler when it transmits ranges
 // of storage slots for the local node to process.
-func (d *Downloader) DeliverSnapshotStorage(peer *snap.Peer, id uint64, keys []common.Hash, slots [][]byte, proof [][]byte) error {
+func (d *Downloader) DeliverSnapshotStorage(peer *snap.Peer, id uint64, keys [][]common.Hash, slots [][][]byte, proof [][]byte) error {
 	return d.SnapSyncer.OnStorage(peer, id, keys, slots, proof)
 }
 

@@ -44,14 +44,14 @@ var protocolLengths = map[uint]uint64{snap1: 8}
 const maxMessageSize = 10 * 1024 * 1024
 
 const (
-	getAccountRangeMsg = 0x00
-	accountRangeMsg    = 0x01
-	getStorageRangeMsg = 0x02
-	storageRangeMsg    = 0x03
-	getByteCodesMsg    = 0x04
-	byteCodesMsg       = 0x05
-	getTrieNodesMsg    = 0x06
-	trieNodesMsg       = 0x07
+	getAccountRangeMsg  = 0x00
+	accountRangeMsg     = 0x01
+	getStorageRangesMsg = 0x02
+	storageRangesMsg    = 0x03
+	getByteCodesMsg     = 0x04
+	byteCodesMsg        = 0x05
+	getTrieNodesMsg     = 0x06
+	trieNodesMsg        = 0x07
 )
 
 var (
@@ -81,20 +81,20 @@ type accountData struct {
 	Body rlp.RawValue // Account body in slim format
 }
 
-// getStorageRangeData represents an storage slot query.
-type getStorageRangeData struct {
-	ID      uint64      // Request ID to match up responses with
-	Root    common.Hash // Root hash of the account trie to serve
-	Account common.Hash // Account hash of the storage trie to serve
-	Origin  common.Hash // Storage slot hash of the first to retrieve
-	Bytes   uint64      // Soft limit at which to stop returning data
+// getStorageRangesData represents an storage slot query.
+type getStorageRangesData struct {
+	ID       uint64        // Request ID to match up responses with
+	Root     common.Hash   // Root hash of the account trie to serve
+	Accounts []common.Hash // Account hashes of the storage tries to serve
+	Origin   []byte        // Storage slot hash from which to retrieve (single account, optional)
+	Bytes    uint64        // Soft limit at which to stop returning data
 }
 
-// storageRangeData represents a storage slot query response.
-type storageRangeData struct {
-	ID    uint64         // ID of the request this is a response for
-	Slots []*storageData // LList of consecutive slots from the trie
-	Proof [][]byte       // List of trie nodes proving the slot range
+// storageRangesData represents a storage slot query response.
+type storageRangesData struct {
+	ID    uint64           // ID of the request this is a response for
+	Slots [][]*storageData // Lists of consecutive storage slots for the requested accounts
+	Proof [][]byte         // Merkle proofs for the *last* slot range, if it's incomplete
 }
 
 // storageData represents a single storage slot in a query response.

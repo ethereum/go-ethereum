@@ -48,9 +48,9 @@ func (h *snapHandler) OnAccounts(peer *snap.Peer, id uint64, keys []common.Hash,
 	return h.downloader.DeliverSnapshotAccounts(peer, id, keys, accounts, proof)
 }
 
-// OnStorage is invoked from a peer's message handler when it transmits a range
+// OnStorage is invoked from a peer's message handler when it transmits ranges
 // of storage slots for the local node to process.
-func (h *snapHandler) OnStorage(peer *snap.Peer, id uint64, keys []common.Hash, slots [][]byte, proof [][]byte) error {
+func (h *snapHandler) OnStorage(peer *snap.Peer, id uint64, keys [][]common.Hash, slots [][][]byte, proof [][]byte) error {
 	return h.downloader.DeliverSnapshotStorage(peer, id, keys, slots, proof)
 }
 
