@@ -20,6 +20,8 @@ import (
 	"encoding/binary"
 	"fmt"
 	"math/big"
+	"reflect"
+	"strings"
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/crypto"
@@ -57,17 +59,25 @@ var (
 	MainnetChainConfig = &ChainConfig{
 		ChainID:             big.NewInt(1),
 		HomesteadBlock:      big.NewInt(1150000),
+		HomesteadHash:       common.HexToHash("0x584bdb5d4e74fe97f5a5222b533fe1322fd0b6ad3eb03f02c3221984e2c0b430"),
 		DAOForkBlock:        big.NewInt(1920000),
 		DAOForkSupport:      true,
 		EIP150Block:         big.NewInt(2463000),
 		EIP150Hash:          common.HexToHash("0x2086799aeebeae135c246c65021c82b4e15a2c451340993aacfd2751886514f0"),
 		EIP155Block:         big.NewInt(2675000),
+		EIP155Hash:          common.HexToHash("0x58eff9265aedf8a54da8121de1324e1e0d9aac99f694d16c6a41afffe3817d73"),
 		EIP158Block:         big.NewInt(2675000),
+		/* EIP158Hash is skipped since it's same with EIP155 */
 		ByzantiumBlock:      big.NewInt(4370000),
+		ByzantiumHash:       common.HexToHash("0xb1fcff633029ee18ab6482b58ff8b6e95dd7c82a954c852157152a7a6d32785e"),
 		ConstantinopleBlock: big.NewInt(7280000),
+		ConstantinopleHash:  common.HexToHash("0xeddb0590e1095fbe51205a51a297daef7259e229af0432214ae6cb2c1f750750"),
 		PetersburgBlock:     big.NewInt(7280000),
+		/* PetersburgHash is skipped since it's same with Constantinople */
 		IstanbulBlock:       big.NewInt(9069000),
+		IstanbulHash:        common.HexToHash("0x451226b98bf4f784314e9ca2daaa30dc664a387c342ef775ba2d88682a27c084"),
 		MuirGlacierBlock:    big.NewInt(9200000),
+		MuirGlacierHash:     common.HexToHash("0x6ba9486095de7d96a75b67954cfe2581234eae1ef2a92ab03b84fc2eae2deb8a"),
 		Ethash:              new(EthashConfig),
 	}
 
@@ -103,10 +113,15 @@ var (
 		EIP155Block:         big.NewInt(10),
 		EIP158Block:         big.NewInt(10),
 		ByzantiumBlock:      big.NewInt(1700000),
+		ByzantiumHash:       common.HexToHash("0x279a2890d2b9d9c80da96d052173a5ea281417741aec6bc109efd1e779c2c83c"),
 		ConstantinopleBlock: big.NewInt(4230000),
+		ConstantinopleHash:  common.HexToHash("0xbd9e8b9e8d8c00f8e0119cd996d2b665eec3dcd711a86b0681538fd9904c3f25"),
 		PetersburgBlock:     big.NewInt(4939394),
+		PetersburgHash:      common.HexToHash("0x8696d2eed8197e186d8d682756a0c2a1947ab5e71257475ebcce4fa3252ee9f7"),
 		IstanbulBlock:       big.NewInt(6485846),
+		IstanbulHash:        common.HexToHash("0x43f0cd1e5b1f9c4d5cda26c240b59ee4f1b510d0a185aa8fd476d091b0097a80"),
 		MuirGlacierBlock:    big.NewInt(7117117),
+		MuirGlacierHash:     common.HexToHash("0xe11c0b6bcf256dcb9570b5fcc9ab67cabb0ccc7c9edfa3f0d3753b8819adfb31"),
 		Ethash:              new(EthashConfig),
 	}
 
@@ -142,9 +157,13 @@ var (
 		EIP155Block:         big.NewInt(3),
 		EIP158Block:         big.NewInt(3),
 		ByzantiumBlock:      big.NewInt(1035301),
+		ByzantiumHash:       common.HexToHash("0x9e673f84fa096626d50440cbb7c71ec891fd42993be3d99f87c826b43842c592"),
 		ConstantinopleBlock: big.NewInt(3660663),
+		ConstantinopleHash:  common.HexToHash("0x366d4e07668df795c2d252baa43d929f64bcbddd548266bfef3b931b95c69e9f"),
 		PetersburgBlock:     big.NewInt(4321234),
+		PetersburgHash:      common.HexToHash("0xe2fa06d53b28bfa053e022686d6106026f8a1d5fe40e0eccd09e3f7165acd424"),
 		IstanbulBlock:       big.NewInt(5435345),
+		IstanbulHash:        common.HexToHash("0x996cb7cfa06de2348e804bd0dd28ff34aabd7e74529af9961b1afc8ce33cdcb1"),
 		MuirGlacierBlock:    nil,
 		Clique: &CliqueConfig{
 			Period: 15,
@@ -185,6 +204,7 @@ var (
 		ConstantinopleBlock: big.NewInt(0),
 		PetersburgBlock:     big.NewInt(0),
 		IstanbulBlock:       big.NewInt(1561651),
+		IstanbulHash:        common.HexToHash("0x54ea02c518613c367761ee5aee43f0596be62a9d79c91648bfb17b70c820148f"),
 		MuirGlacierBlock:    nil,
 		Clique: &CliqueConfig{
 			Period: 15,
@@ -239,16 +259,16 @@ var (
 	//
 	// This configuration is intentionally not using keyed fields to force anyone
 	// adding flags to the config to also have to set these fields.
-	AllEthashProtocolChanges = &ChainConfig{big.NewInt(1337), big.NewInt(0), nil, false, big.NewInt(0), common.Hash{}, big.NewInt(0), big.NewInt(0), big.NewInt(0), big.NewInt(0), big.NewInt(0), big.NewInt(0), nil, nil, nil, new(EthashConfig), nil}
+	AllEthashProtocolChanges = &ChainConfig{big.NewInt(1337), big.NewInt(0), common.Hash{}, nil, false, big.NewInt(0), common.Hash{}, big.NewInt(0), common.Hash{}, big.NewInt(0), common.Hash{}, big.NewInt(0), common.Hash{}, big.NewInt(0), common.Hash{}, big.NewInt(0), common.Hash{}, big.NewInt(0), common.Hash{}, nil, common.Hash{}, nil, nil, new(EthashConfig), nil, nil, nil}
 
 	// AllCliqueProtocolChanges contains every protocol change (EIPs) introduced
 	// and accepted by the Ethereum core developers into the Clique consensus.
 	//
 	// This configuration is intentionally not using keyed fields to force anyone
 	// adding flags to the config to also have to set these fields.
-	AllCliqueProtocolChanges = &ChainConfig{big.NewInt(1337), big.NewInt(0), nil, false, big.NewInt(0), common.Hash{}, big.NewInt(0), big.NewInt(0), big.NewInt(0), big.NewInt(0), big.NewInt(0), big.NewInt(0), nil, nil, nil, nil, &CliqueConfig{Period: 0, Epoch: 30000}}
+	AllCliqueProtocolChanges = &ChainConfig{big.NewInt(1337), big.NewInt(0), common.Hash{}, nil, false, big.NewInt(0), common.Hash{}, big.NewInt(0), common.Hash{}, big.NewInt(0), common.Hash{}, big.NewInt(0), common.Hash{}, big.NewInt(0), common.Hash{}, big.NewInt(0), common.Hash{}, big.NewInt(0), common.Hash{}, nil, common.Hash{}, nil, nil, nil, &CliqueConfig{Period: 0, Epoch: 30000}, nil, nil}
 
-	TestChainConfig = &ChainConfig{big.NewInt(1), big.NewInt(0), nil, false, big.NewInt(0), common.Hash{}, big.NewInt(0), big.NewInt(0), big.NewInt(0), big.NewInt(0), big.NewInt(0), big.NewInt(0), nil, nil, nil, new(EthashConfig), nil}
+	TestChainConfig = &ChainConfig{big.NewInt(1), big.NewInt(0), common.Hash{}, nil, false, big.NewInt(0), common.Hash{}, big.NewInt(0), common.Hash{}, big.NewInt(0), common.Hash{}, big.NewInt(0), common.Hash{}, big.NewInt(0), common.Hash{}, big.NewInt(0), common.Hash{}, big.NewInt(0), common.Hash{}, nil, common.Hash{}, nil, nil, new(EthashConfig), nil, nil, nil}
 	TestRules       = TestChainConfig.Rules(new(big.Int))
 )
 
@@ -302,7 +322,8 @@ type CheckpointOracleConfig struct {
 type ChainConfig struct {
 	ChainID *big.Int `json:"chainId"` // chainId identifies the current chain and is used for replay protection
 
-	HomesteadBlock *big.Int `json:"homesteadBlock,omitempty"` // Homestead switch block (nil = no fork, 0 = already homestead)
+	HomesteadBlock *big.Int    `json:"homesteadBlock,omitempty"` // Homestead switch block (nil = no fork, 0 = already homestead)
+	HomesteadHash  common.Hash `json:"homesteadHash,omitempty"`  // Homestead HF hash (empty means "don't check")
 
 	DAOForkBlock   *big.Int `json:"daoForkBlock,omitempty"`   // TheDAO hard-fork switch block (nil = no fork)
 	DAOForkSupport bool     `json:"daoForkSupport,omitempty"` // Whether the nodes supports or opposes the DAO hard-fork
@@ -311,14 +332,22 @@ type ChainConfig struct {
 	EIP150Block *big.Int    `json:"eip150Block,omitempty"` // EIP150 HF block (nil = no fork)
 	EIP150Hash  common.Hash `json:"eip150Hash,omitempty"`  // EIP150 HF hash (needed for header only clients as only gas pricing changed)
 
-	EIP155Block *big.Int `json:"eip155Block,omitempty"` // EIP155 HF block
-	EIP158Block *big.Int `json:"eip158Block,omitempty"` // EIP158 HF block
+	EIP155Block *big.Int    `json:"eip155Block,omitempty"` // EIP155 HF block
+	EIP155Hash  common.Hash `json:"eip155Hash,omitempty"`  // EIP155 HF hash (empty means "don't check")
 
-	ByzantiumBlock      *big.Int `json:"byzantiumBlock,omitempty"`      // Byzantium switch block (nil = no fork, 0 = already on byzantium)
-	ConstantinopleBlock *big.Int `json:"constantinopleBlock,omitempty"` // Constantinople switch block (nil = no fork, 0 = already activated)
-	PetersburgBlock     *big.Int `json:"petersburgBlock,omitempty"`     // Petersburg switch block (nil = same as Constantinople)
-	IstanbulBlock       *big.Int `json:"istanbulBlock,omitempty"`       // Istanbul switch block (nil = no fork, 0 = already on istanbul)
-	MuirGlacierBlock    *big.Int `json:"muirGlacierBlock,omitempty"`    // Eip-2384 (bomb delay) switch block (nil = no fork, 0 = already activated)
+	EIP158Block *big.Int    `json:"eip158Block,omitempty"` // EIP158 HF block
+	EIP158Hash  common.Hash `json:"eip158Hash,omitempty"`  // EIP158 HF hash (empty means "don't check")
+
+	ByzantiumBlock      *big.Int    `json:"byzantiumBlock,omitempty"`      // Byzantium switch block (nil = no fork, 0 = already on byzantium)
+	ByzantiumHash       common.Hash `json:"byzantiumHash,omitempty"`       // Byzantium HF hash (empty means "don't check")
+	ConstantinopleBlock *big.Int    `json:"constantinopleBlock,omitempty"` // Constantinople switch block (nil = no fork, 0 = already activated)
+	ConstantinopleHash  common.Hash `json:"constantinopleHash,omitempty"`  // Constantinople HF hash (empty means "don't check")
+	PetersburgBlock     *big.Int    `json:"petersburgBlock,omitempty"`     // Petersburg switch block (nil = same as Constantinople)
+	PetersburgHash      common.Hash `json:"petersburgHash,omitempty"`      // Petersburg HF hash (empty means "don't check")
+	IstanbulBlock       *big.Int    `json:"istanbulBlock,omitempty"`       // Istanbul switch block (nil = no fork, 0 = already on istanbul)
+	IstanbulHash        common.Hash `json:"istanbulHash,omitempty"`        // Istanbul HF hash (empty means "don't check")
+	MuirGlacierBlock    *big.Int    `json:"muirGlacierBlock,omitempty"`    // Eip-2384 (bomb delay) switch block (nil = no fork, 0 = already activated)
+	MuirGlacierHash     common.Hash `json:"muirGlacierHash,omitempty"`     // MuirGlacier HF hash (empty means "don't check")
 
 	YoloV1Block *big.Int `json:"yoloV1Block,omitempty"` // YOLO v1: https://github.com/ethereum/EIPs/pull/2657 (Ephemeral testnet)
 	EWASMBlock  *big.Int `json:"ewasmBlock,omitempty"`  // EWASM switch block (nil = no fork, 0 = already activated)
@@ -326,6 +355,12 @@ type ChainConfig struct {
 	// Various consensus engines
 	Ethash *EthashConfig `json:"ethash,omitempty"`
 	Clique *CliqueConfig `json:"clique,omitempty"`
+
+	// Cached value to avoid recalculating. These two fields are generated by SortedForkCheckList.
+	// If the hardfork config contains the relevant block hash, then the fork will be append into
+	// the check list and enforce the synced chain matches with the forks.
+	ForkNumbers []uint64      `json:"-"`
+	ForkHashes  []common.Hash `json:"-"`
 }
 
 // EthashConfig is the consensus engine configs for proof-of-work based sealing.
@@ -543,6 +578,63 @@ func (c *ChainConfig) checkCompatible(newcfg *ChainConfig, head *big.Int) *Confi
 		return newCompatError("ewasm fork block", c.EWASMBlock, newcfg.EWASMBlock)
 	}
 	return nil
+}
+
+// SortedForkCheckList returns a batch of fork list with fork number and fork
+// hash set. The returned list is sorted in ascending order.
+func (c *ChainConfig) SortedForkCheckList() ([]uint64, []common.Hash) {
+	if c.ForkNumbers != nil {
+		return c.ForkNumbers, c.ForkHashes
+	}
+	var (
+		blocks   = make(map[string]uint64)
+		hashes   = make(map[string]common.Hash)
+		forkList []string
+	)
+	// Gather all the fork block numbers via reflection
+	kind := reflect.TypeOf(ChainConfig{})
+	conf := reflect.ValueOf(c).Elem()
+	for i := 0; i < kind.NumField(); i++ {
+		// Fetch the next field and skip non-fork rules
+		field := kind.Field(i)
+		switch {
+		case strings.HasSuffix(field.Name, "Block"):
+			if field.Type != reflect.TypeOf(new(big.Int)) {
+				continue
+			}
+			// Extract the fork rule block number
+			rule := conf.Field(i).Interface().(*big.Int)
+			if rule != nil {
+				forkName := strings.TrimSuffix(field.Name, "Block")
+				blocks[forkName] = rule.Uint64()
+				forkList = append(forkList, forkName)
+			}
+
+		case strings.HasSuffix(field.Name, "Hash"):
+			if field.Type != reflect.TypeOf(common.Hash{}) {
+				continue
+			}
+			// Extract the fork rule block hash
+			hash := conf.Field(i).Interface().(common.Hash)
+			if hash != (common.Hash{}) {
+				forkName := strings.TrimSuffix(field.Name, "Hash")
+				hashes[forkName] = hash
+			}
+		}
+	}
+	var (
+		forkBlocks []uint64
+		forkHashes []common.Hash
+	)
+	for _, fork := range forkList {
+		if blocks[fork] == 0 || hashes[fork] == (common.Hash{}) {
+			continue
+		}
+		forkBlocks = append(forkBlocks, blocks[fork])
+		forkHashes = append(forkHashes, hashes[fork])
+	}
+	c.ForkNumbers, c.ForkHashes = forkBlocks, forkHashes
+	return forkBlocks, forkHashes
 }
 
 // isForkIncompatible returns true if a fork scheduled at s1 cannot be rescheduled to

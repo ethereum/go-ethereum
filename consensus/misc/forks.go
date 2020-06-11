@@ -18,8 +18,8 @@ package misc
 
 import (
 	"fmt"
+	"sort"
 
-	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/params"
 )
@@ -32,11 +32,21 @@ func VerifyForkHashes(config *params.ChainConfig, header *types.Header, uncle bo
 	if uncle {
 		return nil
 	}
-	// If the homestead reprice hash is set, validate it
-	if config.EIP150Block != nil && config.EIP150Block.Cmp(header.Number) == 0 {
-		if config.EIP150Hash != (common.Hash{}) && config.EIP150Hash != header.Hash() {
-			return fmt.Errorf("homestead gas reprice fork: have 0x%x, want 0x%x", header.Hash(), config.EIP150Hash)
-		}
+	forkBlocks, forkHashes := config.SortedForkCheckList()
+	if len(forkBlocks) == 0 {
+		return nil
+	}
+	index := sort.Search(len(forkBlocks), func(i int) bool {
+		return forkBlocks[i] > header.Number.Uint64()
+	})
+	if index == 0 {
+		return nil
+	}
+	if forkBlocks[index-1] != header.Number.Uint64() {
+		return nil
+	}
+	if forkHashes[index-1] != header.Hash() {
+		return fmt.Errorf("invalid fork block: have 0x%x, want 0x%x", header.Hash(), forkHashes[index-1])
 	}
 	// All ok, return
 	return nil

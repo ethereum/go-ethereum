@@ -17,6 +17,7 @@
 package params
 
 import (
+	"github.com/ethereum/go-ethereum/common"
 	"math/big"
 	"reflect"
 	"testing"
@@ -76,6 +77,37 @@ func TestCheckCompatible(t *testing.T) {
 		err := test.stored.CheckCompatible(test.new, test.head)
 		if !reflect.DeepEqual(err, test.wantErr) {
 			t.Errorf("error mismatch:\nstored: %v\nnew: %v\nhead: %v\nerr: %v\nwant: %v", test.stored, test.new, test.head, err, test.wantErr)
+		}
+	}
+}
+
+func TestSortedForkList(t *testing.T) {
+	var cases = []struct{
+		config *ChainConfig
+		blocks []uint64
+		hashes []common.Hash
+	} {
+		{
+			MainnetChainConfig,
+			[]uint64{1150000, 2463000, 2675000, 4370000, 7280000, 9069000, 9200000},
+			[]common.Hash{
+				common.HexToHash("0x584bdb5d4e74fe97f5a5222b533fe1322fd0b6ad3eb03f02c3221984e2c0b430"),
+				common.HexToHash("0x2086799aeebeae135c246c65021c82b4e15a2c451340993aacfd2751886514f0"),
+				common.HexToHash("0x58eff9265aedf8a54da8121de1324e1e0d9aac99f694d16c6a41afffe3817d73"),
+				common.HexToHash("0xb1fcff633029ee18ab6482b58ff8b6e95dd7c82a954c852157152a7a6d32785e"),
+				common.HexToHash("0xeddb0590e1095fbe51205a51a297daef7259e229af0432214ae6cb2c1f750750"),
+				common.HexToHash("0x451226b98bf4f784314e9ca2daaa30dc664a387c342ef775ba2d88682a27c084"),
+				common.HexToHash("0x6ba9486095de7d96a75b67954cfe2581234eae1ef2a92ab03b84fc2eae2deb8a"),
+			},
+		},
+	}
+	for _, c := range cases {
+		blocks, hashes := c.config.SortedForkCheckList()
+		if !reflect.DeepEqual(blocks, c.blocks) {
+			t.Fatalf("The fork number list is different")
+		}
+		if !reflect.DeepEqual(hashes, c.hashes) {
+			t.Fatalf("The fork hash list is different")
 		}
 	}
 }
