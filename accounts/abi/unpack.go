@@ -224,7 +224,10 @@ func toGoType(index int, t Type, output []byte) (interface{}, error) {
 		return forEachUnpack(t, output[begin:], 0, length)
 	case ArrayTy:
 		if isDynamicType(*t.Elem) {
-			offset := int64(binary.BigEndian.Uint64(returnOutput[len(returnOutput)-8:]))
+			offset := binary.BigEndian.Uint64(returnOutput[len(returnOutput)-8:])
+			if offset > uint64(len(output)) {
+				return nil, fmt.Errorf("abi: toGoType offset greater than output length: offset: %d, len(output): %d", offset, len(output))
+			}
 			return forEachUnpack(t, output[offset:], 0, t.Size)
 		}
 		return forEachUnpack(t, output[index:], 0, t.Size)

@@ -17,6 +17,8 @@
 package abi
 
 import (
+	"errors"
+	"fmt"
 	"math/big"
 	"reflect"
 
@@ -33,35 +35,38 @@ func packBytesSlice(bytes []byte, l int) []byte {
 
 // packElement packs the given reflect value according to the abi specification in
 // t.
-func packElement(t Type, reflectValue reflect.Value) []byte {
+func packElement(t Type, reflectValue reflect.Value) ([]byte, error) {
 	switch t.T {
 	case IntTy, UintTy:
-		return packNum(reflectValue)
+		return packNum(reflectValue), nil
 	case StringTy:
-		return packBytesSlice([]byte(reflectValue.String()), reflectValue.Len())
+		return packBytesSlice([]byte(reflectValue.String()), reflectValue.Len()), nil
 	case AddressTy:
 		if reflectValue.Kind() == reflect.Array {
 			reflectValue = mustArrayToByteSlice(reflectValue)
 		}
 
-		return common.LeftPadBytes(reflectValue.Bytes(), 32)
+		return common.LeftPadBytes(reflectValue.Bytes(), 32), nil
 	case BoolTy:
 		if reflectValue.Bool() {
-			return math.PaddedBigBytes(common.Big1, 32)
+			return math.PaddedBigBytes(common.Big1, 32), nil
 		}
-		return math.PaddedBigBytes(common.Big0, 32)
+		return math.PaddedBigBytes(common.Big0, 32), nil
 	case BytesTy:
 		if reflectValue.Kind() == reflect.Array {
 			reflectValue = mustArrayToByteSlice(reflectValue)
 		}
-		return packBytesSlice(reflectValue.Bytes(), reflectValue.Len())
+		if reflectValue.Type() != reflect.TypeOf([]byte{}) {
+			return []byte{}, errors.New("Bytes type is neither slice nor array")
+		}
+		return packBytesSlice(reflectValue.Bytes(), reflectValue.Len()), nil
 	case FixedBytesTy, FunctionTy:
 		if reflectValue.Kind() == reflect.Array {
 			reflectValue = mustArrayToByteSlice(reflectValue)
 		}
-		return common.RightPadBytes(reflectValue.Bytes(), 32)
+		return common.RightPadBytes(reflectValue.Bytes(), 32), nil
 	default:
-		panic("abi: fatal error")
+		return []byte{}, fmt.Errorf("Could not pack element, unknown type: %v", t.T)
 	}
 }
 
