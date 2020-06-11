@@ -478,6 +478,10 @@ var (
 		Name:  "rpc.gascap",
 		Usage: "Sets a cap on gas that can be used in eth_call/estimateGas",
 	}
+	RPCGlobalGasPriceCap = cli.Uint64Flag{
+		Name:  "rpc.gaspricecap",
+		Usage: "Sets a cap on gasprice that can be used in sendTransaction/sendRawTransaction",
+	}
 	// Logging and debug settings
 	EthStatsURLFlag = cli.StringFlag{
 		Name:  "ethstats",
@@ -1559,6 +1563,9 @@ func SetEthConfig(ctx *cli.Context, stack *node.Node, cfg *eth.Config) {
 	}
 	if ctx.GlobalIsSet(RPCGlobalGasCap.Name) {
 		cfg.RPCGasCap = new(big.Int).SetUint64(ctx.GlobalUint64(RPCGlobalGasCap.Name))
+	}
+	if ctx.GlobalIsSet(RPCGlobalGasPriceCap.Name) {
+		cfg.RPCGasPriceCap = new(big.Int).SetUint64(ctx.GlobalUint64(RPCGlobalGasPriceCap.Name))
 	}
 	if ctx.GlobalIsSet(DNSDiscoveryFlag.Name) {
 		urls := ctx.GlobalString(DNSDiscoveryFlag.Name)

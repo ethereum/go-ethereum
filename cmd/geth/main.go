@@ -186,6 +186,7 @@ var (
 		utils.IPCPathFlag,
 		utils.InsecureUnlockAllowedFlag,
 		utils.RPCGlobalGasCap,
+		utils.RPCGlobalGasPriceCap,
 	}
 
 	whisperFlags = []cli.Flag{

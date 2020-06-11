@@ -159,6 +159,9 @@ type Config struct {
 	// RPCGasCap is the global gas cap for eth-call variants.
 	RPCGasCap *big.Int `toml:",omitempty"`
 
+	// RPCGasPriceCap is the global gasprice cap for send-transction variants.
+	RPCGasPriceCap *big.Int `toml:",omitempty"`
+
 	// Checkpoint is a hardcoded checkpoint which can be nil.
 	Checkpoint *params.TrustedCheckpoint `toml:",omitempty"`
 

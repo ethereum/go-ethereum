@@ -293,6 +293,10 @@ func (b *EthAPIBackend) RPCGasCap() *big.Int {
 	return b.eth.config.RPCGasCap
 }
 
+func (b *EthAPIBackend) RPCGasPriceCap() *big.Int {
+	return b.eth.config.RPCGasPriceCap
+}
+
 func (b *EthAPIBackend) BloomStatus() (uint64, uint64) {
 	sections, _, _ := b.eth.bloomIndexer.Sections()
 	return params.BloomBitsBlocks, sections
