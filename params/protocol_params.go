@@ -81,7 +81,7 @@ const (
 
 	// These have been changed during the course of the chain
 	CallGasFrontier              uint64 = 40  // Once per CALL operation & message call transaction.
-	CallGasEIP150                uint64 = 100 // Static portion of gas for CALL-derivates after EIP 150 (Tangerine)
+	CallGasEIP150                uint64 = 40 // Static portion of gas for CALL-derivates after EIP 150 (Tangerine)
 	BalanceGasFrontier           uint64 = 20  // The cost of a BALANCE operation
 	BalanceGasEIP150             uint64 = 400 // The cost of a BALANCE operation after Tangerine
 	BalanceGasEIP1884            uint64 = 700 // The cost of a BALANCE operation after EIP 1884 (part of Istanbul)
