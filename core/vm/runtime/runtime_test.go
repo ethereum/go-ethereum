@@ -632,10 +632,10 @@ func BenchmarkSimpleLoop(b *testing.B) {
 	//		Tracer: tracer,
 	//	}})
 	// 100M gas
-	benchmarkNonModifyingCode(100000000, precompileCallerCode, "identity-precompile-100M", b)
-	benchmarkNonModifyingCode(100000000, loopingCode, "loop-100M", b)
+	//benchmarkNonModifyingCode(100000000, precompileCallerCode, "identity-precompile-100M", b)
+	//benchmarkNonModifyingCode(100000000, loopingCode, "loop-100M", b)
 
 
-	//benchmarkNonModifyingCode(10000000, precompileCallerCode, "identity-precompile-10M", b)
-	//benchmarkNonModifyingCode(10000000, loopingCode, "loop-10M", b)
+	benchmarkNonModifyingCode(10000000, precompileCallerCode, "identity-precompile-10M", b)
+	benchmarkNonModifyingCode(10000000, loopingCode, "loop-10M", b)
 }

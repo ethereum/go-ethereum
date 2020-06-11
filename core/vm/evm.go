@@ -41,21 +41,28 @@ type (
 	GetHashFunc func(uint64) common.Hash
 )
 
+func (evm *EVM) precompile(addr common.Address) (PrecompiledContract, bool) {
+	var precompiles map[common.Address]PrecompiledContract
+	if evm.chainRules.IsYoloV1 {
+		precompiles = PrecompiledContractsYoloV1
+	} else if evm.chainRules.IsIstanbul {
+		precompiles = PrecompiledContractsIstanbul
+	} else if evm.chainRules.IsByzantium {
+		precompiles = PrecompiledContractsByzantium
+	} else {
+		precompiles = PrecompiledContractsHomestead
+	}
+	p, ok := precompiles[addr]
+	return p, ok
+}
+
 // run runs the given contract and takes care of running precompiles with a fallback to the byte code interpreter.
 func run(evm *EVM, contract *Contract, input []byte, readOnly bool) ([]byte, error) {
 	if contract.CodeAddr != nil {
-		precompiles := PrecompiledContractsHomestead
-		if evm.chainRules.IsByzantium {
-			precompiles = PrecompiledContractsByzantium
-		}
-		if evm.chainRules.IsIstanbul {
-			precompiles = PrecompiledContractsIstanbul
-		}
-		if evm.chainRules.IsYoloV1 {
-			precompiles = PrecompiledContractsYoloV1
-		}
-		if p := precompiles[*contract.CodeAddr]; p != nil {
-			return RunPrecompiledContract(p, input, contract)
+		if p, ok := evm.precompile(*contract.CodeAddr); ok {
+			ret, remaining, err := RunPrecompiledContract(p, input, contract.Gas)
+			contract.Gas = remaining
+			return ret, err
 		}
 	}
 	for _, interpreter := range evm.interpreters {
@@ -343,16 +350,20 @@ func (evm *EVM) StaticCall(caller ContractRef, addr common.Address, input []byte
 		to       = AccountRef(addr)
 		snapshot = evm.StateDB.Snapshot()
 	)
-	// Initialise a new contract and set the code that is to be used by the EVM.
-	// The contract is a scoped environment for this execution context only.
-	contract := NewContract(caller, to, new(big.Int), gas)
-	contract.SetCallCode(&addr, evm.StateDB.GetCodeHash(addr), evm.StateDB.GetCode(addr))
-
 	// We do an AddBalance of zero here, just in order to trigger a touch.
 	// This doesn't matter on Mainnet, where all empties are gone at the time of Byzantium,
 	// but is the correct thing to do and matters on other networks, in tests, and potential
 	// future scenarios
 	evm.StateDB.AddBalance(addr, big.NewInt(0))
+
+	if p, isPrecompile := evm.precompile(addr); isPrecompile {
+		 return RunPrecompiledContract(p, input, gas)
+	}
+	// Initialise a new contract and set the code that is to be used by the EVM.
+	// The contract is a scoped environment for this execution context only.
+	contract := NewContract(caller, to, new(big.Int), gas)
+	contract.SetCallCode(&addr, evm.StateDB.GetCodeHash(addr), evm.StateDB.GetCode(addr))
+
 
 	// When an error was returned by the EVM or when setting the creation code
 	// above we revert to the snapshot and consume any gas remaining. Additionally
