@@ -111,6 +111,40 @@ func readPacket(c *net.UDPConn) (v4wire.Packet, error) {
 	return p, nil
 }
 
+func readFromPacketConn(c net.PacketConn) (v4wire.Packet, error) {
+	buf := make([]byte, 2048)
+	var err error
+
+	if err = c.SetReadDeadline(time.Now().Add(time.Duration(*waitTime) * time.Millisecond)); err != nil {
+		return nil, err
+	}
+	n, _, err := c.ReadFrom(buf)
+	if err != nil {
+		return nil, err
+	}
+	p, _, _, err := v4wire.Decode(buf[:n])
+	if err != nil {
+		return nil, err
+	}
+	return p, nil
+}
+
+func writeToPacketConn(c net.PacketConn, req v4wire.Packet, addr net.Addr) error {
+	packet, _, err := v4wire.Encode(priv, req)
+	if err != nil {
+		return err
+	}
+
+	n, err := c.WriteTo(packet, addr)
+	if err != nil {
+		return err
+	}
+	if n == 0 {
+		return fmt.Errorf("0 byte written")
+	}
+	return nil
+}
+
 func PingKnownEnode(t *testing.T) {
 	c, err := net.DialUDP("udp", nil, remoteAddr)
 	if err != nil {
@@ -355,23 +389,13 @@ func FindNeighbours(t *testing.T) {
 
 func SpoofSanityCheck(t *testing.T) {
 	var err error
-	var conn, relayConn *net.UDPConn
 	var reply v4wire.Packet
 
-	localAddr := &net.UDPAddr{IP: net.ParseIP("127.0.0.1")}
-	conn, err = net.DialUDP("udp", localAddr, remoteAddr)
+	conn, err := net.ListenPacket("udp", "127.0.0.2:0")
 	if err != nil {
 		t.Fatal(err)
 	}
 	defer conn.Close()
-
-	// Make another connection that will act as relay
-	relayAddr := &net.UDPAddr{IP: net.ParseIP("127.0.0.2")}
-	relayConn, err = net.DialUDP("udp", relayAddr, remoteAddr)
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer relayConn.Close()
 
 	req := v4wire.Ping{
 		Version:    4,
@@ -379,18 +403,12 @@ func SpoofSanityCheck(t *testing.T) {
 		To:         remoteEndpoint,
 		Expiration: futureExpiration(),
 	}
-
-	packetBytes, _, err := v4wire.Encode(priv, &req)
-	if err != nil {
+	if err := writeToPacketConn(conn, &req, remoteAddr); err != nil {
 		t.Fatal(err)
 	}
 
-	if err := spoofedWrite(relayAddr, remoteAddr, packetBytes); err != nil {
-		t.Fatal("write", err)
-	}
-
 	// We expect the relayConn to receive a pong
-	reply, err = readPacket(relayConn)
+	reply, err = readFromPacketConn(conn)
 	if err != nil {
 		t.Fatal("read", err)
 	}
