@@ -1020,7 +1020,7 @@ func DoEstimateGas(ctx context.Context, b Backend, args CallArgs, blockNrOrHash 
 		}
 	}
 	return &EstimationResult{
-		UsedGas:    hexutil.Uint64(hi),
+		GasUsed:    hexutil.Uint64(hi),
 		ReturnData: returnData,
 	}, nil
 }
@@ -1033,7 +1033,7 @@ func (s *PublicBlockChainAPI) EstimateGas(ctx context.Context, args CallArgs) (*
 }
 
 type EstimationResult struct {
-	UsedGas    hexutil.Uint64 `json:"usedGas"`
+	GasUsed    hexutil.Uint64 `json:"usedGas"`
 	ReturnData hexutil.Bytes  `json:"returnData"`
 }
 
@@ -1509,7 +1509,7 @@ func (args *SendTxArgs) setDefaults(ctx context.Context, b Backend) error {
 		if err != nil {
 			return err
 		}
-		args.Gas = &estimated.UsedGas
+		args.Gas = &estimated.GasUsed
 		log.Trace("Estimate gas usage automatically", "gas", args.Gas)
 	}
 	return nil
