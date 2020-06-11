@@ -17,6 +17,7 @@ import (
 const (
 	expiration  = 20 * time.Second
 	wrongPacket = 66
+	macSize     = 256 / 8
 )
 
 var (
@@ -417,8 +418,82 @@ func SpoofSanityCheck(t *testing.T) {
 	}
 }
 
+// spoofed ping victim -> target
+// (pong target -> victim)
+// (ping target -> victim)
+// wait
+// spoofed pong victim -> target
+// spoofed findnode victim -> target
+// (target should ignore it)
 func SpoofAmplificationAttackCheck(t *testing.T) {
-	t.Fatal("Not implemented")
+	var err error
+
+	victimConn, err := net.ListenPacket("udp", "127.0.0.2:0")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer victimConn.Close()
+
+	// send ping
+	pingReq := v4wire.Ping{
+		Version:    4,
+		From:       localhostEndpoint,
+		To:         remoteEndpoint,
+		Expiration: futureExpiration(),
+	}
+	if err := writeToPacketConn(victimConn, &pingReq, remoteAddr); err != nil {
+		t.Fatal(err)
+	}
+
+	//wait for a tiny bit
+	//NB: in a real scenario the 'victim' will have responded with a v4 pong
+	//message to our ping recipient. in the attack scenario, the pong
+	//will have been ignored because the source id is different than
+	//expected. (to be more authentic, an improvement to this test
+	//could be to send a fake pong from the node id - but this is not
+	//essential because the following pong may be received prior to the
+	//real pong)
+	time.Sleep(200 * time.Millisecond)
+
+	//send spoofed pong from this node id but with junk replytok
+	//because the replytok will not be available to a real attacker
+	//TODO- send a best reply tok guess?
+	pongReq := &v4wire.Pong{
+		To:         remoteEndpoint,
+		ReplyTok:   make([]byte, macSize),
+		Expiration: futureExpiration(),
+	}
+	if err := writeToPacketConn(victimConn, pongReq, remoteAddr); err != nil {
+		t.Fatal(err)
+	}
+
+	//consider the target 'bonded' , as it has received the expected pong
+	//send a findnode request for a random 'target' (target there being the
+	//node to find)
+	var fakeKey *ecdsa.PrivateKey
+	if fakeKey, err = crypto.GenerateKey(); err != nil {
+		t.Fatal(err)
+	}
+	fakePub := fakeKey.PublicKey
+	lookupTarget := v4wire.EncodePubkey(&fakePub)
+
+	findReq := &v4wire.Findnode{
+		Target:     lookupTarget,
+		Expiration: futureExpiration(),
+	}
+	if err := writeToPacketConn(victimConn, findReq, remoteAddr); err != nil {
+		t.Fatal(err)
+	}
+
+	// read a pong
+	readFromPacketConn(victimConn)
+	// read a ping
+	readFromPacketConn(victimConn)
+	//if we receive a neighbours request, then the attack worked and the test should fail
+	reply, err := readFromPacketConn(victimConn)
+	if reply != nil && reply.Kind() == v4wire.NeighborsPacket {
+		t.Error("Got neighbors")
+	}
 }
 
 func FindNeighboursOnRecentlyBondedTarget(t *testing.T) {
