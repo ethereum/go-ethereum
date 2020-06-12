@@ -40,7 +40,6 @@ import (
 	"github.com/ethereum/go-ethereum/cmd/utils"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/hexutil"
-	"github.com/ethereum/go-ethereum/console/prompt"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/internal/ethapi"
@@ -289,7 +288,7 @@ func initializeSecrets(c *cli.Context) error {
 	text := "The master seed of clef will be locked with a password.\nPlease specify a password. Do not forget this password!"
 	var password string
 	for {
-		password = getPassPhrase(text, true)
+		password = utils.GetPassPhrase(text, true)
 		if err := core.ValidatePasswordFormat(password); err != nil {
 			fmt.Printf("invalid password: %v\n", err)
 		} else {
@@ -362,7 +361,7 @@ func setCredential(ctx *cli.Context) error {
 		utils.Fatalf("Invalid address specified: %s", addr)
 	}
 	address := common.HexToAddress(addr)
-	password := getPassPhrase("Please enter a password to store for this address:", true)
+	password := utils.GetPassPhrase("Please enter a password to store for this address:", true)
 	fmt.Println()
 
 	stretchedKey, err := readMasterKey(ctx, nil)
@@ -720,7 +719,7 @@ func readMasterKey(ctx *cli.Context, ui core.UIClientAPI) ([]byte, error) {
 		}
 		password = resp.Text
 	} else {
-		password = getPassPhrase("Decrypt master seed of clef", false)
+		password = utils.GetPassPhrase("Decrypt master seed of clef", false)
 	}
 	masterSeed, err := decryptSeed(cipherKey, password)
 	if err != nil {
@@ -913,27 +912,6 @@ func testExternalUI(api *core.SignerAPI) {
 	result := fmt.Sprintf("Tests completed. %d errors:\n%s\n", len(errs), strings.Join(errs, "\n"))
 	api.UI.ShowInfo(result)
 
-}
-
-// getPassPhrase retrieves the password associated with clef, either fetched
-// from a list of preloaded passphrases, or requested interactively from the user.
-// TODO: there are many `getPassPhrase` functions, it will be better to abstract them into one.
-func getPassPhrase(query string, confirmation bool) string {
-	fmt.Println(query)
-	password, err := prompt.Stdin.PromptPassword("Password: ")
-	if err != nil {
-		utils.Fatalf("Failed to read password: %v", err)
-	}
-	if confirmation {
-		confirm, err := prompt.Stdin.PromptPassword("Repeat password: ")
-		if err != nil {
-			utils.Fatalf("Failed to read password confirmation: %v", err)
-		}
-		if password != confirm {
-			utils.Fatalf("Passwords do not match")
-		}
-	}
-	return password
 }
 
 type encryptedSeedStorage struct {
