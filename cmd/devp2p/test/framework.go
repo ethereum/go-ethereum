@@ -59,13 +59,13 @@ func (te *testenv) close() {
 	te.l2.Close()
 }
 
-func (te *testenv) send(c net.PacketConn, req v4wire.Packet) error {
-	packet, _, err := v4wire.Encode(te.key, req)
+func (te *testenv) send(c net.PacketConn, req v4wire.Packet) ([]byte, error) {
+	packet, hash, err := v4wire.Encode(te.key, req)
 	if err != nil {
-		return err
+		return hash, err
 	}
 	_, err = c.WriteTo(packet, te.remoteAddr)
-	return err
+	return hash, err
 }
 
 func (te *testenv) read(c net.PacketConn) (v4wire.Packet, []byte, error) {
@@ -84,7 +84,7 @@ func (te *testenv) read(c net.PacketConn) (v4wire.Packet, []byte, error) {
 func (te *testenv) localEndpoint(c net.PacketConn) v4wire.Endpoint {
 	addr := c.LocalAddr().(*net.UDPAddr)
 	return v4wire.Endpoint{
-		IP:  net.IP{127, 0, 0, 1},
+		IP:  net.IP{127, 0, 0, 1}.To4(),
 		UDP: uint16(addr.Port),
 		TCP: 0,
 	}

@@ -17,11 +17,13 @@
 package test
 
 import (
+	"bytes"
 	"crypto/rand"
 	"flag"
 	"fmt"
 	"net"
 	"os"
+	"reflect"
 	"testing"
 	"time"
 
@@ -87,16 +89,33 @@ func BasicPing(t *testing.T) {
 		To:         te.remoteEndpoint(),
 		Expiration: futureExpiration(),
 	}
-	if err := te.send(te.l1, &req); err != nil {
+	pingHash, err := te.send(te.l1, &req)
+	if err != nil {
 		t.Fatal("send", err)
 	}
-	reply, _, err := te.read(te.l1)
-	if err != nil {
-		t.Fatal("read", err)
+	reply, _, _ := te.read(te.l1)
+	if err := te.checkPong(reply, pingHash); err != nil {
+		t.Fatal(err)
 	}
-	if reply.Kind() != v4wire.PongPacket {
-		t.Error("Reply is not a Pong", reply.Name())
+}
+
+// checkPong verifies that reply is a valid PONG matching the given ping hash.
+func (te *testenv) checkPong(reply v4wire.Packet, pingHash []byte) error {
+	if reply == nil || reply.Kind() != v4wire.PongPacket {
+		return fmt.Errorf("expected PONG reply, got %v", reply)
 	}
+	pong := reply.(*v4wire.Pong)
+	if !bytes.Equal(pong.ReplyTok, pingHash) {
+		return fmt.Errorf("PONG reply token mismatch: got %x, want %x", pong.ReplyTok, pingHash)
+	}
+	wantEndpoint := te.localEndpoint(te.l1)
+	if !reflect.DeepEqual(pong.To, wantEndpoint) {
+		return fmt.Errorf("PONG 'to' field is wrong: got %v, want %v", pong.To, wantEndpoint)
+	}
+	if v4wire.Expired(pong.Expiration) {
+		return fmt.Errorf("PONG is expired (%v)", pong.Expiration)
+	}
+	return nil
 }
 
 // This test sends a PING packet with wrong 'to' field and expects a PONG response.
@@ -111,15 +130,13 @@ func PingWrongTo(t *testing.T) {
 		To:         wrongEndpoint,
 		Expiration: futureExpiration(),
 	}
-	if err := te.send(te.l1, &req); err != nil {
+	pingHash, err := te.send(te.l1, &req)
+	if err != nil {
 		t.Fatal("send", err)
 	}
-	reply, _, err := te.read(te.l1)
-	if err != nil {
-		t.Fatal("read", err)
-	}
-	if reply.Kind() != v4wire.PongPacket {
-		t.Error("Reply is not a Pong", reply.Name())
+	reply, _, _ := te.read(te.l1)
+	if err := te.checkPong(reply, pingHash); err != nil {
+		t.Fatal(err)
 	}
 }
 
@@ -135,15 +152,13 @@ func PingWrongFrom(t *testing.T) {
 		To:         te.remoteEndpoint(),
 		Expiration: futureExpiration(),
 	}
-	if err := te.send(te.l1, &req); err != nil {
+	pingHash, err := te.send(te.l1, &req)
+	if err != nil {
 		t.Fatal("send", err)
 	}
-	reply, _, err := te.read(te.l1)
-	if err != nil {
-		t.Fatal("read", err)
-	}
-	if reply.Kind() != v4wire.PongPacket {
-		t.Error("Reply is not a Pong", reply.Name())
+	reply, _, _ := te.read(te.l1)
+	if err := te.checkPong(reply, pingHash); err != nil {
+		t.Fatal(err)
 	}
 }
 
@@ -162,15 +177,13 @@ func PingExtraData(t *testing.T) {
 		JunkData1:  42,
 		JunkData2:  []byte{9, 8, 7, 6, 5, 4, 3, 2, 1},
 	}
-	if err := te.send(te.l1, &req); err != nil {
+	pingHash, err := te.send(te.l1, &req)
+	if err != nil {
 		t.Fatal("send", err)
 	}
-	reply, _, err := te.read(te.l1)
-	if err != nil {
-		t.Fatal("read", err)
-	}
-	if reply.Kind() != v4wire.PongPacket {
-		t.Error("Reply is not a Pong", reply.Name())
+	reply, _, _ := te.read(te.l1)
+	if err := te.checkPong(reply, pingHash); err != nil {
+		t.Fatal(err)
 	}
 }
 
@@ -189,15 +202,13 @@ func PingExtraDataWrongFrom(t *testing.T) {
 		JunkData1:  42,
 		JunkData2:  []byte{9, 8, 7, 6, 5, 4, 3, 2, 1},
 	}
-	if err := te.send(te.l1, &req); err != nil {
+	pingHash, err := te.send(te.l1, &req)
+	if err != nil {
 		t.Fatal("send", err)
 	}
-	reply, _, err := te.read(te.l1)
-	if err != nil {
-		t.Fatal("read", err)
-	}
-	if reply.Kind() != v4wire.PongPacket {
-		t.Error("Reply is not a Pong", reply.Name())
+	reply, _, _ := te.read(te.l1)
+	if err := te.checkPong(reply, pingHash); err != nil {
+		t.Fatal(err)
 	}
 }
 
@@ -213,7 +224,7 @@ func PingPastExpiration(t *testing.T) {
 		To:         te.remoteEndpoint(),
 		Expiration: -futureExpiration(),
 	}
-	if err := te.send(te.l1, &req); err != nil {
+	if _, err := te.send(te.l1, &req); err != nil {
 		t.Fatal("send", err)
 	}
 	reply, _, _ := te.read(te.l1)
@@ -233,7 +244,7 @@ func WrongPacketType(t *testing.T) {
 		To:         te.remoteEndpoint(),
 		Expiration: futureExpiration(),
 	}
-	if err := te.send(te.l1, &req); err != nil {
+	if _, err := te.send(te.l1, &req); err != nil {
 		t.Fatal("send", err)
 	}
 	reply, _, _ := te.read(te.l1)
@@ -250,22 +261,19 @@ func BondThenPingWithWrongFrom(t *testing.T) {
 	bond(t, te)
 
 	wrongEndpoint := v4wire.Endpoint{IP: net.ParseIP("192.0.2.0")}
-	req2 := v4wire.Ping{
+	req := v4wire.Ping{
 		Version:    4,
 		From:       wrongEndpoint,
 		To:         te.remoteEndpoint(),
 		Expiration: futureExpiration(),
 	}
-	if err := te.send(te.l1, &req2); err != nil {
-		t.Fatal("send 2nd", err)
-	}
-
-	reply, _, err := te.read(te.l1)
+	pingHash, err := te.send(te.l1, &req)
 	if err != nil {
-		t.Fatal("read 2nd", err)
+		t.Fatal("send", err)
 	}
-	if reply.Kind() != v4wire.PongPacket {
-		t.Error("Reply is not a Pong after bonding", reply.Name())
+	reply, _, _ := te.read(te.l1)
+	if err := te.checkPong(reply, pingHash); err != nil {
+		t.Fatal(err)
 	}
 }
 
@@ -277,7 +285,7 @@ func FindnodeWithoutEndpointProof(t *testing.T) {
 
 	req := v4wire.Findnode{Expiration: futureExpiration()}
 	rand.Read(req.Target[:])
-	if err := te.send(te.l1, &req); err != nil {
+	if _, err := te.send(te.l1, &req); err != nil {
 		t.Fatal("sending find nodes", err)
 	}
 	reply, _, _ := te.read(te.l1)
@@ -296,7 +304,7 @@ func BasicFindnode(t *testing.T) {
 	//now call find neighbours
 	findnode := v4wire.Findnode{Expiration: futureExpiration()}
 	rand.Read(findnode.Target[:])
-	if err := te.send(te.l1, &findnode); err != nil {
+	if _, err := te.send(te.l1, &findnode); err != nil {
 		t.Fatal("sending findnode", err)
 	}
 	reply, _, err := te.read(te.l1)
@@ -328,7 +336,7 @@ func UnsolicitedNeighbors(t *testing.T) {
 			TCP: 30303,
 		}},
 	}
-	if err := te.send(te.l1, &neighbors); err != nil {
+	if _, err := te.send(te.l1, &neighbors); err != nil {
 		t.Fatal("NeighborsReq", err)
 	}
 
@@ -337,7 +345,7 @@ func UnsolicitedNeighbors(t *testing.T) {
 		Expiration: futureExpiration(),
 		Target:     encFakeKey,
 	}
-	if err := te.send(te.l1, &findnode); err != nil {
+	if _, err := te.send(te.l1, &findnode); err != nil {
 		t.Fatal("sending findnode", err)
 	}
 	reply, _, err := te.read(te.l1)
@@ -364,7 +372,7 @@ func FindnodePastExpiration(t *testing.T) {
 		Expiration: -futureExpiration(),
 	}
 	rand.Read(findnode.Target[:])
-	if err := te.send(te.l1, &findnode); err != nil {
+	if _, err := te.send(te.l1, &findnode); err != nil {
 		t.Fatal("sending find nodes", err)
 	}
 	reply, _, _ := te.read(te.l1)
@@ -381,7 +389,7 @@ func bond(t *testing.T, te *testenv) {
 		To:         te.remoteEndpoint(),
 		Expiration: futureExpiration(),
 	}
-	if err := te.send(te.l1, &ping); err != nil {
+	if _, err := te.send(te.l1, &ping); err != nil {
 		t.Fatal("ping failed", err)
 	}
 	var gotPing, gotPong bool
@@ -423,7 +431,7 @@ func FindnodeAmplificationInvalidPongHash(t *testing.T) {
 		To:         te.remoteEndpoint(),
 		Expiration: futureExpiration(),
 	}
-	if err := te.send(te.l1, &ping); err != nil {
+	if _, err := te.send(te.l1, &ping); err != nil {
 		t.Fatal(err)
 	}
 
@@ -451,7 +459,7 @@ func FindnodeAmplificationInvalidPongHash(t *testing.T) {
 	// PONG did not reference the PING hash.
 	findnode := v4wire.Findnode{Expiration: futureExpiration()}
 	rand.Read(findnode.Target[:])
-	if err := te.send(te.l1, &findnode); err != nil {
+	if _, err := te.send(te.l1, &findnode); err != nil {
 		t.Fatal(err)
 	}
 
@@ -476,7 +484,7 @@ func FindnodeAmplificationWrongIP(t *testing.T) {
 	// The remote node should not respond.
 	findnode := v4wire.Findnode{Expiration: futureExpiration()}
 	rand.Read(findnode.Target[:])
-	if err := te.send(te.l2, &findnode); err != nil {
+	if _, err := te.send(te.l2, &findnode); err != nil {
 		t.Fatal(err)
 	}
 	// If we receive a NEIGHBORS response, the attack worked and the test fails.
