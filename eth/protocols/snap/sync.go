@@ -76,21 +76,30 @@ const (
 
 // accountRequest tracks a pending account range request to ensure responses are
 // to actual requests and to validate any security constraints.
+//
+// Concurrency note: account requests and responses are handled concurrently from
+// the main runloop to allow Merkle proof verifications on the peer's thread and
+// to drop on invalid response. The request struct must contain all the data to
+// construct the response without accessing runloop internals (i.e. task). That
+// is only included to allow the runloop to match a response to the task being
+// synced without having yet another set of maps.
 type accountRequest struct {
 	peer string // Peer to which this request is assigned
 	id   uint64 // Request ID of this request
 
 	cancel  chan struct{} // Channel to track sync cancellation
 	timeout *time.Timer   // Timer to track delivery timeout
+	stale   chan struct{} // Channel to signal the request was dropped
 
-	task *accountTask // Task which this request is filling
+	origin common.Hash  // First account requested to allow continuation checks
+	task   *accountTask // Task which this request is filling (only access fields through the runloop!!)
 }
 
 // accountResponse is an already Merkle-verified remote response to an account
 // range request. It contains the subtrie for the requested account range and
 // the database that's going to be filled with the internal nodes on commit.
 type accountResponse struct {
-	task *accountTask // Task which this response is filling
+	task *accountTask // Task which this request is filling
 
 	hashes   []common.Hash    // Account hashes in the returned range
 	accounts []*state.Account // Expanded accounts in the returned range
@@ -103,20 +112,28 @@ type accountResponse struct {
 
 // byteCodesRequest tracks a pending bytecode request to ensure responses are to
 // actual requests and to validate any security constraints.
+//
+// Concurrency note: bytecode requests and responses are handled concurrently from
+// the main runloop to allow Keccak256 hash verifications on the peer's thread and
+// to drop on invalid response. The request struct must contain all the data to
+// construct the response without accessing runloop internals (i.e. task). That
+// is only included to allow the runloop to match a response to the task being
+// synced without having yet another set of maps.
 type bytecodeRequest struct {
 	peer string // Peer to which this request is assigned
 	id   uint64 // Request ID of this request
 
 	cancel  chan struct{} // Channel to track sync cancellation
 	timeout *time.Timer   // Timer to track delivery timeout
+	stale   chan struct{} // Channel to signal the request was dropped
 
-	task   *accountTask  // Task which this request is filling
 	hashes []common.Hash // Bytecode hashes to validate responses
+	task   *accountTask  // Task which this request is filling (only access fields through the runloop!!)
 }
 
 // bytecodeResponse is an already verified remote response to a bytecode request.
 type bytecodeResponse struct {
-	task *accountTask // Task which this response is filling
+	task *accountTask // Task which this request is filling
 
 	hashes []common.Hash // Hashes of the bytecode to avoid double hashing
 	codes  [][]byte      // Actual bytecodes to store into the database (nil = missing)
@@ -124,16 +141,26 @@ type bytecodeResponse struct {
 
 // storageRequest tracks a pending storage ranges request to ensure responses are
 // to actual requests and to validate any security constraints.
+//
+// Concurrency note: storage requests and responses are handled concurrently from
+// the main runloop to allow Merkel proof verifications on the peer's thread and
+// to drop on invalid response. The request struct must contain all the data to
+// construct the response without accessing runloop internals (i.e. tasks). That
+// is only included to allow the runloop to match a response to the task being
+// synced without having yet another set of maps.
 type storageRequest struct {
 	peer string // Peer to which this request is assigned
 	id   uint64 // Request ID of this request
 
 	cancel  chan struct{} // Channel to track sync cancellation
 	timeout *time.Timer   // Timer to track delivery timeout
+	stale   chan struct{} // Channel to signal the request was dropped
 
-	mainTask *accountTask  // Task which this response belongs to
-	subTask  *storageTask  // Task which this response is filling
 	accounts []common.Hash // Account hashes to validate responses
+	roots    []common.Hash // Storage roots to validate responses
+
+	mainTask *accountTask // Task which this response belongs to (only access fields through the runloop!!)
+	subTask  *storageTask // Task which this response is filling (only access fields through the runloop!!)
 }
 
 // storageResponse is an already Merkle-verified remote response to a storage
@@ -143,12 +170,12 @@ type storageResponse struct {
 	mainTask *accountTask // Task which this response belongs to
 	subTask  *storageTask // Task which this response is filling
 
-	accounts []common.Hash   // Account hashes filling
-	hashes   [][]common.Hash // Storage slot hashes in the returned range
-	slots    [][][]byte      // Storage slot values in the returned range
+	accounts []common.Hash // Account hashes filling
+	roots    []common.Hash // Storage roots filling
 
-	nodes []ethdb.KeyValueStore // Database containing the reconstructed trie nodes
-	tries []*trie.Trie          // Reconstructed tries to retrieve root hashes
+	hashes [][]common.Hash       // Storage slot hashes in the returned range
+	slots  [][][]byte            // Storage slot values in the returned range
+	nodes  []ethdb.KeyValueStore // Database containing the reconstructed trie nodes
 
 	// Fields relevant for the last account only
 	bounds map[common.Hash]struct{} // Boundary nodes to avoid persisting (incomplete)
@@ -173,8 +200,8 @@ type accountTask struct {
 	needState []bool // Flags whether the filling accounts need storage retrieval
 	needHeal  []bool // Flags whether the filling accounts's state was chunked and need healing
 
-	codeTasks  map[common.Hash]struct{} // Code hashes that need retrieval
-	stateTasks map[common.Hash]struct{} // Account hashes that need full state retrieval
+	codeTasks  map[common.Hash]struct{}    // Code hashes that need retrieval
+	stateTasks map[common.Hash]common.Hash // Account hashes->roots that need full state retrieval
 }
 
 // accountTask represents the sync task for a chunk of the storage snapshot.
@@ -494,36 +521,41 @@ func (s *Syncer) assignAccountTasks(tasks []*accountTask, cancel chan struct{}) 
 				break
 			}
 			// Generate the network query and send it to the peer
-			task.req = &accountRequest{
+			req := &accountRequest{
 				peer:   id,
 				id:     reqid,
-				task:   task,
 				cancel: cancel,
+				stale:  make(chan struct{}),
+				origin: task.Next,
+				task:   task,
 			}
-			task.req.timeout = time.AfterFunc(requestTimeout, func() {
+			req.timeout = time.AfterFunc(requestTimeout, func() {
 				log.Debug("Account range request timed out")
 				select {
 				case s.accountReqFails <- task.req:
 				default:
 				}
 			})
-			s.accountReqs[reqid] = task.req
+			s.accountReqs[reqid] = req
 			delete(s.accountIdlers, id)
 
 			s.pend.Add(1)
-			go func(peer *Peer, root common.Hash, task *accountTask) {
+			go func(peer *Peer, root common.Hash) {
 				defer s.pend.Done()
 
 				// Attempt to send the remote request and revert if it fails
-				if err := peer.RequestAccountRange(reqid, root, task.Next, maxRequestSize); err != nil {
+				if err := peer.RequestAccountRange(reqid, root, req.origin, maxRequestSize); err != nil {
 					peer.Log().Debug("Failed to request account range", "err", err)
 					select {
-					case s.accountReqFails <- task.req:
+					case s.accountReqFails <- req:
 					default:
 					}
 				}
 				// Request successfully sent, start a
-			}(s.peers[id], s.root, task) // We're in the lock, peers[id] surely exists
+			}(s.peers[id], s.root) // We're in the lock, peers[id] surely exists
+
+			// Inject the request into the task to block further assignments
+			task.req = req
 
 			// Task assigned, abort scanning for new tasks
 			break
@@ -574,9 +606,11 @@ func (s *Syncer) assignBytecodeTasks(tasks []*accountTask, cancel chan struct{})
 			}
 			req := &bytecodeRequest{
 				peer:   id,
-				task:   task,
-				hashes: hashes,
+				id:     reqid,
 				cancel: cancel,
+				stale:  make(chan struct{}),
+				hashes: hashes,
+				task:   task,
 			}
 			req.timeout = time.AfterFunc(requestTimeout, func() {
 				log.Debug("Bytecode request timed out")
@@ -589,7 +623,7 @@ func (s *Syncer) assignBytecodeTasks(tasks []*accountTask, cancel chan struct{})
 			delete(s.bytecodeIdlers, id)
 
 			s.pend.Add(1)
-			go func(peer *Peer, task *accountTask) {
+			go func(peer *Peer) {
 				defer s.pend.Done()
 
 				// Attempt to send the remote request and revert if it fails
@@ -601,7 +635,7 @@ func (s *Syncer) assignBytecodeTasks(tasks []*accountTask, cancel chan struct{})
 					}
 				}
 				// Request successfully sent, start a
-			}(s.peers[id], task) // We're in the lock, peers[id] surely exists
+			}(s.peers[id]) // We're in the lock, peers[id] surely exists
 
 			// Task assigned, abort scanning for new tasks
 			break
@@ -643,18 +677,28 @@ func (s *Syncer) assignStorageTasks(tasks []*accountTask, cancel chan struct{}) 
 				break
 			}
 			// Generate the network query and send it to the peer
-			accounts := make([]common.Hash, 0, maxStorageSetRequestCount)
-			for acccount := range task.stateTasks {
+			var (
+				accounts = make([]common.Hash, 0, maxStorageSetRequestCount)
+				roots    = make([]common.Hash, 0, maxStorageSetRequestCount)
+			)
+			for acccount, root := range task.stateTasks {
 				delete(task.stateTasks, acccount)
+
 				accounts = append(accounts, acccount)
+				roots = append(roots, root)
+
 				if len(accounts) >= maxStorageSetRequestCount {
 					break
 				}
 			}
 			req := &storageRequest{
-				mainTask: task,
+				peer:     id,
+				id:       reqid,
 				cancel:   cancel,
+				stale:    make(chan struct{}),
 				accounts: accounts,
+				roots:    roots,
+				mainTask: task,
 			}
 			req.timeout = time.AfterFunc(requestTimeout, func() {
 				log.Debug("Storage request timed out")
@@ -667,7 +711,7 @@ func (s *Syncer) assignStorageTasks(tasks []*accountTask, cancel chan struct{}) 
 			delete(s.storageIdlers, id)
 
 			s.pend.Add(1)
-			go func(peer *Peer, root common.Hash, task *accountTask) {
+			go func(peer *Peer, root common.Hash) {
 				defer s.pend.Done()
 
 				// Attempt to send the remote request and revert if it fails
@@ -679,7 +723,7 @@ func (s *Syncer) assignStorageTasks(tasks []*accountTask, cancel chan struct{}) 
 					}
 				}
 				// Request successfully sent, start a
-			}(s.peers[id], s.root, task) // We're in the lock, peers[id] surely exists
+			}(s.peers[id], s.root) // We're in the lock, peers[id] surely exists
 
 			// Task assigned, abort scanning for new tasks
 			break
@@ -727,7 +771,14 @@ func (s *Syncer) revertRequests(peer string) {
 // revertAccountRequest cleans up an account range request and returns all failed
 // retrieval tasks to the scheduler for reassignment.
 func (s *Syncer) revertAccountRequest(req *accountRequest) {
-	log.Trace("Reverting account request", "peer", req.peer)
+	log.Trace("Reverting account request", "peer", req.peer, "reqid", req.id)
+	select {
+	case <-req.stale:
+		log.Trace("Account request already reverted", "peer", req.peer, "reqid", req.id)
+		return
+	default:
+	}
+	close(req.stale)
 
 	// Remove the request from the tracked set
 	s.lock.Lock()
@@ -737,13 +788,22 @@ func (s *Syncer) revertAccountRequest(req *accountRequest) {
 	// If there's a timeout timer still running, abort it and mark the account
 	// task as not-pending, ready for resheduling
 	req.timeout.Stop()
-	req.task.req = nil
+	if req.task.req == req {
+		req.task.req = nil
+	}
 }
 
 // revertBytecodeRequest cleans up an bytecode request and returns all failed
 // retrieval tasks to the scheduler for reassignment.
 func (s *Syncer) revertBytecodeRequest(req *bytecodeRequest) {
 	log.Trace("Reverting bytecode request", "peer", req.peer)
+	select {
+	case <-req.stale:
+		log.Trace("Bytecode request already reverted", "peer", req.peer, "reqid", req.id)
+		return
+	default:
+	}
+	close(req.stale)
 
 	// Remove the request from the tracked set
 	s.lock.Lock()
@@ -762,6 +822,13 @@ func (s *Syncer) revertBytecodeRequest(req *bytecodeRequest) {
 // retrieval tasks to the scheduler for reassignment.
 func (s *Syncer) revertStorageRequest(req *storageRequest) {
 	log.Trace("Reverting storage request", "peer", req.peer)
+	select {
+	case <-req.stale:
+		log.Trace("Storage request already reverted", "peer", req.peer, "reqid", req.id)
+		return
+	default:
+	}
+	close(req.stale)
 
 	// Remove the request from the tracked set
 	s.lock.Lock()
@@ -771,8 +838,8 @@ func (s *Syncer) revertStorageRequest(req *storageRequest) {
 	// If there's a timeout timer still running, abort it and mark the storage
 	// task as not-pending, ready for resheduling
 	req.timeout.Stop()
-	for _, account := range req.accounts {
-		req.mainTask.stateTasks[account] = struct{}{}
+	for i, account := range req.accounts {
+		req.mainTask.stateTasks[account] = req.roots[i]
 	}
 }
 
@@ -801,7 +868,7 @@ func (s *Syncer) processAccountResponse(res *accountResponse) {
 	res.task.needHeal = make([]bool, len(res.accounts))
 
 	res.task.codeTasks = make(map[common.Hash]struct{})
-	res.task.stateTasks = make(map[common.Hash]struct{})
+	res.task.stateTasks = make(map[common.Hash]common.Hash)
 
 	res.task.pend = 0
 	for i, account := range res.accounts {
@@ -816,7 +883,7 @@ func (s *Syncer) processAccountResponse(res *accountResponse) {
 		// Check if the account is a contract with an unknown storage trie
 		if account.Root != emptyRoot {
 			if node, err := s.db.Get(account.Root[:]); err != nil || node == nil {
-				res.task.stateTasks[res.hashes[i]] = struct{}{}
+				res.task.stateTasks[res.hashes[i]] = account.Root
 				res.task.needState[i] = true
 				res.task.pend++
 			}
@@ -896,19 +963,20 @@ func (s *Syncer) processStorageResponse(res *storageResponse) {
 	for i, account := range res.accounts {
 		// If the account was not delivered, reschedule it
 		if i >= len(res.hashes) {
-			res.mainTask.stateTasks[account] = struct{}{}
+			res.mainTask.stateTasks[account] = res.roots[i]
 			continue
 		}
 		// State was delivered, if complete mark as not needed any more, otherwise
 		// mark the account as needing healing
 		for j, acc := range res.mainTask.res.accounts {
-			if res.tries[i].Hash() == acc.Root {
+			if res.roots[i] == acc.Root {
 				if res.mainTask.needState[j] {
 					res.mainTask.needState[j] = false //i < len(res.hashes)-1 || !res.cont
 					res.mainTask.pend--
 				}
-				if !res.mainTask.needHeal[j] {
-					res.mainTask.needHeal[j] = i == len(res.hashes)-1 && res.cont
+				if !res.mainTask.needHeal[j] && i == len(res.hashes)-1 && res.cont {
+					log.Error("Needs heal", "acc", res.mainTask.res.hashes[j], "aaa", account, "root", res.roots[i])
+					res.mainTask.needHeal[j] = true
 				}
 			}
 		}
@@ -1093,7 +1161,7 @@ func (s *Syncer) OnAccounts(peer *Peer, id uint64, hashes []common.Hash, account
 	}
 	proofdb := nodes.NodeSet()
 
-	db, tr, cont, err := trie.VerifyRangeProof(root, req.task.Next[:], keys, accounts, proofdb, proofdb)
+	db, tr, cont, err := trie.VerifyRangeProof(root, req.origin[:], keys, accounts, proofdb, proofdb)
 	if err != nil {
 		logger.Warn("Account range failed proof", "err", err)
 		return err
@@ -1124,8 +1192,9 @@ func (s *Syncer) OnAccounts(peer *Peer, id uint64, hashes []common.Hash, account
 		cont:     cont,
 	}
 	select {
-	case <-req.cancel:
 	case s.accountResps <- response:
+	case <-req.cancel:
+	case <-req.stale:
 	}
 	return nil
 }
@@ -1206,8 +1275,9 @@ func (s *Syncer) OnByteCodes(peer *Peer, id uint64, bytecodes [][]byte) error {
 		codes:  codes,
 	}
 	select {
-	case <-req.cancel:
 	case s.bytecodeResps <- response:
+	case <-req.cancel:
+	case <-req.stale:
 	}
 	return nil
 }
@@ -1288,10 +1358,9 @@ func (s *Syncer) OnStorage(peer *Peer, id uint64, hashes [][]common.Hash, slots 
 
 	// Reconstruct the partial tries from the response and verify them
 	var (
-		tries = make([]*trie.Trie, len(hashes))
-		dbs   = make([]ethdb.KeyValueStore, len(hashes))
+		dbs  = make([]ethdb.KeyValueStore, len(hashes))
+		cont bool
 	)
-
 	for i := 0; i < len(hashes); i++ {
 		// Convert the keys and proofs into an internal format
 		keys := make([][]byte, len(hashes[i]))
@@ -1304,19 +1373,11 @@ func (s *Syncer) OnStorage(peer *Peer, id uint64, hashes [][]common.Hash, slots 
 				nodes = append(nodes, node)
 			}
 		}
-		// Dig up the expected root hash for this response entry
-		account := req.accounts[i]
-		var root common.Hash
-		for j, hash := range req.mainTask.res.hashes {
-			if hash == account {
-				root = req.mainTask.res.accounts[j].Root
-			}
-		}
 		var err error
 		if len(nodes) == 0 {
 			// No proof has been attached, the response must cover the entire key
 			// space and hash to the origin root.
-			dbs[i], tries[i], _, err = trie.VerifyRangeProof(root, nil, keys, slots[i], nil, nil)
+			dbs[i], _, _, err = trie.VerifyRangeProof(req.roots[i], nil, keys, slots[i], nil, nil)
 			if err != nil {
 				logger.Warn("Storage slots failed proof", "err", err)
 				return err
@@ -1330,7 +1391,7 @@ func (s *Syncer) OnStorage(peer *Peer, id uint64, hashes [][]common.Hash, slots 
 			if req.subTask != nil {
 				origin = req.subTask.Next
 			}
-			dbs[i], tries[i], _, err = trie.VerifyRangeProof(root, origin[:], keys, slots[i], proofdb, proofdb)
+			dbs[i], _, cont, err = trie.VerifyRangeProof(req.roots[i], origin[:], keys, slots[i], proofdb, proofdb)
 			if err != nil {
 				logger.Warn("Storage range failed proof", "err", err)
 				return err
@@ -1350,15 +1411,17 @@ func (s *Syncer) OnStorage(peer *Peer, id uint64, hashes [][]common.Hash, slots 
 		mainTask: req.mainTask,
 		subTask:  req.subTask,
 		accounts: req.accounts,
+		roots:    req.roots,
 		hashes:   hashes,
 		slots:    slots,
 		nodes:    dbs,
-		tries:    tries,
 		bounds:   bounds,
+		cont:     cont,
 	}
 	select {
-	case <-req.cancel:
 	case s.storageResps <- response:
+	case <-req.cancel:
+	case <-req.stale:
 	}
 	return nil
 }
