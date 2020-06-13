@@ -66,7 +66,7 @@ type StructLog struct {
 	Memory        []byte                      `json:"memory"`
 	MemorySize    int                         `json:"memSize"`
 	Stack         []*big.Int                  `json:"stack"`
-	ReturnStack   []uint64                    `json:"returnStack"`
+	ReturnStack   []uint32                    `json:"returnStack"`
 	Storage       map[common.Hash]common.Hash `json:"-"`
 	Depth         int                         `json:"depth"`
 	RefundCounter uint64                      `json:"refund"`
@@ -161,9 +161,9 @@ func (l *StructLogger) CaptureState(env *EVM, pc uint64, op OpCode, gas, cost ui
 			stck[i] = new(big.Int).Set(item.ToBig())
 		}
 	}
-	var rstack []uint64
+	var rstack []uint32
 	if !l.cfg.DisableStack && rStack != nil {
-		rstck := make([]uint64, len(rStack.data))
+		rstck := make([]uint32, len(rStack.data))
 		copy(rstck, rStack.data)
 	}
 	// Copy a snapshot of the current storage to a new container

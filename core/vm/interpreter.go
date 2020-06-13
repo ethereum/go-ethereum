@@ -182,6 +182,7 @@ func (in *EVMInterpreter) Run(contract *Contract, input []byte, readOnly bool) (
 		logged  bool   // deferred Tracer should ignore already logged steps
 		res     []byte // result of the opcode execution function
 	)
+	defer returnStack(stack)
 	contract.Input = input
 
 	if in.cfg.Debug {
