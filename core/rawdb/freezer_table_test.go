@@ -552,8 +552,8 @@ func TestOffset(t *testing.T) {
 		tailId := uint32(2)     // First file is 2
 		itemOffset := uint32(4) // We have removed four items
 		zeroIndex := indexEntry{
-			offset:  tailId,
-			filenum: itemOffset,
+			filenum: tailId,
+			offset:  itemOffset,
 		}
 		buf := zeroIndex.marshallBinary()
 		// Overwrite index zero
@@ -579,7 +579,7 @@ func TestOffset(t *testing.T) {
 		// It should be fine to fetch 4,5,6
 		if got, err := f.Retrieve(4); err != nil {
 			t.Fatal(err)
-		} else if exp := getChunk(20, 0xbb); !bytes.Equal(got, exp) {
+		} else if exp := getChunk(16, 0xbb); !bytes.Equal(got, exp) {
 			t.Fatalf("expected %x got %x", exp, got)
 		}
 		if got, err := f.Retrieve(5); err != nil {

@@ -232,8 +232,8 @@ func (t *freezerTable) repair() error {
 	t.index.ReadAt(buffer, 0)
 	firstIndex.unmarshalBinary(buffer)
 
-	t.tailId = firstIndex.offset
-	t.itemOffset = firstIndex.filenum
+	t.tailId = firstIndex.filenum
+	t.itemOffset = firstIndex.offset
 
 	t.index.ReadAt(buffer, offsetsSize-indexEntrySize)
 	lastIndex.unmarshalBinary(buffer)
