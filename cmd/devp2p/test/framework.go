@@ -31,9 +31,10 @@ type testenv struct {
 	key        *ecdsa.PrivateKey
 	remote     *enode.Node
 	remoteAddr *net.UDPAddr
+	waitTime   int
 }
 
-func newTestEnv(remote string) *testenv {
+func newTestEnv(remote string, waitTime int) *testenv {
 	l1, err := net.ListenPacket("udp", "127.0.0.1:0")
 	if err != nil {
 		panic(err)
@@ -65,7 +66,7 @@ func newTestEnv(remote string) *testenv {
 		node = enode.NewV4(node.Pubkey(), ip, tcpPort, udpPort)
 	}
 	addr := &net.UDPAddr{IP: node.IP(), Port: node.UDP()}
-	return &testenv{l1, l2, key, node, addr}
+	return &testenv{l1, l2, key, node, addr, waitTime}
 }
 
 func (te *testenv) close() {
@@ -84,7 +85,7 @@ func (te *testenv) send(c net.PacketConn, req v4wire.Packet) ([]byte, error) {
 
 func (te *testenv) read(c net.PacketConn) (v4wire.Packet, []byte, error) {
 	buf := make([]byte, 2048)
-	if err := c.SetReadDeadline(time.Now().Add(time.Duration(*waitTime) * time.Millisecond)); err != nil {
+	if err := c.SetReadDeadline(time.Now().Add(time.Duration(te.waitTime) * time.Millisecond)); err != nil {
 		return nil, nil, err
 	}
 	n, _, err := c.ReadFrom(buf)

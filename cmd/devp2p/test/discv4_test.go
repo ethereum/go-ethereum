@@ -80,7 +80,7 @@ func futureExpiration() uint64 {
 
 // This test just sends a PING packet and expects a response.
 func BasicPing(t *testing.T) {
-	te := newTestEnv(*remote)
+	te := newTestEnv(*remote, *waitTime)
 	defer te.close()
 
 	req := v4wire.Ping{
@@ -120,7 +120,7 @@ func (te *testenv) checkPong(reply v4wire.Packet, pingHash []byte) error {
 
 // This test sends a PING packet with wrong 'to' field and expects a PONG response.
 func PingWrongTo(t *testing.T) {
-	te := newTestEnv(*remote)
+	te := newTestEnv(*remote, *waitTime)
 	defer te.close()
 
 	wrongEndpoint := v4wire.Endpoint{IP: net.ParseIP("192.0.2.0")}
@@ -142,7 +142,7 @@ func PingWrongTo(t *testing.T) {
 
 // This test sends a PING packet with wrong 'from' field and expects a PONG response.
 func PingWrongFrom(t *testing.T) {
-	te := newTestEnv(*remote)
+	te := newTestEnv(*remote, *waitTime)
 	defer te.close()
 
 	wrongEndpoint := v4wire.Endpoint{IP: net.ParseIP("192.0.2.0")}
@@ -166,7 +166,7 @@ func PingWrongFrom(t *testing.T) {
 // response. The remote node should respond because EIP-8 mandates ignoring additional
 // trailing data.
 func PingExtraData(t *testing.T) {
-	te := newTestEnv(*remote)
+	te := newTestEnv(*remote, *waitTime)
 	defer te.close()
 
 	req := pingWithJunk{
@@ -190,7 +190,7 @@ func PingExtraData(t *testing.T) {
 // This test sends a PING packet with additional data and wrong 'from' field
 // and expects a PONG response.
 func PingExtraDataWrongFrom(t *testing.T) {
-	te := newTestEnv(*remote)
+	te := newTestEnv(*remote, *waitTime)
 	defer te.close()
 
 	wrongEndpoint := v4wire.Endpoint{IP: net.ParseIP("192.0.2.0")}
@@ -215,7 +215,7 @@ func PingExtraDataWrongFrom(t *testing.T) {
 // This test sends a PING packet with an expiration in the past.
 // The remote node should not respond.
 func PingPastExpiration(t *testing.T) {
-	te := newTestEnv(*remote)
+	te := newTestEnv(*remote, *waitTime)
 	defer te.close()
 
 	req := v4wire.Ping{
@@ -235,7 +235,7 @@ func PingPastExpiration(t *testing.T) {
 
 // This test sends an invalid packet. The remote node should not respond.
 func WrongPacketType(t *testing.T) {
-	te := newTestEnv(*remote)
+	te := newTestEnv(*remote, *waitTime)
 	defer te.close()
 
 	req := pingWrongType{
@@ -256,7 +256,7 @@ func WrongPacketType(t *testing.T) {
 // This test verifies that the default behaviour of ignoring 'from' fields is unaffected by
 // the bonding process. After bonding, it pings the target with a different from endpoint.
 func BondThenPingWithWrongFrom(t *testing.T) {
-	te := newTestEnv(*remote)
+	te := newTestEnv(*remote, *waitTime)
 	defer te.close()
 	bond(t, te)
 
@@ -280,7 +280,7 @@ func BondThenPingWithWrongFrom(t *testing.T) {
 // This test just sends FINDNODE. The remote node should not reply
 // because the endpoint proof has not completed.
 func FindnodeWithoutEndpointProof(t *testing.T) {
-	te := newTestEnv(*remote)
+	te := newTestEnv(*remote, *waitTime)
 	defer te.close()
 
 	req := v4wire.Findnode{Expiration: futureExpiration()}
@@ -297,7 +297,7 @@ func FindnodeWithoutEndpointProof(t *testing.T) {
 // BasicFindnode sends a FINDNODE request after performing the endpoint
 // proof. The remote node should respond.
 func BasicFindnode(t *testing.T) {
-	te := newTestEnv(*remote)
+	te := newTestEnv(*remote, *waitTime)
 	defer te.close()
 	bond(t, te)
 
@@ -320,7 +320,7 @@ func BasicFindnode(t *testing.T) {
 // FINDNODE to read the remote table. The remote node should not return the node contained
 // in the unsolicited NEIGHBORS packet.
 func UnsolicitedNeighbors(t *testing.T) {
-	te := newTestEnv(*remote)
+	te := newTestEnv(*remote, *waitTime)
 	defer te.close()
 	bond(t, te)
 
@@ -364,7 +364,7 @@ func UnsolicitedNeighbors(t *testing.T) {
 // This test sends FINDNODE with an expiration timestamp in the past.
 // The remote node should not respond.
 func FindnodePastExpiration(t *testing.T) {
-	te := newTestEnv(*remote)
+	te := newTestEnv(*remote, *waitTime)
 	defer te.close()
 	bond(t, te)
 
@@ -421,7 +421,7 @@ func bond(t *testing.T, te *testenv) {
 // attacker could then perform traffic amplification by sending many FINDNODE
 // requests to the discovery node, which would reply to the 'victim' address.
 func FindnodeAmplificationInvalidPongHash(t *testing.T) {
-	te := newTestEnv(*remote)
+	te := newTestEnv(*remote, *waitTime)
 	defer te.close()
 
 	// Send PING to start endpoint verification.
@@ -474,7 +474,7 @@ func FindnodeAmplificationInvalidPongHash(t *testing.T) {
 // The attack works if the remote node does not verify the IP address of FINDNODE
 // against the endpoint verification proof done by PING/PONG.
 func FindnodeAmplificationWrongIP(t *testing.T) {
-	te := newTestEnv(*remote)
+	te := newTestEnv(*remote, *waitTime)
 	defer te.close()
 
 	// Do the endpoint proof from the l1 IP.
