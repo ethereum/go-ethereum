@@ -18,6 +18,7 @@ package snap
 
 import (
 	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/p2p"
 )
 
@@ -28,16 +29,20 @@ type Peer struct {
 	*p2p.Peer                   // The embedded P2P package peer
 	rw        p2p.MsgReadWriter // Input/output streams for snap
 	version   uint              // Protocol version negotiated
+
+	logger log.Logger // Contextual logger with the peer id injected
 }
 
 // newPeer create a wrapper for a network connection and negotiated  protocol
 // version.
 func newPeer(version uint, p *p2p.Peer, rw p2p.MsgReadWriter) *Peer {
+	id := p.ID().String()
 	return &Peer{
-		id:      p.ID().String(),
+		id:      id,
 		Peer:    p,
 		rw:      rw,
 		version: version,
+		logger:  log.New("peer", id[:8]),
 	}
 }
 
@@ -46,10 +51,15 @@ func (p *Peer) ID() string {
 	return p.id
 }
 
+// Version retrieves the peer's negoatiated `snap` protocol version.
+func (p *Peer) Version() uint {
+	return p.version
+}
+
 // RequestAccountRange fetches a batch of accounts rooted in a specific account
 // trie, starting with the origin.
 func (p *Peer) RequestAccountRange(id uint64, root common.Hash, origin common.Hash, bytes uint64) error {
-	p.Log().Trace("Fetching range of accounts", "reqid", id, "root", root, "origin", origin, "bytes", common.StorageSize(bytes))
+	p.logger.Trace("Fetching range of accounts", "reqid", id, "root", root, "origin", origin, "bytes", common.StorageSize(bytes))
 	return p2p.Send(p.rw, getAccountRangeMsg, &getAccountRangeData{
 		ID:     id,
 		Root:   root,
@@ -61,7 +71,7 @@ func (p *Peer) RequestAccountRange(id uint64, root common.Hash, origin common.Ha
 // RequestStorageRange fetches a batch of accounts rooted in a specific account
 // trie, starting with the origin.
 func (p *Peer) RequestStorageRanges(id uint64, root common.Hash, accounts []common.Hash, origin []byte, bytes uint64) error {
-	p.Log().Trace("Fetching ranges of storage slots", "reqid", id, "root", root, "accounts", len(accounts), "origin", origin, "bytes", common.StorageSize(bytes))
+	p.logger.Trace("Fetching ranges of storage slots", "reqid", id, "root", root, "accounts", len(accounts), "origin", origin, "bytes", common.StorageSize(bytes))
 	return p2p.Send(p.rw, getStorageRangesMsg, &getStorageRangesData{
 		ID:       id,
 		Root:     root,
@@ -74,23 +84,10 @@ func (p *Peer) RequestStorageRanges(id uint64, root common.Hash, accounts []comm
 // RequestByteCodes fetches a batch of accounts rooted in a specific account
 // trie, starting with the origin.
 func (p *Peer) RequestByteCodes(id uint64, hashes []common.Hash, bytes uint64) error {
-	p.Log().Trace("Fetching set of byte codes", "reqid", id, "hashes", len(hashes), "bytes", common.StorageSize(bytes))
+	p.logger.Trace("Fetching set of byte codes", "reqid", id, "hashes", len(hashes), "bytes", common.StorageSize(bytes))
 	return p2p.Send(p.rw, getByteCodesMsg, &getByteCodesData{
 		ID:     id,
 		Hashes: hashes,
 		Bytes:  bytes,
 	})
-}
-
-// PeerInfo represents a short summary of the `snap` sub-protocol metadata known
-// about a connected peer.
-type PeerInfo struct {
-	Version uint `json:"version"` // Snapshot protocol version negotiated
-}
-
-// info gathers and returns some `snap` protocol metadata known about a peer.
-func (p *Peer) info() *PeerInfo {
-	return &PeerInfo{
-		Version: p.version,
-	}
 }

@@ -201,7 +201,7 @@ func (dl *diskLayer) generate(stats *generatorStats) {
 		if acc.Root != emptyRoot {
 			storeTrie, err := trie.NewSecure(acc.Root, dl.triedb)
 			if err != nil {
-				log.Crit("Storage trie inaccessible for snapshot generation", "err", err)
+				log.Crit("Storage trie inaccessible for snapshot generation", "account", accountHash, "root", acc.Root, "err", err)
 			}
 			var storeMarker []byte
 			if accMarker != nil && bytes.Equal(accountHash[:], accMarker) && len(dl.genMarker) > common.HashLength {

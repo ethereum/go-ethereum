@@ -104,10 +104,13 @@ type accountResponse struct {
 	hashes   []common.Hash    // Account hashes in the returned range
 	accounts []*state.Account // Expanded accounts in the returned range
 
-	nodes  ethdb.KeyValueStore      // Database containing the reconstructed trie nodes
-	trie   *trie.Trie               // Reconstructed trie to reject incomplete account paths
-	bounds map[common.Hash]struct{} // Boundary nodes to avoid persisting (incomplete)
-	cont   bool                     // Whether the account range has a continuation
+	nodes ethdb.KeyValueStore // Database containing the reconstructed trie nodes
+	trie  *trie.Trie          // Reconstructed trie to reject incomplete account paths
+
+	bounds   map[common.Hash]struct{} // Boundary nodes to avoid persisting incomplete accounts
+	overflow *light.NodeSet           // Overflow nodes to avoid persisting across chunk boundaries
+
+	cont bool // Whether the account range has a continuation
 }
 
 // byteCodesRequest tracks a pending bytecode request to ensure responses are to
@@ -170,8 +173,8 @@ type storageResponse struct {
 	mainTask *accountTask // Task which this response belongs to
 	subTask  *storageTask // Task which this response is filling
 
-	accounts []common.Hash // Account hashes filling
-	roots    []common.Hash // Storage roots filling
+	accounts []common.Hash // Account hashes requested, may be only partially filled
+	roots    []common.Hash // Storage roots requested, may be only partially filled
 
 	hashes [][]common.Hash       // Storage slot hashes in the returned range
 	slots  [][][]byte            // Storage slot values in the returned range
@@ -855,6 +858,12 @@ func (s *Syncer) processAccountResponse(res *accountResponse) {
 	last := res.task.Last.Big()
 	for i, hash := range res.hashes {
 		if hash.Big().Cmp(last) > 0 {
+			// Chunk overflown, cut off excess, but also updat ethe boundary nodes
+			for j := i; j < len(res.hashes); j++ {
+				if err := res.trie.Prove(res.hashes[j][:], 0, res.overflow); err != nil {
+					panic(err) // Account range was already proven, what happened
+				}
+			}
 			res.hashes = res.hashes[:i]
 			res.accounts = res.accounts[:i]
 			res.cont = false // Mark range completed
@@ -960,10 +969,16 @@ func (s *Syncer) processStorageResponse(res *storageResponse) {
 	)
 	// Iterate over all the accounts and reconstruct their storage tries from the
 	// delivered slots
+	delivered := make(map[common.Hash]bool)
+	for i := 0; i < len(res.hashes); i++ {
+		delivered[res.roots[i]] = true
+	}
 	for i, account := range res.accounts {
 		// If the account was not delivered, reschedule it
 		if i >= len(res.hashes) {
-			res.mainTask.stateTasks[account] = res.roots[i]
+			if !delivered[res.roots[i]] {
+				res.mainTask.stateTasks[account] = res.roots[i]
+			}
 			continue
 		}
 		// State was delivered, if complete mark as not needed any more, otherwise
@@ -975,7 +990,6 @@ func (s *Syncer) processStorageResponse(res *storageResponse) {
 					res.mainTask.pend--
 				}
 				if !res.mainTask.needHeal[j] && i == len(res.hashes)-1 && res.cont {
-					log.Error("Needs heal", "acc", res.mainTask.res.hashes[j], "aaa", account, "root", res.roots[i])
 					res.mainTask.needHeal[j] = true
 				}
 			}
@@ -985,10 +999,12 @@ func (s *Syncer) processStorageResponse(res *storageResponse) {
 
 		it := res.nodes[i].NewIterator(nil, nil)
 		for it.Next() {
-			// Boundary nodes are not written, since they are incomplete
-			if _, ok := res.bounds[common.BytesToHash(it.Key())]; ok {
-				skipped++
-				continue
+			// Boundary nodes are not written for the last result, since they are incomplete
+			if i == len(res.hashes)-1 {
+				if _, ok := res.bounds[common.BytesToHash(it.Key())]; ok {
+					skipped++
+					continue
+				}
 			}
 			// Node is not a boundary, persist to disk
 			batch.Put(it.Key(), it.Value())
@@ -1065,6 +1081,11 @@ func (s *Syncer) forwardAccountTask(task *accountTask) {
 			skipped++
 			continue
 		}
+		// Overflow nodes are not written, since they mess with another task
+		if _, err := res.overflow.Get(it.Key()); err == nil {
+			skipped++
+			continue
+		}
 		// Accounts with split storage requests are incomplete
 		if _, err := incompletes.Get(it.Key()); err == nil {
 			skipped++
@@ -1109,7 +1130,7 @@ func (s *Syncer) OnAccounts(peer *Peer, id uint64, hashes []common.Hash, account
 	for _, node := range proof {
 		size += common.StorageSize(len(node))
 	}
-	logger := peer.Log().New("reqid", id)
+	logger := peer.logger.New("reqid", id)
 	logger.Trace("Delivering range of accounts", "hashes", len(hashes), "accounts", len(accounts), "proofs", len(proof), "bytes", size)
 
 	// Whether or not the response is valid, we can mark the peer as idle and
@@ -1189,6 +1210,7 @@ func (s *Syncer) OnAccounts(peer *Peer, id uint64, hashes []common.Hash, account
 		nodes:    db,
 		trie:     tr,
 		bounds:   bounds,
+		overflow: light.NewNodeSet(),
 		cont:     cont,
 	}
 	select {
@@ -1206,7 +1228,7 @@ func (s *Syncer) OnByteCodes(peer *Peer, id uint64, bytecodes [][]byte) error {
 	for _, code := range bytecodes {
 		size += common.StorageSize(len(code))
 	}
-	logger := peer.Log().New("reqid", id)
+	logger := peer.logger.New("reqid", id)
 	logger.Trace("Delivering set of bytecodes", "bytecodes", len(bytecodes), "bytes", size)
 
 	// Whether or not the response is valid, we can mark the peer as idle and
@@ -1304,7 +1326,7 @@ func (s *Syncer) OnStorage(peer *Peer, id uint64, hashes [][]common.Hash, slots 
 	for _, node := range proof {
 		size += common.StorageSize(len(node))
 	}
-	logger := peer.Log().New("reqid", id)
+	logger := peer.logger.New("reqid", id)
 	logger.Trace("Delivering ranges of storage slots", "accounts", len(hashes), "hashes", hashCount, "slots", slotCount, "proofs", len(proof), "size", size)
 
 	// Whether or not the response is valid, we can mark the peer as idle and
