@@ -231,7 +231,8 @@ web3._extend({
 		new web3._extend.Method({
 			name: 'accountRange',
 			call: 'debug_accountRange',
-			params: 2
+			params: 6,
+			inputFormatter: [web3._extend.formatters.inputDefaultBlockNumberFormatter, null, null, null, null, null],
 		}),
 		new web3._extend.Method({
 			name: 'printBlock',

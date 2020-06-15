@@ -235,6 +235,10 @@ func (w *wizard) manageGenesis() {
 		fmt.Printf("Which block should Istanbul come into effect? (default = %v)\n", w.conf.Genesis.Config.IstanbulBlock)
 		w.conf.Genesis.Config.IstanbulBlock = w.readDefaultBigInt(w.conf.Genesis.Config.IstanbulBlock)
 
+		fmt.Println()
+		fmt.Printf("Which block should YOLOv1 come into effect? (default = %v)\n", w.conf.Genesis.Config.YoloV1Block)
+		w.conf.Genesis.Config.YoloV1Block = w.readDefaultBigInt(w.conf.Genesis.Config.YoloV1Block)
+
 		out, _ := json.MarshalIndent(w.conf.Genesis.Config, "", "  ")
 		fmt.Printf("Chain configuration updated:\n\n%s\n", out)
 
