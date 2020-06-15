@@ -96,14 +96,15 @@ func (pre *Prestate) Apply(vmConfig vm.Config, chainConfig *params.ChainConfig,
 		return h
 	}
 	var (
-		statedb   = MakePreState(rawdb.NewMemoryDatabase(), pre.Pre)
-		signer    = types.NewEIP155Signer(chainConfig.ChainID)
-		gaspool   = new(core.GasPool)
-		blockHash = common.Hash{0x13, 0x37}
-		rejected  []int
-		gasUsed   = uint64(0)
-		receipts  = make(types.Receipts, 0)
-		txIndex   = 0
+		statedb     = MakePreState(rawdb.NewMemoryDatabase(), pre.Pre)
+		signer      = types.NewEIP155Signer(chainConfig.ChainID)
+		gaspool     = new(core.GasPool)
+		blockHash   = common.Hash{0x13, 0x37}
+		rejectedTxs []int
+		includedTxs types.Transactions
+		gasUsed     = uint64(0)
+		receipts    = make(types.Receipts, 0)
+		txIndex     = 0
 	)
 	gaspool.AddGas(pre.Env.GasLimit)
 	vmContext := vm.Context{
@@ -122,7 +123,7 @@ func (pre *Prestate) Apply(vmConfig vm.Config, chainConfig *params.ChainConfig,
 		msg, err := tx.AsMessage(signer)
 		if err != nil {
 			log.Info("rejected tx", "index", i, "hash", tx.Hash(), "error", err)
-			rejected = append(rejected, i)
+			rejectedTxs = append(rejectedTxs, i)
 			continue
 		}
 		tracer, err := getTracerFn(txIndex)
@@ -142,9 +143,10 @@ func (pre *Prestate) Apply(vmConfig vm.Config, chainConfig *params.ChainConfig,
 		if err != nil {
 			statedb.RevertToSnapshot(snapshot)
 			log.Info("rejected tx", "index", i, "hash", tx.Hash(), "from", msg.From(), "error", err)
-			rejected = append(rejected, i)
+			rejectedTxs = append(rejectedTxs, i)
 			continue
 		}
+		includedTxs = append(includedTxs, tx)
 		if hashError != nil {
 			return nil, nil, NewError(ErrorMissingBlockhash, hashError)
 		}
@@ -209,11 +211,11 @@ func (pre *Prestate) Apply(vmConfig vm.Config, chainConfig *params.ChainConfig,
 	}
 	execRs := &ExecutionResult{
 		StateRoot:   root,
-		TxRoot:      types.DeriveSha(txs),
+		TxRoot:      types.DeriveSha(includedTxs),
 		ReceiptRoot: types.DeriveSha(receipts),
 		LogsHash:    rlpHash(statedb.Logs()),
 		Receipts:    receipts,
-		Rejected:    rejected,
+		Rejected:    rejectedTxs,
 	}
 	return statedb, execRs, nil
 }
