@@ -421,7 +421,7 @@ func (ps *peerSet) Unregister(id string) error {
 	ps.lock.Lock()
 	p, ok := ps.peers[id]
 	if !ok {
-		defer ps.lock.Unlock()
+		ps.lock.Unlock()
 		return errNotRegistered
 	}
 	delete(ps.peers, id)
