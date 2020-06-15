@@ -48,6 +48,7 @@ type ExecutionResult struct {
 	TxRoot      common.Hash    `json:"txRoot"`
 	ReceiptRoot common.Hash    `json:"receiptRoot"`
 	LogsHash    common.Hash    `json:"logsHash"`
+	Bloom       types.Bloom    `json:"logsBloom"        gencodec:"required"`
 	Receipts    types.Receipts `json:"receipts"`
 	Rejected    []int          `json:"rejected,omitempty"`
 }
@@ -213,6 +214,7 @@ func (pre *Prestate) Apply(vmConfig vm.Config, chainConfig *params.ChainConfig,
 		StateRoot:   root,
 		TxRoot:      types.DeriveSha(includedTxs),
 		ReceiptRoot: types.DeriveSha(receipts),
+		Bloom:       types.CreateBloom(receipts),
 		LogsHash:    rlpHash(statedb.Logs()),
 		Receipts:    receipts,
 		Rejected:    rejectedTxs,

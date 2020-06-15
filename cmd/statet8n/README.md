@@ -92,6 +92,7 @@ Two resulting files:
  "txRoot": "0xc4761fd7b87ff2364c7c60b6c5c8d02e522e815328aaea3f20e3b7b7ef52c42d",
  "receiptRoot": "0x056b23fbba480696b65fe5a59b8f2148a1299103c4f57df839233af2cf4ca2d2",
  "logsHash": "0x1dcc4de8dec75d7aab85b567b6ccd41ad312451b948a7413f0a142fd40d49347",
+ "logsBloom": "0x00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000",
  "receipts": [
   {
    "root": "0x",
@@ -137,6 +138,7 @@ Output:
   "txRoot": "0xc4761fd7b87ff2364c7c60b6c5c8d02e522e815328aaea3f20e3b7b7ef52c42d",
   "receiptRoot": "0x056b23fbba480696b65fe5a59b8f2148a1299103c4f57df839233af2cf4ca2d2",
   "logsHash": "0x1dcc4de8dec75d7aab85b567b6ccd41ad312451b948a7413f0a142fd40d49347",
+  "logsBloom": "0x00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000",
   "receipts": [
    {
     "root": "0x",
@@ -236,7 +238,7 @@ cat trace-0.jsonl | grep BLOCKHASH -C2
 {"pc":0,"op":96,"gas":"0x5f58ef8","gasCost":"0x3","memory":"0x","memSize":0,"stack":[],"returnStack":[],"depth":1,"refund":0,"opName":"PUSH1","error":""}
 {"pc":2,"op":64,"gas":"0x5f58ef5","gasCost":"0x14","memory":"0x","memSize":0,"stack":["0x1"],"returnStack":[],"depth":1,"refund":0,"opName":"BLOCKHASH","error":""}
 {"pc":3,"op":0,"gas":"0x5f58ee1","gasCost":"0x0","memory":"0x","memSize":0,"stack":["0xdac58aa524e50956d0c0bae7f3f8bb9d35381365d07804dd5b48a5a297c06af4"],"returnStack":[],"depth":1,"refund":0,"opName":"STOP","error":""}
-{"output":"","gasUsed":"0x17","time":123201}
+{"output":"","gasUsed":"0x17","time":142174}
 ```
 
 In this example, the caller has not provided the required blockhash:
@@ -252,9 +254,9 @@ Error code: 4
 Another thing that can be done, is to chain invocations:
 ```
 ./statet8n --input.alloc=./testdata/1/alloc.json --input.txs=./testdata/1/txs.json --input.env=./testdata/1/env.json --output.alloc=stdout | ./statet8n --input.alloc=stdin --input.env=./testdata/1/env.json --input.txs=./testdata/1/txs.json
-INFO [06-15|14:53:51.350] rejected tx                              index=1 hash="0557ba…18d673" from=0x8A8eAFb1cf62BfBeb1741769DAE1a9dd47996192 error="nonce too low"
-INFO [06-15|14:53:51.352] rejected tx                              index=0 hash="0557ba…18d673" from=0x8A8eAFb1cf62BfBeb1741769DAE1a9dd47996192 error="nonce too low"
-INFO [06-15|14:53:51.353] rejected tx                              index=1 hash="0557ba…18d673" from=0x8A8eAFb1cf62BfBeb1741769DAE1a9dd47996192 error="nonce too low"
+INFO [06-15|15:10:38.683] rejected tx                              index=1 hash="0557ba…18d673" from=0x8A8eAFb1cf62BfBeb1741769DAE1a9dd47996192 error="nonce too low"
+INFO [06-15|15:10:38.684] rejected tx                              index=0 hash="0557ba…18d673" from=0x8A8eAFb1cf62BfBeb1741769DAE1a9dd47996192 error="nonce too low"
+INFO [06-15|15:10:38.685] rejected tx                              index=1 hash="0557ba…18d673" from=0x8A8eAFb1cf62BfBeb1741769DAE1a9dd47996192 error="nonce too low"
 
 ```
 What happened here, is that we first applied two identical transactions, so the second one was rejected. 
