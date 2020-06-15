@@ -22,6 +22,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/ethereum/go-ethereum/cmd/devp2p/test"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/p2p/discover"
@@ -210,7 +211,7 @@ func discv4Crawl(ctx *cli.Context) error {
 
 func discv4Test(ctx *cli.Context) error {
 	if ctx.Bool(testPingFlag.Name) {
-		//TestPing(nil)
+		test.TestPing(nil)
 	}
 	return nil
 }
