@@ -50,6 +50,20 @@ func newTestEnv(remote string) *testenv {
 	if err != nil {
 		panic(err)
 	}
+	if node.IP() == nil || node.UDP() == 0 {
+		var ip net.IP
+		var tcpPort, udpPort int
+		if ip = node.IP(); ip == nil {
+			ip = net.ParseIP("127.0.0.1")
+		}
+		if tcpPort = node.TCP(); tcpPort == 0 {
+			tcpPort = 30303
+		}
+		if udpPort = node.TCP(); udpPort == 0 {
+			udpPort = 30303
+		}
+		node = enode.NewV4(node.Pubkey(), ip, tcpPort, udpPort)
+	}
 	addr := &net.UDPAddr{IP: node.IP(), Port: node.UDP()}
 	return &testenv{l1, l2, key, node, addr}
 }
