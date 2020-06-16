@@ -108,8 +108,9 @@ var (
 		Value: 30 * time.Minute,
 	}
 	remoteEnodeFlag = cli.StringFlag{
-		Name:  "remote",
-		Usage: "Enode of the remote node under test",
+		Name:   "remote",
+		Usage:  "Enode of the remote node under test",
+		EnvVar: "REMOTE_ENODE",
 	}
 	testPatternFlag = cli.StringFlag{
 		Name:  "run",
