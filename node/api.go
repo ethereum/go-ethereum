@@ -159,7 +159,7 @@ func (api *PrivateAdminAPI) StartRPC(host *string, port *int, cors *string, apis
 	}
 	endpoint := fmt.Sprintf("%s:%d", *host, *port)
 	// check if HTTP server already exists
-	if server, exists := api.node.httpServerMap[endpoint]; exists {
+	if server, exists := api.node.HTTPServers.servers[endpoint]; exists {
 		if server.RPCAllowed {
 			return false, fmt.Errorf("HTTP RPC already running on %v", server.Listener.Addr())
 		}
@@ -219,7 +219,7 @@ func (api *PrivateAdminAPI) StopRPC() (bool, error) {
 	api.node.lock.Lock()
 	defer api.node.lock.Unlock()
 
-	for _, httpServer := range api.node.httpServerMap {
+	for _, httpServer := range api.node.HTTPServers.servers {
 		if httpServer.RPCAllowed {
 			api.node.stopServer(httpServer)
 			return true, nil
@@ -234,7 +234,7 @@ func (api *PrivateAdminAPI) StartWS(host *string, port *int, allowedOrigins *str
 	api.node.lock.Lock()
 	defer api.node.lock.Unlock()
 	// check if an existing WS server already exists
-	for _, server := range api.node.httpServerMap {
+	for _, server := range api.node.HTTPServers.servers {
 		if server.WSAllowed {
 			return false, fmt.Errorf("WebSocket RPC already running on %v", server.Listener.Addr())
 		}
@@ -252,7 +252,7 @@ func (api *PrivateAdminAPI) StartWS(host *string, port *int, allowedOrigins *str
 	}
 	endpoint := fmt.Sprintf("%s:%d", *host, *port)
 	// check if there is an existing server on the specified port, and if there is, enable ws on it
-	if server, exists := api.node.httpServerMap[endpoint]; exists {
+	if server, exists := api.node.HTTPServers.servers[endpoint]; exists {
 		// else configure ws on the existing server
 		server.WSAllowed = true
 		// configure origins
@@ -319,7 +319,7 @@ func (api *PrivateAdminAPI) StopWS() (bool, error) {
 	api.node.lock.Lock()
 	defer api.node.lock.Unlock()
 
-	for _, httpServer := range api.node.httpServerMap {
+	for _, httpServer := range api.node.HTTPServers.servers {
 		if httpServer.WSAllowed {
 			httpServer.WSAllowed = false
 			// if RPC is not enabled on the WS http server, shut it down

@@ -56,10 +56,10 @@ type Node struct {
 
 	lifecycles map[reflect.Type]Lifecycle // All registered backends, services, and auxiliary services that have a lifecycle
 
+	HTTPServers *HTTPServers // TODO document
+
 	rpcAPIs       []rpc.API   // List of APIs currently provided by the node
 	inprocHandler *rpc.Server // In-process RPC request handler to process the API requests
-
-	httpServerMap map[string]*HTTPServer // Stores information about all http servers (if any) by their port, including http, ws, and graphql
 
 	ipc *HTTPServer // Stores information about the ipc http server
 
@@ -113,7 +113,9 @@ func New(conf *Config) (*Node, error) {
 			Config:     *conf,
 			Lifecycles: make(map[reflect.Type]Lifecycle),
 		},
-		httpServerMap: make(map[string]*HTTPServer),
+		HTTPServers: &HTTPServers{
+			servers: make(map[string]*HTTPServer),
+		},
 		ipc: &HTTPServer{
 			endpoint: conf.IPCEndpoint(),
 		},
@@ -157,13 +159,13 @@ func New(conf *Config) (*Node, error) {
 			httpServ.WSAllowed = true
 			httpServ.WsOrigins = conf.WSOrigins
 			httpServ.Whitelist = append(httpServ.Whitelist, conf.WSModules...)
-			node.httpServerMap[conf.HTTPEndpoint()] = httpServ
+			node.HTTPServers.servers[conf.HTTPEndpoint()] = httpServ
 			return node, nil
 		}
-		node.httpServerMap[conf.HTTPEndpoint()] = httpServ
+		node.HTTPServers.servers[conf.HTTPEndpoint()] = httpServ
 	}
 	if conf.WSHost != "" {
-		node.httpServerMap[conf.WSEndpoint()] = &HTTPServer{
+		node.HTTPServers.servers[conf.WSEndpoint()] = &HTTPServer{
 			WsOrigins: conf.WSOrigins,
 			Whitelist: conf.WSModules,
 			Srv:       rpc.NewServer(),
@@ -224,18 +226,18 @@ func (n *Node) RegisterAPIs(apis []rpc.API) {
 
 // RegisterHTTPServer registers the given HTTP server on the node
 func (n *Node) RegisterHTTPServer(endpoint string, server *HTTPServer) {
-	n.httpServerMap[endpoint] = server
+	n.HTTPServers.servers[endpoint] = server
 }
 
 // ExistingHTTPServer checks if an HTTP server is already configured on the given endpoint
 func (n *Node) ExistingHTTPServer(endpoint string) *HTTPServer {
-	if server, exists := n.httpServerMap[endpoint]; exists {
+	if server, exists := n.HTTPServers.servers[endpoint]; exists {
 		return server
 	}
 	return nil
 }
 
-// CreateHTTPServer creates an http.Server and adds it to the given HTTPServer // TODO improve?
+// CreateHTTPServer creates an http.Server and adds it to the given HTTPServers // TODO improve?
 func (n *Node) CreateHTTPServer(h *HTTPServer, exposeAll bool) error {
 	// register apis and create handler stack
 	err := RegisterApisFromWhitelist(n.rpcAPIs, h.Whitelist, h.Srv, exposeAll)
@@ -258,7 +260,7 @@ func (n *Node) CreateHTTPServer(h *HTTPServer, exposeAll bool) error {
 		httpSrv.IdleTimeout = h.Timeouts.IdleTimeout
 	}
 
-	// complete the HTTPServer
+	// complete the HTTPServers
 	h.Listener = listener
 	h.Server = httpSrv
 
@@ -293,6 +295,7 @@ func (n *Node) Start() error {
 
 	// Configure the RPC interfaces
 	if err := n.configureRPC(); err != nil {
+		n.HTTPServers.Stop()
 		n.server.Stop()
 		return err
 	}
@@ -363,7 +366,7 @@ func (n *Node) configureRPC() error {
 		return err
 	}
 
-	for _, server := range n.httpServerMap {
+	for _, server := range n.HTTPServers.servers {
 		// configure the handlers
 		if server.RPCAllowed {
 			server.handler = NewHTTPHandlerStack(server.Srv, server.CorsAllowedOrigins, server.Vhosts)
@@ -392,8 +395,10 @@ func (n *Node) configureRPC() error {
 		if err := n.CreateHTTPServer(server, false); err != nil {
 			return err
 		}
-		// start HTTP server
-		n.RegisterLifecycle(server)
+	}
+	// only register http server as a lifecycle if it has not already been registered
+	if _, exists := n.lifecycles[reflect.TypeOf(n.HTTPServers)]; !exists {
+		n.RegisterLifecycle(n.HTTPServers)
 	}
 	// All API endpoints started successfully
 	return nil
@@ -463,7 +468,7 @@ func (n *Node) stopServer(server *HTTPServer) {
 		server.Srv = nil
 	}
 	// remove stopped http server from node's http servers // TODO is this preferable?
-	delete(n.httpServerMap, server.endpoint)
+	delete(n.HTTPServers.servers, server.endpoint)
 	// remove stopped http server from node's lifecycles
 	n.removeLifecycle(server)
 }
@@ -597,7 +602,7 @@ func (n *Node) WSEndpoint() string {
 	n.lock.Lock()
 	defer n.lock.Unlock()
 
-	for _, httpServer := range n.httpServerMap {
+	for _, httpServer := range n.HTTPServers.servers {
 		if httpServer.WSAllowed {
 			if httpServer.Listener != nil {
 				return httpServer.Listener.Addr().String()

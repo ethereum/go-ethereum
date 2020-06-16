@@ -130,6 +130,41 @@ func TestGraphQLHTTPOnSamePort_GQLRequest_Unsuccessful(t *testing.T) {
 	assert.Equal(t, string(bodyBytes), expected)
 }
 
+func TestGraphqlOnSeparatePort(t *testing.T) {
+	stack, err := node.New(&node.Config{
+		HTTPHost: "127.0.0.1",
+		HTTPPort: 9393,
+	})
+	if err != nil {
+		t.Fatalf("could not create node: %v", err)
+	}
+	defer stack.Close()
+
+	separateTestEndpoint := "127.0.0.1:7474"
+
+	createGQLService(t, stack, separateTestEndpoint)
+	// start node
+	if err := stack.Start(); err != nil {
+		t.Fatalf("could not start node: %v", err)
+	}
+	// create http request
+	body := strings.NewReader("{\"query\": \"{block{number}}\",\"variables\": null}")
+	gqlReq, err := http.NewRequest(http.MethodGet, fmt.Sprintf("http://%s/graphql", separateTestEndpoint), body)
+	if err != nil {
+		t.Error("could not issue new http request ", err)
+	}
+	gqlReq.Header.Set("Content-Type", "application/json")
+	// read from response
+	resp := doHTTPRequest(t, gqlReq)
+	bodyBytes, err := ioutil.ReadAll(resp.Body)
+	if err != nil {
+		t.Fatalf("could not read from response body: %v", err)
+	}
+	expected := "{\"data\":{\"block\":{\"number\":\"0x0\"}}}"
+	assert.Equal(t, expected, string(bodyBytes))
+
+}
+
 func createNode(t *testing.T, gqlEnabled bool) *node.Node {
 	stack, err := node.New(&node.Config{
 		HTTPHost: "127.0.0.1",
@@ -143,6 +178,13 @@ func createNode(t *testing.T, gqlEnabled bool) *node.Node {
 	if !gqlEnabled {
 		return stack
 	}
+
+	createGQLService(t, stack, testEndpoint)
+
+	return stack
+}
+
+func createGQLService(t *testing.T, stack *node.Node, endpoint string) {
 	// create backend
 	ethBackend, err := eth.New(stack, &eth.DefaultConfig)
 	if err != nil {
@@ -150,12 +192,10 @@ func createNode(t *testing.T, gqlEnabled bool) *node.Node {
 	}
 
 	// create gql service
-	err = New(stack, ethBackend.APIBackend, testEndpoint, []string{}, []string{}, rpc.DefaultHTTPTimeouts)
+	err = New(stack, ethBackend.APIBackend, endpoint, []string{}, []string{}, rpc.DefaultHTTPTimeouts)
 	if err != nil {
 		t.Fatalf("could not create graphql service: %v", err)
 	}
-
-	return stack
 }
 
 func doHTTPRequest(t *testing.T, req *http.Request) *http.Response {

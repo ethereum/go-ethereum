@@ -40,7 +40,7 @@ func TestNewWebsocketUpgradeHandler_websocket(t *testing.T) {
 	assert.Equal(t, "websocket", response.Header.Get("Upgrade"))
 }
 
-// Tests that a ws handler can be added to and enabled on an existing HTTPServer
+// Tests that a ws handler can be added to and enabled on an existing HTTPServers
 func TestWSAllowed(t *testing.T) {
 	stack, err := New(&Config{
 		HTTPHost: DefaultHTTPHost,

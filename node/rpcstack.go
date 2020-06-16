@@ -32,6 +32,10 @@ import (
 	"github.com/rs/cors"
 )
 
+type HTTPServers struct {
+	servers map[string]*HTTPServer // Stores information about all http servers (if any) by their port, including http, ws, and graphql
+}
+
 type HTTPServer struct {
 	handler http.Handler
 	Srv     *rpc.Server
@@ -57,14 +61,32 @@ type HTTPServer struct {
 	GQLHandler http.Handler
 }
 
-// Start starts the HTTPServer's HTTP server. // TODO I don't like the way this is written
+func (h *HTTPServers) Start() error {
+	for _, server := range h.servers {
+		if err := server.Start(); err != nil {
+			return h.Stop()
+		}
+	}
+	return nil
+}
+
+func (h *HTTPServers) Stop() error {
+	for _, server := range h.servers {
+		if err := server.Stop(); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+// Start starts the HTTPServers's HTTP server. // TODO I don't like the way this is written
 func (h *HTTPServer) Start() error {
 	go h.Server.Serve(h.Listener)
 	log.Info("HTTP endpoint successfully opened", "url", fmt.Sprintf("http://%v/", h.Listener.Addr()))
 	return nil
 }
 
-// Stop shuts down the HTTPServer's HTTP server. // TODO I don't like the way this is written
+// Stop shuts down the HTTPServers's HTTP server. // TODO I don't like the way this is written
 func (h *HTTPServer) Stop() error {
 	if h.Server != nil {
 		url := fmt.Sprintf("http://%v/", h.Listener.Addr())
@@ -80,12 +102,12 @@ func (h *HTTPServer) Stop() error {
 	return nil
 }
 
-// SetHandler assigns the given handler to the HTTPServer.
+// SetHandler assigns the given handler to the HTTPServers.
 func (h *HTTPServer) SetHandler(handler http.Handler) {
 	h.handler = handler
 }
 
-// SetEndpoints assigns the given endpoint to the HTTPServer.
+// SetEndpoints assigns the given endpoint to the HTTPServers.
 func (h *HTTPServer) SetEndpoint(endpoint string) {
 	h.endpoint = endpoint
 }
