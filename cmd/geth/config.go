@@ -20,6 +20,7 @@ import (
 	"bufio"
 	"errors"
 	"fmt"
+	"github.com/ethereum/go-ethereum/core"
 	"os"
 	"reflect"
 	"unicode"
@@ -129,6 +130,7 @@ func makeConfigNode(ctx *cli.Context) (*node.Node, gethConfig) {
 	if ctx.GlobalIsSet(utils.EthStatsURLFlag.Name) {
 		cfg.Ethstats.URL = ctx.GlobalString(utils.EthStatsURLFlag.Name)
 	}
+
 	utils.SetShhConfig(ctx, stack, &cfg.Shh)
 
 	return stack, cfg
@@ -144,8 +146,11 @@ func enableWhisper(ctx *cli.Context) bool {
 	return false
 }
 
-func makeFullNode(ctx *cli.Context) *node.Node {
+func makeFullNode(ctx *cli.Context, genesis *core.Genesis) *node.Node {
 	stack, cfg := makeConfigNode(ctx)
+	if genesis != nil {
+		cfg.Eth.Genesis = genesis
+	}
 	utils.RegisterEthService(stack, &cfg.Eth)
 
 	// Whisper must be explicitly enabled by specifying at least 1 whisper flag or in dev mode

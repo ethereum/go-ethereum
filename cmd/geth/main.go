@@ -351,7 +351,7 @@ func geth(ctx *cli.Context) error {
 		return fmt.Errorf("invalid command: %q", args[0])
 	}
 	prepare(ctx)
-	stack := makeFullNode(ctx)
+	stack := makeFullNode(ctx, nil)
 
 	defer stack.Close()
 	startNode(ctx, stack)
