@@ -353,7 +353,6 @@ func UnsolicitedNeighbors(t *utesting.T) {
 func FindnodePastExpiration(t *utesting.T) {
 	te := newTestEnv(Remote, waitTime)
 	defer te.close()
-	bond(t, te)
 
 	findnode := v4wire.Findnode{
 		Expiration: -futureExpiration(),
