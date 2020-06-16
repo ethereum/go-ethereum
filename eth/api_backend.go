@@ -293,8 +293,8 @@ func (b *EthAPIBackend) RPCGasCap() *big.Int {
 	return b.eth.config.RPCGasCap
 }
 
-func (b *EthAPIBackend) RPCGasPriceCap() *big.Int {
-	return b.eth.config.RPCGasPriceCap
+func (b *EthAPIBackend) RPCTxFeeCap() float64 {
+	return b.eth.config.RPCTxFeeCap
 }
 
 func (b *EthAPIBackend) BloomStatus() (uint64, uint64) {

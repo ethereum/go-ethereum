@@ -64,7 +64,7 @@ var DefaultConfig = Config{
 		Blocks:     20,
 		Percentile: 60,
 	},
-	RPCGasPriceCap: big.NewInt(1000 * params.GWei),
+	RPCTxFeeCap: 1, // 1 ether
 }
 
 func init() {
@@ -160,8 +160,8 @@ type Config struct {
 	// RPCGasCap is the global gas cap for eth-call variants.
 	RPCGasCap *big.Int `toml:",omitempty"`
 
-	// RPCGasPriceCap is the global gasprice cap for send-transction variants.
-	RPCGasPriceCap *big.Int `toml:",omitempty"`
+	// RPCTxFeeCap is the global transaction fee(price * gaslimit) cap for send-transction variants.
+	RPCTxFeeCap float64 `toml:",omitempty"`
 
 	// Checkpoint is a hardcoded checkpoint which can be nil.
 	Checkpoint *params.TrustedCheckpoint `toml:",omitempty"`

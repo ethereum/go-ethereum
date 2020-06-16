@@ -262,8 +262,8 @@ func (b *LesApiBackend) RPCGasCap() *big.Int {
 	return b.eth.config.RPCGasCap
 }
 
-func (b *LesApiBackend) RPCGasPriceCap() *big.Int {
-	return b.eth.config.RPCGasPriceCap
+func (b *LesApiBackend) RPCTxFeeCap() float64 {
+	return b.eth.config.RPCTxFeeCap
 }
 
 func (b *LesApiBackend) BloomStatus() (uint64, uint64) {

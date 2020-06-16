@@ -1520,10 +1520,12 @@ func (args *SendTxArgs) toTransaction() *types.Transaction {
 
 // SubmitTransaction is a helper function that submits tx to txPool and logs a message.
 func SubmitTransaction(ctx context.Context, b Backend, tx *types.Transaction) (common.Hash, error) {
-	// If the gasprice cap is already specified, ensure the
-	// gasprice of given transaction is _reasonable_.
-	if b.RPCGasPriceCap() != nil && tx.GasPrice().Cmp(b.RPCGasPriceCap()) > 0 {
-		return common.Hash{}, fmt.Errorf("gasprice(%s) exceeds the maximum setting(%s)", hexutil.EncodeBig(tx.GasPrice()), hexutil.EncodeBig(b.RPCGasPriceCap()))
+	// If the transaction fee cap is already specified, ensure the
+	// fee of the given transaction is _reasonable_.
+	feeEth := new(big.Float).Quo(new(big.Float).SetInt(new(big.Int).Mul(tx.GasPrice(), new(big.Int).SetUint64(tx.Gas()))), new(big.Float).SetInt(big.NewInt(params.Ether)))
+	feeFloat, _ := feeEth.Float64()
+	if b.RPCTxFeeCap() != 0 && feeFloat > b.RPCTxFeeCap() {
+		return common.Hash{}, fmt.Errorf("txfee(%.2f ether) exceeds the maximum setting(%.2f ether)", feeFloat, b.RPCTxFeeCap())
 	}
 	if err := b.SendTx(ctx, tx); err != nil {
 		return common.Hash{}, err
