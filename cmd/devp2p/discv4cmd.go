@@ -206,27 +206,9 @@ func discv4Test(ctx *cli.Context) error {
 		return fmt.Errorf("Missing -%v", remoteEnodeFlag.Name)
 	}
 	test.Remote = ctx.String(remoteEnodeFlag.Name)
-	tests := []utesting.Test{
-		{Name: "Ping/Basic", Fn: test.BasicPing},
-		{Name: "Ping/WrongTo", Fn: test.PingWrongTo},
-		{Name: "Ping/WrongFrom", Fn: test.PingWrongFrom},
-		{Name: "Ping/ExtraData", Fn: test.PingExtraData},
-		{Name: "Ping/ExtraDataWrongFrom", Fn: test.PingExtraDataWrongFrom},
-		{Name: "Ping/PastExpiration", Fn: test.PingPastExpiration},
-		{Name: "Ping/WrongPacketType", Fn: test.WrongPacketType},
-		{Name: "Ping/BondThenPingWithWrongFrom", Fn: test.BondThenPingWithWrongFrom},
-
-		{Name: "Findnode/WithoutEndpointProof", Fn: test.FindnodeWithoutEndpointProof},
-		{Name: "Findnode/BasicFindnode", Fn: test.BasicFindnode},
-		{Name: "Findnode/UnsolicitedNeighbors", Fn: test.UnsolicitedNeighbors},
-		{Name: "Findnode/PastExpiration", Fn: test.FindnodePastExpiration},
-
-		{Name: "Amplification/InvalidPongHash", Fn: test.FindnodeAmplificationInvalidPongHash},
-		{Name: "Amplification/WrongIP", Fn: test.FindnodeAmplificationWrongIP},
-	}
-	selectedTests := tests
+	selectedTests := test.AllTests
 	if ctx.IsSet(testPatternFlag.Name) {
-		selectedTests = utesting.MatchTests(tests, ctx.String(testPatternFlag.Name))
+		selectedTests = utesting.MatchTests(test.AllTests, ctx.String(testPatternFlag.Name))
 	}
 	results := utesting.RunTests(selectedTests)
 	passed := true

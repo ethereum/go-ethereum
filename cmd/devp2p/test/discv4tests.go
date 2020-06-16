@@ -479,3 +479,22 @@ func FindnodeAmplificationWrongIP(t *utesting.T) {
 		t.Error("Got NEIGHORS response for FINDNODE from wrong IP")
 	}
 }
+
+var AllTests = []utesting.Test{
+	{Name: "Ping/Basic", Fn: BasicPing},
+	{Name: "Ping/WrongTo", Fn: PingWrongTo},
+	{Name: "Ping/WrongFrom", Fn: PingWrongFrom},
+	{Name: "Ping/ExtraData", Fn: PingExtraData},
+	{Name: "Ping/ExtraDataWrongFrom", Fn: PingExtraDataWrongFrom},
+	{Name: "Ping/PastExpiration", Fn: PingPastExpiration},
+	{Name: "Ping/WrongPacketType", Fn: WrongPacketType},
+	{Name: "Ping/BondThenPingWithWrongFrom", Fn: BondThenPingWithWrongFrom},
+
+	{Name: "Findnode/WithoutEndpointProof", Fn: FindnodeWithoutEndpointProof},
+	{Name: "Findnode/BasicFindnode", Fn: BasicFindnode},
+	{Name: "Findnode/UnsolicitedNeighbors", Fn: UnsolicitedNeighbors},
+	{Name: "Findnode/PastExpiration", Fn: FindnodePastExpiration},
+
+	{Name: "Amplification/InvalidPongHash", Fn: FindnodeAmplificationInvalidPongHash},
+	{Name: "Amplification/WrongIP", Fn: FindnodeAmplificationWrongIP},
+}
