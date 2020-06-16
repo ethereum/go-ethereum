@@ -64,6 +64,7 @@ var DefaultConfig = Config{
 		Blocks:     20,
 		Percentile: 60,
 	},
+	RPCGasPriceCap: big.NewInt(1000 * params.GWei),
 }
 
 func init() {
