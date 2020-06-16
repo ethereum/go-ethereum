@@ -1854,15 +1854,15 @@ func TestInsaneTransactionFee(t *testing.T) {
 
 	// Will try to send a transaction with a maximum fee of 100,000 ETH
 	if err := pool.AddLocal(pricedTransaction(1, 100000, big.NewInt(1000000000000000000), key)); err == nil {
-		t.Fatalf("succeded to add local transaction with a gas fee of 100,000 ETH to the pool")
+		t.Fatalf("succeeded to add local transaction with a gas fee of 100,000 ETH to the pool")
 	}
 	// Will try to send a transaction with a maximum fee of 10,000 ETH
 	if err := pool.AddLocal(pricedTransaction(1, 100000, big.NewInt(100000000000000000), key)); err == nil {
-		t.Fatalf("succeded to add local transaction with a gas fee of 10,000 ETH to the pool")
+		t.Fatalf("succeeded to add local transaction with a gas fee of 10,000 ETH to the pool")
 	}
 	// Will try to send a transaction with a maximum fee of 1000 ETH
 	if err := pool.AddLocal(pricedTransaction(1, 100000, big.NewInt(10000000000000000), key)); err == nil {
-		t.Fatalf("succeded to add local transaction with a gas fee of 1000 ETH to the pool")
+		t.Fatalf("succeeded to add local transaction with a gas fee of 1000 ETH to the pool")
 	}
 	// Will try to send a transaction with a maximum fee of 1 ETH
 	if err := pool.AddLocal(pricedTransaction(1, 100000, big.NewInt(10000000000000), key)); err != nil {
