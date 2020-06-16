@@ -1838,6 +1838,38 @@ func TestTransactionSlotCount(t *testing.T) {
 	}
 }
 
+// Test the transaction fee sanity check
+func TestInsaneTransactionFee(t *testing.T) {
+	t.Parallel()
+
+	// Create the pool to test the transaction fee sanity check
+	statedb, _ := state.New(common.Hash{}, state.NewDatabase(rawdb.NewMemoryDatabase()), nil)
+	blockchain := &testBlockChain{statedb, 1000000, new(event.Feed)}
+
+	pool := NewTxPool(testTxPoolConfig, params.TestChainConfig, blockchain)
+	defer pool.Stop()
+
+	key, _ := crypto.GenerateKey()
+	pool.currentState.AddBalance(crypto.PubkeyToAddress(key.PublicKey), new(big.Int).Mul(big.NewInt(params.Ether), big.NewInt(10)))
+
+	// Will try to send a transaction with a maximum fee of 100,000 ETH
+	if err := pool.AddLocal(pricedTransaction(1, 100000, big.NewInt(1000000000000000000), key)); err == nil {
+		t.Fatalf("succeded to add local transaction with a gas fee of 100,000 ETH to the pool")
+	}
+	// Will try to send a transaction with a maximum fee of 10,000 ETH
+	if err := pool.AddLocal(pricedTransaction(1, 100000, big.NewInt(100000000000000000), key)); err == nil {
+		t.Fatalf("succeded to add local transaction with a gas fee of 10,000 ETH to the pool")
+	}
+	// Will try to send a transaction with a maximum fee of 1000 ETH
+	if err := pool.AddLocal(pricedTransaction(1, 100000, big.NewInt(10000000000000000), key)); err == nil {
+		t.Fatalf("succeded to add local transaction with a gas fee of 1000 ETH to the pool")
+	}
+	// Will try to send a transaction with a maximum fee of 1 ETH
+	if err := pool.AddLocal(pricedTransaction(1, 100000, big.NewInt(10000000000000), key)); err != nil {
+		t.Fatalf("failed to add local transaction with a gas fee of 1 ETH to the pool: %v", err)
+	}
+}
+
 // Benchmarks the speed of validating the contents of the pending queue of the
 // transaction pool.
 func BenchmarkPendingDemotion100(b *testing.B)   { benchmarkPendingDemotion(b, 100) }

@@ -373,6 +373,15 @@ var (
 		Usage: "Maximum amount of time non-executable transaction are queued",
 		Value: eth.DefaultConfig.TxPool.Lifetime,
 	}
+	TxPoolDisableFeeSanityCheckFlag = cli.BoolFlag{
+		Name:  "txpool.disablefeesanitycheck",
+		Usage: "Disables the transactions fee sanity check",
+	}
+	TxPoolFeeSanityCheckThresholdFlag = BigFlag{
+		Name:  "txpool.feesanitycheckthreshold",
+		Usage: "Threshold value in Wei for the transaction fee sanity check",
+		Value: new(big.Int).Mul(big.NewInt(params.Ether), big.NewInt(5)),
+	}
 	// Performance tuning settings
 	CacheFlag = cli.IntFlag{
 		Name:  "cache",
@@ -1338,6 +1347,12 @@ func setTxPool(ctx *cli.Context, cfg *core.TxPoolConfig) {
 	}
 	if ctx.GlobalIsSet(TxPoolLifetimeFlag.Name) {
 		cfg.Lifetime = ctx.GlobalDuration(TxPoolLifetimeFlag.Name)
+	}
+	if ctx.GlobalIsSet(TxPoolDisableFeeSanityCheckFlag.Name) {
+		cfg.DisableTransactionFeeSanityCheck = ctx.GlobalBool(TxPoolDisableFeeSanityCheckFlag.Name)
+	}
+	if ctx.GlobalIsSet(TxPoolFeeSanityCheckThresholdFlag.Name) {
+		cfg.TransactionFeeSanityCheckThreshold = GlobalBig(ctx, TxPoolFeeSanityCheckThresholdFlag.Name)
 	}
 }
 
