@@ -364,7 +364,7 @@ func FindnodePastExpiration(t *utesting.T) {
 	}
 	reply, _, _ := te.read(te.l1)
 	if reply != nil {
-		t.Fatal("Expected no reply, got", reply)
+		t.Fatal("Expected no reply, got", reply.Name())
 	}
 }
 
