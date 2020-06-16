@@ -84,7 +84,6 @@ func (arguments Arguments) Unpack(data []byte) ([]interface{}, error) {
 		// Nothing to unmarshal, return default arguments
 		return arguments.makeDefaulArgs(), nil
 	}
-
 	return arguments.UnpackValues(data)
 }
 
@@ -148,7 +147,7 @@ func (arguments Arguments) copyAtomic(v interface{}, marshalledValues interface{
 	return set(dst, src)
 }
 
-// unpackTuple unpacks ( hexdata -> go ) a batch of values.
+// copyTuple copies a batch of values from marshalledValues to v.
 func (arguments Arguments) copyTuple(v interface{}, marshalledValues []interface{}) error {
 	value := reflect.ValueOf(v).Elem()
 	nonIndexedArgs := arguments.NonIndexed()
