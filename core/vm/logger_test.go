@@ -23,6 +23,7 @@ import (
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/state"
 	"github.com/ethereum/go-ethereum/params"
+	"github.com/holiman/uint256"
 )
 
 type dummyContractRef struct {
@@ -57,15 +58,15 @@ func TestStoreCapture(t *testing.T) {
 		rstack   = newReturnStack()
 		contract = NewContract(&dummyContractRef{}, &dummyContractRef{}, new(big.Int), 0)
 	)
-	stack.push(big.NewInt(1))
-	stack.push(big.NewInt(0))
+	stack.push(uint256.NewInt().SetUint64(1))
+	stack.push(uint256.NewInt())
 	var index common.Hash
 	logger.CaptureState(env, 0, SSTORE, 0, 0, mem, stack, rstack, contract, 0, nil)
-	if len(logger.changedValues[contract.Address()]) == 0 {
-		t.Fatalf("expected exactly 1 changed value on address %x, got %d", contract.Address(), len(logger.changedValues[contract.Address()]))
+	if len(logger.storage[contract.Address()]) == 0 {
+		t.Fatalf("expected exactly 1 changed value on address %x, got %d", contract.Address(), len(logger.storage[contract.Address()]))
 	}
 	exp := common.BigToHash(big.NewInt(1))
-	if logger.changedValues[contract.Address()][index] != exp {
-		t.Errorf("expected %x, got %x", exp, logger.changedValues[contract.Address()][index])
+	if logger.storage[contract.Address()][index] != exp {
+		t.Errorf("expected %x, got %x", exp, logger.storage[contract.Address()][index])
 	}
 }

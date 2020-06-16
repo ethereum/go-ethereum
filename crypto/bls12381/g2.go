@@ -165,7 +165,7 @@ func (g *G2) ToBytes(p *PointG2) []byte {
 	return out
 }
 
-// EncodePoint encodes a point into 128 bytes.
+// EncodePoint encodes a point into 256 bytes.
 func (g *G2) EncodePoint(p *PointG2) []byte {
 	// outRaw is 96 bytes
 	outRaw := g.ToBytes(p)

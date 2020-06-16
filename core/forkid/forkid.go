@@ -235,7 +235,7 @@ func gatherForks(config *params.ChainConfig) []uint64 {
 			forks = append(forks, rule.Uint64())
 		}
 	}
-	// Sort the fork block numbers to permit chronologival XOR
+	// Sort the fork block numbers to permit chronological XOR
 	for i := 0; i < len(forks); i++ {
 		for j := i + 1; j < len(forks); j++ {
 			if forks[i] > forks[j] {
