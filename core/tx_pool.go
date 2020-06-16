@@ -753,7 +753,7 @@ func (pool *TxPool) AddLocal(tx *types.Transaction) error {
 			sanityCheckThresholdEth := new(big.Float).Quo(new(big.Float).
 				SetInt(pool.config.TransactionFeeSanityCheckThreshold),
 				big.NewFloat(params.Ether))
-			return fmt.Errorf("transacion rejected: maximum fee of %f ETH is greater "+
+			return fmt.Errorf("transaction rejected: maximum fee of %f ETH is greater "+
 				"than the configured sanity check threshold of %f ETH", maximumFeeEth,
 				sanityCheckThresholdEth)
 		}
