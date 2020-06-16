@@ -392,7 +392,7 @@ func (f *lightFetcher) mainloop() {
 				}
 				if resp.headers[0].Hash() != req.hash {
 					f.peerset.unregister(req.peerid.String())
-					log.Debug("Deliver more than requested", "peer", req.peerid, "reqid", req.reqid)
+					log.Debug("Deliver invalid header", "peer", req.peerid, "reqid", req.reqid)
 					continue
 				}
 				resp.remain <- f.fetcher.FilterHeaders(resp.peerid.String(), resp.headers, time.Now())
