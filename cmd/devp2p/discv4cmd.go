@@ -207,22 +207,22 @@ func discv4Test(ctx *cli.Context) error {
 	}
 	test.Remote = ctx.String(remoteEnodeFlag.Name)
 	tests := []utesting.Test{
-		utesting.Test{"Ping/Basic", test.BasicPing},
-		utesting.Test{"Ping/WrongTo", test.PingWrongTo},
-		utesting.Test{"Ping/WrongFrom", test.PingWrongFrom},
-		utesting.Test{"Ping/ExtraData", test.PingExtraData},
-		utesting.Test{"Ping/ExtraDataWrongFrom", test.PingExtraDataWrongFrom},
-		utesting.Test{"Ping/PastExpiration", test.PingPastExpiration},
-		utesting.Test{"Ping/WrongPacketType", test.WrongPacketType},
-		utesting.Test{"Ping/BondThenPingWithWrongFrom", test.BondThenPingWithWrongFrom},
+		{"Ping/Basic", test.BasicPing},
+		{"Ping/WrongTo", test.PingWrongTo},
+		{"Ping/WrongFrom", test.PingWrongFrom},
+		{"Ping/ExtraData", test.PingExtraData},
+		{"Ping/ExtraDataWrongFrom", test.PingExtraDataWrongFrom},
+		{"Ping/PastExpiration", test.PingPastExpiration},
+		{"Ping/WrongPacketType", test.WrongPacketType},
+		{"Ping/BondThenPingWithWrongFrom", test.BondThenPingWithWrongFrom},
 
-		utesting.Test{"Findnode/WithoutEndpointProof", test.FindnodeWithoutEndpointProof},
-		utesting.Test{"Findnode/BasicFindnode", test.BasicFindnode},
-		utesting.Test{"Findnode/UnsolicitedNeighbors", test.UnsolicitedNeighbors},
-		utesting.Test{"Findnode/PastExpiration", test.FindnodePastExpiration},
+		{"Findnode/WithoutEndpointProof", test.FindnodeWithoutEndpointProof},
+		{"Findnode/BasicFindnode", test.BasicFindnode},
+		{"Findnode/UnsolicitedNeighbors", test.UnsolicitedNeighbors},
+		{"Findnode/PastExpiration", test.FindnodePastExpiration},
 
-		utesting.Test{"Amplification/InvalidPongHash", test.FindnodeAmplificationInvalidPongHash},
-		utesting.Test{"Amplification/WrongIP", test.FindnodeAmplificationWrongIP},
+		{"Amplification/InvalidPongHash", test.FindnodeAmplificationInvalidPongHash},
+		{"Amplification/WrongIP", test.FindnodeAmplificationWrongIP},
 	}
 	selectedTests := tests
 	if ctx.IsSet(testPatternFlag.Name) {
