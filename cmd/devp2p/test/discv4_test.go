@@ -28,21 +28,9 @@ func TestMain(m *testing.M) {
 		os.Exit(0)
 	}
 	flag.Parse()
-	if *remote == "" {
+	if *Remote == "" {
 		fmt.Fprintf(os.Stderr, "Need -remote to run this test\n")
 		os.Exit(1)
 	}
 	os.Exit(m.Run())
-}
-
-func TestPing(t *testing.T) {
-	PingTests(t)
-}
-
-func TestAmplification(t *testing.T) {
-	AmplificationTests(t)
-}
-
-func TestFindnode(t *testing.T) {
-	FindnodeTests(t)
 }

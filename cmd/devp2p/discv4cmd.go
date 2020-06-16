@@ -22,6 +22,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/ethereum/go-ethereum/cmd/devp2p/test"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/internal/utesting"
@@ -80,7 +81,7 @@ var (
 		Name:   "test",
 		Usage:  "Runs tests against a node",
 		Action: discv4Test,
-		Flags:  []cli.Flag{remoteEnodeFlag, testPingFlag, testFindnodeFlag, testAmplificationFlag, testPatternFlag},
+		Flags:  []cli.Flag{remoteEnodeFlag, testPatternFlag},
 	}
 )
 
@@ -109,15 +110,6 @@ var (
 	remoteEnodeFlag = cli.StringFlag{
 		Name:  "remote",
 		Usage: "Enode of the remote node under test",
-	}
-	testPingFlag = cli.BoolFlag{
-		Name: "ping",
-	}
-	testFindnodeFlag = cli.BoolFlag{
-		Name: "findnode",
-	}
-	testAmplificationFlag = cli.BoolFlag{
-		Name: "amplification",
 	}
 	testPatternFlag = cli.StringFlag{
 		Name:  "run",
@@ -210,11 +202,34 @@ func discv4Crawl(ctx *cli.Context) error {
 }
 
 func discv4Test(ctx *cli.Context) error {
-	tests := []utesting.Test{}
-	if ctx.Bool(testPingFlag.Name) {
-		//append(tests, utesting.Test{Name: "Ping", Fn: test.PingTests})
+	if !ctx.IsSet(remoteEnodeFlag.Name) {
+		return fmt.Errorf("Missing -%v", remoteEnodeFlag.Name)
 	}
-	utesting.RunTests(tests)
+	test.Remote = ctx.String(remoteEnodeFlag.Name)
+	tests := []utesting.Test{
+		utesting.Test{"Ping/Basic", test.BasicPing},
+		utesting.Test{"Ping/WrongTo", test.PingWrongTo},
+		utesting.Test{"Ping/WrongFrom", test.PingWrongFrom},
+		utesting.Test{"Ping/ExtraData", test.PingExtraData},
+		utesting.Test{"Ping/ExtraDataWrongFrom", test.PingExtraDataWrongFrom},
+		utesting.Test{"Ping/PastExpiration", test.PingPastExpiration},
+		utesting.Test{"Ping/WrongPacketType", test.WrongPacketType},
+		utesting.Test{"Ping/BondThenPingWithWrongFrom", test.BondThenPingWithWrongFrom},
+
+		utesting.Test{"Findnode/WithoutEndpointProof", test.FindnodeWithoutEndpointProof},
+		utesting.Test{"Findnode/BasicFindnode", test.BasicFindnode},
+		utesting.Test{"Findnode/UnsolicitedNeighbors", test.UnsolicitedNeighbors},
+		utesting.Test{"Findnode/PastExpiration", test.FindnodePastExpiration},
+
+		utesting.Test{"Amplification/InvalidPongHash", test.FindnodeAmplificationInvalidPongHash},
+		utesting.Test{"Amplification/WrongIP", test.FindnodeAmplificationWrongIP},
+	}
+	selectedTests := tests
+	if ctx.IsSet(testPatternFlag.Name) {
+		selectedTests = utesting.MatchTests(tests, ctx.String(testPatternFlag.Name))
+	}
+	results := utesting.RunTests(selectedTests)
+	fmt.Println(results)
 	return nil
 }
 
