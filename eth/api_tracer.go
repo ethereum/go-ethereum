@@ -28,7 +28,6 @@ import (
 	"sync"
 	"time"
 
-	"github.com/ethereum/go-ethereum/accounts/abi"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/ethereum/go-ethereum/core"
@@ -766,13 +765,10 @@ func (api *PrivateDebugAPI) traceTx(ctx context.Context, message core.Message, v
 	// Depending on the tracer type, format and return the output
 	switch tracer := tracer.(type) {
 	case *vm.StructLogger:
-		// If the result contains a revert reason, try to unpack and return it.
+		// If the result contains a revert reason, return it.
 		returnVal := fmt.Sprintf("%x", result.Return())
 		if len(result.Revert()) > 0 {
-			reason, errUnpack := abi.UnpackRevert(result.Revert())
-			if errUnpack == nil {
-				returnVal = fmt.Sprintf("execution reverted: %v returnValue: %x", reason, result.Return())
-			}
+			returnVal = fmt.Sprintf("%x", result.Revert())
 		}
 		return &ethapi.ExecutionResult{
 			Gas:         result.UsedGas,
