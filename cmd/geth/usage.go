@@ -132,8 +132,7 @@ var AppHelpFlagGroups = []flagGroup{
 			utils.TxPoolAccountQueueFlag,
 			utils.TxPoolGlobalQueueFlag,
 			utils.TxPoolLifetimeFlag,
-			utils.TxPoolDisableFeeSanityCheckFlag,
-			utils.TxPoolFeeSanityCheckThresholdFlag,
+			utils.TxPoolMaxFeeFlag,
 		},
 	},
 	{

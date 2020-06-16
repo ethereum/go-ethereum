@@ -1838,7 +1838,7 @@ func TestTransactionSlotCount(t *testing.T) {
 	}
 }
 
-// Test the transaction fee sanity check
+// Test the transaction pool max tx fee check
 func TestInsaneTransactionFee(t *testing.T) {
 	t.Parallel()
 
@@ -1850,23 +1850,30 @@ func TestInsaneTransactionFee(t *testing.T) {
 	defer pool.Stop()
 
 	key, _ := crypto.GenerateKey()
-	pool.currentState.AddBalance(crypto.PubkeyToAddress(key.PublicKey), new(big.Int).Mul(big.NewInt(params.Ether), big.NewInt(10)))
+	pool.currentState.AddBalance(crypto.PubkeyToAddress(key.PublicKey), new(big.Int).Mul(big.NewInt(params.Ether), big.NewInt(10000)))
 
 	// Will try to send a transaction with a maximum fee of 100,000 ETH
 	if err := pool.AddLocal(pricedTransaction(1, 100000, big.NewInt(1000000000000000000), key)); err == nil {
-		t.Fatalf("succeeded to add local transaction with a gas fee of 100,000 ETH to the pool")
+		t.Fatalf("succeeded to add local tx with a gas fee of 100,000 ETH to the pool")
 	}
 	// Will try to send a transaction with a maximum fee of 10,000 ETH
 	if err := pool.AddLocal(pricedTransaction(1, 100000, big.NewInt(100000000000000000), key)); err == nil {
-		t.Fatalf("succeeded to add local transaction with a gas fee of 10,000 ETH to the pool")
+		t.Fatalf("succeeded to add local tx with a gas fee of 10,000 ETH to the pool")
 	}
 	// Will try to send a transaction with a maximum fee of 1000 ETH
 	if err := pool.AddLocal(pricedTransaction(1, 100000, big.NewInt(10000000000000000), key)); err == nil {
-		t.Fatalf("succeeded to add local transaction with a gas fee of 1000 ETH to the pool")
+		t.Fatalf("succeeded to add local tx with a gas fee of 1000 ETH to the pool")
 	}
 	// Will try to send a transaction with a maximum fee of 1 ETH
 	if err := pool.AddLocal(pricedTransaction(1, 100000, big.NewInt(10000000000000), key)); err != nil {
-		t.Fatalf("failed to add local transaction with a gas fee of 1 ETH to the pool: %v", err)
+		t.Fatalf("failed to add local tx with a gas fee of 1 ETH to the pool: %v", err)
+	}
+
+	// Disable the max tx fee check
+	pool.config.MaxTxFee = big.NewInt(0)
+	// Will try to send a transaction with a maximum fee of 1000 ETH, must succeed now
+	if err := pool.AddLocal(pricedTransaction(1, 100000, big.NewInt(10000000000000000), key)); err != nil {
+		t.Fatalf("failed to add local tx with a gas fee of 1000 ETH to the pool with max tx fee check disabled: %v", err)
 	}
 }
 

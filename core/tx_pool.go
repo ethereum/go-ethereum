@@ -150,10 +150,8 @@ type TxPoolConfig struct {
 	Lifetime time.Duration // Maximum amount of time non-executable transaction are queued
 
 	// Enables a sanity check which rejects all transactions sent via RPC with an estimated
-	// transaction fee greater than the TransactionFeeSanityCheckThreshold value
-	// Enabled by default
-	DisableTransactionFeeSanityCheck   bool `toml:",omitempty"`
-	TransactionFeeSanityCheckThreshold *big.Int
+	// transaction fee greater than the MaxTxFee value. Set to 5 ETH by default.
+	MaxTxFee *big.Int
 }
 
 // DefaultTxPoolConfig contains the default configurations for the transaction
@@ -172,8 +170,7 @@ var DefaultTxPoolConfig = TxPoolConfig{
 
 	Lifetime: 3 * time.Hour,
 
-	DisableTransactionFeeSanityCheck:   false,
-	TransactionFeeSanityCheckThreshold: new(big.Int).Mul(big.NewInt(params.Ether), big.NewInt(5)),
+	MaxTxFee: new(big.Int).Mul(big.NewInt(params.Ether), big.NewInt(5)),
 }
 
 // sanitize checks the provided user configurations and changes anything that's
@@ -744,18 +741,18 @@ func (pool *TxPool) AddLocals(txs []*types.Transaction) []error {
 // AddLocal enqueues a single local transaction into the pool if it is valid. This is
 // a convenience wrapper around AddLocals.
 func (pool *TxPool) AddLocal(tx *types.Transaction) error {
-	if !pool.config.DisableTransactionFeeSanityCheck {
+	if pool.config.MaxTxFee.Cmp(big.NewInt(0)) > 0 {
 		maximumFee := new(big.Int).Mul(tx.GasPrice(), new(big.Int).SetUint64(tx.Gas()))
 
-		if maximumFee.Cmp(pool.config.TransactionFeeSanityCheckThreshold) > 0 {
+		if maximumFee.Cmp(pool.config.MaxTxFee) > 0 {
 			maximumFeeEth := new(big.Float).Quo(new(big.Float).SetInt(maximumFee),
 				big.NewFloat(params.Ether))
-			sanityCheckThresholdEth := new(big.Float).Quo(new(big.Float).
-				SetInt(pool.config.TransactionFeeSanityCheckThreshold),
+			checkThresholdEth := new(big.Float).Quo(new(big.Float).
+				SetInt(pool.config.MaxTxFee),
 				big.NewFloat(params.Ether))
 			return fmt.Errorf("transaction rejected: maximum fee of %f ETH is greater "+
 				"than the configured sanity check threshold of %f ETH", maximumFeeEth,
-				sanityCheckThresholdEth)
+				checkThresholdEth)
 		}
 	}
 	errs := pool.AddLocals([]*types.Transaction{tx})
