@@ -24,6 +24,7 @@ import (
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/crypto"
+	"github.com/ethereum/go-ethereum/internal/utesting"
 	"github.com/ethereum/go-ethereum/p2p/discover"
 	"github.com/ethereum/go-ethereum/p2p/enode"
 	"github.com/ethereum/go-ethereum/params"
@@ -209,9 +210,11 @@ func discv4Crawl(ctx *cli.Context) error {
 }
 
 func discv4Test(ctx *cli.Context) error {
+	tests := []utesting.Test{}
 	if ctx.Bool(testPingFlag.Name) {
-		//TestPing(nil)
+		//append(tests, utesting.Test{Name: "Ping", Fn: test.PingTests})
 	}
+	utesting.RunTests(tests)
 	return nil
 }
 
