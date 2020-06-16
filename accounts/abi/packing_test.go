@@ -620,7 +620,7 @@ var packUnpackTests = []packUnpackTest{
 
 	{
 		def:      `[{"type": "bytes32[]"}]`,
-		unpacked: []common.Hash{{1}, {2}},
+		unpacked: [][32]byte{{1}, {2}},
 		packed: "0000000000000000000000000000000000000000000000000000000000000020" +
 			"0000000000000000000000000000000000000000000000000000000000000002" +
 			"0100000000000000000000000000000000000000000000000000000000000000" +
@@ -722,7 +722,7 @@ var packUnpackTests = []packUnpackTest{
 	},
 	// struct outputs
 	{
-		def: `[{"name":"int1","type":"int256"},{"name":"int2","type":"int256"}]`,
+		def: `["components": [{"name":"int1","type":"int256"},{"name":"int2","type":"int256"}]]`,
 		packed: "0000000000000000000000000000000000000000000000000000000000000001" +
 			"0000000000000000000000000000000000000000000000000000000000000002",
 		unpacked: struct {
@@ -855,7 +855,7 @@ var packUnpackTests = []packUnpackTest{
 			"0500000000000000000000000000000000000000000000000000000000000000", // struct[e] array[1][2]
 	},
 	{
-		def: `[{"name":"a","type":"string"}, 
+		def: `"type": "tuple","components": [{"name":"a","type":"string"}, 
 		{"name":"b","type":"int64"}, 
 		{"name":"c","type":"bytes"}, 
 		{"name":"d","type":"string[]"},
@@ -894,7 +894,7 @@ var packUnpackTests = []packUnpackTest{
 			"0000000000000000000000000200000000000000000000000000000000000000", // common.Address{2}
 	},
 	{
-		def: `[{"components": [{"name": "a","type": "uint256"},	
+		def: `[{"type": "tuple","components": [{"name": "a","type": "uint256"},	
 							{"name": "b","type": "uint256[]"}],	
 							"name": "a","type": "tuple"},
 							{"name": "b","type": "uint256[]"}]`,
