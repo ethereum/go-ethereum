@@ -158,7 +158,7 @@ func runFuzzer(input []byte) int {
 			if rnd.Int31n(10) == 0 {
 				argTyp += "[]"
 			} else if rnd.Int31n(10) == 0 {
-				arrayArgs := rnd.Int31n(30)
+				arrayArgs := rnd.Int31n(30) + 1
 				argTyp += fmt.Sprintf("[%d]", arrayArgs)
 			}
 			arg = append(arg, args{
