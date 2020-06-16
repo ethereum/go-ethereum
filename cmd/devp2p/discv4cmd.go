@@ -40,6 +40,7 @@ var (
 			discv4ResolveCommand,
 			discv4ResolveJSONCommand,
 			discv4CrawlCommand,
+			discv4TestCommand,
 		},
 	}
 	discv4PingCommand = cli.Command{
@@ -74,6 +75,12 @@ var (
 		Action: discv4Crawl,
 		Flags:  []cli.Flag{bootnodesFlag, crawlTimeoutFlag},
 	}
+	discv4TestCommand = cli.Command{
+		Name:   "test",
+		Usage:  "Runs tests against a node",
+		Action: discv4Test,
+		Flags:  []cli.Flag{remoteEnodeFlag, testPingFlag, testFindnodeFlag, testAmplificationFlag, testPatternFlag},
+	}
 )
 
 var (
@@ -97,6 +104,23 @@ var (
 		Name:  "timeout",
 		Usage: "Time limit for the crawl.",
 		Value: 30 * time.Minute,
+	}
+	remoteEnodeFlag = cli.StringFlag{
+		Name:  "remote",
+		Usage: "Enode of the remote node under test",
+	}
+	testPingFlag = cli.BoolFlag{
+		Name: "ping",
+	}
+	testFindnodeFlag = cli.BoolFlag{
+		Name: "findnode",
+	}
+	testAmplificationFlag = cli.BoolFlag{
+		Name: "amplification",
+	}
+	testPatternFlag = cli.StringFlag{
+		Name:  "run",
+		Usage: "Pattern of test suite(s) to run",
 	}
 )
 
@@ -181,6 +205,13 @@ func discv4Crawl(ctx *cli.Context) error {
 	c.revalidateInterval = 10 * time.Minute
 	output := c.run(ctx.Duration(crawlTimeoutFlag.Name))
 	writeNodesJSON(nodesFile, output)
+	return nil
+}
+
+func discv4Test(ctx *cli.Context) error {
+	if ctx.Bool(testPingFlag.Name) {
+		//TestPing(nil)
+	}
 	return nil
 }
 
