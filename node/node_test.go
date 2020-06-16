@@ -359,9 +359,48 @@ func TestLifecycleRetrieval(t *testing.T) {
 	}
 }
 
-// Tests whether websocket requests can be handled on the same port as a regular http server
+// Tests whether a node can successfully create and register HTTP server
+// lifecycles on the node.
+func TestHTTPServerCreation(t *testing.T) {
+	// test on same ports
+	node1 := startHTTP(t, 7453, 7453)
+	if len(node1.HTTPServers.servers) != 1 {
+		t.Fatalf("node has more than 1 http server")
+	}
+	// check to make sure http servers are registered
+	var httpSrv1 *HTTPServers
+	if err := node1.Lifecycle(&httpSrv1); err != nil {
+		t.Fatalf("HTTP servers not registered as lifecycles on the node: %v", err)
+	}
+	for _, server := range node1.HTTPServers.servers {
+		if !(server.WSAllowed && server.RPCAllowed) {
+			t.Fatalf("node's http server is not configured to handle both rpc and ws")
+		}
+	}
+	node1.Close()
+
+	// test on separate ports
+	node2 := startHTTP(t, 7453, 9393)
+	if len(node2.HTTPServers.servers) != 2 {
+		t.Fatalf("amount of http servers on the node is not equal to 2")
+	}
+	// check to make sure http servers are registered
+	var httpSrv2 *HTTPServers
+	if err := node2.Lifecycle(&httpSrv2); err != nil {
+		t.Fatalf("HTTP servers not registered as lifecycles on the node: %v", err)
+	}
+	// check that neither http server has both ws and rpc enabled
+	for _, server := range node2.HTTPServers.servers {
+		if server.WSAllowed && server.RPCAllowed {
+			t.Fatalf("both rpc and ws allowed on a single http server")
+		}
+	}
+	node2.Close()
+}
+
+// Tests whether websocket requests can be handled on the same port as a regular http server.
 func TestWebsocketHTTPOnSamePort_WebsocketRequest(t *testing.T) {
-	node := startHTTP(t)
+	node := startHTTP(t, 7453, 7453)
 	defer node.Close()
 
 	wsReq, err := http.NewRequest(http.MethodGet, "http://127.0.0.1:7453", nil)
@@ -377,9 +416,9 @@ func TestWebsocketHTTPOnSamePort_WebsocketRequest(t *testing.T) {
 	assert.Equal(t, "websocket", resp.Header.Get("Upgrade"))
 }
 
-// Tests whether http requests can be handled successfully
+// Tests whether http requests can be handled successfully.
 func TestWebsocketHTTPOnSamePort_HTTPRequest(t *testing.T) {
-	node := startHTTP(t)
+	node := startHTTP(t, 7453, 7453)
 	defer node.Close()
 
 	httpReq, err := http.NewRequest(http.MethodGet, "http://127.0.0.1:7453", nil)
@@ -392,20 +431,20 @@ func TestWebsocketHTTPOnSamePort_HTTPRequest(t *testing.T) {
 	assert.Equal(t, "gzip", resp.Header.Get("Content-Encoding"))
 }
 
-func startHTTP(t *testing.T) *Node {
+func startHTTP(t *testing.T, httpPort, wsPort int) *Node {
 	conf := &Config{
 		HTTPHost: "127.0.0.1",
-		HTTPPort: 7453,
+		HTTPPort: httpPort,
 		WSHost:   "127.0.0.1",
-		WSPort:   7453,
+		WSPort:   wsPort,
 	}
 	node, err := New(conf)
 	if err != nil {
-		t.Error("could not create a new node ", err)
+		t.Fatalf("could not create a new node: %v", err)
 	}
 	err = node.Start()
 	if err != nil {
-		t.Error("could not start http service on node ", err)
+		t.Fatalf("could not start http service on node: %v", err)
 	}
 
 	return node
@@ -415,7 +454,7 @@ func doHTTPRequest(t *testing.T, req *http.Request) *http.Response {
 	client := &http.Client{}
 	resp, err := client.Do(req)
 	if err != nil {
-		t.Fatal("could not issue a GET request to the given endpoint", err)
+		t.Fatalf("could not issue a GET request to the given endpoint: %v", err)
 
 	}
 	return resp
