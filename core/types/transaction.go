@@ -183,6 +183,10 @@ func (tx *Transaction) CmpGasPrice(other *Transaction) int {
 	return tx.data.Price.Cmp(other.data.Price)
 }
 
+func (tx *Transaction) CmpGasPriceInt(other *big.Int) int {
+	return tx.data.Price.Cmp(other)
+}
+
 // To returns the recipient address of the transaction.
 // It returns nil if the transaction is a contract creation.
 func (tx *Transaction) To() *common.Address {
