@@ -81,7 +81,7 @@ var (
 		Name:   "test",
 		Usage:  "Runs tests against a node",
 		Action: discv4Test,
-		Flags:  []cli.Flag{remoteEnodeFlag, testPatternFlag, testListen1Flag},
+		Flags:  []cli.Flag{remoteEnodeFlag, testPatternFlag, testListen1Flag, testListen2Flag},
 	}
 )
 
@@ -118,8 +118,13 @@ var (
 	}
 	testListen1Flag = cli.StringFlag{
 		Name:  "listen1",
-		Usage: "IP address and port of the tester",
-		Value: "127.0.0.1:0",
+		Usage: "IP address and port of the first tester",
+		Value: test.Listen2,
+	}
+	testListen2Flag = cli.StringFlag{
+		Name:  "listen2",
+		Usage: "IP address and port of the second tester",
+		Value: test.Listen2,
 	}
 )
 
@@ -213,6 +218,7 @@ func discv4Test(ctx *cli.Context) error {
 	}
 	test.Remote = ctx.String(remoteEnodeFlag.Name)
 	test.Listen1 = ctx.String(testListen1Flag.Name)
+	test.Listen2 = ctx.String(testListen2Flag.Name)
 	selectedTests := test.AllTests
 	if ctx.IsSet(testPatternFlag.Name) {
 		selectedTests = utesting.MatchTests(test.AllTests, ctx.String(testPatternFlag.Name))
