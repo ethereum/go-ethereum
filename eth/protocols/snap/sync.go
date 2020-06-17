@@ -70,8 +70,13 @@ const (
 	// a single network request.
 	requestTimeout = 10 * time.Second // TODO(karalabe): Make it dynamic ala fast-sync?
 
-	// accountConcurrency is the number of
+	// accountConcurrency is the number of chunks to split the account trie into
+	// to allow concurrent retrievals.
 	accountConcurrency = 16
+
+	// storageConcurrency is the number of chunks to split the a large contract
+	// storage trie into to allow concurrent retrievals.
+	storageConcurrency = 16
 )
 
 // accountRequest tracks a pending account range request to ensure responses are
@@ -162,6 +167,7 @@ type storageRequest struct {
 	accounts []common.Hash // Account hashes to validate responses
 	roots    []common.Hash // Storage roots to validate responses
 
+	origin   common.Hash  // First storage slot requested to allow continuation checks
 	mainTask *accountTask // Task which this response belongs to (only access fields through the runloop!!)
 	subTask  *storageTask // Task which this response is filling (only access fields through the runloop!!)
 }
@@ -179,10 +185,12 @@ type storageResponse struct {
 	hashes [][]common.Hash       // Storage slot hashes in the returned range
 	slots  [][][]byte            // Storage slot values in the returned range
 	nodes  []ethdb.KeyValueStore // Database containing the reconstructed trie nodes
+	tries  []*trie.Trie          // Reconstructed tries to reject overflown slots
 
 	// Fields relevant for the last account only
-	bounds map[common.Hash]struct{} // Boundary nodes to avoid persisting (incomplete)
-	cont   bool                     // Whether the last storage range has a continuation
+	bounds   map[common.Hash]struct{} // Boundary nodes to avoid persisting (incomplete)
+	overflow *light.NodeSet           // Overflow nodes to avoid persisting across chunk boundaries
+	cont     bool                     // Whether the last storage range has a continuation
 }
 
 // accountTask represents the sync task for a chunk of the account snapshot.
@@ -197,20 +205,25 @@ type accountTask struct {
 	res  *accountResponse // Validate response filling this task
 	pend int              // Number of pending subtasks for this round
 
-	done bool // Flag whether the task can be removed
-
 	needCode  []bool // Flags whether the filling accounts need code retrieval
 	needState []bool // Flags whether the filling accounts need storage retrieval
 	needHeal  []bool // Flags whether the filling accounts's state was chunked and need healing
 
 	codeTasks  map[common.Hash]struct{}    // Code hashes that need retrieval
 	stateTasks map[common.Hash]common.Hash // Account hashes->roots that need full state retrieval
+
+	done bool // Flag whether the task can be removed
 }
 
 // accountTask represents the sync task for a chunk of the storage snapshot.
 type storageTask struct {
 	Next common.Hash // Next account to sync in this interval
 	Last common.Hash // Last account to sync in this interval
+
+	// These fields are internals used during runtime
+	root common.Hash     // Storage root hash for this instance
+	req  *storageRequest // Pending request to fill this task
+	done bool            // Flag whether the task can be removed
 }
 
 // Syncer is an Ethereum account and storage trie syncer based on snapshots and
@@ -396,6 +409,7 @@ func (s *Syncer) Sync(root common.Hash, cancel chan struct{}) error {
 
 	for {
 		// Remove all completed tasks and terminate sync if everything's done
+		s.cleanStorageTasks(tasks)
 		s.cleanAccountTasks(&tasks)
 		if len(tasks) == 0 {
 			return nil
@@ -494,75 +508,119 @@ func (s *Syncer) cleanAccountTasks(tasks *[]*accountTask) {
 	}
 }
 
+// cleanStorageTasks iterates over all the account tasks and storage sub-tasks
+// within, cleaning any that have been completed.
+func (s *Syncer) cleanStorageTasks(tasks []*accountTask) {
+	for _, task := range tasks {
+		for account, subtasks := range task.SubTasks {
+			// Remove storage range retrieval tasks that completed
+			for j := 0; j < len(subtasks); j++ {
+				if subtasks[j].done {
+					subtasks = append(subtasks[:j], subtasks[j+1:]...)
+					j--
+				}
+			}
+			if len(subtasks) > 0 {
+				task.SubTasks[account] = subtasks
+				continue
+			}
+			// If all storage chunks are done, mark the account as done too
+			for j, hash := range task.res.hashes {
+				if hash == account {
+					task.needState[j] = false
+				}
+			}
+			delete(task.SubTasks, account)
+			task.pend--
+
+			// If this was the last pending task, forward the account task
+			if task.pend == 0 {
+				s.forwardAccountTask(task)
+			}
+		}
+	}
+}
+
 // assignAccountTasks attempts to match idle peers to pending account range
 // retrievals.
 func (s *Syncer) assignAccountTasks(tasks []*accountTask, cancel chan struct{}) {
 	s.lock.Lock()
 	defer s.lock.Unlock()
 
-	for id := range s.accountIdlers {
-		// If the peer rejected a query in this sync cycle, don't bother asking
-		// again for anything, it's either out of sync or already pruned
-		if _, ok := s.statelessPeers[id]; ok {
+	// If there are no idle peers, short circuit assignment
+	if len(s.accountIdlers) == 0 {
+		return
+	}
+	// Iterate over all the tasks and try to find a pending one
+	for _, task := range tasks {
+		// Skip any tasks already filling
+		if task.req != nil || task.res != nil {
 			continue
 		}
-		for _, task := range tasks {
-			// Skip any tasks already filling
-			if task.req != nil || task.res != nil {
+		// Task pending retrieval, try to find an idle peer. If no such peer
+		// exists, we probably assigned tasks for all (or they are stateless).
+		// Abort the entire assignment mechanism.
+		var idle string
+		for id := range s.accountIdlers {
+			// If the peer rejected a query in this sync cycle, don't bother asking
+			// again for anything, it's either out of sync or already pruned
+			if _, ok := s.statelessPeers[id]; ok {
 				continue
 			}
-			// Task not yet done, allocate a unique request id
-			var reqid uint64
-			for {
-				reqid = uint64(rand.Int63())
-				if reqid == 0 {
-					continue
-				}
-				if _, ok := s.accountReqs[reqid]; ok {
-					continue
-				}
-				break
-			}
-			// Generate the network query and send it to the peer
-			req := &accountRequest{
-				peer:   id,
-				id:     reqid,
-				cancel: cancel,
-				stale:  make(chan struct{}),
-				origin: task.Next,
-				task:   task,
-			}
-			req.timeout = time.AfterFunc(requestTimeout, func() {
-				log.Debug("Account range request timed out")
-				select {
-				case s.accountReqFails <- task.req:
-				default:
-				}
-			})
-			s.accountReqs[reqid] = req
-			delete(s.accountIdlers, id)
-
-			s.pend.Add(1)
-			go func(peer *Peer, root common.Hash) {
-				defer s.pend.Done()
-
-				// Attempt to send the remote request and revert if it fails
-				if err := peer.RequestAccountRange(reqid, root, req.origin, maxRequestSize); err != nil {
-					peer.Log().Debug("Failed to request account range", "err", err)
-					select {
-					case s.accountReqFails <- req:
-					default:
-					}
-				}
-				// Request successfully sent, start a
-			}(s.peers[id], s.root) // We're in the lock, peers[id] surely exists
-
-			// Inject the request into the task to block further assignments
-			task.req = req
-
-			// Task assigned, abort scanning for new tasks
+			idle = id
 			break
 		}
+		if idle == "" {
+			return
+		}
+		// Matched a pending task to an idle peer, allocate a unique request id
+		var reqid uint64
+		for {
+			reqid = uint64(rand.Int63())
+			if reqid == 0 {
+				continue
+			}
+			if _, ok := s.accountReqs[reqid]; ok {
+				continue
+			}
+			break
+		}
+		// Generate the network query and send it to the peer
+		req := &accountRequest{
+			peer:   idle,
+			id:     reqid,
+			cancel: cancel,
+			stale:  make(chan struct{}),
+			origin: task.Next,
+			task:   task,
+		}
+		req.timeout = time.AfterFunc(requestTimeout, func() {
+			log.Debug("Account range request timed out")
+			select {
+			case s.accountReqFails <- req:
+			default:
+			}
+		})
+		s.accountReqs[reqid] = req
+		delete(s.accountIdlers, idle)
+
+		s.pend.Add(1)
+		go func(peer *Peer, root common.Hash) {
+			defer s.pend.Done()
+
+			// Attempt to send the remote request and revert if it fails
+			if err := peer.RequestAccountRange(reqid, root, req.origin, maxRequestSize); err != nil {
+				peer.Log().Debug("Failed to request account range", "err", err)
+				select {
+				case s.accountReqFails <- req:
+				default:
+				}
+			}
+			// Request successfully sent, start a
+		}(s.peers[idle], s.root) // We're in the lock, peers[id] surely exists
+
+		// Inject the request into the task to block further assignments
+		task.req = req
 	}
 }
 
@@ -571,78 +629,89 @@ func (s *Syncer) assignBytecodeTasks(tasks []*accountTask, cancel chan struct{})
 	s.lock.Lock()
 	defer s.lock.Unlock()
 
-	for id := range s.bytecodeIdlers {
-		// If the peer rejected a query in this sync cycle, don't bother asking
-		// again for anything, it's either out of sync or already pruned
-		if _, ok := s.statelessPeers[id]; ok {
+	// If there are no idle peers, short circuit assignment
+	if len(s.bytecodeIdlers) == 0 {
+		return
+	}
+	// Iterate over all the tasks and try to find a pending one
+	for _, task := range tasks {
+		// Skip any tasks not in the bytecode retrieval phase
+		if task.res == nil {
 			continue
 		}
-		for _, task := range tasks {
-			// Skip any tasks not in the bytecode retrieval phase
-			if task.res == nil {
+		// Skip tasks that are already retrieving (or done with) all codes
+		if len(task.codeTasks) == 0 {
+			continue
+		}
+		// Task pending retrieval, try to find an idle peer. If no such peer
+		// exists, we probably assigned tasks for all (or they are stateless).
+		// Abort the entire assignment mechanism.
+		var idle string
+		for id := range s.bytecodeIdlers {
+			// If the peer rejected a query in this sync cycle, don't bother asking
+			// again for anything, it's either out of sync or already pruned
+			if _, ok := s.statelessPeers[id]; ok {
 				continue
 			}
-			// Skip tasks that are already retrieving (or done with) all codes
-			if len(task.codeTasks) == 0 {
+			idle = id
+			break
+		}
+		if idle == "" {
+			return
+		}
+		// Matched a pending task to an idle peer, allocate a unique request id
+		var reqid uint64
+		for {
+			reqid = uint64(rand.Int63())
+			if reqid == 0 {
 				continue
 			}
-			// Task not yet done, allocate a unique request id
-			var reqid uint64
-			for {
-				reqid = uint64(rand.Int63())
-				if reqid == 0 {
-					continue
-				}
-				if _, ok := s.bytecodeReqs[reqid]; ok {
-					continue
-				}
+			if _, ok := s.bytecodeReqs[reqid]; ok {
+				continue
+			}
+			break
+		}
+		// Generate the network query and send it to the peer
+		hashes := make([]common.Hash, 0, maxCodeRequestCount)
+		for hash := range task.codeTasks {
+			delete(task.codeTasks, hash)
+			hashes = append(hashes, hash)
+			if len(hashes) >= maxCodeRequestCount {
 				break
 			}
-			// Generate the network query and send it to the peer
-			hashes := make([]common.Hash, 0, maxCodeRequestCount)
-			for hash := range task.codeTasks {
-				delete(task.codeTasks, hash)
-				hashes = append(hashes, hash)
-				if len(hashes) >= maxCodeRequestCount {
-					break
-				}
+		}
+		req := &bytecodeRequest{
+			peer:   idle,
+			id:     reqid,
+			cancel: cancel,
+			stale:  make(chan struct{}),
+			hashes: hashes,
+			task:   task,
+		}
+		req.timeout = time.AfterFunc(requestTimeout, func() {
+			log.Debug("Bytecode request timed out")
+			select {
+			case s.bytecodeReqFails <- req:
+			default:
 			}
-			req := &bytecodeRequest{
-				peer:   id,
-				id:     reqid,
-				cancel: cancel,
-				stale:  make(chan struct{}),
-				hashes: hashes,
-				task:   task,
-			}
-			req.timeout = time.AfterFunc(requestTimeout, func() {
-				log.Debug("Bytecode request timed out")
+		})
+		s.bytecodeReqs[reqid] = req
+		delete(s.bytecodeIdlers, idle)
+
+		s.pend.Add(1)
+		go func(peer *Peer) {
+			defer s.pend.Done()
+
+			// Attempt to send the remote request and revert if it fails
+			if err := peer.RequestByteCodes(reqid, hashes, maxRequestSize); err != nil {
+				log.Debug("Failed to request bytecodes", "err", err)
 				select {
 				case s.bytecodeReqFails <- req:
 				default:
 				}
-			})
-			s.bytecodeReqs[reqid] = req
-			delete(s.bytecodeIdlers, id)
-
-			s.pend.Add(1)
-			go func(peer *Peer) {
-				defer s.pend.Done()
-
-				// Attempt to send the remote request and revert if it fails
-				if err := peer.RequestByteCodes(reqid, hashes, maxRequestSize); err != nil {
-					log.Debug("Failed to request bytecodes", "err", err)
-					select {
-					case s.bytecodeReqFails <- req:
-					default:
-					}
-				}
-				// Request successfully sent, start a
-			}(s.peers[id]) // We're in the lock, peers[id] surely exists
-
-			// Task assigned, abort scanning for new tasks
-			break
-		}
+			}
+			// Request successfully sent, start a
+		}(s.peers[idle]) // We're in the lock, peers[id] surely exists
 	}
 }
 
@@ -652,38 +721,75 @@ func (s *Syncer) assignStorageTasks(tasks []*accountTask, cancel chan struct{}) 
 	s.lock.Lock()
 	defer s.lock.Unlock()
 
-	for id := range s.storageIdlers {
-		// If the peer rejected a query in this sync cycle, don't bother asking
-		// again for anything, it's either out of sync or already pruned
-		if _, ok := s.statelessPeers[id]; ok {
+	// If there are no idle peers, short circuit assignment
+	if len(s.storageIdlers) == 0 {
+		return
+	}
+	// Iterate over all the tasks and try to find a pending one
+	for _, task := range tasks {
+		// Skip any tasks not in the storage retrieval phase
+		if task.res == nil {
 			continue
 		}
-		for _, task := range tasks {
-			// Skip any tasks not in the storage retrieval phase
-			if task.res == nil {
+		// Skip tasks that are already retrieving (or done with) all small states
+		if len(task.SubTasks) == 0 && len(task.stateTasks) == 0 {
+			continue
+		}
+		// Task pending retrieval, try to find an idle peer. If no such peer
+		// exists, we probably assigned tasks for all (or they are stateless).
+		// Abort the entire assignment mechanism.
+		var idle string
+		for id := range s.storageIdlers {
+			// If the peer rejected a query in this sync cycle, don't bother asking
+			// again for anything, it's either out of sync or already pruned
+			if _, ok := s.statelessPeers[id]; ok {
 				continue
 			}
-			// Skip tasks that are already retrieving (or done with) all small states
-			if len(task.stateTasks) == 0 {
+			idle = id
+			break
+		}
+		if idle == "" {
+			return
+		}
+		// Matched a pending task to an idle peer, allocate a unique request id
+		var reqid uint64
+		for {
+			reqid = uint64(rand.Int63())
+			if reqid == 0 {
 				continue
 			}
-			// Task not yet done, allocate a unique request id
-			var reqid uint64
-			for {
-				reqid = uint64(rand.Int63())
-				if reqid == 0 {
-					continue
-				}
-				if _, ok := s.storageReqs[reqid]; ok {
-					continue
-				}
-				break
+			if _, ok := s.storageReqs[reqid]; ok {
+				continue
 			}
-			// Generate the network query and send it to the peer
-			var (
-				accounts = make([]common.Hash, 0, maxStorageSetRequestCount)
-				roots    = make([]common.Hash, 0, maxStorageSetRequestCount)
-			)
+			break
+		}
+		// Generate the network query and send it to the peer. If there are
+		// large contract tasks pending, complete those before diving into
+		// even more new contracts.
+		var (
+			accounts = make([]common.Hash, 0, maxStorageSetRequestCount)
+			roots    = make([]common.Hash, 0, maxStorageSetRequestCount)
+			subtask  *storageTask
+		)
+		for account, subtasks := range task.SubTasks {
+			for _, st := range subtasks {
+				// Skip any subtasks already filling
+				if st.req != nil {
+					continue
+				}
+				// Found an imcomplete storage chunk, schedule it
+				accounts = append(accounts, account)
+				roots = append(roots, st.root)
+
+				subtask = st
+				break // Large contract chunks are downloaded individually
+			}
+			if subtask != nil {
+				break // Large contract chunks are downloaded individually
+			}
+		}
+		if subtask == nil {
+			// No large contract required retrieval, but small ones available
 			for acccount, root := range task.stateTasks {
 				delete(task.stateTasks, acccount)
 
@@ -694,42 +800,57 @@ func (s *Syncer) assignStorageTasks(tasks []*accountTask, cancel chan struct{}) 
 					break
 				}
 			}
-			req := &storageRequest{
-				peer:     id,
-				id:       reqid,
-				cancel:   cancel,
-				stale:    make(chan struct{}),
-				accounts: accounts,
-				roots:    roots,
-				mainTask: task,
+		}
+		// If nothing was found, it means this task is actually already fully
+		// retrieving, but large contracts are hard to detect. Skip to the next.
+		if len(accounts) == 0 {
+			continue
+		}
+		req := &storageRequest{
+			peer:     idle,
+			id:       reqid,
+			cancel:   cancel,
+			stale:    make(chan struct{}),
+			accounts: accounts,
+			roots:    roots,
+			mainTask: task,
+			subTask:  subtask,
+		}
+		if subtask != nil {
+			req.origin = subtask.Next
+		}
+		req.timeout = time.AfterFunc(requestTimeout, func() {
+			log.Debug("Storage request timed out")
+			select {
+			case s.storageReqFails <- req:
+			default:
 			}
-			req.timeout = time.AfterFunc(requestTimeout, func() {
-				log.Debug("Storage request timed out")
+		})
+		s.storageReqs[reqid] = req
+		delete(s.storageIdlers, idle)
+
+		s.pend.Add(1)
+		go func(peer *Peer, root common.Hash) {
+			defer s.pend.Done()
+
+			// Attempt to send the remote request and revert if it fails
+			var origin []byte
+			if subtask != nil {
+				origin = req.origin[:]
+			}
+			if err := peer.RequestStorageRanges(reqid, root, accounts, origin, maxRequestSize); err != nil {
+				log.Debug("Failed to request storage", "err", err)
 				select {
 				case s.storageReqFails <- req:
 				default:
 				}
-			})
-			s.storageReqs[reqid] = req
-			delete(s.storageIdlers, id)
+			}
+			// Request successfully sent, start a
+		}(s.peers[idle], s.root) // We're in the lock, peers[id] surely exists
 
-			s.pend.Add(1)
-			go func(peer *Peer, root common.Hash) {
-				defer s.pend.Done()
-
-				// Attempt to send the remote request and revert if it fails
-				if err := peer.RequestStorageRanges(reqid, root, accounts, nil, maxRequestSize); err != nil {
-					log.Debug("Failed to request storage", "err", err)
-					select {
-					case s.storageReqFails <- req:
-					default:
-					}
-				}
-				// Request successfully sent, start a
-			}(s.peers[id], s.root) // We're in the lock, peers[id] surely exists
-
-			// Task assigned, abort scanning for new tasks
-			break
+		// Inject the request into the subtask to block further assignments
+		if subtask != nil {
+			subtask.req = req
 		}
 	}
 }
@@ -841,8 +962,12 @@ func (s *Syncer) revertStorageRequest(req *storageRequest) {
 	// If there's a timeout timer still running, abort it and mark the storage
 	// task as not-pending, ready for resheduling
 	req.timeout.Stop()
-	for i, account := range req.accounts {
-		req.mainTask.stateTasks[account] = req.roots[i]
+	if req.subTask != nil {
+		req.subTask.req = nil
+	} else {
+		for i, account := range req.accounts {
+			req.mainTask.stateTasks[account] = req.roots[i]
+		}
 	}
 }
 
@@ -853,12 +978,11 @@ func (s *Syncer) processAccountResponse(res *accountResponse) {
 	res.task.req = nil
 	res.task.res = res
 
-	// Ensure that the response doesn't overflow into the subsequent task, otherwise
-	// we run the risk of downloading a huge contract twice.
+	// Ensure that the response doesn't overflow into the subsequent task
 	last := res.task.Last.Big()
 	for i, hash := range res.hashes {
 		if hash.Big().Cmp(last) > 0 {
-			// Chunk overflown, cut off excess, but also updat ethe boundary nodes
+			// Chunk overflown, cut off excess, but also update the boundary nodes
 			for j := i; j < len(res.hashes); j++ {
 				if err := res.trie.Prove(res.hashes[j][:], 0, res.overflow); err != nil {
 					panic(err) // Account range was already proven, what happened
@@ -876,6 +1000,7 @@ func (s *Syncer) processAccountResponse(res *accountResponse) {
 	res.task.needState = make([]bool, len(res.accounts))
 	res.task.needHeal = make([]bool, len(res.accounts))
 
+	res.task.SubTasks = make(map[common.Hash][]*storageTask)
 	res.task.codeTasks = make(map[common.Hash]struct{})
 	res.task.stateTasks = make(map[common.Hash]common.Hash)
 
@@ -959,6 +1084,10 @@ func (s *Syncer) processBytecodeResponse(res *bytecodeResponse) {
 // processStorageResponse integrates an already validated storage response
 // into the account tasks.
 func (s *Syncer) processStorageResponse(res *storageResponse) {
+	// Switch the suntask from pending to idle
+	if res.subTask != nil {
+		res.subTask.req = nil
+	}
 	batch := s.db.NewBatch()
 
 	var (
@@ -985,12 +1114,78 @@ func (s *Syncer) processStorageResponse(res *storageResponse) {
 		// mark the account as needing healing
 		for j, acc := range res.mainTask.res.accounts {
 			if res.roots[i] == acc.Root {
-				if res.mainTask.needState[j] {
-					res.mainTask.needState[j] = false //i < len(res.hashes)-1 || !res.cont
+				// If the packet contains multiple contract storage slots, all
+				// but the last are surely complete. The last contract may be
+				// chunked, so check it's continuation flag.
+				if res.subTask == nil && res.mainTask.needState[j] && (i < len(res.hashes)-1 || !res.cont) {
+					res.mainTask.needState[j] = false
 					res.mainTask.pend--
 				}
-				if !res.mainTask.needHeal[j] && i == len(res.hashes)-1 && res.cont {
+				// If the last contract was chunked, mark it as needing healing
+				// to avoid writing it out to disk prematurely.
+				if res.subTask == nil && !res.mainTask.needHeal[j] && i == len(res.hashes)-1 && res.cont {
 					res.mainTask.needHeal[j] = true
+				}
+				// If the last contract was chunked, we need to switch to large
+				// contract handling mode
+				if res.subTask == nil && i == len(res.hashes)-1 && res.cont {
+					// If we haven't yet started a large-contract retrieval, create
+					// the subtasks for it within the main account task
+					if tasks, ok := res.mainTask.SubTasks[account]; !ok {
+						var (
+							next common.Hash
+						)
+						step := new(big.Int).Sub(
+							new(big.Int).Div(
+								new(big.Int).Exp(common.Big2, common.Big256, nil),
+								big.NewInt(storageConcurrency),
+							), common.Big1,
+						)
+						for k := 0; k < storageConcurrency; k++ {
+							last := common.BigToHash(new(big.Int).Add(next.Big(), step))
+							if k == storageConcurrency-1 {
+								// Make sure we don't overflow if the step is not a proper divisor
+								last = common.HexToHash("0xffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff")
+							}
+							tasks = append(tasks, &storageTask{
+								Next: next,
+								Last: last,
+								root: acc.Root,
+							})
+							log.Debug("Created storage sync task", "account", account, "root", acc.Root, "from", next, "last", last)
+							next = common.BigToHash(new(big.Int).Add(last.Big(), common.Big1))
+						}
+						res.mainTask.SubTasks[account] = tasks
+
+						// Since we've just created the sub-tasks, this response
+						// is surely for the first one (zero origin)
+						res.subTask = tasks[0]
+					}
+				}
+				// If we're in large contract delivery mode, forward the subtask
+				if res.subTask != nil {
+					// Ensure the response doesn't overflow into the subsequent task
+					last := res.subTask.Last.Big()
+					for k, hash := range res.hashes[i] {
+						if hash.Big().Cmp(last) > 0 {
+							// Chunk overflown, cut off excess, but also update the boundary
+							for l := k; l < len(res.hashes[i]); l++ {
+								if err := res.tries[i].Prove(res.hashes[i][l][:], 0, res.overflow); err != nil {
+									panic(err) // Account range was already proven, what happened
+								}
+							}
+							res.hashes[i] = res.hashes[i][:k]
+							res.slots[i] = res.slots[i][:k]
+							res.cont = false // Mark range completed
+							break
+						}
+					}
+					// Forward the relevant storage chunk (even if created just now)
+					if res.cont {
+						res.subTask.Next = common.BigToHash(new(big.Int).Add(res.hashes[i][len(res.hashes[i])-1].Big(), big.NewInt(1)))
+					} else {
+						res.subTask.done = true
+					}
 				}
 			}
 		}
@@ -1380,8 +1575,9 @@ func (s *Syncer) OnStorage(peer *Peer, id uint64, hashes [][]common.Hash, slots 
 
 	// Reconstruct the partial tries from the response and verify them
 	var (
-		dbs  = make([]ethdb.KeyValueStore, len(hashes))
-		cont bool
+		dbs   = make([]ethdb.KeyValueStore, len(hashes))
+		tries = make([]*trie.Trie, len(hashes))
+		cont  bool
 	)
 	for i := 0; i < len(hashes); i++ {
 		// Convert the keys and proofs into an internal format
@@ -1399,7 +1595,7 @@ func (s *Syncer) OnStorage(peer *Peer, id uint64, hashes [][]common.Hash, slots 
 		if len(nodes) == 0 {
 			// No proof has been attached, the response must cover the entire key
 			// space and hash to the origin root.
-			dbs[i], _, _, err = trie.VerifyRangeProof(req.roots[i], nil, keys, slots[i], nil, nil)
+			dbs[i], tries[i], _, err = trie.VerifyRangeProof(req.roots[i], nil, keys, slots[i], nil, nil)
 			if err != nil {
 				logger.Warn("Storage slots failed proof", "err", err)
 				return err
@@ -1409,11 +1605,7 @@ func (s *Syncer) OnStorage(peer *Peer, id uint64, hashes [][]common.Hash, slots 
 			// returned data is indeed part of the storage trie
 			proofdb := nodes.NodeSet()
 
-			var origin common.Hash
-			if req.subTask != nil {
-				origin = req.subTask.Next
-			}
-			dbs[i], _, cont, err = trie.VerifyRangeProof(req.roots[i], origin[:], keys, slots[i], proofdb, proofdb)
+			dbs[i], tries[i], cont, err = trie.VerifyRangeProof(req.roots[i], req.origin[:], keys, slots[i], proofdb, proofdb)
 			if err != nil {
 				logger.Warn("Storage range failed proof", "err", err)
 				return err
@@ -1437,7 +1629,9 @@ func (s *Syncer) OnStorage(peer *Peer, id uint64, hashes [][]common.Hash, slots 
 		hashes:   hashes,
 		slots:    slots,
 		nodes:    dbs,
+		tries:    tries,
 		bounds:   bounds,
+		overflow: light.NewNodeSet(),
 		cont:     cont,
 	}
 	select {

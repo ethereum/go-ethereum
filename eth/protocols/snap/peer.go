@@ -71,7 +71,7 @@ func (p *Peer) RequestAccountRange(id uint64, root common.Hash, origin common.Ha
 // RequestStorageRange fetches a batch of accounts rooted in a specific account
 // trie, starting with the origin.
 func (p *Peer) RequestStorageRanges(id uint64, root common.Hash, accounts []common.Hash, origin []byte, bytes uint64) error {
-	p.logger.Trace("Fetching ranges of storage slots", "reqid", id, "root", root, "accounts", len(accounts), "origin", origin, "bytes", common.StorageSize(bytes))
+	p.logger.Trace("Fetching ranges of storage slots", "reqid", id, "root", root, "accounts", len(accounts), "origin", common.BytesToHash(origin), "bytes", common.StorageSize(bytes))
 	return p2p.Send(p.rw, getStorageRangesMsg, &getStorageRangesData{
 		ID:       id,
 		Root:     root,
