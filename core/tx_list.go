@@ -224,7 +224,7 @@ func (m *txSortedMap) Flatten() types.Transactions {
 // transaction with the highest nonce
 func (m *txSortedMap) LastElement() *types.Transaction {
 	cache := m.flatten()
-	return cache[len(m.cache)-1]
+	return cache[len(cache)-1]
 }
 
 // txList is a "list" of transactions belonging to an account, sorted by account
