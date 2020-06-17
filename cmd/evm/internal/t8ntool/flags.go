@@ -38,6 +38,10 @@ var (
 		Name:  "trace.nostack",
 		Usage: "Disable stack output in traces",
 	}
+	TraceDisableReturnDataFlag = cli.BoolFlag{
+		Name:  "trace.noreturndata",
+		Usage: "Disable return data output in traces",
+	}
 	OutputAllocFlag = cli.StringFlag{
 		Name: "output.alloc",
 		Usage: "Determines where to put the `alloc` of the post-state.\n" +

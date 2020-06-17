@@ -58,7 +58,6 @@ type StateDB interface {
 	Empty(common.Address) bool
 
 	RevertToSnapshot(int)
-	DiscardSnapshot(int)
 	Snapshot() int
 
 	AddLog(*types.Log)

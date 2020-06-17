@@ -37,7 +37,6 @@ type Stack struct {
 }
 
 func newstack() *Stack {
-	//return &Stack{data: make([]uint256.Int, 0, 16)}
 	return stackPool.Get().(*Stack)
 }
 
@@ -100,13 +99,24 @@ func (st *Stack) Print() {
 	fmt.Println("#############")
 }
 
+var rStackPool = sync.Pool{
+	New: func() interface{} {
+		return &ReturnStack{data: make([]uint32, 0, 10)}
+	},
+}
+
 // ReturnStack is an object for basic return stack operations.
 type ReturnStack struct {
 	data []uint32
 }
 
 func newReturnStack() *ReturnStack {
-	return &ReturnStack{data: make([]uint32, 0, 10)}
+	return rStackPool.Get().(*ReturnStack)
+}
+
+func returnRStack(rs *ReturnStack) {
+	rs.data = rs.data[:0]
+	rStackPool.Put(rs)
 }
 
 func (st *ReturnStack) push(d uint32) {
