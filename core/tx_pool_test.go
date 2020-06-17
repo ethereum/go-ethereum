@@ -109,6 +109,10 @@ func validateTxPoolInternals(pool *TxPool) error {
 	if priced := pool.priced.items.Len() - pool.priced.stales; priced != pending+queued {
 		return fmt.Errorf("total priced transaction count %d != %d pending + %d queued", priced, pending, queued)
 	}
+	if queued != len(pool.queued_ts) {
+		return fmt.Errorf("total queued transaction count %d != %d queued_ts length", queued, len(pool.queued_ts))
+	}
+
 	// Ensure the next nonce to assign is the correct one
 	for addr, txs := range pool.pending {
 		// Find the last transaction
@@ -972,13 +976,20 @@ func testTransactionQueueTimeLimiting(t *testing.T, nolocals bool) {
 		t.Fatalf("failed to add remote transaction: %v", err)
 	}
 
+	// wait a short amount of time to add an additional future queued item to test proper eviction when
+	// pending is removed
+	time.Sleep(2 * evictionInterval)
+	if err := pool.addRemoteSync(pricedTransaction(5, 100000, big.NewInt(1), remote)); err != nil {
+		t.Fatalf("failed to add remote transaction: %v", err)
+	}
+
 	// Make sure future queue and pending have transactions
 	pending, queued = pool.Stats()
 	if pending != 2 {
 		t.Fatalf("pending transactions mismatched: have %d, want %d", pending, 2)
 	}
-	if queued != 2 {
-		t.Fatalf("queued transactions mismatched: have %d, want %d", queued, 2)
+	if queued != 3 {
+		t.Fatalf("queued transactions mismatched: have %d, want %d", queued, 3)
 	}
 	if err := validateTxPoolInternals(pool); err != nil {
 		t.Fatalf("pool internal state corrupted: %v", err)
@@ -998,8 +1009,48 @@ func testTransactionQueueTimeLimiting(t *testing.T, nolocals bool) {
 	if pending != 0 {
 		t.Fatalf("pending transactions mismatched: have %d, want %d", pending, 0)
 	}
-	if queued != 2 {
+	if queued != 3 {
 		t.Fatalf("queued transactions mismatched: have %d, want %d", queued, 2)
+	}
+	if err := validateTxPoolInternals(pool); err != nil {
+		t.Fatalf("pool internal state corrupted: %v", err)
+	}
+
+	// Wait for the lifetime to run for all transactions except the one that was added later
+	time.Sleep(evictionInterval * 7)
+	pending, queued = pool.Stats()
+	if pending != 0 {
+		t.Fatalf("pending transactions mismatched: have %d, want %d", pending, 0)
+	}
+	if nolocals {
+		if queued != 1 {
+			t.Fatalf("queued transactions mismatched: have %d, want %d", queued, 1)
+		}
+	} else {
+		if queued != 2 {
+			t.Fatalf("queued transactions mismatched: have %d, want %d", queued, 2)
+		}
+	}
+
+	if err := validateTxPoolInternals(pool); err != nil {
+		t.Fatalf("pool internal state corrupted: %v", err)
+	}
+
+	// lifetime should pass for the final transaction
+	time.Sleep(evictionInterval * 2)
+
+	pending, queued = pool.Stats()
+	if pending != 0 {
+		t.Fatalf("pending transactions mismatched: have %d, want %d", pending, 0)
+	}
+	if nolocals {
+		if queued != 0 {
+			t.Fatalf("queued transactions mismatched: have %d, want %d", queued, 2)
+		}
+	} else {
+		if queued != 1 {
+			t.Fatalf("queued transactions mismatched: have %d, want %d", queued, 0)
+		}
 	}
 	if err := validateTxPoolInternals(pool); err != nil {
 		t.Fatalf("pool internal state corrupted: %v", err)
