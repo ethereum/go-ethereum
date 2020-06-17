@@ -19,21 +19,22 @@ package params
 import "math/big"
 
 const (
-	GasLimitBoundDivisor uint64 = 256    // The bound divisor of the gas limit, used in update calculations.
+	GasLimitBoundDivisor uint64 = 256     // The bound divisor of the gas limit, used in update calculations.
 	MinGasLimit          uint64 = 5000    // Minimum the gas limit may ever be.
 	GenesisGasLimit      uint64 = 4712388 // Gas limit of the Genesis block.
 
-	MaximumExtraDataSize  uint64 = 32    // Maximum size extra data may be after Genesis.
-	ExpByteGas            uint64 = 10    // Times ceil(log256(exponent)) for the EXP instruction.
-	SloadGas              uint64 = 50    // Multiplied by the number of 32-byte words that are copied (round up) for any *COPY operation and added.
-	CallValueTransferGas  uint64 = 9000  // Paid for CALL when the value transfer is non-zero.
-	CallNewAccountGas     uint64 = 25000 // Paid for CALL when the destination address didn't exist prior.
-	TxGas                 uint64 = 21000 // Per transaction not creating a contract. NOTE: Not payable on data of calls between transactions.
-	TxGasContractCreation uint64 = 53000 // Per transaction that creates a contract. NOTE: Not payable on data of calls between transactions.
-	TxDataZeroGas         uint64 = 4     // Per byte of data attached to a transaction that equals zero. NOTE: Not payable on data of calls between transactions.
-	QuadCoeffDiv          uint64 = 512   // Divisor for the quadratic particle of the memory cost equation.
-	LogDataGas            uint64 = 8     // Per byte in a LOG* operation's data.
-	CallStipend           uint64 = 2300  // Free gas given at beginning of call.
+	MaximumExtraDataSize  uint64 = 32     // Maximum size extra data may be after Genesis.
+	ExpByteGas            uint64 = 10     // Times ceil(log256(exponent)) for the EXP instruction.
+	SloadGas              uint64 = 50     // Multiplied by the number of 32-byte words that are copied (round up) for any *COPY operation and added.
+	CallValueTransferGas  uint64 = 9000   // Paid for CALL when the value transfer is non-zero.
+	CallNewAccountGas     uint64 = 25000  // Paid for CALL when the destination address didn't exist prior.
+	TxGas                 uint64 = 21000  // Per transaction not creating a contract. NOTE: Not payable on data of calls between transactions.
+	SystemTxsGas          uint64 = 100000 // The gas reserved for system txs; only for parlia consensus
+	TxGasContractCreation uint64 = 53000  // Per transaction that creates a contract. NOTE: Not payable on data of calls between transactions.
+	TxDataZeroGas         uint64 = 4      // Per byte of data attached to a transaction that equals zero. NOTE: Not payable on data of calls between transactions.
+	QuadCoeffDiv          uint64 = 512    // Divisor for the quadratic particle of the memory cost equation.
+	LogDataGas            uint64 = 8      // Per byte in a LOG* operation's data.
+	CallStipend           uint64 = 2300   // Free gas given at beginning of call.
 
 	Sha3Gas     uint64 = 30 // Once per SHA3 operation.
 	Sha3WordGas uint64 = 6  // Once per word of the SHA3 operation's data.
