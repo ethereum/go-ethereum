@@ -56,7 +56,7 @@ const (
 	resubmitAdjustChanSize = 10
 
 	// miningLogAtDepth is the number of confirmations before logging successful mining.
-	miningLogAtDepth = 15
+	miningLogAtDepth = 11
 
 	// minRecommitInterval is the minimal time interval to recreate the mining block with
 	// any newly arrived transactions.
@@ -75,7 +75,7 @@ const (
 	intervalAdjustBias = 200 * 1000.0 * 1000.0
 
 	// staleThreshold is the maximum depth of the acceptable stale block.
-	staleThreshold = 7
+	staleThreshold = 11
 )
 
 var (
@@ -356,7 +356,7 @@ func (w *worker) newWorkLoop(recommit time.Duration) {
 			commit(false, commitInterruptNewHead)
 
 		case head := <-w.chainHeadCh:
-			if !w.isRunning(){
+			if !w.isRunning() {
 				continue
 			}
 			clearPending(head.Block.NumberU64())
