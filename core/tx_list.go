@@ -520,8 +520,25 @@ func (l *txPricedList) Underpriced(tx *types.Transaction, local *accountSet) boo
 // Discard finds a number of most underpriced transactions, removes them from the
 // priced list and returns them for further removal from the entire pool.
 func (l *txPricedList) Discard(slots int, local *accountSet) types.Transactions {
-	drop := make(types.Transactions, 0, slots) // Remote underpriced transactions to drop
-	save := make(types.Transactions, 0, 64)    // Local underpriced transactions to keep
+	discardable := 0
+	for _, tx := range *l.items {
+		if !local.containsTx(tx) {
+			discardable++
+		}
+		if discardable >= slots {
+			break
+		}
+	}
+	// If we want to free up 'N' slots, but we can only eject 'n', set number to
+	// free to the smaller of the two
+	if slots > discardable {
+		slots = discardable
+	}
+	if slots == 0 {
+		return nil
+	}
+	drop := make(types.Transactions, 0, slots)               // Remote underpriced transactions to drop
+	save := make(types.Transactions, 0, len(*l.items)-slots) // Local underpriced transactions to keep
 
 	for len(*l.items) > 0 && slots > 0 {
 		// Discard stale transactions if found during cleanup
