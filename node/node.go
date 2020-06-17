@@ -214,9 +214,8 @@ func (n *Node) RegisterLifecycle(lifecycle Lifecycle) {
 }
 
 // RegisterProtocols adds backend's protocols to the node's p2p server
-func (n *Node) RegisterProtocols(protocols []p2p.Protocol) error {
+func (n *Node) RegisterProtocols(protocols []p2p.Protocol) {
 	n.server.Protocols = append(n.server.Protocols, protocols...)
-	return nil
 }
 
 // RegisterAPIs registers the APIs a service provides on the node
@@ -237,7 +236,7 @@ func (n *Node) ExistingHTTPServer(endpoint string) *HTTPServer {
 	return nil
 }
 
-// CreateHTTPServer creates an http.Server and adds it to the given HTTPServers // TODO improve?
+// CreateHTTPServer creates an http.Server and adds it to the given HTTPServer
 func (n *Node) CreateHTTPServer(h *HTTPServer, exposeAll bool) error {
 	// register apis and create handler stack
 	err := RegisterApisFromWhitelist(n.rpcAPIs, h.Whitelist, h.Srv, exposeAll)
@@ -469,13 +468,6 @@ func (n *Node) stopServer(server *HTTPServer) {
 	}
 	// remove stopped http server from node's http servers // TODO is this preferable?
 	delete(n.HTTPServers.servers, server.endpoint)
-	// remove stopped http server from node's lifecycles
-	n.removeLifecycle(server)
-}
-
-// removeLifecycle removes a stopped Lifecycle from the running node's Lifecycles
-func (n *Node) removeLifecycle(lifecycle Lifecycle) {
-	delete(n.lifecycles, reflect.TypeOf(lifecycle))
 }
 
 // Stop terminates a running node along with all it's services. In the node was

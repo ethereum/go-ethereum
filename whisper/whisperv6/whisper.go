@@ -134,11 +134,8 @@ func New(stack *node.Node, cfg *Config) error {
 	}
 
 	stack.RegisterAPIs(whisper.APIs())
-	if err := stack.RegisterProtocols(whisper.Protocols()); err != nil {
-		return err
-	}
+	stack.RegisterProtocols(whisper.Protocols())
 	stack.RegisterLifecycle(whisper)
-
 	return nil
 }
 

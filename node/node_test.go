@@ -18,6 +18,8 @@ package node
 
 import (
 	"errors"
+	"fmt"
+	"github.com/ethereum/go-ethereum/rpc"
 	"io/ioutil"
 	"net/http"
 	"os"
@@ -105,7 +107,7 @@ func TestNodeUsedDataDir(t *testing.T) {
 }
 
 // Tests whether a Lifecycle can be registered.
-func TestLifecycleRegistry(t *testing.T) {
+func TestLifecycleRegistry_Successful(t *testing.T) {
 	stack, err := New(testNodeConfig())
 	if err != nil {
 		t.Fatalf("failed to create protocol stack: %v", err)
@@ -118,6 +120,50 @@ func TestLifecycleRegistry(t *testing.T) {
 	if _, exists := stack.lifecycles[reflect.TypeOf(noop)]; !exists {
 		t.Fatalf("lifecycle was not properly registered on the node, %v", err)
 	}
+}
+
+// Tests whether a service's protocols can be registered properly on the node's p2p server.
+func TestRegisterProtocols(t *testing.T) {
+	stack, err := New(testNodeConfig())
+	if err != nil {
+		t.Fatalf("failed to create protocol stack: %v", err)
+	}
+	defer stack.Close()
+
+	fs, err := NewFullService(stack)
+	if err != nil {
+		t.Fatalf("could not create full service: %v", err)
+	}
+
+	for _, protocol := range fs.Protocols() {
+		if !containsProtocol(stack.server.Protocols, protocol) {
+			t.Fatalf("protocol %v was not successfully registered", protocol)
+		}
+	}
+
+	for _, api := range fs.APIs() {
+		if !containsAPI(stack.rpcAPIs, api) {
+			t.Fatalf("api %v was not successfully registered", api)
+		}
+	}
+}
+
+func containsProtocol(stackProtocols []p2p.Protocol, protocol p2p.Protocol) bool {
+	for _, a := range stackProtocols {
+		if reflect.DeepEqual(a, protocol) {
+			return true
+		}
+	}
+	return false
+}
+
+func containsAPI(stackAPIs []rpc.API, api rpc.API) bool {
+	for _, a := range stackAPIs {
+		if reflect.DeepEqual(a, api) {
+			return true
+		}
+	}
+	return false
 }
 
 // Tests that registered Lifecycles get started and stopped correctly.
@@ -359,9 +405,48 @@ func TestLifecycleRetrieval(t *testing.T) {
 	}
 }
 
+// Tests whether a given HTTPServer can be registered on the node
+func TestRegisterHTTPServer(t *testing.T) {
+	stack, err := New(testNodeConfig())
+	if err != nil {
+		t.Fatalf("failed to create protocol stack: %v", err)
+	}
+	defer stack.Close()
+
+	srv1 := &HTTPServer{
+		host: "test1",
+		port: 0001,
+	}
+	endpoint1 := fmt.Sprintf("%s:%d", srv1.host, srv1.port)
+	stack.RegisterHTTPServer(endpoint1, srv1)
+
+	srv2 := &HTTPServer{
+		host: "test2",
+		port: 0002,
+	}
+	endpoint2 := fmt.Sprintf("%s:%d", srv2.host, srv2.port)
+	stack.RegisterHTTPServer(endpoint2, srv2)
+
+	noop := &HTTPServer{
+		host: "test",
+		port: 0000,
+	}
+	endpointNoop := fmt.Sprintf("%s:%d", noop.host, noop.port)
+
+	if srv1 != stack.ExistingHTTPServer(endpoint1) {
+		t.Fatalf("server %v was not properly registered on the given endpoint %s", srv1, endpoint1)
+	}
+	if srv2 != stack.ExistingHTTPServer(endpoint2) {
+		t.Fatalf("server %v was not properly registered on the given endpoint %s", srv2, endpoint2)
+	}
+	if noop == stack.ExistingHTTPServer(endpointNoop) {
+		t.Fatalf("server %v was incorrectly registered on the given endpoint %s", noop, endpointNoop)
+	}
+}
+
 // Tests whether a node can successfully create and register HTTP server
 // lifecycles on the node.
-func TestHTTPServerCreation(t *testing.T) {
+func TestHTTPServerCreateAndStop(t *testing.T) {
 	// test on same ports
 	node1 := startHTTP(t, 7453, 7453)
 	if len(node1.HTTPServers.servers) != 1 {
@@ -376,7 +461,12 @@ func TestHTTPServerCreation(t *testing.T) {
 		if !(server.WSAllowed && server.RPCAllowed) {
 			t.Fatalf("node's http server is not configured to handle both rpc and ws")
 		}
+		node1.stopServer(server)
+		if node1.ExistingHTTPServer(server.endpoint) != nil {
+			t.Fatalf("failed to remove server %v from node after stopping it", server)
+		}
 	}
+
 	node1.Close()
 
 	// test on separate ports
@@ -393,6 +483,10 @@ func TestHTTPServerCreation(t *testing.T) {
 	for _, server := range node2.HTTPServers.servers {
 		if server.WSAllowed && server.RPCAllowed {
 			t.Fatalf("both rpc and ws allowed on a single http server")
+		}
+		node2.stopServer(server)
+		if node2.ExistingHTTPServer(server.endpoint) != nil {
+			t.Fatalf("failed to remove server %v from node after stopping it", server)
 		}
 	}
 	node2.Close()

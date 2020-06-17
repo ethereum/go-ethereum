@@ -239,9 +239,7 @@ func New(stack *node.Node, config *Config) (*Ethereum, error) {
 
 	// Register the backend on the node
 	stack.RegisterAPIs(eth.APIs())
-	if err := stack.RegisterProtocols(eth.Protocols()); err != nil {
-		return nil, err
-	}
+	stack.RegisterProtocols(eth.Protocols())
 	stack.RegisterLifecycle(eth)
 
 	return eth, nil

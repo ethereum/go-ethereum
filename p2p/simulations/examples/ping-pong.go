@@ -48,9 +48,7 @@ func main() {
 	services := map[string]adapters.LifecycleConstructor{
 		"ping-pong": func(ctx *adapters.ServiceContext, stack *node.Node) (node.Lifecycle, error) {
 			pps := newPingPongService(ctx.Config.ID)
-			if err := stack.RegisterProtocols(pps.Protocols()); err != nil {
-				return nil, err
-			}
+			stack.RegisterProtocols(pps.Protocols())
 			stack.RegisterAPIs(pps.APIs())
 			return pps, nil
 		},

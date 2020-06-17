@@ -71,9 +71,7 @@ func newTestService(ctx *adapters.ServiceContext, stack *node.Node) (node.Lifecy
 	}
 	svc.state.Store(ctx.Snapshot)
 
-	if err := stack.RegisterProtocols(svc.Protocols()); err != nil {
-		return nil, err
-	}
+	stack.RegisterProtocols(svc.Protocols())
 	stack.RegisterAPIs(svc.APIs())
 	return svc, nil
 }

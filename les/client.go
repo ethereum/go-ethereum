@@ -173,9 +173,7 @@ func New(stack *node.Node, config *eth.Config) (*LightEthereum, error) {
 
 	// Register the backend on the node
 	stack.RegisterAPIs(leth.APIs())
-	if err := stack.RegisterProtocols(leth.Protocols()); err != nil {
-		return nil, err
-	}
+	stack.RegisterProtocols(leth.Protocols())
 	stack.RegisterLifecycle(leth)
 
 	return leth, nil
