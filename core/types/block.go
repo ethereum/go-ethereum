@@ -20,6 +20,7 @@ package types
 import (
 	"encoding/binary"
 	"fmt"
+	"hash"
 	"io"
 	"math/big"
 	"reflect"
@@ -28,6 +29,7 @@ import (
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/hexutil"
+	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/rlp"
 	"golang.org/x/crypto/sha3"
 )
@@ -130,9 +132,9 @@ func (h *Header) SanityCheck() error {
 }
 
 func rlpHash(x interface{}) (h common.Hash) {
-	hw := sha3.NewLegacyKeccak256()
-	rlp.Encode(hw, x)
-	hw.Sum(h[:0])
+	sha := sha3.NewLegacyKeccak256().(crypto.KeccakState)
+	rlp.Encode(sha, x)
+	sha.Read(h[:])
 	return h
 }
 
