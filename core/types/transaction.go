@@ -254,7 +254,16 @@ func (tx *Transaction) WithSignature(signer Signer, sig []byte) (*Transaction, e
 }
 
 // Cost returns amount + gasprice * gaslimit.
-func (tx *Transaction) Cost() (uint64, bool) {
+func (tx *Transaction) Cost() *big.Int {
+	total := new(big.Int).Mul(tx.data.Price, new(big.Int).SetUint64(tx.data.GasLimit))
+	total.Add(total, tx.data.Amount)
+	return total
+}
+
+func (tx *Transaction) CostU64() (uint64, bool) {
+	if tx.data.Price.BitLen() > 63 || tx.data.Amount.BitLen() > 63 {
+		return 0, false
+	}
 	cost, overflowMul := math.SafeMul(tx.data.Price.Uint64(), tx.data.GasLimit)
 	total, overflowAdd := math.SafeAdd(cost, tx.data.Amount.Uint64())
 	return total, overflowMul || overflowAdd

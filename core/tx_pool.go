@@ -543,12 +543,9 @@ func (pool *TxPool) validateTx(tx *types.Transaction, local bool) error {
 	}
 	// Transactor should have enough funds to cover the costs
 	// cost == V + GP * GL
-	if !pool.currentState.GetBalance(from).IsUint64() {
-		return ErrGasUintOverflow
-	}
-	cost, overflow := tx.Cost()
+	cost, overflow := tx.CostU64()
 	if overflow {
-		return ErrGasUintOverflow
+		return ErrInsufficientFunds
 	}
 	if pool.currentState.GetBalance(from).Uint64() < cost {
 		return ErrInsufficientFunds
@@ -1066,8 +1063,8 @@ func (pool *TxPool) runReorg(done chan struct{}, reset *txpoolResetRequest, dirt
 
 	// Update all accounts to the latest known pending nonce
 	for addr, list := range pool.pending {
-		txs := list.Flatten() // Heavy but will be cached and is needed by the miner anyway
-		pool.pendingNonces.set(addr, txs[len(txs)-1].Nonce()+1)
+		highestPending := list.LastElement()
+		pool.pendingNonces.set(addr, highestPending.Nonce()+1)
 	}
 	pool.mu.Unlock()
 
