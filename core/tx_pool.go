@@ -1461,6 +1461,10 @@ func (as *accountSet) contains(addr common.Address) bool {
 	return exist
 }
 
+func (as *accountSet) empty() bool {
+	return len(as.accounts) == 0
+}
+
 // containsTx checks if the sender of a given tx is within the set. If the sender
 // cannot be derived, this method returns false.
 func (as *accountSet) containsTx(tx *types.Transaction) bool {

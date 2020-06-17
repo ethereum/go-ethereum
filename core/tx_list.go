@@ -99,7 +99,30 @@ func (m *txSortedMap) Forward(threshold uint64) types.Transactions {
 
 // Filter iterates over the list of transactions and removes all of them for which
 // the specified function evaluates to true.
+// Filter, as opposed to 'filter', re-initialises the heap after the operation is done.
+// If you want to do several consecutive filterings, it's therefore better to first
+// do a .filter(func1) followed by .Filter(func2) or reheap()
 func (m *txSortedMap) Filter(filter func(*types.Transaction) bool) types.Transactions {
+	removed := m.filter(filter)
+	// If transactions were removed, the heap and cache are ruined
+	if len(removed) > 0 {
+		m.reheap()
+	}
+	return removed
+}
+
+func (m *txSortedMap) reheap() {
+	*m.index = make([]uint64, 0, len(m.items))
+	for nonce := range m.items {
+		*m.index = append(*m.index, nonce)
+	}
+	heap.Init(m.index)
+	m.cache = nil
+}
+
+// filter is identical to Filter, but **does not** regenerate the heap. This method
+// should only be used if followed immediately by a call to Filter or reheap()
+func (m *txSortedMap) filter(filter func(*types.Transaction) bool) types.Transactions {
 	var removed types.Transactions
 
 	// Collect all the transactions to filter out
@@ -109,14 +132,7 @@ func (m *txSortedMap) Filter(filter func(*types.Transaction) bool) types.Transac
 			delete(m.items, nonce)
 		}
 	}
-	// If transactions were removed, the heap and cache are ruined
 	if len(removed) > 0 {
-		*m.index = make([]uint64, 0, len(m.items))
-		for nonce := range m.items {
-			*m.index = append(*m.index, nonce)
-		}
-		heap.Init(m.index)
-
 		m.cache = nil
 	}
 	return removed
@@ -216,7 +232,7 @@ func (m *txSortedMap) Flatten() types.Transactions {
 	// Copy the cache to prevent accidental modifications
 	cache := m.flatten()
 	txs := make(types.Transactions, len(cache))
-	copy(txs, m.cache)
+	copy(txs, cache)
 	return txs
 }
 
@@ -263,7 +279,11 @@ func (l *txList) Add(tx *types.Transaction, priceBump uint64) (bool, *types.Tran
 	// If there's an older better transaction, abort
 	old := l.txs.Get(tx.Nonce())
 	if old != nil {
-		threshold := new(big.Int).Div(new(big.Int).Mul(old.GasPrice(), big.NewInt(100+int64(priceBump))), big.NewInt(100))
+		// threshold = oldGP * (100 + priceBump) / 100
+		a := big.NewInt(100 + int64(priceBump))
+		a = a.Mul(a, old.GasPrice())
+		b := big.NewInt(100)
+		threshold := a.Div(a, b)
 		// Have to ensure that the new gas price is higher than the old gas
 		// price as well as checking the percentage threshold to ensure that
 		// this is accurate for low (Wei-level) gas price replacements
@@ -312,23 +332,26 @@ func (l *txList) Filter(costLimit uint64, gasLimit uint64) (types.Transactions, 
 	l.gascap = gasLimit
 
 	// Filter out all the transactions above the account's funds
-	removed := l.txs.Filter(func(tx *types.Transaction) bool {
+	removed := l.txs.filter(func(tx *types.Transaction) bool {
 		cost, _ := tx.CostU64()
 		return cost > costLimit || tx.Gas() > gasLimit
 	})
 
-	// If the list was strict, filter anything above the lowest nonce
+	if len(removed) == 0 {
+		return nil, nil
+	}
 	var invalids types.Transactions
-
-	if l.strict && len(removed) > 0 {
+	// If the list was strict, filter anything above the lowest nonce
+	if l.strict {
 		lowest := uint64(math.MaxUint64)
 		for _, tx := range removed {
 			if nonce := tx.Nonce(); lowest > nonce {
 				lowest = nonce
 			}
 		}
-		invalids = l.txs.Filter(func(tx *types.Transaction) bool { return tx.Nonce() > lowest })
+		invalids = l.txs.filter(func(tx *types.Transaction) bool { return tx.Nonce() > lowest })
 	}
+	l.txs.reheap()
 	return removed, invalids
 }
 
@@ -520,19 +543,23 @@ func (l *txPricedList) Underpriced(tx *types.Transaction, local *accountSet) boo
 // Discard finds a number of most underpriced transactions, removes them from the
 // priced list and returns them for further removal from the entire pool.
 func (l *txPricedList) Discard(slots int, local *accountSet) types.Transactions {
-	discardable := 0
-	for _, tx := range *l.items {
-		if !local.containsTx(tx) {
-			discardable++
+	// If we have some local accountset, those will not be discarded
+	if !local.empty() {
+		// In case the list is filled to the brim with 'local' txs, we do this
+		// little check to avoid unpacking / repacking the heap later on, which
+		// is very expensive
+		discardable := 0
+		for _, tx := range *l.items {
+			if !local.containsTx(tx) {
+				discardable++
+			}
+			if discardable >= slots {
+				break
+			}
 		}
-		if discardable >= slots {
-			break
+		if slots > discardable {
+			slots = discardable
 		}
-	}
-	// If we want to free up 'N' slots, but we can only eject 'n', set number to
-	// free to the smaller of the two
-	if slots > discardable {
-		slots = discardable
 	}
 	if slots == 0 {
 		return nil

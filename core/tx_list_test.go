@@ -61,7 +61,7 @@ func BenchmarkTxListAdd(b *testing.B) {
 	// Insert the transactions in a random order
 	b.ResetTimer()
 	priceLimit := DefaultTxPoolConfig.PriceLimit
-	for i := 0 ; i < b.N; i++{
+	for i := 0; i < b.N; i++ {
 		list := newTxList(true)
 		for _, v := range rand.Perm(len(txs)) {
 			list.Add(txs[v], DefaultTxPoolConfig.PriceBump)
