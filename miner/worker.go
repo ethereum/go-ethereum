@@ -189,6 +189,7 @@ type worker struct {
 func newWorker(config *Config, chainConfig *params.ChainConfig, engine consensus.Engine, eth Backend, mux *event.TypeMux, isLocalBlock func(*types.Block) bool, init bool) *worker {
 	worker := &worker{
 		config:             config,
+		coinbase:           config.Etherbase,
 		chainConfig:        chainConfig,
 		engine:             engine,
 		eth:                eth,

@@ -68,6 +68,7 @@ type Miner struct {
 
 func New(eth Backend, config *Config, chainConfig *params.ChainConfig, mux *event.TypeMux, engine consensus.Engine, isLocalBlock func(block *types.Block) bool) *Miner {
 	miner := &Miner{
+		coinbase: config.Etherbase,
 		eth:      eth,
 		mux:      mux,
 		engine:   engine,
