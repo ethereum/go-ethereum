@@ -290,7 +290,10 @@ func (b *EthAPIBackend) ExtRPCEnabled() bool {
 }
 
 func (b *EthAPIBackend) RPCGasCap() *big.Int {
-	return b.eth.config.RPCGasCap
+	if cap := b.eth.config.RPCGasCap; cap != nil && cap.Uint64() != 0{
+		return cap
+	}
+	return nil
 }
 
 func (b *EthAPIBackend) RPCTxFeeCap() float64 {

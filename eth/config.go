@@ -59,7 +59,8 @@ var DefaultConfig = Config{
 		GasPrice: big.NewInt(params.GWei),
 		Recommit: 3 * time.Second,
 	},
-	TxPool: core.DefaultTxPoolConfig,
+	TxPool:    core.DefaultTxPoolConfig,
+	RPCGasCap: big.NewInt(50000000),
 	GPO: gasprice.Config{
 		Blocks:     20,
 		Percentile: 60,

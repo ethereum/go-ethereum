@@ -476,7 +476,8 @@ var (
 	}
 	RPCGlobalGasCap = cli.Uint64Flag{
 		Name:  "rpc.gascap",
-		Usage: "Sets a cap on gas that can be used in eth_call/estimateGas",
+		Usage: "Sets a cap on gas that can be used in eth_call/estimateGas (0=infinite)",
+		Value: eth.DefaultConfig.RPCGasCap.Uint64(),
 	}
 	RPCGlobalTxFeeCap = cli.Float64Flag{
 		Name:  "rpc.txfeecap",
@@ -1567,6 +1568,11 @@ func SetEthConfig(ctx *cli.Context, stack *node.Node, cfg *eth.Config) {
 	}
 	if ctx.GlobalIsSet(RPCGlobalTxFeeCap.Name) {
 		cfg.RPCTxFeeCap = ctx.GlobalFloat64(RPCGlobalTxFeeCap.Name)
+	}
+	if cap := cfg.RPCGasCap; cap != nil && cap.Uint64() != 0 {
+		log.Info("Set global gas cap", "cap", cap)
+	} else {
+		log.Info("Global gas cap disabled")
 	}
 	if ctx.GlobalIsSet(DNSDiscoveryFlag.Name) {
 		urls := ctx.GlobalString(DNSDiscoveryFlag.Name)

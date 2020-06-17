@@ -259,7 +259,10 @@ func (b *LesApiBackend) ExtRPCEnabled() bool {
 }
 
 func (b *LesApiBackend) RPCGasCap() *big.Int {
-	return b.eth.config.RPCGasCap
+	if cap := b.eth.config.RPCGasCap; cap != nil && cap.Uint64() != 0 {
+		return cap
+	}
+	return nil
 }
 
 func (b *LesApiBackend) RPCTxFeeCap() float64 {
