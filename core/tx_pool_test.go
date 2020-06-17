@@ -1889,11 +1889,15 @@ func benchmarkFuturePromotion(b *testing.B, size int) {
 }
 
 // Benchmarks the speed of batched transaction insertion.
-func BenchmarkPoolBatchInsert100(b *testing.B)   { benchmarkPoolBatchInsert(b, 100) }
-func BenchmarkPoolBatchInsert1000(b *testing.B)  { benchmarkPoolBatchInsert(b, 1000) }
-func BenchmarkPoolBatchInsert10000(b *testing.B) { benchmarkPoolBatchInsert(b, 10000) }
+func BenchmarkPoolBatchInsert100(b *testing.B)   { benchmarkPoolBatchInsert(b, 100, false) }
+func BenchmarkPoolBatchInsert1000(b *testing.B)  { benchmarkPoolBatchInsert(b, 1000, false) }
+func BenchmarkPoolBatchInsert10000(b *testing.B) { benchmarkPoolBatchInsert(b, 10000, false) }
 
-func benchmarkPoolBatchInsert(b *testing.B, size int) {
+func BenchmarkPoolBatchLocalInsert100(b *testing.B)   { benchmarkPoolBatchInsert(b, 100, true) }
+func BenchmarkPoolBatchLocalInsert1000(b *testing.B)  { benchmarkPoolBatchInsert(b, 1000, true) }
+func BenchmarkPoolBatchLocalInsert10000(b *testing.B) { benchmarkPoolBatchInsert(b, 10000, true) }
+
+func benchmarkPoolBatchInsert(b *testing.B, size int, local bool) {
 	// Generate a batch of transactions to enqueue into the pool
 	pool, key := setupTxPool()
 	defer pool.Stop()
@@ -1911,6 +1915,10 @@ func benchmarkPoolBatchInsert(b *testing.B, size int) {
 	// Benchmark importing the transactions into the queue
 	b.ResetTimer()
 	for _, batch := range batches {
-		pool.AddRemotes(batch)
+		if local {
+			pool.AddLocals(batch)
+		} else {
+			pool.AddRemotes(batch)
+		}
 	}
 }
