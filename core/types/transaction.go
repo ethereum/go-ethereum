@@ -182,6 +182,10 @@ func (tx *Transaction) Value() *big.Int  { return new(big.Int).Set(tx.data.Amoun
 func (tx *Transaction) Nonce() uint64    { return tx.data.AccountNonce }
 func (tx *Transaction) CheckNonce() bool { return true }
 
+func (tx *Transaction) CmpGasPrice(other *Transaction) int {
+	return tx.data.Price.Cmp(other.data.Price)
+}
+
 // To returns the recipient address of the transaction.
 // It returns nil if the transaction is a contract creation.
 func (tx *Transaction) To() *common.Address {

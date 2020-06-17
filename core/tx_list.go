@@ -268,7 +268,7 @@ func (l *txList) Add(tx *types.Transaction, priceBump uint64) (bool, *types.Tran
 		// Have to ensure that the new gas price is higher than the old gas
 		// price as well as checking the percentage threshold to ensure that
 		// this is accurate for low (Wei-level) gas price replacements
-		if old.GasPrice().Cmp(tx.GasPrice()) >= 0 || threshold.Cmp(tx.GasPrice()) > 0 {
+		if old.CmpGasPrice(tx) >= 0 || threshold.Cmp(tx.GasPrice()) > 0 {
 			return false, nil
 		}
 	}
@@ -390,7 +390,7 @@ func (h priceHeap) Swap(i, j int) { h[i], h[j] = h[j], h[i] }
 
 func (h priceHeap) Less(i, j int) bool {
 	// Sort primarily by price, returning the cheaper one
-	switch h[i].GasPriceCmp(h[j]) {
+	switch h[i].CmpGasPrice(h[j]) {
 	case -1:
 		return true
 	case 1:
@@ -507,7 +507,7 @@ func (l *txPricedList) Underpriced(tx *types.Transaction, local *accountSet) boo
 		return false
 	}
 	cheapest := []*types.Transaction(*l.items)[0]
-	return cheapest.GasPrice().Cmp(tx.GasPrice()) >= 0
+	return cheapest.CmpGasPrice(tx) >= 0
 }
 
 // Discard finds a number of most underpriced transactions, removes them from the
