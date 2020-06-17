@@ -1525,7 +1525,7 @@ func SubmitTransaction(ctx context.Context, b Backend, tx *types.Transaction) (c
 	feeEth := new(big.Float).Quo(new(big.Float).SetInt(new(big.Int).Mul(tx.GasPrice(), new(big.Int).SetUint64(tx.Gas()))), new(big.Float).SetInt(big.NewInt(params.Ether)))
 	feeFloat, _ := feeEth.Float64()
 	if b.RPCTxFeeCap() != 0 && feeFloat > b.RPCTxFeeCap() {
-		return common.Hash{}, fmt.Errorf("txfee(%.2f ether) exceeds the maximum setting(%.2f ether)", feeFloat, b.RPCTxFeeCap())
+		return common.Hash{}, fmt.Errorf("tx fee (%.2f ether) exceeds the configured cap (%.2f ether)", feeFloat, b.RPCTxFeeCap())
 	}
 	if err := b.SendTx(ctx, tx); err != nil {
 		return common.Hash{}, err

@@ -480,7 +480,7 @@ var (
 	}
 	RPCGlobalTxFeeCap = cli.Float64Flag{
 		Name:  "rpc.txfeecap",
-		Usage: "Sets a cap on transaction fee(in ether) that can be used in sendTransaction/sendRawTransaction(zero for disable)",
+		Usage: "Sets a cap on transaction fee (in ether) that can be sent via the RPC APIs (0 = no cap)",
 		Value: eth.DefaultConfig.RPCTxFeeCap,
 	}
 	// Logging and debug settings
