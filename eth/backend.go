@@ -221,7 +221,6 @@ func New(stack *node.Node, config *Config) (*Ethereum, error) {
 	if eth.protocolManager, err = NewProtocolManager(chainConfig, checkpoint, config.SyncMode, config.NetworkId, eth.eventMux, eth.txPool, eth.engine, eth.blockchain, chainDb, cacheLimit, config.Whitelist); err != nil {
 		return nil, err
 	}
-
 	eth.miner = miner.New(eth, &config.Miner, chainConfig, eth.EventMux(), eth.engine, eth.isLocalBlock)
 	eth.miner.SetExtra(makeExtraData(config.Miner.ExtraData))
 
@@ -241,7 +240,6 @@ func New(stack *node.Node, config *Config) (*Ethereum, error) {
 	stack.RegisterAPIs(eth.APIs())
 	stack.RegisterProtocols(eth.Protocols())
 	stack.RegisterLifecycle(eth)
-
 	return eth, nil
 }
 
@@ -545,7 +543,7 @@ func (s *Ethereum) Protocols() []p2p.Protocol {
 // P2PServer registers the node's running p2p server with the Backend.
 func (s *Ethereum) P2PServer(server *p2p.Server) error {
 	if server == nil {
-		return errors.New("p2p server is not running, cannot register with eth backend") // TODO is this error message okay?
+		return node.ErrNodeStopped // TODO is this error okay to return?
 	}
 	s.p2pServer = server
 	return nil

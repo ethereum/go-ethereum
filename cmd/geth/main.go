@@ -350,12 +350,12 @@ func geth(ctx *cli.Context) error {
 	if args := ctx.Args(); len(args) > 0 {
 		return fmt.Errorf("invalid command: %q", args[0])
 	}
+
 	prepare(ctx)
 	stack := makeFullNode(ctx, nil)
-
 	defer stack.Close()
-	startNode(ctx, stack)
 
+	startNode(ctx, stack)
 	stack.Wait()
 	return nil
 }
@@ -465,10 +465,10 @@ func startNode(ctx *cli.Context, stack *node.Node) {
 		if ctx.GlobalString(utils.SyncModeFlag.Name) == "light" {
 			utils.Fatalf("Light clients do not support mining")
 		}
-		// Check if node's backend is eth and that it exists
+		// Check if node's backend is eth
 		var ethBackend *eth.Ethereum
 		if err := stack.ServiceContext.Lifecycle(&ethBackend); err != nil {
-			utils.Fatalf("Ethereum service not running: backend is not an eth backend")
+			utils.Fatalf("Ethereum service not running: %v", err)
 		}
 		// Set the gas price to the limits from the CLI and start mining
 		gasprice := utils.GlobalBig(ctx, utils.MinerGasPriceFlag.Name)

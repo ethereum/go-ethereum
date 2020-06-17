@@ -133,7 +133,6 @@ func testDAOForkBlockNewChain(t *testing.T, test int, genesis string, expectBloc
 	if genesis != "" {
 		genesisHash = daoGenesisHash
 	}
-
 	config := rawdb.ReadChainConfig(db, genesisHash)
 	if config == nil {
 		t.Errorf("test %d: failed to retrieve chain config: %v", test, err)
