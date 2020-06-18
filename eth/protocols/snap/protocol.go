@@ -64,7 +64,8 @@ var (
 type getAccountRangeData struct {
 	ID     uint64      // Request ID to match up responses with
 	Root   common.Hash // Root hash of the account trie to serve
-	Origin common.Hash // Account hash of the first to retrieve
+	Origin common.Hash // Hash of the first account to retrieve
+	Limit  common.Hash // Hash of the last account to retrieve
 	Bytes  uint64      // Soft limit at which to stop returning data
 }
 
@@ -86,7 +87,8 @@ type getStorageRangesData struct {
 	ID       uint64        // Request ID to match up responses with
 	Root     common.Hash   // Root hash of the account trie to serve
 	Accounts []common.Hash // Account hashes of the storage tries to serve
-	Origin   []byte        // Storage slot hash from which to retrieve (single account, optional)
+	Origin   []byte        // Hash of the first storage slot to retrieve (large contract mode)
+	Limit    []byte        // Hash of the last storage slot to retrieve (large contract mode)
 	Bytes    uint64        // Soft limit at which to stop returning data
 }
 

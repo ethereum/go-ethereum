@@ -96,8 +96,10 @@ type accountRequest struct {
 	timeout *time.Timer   // Timer to track delivery timeout
 	stale   chan struct{} // Channel to signal the request was dropped
 
-	origin common.Hash  // First account requested to allow continuation checks
-	task   *accountTask // Task which this request is filling (only access fields through the runloop!!)
+	origin common.Hash // First account requested to allow continuation checks
+	limit  common.Hash // Last account requested to allow non-overlapping chunking
+
+	task *accountTask // Task which this request is filling (only access fields through the runloop!!)
 }
 
 // accountResponse is an already Merkle-verified remote response to an account
@@ -167,7 +169,9 @@ type storageRequest struct {
 	accounts []common.Hash // Account hashes to validate responses
 	roots    []common.Hash // Storage roots to validate responses
 
-	origin   common.Hash  // First storage slot requested to allow continuation checks
+	origin common.Hash // First storage slot requested to allow continuation checks
+	limit  common.Hash // Last storage slot requested to allow non-overlapping chunking
+
 	mainTask *accountTask // Task which this response belongs to (only access fields through the runloop!!)
 	subTask  *storageTask // Task which this response is filling (only access fields through the runloop!!)
 }
@@ -592,6 +596,7 @@ func (s *Syncer) assignAccountTasks(tasks []*accountTask, cancel chan struct{}) 
 			cancel: cancel,
 			stale:  make(chan struct{}),
 			origin: task.Next,
+			limit:  task.Last,
 			task:   task,
 		}
 		req.timeout = time.AfterFunc(requestTimeout, func() {
@@ -609,7 +614,7 @@ func (s *Syncer) assignAccountTasks(tasks []*accountTask, cancel chan struct{}) 
 			defer s.pend.Done()
 
 			// Attempt to send the remote request and revert if it fails
-			if err := peer.RequestAccountRange(reqid, root, req.origin, maxRequestSize); err != nil {
+			if err := peer.RequestAccountRange(reqid, root, req.origin, req.limit, maxRequestSize); err != nil {
 				peer.Log().Debug("Failed to request account range", "err", err)
 				select {
 				case s.accountReqFails <- req:
@@ -818,6 +823,7 @@ func (s *Syncer) assignStorageTasks(tasks []*accountTask, cancel chan struct{}) 
 		}
 		if subtask != nil {
 			req.origin = subtask.Next
+			req.limit = subtask.Last
 		}
 		req.timeout = time.AfterFunc(requestTimeout, func() {
 			log.Debug("Storage request timed out")
@@ -834,11 +840,11 @@ func (s *Syncer) assignStorageTasks(tasks []*accountTask, cancel chan struct{}) 
 			defer s.pend.Done()
 
 			// Attempt to send the remote request and revert if it fails
-			var origin []byte
+			var origin, limit []byte
 			if subtask != nil {
-				origin = req.origin[:]
+				origin, limit = req.origin[:], req.limit[:]
 			}
-			if err := peer.RequestStorageRanges(reqid, root, accounts, origin, maxRequestSize); err != nil {
+			if err := peer.RequestStorageRanges(reqid, root, accounts, origin, limit, maxRequestSize); err != nil {
 				log.Debug("Failed to request storage", "err", err)
 				select {
 				case s.storageReqFails <- req:

@@ -17,6 +17,7 @@
 package snap
 
 import (
+	"bytes"
 	"fmt"
 
 	"github.com/ethereum/go-ethereum/common"
@@ -165,21 +166,25 @@ func handleMessage(backend Backend, peer *Peer) error {
 		// Iterate over the requested range and pile accounts up
 		var (
 			accounts []*accountData
-			bytes    uint64
+			size     uint64
 			last     common.Hash
 		)
-		for it.Next() && bytes < req.Bytes {
+		for it.Next() && size < req.Bytes {
 			hash, account := it.Hash(), common.CopyBytes(it.Account())
 
 			// Track the returned interval for the Merkle proofs
 			last = hash
 
 			// Assemble the reply item
-			bytes += uint64(common.HashLength + len(account))
+			size += uint64(common.HashLength + len(account))
 			accounts = append(accounts, &accountData{
 				Hash: hash,
 				Body: account,
 			})
+			// If we've exceeded the request threshold, abort
+			if bytes.Compare(hash[:], req.Limit[:]) >= 0 {
+				break
+			}
 		}
 		// Generate the Merkle proofs for the first and last account
 		proof := light.NewNodeSet()
@@ -241,18 +246,22 @@ func handleMessage(backend Backend, peer *Peer) error {
 		var (
 			slots  [][]*storageData
 			proofs [][]byte
-			bytes  uint64
+			size   uint64
 		)
 		for _, account := range req.Accounts {
 			// If we've exceeded the requested data limit, abort without opening
 			// a new storage range (that we'd need to prove due to exceeded size)
-			if bytes >= req.Bytes {
+			if size >= req.Bytes {
 				break
 			}
-			// The first account might start from a different origin
+			// The first account might start from a different origin and end sooner
 			var origin common.Hash
 			if len(req.Origin) > 0 {
 				origin, req.Origin = common.BytesToHash(req.Origin), nil
+			}
+			var limit = common.HexToHash("0xffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff")
+			if len(req.Limit) > 0 {
+				limit, req.Limit = common.BytesToHash(req.Limit), nil
 			}
 			// Retrieve the requested state and bail out if non existent
 			it, err := backend.Chain().Snapshot().StorageIterator(req.Root, account, origin)
@@ -264,18 +273,22 @@ func handleMessage(backend Backend, peer *Peer) error {
 				storage []*storageData
 				last    common.Hash
 			)
-			for it.Next() && bytes < hardLimit {
+			for it.Next() && size < hardLimit {
 				hash, slot := it.Hash(), common.CopyBytes(it.Slot())
 
 				// Track the returned interval for the Merkle proofs
 				last = hash
 
 				// Assemble the reply item
-				bytes += uint64(common.HashLength + len(slot))
+				size += uint64(common.HashLength + len(slot))
 				storage = append(storage, &storageData{
 					Hash: hash,
 					Body: slot,
 				})
+				// If we've exceeded the request threshold, abort
+				if bytes.Compare(hash[:], limit[:]) >= 0 {
+					break
+				}
 			}
 			slots = append(slots, storage)
 			it.Release()
@@ -283,7 +296,7 @@ func handleMessage(backend Backend, peer *Peer) error {
 			// Generate the Merkle proofs for the first and last storage slot, but
 			// only if the response was capped. If the entire storage trie included
 			// in the response, no need for any proofs.
-			if origin != (common.Hash{}) || bytes >= hardLimit {
+			if origin != (common.Hash{}) || size >= hardLimit {
 				// Request started at a non-zero hash or was capped prematurely, add
 				// the endpoint Merkle proofs
 				accTrie, err := trie.New(req.Root, backend.Chain().StateCache().TrieDB())

@@ -58,25 +58,31 @@ func (p *Peer) Version() uint {
 
 // RequestAccountRange fetches a batch of accounts rooted in a specific account
 // trie, starting with the origin.
-func (p *Peer) RequestAccountRange(id uint64, root common.Hash, origin common.Hash, bytes uint64) error {
-	p.logger.Trace("Fetching range of accounts", "reqid", id, "root", root, "origin", origin, "bytes", common.StorageSize(bytes))
+func (p *Peer) RequestAccountRange(id uint64, root common.Hash, origin, limit common.Hash, bytes uint64) error {
+	p.logger.Trace("Fetching range of accounts", "reqid", id, "root", root, "origin", origin, "limit", limit, "bytes", common.StorageSize(bytes))
 	return p2p.Send(p.rw, getAccountRangeMsg, &getAccountRangeData{
 		ID:     id,
 		Root:   root,
 		Origin: origin,
+		Limit:  limit,
 		Bytes:  bytes,
 	})
 }
 
 // RequestStorageRange fetches a batch of accounts rooted in a specific account
 // trie, starting with the origin.
-func (p *Peer) RequestStorageRanges(id uint64, root common.Hash, accounts []common.Hash, origin []byte, bytes uint64) error {
-	p.logger.Trace("Fetching ranges of storage slots", "reqid", id, "root", root, "accounts", len(accounts), "origin", common.BytesToHash(origin), "bytes", common.StorageSize(bytes))
+func (p *Peer) RequestStorageRanges(id uint64, root common.Hash, accounts []common.Hash, origin, limit []byte, bytes uint64) error {
+	if len(accounts) == 1 && origin != nil {
+		p.logger.Trace("Fetching range of large storage slots", "reqid", id, "root", root, "account", accounts[0], "origin", common.BytesToHash(origin), "limit", common.BytesToHash(limit), "bytes", common.StorageSize(bytes))
+	} else {
+		p.logger.Trace("Fetching ranges of small storage slots", "reqid", id, "root", root, "accounts", len(accounts), accounts[0], "first", "bytes", common.StorageSize(bytes))
+	}
 	return p2p.Send(p.rw, getStorageRangesMsg, &getStorageRangesData{
 		ID:       id,
 		Root:     root,
 		Accounts: accounts,
 		Origin:   origin,
+		Limit:    limit,
 		Bytes:    bytes,
 	})
 }
