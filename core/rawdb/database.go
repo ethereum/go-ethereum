@@ -352,6 +352,8 @@ func InspectDatabase(db ethdb.Database) error {
 	table := tablewriter.NewWriter(os.Stdout)
 	table.SetHeader([]string{"Database", "Category", "Size"})
 	table.SetFooter([]string{"", "Total", total.String()})
+	table.SetRowLine(true)
+	table.SetAutoMergeCellsByColumnIndex([]int{2})
 	table.AppendBulk(stats)
 	table.Render()
 
