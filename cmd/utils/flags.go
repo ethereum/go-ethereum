@@ -49,7 +49,6 @@ import (
 	"github.com/ethereum/go-ethereum/ethstats"
 	"github.com/ethereum/go-ethereum/graphql"
 	"github.com/ethereum/go-ethereum/internal/flags"
-	"github.com/ethereum/go-ethereum/internal/ethapi"
 	"github.com/ethereum/go-ethereum/les"
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/metrics"
@@ -1727,18 +1726,8 @@ func RegisterEthStatsService(stack *node.Node, url string) {
 
 // RegisterGraphQLService is a utility function to construct a new service and register it against a node.
 func RegisterGraphQLService(stack *node.Node, endpoint string, cors, vhosts []string, timeouts rpc.HTTPTimeouts) {
-	var backend ethapi.Backend
-	// fetch backend
-	var ethServ *eth.Ethereum
-	if err := stack.ServiceContext.Lifecycle(&ethServ); err == nil {
-		backend = ethServ.APIBackend
-	}
-	var lesServ *les.LightEthereum
-	if err := stack.ServiceContext.Lifecycle(&lesServ); err == nil {
-		backend = lesServ.ApiBackend
-	}
 	// create new graphQL service
-	if err := graphql.New(stack, backend, endpoint, cors, vhosts, timeouts); err != nil {
+	if err := graphql.New(stack, endpoint, cors, vhosts, timeouts); err != nil {
 		Fatalf("Failed to register the GraphQL service: %v", err)
 	}
 }

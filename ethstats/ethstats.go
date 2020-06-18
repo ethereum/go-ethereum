@@ -110,7 +110,9 @@ func New(node *node.Node, url string) error {
 		ethstats.les = lesServ
 		ethstats.engine = lesServ.Engine()
 	}
-	// TODO check to make sure at least one backend is not nil?
+	if ethstats.engine == nil {// TODO check to make sure at least one backend is not nil?
+		return fmt.Errorf("Ethereum service not found")
+	}
 
 	node.RegisterLifecycle(ethstats)
 	return nil
@@ -129,8 +131,6 @@ func (s *Service) Stop() error {
 	log.Info("Stats daemon stopped")
 	return nil
 }
-
-func (s *Service) Server() *node.HTTPServer { return nil }
 
 // loop keeps trying to connect to the netstats server, reporting chain events
 // until termination.

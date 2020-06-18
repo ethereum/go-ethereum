@@ -130,14 +130,9 @@ func TestGraphQLHTTPOnSamePort_GQLRequest_Unsuccessful(t *testing.T) {
 	assert.Equal(t, string(bodyBytes), expected)
 }
 
+// Tests that graphql can be successfully enabled on a separate port than rpc and ws.
 func TestGraphqlOnSeparatePort(t *testing.T) {
-	stack, err := node.New(&node.Config{
-		HTTPHost: "127.0.0.1",
-		HTTPPort: 9393,
-	})
-	if err != nil {
-		t.Fatalf("could not create node: %v", err)
-	}
+	stack := createNode(t, false)
 	defer stack.Close()
 
 	separateTestEndpoint := "127.0.0.1:7474"
@@ -186,13 +181,13 @@ func createNode(t *testing.T, gqlEnabled bool) *node.Node {
 
 func createGQLService(t *testing.T, stack *node.Node, endpoint string) {
 	// create backend
-	ethBackend, err := eth.New(stack, &eth.DefaultConfig)
+	_, err := eth.New(stack, &eth.DefaultConfig)
 	if err != nil {
 		t.Fatalf("could not create eth backend: %v", err)
 	}
 
 	// create gql service
-	err = New(stack, ethBackend.APIBackend, endpoint, []string{}, []string{}, rpc.DefaultHTTPTimeouts)
+	err = New(stack, endpoint, []string{}, []string{}, rpc.DefaultHTTPTimeouts)
 	if err != nil {
 		t.Fatalf("could not create graphql service: %v", err)
 	}

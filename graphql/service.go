@@ -18,6 +18,8 @@ package graphql
 
 import (
 	"errors"
+	"github.com/ethereum/go-ethereum/eth"
+	"github.com/ethereum/go-ethereum/les"
 	"net/http"
 
 	"github.com/ethereum/go-ethereum/internal/ethapi"
@@ -27,19 +29,21 @@ import (
 	"github.com/graph-gophers/graphql-go/relay"
 )
 
-// Service encapsulates a GraphQL service.
-type Service struct {
-	backend       ethapi.Backend // The backend that queries will operate on.
-	graphqlServer *node.HTTPServer
-}
-
 // New constructs a new GraphQL service instance.
-func New(stack *node.Node, backend ethapi.Backend, endpoint string, cors, vhosts []string, timeouts rpc.HTTPTimeouts) error {
-	service := new(Service)
+func New(stack *node.Node, endpoint string, cors, vhosts []string, timeouts rpc.HTTPTimeouts) error {
+	// fetch backend
+	var backend ethapi.Backend
+	var ethServ *eth.Ethereum
+	if err := stack.ServiceContext.Lifecycle(&ethServ); err == nil {
+		backend = ethServ.APIBackend
+	}
+	var lesServ *les.LightEthereum
+	if err := stack.ServiceContext.Lifecycle(&lesServ); err == nil {
+		backend = lesServ.ApiBackend
+	}
 	if backend == nil {
 		return errors.New("No backend found") // TODO should this be a fatal error?
 	}
-	service.backend = backend
 	// check if http server with given endpoint exists and enable graphQL on it
 	server := stack.ExistingHTTPServer(endpoint)
 	if server != nil {
@@ -48,7 +52,7 @@ func New(stack *node.Node, backend ethapi.Backend, endpoint string, cors, vhosts
 		server.CorsAllowedOrigins = append(server.CorsAllowedOrigins, cors...)
 		server.Timeouts = timeouts
 		// create handler
-		handler, err := createHandler(service.backend, cors, vhosts)
+		handler, err := createHandler(backend, cors, vhosts)
 		if err != nil {
 			return err
 		}
@@ -57,7 +61,7 @@ func New(stack *node.Node, backend ethapi.Backend, endpoint string, cors, vhosts
 		return nil
 	}
 	// otherwise create a new server
-	handler, err := createHandler(service.backend, cors, vhosts)
+	handler, err := createHandler(backend, cors, vhosts)
 	if err != nil {
 		return err
 	}
@@ -73,7 +77,6 @@ func New(stack *node.Node, backend ethapi.Backend, endpoint string, cors, vhosts
 	gqlServer.SetEndpoint(endpoint)
 	stack.RegisterHTTPServer(endpoint, gqlServer)
 
-	service.graphqlServer = gqlServer
 
 	return nil
 }
@@ -105,19 +108,4 @@ func newHandler(backend ethapi.Backend) (http.Handler, error) {
 	mux.Handle("/graphql", h)
 	mux.Handle("/graphql/", h)
 	return mux, nil
-}
-
-// Start is called after all services have been constructed and the networking
-// layer was also initialized to spawn any goroutines required by the service.
-func (s *Service) Start() error {
-
-	return nil
-}
-
-// Stop terminates all goroutines belonging to the service, blocking until they
-// are all terminated.
-func (s *Service) Stop() error { return nil }
-
-func (s *Service) Server() *node.HTTPServer {
-	return s.graphqlServer
 }
