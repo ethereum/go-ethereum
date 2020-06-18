@@ -252,10 +252,8 @@ func (whisper *Whisper) SetBloomFilter(bloom []byte) error {
 		ticker := time.NewTicker(time.Duration(whisper.syncAllowance) * time.Second)
 		defer ticker.Stop()
 
-		select {
-		case <-ticker.C:
-			whisper.settings.Store(bloomFilterToleranceIdx, b)
-		}
+		<-ticker.C
+		whisper.settings.Store(bloomFilterToleranceIdx, b)
 	}()
 
 	return nil
@@ -277,10 +275,8 @@ func (whisper *Whisper) SetMinimumPoW(val float64) error {
 		ticker := time.NewTicker(time.Duration(whisper.syncAllowance) * time.Second)
 		defer ticker.Stop()
 
-		select {
-		case <-ticker.C:
-			whisper.settings.Store(minPowToleranceIdx, val)
-		}
+		<-ticker.C
+		whisper.settings.Store(minPowToleranceIdx, val)
 	}()
 
 	return nil
