@@ -119,7 +119,7 @@ var (
 	testListen1Flag = cli.StringFlag{
 		Name:  "listen1",
 		Usage: "IP address and port of the first tester",
-		Value: test.Listen2,
+		Value: test.Listen1,
 	}
 	testListen2Flag = cli.StringFlag{
 		Name:  "listen2",
