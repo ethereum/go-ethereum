@@ -19,7 +19,6 @@ package node
 import (
 	"errors"
 	"fmt"
-	"github.com/ethereum/go-ethereum/rpc"
 	"io/ioutil"
 	"net/http"
 	"os"
@@ -28,6 +27,7 @@ import (
 
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/p2p"
+	"github.com/ethereum/go-ethereum/rpc"
 
 	"github.com/stretchr/testify/assert"
 )

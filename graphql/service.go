@@ -18,11 +18,11 @@ package graphql
 
 import (
 	"errors"
-	"github.com/ethereum/go-ethereum/eth"
-	"github.com/ethereum/go-ethereum/les"
 	"net/http"
 
+	"github.com/ethereum/go-ethereum/eth"
 	"github.com/ethereum/go-ethereum/internal/ethapi"
+	"github.com/ethereum/go-ethereum/les"
 	"github.com/ethereum/go-ethereum/node"
 	"github.com/ethereum/go-ethereum/rpc"
 	"github.com/graph-gophers/graphql-go"
@@ -76,7 +76,6 @@ func New(stack *node.Node, endpoint string, cors, vhosts []string, timeouts rpc.
 	}
 	gqlServer.SetEndpoint(endpoint)
 	stack.RegisterHTTPServer(endpoint, gqlServer)
-
 
 	return nil
 }
