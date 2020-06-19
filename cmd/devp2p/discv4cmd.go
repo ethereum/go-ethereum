@@ -224,18 +224,18 @@ func discv4Test(ctx *cli.Context) error {
 		selectedTests = utesting.MatchTests(test.AllTests, ctx.String(testPatternFlag.Name))
 	}
 	results := utesting.RunTests(selectedTests)
-	passed := true
+	failed := 0
 	for _, result := range results {
 		if result.Failed {
-			passed = false
+			failed++
 			fmt.Println("Failed", result.Name, result.Output)
 		}
 	}
-	if passed {
-		fmt.Println("PASSED")
-	} else {
-		fmt.Println("FAILED")
+	if failed > 0 {
+		return fmt.Errorf("FAILED %v/%v", failed, len(results))
+
 	}
+	fmt.Printf("PASSED %v/%v\n", len(results), len(results))
 	return nil
 }
 
