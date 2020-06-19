@@ -71,7 +71,8 @@ import "github.com/ethereum/go-ethereum/accounts"
 Afterwards you can create a new encrypted account manager via:
 
 ```go
-am := accounts.NewManager("/path/to/keystore", accounts.StandardScryptN, accounts.StandardScryptP);
+ks := keystore.NewKeyStore("/path/to/keystore", keystore.StandardScryptN, keystore.StandardScryptP)
+am := accounts.NewManager(&accounts.Config{InsecureUnlockAllowed: false}, ks)
 ```
 
 The path to the keystore folder needs to be a location that is writable by the local user
