@@ -99,7 +99,7 @@ func (te *testenv) read(c net.PacketConn) (v4wire.Packet, []byte, error) {
 func (te *testenv) localEndpoint(c net.PacketConn) v4wire.Endpoint {
 	addr := c.LocalAddr().(*net.UDPAddr)
 	return v4wire.Endpoint{
-		IP:  net.IP{127, 0, 0, 1}.To4(),
+		IP:  addr.IP.To4(),
 		UDP: uint16(addr.Port),
 		TCP: 0,
 	}
