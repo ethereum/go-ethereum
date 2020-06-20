@@ -1926,7 +1926,7 @@ func BenchmarkLocalInsert(b *testing.B) {
 		remoteKeys = append(remoteKeys, key)
 	}
 	// The reason for picking these numbers is ~4000 txs/s is a reasonable peak value
-	// in the real mainnet. It's valueable to benchmark with these parameters.
+	// in the real mainnet. It's valuable to benchmark with these parameters.
 	locals := make([]*types.Transaction, 50)
 	for i := 0; i < 50; i++ {
 		locals[i] = transaction(uint64(i), 100000, key)
