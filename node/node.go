@@ -56,7 +56,7 @@ type Node struct {
 
 	lifecycles map[reflect.Type]Lifecycle // All registered backends, services, and auxiliary services that have a lifecycle
 
-	HTTPServers *HTTPServers // TODO document
+	HTTPServers *HTTPServers // HTTPServers stores information about the node's rpc, ws, and graphQL http servers.
 
 	rpcAPIs       []rpc.API   // List of APIs currently provided by the node
 	inprocHandler *rpc.Server // In-process RPC request handler to process the API requests
