@@ -20,6 +20,7 @@ import (
 	"bytes"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"math/big"
 	"math/rand"
 	"sync"
@@ -230,6 +231,20 @@ type storageTask struct {
 	done bool            // Flag whether the task can be removed
 }
 
+// progress is a database entry to allow suspending and resuming a snapshot state
+// sync. Opposed to full and fast sync, there is no way to restart a suspended
+// snap sync without prior knowledge of the suspension point.
+type progress struct {
+	Tasks []*accountTask // The suspended account tasks (contract tasks within)
+
+	AccountSynced  uint64             // Number of accounts downloaded
+	AccountBytes   common.StorageSize // Number of account trie bytes persisted to disk
+	BytecodeSynced uint64             // Number of bytecodes downloaded
+	BytecodeBytes  common.StorageSize // Number of bytecode bytes downloaded
+	StorageSynced  uint64             // Number of storage slots downloaded
+	StorageBytes   common.StorageSize // Number of storage trie bytes persisted to disk
+}
+
 // Syncer is an Ethereum account and storage trie syncer based on snapshots and
 // the  snap protocol. It's purpose is to download all the accounts and storage
 // slots from remote peers and reassemble chunks of the state trie, on top of
@@ -245,8 +260,9 @@ type Syncer struct {
 	db    ethdb.KeyValueStore // Database to store the trie nodes into (and dedup)
 	bloom *trie.SyncBloom     // Bloom filter to deduplicate nodes for state fixup
 
-	root   common.Hash   // Current state trie root being synced
-	update chan struct{} // Notification channel for possible sync progression
+	root   common.Hash    // Current state trie root being synced
+	tasks  []*accountTask // Current account task set being synced
+	update chan struct{}  // Notification channel for possible sync progression
 
 	peers    map[string]*Peer // Currently active peers to download from
 	peerJoin *event.Feed      // Event feed to react to peers joining
@@ -343,6 +359,8 @@ func (s *Syncer) Unregister(id string) error {
 	s.lock.Lock()
 	if _, ok := s.peers[id]; !ok {
 		log.Error("Snap peer not registered", "id", id)
+
+		s.lock.Unlock()
 		return errors.New("not registered")
 	}
 	delete(s.peers, id)
@@ -377,17 +395,17 @@ func (s *Syncer) Sync(root common.Hash, cancel chan struct{}) error {
 		s.startTime = time.Now()
 	}
 	// Retrieve the previous sync status from LevelDB and abort if already synced
-	tasks := s.loadSyncStatus()
-	if len(tasks) == 0 {
+	s.loadSyncStatus()
+	if len(s.tasks) == 0 {
 		log.Debug("Snapshot sync already completed")
 		return nil
 	}
 	defer func() { // Persist any progress, independent of failure
-		for _, task := range tasks {
+		for _, task := range s.tasks {
 			s.forwardAccountTask(task)
 		}
-		s.cleanAccountTasks(&tasks)
-		s.saveSyncStatus(tasks)
+		s.cleanAccountTasks()
+		s.saveSyncStatus()
 	}()
 
 	log.Debug("Starting snapshot sync cycle", "root", root)
@@ -413,15 +431,15 @@ func (s *Syncer) Sync(root common.Hash, cancel chan struct{}) error {
 
 	for {
 		// Remove all completed tasks and terminate sync if everything's done
-		s.cleanStorageTasks(tasks)
-		s.cleanAccountTasks(&tasks)
-		if len(tasks) == 0 {
+		s.cleanStorageTasks()
+		s.cleanAccountTasks()
+		if len(s.tasks) == 0 {
 			return nil
 		}
 		// Assign all the data retrieval tasks to any free peers
-		s.assignAccountTasks(tasks, cancel)
-		s.assignBytecodeTasks(tasks, cancel)
-		s.assignStorageTasks(tasks, cancel)
+		s.assignAccountTasks(cancel)
+		s.assignBytecodeTasks(cancel)
+		s.assignStorageTasks(cancel)
 
 		// Wait for something to happen
 		select {
@@ -448,27 +466,42 @@ func (s *Syncer) Sync(root common.Hash, cancel chan struct{}) error {
 		case res := <-s.storageResps:
 			s.processStorageResponse(res)
 		}
+		// Report stats if something meaningful happened
+		s.report(false)
 	}
 }
 
 // loadSyncStatus retrieves a previously aborted sync status from the database,
 // or generates a fresh one if none is available.
-func (s *Syncer) loadSyncStatus() []*accountTask {
-	var tasks []*accountTask
+func (s *Syncer) loadSyncStatus() {
+	var progress progress
 
 	if status := rawdb.ReadSanpshotSyncStatus(s.db); status != nil {
-		if err := json.Unmarshal(status, &tasks); err != nil {
+		if err := json.Unmarshal(status, &progress); err != nil {
 			log.Error("Failed to decode snap sync status", "err", err)
 		} else {
-			for _, task := range tasks {
+			for _, task := range progress.Tasks {
 				log.Debug("Scheduled account sync task", "from", task.Next, "last", task.Last)
 			}
-			return tasks
+			s.tasks = progress.Tasks
+
+			s.accountSynced = progress.AccountSynced
+			s.accountBytes = progress.AccountBytes
+			s.bytecodeSynced = progress.BytecodeSynced
+			s.bytecodeBytes = progress.BytecodeBytes
+			s.storageSynced = progress.StorageSynced
+			s.storageBytes = progress.StorageBytes
+			return
 		}
 	}
 	// Either we've failed to decode the previus state, or there was none.
 	// Start a fresh sync by chunking up the account range and scheduling
 	// them for retrieval.
+	s.tasks = nil
+	s.accountSynced, s.accountBytes = 0, 0
+	s.bytecodeSynced, s.bytecodeBytes = 0, 0
+	s.storageSynced, s.storageBytes = 0, 0
+
 	var next common.Hash
 	step := new(big.Int).Sub(
 		new(big.Int).Div(
@@ -482,19 +515,28 @@ func (s *Syncer) loadSyncStatus() []*accountTask {
 			// Make sure we don't overflow if the step is not a proper divisor
 			last = common.HexToHash("0xffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff")
 		}
-		tasks = append(tasks, &accountTask{
-			Next: next,
-			Last: last,
+		s.tasks = append(s.tasks, &accountTask{
+			Next:     next,
+			Last:     last,
+			SubTasks: make(map[common.Hash][]*storageTask),
 		})
 		log.Debug("Created account sync task", "from", next, "last", last)
 		next = common.BigToHash(new(big.Int).Add(last.Big(), common.Big1))
 	}
-	return tasks
 }
 
 // saveSyncStatus marshals the remaining sync tasks into leveldb.
-func (s *Syncer) saveSyncStatus(tasks []*accountTask) {
-	status, err := json.Marshal(tasks)
+func (s *Syncer) saveSyncStatus() {
+	progress := &progress{
+		Tasks:          s.tasks,
+		AccountSynced:  s.accountSynced,
+		AccountBytes:   s.accountBytes,
+		BytecodeSynced: s.bytecodeSynced,
+		BytecodeBytes:  s.bytecodeBytes,
+		StorageSynced:  s.storageSynced,
+		StorageBytes:   s.storageBytes,
+	}
+	status, err := json.Marshal(progress)
 	if err != nil {
 		panic(err) // This can only fail during implementation
 	}
@@ -503,10 +545,10 @@ func (s *Syncer) saveSyncStatus(tasks []*accountTask) {
 
 // cleanAccountTasks removes account range retrieval tasks that have already been
 // completed.
-func (s *Syncer) cleanAccountTasks(tasks *[]*accountTask) {
-	for i := 0; i < len(*tasks); i++ {
-		if (*tasks)[i].done {
-			*tasks = append((*tasks)[:i], (*tasks)[i+1:]...)
+func (s *Syncer) cleanAccountTasks() {
+	for i := 0; i < len(s.tasks); i++ {
+		if s.tasks[i].done {
+			s.tasks = append(s.tasks[:i], s.tasks[i+1:]...)
 			i--
 		}
 	}
@@ -514,8 +556,8 @@ func (s *Syncer) cleanAccountTasks(tasks *[]*accountTask) {
 
 // cleanStorageTasks iterates over all the account tasks and storage sub-tasks
 // within, cleaning any that have been completed.
-func (s *Syncer) cleanStorageTasks(tasks []*accountTask) {
-	for _, task := range tasks {
+func (s *Syncer) cleanStorageTasks() {
+	for _, task := range s.tasks {
 		for account, subtasks := range task.SubTasks {
 			// Remove storage range retrieval tasks that completed
 			for j := 0; j < len(subtasks); j++ {
@@ -547,7 +589,7 @@ func (s *Syncer) cleanStorageTasks(tasks []*accountTask) {
 
 // assignAccountTasks attempts to match idle peers to pending account range
 // retrievals.
-func (s *Syncer) assignAccountTasks(tasks []*accountTask, cancel chan struct{}) {
+func (s *Syncer) assignAccountTasks(cancel chan struct{}) {
 	s.lock.Lock()
 	defer s.lock.Unlock()
 
@@ -556,7 +598,7 @@ func (s *Syncer) assignAccountTasks(tasks []*accountTask, cancel chan struct{}) 
 		return
 	}
 	// Iterate over all the tasks and try to find a pending one
-	for _, task := range tasks {
+	for _, task := range s.tasks {
 		// Skip any tasks already filling
 		if task.req != nil || task.res != nil {
 			continue
@@ -630,7 +672,7 @@ func (s *Syncer) assignAccountTasks(tasks []*accountTask, cancel chan struct{}) 
 }
 
 // assignBytecodeTasks attempts to match idle peers to pending code retrievals.
-func (s *Syncer) assignBytecodeTasks(tasks []*accountTask, cancel chan struct{}) {
+func (s *Syncer) assignBytecodeTasks(cancel chan struct{}) {
 	s.lock.Lock()
 	defer s.lock.Unlock()
 
@@ -639,7 +681,7 @@ func (s *Syncer) assignBytecodeTasks(tasks []*accountTask, cancel chan struct{})
 		return
 	}
 	// Iterate over all the tasks and try to find a pending one
-	for _, task := range tasks {
+	for _, task := range s.tasks {
 		// Skip any tasks not in the bytecode retrieval phase
 		if task.res == nil {
 			continue
@@ -722,7 +764,7 @@ func (s *Syncer) assignBytecodeTasks(tasks []*accountTask, cancel chan struct{})
 
 // assignStorageTasks attempts to match idle peers to pending storage range
 // retrievals.
-func (s *Syncer) assignStorageTasks(tasks []*accountTask, cancel chan struct{}) {
+func (s *Syncer) assignStorageTasks(cancel chan struct{}) {
 	s.lock.Lock()
 	defer s.lock.Unlock()
 
@@ -731,7 +773,7 @@ func (s *Syncer) assignStorageTasks(tasks []*accountTask, cancel chan struct{}) 
 		return
 	}
 	// Iterate over all the tasks and try to find a pending one
-	for _, task := range tasks {
+	for _, task := range s.tasks {
 		// Skip any tasks not in the storage retrieval phase
 		if task.res == nil {
 			continue
@@ -1006,9 +1048,10 @@ func (s *Syncer) processAccountResponse(res *accountResponse) {
 	res.task.needState = make([]bool, len(res.accounts))
 	res.task.needHeal = make([]bool, len(res.accounts))
 
-	res.task.SubTasks = make(map[common.Hash][]*storageTask)
 	res.task.codeTasks = make(map[common.Hash]struct{})
 	res.task.stateTasks = make(map[common.Hash]common.Hash)
+
+	resumed := make(map[common.Hash]struct{})
 
 	res.task.pend = 0
 	for i, account := range res.accounts {
@@ -1023,10 +1066,32 @@ func (s *Syncer) processAccountResponse(res *accountResponse) {
 		// Check if the account is a contract with an unknown storage trie
 		if account.Root != emptyRoot {
 			if node, err := s.db.Get(account.Root[:]); err != nil || node == nil {
-				res.task.stateTasks[res.hashes[i]] = account.Root
+				// If there was a previous large state retrieval in progress,
+				// don't restart it from scratch. This happens if a sync cycle
+				// is interrupted and resumed later. However, *do* update the
+				// previous root hash.
+				if subtasks, ok := res.task.SubTasks[res.hashes[i]]; ok {
+					log.Error("Resuming large storage retrieval", "account", res.hashes[i], "root", account.Root)
+					for _, subtask := range subtasks {
+						subtask.root = account.Root
+					}
+					res.task.needHeal[i] = true
+					resumed[res.hashes[i]] = struct{}{}
+				} else {
+					res.task.stateTasks[res.hashes[i]] = account.Root
+				}
 				res.task.needState[i] = true
 				res.task.pend++
 			}
+		}
+	}
+	// Delete any subtasks that have been aborted but not resumed. This may undo
+	// some progress if a newpeer gives us less accounts than an old one, but for
+	// now we have to live with that.
+	for hash := range res.task.SubTasks {
+		if _, ok := resumed[hash]; !ok {
+			log.Error("Aborting suspended storage retrieval", "account", hash)
+			delete(res.task.SubTasks, hash)
 		}
 	}
 	// If the account range contained no contracts, or all have been fully filled
@@ -1654,25 +1719,32 @@ func (s *Syncer) OnTrieNodes(peer *Peer, id uint64, nodes [][]byte) error {
 	return errors.New("not implemented")
 }
 
+// hashSpace is the total size of the 256 bit hash space for accounts.
+var hashSpace = new(big.Int).Exp(common.Big2, common.Big256, nil)
+
 // report calculates various status reports and provides it to the user.
 func (s *Syncer) report(force bool) {
-	/*// Don't report all the events, just occasionally
+	// Don't report all the events, just occasionally
 	if !force && time.Since(s.logTime) < 3*time.Second {
 		return
 	}
 	// Don't report anything until we have a meaningful progress
 	synced := s.accountBytes + s.bytecodeBytes + s.storageBytes
-	if synced == 0 || bytes.Compare(s.nextAcc[:], s.startAcc[:]) <= 0 {
+	if synced == 0 {
+		return
+	}
+	accountGaps := new(big.Int)
+	for _, task := range s.tasks {
+		accountGaps.Add(accountGaps, new(big.Int).Sub(task.Last.Big(), task.Next.Big()))
+	}
+	accountFills := new(big.Int).Sub(hashSpace, accountGaps)
+	if accountFills.BitLen() == 0 {
 		return
 	}
 	s.logTime = time.Now()
-
 	estBytes := float64(new(big.Int).Div(
-		new(big.Int).Exp(common.Big2, common.Big256, nil),
-		new(big.Int).Div(
-			new(big.Int).Sub(s.nextAcc.Big(), s.startAcc.Big()),
-			new(big.Int).SetUint64(uint64(synced)),
-		),
+		new(big.Int).Mul(new(big.Int).SetUint64(uint64(synced)), hashSpace),
+		accountFills,
 	).Uint64())
 
 	elapsed := time.Since(s.startTime)
@@ -1686,5 +1758,5 @@ func (s *Syncer) report(force bool) {
 		bytecode = fmt.Sprintf("%d@%v", s.bytecodeSynced, s.bytecodeBytes.TerminalString())
 	)
 	log.Info("State sync in progress", "synced", progress, "state", synced,
-		"accounts", accounts, "slots", storage, "codes", bytecode, "eta", common.PrettyDuration(estTime-elapsed))*/
+		"accounts", accounts, "slots", storage, "codes", bytecode, "eta", common.PrettyDuration(estTime-elapsed))
 }
