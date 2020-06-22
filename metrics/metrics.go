@@ -94,6 +94,9 @@ func CollectProcessMetrics(refresh time.Duration) {
 		diskWriteBytesCounter = GetOrRegisterCounter("system/disk/writebytes", DefaultRegistry)
 	)
 	// Iterate loading the different stats and updating the meters
+	timer := time.NewTimer(refresh)
+	defer timer.Stop()
+
 	for i := 1; ; i++ {
 		location1 := i % 2
 		location2 := (i - 1) % 2
@@ -121,6 +124,7 @@ func CollectProcessMetrics(refresh time.Duration) {
 			diskReadBytesCounter.Inc(diskstats[location1].ReadBytes - diskstats[location2].ReadBytes)
 			diskWriteBytesCounter.Inc(diskstats[location1].WriteBytes - diskstats[location2].WriteBytes)
 		}
-		time.Sleep(refresh)
+		<-timer.C
+		timer.Reset(refresh)
 	}
 }
