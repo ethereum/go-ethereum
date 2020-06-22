@@ -189,6 +189,8 @@ func makeMiner(genesis *core.Genesis) (*node.Node, error) {
 	if err != nil {
 		return nil, err
 	}
+	stack.RegisterAPIs(ethBackend.APIs())
+	stack.RegisterProtocols(ethBackend.Protocols())
 	stack.RegisterLifecycle(ethBackend)
 
 	// Start the node and return if successful
