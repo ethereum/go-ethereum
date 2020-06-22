@@ -188,7 +188,7 @@ func TestRangeProof(t *testing.T) {
 	}
 }
 
-// TestRangeProof tests normal range proof with the non-existent proof.
+// TestRangeProof tests normal range proof with two non-existent proofs.
 // The test cases are generated randomly.
 func TestRangeProofWithNonExistentProof(t *testing.T) {
 	trie, vals := randomTrie(4096)
@@ -236,6 +236,26 @@ func TestRangeProofWithNonExistentProof(t *testing.T) {
 		if err != nil {
 			t.Fatalf("Case %d(%d->%d) expect no error, got %v", i, start, end-1, err)
 		}
+	}
+	// Special case, two edge proofs for two edge key.
+	proof := memorydb.New()
+	first := common.HexToHash("0x0000000000000000000000000000000000000000000000000000000000000000").Bytes()
+	last := common.HexToHash("0xffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff").Bytes()
+	if err := trie.Prove(first, 0, proof); err != nil {
+		t.Fatalf("Failed to prove the first node %v", err)
+	}
+	if err := trie.Prove(last, 0, proof); err != nil {
+		t.Fatalf("Failed to prove the last node %v", err)
+	}
+	var k [][]byte
+	var v [][]byte
+	for i := 0; i < len(entries); i++ {
+		k = append(k, entries[i].k)
+		v = append(v, entries[i].v)
+	}
+	err, _ := VerifyRangeProof(trie.Hash(), first, last, k, v, proof)
+	if err != nil {
+		t.Fatal("Failed to verify whole rang with non-existent edges")
 	}
 }
 
@@ -318,6 +338,7 @@ func TestOneElementRangeProof(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Expected no error, got %v", err)
 	}
+
 	// One element with left non-existent edge proof
 	start = 1000
 	first := decreseKey(common.CopyBytes(entries[start].k))
@@ -332,6 +353,7 @@ func TestOneElementRangeProof(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Expected no error, got %v", err)
 	}
+
 	// One element with right non-existent edge proof
 	start = 1000
 	last := increseKey(common.CopyBytes(entries[start].k))
@@ -343,6 +365,21 @@ func TestOneElementRangeProof(t *testing.T) {
 		t.Fatalf("Failed to prove the last node %v", err)
 	}
 	err, _ = VerifyRangeProof(trie.Hash(), entries[start].k, last, [][]byte{entries[start].k}, [][]byte{entries[start].v}, proof)
+	if err != nil {
+		t.Fatalf("Expected no error, got %v", err)
+	}
+
+	// One element with two non-existent edge proofs
+	start = 1000
+	first, last = decreseKey(common.CopyBytes(entries[start].k)), increseKey(common.CopyBytes(entries[start].k))
+	proof = memorydb.New()
+	if err := trie.Prove(first, 0, proof); err != nil {
+		t.Fatalf("Failed to prove the first node %v", err)
+	}
+	if err := trie.Prove(last, 0, proof); err != nil {
+		t.Fatalf("Failed to prove the last node %v", err)
+	}
+	err, _ = VerifyRangeProof(trie.Hash(), first, last, [][]byte{entries[start].k}, [][]byte{entries[start].v}, proof)
 	if err != nil {
 		t.Fatalf("Expected no error, got %v", err)
 	}
@@ -369,7 +406,7 @@ func TestAllElementsProof(t *testing.T) {
 		t.Fatalf("Expected no error, got %v", err)
 	}
 
-	// Even with edge proofs, it should still work.
+	// With edge proofs, it should still work.
 	proof := memorydb.New()
 	if err := trie.Prove(entries[0].k, 0, proof); err != nil {
 		t.Fatalf("Failed to prove the first node %v", err)
@@ -378,6 +415,21 @@ func TestAllElementsProof(t *testing.T) {
 		t.Fatalf("Failed to prove the last node %v", err)
 	}
 	err, _ = VerifyRangeProof(trie.Hash(), k[0], k[len(k)-1], k, v, proof)
+	if err != nil {
+		t.Fatalf("Expected no error, got %v", err)
+	}
+
+	// Even with non-existent edge proofs, it should still work.
+	proof = memorydb.New()
+	first := common.HexToHash("0x0000000000000000000000000000000000000000000000000000000000000000").Bytes()
+	last := common.HexToHash("0xffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff").Bytes()
+	if err := trie.Prove(first, 0, proof); err != nil {
+		t.Fatalf("Failed to prove the first node %v", err)
+	}
+	if err := trie.Prove(last, 0, proof); err != nil {
+		t.Fatalf("Failed to prove the last node %v", err)
+	}
+	err, _ = VerifyRangeProof(trie.Hash(), first, last, k, v, proof)
 	if err != nil {
 		t.Fatalf("Expected no error, got %v", err)
 	}
@@ -507,9 +559,8 @@ func TestBadRangeProof(t *testing.T) {
 			if index1 == index2 {
 				continue
 			}
-			tmpk, tmpv := keys[index1], vals[index1]
-			keys[index1], vals[index1] = keys[index2], vals[index2]
-			keys[index2], vals[index2] = tmpk, tmpv
+			keys[index1], keys[index2] = keys[index2], keys[index1]
+			vals[index1], vals[index2] = vals[index2], vals[index1]
 		case 4:
 			// Set random key to nil, do nothing
 			index = mrand.Intn(end - start)
@@ -556,6 +607,49 @@ func TestGappedRangeProof(t *testing.T) {
 	err, _ := VerifyRangeProof(trie.Hash(), keys[0], keys[len(keys)-1], keys, vals, proof)
 	if err == nil {
 		t.Fatal("expect error, got nil")
+	}
+}
+
+// TestSameSideProofs tests the element is not in the range covered by proofs
+func TestSameSideProofs(t *testing.T) {
+	trie, vals := randomTrie(4096)
+	var entries entrySlice
+	for _, kv := range vals {
+		entries = append(entries, kv)
+	}
+	sort.Sort(entries)
+
+	pos := 1000
+	first := decreseKey(common.CopyBytes(entries[pos].k))
+	first = decreseKey(first)
+	last := decreseKey(common.CopyBytes(entries[pos].k))
+
+	proof := memorydb.New()
+	if err := trie.Prove(first, 0, proof); err != nil {
+		t.Fatalf("Failed to prove the first node %v", err)
+	}
+	if err := trie.Prove(last, 0, proof); err != nil {
+		t.Fatalf("Failed to prove the last node %v", err)
+	}
+	err, _ := VerifyRangeProof(trie.Hash(), first, last, [][]byte{entries[pos].k}, [][]byte{entries[pos].v}, proof)
+	if err == nil {
+		t.Fatalf("Expected error, got nil")
+	}
+
+	first = increseKey(common.CopyBytes(entries[pos].k))
+	last = increseKey(common.CopyBytes(entries[pos].k))
+	last = increseKey(last)
+
+	proof = memorydb.New()
+	if err := trie.Prove(first, 0, proof); err != nil {
+		t.Fatalf("Failed to prove the first node %v", err)
+	}
+	if err := trie.Prove(last, 0, proof); err != nil {
+		t.Fatalf("Failed to prove the last node %v", err)
+	}
+	err, _ = VerifyRangeProof(trie.Hash(), first, last, [][]byte{entries[pos].k}, [][]byte{entries[pos].v}, proof)
+	if err == nil {
+		t.Fatalf("Expected error, got nil")
 	}
 }
 
