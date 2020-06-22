@@ -1120,6 +1120,7 @@ func (srv *Server) PeersInfo() []*PeerInfo {
 	return infos
 }
 
+// Running returns whether the server is running.
 func (srv *Server) Running() bool {
 	return srv.running
 }

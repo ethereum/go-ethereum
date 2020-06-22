@@ -73,7 +73,7 @@ func (ctx *ServiceContext) ResolvePath(path string) string {
 	return ctx.Config.ResolvePath(path)
 }
 
-// Lifecycle retrieves a currently running lifecycle registered of a specific type.
+// Lifecycle retrieves a currently running Lifecycle registered of a specific type.
 func (ctx *ServiceContext) Lifecycle(lifecycle interface{}) error {
 	element := reflect.ValueOf(lifecycle).Elem()
 	if running, ok := ctx.Lifecycles[element.Type()]; ok {
