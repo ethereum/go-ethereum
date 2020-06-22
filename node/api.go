@@ -204,13 +204,14 @@ func (api *PrivateAdminAPI) StartRPC(host *string, port *int, cors *string, apis
 	if err := api.node.CreateHTTPServer(httpServer, false); err != nil {
 		return false, err
 	}
+	// register the HTTP server
+	api.node.RegisterHTTPServer(endpoint, httpServer)
 	// start the HTTP server
 	httpServer.Start()
 	api.node.log.Info("HTTP endpoint opened", "url", fmt.Sprintf("http://%v/", httpServer.Listener.Addr()),
 		"cors", strings.Join(httpServer.CorsAllowedOrigins, ","),
 		"vhosts", strings.Join(httpServer.Vhosts, ","))
 
-	api.node.RegisterHTTPServer(endpoint, httpServer)
 	return true, nil
 }
 
@@ -291,7 +292,7 @@ func (api *PrivateAdminAPI) StartWS(host *string, port *int, allowedOrigins *str
 			modules = append(modules, strings.TrimSpace(m))
 		}
 	}
-
+	// configure http server
 	wsServer := &HTTPServer{
 		Srv:       rpc.NewServer(),
 		endpoint:  endpoint,
@@ -301,16 +302,18 @@ func (api *PrivateAdminAPI) StartWS(host *string, port *int, allowedOrigins *str
 		WsOrigins: origins,
 		WSAllowed: true,
 	}
-
+	// create handler
 	wsServer.handler = wsServer.Srv.WebsocketHandler(wsServer.WsOrigins)
+	// create the HTTP server
 	if err := api.node.CreateHTTPServer(wsServer, api.node.config.WSExposeAll); err != nil {
 		return false, err
 	}
-
+	// register the HTTP server
+	api.node.RegisterHTTPServer(endpoint, wsServer)
+	// start the HTTP server
 	wsServer.Start()
 	api.node.log.Info("WebSocket endpoint opened", "url", fmt.Sprintf("ws://%v", wsServer.Listener.Addr()))
 
-	api.node.RegisterHTTPServer(endpoint, wsServer)
 	return true, nil
 }
 
