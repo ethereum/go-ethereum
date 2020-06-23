@@ -368,7 +368,7 @@ func (p *peer) AsyncSendTransactions(hashes []common.Hash) {
 		for _, hash := range hashes {
 			p.knownTxs.Add(hash)
 		}
-	case <-p.term:
+	default:
 		p.Log().Debug("Dropping transaction propagation", "count", len(hashes))
 	}
 }
@@ -403,7 +403,7 @@ func (p *peer) AsyncSendPooledTransactionHashes(hashes []common.Hash) {
 		for _, hash := range hashes {
 			p.knownTxs.Add(hash)
 		}
-	case <-p.term:
+	default:
 		p.Log().Debug("Dropping transaction announcement", "count", len(hashes))
 	}
 }
