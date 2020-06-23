@@ -98,7 +98,7 @@ func (pre *Prestate) Apply(vmConfig vm.Config, chainConfig *params.ChainConfig,
 	}
 	var (
 		statedb     = MakePreState(rawdb.NewMemoryDatabase(), pre.Pre)
-		signer      = types.NewEIP155Signer(chainConfig.ChainID)
+		signer      = types.MakeSigner(chainConfig, new(big.Int).SetUint64(pre.Env.Number))
 		gaspool     = new(core.GasPool)
 		blockHash   = common.Hash{0x13, 0x37}
 		rejectedTxs []int
