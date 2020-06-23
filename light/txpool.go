@@ -446,21 +446,25 @@ func (pool *TxPool) Add(ctx context.Context, tx *types.Transaction) error {
 	return nil
 }
 
-// AddTransactions adds all valid transactions to the pool and passes them to
+// AddBatch adds all valid transactions to the pool and passes them to
 // the tx relay backend
-func (pool *TxPool) AddBatch(ctx context.Context, txs []*types.Transaction) {
+func (pool *TxPool) AddBatch(ctx context.Context, txs []*types.Transaction) []error {
 	pool.mu.Lock()
 	defer pool.mu.Unlock()
 	var sendTx types.Transactions
 
-	for _, tx := range txs {
+	errors := make([]error, len(txs))
+	for i, tx := range txs {
 		if err := pool.add(ctx, tx); err == nil {
 			sendTx = append(sendTx, tx)
+		} else {
+			errors[i] = err
 		}
 	}
 	if len(sendTx) > 0 {
 		pool.relay.Send(sendTx)
 	}
+	return errors
 }
 
 // GetTransaction returns a transaction if it is contained in the pool

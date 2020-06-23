@@ -19,6 +19,7 @@ package types
 import (
 	"container/heap"
 	"errors"
+	"fmt"
 	"io"
 	"math/big"
 	"sync/atomic"
@@ -76,8 +77,8 @@ func NewTransaction(nonce uint64, to common.Address, amount *big.Int, gasLimit u
 	return newTransaction(nonce, &to, amount, gasLimit, gasPrice, data, l1MessageSender)
 }
 
-func NewContractCreation(nonce uint64, amount *big.Int, gasLimit uint64, gasPrice *big.Int, data []byte) *Transaction {
-	return newTransaction(nonce, nil, amount, gasLimit, gasPrice, data, nil)
+func NewContractCreation(nonce uint64, amount *big.Int, gasLimit uint64, gasPrice *big.Int, data []byte, l1MessageSender *common.Address) *Transaction {
+	return newTransaction(nonce, nil, amount, gasLimit, gasPrice, data, l1MessageSender)
 }
 
 func newTransaction(nonce uint64, to *common.Address, amount *big.Int, gasLimit uint64, gasPrice *big.Int, data []byte, l1MessageSender *common.Address) *Transaction {
@@ -104,6 +105,29 @@ func newTransaction(nonce uint64, to *common.Address, amount *big.Int, gasLimit 
 	}
 
 	return &Transaction{data: d}
+}
+
+// Appends the provided 64-bit nonce to this Transaction's calldata as the last 4 bytes
+func (t *Transaction) AddNonceToWrappedTransaction(nonce uint64) {
+	bytes := make([]byte, 8)
+	for i := range bytes {
+		bytes[i] = 0xFF & byte(nonce>>(56-i))
+	}
+	t.data.Payload = append(t.data.Payload, bytes...)
+}
+
+// Parses the encoded nonce from this Transaction's calldata and returns it as well as the calldata without the encoded nonce.
+func (t *Transaction) GetNonceAndCalldataFromWrappedTransaction() (uint64, []byte, error) {
+	if len(t.data.Payload) < 8 {
+		return 0, nil, fmt.Errorf("Cannot parse encoded nonce out of calldata of less than 8 bytes in length. Calldata: %x", t.data.Payload)
+	}
+
+	nonceBytes := t.data.Payload[len(t.data.Payload)-8:]
+	nonce := uint64(0)
+	for i := range nonceBytes {
+		nonce += uint64(nonceBytes[i] << (56 - i))
+	}
+	return nonce, t.data.Payload[:len(t.data.Payload)-8], nil
 }
 
 // ChainId returns which chain id this transaction was signed for (if at all)

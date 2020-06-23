@@ -82,6 +82,10 @@ type Backend interface {
 	SubscribePendingLogsEvent(ch chan<- []*types.Log) event.Subscription
 	SubscribeRemovedLogsEvent(ch chan<- core.RemovedLogsEvent) event.Subscription
 
+	// Optimism-specific API
+	SendTxs(ctx context.Context, signedTxs []*types.Transaction) []error
+	SetTimestamp(timestamp int64)
+
 	ChainConfig() *params.ChainConfig
 	CurrentBlock() *types.Block
 }
@@ -102,8 +106,9 @@ func GetAPIs(apiBackend Backend) []rpc.API {
 		}, {
 			Namespace: "eth",
 			Version:   "1.0",
-			Service:   NewPublicTransactionPoolAPI(apiBackend, nonceLock),
-			Public:    true,
+			// TODO: Instantiate Private Key from env var here when we know it
+			Service: NewPublicTransactionPoolAPI(apiBackend, nonceLock, nil),
+			Public:  true,
 		}, {
 			Namespace: "txpool",
 			Version:   "1.0",

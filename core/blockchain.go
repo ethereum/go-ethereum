@@ -151,6 +151,8 @@ type BlockChain struct {
 
 	chainmu sync.RWMutex // blockchain insertion lock
 
+	currentTimestamp atomic.Value // Timestamp to be used when mining the current block.
+
 	currentBlock     atomic.Value // Current head of the block chain
 	currentFastBlock atomic.Value // Current head of the fast-sync chain (may be above the block chain!)
 
@@ -233,6 +235,9 @@ func NewBlockChain(db ethdb.Database, cacheConfig *CacheConfig, chainConfig *par
 	var nilBlock *types.Block
 	bc.currentBlock.Store(nilBlock)
 	bc.currentFastBlock.Store(nilBlock)
+
+	// TODO: Make default current timestamp configurable & make 0 if genesis else load from last block?
+	bc.SetCurrentTimestamp(int64(0))
 
 	// Initialize the chain with ancient data if it isn't empty.
 	if bc.empty() {
@@ -493,6 +498,17 @@ func (bc *BlockChain) FastSyncCommitHead(hash common.Hash) error {
 // GasLimit returns the gas limit of the current HEAD block.
 func (bc *BlockChain) GasLimit() uint64 {
 	return bc.CurrentBlock().GasLimit()
+}
+
+// SetCurrentTimestamp sets the timestamp for blocks added to the canonical chain.
+func (bc *BlockChain) SetCurrentTimestamp(timestamp int64) {
+	bc.currentTimestamp.Store(&timestamp)
+}
+
+// CurrentTimestamp retrieves the timestamp used for blocks added to the canonical chain.
+func (bc *BlockChain) CurrentTimestamp() int64 {
+	// Note: Can never be nil
+	return *bc.currentTimestamp.Load().(*int64)
 }
 
 // CurrentBlock retrieves the current head block of the canonical chain. The

@@ -190,7 +190,7 @@ func TestTransactionJSON(t *testing.T) {
 		case 0:
 			tx = NewTransaction(i, common.Address{1}, common.Big0, 1, common.Big2, []byte("abcdef"), &sender)
 		case 1:
-			tx = NewContractCreation(i, common.Big0, 1, common.Big2, []byte("abcdef"))
+			tx = NewContractCreation(i, common.Big0, 1, common.Big2, []byte("abcdef"), nil)
 		}
 		transactions = append(transactions, tx)
 

@@ -155,7 +155,7 @@ func encodeAsV3StoredReceiptRLP(want *Receipt) ([]byte, error) {
 func TestDeriveFields(t *testing.T) {
 	// Create a few transactions to have receipts for
 	txs := Transactions{
-		NewContractCreation(1, big.NewInt(1), 1, big.NewInt(1), nil),
+		NewContractCreation(1, big.NewInt(1), 1, big.NewInt(1), nil, nil),
 		NewTransaction(2, common.HexToAddress("0x2"), big.NewInt(2), 2, big.NewInt(2), nil, nil),
 	}
 	// Create the corresponding receipts
