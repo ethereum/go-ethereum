@@ -620,11 +620,12 @@ func (c *bls12381G1MultiExp) RequiredGas(input []byte) uint64 {
 		return 0
 	}
 	// Lookup discount value for G1 point, scalar value pair length
-	maxDiscountLen := len(params.Bls12381MultiExpDiscountTable)
-	if k > maxDiscountLen {
-		k = maxDiscountLen
+	var discount uint64
+	if dLen := len(params.Bls12381MultiExpDiscountTable); k < dLen {
+		discount = params.Bls12381MultiExpDiscountTable[k-1]
+	} else {
+		discount = params.Bls12381MultiExpDiscountTable[dLen-1]
 	}
-	discount := params.Bls12381MultiExpDiscountTable[k-1]
 	// Calculate gas and return the result
 	return (uint64(k) * params.Bls12381G1MulGas * discount) / 1000
 }
@@ -750,11 +751,12 @@ func (c *bls12381G2MultiExp) RequiredGas(input []byte) uint64 {
 		return 0
 	}
 	// Lookup discount value for G2 point, scalar value pair length
-	maxDiscountLen := len(params.Bls12381MultiExpDiscountTable)
-	if k > maxDiscountLen {
-		k = maxDiscountLen
+	var discount uint64
+	if dLen := len(params.Bls12381MultiExpDiscountTable); k < dLen {
+		discount = params.Bls12381MultiExpDiscountTable[k-1]
+	} else {
+		discount = params.Bls12381MultiExpDiscountTable[dLen-1]
 	}
-	discount := params.Bls12381MultiExpDiscountTable[k-1]
 	// Calculate gas and return the result
 	return (uint64(k) * params.Bls12381G2MulGas * discount) / 1000
 }
