@@ -129,17 +129,19 @@ func newPeer(version int, p *p2p.Peer, rw p2p.MsgReadWriter, getPooledTx func(ha
 // broadcastBlocks is a write loop that multiplexes blocks and block accouncements
 // to the remote peer. The goal is to have an async writer that does not lock up
 // node internals and at the same time rate limits queued data.
-func (p *peer) broadcastBlocks() {
+func (p *peer) broadcastBlocks(removePeer func(string)) {
 	for {
 		select {
 		case prop := <-p.queuedBlocks:
 			if err := p.SendNewBlock(prop.block, prop.td); err != nil {
+				removePeer(p.id)
 				return
 			}
 			p.Log().Trace("Propagated block", "number", prop.block.Number(), "hash", prop.block.Hash(), "td", prop.td)
 
 		case block := <-p.queuedBlockAnns:
 			if err := p.SendNewBlockHashes([]common.Hash{block.Hash()}, []uint64{block.NumberU64()}); err != nil {
+				removePeer(p.id)
 				return
 			}
 			p.Log().Trace("Announced block", "number", block.Number(), "hash", block.Hash())
@@ -153,7 +155,7 @@ func (p *peer) broadcastBlocks() {
 // broadcastTransactions is a write loop that schedules transaction broadcasts
 // to the remote peer. The goal is to have an async writer that does not lock up
 // node internals and at the same time rate limits queued data.
-func (p *peer) broadcastTransactions() {
+func (p *peer) broadcastTransactions(removePeer func(string)) {
 	var (
 		queue []common.Hash         // Queue of hashes to broadcast as full transactions
 		done  chan struct{}         // Non-nil if background broadcaster is running
@@ -204,6 +206,7 @@ func (p *peer) broadcastTransactions() {
 			done = nil
 
 		case <-fail:
+			removePeer(p.id)
 			return
 
 		case <-p.term:
@@ -215,7 +218,7 @@ func (p *peer) broadcastTransactions() {
 // announceTransactions is a write loop that schedules transaction broadcasts
 // to the remote peer. The goal is to have an async writer that does not lock up
 // node internals and at the same time rate limits queued data.
-func (p *peer) announceTransactions() {
+func (p *peer) announceTransactions(removePeer func(string)) {
 	var (
 		queue []common.Hash         // Queue of hashes to announce as transaction stubs
 		done  chan struct{}         // Non-nil if background announcer is running
@@ -266,6 +269,7 @@ func (p *peer) announceTransactions() {
 			done = nil
 
 		case <-fail:
+			removePeer(p.id)
 			return
 
 		case <-p.term:
@@ -706,7 +710,7 @@ func newPeerSet() *peerSet {
 // Register injects a new peer into the working set, or returns an error if the
 // peer is already known. If a new peer it registered, its broadcast loop is also
 // started.
-func (ps *peerSet) Register(p *peer) error {
+func (ps *peerSet) Register(p *peer, removePeer func(string)) error {
 	ps.lock.Lock()
 	defer ps.lock.Unlock()
 
@@ -718,10 +722,10 @@ func (ps *peerSet) Register(p *peer) error {
 	}
 	ps.peers[p.id] = p
 
-	go p.broadcastBlocks()
-	go p.broadcastTransactions()
+	go p.broadcastBlocks(removePeer)
+	go p.broadcastTransactions(removePeer)
 	if p.version >= eth65 {
-		go p.announceTransactions()
+		go p.announceTransactions(removePeer)
 	}
 	return nil
 }
