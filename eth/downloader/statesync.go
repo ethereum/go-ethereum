@@ -63,6 +63,10 @@ func (d *Downloader) syncState(root common.Hash) *stateSync {
 	s := newStateSync(d, root)
 	select {
 	case d.stateSyncStart <- s:
+		// If we tell the statesync to restart with a new root, we also need
+		// to wait for it to actually also start -- when old requests have timed
+		// out or been delivered
+		<-s.started
 	case <-d.quitCh:
 		s.err = errCancelStateFetch
 		close(s.done)
@@ -95,14 +99,6 @@ func (d *Downloader) runStateSync(s *stateSync) *stateSync {
 		finished []*stateReq                  // Completed or failed requests
 		timeout  = make(chan *stateReq)       // Timed out active requests
 	)
-	defer func() {
-		// Cancel active request timers on exit. Also set peers to idle so they're
-		// available for the next sync.
-		for _, req := range active {
-			req.timer.Stop()
-			req.peer.SetNodeDataIdle(len(req.items))
-		}
-	}()
 	// Run the state sync.
 	go s.run()
 	defer s.Cancel()
@@ -126,10 +122,10 @@ func (d *Downloader) runStateSync(s *stateSync) *stateSync {
 		select {
 		// The stateSync lifecycle:
 		case next := <-d.stateSyncStart:
-			return next
+			return d.spindownStateSync(active, timeout, peerDrop, next)
 
 		case <-s.done:
-			return nil
+			return d.spindownStateSync(active, timeout, peerDrop, nil)
 
 		// Send the next finished request to the current sync:
 		case deliverReqCh <- deliverReq:
@@ -210,6 +206,42 @@ func (d *Downloader) runStateSync(s *stateSync) *stateSync {
 	}
 }
 
+// spindownStateSync 'drains' the outstanding requests; some will be delivered and other
+// will time out. This is to ensure that when the next stateSync starts working, all peers
+// are marked as idle and de facto _are_ idle.
+func (d *Downloader) spindownStateSync(active map[string]*stateReq, timeout chan *stateReq, peerDrop chan *peerConnection, next *stateSync) *stateSync {
+	// We're exiting now, but we need to time out (or handle outstanding requests first)
+	for len(active) > 0 {
+		log.Info("Statesync exiting...", "active peers", len(active))
+		var (
+			req    *stateReq
+			reason string
+		)
+		select {
+		// Handle (drop) incoming state packs
+		case pack := <-d.stateCh:
+			req = active[pack.PeerId()]
+			reason = "delivered"
+		// Handle dropped peer connections
+		case p := <-peerDrop:
+			req = active[p.id]
+			reason = "peerdrop"
+		// Handle timed-out requests
+		case req = <-timeout:
+			reason = "timeout"
+		}
+		if req == nil {
+			continue
+		}
+		req.peer.log.Info("Marking previously active as idle", "req.items", len(req.items), "reason", reason)
+		req.timer.Stop()
+		delete(active, req.peer.id)
+		req.peer.SetNodeDataIdle(len(req.items))
+	}
+	log.Info("Statesync exiting")
+	return next
+}
+
 // stateSync schedules requests for downloading a particular state trie defined
 // by a given state root.
 type stateSync struct {
@@ -221,6 +253,8 @@ type stateSync struct {
 
 	numUncommitted   int
 	bytesUncommitted int
+
+	started chan struct{} // Started is signalled once the sync loop starts
 
 	deliver    chan *stateReq // Delivery channel multiplexing peer responses
 	cancel     chan struct{}  // Channel to signal a termination request
@@ -246,6 +280,7 @@ func newStateSync(d *Downloader, root common.Hash) *stateSync {
 		deliver: make(chan *stateReq),
 		cancel:  make(chan struct{}),
 		done:    make(chan struct{}),
+		started: make(chan struct{}),
 	}
 }
 
@@ -276,6 +311,7 @@ func (s *stateSync) Cancel() error {
 // pushed here async. The reason is to decouple processing from data receipt
 // and timeouts.
 func (s *stateSync) loop() (err error) {
+	close(s.started)
 	// Listen for new peer events to assign tasks to them
 	newPeer := make(chan *peerConnection, 1024)
 	peerSub := s.d.peers.SubscribeNewPeers(newPeer)
@@ -331,11 +367,11 @@ func (s *stateSync) loop() (err error) {
 			}
 			// Process all the received blobs and check for stale delivery
 			delivered, err := s.process(req)
+			req.peer.SetNodeDataIdle(delivered)
 			if err != nil {
 				log.Warn("Node data write error", "err", err)
 				return err
 			}
-			req.peer.SetNodeDataIdle(delivered)
 		}
 	}
 	return nil
