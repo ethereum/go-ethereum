@@ -581,6 +581,64 @@ func TestSimulatedBackend_EstimateGasWithPrice(t *testing.T) {
 	}
 }
 
+func TestSimulatedBackend_EstimateGasList(t *testing.T) {
+	/*
+		pragma solidity >=0.6.0 <0.7.0;
+
+		contract HelloWorld {
+			uint256 value;
+			function setValue(uint256 _value) public {
+				value = _value;
+			}
+			function getValue() public view returns (uint256) {
+				if (value == 0) {
+					revert();
+				}
+				return value;
+			}
+		}
+	*/
+	const contractAbi = "[{\"inputs\":[],\"name\":\"getValue\",\"outputs\":[{\"internalType\":\"uint256\",\"name\":\"\",\"type\":\"uint256\"}],\"stateMutability\":\"view\",\"type\":\"function\"},{\"inputs\":[{\"internalType\":\"uint256\",\"name\":\"_value\",\"type\":\"uint256\"}],\"name\":\"setValue\",\"outputs\":[],\"stateMutability\":\"nonpayable\",\"type\":\"function\"}]"
+	const contractBin = "0x608060405234801561001057600080fd5b5060d68061001f6000396000f3fe6080604052348015600f57600080fd5b506004361060325760003560e01c80632096525514603757806355241077146053575b600080fd5b603d607e565b6040518082815260200191505060405180910390f35b607c60048036036020811015606757600080fd5b81019080803590602001909291905050506096565b005b6000806000541415608e57600080fd5b600054905090565b806000819055505056fea264697066735822122076346f88e003f2d4fd66d3f372e7ac9862064d78f35048169307a88d9778b10364736f6c634300060a0033"
+
+	key, _ := crypto.GenerateKey()
+	addr := crypto.PubkeyToAddress(key.PublicKey)
+	opts := bind.NewKeyedTransactor(key)
+
+	sim := NewSimulatedBackend(core.GenesisAlloc{addr: {Balance: big.NewInt(params.Ether)}}, 10000000)
+	defer sim.Close()
+
+	parsed, _ := abi.JSON(strings.NewReader(contractAbi))
+	contractAddr, _, _, _ := bind.DeployContract(opts, parsed, common.FromHex(contractBin), sim)
+	sim.Commit()
+
+	var (
+		calls []ethereum.CallMsg
+		gas   []uint64
+	)
+	calls = append(calls, ethereum.CallMsg{
+		From: addr,
+		To:   &contractAddr,
+		Data: common.Hex2Bytes("552410770000000000000000000000000000000000000000000000000000000000000064"),
+	})
+	gas = append(gas, 41446)
+
+	calls = append(calls, ethereum.CallMsg{
+		From: addr,
+		To:   &contractAddr,
+		Data: common.Hex2Bytes("20965255"),
+	})
+	gas = append(gas, 22881)
+
+	res, err := sim.EstimateGasList(context.Background(), calls)
+	if err != nil {
+		t.Fatalf("Failed to estimate gas: %v", err)
+	}
+	if !reflect.DeepEqual(res, gas) {
+		t.Fatalf("Estimated gas mismatch, want: %v, got: %v", gas, res)
+	}
+}
+
 func TestSimulatedBackend_HeaderByHash(t *testing.T) {
 	testAddr := crypto.PubkeyToAddress(testKey.PublicKey)
 
