@@ -444,10 +444,8 @@ func (d *Downloader) syncWithPeer(p *peerConnection, hash common.Hash, td *big.I
 
 	var origin = uint64(0)
 
-	if d.blockchain != nil &&
-		d.blockchain.CurrentHeader() != nil &&
-		d.blockchain.CurrentHeader().Number != nil &&
-		d.blockchain.CurrentHeader().Number.Uint64() > 0 {
+	if (d.mode != LightSync && d.blockchain.CurrentHeader().Number.Uint64() > 0) ||
+		d.lightchain.CurrentHeader().Number.Uint64() > 0 {
 		origin, err = d.findAncestor(p, latest)
 		if err != nil {
 			return err
