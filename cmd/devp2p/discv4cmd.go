@@ -35,12 +35,19 @@ var (
 		Name:  "discv4",
 		Usage: "Node Discovery v4 tools",
 		Subcommands: []cli.Command{
+			discv4InfoCommand,
 			discv4PingCommand,
 			discv4RequestRecordCommand,
 			discv4ResolveCommand,
 			discv4ResolveJSONCommand,
 			discv4CrawlCommand,
 		},
+	}
+	discv4InfoCommand = cli.Command{
+		Name:      "info",
+		Usage:     "Prints info about a node (IP, ports, enode)",
+		Action:    discv4Info,
+		ArgsUsage: "<node>",
 	}
 	discv4PingCommand = cli.Command{
 		Name:      "ping",
@@ -99,6 +106,12 @@ var (
 		Value: 30 * time.Minute,
 	}
 )
+
+func discv4Info(ctx *cli.Context) error {
+	n := getNodeArg(ctx)
+	fmt.Printf("ID: %v\nenode: %v\nIP: %v\nTCP: %v\nUDP: %v\n", n.ID(), n.URLv4(), n.IP(), n.TCP(), n.UDP())
+	return nil
+}
 
 func discv4Ping(ctx *cli.Context) error {
 	n := getNodeArg(ctx)
