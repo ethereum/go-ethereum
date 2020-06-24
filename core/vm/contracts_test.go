@@ -155,17 +155,16 @@ func benchmarkPrecompiled(addr string, test precompiledTest, bench *testing.B) {
 		if elapsed < 1 {
 			elapsed = 1
 		}
-		elapsed = elapsed / 100000000
-		gasUsed := reqGas * uint64(bench.N) / 1000 / 1000
+		gasUsed := reqGas * uint64(bench.N)
 		bench.ReportMetric(float64(reqGas), "gas/op")
-		bench.ReportMetric(float64(gasUsed)/elapsed, "mgas/s")
+		bench.ReportMetric(float64(gasUsed*1000)/elapsed, "mgas/s")
 		//Check if it is correct
 		if err != nil {
 			bench.Error(err)
 			return
 		}
 		if common.Bytes2Hex(res) != test.Expected {
-			//bench.Error(fmt.Sprintf("Expected %v, got %v", test.Expected, common.Bytes2Hex(res)))
+			bench.Error(fmt.Sprintf("Expected %v, got %v", test.Expected, common.Bytes2Hex(res)))
 			return
 		}
 	})
@@ -341,7 +340,7 @@ func BenchmarkPrecompiledBLS12381G1MultiExpWorstCase(b *testing.B) {
 	}
 	testcase := precompiledTest{
 		Input:       input,
-		Expected:    "000000000000000000000000000000000e11906390858582e2272e9354310d8eace22413744d5425f8e101699060a2855d0fddbab0d3b34ead21a41819b75f390000000000000000000000000000000001eb05ff91a1389a20602f5a21a0459a2668a89b4cc05f44d25e69d23364625da000a1e9079c3e91ae9dc6995c2cfd83",
+		Expected:    "0000000000000000000000000000000005a6310ea6f2a598023ae48819afc292b4dfcb40aabad24a0c2cb6c19769465691859eeb2a764342a810c5038d700f18000000000000000000000000000000001268ac944437d15923dc0aec00daa9250252e43e4b35ec7a19d01f0d6cd27f6e139d80dae16ba1c79cc7f57055a93ff5",
 		Name:        "WorstCaseG1",
 		NoBenchmark: false,
 	}
@@ -362,7 +361,7 @@ func BenchmarkPrecompiledBLS12381G2MultiExpWorstCase(b *testing.B) {
 
 	testcase := precompiledTest{
 		Input:       input,
-		Expected:    "000000000000000000000000000000000c3932ad43e907c4a2cefe3c2c0902bd179aa82e4857d962479e44da120df374099438c62b4c50589893db3d5255d778000000000000000000000000000000000509ffdf3b4c398d2bcce5bf239257fd0d0772cac06b7a9185ece16aa7737690bc1eefcd398f03b9a13cf683a39de6230000000000000000000000000000000012c425664721f730e05a874aae5fc0f81cc57e3339f8b23e7b2cef30c5d309b7aa03ee369eca2538f775067abc4937c900000000000000000000000000000000139d0c179d9b4b53e2e7f6fe05d3db323c41b7ae47709804d9886cc5daf8baee0b50a565dc12da0862f32aa2b45f475f",
+		Expected:    "0000000000000000000000000000000018f5ea0c8b086095cfe23f6bb1d90d45de929292006dba8cdedd6d3203af3c6bbfd592e93ecb2b2c81004961fdcbb46c00000000000000000000000000000000076873199175664f1b6493a43c02234f49dc66f077d3007823e0343ad92e30bd7dc209013435ca9f197aca44d88e9dac000000000000000000000000000000000e6f07f4b23b511eac1e2682a0fc224c15d80e122a3e222d00a41fab15eba645a700b9ae84f331ae4ed873678e2e6c9b000000000000000000000000000000000bcb4849e460612aaed79617255fd30c03f51cf03d2ed4163ca810c13e1954b1e8663157b957a601829bb272a4e6c7b8",
 		Name:        "WorstCaseG2",
 		NoBenchmark: false,
 	}
