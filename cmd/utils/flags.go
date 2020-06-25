@@ -85,7 +85,7 @@ SUBCOMMANDS:
   {{range .Subcommands}}{{.Name}}{{with .ShortName}}, {{.}}{{end}}{{ "\t" }}{{.Usage}}
   {{end}}{{end}}{{if .Flags}}
 OPTIONS:
-{{range $.Flags}}{{.}}
+{{range $.Flags}}   {{.}}
 {{end}}
 {{end}}`
 )
