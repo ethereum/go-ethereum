@@ -19,10 +19,10 @@ function tick(){
 }
 
 cat << EOF
-## \`statet8n\`
+## EVM state transition tool
 
-The \`statet8n\` tool is a stateless state transition utility. It is a utility which
-can
+The \`evm t8n\` tool is a stateless state transition utility. It is a utility
+which can
 
 1. Take a prestate, including
   - Accounts,
@@ -47,7 +47,7 @@ implementation.
 Command line params that has to be supported are
 $(tick)
 
-` ./statet8n -h | grep "trace\|output\|state\."`
+` ./evm t8n -h | grep "trace\|output\|state\."`
 
 $(tick)
 
@@ -73,7 +73,7 @@ There are a few (not many) errors that can occur, those are defined below.
 EOF
 
 # This should exit with 3
-./statet8n --input.alloc=./testdata/1/alloc.json --input.txs=./testdata/1/txs.json --input.env=./testdata/1/env.json --state.fork=Frontier+1346 2>/dev/null
+./evm t8n --input.alloc=./testdata/1/alloc.json --input.txs=./testdata/1/txs.json --input.env=./testdata/1/env.json --state.fork=Frontier+1346 2>/dev/null
 if [ $? !=  3 ]; then
 	echo "Failed, exitcode should be 3"
 fi
@@ -83,7 +83,7 @@ cat << EOF
 
 Invoking it with the provided example files
 EOF
-cmd="./statet8n --input.alloc=./testdata/1/alloc.json --input.txs=./testdata/1/txs.json --input.env=./testdata/1/env.json"
+cmd="./evm t8n --input.alloc=./testdata/1/alloc.json --input.txs=./testdata/1/txs.json --input.env=./testdata/1/env.json"
 tick;echo "$cmd"; tick
 $cmd 2>/dev/null
 echo "Two resulting files:"
@@ -93,7 +93,7 @@ showjson result.json
 echo ""
 
 echo "We can make them spit out the data to e.g. \`stdout\` like this:"
-cmd="./statet8n --input.alloc=./testdata/1/alloc.json --input.txs=./testdata/1/txs.json --input.env=./testdata/1/env.json --output.result=stdout --output.alloc=stdout"
+cmd="./evm t8n --input.alloc=./testdata/1/alloc.json --input.txs=./testdata/1/txs.json --input.env=./testdata/1/env.json --output.result=stdout --output.alloc=stdout"
 tick;echo "$cmd"; tick
 output=`$cmd 2>/dev/null`
 echo "Output:"
@@ -132,7 +132,7 @@ EOF
 showjson ./testdata/5/env.json
 
 echo "When applying this, using a reward of \`0x08\`"
-cmd="./statet8n --input.alloc=./testdata/5/alloc.json -input.txs=./testdata/5/txs.json --input.env=./testdata/5/env.json  --output.alloc=stdout --state.reward=0x80"
+cmd="./evm t8n --input.alloc=./testdata/5/alloc.json -input.txs=./testdata/5/txs.json --input.env=./testdata/5/env.json  --output.alloc=stdout --state.reward=0x80"
 output=`$cmd 2>/dev/null`
 echo "Output:"
 echo "${ticks}json"
@@ -143,7 +143,7 @@ echo "### Future EIPS"
 echo ""
 echo "It is also possible to experiment with future eips that are not yet defined in a hard fork."
 echo "Example, putting EIP-1344 into Frontier: "
-cmd="./statet8n --state.fork=Frontier+1344 --input.pre=./testdata/1/pre.json --input.txs=./testdata/1/txs.json --input.env=/testdata/1/env.json"
+cmd="./evm t8n --state.fork=Frontier+1344 --input.pre=./testdata/1/pre.json --input.txs=./testdata/1/txs.json --input.env=/testdata/1/env.json"
 tick;echo "$cmd"; tick
 echo ""
 
@@ -152,7 +152,7 @@ echo ""
 echo "The \`BLOCKHASH\` opcode requires blockhashes to be provided by the caller, inside the \`env\`."
 echo "If a required blockhash is not provided, the exit code should be \`4\`:"
 echo "Example where blockhashes are provided: "
-cmd="./statet8n --input.alloc=./testdata/3/alloc.json --input.txs=./testdata/3/txs.json --input.env=./testdata/3/env.json  --trace"
+cmd="./evm t8n --input.alloc=./testdata/3/alloc.json --input.txs=./testdata/3/txs.json --input.env=./testdata/3/env.json  --trace"
 tick && echo $cmd && tick
 $cmd 2>&1 >/dev/null
 cmd="cat trace-0.jsonl | grep BLOCKHASH -C2"
@@ -163,7 +163,7 @@ echo "$ticks"
 echo ""
 
 echo "In this example, the caller has not provided the required blockhash:"
-cmd="./statet8n --input.alloc=./testdata/4/alloc.json --input.txs=./testdata/4/txs.json --input.env=./testdata/4/env.json  --trace"
+cmd="./evm t8n --input.alloc=./testdata/4/alloc.json --input.txs=./testdata/4/txs.json --input.env=./testdata/4/env.json  --trace"
 tick && echo $cmd && tick
 tick
 $cmd
@@ -175,8 +175,8 @@ echo "Error code: $errc"
 echo "### Chaining"
 echo ""
 echo "Another thing that can be done, is to chain invocations:"
-cmd1="./statet8n --input.alloc=./testdata/1/alloc.json --input.txs=./testdata/1/txs.json --input.env=./testdata/1/env.json --output.alloc=stdout"
-cmd2="./statet8n --input.alloc=stdin --input.env=./testdata/1/env.json --input.txs=./testdata/1/txs.json"
+cmd1="./evm t8n --input.alloc=./testdata/1/alloc.json --input.txs=./testdata/1/txs.json --input.env=./testdata/1/env.json --output.alloc=stdout"
+cmd2="./evm t8n --input.alloc=stdin --input.env=./testdata/1/env.json --input.txs=./testdata/1/txs.json"
 echo "$ticks"
 echo "$cmd1 | $cmd2"
 output=$($cmd1 | $cmd2 )

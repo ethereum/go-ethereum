@@ -14,7 +14,7 @@
 // You should have received a copy of the GNU Lesser General Public License
 // along with the go-ethereum library. If not, see <http://www.gnu.org/licenses/>.
 
-package machine
+package t8ntool
 
 import (
 	"fmt"
@@ -41,17 +41,17 @@ var (
 	OutputAllocFlag = cli.StringFlag{
 		Name: "output.alloc",
 		Usage: "Determines where to put the `alloc` of the post-state.\n" +
-			"\t`stdout` - into the stdout output\n" +
-			"\t`stderr` - into the stderr output\n" +
-			"\t<file> - into the file <file> ",
+			"\t\t`stdout` - into the stdout output\n" +
+			"\t\t`stderr` - into the stderr output\n" +
+			"\t\t<file> - into the file <file> ",
 		Value: "alloc.json",
 	}
 	OutputResultFlag = cli.StringFlag{
 		Name: "output.result",
 		Usage: "Determines where to put the `result` (stateroot, txroot etc) of the post-state.\n" +
-			"\t`stdout` - into the stdout output\n" +
-			"\t`stderr` - into the stderr output\n" +
-			"\t<file> - into the file <file> ",
+			"\t\t`stdout` - into the stdout output\n" +
+			"\t\t`stderr` - into the stderr output\n" +
+			"\t\t<file> - into the file <file> ",
 		Value: "result.json",
 	}
 	InputAllocFlag = cli.StringFlag{
@@ -82,12 +82,13 @@ var (
 	ForknameFlag = cli.StringFlag{
 		Name: "state.fork",
 		Usage: fmt.Sprintf("Name of ruleset to use."+
-			"\n\tAvailable forknames:"+
-			" \n\t  %v"+
-			"\n\tAvailable extra eips: \n\t  %v"+
-			"\n\tSyntax <forkname>(+ExtraEip)",
-			strings.Join(tests.AvailableForks(), "\n\t  "),
-			strings.Join(vm.ActivateableEips(), ",")),
+			"\n\t\tAvailable forknames:"+
+			"\n\t\t    %v"+
+			"\n\t\tAvailable extra eips:"+
+			"\n\t\t    %v"+
+			"\n\t\tSyntax <forkname>(+ExtraEip)",
+			strings.Join(tests.AvailableForks(), "\n\t\t    "),
+			strings.Join(vm.ActivateableEips(), ", ")),
 		Value: "Istanbul",
 	}
 	VerbosityFlag = cli.IntFlag{

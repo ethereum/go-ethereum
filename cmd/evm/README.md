@@ -1,7 +1,7 @@
-## `statet8n`
+## EVM state transition tool
 
-The `statet8n` tool is a stateless state transition utility. It is a utility which
-can
+The `evm t8n` tool is a stateless state transition utility. It is a utility
+which can
 
 1. Take a prestate, including
   - Accounts,
@@ -26,18 +26,18 @@ implementation.
 Command line params that has to be supported are
 ```
 
-   --trace                            Output full trace logs to files <txhash>.jsonl
-   --trace.nomemory                   Disable full memory dump in traces
-   --trace.nostack                    Disable stack output in traces
-   --output.alloc alloc               Determines where to put the alloc of the post-state.
-                                      `stdout` - into the stdout output
-                                      `stderr` - into the stderr output
-   --output.result result             Determines where to put the result (stateroot, txroot etc) of the post-state.
-                                      `stdout` - into the stdout output
-                                      `stderr` - into the stderr output
-   --state.fork value                 Name of ruleset to use.
-   --state.chainid value              ChainID to use (default: 1)
-   --state.reward value               Mining reward. Set to -1 to disable (default: 0)
+                                      --trace                               Output full trace logs to files <txhash>.jsonl
+                                      --trace.nomemory                      Disable full memory dump in traces
+                                      --trace.nostack                       Disable stack output in traces
+                                      --output.alloc alloc                  Determines where to put the alloc of the post-state.
+                                                                            `stdout` - into the stdout output
+                                                                            `stderr` - into the stderr output
+                                      --output.result result                Determines where to put the result (stateroot, txroot etc) of the post-state.
+                                                                            `stdout` - into the stdout output
+                                                                            `stderr` - into the stderr output
+                                      --state.fork value                    Name of ruleset to use.
+                                      --state.chainid value                 ChainID to use (default: 1)
+                                      --state.reward value                  Mining reward. Set to -1 to disable (default: 0)
 
 ```
 
@@ -65,7 +65,7 @@ There are a few (not many) errors that can occur, those are defined below.
 
 Invoking it with the provided example files
 ```
-./statet8n --input.alloc=./testdata/1/alloc.json --input.txs=./testdata/1/txs.json --input.env=./testdata/1/env.json
+./evm t8n --input.alloc=./testdata/1/alloc.json --input.txs=./testdata/1/txs.json --input.env=./testdata/1/env.json
 ```
 Two resulting files:
 
@@ -115,7 +115,7 @@ Two resulting files:
 
 We can make them spit out the data to e.g. `stdout` like this:
 ```
-./statet8n --input.alloc=./testdata/1/alloc.json --input.txs=./testdata/1/txs.json --input.env=./testdata/1/env.json --output.result=stdout --output.alloc=stdout
+./evm t8n --input.alloc=./testdata/1/alloc.json --input.txs=./testdata/1/txs.json --input.env=./testdata/1/env.json --output.result=stdout --output.alloc=stdout
 ```
 Output:
 ```json
@@ -220,7 +220,7 @@ Output:
 It is also possible to experiment with future eips that are not yet defined in a hard fork.
 Example, putting EIP-1344 into Frontier: 
 ```
-./statet8n --state.fork=Frontier+1344 --input.pre=./testdata/1/pre.json --input.txs=./testdata/1/txs.json --input.env=/testdata/1/env.json
+./evm t8n --state.fork=Frontier+1344 --input.pre=./testdata/1/pre.json --input.txs=./testdata/1/txs.json --input.env=/testdata/1/env.json
 ```
 
 ### Block history
@@ -229,21 +229,18 @@ The `BLOCKHASH` opcode requires blockhashes to be provided by the caller, inside
 If a required blockhash is not provided, the exit code should be `4`:
 Example where blockhashes are provided: 
 ```
-./statet8n --input.alloc=./testdata/3/alloc.json --input.txs=./testdata/3/txs.json --input.env=./testdata/3/env.json --trace
+./evm t8n --input.alloc=./testdata/3/alloc.json --input.txs=./testdata/3/txs.json --input.env=./testdata/3/env.json --trace
 ```
 ```
 cat trace-0.jsonl | grep BLOCKHASH -C2
 ```
 ```
-{"pc":0,"op":96,"gas":"0x5f58ef8","gasCost":"0x3","memory":"0x","memSize":0,"stack":[],"returnStack":[],"depth":1,"refund":0,"opName":"PUSH1","error":""}
-{"pc":2,"op":64,"gas":"0x5f58ef5","gasCost":"0x14","memory":"0x","memSize":0,"stack":["0x1"],"returnStack":[],"depth":1,"refund":0,"opName":"BLOCKHASH","error":""}
-{"pc":3,"op":0,"gas":"0x5f58ee1","gasCost":"0x0","memory":"0x","memSize":0,"stack":["0xdac58aa524e50956d0c0bae7f3f8bb9d35381365d07804dd5b48a5a297c06af4"],"returnStack":[],"depth":1,"refund":0,"opName":"STOP","error":""}
-{"output":"","gasUsed":"0x17","time":142174}
+cat: trace-0.jsonl: No such file or directory
 ```
 
 In this example, the caller has not provided the required blockhash:
 ```
-./statet8n --input.alloc=./testdata/4/alloc.json --input.txs=./testdata/4/txs.json --input.env=./testdata/4/env.json --trace
+./evm t8n --input.alloc=./testdata/4/alloc.json --input.txs=./testdata/4/txs.json --input.env=./testdata/4/env.json --trace
 ```
 ```
 ERROR(4): getHash(3) invoked, blockhash for that block not provided
@@ -253,10 +250,10 @@ Error code: 4
 
 Another thing that can be done, is to chain invocations:
 ```
-./statet8n --input.alloc=./testdata/1/alloc.json --input.txs=./testdata/1/txs.json --input.env=./testdata/1/env.json --output.alloc=stdout | ./statet8n --input.alloc=stdin --input.env=./testdata/1/env.json --input.txs=./testdata/1/txs.json
-INFO [06-15|15:10:38.683] rejected tx                              index=1 hash="0557ba…18d673" from=0x8A8eAFb1cf62BfBeb1741769DAE1a9dd47996192 error="nonce too low"
-INFO [06-15|15:10:38.684] rejected tx                              index=0 hash="0557ba…18d673" from=0x8A8eAFb1cf62BfBeb1741769DAE1a9dd47996192 error="nonce too low"
-INFO [06-15|15:10:38.685] rejected tx                              index=1 hash="0557ba…18d673" from=0x8A8eAFb1cf62BfBeb1741769DAE1a9dd47996192 error="nonce too low"
+./evm t8n --input.alloc=./testdata/1/alloc.json --input.txs=./testdata/1/txs.json --input.env=./testdata/1/env.json --output.alloc=stdout | ./evm t8n --input.alloc=stdin --input.env=./testdata/1/env.json --input.txs=./testdata/1/txs.json
+INFO [06-25|15:07:59.712] rejected tx                              index=1 hash="0557ba…18d673" from=0x8A8eAFb1cf62BfBeb1741769DAE1a9dd47996192 error="nonce too low"
+INFO [06-25|15:07:59.713] rejected tx                              index=0 hash="0557ba…18d673" from=0x8A8eAFb1cf62BfBeb1741769DAE1a9dd47996192 error="nonce too low"
+INFO [06-25|15:07:59.714] rejected tx                              index=1 hash="0557ba…18d673" from=0x8A8eAFb1cf62BfBeb1741769DAE1a9dd47996192 error="nonce too low"
 
 ```
 What happened here, is that we first applied two identical transactions, so the second one was rejected. 
@@ -265,3 +262,4 @@ the same two transactions: this time, both failed due to too low nonce.
 
 In order to meaningfully chain invocations, one would need to provide meaningful new `env`, otherwise the
 actual blocknumber (exposed to the EVM) would not increase.
+

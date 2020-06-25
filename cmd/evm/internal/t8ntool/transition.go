@@ -14,7 +14,7 @@
 // You should have received a copy of the GNU General Public License
 // along with go-ethereum. If not, see <http://www.gnu.org/licenses/>.
 
-package machine
+package t8ntool
 
 import (
 	"encoding/json"
@@ -68,10 +68,10 @@ type input struct {
 	Txs   types.Transactions `json:"txs,omitempty"`
 }
 
-func StateTransition(ctx *cli.Context) error {
+func Main(ctx *cli.Context) error {
 	// Configure the go-ethereum logger
 	glogger := log.NewGlogHandler(log.StreamHandler(os.Stderr, log.TerminalFormat(false)))
-	glogger.Verbosity(log.Lvl(ctx.GlobalInt(VerbosityFlag.Name)))
+	glogger.Verbosity(log.Lvl(ctx.Int(VerbosityFlag.Name)))
 	log.Root().SetHandler(glogger)
 
 	var (
@@ -83,8 +83,8 @@ func StateTransition(ctx *cli.Context) error {
 	if ctx.GlobalBool(TraceFlag.Name) {
 		// Configure the EVM logger
 		logConfig := &vm.LogConfig{
-			DisableStack:  ctx.GlobalBool(TraceDisableStackFlag.Name),
-			DisableMemory: ctx.GlobalBool(TraceDisableMemoryFlag.Name),
+			DisableStack:  ctx.Bool(TraceDisableStackFlag.Name),
+			DisableMemory: ctx.Bool(TraceDisableMemoryFlag.Name),
 			Debug:         true,
 		}
 		var prevFile *os.File
@@ -116,10 +116,10 @@ func StateTransition(ctx *cli.Context) error {
 	var (
 		prestate Prestate
 		txs      types.Transactions // txs to apply
-		allocStr = ctx.GlobalString(InputAllocFlag.Name)
+		allocStr = ctx.String(InputAllocFlag.Name)
 
-		envStr    = ctx.GlobalString(InputEnvFlag.Name)
-		txStr     = ctx.GlobalString(InputTxsFlag.Name)
+		envStr    = ctx.String(InputEnvFlag.Name)
+		txStr     = ctx.String(InputTxsFlag.Name)
 		inputData = &input{}
 	)
 
@@ -178,17 +178,17 @@ func StateTransition(ctx *cli.Context) error {
 	}
 	// Construct the chainconfig
 	var chainConfig *params.ChainConfig
-	if cConf, extraEips, err := tests.GetChainConfig(ctx.GlobalString(ForknameFlag.Name)); err != nil {
+	if cConf, extraEips, err := tests.GetChainConfig(ctx.String(ForknameFlag.Name)); err != nil {
 		return NewError(ErrorVMConfig, fmt.Errorf("Failed constructing chain configuration: %v", err))
 	} else {
 		chainConfig = cConf
 		vmConfig.ExtraEips = extraEips
 	}
 	// Set the chain id
-	chainConfig.ChainID = big.NewInt(ctx.GlobalInt64(ChainIDFlag.Name))
+	chainConfig.ChainID = big.NewInt(ctx.Int64(ChainIDFlag.Name))
 
 	// Run the test and aggregate the result
-	state, result, err := prestate.Apply(vmConfig, chainConfig, txs, ctx.GlobalInt64(RewardFlag.Name), getTracer)
+	state, result, err := prestate.Apply(vmConfig, chainConfig, txs, ctx.Int64(RewardFlag.Name), getTracer)
 	if err != nil {
 		return err
 	}
@@ -253,10 +253,10 @@ func dispatchOutput(ctx *cli.Context, result *ExecutionResult, alloc Alloc) erro
 		}
 		return nil
 	}
-	if err := dispatch(ctx.GlobalString(OutputAllocFlag.Name), "alloc", alloc); err != nil {
+	if err := dispatch(ctx.String(OutputAllocFlag.Name), "alloc", alloc); err != nil {
 		return err
 	}
-	if err := dispatch(ctx.GlobalString(OutputResultFlag.Name), "result", result); err != nil {
+	if err := dispatch(ctx.String(OutputResultFlag.Name), "result", result); err != nil {
 		return err
 	}
 	if len(stdOutObject) > 0 {
