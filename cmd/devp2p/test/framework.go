@@ -19,8 +19,11 @@ package test
 import (
 	"crypto/ecdsa"
 	"fmt"
+	"io/ioutil"
 	"net"
+	"net/http"
 	"os"
+	"syscall"
 	"time"
 
 	"github.com/ethereum/go-ethereum/crypto"
@@ -83,7 +86,11 @@ func debugError(err error) {
 	if opErr, ok := err.(*net.OpError); ok {
 		fmt.Println("OpError", opErr.Op)
 		if sysErr, ok := opErr.Err.(*os.SyscallError); ok {
-			fmt.Println("  syscall", sysErr.Syscall, sysErr.Err)
+			errnoStr := "?"
+			if errno, ok := sysErr.Err.(syscall.Errno); ok {
+				errnoStr = fmt.Sprint(errno)
+			}
+			fmt.Println("  syscall", sysErr.Syscall, sysErr.Err, errnoStr)
 		} else {
 			fmt.Println("  ", opErr.Err)
 		}
@@ -133,4 +140,27 @@ func contains(ns []v4wire.Node, key v4wire.Pubkey) bool {
 		}
 	}
 	return false
+}
+
+// Get IP from an external service via http
+func getMyPublicIP() (net.IP, error) {
+	url := "https://api.ipify.org?format=text" // we are using a pulib IP API, we're using ipify here, below are some others
+	// https://www.ipify.org
+	// http://myexternalip.com
+	// http://api.ident.me
+	// http://whatismyipaddress.com/api
+	resp, err := http.Get(url)
+	if err != nil {
+		panic(err)
+	}
+	defer resp.Body.Close()
+	ipBytes, err := ioutil.ReadAll(resp.Body)
+	if err != nil {
+		return nil, err
+	}
+	ip := net.ParseIP(string(ipBytes))
+	if ip == nil {
+		return nil, fmt.Errorf("Wrong IP %v", string(ipBytes))
+	}
+	return ip, nil
 }
