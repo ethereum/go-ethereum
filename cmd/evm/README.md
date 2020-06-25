@@ -26,18 +26,18 @@ implementation.
 Command line params that has to be supported are
 ```
 
---trace                               Output full trace logs to files <txhash>.jsonl
---trace.nomemory                      Disable full memory dump in traces
---trace.nostack                       Disable stack output in traces
---output.alloc alloc                  Determines where to put the alloc of the post-state.
-                                                                            `stdout` - into the stdout output
-                                                                            `stderr` - into the stderr output
---output.result result                Determines where to put the result (stateroot, txroot etc) of the post-state.
-                                                                            `stdout` - into the stdout output
-                                                                            `stderr` - into the stderr output
---state.fork value                    Name of ruleset to use.
---state.chainid value                 ChainID to use (default: 1)
---state.reward value                  Mining reward. Set to -1 to disable (default: 0)
+   --trace                            Output full trace logs to files <txhash>.jsonl
+   --trace.nomemory                   Disable full memory dump in traces
+   --trace.nostack                    Disable stack output in traces
+   --output.alloc alloc               Determines where to put the alloc of the post-state.
+                                      `stdout` - into the stdout output
+                                      `stderr` - into the stderr output
+   --output.result result             Determines where to put the result (stateroot, txroot etc) of the post-state.
+                                      `stdout` - into the stdout output
+                                      `stderr` - into the stderr output
+   --state.fork value                 Name of ruleset to use.
+   --state.chainid value              ChainID to use (default: 1)
+   --state.reward value               Mining reward. Set to -1 to disable (default: 0)
 
 ```
 
@@ -251,9 +251,9 @@ Error code: 4
 Another thing that can be done, is to chain invocations:
 ```
 ./evm t8n --input.alloc=./testdata/1/alloc.json --input.txs=./testdata/1/txs.json --input.env=./testdata/1/env.json --output.alloc=stdout | ./evm t8n --input.alloc=stdin --input.env=./testdata/1/env.json --input.txs=./testdata/1/txs.json
-INFO [06-25|15:14:56.599] rejected tx                              index=1 hash="0557ba…18d673" from=0x8A8eAFb1cf62BfBeb1741769DAE1a9dd47996192 error="nonce too low"
-INFO [06-25|15:14:56.601] rejected tx                              index=0 hash="0557ba…18d673" from=0x8A8eAFb1cf62BfBeb1741769DAE1a9dd47996192 error="nonce too low"
-INFO [06-25|15:14:56.601] rejected tx                              index=1 hash="0557ba…18d673" from=0x8A8eAFb1cf62BfBeb1741769DAE1a9dd47996192 error="nonce too low"
+INFO [06-25|15:22:04.359] rejected tx                              index=1 hash="0557ba…18d673" from=0x8A8eAFb1cf62BfBeb1741769DAE1a9dd47996192 error="nonce too low"
+INFO [06-25|15:22:04.361] rejected tx                              index=0 hash="0557ba…18d673" from=0x8A8eAFb1cf62BfBeb1741769DAE1a9dd47996192 error="nonce too low"
+INFO [06-25|15:22:04.361] rejected tx                              index=1 hash="0557ba…18d673" from=0x8A8eAFb1cf62BfBeb1741769DAE1a9dd47996192 error="nonce too low"
 
 ```
 What happened here, is that we first applied two identical transactions, so the second one was rejected. 
