@@ -66,12 +66,15 @@ need to import only the `accounts` package into your code:
 
 ```go
 import "github.com/ethereum/go-ethereum/accounts"
+import "github.com/ethereum/go-ethereum/accounts/keystore"
+import "github.com/ethereum/go-ethereum/common"
 ```
 
 Afterwards you can create a new encrypted account manager via:
 
 ```go
-am := accounts.NewManager("/path/to/keystore", accounts.StandardScryptN, accounts.StandardScryptP);
+ks := keystore.NewKeyStore("/path/to/keystore", keystore.StandardScryptN, keystore.StandardScryptP)
+am := accounts.NewManager(&accounts.Config{InsecureUnlockAllowed: false}, ks)
 ```
 
 The path to the keystore folder needs to be a location that is writable by the local user
@@ -141,21 +144,22 @@ lifecycle operations with a handful of function calls (error handling omitted).
 
 ```go
 // Create a new account with the specified encryption passphrase.
-newAcc, _ := am.NewAccount("Creation password");
+newAcc, _ := ks.NewAccount("Creation password")
+fmt.Println(newAcc)
 
 // Export the newly created account with a different passphrase. The returned
 // data from this method invocation is a JSON encoded, encrypted key-file.
-jsonAcc, _ := am.Export(newAcc, "Creation password", "Export password");
+jsonAcc, _ := ks.Export(newAcc, "Creation password", "Export password")
 
 // Update the passphrase on the account created above inside the local keystore.
-am.Update(newAcc, "Creation password", "Update password");
+_ = ks.Update(newAcc, "Creation password", "Update password")
 
 // Delete the account updated above from the local keystore.
-am.Delete(newAcc, "Update password");
+_ = ks.Delete(newAcc, "Update password")
 
 // Import back the account we've exported (and then deleted) above with yet
 // again a fresh passphrase.
-impAcc, _ := am.Import(jsonAcc, "Export password", "Import password");
+impAcc, _ := ks.Import(jsonAcc, "Export password", "Import password")
 ```
 
 *Although instances of
@@ -213,8 +217,8 @@ instead.
 
 ```go
 // Create a new account to sign transactions with
-signer, _ := am.NewAccount("Signer password");
-txHash := common.HexToHash("0x0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef");
+signer, _ := ks.NewAccount("Signer password")
+txHash := common.HexToHash("0x0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef")
 ```
 
 With the boilerplate out of the way, we can now sign transaction using the authorization
@@ -222,16 +226,16 @@ mechanisms described above:
 
 ```go
 // Sign a transaction with a single authorization
-signature, _ := am.SignWithPassphrase(signer, "Signer password", txHash.Bytes());
+signature, _ := ks.SignHashWithPassphrase(signer, "Signer password", txHash.Bytes())
 
 // Sign a transaction with multiple manually cancelled authorizations
-am.Unlock(signer, "Signer password");
-signature, _ = am.Sign(signer.Address, txHash.Bytes());
-am.Lock(signer.Address);
+_ = ks.Unlock(signer, "Signer password")
+signature, _ = ks.SignHash(signer, txHash.Bytes())
+_ = ks.Lock(signer.Address)
 
 // Sign a transaction with multiple automatically cancelled authorizations
-am.TimedUnlock(signer, "Signer password", time.Second);
-signature, _ = am.Sign(signer.Address, txHash.Bytes());
+_ = ks.TimedUnlock(signer, "Signer password", time.Second)
+signature, _ = ks.SignHash(signer, txHash.Bytes())
 ```
 
 You may wonder why
