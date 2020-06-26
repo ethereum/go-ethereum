@@ -17,8 +17,6 @@
 package trie
 
 import (
-	"io"
-
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/rlp"
 	"golang.org/x/crypto/sha3"
@@ -343,111 +341,6 @@ func rawLeafHPRLP(key, val []byte, leaf bool) []byte {
 	return rlp[:pos]
 }
 
-// writeEvenHP writes a key with its hex prefix into a writer (presumably, the
-// input of a hasher) and then writes the value. The value can be a maximum of
-// 256 bytes, as it is only concerned with writing account leaves and optimize
-// for this use case.
-func writeHPRLP(writer io.Writer, key, val []byte, leaf bool) {
-	// DEBUG don't remove yet
-	//var writer bytes.Buffer
-
-	// Determine the _t_ part of the hex prefix
-	hp := byte(0)
-	if leaf {
-		hp = 32
-	}
-
-	const maxHeaderSize = 1 /* key byte list header */ +
-		1 /* list header for key + value */ +
-		1 /* potential size byte if total size > 56 */ +
-		1 /* hex prefix if key is even-length*/
-	header := [maxHeaderSize]byte{}
-	keyOffset := 0
-	headerPos := maxHeaderSize - 1
-
-	// Add the hex prefix to its own byte if the key length is even, and
-	// as the most significant nibble of the key if it's odd.
-	// In the latter case, the first nibble of the key will be part of
-	// the header and it will be skipped later when it's added to the
-	// hasher sponge.
-	if len(key)%2 == 0 {
-		header[headerPos] = hp
-	} else {
-		header[headerPos] = hp | key[0] | 16
-		keyOffset = 1
-	}
-	headerPos--
-
-	// Add the key byte header, the key is 32 bytes max so it's always
-	// under 56 bytes - no extra byte needed.
-	keyByteSize := byte(len(key) / 2)
-	if len(key) > 1 || header[len(header)-1] > 128 {
-		header[headerPos] = 0x80 + keyByteSize + 1 /* HP */
-		headerPos--
-	}
-
-	// If this is a leaf being inserted, the header length for the
-	// value part will be two bytes as the leaf is more than 56 bytes
-	// long.
-	valHeaderLen := 1
-	if len(val) == 1 && val[0] < 128 {
-		// Don't reserve space for the header if this
-		// is an integer < 128
-		valHeaderLen = 0
-	}
-	if len(val) > 56 {
-		valHeaderLen = 2
-	}
-
-	// Add the global header, with optional length, and specify at
-	// which byte the header is starting.
-	payloadSize := int(keyByteSize) + (len(header) - headerPos - 1) +
-		valHeaderLen + len(val) /* value + rlp header */
-	var start int
-	if payloadSize >= 56 {
-		header[headerPos] = byte(payloadSize)
-		headerPos--
-		header[headerPos] = 0xf8
-		start = headerPos
-	} else {
-		header[headerPos] = 0xc0 + byte(payloadSize)
-		start = headerPos
-	}
-
-	// Write the header into the sponge
-	writer.Write(header[start:])
-
-	// Write the key into the sponge
-	var m byte
-	for i, nibble := range key {
-		// Skip the first byte if the key has an odd-length, since
-		// it has already been written with the header.
-		if i >= keyOffset {
-			if (i-keyOffset)%2 == 0 {
-				m = nibble
-			} else {
-				writer.Write([]byte{m*16 + nibble})
-			}
-		}
-	}
-
-	// Write the RLP prefix to the value if needed
-	if len(val) > 56 {
-		writer.Write([]byte{0xb8, byte(len(val))})
-	} else if len(val) > 1 || val[0] >= 128 {
-		writer.Write([]byte{0x80 + byte(len(val))})
-	}
-	writer.Write(val)
-
-	// DEBUG don't remove yet
-	//if leaf {
-	//fmt.Println("leaf rlp ", writer)
-	//} else {
-	//fmt.Println("ext rlp ", writer)
-	//}
-	//io.Copy(w, &writer)
-}
-
 func (st *StackTrie) hash() []byte {
 	/* Shortcut if node is already hashed */
 	if st.nodeType == hashedNode {
@@ -505,10 +398,11 @@ func (st *StackTrie) hash() []byte {
 		d.Write(payload[start:pos])
 	case extNode:
 		ch := st.children[0].hash()
-		if (len(st.key)/2)+1+len(ch) < 29 {
-			return rawExtHPRLP(st.key, st.val)
+		n := shortNode{
+			Key: hexToCompact(st.key),
+			Val: hashNode(ch),
 		}
-		writeHPRLP(d, st.key, ch, false)
+		rlp.Encode(d, n)
 		st.children[0] = nil // Reclaim mem from subtree
 	case leafNode:
 		n := shortNode{
