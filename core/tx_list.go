@@ -209,6 +209,7 @@ func (m *txSortedMap) Flatten() types.Transactions {
 		}
 		sort.Sort(types.TxByNonce(m.cache))
 	}
+	// Copy the cache to prevent accidental modifications
 	txs := make(types.Transactions, len(m.cache))
 	copy(txs, m.cache)
 	return txs
