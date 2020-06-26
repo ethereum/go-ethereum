@@ -20,6 +20,7 @@ import (
 	"io"
 
 	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/rlp"
 	"golang.org/x/crypto/sha3"
 )
 
@@ -510,10 +511,11 @@ func (st *StackTrie) hash() []byte {
 		writeHPRLP(d, st.key, ch, false)
 		st.children[0] = nil // Reclaim mem from subtree
 	case leafNode:
-		if (len(st.key)/2)+1+len(st.val) < 30 {
-			return rawLeafHPRLP(st.key, st.val, true)
+		n := shortNode{
+			Key: hexToCompact(st.key),
+			Val: valueNode(st.val),
 		}
-		writeHPRLP(d, st.key, st.val, true)
+		rlp.Encode(d, n)
 	case emptyNode:
 		return emptyRoot[:]
 	default:
