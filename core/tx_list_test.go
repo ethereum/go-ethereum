@@ -17,6 +17,7 @@
 package core
 
 import (
+	"math/big"
 	"math/rand"
 	"testing"
 
@@ -60,7 +61,7 @@ func BenchmarkTxListAdd(t *testing.B) {
 	}
 	// Insert the transactions in a random order
 	list := newTxList(true)
-	priceLimit := DefaultTxPoolConfig.PriceLimit
+	priceLimit := big.NewInt(int64(DefaultTxPoolConfig.PriceLimit))
 	t.ResetTimer()
 	for _, v := range rand.Perm(len(txs)) {
 		list.Add(txs[v], DefaultTxPoolConfig.PriceBump)
