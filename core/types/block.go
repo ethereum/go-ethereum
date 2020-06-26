@@ -20,10 +20,10 @@ package types
 import (
 	"encoding/binary"
 	"fmt"
-	"hash"
 	"io"
 	"math/big"
 	"reflect"
+	"sync"
 	"sync/atomic"
 	"time"
 
@@ -131,8 +131,17 @@ func (h *Header) SanityCheck() error {
 	return nil
 }
 
+// hasherPool holds LegacyKeccak hashers.
+var hasherPool = sync.Pool{
+	New: func() interface{} {
+		return sha3.NewLegacyKeccak256()
+	},
+}
+
 func rlpHash(x interface{}) (h common.Hash) {
-	sha := sha3.NewLegacyKeccak256().(crypto.KeccakState)
+	sha := hasherPool.Get().(crypto.KeccakState)
+	defer hasherPool.Put(sha)
+	sha.Reset()
 	rlp.Encode(sha, x)
 	sha.Read(h[:])
 	return h
