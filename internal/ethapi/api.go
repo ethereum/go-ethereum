@@ -277,6 +277,10 @@ func (s *PrivateAccountAPI) DeriveAccount(url string, path string, pin *bool) (a
 
 // NewAccount will create a new account and returns the address for the new account.
 func (s *PrivateAccountAPI) NewAccount(password string) (common.Address, error) {
+	if len(s.am.Backends(keystore.KeyStoreType)) == 0 {
+		return common.Address{}, errors.New("keystore backend not available")
+	}
+
 	acc, err := fetchKeystore(s.am).NewAccount(password)
 	if err == nil {
 		log.Info("Your new key was generated", "address", acc.Address)
@@ -295,6 +299,10 @@ func fetchKeystore(am *accounts.Manager) *keystore.KeyStore {
 // ImportRawKey stores the given hex encoded ECDSA key into the key directory,
 // encrypting it with the passphrase.
 func (s *PrivateAccountAPI) ImportRawKey(privkey string, password string) (common.Address, error) {
+	if len(s.am.Backends(keystore.KeyStoreType)) == 0 {
+		return common.Address{}, errors.New("keystore backend not available")
+	}
+
 	key, err := crypto.HexToECDSA(privkey)
 	if err != nil {
 		return common.Address{}, err
@@ -313,26 +321,23 @@ func (s *PrivateAccountAPI) UnlockAccount(ctx context.Context, addr common.Addre
 	if s.b.ExtRPCEnabled() && !s.b.AccountManager().Config().InsecureUnlockAllowed {
 		return false, errors.New("account unlock with HTTP access is forbidden")
 	}
-
-	const max = uint64(time.Duration(math.MaxInt64) / time.Second)
-	var d time.Duration
-	if duration == nil {
-		d = 300 * time.Second
-	} else if *duration > max {
-		return false, errors.New("unlock duration too large")
-	} else {
-		d = time.Duration(*duration) * time.Second
-	}
-	err := fetchKeystore(s.am).TimedUnlock(accounts.Account{Address: addr}, password, d)
+	account := accounts.Account{Address: addr}
+	wallet, err := s.am.Find(account)
 	if err != nil {
-		log.Warn("Failed account unlock attempt", "address", addr, "err", err)
+		return false, err
 	}
-	return err == nil, err
+	return wallet.UnlockAccount(account, password, duration)
 }
 
 // LockAccount will lock the account associated with the given address when it's unlocked.
-func (s *PrivateAccountAPI) LockAccount(addr common.Address) bool {
-	return fetchKeystore(s.am).Lock(addr) == nil
+func (s *PrivateAccountAPI) LockAccount(addr common.Address) (bool, error) {
+	account := accounts.Account{Address: addr}
+	wallet, err := s.am.Find(account)
+	if err != nil {
+		return false, err
+	}
+
+	return wallet.LockAccount(account)
 }
 
 // signTransaction sets defaults and signs the given transaction

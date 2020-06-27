@@ -151,6 +151,12 @@ type Wallet interface {
 
 	// SignTxWithPassphrase is identical to SignTx, but also takes a password
 	SignTxWithPassphrase(account Account, passphrase string, tx *types.Transaction, chainID *big.Int) (*types.Transaction, error)
+
+	// LockAccount locks the account
+	LockAccount(account Account) (bool, error)
+
+	// UnLockAccount unlocks the account with given password for the given duration
+	UnlockAccount(account Account, password string, duration *uint64) (bool, error)
 }
 
 // Backend is a "wallet provider" that may contain a batch of accounts they can

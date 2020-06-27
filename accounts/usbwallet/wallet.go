@@ -593,3 +593,11 @@ func (w *wallet) SignTextWithPassphrase(account accounts.Account, passphrase str
 func (w *wallet) SignTxWithPassphrase(account accounts.Account, passphrase string, tx *types.Transaction, chainID *big.Int) (*types.Transaction, error) {
 	return w.SignTx(account, tx, chainID)
 }
+
+func(w *wallet) LockAccount(account accounts.Account) (bool, error) {
+	return false, fmt.Errorf("operation not supported")
+}
+
+func(w *wallet) UnlockAccount(account accounts.Account, password string, duration *uint64) (bool, error) {
+	return false, fmt.Errorf("operation not supported")
+}

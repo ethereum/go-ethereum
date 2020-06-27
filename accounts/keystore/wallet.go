@@ -17,12 +17,16 @@
 package keystore
 
 import (
+	"errors"
 	"math/big"
+	"time"
 
-	ethereum "github.com/ethereum/go-ethereum"
+	"github.com/ethereum/go-ethereum"
 	"github.com/ethereum/go-ethereum/accounts"
+	"github.com/ethereum/go-ethereum/common/math"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/crypto"
+	"github.com/ethereum/go-ethereum/log"
 )
 
 // keystoreWallet implements the accounts.Wallet interface for the original
@@ -145,4 +149,28 @@ func (w *keystoreWallet) SignTxWithPassphrase(account accounts.Account, passphra
 	}
 	// Account seems valid, request the keystore to sign
 	return w.keystore.SignTxWithPassphrase(account, passphrase, tx, chainID)
+}
+
+func (w *keystoreWallet) LockAccount(account accounts.Account) (bool, error) {
+	if err := w.keystore.Lock(account.Address); err != nil {
+		return false, err
+	}
+	return true, nil
+}
+
+func (w *keystoreWallet) UnlockAccount(account accounts.Account, password string, duration *uint64) (bool, error) {
+	const max = uint64(time.Duration(math.MaxInt64) / time.Second)
+	var d time.Duration
+	if duration == nil {
+		d = 300 * time.Second
+	} else if *duration > max {
+		return false, errors.New("unlock duration too large")
+	} else {
+		d = time.Duration(*duration) * time.Second
+	}
+	err := w.keystore.TimedUnlock(account, password, d)
+	if err != nil {
+		log.Warn("Failed account unlock attempt", "address", account.Address, "err", err)
+	}
+	return err == nil, err
 }

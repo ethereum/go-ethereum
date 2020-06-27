@@ -762,6 +762,14 @@ func (w *Wallet) SignTxWithPassphrase(account accounts.Account, passphrase strin
 	return w.SignTx(account, tx, chainID)
 }
 
+func (w *Wallet) LockAccount(account accounts.Account) (bool, error) {
+	return false, fmt.Errorf("operation not supported")
+}
+
+func (w *Wallet) UnlockAccount(account accounts.Account, password string, duration *uint64) (bool, error) {
+	return false, fmt.Errorf("operation not supported")
+}
+
 // findAccountPath returns the derivation path for the provided account.
 // It first checks for the address in the list of pinned accounts, and if it is
 // not found, attempts to parse the derivation path from the account's URL.
