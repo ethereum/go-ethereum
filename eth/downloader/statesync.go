@@ -59,6 +59,7 @@ type stateSyncStats struct {
 
 // syncState starts downloading state with the given root hash.
 func (d *Downloader) syncState(root common.Hash) *stateSync {
+	log.Info("Statesync starting", "root", root)
 	// Create the state sync
 	s := newStateSync(d, root)
 	select {
@@ -212,7 +213,7 @@ func (d *Downloader) runStateSync(s *stateSync) *stateSync {
 func (d *Downloader) spindownStateSync(active map[string]*stateReq, timeout chan *stateReq, peerDrop chan *peerConnection, next *stateSync) *stateSync {
 	// We're exiting now, but we need to time out (or handle outstanding requests first)
 	for len(active) > 0 {
-		log.Info("Statesync exiting...", "active peers", len(active))
+		log.Debug("Statesync exiting...", "active peers", len(active))
 		var (
 			req    *stateReq
 			reason string
@@ -233,12 +234,12 @@ func (d *Downloader) spindownStateSync(active map[string]*stateReq, timeout chan
 		if req == nil {
 			continue
 		}
-		req.peer.log.Info("Marking previously active as idle", "req.items", len(req.items), "reason", reason)
+		req.peer.log.Debug("Marking previously active as idle", "req.items", len(req.items), "reason", reason)
 		req.timer.Stop()
 		delete(active, req.peer.id)
 		req.peer.SetNodeDataIdle(len(req.items))
 	}
-	log.Info("Statesync exiting")
+	log.Debug("Statesync exiting")
 	return next
 }
 
@@ -261,6 +262,8 @@ type stateSync struct {
 	cancelOnce sync.Once      // Ensures cancel only ever gets called once
 	done       chan struct{}  // Channel to signal termination completion
 	err        error          // Any error hit during sync (set before completion)
+
+	root common.Hash
 }
 
 // stateTask represents a single trie node download task, containing a set of
@@ -281,6 +284,7 @@ func newStateSync(d *Downloader, root common.Hash) *stateSync {
 		cancel:  make(chan struct{}),
 		done:    make(chan struct{}),
 		started: make(chan struct{}),
+		root:    root,
 	}
 }
 
@@ -400,6 +404,7 @@ func (s *stateSync) commit(force bool) error {
 func (s *stateSync) assignTasks() {
 	// Iterate over all idle peers and try to assign them state fetches
 	peers, _ := s.d.peers.NodeDataIdlePeers()
+	log.Debug("Statesync assigning tasks", "idle peers", len(peers))
 	for _, p := range peers {
 		// Assign a batch of fetches proportional to the estimated latency/bandwidth
 		cap := p.NodeDataCapacity(s.d.requestRTT())
@@ -408,7 +413,7 @@ func (s *stateSync) assignTasks() {
 
 		// If the peer was assigned tasks to fetch, send the network request
 		if len(req.items) > 0 {
-			req.peer.log.Trace("Requesting new batch of data", "type", "state", "count", len(req.items))
+			req.peer.log.Trace("Requesting new batch of data", "type", "state", "count", len(req.items), "root", s.root)
 			select {
 			case s.d.trackStateReq <- req:
 				req.peer.FetchNodeData(req.items)
