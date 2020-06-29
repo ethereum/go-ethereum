@@ -80,7 +80,7 @@ func Main(ctx *cli.Context) error {
 	)
 	var getTracer func(txIndex int) (vm.Tracer, error)
 
-	if ctx.GlobalBool(TraceFlag.Name) {
+	if ctx.Bool(TraceFlag.Name) {
 		// Configure the EVM logger
 		logConfig := &vm.LogConfig{
 			DisableStack:  ctx.Bool(TraceDisableStackFlag.Name),
@@ -205,7 +205,6 @@ type Alloc map[common.Address]core.GenesisAccount
 func (g Alloc) OnRoot(common.Hash) {}
 
 func (g Alloc) OnAccount(addr common.Address, dumpAccount state.DumpAccount) {
-
 	balance, _ := new(big.Int).SetString(dumpAccount.Balance, 10)
 	var storage map[common.Hash]common.Hash
 	if dumpAccount.Storage != nil {
