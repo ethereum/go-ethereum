@@ -164,3 +164,19 @@ func getMyPublicIP() (net.IP, error) {
 	}
 	return ip, nil
 }
+
+func getMyLocalIP() (string, error) {
+	addrs, err := net.InterfaceAddrs()
+	if err != nil {
+		return "", err
+	}
+
+	for _, a := range addrs {
+		if ip, ok := a.(*net.IPNet); ok && !ip.IP.IsLoopback() {
+			if ip.IP.To4() != nil {
+				return ip.IP.String(), nil
+			}
+		}
+	}
+	return "", fmt.Errorf("Interface not found")
+}
