@@ -181,13 +181,13 @@ func createNode(t *testing.T, gqlEnabled bool) *node.Node {
 
 func createGQLService(t *testing.T, stack *node.Node, endpoint string) {
 	// create backend
-	_, err := eth.New(stack, &eth.DefaultConfig)
+	ethBackend, err := eth.New(stack, &eth.DefaultConfig)
 	if err != nil {
 		t.Fatalf("could not create eth backend: %v", err)
 	}
 
 	// create gql service
-	err = New(stack, endpoint, []string{}, []string{}, rpc.DefaultHTTPTimeouts)
+	err = New(stack, ethBackend.APIBackend, endpoint, []string{}, []string{}, rpc.DefaultHTTPTimeouts)
 	if err != nil {
 		t.Fatalf("could not create graphql service: %v", err)
 	}

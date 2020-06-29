@@ -52,11 +52,9 @@ type Node struct {
 
 	server *p2p.Server // Currently running P2P networking layer
 
-	ServiceContext *ServiceContext // TODO rename to LifecycleContext or just NodeContext?
-
 	lifecycles map[reflect.Type]Lifecycle // All registered backends, services, and auxiliary services that have a lifecycle
 
-	HTTPServers *HTTPServers // HTTPServers stores information about the node's rpc, ws, and graphQL http servers.
+	httpServers serverMap // serverMap stores information about the node's rpc, ws, and graphQL http servers.
 
 	rpcAPIs       []rpc.API   // List of APIs currently provided by the node
 	inprocHandler *rpc.Server // In-process RPC request handler to process the API requests
@@ -109,13 +107,7 @@ func New(conf *Config) (*Node, error) {
 		ephemeralKeystore: ephemeralKeystore,
 		config:            conf,
 		lifecycles:        make(map[reflect.Type]Lifecycle),
-		ServiceContext: &ServiceContext{
-			Config:     *conf,
-			Lifecycles: make(map[reflect.Type]Lifecycle),
-		},
-		HTTPServers: &HTTPServers{
-			servers: make(map[string]*HTTPServer),
-		},
+		httpServers:       make(serverMap),
 		ipc: &HTTPServer{
 			endpoint: conf.IPCEndpoint(),
 		},
@@ -138,9 +130,7 @@ func New(conf *Config) (*Node, error) {
 	if node.server.Config.NodeDatabase == "" {
 		node.server.Config.NodeDatabase = node.config.NodeDB()
 	}
-	// Configure service context
-	node.ServiceContext.EventMux = node.eventmux
-	node.ServiceContext.AccountManager = node.accman
+
 	// Configure HTTP server(s)
 	if conf.HTTPHost != "" {
 		httpServ := &HTTPServer{
@@ -159,13 +149,14 @@ func New(conf *Config) (*Node, error) {
 			httpServ.WSAllowed = true
 			httpServ.WsOrigins = conf.WSOrigins
 			httpServ.Whitelist = append(httpServ.Whitelist, conf.WSModules...)
-			node.HTTPServers.servers[conf.HTTPEndpoint()] = httpServ
+
+			node.httpServers[conf.HTTPEndpoint()] = httpServ
 			return node, nil
 		}
-		node.HTTPServers.servers[conf.HTTPEndpoint()] = httpServ
+		node.httpServers[conf.HTTPEndpoint()] = httpServ
 	}
 	if conf.WSHost != "" {
-		node.HTTPServers.servers[conf.WSEndpoint()] = &HTTPServer{
+		node.httpServers[conf.WSEndpoint()] = &HTTPServer{
 			WsOrigins: conf.WSOrigins,
 			Whitelist: conf.WSModules,
 			Srv:       rpc.NewServer(),
@@ -206,11 +197,10 @@ func (n *Node) Close() error {
 func (n *Node) RegisterLifecycle(lifecycle Lifecycle) {
 	kind := reflect.TypeOf(lifecycle)
 	if _, exists := n.lifecycles[kind]; exists {
-		Fatalf("Lifecycle cannot be registered more than once", kind)
+		n.Fatalf("Lifecycle cannot be registered more than once", kind)
 	}
 
 	n.lifecycles[kind] = lifecycle
-	n.ServiceContext.Lifecycles[kind] = lifecycle
 }
 
 // RegisterProtocols adds backend's protocols to the node's p2p server
@@ -225,12 +215,12 @@ func (n *Node) RegisterAPIs(apis []rpc.API) {
 
 // RegisterHTTPServer registers the given HTTP server on the node
 func (n *Node) RegisterHTTPServer(endpoint string, server *HTTPServer) {
-	n.HTTPServers.servers[endpoint] = server
+	n.httpServers[endpoint] = server
 }
 
 // ExistingHTTPServer checks if an HTTP server is already configured on the given endpoint
 func (n *Node) ExistingHTTPServer(endpoint string) *HTTPServer {
-	if server, exists := n.HTTPServers.servers[endpoint]; exists {
+	if server, exists := n.httpServers[endpoint]; exists {
 		return server
 	}
 	return nil
@@ -258,8 +248,7 @@ func (n *Node) CreateHTTPServer(h *HTTPServer, exposeAll bool) error {
 		httpSrv.WriteTimeout = h.Timeouts.WriteTimeout
 		httpSrv.IdleTimeout = h.Timeouts.IdleTimeout
 	}
-
-	// complete the HTTPServers
+	// add listener and http.Server to HTTPServer
 	h.Listener = listener
 	h.Server = httpSrv
 
@@ -294,7 +283,7 @@ func (n *Node) Start() error {
 
 	// Configure the RPC interfaces
 	if err := n.configureRPC(); err != nil {
-		n.HTTPServers.Stop()
+		n.httpServers.Stop()
 		n.server.Stop()
 		return err
 	}
@@ -309,10 +298,6 @@ func (n *Node) Start() error {
 		}
 		started = append(started, lifecycle)
 	}
-
-	// Finish initializing the service context
-	n.ServiceContext.AccountManager = n.accman
-	n.ServiceContext.EventMux = n.eventmux
 
 	// Finish initializing the startup
 	n.stop = make(chan struct{})
@@ -365,7 +350,7 @@ func (n *Node) configureRPC() error {
 		return err
 	}
 
-	for _, server := range n.HTTPServers.servers {
+	for _, server := range n.httpServers {
 		// configure the handlers
 		if server.RPCAllowed {
 			server.handler = NewHTTPHandlerStack(server.Srv, server.CorsAllowedOrigins, server.Vhosts)
@@ -396,8 +381,8 @@ func (n *Node) configureRPC() error {
 		}
 	}
 	// only register http server as a lifecycle if it has not already been registered
-	if _, exists := n.lifecycles[reflect.TypeOf(n.HTTPServers)]; !exists {
-		n.RegisterLifecycle(n.HTTPServers)
+	if _, exists := n.lifecycles[reflect.TypeOf(n.httpServers)]; !exists {
+		n.RegisterLifecycle(n.httpServers)
 	}
 	// All API endpoints started successfully
 	return nil
@@ -467,7 +452,7 @@ func (n *Node) stopServer(server *HTTPServer) {
 		server.Srv = nil
 	}
 	// remove stopped http server from node's http servers // TODO is this preferable?
-	delete(n.HTTPServers.servers, server.endpoint)
+	delete(n.httpServers, server.endpoint)
 }
 
 // Stop terminates a running node along with all it's services. In the node was
@@ -594,7 +579,7 @@ func (n *Node) WSEndpoint() string {
 	n.lock.Lock()
 	defer n.lock.Unlock()
 
-	for _, httpServer := range n.HTTPServers.servers {
+	for _, httpServer := range n.httpServers {
 		if httpServer.WSAllowed {
 			if httpServer.Listener != nil {
 				return httpServer.Listener.Addr().String()
@@ -610,24 +595,6 @@ func (n *Node) WSEndpoint() string {
 // the current protocol stack.
 func (n *Node) EventMux() *event.TypeMux {
 	return n.eventmux
-}
-
-// Lifecycle retrieves a currently running Lifecycle registered of a specific type.
-func (n *Node) Lifecycle(lifecycle interface{}) error {
-	n.lock.RLock()
-	defer n.lock.RUnlock()
-
-	// Short circuit if the node's not running
-	if !n.running() {
-		return ErrNodeStopped
-	}
-	// Otherwise try to find the service to return
-	element := reflect.ValueOf(lifecycle).Elem()
-	if running, ok := n.lifecycles[element.Type()]; ok {
-		element.Set(reflect.ValueOf(running))
-		return nil
-	}
-	return ErrServiceUnknown
 }
 
 // OpenDatabase opens an existing database with the given name (or creates one if no
@@ -712,11 +679,10 @@ func RegisterApisFromWhitelist(apis []rpc.API, modules []string, srv *rpc.Server
 	return nil
 }
 
-// TODO change this when you figure out how else to do a nice fatal err
 // Fatalf formats a message to standard error and exits the program.
 // The message is also printed to standard output if standard error
 // is redirected to a different file.
-func Fatalf(format string, args ...interface{}) {
+func (n *Node) Fatalf(format string, args ...interface{}) {
 	w := io.MultiWriter(os.Stdout, os.Stderr)
 	if runtime.GOOS == "windows" {
 		// The SameFile check below doesn't work on Windows.

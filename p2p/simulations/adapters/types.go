@@ -233,9 +233,8 @@ func assignTCPPort() (uint16, error) {
 type ServiceContext struct {
 	RPCDialer
 
-	NodeContext *node.ServiceContext
-	Config      *NodeConfig
-	Snapshot    []byte
+	Config   *NodeConfig
+	Snapshot []byte
 }
 
 // RPCDialer is used when initialising services which need to connect to

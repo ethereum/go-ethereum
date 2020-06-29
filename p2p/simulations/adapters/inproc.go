@@ -250,9 +250,8 @@ func (sn *SimNode) Start(snapshots map[string][]byte) error {
 	sn.registerOnce.Do(func() {
 		for _, name := range sn.config.Lifecycles {
 			ctx := &ServiceContext{
-				RPCDialer:   sn.adapter,
-				NodeContext: sn.node.ServiceContext,
-				Config:      sn.config,
+				RPCDialer: sn.adapter,
+				Config:    sn.config,
 			}
 			if snapshots != nil {
 				ctx.Snapshot = snapshots[name]

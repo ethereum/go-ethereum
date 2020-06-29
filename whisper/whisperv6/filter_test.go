@@ -93,10 +93,8 @@ func TestInstallFilters(t *testing.T) {
 
 	const SizeTestFilters = 256
 
-	stack := newNode(t)
+	stack, w := newNodeWithWhisper(t)
 	defer stack.Close()
-
-	w := getWhisperFromNode(stack, t)
 
 	filters := NewFilters(w)
 	tst := generateTestCases(t, SizeTestFilters)
@@ -135,10 +133,8 @@ func TestInstallFilters(t *testing.T) {
 func TestInstallSymKeyGeneratesHash(t *testing.T) {
 	InitSingleTest()
 
-	stack := newNode(t)
+	stack, w := newNodeWithWhisper(t)
 	defer stack.Close()
-
-	w := getWhisperFromNode(stack, t)
 
 	filters := NewFilters(w)
 	filter, _ := generateFilter(t, true)
@@ -166,10 +162,8 @@ func TestInstallSymKeyGeneratesHash(t *testing.T) {
 func TestInstallIdenticalFilters(t *testing.T) {
 	InitSingleTest()
 
-	stack := newNode(t)
+	stack, w := newNodeWithWhisper(t)
 	defer stack.Close()
-
-	w := getWhisperFromNode(stack, t)
 
 	filters := NewFilters(w)
 	filter1, _ := generateFilter(t, true)
@@ -240,10 +234,8 @@ func TestInstallIdenticalFilters(t *testing.T) {
 func TestInstallFilterWithSymAndAsymKeys(t *testing.T) {
 	InitSingleTest()
 
-	stack := newNode(t)
+	stack, w := newNodeWithWhisper(t)
 	defer stack.Close()
-
-	w := getWhisperFromNode(stack, t)
 
 	filters := NewFilters(w)
 	filter1, _ := generateFilter(t, true)
@@ -658,10 +650,8 @@ func TestWatchers(t *testing.T) {
 	var x, firstID string
 	var err error
 
-	stack := newNode(t)
+	stack, w := newNodeWithWhisper(t)
 	defer stack.Close()
-
-	w := getWhisperFromNode(stack, t)
 
 	filters := NewFilters(w)
 	tst := generateTestCases(t, NumFilters)

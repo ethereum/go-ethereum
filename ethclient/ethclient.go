@@ -397,6 +397,14 @@ func (ec *Client) SubscribeFilterLogs(ctx context.Context, q ethereum.FilterQuer
 	return ec.c.EthSubscribe(ctx, ch, "logs", arg)
 }
 
+// ToFilterArg is for testing purposes only.
+func ToFilterArg(q ethereum.FilterQuery, test bool) (interface{}, error) {
+	if test {
+		return toFilterArg(q)
+	}
+	return nil, fmt.Errorf("functionality reserved for testing") // TODO is this okay?
+}
+
 func toFilterArg(q ethereum.FilterQuery) (interface{}, error) {
 	arg := map[string]interface{}{
 		"address": q.Addresses,

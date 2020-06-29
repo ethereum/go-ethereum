@@ -364,47 +364,6 @@ func TestLifecycleTerminationGuarantee(t *testing.T) {
 	stack.server.PrivateKey = testNodeKey
 }
 
-// TestLifecycleRetrieval tests that individual services can be retrieved.
-func TestLifecycleRetrieval(t *testing.T) {
-	// Create a simple stack and register two service types
-	stack, err := New(testNodeConfig())
-	if err != nil {
-		t.Fatalf("failed to create protocol stack: %v", err)
-	}
-	defer stack.Close()
-
-	noop := NewNoop()
-	stack.RegisterLifecycle(noop)
-
-	is, err := NewInstrumentedService()
-	if err != nil {
-		t.Fatalf("instrumented service creation failed: %v", err)
-	}
-	stack.RegisterLifecycle(is)
-
-	// Make sure none of the services can be retrieved until started
-	var noopServ *Noop
-	if err := stack.Lifecycle(&noopServ); err != ErrNodeStopped {
-		t.Fatalf("noop service retrieval mismatch: have %v, want %v", err, ErrNodeStopped)
-	}
-	var instServ *InstrumentedService
-	if err := stack.Lifecycle(&instServ); err != ErrNodeStopped {
-		t.Fatalf("instrumented service retrieval mismatch: have %v, want %v", err, ErrNodeStopped)
-	}
-	// Start the stack and ensure everything is retrievable now
-	if err := stack.Start(); err != nil {
-		t.Fatalf("failed to start stack: %v", err)
-	}
-	defer stack.Stop()
-
-	if err := stack.Lifecycle(&noopServ); err != nil {
-		t.Fatalf("noop service retrieval mismatch: have %v, want %v", err, nil)
-	}
-	if err := stack.Lifecycle(&instServ); err != nil {
-		t.Fatalf("instrumented service retrieval mismatch: have %v, want %v", err, nil)
-	}
-}
-
 // Tests whether a given HTTPServer can be registered on the node
 func TestRegisterHTTPServer(t *testing.T) {
 	stack, err := New(testNodeConfig())
@@ -449,15 +408,21 @@ func TestRegisterHTTPServer(t *testing.T) {
 func TestHTTPServerCreateAndStop(t *testing.T) {
 	// test on same ports
 	node1 := startHTTP(t, 7453, 7453)
-	if len(node1.HTTPServers.servers) != 1 {
+	if len(node1.httpServers) != 1 {
 		t.Fatalf("node has more than 1 http server")
 	}
 	// check to make sure http servers are registered
-	var httpSrv1 *HTTPServers
-	if err := node1.Lifecycle(&httpSrv1); err != nil {
-		t.Fatalf("HTTP servers not registered as lifecycles on the node: %v", err)
+	var exists bool
+	for _, lifecycle := range node1.lifecycles {
+		if reflect.DeepEqual(node1.httpServers, lifecycle) {
+			exists = true
+		}
 	}
-	for _, server := range node1.HTTPServers.servers {
+	if !exists {
+		t.Fatal("HTTP servers not registered as lifecycles on the node")
+	}
+	// check to make sure http servers are configured properly
+	for _, server := range node1.httpServers {
 		if !(server.WSAllowed && server.RPCAllowed) {
 			t.Fatalf("node's http server is not configured to handle both rpc and ws")
 		}
@@ -466,21 +431,25 @@ func TestHTTPServerCreateAndStop(t *testing.T) {
 			t.Fatalf("failed to remove server %v from node after stopping it", server)
 		}
 	}
-
 	node1.Close()
 
 	// test on separate ports
 	node2 := startHTTP(t, 7453, 9393)
-	if len(node2.HTTPServers.servers) != 2 {
+	if len(node2.httpServers) != 2 {
 		t.Fatalf("amount of http servers on the node is not equal to 2")
 	}
 	// check to make sure http servers are registered
-	var httpSrv2 *HTTPServers
-	if err := node2.Lifecycle(&httpSrv2); err != nil {
-		t.Fatalf("HTTP servers not registered as lifecycles on the node: %v", err)
+	exists = false
+	for _, lifecycle := range node2.lifecycles {
+		if reflect.DeepEqual(node2.httpServers, lifecycle) {
+			exists = true
+		}
+	}
+	if !exists {
+		t.Fatal("HTTP servers not registered as lifecycles on the node")
 	}
 	// check that neither http server has both ws and rpc enabled
-	for _, server := range node2.HTTPServers.servers {
+	for _, server := range node2.httpServers {
 		if server.WSAllowed && server.RPCAllowed {
 			t.Fatalf("both rpc and ws allowed on a single http server")
 		}

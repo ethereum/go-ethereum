@@ -36,7 +36,7 @@ import (
 	"github.com/ethereum/go-ethereum/core"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/eth"
-	"github.com/ethereum/go-ethereum/event"
+	"github.com/ethereum/go-ethereum/internal/ethapi"
 	"github.com/ethereum/go-ethereum/les"
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/node"
@@ -56,23 +56,15 @@ const (
 	chainHeadChanSize = 10
 )
 
-type txPool interface {
-	// SubscribeNewTxsEvent should return an event subscription of
-	// NewTxsEvent and send events to the given channel.
-	SubscribeNewTxsEvent(chan<- core.NewTxsEvent) event.Subscription
-}
-
-type blockChain interface {
-	SubscribeChainHeadEvent(ch chan<- core.ChainHeadEvent) event.Subscription
-}
+// Backend encompasses the backend behaviors needed for the ethstats service.
+type Backend ethapi.Backend
 
 // Service implements an Ethereum netstats reporting daemon that pushes local
 // chain statistics up to a monitoring server.
 type Service struct {
-	server *p2p.Server        // Peer-to-peer server to retrieve networking infos
-	eth    *eth.Ethereum      // Full Ethereum service if monitoring a full node
-	les    *les.LightEthereum // Light Ethereum service if monitoring a light node
-	engine consensus.Engine   // Consensus engine to retrieve variadic block fields
+	server  *p2p.Server // Peer-to-peer server to retrieve networking infos
+	backend Backend
+	engine  consensus.Engine // Consensus engine to retrieve variadic block fields
 
 	node string // Name of the node to display on the monitoring page
 	pass string // Password to authorize access to the monitoring page
@@ -83,7 +75,7 @@ type Service struct {
 }
 
 // New returns a monitoring service ready for stats reporting.
-func New(node *node.Node, url string) error {
+func New(node *node.Node, backend Backend, engine consensus.Engine, url string) error {
 	// Parse the netstats connection url
 	re := regexp.MustCompile("([^:@]*)(:([^@]*))?@(.+)")
 	parts := re.FindStringSubmatch(url)
@@ -91,27 +83,14 @@ func New(node *node.Node, url string) error {
 		return fmt.Errorf("invalid netstats url: \"%s\", should be nodename:secret@host:port", url)
 	}
 	ethstats := &Service{
-		server: node.Server(),
-		node:   parts[1],
-		pass:   parts[3],
-		host:   parts[4],
-		pongCh: make(chan struct{}),
-		histCh: make(chan []uint64, 1),
-	}
-
-	// fetch backend
-	var ethServ *eth.Ethereum
-	if err := node.ServiceContext.Lifecycle(&ethServ); err == nil {
-		ethstats.eth = ethServ
-		ethstats.engine = ethServ.Engine()
-	}
-	var lesServ *les.LightEthereum
-	if err := node.ServiceContext.Lifecycle(&lesServ); err == nil {
-		ethstats.les = lesServ
-		ethstats.engine = lesServ.Engine()
-	}
-	if ethstats.engine == nil { // TODO check to make sure at least one backend is not nil?
-		return fmt.Errorf("Ethereum service not found")
+		backend: backend,
+		engine:  engine,
+		server:  node.Server(),
+		node:    parts[1],
+		pass:    parts[3],
+		host:    parts[4],
+		pongCh:  make(chan struct{}),
+		histCh:  make(chan []uint64, 1),
 	}
 
 	node.RegisterLifecycle(ethstats)
@@ -136,22 +115,12 @@ func (s *Service) Stop() error {
 // until termination.
 func (s *Service) loop() {
 	// Subscribe to chain events to execute updates on
-	var blockchain blockChain
-	var txpool txPool
-	if s.eth != nil {
-		blockchain = s.eth.BlockChain()
-		txpool = s.eth.TxPool()
-	} else {
-		blockchain = s.les.BlockChain()
-		txpool = s.les.TxPool()
-	}
-
 	chainHeadCh := make(chan core.ChainHeadEvent, chainHeadChanSize)
-	headSub := blockchain.SubscribeChainHeadEvent(chainHeadCh)
+	headSub := s.backend.SubscribeChainHeadEvent(chainHeadCh)
 	defer headSub.Unsubscribe()
 
 	txEventCh := make(chan core.NewTxsEvent, txChanSize)
-	txSub := txpool.SubscribeNewTxsEvent(txEventCh)
+	txSub := s.backend.SubscribeNewTxsEvent(txEventCh)
 	defer txSub.Unsubscribe()
 
 	// Start a goroutine that exhausts the subscriptions to avoid events piling up
@@ -560,29 +529,20 @@ func (s *Service) assembleBlockStats(block *types.Block) *blockStats {
 		txs    []txStats
 		uncles []*types.Header
 	)
-	if s.eth != nil {
-		// Full nodes have all needed information available
-		if block == nil {
-			block = s.eth.BlockChain().CurrentBlock()
-		}
-		header = block.Header()
-		td = s.eth.BlockChain().GetTd(header.Hash(), header.Number.Uint64())
 
-		txs = make([]txStats, len(block.Transactions()))
-		for i, tx := range block.Transactions() {
-			txs[i].Hash = tx.Hash()
-		}
-		uncles = block.Uncles()
-	} else {
-		// Light nodes would need on-demand lookups for transactions/uncles, skip
-		if block != nil {
-			header = block.Header()
-		} else {
-			header = s.les.BlockChain().CurrentHeader()
-		}
-		td = s.les.BlockChain().GetTd(header.Hash(), header.Number.Uint64())
-		txs = []txStats{}
+	// Full nodes have all needed information available
+	if block == nil {
+		block = s.backend.CurrentBlock()
 	}
+	header = block.Header()
+	td = s.backend.GetTd(header.Hash()) // TODO is it okay to just call `GetTD` with just the hash and not number?
+
+	txs = make([]txStats, len(block.Transactions()))
+	for i, tx := range block.Transactions() {
+		txs[i].Hash = tx.Hash()
+	}
+	uncles = block.Uncles()
+
 	// Assemble and return the block stats
 	author, _ := s.engine.Author(header)
 
@@ -613,12 +573,7 @@ func (s *Service) reportHistory(conn *websocket.Conn, list []uint64) error {
 		indexes = append(indexes, list...)
 	} else {
 		// No indexes requested, send back the top ones
-		var head int64
-		if s.eth != nil {
-			head = s.eth.BlockChain().CurrentHeader().Number.Int64()
-		} else {
-			head = s.les.BlockChain().CurrentHeader().Number.Int64()
-		}
+		head := s.backend.CurrentHeader().Number.Int64()
 		start := head - historyUpdateRange + 1
 		if start < 0 {
 			start = 0
@@ -631,14 +586,11 @@ func (s *Service) reportHistory(conn *websocket.Conn, list []uint64) error {
 	history := make([]*blockStats, len(indexes))
 	for i, number := range indexes {
 		// Retrieve the next block if it's known to us
-		var block *types.Block
-		if s.eth != nil {
-			block = s.eth.BlockChain().GetBlockByNumber(number)
-		} else {
-			if header := s.les.BlockChain().GetHeaderByNumber(number); header != nil {
-				block = types.NewBlockWithHeader(header)
-			}
+		block, err := s.backend.GetBlockByNumber(context.Background(), number)
+		if err != nil {
+			return err
 		}
+
 		// If we do have the block, add to the history and continue
 		if block != nil {
 			history[len(history)-1-i] = s.assembleBlockStats(block)
@@ -673,12 +625,7 @@ type pendStats struct {
 // it to the stats server.
 func (s *Service) reportPending(conn *websocket.Conn) error {
 	// Retrieve the pending count from the local blockchain
-	var pending int
-	if s.eth != nil {
-		pending, _ = s.eth.TxPool().Stats()
-	} else {
-		pending = s.les.TxPool().Stats()
-	}
+	pending, _ := s.backend.Stats()
 	// Assemble the transaction stats and send it to the server
 	log.Trace("Sending pending transactions to ethstats", "count", pending)
 
@@ -712,22 +659,20 @@ func (s *Service) reportStats(conn *websocket.Conn) error {
 	var (
 		mining   bool
 		hashrate int
-		syncing  bool
-		gasprice int
 	)
-	if s.eth != nil {
-		mining = s.eth.Miner().Mining()
-		hashrate = int(s.eth.Miner().HashRate())
 
-		sync := s.eth.Downloader().Progress()
-		syncing = s.eth.BlockChain().CurrentHeader().Number.Uint64() >= sync.HighestBlock
-
-		price, _ := s.eth.APIBackend.SuggestPrice(context.Background())
-		gasprice = int(price.Uint64())
-	} else {
-		sync := s.les.Downloader().Progress()
-		syncing = s.les.BlockChain().CurrentHeader().Number.Uint64() >= sync.HighestBlock
+	mine := s.backend.Miner()
+	if mine != nil {
+		mining = mine.Mining()
+		hashrate = int(s.backend.Miner().HashRate())
 	}
+
+	sync := s.backend.Downloader().Progress()
+	syncing := s.backend.CurrentHeader().Number.Uint64() >= sync.HighestBlock
+
+	price, _ := s.backend.SuggestPrice(context.Background())
+	gasprice := int(price.Uint64())
+
 	// Assemble the node stats and send it to the server
 	log.Trace("Sending node details to ethstats")
 

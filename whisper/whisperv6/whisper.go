@@ -94,7 +94,7 @@ type Whisper struct {
 }
 
 // New creates a Whisper client ready to communicate through the Ethereum P2P network.
-func New(stack *node.Node, cfg *Config) error {
+func New(stack *node.Node, cfg *Config) (*Whisper, error) {
 	if cfg == nil {
 		cfg = &DefaultConfig
 	}
@@ -136,7 +136,7 @@ func New(stack *node.Node, cfg *Config) error {
 	stack.RegisterAPIs(whisper.APIs())
 	stack.RegisterProtocols(whisper.Protocols())
 	stack.RegisterLifecycle(whisper)
-	return nil
+	return whisper, nil
 }
 
 // MinPow returns the PoW value required by this node.

@@ -32,9 +32,7 @@ import (
 	"github.com/rs/cors"
 )
 
-type HTTPServers struct {
-	servers map[string]*HTTPServer // Stores information about all http servers (if any) by their port, including http, ws, and graphql
-}
+type serverMap map[string]*HTTPServer // Stores information about all http servers (if any) by their endpoint, including http, ws, and graphql
 
 type HTTPServer struct {
 	handler http.Handler
@@ -55,23 +53,23 @@ type HTTPServer struct {
 	Timeouts           rpc.HTTPTimeouts
 
 	RPCAllowed bool
-	WSAllowed  bool
+	WSAllowed  bool // TODO discuss this later bc possible race condition
 	GQLAllowed bool
 
 	GQLHandler http.Handler
 }
 
-func (h *HTTPServers) Start() error {
-	for _, server := range h.servers {
+func (sm serverMap) Start() error {
+	for _, server := range sm {
 		if err := server.Start(); err != nil {
-			return h.Stop()
+			return sm.Stop()
 		}
 	}
 	return nil
 }
 
-func (h *HTTPServers) Stop() error {
-	for _, server := range h.servers {
+func (sm serverMap) Stop() error {
+	for _, server := range sm {
 		if err := server.Stop(); err != nil {
 			return err
 		}
@@ -79,14 +77,14 @@ func (h *HTTPServers) Stop() error {
 	return nil
 }
 
-// Start starts the HTTPServers's HTTP server. // TODO I don't like the way this is written
+// Start starts the serverMap's HTTP server. // TODO I don't like the way this is written
 func (h *HTTPServer) Start() error {
 	go h.Server.Serve(h.Listener)
 	log.Info("HTTP endpoint successfully opened", "url", fmt.Sprintf("http://%v/", h.Listener.Addr()))
 	return nil
 }
 
-// Stop shuts down the HTTPServers's HTTP server. // TODO I don't like the way this is written
+// Stop shuts down the serverMap's HTTP server. // TODO I don't like the way this is written
 func (h *HTTPServer) Stop() error {
 	if h.Server != nil {
 		url := fmt.Sprintf("http://%v/", h.Listener.Addr())
@@ -102,12 +100,12 @@ func (h *HTTPServer) Stop() error {
 	return nil
 }
 
-// SetHandler assigns the given handler to the HTTPServers.
+// SetHandler assigns the given handler to the serverMap.
 func (h *HTTPServer) SetHandler(handler http.Handler) {
 	h.handler = handler
 }
 
-// SetEndpoints assigns the given endpoint to the HTTPServers.
+// SetEndpoints assigns the given endpoint to the serverMap.
 func (h *HTTPServer) SetEndpoint(endpoint string) {
 	h.endpoint = endpoint
 }
@@ -224,6 +222,7 @@ func newGzipHandler(next http.Handler) http.Handler {
 // NewWebsocketUpgradeHandler returns a websocket handler that serves an incoming request only if it contains an upgrade
 // request to the websocket protocol. If not, serves the the request with the http handler.
 func (hs *HTTPServer) NewWebsocketUpgradeHandler(h http.Handler, ws http.Handler) http.Handler {
+	// TODO make sure you protect the pointer
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if hs.WSAllowed && isWebsocket(r) {
 			ws.ServeHTTP(w, r)

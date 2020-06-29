@@ -175,20 +175,20 @@ func NewNode(datadir string, config *NodeConfig) (stack *Node, _ error) {
 		ethConf.SyncMode = downloader.LightSync
 		ethConf.NetworkId = uint64(config.EthereumNetworkID)
 		ethConf.DatabaseCache = config.EthereumDatabaseCache
-		_, err = les.New(rawStack, &ethConf)
+		lesBackend, err := les.New(rawStack, &ethConf)
 		if err != nil {
 			return nil, fmt.Errorf("ethereum init: %v", err)
 		}
 		// If netstats reporting is requested, do it
 		if config.EthereumNetStats != "" {
-			if err := ethstats.New(rawStack, config.EthereumNetStats); err != nil {
+			if err := ethstats.New(rawStack, lesBackend.ApiBackend, lesBackend.Engine(), config.EthereumNetStats); err != nil {
 				return nil, fmt.Errorf("netstats init: %v", err)
 			}
 		}
 	}
 	// Register the Whisper protocol if requested
 	if config.WhisperEnabled {
-		if err := whisper.New(rawStack, &whisper.DefaultConfig); err != nil {
+		if _, err := whisper.New(rawStack, &whisper.DefaultConfig); err != nil {
 			return nil, fmt.Errorf("whisper init: %v", err)
 		}
 	}

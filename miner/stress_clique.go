@@ -22,6 +22,7 @@ package main
 import (
 	"bytes"
 	"crypto/ecdsa"
+	"github.com/ethereum/go-ethereum/internal/ethapi"
 	"io/ioutil"
 	"math/big"
 	"math/rand"
@@ -59,12 +60,16 @@ func main() {
 	genesis := makeGenesis(faucets, sealers)
 
 	var (
-		nodes  []*node.Node
+		nodes  []struct{
+			node *node.Node
+			backend ethapi.Backend
+		}
 		enodes []*enode.Node
 	)
+
 	for _, sealer := range sealers {
 		// Start the node and wait until it's up
-		node, err := makeSealer(genesis)
+		node, ethBackend, err := makeSealer(genesis)
 		if err != nil {
 			panic(err)
 		}
@@ -78,7 +83,13 @@ func main() {
 			node.Server().AddPeer(n)
 		}
 		// Start tracking the node and it's enode
-		nodes = append(nodes, node)
+		nodes = append(nodes, struct{
+			node *node.Node
+			backend ethapi.Backend
+		}{
+			node,
+			ethBackend,
+		})
 		enodes = append(enodes, node.Server().Self())
 
 		// Inject the signer key and start sealing with it
@@ -95,11 +106,7 @@ func main() {
 	time.Sleep(3 * time.Second)
 
 	for _, node := range nodes {
-		var ethereum *eth.Ethereum
-		if err := node.ServiceContext.Lifecycle(&ethereum); err != nil {
-			panic(err)
-		}
-		if err := ethereum.StartMining(1); err != nil {
+		if err := node.backend.StartMining(1); err != nil {
 			panic(err)
 		}
 	}
@@ -111,22 +118,24 @@ func main() {
 		index := rand.Intn(len(faucets))
 
 		// Fetch the accessor for the relevant signer
-		var ethereum *eth.Ethereum
-		if err := nodes[index%len(nodes)].Service(&ethereum); err != nil {
-			panic(err)
-		}
+		backend := nodes[index%len(nodes)].backend
+
 		// Create a self transaction and inject into the pool
 		tx, err := types.SignTx(types.NewTransaction(nonces[index], crypto.PubkeyToAddress(faucets[index].PublicKey), new(big.Int), 21000, big.NewInt(100000000000), nil), types.HomesteadSigner{}, faucets[index])
 		if err != nil {
 			panic(err)
 		}
-		if err := ethereum.TxPool().AddLocal(tx); err != nil {
+		txpool := backend.TxPool()
+		if txpool == nil {
+			panic(fmt.Errorf("Ethereum service not running"))
+		}
+		if err := txpool.AddLocal(tx); err != nil {
 			panic(err)
 		}
 		nonces[index]++
 
 		// Wait if we're too saturated
-		if pend, _ := ethereum.TxPool().Stats(); pend > 2048 {
+		if pend, _ := txpool.Stats(); pend > 2048 {
 			time.Sleep(100 * time.Millisecond)
 		}
 	}
@@ -169,7 +178,7 @@ func makeGenesis(faucets []*ecdsa.PrivateKey, sealers []*ecdsa.PrivateKey) *core
 	return genesis
 }
 
-func makeSealer(genesis *core.Genesis) (*node.Node, error) {
+func makeSealer(genesis *core.Genesis) (*node.Node, ethapi.Backend, error) {
 	// Define the basic configurations for the Ethereum node
 	datadir, _ := ioutil.TempDir("", "")
 
@@ -213,5 +222,5 @@ func makeSealer(genesis *core.Genesis) (*node.Node, error) {
 	stack.RegisterLifecycle(ethBackend)
 
 	// Start the node and return if successful
-	return stack, stack.Start()
+	return stack, ethBackend, stack.Start()
 }

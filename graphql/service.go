@@ -17,12 +17,9 @@
 package graphql
 
 import (
-	"errors"
 	"net/http"
 
-	"github.com/ethereum/go-ethereum/eth"
 	"github.com/ethereum/go-ethereum/internal/ethapi"
-	"github.com/ethereum/go-ethereum/les"
 	"github.com/ethereum/go-ethereum/node"
 	"github.com/ethereum/go-ethereum/rpc"
 	"github.com/graph-gophers/graphql-go"
@@ -30,19 +27,9 @@ import (
 )
 
 // New constructs a new GraphQL service instance.
-func New(stack *node.Node, endpoint string, cors, vhosts []string, timeouts rpc.HTTPTimeouts) error {
-	// fetch backend
-	var backend ethapi.Backend
-	var ethServ *eth.Ethereum
-	if err := stack.ServiceContext.Lifecycle(&ethServ); err == nil {
-		backend = ethServ.APIBackend
-	}
-	var lesServ *les.LightEthereum
-	if err := stack.ServiceContext.Lifecycle(&lesServ); err == nil {
-		backend = lesServ.ApiBackend
-	}
+func New(stack *node.Node, backend ethapi.Backend, endpoint string, cors, vhosts []string, timeouts rpc.HTTPTimeouts) error {
 	if backend == nil {
-		return errors.New("No backend found") // TODO should this be a fatal error?
+		stack.Fatalf("missing backend")
 	}
 	// check if http server with given endpoint exists and enable graphQL on it
 	server := stack.ExistingHTTPServer(endpoint)

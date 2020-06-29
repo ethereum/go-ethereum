@@ -443,9 +443,8 @@ func startExecNodeStack() (*node.Node, error) {
 			return nil, fmt.Errorf("unknown node service %q", err)
 		}
 		ctx := &ServiceContext{
-			RPCDialer:   &wsRPCDialer{addrs: conf.PeerAddrs},
-			NodeContext: stack.ServiceContext,
-			Config:      conf.Node,
+			RPCDialer: &wsRPCDialer{addrs: conf.PeerAddrs},
+			Config:    conf.Node,
 		}
 		if conf.Snapshots != nil {
 			ctx.Snapshot = conf.Snapshots[name]

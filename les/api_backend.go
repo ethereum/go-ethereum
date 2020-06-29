@@ -19,10 +19,12 @@ package les
 import (
 	"context"
 	"errors"
+	"fmt"
 	"math/big"
 
 	"github.com/ethereum/go-ethereum/accounts"
 	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/consensus"
 	"github.com/ethereum/go-ethereum/core"
 	"github.com/ethereum/go-ethereum/core/bloombits"
 	"github.com/ethereum/go-ethereum/core/rawdb"
@@ -31,9 +33,11 @@ import (
 	"github.com/ethereum/go-ethereum/core/vm"
 	"github.com/ethereum/go-ethereum/eth/downloader"
 	"github.com/ethereum/go-ethereum/eth/gasprice"
+	"github.com/ethereum/go-ethereum/ethclient"
 	"github.com/ethereum/go-ethereum/ethdb"
 	"github.com/ethereum/go-ethereum/event"
 	"github.com/ethereum/go-ethereum/light"
+	"github.com/ethereum/go-ethereum/miner"
 	"github.com/ethereum/go-ethereum/params"
 	"github.com/ethereum/go-ethereum/rpc"
 )
@@ -281,4 +285,33 @@ func (b *LesApiBackend) ServiceFilter(ctx context.Context, session *bloombits.Ma
 	for i := 0; i < bloomFilterThreads; i++ {
 		go session.Multiplex(bloomRetrievalBatch, bloomRetrievalWait, b.eth.bloomRequests)
 	}
+}
+
+func (b *LesApiBackend) Engine() consensus.Engine {
+	return b.eth.engine
+}
+
+func (b *LesApiBackend) GetBlockByNumber(ctx context.Context, number uint64) (*types.Block, error) {
+	header := b.eth.blockchain.GetHeaderByNumber(number)
+	return types.NewBlockWithHeader(header), nil // TODO is this okay?
+}
+
+func (b *LesApiBackend) CurrentHeader() *types.Header {
+	return b.eth.blockchain.CurrentHeader()
+}
+
+func (b *LesApiBackend) Miner() *miner.Miner {
+	return nil
+}
+
+func (b *LesApiBackend) StartMining(threads int) error {
+	return fmt.Errorf("Light clients do not support mining") // TODO is this okay?
+}
+
+func (b *LesApiBackend) SetContractBackend(client *ethclient.Client) {
+	b.eth.SetContractBackend(client)
+}
+
+func (b *LesApiBackend) TxPool() *core.TxPool {
+	return nil // TODO is this okay?
 }
