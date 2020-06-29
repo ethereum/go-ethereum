@@ -70,6 +70,11 @@ func enrdump(ctx *cli.Context) error {
 		return fmt.Errorf("INVALID: %v", err)
 	}
 	fmt.Print(dumpRecord(r))
+	n, err := parseNode(source)
+	if err != nil {
+		return err
+	}
+	fmt.Printf("URLv4: %v\n", n.URLv4())
 	return nil
 }
 
