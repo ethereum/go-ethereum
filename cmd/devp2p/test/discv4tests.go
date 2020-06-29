@@ -39,11 +39,11 @@ const (
 var (
 	// Remote node under test
 	Remote string
-	// IP and port where the first tester is listening
-	Listen1 string = "127.0.0.1:0"
-	// IP and port where the second tester is listening.
+	// IP where the first tester is listening, port will be assigned
+	Listen1 string = "127.0.0.1"
+	// IP where the second tester is listening, port will be assigned
 	// Before running the test, you may have to `sudo ifconfig lo0 add 127.0.0.2` (on MacOS at least)
-	Listen2 string = "127.0.0.2:0"
+	Listen2 string = "127.0.0.2"
 )
 
 type pingWithJunk struct {

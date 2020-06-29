@@ -40,11 +40,11 @@ type testenv struct {
 }
 
 func newTestEnv(remote string, waitTime int, listen1, listen2 string) *testenv {
-	l1, err := net.ListenPacket("udp", listen1)
+	l1, err := net.ListenPacket("udp", fmt.Sprintf("%v:0", listen1))
 	if err != nil {
 		panic(err)
 	}
-	l2, err := net.ListenPacket("udp", listen2)
+	l2, err := net.ListenPacket("udp", fmt.Sprintf("%v:0", listen2))
 	if err != nil {
 		panic(err)
 	}
