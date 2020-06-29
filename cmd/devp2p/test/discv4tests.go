@@ -22,7 +22,6 @@ import (
 	"fmt"
 	"net"
 	"reflect"
-	"strings"
 	"time"
 
 	"github.com/ethereum/go-ethereum/crypto"
@@ -102,11 +101,8 @@ func (te *testenv) checkPong(reply v4wire.Packet, pingHash []byte) error {
 		return fmt.Errorf("PONG reply token mismatch: got %x, want %x", pong.ReplyTok, pingHash)
 	}
 	wantEndpoint := te.localEndpoint(te.l1)
-	if strings.HasPrefix(wantEndpoint.IP.String(), "127.0.0") {
-		if !reflect.DeepEqual(pong.To, wantEndpoint) {
-			return fmt.Errorf("PONG 'to' field is wrong: got %v, want %v", pong.To, wantEndpoint)
-		}
-	} else {
+	if !reflect.DeepEqual(pong.To, wantEndpoint) {
+		// If check failed for internal IP, check for public IP
 		myPublicIP, err := getMyPublicIP()
 		if err != nil {
 			return err
