@@ -18,28 +18,42 @@ package vm
 
 import (
 	"fmt"
+	"sort"
 
 	"github.com/ethereum/go-ethereum/params"
 	"github.com/holiman/uint256"
 )
 
+var activators = map[int]func(*JumpTable){
+	2200: enable2200,
+	1884: enable1884,
+	1344: enable1344,
+	2315: enable2315,
+}
+
 // EnableEIP enables the given EIP on the config.
 // This operation writes in-place, and callers need to ensure that the globally
 // defined jump tables are not polluted.
 func EnableEIP(eipNum int, jt *JumpTable) error {
-	switch eipNum {
-	case 2200:
-		enable2200(jt)
-	case 1884:
-		enable1884(jt)
-	case 1344:
-		enable1344(jt)
-	case 2315:
-		enable2315(jt)
-	default:
+	enablerFn, ok := activators[eipNum]
+	if !ok {
 		return fmt.Errorf("undefined eip %d", eipNum)
 	}
+	enablerFn(jt)
 	return nil
+}
+
+func ValidEip(eipNum int) bool {
+	_, ok := activators[eipNum]
+	return ok
+}
+func ActivateableEips() []string {
+	var nums []string
+	for k := range activators {
+		nums = append(nums, fmt.Sprintf("%d", k))
+	}
+	sort.Strings(nums)
+	return nums
 }
 
 // enable1884 applies EIP-1884 to the given jump table:
