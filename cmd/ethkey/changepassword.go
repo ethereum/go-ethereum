@@ -67,7 +67,7 @@ Change the password of a keyfile.`,
 			}
 			newPhrase = strings.TrimRight(string(content), "\r\n")
 		} else {
-			newPhrase = promptPassphrase(true)
+			newPhrase = utils.GetPassPhrase("", true)
 		}
 
 		// Encrypt the key with the new passphrase.
