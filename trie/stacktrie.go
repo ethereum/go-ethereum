@@ -41,6 +41,32 @@ func NewStackTrie() *StackTrie {
 	}
 }
 
+func newLeaf(ko int, key, val []byte) *StackTrie {
+	return &StackTrie{
+		nodeType:  leafNode,
+		keyOffset: ko,
+		key:       key[ko:],
+		val:       val,
+	}
+}
+
+func (st *StackTrie) convertToHash(ko int) {
+	st.keyOffset = ko
+	st.val = st.hash()
+	st.nodeType = hashedNode
+	st.key = nil
+}
+
+func newExt(ko int, key []byte, child *StackTrie) *StackTrie {
+	st := &StackTrie{
+		nodeType:  leafNode,
+		keyOffset: ko,
+		key:       key[ko:],
+	}
+	st.children[0] = child
+	return st
+}
+
 // List all values that StackTrie#nodeType can hold
 const (
 	emptyNode = iota
@@ -113,16 +139,16 @@ func (st *StackTrie) insert(key, value []byte) {
 		// node directly.
 		var n *StackTrie
 		if diffidx < len(st.key)-1 {
-			n = NewStackTrie()
-			n.key = st.key[diffidx+1:]
-			n.children[0] = st.children[0]
-			n.nodeType = extNode
+			n = newExt(st.keyOffset+diffidx+1, key, st.children[0])
 		} else {
 			// Break on the last byte, no need to insert
 			// an extension node: reuse the current node
 			n = st.children[0]
+			// DEBUG this line shouldn't be necessary since
+			// st.children[0] should already have keyOffset
+			// set correctly. Keeping it until confirmation
+			//n.keyOffset = st.keyOffset + diffidx + 1
 		}
-		n.keyOffset = st.keyOffset + diffidx + 1
 
 		var p *StackTrie
 		if diffidx == 0 {
@@ -147,11 +173,7 @@ func (st *StackTrie) insert(key, value []byte) {
 		n.key = nil
 
 		// Create a leaf for the inserted part
-		o := NewStackTrie()
-		o.keyOffset = st.keyOffset + diffidx + 1
-		o.key = key[o.keyOffset:]
-		o.val = value
-		o.nodeType = leafNode
+		o := newLeaf(st.keyOffset+diffidx+1, key, value)
 
 		// Insert both child leaves where they belong:
 		origIdx := st.key[diffidx]
@@ -198,23 +220,14 @@ func (st *StackTrie) insert(key, value []byte) {
 		// The child leave will be hashed directly in order to
 		// free up some memory.
 		origIdx := st.key[diffidx]
-		p.children[origIdx] = NewStackTrie()
-		p.children[origIdx].nodeType = leafNode
-		p.children[origIdx].key = st.key[diffidx+1:]
-		p.children[origIdx].val = st.val
-		p.children[origIdx].keyOffset = p.keyOffset + 1
-
-		p.children[origIdx].val = p.children[origIdx].hash()
-		p.children[origIdx].nodeType = hashedNode
-		p.children[origIdx].key = nil
+		p.children[origIdx] = newLeaf(diffidx+1, st.key, st.val)
+		p.children[origIdx].convertToHash(p.keyOffset + 1)
 
 		newIdx := key[diffidx+st.keyOffset]
-		p.children[newIdx] = NewStackTrie()
-		p.children[newIdx].nodeType = leafNode
-		p.children[newIdx].key = key[p.keyOffset+1:]
-		p.children[newIdx].val = value
-		p.children[newIdx].keyOffset = p.keyOffset + 1
+		p.children[newIdx] = newLeaf(p.keyOffset+1, key, value)
 
+		// Finally, cut off the key part that has been passed
+		// over to the children.
 		st.key = st.key[:diffidx]
 	case emptyNode: /* Empty */
 		st.nodeType = leafNode
