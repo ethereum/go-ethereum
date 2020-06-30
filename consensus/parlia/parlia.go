@@ -683,7 +683,8 @@ func (p *Parlia) Finalize(chain consensus.ChainReader, header *types.Header, sta
 			log.Info("slash validator", "block hash", header.Hash(), "address", spoiledVal)
 			err = p.slash(spoiledVal, state, header, cx, txs, receipts, systemTxs, usedGas, false)
 			if err != nil {
-				panic(err)
+				// it is possible that slash validator failed because of the slash channel is disabled.
+				log.Error("slash validator failed", "block hash", header.Hash(), "address", spoiledVal)
 			}
 		}
 	}
@@ -735,7 +736,8 @@ func (p *Parlia) FinalizeAndAssemble(chain consensus.ChainReader, header *types.
 		if !signedRecently {
 			err = p.slash(spoiledVal, state, header, cx, &txs, &receipts, nil, &header.GasUsed, true)
 			if err != nil {
-				panic(err)
+				// it is possible that slash validator failed because of the slash channel is disabled.
+				log.Error("slash validator failed", "block hash", header.Hash(), "address", spoiledVal)
 			}
 		}
 	}
