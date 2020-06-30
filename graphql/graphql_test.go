@@ -30,8 +30,6 @@ import (
 	"github.com/stretchr/testify/assert"
 )
 
-var testEndpoint = "127.0.0.1:9393"
-
 func TestBuildSchema(t *testing.T) {
 	// Make sure the schema can be parsed and matched up to the object model.
 	if _, err := newHandler(nil); err != nil {
@@ -48,7 +46,7 @@ func TestGQLAllowed(t *testing.T) {
 		t.Fatalf("could not start node: %v", err)
 	}
 	// check that server was created
-	server := stack.ExistingHTTPServer(testEndpoint)
+	server := stack.ExistingHTTPServer("127.0.0.1:9393")
 	if server == nil {
 		t.Errorf("server was not created on the given endpoint")
 	}
@@ -64,7 +62,7 @@ func TestMultiplexedServer(t *testing.T) {
 	if err := stack.Start(); err != nil {
 		t.Error("could not start http service on node ", err)
 	}
-	server := stack.ExistingHTTPServer(testEndpoint)
+	server := stack.ExistingHTTPServer("127.0.0.1:9393")
 	if server == nil {
 		t.Fatalf("server was not configured on the given endpoint")
 	}
@@ -83,7 +81,7 @@ func TestGraphQLHTTPOnSamePort_GQLRequest_Successful(t *testing.T) {
 	}
 	// create http request
 	body := strings.NewReader("{\"query\": \"{block{number}}\",\"variables\": null}")
-	gqlReq, err := http.NewRequest(http.MethodGet, fmt.Sprintf("http://%s/graphql", testEndpoint), body)
+	gqlReq, err := http.NewRequest(http.MethodGet, fmt.Sprintf("http://%s/graphql", "127.0.0.1:9393"), body)
 	if err != nil {
 		t.Error("could not issue new http request ", err)
 	}
@@ -107,14 +105,14 @@ func TestGraphQLHTTPOnSamePort_GQLRequest_Unsuccessful(t *testing.T) {
 		t.Fatalf("could not start node: %v", err)
 	}
 	// make sure GQL is not enabled
-	server := stack.ExistingHTTPServer(testEndpoint)
+	server := stack.ExistingHTTPServer("127.0.0.1:9797")
 	if server == nil {
 		t.Fatalf("server was not created on the given endpoint")
 	}
 	assert.False(t, server.GQLAllowed)
 	// create http request
 	body := strings.NewReader("{\"query\": \"{block{number}}\",\"variables\": null}")
-	gqlReq, err := http.NewRequest(http.MethodPost, fmt.Sprintf("http://%s/graphql", testEndpoint), body)
+	gqlReq, err := http.NewRequest(http.MethodPost, fmt.Sprintf("http://%s/graphql", "127.0.0.1:9797"), body)
 	if err != nil {
 		t.Error("could not issue new http request ", err)
 	}
@@ -174,7 +172,7 @@ func createNode(t *testing.T, gqlEnabled bool) *node.Node {
 		return stack
 	}
 
-	createGQLService(t, stack, testEndpoint)
+	createGQLService(t, stack, "127.0.0.1:9393")
 
 	return stack
 }
