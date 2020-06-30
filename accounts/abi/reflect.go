@@ -24,6 +24,21 @@ import (
 	"strings"
 )
 
+// ToStruct converts a interface of a runtime type into a interface of the
+// given type
+// e.g. turn
+// var fields []reflect.StructField
+// fields = append(fields, reflect.StructField{
+// 		Name: "X",
+//		Type: reflect.TypeOf(new(big.Int)),
+//		Tag:  reflect.StructTag("json:\"" + "x" + "\""),
+// }
+// into
+// type TupleT struct { X *big.Int }
+func ToStruct(in interface{}, typ interface{}) interface{} {
+	return reflect.ValueOf(in).Convert(reflect.TypeOf(typ)).Interface()
+}
+
 // indirect recursively dereferences the value until it either gets the value
 // or finds a big.Int
 func indirect(v reflect.Value) reflect.Value {

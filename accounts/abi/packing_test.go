@@ -752,7 +752,7 @@ var packUnpackTests = []packUnpackTest{
 		}{big.NewInt(1)},
 	},
 	{
-		def: `[{"components": [{"name":"int_one","type":"int256"}, {"name":"intone","type":"int256"}], "type":"tuple"}]`,
+		def: `[{"name":"int_one","type":"int256"}, {"name":"intone","type":"int256"}]`,
 		packed: "0000000000000000000000000000000000000000000000000000000000000001" +
 			"0000000000000000000000000000000000000000000000000000000000000002",
 		unpacked: struct {
