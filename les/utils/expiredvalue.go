@@ -124,7 +124,7 @@ func (e *ExpiredValue) SubExp(a ExpiredValue) {
 	}
 }
 
-// LinearExpiredValue is very similiar with the expiredValue which the value
+// LinearExpiredValue is very similar with the expiredValue which the value
 // will continuously expired. But the different part is it's expired linearly.
 type LinearExpiredValue struct {
 	Offset uint64         // The latest time offset

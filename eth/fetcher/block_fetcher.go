@@ -432,7 +432,7 @@ func (f *BlockFetcher) loop() {
 
 			for hash, announces := range f.announced {
 				// In current LES protocol(les2/les3), only header announce is
-				// avaiable, no need to wait too much time for header broadcast.
+				// available, no need to wait too much time for header broadcast.
 				timeout := arriveTimeout - gatherSlack
 				if f.light {
 					timeout = 0
