@@ -2,15 +2,11 @@ package vm
 
 import (
 	"encoding/binary"
+	"encoding/hex"
+	"fmt"
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/crypto"
-)
-
-var (
-	ExecutionManagerAddress = common.HexToAddress("A193E42526F1FEA8C99AF609dcEabf30C1c29fAA")
-	StateManagerAddress = common.HexToAddress("b0229ed527b40a36bc00eab1a29390a9bc1417a6")
-  WORD_SIZE = 32
 )
 
 type stateManagerFunction func(*EVM, *Contract, []byte) ([]byte, error)
@@ -57,6 +53,7 @@ func setStorage(evm *EVM, contract *Contract, input []byte) (ret []byte, err err
 	address := common.BytesToAddress(input[4:36])
 	key := common.BytesToHash(input[36:68])
 	val := common.BytesToHash(input[68:100])
+	fmt.Println("Setting storage address:", hex.EncodeToString(address.Bytes()), "key:", hex.EncodeToString(key.Bytes()), "val:", hex.EncodeToString(val.Bytes()))
 	evm.StateDB.SetState(address, key, val)
 	return nil, nil
 }
@@ -73,7 +70,6 @@ func getCodeContractBytecode(evm *EVM, contract *Contract, input []byte) (ret []
 	code := evm.StateDB.GetCode(address)
 	return simpleAbiEncode(code), nil
 }
-
 
 func getCodeContractHash(evm *EVM, contract *Contract, input []byte) (ret []byte, err error) {
 	address := common.BytesToAddress(input[4:36])
@@ -110,19 +106,20 @@ func deployContract(evm *EVM, contract *Contract, input []byte) (ret []byte, err
 	callerAddress := common.BytesToAddress(input[100:132])
 	initCodeLength := binary.BigEndian.Uint32(input[160:164])
 	initCode := input[164 : 164+initCodeLength]
+	fmt.Println("Deploying new contract! Got bytecode:", initCode)
 	callerContractRef := &Contract{self: AccountRef(callerAddress)}
 	_, _, _, err = evm.OvmCreate(callerContractRef, address, initCode, contract.Gas, bigZero)
 
 	return common.BytesToHash(address.Bytes()).Bytes(), nil
 }
 
-func simpleAbiEncode(bytes []byte) ([]byte) {
+func simpleAbiEncode(bytes []byte) []byte {
 	encodedCode := make([]byte, WORD_SIZE)
 	binary.BigEndian.PutUint64(encodedCode[WORD_SIZE-8:], uint64(len(bytes)))
-	padding := make([]byte, len(bytes) % WORD_SIZE)
+	padding := make([]byte, len(bytes)%WORD_SIZE)
 	codeWithLength := append(append(encodedCode, bytes...), padding...)
 	offset := make([]byte, WORD_SIZE)
-  // Hardcode a 2 because we will only return dynamic bytes with a single element
+	// Hardcode a 2 because we will only return dynamic bytes with a single element
 	binary.BigEndian.PutUint64(offset[WORD_SIZE-8:], uint64(2))
 	return append([]byte{0, 0}, append(offset, codeWithLength...)...)
 }

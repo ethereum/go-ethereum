@@ -17,6 +17,7 @@
 package core
 
 import (
+	// "encoding/hex"
 	"errors"
 	"math"
 	"math/big"
@@ -185,6 +186,12 @@ func (st *StateTransition) preCheck() error {
 			return ErrNonceTooLow
 		}
 	}
+	// // Make sure the ExecutionManager is deployed. If not, deploy it.
+	// if len(st.evm.StateDB.GetCode(vm.ExecutionManagerAddress)) == 0 {
+	// 	deployExecutionManagerCalldata, _ := hex.DecodeString(vm.ExecutionManagerInitcode)
+	// 	executionManagerFrom := common.HexToAddress("999999999999999999999999999999999999")
+	// 	st.evm.OvmCreate(vm.AccountRef(executionManagerFrom), common.HexToAddress("A193E42526F1FEA8C99AF609dcEabf30C1c29fAA"), deployExecutionManagerCalldata, 100000000, big.NewInt(0))
+	// }
 	return st.buyGas()
 }
 
@@ -217,6 +224,7 @@ func (st *StateTransition) TransitionDb() (ret []byte, usedGas uint64, failed bo
 		// error.
 		vmerr error
 	)
+	// if contractCreation && sender.Address() != common.HexToAddress("17ec8597ff92C3F44523bDc65BF0f1bE632917ff") {
 	if contractCreation {
 		deployContractCalldata, _ := executionManagerAbi.Pack(
 			"executeTransaction",
@@ -228,21 +236,27 @@ func (st *StateTransition) TransitionDb() (ret []byte, usedGas uint64, failed bo
 			common.HexToAddress(""),
 			true,
 		)
-		executionManagerAddress := common.HexToAddress("A193E42526F1FEA8C99AF609dcEabf30C1c29fAA")
-		ret, st.gas, vmerr = evm.Call(sender, executionManagerAddress, deployContractCalldata, st.gas, st.value)
+		ret, st.gas, vmerr = evm.Call(sender, vm.ExecutionManagerAddress, deployContractCalldata, st.gas, st.value)
+  } else if contractCreation {
+    ret, _, st.gas, vmerr = evm.Create(sender, st.data, st.gas, st.value)
 	} else {
-		callContractCalldata, _ := executionManagerAbi.Pack(
-			"executeTransaction",
-			big.NewInt(1),
-			new(big.Int),
-			st.to(),
-			st.data,
-			sender,
-			common.HexToAddress(""),
-			true,
-		)
-		executionManagerAddress := common.HexToAddress("A193E42526F1FEA8C99AF609dcEabf30C1c29fAA")
-		ret, st.gas, vmerr = evm.Call(sender, executionManagerAddress, callContractCalldata, st.gas, st.value)
+		// New Version
+		// callContractCalldata, _ := executionManagerAbi.Pack(
+		// 	"executeTransaction",
+		// 	big.NewInt(1),
+		// 	new(big.Int),
+		// 	st.to(),
+		// 	st.data,
+		// 	sender,
+		// 	common.HexToAddress(""),
+		// 	true,
+		// )
+		// ret, st.gas, vmerr = evm.Call(sender, vm.ExecutionManagerAddress, callContractCalldata, st.gas, st.value)
+
+		// Old Version
+		// Increment the nonce for the next transaction
+		st.state.SetNonce(msg.From(), st.state.GetNonce(sender.Address())+1)
+		ret, st.gas, vmerr = evm.Call(sender, st.to(), st.data, st.gas, st.value)
 	}
 	if vmerr != nil {
 		log.Debug("VM returned with error", "err", vmerr)

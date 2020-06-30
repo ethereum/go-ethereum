@@ -20,6 +20,7 @@ import (
 	"math/big"
 	"sync/atomic"
 	"time"
+	"fmt"
 	"encoding/hex"
 
 	"github.com/ethereum/go-ethereum/common"
@@ -43,7 +44,9 @@ type (
 
 // run runs the given contract and takes care of running precompiles with a fallback to the byte code interpreter.
 func run(evm *EVM, contract *Contract, input []byte, readOnly bool) ([]byte, error) {
+  // Intercept the StateManager calls and make sure len(input) > 0 because if that is the case, then we are deploying a StateManager.
 	if contract.Address() == StateManagerAddress && len(input) > 0 {
+    fmt.Println("Contract address:", hex.EncodeToString(contract.Address().Bytes()), "StateManagerAddress", hex.EncodeToString(StateManagerAddress.Bytes()))
 		ret, err := callStateManager(input, evm, contract)
 		return ret, err
 	}
@@ -169,11 +172,6 @@ func NewEVM(ctx Context, statedb StateDB, chainConfig *params.ChainConfig, vmCon
 	evm.interpreters = append(evm.interpreters, NewEVMInterpreter(evm, vmConfig))
 	evm.interpreter = evm.interpreters[0]
 
-  // Deploy an ExecutionManager to the EVM
-	deployExecutionManagerCalldata, _ := hex.DecodeString(ExecutionManagerInitcode)
-	executionManagerFrom := common.HexToAddress("999999999999999999999999999999999999")
-	evm.OvmCreate(AccountRef(executionManagerFrom), common.HexToAddress("A193E42526F1FEA8C99AF609dcEabf30C1c29fAA"), deployExecutionManagerCalldata, 100000000, big.NewInt(0))
-
 	return evm
 }
 
@@ -198,6 +196,9 @@ func (evm *EVM) Interpreter() Interpreter {
 // the necessary steps to create accounts and reverses the state in case of an
 // execution error or failed value transfer.
 func (evm *EVM) Call(caller ContractRef, addr common.Address, input []byte, gas uint64, value *big.Int) (ret []byte, leftOverGas uint64, err error) {
+  fmt.Println("New Call ~~~ Contract caller:", hex.EncodeToString(caller.Address().Bytes()), "Contract target address:", hex.EncodeToString(addr.Bytes()))
+  fmt.Println("Calldata:", hex.EncodeToString(input))
+  // fmt.Println("New Call ~~~ Contract caller:", hex.EncodeToString(caller.Bytes()), "Contract to address:", hex.EncodeToString(addr.Bytes()))
 	if evm.vmConfig.NoRecursion && evm.depth > 0 {
 		return nil, gas, nil
 	}
@@ -310,6 +311,7 @@ func (evm *EVM) CallCode(caller ContractRef, addr common.Address, input []byte, 
 // DelegateCall differs from CallCode in the sense that it executes the given address'
 // code with the caller as context and the caller is set to the caller of the caller.
 func (evm *EVM) DelegateCall(caller ContractRef, addr common.Address, input []byte, gas uint64) (ret []byte, leftOverGas uint64, err error) {
+  fmt.Println("New DelegateCall ~~~ Contract caller:", hex.EncodeToString(caller.Address().Bytes()), "Contract target address:", hex.EncodeToString(addr.Bytes()))
 	if evm.vmConfig.NoRecursion && evm.depth > 0 {
 		return nil, gas, nil
 	}
@@ -342,6 +344,7 @@ func (evm *EVM) DelegateCall(caller ContractRef, addr common.Address, input []by
 // Opcodes that attempt to perform such modifications will result in exceptions
 // instead of performing the modifications.
 func (evm *EVM) StaticCall(caller ContractRef, addr common.Address, input []byte, gas uint64) (ret []byte, leftOverGas uint64, err error) {
+  fmt.Println("New StaticCall ~~~ Contract caller:", hex.EncodeToString(caller.Address().Bytes()), "Contract target address:", hex.EncodeToString(addr.Bytes()))
 	if evm.vmConfig.NoRecursion && evm.depth > 0 {
 		return nil, gas, nil
 	}
@@ -477,6 +480,7 @@ func (evm *EVM) OvmCreate(caller ContractRef, contractAddr common.Address, code 
 // Create creates a new contract using code as deployment code.
 func (evm *EVM) Create(caller ContractRef, code []byte, gas uint64, value *big.Int) (ret []byte, contractAddr common.Address, leftOverGas uint64, err error) {
 	contractAddr = crypto.CreateAddress(caller.Address(), evm.StateDB.GetNonce(caller.Address()))
+  fmt.Println("Creating contract address:", contractAddr)
 	return evm.create(caller, &codeAndHash{code: code}, gas, value, contractAddr)
 }
 
