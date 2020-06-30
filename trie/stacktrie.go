@@ -23,26 +23,25 @@ import (
 	"golang.org/x/crypto/sha3"
 )
 
-// ReStackTrie is a reimplementation of the Stacktrie, that fixes
-// bugs in the previous implementation, and which also implements
-// its own hashing mechanism which is more specific and hopefully
-// more efficient that the default hasher.
-type ReStackTrie struct {
-	nodeType  uint8            // node type (as in branch, ext, leaf)
-	val       []byte           // value contained by this node if it's a leaf
-	key       []byte           // key chunk covered by this (full|ext) node
-	keyOffset int              // offset of the key chunk inside a full key
-	children  [16]*ReStackTrie // list of children (for fullnodes and exts)
+// StackTrie is a trie implementation that expects keys to be inserted
+// in order. Once it determines that a subtree will no longer be inserted
+// into, it will hash it and free up the memory it uses.
+type StackTrie struct {
+	nodeType  uint8          // node type (as in branch, ext, leaf)
+	val       []byte         // value contained by this node if it's a leaf
+	key       []byte         // key chunk covered by this (full|ext) node
+	keyOffset int            // offset of the key chunk inside a full key
+	children  [16]*StackTrie // list of children (for fullnodes and exts)
 }
 
-// NewReStackTrie allocates and initializes an empty trie.
-func NewReStackTrie() *ReStackTrie {
-	return &ReStackTrie{
+// NewStackTrie allocates and initializes an empty trie.
+func NewStackTrie() *StackTrie {
+	return &StackTrie{
 		nodeType: emptyNode,
 	}
 }
 
-// List all values that ReStackTrie#nodeType can hold
+// List all values that StackTrie#nodeType can hold
 const (
 	emptyNode = iota
 	branchNode
@@ -51,7 +50,7 @@ const (
 	hashedNode
 )
 
-func (st *ReStackTrie) TryUpdate(key, value []byte) error {
+func (st *StackTrie) TryUpdate(key, value []byte) error {
 	k := keybytesToHex(key)
 	if len(value) == 0 {
 		panic("deletion not supported")
@@ -63,7 +62,7 @@ func (st *ReStackTrie) TryUpdate(key, value []byte) error {
 // Helper function that, given a full key, determines the index
 // at which the chunk pointed by st.keyOffset is different from
 // the same chunk in the full key.
-func (st *ReStackTrie) getDiffIndex(key []byte) int {
+func (st *StackTrie) getDiffIndex(key []byte) int {
 	diffindex := 0
 	for ; diffindex < len(st.key) && st.key[diffindex] == key[st.keyOffset+diffindex]; diffindex++ {
 	}
@@ -72,12 +71,12 @@ func (st *ReStackTrie) getDiffIndex(key []byte) int {
 
 // Helper function to that inserts a (key, value) pair into
 // the trie.
-func (st *ReStackTrie) insert(key, value []byte) {
+func (st *StackTrie) insert(key, value []byte) {
 	switch st.nodeType {
 	case branchNode: /* Branch */
 		idx := int(key[st.keyOffset])
 		if st.children[idx] == nil {
-			st.children[idx] = NewReStackTrie()
+			st.children[idx] = NewStackTrie()
 			st.children[idx].keyOffset = st.keyOffset + 1
 		}
 		for i := idx - 1; i >= 0; i-- {
@@ -112,9 +111,9 @@ func (st *ReStackTrie) insert(key, value []byte) {
 		// at the extension's last byte or not, create an
 		// intermediate extension or use the extension's child
 		// node directly.
-		var n *ReStackTrie
+		var n *StackTrie
 		if diffidx < len(st.key)-1 {
-			n = NewReStackTrie()
+			n = NewStackTrie()
 			n.key = st.key[diffidx+1:]
 			n.children[0] = st.children[0]
 			n.nodeType = extNode
@@ -125,7 +124,7 @@ func (st *ReStackTrie) insert(key, value []byte) {
 		}
 		n.keyOffset = st.keyOffset + diffidx + 1
 
-		var p *ReStackTrie
+		var p *StackTrie
 		if diffidx == 0 {
 			// the break is on the first byte, so
 			// the current node is converted into
@@ -137,7 +136,7 @@ func (st *ReStackTrie) insert(key, value []byte) {
 			// the common prefix is at least one byte
 			// long, insert a new intermediate branch
 			// node.
-			st.children[0] = NewReStackTrie()
+			st.children[0] = NewStackTrie()
 			st.children[0].nodeType = branchNode
 			st.children[0].keyOffset = st.keyOffset + diffidx
 			p = st.children[0]
@@ -148,7 +147,7 @@ func (st *ReStackTrie) insert(key, value []byte) {
 		n.key = nil
 
 		// Create a leaf for the inserted part
-		o := NewReStackTrie()
+		o := NewStackTrie()
 		o.keyOffset = st.keyOffset + diffidx + 1
 		o.key = key[o.keyOffset:]
 		o.val = value
@@ -178,7 +177,7 @@ func (st *ReStackTrie) insert(key, value []byte) {
 		// Check if the split occurs at the first nibble of the
 		// chunk. In that case, no prefix extnode is necessary.
 		// Otherwise, create that
-		var p *ReStackTrie
+		var p *StackTrie
 		if diffidx == 0 {
 			// Convert current leaf into a branch
 			st.nodeType = branchNode
@@ -188,7 +187,7 @@ func (st *ReStackTrie) insert(key, value []byte) {
 			// Convert current node into an ext,
 			// and insert a child branch node.
 			st.nodeType = extNode
-			st.children[0] = NewReStackTrie()
+			st.children[0] = NewStackTrie()
 			st.children[0].nodeType = branchNode
 			st.children[0].keyOffset = st.keyOffset + diffidx
 			p = st.children[0]
@@ -199,7 +198,7 @@ func (st *ReStackTrie) insert(key, value []byte) {
 		// The child leave will be hashed directly in order to
 		// free up some memory.
 		origIdx := st.key[diffidx]
-		p.children[origIdx] = NewReStackTrie()
+		p.children[origIdx] = NewStackTrie()
 		p.children[origIdx].nodeType = leafNode
 		p.children[origIdx].key = st.key[diffidx+1:]
 		p.children[origIdx].val = st.val
@@ -210,7 +209,7 @@ func (st *ReStackTrie) insert(key, value []byte) {
 		p.children[origIdx].key = nil
 
 		newIdx := key[diffidx+st.keyOffset]
-		p.children[newIdx] = NewReStackTrie()
+		p.children[newIdx] = NewStackTrie()
 		p.children[newIdx].nodeType = leafNode
 		p.children[newIdx].key = key[p.keyOffset+1:]
 		p.children[newIdx].val = value
@@ -448,7 +447,7 @@ func writeHPRLP(writer io.Writer, key, val []byte, leaf bool) {
 	//io.Copy(w, &writer)
 }
 
-func (st *ReStackTrie) hash() []byte {
+func (st *StackTrie) hash() []byte {
 	/* Shortcut if node is already hashed */
 	if st.nodeType == hashedNode {
 		return st.val
@@ -523,6 +522,6 @@ func (st *ReStackTrie) hash() []byte {
 	return d.Sum(nil)
 }
 
-func (st *ReStackTrie) Hash() (h common.Hash) {
+func (st *StackTrie) Hash() (h common.Hash) {
 	return common.BytesToHash(st.hash())
 }
