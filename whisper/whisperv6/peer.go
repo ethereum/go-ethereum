@@ -100,6 +100,7 @@ func (peer *Peer) handshake() error {
 	if err != nil {
 		return err
 	}
+	defer packet.Discard()
 	if packet.Code != statusCode {
 		return fmt.Errorf("peer [%x] sent packet %x before status packet", peer.ID(), packet.Code)
 	}
