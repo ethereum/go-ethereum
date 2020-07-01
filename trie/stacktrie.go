@@ -17,9 +17,11 @@
 package trie
 
 import (
+	"bytes"
 	"io"
 
 	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/crypto"
 	"golang.org/x/crypto/sha3"
 )
 
@@ -32,6 +34,8 @@ type StackTrie struct {
 	key       []byte         // key chunk covered by this (full|ext) node
 	keyOffset int            // offset of the key chunk inside a full key
 	children  [16]*StackTrie // list of children (for fullnodes and exts)
+
+	db *Database // Pointer to the commit db, can be nil
 }
 
 // NewStackTrie allocates and initializes an empty trie.
@@ -466,7 +470,10 @@ func (st *StackTrie) hash() []byte {
 		return st.val
 	}
 
-	d := sha3.NewLegacyKeccak256()
+	var ret [32]byte
+	d := hasherPool.Get().(crypto.KeccakState)
+	var preimage bytes.Buffer
+
 	switch st.nodeType {
 	case branchNode:
 		payload := [544]byte{}
@@ -512,29 +519,51 @@ func (st *StackTrie) hash() []byte {
 
 		// Do not hash if the payload length is less than 32 bytes
 		if pos-start < 32 {
+			// rlp len < 32, will be embedded
+			// into its parent.
 			return payload[start:pos]
 		}
-		d.Write(payload[start:pos])
+		preimage.Write(payload[start:pos])
 	case extNode:
 		ch := st.children[0].hash()
 		if (len(st.key)/2)+1+len(ch) < 29 {
+			// rlp len < 32, will be embedded
+			// into its parent.
 			return rawExtHPRLP(st.key, st.val)
 		}
-		writeHPRLP(d, st.key, ch, false)
+		writeHPRLP(&preimage, st.key, ch, false)
 		st.children[0] = nil // Reclaim mem from subtree
 	case leafNode:
 		if (len(st.key)/2)+1+len(st.val) < 30 {
+			// rlp len < 32, will be embedded
+			// into its parent.
 			return rawLeafHPRLP(st.key, st.val, true)
 		}
-		writeHPRLP(d, st.key, st.val, true)
+		writeHPRLP(&preimage, st.key, st.val, true)
 	case emptyNode:
 		return emptyRoot[:]
 	default:
 		panic("Invalid node type")
 	}
-	return d.Sum(nil)
+	io.Copy(d, &preimage)
+	d.Read(ret[:])
+
+	if st.db != nil {
+		st.db.insertPreimage(common.BytesToHash(ret[:]), preimage.Bytes())
+	}
+
+	return ret[:]
 }
 
 func (st *StackTrie) Hash() (h common.Hash) {
+	return common.BytesToHash(st.hash())
+}
+
+func (st *StackTrie) Commit(db *Database) common.Hash {
+	old_db := st.db
+	st.db = db
+	defer func() {
+		st.db = old_db
+	}()
 	return common.BytesToHash(st.hash())
 }
