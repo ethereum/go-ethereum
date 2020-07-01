@@ -696,6 +696,7 @@ func (whisper *Whisper) runMessageLoop(p *Peer, rw p2p.MsgReadWriter) error {
 		}
 		if packet.Size > whisper.MaxMessageSize() {
 			log.Warn("oversized message received", "peer", p.peer.ID())
+			packet.Discard()
 			return errors.New("oversized message received")
 		}
 
@@ -708,6 +709,7 @@ func (whisper *Whisper) runMessageLoop(p *Peer, rw p2p.MsgReadWriter) error {
 			var envelopes []*Envelope
 			if err := packet.Decode(&envelopes); err != nil {
 				log.Warn("failed to decode envelopes, peer will be disconnected", "peer", p.peer.ID(), "err", err)
+				packet.Discard()
 				return errors.New("invalid envelopes")
 			}
 
@@ -724,6 +726,7 @@ func (whisper *Whisper) runMessageLoop(p *Peer, rw p2p.MsgReadWriter) error {
 			}
 
 			if trouble {
+				packet.Discard()
 				return errors.New("invalid envelope")
 			}
 		case powRequirementCode:
@@ -731,11 +734,13 @@ func (whisper *Whisper) runMessageLoop(p *Peer, rw p2p.MsgReadWriter) error {
 			i, err := s.Uint()
 			if err != nil {
 				log.Warn("failed to decode powRequirementCode message, peer will be disconnected", "peer", p.peer.ID(), "err", err)
+				packet.Discard()
 				return errors.New("invalid powRequirementCode message")
 			}
 			f := math.Float64frombits(i)
 			if math.IsInf(f, 0) || math.IsNaN(f) || f < 0.0 {
 				log.Warn("invalid value in powRequirementCode message, peer will be disconnected", "peer", p.peer.ID(), "err", err)
+				packet.Discard()
 				return errors.New("invalid value in powRequirementCode message")
 			}
 			p.powRequirement = f
@@ -748,6 +753,7 @@ func (whisper *Whisper) runMessageLoop(p *Peer, rw p2p.MsgReadWriter) error {
 
 			if err != nil {
 				log.Warn("failed to decode bloom filter exchange message, peer will be disconnected", "peer", p.peer.ID(), "err", err)
+				packet.Discard()
 				return errors.New("invalid bloom filter exchange message")
 			}
 			p.setBloomFilter(bloom)
@@ -760,6 +766,7 @@ func (whisper *Whisper) runMessageLoop(p *Peer, rw p2p.MsgReadWriter) error {
 				var envelope Envelope
 				if err := packet.Decode(&envelope); err != nil {
 					log.Warn("failed to decode direct message, peer will be disconnected", "peer", p.peer.ID(), "err", err)
+					packet.Discard()
 					return errors.New("invalid direct message")
 				}
 				whisper.postEvent(&envelope, true)
@@ -770,6 +777,7 @@ func (whisper *Whisper) runMessageLoop(p *Peer, rw p2p.MsgReadWriter) error {
 				var request Envelope
 				if err := packet.Decode(&request); err != nil {
 					log.Warn("failed to decode p2p request message, peer will be disconnected", "peer", p.peer.ID(), "err", err)
+					packet.Discard()
 					return errors.New("invalid p2p request")
 				}
 				whisper.mailServer.DeliverMail(p, &request)
