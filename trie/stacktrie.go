@@ -19,6 +19,7 @@ package trie
 import (
 	"bytes"
 	"io"
+	"sync"
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/crypto"
@@ -464,6 +465,13 @@ func writeHPRLP(writer io.Writer, key, val []byte, leaf bool) {
 	//io.Copy(w, &writer)
 }
 
+// hasherPool holds LegacyKeccak hashers.
+var hasherPoolNoCache = sync.Pool{
+	New: func() interface{} {
+		return sha3.NewLegacyKeccak256()
+	},
+}
+
 func (st *StackTrie) hash() []byte {
 	/* Shortcut if node is already hashed */
 	if st.nodeType == hashedNode {
@@ -471,7 +479,9 @@ func (st *StackTrie) hash() []byte {
 	}
 
 	var ret [32]byte
-	d := hasherPool.Get().(crypto.KeccakState)
+	d := hasherPoolNoCache.Get().(crypto.KeccakState)
+	d.Reset()
+	defer hasherPoolNoCache.Put(d)
 	var preimage bytes.Buffer
 
 	switch st.nodeType {
