@@ -18,6 +18,7 @@ package math
 
 import (
 	"fmt"
+	"math/bits"
 	"strconv"
 )
 
@@ -87,13 +88,12 @@ func SafeSub(x, y uint64) (uint64, bool) {
 
 // SafeAdd returns the result and whether overflow occurred.
 func SafeAdd(x, y uint64) (uint64, bool) {
-	return x + y, y > MaxUint64-x
+	sum, carry := bits.Add64(x, y, 0)
+	return sum, carry != 0
 }
 
 // SafeMul returns multiplication result and whether overflow occurred.
 func SafeMul(x, y uint64) (uint64, bool) {
-	if x == 0 || y == 0 {
-		return 0, false
-	}
-	return x * y, y > MaxUint64/x
+	hi, lo := bits.Mul64(x, y)
+	return lo, hi != 0
 }
