@@ -80,7 +80,7 @@ func NewOracle(backend OracleBackend, params Config) *Oracle {
 	}
 }
 
-// SuggesstPrice returns a gasprice so that newly created transaction can
+// SuggestPrice returns a gasprice so that newly created transaction can
 // have a very high chance to be included in the following blocks.
 func (gpo *Oracle) SuggestPrice(ctx context.Context) (*big.Int, error) {
 	head, _ := gpo.backend.HeaderByNumber(ctx, rpc.LatestBlockNumber)
