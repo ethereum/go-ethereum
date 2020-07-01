@@ -76,6 +76,8 @@ const (
 	expirationCycle   = time.Second
 	transmissionCycle = 300 * time.Millisecond
 
+	handshakeTimeout = 60 * time.Second
+
 	DefaultTTL           = 50 // seconds
 	DefaultSyncAllowance = 10 // seconds
 )

@@ -140,9 +140,16 @@ func (peer *Peer) handshake() error {
 	if isRemotePeerLightNode && isLightNode && isRestrictedLightNodeConnection {
 		return fmt.Errorf("peer [%x] is useless: two light client communication restricted", peer.ID())
 	}
-
-	if err := <-errc; err != nil {
-		return fmt.Errorf("peer [%x] failed to send status packet: %v", peer.ID(), err)
+	timeout := time.NewTimer(handshakeTimeout)
+	defer timeout.Stop()
+	select {
+	case err := <-errc:
+		if err != nil {
+			return fmt.Errorf("peer [%x] failed to send status packet: %v", peer.ID(), err)
+		}
+	case <-timeout.C:
+		log.Info("Handshake timeout")
+		return fmt.Errorf("peer [%x] timeout", peer.ID())
 	}
 	return nil
 }
