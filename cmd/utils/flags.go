@@ -1287,24 +1287,25 @@ func setDataDir(ctx *cli.Context, cfg *node.Config) {
 }
 
 func setGPO(ctx *cli.Context, cfg *gasprice.Config, light bool) {
+	// If we are running the light client, apply another group
+	// settings for gas oracle.
+	if light {
+		cfg.Blocks = eth.DefaultLightGPOConfig.Blocks
+		cfg.Percentile = eth.DefaultLightGPOConfig.Percentile
+	}
 	if ctx.GlobalIsSet(LegacyGpoBlocksFlag.Name) {
 		cfg.Blocks = ctx.GlobalInt(LegacyGpoBlocksFlag.Name)
 		log.Warn("The flag --gpoblocks is deprecated and will be removed in the future, please use --gpo.blocks")
 	}
 	if ctx.GlobalIsSet(GpoBlocksFlag.Name) {
 		cfg.Blocks = ctx.GlobalInt(GpoBlocksFlag.Name)
-	} else if light {
-		cfg.Blocks = eth.DefaultLightGPOConfig.Blocks
 	}
-
 	if ctx.GlobalIsSet(LegacyGpoPercentileFlag.Name) {
 		cfg.Percentile = ctx.GlobalInt(LegacyGpoPercentileFlag.Name)
 		log.Warn("The flag --gpopercentile is deprecated and will be removed in the future, please use --gpo.percentile")
 	}
 	if ctx.GlobalIsSet(GpoPercentileFlag.Name) {
 		cfg.Percentile = ctx.GlobalInt(GpoPercentileFlag.Name)
-	} else if light {
-		cfg.Percentile = eth.DefaultLightGPOConfig.Percentile
 	}
 }
 
