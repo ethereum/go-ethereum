@@ -1566,13 +1566,13 @@ func SetEthConfig(ctx *cli.Context, stack *node.Node, cfg *eth.Config) {
 	if ctx.GlobalIsSet(RPCGlobalGasCap.Name) {
 		cfg.RPCGasCap = ctx.GlobalUint64(RPCGlobalGasCap.Name)
 	}
-	if ctx.GlobalIsSet(RPCGlobalTxFeeCap.Name) {
-		cfg.RPCTxFeeCap = ctx.GlobalFloat64(RPCGlobalTxFeeCap.Name)
-	}
-	if cap := cfg.RPCGasCap; cap != 0 {
-		log.Info("Set global gas cap", "cap", cap)
+	if cfg.RPCGasCap != 0 {
+		log.Info("Set global gas cap", "cap", cfg.RPCGasCap)
 	} else {
 		log.Info("Global gas cap disabled")
+	}
+	if ctx.GlobalIsSet(RPCGlobalTxFeeCap.Name) {
+		cfg.RPCTxFeeCap = ctx.GlobalFloat64(RPCGlobalTxFeeCap.Name)
 	}
 	if ctx.GlobalIsSet(DNSDiscoveryFlag.Name) {
 		urls := ctx.GlobalString(DNSDiscoveryFlag.Name)

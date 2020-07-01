@@ -60,7 +60,7 @@ var DefaultConfig = Config{
 		Recommit: 3 * time.Second,
 	},
 	TxPool:    core.DefaultTxPoolConfig,
-	RPCGasCap: 50000000,
+	RPCGasCap: 25000000,
 	GPO: gasprice.Config{
 		Blocks:     20,
 		Percentile: 60,
