@@ -17,6 +17,8 @@
 package vm
 
 import (
+	"fmt"
+
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/params"
@@ -25,12 +27,14 @@ import (
 )
 
 func opAdd(pc *uint64, interpreter *EVMInterpreter, callContext *callCtx) ([]byte, error) {
+	fmt.Println("ADD")
 	x, y := callContext.stack.pop(), callContext.stack.peek()
 	y.Add(&x, y)
 	return nil, nil
 }
 
 func opSub(pc *uint64, interpreter *EVMInterpreter, callContext *callCtx) ([]byte, error) {
+	fmt.Println("SUB")
 	x, y := callContext.stack.pop(), callContext.stack.peek()
 	y.Sub(&x, y)
 	return nil, nil
@@ -506,6 +510,7 @@ func opMstore8(pc *uint64, interpreter *EVMInterpreter, callContext *callCtx) ([
 }
 
 func opSload(pc *uint64, interpreter *EVMInterpreter, callContext *callCtx) ([]byte, error) {
+	fmt.Println("Sload")
 	loc := callContext.stack.peek()
 	hash := common.Hash(loc.Bytes32())
 	val := interpreter.evm.StateDB.GetState(callContext.contract.Address(), hash)
@@ -514,6 +519,7 @@ func opSload(pc *uint64, interpreter *EVMInterpreter, callContext *callCtx) ([]b
 }
 
 func opSstore(pc *uint64, interpreter *EVMInterpreter, callContext *callCtx) ([]byte, error) {
+	fmt.Println("Sstore")
 	loc := callContext.stack.pop()
 	val := callContext.stack.pop()
 	interpreter.evm.StateDB.SetState(callContext.contract.Address(),
