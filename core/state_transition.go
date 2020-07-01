@@ -19,6 +19,7 @@ package core
 import (
 	// "encoding/hex"
 	"errors"
+	"fmt"
 	"math"
 	"math/big"
 	"strings"
@@ -226,19 +227,21 @@ func (st *StateTransition) TransitionDb() (ret []byte, usedGas uint64, failed bo
 	)
 	// if contractCreation && sender.Address() != common.HexToAddress("17ec8597ff92C3F44523bDc65BF0f1bE632917ff") {
 	if contractCreation {
-		deployContractCalldata, _ := executionManagerAbi.Pack(
-			"executeTransaction",
-			big.NewInt(1),
-			new(big.Int),
-			common.HexToAddress(""),
-			st.data,
-			sender,
-			common.HexToAddress(""),
-			true,
-		)
-		ret, st.gas, vmerr = evm.Call(sender, vm.ExecutionManagerAddress, deployContractCalldata, st.gas, st.value)
-  } else if contractCreation {
-    ret, _, st.gas, vmerr = evm.Create(sender, st.data, st.gas, st.value)
+		// New Version
+		// deployContractCalldata, _ := executionManagerAbi.Pack(
+		// 	"executeTransaction",
+		// 	big.NewInt(1),
+		// 	new(big.Int),
+		// 	common.HexToAddress(""),
+		// 	st.data,
+		// 	sender,
+		// 	common.HexToAddress(""),
+		// 	true,
+		// )
+		// ret, st.gas, vmerr = evm.Call(sender, vm.ExecutionManagerAddress, deployContractCalldata, st.gas, st.value)
+
+		// Old Version
+		ret, _, st.gas, vmerr = evm.Create(sender, st.data, st.gas, st.value)
 	} else {
 		// New Version
 		// callContractCalldata, _ := executionManagerAbi.Pack(
@@ -260,6 +263,7 @@ func (st *StateTransition) TransitionDb() (ret []byte, usedGas uint64, failed bo
 	}
 	if vmerr != nil {
 		log.Debug("VM returned with error", "err", vmerr)
+		fmt.Println("VM returned with error", "err", vmerr)
 		// The only possible consensus-error would be if there wasn't
 		// sufficient balance to make the transfer happen. The first
 		// balance transfer may never fail.
