@@ -148,7 +148,6 @@ func (peer *Peer) handshake() error {
 			return fmt.Errorf("peer [%x] failed to send status packet: %v", peer.ID(), err)
 		}
 	case <-timeout.C:
-		log.Info("Handshake timeout")
 		return fmt.Errorf("peer [%x] timeout", peer.ID())
 	}
 	return nil
