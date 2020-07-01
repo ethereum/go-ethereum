@@ -83,14 +83,14 @@ func (arguments Arguments) Unpack(data []byte) ([]interface{}, error) {
 		}
 		// Nothing to unmarshal, return default arguments
 		return arguments.makeDefaulArgs(), nil
-	}
-	if len(arguments) > 1 {
-		args, err := arguments.UnpackValues(data)
-		if err != nil {
-			return args, err
-		}
-		return arguments.createStruct(args)
-	}
+	} /*
+		if len(arguments) > 1 {
+			args, err := arguments.UnpackValues(data)
+			if err != nil {
+				return args, err
+			}
+			return arguments.createStruct(args)
+		}*/
 	return arguments.UnpackValues(data)
 }
 
@@ -117,6 +117,19 @@ func (arguments Arguments) createStruct(values []interface{}) ([]interface{}, er
 	ret[0] = typ.Interface()
 	return ret, nil
 }
+
+/*
+func (arguments Argument) createSlice(values []interface{}) ([]interface{}, error) {
+case reflect.Slice, reflect.Array:
+	if value.Len() < len(marshalledValues) {
+		return fmt.Errorf("abi: insufficient number of arguments for unpack, want %d, got %d", len(arguments), value.Len())
+	}
+	for i := range nonIndexedArgs {
+		if err := set(value.Index(i), reflect.ValueOf(marshalledValues[i])); err != nil {
+			return err
+		}
+	}
+}*/
 
 func (arguments Arguments) makeDefaulArgs() []interface{} {
 	nonIndexedArgs := arguments.NonIndexed()
