@@ -92,10 +92,10 @@ func EncodeToReader(val interface{}) (size int, r io.Reader, err error) {
 }
 
 type encbuf struct {
-	str     []byte      // string data, contains everything except list headers
-	lheads  []*listhead // all list headers
-	lhsize  int         // sum of sizes of all encoded list headers
-	sizebuf []byte      // 9-byte auxiliary buffer for uint encoding
+	str     []byte     // string data, contains everything except list headers
+	lheads  []listhead // all list headers
+	lhsize  int        // sum of sizes of all encoded list headers
+	sizebuf []byte     // 9-byte auxiliary buffer for uint encoding
 }
 
 type listhead struct {
@@ -137,12 +137,8 @@ var encbufPool = sync.Pool{
 
 func (w *encbuf) reset() {
 	w.lhsize = 0
-	if w.str != nil {
-		w.str = w.str[:0]
-	}
-	if w.lheads != nil {
-		w.lheads = w.lheads[:0]
-	}
+	w.str = w.str[:0]
+	w.lheads = w.lheads[:0]
 }
 
 // encbuf implements io.Writer so it can be passed it into EncodeRLP.
@@ -181,13 +177,16 @@ func (w *encbuf) encodeString(b []byte) {
 	}
 }
 
-func (w *encbuf) list() *listhead {
-	lh := &listhead{offset: len(w.str), size: w.lhsize}
-	w.lheads = append(w.lheads, lh)
-	return lh
+// list adds a new list header to the header stack. It returns the index
+// of the header. The caller must call listEnd with this index after encoding
+// the content of the list.
+func (w *encbuf) list() int {
+	w.lheads = append(w.lheads, listhead{offset: len(w.str), size: w.lhsize})
+	return len(w.lheads) - 1
 }
 
-func (w *encbuf) listEnd(lh *listhead) {
+func (w *encbuf) listEnd(index int) {
+	lh := &w.lheads[index]
 	lh.size = w.size() - lh.offset - lh.size
 	if lh.size < 56 {
 		w.lhsize++ // length encoded into kind tag
