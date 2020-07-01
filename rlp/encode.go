@@ -181,12 +181,16 @@ func (w *encbuf) encodeString(b []byte) {
 	}
 }
 
-func (w *encbuf) list() *listhead {
+// list adds a new list header to the header stack. It returns the index
+// of the header. The caller must call listEnd with this index after encoding
+// the content of the list.
+func (w *encbuf) list() int {
 	w.lheads = append(w.lheads, listhead{offset: len(w.str), size: w.lhsize})
-	return &w.lheads[len(w.lheads)-1]
+	return len(w.lheads) - 1
 }
 
-func (w *encbuf) listEnd(lh *listhead) {
+func (w *encbuf) listEnd(index int) {
+	lh := &w.lheads[index]
 	lh.size = w.size() - lh.offset - lh.size
 	if lh.size < 56 {
 		w.lhsize++ // length encoded into kind tag
