@@ -137,12 +137,8 @@ var encbufPool = sync.Pool{
 
 func (w *encbuf) reset() {
 	w.lhsize = 0
-	if w.str != nil {
-		w.str = w.str[:0]
-	}
-	if w.lheads != nil {
-		w.lheads = w.lheads[:0]
-	}
+	w.str = w.str[:0]
+	w.lheads = w.lheads[:0]
 }
 
 // encbuf implements io.Writer so it can be passed it into EncodeRLP.
