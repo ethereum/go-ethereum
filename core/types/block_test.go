@@ -75,13 +75,6 @@ func TestUncleHash(t *testing.T) {
 		t.Fatalf("empty uncle hash is wrong, got %x != %x", h, exp)
 	}
 }
-func BenchmarkUncleHash(b *testing.B) {
-	uncles := make([]*Header, 0)
-	b.ResetTimer()
-	for i := 0; i < b.N; i++ {
-		CalcUncleHash(uncles)
-	}
-}
 
 var benchBuffer = bytes.NewBuffer(make([]byte, 0, 32000))
 
