@@ -81,6 +81,7 @@ type stateObject struct {
 
 	originStorage  Storage // Storage cache of original entries to dedup rewrites, reset for every transaction
 	pendingStorage Storage // Storage entries that need to be flushed to disk, at the end of an entire block
+	diffStorage    Storage // Storage entries that need to be emitted with stateDiffs
 	dirtyStorage   Storage // Storage entries that have been modified in the current transaction execution
 	fakeStorage    Storage // Fake storage which constructed by caller for debugging purpose.
 
@@ -125,6 +126,7 @@ func newObject(db *StateDB, address common.Address, data Account) *stateObject {
 		originStorage:  make(Storage),
 		pendingStorage: make(Storage),
 		dirtyStorage:   make(Storage),
+		diffStorage:    make(Storage),
 	}
 }
 
@@ -321,6 +323,7 @@ func (s *stateObject) updateTrie(db Database) Trie {
 			continue
 		}
 		s.originStorage[key] = value
+		s.diffStorage[key] = value
 
 		var v []byte
 		if (value == common.Hash{}) {
@@ -423,6 +426,7 @@ func (s *stateObject) deepCopy(db *StateDB) *stateObject {
 	stateObject.dirtyStorage = s.dirtyStorage.Copy()
 	stateObject.originStorage = s.originStorage.Copy()
 	stateObject.pendingStorage = s.pendingStorage.Copy()
+	stateObject.diffStorage = s.diffStorage.Copy()
 	stateObject.suicided = s.suicided
 	stateObject.dirtyCode = s.dirtyCode
 	stateObject.deleted = s.deleted
