@@ -137,16 +137,43 @@ var encTests = []encTest{
 	// negative ints are not supported
 	{val: big.NewInt(-1), error: "rlp: cannot encode negative *big.Int"},
 
-	// byte slices, strings
+	// byte arrays
+	{val: [0]byte{}, output: "80"},
+	{val: [1]byte{0}, output: "00"},
+	{val: [1]byte{1}, output: "01"},
+	{val: [1]byte{0x7F}, output: "7F"},
+	{val: [1]byte{0x80}, output: "8180"},
+	{val: [1]byte{0xFF}, output: "81FF"},
+	{val: [3]byte{1, 2, 3}, output: "83010203"},
+	{val: [57]byte{1, 2, 3}, output: "B839010203000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000"},
+
+	// named byte type arrays
+	{val: [0]namedByteType{}, output: "80"},
+	{val: [1]namedByteType{0}, output: "00"},
+	{val: [1]namedByteType{1}, output: "01"},
+	{val: [1]namedByteType{0x7F}, output: "7F"},
+	{val: [1]namedByteType{0x80}, output: "8180"},
+	{val: [1]namedByteType{0xFF}, output: "81FF"},
+	{val: [3]namedByteType{1, 2, 3}, output: "83010203"},
+	{val: [57]namedByteType{1, 2, 3}, output: "B839010203000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000"},
+
+	// byte slices
 	{val: []byte{}, output: "80"},
+	{val: []byte{0}, output: "00"},
 	{val: []byte{0x7E}, output: "7E"},
 	{val: []byte{0x7F}, output: "7F"},
 	{val: []byte{0x80}, output: "8180"},
 	{val: []byte{1, 2, 3}, output: "83010203"},
 
+	// named byte type slices
+	{val: []namedByteType{}, output: "80"},
+	{val: []namedByteType{0}, output: "00"},
+	{val: []namedByteType{0x7E}, output: "7E"},
+	{val: []namedByteType{0x7F}, output: "7F"},
+	{val: []namedByteType{0x80}, output: "8180"},
 	{val: []namedByteType{1, 2, 3}, output: "83010203"},
-	{val: [...]namedByteType{1, 2, 3}, output: "83010203"},
 
+	// strings
 	{val: "", output: "80"},
 	{val: "\x7E", output: "7E"},
 	{val: "\x7F", output: "7F"},
