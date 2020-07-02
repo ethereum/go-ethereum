@@ -401,3 +401,19 @@ func TestEncodeToReaderReturnToPool(t *testing.T) {
 	}
 	wg.Wait()
 }
+
+var sink interface{}
+
+func BenchmarkIntsize(b *testing.B) {
+	for i := 0; i < b.N; i++ {
+		sink = intsize(0x12345678)
+	}
+}
+
+func BenchmarkPutint(b *testing.B) {
+	buf := make([]byte, 8)
+	for i := 0; i < b.N; i++ {
+		putint(buf, 0x12345678)
+		sink = buf
+	}
+}
