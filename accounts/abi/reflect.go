@@ -42,20 +42,17 @@ func ToStruct(in interface{}, proto interface{}) interface{} {
 		return reflect.ValueOf(in).Convert(protoType).Interface()
 	case inType.Kind() == reflect.Struct:
 		if err := copyStruct(proto, in); err != nil {
-			panic(err)
 			return nil
 		}
 		return proto
-	case inType.Kind() == reflect.Array || inType.Kind() == reflect.Slice:
-		if err := copySlice(proto, in); err != nil {
-			panic(err)
+	case inType.Kind() == reflect.Array:
+		if err := copyArray(proto, in); err != nil {
 			return nil
 		}
 		return proto
 	default:
 		// Use set as a last ditch effort
 		if err := set(reflect.ValueOf(proto), reflect.ValueOf(in)); err != nil {
-			panic(err)
 			return nil
 		}
 		return proto
@@ -74,7 +71,7 @@ func copyStruct(out interface{}, in interface{}) error {
 	return nil
 }
 
-func copySlice(out interface{}, in interface{}) error {
+func copyArray(out interface{}, in interface{}) error {
 	valueIn := reflect.ValueOf(in)
 	valueOut := reflect.ValueOf(out).Elem()
 	for i := 0; i < valueOut.Len(); i++ {
