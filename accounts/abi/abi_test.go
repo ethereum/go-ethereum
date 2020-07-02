@@ -185,8 +185,11 @@ func TestConstructor(t *testing.T) {
 	if err != nil {
 		t.Error(err)
 	}
-	res := struct{ A, B *big.Int }{big.NewInt(1), big.NewInt(2)}
-	if !reflect.DeepEqual(ToStruct(unpacked[0], res), res) {
+
+	if !reflect.DeepEqual(unpacked[0], big.NewInt(1)) {
+		t.Error("Unable to pack/unpack from constructor")
+	}
+	if !reflect.DeepEqual(unpacked[1], big.NewInt(2)) {
 		t.Error("Unable to pack/unpack from constructor")
 	}
 }

@@ -35,8 +35,54 @@ import (
 // }
 // into
 // type TupleT struct { X *big.Int }
-func ToStruct(in interface{}, typ interface{}) interface{} {
-	return reflect.ValueOf(in).Convert(reflect.TypeOf(typ)).Interface()
+func ToStruct(in interface{}, proto interface{}) interface{} {
+	inType, protoType := reflect.TypeOf(in), reflect.TypeOf(proto)
+	switch {
+	case inType.ConvertibleTo(protoType):
+		return reflect.ValueOf(in).Convert(protoType).Interface()
+	case inType.Kind() == reflect.Struct:
+		if err := copyStruct(proto, in); err != nil {
+			panic(err)
+			return nil
+		}
+		return proto
+	case inType.Kind() == reflect.Array || inType.Kind() == reflect.Slice:
+		if err := copySlice(proto, in); err != nil {
+			panic(err)
+			return nil
+		}
+		return proto
+	default:
+		// Use set as a last ditch effort
+		if err := set(reflect.ValueOf(proto), reflect.ValueOf(in)); err != nil {
+			panic(err)
+			return nil
+		}
+		return proto
+	}
+}
+
+// copyStruct tries to copy each field of in to out.
+func copyStruct(out interface{}, in interface{}) error {
+	valueIn := reflect.ValueOf(in)
+	valueOut := reflect.ValueOf(out).Elem()
+	for i := 0; i < valueOut.NumField(); i++ {
+		if err := set(valueOut.Field(i), valueIn.Field(i)); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func copySlice(out interface{}, in interface{}) error {
+	valueIn := reflect.ValueOf(in)
+	valueOut := reflect.ValueOf(out).Elem()
+	for i := 0; i < valueOut.Len(); i++ {
+		if err := set(valueOut.Index(i), valueIn.Index(i)); err != nil {
+			return err
+		}
+	}
+	return nil
 }
 
 // indirect recursively dereferences the value until it either gets the value
@@ -100,6 +146,8 @@ func set(dst, src reflect.Value) error {
 	case dstType.Kind() == reflect.Slice && srcType.Kind() == reflect.Slice && dst.CanSet():
 		return setSlice(dst, src)
 	case dstType.Kind() == reflect.Array && srcType.Kind() == reflect.Array:
+		return setArray(dst, src)
+	case dstType.Kind() == reflect.Array && srcType.Kind() == reflect.Slice:
 		return setArray(dst, src)
 	case dstType.Kind() == reflect.Struct:
 		return setStruct(dst, src)

@@ -118,19 +118,6 @@ func (arguments Arguments) createStruct(values []interface{}) ([]interface{}, er
 	return ret, nil
 }
 
-/*
-func (arguments Argument) createSlice(values []interface{}) ([]interface{}, error) {
-case reflect.Slice, reflect.Array:
-	if value.Len() < len(marshalledValues) {
-		return fmt.Errorf("abi: insufficient number of arguments for unpack, want %d, got %d", len(arguments), value.Len())
-	}
-	for i := range nonIndexedArgs {
-		if err := set(value.Index(i), reflect.ValueOf(marshalledValues[i])); err != nil {
-			return err
-		}
-	}
-}*/
-
 func (arguments Arguments) makeDefaulArgs() []interface{} {
 	nonIndexedArgs := arguments.NonIndexed()
 	retval := make([]interface{}, len(nonIndexedArgs))

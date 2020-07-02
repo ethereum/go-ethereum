@@ -752,7 +752,7 @@ var packUnpackTests = []packUnpackTest{
 		}{big.NewInt(1)},
 	},
 	{
-		def: `[{"name":"int_one","type":"int256"}, {"name":"intone","type":"int256"}]`,
+		def: `[{"components": [{"name":"int_one","type":"int256"}, {"name":"intone","type":"int256"}], "type":"tuple"}]`,
 		packed: "0000000000000000000000000000000000000000000000000000000000000001" +
 			"0000000000000000000000000000000000000000000000000000000000000002",
 		unpacked: struct {
@@ -862,14 +862,15 @@ var packUnpackTests = []packUnpackTest{
 		{"name":"e","type":"int256[]"},
 		{"name":"f","type":"address[]"}], "type":"tuple"}]`,
 		unpacked: struct {
-			FieldA string `abi:"a"` // Test whether abi tag works
-			FieldB int64  `abi:"b"`
-			C      []byte
-			D      []string
-			E      []*big.Int
-			F      []common.Address
+			A string
+			B int64
+			C []byte
+			D []string
+			E []*big.Int
+			F []common.Address
 		}{"foobar", 1, []byte{1}, []string{"foo", "bar"}, []*big.Int{big.NewInt(1), big.NewInt(-1)}, []common.Address{{1}, {2}}},
-		packed: "00000000000000000000000000000000000000000000000000000000000000c0" + // struct[a] offset
+		packed: "0000000000000000000000000000000000000000000000000000000000000020" + // struct a
+			"00000000000000000000000000000000000000000000000000000000000000c0" + // struct[a] offset
 			"0000000000000000000000000000000000000000000000000000000000000001" + // struct[b]
 			"0000000000000000000000000000000000000000000000000000000000000100" + // struct[c] offset
 			"0000000000000000000000000000000000000000000000000000000000000140" + // struct[d] offset
@@ -900,17 +901,18 @@ var packUnpackTests = []packUnpackTest{
 							{"name": "b","type": "uint256[]"}],  "type": "tuple"}]`,
 		unpacked: struct {
 			A struct {
-				FieldA *big.Int `abi:"a"`
-				B      []*big.Int
+				A *big.Int
+				B []*big.Int
 			}
 			B []*big.Int
 		}{
 			A: struct {
-				FieldA *big.Int `abi:"a"` // Test whether abi tag works for nested tuple
-				B      []*big.Int
+				A *big.Int
+				B []*big.Int
 			}{big.NewInt(1), []*big.Int{big.NewInt(1), big.NewInt(2)}},
 			B: []*big.Int{big.NewInt(1), big.NewInt(2)}},
-		packed: "0000000000000000000000000000000000000000000000000000000000000040" + // a offset
+		packed: "0000000000000000000000000000000000000000000000000000000000000020" + // struct a
+			"0000000000000000000000000000000000000000000000000000000000000040" + // a offset
 			"00000000000000000000000000000000000000000000000000000000000000e0" + // b offset
 			"0000000000000000000000000000000000000000000000000000000000000001" + // a.a value
 			"0000000000000000000000000000000000000000000000000000000000000040" + // a.b offset
