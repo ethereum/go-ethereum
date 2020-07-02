@@ -43,10 +43,10 @@ type CheckpointOracle struct {
 	running  int32                                 // Flag whether the contract backend is set or not
 	getLocal func(uint64) params.TrustedCheckpoint // Function used to retrieve local checkpoint
 
-	checkMu              sync.RWMutex              // Mutex to sync access the fields below
+	checkMu              sync.Mutex                // Mutex to sync access to the fields below
 	lastCheckTime        time.Time                 // Time we last checked the checkpoint
-	lastCheckPoint       *params.TrustedCheckpoint // last stable checkpoint
-	lastCheckPointHeight uint64                    // last stable checkpoint height
+	lastCheckPoint       *params.TrustedCheckpoint // The last stable checkpoint
+	lastCheckPointHeight uint64                    // The height of last stable checkpoint
 }
 
 // New creates a checkpoint oracle handler with given configs and callback.
@@ -97,7 +97,7 @@ func (oracle *CheckpointOracle) Contract() *checkpointoracle.CheckpointOracle {
 func (oracle *CheckpointOracle) StableCheckpoint() (*params.TrustedCheckpoint, uint64) {
 	oracle.checkMu.Lock()
 	defer oracle.checkMu.Unlock()
-	if time.Since(oracle.lastCheckTime) < 1*time.Second {
+	if time.Since(oracle.lastCheckTime) < 1*time.Minute {
 		return oracle.lastCheckPoint, oracle.lastCheckPointHeight
 	}
 	// Look it up properly
