@@ -27,14 +27,12 @@ import (
 )
 
 func opAdd(pc *uint64, interpreter *EVMInterpreter, callContext *callCtx) ([]byte, error) {
-	fmt.Println("ADD")
 	x, y := callContext.stack.pop(), callContext.stack.peek()
 	y.Add(&x, y)
 	return nil, nil
 }
 
 func opSub(pc *uint64, interpreter *EVMInterpreter, callContext *callCtx) ([]byte, error) {
-	fmt.Println("SUB")
 	x, y := callContext.stack.pop(), callContext.stack.peek()
 	y.Sub(&x, y)
 	return nil, nil
@@ -510,20 +508,20 @@ func opMstore8(pc *uint64, interpreter *EVMInterpreter, callContext *callCtx) ([
 }
 
 func opSload(pc *uint64, interpreter *EVMInterpreter, callContext *callCtx) ([]byte, error) {
-	fmt.Println("Sload")
 	loc := callContext.stack.peek()
 	hash := common.Hash(loc.Bytes32())
 	val := interpreter.evm.StateDB.GetState(callContext.contract.Address(), hash)
 	loc.SetBytes(val.Bytes())
+	fmt.Println("Sload -> address : " + callContext.contract.Address().String() + " Key : " + hash.String())
 	return nil, nil
 }
 
 func opSstore(pc *uint64, interpreter *EVMInterpreter, callContext *callCtx) ([]byte, error) {
-	fmt.Println("Sstore")
 	loc := callContext.stack.pop()
 	val := callContext.stack.pop()
-	interpreter.evm.StateDB.SetState(callContext.contract.Address(),
-		common.Hash(loc.Bytes32()), common.Hash(val.Bytes32()))
+	hash := common.Hash(loc.Bytes32())
+	interpreter.evm.StateDB.SetState(callContext.contract.Address(), hash, common.Hash(val.Bytes32()))
+	fmt.Println("Sstore -> address : " + callContext.contract.Address().String() + " Key : " + hash.String())
 	return nil, nil
 }
 
