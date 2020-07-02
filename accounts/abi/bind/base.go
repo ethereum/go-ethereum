@@ -122,6 +122,9 @@ func (c *BoundContract) Call(opts *CallOpts, results *[]interface{}, method stri
 	if opts == nil {
 		opts = new(CallOpts)
 	}
+	if results == nil {
+		results = new([]interface{})
+	}
 	// Pack the input, call and unpack the results
 	input, err := c.abi.Pack(method, params...)
 	if err != nil {
