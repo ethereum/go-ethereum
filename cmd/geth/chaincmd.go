@@ -85,6 +85,8 @@ The dumpgenesis command dumps the genesis block configuration in JSON format to 
 			utils.CacheGCFlag,
 			utils.MetricsEnabledFlag,
 			utils.MetricsEnabledExpensiveFlag,
+			utils.MetricsHTTPFlag,
+			utils.MetricsPortFlag,
 			utils.MetricsEnableInfluxDBFlag,
 			utils.MetricsInfluxDBEndpointFlag,
 			utils.MetricsInfluxDBDatabaseFlag,
