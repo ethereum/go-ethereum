@@ -41,29 +41,35 @@ func init() {
 const GAS_LIMIT = 15000000
 
 var ZERO_ADDRESS = common.HexToAddress("0000000000000000000000000000000000000000")
+var DEFAULT_FROM_ADDR = common.HexToAddress("17ec8597ff92C3F44523bDc65BF0f1bE632917ff")
+var OTHER_FROM_ADDR = common.HexToAddress("8888888888888888888888888888888888888888")
 
-func TestSetExecutionContext(t *testing.T) {
-	initCode, _ := hex.DecodeString("6080604052348015600f57600080fd5b5060b28061001e6000396000f3fe6080604052348015600f57600080fd5b506004361060285760003560e01c80639b0b0fda14602d575b600080fd5b606060048036036040811015604157600080fd5b8101908080359060200190929190803590602001909291905050506062565b005b8060008084815260200190815260200160002081905550505056fea265627a7a7231582053ac32a8b70d1cf87fb4ebf5a538ea9d9e773351e6c8afbc4bf6a6c273187f4a64736f6c63430005110032")
-	state := newState()
+func TestContractCreation(t *testing.T) {
+	currentState := newState()
 
-	codeBefore := state.GetCode(common.HexToAddress("65486c8ec9167565ebd93c94ed04f0f71d1b5137"))
+	// First we'll need to deploy an EM (because we don't have this auto deploying yet)
+	executionMgrInitcode, _ := hex.DecodeString(vm.ExecutionManagerInitcode)
+	applyMessageToState(currentState, ZERO_ADDRESS, GAS_LIMIT, executionMgrInitcode)
 
-	// Now apply a simple message with contract deployment
+	// Next we've got to generate & apply a transaction which calls the EM to deploy a new contract
+	initCode, _ := hex.DecodeString("608060405234801561001057600080fd5b5060405161026b38038061026b8339818101604052602081101561003357600080fd5b8101908080519060200190929190505050806000806101000a81548173ffffffffffffffffffffffffffffffffffffffff021916908373ffffffffffffffffffffffffffffffffffffffff160217905550506101d7806100946000396000f3fe608060405234801561001057600080fd5b50600436106100365760003560e01c80633408f73a1461003b578063d3404b6d14610045575b600080fd5b61004361004f565b005b61004d6100fa565b005b600060e060405180807f6f766d534c4f4144282900000000000000000000000000000000000000000000815250600a0190506040518091039020901c905060008060009054906101000a900473ffffffffffffffffffffffffffffffffffffffff16905060405136600082378260181c81538260101c60018201538260081c60028201538260038201536040516207a1208136846000875af160008114156100f657600080fd5b3d82f35b600060e060405180807f6f766d5353544f52452829000000000000000000000000000000000000000000815250600b0190506040518091039020901c905060008060009054906101000a900473ffffffffffffffffffffffffffffffffffffffff16905060405136600082378260181c81538260101c60018201538260081c600282015382600382015360008036836000865af1600081141561019c57600080fd5b5050505056fea265627a7a72315820311a406c97055eec367b660092882e1a174e14333416a3de384439293b7b129264736f6c63430005100032000000000000000000000000a193e42526f1fea8c99af609dceabf30c1c29faa")
+	executionManagerAbi, _ := abi.JSON(strings.NewReader(vm.RawExecutionManagerAbi))
+	deployContractCalldata, _ := executionManagerAbi.Pack(
+		"executeTransaction",
+		big.NewInt(1),
+		new(big.Int),
+		common.HexToAddress(""),
+		initCode,
+		OTHER_FROM_ADDR,
+		common.HexToAddress(""),
+		true,
+	)
 
-	returnValue, gasUsed, failed, err := applyMessageToState(*state, ZERO_ADDRESS, GAS_LIMIT, initCode)
+	fmt.Println("\n\nApplying new Tx to State.")
+	applyMessageToState(currentState, vm.ExecutionManagerAddress, GAS_LIMIT, deployContractCalldata)
+	fmt.Println("Complete.")
 
-	// Verify the transition occurred
-	code := state.GetCode(common.HexToAddress("65486c8ec9167565ebd93c94ed04f0f71d1b5137"))
-
-	fmt.Println("Hello!")
-	fmt.Println("Code before:", codeBefore, "Code After:", code)
-
-	fmt.Println("Return val:", returnValue, "Gas used:", gasUsed, "Failed:", failed, "Error:", err)
-
-	// expectedDeployedBytecode := common.FromHex("6080604052348015600f57600080fd5b506004361060285760003560e01c80639b0b0fda14602d575b600080fd5b606060048036036040811015604157600080fd5b8101908080359060200190929190803590602001909291905050506062565b005b8060008084815260200190815260200160002081905550505056fea265627a7a7231582053ac32a8b70d1cf87fb4ebf5a538ea9d9e773351e6c8afbc4bf6a6c273187f4a64736f6c63430005110032")
-	// if !bytes.Equal(code[:], expectedDeployedBytecode) {
-	// 	t.Errorf("Expected %020x; got %020x", expectedDeployedBytecode, code[:])
-	// }
+	fmt.Println("The deployed contract code:", currentState.GetCode(common.HexToAddress("65486c8ec9167565eBD93c94ED04F0F71d1b5137")))
 }
 
 func TestSloadAndStore(t *testing.T) {
@@ -210,14 +216,14 @@ func newState() *state.StateDB {
 	return state
 }
 
-func applyMessageToState(state state.StateDB, to common.Address, gasLimit uint64, data []byte) ([]byte, uint64, bool, error) {
+func applyMessageToState(currentState *state.StateDB, to common.Address, gasLimit uint64, data []byte) {
 	header := &types.Header{
 		Number:     big.NewInt(0),
 		Difficulty: big.NewInt(0),
 	}
 	gasPool := core.GasPool(100000000)
 	// Default from address
-	from := common.HexToAddress("8888888888888888888888888888888888888888")
+	from := DEFAULT_FROM_ADDR
 	// Generate the message
 	message := types.Message{}
 	if to == ZERO_ADDRESS {
@@ -225,7 +231,7 @@ func applyMessageToState(state state.StateDB, to common.Address, gasLimit uint64
 		message = types.NewMessage(
 			from,
 			nil,
-			0,
+			currentState.GetNonce(from),
 			big.NewInt(0),
 			gasLimit,
 			big.NewInt(0),
@@ -237,7 +243,7 @@ func applyMessageToState(state state.StateDB, to common.Address, gasLimit uint64
 		message = types.NewMessage(
 			from,
 			&to,
-			0,
+			currentState.GetNonce(from),
 			big.NewInt(0),
 			gasLimit,
 			big.NewInt(0),
@@ -247,18 +253,19 @@ func applyMessageToState(state state.StateDB, to common.Address, gasLimit uint64
 	}
 
 	context := core.NewEVMContext(message, header, nil, &from)
-	evm := vm.NewEVM(context, &state, &chainConfig, vm.Config{})
+	evm := vm.NewEVM(context, currentState, &chainConfig, vm.Config{})
 
-	returnValue, gasUsed, failed, err := core.ApplyMessage(evm, message, &gasPool)
+	_, gasUsed, failed, err := core.ApplyMessage(evm, message, &gasPool)
+	// fmt.Println("Return val:", returnValue, "Gas used:", gasUsed, "Failed:", failed, "Error:", err)
+	fmt.Println("Return val: [HIDDEN]", "Gas used:", gasUsed, "Failed:", failed, "Error:", err)
 
-	state.Finalise(true)
-
-	return returnValue, gasUsed, failed, err
+	commitHash, commitErr := currentState.Commit(false)
+	fmt.Println("Commit hash:", commitHash, "Commit err:", commitErr)
 }
 
-func call(t *testing.T, state *state.StateDB, address common.Address, callData []byte) ([]byte, error) {
+func call(t *testing.T, currentState *state.StateDB, address common.Address, callData []byte) ([]byte, error) {
 	returnValue, _, err := runtime.Call(address, callData, &runtime.Config{
-		State:       state,
+		State:       currentState,
 		ChainConfig: &chainConfig,
 	})
 
