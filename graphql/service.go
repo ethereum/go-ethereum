@@ -17,13 +17,12 @@
 package graphql
 
 import (
-	"net/http"
-
 	"github.com/ethereum/go-ethereum/internal/ethapi"
 	"github.com/ethereum/go-ethereum/node"
 	"github.com/ethereum/go-ethereum/rpc"
 	"github.com/graph-gophers/graphql-go"
 	"github.com/graph-gophers/graphql-go/relay"
+	"net/http"
 )
 
 // New constructs a new GraphQL service instance.
@@ -34,7 +33,7 @@ func New(stack *node.Node, backend ethapi.Backend, endpoint string, cors, vhosts
 	// check if http server with given endpoint exists and enable graphQL on it
 	server := stack.ExistingHTTPServer(endpoint)
 	if server != nil {
-		server.GQLAllowed = true
+		// set vhosts, cors and timeouts
 		server.Vhosts = append(server.Vhosts, vhosts...)
 		server.CorsAllowedOrigins = append(server.CorsAllowedOrigins, cors...)
 		server.Timeouts = timeouts
@@ -54,10 +53,11 @@ func New(stack *node.Node, backend ethapi.Backend, endpoint string, cors, vhosts
 	}
 	// create the http server
 	gqlServer := &node.HTTPServer{
+		RPCAllowed:         0,
+		WSAllowed:          0,
 		Vhosts:             vhosts,
 		CorsAllowedOrigins: cors,
 		Timeouts:           timeouts,
-		GQLAllowed:         true,
 		GQLHandler:         handler,
 		Srv:                rpc.NewServer(),
 	}

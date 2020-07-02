@@ -29,6 +29,7 @@ import (
 	"runtime"
 	"strings"
 	"sync"
+	"sync/atomic"
 
 	"github.com/ethereum/go-ethereum/accounts"
 	"github.com/ethereum/go-ethereum/core/rawdb"
@@ -142,11 +143,11 @@ func New(conf *Config) (*Node, error) {
 			endpoint:           conf.HTTPEndpoint(),
 			host:               conf.HTTPHost,
 			port:               conf.HTTPPort,
-			RPCAllowed:         true,
+			RPCAllowed:         1,
 		}
 		// check if ws is enabled and if ws port is the same as http port
 		if conf.WSHost != "" && conf.WSPort == conf.HTTPPort {
-			httpServ.WSAllowed = true
+			httpServ.WSAllowed = 1
 			httpServ.WsOrigins = conf.WSOrigins
 			httpServ.Whitelist = append(httpServ.Whitelist, conf.WSModules...)
 
@@ -157,13 +158,13 @@ func New(conf *Config) (*Node, error) {
 	}
 	if conf.WSHost != "" {
 		node.httpServers[conf.WSEndpoint()] = &HTTPServer{
-			WsOrigins: conf.WSOrigins,
-			Whitelist: conf.WSModules,
-			Srv:       rpc.NewServer(),
-			endpoint:  conf.WSEndpoint(),
-			host:      conf.WSHost,
-			port:      conf.WSPort,
-			WSAllowed: true,
+			WsOrigins:  conf.WSOrigins,
+			Whitelist:  conf.WSModules,
+			Srv:        rpc.NewServer(),
+			endpoint:   conf.WSEndpoint(),
+			host:       conf.WSHost,
+			port:       conf.WSPort,
+			WSAllowed:  1,
 		}
 	}
 
@@ -352,28 +353,20 @@ func (n *Node) configureRPC() error {
 
 	for _, server := range n.httpServers {
 		// configure the handlers
-		if server.RPCAllowed {
+		if atomic.LoadInt32(&server.RPCAllowed) == 1 {
 			server.handler = NewHTTPHandlerStack(server.Srv, server.CorsAllowedOrigins, server.Vhosts)
 			// wrap ws handler just in case ws is enabled through the console after start-up
 			wsHandler := server.Srv.WebsocketHandler(server.WsOrigins)
 			server.handler = server.NewWebsocketUpgradeHandler(server.handler, wsHandler)
 
 			n.log.Info("HTTP configured on endpoint ", "endpoint", server.endpoint)
-			if server.WSAllowed {
+			if atomic.LoadInt32(&server.WSAllowed) == 1 {
 				n.log.Info("Websocket configured on endpoint ", "endpoint", server.endpoint)
 			}
 		}
-		if server.WSAllowed && server.handler == nil {
+		if (atomic.LoadInt32(&server.WSAllowed) == 1) && server.handler == nil {
 			server.handler = server.Srv.WebsocketHandler(server.WsOrigins)
 			n.log.Info("Websocket configured on endpoint ", "endpoint", server.endpoint)
-		}
-		if server.GQLAllowed {
-			if server.handler == nil {
-				server.handler = server.GQLHandler
-			} else {
-				server.handler = NewGQLUpgradeHandler(server.handler, server.GQLHandler)
-			}
-			n.log.Info("GraphQL configured on endpoint ", "endpoint", server.endpoint)
 		}
 		// create the HTTP server
 		if err := n.CreateHTTPServer(server, false); err != nil {
@@ -580,7 +573,7 @@ func (n *Node) WSEndpoint() string {
 	defer n.lock.Unlock()
 
 	for _, httpServer := range n.httpServers {
-		if httpServer.WSAllowed {
+		if atomic.LoadInt32(&httpServer.WSAllowed) == 1 {
 			if httpServer.Listener != nil {
 				return httpServer.Listener.Addr().String()
 			}

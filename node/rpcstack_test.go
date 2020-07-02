@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"net/http"
 	"net/http/httptest"
+	"sync/atomic"
 	"testing"
 
 	"github.com/ethereum/go-ethereum/rpc"
@@ -13,7 +14,7 @@ import (
 func TestNewWebsocketUpgradeHandler_websocket(t *testing.T) {
 	h := &HTTPServer{
 		Srv:       rpc.NewServer(),
-		WSAllowed: true,
+		WSAllowed: 1,
 	}
 	handler := h.NewWebsocketUpgradeHandler(nil, h.Srv.WebsocketHandler([]string{}))
 	ts := httptest.NewServer(handler)
@@ -63,6 +64,6 @@ func TestWSAllowed(t *testing.T) {
 		t.Fatalf("server was not started on the given endpoint: %v", err)
 	}
 	// assert that both RPC and WS are allowed on the HTTP Server
-	assert.True(t, server.RPCAllowed)
-	assert.True(t, server.WSAllowed)
+	assert.Equal(t, atomic.LoadInt32(&server.RPCAllowed), int32(1))
+	assert.Equal(t, atomic.LoadInt32(&server.WSAllowed), int32(1))
 }

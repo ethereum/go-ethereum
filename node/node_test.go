@@ -23,6 +23,7 @@ import (
 	"net/http"
 	"os"
 	"reflect"
+	"sync/atomic"
 	"testing"
 
 	"github.com/ethereum/go-ethereum/crypto"
@@ -423,7 +424,8 @@ func TestHTTPServerCreateAndStop(t *testing.T) {
 	}
 	// check to make sure http servers are configured properly
 	for _, server := range node1.httpServers {
-		if !(server.WSAllowed && server.RPCAllowed) {
+
+		if atomic.LoadInt32(&server.WSAllowed) == 0 && atomic.LoadInt32(&server.RPCAllowed) == 0 {
 			t.Fatalf("node's http server is not configured to handle both rpc and ws")
 		}
 		node1.stopServer(server)
@@ -450,7 +452,7 @@ func TestHTTPServerCreateAndStop(t *testing.T) {
 	}
 	// check that neither http server has both ws and rpc enabled
 	for _, server := range node2.httpServers {
-		if server.WSAllowed && server.RPCAllowed {
+		if atomic.LoadInt32(&server.WSAllowed) == 1 && atomic.LoadInt32(&server.RPCAllowed) == 1 {
 			t.Fatalf("both rpc and ws allowed on a single http server")
 		}
 		node2.stopServer(server)

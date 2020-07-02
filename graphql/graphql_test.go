@@ -37,40 +37,6 @@ func TestBuildSchema(t *testing.T) {
 	}
 }
 
-// Tests that a graphql handler can be added to an existing HTTPServer
-func TestGQLAllowed(t *testing.T) {
-	stack := createNode(t, true)
-	defer stack.Close()
-	// start node
-	if err := stack.Start(); err != nil {
-		t.Fatalf("could not start node: %v", err)
-	}
-	// check that server was created
-	server := stack.ExistingHTTPServer("127.0.0.1:9393")
-	if server == nil {
-		t.Errorf("server was not created on the given endpoint")
-	}
-	// assert that server allows GQL requests
-	assert.True(t, server.GQLAllowed)
-}
-
-// Tests to make sure an HTTPServer is created that handles for http, ws, and graphQL
-func TestMultiplexedServer(t *testing.T) {
-	stack := createNode(t, true)
-	defer stack.Close()
-	// start the node
-	if err := stack.Start(); err != nil {
-		t.Error("could not start http service on node ", err)
-	}
-	server := stack.ExistingHTTPServer("127.0.0.1:9393")
-	if server == nil {
-		t.Fatalf("server was not configured on the given endpoint")
-	}
-	assert.True(t, server.RPCAllowed)
-	assert.True(t, server.WSAllowed)
-	assert.True(t, server.GQLAllowed)
-}
-
 // Tests that a graphQL request is successfully handled when graphql is enabled on the specified endpoint
 func TestGraphQLHTTPOnSamePort_GQLRequest_Successful(t *testing.T) {
 	stack := createNode(t, true)
@@ -109,7 +75,6 @@ func TestGraphQLHTTPOnSamePort_GQLRequest_Unsuccessful(t *testing.T) {
 	if server == nil {
 		t.Fatalf("server was not created on the given endpoint")
 	}
-	assert.False(t, server.GQLAllowed)
 	// create http request
 	body := strings.NewReader("{\"query\": \"{block{number}}\",\"variables\": null}")
 	gqlReq, err := http.NewRequest(http.MethodPost, fmt.Sprintf("http://%s/graphql", "127.0.0.1:9393"), body)
@@ -126,36 +91,6 @@ func TestGraphQLHTTPOnSamePort_GQLRequest_Unsuccessful(t *testing.T) {
 	// make sure the request is not handled successfully
 	expected := "{\"jsonrpc\":\"2.0\",\"id\":null,\"error\":{\"code\":-32600,\"message\":\"invalid request\"}}\n"
 	assert.Equal(t, string(bodyBytes), expected)
-}
-
-// Tests that graphql can be successfully enabled on a separate port than rpc and ws.
-func TestGraphqlOnSeparatePort(t *testing.T) {
-	stack := createNode(t, false)
-	defer stack.Close()
-
-	separateTestEndpoint := "127.0.0.1:7474"
-
-	createGQLService(t, stack, separateTestEndpoint)
-	// start node
-	if err := stack.Start(); err != nil {
-		t.Fatalf("could not start node: %v", err)
-	}
-	// create http request
-	body := strings.NewReader("{\"query\": \"{block{number}}\",\"variables\": null}")
-	gqlReq, err := http.NewRequest(http.MethodGet, fmt.Sprintf("http://%s/graphql", separateTestEndpoint), body)
-	if err != nil {
-		t.Error("could not issue new http request ", err)
-	}
-	gqlReq.Header.Set("Content-Type", "application/json")
-	// read from response
-	resp := doHTTPRequest(t, gqlReq)
-	bodyBytes, err := ioutil.ReadAll(resp.Body)
-	if err != nil {
-		t.Fatalf("could not read from response body: %v", err)
-	}
-	expected := "{\"data\":{\"block\":{\"number\":\"0x0\"}}}"
-	assert.Equal(t, expected, string(bodyBytes))
-
 }
 
 func createNode(t *testing.T, gqlEnabled bool) *node.Node {

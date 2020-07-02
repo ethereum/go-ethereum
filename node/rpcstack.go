@@ -26,6 +26,7 @@ import (
 	"net/http"
 	"strings"
 	"sync"
+	"sync/atomic"
 
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/rpc"
@@ -52,9 +53,8 @@ type HTTPServer struct {
 	WsOrigins          []string
 	Timeouts           rpc.HTTPTimeouts
 
-	RPCAllowed bool
-	WSAllowed  bool // TODO discuss this later bc possible race condition
-	GQLAllowed bool
+	RPCAllowed int32
+	WSAllowed  int32
 
 	GQLHandler http.Handler
 }
@@ -224,7 +224,7 @@ func newGzipHandler(next http.Handler) http.Handler {
 func (hs *HTTPServer) NewWebsocketUpgradeHandler(h http.Handler, ws http.Handler) http.Handler {
 	// TODO make sure you protect the pointer
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if hs.WSAllowed && isWebsocket(r) {
+		if atomic.LoadInt32(&hs.WSAllowed) == 1 && isWebsocket(r) {
 			ws.ServeHTTP(w, r)
 			log.Debug("serving websocket request")
 			return

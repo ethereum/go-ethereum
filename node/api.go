@@ -20,6 +20,7 @@ import (
 	"context"
 	"fmt"
 	"strings"
+	"sync/atomic"
 
 	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/ethereum/go-ethereum/crypto"
@@ -160,7 +161,7 @@ func (api *PrivateAdminAPI) StartRPC(host *string, port *int, cors *string, apis
 	endpoint := fmt.Sprintf("%s:%d", *host, *port)
 	// check if HTTP server already exists
 	if server, exists := api.node.httpServers[endpoint]; exists {
-		if server.RPCAllowed {
+		if atomic.LoadInt32(&server.RPCAllowed) == 1 {
 			return false, fmt.Errorf("HTTP RPC already running on %v", server.Listener.Addr())
 		}
 	}
@@ -221,7 +222,7 @@ func (api *PrivateAdminAPI) StopRPC() (bool, error) {
 	defer api.node.lock.Unlock()
 
 	for _, httpServer := range api.node.httpServers {
-		if httpServer.RPCAllowed {
+		if atomic.LoadInt32(&httpServer.RPCAllowed) == 1 {
 			api.node.stopServer(httpServer)
 			return true, nil
 		}
@@ -236,7 +237,7 @@ func (api *PrivateAdminAPI) StartWS(host *string, port *int, allowedOrigins *str
 	defer api.node.lock.Unlock()
 	// check if an existing WS server already exists
 	for _, server := range api.node.httpServers {
-		if server.WSAllowed {
+		if atomic.LoadInt32(&server.WSAllowed) == 1 {
 			return false, fmt.Errorf("WebSocket RPC already running on %v", server.Listener.Addr())
 		}
 	}
@@ -255,7 +256,7 @@ func (api *PrivateAdminAPI) StartWS(host *string, port *int, allowedOrigins *str
 	// check if there is an existing server on the specified port, and if there is, enable ws on it
 	if server, exists := api.node.httpServers[endpoint]; exists {
 		// else configure ws on the existing server
-		server.WSAllowed = true
+		atomic.AddInt32(&server.WSAllowed, 1)
 		// configure origins
 		origins := api.node.config.WSOrigins
 		if allowedOrigins != nil {
@@ -280,7 +281,7 @@ func (api *PrivateAdminAPI) StartWS(host *string, port *int, allowedOrigins *str
 	// check if an HTTP server exists on the given endpoint, and if so, enable websocket on that HTTP server
 	existingServer := api.node.ExistingHTTPServer(endpoint)
 	if existingServer != nil {
-		existingServer.WSAllowed = true
+		atomic.AddInt32(&existingServer.WSAllowed, 1)
 		existingServer.WsOrigins = origins
 
 	}
@@ -300,7 +301,7 @@ func (api *PrivateAdminAPI) StartWS(host *string, port *int, allowedOrigins *str
 		port:      *port,
 		Whitelist: modules,
 		WsOrigins: origins,
-		WSAllowed: true,
+		WSAllowed: 1,
 	}
 	// create handler
 	wsServer.handler = wsServer.Srv.WebsocketHandler(wsServer.WsOrigins)
@@ -323,10 +324,10 @@ func (api *PrivateAdminAPI) StopWS() (bool, error) {
 	defer api.node.lock.Unlock()
 
 	for _, httpServer := range api.node.httpServers {
-		if httpServer.WSAllowed {
-			httpServer.WSAllowed = false
+		if atomic.LoadInt32(&httpServer.WSAllowed) == 1 {
+			atomic.AddInt32(&httpServer.WSAllowed, int32(-1))
 			// if RPC is not enabled on the WS http server, shut it down
-			if !httpServer.RPCAllowed && !httpServer.GQLAllowed { // TODO is the gql check necessary? Can GQL ever be on a WS server that doesn't also support regular http?
+			if atomic.LoadInt32(&httpServer.RPCAllowed) == 0 {
 				api.node.stopServer(httpServer)
 				return true, nil
 			}
