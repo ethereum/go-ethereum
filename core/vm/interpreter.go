@@ -162,10 +162,11 @@ func (in *EVMInterpreter) Run(contract *Contract, input []byte, readOnly bool) (
 	// as every returning call will return new data anyway.
 	in.returnData = nil
 
+	// TODO  temporary fix for issue
 	// Don't bother with the execution if there's no code.
-	if len(contract.Code) == 0 {
-		return nil, nil
-	}
+	//if len(contract.Code) == 0 {
+	//	return nil, nil
+	//}
 
 	var (
 		op          OpCode        // current opcode

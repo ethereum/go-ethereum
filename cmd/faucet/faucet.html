@@ -53,7 +53,13 @@
 							<span class="input-group-btn">
 								<button class="btn btn-default dropdown-toggle" type="button" data-toggle="dropdown" aria-haspopup="true" aria-expanded="false">Give me BNB	<i class="fa fa-caret-down" aria-hidden="true"></i></button>
 				        <ul class="dropdown-menu dropdown-menu-right">{{range $idx, $amount := .Amounts}}
-				          <li><a style="text-align: center;" onclick="tier={{$idx}}; {{if $.Recaptcha}}grecaptcha.execute(){{else}}submit({{$idx}}){{end}}">{{$amount}}</a></li>{{end}}
+				          <li><a style="text-align: center;" onclick="tier={{$idx}};symbol='BNB'; {{if $.Recaptcha}}grecaptcha.execute(){{else}}submit({{$idx}}){{end}}">{{$amount}}</a></li>{{end}}
+				        </ul>
+							</span>
+							<span class="input-group-btn">
+								<button class="btn btn-default dropdown-toggle" type="button" data-toggle="dropdown" aria-haspopup="true" aria-expanded="false">Peggy tokens<i class="fa fa-caret-down" aria-hidden="true"></i></button>
+				        <ul class="dropdown-menu dropdown-menu-right"> {{range $symbol, $bep2eInfo := .Bep2eInfos}}
+								<li><a style="text-align: center;" onclick="symbol={{$symbol}}; {{if $.Recaptcha}}grecaptcha.execute(){{else}}submitBep2e({{$symbol}}){{end}}">{{$bep2eInfo.AmountStr}} {{$symbol}}</a></li>{{end}}
 				        </ul>
 							</span>
 						</div>{{if .Recaptcha}}
@@ -85,6 +91,7 @@
 			var attempt = 0;
 			var server;
 			var tier = 0;
+			var symbol="";
 			var requests = [];
 
 			// Define a function that creates closures to drop old requests
@@ -100,7 +107,7 @@
 			};
 			// Define the function that submits a gist url to the server
 			var submit = function({{if .Recaptcha}}captcha{{end}}) {
-				server.send(JSON.stringify({url: $("#url")[0].value, tier: tier{{if .Recaptcha}}, captcha: captcha{{end}}}));{{if .Recaptcha}}
+				server.send(JSON.stringify({url: $("#url")[0].value, symbol: symbol, tier: tier{{if .Recaptcha}}, captcha: captcha{{end}}}));{{if .Recaptcha}}
 				grecaptcha.reset();{{end}}
 			};
 			// Define a method to reconnect upon server loss
