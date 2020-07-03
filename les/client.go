@@ -171,6 +171,8 @@ func New(stack *node.Node, config *eth.Config) (*LightEthereum, error) {
 	}
 	leth.ApiBackend.gpo = gasprice.NewOracle(leth.ApiBackend, gpoParams)
 
+	leth.netRPCService = ethapi.NewPublicNetAPI(leth.p2pServer, leth.config.NetworkId)
+
 	// Register the backend on the node
 	stack.RegisterAPIs(leth.APIs())
 	stack.RegisterProtocols(leth.Protocols())
@@ -298,8 +300,6 @@ func (s *LightEthereum) Start() error {
 	s.wg.Add(bloomServiceThreads)
 	s.startBloomHandlers(params.BloomBitsBlocksClient)
 	s.handler.start()
-
-	s.netRPCService = ethapi.NewPublicNetAPI(s.p2pServer, s.config.NetworkId)
 
 	return nil
 }
