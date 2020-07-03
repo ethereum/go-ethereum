@@ -406,7 +406,7 @@ func writeBigInt(i *big.Int, w *encbuf) error {
 	if bitlen <= 64 {
 		w.encodeUint(i.Uint64())
 	} else {
-		writeBigIntBits(bitlen, i.Bits(), w)
+		writeLargeBigInt(bitlen, i, w)
 	}
 	return nil
 }
@@ -415,14 +415,15 @@ func writeBigInt(i *big.Int, w *encbuf) error {
 const wordBytes = (32 << (uint64(^big.Word(0)) >> 63)) / 8
 
 // writeBigIntBits encodes big.Int values > 2^64.
-func writeBigIntBits(bitlen int, words []big.Word, w *encbuf) {
+func writeLargeBigInt(bitlen int, i *big.Int, w *encbuf) {
+	// The byte length is bitlen rounded up to the next multiple of 8, divided by 8.
 	length := ((bitlen + 7) & -8) >> 3
 	w.encodeStringHeader(length)
 
 	w.str = append(w.str, make([]byte, length)...)
 	index := length
 	buf := w.str[len(w.str)-length:]
-	for _, d := range words {
+	for _, d := range i.Bits() {
 		for j := 0; j < wordBytes && index > 0; j++ {
 			index--
 			buf[index] = byte(d)
