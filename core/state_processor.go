@@ -67,7 +67,7 @@ func (p *StateProcessor) Process(block *types.Block, statedb *state.StateDB, cfg
 		misc.ApplyDAOHardFork(statedb)
 	}
 	// Handle upgrade build-in system contract code
-	systemcontractupgrade.UpgradeBuildInSystemContract(block.Number(), statedb)
+	systemcontractupgrade.UpgradeBuildInSystemContract(p.config, block.Number(), statedb)
 	// Iterate over and process the individual transactions
 	posa, isPoSA := p.engine.(consensus.PoSA)
 	commonTxs := make([]*types.Transaction, 0, len(block.Transactions()))

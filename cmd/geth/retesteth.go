@@ -508,7 +508,7 @@ func (api *RetestethAPI) mineBlock() error {
 	if api.chainConfig.DAOForkSupport && api.chainConfig.DAOForkBlock != nil && api.chainConfig.DAOForkBlock.Cmp(header.Number) == 0 {
 		misc.ApplyDAOHardFork(statedb)
 	}
-	systemcontractupgrade.UpgradeBuildInSystemContract(header.Number, statedb)
+	systemcontractupgrade.UpgradeBuildInSystemContract(api.chainConfig, header.Number, statedb)
 	gasPool := new(core.GasPool).AddGas(header.GasLimit)
 	txCount := 0
 	var txs []*types.Transaction
