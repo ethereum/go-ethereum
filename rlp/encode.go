@@ -399,18 +399,14 @@ func writeBigIntNoPtr(val reflect.Value, w *encbuf) error {
 }
 
 func writeBigInt(i *big.Int, w *encbuf) error {
-	switch i.Sign() {
-	case -1:
+	if i.Sign() == -1 {
 		return fmt.Errorf("rlp: cannot encode negative *big.Int")
-	case 0:
-		w.str = append(w.str, 0x80)
-	default:
-		bitlen := i.BitLen()
-		if bitlen <= 64 {
-			w.encodeUint(uint64(i.Bits()[0]))
-		} else {
-			writeBigIntBits(bitlen, i.Bits(), w)
-		}
+	}
+	bitlen := i.BitLen()
+	if bitlen <= 64 {
+		w.encodeUint(i.Uint64())
+	} else {
+		writeBigIntBits(bitlen, i.Bits(), w)
 	}
 	return nil
 }
