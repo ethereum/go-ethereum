@@ -7,9 +7,8 @@ import (
 var (
 	// ExecutionManagerAddress The address of the execution manager.
 	ExecutionManagerAddress = common.HexToAddress("A193E42526F1FEA8C99AF609dcEabf30C1c29fAA")
-	// StateManagerAddress     = common.HexToAddress("b0229ed527b40a36bc00eab1a29390a9bc1417a6")
-	StateManagerAddress = common.HexToAddress("70658f7d03acf4cfa5113b564f2282c70662d6d5")
-	WORD_SIZE           = 32
+	StateManagerAddress     = common.HexToAddress("0dDd780A2899B9a6b7Acfe5153675cF65c55E03d")
+	WORD_SIZE               = 32
 )
 
 // ExecutionManagerInitcode -- The execution manager initcode. We use this during deployment

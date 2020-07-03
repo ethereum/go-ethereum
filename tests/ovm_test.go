@@ -65,11 +65,41 @@ func TestContractCreation(t *testing.T) {
 		true,
 	)
 
-	fmt.Println("\n\nApplying new Tx to State.")
+	fmt.Println("\n\nApplying CREATE SIMPLE STORAGE Tx to State.")
 	applyMessageToState(currentState, vm.ExecutionManagerAddress, GAS_LIMIT, deployContractCalldata)
 	fmt.Println("Complete.")
 
-	fmt.Println("The deployed contract code:", currentState.GetCode(common.HexToAddress("65486c8ec9167565eBD93c94ED04F0F71d1b5137")))
+	fmt.Println("\n\nApplying CALL SIMPLE STORAGE Tx to State.")
+	setStorageInnerCalldata, _ := hex.DecodeString("d3404b6d99999999999999999999999999999999999999999999999999999999999999990101010101010101010101010101010101010101010101010101010101010101")
+	getStorageInnerCalldata, _ := hex.DecodeString("3408f73a9999999999999999999999999999999999999999999999999999999999999999")
+
+	// Set storage transaction calldata
+	setStorageTxCalldata, _ := executionManagerAbi.Pack(
+		"executeTransaction",
+		big.NewInt(1),
+		new(big.Int),
+		common.HexToAddress("65486c8ec9167565eBD93c94ED04F0F71d1b5137"),
+		setStorageInnerCalldata,
+		OTHER_FROM_ADDR,
+		common.HexToAddress(""),
+		true,
+	)
+	// Get storage transaction calldata
+	getStorageTxCalldata, _ := executionManagerAbi.Pack(
+		"executeTransaction",
+		big.NewInt(1),
+		new(big.Int),
+		common.HexToAddress("65486c8ec9167565eBD93c94ED04F0F71d1b5137"),
+		getStorageInnerCalldata,
+		OTHER_FROM_ADDR,
+		common.HexToAddress(""),
+		true,
+	)
+	fmt.Println("\n\nApplying `set()` SIMPLE STORAGE Tx to State.")
+	applyMessageToState(currentState, vm.ExecutionManagerAddress, GAS_LIMIT, setStorageTxCalldata)
+	fmt.Println("\n\nApplying `get()` SIMPLE STORAGE Tx to State.")
+	applyMessageToState(currentState, vm.ExecutionManagerAddress, GAS_LIMIT, getStorageTxCalldata)
+	fmt.Println("Complete.")
 }
 
 func TestSloadAndStore(t *testing.T) {

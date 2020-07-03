@@ -13,15 +13,14 @@ type stateManagerFunction func(*EVM, *Contract, []byte) ([]byte, error)
 type methodId [4]byte
 
 var funcs = map[string]stateManagerFunction{
-	"getStorage(address,bytes32)":                getStorage,
-	"setStorage(address,bytes32,bytes32)":        setStorage,
-	"deployContract(address,bytes,bool,address)": deployContract,
-	"getOvmContractNonce(address)":               getOvmContractNonce,
-	"getCodeContractBytecode(address)":           getCodeContractBytecode,
-	"getCodeContractHash(address)":               getCodeContractHash,
-	"getCodeContractAddress(address)":            getCodeContractAddress,
-	"associateCodeContract(address,address)":     associateCodeContract,
-	"incrementOvmContractNonce(address)":         incrementOvmContractNonce,
+	"getStorage(address,bytes32)":            getStorage,
+	"setStorage(address,bytes32,bytes32)":    setStorage,
+	"getOvmContractNonce(address)":           getOvmContractNonce,
+	"getCodeContractBytecode(address)":       getCodeContractBytecode,
+	"getCodeContractHash(address)":           getCodeContractHash,
+	"getCodeContractAddress(address)":        getCodeContractAddress,
+	"associateCodeContract(address,address)": associateCodeContract,
+	"incrementOvmContractNonce(address)":     incrementOvmContractNonce,
 }
 var methodIds map[[4]byte]stateManagerFunction
 var executionMangerBytecode []byte
@@ -53,7 +52,7 @@ func setStorage(evm *EVM, contract *Contract, input []byte) (ret []byte, err err
 	address := common.BytesToAddress(input[4:36])
 	key := common.BytesToHash(input[36:68])
 	val := common.BytesToHash(input[68:100])
-	fmt.Println("Setting storage address:", hex.EncodeToString(address.Bytes()), "key:", hex.EncodeToString(key.Bytes()), "val:", hex.EncodeToString(val.Bytes()))
+	fmt.Println("[State Mgr] Setting storage address:", hex.EncodeToString(address.Bytes()), "key:", hex.EncodeToString(key.Bytes()), "val:", hex.EncodeToString(val.Bytes()))
 	evm.StateDB.SetState(address, key, val)
 	return nil, nil
 }
@@ -62,6 +61,7 @@ func getStorage(evm *EVM, contract *Contract, input []byte) (ret []byte, err err
 	address := common.BytesToAddress(input[4:36])
 	key := common.BytesToHash(input[36:68])
 	val := evm.StateDB.GetState(address, key)
+	fmt.Println("[State Mgr] Getting storage address:", hex.EncodeToString(address.Bytes()), "key:", hex.EncodeToString(key.Bytes()), "val:", hex.EncodeToString(val.Bytes()))
 	return val.Bytes(), nil
 }
 
@@ -99,18 +99,6 @@ func incrementOvmContractNonce(evm *EVM, contract *Contract, input []byte) (ret 
 	oldNonce := evm.StateDB.GetNonce(address)
 	evm.StateDB.SetNonce(address, oldNonce+1)
 	return nil, nil
-}
-
-func deployContract(evm *EVM, contract *Contract, input []byte) (ret []byte, err error) {
-	address := common.BytesToAddress(input[4:36])
-	callerAddress := common.BytesToAddress(input[100:132])
-	initCodeLength := binary.BigEndian.Uint32(input[160:164])
-	initCode := input[164 : 164+initCodeLength]
-	fmt.Println("Deploying new contract! Got bytecode:", initCode)
-	callerContractRef := &Contract{self: AccountRef(callerAddress)}
-	_, _, _, err = evm.OvmCreate(callerContractRef, address, initCode, contract.Gas, bigZero)
-
-	return common.BytesToHash(address.Bytes()).Bytes(), nil
 }
 
 func simpleAbiEncode(bytes []byte) []byte {
