@@ -107,7 +107,7 @@ func TestWaitDeployedCornerCases(t *testing.T) {
 
 	// Create a transaction to an account.
 	code := "6060604052600a8060106000396000f360606040526008565b00"
-	tx := types.NewTransaction(0, common.HexToAddress("0x01"), big.NewInt(0), 3000000, big.NewInt(1), common.FromHex(code))
+	tx := types.NewTransaction(0, common.HexToAddress("0x01"), big.NewInt(0), 3000000, big.NewInt(1), common.FromHex(code), nil, nil)
 	tx, _ = types.SignTx(tx, types.HomesteadSigner{}, testKey)
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
@@ -119,7 +119,7 @@ func TestWaitDeployedCornerCases(t *testing.T) {
 	}
 
 	// Create a transaction that is not mined.
-	tx = types.NewContractCreation(1, big.NewInt(0), 3000000, big.NewInt(1), common.FromHex(code))
+	tx = types.NewContractCreation(1, big.NewInt(0), 3000000, big.NewInt(1), common.FromHex(code), nil, nil)
 	tx, _ = types.SignTx(tx, types.HomesteadSigner{}, testKey)
 
 	go func() {

@@ -696,7 +696,7 @@ func (api *RetestethAPI) AccountRange(ctx context.Context,
 			if vmenv.ChainConfig().IsEIP1559(block.Number()) {
 				gp1559 = new(core.GasPool).AddGas(tx.Gas())
 			}
-			if _, _, _, err := core.ApplyMessage(vmenv, msg, new(core.GasPool).AddGas(tx.Gas()), gp1559); err != nil {
+			if _, err := core.ApplyMessage(vmenv, msg, new(core.GasPool).AddGas(tx.Gas()), gp1559); err != nil {
 				return AccountRangeResult{}, fmt.Errorf("transaction %#x failed: %v", tx.Hash(), err)
 			}
 			// Ensure any modifications are committed to the state
@@ -810,7 +810,7 @@ func (api *RetestethAPI) StorageRangeAt(ctx context.Context,
 			if vmenv.ChainConfig().IsEIP1559(block.Number()) {
 				gp1559 = new(core.GasPool).AddGas(tx.Gas())
 			}
-			if _, _, _, err := core.ApplyMessage(vmenv, msg, new(core.GasPool).AddGas(tx.Gas()), gp1559); err != nil {
+			if _, err := core.ApplyMessage(vmenv, msg, new(core.GasPool).AddGas(tx.Gas()), gp1559); err != nil {
 				return StorageRangeResult{}, fmt.Errorf("transaction %#x failed: %v", tx.Hash(), err)
 			}
 			// Ensure any modifications are committed to the state

@@ -98,19 +98,19 @@ var (
 
 	// RopstenChainConfig contains the chain parameters to run a node on the Ropsten test network.
 	RopstenChainConfig = &ChainConfig{
-		ChainID:             big.NewInt(3),
-		HomesteadBlock:      big.NewInt(0),
-		DAOForkBlock:        nil,
-		DAOForkSupport:      true,
-		EIP150Block:         big.NewInt(0),
-		EIP150Hash:          common.HexToHash("0x41941023680923e0fe4d74a34bdac8141f2540e3ae90623718e47d66d1ca4a2d"),
-		EIP155Block:         big.NewInt(10),
-		EIP158Block:         big.NewInt(10),
-		ByzantiumBlock:      big.NewInt(1700000),
-		ConstantinopleBlock: big.NewInt(4230000),
-		PetersburgBlock:     big.NewInt(4939394),
-		IstanbulBlock:       big.NewInt(6485846),
-		MuirGlacierBlock:    big.NewInt(7117117),
+		ChainID:               big.NewInt(3),
+		HomesteadBlock:        big.NewInt(0),
+		DAOForkBlock:          nil,
+		DAOForkSupport:        true,
+		EIP150Block:           big.NewInt(0),
+		EIP150Hash:            common.HexToHash("0x41941023680923e0fe4d74a34bdac8141f2540e3ae90623718e47d66d1ca4a2d"),
+		EIP155Block:           big.NewInt(10),
+		EIP158Block:           big.NewInt(10),
+		ByzantiumBlock:        big.NewInt(1700000),
+		ConstantinopleBlock:   big.NewInt(4230000),
+		PetersburgBlock:       big.NewInt(4939394),
+		IstanbulBlock:         big.NewInt(6485846),
+		MuirGlacierBlock:      big.NewInt(7117117),
 		EIP1559Block:          nil,
 		EIP1559FinalizedBlock: nil,
 		EWASMBlock:            nil,
@@ -141,19 +141,19 @@ var (
 
 	// RinkebyChainConfig contains the chain parameters to run a node on the Rinkeby test network.
 	RinkebyChainConfig = &ChainConfig{
-		ChainID:             big.NewInt(4),
-		HomesteadBlock:      big.NewInt(1),
-		DAOForkBlock:        nil,
-		DAOForkSupport:      true,
-		EIP150Block:         big.NewInt(2),
-		EIP150Hash:          common.HexToHash("0x9b095b36c15eaf13044373aef8ee0bd3a382a5abb92e402afa44b8249c3a90e9"),
-		EIP155Block:         big.NewInt(3),
-		EIP158Block:         big.NewInt(3),
-		ByzantiumBlock:      big.NewInt(1035301),
-		ConstantinopleBlock: big.NewInt(3660663),
-		PetersburgBlock:     big.NewInt(4321234),
-		IstanbulBlock:       big.NewInt(5435345),
-		MuirGlacierBlock:    nil,
+		ChainID:               big.NewInt(4),
+		HomesteadBlock:        big.NewInt(1),
+		DAOForkBlock:          nil,
+		DAOForkSupport:        true,
+		EIP150Block:           big.NewInt(2),
+		EIP150Hash:            common.HexToHash("0x9b095b36c15eaf13044373aef8ee0bd3a382a5abb92e402afa44b8249c3a90e9"),
+		EIP155Block:           big.NewInt(3),
+		EIP158Block:           big.NewInt(3),
+		ByzantiumBlock:        big.NewInt(1035301),
+		ConstantinopleBlock:   big.NewInt(3660663),
+		PetersburgBlock:       big.NewInt(4321234),
+		IstanbulBlock:         big.NewInt(5435345),
+		MuirGlacierBlock:      nil,
 		EIP1559Block:          nil,
 		EIP1559FinalizedBlock: nil,
 		EWASMBlock:            nil,
@@ -186,18 +186,18 @@ var (
 
 	// GoerliChainConfig contains the chain parameters to run a node on the Görli test network.
 	GoerliChainConfig = &ChainConfig{
-		ChainID:             big.NewInt(5),
-		HomesteadBlock:      big.NewInt(0),
-		DAOForkBlock:        nil,
-		DAOForkSupport:      true,
-		EIP150Block:         big.NewInt(0),
-		EIP155Block:         big.NewInt(0),
-		EIP158Block:         big.NewInt(0),
-		ByzantiumBlock:      big.NewInt(0),
-		ConstantinopleBlock: big.NewInt(0),
-		PetersburgBlock:     big.NewInt(0),
-		IstanbulBlock:       big.NewInt(1561651),
-		MuirGlacierBlock:    nil,
+		ChainID:               big.NewInt(5),
+		HomesteadBlock:        big.NewInt(0),
+		DAOForkBlock:          nil,
+		DAOForkSupport:        true,
+		EIP150Block:           big.NewInt(0),
+		EIP155Block:           big.NewInt(0),
+		EIP158Block:           big.NewInt(0),
+		ByzantiumBlock:        big.NewInt(0),
+		ConstantinopleBlock:   big.NewInt(0),
+		PetersburgBlock:       big.NewInt(0),
+		IstanbulBlock:         big.NewInt(1561651),
+		MuirGlacierBlock:      nil,
 		EIP1559Block:          nil,
 		EIP1559FinalizedBlock: nil,
 		EWASMBlock:            nil,
@@ -255,22 +255,22 @@ var (
 	//
 	// This configuration is intentionally not using keyed fields to force anyone
 	// adding flags to the config to also have to set these fields.
-	AllEthashProtocolChanges = &ChainConfig{big.NewInt(1337), big.NewInt(0), nil, false, big.NewInt(0), common.Hash{}, big.NewInt(0), big.NewInt(0), big.NewInt(0), big.NewInt(0), big.NewInt(0), big.NewInt(0), nil, nil, nil, nil, new(EthashConfig), nil, DefaultEIP1559Config}
+	AllEthashProtocolChanges = &ChainConfig{big.NewInt(1337), big.NewInt(0), nil, false, big.NewInt(0), common.Hash{}, big.NewInt(0), big.NewInt(0), big.NewInt(0), big.NewInt(0), big.NewInt(0), big.NewInt(0), nil, nil, nil, nil, nil, new(EthashConfig), nil, DefaultEIP1559Config}
 
 	// AllCliqueProtocolChanges contains every protocol change (EIPs) introduced
 	// and accepted by the Ethereum core developers into the Clique consensus.
 	//
 	// This configuration is intentionally not using keyed fields to force anyone
 	// adding flags to the config to also have to set these fields.
-	AllCliqueProtocolChanges = &ChainConfig{big.NewInt(1337), big.NewInt(0), nil, false, big.NewInt(0), common.Hash{}, big.NewInt(0), big.NewInt(0), big.NewInt(0), big.NewInt(0), big.NewInt(0), big.NewInt(0), nil, nil, nil, nil, nil, &CliqueConfig{Period: 0, Epoch: 30000}, DefaultEIP1559Config}
+	AllCliqueProtocolChanges = &ChainConfig{big.NewInt(1337), big.NewInt(0), nil, false, big.NewInt(0), common.Hash{}, big.NewInt(0), big.NewInt(0), big.NewInt(0), big.NewInt(0), big.NewInt(0), big.NewInt(0), nil, nil, nil, nil, nil, nil, &CliqueConfig{Period: 0, Epoch: 30000}, DefaultEIP1559Config}
 
-	TestChainConfig = &ChainConfig{big.NewInt(1), big.NewInt(0), nil, false, big.NewInt(0), common.Hash{}, big.NewInt(0), big.NewInt(0), big.NewInt(0), big.NewInt(0), big.NewInt(0), big.NewInt(0), nil, nil, nil, nil, new(EthashConfig), nil, DefaultEIP1559Config}
+	TestChainConfig = &ChainConfig{big.NewInt(1), big.NewInt(0), nil, false, big.NewInt(0), common.Hash{}, big.NewInt(0), big.NewInt(0), big.NewInt(0), big.NewInt(0), big.NewInt(0), big.NewInt(0), nil, nil, nil, nil, nil, new(EthashConfig), nil, DefaultEIP1559Config}
 
 	TestRules = TestChainConfig.Rules(new(big.Int))
 
 	// EIP1559 test configs
-	EIP1559ChainConfig          = &ChainConfig{big.NewInt(1), big.NewInt(0), nil, false, big.NewInt(0), common.Hash{}, big.NewInt(0), big.NewInt(0), big.NewInt(0), big.NewInt(0), big.NewInt(0), big.NewInt(0), nil, nil,  big.NewInt(0), nil, nil, new(EthashConfig), nil, DefaultEIP1559Config}
-	EIP1559FinalizedChainConfig = &ChainConfig{big.NewInt(1), big.NewInt(0), nil, false, big.NewInt(0), common.Hash{}, big.NewInt(0), big.NewInt(0), big.NewInt(0), big.NewInt(0), big.NewInt(0), big.NewInt(0), nil, nil, big.NewInt(0), big.NewInt(0), nil, new(EthashConfig), nil, DefaultEIP1559Config}
+	EIP1559ChainConfig          = &ChainConfig{big.NewInt(1), big.NewInt(0), nil, false, big.NewInt(0), common.Hash{}, big.NewInt(0), big.NewInt(0), big.NewInt(0), big.NewInt(0), big.NewInt(0), big.NewInt(0), big.NewInt(0), big.NewInt(0), big.NewInt(0), nil, nil, new(EthashConfig), nil, DefaultEIP1559Config}
+	EIP1559FinalizedChainConfig = &ChainConfig{big.NewInt(1), big.NewInt(0), nil, false, big.NewInt(0), common.Hash{}, big.NewInt(0), big.NewInt(0), big.NewInt(0), big.NewInt(0), big.NewInt(0), big.NewInt(0), big.NewInt(0), big.NewInt(0), big.NewInt(0), big.NewInt(0), nil, new(EthashConfig), nil, DefaultEIP1559Config}
 
 	EIP1559TestRules          = EIP1559ChainConfig.Rules(new(big.Int))
 	EIP1559FinalizedTestRules = EIP1559FinalizedChainConfig.Rules(new(big.Int))
@@ -344,12 +344,12 @@ type ChainConfig struct {
 	IstanbulBlock       *big.Int `json:"istanbulBlock,omitempty"`       // Istanbul switch block (nil = no fork, 0 = already on istanbul)
 	MuirGlacierBlock    *big.Int `json:"muirGlacierBlock,omitempty"`    // Eip-2384 (bomb delay) switch block (nil = no fork, 0 = already activated)
 
-	YoloV1Block *big.Int `json:"yoloV1Block,omitempty"` // YOLO v1: https://github.com/ethereum/EIPs/pull/2657 (Ephemeral testnet)
+	YoloV1Block           *big.Int `json:"yoloV1Block,omitempty"`           // YOLO v1: https://github.com/ethereum/EIPs/pull/2657 (Ephemeral testnet)
 	EIP1559Block          *big.Int `json:"eip1559Block,omitempty"`          // EIP1559 switch block (nil = no fork, 0 = already on eip1559)
 	EIP1559FinalizedBlock *big.Int `json:"eip1559FinalizedBlock,omitempty"` // EIP1559 finalization switch block (nil = no fork, 0 = already on eip1559 finalized)
 	EWASMBlock            *big.Int `json:"ewasmBlock,omitempty"`            // EWASM switch block (nil = no fork, 0 = already activated)
 
-// Various consensus engines
+	// Various consensus engines
 	Ethash *EthashConfig `json:"ethash,omitempty"`
 	Clique *CliqueConfig `json:"clique,omitempty"`
 
@@ -693,7 +693,7 @@ type Rules struct {
 	IsHomestead, IsEIP150, IsEIP155, IsEIP158               bool
 	IsByzantium, IsConstantinople, IsPetersburg, IsIstanbul bool
 	IsMuirGlacier, IsYoloV1, IsEIP1559, IsEIP1559Finalized  bool
-	IsEWASM        											bool
+	IsEWASM                                                 bool
 }
 
 // Rules ensures c's ChainID is not nil.
@@ -703,17 +703,17 @@ func (c *ChainConfig) Rules(num *big.Int) Rules {
 		chainID = new(big.Int)
 	}
 	return Rules{
-		ChainID:          new(big.Int).Set(chainID),
-		IsHomestead:      c.IsHomestead(num),
-		IsEIP150:         c.IsEIP150(num),
-		IsEIP155:         c.IsEIP155(num),
-		IsEIP158:         c.IsEIP158(num),
-		IsByzantium:      c.IsByzantium(num),
-		IsConstantinople: c.IsConstantinople(num),
-		IsPetersburg:     c.IsPetersburg(num),
-		IsIstanbul:       c.IsIstanbul(num),
+		ChainID:            new(big.Int).Set(chainID),
+		IsHomestead:        c.IsHomestead(num),
+		IsEIP150:           c.IsEIP150(num),
+		IsEIP155:           c.IsEIP155(num),
+		IsEIP158:           c.IsEIP158(num),
+		IsByzantium:        c.IsByzantium(num),
+		IsConstantinople:   c.IsConstantinople(num),
+		IsPetersburg:       c.IsPetersburg(num),
+		IsIstanbul:         c.IsIstanbul(num),
 		IsMuirGlacier:      c.IsMuirGlacier(num),
-		IsYoloV1:         c.IsYoloV1(num),
+		IsYoloV1:           c.IsYoloV1(num),
 		IsEIP1559:          c.IsEIP1559(num),
 		IsEIP1559Finalized: c.IsEIP1559Finalized(num),
 		IsEWASM:            c.IsEWASM(num),

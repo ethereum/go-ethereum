@@ -127,7 +127,7 @@ func TestHeaderVerificationEIP1559(t *testing.T) {
 		headers[i] = block.Header()
 	}
 	// Run the header checker for blocks one-by-one, checking for both valid and invalid nonces
-	chain, _ := NewBlockChain(testdb, nil, params.EIP1559ChainConfig, ethash.NewFaker(), vm.Config{}, nil)
+	chain, _ := NewBlockChain(testdb, nil, params.EIP1559ChainConfig, ethash.NewFaker(), vm.Config{}, nil, nil)
 	defer chain.Stop()
 
 	for i := 0; i < len(blocks); i++ {
@@ -211,7 +211,7 @@ func TestHeaderVerificationEIP1559Finalized(t *testing.T) {
 		headers[i] = block.Header()
 	}
 	// Run the header checker for blocks one-by-one, checking for both valid and invalid nonces
-	chain, _ := NewBlockChain(testdb, nil, params.EIP1559FinalizedChainConfig, ethash.NewFaker(), vm.Config{}, nil)
+	chain, _ := NewBlockChain(testdb, nil, params.EIP1559FinalizedChainConfig, ethash.NewFaker(), vm.Config{}, nil, nil)
 	defer chain.Stop()
 
 	for i := 0; i < len(blocks); i++ {
@@ -351,11 +351,11 @@ func testHeaderConcurrentVerificationEIP1559(t *testing.T, threads int) {
 		var results <-chan error
 
 		if valid {
-			chain, _ := NewBlockChain(testdb, nil, params.EIP1559ChainConfig, ethash.NewFaker(), vm.Config{}, nil)
+			chain, _ := NewBlockChain(testdb, nil, params.EIP1559ChainConfig, ethash.NewFaker(), vm.Config{}, nil, nil)
 			_, results = chain.engine.VerifyHeaders(chain, headers, seals)
 			chain.Stop()
 		} else {
-			chain, _ := NewBlockChain(testdb, nil, params.EIP1559ChainConfig, ethash.NewFakeFailer(uint64(len(headers)-1)), vm.Config{}, nil)
+			chain, _ := NewBlockChain(testdb, nil, params.EIP1559ChainConfig, ethash.NewFakeFailer(uint64(len(headers)-1)), vm.Config{}, nil, nil)
 			_, results = chain.engine.VerifyHeaders(chain, headers, seals)
 			chain.Stop()
 		}
@@ -427,11 +427,11 @@ func testHeaderConcurrentVerificationEIP1559Finalized(t *testing.T, threads int)
 		var results <-chan error
 
 		if valid {
-			chain, _ := NewBlockChain(testdb, nil, params.EIP1559FinalizedChainConfig, ethash.NewFaker(), vm.Config{}, nil)
+			chain, _ := NewBlockChain(testdb, nil, params.EIP1559FinalizedChainConfig, ethash.NewFaker(), vm.Config{}, nil, nil)
 			_, results = chain.engine.VerifyHeaders(chain, headers, seals)
 			chain.Stop()
 		} else {
-			chain, _ := NewBlockChain(testdb, nil, params.EIP1559FinalizedChainConfig, ethash.NewFakeFailer(uint64(len(headers)-1)), vm.Config{}, nil)
+			chain, _ := NewBlockChain(testdb, nil, params.EIP1559FinalizedChainConfig, ethash.NewFakeFailer(uint64(len(headers)-1)), vm.Config{}, nil, nil)
 			_, results = chain.engine.VerifyHeaders(chain, headers, seals)
 			chain.Stop()
 		}

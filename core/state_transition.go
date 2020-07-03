@@ -17,6 +17,7 @@
 package core
 
 import (
+	"errors"
 	"math"
 	"math/big"
 
@@ -182,7 +183,7 @@ func NewStateTransition(evm *vm.EVM, msg Message, gp, gp1559 *GasPool) *StateTra
 // the gas used (which includes gas refunds) and an error if it failed. An error always
 // indicates a core error meaning that the message would always fail for that particular
 // state and would never be accepted within a block.
-func ApplyMessage(evm *vm.EVM, msg Message, gp, gp1559 *GasPool) ([]byte, uint64, bool, error) {
+func ApplyMessage(evm *vm.EVM, msg Message, gp, gp1559 *GasPool) (*ExecutionResult, error) {
 	return NewStateTransition(evm, msg, gp, gp1559).TransitionDb()
 }
 
@@ -337,7 +338,11 @@ func (st *StateTransition) TransitionDb() (*ExecutionResult, error) {
 		// coinbaseCredit cannot be negative since we precheck that eip1559GasPrice >= st.evm.BaseFee
 		st.state.AddBalance(st.evm.Coinbase, coinBaseCredit)
 
-		return ret, st.gasUsed(), vmerr != nil, err
+		return &ExecutionResult{
+			UsedGas:    st.gasUsed(),
+			Err:        vmerr,
+			ReturnData: ret,
+		}, nil
 	}
 	st.state.AddBalance(st.evm.Coinbase, new(big.Int).Mul(new(big.Int).SetUint64(st.gasUsed()), st.gasPrice))
 
