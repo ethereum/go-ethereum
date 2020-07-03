@@ -398,6 +398,9 @@ func writeBigIntNoPtr(val reflect.Value, w *encbuf) error {
 	return writeBigInt(&i, w)
 }
 
+// wordBytes is the number of bytes in a big.Word
+const wordBytes = (32 << (uint64(^big.Word(0)) >> 63)) / 8
+
 func writeBigInt(i *big.Int, w *encbuf) error {
 	if i.Sign() == -1 {
 		return fmt.Errorf("rlp: cannot encode negative *big.Int")
@@ -405,21 +408,13 @@ func writeBigInt(i *big.Int, w *encbuf) error {
 	bitlen := i.BitLen()
 	if bitlen <= 64 {
 		w.encodeUint(i.Uint64())
-	} else {
-		writeLargeBigInt(bitlen, i, w)
+		return nil
 	}
-	return nil
-}
-
-// wordBytes is the number of bytes in a big.Word
-const wordBytes = (32 << (uint64(^big.Word(0)) >> 63)) / 8
-
-// writeBigIntBits encodes big.Int values > 2^64.
-func writeLargeBigInt(bitlen int, i *big.Int, w *encbuf) {
-	// The byte length is bitlen rounded up to the next multiple of 8, divided by 8.
+	// Integer is larger than 64 bits, encode from i.Bits().
+	// The minimal byte length is bitlen rounded up to the next
+	// multiple of 8, divided by 8.
 	length := ((bitlen + 7) & -8) >> 3
 	w.encodeStringHeader(length)
-
 	w.str = append(w.str, make([]byte, length)...)
 	index := length
 	buf := w.str[len(w.str)-length:]
@@ -430,6 +425,7 @@ func writeLargeBigInt(bitlen int, i *big.Int, w *encbuf) {
 			d >>= 8
 		}
 	}
+	return nil
 }
 
 func writeBytes(val reflect.Value, w *encbuf) error {
