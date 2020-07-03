@@ -37,7 +37,7 @@ func TestChainIterator(t *testing.T) {
 		if i == 0 {
 			block = types.NewBlock(&types.Header{Number: big.NewInt(int64(i))}, nil, nil, nil, newHasher()) // Empty genesis block
 		} else {
-			tx := types.NewTransaction(i, common.BytesToAddress([]byte{0x11}), big.NewInt(111), 1111, big.NewInt(11111), []byte{0x11, 0x11, 0x11})
+			tx := types.NewTransaction(i, common.BytesToAddress([]byte{0x11}), big.NewInt(111), 1111, big.NewInt(11111), []byte{0x11, 0x11, 0x11}, nil, nil)
 			txs = append(txs, tx)
 			block = types.NewBlock(&types.Header{Number: big.NewInt(int64(i))}, []*types.Transaction{tx}, nil, nil, newHasher())
 		}

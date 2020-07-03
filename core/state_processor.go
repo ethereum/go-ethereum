@@ -119,7 +119,7 @@ func applyTransaction(msg types.Message, config *params.ChainConfig, bc ChainCon
 	// Update the evm with the new transaction context.
 	evm.Reset(txContext, statedb)
 	// Apply the transaction to the current state (included in the env)
-	result, err := ApplyMessage(evm, msg, gp, gp1559)
+	res, err := ApplyMessage(evm, msg, gp, gp1559)
 	if err != nil {
 		return nil, err
 	}
@@ -130,13 +130,13 @@ func applyTransaction(msg types.Message, config *params.ChainConfig, bc ChainCon
 	} else {
 		root = statedb.IntermediateRoot(config.IsEIP158(header.Number)).Bytes()
 	}
-	*usedGas += result.UsedGas
+	*usedGas += res.UsedGas
 
 	// Create a new receipt for the transaction, storing the intermediate root and gas used by the tx
 	// based on the eip phase, we're passing whether the root touch-delete accounts.
-	receipt := types.NewReceipt(root, result.Failed(), *usedGas)
+	receipt := types.NewReceipt(root, res.Failed(), *usedGas)
 	receipt.TxHash = tx.Hash()
-	receipt.GasUsed = result.UsedGas
+	receipt.GasUsed = res.UsedGas
 	// if the transaction created a contract, store the creation address in the receipt.
 	if msg.To() == nil {
 		receipt.ContractAddress = crypto.CreateAddress(evm.TxContext.Origin, tx.Nonce())

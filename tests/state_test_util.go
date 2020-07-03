@@ -208,7 +208,7 @@ func (t *StateTest) RunNoVerify(subtest StateSubtest, vmconfig vm.Config, snapsh
 	}
 
 	snapshot := statedb.Snapshot()
-	if _, _, _, err := core.ApplyMessage(evm, msg, gaspool, gp1559); err != nil {
+	if _, err := core.ApplyMessage(evm, msg, gaspool, gp1559); err != nil {
 		statedb.RevertToSnapshot(snapshot)
 	}
 	// Commit block

@@ -308,7 +308,10 @@ func testShorterFork(t *testing.T, full bool, chainConfig *params.ChainConfig, b
 func TestLongerForkHeaders(t *testing.T) {
 	testLongerFork(t, false, params.AllEthashProtocolChanges, nil)
 }
-func TestLongerForkBlocks(t *testing.T) { testLongerFork(t, true, params.AllEthashProtocolChanges, nil) }
+func TestLongerForkBlocks(t *testing.T) {
+	testLongerFork(t, true, params.AllEthashProtocolChanges, nil)
+}
+
 func TestLongerForkHeadersEIP1559(t *testing.T) {
 	testLongerFork(t, false, params.EIP1559ChainConfig, new(big.Int).SetUint64(params.EIP1559InitialBaseFee))
 }
@@ -349,8 +352,12 @@ func testLongerFork(t *testing.T, full bool, chainConfig *params.ChainConfig, ba
 
 // Tests that given a starting canonical chain of a given size, creating equal
 // forks do take canonical ownership.
-func TestEqualForkHeaders(t *testing.T) { testEqualFork(t, false, params.AllEthashProtocolChanges, nil) }
-func TestEqualForkBlocks(t *testing.T)  { testEqualFork(t, true, params.AllEthashProtocolChanges, nil) }
+func TestEqualForkHeaders(t *testing.T) {
+	testEqualFork(t, false, params.AllEthashProtocolChanges, nil)
+}
+func TestEqualForkBlocks(t *testing.T) {
+	testEqualFork(t, true, params.AllEthashProtocolChanges, nil)
+}
 func TestEqualForkHeadersEIP1559(t *testing.T) {
 	testEqualFork(t, false, params.EIP1559ChainConfig, new(big.Int).SetUint64(params.EIP1559InitialBaseFee))
 }
@@ -433,8 +440,12 @@ func testBrokenChain(t *testing.T, full bool, chainConfig *params.ChainConfig, b
 
 // Tests that reorganising a long difficult chain after a short easy one
 // overwrites the canonical numbers and links in the database.
-func TestReorgLongHeaders(t *testing.T) { testReorgLong(t, false, params.AllEthashProtocolChanges, nil) }
-func TestReorgLongBlocks(t *testing.T)  { testReorgLong(t, true, params.AllEthashProtocolChanges, nil) }
+func TestReorgLongHeaders(t *testing.T) {
+	testReorgLong(t, false, params.AllEthashProtocolChanges, nil)
+}
+func TestReorgLongBlocks(t *testing.T) {
+	testReorgLong(t, true, params.AllEthashProtocolChanges, nil)
+}
 func TestReorgLongHeadersEIP1559(t *testing.T) {
 	testReorgLong(t, false, params.EIP1559ChainConfig, new(big.Int).SetUint64(params.EIP1559InitialBaseFee))
 }
@@ -2248,7 +2259,7 @@ func TestTransactionIndices(t *testing.T) {
 	)
 	height := uint64(128)
 	blocks, receipts := GenerateChain(gspec.Config, genesis, ethash.NewFaker(), gendb, int(height), func(i int, block *BlockGen) {
-		tx, err := types.SignTx(types.NewTransaction(block.TxNonce(address), common.Address{0x00}, big.NewInt(1000), params.TxGas, nil, nil), signer, key)
+		tx, err := types.SignTx(types.NewTransaction(block.TxNonce(address), common.Address{0x00}, big.NewInt(1000), params.TxGas, new(big.Int), nil, nil, nil), signer, key)
 		if err != nil {
 			panic(err)
 		}
@@ -2375,7 +2386,7 @@ func TestSkipStaleTxIndicesInFastSync(t *testing.T) {
 	)
 	height := uint64(128)
 	blocks, receipts := GenerateChain(gspec.Config, genesis, ethash.NewFaker(), gendb, int(height), func(i int, block *BlockGen) {
-		tx, err := types.SignTx(types.NewTransaction(block.TxNonce(address), common.Address{0x00}, big.NewInt(1000), params.TxGas, nil, nil), signer, key)
+		tx, err := types.SignTx(types.NewTransaction(block.TxNonce(address), common.Address{0x00}, big.NewInt(1000), params.TxGas, new(big.Int), nil, nil, nil), signer, key)
 		if err != nil {
 			panic(err)
 		}
@@ -2770,11 +2781,11 @@ func TestDeleteRecreateSlots(t *testing.T) {
 		b.SetCoinbase(common.Address{1})
 		// One transaction to AA, to kill it
 		tx, _ := types.SignTx(types.NewTransaction(0, aa,
-			big.NewInt(0), 50000, big.NewInt(1), nil), types.HomesteadSigner{}, key)
+			big.NewInt(0), 50000, big.NewInt(1), nil, nil, nil), types.HomesteadSigner{}, key)
 		b.AddTx(tx)
 		// One transaction to BB, to recreate AA
 		tx, _ = types.SignTx(types.NewTransaction(1, bb,
-			big.NewInt(0), 100000, big.NewInt(1), nil), types.HomesteadSigner{}, key)
+			big.NewInt(0), 100000, big.NewInt(1), nil, nil, nil), types.HomesteadSigner{}, key)
 		b.AddTx(tx)
 	})
 	// Import the canonical chain
@@ -2850,11 +2861,11 @@ func TestDeleteRecreateAccount(t *testing.T) {
 		b.SetCoinbase(common.Address{1})
 		// One transaction to AA, to kill it
 		tx, _ := types.SignTx(types.NewTransaction(0, aa,
-			big.NewInt(0), 50000, big.NewInt(1), nil), types.HomesteadSigner{}, key)
+			big.NewInt(0), 50000, big.NewInt(1), nil, nil, nil), types.HomesteadSigner{}, key)
 		b.AddTx(tx)
 		// One transaction to AA, to recreate it (but without storage
 		tx, _ = types.SignTx(types.NewTransaction(1, aa,
-			big.NewInt(1), 100000, big.NewInt(1), nil), types.HomesteadSigner{}, key)
+			big.NewInt(1), 100000, big.NewInt(1), nil, nil, nil), types.HomesteadSigner{}, key)
 		b.AddTx(tx)
 	})
 	// Import the canonical chain
@@ -2984,7 +2995,7 @@ func TestDeleteRecreateSlotsAcrossManyBlocks(t *testing.T) {
 	var expectations []*expectation
 	var newDestruct = func(e *expectation) *types.Transaction {
 		tx, _ := types.SignTx(types.NewTransaction(nonce, aa,
-			big.NewInt(0), 50000, big.NewInt(1), nil), types.HomesteadSigner{}, key)
+			big.NewInt(0), 50000, big.NewInt(1), nil, nil, nil), types.HomesteadSigner{}, key)
 		nonce++
 		if e.exist {
 			e.exist = false
@@ -2995,7 +3006,7 @@ func TestDeleteRecreateSlotsAcrossManyBlocks(t *testing.T) {
 	}
 	var newResurrect = func(e *expectation) *types.Transaction {
 		tx, _ := types.SignTx(types.NewTransaction(nonce, bb,
-			big.NewInt(0), 100000, big.NewInt(1), nil), types.HomesteadSigner{}, key)
+			big.NewInt(0), 100000, big.NewInt(1), nil, nil, nil), types.HomesteadSigner{}, key)
 		nonce++
 		if !e.exist {
 			e.exist = true
@@ -3159,7 +3170,7 @@ func TestInitThenFailCreateContract(t *testing.T) {
 		b.SetCoinbase(common.Address{1})
 		// One transaction to BB
 		tx, _ := types.SignTx(types.NewTransaction(nonce, bb,
-			big.NewInt(0), 100000, big.NewInt(1), nil), types.HomesteadSigner{}, key)
+			big.NewInt(0), 100000, big.NewInt(1), nil, nil, nil), types.HomesteadSigner{}, key)
 		b.AddTx(tx)
 		nonce++
 	})

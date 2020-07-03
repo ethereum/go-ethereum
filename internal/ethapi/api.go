@@ -47,6 +47,10 @@ import (
 	"github.com/tyler-smith/go-bip39"
 )
 
+const (
+	defaultGasPrice = params.GWei
+)
+
 // PublicEthereumAPI provides an API to access Ethereum related information.
 // It offers only methods that operate on public data that is freely available to anyone.
 type PublicEthereumAPI struct {
@@ -795,9 +799,13 @@ func (args *CallArgs) ToMessage(globalGasCap uint64) types.Message {
 		log.Warn("Caller gas above allowance, capping", "requested", gas, "cap", globalGasCap)
 		gas = globalGasCap
 	}
-	gasPrice := new(big.Int)
-	if args.GasPrice != nil {
-		gasPrice = args.GasPrice.ToInt()
+
+	var gasPrice *big.Int
+	if args.GasPremium == nil {
+		gasPrice = new(big.Int).SetUint64(defaultGasPrice)
+		if args.GasPrice != nil {
+			gasPrice = args.GasPrice.ToInt()
+		}
 	}
 
 	value := new(big.Int)
@@ -810,7 +818,8 @@ func (args *CallArgs) ToMessage(globalGasCap uint64) types.Message {
 		data = *args.Data
 	}
 
-	msg := types.NewMessage(addr, args.To, 0, value, gas, gasPrice, data, false)
+	// Create new call message
+	msg := types.NewMessage(addr, args.To, 0, value, gas, gasPrice, data, false, (*big.Int)(args.GasPremium), (*big.Int)(args.FeeCap))
 	return msg
 }
 
@@ -835,30 +844,30 @@ func DoCall(ctx context.Context, b Backend, args CallArgs, blockNrOrHash rpc.Blo
 	eip1559 := b.ChainConfig().IsEIP1559(b.CurrentBlock().Number())
 	eip1559Finalized := b.ChainConfig().IsEIP1559Finalized(b.CurrentBlock().Number())
 	if eip1559 && b.CurrentBlock().BaseFee() == nil {
-		return nil, 0, false, core.ErrNoBaseFee
+		return nil, core.ErrNoBaseFee
 	}
 	if eip1559Finalized && (args.GasPremium == nil || args.FeeCap == nil || args.GasPrice != nil) {
-		return nil, 0, false, core.ErrTxNotEIP1559
+		return nil, core.ErrTxNotEIP1559
 	}
 	if !eip1559 && (args.GasPremium != nil || args.FeeCap != nil || args.GasPrice == nil) {
-		return nil, 0, false, core.ErrTxIsEIP1559
+		return nil, core.ErrTxIsEIP1559
 	}
 	if args.GasPrice != nil && (args.GasPremium != nil || args.FeeCap != nil) {
-		return nil, 0, false, core.ErrTxSetsLegacyAndEIP1559Fields
+		return nil, core.ErrTxSetsLegacyAndEIP1559Fields
 	}
 	if args.FeeCap != nil && args.GasPremium == nil {
-		return nil, 0, false, errors.New("if FeeCap is set, GasPremium must be set")
+		return nil, errors.New("if FeeCap is set, GasPremium must be set")
 	}
 	if args.GasPremium != nil {
 		if args.FeeCap == nil {
-			return nil, 0, false, errors.New("if GasPremium is set, FeeCap must be set")
+			return nil, errors.New("if GasPremium is set, FeeCap must be set")
 		}
 		gasPrice := new(big.Int).Add(b.CurrentBlock().BaseFee(), args.GasPremium.ToInt())
 		if gasPrice.Cmp(args.FeeCap.ToInt()) > 0 {
 			gasPrice.Set(args.FeeCap.ToInt())
 		}
 		if gasPrice.Cmp(b.CurrentBlock().BaseFee()) < 0 {
-			return nil, 0, false, core.ErrEIP1559GasPriceLessThanBaseFee
+			return nil, core.ErrEIP1559GasPriceLessThanBaseFee
 		}
 	}
 
@@ -926,7 +935,7 @@ func DoCall(ctx context.Context, b Backend, args CallArgs, blockNrOrHash rpc.Blo
 	if evm.ChainConfig().IsEIP1559(header.Number) {
 		gp1559 = new(core.GasPool).AddGas(math.MaxUint64)
 	}
-	res, gas, failed, err := core.ApplyMessage(evm, msg, gp, gp1559)
+	res, err := core.ApplyMessage(evm, msg, gp, gp1559)
 	if err := vmError(); err != nil {
 		return nil, err
 	}
@@ -935,9 +944,9 @@ func DoCall(ctx context.Context, b Backend, args CallArgs, blockNrOrHash rpc.Blo
 		return nil, fmt.Errorf("execution aborted (timeout = %v)", timeout)
 	}
 	if err != nil {
-		return result, fmt.Errorf("err: %w (supplied gas %d)", err, msg.Gas())
+		return res, fmt.Errorf("err: %w (supplied gas %d)", err, msg.Gas())
 	}
-	return result, nil
+	return res, nil
 }
 
 func newRevertError(result *core.ExecutionResult) *revertError {

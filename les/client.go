@@ -19,8 +19,8 @@ package les
 
 import (
 	"fmt"
-	"time"
 	"math/big"
+	"time"
 
 	"github.com/ethereum/go-ethereum/accounts"
 	"github.com/ethereum/go-ethereum/common"

@@ -1712,6 +1712,14 @@ func SetEthConfig(ctx *cli.Context, stack *node.Node, cfg *eth.Config) {
 			SetDNSDiscoveryDefaults(cfg, params.MainnetGenesisHash)
 		}
 	}
+
+	// If we are configuring custom EIP1559 params, do so now
+	if ctx.GlobalBool(EIP1559CLIConfigure.Name) {
+		if cfg.Genesis == nil {
+			cfg.Genesis = core.DefaultGenesisBlock()
+		}
+		setEIP1559Params(ctx, cfg)
+	}
 }
 
 // SetDNSDiscoveryDefaults configures DNS discovery with the given URL if
@@ -1727,14 +1735,6 @@ func SetDNSDiscoveryDefaults(cfg *eth.Config, genesis common.Hash) {
 	}
 	if url := params.KnownDNSNetwork(genesis, protocol); url != "" {
 		cfg.DiscoveryURLs = []string{url}
-	}
-
-	// If we are configuring custom EIP1559 params, do so now
-	if ctx.GlobalBool(EIP1559CLIConfigure.Name) {
-		if cfg.Genesis == nil {
-			cfg.Genesis = core.DefaultGenesisBlock()
-		}
-		setEIP1559Params(ctx, cfg)
 	}
 }
 

@@ -137,7 +137,7 @@ func New(stack *node.Node, config *Config) (*Ethereum, error) {
 		closeBloomHandler: make(chan struct{}),
 		networkID:         config.NetworkId,
 		gasPrice:          config.Miner.GasPrice,
-		perTxGasLimit:  config.Miner.PerTxGasLimit,
+		perTxGasLimit:     config.Miner.PerTxGasLimit,
 		etherbase:         config.Miner.Etherbase,
 		bloomRequests:     make(chan chan *bloombits.Retrieval),
 		bloomIndexer:      NewBloomIndexer(chainDb, params.BloomBitsBlocks, params.BloomConfirms),

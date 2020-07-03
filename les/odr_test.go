@@ -140,8 +140,8 @@ func odrContractCall(ctx context.Context, db ethdb.Database, config *params.Chai
 				if config.IsEIP1559(header.Number) {
 					gp1559 = new(core.GasPool).AddGas(math.MaxUint64)
 				}
-				ret, _, _, _ := core.ApplyMessage(vmenv, msg, gp, gp1559)
-				res = append(res, ret...)
+				ret, _ := core.ApplyMessage(vmenv, msg, gp, gp1559)
+				res = append(res, ret.Return()...)
 			}
 		} else {
 			header := lc.GetHeaderByHash(bhash)
@@ -156,9 +156,9 @@ func odrContractCall(ctx context.Context, db ethdb.Database, config *params.Chai
 			if config.IsEIP1559(header.Number) {
 				gp1559 = new(core.GasPool).AddGas(math.MaxUint64)
 			}
-			ret, _, _, _ := core.ApplyMessage(vmenv, msg, gp, gp1559)
+			ret, _ := core.ApplyMessage(vmenv, msg, gp, gp1559)
 			if state.Error() == nil {
-				res = append(res, result.Return()...)
+				res = append(res, ret.Return()...)
 			}
 		}
 	}
