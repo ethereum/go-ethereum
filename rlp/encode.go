@@ -361,10 +361,6 @@ func makeWriter(typ reflect.Type, ts tags) (writer, error) {
 	}
 }
 
-func isByte(typ reflect.Type) bool {
-	return typ.Kind() == reflect.Uint8 && !typ.Implements(encoderInterface)
-}
-
 func writeRawValue(val reflect.Value, w *encbuf) error {
 	w.str = append(w.str, val.Bytes()...)
 	return nil
