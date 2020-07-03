@@ -462,8 +462,8 @@ func writeLengthOneByteArray(val reflect.Value, w *encbuf) error {
 	return nil
 }
 
-// writeByteArrayCopy encodes byte array data using reflect.Copy. This is
-// the fast path for non-named byte array types of length > 1.
+// writeByteArrayCopy encodes byte arrays using reflect.Copy. This is
+// the fast path for [N]byte where N > 1.
 func writeByteArrayCopy(length int, val reflect.Value, w *encbuf) {
 	w.encodeStringHeader(length)
 	offset := len(w.str)
@@ -472,7 +472,7 @@ func writeByteArrayCopy(length int, val reflect.Value, w *encbuf) {
 	reflect.Copy(w.bufvalue, val)
 }
 
-// writeNamedByteArray encodes a byte array with named element type.
+// writeNamedByteArray encodes byte arrays with named element type.
 // This exists because reflect.Copy can't be used with such types.
 func writeNamedByteArray(val reflect.Value, w *encbuf) error {
 	if !val.CanAddr() {
