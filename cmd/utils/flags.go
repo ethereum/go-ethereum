@@ -1767,6 +1767,11 @@ func setEIP1559Params(ctx *cli.Context, config *eth.Config) {
 	config.Genesis.Config.EIP1559Block = new(big.Int).SetUint64(config.Genesis.Config.EIP1559.ForkBlockNumber)
 	config.Genesis.Config.EIP1559FinalizedBlock = new(big.Int).SetUint64(config.Genesis.Config.EIP1559.ForkFinalizedBlockNumber)
 	config.Miner.PerTxGasLimit = config.Genesis.Config.EIP1559.PerTransactionGasLimit
+
+	// If eip1559 fork block number is set to 0 then set the genesis (0th) block basefee to the default initial basefee value if none was provided
+	if config.Genesis.BaseFee == nil && config.Genesis.Config.EIP1559.ForkBlockNumber == 0 {
+		config.Genesis.BaseFee = new(big.Int).SetUint64(params.EIP1559InitialBaseFee)
+	}
 }
 
 // RegisterEthService adds an Ethereum client to the stack.
