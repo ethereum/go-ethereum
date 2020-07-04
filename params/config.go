@@ -367,7 +367,6 @@ type EIP1559Config struct {
 	TargetGasUsed               uint64
 	MaxGas                      uint64
 	SlackCoefficient            uint64
-	PerTransactionGasLimit      uint64
 }
 
 var DefaultEIP1559Config = &EIP1559Config{
@@ -380,7 +379,6 @@ var DefaultEIP1559Config = &EIP1559Config{
 	TargetGasUsed:               TargetGasUsed,
 	MaxGas:                      MaxGasEIP1559,
 	SlackCoefficient:            SlackCoefficient,
-	PerTransactionGasLimit:      PerTransactionGasLimit,
 }
 
 // EthashConfig is the consensus engine configs for proof-of-work based sealing.
