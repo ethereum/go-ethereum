@@ -163,7 +163,6 @@ var (
 		utils.EIP1559ForkBlockNumber,
 		utils.EIP1559InitialBaseFee,
 		utils.EIP1559BaseFeeMaxChangeDenominator,
-		utils.EIP1559PerTransactionGasLimit,
 		utils.EIP1559SlackCoefficient,
 		utils.EIP1559TargetGasUsed,
 		utils.EIP1559DecayRange,

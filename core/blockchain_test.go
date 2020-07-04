@@ -468,7 +468,9 @@ func testReorgLong(t *testing.T, full bool, chainConfig *params.ChainConfig, bas
 func TestReorgShortHeaders(t *testing.T) {
 	testReorgShort(t, false, params.AllEthashProtocolChanges, nil)
 }
-func TestReorgShortBlocks(t *testing.T) { testReorgShort(t, true, params.AllEthashProtocolChanges, nil) }
+func TestReorgShortBlocks(t *testing.T) {
+	testReorgShort(t, true, params.AllEthashProtocolChanges, nil)
+}
 func TestReorgShortHeadersEIP1559(t *testing.T) {
 	testReorgShort(t, false, params.EIP1559ChainConfig, new(big.Int).SetUint64(params.EIP1559InitialBaseFee))
 }

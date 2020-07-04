@@ -757,11 +757,6 @@ var (
 		Usage: "External configuration of EIP1559 SlackCoefficient",
 		Value: params.SlackCoefficient,
 	}
-	EIP1559PerTransactionGasLimit = cli.Uint64Flag{
-		Name:  "eip1559.pertxgaslimit",
-		Usage: "External configuration of EIP1559 PerTransactionGasLimit",
-		Value: params.PerTransactionGasLimit,
-	}
 	EIP1559DecayRange = cli.Uint64Flag{
 		Name:  "eip1559.decayrange",
 		Usage: "External configuration of EIP1559 DecayRange",
@@ -1751,9 +1746,6 @@ func setEIP1559Params(ctx *cli.Context, config *eth.Config) {
 	if ctx.GlobalIsSet(EIP1559SlackCoefficient.Name) {
 		config.Genesis.Config.EIP1559.SlackCoefficient = ctx.GlobalUint64(EIP1559SlackCoefficient.Name)
 	}
-	if ctx.GlobalIsSet(EIP1559PerTransactionGasLimit.Name) {
-		config.Genesis.Config.EIP1559.PerTransactionGasLimit = ctx.GlobalUint64(EIP1559PerTransactionGasLimit.Name)
-	}
 	if ctx.GlobalIsSet(EIP1559BaseFeeMaxChangeDenominator.Name) {
 		config.Genesis.Config.EIP1559.BaseFeeMaxChangeDenominator = ctx.GlobalUint64(EIP1559BaseFeeMaxChangeDenominator.Name)
 	}
@@ -1766,7 +1758,6 @@ func setEIP1559Params(ctx *cli.Context, config *eth.Config) {
 	config.Genesis.Config.EIP1559.GasIncrementAmount = (config.Genesis.Config.EIP1559.MaxGas / 2) / config.Genesis.Config.EIP1559.DecayRange
 	config.Genesis.Config.EIP1559Block = new(big.Int).SetUint64(config.Genesis.Config.EIP1559.ForkBlockNumber)
 	config.Genesis.Config.EIP1559FinalizedBlock = new(big.Int).SetUint64(config.Genesis.Config.EIP1559.ForkFinalizedBlockNumber)
-	config.Miner.PerTxGasLimit = config.Genesis.Config.EIP1559.PerTransactionGasLimit
 
 	// If eip1559 fork block number is set to 0 then set the genesis (0th) block basefee to the default initial basefee value if none was provided
 	if config.Genesis.BaseFee == nil && config.Genesis.Config.EIP1559.ForkBlockNumber == 0 {

@@ -77,7 +77,6 @@ var (
 	errInvalidDifficulty = errors.New("non-positive difficulty")
 	errInvalidMixDigest  = errors.New("invalid mix digest")
 	errInvalidPoW        = errors.New("invalid proof-of-work")
-	errExceedGasLimit    = errors.New("transaction gas usage exceeds the per-transaction limit")
 )
 
 // Author implements consensus.Engine, returning the header's coinbase as the

@@ -107,9 +107,6 @@ var (
 
 	// ErrMissingGasFields is returned if neither GasPrice nor GasPremium and FeeCap are set
 	ErrMissingGasFields = errors.New("either GasPrice or GasPremium and FeeCap need to be set")
-
-	// ErrExceedGasLimit is returned if a transaction uses more gas than the allowed per-tx limit
-	ErrExceedGasLimit = errors.New("transaction gas usage exceeds the per-transaction limit")
 )
 
 var (
@@ -246,15 +243,14 @@ func (config *TxPoolConfig) sanitize() TxPoolConfig {
 // current state) and future transactions. Transactions move between those
 // two states over time as they are received and processed.
 type TxPool struct {
-	config        TxPoolConfig
-	chainconfig   *params.ChainConfig
-	chain         blockChain
-	gasPrice      *big.Int
-	perTxGasLimit uint64
-	txFeed        event.Feed
-	scope         event.SubscriptionScope
-	signer        types.Signer
-	mu            sync.RWMutex
+	config      TxPoolConfig
+	chainconfig *params.ChainConfig
+	chain       blockChain
+	gasPrice    *big.Int
+	txFeed      event.Feed
+	scope       event.SubscriptionScope
+	signer      types.Signer
+	mu          sync.RWMutex
 
 	istanbul bool // Fork indicator whether we are in the istanbul stage.
 
@@ -317,7 +313,6 @@ func NewTxPool(config TxPoolConfig, chainconfig *params.ChainConfig, chain block
 	}
 	pool.priced = newTxPricedList(pool.all, chain.CurrentBlock().BaseFee())
 	pool.reset(nil, chain.CurrentBlock().Header())
-	pool.perTxGasLimit = params.PerTransactionGasLimit
 
 	// Start the reorg loop early so it can handle requests generated during journal loading.
 	pool.wg.Add(1)
@@ -463,21 +458,6 @@ func (pool *TxPool) SetGasPrice(price *big.Int) {
 	log.Info("Transaction pool price threshold updated", "price", price)
 }
 
-// SetPerTxGasLimit updates the maximum gas allowed by the transaction pool for a
-// new transaction, and drops all transactions above this threshold.
-func (pool *TxPool) SetPerTxGasLimit(limit uint64) {
-	pool.mu.Lock()
-	defer pool.mu.Unlock()
-	pool.perTxGasLimit = limit
-	pool.all.Range(func(hash common.Hash, tx *types.Transaction) bool {
-		if tx.Gas() > limit {
-			pool.removeTx(tx.Hash(), false)
-		}
-		return true
-	})
-	log.Info("Transaction pool per-transaction gas limit updated", "limit", limit)
-}
-
 // Nonce returns the next nonce of an account, with all transactions executable
 // by the pool already applied on top.
 func (pool *TxPool) Nonce(addr common.Address) uint64 {
@@ -603,10 +583,6 @@ func (pool *TxPool) validateTx(tx *types.Transaction, local bool) error {
 	// Heuristic limit, reject transactions over 32KB to prevent DOS attacks
 	if uint64(tx.Size()) > txMaxSize {
 		return ErrOversizedData
-	}
-	// If the transactions gas usage is above the per-tx limit, reject it
-	if eip1559 && tx.Gas() > pool.perTxGasLimit {
-		return ErrExceedGasLimit
 	}
 	// Transactions can't be negative. This may never happen using RLP decoded
 	// transactions but may occur if you create a transaction using the RPC.

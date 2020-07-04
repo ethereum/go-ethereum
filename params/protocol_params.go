@@ -144,7 +144,6 @@ const (
 	MaxGasEIP1559                          = SlackCoefficient * TargetGasUsed
 	EIP1559DecayRange               uint64 = 1000000
 	EIP1559GasIncrementAmount              = (MaxGasEIP1559 / 2) / EIP1559DecayRange // We need to shift (MaxGasEIP1559 / 2) gas from the legacy pool into the EIP1559 pool over the EIP1559DecayRange
-	PerTransactionGasLimit          uint64 = 8000000
 )
 
 // Gas discount table for BLS12-381 G1 and G2 multi exponentiation operations
