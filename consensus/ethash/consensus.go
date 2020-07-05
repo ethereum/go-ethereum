@@ -265,31 +265,26 @@ func (ethash *Ethash) verifyHeader(chain consensus.ChainHeaderReader, header, pa
 		return fmt.Errorf("invalid difficulty: have %v, want %v", header.Difficulty, expected)
 	}
 
-	// If EIP1559 is not active we need to verify that the GasLimit field is valid according to the legacy rules
-	if !chain.Config().IsEIP1559(header.Number) {
-		// Verify that the gas limit is <= 2^63-1
-		cap := uint64(0x7fffffffffffffff)
-		if header.GasLimit > cap {
-			return fmt.Errorf("invalid gasLimit: have %v, max %v", header.GasLimit, cap)
-		}
-		// Verify that the gasUsed is <= gasLimit
-		if header.GasUsed > header.GasLimit {
-			return fmt.Errorf("invalid gasUsed: have %d, gasLimit %d", header.GasUsed, header.GasLimit)
-		}
+	// Verify that the "GasLimit" header field is valid
+	// Verify that the gas limit is <= 2^63-1
+	max := uint64(0x7fffffffffffffff)
+	if header.GasLimit > max {
+		return fmt.Errorf("invalid gasLimit: have %v, max %v", header.GasLimit, max)
+	}
+	// Verify that the gasUsed is <= gasLimit
+	if header.GasUsed > header.GasLimit {
+		return fmt.Errorf("invalid gasUsed: have %d, gasLimit %d", header.GasUsed, header.GasLimit)
+	}
 
-		// Verify that the gas limit remains within allowed bounds
-		diff := int64(parent.GasLimit) - int64(header.GasLimit)
-		if diff < 0 {
-			diff *= -1
-		}
-		limit := parent.GasLimit / params.GasLimitBoundDivisor
+	// Verify that the gas limit remains within allowed bounds
+	diff := int64(parent.GasLimit) - int64(header.GasLimit)
+	if diff < 0 {
+		diff *= -1
+	}
+	limit := parent.GasLimit / params.GasLimitBoundDivisor
 
-		if uint64(diff) >= limit || header.GasLimit < params.MinGasLimit {
-			return fmt.Errorf("invalid gas limit: have %d, want %d += %d", header.GasLimit, parent.GasLimit, limit)
-		}
-		// If EIP1559 is active, assert that the GasLimit field is valid according to the EIP1559 rules
-	} else if err := misc.VerifyEIP1559GasLimit(chain.Config(), header); err != nil {
-		return err
+	if uint64(diff) >= limit || header.GasLimit < params.MinGasLimit {
+		return fmt.Errorf("invalid gas limit: have %d, want %d += %d", header.GasLimit, parent.GasLimit, limit)
 	}
 
 	// Verify that the block number is parent's +1

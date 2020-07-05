@@ -137,13 +137,10 @@ const (
 
 	EIP1559InitialBaseFee           uint64 = 1000000000 // Wei used as the initial BaseFee
 	EIP1559ForkBlockNumber          uint64 = 110000000  // TBD
-	EIP1559ForkFinalizedBlockNumber        = EIP1559ForkBlockNumber + EIP1559DecayRange
-	BaseFeeMaxChangeDenominator     uint64 = 8
-	TargetGasUsed                   uint64 = 10000000
-	SlackCoefficient                uint64 = 2
-	MaxGasEIP1559                          = SlackCoefficient * TargetGasUsed
-	EIP1559DecayRange               uint64 = 1000000
-	EIP1559GasIncrementAmount              = (MaxGasEIP1559 / 2) / EIP1559DecayRange // We need to shift (MaxGasEIP1559 / 2) gas from the legacy pool into the EIP1559 pool over the EIP1559DecayRange
+	EIP1559MigrationBlockDuration   uint64 = 800000
+	EIP1559ForkFinalizedBlockNumber        = EIP1559ForkBlockNumber + EIP1559MigrationBlockDuration
+	EIP1559BaseFeeMaxChangeDenominator     uint64 = 8
+	EIP1559SlackCoefficient                uint64 = 2
 )
 
 // Gas discount table for BLS12-381 G1 and G2 multi exponentiation operations

@@ -25,6 +25,8 @@ import (
 	"sync"
 	"time"
 
+	"github.com/ethereum/go-ethereum/consensus/misc"
+
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/prque"
 	"github.com/ethereum/go-ethereum/core/state"
@@ -1252,13 +1254,10 @@ func (pool *TxPool) reset(oldHead, newHead *types.Header) {
 	pool.currentState = statedb
 	pool.pendingNonces = newTxNoncer(statedb)
 
-	if pool.chainconfig.IsEIP1559(newHead.Number) {
-		pool.currentLegacyMaxGas = pool.chainconfig.EIP1559.MaxGas - newHead.GasLimit
-		pool.currentEIP1559MaxGas = newHead.GasLimit
-	} else {
-		pool.currentLegacyMaxGas = newHead.GasLimit
-		pool.currentEIP1559MaxGas = 0
-	}
+	// eip1559GasTarget will be 0 if below EIP1559 activation and equal to the entire newHead.GasLimit if at or above finalization
+	eip1559GasTarget := misc.CalcEIP1559GasTarget(pool.chainconfig, newHead.Number, new(big.Int).SetUint64(newHead.GasLimit))
+	pool.currentLegacyMaxGas = newHead.GasLimit - eip1559GasTarget.Uint64()
+	pool.currentEIP1559MaxGas = 2 * eip1559GasTarget.Uint64()
 
 	// Inject any transactions discarded due to reorgs
 	log.Debug("Reinjecting stale transactions", "count", len(reinject))

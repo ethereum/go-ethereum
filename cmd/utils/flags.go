@@ -742,25 +742,20 @@ var (
 		Usage: "External configuration of EIP1559 ForkBlockNumber",
 		Value: params.EIP1559ForkBlockNumber,
 	}
-	EIP1559BaseFeeMaxChangeDenominator = cli.Uint64Flag{
+	EIP1559EIP1559BaseFeeMaxChangeDenominator = cli.Uint64Flag{
 		Name:  "eip1559.basefeemaxchangedenominator",
-		Usage: "External configuration of EIP1559 BaseFeeMaxChangeDenominator",
-		Value: params.BaseFeeMaxChangeDenominator,
+		Usage: "External configuration of EIP1559 EIP1559BaseFeeMaxChangeDenominator",
+		Value: params.EIP1559BaseFeeMaxChangeDenominator,
 	}
-	EIP1559TargetGasUsed = cli.Uint64Flag{
-		Name:  "eip1559.targetgasused",
-		Usage: "External configuration of EIP1559 TargetGasUsed",
-		Value: params.TargetGasUsed,
-	}
-	EIP1559SlackCoefficient = cli.Uint64Flag{
+	EIP1559EIP1559SlackCoefficient = cli.Uint64Flag{
 		Name:  "eip1559.slackcoefficient",
-		Usage: "External configuration of EIP1559 SlackCoefficient",
-		Value: params.SlackCoefficient,
+		Usage: "External configuration of EIP1559 EIP1559SlackCoefficient",
+		Value: params.EIP1559SlackCoefficient,
 	}
-	EIP1559DecayRange = cli.Uint64Flag{
-		Name:  "eip1559.decayrange",
-		Usage: "External configuration of EIP1559 DecayRange",
-		Value: params.EIP1559DecayRange,
+	EIP1559MigrationBlockDuration = cli.Uint64Flag{
+		Name:  "eip1559.migrationblockduration",
+		Usage: "External configuration of the number of EIP1559 transition blocks",
+		Value: params.EIP1559MigrationBlockDuration,
 	}
 )
 
@@ -1740,22 +1735,17 @@ func setEIP1559Params(ctx *cli.Context, config *eth.Config) {
 	if ctx.GlobalIsSet(EIP1559InitialBaseFee.Name) {
 		config.Genesis.Config.EIP1559.InitialBaseFee = ctx.GlobalUint64(EIP1559InitialBaseFee.Name)
 	}
-	if ctx.GlobalIsSet(EIP1559TargetGasUsed.Name) {
-		config.Genesis.Config.EIP1559.TargetGasUsed = ctx.GlobalUint64(EIP1559TargetGasUsed.Name)
+	if ctx.GlobalIsSet(EIP1559EIP1559SlackCoefficient.Name) {
+		config.Genesis.Config.EIP1559.EIP1559SlackCoefficient = ctx.GlobalUint64(EIP1559EIP1559SlackCoefficient.Name)
 	}
-	if ctx.GlobalIsSet(EIP1559SlackCoefficient.Name) {
-		config.Genesis.Config.EIP1559.SlackCoefficient = ctx.GlobalUint64(EIP1559SlackCoefficient.Name)
+	if ctx.GlobalIsSet(EIP1559EIP1559BaseFeeMaxChangeDenominator.Name) {
+		config.Genesis.Config.EIP1559.EIP1559BaseFeeMaxChangeDenominator = ctx.GlobalUint64(EIP1559EIP1559BaseFeeMaxChangeDenominator.Name)
 	}
-	if ctx.GlobalIsSet(EIP1559BaseFeeMaxChangeDenominator.Name) {
-		config.Genesis.Config.EIP1559.BaseFeeMaxChangeDenominator = ctx.GlobalUint64(EIP1559BaseFeeMaxChangeDenominator.Name)
-	}
-	if ctx.GlobalIsSet(EIP1559DecayRange.Name) {
-		config.Genesis.Config.EIP1559.DecayRange = ctx.GlobalUint64(EIP1559DecayRange.Name)
+	if ctx.GlobalIsSet(EIP1559MigrationBlockDuration.Name) {
+		config.Genesis.Config.EIP1559.MigrationBlockDuration = ctx.GlobalUint64(EIP1559MigrationBlockDuration.Name)
 	}
 	// Re-calculate the derived config params
-	config.Genesis.Config.EIP1559.ForkFinalizedBlockNumber = config.Genesis.Config.EIP1559.ForkBlockNumber + config.Genesis.Config.EIP1559.DecayRange
-	config.Genesis.Config.EIP1559.MaxGas = config.Genesis.Config.EIP1559.SlackCoefficient * config.Genesis.Config.EIP1559.TargetGasUsed
-	config.Genesis.Config.EIP1559.GasIncrementAmount = (config.Genesis.Config.EIP1559.MaxGas / 2) / config.Genesis.Config.EIP1559.DecayRange
+	config.Genesis.Config.EIP1559.ForkFinalizedBlockNumber = config.Genesis.Config.EIP1559.ForkBlockNumber + config.Genesis.Config.EIP1559.MigrationBlockDuration
 	config.Genesis.Config.EIP1559Block = new(big.Int).SetUint64(config.Genesis.Config.EIP1559.ForkBlockNumber)
 	config.Genesis.Config.EIP1559FinalizedBlock = new(big.Int).SetUint64(config.Genesis.Config.EIP1559.ForkFinalizedBlockNumber)
 

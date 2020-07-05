@@ -363,24 +363,18 @@ type EIP1559Config struct {
 	InitialBaseFee              uint64
 	ForkBlockNumber             uint64
 	ForkFinalizedBlockNumber    uint64
-	DecayRange                  uint64
-	GasIncrementAmount          uint64
-	BaseFeeMaxChangeDenominator uint64
-	TargetGasUsed               uint64
-	MaxGas                      uint64
-	SlackCoefficient            uint64
+	MigrationBlockDuration      uint64
+	EIP1559BaseFeeMaxChangeDenominator uint64
+	EIP1559SlackCoefficient            uint64
 }
 
 var DefaultEIP1559Config = &EIP1559Config{
 	InitialBaseFee:              EIP1559InitialBaseFee,
 	ForkBlockNumber:             EIP1559ForkBlockNumber,
 	ForkFinalizedBlockNumber:    EIP1559ForkFinalizedBlockNumber,
-	DecayRange:                  EIP1559DecayRange,
-	GasIncrementAmount:          EIP1559GasIncrementAmount,
-	BaseFeeMaxChangeDenominator: BaseFeeMaxChangeDenominator,
-	TargetGasUsed:               TargetGasUsed,
-	MaxGas:                      MaxGasEIP1559,
-	SlackCoefficient:            SlackCoefficient,
+	MigrationBlockDuration:      EIP1559MigrationBlockDuration,
+	EIP1559BaseFeeMaxChangeDenominator: EIP1559BaseFeeMaxChangeDenominator,
+	EIP1559SlackCoefficient:            EIP1559SlackCoefficient,
 }
 
 // EthashConfig is the consensus engine configs for proof-of-work based sealing.

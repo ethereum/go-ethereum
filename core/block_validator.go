@@ -18,9 +18,7 @@ package core
 
 import (
 	"fmt"
-	"math/big"
 
-	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/consensus"
 	"github.com/ethereum/go-ethereum/core/state"
 	"github.com/ethereum/go-ethereum/core/types"
@@ -139,64 +137,4 @@ func CalcGasLimit(parent *types.Block, gasFloor, gasCeil uint64) uint64 {
 		}
 	}
 	return limit
-}
-
-func CalcGasLimitAndBaseFee(config *params.ChainConfig, parent *types.Block, gasFloor, gasCeil uint64) (uint64, *big.Int) {
-	if !config.IsEIP1559(new(big.Int).Add(parent.Number(), common.Big1)) {
-		return CalcGasLimit(parent, gasFloor, gasCeil), nil
-	}
-	return calcGasLimitAndBaseFee(config, parent)
-}
-
-// calcGasLimitAndBaseFee returns the EIP1559GasLimit and the BaseFee
-// Start at 50 : 50 and then shift to 0 : 100
-// The GasLimit for the legacy pool is (params.MaxGasEIP1559 - EIP1559GasLimit)
-func calcGasLimitAndBaseFee(config *params.ChainConfig, parent *types.Block) (uint64, *big.Int) {
-	height := new(big.Int).Add(parent.Number(), common.Big1)
-
-	// If we are at the block of EIP1559 activation then the BaseFee is set to the initial value
-	// and the GasLimit is split evenly between the two pools
-	if config.EIP1559Block.Cmp(height) == 0 {
-		return config.EIP1559.MaxGas / 2, new(big.Int).SetUint64(config.EIP1559.InitialBaseFee)
-	}
-
-	// Otherwise, calculate the BaseFee
-	// As a default strategy, miners set BASEFEE as follows. Let delta = block.gas_used - TARGET_GASUSED (possibly negative).
-	// Set BASEFEE = PARENT_BASEFEE + PARENT_BASEFEE * delta // TARGET_GASUSED // BASEFEE_MAX_CHANGE_DENOMINATOR,
-
-	delta := new(big.Int).Sub(new(big.Int).SetUint64(parent.GasUsed()), new(big.Int).SetUint64(config.EIP1559.TargetGasUsed))
-	mul := new(big.Int).Mul(parent.BaseFee(), delta)
-	div := new(big.Int).Div(mul, new(big.Int).SetUint64(config.EIP1559.TargetGasUsed))
-	div2 := new(big.Int).Div(div, new(big.Int).SetUint64(config.EIP1559.BaseFeeMaxChangeDenominator))
-	baseFee := new(big.Int).Add(parent.BaseFee(), div2)
-
-	// A valid BASEFEE is one such that abs(BASEFEE - PARENT_BASEFEE) <= max(1, PARENT_BASEFEE // BASEFEE_MAX_CHANGE_DENOMINATOR)
-	diff := new(big.Int).Sub(baseFee, parent.BaseFee())
-	neg := false
-	if diff.Sign() < 0 {
-		neg = true
-		diff.Neg(diff)
-	}
-	max := new(big.Int).Div(parent.BaseFee(), new(big.Int).SetUint64(config.EIP1559.BaseFeeMaxChangeDenominator))
-	if max.Cmp(common.Big1) < 0 {
-		max = common.Big1
-	}
-	// If derived BaseFee is not valid, restrict it within the bounds
-	if diff.Cmp(max) > 0 {
-		if neg {
-			max.Neg(max)
-		}
-		baseFee.Set(new(big.Int).Add(parent.BaseFee(), max))
-	}
-
-	// If EIP1559 is finalized, our limit for the EIP1559 pool is the entire max limit
-	if config.IsEIP1559Finalized(new(big.Int).Add(parent.Number(), common.Big1)) {
-		return params.MaxGasEIP1559, baseFee
-	}
-
-	// Otherwise calculate how much of the MaxGasEIP1559 serves as the limit for the EIP1559 pool
-	// The GasLimit for the legacy pool is (params.MaxGasEIP1559 - eip1559GasLimit)
-	numOfIncrements := new(big.Int).Sub(height, config.EIP1559Block).Uint64()
-	eip1559GasLimit := (config.EIP1559.MaxGas / 2) + (numOfIncrements * config.EIP1559.GasIncrementAmount)
-	return eip1559GasLimit, baseFee
 }

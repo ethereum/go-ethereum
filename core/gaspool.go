@@ -19,11 +19,28 @@ package core
 import (
 	"fmt"
 	"math"
+	"math/big"
+
+	"github.com/ethereum/go-ethereum/consensus/misc"
+	"github.com/ethereum/go-ethereum/params"
 )
 
 // GasPool tracks the amount of gas available during execution of the transactions
 // in a block. The zero value is a pool with zero gas available.
 type GasPool uint64
+
+// NewLegacyGasPool returns a GasPool filled to the legacy gas limit
+func NewLegacyGasPool(chainConfig *params.ChainConfig, height, gasLimit *big.Int) *GasPool {
+	eip1559GasTarget := misc.CalcEIP1559GasTarget(chainConfig, height, gasLimit)
+	return new(GasPool).AddGas(gasLimit.Uint64() - eip1559GasTarget.Uint64())
+}
+
+// NewEIP1559GasPool returns a GasPool filled to the EIP1559 gas limit
+func NewEIP1559GasPool(chainConfig *params.ChainConfig, height, gasLimit *big.Int) *GasPool {
+	// EIP1559 gas limit is 2x the EIP1559GasTarget
+	eip1559GasTarget := misc.CalcEIP1559GasTarget(chainConfig, height, gasLimit)
+	return new(GasPool).AddGas(2 * eip1559GasTarget.Uint64())
+}
 
 // AddGas makes gas available for execution.
 func (gp *GasPool) AddGas(amount uint64) *GasPool {

@@ -19,6 +19,7 @@ package light
 import (
 	"context"
 	"fmt"
+	"github.com/ethereum/go-ethereum/consensus/misc"
 	"math/big"
 	"sync"
 	"time"
@@ -381,15 +382,12 @@ func (pool *TxPool) validateTx(ctx context.Context, tx *types.Transaction) error
 		return core.ErrNonceTooLow
 	}
 
-	// Check the transaction doesn't exceed the current
-	// block limit gas.
+	// Check the transaction doesn't exceed the current block gas limits
 	var legacyGasLimit, eip1559GasLimit uint64
-	if pool.config.IsEIP1559(header.Number) {
-		legacyGasLimit = pool.config.EIP1559.MaxGas - header.GasLimit
-		eip1559GasLimit = header.GasLimit
-	} else {
-		legacyGasLimit = header.GasLimit
-	}
+	// eip1559GasTarget will be 0 if below EIP1559 activation and equal to the entire newHead.GasLimit if at or above finalization
+	eip1559GasTarget := misc.CalcEIP1559GasTarget(pool.config, header.Number, new(big.Int).SetUint64(header.GasLimit))
+	legacyGasLimit = header.GasLimit - eip1559GasTarget.Uint64()
+	eip1559GasLimit = 2 * eip1559GasTarget.Uint64()
 	if tx.GasPrice() != nil && legacyGasLimit < tx.Gas() {
 		return core.ErrLegacyGasLimit
 	}

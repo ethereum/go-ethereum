@@ -758,24 +758,21 @@ func (w *worker) commitTransactions(txs *types.TransactionsByPriceAndNonce, coin
 		return true
 	}
 
-	// If EIP1559 is initialized then header.GasLimit is for the EIP1559 pool
-	// and the difference between the MaxGasEIP1559 and header.GasLimit is the limit for the legacy pool
-	// Once EIP1559 is finalized the header.GasLimit is the entire MaxGasEIP1559
-	// so no gas will be allocated to the legacy pool
+	// See core/gaspool.go for detials on how these gas limit values are calculated
 	var eip1559GasLimit uint64
 	var legacyGasLimit uint64
+
+	if w.current.gasPool == nil {
+		w.current.gasPool = core.NewLegacyGasPool(w.chainConfig,
+			w.current.header.Number, new(big.Int).SetUint64(w.current.header.GasLimit))
+		legacyGasLimit = w.current.gasPool.Gas()
+	}
 	if w.chainConfig.IsEIP1559(w.current.header.Number) {
-		if w.current.gasPool == nil {
-			legacyGasLimit = w.chainConfig.EIP1559.MaxGas - w.current.header.GasLimit
-			w.current.gasPool = new(core.GasPool).AddGas(legacyGasLimit)
-		}
 		if w.current.gp1559 == nil {
-			eip1559GasLimit = w.current.header.GasLimit
-			w.current.gp1559 = new(core.GasPool).AddGas(eip1559GasLimit)
+			w.current.gp1559 = core.NewEIP1559GasPool(w.chainConfig,
+				w.current.header.Number, new(big.Int).SetUint64(w.current.header.GasLimit))
+			eip1559GasLimit = w.current.gp1559.Gas()
 		}
-	} else if w.current.gasPool == nil { // If we are before EIP1559 activation then we use header.GasLimit for the legacy pool
-		legacyGasLimit = w.current.header.GasLimit
-		w.current.gasPool = new(core.GasPool).AddGas(legacyGasLimit)
 	}
 
 	var coalescedLogs []*types.Log
@@ -931,11 +928,11 @@ func (w *worker) commitNewWork(interrupt *int32, noempty bool, timestamp int64) 
 	}
 
 	num := parent.Number()
-	gasLimit, baseFee := core.CalcGasLimitAndBaseFee(w.chainConfig, parent, w.config.GasFloor, w.config.GasCeil)
+	baseFee := misc.CalcBaseFee(w.chainConfig, parent.Header())
 	header := &types.Header{
 		ParentHash: parent.Hash(),
 		Number:     num.Add(num, common.Big1),
-		GasLimit:   gasLimit,
+		GasLimit:   core.CalcGasLimit(parent, w.config.GasFloor, w.config.GasCeil),
 		BaseFee:    baseFee,
 		Extra:      w.extra,
 		Time:       uint64(timestamp),
