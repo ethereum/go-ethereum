@@ -17,7 +17,6 @@
 package core
 
 import (
-	// "encoding/hex"
 	"errors"
 	"fmt"
 	"math"

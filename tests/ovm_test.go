@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"encoding/binary"
 	"encoding/hex"
+	"encoding/json"
 	"fmt"
 	"io/ioutil"
 	"math/big"
@@ -41,15 +42,28 @@ func init() {
 const GAS_LIMIT = 15000000
 
 var ZERO_ADDRESS = common.HexToAddress("0000000000000000000000000000000000000000")
-var DEFAULT_FROM_ADDR = common.HexToAddress("17ec8597ff92C3F44523bDc65BF0f1bE632917ff")
 var OTHER_FROM_ADDR = common.HexToAddress("8888888888888888888888888888888888888888")
 
-func TestContractCreation(t *testing.T) {
+func TestPrintingStateAfterEmDeployment(t *testing.T) {
 	currentState := newState()
 
 	// First we'll need to deploy an EM (because we don't have this auto deploying yet)
 	executionMgrInitcode, _ := hex.DecodeString(vm.ExecutionManagerInitcode)
 	applyMessageToState(currentState, ZERO_ADDRESS, GAS_LIMIT, executionMgrInitcode)
+
+	// Now print everything out
+	fmt.Println("\nDUMP INCOMING!")
+	var theDump state.Dump
+	theDumpMarshaled, _ := hex.DecodeString(vm.InitialOvmStateDump)
+	err := json.Unmarshal(theDumpMarshaled, &theDump)
+	if err != nil {
+		fmt.Println("Can't deserislize")
+	}
+	fmt.Println(theDump.Root)
+}
+
+func TestContractCreation(t *testing.T) {
+	currentState := newState()
 
 	// Next we've got to generate & apply a transaction which calls the EM to deploy a new contract
 	initCode, _ := hex.DecodeString("608060405234801561001057600080fd5b5060405161026b38038061026b8339818101604052602081101561003357600080fd5b8101908080519060200190929190505050806000806101000a81548173ffffffffffffffffffffffffffffffffffffffff021916908373ffffffffffffffffffffffffffffffffffffffff160217905550506101d7806100946000396000f3fe608060405234801561001057600080fd5b50600436106100365760003560e01c80633408f73a1461003b578063d3404b6d14610045575b600080fd5b61004361004f565b005b61004d6100fa565b005b600060e060405180807f6f766d534c4f4144282900000000000000000000000000000000000000000000815250600a0190506040518091039020901c905060008060009054906101000a900473ffffffffffffffffffffffffffffffffffffffff16905060405136600082378260181c81538260101c60018201538260081c60028201538260038201536040516207a1208136846000875af160008114156100f657600080fd5b3d82f35b600060e060405180807f6f766d5353544f52452829000000000000000000000000000000000000000000815250600b0190506040518091039020901c905060008060009054906101000a900473ffffffffffffffffffffffffffffffffffffffff16905060405136600082378260181c81538260101c60018201538260081c600282015382600382015360008036836000865af1600081141561019c57600080fd5b5050505056fea265627a7a72315820311a406c97055eec367b660092882e1a174e14333416a3de384439293b7b129264736f6c63430005100032000000000000000000000000a193e42526f1fea8c99af609dceabf30c1c29faa")
@@ -253,7 +267,7 @@ func applyMessageToState(currentState *state.StateDB, to common.Address, gasLimi
 	}
 	gasPool := core.GasPool(100000000)
 	// Default from address
-	from := DEFAULT_FROM_ADDR
+	from := vm.ExecutionManagerDeployerAddress
 	// Generate the message
 	message := types.Message{}
 	if to == ZERO_ADDRESS {
