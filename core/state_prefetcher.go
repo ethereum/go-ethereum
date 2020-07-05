@@ -17,6 +17,7 @@
 package core
 
 import (
+	"math/big"
 	"sync/atomic"
 
 	"github.com/ethereum/go-ethereum/common"
@@ -51,18 +52,13 @@ func newStatePrefetcher(config *params.ChainConfig, bc *BlockChain, engine conse
 func (p *statePrefetcher) Prefetch(block *types.Block, statedb *state.StateDB, cfg vm.Config, interrupt *uint32) {
 	var (
 		header  = block.Header()
-		gaspool *GasPool
+		gp *GasPool
 		gp1559  *GasPool
 	)
-	// If EIP1559 is initialized then header.GasLimit is for the EIP1559 pool
-	// and the difference between the MaxGasEIP1559 and header.GasLimit is the limit for the legacy pool
-	// Once EIP1559 is finalized the header.GasLimit is the entire MaxGasEIP1559
-	// so no gas will be allocated to the legacy pool
+	// See core/gaspool.go for detials on how these gas limit values are calculated
+	gp = NewLegacyGasPool(p.config, block.Number(), new(big.Int).SetUint64(block.GasLimit()))
 	if p.config.IsEIP1559(block.Number()) {
-		gaspool = new(GasPool).AddGas(p.config.EIP1559.MaxGas - block.GasLimit())
-		gp1559 = new(GasPool).AddGas(block.GasLimit())
-	} else { // If we are before EIP1559 activation then we use header.GasLimit for the legacy pool
-		gaspool = new(GasPool).AddGas(block.GasLimit())
+		gp1559 = NewEIP1559GasPool(p.config, block.Number(), new(big.Int).SetUint64(block.GasLimit()))
 	}
 	// Iterate over and process the individual transactions
 	byzantium := p.config.IsByzantium(block.Number())
@@ -73,7 +69,7 @@ func (p *statePrefetcher) Prefetch(block *types.Block, statedb *state.StateDB, c
 		}
 		// Block precaching permitted to continue, execute the transaction
 		statedb.Prepare(tx.Hash(), block.Hash(), i)
-		if err := precacheTransaction(p.config, p.bc, nil, gaspool, gp1559, statedb, header, tx, cfg); err != nil {
+		if err := precacheTransaction(p.config, p.bc, nil, gp, gp1559, statedb, header, tx, cfg); err != nil {
 			return // Ugh, something went horribly wrong, bail out
 		}
 		// If we're pre-byzantium, pre-load trie nodes for the intermediate root

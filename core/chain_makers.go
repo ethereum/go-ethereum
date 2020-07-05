@@ -59,15 +59,10 @@ func (b *BlockGen) SetCoinbase(addr common.Address) {
 		panic("coinbase can only be set once")
 	}
 	b.header.Coinbase = addr
-	// If EIP1559 is initialized then header.GasLimit is for the EIP1559 pool
-	// and the difference between the MaxGasEIP1559 and header.GasLimit is the limit for the legacy pool
-	// Once EIP1559 is finalized the header.GasLimit is the entire MaxGasEIP1559
-	// so no gas will be allocated to the legacy pool
+	// See core/gaspool.go for detials on how these gas limit values are calculated
+	b.gasPool = NewLegacyGasPool(b.config, b.header.Number, new(big.Int).SetUint64(b.header.GasLimit))
 	if b.config.IsEIP1559(b.header.Number) {
-		b.gasPool = new(GasPool).AddGas(b.config.EIP1559.MaxGas - b.header.GasLimit)
-		b.gasPool1559 = new(GasPool).AddGas(b.header.GasLimit)
-	} else { // If we are before EIP1559 activation then we use header.GasLimit for the legacy pool
-		b.gasPool = new(GasPool).AddGas(b.header.GasLimit)
+		b.gasPool1559 = NewEIP1559GasPool(b.config, b.header.Number, new(big.Int).SetUint64(b.header.GasLimit))
 	}
 }
 
@@ -258,8 +253,6 @@ func makeHeader(chain consensus.ChainReader, parent *types.Block, state *state.S
 	} else {
 		time = parent.Time() + 10 // block time is fixed at 10 seconds
 	}
-
-	gasLimit, baseFee := CalcGasLimitAndBaseFee(chain.Config(), parent, parent.GasLimit(), parent.GasLimit())
 	return &types.Header{
 		Root:       state.IntermediateRoot(chain.Config().IsEIP158(parent.Number())),
 		ParentHash: parent.Hash(),
@@ -270,8 +263,8 @@ func makeHeader(chain consensus.ChainReader, parent *types.Block, state *state.S
 			Difficulty: parent.Difficulty(),
 			UncleHash:  parent.UncleHash(),
 		}),
-		GasLimit: gasLimit,
-		BaseFee:  baseFee,
+		GasLimit: CalcGasLimit(parent, parent.GasLimit(), parent.GasLimit()),
+		BaseFee:  misc.CalcBaseFee(chain.Config(), parent.Header()),
 		Number:   new(big.Int).Add(parent.Number(), common.Big1),
 		Time:     time,
 	}

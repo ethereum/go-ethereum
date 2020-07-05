@@ -25,6 +25,7 @@ import (
 	"github.com/ethereum/go-ethereum/core/vm"
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/params"
+	"math/big"
 )
 
 // StateProcessor is a basic Processor, which takes care of transitioning
@@ -62,17 +63,11 @@ func (p *StateProcessor) Process(block *types.Block, statedb *state.StateDB, cfg
 		gp       *GasPool
 		gp1559   *GasPool
 	)
-	// If EIP1559 is initialized then header.GasLimit is for the EIP1559 pool
-	// and the difference between the MaxGasEIP1559 and header.GasLimit is the limit for the legacy pool
-	// Once EIP1559 is finalized the header.GasLimit is the entire MaxGasEIP1559
-	// so no gas will be allocated to the legacy pool
+	// See core/gaspool.go for detials on how these gas limit values are calculated
+	gp = NewLegacyGasPool(p.config, block.Number(), new(big.Int).SetUint64(block.GasLimit()))
 	if p.config.IsEIP1559(block.Number()) {
-		gp = new(GasPool).AddGas(p.config.EIP1559.MaxGas - block.GasLimit())
-		gp1559 = new(GasPool).AddGas(block.GasLimit())
-	} else { // If we are before EIP1559 activation then we use header.GasLimit for the legacy pool
-		gp = new(GasPool).AddGas(block.GasLimit())
+		gp1559 = NewEIP1559GasPool(p.config, block.Number(), new(big.Int).SetUint64(block.GasLimit()))
 	}
-
 	// Mutate the block and state according to any hard-fork specs
 	if p.config.DAOForkSupport && p.config.DAOForkBlock != nil && p.config.DAOForkBlock.Cmp(block.Number()) == 0 {
 		misc.ApplyDAOHardFork(statedb)
