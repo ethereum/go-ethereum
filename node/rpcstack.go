@@ -222,7 +222,6 @@ func newGzipHandler(next http.Handler) http.Handler {
 // NewWebsocketUpgradeHandler returns a websocket handler that serves an incoming request only if it contains an upgrade
 // request to the websocket protocol. If not, serves the the request with the http handler.
 func (hs *HTTPServer) NewWebsocketUpgradeHandler(h http.Handler, ws http.Handler) http.Handler {
-	// TODO make sure you protect the pointer
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if atomic.LoadInt32(&hs.WSAllowed) == 1 && isWebsocket(r) {
 			ws.ServeHTTP(w, r)

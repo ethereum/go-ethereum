@@ -147,6 +147,7 @@ func (api *PrivateAdminAPI) PeerEvents(ctx context.Context) (*rpc.Subscription, 
 func (api *PrivateAdminAPI) StartRPC(host *string, port *int, cors *string, apis *string, vhosts *string) (bool, error) {
 	api.node.lock.Lock()
 	defer api.node.lock.Unlock()
+
 	// set host, port, and endpoint
 	if host == nil {
 		h := DefaultHTTPHost
@@ -235,6 +236,7 @@ func (api *PrivateAdminAPI) StopRPC() (bool, error) {
 func (api *PrivateAdminAPI) StartWS(host *string, port *int, allowedOrigins *string, apis *string) (bool, error) {
 	api.node.lock.Lock()
 	defer api.node.lock.Unlock()
+
 	// check if an existing WS server already exists
 	for _, server := range api.node.httpServers {
 		if atomic.LoadInt32(&server.WSAllowed) == 1 {
@@ -256,7 +258,7 @@ func (api *PrivateAdminAPI) StartWS(host *string, port *int, allowedOrigins *str
 	// check if there is an existing server on the specified port, and if there is, enable ws on it
 	if server, exists := api.node.httpServers[endpoint]; exists {
 		// else configure ws on the existing server
-		atomic.AddInt32(&server.WSAllowed, 1)
+		atomic.StoreInt32(&server.WSAllowed, 1)
 		// configure origins
 		origins := api.node.config.WSOrigins
 		if allowedOrigins != nil {
@@ -281,7 +283,7 @@ func (api *PrivateAdminAPI) StartWS(host *string, port *int, allowedOrigins *str
 	// check if an HTTP server exists on the given endpoint, and if so, enable websocket on that HTTP server
 	existingServer := api.node.ExistingHTTPServer(endpoint)
 	if existingServer != nil {
-		atomic.AddInt32(&existingServer.WSAllowed, 1)
+		atomic.StoreInt32(&existingServer.WSAllowed, 1)
 		existingServer.WsOrigins = origins
 
 	}
@@ -324,14 +326,11 @@ func (api *PrivateAdminAPI) StopWS() (bool, error) {
 	defer api.node.lock.Unlock()
 
 	for _, httpServer := range api.node.httpServers {
-		if atomic.LoadInt32(&httpServer.WSAllowed) == 1 {
-			atomic.AddInt32(&httpServer.WSAllowed, int32(-1))
+		if atomic.SwapInt32(&httpServer.WSAllowed, 0) == 1 {
 			// if RPC is not enabled on the WS http server, shut it down
 			if atomic.LoadInt32(&httpServer.RPCAllowed) == 0 {
 				api.node.stopServer(httpServer)
-				return true, nil
 			}
-
 			return true, nil
 		}
 	}

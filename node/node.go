@@ -44,28 +44,21 @@ import (
 
 // Node is a container on which services can be registered.
 type Node struct {
-	eventmux *event.TypeMux // Event multiplexer used between the services of a stack
-	config   *Config
-	accman   *accounts.Manager
-
+	eventmux          *event.TypeMux // Event multiplexer used between the services of a stack
+	config            *Config
+	accman            *accounts.Manager
+	log               log.Logger
 	ephemeralKeystore string            // if non-empty, the key directory that will be removed by Stop
 	instanceDirLock   fileutil.Releaser // prevents concurrent use of instance directory
 
-	server *p2p.Server // Currently running P2P networking layer
-
-	lifecycles map[reflect.Type]Lifecycle // All registered backends, services, and auxiliary services that have a lifecycle
-
-	httpServers serverMap // serverMap stores information about the node's rpc, ws, and graphQL http servers.
-
-	rpcAPIs       []rpc.API   // List of APIs currently provided by the node
-	inprocHandler *rpc.Server // In-process RPC request handler to process the API requests
-
-	ipc *HTTPServer // Stores information about the ipc http server
-
-	stop chan struct{} // Channel to wait for termination notifications
-	lock sync.RWMutex
-
-	log log.Logger
+	lock          sync.RWMutex
+	stop          chan struct{}              // Channel to wait for termination notifications
+	server        *p2p.Server                // Currently running P2P networking layer
+	lifecycles    map[reflect.Type]Lifecycle // All registered backends, services, and auxiliary services that have a lifecycle
+	httpServers   serverMap                  // serverMap stores information about the node's rpc, ws, and graphQL http servers.
+	inprocHandler *rpc.Server                // In-process RPC request handler to process the API requests
+	rpcAPIs       []rpc.API                  // List of APIs currently provided by the node
+	ipc           *HTTPServer                // Stores information about the ipc http server
 }
 
 // New creates a new P2P node, ready for protocol registration.
@@ -158,13 +151,13 @@ func New(conf *Config) (*Node, error) {
 	}
 	if conf.WSHost != "" {
 		node.httpServers[conf.WSEndpoint()] = &HTTPServer{
-			WsOrigins:  conf.WSOrigins,
-			Whitelist:  conf.WSModules,
-			Srv:        rpc.NewServer(),
-			endpoint:   conf.WSEndpoint(),
-			host:       conf.WSHost,
-			port:       conf.WSPort,
-			WSAllowed:  1,
+			WsOrigins: conf.WSOrigins,
+			Whitelist: conf.WSModules,
+			Srv:       rpc.NewServer(),
+			endpoint:  conf.WSEndpoint(),
+			host:      conf.WSHost,
+			port:      conf.WSPort,
+			WSAllowed: 1,
 		}
 	}
 
