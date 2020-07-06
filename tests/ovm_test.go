@@ -4,7 +4,6 @@ import (
 	"bytes"
 	"encoding/binary"
 	"encoding/hex"
-	"encoding/json"
 	"fmt"
 	"io/ioutil"
 	"math/big"
@@ -44,76 +43,50 @@ const GAS_LIMIT = 15000000
 var ZERO_ADDRESS = common.HexToAddress("0000000000000000000000000000000000000000")
 var OTHER_FROM_ADDR = common.HexToAddress("8888888888888888888888888888888888888888")
 
-func TestPrintingStateAfterEmDeployment(t *testing.T) {
-	currentState := newState()
+// This function is used to generate a new state dump. Use if we need to update the EM.
+// func PrintStateDump(t *testing.T) {
+// 	currentState := newState()
 
-	// First we'll need to deploy an EM (because we don't have this auto deploying yet)
-	executionMgrInitcode, _ := hex.DecodeString(vm.ExecutionManagerInitcode)
-	applyMessageToState(currentState, ZERO_ADDRESS, GAS_LIMIT, executionMgrInitcode)
+// 	// First we'll need to deploy an EM (because we don't have this auto deploying yet)
+// 	executionMgrInitcode, _ := hex.DecodeString(vm.ExecutionManagerInitcode)
+// 	applyMessageToState(currentState, vm.ExecutionManagerDeployerAddress, ZERO_ADDRESS, GAS_LIMIT, executionMgrInitcode)
 
-	// Now print everything out
-	fmt.Println("\nDUMP INCOMING!")
-	var theDump state.Dump
-	theDumpMarshaled, _ := hex.DecodeString(vm.InitialOvmStateDump)
-	err := json.Unmarshal(theDumpMarshaled, &theDump)
-	if err != nil {
-		fmt.Println("Can't deserislize")
-	}
-	fmt.Println(theDump.Root)
-}
+// 	// Now print everything out
+// 	fmt.Println("\nDUMP INCOMING!")
+// 	var theDump state.Dump
+// 	theDumpMarshaled, _ := hex.DecodeString(vm.InitialOvmStateDump)
+// 	err := json.Unmarshal(theDumpMarshaled, &theDump)
+// 	if err != nil {
+// 		fmt.Println("Can't deserislize")
+// 	}
+// 	fmt.Println(theDump.Root)
+// }
 
-func TestContractCreation(t *testing.T) {
+func TestContractCreationAndSimpleStorageTxs(t *testing.T) {
 	currentState := newState()
 
 	// Next we've got to generate & apply a transaction which calls the EM to deploy a new contract
 	initCode, _ := hex.DecodeString("608060405234801561001057600080fd5b5060405161026b38038061026b8339818101604052602081101561003357600080fd5b8101908080519060200190929190505050806000806101000a81548173ffffffffffffffffffffffffffffffffffffffff021916908373ffffffffffffffffffffffffffffffffffffffff160217905550506101d7806100946000396000f3fe608060405234801561001057600080fd5b50600436106100365760003560e01c80633408f73a1461003b578063d3404b6d14610045575b600080fd5b61004361004f565b005b61004d6100fa565b005b600060e060405180807f6f766d534c4f4144282900000000000000000000000000000000000000000000815250600a0190506040518091039020901c905060008060009054906101000a900473ffffffffffffffffffffffffffffffffffffffff16905060405136600082378260181c81538260101c60018201538260081c60028201538260038201536040516207a1208136846000875af160008114156100f657600080fd5b3d82f35b600060e060405180807f6f766d5353544f52452829000000000000000000000000000000000000000000815250600b0190506040518091039020901c905060008060009054906101000a900473ffffffffffffffffffffffffffffffffffffffff16905060405136600082378260181c81538260101c60018201538260081c600282015382600382015360008036836000865af1600081141561019c57600080fd5b5050505056fea265627a7a72315820311a406c97055eec367b660092882e1a174e14333416a3de384439293b7b129264736f6c63430005100032000000000000000000000000a193e42526f1fea8c99af609dceabf30c1c29faa")
-	executionManagerAbi, _ := abi.JSON(strings.NewReader(vm.RawExecutionManagerAbi))
-	deployContractCalldata, _ := executionManagerAbi.Pack(
-		"executeTransaction",
-		big.NewInt(1),
-		new(big.Int),
-		common.HexToAddress(""),
-		initCode,
-		OTHER_FROM_ADDR,
-		common.HexToAddress(""),
-		true,
-	)
 
 	fmt.Println("\n\nApplying CREATE SIMPLE STORAGE Tx to State.")
-	applyMessageToState(currentState, vm.ExecutionManagerAddress, GAS_LIMIT, deployContractCalldata)
+	applyMessageToState(currentState, OTHER_FROM_ADDR, ZERO_ADDRESS, GAS_LIMIT, initCode)
 	fmt.Println("Complete.")
 
 	fmt.Println("\n\nApplying CALL SIMPLE STORAGE Tx to State.")
+	newContractAddr := common.HexToAddress("65486c8ec9167565eBD93c94ED04F0F71d1b5137")
 	setStorageInnerCalldata, _ := hex.DecodeString("d3404b6d99999999999999999999999999999999999999999999999999999999999999990101010101010101010101010101010101010101010101010101010101010101")
 	getStorageInnerCalldata, _ := hex.DecodeString("3408f73a9999999999999999999999999999999999999999999999999999999999999999")
 
-	// Set storage transaction calldata
-	setStorageTxCalldata, _ := executionManagerAbi.Pack(
-		"executeTransaction",
-		big.NewInt(1),
-		new(big.Int),
-		common.HexToAddress("65486c8ec9167565eBD93c94ED04F0F71d1b5137"),
-		setStorageInnerCalldata,
-		OTHER_FROM_ADDR,
-		common.HexToAddress(""),
-		true,
-	)
-	// Get storage transaction calldata
-	getStorageTxCalldata, _ := executionManagerAbi.Pack(
-		"executeTransaction",
-		big.NewInt(1),
-		new(big.Int),
-		common.HexToAddress("65486c8ec9167565eBD93c94ED04F0F71d1b5137"),
-		getStorageInnerCalldata,
-		OTHER_FROM_ADDR,
-		common.HexToAddress(""),
-		true,
-	)
 	fmt.Println("\n\nApplying `set()` SIMPLE STORAGE Tx to State.")
-	applyMessageToState(currentState, vm.ExecutionManagerAddress, GAS_LIMIT, setStorageTxCalldata)
+	applyMessageToState(currentState, OTHER_FROM_ADDR, newContractAddr, GAS_LIMIT, setStorageInnerCalldata)
 	fmt.Println("\n\nApplying `get()` SIMPLE STORAGE Tx to State.")
-	applyMessageToState(currentState, vm.ExecutionManagerAddress, GAS_LIMIT, getStorageTxCalldata)
+	returnValue, _, _, _ := applyMessageToState(currentState, OTHER_FROM_ADDR, newContractAddr, GAS_LIMIT, getStorageInnerCalldata)
 	fmt.Println("Complete.")
+
+	expectedReturnValue, _ := hex.DecodeString("0101010101010101010101010101010101010101010101010101010101010101")
+	if !bytes.Equal(returnValue[:], expectedReturnValue) {
+		t.Errorf("Expected %020x; got %020x", returnValue[:], expectedReturnValue)
+	}
 }
 
 func TestSloadAndStore(t *testing.T) {
@@ -260,14 +233,12 @@ func newState() *state.StateDB {
 	return state
 }
 
-func applyMessageToState(currentState *state.StateDB, to common.Address, gasLimit uint64, data []byte) {
+func applyMessageToState(currentState *state.StateDB, from common.Address, to common.Address, gasLimit uint64, data []byte) ([]byte, uint64, bool, error) {
 	header := &types.Header{
 		Number:     big.NewInt(0),
 		Difficulty: big.NewInt(0),
 	}
 	gasPool := core.GasPool(100000000)
-	// Default from address
-	from := vm.ExecutionManagerDeployerAddress
 	// Generate the message
 	message := types.Message{}
 	if to == ZERO_ADDRESS {
@@ -299,12 +270,14 @@ func applyMessageToState(currentState *state.StateDB, to common.Address, gasLimi
 	context := core.NewEVMContext(message, header, nil, &from)
 	evm := vm.NewEVM(context, currentState, &chainConfig, vm.Config{})
 
-	_, gasUsed, failed, err := core.ApplyMessage(evm, message, &gasPool)
+	returnValue, gasUsed, failed, err := core.ApplyMessage(evm, message, &gasPool)
 	// fmt.Println("Return val:", returnValue, "Gas used:", gasUsed, "Failed:", failed, "Error:", err)
 	fmt.Println("Return val: [HIDDEN]", "Gas used:", gasUsed, "Failed:", failed, "Error:", err)
 
 	commitHash, commitErr := currentState.Commit(false)
 	fmt.Println("Commit hash:", commitHash, "Commit err:", commitErr)
+
+	return returnValue, gasUsed, failed, err
 }
 
 func call(t *testing.T, currentState *state.StateDB, address common.Address, callData []byte) ([]byte, error) {

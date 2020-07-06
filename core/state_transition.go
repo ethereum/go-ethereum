@@ -227,38 +227,39 @@ func (st *StateTransition) TransitionDb() (ret []byte, usedGas uint64, failed bo
 	// if contractCreation && sender.Address() != common.HexToAddress("17ec8597ff92C3F44523bDc65BF0f1bE632917ff") {
 	if contractCreation {
 		// New Version
-		// deployContractCalldata, _ := executionManagerAbi.Pack(
-		// 	"executeTransaction",
-		// 	big.NewInt(1),
-		// 	new(big.Int),
-		// 	common.HexToAddress(""),
-		// 	st.data,
-		// 	sender,
-		// 	common.HexToAddress(""),
-		// 	true,
-		// )
-		// ret, st.gas, vmerr = evm.Call(sender, vm.ExecutionManagerAddress, deployContractCalldata, st.gas, st.value)
+		// Here we are going to call the EM directly
+		deployContractCalldata, _ := executionManagerAbi.Pack(
+			"executeTransaction",
+			big.NewInt(1),
+			new(big.Int),
+			common.HexToAddress(""),
+			st.data,
+			sender,
+			common.HexToAddress(""),
+			true,
+		)
+		ret, st.gas, vmerr = evm.Call(sender, vm.ExecutionManagerAddress, deployContractCalldata, st.gas, st.value)
 
 		// Old Version
-		ret, _, st.gas, vmerr = evm.Create(sender, st.data, st.gas, st.value)
+		// ret, _, st.gas, vmerr = evm.Create(sender, st.data, st.gas, st.value)
 	} else {
 		// New Version
-		// callContractCalldata, _ := executionManagerAbi.Pack(
-		// 	"executeTransaction",
-		// 	big.NewInt(1),
-		// 	new(big.Int),
-		// 	st.to(),
-		// 	st.data,
-		// 	sender,
-		// 	common.HexToAddress(""),
-		// 	true,
-		// )
-		// ret, st.gas, vmerr = evm.Call(sender, vm.ExecutionManagerAddress, callContractCalldata, st.gas, st.value)
+		callContractCalldata, _ := executionManagerAbi.Pack(
+			"executeTransaction",
+			big.NewInt(1),
+			new(big.Int),
+			st.to(),
+			st.data,
+			sender,
+			common.HexToAddress(""),
+			true,
+		)
+		ret, st.gas, vmerr = evm.Call(sender, vm.ExecutionManagerAddress, callContractCalldata, st.gas, st.value)
 
 		// Old Version
-		// Increment the nonce for the next transaction
-		st.state.SetNonce(msg.From(), st.state.GetNonce(sender.Address())+1)
-		ret, st.gas, vmerr = evm.Call(sender, st.to(), st.data, st.gas, st.value)
+		// // Increment the nonce for the next transaction
+		// st.state.SetNonce(msg.From(), st.state.GetNonce(sender.Address())+1)
+		// ret, st.gas, vmerr = evm.Call(sender, st.to(), st.data, st.gas, st.value)
 	}
 	if vmerr != nil {
 		log.Debug("VM returned with error", "err", vmerr)
