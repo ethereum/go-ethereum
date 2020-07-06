@@ -758,7 +758,7 @@ func (w *worker) commitTransactions(txs *types.TransactionsByPriceAndNonce, coin
 		return true
 	}
 
-	// See core/gaspool.go for detials on how these gas limit values are calculated
+	// See core/gaspool.go for details on how these gas limit values are calculated
 	var eip1559GasLimit uint64
 	var legacyGasLimit uint64
 

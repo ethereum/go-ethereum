@@ -924,11 +924,11 @@ func TestTransactionDoubleNonceEIP1559(t *testing.T) {
 	resetState()
 
 	signer := types.HomesteadSigner{}
-	tx1, _ := types.SignTx(types.NewTransaction(0, common.Address{}, big.NewInt(100), 100000, big.NewInt(5), nil, nil, nil), signer, key)
+	tx1, _ := types.SignTx(types.NewTransaction(0, common.Address{}, big.NewInt(100), 500000, big.NewInt(5), nil, nil, nil), signer, key)
 	tx2, _ := types.SignTx(types.NewTransaction(0, common.Address{}, big.NewInt(100), 1000000, nil, nil, big.NewInt(2), big.NewInt(10)), signer, key)
 	tx3, _ := types.SignTx(types.NewTransaction(0, common.Address{}, big.NewInt(100), 1000000, nil, nil, big.NewInt(1), big.NewInt(10)), signer, key)
-	tx4, _ := types.SignTx(types.NewTransaction(0, common.Address{}, big.NewInt(100), 1000000, big.NewInt(6), nil, nil, nil), signer, key)
-	tx5, _ := types.SignTx(types.NewTransaction(0, common.Address{}, big.NewInt(100), 1000000, big.NewInt(8), nil, nil, nil), signer, key)
+	tx4, _ := types.SignTx(types.NewTransaction(0, common.Address{}, big.NewInt(100), 100000, big.NewInt(6), nil, nil, nil), signer, key)
+	tx5, _ := types.SignTx(types.NewTransaction(0, common.Address{}, big.NewInt(100), 500000, big.NewInt(100), nil, nil, nil), signer, key)
 
 	// Add the first two transaction, ensure higher priced stays only
 	if replace, err := pool.add(tx1, false); err != nil || replace {
@@ -979,7 +979,7 @@ func TestTransactionDoubleNonceEIP1559(t *testing.T) {
 		t.Error("expected 1 pending transactions, got", pool.pending[addr].Len())
 	}
 	if tx := pool.pending[addr].txs.items[0]; tx.Hash() != tx5.Hash() {
-		t.Errorf("transaction mismatch: have %x, want %x", tx.Hash(), tx2.Hash())
+		t.Errorf("transaction mismatch: have %x, want %x", tx.Hash(), tx5.Hash())
 	}
 	// Ensure the total transaction count is correct
 	if pool.all.Count() != 1 {
@@ -1311,7 +1311,7 @@ func TestTransactionDropping(t *testing.T) {
 	}
 }
 
-func TestTransactionDroppingEIP1559(t *testing.T) {
+func TestTransactionDroppingEIP15591(t *testing.T) {
 	t.Parallel()
 
 	// Create a test account and fund it
@@ -1383,22 +1383,20 @@ func TestTransactionDroppingEIP1559(t *testing.T) {
 		t.Errorf("total transaction mismatch: have %d, want %d", pool.all.Count(), 4)
 	}
 	// Reduce the block gas limit, check that invalidated transactions are dropped
-	// After EIP1559 initialization, the legacy gas limit is `params.MaxGasEIP1559 - gasLimit` and the EIP1559 gas limit is `gasLimit`
-	// As such by reducing the `gasLimit` we increase the legacy gas limit, this must be accounted for in these tests (tx1 is not over-gased)
-	pool.chain.(*testBlockChain).gasLimit = 100
+	pool.chain.(*testBlockChain).gasLimit = 200
 	<-pool.requestReset(nil, nil)
 
 	if _, ok := pool.pending[account].txs.items[tx0.Nonce()]; !ok {
 		t.Errorf("funded pending transaction missing: %v", tx0)
 	}
-	if _, ok := pool.pending[account].txs.items[tx1.Nonce()]; !ok {
-		t.Errorf("funded pending transaction missing: %v", tx1)
+	if _, ok := pool.pending[account].txs.items[tx1.Nonce()]; ok {
+		t.Errorf("over-gased queued transaction present: %v", tx1)
 	}
 	if _, ok := pool.queue[account].txs.items[tx10.Nonce()]; !ok {
 		t.Errorf("funded queued transaction missing: %v", tx10)
 	}
-	if _, ok := pool.queue[account].txs.items[tx11.Nonce()]; ok {
-		t.Errorf("over-gased queued transaction present: %v", tx11)
+	if _, ok := pool.queue[account].txs.items[tx11.Nonce()]; !ok {
+		t.Errorf("funded queued transaction missing: %v", tx11)
 	}
 	if pool.all.Count() != 3 {
 		t.Errorf("total transaction mismatch: have %d, want %d", pool.all.Count(), 3)
@@ -1477,7 +1475,7 @@ func TestTransactionDroppingEIP1559Finalized(t *testing.T) {
 		t.Errorf("total transaction mismatch: have %d, want %d", pool.all.Count(), 4)
 	}
 	// Reduce the block gas limit, check that invalidated transactions are dropped
-	pool.chain.(*testBlockChain).gasLimit = 100
+	pool.chain.(*testBlockChain).gasLimit = 50
 	<-pool.requestReset(nil, nil)
 
 	if _, ok := pool.pending[account].txs.items[tx0.Nonce()]; !ok {

@@ -51,11 +51,11 @@ func newStatePrefetcher(config *params.ChainConfig, bc *BlockChain, engine conse
 // only goal is to pre-cache transaction signatures and state trie nodes.
 func (p *statePrefetcher) Prefetch(block *types.Block, statedb *state.StateDB, cfg vm.Config, interrupt *uint32) {
 	var (
-		header  = block.Header()
-		gp *GasPool
-		gp1559  *GasPool
+		header = block.Header()
+		gp     *GasPool
+		gp1559 *GasPool
 	)
-	// See core/gaspool.go for detials on how these gas limit values are calculated
+	// See core/gaspool.go for details on how these gas limit values are calculated
 	gp = NewLegacyGasPool(p.config, block.Number(), new(big.Int).SetUint64(block.GasLimit()))
 	if p.config.IsEIP1559(block.Number()) {
 		gp1559 = NewEIP1559GasPool(p.config, block.Number(), new(big.Int).SetUint64(block.GasLimit()))

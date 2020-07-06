@@ -361,7 +361,6 @@ func (l *txList) Filter(costLimit *big.Int, legacyGasLimit, eip1559GasLimit uint
 	l.costcap = new(big.Int).Set(costLimit) // Lower the caps to the thresholds
 	l.legacyGasCap = legacyGasLimit
 	l.eip1559GasCap = eip1559GasLimit
-
 	// Filter out all the transactions above the account's funds
 	removed := l.txs.Filter(func(tx *types.Transaction) bool {
 		return tx.Cost(baseFee).Cmp(costLimit) > 0 || (tx.GasPrice() != nil && tx.Gas() > legacyGasLimit) || (tx.GasPremium()) != nil && tx.Gas() > eip1559GasLimit

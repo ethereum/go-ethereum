@@ -135,12 +135,12 @@ const (
 	Bls12381MapG1Gas          uint64 = 5500   // Gas price for BLS12-381 mapping field element to G1 operation
 	Bls12381MapG2Gas          uint64 = 110000 // Gas price for BLS12-381 mapping field element to G2 operation
 
-	EIP1559InitialBaseFee           uint64 = 1000000000 // Wei used as the initial BaseFee
-	EIP1559ForkBlockNumber          uint64 = 110000000  // TBD
-	EIP1559MigrationBlockDuration   uint64 = 800000
-	EIP1559ForkFinalizedBlockNumber        = EIP1559ForkBlockNumber + EIP1559MigrationBlockDuration
-	EIP1559BaseFeeMaxChangeDenominator     uint64 = 8
-	EIP1559SlackCoefficient                uint64 = 2
+	EIP1559InitialBaseFee              uint64 = 1000000000 // Wei used as the initial BaseFee
+	EIP1559ForkBlockNumber             uint64 = 110000000  // TBD
+	EIP1559MigrationBlockDuration      uint64 = 800000
+	EIP1559ForkFinalizedBlockNumber           = EIP1559ForkBlockNumber + EIP1559MigrationBlockDuration
+	EIP1559BaseFeeMaxChangeDenominator uint64 = 8
+	EIP1559SlackCoefficient            uint64 = 2
 )
 
 // Gas discount table for BLS12-381 G1 and G2 multi exponentiation operations

@@ -360,19 +360,19 @@ type ChainConfig struct {
 }
 
 type EIP1559Config struct {
-	InitialBaseFee              uint64
-	ForkBlockNumber             uint64
-	ForkFinalizedBlockNumber    uint64
-	MigrationBlockDuration      uint64
+	InitialBaseFee                     uint64
+	ForkBlockNumber                    uint64
+	ForkFinalizedBlockNumber           uint64
+	MigrationBlockDuration             uint64
 	EIP1559BaseFeeMaxChangeDenominator uint64
 	EIP1559SlackCoefficient            uint64
 }
 
 var DefaultEIP1559Config = &EIP1559Config{
-	InitialBaseFee:              EIP1559InitialBaseFee,
-	ForkBlockNumber:             EIP1559ForkBlockNumber,
-	ForkFinalizedBlockNumber:    EIP1559ForkFinalizedBlockNumber,
-	MigrationBlockDuration:      EIP1559MigrationBlockDuration,
+	InitialBaseFee:                     EIP1559InitialBaseFee,
+	ForkBlockNumber:                    EIP1559ForkBlockNumber,
+	ForkFinalizedBlockNumber:           EIP1559ForkFinalizedBlockNumber,
+	MigrationBlockDuration:             EIP1559MigrationBlockDuration,
 	EIP1559BaseFeeMaxChangeDenominator: EIP1559BaseFeeMaxChangeDenominator,
 	EIP1559SlackCoefficient:            EIP1559SlackCoefficient,
 }
