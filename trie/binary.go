@@ -48,23 +48,27 @@ type (
 	// BinaryTrie is a node with two children ("left" and "right")
 	// It can be prefixed by bits that are common to all subtrie
 	// keys and it can also hold a value.
-	BinaryTrie struct {
+	binBranchNode struct {
 		left  binaryNode
 		right binaryNode
+
+		// "Extension" part: a pointer to the leaf, as well as a
+		// start offset into the key and its length.
+		leafPtr   *binLeafNode
+		startBit  int
+		prefixLen int
+	}
+
+	binLeafNode struct {
+		key   []byte
 		value []byte
 
 		// Used to send (hash, preimage) pairs when hashing
 		CommitCh chan BinaryHashPreimage
 
-		// This is the binary equivalent of "extension nodes":
-		// binary nodes can have a prefix that is common to all
-		// subtrees. The prefix is defined by a series of bytes,
-		// and two offsets marking the start bit and the end bit
-		// of the range.
-		prefix   []byte
 		startBit int
-		endBit   int // Technically, this is the "1st bit past the end"
 	}
+
 	hashBinaryNode []byte
 )
 
