@@ -17,6 +17,8 @@
 package core
 
 import (
+	"math/big"
+
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/consensus"
 	"github.com/ethereum/go-ethereum/consensus/misc"
@@ -25,7 +27,6 @@ import (
 	"github.com/ethereum/go-ethereum/core/vm"
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/params"
-	"math/big"
 )
 
 // StateProcessor is a basic Processor, which takes care of transitioning
@@ -63,7 +64,7 @@ func (p *StateProcessor) Process(block *types.Block, statedb *state.StateDB, cfg
 		gp       *GasPool
 		gp1559   *GasPool
 	)
-	// See core/gaspool.go for detials on how these gas limit values are calculated
+	// See core/gaspool.go for details on how these gas limit values are calculated
 	gp = NewLegacyGasPool(p.config, block.Number(), new(big.Int).SetUint64(block.GasLimit()))
 	if p.config.IsEIP1559(block.Number()) {
 		gp1559 = NewEIP1559GasPool(p.config, block.Number(), new(big.Int).SetUint64(block.GasLimit()))

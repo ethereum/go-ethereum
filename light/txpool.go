@@ -19,10 +19,11 @@ package light
 import (
 	"context"
 	"fmt"
-	"github.com/ethereum/go-ethereum/consensus/misc"
 	"math/big"
 	"sync"
 	"time"
+
+	"github.com/ethereum/go-ethereum/consensus/misc"
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core"

@@ -72,8 +72,8 @@ func CalcBaseFee(config *params.ChainConfig, parent *types.Header) *big.Int {
 	}
 
 	// Otherwise,
-	// BASEFEE = PARENT_BASEFEE + PARENT_BASEFEE * delta // EIP1559_GAS_TARGET // BASEFEE_MAX_CHANGE_DENOMINATOR
-	// Where delta = block.gas_used - EIP1559_GAS_TARGET
+	// BASEFEE = PARENT_BASEFEE + PARENT_BASEFEE * delta // PARENT_EIP1559_GAS_TARGET // BASEFEE_MAX_CHANGE_DENOMINATOR
+	// Where delta = parent.GasUsed - PARENT_EIP1559_GAS_TARGET
 	parentGasTarget := CalcEIP1559GasTarget(config, parent.Number, new(big.Int).SetUint64(parent.GasLimit))
 	delta := new(big.Int).Sub(new(big.Int).SetUint64(parent.GasUsed), parentGasTarget)
 	mul := new(big.Int).Mul(parent.BaseFee, delta)

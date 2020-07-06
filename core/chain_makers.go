@@ -59,7 +59,7 @@ func (b *BlockGen) SetCoinbase(addr common.Address) {
 		panic("coinbase can only be set once")
 	}
 	b.header.Coinbase = addr
-	// See core/gaspool.go for detials on how these gas limit values are calculated
+	// See core/gaspool.go for details on how these gas limit values are calculated
 	b.gasPool = NewLegacyGasPool(b.config, b.header.Number, new(big.Int).SetUint64(b.header.GasLimit))
 	if b.config.IsEIP1559(b.header.Number) {
 		b.gasPool1559 = NewEIP1559GasPool(b.config, b.header.Number, new(big.Int).SetUint64(b.header.GasLimit))
