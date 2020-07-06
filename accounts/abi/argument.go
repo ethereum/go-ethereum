@@ -83,39 +83,8 @@ func (arguments Arguments) Unpack(data []byte) ([]interface{}, error) {
 		}
 		// Nothing to unmarshal, return default arguments
 		return arguments.makeDefaulArgs(), nil
-	} /*
-		if len(arguments) > 1 {
-			args, err := arguments.UnpackValues(data)
-			if err != nil {
-				return args, err
-			}
-			return arguments.createStruct(args)
-		}*/
+	}
 	return arguments.UnpackValues(data)
-}
-
-func (arguments Arguments) createStruct(values []interface{}) ([]interface{}, error) {
-	var fields []reflect.StructField
-	for _, arg := range arguments {
-		fields = append(fields, reflect.StructField{
-			Name: ToCamelCase(arg.Name), // reflect.StructOf will panic for any exported field.
-			Type: arg.Type.getType(),
-			Tag:  reflect.StructTag("json:\"" + arg.Name + "\""),
-		})
-	}
-	typ := reflect.New(reflect.StructOf(fields)).Elem()
-	for i, val := range values {
-		field := typ.Field(i)
-		if !field.IsValid() {
-			return arguments.makeDefaulArgs(), fmt.Errorf("abi: field %v not valid", i)
-		}
-		if err := set(field, reflect.ValueOf(val)); err != nil {
-			return arguments.makeDefaulArgs(), err
-		}
-	}
-	ret := make([]interface{}, 1)
-	ret[0] = typ.Interface()
-	return ret, nil
 }
 
 func (arguments Arguments) makeDefaulArgs() []interface{} {
