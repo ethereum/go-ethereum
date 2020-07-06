@@ -48,25 +48,23 @@ type (
 	// BinaryTrie is a node with two children ("left" and "right")
 	// It can be prefixed by bits that are common to all subtrie
 	// keys and it can also hold a value.
-	binBranchNode struct {
+	BinaryTrie struct {
 		left  binaryNode
 		right binaryNode
 
-		// "Extension" part: a pointer to the leaf, as well as a
-		// start offset into the key and its length.
-		leafPtr   *binLeafNode
-		startBit  int
-		prefixLen int
-	}
-
-	binLeafNode struct {
-		key   []byte
 		value []byte
 
 		// Used to send (hash, preimage) pairs when hashing
 		CommitCh chan BinaryHashPreimage
 
+		// This is the binary equivalent of "extension nodes":
+		// binary nodes can have a prefix that is common to all
+		// subtrees. The prefix is defined by a series of bytes,
+		// and two offsets marking the start bit and the end bit
+		// of the range.
+		prefix   []byte
 		startBit int
+		endBit   int // Technically, this is the "1st bit past the end"
 	}
 
 	hashBinaryNode []byte
@@ -244,31 +242,40 @@ type BinaryDBNode struct {
 // that of Commit, and that of Hash otherwise.
 func (t *BinaryTrie) hash() []byte {
 	var payload bytes.Buffer
-
-	// Calculate the hash of both subtrees
-	var dbnode BinaryDBNode
-	if t.left != nil {
-		dbnode.Left = t.left.Hash()
-		t.left = hashBinaryNode(dbnode.Left)
-	}
-	if t.right != nil {
-		dbnode.Right = t.right.Hash()
-		t.right = hashBinaryNode(dbnode.Right)
-	}
-
-	dbnode.Value = t.value
-	dbnode.Bitprefix = t.bitPrefix()
-
-	// Create the "bitprefix" which indicates which are the start and
-	// end bit inside the prefix value.
-	rlp.Encode(&payload, dbnode)
-	value := payload.Bytes()
-
 	hasher := sha3.NewLegacyKeccak256()
+
+	// Check that either value is set or left+right are
+	if t.value != nil && (t.left != nil || t.right != nil) {
+		panic("Value and children can not both be set")
+	}
+
+	if t.value == nil {
+		// Calculate the hash of both subtrees
+		payload.Write(t.left.Hash())
+		payload.Write(t.right.Hash())
+	} else {
+		payload.Write([]byte{0})
+		payload.Write(t.value)
+	}
+	value := payload.Bytes()
 	io.Copy(hasher, &payload)
 	h := hasher.Sum(nil)
 	if t.CommitCh != nil {
 		t.CommitCh <- BinaryHashPreimage{Key: h, Value: value}
+	}
+
+	if t.prefix != nil {
+		hasher.Reset()
+		payload.Reset()
+		payload.Write(t.bitPrefix())
+		payload.Write(h)
+		value = payload.Bytes()
+		io.Copy(hasher, &payload)
+		h = hasher.Sum(nil)
+
+		if t.CommitCh != nil {
+			t.CommitCh <- BinaryHashPreimage{Key: h, Value: value}
+		}
 	}
 	return h
 }
