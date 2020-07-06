@@ -126,7 +126,7 @@ type Config struct {
 	LightIngress int  `toml:",omitempty"` // Incoming bandwidth limit for light servers
 	LightEgress  int  `toml:",omitempty"` // Outgoing bandwidth limit for light servers
 	LightPeers   int  `toml:",omitempty"` // Maximum number of LES client peers
-	LightPrune   bool `toml:",omitempty"` // Whether to enable light chain pruning
+	LightNoPrune bool `toml:",omitempty"` // Whether to disable light chain pruning
 
 	// Ultra Light client options
 	UltraLightServers      []string `toml:",omitempty"` // List of trusted ultra light servers

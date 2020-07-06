@@ -282,9 +282,9 @@ var (
 		Name:  "ulc.onlyannounce",
 		Usage: "Ultra light server sends announcements only",
 	}
-	LightPruneFlag = cli.BoolFlag{
-		Name:  "light.prune",
-		Usage: "Enable ancient light chain data pruning",
+	LightNoPruneFlag = cli.BoolFlag{
+		Name:  "light.nopruning",
+		Usage: "Disable ancient light chain data pruning",
 	}
 	// Ethash settings
 	EthashCacheDirFlag = DirectoryFlag{
@@ -1071,8 +1071,8 @@ func setLes(ctx *cli.Context, cfg *eth.Config) {
 	if ctx.GlobalIsSet(UltraLightOnlyAnnounceFlag.Name) {
 		cfg.UltraLightOnlyAnnounce = ctx.GlobalBool(UltraLightOnlyAnnounceFlag.Name)
 	}
-	if ctx.GlobalIsSet(LightPruneFlag.Name) {
-		cfg.LightPrune = ctx.GlobalBool(LightPruneFlag.Name)
+	if ctx.GlobalIsSet(LightNoPruneFlag.Name) {
+		cfg.LightNoPrune = ctx.GlobalBool(LightNoPruneFlag.Name)
 	}
 }
 
