@@ -542,7 +542,7 @@ func newClientServerEnv(t *testing.T, blocks int, protocol int, callback indexer
 		}
 		select {
 		case <-done:
-		case <-time.After(3 * time.Second):
+		case <-time.After(10 * time.Second):
 			t.Fatal("test peer did not connect and sync within 3s")
 		}
 	}

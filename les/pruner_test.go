@@ -46,7 +46,7 @@ func TestLightPruner(t *testing.T) {
 	// checkDB iterates the chain with given prefix, resolves the block number
 	// with given callback and ensures this entry should exist or not.
 	checkDB := func(from, to uint64, prefix []byte, resolve func(key, value []byte) *uint64, exist bool) bool {
-		it := client.db.NewIteratorWithPrefix(prefix)
+		it := client.db.NewIterator(prefix, nil)
 		defer it.Release()
 
 		var next = from
