@@ -110,16 +110,7 @@ func (te *testenv) checkPong(reply v4wire.Packet, pingHash []byte) error {
 	}
 	wantEndpoint := te.localEndpoint(te.l1)
 	if !reflect.DeepEqual(pong.To, wantEndpoint) {
-		// If check failed for internal IP, check for public IP
-		myPublicIP, err := getMyPublicIP()
-		if err != nil {
-			return err
-		}
-		ipStr := myPublicIP.String()
-		pongToStr := pong.To.IP.String()
-		if ipStr != pongToStr {
-			return fmt.Errorf("PONG 'to' IP is wrong: got %v, want %v", pongToStr, ipStr)
-		}
+		return fmt.Errorf("PONG 'to' endpoint mismatch: got %+v, want %+v", pong.To, wantEndpoint)
 	}
 	if v4wire.Expired(pong.Expiration) {
 		return fmt.Errorf("PONG is expired (%v)", pong.Expiration)

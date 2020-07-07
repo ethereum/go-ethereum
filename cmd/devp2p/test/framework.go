@@ -19,9 +19,7 @@ package test
 import (
 	"crypto/ecdsa"
 	"fmt"
-	"io/ioutil"
 	"net"
-	"net/http"
 	"os"
 	"syscall"
 	"time"
@@ -140,29 +138,6 @@ func contains(ns []v4wire.Node, key v4wire.Pubkey) bool {
 		}
 	}
 	return false
-}
-
-// Get IP from an external service via http
-func getMyPublicIP() (net.IP, error) {
-	url := "https://api.ipify.org?format=text" // we are using a pulib IP API, we're using ipify here, below are some others
-	// https://www.ipify.org
-	// http://myexternalip.com
-	// http://api.ident.me
-	// http://whatismyipaddress.com/api
-	resp, err := http.Get(url)
-	if err != nil {
-		panic(err)
-	}
-	defer resp.Body.Close()
-	ipBytes, err := ioutil.ReadAll(resp.Body)
-	if err != nil {
-		return nil, err
-	}
-	ip := net.ParseIP(string(ipBytes))
-	if ip == nil {
-		return nil, fmt.Errorf("Wrong IP %v", string(ipBytes))
-	}
-	return ip, nil
 }
 
 func getMyLocalIP() (string, error) {
