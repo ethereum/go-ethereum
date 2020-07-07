@@ -76,13 +76,15 @@ func (te *testenv) close() {
 	te.l2.Close()
 }
 
-func (te *testenv) send(c net.PacketConn, req v4wire.Packet) ([]byte, error) {
+func (te *testenv) send(c net.PacketConn, req v4wire.Packet) []byte {
 	packet, hash, err := v4wire.Encode(te.key, req)
 	if err != nil {
-		return hash, err
+		panic(fmt.Errorf("can't encode %v packet: %v", req.Name(), err))
 	}
-	_, err = c.WriteTo(packet, te.remoteAddr)
-	return hash, err
+	if _, err := c.WriteTo(packet, te.remoteAddr); err != nil {
+		panic(fmt.Errorf("can't send %v: %v", req.Name(), err))
+	}
+	return hash
 }
 
 func (te *testenv) read(c net.PacketConn) (v4wire.Packet, []byte, error) {
