@@ -111,7 +111,7 @@ func New(conf *Config) (*Node, error) {
 
 	// Initialize the p2p server. This creates the node key and
 	// discovery databases.
-	node.server = &p2p.Server{Config: conf.P2P} // TODO add init step for p2p server
+	node.server = &p2p.Server{Config: conf.P2P}
 	node.server.Config.PrivateKey = node.config.NodeKey()
 	node.server.Config.Name = node.config.NodeName()
 	node.server.Config.Logger = node.log
@@ -284,8 +284,6 @@ func (n *Node) Start() error {
 		return convertFileLockError(err)
 	}
 	n.log.Info("Starting peer-to-peer node", "instance", n.server.Name)
-
-	// TODO running p2p server needs to somehow be added to the backend
 
 	// Configure the RPC interfaces
 	if err := n.configureRPC(); err != nil {
@@ -597,7 +595,7 @@ func (n *Node) WSEndpoint() string {
 		}
 	}
 
-	return n.config.WSEndpoint() // TODO should it return the endpoint from the node's config? Or just an empty string?
+	return n.config.WSEndpoint()
 }
 
 // EventMux retrieves the event multiplexer used by all the network services in
