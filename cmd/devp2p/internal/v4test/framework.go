@@ -27,15 +27,16 @@ import (
 	"github.com/ethereum/go-ethereum/p2p/enode"
 )
 
+const waitTime = 300 * time.Millisecond
+
 type testenv struct {
 	l1, l2     net.PacketConn
 	key        *ecdsa.PrivateKey
 	remote     *enode.Node
 	remoteAddr *net.UDPAddr
-	waitTime   int
 }
 
-func newTestEnv(remote string, waitTime int, listen1, listen2 string) *testenv {
+func newTestEnv(remote string, listen1, listen2 string) *testenv {
 	l1, err := net.ListenPacket("udp", fmt.Sprintf("%v:0", listen1))
 	if err != nil {
 		panic(err)
@@ -67,7 +68,7 @@ func newTestEnv(remote string, waitTime int, listen1, listen2 string) *testenv {
 		node = enode.NewV4(node.Pubkey(), ip, tcpPort, udpPort)
 	}
 	addr := &net.UDPAddr{IP: node.IP(), Port: node.UDP()}
-	return &testenv{l1, l2, key, node, addr, waitTime}
+	return &testenv{l1, l2, key, node, addr}
 }
 
 func (te *testenv) close() {
@@ -86,7 +87,7 @@ func (te *testenv) send(c net.PacketConn, req v4wire.Packet) ([]byte, error) {
 
 func (te *testenv) read(c net.PacketConn) (v4wire.Packet, []byte, error) {
 	buf := make([]byte, 2048)
-	if err := c.SetReadDeadline(time.Now().Add(time.Duration(te.waitTime) * time.Millisecond)); err != nil {
+	if err := c.SetReadDeadline(time.Now().Add(waitTime)); err != nil {
 		return nil, nil, err
 	}
 	n, _, err := c.ReadFrom(buf)
