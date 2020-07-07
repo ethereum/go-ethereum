@@ -20,8 +20,6 @@ import (
 	"crypto/ecdsa"
 	"fmt"
 	"net"
-	"os"
-	"syscall"
 	"time"
 
 	"github.com/ethereum/go-ethereum/crypto"
@@ -77,31 +75,12 @@ func (te *testenv) close() {
 	te.l2.Close()
 }
 
-func debugError(err error) {
-	if err == nil {
-		return
-	}
-	if opErr, ok := err.(*net.OpError); ok {
-		fmt.Println("OpError", opErr.Op)
-		if sysErr, ok := opErr.Err.(*os.SyscallError); ok {
-			errnoStr := "?"
-			if errno, ok := sysErr.Err.(syscall.Errno); ok {
-				errnoStr = fmt.Sprint(errno)
-			}
-			fmt.Println("  syscall", sysErr.Syscall, sysErr.Err, errnoStr)
-		} else {
-			fmt.Println("  ", opErr.Err)
-		}
-		return
-	}
-}
 func (te *testenv) send(c net.PacketConn, req v4wire.Packet) ([]byte, error) {
 	packet, hash, err := v4wire.Encode(te.key, req)
 	if err != nil {
 		return hash, err
 	}
 	_, err = c.WriteTo(packet, te.remoteAddr)
-	debugError(err)
 	return hash, err
 }
 
