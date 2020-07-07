@@ -614,13 +614,16 @@ func testBroadcastBlock(t *testing.T, totalPeers, broadcastExpected int) {
 		select {
 		case <-doneCh:
 			received++
-
-		case <-time.After(time.Second):
+			if received > broadcastExpected {
+				// We can bail early here
+				t.Errorf("broadcast count mismatch: have %d > want %d", received, broadcastExpected)
+				return
+			}
+		case <-time.After(2 * time.Second):
 			if received != broadcastExpected {
 				t.Errorf("broadcast count mismatch: have %d, want %d", received, broadcastExpected)
 			}
 			return
-
 		case err = <-errCh:
 			t.Fatalf("broadcast failed: %v", err)
 		}
