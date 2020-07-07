@@ -115,9 +115,9 @@ Some snags and todos
 
 Clef listens to HTTP requests on `rpcaddr`:`rpcport` (or to IPC on `ipcpath`), with the same JSON-RPC standard as Geth. The messages are expected to be [JSON-RPC 2.0 standard](https://www.jsonrpc.org/specification).
 
-Some of these call can require user interaction. Clients must be aware that responses may be delayed significantly or may never be received if a users decides to ignore the confirmation request.
+Some of these calls can require user interaction. Clients must be aware that responses may be delayed significantly or may never be received if a user decides to ignore the confirmation request.
 
-The External API is **untrusted**: it does not accept credentials over this API, nor does it expect that requests have any authority.
+The External API is **untrusted**: it does not accept credentials, nor does it expect that requests have any authority.
 
 ### Internal UI API
 
@@ -172,9 +172,9 @@ None
 Response
 ```json
 {
-    "id": 0,
-    "jsonrpc": "2.0",
-    "result": "0xbea9183f8f4f03d427f6bcea17388bdff1cab133"
+  "id": 0,
+  "jsonrpc": "2.0",
+  "result": "0xbea9183f8f4f03d427f6bcea17388bdff1cab133"
 }
 ```
 
@@ -370,7 +370,7 @@ Response
 ### account_signTypedData
 
 #### Sign data
-   Signs a chunk of structured data conformant to [EIP712]([EIP-712](https://github.com/ethereum/EIPs/blob/master/EIPS/eip-712.md)) and returns the calculated signature.
+   Signs a chunk of structured data conformant to [EIP-712](https://github.com/ethereum/EIPs/blob/master/EIPS/eip-712.md) and returns the calculated signature.
 
 #### Arguments
   - account [address]: account to sign with
