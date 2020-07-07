@@ -46,14 +46,6 @@ var (
 	Listen2 string = "127.0.0.2"
 )
 
-func init() {
-	var err error
-	Listen1, err = getMyLocalIP()
-	if err != nil {
-		fmt.Println(err)
-	}
-}
-
 type pingWithJunk struct {
 	Version    uint
 	From, To   v4wire.Endpoint
