@@ -41,7 +41,7 @@ func TestTest(t *testing.T) {
 			},
 		},
 	}
-	results := RunTests(tests)
+	results := RunTests(tests, nil)
 
 	if results[0].Failed || results[0].Output != "" {
 		t.Fatalf("wrong result for successful test: %#v", results[0])
