@@ -367,9 +367,13 @@ func FindnodePastExpiration(t *utesting.T) {
 	if _, err := te.send(te.l1, &findnode); err != nil {
 		t.Fatal("sending find nodes", err)
 	}
-	reply, _, _ := te.read(te.l1)
-	if reply != nil {
-		t.Fatal("Expected no reply, got", reply.Name())
+	for {
+		reply, _, _ := te.read(te.l1)
+		if reply == nil {
+			return
+		} else if reply.Kind() == v4wire.NeighborsPacket {
+			t.Fatal("Unexpected NEIGHBORS response for expired FINDNODE request")
+		}
 	}
 }
 
