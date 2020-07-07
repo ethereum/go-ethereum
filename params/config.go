@@ -540,7 +540,6 @@ func (c *ChainConfig) CheckConfigForkOrder() error {
 		{name: "yoloV2Block", block: c.YoloV2Block},
 		{name: "eip1559Block", block: c.EIP1559Block},
 		{name: "eip1559FinalizedBlock", block: c.EIP1559FinalizedBlock},
-		{name: "ewasmBlock", block: c.EWASMBlock},
 	} {
 		if lastFork.name != "" {
 			// Next one must be higher number
@@ -606,12 +605,6 @@ func (c *ChainConfig) checkCompatible(newcfg *ChainConfig, head *big.Int) *Confi
 	}
 	if isForkIncompatible(c.YoloV2Block, newcfg.YoloV2Block, head) {
 		return newCompatError("YOLOv2 fork block", c.YoloV2Block, newcfg.YoloV2Block)
-	}
-	if isForkIncompatible(c.EIP1559Block, newcfg.EIP1559Block, head) {
-		return newCompatError("EIP1559 fork block", c.EIP1559Block, newcfg.EIP1559Block)
-	}
-	if isForkIncompatible(c.EIP1559FinalizedBlock, newcfg.EIP1559FinalizedBlock, head) {
-		return newCompatError("EIP1559Finalized fork block", c.EIP1559FinalizedBlock, newcfg.EIP1559FinalizedBlock)
 	}
 	if isForkIncompatible(c.EIP1559Block, newcfg.EIP1559Block, head) {
 		return newCompatError("EIP1559 fork block", c.EIP1559Block, newcfg.EIP1559Block)
