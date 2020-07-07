@@ -123,10 +123,10 @@ func (d *Downloader) runStateSync(s *stateSync) *stateSync {
 		select {
 		// The stateSync lifecycle:
 		case next := <-d.stateSyncStart:
-			return d.spindownStateSync(active, timeout, peerDrop, next)
+			return d.spindownStateSync(active, finished, timeout, peerDrop, next)
 
 		case <-s.done:
-			return d.spindownStateSync(active, timeout, peerDrop, nil)
+			return d.spindownStateSync(active, finished, timeout, peerDrop, nil)
 
 		// Send the next finished request to the current sync:
 		case deliverReqCh <- deliverReq:
@@ -210,10 +210,10 @@ func (d *Downloader) runStateSync(s *stateSync) *stateSync {
 // spindownStateSync 'drains' the outstanding requests; some will be delivered and other
 // will time out. This is to ensure that when the next stateSync starts working, all peers
 // are marked as idle and de facto _are_ idle.
-func (d *Downloader) spindownStateSync(active map[string]*stateReq, timeout chan *stateReq, peerDrop chan *peerConnection, next *stateSync) *stateSync {
+func (d *Downloader) spindownStateSync(active map[string]*stateReq, finished []*stateReq, timeout chan *stateReq, peerDrop chan *peerConnection, next *stateSync) *stateSync {
 	// We're exiting now, but we need to time out (or handle outstanding requests first)
+	log.Debug("Statesync exiting...", "active peers", len(active), "finished", len(finished))
 	for len(active) > 0 {
-		log.Debug("Statesync exiting...", "active peers", len(active))
 		var (
 			req    *stateReq
 			reason string
@@ -237,6 +237,12 @@ func (d *Downloader) spindownStateSync(active map[string]*stateReq, timeout chan
 		req.peer.log.Debug("Marking previously active as idle", "req.items", len(req.items), "reason", reason)
 		req.timer.Stop()
 		delete(active, req.peer.id)
+		req.peer.SetNodeDataIdle(len(req.items))
+	}
+	// The 'finished' set contains deliveries that we were going to pass to processing.
+	// Those are now moot, but we still need to set those peers as idle, which would
+	// otherwise have been done after processing
+	for _, req := range finished {
 		req.peer.SetNodeDataIdle(len(req.items))
 	}
 	log.Debug("Statesync exiting")
