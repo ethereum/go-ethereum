@@ -269,8 +269,8 @@ var (
 	TestRules = TestChainConfig.Rules(new(big.Int))
 
 	// EIP1559 test configs
-	EIP1559ChainConfig          = &ChainConfig{big.NewInt(1), big.NewInt(0), nil, false, big.NewInt(0), common.Hash{}, big.NewInt(0), big.NewInt(0), big.NewInt(0), big.NewInt(0), big.NewInt(0), big.NewInt(0), big.NewInt(0), big.NewInt(0), big.NewInt(0), nil, nil, new(EthashConfig), nil, DefaultEIP1559Config}
-	EIP1559FinalizedChainConfig = &ChainConfig{big.NewInt(1), big.NewInt(0), nil, false, big.NewInt(0), common.Hash{}, big.NewInt(0), big.NewInt(0), big.NewInt(0), big.NewInt(0), big.NewInt(0), big.NewInt(0), big.NewInt(0), big.NewInt(0), big.NewInt(0), big.NewInt(0), nil, new(EthashConfig), nil, DefaultEIP1559Config}
+	EIP1559ChainConfig          = &ChainConfig{big.NewInt(1), big.NewInt(0), nil, false, big.NewInt(0), common.Hash{}, big.NewInt(0), big.NewInt(0), big.NewInt(0), big.NewInt(0), big.NewInt(0), big.NewInt(0), big.NewInt(0), big.NewInt(0), nil, nil, nil, new(EthashConfig), nil, DefaultEIP1559Config}
+	EIP1559FinalizedChainConfig = &ChainConfig{big.NewInt(1), big.NewInt(0), nil, false, big.NewInt(0), common.Hash{}, big.NewInt(0), big.NewInt(0), big.NewInt(0), big.NewInt(0), big.NewInt(0), big.NewInt(0), big.NewInt(0), big.NewInt(0), big.NewInt(0), nil, nil, new(EthashConfig), nil, DefaultEIP1559Config}
 
 	EIP1559TestRules          = EIP1559ChainConfig.Rules(new(big.Int))
 	EIP1559FinalizedTestRules = EIP1559FinalizedChainConfig.Rules(new(big.Int))
@@ -344,9 +344,9 @@ type ChainConfig struct {
 	IstanbulBlock       *big.Int `json:"istanbulBlock,omitempty"`       // Istanbul switch block (nil = no fork, 0 = already on istanbul)
 	MuirGlacierBlock    *big.Int `json:"muirGlacierBlock,omitempty"`    // Eip-2384 (bomb delay) switch block (nil = no fork, 0 = already activated)
 
-	YoloV1Block           *big.Int `json:"yoloV1Block,omitempty"`           // YOLO v1: https://github.com/ethereum/EIPs/pull/2657 (Ephemeral testnet)
 	EIP1559Block          *big.Int `json:"eip1559Block,omitempty"`          // EIP1559 switch block (nil = no fork, 0 = already on eip1559)
 	EIP1559FinalizedBlock *big.Int `json:"eip1559FinalizedBlock,omitempty"` // EIP1559 finalization switch block (nil = no fork, 0 = already on eip1559 finalized)
+	YoloV1Block           *big.Int `json:"yoloV1Block,omitempty"`           // YOLO v1: https://github.com/ethereum/EIPs/pull/2657 (Ephemeral testnet)
 	EWASMBlock            *big.Int `json:"ewasmBlock,omitempty"`            // EWASM switch block (nil = no fork, 0 = already activated)
 
 	// Various consensus engines
@@ -405,7 +405,7 @@ func (c *ChainConfig) String() string {
 	default:
 		engine = "unknown"
 	}
-	return fmt.Sprintf("{ChainID: %v Homestead: %v DAO: %v DAOSupport: %v EIP150: %v EIP155: %v EIP158: %v Byzantium: %v Constantinople: %v Petersburg: %v Istanbul: %v Muir Glacier: %v YOLO v1: %v EIP1559: %v EIP1559Finalized: %v EWASM: %v Engine: %v}",
+	return fmt.Sprintf("{ChainID: %v Homestead: %v DAO: %v DAOSupport: %v EIP150: %v EIP155: %v EIP158: %v Byzantium: %v Constantinople: %v Petersburg: %v Istanbul: %v Muir Glacier: %v EIP1559: %v EIP1559Finalized: %v YOLO v1: %v EWASM: %v Engine: %v}",
 		c.ChainID,
 		c.HomesteadBlock,
 		c.DAOForkBlock,
@@ -418,9 +418,9 @@ func (c *ChainConfig) String() string {
 		c.PetersburgBlock,
 		c.IstanbulBlock,
 		c.MuirGlacierBlock,
-		c.YoloV1Block,
 		c.EIP1559Block,
 		c.EIP1559FinalizedBlock,
+		c.YoloV1Block,
 		c.EWASMBlock,
 		engine,
 	)
@@ -536,9 +536,9 @@ func (c *ChainConfig) CheckConfigForkOrder() error {
 		{name: "petersburgBlock", block: c.PetersburgBlock},
 		{name: "istanbulBlock", block: c.IstanbulBlock},
 		{name: "muirGlacierBlock", block: c.MuirGlacierBlock, optional: true},
-		{name: "yoloV1Block", block: c.YoloV1Block},
 		{name: "eip1559Block", block: c.EIP1559Block},
 		{name: "eip1559FinalizedBlock", block: c.EIP1559FinalizedBlock},
+		{name: "yoloV1Block", block: c.YoloV1Block},
 		{name: "ewasmBlock", block: c.EWASMBlock},
 	} {
 		if lastFork.name != "" {
@@ -599,20 +599,14 @@ func (c *ChainConfig) checkCompatible(newcfg *ChainConfig, head *big.Int) *Confi
 	if isForkIncompatible(c.MuirGlacierBlock, newcfg.MuirGlacierBlock, head) {
 		return newCompatError("Muir Glacier fork block", c.MuirGlacierBlock, newcfg.MuirGlacierBlock)
 	}
+	if isForkIncompatible(c.EIP1559Block, newcfg.EIP1559Block, head) {
+		return newCompatError("EIP1559 fork block", c.EIP1559Block, newcfg.EIP1559Block)
+	}
+	if isForkIncompatible(c.EIP1559FinalizedBlock, newcfg.EIP1559FinalizedBlock, head) {
+		return newCompatError("EIP1559Finalized fork block", c.EIP1559FinalizedBlock, newcfg.EIP1559FinalizedBlock)
+	}
 	if isForkIncompatible(c.YoloV1Block, newcfg.YoloV1Block, head) {
 		return newCompatError("YOLOv1 fork block", c.YoloV1Block, newcfg.YoloV1Block)
-	}
-	if isForkIncompatible(c.EIP1559Block, newcfg.EIP1559Block, head) {
-		return newCompatError("EIP1559 fork block", c.EIP1559Block, newcfg.EIP1559Block)
-	}
-	if isForkIncompatible(c.EIP1559FinalizedBlock, newcfg.EIP1559FinalizedBlock, head) {
-		return newCompatError("EIP1559Finalized fork block", c.EIP1559FinalizedBlock, newcfg.EIP1559FinalizedBlock)
-	}
-	if isForkIncompatible(c.EIP1559Block, newcfg.EIP1559Block, head) {
-		return newCompatError("EIP1559 fork block", c.EIP1559Block, newcfg.EIP1559Block)
-	}
-	if isForkIncompatible(c.EIP1559FinalizedBlock, newcfg.EIP1559FinalizedBlock, head) {
-		return newCompatError("EIP1559Finalized fork block", c.EIP1559FinalizedBlock, newcfg.EIP1559FinalizedBlock)
 	}
 	if isForkIncompatible(c.EWASMBlock, newcfg.EWASMBlock, head) {
 		return newCompatError("EWASM fork block", c.EWASMBlock, newcfg.EWASMBlock)
@@ -684,7 +678,7 @@ type Rules struct {
 	ChainID                                                 *big.Int
 	IsHomestead, IsEIP150, IsEIP155, IsEIP158               bool
 	IsByzantium, IsConstantinople, IsPetersburg, IsIstanbul bool
-	IsMuirGlacier, IsYoloV1, IsEIP1559, IsEIP1559Finalized  bool
+	IsMuirGlacier, IsEIP1559, IsEIP1559Finalized, IsYoloV1  bool
 	IsEWASM                                                 bool
 }
 
@@ -705,9 +699,9 @@ func (c *ChainConfig) Rules(num *big.Int) Rules {
 		IsPetersburg:       c.IsPetersburg(num),
 		IsIstanbul:         c.IsIstanbul(num),
 		IsMuirGlacier:      c.IsMuirGlacier(num),
-		IsYoloV1:           c.IsYoloV1(num),
 		IsEIP1559:          c.IsEIP1559(num),
 		IsEIP1559Finalized: c.IsEIP1559Finalized(num),
+		IsYoloV1:           c.IsYoloV1(num),
 		IsEWASM:            c.IsEWASM(num),
 	}
 }
