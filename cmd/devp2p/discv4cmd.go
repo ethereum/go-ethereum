@@ -19,6 +19,7 @@ package main
 import (
 	"fmt"
 	"net"
+	"os"
 	"strings"
 	"time"
 
@@ -226,21 +227,9 @@ func discv4Test(ctx *cli.Context) error {
 	if ctx.IsSet(testPatternFlag.Name) {
 		tests = utesting.MatchTests(tests, ctx.String(testPatternFlag.Name))
 	}
-	failcount := 0
-	for _, test := range tests {
-		start := time.Now()
-		failed, output := utesting.Run(test)
-		duration := time.Since(start).Truncate(time.Millisecond)
-		if failed {
-			failcount++
-			fmt.Printf("-- FAIL %s (%v)\n", test.Name, duration)
-			fmt.Println(output)
-		} else {
-			fmt.Printf("-- OK %s (%v)\n", test.Name, duration)
-		}
-	}
-	if failcount > 0 {
-		return fmt.Errorf("%v/%v tests passed.", len(tests)-failcount, len(tests))
+	results := utesting.RunTests(tests, os.Stdout)
+	if fails := utesting.CountFailures(results); fails > 0 {
+		return fmt.Errorf("%v/%v tests passed.", len(tests)-fails, len(tests))
 	}
 	fmt.Printf("%v/%v passed\n", len(tests), len(tests))
 	return nil

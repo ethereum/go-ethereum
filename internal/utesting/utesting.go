@@ -24,9 +24,11 @@ package utesting
 import (
 	"bytes"
 	"fmt"
+	"io"
 	"regexp"
 	"runtime"
 	"sync"
+	"time"
 )
 
 // Test represents a single test.
@@ -37,9 +39,10 @@ type Test struct {
 
 // Result is the result of a test execution.
 type Result struct {
-	Name   string
-	Failed bool
-	Output string
+	Name     string
+	Failed   bool
+	Output   string
+	Duration time.Duration
 }
 
 // MatchTests returns the tests whose name matches a regular expression.
@@ -58,13 +61,39 @@ func MatchTests(tests []Test, expr string) []Test {
 }
 
 // RunTests executes all given tests in order and returns their results.
-func RunTests(tests []Test) []Result {
+// If the report writer is non-nil, a test report is written to it in real time.
+func RunTests(tests []Test, report io.Writer) []Result {
 	results := make([]Result, len(tests))
 	for i, test := range tests {
+		start := time.Now()
 		results[i].Name = test.Name
 		results[i].Failed, results[i].Output = Run(test)
+		results[i].Duration = time.Since(start)
+		if report != nil {
+			printResult(results[i], report)
+		}
 	}
 	return results
+}
+
+func printResult(r Result, w io.Writer) {
+	if r.Failed {
+		fmt.Fprintf(w, "-- FAIL %s (%v)\n", r.Name, r.Duration)
+		fmt.Fprintln(w, r.Output)
+	} else {
+		fmt.Fprintf(w, "-- OK %s (%v)\n", r.Name, r.Duration)
+	}
+}
+
+// CountFailures returns the number of failed tests in the result slice.
+func CountFailures(rr []Result) int {
+	count := 0
+	for _, r := range rr {
+		if r.Failed {
+			count++
+		}
+	}
+	return count
 }
 
 // Run executes a single test.
