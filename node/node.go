@@ -58,7 +58,7 @@ type Node struct {
 	httpServers   serverMap                  // serverMap stores information about the node's rpc, ws, and graphQL http servers.
 	inprocHandler *rpc.Server                // In-process RPC request handler to process the API requests
 	rpcAPIs       []rpc.API                  // List of APIs currently provided by the node
-	ipc           *HTTPServer                // Stores information about the ipc http server
+	ipc           *httpServer                // Stores information about the ipc http server
 }
 
 // New creates a new P2P node, ready for protocol registration.
@@ -102,7 +102,7 @@ func New(conf *Config) (*Node, error) {
 		config:            conf,
 		lifecycles:        make(map[reflect.Type]Lifecycle),
 		httpServers:       make(serverMap),
-		ipc: &HTTPServer{
+		ipc: &httpServer{
 			endpoint: conf.IPCEndpoint(),
 		},
 		eventmux: new(event.TypeMux),
@@ -127,7 +127,7 @@ func New(conf *Config) (*Node, error) {
 
 	// Configure HTTP server(s)
 	if conf.HTTPHost != "" {
-		httpServ := &HTTPServer{
+		httpServ := &httpServer{
 			CorsAllowedOrigins: conf.HTTPCors,
 			Vhosts:             conf.HTTPVirtualHosts,
 			Whitelist:          conf.HTTPModules,
@@ -150,7 +150,7 @@ func New(conf *Config) (*Node, error) {
 		node.httpServers[conf.HTTPEndpoint()] = httpServ
 	}
 	if conf.WSHost != "" {
-		node.httpServers[conf.WSEndpoint()] = &HTTPServer{
+		node.httpServers[conf.WSEndpoint()] = &httpServer{
 			WsOrigins: conf.WSOrigins,
 			Whitelist: conf.WSModules,
 			Srv:       rpc.NewServer(),
@@ -187,7 +187,7 @@ func (n *Node) Close() error {
 	}
 }
 
-// RegisterLifecycle registers the given Lifecycle on the node
+// RegisterLifecycle registers the given Lifecycle on the node.
 func (n *Node) RegisterLifecycle(lifecycle Lifecycle) {
 	kind := reflect.TypeOf(lifecycle)
 	if _, exists := n.lifecycles[kind]; exists {
@@ -197,31 +197,43 @@ func (n *Node) RegisterLifecycle(lifecycle Lifecycle) {
 	n.lifecycles[kind] = lifecycle
 }
 
-// RegisterProtocols adds backend's protocols to the node's p2p server
+// RegisterProtocols adds backend's protocols to the node's p2p server.
 func (n *Node) RegisterProtocols(protocols []p2p.Protocol) {
 	n.server.Protocols = append(n.server.Protocols, protocols...)
 }
 
-// RegisterAPIs registers the APIs a service provides on the node
+// RegisterAPIs registers the APIs a service provides on the node.
 func (n *Node) RegisterAPIs(apis []rpc.API) {
 	n.rpcAPIs = append(n.rpcAPIs, apis...)
 }
 
-// RegisterHTTPServer registers the given HTTP server on the node
-func (n *Node) RegisterHTTPServer(endpoint string, server *HTTPServer) {
+// RegisterHTTPServer registers the given HTTP server on the node.
+func (n *Node) RegisterHTTPServer(endpoint string, server *httpServer) {
 	n.httpServers[endpoint] = server
 }
 
-// ExistingHTTPServer checks if an HTTP server is already configured on the given endpoint
-func (n *Node) ExistingHTTPServer(endpoint string) *HTTPServer {
+// RegisterPath mounts the given handler on the given path on the canonical HTTP server.
+func (n *Node) RegisterPath(path string, handler http.Handler) string {
+	for _, server := range n.httpServers {
+		if atomic.LoadInt32(&server.RPCAllowed) == 1 {
+			server.srvMux.Handle(path, handler)
+			return server.endpoint
+		}
+	}
+	n.log.Warn(fmt.Sprintf("HTTP server not configured on node, path %s cannot be enabled", path))
+	return ""
+}
+
+// ExistingHTTPServer checks if an HTTP server is already configured on the given endpoint.
+func (n *Node) ExistingHTTPServer(endpoint string) *httpServer {
 	if server, exists := n.httpServers[endpoint]; exists {
 		return server
 	}
 	return nil
 }
 
-// CreateHTTPServer creates an http.Server and adds it to the given HTTPServer
-func (n *Node) CreateHTTPServer(h *HTTPServer, exposeAll bool) error {
+// CreateHTTPServer creates an http.Server and adds it to the given httpServer.
+func (n *Node) CreateHTTPServer(h *httpServer, exposeAll bool) error {
 	// register apis and create handler stack
 	err := RegisterApisFromWhitelist(n.rpcAPIs, h.Whitelist, h.Srv, exposeAll)
 	if err != nil {
@@ -234,7 +246,7 @@ func (n *Node) CreateHTTPServer(h *HTTPServer, exposeAll bool) error {
 		return err
 	}
 	// create the HTTP server
-	httpSrv := &http.Server{Handler: h.handler}
+	httpSrv := &http.Server{Handler: &h.srvMux}
 	// check timeouts if they exist
 	if h.Timeouts != (rpc.HTTPTimeouts{}) {
 		CheckTimeouts(&h.Timeouts)
@@ -242,14 +254,14 @@ func (n *Node) CreateHTTPServer(h *HTTPServer, exposeAll bool) error {
 		httpSrv.WriteTimeout = h.Timeouts.WriteTimeout
 		httpSrv.IdleTimeout = h.Timeouts.IdleTimeout
 	}
-	// add listener and http.Server to HTTPServer
+	// add listener and http.Server to httpServer
 	h.Listener = listener
 	h.Server = httpSrv
 
 	return nil
 }
 
-// running returns true if the node's p2p server is already running
+// running returns true if the node's p2p server is already running.
 func (n *Node) running() bool {
 	return n.server.Running()
 }
@@ -298,7 +310,7 @@ func (n *Node) Start() error {
 	return nil
 }
 
-// stopLifecycles stops the node's running Lifecycles
+// stopLifecycles stops the node's running Lifecycles.
 func (n *Node) stopLifecycles(started []Lifecycle) {
 	for _, lifecycle := range started {
 		lifecycle.Stop()
@@ -343,23 +355,12 @@ func (n *Node) configureRPC() error {
 		n.stopInProc()
 		return err
 	}
-
+	// configure HTTPServers
 	for _, server := range n.httpServers {
 		// configure the handlers
-		if atomic.LoadInt32(&server.RPCAllowed) == 1 {
-			server.handler = NewHTTPHandlerStack(server.Srv, server.CorsAllowedOrigins, server.Vhosts)
-			// wrap ws handler just in case ws is enabled through the console after start-up
-			wsHandler := server.Srv.WebsocketHandler(server.WsOrigins)
-			server.handler = server.NewWebsocketUpgradeHandler(server.handler, wsHandler)
-
-			n.log.Info("HTTP configured on endpoint ", "endpoint", server.endpoint)
-			if atomic.LoadInt32(&server.WSAllowed) == 1 {
-				n.log.Info("Websocket configured on endpoint ", "endpoint", server.endpoint)
-			}
-		}
-		if (atomic.LoadInt32(&server.WSAllowed) == 1) && server.handler == nil {
-			server.handler = server.Srv.WebsocketHandler(server.WsOrigins)
-			n.log.Info("Websocket configured on endpoint ", "endpoint", server.endpoint)
+		handler := n.createHandler(server)
+		if handler != nil {
+			server.srvMux.Handle("/", handler)
 		}
 		// create the HTTP server
 		if err := n.CreateHTTPServer(server, false); err != nil {
@@ -372,6 +373,28 @@ func (n *Node) configureRPC() error {
 	}
 	// All API endpoints started successfully
 	return nil
+}
+
+// createHandler creates the http.Handler for the given httpServer.
+func (n *Node) createHandler(server *httpServer) http.Handler {
+	var handler http.Handler
+	if atomic.LoadInt32(&server.RPCAllowed) == 1 {
+		handler = NewHTTPHandlerStack(server.Srv, server.CorsAllowedOrigins, server.Vhosts)
+		// wrap ws handler just in case ws is enabled through the console after start-up
+		wsHandler := server.Srv.WebsocketHandler(server.WsOrigins)
+		handler = server.NewWebsocketUpgradeHandler(handler, wsHandler)
+
+		n.log.Info("HTTP configured on endpoint ", "endpoint", fmt.Sprintf("http://%s/", server.endpoint))
+		if atomic.LoadInt32(&server.WSAllowed) == 1 {
+			n.log.Info("Websocket configured on endpoint ", "endpoint", fmt.Sprintf("ws://%s/", server.endpoint))
+		}
+	}
+	if (atomic.LoadInt32(&server.WSAllowed) == 1) && handler == nil {
+		handler = server.Srv.WebsocketHandler(server.WsOrigins)
+		n.log.Info("Websocket configured on endpoint ", "endpoint", fmt.Sprintf("ws://%s/", server.endpoint))
+	}
+
+	return handler
 }
 
 // startInProc initializes an in-process RPC endpoint.
@@ -426,7 +449,7 @@ func (n *Node) stopIPC() {
 }
 
 // stopServers terminates the given HTTP servers' endpoints
-func (n *Node) stopServer(server *HTTPServer) {
+func (n *Node) stopServer(server *httpServer) {
 	if server.Server != nil {
 		url := fmt.Sprintf("http://%v/", server.Listener.Addr())
 		// Don't bother imposing a timeout here.
@@ -437,7 +460,7 @@ func (n *Node) stopServer(server *HTTPServer) {
 		server.Srv.Stop()
 		server.Srv = nil
 	}
-	// remove stopped http server from node's http servers // TODO is this preferable?
+	// remove stopped http server from node's http servers
 	delete(n.httpServers, server.endpoint)
 }
 

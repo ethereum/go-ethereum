@@ -25,14 +25,16 @@ import (
 
 	"github.com/ethereum/go-ethereum/eth"
 	"github.com/ethereum/go-ethereum/node"
-	"github.com/ethereum/go-ethereum/rpc"
-
 	"github.com/stretchr/testify/assert"
 )
 
 func TestBuildSchema(t *testing.T) {
+	stack, err := node.New(&node.DefaultConfig)
+	if err != nil {
+		t.Fatalf("could not create new node: %v", err)
+	}
 	// Make sure the schema can be parsed and matched up to the object model.
-	if _, err := newHandler(nil); err != nil {
+	if err := newHandler(stack, nil, []string{}, []string{}); err != nil {
 		t.Errorf("Could not construct GraphQL handler: %v", err)
 	}
 }
@@ -120,7 +122,7 @@ func createGQLService(t *testing.T, stack *node.Node, endpoint string) {
 	}
 
 	// create gql service
-	err = New(stack, ethBackend.APIBackend, endpoint, []string{}, []string{}, rpc.DefaultHTTPTimeouts)
+	err = New(stack, ethBackend.APIBackend,[]string{}, []string{})
 	if err != nil {
 		t.Fatalf("could not create graphql service: %v", err)
 	}

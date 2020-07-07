@@ -12,7 +12,7 @@ import (
 )
 
 func TestNewWebsocketUpgradeHandler_websocket(t *testing.T) {
-	h := &HTTPServer{
+	h := &httpServer{
 		Srv:       rpc.NewServer(),
 		WSAllowed: 1,
 	}

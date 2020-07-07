@@ -191,7 +191,7 @@ func (api *PrivateAdminAPI) StartRPC(host *string, port *int, cors *string, apis
 		}
 	}
 	// configure http server
-	httpServer := &HTTPServer{
+	httpServer := &httpServer{
 		host:               *host,
 		port:               *port,
 		endpoint:           endpoint,
@@ -201,7 +201,8 @@ func (api *PrivateAdminAPI) StartRPC(host *string, port *int, cors *string, apis
 		Whitelist:          modules,
 	}
 	// create handler
-	httpServer.handler = NewHTTPHandlerStack(httpServer.Srv, httpServer.CorsAllowedOrigins, httpServer.Vhosts)
+	handler := NewHTTPHandlerStack(httpServer.Srv, httpServer.CorsAllowedOrigins, httpServer.Vhosts)
+	httpServer.srvMux.Handle("/", handler)
 	// create HTTP server
 	if err := api.node.CreateHTTPServer(httpServer, false); err != nil {
 		return false, err
@@ -213,7 +214,6 @@ func (api *PrivateAdminAPI) StartRPC(host *string, port *int, cors *string, apis
 	api.node.log.Info("HTTP endpoint opened", "url", fmt.Sprintf("http://%v/", httpServer.Listener.Addr()),
 		"cors", strings.Join(httpServer.CorsAllowedOrigins, ","),
 		"vhosts", strings.Join(httpServer.Vhosts, ","))
-
 	return true, nil
 }
 
@@ -228,7 +228,6 @@ func (api *PrivateAdminAPI) StopRPC() (bool, error) {
 			return true, nil
 		}
 	}
-
 	return false, fmt.Errorf("HTTP RPC not running")
 }
 
@@ -255,23 +254,6 @@ func (api *PrivateAdminAPI) StartWS(host *string, port *int, allowedOrigins *str
 		port = &api.node.config.WSPort
 	}
 	endpoint := fmt.Sprintf("%s:%d", *host, *port)
-	// check if there is an existing server on the specified port, and if there is, enable ws on it
-	if server, exists := api.node.httpServers[endpoint]; exists {
-		// else configure ws on the existing server
-		atomic.StoreInt32(&server.WSAllowed, 1)
-		// configure origins
-		origins := api.node.config.WSOrigins
-		if allowedOrigins != nil {
-			origins = nil
-			for _, origin := range strings.Split(*allowedOrigins, ",") {
-				origins = append(origins, strings.TrimSpace(origin))
-			}
-		}
-		server.WsOrigins = origins
-
-		api.node.log.Info("WebSocket endpoint opened", "url", fmt.Sprintf("ws://%v", server.Listener.Addr()))
-		return true, nil
-	}
 
 	origins := api.node.config.WSOrigins
 	if allowedOrigins != nil {
@@ -286,6 +268,8 @@ func (api *PrivateAdminAPI) StartWS(host *string, port *int, allowedOrigins *str
 		atomic.StoreInt32(&existingServer.WSAllowed, 1)
 		existingServer.WsOrigins = origins
 
+		api.node.log.Info("WebSocket endpoint opened", "url", fmt.Sprintf("ws://%v", existingServer.Listener.Addr()))
+		return true, nil
 	}
 
 	modules := api.node.config.WSModules
@@ -296,7 +280,7 @@ func (api *PrivateAdminAPI) StartWS(host *string, port *int, allowedOrigins *str
 		}
 	}
 	// configure http server
-	wsServer := &HTTPServer{
+	wsServer := &httpServer{
 		Srv:       rpc.NewServer(),
 		endpoint:  endpoint,
 		host:      *host,
@@ -306,7 +290,8 @@ func (api *PrivateAdminAPI) StartWS(host *string, port *int, allowedOrigins *str
 		WSAllowed: 1,
 	}
 	// create handler
-	wsServer.handler = wsServer.Srv.WebsocketHandler(wsServer.WsOrigins)
+	handler := wsServer.Srv.WebsocketHandler(wsServer.WsOrigins)
+	wsServer.srvMux.Handle("/", handler)
 	// create the HTTP server
 	if err := api.node.CreateHTTPServer(wsServer, api.node.config.WSExposeAll); err != nil {
 		return false, err
@@ -314,9 +299,10 @@ func (api *PrivateAdminAPI) StartWS(host *string, port *int, allowedOrigins *str
 	// register the HTTP server
 	api.node.RegisterHTTPServer(endpoint, wsServer)
 	// start the HTTP server
-	wsServer.Start()
+	if err := wsServer.Start(); err != nil {
+		return false, err
+	}
 	api.node.log.Info("WebSocket endpoint opened", "url", fmt.Sprintf("ws://%v", wsServer.Listener.Addr()))
-
 	return true, nil
 }
 
@@ -334,7 +320,6 @@ func (api *PrivateAdminAPI) StopWS() (bool, error) {
 			return true, nil
 		}
 	}
-
 	return false, fmt.Errorf("WebSocket RPC not running")
 }
 

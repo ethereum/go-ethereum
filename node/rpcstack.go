@@ -33,9 +33,11 @@ import (
 	"github.com/rs/cors"
 )
 
-type serverMap map[string]*HTTPServer // Stores information about all http servers (if any) by their endpoint, including http, ws, and graphql
+type serverMap map[string]*httpServer // Stores information about all http servers (if any) by their endpoint, including http, ws, and graphql
 
-type HTTPServer struct {
+type httpServer struct {
+	srvMux 	http.ServeMux
+
 	handler http.Handler
 	Srv     *rpc.Server
 	Server  *http.Server
@@ -55,8 +57,6 @@ type HTTPServer struct {
 
 	RPCAllowed int32
 	WSAllowed  int32
-
-	GQLHandler http.Handler
 }
 
 func (sm serverMap) Start() error {
@@ -77,15 +77,15 @@ func (sm serverMap) Stop() error {
 	return nil
 }
 
-// Start starts the serverMap's HTTP server. // TODO I don't like the way this is written
-func (h *HTTPServer) Start() error {
+// Start starts the httpServer's http.Server
+func (h *httpServer) Start() error {
 	go h.Server.Serve(h.Listener)
 	log.Info("HTTP endpoint successfully opened", "url", fmt.Sprintf("http://%v/", h.Listener.Addr()))
 	return nil
 }
 
-// Stop shuts down the serverMap's HTTP server. // TODO I don't like the way this is written
-func (h *HTTPServer) Stop() error {
+// Stop shuts down the httpServer's http.Server
+func (h *httpServer) Stop() error {
 	if h.Server != nil {
 		url := fmt.Sprintf("http://%v/", h.Listener.Addr())
 		// Don't bother imposing a timeout here.
@@ -98,16 +98,6 @@ func (h *HTTPServer) Stop() error {
 	}
 
 	return nil
-}
-
-// SetHandler assigns the given handler to the serverMap.
-func (h *HTTPServer) SetHandler(handler http.Handler) {
-	h.handler = handler
-}
-
-// SetEndpoints assigns the given endpoint to the serverMap.
-func (h *HTTPServer) SetEndpoint(endpoint string) {
-	h.endpoint = endpoint
 }
 
 // NewHTTPHandlerStack returns wrapped http-related handlers
@@ -221,7 +211,7 @@ func newGzipHandler(next http.Handler) http.Handler {
 
 // NewWebsocketUpgradeHandler returns a websocket handler that serves an incoming request only if it contains an upgrade
 // request to the websocket protocol. If not, serves the the request with the http handler.
-func (hs *HTTPServer) NewWebsocketUpgradeHandler(h http.Handler, ws http.Handler) http.Handler {
+func (hs *httpServer) NewWebsocketUpgradeHandler(h http.Handler, ws http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if atomic.LoadInt32(&hs.WSAllowed) == 1 && isWebsocket(r) {
 			ws.ServeHTTP(w, r)

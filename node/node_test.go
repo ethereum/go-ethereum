@@ -19,6 +19,7 @@ package node
 import (
 	"errors"
 	"fmt"
+	"io"
 	"io/ioutil"
 	"net/http"
 	"os"
@@ -365,7 +366,7 @@ func TestLifecycleTerminationGuarantee(t *testing.T) {
 	stack.server.PrivateKey = testNodeKey
 }
 
-// Tests whether a given HTTPServer can be registered on the node
+// Tests whether a given httpServer can be registered on the node
 func TestRegisterHTTPServer(t *testing.T) {
 	stack, err := New(testNodeConfig())
 	if err != nil {
@@ -373,21 +374,21 @@ func TestRegisterHTTPServer(t *testing.T) {
 	}
 	defer stack.Close()
 
-	srv1 := &HTTPServer{
+	srv1 := &httpServer{
 		host: "test1",
 		port: 0001,
 	}
 	endpoint1 := fmt.Sprintf("%s:%d", srv1.host, srv1.port)
 	stack.RegisterHTTPServer(endpoint1, srv1)
 
-	srv2 := &HTTPServer{
+	srv2 := &httpServer{
 		host: "test2",
 		port: 0002,
 	}
 	endpoint2 := fmt.Sprintf("%s:%d", srv2.host, srv2.port)
 	stack.RegisterHTTPServer(endpoint2, srv2)
 
-	noop := &HTTPServer{
+	noop := &httpServer{
 		host: "test",
 		port: 0000,
 	}
@@ -402,6 +403,55 @@ func TestRegisterHTTPServer(t *testing.T) {
 	if noop == stack.ExistingHTTPServer(endpointNoop) {
 		t.Fatalf("server %v was incorrectly registered on the given endpoint %s", noop, endpointNoop)
 	}
+}
+
+// Tests whether a handler can be successfully mounted on the canonical HTTP server
+// on the given path
+func TestRegisterPath_Successful(t *testing.T) {
+	node := createNode(t, 7878, 7979)
+
+	// create and mount handler
+	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Write([]byte("success"))
+	})
+	endpoint := node.RegisterPath("/test", handler)
+	assert.Equal(t, "127.0.0.1:7878", endpoint)
+
+	// start node
+	if err := node.Start(); err != nil {
+		t.Fatalf("could not start node: %v", err)
+	}
+
+	// create HTTP request
+	httpReq, err := http.NewRequest(http.MethodGet, "http://127.0.0.1:7878/test", nil)
+	if err != nil {
+		t.Error("could not issue new http request ", err)
+	}
+
+	// check response
+	resp := doHTTPRequest(t, httpReq)
+	buf := make([]byte, 7)
+	_, err = io.ReadFull(resp.Body, buf)
+	if err != nil {
+		t.Fatalf("could not read response: %v", err)
+	}
+	assert.Equal(t, "success", string(buf))
+}
+
+// Tests that the given handler will not be successfully mounted since no HTTP server
+// is enabled for RPC
+func TestRegisterPath_Unsuccessful(t *testing.T) {
+	node, err := New(&DefaultConfig)
+	if err != nil {
+		t.Fatalf("could not create new node: %v", err)
+	}
+
+	// create and mount handler
+	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Write([]byte("success"))
+	})
+	endpoint := node.RegisterPath("/test", handler)
+	assert.Equal(t, "", endpoint)
 }
 
 // Tests whether a node can successfully create and register HTTP server
@@ -496,7 +546,7 @@ func TestWebsocketHTTPOnSamePort_HTTPRequest(t *testing.T) {
 	assert.Equal(t, "gzip", resp.Header.Get("Content-Encoding"))
 }
 
-func startHTTP(t *testing.T, httpPort, wsPort int) *Node {
+func createNode(t *testing.T, httpPort, wsPort int) *Node {
 	conf := &Config{
 		HTTPHost: "127.0.0.1",
 		HTTPPort: httpPort,
@@ -507,7 +557,12 @@ func startHTTP(t *testing.T, httpPort, wsPort int) *Node {
 	if err != nil {
 		t.Fatalf("could not create a new node: %v", err)
 	}
-	err = node.Start()
+	return node
+}
+
+func startHTTP(t *testing.T, httpPort, wsPort int) *Node {
+	node := createNode(t, httpPort, wsPort)
+	err := node.Start()
 	if err != nil {
 		t.Fatalf("could not start http service on node: %v", err)
 	}
