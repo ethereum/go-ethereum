@@ -213,29 +213,36 @@ func discv4Crawl(ctx *cli.Context) error {
 }
 
 func discv4Test(ctx *cli.Context) error {
+	// Configure test package globals.
 	if !ctx.IsSet(remoteEnodeFlag.Name) {
 		return fmt.Errorf("Missing -%v", remoteEnodeFlag.Name)
 	}
 	test.Remote = ctx.String(remoteEnodeFlag.Name)
 	test.Listen1 = ctx.String(testListen1Flag.Name)
 	test.Listen2 = ctx.String(testListen2Flag.Name)
-	selectedTests := test.AllTests
+
+	// Filter and run test cases.
+	tests := test.AllTests
 	if ctx.IsSet(testPatternFlag.Name) {
-		selectedTests = utesting.MatchTests(test.AllTests, ctx.String(testPatternFlag.Name))
+		tests = utesting.MatchTests(tests, ctx.String(testPatternFlag.Name))
 	}
-	results := utesting.RunTests(selectedTests)
-	failed := 0
-	for _, result := range results {
-		if result.Failed {
-			failed++
-			fmt.Println("Failed", result.Name, result.Output)
+	failcount := 0
+	for _, test := range tests {
+		start := time.Now()
+		failed, output := utesting.Run(test)
+		duration := time.Since(start).Truncate(time.Millisecond)
+		if failed {
+			failcount++
+			fmt.Printf("-- FAIL %s (%v)\n", test.Name, duration)
+			fmt.Println(output)
+		} else {
+			fmt.Printf("-- OK %s (%v)\n", test.Name, duration)
 		}
 	}
-	if failed > 0 {
-		return fmt.Errorf("FAILED %v/%v", failed, len(results))
-
+	if failcount > 0 {
+		return fmt.Errorf("%v/%v tests passed.", len(tests)-failcount, len(tests))
 	}
-	fmt.Printf("PASSED %v/%v\n", len(results), len(results))
+	fmt.Printf("%v/%v passed\n", len(tests), len(tests))
 	return nil
 }
 
