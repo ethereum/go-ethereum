@@ -22,7 +22,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/ethereum/go-ethereum/cmd/devp2p/test"
+	"github.com/ethereum/go-ethereum/cmd/devp2p/internal/v4test"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/internal/utesting"
@@ -119,12 +119,12 @@ var (
 	testListen1Flag = cli.StringFlag{
 		Name:  "listen1",
 		Usage: "IP address of the first tester",
-		Value: test.Listen1,
+		Value: v4test.Listen1,
 	}
 	testListen2Flag = cli.StringFlag{
 		Name:  "listen2",
 		Usage: "IP address of the second tester",
-		Value: test.Listen2,
+		Value: v4test.Listen2,
 	}
 )
 
@@ -217,12 +217,12 @@ func discv4Test(ctx *cli.Context) error {
 	if !ctx.IsSet(remoteEnodeFlag.Name) {
 		return fmt.Errorf("Missing -%v", remoteEnodeFlag.Name)
 	}
-	test.Remote = ctx.String(remoteEnodeFlag.Name)
-	test.Listen1 = ctx.String(testListen1Flag.Name)
-	test.Listen2 = ctx.String(testListen2Flag.Name)
+	v4test.Remote = ctx.String(remoteEnodeFlag.Name)
+	v4test.Listen1 = ctx.String(testListen1Flag.Name)
+	v4test.Listen2 = ctx.String(testListen2Flag.Name)
 
 	// Filter and run test cases.
-	tests := test.AllTests
+	tests := v4test.AllTests
 	if ctx.IsSet(testPatternFlag.Name) {
 		tests = utesting.MatchTests(tests, ctx.String(testPatternFlag.Name))
 	}
