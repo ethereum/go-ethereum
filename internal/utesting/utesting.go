@@ -77,11 +77,12 @@ func RunTests(tests []Test, report io.Writer) []Result {
 }
 
 func printResult(r Result, w io.Writer) {
+	pd := r.Duration.Truncate(100 * time.Microsecond)
 	if r.Failed {
-		fmt.Fprintf(w, "-- FAIL %s (%v)\n", r.Name, r.Duration)
+		fmt.Fprintf(w, "-- FAIL %s (%v)\n", r.Name, pd)
 		fmt.Fprintln(w, r.Output)
 	} else {
-		fmt.Fprintf(w, "-- OK %s (%v)\n", r.Name, r.Duration)
+		fmt.Fprintf(w, "-- OK %s (%v)\n", r.Name, pd)
 	}
 }
 
