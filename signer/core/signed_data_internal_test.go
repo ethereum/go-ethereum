@@ -17,9 +17,41 @@
 package core
 
 import (
+	"fmt"
 	"math/big"
 	"testing"
+
+	"github.com/ethereum/go-ethereum/common/hexutil"
 )
+
+func TestParseBytes(t *testing.T) {
+	for i, tt := range []struct {
+		v   interface{}
+		exp []byte
+	}{
+		{"0x", []byte{}},
+		{"0x1234", []byte{0x12, 0x34}},
+		{[]byte{12, 34}, []byte{12, 34}},
+		{hexutil.Bytes([]byte{12, 34}), []byte{12, 34}},
+		{"not a hex string", nil},
+		{15, nil},
+		{nil, nil},
+	} {
+		out, ok := parseBytes(tt.v)
+		if tt.exp == nil {
+			if ok {
+				t.Errorf("Case %d: expecting !ok, got ok with %v", i, out)
+			}
+			continue
+		}
+		if !ok {
+			t.Errorf("Case %d: expecting ok got !ok", i)
+		}
+		if fmt.Sprintf("%#v", out) != fmt.Sprintf("%#v", tt.exp) {
+			t.Errorf("Case %d: expecting %v got %v", i, tt.exp, out)
+		}
+	}
+}
 
 func TestParseInteger(t *testing.T) {
 	for i, tt := range []struct {
