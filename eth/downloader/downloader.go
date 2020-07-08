@@ -328,7 +328,9 @@ func (d *Downloader) Synchronise(id string, head common.Hash, td *big.Int, mode 
 		return err
 	}
 
-	if errors.Is(err, errInvalidChain) {
+	if errors.Is(err, errInvalidChain) || errors.Is(err, errBadPeer) || errors.Is(err, errTimeout) ||
+		errors.Is(err, errStallingPeer) || errors.Is(err, errUnsyncedPeer) || errors.Is(err, errEmptyHeaderSet) ||
+		errors.Is(err, errPeersUnavailable) || errors.Is(err, errTooOld) || errors.Is(err, errInvalidAncestor) {
 		log.Warn("Synchronisation failed, dropping peer", "peer", id, "err", err)
 		if d.dropPeer == nil {
 			// The dropPeer method is nil when `--copydb` is used for a local copy.
@@ -339,22 +341,7 @@ func (d *Downloader) Synchronise(id string, head common.Hash, td *big.Int, mode 
 		}
 		return err
 	}
-
-	switch err {
-	case errTimeout, errBadPeer, errStallingPeer, errUnsyncedPeer,
-		errEmptyHeaderSet, errPeersUnavailable, errTooOld,
-		errInvalidAncestor:
-		log.Warn("Synchronisation failed, dropping peer", "peer", id, "err", err)
-		if d.dropPeer == nil {
-			// The dropPeer method is nil when `--copydb` is used for a local copy.
-			// Timeouts can occur if e.g. compaction hits at the wrong time, and can be ignored
-			log.Warn("Downloader wants to drop peer, but peerdrop-function is not set", "peer", id)
-		} else {
-			d.dropPeer(id)
-		}
-	default:
-		log.Warn("Synchronisation failed, retrying", "err", err)
-	}
+	log.Warn("Synchronisation failed, retrying", "err", err)
 	return err
 }
 
@@ -643,7 +630,7 @@ func (d *Downloader) fetchHeight(p *peerConnection) (*types.Header, error) {
 			headers := packet.(*headerPack).headers
 			if len(headers) != 1 {
 				p.log.Debug("Multiple headers for single request", "headers", len(headers))
-				return nil, errBadPeer
+				return nil, fmt.Errorf("%w: multiple headers (%d) for single request", errBadPeer, len(headers))
 			}
 			head := headers[0]
 			if (mode == FastSync || mode == LightSync) && head.Number.Uint64() < d.checkpoint {
@@ -876,7 +863,7 @@ func (d *Downloader) findAncestor(p *peerConnection, remoteHeader *types.Header)
 				headers := packer.(*headerPack).headers
 				if len(headers) != 1 {
 					p.log.Debug("Multiple headers for single request", "headers", len(headers))
-					return 0, errBadPeer
+					return 0, fmt.Errorf("%w: multiple headers (%d) for single request", errBadPeer, len(headers))
 				}
 				arrived = true
 
@@ -900,7 +887,7 @@ func (d *Downloader) findAncestor(p *peerConnection, remoteHeader *types.Header)
 				header := d.lightchain.GetHeaderByHash(h) // Independent of sync mode, header surely exists
 				if header.Number.Uint64() != check {
 					p.log.Debug("Received non requested header", "number", header.Number, "hash", header.Hash(), "request", check)
-					return 0, errBadPeer
+					return 0, fmt.Errorf("%w: non-requested header (%d)", errBadPeer, header.Number)
 				}
 				start = check
 				hash = h
@@ -1092,7 +1079,7 @@ func (d *Downloader) fetchHeaders(p *peerConnection, from uint64, pivot uint64) 
 			case d.headerProcCh <- nil:
 			case <-d.cancelCh:
 			}
-			return errBadPeer
+			return fmt.Errorf("%w: header request timed out", errBadPeer)
 		}
 	}
 }
@@ -1520,7 +1507,7 @@ func (d *Downloader) processHeaders(origin uint64, pivot uint64, td *big.Int) er
 					inserts := d.queue.Schedule(chunk, origin)
 					if len(inserts) != len(chunk) {
 						log.Debug("Stale headers")
-						return errBadPeer
+						return fmt.Errorf("%w: stale headers", errBadPeer)
 					}
 				}
 				headers = headers[limit:]
