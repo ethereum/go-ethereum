@@ -99,7 +99,9 @@ func (d *Downloader) runStateSync(s *stateSync) *stateSync {
 		finished []*stateReq                  // Completed or failed requests
 		timeout  = make(chan *stateReq)       // Timed out active requests
 	)
+
 	// Run the state sync.
+	log.Trace("State sync starting", "root", s.root)
 	go s.run()
 	defer s.Cancel()
 
@@ -210,6 +212,8 @@ func (d *Downloader) runStateSync(s *stateSync) *stateSync {
 // will time out. This is to ensure that when the next stateSync starts working, all peers
 // are marked as idle and de facto _are_ idle.
 func (d *Downloader) spindownStateSync(active map[string]*stateReq, finished []*stateReq, timeout chan *stateReq, peerDrop chan *peerConnection) {
+	log.Trace("State sync spinning down", "active", len(active), "finished", len(finished))
+
 	for len(active) > 0 {
 		var (
 			req    *stateReq
