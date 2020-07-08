@@ -59,7 +59,6 @@ type stateSyncStats struct {
 
 // syncState starts downloading state with the given root hash.
 func (d *Downloader) syncState(root common.Hash) *stateSync {
-	log.Info("Statesync starting", "root", root)
 	// Create the state sync
 	s := newStateSync(d, root)
 	select {
@@ -188,11 +187,9 @@ func (d *Downloader) runStateSync(s *stateSync) *stateSync {
 			// causes valid requests to go missing and sync to get stuck.
 			if old := active[req.peer.id]; old != nil {
 				log.Warn("Busy peer assigned new state fetch", "peer", old.peer.id)
-
-				// Make sure the previous one doesn't get siletly lost
+				// Move the previous request to the finished set
 				old.timer.Stop()
 				old.dropped = true
-
 				finished = append(finished, old)
 			}
 			// Start a timer to notify the sync loop if the peer stalled.
@@ -213,30 +210,28 @@ func (d *Downloader) runStateSync(s *stateSync) *stateSync {
 // will time out. This is to ensure that when the next stateSync starts working, all peers
 // are marked as idle and de facto _are_ idle.
 func (d *Downloader) spindownStateSync(active map[string]*stateReq, finished []*stateReq, timeout chan *stateReq, peerDrop chan *peerConnection) {
-	// We're exiting now, but we need to time out (or handle outstanding requests first)
-	log.Debug("Statesync exiting...", "active peers", len(active), "finished", len(finished))
 	for len(active) > 0 {
 		var (
 			req    *stateReq
 			reason string
 		)
 		select {
-		// Handle (drop) incoming state packs
+		// Handle (drop) incoming state packs:
 		case pack := <-d.stateCh:
 			req = active[pack.PeerId()]
 			reason = "delivered"
-		// Handle dropped peer connections
+		// Handle dropped peer connections:
 		case p := <-peerDrop:
 			req = active[p.id]
 			reason = "peerdrop"
-		// Handle timed-out requests
+		// Handle timed-out requests:
 		case req = <-timeout:
 			reason = "timeout"
 		}
 		if req == nil {
 			continue
 		}
-		req.peer.log.Debug("Marking previously active as idle", "req.items", len(req.items), "reason", reason)
+		req.peer.log.Trace("State peer marked idle (spindown)", "req.items", len(req.items), "reason", reason)
 		req.timer.Stop()
 		delete(active, req.peer.id)
 		req.peer.SetNodeDataIdle(len(req.items))
@@ -247,7 +242,6 @@ func (d *Downloader) spindownStateSync(active map[string]*stateReq, finished []*
 	for _, req := range finished {
 		req.peer.SetNodeDataIdle(len(req.items))
 	}
-	log.Debug("Statesync exiting")
 }
 
 // stateSync schedules requests for downloading a particular state trie defined
@@ -411,7 +405,6 @@ func (s *stateSync) commit(force bool) error {
 func (s *stateSync) assignTasks() {
 	// Iterate over all idle peers and try to assign them state fetches
 	peers, _ := s.d.peers.NodeDataIdlePeers()
-	log.Debug("Statesync assigning tasks", "idle peers", len(peers))
 	for _, p := range peers {
 		// Assign a batch of fetches proportional to the estimated latency/bandwidth
 		cap := p.NodeDataCapacity(s.d.requestRTT())
