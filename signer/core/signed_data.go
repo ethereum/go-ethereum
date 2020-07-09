@@ -285,7 +285,7 @@ func (api *SignerAPI) determineSignatureFormat(ctx context.Context, contentType 
 			header.Extra = newExtra
 		}
 		// Get back the rlp data, encoded by us
-		sighash, parliaRlp, err := parliaHeaderHashAndRlp(header)
+		sighash, parliaRlp, err := parliaHeaderHashAndRlp(header, api.chainID)
 		if err != nil {
 			return nil, useEthereumV, err
 		}
@@ -351,13 +351,13 @@ func cliqueHeaderHashAndRlp(header *types.Header) (hash, rlp []byte, err error) 
 	return hash, rlp, err
 }
 
-func parliaHeaderHashAndRlp(header *types.Header) (hash, rlp []byte, err error) {
+func parliaHeaderHashAndRlp(header *types.Header, chainId *big.Int) (hash, rlp []byte, err error) {
 	if len(header.Extra) < 65 {
 		err = fmt.Errorf("clique header extradata too short, %d < 65", len(header.Extra))
 		return
 	}
-	rlp = parlia.ParliaRLP(header)
-	hash = parlia.SealHash(header).Bytes()
+	rlp = parlia.ParliaRLP(header, chainId)
+	hash = parlia.SealHash(header, chainId).Bytes()
 	return hash, rlp, err
 }
 

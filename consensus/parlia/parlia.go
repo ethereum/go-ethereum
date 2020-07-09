@@ -156,7 +156,7 @@ func isToSystemContract(to common.Address) bool {
 }
 
 // ecrecover extracts the Ethereum account address from a signed header.
-func ecrecover(header *types.Header, sigCache *lru.ARCCache) (common.Address, error) {
+func ecrecover(header *types.Header, sigCache *lru.ARCCache, chainId *big.Int) (common.Address, error) {
 	// If the signature's already cached, return that
 	hash := header.Hash()
 	if address, known := sigCache.Get(hash); known {
@@ -169,7 +169,7 @@ func ecrecover(header *types.Header, sigCache *lru.ARCCache) (common.Address, er
 	signature := header.Extra[len(header.Extra)-extraSeal:]
 
 	// Recover the public key and the Ethereum address
-	pubkey, err := crypto.Ecrecover(SealHash(header).Bytes(), signature)
+	pubkey, err := crypto.Ecrecover(SealHash(header, chainId).Bytes(), signature)
 	if err != nil {
 		return common.Address{}, err
 	}
@@ -187,9 +187,9 @@ func ecrecover(header *types.Header, sigCache *lru.ARCCache) (common.Address, er
 // Note, the method requires the extra data to be at least 65 bytes, otherwise it
 // panics. This is done to avoid accidentally using both forms (signature present
 // or not), which could be abused to produce different hashes for the same header.
-func ParliaRLP(header *types.Header) []byte {
+func ParliaRLP(header *types.Header, chainId *big.Int) []byte {
 	b := new(bytes.Buffer)
-	encodeSigHeader(b, header)
+	encodeSigHeader(b, header, chainId)
 	return b.Bytes()
 }
 
@@ -498,7 +498,7 @@ func (p *Parlia) snapshot(chain consensus.ChainReader, number uint64, hash commo
 		headers[i], headers[len(headers)-1-i] = headers[len(headers)-1-i], headers[i]
 	}
 
-	snap, err := snap.apply(headers, chain, parents)
+	snap, err := snap.apply(headers, chain, parents, p.chainConfig.ChainID)
 	if err != nil {
 		return nil, err
 	}
@@ -546,7 +546,7 @@ func (p *Parlia) verifySeal(chain consensus.ChainReader, header *types.Header, p
 	}
 
 	// Resolve the authorization key and check against validators
-	signer, err := ecrecover(header, p.signatures)
+	signer, err := ecrecover(header, p.signatures, p.chainConfig.ChainID)
 	if err != nil {
 		return err
 	}
@@ -821,7 +821,7 @@ func (p *Parlia) Seal(chain consensus.ChainReader, block *types.Block, results c
 	log.Info("Sealing block with", "number", number, "delay", delay, "headerDifficulty", header.Difficulty, "val", val.Hex())
 
 	// Sign all the things!
-	sig, err := signFn(accounts.Account{Address: val}, accounts.MimetypeParlia, ParliaRLP(header))
+	sig, err := signFn(accounts.Account{Address: val}, accounts.MimetypeParlia, ParliaRLP(header, p.chainConfig.ChainID))
 	if err != nil {
 		return err
 	}
@@ -839,7 +839,7 @@ func (p *Parlia) Seal(chain consensus.ChainReader, block *types.Block, results c
 		select {
 		case results <- block.WithSeal(header):
 		default:
-			log.Warn("Sealing result is not read by miner", "sealhash", SealHash(header))
+			log.Warn("Sealing result is not read by miner", "sealhash", SealHash(header, p.chainConfig.ChainID))
 		}
 	}()
 
@@ -869,7 +869,7 @@ func CalcDifficulty(snap *Snapshot, signer common.Address) *big.Int {
 
 // SealHash returns the hash of a block prior to it being sealed.
 func (p *Parlia) SealHash(header *types.Header) common.Hash {
-	return SealHash(header)
+	return SealHash(header, p.chainConfig.ChainID)
 }
 
 // APIs implements consensus.Engine, returning the user facing RPC API to query snapshot.
@@ -1109,15 +1109,16 @@ func (p *Parlia) applyTransaction(
 
 // ===========================     utility function        ==========================
 // SealHash returns the hash of a block prior to it being sealed.
-func SealHash(header *types.Header) (hash common.Hash) {
+func SealHash(header *types.Header, chainId *big.Int) (hash common.Hash) {
 	hasher := sha3.NewLegacyKeccak256()
-	encodeSigHeader(hasher, header)
+	encodeSigHeader(hasher, header, chainId)
 	hasher.Sum(hash[:0])
 	return hash
 }
 
-func encodeSigHeader(w io.Writer, header *types.Header) {
+func encodeSigHeader(w io.Writer, header *types.Header, chainId *big.Int) {
 	err := rlp.Encode(w, []interface{}{
+		chainId,
 		header.ParentHash,
 		header.UncleHash,
 		header.Coinbase,
