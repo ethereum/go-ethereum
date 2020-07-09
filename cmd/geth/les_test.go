@@ -88,10 +88,8 @@ func (g *gethrpc) waitSynced() {
 		g.geth.Log("Other 'syncing' event", ev)
 	case err := <-sub.Err():
 		g.geth.Fatalf("%v notification: %v", g.name, err)
-		break
 	case <-timeout:
 		g.geth.Fatalf("%v timeout syncing", g.name)
-		break
 	}
 }
 
@@ -150,8 +148,13 @@ func TestPriorityClient(t *testing.T) {
 	// Set up priority client, get its nodeID, increase its balance on the lightServer
 	prioCli := startClient(t, "prioCli")
 	defer prioCli.killAndWait()
-	// 3_000_000_000 once we move to Go 1.13
-	tokens := 3000000000
+
+	// 5_000_000_000 once we move to Go 1.13.
+	//
+	// The reason for picking this number is the connected client can enjoy a connection
+	// bias so that we have to assign a higer balance to ensure the new client can kick
+	// out the original client.
+	tokens := 5000000000
 	lightServer.callRPC(nil, "les_addBalance", prioCli.getNodeInfo().ID, tokens, "foobar")
 	prioCli.addPeer(lightServer)
 
