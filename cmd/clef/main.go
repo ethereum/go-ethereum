@@ -297,11 +297,10 @@ var AppHelpFlagGroups = []flagGroup{
 	},
 	{
 		Name: "ALIASED (deprecated)",
-		Flags: []cli.Flag {
+		Flags: []cli.Flag{
 			legacyRPCPortFlag,
 		},
 	},
-
 }
 
 func init() {
