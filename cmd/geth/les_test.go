@@ -97,7 +97,7 @@ func (g *gethrpc) waitSynced() {
 
 func startGethWithRpc(t *testing.T, name string, args ...string) *gethrpc {
 	g := &gethrpc{name: name}
-	args = append([]string{"--networkid=42", "--port=0", "--nousb", "--rpc", "--rpcport=0", "--rpcapi=admin,eth,les"}, args...)
+	args = append([]string{"--networkid=42", "--port=0", "--nousb", "--http", "--http.port=0", "--http.api=admin,eth,les"}, args...)
 	t.Logf("Starting %v with rpc: %v", name, args)
 	g.geth = runGeth(t, args...)
 	// wait before we can attach to it. TODO: probe for it properly
