@@ -1688,6 +1688,8 @@ func RegisterEthService(stack *node.Node, cfg *eth.Config) ethapi.Backend {
 		}
 		if cfg.LightServ > 0 {
 			ls, _ := les.NewLesServer(backend, cfg)
+			stack.RegisterProtocols(ls.Protocols()) // TODO should this happen?
+			stack.RegisterAPIs(ls.APIs())
 			backend.AddLesServer(ls)
 		}
 		return backend.APIBackend
