@@ -308,6 +308,28 @@ func init() {
 	app.Name = "Clef"
 	app.Usage = "Manage Ethereum account operations"
 	app.Flags = []cli.Flag{
+		logLevelFlag,
+		keystoreFlag,
+		configdirFlag,
+		chainIdFlag,
+		utils.LightKDFFlag,
+		utils.NoUSBFlag,
+		utils.SmartCardDaemonPathFlag,
+		utils.HTTPListenAddrFlag,
+		utils.HTTPVirtualHostsFlag,
+		utils.IPCDisabledFlag,
+		utils.IPCPathFlag,
+		utils.HTTPEnabledFlag,
+		rpcPortFlag,
+		signerSecretFlag,
+		customDBFlag,
+		auditLogFlag,
+		ruleFlag,
+		stdiouiFlag,
+		testFlag,
+		advancedMode,
+		acceptFlag,
+		legacyRPCPortFlag,
 	}
 	app.Action = signer
 	app.Commands = []cli.Command{initCommand,
@@ -353,6 +375,8 @@ func init() {
 				"cmd":              data,
 				"categorizedFlags": sorted,
 			})
+		} else {
+			originalHelpPrinter(w, tmpl, data)
 		}
 	}
 }
@@ -714,8 +738,17 @@ func signer(c *cli.Context) error {
 		}
 		handler := node.NewHTTPHandlerStack(srv, cors, vhosts)
 
+		// set port
+		port := c.Int(rpcPortFlag.Name)
+		if c.GlobalIsSet(legacyRPCPortFlag.Name) {
+			if !c.GlobalIsSet(rpcPortFlag.Name) {
+				port = c.Int(legacyRPCPortFlag.Name)
+			}
+			log.Warn("The flag --rpcport is deprecated and will be removed in the future, please use --http.clefport")
+		}
+
 		// start http server
-		httpEndpoint := fmt.Sprintf("%s:%d", c.GlobalString(utils.HTTPListenAddrFlag.Name), c.Int(rpcPortFlag.Name))
+		httpEndpoint := fmt.Sprintf("%s:%d", c.GlobalString(utils.HTTPListenAddrFlag.Name), port)
 		httpServer, addr, err := node.StartHTTPEndpoint(httpEndpoint, rpc.DefaultHTTPTimeouts, handler)
 		if err != nil {
 			utils.Fatalf("Could not start RPC api: %v", err)
