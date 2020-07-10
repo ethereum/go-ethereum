@@ -190,6 +190,13 @@ func (api *ExternalSigner) SignText(account accounts.Account, text []byte) ([]by
 	return signature, nil
 }
 
+
+// signTransactionResult represents the signinig result returned by clef.
+type signTransactionResult struct {
+	Raw hexutil.Bytes      `json:"raw"`
+	Tx  *types.Transaction `json:"tx"`
+}
+
 func (api *ExternalSigner) SignTx(account accounts.Account, tx *types.Transaction, chainID *big.Int) (*types.Transaction, error) {
 	data := hexutil.Bytes(tx.Data())
 	var to *common.MixedcaseAddress
@@ -206,7 +213,7 @@ func (api *ExternalSigner) SignTx(account accounts.Account, tx *types.Transactio
 		To:       to,
 		From:     common.NewMixedcaseAddress(account.Address),
 	}
-	var res core.SignTransactionResult
+	var res signTransactionResult
 	if err := api.client.Call(&res, "account_signTransaction", args); err != nil {
 		return nil, err
 	}
