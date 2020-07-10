@@ -228,21 +228,3 @@ func isWebsocket(r *http.Request) bool {
 	return strings.ToLower(r.Header.Get("Upgrade")) == "websocket" &&
 		strings.ToLower(r.Header.Get("Connection")) == "upgrade"
 }
-
-// NewGQLUpgradeHandler wraps the given handler, h, in the given graphQL handler.
-func NewGQLUpgradeHandler(h http.Handler, gql http.Handler) http.Handler {
-	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if isGQL(r) {
-			gql.ServeHTTP(w, r)
-			log.Debug("serving graphql request")
-			return
-		}
-
-		h.ServeHTTP(w, r)
-	})
-}
-
-// isGQL checks if the given request is a graphQL request.
-func isGQL(r *http.Request) bool {
-	return r.URL.Path == "/graphql" || r.URL.Path == "/graphql/"
-}
