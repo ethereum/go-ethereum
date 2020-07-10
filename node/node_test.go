@@ -119,7 +119,7 @@ func TestLifecycleRegistry_Successful(t *testing.T) {
 	noop := NewNoop()
 	stack.RegisterLifecycle(noop)
 
-	if _, exists := stack.lifecycles[reflect.TypeOf(noop)]; !exists {
+	if !containsLifecycle(stack.lifecycles, noop) {
 		t.Fatalf("lifecycle was not properly registered on the node, %v", err)
 	}
 }
@@ -463,18 +463,11 @@ func TestHTTPServerCreateAndStop(t *testing.T) {
 		t.Fatalf("node has more than 1 http server")
 	}
 	// check to make sure http servers are registered
-	var exists bool
-	for _, lifecycle := range node1.lifecycles {
-		if reflect.DeepEqual(node1.httpServers, lifecycle) {
-			exists = true
-		}
-	}
-	if !exists {
+	if !containsLifecycle(node1.lifecycles, &node1.httpServers) {
 		t.Fatal("HTTP servers not registered as lifecycles on the node")
 	}
 	// check to make sure http servers are configured properly
 	for _, server := range node1.httpServers {
-
 		if atomic.LoadInt32(&server.WSAllowed) == 0 && atomic.LoadInt32(&server.RPCAllowed) == 0 {
 			t.Fatalf("node's http server is not configured to handle both rpc and ws")
 		}
@@ -491,13 +484,7 @@ func TestHTTPServerCreateAndStop(t *testing.T) {
 		t.Fatalf("amount of http servers on the node is not equal to 2")
 	}
 	// check to make sure http servers are registered
-	exists = false
-	for _, lifecycle := range node2.lifecycles {
-		if reflect.DeepEqual(node2.httpServers, lifecycle) {
-			exists = true
-		}
-	}
-	if !exists {
+	if !containsLifecycle(node2.lifecycles, &node2.httpServers) {
 		t.Fatal("HTTP servers not registered as lifecycles on the node")
 	}
 	// check that neither http server has both ws and rpc enabled

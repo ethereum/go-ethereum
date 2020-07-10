@@ -50,13 +50,13 @@ type Node struct {
 	instanceDirLock   fileutil.Releaser // prevents concurrent use of instance directory
 
 	lock          sync.RWMutex
-	stop          chan struct{}              // Channel to wait for termination notifications
-	server        *p2p.Server                // Currently running P2P networking layer
-	lifecycles    map[reflect.Type]Lifecycle // All registered backends, services, and auxiliary services that have a lifecycle
-	httpServers   serverMap                  // serverMap stores information about the node's rpc, ws, and graphQL http servers.
-	inprocHandler *rpc.Server                // In-process RPC request handler to process the API requests
-	rpcAPIs       []rpc.API                  // List of APIs currently provided by the node
-	ipc           *httpServer                // Stores information about the ipc http server
+	stop          chan struct{} // Channel to wait for termination notifications
+	server        *p2p.Server   // Currently running P2P networking layer
+	lifecycles    []Lifecycle   // All registered backends, services, and auxiliary services that have a lifecycle
+	httpServers   serverMap     // serverMap stores information about the node's rpc, ws, and graphQL http servers.
+	inprocHandler *rpc.Server   // In-process RPC request handler to process the API requests
+	rpcAPIs       []rpc.API     // List of APIs currently provided by the node
+	ipc           *httpServer   // Stores information about the ipc http server
 }
 
 // New creates a new P2P node, ready for protocol registration.
@@ -98,7 +98,6 @@ func New(conf *Config) (*Node, error) {
 		accman:            am,
 		ephemeralKeystore: ephemeralKeystore,
 		config:            conf,
-		lifecycles:        make(map[reflect.Type]Lifecycle),
 		httpServers:       make(serverMap),
 		ipc: &httpServer{
 			endpoint: conf.IPCEndpoint(),
@@ -188,12 +187,12 @@ func (n *Node) Close() error {
 
 // RegisterLifecycle registers the given Lifecycle on the node.
 func (n *Node) RegisterLifecycle(lifecycle Lifecycle) {
-	kind := reflect.TypeOf(lifecycle)
-	if _, exists := n.lifecycles[kind]; exists {
-		panic(fmt.Sprintf("Lifecycle cannot be registered more than once: %v", kind))
+	for _, obj := range n.lifecycles {
+		if obj == lifecycle {
+			panic(fmt.Sprintf("attempt to register lifecycle %T more than once", lifecycle))
+		}
 	}
-
-	n.lifecycles[kind] = lifecycle
+	n.lifecycles = append(n.lifecycles, lifecycle)
 }
 
 // RegisterProtocols adds backend's protocols to the node's p2p server.
@@ -295,7 +294,7 @@ func (n *Node) Start() error {
 	var started []Lifecycle
 	for _, lifecycle := range n.lifecycles {
 		if err := lifecycle.Start(); err != nil {
-			n.stopLifecycles(started)
+			stopLifecycles(started)
 			n.server.Stop()
 			return err
 		}
@@ -307,11 +306,25 @@ func (n *Node) Start() error {
 	return nil
 }
 
-// stopLifecycles stops the node's running Lifecycles.
-func (n *Node) stopLifecycles(started []Lifecycle) {
-	for _, lifecycle := range started {
-		lifecycle.Stop()
+// containsLifecycle checks if 'lfs' contains 'l'.
+func containsLifecycle(lfs []Lifecycle, l Lifecycle) bool {
+	for _, obj := range lfs {
+		if obj == l {
+			return true
+		}
 	}
+	return false
+}
+
+// stopLifecycles stops the given lifecycles in reverse order.
+func stopLifecycles(lfs []Lifecycle) map[reflect.Type]error {
+	errors := make(map[reflect.Type]error)
+	for i := len(lfs) - 1; i >= 0; i-- {
+		if err := lfs[i].Stop(); err != nil {
+			errors[reflect.TypeOf(lfs[i])] = err
+		}
+	}
+	return errors
 }
 
 // Config returns the configuration of node.
@@ -364,10 +377,12 @@ func (n *Node) configureRPC() error {
 			return err
 		}
 	}
+
 	// only register http server as a lifecycle if it has not already been registered
-	if _, exists := n.lifecycles[reflect.TypeOf(n.httpServers)]; !exists {
-		n.RegisterLifecycle(n.httpServers)
+	if !containsLifecycle(n.lifecycles, &n.httpServers) {
+		n.RegisterLifecycle(&n.httpServers)
 	}
+
 	// All API endpoints started successfully
 	return nil
 }
@@ -468,15 +483,9 @@ func (n *Node) Stop() error {
 	// Terminate the API, services and the p2p server.
 	n.stopIPC()
 	n.rpcAPIs = nil
-	failure := &StopError{
-		Services: make(map[reflect.Type]error),
-	}
-	for kind, lifecycle := range n.lifecycles {
-		if err := lifecycle.Stop(); err != nil {
-			failure.Services[reflect.TypeOf(lifecycle)] = err
-		}
-		delete(n.lifecycles, kind)
-	}
+	failure := new(StopError)
+	failure.Services = stopLifecycles(n.lifecycles)
+
 	n.server.Stop()
 	n.server = nil
 
