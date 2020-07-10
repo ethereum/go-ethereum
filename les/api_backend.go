@@ -19,7 +19,6 @@ package les
 import (
 	"context"
 	"errors"
-	"fmt"
 	"math/big"
 
 	"github.com/ethereum/go-ethereum/accounts"
@@ -36,7 +35,6 @@ import (
 	"github.com/ethereum/go-ethereum/ethdb"
 	"github.com/ethereum/go-ethereum/event"
 	"github.com/ethereum/go-ethereum/light"
-	"github.com/ethereum/go-ethereum/miner"
 	"github.com/ethereum/go-ethereum/params"
 	"github.com/ethereum/go-ethereum/rpc"
 )
@@ -290,23 +288,6 @@ func (b *LesApiBackend) Engine() consensus.Engine {
 	return b.eth.engine
 }
 
-func (b *LesApiBackend) GetBlockByNumber(ctx context.Context, number uint64) (*types.Block, error) {
-	header := b.eth.blockchain.GetHeaderByNumber(number)
-	return types.NewBlockWithHeader(header), nil // TODO is this okay?
-}
-
 func (b *LesApiBackend) CurrentHeader() *types.Header {
 	return b.eth.blockchain.CurrentHeader()
-}
-
-func (b *LesApiBackend) Miner() *miner.Miner {
-	return nil
-}
-
-func (b *LesApiBackend) StartMining(threads int) error {
-	return fmt.Errorf("Light clients do not support mining") // TODO is this okay?
-}
-
-func (b *LesApiBackend) TxPool() *core.TxPool {
-	return nil // TODO is this okay?
 }

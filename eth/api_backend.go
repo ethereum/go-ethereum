@@ -318,10 +318,6 @@ func (b *EthAPIBackend) Engine() consensus.Engine {
 	return b.eth.engine
 }
 
-func (b *EthAPIBackend) GetBlockByNumber(ctx context.Context, number uint64) (*types.Block, error) {
-	return b.eth.blockchain.GetBlockByNumber(number), nil
-}
-
 func (b *EthAPIBackend) CurrentHeader() *types.Header {
 	return b.eth.blockchain.CurrentHeader()
 }

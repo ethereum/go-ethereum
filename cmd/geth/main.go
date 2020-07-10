@@ -19,6 +19,7 @@ package main
 
 import (
 	"fmt"
+	"github.com/ethereum/go-ethereum/eth"
 	"math"
 	"os"
 	godebug "runtime/debug"
@@ -378,7 +379,6 @@ func startNode(ctx *cli.Context, stack *node.Node, backend ethapi.Backend) {
 	if err != nil {
 		utils.Fatalf("Failed to attach to self: %v", err)
 	}
-
 	ethClient := ethclient.NewClient(rpcClient)
 
 	go func() {
@@ -444,23 +444,24 @@ func startNode(ctx *cli.Context, stack *node.Node, backend ethapi.Backend) {
 		if ctx.GlobalString(utils.SyncModeFlag.Name) == "light" {
 			utils.Fatalf("Light clients do not support mining")
 		}
+		ethBackend, ok := backend.(*eth.EthAPIBackend)
+		if !ok {
+			utils.Fatalf("Ethereum service not running: %v", err)
+		}
+
 		// Set the gas price to the limits from the CLI and start mining
 		gasprice := utils.GlobalBig(ctx, utils.MinerGasPriceFlag.Name)
 		if ctx.GlobalIsSet(utils.LegacyMinerGasPriceFlag.Name) && !ctx.GlobalIsSet(utils.MinerGasPriceFlag.Name) {
 			gasprice = utils.GlobalBig(ctx, utils.LegacyMinerGasPriceFlag.Name)
 		}
-		txpool := backend.TxPool()
-		if txpool == nil {
-			utils.Fatalf("Ethereum service not running: %v", err)
-		}
-		txpool.SetGasPrice(gasprice)
-
+		ethBackend.TxPool().SetGasPrice(gasprice)
+		// start mining
 		threads := ctx.GlobalInt(utils.MinerThreadsFlag.Name)
 		if ctx.GlobalIsSet(utils.LegacyMinerThreadsFlag.Name) && !ctx.GlobalIsSet(utils.MinerThreadsFlag.Name) {
 			threads = ctx.GlobalInt(utils.LegacyMinerThreadsFlag.Name)
 			log.Warn("The flag --minerthreads is deprecated and will be removed in the future, please use --miner.threads")
 		}
-		if err := backend.StartMining(threads); err != nil {
+		if err := ethBackend.StartMining(threads); err != nil {
 			utils.Fatalf("Failed to start mining: %v", err)
 		}
 	}

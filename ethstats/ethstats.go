@@ -22,6 +22,10 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"github.com/ethereum/go-ethereum/eth/downloader"
+	"github.com/ethereum/go-ethereum/event"
+	"github.com/ethereum/go-ethereum/miner"
+	"github.com/ethereum/go-ethereum/rpc"
 	"math/big"
 	"net/http"
 	"regexp"
@@ -36,7 +40,6 @@ import (
 	"github.com/ethereum/go-ethereum/core"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/eth"
-	"github.com/ethereum/go-ethereum/internal/ethapi"
 	"github.com/ethereum/go-ethereum/les"
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/node"
@@ -56,14 +59,29 @@ const (
 	chainHeadChanSize = 10
 )
 
-// Backend encompasses the backend behaviors needed for the ethstats service.
-type Backend ethapi.Backend
+type backend interface{
+	SubscribeChainHeadEvent(ch chan<- core.ChainHeadEvent) event.Subscription
+	SubscribeNewTxsEvent(ch chan<- core.NewTxsEvent) event.Subscription
+	CurrentHeader() *types.Header
+	HeaderByNumber(ctx context.Context, number rpc.BlockNumber) (*types.Header, error)
+	GetTd(blockHash common.Hash) *big.Int
+	Stats() (pending int, queued int)
+	Downloader() *downloader.Downloader
+}
+
+type fullNodeBackend interface{
+	backend
+	Miner() *miner.Miner
+	BlockByNumber(ctx context.Context, number rpc.BlockNumber) (*types.Block, error)
+	CurrentBlock() *types.Block
+	SuggestPrice(ctx context.Context) (*big.Int, error)
+}
 
 // Service implements an Ethereum netstats reporting daemon that pushes local
 // chain statistics up to a monitoring server.
 type Service struct {
 	server  *p2p.Server // Peer-to-peer server to retrieve networking infos
-	backend Backend
+	backend backend
 	engine  consensus.Engine // Consensus engine to retrieve variadic block fields
 
 	node string // Name of the node to display on the monitoring page
@@ -75,7 +93,7 @@ type Service struct {
 }
 
 // New returns a monitoring service ready for stats reporting.
-func New(node *node.Node, backend Backend, engine consensus.Engine, url string) error {
+func New(node *node.Node, backend backend, engine consensus.Engine, url string) error {
 	// Parse the netstats connection url
 	re := regexp.MustCompile("([^:@]*)(:([^@]*))?@(.+)")
 	parts := re.FindStringSubmatch(url)
@@ -530,18 +548,30 @@ func (s *Service) assembleBlockStats(block *types.Block) *blockStats {
 		uncles []*types.Header
 	)
 
-	// Full nodes have all needed information available
-	if block == nil {
-		block = s.backend.CurrentBlock()
-	}
-	header = block.Header()
-	td = s.backend.GetTd(header.Hash()) // TODO is it okay to just call `GetTD` with just the hash and not number?
+	// check if backend is a full node
+	fullBackend, ok := s.backend.(fullNodeBackend)
+	if ok {
+		if block == nil {
+			block = fullBackend.CurrentBlock()
+		}
+		header = block.Header()
+		td = fullBackend.GetTd(header.Hash())
 
-	txs = make([]txStats, len(block.Transactions()))
-	for i, tx := range block.Transactions() {
-		txs[i].Hash = tx.Hash()
+		txs = make([]txStats, len(block.Transactions()))
+		for i, tx := range block.Transactions() {
+			txs[i].Hash = tx.Hash()
+		}
+		uncles = block.Uncles()
+	} else {
+		// Light nodes would need on-demand lookups for transactions/uncles, skip
+		if block != nil {
+			header = block.Header()
+		} else {
+			header = s.backend.CurrentHeader()
+		}
+		td = s.backend.GetTd(header.Hash())
+		txs = []txStats{}
 	}
-	uncles = block.Uncles()
 
 	// Assemble and return the block stats
 	author, _ := s.engine.Author(header)
@@ -585,12 +615,16 @@ func (s *Service) reportHistory(conn *websocket.Conn, list []uint64) error {
 	// Gather the batch of blocks to report
 	history := make([]*blockStats, len(indexes))
 	for i, number := range indexes {
+		fullBackend, ok := s.backend.(fullNodeBackend)
 		// Retrieve the next block if it's known to us
-		block, err := s.backend.GetBlockByNumber(context.Background(), number)
-		if err != nil {
-			return err
+		var block *types.Block
+		if ok {
+			block, _ = fullBackend.BlockByNumber(context.Background(), rpc.BlockNumber(number)) // TODO ignore error here ?
+		} else {
+			if header, _ := s.backend.HeaderByNumber(context.Background(), rpc.BlockNumber(number)); header != nil {
+				block = types.NewBlockWithHeader(header)
+			}
 		}
-
 		// If we do have the block, add to the history and continue
 		if block != nil {
 			history[len(history)-1-i] = s.assembleBlockStats(block)
@@ -652,27 +686,31 @@ type nodeStats struct {
 	Uptime   int  `json:"uptime"`
 }
 
-// reportPending retrieves various stats about the node at the networking and
+// reportStats retrieves various stats about the node at the networking and
 // mining layer and reports it to the stats server.
 func (s *Service) reportStats(conn *websocket.Conn) error {
 	// Gather the syncing and mining infos from the local miner instance
 	var (
 		mining   bool
 		hashrate int
+		syncing bool
+		gasprice int
 	)
+	// check if backend is a full node
+	fullBackend, ok := s.backend.(fullNodeBackend)
+	if ok {
+		mining = fullBackend.Miner().Mining()
+		hashrate = int(fullBackend.Miner().HashRate())
 
-	mine := s.backend.Miner()
-	if mine != nil {
-		mining = mine.Mining()
-		hashrate = int(s.backend.Miner().HashRate())
+		sync := fullBackend.Downloader().Progress()
+		syncing = fullBackend.CurrentHeader().Number.Uint64() >= sync.HighestBlock
+
+		price, _ := fullBackend.SuggestPrice(context.Background())
+		gasprice = int(price.Uint64())
+	} else {
+		sync := s.backend.Downloader().Progress()
+		syncing = s.backend.CurrentHeader().Number.Uint64() >= sync.HighestBlock
 	}
-
-	sync := s.backend.Downloader().Progress()
-	syncing := s.backend.CurrentHeader().Number.Uint64() >= sync.HighestBlock
-
-	price, _ := s.backend.SuggestPrice(context.Background())
-	gasprice := int(price.Uint64())
-
 	// Assemble the node stats and send it to the server
 	log.Trace("Sending node details to ethstats")
 
