@@ -38,7 +38,7 @@ GLOBAL OPTIONS:
    --ipcdisable            Disable the IPC-RPC server
    --ipcpath               Filename for IPC socket/pipe within the datadir (explicit paths escape it)
    --http                  Enable the HTTP-RPC server
-   --http.clefport value   HTTP-RPC server listening port (default: 8550)
+   --http.port value       HTTP-RPC server listening port (default: 8550)
    --signersecret value    A file containing the (encrypted) master seed to encrypt Clef data, e.g. keystore credentials and ruleset hash
    --4bytedb-custom value  File used for writing new 4byte-identifiers submitted via API (default: "./4byte-custom.json")
    --auditlog value        File used to emit audit logs. Set to "" to disable (default: "audit.log")
@@ -113,7 +113,7 @@ Some snags and todos
 
 ### External API
 
-Clef listens to HTTP requests on `http.addr`:`http.clefport` (or to IPC on `ipcpath`), with the same JSON-RPC standard as Geth. The messages are expected to be [JSON-RPC 2.0 standard](https://www.jsonrpc.org/specification).
+Clef listens to HTTP requests on `http.addr`:`http.port` (or to IPC on `ipcpath`), with the same JSON-RPC standard as Geth. The messages are expected to be [JSON-RPC 2.0 standard](https://www.jsonrpc.org/specification).
 
 Some of these calls can require user interaction. Clients must be aware that responses may be delayed significantly or may never be received if a user decides to ignore the confirmation request.
 

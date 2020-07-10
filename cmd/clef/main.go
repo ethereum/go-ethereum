@@ -122,13 +122,13 @@ var (
 		Usage: "Chain id to use for signing (1=mainnet, 3=Ropsten, 4=Rinkeby, 5=Goerli)",
 	}
 	rpcPortFlag = cli.IntFlag{
-		Name:  "http.clefport",
+		Name:  "http.port",
 		Usage: "HTTP-RPC server listening port",
 		Value: node.DefaultHTTPPort + 5,
 	}
 	legacyRPCPortFlag = cli.IntFlag{
 		Name:  "rpcport",
-		Usage: "HTTP-RPC server listening port (Deprecated, please use --http.clefport).",
+		Usage: "HTTP-RPC server listening port (Deprecated, please use --http.port).",
 		Value: node.DefaultHTTPPort + 5,
 	}
 	signerSecretFlag = cli.StringFlag{
@@ -743,7 +743,7 @@ func signer(c *cli.Context) error {
 			if !c.GlobalIsSet(rpcPortFlag.Name) {
 				port = c.Int(legacyRPCPortFlag.Name)
 			}
-			log.Warn("The flag --rpcport is deprecated and will be removed in the future, please use --http.clefport")
+			log.Warn("The flag --rpcport is deprecated and will be removed in the future, please use --http.port")
 		}
 
 		// start http server
