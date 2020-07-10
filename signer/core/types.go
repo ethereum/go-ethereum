@@ -98,9 +98,3 @@ func (args *SendTxArgs) toTransaction() *types.Transaction {
 	}
 	return types.NewTransaction(uint64(args.Nonce), args.To.Address(), (*big.Int)(&args.Value), (uint64)(args.Gas), (*big.Int)(&args.GasPrice), input)
 }
-
-// SignTransactionResult represents the signinig result.
-type SignTransactionResult struct {
-	Raw hexutil.Bytes      `json:"raw"`
-	Tx  *types.Transaction `json:"tx"`
-}
