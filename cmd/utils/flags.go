@@ -1684,12 +1684,13 @@ func RegisterEthService(stack *node.Node, cfg *eth.Config) ethapi.Backend {
 	} else {
 		backend, err := eth.New(stack, cfg)
 		if err != nil {
-			Fatalf("Failed to register the Ethereum service: %w", err)
+			Fatalf("Failed to register the Ethereum service: %v", err)
 		}
 		if cfg.LightServ > 0 {
-			ls, _ := les.NewLesServer(stack, backend, cfg)
-			stack.RegisterProtocols(ls.Protocols()) // TODO should this happen?
-			stack.RegisterAPIs(ls.APIs())
+			_, err := les.NewLesServer(stack, backend, cfg)
+			if err != nil {
+				Fatalf("Failed to create the LES server: %v", err)
+			}
 		}
 		return backend.APIBackend
 	}
