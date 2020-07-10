@@ -187,10 +187,8 @@ func (n *Node) Close() error {
 
 // RegisterLifecycle registers the given Lifecycle on the node.
 func (n *Node) RegisterLifecycle(lifecycle Lifecycle) {
-	for _, obj := range n.lifecycles {
-		if obj == lifecycle {
-			panic(fmt.Sprintf("attempt to register lifecycle %T more than once", lifecycle))
-		}
+	if containsLifecycle(n.lifecycles, lifecycle) {
+		panic(fmt.Sprintf("attempt to register lifecycle %T more than once", lifecycle))
 	}
 	n.lifecycles = append(n.lifecycles, lifecycle)
 }
