@@ -105,8 +105,9 @@ func New(conf *Config) (*Node, error) {
 		ipc: &httpServer{
 			endpoint: conf.IPCEndpoint(),
 		},
-		eventmux: new(event.TypeMux),
-		log:      conf.Logger,
+		inprocHandler: rpc.NewServer(),
+		eventmux:      new(event.TypeMux),
+		log:           conf.Logger,
 	}
 
 	// Initialize the p2p server. This creates the node key and
@@ -395,26 +396,19 @@ func (n *Node) createHandler(server *httpServer) http.Handler {
 	return handler
 }
 
-// startInProc initializes an in-process RPC endpoint.
+// startInProc registers all RPC APIs on the inproc server.
 func (n *Node) startInProc() error {
-	// Register all the APIs exposed by the services
-	handler := rpc.NewServer()
 	for _, api := range n.rpcAPIs {
-		if err := handler.RegisterName(api.Namespace, api.Service); err != nil {
+		if err := n.inprocHandler.RegisterName(api.Namespace, api.Service); err != nil {
 			return err
 		}
-		n.log.Debug("InProc registered", "namespace", api.Namespace)
 	}
-	n.inprocHandler = handler
 	return nil
 }
 
 // stopInProc terminates the in-process RPC endpoint.
 func (n *Node) stopInProc() {
-	if n.inprocHandler != nil {
-		n.inprocHandler.Stop()
-		n.inprocHandler = nil
-	}
+	n.inprocHandler.Stop()
 }
 
 // startIPC initializes and starts the IPC RPC endpoint.
@@ -530,12 +524,6 @@ func (n *Node) Wait() {
 
 // Attach creates an RPC client attached to an in-process API handler.
 func (n *Node) Attach() (*rpc.Client, error) {
-	n.lock.RLock()
-	defer n.lock.RUnlock()
-
-	if n.server == nil {
-		return nil, ErrNodeStopped
-	}
 	return rpc.DialInProc(n.inprocHandler), nil
 }
 
