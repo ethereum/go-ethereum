@@ -51,16 +51,6 @@ type CheckpointOracle struct {
 
 // New creates a checkpoint oracle handler with given configs and callback.
 func New(config *params.CheckpointOracleConfig, getLocal func(uint64) params.TrustedCheckpoint) *CheckpointOracle {
-	if config == nil {
-		log.Info("Checkpoint registrar is not enabled")
-		return nil
-	}
-	if config.Address == (common.Address{}) || uint64(len(config.Signers)) < config.Threshold {
-		log.Warn("Invalid checkpoint registrar config")
-		return nil
-	}
-	log.Info("Configured checkpoint registrar", "address", config.Address, "signers", len(config.Signers), "threshold", config.Threshold)
-
 	return &CheckpointOracle{
 		config:   config,
 		getLocal: getLocal,
