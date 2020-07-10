@@ -28,7 +28,7 @@ import (
 // New constructs a new GraphQL service instance.
 func New(stack *node.Node, backend ethapi.Backend, cors, vhosts []string) error {
 	if backend == nil {
-		stack.Fatalf("missing backend")
+		panic("missing backend")
 	}
 	// check if http server with given endpoint exists and enable graphQL on it
 	return newHandler(stack, backend, cors, vhosts)

@@ -20,13 +20,11 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"io"
 	"net"
 	"net/http"
 	"os"
 	"path/filepath"
 	"reflect"
-	"runtime"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -192,7 +190,7 @@ func (n *Node) Close() error {
 func (n *Node) RegisterLifecycle(lifecycle Lifecycle) {
 	kind := reflect.TypeOf(lifecycle)
 	if _, exists := n.lifecycles[kind]; exists {
-		n.Fatalf("Lifecycle cannot be registered more than once", kind)
+		panic(fmt.Sprintf("Lifecycle cannot be registered more than once: %v", kind))
 	}
 
 	n.lifecycles[kind] = lifecycle
@@ -672,24 +670,4 @@ func RegisterApisFromWhitelist(apis []rpc.API, modules []string, srv *rpc.Server
 		}
 	}
 	return nil
-}
-
-// Fatalf formats a message to standard error and exits the program.
-// The message is also printed to standard output if standard error
-// is redirected to a different file.
-func (n *Node) Fatalf(format string, args ...interface{}) {
-	w := io.MultiWriter(os.Stdout, os.Stderr)
-	if runtime.GOOS == "windows" {
-		// The SameFile check below doesn't work on Windows.
-		// stdout is unlikely to get redirected though, so just print there.
-		w = os.Stdout
-	} else {
-		outf, _ := os.Stdout.Stat()
-		errf, _ := os.Stderr.Stat()
-		if outf != nil && errf != nil && os.SameFile(outf, errf) {
-			w = os.Stderr
-		}
-	}
-	fmt.Fprintf(w, "Fatal: "+format+"\n", args...)
-	os.Exit(1)
 }
