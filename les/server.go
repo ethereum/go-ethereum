@@ -55,7 +55,7 @@ type LesServer struct {
 	threadsIdle                            int // Request serving threads count when system is idle.
 	threadsBusy                            int // Request serving threads count when system is busy(block insertion).
 
-	p2pSrv 		*p2p.Server
+	p2pSrv *p2p.Server
 }
 
 func NewLesServer(node *node.Node, e *eth.Ethereum, config *eth.Config) (*LesServer, error) {
@@ -89,13 +89,15 @@ func NewLesServer(node *node.Node, e *eth.Ethereum, config *eth.Config) (*LesSer
 		servingQueue: newServingQueue(int64(time.Millisecond*10), float64(config.LightServ)/100),
 		threadsBusy:  config.LightServ/100 + 1,
 		threadsIdle:  threads,
-		p2pSrv: node.Server(),
+		p2pSrv:       node.Server(),
 	}
 	srv.handler = newServerHandler(srv, e.BlockChain(), e.ChainDb(), e.TxPool(), e.Synced)
 	srv.costTracker, srv.minCapacity = newCostTracker(e.ChainDb(), config)
 	srv.freeCapacity = srv.minCapacity
-
 	srv.oracle = srv.setupOracle(node, e.BlockChain().Genesis().Hash(), config)
+
+	// Initialize the bloom trie indexer.
+	e.BloomIndexer().AddChildIndexer(srv.bloomTrieIndexer)
 
 	// Initialize server capacity management fields.
 	srv.defParams = flowcontrol.ServerParams{
@@ -216,7 +218,6 @@ func (s *LesServer) Stop() error {
 }
 
 func (s *LesServer) SetBloomBitsIndexer(bloomIndexer *core.ChainIndexer) {
-	bloomIndexer.AddChildIndexer(s.bloomTrieIndexer)
 }
 
 // capacityManagement starts an event handler loop that updates the recharge curve of

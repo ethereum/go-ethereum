@@ -1690,7 +1690,6 @@ func RegisterEthService(stack *node.Node, cfg *eth.Config) ethapi.Backend {
 			ls, _ := les.NewLesServer(stack, backend, cfg)
 			stack.RegisterProtocols(ls.Protocols()) // TODO should this happen?
 			stack.RegisterAPIs(ls.APIs())
-			backend.AddLesServer(ls)
 		}
 		return backend.APIBackend
 	}

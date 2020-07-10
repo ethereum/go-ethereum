@@ -512,6 +512,5 @@ func newLesServerService(ctx *adapters.ServiceContext, stack *node.Node) (node.L
 	if err != nil {
 		return nil, err
 	}
-	ethereum.AddLesServer(server)
 	return ethereum, nil
 }

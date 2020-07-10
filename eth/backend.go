@@ -53,10 +53,6 @@ import (
 	"github.com/ethereum/go-ethereum/rpc"
 )
 
-type LesServer interface {
-	SetBloomBitsIndexer(bbIndexer *core.ChainIndexer)
-}
-
 // Ethereum implements the Ethereum full node service.
 type Ethereum struct {
 	config *Config
@@ -65,7 +61,6 @@ type Ethereum struct {
 	txPool          *core.TxPool
 	blockchain      *core.BlockChain
 	protocolManager *ProtocolManager
-	lesServer       LesServer
 	dialCandidates  enode.Iterator
 
 	// DB interfaces
@@ -91,10 +86,6 @@ type Ethereum struct {
 	p2pServer *p2p.Server
 
 	lock sync.RWMutex // Protects the variadic fields (e.g. gas price and etherbase)
-}
-
-func (s *Ethereum) AddLesServer(ls LesServer) {
-	ls.SetBloomBitsIndexer(s.bloomIndexer)
 }
 
 // New creates a new Ethereum object (including the
@@ -285,7 +276,7 @@ func CreateConsensusEngine(stack *node.Node, chainConfig *params.ChainConfig, co
 // NOTE, some of these services probably need to be moved to somewhere else.
 func (s *Ethereum) APIs() []rpc.API {
 	apis := ethapi.GetAPIs(s.APIBackend)
-	
+
 	// Append any APIs exposed explicitly by the consensus engine
 	apis = append(apis, s.engine.APIs(s.BlockChain())...)
 
@@ -503,6 +494,7 @@ func (s *Ethereum) NetVersion() uint64                 { return s.networkID }
 func (s *Ethereum) Downloader() *downloader.Downloader { return s.protocolManager.downloader }
 func (s *Ethereum) Synced() bool                       { return atomic.LoadUint32(&s.protocolManager.acceptTxs) == 1 }
 func (s *Ethereum) ArchiveMode() bool                  { return s.config.NoPruning }
+func (s *Ethereum) BloomIndexer() *core.ChainIndexer   { return s.bloomIndexer }
 
 // Protocols returns all the currently configured
 // network protocols to start.
