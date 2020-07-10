@@ -14,7 +14,7 @@
 // You should have received a copy of the GNU Lesser General Public License
 // along with the go-ethereum library. If not, see <http://www.gnu.org/licenses/>.
 
-package ethclient_test
+package ethclient
 
 import (
 	"context"
@@ -33,24 +33,23 @@ import (
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/eth"
-	"github.com/ethereum/go-ethereum/ethclient"
 	"github.com/ethereum/go-ethereum/node"
 	"github.com/ethereum/go-ethereum/params"
 )
 
 // Verify that Client implements the ethereum interfaces.
 var (
-	_ = ethereum.ChainReader(&ethclient.Client{})
-	_ = ethereum.TransactionReader(&ethclient.Client{})
-	_ = ethereum.ChainStateReader(&ethclient.Client{})
-	_ = ethereum.ChainSyncReader(&ethclient.Client{})
-	_ = ethereum.ContractCaller(&ethclient.Client{})
-	_ = ethereum.GasEstimator(&ethclient.Client{})
-	_ = ethereum.GasPricer(&ethclient.Client{})
-	_ = ethereum.LogFilterer(&ethclient.Client{})
-	_ = ethereum.PendingStateReader(&ethclient.Client{})
+	_ = ethereum.ChainReader(&Client{})
+	_ = ethereum.TransactionReader(&Client{})
+	_ = ethereum.ChainStateReader(&Client{})
+	_ = ethereum.ChainSyncReader(&Client{})
+	_ = ethereum.ContractCaller(&Client{})
+	_ = ethereum.GasEstimator(&Client{})
+	_ = ethereum.GasPricer(&Client{})
+	_ = ethereum.LogFilterer(&Client{})
+	_ = ethereum.PendingStateReader(&Client{})
 	// _ = ethereum.PendingStateEventer(&Client{})
-	_ = ethereum.PendingContractCaller(&ethclient.Client{})
+	_ = ethereum.PendingContractCaller(&Client{})
 )
 
 func TestToFilterArg(t *testing.T) {
@@ -164,7 +163,7 @@ func TestToFilterArg(t *testing.T) {
 		},
 	} {
 		t.Run(testCase.name, func(t *testing.T) {
-			output, err := ethclient.ToFilterArg(testCase.input, true)
+			output, err := toFilterArg(testCase.input)
 			if (testCase.err == nil) != (err == nil) {
 				t.Fatalf("expected error %v but got %v", testCase.err, err)
 			}
@@ -256,7 +255,7 @@ func TestHeader(t *testing.T) {
 	}
 	for name, tt := range tests {
 		t.Run(name, func(t *testing.T) {
-			ec := ethclient.NewClient(client)
+			ec := NewClient(client)
 			ctx, cancel := context.WithTimeout(context.Background(), 100*time.Millisecond)
 			defer cancel()
 
@@ -305,7 +304,7 @@ func TestBalanceAt(t *testing.T) {
 	}
 	for name, tt := range tests {
 		t.Run(name, func(t *testing.T) {
-			ec := ethclient.NewClient(client)
+			ec := NewClient(client)
 			ctx, cancel := context.WithTimeout(context.Background(), 100*time.Millisecond)
 			defer cancel()
 
@@ -326,7 +325,7 @@ func TestTransactionInBlockInterrupted(t *testing.T) {
 	defer backend.Stop()
 	defer client.Close()
 
-	ec := ethclient.NewClient(client)
+	ec := NewClient(client)
 	ctx, cancel := context.WithCancel(context.Background())
 	cancel()
 	tx, err := ec.TransactionInBlock(ctx, common.Hash{1}, 1)
@@ -343,7 +342,7 @@ func TestChainID(t *testing.T) {
 	client, _ := backend.Attach()
 	defer backend.Stop()
 	defer client.Close()
-	ec := ethclient.NewClient(client)
+	ec := NewClient(client)
 
 	id, err := ec.ChainID(context.Background())
 	if err != nil {
