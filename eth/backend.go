@@ -54,10 +54,6 @@ import (
 )
 
 type LesServer interface {
-	Start(srvr *p2p.Server)
-	Stop()
-	APIs() []rpc.API
-	Protocols() []p2p.Protocol
 	SetBloomBitsIndexer(bbIndexer *core.ChainIndexer)
 }
 
@@ -98,7 +94,6 @@ type Ethereum struct {
 }
 
 func (s *Ethereum) AddLesServer(ls LesServer) {
-	s.lesServer = ls
 	ls.SetBloomBitsIndexer(s.bloomIndexer)
 }
 
@@ -290,18 +285,9 @@ func CreateConsensusEngine(stack *node.Node, chainConfig *params.ChainConfig, co
 // NOTE, some of these services probably need to be moved to somewhere else.
 func (s *Ethereum) APIs() []rpc.API {
 	apis := ethapi.GetAPIs(s.APIBackend)
-
-	// Append any APIs exposed explicitly by the les server
-	if s.lesServer != nil {
-		apis = append(apis, s.lesServer.APIs()...)
-	}
+	
 	// Append any APIs exposed explicitly by the consensus engine
 	apis = append(apis, s.engine.APIs(s.BlockChain())...)
-
-	// Append any APIs exposed explicitly by the les server
-	if s.lesServer != nil {
-		apis = append(apis, s.lesServer.APIs()...)
-	}
 
 	// Append all the local APIs and return
 	return append(apis, []rpc.API{
@@ -527,9 +513,6 @@ func (s *Ethereum) Protocols() []p2p.Protocol {
 		protos[i].Attributes = []enr.Entry{s.currentEthEntry()}
 		protos[i].DialCandidates = s.dialCandidates
 	}
-	if s.lesServer != nil {
-		protos = append(protos, s.lesServer.Protocols()...)
-	}
 	return protos
 }
 
@@ -551,9 +534,6 @@ func (s *Ethereum) Start() error {
 	}
 	// Start the networking layer and the light server if requested
 	s.protocolManager.Start(maxPeers)
-	if s.lesServer != nil {
-		s.lesServer.Start(s.p2pServer)
-	}
 	return nil
 }
 
@@ -562,9 +542,6 @@ func (s *Ethereum) Start() error {
 func (s *Ethereum) Stop() error {
 	// Stop all the peer-related stuff first.
 	s.protocolManager.Stop()
-	if s.lesServer != nil {
-		s.lesServer.Stop()
-	}
 
 	// Then stop everything else.
 	s.bloomIndexer.Close()
