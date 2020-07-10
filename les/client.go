@@ -22,7 +22,6 @@ import (
 	"time"
 
 	"github.com/ethereum/go-ethereum/accounts"
-	"github.com/ethereum/go-ethereum/accounts/abi/bind"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/ethereum/go-ethereum/common/mclock"
@@ -37,7 +36,6 @@ import (
 	"github.com/ethereum/go-ethereum/eth/gasprice"
 	"github.com/ethereum/go-ethereum/event"
 	"github.com/ethereum/go-ethereum/internal/ethapi"
-	"github.com/ethereum/go-ethereum/les/checkpointoracle"
 	lpc "github.com/ethereum/go-ethereum/les/lespay/client"
 	"github.com/ethereum/go-ethereum/light"
 	"github.com/ethereum/go-ethereum/log"
@@ -76,6 +74,7 @@ type LightEthereum struct {
 	p2pServer *p2p.Server
 }
 
+// New creates an instance of the light client.
 func New(stack *node.Node, config *eth.Config) (*LightEthereum, error) {
 	chainDb, err := stack.OpenDatabase("lightchaindata", config.DatabaseCache, config.DatabaseHandles, "eth/db/chaindata/")
 	if err != nil {
@@ -142,11 +141,7 @@ func New(stack *node.Node, config *eth.Config) (*LightEthereum, error) {
 	leth.txPool = light.NewTxPool(leth.chainConfig, leth.blockchain, leth.relay)
 
 	// Set up checkpoint oracle.
-	oracle := config.CheckpointOracle
-	if oracle == nil {
-		oracle = params.CheckpointOracles[genesisHash]
-	}
-	leth.oracle = checkpointoracle.New(oracle, leth.localCheckpoint)
+	leth.oracle = leth.setupOracle(stack, genesisHash, config)
 
 	// Note: AddChildIndexer starts the update process for the child
 	leth.bloomIndexer.AddChildIndexer(leth.bloomTrieIndexer)
@@ -322,12 +317,4 @@ func (s *LightEthereum) Stop() error {
 	s.wg.Wait()
 	log.Info("Light ethereum stopped")
 	return nil
-}
-
-// SetClient sets the rpc client and binds the registrar contract.
-func (s *LightEthereum) SetContractBackend(backend bind.ContractBackend) {
-	if s.oracle == nil {
-		return
-	}
-	s.oracle.Start(backend)
 }

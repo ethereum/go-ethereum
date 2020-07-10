@@ -508,7 +508,7 @@ func newLesServerService(ctx *adapters.ServiceContext, stack *node.Node) (node.L
 	if err != nil {
 		return nil, err
 	}
-	server, err := NewLesServer(ethereum, &config)
+	server, err := NewLesServer(stack, ethereum, &config)
 	if err != nil {
 		return nil, err
 	}

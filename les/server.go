@@ -20,14 +20,13 @@ import (
 	"crypto/ecdsa"
 	"time"
 
-	"github.com/ethereum/go-ethereum/accounts/abi/bind"
 	"github.com/ethereum/go-ethereum/common/mclock"
 	"github.com/ethereum/go-ethereum/core"
 	"github.com/ethereum/go-ethereum/eth"
-	"github.com/ethereum/go-ethereum/les/checkpointoracle"
 	"github.com/ethereum/go-ethereum/les/flowcontrol"
 	"github.com/ethereum/go-ethereum/light"
 	"github.com/ethereum/go-ethereum/log"
+	"github.com/ethereum/go-ethereum/node"
 	"github.com/ethereum/go-ethereum/p2p"
 	"github.com/ethereum/go-ethereum/p2p/discv5"
 	"github.com/ethereum/go-ethereum/p2p/enode"
@@ -57,7 +56,7 @@ type LesServer struct {
 	threadsBusy                            int // Request serving threads count when system is busy(block insertion).
 }
 
-func NewLesServer(e *eth.Ethereum, config *eth.Config) (*LesServer, error) {
+func NewLesServer(node *node.Node, e *eth.Ethereum, config *eth.Config) (*LesServer, error) {
 	// Collect les protocol version information supported by local node.
 	lesTopics := make([]discv5.Topic, len(AdvertiseProtocolVersions))
 	for i, pv := range AdvertiseProtocolVersions {
@@ -93,12 +92,7 @@ func NewLesServer(e *eth.Ethereum, config *eth.Config) (*LesServer, error) {
 	srv.costTracker, srv.minCapacity = newCostTracker(e.ChainDb(), config)
 	srv.freeCapacity = srv.minCapacity
 
-	// Set up checkpoint oracle.
-	oracle := config.CheckpointOracle
-	if oracle == nil {
-		oracle = params.CheckpointOracles[e.BlockChain().Genesis().Hash()]
-	}
-	srv.oracle = checkpointoracle.New(oracle, srv.localCheckpoint)
+	srv.oracle = srv.setupOracle(node, e.BlockChain().Genesis().Hash(), config)
 
 	// Initialize server capacity management fields.
 	srv.defParams = flowcontrol.ServerParams{
@@ -211,14 +205,6 @@ func (s *LesServer) Stop() {
 
 func (s *LesServer) SetBloomBitsIndexer(bloomIndexer *core.ChainIndexer) {
 	bloomIndexer.AddChildIndexer(s.bloomTrieIndexer)
-}
-
-// SetClient sets the rpc client and starts running checkpoint contract if it is not yet watched.
-func (s *LesServer) SetContractBackend(backend bind.ContractBackend) {
-	if s.oracle == nil {
-		return
-	}
-	s.oracle.Start(backend)
 }
 
 // capacityManagement starts an event handler loop that updates the recharge curve of

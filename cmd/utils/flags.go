@@ -1687,7 +1687,7 @@ func RegisterEthService(stack *node.Node, cfg *eth.Config) ethapi.Backend {
 			Fatalf("Failed to register the Ethereum service: %w", err)
 		}
 		if cfg.LightServ > 0 {
-			ls, _ := les.NewLesServer(backend, cfg)
+			ls, _ := les.NewLesServer(stack, backend, cfg)
 			stack.RegisterProtocols(ls.Protocols()) // TODO should this happen?
 			stack.RegisterAPIs(ls.APIs())
 			backend.AddLesServer(ls)

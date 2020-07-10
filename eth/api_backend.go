@@ -32,7 +32,6 @@ import (
 	"github.com/ethereum/go-ethereum/core/vm"
 	"github.com/ethereum/go-ethereum/eth/downloader"
 	"github.com/ethereum/go-ethereum/eth/gasprice"
-	"github.com/ethereum/go-ethereum/ethclient"
 	"github.com/ethereum/go-ethereum/ethdb"
 	"github.com/ethereum/go-ethereum/event"
 	"github.com/ethereum/go-ethereum/miner"
@@ -333,8 +332,4 @@ func (b *EthAPIBackend) Miner() *miner.Miner {
 
 func (b *EthAPIBackend) StartMining(threads int) error {
 	return b.eth.StartMining(threads)
-}
-
-func (b *EthAPIBackend) SetContractBackend(client *ethclient.Client) {
-	b.eth.SetContractBackend(client)
 }

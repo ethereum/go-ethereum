@@ -33,7 +33,6 @@ import (
 	"github.com/ethereum/go-ethereum/core/vm"
 	"github.com/ethereum/go-ethereum/eth/downloader"
 	"github.com/ethereum/go-ethereum/eth/gasprice"
-	"github.com/ethereum/go-ethereum/ethclient"
 	"github.com/ethereum/go-ethereum/ethdb"
 	"github.com/ethereum/go-ethereum/event"
 	"github.com/ethereum/go-ethereum/light"
@@ -306,10 +305,6 @@ func (b *LesApiBackend) Miner() *miner.Miner {
 
 func (b *LesApiBackend) StartMining(threads int) error {
 	return fmt.Errorf("Light clients do not support mining") // TODO is this okay?
-}
-
-func (b *LesApiBackend) SetContractBackend(client *ethclient.Client) {
-	b.eth.SetContractBackend(client)
 }
 
 func (b *LesApiBackend) TxPool() *core.TxPool {

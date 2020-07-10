@@ -26,9 +26,11 @@ import (
 	"github.com/ethereum/go-ethereum/core/rawdb"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/eth"
+	"github.com/ethereum/go-ethereum/ethclient"
 	"github.com/ethereum/go-ethereum/ethdb"
 	"github.com/ethereum/go-ethereum/les/checkpointoracle"
 	"github.com/ethereum/go-ethereum/light"
+	"github.com/ethereum/go-ethereum/node"
 	"github.com/ethereum/go-ethereum/p2p"
 	"github.com/ethereum/go-ethereum/p2p/discv5"
 	"github.com/ethereum/go-ethereum/p2p/enode"
@@ -144,4 +146,17 @@ func (c *lesCommons) localCheckpoint(index uint64) params.TrustedCheckpoint {
 		CHTRoot:      light.GetChtRoot(c.chainDb, index, sectionHead),
 		BloomRoot:    light.GetBloomTrieRoot(c.chainDb, index, sectionHead),
 	}
+}
+
+// setupOracle sets up the checkpoint oracle contract client.
+func (c *lesCommons) setupOracle(node *node.Node, genesis common.Hash, config *eth.Config) *checkpointoracle.CheckpointOracle {
+	cfg := config.CheckpointOracle
+	if cfg == nil {
+		cfg = params.CheckpointOracles[genesis]
+	}
+	oracle := checkpointoracle.New(cfg, c.localCheckpoint)
+	rpcClient, _ := node.Attach()
+	client := ethclient.NewClient(rpcClient)
+	oracle.Start(client)
+	return oracle
 }

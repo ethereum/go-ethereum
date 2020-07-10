@@ -378,18 +378,8 @@ func startNode(ctx *cli.Context, stack *node.Node, backend ethapi.Backend) {
 	if err != nil {
 		utils.Fatalf("Failed to attach to self: %v", err)
 	}
-	ethClient := ethclient.NewClient(rpcClient)
 
-	// Set contract backend for ethereum service if local node
-	// is serving LES requests.
-	if ctx.GlobalInt(utils.LegacyLightServFlag.Name) > 0 || ctx.GlobalInt(utils.LightServeFlag.Name) > 0 {
-		backend.SetContractBackend(ethClient)
-	}
-	// Set contract backend for les service if local node is
-	// running as a light client.
-	if ctx.GlobalString(utils.SyncModeFlag.Name) == "light" {
-		backend.SetContractBackend(ethClient)
-	}
+	ethClient := ethclient.NewClient(rpcClient)
 
 	go func() {
 		// Open any wallets already attached
