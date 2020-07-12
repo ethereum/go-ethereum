@@ -400,7 +400,7 @@ func DeveloperGenesisBlock(period uint64, faucet common.Address) *Genesis {
 	return &Genesis{
 		Config:     &config,
 		ExtraData:  append(append(make([]byte, 32), faucet[:]...), make([]byte, crypto.SignatureLength)...),
-		GasLimit:   6283185,
+		GasLimit:   9000000,
 		Difficulty: big.NewInt(1),
 		Alloc: map[common.Address]GenesisAccount{
 			common.BytesToAddress([]byte{1}): {Balance: big.NewInt(1)}, // ECRecover
