@@ -68,15 +68,10 @@ func TestGraphQLHTTPOnSamePort_GQLRequest_Successful(t *testing.T) {
 func TestGraphQLHTTPOnSamePort_GQLRequest_Unsuccessful(t *testing.T) {
 	stack := createNode(t, false)
 	defer stack.Close()
-	// start node
 	if err := stack.Start(); err != nil {
 		t.Fatalf("could not start node: %v", err)
 	}
-	// make sure GQL is not enabled
-	server := stack.ExistingHTTPServer("127.0.0.1:9393")
-	if server == nil {
-		t.Fatalf("server was not created on the given endpoint")
-	}
+
 	// create http request
 	body := strings.NewReader("{\"query\": \"{block{number}}\",\"variables\": null}")
 	gqlReq, err := http.NewRequest(http.MethodPost, fmt.Sprintf("http://%s/graphql", "127.0.0.1:9393"), body)
