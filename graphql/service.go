@@ -18,6 +18,7 @@ package graphql
 
 import (
 	"fmt"
+
 	"github.com/ethereum/go-ethereum/internal/ethapi"
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/node"
@@ -46,9 +47,9 @@ func newHandler(stack *node.Node, backend ethapi.Backend, cors, vhosts []string)
 	h := &relay.Handler{Schema: s}
 	handler := node.NewHTTPHandlerStack(h, cors, vhosts)
 
-	endpoint := stack.RegisterPath("/graphql/ui", GraphiQL{})
-	endpoint = stack.RegisterPath("/graphql", handler)
-	endpoint = stack.RegisterPath("/graphql/", handler)
+	_ = stack.RegisterPath("/graphql/ui", GraphiQL{})
+	_ = stack.RegisterPath("/graphql", handler)
+	endpoint := stack.RegisterPath("/graphql/", handler)
 
 	if endpoint != "" {
 		log.Info("GraphQL configured on endpoint", "endpoint", fmt.Sprintf("http://%s/graphql", endpoint))

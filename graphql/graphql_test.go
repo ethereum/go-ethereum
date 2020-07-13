@@ -122,7 +122,7 @@ func createGQLService(t *testing.T, stack *node.Node, endpoint string) {
 	}
 
 	// create gql service
-	err = New(stack, ethBackend.APIBackend,[]string{}, []string{})
+	err = New(stack, ethBackend.APIBackend, []string{}, []string{})
 	if err != nil {
 		t.Fatalf("could not create graphql service: %v", err)
 	}

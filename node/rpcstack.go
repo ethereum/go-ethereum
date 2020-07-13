@@ -36,7 +36,7 @@ import (
 type serverMap map[string]*httpServer // Stores information about all http servers (if any) by their endpoint, including http, ws, and graphql
 
 type httpServer struct {
-	srvMux 	http.ServeMux
+	srvMux http.ServeMux
 
 	handler http.Handler
 	Srv     *rpc.Server

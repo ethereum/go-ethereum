@@ -19,7 +19,6 @@ package main
 
 import (
 	"fmt"
-	"github.com/ethereum/go-ethereum/eth"
 	"math"
 	"os"
 	godebug "runtime/debug"
@@ -33,6 +32,7 @@ import (
 	"github.com/ethereum/go-ethereum/cmd/utils"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/console/prompt"
+	"github.com/ethereum/go-ethereum/eth"
 	"github.com/ethereum/go-ethereum/eth/downloader"
 	"github.com/ethereum/go-ethereum/ethclient"
 	"github.com/ethereum/go-ethereum/internal/debug"

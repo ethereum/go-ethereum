@@ -22,10 +22,6 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"github.com/ethereum/go-ethereum/eth/downloader"
-	"github.com/ethereum/go-ethereum/event"
-	"github.com/ethereum/go-ethereum/miner"
-	"github.com/ethereum/go-ethereum/rpc"
 	"math/big"
 	"net/http"
 	"regexp"
@@ -40,10 +36,14 @@ import (
 	"github.com/ethereum/go-ethereum/core"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/eth"
+	"github.com/ethereum/go-ethereum/eth/downloader"
+	"github.com/ethereum/go-ethereum/event"
 	"github.com/ethereum/go-ethereum/les"
 	"github.com/ethereum/go-ethereum/log"
+	"github.com/ethereum/go-ethereum/miner"
 	"github.com/ethereum/go-ethereum/node"
 	"github.com/ethereum/go-ethereum/p2p"
+	"github.com/ethereum/go-ethereum/rpc"
 	"github.com/gorilla/websocket"
 )
 
@@ -59,7 +59,8 @@ const (
 	chainHeadChanSize = 10
 )
 
-type backend interface{
+// backend encompasses the bare-minimum functionality needed for ethstats reporting
+type backend interface {
 	SubscribeChainHeadEvent(ch chan<- core.ChainHeadEvent) event.Subscription
 	SubscribeNewTxsEvent(ch chan<- core.NewTxsEvent) event.Subscription
 	CurrentHeader() *types.Header
@@ -69,7 +70,9 @@ type backend interface{
 	Downloader() *downloader.Downloader
 }
 
-type fullNodeBackend interface{
+// fullNodeBackend encompasses the functionality necessary for a full node
+// reporting to ethstats
+type fullNodeBackend interface {
 	backend
 	Miner() *miner.Miner
 	BlockByNumber(ctx context.Context, number rpc.BlockNumber) (*types.Block, error)
@@ -693,7 +696,7 @@ func (s *Service) reportStats(conn *websocket.Conn) error {
 	var (
 		mining   bool
 		hashrate int
-		syncing bool
+		syncing  bool
 		gasprice int
 	)
 	// check if backend is a full node
