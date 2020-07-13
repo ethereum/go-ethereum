@@ -263,7 +263,7 @@ func (api *PrivateAdminAPI) StartWS(host *string, port *int, allowedOrigins *str
 		}
 	}
 	// check if an HTTP server exists on the given endpoint, and if so, enable websocket on that HTTP server
-	existingServer := api.node.ExistingHTTPServer(endpoint)
+	existingServer := api.node.existingHTTPServer(endpoint)
 	if existingServer != nil {
 		atomic.StoreInt32(&existingServer.WSAllowed, 1)
 		existingServer.WsOrigins = origins

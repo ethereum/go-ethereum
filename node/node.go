@@ -220,8 +220,8 @@ func (n *Node) RegisterPath(path string, handler http.Handler) string {
 	return ""
 }
 
-// ExistingHTTPServer checks if an HTTP server is already configured on the given endpoint.
-func (n *Node) ExistingHTTPServer(endpoint string) *httpServer {
+// existingHTTPServer checks if an HTTP server is already configured on the given endpoint.
+func (n *Node) existingHTTPServer(endpoint string) *httpServer {
 	if server, exists := n.httpServers[endpoint]; exists {
 		return server
 	}

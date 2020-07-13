@@ -394,13 +394,13 @@ func TestRegisterHTTPServer(t *testing.T) {
 	}
 	endpointNoop := fmt.Sprintf("%s:%d", noop.host, noop.port)
 
-	if srv1 != stack.ExistingHTTPServer(endpoint1) {
+	if srv1 != stack.existingHTTPServer(endpoint1) {
 		t.Fatalf("server %v was not properly registered on the given endpoint %s", srv1, endpoint1)
 	}
-	if srv2 != stack.ExistingHTTPServer(endpoint2) {
+	if srv2 != stack.existingHTTPServer(endpoint2) {
 		t.Fatalf("server %v was not properly registered on the given endpoint %s", srv2, endpoint2)
 	}
-	if noop == stack.ExistingHTTPServer(endpointNoop) {
+	if noop == stack.existingHTTPServer(endpointNoop) {
 		t.Fatalf("server %v was incorrectly registered on the given endpoint %s", noop, endpointNoop)
 	}
 }
@@ -472,7 +472,7 @@ func TestHTTPServerCreateAndStop(t *testing.T) {
 			t.Fatalf("node's http server is not configured to handle both rpc and ws")
 		}
 		node1.stopServer(server)
-		if node1.ExistingHTTPServer(server.endpoint) != nil {
+		if node1.existingHTTPServer(server.endpoint) != nil {
 			t.Fatalf("failed to remove server %v from node after stopping it", server)
 		}
 	}
@@ -493,7 +493,7 @@ func TestHTTPServerCreateAndStop(t *testing.T) {
 			t.Fatalf("both rpc and ws allowed on a single http server")
 		}
 		node2.stopServer(server)
-		if node2.ExistingHTTPServer(server.endpoint) != nil {
+		if node2.existingHTTPServer(server.endpoint) != nil {
 			t.Fatalf("failed to remove server %v from node after stopping it", server)
 		}
 	}

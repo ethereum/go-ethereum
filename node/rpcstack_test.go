@@ -59,7 +59,7 @@ func TestWSAllowed(t *testing.T) {
 		t.Fatalf("could not start node: %v", err)
 	}
 	// check that server was configured on the given endpoint
-	server := stack.ExistingHTTPServer(fmt.Sprintf("%s:%d", DefaultHTTPHost, 9393))
+	server := stack.existingHTTPServer(fmt.Sprintf("%s:%d", DefaultHTTPHost, 9393))
 	if server == nil {
 		t.Fatalf("server was not started on the given endpoint: %v", err)
 	}
