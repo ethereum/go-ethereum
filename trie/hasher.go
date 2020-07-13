@@ -66,11 +66,11 @@ func returnHasherToPool(h *hasher) {
 // hash collapses a node down into a hash node, also returning a copy of the
 // original node initialized with the computed hash to replace the original one.
 func (h *hasher) hash(n node, force bool) (hashed node, cached node) {
-	// We're not storing the node, just hashing, use available cached data
+	// The hash is available, return the cached one.
 	if hash, _ := n.cache(); hash != nil {
 		return hash, n
 	}
-	// Trie not processed yet or needs storage, walk the children
+	// Trie not processed yet, walk the children
 	switch n := n.(type) {
 	case *shortNode:
 		collapsed, cached := h.hashShortNodeChildren(n)
@@ -120,7 +120,11 @@ func (h *hasher) hashFullNodeChildren(n *fullNode) (collapsed *fullNode, cached 
 	// Hash the full node's children, caching the newly hashed subtrees
 	cached = n.copy()
 	collapsed = n.copy()
+
+	// If we're not running in threaded mode yet, span a goroutine for each child
 	if h.parallel {
+		h.parallel = false // Disable further threading
+
 		var wg sync.WaitGroup
 		wg.Add(16)
 		for i := 0; i < 16; i++ {
@@ -136,6 +140,9 @@ func (h *hasher) hashFullNodeChildren(n *fullNode) (collapsed *fullNode, cached 
 			}(i)
 		}
 		wg.Wait()
+
+		// Reenable threading for subsequent hash calls
+		h.parallel = true
 	} else {
 		for i := 0; i < 16; i++ {
 			if child := n.Children[i]; child != nil {

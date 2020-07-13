@@ -48,7 +48,7 @@ type LeafCallback func(leaf []byte, parent common.Hash) error
 type Trie struct {
 	db   *Database
 	root node
-	// Keep track of the number leafs which have been inserted since the last
+	// Keep track of the number leaves which have been inserted since the last
 	// hashing operation. This number will not directly map to the number of
 	// actually unhashed nodes
 	unhashed int

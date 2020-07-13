@@ -222,17 +222,11 @@ func (c *committer) commitLoop(db *Database) {
 		db.lock.Lock()
 		db.insert(hash, size, n)
 		db.lock.Unlock()
+
 		if c.onleaf != nil && hasVnodes {
-			switch n := n.(type) {
-			case *shortNode:
-				if child, ok := n.Val.(valueNode); ok {
+			if sn, ok := n.(*shortNode); ok {
+				if child, ok := sn.Val.(valueNode); ok {
 					c.onleaf(child, hash)
-				}
-			case *fullNode:
-				for i := 0; i < 16; i++ {
-					if child, ok := n.Children[i].(valueNode); ok {
-						c.onleaf(child, hash)
-					}
 				}
 			}
 		}
