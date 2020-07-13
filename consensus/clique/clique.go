@@ -287,10 +287,23 @@ func (c *Clique) verifyHeader(chain consensus.ChainHeaderReader, header *types.H
 	if header.UncleHash != uncleHash {
 		return errInvalidUncleHash
 	}
+	var parent *types.Header
 	// Ensure that the block's difficulty is meaningful (may not be correct at this point)
 	if number > 0 {
+		if len(parents) > 0 {
+			parent = parents[len(parents)-1]
+		} else {
+			parent = chain.GetHeader(header.ParentHash, number-1)
+		}
+		if parent == nil || parent.Number.Uint64() != number-1 || parent.Hash() != header.ParentHash {
+			return consensus.ErrUnknownAncestor
+		}
 		if header.Difficulty == nil || (header.Difficulty.Cmp(diffInTurn) != 0 && header.Difficulty.Cmp(diffNoTurn) != 0) {
 			return errInvalidDifficulty
+		}
+		// If we are past the genesis block, validate the basefee is valid according to the parent
+		if err := misc.VerifyEIP1559BaseFee(chain.Config(), header, parent); err != nil {
+			return err
 		}
 	}
 	// If all checks passed, validate any special fields for hard forks
@@ -298,7 +311,7 @@ func (c *Clique) verifyHeader(chain consensus.ChainHeaderReader, header *types.H
 		return err
 	}
 	// All basic checks passed, verify cascading fields
-	return c.verifyCascadingFields(chain, header, parents)
+	return c.verifyCascadingFields(chain, header, parents, parent)
 }
 
 // verifyCascadingFields verifies all the header fields that are not standalone,
