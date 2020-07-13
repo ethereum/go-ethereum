@@ -204,7 +204,7 @@ func (api *PrivateAdminAPI) StartRPC(host *string, port *int, cors *string, apis
 	handler := NewHTTPHandlerStack(httpServer.Srv, httpServer.CorsAllowedOrigins, httpServer.Vhosts)
 	httpServer.srvMux.Handle("/", handler)
 	// create HTTP server
-	if err := api.node.CreateHTTPServer(httpServer, false); err != nil {
+	if err := api.node.createHTTPServer(httpServer, false); err != nil {
 		return false, err
 	}
 	// register the HTTP server
@@ -293,7 +293,7 @@ func (api *PrivateAdminAPI) StartWS(host *string, port *int, allowedOrigins *str
 	handler := wsServer.Srv.WebsocketHandler(wsServer.WsOrigins)
 	wsServer.srvMux.Handle("/", handler)
 	// create the HTTP server
-	if err := api.node.CreateHTTPServer(wsServer, api.node.config.WSExposeAll); err != nil {
+	if err := api.node.createHTTPServer(wsServer, api.node.config.WSExposeAll); err != nil {
 		return false, err
 	}
 	// register the HTTP server

@@ -228,8 +228,8 @@ func (n *Node) ExistingHTTPServer(endpoint string) *httpServer {
 	return nil
 }
 
-// CreateHTTPServer creates an http.Server and adds it to the given httpServer.
-func (n *Node) CreateHTTPServer(h *httpServer, exposeAll bool) error {
+// createHTTPServer creates an http.Server and adds it to the given httpServer.
+func (n *Node) createHTTPServer(h *httpServer, exposeAll bool) error {
 	// register apis and create handler stack
 	err := RegisterApisFromWhitelist(n.rpcAPIs, h.Whitelist, h.Srv, exposeAll)
 	if err != nil {
@@ -371,7 +371,7 @@ func (n *Node) configureRPC() error {
 			server.srvMux.Handle("/", handler)
 		}
 		// create the HTTP server
-		if err := n.CreateHTTPServer(server, false); err != nil {
+		if err := n.createHTTPServer(server, false); err != nil {
 			return err
 		}
 	}
