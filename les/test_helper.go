@@ -158,11 +158,11 @@ func prepare(n int, backend *backends.SimulatedBackend) {
 }
 
 // testIndexers creates a set of indexers with specified params for testing purpose.
-func testIndexers(db ethdb.Database, odr light.OdrBackend, config *light.IndexerConfig) []*core.ChainIndexer {
+func testIndexers(db ethdb.Database, odr light.OdrBackend, config *light.IndexerConfig, disablePruning bool) []*core.ChainIndexer {
 	var indexers [3]*core.ChainIndexer
-	indexers[0] = light.NewChtIndexer(db, odr, config.ChtSize, config.ChtConfirms)
+	indexers[0] = light.NewChtIndexer(db, odr, config.ChtSize, config.ChtConfirms, disablePruning)
 	indexers[1] = eth.NewBloomIndexer(db, config.BloomSize, config.BloomConfirms)
-	indexers[2] = light.NewBloomTrieIndexer(db, odr, config.BloomSize, config.BloomTrieSize)
+	indexers[2] = light.NewBloomTrieIndexer(db, odr, config.BloomSize, config.BloomTrieSize, disablePruning)
 	// make bloomTrieIndexer as a child indexer of bloom indexer.
 	indexers[1].AddChildIndexer(indexers[2])
 	return indexers[:]
@@ -456,7 +456,7 @@ type testServer struct {
 
 func newServerEnv(t *testing.T, blocks int, protocol int, callback indexerCallback, simClock bool, newPeer bool, testCost uint64) (*testServer, func()) {
 	db := rawdb.NewMemoryDatabase()
-	indexers := testIndexers(db, nil, light.TestServerIndexerConfig)
+	indexers := testIndexers(db, nil, light.TestServerIndexerConfig, true)
 
 	var clock mclock.Clock = &mclock.System{}
 	if simClock {
@@ -499,7 +499,7 @@ func newServerEnv(t *testing.T, blocks int, protocol int, callback indexerCallba
 	return server, teardown
 }
 
-func newClientServerEnv(t *testing.T, blocks int, protocol int, callback indexerCallback, ulcServers []string, ulcFraction int, simClock bool, connect bool) (*testServer, *testClient, func()) {
+func newClientServerEnv(t *testing.T, blocks int, protocol int, callback indexerCallback, ulcServers []string, ulcFraction int, simClock bool, connect bool, disablePruning bool) (*testServer, *testClient, func()) {
 	sdb, cdb := rawdb.NewMemoryDatabase(), rawdb.NewMemoryDatabase()
 	speers, cpeers := newServerPeerSet(), newClientPeerSet()
 
@@ -511,8 +511,8 @@ func newClientServerEnv(t *testing.T, blocks int, protocol int, callback indexer
 	rm := newRetrieveManager(speers, dist, func() time.Duration { return time.Millisecond * 500 })
 	odr := NewLesOdr(cdb, light.TestClientIndexerConfig, rm)
 
-	sindexers := testIndexers(sdb, nil, light.TestServerIndexerConfig)
-	cIndexers := testIndexers(cdb, odr, light.TestClientIndexerConfig)
+	sindexers := testIndexers(sdb, nil, light.TestServerIndexerConfig, true)
+	cIndexers := testIndexers(cdb, odr, light.TestClientIndexerConfig, disablePruning)
 
 	scIndexer, sbIndexer, sbtIndexer := sindexers[0], sindexers[1], sindexers[2]
 	ccIndexer, cbIndexer, cbtIndexer := cIndexers[0], cIndexers[1], cIndexers[2]
@@ -542,7 +542,7 @@ func newClientServerEnv(t *testing.T, blocks int, protocol int, callback indexer
 		}
 		select {
 		case <-done:
-		case <-time.After(3 * time.Second):
+		case <-time.After(10 * time.Second):
 			t.Fatal("test peer did not connect and sync within 3s")
 		}
 	}

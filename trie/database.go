@@ -693,7 +693,7 @@ func (db *Database) Cap(limit common.StorageSize) error {
 //
 // Note, this method is a non-synchronized mutator. It is unsafe to call this
 // concurrently with other mutators.
-func (db *Database) Commit(node common.Hash, report bool) error {
+func (db *Database) Commit(node common.Hash, report bool, callback func(common.Hash)) error {
 	// Create a database batch to flush persistent data out. It is important that
 	// outside code doesn't see an inconsistent state (referenced data removed from
 	// memory cache during commit but not yet in persistent storage). This is ensured
@@ -732,7 +732,7 @@ func (db *Database) Commit(node common.Hash, report bool) error {
 	nodes, storage := len(db.dirties), db.dirtiesSize
 
 	uncacher := &cleaner{db}
-	if err := db.commit(node, batch, uncacher); err != nil {
+	if err := db.commit(node, batch, uncacher, callback); err != nil {
 		log.Error("Failed to commit trie from trie database", "err", err)
 		return err
 	}
@@ -771,7 +771,7 @@ func (db *Database) Commit(node common.Hash, report bool) error {
 }
 
 // commit is the private locked version of Commit.
-func (db *Database) commit(hash common.Hash, batch ethdb.Batch, uncacher *cleaner) error {
+func (db *Database) commit(hash common.Hash, batch ethdb.Batch, uncacher *cleaner, callback func(common.Hash)) error {
 	// If the node does not exist, it's a previously committed node
 	node, ok := db.dirties[hash]
 	if !ok {
@@ -780,7 +780,7 @@ func (db *Database) commit(hash common.Hash, batch ethdb.Batch, uncacher *cleane
 	var err error
 	node.forChilds(func(child common.Hash) {
 		if err == nil {
-			err = db.commit(child, batch, uncacher)
+			err = db.commit(child, batch, uncacher, callback)
 		}
 	})
 	if err != nil {
@@ -788,6 +788,9 @@ func (db *Database) commit(hash common.Hash, batch ethdb.Batch, uncacher *cleane
 	}
 	if err := batch.Put(hash[:], node.rlp()); err != nil {
 		return err
+	}
+	if callback != nil {
+		callback(hash)
 	}
 	// If we've reached an optimal batch size, commit and start over
 	if batch.ValueSize() >= ethdb.IdealBatchSize {

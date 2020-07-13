@@ -183,7 +183,7 @@ func odrTxStatus(ctx context.Context, db ethdb.Database, config *params.ChainCon
 // testOdr tests odr requests whose validation guaranteed by block headers.
 func testOdr(t *testing.T, protocol int, expFail uint64, checkCached bool, fn odrTestFn) {
 	// Assemble the test environment
-	server, client, tearDown := newClientServerEnv(t, 4, protocol, nil, nil, 0, false, true)
+	server, client, tearDown := newClientServerEnv(t, 4, protocol, nil, nil, 0, false, true, true)
 	defer tearDown()
 
 	// Ensure the client has synced all necessary data.

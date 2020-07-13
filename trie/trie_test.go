@@ -88,7 +88,7 @@ func testMissingNode(t *testing.T, memonly bool) {
 	updateString(trie, "123456", "asdfasdfasdfasdfasdfasdfasdfasdf")
 	root, _ := trie.Commit(nil)
 	if !memonly {
-		triedb.Commit(root, true)
+		triedb.Commit(root, true, nil)
 	}
 
 	trie, _ = New(root, triedb)

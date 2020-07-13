@@ -282,6 +282,10 @@ var (
 		Name:  "ulc.onlyannounce",
 		Usage: "Ultra light server sends announcements only",
 	}
+	LightNoPruneFlag = cli.BoolFlag{
+		Name:  "light.nopruning",
+		Usage: "Disable ancient light chain data pruning",
+	}
 	// Ethash settings
 	EthashCacheDirFlag = DirectoryFlag{
 		Name:  "ethash.cachedir",
@@ -1070,6 +1074,9 @@ func setLes(ctx *cli.Context, cfg *eth.Config) {
 	if ctx.GlobalIsSet(UltraLightOnlyAnnounceFlag.Name) {
 		cfg.UltraLightOnlyAnnounce = ctx.GlobalBool(UltraLightOnlyAnnounceFlag.Name)
 	}
+	if ctx.GlobalIsSet(LightNoPruneFlag.Name) {
+		cfg.LightNoPrune = ctx.GlobalBool(LightNoPruneFlag.Name)
+	}
 }
 
 // makeDatabaseHandles raises out the number of allowed file handles per process
@@ -1800,12 +1807,17 @@ func MakeChainDatabase(ctx *cli.Context, stack *node.Node) ethdb.Database {
 	var (
 		cache   = ctx.GlobalInt(CacheFlag.Name) * ctx.GlobalInt(CacheDatabaseFlag.Name) / 100
 		handles = makeDatabaseHandles()
+
+		err     error
+		chainDb ethdb.Database
 	)
-	name := "chaindata"
 	if ctx.GlobalString(SyncModeFlag.Name) == "light" {
-		name = "lightchaindata"
+		name := "lightchaindata"
+		chainDb, err = stack.OpenDatabase(name, cache, handles, "")
+	} else {
+		name := "chaindata"
+		chainDb, err = stack.OpenDatabaseWithFreezer(name, cache, handles, ctx.GlobalString(AncientFlag.Name), "")
 	}
-	chainDb, err := stack.OpenDatabaseWithFreezer(name, cache, handles, ctx.GlobalString(AncientFlag.Name), "")
 	if err != nil {
 		Fatalf("Could not open database: %v", err)
 	}
