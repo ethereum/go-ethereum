@@ -243,12 +243,6 @@ func init() {
 	// Override the default app help template
 	cli.AppHelpTemplate = flags.AppHelpTemplate
 
-	// Define a one shot struct to pass to the usage template
-	type helpData struct {
-		App        interface{}
-		FlagGroups []flags.FlagGroup
-	}
-
 	// Override the default app help printer, but only for the global app help
 	originalHelpPrinter := cli.HelpPrinter
 	cli.HelpPrinter = func(w io.Writer, tmpl string, data interface{}) {
@@ -284,7 +278,7 @@ func init() {
 				}()
 			}
 			// Render out custom usage screen
-			originalHelpPrinter(w, tmpl, helpData{data, AppHelpFlagGroups})
+			originalHelpPrinter(w, tmpl, flags.HelpData{App: data, FlagGroups: AppHelpFlagGroups})
 		} else if tmpl == flags.CommandHelpTemplate {
 			// Iterate over all command specific flags and categorize them
 			categorized := make(map[string][]cli.Flag)

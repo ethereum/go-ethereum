@@ -95,6 +95,12 @@ COPYRIGHT:
 `
 )
 
+// HelpData is a one shot struct to pass to the usage template
+type HelpData struct {
+	App        interface{}
+	FlagGroups []FlagGroup
+}
+
 // FlagGroup is a collection of flags belonging to a single topic.
 type FlagGroup struct {
 	Name  string
