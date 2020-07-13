@@ -295,7 +295,7 @@ func init() {
 		gendocCommand}
 	cli.CommandHelpTemplate = flags.CommandHelpTemplate
 	// Override the default app help template
-	cli.AppHelpTemplate = flags.AppHelpTemplate
+	cli.AppHelpTemplate = flags.ClefAppHelpTemplate
 
 	// Define a one shot struct to pass to the usage template
 	type helpData struct {
@@ -306,7 +306,7 @@ func init() {
 	// Override the default app help printer, but only for the global app help
 	originalHelpPrinter := cli.HelpPrinter
 	cli.HelpPrinter = func(w io.Writer, tmpl string, data interface{}) {
-		if tmpl == flags.AppHelpTemplate {
+		if tmpl == flags.ClefAppHelpTemplate {
 			// Render out custom usage screen
 			originalHelpPrinter(w, tmpl, helpData{data, AppHelpFlagGroups})
 		} else if tmpl == flags.CommandHelpTemplate {

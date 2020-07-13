@@ -46,10 +46,9 @@ OPTIONS:
 {{range $.Flags}}   {{.}}
 {{end}}
 {{end}}`
-)
 
-// AppHelpTemplate is the test template for the default, global app help topic.
-var AppHelpTemplate = `NAME:
+	// AppHelpTemplate is the test template for the default, global app help topic.
+	AppHelpTemplate = `NAME:
    {{.App.Name}} - {{.App.Usage}}
 
    Copyright 2013-2019 The go-ethereum Authors
@@ -74,9 +73,8 @@ COPYRIGHT:
    {{.App.Copyright}}
    {{end}}
 `
-
-// ClefAppHelpTemplate is the template for the default, global app help topic.
-var ClefAppHelpTemplate = `NAME:
+	// ClefAppHelpTemplate is the template for the default, global app help topic.
+	ClefAppHelpTemplate = `NAME:
    {{.App.Name}} - {{.App.Usage}}
 
    Copyright 2013-2019 The go-ethereum Authors
@@ -95,6 +93,7 @@ COPYRIGHT:
    {{.App.Copyright}}
    {{end}}
 `
+)
 
 // FlagGroup is a collection of flags belonging to a single topic.
 type FlagGroup struct {
