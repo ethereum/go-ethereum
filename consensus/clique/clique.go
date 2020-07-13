@@ -287,10 +287,23 @@ func (c *Clique) verifyHeader(chain consensus.ChainReader, header *types.Header,
 	if header.UncleHash != uncleHash {
 		return errInvalidUncleHash
 	}
+	var parent *types.Header
 	// Ensure that the block's difficulty is meaningful (may not be correct at this point)
 	if number > 0 {
+		if len(parents) > 0 {
+			parent = parents[len(parents)-1]
+		} else {
+			parent = chain.GetHeader(header.ParentHash, number-1)
+		}
+		if parent == nil || parent.Number.Uint64() != number-1 || parent.Hash() != header.ParentHash {
+			return consensus.ErrUnknownAncestor
+		}
 		if header.Difficulty == nil || (header.Difficulty.Cmp(diffInTurn) != 0 && header.Difficulty.Cmp(diffNoTurn) != 0) {
 			return errInvalidDifficulty
+		}
+		// If we are past the genesis block, validate the basefee is valid according to the parent
+		if err := misc.VerifyEIP1559BaseFee(chain.Config(), header, parent); err != nil {
+			return err
 		}
 	}
 	// If all checks passed, validate any special fields for hard forks
@@ -298,29 +311,20 @@ func (c *Clique) verifyHeader(chain consensus.ChainReader, header *types.Header,
 		return err
 	}
 	// All basic checks passed, verify cascading fields
-	return c.verifyCascadingFields(chain, header, parents)
+	return c.verifyCascadingFields(chain, header, parents, parent)
 }
 
 // verifyCascadingFields verifies all the header fields that are not standalone,
 // rather depend on a batch of previous headers. The caller may optionally pass
 // in a batch of parents (ascending order) to avoid looking those up from the
 // database. This is useful for concurrently verifying a batch of new headers.
-func (c *Clique) verifyCascadingFields(chain consensus.ChainReader, header *types.Header, parents []*types.Header) error {
+func (c *Clique) verifyCascadingFields(chain consensus.ChainReader, header *types.Header, parents []*types.Header, parent *types.Header) error {
 	// The genesis block is the always valid dead-end
 	number := header.Number.Uint64()
 	if number == 0 {
 		return nil
 	}
 	// Ensure that the block's timestamp isn't too close to its parent
-	var parent *types.Header
-	if len(parents) > 0 {
-		parent = parents[len(parents)-1]
-	} else {
-		parent = chain.GetHeader(header.ParentHash, number-1)
-	}
-	if parent == nil || parent.Number.Uint64() != number-1 || parent.Hash() != header.ParentHash {
-		return consensus.ErrUnknownAncestor
-	}
 	if parent.Time+c.config.Period > header.Time {
 		return errInvalidTimestamp
 	}
