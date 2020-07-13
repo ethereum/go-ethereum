@@ -24,7 +24,7 @@ import (
 	"strings"
 )
 
-// ToStruct converts a interface of a runtime type into a interface of the
+// ConvertType converts a interface of a runtime type into a interface of the
 // given type
 // e.g. turn
 // var fields []reflect.StructField
@@ -35,25 +35,25 @@ import (
 // }
 // into
 // type TupleT struct { X *big.Int }
-func ToStruct(in interface{}, proto interface{}) interface{} {
+func ConvertType(in interface{}, proto interface{}) interface{} {
 	inType, protoType := reflect.TypeOf(in), reflect.TypeOf(proto)
 	switch {
 	case inType.ConvertibleTo(protoType):
 		return reflect.ValueOf(in).Convert(protoType).Interface()
 	case inType.Kind() == reflect.Struct:
 		if err := copyStruct(proto, in); err != nil {
-			return nil
+			panic(err)
 		}
 		return proto
 	case inType.Kind() == reflect.Array:
 		if err := copyArray(proto, in); err != nil {
-			return nil
+			panic(err)
 		}
 		return proto
 	default:
 		// Use set as a last ditch effort
 		if err := set(reflect.ValueOf(proto), reflect.ValueOf(in)); err != nil {
-			return nil
+			panic(err)
 		}
 		return proto
 	}

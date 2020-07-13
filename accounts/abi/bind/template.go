@@ -303,16 +303,20 @@ var (
 			var out []interface{}
 			err := _{{$contract.Type}}.contract.Call(opts, &out, "{{.Original.Name}}" {{range .Normalized.Inputs}}, {{.Name}}{{end}})
 			{{if .Structured}}
-				outstruct := new(struct{ {{range .Normalized.Outputs}} {{.Name}} {{bindtype .Type $structs}}; {{end}} })
-				{{range $i, $t := .Normalized.Outputs}} 
-					outstruct.{{.Name}} = out[{{$i}}].({{bindtype .Type $structs}}){{end}}
+			outstruct := new(struct{ {{range .Normalized.Outputs}} {{.Name}} {{bindtype .Type $structs}}; {{end}} })
+			{{range $i, $t := .Normalized.Outputs}} 
+			outstruct.{{.Name}} = out[{{$i}}].({{bindtype .Type $structs}}){{end}}
+
+			return *outstruct, err
 			{{else}}
 			if err != nil {
 				return {{range $i, $_ := .Normalized.Outputs}}*new({{bindtype .Type $structs}}), {{end}} err
 			}
-			{{end}}
+			{{range $i, $t := .Normalized.Outputs}}
+			out{{$i}} := *abi.ConvertType(out[{{$i}}], new({{bindtype .Type $structs}})).(*{{bindtype .Type $structs}}){{end}}
 			
-			return {{if .Structured}}*outstruct,{{else}}{{range $i, $t := .Normalized.Outputs}}*abi.ToStruct(out[{{$i}}], new({{bindtype .Type $structs}})).(*{{bindtype .Type $structs}}),{{end}}{{end}} err
+			return {{range $i, $t := .Normalized.Outputs}}out{{$i}}, {{end}} err
+			{{end}}
 		}
 
 		// {{.Normalized.Name}} is a free data retrieval call binding the contract method 0x{{printf "%x" .Original.ID}}.

@@ -49,7 +49,7 @@ func TestUnpack(t *testing.T) {
 				t.Errorf("test %d (%v) failed: %v", i, test.def, err)
 				return
 			}
-			if !reflect.DeepEqual(test.unpacked, ToStruct(out[0], test.unpacked)) {
+			if !reflect.DeepEqual(test.unpacked, ConvertType(out[0], test.unpacked)) {
 				t.Errorf("test %d (%v) failed: expected %v, got %v", i, test.def, test.unpacked, out[0])
 			}
 		})
