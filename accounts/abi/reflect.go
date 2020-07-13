@@ -36,50 +36,15 @@ import (
 // into
 // type TupleT struct { X *big.Int }
 func ConvertType(in interface{}, proto interface{}) interface{} {
-	inType, protoType := reflect.TypeOf(in), reflect.TypeOf(proto)
-	switch {
-	case inType.ConvertibleTo(protoType):
+	protoType := reflect.TypeOf(proto)
+	if reflect.TypeOf(in).ConvertibleTo(protoType) {
 		return reflect.ValueOf(in).Convert(protoType).Interface()
-	case inType.Kind() == reflect.Struct:
-		if err := copyStruct(proto, in); err != nil {
-			panic(err)
-		}
-		return proto
-	case inType.Kind() == reflect.Array:
-		if err := copyArray(proto, in); err != nil {
-			panic(err)
-		}
-		return proto
-	default:
-		// Use set as a last ditch effort
-		if err := set(reflect.ValueOf(proto), reflect.ValueOf(in)); err != nil {
-			panic(err)
-		}
-		return proto
 	}
-}
-
-// copyStruct tries to copy each field of in to out.
-func copyStruct(out interface{}, in interface{}) error {
-	valueIn := reflect.ValueOf(in)
-	valueOut := reflect.ValueOf(out).Elem()
-	for i := 0; i < valueOut.NumField(); i++ {
-		if err := set(valueOut.Field(i), valueIn.Field(i)); err != nil {
-			return err
-		}
+	// Use set as a last ditch effort
+	if err := set(reflect.ValueOf(proto), reflect.ValueOf(in)); err != nil {
+		panic(err)
 	}
-	return nil
-}
-
-func copyArray(out interface{}, in interface{}) error {
-	valueIn := reflect.ValueOf(in)
-	valueOut := reflect.ValueOf(out).Elem()
-	for i := 0; i < valueOut.Len(); i++ {
-		if err := set(valueOut.Index(i), valueIn.Index(i)); err != nil {
-			return err
-		}
-	}
-	return nil
+	return proto
 }
 
 // indirect recursively dereferences the value until it either gets the value
@@ -142,9 +107,7 @@ func set(dst, src reflect.Value) error {
 		dst.Set(src)
 	case dstType.Kind() == reflect.Slice && srcType.Kind() == reflect.Slice && dst.CanSet():
 		return setSlice(dst, src)
-	case dstType.Kind() == reflect.Array && srcType.Kind() == reflect.Array:
-		return setArray(dst, src)
-	case dstType.Kind() == reflect.Array && srcType.Kind() == reflect.Slice:
+	case dstType.Kind() == reflect.Array:
 		return setArray(dst, src)
 	case dstType.Kind() == reflect.Struct:
 		return setStruct(dst, src)
@@ -179,6 +142,9 @@ func setSlice(dst, src reflect.Value) error {
 }
 
 func setArray(dst, src reflect.Value) error {
+	if src.Kind() == reflect.Ptr {
+		return set(dst, indirect(src))
+	}
 	array := reflect.New(dst.Type()).Elem()
 	min := src.Len()
 	if src.Len() > dst.Len() {
