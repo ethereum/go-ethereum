@@ -54,6 +54,7 @@ import (
 	"github.com/ethereum/go-ethereum/signer/fourbyte"
 	"github.com/ethereum/go-ethereum/signer/rules"
 	"github.com/ethereum/go-ethereum/signer/storage"
+
 	colorable "github.com/mattn/go-colorable"
 	"github.com/mattn/go-isatty"
 	"gopkg.in/urfave/cli.v1"
@@ -223,7 +224,7 @@ The gendoc generates example structures of the json-rpc communication types.
 )
 
 // AppHelpFlagGroups is the application flags, grouped by functionality.
-var  AppHelpFlagGroups = []flags.FlagGroup{
+var AppHelpFlagGroups = []flags.FlagGroup{
 	{
 		Name: "FLAGS",
 		Flags: []cli.Flag{
@@ -292,7 +293,7 @@ func init() {
 		delCredentialCommand,
 		newAccountCommand,
 		gendocCommand}
-	cli.CommandHelpTemplate = utils.CommandHelpTemplate
+	cli.CommandHelpTemplate = flags.CommandHelpTemplate
 	// Override the default app help template
 	cli.AppHelpTemplate = flags.AppHelpTemplate
 
@@ -308,7 +309,7 @@ func init() {
 		if tmpl == flags.AppHelpTemplate {
 			// Render out custom usage screen
 			originalHelpPrinter(w, tmpl, helpData{data, AppHelpFlagGroups})
-		} else if tmpl == utils.CommandHelpTemplate {
+		} else if tmpl == flags.CommandHelpTemplate {
 			// Iterate over all command specific flags and categorize them
 			categorized := make(map[string][]cli.Flag)
 			for _, flag := range data.(cli.Command).Flags {
@@ -320,7 +321,7 @@ func init() {
 			// sort to get a stable ordering
 			sorted := make([]flags.FlagGroup, 0, len(categorized))
 			for cat, flgs := range categorized {
-				sorted = append(sorted, flags.FlagGroup{cat, flgs})
+				sorted = append(sorted, flags.FlagGroup{Name: cat, Flags: flgs})
 			}
 			sort.Sort(flags.ByCategory(sorted))
 

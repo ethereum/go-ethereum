@@ -19,12 +19,12 @@
 package main
 
 import (
-	"github.com/ethereum/go-ethereum/internal/flags"
 	"io"
 	"sort"
 
 	"github.com/ethereum/go-ethereum/cmd/utils"
 	"github.com/ethereum/go-ethereum/internal/debug"
+	"github.com/ethereum/go-ethereum/internal/flags"
 	cli "gopkg.in/urfave/cli.v1"
 )
 
@@ -285,7 +285,7 @@ func init() {
 			}
 			// Render out custom usage screen
 			originalHelpPrinter(w, tmpl, helpData{data, AppHelpFlagGroups})
-		} else if tmpl == utils.CommandHelpTemplate {
+		} else if tmpl == flags.CommandHelpTemplate {
 			// Iterate over all command specific flags and categorize them
 			categorized := make(map[string][]cli.Flag)
 			for _, flag := range data.(cli.Command).Flags {
@@ -297,7 +297,7 @@ func init() {
 			// sort to get a stable ordering
 			sorted := make([]flags.FlagGroup, 0, len(categorized))
 			for cat, flgs := range categorized {
-				sorted = append(sorted, flags.FlagGroup{cat, flgs})
+				sorted = append(sorted, flags.FlagGroup{Name: cat, Flags: flgs})
 			}
 			sort.Sort(flags.ByCategory(sorted))
 
