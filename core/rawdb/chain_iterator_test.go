@@ -59,7 +59,7 @@ func TestChainIterator(t *testing.T) {
 	}
 	for i, c := range cases {
 		var numbers []int
-		hashCh, _ := iterateTransactions(chainDb, c.from, c.to, c.reverse)
+		hashCh := iterateTransactions(chainDb, c.from, c.to, c.reverse, nil)
 		if hashCh != nil {
 			for h := range hashCh {
 				numbers = append(numbers, int(h.number))
