@@ -19,7 +19,8 @@ package downloader
 import "fmt"
 
 // SyncMode represents the synchronisation mode of the downloader.
-type SyncMode int
+// It is a uint32 as it is used with atomic operations.
+type SyncMode uint32
 
 const (
 	FullSync  SyncMode = iota // Synchronise the entire blockchain history from full blocks

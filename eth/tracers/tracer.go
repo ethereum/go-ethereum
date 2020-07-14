@@ -162,7 +162,7 @@ func (sw *stackWrapper) peek(idx int) *big.Int {
 		log.Warn("Tracer accessed out of bound stack", "size", len(sw.stack.Data()), "index", idx)
 		return new(big.Int)
 	}
-	return sw.stack.Data()[len(sw.stack.Data())-idx-1]
+	return sw.stack.Back(idx).ToBig()
 }
 
 // pushObject assembles a JSVM object wrapping a swappable stack and pushes it

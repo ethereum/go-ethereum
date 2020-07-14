@@ -176,7 +176,7 @@ func NewType(t string, internalType string, components []ArgumentMarshaling) (ty
 			overloadedNames[fieldName] = fieldName
 			fields = append(fields, reflect.StructField{
 				Name: fieldName, // reflect.StructOf will panic for any exported field.
-				Type: cType.getType(),
+				Type: cType.GetType(),
 				Tag:  reflect.StructTag("json:\"" + c.Name + "\""),
 			})
 			elems = append(elems, &cType)
@@ -214,7 +214,8 @@ func NewType(t string, internalType string, components []ArgumentMarshaling) (ty
 	return
 }
 
-func (t Type) getType() reflect.Type {
+// GetType returns the reflection type of the ABI type.
+func (t Type) GetType() reflect.Type {
 	switch t.T {
 	case IntTy:
 		return reflectIntType(false, t.Size)
@@ -225,9 +226,9 @@ func (t Type) getType() reflect.Type {
 	case StringTy:
 		return reflect.TypeOf("")
 	case SliceTy:
-		return reflect.SliceOf(t.Elem.getType())
+		return reflect.SliceOf(t.Elem.GetType())
 	case ArrayTy:
-		return reflect.ArrayOf(t.Size, t.Elem.getType())
+		return reflect.ArrayOf(t.Size, t.Elem.GetType())
 	case TupleTy:
 		return t.TupleType
 	case AddressTy:

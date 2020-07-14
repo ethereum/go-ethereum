@@ -22,6 +22,7 @@ import (
 	"sync"
 
 	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/rlp"
 	"golang.org/x/crypto/sha3"
 )
@@ -46,7 +47,7 @@ type leaf struct {
 // processed sequentially - onleaf will never be called in parallel or out of order.
 type committer struct {
 	tmp sliceBuffer
-	sha keccakState
+	sha crypto.KeccakState
 
 	onleaf LeafCallback
 	leafCh chan *leaf
@@ -57,7 +58,7 @@ var committerPool = sync.Pool{
 	New: func() interface{} {
 		return &committer{
 			tmp: make(sliceBuffer, 0, 550), // cap is as large as a full fullNode.
-			sha: sha3.NewLegacyKeccak256().(keccakState),
+			sha: sha3.NewLegacyKeccak256().(crypto.KeccakState),
 		}
 	},
 }

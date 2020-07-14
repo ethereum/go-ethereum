@@ -489,8 +489,10 @@ func TestExpiry(t *testing.T) {
 
 	// wait till received or timeout
 	var received, expired bool
+	ticker := time.NewTicker(100 * time.Millisecond)
+	defer ticker.Stop()
 	for j := 0; j < 20; j++ {
-		time.Sleep(100 * time.Millisecond)
+		<-ticker.C
 		if len(w.Envelopes()) == messagesCount {
 			received = true
 			break
@@ -503,7 +505,7 @@ func TestExpiry(t *testing.T) {
 
 	// wait till expired or timeout
 	for j := 0; j < 20; j++ {
-		time.Sleep(100 * time.Millisecond)
+		<-ticker.C
 		if len(w.Envelopes()) == 0 {
 			expired = true
 			break
@@ -582,8 +584,10 @@ func TestCustomization(t *testing.T) {
 
 	// wait till received or timeout
 	var received bool
+	ticker := time.NewTicker(100 * time.Millisecond)
+	defer ticker.Stop()
 	for j := 0; j < 20; j++ {
-		time.Sleep(100 * time.Millisecond)
+		<-ticker.C
 		if len(w.Envelopes()) > 1 {
 			received = true
 			break
@@ -599,7 +603,7 @@ func TestCustomization(t *testing.T) {
 	if err != nil {
 		t.Fatalf("failed subscribe with seed %d: %s.", seed, err)
 	}
-	time.Sleep(5 * time.Millisecond)
+	<-ticker.C
 	mail := f.Retrieve()
 	if len(mail) > 0 {
 		t.Fatalf("received premature mail")
@@ -670,8 +674,10 @@ func TestSymmetricSendCycle(t *testing.T) {
 
 	// wait till received or timeout
 	var received bool
+	ticker := time.NewTicker(10 * time.Millisecond)
+	defer ticker.Stop()
 	for j := 0; j < 200; j++ {
-		time.Sleep(10 * time.Millisecond)
+		<-ticker.C
 		if len(w.Envelopes()) > 0 {
 			received = true
 			break
@@ -683,7 +689,7 @@ func TestSymmetricSendCycle(t *testing.T) {
 	}
 
 	// check w.messages()
-	time.Sleep(5 * time.Millisecond)
+	<-ticker.C
 	mail1 := filter1.Retrieve()
 	mail2 := filter2.Retrieve()
 	if len(mail2) == 0 {
@@ -743,8 +749,10 @@ func TestSymmetricSendWithoutAKey(t *testing.T) {
 
 	// wait till received or timeout
 	var received bool
+	ticker := time.NewTicker(10 * time.Millisecond)
+	defer ticker.Stop()
 	for j := 0; j < 200; j++ {
-		time.Sleep(10 * time.Millisecond)
+		<-ticker.C
 		if len(w.Envelopes()) > 0 {
 			received = true
 			break
@@ -756,7 +764,7 @@ func TestSymmetricSendWithoutAKey(t *testing.T) {
 	}
 
 	// check w.messages()
-	time.Sleep(5 * time.Millisecond)
+	<-ticker.C
 	mail := filter.Retrieve()
 	if len(mail) == 0 {
 		t.Fatalf("did not receive message in spite of not setting a public key")
@@ -809,8 +817,10 @@ func TestSymmetricSendKeyMismatch(t *testing.T) {
 
 	// wait till received or timeout
 	var received bool
+	ticker := time.NewTicker(10 * time.Millisecond)
+	defer ticker.Stop()
 	for j := 0; j < 200; j++ {
-		time.Sleep(10 * time.Millisecond)
+		<-ticker.C
 		if len(w.Envelopes()) > 0 {
 			received = true
 			break
@@ -822,7 +832,7 @@ func TestSymmetricSendKeyMismatch(t *testing.T) {
 	}
 
 	// check w.messages()
-	time.Sleep(5 * time.Millisecond)
+	<-ticker.C
 	mail := filter.Retrieve()
 	if len(mail) > 0 {
 		t.Fatalf("received a message when keys weren't matching")

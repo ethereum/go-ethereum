@@ -14,14 +14,14 @@
 // You should have received a copy of the GNU Lesser General Public License
 // along with the go-ethereum library. If not, see <http://www.gnu.org/licenses/>.
 
-// +build freebsd
+// +build freebsd dragonfly
 
 package fdlimit
 
 import "syscall"
 
 // This file is largely identical to fdlimit_unix.go,
-// but Rlimit fields have type int64 on FreeBSD so it needs
+// but Rlimit fields have type int64 on *BSD so it needs
 // an extra conversion.
 
 // Raise tries to maximize the file descriptor allowance of this process

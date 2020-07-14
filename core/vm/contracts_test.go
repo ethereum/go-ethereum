@@ -23,6 +23,7 @@ import (
 	"io/ioutil"
 	"math/big"
 	"testing"
+	"time"
 
 	"github.com/ethereum/go-ethereum/common"
 )
@@ -142,6 +143,7 @@ func benchmarkPrecompiled(addr string, test precompiledTest, bench *testing.B) {
 
 	bench.Run(fmt.Sprintf("%s-Gas=%d", test.Name, contract.Gas), func(bench *testing.B) {
 		bench.ReportAllocs()
+		start := time.Now().Nanosecond()
 		bench.ResetTimer()
 		for i := 0; i < bench.N; i++ {
 			contract.Gas = reqGas
@@ -149,7 +151,13 @@ func benchmarkPrecompiled(addr string, test precompiledTest, bench *testing.B) {
 			res, err = RunPrecompiledContract(p, data, contract)
 		}
 		bench.StopTimer()
+		elapsed := float64(time.Now().Nanosecond() - start)
+		if elapsed < 1 {
+			elapsed = 1
+		}
+		gasUsed := reqGas * uint64(bench.N)
 		bench.ReportMetric(float64(reqGas), "gas/op")
+		bench.ReportMetric(float64(gasUsed*1000)/elapsed, "mgas/s")
 		//Check if it is correct
 		if err != nil {
 			bench.Error(err)
@@ -319,4 +327,43 @@ func loadJsonFail(name string) ([]precompiledFailureTest, error) {
 	var testcases []precompiledFailureTest
 	err = json.Unmarshal(data, &testcases)
 	return testcases, err
+}
+
+// BenchmarkPrecompiledBLS12381G1MultiExpWorstCase benchmarks the worst case we could find that still fits a gaslimit of 10MGas.
+func BenchmarkPrecompiledBLS12381G1MultiExpWorstCase(b *testing.B) {
+	task := "0000000000000000000000000000000008d8c4a16fb9d8800cce987c0eadbb6b3b005c213d44ecb5adeed713bae79d606041406df26169c35df63cf972c94be1" +
+		"0000000000000000000000000000000011bc8afe71676e6730702a46ef817060249cd06cd82e6981085012ff6d013aa4470ba3a2c71e13ef653e1e223d1ccfe9" +
+		"FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF"
+	input := task
+	for i := 0; i < 4787; i++ {
+		input = input + task
+	}
+	testcase := precompiledTest{
+		Input:       input,
+		Expected:    "0000000000000000000000000000000005a6310ea6f2a598023ae48819afc292b4dfcb40aabad24a0c2cb6c19769465691859eeb2a764342a810c5038d700f18000000000000000000000000000000001268ac944437d15923dc0aec00daa9250252e43e4b35ec7a19d01f0d6cd27f6e139d80dae16ba1c79cc7f57055a93ff5",
+		Name:        "WorstCaseG1",
+		NoBenchmark: false,
+	}
+	benchmarkPrecompiled("0c", testcase, b)
+}
+
+// BenchmarkPrecompiledBLS12381G2MultiExpWorstCase benchmarks the worst case we could find that still fits a gaslimit of 10MGas.
+func BenchmarkPrecompiledBLS12381G2MultiExpWorstCase(b *testing.B) {
+	task := "000000000000000000000000000000000d4f09acd5f362e0a516d4c13c5e2f504d9bd49fdfb6d8b7a7ab35a02c391c8112b03270d5d9eefe9b659dd27601d18f" +
+		"000000000000000000000000000000000fd489cb75945f3b5ebb1c0e326d59602934c8f78fe9294a8877e7aeb95de5addde0cb7ab53674df8b2cfbb036b30b99" +
+		"00000000000000000000000000000000055dbc4eca768714e098bbe9c71cf54b40f51c26e95808ee79225a87fb6fa1415178db47f02d856fea56a752d185f86b" +
+		"000000000000000000000000000000001239b7640f416eb6e921fe47f7501d504fadc190d9cf4e89ae2b717276739a2f4ee9f637c35e23c480df029fd8d247c7" +
+		"FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF"
+	input := task
+	for i := 0; i < 1040; i++ {
+		input = input + task
+	}
+
+	testcase := precompiledTest{
+		Input:       input,
+		Expected:    "0000000000000000000000000000000018f5ea0c8b086095cfe23f6bb1d90d45de929292006dba8cdedd6d3203af3c6bbfd592e93ecb2b2c81004961fdcbb46c00000000000000000000000000000000076873199175664f1b6493a43c02234f49dc66f077d3007823e0343ad92e30bd7dc209013435ca9f197aca44d88e9dac000000000000000000000000000000000e6f07f4b23b511eac1e2682a0fc224c15d80e122a3e222d00a41fab15eba645a700b9ae84f331ae4ed873678e2e6c9b000000000000000000000000000000000bcb4849e460612aaed79617255fd30c03f51cf03d2ed4163ca810c13e1954b1e8663157b957a601829bb272a4e6c7b8",
+		Name:        "WorstCaseG2",
+		NoBenchmark: false,
+	}
+	benchmarkPrecompiled("0f", testcase, b)
 }

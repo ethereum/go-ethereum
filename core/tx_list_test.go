@@ -17,6 +17,7 @@
 package core
 
 import (
+	"math/big"
 	"math/rand"
 	"testing"
 
@@ -47,5 +48,23 @@ func TestStrictTxListAdd(t *testing.T) {
 		if list.txs.items[tx.Nonce()] != tx {
 			t.Errorf("item %d: transaction mismatch: have %v, want %v", i, list.txs.items[tx.Nonce()], tx)
 		}
+	}
+}
+
+func BenchmarkTxListAdd(t *testing.B) {
+	// Generate a list of transactions to insert
+	key, _ := crypto.GenerateKey()
+
+	txs := make(types.Transactions, 100000)
+	for i := 0; i < len(txs); i++ {
+		txs[i] = transaction(uint64(i), 0, key)
+	}
+	// Insert the transactions in a random order
+	list := newTxList(true)
+	priceLimit := big.NewInt(int64(DefaultTxPoolConfig.PriceLimit))
+	t.ResetTimer()
+	for _, v := range rand.Perm(len(txs)) {
+		list.Add(txs[v], DefaultTxPoolConfig.PriceBump)
+		list.Filter(priceLimit, DefaultTxPoolConfig.PriceBump)
 	}
 }

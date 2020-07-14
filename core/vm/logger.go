@@ -42,7 +42,6 @@ func (s Storage) Copy() Storage {
 	for key, value := range s {
 		cpy[key] = value
 	}
-
 	return cpy
 }
 
@@ -118,16 +117,16 @@ type Tracer interface {
 type StructLogger struct {
 	cfg LogConfig
 
-	logs          []StructLog
-	changedValues map[common.Address]Storage
-	output        []byte
-	err           error
+	storage map[common.Address]Storage
+	logs    []StructLog
+	output  []byte
+	err     error
 }
 
 // NewStructLogger returns a new logger
 func NewStructLogger(cfg *LogConfig) *StructLogger {
 	logger := &StructLogger{
-		changedValues: make(map[common.Address]Storage),
+		storage: make(map[common.Address]Storage),
 	}
 	if cfg != nil {
 		logger.cfg = *cfg
@@ -142,27 +141,11 @@ func (l *StructLogger) CaptureStart(from common.Address, to common.Address, crea
 
 // CaptureState logs a new structured log message and pushes it out to the environment
 //
-// CaptureState also tracks SSTORE ops to track dirty values.
+// CaptureState also tracks SLOAD/SSTORE ops to track storage change.
 func (l *StructLogger) CaptureState(env *EVM, pc uint64, op OpCode, gas, cost uint64, memory *Memory, stack *Stack, rStack *ReturnStack, contract *Contract, depth int, err error) error {
 	// check if already accumulated the specified number of logs
 	if l.cfg.Limit != 0 && l.cfg.Limit <= len(l.logs) {
 		return errTraceLimitReached
-	}
-
-	// initialise new changed values storage container for this contract
-	// if not present.
-	if l.changedValues[contract.Address()] == nil {
-		l.changedValues[contract.Address()] = make(Storage)
-	}
-
-	// capture SSTORE opcodes and determine the changed value and store
-	// it in the local storage container.
-	if op == SSTORE && stack.len() >= 2 {
-		var (
-			value   = common.BigToHash(stack.data[stack.len()-2])
-			address = common.BigToHash(stack.data[stack.len()-1])
-		)
-		l.changedValues[contract.Address()][address] = value
 	}
 	// Copy a snapshot of the current memory state to a new buffer
 	var mem []byte
@@ -175,22 +158,42 @@ func (l *StructLogger) CaptureState(env *EVM, pc uint64, op OpCode, gas, cost ui
 	if !l.cfg.DisableStack {
 		stck = make([]*big.Int, len(stack.Data()))
 		for i, item := range stack.Data() {
-			stck[i] = new(big.Int).Set(item)
+			stck[i] = new(big.Int).Set(item.ToBig())
 		}
-	}
-	// Copy a snapshot of the current storage to a new container
-	var storage Storage
-	if !l.cfg.DisableStorage {
-		storage = l.changedValues[contract.Address()].Copy()
 	}
 	var rstack []uint64
 	if !l.cfg.DisableStack && rStack != nil {
 		rstck := make([]uint64, len(rStack.data))
 		copy(rstck, rStack.data)
 	}
+	// Copy a snapshot of the current storage to a new container
+	var storage Storage
+	if !l.cfg.DisableStorage {
+		// initialise new changed values storage container for this contract
+		// if not present.
+		if l.storage[contract.Address()] == nil {
+			l.storage[contract.Address()] = make(Storage)
+		}
+		// capture SLOAD opcodes and record the read entry in the local storage
+		if op == SLOAD && stack.len() >= 1 {
+			var (
+				address = common.Hash(stack.data[stack.len()-1].Bytes32())
+				value   = env.StateDB.GetState(contract.Address(), address)
+			)
+			l.storage[contract.Address()][address] = value
+		}
+		// capture SSTORE opcodes and record the written entry in the local storage.
+		if op == SSTORE && stack.len() >= 2 {
+			var (
+				value   = common.Hash(stack.data[stack.len()-2].Bytes32())
+				address = common.Hash(stack.data[stack.len()-1].Bytes32())
+			)
+			l.storage[contract.Address()][address] = value
+		}
+		storage = l.storage[contract.Address()].Copy()
+	}
 	// create a new snapshot of the EVM.
 	log := StructLog{pc, op, gas, cost, mem, memory.Len(), stck, rstack, storage, depth, env.StateDB.GetRefund(), err}
-
 	l.logs = append(l.logs, log)
 	return nil
 }
