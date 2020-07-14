@@ -265,7 +265,7 @@ func indexTransactions(db ethdb.Database, from uint64, to uint64, interrupt chan
 // We can write tx index tail flag periodically even without the whole indexing
 // procedure is finished. So that we can resume indexing procedure next time quickly.
 //
-// There is a passed channel, the whole procedure will be interruped if any
+// There is a passed channel, the whole procedure will be interrupted if any
 // signal received.
 func IndexTransactions(db ethdb.Database, from uint64, to uint64, interrupt chan struct{}) {
 	indexTransactions(db, from, to, interrupt, nil)
@@ -278,7 +278,7 @@ func indexTransactionsForTesting(db ethdb.Database, from uint64, to uint64, inte
 
 // unindexTransactions removes txlookup indices of the specified block range.
 //
-// There is a passed channel, the whole procedure will be interruped if any
+// There is a passed channel, the whole procedure will be interrupted if any
 // signal received.
 func unindexTransactions(db ethdb.Database, from uint64, to uint64, interrupt chan struct{}, hook func(uint64) bool) {
 	// short circuit for invalid range
@@ -352,7 +352,7 @@ func unindexTransactions(db ethdb.Database, from uint64, to uint64, interrupt ch
 
 // UnindexTransactions removes txlookup indices of the specified block range.
 //
-// There is a passed channel, the whole procedure will be interruped if any
+// There is a passed channel, the whole procedure will be interrupted if any
 // signal received.
 func UnindexTransactions(db ethdb.Database, from uint64, to uint64, interrupt chan struct{}) {
 	unindexTransactions(db, from, to, interrupt, nil)
