@@ -305,8 +305,9 @@ func (api *PublicDebugAPI) DumpBlock(blockNr rpc.BlockNumber) (state.Dump, error
 }
 
 type Eth2API struct {
-	eth *Ethereum
-	env *eth2bpenv
+	eth  *Ethereum
+	env  *eth2bpenv
+	head common.Hash
 }
 
 // NewEth2API creates a new API definition for the eth2 prototype.
@@ -346,7 +347,7 @@ func (api *Eth2API) ValidateBlock(blockRLP []byte) (bool, error) {
 		return false, err
 	}
 
-	return true, nil
+	return true, api.InsertBlock(blockRLP)
 }
 
 type eth2bpenv struct {
@@ -387,9 +388,9 @@ func (api *Eth2API) makeEnv(parent *types.Block, header *types.Header) error {
 	return nil
 }
 
-func (api *Eth2API) ProduceBlock(coinbase common.Address) ([]byte, error) {
+func (api *Eth2API) ProduceBlock(parentHash common.Hash) ([]byte, error) {
 	bc := api.eth.BlockChain()
-	parent := bc.CurrentBlock()
+	parent := bc.GetBlockByHash(parentHash)
 	pool := api.eth.TxPool()
 	pending, err := pool.Pending()
 	if err != nil {
@@ -415,6 +416,10 @@ func (api *Eth2API) ProduceBlock(coinbase common.Address) ([]byte, error) {
 	}
 	signer := types.NewEIP155Signer(bc.Config().ChainID)
 	txs := types.NewTransactionsByPriceAndNonce(signer, pending)
+	coinbase, err := api.eth.Etherbase()
+	if err != nil {
+		return nil, err
+	}
 
 	var transactions []*types.Transaction
 
@@ -483,6 +488,17 @@ func (api *Eth2API) InsertBlock(blockRLP []byte) error {
 
 	_, err := api.eth.BlockChain().InsertChain(types.Blocks([]*types.Block{&block}))
 	return err
+}
+
+func (api *Eth2API) SetHead(newHead common.Hash) error {
+	oldBlock := api.eth.BlockChain().GetBlockByHash(api.head)
+	newBlock := api.eth.BlockChain().GetBlockByHash(newHead)
+	err := api.eth.BlockChain().Reorg(oldBlock, newBlock)
+	if err != nil {
+		return err
+	}
+	api.head = newHead
+	return nil
 }
 
 // PrivateDebugAPI is the collection of Ethereum full node APIs exposed over
