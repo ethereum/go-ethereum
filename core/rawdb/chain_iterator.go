@@ -181,7 +181,7 @@ func iterateTransactions(db ethdb.Database, from uint64, to uint64, reverse bool
 	return hashesCh
 }
 
-// IndexTransactions creates txlookup indices of the specified block range.
+// indexTransactions creates txlookup indices of the specified block range.
 //
 // This function iterates canonical chain in reverse order, it has one main advantage:
 // We can write tx index tail flag periodically even without the whole indexing
@@ -189,7 +189,7 @@ func iterateTransactions(db ethdb.Database, from uint64, to uint64, reverse bool
 //
 // There is a passed channel, the whole procedure will be interruped if any
 // signal received.
-func IndexTransactions(db ethdb.Database, from uint64, to uint64, interrupt chan struct{}) {
+func indexTransactions(db ethdb.Database, from uint64, to uint64, interrupt chan struct{}, hook func(uint64) bool) {
 	// short circuit for invalid range
 	if from >= to {
 		return
@@ -215,6 +215,10 @@ func IndexTransactions(db ethdb.Database, from uint64, to uint64, interrupt chan
 		for !queue.Empty() {
 			// If the next available item is gapped, return
 			if _, priority := queue.Peek(); priority != int64(lastNum-1) {
+				break
+			}
+			// For testing
+			if hook != nil && !hook(lastNum-1) {
 				break
 			}
 			// Next block available, pop it off and index it
@@ -255,11 +259,28 @@ func IndexTransactions(db ethdb.Database, from uint64, to uint64, interrupt chan
 	}
 }
 
-// UnindexTransactions removes txlookup indices of the specified block range.
+// IndexTransactions creates txlookup indices of the specified block range.
+//
+// This function iterates canonical chain in reverse order, it has one main advantage:
+// We can write tx index tail flag periodically even without the whole indexing
+// procedure is finished. So that we can resume indexing procedure next time quickly.
 //
 // There is a passed channel, the whole procedure will be interruped if any
 // signal received.
-func UnindexTransactions(db ethdb.Database, from uint64, to uint64, interrupt chan struct{}) {
+func IndexTransactions(db ethdb.Database, from uint64, to uint64, interrupt chan struct{}) {
+	indexTransactions(db, from, to, interrupt, nil)
+}
+
+// indexTransactionsForTesting is the internal debug version with an additional hook.
+func indexTransactionsForTesting(db ethdb.Database, from uint64, to uint64, interrupt chan struct{}, hook func(uint64) bool) {
+	indexTransactions(db, from, to, interrupt, hook)
+}
+
+// unindexTransactions removes txlookup indices of the specified block range.
+//
+// There is a passed channel, the whole procedure will be interruped if any
+// signal received.
+func unindexTransactions(db ethdb.Database, from uint64, to uint64, interrupt chan struct{}, hook func(uint64) bool) {
 	// short circuit for invalid range
 	if from >= to {
 		return
@@ -283,6 +304,10 @@ func UnindexTransactions(db ethdb.Database, from uint64, to uint64, interrupt ch
 		for !queue.Empty() {
 			// If the next available item is gapped, return
 			if _, priority := queue.Peek(); -priority != int64(nextNum) {
+				break
+			}
+			// For testing
+			if hook != nil && !hook(nextNum) {
 				break
 			}
 			delivery := queue.PopItem().(*blockTxHashes)
@@ -323,4 +348,17 @@ func UnindexTransactions(db ethdb.Database, from uint64, to uint64, interrupt ch
 	default:
 		log.Info("Unindexed transactions", "blocks", blocks, "txs", txs, "tail", to, "elapsed", common.PrettyDuration(time.Since(start)))
 	}
+}
+
+// UnindexTransactions removes txlookup indices of the specified block range.
+//
+// There is a passed channel, the whole procedure will be interruped if any
+// signal received.
+func UnindexTransactions(db ethdb.Database, from uint64, to uint64, interrupt chan struct{}) {
+	unindexTransactions(db, from, to, interrupt, nil)
+}
+
+// unindexTransactionsForTesting is the internal debug version with an additional hook.
+func unindexTransactionsForTesting(db ethdb.Database, from uint64, to uint64, interrupt chan struct{}, hook func(uint64) bool) {
+	unindexTransactions(db, from, to, interrupt, hook)
 }
