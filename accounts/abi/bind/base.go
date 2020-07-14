@@ -25,7 +25,6 @@ import (
 	"github.com/ethereum/go-ethereum"
 	"github.com/ethereum/go-ethereum/accounts/abi"
 	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/event"
@@ -121,8 +120,8 @@ func DeployContract(opts *TransactOpts, abi abi.ABI, bytecode []byte, backend Co
 	return c.address, tx, c, nil
 }
 
-// CheckContract checks whether the deployed contract at the given address matches the provided binary
-func CheckContract(opts *CheckOpts, bytecode string, backend ContractBackend) (bool, error) {
+// CheckContract checks whether the deployed contract at the given address matches the provided code hash
+func CheckContract(opts *CheckOpts, codeHash string, backend ContractBackend) (bool, error) {
 	if opts == nil {
 		return false, errors.New("Invalid CheckOpts provided")
 	}
@@ -131,7 +130,8 @@ func CheckContract(opts *CheckOpts, bytecode string, backend ContractBackend) (b
 		return false, err
 	}
 
-	return bytecode == hexutil.Encode(code), nil
+	gotHash := common.Bytes2Hex(crypto.Keccak256([]byte(common.Bytes2Hex(code))))
+	return codeHash == "0x"+gotHash, nil
 }
 
 // Call invokes the (constant) contract method with params as input values and

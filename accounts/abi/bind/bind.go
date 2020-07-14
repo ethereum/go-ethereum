@@ -31,6 +31,8 @@ import (
 	"unicode"
 
 	"github.com/ethereum/go-ethereum/accounts/abi"
+	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/log"
 )
 
@@ -173,10 +175,11 @@ func Bind(types []string, abis []string, bytecodes []string, fsigs []map[string]
 		inputBin := strings.TrimPrefix(strings.TrimSpace(bytecodes[i]), "0x")
 		outputBin := strings.SplitAfter(inputBin, "6080604052")
 		contracts[types[i]] = &tmplContract{
-			Type:        capitalise(types[i]),
-			InputABI:    strings.Replace(strippedABI, "\"", "\\\"", -1),
-			InputBin:    inputBin,
-			OutputBin:   outputBin[len(outputBin)-1],
+			Type:     capitalise(types[i]),
+			InputABI: strings.Replace(strippedABI, "\"", "\\\"", -1),
+			InputBin: inputBin,
+			// CodeHash is the hash of the last segment of the outputBin.
+			CodeHash:    common.Bytes2Hex(crypto.Keccak256([]byte("6080604052" + outputBin[len(outputBin)-1]))),
 			Constructor: evmABI.Constructor,
 			Calls:       calls,
 			Transacts:   transacts,

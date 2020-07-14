@@ -31,7 +31,7 @@ type tmplContract struct {
 	Type        string                 // Type name of the main contract binding
 	InputABI    string                 // JSON ABI used as the input to generate the binding from
 	InputBin    string                 // Optional EVM bytecode used to deploy code from
-	OutputBin   string                 // Optional EVM bytecode as will be produced by deploying this contract
+	CodeHash    string                 // Optional Hash of the EVM bytecode as deployed on chain
 	FuncSigs    map[string]string      // Optional map: string signature -> 4-byte signature
 	Constructor abi.Method             // Contract constructor for deploy parametrization
 	Calls       map[string]*tmplMethod // Contract calls that only read state data
@@ -153,13 +153,13 @@ var (
 		}
 	{{end}}
 
-	{{if .OutputBin}}
-		// {{.Type}}OnChainBin is the compiled bytecode of the contract as deployed on-chain.
-		var {{.Type}}OnChainBin = "0x{{.OutputBin}}"
+	{{if .CodeHash}}
+		// {{.Type}}CodeHash is the hash of the bytecode as deployed on-chain.
+		var {{.Type}}CodeHash = "0x{{.CodeHash}}"
 
 		// Is{{.Type}} checks whether a contract at this address is an instance of {{.Type}}.
 		func Is{{.Type}} (checkOpts *bind.CheckOpts, backend bind.ContractBackend) (bool, error) {
-		  return bind.CheckContract(checkOpts, {{.Type}}OnChainBin, backend)
+		  return bind.CheckContract(checkOpts, {{.Type}}CodeHash, backend)
 		}
 	{{end}}
 
