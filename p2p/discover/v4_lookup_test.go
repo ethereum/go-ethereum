@@ -24,6 +24,7 @@ import (
 	"testing"
 
 	"github.com/maticnetwork/bor/crypto"
+	"github.com/maticnetwork/bor/p2p/discover/v4wire"
 	"github.com/maticnetwork/bor/p2p/enode"
 	"github.com/maticnetwork/bor/p2p/enr"
 )
@@ -51,14 +52,13 @@ func TestUDPv4_Lookup(t *testing.T) {
 	// Answer lookup packets.
 	serveTestnet(test, lookupTestnet)
 
-	// Verify result nodes.
-	results := <-resultC
+// checkLookupResults verifies that the results of a lookup are the closest nodes to
+// the testnet's target.
+func checkLookupResults(t *testing.T, tn *preminedTestnet, results []*enode.Node) {
+	t.Helper()
 	t.Logf("results:")
 	for _, e := range results {
-		t.Logf("  ld=%d, %x", enode.LogDist(lookupTestnet.target.id(), e.ID()), e.ID().Bytes())
-	}
-	if len(results) != bucketSize {
-		t.Errorf("wrong number of results: got %d, want %d", len(results), bucketSize)
+		t.Logf("  ld=%d, %x", enode.LogDist(tn.target.id(), e.ID()), e.ID().Bytes())
 	}
 	checkLookupResults(t, lookupTestnet, results)
 }
@@ -135,15 +135,15 @@ func TestUDPv4_LookupIteratorClose(t *testing.T) {
 
 func serveTestnet(test *udpTest, testnet *preminedTestnet) {
 	for done := false; !done; {
-		done = test.waitPacketOut(func(p packetV4, to *net.UDPAddr, hash []byte) {
+		done = test.waitPacketOut(func(p v4wire.Packet, to *net.UDPAddr, hash []byte) {
 			n, key := testnet.nodeByAddr(to)
 			switch p.(type) {
-			case *pingV4:
-				test.packetInFrom(nil, key, to, &pongV4{Expiration: futureExp, ReplyTok: hash})
-			case *findnodeV4:
+			case *v4wire.Ping:
+				test.packetInFrom(nil, key, to, &v4wire.Pong{Expiration: futureExp, ReplyTok: hash})
+			case *v4wire.Findnode:
 				dist := enode.LogDist(n.ID(), testnet.target.id())
 				nodes := testnet.nodesAtDistance(dist - 1)
-				test.packetInFrom(nil, key, to, &neighborsV4{Expiration: futureExp, Nodes: nodes})
+				test.packetInFrom(nil, key, to, &v4wire.Neighbors{Expiration: futureExp, Nodes: nodes})
 			}
 		})
 	}
@@ -270,8 +270,8 @@ func (tn *preminedTestnet) nodeByAddr(addr *net.UDPAddr) (*enode.Node, *ecdsa.Pr
 	return tn.node(dist, index), key
 }
 
-func (tn *preminedTestnet) nodesAtDistance(dist int) []rpcNode {
-	result := make([]rpcNode, len(tn.dists[dist]))
+func (tn *preminedTestnet) nodesAtDistance(dist int) []v4wire.Node {
+	result := make([]v4wire.Node, len(tn.dists[dist]))
 	for i := range result {
 		result[i] = nodeToRPC(wrapNode(tn.node(dist, i)))
 	}

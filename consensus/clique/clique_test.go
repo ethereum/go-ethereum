@@ -99,7 +99,7 @@ func TestReimportMirroredState(t *testing.T) {
 	}
 
 	// Simulate a crash by creating a new chain on top of the database, without
-	// flushing the dirty states out. Insert the last block, trigerring a sidechain
+	// flushing the dirty states out. Insert the last block, triggering a sidechain
 	// reimport.
 	chain, _ = core.NewBlockChain(db, nil, params.AllCliqueProtocolChanges, engine, vm.Config{}, nil, nil)
 	defer chain.Stop()

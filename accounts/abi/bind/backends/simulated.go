@@ -28,6 +28,7 @@ import (
 	"github.com/maticnetwork/bor/accounts/abi"
 	"github.com/maticnetwork/bor/accounts/abi/bind"
 	"github.com/maticnetwork/bor/common"
+	"github.com/maticnetwork/bor/common/hexutil"
 	"github.com/maticnetwork/bor/common/math"
 	"github.com/maticnetwork/bor/consensus/ethash"
 	"github.com/maticnetwork/bor/core"
@@ -64,7 +65,7 @@ type SimulatedBackend struct {
 
 	mu           sync.Mutex
 	pendingBlock *types.Block   // Currently pending block that will be imported on request
-	pendingState *state.StateDB // Currently pending state that will be the active on on request
+	pendingState *state.StateDB // Currently pending state that will be the active on request
 
 	events *filters.EventSystem // Event system for filtering log events live
 
@@ -133,11 +134,11 @@ func (b *SimulatedBackend) stateByBlockNumber(ctx context.Context, blockNumber *
 	if blockNumber == nil || blockNumber.Cmp(b.blockchain.CurrentBlock().Number()) == 0 {
 		return b.blockchain.State()
 	}
-	block, err := b.BlockByNumber(ctx, blockNumber)
+	block, err := b.blockByNumberNoLock(ctx, blockNumber)
 	if err != nil {
 		return nil, err
 	}
-	return b.blockchain.StateAt(block.Hash())
+	return b.blockchain.StateAt(block.Root())
 }
 
 // CodeAt returns the code associated with a certain account in the blockchain.
@@ -244,6 +245,12 @@ func (b *SimulatedBackend) BlockByNumber(ctx context.Context, number *big.Int) (
 	b.mu.Lock()
 	defer b.mu.Unlock()
 
+	return b.blockByNumberNoLock(ctx, number)
+}
+
+// blockByNumberNoLock retrieves a block from the database by number, caching it
+// (associated with its hash) if found without Lock.
+func (b *SimulatedBackend) blockByNumberNoLock(ctx context.Context, number *big.Int) (*types.Block, error) {
 	if number == nil || number.Cmp(b.pendingBlock.Number()) == 0 {
 		return b.blockchain.CurrentBlock(), nil
 	}
@@ -338,6 +345,36 @@ func (b *SimulatedBackend) PendingCodeAt(ctx context.Context, contract common.Ad
 	return b.pendingState.GetCode(contract), nil
 }
 
+func newRevertError(result *core.ExecutionResult) *revertError {
+	reason, errUnpack := abi.UnpackRevert(result.Revert())
+	err := errors.New("execution reverted")
+	if errUnpack == nil {
+		err = fmt.Errorf("execution reverted: %v", reason)
+	}
+	return &revertError{
+		error:  err,
+		reason: hexutil.Encode(result.Revert()),
+	}
+}
+
+// revertError is an API error that encompassas an EVM revertal with JSON error
+// code and a binary data blob.
+type revertError struct {
+	error
+	reason string // revert reason hex encoded
+}
+
+// ErrorCode returns the JSON error code for a revertal.
+// See: https://github.com/ethereum/wiki/wiki/JSON-RPC-Error-Codes-Improvement-Proposal
+func (e *revertError) ErrorCode() int {
+	return 3
+}
+
+// ErrorData returns the hex encoded revert reason.
+func (e *revertError) ErrorData() interface{} {
+	return e.reason
+}
+
 // CallContract executes a contract call.
 func (b *SimulatedBackend) CallContract(ctx context.Context, call ethereum.CallMsg, blockNumber *big.Int) ([]byte, error) {
 	b.mu.Lock()
@@ -354,7 +391,11 @@ func (b *SimulatedBackend) CallContract(ctx context.Context, call ethereum.CallM
 	if err != nil {
 		return nil, err
 	}
-	return res.Return(), nil
+	// If the result contains a revert reason, try to unpack and return it.
+	if len(res.Revert()) > 0 {
+		return nil, newRevertError(res)
+	}
+	return res.Return(), res.Err
 }
 
 // PendingCallContract executes a contract call on the pending state.
@@ -367,7 +408,11 @@ func (b *SimulatedBackend) PendingCallContract(ctx context.Context, call ethereu
 	if err != nil {
 		return nil, err
 	}
-	return res.Return(), nil
+	// If the result contains a revert reason, try to unpack and return it.
+	if len(res.Revert()) > 0 {
+		return nil, newRevertError(res)
+	}
+	return res.Return(), res.Err
 }
 
 // PendingNonceAt implements PendingStateReader.PendingNonceAt, retrieving
@@ -466,16 +511,10 @@ func (b *SimulatedBackend) EstimateGas(ctx context.Context, call ethereum.CallMs
 		}
 		if failed {
 			if result != nil && result.Err != vm.ErrOutOfGas {
-				errMsg := fmt.Sprintf("always failing transaction (%v)", result.Err)
 				if len(result.Revert()) > 0 {
-					ret, err := abi.UnpackRevert(result.Revert())
-					if err != nil {
-						errMsg += fmt.Sprintf(" (%#x)", result.Revert())
-					} else {
-						errMsg += fmt.Sprintf(" (%s)", ret)
-					}
+					return 0, newRevertError(result)
 				}
-				return 0, errors.New(errMsg)
+				return 0, result.Err
 			}
 			// Otherwise, the specified gas cap is too low
 			return 0, fmt.Errorf("gas required exceeds allowance (%d)", cap)
@@ -738,14 +777,14 @@ func (fb *filterBackend) SubscribePendingLogsEvent(ch chan<- []*types.Log) event
 	return nullSubscription()
 }
 
+func (fb *filterBackend) SubscribeStateSyncEvent(ch chan<- core.StateSyncEvent) event.Subscription {
+	return fb.bc.SubscribeStateSyncEvent(ch)
+}
+
 func (fb *filterBackend) BloomStatus() (uint64, uint64) { return 4096, 0 }
 
 func (fb *filterBackend) ServiceFilter(ctx context.Context, ms *bloombits.MatcherSession) {
 	panic("not supported")
-}
-
-func (fb *filterBackend) SubscribeStateEvent(ch chan<- core.NewStateChangeEvent) event.Subscription {
-	return fb.bc.SubscribeStateEvent(ch)
 }
 
 func nullSubscription() event.Subscription {

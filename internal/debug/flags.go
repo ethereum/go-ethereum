@@ -195,15 +195,19 @@ func Setup(ctx *cli.Context) error {
 		}
 
 		address := fmt.Sprintf("%s:%d", listenHost, port)
-		StartPProf(address)
+		// This context value ("metrics.addr") represents the utils.MetricsHTTPFlag.Name.
+		// It cannot be imported because it will cause a cyclical dependency.
+		StartPProf(address, !ctx.GlobalIsSet("metrics.addr"))
 	}
 	return nil
 }
 
-func StartPProf(address string) {
+func StartPProf(address string, withMetrics bool) {
 	// Hook go-metrics into expvar on any /debug/metrics request, load all vars
 	// from the registry into expvar, and execute regular expvar handler.
-	exp.Exp(metrics.DefaultRegistry)
+	if withMetrics {
+		exp.Exp(metrics.DefaultRegistry)
+	}
 	http.Handle("/memsize/", http.StripPrefix("/memsize", &Memsize))
 	log.Info("Starting pprof server", "addr", fmt.Sprintf("http://%s/debug/pprof", address))
 	go func() {

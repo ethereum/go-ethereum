@@ -27,7 +27,7 @@ import (
 
 	"github.com/maticnetwork/bor/accounts/keystore"
 	"github.com/maticnetwork/bor/common"
-	"github.com/maticnetwork/bor/console"
+	"github.com/maticnetwork/bor/console/prompt"
 	"github.com/maticnetwork/bor/p2p/dnsdisc"
 	"github.com/maticnetwork/bor/p2p/enode"
 	cli "gopkg.in/urfave/cli.v1"
@@ -226,7 +226,7 @@ func loadSigningKey(keyfile string) *ecdsa.PrivateKey {
 	if err != nil {
 		exit(fmt.Errorf("failed to read the keyfile at '%s': %v", keyfile, err))
 	}
-	password, _ := console.Stdin.PromptPassword("Please enter the password for '" + keyfile + "': ")
+	password, _ := prompt.Stdin.PromptPassword("Please enter the password for '" + keyfile + "': ")
 	key, err := keystore.DecryptKey(keyjson, password)
 	if err != nil {
 		exit(fmt.Errorf("error decrypting key: %v", err))

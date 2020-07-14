@@ -28,6 +28,7 @@ import (
 
 	"github.com/maticnetwork/bor/common"
 	"github.com/maticnetwork/bor/consensus/ethash"
+	"github.com/maticnetwork/bor/console/prompt"
 	"github.com/maticnetwork/bor/core"
 	"github.com/maticnetwork/bor/eth"
 	"github.com/maticnetwork/bor/internal/jsre"
@@ -67,10 +68,10 @@ func (p *hookedPrompter) PromptPassword(prompt string) (string, error) {
 func (p *hookedPrompter) PromptConfirm(prompt string) (bool, error) {
 	return false, errors.New("not implemented")
 }
-func (p *hookedPrompter) SetHistory(history []string)              {}
-func (p *hookedPrompter) AppendHistory(command string)             {}
-func (p *hookedPrompter) ClearHistory()                            {}
-func (p *hookedPrompter) SetWordCompleter(completer WordCompleter) {}
+func (p *hookedPrompter) SetHistory(history []string)                     {}
+func (p *hookedPrompter) AppendHistory(command string)                    {}
+func (p *hookedPrompter) ClearHistory()                                   {}
+func (p *hookedPrompter) SetWordCompleter(completer prompt.WordCompleter) {}
 
 // tester is a console test environment for the console tests to operate on.
 type tester struct {

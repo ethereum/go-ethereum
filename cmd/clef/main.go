@@ -40,7 +40,6 @@ import (
 	"github.com/maticnetwork/bor/cmd/utils"
 	"github.com/maticnetwork/bor/common"
 	"github.com/maticnetwork/bor/common/hexutil"
-	"github.com/maticnetwork/bor/console"
 	"github.com/maticnetwork/bor/core/types"
 	"github.com/maticnetwork/bor/crypto"
 	"github.com/maticnetwork/bor/internal/ethapi"
@@ -81,6 +80,10 @@ var (
 	advancedMode = cli.BoolFlag{
 		Name:  "advanced",
 		Usage: "If enabled, issues warnings instead of rejections for suspicious requests. Default off",
+	}
+	acceptFlag = cli.BoolFlag{
+		Name:  "suppress-bootwarn",
+		Usage: "If set, does not show the warning during boot",
 	}
 	keystoreFlag = cli.StringFlag{
 		Name:  "keystore",
@@ -196,6 +199,7 @@ The delpw command removes a password for a given address (keyfile).
 			logLevelFlag,
 			keystoreFlag,
 			utils.LightKDFFlag,
+			acceptFlag,
 		},
 		Description: `
 The newaccount command creates a new keystore-backed account. It is a convenience-method
@@ -235,6 +239,7 @@ func init() {
 		stdiouiFlag,
 		testFlag,
 		advancedMode,
+		acceptFlag,
 	}
 	app.Action = signer
 	app.Commands = []cli.Command{initCommand,
@@ -283,7 +288,7 @@ func initializeSecrets(c *cli.Context) error {
 	text := "The master seed of clef will be locked with a password.\nPlease specify a password. Do not forget this password!"
 	var password string
 	for {
-		password = getPassPhrase(text, true)
+		password = utils.GetPassPhrase(text, true)
 		if err := core.ValidatePasswordFormat(password); err != nil {
 			fmt.Printf("invalid password: %v\n", err)
 		} else {
@@ -356,7 +361,7 @@ func setCredential(ctx *cli.Context) error {
 		utils.Fatalf("Invalid address specified: %s", addr)
 	}
 	address := common.HexToAddress(addr)
-	password := getPassPhrase("Please enter a password to store for this address:", true)
+	password := utils.GetPassPhrase("Please enter a password to store for this address:", true)
 	fmt.Println()
 
 	stretchedKey, err := readMasterKey(ctx, nil)
@@ -433,8 +438,10 @@ func initialize(c *cli.Context) error {
 	if c.GlobalBool(stdiouiFlag.Name) {
 		logOutput = os.Stderr
 		// If using the stdioui, we can't do the 'confirm'-flow
-		fmt.Fprint(logOutput, legalWarning)
-	} else {
+		if !c.GlobalBool(acceptFlag.Name) {
+			fmt.Fprint(logOutput, legalWarning)
+		}
+	} else if !c.GlobalBool(acceptFlag.Name) {
 		if !confirm(legalWarning) {
 			return fmt.Errorf("aborted by user")
 		}
@@ -712,7 +719,7 @@ func readMasterKey(ctx *cli.Context, ui core.UIClientAPI) ([]byte, error) {
 		}
 		password = resp.Text
 	} else {
-		password = getPassPhrase("Decrypt master seed of clef", false)
+		password = utils.GetPassPhrase("Decrypt master seed of clef", false)
 	}
 	masterSeed, err := decryptSeed(cipherKey, password)
 	if err != nil {
@@ -907,27 +914,6 @@ func testExternalUI(api *core.SignerAPI) {
 
 }
 
-// getPassPhrase retrieves the password associated with clef, either fetched
-// from a list of preloaded passphrases, or requested interactively from the user.
-// TODO: there are many `getPassPhrase` functions, it will be better to abstract them into one.
-func getPassPhrase(prompt string, confirmation bool) string {
-	fmt.Println(prompt)
-	password, err := console.Stdin.PromptPassword("Password: ")
-	if err != nil {
-		utils.Fatalf("Failed to read password: %v", err)
-	}
-	if confirmation {
-		confirm, err := console.Stdin.PromptPassword("Repeat password: ")
-		if err != nil {
-			utils.Fatalf("Failed to read password confirmation: %v", err)
-		}
-		if password != confirm {
-			utils.Fatalf("Passwords do not match")
-		}
-	}
-	return password
-}
-
 type encryptedSeedStorage struct {
 	Description string              `json:"description"`
 	Version     int                 `json:"version"`
@@ -978,7 +964,7 @@ func GenDoc(ctx *cli.Context) {
 			if data, err := json.MarshalIndent(v, "", "  "); err == nil {
 				output = append(output, fmt.Sprintf("### %s\n\n%s\n\nExample:\n```json\n%s\n```", name, desc, data))
 			} else {
-				log.Error("Error generating output", err)
+				log.Error("Error generating output", "err", err)
 			}
 		}
 	)

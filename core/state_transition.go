@@ -17,7 +17,6 @@
 package core
 
 import (
-	"errors"
 	"math"
 	"math/big"
 
@@ -25,10 +24,6 @@ import (
 	"github.com/maticnetwork/bor/core/types"
 	"github.com/maticnetwork/bor/core/vm"
 	"github.com/maticnetwork/bor/params"
-)
-
-var (
-	errInsufficientBalanceForGas = errors.New("insufficient balance to pay for gas")
 )
 
 var transferLogSig = common.HexToHash("0xe6497e3ee548a3372136af2fcb0696db31fc6cf20260707645068bd3fe97f3c4")

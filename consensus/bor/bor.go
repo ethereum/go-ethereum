@@ -225,7 +225,7 @@ type Bor struct {
 	stateReceiverABI       abi.ABI
 	HeimdallClient         IHeimdallClient
 
-	stateDataFeed event.Feed
+	stateSyncFeed event.Feed
 	scope         event.SubscriptionScope
 	// The fields below are for testing only
 	fakeDiff bool // Skip difficulty verifications
@@ -845,7 +845,7 @@ func (c *Bor) GetCurrentSpan(snapshotNumber uint64) (*Span, error) {
 		Gas:  &gas,
 		To:   &toAddress,
 		Data: &msgData,
-	}, rpc.BlockNumberOrHash{BlockNumber: &blockNr} , nil)
+	}, rpc.BlockNumberOrHash{BlockNumber: &blockNr}, nil)
 	if err != nil {
 		return nil, err
 	}
@@ -1105,7 +1105,7 @@ func (c *Bor) CommitStates(
 			TxHash:   eventRecord.TxHash,
 		}
 		go func() {
-			c.stateDataFeed.Send(core.NewStateChangeEvent{StateData: &stateData})
+			c.stateSyncFeed.Send(core.StateSyncEvent{StateData: &stateData})
 		}()
 
 		if err := c.GenesisContractsClient.CommitState(eventRecord, state, header, chain); err != nil {
@@ -1124,9 +1124,9 @@ func validateEventRecord(eventRecord *EventRecordWithTime, number uint64, to tim
 	return nil
 }
 
-// SubscribeStateEvent registers a subscription of ChainSideEvent.
-func (c *Bor) SubscribeStateEvent(ch chan<- core.NewStateChangeEvent) event.Subscription {
-	return c.scope.Track(c.stateDataFeed.Subscribe(ch))
+// SubscribeStateSyncEvent registers a subscription of StateSyncEvent.
+func (c *Bor) SubscribeStateSyncEvent(ch chan<- core.StateSyncEvent) event.Subscription {
+	return c.scope.Track(c.stateSyncFeed.Subscribe(ch))
 }
 
 func (c *Bor) SetHeimdallClient(h IHeimdallClient) {

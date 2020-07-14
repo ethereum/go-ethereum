@@ -27,26 +27,6 @@ jobs:
     - stage: build
       os: linux
       dist: xenial
-      go: 1.11.x
-      env:
-        - GO111MODULE=on
-      script:
-        - go run build/ci.go install
-        - go run build/ci.go test -coverage $TEST_PACKAGES
-
-    - stage: build
-      os: linux
-      dist: xenial
-      go: 1.12.x
-      env:
-        - GO111MODULE=on
-      script:
-        - go run build/ci.go install
-        - go run build/ci.go test -coverage $TEST_PACKAGES
-
-    - stage: build
-      os: linux
-      dist: xenial
       go: 1.13.x
       env:
         - GO111MODULE=on

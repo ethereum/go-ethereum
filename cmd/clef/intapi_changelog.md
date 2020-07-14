@@ -12,7 +12,7 @@ Additional labels for pre-release and build metadata are available as extensions
 
 ### 7.0.1 
 
-Added `clef_New` to the internal API calleable from a UI. 
+Added `clef_New` to the internal API callable from a UI.
 
 > `New` creates a new password protected Account. The private key is protected with
 > the given password. Users are responsible to backup the private key that is stored
@@ -161,7 +161,7 @@ UserInputResponse struct {
 #### 1.2.0
 
 * Add `OnStartup` method, to provide the UI with information about what API version
-the signer uses (both internal and external) aswell as build-info and external api.
+the signer uses (both internal and external) as well as build-info and external api.
 
 Example call:
 ```json

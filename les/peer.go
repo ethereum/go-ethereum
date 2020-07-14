@@ -150,7 +150,7 @@ func (p *peerCommons) isFrozen() bool {
 	return atomic.LoadUint32(&p.frozen) != 0
 }
 
-// canQueue returns an indicator whether the peer can queue a operation.
+// canQueue returns an indicator whether the peer can queue an operation.
 func (p *peerCommons) canQueue() bool {
 	return p.sendQueue.CanQueue() && !p.isFrozen()
 }
@@ -336,7 +336,6 @@ type serverPeer struct {
 	checkpointNumber uint64                   // The block height which the checkpoint is registered.
 	checkpoint       params.TrustedCheckpoint // The advertised checkpoint sent by server.
 
-	poolEntry        *poolEntry              // Statistic for server peer.
 	fcServer         *flowcontrol.ServerNode // Client side mirror token bucket.
 	vtLock           sync.Mutex
 	valueTracker     *lpc.ValueTracker

@@ -582,6 +582,9 @@ func testBroadcastBlock(t *testing.T, totalPeers, broadcastExpected int) {
 	if err != nil {
 		t.Fatalf("failed to create new blockchain: %v", err)
 	}
+	pm, err := NewProtocolManager(config, nil, downloader.FullSync, DefaultConfig.NetworkId, evmux, &testTxPool{pool: make(map[common.Hash]*types.Transaction)}, pow, blockchain, db, 1, nil)
+	if err != nil {
+		t.Fatalf("failed to start test protocol manager: %v", err)
 	}
 	defer pm.Stop()
 	var peers []*testPeer
@@ -610,13 +613,16 @@ func testBroadcastBlock(t *testing.T, totalPeers, broadcastExpected int) {
 		select {
 		case <-doneCh:
 			received++
-
-		case <-time.After(time.Second):
+			if received > broadcastExpected {
+				// We can bail early here
+				t.Errorf("broadcast count mismatch: have %d > want %d", received, broadcastExpected)
+				return
+			}
+		case <-time.After(2 * time.Second):
 			if received != broadcastExpected {
 				t.Errorf("broadcast count mismatch: have %d, want %d", received, broadcastExpected)
 			}
 			return
-
 		case err = <-errCh:
 			t.Fatalf("broadcast failed: %v", err)
 		}

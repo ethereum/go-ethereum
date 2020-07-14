@@ -29,6 +29,7 @@ import (
 	"syscall"
 
 	"github.com/dop251/goja"
+	"github.com/maticnetwork/bor/console/prompt"
 	"github.com/maticnetwork/bor/internal/jsre"
 	"github.com/maticnetwork/bor/internal/jsre/deps"
 	"github.com/maticnetwork/bor/internal/web3ext"
@@ -38,7 +39,8 @@ import (
 )
 
 var (
-	passwordRegexp = regexp.MustCompile(`personal.[nus]`)
+	// u: unlock, s: signXX, sendXX, n: newAccount, i: importXX
+	passwordRegexp = regexp.MustCompile(`personal.[nusi]`)
 	onlyWhitespace = regexp.MustCompile(`^\s*$`)
 	exit           = regexp.MustCompile(`^\s*exit\s*;*\s*$`)
 )
@@ -52,26 +54,26 @@ const DefaultPrompt = "> "
 // Config is the collection of configurations to fine tune the behavior of the
 // JavaScript console.
 type Config struct {
-	DataDir  string       // Data directory to store the console history at
-	DocRoot  string       // Filesystem path from where to load JavaScript files from
-	Client   *rpc.Client  // RPC client to execute Ethereum requests through
-	Prompt   string       // Input prompt prefix string (defaults to DefaultPrompt)
-	Prompter UserPrompter // Input prompter to allow interactive user feedback (defaults to TerminalPrompter)
-	Printer  io.Writer    // Output writer to serialize any display strings to (defaults to os.Stdout)
-	Preload  []string     // Absolute paths to JavaScript files to preload
+	DataDir  string              // Data directory to store the console history at
+	DocRoot  string              // Filesystem path from where to load JavaScript files from
+	Client   *rpc.Client         // RPC client to execute Ethereum requests through
+	Prompt   string              // Input prompt prefix string (defaults to DefaultPrompt)
+	Prompter prompt.UserPrompter // Input prompter to allow interactive user feedback (defaults to TerminalPrompter)
+	Printer  io.Writer           // Output writer to serialize any display strings to (defaults to os.Stdout)
+	Preload  []string            // Absolute paths to JavaScript files to preload
 }
 
 // Console is a JavaScript interpreted runtime environment. It is a fully fledged
 // JavaScript console attached to a running node via an external or in-process RPC
 // client.
 type Console struct {
-	client   *rpc.Client  // RPC client to execute Ethereum requests through
-	jsre     *jsre.JSRE   // JavaScript runtime environment running the interpreter
-	prompt   string       // Input prompt prefix string
-	prompter UserPrompter // Input prompter to allow interactive user feedback
-	histPath string       // Absolute path to the console scrollback history
-	history  []string     // Scroll history maintained by the console
-	printer  io.Writer    // Output writer to serialize any display strings to
+	client   *rpc.Client         // RPC client to execute Ethereum requests through
+	jsre     *jsre.JSRE          // JavaScript runtime environment running the interpreter
+	prompt   string              // Input prompt prefix string
+	prompter prompt.UserPrompter // Input prompter to allow interactive user feedback
+	histPath string              // Absolute path to the console scrollback history
+	history  []string            // Scroll history maintained by the console
+	printer  io.Writer           // Output writer to serialize any display strings to
 }
 
 // New initializes a JavaScript interpreted runtime environment and sets defaults
@@ -79,7 +81,7 @@ type Console struct {
 func New(config Config) (*Console, error) {
 	// Handle unset config values gracefully
 	if config.Prompter == nil {
-		config.Prompter = Stdin
+		config.Prompter = prompt.Stdin
 	}
 	if config.Prompt == "" {
 		config.Prompt = DefaultPrompt

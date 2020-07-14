@@ -36,7 +36,7 @@ type ChainEvent struct {
 	Logs  []*types.Log
 }
 
-type NewStateChangeEvent struct {
+type StateSyncEvent struct {
 	StateData *types.StateData
 }
 

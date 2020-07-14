@@ -94,7 +94,7 @@ If you want to encrypt an existing private key, it can be specified by setting
 		}
 
 		// Encrypt key with passphrase.
-		passphrase := promptPassphrase(true)
+		passphrase := getPassphrase(ctx, true)
 		scryptN, scryptP := keystore.StandardScryptN, keystore.StandardScryptP
 		if ctx.Bool("lightkdf") {
 			scryptN, scryptP = keystore.LightScryptN, keystore.LightScryptP

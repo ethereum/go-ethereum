@@ -21,13 +21,12 @@ import (
 	"math/big"
 	"sync"
 
-	"github.com/maticnetwork/bor"
+	ethereum "github.com/maticnetwork/bor"
 	"github.com/maticnetwork/bor/accounts"
 	"github.com/maticnetwork/bor/common"
 	"github.com/maticnetwork/bor/common/hexutil"
 	"github.com/maticnetwork/bor/core/types"
 	"github.com/maticnetwork/bor/event"
-	"github.com/maticnetwork/bor/internal/ethapi"
 	"github.com/maticnetwork/bor/log"
 	"github.com/maticnetwork/bor/rpc"
 	"github.com/maticnetwork/bor/signer/core"
@@ -167,7 +166,7 @@ func (api *ExternalSigner) SignData(account accounts.Account, mimeType string, d
 		hexutil.Encode(data)); err != nil {
 		return nil, err
 	}
-	// If V is on 27/28-form, convert to to 0/1 for Clique
+	// If V is on 27/28-form, convert to 0/1 for Clique
 	if mimeType == accounts.MimetypeClique && (res[64] == 27 || res[64] == 28) {
 		res[64] -= 27 // Transform V from 27/28 to 0/1 for Clique use
 	}
@@ -191,8 +190,13 @@ func (api *ExternalSigner) SignText(account accounts.Account, text []byte) ([]by
 	return signature, nil
 }
 
+// signTransactionResult represents the signinig result returned by clef.
+type signTransactionResult struct {
+	Raw hexutil.Bytes      `json:"raw"`
+	Tx  *types.Transaction `json:"tx"`
+}
+
 func (api *ExternalSigner) SignTx(account accounts.Account, tx *types.Transaction, chainID *big.Int) (*types.Transaction, error) {
-	res := ethapi.SignTransactionResult{}
 	data := hexutil.Bytes(tx.Data())
 	var to *common.MixedcaseAddress
 	if tx.To() != nil {
@@ -208,6 +212,7 @@ func (api *ExternalSigner) SignTx(account accounts.Account, tx *types.Transactio
 		To:       to,
 		From:     common.NewMixedcaseAddress(account.Address),
 	}
+	var res signTransactionResult
 	if err := api.client.Call(&res, "account_signTransaction", args); err != nil {
 		return nil, err
 	}

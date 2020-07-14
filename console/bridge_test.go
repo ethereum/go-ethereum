@@ -1,4 +1,4 @@
-// Copyright 2017 The go-ethereum Authors
+// Copyright 2020 The go-ethereum Authors
 // This file is part of the go-ethereum library.
 //
 // The go-ethereum library is free software: you can redistribute it and/or modify
@@ -14,18 +14,35 @@
 // You should have received a copy of the GNU Lesser General Public License
 // along with the go-ethereum library. If not, see <http://www.gnu.org/licenses/>.
 
-// +build VERIFY_EVM_INTEGER_POOL
+package console
 
-package vm
+import (
+	"testing"
 
-import "fmt"
+	"github.com/dop251/goja"
+	"github.com/maticnetwork/bor/internal/jsre"
+)
 
-const verifyPool = true
+// TestUndefinedAsParam ensures that personal functions can receive
+// `undefined` as a parameter.
+func TestUndefinedAsParam(t *testing.T) {
+	b := bridge{}
+	call := jsre.Call{}
+	call.Arguments = []goja.Value{goja.Undefined()}
 
-func verifyIntegerPool(ip *intPool) {
-	for i, item := range ip.pool.data {
-		if item.Cmp(checkVal) != 0 {
-			panic(fmt.Sprintf("%d'th item failed aggressive pool check. Value was modified", i))
-		}
-	}
+	b.UnlockAccount(call)
+	b.Sign(call)
+	b.Sleep(call)
+}
+
+// TestNullAsParam ensures that personal functions can receive
+// `null` as a parameter.
+func TestNullAsParam(t *testing.T) {
+	b := bridge{}
+	call := jsre.Call{}
+	call.Arguments = []goja.Value{goja.Null()}
+
+	b.UnlockAccount(call)
+	b.Sign(call)
+	b.Sleep(call)
 }

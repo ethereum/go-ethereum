@@ -425,7 +425,7 @@ func (dl *diffLayer) Update(blockRoot common.Hash, destructs map[common.Hash]str
 
 // flatten pushes all data from this point downwards, flattening everything into
 // a single diff at the bottom. Since usually the lowermost diff is the largest,
-// the flattening bulds up from there in reverse.
+// the flattening builds up from there in reverse.
 func (dl *diffLayer) flatten() snapshot {
 	// If the parent is not diff, we're the first in line, return unmodified
 	parent, ok := dl.parent.(*diffLayer)

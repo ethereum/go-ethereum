@@ -78,7 +78,7 @@ type TerminalStringer interface {
 // a terminal with color-coded level output and terser human friendly timestamp.
 // This format should only be used for interactive programs or while developing.
 //
-//     [LEVEL] [TIME] MESAGE key=value key=value ...
+//     [LEVEL] [TIME] MESSAGE key=value key=value ...
 //
 // Example:
 //
