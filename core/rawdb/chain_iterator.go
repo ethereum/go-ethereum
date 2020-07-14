@@ -195,7 +195,7 @@ func IndexTransactions(db ethdb.Database, from uint64, to uint64) {
 		batch             = db.NewBatch()
 		start             = time.Now()
 		logged            = start.Add(-7 * time.Second)
-		//  Since we iterate in reverse, we expect the first number to come
+		// Since we iterate in reverse, we expect the first number to come
 		// in to be [to-1]. Therefore, setting lastNum to means that the
 		// prqueue gap-evaluation will work correctly
 		lastNum = to
