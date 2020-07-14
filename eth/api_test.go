@@ -312,15 +312,24 @@ func TestEth2ProduceBlock(t *testing.T) {
 	if _, err := eth.BlockChain().InsertChain(blocks[1:9]); err != nil {
 		t.Fatalf("can't import test blocks: %v", err)
 	}
+	eth.SetEtherbase(testAddr)
 
 	api := NewEth2API(eth)
 	signer := types.NewEIP155Signer(eth.BlockChain().Config().ChainID)
 	tx, err := types.SignTx(types.NewTransaction(0, blocks[8].Coinbase(), big.NewInt(1000), params.TxGas, nil, nil), signer, testKey)
 	eth.txPool.AddLocal(tx)
-	_, err = api.ProduceBlock(blocks[9].Hash())
+	newblockrlp, err := api.ProduceBlock(blocks[8].Hash())
 
 	if err != nil {
 		t.Fatalf("error producing block, err=%v", err)
+	}
+
+	var newblock types.Block
+	if err = rlp.DecodeBytes(newblockrlp, &newblock); err != nil {
+		t.Fatalf("error decoding produced block %v", err)
+	}
+	if len(newblock.Transactions()) != 1 {
+		t.Fatalf("invalid number of transactions %d != 1", len(newblock.Transactions()))
 	}
 }
 
