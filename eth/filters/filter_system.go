@@ -52,10 +52,10 @@ const (
 	PendingTransactionsSubscription
 	// BlocksSubscription queries hashes for blocks that are imported
 	BlocksSubscription
-	// LastSubscription keeps track of the last index
-	LastIndexSubscription
 	//StateSubscription to listen main chain state
 	StateSubscription
+	// LastIndexSubscription keeps track of the last index
+	LastIndexSubscription
 )
 
 const (
