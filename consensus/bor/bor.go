@@ -224,6 +224,7 @@ type Bor struct {
 	validatorSetABI        abi.ABI
 	stateReceiverABI       abi.ABI
 	HeimdallClient         IHeimdallClient
+	WithoutHeimdall        bool
 
 	stateSyncFeed event.Feed
 	scope         event.SubscriptionScope
@@ -237,6 +238,7 @@ func New(
 	db ethdb.Database,
 	ethAPI *ethapi.PublicBlockChainAPI,
 	heimdallURL string,
+	withoutHeimdall bool,
 ) *Bor {
 	// get bor config
 	borConfig := chainConfig.Bor
@@ -264,6 +266,7 @@ func New(
 		stateReceiverABI:       sABI,
 		GenesisContractsClient: genesisContractsClient,
 		HeimdallClient:         heimdallClient,
+		WithoutHeimdall:        withoutHeimdall,
 	}
 
 	return c
@@ -653,7 +656,7 @@ func (c *Bor) Prepare(chain consensus.ChainReader, header *types.Header) error {
 // rewards given.
 func (c *Bor) Finalize(chain consensus.ChainReader, header *types.Header, state *state.StateDB, txs []*types.Transaction, uncles []*types.Header) {
 	headerNumber := header.Number.Uint64()
-	if headerNumber%c.config.Sprint == 0 {
+	if !c.WithoutHeimdall && headerNumber%c.config.Sprint == 0 {
 		cx := chainContext{Chain: chain, Bor: c}
 		// check and commit span
 		if err := c.checkAndCommitSpan(state, header, cx); err != nil {
@@ -677,7 +680,7 @@ func (c *Bor) Finalize(chain consensus.ChainReader, header *types.Header, state 
 // nor block rewards given, and returns the final block.
 func (c *Bor) FinalizeAndAssemble(chain consensus.ChainReader, header *types.Header, state *state.StateDB, txs []*types.Transaction, uncles []*types.Header, receipts []*types.Receipt) (*types.Block, error) {
 	headerNumber := header.Number.Uint64()
-	if headerNumber%c.config.Sprint == 0 {
+	if !c.WithoutHeimdall && headerNumber%c.config.Sprint == 0 {
 		cx := chainContext{Chain: chain, Bor: c}
 
 		// check and commit span

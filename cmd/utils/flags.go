@@ -751,11 +751,21 @@ var (
 		Value: "",
 	}
 
+	//
 	// Bor Specific flags
+	//
+
+	// HeimdallURLFlag flag for heimdall url
 	HeimdallURLFlag = cli.StringFlag{
 		Name:  "heimdall",
 		Usage: "URL of Heimdall service",
 		Value: "http://localhost:1317",
+	}
+
+	// WithoutHeimdallFlag no heimdall (for testing purpose)
+	WithoutHeimdallFlag = cli.BoolFlag{
+		Name:  "without-heimdall",
+		Usage: "Run without Heimdall service (for testing purpose)",
 	}
 )
 
@@ -1872,7 +1882,11 @@ func MakeChain(ctx *cli.Context, stack *node.Node, readOnly bool) (chain *core.B
 	if config.Clique != nil {
 		engine = clique.New(config.Clique, chainDb)
 	} else if config.Bor != nil {
-		cfg := &eth.Config{Genesis: genesis, HeimdallURL: ctx.GlobalString(HeimdallURLFlag.Name)}
+		cfg := &eth.Config{
+			Genesis:         genesis,
+			HeimdallURL:     ctx.GlobalString(HeimdallURLFlag.Name),
+			WithoutHeimdall: ctx.GlobalBool(WithoutHeimdallFlag.Name),
+		}
 		workspace, err := ioutil.TempDir("", "console-tester-")
 		if err != nil {
 			Fatalf("failed to create temporary keystore: %v", err)

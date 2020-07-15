@@ -273,7 +273,7 @@ func CreateConsensusEngine(ctx *node.ServiceContext, chainConfig *params.ChainCo
 
 	// If Matic Bor is requested, set it up
 	if chainConfig.Bor != nil {
-		return bor.New(chainConfig, db, ee, ethConfig.HeimdallURL)
+		return bor.New(chainConfig, db, ee, ethConfig.HeimdallURL, ethConfig.WithoutHeimdall)
 	}
 
 	// Otherwise assume proof-of-work

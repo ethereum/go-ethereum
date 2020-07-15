@@ -148,7 +148,12 @@ func enableWhisper(ctx *cli.Context) bool {
 func makeFullNode(ctx *cli.Context) *node.Node {
 	stack, cfg := makeConfigNode(ctx)
 	cfg.Eth.HeimdallURL = ctx.GlobalString(utils.HeimdallURLFlag.Name)
-	log.Info("Connecting to heimdall service on...", "heimdallURL", cfg.Eth.HeimdallURL)
+	cfg.Eth.WithoutHeimdall = ctx.GlobalBool(utils.WithoutHeimdallFlag.Name)
+	if cfg.Eth.WithoutHeimdall {
+		log.Info("Running without Heimdall node")
+	} else {
+		log.Info("Connecting to Heimdall node", "heimdallURL", cfg.Eth.HeimdallURL)
+	}
 	utils.RegisterEthService(stack, &cfg.Eth)
 
 	// Whisper must be explicitly enabled by specifying at least 1 whisper flag or in dev mode

@@ -78,6 +78,7 @@ The dumpgenesis command dumps the genesis block configuration in JSON format to 
 		Flags: []cli.Flag{
 			utils.DataDirFlag,
 			utils.HeimdallURLFlag,
+			utils.WithoutHeimdallFlag,
 			utils.CacheFlag,
 			utils.SyncModeFlag,
 			utils.GCModeFlag,

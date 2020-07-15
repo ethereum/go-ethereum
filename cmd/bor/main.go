@@ -211,6 +211,7 @@ var (
 
 	borFlags = []cli.Flag{
 		utils.HeimdallURLFlag,
+		utils.WithoutHeimdallFlag,
 	}
 )
 

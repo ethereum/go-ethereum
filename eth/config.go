@@ -182,4 +182,7 @@ type Config struct {
 
 	// URL to connect to Heimdall node
 	HeimdallURL string
+
+	// No heimdall service
+	WithoutHeimdall bool
 }
