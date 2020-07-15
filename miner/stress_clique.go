@@ -22,7 +22,6 @@ package main
 import (
 	"bytes"
 	"crypto/ecdsa"
-	"github.com/ethereum/go-ethereum/internal/ethapi"
 	"io/ioutil"
 	"math/big"
 	"math/rand"
@@ -36,6 +35,7 @@ import (
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/eth"
+	"github.com/ethereum/go-ethereum/internal/ethapi"
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/node"
 	"github.com/ethereum/go-ethereum/p2p"
@@ -60,8 +60,8 @@ func main() {
 	genesis := makeGenesis(faucets, sealers)
 
 	var (
-		nodes  []struct{
-			node *node.Node
+		nodes []struct {
+			node    *node.Node
 			backend ethapi.Backend
 		}
 		enodes []*enode.Node
@@ -83,8 +83,8 @@ func main() {
 			node.Server().AddPeer(n)
 		}
 		// Start tracking the node and it's enode
-		nodes = append(nodes, struct{
-			node *node.Node
+		nodes = append(nodes, struct {
+			node    *node.Node
 			backend ethapi.Backend
 		}{
 			node,

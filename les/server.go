@@ -21,7 +21,6 @@ import (
 	"time"
 
 	"github.com/ethereum/go-ethereum/common/mclock"
-	"github.com/ethereum/go-ethereum/core"
 	"github.com/ethereum/go-ethereum/eth"
 	"github.com/ethereum/go-ethereum/les/flowcontrol"
 	"github.com/ethereum/go-ethereum/light"
@@ -215,9 +214,6 @@ func (s *LesServer) Stop() error {
 	log.Info("Les server stopped")
 
 	return nil
-}
-
-func (s *LesServer) SetBloomBitsIndexer(bloomIndexer *core.ChainIndexer) {
 }
 
 // capacityManagement starts an event handler loop that updates the recharge curve of
