@@ -656,7 +656,7 @@ func (c *Bor) Prepare(chain consensus.ChainReader, header *types.Header) error {
 // rewards given.
 func (c *Bor) Finalize(chain consensus.ChainReader, header *types.Header, state *state.StateDB, txs []*types.Transaction, uncles []*types.Header) {
 	headerNumber := header.Number.Uint64()
-	if !c.WithoutHeimdall && headerNumber%c.config.Sprint == 0 {
+	if headerNumber%c.config.Sprint == 0 {
 		cx := chainContext{Chain: chain, Bor: c}
 		// check and commit span
 		if err := c.checkAndCommitSpan(state, header, cx); err != nil {
@@ -664,10 +664,12 @@ func (c *Bor) Finalize(chain consensus.ChainReader, header *types.Header, state 
 			return
 		}
 
-		// commit statees
-		if err := c.CommitStates(state, header, cx); err != nil {
-			log.Error("Error while committing states", "error", err)
-			return
+		if !c.WithoutHeimdall {
+			// commit statees
+			if err := c.CommitStates(state, header, cx); err != nil {
+				log.Error("Error while committing states", "error", err)
+				return
+			}
 		}
 	}
 
@@ -680,7 +682,7 @@ func (c *Bor) Finalize(chain consensus.ChainReader, header *types.Header, state 
 // nor block rewards given, and returns the final block.
 func (c *Bor) FinalizeAndAssemble(chain consensus.ChainReader, header *types.Header, state *state.StateDB, txs []*types.Transaction, uncles []*types.Header, receipts []*types.Receipt) (*types.Block, error) {
 	headerNumber := header.Number.Uint64()
-	if !c.WithoutHeimdall && headerNumber%c.config.Sprint == 0 {
+	if headerNumber%c.config.Sprint == 0 {
 		cx := chainContext{Chain: chain, Bor: c}
 
 		// check and commit span
@@ -690,10 +692,12 @@ func (c *Bor) FinalizeAndAssemble(chain consensus.ChainReader, header *types.Hea
 			return nil, err
 		}
 
-		// commit statees
-		if err := c.CommitStates(state, header, cx); err != nil {
-			log.Error("Error while committing states", "error", err)
-			return nil, err
+		if !c.WithoutHeimdall {
+			// commit statees
+			if err := c.CommitStates(state, header, cx); err != nil {
+				log.Error("Error while committing states", "error", err)
+				return nil, err
+			}
 		}
 	}
 
@@ -967,15 +971,23 @@ func (c *Bor) fetchAndCommitSpan(
 	header *types.Header,
 	chain core.ChainContext,
 ) error {
-	response, err := c.HeimdallClient.FetchWithRetry(fmt.Sprintf("bor/span/%d", newSpanID), "")
-
-	if err != nil {
-		return err
-	}
-
 	var heimdallSpan HeimdallSpan
-	if err := json.Unmarshal(response.Result, &heimdallSpan); err != nil {
-		return err
+
+	if c.WithoutHeimdall {
+		s, err := c.getNextHeimdallSpanForTest(newSpanID, state, header, chain)
+		if err != nil {
+			return err
+		}
+		heimdallSpan = *s
+	} else {
+		response, err := c.HeimdallClient.FetchWithRetry(fmt.Sprintf("bor/span/%d", newSpanID), "")
+		if err != nil {
+			return err
+		}
+
+		if err := json.Unmarshal(response.Result, &heimdallSpan); err != nil {
+			return err
+		}
 	}
 
 	// check if chain id matches with heimdall span
@@ -1139,6 +1151,49 @@ func (c *Bor) SetHeimdallClient(h IHeimdallClient) {
 //
 // Private methods
 //
+
+func (c *Bor) getNextHeimdallSpanForTest(
+	newSpanID uint64,
+	state *state.StateDB,
+	header *types.Header,
+	chain core.ChainContext,
+) (*HeimdallSpan, error) {
+	headerNumber := header.Number.Uint64()
+	span, err := c.GetCurrentSpan(headerNumber - 1)
+	if err != nil {
+		return nil, err
+	}
+
+	// get local chain context object
+	localContext := chain.(chainContext)
+	// Retrieve the snapshot needed to verify this header and cache it
+	snap, err := c.snapshot(localContext.Chain, headerNumber-1, header.ParentHash, nil)
+	if err != nil {
+		return nil, err
+	}
+
+	// new span
+	span.ID = newSpanID
+	if span.EndBlock == 0 {
+		span.StartBlock = 256
+	} else {
+		span.StartBlock = span.EndBlock + 1
+	}
+	span.EndBlock = span.StartBlock + (100 * c.config.Sprint) - 1
+
+	selectedProducers := make([]Validator, len(snap.ValidatorSet.Validators))
+	for i, v := range snap.ValidatorSet.Validators {
+		selectedProducers[i] = *v
+	}
+	heimdallSpan := &HeimdallSpan{
+		Span:              *span,
+		ValidatorSet:      *snap.ValidatorSet,
+		SelectedProducers: selectedProducers,
+		ChainID:           c.chainConfig.ChainID.String(),
+	}
+
+	return heimdallSpan, nil
+}
 
 //
 // Chain context
