@@ -16,6 +16,7 @@ jobs:
         DOCKERHUB: ${{ secrets.DOCKERHUB }}
         DOCKERHUB_KEY: ${{ secrets.DOCKERHUB_KEY }}
       run: |
+        set -x
         ls -l
         echo "Docker login"
         docker login -u $DOCKERHUB -p $DOCKERHUB_KEY
