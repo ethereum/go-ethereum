@@ -121,6 +121,14 @@ var (
 		Name:  "nostack",
 		Usage: "disable stack output",
 	}
+	DisableStorageFlag = cli.BoolFlag{
+		Name:  "nostorage",
+		Usage: "disable storage output",
+	}
+	DisableReturnDataFlag = cli.BoolFlag{
+		Name:  "noreturndata",
+		Usage: "disable return data output",
+	}
 	EVMInterpreterFlag = cli.StringFlag{
 		Name:  "vm.evm",
 		Usage: "External EVM configuration (default = built-in interpreter)",
@@ -137,6 +145,7 @@ var stateTransitionCommand = cli.Command{
 		t8ntool.TraceFlag,
 		t8ntool.TraceDisableMemoryFlag,
 		t8ntool.TraceDisableStackFlag,
+		t8ntool.TraceDisableReturnDataFlag,
 		t8ntool.OutputAllocFlag,
 		t8ntool.OutputResultFlag,
 		t8ntool.InputAllocFlag,
@@ -172,6 +181,8 @@ func init() {
 		ReceiverFlag,
 		DisableMemoryFlag,
 		DisableStackFlag,
+		DisableStorageFlag,
+		DisableReturnDataFlag,
 		EVMInterpreterFlag,
 	}
 	app.Commands = []cli.Command{
