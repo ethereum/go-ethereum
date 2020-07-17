@@ -719,6 +719,23 @@ func (api *PrivateDebugAPI) TraceTransaction(ctx context.Context, hash common.Ha
 	return api.traceTx(ctx, msg, vmctx, statedb, config)
 }
 
+// TraceTransactionPending returns the structured logs created during the execution of EVM
+// if the given transaction was added on top of the current block and returns them as a JSON object.
+func (api *PrivateDebugAPI) TraceTransactionPending(ctx context.Context, tx types.Transaction, config *TraceConfig) (interface{}, error) {
+	statedb, err := api.eth.blockchain.State()
+	if err != nil {
+		return nil, err
+	}
+	block := api.eth.blockchain.CurrentBlock()
+	signer := types.MakeSigner(api.eth.blockchain.Config(), block.Number())
+	msg, err := tx.AsMessage(signer)
+	if err != nil {
+		return nil, err
+	}
+	vmctx := core.NewEVMContext(msg, block.Header(), api.eth.blockchain, nil)
+	return api.traceTx(ctx, msg, vmctx, statedb, config)
+}
+
 // traceTx configures a new tracer according to the provided configuration, and
 // executes the given message in the provided environment. The return value will
 // be tracer dependent.
