@@ -174,9 +174,20 @@ func TestNewSimulatedBackend_AdjustTimeFail(t *testing.T) {
 		t.Error(err)
 	}
 	newTime := sim.pendingBlock.Time()
-
 	if newTime-prevTime != uint64(time.Minute.Seconds()) {
-		t.Errorf("adjusted time not equal to a second. prev: %v, new: %v", prevTime, newTime)
+		t.Errorf("adjusted time not equal to a minute. prev: %v, new: %v", prevTime, newTime)
+	}
+	// Put a transaction after adjusting time
+	tx2 := types.NewTransaction(1, testAddr, big.NewInt(1000), params.TxGas, big.NewInt(1), nil)
+	signedTx2, err := types.SignTx(tx2, types.HomesteadSigner{}, testKey)
+	if err != nil {
+		t.Errorf("could not sign tx: %v", err)
+	}
+	sim.SendTransaction(context.Background(), signedTx2)
+	sim.Commit()
+	newTime = sim.pendingBlock.Time()
+	if newTime-prevTime >= uint64(time.Minute.Seconds()) {
+		t.Errorf("time adjusted, but shouldn't be: prev: %v, new: %v", prevTime, newTime)
 	}
 }
 
