@@ -319,7 +319,7 @@ func writeHPRLP(writer io.Writer, key, val []byte, leaf bool) {
 	// Write the RLP prefix to the value if needed
 	if len(val) > 56 {
 		writer.Write([]byte{0xb8, byte(len(val))})
-	} else if len(val) > 1 || val[0] >= 128 {
+	} else if len(val) != 1 || val[0] >= 128 {
 		writer.Write([]byte{0x80 + byte(len(val))})
 	}
 	writer.Write(val)
