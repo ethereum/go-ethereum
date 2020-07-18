@@ -1,3 +1,5 @@
+package log
+
 /*
 Package log15 provides an opinionated, simple toolkit for best-practice logging that is
 both human and machine readable. It is modeled after the standard library's io and net/http
@@ -86,8 +88,8 @@ from the rpc package in logfmt to standard out. The other prints records at Erro
 or above in JSON formatted output to the file /var/log/service.json
 
     handler := log.MultiHandler(
-        log.LvlFilterHandler(log.LvlError, log.Must.FileHandler("/var/log/service.json", log.JSONFormat())),
-        log.MatchFilterHandler("pkg", "app/rpc" log.StdoutHandler())
+        log.LvlFilterHandler(log.lvlError, log.Must.FileHandler("/var/log/service.json", log.JSONFormat())),
+        log.MatchFilterHandler("pkg", "app/rpc" log.stdoutHandler())
     )
 
 Logging File Names and Line Numbers
@@ -97,7 +99,7 @@ context, CallerFileHandler, CallerFuncHandler and CallerStackHandler. Here's
 an example that adds the source file and line number of each logging call to
 the context.
 
-    h := log.CallerFileHandler(log.StdoutHandler)
+    h := log.CallerFileHandler(log.stdoutHandler)
     log.Root().SetHandler(h)
     ...
     log.Error("open file", "err", err)
@@ -108,7 +110,7 @@ This will output a line that looks like:
 
 Here's an example that logs the call stack rather than just the call site.
 
-    h := log.CallerStackHandler("%+v", log.StdoutHandler)
+    h := log.CallerStackHandler("%+v", log.stdoutHandler)
     log.Root().SetHandler(h)
     ...
     log.Error("open file", "err", err)
@@ -194,7 +196,7 @@ current state no matter when the log message is written:
 Terminal Format
 
 If log15 detects that stdout is a terminal, it will configure the default
-handler for it (which is log.StdoutHandler) to use TerminalFormat. This format
+handler for it (which is log.stdoutHandler) to use TerminalFormat. This format
 logs records nicely for your terminal, including color-coded output based
 on log level.
 
@@ -330,4 +332,3 @@ The Name
 https://xkcd.com/927/
 
 */
-package log

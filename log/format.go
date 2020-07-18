@@ -51,6 +51,7 @@ var fieldPadding = make(map[string]int)
 // fieldPaddingLock is a global mutex protecting the field padding map.
 var fieldPaddingLock sync.RWMutex
 
+// Format is the log format interface
 type Format interface {
 	Format(r *Record) []byte
 }
@@ -89,17 +90,17 @@ func TerminalFormat(usecolor bool) Format {
 		var color = 0
 		if usecolor {
 			switch r.Lvl {
-			case LvlCrit:
+			case lvlCrit:
 				color = 35
-			case LvlError:
+			case lvlError:
 				color = 31
-			case LvlWarn:
+			case lvlWarn:
 				color = 33
-			case LvlInfo:
+			case lvlInfo:
 				color = 32
-			case LvlDebug:
+			case lvlDebug:
 				color = 36
-			case LvlTrace:
+			case lvlTrace:
 				color = 34
 			}
 		}

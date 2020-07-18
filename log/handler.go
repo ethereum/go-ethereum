@@ -158,7 +158,7 @@ func FilterHandler(fn func(r *Record) bool, h Handler) Handler {
 // context matches the value. For example, to only log records
 // from your ui package:
 //
-//    log.MatchFilterHandler("pkg", "app/ui", log.StdoutHandler)
+//    log.MatchFilterHandler("pkg", "app/ui", log.stdoutHandler)
 //
 func MatchFilterHandler(key string, value interface{}, h Handler) Handler {
 	return FilterHandler(func(r *Record) (pass bool) {
@@ -185,7 +185,7 @@ func MatchFilterHandler(key string, value interface{}, h Handler) Handler {
 // level to the wrapped Handler. For example, to only
 // log Error/Crit records:
 //
-//     log.LvlFilterHandler(log.LvlError, log.StdoutHandler)
+//     log.LvlFilterHandler(log.lvlError, log.stdoutHandler)
 //
 func LvlFilterHandler(maxLvl Lvl, h Handler) Handler {
 	return FilterHandler(func(r *Record) (pass bool) {
@@ -200,7 +200,7 @@ func LvlFilterHandler(maxLvl Lvl, h Handler) Handler {
 //
 //     log.MultiHandler(
 //         log.Must.FileHandler("/var/log/app.log", log.LogfmtFormat()),
-//         log.StderrHandler)
+//         log.stderrHandler)
 //
 func MultiHandler(hs ...Handler) Handler {
 	return FuncHandler(func(r *Record) error {
@@ -222,7 +222,7 @@ func MultiHandler(hs ...Handler) Handler {
 //     log.FailoverHandler(
 //         log.Must.NetHandler("tcp", ":9090", log.JSONFormat()),
 //         log.Must.FileHandler("/var/log/app.log", log.LogfmtFormat()),
-//         log.StdoutHandler)
+//         log.stdoutHandler)
 //
 // All writes that do not go to the first handler will add context with keys of
 // the form "failover_err_{idx}" which explain the error encountered while

@@ -15,31 +15,32 @@ const ctxKey = "ctx"
 const errorKey = "LOG15_ERROR"
 const skipLevel = 2
 
+// Lvl is the log level symbol
 type Lvl int
 
 const (
-	LvlCrit Lvl = iota
-	LvlError
-	LvlWarn
-	LvlInfo
-	LvlDebug
-	LvlTrace
+	lvlCrit Lvl = iota
+	lvlError
+	lvlWarn
+	lvlInfo
+	lvlDebug
+	lvlTrace
 )
 
 // AlignedString returns a 5-character string containing the name of a Lvl.
 func (l Lvl) AlignedString() string {
 	switch l {
-	case LvlTrace:
+	case lvlTrace:
 		return "TRACE"
-	case LvlDebug:
+	case lvlDebug:
 		return "DEBUG"
-	case LvlInfo:
+	case lvlInfo:
 		return "INFO "
-	case LvlWarn:
+	case lvlWarn:
 		return "WARN "
-	case LvlError:
+	case lvlError:
 		return "ERROR"
-	case LvlCrit:
+	case lvlCrit:
 		return "CRIT "
 	default:
 		panic("bad level")
@@ -49,17 +50,17 @@ func (l Lvl) AlignedString() string {
 // Strings returns the name of a Lvl.
 func (l Lvl) String() string {
 	switch l {
-	case LvlTrace:
+	case lvlTrace:
 		return "trce"
-	case LvlDebug:
+	case lvlDebug:
 		return "dbug"
-	case LvlInfo:
+	case lvlInfo:
 		return "info"
-	case LvlWarn:
+	case lvlWarn:
 		return "warn"
-	case LvlError:
+	case lvlError:
 		return "eror"
-	case LvlCrit:
+	case lvlCrit:
 		return "crit"
 	default:
 		panic("bad level")
@@ -71,19 +72,19 @@ func (l Lvl) String() string {
 func LvlFromString(lvlString string) (Lvl, error) {
 	switch lvlString {
 	case "trace", "trce":
-		return LvlTrace, nil
+		return lvlTrace, nil
 	case "debug", "dbug":
-		return LvlDebug, nil
+		return lvlDebug, nil
 	case "info":
-		return LvlInfo, nil
+		return lvlInfo, nil
 	case "warn":
-		return LvlWarn, nil
+		return lvlWarn, nil
 	case "error", "eror":
-		return LvlError, nil
+		return lvlError, nil
 	case "crit":
-		return LvlCrit, nil
+		return lvlCrit, nil
 	default:
-		return LvlDebug, fmt.Errorf("unknown level: %v", lvlString)
+		return lvlDebug, fmt.Errorf("unknown level: %v", lvlString)
 	}
 }
 
@@ -161,27 +162,27 @@ func newContext(prefix []interface{}, suffix []interface{}) []interface{} {
 }
 
 func (l *logger) Trace(msg string, ctx ...interface{}) {
-	l.write(msg, LvlTrace, ctx, skipLevel)
+	l.write(msg, lvlTrace, ctx, skipLevel)
 }
 
 func (l *logger) Debug(msg string, ctx ...interface{}) {
-	l.write(msg, LvlDebug, ctx, skipLevel)
+	l.write(msg, lvlDebug, ctx, skipLevel)
 }
 
 func (l *logger) Info(msg string, ctx ...interface{}) {
-	l.write(msg, LvlInfo, ctx, skipLevel)
+	l.write(msg, lvlInfo, ctx, skipLevel)
 }
 
 func (l *logger) Warn(msg string, ctx ...interface{}) {
-	l.write(msg, LvlWarn, ctx, skipLevel)
+	l.write(msg, lvlWarn, ctx, skipLevel)
 }
 
 func (l *logger) Error(msg string, ctx ...interface{}) {
-	l.write(msg, LvlError, ctx, skipLevel)
+	l.write(msg, lvlError, ctx, skipLevel)
 }
 
 func (l *logger) Crit(msg string, ctx ...interface{}) {
-	l.write(msg, LvlCrit, ctx, skipLevel)
+	l.write(msg, lvlCrit, ctx, skipLevel)
 	os.Exit(1)
 }
 

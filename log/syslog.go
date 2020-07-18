@@ -28,17 +28,17 @@ func sharedSyslog(fmtr Format, sysWr *syslog.Writer, err error) (Handler, error)
 	h := FuncHandler(func(r *Record) error {
 		var syslogFn = sysWr.Info
 		switch r.Lvl {
-		case LvlCrit:
+		case lvlCrit:
 			syslogFn = sysWr.Crit
-		case LvlError:
+		case lvlError:
 			syslogFn = sysWr.Err
-		case LvlWarn:
+		case lvlWarn:
 			syslogFn = sysWr.Warning
-		case LvlInfo:
+		case lvlInfo:
 			syslogFn = sysWr.Info
-		case LvlDebug:
+		case lvlDebug:
 			syslogFn = sysWr.Debug
-		case LvlTrace:
+		case lvlTrace:
 			syslogFn = func(m string) error { return nil } // There's no syslog level for trace
 		}
 

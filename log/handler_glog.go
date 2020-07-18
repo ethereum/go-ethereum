@@ -190,7 +190,7 @@ func (h *GlogHandler) Log(r *Record) error {
 
 		if match {
 			// Callsite matched, raise the log level to info and gather the stacks
-			r.Lvl = LvlInfo
+			r.Lvl = lvlInfo
 
 			buf := make([]byte, 1024*1024)
 			buf = buf[:runtime.Stack(buf, true)]

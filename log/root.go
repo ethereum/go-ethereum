@@ -6,8 +6,8 @@ import (
 
 var (
 	root          = &logger{[]interface{}{}, new(swapHandler)}
-	StdoutHandler = StreamHandler(os.Stdout, LogfmtFormat())
-	StderrHandler = StreamHandler(os.Stderr, LogfmtFormat())
+	stdoutHandler = StreamHandler(os.Stdout, LogfmtFormat())
+	stderrHandler = StreamHandler(os.Stderr, LogfmtFormat())
 )
 
 func init() {
@@ -31,32 +31,32 @@ func Root() Logger {
 
 // Trace is a convenient alias for Root().Trace
 func Trace(msg string, ctx ...interface{}) {
-	root.write(msg, LvlTrace, ctx, skipLevel)
+	root.write(msg, lvlTrace, ctx, skipLevel)
 }
 
 // Debug is a convenient alias for Root().Debug
 func Debug(msg string, ctx ...interface{}) {
-	root.write(msg, LvlDebug, ctx, skipLevel)
+	root.write(msg, lvlDebug, ctx, skipLevel)
 }
 
 // Info is a convenient alias for Root().Info
 func Info(msg string, ctx ...interface{}) {
-	root.write(msg, LvlInfo, ctx, skipLevel)
+	root.write(msg, lvlInfo, ctx, skipLevel)
 }
 
 // Warn is a convenient alias for Root().Warn
 func Warn(msg string, ctx ...interface{}) {
-	root.write(msg, LvlWarn, ctx, skipLevel)
+	root.write(msg, lvlWarn, ctx, skipLevel)
 }
 
 // Error is a convenient alias for Root().Error
 func Error(msg string, ctx ...interface{}) {
-	root.write(msg, LvlError, ctx, skipLevel)
+	root.write(msg, lvlError, ctx, skipLevel)
 }
 
 // Crit is a convenient alias for Root().Crit
 func Crit(msg string, ctx ...interface{}) {
-	root.write(msg, LvlCrit, ctx, skipLevel)
+	root.write(msg, lvlCrit, ctx, skipLevel)
 	os.Exit(1)
 }
 
