@@ -448,7 +448,7 @@ func (b *SimulatedBackend) EstimateGas(ctx context.Context, call ethereum.CallMs
 		hi = b.pendingBlock.GasLimit()
 	}
 	// Recap the highest gas allowance with account's balance.
-	if call.GasPrice != nil && call.GasPrice.Uint64() != 0 {
+	if call.GasPrice != nil && call.GasPrice.BitLen() != 0 {
 		balance := b.pendingState.GetBalance(call.From) // from can't be nil
 		available := new(big.Int).Set(balance)
 		if call.Value != nil {
@@ -458,7 +458,7 @@ func (b *SimulatedBackend) EstimateGas(ctx context.Context, call ethereum.CallMs
 			available.Sub(available, call.Value)
 		}
 		allowance := new(big.Int).Div(available, call.GasPrice)
-		if hi > allowance.Uint64() {
+		if allowance.IsUint64() && hi > allowance.Uint64() {
 			transfer := call.Value
 			if transfer == nil {
 				transfer = new(big.Int)
