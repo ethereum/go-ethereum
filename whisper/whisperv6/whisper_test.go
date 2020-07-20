@@ -42,13 +42,13 @@ func TestWhisperBasic(t *testing.T) {
 		t.Fatalf("failed Protocol Length: %v.", shh.Length)
 	}
 	if shh.Run == nil {
-		t.Fatalf("failed shh.Run.")
+		t.Fatal("failed shh.Run.")
 	}
 	if uint64(w.Version()) != ProtocolVersion {
 		t.Fatalf("failed whisper Version: %v.", shh.Version)
 	}
 	if w.GetFilter("non-existent") != nil {
-		t.Fatalf("failed GetFilter.")
+		t.Fatal("failed GetFilter.")
 	}
 
 	peerID := make([]byte, 64)
@@ -69,7 +69,7 @@ func TestWhisperBasic(t *testing.T) {
 		t.Fatalf("failed GetSymKey(non-existing): false positive. key=%v", key)
 	}
 	if key != nil {
-		t.Fatalf("failed GetSymKey: false positive.")
+		t.Fatal("failed GetSymKey: false positive.")
 	}
 	mail := w.Envelopes()
 	if len(mail) != 0 {
@@ -130,7 +130,7 @@ func TestWhisperAsymmetricKeyImport(t *testing.T) {
 		privateKeys = append(privateKeys, pk)
 
 		if !w.DeleteKeyPair(id) {
-			t.Fatalf("could not delete private key")
+			t.Fatal("could not delete private key")
 		}
 	}
 
@@ -161,55 +161,55 @@ func TestWhisperIdentityManagement(t *testing.T) {
 	}
 
 	if !w.HasKeyPair(id1) {
-		t.Fatalf("failed HasIdentity(pk1).")
+		t.Fatal("failed HasIdentity(pk1).")
 	}
 	if !w.HasKeyPair(id2) {
-		t.Fatalf("failed HasIdentity(pk2).")
+		t.Fatal("failed HasIdentity(pk2).")
 	}
 	if pk1 == nil {
-		t.Fatalf("failed GetIdentity(pk1).")
+		t.Fatal("failed GetIdentity(pk1).")
 	}
 	if pk2 == nil {
-		t.Fatalf("failed GetIdentity(pk2).")
+		t.Fatal("failed GetIdentity(pk2).")
 	}
 
 	if !validatePrivateKey(pk1) {
-		t.Fatalf("pk1 is invalid.")
+		t.Fatal("pk1 is invalid.")
 	}
 	if !validatePrivateKey(pk2) {
-		t.Fatalf("pk2 is invalid.")
+		t.Fatal("pk2 is invalid.")
 	}
 
 	// Delete one identity
 	done := w.DeleteKeyPair(id1)
 	if !done {
-		t.Fatalf("failed to delete id1.")
+		t.Fatal("failed to delete id1.")
 	}
 	pk1, err = w.GetPrivateKey(id1)
 	if err == nil {
-		t.Fatalf("retrieve the key pair: false positive. key=%v", pk1)
+		t.Fatalf("retrieve the key pair: false positive. key=%v", pk1) // TODO does it even matter to print the pk?
 	}
 	pk2, err = w.GetPrivateKey(id2)
 	if err != nil {
 		t.Fatalf("failed to retrieve the key pair: %s.", err)
 	}
 	if w.HasKeyPair(id1) {
-		t.Fatalf("failed DeleteIdentity(pub1): still exist.")
+		t.Fatal("failed DeleteIdentity(pub1): still exist.")
 	}
 	if !w.HasKeyPair(id2) {
-		t.Fatalf("failed DeleteIdentity(pub1): pub2 does not exist.")
+		t.Fatal("failed DeleteIdentity(pub1): pub2 does not exist.")
 	}
 	if pk1 != nil {
-		t.Fatalf("failed DeleteIdentity(pub1): first key still exist.")
+		t.Fatal("failed DeleteIdentity(pub1): first key still exist.")
 	}
 	if pk2 == nil {
-		t.Fatalf("failed DeleteIdentity(pub1): second key does not exist.")
+		t.Fatal("failed DeleteIdentity(pub1): second key does not exist.")
 	}
 
 	// Delete again non-existing identity
 	done = w.DeleteKeyPair(id1)
 	if done {
-		t.Fatalf("delete id1: false positive.")
+		t.Fatal("delete id1: false positive.")
 	}
 	pk1, err = w.GetPrivateKey(id1)
 	if err == nil {
@@ -220,22 +220,22 @@ func TestWhisperIdentityManagement(t *testing.T) {
 		t.Fatalf("failed to retrieve the key pair: %s.", err)
 	}
 	if w.HasKeyPair(id1) {
-		t.Fatalf("failed delete non-existing identity: exist.")
+		t.Fatal("failed delete non-existing identity: exist.")
 	}
 	if !w.HasKeyPair(id2) {
-		t.Fatalf("failed delete non-existing identity: pub2 does not exist.")
+		t.Fatal("failed delete non-existing identity: pub2 does not exist.")
 	}
 	if pk1 != nil {
-		t.Fatalf("failed delete non-existing identity: first key exist.")
+		t.Fatal("failed delete non-existing identity: first key exist.")
 	}
 	if pk2 == nil {
-		t.Fatalf("failed delete non-existing identity: second key does not exist.")
+		t.Fatal("failed delete non-existing identity: second key does not exist.")
 	}
 
 	// Delete second identity
 	done = w.DeleteKeyPair(id2)
 	if !done {
-		t.Fatalf("failed to delete id2.")
+		t.Fatal("failed to delete id2.")
 	}
 	pk1, err = w.GetPrivateKey(id1)
 	if err == nil {
@@ -246,16 +246,16 @@ func TestWhisperIdentityManagement(t *testing.T) {
 		t.Fatalf("retrieve the key pair: false positive. key=%v", pk2)
 	}
 	if w.HasKeyPair(id1) {
-		t.Fatalf("failed delete second identity: first identity exist.")
+		t.Fatal("failed delete second identity: first identity exist.")
 	}
 	if w.HasKeyPair(id2) {
-		t.Fatalf("failed delete second identity: still exist.")
+		t.Fatal("failed delete second identity: still exist.")
 	}
 	if pk1 != nil {
-		t.Fatalf("failed delete second identity: first key exist.")
+		t.Fatal("failed delete second identity: first key exist.")
 	}
 	if pk2 != nil {
-		t.Fatalf("failed delete second identity: second key exist.")
+		t.Fatal("failed delete second identity: second key exist.")
 	}
 }
 
@@ -310,19 +310,19 @@ func TestWhisperSymKeyManagement(t *testing.T) {
 		t.Fatalf("failed w.GetSymKey(id2): false positive. key=%v", k2)
 	}
 	if !w.HasSymKey(id1) {
-		t.Fatalf("failed w.HasSymKey(id1).")
+		t.Fatal("failed w.HasSymKey(id1).")
 	}
 	if w.HasSymKey(id2) {
-		t.Fatalf("failed w.HasSymKey(id2): false positive.")
+		t.Fatal("failed w.HasSymKey(id2): false positive.")
 	}
 	if k1 == nil {
-		t.Fatalf("first key does not exist.")
+		t.Fatal("first key does not exist.")
 	}
 	if !bytes.Equal(k1, randomKey) {
-		t.Fatalf("k1 != randomKey.")
+		t.Fatal("k1 != randomKey.")
 	}
 	if k2 != nil {
-		t.Fatalf("second key already exist.")
+		t.Fatal("second key already exist.")
 	}
 
 	id2, err = w.AddSymKeyDirect(randomKey)
@@ -338,22 +338,22 @@ func TestWhisperSymKeyManagement(t *testing.T) {
 		t.Fatalf("failed w.GetSymKey(id2). err=%v", err)
 	}
 	if !w.HasSymKey(id1) {
-		t.Fatalf("HasSymKey(id1) failed.")
+		t.Fatal("HasSymKey(id1) failed.")
 	}
 	if !w.HasSymKey(id2) {
-		t.Fatalf("HasSymKey(id2) failed.")
+		t.Fatal("HasSymKey(id2) failed.")
 	}
 	if k1 == nil {
-		t.Fatalf("k1 does not exist.")
+		t.Fatal("k1 does not exist.")
 	}
 	if k2 == nil {
-		t.Fatalf("k2 does not exist.")
+		t.Fatal("k2 does not exist.")
 	}
 	if !bytes.Equal(k1, k2) {
-		t.Fatalf("k1 != k2.")
+		t.Fatal("k1 != k2.")
 	}
 	if !bytes.Equal(k1, randomKey) {
-		t.Fatalf("k1 != randomKey.")
+		t.Fatal("k1 != randomKey.")
 	}
 	if len(k1) != aesKeyLength {
 		t.Fatalf("wrong length of k1. length=%d", len(k1))
@@ -368,23 +368,23 @@ func TestWhisperSymKeyManagement(t *testing.T) {
 		t.Fatalf("failed w.GetSymKey(id1): false positive. key=%v", k1)
 	}
 	if k1 != nil {
-		t.Fatalf("failed GetSymKey(id1): false positive.")
+		t.Fatal("failed GetSymKey(id1): false positive.")
 	}
 	k2, err = w.GetSymKey(id2)
 	if err != nil {
 		t.Fatalf("failed w.GetSymKey(id2). err=%v", err)
 	}
 	if w.HasSymKey(id1) {
-		t.Fatalf("failed to delete first key: still exist.")
+		t.Fatal("failed to delete first key: still exist.")
 	}
 	if !w.HasSymKey(id2) {
 		t.Fatalf("failed to delete first key: second key does not exist.")
 	}
 	if k1 != nil {
-		t.Fatalf("failed to delete first key.")
+		t.Fatal("failed to delete first key.")
 	}
 	if k2 == nil {
-		t.Fatalf("failed to delete first key: second key is nil.")
+		t.Fatal("failed to delete first key: second key is nil.")
 	}
 
 	w.DeleteSymKey(id1)
@@ -398,19 +398,19 @@ func TestWhisperSymKeyManagement(t *testing.T) {
 		t.Fatalf("failed w.GetSymKey(id2): false positive. key=%v", k2)
 	}
 	if k1 != nil || k2 != nil {
-		t.Fatalf("k1 or k2 is not nil")
+		t.Fatal("k1 or k2 is not nil")
 	}
 	if w.HasSymKey(id1) {
-		t.Fatalf("failed to delete second key: first key exist.")
+		t.Fatal("failed to delete second key: first key exist.")
 	}
 	if w.HasSymKey(id2) {
-		t.Fatalf("failed to delete second key: still exist.")
+		t.Fatal("failed to delete second key: still exist.")
 	}
 	if k1 != nil {
-		t.Fatalf("failed to delete second key: first key is not nil.")
+		t.Fatal("failed to delete second key: first key is not nil.")
 	}
 	if k2 != nil {
-		t.Fatalf("failed to delete second key: second key is not nil.")
+		t.Fatal("failed to delete second key: second key is not nil.")
 	}
 
 	randomKey = make([]byte, aesKeyLength+1)
@@ -431,23 +431,23 @@ func TestWhisperSymKeyManagement(t *testing.T) {
 	}
 	k1, err = w.GetSymKey(id1)
 	if err != nil {
-		t.Fatalf("failed w.GetSymKey(id1).")
+		t.Fatalf("failed w.GetSymKey(id1). err=%v", err)
 	}
 	k2, err = w.GetSymKey(id2)
 	if err != nil {
-		t.Fatalf("failed w.GetSymKey(id2).")
+		t.Fatalf("failed w.GetSymKey(id2). err=%v", err)
 	}
 	if !w.HasSymKey(id1) {
-		t.Fatalf("HasSymKey(id1) failed.")
+		t.Fatal("HasSymKey(id1) failed.")
 	}
 	if !w.HasSymKey(id2) {
-		t.Fatalf("HasSymKey(id2) failed.")
+		t.Fatal("HasSymKey(id2) failed.")
 	}
 	if !validateDataIntegrity(k2, aesKeyLength) {
-		t.Fatalf("key validation failed.")
+		t.Fatal("key validation failed.")
 	}
 	if !bytes.Equal(k1, k2) {
-		t.Fatalf("k1 != k2.")
+		t.Fatal("k1 != k2.")
 	}
 }
 
@@ -693,10 +693,10 @@ func TestSymmetricSendCycle(t *testing.T) {
 	mail1 := filter1.Retrieve()
 	mail2 := filter2.Retrieve()
 	if len(mail2) == 0 {
-		t.Fatalf("did not receive any email for filter 2")
+		t.Fatal("did not receive any email for filter 2.")
 	}
 	if len(mail1) == 0 {
-		t.Fatalf("did not receive any email for filter 1")
+		t.Fatal("did not receive any email for filter 1.")
 	}
 
 }
@@ -767,7 +767,7 @@ func TestSymmetricSendWithoutAKey(t *testing.T) {
 	<-ticker.C
 	mail := filter.Retrieve()
 	if len(mail) == 0 {
-		t.Fatalf("did not receive message in spite of not setting a public key")
+		t.Fatal("did not receive message in spite of not setting a public key")
 	}
 }
 
@@ -835,7 +835,7 @@ func TestSymmetricSendKeyMismatch(t *testing.T) {
 	<-ticker.C
 	mail := filter.Retrieve()
 	if len(mail) > 0 {
-		t.Fatalf("received a message when keys weren't matching")
+		t.Fatalf("received a message when keys weren't matching. message=%v", mail)
 	}
 }
 
@@ -847,48 +847,48 @@ func TestBloom(t *testing.T) {
 	x[32] = byte(1)
 	x[BloomFilterSize-1] = byte(128)
 	if !BloomFilterMatch(x, b) || !BloomFilterMatch(b, x) {
-		t.Fatalf("bloom filter does not match the mask")
+		t.Fatal("bloom filter does not match the mask")
 	}
 
 	_, err := mrand.Read(b)
 	if err != nil {
-		t.Fatalf("math rand error")
+		t.Fatalf("math rand error. err=%v", err)
 	}
 	_, err = mrand.Read(x)
 	if err != nil {
-		t.Fatalf("math rand error")
+		t.Fatalf("math rand error. err=%v", err)
 	}
 	if !BloomFilterMatch(b, b) {
-		t.Fatalf("bloom filter does not match self")
+		t.Fatal("bloom filter does not match self")
 	}
 	x = addBloom(x, b)
 	if !BloomFilterMatch(x, b) {
-		t.Fatalf("bloom filter does not match combined bloom")
+		t.Fatal("bloom filter does not match combined bloom")
 	}
 	if !isFullNode(nil) {
-		t.Fatalf("isFullNode did not recognize nil as full node")
+		t.Fatal("isFullNode did not recognize nil as full node")
 	}
 	x[17] = 254
 	if isFullNode(x) {
-		t.Fatalf("isFullNode false positive")
+		t.Fatal("isFullNode false positive")
 	}
 	for i := 0; i < BloomFilterSize; i++ {
 		b[i] = byte(255)
 	}
 	if !isFullNode(b) {
-		t.Fatalf("isFullNode false negative")
+		t.Fatal("isFullNode false negative")
 	}
 	if BloomFilterMatch(x, b) {
-		t.Fatalf("bloomFilterMatch false positive")
+		t.Fatal("bloomFilterMatch false positive")
 	}
 	if !BloomFilterMatch(b, x) {
-		t.Fatalf("bloomFilterMatch false negative")
+		t.Fatal("bloomFilterMatch false negative")
 	}
 
 	w := New(&DefaultConfig)
 	f := w.BloomFilter()
 	if f != nil {
-		t.Fatalf("wrong bloom on creation")
+		t.Fatal("wrong bloom on creation")
 	}
 	err = w.SetBloomFilter(x)
 	if err != nil {
