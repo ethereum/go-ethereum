@@ -58,22 +58,22 @@ func TestWhisperBasic(t *testing.T) {
 		t.Fatal("found peer for random key.")
 	}
 	if err := w.AllowP2PMessagesFromPeer(peerID); err == nil {
-		t.Fatalf("failed MarkPeerTrusted.")
+		t.Fatal("failed MarkPeerTrusted.")
 	}
 	exist := w.HasSymKey("non-existing")
 	if exist {
-		t.Fatalf("failed HasSymKey.")
+		t.Fatal("failed HasSymKey.")
 	}
 	key, err := w.GetSymKey("non-existing")
 	if err == nil {
-		t.Fatalf("failed GetSymKey(non-existing): false positive.")
+		t.Fatalf("failed GetSymKey(non-existing): false positive. key=%v", key)
 	}
 	if key != nil {
 		t.Fatalf("failed GetSymKey: false positive.")
 	}
 	mail := w.Envelopes()
 	if len(mail) != 0 {
-		t.Fatalf("failed w.Envelopes().")
+		t.Fatalf("failed w.Envelopes(). length=%d", len(mail))
 	}
 
 	derived := pbkdf2.Key(peerID, nil, 65356, aesKeyLength, sha256.New)
@@ -96,11 +96,11 @@ func TestWhisperBasic(t *testing.T) {
 
 	id, err := w.NewKeyPair()
 	if err != nil {
-		t.Fatalf("failed to generate new key pair: %s.", err)
+		t.Fatalf("failed to generate new key pair: %v.", err)
 	}
 	pk, err := w.GetPrivateKey(id)
 	if err != nil {
-		t.Fatalf("failed to retrieve new key pair: %s.", err)
+		t.Fatalf("failed to retrieve new key pair: %v.", err)
 	}
 	if !validatePrivateKey(pk) {
 		t.Fatalf("failed validatePrivateKey: %v.", pk)
@@ -187,7 +187,7 @@ func TestWhisperIdentityManagement(t *testing.T) {
 	}
 	pk1, err = w.GetPrivateKey(id1)
 	if err == nil {
-		t.Fatalf("retrieve the key pair: false positive.")
+		t.Fatalf("retrieve the key pair: false positive. key=%v", pk1)
 	}
 	pk2, err = w.GetPrivateKey(id2)
 	if err != nil {
@@ -213,7 +213,7 @@ func TestWhisperIdentityManagement(t *testing.T) {
 	}
 	pk1, err = w.GetPrivateKey(id1)
 	if err == nil {
-		t.Fatalf("retrieve the key pair: false positive.")
+		t.Fatalf("retrieve the key pair: false positive. key=%v", pk1)
 	}
 	pk2, err = w.GetPrivateKey(id2)
 	if err != nil {
@@ -239,11 +239,11 @@ func TestWhisperIdentityManagement(t *testing.T) {
 	}
 	pk1, err = w.GetPrivateKey(id1)
 	if err == nil {
-		t.Fatalf("retrieve the key pair: false positive.")
+		t.Fatalf("retrieve the key pair: false positive. key=%v", pk1)
 	}
 	pk2, err = w.GetPrivateKey(id2)
 	if err == nil {
-		t.Fatalf("retrieve the key pair: false positive.")
+		t.Fatalf("retrieve the key pair: false positive. key=%v", pk2)
 	}
 	if w.HasKeyPair(id1) {
 		t.Fatalf("failed delete second identity: first identity exist.")
@@ -274,11 +274,11 @@ func TestWhisperSymKeyManagement(t *testing.T) {
 
 	k1, err = w.GetSymKey(id1)
 	if err != nil {
-		t.Fatalf("failed GetSymKey(id1).")
+		t.Fatalf("failed GetSymKey(id1). err=%v", err)
 	}
 	k2, err = w.GetSymKey(id2)
 	if err == nil {
-		t.Fatalf("failed GetSymKey(id2): false positive.")
+		t.Fatalf("failed GetSymKey(id2): false positive. key=%v", k2)
 	}
 	if !w.HasSymKey(id1) {
 		t.Fatalf("failed HasSymKey(id1).")
@@ -303,11 +303,11 @@ func TestWhisperSymKeyManagement(t *testing.T) {
 
 	k1, err = w.GetSymKey(id1)
 	if err != nil {
-		t.Fatalf("failed w.GetSymKey(id1).")
+		t.Fatalf("failed w.GetSymKey(id1). err=%v", err)
 	}
 	k2, err = w.GetSymKey(id2)
 	if err == nil {
-		t.Fatalf("failed w.GetSymKey(id2): false positive.")
+		t.Fatalf("failed w.GetSymKey(id2): false positive. key=%v", k2)
 	}
 	if !w.HasSymKey(id1) {
 		t.Fatalf("failed w.HasSymKey(id1).")
@@ -331,11 +331,11 @@ func TestWhisperSymKeyManagement(t *testing.T) {
 	}
 	k1, err = w.GetSymKey(id1)
 	if err != nil {
-		t.Fatalf("failed w.GetSymKey(id1).")
+		t.Fatalf("failed w.GetSymKey(id1). err=%v", err)
 	}
 	k2, err = w.GetSymKey(id2)
 	if err != nil {
-		t.Fatalf("failed w.GetSymKey(id2).")
+		t.Fatalf("failed w.GetSymKey(id2). err=%v", err)
 	}
 	if !w.HasSymKey(id1) {
 		t.Fatalf("HasSymKey(id1) failed.")
@@ -356,23 +356,23 @@ func TestWhisperSymKeyManagement(t *testing.T) {
 		t.Fatalf("k1 != randomKey.")
 	}
 	if len(k1) != aesKeyLength {
-		t.Fatalf("wrong length of k1.")
+		t.Fatalf("wrong length of k1. length=%d", len(k1))
 	}
 	if len(k2) != aesKeyLength {
-		t.Fatalf("wrong length of k2.")
+		t.Fatalf("wrong length of k2. length=%d", len(k2))
 	}
 
 	w.DeleteSymKey(id1)
 	k1, err = w.GetSymKey(id1)
 	if err == nil {
-		t.Fatalf("failed w.GetSymKey(id1): false positive.")
+		t.Fatalf("failed w.GetSymKey(id1): false positive. key=%v", k1)
 	}
 	if k1 != nil {
 		t.Fatalf("failed GetSymKey(id1): false positive.")
 	}
 	k2, err = w.GetSymKey(id2)
 	if err != nil {
-		t.Fatalf("failed w.GetSymKey(id2).")
+		t.Fatalf("failed w.GetSymKey(id2). err=%v", err)
 	}
 	if w.HasSymKey(id1) {
 		t.Fatalf("failed to delete first key: still exist.")
@@ -391,11 +391,11 @@ func TestWhisperSymKeyManagement(t *testing.T) {
 	w.DeleteSymKey(id2)
 	k1, err = w.GetSymKey(id1)
 	if err == nil {
-		t.Fatalf("failed w.GetSymKey(id1): false positive.")
+		t.Fatalf("failed w.GetSymKey(id1): false positive. key=%v", k1)
 	}
 	k2, err = w.GetSymKey(id2)
 	if err == nil {
-		t.Fatalf("failed w.GetSymKey(id2): false positive.")
+		t.Fatalf("failed w.GetSymKey(id2): false positive. key=%v", k2)
 	}
 	if k1 != nil || k2 != nil {
 		t.Fatalf("k1 or k2 is not nil")
