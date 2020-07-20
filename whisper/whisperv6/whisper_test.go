@@ -69,7 +69,7 @@ func TestWhisperBasic(t *testing.T) {
 		t.Fatalf("failed GetSymKey(non-existing): false positive. key=%v", key)
 	}
 	if key != nil {
-		t.Fatal("failed GetSymKey: false positive.")
+		t.Fatalf("failed GetSymKey: false positive. key=%v", key)
 	}
 	mail := w.Envelopes()
 	if len(mail) != 0 {
@@ -187,7 +187,7 @@ func TestWhisperIdentityManagement(t *testing.T) {
 	}
 	pk1, err = w.GetPrivateKey(id1)
 	if err == nil {
-		t.Fatalf("retrieve the key pair: false positive. key=%v", pk1) // TODO does it even matter to print the pk?
+		t.Fatalf("retrieve the key pair: false positive. key=%v", pk1)
 	}
 	pk2, err = w.GetPrivateKey(id2)
 	if err != nil {
@@ -226,7 +226,7 @@ func TestWhisperIdentityManagement(t *testing.T) {
 		t.Fatal("failed delete non-existing identity: pub2 does not exist.")
 	}
 	if pk1 != nil {
-		t.Fatal("failed delete non-existing identity: first key exist.")
+		t.Fatalf("failed delete non-existing identity: first key exist. key=%v", pk1)
 	}
 	if pk2 == nil {
 		t.Fatal("failed delete non-existing identity: second key does not exist.")
@@ -252,10 +252,10 @@ func TestWhisperIdentityManagement(t *testing.T) {
 		t.Fatal("failed delete second identity: still exist.")
 	}
 	if pk1 != nil {
-		t.Fatal("failed delete second identity: first key exist.")
+		t.Fatalf("failed delete second identity: first key exist. key=%v", pk1)
 	}
 	if pk2 != nil {
-		t.Fatal("failed delete second identity: second key exist.")
+		t.Fatalf("failed delete second identity: second key exist. key=%v", pk2)
 	}
 }
 
@@ -281,16 +281,16 @@ func TestWhisperSymKeyManagement(t *testing.T) {
 		t.Fatalf("failed GetSymKey(id2): false positive. key=%v", k2)
 	}
 	if !w.HasSymKey(id1) {
-		t.Fatalf("failed HasSymKey(id1).")
+		t.Fatal("failed HasSymKey(id1).")
 	}
 	if w.HasSymKey(id2) {
-		t.Fatalf("failed HasSymKey(id2): false positive.")
+		t.Fatal("failed HasSymKey(id2): false positive.")
 	}
 	if k1 == nil {
-		t.Fatalf("first key does not exist.")
+		t.Fatal("first key does not exist.")
 	}
 	if k2 != nil {
-		t.Fatalf("second key still exist.")
+		t.Fatalf("second key still exist. key=%v", k2)
 	}
 
 	// add existing id, nothing should change
@@ -322,7 +322,7 @@ func TestWhisperSymKeyManagement(t *testing.T) {
 		t.Fatal("k1 != randomKey.")
 	}
 	if k2 != nil {
-		t.Fatal("second key already exist.")
+		t.Fatalf("second key already exist. key=%v", k2)
 	}
 
 	id2, err = w.AddSymKeyDirect(randomKey)
@@ -365,10 +365,10 @@ func TestWhisperSymKeyManagement(t *testing.T) {
 	w.DeleteSymKey(id1)
 	k1, err = w.GetSymKey(id1)
 	if err == nil {
-		t.Fatalf("failed w.GetSymKey(id1): false positive. key=%v", k1)
+		t.Fatalf("failed w.GetSymKey(id1): false positive.")
 	}
 	if k1 != nil {
-		t.Fatal("failed GetSymKey(id1): false positive.")
+		t.Fatalf("failed GetSymKey(id1): false positive. key=%v", k1)
 	}
 	k2, err = w.GetSymKey(id2)
 	if err != nil {
@@ -378,9 +378,9 @@ func TestWhisperSymKeyManagement(t *testing.T) {
 		t.Fatal("failed to delete first key: still exist.")
 	}
 	if !w.HasSymKey(id2) {
-		t.Fatalf("failed to delete first key: second key does not exist.")
+		t.Fatal("failed to delete first key: second key does not exist.")
 	}
-	if k1 != nil {
+	if k1 != nil { // TODO isn't this an ineffectual check? if k1 were not nil, that would've been caught on L370
 		t.Fatal("failed to delete first key.")
 	}
 	if k2 == nil {
@@ -606,7 +606,7 @@ func TestCustomization(t *testing.T) {
 	<-ticker.C
 	mail := f.Retrieve()
 	if len(mail) > 0 {
-		t.Fatalf("received premature mail")
+		t.Fatalf("received premature mail. mail=%v", mail)
 	}
 }
 
@@ -896,6 +896,6 @@ func TestBloom(t *testing.T) {
 	}
 	f = w.BloomFilter()
 	if !BloomFilterMatch(f, x) || !BloomFilterMatch(x, f) {
-		t.Fatalf("retireved wrong bloom filter")
+		t.Fatal("retireved wrong bloom filter")
 	}
 }
