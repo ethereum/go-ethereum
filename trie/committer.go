@@ -105,20 +105,19 @@ func (c *committer) commit(n node, db *Database, force bool) (node, error) {
 		// Commit child
 		collapsed := cn.copy()
 		if _, ok := cn.Val.(valueNode); !ok {
-			if childV, err := c.commit(cn.Val, db, false); err != nil {
+			childV, err := c.commit(cn.Val, db, false)
+			if err != nil {
 				return nil, err
-			} else {
-				collapsed.Val = childV
 			}
+			collapsed.Val = childV
 		}
 		// The key needs to be copied, since we're delivering it to database
 		collapsed.Key = hexToCompact(cn.Key)
 		hashedNode := c.store(collapsed, db, force, true)
 		if hn, ok := hashedNode.(hashNode); ok {
 			return hn, nil
-		} else {
-			return collapsed, nil
 		}
+		return collapsed, nil
 	case *fullNode:
 		hashedKids, hasVnodes, err := c.commitChildren(cn, db, force)
 		if err != nil {
@@ -130,9 +129,8 @@ func (c *committer) commit(n node, db *Database, force bool) (node, error) {
 		hashedNode := c.store(collapsed, db, force, hasVnodes)
 		if hn, ok := hashedNode.(hashNode); ok {
 			return hn, nil
-		} else {
-			return collapsed, nil
 		}
+		return collapsed, nil
 	case valueNode:
 		return c.store(cn, db, force, false), nil
 	// hashnodes aren't stored
@@ -265,7 +263,7 @@ func estimateSize(n node) int {
 			if child := n.Children[i]; child != nil {
 				s += estimateSize(child)
 			} else {
-				s += 1
+				s++
 			}
 		}
 		return s

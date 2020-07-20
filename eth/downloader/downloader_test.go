@@ -37,7 +37,8 @@ import (
 
 // Reduce some of the parameters to make the tester faster.
 func init() {
-	maxForkAncestry = 10000
+	fullMaxForkAncestry = 10000
+	lightMaxForkAncestry = 10000
 	blockCacheItems = 1024
 	fsHeaderContCheck = 500 * time.Millisecond
 }
