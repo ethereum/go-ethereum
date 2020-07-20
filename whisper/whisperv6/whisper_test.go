@@ -380,9 +380,6 @@ func TestWhisperSymKeyManagement(t *testing.T) {
 	if !w.HasSymKey(id2) {
 		t.Fatal("failed to delete first key: second key does not exist.")
 	}
-	if k1 != nil { // TODO isn't this an ineffectual check? if k1 were not nil, that would've been caught on L370
-		t.Fatal("failed to delete first key.")
-	}
 	if k2 == nil {
 		t.Fatal("failed to delete first key: second key is nil.")
 	}
