@@ -719,20 +719,16 @@ func (api *PrivateDebugAPI) TraceTransaction(ctx context.Context, hash common.Ha
 	return api.traceTx(ctx, msg, vmctx, statedb, config)
 }
 
-// TraceTransactionPending returns the structured logs created during the execution of EVM
-// if the given transaction was added on top of the current block and returns them as a JSON object.
-func (api *PrivateDebugAPI) TraceTransactionPending(ctx context.Context, tx types.Transaction, config *TraceConfig) (interface{}, error) {
-	statedb, err := api.eth.blockchain.State()
+// Call lets you trace a given eth_call. returns the structured logs created during the execution of EVM
+// if the given transaction was added on top of the provided block and returns them as a JSON object.
+// You can provide -2 as a block number to trace on top of the pending block.
+func (api *PrivateDebugAPI) Call(ctx context.Context, args ethapi.CallArgs, blockNrOrHash rpc.BlockNumberOrHash, config *TraceConfig) (interface{}, error) {
+	statedb, header, err := api.eth.APIBackend.StateAndHeaderByNumberOrHash(ctx, blockNrOrHash)
 	if err != nil {
 		return nil, err
 	}
-	block := api.eth.blockchain.CurrentBlock()
-	signer := types.MakeSigner(api.eth.blockchain.Config(), block.Number())
-	msg, err := tx.AsMessage(signer)
-	if err != nil {
-		return nil, err
-	}
-	vmctx := core.NewEVMContext(msg, block.Header(), api.eth.blockchain, nil)
+	msg := args.ToMessage(api.eth.APIBackend.RPCGasCap())
+	vmctx := core.NewEVMContext(msg, header, api.eth.blockchain, nil)
 	return api.traceTx(ctx, msg, vmctx, statedb, config)
 }
 
