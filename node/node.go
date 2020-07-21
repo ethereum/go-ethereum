@@ -220,7 +220,7 @@ func (n *Node) Close() error {
 // RegisterLifecycle registers the given Lifecycle on the node.
 func (n *Node) RegisterLifecycle(lifecycle Lifecycle) {
 	if n.runstate != initializingState {
-		panic(fmt.Sprintf("can't register lifecycle on running/stopped node"))
+		panic("can't register lifecycle on running/stopped node")
 	}
 	if containsLifecycle(n.lifecycles, lifecycle) {
 		panic(fmt.Sprintf("attempt to register lifecycle %T more than once", lifecycle))
@@ -231,7 +231,7 @@ func (n *Node) RegisterLifecycle(lifecycle Lifecycle) {
 // RegisterProtocols adds backend's protocols to the node's p2p server.
 func (n *Node) RegisterProtocols(protocols []p2p.Protocol) {
 	if n.runstate != initializingState {
-		panic(fmt.Sprintf("can't register protocols on running/stopped node"))
+		panic("can't register protocols on running/stopped node")
 	}
 	n.server.Protocols = append(n.server.Protocols, protocols...)
 }
@@ -239,7 +239,7 @@ func (n *Node) RegisterProtocols(protocols []p2p.Protocol) {
 // RegisterAPIs registers the APIs a service provides on the node.
 func (n *Node) RegisterAPIs(apis []rpc.API) {
 	if n.runstate != initializingState {
-		panic(fmt.Sprintf("can't register APIs on running/stopped node"))
+		panic("can't register APIs on running/stopped node")
 	}
 	n.rpcAPIs = append(n.rpcAPIs, apis...)
 }
@@ -252,7 +252,7 @@ func (n *Node) RegisterHTTPServer(endpoint string, server *httpServer) {
 // RegisterPath mounts the given handler on the given path on the canonical HTTP server.
 func (n *Node) RegisterPath(path string, handler http.Handler) string {
 	if n.runstate != initializingState {
-		panic(fmt.Sprintf("can't register HTTP handler on running/stopped node"))
+		panic("can't register HTTP handler on running/stopped node")
 	}
 	for _, server := range n.httpServers {
 		if atomic.LoadInt32(&server.RPCAllowed) == 1 {
