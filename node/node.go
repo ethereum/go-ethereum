@@ -541,7 +541,7 @@ func (n *Node) RPCHandler() (*rpc.Server, error) {
 	n.lock.RLock()
 	defer n.lock.RUnlock()
 
-	if n.inprocHandler == nil {
+	if n.runstate == stoppedState {
 		return nil, ErrNodeStopped
 	}
 	return n.inprocHandler, nil
@@ -607,6 +607,9 @@ func (n *Node) EventMux() *event.TypeMux {
 func (n *Node) OpenDatabase(name string, cache, handles int, namespace string) (ethdb.Database, error) {
 	// TODO: track databases so they can be closed later.
 
+	if n.runstate == stoppedState {
+		return nil, ErrNodeStopped
+	}
 	if n.config.DataDir == "" {
 		return rawdb.NewMemoryDatabase(), nil
 	}
@@ -619,6 +622,9 @@ func (n *Node) OpenDatabase(name string, cache, handles int, namespace string) (
 // database to immutable append-only files. If the node is an ephemeral one, a
 // memory database is returned.
 func (n *Node) OpenDatabaseWithFreezer(name string, cache, handles int, freezer, namespace string) (ethdb.Database, error) {
+	if n.runstate == stoppedState {
+		return nil, ErrNodeStopped
+	}
 	if n.config.DataDir == "" {
 		return rawdb.NewMemoryDatabase(), nil
 	}
