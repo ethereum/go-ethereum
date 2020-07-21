@@ -42,14 +42,14 @@ import (
 
 // Node is a container on which services can be registered.
 type Node struct {
-	eventmux          *event.TypeMux // Event multiplexer used between the services of a stack
-	config            *Config
-	accman            *accounts.Manager
-	log               log.Logger
-	ephemeralKeystore string            // if non-empty, the key directory that will be removed by Stop
-	instanceDirLock   fileutil.Releaser // prevents concurrent use of instance directory
-	stop              chan struct{}     // Channel to wait for termination notifications
-	server            *p2p.Server       // Currently running P2P networking layer
+	eventmux      *event.TypeMux // Event multiplexer used between the services of a stack
+	config        *Config
+	accman        *accounts.Manager
+	log           log.Logger
+	ephemKeystore string            // if non-empty, the key directory that will be removed by Stop
+	dirLock       fileutil.Releaser // prevents concurrent use of instance directory
+	stop          chan struct{}     // Channel to wait for termination notifications
+	server        *p2p.Server       // Currently running P2P networking layer
 
 	lock          sync.Mutex
 	runstate      int
@@ -96,11 +96,9 @@ func New(conf *Config) (*Node, error) {
 		conf.Logger = log.New()
 	}
 	node := &Node{
-		config:      conf,
-		httpServers: make(serverMap),
-		ipc: &httpServer{
-			endpoint: conf.IPCEndpoint(),
-		},
+		config:        conf,
+		httpServers:   make(serverMap),
+		ipc:           &httpServer{endpoint: conf.IPCEndpoint()},
 		inprocHandler: rpc.NewServer(),
 		eventmux:      new(event.TypeMux),
 		log:           conf.Logger,
@@ -119,7 +117,7 @@ func New(conf *Config) (*Node, error) {
 		return nil, err
 	}
 	node.accman = am
-	node.ephemeralKeystore = ephemeralKeystore
+	node.ephemKeystore = ephemeralKeystore
 
 	// Initialize the p2p server. This creates the node key and discovery databases.
 	node.server.Config.PrivateKey = node.config.NodeKey()
@@ -196,8 +194,8 @@ func (n *Node) Close() error {
 	if err := n.accman.Close(); err != nil {
 		errs = append(errs, err)
 	}
-	if n.ephemeralKeystore != "" {
-		if err := os.RemoveAll(n.ephemeralKeystore); err != nil {
+	if n.ephemKeystore != "" {
+		if err := os.RemoveAll(n.ephemKeystore); err != nil {
 			errs = append(errs, err)
 		}
 	}
@@ -385,17 +383,17 @@ func (n *Node) openDataDir() error {
 	if err != nil {
 		return convertFileLockError(err)
 	}
-	n.instanceDirLock = release
+	n.dirLock = release
 	return nil
 }
 
 func (n *Node) closeDataDir() {
 	// Release instance directory lock.
-	if n.instanceDirLock != nil {
-		if err := n.instanceDirLock.Release(); err != nil {
+	if n.dirLock != nil {
+		if err := n.dirLock.Release(); err != nil {
 			n.log.Error("Can't release datadir lock", "err", err)
 		}
-		n.instanceDirLock = nil
+		n.dirLock = nil
 	}
 }
 
@@ -537,7 +535,7 @@ func (n *Node) stopServices() error {
 	return nil
 }
 
-// Wait blocks until the node is stopped.
+// Wait blocks until the node is closed.
 func (n *Node) Wait() {
 	<-n.stop
 }
@@ -613,7 +611,8 @@ func (n *Node) EventMux() *event.TypeMux {
 // previous can be found) from within the node's instance directory. If the node is
 // ephemeral, a memory database is returned.
 func (n *Node) OpenDatabase(name string, cache, handles int, namespace string) (ethdb.Database, error) {
-	// TODO: track databases so they can be closed later.
+	n.lock.Lock()
+	defer n.lock.Unlock()
 
 	if n.runstate == stoppedState {
 		return nil, ErrNodeStopped
@@ -621,7 +620,7 @@ func (n *Node) OpenDatabase(name string, cache, handles int, namespace string) (
 	if n.config.DataDir == "" {
 		return rawdb.NewMemoryDatabase(), nil
 	}
-	return rawdb.NewLevelDBDatabase(n.config.ResolvePath(name), cache, handles, namespace)
+	return rawdb.NewLevelDBDatabase(n.ResolvePath(name), cache, handles, namespace)
 }
 
 // OpenDatabaseWithFreezer opens an existing database with the given name (or
@@ -630,19 +629,21 @@ func (n *Node) OpenDatabase(name string, cache, handles int, namespace string) (
 // database to immutable append-only files. If the node is an ephemeral one, a
 // memory database is returned.
 func (n *Node) OpenDatabaseWithFreezer(name string, cache, handles int, freezer, namespace string) (ethdb.Database, error) {
+	n.lock.Lock()
+	defer n.lock.Unlock()
+
 	if n.runstate == stoppedState {
 		return nil, ErrNodeStopped
 	}
 	if n.config.DataDir == "" {
 		return rawdb.NewMemoryDatabase(), nil
 	}
-	root := n.config.ResolvePath(name)
-
+	root := n.ResolvePath(name)
 	switch {
 	case freezer == "":
 		freezer = filepath.Join(root, "ancient")
 	case !filepath.IsAbs(freezer):
-		freezer = n.config.ResolvePath(freezer)
+		freezer = n.ResolvePath(freezer)
 	}
 	return rawdb.NewLevelDBDatabaseWithFreezer(root, cache, handles, freezer, namespace)
 }
