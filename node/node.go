@@ -49,10 +49,10 @@ type Node struct {
 	ephemeralKeystore string            // if non-empty, the key directory that will be removed by Stop
 	instanceDirLock   fileutil.Releaser // prevents concurrent use of instance directory
 	stop              chan struct{}     // Channel to wait for termination notifications
+	server            *p2p.Server       // Currently running P2P networking layer
 
 	lock          sync.RWMutex
 	runstate      int
-	server        *p2p.Server // Currently running P2P networking layer
 	lifecycles    []Lifecycle // All registered backends, services, and auxiliary services that have a lifecycle
 	httpServers   serverMap   // serverMap stores information about the node's rpc, ws, and graphQL http servers.
 	inprocHandler *rpc.Server // In-process RPC request handler to process the API requests
@@ -530,7 +530,6 @@ func (n *Node) stopServices() error {
 	failure := new(StopError)
 	failure.Services = stopLifecycles(n.lifecycles)
 	n.server.Stop()
-	n.server = nil
 
 	if len(failure.Services) > 0 {
 		return failure
@@ -560,12 +559,9 @@ func (n *Node) RPCHandler() (*rpc.Server, error) {
 }
 
 // Server retrieves the currently running P2P network layer. This method is meant
-// only to inspect fields of the currently running server, life cycle management
-// should be left to this Node entity.
+// only to inspect fields of the currently running server. Callers should not
+// start or stop the returned server.
 func (n *Node) Server() *p2p.Server {
-	n.lock.RLock()
-	defer n.lock.RUnlock()
-
 	return n.server
 }
 
