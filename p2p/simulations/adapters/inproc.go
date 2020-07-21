@@ -147,11 +147,7 @@ func (s *SimAdapter) DialRPC(id enode.ID) (*rpc.Client, error) {
 	if !ok {
 		return nil, fmt.Errorf("unknown node: %s", id)
 	}
-	handler, err := node.node.RPCHandler()
-	if err != nil {
-		return nil, err
-	}
-	return rpc.DialInProc(handler), nil
+	return node.node.Attach()
 }
 
 // GetNode returns the node with the given ID if it exists
@@ -279,13 +275,12 @@ func (sn *SimNode) Start(snapshots map[string][]byte) error {
 	}
 
 	// create an in-process RPC client
-	handler, err := sn.node.RPCHandler()
+	client, err := sn.node.Attach()
 	if err != nil {
 		return err
 	}
-
 	sn.lock.Lock()
-	sn.client = rpc.DialInProc(handler)
+	sn.client = client
 	sn.lock.Unlock()
 
 	return nil
