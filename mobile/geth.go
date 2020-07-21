@@ -195,8 +195,8 @@ func NewNode(datadir string, config *NodeConfig) (stack *Node, _ error) {
 	return &Node{rawStack}, nil
 }
 
-// Close terminates a running node along with all it's services, tearing internal
-// state doen too. It's not possible to restart a closed node.
+// Close terminates a running node along with all it's services, tearing internal state
+// down. It is not possible to restart a closed node.
 func (n *Node) Close() error {
 	return n.node.Close()
 }
@@ -206,10 +206,12 @@ func (n *Node) Start() error {
 	return n.node.Start()
 }
 
-// Stop terminates a running node along with all it's services. If the node was
-// not started, an error is returned.
+// Stop terminates a running node along with all its services. If the node was not started,
+// an error is returned. It is not possible to restart a stopped node.
+//
+// Deprecated: use Close()
 func (n *Node) Stop() error {
-	return n.node.Stop()
+	return n.node.Close()
 }
 
 // GetEthereumClient retrieves a client to access the Ethereum subsystem.

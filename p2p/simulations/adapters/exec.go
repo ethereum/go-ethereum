@@ -400,7 +400,7 @@ func execP2PNode() {
 		defer signal.Stop(sigc)
 		<-sigc
 		log.Info("Received SIGTERM, shutting down...")
-		stack.Stop()
+		stack.Close()
 	}()
 	stack.Wait() // Wait for the stack to exit.
 }

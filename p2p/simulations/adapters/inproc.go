@@ -299,7 +299,7 @@ func (sn *SimNode) Stop() error {
 		sn.client = nil
 	}
 	sn.lock.Unlock()
-	return sn.node.Stop()
+	return sn.node.Close()
 }
 
 // Service returns a running service by name

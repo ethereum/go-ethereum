@@ -232,7 +232,7 @@ func generateTestChain() (*core.Genesis, []*types.Block) {
 func TestHeader(t *testing.T) {
 	backend, chain := newTestBackend(t)
 	client, _ := backend.Attach()
-	defer backend.Stop()
+	defer backend.Close()
 	defer client.Close()
 
 	tests := map[string]struct {
@@ -276,7 +276,7 @@ func TestHeader(t *testing.T) {
 func TestBalanceAt(t *testing.T) {
 	backend, _ := newTestBackend(t)
 	client, _ := backend.Attach()
-	defer backend.Stop()
+	defer backend.Close()
 	defer client.Close()
 
 	tests := map[string]struct {
@@ -322,7 +322,7 @@ func TestBalanceAt(t *testing.T) {
 func TestTransactionInBlockInterrupted(t *testing.T) {
 	backend, _ := newTestBackend(t)
 	client, _ := backend.Attach()
-	defer backend.Stop()
+	defer backend.Close()
 	defer client.Close()
 
 	ec := NewClient(client)
@@ -340,7 +340,7 @@ func TestTransactionInBlockInterrupted(t *testing.T) {
 func TestChainID(t *testing.T) {
 	backend, _ := newTestBackend(t)
 	client, _ := backend.Attach()
-	defer backend.Stop()
+	defer backend.Close()
 	defer client.Close()
 	ec := NewClient(client)
 
