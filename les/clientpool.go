@@ -42,15 +42,7 @@ const (
 	persistCumulativeTimeRefresh = time.Minute * 5  // refresh period of the cumulative running time persistence
 	posBalanceCacheLimit         = 8192             // the maximum number of cached items in positive balance queue
 	negBalanceCacheLimit         = 8192             // the maximum number of cached items in negative balance queue
-
-	// connectedBias is applied to already connected clients So that
-	// already connected client won't be kicked out very soon and we
-	// can ensure all connected clients can have enough time to request
-	// or sync some data.
-	//
-	// todo(rjl493456442) make it configurable. It can be the option of
-	// free trial time!
-	connectedBias = time.Minute * 3
+	defaultConnectedBias         = time.Minute * 3  // the default connectedBias used in clientPool
 )
 
 // clientPool implements a client database that assigns a priority to each client
@@ -94,7 +86,7 @@ type clientPool struct {
 	freeClientCap     uint64         // The capacity value of each free client
 	startTime         mclock.AbsTime // The timestamp at which the clientpool started running
 	cumulativeTime    int64          // The cumulative running time of clientpool at the start point.
-	disableBias       bool           // Disable connection bias(used in testing)
+	connectedBias     time.Duration  // The connection bias. 0: Disable connection bias(used in testing)
 }
 
 // clientPoolPeer represents a client peer in the pool.
@@ -171,6 +163,7 @@ func newClientPool(db ethdb.Database, freeClientCap uint64, clock mclock.Clock, 
 		startTime:      clock.Now(),
 		cumulativeTime: ndb.getCumulativeTime(),
 		stopCh:         make(chan struct{}),
+		connectedBias:  defaultConnectedBias,
 	}
 	// If the negative balance of free client is even lower than 1,
 	// delete this entry.
@@ -279,11 +272,7 @@ func (f *clientPool) connect(peer clientPoolPeer, capacity uint64) bool {
 			newCount--
 			return newCapacity > f.capLimit || newCount > f.connLimit
 		})
-		bias := connectedBias
-		if f.disableBias {
-			bias = 0
-		}
-		if newCapacity > f.capLimit || newCount > f.connLimit || (e.balanceTracker.estimatedPriority(now+mclock.AbsTime(bias), false)-kickPriority) > 0 {
+		if newCapacity > f.capLimit || newCount > f.connLimit || (e.balanceTracker.estimatedPriority(now+mclock.AbsTime(f.connectedBias), false)-kickPriority) > 0 {
 			for _, c := range kickList {
 				f.connectedQueue.Push(c)
 			}
@@ -369,6 +358,16 @@ func (f *clientPool) setDefaultFactors(posFactors, negFactors priceFactors) {
 
 	f.defaultPosFactors = posFactors
 	f.defaultNegFactors = negFactors
+}
+
+// setConnectedBias sets the connection bias, which is applied to already connected clients
+// So that already connected client won't be kicked out very soon and we can ensure all
+// connected clients can have enough time to request or sync some data.
+func (f *clientPool) setConnectedBias(bias time.Duration) {
+	f.lock.Lock()
+	defer f.lock.Unlock()
+
+	f.connectedBias = bias
 }
 
 // dropClient removes a client from the connected queue and finalizes its balance.
