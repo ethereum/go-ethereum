@@ -83,22 +83,13 @@ func New(conf *Config) (*Node, error) {
 	if strings.HasSuffix(conf.Name, ".ipc") {
 		return nil, errors.New(`Config.Name cannot end in ".ipc"`)
 	}
-	// Ensure that the AccountManager method works before the node has started.
-	// We rely on this in cmd/geth.
-	am, ephemeralKeystore, err := makeAccountManager(conf)
-	if err != nil {
-		return nil, err
-	}
 	if conf.Logger == nil {
 		conf.Logger = log.New()
 	}
-	// Note: any interaction with Config that would create/touch files
-	// in the data directory or instance directory is delayed until Start.
+
 	node := &Node{
-		accman:            am,
-		ephemeralKeystore: ephemeralKeystore,
-		config:            conf,
-		httpServers:       make(serverMap),
+		config:      conf,
+		httpServers: make(serverMap),
 		ipc: &httpServer{
 			endpoint: conf.IPCEndpoint(),
 		},
@@ -106,6 +97,19 @@ func New(conf *Config) (*Node, error) {
 		eventmux:      new(event.TypeMux),
 		log:           conf.Logger,
 	}
+
+	// Acquire the instance directory lock.
+	if err := node.openDataDir(); err != nil {
+		return nil, err
+	}
+	// Ensure that the AccountManager method works before the node has started.
+	// We rely on this in cmd/geth.
+	am, ephemeralKeystore, err := makeAccountManager(conf)
+	if err != nil {
+		return nil, err
+	}
+	node.accman = am
+	node.ephemeralKeystore = ephemeralKeystore
 
 	// Initialize the p2p server. This creates the node key and
 	// discovery databases.
@@ -167,13 +171,24 @@ func New(conf *Config) (*Node, error) {
 func (n *Node) Close() error {
 	var errs []error
 
-	// Terminate all subsystems and collect any errors
-	if err := n.Stop(); err != nil && err != ErrNodeStopped {
-		errs = append(errs, err)
+	if n.server != nil && n.running() {
+		// The node is in RUNNING state, stop lifecycles first.
+		if err := n.Stop(); err != nil && err != ErrNodeStopped {
+			errs = append(errs, err)
+		}
 	}
+
+	// Release resources acquired by New().
+	n.closeDataDir()
 	if err := n.accman.Close(); err != nil {
 		errs = append(errs, err)
 	}
+	if n.ephemeralKeystore != "" {
+		if err := os.RemoveAll(n.ephemeralKeystore); err != nil {
+			errs = append(errs, err)
+		}
+	}
+
 	// Report any errors that might have occurred
 	switch len(errs) {
 	case 0:
@@ -271,9 +286,6 @@ func (n *Node) Start() error {
 	if n.running() {
 		return ErrNodeRunning
 	}
-	if err := n.openDataDir(); err != nil {
-		return err
-	}
 
 	// Start the p2p node
 	if err := n.server.Start(); err != nil {
@@ -347,6 +359,16 @@ func (n *Node) openDataDir() error {
 	}
 	n.instanceDirLock = release
 	return nil
+}
+
+func (n *Node) closeDataDir() {
+	// Release instance directory lock.
+	if n.instanceDirLock != nil {
+		if err := n.instanceDirLock.Release(); err != nil {
+			n.log.Error("Can't release datadir lock", "err", err)
+		}
+		n.instanceDirLock = nil
+	}
 }
 
 // configureRPC is a helper method to configure all the various RPC endpoints during node
@@ -487,28 +509,11 @@ func (n *Node) Stop() error {
 	n.server.Stop()
 	n.server = nil
 
-	// Release instance directory lock.
-	if n.instanceDirLock != nil {
-		if err := n.instanceDirLock.Release(); err != nil {
-			n.log.Error("Can't release datadir lock", "err", err)
-		}
-		n.instanceDirLock = nil
-	}
-
 	// unblock n.Wait
 	close(n.stop)
 
-	// Remove the keystore if it was created ephemerally.
-	var keystoreErr error
-	if n.ephemeralKeystore != "" {
-		keystoreErr = os.RemoveAll(n.ephemeralKeystore)
-	}
-
 	if len(failure.Services) > 0 {
 		return failure
-	}
-	if keystoreErr != nil {
-		return keystoreErr
 	}
 	return nil
 }

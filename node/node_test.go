@@ -97,13 +97,8 @@ func TestNodeUsedDataDir(t *testing.T) {
 	defer original.Stop()
 
 	// Create a second node based on the same data directory and ensure failure
-	duplicate, err := New(&Config{DataDir: dir})
-	if err != nil {
-		t.Fatalf("failed to create duplicate protocol stack: %v", err)
-	}
-	defer duplicate.Close()
-
-	if err := duplicate.Start(); err != ErrDatadirUsed {
+	_, err = New(&Config{DataDir: dir})
+	if err != ErrDatadirUsed {
 		t.Fatalf("duplicate datadir failure mismatch: have %v, want %v", err, ErrDatadirUsed)
 	}
 }
@@ -406,7 +401,7 @@ func TestRegisterHTTPServer(t *testing.T) {
 }
 
 // Tests whether a handler can be successfully mounted on the canonical HTTP server
-// on the given path
+// on the givenq path
 func TestRegisterPath_Successful(t *testing.T) {
 	node := createNode(t, 7878, 7979)
 
