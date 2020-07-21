@@ -405,7 +405,7 @@ func TestRegisterHTTPServer(t *testing.T) {
 }
 
 // Tests whether a handler can be successfully mounted on the canonical HTTP server
-// on the givenq path
+// on the given path
 func TestRegisterPath_Successful(t *testing.T) {
 	node := createNode(t, 7878, 7979)
 
