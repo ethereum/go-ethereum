@@ -42,7 +42,7 @@ import (
 
 // Node is a container on which services can be registered.
 type Node struct {
-	eventmux      *event.TypeMux // Event multiplexer used between the services of a stack
+	eventmux      *event.TypeMux
 	config        *Config
 	accman        *accounts.Manager
 	log           log.Logger
@@ -53,11 +53,12 @@ type Node struct {
 
 	lock          sync.Mutex
 	runstate      int
-	lifecycles    []Lifecycle // All registered backends, services, and auxiliary services that have a lifecycle
-	httpServers   serverMap   // serverMap stores information about the node's rpc, ws, and graphQL http servers.
-	inprocHandler *rpc.Server // In-process RPC request handler to process the API requests
-	rpcAPIs       []rpc.API   // List of APIs currently provided by the node
-	ipc           *httpServer // Stores information about the ipc http server
+	lifecycles    []Lifecycle      // All registered backends, services, and auxiliary services that have a lifecycle
+	httpServers   serverMap        // serverMap stores information about the node's rpc, ws, and graphQL http servers.
+	inprocHandler *rpc.Server      // In-process RPC request handler to process the API requests
+	rpcAPIs       []rpc.API        // List of APIs currently provided by the node
+	ipc           *httpServer      // Stores information about the ipc http server
+	databases     []ethdb.Database // all opened databases
 }
 
 const (
@@ -190,7 +191,6 @@ func (n *Node) Close() error {
 	}
 
 	// Release resources acquired by New().
-	n.closeDataDir()
 	if err := n.accman.Close(); err != nil {
 		errs = append(errs, err)
 	}
@@ -199,6 +199,8 @@ func (n *Node) Close() error {
 			errs = append(errs, err)
 		}
 	}
+	errs = append(errs, n.closeDatabases()...)
+	n.closeDataDir()
 	n.runstate = stoppedState
 
 	// Unblock n.Wait.
@@ -620,7 +622,9 @@ func (n *Node) OpenDatabase(name string, cache, handles int, namespace string) (
 	if n.config.DataDir == "" {
 		return rawdb.NewMemoryDatabase(), nil
 	}
-	return rawdb.NewLevelDBDatabase(n.ResolvePath(name), cache, handles, namespace)
+	db, err := rawdb.NewLevelDBDatabase(n.ResolvePath(name), cache, handles, namespace)
+	n.addDatabase(db)
+	return db, err
 }
 
 // OpenDatabaseWithFreezer opens an existing database with the given name (or
@@ -645,7 +649,24 @@ func (n *Node) OpenDatabaseWithFreezer(name string, cache, handles int, freezer,
 	case !filepath.IsAbs(freezer):
 		freezer = n.ResolvePath(freezer)
 	}
-	return rawdb.NewLevelDBDatabaseWithFreezer(root, cache, handles, freezer, namespace)
+	db, err := rawdb.NewLevelDBDatabaseWithFreezer(root, cache, handles, freezer, namespace)
+	n.addDatabase(db)
+	return db, err
+}
+
+func (n *Node) addDatabase(db ethdb.Database) {
+	if db != nil {
+		n.databases = append(n.databases, db)
+	}
+}
+
+func (n *Node) closeDatabases() (errors []error) {
+	for _, db := range n.databases {
+		if err := db.Close(); err != nil {
+			errors = append(errors, err)
+		}
+	}
+	return errors
 }
 
 // ResolvePath returns the absolute path of a resource in the instance directory.
