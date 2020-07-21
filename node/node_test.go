@@ -45,20 +45,28 @@ func testNodeConfig() *Config {
 	}
 }
 
-// Tests that an empty protocol stack can be started and stopped.
-func TestNodeLifeCycle(t *testing.T) {
+// Tests that an empty protocol stack can be closed more than once.
+func TestNodeCloseMultipleTimes(t *testing.T) {
 	stack, err := New(testNodeConfig())
 	if err != nil {
 		t.Fatalf("failed to create protocol stack: %v", err)
 	}
-	defer stack.Close()
+	stack.Close()
 
 	// Ensure that a stopped node can be stopped again
 	for i := 0; i < 3; i++ {
-		if err := stack.Stop(); err != ErrNodeStopped {
+		if err := stack.Close(); err != ErrNodeStopped {
 			t.Fatalf("iter %d: stop failure mismatch: have %v, want %v", i, err, ErrNodeStopped)
 		}
 	}
+}
+
+func TestNodeStartMultipleTimes(t *testing.T) {
+	stack, err := New(testNodeConfig())
+	if err != nil {
+		t.Fatalf("failed to create protocol stack: %v", err)
+	}
+
 	// Ensure that a node can be successfully started, but only once
 	if err := stack.Start(); err != nil {
 		t.Fatalf("failed to start node: %v", err)
@@ -67,10 +75,10 @@ func TestNodeLifeCycle(t *testing.T) {
 		t.Fatalf("start failure mismatch: have %v, want %v ", err, ErrNodeRunning)
 	}
 	// Ensure that a node can be stopped, but only once
-	if err := stack.Stop(); err != nil {
+	if err := stack.Close(); err != nil {
 		t.Fatalf("failed to stop node: %v", err)
 	}
-	if err := stack.Stop(); err != ErrNodeStopped {
+	if err := stack.Close(); err != ErrNodeStopped {
 		t.Fatalf("stop failure mismatch: have %v, want %v ", err, ErrNodeStopped)
 	}
 }
@@ -90,11 +98,9 @@ func TestNodeUsedDataDir(t *testing.T) {
 		t.Fatalf("failed to create original protocol stack: %v", err)
 	}
 	defer original.Close()
-
 	if err := original.Start(); err != nil {
 		t.Fatalf("failed to start original protocol stack: %v", err)
 	}
-	defer original.Stop()
 
 	// Create a second node based on the same data directory and ensure failure
 	_, err = New(&Config{DataDir: dir})
@@ -212,7 +218,7 @@ func TestLifecycleLifeCycle(t *testing.T) {
 		}
 	}
 	// Stop the node and check that all services have been stopped
-	if err := stack.Stop(); err != nil {
+	if err := stack.Close(); err != nil {
 		t.Fatalf("failed to stop protocol stack: %v", err)
 	}
 	for id := range lifecycles {
@@ -224,7 +230,7 @@ func TestLifecycleLifeCycle(t *testing.T) {
 
 // Tests that if a Lifecycle fails to start, all others started before it will be
 // shut down.
-func TestLifecycleStartupAbortion(t *testing.T) {
+func TestLifecycleStartupError(t *testing.T) {
 	stack, err := New(testNodeConfig())
 	if err != nil {
 		t.Fatalf("failed to create protocol stack: %v", err)
@@ -266,17 +272,15 @@ func TestLifecycleStartupAbortion(t *testing.T) {
 	stack.RegisterLifecycle(failer)
 
 	// Start the protocol stack and ensure all started services stop
-	for i := 0; i < 100; i++ {
-		if err := stack.Start(); err != failure {
-			t.Fatalf("iter %d: stack startup failure mismatch: have %v, want %v", i, err, failure)
+	if err := stack.Start(); err != failure {
+		t.Fatalf("stack startup failure mismatch: have %v, want %v", err, failure)
+	}
+	for id := range lifecycles {
+		if started[id] && !stopped[id] {
+			t.Fatalf("service %s: started but not stopped", id)
 		}
-		for id := range lifecycles {
-			if started[id] && !stopped[id] {
-				t.Fatalf("service %s: started but not stopped", id)
-			}
-			delete(started, id)
-			delete(stopped, id)
-		}
+		delete(started, id)
+		delete(stopped, id)
 	}
 }
 
@@ -337,7 +341,7 @@ func TestLifecycleTerminationGuarantee(t *testing.T) {
 		}
 	}
 	// Stop the stack, verify failure and check all terminations
-	err = stack.Stop()
+	err = stack.Close()
 	if err, ok := err.(*StopError); !ok {
 		t.Fatalf("termination failure mismatch: have %v, want StopError", err)
 	} else {

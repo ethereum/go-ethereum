@@ -51,6 +51,7 @@ type Node struct {
 	stop              chan struct{}     // Channel to wait for termination notifications
 
 	lock          sync.RWMutex
+	runstate      int
 	server        *p2p.Server // Currently running P2P networking layer
 	lifecycles    []Lifecycle // All registered backends, services, and auxiliary services that have a lifecycle
 	httpServers   serverMap   // serverMap stores information about the node's rpc, ws, and graphQL http servers.
@@ -58,6 +59,12 @@ type Node struct {
 	rpcAPIs       []rpc.API   // List of APIs currently provided by the node
 	ipc           *httpServer // Stores information about the ipc http server
 }
+
+const (
+	initializingState = iota
+	runningState
+	stoppedState
+)
 
 // New creates a new P2P node, ready for protocol registration.
 func New(conf *Config) (*Node, error) {
@@ -170,11 +177,16 @@ func New(conf *Config) (*Node, error) {
 // Close stops the Node and releases resources acquired in
 // Node constructor New.
 func (n *Node) Close() error {
-	var errs []error
+	n.lock.Lock()
+	defer n.lock.Unlock()
 
-	if n.server != nil && n.running() {
-		// The node is in RUNNING state, stop lifecycles first.
-		if err := n.Stop(); err != nil && err != ErrNodeStopped {
+	var errs []error
+	switch n.runstate {
+	case stoppedState:
+		return ErrNodeStopped
+	case runningState:
+		// The node was started, release resources acquired by Start().
+		if err := n.stopServices(); err != nil {
 			errs = append(errs, err)
 		}
 	}
@@ -189,8 +201,12 @@ func (n *Node) Close() error {
 			errs = append(errs, err)
 		}
 	}
+	n.runstate = stoppedState
 
-	// Report any errors that might have occurred
+	// Unblock n.Wait.
+	close(n.stop)
+
+	// Report any errors that might have occurred.
 	switch len(errs) {
 	case 0:
 		return nil
@@ -273,19 +289,17 @@ func (n *Node) createHTTPServer(h *httpServer, exposeAll bool) error {
 	return nil
 }
 
-// running returns true if the node's p2p server is already running.
-func (n *Node) running() bool {
-	return n.server.Running()
-}
-
 // Start starts all registered lifecycles, RPC services and p2p networking.
 func (n *Node) Start() error {
 	n.lock.Lock()
 	defer n.lock.Unlock()
 
-	// Short circuit if the node's already running
-	if n.running() {
+	// Node can only be started when it
+	switch n.runstate {
+	case runningState:
 		return ErrNodeRunning
+	case stoppedState:
+		return ErrNodeStopped
 	}
 
 	// Start the p2p node
@@ -298,6 +312,7 @@ func (n *Node) Start() error {
 	if err := n.configureRPC(); err != nil {
 		n.httpServers.Stop()
 		n.server.Stop()
+		n.runstate = stoppedState
 		return err
 	}
 
@@ -307,10 +322,13 @@ func (n *Node) Start() error {
 		if err := lifecycle.Start(); err != nil {
 			stopLifecycles(started)
 			n.server.Stop()
+			n.runstate = stoppedState
 			return err
 		}
 		started = append(started, lifecycle)
 	}
+
+	n.runstate = runningState
 	return nil
 }
 
@@ -487,15 +505,11 @@ func (n *Node) stopServer(server *httpServer) {
 	delete(n.httpServers, server.endpoint)
 }
 
-// Stop terminates a running node along with all it's services. In the node was
-// not started, an error is returned.
-func (n *Node) Stop() error {
-	n.lock.Lock()
-	defer n.lock.Unlock()
-
-	// Short circuit if the node's not running
-	if n.server == nil || !n.running() {
-		return ErrNodeStopped
+// stopServices terminates running services, RPC and p2p networking.
+// It is the inverse of Start.
+func (n *Node) stopServices() error {
+	if n.runstate != runningState {
+		panic("call to stopServices on node that isn't running")
 	}
 
 	// Terminate the API, services and the p2p server.
@@ -503,12 +517,8 @@ func (n *Node) Stop() error {
 	n.rpcAPIs = nil
 	failure := new(StopError)
 	failure.Services = stopLifecycles(n.lifecycles)
-
 	n.server.Stop()
 	n.server = nil
-
-	// unblock n.Wait
-	close(n.stop)
 
 	if len(failure.Services) > 0 {
 		return failure
@@ -595,6 +605,8 @@ func (n *Node) EventMux() *event.TypeMux {
 // previous can be found) from within the node's instance directory. If the node is
 // ephemeral, a memory database is returned.
 func (n *Node) OpenDatabase(name string, cache, handles int, namespace string) (ethdb.Database, error) {
+	// TODO: track databases so they can be closed later.
+
 	if n.config.DataDir == "" {
 		return rawdb.NewMemoryDatabase(), nil
 	}

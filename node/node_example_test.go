@@ -50,7 +50,7 @@ func ExampleLifecycle() {
 	if err := stack.Start(); err != nil {
 		log.Fatalf("Failed to start the protocol stack: %v", err)
 	}
-	if err := stack.Stop(); err != nil {
+	if err := stack.Close(); err != nil {
 		log.Fatalf("Failed to stop the protocol stack: %v", err)
 	}
 	// Output:
