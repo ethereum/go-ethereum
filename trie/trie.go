@@ -48,15 +48,26 @@ type LeafCallback func(leaf []byte, parent common.Hash) error
 type Trie struct {
 	db   *Database
 	root node
-	// Keep track of the number leaves which have been inserted since the last
-	// hashing operation. This number will not directly map to the number of
-	// actually unhashed nodes
+
+	// unhashed keeps track of the number leaves which have been inserted since
+	// the last hashing operation. This number will not directly map to the number
+	// of actually unhashed nodes
 	unhashed int
+
+	// commitSeq is used to tag the commit order for each changed node.
+	// The uncommitted trie may be reused(e.g. for processing the next block).
+	// In this case, trie nodes will be tagged with different seq.
+	//
+	// The default seq is 0.
+	commitSeq int
 }
 
 // newFlag returns the cache flag value for a newly created node.
 func (t *Trie) newFlag() nodeFlag {
-	return nodeFlag{dirty: true}
+	return nodeFlag{
+		dirty: true,
+		seq:   t.commitSeq,
+	}
 }
 
 // New creates a trie with an existing root node from db.
@@ -80,6 +91,21 @@ func New(root common.Hash, db *Database) (*Trie, error) {
 		trie.root = rootnode
 	}
 	return trie, nil
+}
+
+// CopyTrie returns a copied trie which can be reused. If the original
+// trie is not committed yet, bump the commit sequence to isolate commit
+// target, otherwise just return the copy.
+//
+// Note the original trie should be hashed first.
+func CopyTrie(t *Trie) *Trie {
+	t.Hash()
+	cpy := *t
+	if _, dirty := t.root.cache(); !dirty {
+		return &cpy
+	}
+	cpy.commitSeq = t.commitSeq + 1
+	return &cpy
 }
 
 // NodeIterator returns an iterator that returns nodes of the trie. Iteration starts at
@@ -428,13 +454,17 @@ func (t *Trie) Commit(onleaf LeafCallback) (root common.Hash, err error) {
 	// Derive the hash for all dirty nodes first. We hold the assumption
 	// in the following procedure that all nodes are hashed.
 	rootHash := t.Hash()
-	h := newCommitter()
+
+	h := newCommitter(t.commitSeq)
 	defer returnCommitterToPool(h)
 
 	// Do a quick check if we really need to commit, before we spin
 	// up goroutines. This can happen e.g. if we load a trie for reading storage
 	// values, but don't write to it.
 	if _, dirty := t.root.cache(); !dirty {
+		return rootHash, nil
+	}
+	if t.commitSeq > t.root.commitSeq() {
 		return rootHash, nil
 	}
 	var wg sync.WaitGroup

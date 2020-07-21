@@ -48,8 +48,9 @@ type committer struct {
 	tmp sliceBuffer
 	sha crypto.KeccakState
 
-	onleaf LeafCallback
-	leafCh chan *leaf
+	onleaf    LeafCallback
+	leafCh    chan *leaf
+	commitSeq int
 }
 
 // committers live in a global sync.Pool
@@ -63,8 +64,10 @@ var committerPool = sync.Pool{
 }
 
 // newCommitter creates a new committer or picks one from the pool.
-func newCommitter() *committer {
-	return committerPool.Get().(*committer)
+func newCommitter(commitSeq int) *committer {
+	c := committerPool.Get().(*committer)
+	c.commitSeq = commitSeq
+	return c
 }
 
 func returnCommitterToPool(h *committer) {
@@ -89,7 +92,7 @@ func (c *committer) Commit(n node, db *Database) (hashNode, error) {
 func (c *committer) commit(n node, db *Database) (node, error) {
 	// if this path is clean, use available cached data
 	hash, dirty := n.cache()
-	if hash != nil && !dirty {
+	if hash != nil && (!dirty || c.commitSeq > n.commitSeq()) {
 		return hash, nil
 	}
 	// Commit children, then parent, and remove remove the dirty flag.

@@ -309,6 +309,49 @@ func TestReplication(t *testing.T) {
 	}
 }
 
+func TestCommitIsolation(t *testing.T) {
+	db := NewDatabase(memorydb.New())
+	trie, _ := New(common.Hash{}, db)
+	vals := []struct{ k, v string }{
+		{"key1", "verb"},
+		{"key2", "wookiedoo"},
+		{"key3", "stallion"},
+		{"key4", "horse"},
+		{"key5", "coin"},
+		{"key6", "puppy"},
+	}
+	for _, kv := range vals {
+		updateString(trie, kv.k, kv.v)
+	}
+	trie2 := CopyTrie(trie) // Copy before commit
+
+	root, _ := trie.Commit(nil)
+	committed := make(map[common.Hash]struct{})
+	db.Commit(root, false, func(hash common.Hash) {
+		committed[hash] = struct{}{}
+	})
+
+	vals2 := []struct{ k, v string }{
+		// Overwrite existent keys
+		{"key1", "verb2"},
+		{"key2", "wookiedoo2"},
+		{"key3", "stallion2"},
+		// Append new keys
+		{"key7", "horse"},
+		{"key8", "coin"},
+		{"key9", "puppy"},
+	}
+	for _, kv := range vals2 {
+		updateString(trie2, kv.k, kv.v)
+	}
+	root, _ = trie2.Commit(nil)
+	db.Commit(root, false, func(hash common.Hash) {
+		if _, ok := committed[hash]; ok {
+			t.Fatalf("Duplicated commit")
+		}
+	})
+}
+
 func TestLargeValue(t *testing.T) {
 	trie := newEmpty()
 	trie.Update([]byte("key1"), []byte{99, 99, 99, 99})
@@ -854,3 +897,4 @@ func TestDecodeNode(t *testing.T) {
 		decodeNode(hash, elems)
 	}
 }
+
