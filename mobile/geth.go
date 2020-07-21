@@ -203,6 +203,7 @@ func (n *Node) Close() error {
 
 // Start creates a live P2P node and starts running it.
 func (n *Node) Start() error {
+	// TODO: recreate the node so it can be started multiple times
 	return n.node.Start()
 }
 
