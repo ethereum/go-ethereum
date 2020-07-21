@@ -66,7 +66,7 @@ func returnHasherToPool(h *hasher) {
 // hash collapses a node down into a hash node, also returning a copy of the
 // original node initialized with the computed hash to replace the original one.
 func (h *hasher) hash(n node, force bool) (hashed node, cached node) {
-	// The hash is available, return the cached one.
+	// Return the cached hash if it's available
 	if hash, _ := n.cache(); hash != nil {
 		return hash, n
 	}
