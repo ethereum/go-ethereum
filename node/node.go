@@ -53,12 +53,14 @@ type Node struct {
 
 	lock          sync.Mutex
 	runstate      int
-	lifecycles    []Lifecycle      // All registered backends, services, and auxiliary services that have a lifecycle
-	httpServers   serverMap        // serverMap stores information about the node's rpc, ws, and graphQL http servers.
-	inprocHandler *rpc.Server      // In-process RPC request handler to process the API requests
-	rpcAPIs       []rpc.API        // List of APIs currently provided by the node
-	ipc           *httpServer      // Stores information about the ipc http server
-	databases     []ethdb.Database // all opened databases
+	lifecycles    []Lifecycle // All registered backends, services, and auxiliary services that have a lifecycle
+	httpServers   serverMap   // serverMap stores information about the node's rpc, ws, and graphQL http servers.
+	inprocHandler *rpc.Server // In-process RPC request handler to process the API requests
+	rpcAPIs       []rpc.API   // List of APIs currently provided by the node
+	ipc           *httpServer // Stores information about the ipc http server
+
+	dbLock    sync.Mutex
+	databases map[*closeTrackingDB]struct{} // all opened databases
 }
 
 const (
@@ -105,6 +107,7 @@ func New(conf *Config) (*Node, error) {
 		log:           conf.Logger,
 		stop:          make(chan struct{}),
 		server:        &p2p.Server{Config: conf.P2P},
+		databases:     make(map[*closeTrackingDB]struct{}),
 	}
 
 	// Acquire the instance directory lock.
@@ -623,7 +626,9 @@ func (n *Node) OpenDatabase(name string, cache, handles int, namespace string) (
 		return rawdb.NewMemoryDatabase(), nil
 	}
 	db, err := rawdb.NewLevelDBDatabase(n.ResolvePath(name), cache, handles, namespace)
-	n.addDatabase(db)
+	if err == nil {
+		db = n.wrapDatabase(db)
+	}
 	return db, err
 }
 
@@ -650,23 +655,10 @@ func (n *Node) OpenDatabaseWithFreezer(name string, cache, handles int, freezer,
 		freezer = n.ResolvePath(freezer)
 	}
 	db, err := rawdb.NewLevelDBDatabaseWithFreezer(root, cache, handles, freezer, namespace)
-	n.addDatabase(db)
+	if err == nil {
+		db = n.wrapDatabase(db)
+	}
 	return db, err
-}
-
-func (n *Node) addDatabase(db ethdb.Database) {
-	if db != nil {
-		n.databases = append(n.databases, db)
-	}
-}
-
-func (n *Node) closeDatabases() (errors []error) {
-	for _, db := range n.databases {
-		if err := db.Close(); err != nil {
-			errors = append(errors, err)
-		}
-	}
-	return errors
 }
 
 // ResolvePath returns the absolute path of a resource in the instance directory.
@@ -697,6 +689,45 @@ func (n *Node) apis() []rpc.API {
 			Public:    true,
 		},
 	}
+}
+
+// closeTrackingDB wraps the Close method of a database. When the database is closed by the
+// service, the wrapper removes it from the node's database map. This ensures that Node
+// won't auto-close the database if it is closed by the service that opened it.
+type closeTrackingDB struct {
+	ethdb.Database
+	n *Node
+}
+
+func (db *closeTrackingDB) Close() error {
+	db.n.dbLock.Lock()
+	delete(db.n.databases, db)
+	db.n.dbLock.Unlock()
+	return db.Database.Close()
+}
+
+// wrapDatabase ensures the database will be auto-closed when Node is closed.
+func (n *Node) wrapDatabase(db ethdb.Database) ethdb.Database {
+	n.dbLock.Lock()
+	defer n.dbLock.Unlock()
+
+	wrapper := &closeTrackingDB{db, n}
+	n.databases[wrapper] = struct{}{}
+	return wrapper
+}
+
+// closeDatabases closes all open databases.
+func (n *Node) closeDatabases() (errors []error) {
+	n.dbLock.Lock()
+	defer n.dbLock.Unlock()
+
+	for db := range n.databases {
+		delete(n.databases, db)
+		if err := db.Database.Close(); err != nil {
+			errors = append(errors, err)
+		}
+	}
+	return errors
 }
 
 // RegisterApisFromWhitelist checks the given modules' availability, generates a whitelist based on the allowed modules,
