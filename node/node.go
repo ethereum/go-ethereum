@@ -79,6 +79,7 @@ func New(conf *Config) (*Node, error) {
 		}
 		conf.DataDir = absdatadir
 	}
+
 	// Ensure that the instance name doesn't cause weird conflicts with
 	// other files in the data directory.
 	if strings.ContainsAny(conf.Name, `/\`) {
@@ -90,10 +91,10 @@ func New(conf *Config) (*Node, error) {
 	if strings.HasSuffix(conf.Name, ".ipc") {
 		return nil, errors.New(`Config.Name cannot end in ".ipc"`)
 	}
+
 	if conf.Logger == nil {
 		conf.Logger = log.New()
 	}
-
 	node := &Node{
 		config:      conf,
 		httpServers: make(serverMap),
@@ -104,14 +105,15 @@ func New(conf *Config) (*Node, error) {
 		eventmux:      new(event.TypeMux),
 		log:           conf.Logger,
 		stop:          make(chan struct{}),
+		server:        &p2p.Server{Config: conf.P2P},
 	}
 
 	// Acquire the instance directory lock.
 	if err := node.openDataDir(); err != nil {
 		return nil, err
 	}
-	// Ensure that the AccountManager method works before the node has started.
-	// We rely on this in cmd/geth.
+	// Ensure that the AccountManager method works before the node has started. We rely on
+	// this in cmd/geth.
 	am, ephemeralKeystore, err := makeAccountManager(conf)
 	if err != nil {
 		return nil, err
@@ -119,9 +121,7 @@ func New(conf *Config) (*Node, error) {
 	node.accman = am
 	node.ephemeralKeystore = ephemeralKeystore
 
-	// Initialize the p2p server. This creates the node key and
-	// discovery databases.
-	node.server = &p2p.Server{Config: conf.P2P}
+	// Initialize the p2p server. This creates the node key and discovery databases.
 	node.server.Config.PrivateKey = node.config.NodeKey()
 	node.server.Config.Name = node.config.NodeName()
 	node.server.Config.Logger = node.log
@@ -135,7 +135,7 @@ func New(conf *Config) (*Node, error) {
 		node.server.Config.NodeDatabase = node.config.NodeDB()
 	}
 
-	// Configure HTTP server(s)
+	// Configure HTTP servers.
 	if conf.HTTPHost != "" {
 		httpServ := &httpServer{
 			CorsAllowedOrigins: conf.HTTPCors,
@@ -148,7 +148,7 @@ func New(conf *Config) (*Node, error) {
 			port:               conf.HTTPPort,
 			RPCAllowed:         1,
 		}
-		// check if ws is enabled and if ws port is the same as http port
+		// Enable WebSocket on HTTP port if enabled.
 		if conf.WSHost != "" && conf.WSPort == conf.HTTPPort {
 			httpServ.WSAllowed = 1
 			httpServ.WsOrigins = conf.WSOrigins
