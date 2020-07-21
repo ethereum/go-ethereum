@@ -51,7 +51,7 @@ type Node struct {
 	stop              chan struct{}     // Channel to wait for termination notifications
 	server            *p2p.Server       // Currently running P2P networking layer
 
-	lock          sync.RWMutex
+	lock          sync.Mutex
 	runstate      int
 	lifecycles    []Lifecycle // All registered backends, services, and auxiliary services that have a lifecycle
 	httpServers   serverMap   // serverMap stores information about the node's rpc, ws, and graphQL http servers.
@@ -549,8 +549,8 @@ func (n *Node) Attach() (*rpc.Client, error) {
 
 // RPCHandler returns the in-process RPC request handler.
 func (n *Node) RPCHandler() (*rpc.Server, error) {
-	n.lock.RLock()
-	defer n.lock.RUnlock()
+	n.lock.Lock()
+	defer n.lock.Unlock()
 
 	if n.runstate == stoppedState {
 		return nil, ErrNodeStopped
