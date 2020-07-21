@@ -262,7 +262,7 @@ func (n *Node) running() bool {
 	return n.server.Running()
 }
 
-// Start creates a live P2P node and starts running it.
+// Start starts all registered lifecycles, RPC services and p2p networking.
 func (n *Node) Start() error {
 	n.lock.Lock()
 	defer n.lock.Unlock()
