@@ -48,15 +48,15 @@ type Node struct {
 	log               log.Logger
 	ephemeralKeystore string            // if non-empty, the key directory that will be removed by Stop
 	instanceDirLock   fileutil.Releaser // prevents concurrent use of instance directory
+	stop              chan struct{}     // Channel to wait for termination notifications
 
 	lock          sync.RWMutex
-	stop          chan struct{} // Channel to wait for termination notifications
-	server        *p2p.Server   // Currently running P2P networking layer
-	lifecycles    []Lifecycle   // All registered backends, services, and auxiliary services that have a lifecycle
-	httpServers   serverMap     // serverMap stores information about the node's rpc, ws, and graphQL http servers.
-	inprocHandler *rpc.Server   // In-process RPC request handler to process the API requests
-	rpcAPIs       []rpc.API     // List of APIs currently provided by the node
-	ipc           *httpServer   // Stores information about the ipc http server
+	server        *p2p.Server // Currently running P2P networking layer
+	lifecycles    []Lifecycle // All registered backends, services, and auxiliary services that have a lifecycle
+	httpServers   serverMap   // serverMap stores information about the node's rpc, ws, and graphQL http servers.
+	inprocHandler *rpc.Server // In-process RPC request handler to process the API requests
+	rpcAPIs       []rpc.API   // List of APIs currently provided by the node
+	ipc           *httpServer // Stores information about the ipc http server
 }
 
 // New creates a new P2P node, ready for protocol registration.
@@ -96,6 +96,7 @@ func New(conf *Config) (*Node, error) {
 		inprocHandler: rpc.NewServer(),
 		eventmux:      new(event.TypeMux),
 		log:           conf.Logger,
+		stop:          make(chan struct{}),
 	}
 
 	// Acquire the instance directory lock.
@@ -310,9 +311,6 @@ func (n *Node) Start() error {
 		}
 		started = append(started, lifecycle)
 	}
-
-	// Finish initializing the startup
-	n.stop = make(chan struct{})
 	return nil
 }
 
@@ -518,18 +516,9 @@ func (n *Node) Stop() error {
 	return nil
 }
 
-// Wait blocks the thread until the node is stopped. If the node is not running
-// at the time of invocation, the method immediately returns.
+// Wait blocks until the node is stopped.
 func (n *Node) Wait() {
-	n.lock.RLock()
-	if n.server == nil {
-		n.lock.RUnlock()
-		return
-	}
-	stop := n.stop
-	n.lock.RUnlock()
-
-	<-stop
+	<-n.stop
 }
 
 // Attach creates an RPC client attached to an in-process API handler.
