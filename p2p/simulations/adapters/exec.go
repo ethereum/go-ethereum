@@ -434,8 +434,8 @@ func startExecNodeStack() (*node.Node, error) {
 		return nil, fmt.Errorf("error creating node stack: %v", err)
 	}
 
-	// register the services, collecting them into a map so we can wrap
-	// them in a snapshot service
+	// Register the services, collecting them into a map so they can
+	// be accessed by the snapshot API.
 	services := make(map[string]node.Lifecycle, len(serviceNames))
 	for _, name := range serviceNames {
 		lifecycleFunc, exists := lifecycleConstructorFuncs[name]
@@ -457,10 +457,13 @@ func startExecNodeStack() (*node.Node, error) {
 		stack.RegisterLifecycle(service)
 	}
 
-	// register the snapshot service
-	stack.RegisterLifecycle(&snapshotService{services})
+	// Add the snapshot API.
+	stack.RegisterAPIs([]rpc.API{{
+		Namespace: "simulation",
+		Version:   "1.0",
+		Service:   SnapshotAPI{services},
+	}})
 
-	// start the stack
 	if err = stack.Start(); err != nil {
 		err = fmt.Errorf("error starting stack: %v", err)
 	}
@@ -477,32 +480,6 @@ type nodeStartupJSON struct {
 	Err        string
 	WSEndpoint string
 	NodeInfo   *p2p.NodeInfo
-}
-
-// snapshotService is a node.Service which wraps a list of services and
-// exposes an API to generate a snapshot of those services
-type snapshotService struct {
-	services map[string]node.Lifecycle
-}
-
-func (s *snapshotService) APIs() []rpc.API {
-	return []rpc.API{{
-		Namespace: "simulation",
-		Version:   "1.0",
-		Service:   SnapshotAPI{s.services},
-	}}
-}
-
-func (s *snapshotService) Protocols() []p2p.Protocol {
-	return nil
-}
-
-func (s *snapshotService) Start() error {
-	return nil
-}
-
-func (s *snapshotService) Stop() error {
-	return nil
 }
 
 // SnapshotAPI provides an RPC method to create snapshots of services
