@@ -573,7 +573,7 @@ func ipcTestClient(srv *Server, fl *flakeyListener) (*Client, net.Listener) {
 	} else {
 		endpoint = os.TempDir() + "/" + endpoint
 	}
-	l, err := ipcListen(endpoint)
+	l, err := ipcListen(endpoint, 0600)
 	if err != nil {
 		panic(err)
 	}

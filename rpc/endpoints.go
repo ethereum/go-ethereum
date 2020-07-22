@@ -18,12 +18,13 @@ package rpc
 
 import (
 	"net"
+	"os"
 
 	"github.com/ethereum/go-ethereum/log"
 )
 
 // StartIPCEndpoint starts an IPC endpoint.
-func StartIPCEndpoint(ipcEndpoint string, apis []API) (net.Listener, *Server, error) {
+func StartIPCEndpoint(ipcEndpoint string, ipcMode os.FileMode, apis []API) (net.Listener, *Server, error) {
 	// Register all the APIs exposed by the services.
 	handler := NewServer()
 	for _, api := range apis {
@@ -33,7 +34,7 @@ func StartIPCEndpoint(ipcEndpoint string, apis []API) (net.Listener, *Server, er
 		log.Debug("IPC registered", "namespace", api.Namespace)
 	}
 	// All APIs registered, start the IPC listener.
-	listener, err := ipcListen(ipcEndpoint)
+	listener, err := ipcListen(ipcEndpoint, ipcMode)
 	if err != nil {
 		return nil, nil, err
 	}

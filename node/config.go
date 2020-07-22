@@ -104,6 +104,9 @@ type Config struct {
 	// relative), then that specific path is enforced. An empty path disables IPC.
 	IPCPath string
 
+	// IPCMode is the octal file permissions for the IPC endpoint. Default is 0600.
+	IPCMode os.FileMode
+
 	// HTTPHost is the host interface on which to start the HTTP RPC server. If this
 	// field is empty, no HTTP API endpoint will be started.
 	HTTPHost string
@@ -216,6 +219,14 @@ func (c *Config) IPCEndpoint() string {
 		return filepath.Join(c.DataDir, c.IPCPath)
 	}
 	return c.IPCPath
+}
+
+// IPCChmod returns the configuration ipc file mode or default 0600 (-rw-------).
+func (c *Config) IPCChmod() os.FileMode {
+	if c.IPCMode == 0 {
+		return os.FileMode(0600)
+	}
+	return c.IPCMode
 }
 
 // NodeDB returns the path to the discovery node database.

@@ -58,6 +58,7 @@ type Node struct {
 	inprocHandler *rpc.Server // In-process RPC request handler to process the API requests
 
 	ipcEndpoint string       // IPC endpoint to listen at (empty = IPC disabled)
+	ipcMode     os.FileMode  // IPC octal permissions
 	ipcListener net.Listener // IPC RPC listener socket to serve API requests
 	ipcHandler  *rpc.Server  // IPC RPC request handler to process the API requests
 
@@ -119,6 +120,7 @@ func New(conf *Config) (*Node, error) {
 		config:            conf,
 		serviceFuncs:      []ServiceConstructor{},
 		ipcEndpoint:       conf.IPCEndpoint(),
+		ipcMode:           conf.IPCChmod(),
 		httpEndpoint:      conf.HTTPEndpoint(),
 		wsEndpoint:        conf.WSEndpoint(),
 		eventmux:          new(event.TypeMux),
@@ -342,13 +344,13 @@ func (n *Node) startIPC(apis []rpc.API) error {
 	if n.ipcEndpoint == "" {
 		return nil // IPC disabled.
 	}
-	listener, handler, err := rpc.StartIPCEndpoint(n.ipcEndpoint, apis)
+	listener, handler, err := rpc.StartIPCEndpoint(n.ipcEndpoint, n.ipcMode, apis)
 	if err != nil {
 		return err
 	}
 	n.ipcListener = listener
 	n.ipcHandler = handler
-	n.log.Info("IPC endpoint opened", "url", n.ipcEndpoint)
+	n.log.Info("IPC endpoint opened", "url", n.ipcEndpoint, "mode", n.ipcMode.String())
 	return nil
 }
 

@@ -33,6 +33,7 @@ import (
 	"path/filepath"
 	"runtime"
 	"sort"
+	"strconv"
 	"strings"
 	"time"
 
@@ -239,6 +240,7 @@ var AppHelpFlagGroups = []flags.FlagGroup{
 			utils.HTTPVirtualHostsFlag,
 			utils.IPCDisabledFlag,
 			utils.IPCPathFlag,
+			utils.IPCChmodFlag,
 			utils.HTTPEnabledFlag,
 			rpcPortFlag,
 			signerSecretFlag,
@@ -703,7 +705,12 @@ func signer(c *cli.Context) error {
 	if !c.GlobalBool(utils.IPCDisabledFlag.Name) {
 		givenPath := c.GlobalString(utils.IPCPathFlag.Name)
 		ipcapiURL = ipcEndpoint(filepath.Join(givenPath, "clef.ipc"), configDir)
-		listener, _, err := rpc.StartIPCEndpoint(ipcapiURL, rpcAPI)
+		givenMode := c.GlobalString(utils.IPCChmodFlag.Name)
+		parsedMode, err := strconv.ParseUint(givenMode, 8, 32)
+		if err != nil {
+			utils.Fatalf("Could not parse IPC file mode: %v", err)
+		}
+		listener, _, err := rpc.StartIPCEndpoint(ipcapiURL, os.FileMode(parsedMode), rpcAPI)
 		if err != nil {
 			utils.Fatalf("Could not start IPC api: %v", err)
 		}

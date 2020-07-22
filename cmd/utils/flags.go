@@ -478,6 +478,11 @@ var (
 		Name:  "ipcpath",
 		Usage: "Filename for IPC socket/pipe within the datadir (explicit paths escape it)",
 	}
+	IPCChmodFlag = cli.StringFlag{
+		Name:  "ipc.chmod",
+		Usage: "Specify octal value for ipc socket permissions",
+		Value: "0600",
+	}
 	HTTPEnabledFlag = cli.BoolFlag{
 		Name:  "http",
 		Usage: "Enable the HTTP-RPC server",
@@ -998,12 +1003,18 @@ func setWS(ctx *cli.Context, cfg *node.Config) {
 // returning an empty string if IPC was explicitly disabled, or the set path.
 func setIPC(ctx *cli.Context, cfg *node.Config) {
 	CheckExclusive(ctx, IPCDisabledFlag, IPCPathFlag)
+	CheckExclusive(ctx, IPCDisabledFlag, IPCChmodFlag)
 	switch {
 	case ctx.GlobalBool(IPCDisabledFlag.Name):
 		cfg.IPCPath = ""
 	case ctx.GlobalIsSet(IPCPathFlag.Name):
 		cfg.IPCPath = ctx.GlobalString(IPCPathFlag.Name)
 	}
+	mode, err := strconv.ParseUint(ctx.GlobalString(IPCChmodFlag.Name), 8, 32)
+	if err != nil {
+		Fatalf("Could not parse IPC mode: %v", err)
+	}
+	cfg.IPCMode = os.FileMode(mode)
 }
 
 // setLes configures the les server and ultra light client settings from the command line flags.
