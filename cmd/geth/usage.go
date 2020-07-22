@@ -103,9 +103,6 @@ var AppHelpFlagGroups = []flagGroup{
 		Flags: []cli.Flag{
 			utils.DeveloperFlag,
 			utils.DeveloperPeriodFlag,
-			utils.KeyStoreDirFlag,
-			utils.PasswordFileFlag,
-			utils.MinerEtherbaseFlag,
 		},
 	},
 	{
