@@ -178,6 +178,51 @@ func New(conf *Config) (*Node, error) {
 	return node, nil
 }
 
+// Start starts all registered lifecycles, RPC services and p2p networking.
+// Node can only be started once.
+func (n *Node) Start() error {
+	n.lock.Lock()
+	defer n.lock.Unlock()
+
+	switch n.runstate {
+	case runningState, startingState:
+		return ErrNodeRunning
+	case closedState, closedWhileStartingState:
+		return ErrNodeStopped
+	}
+	if n.runstate != initializingState {
+		panic(fmt.Sprintf("BUG: node is in unexpected state %d", n.runstate))
+	}
+	if err := n.startNetworking(); err != nil {
+		n.doClose(nil)
+		return err
+	}
+	n.runstate = startingState
+
+	// Start all registered lifecycles. The node lock mustn't
+	// be held here because the Start methods of lifecycle objects
+	// might want to access resources on the node.
+	n.lock.Unlock()
+	var started []Lifecycle
+	var startErr error
+	for _, lifecycle := range n.lifecycles {
+		if startErr = lifecycle.Start(); startErr != nil {
+			break
+		}
+		started = append(started, lifecycle)
+	}
+	n.lock.Lock()
+
+	// Check if any lifecycle failed to start or the node was closed while starting.
+	if startErr != nil || n.runstate == closedWhileStartingState {
+		stopLifecycles(started)
+		n.doClose(nil)
+	} else {
+		n.runstate = runningState
+	}
+	return startErr
+}
+
 // Close stops the Node and releases resources acquired in
 // Node constructor New.
 func (n *Node) Close() error {
@@ -329,51 +374,6 @@ func (n *Node) createHTTPServer(h *httpServer, exposeAll bool) error {
 	h.Server = httpSrv
 
 	return nil
-}
-
-// Start starts all registered lifecycles, RPC services and p2p networking.
-// Node can only be started once.
-func (n *Node) Start() error {
-	n.lock.Lock()
-	defer n.lock.Unlock()
-
-	switch n.runstate {
-	case runningState, startingState:
-		return ErrNodeRunning
-	case closedState, closedWhileStartingState:
-		return ErrNodeStopped
-	}
-	if n.runstate != initializingState {
-		panic(fmt.Sprintf("BUG: node is in unexpected state %d", n.runstate))
-	}
-	if err := n.startNetworking(); err != nil {
-		n.runstate = closedState
-		return err
-	}
-	n.runstate = startingState
-
-	// Start all registered lifecycles. The node lock mustn't
-	// be held here because the Start methods of lifecycle objects
-	// might want to access resources on the node.
-	n.lock.Unlock()
-	var started []Lifecycle
-	var startErr error
-	for _, lifecycle := range n.lifecycles {
-		if startErr = lifecycle.Start(); startErr != nil {
-			break
-		}
-		started = append(started, lifecycle)
-	}
-	n.lock.Lock()
-
-	// Check if any lifecycle failed to start or the node was closed while starting.
-	if startErr != nil || n.runstate == closedWhileStartingState {
-		stopLifecycles(started)
-		n.doClose(nil)
-	} else {
-		n.runstate = runningState
-	}
-	return startErr
 }
 
 // startNetworking starts all network endpoints.
