@@ -65,8 +65,10 @@ type Node struct {
 
 const (
 	initializingState = iota
+	startingState
+	closedWhileStartingState
 	runningState
-	stoppedState
+	closedState
 )
 
 // New creates a new P2P node, ready for protocol registration.
@@ -180,20 +182,45 @@ func New(conf *Config) (*Node, error) {
 // Node constructor New.
 func (n *Node) Close() error {
 	n.lock.Lock()
-	defer n.lock.Unlock()
 
-	var errs []error
 	switch n.runstate {
-	case stoppedState:
-		return ErrNodeStopped
+	case initializingState:
+		// The node was never started.
+		defer n.lock.Unlock()
+		return n.doClose(nil)
+	case startingState:
+		// The node is currently starting lifecycles. Signal that
+		// Close was called through runstate to make Start stop
+		// everything when it re-acquires the lock.
+		n.runstate = closedWhileStartingState
+		n.lock.Unlock()
+		n.Wait()
+		return nil
+	case closedWhileStartingState:
+		// This branch handles double-close during startup.
+		n.lock.Unlock()
+		n.Wait()
+		return nil
 	case runningState:
 		// The node was started, release resources acquired by Start().
+		defer n.lock.Unlock()
+		var errs []error
 		if err := n.stopServices(); err != nil {
 			errs = append(errs, err)
 		}
+		return n.doClose(errs)
+	case closedState:
+		// Shutdown is already over.
+		n.lock.Unlock()
+		return ErrNodeStopped
+	default:
+		defer n.lock.Unlock()
+		panic(fmt.Sprintf("BUG: node is in unexpected state %d", n.runstate))
 	}
+}
 
-	// Release resources acquired by New().
+// doClose releases resources acquired by New() and collects shutdown errors.
+func (n *Node) doClose(errs []error) error {
 	if err := n.accman.Close(); err != nil {
 		errs = append(errs, err)
 	}
@@ -204,7 +231,7 @@ func (n *Node) Close() error {
 	}
 	errs = append(errs, n.closeDatabases()...)
 	n.closeDataDir()
-	n.runstate = stoppedState
+	n.runstate = closedState
 
 	// Unblock n.Wait.
 	close(n.stop)
@@ -305,46 +332,62 @@ func (n *Node) createHTTPServer(h *httpServer, exposeAll bool) error {
 }
 
 // Start starts all registered lifecycles, RPC services and p2p networking.
+// Node can only be started once.
 func (n *Node) Start() error {
 	n.lock.Lock()
 	defer n.lock.Unlock()
 
-	// Node can only be started when it
 	switch n.runstate {
-	case runningState:
+	case runningState, startingState:
 		return ErrNodeRunning
-	case stoppedState:
+	case closedState, closedWhileStartingState:
 		return ErrNodeStopped
 	}
-
-	// Start the p2p node
-	if err := n.server.Start(); err != nil {
-		return convertFileLockError(err)
+	if n.runstate != initializingState {
+		panic(fmt.Sprintf("BUG: node is in unexpected state %d", n.runstate))
 	}
-	n.log.Info("Starting peer-to-peer node", "instance", n.server.Name)
-
-	// Configure the RPC interfaces
-	if err := n.configureRPC(); err != nil {
-		n.httpServers.Stop()
-		n.server.Stop()
-		n.runstate = stoppedState
+	if err := n.startNetworking(); err != nil {
+		n.runstate = closedState
 		return err
 	}
+	n.runstate = startingState
 
-	// Start all registered lifecycles
+	// Start all registered lifecycles. The node lock mustn't
+	// be held here because the Start methods of lifecycle objects
+	// might want to access resources on the node.
+	n.lock.Unlock()
 	var started []Lifecycle
+	var startErr error
 	for _, lifecycle := range n.lifecycles {
-		if err := lifecycle.Start(); err != nil {
-			stopLifecycles(started)
-			n.server.Stop()
-			n.runstate = stoppedState
-			return err
+		if startErr = lifecycle.Start(); startErr != nil {
+			break
 		}
 		started = append(started, lifecycle)
 	}
+	n.lock.Lock()
 
-	n.runstate = runningState
-	return nil
+	// Check if any lifecycle failed to start or the node was closed while starting.
+	if startErr != nil || n.runstate == closedWhileStartingState {
+		stopLifecycles(started)
+		n.doClose(nil)
+	} else {
+		n.runstate = runningState
+	}
+	return startErr
+}
+
+// startNetworking starts all network endpoints.
+func (n *Node) startNetworking() error {
+	n.log.Info("Starting peer-to-peer node", "instance", n.server.Name)
+	if err := n.server.Start(); err != nil {
+		return convertFileLockError(err)
+	}
+	err := n.configureRPC()
+	if err != nil {
+		n.httpServers.Stop()
+		n.server.Stop()
+	}
+	return err
 }
 
 // containsLifecycle checks if 'lfs' contains 'l'.
@@ -495,7 +538,6 @@ func (n *Node) stopIPC() {
 	if n.ipc.Listener != nil {
 		n.ipc.Listener.Close()
 		n.ipc.Listener = nil
-
 		n.log.Info("IPC endpoint closed", "url", n.ipc.endpoint)
 	}
 	if n.ipc.Srv != nil {
@@ -555,7 +597,7 @@ func (n *Node) RPCHandler() (*rpc.Server, error) {
 	n.lock.Lock()
 	defer n.lock.Unlock()
 
-	if n.runstate == stoppedState {
+	if n.runstate == closedState {
 		return nil, ErrNodeStopped
 	}
 	return n.inprocHandler, nil
@@ -619,7 +661,7 @@ func (n *Node) OpenDatabase(name string, cache, handles int, namespace string) (
 	n.lock.Lock()
 	defer n.lock.Unlock()
 
-	if n.runstate == stoppedState {
+	if n.runstate == closedState {
 		return nil, ErrNodeStopped
 	}
 
@@ -646,7 +688,7 @@ func (n *Node) OpenDatabaseWithFreezer(name string, cache, handles int, freezer,
 	n.lock.Lock()
 	defer n.lock.Unlock()
 
-	if n.runstate == stoppedState {
+	if n.runstate == closedState {
 		return nil, ErrNodeStopped
 	}
 

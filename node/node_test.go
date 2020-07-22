@@ -28,6 +28,7 @@ import (
 	"testing"
 
 	"github.com/ethereum/go-ethereum/crypto"
+	"github.com/ethereum/go-ethereum/ethdb"
 	"github.com/ethereum/go-ethereum/p2p"
 	"github.com/ethereum/go-ethereum/rpc"
 
@@ -152,7 +153,7 @@ func TestRegisterProtocols(t *testing.T) {
 }
 
 // This test checks that open databases are closed with node.
-func TestCloseNodeClosesDB(t *testing.T) {
+func TestNodeCloseClosesDB(t *testing.T) {
 	stack, _ := New(testNodeConfig())
 	defer stack.Close()
 
@@ -161,13 +162,36 @@ func TestCloseNodeClosesDB(t *testing.T) {
 		t.Fatal("can't open DB:", err)
 	}
 	if err = db.Put([]byte{}, []byte{}); err != nil {
-		t.Fatal("can't put on open DB:", err)
+		t.Fatal("can't Put on open DB:", err)
 	}
 
 	stack.Close()
 	if err = db.Put([]byte{}, []byte{}); err == nil {
-		t.Fatal("put succeeded after node is closed")
+		t.Fatal("Put succeeded after node is closed")
 	}
+}
+
+// This test checks that OpenDatabase can be used from within a Lifecycle Start method.
+func TestNodeOpenDatabaseFromLifecycle(t *testing.T) {
+	stack, _ := New(testNodeConfig())
+	defer stack.Close()
+
+	var db ethdb.Database
+	var err error
+	stack.RegisterLifecycle(&InstrumentedService{
+		startHook: func() {
+			db, err = stack.OpenDatabase("mydb", 0, 0, "")
+			if err != nil {
+				t.Fatal("can't open DB:", err)
+			}
+		},
+		stopHook: func() {
+			db.Close()
+		},
+	})
+
+	stack.Start()
+	stack.Close()
 }
 
 // Tests that registered Lifecycles get started and stopped correctly.
