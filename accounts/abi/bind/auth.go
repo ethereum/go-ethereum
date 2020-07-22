@@ -21,6 +21,7 @@ import (
 	"errors"
 	"io"
 	"io/ioutil"
+	"math/big"
 
 	"github.com/ethereum/go-ethereum/accounts"
 	"github.com/ethereum/go-ethereum/accounts/external"
@@ -32,7 +33,7 @@ import (
 
 // NewTransactor is a utility method to easily create a transaction signer from
 // an encrypted json key stream and the associated passphrase.
-func NewTransactor(keyin io.Reader, passphrase string) (*TransactOpts, error) {
+func NewTransactor(keyin io.Reader, passphrase string, signer types.Signer) (*TransactOpts, error) {
 	json, err := ioutil.ReadAll(keyin)
 	if err != nil {
 		return nil, err
@@ -41,15 +42,19 @@ func NewTransactor(keyin io.Reader, passphrase string) (*TransactOpts, error) {
 	if err != nil {
 		return nil, err
 	}
-	return NewKeyedTransactor(key.PrivateKey), nil
+	return NewKeyedTransactor(key.PrivateKey, signer), nil
 }
 
 // NewKeyStoreTransactor is a utility method to easily create a transaction signer from
-// a decrypted key from a keystore.
-func NewKeyStoreTransactor(keystore *keystore.KeyStore, account accounts.Account) (*TransactOpts, error) {
+// an decrypted key from a keystore.
+func NewKeyStoreTransactor(keystore *keystore.KeyStore, account accounts.Account, signer types.Signer) (*TransactOpts, error) {
+	if signer == nil {
+		// If no signer is explicitly passed, sign for mainnet
+		signer = types.NewEIP155Signer(big.NewInt(1))
+	}
 	return &TransactOpts{
 		From: account.Address,
-		Signer: func(signer types.Signer, address common.Address, tx *types.Transaction) (*types.Transaction, error) {
+		Signer: func(address common.Address, tx *types.Transaction) (*types.Transaction, error) {
 			if address != account.Address {
 				return nil, errors.New("not authorized to sign this account")
 			}
@@ -64,11 +69,15 @@ func NewKeyStoreTransactor(keystore *keystore.KeyStore, account accounts.Account
 
 // NewKeyedTransactor is a utility method to easily create a transaction signer
 // from a single private key.
-func NewKeyedTransactor(key *ecdsa.PrivateKey) *TransactOpts {
+func NewKeyedTransactor(key *ecdsa.PrivateKey, signer types.Signer) *TransactOpts {
 	keyAddr := crypto.PubkeyToAddress(key.PublicKey)
+	if signer == nil {
+		// If no signer is explicitly passed, sign for mainnet
+		signer = types.NewEIP155Signer(big.NewInt(1))
+	}
 	return &TransactOpts{
 		From: keyAddr,
-		Signer: func(signer types.Signer, address common.Address, tx *types.Transaction) (*types.Transaction, error) {
+		Signer: func(address common.Address, tx *types.Transaction) (*types.Transaction, error) {
 			if address != keyAddr {
 				return nil, errors.New("not authorized to sign this account")
 			}
@@ -86,7 +95,7 @@ func NewKeyedTransactor(key *ecdsa.PrivateKey) *TransactOpts {
 func NewClefTransactor(clef *external.ExternalSigner, account accounts.Account) *TransactOpts {
 	return &TransactOpts{
 		From: account.Address,
-		Signer: func(signer types.Signer, address common.Address, transaction *types.Transaction) (*types.Transaction, error) {
+		Signer: func(address common.Address, transaction *types.Transaction) (*types.Transaction, error) {
 			if address != account.Address {
 				return nil, errors.New("not authorized to sign this account")
 			}
