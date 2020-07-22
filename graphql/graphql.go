@@ -584,7 +584,7 @@ func (b *Block) TotalDifficulty(ctx context.Context) (hexutil.Big, error) {
 		}
 		h = header.Hash()
 	}
-	return hexutil.Big(*b.backend.GetTd(h)), nil
+	return hexutil.Big(*b.backend.GetTd(ctx, h)), nil
 }
 
 // BlockNumberArgs encapsulates arguments to accessors that specify a block number.
@@ -811,8 +811,9 @@ func (b *Block) Call(ctx context.Context, args struct {
 	if result.Failed() {
 		status = 0
 	}
+
 	return &CallResult{
-		data:    result.Return(),
+		data:    result.ReturnData,
 		gasUsed: hexutil.Uint64(result.UsedGas),
 		status:  status,
 	}, nil
@@ -880,8 +881,9 @@ func (p *Pending) Call(ctx context.Context, args struct {
 	if result.Failed() {
 		status = 0
 	}
+
 	return &CallResult{
-		data:    result.Return(),
+		data:    result.ReturnData,
 		gasUsed: hexutil.Uint64(result.UsedGas),
 		status:  status,
 	}, nil

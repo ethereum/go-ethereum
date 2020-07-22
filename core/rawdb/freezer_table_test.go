@@ -552,8 +552,8 @@ func TestOffset(t *testing.T) {
 		tailId := uint32(2)     // First file is 2
 		itemOffset := uint32(4) // We have removed four items
 		zeroIndex := indexEntry{
-			offset:  tailId,
-			filenum: itemOffset,
+			filenum: tailId,
+			offset:  itemOffset,
 		}
 		buf := zeroIndex.marshallBinary()
 		// Overwrite index zero
@@ -567,39 +567,67 @@ func TestOffset(t *testing.T) {
 
 	}
 	// Now open again
-	{
+	checkPresent := func(numDeleted uint64) {
 		f, err := newCustomTable(os.TempDir(), fname, rm, wm, sg, 40, true)
 		if err != nil {
 			t.Fatal(err)
 		}
 		f.printIndex()
 		// It should allow writing item 6
-		f.Append(6, getChunk(20, 0x99))
+		f.Append(numDeleted+2, getChunk(20, 0x99))
 
 		// It should be fine to fetch 4,5,6
-		if got, err := f.Retrieve(4); err != nil {
+		if got, err := f.Retrieve(numDeleted); err != nil {
 			t.Fatal(err)
 		} else if exp := getChunk(20, 0xbb); !bytes.Equal(got, exp) {
 			t.Fatalf("expected %x got %x", exp, got)
 		}
-		if got, err := f.Retrieve(5); err != nil {
+		if got, err := f.Retrieve(numDeleted + 1); err != nil {
 			t.Fatal(err)
 		} else if exp := getChunk(20, 0xaa); !bytes.Equal(got, exp) {
 			t.Fatalf("expected %x got %x", exp, got)
 		}
-		if got, err := f.Retrieve(6); err != nil {
+		if got, err := f.Retrieve(numDeleted + 2); err != nil {
 			t.Fatal(err)
 		} else if exp := getChunk(20, 0x99); !bytes.Equal(got, exp) {
 			t.Fatalf("expected %x got %x", exp, got)
 		}
 
 		// It should error at 0, 1,2,3
-		for i := 0; i < 4; i++ {
-			if _, err := f.Retrieve(uint64(i)); err == nil {
+		for i := numDeleted - 1; i > numDeleted-10; i-- {
+			if _, err := f.Retrieve(i); err == nil {
 				t.Fatal("expected err")
 			}
 		}
 	}
+	checkPresent(4)
+	// Now, let's pretend we have deleted 1M items
+	{
+		// Read the index file
+		p := filepath.Join(os.TempDir(), fmt.Sprintf("%v.ridx", fname))
+		indexFile, err := os.OpenFile(p, os.O_RDWR, 0644)
+		if err != nil {
+			t.Fatal(err)
+		}
+		indexBuf := make([]byte, 3*indexEntrySize)
+		indexFile.Read(indexBuf)
+
+		// Update the index file, so that we store
+		// [ file = 2, offset = 1M ] at index zero
+
+		tailId := uint32(2)           // First file is 2
+		itemOffset := uint32(1000000) // We have removed 1M items
+		zeroIndex := indexEntry{
+			offset:  itemOffset,
+			filenum: tailId,
+		}
+		buf := zeroIndex.marshallBinary()
+		// Overwrite index zero
+		copy(indexBuf, buf)
+		indexFile.WriteAt(indexBuf, 0)
+		indexFile.Close()
+	}
+	checkPresent(1000000)
 }
 
 // TODO (?)

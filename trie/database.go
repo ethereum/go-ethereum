@@ -349,14 +349,15 @@ func (db *Database) insert(hash common.Hash, size int, node node) {
 }
 
 // insertPreimage writes a new trie node pre-image to the memory database if it's
-// yet unknown. The method will make a copy of the slice.
+// yet unknown. The method will NOT make a copy of the slice,
+// only use if the preimage will NOT be changed later on.
 //
 // Note, this method assumes that the database's lock is held!
 func (db *Database) insertPreimage(hash common.Hash, preimage []byte) {
 	if _, ok := db.preimages[hash]; ok {
 		return
 	}
-	db.preimages[hash] = common.CopyBytes(preimage)
+	db.preimages[hash] = preimage
 	db.preimagesSize += common.StorageSize(common.HashLength + len(preimage))
 }
 
@@ -399,7 +400,7 @@ func (db *Database) node(hash common.Hash) node {
 // Node retrieves an encoded cached trie node from memory. If it cannot be found
 // cached, the method queries the persistent database for the content.
 func (db *Database) Node(hash common.Hash) ([]byte, error) {
-	// It doens't make sense to retrieve the metaroot
+	// It doesn't make sense to retrieve the metaroot
 	if hash == (common.Hash{}) {
 		return nil, errors.New("not found")
 	}
@@ -692,7 +693,7 @@ func (db *Database) Cap(limit common.StorageSize) error {
 //
 // Note, this method is a non-synchronized mutator. It is unsafe to call this
 // concurrently with other mutators.
-func (db *Database) Commit(node common.Hash, report bool) error {
+func (db *Database) Commit(node common.Hash, report bool, callback func(common.Hash)) error {
 	// Create a database batch to flush persistent data out. It is important that
 	// outside code doesn't see an inconsistent state (referenced data removed from
 	// memory cache during commit but not yet in persistent storage). This is ensured
@@ -731,7 +732,7 @@ func (db *Database) Commit(node common.Hash, report bool) error {
 	nodes, storage := len(db.dirties), db.dirtiesSize
 
 	uncacher := &cleaner{db}
-	if err := db.commit(node, batch, uncacher); err != nil {
+	if err := db.commit(node, batch, uncacher, callback); err != nil {
 		log.Error("Failed to commit trie from trie database", "err", err)
 		return err
 	}
@@ -770,7 +771,7 @@ func (db *Database) Commit(node common.Hash, report bool) error {
 }
 
 // commit is the private locked version of Commit.
-func (db *Database) commit(hash common.Hash, batch ethdb.Batch, uncacher *cleaner) error {
+func (db *Database) commit(hash common.Hash, batch ethdb.Batch, uncacher *cleaner, callback func(common.Hash)) error {
 	// If the node does not exist, it's a previously committed node
 	node, ok := db.dirties[hash]
 	if !ok {
@@ -779,7 +780,7 @@ func (db *Database) commit(hash common.Hash, batch ethdb.Batch, uncacher *cleane
 	var err error
 	node.forChilds(func(child common.Hash) {
 		if err == nil {
-			err = db.commit(child, batch, uncacher)
+			err = db.commit(child, batch, uncacher, callback)
 		}
 	})
 	if err != nil {
@@ -787,6 +788,9 @@ func (db *Database) commit(hash common.Hash, batch ethdb.Batch, uncacher *cleane
 	}
 	if err := batch.Put(hash[:], node.rlp()); err != nil {
 		return err
+	}
+	if callback != nil {
+		callback(hash)
 	}
 	// If we've reached an optimal batch size, commit and start over
 	if batch.ValueSize() >= ethdb.IdealBatchSize {

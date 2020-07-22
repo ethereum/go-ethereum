@@ -80,6 +80,39 @@ func ReadAllHashes(db ethdb.Iteratee, number uint64) []common.Hash {
 	return hashes
 }
 
+// ReadAllCanonicalHashes retrieves all canonical number and hash mappings at the
+// certain chain range. If the accumulated entries reaches the given threshold,
+// abort the iteration and return the semi-finish result.
+func ReadAllCanonicalHashes(db ethdb.Iteratee, from uint64, to uint64, limit int) ([]uint64, []common.Hash) {
+	// Short circuit if the limit is 0.
+	if limit == 0 {
+		return nil, nil
+	}
+	var (
+		numbers []uint64
+		hashes  []common.Hash
+	)
+	// Construct the key prefix of start point.
+	start, end := headerHashKey(from), headerHashKey(to)
+	it := db.NewIterator(nil, start)
+	defer it.Release()
+
+	for it.Next() {
+		if bytes.Compare(it.Key(), end) >= 0 {
+			break
+		}
+		if key := it.Key(); len(key) == len(headerPrefix)+8+1 && bytes.Equal(key[len(key)-1:], headerHashSuffix) {
+			numbers = append(numbers, binary.BigEndian.Uint64(key[len(headerPrefix):len(headerPrefix)+8]))
+			hashes = append(hashes, common.BytesToHash(it.Value()))
+			// If the accumulated entries reaches the limit threshold, return.
+			if len(numbers) >= limit {
+				break
+			}
+		}
+	}
+	return numbers, hashes
+}
+
 // ReadHeaderNumber returns the header number assigned to a hash.
 func ReadHeaderNumber(db ethdb.KeyValueReader, hash common.Hash) *uint64 {
 	data, _ := db.Get(headerNumberKey(hash))

@@ -138,6 +138,6 @@ func newTestServerPeer(t *testing.T, blocks int, protocol int) (*testServer, *en
 
 // newTestLightPeer creates node with light sync mode
 func newTestLightPeer(t *testing.T, protocol int, ulcServers []string, ulcFraction int) (*testClient, func()) {
-	_, c, teardown := newClientServerEnv(t, 0, protocol, nil, ulcServers, ulcFraction, false, false)
+	_, c, teardown := newClientServerEnv(t, 0, protocol, nil, ulcServers, ulcFraction, false, false, true)
 	return c, teardown
 }

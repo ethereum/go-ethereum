@@ -55,7 +55,7 @@ func TestUpdateLeaks(t *testing.T) {
 	}
 
 	root := state.IntermediateRoot(false)
-	if err := state.Database().TrieDB().Commit(root, false); err != nil {
+	if err := state.Database().TrieDB().Commit(root, false, nil); err != nil {
 		t.Errorf("can not commit trie %v to persistent database", root.Hex())
 	}
 
@@ -106,7 +106,7 @@ func TestIntermediateLeaks(t *testing.T) {
 	if err != nil {
 		t.Fatalf("failed to commit transition state: %v", err)
 	}
-	if err = transState.Database().TrieDB().Commit(transRoot, false); err != nil {
+	if err = transState.Database().TrieDB().Commit(transRoot, false, nil); err != nil {
 		t.Errorf("can not commit trie %v to persistent database", transRoot.Hex())
 	}
 
@@ -114,7 +114,7 @@ func TestIntermediateLeaks(t *testing.T) {
 	if err != nil {
 		t.Fatalf("failed to commit final state: %v", err)
 	}
-	if err = finalState.Database().TrieDB().Commit(finalRoot, false); err != nil {
+	if err = finalState.Database().TrieDB().Commit(finalRoot, false, nil); err != nil {
 		t.Errorf("can not commit trie %v to persistent database", finalRoot.Hex())
 	}
 

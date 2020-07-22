@@ -520,6 +520,9 @@ func (tab *Table) delete(node *node) {
 }
 
 func (tab *Table) addIP(b *bucket, ip net.IP) bool {
+	if len(ip) == 0 {
+		return false // Nodes without IP cannot be added.
+	}
 	if netutil.IsLAN(ip) {
 		return true
 	}

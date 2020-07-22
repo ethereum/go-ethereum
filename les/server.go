@@ -77,8 +77,8 @@ func NewLesServer(e *eth.Ethereum, config *eth.Config) (*LesServer, error) {
 			iConfig:          light.DefaultServerIndexerConfig,
 			chainDb:          e.ChainDb(),
 			chainReader:      e.BlockChain(),
-			chtIndexer:       light.NewChtIndexer(e.ChainDb(), nil, params.CHTFrequency, params.HelperTrieProcessConfirmations),
-			bloomTrieIndexer: light.NewBloomTrieIndexer(e.ChainDb(), nil, params.BloomBitsBlocks, params.BloomTrieFrequency),
+			chtIndexer:       light.NewChtIndexer(e.ChainDb(), nil, params.CHTFrequency, params.HelperTrieProcessConfirmations, true),
+			bloomTrieIndexer: light.NewBloomTrieIndexer(e.ChainDb(), nil, params.BloomBitsBlocks, params.BloomTrieFrequency, true),
 			closeCh:          make(chan struct{}),
 		},
 		archiveMode:  e.ArchiveMode(),
@@ -157,7 +157,7 @@ func (s *LesServer) Protocols() []p2p.Protocol {
 			return p.Info()
 		}
 		return nil
-	})
+	}, nil)
 	// Add "les" ENR entries.
 	for i := range ps {
 		ps[i].Attributes = []enr.Entry{&lesEntry{}}

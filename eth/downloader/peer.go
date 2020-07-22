@@ -155,7 +155,7 @@ func (p *peerConnection) FetchHeaders(from uint64, count int) error {
 	}
 	p.headerStarted = time.Now()
 
-	// Issue the header retrieval request (absolut upwards without gaps)
+	// Issue the header retrieval request (absolute upwards without gaps)
 	go p.peer.RequestHeadersByNumber(from, count, 0, false)
 
 	return nil
@@ -421,7 +421,7 @@ func (ps *peerSet) Unregister(id string) error {
 	ps.lock.Lock()
 	p, ok := ps.peers[id]
 	if !ok {
-		defer ps.lock.Unlock()
+		ps.lock.Unlock()
 		return errNotRegistered
 	}
 	delete(ps.peers, id)
