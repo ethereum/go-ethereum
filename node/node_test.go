@@ -151,30 +151,28 @@ func TestRegisterProtocols(t *testing.T) {
 	}
 }
 
-func containsProtocol(stackProtocols []p2p.Protocol, protocol p2p.Protocol) bool {
-	for _, a := range stackProtocols {
-		if reflect.DeepEqual(a, protocol) {
-			return true
-		}
-	}
-	return false
-}
+// This test checks that open databases are closed with node.
+func TestCloseNodeClosesDB(t *testing.T) {
+	stack, _ := New(testNodeConfig())
+	defer stack.Close()
 
-func containsAPI(stackAPIs []rpc.API, api rpc.API) bool {
-	for _, a := range stackAPIs {
-		if reflect.DeepEqual(a, api) {
-			return true
-		}
+	db, err := stack.OpenDatabase("mydb", 0, 0, "")
+	if err != nil {
+		t.Fatal("can't open DB:", err)
 	}
-	return false
+	if err = db.Put([]byte{}, []byte{}); err != nil {
+		t.Fatal("can't put on open DB:", err)
+	}
+
+	stack.Close()
+	if err = db.Put([]byte{}, []byte{}); err == nil {
+		t.Fatal("put succeeded after node is closed")
+	}
 }
 
 // Tests that registered Lifecycles get started and stopped correctly.
 func TestLifecycleLifeCycle(t *testing.T) {
-	stack, err := New(testNodeConfig())
-	if err != nil {
-		t.Fatalf("failed to create protocol stack: %v", err)
-	}
+	stack, _ := New(testNodeConfig())
 	defer stack.Close()
 
 	started := make(map[string]bool)
@@ -546,4 +544,22 @@ func doHTTPRequest(t *testing.T, req *http.Request) *http.Response {
 
 	}
 	return resp
+}
+
+func containsProtocol(stackProtocols []p2p.Protocol, protocol p2p.Protocol) bool {
+	for _, a := range stackProtocols {
+		if reflect.DeepEqual(a, protocol) {
+			return true
+		}
+	}
+	return false
+}
+
+func containsAPI(stackAPIs []rpc.API, api rpc.API) bool {
+	for _, a := range stackAPIs {
+		if reflect.DeepEqual(a, api) {
+			return true
+		}
+	}
+	return false
 }

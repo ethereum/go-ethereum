@@ -622,10 +622,15 @@ func (n *Node) OpenDatabase(name string, cache, handles int, namespace string) (
 	if n.runstate == stoppedState {
 		return nil, ErrNodeStopped
 	}
+
+	var db ethdb.Database
+	var err error
 	if n.config.DataDir == "" {
-		return rawdb.NewMemoryDatabase(), nil
+		db = rawdb.NewMemoryDatabase()
+	} else {
+		db, err = rawdb.NewLevelDBDatabase(n.ResolvePath(name), cache, handles, namespace)
 	}
-	db, err := rawdb.NewLevelDBDatabase(n.ResolvePath(name), cache, handles, namespace)
+
 	if err == nil {
 		db = n.wrapDatabase(db)
 	}
@@ -644,17 +649,22 @@ func (n *Node) OpenDatabaseWithFreezer(name string, cache, handles int, freezer,
 	if n.runstate == stoppedState {
 		return nil, ErrNodeStopped
 	}
+
+	var db ethdb.Database
+	var err error
 	if n.config.DataDir == "" {
-		return rawdb.NewMemoryDatabase(), nil
+		db = rawdb.NewMemoryDatabase()
+	} else {
+		root := n.ResolvePath(name)
+		switch {
+		case freezer == "":
+			freezer = filepath.Join(root, "ancient")
+		case !filepath.IsAbs(freezer):
+			freezer = n.ResolvePath(freezer)
+		}
+		db, err = rawdb.NewLevelDBDatabaseWithFreezer(root, cache, handles, freezer, namespace)
 	}
-	root := n.ResolvePath(name)
-	switch {
-	case freezer == "":
-		freezer = filepath.Join(root, "ancient")
-	case !filepath.IsAbs(freezer):
-		freezer = n.ResolvePath(freezer)
-	}
-	db, err := rawdb.NewLevelDBDatabaseWithFreezer(root, cache, handles, freezer, namespace)
+
 	if err == nil {
 		db = n.wrapDatabase(db)
 	}
