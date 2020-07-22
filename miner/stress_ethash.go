@@ -21,7 +21,6 @@ package main
 
 import (
 	"crypto/ecdsa"
-	"fmt"
 	"io/ioutil"
 	"math/big"
 	"math/rand"
@@ -76,7 +75,7 @@ func main() {
 		for stack.Server().NodeInfo().Ports.Listener == 0 {
 			time.Sleep(250 * time.Millisecond)
 		}
-		// Connect the node to al the previous ones
+		// Connect the node to all the previous ones
 		for _, n := range enodes {
 			stack.Server().AddPeer(n)
 		}
@@ -112,17 +111,13 @@ func main() {
 		if err != nil {
 			panic(err)
 		}
-		txpool := backend.TxPool()
-		if txpool == nil {
-			panic(fmt.Errorf("Ethereum service not running"))
-		}
-		if err := txpool.AddLocal(tx); err != nil {
+		if err := backend.TxPool().AddLocal(tx); err != nil {
 			panic(err)
 		}
 		nonces[index]++
 
 		// Wait if we're too saturated
-		if pend, _ := txpool.Stats(); pend > 2048 {
+		if pend, _ := backend.TxPool().Stats(); pend > 2048 {
 			time.Sleep(100 * time.Millisecond)
 		}
 	}
