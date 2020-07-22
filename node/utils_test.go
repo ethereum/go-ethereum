@@ -51,14 +51,6 @@ type InstrumentedService struct {
 	protocols []p2p.Protocol
 }
 
-type InstrumentedServiceA struct{ InstrumentedService }
-type InstrumentedServiceB struct{ InstrumentedService }
-type InstrumentedServiceC struct{ InstrumentedService }
-
-func NewInstrumentedService() (*InstrumentedService, error) {
-	return new(InstrumentedService), nil
-}
-
 func (s *InstrumentedService) Start() error {
 	if s.startHook != nil {
 		s.startHook()

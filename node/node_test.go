@@ -182,23 +182,17 @@ func TestLifecycleLifeCycle(t *testing.T) {
 
 	// Create a batch of instrumented services
 	lifecycles := map[string]Lifecycle{
-		"A": &InstrumentedServiceA{
-			InstrumentedService{
-				startHook: func() { started["A"] = true },
-				stopHook:  func() { stopped["A"] = true },
-			},
+		"A": &InstrumentedService{
+			startHook: func() { started["A"] = true },
+			stopHook:  func() { stopped["A"] = true },
 		},
-		"B": &InstrumentedServiceB{
-			InstrumentedService{
-				startHook: func() { started["B"] = true },
-				stopHook:  func() { stopped["B"] = true },
-			},
+		"B": &InstrumentedService{
+			startHook: func() { started["B"] = true },
+			stopHook:  func() { stopped["B"] = true },
 		},
-		"C": &InstrumentedServiceC{
-			InstrumentedService{
-				startHook: func() { started["C"] = true },
-				stopHook:  func() { stopped["C"] = true },
-			},
+		"C": &InstrumentedService{
+			startHook: func() { started["C"] = true },
+			stopHook:  func() { stopped["C"] = true },
 		},
 	}
 	// register lifecycles on node
@@ -242,23 +236,17 @@ func TestLifecycleStartupError(t *testing.T) {
 
 	// Create a batch of instrumented services
 	lifecycles := map[string]Lifecycle{
-		"A": &InstrumentedServiceA{
-			InstrumentedService{
-				startHook: func() { started["A"] = true },
-				stopHook:  func() { stopped["A"] = true },
-			},
+		"A": &InstrumentedService{
+			startHook: func() { started["A"] = true },
+			stopHook:  func() { stopped["A"] = true },
 		},
-		"B": &InstrumentedServiceB{
-			InstrumentedService{
-				startHook: func() { started["B"] = true },
-				stopHook:  func() { stopped["B"] = true },
-			},
+		"B": &InstrumentedService{
+			startHook: func() { started["B"] = true },
+			stopHook:  func() { stopped["B"] = true },
 		},
-		"C": &InstrumentedServiceC{
-			InstrumentedService{
-				startHook: func() { started["C"] = true },
-				stopHook:  func() { stopped["C"] = true },
-			},
+		"C": &InstrumentedService{
+			startHook: func() { started["C"] = true },
+			stopHook:  func() { stopped["C"] = true },
 		},
 	}
 	// register lifecycles on node
@@ -298,23 +286,17 @@ func TestLifecycleTerminationGuarantee(t *testing.T) {
 
 	// Create a batch of instrumented services
 	lifecycles := map[string]Lifecycle{
-		"A": &InstrumentedServiceA{
-			InstrumentedService{
-				startHook: func() { started["A"] = true },
-				stopHook:  func() { stopped["A"] = true },
-			},
+		"A": &InstrumentedService{
+			startHook: func() { started["A"] = true },
+			stopHook:  func() { stopped["A"] = true },
 		},
-		"B": &InstrumentedServiceB{
-			InstrumentedService{
-				startHook: func() { started["B"] = true },
-				stopHook:  func() { stopped["B"] = true },
-			},
+		"B": &InstrumentedService{
+			startHook: func() { started["B"] = true },
+			stopHook:  func() { stopped["B"] = true },
 		},
-		"C": &InstrumentedServiceC{
-			InstrumentedService{
-				startHook: func() { started["C"] = true },
-				stopHook:  func() { stopped["C"] = true },
-			},
+		"C": &InstrumentedService{
+			startHook: func() { started["C"] = true },
+			stopHook:  func() { stopped["C"] = true },
 		},
 	}
 	// register lifecycles on node
