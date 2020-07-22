@@ -247,11 +247,6 @@ func (n *Node) RegisterAPIs(apis []rpc.API) {
 	n.rpcAPIs = append(n.rpcAPIs, apis...)
 }
 
-// RegisterHTTPServer registers the given HTTP server on the node.
-func (n *Node) RegisterHTTPServer(endpoint string, server *httpServer) {
-	n.httpServers[endpoint] = server
-}
-
 // RegisterPath mounts the given handler on the given path on the canonical HTTP server.
 func (n *Node) RegisterPath(path string, handler http.Handler) string {
 	if n.runstate != initializingState {
@@ -265,6 +260,11 @@ func (n *Node) RegisterPath(path string, handler http.Handler) string {
 	}
 	n.log.Warn(fmt.Sprintf("HTTP server not configured on node, path %s cannot be enabled", path))
 	return ""
+}
+
+// registerHTTPServer registers the given HTTP server on the node.
+func (n *Node) registerHTTPServer(endpoint string, server *httpServer) {
+	n.httpServers[endpoint] = server
 }
 
 // existingHTTPServer checks if an HTTP server is already configured on the given endpoint.

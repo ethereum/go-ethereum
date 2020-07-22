@@ -208,7 +208,7 @@ func (api *PrivateAdminAPI) StartRPC(host *string, port *int, cors *string, apis
 		return false, err
 	}
 	// register the HTTP server
-	api.node.RegisterHTTPServer(endpoint, httpServer)
+	api.node.registerHTTPServer(endpoint, httpServer)
 	// start the HTTP server
 	httpServer.Start()
 	api.node.log.Info("HTTP endpoint opened", "url", fmt.Sprintf("http://%v/", httpServer.Listener.Addr()),
@@ -297,7 +297,7 @@ func (api *PrivateAdminAPI) StartWS(host *string, port *int, allowedOrigins *str
 		return false, err
 	}
 	// register the HTTP server
-	api.node.RegisterHTTPServer(endpoint, wsServer)
+	api.node.registerHTTPServer(endpoint, wsServer)
 	// start the HTTP server
 	if err := wsServer.Start(); err != nil {
 		return false, err

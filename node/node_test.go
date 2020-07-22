@@ -378,14 +378,14 @@ func TestRegisterHTTPServer(t *testing.T) {
 		port: 0001,
 	}
 	endpoint1 := fmt.Sprintf("%s:%d", srv1.host, srv1.port)
-	stack.RegisterHTTPServer(endpoint1, srv1)
+	stack.registerHTTPServer(endpoint1, srv1)
 
 	srv2 := &httpServer{
 		host: "test2",
 		port: 0002,
 	}
 	endpoint2 := fmt.Sprintf("%s:%d", srv2.host, srv2.port)
-	stack.RegisterHTTPServer(endpoint2, srv2)
+	stack.registerHTTPServer(endpoint2, srv2)
 
 	noop := &httpServer{
 		host: "test",
