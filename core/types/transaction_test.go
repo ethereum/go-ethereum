@@ -131,10 +131,10 @@ func TestTransactionPriceNonceSort(t *testing.T) {
 	signer := HomesteadSigner{}
 	// Generate a batch of transactions with overlapping values, but shifted nonces
 	groups := map[common.Address]Transactions{}
-	for start, key := range keys {
+	for _, key := range keys {
 		addr := crypto.PubkeyToAddress(key.PublicKey)
 		for i := 0; i < 25; i++ {
-			tx, _ := SignTx(NewTransaction(uint64(start+i), common.Address{}, big.NewInt(100), 100, big.NewInt(int64(start+i)), nil), signer, key)
+			tx, _ := SignTx(NewTransaction(uint64(i), common.Address{}, big.NewInt(100), 100, big.NewInt(int64(25-i)), nil), signer, key)
 			groups[addr] = append(groups[addr], tx)
 		}
 	}
@@ -152,21 +152,27 @@ func TestTransactionPriceNonceSort(t *testing.T) {
 	for i, txi := range txs {
 		fromi, _ := Sender(signer, txi)
 
-		// Make sure the nonce order is valid
 		for j, txj := range txs[i+1:] {
 			fromj, _ := Sender(signer, txj)
 
+			// Make sure the nonce order is valid
 			if fromi == fromj && txi.Nonce() > txj.Nonce() {
 				t.Errorf("invalid nonce ordering: tx #%d (A=%x N=%v) < tx #%d (A=%x N=%v)", i, fromi[:4], txi.Nonce(), i+j, fromj[:4], txj.Nonce())
 			}
 		}
 
-		// If the next tx has different from account, the price must be lower than the current one
 		if i+1 < len(txs) {
 			next := txs[i+1]
 			fromNext, _ := Sender(signer, next)
+
+			// If the next tx has different from account, the price must be lower than the current one
 			if fromi != fromNext && txi.GasPrice().Cmp(next.GasPrice()) < 0 {
 				t.Errorf("invalid gasprice ordering: tx #%d (A=%x P=%v) < tx #%d (A=%x P=%v)", i, fromi[:4], txi.GasPrice(), i+1, fromNext[:4], next.GasPrice())
+			}
+
+			// Make sure sender order is ascending if the txs have the same gas price
+			if txi.GasPrice().Cmp(next.GasPrice()) == 0 && fromi != fromNext && fromi.Big().Cmp(fromNext.Big()) == 1 {
+				t.Errorf("invalid sender ordering: tx #%d (A=%x S=%s) < tx #%d (A=%x S=%s)", i, fromi[:4], fromi.String(), i+1, fromNext[:4], fromNext.String())
 			}
 		}
 	}
