@@ -21,6 +21,7 @@ package main
 
 import (
 	"crypto/ecdsa"
+	"fmt"
 	"io/ioutil"
 	"math/big"
 	"math/rand"
@@ -61,39 +62,39 @@ func main() {
 	genesis := makeGenesis(faucets)
 
 	var (
-		nodes  []struct{
-			node *node.Node
-			backend ethapi.Backend
+		nodes []struct {
+			node    *node.Node
+			backend *eth.Ethereum
 		}
 		enodes []*enode.Node
 	)
 	for i := 0; i < 4; i++ {
 		// Start the node and wait until it's up
-		node, ethBackend, err := makeMiner(genesis)
+		stack, ethBackend, err := makeMiner(genesis)
 		if err != nil {
 			panic(err)
 		}
-		defer node.Close()
+		defer stack.Close()
 
-		for node.Server().NodeInfo().Ports.Listener == 0 {
+		for stack.Server().NodeInfo().Ports.Listener == 0 {
 			time.Sleep(250 * time.Millisecond)
 		}
 		// Connect the node to al the previous ones
 		for _, n := range enodes {
-			node.Server().AddPeer(n)
+			stack.Server().AddPeer(n)
 		}
 		// Start tracking the node and it's enode
-		nodes = append(nodes, struct{
-			node *node.Node
-			backend ethapi.Backend
+		nodes = append(nodes, struct {
+			node    *node.Node
+			backend *eth.Ethereum
 		}{
-			node,
+			stack,
 			ethBackend,
 		})
-		enodes = append(enodes, node.Server().Self())
+		enodes = append(enodes, stack.Server().Self())
 
 		// Inject the signer key and start sealing with it
-		store := node.AccountManager().Backends(keystore.KeyStoreType)[0].(*keystore.KeyStore)
+		store := stack.AccountManager().Backends(keystore.KeyStoreType)[0].(*keystore.KeyStore)
 		if _, err := store.NewAccount(""); err != nil {
 			panic(err)
 		}
@@ -154,7 +155,7 @@ func makeGenesis(faucets []*ecdsa.PrivateKey) *core.Genesis {
 	return genesis
 }
 
-func makeMiner(genesis *core.Genesis) (*node.Node, ethapi.Backend, error) {
+func makeMiner(genesis *core.Genesis) (*node.Node, *eth.Ethereum, error) {
 	// Define the basic configurations for the Ethereum node
 	datadir, _ := ioutil.TempDir("", "")
 
@@ -173,9 +174,9 @@ func makeMiner(genesis *core.Genesis) (*node.Node, ethapi.Backend, error) {
 	// Create the node and configure a full Ethereum node on it
 	stack, err := node.New(config)
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
-	ethBackend, err := eth.New(ctx, &eth.Config{
+	ethBackend, err := eth.New(stack, &eth.Config{
 		Genesis:         genesis,
 		NetworkId:       genesis.Config.ChainID.Uint64(),
 		SyncMode:        downloader.FullSync,
@@ -192,12 +193,9 @@ func makeMiner(genesis *core.Genesis) (*node.Node, ethapi.Backend, error) {
 		},
 	})
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
-	stack.RegisterAPIs(ethBackend.APIs())
-	stack.RegisterProtocols(ethBackend.Protocols())
-	stack.RegisterLifecycle(ethBackend)
 
-	// Start the node and return if successful
-	return stack, ethBackend, stack.Start()
+	err = stack.Start()
+	return stack, ethBackend, err
 }
