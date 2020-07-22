@@ -22,6 +22,7 @@ import (
 	"encoding/json"
 	"math/big"
 	"testing"
+	"time"
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/crypto"
@@ -134,7 +135,8 @@ func TestTransactionPriceNonceSort(t *testing.T) {
 	for start, key := range keys {
 		addr := crypto.PubkeyToAddress(key.PublicKey)
 		for i := 0; i < 25; i++ {
-			tx, _ := SignTx(NewTransaction(uint64(start+i), common.Address{}, big.NewInt(100), 100, big.NewInt(int64(start+i)), nil), signer, key)
+			tx, _ := SignTx(NewTransaction(uint64(i), common.Address{}, big.NewInt(100), 100, big.NewInt(int64(25-i)), nil), signer, key)
+			tx.SetReceivedTime(time.Unix(0, int64(start)))
 			groups[addr] = append(groups[addr], tx)
 		}
 	}
@@ -167,6 +169,11 @@ func TestTransactionPriceNonceSort(t *testing.T) {
 			fromNext, _ := Sender(signer, next)
 			if fromi != fromNext && txi.GasPrice().Cmp(next.GasPrice()) < 0 {
 				t.Errorf("invalid gasprice ordering: tx #%d (A=%x P=%v) < tx #%d (A=%x P=%v)", i, fromi[:4], txi.GasPrice(), i+1, fromNext[:4], next.GasPrice())
+			}
+
+			// Make sure receivedTime order is ascending if the txs have the same gas price
+			if txi.GasPrice().Cmp(next.GasPrice()) == 0 && fromi != fromNext && txi.receivedTime.UnixNano() > next.receivedTime.UnixNano() {
+				t.Errorf("invalid received time ordering: tx #%d (A=%x T=%d) > tx #%d (A=%x T=%d)", i, fromi[:4], txi.receivedTime.UnixNano(), i+1, fromNext[:4], next.receivedTime.UnixNano())
 			}
 		}
 	}
