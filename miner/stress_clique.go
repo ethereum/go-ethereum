@@ -62,10 +62,7 @@ func main() {
 	genesis := makeGenesis(faucets, sealers)
 
 	var (
-		nodes []struct {
-			node    *node.Node
-			backend *eth.Ethereum
-		}
+		nodes  []*eth.Ethereum
 		enodes []*enode.Node
 	)
 
@@ -85,13 +82,7 @@ func main() {
 			stack.Server().AddPeer(n)
 		}
 		// Start tracking the node and it's enode
-		nodes = append(nodes, struct {
-			node    *node.Node
-			backend *eth.Ethereum
-		}{
-			stack,
-			ethBackend,
-		})
+		nodes = append(nodes, ethBackend)
 		enodes = append(enodes, stack.Server().Self())
 
 		// Inject the signer key and start sealing with it
@@ -104,11 +95,11 @@ func main() {
 			panic(err)
 		}
 	}
-	// Iterate over all the nodes and start signing with them
-	time.Sleep(3 * time.Second)
 
+	// Iterate over all the nodes and start signing on them
+	time.Sleep(3 * time.Second)
 	for _, node := range nodes {
-		if err := node.backend.StartMining(1); err != nil {
+		if err := node.StartMining(1); err != nil {
 			panic(err)
 		}
 	}
@@ -117,10 +108,9 @@ func main() {
 	// Start injecting transactions from the faucet like crazy
 	nonces := make([]uint64, len(faucets))
 	for {
+		// Pick a random signer node
 		index := rand.Intn(len(faucets))
-
-		// Fetch the accessor for the relevant signer
-		backend := nodes[index%len(nodes)].backend
+		backend := nodes[index%len(nodes)]
 
 		// Create a self transaction and inject into the pool
 		tx, err := types.SignTx(types.NewTransaction(nonces[index], crypto.PubkeyToAddress(faucets[index].PublicKey), new(big.Int), 21000, big.NewInt(100000000000), nil), types.HomesteadSigner{}, faucets[index])
