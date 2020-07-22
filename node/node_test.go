@@ -172,7 +172,7 @@ func TestNodeCloseClosesDB(t *testing.T) {
 }
 
 // This test checks that OpenDatabase can be used from within a Lifecycle Start method.
-func TestNodeOpenDatabaseFromLifecycle(t *testing.T) {
+func TestNodeOpenDatabaseFromLifecycleStart(t *testing.T) {
 	stack, _ := New(testNodeConfig())
 	defer stack.Close()
 
@@ -186,6 +186,25 @@ func TestNodeOpenDatabaseFromLifecycle(t *testing.T) {
 			}
 		},
 		stopHook: func() {
+			db.Close()
+		},
+	})
+
+	stack.Start()
+	stack.Close()
+}
+
+// This test checks that OpenDatabase can be used from within a Lifecycle Stop method.
+func TestNodeOpenDatabaseFromLifecycleStop(t *testing.T) {
+	stack, _ := New(testNodeConfig())
+	defer stack.Close()
+
+	stack.RegisterLifecycle(&InstrumentedService{
+		stopHook: func() {
+			db, err := stack.OpenDatabase("mydb", 0, 0, "")
+			if err != nil {
+				t.Fatal("can't open DB:", err)
+			}
 			db.Close()
 		},
 	})

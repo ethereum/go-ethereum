@@ -50,26 +50,32 @@ type Node struct {
 	dirLock       fileutil.Releaser // prevents concurrent use of instance directory
 	stop          chan struct{}     // Channel to wait for termination notifications
 	server        *p2p.Server       // Currently running P2P networking layer
+	startStopLock sync.Mutex        // Start/Stop are protected by an additional lock
+	stateFlag     int32             // Tracks state of node lifecycle
 
 	lock          sync.Mutex
-	runstate      int
 	lifecycles    []Lifecycle // All registered backends, services, and auxiliary services that have a lifecycle
 	httpServers   serverMap   // serverMap stores information about the node's rpc, ws, and graphQL http servers.
 	inprocHandler *rpc.Server // In-process RPC request handler to process the API requests
 	rpcAPIs       []rpc.API   // List of APIs currently provided by the node
 	ipc           *httpServer // Stores information about the ipc http server
 
-	dbLock    sync.Mutex
-	databases map[*closeTrackingDB]struct{} // all opened databases
+	databases map[*closeTrackingDB]struct{} // All open databases
 }
 
 const (
 	initializingState = iota
-	startingState
-	closedWhileStartingState
 	runningState
 	closedState
 )
+
+func (n *Node) state() int32 {
+	return atomic.LoadInt32(&n.stateFlag)
+}
+
+func (n *Node) setState(state int32) {
+	atomic.StoreInt32(&n.stateFlag, state)
+}
 
 // New creates a new P2P node, ready for protocol registration.
 func New(conf *Config) (*Node, error) {
@@ -84,6 +90,9 @@ func New(conf *Config) (*Node, error) {
 		}
 		conf.DataDir = absdatadir
 	}
+	if conf.Logger == nil {
+		conf.Logger = log.New()
+	}
 
 	// Ensure that the instance name doesn't cause weird conflicts with
 	// other files in the data directory.
@@ -97,9 +106,6 @@ func New(conf *Config) (*Node, error) {
 		return nil, errors.New(`Config.Name cannot end in ".ipc"`)
 	}
 
-	if conf.Logger == nil {
-		conf.Logger = log.New()
-	}
 	node := &Node{
 		config:        conf,
 		httpServers:   make(serverMap),
@@ -111,6 +117,9 @@ func New(conf *Config) (*Node, error) {
 		server:        &p2p.Server{Config: conf.P2P},
 		databases:     make(map[*closeTrackingDB]struct{}),
 	}
+
+	// Register built-in APIs.
+	node.rpcAPIs = append(node.rpcAPIs, node.apis()...)
 
 	// Acquire the instance directory lock.
 	if err := node.openDataDir(); err != nil {
@@ -181,91 +190,72 @@ func New(conf *Config) (*Node, error) {
 // Start starts all registered lifecycles, RPC services and p2p networking.
 // Node can only be started once.
 func (n *Node) Start() error {
-	n.lock.Lock()
-	defer n.lock.Unlock()
+	n.startStopLock.Lock()
+	defer n.startStopLock.Unlock()
 
-	switch n.runstate {
-	case runningState, startingState:
+	switch n.state() {
+	case runningState:
 		return ErrNodeRunning
-	case closedState, closedWhileStartingState:
+	case closedState:
 		return ErrNodeStopped
 	}
-	if n.runstate != initializingState {
-		panic(fmt.Sprintf("BUG: node is in unexpected state %d", n.runstate))
-	}
-	if err := n.startNetworking(); err != nil {
+	n.setState(runningState)
+
+	n.lock.Lock()
+	err := n.startNetworking()
+	lifecycles := make([]Lifecycle, len(n.lifecycles))
+	copy(lifecycles, n.lifecycles)
+	n.lock.Unlock()
+
+	// Check if networking startup failed.
+	if err != nil {
 		n.doClose(nil)
 		return err
 	}
-	n.runstate = startingState
-
-	// Start all registered lifecycles. The node lock mustn't
-	// be held here because the Start methods of lifecycle objects
-	// might want to access resources on the node.
-	n.lock.Unlock()
+	// Start all registered lifecycles.
 	var started []Lifecycle
-	var startErr error
-	for _, lifecycle := range n.lifecycles {
-		if startErr = lifecycle.Start(); startErr != nil {
+	for _, lifecycle := range lifecycles {
+		if err = lifecycle.Start(); err != nil {
 			break
 		}
 		started = append(started, lifecycle)
 	}
-	n.lock.Lock()
-
-	// Check if any lifecycle failed to start or the node was closed while starting.
-	if startErr != nil || n.runstate == closedWhileStartingState {
-		stopLifecycles(started)
+	// Check if any lifecycle failed to start.
+	if err != nil {
+		n.stopServices(started)
 		n.doClose(nil)
-	} else {
-		n.runstate = runningState
 	}
-	return startErr
+	return err
 }
 
 // Close stops the Node and releases resources acquired in
 // Node constructor New.
 func (n *Node) Close() error {
-	n.lock.Lock()
+	n.startStopLock.Lock()
+	defer n.startStopLock.Unlock()
 
-	switch n.runstate {
+	switch state := n.state(); state {
 	case initializingState:
 		// The node was never started.
-		defer n.lock.Unlock()
 		return n.doClose(nil)
-	case startingState:
-		// The node is currently starting lifecycles. Signal that
-		// Close was called through runstate to make Start stop
-		// everything when it re-acquires the lock.
-		n.runstate = closedWhileStartingState
-		n.lock.Unlock()
-		n.Wait()
-		return nil
-	case closedWhileStartingState:
-		// This branch handles double-close during startup.
-		n.lock.Unlock()
-		n.Wait()
-		return nil
 	case runningState:
 		// The node was started, release resources acquired by Start().
-		defer n.lock.Unlock()
 		var errs []error
-		if err := n.stopServices(); err != nil {
+		if err := n.stopServices(n.lifecycles); err != nil {
 			errs = append(errs, err)
 		}
 		return n.doClose(errs)
 	case closedState:
-		// Shutdown is already over.
-		n.lock.Unlock()
 		return ErrNodeStopped
 	default:
-		defer n.lock.Unlock()
-		panic(fmt.Sprintf("BUG: node is in unexpected state %d", n.runstate))
+		panic(fmt.Sprintf("node is in unknown state %d", state))
 	}
 }
 
-// doClose releases resources acquired by New() and collects shutdown errors.
+// doClose releases resources acquired by New(), collecting errors.
 func (n *Node) doClose(errs []error) error {
+	n.setState(closedState)
+
 	if err := n.accman.Close(); err != nil {
 		errs = append(errs, err)
 	}
@@ -274,9 +264,15 @@ func (n *Node) doClose(errs []error) error {
 			errs = append(errs, err)
 		}
 	}
+
+	// Close databases. This needs the lock because it needs to
+	// synchronize with OpenDatabase*.
+	n.lock.Lock()
 	errs = append(errs, n.closeDatabases()...)
+	n.lock.Unlock()
+
+	// Release instance directory lock.
 	n.closeDataDir()
-	n.runstate = closedState
 
 	// Unblock n.Wait.
 	close(n.stop)
@@ -290,48 +286,6 @@ func (n *Node) doClose(errs []error) error {
 	default:
 		return fmt.Errorf("%v", errs)
 	}
-}
-
-// RegisterLifecycle registers the given Lifecycle on the node.
-func (n *Node) RegisterLifecycle(lifecycle Lifecycle) {
-	if n.runstate != initializingState {
-		panic("can't register lifecycle on running/stopped node")
-	}
-	if containsLifecycle(n.lifecycles, lifecycle) {
-		panic(fmt.Sprintf("attempt to register lifecycle %T more than once", lifecycle))
-	}
-	n.lifecycles = append(n.lifecycles, lifecycle)
-}
-
-// RegisterProtocols adds backend's protocols to the node's p2p server.
-func (n *Node) RegisterProtocols(protocols []p2p.Protocol) {
-	if n.runstate != initializingState {
-		panic("can't register protocols on running/stopped node")
-	}
-	n.server.Protocols = append(n.server.Protocols, protocols...)
-}
-
-// RegisterAPIs registers the APIs a service provides on the node.
-func (n *Node) RegisterAPIs(apis []rpc.API) {
-	if n.runstate != initializingState {
-		panic("can't register APIs on running/stopped node")
-	}
-	n.rpcAPIs = append(n.rpcAPIs, apis...)
-}
-
-// RegisterPath mounts the given handler on the given path on the canonical HTTP server.
-func (n *Node) RegisterPath(path string, handler http.Handler) string {
-	if n.runstate != initializingState {
-		panic("can't register HTTP handler on running/stopped node")
-	}
-	for _, server := range n.httpServers {
-		if atomic.LoadInt32(&server.RPCAllowed) == 1 {
-			server.srvMux.Handle(path, handler)
-			return server.endpoint
-		}
-	}
-	n.log.Warn(fmt.Sprintf("HTTP server not configured on node, path %s cannot be enabled", path))
-	return ""
 }
 
 // registerHTTPServer registers the given HTTP server on the node.
@@ -400,20 +354,27 @@ func containsLifecycle(lfs []Lifecycle, l Lifecycle) bool {
 	return false
 }
 
-// stopLifecycles stops the given lifecycles in reverse order.
-func stopLifecycles(lfs []Lifecycle) map[reflect.Type]error {
-	errors := make(map[reflect.Type]error)
-	for i := len(lfs) - 1; i >= 0; i-- {
-		if err := lfs[i].Stop(); err != nil {
-			errors[reflect.TypeOf(lfs[i])] = err
+// stopServices terminates running services, RPC and p2p networking.
+// It is the inverse of Start.
+func (n *Node) stopServices(running []Lifecycle) error {
+	n.stopIPC()
+	n.rpcAPIs = nil
+
+	// Stop running lifecycles in reverse order.
+	failure := &StopError{Services: make(map[reflect.Type]error)}
+	for i := len(running) - 1; i >= 0; i-- {
+		if err := running[i].Stop(); err != nil {
+			failure.Services[reflect.TypeOf(running[i])] = err
 		}
 	}
-	return errors
-}
 
-// Config returns the configuration of node.
-func (n *Node) Config() *Config {
-	return n.config
+	// Stop p2p networking.
+	n.server.Stop()
+
+	if len(failure.Services) > 0 {
+		return failure
+	}
+	return nil
 }
 
 func (n *Node) openDataDir() error {
@@ -449,8 +410,6 @@ func (n *Node) closeDataDir() {
 // startup. It's not meant to be called at any time afterwards as it makes certain
 // assumptions about the state of the node.
 func (n *Node) configureRPC() error {
-	n.RegisterAPIs(n.apis())
-
 	// Start the various API endpoints, terminating all in case of errors
 	if err := n.startInProc(); err != nil {
 		return err
@@ -459,25 +418,22 @@ func (n *Node) configureRPC() error {
 		n.stopInProc()
 		return err
 	}
-	// configure HTTPServers
+
+	// Configure HTTP servers.
 	for _, server := range n.httpServers {
-		// configure the handlers
 		handler := n.createHandler(server)
 		if handler != nil {
 			server.srvMux.Handle("/", handler)
 		}
-		// create the HTTP server
 		if err := n.createHTTPServer(server, false); err != nil {
 			return err
 		}
 	}
 
-	// only register http server as a lifecycle if it has not already been registered
+	// Register HTTP server as a lifecycle if it has not already been registered.
 	if !containsLifecycle(n.lifecycles, &n.httpServers) {
-		n.RegisterLifecycle(&n.httpServers)
+		n.lifecycles = append(n.lifecycles, &n.httpServers)
 	}
-
-	// All API endpoints started successfully
 	return nil
 }
 
@@ -562,29 +518,63 @@ func (n *Node) stopServer(server *httpServer) {
 	delete(n.httpServers, server.endpoint)
 }
 
-// stopServices terminates running services, RPC and p2p networking.
-// It is the inverse of Start.
-func (n *Node) stopServices() error {
-	if n.runstate != runningState {
-		panic("call to stopServices on node that isn't running")
-	}
-
-	// Terminate the API, services and the p2p server.
-	n.stopIPC()
-	n.rpcAPIs = nil
-	failure := new(StopError)
-	failure.Services = stopLifecycles(n.lifecycles)
-	n.server.Stop()
-
-	if len(failure.Services) > 0 {
-		return failure
-	}
-	return nil
-}
-
 // Wait blocks until the node is closed.
 func (n *Node) Wait() {
 	<-n.stop
+}
+
+// RegisterLifecycle registers the given Lifecycle on the node.
+func (n *Node) RegisterLifecycle(lifecycle Lifecycle) {
+	n.lock.Lock()
+	defer n.lock.Unlock()
+
+	if n.state() != initializingState {
+		panic("can't register lifecycle on running/stopped node")
+	}
+	if containsLifecycle(n.lifecycles, lifecycle) {
+		panic(fmt.Sprintf("attempt to register lifecycle %T more than once", lifecycle))
+	}
+	n.lifecycles = append(n.lifecycles, lifecycle)
+}
+
+// RegisterProtocols adds backend's protocols to the node's p2p server.
+func (n *Node) RegisterProtocols(protocols []p2p.Protocol) {
+	n.lock.Lock()
+	defer n.lock.Unlock()
+
+	if n.state() != initializingState {
+		panic("can't register protocols on running/stopped node")
+	}
+	n.server.Protocols = append(n.server.Protocols, protocols...)
+}
+
+// RegisterAPIs registers the APIs a service provides on the node.
+func (n *Node) RegisterAPIs(apis []rpc.API) {
+	n.lock.Lock()
+	defer n.lock.Unlock()
+
+	if n.state() != initializingState {
+		panic("can't register APIs on running/stopped node")
+	}
+	n.rpcAPIs = append(n.rpcAPIs, apis...)
+}
+
+// RegisterPath mounts the given handler on the given path on the canonical HTTP server.
+func (n *Node) RegisterPath(path string, handler http.Handler) string {
+	n.lock.Lock()
+	defer n.lock.Unlock()
+
+	if n.state() != initializingState {
+		panic("can't register HTTP handler on running/stopped node")
+	}
+	for _, server := range n.httpServers {
+		if atomic.LoadInt32(&server.RPCAllowed) == 1 {
+			server.srvMux.Handle(path, handler)
+			return server.endpoint
+		}
+	}
+	n.log.Warn(fmt.Sprintf("HTTP server not configured on node, path %s cannot be enabled", path))
+	return ""
 }
 
 // Attach creates an RPC client attached to an in-process API handler.
@@ -597,10 +587,15 @@ func (n *Node) RPCHandler() (*rpc.Server, error) {
 	n.lock.Lock()
 	defer n.lock.Unlock()
 
-	if n.runstate == closedState {
+	if n.state() == closedState {
 		return nil, ErrNodeStopped
 	}
 	return n.inprocHandler, nil
+}
+
+// Config returns the configuration of node.
+func (n *Node) Config() *Config {
+	return n.config
 }
 
 // Server retrieves the currently running P2P network layer. This method is meant
@@ -661,7 +656,7 @@ func (n *Node) OpenDatabase(name string, cache, handles int, namespace string) (
 	n.lock.Lock()
 	defer n.lock.Unlock()
 
-	if n.runstate == closedState {
+	if n.state() == closedState {
 		return nil, ErrNodeStopped
 	}
 
@@ -688,7 +683,7 @@ func (n *Node) OpenDatabaseWithFreezer(name string, cache, handles int, freezer,
 	n.lock.Lock()
 	defer n.lock.Unlock()
 
-	if n.runstate == closedState {
+	if n.state() == closedState {
 		return nil, ErrNodeStopped
 	}
 
@@ -752,17 +747,14 @@ type closeTrackingDB struct {
 }
 
 func (db *closeTrackingDB) Close() error {
-	db.n.dbLock.Lock()
+	db.n.lock.Lock()
 	delete(db.n.databases, db)
-	db.n.dbLock.Unlock()
+	db.n.lock.Unlock()
 	return db.Database.Close()
 }
 
 // wrapDatabase ensures the database will be auto-closed when Node is closed.
 func (n *Node) wrapDatabase(db ethdb.Database) ethdb.Database {
-	n.dbLock.Lock()
-	defer n.dbLock.Unlock()
-
 	wrapper := &closeTrackingDB{db, n}
 	n.databases[wrapper] = struct{}{}
 	return wrapper
@@ -770,9 +762,6 @@ func (n *Node) wrapDatabase(db ethdb.Database) ethdb.Database {
 
 // closeDatabases closes all open databases.
 func (n *Node) closeDatabases() (errors []error) {
-	n.dbLock.Lock()
-	defer n.dbLock.Unlock()
-
 	for db := range n.databases {
 		delete(n.databases, db)
 		if err := db.Database.Close(); err != nil {
