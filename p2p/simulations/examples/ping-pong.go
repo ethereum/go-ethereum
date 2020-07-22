@@ -31,7 +31,6 @@ import (
 	"github.com/ethereum/go-ethereum/p2p/enode"
 	"github.com/ethereum/go-ethereum/p2p/simulations"
 	"github.com/ethereum/go-ethereum/p2p/simulations/adapters"
-	"github.com/ethereum/go-ethereum/rpc"
 )
 
 var adapterType = flag.String("adapter", "sim", `node adapter to use (one of "sim", "exec" or "docker")`)
@@ -49,7 +48,6 @@ func main() {
 		"ping-pong": func(ctx *adapters.ServiceContext, stack *node.Node) (node.Lifecycle, error) {
 			pps := newPingPongService(ctx.Config.ID)
 			stack.RegisterProtocols(pps.Protocols())
-			stack.RegisterAPIs(pps.APIs())
 			return pps, nil
 		},
 	}
@@ -111,10 +109,6 @@ func (p *pingPongService) Protocols() []p2p.Protocol {
 		Run:      p.Run,
 		NodeInfo: p.Info,
 	}}
-}
-
-func (p *pingPongService) APIs() []rpc.API {
-	return nil
 }
 
 func (p *pingPongService) Start() error {
