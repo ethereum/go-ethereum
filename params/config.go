@@ -73,6 +73,7 @@ var (
 
 	// MainnetTrustedCheckpoint contains the light client trusted checkpoint for the main network.
 	MainnetTrustedCheckpoint = &TrustedCheckpoint{
+		Name:         "mainnet",
 		SectionIndex: 310,
 		SectionHead:  common.HexToHash("0x9ad360474d1187f5f118f4274a319877862b31b2f6de6fc8ce07bdf6784038fd"),
 		CHTRoot:      common.HexToHash("0xbb3fc87df2f81bafbf9ae5e7f4bbd89702e2257dceccefb1a37ec35a7bb6b40c"),
@@ -257,6 +258,7 @@ var (
 // used to start light syncing from this checkpoint and avoid downloading the
 // entire header chain while still being able to securely access old headers/logs.
 type TrustedCheckpoint struct {
+	Name         string      `json:"name"`
 	SectionIndex uint64      `json:"sectionIndex"`
 	SectionHead  common.Hash `json:"sectionHead"`
 	CHTRoot      common.Hash `json:"chtRoot"`

@@ -69,6 +69,7 @@ type ProtocolManager struct {
 
 	checkpointNumber uint64      // Block number for the sync progress validator to cross reference
 	checkpointHash   common.Hash // Block hash for the sync progress validator to cross reference
+	checkpointName   string
 
 	txpool     txPool
 	blockchain *core.BlockChain
@@ -144,6 +145,7 @@ func NewProtocolManager(config *params.ChainConfig, checkpoint *params.TrustedCh
 	if checkpoint != nil {
 		manager.checkpointNumber = (checkpoint.SectionIndex+1)*params.CHTFrequency - 1
 		manager.checkpointHash = checkpoint.SectionHead
+		manager.checkpointName = checkpoint.Name
 	}
 
 	// Construct the downloader (long sync) and its backing state bloom if fast
