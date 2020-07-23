@@ -173,7 +173,7 @@ func (q *queue) Reset(blockCacheLimit int) {
 	q.receiptTaskQueue.Reset()
 	q.receiptPendPool = make(map[string]*fetchRequest)
 
-	q.resultCache = newResultStore(blockCacheLimit * 2)
+	q.resultCache = newResultStore(blockCacheLimit)
 }
 
 // Close marks the end of the sync, unblocking Results.

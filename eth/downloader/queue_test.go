@@ -128,7 +128,7 @@ func TestBasics(t *testing.T) {
 			t.Fatal("should throttle")
 		}
 		// But we should still get the first things to fetch
-		if got, exp := len(fetchReq.Headers), 8; got != exp {
+		if got, exp := len(fetchReq.Headers), 5; got != exp {
 			t.Fatalf("expected %d requests, got %d", exp, got)
 		}
 		if got, exp := fetchReq.Headers[0].Number.Uint64(), uint64(1); got != exp {
@@ -160,7 +160,7 @@ func TestBasics(t *testing.T) {
 			t.Fatal("should throttle")
 		}
 		// But we should still get the first things to fetch
-		if got, exp := len(fetchReq.Headers), 8; got != exp {
+		if got, exp := len(fetchReq.Headers), 5; got != exp {
 			t.Fatalf("expected %d requests, got %d", exp, got)
 		}
 		if got, exp := fetchReq.Headers[0].Number.Uint64(), uint64(1); got != exp {
@@ -208,7 +208,7 @@ func TestEmptyBlocks(t *testing.T) {
 		}
 
 	}
-	if q.blockTaskQueue.Size() != len(emptyChain.blocks)-(10*2*3/4) {
+	if q.blockTaskQueue.Size() != len(emptyChain.blocks)-10 {
 		t.Errorf("expected block task queue to be 0, got %d", q.blockTaskQueue.Size())
 	}
 	if q.receiptTaskQueue.Size() != 0 {
@@ -224,10 +224,9 @@ func TestEmptyBlocks(t *testing.T) {
 			t.Fatal("there should be no body fetch tasks remaining")
 		}
 	}
-	if got, exp := q.resultCache.countCompleted(), (10 * 2 * 3 / 4); got != exp {
+	if got, exp := q.resultCache.countCompleted(), 10; got != exp {
 		t.Errorf("wrong processable count, got %d, exp %d", got, exp)
 	}
-
 }
 
 // XTestDelivery does some more extensive testing of events that happen,

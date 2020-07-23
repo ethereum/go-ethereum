@@ -49,7 +49,7 @@ func newResultStore(size int) *resultStore {
 	return &resultStore{
 		resultOffset:      0,
 		items:             make([]*fetchResult, size),
-		throttleThreshold: 3 * uint64(size) / 4, // 75%
+		throttleThreshold: uint64(size),
 	}
 }
 
@@ -59,7 +59,7 @@ func (r *resultStore) SetThrottleThreshold(threshold uint64) {
 	r.lock.Lock()
 	defer r.lock.Unlock()
 
-	limit := uint64(len(r.items)) * 3 / 4
+	limit := uint64(len(r.items))
 	if threshold >= limit {
 		threshold = limit
 	}
