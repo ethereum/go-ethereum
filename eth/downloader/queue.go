@@ -378,7 +378,7 @@ func (q *queue) Results(block bool) []*fetchResult {
 	// Using the newly calibrated resultsize, figure out the new throttle limit
 	// on the result cache
 	throttleThreshold := uint64((common.StorageSize(blockCacheMemory) + q.resultSize - 1) / q.resultSize)
-	q.resultCache.SetThrottleThreshold(throttleThreshold)
+	throttleThreshold = q.resultCache.SetThrottleThreshold(throttleThreshold)
 
 	// Log some info at certain times
 	if time.Since(q.lastStatLog) > 10*time.Second {

@@ -54,8 +54,8 @@ func newResultStore(size int) *resultStore {
 }
 
 // SetThrottleThreshold updates the throttling threshold based on the requested
-// limit and the total queue capacity.
-func (r *resultStore) SetThrottleThreshold(threshold uint64) {
+// limit and the total queue capacity. It returns the (possibly capped) threshold
+func (r *resultStore) SetThrottleThreshold(threshold uint64) uint64 {
 	r.lock.Lock()
 	defer r.lock.Unlock()
 
@@ -64,6 +64,7 @@ func (r *resultStore) SetThrottleThreshold(threshold uint64) {
 		threshold = limit
 	}
 	r.throttleThreshold = threshold
+	return r.throttleThreshold
 }
 
 // AddFetch adds a header for body/receipt fetching. This is used when the queue
