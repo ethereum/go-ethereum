@@ -601,6 +601,7 @@ func (d *Downloader) Terminate() {
 		d.stateBloom.Close()
 	}
 	d.quitLock.Unlock()
+
 	// Cancel any pending download requests
 	d.Cancel()
 }
@@ -1211,6 +1212,7 @@ func (d *Downloader) fetchParts(deliveryCh chan dataPack, deliver func(dataPack)
 	// Create a ticker to detect expired retrieval tasks
 	ticker := time.NewTicker(100 * time.Millisecond)
 	defer ticker.Stop()
+
 	update := make(chan struct{}, 1)
 
 	// Prepare the queue and fetch block parts until the block header fetcher's done

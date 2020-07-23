@@ -75,6 +75,7 @@ func init() {
 	blocks, _ = makeChain(targetBlocks, 0, genesis, true)
 	emptyChain = &chainData{blocks, 0}
 }
+
 func (chain *chainData) headers() []*types.Header {
 	hdrs := make([]*types.Header, len(chain.blocks))
 	for i, b := range chain.blocks {
@@ -82,6 +83,7 @@ func (chain *chainData) headers() []*types.Header {
 	}
 	return hdrs
 }
+
 func (chain *chainData) Len() int {
 	return len(chain.blocks)
 }
@@ -95,7 +97,6 @@ func dummyPeer(id string) *peerConnection {
 }
 
 func TestBasics(t *testing.T) {
-
 	q := newQueue(10)
 	if !q.Idle() {
 		t.Errorf("new queue should be idle")
@@ -121,10 +122,7 @@ func TestBasics(t *testing.T) {
 	// queue that a certain peer will deliver them for us
 	{
 		peer := dummyPeer("peer-1")
-		fetchReq, _, throttle, err := q.ReserveBodies(peer, 50)
-		if err != nil {
-			t.Fatal(err)
-		}
+		fetchReq, _, throttle := q.ReserveBodies(peer, 50)
 		if !throttle {
 			// queue size is only 10, so throttling should occur
 			t.Fatal("should throttle")
@@ -139,10 +137,8 @@ func TestBasics(t *testing.T) {
 	}
 	{
 		peer := dummyPeer("peer-2")
-		fetchReq, _, throttle, err := q.ReserveBodies(peer, 50)
-		if err != nil {
-			t.Fatal(err)
-		}
+		fetchReq, _, throttle := q.ReserveBodies(peer, 50)
+
 		// The second peer should hit throttling
 		if !throttle {
 			t.Fatalf("should not throttle")
@@ -158,10 +154,7 @@ func TestBasics(t *testing.T) {
 		// The receipt delivering peer should not be affected
 		// by the throttling of body deliveries
 		peer := dummyPeer("peer-3")
-		fetchReq, _, throttle, err := q.ReserveReceipts(peer, 50)
-		if err != nil {
-			t.Fatal(err)
-		}
+		fetchReq, _, throttle := q.ReserveReceipts(peer, 50)
 		if !throttle {
 			// queue size is only 10, so throttling should occur
 			t.Fatal("should throttle")
@@ -181,7 +174,6 @@ func TestBasics(t *testing.T) {
 }
 
 func TestEmptyBlocks(t *testing.T) {
-
 	q := newQueue(10)
 
 	q.Prepare(1, FastSync)
@@ -208,10 +200,8 @@ func TestEmptyBlocks(t *testing.T) {
 	{
 		// Reserve blocks
 		peer := dummyPeer("peer-1")
-		fetchReq, _, _, err := q.ReserveBodies(peer, 50)
-		if err != nil {
-			t.Fatal(err)
-		}
+		fetchReq, _, _ := q.ReserveBodies(peer, 50)
+
 		// there should be nothing to fetch, blocks are empty
 		if fetchReq != nil {
 			t.Fatal("there should be no body fetch tasks remaining")
@@ -227,10 +217,8 @@ func TestEmptyBlocks(t *testing.T) {
 	//fmt.Printf("receiptTaskQueue len: %d\n", q.receiptTaskQueue.Size())
 	{
 		peer := dummyPeer("peer-3")
-		fetchReq, _, _, err := q.ReserveReceipts(peer, 50)
-		if err != nil {
-			t.Fatal(err)
-		}
+		fetchReq, _, _ := q.ReserveReceipts(peer, 50)
+
 		// there should be nothing to fetch, blocks are empty
 		if fetchReq != nil {
 			t.Fatal("there should be no body fetch tasks remaining")
@@ -296,7 +284,7 @@ func XTestDelivery(t *testing.T) {
 		i := 4
 		for {
 			peer := dummyPeer(fmt.Sprintf("peer-%d", i))
-			f, _, _, _ := q.ReserveBodies(peer, rand.Intn(30))
+			f, _, _ := q.ReserveBodies(peer, rand.Intn(30))
 			if f != nil {
 				var emptyList []*types.Header
 				var txs [][]*types.Transaction
@@ -322,7 +310,7 @@ func XTestDelivery(t *testing.T) {
 		// reserve receiptfetch
 		peer := dummyPeer("peer-3")
 		for {
-			f, _, _, _ := q.ReserveReceipts(peer, rand.Intn(50))
+			f, _, _ := q.ReserveReceipts(peer, rand.Intn(50))
 			if f != nil {
 				var rcs [][]*types.Receipt
 				for _, hdr := range f.Headers {

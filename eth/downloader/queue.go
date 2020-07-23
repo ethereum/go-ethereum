@@ -335,7 +335,7 @@ func (q *queue) Schedule(headers []*types.Header, from uint64) []*types.Header {
 // Results can be called concurrently with Deliver and Schedule,
 // but assumes that there are not two simultaneous callers to Results
 func (q *queue) Results(block bool) []*fetchResult {
-	// abort early if there are no items and non-blocking requested
+	// Abort early if there are no items and non-blocking requested
 	if !block && !q.resultCache.HasCompletedItems() {
 		return nil
 	}
@@ -379,7 +379,8 @@ func (q *queue) Results(block bool) []*fetchResult {
 	// on the result cache
 	throttleThreshold := uint64((common.StorageSize(blockCacheMemory) + q.resultSize - 1) / q.resultSize)
 	q.resultCache.SetThrottleThreshold(throttleThreshold)
-	// log some info at certain times
+
+	// Log some info at certain times
 	if time.Since(q.lastStatLog) > 10*time.Second {
 		q.lastStatLog = time.Now()
 		info := q.Stats()
@@ -392,13 +393,15 @@ func (q *queue) Results(block bool) []*fetchResult {
 func (q *queue) Stats() []interface{} {
 	q.lock.RLock()
 	defer q.lock.RUnlock()
+
 	return q.stats()
 }
+
 func (q *queue) stats() []interface{} {
 	return []interface{}{
-		"receiptTaskQueue", q.receiptTaskQueue.Size(),
-		"blockTaskQueue", q.blockTaskQueue.Size(),
-		"est resultSize", q.resultSize,
+		"receiptTasks", q.receiptTaskQueue.Size(),
+		"blockTasks", q.blockTaskQueue.Size(),
+		"itemSize", q.resultSize,
 	}
 }
 
@@ -469,11 +472,11 @@ func (q *queue) ReserveReceipts(p *peerConnection, count int) (*fetchRequest, bo
 // Note, this method expects the queue lock to be already held for writing. The
 // reason the lock is not obtained in here is because the parameters already need
 // to access the queue, so they already need a lock anyway.
-// returns:
-// item - the fetchRequest
-// progress, bool - whether any progress was made
-// throttle, bool - if the caller should throttle for a while
-// error - any error that occcurred
+//
+// Returns:
+//   item     - the fetchRequest
+//   progress - whether any progress was made
+//   throttle - if the caller should throttle for a while
 func (q *queue) reserveHeaders(p *peerConnection, count int, taskPool map[common.Hash]*types.Header, taskQueue *prque.Prque,
 	pendPool map[string]*fetchRequest, kind uint) (*fetchRequest, bool, bool) {
 	// Short circuit if the pool has been depleted, or if the peer's already
@@ -518,7 +521,7 @@ func (q *queue) reserveHeaders(p *peerConnection, count int, taskPool map[common
 		}
 		if err != nil {
 			// this most definitely should _not_ happen
-			log.Warn("reserve headers error", "error", err)
+			log.Warn("Failed to reserve headers", "err", err)
 			// There are no resultslots available. Leave it in the task queue
 			break
 		}
