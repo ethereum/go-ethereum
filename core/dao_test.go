@@ -79,6 +79,7 @@ func TestDAOForkRangeExtradata(t *testing.T) {
 		if _, err := bc.InsertChain(blocks); err != nil {
 			t.Fatalf("failed to import contra-fork chain for expansion: %v", err)
 		}
+		bc.stateCache.WaitCommits(0)
 		if err := bc.stateCache.TrieDB().Commit(bc.CurrentHeader().Root, true, nil); err != nil {
 			t.Fatalf("failed to commit contra-fork head for expansion: %v", err)
 		}
@@ -104,6 +105,7 @@ func TestDAOForkRangeExtradata(t *testing.T) {
 		if _, err := bc.InsertChain(blocks); err != nil {
 			t.Fatalf("failed to import pro-fork chain for expansion: %v", err)
 		}
+		bc.stateCache.WaitCommits(0)
 		if err := bc.stateCache.TrieDB().Commit(bc.CurrentHeader().Root, true, nil); err != nil {
 			t.Fatalf("failed to commit pro-fork head for expansion: %v", err)
 		}
@@ -130,6 +132,7 @@ func TestDAOForkRangeExtradata(t *testing.T) {
 	if _, err := bc.InsertChain(blocks); err != nil {
 		t.Fatalf("failed to import contra-fork chain for expansion: %v", err)
 	}
+	bc.stateCache.WaitCommits(0)
 	if err := bc.stateCache.TrieDB().Commit(bc.CurrentHeader().Root, true, nil); err != nil {
 		t.Fatalf("failed to commit contra-fork head for expansion: %v", err)
 	}
@@ -150,6 +153,7 @@ func TestDAOForkRangeExtradata(t *testing.T) {
 	if _, err := bc.InsertChain(blocks); err != nil {
 		t.Fatalf("failed to import pro-fork chain for expansion: %v", err)
 	}
+	bc.stateCache.WaitCommits(0)
 	if err := bc.stateCache.TrieDB().Commit(bc.CurrentHeader().Root, true, nil); err != nil {
 		t.Fatalf("failed to commit pro-fork head for expansion: %v", err)
 	}

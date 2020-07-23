@@ -89,6 +89,14 @@ func (db *odrDatabase) TrieDB() *trie.Database {
 	return nil
 }
 
+func (db *odrDatabase) Close() {}
+
+func (db *odrDatabase) Commit(root common.Hash, stateTrie state.Trie, storageTries map[common.Hash]state.Trie, callback func()) error {
+	return nil
+}
+
+func (db *odrDatabase) WaitCommits(n int) {}
+
 type odrTrie struct {
 	db   *odrDatabase
 	id   *TrieID
@@ -119,9 +127,9 @@ func (t *odrTrie) TryDelete(key []byte) error {
 	})
 }
 
-func (t *odrTrie) Commit(onleaf trie.LeafCallback) (common.Hash, error) {
+func (t *odrTrie) Commit(onleaf trie.LeafCallback) common.Hash {
 	if t.trie == nil {
-		return t.id.Root, nil
+		return t.id.Root
 	}
 	return t.trie.Commit(onleaf)
 }
