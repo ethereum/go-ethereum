@@ -50,7 +50,7 @@ type Node struct {
 	stop          chan struct{}     // Channel to wait for termination notifications
 	server        *p2p.Server       // Currently running P2P networking layer
 	startStopLock sync.Mutex        // Start/Stop are protected by an additional lock
-	stateFlag     int32             // Tracks state of node lifecycle
+	state         int               // Tracks state of node lifecycle
 
 	lock          sync.Mutex
 	lifecycles    []Lifecycle // All registered backends, services, and auxiliary services that have a lifecycle
@@ -67,14 +67,6 @@ const (
 	runningState
 	closedState
 )
-
-func (n *Node) state() int32 {
-	return atomic.LoadInt32(&n.stateFlag)
-}
-
-func (n *Node) setState(state int32) {
-	atomic.StoreInt32(&n.stateFlag, state)
-}
 
 // New creates a new P2P node, ready for protocol registration.
 func New(conf *Config) (*Node, error) {
@@ -192,15 +184,16 @@ func (n *Node) Start() error {
 	n.startStopLock.Lock()
 	defer n.startStopLock.Unlock()
 
-	switch n.state() {
+	n.lock.Lock()
+	switch n.state {
 	case runningState:
+		n.lock.Unlock()
 		return ErrNodeRunning
 	case closedState:
+		n.lock.Unlock()
 		return ErrNodeStopped
 	}
-	n.setState(runningState)
-
-	n.lock.Lock()
+	n.state = runningState
 	err := n.startNetworking()
 	lifecycles := make([]Lifecycle, len(n.lifecycles))
 	copy(lifecycles, n.lifecycles)
@@ -233,7 +226,10 @@ func (n *Node) Close() error {
 	n.startStopLock.Lock()
 	defer n.startStopLock.Unlock()
 
-	switch state := n.state(); state {
+	n.lock.Lock()
+	state := n.state
+	n.lock.Unlock()
+	switch state {
 	case initializingState:
 		// The node was never started.
 		return n.doClose(nil)
@@ -253,7 +249,12 @@ func (n *Node) Close() error {
 
 // doClose releases resources acquired by New(), collecting errors.
 func (n *Node) doClose(errs []error) error {
-	n.setState(closedState)
+	// Close databases. This needs the lock because it needs to
+	// synchronize with OpenDatabase*.
+	n.lock.Lock()
+	n.state = closedState
+	errs = append(errs, n.closeDatabases()...)
+	n.lock.Unlock()
 
 	if err := n.accman.Close(); err != nil {
 		errs = append(errs, err)
@@ -263,12 +264,6 @@ func (n *Node) doClose(errs []error) error {
 			errs = append(errs, err)
 		}
 	}
-
-	// Close databases. This needs the lock because it needs to
-	// synchronize with OpenDatabase*.
-	n.lock.Lock()
-	errs = append(errs, n.closeDatabases()...)
-	n.lock.Unlock()
 
 	// Release instance directory lock.
 	n.closeDataDir()
@@ -527,7 +522,7 @@ func (n *Node) RegisterLifecycle(lifecycle Lifecycle) {
 	n.lock.Lock()
 	defer n.lock.Unlock()
 
-	if n.state() != initializingState {
+	if n.state != initializingState {
 		panic("can't register lifecycle on running/stopped node")
 	}
 	if containsLifecycle(n.lifecycles, lifecycle) {
@@ -541,7 +536,7 @@ func (n *Node) RegisterProtocols(protocols []p2p.Protocol) {
 	n.lock.Lock()
 	defer n.lock.Unlock()
 
-	if n.state() != initializingState {
+	if n.state != initializingState {
 		panic("can't register protocols on running/stopped node")
 	}
 	n.server.Protocols = append(n.server.Protocols, protocols...)
@@ -552,7 +547,7 @@ func (n *Node) RegisterAPIs(apis []rpc.API) {
 	n.lock.Lock()
 	defer n.lock.Unlock()
 
-	if n.state() != initializingState {
+	if n.state != initializingState {
 		panic("can't register APIs on running/stopped node")
 	}
 	n.rpcAPIs = append(n.rpcAPIs, apis...)
@@ -563,7 +558,7 @@ func (n *Node) RegisterPath(path string, handler http.Handler) string {
 	n.lock.Lock()
 	defer n.lock.Unlock()
 
-	if n.state() != initializingState {
+	if n.state != initializingState {
 		panic("can't register HTTP handler on running/stopped node")
 	}
 	for _, server := range n.httpServers {
@@ -586,7 +581,7 @@ func (n *Node) RPCHandler() (*rpc.Server, error) {
 	n.lock.Lock()
 	defer n.lock.Unlock()
 
-	if n.state() == closedState {
+	if n.state == closedState {
 		return nil, ErrNodeStopped
 	}
 	return n.inprocHandler, nil
@@ -654,8 +649,7 @@ func (n *Node) EventMux() *event.TypeMux {
 func (n *Node) OpenDatabase(name string, cache, handles int, namespace string) (ethdb.Database, error) {
 	n.lock.Lock()
 	defer n.lock.Unlock()
-
-	if n.state() == closedState {
+	if n.state == closedState {
 		return nil, ErrNodeStopped
 	}
 
@@ -681,8 +675,7 @@ func (n *Node) OpenDatabase(name string, cache, handles int, namespace string) (
 func (n *Node) OpenDatabaseWithFreezer(name string, cache, handles int, freezer, namespace string) (ethdb.Database, error) {
 	n.lock.Lock()
 	defer n.lock.Unlock()
-
-	if n.state() == closedState {
+	if n.state == closedState {
 		return nil, ErrNodeStopped
 	}
 
