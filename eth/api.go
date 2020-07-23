@@ -388,10 +388,24 @@ func (api *Eth2API) makeEnv(parent *types.Block, header *types.Header) error {
 	return nil
 }
 
-func (api *Eth2API) ProduceBlock(parentHash common.Hash) ([]byte, error) {
+func (api *Eth2API) ProduceBlock(parentHash common.Hash) ([]byte, error) {	
+	log.Info("Produce block", "parentHash", parentHash)
+
 	bc := api.eth.BlockChain()
 	parent := bc.GetBlockByHash(parentHash)
 	pool := api.eth.TxPool()
+
+	timestamp := time.Now().Unix()
+	if parent.Time() >= uint64(timestamp) {
+		timestamp = int64(parent.Time() + 1)
+	}
+	// this will ensure we're not going off too far in the future
+	if now := time.Now().Unix(); timestamp > now+1 {
+		wait := time.Duration(timestamp-now) * time.Second
+		log.Info("Producing block too far in the future", "wait", common.PrettyDuration(wait))
+		time.Sleep(wait)
+	}
+
 	pending, err := pool.Pending()
 	if err != nil {
 		return nil, err
@@ -403,7 +417,7 @@ func (api *Eth2API) ProduceBlock(parentHash common.Hash) ([]byte, error) {
 		Number:     num.Add(num, common.Big1),
 		GasLimit:   parent.GasLimit(), // Keep the gas limit constant in this prototype
 		Extra:      []byte{},
-		Time:       uint64(time.Now().UnixNano()),
+		Time:       uint64(timestamp),
 	}
 	err = api.eth.Engine().Prepare(bc, header)
 	if err != nil {
@@ -486,13 +500,19 @@ func (api *Eth2API) InsertBlock(blockRLP []byte) error {
 		return err
 	}
 
-	_, err := api.eth.BlockChain().InsertChain(types.Blocks([]*types.Block{&block}))
+	_, err := api.eth.BlockChain().InsertChainWithoutSealVerification(types.Blocks([]*types.Block{&block}))
 	return err
 }
 
 func (api *Eth2API) SetHead(newHead common.Hash) error {
-	oldBlock := api.eth.BlockChain().GetBlockByHash(api.head)
+	oldBlock := api.eth.BlockChain().CurrentBlock()
+
+	if oldBlock.Hash() == newHead {
+		return nil
+	}
+
 	newBlock := api.eth.BlockChain().GetBlockByHash(newHead)
+
 	err := api.eth.BlockChain().Reorg(oldBlock, newBlock)
 	if err != nil {
 		return err
