@@ -318,25 +318,25 @@ func (db *cachingDB) run() {
 			return nil
 		})
 	}
+
+	// release sends the "resume" signal the waiting channels.
+	release := func(n int) {
+		waitLock.Lock()
+		defer waitLock.Unlock()
+
+		for i := 0; i < len(waits); i++ {
+			if n <= waits[i].n {
+				close(waits[i].ack)
+				waits[i] = waits[len(waits)-1]
+				waits[i] = nil
+				waits = waits[:len(waits)-1]
+				i--
+			}
+		}
+	}
 	// commit tries to commit all cumulative tasks in the single thread.
 	commit := func(done chan struct{}) {
 		defer close(done)
-
-		release := func(n int) {
-			waitLock.Lock()
-			defer waitLock.Unlock()
-
-			for i := 0; i < len(waits); i++ {
-				if n <= waits[i].n {
-					close(waits[i].ack)
-					waits[i] = waits[len(waits)-1]
-					waits[i] = nil
-					waits = waits[:len(waits)-1]
-					i--
-				}
-			}
-		}
-		defer release(0)
 
 		for {
 			db.lock.Lock()
@@ -365,24 +365,27 @@ func (db *cachingDB) run() {
 			remain := len(db.fifo)
 			db.lock.Unlock()
 
-			release(remain)
+			release(remain) // send back ack as soon as possible
 		}
 	}
 	for {
 		select {
 		case wait := <-db.signal:
+			waitLock.Lock()
+			waits = append(waits, wait)
+			waitLock.Unlock()
+
 			if done == nil {
 				done = make(chan struct{})
 				go commit(done)
 			}
-			waitLock.Lock()
-			waits = append(waits, wait)
-			waitLock.Unlock()
 		case <-done:
 			done = nil
+			release(0)
 		case <-db.close:
 			if done != nil {
 				<-done
+				release(0)
 			}
 			return
 		}
