@@ -89,14 +89,6 @@ func (db *odrDatabase) TrieDB() *trie.Database {
 	return nil
 }
 
-func (db *odrDatabase) Close() {}
-
-func (db *odrDatabase) Commit(root common.Hash, stateTrie state.Trie, storageTries map[common.Hash]state.Trie, callback func()) error {
-	return nil
-}
-
-func (db *odrDatabase) WaitCommits(n int) {}
-
 type odrTrie struct {
 	db   *odrDatabase
 	id   *TrieID

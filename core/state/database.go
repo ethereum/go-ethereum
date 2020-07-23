@@ -51,11 +51,17 @@ type Database interface {
 
 	// TrieDB retrieves the low level trie database used for data storage.
 	TrieDB() *trie.Database
+}
+
+// CacheableDatabase extends the Database by adding the functions for lazy state commit.
+type CacheableDatabase interface {
+	Database
 
 	// Commit enqueues the given commit task and schedules for background committing.
 	Commit(root common.Hash, stateTrie Trie, storageTries map[common.Hash]Trie, postCommit func()) error
 
 	// WaitCommits waits until the cached commit tasks equal or less than n.
+	// This function can act as the barrier between task generator and commiter.
 	WaitCommits(n int)
 
 	// Close terminates all background threads and exit.
@@ -112,14 +118,14 @@ const maxCachedState = 16 // Cache state limit exceeds which to suspend commit.
 // NewDatabase creates a backing store for state. The returned database is safe for
 // concurrent use, but does not retain any recent trie nodes in memory. To keep some
 // historical state in memory, use the NewDatabaseWithCache constructor.
-func NewDatabase(db ethdb.Database) Database {
+func NewDatabase(db ethdb.Database) CacheableDatabase {
 	return NewDatabaseWithCache(db, 0, "")
 }
 
 // NewDatabaseWithCache creates a backing store for state. The returned database
 // is safe for concurrent use and retains a lot of collapsed RLP trie nodes in a
 // large memory cache.
-func NewDatabaseWithCache(db ethdb.Database, cache int, journal string) Database {
+func NewDatabaseWithCache(db ethdb.Database, cache int, journal string) CacheableDatabase {
 	csc, _ := lru.New(codeSizeCacheSize)
 	cdb := &cachingDB{
 		db:            trie.NewDatabaseWithCache(db, cache, journal),

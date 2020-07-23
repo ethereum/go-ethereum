@@ -301,8 +301,12 @@ func TestReplication(t *testing.T) {
 }
 
 func TestCommitIsolation(t *testing.T) {
+	// trie and trieMirror should be exactly same
 	db := NewDatabase(memorydb.New())
 	trie, _ := New(common.Hash{}, db)
+	dbMirror := NewDatabase(memorydb.New())
+	trieMirror, _ := New(common.Hash{}, dbMirror)
+
 	vals := []struct{ k, v string }{
 		{"key1", "verb"},
 		{"key2", "wookiedoo"},
@@ -313,20 +317,18 @@ func TestCommitIsolation(t *testing.T) {
 	}
 	for _, kv := range vals {
 		updateString(trie, kv.k, kv.v)
+		updateString(trieMirror, kv.k, kv.v)
 	}
 	trie2 := HashAndCopyTrie(trie) // Copy before commit
-
-	root := trie.Commit(nil)
-	committed := make(map[common.Hash]struct{})
-	db.Commit(root, false, func(hash common.Hash) {
-		committed[hash] = struct{}{}
-	})
-
 	vals2 := []struct{ k, v string }{
 		// Overwrite existent keys
 		{"key1", "verb2"},
 		{"key2", "wookiedoo2"},
 		{"key3", "stallion2"},
+		// Delete existent keys
+		{"key4", ""},
+		{"key5", ""},
+		{"key6", ""},
 		// Append new keys
 		{"key7", "horse"},
 		{"key8", "coin"},
@@ -335,6 +337,33 @@ func TestCommitIsolation(t *testing.T) {
 	for _, kv := range vals2 {
 		updateString(trie2, kv.k, kv.v)
 	}
+
+	// Commit the first trie, the modification in trie2 shouldn't affect it
+	root := trie.Commit(nil)
+	committed := make(map[common.Hash]struct{})
+	db.Commit(root, false, func(hash common.Hash) {
+		committed[hash] = struct{}{}
+	})
+
+	// Commit the mirror trie, ensure the commitment is exactly same
+	rootMirror := trieMirror.Commit(nil)
+	committedMirror := make(map[common.Hash]struct{})
+	dbMirror.Commit(rootMirror, false, func(hash common.Hash) {
+		committedMirror[hash] = struct{}{}
+	})
+	if root != rootMirror {
+		t.Fatalf("Hash mismatched, want %v, got %v", rootMirror, root)
+	}
+	for h := range committedMirror {
+		if _, ok := committed[h]; !ok {
+			t.Fatalf("Missing commit entry %v", h)
+		}
+	}
+	if len(committed) != len(committedMirror) {
+		t.Fatalf("Commitment size is different")
+	}
+
+	// Commit the second trie, duplicated commit is filtered.
 	root = trie2.Commit(nil)
 	db.Commit(root, false, func(hash common.Hash) {
 		if _, ok := committed[hash]; ok {

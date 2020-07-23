@@ -56,7 +56,7 @@ type Trie struct {
 
 	// commitSeq is used to tag the commit order for each changed node.
 	// The uncommitted trie may be reused(e.g. for processing the next block).
-	// In this case, trie nodes will be tagged with different seq.
+	// In this case, trie nodes will be tagged with a increased seq.
 	//
 	// The default seq is 0.
 	commitSeq int

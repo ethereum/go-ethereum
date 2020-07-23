@@ -142,13 +142,17 @@ type CacheConfig struct {
 // included in the canonical one where as GetBlockByNumber always represents the
 // canonical chain.
 type BlockChain struct {
+	// WARNING: The `gcproc` is accessed atomically.
+	// On 32 bit platforms, only 64-bit aligned fields can be atomic. The struct is
+	// guaranteed to be so aligned, so take advantage of that. For more information,
+	// see https://golang.org/pkg/sync/atomic/#pkg-note-BUG.
+	gcproc      uint64              // Accumulates canonical block processing for trie dumping
 	chainConfig *params.ChainConfig // Chain & network configuration
 	cacheConfig *CacheConfig        // Cache configuration for pruning
 
 	db     ethdb.Database // Low level persistent database to store final content in
 	snaps  *snapshot.Tree // Snapshot tree for fast trie leaf access
 	triegc *prque.Prque   // Priority queue mapping block numbers to tries to gc
-	gcproc time.Duration  // Accumulates canonical block processing for trie dumping
 
 	// txLookupLimit is the maximum number of blocks from head whose tx indices
 	// are reserved:
@@ -172,13 +176,13 @@ type BlockChain struct {
 	currentBlock     atomic.Value // Current head of the block chain
 	currentFastBlock atomic.Value // Current head of the fast-sync chain (may be above the block chain!)
 
-	stateCache    state.Database // State database to reuse between imports (contains state cache)
-	bodyCache     *lru.Cache     // Cache for the most recent block bodies
-	bodyRLPCache  *lru.Cache     // Cache for the most recent block bodies in RLP encoded format
-	receiptsCache *lru.Cache     // Cache for the most recent receipts per block
-	blockCache    *lru.Cache     // Cache for the most recent entire blocks
-	txLookupCache *lru.Cache     // Cache for the most recent transaction lookup data.
-	futureBlocks  *lru.Cache     // future blocks are blocks added for later processing
+	stateCache    state.CacheableDatabase // State database to reuse between imports (contains state cache)
+	bodyCache     *lru.Cache              // Cache for the most recent block bodies
+	bodyRLPCache  *lru.Cache              // Cache for the most recent block bodies in RLP encoded format
+	receiptsCache *lru.Cache              // Cache for the most recent receipts per block
+	blockCache    *lru.Cache              // Cache for the most recent entire blocks
+	txLookupCache *lru.Cache              // Cache for the most recent transaction lookup data.
+	futureBlocks  *lru.Cache              // future blocks are blocks added for later processing
 
 	quit          chan struct{}  // blockchain quit channel
 	wg            sync.WaitGroup // chain processing wait group for shutting down
@@ -1492,8 +1496,9 @@ func (bc *BlockChain) writeBlockWithState(block *types.Block, receipts []*types.
 				// Find the next state trie we need to commit
 				chosen := current - TriesInMemory
 
-				// If we exceeded out time allowance, flush an entire trie to disk
-				if bc.gcproc > bc.cacheConfig.TrieTimeLimit {
+				// If we exceeded out time allowance, flush an entire trie to disk.
+				gcproc := atomic.LoadUint64(&bc.gcproc)
+				if time.Duration(gcproc) > bc.cacheConfig.TrieTimeLimit {
 					// If the header is missing (canonical chain behind), we're reorging a low
 					// diff sidechain. Suspend committing until this operation is completed.
 					header := bc.GetHeaderByNumber(chosen)
@@ -1502,13 +1507,13 @@ func (bc *BlockChain) writeBlockWithState(block *types.Block, receipts []*types.
 					} else {
 						// If we're exceeding limits but haven't reached a large enough memory gap,
 						// warn the user that the system is becoming unstable.
-						if chosen < lastWrite+TriesInMemory && bc.gcproc >= 2*bc.cacheConfig.TrieTimeLimit {
-							log.Info("State in memory for too long, committing", "time", bc.gcproc, "allowance", bc.cacheConfig.TrieTimeLimit, "optimum", float64(chosen-lastWrite)/TriesInMemory)
+						if chosen < lastWrite+TriesInMemory && gcproc >= 2*bc.cacheConfig.TrieTimeLimit {
+							log.Info("State in memory for too long, committing", "time", gcproc, "allowance", bc.cacheConfig.TrieTimeLimit, "optimum", float64(chosen-lastWrite)/TriesInMemory)
 						}
 						// Flush an entire trie and restart the counters
 						triedb.Commit(header.Root, true, nil)
 						lastWrite = chosen
-						bc.gcproc = 0
+						atomic.StoreUint64(&bc.gcproc, 0)
 					}
 				}
 				// Garbage collect anything below our required write retention
@@ -1882,7 +1887,7 @@ func (bc *BlockChain) insertChain(chain types.Blocks, verifySeals bool) (int, er
 			lastCanon = block
 
 			// Only count canonical blocks for GC processing time
-			bc.gcproc += proctime
+			atomic.AddUint64(&bc.gcproc, uint64(proctime.Nanoseconds()))
 
 		case SideStatTy:
 			log.Debug("Inserted forked block", "number", block.Number(), "hash", block.Hash(),
