@@ -19,9 +19,12 @@ package state
 import (
 	"fmt"
 	"sync"
+	"time"
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/ethdb"
+	"github.com/ethereum/go-ethereum/log"
+	"github.com/ethereum/go-ethereum/metrics"
 	"github.com/ethereum/go-ethereum/rlp"
 	"github.com/ethereum/go-ethereum/trie"
 	lru "github.com/hashicorp/golang-lru"
@@ -58,7 +61,7 @@ type CacheableDatabase interface {
 	Database
 
 	// Commit enqueues the given commit task and schedules for background committing.
-	Commit(root common.Hash, stateTrie Trie, storageTries map[common.Hash]Trie, postCommit func()) error
+	Commit(root common.Hash, number uint64, stateTrie Trie, storageTries map[common.Hash]Trie, postCommit func()) error
 
 	// WaitCommits waits until the cached commit tasks equal or less than n.
 	// This function can act as the barrier between task generator and commiter.
@@ -115,6 +118,13 @@ type Trie interface {
 
 const maxCachedState = 16 // Cache state limit exceeds which to suspend commit.
 
+var (
+	stateTrieHits   = metrics.NewRegisteredMeter("chain/committer/state/hits", nil)
+	stateTrieMiss   = metrics.NewRegisteredMeter("chain/committer/state/miss", nil)
+	storageTrieHits = metrics.NewRegisteredMeter("chain/committer/storage/hits", nil)
+	storageTrieMiss = metrics.NewRegisteredMeter("chain/committer/storage/miss", nil)
+)
+
 // NewDatabase creates a backing store for state. The returned database is safe for
 // concurrent use, but does not retain any recent trie nodes in memory. To keep some
 // historical state in memory, use the NewDatabaseWithCache constructor.
@@ -143,6 +153,7 @@ func NewDatabaseWithCache(db ethdb.Database, cache int, journal string) Cacheabl
 // usually the callback is necessary in order to run the memory gc algorithm.
 type commitTask struct {
 	root       common.Hash
+	number     uint64
 	state      Trie
 	storage    map[common.Hash]Trie
 	postCommit func()
@@ -175,9 +186,11 @@ func (db *cachingDB) OpenTrie(root common.Hash) (Trie, error) {
 	db.lock.Lock()
 	if task, ok := db.tasks[root]; ok {
 		db.lock.Unlock()
+		stateTrieHits.Mark(1)
 		return task.state.(*trie.SecureTrie).HashAndCopy(), nil
 	}
 	db.lock.Unlock()
+	stateTrieMiss.Mark(1)
 	return trie.NewSecure(root, db.db)
 }
 
@@ -187,10 +200,12 @@ func (db *cachingDB) OpenStorageTrie(addrHash, root common.Hash) (Trie, error) {
 	for _, task := range db.tasks {
 		if t, ok := task.storage[addrHash]; ok && t.Hash() == root {
 			db.lock.Unlock()
+			storageTrieHits.Mark(1)
 			return t.(*trie.SecureTrie).HashAndCopy(), nil
 		}
 	}
 	db.lock.Unlock()
+	storageTrieMiss.Mark(1)
 	return trie.NewSecure(root, db.db)
 }
 
@@ -225,7 +240,7 @@ func (db *cachingDB) ContractCodeSize(addrHash, codeHash common.Hash) (int, erro
 // Commit enqueues the given commit task and schedule for background execution.
 // The callback is applied when the given state is committed. It can be used
 // to run memory garbage collection algorithm.
-func (db *cachingDB) Commit(root common.Hash, stateTrie Trie, storageTries map[common.Hash]Trie, postCommit func()) error {
+func (db *cachingDB) Commit(root common.Hash, number uint64, stateTrie Trie, storageTries map[common.Hash]Trie, postCommit func()) error {
 	db.lock.Lock()
 
 	// Short circult if nothing to commit
@@ -249,7 +264,9 @@ func (db *cachingDB) Commit(root common.Hash, stateTrie Trie, storageTries map[c
 		storage:    storageTries,
 		postCommit: postCommit,
 	}
+	block := len(db.fifo)
 	db.lock.Unlock()
+	log.Debug("Enqueue commit task", "root", root, "number", number)
 
 	ack := &waitAck{
 		n:   maxCachedState,
@@ -259,7 +276,9 @@ func (db *cachingDB) Commit(root common.Hash, stateTrie Trie, storageTries map[c
 	case db.signal <- ack:
 		// If there are too many cached commit tasks, suspend the
 		// commit for a while before enough tasks are finished.
-		<-ack.ack
+		if block > maxCachedState {
+			<-ack.ack
+		}
 	case <-db.close:
 	}
 	return nil
@@ -279,7 +298,7 @@ func (db *cachingDB) Close() {
 // WaitCommits waits until the cached commit tasks equal or less than n.
 func (db *cachingDB) WaitCommits(n int) {
 	ack := &waitAck{
-		n:   0,
+		n:   n,
 		ack: make(chan struct{}),
 	}
 	select {
@@ -324,8 +343,7 @@ func (db *cachingDB) run() {
 			return nil
 		})
 	}
-
-	// release sends the "resume" signal the waiting channels.
+	// release sends the "resume" signal to the waiting channels.
 	release := func(n int) {
 		waitLock.Lock()
 		defer waitLock.Unlock()
@@ -334,7 +352,7 @@ func (db *cachingDB) run() {
 			if n <= waits[i].n {
 				close(waits[i].ack)
 				waits[i] = waits[len(waits)-1]
-				waits[i] = nil
+				waits[len(waits)-1] = nil
 				waits = waits[:len(waits)-1]
 				i--
 			}
@@ -358,6 +376,7 @@ func (db *cachingDB) run() {
 			db.lock.Unlock()
 
 			// Commit the tries without holding the lock. It's totally thread-safe to do it.
+			start := time.Now()
 			commitState(task.state, task.storage)
 
 			// Run the callback after commit if it's not nil, usually it's in-memory GC algo.
@@ -371,6 +390,7 @@ func (db *cachingDB) run() {
 			remain := len(db.fifo)
 			db.lock.Unlock()
 
+			log.Debug("State committed", "root", task.root, "number", task.number, "remaining", remain, "elapsed", common.PrettyDuration(time.Since(start)))
 			release(remain) // send back ack as soon as possible
 		}
 	}
@@ -390,6 +410,7 @@ func (db *cachingDB) run() {
 			release(0)
 		case <-db.close:
 			if done != nil {
+				log.Debug("Waiting background commit tasks to be finished")
 				<-done
 				release(0)
 			}
