@@ -25,6 +25,7 @@ import (
 	"math/rand"
 	"os"
 	"reflect"
+	"sync"
 	"testing"
 	"testing/quick"
 
@@ -370,6 +371,66 @@ func TestCommitIsolation(t *testing.T) {
 			t.Fatalf("Duplicated commit")
 		}
 	})
+}
+
+func TestConcurrentHash(t *testing.T) {
+	trie := newEmpty()
+	trie2 := newEmpty()
+	vals := []struct{ k, v string }{
+		{"do", "verb"},
+		{"ether", "wookiedoo"},
+		{"horse", "stallion"},
+		{"shaman", "horse"},
+		{"doge", "coin"},
+		{"dog", "puppy"},
+		{"somethingveryoddindeedthis is", "myothernodedata"},
+	}
+	for _, val := range vals {
+		updateString(trie, val.k, val.v)
+		updateString(trie2, val.k, val.v)
+	}
+	var wg sync.WaitGroup
+	var h = make([]common.Hash, 128)
+	wg.Add(128)
+	for i := 0; i < 128; i++ {
+		go func(index int) {
+			defer wg.Done()
+			h[index] = trie.Hash()
+		}(i)
+	}
+	wg.Wait()
+
+	for i := 0; i < 128; i++ {
+		// fmt.Println(h[i].Hex())
+	}
+
+	h3 := trie2.Hash()
+	fmt.Println(h3.Hex())
+}
+
+func TestNodeCopy(t *testing.T) {
+	trie := newEmpty()
+	vals := []struct{ k, v string }{
+		{"do", "verb"},
+		{"ether", "wookiedoo"},
+		{"horse", "stallion"},
+		{"shaman", "horse"},
+		{"doge", "coin"},
+		{"dog", "puppy"},
+		{"somethingveryoddindeedthis is", "myothernodedata"},
+	}
+	for _, val := range vals {
+		updateString(trie, val.k, val.v)
+	}
+	h := trie.Hash()
+	fmt.Println(h.Hex())
+	// spew.Dump(trie.root)
+	fn := trie.root.(*fullNode)
+	fn2 := fn.copy()
+	fmt.Printf("%p\n", fn.flags.hash)
+	fmt.Printf("%p\n", fn2.flags.hash)
+	spew.Dump(fn.flags)
+	spew.Dump(fn2.flags)
 }
 
 func TestLargeValue(t *testing.T) {

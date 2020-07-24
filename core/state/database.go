@@ -119,10 +119,13 @@ type Trie interface {
 const maxCachedState = 16 // Cache state limit exceeds which to suspend commit.
 
 var (
-	stateTrieHits   = metrics.NewRegisteredMeter("chain/committer/state/hits", nil)
-	stateTrieMiss   = metrics.NewRegisteredMeter("chain/committer/state/miss", nil)
-	storageTrieHits = metrics.NewRegisteredMeter("chain/committer/storage/hits", nil)
-	storageTrieMiss = metrics.NewRegisteredMeter("chain/committer/storage/miss", nil)
+	stateTrieHits      = metrics.NewRegisteredMeter("chain/committer/state/hits", nil)
+	stateTrieMiss      = metrics.NewRegisteredMeter("chain/committer/state/miss", nil)
+	accountCommitTimer = metrics.NewRegisteredTimer("chain/committer/state/commits", nil)
+	storageTrieHits    = metrics.NewRegisteredMeter("chain/committer/storage/hits", nil)
+	storageTrieMiss    = metrics.NewRegisteredMeter("chain/committer/storage/miss", nil)
+	storageCommitTimer = metrics.NewRegisteredTimer("chain/committer/storage/commits", nil)
+	memoryGCTimer      = metrics.NewRegisteredTimer("chain/committer/gc/duration", nil)
 )
 
 // NewDatabase creates a backing store for state. The returned database is safe for
@@ -142,7 +145,7 @@ func NewDatabaseWithCache(db ethdb.Database, cache int, journal string) Cacheabl
 		codeSizeCache: csc,
 		tasks:         make(map[common.Hash]*commitTask),
 		close:         make(chan struct{}),
-		signal:        make(chan *waitAck),
+		task:          make(chan *commitTask),
 	}
 	cdb.wg.Add(1)
 	go cdb.run()
@@ -156,7 +159,12 @@ type commitTask struct {
 	number     uint64
 	state      Trie
 	storage    map[common.Hash]Trie
+	lock       sync.Mutex
 	postCommit func()
+
+	// ACK fields.
+	waitN int
+	ack   chan struct{}
 }
 
 // waitAck is the response from the background committer. The ack will send
@@ -173,12 +181,12 @@ type cachingDB struct {
 	db            *trie.Database
 	codeSizeCache *lru.Cache
 
-	lock   sync.Mutex
-	fifo   []common.Hash
-	tasks  map[common.Hash]*commitTask
-	wg     sync.WaitGroup
-	close  chan struct{}
-	signal chan *waitAck
+	lock  sync.Mutex
+	fifo  []common.Hash
+	tasks map[common.Hash]*commitTask
+	wg    sync.WaitGroup
+	close chan struct{}
+	task  chan *commitTask
 }
 
 // OpenTrie opens the main account trie at a specific root hash.
@@ -187,6 +195,9 @@ func (db *cachingDB) OpenTrie(root common.Hash) (Trie, error) {
 	if task, ok := db.tasks[root]; ok {
 		db.lock.Unlock()
 		stateTrieHits.Mark(1)
+
+		task.lock.Lock()
+		defer task.lock.Unlock()
 		return task.state.(*trie.SecureTrie).HashAndCopy(), nil
 	}
 	db.lock.Unlock()
@@ -201,6 +212,9 @@ func (db *cachingDB) OpenStorageTrie(addrHash, root common.Hash) (Trie, error) {
 		if t, ok := task.storage[addrHash]; ok && t.Hash() == root {
 			db.lock.Unlock()
 			storageTrieHits.Mark(1)
+
+			task.lock.Lock()
+			defer task.lock.Unlock()
 			return t.(*trie.SecureTrie).HashAndCopy(), nil
 		}
 	}
@@ -241,13 +255,11 @@ func (db *cachingDB) ContractCodeSize(addrHash, codeHash common.Hash) (int, erro
 // The callback is applied when the given state is committed. It can be used
 // to run memory garbage collection algorithm.
 func (db *cachingDB) Commit(root common.Hash, number uint64, stateTrie Trie, storageTries map[common.Hash]Trie, postCommit func()) error {
-	db.lock.Lock()
-
 	// Short circult if nothing to commit
 	if root == emptyRoot {
-		db.lock.Unlock()
 		return nil
 	}
+	db.lock.Lock()
 	// Reject duplicated commit task. It can happen in several cases:
 	// - in the clique networks where empty blocks don't modify the state
 	// 	 (0 block subsidy). In this case we should keep the original one.
@@ -257,29 +269,32 @@ func (db *cachingDB) Commit(root common.Hash, number uint64, stateTrie Trie, sto
 		db.lock.Unlock()
 		return nil
 	}
-	db.fifo = append(db.fifo, root)
-	db.tasks[root] = &commitTask{
+	left := len(db.fifo)
+	db.lock.Unlock()
+
+	// If there are too many cached commit tasks, suspend the
+	// commit for a while before enough tasks are finished.
+	var (
+		ack   = make(chan struct{})
+		waitN = -1
+	)
+	if left+1 > maxCachedState {
+		waitN = maxCachedState
+	}
+	select {
+	case db.task <- &commitTask{
 		root:       root,
+		number:     number,
 		state:      stateTrie,
 		storage:    storageTries,
 		postCommit: postCommit,
-	}
-	block := len(db.fifo)
-	db.lock.Unlock()
-	log.Debug("Enqueue commit task", "root", root, "number", number)
-
-	ack := &waitAck{
-		n:   maxCachedState,
-		ack: make(chan struct{}),
-	}
-	select {
-	case db.signal <- ack:
-		// If there are too many cached commit tasks, suspend the
-		// commit for a while before enough tasks are finished.
-		if block > maxCachedState {
-			<-ack.ack
-		}
+		waitN:      waitN,
+		ack:        ack,
+	}:
+		log.Debug("Enqueue commit task", "root", root, "number", number)
+		<-ack
 	case <-db.close:
+		return nil // DB closed
 	}
 	return nil
 }
@@ -297,15 +312,46 @@ func (db *cachingDB) Close() {
 
 // WaitCommits waits until the cached commit tasks equal or less than n.
 func (db *cachingDB) WaitCommits(n int) {
-	ack := &waitAck{
-		n:   n,
-		ack: make(chan struct{}),
-	}
+	ack := make(chan struct{})
 	select {
-	case db.signal <- ack:
-		<-ack.ack
+	case db.task <- &commitTask{
+		waitN: n,
+		ack:   ack,
+	}:
+		<-ack
 	case <-db.close:
 	}
+}
+
+// pick retrieves the task in the head, return nil if there is nothing left.
+func (db *cachingDB) pick() *commitTask {
+	db.lock.Lock()
+	if len(db.fifo) == 0 {
+		db.lock.Unlock()
+		return nil
+	}
+	root := db.fifo[0]
+	task := db.tasks[root]
+	if task == nil {
+		panic(fmt.Sprintf("missing commit task %x", root))
+	}
+	db.lock.Unlock()
+	return task
+}
+
+// del deletes the head task from the queue and returns the remaining tasks as well.
+func (db *cachingDB) del() int {
+	db.lock.Lock()
+	if len(db.fifo) == 0 {
+		db.lock.Unlock()
+		return 0
+	}
+	root := db.fifo[0]
+	db.fifo = db.fifo[1:]
+	delete(db.tasks, root)
+	left := len(db.fifo)
+	db.lock.Unlock()
+	return left
 }
 
 // run is the main loop of cachingDB, all background tasks will be executed here
@@ -315,20 +361,22 @@ func (db *cachingDB) run() {
 
 	var (
 		// Non-nil if background commit routine is active.
-		done chan struct{}
-
-		waitLock sync.Mutex
-		waits    []*waitAck
+		done  chan struct{}
+		waits []*waitAck
 	)
 	// commitState flushes dirty state in the given tries into the underlying database.
 	commitState := func(stateTrie Trie, storageTries map[common.Hash]Trie) {
 		triedb := db.TrieDB()
+		start := time.Now()
 		for _, storage := range storageTries {
 			storage.Commit(nil)
 		}
+		storageCommitTimer.UpdateSince(start)
+
 		// The onleaf func is called _serially_, so we can reuse the same account
 		// for unmarshalling every time.
 		var account Account
+		start = time.Now()
 		stateTrie.Commit(func(leaf []byte, parent common.Hash) error {
 			if err := rlp.DecodeBytes(leaf, &account); err != nil {
 				return nil
@@ -342,12 +390,10 @@ func (db *cachingDB) run() {
 			}
 			return nil
 		})
+		accountCommitTimer.UpdateSince(start)
 	}
 	// release sends the "resume" signal to the waiting channels.
 	release := func(n int) {
-		waitLock.Lock()
-		defer waitLock.Unlock()
-
 		for i := 0; i < len(waits); i++ {
 			if n <= waits[i].n {
 				close(waits[i].ack)
@@ -358,63 +404,72 @@ func (db *cachingDB) run() {
 			}
 		}
 	}
-	// commit tries to commit all cumulative tasks in the single thread.
-	commit := func(done chan struct{}) {
+	// commit tries to commit the given task in the single thread.
+	commit := func(done chan struct{}, task *commitTask) {
 		defer close(done)
 
-		for {
-			db.lock.Lock()
-			if len(db.fifo) == 0 {
-				db.lock.Unlock()
-				return // no more work left
-			}
-			root := db.fifo[0]
-			task := db.tasks[root]
-			if task == nil {
-				panic(fmt.Sprintf("missing commit task %x", root))
-			}
-			db.lock.Unlock()
+		// Commit the tries, now we have to hold the lock here to prevent
+		// concurrent issue between commit and hash. Please fix it(rjl493456442)
+		start := time.Now()
+		task.lock.Lock()
+		commitState(task.state, task.storage)
+		task.lock.Unlock()
 
-			// Commit the tries without holding the lock. It's totally thread-safe to do it.
-			start := time.Now()
-			commitState(task.state, task.storage)
-
-			// Run the callback after commit if it's not nil, usually it's in-memory GC algo.
-			if task.postCommit != nil {
-				task.postCommit()
-			}
-			// Delete the executed tasks.
-			db.lock.Lock()
-			db.fifo = db.fifo[1:]
-			delete(db.tasks, root)
-			remain := len(db.fifo)
-			db.lock.Unlock()
-
-			log.Debug("State committed", "root", task.root, "number", task.number, "remaining", remain, "elapsed", common.PrettyDuration(time.Since(start)))
-			release(remain) // send back ack as soon as possible
+		// Run the callback after commit if it's not nil, usually it's in-memory GC algo.
+		callstart := time.Now()
+		if task.postCommit != nil {
+			task.postCommit()
 		}
+		memoryGCTimer.UpdateSince(callstart)
+		log.Debug("State committed", "root", task.root, "number", task.number, "elapsed", common.PrettyDuration(time.Since(start)))
 	}
 	for {
-		select {
-		case wait := <-db.signal:
-			waitLock.Lock()
-			waits = append(waits, wait)
-			waitLock.Unlock()
-
-			if done == nil {
+		if done == nil {
+			task := db.pick()
+			if task != nil {
 				done = make(chan struct{})
-				go commit(done)
+				go commit(done, task)
 			}
+		}
+		select {
+		case t := <-db.task:
+			db.lock.Lock()
+			left := len(db.fifo)
+			if t.root != (common.Hash{}) {
+				db.fifo = append(db.fifo, t.root)
+				db.tasks[t.root] = t
+				left += 1
+			}
+			db.lock.Unlock()
+			if t.waitN == -1 || left == 0 {
+				close(t.ack)
+			} else {
+				waits = append(waits, &waitAck{
+					n:   t.waitN,
+					ack: t.ack,
+				})
+			}
+
 		case <-done:
 			done = nil
-			release(0)
+			// Cleanup the processed task and resume the
+			// waiting acks as soon as possible.
+			release(db.del())
+
 		case <-db.close:
-			if done != nil {
-				log.Debug("Waiting background commit tasks to be finished")
-				<-done
-				release(0)
+			for {
+				if done != nil {
+					<-done
+					done = nil
+					release(db.del())
+				}
+				task := db.pick()
+				if task == nil {
+					return
+				}
+				done = make(chan struct{})
+				go commit(done, task)
 			}
-			return
 		}
 	}
 }

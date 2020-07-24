@@ -1503,6 +1503,7 @@ func TestTrieForkGC(t *testing.T) {
 			t.Fatalf("fork %d: failed to insert into chain: %v", i, err)
 		}
 	}
+	chain.stateCache.WaitCommits(0)
 	// Dereference all the recent tries and ensure no past trie is left in
 	for i := 0; i < TriesInMemory; i++ {
 		chain.stateCache.TrieDB().Dereference(blocks[len(blocks)-1-i].Root())
@@ -1540,6 +1541,7 @@ func TestLargeReorgTrieGC(t *testing.T) {
 	if _, err := chain.InsertChain(original); err != nil {
 		t.Fatalf("failed to insert original chain: %v", err)
 	}
+	chain.stateCache.WaitCommits(0)
 	// Ensure that the state associated with the forking point is pruned away
 	if node, _ := chain.stateCache.TrieDB().Node(shared[len(shared)-1].Root()); node != nil {
 		t.Fatalf("common-but-old ancestor still cache")
@@ -1549,6 +1551,7 @@ func TestLargeReorgTrieGC(t *testing.T) {
 	if _, err := chain.InsertChain(competitor[:len(competitor)-2]); err != nil {
 		t.Fatalf("failed to insert competitor chain: %v", err)
 	}
+	chain.stateCache.WaitCommits(0)
 	for i, block := range competitor[:len(competitor)-2] {
 		if node, _ := chain.stateCache.TrieDB().Node(block.Root()); node != nil {
 			t.Fatalf("competitor %d: low TD chain became processed", i)
@@ -1559,6 +1562,7 @@ func TestLargeReorgTrieGC(t *testing.T) {
 	if _, err := chain.InsertChain(competitor[len(competitor)-2:]); err != nil {
 		t.Fatalf("failed to finalize competitor chain: %v", err)
 	}
+	chain.stateCache.WaitCommits(0)
 	for i, block := range competitor[:len(competitor)-TriesInMemory] {
 		if node, _ := chain.stateCache.TrieDB().Node(block.Root()); node != nil {
 			t.Fatalf("competitor %d: competing chain state missing", i)
@@ -1754,9 +1758,12 @@ func testSideImport(t *testing.T, numCanonBlocksInSidechain, blocksBetweenCommon
 	if err != nil {
 		t.Fatalf("failed to create tester chain: %v", err)
 	}
+	defer chain.Stop()
+
 	if n, err := chain.InsertChain(blocks); err != nil {
 		t.Fatalf("block %d: failed to insert into chain: %v", n, err)
 	}
+	chain.stateCache.WaitCommits(0)
 
 	lastPrunedIndex := len(blocks) - TriesInMemory - 1
 	lastPrunedBlock := blocks[lastPrunedIndex]
@@ -2411,9 +2418,12 @@ func TestSideImportPrunedBlocks(t *testing.T) {
 	if err != nil {
 		t.Fatalf("failed to create tester chain: %v", err)
 	}
+	defer chain.Stop()
+
 	if n, err := chain.InsertChain(blocks); err != nil {
 		t.Fatalf("block %d: failed to insert into chain: %v", n, err)
 	}
+	chain.stateCache.WaitCommits(0)
 
 	lastPrunedIndex := len(blocks) - TriesInMemory - 1
 	lastPrunedBlock := blocks[lastPrunedIndex]

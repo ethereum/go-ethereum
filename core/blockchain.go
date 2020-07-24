@@ -589,7 +589,7 @@ func (bc *BlockChain) StateAt(root common.Hash) (*state.StateDB, error) {
 }
 
 // StateCache returns the caching database underpinning the blockchain instance.
-func (bc *BlockChain) StateCache() state.Database {
+func (bc *BlockChain) StateCache() state.CacheableDatabase {
 	return bc.stateCache
 }
 
@@ -1497,8 +1497,8 @@ func (bc *BlockChain) writeBlockWithState(block *types.Block, receipts []*types.
 				chosen := current - TriesInMemory
 
 				// If we exceeded out time allowance, flush an entire trie to disk.
-				gcproc := atomic.LoadUint64(&bc.gcproc)
-				if time.Duration(gcproc) > bc.cacheConfig.TrieTimeLimit {
+				gcproc := time.Duration(atomic.LoadUint64(&bc.gcproc))
+				if gcproc > bc.cacheConfig.TrieTimeLimit {
 					// If the header is missing (canonical chain behind), we're reorging a low
 					// diff sidechain. Suspend committing until this operation is completed.
 					header := bc.GetHeaderByNumber(chosen)

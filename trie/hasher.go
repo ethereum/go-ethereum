@@ -19,6 +19,7 @@ package trie
 import (
 	"sync"
 
+	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/rlp"
 	"golang.org/x/crypto/sha3"
@@ -104,9 +105,7 @@ func (h *hasher) hash(n node, force bool) (hashed node, cached node) {
 func (h *hasher) hashShortNodeChildren(n *shortNode) (collapsed, cached *shortNode) {
 	// Hash the short node's child, caching the newly hashed subtree
 	collapsed, cached = n.copy(), n.copy()
-	// Previously, we did copy this one. We don't seem to need to actually
-	// do that, since we don't overwrite/reuse keys
-	//cached.Key = common.CopyBytes(n.Key)
+	cached.Key = common.CopyBytes(n.Key)
 	collapsed.Key = hexToCompact(n.Key)
 	// Unless the child is a valuenode or hashnode, hash it
 	switch n.Val.(type) {
