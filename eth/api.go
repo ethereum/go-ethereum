@@ -388,7 +388,7 @@ func (api *Eth2API) makeEnv(parent *types.Block, header *types.Header) error {
 	return nil
 }
 
-func (api *Eth2API) ProduceBlock(parentHash common.Hash) ([]byte, error) {	
+func (api *Eth2API) ProduceBlock(parentHash common.Hash) ([]byte, error) {
 	log.Info("Produce block", "parentHash", parentHash)
 
 	bc := api.eth.BlockChain()
