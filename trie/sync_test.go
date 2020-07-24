@@ -105,7 +105,7 @@ func TestEmptySync(t *testing.T) {
 func TestIterativeSyncIndividual(t *testing.T) { testIterativeSync(t, 1) }
 func TestIterativeSyncBatched(t *testing.T)    { testIterativeSync(t, 100) }
 
-func testIterativeSync(t *testing.T, batch int) {
+func testIterativeSync(t *testing.T, count int) {
 	// Create a random trie to copy
 	srcDb, srcTrie, srcData := makeTestTrie()
 
@@ -114,7 +114,7 @@ func testIterativeSync(t *testing.T, batch int) {
 	triedb := NewDatabase(diskdb)
 	sched := NewSync(srcTrie.Hash(), diskdb, nil, NewSyncBloom(1, diskdb))
 
-	queue := append([]common.Hash{}, sched.Missing(batch)...)
+	queue := append([]common.Hash{}, sched.Missing(count)...)
 	for len(queue) > 0 {
 		results := make([]SyncResult, len(queue))
 		for i, hash := range queue {
@@ -127,10 +127,12 @@ func testIterativeSync(t *testing.T, batch int) {
 		if _, index, err := sched.Process(results); err != nil {
 			t.Fatalf("failed to process result #%d: %v", index, err)
 		}
-		if index, err := sched.Commit(diskdb); err != nil {
-			t.Fatalf("failed to commit data #%d: %v", index, err)
+		batch := diskdb.NewBatch()
+		if err := sched.Commit(batch); err != nil {
+			t.Fatalf("failed to commit data: %v", err)
 		}
-		queue = append(queue[:0], sched.Missing(batch)...)
+		batch.Write()
+		queue = append(queue[:0], sched.Missing(count)...)
 	}
 	// Cross check that the two tries are in sync
 	checkTrieContents(t, triedb, srcTrie.Hash().Bytes(), srcData)
@@ -161,9 +163,11 @@ func TestIterativeDelayedSync(t *testing.T) {
 		if _, index, err := sched.Process(results); err != nil {
 			t.Fatalf("failed to process result #%d: %v", index, err)
 		}
-		if index, err := sched.Commit(diskdb); err != nil {
-			t.Fatalf("failed to commit data #%d: %v", index, err)
+		batch := diskdb.NewBatch()
+		if err := sched.Commit(batch); err != nil {
+			t.Fatalf("failed to commit data: %v", err)
 		}
+		batch.Write()
 		queue = append(queue[len(results):], sched.Missing(10000)...)
 	}
 	// Cross check that the two tries are in sync
@@ -176,7 +180,7 @@ func TestIterativeDelayedSync(t *testing.T) {
 func TestIterativeRandomSyncIndividual(t *testing.T) { testIterativeRandomSync(t, 1) }
 func TestIterativeRandomSyncBatched(t *testing.T)    { testIterativeRandomSync(t, 100) }
 
-func testIterativeRandomSync(t *testing.T, batch int) {
+func testIterativeRandomSync(t *testing.T, count int) {
 	// Create a random trie to copy
 	srcDb, srcTrie, srcData := makeTestTrie()
 
@@ -186,7 +190,7 @@ func testIterativeRandomSync(t *testing.T, batch int) {
 	sched := NewSync(srcTrie.Hash(), diskdb, nil, NewSyncBloom(1, diskdb))
 
 	queue := make(map[common.Hash]struct{})
-	for _, hash := range sched.Missing(batch) {
+	for _, hash := range sched.Missing(count) {
 		queue[hash] = struct{}{}
 	}
 	for len(queue) > 0 {
@@ -203,11 +207,13 @@ func testIterativeRandomSync(t *testing.T, batch int) {
 		if _, index, err := sched.Process(results); err != nil {
 			t.Fatalf("failed to process result #%d: %v", index, err)
 		}
-		if index, err := sched.Commit(diskdb); err != nil {
-			t.Fatalf("failed to commit data #%d: %v", index, err)
+		batch := diskdb.NewBatch()
+		if err := sched.Commit(batch); err != nil {
+			t.Fatalf("failed to commit data: %v", err)
 		}
+		batch.Write()
 		queue = make(map[common.Hash]struct{})
-		for _, hash := range sched.Missing(batch) {
+		for _, hash := range sched.Missing(count) {
 			queue[hash] = struct{}{}
 		}
 	}
@@ -248,9 +254,11 @@ func TestIterativeRandomDelayedSync(t *testing.T) {
 		if _, index, err := sched.Process(results); err != nil {
 			t.Fatalf("failed to process result #%d: %v", index, err)
 		}
-		if index, err := sched.Commit(diskdb); err != nil {
-			t.Fatalf("failed to commit data #%d: %v", index, err)
+		batch := diskdb.NewBatch()
+		if err := sched.Commit(batch); err != nil {
+			t.Fatalf("failed to commit data: %v", err)
 		}
+		batch.Write()
 		for _, result := range results {
 			delete(queue, result.Hash)
 		}
@@ -293,9 +301,11 @@ func TestDuplicateAvoidanceSync(t *testing.T) {
 		if _, index, err := sched.Process(results); err != nil {
 			t.Fatalf("failed to process result #%d: %v", index, err)
 		}
-		if index, err := sched.Commit(diskdb); err != nil {
-			t.Fatalf("failed to commit data #%d: %v", index, err)
+		batch := diskdb.NewBatch()
+		if err := sched.Commit(batch); err != nil {
+			t.Fatalf("failed to commit data: %v", err)
 		}
+		batch.Write()
 		queue = append(queue[:0], sched.Missing(0)...)
 	}
 	// Cross check that the two tries are in sync
@@ -329,9 +339,11 @@ func TestIncompleteSync(t *testing.T) {
 		if _, index, err := sched.Process(results); err != nil {
 			t.Fatalf("failed to process result #%d: %v", index, err)
 		}
-		if index, err := sched.Commit(diskdb); err != nil {
-			t.Fatalf("failed to commit data #%d: %v", index, err)
+		batch := diskdb.NewBatch()
+		if err := sched.Commit(batch); err != nil {
+			t.Fatalf("failed to commit data: %v", err)
 		}
+		batch.Write()
 		for _, result := range results {
 			added = append(added, result.Hash)
 		}

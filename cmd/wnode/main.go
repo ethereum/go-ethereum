@@ -37,7 +37,8 @@ import (
 
 	"github.com/maticnetwork/bor/cmd/utils"
 	"github.com/maticnetwork/bor/common"
-	"github.com/maticnetwork/bor/console"
+	"github.com/maticnetwork/bor/common/hexutil"
+	"github.com/maticnetwork/bor/console/prompt"
 	"github.com/maticnetwork/bor/crypto"
 	"github.com/maticnetwork/bor/log"
 	"github.com/maticnetwork/bor/p2p"
@@ -165,7 +166,7 @@ func echo() {
 	fmt.Printf("pow = %f \n", *argPoW)
 	fmt.Printf("mspow = %f \n", *argServerPoW)
 	fmt.Printf("ip = %s \n", *argIP)
-	fmt.Printf("pub = %s \n", common.ToHex(crypto.FromECDSAPub(pub)))
+	fmt.Printf("pub = %s \n", hexutil.Encode(crypto.FromECDSAPub(pub)))
 	fmt.Printf("idfile = %s \n", *argIDFile)
 	fmt.Printf("dbpath = %s \n", *argDBPath)
 	fmt.Printf("boot = %s \n", *argEnode)
@@ -209,7 +210,7 @@ func initialize() {
 
 	if *mailServerMode {
 		if len(msPassword) == 0 {
-			msPassword, err = console.Stdin.PromptPassword("Please enter the Mail Server password: ")
+			msPassword, err = prompt.Stdin.PromptPassword("Please enter the Mail Server password: ")
 			if err != nil {
 				utils.Fatalf("Failed to read Mail Server password: %s", err)
 			}
@@ -298,7 +299,7 @@ func startServer() error {
 		return err
 	}
 
-	fmt.Printf("my public key: %s \n", common.ToHex(crypto.FromECDSAPub(&asymKey.PublicKey)))
+	fmt.Printf("my public key: %s \n", hexutil.Encode(crypto.FromECDSAPub(&asymKey.PublicKey)))
 	fmt.Println(server.NodeInfo().Enode)
 
 	if *bootstrapMode {
@@ -345,7 +346,7 @@ func configureNode() {
 	if *requestMail {
 		p2pAccept = true
 		if len(msPassword) == 0 {
-			msPassword, err = console.Stdin.PromptPassword("Please enter the Mail Server password: ")
+			msPassword, err = prompt.Stdin.PromptPassword("Please enter the Mail Server password: ")
 			if err != nil {
 				utils.Fatalf("Failed to read Mail Server password: %s", err)
 			}
@@ -354,9 +355,9 @@ func configureNode() {
 
 	if !*asymmetricMode && !*forwarderMode {
 		if len(symPass) == 0 {
-			symPass, err = console.Stdin.PromptPassword("Please enter the password for symmetric encryption: ")
+			symPass, err = prompt.Stdin.PromptPassword("Please enter the password for symmetric encryption: ")
 			if err != nil {
-				utils.Fatalf("Failed to read passphrase: %v", err)
+				utils.Fatalf("Failed to read password: %v", err)
 			}
 		}
 
@@ -598,6 +599,7 @@ func messageLoop() {
 	}
 
 	ticker := time.NewTicker(time.Millisecond * 50)
+	defer ticker.Stop()
 
 	for {
 		select {

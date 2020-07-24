@@ -1,4 +1,4 @@
-// Copyright 2018 The go-ethereum Authors
+// Copyright 2019 The go-ethereum Authors
 // This file is part of the go-ethereum library.
 //
 // The go-ethereum library is free software: you can redistribute it and/or modify
@@ -30,17 +30,14 @@ import (
 )
 
 // Test light syncing which will download all headers from genesis.
-func TestLightSyncingLes2(t *testing.T) { testCheckpointSyncing(t, 2, 0) }
 func TestLightSyncingLes3(t *testing.T) { testCheckpointSyncing(t, 3, 0) }
 
 // Test legacy checkpoint syncing which will download tail headers
 // based on a hardcoded checkpoint.
-func TestLegacyCheckpointSyncingLes2(t *testing.T) { testCheckpointSyncing(t, 2, 1) }
 func TestLegacyCheckpointSyncingLes3(t *testing.T) { testCheckpointSyncing(t, 3, 1) }
 
 // Test checkpoint syncing which will download tail headers based
 // on a verified checkpoint.
-func TestCheckpointSyncingLes2(t *testing.T) { testCheckpointSyncing(t, 2, 2) }
 func TestCheckpointSyncingLes3(t *testing.T) { testCheckpointSyncing(t, 3, 2) }
 
 func testCheckpointSyncing(t *testing.T, protocol int, syncMode int) {
@@ -57,7 +54,7 @@ func testCheckpointSyncing(t *testing.T, protocol int, syncMode int) {
 		}
 	}
 	// Generate 512+4 blocks (totally 1 CHT sections)
-	server, client, tearDown := newClientServerEnv(t, int(config.ChtSize+config.ChtConfirms), protocol, waitIndexers, false)
+	server, client, tearDown := newClientServerEnv(t, int(config.ChtSize+config.ChtConfirms), protocol, waitIndexers, nil, 0, false, false)
 	defer tearDown()
 
 	expected := config.ChtSize + config.ChtConfirms
@@ -74,8 +71,8 @@ func testCheckpointSyncing(t *testing.T, protocol int, syncMode int) {
 		}
 		if syncMode == 1 {
 			// Register the assembled checkpoint as hardcoded one.
-			client.pm.checkpoint = cp
-			client.pm.blockchain.(*light.LightChain).AddTrustedCheckpoint(cp)
+			client.handler.checkpoint = cp
+			client.handler.backend.blockchain.AddTrustedCheckpoint(cp)
 		} else {
 			// Register the assembled checkpoint into oracle.
 			header := server.backend.Blockchain().CurrentHeader()
@@ -83,16 +80,16 @@ func testCheckpointSyncing(t *testing.T, protocol int, syncMode int) {
 			data := append([]byte{0x19, 0x00}, append(registrarAddr.Bytes(), append([]byte{0, 0, 0, 0, 0, 0, 0, 0}, cp.Hash().Bytes()...)...)...)
 			sig, _ := crypto.Sign(crypto.Keccak256(data), signerKey)
 			sig[64] += 27 // Transform V from 0/1 to 27/28 according to the yellow paper
-			if _, err := server.pm.reg.contract.RegisterCheckpoint(bind.NewKeyedTransactor(signerKey), cp.SectionIndex, cp.Hash().Bytes(), new(big.Int).Sub(header.Number, big.NewInt(1)), header.ParentHash, [][]byte{sig}); err != nil {
+			if _, err := server.handler.server.oracle.Contract().RegisterCheckpoint(bind.NewKeyedTransactor(signerKey), cp.SectionIndex, cp.Hash().Bytes(), new(big.Int).Sub(header.Number, big.NewInt(1)), header.ParentHash, [][]byte{sig}); err != nil {
 				t.Error("register checkpoint failed", err)
 			}
 			server.backend.Commit()
 
 			// Wait for the checkpoint registration
 			for {
-				_, hash, _, err := server.pm.reg.contract.Contract().GetLatestCheckpoint(nil)
+				_, hash, _, err := server.handler.server.oracle.Contract().Contract().GetLatestCheckpoint(nil)
 				if err != nil || hash == [32]byte{} {
-					time.Sleep(100 * time.Millisecond)
+					time.Sleep(10 * time.Millisecond)
 					continue
 				}
 				break
@@ -102,8 +99,8 @@ func testCheckpointSyncing(t *testing.T, protocol int, syncMode int) {
 	}
 
 	done := make(chan error)
-	client.pm.reg.syncDoneHook = func() {
-		header := client.pm.blockchain.CurrentHeader()
+	client.handler.syncDone = func() {
+		header := client.handler.backend.blockchain.CurrentHeader()
 		if header.Number.Uint64() == expected {
 			done <- nil
 		} else {
@@ -112,16 +109,105 @@ func testCheckpointSyncing(t *testing.T, protocol int, syncMode int) {
 	}
 
 	// Create connected peer pair.
-	peer, err1, lPeer, err2 := newTestPeerPair("peer", protocol, server.pm, client.pm)
-	select {
-	case <-time.After(time.Millisecond * 100):
-	case err := <-err1:
-		t.Fatalf("peer 1 handshake error: %v", err)
-	case err := <-err2:
-		t.Fatalf("peer 2 handshake error: %v", err)
+	peer1, peer2, err := newTestPeerPair("peer", protocol, server.handler, client.handler)
+	if err != nil {
+		t.Fatalf("Failed to connect testing peers %v", err)
 	}
-	server.rPeer, client.rPeer = peer, lPeer
+	defer peer1.close()
+	defer peer2.close()
 
+	select {
+	case err := <-done:
+		if err != nil {
+			t.Error("sync failed", err)
+		}
+		return
+	case <-time.NewTimer(10 * time.Second).C:
+		t.Error("checkpoint syncing timeout")
+	}
+}
+
+func TestMissOracleBackend(t *testing.T)             { testMissOracleBackend(t, true) }
+func TestMissOracleBackendNoCheckpoint(t *testing.T) { testMissOracleBackend(t, false) }
+
+func testMissOracleBackend(t *testing.T, hasCheckpoint bool) {
+	config := light.TestServerIndexerConfig
+
+	waitIndexers := func(cIndexer, bIndexer, btIndexer *core.ChainIndexer) {
+		for {
+			cs, _, _ := cIndexer.Sections()
+			bts, _, _ := btIndexer.Sections()
+			if cs >= 1 && bts >= 1 {
+				break
+			}
+			time.Sleep(10 * time.Millisecond)
+		}
+	}
+	// Generate 512+4 blocks (totally 1 CHT sections)
+	server, client, tearDown := newClientServerEnv(t, int(config.ChtSize+config.ChtConfirms), 3, waitIndexers, nil, 0, false, false)
+	defer tearDown()
+
+	expected := config.ChtSize + config.ChtConfirms
+
+	s, _, head := server.chtIndexer.Sections()
+	cp := &params.TrustedCheckpoint{
+		SectionIndex: 0,
+		SectionHead:  head,
+		CHTRoot:      light.GetChtRoot(server.db, s-1, head),
+		BloomRoot:    light.GetBloomTrieRoot(server.db, s-1, head),
+	}
+	// Register the assembled checkpoint into oracle.
+	header := server.backend.Blockchain().CurrentHeader()
+
+	data := append([]byte{0x19, 0x00}, append(registrarAddr.Bytes(), append([]byte{0, 0, 0, 0, 0, 0, 0, 0}, cp.Hash().Bytes()...)...)...)
+	sig, _ := crypto.Sign(crypto.Keccak256(data), signerKey)
+	sig[64] += 27 // Transform V from 0/1 to 27/28 according to the yellow paper
+	if _, err := server.handler.server.oracle.Contract().RegisterCheckpoint(bind.NewKeyedTransactor(signerKey), cp.SectionIndex, cp.Hash().Bytes(), new(big.Int).Sub(header.Number, big.NewInt(1)), header.ParentHash, [][]byte{sig}); err != nil {
+		t.Error("register checkpoint failed", err)
+	}
+	server.backend.Commit()
+
+	// Wait for the checkpoint registration
+	for {
+		_, hash, _, err := server.handler.server.oracle.Contract().Contract().GetLatestCheckpoint(nil)
+		if err != nil || hash == [32]byte{} {
+			time.Sleep(100 * time.Millisecond)
+			continue
+		}
+		break
+	}
+	expected += 1
+
+	// Explicitly set the oracle as nil. In normal use case it can happen
+	// that user wants to unlock something which blocks the oracle backend
+	// initialisation. But at the same time syncing starts.
+	//
+	// See https://github.com/ethereum/go-ethereum/issues/20097 for more detail.
+	//
+	// In this case, client should run light sync or legacy checkpoint sync
+	// if hardcoded checkpoint is configured.
+	client.handler.backend.oracle = nil
+
+	// For some private networks it can happen checkpoint syncing is enabled
+	// but there is no hardcoded checkpoint configured.
+	if hasCheckpoint {
+		client.handler.checkpoint = cp
+		client.handler.backend.blockchain.AddTrustedCheckpoint(cp)
+	}
+
+	done := make(chan error)
+	client.handler.syncDone = func() {
+		header := client.handler.backend.blockchain.CurrentHeader()
+		if header.Number.Uint64() == expected {
+			done <- nil
+		} else {
+			done <- fmt.Errorf("blockchain length mismatch, want %d, got %d", expected, header.Number)
+		}
+	}
+	// Create connected peer pair.
+	if _, _, err := newTestPeerPair("peer", 2, server.handler, client.handler); err != nil {
+		t.Fatalf("Failed to connect testing peers %v", err)
+	}
 	select {
 	case err := <-done:
 		if err != nil {

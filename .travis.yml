@@ -1,32 +1,69 @@
 language: go
 go_import_path: github.com/maticnetwork/bor
 sudo: false
-matrix:
-  include:
-    - os: linux
-      dist: xenial
-      go: 1.10.x
-      script:
-      - go run build/ci.go install
-      - go run build/ci.go test -coverage $TEST_PACKAGES
+jobs:
+  allow_failures:
+    - stage: build
+      os: osx
+      go: 1.14.x
+      env:
+        - azure-osx
+        - azure-ios
+        - cocoapods-ios
 
-    - os: linux
+  include:
+    # This builder only tests code linters on latest version of Go
+    - stage: lint
+      os: linux
       dist: xenial
-      go: 1.11.x
+      go: 1.14.x
+      env:
+        - lint
+      git:
+        submodules: false # avoid cloning ethereum/tests
+      script:
+        - go run build/ci.go lint
+
+    - stage: build
+      os: linux
+      dist: xenial
+      go: 1.13.x
+      env:
+        - GO111MODULE=on
       script:
         - go run build/ci.go install
         - go run build/ci.go test -coverage $TEST_PACKAGES
 
     # These are the latest Go versions.
-    - os: linux
+    - stage: build
+      os: linux
+      arch: amd64
       dist: xenial
-      go: 1.12.x
+      go: 1.14.x
+      env:
+        - GO111MODULE=on
       script:
         - go run build/ci.go install
         - go run build/ci.go test -coverage $TEST_PACKAGES
 
-    - os: osx
-      go: 1.12.x
+    - stage: build
+      if: type = pull_request
+      os: linux
+      arch: arm64
+      dist: xenial
+      go: 1.14.x
+      env:
+        - GO111MODULE=on
+      script:
+        - go run build/ci.go install
+        - go run build/ci.go test -coverage $TEST_PACKAGES
+
+    - stage: build
+      os: osx
+      osx_image: xcode11.3
+      go: 1.14.x
+      env:
+        - GO111MODULE=on
       script:
         - echo "Increase the maximum number of open file descriptors on macOS"
         - NOFILE=20480
@@ -40,24 +77,15 @@ matrix:
         - go run build/ci.go install
         - go run build/ci.go test -coverage $TEST_PACKAGES
 
-    # This builder only tests code linters on latest version of Go
-    - os: linux
-      dist: xenial
-      go: 1.12.x
-      env:
-        - lint
-      git:
-        submodules: false # avoid cloning ethereum/tests
-      script:
-        - go run build/ci.go lint
-
     # This builder does the Ubuntu PPA upload
-    - if: type = push
+    - stage: build
+      if: type = push
       os: linux
       dist: xenial
-      go: 1.12.x
+      go: 1.14.x
       env:
         - ubuntu-ppa
+        - GO111MODULE=on
       git:
         submodules: false # avoid cloning ethereum/tests
       addons:
@@ -71,16 +99,18 @@ matrix:
             - python-paramiko
       script:
         - echo '|1|7SiYPr9xl3uctzovOTj4gMwAC1M=|t6ReES75Bo/PxlOPJ6/GsGbTrM0= ssh-rsa AAAAB3NzaC1yc2EAAAABIwAAAQEA0aKz5UTUndYgIGG7dQBV+HaeuEZJ2xPHo2DS2iSKvUL4xNMSAY4UguNW+pX56nAQmZKIZZ8MaEvSj6zMEDiq6HFfn5JcTlM80UwlnyKe8B8p7Nk06PPQLrnmQt5fh0HmEcZx+JU9TZsfCHPnX7MNz4ELfZE6cFsclClrKim3BHUIGq//t93DllB+h4O9LHjEUsQ1Sr63irDLSutkLJD6RXchjROXkNirlcNVHH/jwLWR5RcYilNX7S5bIkK8NlWPjsn/8Ua5O7I9/YoE97PpO6i73DTGLh5H9JN/SITwCKBkgSDWUt61uPK3Y11Gty7o2lWsBjhBUm2Y38CBsoGmBw==' >> ~/.ssh/known_hosts
-        - go run build/ci.go debsrc -upload ethereum/ethereum -sftp-user geth-ci -signer "Go Ethereum Linux Builder <geth-ci@ethereum.org>"
+        - go run build/ci.go debsrc -goversion 1.14.2 -upload ethereum/ethereum -sftp-user geth-ci -signer "Go Ethereum Linux Builder <geth-ci@ethereum.org>"
 
     # This builder does the Linux Azure uploads
-    - if: type = push
+    - stage: build
+      if: type = push
       os: linux
       dist: xenial
       sudo: required
-      go: 1.12.x
+      go: 1.14.x
       env:
         - azure-linux
+        - GO111MODULE=on
       git:
         submodules: false # avoid cloning ethereum/tests
       addons:
@@ -108,14 +138,16 @@ matrix:
         - go run build/ci.go archive -arch arm64 -type tar -signer LINUX_SIGNING_KEY -upload gethstore/builds
 
     # This builder does the Linux Azure MIPS xgo uploads
-    - if: type = push
+    - stage: build
+      if: type = push
       os: linux
       dist: xenial
       services:
         - docker
-      go: 1.12.x
+      go: 1.14.x
       env:
         - azure-linux-mips
+        - GO111MODULE=on
       git:
         submodules: false # avoid cloning ethereum/tests
       script:
@@ -136,7 +168,8 @@ matrix:
         - go run build/ci.go archive -arch mips64le -type tar -signer LINUX_SIGNING_KEY -upload gethstore/builds
 
     # This builder does the Android Maven and Azure uploads
-    - if: type = push
+    - stage: build
+      if: type = push
       os: linux
       dist: xenial
       addons:
@@ -155,10 +188,11 @@ matrix:
       env:
         - azure-android
         - maven-android
+        - GO111MODULE=on
       git:
         submodules: false # avoid cloning ethereum/tests
       before_install:
-        - curl https://dl.google.com/go/go1.12.linux-amd64.tar.gz | tar -xz
+        - curl https://dl.google.com/go/go1.14.2.linux-amd64.tar.gz | tar -xz
         - export PATH=`pwd`/go/bin:$PATH
         - export GOROOT=`pwd`/go
         - export GOPATH=$HOME/go
@@ -173,13 +207,15 @@ matrix:
         - go run build/ci.go aar -signer ANDROID_SIGNING_KEY -deploy https://oss.sonatype.org -upload gethstore/builds
 
     # This builder does the OSX Azure, iOS CocoaPods and iOS Azure uploads
-    - if: type = push
+    - stage: build
+      if: type = push
       os: osx
-      go: 1.12.x
+      go: 1.14.x
       env:
         - azure-osx
         - azure-ios
         - cocoapods-ios
+        - GO111MODULE=on
       git:
         submodules: false # avoid cloning ethereum/tests
       script:
@@ -202,12 +238,14 @@ matrix:
         - go run build/ci.go xcode -signer IOS_SIGNING_KEY -deploy trunk -upload gethstore/builds
 
     # This builder does the Azure archive purges to avoid accumulating junk
-    - if: type = cron
+    - stage: build
+      if: type = cron
       os: linux
       dist: xenial
-      go: 1.12.x
+      go: 1.14.x
       env:
         - azure-purge
+        - GO111MODULE=on
       git:
         submodules: false # avoid cloning ethereum/tests
       script:

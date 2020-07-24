@@ -20,8 +20,10 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"sort"
 
 	"github.com/maticnetwork/bor/internal/debug"
+	"github.com/maticnetwork/bor/p2p/enode"
 	"github.com/maticnetwork/bor/params"
 	"gopkg.in/urfave/cli.v1"
 )
@@ -43,7 +45,7 @@ func init() {
 	// Set up the CLI app.
 	app.Flags = append(app.Flags, debug.Flags...)
 	app.Before = func(ctx *cli.Context) error {
-		return debug.Setup(ctx, "")
+		return debug.Setup(ctx)
 	}
 	app.After = func(ctx *cli.Context) error {
 		debug.Exit()
@@ -56,13 +58,42 @@ func init() {
 	// Add subcommands.
 	app.Commands = []cli.Command{
 		enrdumpCommand,
+		keyCommand,
 		discv4Command,
+		discv5Command,
+		dnsCommand,
+		nodesetCommand,
 	}
 }
 
 func main() {
-	if err := app.Run(os.Args); err != nil {
-		fmt.Fprintln(os.Stderr, err)
-		os.Exit(1)
+	exit(app.Run(os.Args))
+}
+
+// commandHasFlag returns true if the current command supports the given flag.
+func commandHasFlag(ctx *cli.Context, flag cli.Flag) bool {
+	flags := ctx.FlagNames()
+	sort.Strings(flags)
+	i := sort.SearchStrings(flags, flag.GetName())
+	return i != len(flags) && flags[i] == flag.GetName()
+}
+
+// getNodeArg handles the common case of a single node descriptor argument.
+func getNodeArg(ctx *cli.Context) *enode.Node {
+	if ctx.NArg() != 1 {
+		exit("missing node as command-line argument")
 	}
+	n, err := parseNode(ctx.Args()[0])
+	if err != nil {
+		exit(err)
+	}
+	return n
+}
+
+func exit(err interface{}) {
+	if err == nil {
+		os.Exit(0)
+	}
+	fmt.Fprintln(os.Stderr, err)
+	os.Exit(1)
 }

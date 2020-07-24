@@ -25,7 +25,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/jackpal/go-nat-pmp"
+	natpmp "github.com/jackpal/go-nat-pmp"
 	"github.com/maticnetwork/bor/log"
 )
 

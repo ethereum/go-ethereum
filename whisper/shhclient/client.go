@@ -19,7 +19,7 @@ package shhclient
 import (
 	"context"
 
-	"github.com/maticnetwork/bor"
+	ethereum "github.com/maticnetwork/bor"
 	"github.com/maticnetwork/bor/common/hexutil"
 	"github.com/maticnetwork/bor/rpc"
 	whisper "github.com/maticnetwork/bor/whisper/whisperv6"

@@ -29,8 +29,6 @@ Methods that satisfy the following criteria are made available for remote access
 
  - method must be exported
  - method returns 0, 1 (response or error) or 2 (response and error) values
- - method argument(s) must be exported or builtin types
- - method returned value(s) must be exported or builtin types
 
 An example method:
 
@@ -73,14 +71,9 @@ An example server which uses the JSON codec:
 
  calculator := new(CalculatorService)
  server := NewServer()
- server.RegisterName("calculator", calculator")
-
+ server.RegisterName("calculator", calculator)
  l, _ := net.ListenUnix("unix", &net.UnixAddr{Net: "unix", Name: "/tmp/calculator.sock"})
- for {
-	c, _ := l.AcceptUnix()
-	codec := v2.NewJSONCodec(c)
-	go server.ServeCodec(codec, 0)
- }
+ server.ServeListener(l)
 
 Subscriptions
 
@@ -90,7 +83,6 @@ criteria:
 
  - method must be exported
  - first method argument type must be context.Context
- - method argument(s) must be exported or builtin types
  - method must have return types (rpc.Subscription, error)
 
 An example method:

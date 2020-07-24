@@ -17,14 +17,21 @@
 package runtime
 
 import (
+	"fmt"
 	"math/big"
+	"os"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/maticnetwork/bor/accounts/abi"
 	"github.com/maticnetwork/bor/common"
+	"github.com/maticnetwork/bor/consensus"
+	"github.com/maticnetwork/bor/core"
+	"github.com/maticnetwork/bor/core/asm"
 	"github.com/maticnetwork/bor/core/rawdb"
 	"github.com/maticnetwork/bor/core/state"
+	"github.com/maticnetwork/bor/core/types"
 	"github.com/maticnetwork/bor/core/vm"
 	"github.com/maticnetwork/bor/params"
 )
@@ -95,7 +102,7 @@ func TestExecute(t *testing.T) {
 }
 
 func TestCall(t *testing.T) {
-	state, _ := state.New(common.Hash{}, state.NewDatabase(rawdb.NewMemoryDatabase()))
+	state, _ := state.New(common.Hash{}, state.NewDatabase(rawdb.NewMemoryDatabase()), nil)
 	address := common.HexToAddress("0x0a")
 	state.SetCode(address, []byte{
 		byte(vm.PUSH1), 10,
@@ -151,7 +158,7 @@ func BenchmarkCall(b *testing.B) {
 }
 func benchmarkEVM_Create(bench *testing.B, code string) {
 	var (
-		statedb, _ = state.New(common.Hash{}, state.NewDatabase(rawdb.NewMemoryDatabase()))
+		statedb, _ = state.New(common.Hash{}, state.NewDatabase(rawdb.NewMemoryDatabase()), nil)
 		sender     = common.BytesToAddress([]byte("sender"))
 		receiver   = common.BytesToAddress([]byte("receiver"))
 	)
@@ -202,4 +209,387 @@ func BenchmarkEVM_CREATE_1200(bench *testing.B) {
 func BenchmarkEVM_CREATE2_1200(bench *testing.B) {
 	// initcode size 1200K, repeatedly calls CREATE2 and then modifies the mem contents
 	benchmarkEVM_Create(bench, "5b5862124f80600080f5600152600056")
+}
+
+func fakeHeader(n uint64, parentHash common.Hash) *types.Header {
+	header := types.Header{
+		Coinbase:   common.HexToAddress("0x00000000000000000000000000000000deadbeef"),
+		Number:     big.NewInt(int64(n)),
+		ParentHash: parentHash,
+		Time:       1000,
+		Nonce:      types.BlockNonce{0x1},
+		Extra:      []byte{},
+		Difficulty: big.NewInt(0),
+		GasLimit:   100000,
+	}
+	return &header
+}
+
+type dummyChain struct {
+	counter int
+}
+
+// Engine retrieves the chain's consensus engine.
+func (d *dummyChain) Engine() consensus.Engine {
+	return nil
+}
+
+// GetHeader returns the hash corresponding to their hash.
+func (d *dummyChain) GetHeader(h common.Hash, n uint64) *types.Header {
+	d.counter++
+	parentHash := common.Hash{}
+	s := common.LeftPadBytes(big.NewInt(int64(n-1)).Bytes(), 32)
+	copy(parentHash[:], s)
+
+	//parentHash := common.Hash{byte(n - 1)}
+	//fmt.Printf("GetHeader(%x, %d) => header with parent %x\n", h, n, parentHash)
+	return fakeHeader(n, parentHash)
+}
+
+// TestBlockhash tests the blockhash operation. It's a bit special, since it internally
+// requires access to a chain reader.
+func TestBlockhash(t *testing.T) {
+	// Current head
+	n := uint64(1000)
+	parentHash := common.Hash{}
+	s := common.LeftPadBytes(big.NewInt(int64(n-1)).Bytes(), 32)
+	copy(parentHash[:], s)
+	header := fakeHeader(n, parentHash)
+
+	// This is the contract we're using. It requests the blockhash for current num (should be all zeroes),
+	// then iteratively fetches all blockhashes back to n-260.
+	// It returns
+	// 1. the first (should be zero)
+	// 2. the second (should be the parent hash)
+	// 3. the last non-zero hash
+	// By making the chain reader return hashes which correlate to the number, we can
+	// verify that it obtained the right hashes where it should
+
+	/*
+
+		pragma solidity ^0.5.3;
+		contract Hasher{
+
+			function test() public view returns (bytes32, bytes32, bytes32){
+				uint256 x = block.number;
+				bytes32 first;
+				bytes32 last;
+				bytes32 zero;
+				zero = blockhash(x); // Should be zeroes
+				first = blockhash(x-1);
+				for(uint256 i = 2 ; i < 260; i++){
+					bytes32 hash = blockhash(x - i);
+					if (uint256(hash) != 0){
+						last = hash;
+					}
+				}
+				return (zero, first, last);
+			}
+		}
+
+	*/
+	// The contract above
+	data := common.Hex2Bytes("6080604052348015600f57600080fd5b50600436106045576000357c010000000000000000000000000000000000000000000000000000000090048063f8a8fd6d14604a575b600080fd5b60506074565b60405180848152602001838152602001828152602001935050505060405180910390f35b600080600080439050600080600083409050600184034092506000600290505b61010481101560c35760008186034090506000816001900414151560b6578093505b5080806001019150506094565b508083839650965096505050505090919256fea165627a7a72305820462d71b510c1725ff35946c20b415b0d50b468ea157c8c77dff9466c9cb85f560029")
+	// The method call to 'test()'
+	input := common.Hex2Bytes("f8a8fd6d")
+	chain := &dummyChain{}
+	ret, _, err := Execute(data, input, &Config{
+		GetHashFn:   core.GetHashFn(header, chain),
+		BlockNumber: new(big.Int).Set(header.Number),
+	})
+	if err != nil {
+		t.Fatalf("expected no error, got %v", err)
+	}
+	if len(ret) != 96 {
+		t.Fatalf("expected returndata to be 96 bytes, got %d", len(ret))
+	}
+
+	zero := new(big.Int).SetBytes(ret[0:32])
+	first := new(big.Int).SetBytes(ret[32:64])
+	last := new(big.Int).SetBytes(ret[64:96])
+	if zero.BitLen() != 0 {
+		t.Fatalf("expected zeroes, got %x", ret[0:32])
+	}
+	if first.Uint64() != 999 {
+		t.Fatalf("second block should be 999, got %d (%x)", first, ret[32:64])
+	}
+	if last.Uint64() != 744 {
+		t.Fatalf("last block should be 744, got %d (%x)", last, ret[64:96])
+	}
+	if exp, got := 255, chain.counter; exp != got {
+		t.Errorf("suboptimal; too much chain iteration, expected %d, got %d", exp, got)
+	}
+}
+
+// BenchmarkSimpleLoop test a pretty simple loop which loops
+// 1M (1 048 575) times.
+// Takes about 200 ms
+func BenchmarkSimpleLoop(b *testing.B) {
+	// 0xfffff = 1048575 loops
+	code := []byte{
+		byte(vm.PUSH3), 0x0f, 0xff, 0xff,
+		byte(vm.JUMPDEST), //  [ count ]
+		byte(vm.PUSH1), 1, // [count, 1]
+		byte(vm.SWAP1),    // [1, count]
+		byte(vm.SUB),      // [ count -1 ]
+		byte(vm.DUP1),     //  [ count -1 , count-1]
+		byte(vm.PUSH1), 4, // [count-1, count -1, label]
+		byte(vm.JUMPI), // [ 0 ]
+		byte(vm.STOP),
+	}
+	//tracer := vm.NewJSONLogger(nil, os.Stdout)
+	//Execute(code, nil, &Config{
+	//	EVMConfig: vm.Config{
+	//		Debug:  true,
+	//		Tracer: tracer,
+	//	}})
+
+	for i := 0; i < b.N; i++ {
+		Execute(code, nil, nil)
+	}
+}
+
+type stepCounter struct {
+	inner *vm.JSONLogger
+	steps int
+}
+
+func (s *stepCounter) CaptureStart(from common.Address, to common.Address, create bool, input []byte, gas uint64, value *big.Int) error {
+	return nil
+}
+
+func (s *stepCounter) CaptureState(env *vm.EVM, pc uint64, op vm.OpCode, gas, cost uint64, memory *vm.Memory, stack *vm.Stack, rStack *vm.ReturnStack, contract *vm.Contract, depth int, err error) error {
+	s.steps++
+	// Enable this for more output
+	//s.inner.CaptureState(env, pc, op, gas, cost, memory, stack, rStack, contract, depth, err)
+	return nil
+}
+
+func (s *stepCounter) CaptureFault(env *vm.EVM, pc uint64, op vm.OpCode, gas, cost uint64, memory *vm.Memory, stack *vm.Stack, rStack *vm.ReturnStack, contract *vm.Contract, depth int, err error) error {
+	return nil
+}
+
+func (s *stepCounter) CaptureEnd(output []byte, gasUsed uint64, t time.Duration, err error) error {
+	return nil
+}
+
+func TestJumpSub1024Limit(t *testing.T) {
+	state, _ := state.New(common.Hash{}, state.NewDatabase(rawdb.NewMemoryDatabase()), nil)
+	address := common.HexToAddress("0x0a")
+	// Code is
+	// 0 beginsub
+	// 1 push 0
+	// 3 jumpsub
+	//
+	// The code recursively calls itself. It should error when the returns-stack
+	// grows above 1023
+	state.SetCode(address, []byte{
+		byte(vm.PUSH1), 3,
+		byte(vm.JUMPSUB),
+		byte(vm.BEGINSUB),
+		byte(vm.PUSH1), 3,
+		byte(vm.JUMPSUB),
+	})
+	tracer := stepCounter{inner: vm.NewJSONLogger(nil, os.Stdout)}
+	// Enable 2315
+	_, _, err := Call(address, nil, &Config{State: state,
+		GasLimit:    20000,
+		ChainConfig: params.AllEthashProtocolChanges,
+		EVMConfig: vm.Config{
+			ExtraEips: []int{2315},
+			Debug:     true,
+			//Tracer:    vm.NewJSONLogger(nil, os.Stdout),
+			Tracer: &tracer,
+		}})
+	exp := "return stack limit reached"
+	if err.Error() != exp {
+		t.Fatalf("expected %v, got %v", exp, err)
+	}
+	if exp, got := 2048, tracer.steps; exp != got {
+		t.Fatalf("expected %d steps, got %d", exp, got)
+	}
+}
+
+func TestReturnSubShallow(t *testing.T) {
+	state, _ := state.New(common.Hash{}, state.NewDatabase(rawdb.NewMemoryDatabase()), nil)
+	address := common.HexToAddress("0x0a")
+	// The code does returnsub without having anything on the returnstack.
+	// It should not panic, but just fail after one step
+	state.SetCode(address, []byte{
+		byte(vm.PUSH1), 5,
+		byte(vm.JUMPSUB),
+		byte(vm.RETURNSUB),
+		byte(vm.PC),
+		byte(vm.BEGINSUB),
+		byte(vm.RETURNSUB),
+		byte(vm.PC),
+	})
+	tracer := stepCounter{}
+
+	// Enable 2315
+	_, _, err := Call(address, nil, &Config{State: state,
+		GasLimit:    10000,
+		ChainConfig: params.AllEthashProtocolChanges,
+		EVMConfig: vm.Config{
+			ExtraEips: []int{2315},
+			Debug:     true,
+			Tracer:    &tracer,
+		}})
+
+	exp := "invalid retsub"
+	if err.Error() != exp {
+		t.Fatalf("expected %v, got %v", exp, err)
+	}
+	if exp, got := 4, tracer.steps; exp != got {
+		t.Fatalf("expected %d steps, got %d", exp, got)
+	}
+}
+
+// disabled -- only used for generating markdown
+func DisabledTestReturnCases(t *testing.T) {
+	cfg := &Config{
+		EVMConfig: vm.Config{
+			Debug:     true,
+			Tracer:    vm.NewMarkdownLogger(nil, os.Stdout),
+			ExtraEips: []int{2315},
+		},
+	}
+	// This should fail at first opcode
+	Execute([]byte{
+		byte(vm.RETURNSUB),
+		byte(vm.PC),
+		byte(vm.PC),
+	}, nil, cfg)
+
+	// Should also fail
+	Execute([]byte{
+		byte(vm.PUSH1), 5,
+		byte(vm.JUMPSUB),
+		byte(vm.RETURNSUB),
+		byte(vm.PC),
+		byte(vm.BEGINSUB),
+		byte(vm.RETURNSUB),
+		byte(vm.PC),
+	}, nil, cfg)
+
+	// This should complete
+	Execute([]byte{
+		byte(vm.PUSH1), 0x4,
+		byte(vm.JUMPSUB),
+		byte(vm.STOP),
+		byte(vm.BEGINSUB),
+		byte(vm.PUSH1), 0x9,
+		byte(vm.JUMPSUB),
+		byte(vm.RETURNSUB),
+		byte(vm.BEGINSUB),
+		byte(vm.RETURNSUB),
+	}, nil, cfg)
+}
+
+// DisabledTestEipExampleCases contains various testcases that are used for the
+// EIP examples
+// This test is disabled, as it's only used for generating markdown
+func DisabledTestEipExampleCases(t *testing.T) {
+	cfg := &Config{
+		EVMConfig: vm.Config{
+			Debug:     true,
+			Tracer:    vm.NewMarkdownLogger(nil, os.Stdout),
+			ExtraEips: []int{2315},
+		},
+	}
+	prettyPrint := func(comment string, code []byte) {
+		instrs := make([]string, 0)
+		it := asm.NewInstructionIterator(code)
+		for it.Next() {
+			if it.Arg() != nil && 0 < len(it.Arg()) {
+				instrs = append(instrs, fmt.Sprintf("%v 0x%x", it.Op(), it.Arg()))
+			} else {
+				instrs = append(instrs, fmt.Sprintf("%v", it.Op()))
+			}
+		}
+		ops := strings.Join(instrs, ", ")
+
+		fmt.Printf("%v\nBytecode: `0x%x` (`%v`)\n",
+			comment,
+			code, ops)
+		Execute(code, nil, cfg)
+	}
+
+	{ // First eip testcase
+		code := []byte{
+			byte(vm.PUSH1), 4,
+			byte(vm.JUMPSUB),
+			byte(vm.STOP),
+			byte(vm.BEGINSUB),
+			byte(vm.RETURNSUB),
+		}
+		prettyPrint("This should jump into a subroutine, back out and stop.", code)
+	}
+
+	{
+		code := []byte{
+			byte(vm.PUSH9), 0x00, 0x00, 0x00, 0x00, 0x0, 0x00, 0x00, 0x00, (4 + 8),
+			byte(vm.JUMPSUB),
+			byte(vm.STOP),
+			byte(vm.BEGINSUB),
+			byte(vm.PUSH1), 8 + 9,
+			byte(vm.JUMPSUB),
+			byte(vm.RETURNSUB),
+			byte(vm.BEGINSUB),
+			byte(vm.RETURNSUB),
+		}
+		prettyPrint("This should execute fine, going into one two depths of subroutines", code)
+	}
+	// TODO(@holiman) move this test into an actual test, which not only prints
+	// out the trace.
+	{
+		code := []byte{
+			byte(vm.PUSH9), 0x01, 0x00, 0x00, 0x00, 0x0, 0x00, 0x00, 0x00, (4 + 8),
+			byte(vm.JUMPSUB),
+			byte(vm.STOP),
+			byte(vm.BEGINSUB),
+			byte(vm.PUSH1), 8 + 9,
+			byte(vm.JUMPSUB),
+			byte(vm.RETURNSUB),
+			byte(vm.BEGINSUB),
+			byte(vm.RETURNSUB),
+		}
+		prettyPrint("This should fail, since the given location is outside of the "+
+			"code-range. The code is the same as previous example, except that the "+
+			"pushed location is `0x01000000000000000c` instead of `0x0c`.", code)
+	}
+	{
+		// This should fail at first opcode
+		code := []byte{
+			byte(vm.RETURNSUB),
+			byte(vm.PC),
+			byte(vm.PC),
+		}
+		prettyPrint("This should fail at first opcode, due to shallow `return_stack`", code)
+
+	}
+	{
+		code := []byte{
+			byte(vm.PUSH1), 5, // Jump past the subroutine
+			byte(vm.JUMP),
+			byte(vm.BEGINSUB),
+			byte(vm.RETURNSUB),
+			byte(vm.JUMPDEST),
+			byte(vm.PUSH1), 3, // Now invoke the subroutine
+			byte(vm.JUMPSUB),
+		}
+		prettyPrint("In this example. the JUMPSUB is on the last byte of code. When the "+
+			"subroutine returns, it should hit the 'virtual stop' _after_ the bytecode, "+
+			"and not exit with error", code)
+	}
+
+	{
+		code := []byte{
+			byte(vm.BEGINSUB),
+			byte(vm.RETURNSUB),
+			byte(vm.STOP),
+		}
+		prettyPrint("In this example, the code 'walks' into a subroutine, which is not "+
+			"allowed, and causes an error", code)
+	}
 }

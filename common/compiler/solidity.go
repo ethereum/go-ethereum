@@ -1,4 +1,4 @@
-// Copyright 2019 The go-ethereum Authors
+// Copyright 2015 The go-ethereum Authors
 // This file is part of the go-ethereum library.
 //
 // The go-ethereum library is free software: you can redistribute it and/or modify
@@ -47,7 +47,8 @@ type solcOutput struct {
 func (s *Solidity) makeArgs() []string {
 	p := []string{
 		"--combined-json", "bin,bin-runtime,srcmap,srcmap-runtime,abi,userdoc,devdoc",
-		"--optimize", // code optimizer switched on
+		"--optimize",                  // code optimizer switched on
+		"--allow-paths", "., ./, ../", // default to support relative paths
 	}
 	if s.Major > 0 || s.Minor > 4 || s.Patch > 6 {
 		p[1] += ",metadata,hashes"

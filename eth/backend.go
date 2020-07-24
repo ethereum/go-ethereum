@@ -48,6 +48,7 @@ import (
 	"github.com/maticnetwork/bor/miner"
 	"github.com/maticnetwork/bor/node"
 	"github.com/maticnetwork/bor/p2p"
+	"github.com/maticnetwork/bor/p2p/enode"
 	"github.com/maticnetwork/bor/p2p/enr"
 	"github.com/maticnetwork/bor/params"
 	"github.com/maticnetwork/bor/rlp"
@@ -67,16 +68,12 @@ type LesServer interface {
 type Ethereum struct {
 	config *Config
 
-	// Channel for shutting down the service
-	shutdownChan chan bool
-
-	server *p2p.Server
-
 	// Handlers
 	txPool          *core.TxPool
 	blockchain      *core.BlockChain
 	protocolManager *ProtocolManager
 	lesServer       LesServer
+	dialCandidates  enode.Iterator
 
 	// DB interfaces
 	chainDb ethdb.Database // Block chain database
@@ -85,8 +82,9 @@ type Ethereum struct {
 	engine         consensus.Engine
 	accountManager *accounts.Manager
 
-	bloomRequests chan chan *bloombits.Retrieval // Channel receiving bloom data retrieval requests
-	bloomIndexer  *core.ChainIndexer             // Bloom indexer operating during block imports
+	bloomRequests     chan chan *bloombits.Retrieval // Channel receiving bloom data retrieval requests
+	bloomIndexer      *core.ChainIndexer             // Bloom indexer operating during block imports
+	closeBloomHandler chan struct{}
 
 	APIBackend *EthAPIBackend
 
@@ -128,7 +126,12 @@ func New(ctx *node.ServiceContext, config *Config) (*Ethereum, error) {
 		config.Miner.GasPrice = new(big.Int).Set(DefaultConfig.Miner.GasPrice)
 	}
 	if config.NoPruning && config.TrieDirtyCache > 0 {
-		config.TrieCleanCache += config.TrieDirtyCache
+		if config.SnapshotCache > 0 {
+			config.TrieCleanCache += config.TrieDirtyCache * 3 / 5
+			config.SnapshotCache += config.TrieDirtyCache * 2 / 5
+		} else {
+			config.TrieCleanCache += config.TrieDirtyCache
+		}
 		config.TrieDirtyCache = 0
 	}
 	log.Info("Allocated trie memory caches", "clean", common.StorageSize(config.TrieCleanCache)*1024*1024, "dirty", common.StorageSize(config.TrieDirtyCache)*1024*1024)
@@ -145,17 +148,17 @@ func New(ctx *node.ServiceContext, config *Config) (*Ethereum, error) {
 	log.Info("Initialised chain configuration", "config", chainConfig)
 
 	eth := &Ethereum{
-		config:         config,
-		chainDb:        chainDb,
-		eventMux:       ctx.EventMux,
-		accountManager: ctx.AccountManager,
-		engine:         nil,
-		shutdownChan:   make(chan bool),
-		networkID:      config.NetworkId,
-		gasPrice:       config.Miner.GasPrice,
-		etherbase:      config.Miner.Etherbase,
-		bloomRequests:  make(chan chan *bloombits.Retrieval),
-		bloomIndexer:   NewBloomIndexer(chainDb, params.BloomBitsBlocks, params.BloomConfirms),
+		config:            config,
+		chainDb:           chainDb,
+		eventMux:          ctx.EventMux,
+		accountManager:    ctx.AccountManager,
+		engine:            nil,
+		closeBloomHandler: make(chan struct{}),
+		networkID:         config.NetworkId,
+		gasPrice:          config.Miner.GasPrice,
+		etherbase:         config.Miner.Etherbase,
+		bloomRequests:     make(chan chan *bloombits.Retrieval),
+		bloomIndexer:      NewBloomIndexer(chainDb, params.BloomBitsBlocks, params.BloomConfirms),
 	}
 
 	eth.APIBackend = &EthAPIBackend{ctx.ExtRPCEnabled(), eth, nil}
@@ -194,10 +197,11 @@ func New(ctx *node.ServiceContext, config *Config) (*Ethereum, error) {
 			TrieDirtyLimit:      config.TrieDirtyCache,
 			TrieDirtyDisabled:   config.NoPruning,
 			TrieTimeLimit:       config.TrieTimeout,
+			SnapshotLimit:       config.SnapshotCache,
 		}
 	)
 
-	eth.blockchain, err = core.NewBlockChain(chainDb, cacheConfig, chainConfig, eth.engine, vmConfig, eth.shouldPreserve)
+	eth.blockchain, err = core.NewBlockChain(chainDb, cacheConfig, chainConfig, eth.engine, vmConfig, eth.shouldPreserve, &config.TxLookupLimit)
 	eth.engine.VerifyHeader(eth.blockchain, eth.blockchain.CurrentHeader(), true) // TODO think on it
 
 	if err != nil {
@@ -217,7 +221,7 @@ func New(ctx *node.ServiceContext, config *Config) (*Ethereum, error) {
 	eth.txPool = core.NewTxPool(config.TxPool, chainConfig, eth.blockchain)
 
 	// Permit the downloader to use the trie cache allowance during fast sync
-	cacheLimit := cacheConfig.TrieCleanLimit + cacheConfig.TrieDirtyLimit
+	cacheLimit := cacheConfig.TrieCleanLimit + cacheConfig.TrieDirtyLimit + cacheConfig.SnapshotLimit
 	checkpoint := config.Checkpoint
 	if checkpoint == nil {
 		checkpoint = params.TrustedCheckpoints[genesisHash]
@@ -227,6 +231,11 @@ func New(ctx *node.ServiceContext, config *Config) (*Ethereum, error) {
 	}
 	eth.miner = miner.New(eth, &config.Miner, chainConfig, eth.EventMux(), eth.engine, eth.isLocalBlock)
 	eth.miner.SetExtra(makeExtraData(config.Miner.ExtraData))
+
+	eth.dialCandidates, err = eth.setupDiscovery(&ctx.Config.P2P)
+	if err != nil {
+		return nil, err
+	}
 
 	return eth, nil
 }
@@ -252,7 +261,6 @@ func makeExtraData(extra []byte) []byte {
 	return extra
 }
 
-// func CreateConsensusEngine(ctx *node.ServiceContext, chainConfig *params.ChainConfig, config *ethash.Config, notify []string, noverify bool, db ethdb.Database, ee *ethapi.PublicBlockChainAPI) consensus.Engine {
 func CreateConsensusEngine(ctx *node.ServiceContext, chainConfig *params.ChainConfig, ethConfig *Config, db ethdb.Database, ee *ethapi.PublicBlockChainAPI) consensus.Engine {
 	config := &ethConfig.Ethash
 	notify := ethConfig.Miner.Notify
@@ -265,7 +273,7 @@ func CreateConsensusEngine(ctx *node.ServiceContext, chainConfig *params.ChainCo
 
 	// If Matic Bor is requested, set it up
 	if chainConfig.Bor != nil {
-		return bor.New(chainConfig, db, ee, ethConfig.HeimdallURL)
+		return bor.New(chainConfig, db, ee, ethConfig.HeimdallURL, ethConfig.WithoutHeimdall)
 	}
 
 	// Otherwise assume proof-of-work
@@ -281,12 +289,14 @@ func CreateConsensusEngine(ctx *node.ServiceContext, chainConfig *params.ChainCo
 		return ethash.NewShared()
 	default:
 		engine := ethash.New(ethash.Config{
-			CacheDir:       ctx.ResolvePath(config.CacheDir),
-			CachesInMem:    config.CachesInMem,
-			CachesOnDisk:   config.CachesOnDisk,
-			DatasetDir:     config.DatasetDir,
-			DatasetsInMem:  config.DatasetsInMem,
-			DatasetsOnDisk: config.DatasetsOnDisk,
+			CacheDir:         ctx.ResolvePath(config.CacheDir),
+			CachesInMem:      config.CachesInMem,
+			CachesOnDisk:     config.CachesOnDisk,
+			CachesLockMmap:   config.CachesLockMmap,
+			DatasetDir:       config.DatasetDir,
+			DatasetsInMem:    config.DatasetsInMem,
+			DatasetsOnDisk:   config.DatasetsOnDisk,
+			DatasetsLockMmap: config.DatasetsLockMmap,
 		}, notify, noverify)
 		engine.SetThreads(-1) // Disable CPU mining
 		return engine
@@ -540,6 +550,7 @@ func (s *Ethereum) Protocols() []p2p.Protocol {
 	for i, vsn := range ProtocolVersions {
 		protos[i] = s.protocolManager.makeProtocol(vsn)
 		protos[i].Attributes = []enr.Entry{s.currentEthEntry()}
+		protos[i].DialCandidates = s.dialCandidates
 	}
 	if s.lesServer != nil {
 		protos = append(protos, s.lesServer.Protocols()...)
@@ -577,18 +588,20 @@ func (s *Ethereum) Start(srvr *p2p.Server) error {
 // Stop implements node.Service, terminating all internal goroutines used by the
 // Ethereum protocol.
 func (s *Ethereum) Stop() error {
-	s.bloomIndexer.Close()
-	s.blockchain.Stop()
-	s.engine.Close()
+	// Stop all the peer-related stuff first.
 	s.protocolManager.Stop()
 	if s.lesServer != nil {
 		s.lesServer.Stop()
 	}
+
+	// Then stop everything else.
+	s.bloomIndexer.Close()
+	close(s.closeBloomHandler)
 	s.txPool.Stop()
 	s.miner.Stop()
-	s.eventMux.Stop()
-
+	s.blockchain.Stop()
+	s.engine.Close()
 	s.chainDb.Close()
-	close(s.shutdownChan)
+	s.eventMux.Stop()
 	return nil
 }

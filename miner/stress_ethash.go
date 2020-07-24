@@ -38,6 +38,7 @@ import (
 	"github.com/maticnetwork/bor/eth"
 	"github.com/maticnetwork/bor/eth/downloader"
 	"github.com/maticnetwork/bor/log"
+	"github.com/maticnetwork/bor/miner"
 	"github.com/maticnetwork/bor/node"
 	"github.com/maticnetwork/bor/p2p"
 	"github.com/maticnetwork/bor/p2p/enode"
@@ -132,7 +133,7 @@ func main() {
 // makeGenesis creates a custom Ethash genesis block based on some pre-defined
 // faucet accounts.
 func makeGenesis(faucets []*ecdsa.PrivateKey) *core.Genesis {
-	genesis := core.DefaultTestnetGenesisBlock()
+	genesis := core.DefaultRopstenGenesisBlock()
 	genesis.Difficulty = params.MinimumDifficulty
 	genesis.GasLimit = 25000000
 
@@ -179,7 +180,7 @@ func makeMiner(genesis *core.Genesis) (*node.Node, error) {
 			TxPool:          core.DefaultTxPoolConfig,
 			GPO:             eth.DefaultConfig.GPO,
 			Ethash:          eth.DefaultConfig.Ethash,
-			Miner: Config{
+			Miner: miner.Config{
 				GasFloor: genesis.GasLimit * 9 / 10,
 				GasCeil:  genesis.GasLimit * 11 / 10,
 				GasPrice: big.NewInt(1),

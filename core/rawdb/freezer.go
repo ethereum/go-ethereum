@@ -1,4 +1,4 @@
-// Copyright 2018 The go-ethereum Authors
+// Copyright 2019 The go-ethereum Authors
 // This file is part of the go-ethereum library.
 //
 // The go-ethereum library is free software: you can redistribute it and/or modify
@@ -73,6 +73,7 @@ type freezer struct {
 
 	tables       map[string]*freezerTable // Data tables for storing everything
 	instanceLock fileutil.Releaser        // File-system lock to prevent double opens
+	quit         chan struct{}
 }
 
 // newFreezer creates a chain freezer that moves ancient chain data into
@@ -80,9 +81,9 @@ type freezer struct {
 func newFreezer(datadir string, namespace string) (*freezer, error) {
 	// Create the initial freezer object
 	var (
-		readMeter   = metrics.NewRegisteredMeter(namespace+"ancient/read", nil)
-		writeMeter  = metrics.NewRegisteredMeter(namespace+"ancient/write", nil)
-		sizeCounter = metrics.NewRegisteredCounter(namespace+"ancient/size", nil)
+		readMeter  = metrics.NewRegisteredMeter(namespace+"ancient/read", nil)
+		writeMeter = metrics.NewRegisteredMeter(namespace+"ancient/write", nil)
+		sizeGauge  = metrics.NewRegisteredGauge(namespace+"ancient/size", nil)
 	)
 	// Ensure the datadir is not a symbolic link if it exists.
 	if info, err := os.Lstat(datadir); !os.IsNotExist(err) {
@@ -101,9 +102,10 @@ func newFreezer(datadir string, namespace string) (*freezer, error) {
 	freezer := &freezer{
 		tables:       make(map[string]*freezerTable),
 		instanceLock: lock,
+		quit:         make(chan struct{}),
 	}
 	for name, disableSnappy := range freezerNoSnappy {
-		table, err := newTable(datadir, name, readMeter, writeMeter, sizeCounter, disableSnappy)
+		table, err := newTable(datadir, name, readMeter, writeMeter, sizeGauge, disableSnappy)
 		if err != nil {
 			for _, table := range freezer.tables {
 				table.Close()
@@ -126,6 +128,7 @@ func newFreezer(datadir string, namespace string) (*freezer, error) {
 
 // Close terminates the chain freezer, unmapping all the data files.
 func (f *freezer) Close() error {
+	f.quit <- struct{}{}
 	var errs []error
 	for _, table := range f.tables {
 		if err := table.Close(); err != nil {
@@ -254,35 +257,50 @@ func (f *freezer) Sync() error {
 func (f *freezer) freeze(db ethdb.KeyValueStore) {
 	nfdb := &nofreezedb{KeyValueStore: db}
 
+	backoff := false
 	for {
+		select {
+		case <-f.quit:
+			log.Info("Freezer shutting down")
+			return
+		default:
+		}
+		if backoff {
+			select {
+			case <-time.NewTimer(freezerRecheckInterval).C:
+				backoff = false
+			case <-f.quit:
+				return
+			}
+		}
 		// Retrieve the freezing threshold.
 		hash := ReadHeadBlockHash(nfdb)
 		if hash == (common.Hash{}) {
 			log.Debug("Current full block hash unavailable") // new chain, empty database
-			time.Sleep(freezerRecheckInterval)
+			backoff = true
 			continue
 		}
 		number := ReadHeaderNumber(nfdb, hash)
 		switch {
 		case number == nil:
 			log.Error("Current full block number unavailable", "hash", hash)
-			time.Sleep(freezerRecheckInterval)
+			backoff = true
 			continue
 
 		case *number < params.ImmutabilityThreshold:
 			log.Debug("Current full block not old enough", "number", *number, "hash", hash, "delay", params.ImmutabilityThreshold)
-			time.Sleep(freezerRecheckInterval)
+			backoff = true
 			continue
 
 		case *number-params.ImmutabilityThreshold <= f.frozen:
 			log.Debug("Ancient blocks frozen already", "number", *number, "hash", hash, "frozen", f.frozen)
-			time.Sleep(freezerRecheckInterval)
+			backoff = true
 			continue
 		}
 		head := ReadHeader(nfdb, hash, *number)
 		if head == nil {
 			log.Error("Current full block unavailable", "number", *number, "hash", hash)
-			time.Sleep(freezerRecheckInterval)
+			backoff = true
 			continue
 		}
 		// Seems we have data ready to be frozen, process in usable batches
@@ -293,7 +311,7 @@ func (f *freezer) freeze(db ethdb.KeyValueStore) {
 		var (
 			start    = time.Now()
 			first    = f.frozen
-			ancients = make([]common.Hash, 0, limit)
+			ancients = make([]common.Hash, 0, limit-f.frozen)
 		)
 		for f.frozen < limit {
 			// Retrieves all the components of the canonical block
@@ -369,7 +387,7 @@ func (f *freezer) freeze(db ethdb.KeyValueStore) {
 
 		// Avoid database thrashing with tiny writes
 		if f.frozen-first < freezerBatchLimit {
-			time.Sleep(freezerRecheckInterval)
+			backoff = true
 		}
 	}
 }

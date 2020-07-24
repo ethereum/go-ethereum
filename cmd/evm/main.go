@@ -22,6 +22,7 @@ import (
 	"math/big"
 	"os"
 
+	"github.com/maticnetwork/bor/cmd/evm/internal/t8ntool"
 	"github.com/maticnetwork/bor/cmd/utils"
 	"gopkg.in/urfave/cli.v1"
 )
@@ -79,9 +80,17 @@ var (
 		Name:  "input",
 		Usage: "input for the EVM",
 	}
+	InputFileFlag = cli.StringFlag{
+		Name:  "inputfile",
+		Usage: "file containing input for the EVM",
+	}
 	VerbosityFlag = cli.IntFlag{
 		Name:  "verbosity",
 		Usage: "sets the verbosity level",
+	}
+	BenchFlag = cli.BoolFlag{
+		Name:  "bench",
+		Usage: "benchmark the execution",
 	}
 	CreateFlag = cli.BoolFlag{
 		Name:  "create",
@@ -118,8 +127,30 @@ var (
 	}
 )
 
+var stateTransitionCommand = cli.Command{
+	Name:    "transition",
+	Aliases: []string{"t8n"},
+	Usage:   "executes a full state transition",
+	Action:  t8ntool.Main,
+	Flags: []cli.Flag{
+		t8ntool.TraceFlag,
+		t8ntool.TraceDisableMemoryFlag,
+		t8ntool.TraceDisableStackFlag,
+		t8ntool.OutputAllocFlag,
+		t8ntool.OutputResultFlag,
+		t8ntool.InputAllocFlag,
+		t8ntool.InputEnvFlag,
+		t8ntool.InputTxsFlag,
+		t8ntool.ForknameFlag,
+		t8ntool.ChainIDFlag,
+		t8ntool.RewardFlag,
+		t8ntool.VerbosityFlag,
+	},
+}
+
 func init() {
 	app.Flags = []cli.Flag{
+		BenchFlag,
 		CreateFlag,
 		DebugFlag,
 		VerbosityFlag,
@@ -130,6 +161,7 @@ func init() {
 		ValueFlag,
 		DumpFlag,
 		InputFlag,
+		InputFileFlag,
 		MemProfileFlag,
 		CPUProfileFlag,
 		StatDumpFlag,
@@ -146,12 +178,18 @@ func init() {
 		disasmCommand,
 		runCommand,
 		stateTestCommand,
+		stateTransitionCommand,
 	}
+	cli.CommandHelpTemplate = utils.OriginCommandHelpTemplate
 }
 
 func main() {
 	if err := app.Run(os.Args); err != nil {
+		code := 1
+		if ec, ok := err.(*t8ntool.NumberedError); ok {
+			code = ec.Code()
+		}
 		fmt.Fprintln(os.Stderr, err)
-		os.Exit(1)
+		os.Exit(code)
 	}
 }

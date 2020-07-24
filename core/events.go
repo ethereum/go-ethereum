@@ -24,11 +24,6 @@ import (
 // NewTxsEvent is posted when a batch of transactions enter the transaction pool.
 type NewTxsEvent struct{ Txs []*types.Transaction }
 
-// PendingLogsEvent is posted pre mining and notifies of pending logs.
-type PendingLogsEvent struct {
-	Logs []*types.Log
-}
-
 // NewMinedBlockEvent is posted when a block has been imported.
 type NewMinedBlockEvent struct{ Block *types.Block }
 
@@ -41,7 +36,7 @@ type ChainEvent struct {
 	Logs  []*types.Log
 }
 
-type NewStateChangeEvent struct {
+type StateSyncEvent struct {
 	StateData *types.StateData
 }
 

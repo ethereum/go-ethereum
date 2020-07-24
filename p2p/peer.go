@@ -28,6 +28,7 @@ import (
 	"github.com/maticnetwork/bor/common/mclock"
 	"github.com/maticnetwork/bor/event"
 	"github.com/maticnetwork/bor/log"
+	"github.com/maticnetwork/bor/metrics"
 	"github.com/maticnetwork/bor/p2p/enode"
 	"github.com/maticnetwork/bor/p2p/enr"
 	"github.com/maticnetwork/bor/rlp"
@@ -300,6 +301,11 @@ func (p *Peer) handle(msg Msg) error {
 		if err != nil {
 			return fmt.Errorf("msg code out of range: %v", msg.Code)
 		}
+		if metrics.Enabled {
+			m := fmt.Sprintf("%s/%s/%d/%#02x", ingressMeterName, proto.Name, proto.Version, msg.Code-proto.offset)
+			metrics.GetOrRegisterMeter(m, nil).Mark(int64(msg.meterSize))
+			metrics.GetOrRegisterMeter(m+"/packets", nil).Mark(1)
+		}
 		select {
 		case proto.in <- msg:
 			return nil
@@ -360,6 +366,7 @@ func (p *Peer) startProtocols(writeStart <-chan struct{}, writeErr chan<- error)
 		}
 		p.log.Trace(fmt.Sprintf("Starting protocol %s/%d", proto.Name, proto.Version))
 		go func() {
+			defer p.wg.Done()
 			err := proto.Run(p, rw)
 			if err == nil {
 				p.log.Trace(fmt.Sprintf("Protocol %s/%d returned", proto.Name, proto.Version))
@@ -368,7 +375,6 @@ func (p *Peer) startProtocols(writeStart <-chan struct{}, writeErr chan<- error)
 				p.log.Trace(fmt.Sprintf("Protocol %s/%d failed", proto.Name, proto.Version), "err", err)
 			}
 			p.protoErr <- err
-			p.wg.Done()
 		}()
 	}
 }
@@ -398,7 +404,11 @@ func (rw *protoRW) WriteMsg(msg Msg) (err error) {
 	if msg.Code >= rw.Length {
 		return newPeerError(errInvalidMsgCode, "not handled")
 	}
+	msg.meterCap = rw.cap()
+	msg.meterCode = msg.Code
+
 	msg.Code += rw.offset
+
 	select {
 	case <-rw.wstart:
 		err = rw.w.WriteMsg(msg)
@@ -427,10 +437,11 @@ func (rw *protoRW) ReadMsg() (Msg, error) {
 // peer. Sub-protocol independent fields are contained and initialized here, with
 // protocol specifics delegated to all connected sub-protocols.
 type PeerInfo struct {
-	Enode   string   `json:"enode"` // Node URL
-	ID      string   `json:"id"`    // Unique node identifier
-	Name    string   `json:"name"`  // Name of the node, including client type, version, OS, custom data
-	Caps    []string `json:"caps"`  // Protocols advertised by this peer
+	ENR     string   `json:"enr,omitempty"` // Ethereum Node Record
+	Enode   string   `json:"enode"`         // Node URL
+	ID      string   `json:"id"`            // Unique node identifier
+	Name    string   `json:"name"`          // Name of the node, including client type, version, OS, custom data
+	Caps    []string `json:"caps"`          // Protocols advertised by this peer
 	Network struct {
 		LocalAddress  string `json:"localAddress"`  // Local endpoint of the TCP data connection
 		RemoteAddress string `json:"remoteAddress"` // Remote endpoint of the TCP data connection
@@ -450,11 +461,14 @@ func (p *Peer) Info() *PeerInfo {
 	}
 	// Assemble the generic peer metadata
 	info := &PeerInfo{
-		Enode:     p.Node().String(),
+		Enode:     p.Node().URLv4(),
 		ID:        p.ID().String(),
 		Name:      p.Name(),
 		Caps:      caps,
 		Protocols: make(map[string]interface{}),
+	}
+	if p.Node().Seq() > 0 {
+		info.ENR = p.Node().String()
 	}
 	info.Network.LocalAddress = p.LocalAddr().String()
 	info.Network.RemoteAddress = p.RemoteAddr().String()

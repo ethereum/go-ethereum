@@ -224,8 +224,9 @@ type Bor struct {
 	validatorSetABI        abi.ABI
 	stateReceiverABI       abi.ABI
 	HeimdallClient         IHeimdallClient
+	WithoutHeimdall        bool
 
-	stateDataFeed event.Feed
+	stateSyncFeed event.Feed
 	scope         event.SubscriptionScope
 	// The fields below are for testing only
 	fakeDiff bool // Skip difficulty verifications
@@ -237,6 +238,7 @@ func New(
 	db ethdb.Database,
 	ethAPI *ethapi.PublicBlockChainAPI,
 	heimdallURL string,
+	withoutHeimdall bool,
 ) *Bor {
 	// get bor config
 	borConfig := chainConfig.Bor
@@ -264,6 +266,7 @@ func New(
 		stateReceiverABI:       sABI,
 		GenesisContractsClient: genesisContractsClient,
 		HeimdallClient:         heimdallClient,
+		WithoutHeimdall:        withoutHeimdall,
 	}
 
 	return c
@@ -661,10 +664,12 @@ func (c *Bor) Finalize(chain consensus.ChainReader, header *types.Header, state 
 			return
 		}
 
-		// commit statees
-		if err := c.CommitStates(state, header, cx); err != nil {
-			log.Error("Error while committing states", "error", err)
-			return
+		if !c.WithoutHeimdall {
+			// commit statees
+			if err := c.CommitStates(state, header, cx); err != nil {
+				log.Error("Error while committing states", "error", err)
+				return
+			}
 		}
 	}
 
@@ -687,10 +692,12 @@ func (c *Bor) FinalizeAndAssemble(chain consensus.ChainReader, header *types.Hea
 			return nil, err
 		}
 
-		// commit statees
-		if err := c.CommitStates(state, header, cx); err != nil {
-			log.Error("Error while committing states", "error", err)
-			return nil, err
+		if !c.WithoutHeimdall {
+			// commit statees
+			if err := c.CommitStates(state, header, cx); err != nil {
+				log.Error("Error while committing states", "error", err)
+				return nil, err
+			}
 		}
 	}
 
@@ -845,7 +852,7 @@ func (c *Bor) GetCurrentSpan(snapshotNumber uint64) (*Span, error) {
 		Gas:  &gas,
 		To:   &toAddress,
 		Data: &msgData,
-	}, blockNr)
+	}, rpc.BlockNumberOrHash{BlockNumber: &blockNr}, nil)
 	if err != nil {
 		return nil, err
 	}
@@ -892,7 +899,7 @@ func (c *Bor) GetCurrentValidators(snapshotNumber uint64, blockNumber uint64) ([
 		Gas:  &gas,
 		To:   &toAddress,
 		Data: &msgData,
-	}, blockNr)
+	}, rpc.BlockNumberOrHash{BlockNumber: &blockNr}, nil)
 	if err != nil {
 		panic(err)
 		// return nil, err
@@ -964,15 +971,23 @@ func (c *Bor) fetchAndCommitSpan(
 	header *types.Header,
 	chain core.ChainContext,
 ) error {
-	response, err := c.HeimdallClient.FetchWithRetry(fmt.Sprintf("bor/span/%d", newSpanID), "")
-
-	if err != nil {
-		return err
-	}
-
 	var heimdallSpan HeimdallSpan
-	if err := json.Unmarshal(response.Result, &heimdallSpan); err != nil {
-		return err
+
+	if c.WithoutHeimdall {
+		s, err := c.getNextHeimdallSpanForTest(newSpanID, state, header, chain)
+		if err != nil {
+			return err
+		}
+		heimdallSpan = *s
+	} else {
+		response, err := c.HeimdallClient.FetchWithRetry(fmt.Sprintf("bor/span/%d", newSpanID), "")
+		if err != nil {
+			return err
+		}
+
+		if err := json.Unmarshal(response.Result, &heimdallSpan); err != nil {
+			return err
+		}
 	}
 
 	// check if chain id matches with heimdall span
@@ -1055,7 +1070,7 @@ func (c *Bor) GetPendingStateProposals(snapshotNumber uint64) ([]*big.Int, error
 		Gas:  &gas,
 		To:   &toAddress,
 		Data: &msgData,
-	}, blockNr)
+	}, rpc.BlockNumberOrHash{BlockNumber: &blockNr}, nil)
 	if err != nil {
 		return nil, err
 	}
@@ -1105,7 +1120,7 @@ func (c *Bor) CommitStates(
 			TxHash:   eventRecord.TxHash,
 		}
 		go func() {
-			c.stateDataFeed.Send(core.NewStateChangeEvent{StateData: &stateData})
+			c.stateSyncFeed.Send(core.StateSyncEvent{StateData: &stateData})
 		}()
 
 		if err := c.GenesisContractsClient.CommitState(eventRecord, state, header, chain); err != nil {
@@ -1124,9 +1139,9 @@ func validateEventRecord(eventRecord *EventRecordWithTime, number uint64, to tim
 	return nil
 }
 
-// SubscribeStateEvent registers a subscription of ChainSideEvent.
-func (c *Bor) SubscribeStateEvent(ch chan<- core.NewStateChangeEvent) event.Subscription {
-	return c.scope.Track(c.stateDataFeed.Subscribe(ch))
+// SubscribeStateSyncEvent registers a subscription of StateSyncEvent.
+func (c *Bor) SubscribeStateSyncEvent(ch chan<- core.StateSyncEvent) event.Subscription {
+	return c.scope.Track(c.stateSyncFeed.Subscribe(ch))
 }
 
 func (c *Bor) SetHeimdallClient(h IHeimdallClient) {
@@ -1136,6 +1151,49 @@ func (c *Bor) SetHeimdallClient(h IHeimdallClient) {
 //
 // Private methods
 //
+
+func (c *Bor) getNextHeimdallSpanForTest(
+	newSpanID uint64,
+	state *state.StateDB,
+	header *types.Header,
+	chain core.ChainContext,
+) (*HeimdallSpan, error) {
+	headerNumber := header.Number.Uint64()
+	span, err := c.GetCurrentSpan(headerNumber - 1)
+	if err != nil {
+		return nil, err
+	}
+
+	// get local chain context object
+	localContext := chain.(chainContext)
+	// Retrieve the snapshot needed to verify this header and cache it
+	snap, err := c.snapshot(localContext.Chain, headerNumber-1, header.ParentHash, nil)
+	if err != nil {
+		return nil, err
+	}
+
+	// new span
+	span.ID = newSpanID
+	if span.EndBlock == 0 {
+		span.StartBlock = 256
+	} else {
+		span.StartBlock = span.EndBlock + 1
+	}
+	span.EndBlock = span.StartBlock + (100 * c.config.Sprint) - 1
+
+	selectedProducers := make([]Validator, len(snap.ValidatorSet.Validators))
+	for i, v := range snap.ValidatorSet.Validators {
+		selectedProducers[i] = *v
+	}
+	heimdallSpan := &HeimdallSpan{
+		Span:              *span,
+		ValidatorSet:      *snap.ValidatorSet,
+		SelectedProducers: selectedProducers,
+		ChainID:           c.chainConfig.ChainID.String(),
+	}
+
+	return heimdallSpan, nil
+}
 
 //
 // Chain context

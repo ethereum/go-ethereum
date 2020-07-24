@@ -155,7 +155,7 @@ func (p *peerConnection) FetchHeaders(from uint64, count int) error {
 	}
 	p.headerStarted = time.Now()
 
-	// Issue the header retrieval request (absolut upwards without gaps)
+	// Issue the header retrieval request (absolute upwards without gaps)
 	go p.peer.RequestHeadersByNumber(from, count, 0, false)
 
 	return nil
@@ -421,7 +421,7 @@ func (ps *peerSet) Unregister(id string) error {
 	ps.lock.Lock()
 	p, ok := ps.peers[id]
 	if !ok {
-		defer ps.lock.Unlock()
+		ps.lock.Unlock()
 		return errNotRegistered
 	}
 	delete(ps.peers, id)
@@ -470,7 +470,7 @@ func (ps *peerSet) HeaderIdlePeers() ([]*peerConnection, int) {
 		defer p.lock.RUnlock()
 		return p.headerThroughput
 	}
-	return ps.idlePeers(62, 64, idle, throughput)
+	return ps.idlePeers(62, 65, idle, throughput)
 }
 
 // BodyIdlePeers retrieves a flat list of all the currently body-idle peers within
@@ -484,7 +484,7 @@ func (ps *peerSet) BodyIdlePeers() ([]*peerConnection, int) {
 		defer p.lock.RUnlock()
 		return p.blockThroughput
 	}
-	return ps.idlePeers(62, 64, idle, throughput)
+	return ps.idlePeers(62, 65, idle, throughput)
 }
 
 // ReceiptIdlePeers retrieves a flat list of all the currently receipt-idle peers
@@ -498,7 +498,7 @@ func (ps *peerSet) ReceiptIdlePeers() ([]*peerConnection, int) {
 		defer p.lock.RUnlock()
 		return p.receiptThroughput
 	}
-	return ps.idlePeers(63, 64, idle, throughput)
+	return ps.idlePeers(63, 65, idle, throughput)
 }
 
 // NodeDataIdlePeers retrieves a flat list of all the currently node-data-idle
@@ -512,7 +512,7 @@ func (ps *peerSet) NodeDataIdlePeers() ([]*peerConnection, int) {
 		defer p.lock.RUnlock()
 		return p.stateThroughput
 	}
-	return ps.idlePeers(63, 64, idle, throughput)
+	return ps.idlePeers(63, 65, idle, throughput)
 }
 
 // idlePeers retrieves a flat list of all currently idle peers satisfying the

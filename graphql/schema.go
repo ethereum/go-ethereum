@@ -1,4 +1,4 @@
-// Copyright 2018 The go-ethereum Authors
+// Copyright 2019 The go-ethereum Authors
 // This file is part of the go-ethereum library.
 //
 // The go-ethereum library is free software: you can redistribute it and/or modify
@@ -115,6 +115,9 @@ const schema string = `
         # Logs is a list of log entries emitted by this transaction. If the
         # transaction has not yet been mined, this field will be null.
         logs: [Log!]
+        r: BigInt!
+        s: BigInt!
+        v: BigInt!
     }
 
     # BlockFilterCriteria encapsulates log filter criteria for a filter applied

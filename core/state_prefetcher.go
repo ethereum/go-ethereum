@@ -54,6 +54,7 @@ func (p *statePrefetcher) Prefetch(block *types.Block, statedb *state.StateDB, c
 		gaspool = new(GasPool).AddGas(block.GasLimit())
 	)
 	// Iterate over and process the individual transactions
+	byzantium := p.config.IsByzantium(block.Number())
 	for i, tx := range block.Transactions() {
 		// If block precaching was interrupted, abort
 		if interrupt != nil && atomic.LoadUint32(interrupt) == 1 {
@@ -64,6 +65,14 @@ func (p *statePrefetcher) Prefetch(block *types.Block, statedb *state.StateDB, c
 		if err := precacheTransaction(p.config, p.bc, nil, gaspool, statedb, header, tx, cfg); err != nil {
 			return // Ugh, something went horribly wrong, bail out
 		}
+		// If we're pre-byzantium, pre-load trie nodes for the intermediate root
+		if !byzantium {
+			statedb.IntermediateRoot(true)
+		}
+	}
+	// If were post-byzantium, pre-load trie nodes for the final root hash
+	if byzantium {
+		statedb.IntermediateRoot(true)
 	}
 }
 
@@ -80,6 +89,6 @@ func precacheTransaction(config *params.ChainConfig, bc ChainContext, author *co
 	context := NewEVMContext(msg, header, bc, author)
 	vm := vm.NewEVM(context, statedb, config, cfg)
 
-	_, _, _, err = ApplyMessage(vm, msg, gaspool)
+	_, err = ApplyMessage(vm, msg, gaspool)
 	return err
 }
