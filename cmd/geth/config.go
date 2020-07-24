@@ -30,7 +30,6 @@ import (
 	"github.com/ethereum/go-ethereum/eth"
 	"github.com/ethereum/go-ethereum/node"
 	"github.com/ethereum/go-ethereum/params"
-	whisper "github.com/ethereum/go-ethereum/whisper/whisperv6"
 	"github.com/naoina/toml"
 )
 
@@ -40,7 +39,7 @@ var (
 		Name:        "dumpconfig",
 		Usage:       "Show configuration values",
 		ArgsUsage:   "",
-		Flags:       append(append(nodeFlags, rpcFlags...), whisperFlags...),
+		Flags:       append(nodeFlags, rpcFlags...),
 		Category:    "MISCELLANEOUS COMMANDS",
 		Description: `The dumpconfig command shows configuration values.`,
 	}
@@ -74,7 +73,6 @@ type ethstatsConfig struct {
 
 type gethConfig struct {
 	Eth      eth.Config
-	Shh      whisper.Config
 	Node     node.Config
 	Ethstats ethstatsConfig
 }
@@ -108,7 +106,6 @@ func makeConfigNode(ctx *cli.Context) (*node.Node, gethConfig) {
 	// Load defaults.
 	cfg := gethConfig{
 		Eth:  eth.DefaultConfig,
-		Shh:  whisper.DefaultConfig,
 		Node: defaultNodeConfig(),
 	}
 
@@ -132,16 +129,6 @@ func makeConfigNode(ctx *cli.Context) (*node.Node, gethConfig) {
 	utils.SetShhConfig(ctx, stack, &cfg.Shh)
 
 	return stack, cfg
-}
-
-// enableWhisper returns true in case one of the whisper flags is set.
-func enableWhisper(ctx *cli.Context) bool {
-	for _, flag := range whisperFlags {
-		if ctx.GlobalIsSet(flag.GetName()) {
-			return true
-		}
-	}
-	return false
 }
 
 func makeFullNode(ctx *cli.Context) *node.Node {
