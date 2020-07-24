@@ -17,17 +17,14 @@
 package node
 
 import (
-	"context"
 	"errors"
 	"fmt"
-	"net"
 	"net/http"
 	"os"
 	"path/filepath"
 	"reflect"
 	"strings"
 	"sync"
-	"sync/atomic"
 
 	"github.com/ethereum/go-ethereum/accounts"
 	"github.com/ethereum/go-ethereum/core/rawdb"
@@ -54,10 +51,11 @@ type Node struct {
 
 	lock          sync.Mutex
 	lifecycles    []Lifecycle // All registered backends, services, and auxiliary services that have a lifecycle
-	httpServers   serverMap   // serverMap stores information about the node's rpc, ws, and graphQL http servers.
-	inprocHandler *rpc.Server // In-process RPC request handler to process the API requests
 	rpcAPIs       []rpc.API   // List of APIs currently provided by the node
-	ipc           *httpServer // Stores information about the ipc http server
+	http          *httpServer //
+	ws            *httpServer //
+	ipc           *ipcServer  // Stores information about the ipc http server
+	inprocHandler *rpc.Server // In-process RPC request handler to process the API requests
 
 	databases map[*closeTrackingDB]struct{} // All open databases
 }
@@ -99,8 +97,6 @@ func New(conf *Config) (*Node, error) {
 
 	node := &Node{
 		config:        conf,
-		httpServers:   make(serverMap),
-		ipc:           &httpServer{endpoint: conf.IPCEndpoint()},
 		inprocHandler: rpc.NewServer(),
 		eventmux:      new(event.TypeMux),
 		log:           conf.Logger,
@@ -139,41 +135,10 @@ func New(conf *Config) (*Node, error) {
 		node.server.Config.NodeDatabase = node.config.NodeDB()
 	}
 
-	// Configure HTTP servers.
-	if conf.HTTPHost != "" {
-		httpServ := &httpServer{
-			CorsAllowedOrigins: conf.HTTPCors,
-			Vhosts:             conf.HTTPVirtualHosts,
-			Whitelist:          conf.HTTPModules,
-			Timeouts:           conf.HTTPTimeouts,
-			Srv:                rpc.NewServer(),
-			endpoint:           conf.HTTPEndpoint(),
-			host:               conf.HTTPHost,
-			port:               conf.HTTPPort,
-			RPCAllowed:         1,
-		}
-		// Enable WebSocket on HTTP port if enabled.
-		if conf.WSHost != "" && conf.WSPort == conf.HTTPPort {
-			httpServ.WSAllowed = 1
-			httpServ.WsOrigins = conf.WSOrigins
-			httpServ.Whitelist = append(httpServ.Whitelist, conf.WSModules...)
-
-			node.httpServers[conf.HTTPEndpoint()] = httpServ
-			return node, nil
-		}
-		node.httpServers[conf.HTTPEndpoint()] = httpServ
-	}
-	if conf.WSHost != "" {
-		node.httpServers[conf.WSEndpoint()] = &httpServer{
-			WsOrigins: conf.WSOrigins,
-			Whitelist: conf.WSModules,
-			Srv:       rpc.NewServer(),
-			endpoint:  conf.WSEndpoint(),
-			host:      conf.WSHost,
-			port:      conf.WSPort,
-			WSAllowed: 1,
-		}
-	}
+	// Configure RPC servers.
+	node.http = newHTTPServer(node.log, conf.HTTPTimeouts)
+	node.ws = newHTTPServer(node.log, rpc.DefaultHTTPTimeouts)
+	node.ipc = newIPCServer(node.log, conf.IPCEndpoint())
 
 	return node, nil
 }
@@ -282,57 +247,15 @@ func (n *Node) doClose(errs []error) error {
 	}
 }
 
-// registerHTTPServer registers the given HTTP server on the node.
-func (n *Node) registerHTTPServer(endpoint string, server *httpServer) {
-	n.httpServers[endpoint] = server
-}
-
-// existingHTTPServer checks if an HTTP server is already configured on the given endpoint.
-func (n *Node) existingHTTPServer(endpoint string) *httpServer {
-	if server, exists := n.httpServers[endpoint]; exists {
-		return server
-	}
-	return nil
-}
-
-// createHTTPServer creates an http.Server and adds it to the given httpServer.
-func (n *Node) createHTTPServer(h *httpServer, exposeAll bool) error {
-	// register apis and create handler stack
-	err := RegisterApisFromWhitelist(n.rpcAPIs, h.Whitelist, h.Srv, exposeAll)
-	if err != nil {
-		return err
-	}
-
-	// start the HTTP listener
-	listener, err := net.Listen("tcp", h.endpoint)
-	if err != nil {
-		return err
-	}
-	// create the HTTP server
-	httpSrv := &http.Server{Handler: &h.srvMux}
-	// check timeouts if they exist
-	if h.Timeouts != (rpc.HTTPTimeouts{}) {
-		CheckTimeouts(&h.Timeouts)
-		httpSrv.ReadTimeout = h.Timeouts.ReadTimeout
-		httpSrv.WriteTimeout = h.Timeouts.WriteTimeout
-		httpSrv.IdleTimeout = h.Timeouts.IdleTimeout
-	}
-	// add listener and http.Server to httpServer
-	h.Listener = listener
-	h.Server = httpSrv
-
-	return nil
-}
-
 // startNetworking starts all network endpoints.
 func (n *Node) startNetworking() error {
 	n.log.Info("Starting peer-to-peer node", "instance", n.server.Name)
 	if err := n.server.Start(); err != nil {
 		return convertFileLockError(err)
 	}
-	err := n.configureRPC()
+	err := n.startRPC()
 	if err != nil {
-		n.httpServers.Stop()
+		n.stopRPC()
 		n.server.Stop()
 	}
 	return err
@@ -351,8 +274,7 @@ func containsLifecycle(lfs []Lifecycle, l Lifecycle) bool {
 // stopServices terminates running services, RPC and p2p networking.
 // It is the inverse of Start.
 func (n *Node) stopServices(running []Lifecycle) error {
-	n.stopIPC()
-	n.rpcAPIs = nil
+	n.stopRPC()
 
 	// Stop running lifecycles in reverse order.
 	failure := &StopError{Services: make(map[reflect.Type]error)}
@@ -403,54 +325,66 @@ func (n *Node) closeDataDir() {
 // configureRPC is a helper method to configure all the various RPC endpoints during node
 // startup. It's not meant to be called at any time afterwards as it makes certain
 // assumptions about the state of the node.
-func (n *Node) configureRPC() error {
-	// Start the various API endpoints, terminating all in case of errors
+func (n *Node) startRPC() error {
 	if err := n.startInProc(); err != nil {
 		return err
 	}
-	if err := n.startIPC(); err != nil {
-		n.stopInProc()
-		return err
-	}
 
-	// Configure HTTP servers.
-	for _, server := range n.httpServers {
-		handler := n.createHandler(server)
-		if handler != nil {
-			server.srvMux.Handle("/", handler)
-		}
-		if err := n.createHTTPServer(server, false); err != nil {
+	// Configure IPC.
+	if n.ipc.endpoint != "" {
+		if err := n.ipc.start(); err != nil {
 			return err
 		}
 	}
 
-	// Register HTTP server as a lifecycle if it has not already been registered.
-	if !containsLifecycle(n.lifecycles, &n.httpServers) {
-		n.lifecycles = append(n.lifecycles, &n.httpServers)
-	}
-	return nil
-}
-
-// createHandler creates the http.Handler for the given httpServer.
-func (n *Node) createHandler(server *httpServer) http.Handler {
-	var handler http.Handler
-	if atomic.LoadInt32(&server.RPCAllowed) == 1 {
-		handler = NewHTTPHandlerStack(server.Srv, server.CorsAllowedOrigins, server.Vhosts)
-		// wrap ws handler just in case ws is enabled through the console after start-up
-		wsHandler := server.Srv.WebsocketHandler(server.WsOrigins)
-		handler = server.NewWebsocketUpgradeHandler(handler, wsHandler)
-
-		n.log.Info("HTTP configured on endpoint ", "endpoint", fmt.Sprintf("http://%s/", server.endpoint))
-		if atomic.LoadInt32(&server.WSAllowed) == 1 {
-			n.log.Info("Websocket configured on endpoint ", "endpoint", fmt.Sprintf("ws://%s/", server.endpoint))
+	// Configure HTTP.
+	if n.config.HTTPHost != "" {
+		config := httpConfig{
+			CorsAllowedOrigins: n.config.HTTPCors,
+			Vhosts:             n.config.HTTPVirtualHosts,
+			Modules:            n.config.HTTPModules,
+		}
+		if err := n.http.setListenAddr(n.config.HTTPHost, n.config.HTTPPort); err != nil {
+			return err
+		}
+		if err := n.http.enableRPC(n.rpcAPIs, config); err != nil {
+			return err
 		}
 	}
-	if (atomic.LoadInt32(&server.WSAllowed) == 1) && handler == nil {
-		handler = server.Srv.WebsocketHandler(server.WsOrigins)
-		n.log.Info("Websocket configured on endpoint ", "endpoint", fmt.Sprintf("ws://%s/", server.endpoint))
+
+	// Configure WebSocket.
+	if n.config.WSHost != "" {
+		server := n.wsServerForPort(n.config.WSPort)
+		config := wsConfig{
+			Modules: n.config.WSModules,
+			Origins: n.config.WSOrigins,
+		}
+		if err := server.setListenAddr(n.config.WSHost, n.config.WSPort); err != nil {
+			return err
+		}
+		if err := server.enableWS(n.rpcAPIs, config); err != nil {
+			return err
+		}
 	}
 
-	return handler
+	if err := n.http.start(); err != nil {
+		return err
+	}
+	return n.ws.start()
+}
+
+func (n *Node) wsServerForPort(port int) *httpServer {
+	if n.config.HTTPHost == "" || n.http.port == port {
+		return n.http
+	}
+	return n.ws
+}
+
+func (n *Node) stopRPC() {
+	n.http.stop()
+	n.ws.stop()
+	n.ipc.stop()
+	n.stopInProc()
 }
 
 // startInProc registers all RPC APIs on the inproc server.
@@ -466,50 +400,6 @@ func (n *Node) startInProc() error {
 // stopInProc terminates the in-process RPC endpoint.
 func (n *Node) stopInProc() {
 	n.inprocHandler.Stop()
-}
-
-// startIPC initializes and starts the IPC RPC endpoint.
-func (n *Node) startIPC() error {
-	if n.ipc.endpoint == "" {
-		return nil // IPC disabled.
-	}
-	listener, handler, err := rpc.StartIPCEndpoint(n.ipc.endpoint, n.rpcAPIs)
-	if err != nil {
-		return err
-	}
-	n.ipc.Listener = listener
-	n.ipc.handler = handler
-	n.log.Info("IPC endpoint opened", "url", n.ipc.endpoint)
-	return nil
-}
-
-// stopIPC terminates the IPC RPC endpoint.
-func (n *Node) stopIPC() {
-	if n.ipc.Listener != nil {
-		n.ipc.Listener.Close()
-		n.ipc.Listener = nil
-		n.log.Info("IPC endpoint closed", "url", n.ipc.endpoint)
-	}
-	if n.ipc.Srv != nil {
-		n.ipc.Srv.Stop()
-		n.ipc.Srv = nil
-	}
-}
-
-// stopServers terminates the given HTTP servers' endpoints
-func (n *Node) stopServer(server *httpServer) {
-	if server.Server != nil {
-		url := fmt.Sprintf("http://%v/", server.Listener.Addr())
-		// Don't bother imposing a timeout here.
-		server.Server.Shutdown(context.Background())
-		n.log.Info("HTTP Endpoint closed", "url", url)
-	}
-	if server.Srv != nil {
-		server.Srv.Stop()
-		server.Srv = nil
-	}
-	// remove stopped http server from node's http servers
-	delete(n.httpServers, server.endpoint)
 }
 
 // Wait blocks until the node is closed.
@@ -561,14 +451,8 @@ func (n *Node) RegisterPath(path string, handler http.Handler) string {
 	if n.state != initializingState {
 		panic("can't register HTTP handler on running/stopped node")
 	}
-	for _, server := range n.httpServers {
-		if atomic.LoadInt32(&server.RPCAllowed) == 1 {
-			server.srvMux.Handle(path, handler)
-			return server.endpoint
-		}
-	}
-	n.log.Warn(fmt.Sprintf("HTTP server not configured on node, path %s cannot be enabled", path))
-	return ""
+	n.http.mux.Handle(path, handler)
+	return n.http.endpoint
 }
 
 // Attach creates an RPC client attached to an in-process API handler.
@@ -596,6 +480,9 @@ func (n *Node) Config() *Config {
 // only to inspect fields of the currently running server. Callers should not
 // start or stop the returned server.
 func (n *Node) Server() *p2p.Server {
+	n.lock.Lock()
+	defer n.lock.Unlock()
+
 	return n.server
 }
 
@@ -620,21 +507,17 @@ func (n *Node) IPCEndpoint() string {
 	return n.ipc.endpoint
 }
 
+// HTTPEndpoint returns the URL of the HTTP server.
+func (n *Node) HTTPEndpoint() string {
+	return "http://" + n.http.listenAddr()
+}
+
 // WSEndpoint retrieves the current WS endpoint used by the protocol stack.
 func (n *Node) WSEndpoint() string {
-	n.lock.Lock()
-	defer n.lock.Unlock()
-
-	for _, httpServer := range n.httpServers {
-		if atomic.LoadInt32(&httpServer.WSAllowed) == 1 {
-			if httpServer.Listener != nil {
-				return httpServer.Listener.Addr().String()
-			}
-			return httpServer.endpoint
-		}
+	if n.http.wsAllowed() {
+		return "ws://" + n.http.listenAddr()
 	}
-
-	return n.config.WSEndpoint()
+	return "ws://" + n.ws.listenAddr()
 }
 
 // EventMux retrieves the event multiplexer used by all the network services in

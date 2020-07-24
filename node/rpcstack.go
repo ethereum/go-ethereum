@@ -55,71 +55,219 @@ func RegisterApisFromWhitelist(apis []rpc.API, modules []string, srv *rpc.Server
 	return nil
 }
 
-type serverMap map[string]*httpServer // Stores information about all http servers (if any) by their endpoint, including http, ws, and graphql
+// httpConfig is the JSON-RPC/HTTP configuration.
+type httpConfig struct {
+	Modules            []string
+	CorsAllowedOrigins []string
+	Vhosts             []string
+}
+
+// wsConfig is the JSON-RPC/Websocket configuration
+type wsConfig struct {
+	Origins []string
+	Modules []string
+}
 
 type httpServer struct {
-	srvMux http.ServeMux
+	log      log.Logger
+	timeouts rpc.HTTPTimeouts
+	mux      http.ServeMux // registered handlers go here
 
-	handler http.Handler
-	Srv     *rpc.Server
-	Server  *http.Server
+	mu       sync.Mutex
+	server   *http.Server
+	listener net.Listener // non-nil when server is running
 
-	Listener net.Listener
+	httpConfig  httpConfig
+	httpRPC     *rpc.Server
+	httpHandler http.Handler
+
+	wsConfig  wsConfig
+	wsRPC     *rpc.Server
+	wsHandler http.Handler
 
 	endpoint string
 	host     string
 	port     int
+	config   httpConfig
 
-	Whitelist []string
-
-	CorsAllowedOrigins []string
-	Vhosts             []string
-	WsOrigins          []string
-	Timeouts           rpc.HTTPTimeouts
-
-	RPCAllowed int32
-	WSAllowed  int32
+	// atomic flags for the handler
+	rpcAllowedFlag int32
+	wsAllowedFlag  int32
 }
 
-func (sm serverMap) Start() error {
-	for _, server := range sm {
-		if err := server.Start(); err != nil {
-			return sm.Stop()
+func newHTTPServer(log log.Logger, timeouts rpc.HTTPTimeouts) *httpServer {
+	return &httpServer{log: log, timeouts: timeouts}
+}
+
+// setListenAddr configures the listening address of the server.
+// The address can only be set while the server isn't running.
+func (h *httpServer) setListenAddr(host string, port int) error {
+	h.mu.Lock()
+	defer h.mu.Unlock()
+
+	if h.listener != nil && (host != h.host || port != h.port) {
+		return fmt.Errorf("HTTP server already running on %s", h.endpoint)
+	}
+
+	h.host, h.port = host, port
+	h.endpoint = fmt.Sprintf("%s:%d", host, port)
+	return nil
+}
+
+// listenAddr returns the listening address of the server.
+func (h *httpServer) listenAddr() string {
+	h.mu.Lock()
+	defer h.mu.Unlock()
+
+	if h.listener != nil {
+		return h.listener.Addr().String()
+	}
+	return h.endpoint
+}
+
+// enableRPC turns on JSON-RPC over HTTP on the server.
+func (h *httpServer) enableRPC(apis []rpc.API, config httpConfig) error {
+	h.mu.Lock()
+	defer h.mu.Unlock()
+
+	if h.httpRPC != nil {
+		return fmt.Errorf("JSON-RPC over HTTP is already enabled")
+	}
+
+	// Create RPC server.
+	srv := rpc.NewServer()
+	if err := RegisterApisFromWhitelist(apis, h.httpConfig.Modules, srv, false); err != nil {
+		return err
+	}
+	// Create handler.
+	h.httpRPC = srv
+	h.httpHandler = NewHTTPHandlerStack(h.httpRPC, config.CorsAllowedOrigins, config.Vhosts)
+	atomic.StoreInt32(&h.rpcAllowedFlag, 1)
+	return nil
+}
+
+// enableWS turns on JSON-RPC over WebSocket on the server.
+func (h *httpServer) enableWS(apis []rpc.API, config wsConfig) error {
+	h.mu.Lock()
+	defer h.mu.Unlock()
+
+	if h.wsRPC != nil {
+		return fmt.Errorf("JSON-RPC over WebSocket is already enabled")
+	}
+
+	// Create RPC server.
+	srv := rpc.NewServer()
+	if err := RegisterApisFromWhitelist(apis, h.wsConfig.Modules, srv, false); err != nil {
+		return err
+	}
+	// Create handler.
+	h.wsRPC = rpc.NewServer()
+	h.wsHandler = h.wsRPC.WebsocketHandler(config.Origins)
+	atomic.StoreInt32(&h.wsAllowedFlag, 1)
+	return nil
+}
+
+// disableWS disables JSON-RPC over WebSocket.
+func (h *httpServer) disableWS() {
+	h.mu.Lock()
+	defer h.mu.Unlock()
+
+	atomic.StoreInt32(&h.wsAllowedFlag, 0)
+	h.wsRPC.Stop()
+	h.wsRPC = nil
+}
+
+// start starts the HTTP server if it is enabled and not already running.
+func (h *httpServer) start() error {
+	h.mu.Lock()
+	defer h.mu.Unlock()
+
+	if h.endpoint == "" || h.listener != nil {
+		return nil // already running or not configured
+	}
+
+	// Initialize the server.
+	h.server = &http.Server{Handler: h}
+	if h.timeouts != (rpc.HTTPTimeouts{}) {
+		CheckTimeouts(&h.timeouts)
+		h.server.ReadTimeout = h.timeouts.ReadTimeout
+		h.server.WriteTimeout = h.timeouts.WriteTimeout
+		h.server.IdleTimeout = h.timeouts.IdleTimeout
+	}
+
+	// Start the server.
+	listener, err := net.Listen("tcp", h.endpoint)
+	if err != nil {
+		return err
+	}
+	h.listener = listener
+	go h.server.Serve(listener)
+	h.log.Info("HTTP endpoint opened",
+		"url", fmt.Sprintf("http://%v/", listener.Addr()),
+		"cors", strings.Join(h.config.CorsAllowedOrigins, ","),
+		"vhosts", strings.Join(h.config.Vhosts, ","),
+	)
+	return nil
+}
+
+// stop shuts down the HTTP server.
+func (h *httpServer) stop() error {
+	h.mu.Lock()
+	defer h.mu.Unlock()
+	if h.listener == nil {
+		return nil // not running
+	}
+
+	// Shut down the server.
+	if h.httpRPC != nil {
+		h.httpRPC.Stop()
+	}
+	if h.wsRPC != nil {
+		h.wsRPC.Stop()
+	}
+	h.server.Shutdown(context.Background())
+	h.listener.Close()
+	h.log.Info("HTTP endpoint closed", "url", h.endpoint)
+
+	// Clear out everything to allow re-configuring it later.
+	h.host, h.port, h.endpoint = "", 0, ""
+	h.server, h.listener = nil, nil
+	h.httpRPC, h.httpHandler, h.wsRPC, h.wsHandler = nil, nil, nil, nil
+	atomic.StoreInt32(&h.rpcAllowedFlag, 0)
+	atomic.StoreInt32(&h.wsAllowedFlag, 0)
+	return nil
+}
+
+// rpcAllowed returns true when JSON-RPC over HTTP is enabled.
+func (h *httpServer) rpcAllowed() bool {
+	return atomic.LoadInt32(&h.rpcAllowedFlag) == 1
+}
+
+// wsAllowed returns true when JSON-RPC over WebSocket is enabled.
+func (h *httpServer) wsAllowed() bool {
+	return atomic.LoadInt32(&h.wsAllowedFlag) == 1
+}
+
+func (h *httpServer) ServeHTTP(w http.ResponseWriter, r *http.Request) {
+	if h.wsAllowed() && isWebsocket(r) {
+		h.wsHandler.ServeHTTP(w, r)
+		return
+	}
+	if r.RequestURI == "/" {
+		if h.rpcAllowed() {
+			h.httpHandler.ServeHTTP(w, r)
+		} else {
+			w.WriteHeader(404)
 		}
+	} else {
+		h.mux.ServeHTTP(w, r)
 	}
-	return nil
 }
 
-func (sm serverMap) Stop() error {
-	for _, server := range sm {
-		if err := server.Stop(); err != nil {
-			return err
-		}
-	}
-	return nil
-}
-
-// Start starts the httpServer's http.Server
-func (h *httpServer) Start() error {
-	go h.Server.Serve(h.Listener)
-	log.Info("HTTP endpoint successfully opened", "url", fmt.Sprintf("http://%v/", h.Listener.Addr()))
-	return nil
-}
-
-// Stop shuts down the httpServer's http.Server
-func (h *httpServer) Stop() error {
-	if h.Server != nil {
-		url := fmt.Sprintf("http://%v/", h.Listener.Addr())
-		// Don't bother imposing a timeout here.
-		h.Server.Shutdown(context.Background())
-		log.Info("HTTP Endpoint closed", "url", url)
-	}
-	if h.Srv != nil {
-		h.Srv.Stop()
-		h.Srv = nil
-	}
-
-	return nil
+// isWebsocket checks the header of an http request for a websocket upgrade request.
+func isWebsocket(r *http.Request) bool {
+	return strings.ToLower(r.Header.Get("Upgrade")) == "websocket" &&
+		strings.ToLower(r.Header.Get("Connection")) == "upgrade"
 }
 
 // NewHTTPHandlerStack returns wrapped http-related handlers
@@ -231,22 +379,47 @@ func newGzipHandler(next http.Handler) http.Handler {
 	})
 }
 
-// NewWebsocketUpgradeHandler returns a websocket handler that serves an incoming request only if it contains an upgrade
-// request to the websocket protocol. If not, serves the the request with the http handler.
-func (hs *httpServer) NewWebsocketUpgradeHandler(h http.Handler, ws http.Handler) http.Handler {
-	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if atomic.LoadInt32(&hs.WSAllowed) == 1 && isWebsocket(r) {
-			ws.ServeHTTP(w, r)
-			log.Debug("serving websocket request")
-			return
-		}
+type ipcServer struct {
+	log      log.Logger
+	endpoint string
 
-		h.ServeHTTP(w, r)
-	})
+	mu       sync.Mutex
+	listener net.Listener
+	srv      *rpc.Server
+	apis     []rpc.API
 }
 
-// isWebsocket checks the header of an http request for a websocket upgrade request.
-func isWebsocket(r *http.Request) bool {
-	return strings.ToLower(r.Header.Get("Upgrade")) == "websocket" &&
-		strings.ToLower(r.Header.Get("Connection")) == "upgrade"
+func newIPCServer(log log.Logger, endpoint string) *ipcServer {
+	return &ipcServer{log: log, endpoint: endpoint}
+}
+
+// Start starts the httpServer's http.Server
+func (is *ipcServer) start() error {
+	is.mu.Lock()
+	defer is.mu.Unlock()
+
+	if is.listener != nil {
+		return nil // already running
+	}
+	listener, srv, err := rpc.StartIPCEndpoint(is.endpoint, is.apis)
+	if err != nil {
+		return err
+	}
+	is.log.Info("IPC endpoint opened", "url", is.endpoint)
+	is.listener, is.srv = listener, srv
+	return nil
+}
+
+func (is *ipcServer) stop() error {
+	is.mu.Lock()
+	defer is.mu.Unlock()
+
+	if is.listener == nil {
+		return nil // not running
+	}
+	err := is.listener.Close()
+	is.srv.Stop()
+	is.listener, is.srv = nil, nil
+	is.log.Info("IPC endpoint closed", "url", is.endpoint)
+	return err
 }

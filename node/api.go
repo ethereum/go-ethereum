@@ -20,7 +20,6 @@ import (
 	"context"
 	"fmt"
 	"strings"
-	"sync/atomic"
 
 	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/ethereum/go-ethereum/crypto"
@@ -168,7 +167,7 @@ func (api *privateAdminAPI) StartRPC(host *string, port *int, cors *string, apis
 	api.node.lock.Lock()
 	defer api.node.lock.Unlock()
 
-	// set host, port, and endpoint
+	// Determine host and port.
 	if host == nil {
 		h := DefaultHTTPHost
 		if api.node.config.HTTPHost != "" {
@@ -179,76 +178,48 @@ func (api *privateAdminAPI) StartRPC(host *string, port *int, cors *string, apis
 	if port == nil {
 		port = &api.node.config.HTTPPort
 	}
-	endpoint := fmt.Sprintf("%s:%d", *host, *port)
-	// check if HTTP server already exists
-	if server, exists := api.node.httpServers[endpoint]; exists {
-		if atomic.LoadInt32(&server.RPCAllowed) == 1 {
-			return false, fmt.Errorf("HTTP RPC already running on %v", server.Listener.Addr())
-		}
-	}
 
-	allowedOrigins := api.node.config.HTTPCors
+	// Determine config.
+	config := httpConfig{
+		CorsAllowedOrigins: api.node.config.HTTPCors,
+		Vhosts:             api.node.config.HTTPVirtualHosts,
+		Modules:            api.node.config.HTTPModules,
+	}
 	if cors != nil {
-		allowedOrigins = nil
+		config.CorsAllowedOrigins = nil
 		for _, origin := range strings.Split(*cors, ",") {
-			allowedOrigins = append(allowedOrigins, strings.TrimSpace(origin))
+			config.CorsAllowedOrigins = append(config.CorsAllowedOrigins, strings.TrimSpace(origin))
 		}
 	}
-
-	allowedVHosts := api.node.config.HTTPVirtualHosts
 	if vhosts != nil {
-		allowedVHosts = nil
+		config.Vhosts = nil
 		for _, vhost := range strings.Split(*host, ",") {
-			allowedVHosts = append(allowedVHosts, strings.TrimSpace(vhost))
+			config.Vhosts = append(config.Vhosts, strings.TrimSpace(vhost))
+		}
+	}
+	if apis != nil {
+		config.Modules = nil
+		for _, m := range strings.Split(*apis, ",") {
+			config.Modules = append(config.Modules, strings.TrimSpace(m))
 		}
 	}
 
-	modules := api.node.config.HTTPModules
-	if apis != nil {
-		modules = nil
-		for _, m := range strings.Split(*apis, ",") {
-			modules = append(modules, strings.TrimSpace(m))
-		}
-	}
-	// configure http server
-	httpServer := &httpServer{
-		host:               *host,
-		port:               *port,
-		endpoint:           endpoint,
-		Srv:                rpc.NewServer(),
-		CorsAllowedOrigins: allowedOrigins,
-		Vhosts:             allowedVHosts,
-		Whitelist:          modules,
-	}
-	// create handler
-	handler := NewHTTPHandlerStack(httpServer.Srv, httpServer.CorsAllowedOrigins, httpServer.Vhosts)
-	httpServer.srvMux.Handle("/", handler)
-	// create HTTP server
-	if err := api.node.createHTTPServer(httpServer, false); err != nil {
+	if err := api.node.http.setListenAddr(*host, *port); err != nil {
 		return false, err
 	}
-	// register the HTTP server
-	api.node.registerHTTPServer(endpoint, httpServer)
-	// start the HTTP server
-	httpServer.Start()
-	api.node.log.Info("HTTP endpoint opened", "url", fmt.Sprintf("http://%v/", httpServer.Listener.Addr()),
-		"cors", strings.Join(httpServer.CorsAllowedOrigins, ","),
-		"vhosts", strings.Join(httpServer.Vhosts, ","))
+	if err := api.node.http.enableRPC(api.node.rpcAPIs, config); err != nil {
+		return false, err
+	}
+	if err := api.node.http.start(); err != nil {
+		return false, err
+	}
 	return true, nil
 }
 
-// StopRPC terminates an already running HTTP RPC API endpoint.
+// StopRPC shuts down the HTTP server.
 func (api *privateAdminAPI) StopRPC() (bool, error) {
-	api.node.lock.Lock()
-	defer api.node.lock.Unlock()
-
-	for _, httpServer := range api.node.httpServers {
-		if atomic.LoadInt32(&httpServer.RPCAllowed) == 1 {
-			api.node.stopServer(httpServer)
-			return true, nil
-		}
-	}
-	return false, fmt.Errorf("HTTP RPC not running")
+	api.node.http.stop()
+	return true, nil
 }
 
 // StartWS starts the websocket RPC API server.
@@ -256,13 +227,7 @@ func (api *privateAdminAPI) StartWS(host *string, port *int, allowedOrigins *str
 	api.node.lock.Lock()
 	defer api.node.lock.Unlock()
 
-	// check if an existing WS server already exists
-	for _, server := range api.node.httpServers {
-		if atomic.LoadInt32(&server.WSAllowed) == 1 {
-			return false, fmt.Errorf("WebSocket RPC already running on %v", server.Listener.Addr())
-		}
-	}
-	// set host, port and endpoint
+	// Determine host and port.
 	if host == nil {
 		h := DefaultWSHost
 		if api.node.config.WSHost != "" {
@@ -273,74 +238,48 @@ func (api *privateAdminAPI) StartWS(host *string, port *int, allowedOrigins *str
 	if port == nil {
 		port = &api.node.config.WSPort
 	}
-	endpoint := fmt.Sprintf("%s:%d", *host, *port)
 
-	origins := api.node.config.WSOrigins
-	if allowedOrigins != nil {
-		origins = nil
-		for _, origin := range strings.Split(*allowedOrigins, ",") {
-			origins = append(origins, strings.TrimSpace(origin))
-		}
+	// Determine config.
+	config := wsConfig{
+		Modules: api.node.config.WSModules,
+		Origins: api.node.config.WSOrigins,
+		// ExposeAll: api.node.config.WSExposeAll,
 	}
-	// check if an HTTP server exists on the given endpoint, and if so, enable websocket on that HTTP server
-	existingServer := api.node.existingHTTPServer(endpoint)
-	if existingServer != nil {
-		atomic.StoreInt32(&existingServer.WSAllowed, 1)
-		existingServer.WsOrigins = origins
-
-		api.node.log.Info("WebSocket endpoint opened", "url", fmt.Sprintf("ws://%v", existingServer.Listener.Addr()))
-		return true, nil
-	}
-
-	modules := api.node.config.WSModules
 	if apis != nil {
-		modules = nil
+		config.Modules = nil
 		for _, m := range strings.Split(*apis, ",") {
-			modules = append(modules, strings.TrimSpace(m))
+			config.Modules = append(config.Modules, strings.TrimSpace(m))
 		}
 	}
-	// configure http server
-	wsServer := &httpServer{
-		Srv:       rpc.NewServer(),
-		endpoint:  endpoint,
-		host:      *host,
-		port:      *port,
-		Whitelist: modules,
-		WsOrigins: origins,
-		WSAllowed: 1,
+	if allowedOrigins != nil {
+		config.Origins = nil
+		for _, origin := range strings.Split(*allowedOrigins, ",") {
+			config.Origins = append(config.Origins, strings.TrimSpace(origin))
+		}
 	}
-	// create handler
-	handler := wsServer.Srv.WebsocketHandler(wsServer.WsOrigins)
-	wsServer.srvMux.Handle("/", handler)
-	// create the HTTP server
-	if err := api.node.createHTTPServer(wsServer, api.node.config.WSExposeAll); err != nil {
+
+	// Enable WebSocket on the server.
+	server := api.node.wsServerForPort(*port)
+	if err := server.setListenAddr(*host, *port); err != nil {
 		return false, err
 	}
-	// register the HTTP server
-	api.node.registerHTTPServer(endpoint, wsServer)
-	// start the HTTP server
-	if err := wsServer.Start(); err != nil {
+	if err := server.enableWS(api.node.rpcAPIs, config); err != nil {
 		return false, err
 	}
-	api.node.log.Info("WebSocket endpoint opened", "url", fmt.Sprintf("ws://%v", wsServer.Listener.Addr()))
+	if err := server.start(); err != nil {
+		return false, err
+	}
+	api.node.log.Info("WebSocket endpoint opened", "url", api.node.WSEndpoint())
 	return true, nil
 }
 
-// StopWS terminates an already running websocket RPC API endpoint.
+// StopWS terminates all WebSocket servers.
 func (api *privateAdminAPI) StopWS() (bool, error) {
-	api.node.lock.Lock()
-	defer api.node.lock.Unlock()
-
-	for _, httpServer := range api.node.httpServers {
-		if atomic.SwapInt32(&httpServer.WSAllowed, 0) == 1 {
-			// if RPC is not enabled on the WS http server, shut it down
-			if atomic.LoadInt32(&httpServer.RPCAllowed) == 0 {
-				api.node.stopServer(httpServer)
-			}
-			return true, nil
-		}
+	if api.node.http.wsAllowed() {
+		api.node.http.disableWS()
 	}
-	return false, fmt.Errorf("WebSocket RPC not running")
+	api.node.ws.stop()
+	return true, nil
 }
 
 // publicAdminAPI is the collection of administrative API methods exposed over
