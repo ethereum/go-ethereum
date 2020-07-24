@@ -180,7 +180,7 @@ func (c *committer) store(n node, db *Database, hasVnodeChildren bool) node {
 	)
 	if hash == nil {
 		// This was not generated - must be a small node stored in the parent.
-		// In thoery we should apply the leafCall here if it's not nil(embeded
+		// In theory we should apply the leafCall here if it's not nil(embeded
 		// node usually contains value). But small value(less than 32bytes) is
 		// not our target.
 		return n
