@@ -1623,7 +1623,7 @@ func (bc *BlockChain) InsertChain(chain types.Blocks) (int, error) {
 	return n, err
 }
 
-// InsertChainWithoutSealVerification works exactly the same 
+// InsertChainWithoutSealVerification works exactly the same
 // except for seal verification, seal verification is omitted
 func (bc *BlockChain) InsertChainWithoutSealVerification(chain types.Blocks) (int, error) {
 	// Sanity check that we have something meaningful to import
@@ -1660,7 +1660,6 @@ func (bc *BlockChain) InsertChainWithoutSealVerification(chain types.Blocks) (in
 
 	return n, err
 }
-
 
 // insertChain is the internal implementation of InsertChain, which assumes that
 // 1) chains are contiguous, and 2) The chain mutex is held.
