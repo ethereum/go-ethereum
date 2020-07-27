@@ -511,7 +511,7 @@ func startHTTP(t *testing.T, httpPort, wsPort int) *Node {
 }
 
 func doHTTPRequest(t *testing.T, req *http.Request) *http.Response {
-	client := &http.Client{}
+	client := http.DefaultClient
 	resp, err := client.Do(req)
 	if err != nil {
 		t.Fatalf("could not issue a GET request to the given endpoint: %v", err)
