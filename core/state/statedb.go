@@ -896,7 +896,7 @@ func (s *StateDB) CommitAsync(deleteEmptyObjects bool) (common.Hash, Trie, map[c
 			}
 			// Gather dirty storage tries for lazy commit, note it's already hashed.
 			// If it's nil, it means the storage trie is never accessed.
-			if obj.trie != nil {
+			if obj.trie != nil && obj.trie.Hash() != emptyRoot {
 				storage[obj.addrHash] = obj.trie
 			}
 		}

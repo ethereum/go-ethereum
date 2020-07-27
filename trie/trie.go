@@ -113,6 +113,10 @@ func HashAndCopyTrie(t *Trie) *Trie {
 	cpy.db = t.db
 	cpy.commitSeq = t.commitSeq
 	cpy.Hash()
+
+	if cpy.root == nil {
+		return &cpy
+	}
 	if _, dirty := cpy.root.cache(); !dirty {
 		return &cpy
 	}
