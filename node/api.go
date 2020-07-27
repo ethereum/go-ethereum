@@ -269,7 +269,7 @@ func (api *privateAdminAPI) StartWS(host *string, port *int, allowedOrigins *str
 	if err := server.start(); err != nil {
 		return false, err
 	}
-	api.node.log.Info("WebSocket endpoint opened", "url", api.node.WSEndpoint())
+	api.node.http.log.Info("WebSocket endpoint opened", "url", api.node.WSEndpoint())
 	return true, nil
 }
 
