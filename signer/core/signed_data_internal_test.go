@@ -17,7 +17,7 @@
 package core
 
 import (
-	"fmt"
+	"bytes"
 	"math/big"
 	"testing"
 
@@ -33,6 +33,8 @@ func TestParseBytes(t *testing.T) {
 		{"0x1234", []byte{0x12, 0x34}},
 		{[]byte{12, 34}, []byte{12, 34}},
 		{hexutil.Bytes([]byte{12, 34}), []byte{12, 34}},
+		{"1234", nil},    // not a proper hex-string
+		{"0x01233", nil}, // nibbles should be rejected
 		{"not a hex string", nil},
 		{15, nil},
 		{nil, nil},
@@ -40,15 +42,15 @@ func TestParseBytes(t *testing.T) {
 		out, ok := parseBytes(tt.v)
 		if tt.exp == nil {
 			if ok {
-				t.Errorf("Case %d: expecting !ok, got ok with %v", i, out)
+				t.Errorf("Case %d: expecting !ok, got ok with %x", i, out)
 			}
 			continue
 		}
 		if !ok {
 			t.Errorf("Case %d: expecting ok got !ok", i)
 		}
-		if fmt.Sprintf("%#v", out) != fmt.Sprintf("%#v", tt.exp) {
-			t.Errorf("Case %d: expecting %v got %v", i, tt.exp, out)
+		if !bytes.Equal(out, tt.exp) {
+			t.Errorf("Case %d: expecting %x got %x", i, tt.exp, out)
 		}
 	}
 }
