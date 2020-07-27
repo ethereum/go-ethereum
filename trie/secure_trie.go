@@ -170,7 +170,7 @@ func (t *SecureTrie) Copy() *SecureTrie {
 // the Copy is the original trie will be hashed before copy. Also the returned
 // trie will have a bumped commit sequence if the trie is not committed yet.
 func (t *SecureTrie) HashAndCopy() *SecureTrie {
-	cpy := *t
+	var cpy SecureTrie
 	cpy.trie = *(HashAndCopyTrie(&t.trie))
 	return &cpy
 }

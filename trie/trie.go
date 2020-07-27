@@ -21,6 +21,7 @@ import (
 	"bytes"
 	"fmt"
 	"sync"
+	"sync/atomic"
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/crypto"
@@ -46,13 +47,16 @@ type LeafCallback func(leaf []byte, parent common.Hash) error
 //
 // Trie is not safe for concurrent use.
 type Trie struct {
-	db   *Database
-	root node
+	db *Database
+
+	// Protect root and unhashed only. Root node is a bit special and sensitive.
+	rootlock sync.Mutex
+	root     node
 
 	// unhashed keeps track of the number leaves which have been inserted since
 	// the last hashing operation. This number will not directly map to the number
 	// of actually unhashed nodes
-	unhashed int
+	unhashed uint32
 
 	// commitSeq is used to tag the commit order for each changed node.
 	// The uncommitted trie may be reused(e.g. for processing the next block).
@@ -99,9 +103,17 @@ func New(root common.Hash, db *Database) (*Trie, error) {
 //
 // Note the original trie should be hashed first.
 func HashAndCopyTrie(t *Trie) *Trie {
-	t.Hash()
-	cpy := *t
-	if _, dirty := t.root.cache(); !dirty {
+	var cpy Trie
+
+	t.rootlock.Lock()
+	cpy.root = t.root
+	t.rootlock.Unlock()
+
+	cpy.unhashed = atomic.LoadUint32(&t.unhashed)
+	cpy.db = t.db
+	cpy.commitSeq = t.commitSeq
+	cpy.Hash()
+	if _, dirty := cpy.root.cache(); !dirty {
 		return &cpy
 	}
 	cpy.commitSeq = t.commitSeq + 1
@@ -438,7 +450,9 @@ func (t *Trie) resolveHash(n hashNode, prefix []byte) (node, error) {
 // database and can be used even if the trie doesn't have one.
 func (t *Trie) Hash() common.Hash {
 	hash, cached := t.hashRoot()
+	t.rootlock.Lock()
 	t.root = cached
+	t.rootlock.Unlock()
 	return common.BytesToHash(hash.(hashNode))
 }
 
@@ -490,7 +504,9 @@ func (t *Trie) Commit(onleaf LeafCallback) common.Hash {
 		close(h.leafCh)
 		wg.Wait()
 	}
+	t.rootlock.Lock()
 	t.root = newRoot
+	t.rootlock.Unlock()
 	return rootHash
 }
 
@@ -503,6 +519,6 @@ func (t *Trie) hashRoot() (node, node) {
 	h := newHasher(t.unhashed >= 100)
 	defer returnHasherToPool(h)
 	hashed, cached := h.hash(t.root, true)
-	t.unhashed = 0
+	atomic.StoreUint32(&t.unhashed, 0)
 	return hashed, cached
 }

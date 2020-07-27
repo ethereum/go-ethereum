@@ -159,7 +159,6 @@ type commitTask struct {
 	number     uint64
 	state      Trie
 	storage    map[common.Hash]Trie
-	lock       sync.Mutex
 	postCommit func()
 
 	// ACK fields.
@@ -195,9 +194,6 @@ func (db *cachingDB) OpenTrie(root common.Hash) (Trie, error) {
 	if task, ok := db.tasks[root]; ok {
 		db.lock.Unlock()
 		stateTrieHits.Mark(1)
-
-		task.lock.Lock()
-		defer task.lock.Unlock()
 		return task.state.(*trie.SecureTrie).HashAndCopy(), nil
 	}
 	db.lock.Unlock()
@@ -212,9 +208,6 @@ func (db *cachingDB) OpenStorageTrie(addrHash, root common.Hash) (Trie, error) {
 		if t, ok := task.storage[addrHash]; ok && t.Hash() == root {
 			db.lock.Unlock()
 			storageTrieHits.Mark(1)
-
-			task.lock.Lock()
-			defer task.lock.Unlock()
 			return t.(*trie.SecureTrie).HashAndCopy(), nil
 		}
 	}
@@ -411,9 +404,7 @@ func (db *cachingDB) run() {
 		// Commit the tries, now we have to hold the lock here to prevent
 		// concurrent issue between commit and hash. Please fix it(rjl493456442)
 		start := time.Now()
-		task.lock.Lock()
 		commitState(task.state, task.storage)
-		task.lock.Unlock()
 
 		// Run the callback after commit if it's not nil, usually it's in-memory GC algo.
 		callstart := time.Now()
