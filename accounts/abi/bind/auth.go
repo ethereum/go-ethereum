@@ -33,7 +33,7 @@ import (
 
 // NewTransactor is a utility method to easily create a transaction signer from
 // an encrypted json key stream and the associated passphrase.
-func NewTransactor(keyin io.Reader, passphrase string, signer types.Signer) (*TransactOpts, error) {
+func NewTransactor(keyin io.Reader, passphrase string, chainID *big.Int) (*TransactOpts, error) {
 	json, err := ioutil.ReadAll(keyin)
 	if err != nil {
 		return nil, err
@@ -42,16 +42,17 @@ func NewTransactor(keyin io.Reader, passphrase string, signer types.Signer) (*Tr
 	if err != nil {
 		return nil, err
 	}
-	return NewKeyedTransactor(key.PrivateKey, signer), nil
+	return NewKeyedTransactor(key.PrivateKey, chainID), nil
 }
 
 // NewKeyStoreTransactor is a utility method to easily create a transaction signer from
 // an decrypted key from a keystore.
-func NewKeyStoreTransactor(keystore *keystore.KeyStore, account accounts.Account, signer types.Signer) (*TransactOpts, error) {
-	if signer == nil {
-		// If no signer is explicitly passed, sign for mainnet
-		signer = types.NewEIP155Signer(big.NewInt(1))
+func NewKeyStoreTransactor(keystore *keystore.KeyStore, account accounts.Account, chainID *big.Int) (*TransactOpts, error) {
+	if chainID == nil {
+		// If no chainID is explicitly passed, sign for mainnet
+		chainID = common.Big1
 	}
+	signer := types.NewEIP155Signer(chainID)
 	return &TransactOpts{
 		From: account.Address,
 		Signer: func(address common.Address, tx *types.Transaction) (*types.Transaction, error) {
@@ -69,12 +70,13 @@ func NewKeyStoreTransactor(keystore *keystore.KeyStore, account accounts.Account
 
 // NewKeyedTransactor is a utility method to easily create a transaction signer
 // from a single private key.
-func NewKeyedTransactor(key *ecdsa.PrivateKey, signer types.Signer) *TransactOpts {
+func NewKeyedTransactor(key *ecdsa.PrivateKey, chainID *big.Int) *TransactOpts {
 	keyAddr := crypto.PubkeyToAddress(key.PublicKey)
-	if signer == nil {
-		// If no signer is explicitly passed, sign for mainnet
-		signer = types.NewEIP155Signer(big.NewInt(1))
+	if chainID == nil {
+		// If no chainID is explicitly passed, sign for mainnet
+		chainID = common.Big1
 	}
+	signer := types.NewEIP155Signer(chainID)
 	return &TransactOpts{
 		From: keyAddr,
 		Signer: func(address common.Address, tx *types.Transaction) (*types.Transaction, error) {

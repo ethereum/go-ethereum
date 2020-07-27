@@ -87,7 +87,7 @@ func NewKeyedTransactOpts(keyJson []byte, passphrase string, chainID *big.Int) (
 	if err != nil {
 		return nil, err
 	}
-	return &TransactOpts{*bind.NewKeyedTransactor(key.PrivateKey, types.NewEIP155Signer(chainID))}, nil
+	return &TransactOpts{*bind.NewKeyedTransactor(key.PrivateKey, chainID)}, nil
 }
 
 func (opts *TransactOpts) GetFrom() *Address    { return &Address{opts.opts.From} }
