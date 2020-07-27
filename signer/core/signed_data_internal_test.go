@@ -24,6 +24,56 @@ import (
 	"github.com/ethereum/go-ethereum/common/hexutil"
 )
 
+func TestBytesPadding(t *testing.T) {
+	tests := []struct {
+		Type   string
+		Input  []byte
+		Output []byte // nil => error
+	}{
+		{
+			// Fail on wrong length
+			Type:   "bytes20",
+			Input:  []byte{},
+			Output: nil,
+		},
+		{
+			Type:   "bytes1",
+			Input:  []byte{1},
+			Output: []byte{1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0},
+		},
+		{
+			Type:   "bytes7",
+			Input:  []byte{1, 2, 3, 4, 5, 6, 7},
+			Output: []byte{1, 2, 3, 4, 5, 6, 7, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0},
+		},
+		{
+			Type:   "bytes32",
+			Input:  []byte{1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30, 31, 32},
+			Output: []byte{1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30, 31, 32},
+		},
+	}
+
+	d := TypedData{}
+	for _, test := range tests {
+		val, err := d.EncodePrimitiveValue(test.Type, test.Input, 1)
+		if test.Output == nil {
+			if err == nil {
+				t.Errorf("expected error, got nil error with result %v: case %v", val, test)
+			}
+		} else {
+			if err != nil {
+				t.Errorf("expected nil error, got %v: case %v", err, test)
+			}
+			if len(val) != 32 {
+				t.Errorf("expected len 32, got %v: case %v", len(val), test)
+			}
+			if fmt.Sprint(val) != fmt.Sprint(test.Output) {
+				t.Errorf("expected %x, got %x: case %v", test.Output, val, test)
+			}
+		}
+	}
+}
+
 func TestParseBytes(t *testing.T) {
 	for i, tt := range []struct {
 		v   interface{}

@@ -593,10 +593,13 @@ func (typedData *TypedData) EncodePrimitiveValue(encType string, encValue interf
 		if length < 0 || length > 32 {
 			return nil, fmt.Errorf("invalid size on bytes: %d", length)
 		}
-		if byteValue, ok := parseBytes(encValue); !ok {
+		if byteValue, ok := parseBytes(encValue); !ok || len(byteValue) != length {
 			return nil, dataMismatchError(encType, encValue)
 		} else {
-			return math.PaddedBigBytes(new(big.Int).SetBytes(byteValue), 32), nil
+			// Right-pad the bits
+			dst := make([]byte, 32)
+			copy(dst, byteValue)
+			return dst, nil
 		}
 	}
 	if strings.HasPrefix(encType, "int") || strings.HasPrefix(encType, "uint") {
