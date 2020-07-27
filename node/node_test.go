@@ -434,8 +434,7 @@ func TestRegisterPath_Successful(t *testing.T) {
 	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Write([]byte("success"))
 	})
-	endpoint := node.RegisterPath("/test", handler)
-	assert.Equal(t, "127.0.0.1:7878", endpoint)
+	node.RegisterPath("test", "/test", handler)
 
 	// start node
 	if err := node.Start(); err != nil {
@@ -470,8 +469,7 @@ func TestRegisterPath_Unsuccessful(t *testing.T) {
 	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Write([]byte("success"))
 	})
-	endpoint := node.RegisterPath("/test", handler)
-	assert.Equal(t, "", endpoint)
+	node.RegisterPath("test", "/test", handler)
 }
 
 // // Tests whether a node can successfully create and register HTTP server

@@ -444,7 +444,7 @@ func (n *Node) RegisterAPIs(apis []rpc.API) {
 }
 
 // RegisterPath mounts the given handler on the given path on the canonical HTTP server.
-func (n *Node) RegisterPath(path string, handler http.Handler) string {
+func (n *Node) RegisterPath(name, path string, handler http.Handler) {
 	n.lock.Lock()
 	defer n.lock.Unlock()
 
@@ -452,7 +452,8 @@ func (n *Node) RegisterPath(path string, handler http.Handler) string {
 		panic("can't register HTTP handler on running/stopped node")
 	}
 	n.http.mux.Handle(path, handler)
-	return n.http.endpoint
+
+	n.http.handlerNames[path] = name
 }
 
 // Attach creates an RPC client attached to an in-process API handler.
