@@ -41,8 +41,8 @@ func TestParseBytes(t *testing.T) {
 	} {
 		out, ok := parseBytes(tt.v)
 		if tt.exp == nil {
-			if ok {
-				t.Errorf("Case %d: expecting !ok, got ok with %x", i, out)
+			if ok || out != nil {
+				t.Errorf("Case %d: expecting !ok, got ok = %v with out = %x", i, ok, out)
 			}
 			continue
 		}
