@@ -56,7 +56,6 @@ func TestStartRPC(t *testing.T) {
 			wantWS:        false,
 		},
 		{
-
 			name: "rpc enabled through config",
 			cfg:  Config{HTTPHost: "127.0.0.1"},
 			fn: func(t *testing.T, n *Node, api *privateAdminAPI) {
@@ -91,6 +90,21 @@ func TestStartRPC(t *testing.T) {
 			wantWS:        false,
 		},
 		{
+			name: "rpc stopped twice",
+			cfg:  Config{HTTPHost: "127.0.0.1"},
+			fn: func(t *testing.T, n *Node, api *privateAdminAPI) {
+				_, err := api.StopRPC()
+				assert.NoError(t, err)
+
+				_, err = api.StopRPC()
+				assert.NoError(t, err)
+			},
+			wantReachable: false,
+			wantHandlers:  false,
+			wantRPC:       false,
+			wantWS:        false,
+		},
+		{
 			name:          "ws enabled through config",
 			cfg:           Config{WSHost: "127.0.0.1"},
 			wantReachable: true,
@@ -115,6 +129,21 @@ func TestStartRPC(t *testing.T) {
 			cfg:  Config{WSHost: "127.0.0.1"},
 			fn: func(t *testing.T, n *Node, api *privateAdminAPI) {
 				_, err := api.StopWS()
+				assert.NoError(t, err)
+			},
+			wantReachable: false,
+			wantHandlers:  false,
+			wantRPC:       false,
+			wantWS:        false,
+		},
+		{
+			name: "ws stopped twice",
+			cfg:  Config{WSHost: "127.0.0.1"},
+			fn: func(t *testing.T, n *Node, api *privateAdminAPI) {
+				_, err := api.StopWS()
+				assert.NoError(t, err)
+
+				_, err = api.StopWS()
 				assert.NoError(t, err)
 			},
 			wantReachable: false,

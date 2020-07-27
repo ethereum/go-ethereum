@@ -275,9 +275,7 @@ func (api *privateAdminAPI) StartWS(host *string, port *int, allowedOrigins *str
 
 // StopWS terminates all WebSocket servers.
 func (api *privateAdminAPI) StopWS() (bool, error) {
-	if api.node.http.wsAllowed() {
-		api.node.http.disableWS()
-	}
+	api.node.http.stopWS()
 	api.node.ws.stop()
 	return true, nil
 }

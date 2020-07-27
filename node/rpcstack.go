@@ -77,28 +77,32 @@ type httpServer struct {
 	server   *http.Server
 	listener net.Listener // non-nil when server is running
 
+	// HTTP RPC handler things.
 	httpConfig  httpConfig
-	httpRPC     *rpc.Server
-	httpHandler http.Handler
+	httpHandler atomic.Value // *rpcHandler
 
+	// WebSocket handler things.
 	wsConfig  wsConfig
-	wsRPC     *rpc.Server
-	wsHandler http.Handler
+	wsHandler atomic.Value // *rpcHandler
 
+	// These are set by setListenAddr.
 	endpoint string
 	host     string
 	port     int
-	config   httpConfig
 
 	handlerNames map[string]string
+}
 
-	// atomic flags for the handler
-	rpcAllowedFlag int32
-	wsAllowedFlag  int32
+type rpcHandler struct {
+	http.Handler
+	server *rpc.Server
 }
 
 func newHTTPServer(log log.Logger, timeouts rpc.HTTPTimeouts) *httpServer {
-	return &httpServer{log: log, timeouts: timeouts, handlerNames: make(map[string]string)}
+	h := &httpServer{log: log, timeouts: timeouts, handlerNames: make(map[string]string)}
+	h.httpHandler.Store((*rpcHandler)(nil))
+	h.wsHandler.Store((*rpcHandler)(nil))
+	return h
 }
 
 // setListenAddr configures the listening address of the server.
@@ -132,19 +136,20 @@ func (h *httpServer) enableRPC(apis []rpc.API, config httpConfig) error {
 	h.mu.Lock()
 	defer h.mu.Unlock()
 
-	if h.httpRPC != nil {
+	if h.rpcAllowed() {
 		return fmt.Errorf("JSON-RPC over HTTP is already enabled")
 	}
 
-	// Create RPC server.
+	// Create RPC server and handler.
 	srv := rpc.NewServer()
-	if err := RegisterApisFromWhitelist(apis, h.httpConfig.Modules, srv, false); err != nil {
+	if err := RegisterApisFromWhitelist(apis, config.Modules, srv, false); err != nil {
 		return err
 	}
-	// Create handler.
-	h.httpRPC = srv
-	h.httpHandler = NewHTTPHandlerStack(h.httpRPC, config.CorsAllowedOrigins, config.Vhosts)
-	atomic.StoreInt32(&h.rpcAllowedFlag, 1)
+	h.httpConfig = config
+	h.httpHandler.Store(&rpcHandler{
+		Handler: NewHTTPHandlerStack(srv, config.CorsAllowedOrigins, config.Vhosts),
+		server:  srv,
+	})
 	return nil
 }
 
@@ -153,30 +158,37 @@ func (h *httpServer) enableWS(apis []rpc.API, config wsConfig) error {
 	h.mu.Lock()
 	defer h.mu.Unlock()
 
-	if h.wsRPC != nil {
+	if h.wsAllowed() {
 		return fmt.Errorf("JSON-RPC over WebSocket is already enabled")
 	}
 
-	// Create RPC server.
+	// Create RPC server and handler.
 	srv := rpc.NewServer()
-	if err := RegisterApisFromWhitelist(apis, h.wsConfig.Modules, srv, false); err != nil {
+	if err := RegisterApisFromWhitelist(apis, config.Modules, srv, false); err != nil {
 		return err
 	}
-	// Create handler.
-	h.wsRPC = rpc.NewServer()
-	h.wsHandler = h.wsRPC.WebsocketHandler(config.Origins)
-	atomic.StoreInt32(&h.wsAllowedFlag, 1)
+	h.wsConfig = config
+	h.wsHandler.Store(&rpcHandler{
+		Handler: srv.WebsocketHandler(config.Origins),
+		server:  srv,
+	})
 	return nil
 }
 
-// disableWS disables JSON-RPC over WebSocket.
-func (h *httpServer) disableWS() {
+// stopWS disables JSON-RPC over WebSocket.
+func (h *httpServer) stopWS() {
 	h.mu.Lock()
 	defer h.mu.Unlock()
 
-	atomic.StoreInt32(&h.wsAllowedFlag, 0)
-	h.wsRPC.Stop()
-	h.wsRPC = nil
+	ws := h.wsHandler.Load().(*rpcHandler)
+	if ws != nil {
+		h.wsHandler.Store((*rpcHandler)(nil))
+		ws.server.Stop()
+		// If this server only served WebSocket, stop the HTTP server as well.
+		if !h.rpcAllowed() {
+			h.doStop()
+		}
+	}
 }
 
 // start starts the HTTP server if it is enabled and not already running.
@@ -213,69 +225,80 @@ func (h *httpServer) start() error {
 	// log http endpoint
 	h.log.Info("HTTP server started",
 		"endpoint", listener.Addr(),
-		"cors", strings.Join(h.config.CorsAllowedOrigins, ","),
-		"vhosts", strings.Join(h.config.Vhosts, ","),
+		"cors", strings.Join(h.httpConfig.CorsAllowedOrigins, ","),
+		"vhosts", strings.Join(h.httpConfig.Vhosts, ","),
 	)
 	// log all handlers mounted on server
 	for path, name := range h.handlerNames {
-		log.Info(name + " enabled", "url", "http://" + listener.Addr().String() + path)
+		log.Info(name+" enabled", "url", "http://"+listener.Addr().String()+path)
 	}
 
 	return nil
 }
 
 // stop shuts down the HTTP server.
-func (h *httpServer) stop() error {
+func (h *httpServer) stop() {
 	h.mu.Lock()
 	defer h.mu.Unlock()
+	h.doStop()
+}
+
+func (h *httpServer) doStop() {
 	if h.listener == nil {
-		return nil // not running
+		return // not running
 	}
 
 	// Shut down the server.
-	if h.httpRPC != nil {
-		h.httpRPC.Stop()
+	httpHandler := h.httpHandler.Load().(*rpcHandler)
+	wsHandler := h.httpHandler.Load().(*rpcHandler)
+	if httpHandler != nil {
+		h.httpHandler.Store((*rpcHandler)(nil))
+		httpHandler.server.Stop()
 	}
-	if h.wsRPC != nil {
-		h.wsRPC.Stop()
+	if wsHandler != nil {
+		h.wsHandler.Store((*rpcHandler)(nil))
+		wsHandler.server.Stop()
 	}
 	h.server.Shutdown(context.Background())
 	h.listener.Close()
-	h.log.Info("HTTP endpoint closed", "url", h.endpoint)
+	h.log.Info("HTTP server stopped", "endpoint", h.listener.Addr())
 
 	// Clear out everything to allow re-configuring it later.
 	h.host, h.port, h.endpoint = "", 0, ""
 	h.server, h.listener = nil, nil
-	h.httpRPC, h.httpHandler, h.wsRPC, h.wsHandler = nil, nil, nil, nil
-	atomic.StoreInt32(&h.rpcAllowedFlag, 0)
-	atomic.StoreInt32(&h.wsAllowedFlag, 0)
-	return nil
 }
 
 // rpcAllowed returns true when JSON-RPC over HTTP is enabled.
 func (h *httpServer) rpcAllowed() bool {
-	return atomic.LoadInt32(&h.rpcAllowedFlag) == 1
+	return h.httpHandler.Load().(*rpcHandler) != nil
 }
 
 // wsAllowed returns true when JSON-RPC over WebSocket is enabled.
 func (h *httpServer) wsAllowed() bool {
-	return atomic.LoadInt32(&h.wsAllowedFlag) == 1
+	return h.wsHandler.Load().(*rpcHandler) != nil
 }
 
 func (h *httpServer) ServeHTTP(w http.ResponseWriter, r *http.Request) {
-	if h.wsAllowed() && isWebsocket(r) {
-		h.wsHandler.ServeHTTP(w, r)
+	rpc := h.httpHandler.Load().(*rpcHandler)
+	if r.RequestURI == "/" {
+		// Serve JSON-RPC on the root path.
+		ws := h.wsHandler.Load().(*rpcHandler)
+		if ws != nil && isWebsocket(r) {
+			ws.ServeHTTP(w, r)
+			return
+		}
+		if rpc != nil {
+			rpc.ServeHTTP(w, r)
+			return
+		}
+	} else if rpc != nil {
+		// Requests to a path below root are handled by the mux,
+		// which has all the handlers registered via Node.RegisterPath.
+		// These are made available when RPC is enabled.
+		h.mux.ServeHTTP(w, r)
 		return
 	}
-	if r.RequestURI == "/" {
-		if h.rpcAllowed() {
-			h.httpHandler.ServeHTTP(w, r)
-		} else {
-			w.WriteHeader(404)
-		}
-	} else {
-		h.mux.ServeHTTP(w, r)
-	}
+	w.WriteHeader(404)
 }
 
 // isWebsocket checks the header of an http request for a websocket upgrade request.
