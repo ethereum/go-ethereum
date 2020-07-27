@@ -834,7 +834,6 @@ func testMultiProtoSync(t *testing.T, protocol int, mode SyncMode) {
 	// Create peers of every type
 	tester.newPeer("peer 63", 63, chain)
 	tester.newPeer("peer 64", 64, chain)
-	tester.newPeer("peer 65", 65, chain)
 
 	// Synchronise with the requested peer and make sure all blocks were retrieved
 	if err := tester.sync(fmt.Sprintf("peer %d", protocol), nil, mode); err != nil {
@@ -843,7 +842,7 @@ func testMultiProtoSync(t *testing.T, protocol int, mode SyncMode) {
 	assertOwnChain(t, tester, chain.len())
 
 	// Check that no peers have been dropped off
-	for _, version := range []int{63, 64, 65} {
+	for _, version := range []int{63, 64} {
 		peer := fmt.Sprintf("peer %d", version)
 		if _, ok := tester.peers[peer]; !ok {
 			t.Errorf("%s dropped", peer)
@@ -1084,7 +1083,6 @@ func testHighTDStarvationAttack(t *testing.T, protocol int, mode SyncMode) {
 // Tests that misbehaving peers are disconnected, whilst behaving ones are not.
 func TestBlockHeaderAttackerDropping63(t *testing.T) { testBlockHeaderAttackerDropping(t, 63) }
 func TestBlockHeaderAttackerDropping64(t *testing.T) { testBlockHeaderAttackerDropping(t, 64) }
-func TestBlockHeaderAttackerDropping65(t *testing.T) { testBlockHeaderAttackerDropping(t, 65) }
 
 func testBlockHeaderAttackerDropping(t *testing.T, protocol int) {
 	t.Parallel()
@@ -1450,9 +1448,6 @@ func TestDeliverHeadersHang(t *testing.T) {
 		{64, FullSync},
 		{64, FastSync},
 		{64, LightSync},
-		{65, FullSync},
-		{65, FastSync},
-		{65, LightSync},
 	}
 	for _, tc := range testCases {
 		t.Run(fmt.Sprintf("protocol %d mode %v", tc.protocol, tc.syncMode), func(t *testing.T) {
