@@ -25,11 +25,12 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/ethereum/go-ethereum/rpc"
 	"github.com/stretchr/testify/assert"
 )
 
-// This test uses the admin_startRPC API, checking whether the HTTP server is started
-// correctly.
+// This test uses the admin_startRPC and admin_startWS APIs,
+// checking whether the HTTP server is started correctly.
 func TestStartRPC(t *testing.T) {
 	type test struct {
 		name string
@@ -218,8 +219,8 @@ func TestStartRPC(t *testing.T) {
 			baseURL := stack.HTTPEndpoint()
 			reachable := checkReachable(baseURL)
 			handlersAvailable := checkBodyOK(baseURL + "/test")
-			rpcAvailable := checkModules(baseURL, nil) == nil
-			wsAvailable := checkModules(strings.Replace(baseURL, "http://", "ws://", 1), nil) == nil
+			rpcAvailable := checkModules(baseURL)
+			wsAvailable := checkModules(strings.Replace(baseURL, "http://", "ws://", 1))
 			if reachable != test.wantReachable {
 				t.Errorf("HTTP server is %sreachable, want it %sreachable", not(reachable), not(test.wantReachable))
 			}
@@ -236,6 +237,7 @@ func TestStartRPC(t *testing.T) {
 	}
 }
 
+// checkReachable checks if the TCP endpoint in rawurl is open.
 func checkReachable(rawurl string) bool {
 	u, err := url.Parse(rawurl)
 	if err != nil {
@@ -249,6 +251,7 @@ func checkReachable(rawurl string) bool {
 	return true
 }
 
+// checkBodyOK checks whether the given HTTP URL responds with 200 OK and body "OK".
 func checkBodyOK(url string) bool {
 	resp, err := http.Get(url)
 	if err != nil {
@@ -266,6 +269,19 @@ func checkBodyOK(url string) bool {
 	return bytes.Equal(buf, []byte("OK"))
 }
 
+// checkModules checks whether JSON-RPC works against the given URL.
+func checkModules(url string) bool {
+	c, err := rpc.Dial(url)
+	if err != nil {
+		return false
+	}
+	defer c.Close()
+
+	_, err = c.SupportedModules()
+	return err == nil
+}
+
+// string/int pointer helpers.
 func sp(s string) *string { return &s }
 func ip(i int) *int       { return &i }
 
