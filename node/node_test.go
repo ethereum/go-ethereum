@@ -18,11 +18,14 @@ package node
 
 import (
 	"errors"
+	"fmt"
 	"io"
 	"io/ioutil"
+	"net"
 	"net/http"
 	"os"
 	"reflect"
+	"strings"
 	"testing"
 
 	"github.com/ethereum/go-ethereum/crypto"
@@ -348,7 +351,7 @@ func TestLifecycleTerminationGuarantee(t *testing.T) {
 	failer := &InstrumentedService{stop: failure}
 	stack.RegisterLifecycle(failer)
 
-	// Start the protocol stack, and ensure that a failing shut down terminates all // TODO, deleting loop because constructors no longer stored on node.
+	// Start the protocol stack, and ensure that a failing shut down terminates all
 	// Start the stack and make sure all is online
 	if err := stack.Start(); err != nil {
 		t.Fatalf("failed to start protocol stack: %v", err)
@@ -385,45 +388,6 @@ func TestLifecycleTerminationGuarantee(t *testing.T) {
 	stack.server = &p2p.Server{}
 	stack.server.PrivateKey = testNodeKey
 }
-
-// // Tests whether a given httpServer can be registered on the node
-// func TestRegisterHTTPServer(t *testing.T) {
-// 	stack, err := New(testNodeConfig())
-// 	if err != nil {
-// 		t.Fatalf("failed to create protocol stack: %v", err)
-// 	}
-// 	defer stack.Close()
-//
-// 	srv1 := &httpServer{
-// 		host: "test1",
-// 		port: 0001,
-// 	}
-// 	endpoint1 := fmt.Sprintf("%s:%d", srv1.host, srv1.port)
-// 	stack.registerHTTPServer(endpoint1, srv1)
-//
-// 	srv2 := &httpServer{
-// 		host: "test2",
-// 		port: 0002,
-// 	}
-// 	endpoint2 := fmt.Sprintf("%s:%d", srv2.host, srv2.port)
-// 	stack.registerHTTPServer(endpoint2, srv2)
-//
-// 	noop := &httpServer{
-// 		host: "test",
-// 		port: 0000,
-// 	}
-// 	endpointNoop := fmt.Sprintf("%s:%d", noop.host, noop.port)
-//
-// 	if srv1 != stack.existingHTTPServer(endpoint1) {
-// 		t.Fatalf("server %v was not properly registered on the given endpoint %s", srv1, endpoint1)
-// 	}
-// 	if srv2 != stack.existingHTTPServer(endpoint2) {
-// 		t.Fatalf("server %v was not properly registered on the given endpoint %s", srv2, endpoint2)
-// 	}
-// 	if noop == stack.existingHTTPServer(endpointNoop) {
-// 		t.Fatalf("server %v was incorrectly registered on the given endpoint %s", noop, endpointNoop)
-// 	}
-// }
 
 // Tests whether a handler can be successfully mounted on the canonical HTTP server
 // on the given path
@@ -472,83 +436,54 @@ func TestRegisterPath_Unsuccessful(t *testing.T) {
 	node.RegisterPath("test", "/test", handler)
 }
 
-// // Tests whether a node can successfully create and register HTTP server
-// // lifecycles on the node.
-// func TestHTTPServerCreateAndStop(t *testing.T) {
-// 	// test on same ports
-// 	node1 := startHTTP(t, 7453, 7453)
-// 	if len(node1.httpServers) != 1 {
-// 		t.Fatalf("node has more than 1 http server")
-// 	}
-// 	// check to make sure http servers are registered
-// 	if !containsLifecycle(node1.lifecycles, &node1.httpServers) {
-// 		t.Fatal("HTTP servers not registered as lifecycles on the node")
-// 	}
-// 	// check to make sure http servers are configured properly
-// 	for _, server := range node1.httpServers {
-// 		if atomic.LoadInt32(&server.WSAllowed) == 0 && atomic.LoadInt32(&server.RPCAllowed) == 0 {
-// 			t.Fatalf("node's http server is not configured to handle both rpc and ws")
-// 		}
-// 		node1.stopServer(server)
-// 		if node1.existingHTTPServer(server.endpoint) != nil {
-// 			t.Fatalf("failed to remove server %v from node after stopping it", server)
-// 		}
-// 	}
-// 	node1.Close()
-//
-// 	// test on separate ports
-// 	node2 := startHTTP(t, 7453, 9393)
-// 	if len(node2.httpServers) != 2 {
-// 		t.Fatalf("amount of http servers on the node is not equal to 2")
-// 	}
-// 	// check to make sure http servers are registered
-// 	if !containsLifecycle(node2.lifecycles, &node2.httpServers) {
-// 		t.Fatal("HTTP servers not registered as lifecycles on the node")
-// 	}
-// 	// check that neither http server has both ws and rpc enabled
-// 	for _, server := range node2.httpServers {
-// 		if atomic.LoadInt32(&server.WSAllowed) == 1 && atomic.LoadInt32(&server.RPCAllowed) == 1 {
-// 			t.Fatalf("both rpc and ws allowed on a single http server")
-// 		}
-// 		node2.stopServer(server)
-// 		if node2.existingHTTPServer(server.endpoint) != nil {
-// 			t.Fatalf("failed to remove server %v from node after stopping it", server)
-// 		}
-// 	}
-// 	node2.Close()
-// }
-
 // Tests whether websocket requests can be handled on the same port as a regular http server.
 func TestWebsocketHTTPOnSamePort_WebsocketRequest(t *testing.T) {
-	node := startHTTP(t, 7453, 7453)
+	node := startHTTP(t, 0, 0)
 	defer node.Close()
 
-	wsReq, err := http.NewRequest(http.MethodGet, "http://127.0.0.1:7453", nil)
-	if err != nil {
-		t.Error("could not issue new http request ", err)
-	}
-	wsReq.Header.Set("Connection", "upgrade")
-	wsReq.Header.Set("Upgrade", "websocket")
-	wsReq.Header.Set("Sec-WebSocket-Version", "13")
-	wsReq.Header.Set("Sec-Websocket-Key", "SGVsbG8sIHdvcmxkIQ==")
+	ws := strings.Replace(node.HTTPEndpoint() , "http://", "ws://", 1)
 
-	resp := doHTTPRequest(t, wsReq)
-	assert.Equal(t, "websocket", resp.Header.Get("Upgrade"))
+	if node.WSEndpoint() != ws {
+		t.Fatalf("endpoints should be the same")
+	}
+	if !checkRPC(ws) {
+		t.Fatalf("ws request failed")
+	}
+	if !checkRPC(node.HTTPEndpoint()) {
+		t.Fatalf("http request failed")
+	}
 }
 
-// Tests whether http requests can be handled successfully.
-func TestWebsocketHTTPOnSamePort_HTTPRequest(t *testing.T) {
-	node := startHTTP(t, 7453, 7453)
+func TestWebsocketHTTPOnSeparatePort_WSRequest(t *testing.T) {
+	// try and get a free port
+	listener, err := net.Listen("tcp", "127.0.0.1:0")
+	if err != nil {
+		t.Fatal("can't listen:", err)
+	}
+	port := listener.Addr().(*net.TCPAddr).Port
+	listener.Close()
+
+	node := startHTTP(t, 0, port)
 	defer node.Close()
 
-	httpReq, err := http.NewRequest(http.MethodGet, "http://127.0.0.1:7453", nil)
-	if err != nil {
-		t.Error("could not issue new http request ", err)
-	}
-	httpReq.Header.Set("Accept-Encoding", "gzip")
+	wsOnHTTP := strings.Replace(node.HTTPEndpoint() , "http://", "ws://", 1)
+	ws := fmt.Sprintf("ws://127.0.0.1:%d", port)
 
-	resp := doHTTPRequest(t, httpReq)
-	assert.Equal(t, "gzip", resp.Header.Get("Content-Encoding"))
+	if node.WSEndpoint() == wsOnHTTP {
+		t.Fatalf("endpoints should not be the same")
+	}
+	// ensure ws endpoint matches the expected endpoint
+	if node.WSEndpoint() != ws {
+		t.Fatalf("ws endpoint is incorrect: expected %s, got %s", ws, node.WSEndpoint())
+	}
+
+	if !checkRPC(ws) {
+		t.Fatalf("ws request failed")
+	}
+	if !checkRPC(node.HTTPEndpoint()) {
+		t.Fatalf("http request failed")
+	}
+
 }
 
 func createNode(t *testing.T, httpPort, wsPort int) *Node {

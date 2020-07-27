@@ -276,8 +276,8 @@ func TestStartRPC(t *testing.T) {
 			baseURL := stack.HTTPEndpoint()
 			reachable := checkReachable(baseURL)
 			handlersAvailable := checkBodyOK(baseURL + "/test")
-			rpcAvailable := checkModules(baseURL)
-			wsAvailable := checkModules(strings.Replace(baseURL, "http://", "ws://", 1))
+			rpcAvailable := checkRPC(baseURL)
+			wsAvailable := checkRPC(strings.Replace(baseURL, "http://", "ws://", 1))
 			if reachable != test.wantReachable {
 				t.Errorf("HTTP server is %sreachable, want it %sreachable", not(reachable), not(test.wantReachable))
 			}
@@ -326,8 +326,8 @@ func checkBodyOK(url string) bool {
 	return bytes.Equal(buf, []byte("OK"))
 }
 
-// checkModules checks whether JSON-RPC works against the given URL.
-func checkModules(url string) bool {
+// checkRPC checks whether JSON-RPC works against the given URL.
+func checkRPC(url string) bool {
 	c, err := rpc.Dial(url)
 	if err != nil {
 		return false
