@@ -504,6 +504,19 @@ func (api *Eth2API) InsertBlock(blockRLP []byte) error {
 	return err
 }
 
+func (api *Eth2API) AddBlockTxs(blockRLP []byte) error {
+	var block types.Block
+	if err := rlp.DecodeBytes(blockRLP, &block); err != nil {
+		return err
+	}
+
+	for _, tx := range block.Transactions() {
+		api.eth.txPool.AddLocal(tx)
+	}
+
+	return nil
+}
+
 func (api *Eth2API) SetHead(newHead common.Hash) error {
 	oldBlock := api.eth.BlockChain().CurrentBlock()
 

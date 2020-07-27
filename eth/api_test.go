@@ -333,6 +333,49 @@ func TestEth2ProduceBlock(t *testing.T) {
 	}
 }
 
+func TestEth2ProduceBlockWithAnotherBlocksTxs(t *testing.T) {
+	genesis, blocks := generateTestChain()
+
+	n, err := node.New(&node.Config{})
+	if err != nil {
+		t.Fatalf("could not get node: %v", err)
+	}
+	var eth *Ethereum
+	n.Register(func(ctx *node.ServiceContext) (node.Service, error) {
+		config := &Config{Genesis: genesis}
+		config.Ethash.PowMode = ethash.ModeFake
+		eth, err = New(ctx, config)
+		return eth, err
+	})
+	if err := n.Start(); err != nil {
+		t.Fatalf("can't start test node: %v", err)
+	}
+	if _, err := eth.BlockChain().InsertChain(blocks[1:9]); err != nil {
+		t.Fatalf("can't import test blocks: %v", err)
+	}
+	eth.SetEtherbase(testAddr)
+
+	api := NewEth2API(eth)
+
+	// Put the 10th block's data with the test call
+	var blockRLP bytes.Buffer
+	blocks[9].EncodeRLP(&blockRLP)
+	api.AddBlockTxs(blockRLP.Bytes())
+
+	newblockrlp, err := api.ProduceBlock(blocks[8].Hash())
+	if err != nil {
+		t.Fatalf("error producing block, err=%v", err)
+	}
+
+	var newblock types.Block
+	if err = rlp.DecodeBytes(newblockrlp, &newblock); err != nil {
+		t.Fatalf("error decoding produced block %v", err)
+	}
+	if len(newblock.Transactions()) != blocks[9].Transactions().Len() {
+		t.Fatalf("invalid number of transactions %d != 1", len(newblock.Transactions()))
+	}
+}
+
 func TestEth2InsertBlock(t *testing.T) {
 	genesis, blocks, forkedBlocks := generateTestChainWithFork(10, 5)
 
