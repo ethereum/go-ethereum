@@ -78,6 +78,34 @@ func TestStartRPC(t *testing.T) {
 			wantWS:        false,
 		},
 		{
+			name: "rpc start again after failure",
+			cfg:  Config{},
+			fn: func(t *testing.T, n *Node, api *privateAdminAPI) {
+				// Listen on a random port.
+				listener, err := net.Listen("tcp", "127.0.0.1:0")
+				if err != nil {
+					t.Fatal("can't listen:", err)
+				}
+				defer listener.Close()
+				port := listener.Addr().(*net.TCPAddr).Port
+
+				// Now try to start RPC on that port. This should fail.
+				_, err = api.StartRPC(sp("127.0.0.1"), ip(port), nil, nil, nil)
+				if err == nil {
+					t.Fatal("StartRPC should have failed on port", port)
+				}
+
+				// Try again after unblocking the port. It should work this time.
+				listener.Close()
+				_, err = api.StartRPC(sp("127.0.0.1"), ip(port), nil, nil, nil)
+				assert.NoError(t, err)
+			},
+			wantReachable: true,
+			wantHandlers:  true,
+			wantRPC:       true,
+			wantWS:        false,
+		},
+		{
 			name: "rpc stopped through API",
 			cfg:  Config{HTTPHost: "127.0.0.1"},
 			fn: func(t *testing.T, n *Node, api *privateAdminAPI) {

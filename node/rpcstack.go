@@ -153,6 +153,16 @@ func (h *httpServer) enableRPC(apis []rpc.API, config httpConfig) error {
 	return nil
 }
 
+// disableRPC stops the HTTP RPC handler. The caller must hold h.mu.
+func (h *httpServer) disableRPC() bool {
+	handler := h.httpHandler.Load().(*rpcHandler)
+	if handler != nil {
+		h.httpHandler.Store((*rpcHandler)(nil))
+		handler.server.Stop()
+	}
+	return handler != nil
+}
+
 // enableWS turns on JSON-RPC over WebSocket on the server.
 func (h *httpServer) enableWS(apis []rpc.API, config wsConfig) error {
 	h.mu.Lock()
@@ -180,15 +190,22 @@ func (h *httpServer) stopWS() {
 	h.mu.Lock()
 	defer h.mu.Unlock()
 
-	ws := h.wsHandler.Load().(*rpcHandler)
-	if ws != nil {
-		h.wsHandler.Store((*rpcHandler)(nil))
-		ws.server.Stop()
+	if h.disableWS() {
 		// If this server only served WebSocket, stop the HTTP server as well.
 		if !h.rpcAllowed() {
 			h.doStop()
 		}
 	}
+}
+
+// disableWS stops the WebSocket handler. The caller must hold h.mu.
+func (h *httpServer) disableWS() bool {
+	ws := h.wsHandler.Load().(*rpcHandler)
+	if ws != nil {
+		h.wsHandler.Store((*rpcHandler)(nil))
+		ws.server.Stop()
+	}
+	return ws != nil
 }
 
 // start starts the HTTP server if it is enabled and not already running.
@@ -212,6 +229,10 @@ func (h *httpServer) start() error {
 	// Start the server.
 	listener, err := net.Listen("tcp", h.endpoint)
 	if err != nil {
+		// If the server fails to start, we need to clear out the RPC and WS
+		// configuration so they can be configured another time.
+		h.disableRPC()
+		h.disableWS()
 		return err
 	}
 	h.listener = listener
