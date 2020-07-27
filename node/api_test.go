@@ -201,7 +201,7 @@ func TestStartRPC(t *testing.T) {
 			defer stack.Close()
 
 			// Register the test handler.
-			stack.RegisterPath("/test", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			stack.RegisterPath("test", "/test", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 				w.Write([]byte("OK"))
 			}))
 
