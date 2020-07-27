@@ -68,12 +68,11 @@ func enable1884(jt *JumpTable) {
 	jt[EXTCODEHASH].constantGas = params.ExtcodeHashGasEIP1884
 
 	// New opcode
-	jt[SELFBALANCE] = operation{
+	jt[SELFBALANCE] = &operation{
 		execute:     opSelfBalance,
 		constantGas: GasFastStep,
 		minStack:    minStack(0, 1),
 		maxStack:    maxStack(0, 1),
-		valid:       true,
 	}
 }
 
@@ -87,12 +86,11 @@ func opSelfBalance(pc *uint64, interpreter *EVMInterpreter, callContext *callCtx
 // - Adds an opcode that returns the current chain’s EIP-155 unique identifier
 func enable1344(jt *JumpTable) {
 	// New opcode
-	jt[CHAINID] = operation{
+	jt[CHAINID] = &operation{
 		execute:     opChainID,
 		constantGas: GasQuickStep,
 		minStack:    minStack(0, 1),
 		maxStack:    maxStack(0, 1),
-		valid:       true,
 	}
 }
 
@@ -113,29 +111,26 @@ func enable2200(jt *JumpTable) {
 // - Adds opcodes that jump to and return from subroutines
 func enable2315(jt *JumpTable) {
 	// New opcode
-	jt[BEGINSUB] = operation{
+	jt[BEGINSUB] = &operation{
 		execute:     opBeginSub,
 		constantGas: GasQuickStep,
 		minStack:    minStack(0, 0),
 		maxStack:    maxStack(0, 0),
-		valid:       true,
 	}
 	// New opcode
-	jt[JUMPSUB] = operation{
+	jt[JUMPSUB] = &operation{
 		execute:     opJumpSub,
 		constantGas: GasSlowStep,
 		minStack:    minStack(1, 0),
 		maxStack:    maxStack(1, 0),
 		jumps:       true,
-		valid:       true,
 	}
 	// New opcode
-	jt[RETURNSUB] = operation{
+	jt[RETURNSUB] = &operation{
 		execute:     opReturnSub,
 		constantGas: GasFastStep,
 		minStack:    minStack(0, 0),
 		maxStack:    maxStack(0, 0),
-		valid:       true,
 		jumps:       true,
 	}
 }

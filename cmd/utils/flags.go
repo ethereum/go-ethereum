@@ -40,6 +40,7 @@ import (
 	"github.com/ethereum/go-ethereum/consensus/clique"
 	"github.com/ethereum/go-ethereum/consensus/ethash"
 	"github.com/ethereum/go-ethereum/core"
+	"github.com/ethereum/go-ethereum/core/rawdb"
 	"github.com/ethereum/go-ethereum/core/vm"
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/eth"
@@ -1611,23 +1612,43 @@ func SetEthConfig(ctx *cli.Context, stack *node.Node, cfg *eth.Config) {
 		}
 		// Create new developer account or reuse existing one
 		var (
-			developer accounts.Account
-			err       error
+			developer  accounts.Account
+			passphrase string
+			err        error
 		)
-		if accs := ks.Accounts(); len(accs) > 0 {
+		if list := MakePasswordList(ctx); len(list) > 0 {
+			// Just take the first value. Although the function returns a possible multiple values and
+			// some usages iterate through them as attempts, that doesn't make sense in this setting,
+			// when we're definitely concerned with only one account.
+			passphrase = list[0]
+		}
+		// setEtherbase has been called above, configuring the miner address from command line flags.
+		if cfg.Miner.Etherbase != (common.Address{}) {
+			developer = accounts.Account{Address: cfg.Miner.Etherbase}
+		} else if accs := ks.Accounts(); len(accs) > 0 {
 			developer = ks.Accounts()[0]
 		} else {
-			developer, err = ks.NewAccount("")
+			developer, err = ks.NewAccount(passphrase)
 			if err != nil {
 				Fatalf("Failed to create developer account: %v", err)
 			}
 		}
-		if err := ks.Unlock(developer, ""); err != nil {
+		if err := ks.Unlock(developer, passphrase); err != nil {
 			Fatalf("Failed to unlock developer account: %v", err)
 		}
 		log.Info("Using developer account", "address", developer.Address)
 
+		// Create a new developer genesis block or reuse existing one
 		cfg.Genesis = core.DeveloperGenesisBlock(uint64(ctx.GlobalInt(DeveloperPeriodFlag.Name)), developer.Address)
+		if ctx.GlobalIsSet(DataDirFlag.Name) {
+			// Check if we have an already initialized chain and fall back to
+			// that if so. Otherwise we need to generate a new genesis spec.
+			chaindb := MakeChainDatabase(ctx, stack)
+			if rawdb.ReadCanonicalHash(chaindb, 0) != (common.Hash{}) {
+				cfg.Genesis = nil // fallback to db content
+			}
+			chaindb.Close()
+		}
 		if !ctx.GlobalIsSet(MinerGasPriceFlag.Name) && !ctx.GlobalIsSet(LegacyMinerGasPriceFlag.Name) {
 			cfg.Miner.GasPrice = big.NewInt(1)
 		}
