@@ -1471,7 +1471,7 @@ func (bc *BlockChain) writeBlockWithState(block *types.Block, receipts []*types.
 		}
 	} else {
 		// Commit all cached state changes into underlying memory database.
-		root, stateTrie, storageTries, err := state.CommitAsync(bc.chainConfig.IsEIP158(block.Number()))
+		root, stateTrie, storageTries, codes, err := state.CommitAsync(bc.chainConfig.IsEIP158(block.Number()))
 		if err != nil {
 			return NonStatTy, err
 		}
@@ -1479,7 +1479,7 @@ func (bc *BlockChain) writeBlockWithState(block *types.Block, receipts []*types.
 
 		// Generate a commit task and schedule it in the background. After the
 		// commit is done, relevant GC algo will be ran.
-		bc.stateCache.Commit(root, block.NumberU64(), stateTrie, storageTries, func() {
+		bc.stateCache.Commit(root, block.NumberU64(), stateTrie, storageTries, codes, func() {
 			// Full but not archive node, do proper garbage collection
 			triedb.Reference(root, common.Hash{}) // metadata reference to keep trie alive
 			bc.triegc.Push(root, -int64(block.NumberU64()))

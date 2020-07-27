@@ -878,20 +878,23 @@ func (s *StateDB) Commit(deleteEmptyObjects bool) (common.Hash, error) {
 // CommitAsync hashes the state trie as well as all referenced storage tries.
 // Then instead of committing them directly, return the uncommitted set for
 // lazy execution.
-func (s *StateDB) CommitAsync(deleteEmptyObjects bool) (common.Hash, Trie, map[common.Hash]Trie, error) {
+func (s *StateDB) CommitAsync(deleteEmptyObjects bool) (common.Hash, Trie, map[common.Hash]Trie, map[common.Hash][]byte, error) {
 	if s.dbErr != nil {
-		return common.Hash{}, nil, nil, fmt.Errorf("commit aborted due to earlier error: %v", s.dbErr)
+		return common.Hash{}, nil, nil, nil, fmt.Errorf("commit aborted due to earlier error: %v", s.dbErr)
 	}
 	// Finalize any pending changes and merge everything into the tries
 	s.IntermediateRoot(deleteEmptyObjects)
 
 	// Commit objects to the trie, measuring the elapsed time
-	var storage = make(map[common.Hash]Trie)
+	var (
+		storage = make(map[common.Hash]Trie)
+		codes   = make(map[common.Hash][]byte)
+	)
 	for addr := range s.stateObjectsDirty {
 		if obj := s.stateObjects[addr]; !obj.deleted {
 			// Write any contract code associated with the state object
 			if obj.code != nil && obj.dirtyCode {
-				s.db.TrieDB().InsertBlob(common.BytesToHash(obj.CodeHash()), obj.code)
+				codes[common.BytesToHash(obj.CodeHash())] = obj.code
 				obj.dirtyCode = false
 			}
 			// Gather dirty storage tries for lazy commit, note it's already hashed.
@@ -921,5 +924,5 @@ func (s *StateDB) CommitAsync(deleteEmptyObjects bool) (common.Hash, Trie, map[c
 		}
 		s.snap, s.snapDestructs, s.snapAccounts, s.snapStorage = nil, nil, nil, nil
 	}
-	return root, s.trie, storage, nil
+	return root, s.trie, storage, codes, nil
 }

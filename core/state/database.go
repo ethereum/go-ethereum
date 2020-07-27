@@ -61,7 +61,7 @@ type CacheableDatabase interface {
 	Database
 
 	// Commit enqueues the given commit task and schedules for background committing.
-	Commit(root common.Hash, number uint64, stateTrie Trie, storageTries map[common.Hash]Trie, postCommit func()) error
+	Commit(root common.Hash, number uint64, stateTrie Trie, storageTries map[common.Hash]Trie, codes map[common.Hash][]byte, postCommit func()) error
 
 	// WaitCommits waits until the cached commit tasks equal or less than n.
 	// This function can act as the barrier between task generator and commiter.
@@ -159,6 +159,7 @@ type commitTask struct {
 	number     uint64
 	state      Trie
 	storage    map[common.Hash]Trie
+	codes      map[common.Hash][]byte
 	postCommit func()
 
 	// ACK fields.
@@ -228,6 +229,14 @@ func (db *cachingDB) CopyTrie(t Trie) Trie {
 
 // ContractCode retrieves a particular contract's code.
 func (db *cachingDB) ContractCode(addrHash, codeHash common.Hash) ([]byte, error) {
+	db.lock.Lock()
+	for _, task := range db.tasks {
+		if code, ok := task.codes[codeHash]; ok {
+			db.lock.Unlock()
+			return code, nil
+		}
+	}
+	db.lock.Unlock()
 	code, err := db.db.Node(codeHash)
 	if err == nil {
 		db.codeSizeCache.Add(codeHash, len(code))
@@ -247,7 +256,7 @@ func (db *cachingDB) ContractCodeSize(addrHash, codeHash common.Hash) (int, erro
 // Commit enqueues the given commit task and schedule for background execution.
 // The callback is applied when the given state is committed. It can be used
 // to run memory garbage collection algorithm.
-func (db *cachingDB) Commit(root common.Hash, number uint64, stateTrie Trie, storageTries map[common.Hash]Trie, postCommit func()) error {
+func (db *cachingDB) Commit(root common.Hash, number uint64, stateTrie Trie, storageTries map[common.Hash]Trie, codes map[common.Hash][]byte, postCommit func()) error {
 	// Short circult if nothing to commit
 	if root == emptyRoot {
 		return nil
@@ -280,6 +289,7 @@ func (db *cachingDB) Commit(root common.Hash, number uint64, stateTrie Trie, sto
 		number:     number,
 		state:      stateTrie,
 		storage:    storageTries,
+		codes:      codes,
 		postCommit: postCommit,
 		waitN:      waitN,
 		ack:        ack,
@@ -358,7 +368,7 @@ func (db *cachingDB) run() {
 		waits []*waitAck
 	)
 	// commitState flushes dirty state in the given tries into the underlying database.
-	commitState := func(stateTrie Trie, storageTries map[common.Hash]Trie) {
+	commitState := func(stateTrie Trie, storageTries map[common.Hash]Trie, codes map[common.Hash][]byte) {
 		triedb := db.TrieDB()
 		start := time.Now()
 		for _, storage := range storageTries {
@@ -366,6 +376,9 @@ func (db *cachingDB) run() {
 		}
 		storageCommitTimer.UpdateSince(start)
 
+		for h, code := range codes {
+			triedb.InsertBlob(h, code)
+		}
 		// The onleaf func is called _serially_, so we can reuse the same account
 		// for unmarshalling every time.
 		var account Account
@@ -404,7 +417,7 @@ func (db *cachingDB) run() {
 		// Commit the tries, now we have to hold the lock here to prevent
 		// concurrent issue between commit and hash. Please fix it(rjl493456442)
 		start := time.Now()
-		commitState(task.state, task.storage)
+		commitState(task.state, task.storage, task.codes)
 
 		// Run the callback after commit if it's not nil, usually it's in-memory GC algo.
 		callstart := time.Now()

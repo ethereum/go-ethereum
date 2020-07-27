@@ -54,7 +54,7 @@ func TestRunCommitTask(t *testing.T) {
 	tasks := newCommiTasks(2, cdb.TrieDB())
 
 	task := tasks[0]
-	cdb.Commit(task.root, task.number, task.state, task.storage, nil)
+	cdb.Commit(task.root, task.number, task.state, task.storage, nil, nil)
 	cdb.WaitCommits(0)
 	_, err := cdb.OpenTrie(task.root)
 	if err != nil {
@@ -62,7 +62,7 @@ func TestRunCommitTask(t *testing.T) {
 	}
 	task = tasks[1]
 	signal := make(chan struct{})
-	cdb.Commit(task.root, task.number, task.state, task.storage, func() {
+	cdb.Commit(task.root, task.number, task.state, task.storage, nil, func() {
 		signal <- struct{}{} // Will block the commiting
 	})
 	_, err = cdb.OpenTrie(task.root)
