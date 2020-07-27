@@ -1636,6 +1636,18 @@ func (bc *BlockChain) InsertChain(chain types.Blocks) (int, error) {
 	return n, err
 }
 
+// InsertChainAndWait is a wrapper of InsertChain. If the background state committing
+// is enabled, then the commit tasks will be ran async. This function only return when
+// all tasks are done. Mostly it's used in testing
+func (bc *BlockChain) InsertChainAndWait(chain types.Blocks) (int, error) {
+	n, err := bc.InsertChain(chain)
+	if err != nil {
+		return n, err
+	}
+	bc.stateCache.WaitCommits(0)
+	return n, nil
+}
+
 // insertChain is the internal implementation of InsertChain, which assumes that
 // 1) chains are contiguous, and 2) The chain mutex is held.
 //

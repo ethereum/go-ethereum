@@ -17,12 +17,13 @@
 package core
 
 import (
+	"math/big"
+	"testing"
+
 	"github.com/ethereum/go-ethereum/consensus/ethash"
 	"github.com/ethereum/go-ethereum/core/rawdb"
 	"github.com/ethereum/go-ethereum/core/vm"
 	"github.com/ethereum/go-ethereum/params"
-	"math/big"
-	"testing"
 )
 
 // Tests that DAO-fork enabled clients can properly filter out fork-commencing
@@ -57,16 +58,12 @@ func TestDAOForkRangeExtradata(t *testing.T) {
 	conBc, _ := NewBlockChain(conDb, nil, &conConf, ethash.NewFaker(), vm.Config{}, nil, nil)
 	defer conBc.Stop()
 
-	if _, err := proBc.InsertChain(prefix); err != nil {
+	if _, err := proBc.InsertChainAndWait(prefix); err != nil {
 		t.Fatalf("pro-fork: failed to import chain prefix: %v", err)
 	}
-	proBc.stateCache.WaitCommits(0)
-
-	if _, err := conBc.InsertChain(prefix); err != nil {
+	if _, err := conBc.InsertChainAndWait(prefix); err != nil {
 		t.Fatalf("con-fork: failed to import chain prefix: %v", err)
 	}
-	conBc.stateCache.WaitCommits(0)
-
 	// Try to expand both pro-fork and non-fork chains iteratively with other camp's blocks
 	for i := int64(0); i < params.DAOForkExtraRange.Int64(); i++ {
 		// Create a pro-fork block, and try to feed into the no-fork chain
@@ -79,10 +76,9 @@ func TestDAOForkRangeExtradata(t *testing.T) {
 		for j := 0; j < len(blocks)/2; j++ {
 			blocks[j], blocks[len(blocks)-1-j] = blocks[len(blocks)-1-j], blocks[j]
 		}
-		if _, err := bc.InsertChain(blocks); err != nil {
+		if _, err := bc.InsertChainAndWait(blocks); err != nil {
 			t.Fatalf("failed to import contra-fork chain for expansion: %v", err)
 		}
-		bc.stateCache.WaitCommits(0)
 		if err := bc.stateCache.TrieDB().Commit(bc.CurrentHeader().Root, true, nil); err != nil {
 			t.Fatalf("failed to commit contra-fork head for expansion: %v", err)
 		}
@@ -105,10 +101,9 @@ func TestDAOForkRangeExtradata(t *testing.T) {
 		for j := 0; j < len(blocks)/2; j++ {
 			blocks[j], blocks[len(blocks)-1-j] = blocks[len(blocks)-1-j], blocks[j]
 		}
-		if _, err := bc.InsertChain(blocks); err != nil {
+		if _, err := bc.InsertChainAndWait(blocks); err != nil {
 			t.Fatalf("failed to import pro-fork chain for expansion: %v", err)
 		}
-		bc.stateCache.WaitCommits(0)
 		if err := bc.stateCache.TrieDB().Commit(bc.CurrentHeader().Root, true, nil); err != nil {
 			t.Fatalf("failed to commit pro-fork head for expansion: %v", err)
 		}
@@ -132,10 +127,9 @@ func TestDAOForkRangeExtradata(t *testing.T) {
 	for j := 0; j < len(blocks)/2; j++ {
 		blocks[j], blocks[len(blocks)-1-j] = blocks[len(blocks)-1-j], blocks[j]
 	}
-	if _, err := bc.InsertChain(blocks); err != nil {
+	if _, err := bc.InsertChainAndWait(blocks); err != nil {
 		t.Fatalf("failed to import contra-fork chain for expansion: %v", err)
 	}
-	bc.stateCache.WaitCommits(0)
 	if err := bc.stateCache.TrieDB().Commit(bc.CurrentHeader().Root, true, nil); err != nil {
 		t.Fatalf("failed to commit contra-fork head for expansion: %v", err)
 	}
@@ -153,10 +147,9 @@ func TestDAOForkRangeExtradata(t *testing.T) {
 	for j := 0; j < len(blocks)/2; j++ {
 		blocks[j], blocks[len(blocks)-1-j] = blocks[len(blocks)-1-j], blocks[j]
 	}
-	if _, err := bc.InsertChain(blocks); err != nil {
+	if _, err := bc.InsertChainAndWait(blocks); err != nil {
 		t.Fatalf("failed to import pro-fork chain for expansion: %v", err)
 	}
-	bc.stateCache.WaitCommits(0)
 	if err := bc.stateCache.TrieDB().Commit(bc.CurrentHeader().Root, true, nil); err != nil {
 		t.Fatalf("failed to commit pro-fork head for expansion: %v", err)
 	}
