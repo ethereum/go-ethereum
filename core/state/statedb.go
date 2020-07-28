@@ -883,7 +883,7 @@ func (s *StateDB) CommitAsync(deleteEmptyObjects bool) (common.Hash, Trie, map[c
 		return common.Hash{}, nil, nil, nil, fmt.Errorf("commit aborted due to earlier error: %v", s.dbErr)
 	}
 	// Finalize any pending changes and merge everything into the tries
-	s.IntermediateRoot(deleteEmptyObjects)
+	root := s.IntermediateRoot(deleteEmptyObjects)
 
 	// Commit objects to the trie, measuring the elapsed time
 	var (
@@ -898,7 +898,8 @@ func (s *StateDB) CommitAsync(deleteEmptyObjects bool) (common.Hash, Trie, map[c
 				obj.dirtyCode = false
 			}
 			// Gather dirty storage tries for lazy commit, note it's already hashed.
-			// If it's nil, it means the storage trie is never accessed.
+			// If it's nil(or the root node is nil), it means the storage trie is
+			// never accessed.
 			if obj.trie != nil && obj.trie.Hash() != emptyRoot {
 				storage[obj.addrHash] = obj.trie
 			}
@@ -908,7 +909,6 @@ func (s *StateDB) CommitAsync(deleteEmptyObjects bool) (common.Hash, Trie, map[c
 		s.stateObjectsDirty = make(map[common.Address]struct{})
 	}
 	// If snapshotting is enabled, update the snapshot tree with this new version
-	root := s.trie.Hash()
 	if s.snap != nil {
 		if metrics.EnabledExpensive {
 			defer func(start time.Time) { s.SnapshotCommits += time.Since(start) }(time.Now())

@@ -18,7 +18,9 @@ package state
 
 import (
 	"math/rand"
+	"sync"
 	"testing"
+	"time"
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/rawdb"
@@ -71,4 +73,29 @@ func TestRunCommitTask(t *testing.T) {
 	}
 	<-signal
 	cdb.Close()
+}
+
+func TestCachingDBClose(t *testing.T) {
+	cdb := NewDatabase(rawdb.NewMemoryDatabase())
+	tasks := newCommiTasks(10, cdb.TrieDB())
+
+	signal := make(chan struct{})
+	for i := 0; i < len(tasks); i++ {
+		task := tasks[i]
+		cdb.Commit(task.root, task.number, task.state, task.storage, nil, func() {
+			signal <- struct{}{}
+		})
+	}
+	// Drain the blocking channel
+	var wg sync.WaitGroup
+	wg.Add(1)
+	go func() {
+		defer wg.Done()
+		time.Sleep(time.Second) // Hack! ensure the close is called.
+		for range signal {
+		}
+	}()
+	cdb.Close()
+	close(signal)
+	wg.Wait()
 }

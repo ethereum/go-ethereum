@@ -49,7 +49,7 @@ type LeafCallback func(leaf []byte, parent common.Hash) error
 type Trie struct {
 	db *Database
 
-	// Protect root and unhashed only. Root node is a bit special and sensitive.
+	// Protect root only. Root node is a bit special and concurrent-sensitive.
 	rootlock sync.Mutex
 	root     node
 
@@ -105,10 +105,15 @@ func New(root common.Hash, db *Database) (*Trie, error) {
 func HashAndCopyTrie(t *Trie) *Trie {
 	var cpy Trie
 
+	// It's necessary to add the lock here. Root node is a bit special
+	// seems it can be read/write at the same time. But for all other
+	// children referenced by root, it's safe because all other opts
+	// won't modify the node content.
 	t.rootlock.Lock()
 	cpy.root = t.root
 	t.rootlock.Unlock()
 
+	// unhashed is another concurrent-sensitive field.
 	cpy.unhashed = atomic.LoadUint32(&t.unhashed)
 	cpy.db = t.db
 	cpy.commitSeq = t.commitSeq
@@ -118,9 +123,9 @@ func HashAndCopyTrie(t *Trie) *Trie {
 		return &cpy
 	}
 	if _, dirty := cpy.root.cache(); !dirty {
-		return &cpy
+		return &cpy // trie is clean
 	}
-	cpy.commitSeq = t.commitSeq + 1
+	cpy.commitSeq = t.commitSeq + 1 // bump commit seq for creating new scope
 	return &cpy
 }
 

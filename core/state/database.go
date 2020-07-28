@@ -125,6 +125,8 @@ var (
 	storageTrieHits    = metrics.NewRegisteredMeter("chain/committer/storage/hits", nil)
 	storageTrieMiss    = metrics.NewRegisteredMeter("chain/committer/storage/miss", nil)
 	storageCommitTimer = metrics.NewRegisteredTimer("chain/committer/storage/commits", nil)
+	codeHits           = metrics.NewRegisteredMeter("chain/committer/code/hits", nil)
+	codeMiss           = metrics.NewRegisteredMeter("chain/committer/code/miss", nil)
 	memoryGCTimer      = metrics.NewRegisteredTimer("chain/committer/gc/duration", nil)
 )
 
@@ -233,10 +235,12 @@ func (db *cachingDB) ContractCode(addrHash, codeHash common.Hash) ([]byte, error
 	for _, task := range db.tasks {
 		if code, ok := task.codes[codeHash]; ok {
 			db.lock.Unlock()
+			codeHits.Mark(1)
 			return code, nil
 		}
 	}
 	db.lock.Unlock()
+	codeMiss.Mark(1)
 	code, err := db.db.Node(codeHash)
 	if err == nil {
 		db.codeSizeCache.Add(codeHash, len(code))
