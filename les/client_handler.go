@@ -64,16 +64,20 @@ func newClientHandler(ulcServers []string, ulcFraction int, checkpoint *params.T
 	if checkpoint != nil {
 		height = (checkpoint.SectionIndex+1)*params.CHTFrequency - 1
 	}
-	handler.fetcher = newLightFetcher(handler, backend.serverPool.getTimeout)
+	handler.fetcher = newLightFetcher(backend.blockchain, backend.engine, backend.peers, handler.ulc, backend.chainDb, backend.reqDist, handler.synchronise)
 	handler.downloader = downloader.New(height, backend.chainDb, nil, backend.eventMux, nil, backend.blockchain, handler.removePeer)
 	handler.backend.peers.subscribe((*downloaderPeerNotify)(handler))
 	return handler
 }
 
+func (h *clientHandler) start() {
+	h.fetcher.start()
+}
+
 func (h *clientHandler) stop() {
 	close(h.closeCh)
 	h.downloader.Terminate()
-	h.fetcher.close()
+	h.fetcher.stop()
 	h.wg.Wait()
 }
 
@@ -121,7 +125,6 @@ func (h *clientHandler) handle(p *serverPeer) error {
 		connectionTimer.Update(time.Duration(mclock.Now() - connectedAt))
 		serverConnectionGauge.Update(int64(h.backend.peers.len()))
 	}()
-
 	h.fetcher.announce(p, &announceData{Hash: p.headInfo.Hash, Number: p.headInfo.Number, Td: p.headInfo.Td})
 
 	// Mark the peer starts to be served.
@@ -185,6 +188,9 @@ func (h *clientHandler) handleMsg(p *serverPeer) error {
 				p.Log().Trace("Valid announcement signature")
 			}
 			p.Log().Trace("Announce message content", "number", req.Number, "hash", req.Hash, "td", req.Td, "reorg", req.ReorgDepth)
+
+			// Update peer head information first and then notify the announcement
+			p.updateHead(req.Hash, req.Number, req.Td)
 			h.fetcher.announce(p, &req)
 		}
 	case BlockHeadersMsg:
@@ -196,12 +202,17 @@ func (h *clientHandler) handleMsg(p *serverPeer) error {
 		if err := msg.Decode(&resp); err != nil {
 			return errResp(ErrDecode, "msg %v: %v", msg, err)
 		}
+		headers := resp.Headers
 		p.fcServer.ReceivedReply(resp.ReqID, resp.BV)
 		p.answeredRequest(resp.ReqID)
-		if h.fetcher.requestedID(resp.ReqID) {
-			h.fetcher.deliverHeaders(p, resp.ReqID, resp.Headers)
-		} else {
-			if err := h.downloader.DeliverHeaders(p.id, resp.Headers); err != nil {
+
+		// Filter out any explicitly requested headers, deliver the rest to the downloader
+		filter := len(headers) == 1
+		if filter {
+			headers = h.fetcher.deliverHeaders(p, resp.ReqID, resp.Headers)
+		}
+		if len(headers) != 0 || !filter {
+			if err := h.downloader.DeliverHeaders(p.id, headers); err != nil {
 				log.Debug("Failed to deliver headers", "err", err)
 			}
 		}
@@ -320,8 +331,7 @@ func (h *clientHandler) handleMsg(p *serverPeer) error {
 	// Deliver the received response to retriever.
 	if deliverMsg != nil {
 		if err := h.backend.retriever.deliver(p, deliverMsg); err != nil {
-			p.errCount++
-			if p.errCount > maxResponseErrors {
+			if val := p.errCount.Add(1, mclock.Now()); val > maxResponseErrors {
 				return err
 			}
 		}

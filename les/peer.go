@@ -36,7 +36,6 @@ import (
 	"github.com/ethereum/go-ethereum/les/utils"
 	"github.com/ethereum/go-ethereum/light"
 	"github.com/ethereum/go-ethereum/p2p"
-	"github.com/ethereum/go-ethereum/p2p/enode"
 	"github.com/ethereum/go-ethereum/params"
 	"github.com/ethereum/go-ethereum/rlp"
 )
@@ -113,11 +112,6 @@ func (m keyValueMap) get(key string, val interface{}) error {
 		return nil
 	}
 	return rlp.DecodeBytes(enc, val)
-}
-
-// peerIdToString converts enode.ID to a string form
-func peerIdToString(id enode.ID) string {
-	return fmt.Sprintf("%x", id.Bytes())
 }
 
 // peerCommons contains fields needed by both server peer and client peer.
@@ -343,12 +337,12 @@ type serverPeer struct {
 	sentReqs         map[uint64]sentReqEntry
 
 	// Statistics
-	errCount    int // Counter the invalid responses server has replied
+	errCount    utils.LinearExpiredValue // Counter the invalid responses server has replied
 	updateCount uint64
 	updateTime  mclock.AbsTime
 
-	// Callbacks
-	hasBlock func(common.Hash, uint64, bool) bool // Used to determine whether the server has the specified block.
+	// Test callback hooks
+	hasBlockHook func(common.Hash, uint64, bool) bool // Used to determine whether the server has the specified block.
 }
 
 func newServerPeer(version int, network uint64, trusted bool, p *p2p.Peer, rw p2p.MsgReadWriter) *serverPeer {
@@ -356,13 +350,14 @@ func newServerPeer(version int, network uint64, trusted bool, p *p2p.Peer, rw p2
 		peerCommons: peerCommons{
 			Peer:      p,
 			rw:        rw,
-			id:        peerIdToString(p.ID()),
+			id:        p.ID().String(),
 			version:   version,
 			network:   network,
 			sendQueue: utils.NewExecQueue(100),
 			closeCh:   make(chan struct{}),
 		},
-		trusted: trusted,
+		trusted:  trusted,
+		errCount: utils.LinearExpiredValue{Rate: mclock.AbsTime(time.Hour)},
 	}
 }
 
@@ -524,7 +519,11 @@ func (p *serverPeer) getTxRelayCost(amount, size int) uint64 {
 // HasBlock checks if the peer has a given block
 func (p *serverPeer) HasBlock(hash common.Hash, number uint64, hasState bool) bool {
 	p.lock.RLock()
+	defer p.lock.RUnlock()
 
+	if p.hasBlockHook != nil {
+		return p.hasBlockHook(hash, number, hasState)
+	}
 	head := p.headInfo.Number
 	var since, recent uint64
 	if hasState {
@@ -534,10 +533,7 @@ func (p *serverPeer) HasBlock(hash common.Hash, number uint64, hasState bool) bo
 		since = p.chainSince
 		recent = p.chainRecent
 	}
-	hasBlock := p.hasBlock
-	p.lock.RUnlock()
-
-	return head >= number && number >= since && (recent == 0 || number+recent+4 > head) && hasBlock != nil && hasBlock(hash, number, hasState)
+	return head >= number && number >= since && (recent == 0 || number+recent+4 > head)
 }
 
 // updateFlowControl updates the flow control parameters belonging to the server
@@ -560,6 +556,15 @@ func (p *serverPeer) updateFlowControl(update keyValueMap) {
 			p.fcCosts[code] = cost
 		}
 	}
+}
+
+// updateHead updates the head information based on the announcement from
+// the peer.
+func (p *serverPeer) updateHead(hash common.Hash, number uint64, td *big.Int) {
+	p.lock.Lock()
+	defer p.lock.Unlock()
+
+	p.headInfo = blockInfo{Hash: hash, Number: number, Td: td}
 }
 
 // Handshake executes the les protocol handshake, negotiating version number,
@@ -712,11 +717,15 @@ type clientPeer struct {
 	// responseLock ensures that responses are queued in the same order as
 	// RequestProcessed is called
 	responseLock  sync.Mutex
-	server        bool
-	invalidCount  uint32 // Counter the invalid request the client peer has made.
 	responseCount uint64 // Counter to generate an unique id for request processing.
-	errCh         chan error
-	fcClient      *flowcontrol.ClientNode // Server side mirror token bucket.
+
+	// invalidLock is used for protecting invalidCount.
+	invalidLock  sync.RWMutex
+	invalidCount utils.LinearExpiredValue // Counter the invalid request the client peer has made.
+
+	server   bool
+	errCh    chan error
+	fcClient *flowcontrol.ClientNode // Server side mirror token bucket.
 }
 
 func newClientPeer(version int, network uint64, p *p2p.Peer, rw p2p.MsgReadWriter) *clientPeer {
@@ -724,13 +733,14 @@ func newClientPeer(version int, network uint64, p *p2p.Peer, rw p2p.MsgReadWrite
 		peerCommons: peerCommons{
 			Peer:      p,
 			rw:        rw,
-			id:        peerIdToString(p.ID()),
+			id:        p.ID().String(),
 			version:   version,
 			network:   network,
 			sendQueue: utils.NewExecQueue(100),
 			closeCh:   make(chan struct{}),
 		},
-		errCh: make(chan error, 1),
+		invalidCount: utils.LinearExpiredValue{Rate: mclock.AbsTime(time.Hour)},
+		errCh:        make(chan error, 1),
 	}
 }
 
@@ -968,6 +978,18 @@ func (p *clientPeer) Handshake(td *big.Int, head common.Hash, headNum uint64, ge
 		}
 		return nil
 	})
+}
+
+func (p *clientPeer) bumpInvalid() {
+	p.invalidLock.Lock()
+	p.invalidCount.Add(1, mclock.Now())
+	p.invalidLock.Unlock()
+}
+
+func (p *clientPeer) getInvalid() uint64 {
+	p.invalidLock.RLock()
+	defer p.invalidLock.RUnlock()
+	return p.invalidCount.Value(mclock.Now())
 }
 
 // serverPeerSubscriber is an interface to notify services about added or
