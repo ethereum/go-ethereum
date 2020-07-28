@@ -45,7 +45,7 @@ func newHandler(stack *node.Node, backend ethapi.Backend, cors, vhosts []string)
 	handler := node.NewHTTPHandlerStack(h, cors, vhosts)
 
 	stack.RegisterPath("GraphQL UI", "/graphql/ui", GraphiQL{})
-	stack.RegisterPath( "GraphQL", "/graphql", handler)
+	stack.RegisterPath("GraphQL", "/graphql", handler)
 	stack.RegisterPath("GraphQL", "/graphql/", handler)
 
 	return nil

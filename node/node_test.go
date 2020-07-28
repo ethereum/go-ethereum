@@ -441,7 +441,7 @@ func TestWebsocketHTTPOnSamePort_WebsocketRequest(t *testing.T) {
 	node := startHTTP(t, 0, 0)
 	defer node.Close()
 
-	ws := strings.Replace(node.HTTPEndpoint() , "http://", "ws://", 1)
+	ws := strings.Replace(node.HTTPEndpoint(), "http://", "ws://", 1)
 
 	if node.WSEndpoint() != ws {
 		t.Fatalf("endpoints should be the same")
@@ -466,7 +466,7 @@ func TestWebsocketHTTPOnSeparatePort_WSRequest(t *testing.T) {
 	node := startHTTP(t, 0, port)
 	defer node.Close()
 
-	wsOnHTTP := strings.Replace(node.HTTPEndpoint() , "http://", "ws://", 1)
+	wsOnHTTP := strings.Replace(node.HTTPEndpoint(), "http://", "ws://", 1)
 	ws := fmt.Sprintf("ws://127.0.0.1:%d", port)
 
 	if node.WSEndpoint() == wsOnHTTP {
