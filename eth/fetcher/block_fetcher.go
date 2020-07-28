@@ -360,7 +360,7 @@ func (f *BlockFetcher) loop() {
 				break
 			}
 			// Otherwise if fresh and still unknown, try and import
-			if number+maxUncleDist < height || f.light && f.getHeader(hash) != nil || !f.light && f.getBlock(hash) != nil {
+			if (number+maxUncleDist < height) || (f.light && f.getHeader(hash) != nil) || (!f.light && f.getBlock(hash) != nil) {
 				f.forgetBlock(hash)
 				continue
 			}
@@ -443,7 +443,7 @@ func (f *BlockFetcher) loop() {
 					f.forgetHash(hash)
 
 					// If the block still didn't arrive, queue for fetching
-					if f.light && f.getHeader(hash) == nil || !f.light && f.getBlock(hash) == nil {
+					if (f.light && f.getHeader(hash) == nil) || (!f.light && f.getBlock(hash) == nil) {
 						request[announce.origin] = append(request[announce.origin], hash)
 						f.fetching[hash] = announce
 					}
@@ -746,15 +746,8 @@ func (f *BlockFetcher) importHeaders(peer string, header *types.Header) {
 			log.Debug("Unknown parent of propagated header", "peer", peer, "number", header.Number, "hash", hash, "parent", header.ParentHash)
 			return
 		}
-		// Quickly validate the header and propagate the block if it passes
-		switch err := f.verifyHeader(header); err {
-		case nil:
-
-		case consensus.ErrFutureBlock:
-			// Weird future block, don't fail
-
-		default:
-			// Something went very wrong, drop the peer
+		// Validate the header and if something went wrong, drop the peer
+		if err := f.verifyHeader(header); err != nil && err != consensus.ErrFutureBlock {
 			log.Debug("Propagated header verification failed", "peer", peer, "number", header.Number, "hash", hash, "err", err)
 			f.dropPeer(peer)
 			return
