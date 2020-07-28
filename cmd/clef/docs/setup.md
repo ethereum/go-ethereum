@@ -94,7 +94,7 @@ with minimal requirements.
 On the `client` qube, we need to create a listener which will receive the request from the Dapp, and proxy it. 
 
 
-[qubes-client.py](qubes/client/qubes-client.py):
+[qubes-client.py](qubes/qubes-client.py):
 
 ```python
 
