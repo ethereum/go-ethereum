@@ -879,6 +879,8 @@ func (db *Database) saveCache(dir string, threads int) error {
 	if db.cleans == nil {
 		return nil
 	}
+	log.Info("Writing clean trie cache to disk", "path", dir, "threads", threads)
+
 	start := time.Now()
 	err := db.cleans.SaveToFileConcurrent(dir, threads)
 	if err != nil {
