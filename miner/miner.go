@@ -20,7 +20,7 @@ package miner
 import (
 	"fmt"
 	"math/big"
-	"sync/atomic"
+	"sync"
 	"time"
 
 	"github.com/ethereum/go-ethereum/common"
@@ -62,8 +62,9 @@ type Miner struct {
 	engine   consensus.Engine
 	exitCh   chan struct{}
 
-	canStart    int32 // can start indicates whether we can start the mining operation
-	shouldStart int32 // should start indicates whether we should start after sync
+	startStopMutex sync.Mutex
+	canStart       bool // can start indicates whether we can start the mining operation
+	shouldStart    bool // should start indicates whether we should start after sync
 }
 
 func New(eth Backend, config *Config, chainConfig *params.ChainConfig, mux *event.TypeMux, engine consensus.Engine, isLocalBlock func(block *types.Block) bool) *Miner {
@@ -73,7 +74,7 @@ func New(eth Backend, config *Config, chainConfig *params.ChainConfig, mux *even
 		engine:   engine,
 		exitCh:   make(chan struct{}),
 		worker:   newWorker(config, chainConfig, engine, eth, mux, isLocalBlock, true),
-		canStart: 1,
+		canStart: true,
 	}
 	go miner.update()
 
@@ -96,20 +97,39 @@ func (miner *Miner) update() {
 			}
 			switch ev.Data.(type) {
 			case downloader.StartEvent:
-				atomic.StoreInt32(&miner.canStart, 0)
+				// When syncing begins we pause the miner and set a flag to
+				// ensure calls to Start do not start the miner before sync is
+				// finished.
+
+				// We need to lock over setting canStart, checking Mining and
+				// the call to stop, to prevent the race condition where a
+				// prior concurrent call to Start which has passed all its
+				// checks then calls start after stop is called here. Resulting
+				// in the miner starting immediately after this call to stop
+				// whilst canstart is set to false.
+				miner.startStopMutex.Lock()
+				miner.canStart = false
 				if miner.Mining() {
-					miner.Stop()
-					atomic.StoreInt32(&miner.shouldStart, 1)
+					miner.stop()
 					log.Info("Mining aborted due to sync")
 				}
+				miner.startStopMutex.Unlock()
 			case downloader.DoneEvent, downloader.FailedEvent:
-				shouldStart := atomic.LoadInt32(&miner.shouldStart) == 1
+				// When syncing completes, we start the miner if it is expected
+				// to start, we also unset the flag preventing calls to Start
+				// from starting the miner.
 
-				atomic.StoreInt32(&miner.canStart, 1)
-				atomic.StoreInt32(&miner.shouldStart, 0)
-				if shouldStart {
-					miner.Start(miner.coinbase)
+				// We need to lock over both the check on shouldStart and the
+				// call to start, to prevent the race condition where a
+				// concurrent call to Stop occurs between the check of
+				// shouldStart and the call to start resulting in the miner
+				// being started after Stop has been called.
+				miner.startStopMutex.Lock()
+				miner.canStart = true
+				if miner.shouldStart {
+					miner.start(miner.coinbase)
 				}
+				miner.startStopMutex.Unlock()
 				// stop immediately and ignore all further pending events
 				return
 			}
@@ -119,20 +139,38 @@ func (miner *Miner) update() {
 	}
 }
 
+// Start starts the miner mining, unless it has been paused by the downloader
+// during sync, in which case it will start mining once the sync has completed.
 func (miner *Miner) Start(coinbase common.Address) {
-	atomic.StoreInt32(&miner.shouldStart, 1)
-	miner.SetEtherbase(coinbase)
-
-	if atomic.LoadInt32(&miner.canStart) == 0 {
+	miner.startStopMutex.Lock()
+	defer miner.startStopMutex.Unlock()
+	miner.shouldStart = true
+	if !miner.canStart {
 		log.Info("Network syncing, will start miner afterwards")
 		return
 	}
+	miner.start(coinbase)
+}
+
+// start performs the action of starting without managing mutexes or state
+// flags.
+func (miner *Miner) start(coinbase common.Address) {
+	miner.SetEtherbase(coinbase)
 	miner.worker.start()
 }
 
+// Stop stops the miner from mining.
 func (miner *Miner) Stop() {
+	miner.startStopMutex.Lock()
+	defer miner.startStopMutex.Unlock()
+	miner.shouldStart = false
+	miner.stop()
+}
+
+// stop performs the action of stopping without managing mutexes or state
+// flags.
+func (miner *Miner) stop() {
 	miner.worker.stop()
-	atomic.StoreInt32(&miner.shouldStart, 0)
 }
 
 func (miner *Miner) Close() {
