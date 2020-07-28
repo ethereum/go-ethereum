@@ -100,8 +100,6 @@ type Engine interface {
 	//
 	// Note, the method returns immediately and will send the result async. More
 	// than one result may also be returned depending on the consensus algorithm.
-	// Stop is triggered by closing the stop channel hence, any receive from
-	// stop will succeed in all listeners.
 	Seal(chain ChainReader, block *types.Block, results chan<- *types.Block, stop <-chan struct{}) error
 
 	// SealHash returns the hash of a block prior to it being sealed.
