@@ -83,7 +83,7 @@ recommend placing it either inside your user's home directory or even more locke
 backend applications.
 
 The last two arguments of
-[`accounts.NewManager`](https://godoc.org/github.com/ethereum/go-ethereum/accounts#NewManager)
+[`keystore.NewKeyStore`](https://godoc.org/github.com/ethereum/go-ethereum/accounts/keystore#NewKeyStore)
 are the crypto parameters defining how resource-intensive the keystore encryption should
 be. You can choose between [`accounts.StandardScryptN, accounts.StandardScryptP`,
 `accounts.LightScryptN,
