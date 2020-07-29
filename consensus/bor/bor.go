@@ -1125,17 +1125,12 @@ func (c *Bor) CommitStates(
 			Data:     hex.EncodeToString(eventRecord.Data),
 			TxHash:   eventRecord.TxHash,
 		}
-		fmt.Println("stateData", stateData)
-		// go func() {
-		// 	c.stateSyncFeed.Send(core.StateSyncEvent{StateData: &stateData})
-		// }()
 
 		if err := c.GenesisContractsClient.CommitState(eventRecord, state, header, chain); err != nil {
 			return nil, err
 		}
 		lastStateID++
 	}
-	fmt.Println("retuning state Data", &stateData)
 	return &stateData, nil
 }
 
