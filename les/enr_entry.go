@@ -17,6 +17,9 @@
 package les
 
 import (
+	"github.com/ethereum/go-ethereum/p2p"
+	"github.com/ethereum/go-ethereum/p2p/dnsdisc"
+	"github.com/ethereum/go-ethereum/p2p/enode"
 	"github.com/ethereum/go-ethereum/rlp"
 )
 
@@ -29,4 +32,13 @@ type lesEntry struct {
 // ENRKey implements enr.Entry.
 func (e lesEntry) ENRKey() string {
 	return "les"
+}
+
+// setupDiscovery creates the node discovery source for the eth protocol.
+func (eth *LightEthereum) setupDiscovery(cfg *p2p.Config) (enode.Iterator, error) {
+	if /*cfg.NoDiscovery || */ len(eth.config.DiscoveryURLs) == 0 {
+		return nil, nil
+	}
+	client := dnsdisc.NewClient(dnsdisc.Config{})
+	return client.NewIterator(eth.config.DiscoveryURLs...)
 }

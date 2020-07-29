@@ -19,11 +19,14 @@ package main
 import (
 	"fmt"
 	"net"
+	"os"
 	"strings"
 	"time"
 
+	"github.com/ethereum/go-ethereum/cmd/devp2p/internal/v4test"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/crypto"
+	"github.com/ethereum/go-ethereum/internal/utesting"
 	"github.com/ethereum/go-ethereum/p2p/discover"
 	"github.com/ethereum/go-ethereum/p2p/enode"
 	"github.com/ethereum/go-ethereum/params"
@@ -40,6 +43,7 @@ var (
 			discv4ResolveCommand,
 			discv4ResolveJSONCommand,
 			discv4CrawlCommand,
+			discv4TestCommand,
 		},
 	}
 	discv4PingCommand = cli.Command{
@@ -74,6 +78,12 @@ var (
 		Action: discv4Crawl,
 		Flags:  []cli.Flag{bootnodesFlag, crawlTimeoutFlag},
 	}
+	discv4TestCommand = cli.Command{
+		Name:   "test",
+		Usage:  "Runs tests against a node",
+		Action: discv4Test,
+		Flags:  []cli.Flag{remoteEnodeFlag, testPatternFlag, testListen1Flag, testListen2Flag},
+	}
 )
 
 var (
@@ -81,10 +91,41 @@ var (
 		Name:  "bootnodes",
 		Usage: "Comma separated nodes used for bootstrapping",
 	}
+	nodekeyFlag = cli.StringFlag{
+		Name:  "nodekey",
+		Usage: "Hex-encoded node key",
+	}
+	nodedbFlag = cli.StringFlag{
+		Name:  "nodedb",
+		Usage: "Nodes database location",
+	}
+	listenAddrFlag = cli.StringFlag{
+		Name:  "addr",
+		Usage: "Listening address",
+	}
 	crawlTimeoutFlag = cli.DurationFlag{
 		Name:  "timeout",
 		Usage: "Time limit for the crawl.",
 		Value: 30 * time.Minute,
+	}
+	remoteEnodeFlag = cli.StringFlag{
+		Name:   "remote",
+		Usage:  "Enode of the remote node under test",
+		EnvVar: "REMOTE_ENODE",
+	}
+	testPatternFlag = cli.StringFlag{
+		Name:  "run",
+		Usage: "Pattern of test suite(s) to run",
+	}
+	testListen1Flag = cli.StringFlag{
+		Name:  "listen1",
+		Usage: "IP address of the first tester",
+		Value: v4test.Listen1,
+	}
+	testListen2Flag = cli.StringFlag{
+		Name:  "listen2",
+		Usage: "IP address of the second tester",
+		Value: v4test.Listen2,
 	}
 )
 
@@ -172,6 +213,84 @@ func discv4Crawl(ctx *cli.Context) error {
 	return nil
 }
 
+func discv4Test(ctx *cli.Context) error {
+	// Configure test package globals.
+	if !ctx.IsSet(remoteEnodeFlag.Name) {
+		return fmt.Errorf("Missing -%v", remoteEnodeFlag.Name)
+	}
+	v4test.Remote = ctx.String(remoteEnodeFlag.Name)
+	v4test.Listen1 = ctx.String(testListen1Flag.Name)
+	v4test.Listen2 = ctx.String(testListen2Flag.Name)
+
+	// Filter and run test cases.
+	tests := v4test.AllTests
+	if ctx.IsSet(testPatternFlag.Name) {
+		tests = utesting.MatchTests(tests, ctx.String(testPatternFlag.Name))
+	}
+	results := utesting.RunTests(tests, os.Stdout)
+	if fails := utesting.CountFailures(results); fails > 0 {
+		return fmt.Errorf("%v/%v tests passed.", len(tests)-fails, len(tests))
+	}
+	fmt.Printf("%v/%v passed\n", len(tests), len(tests))
+	return nil
+}
+
+// startV4 starts an ephemeral discovery V4 node.
+func startV4(ctx *cli.Context) *discover.UDPv4 {
+	ln, config := makeDiscoveryConfig(ctx)
+	socket := listen(ln, ctx.String(listenAddrFlag.Name))
+	disc, err := discover.ListenV4(socket, ln, config)
+	if err != nil {
+		exit(err)
+	}
+	return disc
+}
+
+func makeDiscoveryConfig(ctx *cli.Context) (*enode.LocalNode, discover.Config) {
+	var cfg discover.Config
+
+	if ctx.IsSet(nodekeyFlag.Name) {
+		key, err := crypto.HexToECDSA(ctx.String(nodekeyFlag.Name))
+		if err != nil {
+			exit(fmt.Errorf("-%s: %v", nodekeyFlag.Name, err))
+		}
+		cfg.PrivateKey = key
+	} else {
+		cfg.PrivateKey, _ = crypto.GenerateKey()
+	}
+
+	if commandHasFlag(ctx, bootnodesFlag) {
+		bn, err := parseBootnodes(ctx)
+		if err != nil {
+			exit(err)
+		}
+		cfg.Bootnodes = bn
+	}
+
+	dbpath := ctx.String(nodedbFlag.Name)
+	db, err := enode.OpenDB(dbpath)
+	if err != nil {
+		exit(err)
+	}
+	ln := enode.NewLocalNode(db, cfg.PrivateKey)
+	return ln, cfg
+}
+
+func listen(ln *enode.LocalNode, addr string) *net.UDPConn {
+	if addr == "" {
+		addr = "0.0.0.0:0"
+	}
+	socket, err := net.ListenPacket("udp4", addr)
+	if err != nil {
+		exit(err)
+	}
+	usocket := socket.(*net.UDPConn)
+	uaddr := socket.LocalAddr().(*net.UDPAddr)
+	ln.SetFallbackIP(net.IP{127, 0, 0, 1})
+	ln.SetFallbackUDP(uaddr.Port)
+	return usocket
+}
+
 func parseBootnodes(ctx *cli.Context) ([]*enode.Node, error) {
 	s := params.RinkebyBootnodes
 	if ctx.IsSet(bootnodesFlag.Name) {
@@ -186,41 +305,4 @@ func parseBootnodes(ctx *cli.Context) ([]*enode.Node, error) {
 		}
 	}
 	return nodes, nil
-}
-
-// startV4 starts an ephemeral discovery V4 node.
-func startV4(ctx *cli.Context) *discover.UDPv4 {
-	socket, ln, cfg, err := listen()
-	if err != nil {
-		exit(err)
-	}
-	if commandHasFlag(ctx, bootnodesFlag) {
-		bn, err := parseBootnodes(ctx)
-		if err != nil {
-			exit(err)
-		}
-		cfg.Bootnodes = bn
-	}
-	disc, err := discover.ListenV4(socket, ln, cfg)
-	if err != nil {
-		exit(err)
-	}
-	return disc
-}
-
-func listen() (*net.UDPConn, *enode.LocalNode, discover.Config, error) {
-	var cfg discover.Config
-	cfg.PrivateKey, _ = crypto.GenerateKey()
-	db, _ := enode.OpenDB("")
-	ln := enode.NewLocalNode(db, cfg.PrivateKey)
-
-	socket, err := net.ListenUDP("udp4", &net.UDPAddr{IP: net.IP{0, 0, 0, 0}})
-	if err != nil {
-		db.Close()
-		return nil, nil, cfg, err
-	}
-	addr := socket.LocalAddr().(*net.UDPAddr)
-	ln.SetFallbackIP(net.IP{127, 0, 0, 1})
-	ln.SetFallbackUDP(addr.Port)
-	return socket, ln, cfg, nil
 }

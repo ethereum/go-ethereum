@@ -34,7 +34,7 @@ import (
 // stateReq represents a batch of state fetch requests grouped together into
 // a single data retrieval network packet.
 type stateReq struct {
-	items    []common.Hash              // Hashes of the state items to download
+	nItems   uint16                     // Number of items requested for download (max is 384, so uint16 is sufficient)
 	tasks    map[common.Hash]*stateTask // Download tasks to track previous attempts
 	timeout  time.Duration              // Maximum round trip time for this to complete
 	timer    *time.Timer                // Timer to fire when the RTT timeout expires
@@ -63,6 +63,10 @@ func (d *Downloader) syncState(root common.Hash) *stateSync {
 	s := newStateSync(d, root)
 	select {
 	case d.stateSyncStart <- s:
+		// If we tell the statesync to restart with a new root, we also need
+		// to wait for it to actually also start -- when old requests have timed
+		// out or been delivered
+		<-s.started
 	case <-d.quitCh:
 		s.err = errCancelStateFetch
 		close(s.done)
@@ -95,15 +99,8 @@ func (d *Downloader) runStateSync(s *stateSync) *stateSync {
 		finished []*stateReq                  // Completed or failed requests
 		timeout  = make(chan *stateReq)       // Timed out active requests
 	)
-	defer func() {
-		// Cancel active request timers on exit. Also set peers to idle so they're
-		// available for the next sync.
-		for _, req := range active {
-			req.timer.Stop()
-			req.peer.SetNodeDataIdle(len(req.items))
-		}
-	}()
 	// Run the state sync.
+	log.Trace("State sync starting", "root", s.root)
 	go s.run()
 	defer s.Cancel()
 
@@ -126,9 +123,11 @@ func (d *Downloader) runStateSync(s *stateSync) *stateSync {
 		select {
 		// The stateSync lifecycle:
 		case next := <-d.stateSyncStart:
+			d.spindownStateSync(active, finished, timeout, peerDrop)
 			return next
 
 		case <-s.done:
+			d.spindownStateSync(active, finished, timeout, peerDrop)
 			return nil
 
 		// Send the next finished request to the current sync:
@@ -189,11 +188,9 @@ func (d *Downloader) runStateSync(s *stateSync) *stateSync {
 			// causes valid requests to go missing and sync to get stuck.
 			if old := active[req.peer.id]; old != nil {
 				log.Warn("Busy peer assigned new state fetch", "peer", old.peer.id)
-
-				// Make sure the previous one doesn't get siletly lost
+				// Move the previous request to the finished set
 				old.timer.Stop()
 				old.dropped = true
-
 				finished = append(finished, old)
 			}
 			// Start a timer to notify the sync loop if the peer stalled.
@@ -210,6 +207,46 @@ func (d *Downloader) runStateSync(s *stateSync) *stateSync {
 	}
 }
 
+// spindownStateSync 'drains' the outstanding requests; some will be delivered and other
+// will time out. This is to ensure that when the next stateSync starts working, all peers
+// are marked as idle and de facto _are_ idle.
+func (d *Downloader) spindownStateSync(active map[string]*stateReq, finished []*stateReq, timeout chan *stateReq, peerDrop chan *peerConnection) {
+	log.Trace("State sync spinning down", "active", len(active), "finished", len(finished))
+
+	for len(active) > 0 {
+		var (
+			req    *stateReq
+			reason string
+		)
+		select {
+		// Handle (drop) incoming state packs:
+		case pack := <-d.stateCh:
+			req = active[pack.PeerId()]
+			reason = "delivered"
+		// Handle dropped peer connections:
+		case p := <-peerDrop:
+			req = active[p.id]
+			reason = "peerdrop"
+		// Handle timed-out requests:
+		case req = <-timeout:
+			reason = "timeout"
+		}
+		if req == nil {
+			continue
+		}
+		req.peer.log.Trace("State peer marked idle (spindown)", "req.items", int(req.nItems), "reason", reason)
+		req.timer.Stop()
+		delete(active, req.peer.id)
+		req.peer.SetNodeDataIdle(int(req.nItems), time.Now())
+	}
+	// The 'finished' set contains deliveries that we were going to pass to processing.
+	// Those are now moot, but we still need to set those peers as idle, which would
+	// otherwise have been done after processing
+	for _, req := range finished {
+		req.peer.SetNodeDataIdle(int(req.nItems), time.Now())
+	}
+}
+
 // stateSync schedules requests for downloading a particular state trie defined
 // by a given state root.
 type stateSync struct {
@@ -222,11 +259,15 @@ type stateSync struct {
 	numUncommitted   int
 	bytesUncommitted int
 
+	started chan struct{} // Started is signalled once the sync loop starts
+
 	deliver    chan *stateReq // Delivery channel multiplexing peer responses
 	cancel     chan struct{}  // Channel to signal a termination request
 	cancelOnce sync.Once      // Ensures cancel only ever gets called once
 	done       chan struct{}  // Channel to signal termination completion
 	err        error          // Any error hit during sync (set before completion)
+
+	root common.Hash
 }
 
 // stateTask represents a single trie node download task, containing a set of
@@ -246,6 +287,8 @@ func newStateSync(d *Downloader, root common.Hash) *stateSync {
 		deliver: make(chan *stateReq),
 		cancel:  make(chan struct{}),
 		done:    make(chan struct{}),
+		started: make(chan struct{}),
+		root:    root,
 	}
 }
 
@@ -276,6 +319,7 @@ func (s *stateSync) Cancel() error {
 // pushed here async. The reason is to decouple processing from data receipt
 // and timeouts.
 func (s *stateSync) loop() (err error) {
+	close(s.started)
 	// Listen for new peer events to assign tasks to them
 	newPeer := make(chan *peerConnection, 1024)
 	peerSub := s.d.peers.SubscribeNewPeers(newPeer)
@@ -305,9 +349,10 @@ func (s *stateSync) loop() (err error) {
 			return errCanceled
 
 		case req := <-s.deliver:
+			deliveryTime := time.Now()
 			// Response, disconnect or timeout triggered, drop the peer if stalling
 			log.Trace("Received node data response", "peer", req.peer.id, "count", len(req.response), "dropped", req.dropped, "timeout", !req.dropped && req.timedOut())
-			if len(req.items) <= 2 && !req.dropped && req.timedOut() {
+			if req.nItems <= 2 && !req.dropped && req.timedOut() {
 				// 2 items are the minimum requested, if even that times out, we've no use of
 				// this peer at the moment.
 				log.Warn("Stalling state sync, dropping peer", "peer", req.peer.id)
@@ -331,11 +376,11 @@ func (s *stateSync) loop() (err error) {
 			}
 			// Process all the received blobs and check for stale delivery
 			delivered, err := s.process(req)
+			req.peer.SetNodeDataIdle(delivered, deliveryTime)
 			if err != nil {
 				log.Warn("Node data write error", "err", err)
 				return err
 			}
-			req.peer.SetNodeDataIdle(delivered)
 		}
 	}
 	return nil
@@ -368,14 +413,14 @@ func (s *stateSync) assignTasks() {
 		// Assign a batch of fetches proportional to the estimated latency/bandwidth
 		cap := p.NodeDataCapacity(s.d.requestRTT())
 		req := &stateReq{peer: p, timeout: s.d.requestTTL()}
-		s.fillTasks(cap, req)
+		items := s.fillTasks(cap, req)
 
 		// If the peer was assigned tasks to fetch, send the network request
-		if len(req.items) > 0 {
-			req.peer.log.Trace("Requesting new batch of data", "type", "state", "count", len(req.items))
+		if len(items) > 0 {
+			req.peer.log.Trace("Requesting new batch of data", "type", "state", "count", len(items), "root", s.root)
 			select {
 			case s.d.trackStateReq <- req:
-				req.peer.FetchNodeData(req.items)
+				req.peer.FetchNodeData(items)
 			case <-s.cancel:
 			case <-s.d.cancelCh:
 			}
@@ -385,7 +430,7 @@ func (s *stateSync) assignTasks() {
 
 // fillTasks fills the given request object with a maximum of n state download
 // tasks to send to the remote peer.
-func (s *stateSync) fillTasks(n int, req *stateReq) {
+func (s *stateSync) fillTasks(n int, req *stateReq) []common.Hash {
 	// Refill available tasks from the scheduler.
 	if len(s.tasks) < n {
 		new := s.sched.Missing(n - len(s.tasks))
@@ -394,11 +439,11 @@ func (s *stateSync) fillTasks(n int, req *stateReq) {
 		}
 	}
 	// Find tasks that haven't been tried with the request's peer.
-	req.items = make([]common.Hash, 0, n)
+	items := make([]common.Hash, 0, n)
 	req.tasks = make(map[common.Hash]*stateTask, n)
 	for hash, t := range s.tasks {
 		// Stop when we've gathered enough requests
-		if len(req.items) == n {
+		if len(items) == n {
 			break
 		}
 		// Skip any requests we've already tried from this peer
@@ -407,10 +452,12 @@ func (s *stateSync) fillTasks(n int, req *stateReq) {
 		}
 		// Assign the request to this peer
 		t.attempts[req.peer.id] = struct{}{}
-		req.items = append(req.items, hash)
+		items = append(items, hash)
 		req.tasks[hash] = t
 		delete(s.tasks, hash)
 	}
+	req.nItems = uint16(len(items))
+	return items
 }
 
 // process iterates over a batch of delivered state data, injecting each item

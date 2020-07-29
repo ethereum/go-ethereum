@@ -88,6 +88,42 @@ Path of the secret key file: .*UTC--.+--[0-9a-f]{40}
 `)
 }
 
+func TestAccountImport(t *testing.T) {
+	tests := []struct{ name, key, output string }{
+		{
+			name:   "correct account",
+			key:    "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef",
+			output: "Address: {fcad0b19bb29d4674531d6f115237e16afce377c}\n",
+		},
+		{
+			name:   "invalid character",
+			key:    "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef1",
+			output: "Fatal: Failed to load the private key: invalid character '1' at end of key file\n",
+		},
+	}
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			t.Parallel()
+			importAccountWithExpect(t, test.key, test.output)
+		})
+	}
+}
+
+func importAccountWithExpect(t *testing.T, key string, expected string) {
+	dir := tmpdir(t)
+	keyfile := filepath.Join(dir, "key.prv")
+	if err := ioutil.WriteFile(keyfile, []byte(key), 0600); err != nil {
+		t.Error(err)
+	}
+	passwordFile := filepath.Join(dir, "password.txt")
+	if err := ioutil.WriteFile(passwordFile, []byte("foobar"), 0600); err != nil {
+		t.Error(err)
+	}
+	geth := runGeth(t, "account", "import", keyfile, "-password", passwordFile)
+	defer geth.ExpectExit()
+	geth.Expect(expected)
+}
+
 func TestAccountNewBadRepeat(t *testing.T) {
 	geth := runGeth(t, "account", "new", "--lightkdf")
 	defer geth.ExpectExit()

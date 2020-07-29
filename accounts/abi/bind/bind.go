@@ -77,6 +77,8 @@ func Bind(types []string, abis []string, bytecodes []string, fsigs []map[string]
 			calls     = make(map[string]*tmplMethod)
 			transacts = make(map[string]*tmplMethod)
 			events    = make(map[string]*tmplEvent)
+			fallback  *tmplMethod
+			receive   *tmplMethod
 
 			// identifiers are used to detect duplicated identifier of function
 			// and event. For all calls, transacts and events, abigen will generate
@@ -92,7 +94,7 @@ func Bind(types []string, abis []string, bytecodes []string, fsigs []map[string]
 			normalizedName := methodNormalizer[lang](alias(aliases, original.Name))
 			// Ensure there is no duplicated identifier
 			var identifiers = callIdentifiers
-			if !original.Const {
+			if !original.IsConstant() {
 				identifiers = transactIdentifiers
 			}
 			if identifiers[normalizedName] {
@@ -121,7 +123,7 @@ func Bind(types []string, abis []string, bytecodes []string, fsigs []map[string]
 				}
 			}
 			// Append the methods to the call or transact lists
-			if original.Const {
+			if original.IsConstant() {
 				calls[original.Name] = &tmplMethod{Original: original, Normalized: normalized, Structured: structured(original.Outputs)}
 			} else {
 				transacts[original.Name] = &tmplMethod{Original: original, Normalized: normalized, Structured: structured(original.Outputs)}
@@ -156,7 +158,13 @@ func Bind(types []string, abis []string, bytecodes []string, fsigs []map[string]
 			// Append the event to the accumulator list
 			events[original.Name] = &tmplEvent{Original: original, Normalized: normalized}
 		}
-
+		// Add two special fallback functions if they exist
+		if evmABI.HasFallback() {
+			fallback = &tmplMethod{Original: evmABI.Fallback}
+		}
+		if evmABI.HasReceive() {
+			receive = &tmplMethod{Original: evmABI.Receive}
+		}
 		// There is no easy way to pass arbitrary java objects to the Go side.
 		if len(structs) > 0 && lang == LangJava {
 			return "", errors.New("java binding for tuple arguments is not supported yet")
@@ -169,6 +177,8 @@ func Bind(types []string, abis []string, bytecodes []string, fsigs []map[string]
 			Constructor: evmABI.Constructor,
 			Calls:       calls,
 			Transacts:   transacts,
+			Fallback:    fallback,
+			Receive:     receive,
 			Events:      events,
 			Libraries:   make(map[string]string),
 		}
@@ -210,8 +220,6 @@ func Bind(types []string, abis []string, bytecodes []string, fsigs []map[string]
 		"bindtype":      bindType[lang],
 		"bindtopictype": bindTopicType[lang],
 		"namedtype":     namedType[lang],
-		"formatmethod":  formatMethod,
-		"formatevent":   formatEvent,
 		"capitalise":    capitalise,
 		"decapitalise":  decapitalise,
 	}
@@ -527,9 +535,7 @@ var methodNormalizer = map[Lang]func(string) string{
 }
 
 // capitalise makes a camel-case string which starts with an upper case character.
-func capitalise(input string) string {
-	return abi.ToCamelCase(input)
-}
+var capitalise = abi.ToCamelCase
 
 // decapitalise makes a camel-case string which starts with a lower case character.
 func decapitalise(input string) string {
@@ -577,64 +583,4 @@ func hasStruct(t abi.Type) bool {
 	default:
 		return false
 	}
-}
-
-// resolveArgName converts a raw argument representation into a user friendly format.
-func resolveArgName(arg abi.Argument, structs map[string]*tmplStruct) string {
-	var (
-		prefix   string
-		embedded string
-		typ      = &arg.Type
-	)
-loop:
-	for {
-		switch typ.T {
-		case abi.SliceTy:
-			prefix += "[]"
-		case abi.ArrayTy:
-			prefix += fmt.Sprintf("[%d]", typ.Size)
-		default:
-			embedded = typ.TupleRawName + typ.String()
-			break loop
-		}
-		typ = typ.Elem
-	}
-	if s, exist := structs[embedded]; exist {
-		return prefix + s.Name
-	} else {
-		return arg.Type.String()
-	}
-}
-
-// formatMethod transforms raw method representation into a user friendly one.
-func formatMethod(method abi.Method, structs map[string]*tmplStruct) string {
-	inputs := make([]string, len(method.Inputs))
-	for i, input := range method.Inputs {
-		inputs[i] = fmt.Sprintf("%v %v", resolveArgName(input, structs), input.Name)
-	}
-	outputs := make([]string, len(method.Outputs))
-	for i, output := range method.Outputs {
-		outputs[i] = resolveArgName(output, structs)
-		if len(output.Name) > 0 {
-			outputs[i] += fmt.Sprintf(" %v", output.Name)
-		}
-	}
-	constant := ""
-	if method.Const {
-		constant = "constant "
-	}
-	return fmt.Sprintf("function %v(%v) %sreturns(%v)", method.RawName, strings.Join(inputs, ", "), constant, strings.Join(outputs, ", "))
-}
-
-// formatEvent transforms raw event representation into a user friendly one.
-func formatEvent(event abi.Event, structs map[string]*tmplStruct) string {
-	inputs := make([]string, len(event.Inputs))
-	for i, input := range event.Inputs {
-		if input.Indexed {
-			inputs[i] = fmt.Sprintf("%v indexed %v", resolveArgName(input, structs), input.Name)
-		} else {
-			inputs[i] = fmt.Sprintf("%v %v", resolveArgName(input, structs), input.Name)
-		}
-	}
-	return fmt.Sprintf("event %v(%v)", event.RawName, strings.Join(inputs, ", "))
 }

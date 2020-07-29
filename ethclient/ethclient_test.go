@@ -98,6 +98,22 @@ func TestToFilterArg(t *testing.T) {
 			nil,
 		},
 		{
+			"with negative fromBlock and negative toBlock",
+			ethereum.FilterQuery{
+				Addresses: addresses,
+				FromBlock: big.NewInt(-1),
+				ToBlock:   big.NewInt(-1),
+				Topics:    [][]common.Hash{},
+			},
+			map[string]interface{}{
+				"address":   addresses,
+				"fromBlock": "pending",
+				"toBlock":   "pending",
+				"topics":    [][]common.Hash{},
+			},
+			nil,
+		},
+		{
 			"with blockhash",
 			ethereum.FilterQuery{
 				Addresses: addresses,

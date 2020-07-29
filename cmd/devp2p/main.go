@@ -58,7 +58,9 @@ func init() {
 	// Add subcommands.
 	app.Commands = []cli.Command{
 		enrdumpCommand,
+		keyCommand,
 		discv4Command,
+		discv5Command,
 		dnsCommand,
 		nodesetCommand,
 	}

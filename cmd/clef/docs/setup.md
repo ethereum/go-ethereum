@@ -34,7 +34,7 @@ There are two ways that this can be achieved: integrated via Qubes or integrated
 
 #### 1. Qubes Integrated
 
-Qubes provdes a facility for inter-qubes communication via `qrexec`. A qube can request to make a cross-qube RPC request 
+Qubes provides a facility for inter-qubes communication via `qrexec`. A qube can request to make a cross-qube RPC request 
 to another qube. The OS then asks the user if the call is permitted. 
 
 ![Example](qubes/qrexec-example.png)
@@ -48,7 +48,7 @@ This is how [Split GPG](https://www.qubes-os.org/doc/split-gpg/) is implemented.
 
 ![Clef via qrexec](qubes/clef_qubes_qrexec.png)
 
-On the `target` qubes, we need to define the rpc service.
+On the `target` qubes, we need to define the RPC service.
 
 [qubes.Clefsign](qubes/qubes.Clefsign):
 
@@ -94,7 +94,7 @@ with minimal requirements.
 On the `client` qube, we need to create a listener which will receive the request from the Dapp, and proxy it. 
 
 
-[qubes-client.py](qubes/client/qubes-client.py):
+[qubes-client.py](qubes/qubes-client.py):
 
 ```python
 
@@ -135,11 +135,11 @@ $ cat newaccnt.json
 $ cat newaccnt.json| qrexec-client-vm debian-work qubes.Clefsign
 ```
 
-This should pop up first a dialog to allow the IPC call:
+A dialog should pop up first to allow the IPC call:
 
 ![one](qubes/qubes_newaccount-1.png)
 
-Followed by a GTK-dialog to approve the operation
+Followed by a GTK-dialog to approve the operation:
 
 ![two](qubes/qubes_newaccount-2.png)
 
@@ -169,7 +169,7 @@ However, it comes with a couple of drawbacks:
   - The `Origin` header must be forwarded
   - Information about the remote ip must be added as a `X-Forwarded-For`. However, Clef cannot always trust an `XFF` header, 
   since malicious clients may lie about `XFF` in order to fool the http server into believing it comes from another address.
-- Even with a policy in place to allow rpc-calls between `caller` and `target`, there will be several popups:
+- Even with a policy in place to allow RPC calls between `caller` and `target`, there will be several popups:
   - One qubes-specific where the user specifies the `target` vm
   - One clef-specific to approve the transaction
   
@@ -177,7 +177,7 @@ However, it comes with a couple of drawbacks:
 #### 2. Network integrated
 
 The second way to set up Clef on a qubes system is to allow networking, and have Clef listen to a port which is accessible
-form other qubes. 
+from other qubes. 
 
 ![Clef via http](qubes/clef_qubes_http.png)
 
@@ -186,13 +186,13 @@ form other qubes.
 
 ## USBArmory
 
-The [USB armory](https://inversepath.com/usbarmory) is an open source hardware design with an 800 Mhz ARM processor. It is a pocket-size
+The [USB armory](https://inversepath.com/usbarmory) is an open source hardware design with an 800 MHz ARM processor. It is a pocket-size
 computer. When inserted into a laptop, it identifies itself as a USB network interface, basically adding another network
 to your computer. Over this new network interface, you can SSH into the device. 
 
 Running Clef off a USB armory means that you can use the armory as a very versatile offline computer, which only
 ever connects to a local network between your computer and the device itself.
 
-Needless to say, the while this model should be fairly secure against remote attacks, an attacker with physical access
+Needless to say, while this model should be fairly secure against remote attacks, an attacker with physical access
 to the USB Armory would trivially be able to extract the contents of the device filesystem. 
 

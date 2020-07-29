@@ -19,6 +19,8 @@ package rawdb
 import (
 	"bytes"
 	"testing"
+
+	"github.com/ethereum/go-ethereum/ethdb"
 )
 
 func TestTableDatabase(t *testing.T)            { testTableDatabase(t, "prefix") }
@@ -96,48 +98,31 @@ func testTableDatabase(t *testing.T, prefix string) {
 		}
 	}
 
+	check := func(iter ethdb.Iterator, expCount, index int) {
+		count := 0
+		for iter.Next() {
+			key, value := iter.Key(), iter.Value()
+			if !bytes.Equal(key, entries[index].key) {
+				t.Fatalf("Key mismatch: want=%v, got=%v", entries[index].key, key)
+			}
+			if !bytes.Equal(value, entries[index].value) {
+				t.Fatalf("Value mismatch: want=%v, got=%v", entries[index].value, value)
+			}
+			index += 1
+			count++
+		}
+		if count != expCount {
+			t.Fatalf("Wrong number of elems, exp %d got %d", expCount, count)
+		}
+		iter.Release()
+	}
 	// Test iterators
-	iter := db.NewIterator()
-	var index int
-	for iter.Next() {
-		key, value := iter.Key(), iter.Value()
-		if !bytes.Equal(key, entries[index].key) {
-			t.Fatalf("Key mismatch: want=%v, got=%v", entries[index].key, key)
-		}
-		if !bytes.Equal(value, entries[index].value) {
-			t.Fatalf("Value mismatch: want=%v, got=%v", entries[index].value, value)
-		}
-		index += 1
-	}
-	iter.Release()
-
+	check(db.NewIterator(nil, nil), 6, 0)
 	// Test iterators with prefix
-	iter = db.NewIteratorWithPrefix([]byte{0xff, 0xff})
-	index = 3
-	for iter.Next() {
-		key, value := iter.Key(), iter.Value()
-		if !bytes.Equal(key, entries[index].key) {
-			t.Fatalf("Key mismatch: want=%v, got=%v", entries[index].key, key)
-		}
-		if !bytes.Equal(value, entries[index].value) {
-			t.Fatalf("Value mismatch: want=%v, got=%v", entries[index].value, value)
-		}
-		index += 1
-	}
-	iter.Release()
-
+	check(db.NewIterator([]byte{0xff, 0xff}, nil), 3, 3)
 	// Test iterators with start point
-	iter = db.NewIteratorWithStart([]byte{0xff, 0xff, 0x02})
-	index = 4
-	for iter.Next() {
-		key, value := iter.Key(), iter.Value()
-		if !bytes.Equal(key, entries[index].key) {
-			t.Fatalf("Key mismatch: want=%v, got=%v", entries[index].key, key)
-		}
-		if !bytes.Equal(value, entries[index].value) {
-			t.Fatalf("Value mismatch: want=%v, got=%v", entries[index].value, value)
-		}
-		index += 1
-	}
-	iter.Release()
+	check(db.NewIterator(nil, []byte{0xff, 0xff, 0x02}), 2, 4)
+	// Test iterators with prefix and start point
+	check(db.NewIterator([]byte{0xee}, nil), 0, 0)
+	check(db.NewIterator(nil, []byte{0x00}), 6, 0)
 }

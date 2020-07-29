@@ -138,6 +138,9 @@ type snapshot interface {
 
 	// AccountIterator creates an account iterator over an arbitrary layer.
 	AccountIterator(seek common.Hash) AccountIterator
+
+	// StorageIterator creates a storage iterator over an arbitrary layer.
+	StorageIterator(account common.Hash, seek common.Hash) (StorageIterator, bool)
 }
 
 // SnapshotTree is an Ethereum state snapshot tree. It consists of one persistent
@@ -327,7 +330,7 @@ func (t *Tree) Cap(root common.Hash, layers int) error {
 			remove(root)
 		}
 	}
-	// If the disk layer was modified, regenerate all the cummulative blooms
+	// If the disk layer was modified, regenerate all the cumulative blooms
 	if persisted != nil {
 		var rebloom func(root common.Hash)
 		rebloom = func(root common.Hash) {
@@ -600,4 +603,10 @@ func (t *Tree) Rebuild(root common.Hash) {
 // seeks to a starting account hash.
 func (t *Tree) AccountIterator(root common.Hash, seek common.Hash) (AccountIterator, error) {
 	return newFastAccountIterator(t, root, seek)
+}
+
+// StorageIterator creates a new storage iterator for the specified root hash and
+// account. The iterator will be move to the specific start position.
+func (t *Tree) StorageIterator(root common.Hash, account common.Hash, seek common.Hash) (StorageIterator, error) {
+	return newFastStorageIterator(t, root, account, seek)
 }

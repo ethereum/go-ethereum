@@ -64,16 +64,20 @@ func newClientHandler(ulcServers []string, ulcFraction int, checkpoint *params.T
 	if checkpoint != nil {
 		height = (checkpoint.SectionIndex+1)*params.CHTFrequency - 1
 	}
-	handler.fetcher = newLightFetcher(handler)
+	handler.fetcher = newLightFetcher(backend.blockchain, backend.engine, backend.peers, handler.ulc, backend.chainDb, backend.reqDist, handler.synchronise)
 	handler.downloader = downloader.New(height, backend.chainDb, nil, backend.eventMux, nil, backend.blockchain, handler.removePeer)
 	handler.backend.peers.subscribe((*downloaderPeerNotify)(handler))
 	return handler
 }
 
+func (h *clientHandler) start() {
+	h.fetcher.start()
+}
+
 func (h *clientHandler) stop() {
 	close(h.closeCh)
 	h.downloader.Terminate()
-	h.fetcher.close()
+	h.fetcher.stop()
 	h.wg.Wait()
 }
 
@@ -85,14 +89,9 @@ func (h *clientHandler) runPeer(version uint, p *p2p.Peer, rw p2p.MsgReadWriter)
 	}
 	peer := newServerPeer(int(version), h.backend.config.NetworkId, trusted, p, newMeteredMsgWriter(rw, int(version)))
 	defer peer.close()
-	peer.poolEntry = h.backend.serverPool.connect(peer, peer.Node())
-	if peer.poolEntry == nil {
-		return p2p.DiscRequested
-	}
 	h.wg.Add(1)
 	defer h.wg.Done()
 	err := h.handle(peer)
-	h.backend.serverPool.disconnect(peer.poolEntry)
 	return err
 }
 
@@ -126,13 +125,8 @@ func (h *clientHandler) handle(p *serverPeer) error {
 		connectionTimer.Update(time.Duration(mclock.Now() - connectedAt))
 		serverConnectionGauge.Update(int64(h.backend.peers.len()))
 	}()
-
 	h.fetcher.announce(p, &announceData{Hash: p.headInfo.Hash, Number: p.headInfo.Number, Td: p.headInfo.Td})
 
-	// pool entry can be nil during the unit test.
-	if p.poolEntry != nil {
-		h.backend.serverPool.registered(p.poolEntry)
-	}
 	// Mark the peer starts to be served.
 	atomic.StoreUint32(&p.serving, 1)
 	defer atomic.StoreUint32(&p.serving, 0)
@@ -180,6 +174,7 @@ func (h *clientHandler) handleMsg(p *serverPeer) error {
 			return errResp(ErrRequestRejected, "")
 		}
 		p.updateFlowControl(update)
+		p.updateVtParams()
 
 		if req.Hash != (common.Hash{}) {
 			if p.announceType == announceTypeNone {
@@ -193,6 +188,9 @@ func (h *clientHandler) handleMsg(p *serverPeer) error {
 				p.Log().Trace("Valid announcement signature")
 			}
 			p.Log().Trace("Announce message content", "number", req.Number, "hash", req.Hash, "td", req.Td, "reorg", req.ReorgDepth)
+
+			// Update peer head information first and then notify the announcement
+			p.updateHead(req.Hash, req.Number, req.Td)
 			h.fetcher.announce(p, &req)
 		}
 	case BlockHeadersMsg:
@@ -204,11 +202,17 @@ func (h *clientHandler) handleMsg(p *serverPeer) error {
 		if err := msg.Decode(&resp); err != nil {
 			return errResp(ErrDecode, "msg %v: %v", msg, err)
 		}
+		headers := resp.Headers
 		p.fcServer.ReceivedReply(resp.ReqID, resp.BV)
-		if h.fetcher.requestedID(resp.ReqID) {
-			h.fetcher.deliverHeaders(p, resp.ReqID, resp.Headers)
-		} else {
-			if err := h.downloader.DeliverHeaders(p.id, resp.Headers); err != nil {
+		p.answeredRequest(resp.ReqID)
+
+		// Filter out any explicitly requested headers, deliver the rest to the downloader
+		filter := len(headers) == 1
+		if filter {
+			headers = h.fetcher.deliverHeaders(p, resp.ReqID, resp.Headers)
+		}
+		if len(headers) != 0 || !filter {
+			if err := h.downloader.DeliverHeaders(p.id, headers); err != nil {
 				log.Debug("Failed to deliver headers", "err", err)
 			}
 		}
@@ -222,6 +226,7 @@ func (h *clientHandler) handleMsg(p *serverPeer) error {
 			return errResp(ErrDecode, "msg %v: %v", msg, err)
 		}
 		p.fcServer.ReceivedReply(resp.ReqID, resp.BV)
+		p.answeredRequest(resp.ReqID)
 		deliverMsg = &Msg{
 			MsgType: MsgBlockBodies,
 			ReqID:   resp.ReqID,
@@ -237,6 +242,7 @@ func (h *clientHandler) handleMsg(p *serverPeer) error {
 			return errResp(ErrDecode, "msg %v: %v", msg, err)
 		}
 		p.fcServer.ReceivedReply(resp.ReqID, resp.BV)
+		p.answeredRequest(resp.ReqID)
 		deliverMsg = &Msg{
 			MsgType: MsgCode,
 			ReqID:   resp.ReqID,
@@ -252,6 +258,7 @@ func (h *clientHandler) handleMsg(p *serverPeer) error {
 			return errResp(ErrDecode, "msg %v: %v", msg, err)
 		}
 		p.fcServer.ReceivedReply(resp.ReqID, resp.BV)
+		p.answeredRequest(resp.ReqID)
 		deliverMsg = &Msg{
 			MsgType: MsgReceipts,
 			ReqID:   resp.ReqID,
@@ -267,6 +274,7 @@ func (h *clientHandler) handleMsg(p *serverPeer) error {
 			return errResp(ErrDecode, "msg %v: %v", msg, err)
 		}
 		p.fcServer.ReceivedReply(resp.ReqID, resp.BV)
+		p.answeredRequest(resp.ReqID)
 		deliverMsg = &Msg{
 			MsgType: MsgProofsV2,
 			ReqID:   resp.ReqID,
@@ -282,6 +290,7 @@ func (h *clientHandler) handleMsg(p *serverPeer) error {
 			return errResp(ErrDecode, "msg %v: %v", msg, err)
 		}
 		p.fcServer.ReceivedReply(resp.ReqID, resp.BV)
+		p.answeredRequest(resp.ReqID)
 		deliverMsg = &Msg{
 			MsgType: MsgHelperTrieProofs,
 			ReqID:   resp.ReqID,
@@ -297,6 +306,7 @@ func (h *clientHandler) handleMsg(p *serverPeer) error {
 			return errResp(ErrDecode, "msg %v: %v", msg, err)
 		}
 		p.fcServer.ReceivedReply(resp.ReqID, resp.BV)
+		p.answeredRequest(resp.ReqID)
 		deliverMsg = &Msg{
 			MsgType: MsgTxStatus,
 			ReqID:   resp.ReqID,
@@ -321,8 +331,7 @@ func (h *clientHandler) handleMsg(p *serverPeer) error {
 	// Deliver the received response to retriever.
 	if deliverMsg != nil {
 		if err := h.backend.retriever.deliver(p, deliverMsg); err != nil {
-			p.errCount++
-			if p.errCount > maxResponseErrors {
+			if val := p.errCount.Add(1, mclock.Now()); val > maxResponseErrors {
 				return err
 			}
 		}

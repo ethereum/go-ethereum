@@ -55,12 +55,12 @@ func TestUpdateLeaks(t *testing.T) {
 	}
 
 	root := state.IntermediateRoot(false)
-	if err := state.Database().TrieDB().Commit(root, false); err != nil {
+	if err := state.Database().TrieDB().Commit(root, false, nil); err != nil {
 		t.Errorf("can not commit trie %v to persistent database", root.Hex())
 	}
 
 	// Ensure that no data was leaked into the database
-	it := db.NewIterator()
+	it := db.NewIterator(nil, nil)
 	for it.Next() {
 		t.Errorf("State leaked into database: %x -> %x", it.Key(), it.Value())
 	}
@@ -106,7 +106,7 @@ func TestIntermediateLeaks(t *testing.T) {
 	if err != nil {
 		t.Fatalf("failed to commit transition state: %v", err)
 	}
-	if err = transState.Database().TrieDB().Commit(transRoot, false); err != nil {
+	if err = transState.Database().TrieDB().Commit(transRoot, false, nil); err != nil {
 		t.Errorf("can not commit trie %v to persistent database", transRoot.Hex())
 	}
 
@@ -114,11 +114,11 @@ func TestIntermediateLeaks(t *testing.T) {
 	if err != nil {
 		t.Fatalf("failed to commit final state: %v", err)
 	}
-	if err = finalState.Database().TrieDB().Commit(finalRoot, false); err != nil {
+	if err = finalState.Database().TrieDB().Commit(finalRoot, false, nil); err != nil {
 		t.Errorf("can not commit trie %v to persistent database", finalRoot.Hex())
 	}
 
-	it := finalDb.NewIterator()
+	it := finalDb.NewIterator(nil, nil)
 	for it.Next() {
 		key, fvalue := it.Key(), it.Value()
 		tvalue, err := transDb.Get(key)
@@ -131,7 +131,7 @@ func TestIntermediateLeaks(t *testing.T) {
 	}
 	it.Release()
 
-	it = transDb.NewIterator()
+	it = transDb.NewIterator(nil, nil)
 	for it.Next() {
 		key, tvalue := it.Key(), it.Value()
 		fvalue, err := finalDb.Get(key)
@@ -678,5 +678,52 @@ func TestDeleteCreateRevert(t *testing.T) {
 
 	if state.getStateObject(addr) != nil {
 		t.Fatalf("self-destructed contract came alive")
+	}
+}
+
+// TestMissingTrieNodes tests that if the statedb fails to load parts of the trie,
+// the Commit operation fails with an error
+// If we are missing trie nodes, we should not continue writing to the trie
+func TestMissingTrieNodes(t *testing.T) {
+
+	// Create an initial state with a few accounts
+	memDb := rawdb.NewMemoryDatabase()
+	db := NewDatabase(memDb)
+	var root common.Hash
+	state, _ := New(common.Hash{}, db, nil)
+	addr := toAddr([]byte("so"))
+	{
+		state.SetBalance(addr, big.NewInt(1))
+		state.SetCode(addr, []byte{1, 2, 3})
+		a2 := toAddr([]byte("another"))
+		state.SetBalance(a2, big.NewInt(100))
+		state.SetCode(a2, []byte{1, 2, 4})
+		root, _ = state.Commit(false)
+		t.Logf("root: %x", root)
+		// force-flush
+		state.Database().TrieDB().Cap(0)
+	}
+	// Create a new state on the old root
+	state, _ = New(root, db, nil)
+	// Now we clear out the memdb
+	it := memDb.NewIterator(nil, nil)
+	for it.Next() {
+		k := it.Key()
+		// Leave the root intact
+		if !bytes.Equal(k, root[:]) {
+			t.Logf("key: %x", k)
+			memDb.Delete(k)
+		}
+	}
+	balance := state.GetBalance(addr)
+	// The removed elem should lead to it returning zero balance
+	if exp, got := uint64(0), balance.Uint64(); got != exp {
+		t.Errorf("expected %d, got %d", exp, got)
+	}
+	// Modify the state
+	state.SetBalance(addr, big.NewInt(2))
+	root, err := state.Commit(false)
+	if err == nil {
+		t.Fatalf("expected error, got root :%x", root)
 	}
 }

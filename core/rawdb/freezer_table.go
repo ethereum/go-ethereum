@@ -232,8 +232,8 @@ func (t *freezerTable) repair() error {
 	t.index.ReadAt(buffer, 0)
 	firstIndex.unmarshalBinary(buffer)
 
-	t.tailId = firstIndex.offset
-	t.itemOffset = firstIndex.filenum
+	t.tailId = firstIndex.filenum
+	t.itemOffset = firstIndex.offset
 
 	t.index.ReadAt(buffer, offsetsSize-indexEntrySize)
 	lastIndex.unmarshalBinary(buffer)
@@ -519,16 +519,27 @@ func (t *freezerTable) Append(item uint64, blob []byte) error {
 // getBounds returns the indexes for the item
 // returns start, end, filenumber and error
 func (t *freezerTable) getBounds(item uint64) (uint32, uint32, uint32, error) {
-	var startIdx, endIdx indexEntry
 	buffer := make([]byte, indexEntrySize)
-	if _, err := t.index.ReadAt(buffer, int64(item*indexEntrySize)); err != nil {
-		return 0, 0, 0, err
-	}
-	startIdx.unmarshalBinary(buffer)
+	var startIdx, endIdx indexEntry
+	// Read second index
 	if _, err := t.index.ReadAt(buffer, int64((item+1)*indexEntrySize)); err != nil {
 		return 0, 0, 0, err
 	}
 	endIdx.unmarshalBinary(buffer)
+	// Read first index (unless it's the very first item)
+	if item != 0 {
+		if _, err := t.index.ReadAt(buffer, int64(item*indexEntrySize)); err != nil {
+			return 0, 0, 0, err
+		}
+		startIdx.unmarshalBinary(buffer)
+	} else {
+		// Special case if we're reading the first item in the freezer. We assume that
+		// the first item always start from zero(regarding the deletion, we
+		// only support deletion by files, so that the assumption is held).
+		// This means we can use the first item metadata to carry information about
+		// the 'global' offset, for the deletion-case
+		return 0, endIdx.offset, endIdx.filenum, nil
+	}
 	if startIdx.filenum != endIdx.filenum {
 		// If a piece of data 'crosses' a data-file,
 		// it's actually in one piece on the second data-file.
@@ -541,20 +552,22 @@ func (t *freezerTable) getBounds(item uint64) (uint32, uint32, uint32, error) {
 // Retrieve looks up the data offset of an item with the given number and retrieves
 // the raw binary blob from the data file.
 func (t *freezerTable) Retrieve(item uint64) ([]byte, error) {
+	t.lock.RLock()
 	// Ensure the table and the item is accessible
 	if t.index == nil || t.head == nil {
+		t.lock.RUnlock()
 		return nil, errClosed
 	}
 	if atomic.LoadUint64(&t.items) <= item {
+		t.lock.RUnlock()
 		return nil, errOutOfBounds
 	}
 	// Ensure the item was not deleted from the tail either
-	offset := atomic.LoadUint32(&t.itemOffset)
-	if uint64(offset) > item {
+	if uint64(t.itemOffset) > item {
+		t.lock.RUnlock()
 		return nil, errOutOfBounds
 	}
-	t.lock.RLock()
-	startOffset, endOffset, filenum, err := t.getBounds(item - uint64(offset))
+	startOffset, endOffset, filenum, err := t.getBounds(item - uint64(t.itemOffset))
 	if err != nil {
 		t.lock.RUnlock()
 		return nil, err

@@ -158,7 +158,11 @@ func loadDiffLayer(parent snapshot, r *rlp.Stream) (snapshot, error) {
 	}
 	accountData := make(map[common.Hash][]byte)
 	for _, entry := range accounts {
-		accountData[entry.Hash] = entry.Blob
+		if len(entry.Blob) > 0 { // RLP loses nil-ness, but `[]byte{}` is not a valid item, so reinterpret that
+			accountData[entry.Hash] = entry.Blob
+		} else {
+			accountData[entry.Hash] = nil
+		}
 	}
 	var storage []journalStorage
 	if err := r.Decode(&storage); err != nil {
@@ -168,7 +172,11 @@ func loadDiffLayer(parent snapshot, r *rlp.Stream) (snapshot, error) {
 	for _, entry := range storage {
 		slots := make(map[common.Hash][]byte)
 		for i, key := range entry.Keys {
-			slots[key] = entry.Vals[i]
+			if len(entry.Vals[i]) > 0 { // RLP loses nil-ness, but `[]byte{}` is not a valid item, so reinterpret that
+				slots[key] = entry.Vals[i]
+			} else {
+				slots[key] = nil
+			}
 		}
 		storageData[entry.Hash] = slots
 	}

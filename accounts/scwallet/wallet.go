@@ -312,15 +312,15 @@ func (w *Wallet) Status() (string, error) {
 	}
 	switch {
 	case !w.session.verified && status.PinRetryCount == 0 && status.PukRetryCount == 0:
-		return fmt.Sprintf("Bricked, waiting for full wipe"), nil
+		return "Bricked, waiting for full wipe", nil
 	case !w.session.verified && status.PinRetryCount == 0:
 		return fmt.Sprintf("Blocked, waiting for PUK (%d attempts left) and new PIN", status.PukRetryCount), nil
 	case !w.session.verified:
 		return fmt.Sprintf("Locked, waiting for PIN (%d attempts left)", status.PinRetryCount), nil
 	case !status.Initialized:
-		return fmt.Sprintf("Empty, waiting for initialization"), nil
+		return "Empty, waiting for initialization", nil
 	default:
-		return fmt.Sprintf("Online"), nil
+		return "Online", nil
 	}
 }
 
@@ -362,7 +362,7 @@ func (w *Wallet) Open(passphrase string) error {
 				return err
 			}
 			// Pairing succeeded, fall through to PIN checks. This will of course fail,
-			// but we can't return ErrPINNeeded directly here becase we don't know whether
+			// but we can't return ErrPINNeeded directly here because we don't know whether
 			// a PIN check or a PIN reset is needed.
 			passphrase = ""
 		}

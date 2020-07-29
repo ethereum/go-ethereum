@@ -20,14 +20,13 @@ import (
 	"time"
 
 	"github.com/ethereum/go-ethereum/log"
-	"github.com/ethereum/go-ethereum/p2p/discover"
 	"github.com/ethereum/go-ethereum/p2p/enode"
 )
 
 type crawler struct {
 	input     nodeSet
 	output    nodeSet
-	disc      *discover.UDPv4
+	disc      resolver
 	iters     []enode.Iterator
 	inputIter enode.Iterator
 	ch        chan *enode.Node
@@ -37,7 +36,11 @@ type crawler struct {
 	revalidateInterval time.Duration
 }
 
-func newCrawler(input nodeSet, disc *discover.UDPv4, iters ...enode.Iterator) *crawler {
+type resolver interface {
+	RequestENR(*enode.Node) (*enode.Node, error)
+}
+
+func newCrawler(input nodeSet, disc resolver, iters ...enode.Iterator) *crawler {
 	c := &crawler{
 		input:     input,
 		output:    make(nodeSet, len(input)),

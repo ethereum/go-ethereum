@@ -17,6 +17,7 @@
 package rawdb
 
 import (
+	"bytes"
 	"math/big"
 
 	"github.com/ethereum/go-ethereum/common"
@@ -63,9 +64,31 @@ func WriteTxLookupEntries(db ethdb.KeyValueWriter, block *types.Block) {
 	}
 }
 
+// WriteTxLookupEntriesByHash is identical to WriteTxLookupEntries, but does not
+// require a full types.Block as input.
+func WriteTxLookupEntriesByHash(db ethdb.KeyValueWriter, number uint64, hashes []common.Hash) {
+	numberBytes := new(big.Int).SetUint64(number).Bytes()
+	for _, hash := range hashes {
+		if err := db.Put(txLookupKey(hash), numberBytes); err != nil {
+			log.Crit("Failed to store transaction lookup entry", "err", err)
+		}
+	}
+}
+
 // DeleteTxLookupEntry removes all transaction data associated with a hash.
 func DeleteTxLookupEntry(db ethdb.KeyValueWriter, hash common.Hash) {
-	db.Delete(txLookupKey(hash))
+	if err := db.Delete(txLookupKey(hash)); err != nil {
+		log.Crit("Failed to delete transaction lookup entry", "err", err)
+	}
+}
+
+// DeleteTxLookupEntries removes all transaction lookups for a given block.
+func DeleteTxLookupEntriesByHash(db ethdb.KeyValueWriter, hashes []common.Hash) {
+	for _, hash := range hashes {
+		if err := db.Delete(txLookupKey(hash)); err != nil {
+			log.Crit("Failed to delete transaction lookup entry", "err", err)
+		}
+	}
 }
 
 // ReadTransaction retrieves a specific transaction from the database, along with
@@ -127,5 +150,26 @@ func ReadBloomBits(db ethdb.KeyValueReader, bit uint, section uint64, head commo
 func WriteBloomBits(db ethdb.KeyValueWriter, bit uint, section uint64, head common.Hash, bits []byte) {
 	if err := db.Put(bloomBitsKey(bit, section, head), bits); err != nil {
 		log.Crit("Failed to store bloom bits", "err", err)
+	}
+}
+
+// DeleteBloombits removes all compressed bloom bits vector belonging to the
+// given section range and bit index.
+func DeleteBloombits(db ethdb.Database, bit uint, from uint64, to uint64) {
+	start, end := bloomBitsKey(bit, from, common.Hash{}), bloomBitsKey(bit, to, common.Hash{})
+	it := db.NewIterator(nil, start)
+	defer it.Release()
+
+	for it.Next() {
+		if bytes.Compare(it.Key(), end) >= 0 {
+			break
+		}
+		if len(it.Key()) != len(bloomBitsPrefix)+2+8+32 {
+			continue
+		}
+		db.Delete(it.Key())
+	}
+	if it.Error() != nil {
+		log.Crit("Failed to delete bloom bits", "err", it.Error())
 	}
 }

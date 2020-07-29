@@ -300,5 +300,5 @@ func (n *NodeConfig) initEnode(ip net.IP, tcpport int, udpport int) error {
 }
 
 func (n *NodeConfig) initDummyEnode() error {
-	return n.initEnode(net.IPv4(127, 0, 0, 1), 0, 0)
+	return n.initEnode(net.IPv4(127, 0, 0, 1), int(n.Port), 0)
 }

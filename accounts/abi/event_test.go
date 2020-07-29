@@ -104,8 +104,8 @@ func TestEventId(t *testing.T) {
 		}
 
 		for name, event := range abi.Events {
-			if event.ID() != test.expectations[name] {
-				t.Errorf("expected id to be %x, got %x", test.expectations[name], event.ID())
+			if event.ID != test.expectations[name] {
+				t.Errorf("expected id to be %x, got %x", test.expectations[name], event.ID)
 			}
 		}
 	}
@@ -312,14 +312,14 @@ func TestEventTupleUnpack(t *testing.T) {
 		&[]interface{}{common.Address{}, new(big.Int)},
 		&[]interface{}{},
 		jsonEventPledge,
-		"abi: insufficient number of elements in the list/array for unpack, want 3, got 2",
+		"abi: insufficient number of arguments for unpack, want 3, got 2",
 		"Can not unpack Pledge event into too short slice",
 	}, {
 		pledgeData1,
 		new(map[string]interface{}),
 		&[]interface{}{},
 		jsonEventPledge,
-		"abi: cannot unmarshal tuple into map[string]interface {}",
+		"abi:[2] cannot unmarshal tuple in to map[string]interface {}",
 		"Can not unpack Pledge event into map",
 	}, {
 		mixedCaseData1,

@@ -105,3 +105,22 @@ func TestNoPrefixShortHexOddLength(t *testing.T) {
 		t.Errorf("Expected %x got %x", expected, result)
 	}
 }
+
+func TestTrimRightZeroes(t *testing.T) {
+	tests := []struct {
+		arr []byte
+		exp []byte
+	}{
+		{FromHex("0x00ffff00ff0000"), FromHex("0x00ffff00ff")},
+		{FromHex("0x00000000000000"), []byte{}},
+		{FromHex("0xff"), FromHex("0xff")},
+		{[]byte{}, []byte{}},
+		{FromHex("0x00ffffffffffff"), FromHex("0x00ffffffffffff")},
+	}
+	for i, test := range tests {
+		got := TrimRightZeroes(test.arr)
+		if !bytes.Equal(got, test.exp) {
+			t.Errorf("test %d, got %x exp %x", i, got, test.exp)
+		}
+	}
+}

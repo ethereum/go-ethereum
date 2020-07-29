@@ -22,12 +22,13 @@ import (
 	"sync"
 
 	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/rlp"
 	"golang.org/x/crypto/sha3"
 )
 
 // leafChanSize is the size of the leafCh. It's a pretty arbitrary number, to allow
-// some paralellism but not incur too much memory overhead.
+// some parallelism but not incur too much memory overhead.
 const leafChanSize = 200
 
 // leaf represents a trie leaf value
@@ -41,12 +42,12 @@ type leaf struct {
 // committer is a type used for the trie Commit operation. A committer has some
 // internal preallocated temp space, and also a callback that is invoked when
 // leaves are committed. The leafs are passed through the `leafCh`,  to allow
-// some level of paralellism.
+// some level of parallelism.
 // By 'some level' of parallelism, it's still the case that all leaves will be
 // processed sequentially - onleaf will never be called in parallel or out of order.
 type committer struct {
 	tmp sliceBuffer
-	sha keccakState
+	sha crypto.KeccakState
 
 	onleaf LeafCallback
 	leafCh chan *leaf
@@ -57,7 +58,7 @@ var committerPool = sync.Pool{
 	New: func() interface{} {
 		return &committer{
 			tmp: make(sliceBuffer, 0, 550), // cap is as large as a full fullNode.
-			sha: sha3.NewLegacyKeccak256().(keccakState),
+			sha: sha3.NewLegacyKeccak256().(crypto.KeccakState),
 		}
 	},
 }
@@ -104,20 +105,19 @@ func (c *committer) commit(n node, db *Database, force bool) (node, error) {
 		// Commit child
 		collapsed := cn.copy()
 		if _, ok := cn.Val.(valueNode); !ok {
-			if childV, err := c.commit(cn.Val, db, false); err != nil {
+			childV, err := c.commit(cn.Val, db, false)
+			if err != nil {
 				return nil, err
-			} else {
-				collapsed.Val = childV
 			}
+			collapsed.Val = childV
 		}
 		// The key needs to be copied, since we're delivering it to database
 		collapsed.Key = hexToCompact(cn.Key)
 		hashedNode := c.store(collapsed, db, force, true)
 		if hn, ok := hashedNode.(hashNode); ok {
 			return hn, nil
-		} else {
-			return collapsed, nil
 		}
+		return collapsed, nil
 	case *fullNode:
 		hashedKids, hasVnodes, err := c.commitChildren(cn, db, force)
 		if err != nil {
@@ -129,9 +129,8 @@ func (c *committer) commit(n node, db *Database, force bool) (node, error) {
 		hashedNode := c.store(collapsed, db, force, hasVnodes)
 		if hn, ok := hashedNode.(hashNode); ok {
 			return hn, nil
-		} else {
-			return collapsed, nil
 		}
+		return collapsed, nil
 	case valueNode:
 		return c.store(cn, db, force, false), nil
 	// hashnodes aren't stored
@@ -264,7 +263,7 @@ func estimateSize(n node) int {
 			if child := n.Children[i]; child != nil {
 				s += estimateSize(child)
 			} else {
-				s += 1
+				s++
 			}
 		}
 		return s

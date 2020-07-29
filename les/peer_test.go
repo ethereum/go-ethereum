@@ -18,6 +18,7 @@ package les
 
 import (
 	"crypto/rand"
+	"errors"
 	"math/big"
 	"reflect"
 	"sort"
@@ -121,10 +122,10 @@ func TestHandshake(t *testing.T) {
 			var reqType uint64
 			err := recv.get("announceType", &reqType)
 			if err != nil {
-				t.Fatal(err)
+				return err
 			}
 			if reqType != announceTypeSigned {
-				t.Fatal("Expected announceTypeSigned")
+				return errors.New("Expected announceTypeSigned")
 			}
 			return nil
 		})
@@ -140,7 +141,7 @@ func TestHandshake(t *testing.T) {
 			if err != nil {
 				t.Fatalf("handshake failed, %v", err)
 			}
-		case <-time.NewTimer(100 * time.Millisecond).C:
+		case <-time.After(time.Second):
 			t.Fatalf("timeout")
 		}
 	}

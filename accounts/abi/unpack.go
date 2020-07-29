@@ -33,33 +33,37 @@ var (
 )
 
 // ReadInteger reads the integer based on its kind and returns the appropriate value
-func ReadInteger(typ byte, kind reflect.Kind, b []byte) interface{} {
-	switch kind {
-	case reflect.Uint8:
-		return b[len(b)-1]
-	case reflect.Uint16:
-		return binary.BigEndian.Uint16(b[len(b)-2:])
-	case reflect.Uint32:
-		return binary.BigEndian.Uint32(b[len(b)-4:])
-	case reflect.Uint64:
-		return binary.BigEndian.Uint64(b[len(b)-8:])
-	case reflect.Int8:
+func ReadInteger(typ Type, b []byte) interface{} {
+	if typ.T == UintTy {
+		switch typ.Size {
+		case 8:
+			return b[len(b)-1]
+		case 16:
+			return binary.BigEndian.Uint16(b[len(b)-2:])
+		case 32:
+			return binary.BigEndian.Uint32(b[len(b)-4:])
+		case 64:
+			return binary.BigEndian.Uint64(b[len(b)-8:])
+		default:
+			// the only case left for unsigned integer is uint256.
+			return new(big.Int).SetBytes(b)
+		}
+	}
+	switch typ.Size {
+	case 8:
 		return int8(b[len(b)-1])
-	case reflect.Int16:
+	case 16:
 		return int16(binary.BigEndian.Uint16(b[len(b)-2:]))
-	case reflect.Int32:
+	case 32:
 		return int32(binary.BigEndian.Uint32(b[len(b)-4:]))
-	case reflect.Int64:
+	case 64:
 		return int64(binary.BigEndian.Uint64(b[len(b)-8:]))
 	default:
-		// the only case left for integer is int256/uint256.
-		ret := new(big.Int).SetBytes(b)
-		if typ == UintTy {
-			return ret
-		}
+		// the only case left for integer is int256
 		// big.SetBytes can't tell if a number is negative or positive in itself.
 		// On EVM, if the returned number > max int256, it is negative.
 		// A number is > max int256 if the bit at position 255 is set.
+		ret := new(big.Int).SetBytes(b)
 		if ret.Bit(255) == 1 {
 			ret.Add(MaxUint256, new(big.Int).Neg(ret))
 			ret.Add(ret, common.Big1)
@@ -106,7 +110,7 @@ func ReadFixedBytes(t Type, word []byte) (interface{}, error) {
 		return nil, fmt.Errorf("abi: invalid type in call to make fixed byte array")
 	}
 	// convert
-	array := reflect.New(t.Type).Elem()
+	array := reflect.New(t.GetType()).Elem()
 
 	reflect.Copy(array, reflect.ValueOf(word[0:t.Size]))
 	return array.Interface(), nil
@@ -127,10 +131,10 @@ func forEachUnpack(t Type, output []byte, start, size int) (interface{}, error) 
 
 	if t.T == SliceTy {
 		// declare our slice
-		refSlice = reflect.MakeSlice(t.Type, size, size)
+		refSlice = reflect.MakeSlice(t.GetType(), size, size)
 	} else if t.T == ArrayTy {
 		// declare our array
-		refSlice = reflect.New(t.Type).Elem()
+		refSlice = reflect.New(t.GetType()).Elem()
 	} else {
 		return nil, fmt.Errorf("abi: invalid type in array/slice unpacking stage")
 	}
@@ -154,7 +158,7 @@ func forEachUnpack(t Type, output []byte, start, size int) (interface{}, error) 
 }
 
 func forTupleUnpack(t Type, output []byte) (interface{}, error) {
-	retval := reflect.New(t.Type).Elem()
+	retval := reflect.New(t.GetType()).Elem()
 	virtualArgs := 0
 	for index, elem := range t.TupleElems {
 		marshalledValue, err := toGoType((index+virtualArgs)*32, *elem, output)
@@ -214,9 +218,8 @@ func toGoType(index int, t Type, output []byte) (interface{}, error) {
 				return nil, err
 			}
 			return forTupleUnpack(t, output[begin:])
-		} else {
-			return forTupleUnpack(t, output[index:])
 		}
+		return forTupleUnpack(t, output[index:])
 	case SliceTy:
 		return forEachUnpack(t, output[begin:], 0, length)
 	case ArrayTy:
@@ -228,7 +231,7 @@ func toGoType(index int, t Type, output []byte) (interface{}, error) {
 	case StringTy: // variable arrays are written at the end of the return bytes
 		return string(output[begin : begin+length]), nil
 	case IntTy, UintTy:
-		return ReadInteger(t.T, t.Kind, returnOutput), nil
+		return ReadInteger(t, returnOutput), nil
 	case BoolTy:
 		return readBool(returnOutput)
 	case AddressTy:

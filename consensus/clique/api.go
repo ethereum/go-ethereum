@@ -28,7 +28,7 @@ import (
 // API is a user facing RPC API to allow controlling the signer and voting
 // mechanisms of the proof-of-authority scheme.
 type API struct {
-	chain  consensus.ChainReader
+	chain  consensus.ChainHeaderReader
 	clique *Clique
 }
 
@@ -170,7 +170,7 @@ func (api *API) Status() (*status, error) {
 		signStatus[sealer]++
 	}
 	return &status{
-		InturnPercent: float64((100 * optimals)) / float64(numBlocks),
+		InturnPercent: float64(100*optimals) / float64(numBlocks),
 		SigningStatus: signStatus,
 		NumBlocks:     numBlocks,
 	}, nil

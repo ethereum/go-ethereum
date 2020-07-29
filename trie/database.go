@@ -21,6 +21,7 @@ import (
 	"fmt"
 	"io"
 	"reflect"
+	"runtime"
 	"sync"
 	"time"
 
@@ -59,8 +60,11 @@ var (
 // secureKeyPrefix is the database key prefix used to store trie node preimages.
 var secureKeyPrefix = []byte("secure-key-")
 
+// secureKeyPrefixLength is the length of the above prefix
+const secureKeyPrefixLength = 11
+
 // secureKeyLength is the length of the above prefix + 32byte hash.
-const secureKeyLength = 11 + 32
+const secureKeyLength = secureKeyPrefixLength + 32
 
 // Database is an intermediate write layer between the trie data structures and
 // the disk database. The aim is to accumulate trie writes in-memory and only
@@ -79,7 +83,6 @@ type Database struct {
 	newest  common.Hash                 // Newest tracked node, flush-list tail
 
 	preimages map[common.Hash][]byte // Preimages of nodes from the secure trie
-	seckeybuf [secureKeyLength]byte  // Ephemeral buffer for calculating preimage keys
 
 	gctime  time.Duration      // Time spent on garbage collection since last commit
 	gcnodes uint64             // Nodes garbage collected since last commit
@@ -276,16 +279,20 @@ func expandNode(hash hashNode, n node) node {
 // its written out to disk or garbage collected. No read cache is created, so all
 // data retrievals will hit the underlying disk database.
 func NewDatabase(diskdb ethdb.KeyValueStore) *Database {
-	return NewDatabaseWithCache(diskdb, 0)
+	return NewDatabaseWithCache(diskdb, 0, "")
 }
 
 // NewDatabaseWithCache creates a new trie database to store ephemeral trie content
 // before its written out to disk or garbage collected. It also acts as a read cache
 // for nodes loaded from disk.
-func NewDatabaseWithCache(diskdb ethdb.KeyValueStore, cache int) *Database {
+func NewDatabaseWithCache(diskdb ethdb.KeyValueStore, cache int, journal string) *Database {
 	var cleans *fastcache.Cache
 	if cache > 0 {
-		cleans = fastcache.New(cache * 1024 * 1024)
+		if journal == "" {
+			cleans = fastcache.New(cache * 1024 * 1024)
+		} else {
+			cleans = fastcache.LoadFromFileOrNew(journal, cache*1024*1024)
+		}
 	}
 	return &Database{
 		diskdb: diskdb,
@@ -347,14 +354,15 @@ func (db *Database) insert(hash common.Hash, size int, node node) {
 }
 
 // insertPreimage writes a new trie node pre-image to the memory database if it's
-// yet unknown. The method will make a copy of the slice.
+// yet unknown. The method will NOT make a copy of the slice,
+// only use if the preimage will NOT be changed later on.
 //
 // Note, this method assumes that the database's lock is held!
 func (db *Database) insertPreimage(hash common.Hash, preimage []byte) {
 	if _, ok := db.preimages[hash]; ok {
 		return
 	}
-	db.preimages[hash] = common.CopyBytes(preimage)
+	db.preimages[hash] = preimage
 	db.preimagesSize += common.StorageSize(common.HashLength + len(preimage))
 }
 
@@ -397,7 +405,7 @@ func (db *Database) node(hash common.Hash) node {
 // Node retrieves an encoded cached trie node from memory. If it cannot be found
 // cached, the method queries the persistent database for the content.
 func (db *Database) Node(hash common.Hash) ([]byte, error) {
-	// It doens't make sense to retrieve the metaroot
+	// It doesn't make sense to retrieve the metaroot
 	if hash == (common.Hash{}) {
 		return nil, errors.New("not found")
 	}
@@ -445,15 +453,15 @@ func (db *Database) preimage(hash common.Hash) ([]byte, error) {
 		return preimage, nil
 	}
 	// Content unavailable in memory, attempt to retrieve from disk
-	return db.diskdb.Get(db.secureKey(hash[:]))
+	return db.diskdb.Get(secureKey(hash))
 }
 
-// secureKey returns the database key for the preimage of key, as an ephemeral
-// buffer. The caller must not hold onto the return value because it will become
-// invalid on the next call.
-func (db *Database) secureKey(key []byte) []byte {
-	buf := append(db.seckeybuf[:0], secureKeyPrefix...)
-	buf = append(buf, key...)
+// secureKey returns the database key for the preimage of key (as a newly
+// allocated byte-slice)
+func secureKey(hash common.Hash) []byte {
+	buf := make([]byte, secureKeyLength)
+	copy(buf, secureKeyPrefix)
+	copy(buf[secureKeyPrefixLength:], hash[:])
 	return buf
 }
 
@@ -596,12 +604,18 @@ func (db *Database) Cap(limit common.StorageSize) error {
 	size := db.dirtiesSize + common.StorageSize((len(db.dirties)-1)*cachedNodeSize)
 	size += db.childrenSize - common.StorageSize(len(db.dirties[common.Hash{}].children)*(common.HashLength+2))
 
+	// We reuse an ephemeral buffer for the keys. The batch Put operation
+	// copies it internally, so we can reuse it.
+	var keyBuf [secureKeyLength]byte
+	copy(keyBuf[:], secureKeyPrefix)
+
 	// If the preimage cache got large enough, push to disk. If it's still small
 	// leave for later to deduplicate writes.
 	flushPreimages := db.preimagesSize > 4*1024*1024
 	if flushPreimages {
 		for hash, preimage := range db.preimages {
-			if err := batch.Put(db.secureKey(hash[:]), preimage); err != nil {
+			copy(keyBuf[secureKeyPrefixLength:], hash[:])
+			if err := batch.Put(keyBuf[:], preimage); err != nil {
 				log.Error("Failed to commit preimage from trie database", "err", err)
 				return err
 			}
@@ -684,7 +698,7 @@ func (db *Database) Cap(limit common.StorageSize) error {
 //
 // Note, this method is a non-synchronized mutator. It is unsafe to call this
 // concurrently with other mutators.
-func (db *Database) Commit(node common.Hash, report bool) error {
+func (db *Database) Commit(node common.Hash, report bool, callback func(common.Hash)) error {
 	// Create a database batch to flush persistent data out. It is important that
 	// outside code doesn't see an inconsistent state (referenced data removed from
 	// memory cache during commit but not yet in persistent storage). This is ensured
@@ -692,9 +706,15 @@ func (db *Database) Commit(node common.Hash, report bool) error {
 	start := time.Now()
 	batch := db.diskdb.NewBatch()
 
+	// We reuse an ephemeral buffer for the keys. The batch Put operation
+	// copies it internally, so we can reuse it.
+	var keyBuf [secureKeyLength]byte
+	copy(keyBuf[:], secureKeyPrefix)
+
 	// Move all of the accumulated preimages into a write batch
 	for hash, preimage := range db.preimages {
-		if err := batch.Put(db.secureKey(hash[:]), preimage); err != nil {
+		copy(keyBuf[secureKeyPrefixLength:], hash[:])
+		if err := batch.Put(keyBuf[:], preimage); err != nil {
 			log.Error("Failed to commit preimage from trie database", "err", err)
 			return err
 		}
@@ -717,7 +737,7 @@ func (db *Database) Commit(node common.Hash, report bool) error {
 	nodes, storage := len(db.dirties), db.dirtiesSize
 
 	uncacher := &cleaner{db}
-	if err := db.commit(node, batch, uncacher); err != nil {
+	if err := db.commit(node, batch, uncacher, callback); err != nil {
 		log.Error("Failed to commit trie from trie database", "err", err)
 		return err
 	}
@@ -756,7 +776,7 @@ func (db *Database) Commit(node common.Hash, report bool) error {
 }
 
 // commit is the private locked version of Commit.
-func (db *Database) commit(hash common.Hash, batch ethdb.Batch, uncacher *cleaner) error {
+func (db *Database) commit(hash common.Hash, batch ethdb.Batch, uncacher *cleaner, callback func(common.Hash)) error {
 	// If the node does not exist, it's a previously committed node
 	node, ok := db.dirties[hash]
 	if !ok {
@@ -765,7 +785,7 @@ func (db *Database) commit(hash common.Hash, batch ethdb.Batch, uncacher *cleane
 	var err error
 	node.forChilds(func(child common.Hash) {
 		if err == nil {
-			err = db.commit(child, batch, uncacher)
+			err = db.commit(child, batch, uncacher, callback)
 		}
 	})
 	if err != nil {
@@ -773,6 +793,9 @@ func (db *Database) commit(hash common.Hash, batch ethdb.Batch, uncacher *cleane
 	}
 	if err := batch.Put(hash[:], node.rlp()); err != nil {
 		return err
+	}
+	if callback != nil {
+		callback(hash)
 	}
 	// If we've reached an optimal batch size, commit and start over
 	if batch.ValueSize() >= ethdb.IdealBatchSize {
@@ -848,4 +871,44 @@ func (db *Database) Size() (common.StorageSize, common.StorageSize) {
 	var metadataSize = common.StorageSize((len(db.dirties) - 1) * cachedNodeSize)
 	var metarootRefs = common.StorageSize(len(db.dirties[common.Hash{}].children) * (common.HashLength + 2))
 	return db.dirtiesSize + db.childrenSize + metadataSize - metarootRefs, db.preimagesSize
+}
+
+// saveCache saves clean state cache to given directory path
+// using specified CPU cores.
+func (db *Database) saveCache(dir string, threads int) error {
+	if db.cleans == nil {
+		return nil
+	}
+	log.Info("Writing clean trie cache to disk", "path", dir, "threads", threads)
+
+	start := time.Now()
+	err := db.cleans.SaveToFileConcurrent(dir, threads)
+	if err != nil {
+		log.Error("Failed to persist clean trie cache", "error", err)
+		return err
+	}
+	log.Info("Persisted the clean trie cache", "path", dir, "elapsed", common.PrettyDuration(time.Since(start)))
+	return nil
+}
+
+// SaveCache atomically saves fast cache data to the given dir using all
+// available CPU cores.
+func (db *Database) SaveCache(dir string) error {
+	return db.saveCache(dir, runtime.GOMAXPROCS(0))
+}
+
+// SaveCachePeriodically atomically saves fast cache data to the given dir with
+// the specified interval. All dump operation will only use a single CPU core.
+func (db *Database) SaveCachePeriodically(dir string, interval time.Duration, stopCh <-chan struct{}) {
+	ticker := time.NewTicker(interval)
+	defer ticker.Stop()
+
+	for {
+		select {
+		case <-ticker.C:
+			db.saveCache(dir, 1)
+		case <-stopCh:
+			return
+		}
+	}
 }

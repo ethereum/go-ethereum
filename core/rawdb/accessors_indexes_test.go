@@ -17,12 +17,14 @@
 package rawdb
 
 import (
+	"bytes"
 	"math/big"
 	"testing"
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/ethdb"
+	"github.com/ethereum/go-ethereum/params"
 	"github.com/ethereum/go-ethereum/rlp"
 )
 
@@ -105,4 +107,47 @@ func TestLookupStorage(t *testing.T) {
 			}
 		})
 	}
+}
+
+func TestDeleteBloomBits(t *testing.T) {
+	// Prepare testing data
+	db := NewMemoryDatabase()
+	for i := uint(0); i < 2; i++ {
+		for s := uint64(0); s < 2; s++ {
+			WriteBloomBits(db, i, s, params.MainnetGenesisHash, []byte{0x01, 0x02})
+			WriteBloomBits(db, i, s, params.RinkebyGenesisHash, []byte{0x01, 0x02})
+		}
+	}
+	check := func(bit uint, section uint64, head common.Hash, exist bool) {
+		bits, _ := ReadBloomBits(db, bit, section, head)
+		if exist && !bytes.Equal(bits, []byte{0x01, 0x02}) {
+			t.Fatalf("Bloombits mismatch")
+		}
+		if !exist && len(bits) > 0 {
+			t.Fatalf("Bloombits should be removed")
+		}
+	}
+	// Check the existence of written data.
+	check(0, 0, params.MainnetGenesisHash, true)
+	check(0, 0, params.RinkebyGenesisHash, true)
+
+	// Check the existence of deleted data.
+	DeleteBloombits(db, 0, 0, 1)
+	check(0, 0, params.MainnetGenesisHash, false)
+	check(0, 0, params.RinkebyGenesisHash, false)
+	check(0, 1, params.MainnetGenesisHash, true)
+	check(0, 1, params.RinkebyGenesisHash, true)
+
+	// Check the existence of deleted data.
+	DeleteBloombits(db, 0, 0, 2)
+	check(0, 0, params.MainnetGenesisHash, false)
+	check(0, 0, params.RinkebyGenesisHash, false)
+	check(0, 1, params.MainnetGenesisHash, false)
+	check(0, 1, params.RinkebyGenesisHash, false)
+
+	// Bit1 shouldn't be affect.
+	check(1, 0, params.MainnetGenesisHash, true)
+	check(1, 0, params.RinkebyGenesisHash, true)
+	check(1, 1, params.MainnetGenesisHash, true)
+	check(1, 1, params.RinkebyGenesisHash, true)
 }

@@ -2,7 +2,7 @@ Hi there,
 
 Please note that this is an issue tracker reserved for bug reports and feature requests.
 
-For general questions please use the gitter channel or the Ethereum stack exchange at https://ethereum.stackexchange.com.
+For general questions please use [discord](https://discord.gg/nthXNEv) or the Ethereum stack exchange at https://ethereum.stackexchange.com.
 
 #### System information
 

@@ -120,7 +120,7 @@ func TestNodeIteratorCoverage(t *testing.T) {
 			}
 		}
 	}
-	it := db.diskdb.NewIterator()
+	it := db.diskdb.NewIterator(nil, nil)
 	for it.Next() {
 		key := it.Key()
 		if _, ok := hashes[common.BytesToHash(key)]; !ok {
@@ -301,7 +301,7 @@ func testIteratorContinueAfterError(t *testing.T, memonly bool) {
 	}
 	tr.Commit(nil)
 	if !memonly {
-		triedb.Commit(tr.Hash(), true)
+		triedb.Commit(tr.Hash(), true, nil)
 	}
 	wantNodeCount := checkIteratorNoDups(t, tr.NodeIterator(nil), nil)
 
@@ -312,7 +312,7 @@ func testIteratorContinueAfterError(t *testing.T, memonly bool) {
 	if memonly {
 		memKeys = triedb.Nodes()
 	} else {
-		it := diskdb.NewIterator()
+		it := diskdb.NewIterator(nil, nil)
 		for it.Next() {
 			diskKeys = append(diskKeys, it.Key())
 		}
@@ -392,7 +392,7 @@ func testIteratorContinueAfterSeekError(t *testing.T, memonly bool) {
 	}
 	root, _ := ctr.Commit(nil)
 	if !memonly {
-		triedb.Commit(root, true)
+		triedb.Commit(root, true, nil)
 	}
 	barNodeHash := common.HexToHash("05041990364eb72fcb1127652ce40d8bab765f2bfe53225b1170d276cc101c2e")
 	var (
