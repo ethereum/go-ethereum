@@ -66,7 +66,7 @@ func TestSequentialAnnouncementsLes2(t *testing.T) { testSequentialAnnouncements
 func TestSequentialAnnouncementsLes3(t *testing.T) { testSequentialAnnouncements(t, 3) }
 
 func testSequentialAnnouncements(t *testing.T, protocol int) {
-	s, c, teardown := newClientServerEnv(t, 4, protocol, nil, nil, 0, false, false)
+	s, c, teardown := newClientServerEnv(t, 4, protocol, nil, nil, 0, false, false, true)
 	defer teardown()
 
 	// Create connected peer pair.
@@ -101,7 +101,7 @@ func TestGappedAnnouncementsLes2(t *testing.T) { testGappedAnnouncements(t, 2) }
 func TestGappedAnnouncementsLes3(t *testing.T) { testGappedAnnouncements(t, 3) }
 
 func testGappedAnnouncements(t *testing.T, protocol int) {
-	s, c, teardown := newClientServerEnv(t, 4, protocol, nil, nil, 0, false, false)
+	s, c, teardown := newClientServerEnv(t, 4, protocol, nil, nil, 0, false, false, true)
 	defer teardown()
 
 	// Create connected peer pair.
@@ -183,7 +183,7 @@ func testTrustedAnnouncement(t *testing.T, protocol int) {
 			ids = append(ids, n.String())
 		}
 	}
-	_, c, teardown := newClientServerEnv(t, 0, protocol, nil, ids, 60, false, false)
+	_, c, teardown := newClientServerEnv(t, 0, protocol, nil, ids, 60, false, false, true)
 	defer teardown()
 	defer func() {
 		for i := 0; i < len(teardowns); i++ {
@@ -234,7 +234,7 @@ func testTrustedAnnouncement(t *testing.T, protocol int) {
 }
 
 func TestInvalidAnnounces(t *testing.T) {
-	s, c, teardown := newClientServerEnv(t, 4, lpv3, nil, nil, 0, false, false)
+	s, c, teardown := newClientServerEnv(t, 4, lpv3, nil, nil, 0, false, false, true)
 	defer teardown()
 
 	// Create connected peer pair.
