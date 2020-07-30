@@ -461,9 +461,9 @@ func (t *UDPv4) loop() {
 				if p.from == r.from && p.ptype == r.data.Kind() && p.ip.Equal(r.ip) {
 					ok, requestDone := p.callback(r.data)
 					matched = matched || ok
+					p.reply = r.data
 					// Remove the matcher if callback indicates that all replies have been received.
 					if requestDone {
-						p.reply = r.data
 						p.errc <- nil
 						plist.Remove(el)
 					}
