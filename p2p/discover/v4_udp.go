@@ -307,8 +307,10 @@ func (t *UDPv4) findnode(toid enode.ID, toaddr *net.UDPAddr, target v4wire.Pubke
 	// active until enough nodes have been received.
 	nodes := make([]*node, 0, bucketSize)
 	nreceived := 0
+	received := false
 	rm := t.pending(toid, toaddr.IP, v4wire.NeighborsPacket, func(r v4wire.Packet) (matched bool, requestDone bool) {
 		reply := r.(*v4wire.Neighbors)
+		received = true
 		for _, rn := range reply.Nodes {
 			nreceived++
 			n, err := t.nodeFromRPC(toaddr, rn)
@@ -324,7 +326,16 @@ func (t *UDPv4) findnode(toid enode.ID, toaddr *net.UDPAddr, target v4wire.Pubke
 		Target:     target,
 		Expiration: uint64(time.Now().Add(expiration).Unix()),
 	})
-	return nodes, <-rm.errc
+
+	// Ensure that callers don't see a timeout if the node actually responded.
+	// Since findnode can receive more than one neighbors response, the reply
+	// matcher will be active until the remote node sends enough nodes. If the
+	// remote end doesn't have enough nodes to send, we'll see a timeout.
+	err := <-rm.errc
+	if err == errTimeout && received {
+		err = nil
+	}
+	return nodes, err
 }
 
 // RequestENR sends enrRequest to the given node and waits for a response.
