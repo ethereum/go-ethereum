@@ -1543,7 +1543,6 @@ func (bc *BlockChain) writeBlockWithState(block *types.Block, receipts []*types.
 			bc.chainHeadFeed.Send(ChainHeadEvent{Block: block})
 		}
 		syncData := block.StateSyncData()
-		// TODO: add emitStateSyncEvent flag check
 		for _, data := range syncData {
 			bc.stateSyncFeed.Send(StateSyncEvent{StateData: data})
 		}
