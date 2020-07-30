@@ -1143,11 +1143,6 @@ func validateEventRecord(eventRecord *EventRecordWithTime, number uint64, to tim
 	return nil
 }
 
-// // SubscribeStateSyncEvent registers a subscription of StateSyncEvent.
-// func (c *Bor) SubscribeStateSyncEvent(ch chan<- core.StateSyncEvent) event.Subscription {
-// 	return c.scope.Track(c.stateSyncFeed.Subscribe(ch))
-// }
-
 func (c *Bor) SetHeimdallClient(h IHeimdallClient) {
 	c.HeimdallClient = h
 }
