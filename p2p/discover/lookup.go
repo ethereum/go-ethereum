@@ -147,7 +147,7 @@ func (it *lookup) query(n *node, reply chan<- []*node) {
 		// Avoid recording failures on shutdown.
 		reply <- nil
 		return
-	} else if len(r) == 0 {
+	} else if len(r) == 0 && err != nil {
 		fails++
 		it.tab.db.UpdateFindFails(n.ID(), n.IP(), fails)
 		it.tab.log.Trace("Findnode failed", "id", n.ID(), "failcount", fails, "results", len(r), "err", err)

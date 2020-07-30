@@ -324,7 +324,15 @@ func (t *UDPv4) findnode(toid enode.ID, toaddr *net.UDPAddr, target v4wire.Pubke
 		Target:     target,
 		Expiration: uint64(time.Now().Add(expiration).Unix()),
 	})
-	return nodes, <-rm.errc
+	// Ensure that callers don't see a timeout if the node actually responded.
+	// Since findnode can receive more than one neighbors response, the reply
+	// matcher will be active until the remote node sends enough nodes. If the
+	// remote end doesn't have enough nodes to send, we'll see a timeout.
+	err := <-rm.errc
+	if err == errTimeout && rm.reply != nil {
+		err = nil
+	}
+	return nodes, err
 }
 
 // RequestENR sends enrRequest to the given node and waits for a response.
