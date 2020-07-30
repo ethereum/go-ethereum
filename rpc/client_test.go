@@ -32,6 +32,7 @@ import (
 
 	"github.com/davecgh/go-spew/spew"
 	"github.com/ethereum/go-ethereum/log"
+	"github.com/stretchr/testify/assert"
 )
 
 func TestClientRequest(t *testing.T) {
@@ -427,6 +428,35 @@ func TestClientNotificationStorm(t *testing.T) {
 
 	doTest(8000, false)
 	doTest(23000, true)
+}
+
+// TestClientSetHeader tests whether an http header has been properly set
+// to the given key and value on a client's http request.
+func TestClientSetHeader(t *testing.T) {
+	server := newTestServer()
+	defer server.Stop()
+
+	client, hs := httpTestClient(server, "http", nil)
+	defer hs.Close()
+	defer client.Close()
+
+	header := struct {
+		key string
+		val string
+	}{
+		key: "test",
+		val: "success",
+	}
+
+	if err := client.SetHeader(header.key, header.val); err != nil {
+		t.Fatal(err)
+	}
+
+	conn := client.writeConn.(*httpConn)
+	if conn == nil {
+		t.Fatal("client is not HTTP")
+	}
+	assert.Equal(t, header.val, conn.req.Header.Get(header.key))
 }
 
 func TestClientHTTP(t *testing.T) {

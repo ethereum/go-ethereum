@@ -260,6 +260,18 @@ func (c *Client) Close() {
 	}
 }
 
+// SetHeader sets the given key to the given value in the header of
+// the http request of a client's http connection. // TODO improve
+func (c *Client) SetHeader(key, value string) error {
+	conn := c.writeConn.(*httpConn)
+	if conn == nil {
+		return fmt.Errorf("client is not http") // TODO revise err?
+	}
+
+	conn.req.Header.Set(key, value)
+	return nil
+}
+
 // Call performs a JSON-RPC call with the given arguments and unmarshals into
 // result if no error occurred.
 //
