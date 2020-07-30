@@ -1544,8 +1544,8 @@ func (bc *BlockChain) writeBlockWithState(block *types.Block, receipts []*types.
 		}
 		syncData := block.StateSyncData()
 		// TODO: add emitStateSyncEvent flag check
-		if syncData.Did != 0 {
-			bc.stateSyncFeed.Send(StateSyncEvent{StateData: syncData})
+		for _, data := range syncData {
+			bc.stateSyncFeed.Send(StateSyncEvent{StateData: data})
 		}
 	} else {
 		bc.chainSideFeed.Send(ChainSideEvent{Block: block})

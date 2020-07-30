@@ -682,7 +682,7 @@ func (c *Bor) Finalize(chain consensus.ChainReader, header *types.Header, state 
 // FinalizeAndAssemble implements consensus.Engine, ensuring no uncles are set,
 // nor block rewards given, and returns the final block.
 func (c *Bor) FinalizeAndAssemble(chain consensus.ChainReader, header *types.Header, state *state.StateDB, txs []*types.Transaction, uncles []*types.Header, receipts []*types.Receipt) (*types.Block, error) {
-	stateSyncData := &types.StateData{}
+	stateSyncData := []*types.StateData{}
 	headerNumber := header.Number.Uint64()
 	if headerNumber%c.config.Sprint == 0 {
 		cx := chainContext{Chain: chain, Bor: c}
@@ -1093,8 +1093,8 @@ func (c *Bor) CommitStates(
 	state *state.StateDB,
 	header *types.Header,
 	chain chainContext,
-) (*types.StateData, error) {
-	var stateData types.StateData
+) ([]*types.StateData, error) {
+	stateSyncs := make([]*types.StateData, 0)
 	number := header.Number.Uint64()
 	_lastStateID, err := c.GenesisContractsClient.LastStateId(number - 1)
 	if err != nil {
@@ -1119,19 +1119,20 @@ func (c *Bor) CommitStates(
 			break
 		}
 
-		stateData = types.StateData{
+		stateData := types.StateData{
 			Did:      eventRecord.ID,
 			Contract: eventRecord.Contract,
 			Data:     hex.EncodeToString(eventRecord.Data),
 			TxHash:   eventRecord.TxHash,
 		}
+		stateSyncs = append(stateSyncs, &stateData)
 
 		if err := c.GenesisContractsClient.CommitState(eventRecord, state, header, chain); err != nil {
 			return nil, err
 		}
 		lastStateID++
 	}
-	return &stateData, nil
+	return stateSyncs, nil
 }
 
 func validateEventRecord(eventRecord *EventRecordWithTime, number uint64, to time.Time, lastStateID uint64, chainID string) error {

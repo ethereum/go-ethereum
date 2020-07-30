@@ -159,7 +159,7 @@ type Block struct {
 	header        *Header
 	uncles        []*Header
 	transactions  Transactions
-	stateSyncData *StateData
+	stateSyncData []*StateData
 	// caches
 	hash atomic.Value
 	size atomic.Value
@@ -267,7 +267,7 @@ func CopyHeader(h *Header) *Header {
 }
 
 // SetStateSync set sync data in block
-func (b *Block) SetStateSync(stateData *StateData) {
+func (b *Block) SetStateSync(stateData []*StateData) {
 	b.stateSyncData = stateData
 }
 
@@ -316,12 +316,12 @@ func (b *Block) Transaction(hash common.Hash) *Transaction {
 	return nil
 }
 
-func (b *Block) Number() *big.Int          { return new(big.Int).Set(b.header.Number) }
-func (b *Block) GasLimit() uint64          { return b.header.GasLimit }
-func (b *Block) GasUsed() uint64           { return b.header.GasUsed }
-func (b *Block) Difficulty() *big.Int      { return new(big.Int).Set(b.header.Difficulty) }
-func (b *Block) Time() uint64              { return b.header.Time }
-func (b *Block) StateSyncData() *StateData { return b.stateSyncData }
+func (b *Block) Number() *big.Int            { return new(big.Int).Set(b.header.Number) }
+func (b *Block) GasLimit() uint64            { return b.header.GasLimit }
+func (b *Block) GasUsed() uint64             { return b.header.GasUsed }
+func (b *Block) Difficulty() *big.Int        { return new(big.Int).Set(b.header.Difficulty) }
+func (b *Block) Time() uint64                { return b.header.Time }
+func (b *Block) StateSyncData() []*StateData { return b.stateSyncData }
 
 func (b *Block) NumberU64() uint64        { return b.header.Number.Uint64() }
 func (b *Block) MixDigest() common.Hash   { return b.header.MixDigest }
