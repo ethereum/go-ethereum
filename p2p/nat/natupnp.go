@@ -21,6 +21,7 @@ import (
 	"fmt"
 	"net"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/huin/goupnp"
@@ -34,6 +35,9 @@ type upnp struct {
 	dev     *goupnp.RootDevice
 	service string
 	client  upnpClient
+	// This mutex ensures requests are performed one at a time because
+	// some routers will stop responding if we send concurrent requests.
+	reqMutex sync.Mutex
 }
 
 type upnpClient interface {
@@ -44,6 +48,8 @@ type upnpClient interface {
 }
 
 func (n *upnp) ExternalIP() (addr net.IP, err error) {
+	n.reqMutex.Lock()
+	defer n.reqMutex.Unlock()
 	ipString, err := n.client.GetExternalIPAddress()
 	if err != nil {
 		return nil, err
@@ -63,6 +69,9 @@ func (n *upnp) AddMapping(protocol string, extport, intport int, desc string, li
 	protocol = strings.ToUpper(protocol)
 	lifetimeS := uint32(lifetime / time.Second)
 	n.DeleteMapping(protocol, extport, intport)
+
+	n.reqMutex.Lock()
+	defer n.reqMutex.Unlock()
 	return n.client.AddPortMapping("", uint16(extport), protocol, uint16(intport), ip.String(), true, desc, lifetimeS)
 }
 
@@ -90,6 +99,8 @@ func (n *upnp) internalAddress() (net.IP, error) {
 }
 
 func (n *upnp) DeleteMapping(protocol string, extport, intport int) error {
+	n.reqMutex.Lock()
+	defer n.reqMutex.Unlock()
 	return n.client.DeletePortMapping("", uint16(extport), strings.ToUpper(protocol))
 }
 
@@ -102,24 +113,24 @@ func (n *upnp) String() string {
 func discoverUPnP() Interface {
 	found := make(chan *upnp, 2)
 	// IGDv1
-	go discover(found, internetgateway1.URN_WANConnectionDevice_1, func(dev *goupnp.RootDevice, sc goupnp.ServiceClient) *upnp {
+	go discover(found, internetgateway1.URN_WANConnectionDevice_1, func(sc goupnp.ServiceClient) *upnp {
 		switch sc.Service.ServiceType {
 		case internetgateway1.URN_WANIPConnection_1:
-			return &upnp{dev, "IGDv1-IP1", &internetgateway1.WANIPConnection1{ServiceClient: sc}}
+			return &upnp{service: "IGDv1-IP1", client: &internetgateway1.WANIPConnection1{ServiceClient: sc}}
 		case internetgateway1.URN_WANPPPConnection_1:
-			return &upnp{dev, "IGDv1-PPP1", &internetgateway1.WANPPPConnection1{ServiceClient: sc}}
+			return &upnp{service: "IGDv1-PPP1", client: &internetgateway1.WANPPPConnection1{ServiceClient: sc}}
 		}
 		return nil
 	})
 	// IGDv2
-	go discover(found, internetgateway2.URN_WANConnectionDevice_2, func(dev *goupnp.RootDevice, sc goupnp.ServiceClient) *upnp {
+	go discover(found, internetgateway2.URN_WANConnectionDevice_2, func(sc goupnp.ServiceClient) *upnp {
 		switch sc.Service.ServiceType {
 		case internetgateway2.URN_WANIPConnection_1:
-			return &upnp{dev, "IGDv2-IP1", &internetgateway2.WANIPConnection1{ServiceClient: sc}}
+			return &upnp{service: "IGDv2-IP1", client: &internetgateway2.WANIPConnection1{ServiceClient: sc}}
 		case internetgateway2.URN_WANIPConnection_2:
-			return &upnp{dev, "IGDv2-IP2", &internetgateway2.WANIPConnection2{ServiceClient: sc}}
+			return &upnp{service: "IGDv2-IP2", client: &internetgateway2.WANIPConnection2{ServiceClient: sc}}
 		case internetgateway2.URN_WANPPPConnection_1:
-			return &upnp{dev, "IGDv2-PPP1", &internetgateway2.WANPPPConnection1{ServiceClient: sc}}
+			return &upnp{service: "IGDv2-PPP1", client: &internetgateway2.WANPPPConnection1{ServiceClient: sc}}
 		}
 		return nil
 	})
@@ -134,7 +145,7 @@ func discoverUPnP() Interface {
 // finds devices matching the given target and calls matcher for all
 // advertised services of each device. The first non-nil service found
 // is sent into out. If no service matched, nil is sent.
-func discover(out chan<- *upnp, target string, matcher func(*goupnp.RootDevice, goupnp.ServiceClient) *upnp) {
+func discover(out chan<- *upnp, target string, matcher func(goupnp.ServiceClient) *upnp) {
 	devs, err := goupnp.DiscoverDevices(target)
 	if err != nil {
 		out <- nil
@@ -157,10 +168,11 @@ func discover(out chan<- *upnp, target string, matcher func(*goupnp.RootDevice, 
 				Service:    service,
 			}
 			sc.SOAPClient.HTTPClient.Timeout = soapRequestTimeout
-			upnp := matcher(devs[i].Root, sc)
+			upnp := matcher(sc)
 			if upnp == nil {
 				return
 			}
+			upnp.dev = devs[i].Root
 			// check whether port mapping is enabled
 			if _, nat, err := upnp.client.GetNATRSIPStatus(); err != nil || !nat {
 				return
