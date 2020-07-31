@@ -430,6 +430,13 @@ func TestClientNotificationStorm(t *testing.T) {
 	doTest(23000, true)
 }
 
+type testHandler struct{}
+
+func (t testHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
+	header := r.Header.Get("test")
+	w.Write([]byte(header))
+}
+
 // TestClientSetHeader tests whether an http header has been properly set
 // to the given key and value on a client's http request.
 func TestClientSetHeader(t *testing.T) {
@@ -440,29 +447,30 @@ func TestClientSetHeader(t *testing.T) {
 	defer hs.Close()
 	defer client.Close()
 
-	headers := []struct {
-		key string
-		val string
-	}{
-		{ key: "test1", val: "success" },
-		{ key: "test2", val: "success" },
-		{ key: "test3", val: "success" },
-	}
+	handler := testHandler{}
+	httpSrv := httptest.NewServer(handler)
+	defer httpSrv.Close()
 
-	for _, header := range headers {
-		if err := client.SetHeader(header.key, header.val); err != nil {
-			t.Fatal(err)
-		}
+	if err := client.SetHeader("test", "success"); err != nil {
+		t.Fatal(err)
 	}
-
 	conn := client.writeConn.(*httpConn)
 	if conn == nil {
 		t.Fatal("client is not HTTP")
 	}
+	conn.req.URL.Host = httpSrv.Listener.Addr().String()
 
-	for _, header := range headers {
-		assert.Equal(t, header.val, conn.headers[header.key][0])
+	resp, err := conn.doRequest(context.Background(), "")
+	if err != nil {
+		t.Fatal(err)
 	}
+	buf := make([]byte, 7)
+	_, err = resp.Read(buf)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	assert.Equal(t, "success", string(buf))
 }
 
 func TestClientHTTP(t *testing.T) {
