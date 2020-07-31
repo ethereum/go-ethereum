@@ -22,6 +22,7 @@ import (
 	crand "crypto/rand"
 	"encoding/binary"
 	"errors"
+	"fmt"
 	"io"
 	"math/rand"
 	"net"
@@ -491,6 +492,89 @@ func TestUDPv4_EIP868(t *testing.T) {
 			t.Fatalf("wrong node in enrResponse: %v", n)
 		}
 	})
+}
+
+// This test verifies that a small network of nodes can boot up into a healthy state.
+func TestUDPv4_smallNetConvergence(t *testing.T) {
+	// Start the network.
+	nodes := make([]*UDPv4, 4)
+	for i := range nodes {
+		var cfg Config
+		if i > 0 {
+			bn := nodes[0].Self()
+			cfg.Bootnodes = []*enode.Node{bn}
+		}
+		nodes[i] = startLocalhostV4(t, cfg)
+		defer nodes[i].Close()
+	}
+
+	// Run through the iterator on all nodes until
+	// they have all found each other.
+	status := make(chan error, len(nodes))
+	for i := range nodes {
+		node := nodes[i]
+		go func() {
+			found := make(map[enode.ID]bool, len(nodes))
+			it := node.RandomNodes()
+			for it.Next() {
+				found[it.Node().ID()] = true
+				if len(found) == len(nodes) {
+					status <- nil
+					return
+				}
+			}
+			status <- fmt.Errorf("node %s didn't find all nodes", node.Self().ID().TerminalString())
+		}()
+	}
+
+	// Wait for all status reports.
+	timeout := time.NewTimer(30 * time.Second)
+	defer timeout.Stop()
+	for received := 0; received < len(nodes); {
+		select {
+		case <-timeout.C:
+			for _, node := range nodes {
+				node.Close()
+			}
+		case err := <-status:
+			received++
+			if err != nil {
+				t.Error("ERROR:", err)
+				return
+			}
+		}
+	}
+}
+
+func startLocalhostV4(t *testing.T, cfg Config) *UDPv4 {
+	t.Helper()
+
+	cfg.PrivateKey = newkey()
+	db, _ := enode.OpenDB("")
+	ln := enode.NewLocalNode(db, cfg.PrivateKey)
+
+	// Prefix logs with node ID.
+	lprefix := fmt.Sprintf("(%s)", ln.ID().TerminalString())
+	lfmt := log.TerminalFormat(false)
+	cfg.Log = testlog.Logger(t, log.LvlTrace)
+	cfg.Log.SetHandler(log.FuncHandler(func(r *log.Record) error {
+		t.Logf("%s %s", lprefix, lfmt.Format(r))
+		return nil
+	}))
+
+	// Listen.
+	socket, err := net.ListenUDP("udp4", &net.UDPAddr{IP: net.IP{127, 0, 0, 1}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	realaddr := socket.LocalAddr().(*net.UDPAddr)
+	ln.SetStaticIP(realaddr.IP)
+	ln.SetFallbackUDP(realaddr.Port)
+	udp, err := ListenV4(socket, ln, cfg)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return udp
 }
 
 // dgramPipe is a fake UDP socket. It queues all sent datagrams.
