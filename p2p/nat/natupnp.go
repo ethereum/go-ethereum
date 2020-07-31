@@ -17,27 +17,29 @@
 package nat
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"net"
 	"strings"
-	"sync"
 	"time"
 
 	"github.com/huin/goupnp"
 	"github.com/huin/goupnp/dcps/internetgateway1"
 	"github.com/huin/goupnp/dcps/internetgateway2"
+	"golang.org/x/time/rate"
 )
 
-const soapRequestTimeout = 3 * time.Second
+const (
+	soapRequestTimeout = 3 * time.Second
+	rateLimit          = 500 * time.Millisecond
+)
 
 type upnp struct {
 	dev     *goupnp.RootDevice
 	service string
 	client  upnpClient
-	// This mutex ensures requests are performed one at a time because
-	// some routers will stop responding if we send concurrent requests.
-	reqMutex sync.Mutex
+	rlimit  *rate.Limiter
 }
 
 type upnpClient interface {
@@ -47,9 +49,14 @@ type upnpClient interface {
 	GetNATRSIPStatus() (sip bool, nat bool, err error)
 }
 
+func (n *upnp) natEnabled() bool {
+	n.rlimit.Wait(context.Background())
+	_, ok, err := n.client.GetNATRSIPStatus()
+	return err == nil && ok
+}
+
 func (n *upnp) ExternalIP() (addr net.IP, err error) {
-	n.reqMutex.Lock()
-	defer n.reqMutex.Unlock()
+	n.rlimit.Wait(context.Background())
 	ipString, err := n.client.GetExternalIPAddress()
 	if err != nil {
 		return nil, err
@@ -70,8 +77,7 @@ func (n *upnp) AddMapping(protocol string, extport, intport int, desc string, li
 	lifetimeS := uint32(lifetime / time.Second)
 	n.DeleteMapping(protocol, extport, intport)
 
-	n.reqMutex.Lock()
-	defer n.reqMutex.Unlock()
+	n.rlimit.Wait(context.Background())
 	return n.client.AddPortMapping("", uint16(extport), protocol, uint16(intport), ip.String(), true, desc, lifetimeS)
 }
 
@@ -99,8 +105,7 @@ func (n *upnp) internalAddress() (net.IP, error) {
 }
 
 func (n *upnp) DeleteMapping(protocol string, extport, intport int) error {
-	n.reqMutex.Lock()
-	defer n.reqMutex.Unlock()
+	n.rlimit.Wait(context.Background())
 	return n.client.DeletePortMapping("", uint16(extport), strings.ToUpper(protocol))
 }
 
@@ -173,12 +178,13 @@ func discover(out chan<- *upnp, target string, matcher func(goupnp.ServiceClient
 				return
 			}
 			upnp.dev = devs[i].Root
+			upnp.rlimit = rate.NewLimiter(rate.Every(rateLimit), 0)
+
 			// check whether port mapping is enabled
-			if _, nat, err := upnp.client.GetNATRSIPStatus(); err != nil || !nat {
-				return
+			if upnp.natEnabled() {
+				out <- upnp
+				found = true
 			}
-			out <- upnp
-			found = true
 		})
 	}
 	if !found {
