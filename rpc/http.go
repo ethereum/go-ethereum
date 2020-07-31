@@ -39,10 +39,10 @@ const (
 var acceptedContentTypes = []string{contentType, "application/json-rpc", "application/jsonrequest"}
 
 type httpConn struct {
-	sync.Mutex
+	mux sync.Mutex
 
 	client    *http.Client
-	headers   map[string]string
+	headers   http.Header
 	req       *http.Request
 	closeOnce sync.Once
 	closeCh   chan interface{}
@@ -113,7 +113,7 @@ func DialHTTPWithClient(endpoint string, client *http.Client) (*Client, error) {
 	req.Header.Set("Accept", contentType)
 
 	initctx := context.Background()
-	headers := map[string]string{"Accept": "application/json", "Content-Type":"application/json"}
+	headers := map[string][]string{"Accept": []string{"application/json"}, "Content-Type": []string{"application/json"}}
 	return newClient(initctx, func(context.Context) (ServerCodec, error) {
 		return &httpConn{client: client, headers: headers, req: req, closeCh: make(chan interface{})}, nil
 	})
@@ -177,11 +177,13 @@ func (hc *httpConn) doRequest(ctx context.Context, msg interface{}) (io.ReadClos
 	req.Host = hc.req.Host
 	req.ContentLength = int64(len(body))
 	// set headers
-	hc.Lock()
-	for key, val := range hc.headers {
-		req.Header.Set(key, val)
+	hc.mux.Lock()
+	for key, vals := range hc.headers {
+		for _, val := range vals {
+			req.Header.Set(key, val)
+		}
 	}
-	hc.Unlock()
+	hc.mux.Unlock()
 	// do request
 	resp, err := hc.client.Do(req)
 	if err != nil {

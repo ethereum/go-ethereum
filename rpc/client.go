@@ -261,16 +261,16 @@ func (c *Client) Close() {
 }
 
 // SetHeader sets the given key to the given value in the header of
-// the http request of a client's http connection. // TODO improve
+// the client's http requests.
 func (c *Client) SetHeader(key, value string) error {
 	conn := c.writeConn.(*httpConn)
 	if conn == nil {
-		return fmt.Errorf("client is not http") // TODO revise err?
+		return fmt.Errorf("client is not http")
 	}
 
-	conn.Lock()
-	conn.headers[key] = value
-	conn.Unlock()
+	conn.mux.Lock()
+	conn.headers[key] = append(conn.headers[key], value)
+	conn.mux.Unlock()
 	return nil
 }
 

@@ -461,7 +461,7 @@ func TestClientSetHeader(t *testing.T) {
 	}
 
 	for _, header := range headers {
-		assert.Equal(t, header.val, conn.headers[header.key])
+		assert.Equal(t, header.val, conn.headers[header.key][0])
 	}
 }
 
