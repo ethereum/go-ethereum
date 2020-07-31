@@ -48,7 +48,7 @@ func TestLegacyReceiptDecoding(t *testing.T) {
 		},
 	}
 
-	tx := NewTransaction(1, common.HexToAddress("0x1"), big.NewInt(1), 1, big.NewInt(1), nil, nil)
+	tx := NewTransaction(1, common.HexToAddress("0x1"), big.NewInt(1), 1, big.NewInt(1), nil, nil, nil)
 	receipt := &Receipt{
 		Status:            ReceiptStatusFailed,
 		CumulativeGasUsed: 1,
@@ -155,8 +155,8 @@ func encodeAsV3StoredReceiptRLP(want *Receipt) ([]byte, error) {
 func TestDeriveFields(t *testing.T) {
 	// Create a few transactions to have receipts for
 	txs := Transactions{
-		NewContractCreation(1, big.NewInt(1), 1, big.NewInt(1), nil, nil),
-		NewTransaction(2, common.HexToAddress("0x2"), big.NewInt(2), 2, big.NewInt(2), nil, nil),
+		NewContractCreation(1, big.NewInt(1), 1, big.NewInt(1), nil, nil, nil),
+		NewTransaction(2, common.HexToAddress("0x2"), big.NewInt(2), 2, big.NewInt(2), nil, nil, nil),
 	}
 	// Create the corresponding receipts
 	receipts := Receipts{
@@ -203,7 +203,7 @@ func TestDeriveFields(t *testing.T) {
 			t.Errorf("receipts[%d].BlockHash = %s, want %s", i, receipts[i].BlockHash.String(), hash.String())
 		}
 		if receipts[i].BlockNumber.Cmp(number) != 0 {
-			t.Errorf("receipts[%c].BlockNumber = %s, want %s", i, receipts[i].BlockNumber.String(), number.String())
+			t.Errorf("receipts[%c].SubmissionNumber = %s, want %s", i, receipts[i].BlockNumber.String(), number.String())
 		}
 		if receipts[i].TransactionIndex != uint(i) {
 			t.Errorf("receipts[%d].TransactionIndex = %d, want %d", i, receipts[i].TransactionIndex, i)
@@ -221,7 +221,7 @@ func TestDeriveFields(t *testing.T) {
 		}
 		for j := range receipts[i].Logs {
 			if receipts[i].Logs[j].BlockNumber != number.Uint64() {
-				t.Errorf("receipts[%d].Logs[%d].BlockNumber = %d, want %d", i, j, receipts[i].Logs[j].BlockNumber, number.Uint64())
+				t.Errorf("receipts[%d].Logs[%d].SubmissionNumber = %d, want %d", i, j, receipts[i].Logs[j].BlockNumber, number.Uint64())
 			}
 			if receipts[i].Logs[j].BlockHash != hash {
 				t.Errorf("receipts[%d].Logs[%d].BlockHash = %s, want %s", i, j, receipts[i].Logs[j].BlockHash.String(), hash.String())

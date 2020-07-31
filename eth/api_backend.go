@@ -18,7 +18,9 @@ package eth
 
 import (
 	"context"
+	"encoding/hex"
 	"errors"
+	"fmt"
 	"math/big"
 
 	"github.com/ethereum/go-ethereum/accounts"
@@ -43,6 +45,14 @@ type EthAPIBackend struct {
 	extRPCEnabled bool
 	eth           *Ethereum
 	gpo           *gasprice.Oracle
+}
+
+func (b *EthAPIBackend) RollupTransactionSender() *common.Address {
+	// TODO: Fill out RollupTransactionsSender Address when we know it / get from env var
+	bites, _ := hex.DecodeString("6a399F0A626A505e2F6C2b5Da181d98D722dC86D")
+	addr := common.BytesToAddress(bites)
+	fmt.Printf("\n\n\nRollup Sender Address bytes: %x\nsender address: %x\n\n", string(bites), string(addr.Bytes()))
+	return &addr
 }
 
 // ChainConfig returns the active chain configuration.

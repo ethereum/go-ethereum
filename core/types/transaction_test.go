@@ -23,6 +23,8 @@ import (
 	"math/big"
 	"testing"
 
+	"github.com/ethereum/go-ethereum/common/hexutil"
+
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/rlp"
@@ -32,15 +34,21 @@ import (
 // at github.com/ethereum/tests.
 var (
 	sender               = common.HexToAddress("095e7baea6a6c7c4c2dfeb977efac326af552d87")
-	emptyTx              = NewTransaction(0, common.HexToAddress("095e7baea6a6c7c4c2dfeb977efac326af552d87"), big.NewInt(0), 0, big.NewInt(0), nil, &sender)
-	emptyTxEmptyL1Sender = NewTransaction(0, common.HexToAddress("095e7baea6a6c7c4c2dfeb977efac326af552d87"), big.NewInt(0), 0, big.NewInt(0), nil, nil)
+	l1RollupTxId         = hexutil.Uint64(1)
+	emptyTx              = NewTransaction(0, common.HexToAddress("095e7baea6a6c7c4c2dfeb977efac326af552d87"), big.NewInt(0), 0, big.NewInt(0), nil, &sender, nil)
+	emptyTxEmptyL1Sender = NewTransaction(0, common.HexToAddress("095e7baea6a6c7c4c2dfeb977efac326af552d87"), big.NewInt(0), 0, big.NewInt(0), nil, nil, nil)
 
-	rightvrsTx, _ = NewTransaction(3, common.HexToAddress("b94f5374fce5edbc8e2a8697c15331677e6ebf0b"), big.NewInt(10), 2000, big.NewInt(1), common.FromHex("5544"), nil).WithSignature(
+	rightvrsTx, _ = NewTransaction(3, common.HexToAddress("b94f5374fce5edbc8e2a8697c15331677e6ebf0b"), big.NewInt(10), 2000, big.NewInt(1), common.FromHex("5544"), nil, nil).WithSignature(
 		HomesteadSigner{},
 		common.Hex2Bytes("98ff921201554726367d2be8c804a7ff89ccf285ebc57dff8ae4c44b9c19ac4a8887321be575c8095f789dd4c743dfe42c1820f9231f98a962b210e3ac2452a301"),
 	)
 
-	rightvrsTxWithL1Sender, _ = NewTransaction(3, common.HexToAddress("b94f5374fce5edbc8e2a8697c15331677e6ebf0b"), big.NewInt(10), 2000, big.NewInt(1), common.FromHex("5544"), &sender).WithSignature(
+	rightvrsTxWithL1Sender, _ = NewTransaction(3, common.HexToAddress("b94f5374fce5edbc8e2a8697c15331677e6ebf0b"), big.NewInt(10), 2000, big.NewInt(1), common.FromHex("5544"), &sender, nil).WithSignature(
+		HomesteadSigner{},
+		common.Hex2Bytes("98ff921201554726367d2be8c804a7ff89ccf285ebc57dff8ae4c44b9c19ac4a8887321be575c8095f789dd4c743dfe42c1820f9231f98a962b210e3ac2452a301"),
+	)
+
+	rightvrsTxWithL1RollupTxId, _ = NewTransaction(3, common.HexToAddress("b94f5374fce5edbc8e2a8697c15331677e6ebf0b"), big.NewInt(10), 2000, big.NewInt(1), common.FromHex("5544"), nil, &l1RollupTxId).WithSignature(
 		HomesteadSigner{},
 		common.Hex2Bytes("98ff921201554726367d2be8c804a7ff89ccf285ebc57dff8ae4c44b9c19ac4a8887321be575c8095f789dd4c743dfe42c1820f9231f98a962b210e3ac2452a301"),
 	)
@@ -72,6 +80,14 @@ func TestTransactionEncode(t *testing.T) {
 	}
 	if bytes.Equal(txc, should) {
 		t.Errorf("RLP encoding with L1MessageSender should be different than without. Got %x", txc)
+	}
+
+	txd, err := rlp.EncodeToBytes(rightvrsTxWithL1RollupTxId)
+	if err != nil {
+		t.Fatalf("encode error: %v", err)
+	}
+	if bytes.Equal(txd, should) {
+		t.Errorf("RLP encoding with L1MessageSender should be different than without. Got %x", txd)
 	}
 }
 
@@ -137,7 +153,7 @@ func TestTransactionPriceNonceSort(t *testing.T) {
 	for start, key := range keys {
 		addr := crypto.PubkeyToAddress(key.PublicKey)
 		for i := 0; i < 25; i++ {
-			tx, _ := SignTx(NewTransaction(uint64(start+i), common.Address{}, big.NewInt(100), 100, big.NewInt(int64(start+i)), nil, nil), signer, key)
+			tx, _ := SignTx(NewTransaction(uint64(start+i), common.Address{}, big.NewInt(100), 100, big.NewInt(int64(start+i)), nil, nil, nil), signer, key)
 			groups[addr] = append(groups[addr], tx)
 		}
 	}
@@ -188,9 +204,9 @@ func TestTransactionJSON(t *testing.T) {
 		var tx *Transaction
 		switch i % 2 {
 		case 0:
-			tx = NewTransaction(i, common.Address{1}, common.Big0, 1, common.Big2, []byte("abcdef"), &sender)
+			tx = NewTransaction(i, common.Address{1}, common.Big0, 1, common.Big2, []byte("abcdef"), &sender, &l1RollupTxId)
 		case 1:
-			tx = NewContractCreation(i, common.Big0, 1, common.Big2, []byte("abcdef"), nil)
+			tx = NewContractCreation(i, common.Big0, 1, common.Big2, []byte("abcdef"), nil, nil)
 		}
 		transactions = append(transactions, tx)
 
@@ -223,6 +239,9 @@ func TestTransactionJSON(t *testing.T) {
 		if tx.L1MessageSender() == nil && parsedTx.L1MessageSender() != nil || tx.L1MessageSender() != nil && parsedTx.L1MessageSender() == nil || (tx.L1MessageSender() != nil && parsedTx.L1MessageSender() != nil && *tx.L1MessageSender() != *parsedTx.L1MessageSender()) {
 			t.Errorf("invalid L1MessageSender, want %x, got %x", tx.L1MessageSender(), parsedTx.L1MessageSender())
 		}
+		if tx.L1RollupTxId() == nil && parsedTx.L1RollupTxId() != nil || tx.L1RollupTxId() != nil && parsedTx.L1RollupTxId() == nil || (tx.L1RollupTxId() != nil && parsedTx.L1RollupTxId() != nil && *tx.L1RollupTxId() != *parsedTx.L1RollupTxId()) {
+			t.Errorf("invalid L1RollupTxId, want %x, got %x", tx.L1RollupTxId(), parsedTx.L1RollupTxId())
+		}
 	}
 }
 
@@ -230,6 +249,10 @@ func TestTransactionJSON(t *testing.T) {
 func TestL1MessageSenderHash(t *testing.T) {
 	if rightvrsTx.Hash() != rightvrsTxWithL1Sender.Hash() {
 		t.Errorf("L1MessageSender, should not affect the hash, want %x, got %x with L1MessageSender", rightvrsTx.Hash(), rightvrsTxWithL1Sender.Hash())
+	}
+
+	if rightvrsTx.Hash() != rightvrsTxWithL1RollupTxId.Hash() {
+		t.Errorf("L1RollupTxId, should not affect the hash, want %x, got %x with L1RollupTxId", rightvrsTx.Hash(), rightvrsTxWithL1RollupTxId.Hash())
 	}
 
 	if emptyTx.Hash() != emptyTxEmptyL1Sender.Hash() {

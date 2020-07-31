@@ -594,7 +594,7 @@ func (api *RetestethAPI) GetLogHash(ctx context.Context, txHash common.Hash) (co
 }
 
 func (api *RetestethAPI) BlockNumber(ctx context.Context) (uint64, error) {
-	//fmt.Printf("BlockNumber, response: %d\n", api.blockNumber)
+	//fmt.Printf("SubmissionNumber, response: %d\n", api.blockNumber)
 	return api.blockNumber, nil
 }
 

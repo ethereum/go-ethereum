@@ -45,6 +45,10 @@ type LesApiBackend struct {
 	gpo           *gasprice.Oracle
 }
 
+func (b *LesApiBackend) RollupTransactionSender() *common.Address {
+	return nil
+}
+
 func (b *LesApiBackend) ChainConfig() *params.ChainConfig {
 	return b.eth.chainConfig
 }

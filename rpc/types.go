@@ -68,7 +68,7 @@ const (
 	EarliestBlockNumber = BlockNumber(0)
 )
 
-// UnmarshalJSON parses the given JSON fragment into a BlockNumber. It supports:
+// UnmarshalJSON parses the given JSON fragment into a SubmissionNumber. It supports:
 // - "latest", "earliest" or "pending" as string arguments
 // - the block number
 // Returned errors:
@@ -119,7 +119,7 @@ func (bnh *BlockNumberOrHash) UnmarshalJSON(data []byte) error {
 	err := json.Unmarshal(data, &e)
 	if err == nil {
 		if e.BlockNumber != nil && e.BlockHash != nil {
-			return fmt.Errorf("cannot specify both BlockHash and BlockNumber, choose one or the other")
+			return fmt.Errorf("cannot specify both BlockHash and SubmissionNumber, choose one or the other")
 		}
 		bnh.BlockNumber = e.BlockNumber
 		bnh.BlockHash = e.BlockHash
