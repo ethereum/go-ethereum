@@ -440,23 +440,29 @@ func TestClientSetHeader(t *testing.T) {
 	defer hs.Close()
 	defer client.Close()
 
-	header := struct {
+	headers := []struct {
 		key string
 		val string
 	}{
-		key: "test",
-		val: "success",
+		{ key: "test1", val: "success" },
+		{ key: "test2", val: "success" },
+		{ key: "test3", val: "success" },
 	}
 
-	if err := client.SetHeader(header.key, header.val); err != nil {
-		t.Fatal(err)
+	for _, header := range headers {
+		if err := client.SetHeader(header.key, header.val); err != nil {
+			t.Fatal(err)
+		}
 	}
 
 	conn := client.writeConn.(*httpConn)
 	if conn == nil {
 		t.Fatal("client is not HTTP")
 	}
-	assert.Equal(t, header.val, conn.req.Header.Get(header.key))
+
+	for _, header := range headers {
+		assert.Equal(t, header.val, conn.headers[header.key])
+	}
 }
 
 func TestClientHTTP(t *testing.T) {

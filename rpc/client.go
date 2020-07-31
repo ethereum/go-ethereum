@@ -85,7 +85,7 @@ type Client struct {
 
 	// writeConn is used for writing to the connection on the caller's goroutine. It should
 	// only be accessed outside of dispatch, with the write lock held. The write lock is
-	// taken by sending on requestOp and released by sending on sendDone.
+	// taken by sending on reqInit and released by sending on reqSent.
 	writeConn jsonWriter
 
 	// for dispatch
@@ -268,7 +268,9 @@ func (c *Client) SetHeader(key, value string) error {
 		return fmt.Errorf("client is not http") // TODO revise err?
 	}
 
-	conn.req.Header.Set(key, value)
+	conn.Lock()
+	conn.headers[key] = value
+	conn.Unlock()
 	return nil
 }
 

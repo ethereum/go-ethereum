@@ -39,7 +39,10 @@ const (
 var acceptedContentTypes = []string{contentType, "application/json-rpc", "application/jsonrequest"}
 
 type httpConn struct {
+	sync.Mutex
+
 	client    *http.Client
+	headers   map[string]string
 	req       *http.Request
 	closeOnce sync.Once
 	closeCh   chan interface{}
@@ -110,8 +113,9 @@ func DialHTTPWithClient(endpoint string, client *http.Client) (*Client, error) {
 	req.Header.Set("Accept", contentType)
 
 	initctx := context.Background()
+	headers := map[string]string{"Accept": "application/json", "Content-Type":"application/json"}
 	return newClient(initctx, func(context.Context) (ServerCodec, error) {
-		return &httpConn{client: client, req: req, closeCh: make(chan interface{})}, nil
+		return &httpConn{client: client, headers: headers, req: req, closeCh: make(chan interface{})}, nil
 	})
 }
 
@@ -166,10 +170,19 @@ func (hc *httpConn) doRequest(ctx context.Context, msg interface{}) (io.ReadClos
 	if err != nil {
 		return nil, err
 	}
-	req := hc.req.WithContext(ctx)
-	req.Body = ioutil.NopCloser(bytes.NewReader(body))
+	req, err := http.NewRequestWithContext(ctx, hc.req.Method, hc.req.URL.String(), ioutil.NopCloser(bytes.NewReader(body)))
+	if err != nil {
+		return nil, err
+	}
+	req.Host = hc.req.Host
 	req.ContentLength = int64(len(body))
-
+	// set headers
+	hc.Lock()
+	for key, val := range hc.headers {
+		req.Header.Set(key, val)
+	}
+	hc.Unlock()
+	// do request
 	resp, err := hc.client.Do(req)
 	if err != nil {
 		return nil, err
