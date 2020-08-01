@@ -1,0 +1,17 @@
+version: 1
+jobs:
+  compile:
+    image: node
+    script:
+      - npm install truffle
+      - npx truffle compile
+  test:
+    image: node
+    script:
+      - npm install truffle
+      - npx truffle test
+stages:
+  - pipeline:
+      jobs:
+        - compile
+        - test
