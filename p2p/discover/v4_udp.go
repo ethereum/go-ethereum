@@ -727,6 +727,14 @@ func (t *UDPv4) handleFindnode(h *packetHandlerV4, from *net.UDPAddr, fromID eno
 	closest := t.tab.closest(target, bucketSize, true).entries
 	t.tab.mutex.Unlock()
 
+	if len(closest) == 0 {
+		t.tab.mutex.Lock()
+		closest = t.tab.closest(target, bucketSize, false).entries
+		t.tab.mutex.Unlock()
+
+		t.log.Trace("Got 0 live nodes, reporting non-live nodes", "nonlive", len(closest))
+	}
+
 	// Send neighbors in chunks with at most maxNeighbors per packet
 	// to stay below the packet size limit.
 	p := v4wire.Neighbors{Expiration: uint64(time.Now().Add(expiration).Unix())}

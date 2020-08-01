@@ -147,13 +147,17 @@ func (it *lookup) query(n *node, reply chan<- []*node) {
 		// Avoid recording failures on shutdown.
 		reply <- nil
 		return
-	} else if len(r) == 0 && err != nil {
+	} else if len(r) == 0 {
 		fails++
 		it.tab.db.UpdateFindFails(n.ID(), n.IP(), fails)
 		it.tab.log.Trace("Findnode failed", "id", n.ID(), "failcount", fails, "results", len(r), "err", err)
 		if fails >= maxFindnodeFailures {
-			it.tab.log.Trace("Too many findnode failures, dropping", "id", n.ID(), "failcount", fails)
-			it.tab.delete(n)
+			if len(it.tab.bucket(n.ID()).entries) >= bucketSize/2 {
+				it.tab.log.Trace("Too many findnode failures, dropping", "id", n.ID(), "failcount", fails)
+				it.tab.delete(n)
+			} else {
+				it.tab.log.Trace("Too many findnode failures, not dropping node because we have too little alternatives", "id", n.ID(), "failcount", fails)
+			}
 		}
 	} else if fails > 0 {
 		// Reset failure counter because it counts _consecutive_ failures.
