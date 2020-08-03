@@ -39,13 +39,12 @@ const (
 var acceptedContentTypes = []string{contentType, "application/json-rpc", "application/jsonrequest"}
 
 type httpConn struct {
-	mu sync.Mutex
-
 	client    *http.Client
-	headers   http.Header
-	req       *http.Request
+	url       string
 	closeOnce sync.Once
 	closeCh   chan interface{}
+	mu        sync.Mutex // protects headers
+	headers   http.Header
 }
 
 // httpConn is treated specially by Client.
@@ -54,7 +53,7 @@ func (hc *httpConn) writeJSON(context.Context, interface{}) error {
 }
 
 func (hc *httpConn) remoteAddr() string {
-	return hc.req.URL.String()
+	return hc.url
 }
 
 func (hc *httpConn) readBatch() ([]*jsonrpcMessage, bool, error) {
@@ -105,17 +104,18 @@ var DefaultHTTPTimeouts = HTTPTimeouts{
 // DialHTTPWithClient creates a new RPC client that connects to an RPC server over HTTP
 // using the provided HTTP Client.
 func DialHTTPWithClient(endpoint string, client *http.Client) (*Client, error) {
-	req, err := http.NewRequest(http.MethodPost, endpoint, nil)
-	if err != nil {
-		return nil, err
-	}
-	req.Header.Set("Content-Type", contentType)
-	req.Header.Set("Accept", contentType)
-
 	initctx := context.Background()
-	headers := map[string][]string{"Accept": []string{"application/json"}, "Content-Type": []string{"application/json"}}
+	headers := make(http.Header, 2)
+	headers.Set("accept", contentType)
+	headers.Set("content-type", contentType)
 	return newClient(initctx, func(context.Context) (ServerCodec, error) {
-		return &httpConn{client: client, headers: headers, req: req, closeCh: make(chan interface{})}, nil
+		hc := &httpConn{
+			client:  client,
+			headers: headers,
+			url:     endpoint,
+			closeCh: make(chan interface{}),
+		}
+		return hc, nil
 	})
 }
 
@@ -170,12 +170,12 @@ func (hc *httpConn) doRequest(ctx context.Context, msg interface{}) (io.ReadClos
 	if err != nil {
 		return nil, err
 	}
-	req, err := http.NewRequestWithContext(ctx, hc.req.Method, hc.req.URL.String(), ioutil.NopCloser(bytes.NewReader(body)))
+	req, err := http.NewRequestWithContext(ctx, "POST", hc.url, ioutil.NopCloser(bytes.NewReader(body)))
 	if err != nil {
 		return nil, err
 	}
-	req.Host = hc.req.Host
 	req.ContentLength = int64(len(body))
+
 	// set headers
 	hc.mu.Lock()
 	for key, vals := range hc.headers {
@@ -184,6 +184,7 @@ func (hc *httpConn) doRequest(ctx context.Context, msg interface{}) (io.ReadClos
 		}
 	}
 	hc.mu.Unlock()
+
 	// do request
 	resp, err := hc.client.Do(req)
 	if err != nil {
