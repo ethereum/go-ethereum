@@ -142,7 +142,7 @@ func (c *Client) sendHTTP(ctx context.Context, op *requestOp, msg interface{}) e
 		if respBody != nil {
 			buf := new(bytes.Buffer)
 			if _, err2 := buf.ReadFrom(respBody); err2 == nil {
-				return fmt.Errorf("%v %v", err, buf.String())
+				return fmt.Errorf("%v: %v", err, buf.String())
 			}
 		}
 		return err
