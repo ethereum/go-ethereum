@@ -965,11 +965,7 @@ func isPrimitiveTypeValid(primitiveType string) bool {
 // validate checks if the given domain is valid, i.e. contains at least
 // the minimum viable keys and values
 func (domain *TypedDataDomain) validate() error {
-	if domain.ChainId == nil {
-		return errors.New("chainId must be specified according to EIP-155")
-	}
-
-	if len(domain.Name) == 0 && len(domain.Version) == 0 && len(domain.VerifyingContract) == 0 && len(domain.Salt) == 0 {
+	if domain.ChainId == nil && len(domain.Name) == 0 && len(domain.Version) == 0 && len(domain.VerifyingContract) == 0 && len(domain.Salt) == 0 {
 		return errors.New("domain is undefined")
 	}
 
