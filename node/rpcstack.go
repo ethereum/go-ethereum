@@ -235,7 +235,7 @@ func (h *httpServer) enableRPC(apis []rpc.API, config httpConfig) error {
 	return nil
 }
 
-// disableRPC stops the HTTP RPC handler. The caller must hold h.mu.
+// disableRPC stops the HTTP RPC handler. This is internal, the caller must hold h.mu.
 func (h *httpServer) disableRPC() bool {
 	handler := h.httpHandler.Load().(*rpcHandler)
 	if handler != nil {
@@ -267,16 +267,6 @@ func (h *httpServer) enableWS(apis []rpc.API, config wsConfig) error {
 	return nil
 }
 
-// disableWS stops the WebSocket handler. The caller must hold h.mu.
-func (h *httpServer) disableWS() bool {
-	ws := h.wsHandler.Load().(*rpcHandler)
-	if ws != nil {
-		h.wsHandler.Store((*rpcHandler)(nil))
-		ws.server.Stop()
-	}
-	return ws != nil
-}
-
 // stopWS disables JSON-RPC over WebSocket and also stops the server if it only serves WebSocket.
 func (h *httpServer) stopWS() {
 	h.mu.Lock()
@@ -287,6 +277,16 @@ func (h *httpServer) stopWS() {
 			h.doStop()
 		}
 	}
+}
+
+// disableWS disables the WebSocket handler. This is internal, the caller must hold h.mu.
+func (h *httpServer) disableWS() bool {
+	ws := h.wsHandler.Load().(*rpcHandler)
+	if ws != nil {
+		h.wsHandler.Store((*rpcHandler)(nil))
+		ws.server.Stop()
+	}
+	return ws != nil
 }
 
 // rpcAllowed returns true when JSON-RPC over HTTP is enabled.
