@@ -17,29 +17,29 @@
 package nat
 
 import (
-	"context"
 	"errors"
 	"fmt"
 	"net"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/huin/goupnp"
 	"github.com/huin/goupnp/dcps/internetgateway1"
 	"github.com/huin/goupnp/dcps/internetgateway2"
-	"golang.org/x/time/rate"
 )
 
 const (
 	soapRequestTimeout = 3 * time.Second
-	rateLimit          = 500 * time.Millisecond
+	rateLimit          = 200 * time.Millisecond
 )
 
 type upnp struct {
-	dev     *goupnp.RootDevice
-	service string
-	client  upnpClient
-	rlimit  *rate.Limiter
+	dev         *goupnp.RootDevice
+	service     string
+	client      upnpClient
+	mu          sync.Mutex
+	lastReqTime time.Time
 }
 
 type upnpClient interface {
@@ -50,14 +50,22 @@ type upnpClient interface {
 }
 
 func (n *upnp) natEnabled() bool {
-	n.rlimit.Wait(context.Background())
-	_, ok, err := n.client.GetNATRSIPStatus()
+	var ok bool
+	var err error
+	n.withRateLimit(func() error {
+		_, ok, err = n.client.GetNATRSIPStatus()
+		return err
+	})
 	return err == nil && ok
 }
 
 func (n *upnp) ExternalIP() (addr net.IP, err error) {
-	n.rlimit.Wait(context.Background())
-	ipString, err := n.client.GetExternalIPAddress()
+	var ipString string
+	n.withRateLimit(func() error {
+		ipString, err = n.client.GetExternalIPAddress()
+		return err
+	})
+
 	if err != nil {
 		return nil, err
 	}
@@ -77,8 +85,9 @@ func (n *upnp) AddMapping(protocol string, extport, intport int, desc string, li
 	lifetimeS := uint32(lifetime / time.Second)
 	n.DeleteMapping(protocol, extport, intport)
 
-	n.rlimit.Wait(context.Background())
-	return n.client.AddPortMapping("", uint16(extport), protocol, uint16(intport), ip.String(), true, desc, lifetimeS)
+	return n.withRateLimit(func() error {
+		return n.client.AddPortMapping("", uint16(extport), protocol, uint16(intport), ip.String(), true, desc, lifetimeS)
+	})
 }
 
 func (n *upnp) internalAddress() (net.IP, error) {
@@ -105,12 +114,26 @@ func (n *upnp) internalAddress() (net.IP, error) {
 }
 
 func (n *upnp) DeleteMapping(protocol string, extport, intport int) error {
-	n.rlimit.Wait(context.Background())
-	return n.client.DeletePortMapping("", uint16(extport), strings.ToUpper(protocol))
+	return n.withRateLimit(func() error {
+		return n.client.DeletePortMapping("", uint16(extport), strings.ToUpper(protocol))
+	})
 }
 
 func (n *upnp) String() string {
 	return "UPNP " + n.service
+}
+
+func (n *upnp) withRateLimit(fn func() error) error {
+	n.mu.Lock()
+	defer n.mu.Unlock()
+
+	lastreq := time.Since(n.lastReqTime)
+	if lastreq < rateLimit {
+		time.Sleep(rateLimit - lastreq)
+	}
+	err := fn()
+	n.lastReqTime = time.Now()
+	return err
 }
 
 // discoverUPnP searches for Internet Gateway Devices
@@ -178,7 +201,6 @@ func discover(out chan<- *upnp, target string, matcher func(goupnp.ServiceClient
 				return
 			}
 			upnp.dev = devs[i].Root
-			upnp.rlimit = rate.NewLimiter(rate.Every(rateLimit), 0)
 
 			// check whether port mapping is enabled
 			if upnp.natEnabled() {
