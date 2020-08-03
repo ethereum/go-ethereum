@@ -30,6 +30,7 @@ import (
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/log"
+	"github.com/ethereum/go-ethereum/node"
 	"github.com/ethereum/go-ethereum/p2p"
 	"github.com/ethereum/go-ethereum/rlp"
 	"github.com/ethereum/go-ethereum/rpc"
@@ -93,7 +94,7 @@ type Whisper struct {
 }
 
 // New creates a Whisper client ready to communicate through the Ethereum P2P network.
-func New(cfg *Config) *Whisper {
+func New(stack *node.Node, cfg *Config) (*Whisper, error) {
 	if cfg == nil {
 		cfg = &DefaultConfig
 	}
@@ -132,7 +133,10 @@ func New(cfg *Config) *Whisper {
 		},
 	}
 
-	return whisper
+	stack.RegisterAPIs(whisper.APIs())
+	stack.RegisterProtocols(whisper.Protocols())
+	stack.RegisterLifecycle(whisper)
+	return whisper, nil
 }
 
 // MinPow returns the PoW value required by this node.
@@ -634,9 +638,9 @@ func (whisper *Whisper) Send(envelope *Envelope) error {
 	return err
 }
 
-// Start implements node.Service, starting the background data propagation thread
+// Start implements node.Lifecycle, starting the background data propagation thread
 // of the Whisper protocol.
-func (whisper *Whisper) Start(*p2p.Server) error {
+func (whisper *Whisper) Start() error {
 	log.Info("started whisper v." + ProtocolVersionStr)
 	whisper.wg.Add(1)
 	go whisper.update()
@@ -650,7 +654,7 @@ func (whisper *Whisper) Start(*p2p.Server) error {
 	return nil
 }
 
-// Stop implements node.Service, stopping the background data propagation thread
+// Stop implements node.Lifecycle, stopping the background data propagation thread
 // of the Whisper protocol.
 func (whisper *Whisper) Stop() error {
 	close(whisper.quit)
@@ -1091,4 +1095,46 @@ func addBloom(a, b []byte) []byte {
 		c[i] = a[i] | b[i]
 	}
 	return c
+}
+
+func StandaloneWhisperService(cfg *Config) *Whisper {
+	if cfg == nil {
+		cfg = &DefaultConfig
+	}
+
+	whisper := &Whisper{
+		privateKeys:   make(map[string]*ecdsa.PrivateKey),
+		symKeys:       make(map[string][]byte),
+		envelopes:     make(map[common.Hash]*Envelope),
+		expirations:   make(map[uint32]mapset.Set),
+		peers:         make(map[*Peer]struct{}),
+		messageQueue:  make(chan *Envelope, messageQueueLimit),
+		p2pMsgQueue:   make(chan *Envelope, messageQueueLimit),
+		quit:          make(chan struct{}),
+		syncAllowance: DefaultSyncAllowance,
+	}
+
+	whisper.filters = NewFilters(whisper)
+
+	whisper.settings.Store(minPowIdx, cfg.MinimumAcceptedPOW)
+	whisper.settings.Store(maxMsgSizeIdx, cfg.MaxMessageSize)
+	whisper.settings.Store(overflowIdx, false)
+	whisper.settings.Store(restrictConnectionBetweenLightClientsIdx, cfg.RestrictConnectionBetweenLightClients)
+
+	// p2p whisper sub protocol handler
+	whisper.protocol = p2p.Protocol{
+		Name:    ProtocolName,
+		Version: uint(ProtocolVersion),
+		Length:  NumberOfMessageCodes,
+		Run:     whisper.HandlePeer,
+		NodeInfo: func() interface{} {
+			return map[string]interface{}{
+				"version":        ProtocolVersionStr,
+				"maxMessageSize": whisper.MaxMessageSize(),
+				"minimumPoW":     whisper.MinPow(),
+			}
+		},
+	}
+
+	return whisper
 }
