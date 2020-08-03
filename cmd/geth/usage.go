@@ -213,10 +213,6 @@ var AppHelpFlagGroups = []flags.FlagGroup{
 		Flags: metricsFlags,
 	},
 	{
-		Name:  "WHISPER (EXPERIMENTAL)",
-		Flags: whisperFlags,
-	},
-	{
 		Name: "ALIASED (deprecated)",
 		Flags: append([]cli.Flag{
 			utils.LegacyRPCEnabledFlag,
