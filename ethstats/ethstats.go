@@ -82,7 +82,17 @@ type Service struct {
 	pongCh chan struct{} // Pong notifications are fed into this channel
 	histCh chan []uint64 // History request block numbers are fed into this channel
 
-	connMu sync.Mutex // Mutex to prevent concurrent write on the websocket connection
+	// Gorilla websocket docs:
+	// Connections support one concurrent reader and one concurrent writer.
+	// Applications are responsible for ensuring that no more than one goroutine calls the write methods
+	// - NextWriter, SetWriteDeadline, WriteMessage, WriteJSON, EnableWriteCompression, SetCompressionLevel
+	// concurrently and that no more than one goroutine calls the read methods
+	// - NextReader, SetReadDeadline, ReadMessage, ReadJSON, SetPongHandler, SetPingHandler
+	// concurrently.
+	// The Close and WriteControl methods can be called concurrently with all other methods.
+	//
+	// In our case, we use a single mutex for both reading and writing.
+	connMu sync.Mutex // Mutex to prevent concurrent write/read on the websocket connection
 }
 
 // New returns a monitoring service ready for stats reporting.
@@ -302,22 +312,24 @@ func (s *Service) readLoop(conn *websocket.Conn) {
 	for {
 		// Retrieve the next generic network packet and bail out on error
 		var blob json.RawMessage
+		s.connMu.Lock()
 		if err := conn.ReadJSON(&blob); err != nil {
 			log.Warn("Failed to retrieve stats server message", "err", err)
+			s.connMu.Unlock()
 			return
 		}
 		// If the network packet is a system ping, respond to it directly
 		var ping string
 		if err := json.Unmarshal(blob, &ping); err == nil && strings.HasPrefix(ping, "primus::ping::") {
-			s.connMu.Lock()
 			if err := conn.WriteJSON(strings.Replace(ping, "ping", "pong", -1)); err != nil {
-				s.connMu.Unlock()
 				log.Warn("Failed to respond to system ping message", "err", err)
+				s.connMu.Unlock()
 				return
 			}
 			s.connMu.Unlock()
 			continue
 		}
+		s.connMu.Unlock()
 		// Not a system ping, try to decode an actual state message
 		var msg map[string][]interface{}
 		if err := json.Unmarshal(blob, &msg); err != nil {
