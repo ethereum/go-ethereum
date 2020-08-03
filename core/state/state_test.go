@@ -18,7 +18,6 @@ package state
 
 import (
 	"bytes"
-	"github.com/ethereum/go-ethereum/trie"
 	"math/big"
 	"testing"
 
@@ -26,6 +25,7 @@ import (
 	"github.com/ethereum/go-ethereum/core/rawdb"
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/ethdb"
+	"github.com/ethereum/go-ethereum/trie"
 )
 
 var toAddr = common.BytesToAddress
