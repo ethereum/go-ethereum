@@ -260,18 +260,17 @@ func (c *Client) Close() {
 	}
 }
 
-// SetHeader sets the given key to the given value in the header of
-// the client's http requests.
-func (c *Client) SetHeader(key, value string) error {
-	conn := c.writeConn.(*httpConn)
-	if conn == nil {
-		return fmt.Errorf("client is not http")
+// SetHeader adds a custom HTTP header to the client's requests.
+// This method only works for clients using HTTP, it doesn't have
+// any effect for clients using another transport.
+func (c *Client) SetHeader(key, value string) {
+	if !c.isHTTP {
+		return
 	}
-
+	conn := c.writeConn.(*httpConn)
 	conn.mu.Lock()
-	conn.headers[key] = append(conn.headers[key], value)
+	conn.headers.Set(key, value)
 	conn.mu.Unlock()
-	return nil
 }
 
 // Call performs a JSON-RPC call with the given arguments and unmarshals into

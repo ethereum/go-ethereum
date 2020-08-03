@@ -32,7 +32,6 @@ import (
 
 	"github.com/davecgh/go-spew/spew"
 	"github.com/ethereum/go-ethereum/log"
-	"github.com/stretchr/testify/assert"
 )
 
 func TestClientRequest(t *testing.T) {
@@ -437,40 +436,31 @@ func (t testHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	w.Write([]byte(header))
 }
 
-// TestClientSetHeader tests whether an http header has been properly set
-// to the given key and value on a client's http request.
 func TestClientSetHeader(t *testing.T) {
-	server := newTestServer()
-	defer server.Stop()
+	var gotHeader bool
+	srv := newTestServer()
+	httpsrv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Header.Get("test") == "ok" {
+			gotHeader = true
+		}
+		srv.ServeHTTP(w, r)
+	}))
+	defer httpsrv.Close()
+	defer srv.Stop()
 
-	client, hs := httpTestClient(server, "http", nil)
-	defer hs.Close()
+	client, err := Dial(httpsrv.URL)
+	if err != nil {
+		t.Fatal(err)
+	}
 	defer client.Close()
 
-	handler := testHandler{}
-	httpSrv := httptest.NewServer(handler)
-	defer httpSrv.Close()
-
-	if err := client.SetHeader("test", "success"); err != nil {
+	client.SetHeader("test", "ok")
+	if _, err := client.SupportedModules(); err != nil {
 		t.Fatal(err)
 	}
-	conn := client.writeConn.(*httpConn)
-	if conn == nil {
-		t.Fatal("client is not HTTP")
+	if !gotHeader {
+		t.Fatal("client did not set custom header")
 	}
-	conn.req.URL.Host = httpSrv.Listener.Addr().String()
-
-	resp, err := conn.doRequest(context.Background(), "")
-	if err != nil {
-		t.Fatal(err)
-	}
-	buf := make([]byte, 7)
-	_, err = resp.Read(buf)
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	assert.Equal(t, "success", string(buf))
 }
 
 func TestClientHTTP(t *testing.T) {
