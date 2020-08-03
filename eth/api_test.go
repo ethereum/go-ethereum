@@ -29,6 +29,7 @@ import (
 	"github.com/ethereum/go-ethereum/core/rawdb"
 	"github.com/ethereum/go-ethereum/core/state"
 	"github.com/ethereum/go-ethereum/crypto"
+	"github.com/ethereum/go-ethereum/trie"
 )
 
 var dumper = spew.ConfigState{Indent: "    "}
@@ -58,7 +59,7 @@ func (h resultHash) Less(i, j int) bool { return bytes.Compare(h[i].Bytes(), h[j
 
 func TestAccountRange(t *testing.T) {
 	var (
-		statedb  = state.NewDatabase(rawdb.NewMemoryDatabase())
+		statedb  = state.NewDatabaseWithConfig(rawdb.NewMemoryDatabase(), &trie.Config{RecordPreimage: true})
 		state, _ = state.New(common.Hash{}, statedb, nil)
 		addrs    = [AccountRangeMaxResults * 2]common.Address{}
 		m        = map[common.Address]bool{}

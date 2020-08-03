@@ -18,6 +18,7 @@ package state
 
 import (
 	"bytes"
+	"github.com/ethereum/go-ethereum/trie"
 	"math/big"
 	"testing"
 
@@ -40,8 +41,14 @@ func newStateTest() *stateTest {
 	return &stateTest{db: db, state: sdb}
 }
 
+func newStateRecordingPreimage() *stateTest {
+	db := rawdb.NewMemoryDatabase()
+	sdb, _ := New(common.Hash{}, NewDatabaseWithConfig(db, &trie.Config{RecordPreimage: true}), nil)
+	return &stateTest{db: db, state: sdb}
+}
+
 func TestDump(t *testing.T) {
-	s := newStateTest()
+	s := newStateRecordingPreimage()
 
 	// generate a few entries
 	obj1 := s.state.GetOrNewStateObject(toAddr([]byte{0x01}))
