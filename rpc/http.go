@@ -186,8 +186,9 @@ func (hc *httpConn) doRequest(ctx context.Context, msg interface{}) (io.ReadClos
 	// set headers
 	hc.mu.Lock()
 	for key, vals := range hc.headers {
+		req.Header.Del(key)
 		for _, val := range vals {
-			req.Header.Set(key, val)
+			req.Header.Add(key, val)
 		}
 	}
 	hc.mu.Unlock()
