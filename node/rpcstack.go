@@ -154,7 +154,7 @@ func (h *httpServer) start() error {
 
 	// Log all handlers mounted on server.
 	var paths []string
-	for path, _ := range h.handlerNames {
+	for path := range h.handlerNames {
 		paths = append(paths, path)
 	}
 	sort.Strings(paths)
