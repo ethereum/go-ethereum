@@ -429,13 +429,6 @@ func TestClientNotificationStorm(t *testing.T) {
 	doTest(23000, true)
 }
 
-type testHandler struct{}
-
-func (t testHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
-	header := r.Header.Get("test")
-	w.Write([]byte(header))
-}
-
 func TestClientSetHeader(t *testing.T) {
 	var gotHeader bool
 	srv := newTestServer()
