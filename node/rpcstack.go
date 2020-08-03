@@ -421,7 +421,6 @@ type ipcServer struct {
 	mu       sync.Mutex
 	listener net.Listener
 	srv      *rpc.Server
-	apis     []rpc.API
 }
 
 func newIPCServer(log log.Logger, endpoint string) *ipcServer {
@@ -429,14 +428,14 @@ func newIPCServer(log log.Logger, endpoint string) *ipcServer {
 }
 
 // Start starts the httpServer's http.Server
-func (is *ipcServer) start() error {
+func (is *ipcServer) start(apis []rpc.API) error {
 	is.mu.Lock()
 	defer is.mu.Unlock()
 
 	if is.listener != nil {
 		return nil // already running
 	}
-	listener, srv, err := rpc.StartIPCEndpoint(is.endpoint, is.apis)
+	listener, srv, err := rpc.StartIPCEndpoint(is.endpoint, apis)
 	if err != nil {
 		return err
 	}
