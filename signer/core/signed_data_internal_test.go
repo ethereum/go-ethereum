@@ -42,6 +42,11 @@ func TestBytesPadding(t *testing.T) {
 			Output: []byte{1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0},
 		},
 		{
+			Type:   "bytes1",
+			Input:  []byte{1, 2},
+			Output: nil,
+		},
+		{
 			Type:   "bytes7",
 			Input:  []byte{1, 2, 3, 4, 5, 6, 7},
 			Output: []byte{1, 2, 3, 4, 5, 6, 7, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0},
@@ -51,24 +56,29 @@ func TestBytesPadding(t *testing.T) {
 			Input:  []byte{1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30, 31, 32},
 			Output: []byte{1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30, 31, 32},
 		},
+		{
+			Type:   "bytes32",
+			Input:  []byte{1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30, 31, 32, 33},
+			Output: nil,
+		},
 	}
 
 	d := TypedData{}
-	for _, test := range tests {
+	for i, test := range tests {
 		val, err := d.EncodePrimitiveValue(test.Type, test.Input, 1)
 		if test.Output == nil {
 			if err == nil {
-				t.Errorf("expected error, got nil error with result %v: case %v", val, test)
+				t.Errorf("test %d: expected error, got no error (result %x)", i, val)
 			}
 		} else {
 			if err != nil {
-				t.Errorf("expected nil error, got %v: case %v", err, test)
+				t.Errorf("test %d: expected no error, got %v", i, err)
 			}
 			if len(val) != 32 {
-				t.Errorf("expected len 32, got %v: case %v", len(val), test)
+				t.Errorf("test %d: expected len 32, got %d", i, len(val))
 			}
-			if fmt.Sprint(val) != fmt.Sprint(test.Output) {
-				t.Errorf("expected %x, got %x: case %v", test.Output, val, test)
+			if !bytes.Equal(val, test.Output) {
+				t.Errorf("test %d: expected %x, got %x", i, test.Output, val)
 			}
 		}
 	}
@@ -92,15 +102,15 @@ func TestParseBytes(t *testing.T) {
 		out, ok := parseBytes(tt.v)
 		if tt.exp == nil {
 			if ok || out != nil {
-				t.Errorf("Case %d: expecting !ok, got ok = %v with out = %x", i, ok, out)
+				t.Errorf("test %d: expected !ok, got ok = %v with out = %x", i, ok, out)
 			}
 			continue
 		}
 		if !ok {
-			t.Errorf("Case %d: expecting ok got !ok", i)
+			t.Errorf("test %d: expected ok got !ok", i)
 		}
 		if !bytes.Equal(out, tt.exp) {
-			t.Errorf("Case %d: expecting %x got %x", i, tt.exp, out)
+			t.Errorf("test %d: expected %x got %x", i, tt.exp, out)
 		}
 	}
 }
