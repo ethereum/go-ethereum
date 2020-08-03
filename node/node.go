@@ -444,6 +444,9 @@ func (n *Node) RegisterAPIs(apis []rpc.API) {
 }
 
 // RegisterHandler mounts a handler on the given path on the canonical HTTP server.
+//
+// The name of the handler is shown in a log message when the HTTP server starts
+// and should be a descriptive term for the service provided by the handler.
 func (n *Node) RegisterHandler(name, path string, handler http.Handler) {
 	n.lock.Lock()
 	defer n.lock.Unlock()
