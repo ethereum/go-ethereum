@@ -481,6 +481,24 @@ func (typedData *TypedData) EncodeData(primaryType string, data map[string]inter
 	return buffer.Bytes(), nil
 }
 
+// Attempt to parse bytes in different formats: byte array, hex string, hexutil.Bytes.
+func parseBytes(encType interface{}) ([]byte, bool) {
+	switch v := encType.(type) {
+	case []byte:
+		return v, true
+	case hexutil.Bytes:
+		return []byte(v), true
+	case string:
+		bytes, err := hexutil.Decode(v)
+		if err != nil {
+			return nil, false
+		}
+		return bytes, true
+	default:
+		return nil, false
+	}
+}
+
 func parseInteger(encType string, encValue interface{}) (*big.Int, error) {
 	var (
 		length int
@@ -560,7 +578,7 @@ func (typedData *TypedData) EncodePrimitiveValue(encType string, encValue interf
 		}
 		return crypto.Keccak256([]byte(strVal)), nil
 	case "bytes":
-		bytesValue, ok := encValue.([]byte)
+		bytesValue, ok := parseBytes(encValue)
 		if !ok {
 			return nil, dataMismatchError(encType, encValue)
 		}
@@ -575,10 +593,13 @@ func (typedData *TypedData) EncodePrimitiveValue(encType string, encValue interf
 		if length < 0 || length > 32 {
 			return nil, fmt.Errorf("invalid size on bytes: %d", length)
 		}
-		if byteValue, ok := encValue.(hexutil.Bytes); !ok {
+		if byteValue, ok := parseBytes(encValue); !ok || len(byteValue) != length {
 			return nil, dataMismatchError(encType, encValue)
 		} else {
-			return math.PaddedBigBytes(new(big.Int).SetBytes(byteValue), 32), nil
+			// Right-pad the bits
+			dst := make([]byte, 32)
+			copy(dst, byteValue)
+			return dst, nil
 		}
 	}
 	if strings.HasPrefix(encType, "int") || strings.HasPrefix(encType, "uint") {
