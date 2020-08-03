@@ -24,6 +24,7 @@ import (
 	"io/ioutil"
 	"net"
 	"net/http"
+	"sort"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -150,11 +151,21 @@ func (h *httpServer) start() error {
 		"cors", strings.Join(h.httpConfig.CorsAllowedOrigins, ","),
 		"vhosts", strings.Join(h.httpConfig.Vhosts, ","),
 	)
-	// Log all handlers mounted on server.
-	for path, name := range h.handlerNames {
-		log.Info(name+" enabled", "url", "http://"+listener.Addr().String()+path)
-	}
 
+	// Log all handlers mounted on server.
+	var paths []string
+	for path, _ := range h.handlerNames {
+		paths = append(paths, path)
+	}
+	sort.Strings(paths)
+	logged := make(map[string]bool, len(paths))
+	for _, path := range paths {
+		name := h.handlerNames[path]
+		if !logged[name] {
+			log.Info(name+" enabled", "url", "http://"+listener.Addr().String()+path)
+			logged[name] = true
+		}
+	}
 	return nil
 }
 
@@ -321,8 +332,8 @@ func newCorsHandler(srv http.Handler, allowedOrigins []string) http.Handler {
 	c := cors.New(cors.Options{
 		AllowedOrigins: allowedOrigins,
 		AllowedMethods: []string{http.MethodPost, http.MethodGet},
-		MaxAge:         600,
 		AllowedHeaders: []string{"*"},
+		MaxAge:         600,
 	})
 	return c.Handler(srv)
 }

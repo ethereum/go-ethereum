@@ -452,7 +452,6 @@ func (n *Node) RegisterPath(name, path string, handler http.Handler) {
 		panic("can't register HTTP handler on running/stopped node")
 	}
 	n.http.mux.Handle(path, handler)
-
 	n.http.handlerNames[path] = name
 }
 
