@@ -80,7 +80,7 @@ func Main(ctx *cli.Context) error {
 		tracer  vm.Tracer
 		baseDir = "."
 	)
-	var getTracer func(txIndex int) (vm.Tracer, error)
+	var getTracer func(txIndex int, txHash common.Hash) (vm.Tracer, error)
 
 	// If user specified a basedir, make sure it exists
 	if ctx.IsSet(OutputBasedir.Name) {
@@ -111,7 +111,7 @@ func Main(ctx *cli.Context) error {
 			if prevFile != nil {
 				prevFile.Close()
 			}
-			traceFile, err := os.Create(path.Join(baseDir, fmt.Sprintf("trace-%d.jsonl", txIndex)))
+			traceFile, err := os.Create(path.Join(baseDir, fmt.Sprintf("trace-%d-%v.jsonl", txIndex, txHash.String())))
 			if err != nil {
 				return nil, NewError(ErrorIO, fmt.Errorf("failed creating trace-file: %v", err))
 			}
@@ -119,7 +119,7 @@ func Main(ctx *cli.Context) error {
 			return vm.NewJSONLogger(logConfig, traceFile), nil
 		}
 	} else {
-		getTracer = func(txIndex int) (tracer vm.Tracer, err error) {
+		getTracer = func(txIndex int, txHash common.Hash) (tracer vm.Tracer, err error) {
 			return nil, nil
 		}
 	}
