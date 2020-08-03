@@ -184,7 +184,7 @@ func (h *httpServer) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		}
 	} else if rpc != nil {
 		// Requests to a path below root are handled by the mux,
-		// which has all the handlers registered via Node.RegisterPath.
+		// which has all the handlers registered via Node.RegisterHandler.
 		// These are made available when RPC is enabled.
 		h.mux.ServeHTTP(w, r)
 		return

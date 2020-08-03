@@ -391,14 +391,14 @@ func TestLifecycleTerminationGuarantee(t *testing.T) {
 
 // Tests whether a handler can be successfully mounted on the canonical HTTP server
 // on the given path
-func TestRegisterPath_Successful(t *testing.T) {
+func TestRegisterHandler_Successful(t *testing.T) {
 	node := createNode(t, 7878, 7979)
 
 	// create and mount handler
 	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Write([]byte("success"))
 	})
-	node.RegisterPath("test", "/test", handler)
+	node.RegisterHandler("test", "/test", handler)
 
 	// start node
 	if err := node.Start(); err != nil {
@@ -423,7 +423,7 @@ func TestRegisterPath_Successful(t *testing.T) {
 
 // Tests that the given handler will not be successfully mounted since no HTTP server
 // is enabled for RPC
-func TestRegisterPath_Unsuccessful(t *testing.T) {
+func TestRegisterHandler_Unsuccessful(t *testing.T) {
 	node, err := New(&DefaultConfig)
 	if err != nil {
 		t.Fatalf("could not create new node: %v", err)
@@ -433,7 +433,7 @@ func TestRegisterPath_Unsuccessful(t *testing.T) {
 	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Write([]byte("success"))
 	})
-	node.RegisterPath("test", "/test", handler)
+	node.RegisterHandler("test", "/test", handler)
 }
 
 // Tests whether websocket requests can be handled on the same port as a regular http server.

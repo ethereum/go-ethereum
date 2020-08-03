@@ -39,7 +39,7 @@ func TestStartRPC(t *testing.T) {
 
 		// Checks. These run after the node is configured and all API calls have been made.
 		wantReachable bool // whether the HTTP server should be reachable at all
-		wantHandlers  bool // whether RegisterPath handlers should be accessible
+		wantHandlers  bool // whether RegisterHandler handlers should be accessible
 		wantRPC       bool // whether JSON-RPC/HTTP should be accessible
 		wantWS        bool // whether JSON-RPC/WS should be accessible
 	}
@@ -259,7 +259,7 @@ func TestStartRPC(t *testing.T) {
 			defer stack.Close()
 
 			// Register the test handler.
-			stack.RegisterPath("test", "/test", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			stack.RegisterHandler("test", "/test", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 				w.Write([]byte("OK"))
 			}))
 
@@ -282,7 +282,7 @@ func TestStartRPC(t *testing.T) {
 				t.Errorf("HTTP server is %sreachable, want it %sreachable", not(reachable), not(test.wantReachable))
 			}
 			if handlersAvailable != test.wantHandlers {
-				t.Errorf("RegisterPath handlers %savailable, want them %savailable", not(handlersAvailable), not(test.wantHandlers))
+				t.Errorf("RegisterHandler handlers %savailable, want them %savailable", not(handlersAvailable), not(test.wantHandlers))
 			}
 			if rpcAvailable != test.wantRPC {
 				t.Errorf("HTTP RPC %savailable, want it %savailable", not(rpcAvailable), not(test.wantRPC))

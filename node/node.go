@@ -443,8 +443,8 @@ func (n *Node) RegisterAPIs(apis []rpc.API) {
 	n.rpcAPIs = append(n.rpcAPIs, apis...)
 }
 
-// RegisterPath mounts the given handler on the given path on the canonical HTTP server.
-func (n *Node) RegisterPath(name, path string, handler http.Handler) {
+// RegisterHandler mounts a handler on the given path on the canonical HTTP server.
+func (n *Node) RegisterHandler(name, path string, handler http.Handler) {
 	n.lock.Lock()
 	defer n.lock.Unlock()
 

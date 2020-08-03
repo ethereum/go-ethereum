@@ -44,9 +44,9 @@ func newHandler(stack *node.Node, backend ethapi.Backend, cors, vhosts []string)
 	h := &relay.Handler{Schema: s}
 	handler := node.NewHTTPHandlerStack(h, cors, vhosts)
 
-	stack.RegisterPath("GraphQL UI", "/graphql/ui", GraphiQL{})
-	stack.RegisterPath("GraphQL", "/graphql", handler)
-	stack.RegisterPath("GraphQL", "/graphql/", handler)
+	stack.RegisterHandler("GraphQL UI", "/graphql/ui", GraphiQL{})
+	stack.RegisterHandler("GraphQL", "/graphql", handler)
+	stack.RegisterHandler("GraphQL", "/graphql/", handler)
 
 	return nil
 }
