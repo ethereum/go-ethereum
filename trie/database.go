@@ -74,7 +74,8 @@ type Database struct {
 	oldest  common.Hash                 // Oldest tracked node, flush-list head
 	newest  common.Hash                 // Newest tracked node, flush-list tail
 
-	preimages map[common.Hash][]byte // Preimages of nodes from the secure trie
+	recordPreimage bool                   // Flag whether the preimage is recorded
+	preimages      map[common.Hash][]byte // Preimages of nodes from the secure trie
 
 	gctime  time.Duration      // Time spent on garbage collection since last commit
 	gcnodes uint64             // Nodes garbage collected since last commit
@@ -272,24 +273,35 @@ func expandNode(hash hashNode, n node) node {
 	}
 }
 
+// Config defines all necessary options for database.
+type Config struct {
+	Cache          int    // Memory allowance (MB) to use for caching trie nodes in memory
+	Journal        string // Journal of clean cache to survive node restarts
+	RecordPreimage bool   // Flag whether the preimage of trie key is recorded
+}
+
 // NewDatabase creates a new trie database to store ephemeral trie content before
 // its written out to disk or garbage collected. No read cache is created, so all
 // data retrievals will hit the underlying disk database.
 func NewDatabase(diskdb ethdb.KeyValueStore) *Database {
-	return NewDatabaseWithCache(diskdb, 0, "")
+	return NewDatabaseWithConfig(diskdb, nil)
 }
 
-// NewDatabaseWithCache creates a new trie database to store ephemeral trie content
+// NewDatabaseWithConfig creates a new trie database to store ephemeral trie content
 // before its written out to disk or garbage collected. It also acts as a read cache
 // for nodes loaded from disk.
-func NewDatabaseWithCache(diskdb ethdb.KeyValueStore, cache int, journal string) *Database {
+func NewDatabaseWithConfig(diskdb ethdb.KeyValueStore, config *Config) *Database {
 	var cleans *fastcache.Cache
-	if cache > 0 {
-		if journal == "" {
-			cleans = fastcache.New(cache * 1024 * 1024)
+	if config != nil && config.Cache > 0 {
+		if config.Journal == "" {
+			cleans = fastcache.New(config.Cache * 1024 * 1024)
 		} else {
-			cleans = fastcache.LoadFromFileOrNew(journal, cache*1024*1024)
+			cleans = fastcache.LoadFromFileOrNew(config.Journal, config.Cache*1024*1024)
 		}
+	}
+	var recordPreimage bool
+	if config != nil {
+		recordPreimage = config.RecordPreimage
 	}
 	return &Database{
 		diskdb: diskdb,
@@ -297,7 +309,8 @@ func NewDatabaseWithCache(diskdb ethdb.KeyValueStore, cache int, journal string)
 		dirties: map[common.Hash]*cachedNode{{}: {
 			children: make(map[common.Hash]uint16),
 		}},
-		preimages: make(map[common.Hash][]byte),
+		recordPreimage: recordPreimage,
+		preimages:      make(map[common.Hash][]byte),
 	}
 }
 
