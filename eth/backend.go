@@ -162,7 +162,7 @@ func New(stack *node.Node, config *Config) (*Ethereum, error) {
 		}
 		cacheConfig = &core.CacheConfig{
 			TrieCleanLimit:      config.TrieCleanCache,
-			TrieCleanJournal:    ctx.ResolvePath(config.TrieCleanCacheJournal),
+			TrieCleanJournal:    stack.ResolvePath(config.TrieCleanCacheJournal),
 			TrieCleanRejournal:  config.TrieCleanCacheRejournal,
 			TrieCleanNoPrefetch: config.NoPrefetch,
 			TrieDirtyLimit:      config.TrieDirtyCache,
