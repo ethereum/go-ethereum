@@ -268,9 +268,9 @@ func (c *Client) SetHeader(key, value string) error {
 		return fmt.Errorf("client is not http")
 	}
 
-	conn.mux.Lock()
+	conn.mu.Lock()
 	conn.headers[key] = append(conn.headers[key], value)
-	conn.mux.Unlock()
+	conn.mu.Unlock()
 	return nil
 }
 

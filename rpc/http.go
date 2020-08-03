@@ -39,7 +39,7 @@ const (
 var acceptedContentTypes = []string{contentType, "application/json-rpc", "application/jsonrequest"}
 
 type httpConn struct {
-	mux sync.Mutex
+	mu sync.Mutex
 
 	client    *http.Client
 	headers   http.Header
@@ -177,13 +177,13 @@ func (hc *httpConn) doRequest(ctx context.Context, msg interface{}) (io.ReadClos
 	req.Host = hc.req.Host
 	req.ContentLength = int64(len(body))
 	// set headers
-	hc.mux.Lock()
+	hc.mu.Lock()
 	for key, vals := range hc.headers {
 		for _, val := range vals {
 			req.Header.Set(key, val)
 		}
 	}
-	hc.mux.Unlock()
+	hc.mu.Unlock()
 	// do request
 	resp, err := hc.client.Do(req)
 	if err != nil {
