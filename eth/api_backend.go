@@ -218,8 +218,7 @@ func (b *EthAPIBackend) SubscribeChainSideEvent(ch chan<- core.ChainSideEvent) e
 }
 
 func (b *EthAPIBackend) SubscribeStateSyncEvent(ch chan<- core.StateSyncEvent) event.Subscription {
-	engine := b.eth.Engine()
-	return engine.(*bor.Bor).SubscribeStateSyncEvent(ch)
+	return b.eth.BlockChain().SubscribeStateSyncEvent(ch)
 }
 
 func (b *EthAPIBackend) SubscribeLogsEvent(ch chan<- []*types.Log) event.Subscription {

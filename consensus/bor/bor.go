@@ -666,7 +666,8 @@ func (c *Bor) Finalize(chain consensus.ChainReader, header *types.Header, state 
 
 		if !c.WithoutHeimdall {
 			// commit statees
-			if err := c.CommitStates(state, header, cx); err != nil {
+			_, err := c.CommitStates(state, header, cx)
+			if err != nil {
 				log.Error("Error while committing states", "error", err)
 				return
 			}
@@ -681,6 +682,7 @@ func (c *Bor) Finalize(chain consensus.ChainReader, header *types.Header, state 
 // FinalizeAndAssemble implements consensus.Engine, ensuring no uncles are set,
 // nor block rewards given, and returns the final block.
 func (c *Bor) FinalizeAndAssemble(chain consensus.ChainReader, header *types.Header, state *state.StateDB, txs []*types.Transaction, uncles []*types.Header, receipts []*types.Receipt) (*types.Block, error) {
+	stateSyncData := []*types.StateData{}
 	headerNumber := header.Number.Uint64()
 	if headerNumber%c.config.Sprint == 0 {
 		cx := chainContext{Chain: chain, Bor: c}
@@ -694,7 +696,8 @@ func (c *Bor) FinalizeAndAssemble(chain consensus.ChainReader, header *types.Hea
 
 		if !c.WithoutHeimdall {
 			// commit statees
-			if err := c.CommitStates(state, header, cx); err != nil {
+			stateSyncData, err = c.CommitStates(state, header, cx)
+			if err != nil {
 				log.Error("Error while committing states", "error", err)
 				return nil, err
 			}
@@ -704,9 +707,12 @@ func (c *Bor) FinalizeAndAssemble(chain consensus.ChainReader, header *types.Hea
 	// No block rewards in PoA, so the state remains as is and uncles are dropped
 	header.Root = state.IntermediateRoot(chain.Config().IsEIP158(header.Number))
 	header.UncleHash = types.CalcUncleHash(nil)
+	// Assemble block
+	block := types.NewBlock(header, txs, nil, receipts)
 
-	// Assemble and return the final block for sealing
-	return types.NewBlock(header, txs, nil, receipts), nil
+	block.SetStateSync(stateSyncData)
+	// return the final block for sealing
+	return block, nil
 }
 
 // Authorize injects a private key into the consensus engine to mint new blocks
@@ -723,7 +729,6 @@ func (c *Bor) Authorize(signer common.Address, signFn SignerFn) {
 // the local signing credentials.
 func (c *Bor) Seal(chain consensus.ChainReader, block *types.Block, results chan<- *types.Block, stop <-chan struct{}) error {
 	header := block.Header()
-
 	// Sealing the genesis block is not supported
 	number := header.Number.Uint64()
 	if number == 0 {
@@ -1088,11 +1093,12 @@ func (c *Bor) CommitStates(
 	state *state.StateDB,
 	header *types.Header,
 	chain chainContext,
-) error {
+) ([]*types.StateData, error) {
+	stateSyncs := make([]*types.StateData, 0)
 	number := header.Number.Uint64()
 	_lastStateID, err := c.GenesisContractsClient.LastStateId(number - 1)
 	if err != nil {
-		return err
+		return nil, err
 	}
 
 	to := time.Unix(int64(chain.Chain.GetHeaderByNumber(number-c.config.Sprint).Time), 0)
@@ -1119,16 +1125,14 @@ func (c *Bor) CommitStates(
 			Data:     hex.EncodeToString(eventRecord.Data),
 			TxHash:   eventRecord.TxHash,
 		}
-		go func() {
-			c.stateSyncFeed.Send(core.StateSyncEvent{StateData: &stateData})
-		}()
+		stateSyncs = append(stateSyncs, &stateData)
 
 		if err := c.GenesisContractsClient.CommitState(eventRecord, state, header, chain); err != nil {
-			return err
+			return nil, err
 		}
 		lastStateID++
 	}
-	return nil
+	return stateSyncs, nil
 }
 
 func validateEventRecord(eventRecord *EventRecordWithTime, number uint64, to time.Time, lastStateID uint64, chainID string) error {
@@ -1137,11 +1141,6 @@ func validateEventRecord(eventRecord *EventRecordWithTime, number uint64, to tim
 		return &InvalidStateReceivedError{number, lastStateID, &to, eventRecord}
 	}
 	return nil
-}
-
-// SubscribeStateSyncEvent registers a subscription of StateSyncEvent.
-func (c *Bor) SubscribeStateSyncEvent(ch chan<- core.StateSyncEvent) event.Subscription {
-	return c.scope.Track(c.stateSyncFeed.Subscribe(ch))
 }
 
 func (c *Bor) SetHeimdallClient(h IHeimdallClient) {
