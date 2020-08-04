@@ -303,8 +303,8 @@ func NewBlockChain(db ethdb.Database, cacheConfig *CacheConfig, chainConfig *par
 			for i := low + 1; i <= bc.CurrentHeader().Number.Uint64(); i++ {
 				hashes = append(hashes, rawdb.ReadCanonicalHash(bc.db, i))
 			}
+			log.Warn("Truncating ancient chain", "from", previous, "to", low)
 			bc.Rollback(hashes)
-			log.Warn("Truncate ancient chain", "from", previous, "to", low)
 		}
 	}
 	// Check the current state of the block hashes and make sure that we do not have any of the bad blocks in our chain
@@ -485,10 +485,9 @@ func (bc *BlockChain) SetHead(head uint64) error {
 		if num+1 <= frozen {
 			// Truncate all relative data(header, total difficulty, body, receipt
 			// and canonical hash) from ancient store.
-			if err := bc.db.TruncateAncients(num + 1); err != nil {
+			if err := bc.truncateAncient(num + 1); err != nil {
 				log.Crit("Failed to truncate ancient data", "number", num, "err", err)
 			}
-
 			// Remove the hash <-> number mapping from the active store.
 			rawdb.DeleteHeaderNumber(db, hash)
 		} else {

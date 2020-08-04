@@ -70,12 +70,16 @@ type freezer struct {
 	// WARNING: The `frozen` field is accessed atomically. On 32 bit platforms, only
 	// 64-bit aligned fields can be atomic. The struct is guaranteed to be so aligned,
 	// so take advantage of that (https://golang.org/pkg/sync/atomic/#pkg-note-BUG).
-	frozen uint64 // Number of blocks already frozen
+	frozen    uint64 // Number of blocks already frozen
+	threshold uint64 // Number of recent blocks not to freeze (params.FullImmutabilityThreshold apart from tests)
 
 	tables       map[string]*freezerTable // Data tables for storing everything
 	instanceLock fileutil.Releaser        // File-system lock to prevent double opens
-	quit         chan struct{}
-	closeOnce    sync.Once
+
+	trigger chan chan struct{} // Manual blocking freeze trigger, test determinism
+
+	quit      chan struct{}
+	closeOnce sync.Once
 }
 
 // newFreezer creates a chain freezer that moves ancient chain data into
@@ -102,8 +106,10 @@ func newFreezer(datadir string, namespace string) (*freezer, error) {
 	}
 	// Open all the supported data tables
 	freezer := &freezer{
+		threshold:    params.FullImmutabilityThreshold,
 		tables:       make(map[string]*freezerTable),
 		instanceLock: lock,
+		trigger:      make(chan chan struct{}),
 		quit:         make(chan struct{}),
 	}
 	for name, disableSnappy := range freezerNoSnappy {
@@ -261,7 +267,10 @@ func (f *freezer) Sync() error {
 func (f *freezer) freeze(db ethdb.KeyValueStore) {
 	nfdb := &nofreezedb{KeyValueStore: db}
 
-	backoff := false
+	var (
+		backoff   bool
+		triggered chan struct{} // Used in tests
+	)
 	for {
 		select {
 		case <-f.quit:
@@ -270,8 +279,15 @@ func (f *freezer) freeze(db ethdb.KeyValueStore) {
 		default:
 		}
 		if backoff {
+			// If we were doing a manual trigger, notify it
+			if triggered != nil {
+				triggered <- struct{}{}
+				triggered = nil
+			}
 			select {
 			case <-time.NewTimer(freezerRecheckInterval).C:
+				backoff = false
+			case triggered = <-f.trigger:
 				backoff = false
 			case <-f.quit:
 				return
@@ -285,18 +301,20 @@ func (f *freezer) freeze(db ethdb.KeyValueStore) {
 			continue
 		}
 		number := ReadHeaderNumber(nfdb, hash)
+		threshold := atomic.LoadUint64(&f.threshold)
+
 		switch {
 		case number == nil:
 			log.Error("Current full block number unavailable", "hash", hash)
 			backoff = true
 			continue
 
-		case *number < params.FullImmutabilityThreshold:
-			log.Debug("Current full block not old enough", "number", *number, "hash", hash, "delay", params.FullImmutabilityThreshold)
+		case *number < threshold:
+			log.Debug("Current full block not old enough", "number", *number, "hash", hash, "delay", threshold)
 			backoff = true
 			continue
 
-		case *number-params.FullImmutabilityThreshold <= f.frozen:
+		case *number-threshold <= f.frozen:
 			log.Debug("Ancient blocks frozen already", "number", *number, "hash", hash, "frozen", f.frozen)
 			backoff = true
 			continue
@@ -308,7 +326,7 @@ func (f *freezer) freeze(db ethdb.KeyValueStore) {
 			continue
 		}
 		// Seems we have data ready to be frozen, process in usable batches
-		limit := *number - params.FullImmutabilityThreshold
+		limit := *number - threshold
 		if limit-f.frozen > freezerBatchLimit {
 			limit = f.frozen + freezerBatchLimit
 		}
