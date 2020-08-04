@@ -396,9 +396,9 @@ func (p *Parlia) verifyCascadingFields(chain consensus.ChainReader, header *type
 	}
 
 	// Verify that the gas limit is <= 2^63-1
-	cap := uint64(0x7fffffffffffffff)
-	if header.GasLimit > cap {
-		return fmt.Errorf("invalid gasLimit: have %v, max %v", header.GasLimit, cap)
+	capacity := uint64(0x7fffffffffffffff)
+	if header.GasLimit > capacity {
+		return fmt.Errorf("invalid gasLimit: have %v, max %v", header.GasLimit, capacity)
 	}
 	// Verify that the gasUsed is <= gasLimit
 	if header.GasUsed > header.GasLimit {
@@ -809,7 +809,7 @@ func (p *Parlia) Seal(chain consensus.ChainReader, block *types.Block, results c
 	}
 
 	// Sweet, the protocol permits us to sign the block, wait for our time
-	delay := time.Unix(int64(header.Time), 0).Sub(time.Now()) // nolint: gosimple
+	delay := time.Until(time.Unix(int64(header.Time), 0)) // nolint: gosimple
 	if header.Difficulty.Cmp(diffNoTurn) == 0 {
 		// It's not our turn explicitly to sign, delay it a bit
 		wiggle := time.Duration(len(snap.Validators)/2+1) * wiggleTime
@@ -1072,8 +1072,8 @@ func (p *Parlia) applyTransaction(
 			return errors.New("supposed to get a actual transaction, but get none")
 		}
 		actualTx := (*receivedTxs)[0]
-		if bytes.Compare(p.signer.Hash(actualTx).Bytes(), expectedHash.Bytes()) != 0 {
-			return errors.New(fmt.Sprintf("expected tx hash %v, get %v", expectedHash.String(), actualTx.Hash().String()))
+		if !bytes.Equal(p.signer.Hash(actualTx).Bytes(), expectedHash.Bytes()) {
+			return fmt.Errorf("expected tx hash %v, get %v", expectedHash.String(), actualTx.Hash().String())
 		}
 		expectedTx = actualTx
 		// move to next
