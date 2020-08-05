@@ -373,7 +373,7 @@ func exportChain(ctx *cli.Context) error {
 	if len(ctx.Args()) < 1 {
 		utils.Fatalf("This command requires an argument.")
 	}
-	
+
 	stack, _ := makeConfigNode(ctx)
 	defer stack.Close()
 
