@@ -504,9 +504,6 @@ func TestCanonicalSynchronisation63Full(t *testing.T) { testCanonicalSynchronisa
 func TestCanonicalSynchronisation63Fast(t *testing.T) { testCanonicalSynchronisation(t, 63, FastSync) }
 func TestCanonicalSynchronisation64Full(t *testing.T) { testCanonicalSynchronisation(t, 64, FullSync) }
 func TestCanonicalSynchronisation64Fast(t *testing.T) { testCanonicalSynchronisation(t, 64, FastSync) }
-func TestCanonicalSynchronisation64Light(t *testing.T) {
-	testCanonicalSynchronisation(t, 64, LightSync)
-}
 func TestCanonicalSynchronisation65Full(t *testing.T) { testCanonicalSynchronisation(t, 65, FullSync) }
 func TestCanonicalSynchronisation65Fast(t *testing.T) { testCanonicalSynchronisation(t, 65, FastSync) }
 func TestCanonicalSynchronisation65Light(t *testing.T) {
@@ -621,7 +618,6 @@ func TestForkedSync63Full(t *testing.T)  { testForkedSync(t, 63, FullSync) }
 func TestForkedSync63Fast(t *testing.T)  { testForkedSync(t, 63, FastSync) }
 func TestForkedSync64Full(t *testing.T)  { testForkedSync(t, 64, FullSync) }
 func TestForkedSync64Fast(t *testing.T)  { testForkedSync(t, 64, FastSync) }
-func TestForkedSync64Light(t *testing.T) { testForkedSync(t, 64, LightSync) }
 func TestForkedSync65Full(t *testing.T)  { testForkedSync(t, 65, FullSync) }
 func TestForkedSync65Fast(t *testing.T)  { testForkedSync(t, 65, FastSync) }
 func TestForkedSync65Light(t *testing.T) { testForkedSync(t, 65, LightSync) }
@@ -655,7 +651,6 @@ func TestHeavyForkedSync63Full(t *testing.T)  { testHeavyForkedSync(t, 63, FullS
 func TestHeavyForkedSync63Fast(t *testing.T)  { testHeavyForkedSync(t, 63, FastSync) }
 func TestHeavyForkedSync64Full(t *testing.T)  { testHeavyForkedSync(t, 64, FullSync) }
 func TestHeavyForkedSync64Fast(t *testing.T)  { testHeavyForkedSync(t, 64, FastSync) }
-func TestHeavyForkedSync64Light(t *testing.T) { testHeavyForkedSync(t, 64, LightSync) }
 func TestHeavyForkedSync65Full(t *testing.T)  { testHeavyForkedSync(t, 65, FullSync) }
 func TestHeavyForkedSync65Fast(t *testing.T)  { testHeavyForkedSync(t, 65, FastSync) }
 func TestHeavyForkedSync65Light(t *testing.T) { testHeavyForkedSync(t, 65, LightSync) }
@@ -691,7 +686,6 @@ func TestBoundedForkedSync63Full(t *testing.T)  { testBoundedForkedSync(t, 63, F
 func TestBoundedForkedSync63Fast(t *testing.T)  { testBoundedForkedSync(t, 63, FastSync) }
 func TestBoundedForkedSync64Full(t *testing.T)  { testBoundedForkedSync(t, 64, FullSync) }
 func TestBoundedForkedSync64Fast(t *testing.T)  { testBoundedForkedSync(t, 64, FastSync) }
-func TestBoundedForkedSync64Light(t *testing.T) { testBoundedForkedSync(t, 64, LightSync) }
 func TestBoundedForkedSync65Full(t *testing.T)  { testBoundedForkedSync(t, 65, FullSync) }
 func TestBoundedForkedSync65Fast(t *testing.T)  { testBoundedForkedSync(t, 65, FastSync) }
 func TestBoundedForkedSync65Light(t *testing.T) { testBoundedForkedSync(t, 65, LightSync) }
@@ -726,7 +720,6 @@ func TestBoundedHeavyForkedSync63Full(t *testing.T)  { testBoundedHeavyForkedSyn
 func TestBoundedHeavyForkedSync63Fast(t *testing.T)  { testBoundedHeavyForkedSync(t, 63, FastSync) }
 func TestBoundedHeavyForkedSync64Full(t *testing.T)  { testBoundedHeavyForkedSync(t, 64, FullSync) }
 func TestBoundedHeavyForkedSync64Fast(t *testing.T)  { testBoundedHeavyForkedSync(t, 64, FastSync) }
-func TestBoundedHeavyForkedSync64Light(t *testing.T) { testBoundedHeavyForkedSync(t, 64, LightSync) }
 func TestBoundedHeavyForkedSync65Full(t *testing.T)  { testBoundedHeavyForkedSync(t, 65, FullSync) }
 func TestBoundedHeavyForkedSync65Fast(t *testing.T)  { testBoundedHeavyForkedSync(t, 65, FastSync) }
 func TestBoundedHeavyForkedSync65Light(t *testing.T) { testBoundedHeavyForkedSync(t, 65, LightSync) }
@@ -779,7 +772,6 @@ func TestCancel63Full(t *testing.T)  { testCancel(t, 63, FullSync) }
 func TestCancel63Fast(t *testing.T)  { testCancel(t, 63, FastSync) }
 func TestCancel64Full(t *testing.T)  { testCancel(t, 64, FullSync) }
 func TestCancel64Fast(t *testing.T)  { testCancel(t, 64, FastSync) }
-func TestCancel64Light(t *testing.T) { testCancel(t, 64, LightSync) }
 func TestCancel65Full(t *testing.T)  { testCancel(t, 65, FullSync) }
 func TestCancel65Fast(t *testing.T)  { testCancel(t, 65, FastSync) }
 func TestCancel65Light(t *testing.T) { testCancel(t, 65, LightSync) }
@@ -813,7 +805,6 @@ func TestMultiSynchronisation63Full(t *testing.T)  { testMultiSynchronisation(t,
 func TestMultiSynchronisation63Fast(t *testing.T)  { testMultiSynchronisation(t, 63, FastSync) }
 func TestMultiSynchronisation64Full(t *testing.T)  { testMultiSynchronisation(t, 64, FullSync) }
 func TestMultiSynchronisation64Fast(t *testing.T)  { testMultiSynchronisation(t, 64, FastSync) }
-func TestMultiSynchronisation64Light(t *testing.T) { testMultiSynchronisation(t, 64, LightSync) }
 func TestMultiSynchronisation65Full(t *testing.T)  { testMultiSynchronisation(t, 65, FullSync) }
 func TestMultiSynchronisation65Fast(t *testing.T)  { testMultiSynchronisation(t, 65, FastSync) }
 func TestMultiSynchronisation65Light(t *testing.T) { testMultiSynchronisation(t, 65, LightSync) }
@@ -844,7 +835,6 @@ func TestMultiProtoSynchronisation63Full(t *testing.T)  { testMultiProtoSync(t, 
 func TestMultiProtoSynchronisation63Fast(t *testing.T)  { testMultiProtoSync(t, 63, FastSync) }
 func TestMultiProtoSynchronisation64Full(t *testing.T)  { testMultiProtoSync(t, 64, FullSync) }
 func TestMultiProtoSynchronisation64Fast(t *testing.T)  { testMultiProtoSync(t, 64, FastSync) }
-func TestMultiProtoSynchronisation64Light(t *testing.T) { testMultiProtoSync(t, 64, LightSync) }
 func TestMultiProtoSynchronisation65Full(t *testing.T)  { testMultiProtoSync(t, 65, FullSync) }
 func TestMultiProtoSynchronisation65Fast(t *testing.T)  { testMultiProtoSync(t, 65, FastSync) }
 func TestMultiProtoSynchronisation65Light(t *testing.T) { testMultiProtoSync(t, 65, LightSync) }
@@ -884,7 +874,6 @@ func TestEmptyShortCircuit63Full(t *testing.T)  { testEmptyShortCircuit(t, 63, F
 func TestEmptyShortCircuit63Fast(t *testing.T)  { testEmptyShortCircuit(t, 63, FastSync) }
 func TestEmptyShortCircuit64Full(t *testing.T)  { testEmptyShortCircuit(t, 64, FullSync) }
 func TestEmptyShortCircuit64Fast(t *testing.T)  { testEmptyShortCircuit(t, 64, FastSync) }
-func TestEmptyShortCircuit64Light(t *testing.T) { testEmptyShortCircuit(t, 64, LightSync) }
 func TestEmptyShortCircuit65Full(t *testing.T)  { testEmptyShortCircuit(t, 65, FullSync) }
 func TestEmptyShortCircuit65Fast(t *testing.T)  { testEmptyShortCircuit(t, 65, FastSync) }
 func TestEmptyShortCircuit65Light(t *testing.T) { testEmptyShortCircuit(t, 65, LightSync) }
@@ -939,7 +928,6 @@ func TestMissingHeaderAttack63Full(t *testing.T)  { testMissingHeaderAttack(t, 6
 func TestMissingHeaderAttack63Fast(t *testing.T)  { testMissingHeaderAttack(t, 63, FastSync) }
 func TestMissingHeaderAttack64Full(t *testing.T)  { testMissingHeaderAttack(t, 64, FullSync) }
 func TestMissingHeaderAttack64Fast(t *testing.T)  { testMissingHeaderAttack(t, 64, FastSync) }
-func TestMissingHeaderAttack64Light(t *testing.T) { testMissingHeaderAttack(t, 64, LightSync) }
 func TestMissingHeaderAttack65Full(t *testing.T)  { testMissingHeaderAttack(t, 65, FullSync) }
 func TestMissingHeaderAttack65Fast(t *testing.T)  { testMissingHeaderAttack(t, 65, FastSync) }
 func TestMissingHeaderAttack65Light(t *testing.T) { testMissingHeaderAttack(t, 65, LightSync) }
@@ -972,7 +960,6 @@ func TestShiftedHeaderAttack63Full(t *testing.T)  { testShiftedHeaderAttack(t, 6
 func TestShiftedHeaderAttack63Fast(t *testing.T)  { testShiftedHeaderAttack(t, 63, FastSync) }
 func TestShiftedHeaderAttack64Full(t *testing.T)  { testShiftedHeaderAttack(t, 64, FullSync) }
 func TestShiftedHeaderAttack64Fast(t *testing.T)  { testShiftedHeaderAttack(t, 64, FastSync) }
-func TestShiftedHeaderAttack64Light(t *testing.T) { testShiftedHeaderAttack(t, 64, LightSync) }
 func TestShiftedHeaderAttack65Full(t *testing.T)  { testShiftedHeaderAttack(t, 65, FullSync) }
 func TestShiftedHeaderAttack65Fast(t *testing.T)  { testShiftedHeaderAttack(t, 65, FastSync) }
 func TestShiftedHeaderAttack65Light(t *testing.T) { testShiftedHeaderAttack(t, 65, LightSync) }
@@ -1008,7 +995,6 @@ func testShiftedHeaderAttack(t *testing.T, protocol int, mode SyncMode) {
 // sure no state was corrupted.
 func TestInvalidHeaderRollback63Fast(t *testing.T)  { testInvalidHeaderRollback(t, 63, FastSync) }
 func TestInvalidHeaderRollback64Fast(t *testing.T)  { testInvalidHeaderRollback(t, 64, FastSync) }
-func TestInvalidHeaderRollback64Light(t *testing.T) { testInvalidHeaderRollback(t, 64, LightSync) }
 func TestInvalidHeaderRollback65Fast(t *testing.T)  { testInvalidHeaderRollback(t, 65, FastSync) }
 func TestInvalidHeaderRollback65Light(t *testing.T) { testInvalidHeaderRollback(t, 65, LightSync) }
 
@@ -1104,7 +1090,6 @@ func TestHighTDStarvationAttack63Full(t *testing.T)  { testHighTDStarvationAttac
 func TestHighTDStarvationAttack63Fast(t *testing.T)  { testHighTDStarvationAttack(t, 63, FastSync) }
 func TestHighTDStarvationAttack64Full(t *testing.T)  { testHighTDStarvationAttack(t, 64, FullSync) }
 func TestHighTDStarvationAttack64Fast(t *testing.T)  { testHighTDStarvationAttack(t, 64, FastSync) }
-func TestHighTDStarvationAttack64Light(t *testing.T) { testHighTDStarvationAttack(t, 64, LightSync) }
 func TestHighTDStarvationAttack65Full(t *testing.T)  { testHighTDStarvationAttack(t, 65, FullSync) }
 func TestHighTDStarvationAttack65Fast(t *testing.T)  { testHighTDStarvationAttack(t, 65, FastSync) }
 func TestHighTDStarvationAttack65Light(t *testing.T) { testHighTDStarvationAttack(t, 65, LightSync) }
@@ -1181,7 +1166,6 @@ func TestSyncProgress63Full(t *testing.T)  { testSyncProgress(t, 63, FullSync) }
 func TestSyncProgress63Fast(t *testing.T)  { testSyncProgress(t, 63, FastSync) }
 func TestSyncProgress64Full(t *testing.T)  { testSyncProgress(t, 64, FullSync) }
 func TestSyncProgress64Fast(t *testing.T)  { testSyncProgress(t, 64, FastSync) }
-func TestSyncProgress64Light(t *testing.T) { testSyncProgress(t, 64, LightSync) }
 func TestSyncProgress65Full(t *testing.T)  { testSyncProgress(t, 65, FullSync) }
 func TestSyncProgress65Fast(t *testing.T)  { testSyncProgress(t, 65, FastSync) }
 func TestSyncProgress65Light(t *testing.T) { testSyncProgress(t, 65, LightSync) }
@@ -1266,7 +1250,6 @@ func TestForkedSyncProgress63Full(t *testing.T)  { testForkedSyncProgress(t, 63,
 func TestForkedSyncProgress63Fast(t *testing.T)  { testForkedSyncProgress(t, 63, FastSync) }
 func TestForkedSyncProgress64Full(t *testing.T)  { testForkedSyncProgress(t, 64, FullSync) }
 func TestForkedSyncProgress64Fast(t *testing.T)  { testForkedSyncProgress(t, 64, FastSync) }
-func TestForkedSyncProgress64Light(t *testing.T) { testForkedSyncProgress(t, 64, LightSync) }
 func TestForkedSyncProgress65Full(t *testing.T)  { testForkedSyncProgress(t, 65, FullSync) }
 func TestForkedSyncProgress65Fast(t *testing.T)  { testForkedSyncProgress(t, 65, FastSync) }
 func TestForkedSyncProgress65Light(t *testing.T) { testForkedSyncProgress(t, 65, LightSync) }
@@ -1343,7 +1326,6 @@ func TestFailedSyncProgress63Full(t *testing.T)  { testFailedSyncProgress(t, 63,
 func TestFailedSyncProgress63Fast(t *testing.T)  { testFailedSyncProgress(t, 63, FastSync) }
 func TestFailedSyncProgress64Full(t *testing.T)  { testFailedSyncProgress(t, 64, FullSync) }
 func TestFailedSyncProgress64Fast(t *testing.T)  { testFailedSyncProgress(t, 64, FastSync) }
-func TestFailedSyncProgress64Light(t *testing.T) { testFailedSyncProgress(t, 64, LightSync) }
 func TestFailedSyncProgress65Full(t *testing.T)  { testFailedSyncProgress(t, 65, FullSync) }
 func TestFailedSyncProgress65Fast(t *testing.T)  { testFailedSyncProgress(t, 65, FastSync) }
 func TestFailedSyncProgress65Light(t *testing.T) { testFailedSyncProgress(t, 65, LightSync) }
@@ -1417,7 +1399,6 @@ func TestFakedSyncProgress63Full(t *testing.T)  { testFakedSyncProgress(t, 63, F
 func TestFakedSyncProgress63Fast(t *testing.T)  { testFakedSyncProgress(t, 63, FastSync) }
 func TestFakedSyncProgress64Full(t *testing.T)  { testFakedSyncProgress(t, 64, FullSync) }
 func TestFakedSyncProgress64Fast(t *testing.T)  { testFakedSyncProgress(t, 64, FastSync) }
-func TestFakedSyncProgress64Light(t *testing.T) { testFakedSyncProgress(t, 64, LightSync) }
 func TestFakedSyncProgress65Full(t *testing.T)  { testFakedSyncProgress(t, 65, FullSync) }
 func TestFakedSyncProgress65Fast(t *testing.T)  { testFakedSyncProgress(t, 65, FastSync) }
 func TestFakedSyncProgress65Light(t *testing.T) { testFakedSyncProgress(t, 65, LightSync) }
@@ -1670,7 +1651,6 @@ func TestCheckpointEnforcement63Full(t *testing.T)  { testCheckpointEnforcement(
 func TestCheckpointEnforcement63Fast(t *testing.T)  { testCheckpointEnforcement(t, 63, FastSync) }
 func TestCheckpointEnforcement64Full(t *testing.T)  { testCheckpointEnforcement(t, 64, FullSync) }
 func TestCheckpointEnforcement64Fast(t *testing.T)  { testCheckpointEnforcement(t, 64, FastSync) }
-func TestCheckpointEnforcement64Light(t *testing.T) { testCheckpointEnforcement(t, 64, LightSync) }
 func TestCheckpointEnforcement65Full(t *testing.T)  { testCheckpointEnforcement(t, 65, FullSync) }
 func TestCheckpointEnforcement65Fast(t *testing.T)  { testCheckpointEnforcement(t, 65, FastSync) }
 func TestCheckpointEnforcement65Light(t *testing.T) { testCheckpointEnforcement(t, 65, LightSync) }
