@@ -239,11 +239,10 @@ func initGenesis(ctx *cli.Context) error {
 	if err := json.NewDecoder(file).Decode(genesis); err != nil {
 		utils.Fatalf("invalid genesis file: %v", err)
 	}
-
-	// Open an initialise both full and light databases
+	// Make the bare-minimum node to avoid unnecessary service start-up
 	stack, _ := makeConfigNode(ctx)
 	defer stack.Close()
-
+	// Open an initialise both full and light databases
 	for _, name := range []string{"chaindata", "lightchaindata"} {
 		chaindb, err := stack.OpenDatabase(name, 0, 0, "")
 		if err != nil {
@@ -407,6 +406,7 @@ func importPreimages(ctx *cli.Context) error {
 	if len(ctx.Args()) < 1 {
 		utils.Fatalf("This command requires an argument.")
 	}
+	// Make the bare-minimum node to avoid unnecessary service start-up
 	stack, _ := makeConfigNode(ctx)
 	defer stack.Close()
 
@@ -425,6 +425,7 @@ func exportPreimages(ctx *cli.Context) error {
 	if len(ctx.Args()) < 1 {
 		utils.Fatalf("This command requires an argument.")
 	}
+	// Make the bare-minimum node to avoid unnecessary service start-up
 	stack, _ := makeConfigNode(ctx)
 	defer stack.Close()
 
@@ -446,10 +447,10 @@ func copyDb(ctx *cli.Context) error {
 	if len(ctx.Args()) < 2 {
 		utils.Fatalf("Source ancient chain directory path argument missing")
 	}
-	// Initialize a new chain for the running node to sync into
+	// Make the bare-minimum node to avoid unnecessary service start-up
 	stack, _ := makeConfigNode(ctx)
 	defer stack.Close()
-
+	// Initialize a new chain for the running node to sync into
 	chain, chainDb := utils.MakeChain(ctx, stack, false)
 	syncMode := *utils.GlobalTextMarshaler(ctx, utils.SyncModeFlag.Name).(*downloader.SyncMode)
 
@@ -495,6 +496,7 @@ func copyDb(ctx *cli.Context) error {
 }
 
 func removeDB(ctx *cli.Context) error {
+	// Make the bare-minimum node to avoid unnecessary service start-up
 	stack, config := makeConfigNode(ctx)
 
 	// Remove the full node state database
@@ -555,6 +557,7 @@ func confirmAndRemoveDB(database string, kind string) {
 }
 
 func dump(ctx *cli.Context) error {
+	// Make the bare-minimum node to avoid unnecessary service start-up
 	stack, _ := makeConfigNode(ctx)
 	defer stack.Close()
 
@@ -594,6 +597,7 @@ func dump(ctx *cli.Context) error {
 }
 
 func inspect(ctx *cli.Context) error {
+	// Make the bare-minimum node to avoid unnecessary service start-up
 	node, _ := makeConfigNode(ctx)
 	defer node.Close()
 
