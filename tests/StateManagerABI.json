@@ -1,0 +1,275 @@
+[
+  {
+      "constant": false,
+      "inputs": [
+          {
+              "internalType": "address",
+              "name": "_ovmContractAddress",
+              "type": "address"
+          },
+          {
+              "internalType": "address",
+              "name": "_codeContractAddress",
+              "type": "address"
+          }
+      ],
+      "name": "associateCodeContract",
+      "outputs": [],
+      "payable": false,
+      "stateMutability": "nonpayable",
+      "type": "function"
+  },
+  {
+      "constant": true,
+      "inputs": [
+          {
+              "internalType": "address",
+              "name": "_ovmContractAddress",
+              "type": "address"
+          }
+      ],
+      "name": "getCodeContractAddressFromOvmAddress",
+      "outputs": [
+          {
+              "internalType": "address",
+              "name": "",
+              "type": "address"
+          }
+      ],
+      "payable": false,
+      "stateMutability": "view",
+      "type": "function"
+  },
+  {
+      "constant": true,
+      "inputs": [
+          {
+              "internalType": "address",
+              "name": "_codeContractAddress",
+              "type": "address"
+          }
+      ],
+      "name": "getCodeContractBytecode",
+      "outputs": [
+          {
+              "internalType": "bytes",
+              "name": "codeContractBytecode",
+              "type": "bytes"
+          }
+      ],
+      "payable": false,
+      "stateMutability": "view",
+      "type": "function"
+  },
+  {
+      "constant": true,
+      "inputs": [
+          {
+              "internalType": "address",
+              "name": "_codeContractAddress",
+              "type": "address"
+          }
+      ],
+      "name": "getCodeContractHash",
+      "outputs": [
+          {
+              "internalType": "bytes32",
+              "name": "_codeContractHash",
+              "type": "bytes32"
+          }
+      ],
+      "payable": false,
+      "stateMutability": "view",
+      "type": "function"
+  },
+  {
+      "constant": true,
+      "inputs": [
+          {
+              "internalType": "address",
+              "name": "_codeContractAddress",
+              "type": "address"
+          }
+      ],
+      "name": "getOvmAddressFromCodeContractAddress",
+      "outputs": [
+          {
+              "internalType": "address",
+              "name": "",
+              "type": "address"
+          }
+      ],
+      "payable": false,
+      "stateMutability": "view",
+      "type": "function"
+  },
+  {
+      "constant": false,
+      "inputs": [
+          {
+              "internalType": "address",
+              "name": "_ovmContractAddress",
+              "type": "address"
+          }
+      ],
+      "name": "getOvmContractNonce",
+      "outputs": [
+          {
+              "internalType": "uint256",
+              "name": "",
+              "type": "uint256"
+          }
+      ],
+      "payable": false,
+      "stateMutability": "nonpayable",
+      "type": "function"
+  },
+  {
+      "constant": true,
+      "inputs": [
+          {
+              "internalType": "address",
+              "name": "_ovmContractAddress",
+              "type": "address"
+          }
+      ],
+      "name": "getOvmContractNonceView",
+      "outputs": [
+          {
+              "internalType": "uint256",
+              "name": "",
+              "type": "uint256"
+          }
+      ],
+      "payable": false,
+      "stateMutability": "view",
+      "type": "function"
+  },
+  {
+      "constant": false,
+      "inputs": [
+          {
+              "internalType": "address",
+              "name": "_ovmContractAddress",
+              "type": "address"
+          },
+          {
+              "internalType": "bytes32",
+              "name": "_slot",
+              "type": "bytes32"
+          }
+      ],
+      "name": "getStorage",
+      "outputs": [
+          {
+              "internalType": "bytes32",
+              "name": "",
+              "type": "bytes32"
+          }
+      ],
+      "payable": false,
+      "stateMutability": "nonpayable",
+      "type": "function"
+  },
+  {
+      "constant": true,
+      "inputs": [
+          {
+              "internalType": "address",
+              "name": "_ovmContractAddress",
+              "type": "address"
+          },
+          {
+              "internalType": "bytes32",
+              "name": "_slot",
+              "type": "bytes32"
+          }
+      ],
+      "name": "getStorageView",
+      "outputs": [
+          {
+              "internalType": "bytes32",
+              "name": "",
+              "type": "bytes32"
+          }
+      ],
+      "payable": false,
+      "stateMutability": "view",
+      "type": "function"
+  },
+  {
+      "constant": false,
+      "inputs": [
+          {
+              "internalType": "address",
+              "name": "_ovmContractAddress",
+              "type": "address"
+          }
+      ],
+      "name": "incrementOvmContractNonce",
+      "outputs": [],
+      "payable": false,
+      "stateMutability": "nonpayable",
+      "type": "function"
+  },
+  {
+      "constant": false,
+      "inputs": [
+          {
+              "internalType": "address",
+              "name": "_ovmContractAddress",
+              "type": "address"
+          }
+      ],
+      "name": "registerCreatedContract",
+      "outputs": [],
+      "payable": false,
+      "stateMutability": "nonpayable",
+      "type": "function"
+  },
+  {
+      "constant": false,
+      "inputs": [
+          {
+              "internalType": "address",
+              "name": "_ovmContractAddress",
+              "type": "address"
+          },
+          {
+              "internalType": "uint256",
+              "name": "_value",
+              "type": "uint256"
+          }
+      ],
+      "name": "setOvmContractNonce",
+      "outputs": [],
+      "payable": false,
+      "stateMutability": "nonpayable",
+      "type": "function"
+  },
+  {
+      "constant": false,
+      "inputs": [
+          {
+              "internalType": "address",
+              "name": "_ovmContractAddress",
+              "type": "address"
+          },
+          {
+              "internalType": "bytes32",
+              "name": "_slot",
+              "type": "bytes32"
+          },
+          {
+              "internalType": "bytes32",
+              "name": "_value",
+              "type": "bytes32"
+          }
+      ],
+      "name": "setStorage",
+      "outputs": [],
+      "payable": false,
+      "stateMutability": "nonpayable",
+      "type": "function"
+  }
+]

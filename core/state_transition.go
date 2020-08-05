@@ -18,9 +18,12 @@ package core
 
 import (
 	"errors"
+	"fmt"
 	"math"
 	"math/big"
+	"strings"
 
+	"github.com/ethereum/go-ethereum/accounts/abi"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/vm"
 	"github.com/ethereum/go-ethereum/log"
@@ -29,7 +32,16 @@ import (
 
 var (
 	errInsufficientBalanceForGas = errors.New("insufficient balance to pay for gas")
+	executionManagerAbi          abi.ABI
 )
+
+func init() {
+	var err error
+	executionManagerAbi, err = abi.JSON(strings.NewReader(vm.RawExecutionManagerAbi))
+	if err != nil {
+		panic(fmt.Sprintf("Error reading ExecutionManagerAbi! Error: %s", err))
+	}
+}
 
 /*
 The State Transitioning Model
@@ -210,15 +222,44 @@ func (st *StateTransition) TransitionDb() (ret []byte, usedGas uint64, failed bo
 		// error.
 		vmerr error
 	)
+	log.Debug("Applying new transaction (technically Message)!", "Tx (aka Message) data", st.msg)
+	executionMgrTime := st.evm.Time
+	if executionMgrTime.Cmp(big.NewInt(0)) == 0 {
+		executionMgrTime = big.NewInt(1)
+	}
 	if contractCreation {
-		ret, _, st.gas, vmerr = evm.Create(sender, st.data, st.gas, st.value)
+		// Here we are going to call the EM directly
+		deployContractCalldata, _ := executionManagerAbi.Pack(
+			"executeTransaction",
+			executionMgrTime,        // lastL1Timestamp
+			new(big.Int),            // queueOrigin
+			common.HexToAddress(""), // ovmEntrypoint
+			st.data,                 // callBytes
+			sender,                  // fromAddress
+			common.HexToAddress(""), // l1MsgSenderAddress
+			true,                    // allowRevert
+		)
+		ret, st.gas, vmerr = evm.Call(sender, vm.ExecutionManagerAddress, deployContractCalldata, st.gas, st.value)
 	} else {
-		// Increment the nonce for the next transaction
-		st.state.SetNonce(msg.From(), st.state.GetNonce(sender.Address())+1)
-		ret, st.gas, vmerr = evm.Call(sender, st.to(), st.data, st.gas, st.value)
+		callContractCalldata, _ := executionManagerAbi.Pack(
+			"executeTransaction",
+			executionMgrTime,        // lastL1Timestamp
+			new(big.Int),            // queueOrigin
+			st.to(),                 // ovmEntrypoint
+			st.data,                 // callBytes
+			sender,                  // fromAddress
+			common.HexToAddress(""), // l1MsgSenderAddress
+			true,                    // allowRevert
+		)
+		ret, st.gas, vmerr = evm.Call(sender, vm.ExecutionManagerAddress, callContractCalldata, st.gas, st.value)
 	}
 	if vmerr != nil {
 		log.Debug("VM returned with error", "err", vmerr)
+
+		// If the tx fails we won't have incremented the nonce. In this case, increment it manually
+		log.Debug("Incrementing nonce due to transaction failure")
+		st.state.SetNonce(msg.From(), st.state.GetNonce(sender.Address())+1)
+
 		// The only possible consensus-error would be if there wasn't
 		// sufficient balance to make the transfer happen. The first
 		// balance transfer may never fail.

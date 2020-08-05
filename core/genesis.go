@@ -31,6 +31,7 @@ import (
 	"github.com/ethereum/go-ethereum/core/rawdb"
 	"github.com/ethereum/go-ethereum/core/state"
 	"github.com/ethereum/go-ethereum/core/types"
+	"github.com/ethereum/go-ethereum/core/vm"
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/ethdb"
 	"github.com/ethereum/go-ethereum/log"
@@ -253,6 +254,23 @@ func (g *Genesis) configOrDefault(ghash common.Hash) *params.ChainConfig {
 	}
 }
 
+// ApplyOvmStateToState applies the initial OVM state to a state object.
+func ApplyOvmStateToState(statedb *state.StateDB) {
+	// Set up the OVM genesis state
+	var initOvmStateDump state.Dump
+	// Load the OVM genesis
+	initOvmStateDumpMarshaled, _ := hex.DecodeString(vm.InitialOvmStateDump)
+	json.Unmarshal(initOvmStateDumpMarshaled, &initOvmStateDump)
+	for addr, account := range initOvmStateDump.Accounts {
+		statedb.AddBalance(addr, big.NewInt(0))
+		statedb.SetCode(addr, common.FromHex(account.Code))
+		statedb.SetNonce(addr, account.Nonce)
+		for key, value := range account.Storage {
+			statedb.SetState(addr, key, common.HexToHash(value))
+		}
+	}
+}
+
 // ToBlock creates the genesis block and writes state of a genesis specification
 // to the given database (or discards it if nil).
 func (g *Genesis) ToBlock(db ethdb.Database) *types.Block {
@@ -260,6 +278,9 @@ func (g *Genesis) ToBlock(db ethdb.Database) *types.Block {
 		db = rawdb.NewMemoryDatabase()
 	}
 	statedb, _ := state.New(common.Hash{}, state.NewDatabase(db))
+
+	ApplyOvmStateToState(statedb)
+
 	for addr, account := range g.Alloc {
 		statedb.AddBalance(addr, account.Balance)
 		statedb.SetCode(addr, account.Code)
