@@ -278,7 +278,7 @@ func importChain(ctx *cli.Context) error {
 	utils.SetupMetrics(ctx)
 	// Start system runtime metrics collection
 	go metrics.CollectProcessMetrics(3 * time.Second)
-	// Make the bare-minimum node to avoid unnecessary service start-up
+
 	stack, _ := makeConfigNode(ctx)
 	defer stack.Close()
 
@@ -373,7 +373,7 @@ func exportChain(ctx *cli.Context) error {
 	if len(ctx.Args()) < 1 {
 		utils.Fatalf("This command requires an argument.")
 	}
-	// Make the bare-minimum node to avoid unnecessary service start-up
+	
 	stack, _ := makeConfigNode(ctx)
 	defer stack.Close()
 
