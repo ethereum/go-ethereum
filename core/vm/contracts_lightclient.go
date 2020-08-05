@@ -9,6 +9,7 @@ import (
 )
 
 const (
+	uint64TypeLength                      uint64 = 8
 	precompileContractInputMetaDataLength uint64 = 32
 	consensusStateLengthBytesLength       uint64 = 32
 
@@ -20,7 +21,7 @@ const (
 // consensus state length | consensus state | tendermint header |
 // 32 bytes               |                 |                   |
 func decodeTendermintHeaderValidationInput(input []byte) (*lightclient.ConsensusState, *lightclient.Header, error) {
-	csLen := binary.BigEndian.Uint64(input[consensusStateLengthBytesLength-8 : consensusStateLengthBytesLength])
+	csLen := binary.BigEndian.Uint64(input[consensusStateLengthBytesLength-uint64TypeLength : consensusStateLengthBytesLength])
 	if uint64(len(input)) <= consensusStateLengthBytesLength+csLen {
 		return nil, nil, fmt.Errorf("expected payload size %d, actual size: %d", consensusStateLengthBytesLength+csLen, len(input))
 	}
@@ -55,7 +56,7 @@ func (c *tmHeaderValidate) Run(input []byte) (result []byte, err error) {
 		return nil, fmt.Errorf("invalid input")
 	}
 
-	payloadLength := binary.BigEndian.Uint64(input[precompileContractInputMetaDataLength-8 : precompileContractInputMetaDataLength])
+	payloadLength := binary.BigEndian.Uint64(input[precompileContractInputMetaDataLength-uint64TypeLength : precompileContractInputMetaDataLength])
 	if uint64(len(input)) != payloadLength+precompileContractInputMetaDataLength {
 		return nil, fmt.Errorf("invalid input: input size should be %d, actual the size is %d", payloadLength+precompileContractInputMetaDataLength, len(input))
 	}
@@ -83,7 +84,7 @@ func (c *tmHeaderValidate) Run(input []byte) (result []byte, err error) {
 		copy(lengthBytes[:1], []byte{0x01})
 	}
 	consensusStateBytesLength := uint64(len(consensusStateBytes))
-	binary.BigEndian.PutUint64(lengthBytes[tmHeaderValidateResultMetaDataLength-8:], consensusStateBytesLength)
+	binary.BigEndian.PutUint64(lengthBytes[tmHeaderValidateResultMetaDataLength-uint64TypeLength:], consensusStateBytesLength)
 
 	result = append(lengthBytes, consensusStateBytes...)
 
@@ -113,7 +114,7 @@ func (c *iavlMerkleProofValidate) Run(input []byte) (result []byte, err error) {
 		return nil, fmt.Errorf("invalid input: input should include %d bytes payload length and payload", precompileContractInputMetaDataLength)
 	}
 
-	payloadLength := binary.BigEndian.Uint64(input[precompileContractInputMetaDataLength-8 : precompileContractInputMetaDataLength])
+	payloadLength := binary.BigEndian.Uint64(input[precompileContractInputMetaDataLength-uint64TypeLength : precompileContractInputMetaDataLength])
 	if uint64(len(input)) != payloadLength+precompileContractInputMetaDataLength {
 		return nil, fmt.Errorf("invalid input: input size should be %d, actual the size is %d", payloadLength+precompileContractInputMetaDataLength, len(input))
 	}
@@ -129,6 +130,6 @@ func (c *iavlMerkleProofValidate) Run(input []byte) (result []byte, err error) {
 	}
 
 	result = make([]byte, merkleProofValidateResultLength)
-	binary.BigEndian.PutUint64(result[merkleProofValidateResultLength-8:], 0x01)
+	binary.BigEndian.PutUint64(result[merkleProofValidateResultLength-uint64TypeLength:], 0x01)
 	return result, nil
 }
