@@ -444,6 +444,11 @@ func (c *ChainConfig) IsRamanujan(num *big.Int) bool {
 	return isForked(c.RamanujanBlock, num)
 }
 
+// IsOnRamanujan returns whether num is equal to the IsRamanujan fork block
+func (c *ChainConfig) IsOnRamanujan(num *big.Int) bool {
+	return configNumEqual(c.RamanujanBlock, num)
+}
+
 // IsMuirGlacier returns whether num is either equal to the Muir Glacier (EIP-2384) fork block or greater.
 func (c *ChainConfig) IsMuirGlacier(num *big.Int) bool {
 	return isForked(c.MuirGlacierBlock, num)
