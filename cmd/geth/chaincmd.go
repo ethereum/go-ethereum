@@ -278,7 +278,8 @@ func importChain(ctx *cli.Context) error {
 	utils.SetupMetrics(ctx)
 	// Start system runtime metrics collection
 	go metrics.CollectProcessMetrics(3 * time.Second)
-	stack, _ := makeFullNode(ctx)
+
+	stack, _ := makeConfigNode(ctx)
 	defer stack.Close()
 
 	chain, db := utils.MakeChain(ctx, stack, false)
@@ -372,7 +373,8 @@ func exportChain(ctx *cli.Context) error {
 	if len(ctx.Args()) < 1 {
 		utils.Fatalf("This command requires an argument.")
 	}
-	stack, _ := makeFullNode(ctx)
+
+	stack, _ := makeConfigNode(ctx)
 	defer stack.Close()
 
 	chain, _ := utils.MakeChain(ctx, stack, true)
