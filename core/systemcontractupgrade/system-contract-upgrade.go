@@ -7,6 +7,7 @@ import (
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/state"
+	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/params"
 )
 
@@ -22,10 +23,6 @@ type Upgrade struct {
 }
 
 var (
-	mainnetChainID = big.NewInt(90)
-	testnetChainID = big.NewInt(96)
-	devnetChainID  = big.NewInt(1417)
-
 	// genesis contracts
 	validatorContract          = common.HexToAddress("0x0000000000000000000000000000000000001000")
 	slashContract              = common.HexToAddress("0x0000000000000000000000000000000000001001")
@@ -38,23 +35,9 @@ var (
 	tokenManagerContract       = common.HexToAddress("0x0000000000000000000000000000000000001008")
 	crossChainContract         = common.HexToAddress("0x0000000000000000000000000000000000002000")
 
-	mainnetUpgrapdeConfig = make(map[int64]Upgrade)
-	testnetUpgrapdeConfig = make(map[int64]Upgrade)
-	devnetUpgrapdeConfig  = make(map[int64]Upgrade)
-)
-
-func init() {
-	// setup mainnet upgrade config
-
-	/* mainnet upgrade config */
-
-	// setup testnet upgrade config
-
-	/* testnet upgrade config */
-
-	// setup testnet upgrade config
-	devnetUpgrapdeConfig[20000] = Upgrade{
-		UpgradeName: "testupgrade",
+	//upgrade config
+	ramanujanUpgrade = &Upgrade{
+		UpgradeName: "ramanujan",
 		Configs: []*UpgradeConfig{
 			{
 				ContractAddr: tokenHubContract,
@@ -63,39 +46,30 @@ func init() {
 			},
 		},
 	}
-	/*
-	  Add more upgrade config for devnet
-	*/
-}
+)
 
 func UpgradeBuildInSystemContract(config *params.ChainConfig, blockNumber *big.Int, statedb *state.StateDB) {
 	if config == nil || blockNumber == nil || statedb == nil {
 		return
 	}
 
-	var upgradeCfg map[int64]Upgrade
-	if config.ChainID.Cmp(mainnetChainID) == 0 {
-		upgradeCfg = mainnetUpgrapdeConfig
-	} else if config.ChainID.Cmp(testnetChainID) == 0 {
-		upgradeCfg = testnetUpgrapdeConfig
-	} else if config.ChainID.Cmp(devnetChainID) == 0 {
-		upgradeCfg = devnetUpgrapdeConfig
-	} else {
-	}
-	if len(upgradeCfg) == 0 {
-		return
+	logger := log.New("type", "system-contract-upgrade")
+	if config.IsRamanujan(blockNumber) {
+		applySystemContractUpgrade(ramanujanUpgrade, blockNumber, statedb, logger)
 	}
 
-	upgrade, ok := upgradeCfg[blockNumber.Int64()]
-	if !ok {
-		return
-	}
-	fmt.Println(fmt.Sprintf("Apply upgrade %s at height %d", upgrade.UpgradeName, blockNumber.Int64()))
+	/*
+		apply other upgrade
+	*/
+}
+
+func applySystemContractUpgrade(upgrade *Upgrade, blockNumber *big.Int, statedb *state.StateDB, logger log.Logger) {
+	logger.Info(fmt.Sprintf("Apply upgrade %s at height %d", upgrade.UpgradeName, blockNumber.Int64()))
 	for _, cfg := range upgrade.Configs {
-		fmt.Println(fmt.Sprintf("Upgrade contract %s to commit %s", cfg.ContractAddr.String(), cfg.CommitUrl))
+		logger.Info(fmt.Sprintf("Upgrade contract %s to commit %s", cfg.ContractAddr.String(), cfg.CommitUrl))
 		newContractCode, err := hex.DecodeString(cfg.Code)
 		if err != nil {
-			fmt.Println(fmt.Sprintf("failed to decode new contract code: %s", err.Error()))
+			logger.Info(fmt.Sprintf("failed to decode new contract code: %s", err.Error()))
 			continue
 		}
 		statedb.SetCode(cfg.ContractAddr, newContractCode)
