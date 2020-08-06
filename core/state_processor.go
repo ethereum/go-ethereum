@@ -21,7 +21,7 @@ import (
 	"github.com/ethereum/go-ethereum/consensus"
 	"github.com/ethereum/go-ethereum/consensus/misc"
 	"github.com/ethereum/go-ethereum/core/state"
-	"github.com/ethereum/go-ethereum/core/systemcontractupgrade"
+	"github.com/ethereum/go-ethereum/core/systemcontracts"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/core/vm"
 	"github.com/ethereum/go-ethereum/crypto"
@@ -67,7 +67,7 @@ func (p *StateProcessor) Process(block *types.Block, statedb *state.StateDB, cfg
 		misc.ApplyDAOHardFork(statedb)
 	}
 	// Handle upgrade build-in system contract code
-	systemcontractupgrade.UpgradeBuildInSystemContract(p.config, block.Number(), statedb)
+	systemcontracts.UpgradeBuildInSystemContract(p.config, block.Number(), statedb)
 	// Iterate over and process the individual transactions
 	posa, isPoSA := p.engine.(consensus.PoSA)
 	commonTxs := make([]*types.Transaction, 0, len(block.Transactions()))
