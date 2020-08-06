@@ -6,6 +6,7 @@ import (
 	"math/big"
 
 	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/core"
 	"github.com/ethereum/go-ethereum/core/state"
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/params"
@@ -27,6 +28,12 @@ type Upgrade struct {
 type beforeUpgrade func(blockNumber *big.Int, contractAddr common.Address, statedb *state.StateDB)
 type afterUpgrade func(blockNumber *big.Int, contractAddr common.Address, statedb *state.StateDB)
 
+const (
+	mainnet = "Mainnet"
+	chapel  = "Chapel"
+	rialto  = "Rialto"
+)
+
 var (
 	// genesis contracts
 	validatorContract          = common.HexToAddress("0x0000000000000000000000000000000000001000")
@@ -41,7 +48,11 @@ var (
 	crossChainContract         = common.HexToAddress("0x0000000000000000000000000000000000002000")
 
 	//upgrade config
-	ramanujanUpgrade = &Upgrade{
+	ramanujanUpgrade = make(map[string]*Upgrade)
+)
+
+func init() {
+	ramanujanUpgrade[rialto] = &Upgrade{
 		UpgradeName: "ramanujan",
 		Configs: []*UpgradeConfig{
 			{
@@ -53,16 +64,24 @@ var (
 			},
 		},
 	}
-)
+}
 
 func UpgradeBuildInSystemContract(config *params.ChainConfig, blockNumber *big.Int, statedb *state.StateDB) {
 	if config == nil || blockNumber == nil || statedb == nil {
 		return
 	}
+	var network string
+	switch core.GenesisHash {
+	/* Add mainnet genesis hash */
+	case params.ChapelGenesisHash:
+		network = chapel
+	case params.RialtoGenesisHash:
+		network = rialto
+	}
 
 	logger := log.New("system-contract-upgrade")
 	if config.IsOnRamanujan(blockNumber) {
-		applySystemContractUpgrade(ramanujanUpgrade, blockNumber, statedb, logger)
+		applySystemContractUpgrade(ramanujanUpgrade[network], blockNumber, statedb, logger)
 	}
 
 	/*
@@ -71,6 +90,10 @@ func UpgradeBuildInSystemContract(config *params.ChainConfig, blockNumber *big.I
 }
 
 func applySystemContractUpgrade(upgrade *Upgrade, blockNumber *big.Int, statedb *state.StateDB, logger log.Logger) {
+	if upgrade == nil {
+		return
+	}
+
 	logger.Info(fmt.Sprintf("Apply upgrade %s at height %d", upgrade.UpgradeName, blockNumber.Int64()))
 	for _, cfg := range upgrade.Configs {
 		logger.Info(fmt.Sprintf("Upgrade contract %s to commit %s", cfg.ContractAddr.String(), cfg.CommitUrl))
