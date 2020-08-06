@@ -239,10 +239,10 @@ func initGenesis(ctx *cli.Context) error {
 	if err := json.NewDecoder(file).Decode(genesis); err != nil {
 		utils.Fatalf("invalid genesis file: %v", err)
 	}
-
+	// Open and initialise both full and light databases
 	stack, _ := makeConfigNode(ctx)
 	defer stack.Close()
-	// Open an initialise both full and light databases
+
 	for _, name := range []string{"chaindata", "lightchaindata"} {
 		chaindb, err := stack.OpenDatabase(name, 0, 0, "")
 		if err != nil {
@@ -447,10 +447,10 @@ func copyDb(ctx *cli.Context) error {
 	if len(ctx.Args()) < 2 {
 		utils.Fatalf("Source ancient chain directory path argument missing")
 	}
-
+	// Initialize a new chain for the running node to sync into
 	stack, _ := makeConfigNode(ctx)
 	defer stack.Close()
-	// Initialize a new chain for the running node to sync into
+
 	chain, chainDb := utils.MakeChain(ctx, stack, false)
 	syncMode := *utils.GlobalTextMarshaler(ctx, utils.SyncModeFlag.Name).(*downloader.SyncMode)
 
