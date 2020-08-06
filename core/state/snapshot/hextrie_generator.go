@@ -55,6 +55,16 @@ func GenerateBinaryTree(path string, it AccountIterator) common.Hash {
 			db.Put(kv.Key, kv.Value, nil)
 		}
 	}()
+
+	timer := time.NewTicker(time.Second * 30)
+	defer timer.Stop()
+	startTime := time.Now()
+	go func() {
+		for range timer.C {
+			log.Info("generating binary trie", "count", nodeCount, "elapsed", common.PrettyDuration(time.Since(startTime)))
+		}
+	}()
+
 	counter := 0
 	for it.Next() {
 		counter++
@@ -68,8 +78,9 @@ func GenerateBinaryTree(path string, it AccountIterator) common.Hash {
 	if err != nil {
 		panic(fmt.Sprintf("error committing trie, err=%v", err))
 	}
-	close(btrie.CommitCh)
 	wg.Wait()
+	timer.Stop()
+	close(btrie.CommitCh)
 	btrie.CommitCh = nil
 	log.Info("Done writing nodes to the DB", "count", nodeCount)
 	log.Info("Calculated binary hash", "hash", common.ToHex(btrie.Hash()))
