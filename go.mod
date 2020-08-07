@@ -1,6 +1,6 @@
 module github.com/maticnetwork/bor
 
-go 1.14
+go 1.14.7
 
 require (
 	github.com/Azure/azure-storage-blob-go v0.7.0
