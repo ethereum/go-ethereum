@@ -725,7 +725,7 @@ func (api *PrivateDebugAPI) TraceTransaction(ctx context.Context, hash common.Ha
 func (api *PrivateDebugAPI) TraceCall(ctx context.Context, args ethapi.CallArgs, blockNrOrHash rpc.BlockNumberOrHash, config *TraceConfig) (interface{}, error) {
 	// First try to retrieve the state
 	statedb, header, err := api.eth.APIBackend.StateAndHeaderByNumberOrHash(ctx, blockNrOrHash)
-	if err != nil {
+	if err != nil && blockNrOrHash.BlockHash != nil {
 		// try to recompute the state
 		reexec := defaultTraceReexec
 		if config != nil && config.Reexec != nil {
