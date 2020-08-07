@@ -39,6 +39,7 @@ type LesServer struct {
 
 	archiveMode bool // Flag whether the ethereum node runs in archive mode.
 	peers       *clientPeerSet
+	serverset   *serverSet
 	handler     *serverHandler
 	lesTopics   []discv5.Topic
 	privateKey  *ecdsa.PrivateKey
@@ -83,6 +84,7 @@ func NewLesServer(node *node.Node, e *eth.Ethereum, config *eth.Config) (*LesSer
 		},
 		archiveMode:  e.ArchiveMode(),
 		peers:        newClientPeerSet(),
+		serverset:    newServerSet(),
 		lesTopics:    lesTopics,
 		fcManager:    flowcontrol.NewClientManager(nil, &mclock.System{}),
 		servingQueue: newServingQueue(int64(time.Millisecond*10), float64(config.LightServ)/100),
@@ -195,6 +197,9 @@ func (s *LesServer) Start() error {
 // Stop stops the LES service
 func (s *LesServer) Stop() error {
 	close(s.closeCh)
+
+	// Disconnect existing connections with other LES servers.
+	s.serverset.close()
 
 	// Disconnect existing sessions.
 	// This also closes the gate for any new registrations on the peer set.
