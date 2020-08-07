@@ -78,13 +78,13 @@ func Main(ctx *cli.Context) error {
 	var (
 		err     error
 		tracer  vm.Tracer
-		baseDir = "."
+		baseDir = ""
 	)
 	var getTracer func(txIndex int, txHash common.Hash) (vm.Tracer, error)
 
 	// If user specified a basedir, make sure it exists
 	if ctx.IsSet(OutputBasedir.Name) {
-		if base := ctx.String(OutputBasedir.Name); base != "." {
+		if base := ctx.String(OutputBasedir.Name); len(base) > 0 {
 			err := os.MkdirAll(base, 0755) // //rw-r--r--
 			if err != nil {
 				return NewError(ErrorIO, fmt.Errorf("failed creating output basedir: %v", err))

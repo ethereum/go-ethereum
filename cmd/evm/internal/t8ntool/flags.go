@@ -45,7 +45,7 @@ var (
 	OutputBasedir = cli.StringFlag{
 		Name:  "output.basedir",
 		Usage: "Specifies where output files are placed. Will be created if it does not exist.",
-		Value: ".",
+		Value: "",
 	}
 	OutputAllocFlag = cli.StringFlag{
 		Name: "output.alloc",
