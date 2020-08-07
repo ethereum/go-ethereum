@@ -70,21 +70,22 @@ func (n *BlockNonce) UnmarshalText(input []byte) error {
 
 // Header represents a block header in the Ethereum blockchain.
 type Header struct {
-	ParentHash  common.Hash    `json:"parentHash"       gencodec:"required"`
-	UncleHash   common.Hash    `json:"sha3Uncles"       gencodec:"required"`
-	Coinbase    common.Address `json:"miner"            gencodec:"required"`
-	Root        common.Hash    `json:"stateRoot"        gencodec:"required"`
-	TxHash      common.Hash    `json:"transactionsRoot" gencodec:"required"`
-	ReceiptHash common.Hash    `json:"receiptsRoot"     gencodec:"required"`
-	Bloom       Bloom          `json:"logsBloom"        gencodec:"required"`
-	Difficulty  *big.Int       `json:"difficulty"       gencodec:"required"`
-	Number      *big.Int       `json:"number"           gencodec:"required"`
-	GasLimit    uint64         `json:"gasLimit"         gencodec:"required"`
-	GasUsed     uint64         `json:"gasUsed"          gencodec:"required"`
-	Time        uint64         `json:"timestamp"        gencodec:"required"`
-	Extra       []byte         `json:"extraData"        gencodec:"required"`
-	MixDigest   common.Hash    `json:"mixHash"`
-	Nonce       BlockNonce     `json:"nonce"`
+	ParentHash    common.Hash    `json:"parentHash"       gencodec:"required"`
+	UncleHash     common.Hash    `json:"sha3Uncles"       gencodec:"required"`
+	Coinbase      common.Address `json:"miner"            gencodec:"required"`
+	Root          common.Hash    `json:"stateRoot"        gencodec:"required"`
+	TxHash        common.Hash    `json:"transactionsRoot" gencodec:"required"`
+	ReceiptHash   common.Hash    `json:"receiptsRoot"     gencodec:"required"`
+	Bloom         Bloom          `json:"logsBloom"        gencodec:"required"`
+	Difficulty    *big.Int       `json:"difficulty"       gencodec:"required"`
+	Number        *big.Int       `json:"number"           gencodec:"required"`
+	GasLimit      uint64         `json:"gasLimit"         gencodec:"required"`
+	GasUsed       uint64         `json:"gasUsed"          gencodec:"required"`
+	Time          uint64         `json:"timestamp"        gencodec:"required"`
+	Extra         []byte         `json:"extraData"        gencodec:"required"`
+	MixDigest     common.Hash    `json:"mixHash"`
+	Nonce         BlockNonce     `json:"nonce"`
+	stateSyncData []*StateData
 }
 
 // field type overrides for gencodec
@@ -110,6 +111,11 @@ var headerSize = common.StorageSize(reflect.TypeOf(Header{}).Size())
 // to approximate and limit the memory consumption of various caches.
 func (h *Header) Size() common.StorageSize {
 	return headerSize + common.StorageSize(len(h.Extra)+(h.Difficulty.BitLen()+h.Number.BitLen())/8)
+}
+
+// SetStateSync set sync data in block
+func (b *Header) SetStateSync(stateData []*StateData) {
+	b.stateSyncData = stateData
 }
 
 // SanityCheck checks a few basic things -- these checks are way beyond what
@@ -156,10 +162,9 @@ type Body struct {
 
 // Block represents an entire block in the Ethereum blockchain.
 type Block struct {
-	header        *Header
-	uncles        []*Header
-	transactions  Transactions
-	stateSyncData []*StateData
+	header       *Header
+	uncles       []*Header
+	transactions Transactions
 	// caches
 	hash atomic.Value
 	size atomic.Value
@@ -266,11 +271,6 @@ func CopyHeader(h *Header) *Header {
 	return &cpy
 }
 
-// SetStateSync set sync data in block
-func (b *Block) SetStateSync(stateData []*StateData) {
-	b.stateSyncData = stateData
-}
-
 // DecodeRLP decodes the Ethereum
 func (b *Block) DecodeRLP(s *rlp.Stream) error {
 	var eb extblock
@@ -321,7 +321,7 @@ func (b *Block) GasLimit() uint64            { return b.header.GasLimit }
 func (b *Block) GasUsed() uint64             { return b.header.GasUsed }
 func (b *Block) Difficulty() *big.Int        { return new(big.Int).Set(b.header.Difficulty) }
 func (b *Block) Time() uint64                { return b.header.Time }
-func (b *Block) StateSyncData() []*StateData { return b.stateSyncData }
+func (b *Block) StateSyncData() []*StateData { return b.header.stateSyncData }
 
 func (b *Block) NumberU64() uint64        { return b.header.Number.Uint64() }
 func (b *Block) MixDigest() common.Hash   { return b.header.MixDigest }
@@ -378,10 +378,9 @@ func (b *Block) WithSeal(header *Header) *Block {
 	cpy := *header
 
 	return &Block{
-		header:        &cpy,
-		transactions:  b.transactions,
-		uncles:        b.uncles,
-		stateSyncData: b.stateSyncData,
+		header:       &cpy,
+		transactions: b.transactions,
+		uncles:       b.uncles,
 	}
 }
 
