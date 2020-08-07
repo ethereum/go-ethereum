@@ -123,6 +123,9 @@ func (h *serverHandler) handle(p *clientPeer) error {
 		return err
 	}
 	if p.server {
+		if err := h.server.serverset.register(p); err != nil {
+			return err
+		}
 		// connected to another server, no messages expected, just wait for disconnection
 		_, err := p.rw.ReadMsg()
 		return err

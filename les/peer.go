@@ -1288,3 +1288,42 @@ func (ps *serverPeerSet) close() {
 	}
 	ps.closed = true
 }
+
+// serverSet is a special set which contains all connected les servers.
+// Les servers will also be discovered by discovery protocol because they
+// also run the LES protocol. We can't drop them although they are useless
+// for us(server) but for other protocols(e.g. ETH) upon the devp2p they
+// may be useful.
+type serverSet struct {
+	lock   sync.Mutex
+	set    map[string]*clientPeer
+	closed bool
+}
+
+func newServerSet() *serverSet {
+	return &serverSet{set: make(map[string]*clientPeer)}
+}
+
+func (s *serverSet) register(peer *clientPeer) error {
+	s.lock.Lock()
+	defer s.lock.Unlock()
+
+	if s.closed {
+		return errClosed
+	}
+	if _, exist := s.set[peer.id]; exist {
+		return errAlreadyRegistered
+	}
+	s.set[peer.id] = peer
+	return nil
+}
+
+func (s *serverSet) close() {
+	s.lock.Lock()
+	defer s.lock.Unlock()
+
+	for _, p := range s.set {
+		p.Disconnect(p2p.DiscQuitting)
+	}
+	s.closed = true
+}
