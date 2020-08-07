@@ -253,9 +253,11 @@ func (t *BinaryTrie) hash() []byte {
 		// Calculate the hash of both subtrees
 		payload.Write(t.left.Hash())
 		payload.Write(t.right.Hash())
+		payload.Write([]byte{byte(t.getPrefixLen())})
 	} else {
-		payload.Write([]byte{0})
+		payload.Write(t.prefix)
 		payload.Write(t.value)
+		payload.Write([]byte{byte(t.getPrefixLen())})
 	}
 	value := payload.Bytes()
 	io.Copy(hasher, &payload)
@@ -264,19 +266,6 @@ func (t *BinaryTrie) hash() []byte {
 		t.CommitCh <- BinaryHashPreimage{Key: h, Value: value}
 	}
 
-	if t.prefix != nil {
-		hasher.Reset()
-		payload.Reset()
-		payload.Write(t.bitPrefix())
-		payload.Write(h)
-		value = payload.Bytes()
-		io.Copy(hasher, &payload)
-		h = hasher.Sum(nil)
-
-		if t.CommitCh != nil {
-			t.CommitCh <- BinaryHashPreimage{Key: h, Value: value}
-		}
-	}
 	return h
 }
 
