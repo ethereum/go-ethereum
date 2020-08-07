@@ -48,8 +48,8 @@ const (
 	extraSeal   = 65 // Fixed number of extra-data suffix bytes reserved for signer seal
 
 	validatorBytesLength = common.AddressLength
-	wiggleTime           = 500 * time.Millisecond // Random delay (per signer) to allow concurrent signers
-	fixedBackOffTime     = 200 * time.Millisecond
+	wiggleTime           = uint64(1) // second, Random delay (per signer) to allow concurrent signers
+	initialBackOffTime   = uint64(1) // second
 
 	systemRewardPercent = 4 // it means 1/2^4 = 1/16 percentage of gas fee incoming will be distributed to system
 
@@ -81,7 +81,7 @@ var (
 		common.HexToAddress(GovHubContract):             true,
 		common.HexToAddress(TokenHubContract):           true,
 		common.HexToAddress(RelayerIncentivizeContract): true,
-		common.HexToAddress(CrossChainContract): true,
+		common.HexToAddress(CrossChainContract):         true,
 	}
 )
 
@@ -395,6 +395,16 @@ func (p *Parlia) verifyCascadingFields(chain consensus.ChainReader, header *type
 		return consensus.ErrUnknownAncestor
 	}
 
+	snap, err := p.snapshot(chain, number-1, header.ParentHash, parents)
+	if err != nil {
+		return err
+	}
+
+	err = p.blockTimeVerifyForRamanujanFork(snap, header, parent)
+	if err != nil {
+		return nil
+	}
+
 	// Verify that the gas limit is <= 2^63-1
 	capacity := uint64(0x7fffffffffffffff)
 	if header.GasLimit > capacity {
@@ -570,7 +580,7 @@ func (p *Parlia) verifySeal(chain consensus.ChainReader, header *types.Header, p
 
 	// Ensure that the difficulty corresponds to the turn-ness of the signer
 	if !p.fakeDiff {
-		inturn := snap.inturn(header.Number.Uint64(), signer)
+		inturn := snap.inturn(signer)
 		if inturn && header.Difficulty.Cmp(diffInTurn) != 0 {
 			return errWrongDifficulty
 		}
@@ -626,8 +636,7 @@ func (p *Parlia) Prepare(chain consensus.ChainReader, header *types.Header) erro
 	if parent == nil {
 		return consensus.ErrUnknownAncestor
 	}
-
-	header.Time = parent.Time + p.config.Period
+	header.Time = p.blockTimeForRamanujanFork(snap, header, parent)
 	if header.Time < uint64(time.Now().Unix()) {
 		header.Time = uint64(time.Now().Unix())
 	}
@@ -809,14 +818,7 @@ func (p *Parlia) Seal(chain consensus.ChainReader, block *types.Block, results c
 	}
 
 	// Sweet, the protocol permits us to sign the block, wait for our time
-	delay := time.Until(time.Unix(int64(header.Time), 0)) // nolint: gosimple
-	if header.Difficulty.Cmp(diffNoTurn) == 0 {
-		// It's not our turn explicitly to sign, delay it a bit
-		wiggle := time.Duration(len(snap.Validators)/2+1) * wiggleTime
-		delay += time.Duration(fixedBackOffTime) + time.Duration(rand.Int63n(int64(wiggle)))
-
-		log.Trace("Out-of-turn signing requested", "wiggle", common.PrettyDuration(wiggle))
-	}
+	delay := p.delayForRamanujanFork(snap, header)
 
 	log.Info("Sealing block with", "number", number, "delay", delay, "headerDifficulty", header.Difficulty, "val", val.Hex())
 
@@ -861,7 +863,7 @@ func (p *Parlia) CalcDifficulty(chain consensus.ChainReader, time uint64, parent
 // that a new block should have based on the previous blocks in the chain and the
 // current signer.
 func CalcDifficulty(snap *Snapshot, signer common.Address) *big.Int {
-	if snap.inturn(snap.Number+1, signer) {
+	if snap.inturn(signer) {
 		return new(big.Int).Set(diffInTurn)
 	}
 	return new(big.Int).Set(diffNoTurn)
@@ -1140,6 +1142,26 @@ func encodeSigHeader(w io.Writer, header *types.Header, chainId *big.Int) {
 	}
 }
 
+func backOffTime(snap *Snapshot, val common.Address) uint64 {
+	if snap.inturn(val) {
+		return 0
+	} else {
+		dis := snap.distanceToInTurn(val)
+		s := rand.NewSource(int64(snap.Number))
+		r := rand.New(s)
+		n := len(snap.Validators)
+		backOffSteps := make([]uint64, 0, n)
+		for idx := uint64(0); idx < uint64(n); idx++ {
+			backOffSteps = append(backOffSteps, idx)
+		}
+		r.Shuffle(n, func(i, j int) {
+			backOffSteps[i], backOffSteps[j] = backOffSteps[j], backOffSteps[i]
+		})
+		delay := initialBackOffTime + backOffSteps[dis]*wiggleTime
+		return delay
+	}
+}
+
 // chain context
 type chainContext struct {
 	Chain  consensus.ChainReader
@@ -1194,4 +1216,3 @@ func applyMessage(
 	}
 	return msg.Gas() - returnGas, err
 }
-

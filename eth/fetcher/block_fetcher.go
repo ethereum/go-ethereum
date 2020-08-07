@@ -681,11 +681,12 @@ func (f *BlockFetcher) insert(peer string, block *types.Block) {
 			go f.broadcastBlock(block, true)
 
 		case consensus.ErrFutureBlock:
-			// Weird future block, don't fail, but neither propagate
+			log.Error("Received future block", "peer", peer, "number", block.Number(), "hash", hash, "err", err)
+			f.dropPeer(peer)
 
 		default:
 			// Something went very wrong, drop the peer
-			log.Debug("Propagated block verification failed", "peer", peer, "number", block.Number(), "hash", hash, "err", err)
+			log.Error("Propagated block verification failed", "peer", peer, "number", block.Number(), "hash", hash, "err", err)
 			f.dropPeer(peer)
 			return
 		}
