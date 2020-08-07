@@ -93,8 +93,11 @@ func (oracle *CheckpointOracle) StableCheckpoint() (*params.TrustedCheckpoint, u
 	// Look it up properly
 	// Retrieve the latest checkpoint from the contract, abort if empty
 	latest, hash, height, err := oracle.contract.Contract().GetLatestCheckpoint(nil)
+	oracle.lastCheckTime = time.Now()
 	if err != nil || (latest == 0 && hash == [32]byte{}) {
-		return nil, 0
+		oracle.lastCheckPointHeight = 0
+		oracle.lastCheckPoint = nil
+		return oracle.lastCheckPoint, oracle.lastCheckPointHeight
 	}
 	local := oracle.getLocal(latest)
 
@@ -106,10 +109,9 @@ func (oracle *CheckpointOracle) StableCheckpoint() (*params.TrustedCheckpoint, u
 	//
 	// In both cases, no stable checkpoint will be returned.
 	if local.HashEqual(hash) {
-		oracle.lastCheckTime = time.Now()
 		oracle.lastCheckPointHeight = height.Uint64()
 		oracle.lastCheckPoint = &local
-		return &local, height.Uint64()
+		return oracle.lastCheckPoint, oracle.lastCheckPointHeight
 	}
 	return nil, 0
 }
