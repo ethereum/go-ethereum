@@ -164,6 +164,7 @@ func (d *Downloader) runStateSync(s *stateSync) *stateSync {
 			// Finalize the request and queue up for processing
 			req.timer.Stop()
 			req.dropped = true
+			req.delivered = time.Now()
 
 			finished = append(finished, req)
 			delete(active, p.id)
@@ -176,6 +177,7 @@ func (d *Downloader) runStateSync(s *stateSync) *stateSync {
 			if active[req.peer.id] != req {
 				continue
 			}
+			req.delivered = time.Now()
 			// Move the timed out data back into the download queue
 			finished = append(finished, req)
 			delete(active, req.peer.id)
@@ -193,6 +195,7 @@ func (d *Downloader) runStateSync(s *stateSync) *stateSync {
 				// Move the previous request to the finished set
 				old.timer.Stop()
 				old.dropped = true
+				old.delivered = time.Now()
 				finished = append(finished, old)
 			}
 			// Start a timer to notify the sync loop if the peer stalled.
