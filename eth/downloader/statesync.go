@@ -34,13 +34,14 @@ import (
 // stateReq represents a batch of state fetch requests grouped together into
 // a single data retrieval network packet.
 type stateReq struct {
-	nItems   uint16                     // Number of items requested for download (max is 384, so uint16 is sufficient)
-	tasks    map[common.Hash]*stateTask // Download tasks to track previous attempts
-	timeout  time.Duration              // Maximum round trip time for this to complete
-	timer    *time.Timer                // Timer to fire when the RTT timeout expires
-	peer     *peerConnection            // Peer that we're requesting from
-	response [][]byte                   // Response data of the peer (nil for timeouts)
-	dropped  bool                       // Flag whether the peer dropped off early
+	nItems    uint16                     // Number of items requested for download (max is 384, so uint16 is sufficient)
+	tasks     map[common.Hash]*stateTask // Download tasks to track previous attempts
+	timeout   time.Duration              // Maximum round trip time for this to complete
+	timer     *time.Timer                // Timer to fire when the RTT timeout expires
+	peer      *peerConnection            // Peer that we're requesting from
+	delivered time.Time                  // Time when the packet was delivered (independent when we process it)
+	response  [][]byte                   // Response data of the peer (nil for timeouts)
+	dropped   bool                       // Flag whether the peer dropped off early
 }
 
 // timedOut returns if this request timed out.
@@ -148,6 +149,7 @@ func (d *Downloader) runStateSync(s *stateSync) *stateSync {
 			// Finalize the request and queue up for processing
 			req.timer.Stop()
 			req.response = pack.(*statePack).states
+			req.delivered = time.Now()
 
 			finished = append(finished, req)
 			delete(active, pack.PeerId())
@@ -349,7 +351,6 @@ func (s *stateSync) loop() (err error) {
 			return errCanceled
 
 		case req := <-s.deliver:
-			deliveryTime := time.Now()
 			// Response, disconnect or timeout triggered, drop the peer if stalling
 			log.Trace("Received node data response", "peer", req.peer.id, "count", len(req.response), "dropped", req.dropped, "timeout", !req.dropped && req.timedOut())
 			if req.nItems <= 2 && !req.dropped && req.timedOut() {
@@ -376,7 +377,7 @@ func (s *stateSync) loop() (err error) {
 			}
 			// Process all the received blobs and check for stale delivery
 			delivered, err := s.process(req)
-			req.peer.SetNodeDataIdle(delivered, deliveryTime)
+			req.peer.SetNodeDataIdle(delivered, req.delivered)
 			if err != nil {
 				log.Warn("Node data write error", "err", err)
 				return err
