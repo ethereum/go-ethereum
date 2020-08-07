@@ -85,7 +85,7 @@ func (arguments Arguments) Unpack(data []byte) ([]interface{}, error) {
 		nonIndexedArgs := arguments.NonIndexed()
 		defaultVars := make([]interface{}, len(nonIndexedArgs))
 		for index, arg := range nonIndexedArgs {
-			defaultVars[index] = reflect.New(arg.Type.getType())
+			defaultVars[index] = reflect.New(arg.Type.GetType())
 		}
 		return defaultVars, nil
 	}
