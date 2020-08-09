@@ -14,12 +14,16 @@ const (
 )
 
 func (p *Parlia) delayForRamanujanFork(snap *Snapshot, header *types.Header) time.Duration {
-	delay := time.Unix(int64(header.Time), 0).Sub(time.Now()) // nolint: gosimple
+	delay := time.Until(time.Unix(int64(header.Time), 0)) // nolint: gosimple
 	if p.chainConfig.IsRamanujan(header.Number) {
 		return delay
 	}
-	wiggle := time.Duration(len(snap.Validators)/2+1) * wiggleTimeBeforeFork
-	return delay + time.Duration(fixedBackOffTimeBeforeFork) + time.Duration(rand.Int63n(int64(wiggle)))
+	if header.Difficulty.Cmp(diffNoTurn) == 0 {
+		// It's not our turn explicitly to sign, delay it a bit
+		wiggle := time.Duration(len(snap.Validators)/2+1) * wiggleTimeBeforeFork
+		delay += time.Duration(fixedBackOffTimeBeforeFork) + time.Duration(rand.Int63n(int64(wiggle)))
+	}
+	return delay
 }
 
 func (p *Parlia) blockTimeForRamanujanFork(snap *Snapshot, header, parent *types.Header) uint64 {
