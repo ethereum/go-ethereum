@@ -99,19 +99,20 @@ type Service struct {
 
 // connWrapper is a wrapper to prevent concurrent-write or concurrent-read on the
 // websocket.
-// From Gorilla websocket docs:
-// Connections support one concurrent reader and one concurrent writer.
-// Applications are responsible for ensuring that no more than one goroutine calls the write methods
-// - NextWriter, SetWriteDeadline, WriteMessage, WriteJSON, EnableWriteCompression, SetCompressionLevel
-// concurrently and that no more than one goroutine calls the read methods
-// - NextReader, SetReadDeadline, ReadMessage, ReadJSON, SetPongHandler, SetPingHandler
-// concurrently.
-// The Close and WriteControl methods can be called concurrently with all other methods.
 //
-// The connWrapper uses a single mutex for both reading and writing.
+// From Gorilla websocket docs:
+//   Connections support one concurrent reader and one concurrent writer.
+//   Applications are responsible for ensuring that no more than one goroutine calls the write methods
+//     - NextWriter, SetWriteDeadline, WriteMessage, WriteJSON, EnableWriteCompression, SetCompressionLevel
+//   concurrently and that no more than one goroutine calls the read methods
+//     - NextReader, SetReadDeadline, ReadMessage, ReadJSON, SetPongHandler, SetPingHandler
+//   concurrently.
+//   The Close and WriteControl methods can be called concurrently with all other methods.
 type connWrapper struct {
 	conn *websocket.Conn
-	mu   sync.Mutex
+
+	rlock sync.Mutex
+	wlock sync.Mutex
 }
 
 func newConnectionWrapper(conn *websocket.Conn) *connWrapper {
@@ -120,15 +121,17 @@ func newConnectionWrapper(conn *websocket.Conn) *connWrapper {
 
 // WriteJSON wraps corresponding method on the websocket but is safe for concurrent calling
 func (w *connWrapper) WriteJSON(v interface{}) error {
-	w.mu.Lock()
-	defer w.mu.Unlock()
+	w.wlock.Lock()
+	defer w.wlock.Unlock()
+
 	return w.conn.WriteJSON(v)
 }
 
 // ReadJSON wraps corresponding method on the websocket but is safe for concurrent calling
 func (w *connWrapper) ReadJSON(v interface{}) error {
-	w.mu.Lock()
-	defer w.mu.Unlock()
+	w.rlock.Lock()
+	defer w.rlock.Unlock()
+
 	return w.conn.ReadJSON(v)
 }
 
@@ -275,6 +278,7 @@ func (s *Service) loop() {
 				continue
 			}
 			go s.readLoop(conn)
+
 			// Send the initial stats so our node looks decent from the get go
 			if err = s.report(conn); err != nil {
 				log.Warn("Initial stats report failed", "err", err)
