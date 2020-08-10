@@ -153,6 +153,20 @@ var Forks = map[string]*params.ChainConfig{
 		IstanbulBlock:       big.NewInt(0),
 		YoloV1Block:         big.NewInt(0),
 	},
+	// This specification is subject to change, but is for now identical to YOLOv1
+	// for cross-client testing purposes
+	"Berlin": {
+		ChainID:             big.NewInt(1),
+		HomesteadBlock:      big.NewInt(0),
+		EIP150Block:         big.NewInt(0),
+		EIP155Block:         big.NewInt(0),
+		EIP158Block:         big.NewInt(0),
+		ByzantiumBlock:      big.NewInt(0),
+		ConstantinopleBlock: big.NewInt(0),
+		PetersburgBlock:     big.NewInt(0),
+		IstanbulBlock:       big.NewInt(0),
+		YoloV1Block:         big.NewInt(0),
+	},
 }
 
 // Returns the set of defined fork names
