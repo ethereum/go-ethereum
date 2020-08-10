@@ -1145,7 +1145,11 @@ func backOffTime(snap *Snapshot, val common.Address) uint64 {
 	if snap.inturn(val) {
 		return 0
 	} else {
-		dis := snap.distanceToInTurn(val)
+		idx := snap.indexOfVal(val)
+		if idx < 0 {
+			// The backOffTime does not matter when a validator is not authorized.
+			return 0
+		}
 		s := rand.NewSource(int64(snap.Number))
 		r := rand.New(s)
 		n := len(snap.Validators)
@@ -1156,7 +1160,7 @@ func backOffTime(snap *Snapshot, val common.Address) uint64 {
 		r.Shuffle(n, func(i, j int) {
 			backOffSteps[i], backOffSteps[j] = backOffSteps[j], backOffSteps[i]
 		})
-		delay := initialBackOffTime + backOffSteps[dis]*wiggleTime
+		delay := initialBackOffTime + backOffSteps[idx]*wiggleTime
 		return delay
 	}
 }
