@@ -216,18 +216,14 @@ func (s *Snapshot) inturn(validator common.Address) bool {
 	return validators[offset] == validator
 }
 
-func (s *Snapshot) distanceToInTurn(validator common.Address) uint64 {
+func (s *Snapshot) indexOfVal(validator common.Address) int {
 	validators := s.validators()
-	offset := (s.Number + 1) % uint64(len(validators))
-	idx := uint64(0)
-	for idx < uint64(len(validator)) && validators[idx] != validator {
-		idx++
+	for idx, val := range validators {
+		if val == validator {
+			return idx
+		}
 	}
-	if offset > idx {
-		return uint64(len(validators)) + idx - offset
-	} else {
-		return idx - offset
-	}
+	return -1
 }
 
 func (s *Snapshot) supposeValidator() common.Address {
