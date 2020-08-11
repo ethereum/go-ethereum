@@ -680,7 +680,6 @@ func (c *Bor) Finalize(chain consensus.ChainReader, header *types.Header, state 
 	header.Root = state.IntermediateRoot(chain.Config().IsEIP158(header.Number))
 	header.UncleHash = types.CalcUncleHash(nil)
 	header.SetStateSync(stateSyncData)
-
 }
 
 // FinalizeAndAssemble implements consensus.Engine, ensuring no uncles are set,

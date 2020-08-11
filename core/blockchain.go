@@ -1542,10 +1542,6 @@ func (bc *BlockChain) writeBlockWithState(block *types.Block, receipts []*types.
 		if emitHeadEvent {
 			bc.chainHeadFeed.Send(ChainHeadEvent{Block: block})
 		}
-		syncData := block.StateSyncData()
-		for _, data := range syncData {
-			bc.stateSyncFeed.Send(StateSyncEvent{StateData: data})
-		}
 	} else {
 		bc.chainSideFeed.Send(ChainSideEvent{Block: block})
 	}
@@ -1797,6 +1793,11 @@ func (bc *BlockChain) insertChain(chain types.Blocks, verifySeals bool) (int, er
 		// Process block using the parent state as reference point
 		substart := time.Now()
 		receipts, logs, usedGas, err := bc.processor.Process(block, statedb, bc.vmConfig)
+		syncData := block.StateSyncData()
+
+		for _, data := range syncData {
+			bc.stateSyncFeed.Send(StateSyncEvent{StateData: data})
+		}
 		if err != nil {
 			bc.reportBlock(block, receipts, err)
 			atomic.StoreUint32(&followupInterrupt, 1)
