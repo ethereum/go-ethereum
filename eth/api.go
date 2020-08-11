@@ -411,10 +411,15 @@ func (api *Eth2API) ProduceBlock(parentHash common.Hash) ([]byte, error) {
 		return nil, err
 	}
 
+	coinbase, err := api.eth.Etherbase()
+	if err != nil {
+		return nil, err
+	}
 	num := parent.Number()
 	header := &types.Header{
 		ParentHash: parent.Hash(),
 		Number:     num.Add(num, common.Big1),
+		Coinbase:   coinbase,
 		GasLimit:   parent.GasLimit(), // Keep the gas limit constant in this prototype
 		Extra:      []byte{},
 		Time:       uint64(timestamp),
@@ -430,10 +435,6 @@ func (api *Eth2API) ProduceBlock(parentHash common.Hash) ([]byte, error) {
 	}
 	signer := types.NewEIP155Signer(bc.Config().ChainID)
 	txs := types.NewTransactionsByPriceAndNonce(signer, pending)
-	coinbase, err := api.eth.Etherbase()
-	if err != nil {
-		return nil, err
-	}
 
 	var transactions []*types.Transaction
 
@@ -489,6 +490,26 @@ func (api *Eth2API) ProduceBlock(parentHash common.Hash) ([]byte, error) {
 		return nil, err
 	}
 
+	var logs []*types.Log
+	var receipts = make(types.Receipts, len(api.env.receipts))
+	hash := block.Hash()
+	for i, receipt := range api.env.receipts {
+		// add block location fields
+		receipt.BlockHash = hash
+		receipt.BlockNumber = block.Number()
+		receipt.TransactionIndex = uint(i)
+
+		receipts[i] = new(types.Receipt)
+		*receipts[i] = *receipt
+		// Update the block hash in all logs since it is now available and not when the
+		// receipt/log of individual transactions were created.
+		for _, log := range receipt.Logs {
+			log.BlockHash = hash
+		}
+		logs = append(logs, receipt.Logs...)
+	}
+
+	block.Header().ReceiptHash = types.DeriveSha(receipts)
 	var rlpbuf bytes.Buffer
 	block.EncodeRLP(&rlpbuf)
 	return rlpbuf.Bytes(), nil
