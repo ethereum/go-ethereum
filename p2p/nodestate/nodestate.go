@@ -18,6 +18,7 @@ package nodestate
 
 import (
 	"errors"
+	"fmt"
 	"reflect"
 	"sync"
 	"time"
@@ -31,6 +32,8 @@ import (
 	"github.com/ethereum/go-ethereum/p2p/enr"
 	"github.com/ethereum/go-ethereum/rlp"
 )
+
+const debugPrints = false
 
 type (
 	// NodeStateMachine connects different system components operating on subsets of
@@ -60,6 +63,8 @@ type (
 		dbNodeKey           []byte
 		nodes               map[enode.ID]*nodeInfo
 		offlineCallbackList []offlineCallback
+		callbackCount       int
+		callbackWait        *sync.Cond
 
 		// Registered state flags or fields. Modifications are allowed
 		// only when the node state machine has not been started.
@@ -128,11 +133,12 @@ type (
 
 	// nodeInfo contains node state, fields and state timeouts
 	nodeInfo struct {
-		node      *enode.Node
-		state     bitMask
-		timeouts  []*nodeStateTimeout
-		fields    []interface{}
-		db, dirty bool
+		node             *enode.Node
+		state            bitMask
+		timeouts         []*nodeStateTimeout
+		fields           []interface{}
+		pendingCallbacks []func()
+		db, dirty        bool
 	}
 
 	nodeInfoEnc struct {
@@ -158,7 +164,7 @@ type (
 	}
 
 	offlineCallback struct {
-		node   *enode.Node
+		node   *nodeInfo
 		state  bitMask
 		fields []interface{}
 	}
@@ -319,10 +325,11 @@ func NewNodeStateMachine(db ethdb.KeyValueStore, dbKey []byte, clock mclock.Cloc
 		nodes:     make(map[enode.ID]*nodeInfo),
 		fields:    make([]*fieldInfo, len(setup.fields)),
 	}
+	ns.callbackWait = sync.NewCond(&ns.lock)
 	stateNameMap := make(map[string]int)
 	for index, flag := range setup.flags {
 		if _, ok := stateNameMap[flag.name]; ok {
-			panic("Node state flag name collision")
+			panic("Node state flag name collision: " + flag.name)
 		}
 		stateNameMap[flag.name] = index
 		if flag.persistent {
@@ -332,7 +339,7 @@ func NewNodeStateMachine(db ethdb.KeyValueStore, dbKey []byte, clock mclock.Cloc
 	fieldNameMap := make(map[string]int)
 	for index, field := range setup.fields {
 		if _, ok := fieldNameMap[field.name]; ok {
-			panic("Node field name collision")
+			panic("Node field name collision: " + field.name)
 		}
 		ns.fields[index] = &fieldInfo{fieldDefinition: field}
 		fieldNameMap[field.name] = index
@@ -415,10 +422,13 @@ func (ns *NodeStateMachine) Start() {
 // Stop stops the state machine and saves its state if a database was supplied
 func (ns *NodeStateMachine) Stop() {
 	ns.lock.Lock()
+	if ns.callbackCount != 0 {
+		ns.callbackWait.Wait()
+	}
 	for _, node := range ns.nodes {
 		fields := make([]interface{}, len(node.fields))
 		copy(fields, node.fields)
-		ns.offlineCallbackList = append(ns.offlineCallbackList, offlineCallback{node.node, node.state, fields})
+		ns.offlineCallbackList = append(ns.offlineCallbackList, offlineCallback{node, node.state, fields})
 	}
 	ns.stopped = true
 	if ns.db != nil {
@@ -491,7 +501,7 @@ func (ns *NodeStateMachine) decodeNode(id enode.ID, data []byte) {
 	node.state = enc.State
 	fields := make([]interface{}, len(node.fields))
 	copy(fields, node.fields)
-	ns.offlineCallbackList = append(ns.offlineCallbackList, offlineCallback{node.node, node.state, fields})
+	ns.offlineCallbackList = append(ns.offlineCallbackList, offlineCallback{node, node.state, fields})
 	log.Debug("Loaded node state", "id", id, "state", Flags{mask: enc.State, setup: ns.setup})
 }
 
@@ -620,6 +630,9 @@ func (ns *NodeStateMachine) SetState(n *enode.Node, setFlags, resetFlags Flags, 
 	}
 	oldState := node.state
 	newState := (node.state & (^reset)) | set
+	if debugPrints {
+		fmt.Println("SetState", n.ID(), "old", Flags{oldState, ns.setup}, "new", Flags{newState, ns.setup}, "set", setFlags, "reset", resetFlags, "timeout", timeout)
+	}
 	changed := oldState ^ newState
 	node.state = newState
 
@@ -646,53 +659,104 @@ func (ns *NodeStateMachine) SetState(n *enode.Node, setFlags, resetFlags Flags, 
 			node.dirty = true
 		}
 	}
-	ns.lock.Unlock()
-	// call state update subscription callbacks without holding the mutex
-	for _, sub := range ns.stateSubs {
-		if changed&sub.mask != 0 {
-			sub.callback(n, Flags{mask: oldState & sub.mask, setup: ns.setup}, Flags{mask: newState & sub.mask, setup: ns.setup})
+	callback := func() {
+		for _, sub := range ns.stateSubs {
+			if changed&sub.mask != 0 {
+				sub.callback(n, Flags{mask: oldState & sub.mask, setup: ns.setup}, Flags{mask: newState & sub.mask, setup: ns.setup})
+			}
 		}
-	}
-	if newState == 0 {
-		// call field subscriptions for discarded fields
-		for i, v := range node.fields {
-			if v != nil {
-				f := ns.fields[i]
-				if len(f.subs) > 0 {
-					for _, cb := range f.subs {
-						cb(n, Flags{setup: ns.setup}, v, nil)
+		if newState == 0 {
+			// call field subscriptions for discarded fields
+			for i, v := range node.fields {
+				if v != nil {
+					if debugPrints {
+						fmt.Println("discardField", n.ID(), ns.setup.fields[i].name, v)
+					}
+					f := ns.fields[i]
+					if len(f.subs) > 0 {
+						for _, cb := range f.subs {
+							cb(n, Flags{setup: ns.setup}, v, nil)
+						}
 					}
 				}
 			}
 		}
+	}
+	callNow := node.pendingCallbacks == nil
+	node.pendingCallbacks = append(node.pendingCallbacks, callback)
+	ns.callbackCount++
+	list := node.pendingCallbacks
+	ns.lock.Unlock()
+	// call state update subscription callbacks without holding the mutex
+	if callNow {
+		ns.processCallbacks(node, list)
+	}
+}
+
+// processCallbacks runs pending callbacks of a given node in a guaranteed correct order.
+// Callbacks resulting from a state/field change performed in a previous callback are always
+// put at the end of the pending list and therefore processed after all callbacks resulting
+// from the previous state/field change.
+func (ns *NodeStateMachine) processCallbacks(node *nodeInfo, list []func()) {
+	for list != nil {
+		for _, cb := range list {
+			cb()
+		}
+		ns.lock.Lock()
+		node.pendingCallbacks = node.pendingCallbacks[len(list):]
+		if len(node.pendingCallbacks) == 0 {
+			node.pendingCallbacks = nil
+		}
+		ns.callbackCount -= len(list)
+		if ns.callbackCount == 0 {
+			ns.callbackWait.Signal()
+		}
+		list = node.pendingCallbacks
+		ns.lock.Unlock()
 	}
 }
 
 // offlineCallbacks calls state update callbacks at startup or shutdown
 func (ns *NodeStateMachine) offlineCallbacks(start bool) {
 	for _, cb := range ns.offlineCallbackList {
-		for _, sub := range ns.stateSubs {
-			offState := offlineState & sub.mask
-			onState := cb.state & sub.mask
-			if offState != onState {
-				if start {
-					sub.callback(cb.node, Flags{mask: offState, setup: ns.setup}, Flags{mask: onState, setup: ns.setup})
-				} else {
-					sub.callback(cb.node, Flags{mask: onState, setup: ns.setup}, Flags{mask: offState, setup: ns.setup})
+		cb := cb
+		callback := func() {
+			for _, sub := range ns.stateSubs {
+				offState := offlineState & sub.mask
+				onState := cb.state & sub.mask
+				if offState != onState {
+					if start {
+						sub.callback(cb.node.node, Flags{mask: offState, setup: ns.setup}, Flags{mask: onState, setup: ns.setup})
+					} else {
+						sub.callback(cb.node.node, Flags{mask: onState, setup: ns.setup}, Flags{mask: offState, setup: ns.setup})
+					}
 				}
 			}
-		}
-		for i, f := range cb.fields {
-			if f != nil && ns.fields[i].subs != nil {
-				for _, fsub := range ns.fields[i].subs {
-					if start {
-						fsub(cb.node, Flags{mask: offlineState, setup: ns.setup}, nil, f)
-					} else {
-						fsub(cb.node, Flags{mask: offlineState, setup: ns.setup}, f, nil)
+			for i, f := range cb.fields {
+				if f != nil && ns.fields[i].subs != nil {
+					for _, fsub := range ns.fields[i].subs {
+						if start {
+							fsub(cb.node.node, Flags{mask: offlineState, setup: ns.setup}, nil, f)
+						} else {
+							fsub(cb.node.node, Flags{mask: offlineState, setup: ns.setup}, f, nil)
+						}
 					}
 				}
 			}
 		}
+		ns.lock.Lock()
+		if cb.node.pendingCallbacks != nil {
+			panic("Fatal: unfinished callback")
+		}
+		cb.node.pendingCallbacks = []func(){callback}
+		ns.callbackCount++
+		ns.lock.Unlock()
+	}
+	for _, cb := range ns.offlineCallbackList {
+		ns.lock.Lock()
+		list := cb.node.pendingCallbacks
+		ns.lock.Unlock()
+		ns.processCallbacks(cb.node, list)
 	}
 	ns.offlineCallbackList = nil
 }
@@ -723,6 +787,9 @@ func (ns *NodeStateMachine) addTimeout(n *enode.Node, mask bitMask, timeout time
 	ns.removeTimeouts(node, mask)
 	t := &nodeStateTimeout{mask: mask}
 	t.timer = ns.clock.AfterFunc(timeout, func() {
+		if debugPrints {
+			fmt.Println("timeout", n.ID(), Flags{mask, ns.setup})
+		}
 		ns.SetState(n, Flags{}, Flags{mask: t.mask, setup: ns.setup}, 0)
 	})
 	node.timeouts = append(node.timeouts, t)
@@ -792,6 +859,9 @@ func (ns *NodeStateMachine) SetField(n *enode.Node, field Field, value interface
 		return errors.New("invalid field type")
 	}
 	oldValue := node.fields[fieldIndex]
+	if debugPrints {
+		fmt.Println("SetField", n.ID(), Flags{node.state, ns.setup}, field.setup.fields[field.index].name, oldValue, value)
+	}
 	if value == oldValue {
 		ns.lock.Unlock()
 		return nil
@@ -802,11 +872,21 @@ func (ns *NodeStateMachine) SetField(n *enode.Node, field Field, value interface
 	}
 
 	state := node.state
-	ns.lock.Unlock()
-	if len(f.subs) > 0 {
-		for _, cb := range f.subs {
-			cb(n, Flags{mask: state, setup: ns.setup}, oldValue, value)
+	callback := func() {
+		if len(f.subs) > 0 {
+			for _, cb := range f.subs {
+				cb(n, Flags{mask: state, setup: ns.setup}, oldValue, value)
+			}
 		}
+	}
+	callNow := node.pendingCallbacks == nil
+	node.pendingCallbacks = append(node.pendingCallbacks, callback)
+	ns.callbackCount++
+	list := node.pendingCallbacks
+	ns.lock.Unlock()
+	// call field update subscription callbacks without holding the mutex
+	if callNow {
+		ns.processCallbacks(node, list)
 	}
 	return nil
 }
