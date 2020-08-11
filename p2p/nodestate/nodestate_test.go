@@ -387,3 +387,34 @@ func TestDuplicatedFlags(t *testing.T) {
 	clock.Run(2 * time.Second)
 	check(flags[0], Flags{}, true)
 }
+
+func TestCallbackOrder(t *testing.T) {
+	mdb, clock := rawdb.NewMemoryDatabase(), &mclock.Simulated{}
+
+	s, flags, _ := testSetup([]bool{false, false, false, false}, nil)
+	ns := NewNodeStateMachine(mdb, []byte("-ns"), clock, s)
+
+	ns.SubscribeState(flags[0], func(n *enode.Node, oldState, newState Flags) {
+		if newState.Equals(flags[0]) {
+			ns.SetState(n, flags[1], Flags{}, 0)
+			ns.SetState(n, flags[2], Flags{}, 0)
+		}
+	})
+	ns.SubscribeState(flags[1], func(n *enode.Node, oldState, newState Flags) {
+		if newState.Equals(flags[1]) {
+			ns.SetState(n, flags[3], Flags{}, 0)
+		}
+	})
+	lastState := Flags{}
+	ns.SubscribeState(MergeFlags(flags[1], flags[2], flags[3]), func(n *enode.Node, oldState, newState Flags) {
+		if !oldState.Equals(lastState) {
+			t.Fatalf("Wrong callback order")
+		}
+		lastState = newState
+	})
+
+	ns.Start()
+	defer ns.Stop()
+
+	ns.SetState(testNode(1), flags[0], Flags{}, 0)
+}
