@@ -17,9 +17,103 @@
 package core
 
 import (
+	"bytes"
 	"math/big"
 	"testing"
+
+	"github.com/ethereum/go-ethereum/common/hexutil"
 )
+
+func TestBytesPadding(t *testing.T) {
+	tests := []struct {
+		Type   string
+		Input  []byte
+		Output []byte // nil => error
+	}{
+		{
+			// Fail on wrong length
+			Type:   "bytes20",
+			Input:  []byte{},
+			Output: nil,
+		},
+		{
+			Type:   "bytes1",
+			Input:  []byte{1},
+			Output: []byte{1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0},
+		},
+		{
+			Type:   "bytes1",
+			Input:  []byte{1, 2},
+			Output: nil,
+		},
+		{
+			Type:   "bytes7",
+			Input:  []byte{1, 2, 3, 4, 5, 6, 7},
+			Output: []byte{1, 2, 3, 4, 5, 6, 7, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0},
+		},
+		{
+			Type:   "bytes32",
+			Input:  []byte{1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30, 31, 32},
+			Output: []byte{1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30, 31, 32},
+		},
+		{
+			Type:   "bytes32",
+			Input:  []byte{1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30, 31, 32, 33},
+			Output: nil,
+		},
+	}
+
+	d := TypedData{}
+	for i, test := range tests {
+		val, err := d.EncodePrimitiveValue(test.Type, test.Input, 1)
+		if test.Output == nil {
+			if err == nil {
+				t.Errorf("test %d: expected error, got no error (result %x)", i, val)
+			}
+		} else {
+			if err != nil {
+				t.Errorf("test %d: expected no error, got %v", i, err)
+			}
+			if len(val) != 32 {
+				t.Errorf("test %d: expected len 32, got %d", i, len(val))
+			}
+			if !bytes.Equal(val, test.Output) {
+				t.Errorf("test %d: expected %x, got %x", i, test.Output, val)
+			}
+		}
+	}
+}
+
+func TestParseBytes(t *testing.T) {
+	for i, tt := range []struct {
+		v   interface{}
+		exp []byte
+	}{
+		{"0x", []byte{}},
+		{"0x1234", []byte{0x12, 0x34}},
+		{[]byte{12, 34}, []byte{12, 34}},
+		{hexutil.Bytes([]byte{12, 34}), []byte{12, 34}},
+		{"1234", nil},    // not a proper hex-string
+		{"0x01233", nil}, // nibbles should be rejected
+		{"not a hex string", nil},
+		{15, nil},
+		{nil, nil},
+	} {
+		out, ok := parseBytes(tt.v)
+		if tt.exp == nil {
+			if ok || out != nil {
+				t.Errorf("test %d: expected !ok, got ok = %v with out = %x", i, ok, out)
+			}
+			continue
+		}
+		if !ok {
+			t.Errorf("test %d: expected ok got !ok", i)
+		}
+		if !bytes.Equal(out, tt.exp) {
+			t.Errorf("test %d: expected %x got %x", i, tt.exp, out)
+		}
+	}
+}
 
 func TestParseInteger(t *testing.T) {
 	for i, tt := range []struct {

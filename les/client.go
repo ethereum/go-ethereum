@@ -22,7 +22,6 @@ import (
 	"time"
 
 	"github.com/ethereum/go-ethereum/accounts"
-	"github.com/ethereum/go-ethereum/accounts/abi/bind"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/ethereum/go-ethereum/common/mclock"
@@ -37,7 +36,6 @@ import (
 	"github.com/ethereum/go-ethereum/eth/gasprice"
 	"github.com/ethereum/go-ethereum/event"
 	"github.com/ethereum/go-ethereum/internal/ethapi"
-	"github.com/ethereum/go-ethereum/les/checkpointoracle"
 	lpc "github.com/ethereum/go-ethereum/les/lespay/client"
 	"github.com/ethereum/go-ethereum/light"
 	"github.com/ethereum/go-ethereum/log"
@@ -72,14 +70,17 @@ type LightEthereum struct {
 	engine         consensus.Engine
 	accountManager *accounts.Manager
 	netRPCService  *ethapi.PublicNetAPI
+
+	p2pServer *p2p.Server
 }
 
-func New(ctx *node.ServiceContext, config *eth.Config) (*LightEthereum, error) {
-	chainDb, err := ctx.OpenDatabase("lightchaindata", config.DatabaseCache, config.DatabaseHandles, "eth/db/chaindata/")
+// New creates an instance of the light client.
+func New(stack *node.Node, config *eth.Config) (*LightEthereum, error) {
+	chainDb, err := stack.OpenDatabase("lightchaindata", config.DatabaseCache, config.DatabaseHandles, "eth/db/chaindata/")
 	if err != nil {
 		return nil, err
 	}
-	lespayDb, err := ctx.OpenDatabase("lespay", 0, 0, "eth/db/lespay")
+	lespayDb, err := stack.OpenDatabase("lespay", 0, 0, "eth/db/lespay")
 	if err != nil {
 		return nil, err
 	}
@@ -100,17 +101,18 @@ func New(ctx *node.ServiceContext, config *eth.Config) (*LightEthereum, error) {
 			closeCh:     make(chan struct{}),
 		},
 		peers:          peers,
-		eventMux:       ctx.EventMux,
+		eventMux:       stack.EventMux(),
 		reqDist:        newRequestDistributor(peers, &mclock.System{}),
-		accountManager: ctx.AccountManager,
-		engine:         eth.CreateConsensusEngine(ctx, chainConfig, &config.Ethash, nil, false, chainDb),
+		accountManager: stack.AccountManager(),
+		engine:         eth.CreateConsensusEngine(stack, chainConfig, &config.Ethash, nil, false, chainDb),
 		bloomRequests:  make(chan chan *bloombits.Retrieval),
 		bloomIndexer:   eth.NewBloomIndexer(chainDb, params.BloomBitsBlocksClient, params.HelperTrieConfirmations),
 		valueTracker:   lpc.NewValueTracker(lespayDb, &mclock.System{}, requestList, time.Minute, 1/float64(time.Hour), 1/float64(time.Hour*100), 1/float64(time.Hour*1000)),
+		p2pServer:      stack.Server(),
 	}
 	peers.subscribe((*vtSubscription)(leth.valueTracker))
 
-	dnsdisc, err := leth.setupDiscovery(&ctx.Config.P2P)
+	dnsdisc, err := leth.setupDiscovery(&stack.Config().P2P)
 	if err != nil {
 		return nil, err
 	}
@@ -139,11 +141,7 @@ func New(ctx *node.ServiceContext, config *eth.Config) (*LightEthereum, error) {
 	leth.txPool = light.NewTxPool(leth.chainConfig, leth.blockchain, leth.relay)
 
 	// Set up checkpoint oracle.
-	oracle := config.CheckpointOracle
-	if oracle == nil {
-		oracle = params.CheckpointOracles[genesisHash]
-	}
-	leth.oracle = checkpointoracle.New(oracle, leth.localCheckpoint)
+	leth.oracle = leth.setupOracle(stack, genesisHash, config)
 
 	// Note: AddChildIndexer starts the update process for the child
 	leth.bloomIndexer.AddChildIndexer(leth.bloomTrieIndexer)
@@ -160,7 +158,7 @@ func New(ctx *node.ServiceContext, config *eth.Config) (*LightEthereum, error) {
 		rawdb.WriteChainConfig(chainDb, genesisHash, chainConfig)
 	}
 
-	leth.ApiBackend = &LesApiBackend{ctx.ExtRPCEnabled(), leth, nil}
+	leth.ApiBackend = &LesApiBackend{stack.Config().ExtRPCEnabled(), leth, nil}
 	gpoParams := config.GPO
 	if gpoParams.Default == nil {
 		gpoParams.Default = config.Miner.GasPrice
@@ -172,6 +170,14 @@ func New(ctx *node.ServiceContext, config *eth.Config) (*LightEthereum, error) {
 		log.Warn("Ultra light client is enabled", "trustedNodes", len(leth.handler.ulc.keys), "minTrustedFraction", leth.handler.ulc.fraction)
 		leth.blockchain.DisableCheckFreq()
 	}
+
+	leth.netRPCService = ethapi.NewPublicNetAPI(leth.p2pServer, leth.config.NetworkId)
+
+	// Register the backend on the node
+	stack.RegisterAPIs(leth.APIs())
+	stack.RegisterProtocols(leth.Protocols())
+	stack.RegisterLifecycle(leth)
+
 	return leth, nil
 }
 
@@ -265,32 +271,31 @@ func (s *LightEthereum) LesVersion() int                    { return int(ClientP
 func (s *LightEthereum) Downloader() *downloader.Downloader { return s.handler.downloader }
 func (s *LightEthereum) EventMux() *event.TypeMux           { return s.eventMux }
 
-// Protocols implements node.Service, returning all the currently configured
-// network protocols to start.
+// Protocols returns all the currently configured network protocols to start.
 func (s *LightEthereum) Protocols() []p2p.Protocol {
 	return s.makeProtocols(ClientProtocolVersions, s.handler.runPeer, func(id enode.ID) interface{} {
-		if p := s.peers.peer(peerIdToString(id)); p != nil {
+		if p := s.peers.peer(id.String()); p != nil {
 			return p.Info()
 		}
 		return nil
 	}, s.dialCandidates)
 }
 
-// Start implements node.Service, starting all internal goroutines needed by the
+// Start implements node.Lifecycle, starting all internal goroutines needed by the
 // light ethereum protocol implementation.
-func (s *LightEthereum) Start(srvr *p2p.Server) error {
+func (s *LightEthereum) Start() error {
 	log.Warn("Light client mode is an experimental feature")
 
 	s.serverPool.start()
 	// Start bloom request workers.
 	s.wg.Add(bloomServiceThreads)
 	s.startBloomHandlers(params.BloomBitsBlocksClient)
+	s.handler.start()
 
-	s.netRPCService = ethapi.NewPublicNetAPI(srvr, s.config.NetworkId)
 	return nil
 }
 
-// Stop implements node.Service, terminating all internal goroutines used by the
+// Stop implements node.Lifecycle, terminating all internal goroutines used by the
 // Ethereum protocol.
 func (s *LightEthereum) Stop() error {
 	close(s.closeCh)
@@ -312,12 +317,4 @@ func (s *LightEthereum) Stop() error {
 	s.wg.Wait()
 	log.Info("Light ethereum stopped")
 	return nil
-}
-
-// SetClient sets the rpc client and binds the registrar contract.
-func (s *LightEthereum) SetContractBackend(backend bind.ContractBackend) {
-	if s.oracle == nil {
-		return
-	}
-	s.oracle.Start(backend)
 }

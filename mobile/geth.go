@@ -175,49 +175,44 @@ func NewNode(datadir string, config *NodeConfig) (stack *Node, _ error) {
 		ethConf.SyncMode = downloader.LightSync
 		ethConf.NetworkId = uint64(config.EthereumNetworkID)
 		ethConf.DatabaseCache = config.EthereumDatabaseCache
-		if err := rawStack.Register(func(ctx *node.ServiceContext) (node.Service, error) {
-			return les.New(ctx, &ethConf)
-		}); err != nil {
+		lesBackend, err := les.New(rawStack, &ethConf)
+		if err != nil {
 			return nil, fmt.Errorf("ethereum init: %v", err)
 		}
 		// If netstats reporting is requested, do it
 		if config.EthereumNetStats != "" {
-			if err := rawStack.Register(func(ctx *node.ServiceContext) (node.Service, error) {
-				var lesServ *les.LightEthereum
-				ctx.Service(&lesServ)
-
-				return ethstats.New(config.EthereumNetStats, nil, lesServ)
-			}); err != nil {
+			if err := ethstats.New(rawStack, lesBackend.ApiBackend, lesBackend.Engine(), config.EthereumNetStats); err != nil {
 				return nil, fmt.Errorf("netstats init: %v", err)
 			}
 		}
 	}
 	// Register the Whisper protocol if requested
 	if config.WhisperEnabled {
-		if err := rawStack.Register(func(*node.ServiceContext) (node.Service, error) {
-			return whisper.New(&whisper.DefaultConfig), nil
-		}); err != nil {
+		if _, err := whisper.New(rawStack, &whisper.DefaultConfig); err != nil {
 			return nil, fmt.Errorf("whisper init: %v", err)
 		}
 	}
 	return &Node{rawStack}, nil
 }
 
-// Close terminates a running node along with all it's services, tearing internal
-// state doen too. It's not possible to restart a closed node.
+// Close terminates a running node along with all it's services, tearing internal state
+// down. It is not possible to restart a closed node.
 func (n *Node) Close() error {
 	return n.node.Close()
 }
 
 // Start creates a live P2P node and starts running it.
 func (n *Node) Start() error {
+	// TODO: recreate the node so it can be started multiple times
 	return n.node.Start()
 }
 
-// Stop terminates a running node along with all it's services. If the node was
-// not started, an error is returned.
+// Stop terminates a running node along with all its services. If the node was not started,
+// an error is returned. It is not possible to restart a stopped node.
+//
+// Deprecated: use Close()
 func (n *Node) Stop() error {
-	return n.node.Stop()
+	return n.node.Close()
 }
 
 // GetEthereumClient retrieves a client to access the Ethereum subsystem.

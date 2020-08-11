@@ -17,10 +17,8 @@
 package node
 
 import (
-	"context"
 	"errors"
 	"fmt"
-	"net"
 	"net/http"
 	"os"
 	"path/filepath"
@@ -32,7 +30,6 @@ import (
 	"github.com/ethereum/go-ethereum/core/rawdb"
 	"github.com/ethereum/go-ethereum/ethdb"
 	"github.com/ethereum/go-ethereum/event"
-	"github.com/ethereum/go-ethereum/internal/debug"
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/p2p"
 	"github.com/ethereum/go-ethereum/rpc"
@@ -41,42 +38,33 @@ import (
 
 // Node is a container on which services can be registered.
 type Node struct {
-	eventmux *event.TypeMux // Event multiplexer used between the services of a stack
-	config   *Config
-	accman   *accounts.Manager
+	eventmux      *event.TypeMux
+	config        *Config
+	accman        *accounts.Manager
+	log           log.Logger
+	ephemKeystore string            // if non-empty, the key directory that will be removed by Stop
+	dirLock       fileutil.Releaser // prevents concurrent use of instance directory
+	stop          chan struct{}     // Channel to wait for termination notifications
+	server        *p2p.Server       // Currently running P2P networking layer
+	startStopLock sync.Mutex        // Start/Stop are protected by an additional lock
+	state         int               // Tracks state of node lifecycle
 
-	ephemeralKeystore string            // if non-empty, the key directory that will be removed by Stop
-	instanceDirLock   fileutil.Releaser // prevents concurrent use of instance directory
-
-	serverConfig p2p.Config
-	server       *p2p.Server // Currently running P2P networking layer
-
-	serviceFuncs []ServiceConstructor     // Service constructors (in dependency order)
-	services     map[reflect.Type]Service // Currently running services
-
+	lock          sync.Mutex
+	lifecycles    []Lifecycle // All registered backends, services, and auxiliary services that have a lifecycle
 	rpcAPIs       []rpc.API   // List of APIs currently provided by the node
+	http          *httpServer //
+	ws            *httpServer //
+	ipc           *ipcServer  // Stores information about the ipc http server
 	inprocHandler *rpc.Server // In-process RPC request handler to process the API requests
 
-	ipcEndpoint string       // IPC endpoint to listen at (empty = IPC disabled)
-	ipcListener net.Listener // IPC RPC listener socket to serve API requests
-	ipcHandler  *rpc.Server  // IPC RPC request handler to process the API requests
-
-	httpEndpoint     string       // HTTP endpoint (interface + port) to listen at (empty = HTTP disabled)
-	httpWhitelist    []string     // HTTP RPC modules to allow through this endpoint
-	httpListenerAddr net.Addr     // Address of HTTP RPC listener socket serving API requests
-	httpServer       *http.Server // HTTP RPC HTTP server
-	httpHandler      *rpc.Server  // HTTP RPC request handler to process the API requests
-
-	wsEndpoint     string       // WebSocket endpoint (interface + port) to listen at (empty = WebSocket disabled)
-	wsListenerAddr net.Addr     // Address of WebSocket RPC listener socket serving API requests
-	wsHTTPServer   *http.Server // WebSocket RPC HTTP server
-	wsHandler      *rpc.Server  // WebSocket RPC request handler to process the API requests
-
-	stop chan struct{} // Channel to wait for termination notifications
-	lock sync.RWMutex
-
-	log log.Logger
+	databases map[*closeTrackingDB]struct{} // All open databases
 }
+
+const (
+	initializingState = iota
+	runningState
+	closedState
+)
 
 // New creates a new P2P node, ready for protocol registration.
 func New(conf *Config) (*Node, error) {
@@ -91,6 +79,10 @@ func New(conf *Config) (*Node, error) {
 		}
 		conf.DataDir = absdatadir
 	}
+	if conf.Logger == nil {
+		conf.Logger = log.New()
+	}
+
 	// Ensure that the instance name doesn't cause weird conflicts with
 	// other files in the data directory.
 	if strings.ContainsAny(conf.Name, `/\`) {
@@ -102,43 +94,149 @@ func New(conf *Config) (*Node, error) {
 	if strings.HasSuffix(conf.Name, ".ipc") {
 		return nil, errors.New(`Config.Name cannot end in ".ipc"`)
 	}
-	// Ensure that the AccountManager method works before the node has started.
-	// We rely on this in cmd/geth.
+
+	node := &Node{
+		config:        conf,
+		inprocHandler: rpc.NewServer(),
+		eventmux:      new(event.TypeMux),
+		log:           conf.Logger,
+		stop:          make(chan struct{}),
+		server:        &p2p.Server{Config: conf.P2P},
+		databases:     make(map[*closeTrackingDB]struct{}),
+	}
+
+	// Register built-in APIs.
+	node.rpcAPIs = append(node.rpcAPIs, node.apis()...)
+
+	// Acquire the instance directory lock.
+	if err := node.openDataDir(); err != nil {
+		return nil, err
+	}
+	// Ensure that the AccountManager method works before the node has started. We rely on
+	// this in cmd/geth.
 	am, ephemeralKeystore, err := makeAccountManager(conf)
 	if err != nil {
 		return nil, err
 	}
-	if conf.Logger == nil {
-		conf.Logger = log.New()
+	node.accman = am
+	node.ephemKeystore = ephemeralKeystore
+
+	// Initialize the p2p server. This creates the node key and discovery databases.
+	node.server.Config.PrivateKey = node.config.NodeKey()
+	node.server.Config.Name = node.config.NodeName()
+	node.server.Config.Logger = node.log
+	if node.server.Config.StaticNodes == nil {
+		node.server.Config.StaticNodes = node.config.StaticNodes()
 	}
-	// Note: any interaction with Config that would create/touch files
-	// in the data directory or instance directory is delayed until Start.
-	return &Node{
-		accman:            am,
-		ephemeralKeystore: ephemeralKeystore,
-		config:            conf,
-		serviceFuncs:      []ServiceConstructor{},
-		ipcEndpoint:       conf.IPCEndpoint(),
-		httpEndpoint:      conf.HTTPEndpoint(),
-		wsEndpoint:        conf.WSEndpoint(),
-		eventmux:          new(event.TypeMux),
-		log:               conf.Logger,
-	}, nil
+	if node.server.Config.TrustedNodes == nil {
+		node.server.Config.TrustedNodes = node.config.TrustedNodes()
+	}
+	if node.server.Config.NodeDatabase == "" {
+		node.server.Config.NodeDatabase = node.config.NodeDB()
+	}
+
+	// Configure RPC servers.
+	node.http = newHTTPServer(node.log, conf.HTTPTimeouts)
+	node.ws = newHTTPServer(node.log, rpc.DefaultHTTPTimeouts)
+	node.ipc = newIPCServer(node.log, conf.IPCEndpoint())
+
+	return node, nil
+}
+
+// Start starts all registered lifecycles, RPC services and p2p networking.
+// Node can only be started once.
+func (n *Node) Start() error {
+	n.startStopLock.Lock()
+	defer n.startStopLock.Unlock()
+
+	n.lock.Lock()
+	switch n.state {
+	case runningState:
+		n.lock.Unlock()
+		return ErrNodeRunning
+	case closedState:
+		n.lock.Unlock()
+		return ErrNodeStopped
+	}
+	n.state = runningState
+	err := n.startNetworking()
+	lifecycles := make([]Lifecycle, len(n.lifecycles))
+	copy(lifecycles, n.lifecycles)
+	n.lock.Unlock()
+
+	// Check if networking startup failed.
+	if err != nil {
+		n.doClose(nil)
+		return err
+	}
+	// Start all registered lifecycles.
+	var started []Lifecycle
+	for _, lifecycle := range lifecycles {
+		if err = lifecycle.Start(); err != nil {
+			break
+		}
+		started = append(started, lifecycle)
+	}
+	// Check if any lifecycle failed to start.
+	if err != nil {
+		n.stopServices(started)
+		n.doClose(nil)
+	}
+	return err
 }
 
 // Close stops the Node and releases resources acquired in
 // Node constructor New.
 func (n *Node) Close() error {
-	var errs []error
+	n.startStopLock.Lock()
+	defer n.startStopLock.Unlock()
 
-	// Terminate all subsystems and collect any errors
-	if err := n.Stop(); err != nil && err != ErrNodeStopped {
-		errs = append(errs, err)
+	n.lock.Lock()
+	state := n.state
+	n.lock.Unlock()
+	switch state {
+	case initializingState:
+		// The node was never started.
+		return n.doClose(nil)
+	case runningState:
+		// The node was started, release resources acquired by Start().
+		var errs []error
+		if err := n.stopServices(n.lifecycles); err != nil {
+			errs = append(errs, err)
+		}
+		return n.doClose(errs)
+	case closedState:
+		return ErrNodeStopped
+	default:
+		panic(fmt.Sprintf("node is in unknown state %d", state))
 	}
+}
+
+// doClose releases resources acquired by New(), collecting errors.
+func (n *Node) doClose(errs []error) error {
+	// Close databases. This needs the lock because it needs to
+	// synchronize with OpenDatabase*.
+	n.lock.Lock()
+	n.state = closedState
+	errs = append(errs, n.closeDatabases()...)
+	n.lock.Unlock()
+
 	if err := n.accman.Close(); err != nil {
 		errs = append(errs, err)
 	}
-	// Report any errors that might have occurred
+	if n.ephemKeystore != "" {
+		if err := os.RemoveAll(n.ephemKeystore); err != nil {
+			errs = append(errs, err)
+		}
+	}
+
+	// Release instance directory lock.
+	n.closeDataDir()
+
+	// Unblock n.Wait.
+	close(n.stop)
+
+	// Report any errors that might have occurred.
 	switch len(errs) {
 	case 0:
 		return nil
@@ -149,114 +247,50 @@ func (n *Node) Close() error {
 	}
 }
 
-// Register injects a new service into the node's stack. The service created by
-// the passed constructor must be unique in its type with regard to sibling ones.
-func (n *Node) Register(constructor ServiceConstructor) error {
-	n.lock.Lock()
-	defer n.lock.Unlock()
-
-	if n.server != nil {
-		return ErrNodeRunning
-	}
-	n.serviceFuncs = append(n.serviceFuncs, constructor)
-	return nil
-}
-
-// Start creates a live P2P node and starts running it.
-func (n *Node) Start() error {
-	n.lock.Lock()
-	defer n.lock.Unlock()
-
-	// Short circuit if the node's already running
-	if n.server != nil {
-		return ErrNodeRunning
-	}
-	if err := n.openDataDir(); err != nil {
-		return err
-	}
-
-	// Initialize the p2p server. This creates the node key and
-	// discovery databases.
-	n.serverConfig = n.config.P2P
-	n.serverConfig.PrivateKey = n.config.NodeKey()
-	n.serverConfig.Name = n.config.NodeName()
-	n.serverConfig.Logger = n.log
-	if n.serverConfig.StaticNodes == nil {
-		n.serverConfig.StaticNodes = n.config.StaticNodes()
-	}
-	if n.serverConfig.TrustedNodes == nil {
-		n.serverConfig.TrustedNodes = n.config.TrustedNodes()
-	}
-	if n.serverConfig.NodeDatabase == "" {
-		n.serverConfig.NodeDatabase = n.config.NodeDB()
-	}
-	running := &p2p.Server{Config: n.serverConfig}
-	n.log.Info("Starting peer-to-peer node", "instance", n.serverConfig.Name)
-
-	// Otherwise copy and specialize the P2P configuration
-	services := make(map[reflect.Type]Service)
-	for _, constructor := range n.serviceFuncs {
-		// Create a new context for the particular service
-		ctx := &ServiceContext{
-			Config:         *n.config,
-			services:       make(map[reflect.Type]Service),
-			EventMux:       n.eventmux,
-			AccountManager: n.accman,
-		}
-		for kind, s := range services { // copy needed for threaded access
-			ctx.services[kind] = s
-		}
-		// Construct and save the service
-		service, err := constructor(ctx)
-		if err != nil {
-			return err
-		}
-		kind := reflect.TypeOf(service)
-		if _, exists := services[kind]; exists {
-			return &DuplicateServiceError{Kind: kind}
-		}
-		services[kind] = service
-	}
-	// Gather the protocols and start the freshly assembled P2P server
-	for _, service := range services {
-		running.Protocols = append(running.Protocols, service.Protocols()...)
-	}
-	if err := running.Start(); err != nil {
+// startNetworking starts all network endpoints.
+func (n *Node) startNetworking() error {
+	n.log.Info("Starting peer-to-peer node", "instance", n.server.Name)
+	if err := n.server.Start(); err != nil {
 		return convertFileLockError(err)
 	}
-	// Start each of the services
-	var started []reflect.Type
-	for kind, service := range services {
-		// Start the next service, stopping all previous upon failure
-		if err := service.Start(running); err != nil {
-			for _, kind := range started {
-				services[kind].Stop()
-			}
-			running.Stop()
-
-			return err
-		}
-		// Mark the service started for potential cleanup
-		started = append(started, kind)
+	err := n.startRPC()
+	if err != nil {
+		n.stopRPC()
+		n.server.Stop()
 	}
-	// Lastly, start the configured RPC interfaces
-	if err := n.startRPC(services); err != nil {
-		for _, service := range services {
-			service.Stop()
-		}
-		running.Stop()
-		return err
-	}
-	// Finish initializing the startup
-	n.services = services
-	n.server = running
-	n.stop = make(chan struct{})
-	return nil
+	return err
 }
 
-// Config returns the configuration of node.
-func (n *Node) Config() *Config {
-	return n.config
+// containsLifecycle checks if 'lfs' contains 'l'.
+func containsLifecycle(lfs []Lifecycle, l Lifecycle) bool {
+	for _, obj := range lfs {
+		if obj == l {
+			return true
+		}
+	}
+	return false
+}
+
+// stopServices terminates running services, RPC and p2p networking.
+// It is the inverse of Start.
+func (n *Node) stopServices(running []Lifecycle) error {
+	n.stopRPC()
+
+	// Stop running lifecycles in reverse order.
+	failure := &StopError{Services: make(map[reflect.Type]error)}
+	for i := len(running) - 1; i >= 0; i-- {
+		if err := running[i].Stop(); err != nil {
+			failure.Services[reflect.TypeOf(running[i])] = err
+		}
+	}
+
+	// Stop p2p networking.
+	n.server.Stop()
+
+	if len(failure.Services) > 0 {
+		return failure
+	}
+	return nil
 }
 
 func (n *Node) openDataDir() error {
@@ -274,315 +308,185 @@ func (n *Node) openDataDir() error {
 	if err != nil {
 		return convertFileLockError(err)
 	}
-	n.instanceDirLock = release
+	n.dirLock = release
 	return nil
 }
 
-// startRPC is a helper method to start all the various RPC endpoints during node
+func (n *Node) closeDataDir() {
+	// Release instance directory lock.
+	if n.dirLock != nil {
+		if err := n.dirLock.Release(); err != nil {
+			n.log.Error("Can't release datadir lock", "err", err)
+		}
+		n.dirLock = nil
+	}
+}
+
+// configureRPC is a helper method to configure all the various RPC endpoints during node
 // startup. It's not meant to be called at any time afterwards as it makes certain
 // assumptions about the state of the node.
-func (n *Node) startRPC(services map[reflect.Type]Service) error {
-	// Gather all the possible APIs to surface
-	apis := n.apis()
-	for _, service := range services {
-		apis = append(apis, service.APIs()...)
-	}
-	// Start the various API endpoints, terminating all in case of errors
-	if err := n.startInProc(apis); err != nil {
+func (n *Node) startRPC() error {
+	if err := n.startInProc(); err != nil {
 		return err
 	}
-	if err := n.startIPC(apis); err != nil {
-		n.stopInProc()
-		return err
-	}
-	if err := n.startHTTP(n.httpEndpoint, apis, n.config.HTTPModules, n.config.HTTPCors, n.config.HTTPVirtualHosts, n.config.HTTPTimeouts, n.config.WSOrigins); err != nil {
-		n.stopIPC()
-		n.stopInProc()
-		return err
-	}
-	// if endpoints are not the same, start separate servers
-	if n.httpEndpoint != n.wsEndpoint {
-		if err := n.startWS(n.wsEndpoint, apis, n.config.WSModules, n.config.WSOrigins, n.config.WSExposeAll); err != nil {
-			n.stopHTTP()
-			n.stopIPC()
-			n.stopInProc()
+
+	// Configure IPC.
+	if n.ipc.endpoint != "" {
+		if err := n.ipc.start(n.rpcAPIs); err != nil {
 			return err
 		}
 	}
 
-	// All API endpoints started successfully
-	n.rpcAPIs = apis
-	return nil
+	// Configure HTTP.
+	if n.config.HTTPHost != "" {
+		config := httpConfig{
+			CorsAllowedOrigins: n.config.HTTPCors,
+			Vhosts:             n.config.HTTPVirtualHosts,
+			Modules:            n.config.HTTPModules,
+		}
+		if err := n.http.setListenAddr(n.config.HTTPHost, n.config.HTTPPort); err != nil {
+			return err
+		}
+		if err := n.http.enableRPC(n.rpcAPIs, config); err != nil {
+			return err
+		}
+	}
+
+	// Configure WebSocket.
+	if n.config.WSHost != "" {
+		server := n.wsServerForPort(n.config.WSPort)
+		config := wsConfig{
+			Modules: n.config.WSModules,
+			Origins: n.config.WSOrigins,
+		}
+		if err := server.setListenAddr(n.config.WSHost, n.config.WSPort); err != nil {
+			return err
+		}
+		if err := server.enableWS(n.rpcAPIs, config); err != nil {
+			return err
+		}
+	}
+
+	if err := n.http.start(); err != nil {
+		return err
+	}
+	return n.ws.start()
 }
 
-// startInProc initializes an in-process RPC endpoint.
-func (n *Node) startInProc(apis []rpc.API) error {
-	// Register all the APIs exposed by the services
-	handler := rpc.NewServer()
-	for _, api := range apis {
-		if err := handler.RegisterName(api.Namespace, api.Service); err != nil {
+func (n *Node) wsServerForPort(port int) *httpServer {
+	if n.config.HTTPHost == "" || n.http.port == port {
+		return n.http
+	}
+	return n.ws
+}
+
+func (n *Node) stopRPC() {
+	n.http.stop()
+	n.ws.stop()
+	n.ipc.stop()
+	n.stopInProc()
+}
+
+// startInProc registers all RPC APIs on the inproc server.
+func (n *Node) startInProc() error {
+	for _, api := range n.rpcAPIs {
+		if err := n.inprocHandler.RegisterName(api.Namespace, api.Service); err != nil {
 			return err
 		}
-		n.log.Debug("InProc registered", "namespace", api.Namespace)
 	}
-	n.inprocHandler = handler
 	return nil
 }
 
 // stopInProc terminates the in-process RPC endpoint.
 func (n *Node) stopInProc() {
-	if n.inprocHandler != nil {
-		n.inprocHandler.Stop()
-		n.inprocHandler = nil
-	}
+	n.inprocHandler.Stop()
 }
 
-// startIPC initializes and starts the IPC RPC endpoint.
-func (n *Node) startIPC(apis []rpc.API) error {
-	if n.ipcEndpoint == "" {
-		return nil // IPC disabled.
-	}
-	listener, handler, err := rpc.StartIPCEndpoint(n.ipcEndpoint, apis)
-	if err != nil {
-		return err
-	}
-	n.ipcListener = listener
-	n.ipcHandler = handler
-	n.log.Info("IPC endpoint opened", "url", n.ipcEndpoint)
-	return nil
+// Wait blocks until the node is closed.
+func (n *Node) Wait() {
+	<-n.stop
 }
 
-// stopIPC terminates the IPC RPC endpoint.
-func (n *Node) stopIPC() {
-	if n.ipcListener != nil {
-		n.ipcListener.Close()
-		n.ipcListener = nil
-
-		n.log.Info("IPC endpoint closed", "url", n.ipcEndpoint)
-	}
-	if n.ipcHandler != nil {
-		n.ipcHandler.Stop()
-		n.ipcHandler = nil
-	}
-}
-
-// startHTTP initializes and starts the HTTP RPC endpoint.
-func (n *Node) startHTTP(endpoint string, apis []rpc.API, modules []string, cors []string, vhosts []string, timeouts rpc.HTTPTimeouts, wsOrigins []string) error {
-	// Short circuit if the HTTP endpoint isn't being exposed
-	if endpoint == "" {
-		return nil
-	}
-	// register apis and create handler stack
-	srv := rpc.NewServer()
-	err := RegisterApisFromWhitelist(apis, modules, srv, false)
-	if err != nil {
-		return err
-	}
-	handler := NewHTTPHandlerStack(srv, cors, vhosts)
-	// wrap handler in WebSocket handler only if WebSocket port is the same as http rpc
-	if n.httpEndpoint == n.wsEndpoint {
-		handler = NewWebsocketUpgradeHandler(handler, srv.WebsocketHandler(wsOrigins))
-	}
-	httpServer, addr, err := StartHTTPEndpoint(endpoint, timeouts, handler)
-	if err != nil {
-		return err
-	}
-	n.log.Info("HTTP endpoint opened", "url", fmt.Sprintf("http://%v/", addr),
-		"cors", strings.Join(cors, ","),
-		"vhosts", strings.Join(vhosts, ","))
-	if n.httpEndpoint == n.wsEndpoint {
-		n.log.Info("WebSocket endpoint opened", "url", fmt.Sprintf("ws://%v", addr))
-	}
-	// All listeners booted successfully
-	n.httpEndpoint = endpoint
-	n.httpListenerAddr = addr
-	n.httpServer = httpServer
-	n.httpHandler = srv
-
-	return nil
-}
-
-// stopHTTP terminates the HTTP RPC endpoint.
-func (n *Node) stopHTTP() {
-	if n.httpServer != nil {
-		// Don't bother imposing a timeout here.
-		n.httpServer.Shutdown(context.Background())
-		n.log.Info("HTTP endpoint closed", "url", fmt.Sprintf("http://%v/", n.httpListenerAddr))
-	}
-	if n.httpHandler != nil {
-		n.httpHandler.Stop()
-		n.httpHandler = nil
-	}
-}
-
-// startWS initializes and starts the WebSocket RPC endpoint.
-func (n *Node) startWS(endpoint string, apis []rpc.API, modules []string, wsOrigins []string, exposeAll bool) error {
-	// Short circuit if the WS endpoint isn't being exposed
-	if endpoint == "" {
-		return nil
-	}
-
-	srv := rpc.NewServer()
-	handler := srv.WebsocketHandler(wsOrigins)
-	err := RegisterApisFromWhitelist(apis, modules, srv, exposeAll)
-	if err != nil {
-		return err
-	}
-	httpServer, addr, err := startWSEndpoint(endpoint, handler)
-	if err != nil {
-		return err
-	}
-	n.log.Info("WebSocket endpoint opened", "url", fmt.Sprintf("ws://%v", addr))
-	// All listeners booted successfully
-	n.wsEndpoint = endpoint
-	n.wsListenerAddr = addr
-	n.wsHTTPServer = httpServer
-	n.wsHandler = srv
-
-	return nil
-}
-
-// stopWS terminates the WebSocket RPC endpoint.
-func (n *Node) stopWS() {
-	if n.wsHTTPServer != nil {
-		// Don't bother imposing a timeout here.
-		n.wsHTTPServer.Shutdown(context.Background())
-		n.log.Info("WebSocket endpoint closed", "url", fmt.Sprintf("ws://%v", n.wsListenerAddr))
-	}
-	if n.wsHandler != nil {
-		n.wsHandler.Stop()
-		n.wsHandler = nil
-	}
-}
-
-// Stop terminates a running node along with all it's services. In the node was
-// not started, an error is returned.
-func (n *Node) Stop() error {
+// RegisterLifecycle registers the given Lifecycle on the node.
+func (n *Node) RegisterLifecycle(lifecycle Lifecycle) {
 	n.lock.Lock()
 	defer n.lock.Unlock()
 
-	// Short circuit if the node's not running
-	if n.server == nil {
-		return ErrNodeStopped
+	if n.state != initializingState {
+		panic("can't register lifecycle on running/stopped node")
 	}
-
-	// Terminate the API, services and the p2p server.
-	n.stopWS()
-	n.stopHTTP()
-	n.stopIPC()
-	n.rpcAPIs = nil
-	failure := &StopError{
-		Services: make(map[reflect.Type]error),
+	if containsLifecycle(n.lifecycles, lifecycle) {
+		panic(fmt.Sprintf("attempt to register lifecycle %T more than once", lifecycle))
 	}
-	for kind, service := range n.services {
-		if err := service.Stop(); err != nil {
-			failure.Services[kind] = err
-		}
-	}
-	n.server.Stop()
-	n.services = nil
-	n.server = nil
-
-	// Release instance directory lock.
-	if n.instanceDirLock != nil {
-		if err := n.instanceDirLock.Release(); err != nil {
-			n.log.Error("Can't release datadir lock", "err", err)
-		}
-		n.instanceDirLock = nil
-	}
-
-	// unblock n.Wait
-	close(n.stop)
-
-	// Remove the keystore if it was created ephemerally.
-	var keystoreErr error
-	if n.ephemeralKeystore != "" {
-		keystoreErr = os.RemoveAll(n.ephemeralKeystore)
-	}
-
-	if len(failure.Services) > 0 {
-		return failure
-	}
-	if keystoreErr != nil {
-		return keystoreErr
-	}
-	return nil
+	n.lifecycles = append(n.lifecycles, lifecycle)
 }
 
-// Wait blocks the thread until the node is stopped. If the node is not running
-// at the time of invocation, the method immediately returns.
-func (n *Node) Wait() {
-	n.lock.RLock()
-	if n.server == nil {
-		n.lock.RUnlock()
-		return
-	}
-	stop := n.stop
-	n.lock.RUnlock()
+// RegisterProtocols adds backend's protocols to the node's p2p server.
+func (n *Node) RegisterProtocols(protocols []p2p.Protocol) {
+	n.lock.Lock()
+	defer n.lock.Unlock()
 
-	<-stop
+	if n.state != initializingState {
+		panic("can't register protocols on running/stopped node")
+	}
+	n.server.Protocols = append(n.server.Protocols, protocols...)
 }
 
-// Restart terminates a running node and boots up a new one in its place. If the
-// node isn't running, an error is returned.
-func (n *Node) Restart() error {
-	if err := n.Stop(); err != nil {
-		return err
+// RegisterAPIs registers the APIs a service provides on the node.
+func (n *Node) RegisterAPIs(apis []rpc.API) {
+	n.lock.Lock()
+	defer n.lock.Unlock()
+
+	if n.state != initializingState {
+		panic("can't register APIs on running/stopped node")
 	}
-	if err := n.Start(); err != nil {
-		return err
+	n.rpcAPIs = append(n.rpcAPIs, apis...)
+}
+
+// RegisterHandler mounts a handler on the given path on the canonical HTTP server.
+//
+// The name of the handler is shown in a log message when the HTTP server starts
+// and should be a descriptive term for the service provided by the handler.
+func (n *Node) RegisterHandler(name, path string, handler http.Handler) {
+	n.lock.Lock()
+	defer n.lock.Unlock()
+
+	if n.state != initializingState {
+		panic("can't register HTTP handler on running/stopped node")
 	}
-	return nil
+	n.http.mux.Handle(path, handler)
+	n.http.handlerNames[path] = name
 }
 
 // Attach creates an RPC client attached to an in-process API handler.
 func (n *Node) Attach() (*rpc.Client, error) {
-	n.lock.RLock()
-	defer n.lock.RUnlock()
-
-	if n.server == nil {
-		return nil, ErrNodeStopped
-	}
 	return rpc.DialInProc(n.inprocHandler), nil
 }
 
 // RPCHandler returns the in-process RPC request handler.
 func (n *Node) RPCHandler() (*rpc.Server, error) {
-	n.lock.RLock()
-	defer n.lock.RUnlock()
+	n.lock.Lock()
+	defer n.lock.Unlock()
 
-	if n.inprocHandler == nil {
+	if n.state == closedState {
 		return nil, ErrNodeStopped
 	}
 	return n.inprocHandler, nil
 }
 
-// Server retrieves the currently running P2P network layer. This method is meant
-// only to inspect fields of the currently running server, life cycle management
-// should be left to this Node entity.
-func (n *Node) Server() *p2p.Server {
-	n.lock.RLock()
-	defer n.lock.RUnlock()
-
-	return n.server
+// Config returns the configuration of node.
+func (n *Node) Config() *Config {
+	return n.config
 }
 
-// Service retrieves a currently running service registered of a specific type.
-func (n *Node) Service(service interface{}) error {
-	n.lock.RLock()
-	defer n.lock.RUnlock()
+// Server retrieves the currently running P2P network layer. This method is meant
+// only to inspect fields of the currently running server. Callers should not
+// start or stop the returned server.
+func (n *Node) Server() *p2p.Server {
+	n.lock.Lock()
+	defer n.lock.Unlock()
 
-	// Short circuit if the node's not running
-	if n.server == nil {
-		return ErrNodeStopped
-	}
-	// Otherwise try to find the service to return
-	element := reflect.ValueOf(service).Elem()
-	if running, ok := n.services[element.Type()]; ok {
-		element.Set(reflect.ValueOf(running))
-		return nil
-	}
-	return ErrServiceUnknown
+	return n.server
 }
 
 // DataDir retrieves the current datadir used by the protocol stack.
@@ -603,29 +507,20 @@ func (n *Node) AccountManager() *accounts.Manager {
 
 // IPCEndpoint retrieves the current IPC endpoint used by the protocol stack.
 func (n *Node) IPCEndpoint() string {
-	return n.ipcEndpoint
+	return n.ipc.endpoint
 }
 
-// HTTPEndpoint retrieves the current HTTP endpoint used by the protocol stack.
+// HTTPEndpoint returns the URL of the HTTP server.
 func (n *Node) HTTPEndpoint() string {
-	n.lock.Lock()
-	defer n.lock.Unlock()
-
-	if n.httpListenerAddr != nil {
-		return n.httpListenerAddr.String()
-	}
-	return n.httpEndpoint
+	return "http://" + n.http.listenAddr()
 }
 
 // WSEndpoint retrieves the current WS endpoint used by the protocol stack.
 func (n *Node) WSEndpoint() string {
-	n.lock.Lock()
-	defer n.lock.Unlock()
-
-	if n.wsListenerAddr != nil {
-		return n.wsListenerAddr.String()
+	if n.http.wsAllowed() {
+		return "ws://" + n.http.listenAddr()
 	}
-	return n.wsEndpoint
+	return "ws://" + n.ws.listenAddr()
 }
 
 // EventMux retrieves the event multiplexer used by all the network services in
@@ -638,10 +533,24 @@ func (n *Node) EventMux() *event.TypeMux {
 // previous can be found) from within the node's instance directory. If the node is
 // ephemeral, a memory database is returned.
 func (n *Node) OpenDatabase(name string, cache, handles int, namespace string) (ethdb.Database, error) {
-	if n.config.DataDir == "" {
-		return rawdb.NewMemoryDatabase(), nil
+	n.lock.Lock()
+	defer n.lock.Unlock()
+	if n.state == closedState {
+		return nil, ErrNodeStopped
 	}
-	return rawdb.NewLevelDBDatabase(n.config.ResolvePath(name), cache, handles, namespace)
+
+	var db ethdb.Database
+	var err error
+	if n.config.DataDir == "" {
+		db = rawdb.NewMemoryDatabase()
+	} else {
+		db, err = rawdb.NewLevelDBDatabase(n.ResolvePath(name), cache, handles, namespace)
+	}
+
+	if err == nil {
+		db = n.wrapDatabase(db)
+	}
+	return db, err
 }
 
 // OpenDatabaseWithFreezer opens an existing database with the given name (or
@@ -650,18 +559,31 @@ func (n *Node) OpenDatabase(name string, cache, handles int, namespace string) (
 // database to immutable append-only files. If the node is an ephemeral one, a
 // memory database is returned.
 func (n *Node) OpenDatabaseWithFreezer(name string, cache, handles int, freezer, namespace string) (ethdb.Database, error) {
-	if n.config.DataDir == "" {
-		return rawdb.NewMemoryDatabase(), nil
+	n.lock.Lock()
+	defer n.lock.Unlock()
+	if n.state == closedState {
+		return nil, ErrNodeStopped
 	}
-	root := n.config.ResolvePath(name)
 
-	switch {
-	case freezer == "":
-		freezer = filepath.Join(root, "ancient")
-	case !filepath.IsAbs(freezer):
-		freezer = n.config.ResolvePath(freezer)
+	var db ethdb.Database
+	var err error
+	if n.config.DataDir == "" {
+		db = rawdb.NewMemoryDatabase()
+	} else {
+		root := n.ResolvePath(name)
+		switch {
+		case freezer == "":
+			freezer = filepath.Join(root, "ancient")
+		case !filepath.IsAbs(freezer):
+			freezer = n.ResolvePath(freezer)
+		}
+		db, err = rawdb.NewLevelDBDatabaseWithFreezer(root, cache, handles, freezer, namespace)
 	}
-	return rawdb.NewLevelDBDatabaseWithFreezer(root, cache, handles, freezer, namespace)
+
+	if err == nil {
+		db = n.wrapDatabase(db)
+	}
+	return db, err
 }
 
 // ResolvePath returns the absolute path of a resource in the instance directory.
@@ -669,49 +591,35 @@ func (n *Node) ResolvePath(x string) string {
 	return n.config.ResolvePath(x)
 }
 
-// apis returns the collection of RPC descriptors this node offers.
-func (n *Node) apis() []rpc.API {
-	return []rpc.API{
-		{
-			Namespace: "admin",
-			Version:   "1.0",
-			Service:   NewPrivateAdminAPI(n),
-		}, {
-			Namespace: "admin",
-			Version:   "1.0",
-			Service:   NewPublicAdminAPI(n),
-			Public:    true,
-		}, {
-			Namespace: "debug",
-			Version:   "1.0",
-			Service:   debug.Handler,
-		}, {
-			Namespace: "web3",
-			Version:   "1.0",
-			Service:   NewPublicWeb3API(n),
-			Public:    true,
-		},
-	}
+// closeTrackingDB wraps the Close method of a database. When the database is closed by the
+// service, the wrapper removes it from the node's database map. This ensures that Node
+// won't auto-close the database if it is closed by the service that opened it.
+type closeTrackingDB struct {
+	ethdb.Database
+	n *Node
 }
 
-// RegisterApisFromWhitelist checks the given modules' availability, generates a whitelist based on the allowed modules,
-// and then registers all of the APIs exposed by the services.
-func RegisterApisFromWhitelist(apis []rpc.API, modules []string, srv *rpc.Server, exposeAll bool) error {
-	if bad, available := checkModuleAvailability(modules, apis); len(bad) > 0 {
-		log.Error("Unavailable modules in HTTP API list", "unavailable", bad, "available", available)
-	}
-	// Generate the whitelist based on the allowed modules
-	whitelist := make(map[string]bool)
-	for _, module := range modules {
-		whitelist[module] = true
-	}
-	// Register all the APIs exposed by the services
-	for _, api := range apis {
-		if exposeAll || whitelist[api.Namespace] || (len(whitelist) == 0 && api.Public) {
-			if err := srv.RegisterName(api.Namespace, api.Service); err != nil {
-				return err
-			}
+func (db *closeTrackingDB) Close() error {
+	db.n.lock.Lock()
+	delete(db.n.databases, db)
+	db.n.lock.Unlock()
+	return db.Database.Close()
+}
+
+// wrapDatabase ensures the database will be auto-closed when Node is closed.
+func (n *Node) wrapDatabase(db ethdb.Database) ethdb.Database {
+	wrapper := &closeTrackingDB{db, n}
+	n.databases[wrapper] = struct{}{}
+	return wrapper
+}
+
+// closeDatabases closes all open databases.
+func (n *Node) closeDatabases() (errors []error) {
+	for db := range n.databases {
+		delete(n.databases, db)
+		if err := db.Database.Close(); err != nil {
+			errors = append(errors, err)
 		}
 	}
-	return nil
+	return errors
 }

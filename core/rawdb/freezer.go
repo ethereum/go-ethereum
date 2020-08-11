@@ -22,6 +22,7 @@ import (
 	"math"
 	"os"
 	"path/filepath"
+	"sync"
 	"sync/atomic"
 	"time"
 
@@ -74,6 +75,7 @@ type freezer struct {
 	tables       map[string]*freezerTable // Data tables for storing everything
 	instanceLock fileutil.Releaser        // File-system lock to prevent double opens
 	quit         chan struct{}
+	closeOnce    sync.Once
 }
 
 // newFreezer creates a chain freezer that moves ancient chain data into
@@ -128,16 +130,18 @@ func newFreezer(datadir string, namespace string) (*freezer, error) {
 
 // Close terminates the chain freezer, unmapping all the data files.
 func (f *freezer) Close() error {
-	f.quit <- struct{}{}
 	var errs []error
-	for _, table := range f.tables {
-		if err := table.Close(); err != nil {
+	f.closeOnce.Do(func() {
+		f.quit <- struct{}{}
+		for _, table := range f.tables {
+			if err := table.Close(); err != nil {
+				errs = append(errs, err)
+			}
+		}
+		if err := f.instanceLock.Release(); err != nil {
 			errs = append(errs, err)
 		}
-	}
-	if err := f.instanceLock.Release(); err != nil {
-		errs = append(errs, err)
-	}
+	})
 	if errs != nil {
 		return fmt.Errorf("%v", errs)
 	}
@@ -221,7 +225,7 @@ func (f *freezer) AppendAncient(number uint64, hash, header, body, receipts, td 
 	return nil
 }
 
-// Truncate discards any recent data above the provided threshold number.
+// TruncateAncients discards any recent data above the provided threshold number.
 func (f *freezer) TruncateAncients(items uint64) error {
 	if atomic.LoadUint64(&f.frozen) <= items {
 		return nil
@@ -235,7 +239,7 @@ func (f *freezer) TruncateAncients(items uint64) error {
 	return nil
 }
 
-// sync flushes all data tables to disk.
+// Sync flushes all data tables to disk.
 func (f *freezer) Sync() error {
 	var errs []error
 	for _, table := range f.tables {
