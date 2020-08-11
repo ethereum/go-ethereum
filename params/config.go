@@ -224,7 +224,7 @@ var (
 		PetersburgBlock:     big.NewInt(0),
 		IstanbulBlock:       big.NewInt(0),
 		MuirGlacierBlock:    big.NewInt(0),
-		RamanujanBlock:      big.NewInt(1066095),
+		RamanujanBlock:      big.NewInt(1010000),
 		Parlia: &ParliaConfig{
 			Period: 3,
 			Epoch:  200,
@@ -242,7 +242,7 @@ var (
 		PetersburgBlock:     big.NewInt(0),
 		IstanbulBlock:       big.NewInt(0),
 		MuirGlacierBlock:    big.NewInt(0),
-		RamanujanBlock:      big.NewInt(200987),
+		RamanujanBlock:      big.NewInt(400),
 		Parlia: &ParliaConfig{
 			Period: 3,
 			Epoch:  200,
@@ -442,6 +442,11 @@ func (c *ChainConfig) IsConstantinople(num *big.Int) bool {
 // IsRamanujan returns whether num is either equal to the IsRamanujan fork block or greater.
 func (c *ChainConfig) IsRamanujan(num *big.Int) bool {
 	return isForked(c.RamanujanBlock, num)
+}
+
+// IsOnRamanujan returns whether num is equal to the IsRamanujan fork block
+func (c *ChainConfig) IsOnRamanujan(num *big.Int) bool {
+	return configNumEqual(c.RamanujanBlock, num)
 }
 
 // IsMuirGlacier returns whether num is either equal to the Muir Glacier (EIP-2384) fork block or greater.

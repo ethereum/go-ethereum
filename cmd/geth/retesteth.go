@@ -36,6 +36,7 @@ import (
 	"github.com/ethereum/go-ethereum/core"
 	"github.com/ethereum/go-ethereum/core/rawdb"
 	"github.com/ethereum/go-ethereum/core/state"
+	"github.com/ethereum/go-ethereum/core/systemcontracts"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/core/vm"
 	"github.com/ethereum/go-ethereum/crypto"
@@ -507,6 +508,7 @@ func (api *RetestethAPI) mineBlock() error {
 	if api.chainConfig.DAOForkSupport && api.chainConfig.DAOForkBlock != nil && api.chainConfig.DAOForkBlock.Cmp(header.Number) == 0 {
 		misc.ApplyDAOHardFork(statedb)
 	}
+	systemcontracts.UpgradeBuildInSystemContract(api.chainConfig, header.Number, statedb)
 	gasPool := new(core.GasPool).AddGas(header.GasLimit)
 	txCount := 0
 	var txs []*types.Transaction

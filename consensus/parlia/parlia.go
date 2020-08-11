@@ -26,6 +26,7 @@ import (
 	"github.com/ethereum/go-ethereum/consensus/misc"
 	"github.com/ethereum/go-ethereum/core"
 	"github.com/ethereum/go-ethereum/core/state"
+	"github.com/ethereum/go-ethereum/core/systemcontracts"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/core/vm"
 	"github.com/ethereum/go-ethereum/crypto"
@@ -53,16 +54,6 @@ const (
 
 	systemRewardPercent = 4 // it means 1/2^4 = 1/16 percentage of gas fee incoming will be distributed to system
 
-	// genesis contracts
-	ValidatorContract          = "0x0000000000000000000000000000000000001000"
-	SlashContract              = "0x0000000000000000000000000000000000001001"
-	SystemRewardContract       = "0x0000000000000000000000000000000000001002"
-	LightClientContract        = "0x0000000000000000000000000000000000001003"
-	TokenHubContract           = "0x0000000000000000000000000000000000001004"
-	RelayerIncentivizeContract = "0x0000000000000000000000000000000000001005"
-	RelayerHubContract         = "0x0000000000000000000000000000000000001006"
-	GovHubContract             = "0x0000000000000000000000000000000000001007"
-	CrossChainContract         = "0x0000000000000000000000000000000000002000"
 )
 
 var (
@@ -73,15 +64,15 @@ var (
 	maxSystemBalance = new(big.Int).Mul(big.NewInt(100), big.NewInt(params.Ether))
 
 	systemContracts = map[common.Address]bool{
-		common.HexToAddress(ValidatorContract):          true,
-		common.HexToAddress(SlashContract):              true,
-		common.HexToAddress(SystemRewardContract):       true,
-		common.HexToAddress(LightClientContract):        true,
-		common.HexToAddress(RelayerHubContract):         true,
-		common.HexToAddress(GovHubContract):             true,
-		common.HexToAddress(TokenHubContract):           true,
-		common.HexToAddress(RelayerIncentivizeContract): true,
-		common.HexToAddress(CrossChainContract):         true,
+		common.HexToAddress(systemcontracts.ValidatorContract):          true,
+		common.HexToAddress(systemcontracts.SlashContract):              true,
+		common.HexToAddress(systemcontracts.SystemRewardContract):       true,
+		common.HexToAddress(systemcontracts.LightClientContract):        true,
+		common.HexToAddress(systemcontracts.RelayerHubContract):         true,
+		common.HexToAddress(systemcontracts.GovHubContract):             true,
+		common.HexToAddress(systemcontracts.TokenHubContract):           true,
+		common.HexToAddress(systemcontracts.RelayerIncentivizeContract): true,
+		common.HexToAddress(systemcontracts.CrossChainContract):         true,
 	}
 )
 
@@ -402,7 +393,7 @@ func (p *Parlia) verifyCascadingFields(chain consensus.ChainReader, header *type
 
 	err = p.blockTimeVerifyForRamanujanFork(snap, header, parent)
 	if err != nil {
-		return nil
+		return err
 	}
 
 	// Verify that the gas limit is <= 2^63-1
@@ -909,7 +900,7 @@ func (p *Parlia) getCurrentValidators(blockHash common.Hash) ([]common.Address, 
 	}
 	// call
 	msgData := (hexutil.Bytes)(data)
-	toAddress := common.HexToAddress(ValidatorContract)
+	toAddress := common.HexToAddress(systemcontracts.ValidatorContract)
 	gas := (hexutil.Uint64)(uint64(math.MaxUint64 / 2))
 	result, err := p.ethAPI.Call(ctx, ethapi.CallArgs{
 		Gas:  &gas,
@@ -947,7 +938,7 @@ func (p *Parlia) distributeIncoming(val common.Address, state *state.StateDB, he
 	state.SetBalance(consensus.SystemAddress, big.NewInt(0))
 	state.AddBalance(coinbase, balance)
 
-	doDistributeSysReward := state.GetBalance(common.HexToAddress(SystemRewardContract)).Cmp(maxSystemBalance) < 0
+	doDistributeSysReward := state.GetBalance(common.HexToAddress(systemcontracts.SystemRewardContract)).Cmp(maxSystemBalance) < 0
 	if doDistributeSysReward {
 		var rewards = new(big.Int)
 		rewards = rewards.Rsh(balance, systemRewardPercent)
@@ -979,7 +970,7 @@ func (p *Parlia) slash(spoiledVal common.Address, state *state.StateDB, header *
 		return err
 	}
 	// get system message
-	msg := p.getSystemMessage(header.Coinbase, common.HexToAddress(SlashContract), data, common.Big0)
+	msg := p.getSystemMessage(header.Coinbase, common.HexToAddress(systemcontracts.SlashContract), data, common.Big0)
 	// apply message
 	return p.applyTransaction(msg, state, header, chain, txs, receipts, receivedTxs, usedGas, mining)
 }
@@ -990,7 +981,15 @@ func (p *Parlia) initContract(state *state.StateDB, header *types.Header, chain 
 	// method
 	method := "init"
 	// contracts
-	contracts := []string{ValidatorContract, SlashContract, LightClientContract, RelayerHubContract, TokenHubContract, RelayerIncentivizeContract, CrossChainContract}
+	contracts := []string{
+		systemcontracts.ValidatorContract,
+		systemcontracts.SlashContract,
+		systemcontracts.LightClientContract,
+		systemcontracts.RelayerHubContract,
+		systemcontracts.TokenHubContract,
+		systemcontracts.RelayerIncentivizeContract,
+		systemcontracts.CrossChainContract,
+	}
 	// get packed data
 	data, err := p.validatorSetABI.Pack(method)
 	if err != nil {
@@ -1012,7 +1011,7 @@ func (p *Parlia) initContract(state *state.StateDB, header *types.Header, chain 
 func (p *Parlia) distributeToSystem(amount *big.Int, state *state.StateDB, header *types.Header, chain core.ChainContext,
 	txs *[]*types.Transaction, receipts *[]*types.Receipt, receivedTxs *[]*types.Transaction, usedGas *uint64, mining bool) error {
 	// get system message
-	msg := p.getSystemMessage(header.Coinbase, common.HexToAddress(SystemRewardContract), nil, amount)
+	msg := p.getSystemMessage(header.Coinbase, common.HexToAddress(systemcontracts.SystemRewardContract), nil, amount)
 	// apply message
 	return p.applyTransaction(msg, state, header, chain, txs, receipts, receivedTxs, usedGas, mining)
 }
@@ -1033,7 +1032,7 @@ func (p *Parlia) distributeToValidator(amount *big.Int, validator common.Address
 		return err
 	}
 	// get system message
-	msg := p.getSystemMessage(header.Coinbase, common.HexToAddress(ValidatorContract), data, amount)
+	msg := p.getSystemMessage(header.Coinbase, common.HexToAddress(systemcontracts.ValidatorContract), data, amount)
 	// apply message
 	return p.applyTransaction(msg, state, header, chain, txs, receipts, receivedTxs, usedGas, mining)
 }
@@ -1146,7 +1145,11 @@ func backOffTime(snap *Snapshot, val common.Address) uint64 {
 	if snap.inturn(val) {
 		return 0
 	} else {
-		dis := snap.distanceToInTurn(val)
+		idx := snap.indexOfVal(val)
+		if idx < 0 {
+			// The backOffTime does not matter when a validator is not authorized.
+			return 0
+		}
 		s := rand.NewSource(int64(snap.Number))
 		r := rand.New(s)
 		n := len(snap.Validators)
@@ -1157,7 +1160,7 @@ func backOffTime(snap *Snapshot, val common.Address) uint64 {
 		r.Shuffle(n, func(i, j int) {
 			backOffSteps[i], backOffSteps[j] = backOffSteps[j], backOffSteps[i]
 		})
-		delay := initialBackOffTime + backOffSteps[dis]*wiggleTime
+		delay := initialBackOffTime + backOffSteps[idx]*wiggleTime
 		return delay
 	}
 }
