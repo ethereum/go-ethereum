@@ -226,17 +226,11 @@ func (kvmp *KeyValueMerkleProof) Validate() bool {
 
 	if len(kvmp.Value) == 0 {
 		err := prt.VerifyAbsence(kvmp.Proof, kvmp.AppHash, kp.String())
-		if err != nil {
-			return false
-		}
-		return true
+		return err == nil
 	}
 
 	err := prt.VerifyValue(kvmp.Proof, kvmp.AppHash, kp.String(), kvmp.Value)
-	if err != nil {
-		return false
-	}
-	return true
+	return err == nil
 }
 
 // input:

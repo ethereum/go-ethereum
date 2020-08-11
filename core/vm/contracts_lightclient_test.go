@@ -24,6 +24,7 @@ func TestTmHeaderValidateAndMerkleProofValidate(t *testing.T) {
 		"cc05d26c7b0be0c8b46418294171730e079f384fde2fa50bafc000000174876e80049b288e4ebbb3a281c2d546fc30253d5baf08993b6e5d295fb7" +
 		"87a5b314a298e000000174876e80004224339688f012e649de48e241880092eaa8f6aa0f4f14bfcf9e0c76917c0b6000000174876e8004034b37ce" +
 		"da8a0bf13b1abaeee7a8f9383542099a554d219b93d0ce69e3970e8000000174876e800")
+	require.NoError(t, err)
 
 	cs, err := lightclient.DecodeConsensusState(consensusStateBytes)
 	require.NoError(t, err)

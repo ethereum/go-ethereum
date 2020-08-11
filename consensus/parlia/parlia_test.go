@@ -4,7 +4,6 @@ import (
 	"fmt"
 	"math/rand"
 	"testing"
-	"time"
 
 	"github.com/ethereum/go-ethereum/common"
 )
@@ -57,7 +56,7 @@ func simulateValidatorOutOfService(totalValidators int, downValidators int) {
 		return validators[idx]
 	}
 
-	downDelay := time.Duration(0)
+	downDelay := uint64(0)
 	for h := 1; h <= downBlocks; h++ {
 		if limit := uint64(totalValidators/2 + 1); uint64(h) >= limit {
 			delete(recents, uint64(h)-limit)
@@ -73,7 +72,7 @@ func simulateValidatorOutOfService(totalValidators int, downValidators int) {
 			if len(candidates) == 0 {
 				panic("can not test such case")
 			}
-			idx, delay := producerBlockDelay(candidates, totalValidators)
+			idx, delay := producerBlockDelay(candidates, h, totalValidators)
 			downDelay = downDelay + delay
 			recents[uint64(h)] = idx
 		} else {
@@ -81,13 +80,13 @@ func simulateValidatorOutOfService(totalValidators int, downValidators int) {
 		}
 	}
 	fmt.Printf("average delay is %v  when there is %d validators and %d is down \n",
-		downDelay/time.Duration(downBlocks), totalValidators, downValidators)
+		downDelay/uint64(downBlocks), totalValidators, downValidators)
 
 	for i := 0; i < downValidators; i++ {
 		validators[down[i]] = true
 	}
 
-	recoverDelay := time.Duration(0)
+	recoverDelay := uint64(0)
 	lastseen := downBlocks
 	for h := downBlocks + 1; h <= downBlocks+recoverBlocks; h++ {
 		if limit := uint64(totalValidators/2 + 1); uint64(h) >= limit {
@@ -105,7 +104,7 @@ func simulateValidatorOutOfService(totalValidators int, downValidators int) {
 			if len(candidates) == 0 {
 				panic("can not test such case")
 			}
-			idx, delay := producerBlockDelay(candidates, totalValidators)
+			idx, delay := producerBlockDelay(candidates, h, totalValidators)
 			recoverDelay = recoverDelay + delay
 			recents[uint64(h)] = idx
 		} else {
@@ -116,18 +115,28 @@ func simulateValidatorOutOfService(totalValidators int, downValidators int) {
 		recoverDelay, downValidators, lastseen)
 }
 
-func producerBlockDelay(candidates map[int]bool, numOfValidators int) (int, time.Duration) {
-	minDur := time.Duration(0)
-	minIdx := 0
-	wiggle := time.Duration(numOfValidators/2+1) * wiggleTime
-	for idx := range candidates {
-		sleepTime := rand.Int63n(int64(wiggle))
-		if int64(minDur) < sleepTime {
-			minDur = time.Duration(rand.Int63n(int64(wiggle)))
-			minIdx = idx
+func producerBlockDelay(candidates map[int]bool, height, numOfValidators int) (int, uint64) {
+
+	s := rand.NewSource(int64(height))
+	r := rand.New(s)
+	n := numOfValidators
+	backOffSteps := make([]int, 0, n)
+	for idx := 0; idx < n; idx++ {
+		backOffSteps = append(backOffSteps, idx)
+	}
+	r.Shuffle(n, func(i, j int) {
+		backOffSteps[i], backOffSteps[j] = backOffSteps[j], backOffSteps[i]
+	})
+	minDelay := numOfValidators
+	minCandidate := 0
+	for c := range candidates {
+		if minDelay > backOffSteps[c] {
+			minDelay = backOffSteps[c]
+			minCandidate = c
 		}
 	}
-	return minIdx, minDur
+	delay := initialBackOffTime + uint64(minDelay)*wiggleTime
+	return minCandidate, delay
 }
 
 func randomAddress() common.Address {

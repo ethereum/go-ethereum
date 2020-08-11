@@ -210,10 +210,20 @@ func (s *Snapshot) validators() []common.Address {
 }
 
 // inturn returns if a validator at a given block height is in-turn or not.
-func (s *Snapshot) inturn(number uint64, validator common.Address) bool {
+func (s *Snapshot) inturn(validator common.Address) bool {
 	validators := s.validators()
-	offset := number % uint64(len(validators))
+	offset := (s.Number + 1) % uint64(len(validators))
 	return validators[offset] == validator
+}
+
+func (s *Snapshot) indexOfVal(validator common.Address) int {
+	validators := s.validators()
+	for idx, val := range validators {
+		if val == validator {
+			return idx
+		}
+	}
+	return -1
 }
 
 func (s *Snapshot) supposeValidator() common.Address {
