@@ -393,7 +393,7 @@ func (p *Parlia) verifyCascadingFields(chain consensus.ChainReader, header *type
 
 	err = p.blockTimeVerifyForRamanujanFork(snap, header, parent)
 	if err != nil {
-		return nil
+		return err
 	}
 
 	// Verify that the gas limit is <= 2^63-1
