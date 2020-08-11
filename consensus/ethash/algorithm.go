@@ -157,7 +157,6 @@ func generateCache(dest []uint32, epoch uint64, seed []byte) {
 	cacheHdr.Data = dstHdr.Data
 	cacheHdr.Len = dstHdr.Len * 4
 	cacheHdr.Cap = dstHdr.Cap * 4
-	cache = *(*[]byte)(unsafe.Pointer(cacheHdr))
 
 	// Calculate the number of theoretical rows (we'll store in one buffer nonetheless)
 	size := uint64(len(cache))
