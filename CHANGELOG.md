@@ -1,5 +1,19 @@
 # Changelog
 
+## v1.0.1-beta
+
+IMPROVEMENT
+* [\#22](https://github.com/binance-chain/bsc/pull/22) resolve best practice advice 
+
+FEATURES
+* [\#23](https://github.com/binance-chain/bsc/pull/23) enforce backoff time for out-turn validator
+
+BUGFIX
+* [\#25](https://github.com/binance-chain/bsc/pull/25) minor fix for ramanujan upgrade
+
+UPGRADE
+* [\#26](https://github.com/binance-chain/bsc/pull/26) update chapel network config for ramanujan fork
+
 ## v1.0.0-beta.0
 
 FEATURES
