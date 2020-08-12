@@ -679,13 +679,13 @@ func (c *Bor) Finalize(chain consensus.ChainReader, header *types.Header, state 
 	// No block rewards in PoA, so the state remains as is and uncles are dropped
 	header.Root = state.IntermediateRoot(chain.Config().IsEIP158(header.Number))
 	header.UncleHash = types.CalcUncleHash(nil)
-	header.SetStateSync(stateSyncData)
+	r := chain.(*core.BlockChain)
+	r.SetStateSync(stateSyncData)
 }
 
 // FinalizeAndAssemble implements consensus.Engine, ensuring no uncles are set,
 // nor block rewards given, and returns the final block.
 func (c *Bor) FinalizeAndAssemble(chain consensus.ChainReader, header *types.Header, state *state.StateDB, txs []*types.Transaction, uncles []*types.Header, receipts []*types.Receipt) (*types.Block, error) {
-	stateSyncData := []*types.StateData{}
 	headerNumber := header.Number.Uint64()
 	if headerNumber%c.config.Sprint == 0 {
 		cx := chainContext{Chain: chain, Bor: c}
@@ -699,7 +699,7 @@ func (c *Bor) FinalizeAndAssemble(chain consensus.ChainReader, header *types.Hea
 
 		if !c.WithoutHeimdall {
 			// commit statees
-			stateSyncData, err = c.CommitStates(state, header, cx)
+			_, err = c.CommitStates(state, header, cx)
 			if err != nil {
 				log.Error("Error while committing states", "error", err)
 				return nil, err
@@ -710,7 +710,6 @@ func (c *Bor) FinalizeAndAssemble(chain consensus.ChainReader, header *types.Hea
 	// No block rewards in PoA, so the state remains as is and uncles are dropped
 	header.Root = state.IntermediateRoot(chain.Config().IsEIP158(header.Number))
 	header.UncleHash = types.CalcUncleHash(nil)
-	header.SetStateSync(stateSyncData)
 
 	// Assemble block
 	block := types.NewBlock(header, txs, nil, receipts)
