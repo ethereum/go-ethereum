@@ -180,6 +180,8 @@ type BlockChain struct {
 	txLookupCache *lru.Cache     // Cache for the most recent transaction lookup data.
 	futureBlocks  *lru.Cache     // future blocks are blocks added for later processing
 
+	stateSyncData []*types.StateData
+
 	quit          chan struct{}  // blockchain quit channel
 	wg            sync.WaitGroup // chain processing wait group for shutting down
 	running       int32          // 0 if chain is running, 1 when stopped
@@ -331,6 +333,11 @@ func NewBlockChain(db ethdb.Database, cacheConfig *CacheConfig, chainConfig *par
 		go bc.maintainTxIndex(txIndexBlock)
 	}
 	return bc, nil
+}
+
+// SetStateSync set sync data in state_data
+func (bc *BlockChain) SetStateSync(stateData []*types.StateData) {
+	bc.stateSyncData = stateData
 }
 
 // GetVMConfig returns the block chain VM config.
@@ -1541,10 +1548,9 @@ func (bc *BlockChain) writeBlockWithState(block *types.Block, receipts []*types.
 		// event here.
 		if emitHeadEvent {
 			bc.chainHeadFeed.Send(ChainHeadEvent{Block: block})
-		}
-		syncData := block.StateSyncData()
-		for _, data := range syncData {
-			bc.stateSyncFeed.Send(StateSyncEvent{StateData: data})
+			for _, data := range bc.stateSyncData {
+				bc.stateSyncFeed.Send(StateSyncEvent{StateData: data})
+			}
 		}
 	} else {
 		bc.chainSideFeed.Send(ChainSideEvent{Block: block})
@@ -1797,6 +1803,9 @@ func (bc *BlockChain) insertChain(chain types.Blocks, verifySeals bool) (int, er
 		// Process block using the parent state as reference point
 		substart := time.Now()
 		receipts, logs, usedGas, err := bc.processor.Process(block, statedb, bc.vmConfig)
+		for _, data := range bc.stateSyncData {
+			bc.stateSyncFeed.Send(StateSyncEvent{StateData: data})
+		}
 		if err != nil {
 			bc.reportBlock(block, receipts, err)
 			atomic.StoreUint32(&followupInterrupt, 1)
