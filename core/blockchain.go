@@ -335,7 +335,7 @@ func NewBlockChain(db ethdb.Database, cacheConfig *CacheConfig, chainConfig *par
 	return bc, nil
 }
 
-// SetStateSync set sync data in block
+// SetStateSync set sync data in state_data
 func (bc *BlockChain) SetStateSync(stateData []*types.StateData) {
 	bc.stateSyncData = stateData
 }
@@ -1548,6 +1548,9 @@ func (bc *BlockChain) writeBlockWithState(block *types.Block, receipts []*types.
 		// event here.
 		if emitHeadEvent {
 			bc.chainHeadFeed.Send(ChainHeadEvent{Block: block})
+			for _, data := range bc.stateSyncData {
+				bc.stateSyncFeed.Send(StateSyncEvent{StateData: data})
+			}
 		}
 	} else {
 		bc.chainSideFeed.Send(ChainSideEvent{Block: block})

@@ -66,14 +66,6 @@ func (n *BlockNonce) UnmarshalText(input []byte) error {
 	return hexutil.UnmarshalFixedText("BlockNonce", input, n[:])
 }
 
-// StateData represents state received from Ethereum Blockchain
-type StateData struct {
-	Did      uint64
-	Contract common.Address
-	Data     string
-	TxHash   common.Hash
-}
-
 //go:generate gencodec -type Header -field-override headerMarshaling -out gen_header_json.go
 
 // Header represents a block header in the Ethereum blockchain.
