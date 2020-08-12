@@ -14,10 +14,13 @@
 // You should have received a copy of the GNU Lesser General Public License
 // along with the go-ethereum library. If not, see <http://www.gnu.org/licenses/>.
 
+// Tests that abnormal program termination (i.e.crash) and restart doesn't leave
+// the database in some strange state with gaps in the chain, nor with block data
+// dangling in the future.
+
 package core
 
 import (
-	"fmt"
 	"io/ioutil"
 	"math/big"
 	"os"
@@ -31,22 +34,31 @@ import (
 	"github.com/ethereum/go-ethereum/params"
 )
 
-// Tests that abnormal program termination (i.e.crash) and restart doesn't leave
-// the database in some strange state with gaps in the chain, nor with block data
-// dangling in the future.
-//
-// The expected behavior in case of missing head state is to delete all blocks and
-// related data up until the first block for which we do have the state, or if we
-// exceed the fast sync pivot point to stop there and reenable fast sync.
-//
-// Note, the trigger condition needs to be the current full block, not the current
-// head header, as fast sync is allowed to go further with headers.
+// repairTest is a test case for chain reparation after a crash.
+type repairTest struct {
+	canonicalBlocks int    // Number of blocks to generate for the canonical chain (heavier)
+	sidechainBlocks int    // Number of blocks to generate for the side chain (lighter)
+	freezeThreshold uint64 // Block number until which to move things into the freezer
+	commitBlock     uint64 // Block number for which to commit the state to disk
+	pivotBlock      uint64 // Pivot block number in case of fast sync
+
+	expCanonicalBlocks int // Number of canonical blocks expected to remain in the database
+	expSidechainBlocks int // Number of sidechain blocks expected to remain in the database
+}
 
 // Tests a recovery for a short canonical chain where a recent block was already
 // comitted to disk and then the process crashed. In this case we expect the chain
 // to be rolled back to the committed block, with everything afterwads deleted.
 func TestShortRepair(t *testing.T) {
-	testRepair(t, 8, 0, 16, 4, 0, 4, 0)
+	testRepair(t, &repairTest{
+		canonicalBlocks:    8,
+		sidechainBlocks:    0,
+		freezeThreshold:    16,
+		commitBlock:        4,
+		pivotBlock:         0,
+		expCanonicalBlocks: 4,
+		expSidechainBlocks: 0,
+	})
 }
 
 // Tests a recovery for a short canonical chain where the fast sync pivot point was
@@ -54,7 +66,15 @@ func TestShortRepair(t *testing.T) {
 // chain to behave like in full sync mode, rolling back to the committed block,
 // with everything afterwads deleted.
 func TestShortFastSyncedRepair(t *testing.T) {
-	testRepair(t, 8, 0, 16, 4, 4, 4, 0)
+	testRepair(t, &repairTest{
+		canonicalBlocks:    8,
+		sidechainBlocks:    0,
+		freezeThreshold:    16,
+		commitBlock:        4,
+		pivotBlock:         4,
+		expCanonicalBlocks: 4,
+		expSidechainBlocks: 0,
+	})
 }
 
 // Tests a recovery for a short canonical chain where the fast sync pivot point was
@@ -62,7 +82,15 @@ func TestShortFastSyncedRepair(t *testing.T) {
 // detect that it was fast syncing and not delete anything, since we can just pick
 // up directly where we left off.
 func TestShortFastSyncingRepair(t *testing.T) {
-	testRepair(t, 8, 0, 16, 0, 4, 8, 0)
+	testRepair(t, &repairTest{
+		canonicalBlocks:    8,
+		sidechainBlocks:    0,
+		freezeThreshold:    16,
+		commitBlock:        0,
+		pivotBlock:         4,
+		expCanonicalBlocks: 8,
+		expSidechainBlocks: 0,
+	})
 }
 
 // Tests a recovery for a short canonical chain and a shorter side chain, where a
@@ -71,7 +99,15 @@ func TestShortFastSyncingRepair(t *testing.T) {
 // the canonical chain to be rolled back to the committed block, with everything
 // afterwads deleted; but the side chain left alone as it was shorter.
 func TestShortOldForkedRepair(t *testing.T) {
-	testRepair(t, 8, 3, 16, 4, 0, 4, 3)
+	testRepair(t, &repairTest{
+		canonicalBlocks:    8,
+		sidechainBlocks:    3,
+		freezeThreshold:    16,
+		commitBlock:        4,
+		pivotBlock:         0,
+		expCanonicalBlocks: 4,
+		expSidechainBlocks: 3,
+	})
 }
 
 // Tests a recovery for a short canonical chain and a shorter side chain, where
@@ -80,7 +116,15 @@ func TestShortOldForkedRepair(t *testing.T) {
 // this case we expect the canonical chain to be rolled back to the committed block,
 // with everything afterwads deleted; but the side chain left alone as it was shorter.
 func TestShortOldForkedFastSyncedRepair(t *testing.T) {
-	testRepair(t, 8, 3, 16, 4, 4, 4, 3)
+	testRepair(t, &repairTest{
+		canonicalBlocks:    8,
+		sidechainBlocks:    3,
+		freezeThreshold:    16,
+		commitBlock:        4,
+		pivotBlock:         4,
+		expCanonicalBlocks: 4,
+		expSidechainBlocks: 3,
+	})
 }
 
 // Tests a recovery for a short canonical chain and a shorter side chain, where
@@ -89,7 +133,15 @@ func TestShortOldForkedFastSyncedRepair(t *testing.T) {
 // the chain to detect that it was fast syncing and not delete anything, since we
 // can just pick up directly where we left off.
 func TestShortOldForkedFastSyncingRepair(t *testing.T) {
-	testRepair(t, 8, 3, 16, 0, 4, 8, 3)
+	testRepair(t, &repairTest{
+		canonicalBlocks:    8,
+		sidechainBlocks:    3,
+		freezeThreshold:    16,
+		commitBlock:        0,
+		pivotBlock:         4,
+		expCanonicalBlocks: 8,
+		expSidechainBlocks: 3,
+	})
 }
 
 // Tests a recovery for a short canonical chain and a shorter side chain, where a
@@ -102,7 +154,15 @@ func TestShortOldForkedFastSyncingRepair(t *testing.T) {
 // we are deleting to, but it would be exceedingly hard to detect that case and
 // properly handle it, so we'll trade extra work in exchange for simpler code.
 func TestShortNewlyForkedRepair(t *testing.T) {
-	testRepair(t, 8, 6, 16, 4, 0, 4, 4)
+	testRepair(t, &repairTest{
+		canonicalBlocks:    8,
+		sidechainBlocks:    6,
+		freezeThreshold:    16,
+		commitBlock:        4,
+		pivotBlock:         0,
+		expCanonicalBlocks: 4,
+		expSidechainBlocks: 4,
+	})
 }
 
 // Tests a recovery for a short canonical chain and a shorter side chain, where
@@ -115,7 +175,15 @@ func TestShortNewlyForkedRepair(t *testing.T) {
 // we are deleting to, but it would be exceedingly hard to detect that case and
 // properly handle it, so we'll trade extra work in exchange for simpler code.
 func TestShortNewlyForkedFastSyncedRepair(t *testing.T) {
-	testRepair(t, 8, 6, 16, 4, 4, 4, 4)
+	testRepair(t, &repairTest{
+		canonicalBlocks:    8,
+		sidechainBlocks:    6,
+		freezeThreshold:    16,
+		commitBlock:        4,
+		pivotBlock:         4,
+		expCanonicalBlocks: 4,
+		expSidechainBlocks: 4,
+	})
 }
 
 // Tests a recovery for a short canonical chain and a shorter side chain, where
@@ -124,7 +192,15 @@ func TestShortNewlyForkedFastSyncedRepair(t *testing.T) {
 // case we expect the chain to detect that it was fast syncing and not delete
 // anything, since we can just pick up directly where we left off.
 func TestShortNewlyForkedFastSyncingRepair(t *testing.T) {
-	testRepair(t, 8, 6, 16, 0, 4, 8, 6)
+	testRepair(t, &repairTest{
+		canonicalBlocks:    8,
+		sidechainBlocks:    6,
+		freezeThreshold:    16,
+		commitBlock:        0,
+		pivotBlock:         4,
+		expCanonicalBlocks: 8,
+		expSidechainBlocks: 6,
+	})
 }
 
 // Tests a recovery for a short canonical chain and a longer side chain, where a
@@ -136,7 +212,15 @@ func TestShortNewlyForkedFastSyncingRepair(t *testing.T) {
 // we are deleting to, but it would be exceedingly hard to detect that case and
 // properly handle it, so we'll trade extra work in exchange for simpler code.
 func TestShortReorgedRepair(t *testing.T) {
-	testRepair(t, 8, 10, 16, 4, 0, 4, 4)
+	testRepair(t, &repairTest{
+		canonicalBlocks:    8,
+		sidechainBlocks:    10,
+		freezeThreshold:    16,
+		commitBlock:        4,
+		pivotBlock:         0,
+		expCanonicalBlocks: 4,
+		expSidechainBlocks: 4,
+	})
 }
 
 // Tests a recovery for a short canonical chain and a longer side chain, where
@@ -148,7 +232,15 @@ func TestShortReorgedRepair(t *testing.T) {
 // we are deleting to, but it would be exceedingly hard to detect that case and
 // properly handle it, so we'll trade extra work in exchange for simpler code.
 func TestShortReorgedFastSyncedRepair(t *testing.T) {
-	testRepair(t, 8, 10, 16, 4, 4, 4, 4)
+	testRepair(t, &repairTest{
+		canonicalBlocks:    8,
+		sidechainBlocks:    10,
+		freezeThreshold:    16,
+		commitBlock:        4,
+		pivotBlock:         4,
+		expCanonicalBlocks: 4,
+		expSidechainBlocks: 4,
+	})
 }
 
 // Tests a recovery for a short canonical chain and a longer side chain, where
@@ -156,7 +248,15 @@ func TestShortReorgedFastSyncedRepair(t *testing.T) {
 // this case we expect the chain to detect that it was fast syncing and not delete
 // anything, since we can just pick up directly where we left off.
 func TestShortReorgedFastSyncingRepair(t *testing.T) {
-	testRepair(t, 8, 10, 16, 0, 4, 8, 10)
+	testRepair(t, &repairTest{
+		canonicalBlocks:    8,
+		sidechainBlocks:    10,
+		freezeThreshold:    16,
+		commitBlock:        0,
+		pivotBlock:         4,
+		expCanonicalBlocks: 8,
+		expSidechainBlocks: 10,
+	})
 }
 
 // Tests a recovery for a long canonical chain with frozen blocks where a recent
@@ -164,7 +264,15 @@ func TestShortReorgedFastSyncingRepair(t *testing.T) {
 // the process crashed. In this case we expect the chain to be rolled back to the
 // committed block, with everything afterwads deleted.
 func TestLongRepair(t *testing.T) {
-	testRepair(t, 24, 0, 16, 4, 0, 4, 0)
+	testRepair(t, &repairTest{
+		canonicalBlocks:    24,
+		sidechainBlocks:    0,
+		freezeThreshold:    16,
+		commitBlock:        4,
+		pivotBlock:         0,
+		expCanonicalBlocks: 4,
+		expSidechainBlocks: 0,
+	})
 }
 
 // Tests a recovery for a long canonical chain with frozen blocks where the fast
@@ -173,7 +281,15 @@ func TestLongRepair(t *testing.T) {
 // full sync mode, rolling back to the committed block, with everything afterwads
 // deleted.
 func TestLongFastSyncedRepair(t *testing.T) {
-	testRepair(t, 24, 0, 16, 4, 4, 4, 0)
+	testRepair(t, &repairTest{
+		canonicalBlocks:    24,
+		sidechainBlocks:    0,
+		freezeThreshold:    16,
+		commitBlock:        4,
+		pivotBlock:         4,
+		expCanonicalBlocks: 4,
+		expSidechainBlocks: 0,
+	})
 }
 
 // Tests a recovery for a long canonical chain with frozen blocks where the fast
@@ -182,7 +298,15 @@ func TestLongFastSyncedRepair(t *testing.T) {
 // syncing and not delete anything, since we can just pick up directly where we
 // left off.
 func TestLongFastSyncingRepair(t *testing.T) {
-	testRepair(t, 24, 0, 16, 0, 4, 24, 0)
+	testRepair(t, &repairTest{
+		canonicalBlocks:    24,
+		sidechainBlocks:    0,
+		freezeThreshold:    16,
+		commitBlock:        0,
+		pivotBlock:         4,
+		expCanonicalBlocks: 24,
+		expSidechainBlocks: 0,
+	})
 }
 
 // Tests a recovery for a long canonical chain with frozen blocks and a shorter
@@ -192,7 +316,15 @@ func TestLongFastSyncingRepair(t *testing.T) {
 // to be rolled back to the committed block, with everything afterwads deleted;
 // the side chain completely nuked by the freezer.
 func TestLongOldForkedRepair(t *testing.T) {
-	testRepair(t, 24, 3, 16, 4, 0, 4, 0)
+	testRepair(t, &repairTest{
+		canonicalBlocks:    24,
+		sidechainBlocks:    3,
+		freezeThreshold:    16,
+		commitBlock:        4,
+		pivotBlock:         0,
+		expCanonicalBlocks: 4,
+		expSidechainBlocks: 0,
+	})
 }
 
 // Tests a recovery for a long canonical chain with frozen blocks and a shorter
@@ -202,7 +334,15 @@ func TestLongOldForkedRepair(t *testing.T) {
 // chain to be rolled back to the committed block, with everything afterwads deleted;
 // the side chain completely nuked by the freezer.
 func TestLongOldForkedFastSyncedRepair(t *testing.T) {
-	testRepair(t, 24, 3, 16, 4, 4, 4, 0)
+	testRepair(t, &repairTest{
+		canonicalBlocks:    24,
+		sidechainBlocks:    3,
+		freezeThreshold:    16,
+		commitBlock:        4,
+		pivotBlock:         4,
+		expCanonicalBlocks: 4,
+		expSidechainBlocks: 0,
+	})
 }
 
 // Tests a recovery for a long canonical chain with frozen blocks and a shorter
@@ -212,37 +352,69 @@ func TestLongOldForkedFastSyncedRepair(t *testing.T) {
 // that it was fast syncing and not delete anything. The side chin is completely
 // nuked by the freezer.
 func TestLongOldForkedFastSyncingRepair(t *testing.T) {
-	testRepair(t, 24, 3, 16, 0, 4, 24, 0)
+	testRepair(t, &repairTest{
+		canonicalBlocks:    24,
+		sidechainBlocks:    3,
+		freezeThreshold:    16,
+		commitBlock:        0,
+		pivotBlock:         4,
+		expCanonicalBlocks: 24,
+		expSidechainBlocks: 0,
+	})
 }
 
 // Tests a recovery for a long canonical chain with frozen blocks and a shorter
 // side chain, where a recent block - older than the ancient limit - was already
 // comitted to disk and then the process crashed. In this test scenario the side
-// chain is abo e the commited block. In this case we expect the canonical chain
+// chain is above the commited block. In this case we expect the canonical chain
 // to be rolled back to the committed block, with everything afterwads deleted;
 // the side chain completely nuked by the freezer.
 func TestLongNewerForkedRepair(t *testing.T) {
-	testRepair(t, 24, 12, 16, 4, 0, 4, 0)
+	testRepair(t, &repairTest{
+		canonicalBlocks:    24,
+		sidechainBlocks:    12,
+		freezeThreshold:    16,
+		commitBlock:        4,
+		pivotBlock:         0,
+		expCanonicalBlocks: 4,
+		expSidechainBlocks: 0,
+	})
 }
 
 // Tests a recovery for a long canonical chain with frozen blocks and a shorter
 // side chain, where the fast sync pivot point - older than the ancient limit -
 // was already comitted to disk and then the process crashed. In this test scenario
-// the side chain is abo e the commited block. In this case we expect the canonical
+// the side chain is above the commited block. In this case we expect the canonical
 // chain to be rolled back to the committed block, with everything afterwads deleted;
 // the side chain completely nuked by the freezer.
 func TestLongNewerForkedFastSyncedRepair(t *testing.T) {
-	testRepair(t, 24, 12, 16, 4, 4, 4, 0)
+	testRepair(t, &repairTest{
+		canonicalBlocks:    24,
+		sidechainBlocks:    12,
+		freezeThreshold:    16,
+		commitBlock:        4,
+		pivotBlock:         4,
+		expCanonicalBlocks: 4,
+		expSidechainBlocks: 0,
+	})
 }
 
 // Tests a recovery for a long canonical chain with frozen blocks and a shorter
 // side chain, where the fast sync pivot point - older than the ancient limit -
 // was not yet comitted, but the process crashed. In this test scenario the side
-// chain is abo e the commited block. In this case we expect the chain to detect
+// chain is above the commited block. In this case we expect the chain to detect
 // that it was fast syncing and not delete anything. The side chain is completely
 // nuked by the freezer.
 func TestLongNewerForkedFastSyncingRepair(t *testing.T) {
-	testRepair(t, 24, 12, 16, 0, 4, 24, 0)
+	testRepair(t, &repairTest{
+		canonicalBlocks:    24,
+		sidechainBlocks:    12,
+		freezeThreshold:    16,
+		commitBlock:        0,
+		pivotBlock:         4,
+		expCanonicalBlocks: 24,
+		expSidechainBlocks: 0,
+	})
 }
 
 // Tests a recovery for a long canonical chain with frozen blocks and a longer side
@@ -255,7 +427,15 @@ func TestLongNewerForkedFastSyncingRepair(t *testing.T) {
 // we are deleting to, but it would be exceedingly hard to detect that case and
 // properly handle it, so we'll trade extra work in exchange for simpler code.
 func TestLongReorgedRepair(t *testing.T) {
-	testRepair(t, 24, 26, 16, 4, 0, 4, 0)
+	testRepair(t, &repairTest{
+		canonicalBlocks:    24,
+		sidechainBlocks:    26,
+		freezeThreshold:    16,
+		commitBlock:        4,
+		pivotBlock:         0,
+		expCanonicalBlocks: 4,
+		expSidechainBlocks: 0,
+	})
 }
 
 // Tests a recovery for a long canonical chain with frozen blocks and a longer
@@ -268,7 +448,15 @@ func TestLongReorgedRepair(t *testing.T) {
 // we are deleting to, but it would be exceedingly hard to detect that case and
 // properly handle it, so we'll trade extra work in exchange for simpler code.
 func TestLongReorgedFastSyncedRepair(t *testing.T) {
-	testRepair(t, 24, 26, 16, 4, 4, 4, 0)
+	testRepair(t, &repairTest{
+		canonicalBlocks:    24,
+		sidechainBlocks:    26,
+		freezeThreshold:    16,
+		commitBlock:        4,
+		pivotBlock:         4,
+		expCanonicalBlocks: 4,
+		expSidechainBlocks: 0,
+	})
 }
 
 // Tests a recovery for a long canonical chain with frozen blocks and a longer
@@ -277,10 +465,18 @@ func TestLongReorgedFastSyncedRepair(t *testing.T) {
 // chain to detect that it was fast syncing and not delete anything, since we
 // can just pick up directly where we left off.
 func TestLongReorgedFastSyncingRepair(t *testing.T) {
-	testRepair(t, 24, 26, 16, 0, 4, 24, 26)
+	testRepair(t, &repairTest{
+		canonicalBlocks:    24,
+		sidechainBlocks:    26,
+		freezeThreshold:    16,
+		commitBlock:        0,
+		pivotBlock:         4,
+		expCanonicalBlocks: 24,
+		expSidechainBlocks: 26,
+	})
 }
 
-func testRepair(t *testing.T, canonchain int, sidechain int, freeze uint64, commit int, pivot int, canonretain int, sideretain int) {
+func testRepair(t *testing.T, tt *repairTest) {
 	//log.Root().SetHandler(log.LvlFilterHandler(log.LvlTrace, log.StreamHandler(os.Stderr, log.TerminalFormat(true))))
 
 	// Create a temporary persistent database
@@ -307,36 +503,32 @@ func testRepair(t *testing.T, canonchain int, sidechain int, freeze uint64, comm
 	}
 	// If sidechain blocks are needed, make a light chain and import it
 	var sideblocks types.Blocks
-	if sidechain > 0 {
-		sideblocks, _ = GenerateChain(params.TestChainConfig, genesis, engine, rawdb.NewMemoryDatabase(), sidechain, func(i int, b *BlockGen) {
+	if tt.sidechainBlocks > 0 {
+		sideblocks, _ = GenerateChain(params.TestChainConfig, genesis, engine, rawdb.NewMemoryDatabase(), tt.sidechainBlocks, func(i int, b *BlockGen) {
 			b.SetCoinbase(common.Address{0x01})
 		})
 		if _, err := chain.InsertChain(sideblocks); err != nil {
 			t.Fatalf("Failed to import side chain: %v", err)
 		}
 	}
-	canonblocks, _ := GenerateChain(params.TestChainConfig, genesis, engine, rawdb.NewMemoryDatabase(), canonchain, func(i int, b *BlockGen) {
+	canonblocks, _ := GenerateChain(params.TestChainConfig, genesis, engine, rawdb.NewMemoryDatabase(), tt.canonicalBlocks, func(i int, b *BlockGen) {
 		b.SetCoinbase(common.Address{0x02})
 		b.SetDifficulty(big.NewInt(1000000))
 	})
-	if _, err := chain.InsertChain(canonblocks[:commit]); err != nil {
+	if _, err := chain.InsertChain(canonblocks[:tt.commitBlock]); err != nil {
 		t.Fatalf("Failed to import canonical chain start: %v", err)
 	}
-	if commit > 0 {
-		chain.stateCache.TrieDB().Commit(canonblocks[commit-1].Root(), true, nil)
+	if tt.commitBlock > 0 {
+		chain.stateCache.TrieDB().Commit(canonblocks[tt.commitBlock-1].Root(), true, nil)
 	}
-	if _, err := chain.InsertChain(canonblocks[commit:]); err != nil {
+	if _, err := chain.InsertChain(canonblocks[tt.commitBlock:]); err != nil {
 		t.Fatalf("Failed to import canonical chain tail: %v", err)
-	}
-	if sidechain > 0 {
-		fmt.Println(sideblocks[sidechain-1].Hash(), canonblocks[canonchain-1].Hash())
-		fmt.Println(chain.CurrentBlock().Hash())
 	}
 	// Force run a freeze cycle
 	type freezer interface {
 		Freeze(threshold uint64)
 	}
-	db.(freezer).Freeze(freeze)
+	db.(freezer).Freeze(tt.freezeThreshold)
 
 	// Pull the plug on the database, simulating a hard crash
 	db.Close()
@@ -355,15 +547,15 @@ func testRepair(t *testing.T, canonchain int, sidechain int, freeze uint64, comm
 	defer chain.Stop()
 
 	// Iterate over all the remaining blocks and ensure there are no gaps
-	verifyNoGaps(t, chain, canonblocks)
-	verifyNoGaps(t, chain, sideblocks)
-	verifyCutoff(t, chain, canonblocks, canonretain)
-	verifyCutoff(t, chain, sideblocks, sideretain)
+	verifyNoGaps(t, chain, true, canonblocks)
+	verifyNoGaps(t, chain, false, sideblocks)
+	verifyCutoff(t, chain, true, canonblocks, tt.expCanonicalBlocks)
+	verifyCutoff(t, chain, false, sideblocks, tt.expSidechainBlocks)
 }
 
 // verifyNoGaps checks that there are no gaps after the initial set of blocks in
 // the database and errors if found.
-func verifyNoGaps(t *testing.T, chain *BlockChain, inserted types.Blocks) {
+func verifyNoGaps(t *testing.T, chain *BlockChain, canonical bool, inserted types.Blocks) {
 	t.Helper()
 
 	var end uint64
@@ -373,7 +565,11 @@ func verifyNoGaps(t *testing.T, chain *BlockChain, inserted types.Blocks) {
 			end = i
 		}
 		if header != nil && end > 0 {
-			t.Errorf("Header gap between #%d-#%d", end, i-1)
+			if canonical {
+				t.Errorf("Canonical header gap between #%d-#%d", end, i-1)
+			} else {
+				t.Errorf("Sidechain header gap between #%d-#%d", end, i-1)
+			}
 			end = 0 // Reset for further gap detection
 		}
 	}
@@ -384,7 +580,11 @@ func verifyNoGaps(t *testing.T, chain *BlockChain, inserted types.Blocks) {
 			end = i
 		}
 		if block != nil && end > 0 {
-			t.Errorf("Block gap between #%d-#%d", end, i-1)
+			if canonical {
+				t.Errorf("Canonical block gap between #%d-#%d", end, i-1)
+			} else {
+				t.Errorf("Sidechain block gap between #%d-#%d", end, i-1)
+			}
 			end = 0 // Reset for further gap detection
 		}
 	}
@@ -395,7 +595,11 @@ func verifyNoGaps(t *testing.T, chain *BlockChain, inserted types.Blocks) {
 			end = i
 		}
 		if receipts != nil && end > 0 {
-			t.Errorf("Receipt gap between #%d-#%d", end, i-1)
+			if canonical {
+				t.Errorf("Canonical receipt gap between #%d-#%d", end, i-1)
+			} else {
+				t.Errorf("Sidechain receipt gap between #%d-#%d", end, i-1)
+			}
 			end = 0 // Reset for further gap detection
 		}
 	}
@@ -403,29 +607,53 @@ func verifyNoGaps(t *testing.T, chain *BlockChain, inserted types.Blocks) {
 
 // verifyCutoff checks that there are no chain data available in the chain after
 // the specified limit, but that it is available before.
-func verifyCutoff(t *testing.T, chain *BlockChain, inserted types.Blocks, head int) {
+func verifyCutoff(t *testing.T, chain *BlockChain, canonical bool, inserted types.Blocks, head int) {
 	t.Helper()
 
 	for i := 1; i <= len(inserted); i++ {
 		if i <= head {
 			if header := chain.GetHeader(inserted[i-1].Hash(), uint64(i)); header == nil {
-				t.Errorf("Header   #%2d [%x...] missing before cap %d", inserted[i-1].Number(), inserted[i-1].Hash().Bytes()[:3], head)
+				if canonical {
+					t.Errorf("Canonical header   #%2d [%x...] missing before cap %d", inserted[i-1].Number(), inserted[i-1].Hash().Bytes()[:3], head)
+				} else {
+					t.Errorf("Sidechain header   #%2d [%x...] missing before cap %d", inserted[i-1].Number(), inserted[i-1].Hash().Bytes()[:3], head)
+				}
 			}
 			if block := chain.GetBlock(inserted[i-1].Hash(), uint64(i)); block == nil {
-				t.Errorf("Block    #%2d [%x...] missing before cap %d", inserted[i-1].Number(), inserted[i-1].Hash().Bytes()[:3], head)
+				if canonical {
+					t.Errorf("Canonical block    #%2d [%x...] missing before cap %d", inserted[i-1].Number(), inserted[i-1].Hash().Bytes()[:3], head)
+				} else {
+					t.Errorf("Sidechain block    #%2d [%x...] missing before cap %d", inserted[i-1].Number(), inserted[i-1].Hash().Bytes()[:3], head)
+				}
 			}
 			if receipts := chain.GetReceiptsByHash(inserted[i-1].Hash()); receipts == nil {
-				t.Errorf("Receipts #%2d [%x...] missing before cap %d", inserted[i-1].Number(), inserted[i-1].Hash().Bytes()[:3], head)
+				if canonical {
+					t.Errorf("Canonical receipts #%2d [%x...] missing before cap %d", inserted[i-1].Number(), inserted[i-1].Hash().Bytes()[:3], head)
+				} else {
+					t.Errorf("Sidechain receipts #%2d [%x...] missing before cap %d", inserted[i-1].Number(), inserted[i-1].Hash().Bytes()[:3], head)
+				}
 			}
 		} else {
 			if header := chain.GetHeader(inserted[i-1].Hash(), uint64(i)); header != nil {
-				t.Errorf("Header   #%2d [%x...] present after cap %d", inserted[i-1].Number(), inserted[i-1].Hash().Bytes()[:3], head)
+				if canonical {
+					t.Errorf("Canonical header   #%2d [%x...] present after cap %d", inserted[i-1].Number(), inserted[i-1].Hash().Bytes()[:3], head)
+				} else {
+					t.Errorf("Sidechain header   #%2d [%x...] present after cap %d", inserted[i-1].Number(), inserted[i-1].Hash().Bytes()[:3], head)
+				}
 			}
 			if block := chain.GetBlock(inserted[i-1].Hash(), uint64(i)); block != nil {
-				t.Errorf("Block    #%2d [%x...] present after cap %d", inserted[i-1].Number(), inserted[i-1].Hash().Bytes()[:3], head)
+				if canonical {
+					t.Errorf("Canonical block    #%2d [%x...] present after cap %d", inserted[i-1].Number(), inserted[i-1].Hash().Bytes()[:3], head)
+				} else {
+					t.Errorf("Sidechain block    #%2d [%x...] present after cap %d", inserted[i-1].Number(), inserted[i-1].Hash().Bytes()[:3], head)
+				}
 			}
 			if receipts := chain.GetReceiptsByHash(inserted[i-1].Hash()); receipts != nil {
-				t.Errorf("Receipts #%2d [%x...] present after cap %d", inserted[i-1].Number(), inserted[i-1].Hash().Bytes()[:3], head)
+				if canonical {
+					t.Errorf("Canonical receipts #%2d [%x...] present after cap %d", inserted[i-1].Number(), inserted[i-1].Hash().Bytes()[:3], head)
+				} else {
+					t.Errorf("Sidechain receipts #%2d [%x...] present after cap %d", inserted[i-1].Number(), inserted[i-1].Hash().Bytes()[:3], head)
+				}
 			}
 		}
 	}
