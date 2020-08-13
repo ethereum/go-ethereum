@@ -11,55 +11,23 @@ import (
 	"github.com/ethereum/go-ethereum/log"
 )
 
-type stateManagerFunctionAndGasCost struct {
-	smFunction stateManagerFunction
-	smGasCost  uint64
-}
 type stateManagerFunction func(*EVM, *Contract, []byte) ([]byte, error)
 
-var funcs = map[string]stateManagerFunctionAndGasCost{
-	"getStorage(address,bytes32)": {
-		smFunction: getStorage,
-		smGasCost:  20000,
-	},
-	"setStorage(address,bytes32,bytes32)": {
-		smFunction: setStorage,
-		smGasCost:  20000,
-	},
-	"getOvmContractNonce(address)": {
-		smFunction: getOvmContractNonce,
-		smGasCost:  20000,
-	},
-	"incrementOvmContractNonce(address)": {
-		smFunction: incrementOvmContractNonce,
-		smGasCost:  20000,
-	},
-	"getCodeContractBytecode(address)": {
-		smFunction: getCodeContractBytecode,
-		smGasCost:  20000,
-	},
-	"getCodeContractHash(address)": {
-		smFunction: getCodeContractHash,
-		smGasCost:  20000,
-	},
-	"getCodeContractAddressFromOvmAddress(address)": {
-		smFunction: getCodeContractAddress,
-		smGasCost:  20000,
-	},
-	"associateCodeContract(address,address)": {
-		smFunction: associateCodeContract,
-		smGasCost:  20000,
-	},
-	"registerCreatedContract(address)": {
-		smFunction: registerCreatedContract,
-		smGasCost:  20000,
-	},
+var funcs = map[string]stateManagerFunction{
+	"getStorage(address,bytes32)":                   getStorage,
+	"setStorage(address,bytes32,bytes32)":           setStorage,
+	"getOvmContractNonce(address)":                  getOvmContractNonce,
+	"incrementOvmContractNonce(address)":            incrementOvmContractNonce,
+	"getCodeContractBytecode(address)":              getCodeContractBytecode,
+	"getCodeContractHash(address)":                  getCodeContractHash,
+	"getCodeContractAddressFromOvmAddress(address)": getCodeContractAddress,
+	"associateCodeContract(address,address)":        associateCodeContract,
+	"registerCreatedContract(address)":              registerCreatedContract,
 }
-
-var methodIds map[[4]byte]stateManagerFunctionAndGasCost
+var methodIds map[[4]byte]stateManagerFunction
 
 func init() {
-	methodIds = make(map[[4]byte]stateManagerFunctionAndGasCost, len(funcs))
+	methodIds = make(map[[4]byte]stateManagerFunction, len(funcs))
 	for methodSignature, f := range funcs {
 		methodIds[methodSignatureToMethodID(methodSignature)] = f
 	}
@@ -71,23 +39,15 @@ func methodSignatureToMethodID(methodSignature string) [4]byte {
 	return methodID
 }
 
-func stateManagerRequiredGas(input []byte) (gas uint64) {
-	var methodID [4]byte
-	copy(methodID[:], input[:4])
-	gas = methodIds[methodID].smGasCost
-	return gas
-}
-
 func callStateManager(input []byte, evm *EVM, contract *Contract) (ret []byte, err error) {
 	var methodID [4]byte
+	if len(input) == 0 {
+		return nil, nil
+	}
 	copy(methodID[:], input[:4])
-	ret, err = methodIds[methodID].smFunction(evm, contract, input)
+	ret, err = methodIds[methodID](evm, contract, input)
 	return ret, err
 }
-
-/*
- * StateManager functions
- */
 
 func setStorage(evm *EVM, contract *Contract, input []byte) (ret []byte, err error) {
 	address := common.BytesToAddress(input[4:36])

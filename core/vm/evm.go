@@ -49,15 +49,11 @@ func run(evm *EVM, contract *Contract, input []byte, readOnly bool) ([]byte, err
 	// Intercept the StateManager calls
 	if contract.Address() == StateManagerAddress {
 		log.Debug("Calling State Manager contract.", "StateManagerAddress", hex.EncodeToString(StateManagerAddress.Bytes()))
-		gas := stateManagerRequiredGas(input)
-		if contract.UseGas(gas) {
-			ret, err := callStateManager(input, evm, contract)
-			if err != nil {
-				log.Error("State manager error!", "Error", err)
-			}
-			return ret, err
+		ret, err := callStateManager(input, evm, contract)
+		if err != nil {
+			log.Error("State manager error!", err)
 		}
-		return nil, ErrOutOfGas
+		return ret, err
 	}
 
 	if contract.CodeAddr != nil {
