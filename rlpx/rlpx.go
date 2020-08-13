@@ -4,9 +4,8 @@ import (
 	"bytes"
 	"crypto/aes"
 	"crypto/cipher"
-	"fmt"
+	"errors"
 	"github.com/ethereum/go-ethereum/crypto"
-	"github.com/ethereum/go-ethereum/metrics"
 	"github.com/ethereum/go-ethereum/rlp"
 	"github.com/golang/snappy"
 	"hash"
@@ -15,7 +14,6 @@ import (
 	"net"
 	"sync"
 	"time"
-	"errors"
 )
 
 const (
@@ -151,12 +149,13 @@ func (rw *rlpxFrameRW) Write(msg RawRLPXMessage) error {
 		msg.Payload = bytes.NewReader(payload)
 		msg.Size = uint32(len(payload))
 	}
-	msg.meterSize = msg.Size
-	if metrics.Enabled && msg.meterCap.Name != "" { // don't meter non-subprotocol messages
-		m := fmt.Sprintf("%s/%s/%d/%#02x", egressMeterName, msg.meterCap.Name, msg.meterCap.Version, msg.meterCode)
-		metrics.GetOrRegisterMeter(m, nil).Mark(int64(msg.meterSize))
-		metrics.GetOrRegisterMeter(m+"/packets", nil).Mark(1)
-	}
+	// TODO all the below logging can be done before Write is called
+	//msg.meterSize = msg.Size
+	//if metrics.Enabled && msg.meterCap.Name != "" { // don't meter non-subprotocol messages
+	//	m := fmt.Sprintf("%s/%s/%d/%#02x", egressMeterName, msg.meterCap.Name, msg.meterCap.Version, msg.meterCode)
+	//	metrics.GetOrRegisterMeter(m, nil).Mark(int64(msg.meterSize))
+	//	metrics.GetOrRegisterMeter(m+"/packets", nil).Mark(1)
+	//}
 	// write header
 	headbuf := make([]byte, 32)
 	fsize := uint32(len(ptype)) + msg.Size
@@ -210,5 +209,11 @@ func UpdateMAC(mac hash.Hash, block cipher.Block, seed []byte) []byte {
 	}
 	mac.Write(aesbuf)
 	return mac.Sum(nil)[:16]
+}
+
+func putInt24(v uint32, b []byte) {
+	b[0] = byte(v >> 16)
+	b[1] = byte(v >> 8)
+	b[2] = byte(v)
 }
 

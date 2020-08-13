@@ -38,7 +38,6 @@ import (
 	"github.com/ethereum/go-ethereum/common/bitutil"
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/crypto/ecies"
-	"github.com/ethereum/go-ethereum/metrics"
 	"github.com/ethereum/go-ethereum/rlp"
 	"github.com/golang/snappy"
 	"golang.org/x/crypto/sha3"
@@ -532,111 +531,6 @@ func xor(one, other []byte) (xor []byte) {
 	return xor
 }
 
-var (
-	// this is used in place of actual frame header data.
-	// TODO: replace this when Msg contains the protocol type code.
-	zeroHeader = []byte{0xC2, 0x80, 0x80}
-	// sixteen zero bytes
-	zero16 = make([]byte, 16)
-)
-
-// rlpxFrameRW implements a simplified version of RLPx framing.
-// chunked messages are not supported and all headers are equal to
-// zeroHeader.
-//
-// rlpxFrameRW is not safe for concurrent use from multiple goroutines.
-type rlpxFrameRW struct {
-	conn io.ReadWriter
-	enc  cipher.Stream
-	dec  cipher.Stream
-
-	macCipher  cipher.Block
-	egressMAC  hash.Hash
-	ingressMAC hash.Hash
-
-	snappy bool
-}
-
-func newRLPXFrameRW(conn io.ReadWriter, s secrets) *rlpxFrameRW {
-	macc, err := aes.NewCipher(s.MAC)
-	if err != nil {
-		panic("invalid MAC secret: " + err.Error())
-	}
-	encc, err := aes.NewCipher(s.AES)
-	if err != nil {
-		panic("invalid AES secret: " + err.Error())
-	}
-	// we use an all-zeroes IV for AES because the key used
-	// for encryption is ephemeral.
-	iv := make([]byte, encc.BlockSize())
-	return &rlpxFrameRW{
-		conn:       conn,
-		enc:        cipher.NewCTR(encc, iv),
-		dec:        cipher.NewCTR(encc, iv),
-		macCipher:  macc,
-		egressMAC:  s.EgressMAC,
-		ingressMAC: s.IngressMAC,
-	}
-}
-
-func (rw *rlpxFrameRW) WriteMsg(msg Msg) error {
-	ptype, _ := rlp.EncodeToBytes(msg.Code)
-
-	// if snappy is enabled, compress message now
-	if rw.snappy {
-		if msg.Size > maxUint24 {
-			return errPlainMessageTooLarge
-		}
-		payload, _ := ioutil.ReadAll(msg.Payload)
-		payload = snappy.Encode(nil, payload)
-
-		msg.Payload = bytes.NewReader(payload)
-		msg.Size = uint32(len(payload))
-	}
-	msg.meterSize = msg.Size
-	if metrics.Enabled && msg.meterCap.Name != "" { // don't meter non-subprotocol messages
-		m := fmt.Sprintf("%s/%s/%d/%#02x", egressMeterName, msg.meterCap.Name, msg.meterCap.Version, msg.meterCode)
-		metrics.GetOrRegisterMeter(m, nil).Mark(int64(msg.meterSize))
-		metrics.GetOrRegisterMeter(m+"/packets", nil).Mark(1)
-	}
-	// write header
-	headbuf := make([]byte, 32)
-	fsize := uint32(len(ptype)) + msg.Size
-	if fsize > maxUint24 {
-		return errors.New("message size overflows uint24")
-	}
-	putInt24(fsize, headbuf) // TODO: check overflow
-	copy(headbuf[3:], zeroHeader)
-	rw.enc.XORKeyStream(headbuf[:16], headbuf[:16]) // first half is now encrypted
-
-	// write header MAC
-	copy(headbuf[16:], updateMAC(rw.egressMAC, rw.macCipher, headbuf[:16]))
-	if _, err := rw.conn.Write(headbuf); err != nil {
-		return err
-	}
-
-	// write encrypted frame, updating the egress MAC hash with
-	// the data written to conn.
-	tee := cipher.StreamWriter{S: rw.enc, W: io.MultiWriter(rw.conn, rw.egressMAC)}
-	if _, err := tee.Write(ptype); err != nil {
-		return err
-	}
-	if _, err := io.Copy(tee, msg.Payload); err != nil {
-		return err
-	}
-	if padding := fsize % 16; padding > 0 {
-		if _, err := tee.Write(zero16[:16-padding]); err != nil {
-			return err
-		}
-	}
-
-	// write frame MAC. egress MAC hash is up to date because
-	// frame content was written to it as well.
-	fmacseed := rw.egressMAC.Sum(nil)
-	mac := updateMAC(rw.egressMAC, rw.macCipher, fmacseed)
-	_, err := rw.conn.Write(mac)
-	return err
-}
 
 func (rw *rlpxFrameRW) ReadMsg() (msg Msg, err error) {
 	// read the header
@@ -722,10 +616,4 @@ func updateMAC(mac hash.Hash, block cipher.Block, seed []byte) []byte {
 
 func readInt24(b []byte) uint32 {
 	return uint32(b[2]) | uint32(b[1])<<8 | uint32(b[0])<<16
-}
-
-func putInt24(v uint32, b []byte) {
-	b[0] = byte(v >> 16)
-	b[1] = byte(v >> 8)
-	b[2] = byte(v)
 }
