@@ -418,12 +418,9 @@ func (db *cachingDB) run() {
 	commit := func(done chan struct{}, task *commitTask) {
 		defer close(done)
 
-		// Commit the tries, now we have to hold the lock here to prevent
-		// concurrent issue between commit and hash. Please fix it(rjl493456442)
 		start := time.Now()
 		commitState(task.state, task.storage, task.codes)
 
-		// Run the callback after commit if it's not nil, usually it's in-memory GC algo.
 		callstart := time.Now()
 		if task.postCommit != nil {
 			task.postCommit()
