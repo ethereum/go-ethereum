@@ -70,15 +70,15 @@ func TestCallback(t *testing.T) {
 	set0 := make(chan struct{}, 1)
 	set1 := make(chan struct{}, 1)
 	set2 := make(chan struct{}, 1)
-	ns.SubscribeState(flags[0], func(n *enode.Node, oldState, newState Flags) { set0 <- struct{}{} })
-	ns.SubscribeState(flags[1], func(n *enode.Node, oldState, newState Flags) { set1 <- struct{}{} })
-	ns.SubscribeState(flags[2], func(n *enode.Node, oldState, newState Flags) { set2 <- struct{}{} })
+	ns.SubscribeState(flags[0], func(n *enode.Node, oldState, newState Flags, caller *Caller) { set0 <- struct{}{} })
+	ns.SubscribeState(flags[1], func(n *enode.Node, oldState, newState Flags, caller *Caller) { set1 <- struct{}{} })
+	ns.SubscribeState(flags[2], func(n *enode.Node, oldState, newState Flags, caller *Caller) { set2 <- struct{}{} })
 
 	ns.Start()
 
-	ns.SetState(testNode(1), flags[0], Flags{}, 0)
-	ns.SetState(testNode(1), flags[1], Flags{}, time.Second)
-	ns.SetState(testNode(1), flags[2], Flags{}, 2*time.Second)
+	ns.SetState(testNode(1), flags[0], Flags{}, 0, nil)
+	ns.SetState(testNode(1), flags[1], Flags{}, time.Second, nil)
+	ns.SetState(testNode(1), flags[2], Flags{}, 2*time.Second, nil)
 
 	for i := 0; i < 3; i++ {
 		select {
@@ -104,11 +104,11 @@ func TestPersistentFlags(t *testing.T) {
 
 	ns.Start()
 
-	ns.SetState(testNode(1), flags[0], Flags{}, time.Second) // state with timeout should not be saved
-	ns.SetState(testNode(2), flags[1], Flags{}, 0)
-	ns.SetState(testNode(3), flags[2], Flags{}, 0)
-	ns.SetState(testNode(4), flags[3], Flags{}, 0)
-	ns.SetState(testNode(5), flags[0], Flags{}, 0)
+	ns.SetState(testNode(1), flags[0], Flags{}, time.Second, nil) // state with timeout should not be saved
+	ns.SetState(testNode(2), flags[1], Flags{}, 0, nil)
+	ns.SetState(testNode(3), flags[2], Flags{}, 0, nil)
+	ns.SetState(testNode(4), flags[3], Flags{}, 0, nil)
+	ns.SetState(testNode(5), flags[0], Flags{}, 0, nil)
 	ns.Persist(testNode(5))
 	select {
 	case <-saveNode:
@@ -145,19 +145,19 @@ func TestSetField(t *testing.T) {
 	ns.Start()
 
 	// Set field before setting state
-	ns.SetField(testNode(1), fields[0], "hello world")
+	ns.SetField(testNode(1), fields[0], "hello world", nil)
 	field := ns.GetField(testNode(1), fields[0])
 	if field != nil {
 		t.Fatalf("Field shouldn't be set before setting states")
 	}
 	// Set field after setting state
-	ns.SetState(testNode(1), flags[0], Flags{}, 0)
-	ns.SetField(testNode(1), fields[0], "hello world")
+	ns.SetState(testNode(1), flags[0], Flags{}, 0, nil)
+	ns.SetField(testNode(1), fields[0], "hello world", nil)
 	field = ns.GetField(testNode(1), fields[0])
 	if field == nil {
 		t.Fatalf("Field should be set after setting states")
 	}
-	if err := ns.SetField(testNode(1), fields[0], 123); err == nil {
+	if err := ns.SetField(testNode(1), fields[0], 123, nil); err == nil {
 		t.Fatalf("Invalid field should be rejected")
 	}
 	// Dirty node should be written back
@@ -177,10 +177,10 @@ func TestUnsetField(t *testing.T) {
 
 	ns.Start()
 
-	ns.SetState(testNode(1), flags[0], Flags{}, time.Second)
-	ns.SetField(testNode(1), fields[0], "hello world")
+	ns.SetState(testNode(1), flags[0], Flags{}, time.Second, nil)
+	ns.SetField(testNode(1), fields[0], "hello world", nil)
 
-	ns.SetState(testNode(1), Flags{}, flags[0], 0)
+	ns.SetState(testNode(1), Flags{}, flags[0], 0, nil)
 	if field := ns.GetField(testNode(1), fields[0]); field != nil {
 		t.Fatalf("Field should be unset")
 	}
@@ -194,7 +194,7 @@ func TestSetState(t *testing.T) {
 
 	type change struct{ old, new Flags }
 	set := make(chan change, 1)
-	ns.SubscribeState(flags[0].Or(flags[1]), func(n *enode.Node, oldState, newState Flags) {
+	ns.SubscribeState(flags[0].Or(flags[1]), func(n *enode.Node, oldState, newState Flags, caller *Caller) {
 		set <- change{
 			old: oldState,
 			new: newState,
@@ -224,25 +224,25 @@ func TestSetState(t *testing.T) {
 			return
 		}
 	}
-	ns.SetState(testNode(1), flags[0], Flags{}, 0)
+	ns.SetState(testNode(1), flags[0], Flags{}, 0, nil)
 	check(Flags{}, flags[0], true)
 
-	ns.SetState(testNode(1), flags[1], Flags{}, 0)
+	ns.SetState(testNode(1), flags[1], Flags{}, 0, nil)
 	check(flags[0], flags[0].Or(flags[1]), true)
 
-	ns.SetState(testNode(1), flags[2], Flags{}, 0)
+	ns.SetState(testNode(1), flags[2], Flags{}, 0, nil)
 	check(Flags{}, Flags{}, false)
 
-	ns.SetState(testNode(1), Flags{}, flags[0], 0)
+	ns.SetState(testNode(1), Flags{}, flags[0], 0, nil)
 	check(flags[0].Or(flags[1]), flags[1], true)
 
-	ns.SetState(testNode(1), Flags{}, flags[1], 0)
+	ns.SetState(testNode(1), Flags{}, flags[1], 0, nil)
 	check(flags[1], Flags{}, true)
 
-	ns.SetState(testNode(1), Flags{}, flags[2], 0)
+	ns.SetState(testNode(1), Flags{}, flags[2], 0, nil)
 	check(Flags{}, Flags{}, false)
 
-	ns.SetState(testNode(1), flags[0].Or(flags[1]), Flags{}, time.Second)
+	ns.SetState(testNode(1), flags[0].Or(flags[1]), Flags{}, time.Second, nil)
 	check(Flags{}, flags[0].Or(flags[1]), true)
 	clock.Run(time.Second)
 	check(flags[0].Or(flags[1]), Flags{}, true)
@@ -282,9 +282,9 @@ func TestPersistentFields(t *testing.T) {
 	ns := NewNodeStateMachine(mdb, []byte("-ns"), clock, s)
 
 	ns.Start()
-	ns.SetState(testNode(1), flags[0], Flags{}, 0)
-	ns.SetField(testNode(1), fields[0], uint64(100))
-	ns.SetField(testNode(1), fields[1], "hello world")
+	ns.SetState(testNode(1), flags[0], Flags{}, 0, nil)
+	ns.SetField(testNode(1), fields[0], uint64(100), nil)
+	ns.SetField(testNode(1), fields[1], "hello world", nil)
 	ns.Stop()
 
 	ns2 := NewNodeStateMachine(mdb, []byte("-ns"), clock, s)
@@ -317,7 +317,7 @@ func TestFieldSub(t *testing.T) {
 		lastState                  Flags
 		lastOldValue, lastNewValue interface{}
 	)
-	ns.SubscribeField(fields[0], func(n *enode.Node, state Flags, oldValue, newValue interface{}) {
+	ns.SubscribeField(fields[0], func(n *enode.Node, state Flags, oldValue, newValue interface{}, caller *Caller) {
 		lastState, lastOldValue, lastNewValue = state, oldValue, newValue
 	})
 	check := func(state Flags, oldValue, newValue interface{}) {
@@ -326,19 +326,19 @@ func TestFieldSub(t *testing.T) {
 		}
 	}
 	ns.Start()
-	ns.SetState(testNode(1), flags[0], Flags{}, 0)
-	ns.SetField(testNode(1), fields[0], uint64(100))
+	ns.SetState(testNode(1), flags[0], Flags{}, 0, nil)
+	ns.SetField(testNode(1), fields[0], uint64(100), nil)
 	check(flags[0], nil, uint64(100))
 	ns.Stop()
 	check(s.OfflineFlag(), uint64(100), nil)
 
 	ns2 := NewNodeStateMachine(mdb, []byte("-ns"), clock, s)
-	ns2.SubscribeField(fields[0], func(n *enode.Node, state Flags, oldValue, newValue interface{}) {
+	ns2.SubscribeField(fields[0], func(n *enode.Node, state Flags, oldValue, newValue interface{}, caller *Caller) {
 		lastState, lastOldValue, lastNewValue = state, oldValue, newValue
 	})
 	ns2.Start()
 	check(s.OfflineFlag(), nil, uint64(100))
-	ns2.SetState(testNode(1), Flags{}, flags[0], 0)
+	ns2.SetState(testNode(1), Flags{}, flags[0], 0, nil)
 	check(Flags{}, uint64(100), nil)
 	ns2.Stop()
 }
@@ -351,7 +351,7 @@ func TestDuplicatedFlags(t *testing.T) {
 
 	type change struct{ old, new Flags }
 	set := make(chan change, 1)
-	ns.SubscribeState(flags[0], func(n *enode.Node, oldState, newState Flags) {
+	ns.SubscribeState(flags[0], func(n *enode.Node, oldState, newState Flags, caller *Caller) {
 		set <- change{oldState, newState}
 	})
 
@@ -379,9 +379,9 @@ func TestDuplicatedFlags(t *testing.T) {
 			return
 		}
 	}
-	ns.SetState(testNode(1), flags[0], Flags{}, time.Second)
+	ns.SetState(testNode(1), flags[0], Flags{}, time.Second, nil)
 	check(Flags{}, flags[0], true)
-	ns.SetState(testNode(1), flags[0], Flags{}, 2*time.Second) // extend the timeout to 2s
+	ns.SetState(testNode(1), flags[0], Flags{}, 2*time.Second, nil) // extend the timeout to 2s
 	check(Flags{}, flags[0], false)
 
 	clock.Run(2 * time.Second)
@@ -394,19 +394,19 @@ func TestCallbackOrder(t *testing.T) {
 	s, flags, _ := testSetup([]bool{false, false, false, false}, nil)
 	ns := NewNodeStateMachine(mdb, []byte("-ns"), clock, s)
 
-	ns.SubscribeState(flags[0], func(n *enode.Node, oldState, newState Flags) {
+	ns.SubscribeState(flags[0], func(n *enode.Node, oldState, newState Flags, caller *Caller) {
 		if newState.Equals(flags[0]) {
-			ns.SetState(n, flags[1], Flags{}, 0)
-			ns.SetState(n, flags[2], Flags{}, 0)
+			ns.SetState(n, flags[1], Flags{}, 0, caller)
+			ns.SetState(n, flags[2], Flags{}, 0, caller)
 		}
 	})
-	ns.SubscribeState(flags[1], func(n *enode.Node, oldState, newState Flags) {
+	ns.SubscribeState(flags[1], func(n *enode.Node, oldState, newState Flags, caller *Caller) {
 		if newState.Equals(flags[1]) {
-			ns.SetState(n, flags[3], Flags{}, 0)
+			ns.SetState(n, flags[3], Flags{}, 0, caller)
 		}
 	})
 	lastState := Flags{}
-	ns.SubscribeState(MergeFlags(flags[1], flags[2], flags[3]), func(n *enode.Node, oldState, newState Flags) {
+	ns.SubscribeState(MergeFlags(flags[1], flags[2], flags[3]), func(n *enode.Node, oldState, newState Flags, caller *Caller) {
 		if !oldState.Equals(lastState) {
 			t.Fatalf("Wrong callback order")
 		}
@@ -416,5 +416,5 @@ func TestCallbackOrder(t *testing.T) {
 	ns.Start()
 	defer ns.Stop()
 
-	ns.SetState(testNode(1), flags[0], Flags{}, 0)
+	ns.SetState(testNode(1), flags[0], Flags{}, 0, nil)
 }
