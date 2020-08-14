@@ -186,6 +186,9 @@ func (b *SyncBloom) Add(hash []byte) {
 // While the bloom is being initialized, any query will return true.
 func (b *SyncBloom) Contains(hash []byte) bool {
 	bloomTestMeter.Mark(1)
+	if b == nil {
+		return true
+	}
 	if atomic.LoadUint32(&b.inited) == 0 {
 		// We didn't load all the trie nodes from the previous run of Geth yet. As
 		// such, we can't say for sure if a hash is not present for anything. Until
