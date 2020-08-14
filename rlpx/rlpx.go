@@ -52,19 +52,19 @@ var errPlainMessageTooLarge = errors.New("message length >= 16MB")
 
 // what about the frame ?
 
-type rlpx struct {
-	fd       net.Conn
+type Rlpx struct {
+	Conn     net.Conn
 	rmu, wmu sync.Mutex
-	RW       *rlpxFrameRW
+	RW       *RlpxFrameRW
 	// TODO probs add frameRW
 }
 
-func newRLPX(fd net.Conn) *rlpx { // TODO figure out later if it needs an interface?
+func NewRLPX(conn net.Conn) *Rlpx { // TODO figure out later if it needs an interface?
 	// TODO timeouts on the conn can be set on the user-side
-	return &rlpx{fd: fd}
+	return &Rlpx{Conn: conn}
 }
 
-func (r *rlpx) Read() {
+func (r *Rlpx) Read() {
 	r.rmu.Lock()
 	defer r.rmu.Unlock()
 	// TODO timeout for frameread timeout should be set on conn beforehand on user-side
@@ -72,20 +72,20 @@ func (r *rlpx) Read() {
 	// TODO call read on frameRW?
 }
 
-func (r *rlpx) Write() {
+func (r *Rlpx) Write(msg RawRLPXMessage) error {
 	r.wmu.Lock()
 	defer r.wmu.Unlock()
 
-	// TODO frame write timeout should be set on user side
+	return r.RW.Write(msg)
 }
 
-func (r *rlpx) close(closeCode int, closeMessage string) {
+func (r *Rlpx) close(closeCode int, closeMessage string) {
 	r.wmu.Lock()
 	defer r.wmu.Unlock()
 
 	// TODO nil frameRW check should be done on user side.
 	// TODO disc connection reason write should be on user-side
-	r.fd.Close()
+	r.Conn.Close()
 }
 
 var (
@@ -96,12 +96,12 @@ var (
 	zero16 = make([]byte, 16)
 )
 
-// rlpxFrameRW implements a simplified version of RLPx framing.
+// RlpxFrameRW implements a simplified version of RLPx framing.
 // chunked messages are not supported and all headers are equal to
 // zeroHeader.
 //
-// rlpxFrameRW is not safe for concurrent use from multiple goroutines.
-type rlpxFrameRW struct {
+// RlpxFrameRW is not safe for concurrent use from multiple goroutines.
+type RlpxFrameRW struct {
 	conn io.ReadWriter
 	enc  cipher.Stream
 	dec  cipher.Stream
@@ -110,10 +110,10 @@ type rlpxFrameRW struct {
 	egressMAC  hash.Hash
 	ingressMAC hash.Hash
 
-	snappy bool
+	Snappy bool
 }
 
-func newRLPXFrameRW(conn io.ReadWriter, AES, MAC []byte, EgressMAC, IngressMAC hash.Hash) *rlpxFrameRW {
+func newRLPXFrameRW(conn io.ReadWriter, AES, MAC []byte, EgressMAC, IngressMAC hash.Hash) *RlpxFrameRW {
 	macc, err := aes.NewCipher(MAC)
 	if err != nil {
 		panic("invalid MAC secret: " + err.Error())
@@ -125,7 +125,7 @@ func newRLPXFrameRW(conn io.ReadWriter, AES, MAC []byte, EgressMAC, IngressMAC h
 	// we use an all-zeroes IV for AES because the key used
 	// for encryption is ephemeral.
 	iv := make([]byte, encc.BlockSize())
-	return &rlpxFrameRW{
+	return &RlpxFrameRW{
 		conn:       conn,
 		enc:        cipher.NewCTR(encc, iv),
 		dec:        cipher.NewCTR(encc, iv),
@@ -135,27 +135,22 @@ func newRLPXFrameRW(conn io.ReadWriter, AES, MAC []byte, EgressMAC, IngressMAC h
 	}
 }
 
-func (rw *rlpxFrameRW) Write(msg RawRLPXMessage) error {
-	ptype, _ := rlp.EncodeToBytes(msg.Code)
-
-	// if snappy is enabled, compress message now
-	if rw.snappy {
-		if msg.Size > maxUint24 {
-			return errPlainMessageTooLarge
-		}
-		payload, _ := ioutil.ReadAll(msg.Payload)
-		payload = snappy.Encode(nil, payload)
-
-		msg.Payload = bytes.NewReader(payload)
-		msg.Size = uint32(len(payload))
+// TODO i still don't like this func
+func (rw *RlpxFrameRW) Compress(size uint32, payload io.Reader) (uint32, io.Reader, error) {
+	if size > maxUint24 {
+		return 0, nil, errPlainMessageTooLarge
 	}
-	// TODO all the below logging can be done before Write is called
-	//msg.meterSize = msg.Size
-	//if metrics.Enabled && msg.meterCap.Name != "" { // don't meter non-subprotocol messages
-	//	m := fmt.Sprintf("%s/%s/%d/%#02x", egressMeterName, msg.meterCap.Name, msg.meterCap.Version, msg.meterCode)
-	//	metrics.GetOrRegisterMeter(m, nil).Mark(int64(msg.meterSize))
-	//	metrics.GetOrRegisterMeter(m+"/packets", nil).Mark(1)
-	//}
+	payloadBytes, _ := ioutil.ReadAll(payload)
+	payloadBytes = snappy.Encode(nil, payloadBytes)
+
+	compressedLen := uint32(len(payloadBytes))
+	compressed := bytes.NewReader(payloadBytes)
+
+	return compressedLen, compressed, nil
+}
+
+func (rw *RlpxFrameRW) Write(msg RawRLPXMessage) error {
+	ptype, _ := rlp.EncodeToBytes(msg.Code)
 	// write header
 	headbuf := make([]byte, 32)
 	fsize := uint32(len(ptype)) + msg.Size
@@ -195,7 +190,7 @@ func (rw *rlpxFrameRW) Write(msg RawRLPXMessage) error {
 	return err
 }
 
-func (rw *rlpxFrameRW) Read() {
+func (rw *RlpxFrameRW) Read() {
 
 }
 
