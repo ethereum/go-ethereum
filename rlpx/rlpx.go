@@ -12,7 +12,6 @@ import (
 	"io"
 	"io/ioutil"
 	"net"
-	"sync"
 )
 
 const (
@@ -23,45 +22,18 @@ const (
 // the allowed 24 bits (i.e. length >= 16MB).
 var errPlainMessageTooLarge = errors.New("message length >= 16MB")
 
-// maybe a struct here to encompass what?
-// it needs a conn and a read and write lock
-// does it need anything else?
-
-// what about the frame ?
-
-type Rlpx struct {
+type Rlpx struct { // TODO is this necessary? how to remove it?
 	Conn net.Conn
-	R, W sync.Mutex // TODO maybe remove this and put it in p2p.Transport instead
 	RW   *RlpxFrameRW
-	// TODO probs add frameRW
 }
 
-func NewRLPX(conn net.Conn) *Rlpx { // TODO figure out later if it needs an interface?
-	// TODO timeouts on the conn can be set on the user-side
+func NewRLPX(conn net.Conn) *Rlpx {
 	return &Rlpx{Conn: conn}
 }
 
-func (r *Rlpx) Read() (RawRLPXMessage, error) {
-	r.R.Lock()
-	defer r.R.Unlock()
-
-	// TODO timeout for frameread timeout should be set on conn beforehand on user-side
-	return r.RW.Read()
-}
-
-func (r *Rlpx) Write(msg RawRLPXMessage) error {
-	r.W.Lock()
-	defer r.W.Unlock()
-
-	return r.RW.Write(msg)
-}
-
-func (r *Rlpx) Close() {
-	r.W.Lock()
-	defer r.W.Unlock()
-
-	r.Conn.Close()
-}
+func (r *Rlpx) Read() (RawRLPXMessage, error) { return r.RW.Read() }
+func (r *Rlpx) Write(msg RawRLPXMessage) error { return r.RW.Write(msg) }
+func (r *Rlpx) Close() { r.Conn.Close() }
 
 var (
 	// this is used in place of actual frame header data.

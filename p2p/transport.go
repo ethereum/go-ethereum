@@ -5,9 +5,10 @@ import (
 	"fmt"
 	"github.com/ethereum/go-ethereum/metrics"
 	"net"
+	"sync"
 	"time"
 
-	b "github.com/ethereum/go-ethereum/rlpx" // TODO change name of import
+	r "github.com/ethereum/go-ethereum/rlpx" // TODO change name of import
 )
 
 type transport interface {
@@ -25,18 +26,21 @@ type transport interface {
 }
 
 // TODO rename maybe?
-// TODO unexport
-type Transport struct {
-	rlpx *b.Rlpx
+type transportWrapper struct {
+	rmu, wmu sync.Mutex
+	rlpx *r.Rlpx
 }
 
 func newTransport(conn net.Conn) transport {
-	return &Transport{
-		rlpx: b.NewRLPX(conn),
+	return &transportWrapper{
+		rlpx: r.NewRLPX(conn),
 	}
 }
 
-func (t *Transport) ReadMsg() (msg Msg, err error) {
+func (t *transportWrapper) ReadMsg() (msg Msg, err error) {
+	t.rmu.Lock()
+	defer t.rmu.Unlock()
+
 	t.rlpx.Conn.SetReadDeadline(time.Now().Add(frameReadTimeout))
 	rawMsg, err := t.rlpx.Read()
 	if err != nil {
@@ -52,7 +56,10 @@ func (t *Transport) ReadMsg() (msg Msg, err error) {
 	return msg, err
 }
 
-func (t *Transport) WriteMsg(msg Msg) error {
+func (t *transportWrapper) WriteMsg(msg Msg) error {
+	t.wmu.Lock()
+	defer t.wmu.Unlock()
+
 	// compress if snappy enabled
 	if t.rlpx.RW.Snappy {
 		var err error
@@ -69,7 +76,7 @@ func (t *Transport) WriteMsg(msg Msg) error {
 		metrics.GetOrRegisterMeter(m+"/packets", nil).Mark(1)
 	}
 	// construct raw message for transport
-	rawMsg := b.RawRLPXMessage{
+	rawMsg := r.RawRLPXMessage{
 		Code: msg.Code,
 		Size: msg.Size,
 		Payload: msg.Payload,
@@ -80,7 +87,9 @@ func (t *Transport) WriteMsg(msg Msg) error {
 	return t.rlpx.Write(rawMsg)
 }
 
-func (t *Transport) close(err error) {
+func (t *transportWrapper) close(err error) {
+	t.wmu.Lock()
+	defer t.wmu.Unlock()
 	// Tell the remote end why we're disconnecting if possible.
 	if t.rlpx.RW != nil {
 		if r, ok := err.(DiscReason); ok && r != DiscNetworkError {

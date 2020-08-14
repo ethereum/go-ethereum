@@ -44,7 +44,7 @@ const (
 	discWriteTimeout = 1 * time.Second
 )
 
-func (t *Transport) doProtoHandshake(our *protoHandshake) (their *protoHandshake, err error) {
+func (t *transportWrapper) doProtoHandshake(our *protoHandshake) (their *protoHandshake, err error) {
 	// Writing our handshake happens concurrently, we prefer
 	// returning the handshake read error. If the remote side
 	// disconnects us early with a valid reason, we should return it
@@ -98,7 +98,7 @@ func readProtocolHandshake(rw MsgReader) (*protoHandshake, error) {
 // messages. the protocol handshake is the first authenticated message
 // and also verifies whether the encryption handshake 'worked' and the
 // remote side actually provided the right public key.
-func (t *Transport) doEncHandshake(prv *ecdsa.PrivateKey, dial *ecdsa.PublicKey) (*ecdsa.PublicKey, error) {
+func (t *transportWrapper) doEncHandshake(prv *ecdsa.PrivateKey, dial *ecdsa.PublicKey) (*ecdsa.PublicKey, error) {
 	var (
 		sec secrets
 		err error
@@ -111,9 +111,9 @@ func (t *Transport) doEncHandshake(prv *ecdsa.PrivateKey, dial *ecdsa.PublicKey)
 	if err != nil {
 		return nil, err
 	}
-	t.rlpx.W.Lock()
+	t.wmu.Lock()
 	t.rlpx.RW = b.NewRLPXFrameRW(t.rlpx.Conn, sec.AES, sec.MAC, sec.EgressMAC, sec.IngressMAC)
-	t.rlpx.W.Unlock()
+	t.wmu.Unlock()
 	return sec.Remote.ExportECDSA(), nil
 }
 
