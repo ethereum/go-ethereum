@@ -37,42 +37,19 @@ func GetOrRegisterMeterForced(name string, r Registry) Meter {
 	if nil == r {
 		r = DefaultRegistry
 	}
-	return r.GetOrRegister(name, NewMeterForced).(Meter)
+	return r.GetOrRegister(name, NewLockFreeMeterForced).(Meter)
 }
 
-// NewMeter constructs a new StandardMeter and launches a goroutine.
+// NewMeter constructs a new lockFreeMeter and launches a goroutine.
 // Be sure to call Stop() once the meter is of no use to allow for garbage collection.
 func NewMeter() Meter {
 	if !Enabled {
 		return NilMeter{}
 	}
-	m := newStandardMeter()
-	arbiter.Lock()
-	defer arbiter.Unlock()
-	arbiter.meters[m] = struct{}{}
-	if !arbiter.started {
-		arbiter.started = true
-		go arbiter.tick()
-	}
-	return m
+	return newLockFreeMeter()
 }
 
-// NewMeterForced constructs a new StandardMeter and launches a goroutine no matter
-// the global switch is enabled or not.
-// Be sure to call Stop() once the meter is of no use to allow for garbage collection.
-func NewMeterForced() Meter {
-	m := newStandardMeter()
-	arbiter.Lock()
-	defer arbiter.Unlock()
-	arbiter.meters[m] = struct{}{}
-	if !arbiter.started {
-		arbiter.started = true
-		go arbiter.tick()
-	}
-	return m
-}
-
-// NewRegisteredMeter constructs and registers a new StandardMeter
+// NewRegisteredMeter constructs and registers a new lockFreeMeter
 // and launches a goroutine.
 // Be sure to unregister the meter from the registry once it is of no use to
 // allow for garbage collection.
@@ -90,12 +67,7 @@ func NewRegisteredMeter(name string, r Registry) Meter {
 // Be sure to unregister the meter from the registry once it is of no use to
 // allow for garbage collection.
 func NewRegisteredMeterForced(name string, r Registry) Meter {
-	c := NewMeterForced()
-	if nil == r {
-		r = DefaultRegistry
-	}
-	r.Register(name, c)
-	return c
+	return NewLockFreeMeterForced(name, r)
 }
 
 // MeterSnapshot is a read-only copy of another Meter.
@@ -149,7 +121,7 @@ func (NilMeter) Rate1() float64 { return 0.0 }
 // Rate5 is a no-op.
 func (NilMeter) Rate5() float64 { return 0.0 }
 
-// Rate15is a no-op.
+// Rate15 is a no-op.
 func (NilMeter) Rate15() float64 { return 0.0 }
 
 // RateMean is a no-op.
@@ -161,101 +133,157 @@ func (NilMeter) Snapshot() Meter { return NilMeter{} }
 // Stop is a no-op.
 func (NilMeter) Stop() {}
 
-// StandardMeter is the standard implementation of a Meter.
-type StandardMeter struct {
-	lock        sync.RWMutex
+// NewLockFreeRegisteredMeter constructs and registers a new StandardMeter
+// and launches a goroutine.
+// Be sure to unregister the meter from the registry once it is of no use to
+// allow for garbage collection.
+func NewLockFreeRegisteredMeter(name string, r Registry) Meter {
+	c := NewLockFreeMeter()
+	if nil == r {
+		r = DefaultRegistry
+	}
+	r.Register(name, c)
+	return c
+}
+
+// NewLockFreeMeter constructs a new LockFreeMeter and launches a goroutine.
+func NewLockFreeMeter() Meter {
+	if !Enabled {
+		return NilMeter{}
+	}
+	return newLockFreeMeter()
+}
+
+// NewLockFreeMeterForced constructs and registers a new StandardMeter
+// and launches a goroutine no matter the global switch is enabled or not.
+// Be sure to unregister the meter from the registry once it is of no use to
+// allow for garbage collection.
+func NewLockFreeMeterForced(name string, r Registry) Meter {
+	c := newLockFreeMeter()
+	if nil == r {
+		r = DefaultRegistry
+	}
+	r.Register(name, c)
+	return c
+}
+
+func NewMeterForced() Meter {
+	return newLockFreeMeter()
+}
+
+// LockFreeMeter is a lock free implementation of a Meter.
+type LockFreeMeter struct {
+	mu          sync.RWMutex
 	snapshot    *MeterSnapshot
 	a1, a5, a15 EWMA
 	startTime   time.Time
-	stopped     bool
+	dataChan    chan int64
+	stopChan    chan interface{}
+	ticker      *time.Ticker
 }
 
-func newStandardMeter() *StandardMeter {
-	return &StandardMeter{
+func newLockFreeMeter() *LockFreeMeter {
+	meter := &LockFreeMeter{
 		snapshot:  &MeterSnapshot{},
 		a1:        NewEWMA1(),
 		a5:        NewEWMA5(),
 		a15:       NewEWMA15(),
 		startTime: time.Now(),
+		dataChan:  make(chan int64, 10),
+		stopChan:  make(chan interface{}),
+		ticker:    time.NewTicker(5e9),
 	}
+	go func() {
+		for {
+			select {
+			case n := <-meter.dataChan:
+				meter.mu.Lock()
+				meter.snapshot.count += n
+				meter.a1.Update(n)
+				meter.a5.Update(n)
+				meter.a15.Update(n)
+				meter.updateSnapshot()
+				meter.mu.Unlock()
+			case <-meter.ticker.C:
+				meter.tick()
+			case <-meter.stopChan:
+				close(meter.dataChan)
+				meter.ticker.Stop()
+				return
+			}
+		}
+	}()
+	return meter
 }
 
-// Stop stops the meter, Mark() will be a no-op if you use it after being stopped.
-func (m *StandardMeter) Stop() {
-	m.lock.Lock()
-	stopped := m.stopped
-	m.stopped = true
-	m.lock.Unlock()
-	if !stopped {
-		arbiter.Lock()
-		delete(arbiter.meters, m)
-		arbiter.Unlock()
-	}
+// Stop stops the meter. If stop was called, Mark becomes a no-op
+func (m *LockFreeMeter) Stop() {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	close(m.stopChan)
 }
 
 // Count returns the number of events recorded.
-func (m *StandardMeter) Count() int64 {
-	m.lock.RLock()
+func (m *LockFreeMeter) Count() int64 {
+	m.mu.RLock()
 	count := m.snapshot.count
-	m.lock.RUnlock()
+	m.mu.RUnlock()
 	return count
 }
 
 // Mark records the occurrence of n events.
-func (m *StandardMeter) Mark(n int64) {
-	m.lock.Lock()
-	defer m.lock.Unlock()
-	if m.stopped {
+func (m *LockFreeMeter) Mark(n int64) {
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+	select {
+	case <-m.stopChan:
 		return
+	default:
+		m.dataChan <- n
 	}
-	m.snapshot.count += n
-	m.a1.Update(n)
-	m.a5.Update(n)
-	m.a15.Update(n)
-	m.updateSnapshot()
 }
 
 // Rate1 returns the one-minute moving average rate of events per second.
-func (m *StandardMeter) Rate1() float64 {
-	m.lock.RLock()
+func (m *LockFreeMeter) Rate1() float64 {
+	m.mu.RLock()
 	rate1 := m.snapshot.rate1
-	m.lock.RUnlock()
+	m.mu.RUnlock()
 	return rate1
 }
 
 // Rate5 returns the five-minute moving average rate of events per second.
-func (m *StandardMeter) Rate5() float64 {
-	m.lock.RLock()
+func (m *LockFreeMeter) Rate5() float64 {
+	m.mu.RLock()
 	rate5 := m.snapshot.rate5
-	m.lock.RUnlock()
+	m.mu.RUnlock()
 	return rate5
 }
 
 // Rate15 returns the fifteen-minute moving average rate of events per second.
-func (m *StandardMeter) Rate15() float64 {
-	m.lock.RLock()
+func (m *LockFreeMeter) Rate15() float64 {
+	m.mu.RLock()
 	rate15 := m.snapshot.rate15
-	m.lock.RUnlock()
+	m.mu.RUnlock()
 	return rate15
 }
 
 // RateMean returns the meter's mean rate of events per second.
-func (m *StandardMeter) RateMean() float64 {
-	m.lock.RLock()
+func (m *LockFreeMeter) RateMean() float64 {
+	m.mu.RLock()
 	rateMean := m.snapshot.rateMean
-	m.lock.RUnlock()
+	m.mu.RUnlock()
 	return rateMean
 }
 
 // Snapshot returns a read-only copy of the meter.
-func (m *StandardMeter) Snapshot() Meter {
-	m.lock.RLock()
+func (m *LockFreeMeter) Snapshot() Meter {
+	m.mu.RLock()
 	snapshot := *m.snapshot
-	m.lock.RUnlock()
+	m.mu.RUnlock()
 	return &snapshot
 }
 
-func (m *StandardMeter) updateSnapshot() {
+func (m *LockFreeMeter) updateSnapshot() {
 	// should run with write lock held on m.lock
 	snapshot := m.snapshot
 	snapshot.rate1 = m.a1.Rate()
@@ -264,37 +292,11 @@ func (m *StandardMeter) updateSnapshot() {
 	snapshot.rateMean = float64(snapshot.count) / time.Since(m.startTime).Seconds()
 }
 
-func (m *StandardMeter) tick() {
-	m.lock.Lock()
-	defer m.lock.Unlock()
+func (m *LockFreeMeter) tick() {
+	m.mu.Lock()
+	defer m.mu.Unlock()
 	m.a1.Tick()
 	m.a5.Tick()
 	m.a15.Tick()
 	m.updateSnapshot()
-}
-
-// meterArbiter ticks meters every 5s from a single goroutine.
-// meters are references in a set for future stopping.
-type meterArbiter struct {
-	sync.RWMutex
-	started bool
-	meters  map[*StandardMeter]struct{}
-	ticker  *time.Ticker
-}
-
-var arbiter = meterArbiter{ticker: time.NewTicker(5e9), meters: make(map[*StandardMeter]struct{})}
-
-// Ticks meters on the scheduled interval
-func (ma *meterArbiter) tick() {
-	for range ma.ticker.C {
-		ma.tickMeters()
-	}
-}
-
-func (ma *meterArbiter) tickMeters() {
-	ma.RLock()
-	defer ma.RUnlock()
-	for meter := range ma.meters {
-		meter.tick()
-	}
 }

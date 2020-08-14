@@ -34,6 +34,7 @@ func TestCollector(t *testing.T) {
 	meter := metrics.NewMeter()
 	defer meter.Stop()
 	meter.Mark(9999999)
+	time.Sleep(time.Millisecond)
 	c.addMeter("test/meter", meter)
 
 	timer := metrics.NewTimer()
