@@ -29,6 +29,7 @@ import (
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/internal/testlog"
 	"github.com/ethereum/go-ethereum/log"
+	"github.com/ethereum/go-ethereum/metrics"
 	"github.com/ethereum/go-ethereum/p2p/enode"
 	"github.com/ethereum/go-ethereum/p2p/enr"
 	"golang.org/x/crypto/sha3"
@@ -80,6 +81,7 @@ func startTestServer(t *testing.T, remoteKey *ecdsa.PublicKey, pf func(*Peer)) *
 		newPeerHook:  pf,
 		newTransport: func(fd net.Conn) transport { return newTestTransport(remoteKey, fd) },
 	}
+	metrics.Enabled = true
 	if err := server.Start(); err != nil {
 		t.Fatalf("Could not start server: %v", err)
 	}
