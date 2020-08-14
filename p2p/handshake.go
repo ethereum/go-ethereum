@@ -1,51 +1,26 @@
-// Copyright 2015 The go-ethereum Authors
-// This file is part of the go-ethereum library.
-//
-// The go-ethereum library is free software: you can redistribute it and/or modify
-// it under the terms of the GNU Lesser General Public License as published by
-// the Free Software Foundation, either version 3 of the License, or
-// (at your option) any later version.
-//
-// The go-ethereum library is distributed in the hope that it will be useful,
-// but WITHOUT ANY WARRANTY; without even the implied warranty of
-// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
-// GNU Lesser General Public License for more details.
-//
-// You should have received a copy of the GNU Lesser General Public License
-// along with the go-ethereum library. If not, see <http://www.gnu.org/licenses/>.
-
 package p2p
 
 import (
 	"bytes"
-	"crypto/aes"
-	"crypto/cipher"
 	"crypto/ecdsa"
 	"crypto/elliptic"
-	"crypto/hmac"
 	"crypto/rand"
 	"encoding/binary"
-	"errors"
 	"fmt"
-	"hash"
-	"io"
-	"io/ioutil"
-	mrand "math/rand"
-	"net"
-	"sync"
-	"time"
-
 	"github.com/ethereum/go-ethereum/common/bitutil"
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/crypto/ecies"
 	"github.com/ethereum/go-ethereum/rlp"
-	"github.com/golang/snappy"
 	"golang.org/x/crypto/sha3"
+	"hash"
+	"io"
+	mrand "math/rand"
+	"time"
+
+	b "github.com/ethereum/go-ethereum/rlpx" // TODO rename import
 )
 
 const (
-	maxUint24 = ^uint32(0) >> 8
-
 	sskLen = 16                     // ecies.MaxSharedKeyLength(pubKey) / 2
 	sigLen = crypto.SignatureLength // elliptic S256
 	pubLen = 64                     // 512 bit pubkey in uncompressed representation without format byte
@@ -54,10 +29,10 @@ const (
 	authMsgLen  = sigLen + shaLen + pubLen + shaLen + 1
 	authRespLen = pubLen + shaLen + 1
 
-	eciesOverhead = 65 /* pubkey */ + 16 /* IV */ + 32 /* MAC */
-
 	encAuthMsgLen  = authMsgLen + eciesOverhead  // size of encrypted pre-EIP-8 initiator handshake
 	encAuthRespLen = authRespLen + eciesOverhead // size of encrypted pre-EIP-8 handshake reply
+
+	eciesOverhead = 65 /* pubkey */ + 16 /* IV */ + 32 /* MAC */
 
 	// total timeout for encryption handshake and protocol
 	// handshake in both directions.
@@ -69,65 +44,14 @@ const (
 	discWriteTimeout = 1 * time.Second
 )
 
-// errPlainMessageTooLarge is returned if a decompressed message length exceeds
-// the allowed 24 bits (i.e. length >= 16MB).
-var errPlainMessageTooLarge = errors.New("message length >= 16MB")
-
-// rlpx is the transport protocol used by actual (non-test) connections.
-// It wraps the frame encoder with locks and read/write deadlines.
-type rlpx struct {
-	fd net.Conn
-
-	rmu, wmu sync.Mutex
-	rw       *rlpxFrameRW
-}
-
-func newRLPX(fd net.Conn) transport {
-	fd.SetDeadline(time.Now().Add(handshakeTimeout))
-	return &rlpx{fd: fd}
-}
-
-func (t *rlpx) ReadMsg() (Msg, error) {
-	t.rmu.Lock()
-	defer t.rmu.Unlock()
-	t.fd.SetReadDeadline(time.Now().Add(frameReadTimeout))
-	return t.rw.ReadMsg()
-}
-
-func (t *rlpx) WriteMsg(msg Msg) error {
-	t.wmu.Lock()
-	defer t.wmu.Unlock()
-	t.fd.SetWriteDeadline(time.Now().Add(frameWriteTimeout))
-	return t.rw.WriteMsg(msg)
-}
-
-func (t *rlpx) close(err error) {
-	t.wmu.Lock()
-	defer t.wmu.Unlock()
-	// Tell the remote end why we're disconnecting if possible.
-	if t.rw != nil {
-		if r, ok := err.(DiscReason); ok && r != DiscNetworkError {
-			// rlpx tries to send DiscReason to disconnected peer
-			// if the connection is net.Pipe (in-memory simulation)
-			// it hangs forever, since net.Pipe does not implement
-			// a write deadline. Because of this only try to send
-			// the disconnect reason message if there is no error.
-			if err := t.fd.SetWriteDeadline(time.Now().Add(discWriteTimeout)); err == nil {
-				SendItems(t.rw, discMsg, r)
-			}
-		}
-	}
-	t.fd.Close()
-}
-
-func (t *rlpx) doProtoHandshake(our *protoHandshake) (their *protoHandshake, err error) {
+func (t *Transport) doProtoHandshake(our *protoHandshake) (their *protoHandshake, err error) {
 	// Writing our handshake happens concurrently, we prefer
 	// returning the handshake read error. If the remote side
 	// disconnects us early with a valid reason, we should return it
 	// as the error so it can be tracked elsewhere.
 	werr := make(chan error, 1)
-	go func() { werr <- Send(t.rw, handshakeMsg, our) }()
-	if their, err = readProtocolHandshake(t.rw); err != nil {
+	go func() { werr <- Send(t, handshakeMsg, our) }()
+	if their, err = readProtocolHandshake(t); err != nil {
 		<-werr // make sure the write terminates too
 		return nil, err
 	}
@@ -135,7 +59,7 @@ func (t *rlpx) doProtoHandshake(our *protoHandshake) (their *protoHandshake, err
 		return nil, fmt.Errorf("write error: %v", err)
 	}
 	// If the protocol version supports Snappy encoding, upgrade immediately
-	t.rw.snappy = their.Version >= snappyProtocolVersion
+	t.rlpx.RW.Snappy = their.Version >= snappyProtocolVersion
 
 	return their, nil
 }
@@ -174,22 +98,22 @@ func readProtocolHandshake(rw MsgReader) (*protoHandshake, error) {
 // messages. the protocol handshake is the first authenticated message
 // and also verifies whether the encryption handshake 'worked' and the
 // remote side actually provided the right public key.
-func (t *rlpx) doEncHandshake(prv *ecdsa.PrivateKey, dial *ecdsa.PublicKey) (*ecdsa.PublicKey, error) {
+func (t *Transport) doEncHandshake(prv *ecdsa.PrivateKey, dial *ecdsa.PublicKey) (*ecdsa.PublicKey, error) {
 	var (
 		sec secrets
 		err error
 	)
 	if dial == nil {
-		sec, err = receiverEncHandshake(t.fd, prv)
+		sec, err = receiverEncHandshake(t.rlpx.Conn, prv)
 	} else {
-		sec, err = initiatorEncHandshake(t.fd, prv, dial)
+		sec, err = initiatorEncHandshake(t.rlpx.Conn, prv, dial)
 	}
 	if err != nil {
 		return nil, err
 	}
-	t.wmu.Lock()
-	t.rw = newRLPXFrameRW(t.fd, sec)
-	t.wmu.Unlock()
+	t.rlpx.W.Lock()
+	t.rlpx.RW = b.NewRLPXFrameRW(t.rlpx.Conn, sec.AES, sec.MAC, sec.EgressMAC, sec.IngressMAC)
+	t.rlpx.W.Unlock()
 	return sec.Remote.ExportECDSA(), nil
 }
 
@@ -529,91 +453,4 @@ func xor(one, other []byte) (xor []byte) {
 		xor[i] = one[i] ^ other[i]
 	}
 	return xor
-}
-
-
-func (rw *rlpxFrameRW) ReadMsg() (msg Msg, err error) {
-	// read the header
-	headbuf := make([]byte, 32)
-	if _, err := io.ReadFull(rw.conn, headbuf); err != nil {
-		return msg, err
-	}
-	// verify header mac
-	shouldMAC := updateMAC(rw.ingressMAC, rw.macCipher, headbuf[:16])
-	if !hmac.Equal(shouldMAC, headbuf[16:]) {
-		return msg, errors.New("bad header MAC")
-	}
-	rw.dec.XORKeyStream(headbuf[:16], headbuf[:16]) // first half is now decrypted
-	fsize := readInt24(headbuf)
-	// ignore protocol type for now
-
-	// read the frame content
-	var rsize = fsize // frame size rounded up to 16 byte boundary
-	if padding := fsize % 16; padding > 0 {
-		rsize += 16 - padding
-	}
-	framebuf := make([]byte, rsize)
-	if _, err := io.ReadFull(rw.conn, framebuf); err != nil {
-		return msg, err
-	}
-
-	// read and validate frame MAC. we can re-use headbuf for that.
-	rw.ingressMAC.Write(framebuf)
-	fmacseed := rw.ingressMAC.Sum(nil)
-	if _, err := io.ReadFull(rw.conn, headbuf[:16]); err != nil {
-		return msg, err
-	}
-	shouldMAC = updateMAC(rw.ingressMAC, rw.macCipher, fmacseed)
-	if !hmac.Equal(shouldMAC, headbuf[:16]) {
-		return msg, errors.New("bad frame MAC")
-	}
-
-	// decrypt frame content
-	rw.dec.XORKeyStream(framebuf, framebuf)
-
-	// decode message code
-	content := bytes.NewReader(framebuf[:fsize])
-	if err := rlp.Decode(content, &msg.Code); err != nil {
-		return msg, err
-	}
-	msg.Size = uint32(content.Len())
-	msg.meterSize = msg.Size
-	msg.Payload = content
-
-	// if snappy is enabled, verify and decompress message
-	if rw.snappy {
-		payload, err := ioutil.ReadAll(msg.Payload)
-		if err != nil {
-			return msg, err
-		}
-		size, err := snappy.DecodedLen(payload)
-		if err != nil {
-			return msg, err
-		}
-		if size > int(maxUint24) {
-			return msg, errPlainMessageTooLarge
-		}
-		payload, err = snappy.Decode(nil, payload)
-		if err != nil {
-			return msg, err
-		}
-		msg.Size, msg.Payload = uint32(size), bytes.NewReader(payload)
-	}
-	return msg, nil
-}
-
-// updateMAC reseeds the given hash with encrypted seed.
-// it returns the first 16 bytes of the hash sum after seeding.
-func updateMAC(mac hash.Hash, block cipher.Block, seed []byte) []byte {
-	aesbuf := make([]byte, aes.BlockSize)
-	block.Encrypt(aesbuf, mac.Sum(nil))
-	for i := range aesbuf {
-		aesbuf[i] ^= seed[i]
-	}
-	mac.Write(aesbuf)
-	return mac.Sum(nil)[:16]
-}
-
-func readInt24(b []byte) uint32 {
-	return uint32(b[2]) | uint32(b[1])<<8 | uint32(b[0])<<16
 }

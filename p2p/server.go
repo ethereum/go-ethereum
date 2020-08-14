@@ -229,20 +229,6 @@ type conn struct {
 	name  string     // valid after the protocol handshake
 }
 
-type transport interface {
-	// The two handshakes.
-	doEncHandshake(prv *ecdsa.PrivateKey, dialDest *ecdsa.PublicKey) (*ecdsa.PublicKey, error)
-	doProtoHandshake(our *protoHandshake) (*protoHandshake, error)
-	// The MsgReadWriter can only be used after the encryption
-	// handshake has completed. The code uses conn.id to track this
-	// by setting it to a non-nil value after the encryption handshake.
-	MsgReadWriter
-	// transports must provide Close because we use MsgPipe in some of
-	// the tests. Closing the actual network connection doesn't do
-	// anything in those tests because MsgPipe doesn't use it.
-	close(err error)
-}
-
 func (c *conn) String() string {
 	s := c.flags.String()
 	if (c.node.ID() != enode.ID{}) {
@@ -457,7 +443,7 @@ func (srv *Server) Start() (err error) {
 		return errors.New("Server.PrivateKey must be set to a non-nil key")
 	}
 	if srv.newTransport == nil {
-		srv.newTransport = newRLPX
+		srv.newTransport = newTransport
 	}
 	if srv.listenFunc == nil {
 		srv.listenFunc = net.Listen

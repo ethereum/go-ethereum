@@ -4,8 +4,8 @@ import (
 	"bytes"
 	"crypto/aes"
 	"crypto/cipher"
+	"crypto/hmac"
 	"errors"
-	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/rlp"
 	"github.com/golang/snappy"
 	"hash"
@@ -13,33 +13,10 @@ import (
 	"io/ioutil"
 	"net"
 	"sync"
-	"time"
 )
 
 const (
 	maxUint24 = ^uint32(0) >> 8
-
-	sskLen = 16                     // ecies.MaxSharedKeyLength(pubKey) / 2
-	sigLen = crypto.SignatureLength // elliptic S256
-	pubLen = 64                     // 512 bit pubkey in uncompressed representation without format byte
-	shaLen = 32                     // hash length (for nonce etc)
-
-	authMsgLen  = sigLen + shaLen + pubLen + shaLen + 1
-	authRespLen = pubLen + shaLen + 1
-
-	eciesOverhead = 65 /* pubkey */ + 16 /* IV */ + 32 /* MAC */
-
-	encAuthMsgLen  = authMsgLen + eciesOverhead  // size of encrypted pre-EIP-8 initiator handshake
-	encAuthRespLen = authRespLen + eciesOverhead // size of encrypted pre-EIP-8 handshake reply
-
-	// total timeout for encryption handshake and protocol
-	// handshake in both directions.
-	handshakeTimeout = 5 * time.Second
-
-	// This is the timeout for sending the disconnect reason.
-	// This is shorter than the usual timeout because we don't want
-	// to wait if the connection is known to be bad anyway.
-	discWriteTimeout = 1 * time.Second
 )
 
 // errPlainMessageTooLarge is returned if a decompressed message length exceeds
@@ -53,9 +30,9 @@ var errPlainMessageTooLarge = errors.New("message length >= 16MB")
 // what about the frame ?
 
 type Rlpx struct {
-	Conn     net.Conn
-	rmu, wmu sync.Mutex
-	RW       *RlpxFrameRW
+	Conn net.Conn
+	R, W sync.Mutex // TODO maybe remove this and put it in p2p.Transport instead
+	RW   *RlpxFrameRW
 	// TODO probs add frameRW
 }
 
@@ -64,27 +41,25 @@ func NewRLPX(conn net.Conn) *Rlpx { // TODO figure out later if it needs an inte
 	return &Rlpx{Conn: conn}
 }
 
-func (r *Rlpx) Read() {
-	r.rmu.Lock()
-	defer r.rmu.Unlock()
-	// TODO timeout for frameread timeout should be set on conn beforehand on user-side
+func (r *Rlpx) Read() (RawRLPXMessage, error) {
+	r.R.Lock()
+	defer r.R.Unlock()
 
-	// TODO call read on frameRW?
+	// TODO timeout for frameread timeout should be set on conn beforehand on user-side
+	return r.RW.Read()
 }
 
 func (r *Rlpx) Write(msg RawRLPXMessage) error {
-	r.wmu.Lock()
-	defer r.wmu.Unlock()
+	r.W.Lock()
+	defer r.W.Unlock()
 
 	return r.RW.Write(msg)
 }
 
-func (r *Rlpx) close(closeCode int, closeMessage string) {
-	r.wmu.Lock()
-	defer r.wmu.Unlock()
+func (r *Rlpx) Close() {
+	r.W.Lock()
+	defer r.W.Unlock()
 
-	// TODO nil frameRW check should be done on user side.
-	// TODO disc connection reason write should be on user-side
 	r.Conn.Close()
 }
 
@@ -101,7 +76,7 @@ var (
 // zeroHeader.
 //
 // RlpxFrameRW is not safe for concurrent use from multiple goroutines.
-type RlpxFrameRW struct {
+type RlpxFrameRW struct { // TODO THIS SHOULD BE UNEXPORTED
 	conn io.ReadWriter
 	enc  cipher.Stream
 	dec  cipher.Stream
@@ -113,7 +88,7 @@ type RlpxFrameRW struct {
 	Snappy bool
 }
 
-func newRLPXFrameRW(conn io.ReadWriter, AES, MAC []byte, EgressMAC, IngressMAC hash.Hash) *RlpxFrameRW {
+func NewRLPXFrameRW(conn io.ReadWriter, AES, MAC []byte, EgressMAC, IngressMAC hash.Hash) *RlpxFrameRW {
 	macc, err := aes.NewCipher(MAC)
 	if err != nil {
 		panic("invalid MAC secret: " + err.Error())
@@ -190,8 +165,73 @@ func (rw *RlpxFrameRW) Write(msg RawRLPXMessage) error {
 	return err
 }
 
-func (rw *RlpxFrameRW) Read() {
+func (rw *RlpxFrameRW) Read() (msg RawRLPXMessage, err error) {
+	// read the header
+	headbuf := make([]byte, 32)
+	if _, err := io.ReadFull(rw.conn, headbuf); err != nil {
+		return msg, err
+	}
+	// verify header mac
+	shouldMAC := UpdateMAC(rw.ingressMAC, rw.macCipher, headbuf[:16])
+	if !hmac.Equal(shouldMAC, headbuf[16:]) {
+		return msg, errors.New("bad header MAC")
+	}
+	rw.dec.XORKeyStream(headbuf[:16], headbuf[:16]) // first half is now decrypted
+	fsize := readInt24(headbuf)
+	// ignore protocol type for now
 
+	// read the frame content
+	var rsize = fsize // frame size rounded up to 16 byte boundary
+	if padding := fsize % 16; padding > 0 {
+		rsize += 16 - padding
+	}
+	framebuf := make([]byte, rsize)
+	if _, err := io.ReadFull(rw.conn, framebuf); err != nil {
+		return msg, err
+	}
+
+	// read and validate frame MAC. we can re-use headbuf for that.
+	rw.ingressMAC.Write(framebuf)
+	fmacseed := rw.ingressMAC.Sum(nil)
+	if _, err := io.ReadFull(rw.conn, headbuf[:16]); err != nil {
+		return msg, err
+	}
+	shouldMAC = UpdateMAC(rw.ingressMAC, rw.macCipher, fmacseed)
+	if !hmac.Equal(shouldMAC, headbuf[:16]) {
+		return msg, errors.New("bad frame MAC")
+	}
+
+	// decrypt frame content
+	rw.dec.XORKeyStream(framebuf, framebuf)
+
+	// decode message code
+	content := bytes.NewReader(framebuf[:fsize])
+	if err := rlp.Decode(content, &msg.Code); err != nil {
+		return msg, err
+	}
+	msg.Size = uint32(content.Len())
+	msg.Payload = content
+
+	// if snappy is enabled, verify and decompress message
+	if rw.Snappy {
+		payload, err := ioutil.ReadAll(msg.Payload)
+		if err != nil {
+			return msg, err
+		}
+		size, err := snappy.DecodedLen(payload)
+		if err != nil {
+			return msg, err
+		}
+		if size > int(maxUint24) {
+			return msg, errPlainMessageTooLarge
+		}
+		payload, err = snappy.Decode(nil, payload)
+		if err != nil {
+			return msg, err
+		}
+		msg.Size, msg.Payload = uint32(size), bytes.NewReader(payload)
+	}
+	return msg, nil
 }
 
 // UpdateMAC reseeds the given hash with encrypted seed.
@@ -210,5 +250,9 @@ func putInt24(v uint32, b []byte) {
 	b[0] = byte(v >> 16)
 	b[1] = byte(v >> 8)
 	b[2] = byte(v)
+}
+
+func readInt24(b []byte) uint32 {
+	return uint32(b[2]) | uint32(b[1])<<8 | uint32(b[0])<<16
 }
 
