@@ -233,8 +233,6 @@ func (m *LockFreeMeter) Count() int64 {
 
 // Mark records the occurrence of n events.
 func (m *LockFreeMeter) Mark(n int64) {
-	m.mu.RLock()
-	defer m.mu.RUnlock()
 	select {
 	case <-m.stopChan:
 		return
