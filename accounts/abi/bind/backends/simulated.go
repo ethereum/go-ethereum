@@ -675,8 +675,7 @@ func (b *SimulatedBackend) SubscribeNewHead(ctx context.Context, ch chan<- *type
 }
 
 // AdjustTime adds a time shift to the simulated clock.
-// You have to call `b.Commit()` right after.
-// AdjustTime can only be called on empty blocks.
+// It can only be called on empty blocks.
 func (b *SimulatedBackend) AdjustTime(adjustment time.Duration) error {
 	b.mu.Lock()
 	defer b.mu.Unlock()
