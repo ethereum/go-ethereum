@@ -78,7 +78,10 @@ func (p *Pruner) Prune(root common.Hash) error {
 	if err := snapshot.CommitAndVerifyState(p.snaptree, root, p.db, p.tmpdb); err != nil {
 		return err
 	}
-	if err := markComplete(p.tmpdb); err != nil {
+	type commiter interface {
+		Commit() error
+	}
+	if err := p.tmpdb.(commiter).Commit(); err != nil {
 		return err
 	}
 	// Delete all old trie nodes in the disk(it's safe since we already commit
@@ -152,26 +155,17 @@ func (p *Pruner) Prune(root common.Hash) error {
 // openTemporaryDatabase opens the temporary state database under the given
 // instance directory.
 func openTemporaryDatabase(homedir string) (ethdb.Database, error) {
+	// First open as the read mode. If it works it means there already exists
+	// one complete db, abort.
 	dir := filepath.Join(homedir, temporaryStateDatabase)
-	if _, err := os.Stat(dir); !os.IsNotExist(err) {
-		db, err := rawdb.NewLevelDBDatabase(dir, 256, 256, "pruning/tmp")
-		if err != nil {
-			return nil, err
-		}
-		// If there is already one complete backup database, abort. Since
-		// in the main db the state may be removed already.
-		if isComplete(db) {
-			db.Close()
-			return nil, fmt.Errorf("backup state database<%s> is existed: %v", dir, err)
-		}
-		// Wipe the incomplete state backup database, it's useless anyway
+	db, err := rawdb.NewFlatDatabase(dir, true)
+	if err == nil {
 		db.Close()
-		err = os.RemoveAll(dir)
-		if err != nil {
-			return nil, err
-		}
+		return nil, fmt.Errorf("backup state database<%s> is existent, don't run `prune-state` again", dir)
 	}
-	return rawdb.NewLevelDBDatabase(dir, 256, 256, "pruning/tmp")
+	// Then open as the write mode. It will automatically truncate all existent
+	// content which is regarded as "incomplete".
+	return rawdb.NewFlatDatabase(dir, false)
 }
 
 // wipeTemporaryDatabase closes the db handler and wipes the data from the disk.
@@ -195,9 +189,6 @@ func migrateState(db, tmpdb ethdb.Database, homedir string) common.StorageSize {
 
 	for iter.Next() {
 		key := iter.Key()
-		if bytes.Equal(key, stateMarker) {
-			continue
-		}
 		// Note all entries with 32byte length key(trie nodes,
 		// contract codes are migrated here).
 		if len(key) != common.HashLength {
@@ -235,35 +226,11 @@ func RecoverTemporaryDatabase(homedir string, db ethdb.Database) error {
 	if _, err := os.Stat(dir); os.IsNotExist(err) {
 		return nil // nothing to recover
 	}
-	recoverdb, err := rawdb.NewLevelDBDatabase(dir, 256, 256, "pruning/tmp")
+	recoverdb, err := rawdb.NewFlatDatabase(dir, true)
 	if err != nil {
-		return err
-	}
-	// If it's a incomplete database, wipe it and return.
-	if !isComplete(recoverdb) {
-		wipeTemporaryDatabase(homedir, recoverdb)
-		return nil
+		return err // incomplete database, remove
 	}
 	migrateState(db, recoverdb, homedir)
 	wipeTemporaryDatabase(homedir, recoverdb)
 	return nil
-}
-
-// stateMarker is the key of special state integrity indicator
-var stateMarker = []byte("StateComplete")
-
-// markComplete writes a special marker into the database to represent
-// the whole state in the database is complete. Note it should be called
-// when all state nodes are committed.
-func markComplete(db ethdb.Database) error {
-	return db.Put(stateMarker, []byte{0x01})
-}
-
-// isComplete reads the special state integrity marker from the disk.
-func isComplete(db ethdb.Database) bool {
-	blob, err := db.Get(stateMarker)
-	if err != nil {
-		return false
-	}
-	return len(blob) != 0
 }
