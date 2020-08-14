@@ -191,7 +191,7 @@ func newLockFreeMeter() *LockFreeMeter {
 		startTime: time.Now(),
 		dataChan:  make(chan int64, 10),
 		stopChan:  make(chan interface{}),
-		ticker:    time.NewTicker(5e9),
+		ticker:    time.NewTicker(5 * time.Second),
 	}
 	go func() {
 		for {
