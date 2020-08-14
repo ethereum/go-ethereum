@@ -473,7 +473,7 @@ func (c *ChainConfig) CheckConfigForkOrder() error {
 		{name: "eip158Block", block: c.EIP158Block},
 		{name: "byzantiumBlock", block: c.ByzantiumBlock},
 		{name: "constantinopleBlock", block: c.ConstantinopleBlock},
-		{name: "petersburgBlock", block: c.PetersburgBlock},
+		{name: "petersburgBlock", block: c.PetersburgBlock, optional: true},
 		{name: "istanbulBlock", block: c.IstanbulBlock},
 		{name: "muirGlacierBlock", block: c.MuirGlacierBlock, optional: true},
 		{name: "yoloV1Block", block: c.YoloV1Block},
