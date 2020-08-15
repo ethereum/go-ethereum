@@ -21,6 +21,7 @@ import (
 	"bytes"
 	"fmt"
 	"sync"
+	"sync/atomic"
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/crypto"
@@ -46,17 +47,31 @@ type LeafCallback func(leaf []byte, parent common.Hash) error
 //
 // Trie is not safe for concurrent use.
 type Trie struct {
-	db   *Database
-	root node
-	// Keep track of the number leafs which have been inserted since the last
-	// hashing operation. This number will not directly map to the number of
-	// actually unhashed nodes
-	unhashed int
+	db *Database
+
+	// Protect root only. Root node is a bit special and concurrent-sensitive.
+	rootlock sync.Mutex
+	root     node
+
+	// unhashed keeps track of the number leaves which have been inserted since
+	// the last hashing operation. This number will not directly map to the number
+	// of actually unhashed nodes
+	unhashed uint32
+
+	// commitSeq is used to tag the commit order for each changed node.
+	// The uncommitted trie may be reused(e.g. for processing the next block).
+	// In this case, trie nodes will be tagged with a increased seq.
+	//
+	// The default seq is 0.
+	commitSeq int
 }
 
 // newFlag returns the cache flag value for a newly created node.
 func (t *Trie) newFlag() nodeFlag {
-	return nodeFlag{dirty: true}
+	return nodeFlag{
+		dirty: true,
+		seq:   t.commitSeq,
+	}
 }
 
 // New creates a trie with an existing root node from db.
@@ -80,6 +95,38 @@ func New(root common.Hash, db *Database) (*Trie, error) {
 		trie.root = rootnode
 	}
 	return trie, nil
+}
+
+// HashAndCopyTrie returns a copied trie which can be reused. If the original
+// trie is not committed yet, bump the commit sequence to isolate commit scope,
+// otherwise just return the copy.
+//
+// Note the original trie should be hashed first.
+func HashAndCopyTrie(t *Trie) *Trie {
+	var cpy Trie
+
+	// It's necessary to add the lock here. Root node is a bit special
+	// seems it can be read/write at the same time. But for all other
+	// children referenced by root, it's safe because all other opts
+	// won't modify the node content.
+	t.rootlock.Lock()
+	cpy.root = t.root
+	t.rootlock.Unlock()
+
+	// unhashed is another concurrent-sensitive field.
+	cpy.unhashed = atomic.LoadUint32(&t.unhashed)
+	cpy.db = t.db
+	cpy.commitSeq = t.commitSeq
+	cpy.Hash()
+
+	if cpy.root == nil {
+		return &cpy
+	}
+	if _, dirty := cpy.root.cache(); !dirty {
+		return &cpy // trie is clean
+	}
+	cpy.commitSeq = t.commitSeq + 1 // bump commit seq for creating new scope
+	return &cpy
 }
 
 // NodeIterator returns an iterator that returns nodes of the trie. Iteration starts at
@@ -411,28 +458,41 @@ func (t *Trie) resolveHash(n hashNode, prefix []byte) (node, error) {
 // Hash returns the root hash of the trie. It does not write to the
 // database and can be used even if the trie doesn't have one.
 func (t *Trie) Hash() common.Hash {
-	hash, cached, _ := t.hashRoot(nil)
+	hash, cached := t.hashRoot()
+	t.rootlock.Lock()
 	t.root = cached
+	t.rootlock.Unlock()
 	return common.BytesToHash(hash.(hashNode))
 }
 
 // Commit writes all nodes to the trie's memory database, tracking the internal
 // and external (for account tries) references.
-func (t *Trie) Commit(onleaf LeafCallback) (root common.Hash, err error) {
+func (t *Trie) Commit(onleaf LeafCallback) common.Hash {
 	if t.db == nil {
 		panic("commit called on trie with nil database")
 	}
 	if t.root == nil {
-		return emptyRoot, nil
+		return emptyRoot
 	}
+	// Derive the hash for all dirty nodes first. We hold the assumption
+	// in the following procedure that all nodes are hashed.
 	rootHash := t.Hash()
-	h := newCommitter()
+
+	h := newCommitter(t.commitSeq)
 	defer returnCommitterToPool(h)
-	// Do a quick check if we really need to commit, before we spin
-	// up goroutines. This can happen e.g. if we load a trie for reading storage
-	// values, but don't write to it.
-	if !h.commitNeeded(t.root) {
-		return rootHash, nil
+
+	// Do a quick check if we really need to commit, before we spin up goroutines
+	// This can happen e.g. if we load a trie for reading storage values, but don't
+	// write to it.
+	if _, dirty := t.root.cache(); !dirty {
+		return rootHash
+	}
+	// Abort the commiting if the root node doesn't belong to the current commit scope.
+	// This can happen e.g. the trie is copied from an uncomitted trie, but no changes
+	// applied before commiting. In this case although the root is dirty, we won't commit
+	// it twice, the assumption is held that the original trie is committed already.
+	if t.commitSeq > t.root.commitSeq() {
+		return rootHash
 	}
 	var wg sync.WaitGroup
 	if onleaf != nil {
@@ -444,8 +504,7 @@ func (t *Trie) Commit(onleaf LeafCallback) (root common.Hash, err error) {
 			h.commitLoop(t.db)
 		}()
 	}
-	var newRoot hashNode
-	newRoot, err = h.Commit(t.root, t.db)
+	newRoot := h.Commit(t.root, t.db)
 	if onleaf != nil {
 		// The leafch is created in newCommitter if there was an onleaf callback
 		// provided. The commitLoop only _reads_ from it, and the commit
@@ -454,22 +513,21 @@ func (t *Trie) Commit(onleaf LeafCallback) (root common.Hash, err error) {
 		close(h.leafCh)
 		wg.Wait()
 	}
-	if err != nil {
-		return common.Hash{}, err
-	}
+	t.rootlock.Lock()
 	t.root = newRoot
-	return rootHash, nil
+	t.rootlock.Unlock()
+	return rootHash
 }
 
 // hashRoot calculates the root hash of the given trie
-func (t *Trie) hashRoot(db *Database) (node, node, error) {
+func (t *Trie) hashRoot() (node, node) {
 	if t.root == nil {
-		return hashNode(emptyRoot.Bytes()), nil, nil
+		return hashNode(emptyRoot.Bytes()), nil
 	}
 	// If the number of changes is below 100, we let one thread handle it
 	h := newHasher(t.unhashed >= 100)
 	defer returnHasherToPool(h)
 	hashed, cached := h.hash(t.root, true)
-	t.unhashed = 0
-	return hashed, cached, nil
+	atomic.StoreUint32(&t.unhashed, 0)
+	return hashed, cached
 }

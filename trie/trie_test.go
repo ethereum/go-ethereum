@@ -86,7 +86,7 @@ func testMissingNode(t *testing.T, memonly bool) {
 	trie, _ := New(common.Hash{}, triedb)
 	updateString(trie, "120000", "qwerqwerqwerqwerqwerqwerqwerqwer")
 	updateString(trie, "123456", "asdfasdfasdfasdfasdfasdfasdfasdf")
-	root, _ := trie.Commit(nil)
+	root := trie.Commit(nil)
 	if !memonly {
 		triedb.Commit(root, true, nil)
 	}
@@ -168,10 +168,7 @@ func TestInsert(t *testing.T) {
 	updateString(trie, "A", "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa")
 
 	exp = common.HexToHash("d23786fb4a010da3ce639d66d5e904a11dbc02746d1ce25029e53290cabf28ab")
-	root, err := trie.Commit(nil)
-	if err != nil {
-		t.Fatalf("commit error: %v", err)
-	}
+	root = trie.Commit(nil)
 	if root != exp {
 		t.Errorf("case 2: exp %x got %x", exp, root)
 	}
@@ -266,10 +263,7 @@ func TestReplication(t *testing.T) {
 	for _, val := range vals {
 		updateString(trie, val.k, val.v)
 	}
-	exp, err := trie.Commit(nil)
-	if err != nil {
-		t.Fatalf("commit error: %v", err)
-	}
+	exp := trie.Commit(nil)
 
 	// create a new trie on top of the database and check that lookups work.
 	trie2, err := New(exp, trie.db)
@@ -281,10 +275,7 @@ func TestReplication(t *testing.T) {
 			t.Errorf("trie2 doesn't have %q => %q", kv.k, kv.v)
 		}
 	}
-	hash, err := trie2.Commit(nil)
-	if err != nil {
-		t.Fatalf("commit error: %v", err)
-	}
+	hash := trie2.Commit(nil)
 	if hash != exp {
 		t.Errorf("root failure. expected %x got %x", exp, hash)
 	}
@@ -307,6 +298,78 @@ func TestReplication(t *testing.T) {
 	if hash := trie2.Hash(); hash != exp {
 		t.Errorf("root failure. expected %x got %x", exp, hash)
 	}
+}
+
+func TestCommitIsolation(t *testing.T) {
+	// trie and trieMirror should be exactly same
+	db := NewDatabase(memorydb.New())
+	trie, _ := New(common.Hash{}, db)
+	dbMirror := NewDatabase(memorydb.New())
+	trieMirror, _ := New(common.Hash{}, dbMirror)
+
+	vals := []struct{ k, v string }{
+		{"key1", "verb"},
+		{"key2", "wookiedoo"},
+		{"key3", "stallion"},
+		{"key4", "horse"},
+		{"key5", "coin"},
+		{"key6", "puppy"},
+	}
+	for _, kv := range vals {
+		updateString(trie, kv.k, kv.v)
+		updateString(trieMirror, kv.k, kv.v)
+	}
+	trie2 := HashAndCopyTrie(trie) // Copy before commit
+	vals2 := []struct{ k, v string }{
+		// Overwrite existent keys
+		{"key1", "verb2"},
+		{"key2", "wookiedoo2"},
+		{"key3", "stallion2"},
+		// Delete existent keys
+		{"key4", ""},
+		{"key5", ""},
+		{"key6", ""},
+		// Append new keys
+		{"key7", "horse"},
+		{"key8", "coin"},
+		{"key9", "puppy"},
+	}
+	for _, kv := range vals2 {
+		updateString(trie2, kv.k, kv.v)
+	}
+
+	// Commit the first trie, the modification in trie2 shouldn't affect it
+	root := trie.Commit(nil)
+	committed := make(map[common.Hash]struct{})
+	db.Commit(root, false, func(hash common.Hash) {
+		committed[hash] = struct{}{}
+	})
+
+	// Commit the mirror trie, ensure the commitment is exactly same
+	rootMirror := trieMirror.Commit(nil)
+	committedMirror := make(map[common.Hash]struct{})
+	dbMirror.Commit(rootMirror, false, func(hash common.Hash) {
+		committedMirror[hash] = struct{}{}
+	})
+	if root != rootMirror {
+		t.Fatalf("Hash mismatched, want %v, got %v", rootMirror, root)
+	}
+	for h := range committedMirror {
+		if _, ok := committed[h]; !ok {
+			t.Fatalf("Missing commit entry %v", h)
+		}
+	}
+	if len(committed) != len(committedMirror) {
+		t.Fatalf("Commitment size is different")
+	}
+
+	// Commit the second trie, duplicated commit is filtered.
+	root = trie2.Commit(nil)
+	db.Commit(root, false, func(hash common.Hash) {
+		if _, ok := committed[hash]; ok {
+			t.Fatalf("Duplicated commit")
+		}
+	})
 }
 
 func TestLargeValue(t *testing.T) {
@@ -425,15 +488,11 @@ func runRandTest(rt randTest) bool {
 				rt[i].err = fmt.Errorf("mismatch for key 0x%x, got 0x%x want 0x%x", step.key, v, want)
 			}
 		case opCommit:
-			_, rt[i].err = tr.Commit(nil)
+			tr.Commit(nil)
 		case opHash:
 			tr.Hash()
 		case opReset:
-			hash, err := tr.Commit(nil)
-			if err != nil {
-				rt[i].err = err
-				return false
-			}
+			hash := tr.Commit(nil)
 			newtr, err := New(hash, triedb)
 			if err != nil {
 				rt[i].err = err
@@ -630,7 +689,7 @@ func TestCommitAfterHash(t *testing.T) {
 	if exp != root {
 		t.Errorf("got %x, exp %x", root, exp)
 	}
-	root, _ = trie.Commit(nil)
+	root = trie.Commit(nil)
 	if exp != root {
 		t.Errorf("got %x, exp %x", root, exp)
 	}

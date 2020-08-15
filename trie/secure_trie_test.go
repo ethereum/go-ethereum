@@ -105,6 +105,21 @@ func TestSecureGetKey(t *testing.T) {
 	}
 }
 
+func TestSecureDeepCopy(t *testing.T) {
+	trie := newEmptySecure()
+	trie.Update([]byte("foo"), []byte("bar"))
+	root := trie.Hash()
+
+	copy := trie.HashAndCopy()
+	copy.Delete([]byte("foo"))
+	copy.Update([]byte("foo1"), []byte("bar1"))
+
+	// Ensure the trie is untouched
+	if trie.Hash() != root {
+		t.Fatalf("Deep copied trie still affect the original one")
+	}
+}
+
 func TestSecureTrieConcurrency(t *testing.T) {
 	// Create an initial trie and copy if for concurrent access
 	_, trie, _ := makeTestSecureTrie()

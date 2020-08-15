@@ -1496,10 +1496,10 @@ func TestTrieForkGC(t *testing.T) {
 		t.Fatalf("failed to create tester chain: %v", err)
 	}
 	for i := 0; i < len(blocks); i++ {
-		if _, err := chain.InsertChain(blocks[i : i+1]); err != nil {
+		if _, err := chain.InsertChainAndWait(blocks[i : i+1]); err != nil {
 			t.Fatalf("block %d: failed to insert into chain: %v", i, err)
 		}
-		if _, err := chain.InsertChain(forks[i : i+1]); err != nil {
+		if _, err := chain.InsertChainAndWait(forks[i : i+1]); err != nil {
 			t.Fatalf("fork %d: failed to insert into chain: %v", i, err)
 		}
 	}
@@ -1534,10 +1534,10 @@ func TestLargeReorgTrieGC(t *testing.T) {
 	if err != nil {
 		t.Fatalf("failed to create tester chain: %v", err)
 	}
-	if _, err := chain.InsertChain(shared); err != nil {
+	if _, err := chain.InsertChainAndWait(shared); err != nil {
 		t.Fatalf("failed to insert shared chain: %v", err)
 	}
-	if _, err := chain.InsertChain(original); err != nil {
+	if _, err := chain.InsertChainAndWait(original); err != nil {
 		t.Fatalf("failed to insert original chain: %v", err)
 	}
 	// Ensure that the state associated with the forking point is pruned away
@@ -1546,7 +1546,7 @@ func TestLargeReorgTrieGC(t *testing.T) {
 	}
 	// Import the competitor chain without exceeding the canonical's TD and ensure
 	// we have not processed any of the blocks (protection against malicious blocks)
-	if _, err := chain.InsertChain(competitor[:len(competitor)-2]); err != nil {
+	if _, err := chain.InsertChainAndWait(competitor[:len(competitor)-2]); err != nil {
 		t.Fatalf("failed to insert competitor chain: %v", err)
 	}
 	for i, block := range competitor[:len(competitor)-2] {
@@ -1556,7 +1556,7 @@ func TestLargeReorgTrieGC(t *testing.T) {
 	}
 	// Import the head of the competitor chain, triggering the reorg and ensure we
 	// successfully reprocess all the stashed away blocks.
-	if _, err := chain.InsertChain(competitor[len(competitor)-2:]); err != nil {
+	if _, err := chain.InsertChainAndWait(competitor[len(competitor)-2:]); err != nil {
 		t.Fatalf("failed to finalize competitor chain: %v", err)
 	}
 	for i, block := range competitor[:len(competitor)-TriesInMemory] {
@@ -1754,10 +1754,11 @@ func testSideImport(t *testing.T, numCanonBlocksInSidechain, blocksBetweenCommon
 	if err != nil {
 		t.Fatalf("failed to create tester chain: %v", err)
 	}
-	if n, err := chain.InsertChain(blocks); err != nil {
+	defer chain.Stop()
+
+	if n, err := chain.InsertChainAndWait(blocks); err != nil {
 		t.Fatalf("block %d: failed to insert into chain: %v", n, err)
 	}
-
 	lastPrunedIndex := len(blocks) - TriesInMemory - 1
 	lastPrunedBlock := blocks[lastPrunedIndex]
 	firstNonPrunedBlock := blocks[len(blocks)-TriesInMemory]
@@ -2411,10 +2412,11 @@ func TestSideImportPrunedBlocks(t *testing.T) {
 	if err != nil {
 		t.Fatalf("failed to create tester chain: %v", err)
 	}
-	if n, err := chain.InsertChain(blocks); err != nil {
+	defer chain.Stop()
+
+	if n, err := chain.InsertChainAndWait(blocks); err != nil {
 		t.Fatalf("block %d: failed to insert into chain: %v", n, err)
 	}
-
 	lastPrunedIndex := len(blocks) - TriesInMemory - 1
 	lastPrunedBlock := blocks[lastPrunedIndex]
 

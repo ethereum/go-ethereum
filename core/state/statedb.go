@@ -840,7 +840,7 @@ func (s *StateDB) Commit(deleteEmptyObjects bool) (common.Hash, error) {
 	// The onleaf func is called _serially_, so we can reuse the same account
 	// for unmarshalling every time.
 	var account Account
-	root, err := s.trie.Commit(func(leaf []byte, parent common.Hash) error {
+	root := s.trie.Commit(func(leaf []byte, parent common.Hash) error {
 		if err := rlp.DecodeBytes(leaf, &account); err != nil {
 			return nil
 		}
@@ -872,5 +872,57 @@ func (s *StateDB) Commit(deleteEmptyObjects bool) (common.Hash, error) {
 		}
 		s.snap, s.snapDestructs, s.snapAccounts, s.snapStorage = nil, nil, nil, nil
 	}
-	return root, err
+	return root, nil
+}
+
+// CommitAsync hashes the state trie as well as all referenced storage tries.
+// Then instead of committing them directly, return the uncommitted set for
+// lazy execution.
+func (s *StateDB) CommitAsync(deleteEmptyObjects bool) (common.Hash, Trie, map[common.Hash]Trie, map[common.Hash][]byte, error) {
+	if s.dbErr != nil {
+		return common.Hash{}, nil, nil, nil, fmt.Errorf("commit aborted due to earlier error: %v", s.dbErr)
+	}
+	// Finalize any pending changes and merge everything into the tries
+	root := s.IntermediateRoot(deleteEmptyObjects)
+
+	// Commit objects to the trie, measuring the elapsed time
+	var (
+		storage = make(map[common.Hash]Trie)
+		codes   = make(map[common.Hash][]byte)
+	)
+	for addr := range s.stateObjectsDirty {
+		if obj := s.stateObjects[addr]; !obj.deleted {
+			// Write any contract code associated with the state object
+			if obj.code != nil && obj.dirtyCode {
+				codes[common.BytesToHash(obj.CodeHash())] = obj.code
+				obj.dirtyCode = false
+			}
+			// Gather dirty storage tries for lazy commit, note it's already hashed.
+			// If it's nil(or the root node is nil), it means the storage trie is
+			// never accessed.
+			if obj.trie != nil && obj.trie.Hash() != emptyRoot {
+				storage[obj.addrHash] = obj.trie
+			}
+		}
+	}
+	if len(s.stateObjectsDirty) > 0 {
+		s.stateObjectsDirty = make(map[common.Address]struct{})
+	}
+	// If snapshotting is enabled, update the snapshot tree with this new version
+	if s.snap != nil {
+		if metrics.EnabledExpensive {
+			defer func(start time.Time) { s.SnapshotCommits += time.Since(start) }(time.Now())
+		}
+		// Only update if there's a state transition (skip empty Clique blocks)
+		if parent := s.snap.Root(); parent != root {
+			if err := s.snaps.Update(root, parent, s.snapDestructs, s.snapAccounts, s.snapStorage); err != nil {
+				log.Warn("Failed to update snapshot tree", "from", parent, "to", root, "err", err)
+			}
+			if err := s.snaps.Cap(root, 127); err != nil { // Persistent layer is 128th, the last available trie
+				log.Warn("Failed to cap snapshot tree", "root", root, "layers", 127, "err", err)
+			}
+		}
+		s.snap, s.snapDestructs, s.snapAccounts, s.snapStorage = nil, nil, nil, nil
+	}
+	return root, s.trie, storage, codes, nil
 }
