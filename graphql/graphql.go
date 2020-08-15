@@ -1044,6 +1044,10 @@ func (r *Resolver) ProtocolVersion(ctx context.Context) (int32, error) {
 	return int32(r.backend.ProtocolVersion()), nil
 }
 
+func (r *Resolver) ChainID(ctx context.Context) (hexutil.Big, error) {
+	return hexutil.Big(*r.backend.ChainConfig().ChainID), nil
+}
+
 // SyncState represents the synchronisation status returned from the `syncing` accessor.
 type SyncState struct {
 	progress ethereum.SyncProgress
