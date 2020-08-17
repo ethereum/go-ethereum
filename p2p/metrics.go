@@ -31,9 +31,9 @@ const (
 
 var (
 	ingressConnectMeter = metrics.NewRegisteredMeter("p2p/serves", nil)
-	ingressTrafficMeter = metrics.NewLockFreeRegisteredMeter(ingressMeterName, nil)
+	ingressTrafficMeter = metrics.NewRegisteredMeter(ingressMeterName, nil)
 	egressConnectMeter  = metrics.NewRegisteredMeter("p2p/dials", nil)
-	egressTrafficMeter  = metrics.NewLockFreeRegisteredMeter(egressMeterName, nil)
+	egressTrafficMeter  = metrics.NewRegisteredMeter(egressMeterName, nil)
 	activePeerGauge     = metrics.NewRegisteredGauge("p2p/peers", nil)
 )
 
