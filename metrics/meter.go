@@ -29,6 +29,17 @@ func GetOrRegisterMeter(name string, r Registry) Meter {
 	return r.GetOrRegister(name, NewMeter).(Meter)
 }
 
+// GetOrRegisterLockFreeMeter returns an existing Meter or constructs and registers a
+// new LockFreeMeter.
+// Be sure to unregister the meter from the registry once it is of no use to
+// allow for garbage collection.
+func GetOrRegisterLockFreeMeter(name string, r Registry) Meter {
+	if nil == r {
+		r = DefaultRegistry
+	}
+	return r.GetOrRegister(name, NewLockFreeMeter).(Meter)
+}
+
 // GetOrRegisterMeterForced returns an existing Meter or constructs and registers a
 // new StandardMeter no matter the global switch is enabled or not.
 // Be sure to unregister the meter from the registry once it is of no use to
