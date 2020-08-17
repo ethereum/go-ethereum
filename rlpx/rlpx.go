@@ -137,7 +137,7 @@ func (rw *RlpxFrameRW) EgressMAC() hash.Hash  { return rw.egressMAC }
 func (rw *RlpxFrameRW) Enc() cipher.Stream    { return rw.enc }
 func (rw *RlpxFrameRW) Dec() cipher.Stream    { return rw.dec }
 
-// TODO i still don't like this func
+// TODO document
 func (rw *RlpxFrameRW) Compress(size uint32, payload io.Reader) (uint32, io.Reader, error) {
 	if size > maxUint24 {
 		return 0, nil, errPlainMessageTooLarge

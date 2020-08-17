@@ -32,7 +32,8 @@ type transportWrapper struct {
 	rlpx *r.Rlpx
 }
 
-func newTransport(conn net.Conn) transport { // TODO see if returning the literal will mess things up
+func newTransport(conn net.Conn) transport {
+	conn.SetDeadline(time.Now().Add(handshakeTimeout))
 	return &transportWrapper{
 		rlpx: r.NewRLPX(conn),
 	}
