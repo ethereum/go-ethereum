@@ -111,9 +111,9 @@ func (t *transportWrapper) doEncHandshake(prv *ecdsa.PrivateKey, dial *ecdsa.Pub
 	if err != nil {
 		return nil, err
 	}
-	t.wmu.Lock()
+	t.mu.Lock()
 	t.rlpx.RW = b.NewRLPXFrameRW(t.rlpx.Conn, sec.AES, sec.MAC, sec.EgressMAC, sec.IngressMAC)
-	t.wmu.Unlock()
+	t.mu.Unlock()
 	return sec.Remote.ExportECDSA(), nil
 }
 

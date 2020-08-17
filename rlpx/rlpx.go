@@ -1,3 +1,19 @@
+// Copyright 2020 The go-ethereum Authors
+// This file is part of the go-ethereum library.
+//
+// The go-ethereum library is free software: you can redistribute it and/or modify
+// it under the terms of the GNU Lesser General Public License as published by
+// the Free Software Foundation, either version 3 of the License, or
+// (at your option) any later version.
+//
+// The go-ethereum library is distributed in the hope that it will be useful,
+// but WITHOUT ANY WARRANTY; without even the implied warranty of
+// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
+// GNU Lesser General Public License for more details.
+//
+// You should have received a copy of the GNU Lesser General Public License
+// along with the go-ethereum library. If not, see <http://www.gnu.org/licenses/>.
+
 package rlpx
 
 import (
@@ -12,6 +28,8 @@ import (
 	"io"
 	"io/ioutil"
 	"net"
+	"sync"
+	"time"
 )
 
 const (
@@ -24,6 +42,7 @@ var errPlainMessageTooLarge = errors.New("message length >= 16MB")
 
 type Rlpx struct { // TODO is this necessary? how to remove it?
 	Conn net.Conn
+	rmu, wmu sync.Mutex
 	RW   *RlpxFrameRW
 }
 
@@ -31,16 +50,47 @@ func NewRLPX(conn net.Conn) *Rlpx {
 	return &Rlpx{Conn: conn}
 }
 
-func (r *Rlpx) Read() (RawRLPXMessage, error) { return r.RW.Read() }
-func (r *Rlpx) Write(msg RawRLPXMessage) error { return r.RW.Write(msg) }
-func (r *Rlpx) Close() { r.Conn.Close() }
+func (r *Rlpx) Read() (RawRLPXMessage, error)  {
+	r.rmu.Lock()
+	defer r.rmu.Unlock()
+
+	return r.RW.Read()
+}
+
+func (r *Rlpx) Write(msg RawRLPXMessage) error {
+	r.wmu.Lock()
+	defer r.wmu.Unlock()
+
+	return r.RW.Write(msg)
+}
+
+func (r *Rlpx) Close() {
+	r.wmu.Lock()
+	defer r.wmu.Unlock()
+
+	r.Conn.Close()
+}
+
+func (r *Rlpx) SetReadDeadline(timeout time.Duration) {
+	r.rmu.Lock()
+	defer r.rmu.Unlock()
+
+	r.Conn.SetReadDeadline(time.Now().Add(timeout))
+}
+
+func (r *Rlpx) SetWriteDeadline(timeout time.Duration) {
+	r.wmu.Lock()
+	defer r.wmu.Unlock()
+
+	r.Conn.SetWriteDeadline(time.Now().Add(timeout))
+}
 
 var (
 	// this is used in place of actual frame header data.
 	// TODO: replace this when Msg contains the protocol type code.
 	zeroHeader = []byte{0xC2, 0x80, 0x80}
 	// sixteen zero bytes
-	zero16 = make([]byte, 16)
+	Zero16 = make([]byte, 16)
 )
 
 // RlpxFrameRW implements a simplified version of RLPx framing.
@@ -81,6 +131,11 @@ func NewRLPXFrameRW(conn io.ReadWriter, AES, MAC []byte, EgressMAC, IngressMAC h
 		ingressMAC: IngressMAC,
 	}
 }
+
+func (rw *RlpxFrameRW) IngressMAC() hash.Hash { return rw.ingressMAC }
+func (rw *RlpxFrameRW) EgressMAC() hash.Hash  { return rw.egressMAC }
+func (rw *RlpxFrameRW) Enc() cipher.Stream    { return rw.enc }
+func (rw *RlpxFrameRW) Dec() cipher.Stream    { return rw.dec }
 
 // TODO i still don't like this func
 func (rw *RlpxFrameRW) Compress(size uint32, payload io.Reader) (uint32, io.Reader, error) {
@@ -124,7 +179,7 @@ func (rw *RlpxFrameRW) Write(msg RawRLPXMessage) error {
 		return err
 	}
 	if padding := fsize % 16; padding > 0 {
-		if _, err := tee.Write(zero16[:16-padding]); err != nil {
+		if _, err := tee.Write(Zero16[:16-padding]); err != nil {
 			return err
 		}
 	}
@@ -227,4 +282,3 @@ func putInt24(v uint32, b []byte) {
 func readInt24(b []byte) uint32 {
 	return uint32(b[2]) | uint32(b[1])<<8 | uint32(b[0])<<16
 }
-

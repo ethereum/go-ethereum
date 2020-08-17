@@ -22,6 +22,7 @@ import (
 	"crypto/rand"
 	"errors"
 	"fmt"
+	r "github.com/ethereum/go-ethereum/rlpx"
 	"io"
 	"io/ioutil"
 	"net"
@@ -88,7 +89,7 @@ func testEncHandshake(token []byte) error {
 		prv0, _  = crypto.GenerateKey()
 		prv1, _  = crypto.GenerateKey()
 		fd0, fd1 = net.Pipe()
-		c0, c1   = newRLPX(fd0).(*rlpx), newRLPX(fd1).(*rlpx)
+		t0, t1   = newTransport(fd0).(*transportWrapper), newTransport(fd1).(*transportWrapper)
 		output   = make(chan result)
 	)
 
@@ -97,7 +98,7 @@ func testEncHandshake(token []byte) error {
 		defer func() { output <- r }()
 		defer fd0.Close()
 
-		r.pubkey, r.err = c0.doEncHandshake(prv0, &prv1.PublicKey)
+		r.pubkey, r.err = t0.doEncHandshake(prv0, &prv1.PublicKey)
 		if r.err != nil {
 			return
 		}
@@ -110,7 +111,7 @@ func testEncHandshake(token []byte) error {
 		defer func() { output <- r }()
 		defer fd1.Close()
 
-		r.pubkey, r.err = c1.doEncHandshake(prv1, nil)
+		r.pubkey, r.err = t1.doEncHandshake(prv1, nil)
 		if r.err != nil {
 			return
 		}
@@ -129,17 +130,17 @@ func testEncHandshake(token []byte) error {
 	}
 
 	// compare derived secrets
-	if !reflect.DeepEqual(c0.rw.egressMAC, c1.rw.ingressMAC) {
-		return fmt.Errorf("egress mac mismatch:\n c0.rw: %#v\n c1.rw: %#v", c0.rw.egressMAC, c1.rw.ingressMAC)
+	if !reflect.DeepEqual(t0.rlpx.RW.EgressMAC(), t1.rlpx.RW.IngressMAC()) {
+		return fmt.Errorf("egress mac mismatch:\n t0.rlpx.RW: %#v\n t1.rlpx.RW: %#v", t0.rlpx.RW.EgressMAC(), t1.rlpx.RW.IngressMAC())
 	}
-	if !reflect.DeepEqual(c0.rw.ingressMAC, c1.rw.egressMAC) {
-		return fmt.Errorf("ingress mac mismatch:\n c0.rw: %#v\n c1.rw: %#v", c0.rw.ingressMAC, c1.rw.egressMAC)
+	if !reflect.DeepEqual(t0.rlpx.RW.IngressMAC(), t1.rlpx.RW.EgressMAC()) {
+		return fmt.Errorf("ingress mac mismatch:\n t0.rlpx.RW: %#v\n t1.rlpx.RW: %#v", t0.rlpx.RW.IngressMAC(), t1.rlpx.RW.EgressMAC())
 	}
-	if !reflect.DeepEqual(c0.rw.enc, c1.rw.enc) {
-		return fmt.Errorf("enc cipher mismatch:\n c0.rw: %#v\n c1.rw: %#v", c0.rw.enc, c1.rw.enc)
+	if !reflect.DeepEqual(t0.rlpx.RW.Enc(), t1.rlpx.RW.Enc()) {
+		return fmt.Errorf("enc cipher mismatch:\n t0.rlpx.RW: %#v\n t1.rlpx.RW: %#v", t0.rlpx.RW.Enc(), t1.rlpx.RW.Enc())
 	}
-	if !reflect.DeepEqual(c0.rw.dec, c1.rw.dec) {
-		return fmt.Errorf("dec cipher mismatch:\n c0.rw: %#v\n c1.rw: %#v", c0.rw.dec, c1.rw.dec)
+	if !reflect.DeepEqual(t0.rlpx.RW.Dec(), t1.rlpx.RW.Dec()) {
+		return fmt.Errorf("dec cipher mismatch:\n t0.rlpx.RW: %#v\n t1.rlpx.RW: %#v", t0.rlpx.RW.Dec(), t1.rlpx.RW.Dec())
 	}
 	return nil
 }
@@ -166,8 +167,8 @@ func TestProtocolHandshake(t *testing.T) {
 	go func() {
 		defer wg.Done()
 		defer fd0.Close()
-		rlpx := newRLPX(fd0)
-		rpubkey, err := rlpx.doEncHandshake(prv0, &prv1.PublicKey)
+		transport := newTransport(fd0)
+		rpubkey, err := transport.doEncHandshake(prv0, &prv1.PublicKey)
 		if err != nil {
 			t.Errorf("dial side enc handshake failed: %v", err)
 			return
@@ -177,7 +178,7 @@ func TestProtocolHandshake(t *testing.T) {
 			return
 		}
 
-		phs, err := rlpx.doProtoHandshake(hs0)
+		phs, err := transport.doProtoHandshake(hs0)
 		if err != nil {
 			t.Errorf("dial side proto handshake error: %v", err)
 			return
@@ -187,13 +188,13 @@ func TestProtocolHandshake(t *testing.T) {
 			t.Errorf("dial side proto handshake mismatch:\ngot: %s\nwant: %s\n", spew.Sdump(phs), spew.Sdump(hs1))
 			return
 		}
-		rlpx.close(DiscQuitting)
+		transport.close(DiscQuitting)
 	}()
 	go func() {
 		defer wg.Done()
 		defer fd1.Close()
-		rlpx := newRLPX(fd1)
-		rpubkey, err := rlpx.doEncHandshake(prv1, nil)
+		transport1 := newTransport(fd1)
+		rpubkey, err := transport1.doEncHandshake(prv1, nil)
 		if err != nil {
 			t.Errorf("listen side enc handshake failed: %v", err)
 			return
@@ -203,7 +204,7 @@ func TestProtocolHandshake(t *testing.T) {
 			return
 		}
 
-		phs, err := rlpx.doProtoHandshake(hs1)
+		phs, err := transport1.doProtoHandshake(hs1)
 		if err != nil {
 			t.Errorf("listen side proto handshake error: %v", err)
 			return
@@ -214,7 +215,7 @@ func TestProtocolHandshake(t *testing.T) {
 			return
 		}
 
-		if err := ExpectMsg(rlpx, discMsg, []DiscReason{DiscQuitting}); err != nil {
+		if err := ExpectMsg(transport1, discMsg, []DiscReason{DiscQuitting}); err != nil {
 			t.Errorf("error receiving disconnect: %v", err)
 		}
 	}()
@@ -267,12 +268,18 @@ func TestProtocolHandshakeErrors(t *testing.T) {
 func TestRLPXFrameFake(t *testing.T) {
 	buf := new(bytes.Buffer)
 	hash := fakeHash([]byte{1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1})
-	rw := newRLPXFrameRW(buf, secrets{
+	sec := secrets{
 		AES:        crypto.Keccak256(),
 		MAC:        crypto.Keccak256(),
 		IngressMAC: hash,
 		EgressMAC:  hash,
-	})
+	}
+	// create transport wrapper
+	transport := &transportWrapper{
+		rlpx: &r.Rlpx{
+			RW: r.NewRLPXFrameRW(buf, sec.AES, sec.MAC, sec.EgressMAC, sec.IngressMAC),
+		},
+	}
 
 	golden := unhex(`
 00828ddae471818bb0bfa6b551d1cb42
@@ -282,7 +289,7 @@ ba628a4ba590cb43f7848f41c4382885
 `)
 
 	// Check WriteMsg. This puts a message into the buffer.
-	if err := Send(rw, 8, []uint{1, 2, 3, 4}); err != nil {
+	if err := Send(transport, 8, []uint{1, 2, 3, 4}); err != nil {
 		t.Fatalf("WriteMsg error: %v", err)
 	}
 	written := buf.Bytes()
@@ -292,7 +299,7 @@ ba628a4ba590cb43f7848f41c4382885
 
 	// Check ReadMsg. It reads the message encoded by WriteMsg, which
 	// is equivalent to the golden message above.
-	msg, err := rw.ReadMsg()
+	msg, err := transport.ReadMsg()
 	if err != nil {
 		t.Fatalf("ReadMsg error: %v", err)
 	}
@@ -338,7 +345,12 @@ func TestRLPXFrameRW(t *testing.T) {
 	}
 	s1.EgressMAC.Write(egressMACinit)
 	s1.IngressMAC.Write(ingressMACinit)
-	rw1 := newRLPXFrameRW(conn, s1)
+	// create transport wrapper
+	transport1 := &transportWrapper{
+		rlpx: &r.Rlpx{
+			RW: r.NewRLPXFrameRW(conn, s1.AES, s1.MAC, s1.EgressMAC, s1.IngressMAC),
+		},
+	}
 
 	s2 := secrets{
 		AES:        aesSecret,
@@ -348,19 +360,23 @@ func TestRLPXFrameRW(t *testing.T) {
 	}
 	s2.EgressMAC.Write(ingressMACinit)
 	s2.IngressMAC.Write(egressMACinit)
-	rw2 := newRLPXFrameRW(conn, s2)
+	transport2 := &transportWrapper{
+		rlpx: &r.Rlpx{
+			RW: r.NewRLPXFrameRW(conn, s2.AES, s2.MAC, s2.EgressMAC, s2.IngressMAC),
+		},
+	}
 
 	// send some messages
 	for i := 0; i < 10; i++ {
 		// write message into conn buffer
 		wmsg := []interface{}{"foo", "bar", strings.Repeat("test", i)}
-		err := Send(rw1, uint64(i), wmsg)
+		err := Send(transport1, uint64(i), wmsg)
 		if err != nil {
 			t.Fatalf("WriteMsg error (i=%d): %v", i, err)
 		}
 
 		// read message that rw1 just wrote
-		msg, err := rw2.ReadMsg()
+		msg, err := transport2.ReadMsg()
 		if err != nil {
 			t.Fatalf("ReadMsg error (i=%d): %v", i, err)
 		}

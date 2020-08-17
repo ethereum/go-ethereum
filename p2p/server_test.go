@@ -31,25 +31,27 @@ import (
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/p2p/enode"
 	"github.com/ethereum/go-ethereum/p2p/enr"
+	r "github.com/ethereum/go-ethereum/rlpx"
 	"golang.org/x/crypto/sha3"
 )
 
 type testTransport struct {
 	rpub *ecdsa.PublicKey
-	*rlpx
+	*transportWrapper
 
 	closeErr error
 }
 
 func newTestTransport(rpub *ecdsa.PublicKey, fd net.Conn) transport {
-	wrapped := newRLPX(fd).(*rlpx)
-	wrapped.rw = newRLPXFrameRW(fd, secrets{
-		MAC:        zero16,
-		AES:        zero16,
+	wrapped := newTransport(fd).(*transportWrapper)
+	sec := secrets{
+		MAC:        r.Zero16,
+		AES:        r.Zero16,
 		IngressMAC: sha3.NewLegacyKeccak256(),
 		EgressMAC:  sha3.NewLegacyKeccak256(),
-	})
-	return &testTransport{rpub: rpub, rlpx: wrapped}
+	}
+	wrapped.rlpx.RW	= r.NewRLPXFrameRW(fd, sec.AES, sec.MAC, sec.EgressMAC, sec.IngressMAC)
+	return &testTransport{rpub: rpub, transportWrapper: wrapped}
 }
 
 func (c *testTransport) doEncHandshake(prv *ecdsa.PrivateKey, dialDest *ecdsa.PublicKey) (*ecdsa.PublicKey, error) {
@@ -62,7 +64,7 @@ func (c *testTransport) doProtoHandshake(our *protoHandshake) (*protoHandshake, 
 }
 
 func (c *testTransport) close(err error) {
-	c.rlpx.fd.Close()
+	c.close(err)
 	c.closeErr = err
 }
 
@@ -524,7 +526,7 @@ func TestServerInboundThrottle(t *testing.T) {
 		},
 		newTransport: func(fd net.Conn) transport {
 			newTransportCalled <- struct{}{}
-			return newRLPX(fd)
+			return newTransport(fd)
 		},
 		listenFunc: func(network, laddr string) (net.Listener, error) {
 			fakeAddr := &net.TCPAddr{IP: net.IP{95, 33, 21, 2}, Port: 4444}

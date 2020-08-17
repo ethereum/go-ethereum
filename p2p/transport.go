@@ -27,21 +27,25 @@ type transport interface {
 
 // TODO rename maybe?
 type transportWrapper struct {
-	rmu, wmu sync.Mutex
+	mu sync.Mutex
+
 	rlpx *r.Rlpx
 }
 
-func newTransport(conn net.Conn) transport {
+func newTransport(conn net.Conn) transport { // TODO see if returning the literal will mess things up
 	return &transportWrapper{
 		rlpx: r.NewRLPX(conn),
 	}
 }
 
 func (t *transportWrapper) ReadMsg() (msg Msg, err error) {
-	t.rmu.Lock()
-	defer t.rmu.Unlock()
+	// TODO not the best way to do this...
+	t.mu.Lock()
+	if t.rlpx.Conn != nil {
+		t.rlpx.SetReadDeadline(frameReadTimeout)
+	}
+	t.mu.Unlock()
 
-	t.rlpx.Conn.SetReadDeadline(time.Now().Add(frameReadTimeout))
 	rawMsg, err := t.rlpx.Read()
 	if err != nil {
 		return msg, err
@@ -57,8 +61,8 @@ func (t *transportWrapper) ReadMsg() (msg Msg, err error) {
 }
 
 func (t *transportWrapper) WriteMsg(msg Msg) error {
-	t.wmu.Lock()
-	defer t.wmu.Unlock()
+	t.mu.Lock()
+	defer t.mu.Unlock()
 
 	// compress if snappy enabled
 	if t.rlpx.RW.Snappy {
@@ -82,14 +86,17 @@ func (t *transportWrapper) WriteMsg(msg Msg) error {
 		Payload: msg.Payload,
 		// TODO receivedAt?
 	}
-
-	t.rlpx.Conn.SetWriteDeadline(time.Now().Add(frameWriteTimeout)) // TODO set timeouts on the conn?
+	// TODO this is not the best way to do this..
+	if t.rlpx.Conn != nil {
+		t.rlpx.SetWriteDeadline(frameWriteTimeout)
+	}
 	return t.rlpx.Write(rawMsg)
 }
 
 func (t *transportWrapper) close(err error) {
-	t.wmu.Lock()
-	defer t.wmu.Unlock()
+	t.mu.Lock()
+	defer t.mu.Unlock()
+
 	// Tell the remote end why we're disconnecting if possible.
 	if t.rlpx.RW != nil {
 		if r, ok := err.(DiscReason); ok && r != DiscNetworkError {
