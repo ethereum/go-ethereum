@@ -13,7 +13,7 @@ func SpeedTest(db ethdb.Database) {
 		key   = make([]byte, 32)
 		t0    = time.Now()
 	)
-	for time.Since(t0) < 1*time.Second {
+	for time.Since(t0) < 2*time.Second {
 		mrand.Read(key)
 		db.Get(key)
 		count++
