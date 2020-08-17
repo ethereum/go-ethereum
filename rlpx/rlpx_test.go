@@ -19,13 +19,14 @@ package rlpx
 import (
 	"bytes"
 	"crypto/rand"
-	"github.com/ethereum/go-ethereum/rlp"
-	"github.com/stretchr/testify/assert"
-	"golang.org/x/crypto/sha3"
 	"net"
 	"net/http"
 	"net/http/httptest"
 	"testing"
+
+	"github.com/ethereum/go-ethereum/rlp"
+	"github.com/stretchr/testify/assert"
+	"golang.org/x/crypto/sha3"
 )
 
 func TestRLPX_ReadWrite(t *testing.T) {
@@ -58,9 +59,9 @@ func TestRLPX_ReadWrite(t *testing.T) {
 	}
 	// create and write message
 	rawMsg := RawRLPXMessage{
-		Code:       1,
-		Size:       uint32(size),
-		Payload:    reader,
+		Code:    1,
+		Size:    uint32(size),
+		Payload: reader,
 	}
 	err = rlpx.Write(rawMsg)
 	if err != nil {
@@ -96,7 +97,8 @@ func TestRLPX_Close(t *testing.T) {
 	}
 }
 
-type testHandler struct {}
+type testHandler struct{}
+
 func (t *testHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {}
 
 func startTestServer() *httptest.Server {

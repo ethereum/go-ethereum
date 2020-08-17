@@ -22,7 +22,6 @@ import (
 	"crypto/rand"
 	"errors"
 	"fmt"
-	r "github.com/ethereum/go-ethereum/rlpx"
 	"io"
 	"io/ioutil"
 	"net"
@@ -37,6 +36,7 @@ import (
 	"github.com/ethereum/go-ethereum/crypto/ecies"
 	"github.com/ethereum/go-ethereum/p2p/simulations/pipes"
 	"github.com/ethereum/go-ethereum/rlp"
+	r "github.com/ethereum/go-ethereum/rlpx"
 	"golang.org/x/crypto/sha3"
 )
 

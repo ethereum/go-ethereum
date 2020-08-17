@@ -7,17 +7,17 @@ import (
 	"crypto/rand"
 	"encoding/binary"
 	"fmt"
-	"github.com/ethereum/go-ethereum/common/bitutil"
-	"github.com/ethereum/go-ethereum/crypto"
-	"github.com/ethereum/go-ethereum/crypto/ecies"
-	"github.com/ethereum/go-ethereum/rlp"
-	"golang.org/x/crypto/sha3"
 	"hash"
 	"io"
 	mrand "math/rand"
 	"time"
 
-	b "github.com/ethereum/go-ethereum/rlpx" // TODO rename import
+	"github.com/ethereum/go-ethereum/common/bitutil"
+	"github.com/ethereum/go-ethereum/crypto"
+	"github.com/ethereum/go-ethereum/crypto/ecies"
+	"github.com/ethereum/go-ethereum/rlp"
+	r "github.com/ethereum/go-ethereum/rlpx" // TODO rename import
+	"golang.org/x/crypto/sha3"
 )
 
 const (
@@ -112,7 +112,7 @@ func (t *transportWrapper) doEncHandshake(prv *ecdsa.PrivateKey, dial *ecdsa.Pub
 		return nil, err
 	}
 	t.mu.Lock()
-	t.rlpx.RW = b.NewRLPXFrameRW(t.rlpx.Conn, sec.AES, sec.MAC, sec.EgressMAC, sec.IngressMAC)
+	t.rlpx.RW = r.NewRLPXFrameRW(t.rlpx.Conn, sec.AES, sec.MAC, sec.EgressMAC, sec.IngressMAC)
 	t.mu.Unlock()
 	return sec.Remote.ExportECDSA(), nil
 }

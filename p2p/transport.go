@@ -3,11 +3,11 @@ package p2p
 import (
 	"crypto/ecdsa"
 	"fmt"
-	"github.com/ethereum/go-ethereum/metrics"
 	"net"
 	"sync"
 	"time"
 
+	"github.com/ethereum/go-ethereum/metrics"
 	r "github.com/ethereum/go-ethereum/rlpx" // TODO change name of import
 )
 
@@ -52,11 +52,11 @@ func (t *transportWrapper) ReadMsg() (msg Msg, err error) {
 		return msg, err
 	}
 	msg = Msg{
-		Code: rawMsg.Code,
-		Size: rawMsg.Size,
-		Payload: rawMsg.Payload,
+		Code:       rawMsg.Code,
+		Size:       rawMsg.Size,
+		Payload:    rawMsg.Payload,
 		ReceivedAt: rawMsg.ReceivedAt,
-		meterSize: rawMsg.Size,
+		meterSize:  rawMsg.Size,
 	}
 	return msg, err
 }
@@ -82,8 +82,8 @@ func (t *transportWrapper) WriteMsg(msg Msg) error {
 	}
 	// construct raw message for transport
 	rawMsg := r.RawRLPXMessage{
-		Code: msg.Code,
-		Size: msg.Size,
+		Code:    msg.Code,
+		Size:    msg.Size,
 		Payload: msg.Payload,
 		// TODO receivedAt?
 	}
@@ -113,5 +113,3 @@ func (t *transportWrapper) close(err error) {
 	}
 	t.rlpx.Close()
 }
-
-

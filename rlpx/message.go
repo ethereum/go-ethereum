@@ -27,4 +27,3 @@ type RawRLPXMessage struct {
 	Payload    io.Reader
 	ReceivedAt time.Time
 }
-

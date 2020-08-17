@@ -50,7 +50,7 @@ func newTestTransport(rpub *ecdsa.PublicKey, fd net.Conn) transport {
 		IngressMAC: sha3.NewLegacyKeccak256(),
 		EgressMAC:  sha3.NewLegacyKeccak256(),
 	}
-	wrapped.rlpx.RW	= r.NewRLPXFrameRW(fd, sec.AES, sec.MAC, sec.EgressMAC, sec.IngressMAC)
+	wrapped.rlpx.RW = r.NewRLPXFrameRW(fd, sec.AES, sec.MAC, sec.EgressMAC, sec.IngressMAC)
 	return &testTransport{rpub: rpub, transportWrapper: wrapped}
 }
 

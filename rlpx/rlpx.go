@@ -22,14 +22,15 @@ import (
 	"crypto/cipher"
 	"crypto/hmac"
 	"errors"
-	"github.com/ethereum/go-ethereum/rlp"
-	"github.com/golang/snappy"
 	"hash"
 	"io"
 	"io/ioutil"
 	"net"
 	"sync"
 	"time"
+
+	"github.com/ethereum/go-ethereum/rlp"
+	"github.com/golang/snappy"
 )
 
 const (
@@ -41,16 +42,16 @@ const (
 var errPlainMessageTooLarge = errors.New("message length >= 16MB")
 
 type Rlpx struct { // TODO is this necessary? how to remove it?
-	Conn net.Conn
+	Conn     net.Conn
 	rmu, wmu sync.Mutex
-	RW   *RlpxFrameRW
+	RW       *RlpxFrameRW
 }
 
 func NewRLPX(conn net.Conn) *Rlpx {
 	return &Rlpx{Conn: conn}
 }
 
-func (r *Rlpx) Read() (RawRLPXMessage, error)  {
+func (r *Rlpx) Read() (RawRLPXMessage, error) {
 	r.rmu.Lock()
 	defer r.rmu.Unlock()
 
