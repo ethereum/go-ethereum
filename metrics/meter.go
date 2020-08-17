@@ -184,8 +184,7 @@ func newStandardMeter() *StandardMeter {
 
 // Stop stops the meter, Mark() will be a no-op if you use it after being stopped.
 func (m *StandardMeter) Stop() {
-	stopped := atomic.LoadUint32(&m.stopped)
-	atomic.StoreUint32(&m.stopped, 1)
+	stopped := atomic.SwapUint32(&m.stopped, 1)
 	if stopped != 1 {
 		arbiter.Lock()
 		delete(arbiter.meters, m)
@@ -204,10 +203,6 @@ func (m *StandardMeter) Count() int64 {
 
 // Mark records the occurrence of n events.
 func (m *StandardMeter) Mark(n int64) {
-	stopped := atomic.LoadUint32(&m.stopped)
-	if stopped == 1 {
-		return
-	}
 	atomic.AddInt64(&m.snapshot.temp, n)
 }
 
