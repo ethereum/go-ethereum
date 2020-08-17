@@ -16,7 +16,6 @@ func BenchmarkMeter(b *testing.B) {
 func TestGetOrRegisterMeter(t *testing.T) {
 	r := NewRegistry()
 	NewRegisteredMeter("foo", r).Mark(47)
-	time.Sleep(5 * time.Second)
 	if m := GetOrRegisterMeter("foo", r); m.Count() != 47 {
 		t.Fatal(m.Count())
 	}
@@ -33,7 +32,7 @@ func TestMeterDecay(t *testing.T) {
 	m.Mark(1)
 	ma.tickMeters()
 	rateMean := m.RateMean()
-	time.Sleep(time.Second)
+	time.Sleep(100 * time.Millisecond)
 	ma.tickMeters()
 	if m.RateMean() >= rateMean {
 		t.Error("m.RateMean() didn't decrease")
@@ -43,7 +42,6 @@ func TestMeterDecay(t *testing.T) {
 func TestMeterNonzero(t *testing.T) {
 	m := NewMeter()
 	m.Mark(3)
-	time.Sleep(5 * time.Second)
 	if count := m.Count(); count != 3 {
 		t.Errorf("m.Count(): 3 != %v\n", count)
 	}

@@ -194,9 +194,11 @@ func (m *StandardMeter) Stop() {
 }
 
 // Count returns the number of events recorded.
+// It updates the meter to be as accurate as possible
 func (m *StandardMeter) Count() int64 {
-	m.lock.RLock()
-	defer m.lock.RUnlock()
+	m.lock.Lock()
+	defer m.lock.Unlock()
+	m.updateMeter()
 	return m.snapshot.count
 }
 
@@ -254,14 +256,19 @@ func (m *StandardMeter) updateSnapshot() {
 	snapshot.rateMean = float64(snapshot.count) / time.Since(m.startTime).Seconds()
 }
 
-func (m *StandardMeter) tick() {
-	m.lock.Lock()
-	defer m.lock.Unlock()
+func (m *StandardMeter) updateMeter() {
+	// should only run with write lock held on m.lock
 	n := atomic.LoadInt64(&m.snapshot.temp)
 	m.snapshot.count += n
 	m.a1.Update(n)
 	m.a5.Update(n)
 	m.a15.Update(n)
+}
+
+func (m *StandardMeter) tick() {
+	m.lock.Lock()
+	defer m.lock.Unlock()
+	m.updateMeter()
 	m.a1.Tick()
 	m.a5.Tick()
 	m.a15.Tick()
