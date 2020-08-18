@@ -50,6 +50,8 @@ const (
 	p_pongV5
 	p_findnodeV5
 	p_nodesV5
+	p_talkreqV5
+	p_talkrespV5
 	p_requestTicketV5
 	p_ticketV5
 	p_regtopicV5
@@ -147,6 +149,19 @@ type (
 		ReqID []byte
 		Total uint8
 		Nodes []*enr.Record
+	}
+
+	// TALKREQ is an application-level request.
+	talkreqV5 struct {
+		ReqID    []byte
+		Protocol string
+		Message  []byte
+	}
+
+	// TALKRESP is the reply to TALKREQ.
+	talkrespV5 struct {
+		ReqID   []byte
+		Message []byte
 	}
 
 	// REQUESTTICKET requests a ticket for a topic queue.
@@ -652,6 +667,10 @@ func decodePacketBodyV5(ptype byte, body []byte) (packetV5, error) {
 		dec = new(findnodeV5)
 	case p_nodesV5:
 		dec = new(nodesV5)
+	case p_talkreqV5:
+		dec = new(talkreqV5)
+	case p_talkrespV5:
+		dec = new(talkrespV5)
 	case p_requestTicketV5:
 		dec = new(requestTicketV5)
 	case p_ticketV5:

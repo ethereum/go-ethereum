@@ -83,6 +83,10 @@ type UDPv5 struct {
 	clock        mclock.Clock
 	validSchemes enr.IdentityScheme
 
+	// talkreq handler registry
+	trlock     sync.Mutex
+	trhandlers map[string]func([]byte) []byte
+
 	// channels into dispatch
 	packetInCh    chan ReadPacket
 	readNextCh    chan struct{}
@@ -152,6 +156,7 @@ func newUDPv5(conn UDPConn, ln *enode.LocalNode, cfg Config) (*UDPv5, error) {
 		log:          cfg.Log,
 		validSchemes: cfg.ValidSchemes,
 		clock:        cfg.Clock,
+		trhandlers:   make(map[string]func([]byte) []byte),
 		// channels into dispatch
 		packetInCh:    make(chan ReadPacket, 1),
 		readNextCh:    make(chan struct{}, 1),
@@ -236,6 +241,28 @@ func (t *UDPv5) LocalNode() *enode.LocalNode {
 	return t.localNode
 }
 
+// RegisterTalkHandler adds a handler for 'talk requests'. The handler function is called
+// whenever a request for the given protocol is received and should return the response
+// data or nil.
+func (t *UDPv5) RegisterTalkHandler(protocol string, handler func([]byte) []byte) {
+	t.trlock.Lock()
+	defer t.trlock.Unlock()
+	t.trhandlers[protocol] = handler
+}
+
+// TalkRequest sends a talk request to n and waits for a response.
+func (t *UDPv5) TalkRequest(n *enode.Node, protocol string, request []byte) ([]byte, error) {
+	resp := t.call(n, p_talkrespV5, &talkreqV5{Protocol: protocol, Message: request})
+	defer t.callDone(resp)
+	select {
+	case respMsg := <-resp.ch:
+		return respMsg.(*talkrespV5).Message, nil
+	case err := <-resp.err:
+		return nil, err
+	}
+}
+
+// RandomNodes returns an iterator that finds random nodes in the DHT.
 func (t *UDPv5) RandomNodes() enode.Iterator {
 	if t.tab.len() == 0 {
 		// All nodes were dropped, refresh. The very first query will hit this
@@ -799,6 +826,36 @@ func (p *nodesV5) kind() byte         { return p_nodesV5 }
 func (p *nodesV5) setreqid(id []byte) { p.ReqID = id }
 
 func (p *nodesV5) handle(t *UDPv5, fromID enode.ID, fromAddr *net.UDPAddr) {
+	t.handleCallResponse(fromID, fromAddr, p.ReqID, p)
+}
+
+// TALKREQ
+
+func (p *talkreqV5) name() string       { return "TALKREQ/v5" }
+func (p *talkreqV5) kind() byte         { return p_talkreqV5 }
+func (p *talkreqV5) setreqid(id []byte) { p.ReqID = id }
+
+func (p *talkreqV5) handle(t *UDPv5, fromID enode.ID, fromAddr *net.UDPAddr) {
+	t.trlock.Lock()
+	handler := t.trhandlers[p.Protocol]
+	t.trlock.Unlock()
+
+	var response []byte
+	if handler != nil {
+		response = handler(p.Message)
+	}
+	if len(p.ReqID) > 0 {
+		t.sendResponse(fromID, fromAddr, &talkrespV5{ReqID: p.ReqID, Message: response})
+	}
+}
+
+// TALKRESP
+
+func (p *talkrespV5) name() string       { return "TALKRESP/v5" }
+func (p *talkrespV5) kind() byte         { return p_talkrespV5 }
+func (p *talkrespV5) setreqid(id []byte) { p.ReqID = id }
+
+func (p *talkrespV5) handle(t *UDPv5, fromID enode.ID, fromAddr *net.UDPAddr) {
 	t.handleCallResponse(fromID, fromAddr, p.ReqID, p)
 }
 

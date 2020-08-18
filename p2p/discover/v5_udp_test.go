@@ -398,6 +398,97 @@ func TestUDPv5_callTimeoutReset(t *testing.T) {
 	}
 }
 
+// This test checks that TALKREQ calls the registered handler function.
+func TestUDPv5_talkHandling(t *testing.T) {
+	t.Parallel()
+	test := newUDPV5Test(t)
+	defer test.close()
+
+	var recvMessage []byte
+	test.udp.RegisterTalkHandler("test", func(message []byte) []byte {
+		recvMessage = message
+		return []byte("test response")
+	})
+
+	// Successful case:
+	test.packetIn(&talkreqV5{
+		ReqID:    []byte("foo"),
+		Protocol: "test",
+		Message:  []byte("test request"),
+	})
+	test.waitPacketOut(func(p *talkrespV5, addr *net.UDPAddr, authTag []byte) {
+		if !bytes.Equal(p.ReqID, []byte("foo")) {
+			t.Error("wrong request ID in response:", p.ReqID)
+		}
+		if string(p.Message) != "test response" {
+			t.Errorf("wrong talk response message: %q", p.Message)
+		}
+		if string(recvMessage) != "test request" {
+			t.Errorf("wrong message received in handler: %q", recvMessage)
+		}
+	})
+
+	// Check that empty response is returned for unregistered protocols.
+	recvMessage = nil
+	test.packetIn(&talkreqV5{
+		ReqID:    []byte("2"),
+		Protocol: "wrong",
+		Message:  []byte("test request"),
+	})
+	test.waitPacketOut(func(p *talkrespV5, addr *net.UDPAddr, authTag []byte) {
+		if !bytes.Equal(p.ReqID, []byte("2")) {
+			t.Error("wrong request ID in response:", p.ReqID)
+		}
+		if string(p.Message) != "" {
+			t.Errorf("wrong talk response message: %q", p.Message)
+		}
+		if recvMessage != nil {
+			t.Errorf("handler was called for wrong protocol: %q", recvMessage)
+		}
+	})
+}
+
+// This test checks that outgoing TALKREQ calls work.
+func TestUDPv5_talkRequest(t *testing.T) {
+	t.Parallel()
+	test := newUDPV5Test(t)
+	defer test.close()
+
+	remote := test.getNode(test.remotekey, test.remoteaddr).Node()
+	done := make(chan error, 1)
+
+	// This request times out.
+	go func() {
+		_, err := test.udp.TalkRequest(remote, "test", []byte("test request"))
+		done <- err
+	}()
+	test.waitPacketOut(func(p *talkreqV5, addr *net.UDPAddr, authTag []byte) {})
+	if err := <-done; err != errTimeout {
+		t.Fatalf("want errTimeout, got %q", err)
+	}
+
+	// This request works.
+	go func() {
+		_, err := test.udp.TalkRequest(remote, "test", []byte("test request"))
+		done <- err
+	}()
+	test.waitPacketOut(func(p *talkreqV5, addr *net.UDPAddr, authTag []byte) {
+		if p.Protocol != "test" {
+			t.Errorf("wrong protocol ID in talk request: %q", p.Protocol)
+		}
+		if string(p.Message) != "test request" {
+			t.Errorf("wrong message talk request: %q", p.Message)
+		}
+		test.packetInFrom(test.remotekey, test.remoteaddr, &talkrespV5{
+			ReqID:   p.ReqID,
+			Message: []byte("test response"),
+		})
+	})
+	if err := <-done; err != nil {
+		t.Fatal(err)
+	}
+}
+
 // This test checks that lookup works.
 func TestUDPv5_lookup(t *testing.T) {
 	t.Parallel()
