@@ -8,7 +8,7 @@ import (
 	"time"
 
 	"github.com/ethereum/go-ethereum/metrics"
-	r "github.com/ethereum/go-ethereum/rlpx" // TODO change name of import
+	r "github.com/ethereum/go-ethereum/p2p/rlpx" // TODO change name of import
 )
 
 type transport interface {

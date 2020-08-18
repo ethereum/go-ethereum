@@ -31,7 +31,7 @@ import (
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/p2p/enode"
 	"github.com/ethereum/go-ethereum/p2p/enr"
-	r "github.com/ethereum/go-ethereum/rlpx"
+	r "github.com/ethereum/go-ethereum/p2p/rlpx"
 	"golang.org/x/crypto/sha3"
 )
 

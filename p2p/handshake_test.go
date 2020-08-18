@@ -34,9 +34,9 @@ import (
 	"github.com/davecgh/go-spew/spew"
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/crypto/ecies"
+	r "github.com/ethereum/go-ethereum/p2p/rlpx"
 	"github.com/ethereum/go-ethereum/p2p/simulations/pipes"
 	"github.com/ethereum/go-ethereum/rlp"
-	r "github.com/ethereum/go-ethereum/rlpx"
 	"golang.org/x/crypto/sha3"
 )
 

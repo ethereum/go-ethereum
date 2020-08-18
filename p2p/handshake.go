@@ -15,8 +15,8 @@ import (
 	"github.com/ethereum/go-ethereum/common/bitutil"
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/crypto/ecies"
+	r "github.com/ethereum/go-ethereum/p2p/rlpx" // TODO rename import
 	"github.com/ethereum/go-ethereum/rlp"
-	r "github.com/ethereum/go-ethereum/rlpx" // TODO rename import
 	"golang.org/x/crypto/sha3"
 )
 
