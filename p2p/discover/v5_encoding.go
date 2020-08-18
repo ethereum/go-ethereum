@@ -27,7 +27,6 @@ import (
 	"errors"
 	"fmt"
 	"hash"
-	"hash/crc64"
 	"net"
 	"time"
 
@@ -63,10 +62,10 @@ const (
 // Discovery v5 packet structures.
 type (
 	packetHeaderV5 struct {
-		Checksum uint64
-		SrcID    enode.ID
-		Flags    byte
-		AuthSize uint16
+		ProtocolID [8]byte
+		SrcID      enode.ID
+		Flags      byte
+		AuthSize   uint16
 	}
 
 	whoareyouAuthDataV5 struct {
@@ -103,6 +102,7 @@ var (
 	sizeofWhoareyouAuthDataV5 = binary.Size(whoareyouAuthDataV5{})
 	sizeofHandshakeAuthDataV5 = binary.Size(handshakeAuthDataV5{}.h)
 	sizeofMessageAuthDataV5   = binary.Size(messageAuthDataV5{})
+	protocolIDV5              = [8]byte{'d', 'i', 's', 'c', 'v', '5', ' ', ' '}
 )
 
 // Discovery v5 messages.
@@ -208,16 +208,13 @@ var (
 
 // wireCodec encodes and decodes discovery v5 packets.
 type wireCodec struct {
-	sha256     hash.Hash
-	localnode  *enode.LocalNode
-	privkey    *ecdsa.PrivateKey
-	checksum   hash.Hash64
-	myChecksum uint64 // protocol checksum of local node
-
-	buf    bytes.Buffer // used for encoding of packets
-	msgbuf bytes.Buffer // used for encoding message content
-	reader bytes.Reader // used for decoding
-	sc     *sessionCache
+	sha256    hash.Hash
+	localnode *enode.LocalNode
+	privkey   *ecdsa.PrivateKey
+	buf       bytes.Buffer // used for encoding of packets
+	msgbuf    bytes.Buffer // used for encoding of message content
+	reader    bytes.Reader // used for decoding
+	sc        *sessionCache
 }
 
 type handshakeSecrets struct {
@@ -230,10 +227,8 @@ func newWireCodec(ln *enode.LocalNode, key *ecdsa.PrivateKey, clock mclock.Clock
 		sha256:    sha256.New(),
 		localnode: ln,
 		privkey:   key,
-		checksum:  crc64.New(crc64.MakeTable(crc64.ISO)),
 		sc:        newSessionCache(1024, clock),
 	}
-	c.myChecksum = c.makeChecksum(ln.ID())
 	return c
 }
 
@@ -278,10 +273,10 @@ func (c *wireCodec) makeHeader(toID enode.ID, flags byte, authsizeExtra int) *pa
 		panic(fmt.Errorf("BUG: auth size %d overflows uint16", authsize))
 	}
 	return &packetHeaderV5{
-		Checksum: c.makeChecksum(toID),
-		SrcID:    c.localnode.ID(),
-		Flags:    flags,
-		AuthSize: uint16(authsize),
+		ProtocolID: protocolIDV5,
+		SrcID:      c.localnode.ID(),
+		Flags:      flags,
+		AuthSize:   uint16(authsize),
 	}
 }
 
@@ -455,8 +450,8 @@ func (c *wireCodec) decode(input []byte, addr string) (src enode.ID, n *enode.No
 	var head packetHeaderV5
 	c.reader.Reset(input)
 	binary.Read(&c.reader, binary.BigEndian, &head)
-	if head.Checksum != c.myChecksum {
-		return enode.ID{}, nil, nil, errBadHash
+	if head.ProtocolID != protocolIDV5 {
+		return enode.ID{}, nil, nil, errInvalidHeader
 	}
 	if int(head.AuthSize) > c.reader.Len() {
 		return enode.ID{}, nil, nil, errInvalidHeader
@@ -674,15 +669,6 @@ func decodePacketBodyV5(ptype byte, body []byte) (packetV5, error) {
 		return nil, err
 	}
 	return dec, nil
-}
-
-// makeChecksum computes the header checksum field for a node
-// with the given ID.
-func (c *wireCodec) makeChecksum(id enode.ID) uint64 {
-	c.checksum.Reset()
-	c.checksum.Write([]byte("discv5"))
-	c.checksum.Write(id[:])
-	return c.checksum.Sum64()
 }
 
 // signIDNonce creates the ID nonce signature.
