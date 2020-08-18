@@ -231,7 +231,7 @@ func (m *StandardMeter) Rate15() float64 {
 func (m *StandardMeter) RateMean() float64 {
 	m.lock.RLock()
 	defer m.lock.RUnlock()
-	return m.snapshot.RateMean()
+	return m.snapshot.rateMean
 }
 
 // Snapshot returns a read-only copy of the meter.
