@@ -13,7 +13,7 @@ jobs:
       - name: Install Go
         uses: actions/setup-go@v1
         with:
-          go-version: 1.13
+          go-version: 1.14.7
 
       - name: Set up Ruby 2.6
         uses: actions/setup-ruby@v1
@@ -33,76 +33,9 @@ jobs:
 
           make all
 
-          cat > bor.service <<- "EOF"
-          [Unit]
-          Description=bor
-          [Service]
-          WorkingDirectory=/etc/bor/
-          EnvironmentFile=/etc/bor/metadata
-          ExecStartPre=/bin/chmod +x /etc/bor/start.sh
-          ExecStart=/bin/bash /etc/bor/start.sh ${NETWORK_ID} ${VALIDATOR_ADDRESS} ${NODE_TYPE}
-          Type=simple
-          User=root
-          EOF
-
-          cat > after_install.sh <<- "EOF"
-          #!/bin/bash
-          touch /etc/bor/metadata
-          touch /etc/bor/start.sh
-          EOF
-
-          cat > metadata <<- "EOF"
-          NETWORK_ID=
-          VALIDATOR_ADDRESS=
-          NODE_TYPE=sentry
-          EOF
-
-          cat > start.sh <<- "EOF"
-          #!/usr/bin/env sh
-
-          NETWORK_ID=$1
-          VALIDATOR_ADDRESS=$2
-          NODE_TYPE=$3
-
-          DATA_DIR=/etc/bor/dataDir
-
-          args="/usr/bin/bor --datadir $DATA_DIR --port '30303' --rpc --rpcaddr '0.0.0.0' --rpcvhosts '*' --rpccorsdomain '*' --rpcport '8545' --ipcpath /etc/bor/bor.ipc --rpcapi 'db,eth,net,web3,txpool,bor' --networkid $NETWORK_ID --miner.gaslimit '200000000' --miner.gastarget '20000000'  --txpool.nolocals --txpool.accountslots '128' --txpool.globalslots '20000' --txpool.lifetime '0h16m0s' "
-
-          if [[ $NODE_TYPE == 'validator' ]]; then
-              args+="--keystore $DATA_DIR/keystore \
-              --unlock $VALIDATOR_ADDRESS \
-              --password $DATA_DIR/password.txt \
-              --allow-insecure-unlock \
-              --nodiscover --maxpeers 1 \
-              --mine
-            "
-          fi
-
-          if [[ $NODE_TYPE == 'sentry' ]]; then
-              args+="--maxpeers 200
-            "
-          fi
-
-          if [[ $NODE_TYPE == 'validator-without-sentry' ]]; then
-              args+="--keystore $DATA_DIR/keystore \
-              --unlock $VALIDATOR_ADDRESS \
-              --password $DATA_DIR/password.txt \
-              --allow-insecure-unlock \
-              --maxpeers 200 \
-              --mine
-            "
-          fi
-
-          eval $args
-          EOF
-
           fpm -s dir -t deb --deb-user root --deb-group root -n matic-bor -v ${{ env.RELEASE_VERSION }} \
-            --after-install after_install.sh \
-            bor.service=/etc/systemd/system/ \
             build/bin/bor=/usr/bin/ \
-            build/bin/bootnode=/usr/bin/ \
-            metadata=/etc/bor/ \
-            start.sh=/etc/bor/
+            build/bin/bootnode=/usr/bin/
 
           mkdir packages-v${{ env.RELEASE_VERSION }}
 
