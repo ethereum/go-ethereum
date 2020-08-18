@@ -146,7 +146,7 @@ func (tt *rewindTest) dump(crash bool) string {
 }
 
 // Tests a sethead for a short canonical chain where a recent block was already
-// comitted to disk and then the sethead called. In this case we expect the full
+// committed to disk and then the sethead called. In this case we expect the full
 // chain to be rolled back to the committed block. Everything above the sethead
 // point should be deleted. In between the committed block and the requested head
 // the data can remain as "fast sync" data to avoid redownloading it.
@@ -185,7 +185,7 @@ func TestShortSetHead(t *testing.T) {
 }
 
 // Tests a sethead for a short canonical chain where the fast sync pivot point was
-// already comitted, after which sethead was called. In this case we expect the
+// already committed, after which sethead was called. In this case we expect the
 // chain to behave like in full sync mode, rolling back to the committed block
 // Everything above the sethead point should be deleted. In between the committed
 // block and the requested head the data can remain as "fast sync" data to avoid
@@ -225,7 +225,7 @@ func TestShortFastSyncedSetHead(t *testing.T) {
 }
 
 // Tests a sethead for a short canonical chain where the fast sync pivot point was
-// not yet comitted, but sethead was called. In this case we expect the chain to
+// not yet committed, but sethead was called. In this case we expect the chain to
 // detect that it was fast syncing and delete everything from the new head, since
 // we can just pick up fast syncing from there. The head full block should be set
 // to the genesis.
@@ -264,8 +264,8 @@ func TestShortFastSyncingSetHead(t *testing.T) {
 }
 
 // Tests a sethead for a short canonical chain and a shorter side chain, where a
-// recent block was already comitted to disk and then sethead was called. In this
-// test scenario the side chain is below the commited block. In this case we expect
+// recent block was already committed to disk and then sethead was called. In this
+// test scenario the side chain is below the committed block. In this case we expect
 // the canonical full chain to be rolled back to the committed block. Everything
 // above the sethead point should be deleted. In between the committed block and
 // the requested head the data can remain as "fast sync" data to avoid redownloading
@@ -307,8 +307,8 @@ func TestShortOldForkedSetHead(t *testing.T) {
 }
 
 // Tests a sethead for a short canonical chain and a shorter side chain, where
-// the fast sync pivot point was already comitted to disk and then sethead was
-// called. In this test scenario the side chain is below the commited block. In
+// the fast sync pivot point was already committed to disk and then sethead was
+// called. In this test scenario the side chain is below the committed block. In
 // this case we expect the canonical full chain to be rolled back to the committed
 // block. Everything above the sethead point should be deleted. In between the
 // committed block and the requested head the data can remain as "fast sync" data
@@ -350,8 +350,8 @@ func TestShortOldForkedFastSyncedSetHead(t *testing.T) {
 }
 
 // Tests a sethead for a short canonical chain and a shorter side chain, where
-// the fast sync pivot point was not yet comitted, but sethead was called. In this
-// test scenario the side chain is below the commited block. In this case we expect
+// the fast sync pivot point was not yet committed, but sethead was called. In this
+// test scenario the side chain is below the committed block. In this case we expect
 // the chain to detect that it was fast syncing and delete everything from the new
 // head, since we can just pick up fast syncing from there. The head full block
 // should be set to the genesis.
@@ -392,8 +392,8 @@ func TestShortOldForkedFastSyncingSetHead(t *testing.T) {
 }
 
 // Tests a sethead for a short canonical chain and a shorter side chain, where a
-// recent block was already comitted to disk and then sethead was called. In this
-// test scenario the side chain reaches above the commited block. In this case we
+// recent block was already committed to disk and then sethead was called. In this
+// test scenario the side chain reaches above the committed block. In this case we
 // expect the canonical full chain to be rolled back to the committed block. All
 // data above the sethead point should be deleted. In between the committed block
 // and the requested head the data can remain as "fast sync" data to avoid having
@@ -439,7 +439,7 @@ func TestShortNewlyForkedSetHead(t *testing.T) {
 }
 
 // Tests a sethead for a short canonical chain and a shorter side chain, where
-// the fast sync pivot point was already comitted to disk and then sethead was
+// the fast sync pivot point was already committed to disk and then sethead was
 // called. In this case we expect the canonical full chain to be rolled back to
 // between the committed block and the requested head the data can remain as
 // "fast sync" data to avoid having to redownload it. The side chain should be
@@ -485,8 +485,8 @@ func TestShortNewlyForkedFastSyncedSetHead(t *testing.T) {
 }
 
 // Tests a sethead for a short canonical chain and a shorter side chain, where
-// the fast sync pivot point was not yet comitted, but sethead was called. In
-// this test scenario the side chain reaches above the commited block. In this
+// the fast sync pivot point was not yet committed, but sethead was called. In
+// this test scenario the side chain reaches above the committed block. In this
 // case we expect the chain to detect that it was fast syncing and delete
 // everything from the new head, since we can just pick up fast syncing from
 // there.
@@ -531,7 +531,7 @@ func TestShortNewlyForkedFastSyncingSetHead(t *testing.T) {
 }
 
 // Tests a sethead for a short canonical chain and a longer side chain, where a
-// recent block was already comitted to disk and then sethead was called. In this
+// recent block was already committed to disk and then sethead was called. In this
 // case we expect the canonical full chain to be rolled back to the committed block.
 // All data above the sethead point should be deleted. In between the committed
 // block and the requested head the data can remain as "fast sync" data to avoid
@@ -577,7 +577,7 @@ func TestShortReorgedSetHead(t *testing.T) {
 }
 
 // Tests a sethead for a short canonical chain and a longer side chain, where
-// the fast sync pivot point was already comitted to disk and then sethead was
+// the fast sync pivot point was already committed to disk and then sethead was
 // called. In this case we expect the canonical full chain to be rolled back to
 // the committed block. All data above the sethead point should be deleted. In
 // between the committed block and the requested head the data can remain as
@@ -624,7 +624,7 @@ func TestShortReorgedFastSyncedSetHead(t *testing.T) {
 }
 
 // Tests a sethead for a short canonical chain and a longer side chain, where
-// the fast sync pivot point was not yet comitted, but sethead was called. In
+// the fast sync pivot point was not yet committed, but sethead was called. In
 // this case we expect the chain to detect that it was fast syncing and delete
 // everything from the new head, since we can just pick up fast syncing from
 // there.
@@ -669,7 +669,7 @@ func TestShortReorgedFastSyncingSetHead(t *testing.T) {
 }
 
 // Tests a sethead for a long canonical chain with frozen blocks where a recent
-// block - newer than the ancient limit - was already comitted to disk and then
+// block - newer than the ancient limit - was already committed to disk and then
 // sethead was called. In this case we expect the full chain to be rolled back
 // to the committed block. Everything above the sethead point should be deleted.
 // In between the committed block and the requested head the data can remain as
@@ -714,7 +714,7 @@ func TestLongShallowSetHead(t *testing.T) {
 }
 
 // Tests a sethead for a long canonical chain with frozen blocks where a recent
-// block - older than the ancient limit - was already comitted to disk and then
+// block - older than the ancient limit - was already committed to disk and then
 // sethead was called. In this case we expect the full chain to be rolled back
 // to the committed block. Since the ancient limit was underflown, everything
 // needs to be deleted onwards to avoid creating a gap.
@@ -757,7 +757,7 @@ func TestLongDeepSetHead(t *testing.T) {
 }
 
 // Tests a sethead for a long canonical chain with frozen blocks where the fast
-// sync pivot point - newer than the ancient limit - was already comitted, after
+// sync pivot point - newer than the ancient limit - was already committed, after
 // which sethead was called. In this case we expect the full chain to be rolled
 // back to the committed block. Everything above the sethead point should be
 // deleted. In between the committed block and the requested head the data can
@@ -802,7 +802,7 @@ func TestLongFastSyncedShallowSetHead(t *testing.T) {
 }
 
 // Tests a sethead for a long canonical chain with frozen blocks where the fast
-// sync pivot point - older than the ancient limit - was already comitted, after
+// sync pivot point - older than the ancient limit - was already committed, after
 // which sethead was called. In this case we expect the full chain to be rolled
 // back to the committed block. Since the ancient limit was underflown, everything
 // needs to be deleted onwards to avoid creating a gap.
@@ -845,7 +845,7 @@ func TestLongFastSyncedDeepSetHead(t *testing.T) {
 }
 
 // Tests a sethead for a long canonical chain with frozen blocks where the fast
-// sync pivot point - newer than the ancient limit - was not yet comitted, but
+// sync pivot point - newer than the ancient limit - was not yet committed, but
 // sethead was called. In this case we expect the chain to detect that it was fast
 // syncing and delete everything from the new head, since we can just pick up fast
 // syncing from there.
@@ -889,7 +889,7 @@ func TestLongFastSyncingShallowSetHead(t *testing.T) {
 }
 
 // Tests a sethead for a long canonical chain with frozen blocks where the fast
-// sync pivot point - older than the ancient limit - was not yet comitted, but
+// sync pivot point - older than the ancient limit - was not yet committed, but
 // sethead was called. In this case we expect the chain to detect that it was fast
 // syncing and delete everything from the new head, since we can just pick up fast
 // syncing from there.
@@ -932,7 +932,7 @@ func TestLongFastSyncingDeepSetHead(t *testing.T) {
 }
 
 // Tests a sethead for a long canonical chain with frozen blocks and a shorter side
-// chain, where a recent block - newer than the ancient limit - was already comitted
+// chain, where a recent block - newer than the ancient limit - was already committed
 // to disk and then sethead was called. In this case we expect the canonical full
 // chain to be rolled back to the committed block. Everything above the sethead point
 // should be deleted. In between the committed block and the requested head the data
@@ -979,7 +979,7 @@ func TestLongOldForkedShallowSetHead(t *testing.T) {
 }
 
 // Tests a sethead for a long canonical chain with frozen blocks and a shorter side
-// chain, where a recent block - older than the ancient limit - was already comitted
+// chain, where a recent block - older than the ancient limit - was already committed
 // to disk and then sethead was called. In this case we expect the canonical full
 // chain to be rolled back to the committed block. Since the ancient limit was
 // underflown, everything needs to be deleted onwards to avoid creating a gap. The
@@ -1025,8 +1025,8 @@ func TestLongOldForkedDeepSetHead(t *testing.T) {
 
 // Tests a sethead for a long canonical chain with frozen blocks and a shorter
 // side chain, where the fast sync pivot point - newer than the ancient limit -
-// was already comitted to disk and then sethead was called. In this test scenario
-// the side chain is below the commited block. In this case we expect the canonical
+// was already committed to disk and then sethead was called. In this test scenario
+// the side chain is below the committed block. In this case we expect the canonical
 // full chain to be rolled back to the committed block. Everything above the
 // sethead point should be deleted. In between the committed block and the
 // requested head the data can remain as "fast sync" data to avoid redownloading
@@ -1073,8 +1073,8 @@ func TestLongOldForkedFastSyncedShallowSetHead(t *testing.T) {
 
 // Tests a sethead for a long canonical chain with frozen blocks and a shorter
 // side chain, where the fast sync pivot point - older than the ancient limit -
-// was already comitted to disk and then sethead was called. In this test scenario
-// the side chain is below the commited block. In this case we expect the canonical
+// was already committed to disk and then sethead was called. In this test scenario
+// the side chain is below the committed block. In this case we expect the canonical
 // full chain to be rolled back to the committed block. Since the ancient limit was
 // underflown, everything needs to be deleted onwards to avoid creating a gap. The
 // side chain is nuked by the freezer.
@@ -1119,8 +1119,8 @@ func TestLongOldForkedFastSyncedDeepSetHead(t *testing.T) {
 
 // Tests a sethead for a long canonical chain with frozen blocks and a shorter
 // side chain, where the fast sync pivot point - newer than the ancient limit -
-// was not yet comitted, but sethead was called. In this test scenario the side
-// chain is below the commited block. In this case we expect the chain to detect
+// was not yet committed, but sethead was called. In this test scenario the side
+// chain is below the committed block. In this case we expect the chain to detect
 // that it was fast syncing and delete everything from the new head, since we can
 // just pick up fast syncing from there. The side chain is completely nuked by the
 // freezer.
@@ -1166,8 +1166,8 @@ func TestLongOldForkedFastSyncingShallowSetHead(t *testing.T) {
 
 // Tests a sethead for a long canonical chain with frozen blocks and a shorter
 // side chain, where the fast sync pivot point - older than the ancient limit -
-// was not yet comitted, but sethead was called. In this test scenario the side
-// chain is below the commited block. In this case we expect the chain to detect
+// was not yet committed, but sethead was called. In this test scenario the side
+// chain is below the committed block. In this case we expect the chain to detect
 // that it was fast syncing and delete everything from the new head, since we can
 // just pick up fast syncing from there. The side chain is completely nuked by the
 // freezer.
@@ -1212,8 +1212,8 @@ func TestLongOldForkedFastSyncingDeepSetHead(t *testing.T) {
 
 // Tests a sethead for a long canonical chain with frozen blocks and a shorter
 // side chain, where a recent block - newer than the ancient limit - was already
-// comitted to disk and then sethead was called. In this test scenario the side
-// chain is above the commited block. In this case the freezer will delete the
+// committed to disk and then sethead was called. In this test scenario the side
+// chain is above the committed block. In this case the freezer will delete the
 // sidechain since it's dangling, reverting to TestLongShallowSetHead.
 func TestLongNewerForkedShallowSetHead(t *testing.T) {
 	// Chain:
@@ -1257,8 +1257,8 @@ func TestLongNewerForkedShallowSetHead(t *testing.T) {
 
 // Tests a sethead for a long canonical chain with frozen blocks and a shorter
 // side chain, where a recent block - older than the ancient limit - was already
-// comitted to disk and then sethead was called. In this test scenario the side
-// chain is above the commited block. In this case the freezer will delete the
+// committed to disk and then sethead was called. In this test scenario the side
+// chain is above the committed block. In this case the freezer will delete the
 // sidechain since it's dangling, reverting to TestLongDeepSetHead.
 func TestLongNewerForkedDeepSetHead(t *testing.T) {
 	// Chain:
@@ -1301,8 +1301,8 @@ func TestLongNewerForkedDeepSetHead(t *testing.T) {
 
 // Tests a sethead for a long canonical chain with frozen blocks and a shorter
 // side chain, where the fast sync pivot point - newer than the ancient limit -
-// was already comitted to disk and then sethead was called. In this test scenario
-// the side chain is above the commited block. In this case the freezer will delete
+// was already committed to disk and then sethead was called. In this test scenario
+// the side chain is above the committed block. In this case the freezer will delete
 // the sidechain since it's dangling, reverting to TestLongFastSyncedShallowSetHead.
 func TestLongNewerForkedFastSyncedShallowSetHead(t *testing.T) {
 	// Chain:
@@ -1346,8 +1346,8 @@ func TestLongNewerForkedFastSyncedShallowSetHead(t *testing.T) {
 
 // Tests a sethead for a long canonical chain with frozen blocks and a shorter
 // side chain, where the fast sync pivot point - older than the ancient limit -
-// was already comitted to disk and then sethead was called. In this test scenario
-// the side chain is above the commited block. In this case the freezer will delete
+// was already committed to disk and then sethead was called. In this test scenario
+// the side chain is above the committed block. In this case the freezer will delete
 // the sidechain since it's dangling, reverting to TestLongFastSyncedDeepSetHead.
 func TestLongNewerForkedFastSyncedDeepSetHead(t *testing.T) {
 	// Chain:
@@ -1390,8 +1390,8 @@ func TestLongNewerForkedFastSyncedDeepSetHead(t *testing.T) {
 
 // Tests a sethead for a long canonical chain with frozen blocks and a shorter
 // side chain, where the fast sync pivot point - newer than the ancient limit -
-// was not yet comitted, but sethead was called. In this test scenario the side
-// chain is above the commited block. In this case the freezer will delete the
+// was not yet committed, but sethead was called. In this test scenario the side
+// chain is above the committed block. In this case the freezer will delete the
 // sidechain since it's dangling, reverting to TestLongFastSyncinghallowSetHead.
 func TestLongNewerForkedFastSyncingShallowSetHead(t *testing.T) {
 	// Chain:
@@ -1435,8 +1435,8 @@ func TestLongNewerForkedFastSyncingShallowSetHead(t *testing.T) {
 
 // Tests a sethead for a long canonical chain with frozen blocks and a shorter
 // side chain, where the fast sync pivot point - older than the ancient limit -
-// was not yet comitted, but sethead was called. In this test scenario the side
-// chain is above the commited block. In this case the freezer will delete the
+// was not yet committed, but sethead was called. In this test scenario the side
+// chain is above the committed block. In this case the freezer will delete the
 // sidechain since it's dangling, reverting to TestLongFastSyncingDeepSetHead.
 func TestLongNewerForkedFastSyncingDeepSetHead(t *testing.T) {
 	// Chain:
@@ -1478,7 +1478,7 @@ func TestLongNewerForkedFastSyncingDeepSetHead(t *testing.T) {
 }
 
 // Tests a sethead for a long canonical chain with frozen blocks and a longer side
-// chain, where a recent block - newer than the ancient limit - was already comitted
+// chain, where a recent block - newer than the ancient limit - was already committed
 // to disk and then sethead was called. In this case the freezer will delete the
 // sidechain since it's dangling, reverting to TestLongShallowSetHead.
 func TestLongReorgedShallowSetHead(t *testing.T) {
@@ -1522,7 +1522,7 @@ func TestLongReorgedShallowSetHead(t *testing.T) {
 }
 
 // Tests a sethead for a long canonical chain with frozen blocks and a longer side
-// chain, where a recent block - older than the ancient limit - was already comitted
+// chain, where a recent block - older than the ancient limit - was already committed
 // to disk and then sethead was called. In this case the freezer will delete the
 // sidechain since it's dangling, reverting to TestLongDeepSetHead.
 func TestLongReorgedDeepSetHead(t *testing.T) {
@@ -1566,7 +1566,7 @@ func TestLongReorgedDeepSetHead(t *testing.T) {
 
 // Tests a sethead for a long canonical chain with frozen blocks and a longer
 // side chain, where the fast sync pivot point - newer than the ancient limit -
-// was already comitted to disk and then sethead was called. In this case the
+// was already committed to disk and then sethead was called. In this case the
 // freezer will delete the sidechain since it's dangling, reverting to
 // TestLongFastSyncedShallowSetHead.
 func TestLongReorgedFastSyncedShallowSetHead(t *testing.T) {
@@ -1611,7 +1611,7 @@ func TestLongReorgedFastSyncedShallowSetHead(t *testing.T) {
 
 // Tests a sethead for a long canonical chain with frozen blocks and a longer
 // side chain, where the fast sync pivot point - older than the ancient limit -
-// was already comitted to disk and then sethead was called. In this case the
+// was already committed to disk and then sethead was called. In this case the
 // freezer will delete the sidechain since it's dangling, reverting to
 // TestLongFastSyncedDeepSetHead.
 func TestLongReorgedFastSyncedDeepSetHead(t *testing.T) {
@@ -1655,7 +1655,7 @@ func TestLongReorgedFastSyncedDeepSetHead(t *testing.T) {
 
 // Tests a sethead for a long canonical chain with frozen blocks and a longer
 // side chain, where the fast sync pivot point - newer than the ancient limit -
-// was not yet comitted, but sethead was called. In this case we expect the
+// was not yet committed, but sethead was called. In this case we expect the
 // chain to detect that it was fast syncing and delete everything from the new
 // head, since we can just pick up fast syncing from there. The side chain is
 // completely nuked by the freezer.
@@ -1701,7 +1701,7 @@ func TestLongReorgedFastSyncingShallowSetHead(t *testing.T) {
 
 // Tests a sethead for a long canonical chain with frozen blocks and a longer
 // side chain, where the fast sync pivot point - older than the ancient limit -
-// was not yet comitted, but sethead was called. In this case we expect the
+// was not yet committed, but sethead was called. In this case we expect the
 // chain to detect that it was fast syncing and delete everything from the new
 // head, since we can just pick up fast syncing from there. The side chain is
 // completely nuked by the freezer.
@@ -1794,7 +1794,7 @@ func testSetHead(t *testing.T, tt *rewindTest) {
 	if _, err := chain.InsertChain(canonblocks[tt.commitBlock:]); err != nil {
 		t.Fatalf("Failed to import canonical chain tail: %v", err)
 	}
-	// Manually dereference anything not comitted to not have to work with 128+ tries
+	// Manually dereference anything not committed to not have to work with 128+ tries
 	for _, block := range sideblocks {
 		chain.stateCache.TrieDB().Dereference(block.Root())
 	}

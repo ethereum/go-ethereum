@@ -35,7 +35,7 @@ import (
 )
 
 // Tests a recovery for a short canonical chain where a recent block was already
-// comitted to disk and then the process crashed. In this case we expect the full
+// committed to disk and then the process crashed. In this case we expect the full
 // chain to be rolled back to the committed block, but the chain data itself left
 // in the database for replaying.
 func TestShortRepair(t *testing.T) {
@@ -72,7 +72,7 @@ func TestShortRepair(t *testing.T) {
 }
 
 // Tests a recovery for a short canonical chain where the fast sync pivot point was
-// already comitted, after which the process crashed. In this case we expect the full
+// already committed, after which the process crashed. In this case we expect the full
 // chain to be rolled back to the committed block, but the chain data itself left in
 // the database for replaying.
 func TestShortFastSyncedRepair(t *testing.T) {
@@ -109,7 +109,7 @@ func TestShortFastSyncedRepair(t *testing.T) {
 }
 
 // Tests a recovery for a short canonical chain where the fast sync pivot point was
-// not yet comitted, but the process crashed. In this case we expect the chain to
+// not yet committed, but the process crashed. In this case we expect the chain to
 // detect that it was fast syncing and not delete anything, since we can just pick
 // up directly where we left off.
 func TestShortFastSyncingRepair(t *testing.T) {
@@ -146,8 +146,8 @@ func TestShortFastSyncingRepair(t *testing.T) {
 }
 
 // Tests a recovery for a short canonical chain and a shorter side chain, where a
-// recent block was already comitted to disk and then the process crashed. In this
-// test scenario the side chain is below the commited block. In this case we expect
+// recent block was already committed to disk and then the process crashed. In this
+// test scenario the side chain is below the committed block. In this case we expect
 // the canonical chain to be rolled back to the committed block, but the chain data
 // itself left in the database for replaying.
 func TestShortOldForkedRepair(t *testing.T) {
@@ -186,8 +186,8 @@ func TestShortOldForkedRepair(t *testing.T) {
 }
 
 // Tests a recovery for a short canonical chain and a shorter side chain, where
-// the fast sync pivot point was already comitted to disk and then the process
-// crashed. In this test scenario the side chain is below the commited block. In
+// the fast sync pivot point was already committed to disk and then the process
+// crashed. In this test scenario the side chain is below the committed block. In
 // this case we expect the canonical chain to be rolled back to the committed block,
 // but the chain data itself left in the database for replaying.
 func TestShortOldForkedFastSyncedRepair(t *testing.T) {
@@ -226,8 +226,8 @@ func TestShortOldForkedFastSyncedRepair(t *testing.T) {
 }
 
 // Tests a recovery for a short canonical chain and a shorter side chain, where
-// the fast sync pivot point was not yet comitted, but the process crashed. In this
-// test scenario the side chain is below the commited block. In this case we expect
+// the fast sync pivot point was not yet committed, but the process crashed. In this
+// test scenario the side chain is below the committed block. In this case we expect
 // the chain to detect that it was fast syncing and not delete anything, since we
 // can just pick up directly where we left off.
 func TestShortOldForkedFastSyncingRepair(t *testing.T) {
@@ -266,8 +266,8 @@ func TestShortOldForkedFastSyncingRepair(t *testing.T) {
 }
 
 // Tests a recovery for a short canonical chain and a shorter side chain, where a
-// recent block was already comitted to disk and then the process crashed. In this
-// test scenario the side chain reaches above the commited block. In this case we
+// recent block was already committed to disk and then the process crashed. In this
+// test scenario the side chain reaches above the committed block. In this case we
 // expect the canonical chain to be rolled back to the committed block, but the
 // chain data itself left in the database for replaying.
 func TestShortNewlyForkedRepair(t *testing.T) {
@@ -306,8 +306,8 @@ func TestShortNewlyForkedRepair(t *testing.T) {
 }
 
 // Tests a recovery for a short canonical chain and a shorter side chain, where
-// the fast sync pivot point was already comitted to disk and then the process
-// crashed. In this test scenario the side chain reaches above the commited block.
+// the fast sync pivot point was already committed to disk and then the process
+// crashed. In this test scenario the side chain reaches above the committed block.
 // In this case we expect the canonical chain to be rolled back to the committed
 // block, but the chain data itself left in the database for replaying.
 func TestShortNewlyForkedFastSyncedRepair(t *testing.T) {
@@ -346,8 +346,8 @@ func TestShortNewlyForkedFastSyncedRepair(t *testing.T) {
 }
 
 // Tests a recovery for a short canonical chain and a shorter side chain, where
-// the fast sync pivot point was not yet comitted, but the process crashed. In
-// this test scenario the side chain reaches above the commited block. In this
+// the fast sync pivot point was not yet committed, but the process crashed. In
+// this test scenario the side chain reaches above the committed block. In this
 // case we expect the chain to detect that it was fast syncing and not delete
 // anything, since we can just pick up directly where we left off.
 func TestShortNewlyForkedFastSyncingRepair(t *testing.T) {
@@ -386,7 +386,7 @@ func TestShortNewlyForkedFastSyncingRepair(t *testing.T) {
 }
 
 // Tests a recovery for a short canonical chain and a longer side chain, where a
-// recent block was already comitted to disk and then the process crashed. In this
+// recent block was already committed to disk and then the process crashed. In this
 // case we expect the canonical chain to be rolled back to the committed block, but
 // the chain data itself left in the database for replaying.
 func TestShortReorgedRepair(t *testing.T) {
@@ -425,7 +425,7 @@ func TestShortReorgedRepair(t *testing.T) {
 }
 
 // Tests a recovery for a short canonical chain and a longer side chain, where
-// the fast sync pivot point was already comitted to disk and then the process
+// the fast sync pivot point was already committed to disk and then the process
 // crashed. In this case we expect the canonical chain to be rolled back to the
 // committed block, but the chain data itself left in the database for replaying.
 func TestShortReorgedFastSyncedRepair(t *testing.T) {
@@ -464,7 +464,7 @@ func TestShortReorgedFastSyncedRepair(t *testing.T) {
 }
 
 // Tests a recovery for a short canonical chain and a longer side chain, where
-// the fast sync pivot point was not yet comitted, but the process crashed. In
+// the fast sync pivot point was not yet committed, but the process crashed. In
 // this case we expect the chain to detect that it was fast syncing and not delete
 // anything, since we can just pick up directly where we left off.
 func TestShortReorgedFastSyncingRepair(t *testing.T) {
@@ -503,7 +503,7 @@ func TestShortReorgedFastSyncingRepair(t *testing.T) {
 }
 
 // Tests a recovery for a long canonical chain with frozen blocks where a recent
-// block - newer than the ancient limit - was already comitted to disk and then
+// block - newer than the ancient limit - was already committed to disk and then
 // the process crashed. In this case we expect the chain to be rolled back to the
 // committed block, with everything afterwads kept as fast sync data.
 func TestLongShallowRepair(t *testing.T) {
@@ -545,7 +545,7 @@ func TestLongShallowRepair(t *testing.T) {
 }
 
 // Tests a recovery for a long canonical chain with frozen blocks where a recent
-// block - older than the ancient limit - was already comitted to disk and then
+// block - older than the ancient limit - was already committed to disk and then
 // the process crashed. In this case we expect the chain to be rolled back to the
 // committed block, with everything afterwads deleted.
 func TestLongDeepRepair(t *testing.T) {
@@ -586,7 +586,7 @@ func TestLongDeepRepair(t *testing.T) {
 }
 
 // Tests a recovery for a long canonical chain with frozen blocks where the fast
-// sync pivot point - newer than the ancient limit - was already comitted, after
+// sync pivot point - newer than the ancient limit - was already committed, after
 // which the process crashed. In this case we expect the chain to be rolled back
 // to the committed block, with everything afterwads kept as fast sync data.
 func TestLongFastSyncedShallowRepair(t *testing.T) {
@@ -628,7 +628,7 @@ func TestLongFastSyncedShallowRepair(t *testing.T) {
 }
 
 // Tests a recovery for a long canonical chain with frozen blocks where the fast
-// sync pivot point - older than the ancient limit - was already comitted, after
+// sync pivot point - older than the ancient limit - was already committed, after
 // which the process crashed. In this case we expect the chain to be rolled back
 // to the committed block, with everything afterwads deleted.
 func TestLongFastSyncedDeepRepair(t *testing.T) {
@@ -669,7 +669,7 @@ func TestLongFastSyncedDeepRepair(t *testing.T) {
 }
 
 // Tests a recovery for a long canonical chain with frozen blocks where the fast
-// sync pivot point - older than the ancient limit - was not yet comitted, but the
+// sync pivot point - older than the ancient limit - was not yet committed, but the
 // process crashed. In this case we expect the chain to detect that it was fast
 // syncing and not delete anything, since we can just pick up directly where we
 // left off.
@@ -712,7 +712,7 @@ func TestLongFastSyncingShallowRepair(t *testing.T) {
 }
 
 // Tests a recovery for a long canonical chain with frozen blocks where the fast
-// sync pivot point - newer than the ancient limit - was not yet comitted, but the
+// sync pivot point - newer than the ancient limit - was not yet committed, but the
 // process crashed. In this case we expect the chain to detect that it was fast
 // syncing and not delete anything, since we can just pick up directly where we
 // left off.
@@ -756,8 +756,8 @@ func TestLongFastSyncingDeepRepair(t *testing.T) {
 
 // Tests a recovery for a long canonical chain with frozen blocks and a shorter
 // side chain, where a recent block - newer than the ancient limit - was already
-// comitted to disk and then the process crashed. In this test scenario the side
-// chain is below the commited block. In this case we expect the chain to be
+// committed to disk and then the process crashed. In this test scenario the side
+// chain is below the committed block. In this case we expect the chain to be
 // rolled back to the committed block, with everything afterwads kept as fast
 // sync data; the side chain completely nuked by the freezer.
 func TestLongOldForkedShallowRepair(t *testing.T) {
@@ -801,8 +801,8 @@ func TestLongOldForkedShallowRepair(t *testing.T) {
 
 // Tests a recovery for a long canonical chain with frozen blocks and a shorter
 // side chain, where a recent block - older than the ancient limit - was already
-// comitted to disk and then the process crashed. In this test scenario the side
-// chain is below the commited block. In this case we expect the canonical chain
+// committed to disk and then the process crashed. In this test scenario the side
+// chain is below the committed block. In this case we expect the canonical chain
 // to be rolled back to the committed block, with everything afterwads deleted;
 // the side chain completely nuked by the freezer.
 func TestLongOldForkedDeepRepair(t *testing.T) {
@@ -845,8 +845,8 @@ func TestLongOldForkedDeepRepair(t *testing.T) {
 
 // Tests a recovery for a long canonical chain with frozen blocks and a shorter
 // side chain, where the fast sync pivot point - newer than the ancient limit -
-// was already comitted to disk and then the process crashed. In this test scenario
-// the side chain is below the commited block. In this case we expect the chain
+// was already committed to disk and then the process crashed. In this test scenario
+// the side chain is below the committed block. In this case we expect the chain
 // to be rolled back to the committed block, with everything afterwads kept as
 // fast sync data; the side chain completely nuked by the freezer.
 func TestLongOldForkedFastSyncedShallowRepair(t *testing.T) {
@@ -890,8 +890,8 @@ func TestLongOldForkedFastSyncedShallowRepair(t *testing.T) {
 
 // Tests a recovery for a long canonical chain with frozen blocks and a shorter
 // side chain, where the fast sync pivot point - older than the ancient limit -
-// was already comitted to disk and then the process crashed. In this test scenario
-// the side chain is below the commited block. In this case we expect the canonical
+// was already committed to disk and then the process crashed. In this test scenario
+// the side chain is below the committed block. In this case we expect the canonical
 // chain to be rolled back to the committed block, with everything afterwads deleted;
 // the side chain completely nuked by the freezer.
 func TestLongOldForkedFastSyncedDeepRepair(t *testing.T) {
@@ -934,8 +934,8 @@ func TestLongOldForkedFastSyncedDeepRepair(t *testing.T) {
 
 // Tests a recovery for a long canonical chain with frozen blocks and a shorter
 // side chain, where the fast sync pivot point - older than the ancient limit -
-// was not yet comitted, but the process crashed. In this test scenario the side
-// chain is below the commited block. In this case we expect the chain to detect
+// was not yet committed, but the process crashed. In this test scenario the side
+// chain is below the committed block. In this case we expect the chain to detect
 // that it was fast syncing and not delete anything. The side chain is completely
 // nuked by the freezer.
 func TestLongOldForkedFastSyncingShallowRepair(t *testing.T) {
@@ -979,8 +979,8 @@ func TestLongOldForkedFastSyncingShallowRepair(t *testing.T) {
 
 // Tests a recovery for a long canonical chain with frozen blocks and a shorter
 // side chain, where the fast sync pivot point - older than the ancient limit -
-// was not yet comitted, but the process crashed. In this test scenario the side
-// chain is below the commited block. In this case we expect the chain to detect
+// was not yet committed, but the process crashed. In this test scenario the side
+// chain is below the committed block. In this case we expect the chain to detect
 // that it was fast syncing and not delete anything. The side chain is completely
 // nuked by the freezer.
 func TestLongOldForkedFastSyncingDeepRepair(t *testing.T) {
@@ -1024,8 +1024,8 @@ func TestLongOldForkedFastSyncingDeepRepair(t *testing.T) {
 
 // Tests a recovery for a long canonical chain with frozen blocks and a shorter
 // side chain, where a recent block - newer than the ancient limit - was already
-// comitted to disk and then the process crashed. In this test scenario the side
-// chain is above the commited block. In this case we expect the chain to be
+// committed to disk and then the process crashed. In this test scenario the side
+// chain is above the committed block. In this case we expect the chain to be
 // rolled back to the committed block, with everything afterwads kept as fast
 // sync data; the side chain completely nuked by the freezer.
 func TestLongNewerForkedShallowRepair(t *testing.T) {
@@ -1069,8 +1069,8 @@ func TestLongNewerForkedShallowRepair(t *testing.T) {
 
 // Tests a recovery for a long canonical chain with frozen blocks and a shorter
 // side chain, where a recent block - older than the ancient limit - was already
-// comitted to disk and then the process crashed. In this test scenario the side
-// chain is above the commited block. In this case we expect the canonical chain
+// committed to disk and then the process crashed. In this test scenario the side
+// chain is above the committed block. In this case we expect the canonical chain
 // to be rolled back to the committed block, with everything afterwads deleted;
 // the side chain completely nuked by the freezer.
 func TestLongNewerForkedDeepRepair(t *testing.T) {
@@ -1113,8 +1113,8 @@ func TestLongNewerForkedDeepRepair(t *testing.T) {
 
 // Tests a recovery for a long canonical chain with frozen blocks and a shorter
 // side chain, where the fast sync pivot point - newer than the ancient limit -
-// was already comitted to disk and then the process crashed. In this test scenario
-// the side chain is above the commited block. In this case we expect the chain
+// was already committed to disk and then the process crashed. In this test scenario
+// the side chain is above the committed block. In this case we expect the chain
 // to be rolled back to the committed block, with everything afterwads kept as fast
 // sync data; the side chain completely nuked by the freezer.
 func TestLongNewerForkedFastSyncedShallowRepair(t *testing.T) {
@@ -1158,8 +1158,8 @@ func TestLongNewerForkedFastSyncedShallowRepair(t *testing.T) {
 
 // Tests a recovery for a long canonical chain with frozen blocks and a shorter
 // side chain, where the fast sync pivot point - older than the ancient limit -
-// was already comitted to disk and then the process crashed. In this test scenario
-// the side chain is above the commited block. In this case we expect the canonical
+// was already committed to disk and then the process crashed. In this test scenario
+// the side chain is above the committed block. In this case we expect the canonical
 // chain to be rolled back to the committed block, with everything afterwads deleted;
 // the side chain completely nuked by the freezer.
 func TestLongNewerForkedFastSyncedDeepRepair(t *testing.T) {
@@ -1202,8 +1202,8 @@ func TestLongNewerForkedFastSyncedDeepRepair(t *testing.T) {
 
 // Tests a recovery for a long canonical chain with frozen blocks and a shorter
 // side chain, where the fast sync pivot point - older than the ancient limit -
-// was not yet comitted, but the process crashed. In this test scenario the side
-// chain is above the commited block. In this case we expect the chain to detect
+// was not yet committed, but the process crashed. In this test scenario the side
+// chain is above the committed block. In this case we expect the chain to detect
 // that it was fast syncing and not delete anything. The side chain is completely
 // nuked by the freezer.
 func TestLongNewerForkedFastSyncingShallowRepair(t *testing.T) {
@@ -1247,8 +1247,8 @@ func TestLongNewerForkedFastSyncingShallowRepair(t *testing.T) {
 
 // Tests a recovery for a long canonical chain with frozen blocks and a shorter
 // side chain, where the fast sync pivot point - older than the ancient limit -
-// was not yet comitted, but the process crashed. In this test scenario the side
-// chain is above the commited block. In this case we expect the chain to detect
+// was not yet committed, but the process crashed. In this test scenario the side
+// chain is above the committed block. In this case we expect the chain to detect
 // that it was fast syncing and not delete anything. The side chain is completely
 // nuked by the freezer.
 func TestLongNewerForkedFastSyncingDeepRepair(t *testing.T) {
@@ -1291,7 +1291,7 @@ func TestLongNewerForkedFastSyncingDeepRepair(t *testing.T) {
 }
 
 // Tests a recovery for a long canonical chain with frozen blocks and a longer side
-// chain, where a recent block - newer than the ancient limit - was already comitted
+// chain, where a recent block - newer than the ancient limit - was already committed
 // to disk and then the process crashed. In this case we expect the chain to be
 // rolled back to the committed block, with everything afterwads kept as fast sync
 // data. The side chain completely nuked by the freezer.
@@ -1335,7 +1335,7 @@ func TestLongReorgedShallowRepair(t *testing.T) {
 }
 
 // Tests a recovery for a long canonical chain with frozen blocks and a longer side
-// chain, where a recent block - older than the ancient limit - was already comitted
+// chain, where a recent block - older than the ancient limit - was already committed
 // to disk and then the process crashed. In this case we expect the canonical chains
 // to be rolled back to the committed block, with everything afterwads deleted. The
 // side chain completely nuked by the freezer.
@@ -1379,7 +1379,7 @@ func TestLongReorgedDeepRepair(t *testing.T) {
 
 // Tests a recovery for a long canonical chain with frozen blocks and a longer
 // side chain, where the fast sync pivot point - newer than the ancient limit -
-// was already comitted to disk and then the process crashed. In this case we
+// was already committed to disk and then the process crashed. In this case we
 // expect the chain to be rolled back to the committed block, with everything
 // afterwads kept as fast sync data. The side chain completely nuked by the
 // freezer.
@@ -1424,7 +1424,7 @@ func TestLongReorgedFastSyncedShallowRepair(t *testing.T) {
 
 // Tests a recovery for a long canonical chain with frozen blocks and a longer
 // side chain, where the fast sync pivot point - older than the ancient limit -
-// was already comitted to disk and then the process crashed. In this case we
+// was already committed to disk and then the process crashed. In this case we
 // expect the canonical chains to be rolled back to the committed block, with
 // everything afterwads deleted. The side chain completely nuked by the freezer.
 func TestLongReorgedFastSyncedDeepRepair(t *testing.T) {
@@ -1467,7 +1467,7 @@ func TestLongReorgedFastSyncedDeepRepair(t *testing.T) {
 
 // Tests a recovery for a long canonical chain with frozen blocks and a longer
 // side chain, where the fast sync pivot point - newer than the ancient limit -
-// was not yet comitted, but the process crashed. In this case we expect the
+// was not yet committed, but the process crashed. In this case we expect the
 // chain to detect that it was fast syncing and not delete anything, since we
 // can just pick up directly where we left off.
 func TestLongReorgedFastSyncingShallowRepair(t *testing.T) {
@@ -1511,7 +1511,7 @@ func TestLongReorgedFastSyncingShallowRepair(t *testing.T) {
 
 // Tests a recovery for a long canonical chain with frozen blocks and a longer
 // side chain, where the fast sync pivot point - older than the ancient limit -
-// was not yet comitted, but the process crashed. In this case we expect the
+// was not yet committed, but the process crashed. In this case we expect the
 // chain to detect that it was fast syncing and not delete anything, since we
 // can just pick up directly where we left off.
 func TestLongReorgedFastSyncingDeepRepair(t *testing.T) {
