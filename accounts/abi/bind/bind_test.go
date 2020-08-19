@@ -287,6 +287,7 @@ var bindTests = []struct {
 		[]string{`[{"constant":true,"inputs":[],"name":"transactString","outputs":[{"name":"","type":"string"}],"type":"function"},{"constant":true,"inputs":[],"name":"deployString","outputs":[{"name":"","type":"string"}],"type":"function"},{"constant":false,"inputs":[{"name":"str","type":"string"}],"name":"transact","outputs":[],"type":"function"},{"inputs":[{"name":"str","type":"string"}],"type":"constructor"}]`},
 		`
 			"math/big"
+			"context"
 
 			"github.com/ethereum/go-ethereum/accounts/abi/bind"
 			"github.com/ethereum/go-ethereum/accounts/abi/bind/backends"
@@ -321,6 +322,30 @@ var bindTests = []struct {
 				t.Fatalf("Failed to retrieve transact string: %v", err)
 			} else if str != "Transact string" {
 				t.Fatalf("Transact string mismatch: have '%s', want 'Transact string'", str)
+			}
+			
+			// Check that IsInteractor works 
+			addr, _, _, _ := DeployInteractor(auth, sim, "Deploy string")
+			checkopts := bind.CheckOpts{
+				Address:     addr,
+				BlockNumber: nil,
+				Context:     context.Background(),
+			}
+			is, err := IsInteractor(&checkopts, sim); 
+			if err != nil {
+				t.Fatalf("Failed to check IsInteractor: %v", err)
+			}
+			if is {
+				t.Fatalf("IsInteractor should produce false if contract is not deployed")
+			}
+			// Commit the deployment
+			sim.Commit()
+			is, err = IsInteractor(&checkopts, sim); 
+			if err != nil {
+				t.Fatalf("Failed to check IsInteractor: %v", err)
+			}
+			if !is {
+				t.Fatalf("IsInteractor should be true for a valid contract")
 			}
 		`,
 		nil,
