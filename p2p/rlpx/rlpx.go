@@ -51,14 +51,14 @@ func NewRLPX(conn net.Conn) *Rlpx {
 	return &Rlpx{Conn: conn}
 }
 
-func (r *Rlpx) Read() (RawRLPXMessage, error) {
+func (r *Rlpx) ReadMsg() (RawRLPXMessage, error) {
 	r.rmu.Lock()
 	defer r.rmu.Unlock()
 
 	return r.RW.Read()
 }
 
-func (r *Rlpx) Write(msg RawRLPXMessage) error {
+func (r *Rlpx) WriteMsg(msg RawRLPXMessage) error {
 	r.wmu.Lock()
 	defer r.wmu.Unlock()
 
@@ -154,7 +154,7 @@ func (rw *RlpxFrameRW) Compress(size uint32, payload io.Reader) (uint32, io.Read
 
 func (rw *RlpxFrameRW) Write(msg RawRLPXMessage) error {
 	ptype, _ := rlp.EncodeToBytes(msg.Code)
-	// write header
+	// write headers
 	headbuf := make([]byte, 32)
 	fsize := uint32(len(ptype)) + msg.Size
 	if fsize > maxUint24 {

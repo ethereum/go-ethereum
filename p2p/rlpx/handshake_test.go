@@ -14,7 +14,7 @@
 // You should have received a copy of the GNU Lesser General Public License
 // along with the go-ethereum library. If not, see <http://www.gnu.org/licenses/>.
 
-package p2p
+package rlpx
 
 import (
 	"bytes"
@@ -22,6 +22,7 @@ import (
 	"crypto/rand"
 	"errors"
 	"fmt"
+	"github.com/ethereum/go-ethereum/p2p"
 	"io"
 	"io/ioutil"
 	"net"
@@ -34,7 +35,6 @@ import (
 	"github.com/davecgh/go-spew/spew"
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/crypto/ecies"
-	r "github.com/ethereum/go-ethereum/p2p/rlpx"
 	"github.com/ethereum/go-ethereum/p2p/simulations/pipes"
 	"github.com/ethereum/go-ethereum/rlp"
 	"golang.org/x/crypto/sha3"
@@ -89,7 +89,7 @@ func testEncHandshake(token []byte) error {
 		prv0, _  = crypto.GenerateKey()
 		prv1, _  = crypto.GenerateKey()
 		fd0, fd1 = net.Pipe()
-		t0, t1   = newTransport(fd0).(*transportWrapper), newTransport(fd1).(*transportWrapper)
+		t0, t1   = p2p.newTransport(fd0).(*p2p.transportWrapper), p2p.newTransport(fd1).(*p2p.transportWrapper)
 		output   = make(chan result)
 	)
 
@@ -149,11 +149,11 @@ func TestProtocolHandshake(t *testing.T) {
 	var (
 		prv0, _ = crypto.GenerateKey()
 		pub0    = crypto.FromECDSAPub(&prv0.PublicKey)[1:]
-		hs0     = &protoHandshake{Version: 3, ID: pub0, Caps: []Cap{{"a", 0}, {"b", 2}}}
+		hs0     = &p2p.protoHandshake{Version: 3, ID: pub0, Caps: []p2p.Cap{{"a", 0}, {"b", 2}}}
 
 		prv1, _ = crypto.GenerateKey()
 		pub1    = crypto.FromECDSAPub(&prv1.PublicKey)[1:]
-		hs1     = &protoHandshake{Version: 3, ID: pub1, Caps: []Cap{{"c", 1}, {"d", 3}}}
+		hs1     = &p2p.protoHandshake{Version: 3, ID: pub1, Caps: []p2p.Cap{{"c", 1}, {"d", 3}}}
 
 		wg sync.WaitGroup
 	)
@@ -167,7 +167,7 @@ func TestProtocolHandshake(t *testing.T) {
 	go func() {
 		defer wg.Done()
 		defer fd0.Close()
-		transport := newTransport(fd0)
+		transport := p2p.newTransport(fd0)
 		rpubkey, err := transport.doEncHandshake(prv0, &prv1.PublicKey)
 		if err != nil {
 			t.Errorf("dial side enc handshake failed: %v", err)
@@ -188,12 +188,12 @@ func TestProtocolHandshake(t *testing.T) {
 			t.Errorf("dial side proto handshake mismatch:\ngot: %s\nwant: %s\n", spew.Sdump(phs), spew.Sdump(hs1))
 			return
 		}
-		transport.close(DiscQuitting)
+		transport.close(p2p.DiscQuitting)
 	}()
 	go func() {
 		defer wg.Done()
 		defer fd1.Close()
-		transport1 := newTransport(fd1)
+		transport1 := p2p.newTransport(fd1)
 		rpubkey, err := transport1.doEncHandshake(prv1, nil)
 		if err != nil {
 			t.Errorf("listen side enc handshake failed: %v", err)
@@ -215,7 +215,7 @@ func TestProtocolHandshake(t *testing.T) {
 			return
 		}
 
-		if err := ExpectMsg(transport1, discMsg, []DiscReason{DiscQuitting}); err != nil {
+		if err := p2p.ExpectMsg(transport1, p2p.discMsg, []p2p.DiscReason{p2p.DiscQuitting}); err != nil {
 			t.Errorf("error receiving disconnect: %v", err)
 		}
 	}()
@@ -229,9 +229,9 @@ func TestProtocolHandshakeErrors(t *testing.T) {
 		err  error
 	}{
 		{
-			code: discMsg,
-			msg:  []DiscReason{DiscQuitting},
-			err:  DiscQuitting,
+			code: p2p.discMsg,
+			msg:  []p2p.DiscReason{p2p.DiscQuitting},
+			err:  p2p.DiscQuitting,
 		},
 		{
 			code: 0x989898,
@@ -239,25 +239,25 @@ func TestProtocolHandshakeErrors(t *testing.T) {
 			err:  errors.New("expected handshake, got 989898"),
 		},
 		{
-			code: handshakeMsg,
-			msg:  make([]byte, baseProtocolMaxMsgSize+2),
+			code: p2p.handshakeMsg,
+			msg:  make([]byte, p2p.baseProtocolMaxMsgSize+2),
 			err:  errors.New("message too big"),
 		},
 		{
-			code: handshakeMsg,
+			code: p2p.handshakeMsg,
 			msg:  []byte{1, 2, 3},
-			err:  newPeerError(errInvalidMsg, "(code 0) (size 4) rlp: expected input list for p2p.protoHandshake"),
+			err:  p2p.newPeerError(p2p.errInvalidMsg, "(code 0) (size 4) rlp: expected input list for p2p.protoHandshake"),
 		},
 		{
-			code: handshakeMsg,
-			msg:  &protoHandshake{Version: 3},
-			err:  DiscInvalidIdentity,
+			code: p2p.handshakeMsg,
+			msg:  &p2p.protoHandshake{Version: 3},
+			err:  p2p.DiscInvalidIdentity,
 		},
 	}
 
 	for i, test := range tests {
-		p1, p2 := MsgPipe()
-		go Send(p1, test.code, test.msg)
+		p1, p2 := p2p.MsgPipe()
+		go p2p.Send(p1, test.code, test.msg)
 		_, err := readProtocolHandshake(p2)
 		if !reflect.DeepEqual(err, test.err) {
 			t.Errorf("test %d: error mismatch: got %q, want %q", i, err, test.err)
@@ -275,13 +275,13 @@ func TestRLPXFrameFake(t *testing.T) {
 		EgressMAC:  hash,
 	}
 	// create transport wrapper
-	transport := &transportWrapper{
+	transport := &p2p.transportWrapper{
 		rlpx: &r.Rlpx{
 			RW: r.NewRLPXFrameRW(buf, sec.AES, sec.MAC, sec.EgressMAC, sec.IngressMAC),
 		},
 	}
 
-	golden := unhex(`
+	golden := p2p.unhex(`
 00828ddae471818bb0bfa6b551d1cb42
 01010101010101010101010101010101
 ba628a4ba590cb43f7848f41c4382885
@@ -289,7 +289,7 @@ ba628a4ba590cb43f7848f41c4382885
 `)
 
 	// Check WriteMsg. This puts a message into the buffer.
-	if err := Send(transport, 8, []uint{1, 2, 3, 4}); err != nil {
+	if err := p2p.Send(transport, 8, []uint{1, 2, 3, 4}); err != nil {
 		t.Fatalf("WriteMsg error: %v", err)
 	}
 	written := buf.Bytes()
@@ -310,7 +310,7 @@ ba628a4ba590cb43f7848f41c4382885
 		t.Errorf("msg code mismatch: got %d, want %d", msg.Code, 8)
 	}
 	payload, _ := ioutil.ReadAll(msg.Payload)
-	wantPayload := unhex("C401020304")
+	wantPayload := p2p.unhex("C401020304")
 	if !bytes.Equal(payload, wantPayload) {
 		t.Errorf("msg payload mismatch:\ngot  %x\nwant %x", payload, wantPayload)
 	}
@@ -346,7 +346,7 @@ func TestRLPXFrameRW(t *testing.T) {
 	s1.EgressMAC.Write(egressMACinit)
 	s1.IngressMAC.Write(ingressMACinit)
 	// create transport wrapper
-	transport1 := &transportWrapper{
+	transport1 := &p2p.transportWrapper{
 		rlpx: &r.Rlpx{
 			RW: r.NewRLPXFrameRW(conn, s1.AES, s1.MAC, s1.EgressMAC, s1.IngressMAC),
 		},
@@ -360,7 +360,7 @@ func TestRLPXFrameRW(t *testing.T) {
 	}
 	s2.EgressMAC.Write(ingressMACinit)
 	s2.IngressMAC.Write(egressMACinit)
-	transport2 := &transportWrapper{
+	transport2 := &p2p.transportWrapper{
 		rlpx: &r.Rlpx{
 			RW: r.NewRLPXFrameRW(conn, s2.AES, s2.MAC, s2.EgressMAC, s2.IngressMAC),
 		},
@@ -370,7 +370,7 @@ func TestRLPXFrameRW(t *testing.T) {
 	for i := 0; i < 10; i++ {
 		// write message into conn buffer
 		wmsg := []interface{}{"foo", "bar", strings.Repeat("test", i)}
-		err := Send(transport1, uint64(i), wmsg)
+		err := p2p.Send(transport1, uint64(i), wmsg)
 		if err != nil {
 			t.Fatalf("WriteMsg error (i=%d): %v", i, err)
 		}
@@ -524,10 +524,10 @@ func TestHandshakeForwardCompatibility(t *testing.T) {
 		ephB, _       = crypto.HexToECDSA("e238eb8e04fee6511ab04c6dd3c89ce097b11f25d584863ac2b6d5b35b1847e4")
 		ephPubA       = crypto.FromECDSAPub(&ephA.PublicKey)[1:]
 		ephPubB       = crypto.FromECDSAPub(&ephB.PublicKey)[1:]
-		nonceA        = unhex("7e968bba13b6c50e2c4cd7f241cc0d64d1ac25c7f5952df231ac6a2bda8ee5d6")
-		nonceB        = unhex("559aead08264d5795d3909718cdd05abd49572e84fe55590eef31a88a08fdffd")
+		nonceA        = p2p.unhex("7e968bba13b6c50e2c4cd7f241cc0d64d1ac25c7f5952df231ac6a2bda8ee5d6")
+		nonceB        = p2p.unhex("559aead08264d5795d3909718cdd05abd49572e84fe55590eef31a88a08fdffd")
 		_, _, _, _    = pubA, pubB, ephPubA, ephPubB
-		authSignature = unhex("299ca6acfd35e3d72d8ba3d1e2b60b5561d5af5218eb5bc182045769eb4226910a301acae3b369fffc4a4899d6b02531e89fd4fe36a2cf0d93607ba470b50f7800")
+		authSignature = p2p.unhex("299ca6acfd35e3d72d8ba3d1e2b60b5561d5af5218eb5bc182045769eb4226910a301acae3b369fffc4a4899d6b02531e89fd4fe36a2cf0d93607ba470b50f7800")
 		_             = authSignature
 	)
 	makeAuth := func(test handshakeAuthTest) *authMsgV4 {
@@ -546,25 +546,25 @@ func TestHandshakeForwardCompatibility(t *testing.T) {
 
 	// check auth msg parsing
 	for _, test := range eip8HandshakeAuthTests {
-		r := bytes.NewReader(unhex(test.input))
+		r := bytes.NewReader(p2p.unhex(test.input))
 		msg := new(authMsgV4)
 		ciphertext, err := readHandshakeMsg(msg, encAuthMsgLen, keyB, r)
 		if err != nil {
-			t.Errorf("error for input %x:\n  %v", unhex(test.input), err)
+			t.Errorf("error for input %x:\n  %v", p2p.unhex(test.input), err)
 			continue
 		}
-		if !bytes.Equal(ciphertext, unhex(test.input)) {
-			t.Errorf("wrong ciphertext for input %x:\n  %x", unhex(test.input), ciphertext)
+		if !bytes.Equal(ciphertext, p2p.unhex(test.input)) {
+			t.Errorf("wrong ciphertext for input %x:\n  %x", p2p.unhex(test.input), ciphertext)
 		}
 		want := makeAuth(test)
 		if !reflect.DeepEqual(msg, want) {
-			t.Errorf("wrong msg for input %x:\ngot %s\nwant %s", unhex(test.input), spew.Sdump(msg), spew.Sdump(want))
+			t.Errorf("wrong msg for input %x:\ngot %s\nwant %s", p2p.unhex(test.input), spew.Sdump(msg), spew.Sdump(want))
 		}
 	}
 
 	// check auth resp parsing
 	for _, test := range eip8HandshakeRespTests {
-		input := unhex(test.input)
+		input := p2p.unhex(test.input)
 		r := bytes.NewReader(input)
 		msg := new(authRespV4)
 		ciphertext, err := readHandshakeMsg(msg, encAuthRespLen, keyA, r)
@@ -588,12 +588,12 @@ func TestHandshakeForwardCompatibility(t *testing.T) {
 			respNonce:     nonceB,
 			randomPrivKey: ecies.ImportECDSA(ephB),
 		}
-		authCiphertext     = unhex(eip8HandshakeAuthTests[1].input)
-		authRespCiphertext = unhex(eip8HandshakeRespTests[1].input)
+		authCiphertext     = p2p.unhex(eip8HandshakeAuthTests[1].input)
+		authRespCiphertext = p2p.unhex(eip8HandshakeRespTests[1].input)
 		authMsg            = makeAuth(eip8HandshakeAuthTests[1])
-		wantAES            = unhex("80e8632c05fed6fc2a13b0f8d31a3cf645366239170ea067065aba8e28bac487")
-		wantMAC            = unhex("2ea74ec5dae199227dff1af715362700e989d889d7a493cb0639691efb8e5f98")
-		wantFooIngressHash = unhex("0c7ec6340062cc46f5e9f1e3cf86f8c8c403c5a0964f5df0ebd34a75ddc86db5")
+		wantAES            = p2p.unhex("80e8632c05fed6fc2a13b0f8d31a3cf645366239170ea067065aba8e28bac487")
+		wantMAC            = p2p.unhex("2ea74ec5dae199227dff1af715362700e989d889d7a493cb0639691efb8e5f98")
+		wantFooIngressHash = p2p.unhex("0c7ec6340062cc46f5e9f1e3cf86f8c8c403c5a0964f5df0ebd34a75ddc86db5")
 	)
 	if err := hs.handleAuthMsg(authMsg, keyB); err != nil {
 		t.Fatalf("handleAuthMsg: %v", err)

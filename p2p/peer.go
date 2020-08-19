@@ -19,6 +19,7 @@ package p2p
 import (
 	"errors"
 	"fmt"
+	r "github.com/ethereum/go-ethereum/p2p/rlpx"
 	"io"
 	"net"
 	"sort"
@@ -41,19 +42,9 @@ var (
 const (
 	baseProtocolVersion    = 5
 	baseProtocolLength     = uint64(16)
-	baseProtocolMaxMsgSize = 2 * 1024
 
-	snappyProtocolVersion = 5
 
 	pingInterval = 15 * time.Second
-)
-
-const (
-	// devp2p message codes
-	handshakeMsg = 0x00
-	discMsg      = 0x01
-	pingMsg      = 0x02
-	pongMsg      = 0x03
 )
 
 // protoHandshake is the RLP structure of the protocol handshake.

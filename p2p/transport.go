@@ -11,20 +11,6 @@ import (
 	r "github.com/ethereum/go-ethereum/p2p/rlpx" // TODO change name of import
 )
 
-type transport interface {
-	// The two handshakes.
-	doEncHandshake(prv *ecdsa.PrivateKey, dialDest *ecdsa.PublicKey) (*ecdsa.PublicKey, error)
-	doProtoHandshake(our *protoHandshake) (*protoHandshake, error)
-	// The MsgReadWriter can only be used after the encryption
-	// handshake has completed. The code uses conn.id to track this
-	// by setting it to a non-nil value after the encryption handshake.
-	MsgReadWriter
-	// transports must provide Close because we use MsgPipe in some of
-	// the tests. Closing the actual network connection doesn't do
-	// anything in those tests because MsgPipe doesn't use it.
-	close(err error)
-}
-
 // TODO rename maybe?
 type transportWrapper struct {
 	mu sync.Mutex
@@ -32,8 +18,8 @@ type transportWrapper struct {
 	rlpx *r.Rlpx
 }
 
-func newTransport(conn net.Conn) transport {
-	conn.SetDeadline(time.Now().Add(handshakeTimeout))
+func newTransport(conn net.Conn) r.Transport {
+	conn.SetDeadline(time.Now().Add(r.HandshakeTimeout))
 	return &transportWrapper{
 		rlpx: r.NewRLPX(conn),
 	}
@@ -106,7 +92,7 @@ func (t *transportWrapper) close(err error) {
 			// it hangs forever, since net.Pipe does not implement
 			// a write deadline. Because of this only try to send
 			// the disconnect reason message if there is no error.
-			if err := t.rlpx.Conn.SetWriteDeadline(time.Now().Add(discWriteTimeout)); err == nil {
+			if err := t.rlpx.Conn.SetWriteDeadline(time.Now().Add(r.discWriteTimeout)); err == nil {
 				SendItems(t, discMsg, r)
 			}
 		}

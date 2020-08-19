@@ -44,7 +44,7 @@ type testTransport struct {
 
 func newTestTransport(rpub *ecdsa.PublicKey, fd net.Conn) transport {
 	wrapped := newTransport(fd).(*transportWrapper)
-	sec := secrets{
+	sec := r.secrets{
 		MAC:        r.Zero16,
 		AES:        r.Zero16,
 		IngressMAC: sha3.NewLegacyKeccak256(),

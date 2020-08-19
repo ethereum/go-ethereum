@@ -1,4 +1,4 @@
-package p2p
+package rlpx
 
 import (
 	"bytes"
@@ -7,6 +7,7 @@ import (
 	"crypto/rand"
 	"encoding/binary"
 	"fmt"
+	"github.com/ethereum/go-ethereum/p2p"
 	"hash"
 	"io"
 	mrand "math/rand"
@@ -15,9 +16,16 @@ import (
 	"github.com/ethereum/go-ethereum/common/bitutil"
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/crypto/ecies"
-	r "github.com/ethereum/go-ethereum/p2p/rlpx" // TODO rename import
 	"github.com/ethereum/go-ethereum/rlp"
 	"golang.org/x/crypto/sha3"
+)
+
+const (
+	// devp2p message codes
+	HandshakeMsg = 0x00
+	DiscMsg      = 0x01
+	PingMsg      = 0x02
+	PongMsg      = 0x03
 )
 
 const (
@@ -36,22 +44,42 @@ const (
 
 	// total timeout for encryption handshake and protocol
 	// handshake in both directions.
-	handshakeTimeout = 5 * time.Second
+	HandshakeTimeout = 5 * time.Second
 
 	// This is the timeout for sending the disconnect reason.
 	// This is shorter than the usual timeout because we don't want
 	// to wait if the connection is known to be bad anyway.
 	discWriteTimeout = 1 * time.Second
+
+	baseProtocolMaxMsgSize = 2 * 1024
+
+	snappyProtocolVersion = 5
 )
 
-func (t *transportWrapper) doProtoHandshake(our *protoHandshake) (their *protoHandshake, err error) {
+type protoHandshake struct {
+	Version    uint64
+	Name       string
+	Caps       []Cap
+	ListenPort uint64
+	ID         []byte // secp256k1 public key
+
+	// Ignore additional fields (for forward compatibility).
+	Rest []rlp.RawValue `rlp:"tail"`
+}
+
+type Cap struct {
+	Name    string
+	Version uint
+}
+
+func (r *Rlpx) DoProtoHandshake(our *protoHandshake) (their *protoHandshake, err error) {
 	// Writing our handshake happens concurrently, we prefer
 	// returning the handshake read error. If the remote side
 	// disconnects us early with a valid reason, we should return it
 	// as the error so it can be tracked elsewhere.
 	werr := make(chan error, 1)
-	go func() { werr <- Send(t, handshakeMsg, our) }()
-	if their, err = readProtocolHandshake(t); err != nil {
+	go func() { werr <- p2p.Send(r, HandshakeMsg, our) }()
+	if their, err = readProtocolHandshake(r); err != nil {
 		<-werr // make sure the write terminates too
 		return nil, err
 	}
@@ -59,12 +87,12 @@ func (t *transportWrapper) doProtoHandshake(our *protoHandshake) (their *protoHa
 		return nil, fmt.Errorf("write error: %v", err)
 	}
 	// If the protocol version supports Snappy encoding, upgrade immediately
-	t.rlpx.RW.Snappy = their.Version >= snappyProtocolVersion
+	r.RW.Snappy = their.Version >= snappyProtocolVersion
 
 	return their, nil
 }
 
-func readProtocolHandshake(rw MsgReader) (*protoHandshake, error) {
+func readProtocolHandshake(rw p2p.MsgReader) (*protoHandshake, error) {
 	msg, err := rw.ReadMsg()
 	if err != nil {
 		return nil, err
@@ -72,16 +100,16 @@ func readProtocolHandshake(rw MsgReader) (*protoHandshake, error) {
 	if msg.Size > baseProtocolMaxMsgSize {
 		return nil, fmt.Errorf("message too big")
 	}
-	if msg.Code == discMsg {
+	if msg.Code == DiscMsg {
 		// Disconnect before protocol handshake is valid according to the
 		// spec and we send it ourself if the post-handshake checks fail.
 		// We can't return the reason directly, though, because it is echoed
 		// back otherwise. Wrap it in a string instead.
-		var reason [1]DiscReason
+		var reason [1]p2p.DiscReason
 		rlp.Decode(msg.Payload, &reason)
 		return nil, reason[0]
 	}
-	if msg.Code != handshakeMsg {
+	if msg.Code != HandshakeMsg {
 		return nil, fmt.Errorf("expected handshake, got %x", msg.Code)
 	}
 	var hs protoHandshake
@@ -89,7 +117,7 @@ func readProtocolHandshake(rw MsgReader) (*protoHandshake, error) {
 		return nil, err
 	}
 	if len(hs.ID) != 64 || !bitutil.TestBytes(hs.ID) {
-		return nil, DiscInvalidIdentity
+		return nil, p2p.DiscInvalidIdentity
 	}
 	return &hs, nil
 }
@@ -98,7 +126,7 @@ func readProtocolHandshake(rw MsgReader) (*protoHandshake, error) {
 // messages. the protocol handshake is the first authenticated message
 // and also verifies whether the encryption handshake 'worked' and the
 // remote side actually provided the right public key.
-func (t *transportWrapper) doEncHandshake(prv *ecdsa.PrivateKey, dial *ecdsa.PublicKey) (*ecdsa.PublicKey, error) {
+func (r *Rlpx) DoEncHandshake(prv *ecdsa.PrivateKey, dial *ecdsa.PublicKey) (*ecdsa.PublicKey, error) {
 	var (
 		sec secrets
 		err error
@@ -111,9 +139,7 @@ func (t *transportWrapper) doEncHandshake(prv *ecdsa.PrivateKey, dial *ecdsa.Pub
 	if err != nil {
 		return nil, err
 	}
-	t.mu.Lock()
-	t.rlpx.RW = r.NewRLPXFrameRW(t.rlpx.Conn, sec.AES, sec.MAC, sec.EgressMAC, sec.IngressMAC)
-	t.mu.Unlock()
+	r.RW = NewRLPXFrameRW(r.Conn, sec.AES, sec.MAC, sec.EgressMAC, sec.IngressMAC) // TODO does this need a lock?
 	return sec.Remote.ExportECDSA(), nil
 }
 
