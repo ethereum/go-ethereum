@@ -144,7 +144,7 @@ func TestIntermediateLeaks(t *testing.T) {
 	}
 }
 
-// TestCopy tests that copying a statedb object indeed makes the original and
+// TestCopy tests that copying a StateDB object indeed makes the original and
 // the copy independent of each other. This test is a regression test against
 // https://github.com/ethereum/go-ethereum/pull/15549.
 func TestCopy(t *testing.T) {
@@ -647,11 +647,11 @@ func TestCopyCopyCommitCopy(t *testing.T) {
 }
 
 // TestDeleteCreateRevert tests a weird state transition corner case that we hit
-// while changing the internals of statedb. The workflow is that a contract is
-// self destructed, then in a followup transaction (but same block) it's created
+// while changing the internals of StateDB. The workflow is that a contract is
+// self-destructed, then in a follow-up transaction (but same block) it's created
 // again and the transaction reverted.
 //
-// The original statedb implementation flushed dirty objects to the tries after
+// The original StateDB implementation flushed dirty objects to the tries after
 // each transaction, so this works ok. The rework accumulated writes in memory
 // first, but the journal wiped the entire state object on create-revert.
 func TestDeleteCreateRevert(t *testing.T) {
@@ -681,7 +681,7 @@ func TestDeleteCreateRevert(t *testing.T) {
 	}
 }
 
-// TestMissingTrieNodes tests that if the statedb fails to load parts of the trie,
+// TestMissingTrieNodes tests that if the StateDB fails to load parts of the trie,
 // the Commit operation fails with an error
 // If we are missing trie nodes, we should not continue writing to the trie
 func TestMissingTrieNodes(t *testing.T) {
