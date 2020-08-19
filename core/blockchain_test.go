@@ -1589,6 +1589,7 @@ func TestBlockchainRecovery(t *testing.T) {
 		t.Fatalf("failed to create temp freezer dir: %v", err)
 	}
 	defer os.Remove(frdir)
+
 	ancientDb, err := rawdb.NewDatabaseWithFreezer(rawdb.NewMemoryDatabase(), frdir, "")
 	if err != nil {
 		t.Fatalf("failed to create temp freezer db: %v", err)
@@ -1606,6 +1607,7 @@ func TestBlockchainRecovery(t *testing.T) {
 	if n, err := ancient.InsertReceiptChain(blocks, receipts, uint64(3*len(blocks)/4)); err != nil {
 		t.Fatalf("failed to insert receipt %d: %v", n, err)
 	}
+	rawdb.WriteLastPivotNumber(ancientDb, blocks[len(blocks)-1].NumberU64()) // Force fast sync behavior
 	ancient.Stop()
 
 	// Destroy head fast block manually
@@ -1621,8 +1623,8 @@ func TestBlockchainRecovery(t *testing.T) {
 	if num := ancient.CurrentFastBlock().NumberU64(); num != midBlock.NumberU64() {
 		t.Errorf("head fast-block mismatch: have #%v, want #%v", num, midBlock.NumberU64())
 	}
-	if num := ancient.CurrentHeader().Number.Uint64(); num != blocks[len(blocks)-1].NumberU64() {
-		t.Errorf("head header mismatch: have #%v, want #%v", num, blocks[len(blocks)-1].NumberU64())
+	if num := ancient.CurrentHeader().Number.Uint64(); num != midBlock.NumberU64() {
+		t.Errorf("head header mismatch: have #%v, want #%v", num, midBlock.NumberU64())
 	}
 }
 
