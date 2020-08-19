@@ -29,6 +29,8 @@ Command line params that has to be supported are
    --trace                            Output full trace logs to files <txhash>.jsonl
    --trace.nomemory                   Disable full memory dump in traces
    --trace.nostack                    Disable stack output in traces
+   --trace.noreturndata               Disable return data output in traces
+   --output.basedir value             Specifies where output files are placed. Will be created if it does not exist. (default: ".")
    --output.alloc alloc               Determines where to put the alloc of the post-state.
                                       `stdout` - into the stdout output
                                       `stderr` - into the stderr output
@@ -232,13 +234,13 @@ Example where blockhashes are provided:
 ./evm t8n --input.alloc=./testdata/3/alloc.json --input.txs=./testdata/3/txs.json --input.env=./testdata/3/env.json --trace
 ```
 ```
-cat trace-0.jsonl | grep BLOCKHASH -C2
+cat trace-0-0x72fadbef39cd251a437eea619cfeda752271a5faaaa2147df012e112159ffb81.jsonl | grep BLOCKHASH -C2
 ```
 ```
-{"pc":0,"op":96,"gas":"0x5f58ef8","gasCost":"0x3","memory":"0x","memSize":0,"stack":[],"returnStack":[],"depth":1,"refund":0,"opName":"PUSH1","error":""}
-{"pc":2,"op":64,"gas":"0x5f58ef5","gasCost":"0x14","memory":"0x","memSize":0,"stack":["0x1"],"returnStack":[],"depth":1,"refund":0,"opName":"BLOCKHASH","error":""}
-{"pc":3,"op":0,"gas":"0x5f58ee1","gasCost":"0x0","memory":"0x","memSize":0,"stack":["0xdac58aa524e50956d0c0bae7f3f8bb9d35381365d07804dd5b48a5a297c06af4"],"returnStack":[],"depth":1,"refund":0,"opName":"STOP","error":""}
-{"output":"","gasUsed":"0x17","time":155861}
+{"pc":0,"op":96,"gas":"0x5f58ef8","gasCost":"0x3","memory":"0x","memSize":0,"stack":[],"returnStack":[],"returnData":null,"depth":1,"refund":0,"opName":"PUSH1","error":""}
+{"pc":2,"op":64,"gas":"0x5f58ef5","gasCost":"0x14","memory":"0x","memSize":0,"stack":["0x1"],"returnStack":[],"returnData":null,"depth":1,"refund":0,"opName":"BLOCKHASH","error":""}
+{"pc":3,"op":0,"gas":"0x5f58ee1","gasCost":"0x0","memory":"0x","memSize":0,"stack":["0xdac58aa524e50956d0c0bae7f3f8bb9d35381365d07804dd5b48a5a297c06af4"],"returnStack":[],"returnData":null,"depth":1,"refund":0,"opName":"STOP","error":""}
+{"output":"","gasUsed":"0x17","time":112885}
 ```
 
 In this example, the caller has not provided the required blockhash:
@@ -254,9 +256,9 @@ Error code: 4
 Another thing that can be done, is to chain invocations:
 ```
 ./evm t8n --input.alloc=./testdata/1/alloc.json --input.txs=./testdata/1/txs.json --input.env=./testdata/1/env.json --output.alloc=stdout | ./evm t8n --input.alloc=stdin --input.env=./testdata/1/env.json --input.txs=./testdata/1/txs.json
-INFO [06-29|11:52:04.934] rejected tx                              index=1 hash="0557ba…18d673" from=0x8A8eAFb1cf62BfBeb1741769DAE1a9dd47996192 error="nonce too low"
-INFO [06-29|11:52:04.936] rejected tx                              index=0 hash="0557ba…18d673" from=0x8A8eAFb1cf62BfBeb1741769DAE1a9dd47996192 error="nonce too low"
-INFO [06-29|11:52:04.936] rejected tx                              index=1 hash="0557ba…18d673" from=0x8A8eAFb1cf62BfBeb1741769DAE1a9dd47996192 error="nonce too low"
+INFO [08-03|15:25:15.168] rejected tx                              index=1 hash="0557ba…18d673" from=0x8A8eAFb1cf62BfBeb1741769DAE1a9dd47996192 error="nonce too low"
+INFO [08-03|15:25:15.169] rejected tx                              index=0 hash="0557ba…18d673" from=0x8A8eAFb1cf62BfBeb1741769DAE1a9dd47996192 error="nonce too low"
+INFO [08-03|15:25:15.169] rejected tx                              index=1 hash="0557ba…18d673" from=0x8A8eAFb1cf62BfBeb1741769DAE1a9dd47996192 error="nonce too low"
 
 ```
 What happened here, is that we first applied two identical transactions, so the second one was rejected. 
