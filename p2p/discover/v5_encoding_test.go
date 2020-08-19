@@ -206,7 +206,7 @@ func TestHandshakeV5_rekey2(t *testing.T) {
 	net.nodeB.c.sc.storeNewSession(net.nodeA.id(), net.nodeA.addr(), initKeysB.readKey, initKeysA.writeKey)
 
 	// A -> B   FINDNODE encrypted with initKeysA
-	findnode, authTag := net.nodeA.encode(t, net.nodeB, &findnodeV5{Distance: 3})
+	findnode, authTag := net.nodeA.encode(t, net.nodeB, &findnodeV5{Distances: []uint{3}})
 	net.nodeB.expectDecode(t, p_unknownV5, findnode)
 
 	// A <- B   WHOAREYOU

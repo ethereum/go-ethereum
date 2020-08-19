@@ -151,19 +151,19 @@ func TestUDPv5_findnodeHandling(t *testing.T) {
 	fillTable(test.table, wrapNodes(nodes))
 
 	// Requesting with distance zero should return the node's own record.
-	test.packetIn(&findnodeV5{ReqID: []byte{0}, Distance: 0})
+	test.packetIn(&findnodeV5{ReqID: []byte{0}, Distances: []uint{0}})
 	test.expectNodes([]byte{0}, 1, []*enode.Node{test.udp.Self()})
 
-	// Requesting with distance > 256 caps it at 256.
-	test.packetIn(&findnodeV5{ReqID: []byte{1}, Distance: 4234098})
+	// Requesting with distance > 256 shouldn't crash.
+	test.packetIn(&findnodeV5{ReqID: []byte{1}, Distances: []uint{4234098}})
 	test.expectNodes([]byte{1}, 1, nil)
 
 	// This request gets no nodes because the corresponding bucket is empty.
-	test.packetIn(&findnodeV5{ReqID: []byte{2}, Distance: 254})
+	test.packetIn(&findnodeV5{ReqID: []byte{2}, Distances: []uint{254}})
 	test.expectNodes([]byte{2}, 1, nil)
 
 	// This request gets all test nodes.
-	test.packetIn(&findnodeV5{ReqID: []byte{3}, Distance: 253})
+	test.packetIn(&findnodeV5{ReqID: []byte{3}, Distances: []uint{253}})
 	test.expectNodes([]byte{3}, 4, nodes)
 }
 
@@ -255,22 +255,22 @@ func TestUDPv5_findnodeCall(t *testing.T) {
 
 	// Launch the request:
 	var (
-		distance = 230
-		remote   = test.getNode(test.remotekey, test.remoteaddr).Node()
-		nodes    = nodesAtDistance(remote.ID(), distance, 8)
-		done     = make(chan error, 1)
-		response []*enode.Node
+		distances = []uint{230}
+		remote    = test.getNode(test.remotekey, test.remoteaddr).Node()
+		nodes     = nodesAtDistance(remote.ID(), int(distances[0]), 8)
+		done      = make(chan error, 1)
+		response  []*enode.Node
 	)
 	go func() {
 		var err error
-		response, err = test.udp.findnode(remote, distance)
+		response, err = test.udp.findnode(remote, distances)
 		done <- err
 	}()
 
 	// Serve the responses:
 	test.waitPacketOut(func(p *findnodeV5, addr *net.UDPAddr, authTag []byte) {
-		if p.Distance != uint(distance) {
-			t.Fatalf("wrong bucket: %d", p.Distance)
+		if !reflect.DeepEqual(p.Distances, distances) {
+			t.Fatalf("wrong distances in request: %v", p.Distances)
 		}
 		test.packetIn(&nodesV5{
 			ReqID: p.ReqID,
@@ -367,13 +367,13 @@ func TestUDPv5_callTimeoutReset(t *testing.T) {
 
 	// Launch the request:
 	var (
-		distance = 230
+		distance = uint(230)
 		remote   = test.getNode(test.remotekey, test.remoteaddr).Node()
-		nodes    = nodesAtDistance(remote.ID(), distance, 8)
+		nodes    = nodesAtDistance(remote.ID(), int(distance), 8)
 		done     = make(chan error, 1)
 	)
 	go func() {
-		_, err := test.udp.findnode(remote, distance)
+		_, err := test.udp.findnode(remote, []uint{distance})
 		done <- err
 	}()
 
@@ -525,7 +525,7 @@ func TestUDPv5_lookup(t *testing.T) {
 			case *pingV5:
 				test.packetInFrom(key, to, &pongV5{ReqID: p.ReqID})
 			case *findnodeV5:
-				nodes := lookupTestnet.neighborsAtDistance(recipient, p.Distance, 3)
+				nodes := lookupTestnet.neighborsAtDistance(recipient, p.Distances[0], 3)
 				response := &nodesV5{ReqID: p.ReqID, Total: 1, Nodes: nodesToRecords(nodes)}
 				test.packetInFrom(key, to, response)
 			}

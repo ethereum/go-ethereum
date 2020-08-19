@@ -140,8 +140,8 @@ type (
 
 	// FINDNODE is a query for nodes in the given bucket.
 	findnodeV5 struct {
-		ReqID    []byte
-		Distance uint
+		ReqID     []byte
+		Distances []uint
 	}
 
 	// NODES is the reply to FINDNODE and TOPICQUERY.

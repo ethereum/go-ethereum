@@ -38,7 +38,7 @@ import (
 
 const (
 	lookupRequestLimit      = 3  // max requests against a single node during lookup
-	findnodeResultLimit     = 15 // applies in FINDNODE handler
+	findnodeResultLimit     = 16 // applies in FINDNODE handler
 	totalNodesResponseLimit = 5  // applies in waitForNodes
 	nodesResponseItemLimit  = 3  // applies in sendNodes
 
@@ -310,16 +310,14 @@ func (t *UDPv5) lookupWorker(destNode *node, target enode.ID) ([]*node, error) {
 		nodes = nodesByDistance{target: target}
 		err   error
 	)
-	for i := 0; i < lookupRequestLimit && len(nodes.entries) < findnodeResultLimit; i++ {
-		var r []*enode.Node
-		r, err = t.findnode(unwrapNode(destNode), dists[i])
-		if err == errClosed {
-			return nil, err
-		}
-		for _, n := range r {
-			if n.ID() != t.Self().ID() {
-				nodes.push(wrapNode(n), findnodeResultLimit)
-			}
+	var r []*enode.Node
+	r, err = t.findnode(unwrapNode(destNode), dists)
+	if err == errClosed {
+		return nil, err
+	}
+	for _, n := range r {
+		if n.ID() != t.Self().ID() {
+			nodes.push(wrapNode(n), findnodeResultLimit)
 		}
 	}
 	return nodes.entries, err
@@ -328,15 +326,15 @@ func (t *UDPv5) lookupWorker(destNode *node, target enode.ID) ([]*node, error) {
 // lookupDistances computes the distance parameter for FINDNODE calls to dest.
 // It chooses distances adjacent to logdist(target, dest), e.g. for a target
 // with logdist(target, dest) = 255 the result is [255, 256, 254].
-func lookupDistances(target, dest enode.ID) (dists []int) {
+func lookupDistances(target, dest enode.ID) (dists []uint) {
 	td := enode.LogDist(target, dest)
-	dists = append(dists, td)
+	dists = append(dists, uint(td))
 	for i := 1; len(dists) < lookupRequestLimit; i++ {
 		if td+i < 256 {
-			dists = append(dists, td+i)
+			dists = append(dists, uint(td+i))
 		}
 		if td-i > 0 {
-			dists = append(dists, td-i)
+			dists = append(dists, uint(td-i))
 		}
 	}
 	return dists
@@ -356,7 +354,7 @@ func (t *UDPv5) ping(n *enode.Node) (uint64, error) {
 
 // requestENR requests n's record.
 func (t *UDPv5) RequestENR(n *enode.Node) (*enode.Node, error) {
-	nodes, err := t.findnode(n, 0)
+	nodes, err := t.findnode(n, []uint{0})
 	if err != nil {
 		return nil, err
 	}
@@ -379,13 +377,13 @@ func (t *UDPv5) requestTicket(n *enode.Node) ([]byte, error) {
 }
 
 // findnode calls FINDNODE on a node and waits for responses.
-func (t *UDPv5) findnode(n *enode.Node, distance int) ([]*enode.Node, error) {
-	resp := t.call(n, p_nodesV5, &findnodeV5{Distance: uint(distance)})
-	return t.waitForNodes(resp, distance)
+func (t *UDPv5) findnode(n *enode.Node, distances []uint) ([]*enode.Node, error) {
+	resp := t.call(n, p_nodesV5, &findnodeV5{Distances: distances})
+	return t.waitForNodes(resp, distances)
 }
 
 // waitForNodes waits for NODES responses to the given call.
-func (t *UDPv5) waitForNodes(c *callV5, distance int) ([]*enode.Node, error) {
+func (t *UDPv5) waitForNodes(c *callV5, distances []uint) ([]*enode.Node, error) {
 	defer t.callDone(c)
 
 	var (
@@ -398,7 +396,7 @@ func (t *UDPv5) waitForNodes(c *callV5, distance int) ([]*enode.Node, error) {
 		case responseP := <-c.ch:
 			response := responseP.(*nodesV5)
 			for _, record := range response.Nodes {
-				node, err := t.verifyResponseNode(c, record, distance, seen)
+				node, err := t.verifyResponseNode(c, record, distances, seen)
 				if err != nil {
 					t.log.Debug("Invalid record in "+response.name(), "id", c.node.ID(), "err", err)
 					continue
@@ -418,7 +416,7 @@ func (t *UDPv5) waitForNodes(c *callV5, distance int) ([]*enode.Node, error) {
 }
 
 // verifyResponseNode checks validity of a record in a NODES response.
-func (t *UDPv5) verifyResponseNode(c *callV5, r *enr.Record, distance int, seen map[enode.ID]struct{}) (*enode.Node, error) {
+func (t *UDPv5) verifyResponseNode(c *callV5, r *enr.Record, distances []uint, seen map[enode.ID]struct{}) (*enode.Node, error) {
 	node, err := enode.New(t.validSchemes, r)
 	if err != nil {
 		return nil, err
@@ -429,9 +427,10 @@ func (t *UDPv5) verifyResponseNode(c *callV5, r *enr.Record, distance int, seen 
 	if c.node.UDP() <= 1024 {
 		return nil, errLowPort
 	}
-	if distance != -1 {
-		if d := enode.LogDist(c.node.ID(), node.ID()); d != distance {
-			return nil, fmt.Errorf("wrong distance %d", d)
+	if distances != nil {
+		nd := enode.LogDist(c.node.ID(), node.ID())
+		if !containsUint(uint(nd), distances) {
+			return nil, errors.New("does not match any requested distance")
 		}
 	}
 	if _, ok := seen[node.ID()]; ok {
@@ -439,6 +438,15 @@ func (t *UDPv5) verifyResponseNode(c *callV5, r *enr.Record, distance int, seen 
 	}
 	seen[node.ID()] = struct{}{}
 	return node, nil
+}
+
+func containsUint(x uint, xs []uint) bool {
+	for _, v := range xs {
+		if x == v {
+			return true
+		}
+	}
+	return false
 }
 
 // call sends the given call and sets up a handler for response packets (of type c.responseType).
@@ -777,27 +785,41 @@ func (p *findnodeV5) kind() byte         { return p_findnodeV5 }
 func (p *findnodeV5) setreqid(id []byte) { p.ReqID = id }
 
 func (p *findnodeV5) handle(t *UDPv5, fromID enode.ID, fromAddr *net.UDPAddr) {
-	if p.Distance == 0 {
-		t.sendNodes(fromID, fromAddr, p.ReqID, []*enode.Node{t.Self()})
-		return
-	}
-	if p.Distance > 256 {
-		p.Distance = 256
-	}
-	// Get bucket entries.
-	t.tab.mutex.Lock()
-	nodes := unwrapNodes(t.tab.bucketAtDistance(int(p.Distance)).entries)
-	t.tab.mutex.Unlock()
-	if len(nodes) > findnodeResultLimit {
-		nodes = nodes[:findnodeResultLimit]
-	}
+	nodes := t.collectTableNodes(fromAddr.IP, p.Distances)
 	t.sendNodes(fromID, fromAddr, p.ReqID, nodes)
+}
+
+func (t *UDPv5) collectTableNodes(rip net.IP, distances []uint) []*enode.Node {
+	t.tab.mutex.Lock()
+	defer t.tab.mutex.Unlock()
+
+	var nodes []*enode.Node
+	for _, dist := range distances {
+		var bn []*enode.Node
+		if dist == 0 {
+			bn = []*enode.Node{t.Self()}
+		} else if dist <= 256 {
+			bn = unwrapNodes(t.tab.bucketAtDistance(int(dist)).entries)
+		} else {
+			continue // invalid distance
+		}
+
+		for _, n := range bn {
+			// TODO livenessChecks > 1
+			if netutil.CheckRelayIP(rip, n.IP()) != nil {
+				continue
+			}
+			nodes = append(nodes, n)
+			if len(nodes) >= nodesResponseItemLimit {
+				return nodes
+			}
+		}
+	}
+	return nodes
 }
 
 // sendNodes sends the given records in one or more NODES packets.
 func (t *UDPv5) sendNodes(toID enode.ID, toAddr *net.UDPAddr, reqid []byte, nodes []*enode.Node) {
-	// TODO livenessChecks > 1
-	// TODO CheckRelayIP
 	total := uint8(math.Ceil(float64(len(nodes)) / 3))
 	resp := &nodesV5{ReqID: reqid, Total: total, Nodes: make([]*enr.Record, 3)}
 	sent := false
