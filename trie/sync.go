@@ -99,7 +99,7 @@ func (s *Sync) AddSubTrie(root common.Hash, depth int, parent common.Hash, callb
 	if _, ok := s.membatch.batch[root]; ok {
 		return
 	}
-	if s.bloom.Contains(root[:]) {
+	if s.bloom == nil || s.bloom.Contains(root[:]) {
 		// Bloom filter says this might be a duplicate, double check
 		blob, _ := s.database.Get(root[:])
 		if local, err := decodeNode(root[:], blob); local != nil && err == nil {
@@ -138,7 +138,7 @@ func (s *Sync) AddRawEntry(hash common.Hash, depth int, parent common.Hash) {
 	if _, ok := s.membatch.batch[hash]; ok {
 		return
 	}
-	if s.bloom.Contains(hash[:]) {
+	if s.bloom == nil || s.bloom.Contains(hash[:]) {
 		// Bloom filter says this might be a duplicate, double check
 		if ok, _ := s.database.Has(hash[:]); ok {
 			return
@@ -300,7 +300,7 @@ func (s *Sync) children(req *request, object node) ([]*request, error) {
 			if _, ok := s.membatch.batch[hash]; ok {
 				continue
 			}
-			if s.bloom.Contains(node) {
+			if s.bloom == nil || s.bloom.Contains(node) {
 				// Bloom filter says this might be a duplicate, double check
 				if ok, _ := s.database.Has(node); ok {
 					continue

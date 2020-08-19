@@ -1607,6 +1607,7 @@ func (d *Downloader) processFastSyncContent(latest *types.Header) error {
 		}
 	}
 	go closeOnErr(sync)
+
 	// Figure out the ideal pivot block. Note, that this goalpost may move if the
 	// sync takes long enough for the chain head to move significantly.
 	pivot := uint64(0)
@@ -1648,6 +1649,10 @@ func (d *Downloader) processFastSyncContent(latest *types.Header) error {
 			if height := latest.Number.Uint64(); height > pivot+2*uint64(fsMinFullBlocks) {
 				log.Warn("Pivot became stale, moving", "old", pivot, "new", height-uint64(fsMinFullBlocks))
 				pivot = height - uint64(fsMinFullBlocks)
+
+				// Write out the pivot into the database so a rollback beyond it will
+				// reenable fast sync
+				rawdb.WriteLastPivotNumber(d.stateDB, pivot)
 			}
 		}
 		P, beforeP, afterP := splitAroundPivot(pivot, results)

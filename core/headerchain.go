@@ -527,7 +527,7 @@ func (hc *HeaderChain) SetHead(head uint64, updateFn UpdateHeadBlocksCallback, d
 		if updateFn != nil {
 			newHead, force := updateFn(markerBatch, parent)
 			if force && newHead < head {
-				log.Warn("Force rewiding till ancient limit", "head", newHead)
+				log.Warn("Force rewinding till ancient limit", "head", newHead)
 				head = newHead
 			}
 		}
