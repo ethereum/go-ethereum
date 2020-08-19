@@ -88,7 +88,7 @@ func testEncHandshake(token []byte) error {
 		prv0, _  = crypto.GenerateKey()
 		prv1, _  = crypto.GenerateKey()
 		fd0, fd1 = net.Pipe()
-		c0, c1   = newRLPX(fd0).(*rlpx), newRLPX(fd1).(*rlpx)
+		c0, c1   = newRLPX(fd0).(*frameRW), newRLPX(fd1).(*frameRW)
 		output   = make(chan result)
 	)
 
