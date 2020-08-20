@@ -204,15 +204,23 @@ func (ethash *Ethash) VerifyUncles(chain consensus.ChainReader, block *types.Blo
 
 	number, parent := block.NumberU64()-1, block.ParentHash()
 	for i := 0; i < 7; i++ {
-		ancestor := chain.GetBlock(parent, number)
-		if ancestor == nil {
+		ancestorHeader := chain.GetHeader(parent, number)
+		if ancestorHeader == nil {
 			break
 		}
-		ancestors[ancestor.Hash()] = ancestor.Header()
-		for _, uncle := range ancestor.Uncles() {
-			uncles.Add(uncle.Hash())
+		ancestors[parent] = ancestorHeader
+		// If the ancestor doesn't have any uncles, we don't have to iterate them
+		if ancestorHeader.UncleHash != types.EmptyUncleHash {
+			// Need to add those uncles to the blacklist too
+			ancestor := chain.GetBlock(parent, number)
+			if ancestor == nil {
+				break
+			}
+			for _, uncle := range ancestor.Uncles() {
+				uncles.Add(uncle.Hash())
+			}
 		}
-		parent, number = ancestor.ParentHash(), number-1
+		parent, number = ancestorHeader.ParentHash, number-1
 	}
 	ancestors[block.Hash()] = block.Header()
 	uncles.Add(block.Hash())
