@@ -70,6 +70,12 @@ func TestCheckCompatible(t *testing.T) {
 				RewindTo:     9,
 			},
 		},
+		{
+			stored:  &ChainConfig{ConstantinopleBlock: big.NewInt(30)},
+			new:     &ChainConfig{ConstantinopleBlock: big.NewInt(30), PetersburgBlock: big.NewInt(30)},
+			head:    40,
+			wantErr: nil,
+		},
 	}
 
 	for _, test := range tests {
