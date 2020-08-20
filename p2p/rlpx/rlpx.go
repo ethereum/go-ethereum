@@ -243,7 +243,7 @@ func (c *Conn) Handshake(prv *ecdsa.PrivateKey) (*ecdsa.PublicKey, error) { // T
 	if c.dialDest == nil {
 		sec, err = receiverEncHandshake(c.conn, prv)
 	}
-	// TODO maybe clean this up later?
+
 	macc, err := aes.NewCipher(sec.MAC)
 	if err != nil {
 		panic("invalid MAC secret: " + err.Error())
@@ -288,15 +288,6 @@ const (
 
 	encAuthMsgLen  = authMsgLen + eciesOverhead  // size of encrypted pre-EIP-8 initiator handshake
 	encAuthRespLen = authRespLen + eciesOverhead // size of encrypted pre-EIP-8 handshake reply
-
-	// total timeout for encryption handshake and protocol
-	// handshake in both directions.
-	handshakeTimeout = 5 * time.Second
-
-	// This is the timeout for sending the disconnect reason.
-	// This is shorter than the usual timeout because we don't want
-	// to wait if the connection is known to be bad anyway.
-	discWriteTimeout = 1 * time.Second
 )
 
 var (

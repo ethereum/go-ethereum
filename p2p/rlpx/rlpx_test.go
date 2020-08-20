@@ -1,42 +1,24 @@
-// Copyright 2015 The go-ethereum Authors
-// This file is part of the go-ethereum library.
-//
-// The go-ethereum library is free software: you can redistribute it and/or modify
-// it under the terms of the GNU Lesser General Public License as published by
-// the Free Software Foundation, either version 3 of the License, or
-// (at your option) any later version.
-//
-// The go-ethereum library is distributed in the hope that it will be useful,
-// but WITHOUT ANY WARRANTY; without even the implied warranty of
-// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
-// GNU Lesser General Public License for more details.
-//
-// You should have received a copy of the GNU Lesser General Public License
-// along with the go-ethereum library. If not, see <http://www.gnu.org/licenses/>.
-
-package p2p
+package rlpx
 
 import (
 	"bytes"
 	"crypto/ecdsa"
 	"crypto/rand"
-	"errors"
+	"encoding/hex"
 	"fmt"
-	"io"
-	"io/ioutil"
-	"net"
-	"reflect"
-	"strings"
-	"sync"
-	"testing"
-	"time"
-
 	"github.com/davecgh/go-spew/spew"
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/crypto/ecies"
 	"github.com/ethereum/go-ethereum/p2p/simulations/pipes"
 	"github.com/ethereum/go-ethereum/rlp"
 	"golang.org/x/crypto/sha3"
+	"io"
+	"io/ioutil"
+	"net"
+	"reflect"
+	"strings"
+	"testing"
+	"time"
 )
 
 func TestSharedSecret(t *testing.T) {
@@ -59,6 +41,7 @@ func TestSharedSecret(t *testing.T) {
 	}
 }
 
+// TODO this test is taking too long -- broken
 func TestEncHandshake(t *testing.T) {
 	for i := 0; i < 10; i++ {
 		start := time.Now()
@@ -88,7 +71,7 @@ func testEncHandshake(token []byte) error {
 		prv0, _  = crypto.GenerateKey()
 		prv1, _  = crypto.GenerateKey()
 		fd0, fd1 = net.Pipe()
-		c0, c1   = newRLPX(fd0).(*frameRW), newRLPX(fd1).(*frameRW)
+		c0, c1   = NewConn(fd0, &prv1.PublicKey), NewConn(fd1, &prv1.PublicKey)
 		output   = make(chan result)
 	)
 
@@ -97,7 +80,7 @@ func testEncHandshake(token []byte) error {
 		defer func() { output <- r }()
 		defer fd0.Close()
 
-		r.pubkey, r.err = c0.doEncHandshake(prv0, &prv1.PublicKey)
+		r.pubkey, r.err = c0.Handshake(prv0)
 		if r.err != nil {
 			return
 		}
@@ -110,7 +93,7 @@ func testEncHandshake(token []byte) error {
 		defer func() { output <- r }()
 		defer fd1.Close()
 
-		r.pubkey, r.err = c1.doEncHandshake(prv1, nil)
+		r.pubkey, r.err = c1.Handshake(prv1)
 		if r.err != nil {
 			return
 		}
@@ -129,150 +112,36 @@ func testEncHandshake(token []byte) error {
 	}
 
 	// compare derived secrets
-	if !reflect.DeepEqual(c0.rw.egressMAC, c1.rw.ingressMAC) {
-		return fmt.Errorf("egress mac mismatch:\n c0.rw: %#v\n c1.rw: %#v", c0.rw.egressMAC, c1.rw.ingressMAC)
+	if !reflect.DeepEqual(c0.handshake.egressMAC, c1.handshake.ingressMAC) {
+		return fmt.Errorf("egress mac mismatch:\n c0.handshake: %#v\n c1.handshake: %#v", c0.handshake.egressMAC, c1.handshake.ingressMAC)
 	}
-	if !reflect.DeepEqual(c0.rw.ingressMAC, c1.rw.egressMAC) {
-		return fmt.Errorf("ingress mac mismatch:\n c0.rw: %#v\n c1.rw: %#v", c0.rw.ingressMAC, c1.rw.egressMAC)
+	if !reflect.DeepEqual(c0.handshake.ingressMAC, c1.handshake.egressMAC) {
+		return fmt.Errorf("ingress mac mismatch:\n c0.handshake: %#v\n c1.handshake: %#v", c0.handshake.ingressMAC, c1.handshake.egressMAC)
 	}
-	if !reflect.DeepEqual(c0.rw.enc, c1.rw.enc) {
-		return fmt.Errorf("enc cipher mismatch:\n c0.rw: %#v\n c1.rw: %#v", c0.rw.enc, c1.rw.enc)
+	if !reflect.DeepEqual(c0.handshake.enc, c1.handshake.enc) {
+		return fmt.Errorf("enc cipher mismatch:\n c0.handshake: %#v\n c1.handshake: %#v", c0.handshake.enc, c1.handshake.enc)
 	}
-	if !reflect.DeepEqual(c0.rw.dec, c1.rw.dec) {
-		return fmt.Errorf("dec cipher mismatch:\n c0.rw: %#v\n c1.rw: %#v", c0.rw.dec, c1.rw.dec)
+	if !reflect.DeepEqual(c0.handshake.dec, c1.handshake.dec) {
+		return fmt.Errorf("dec cipher mismatch:\n c0.handshake: %#v\n c1.handshake: %#v", c0.handshake.dec, c1.handshake.dec)
 	}
 	return nil
 }
 
-func TestProtocolHandshake(t *testing.T) {
-	var (
-		prv0, _ = crypto.GenerateKey()
-		pub0    = crypto.FromECDSAPub(&prv0.PublicKey)[1:]
-		hs0     = &protoHandshake{Version: 3, ID: pub0, Caps: []Cap{{"a", 0}, {"b", 2}}}
-
-		prv1, _ = crypto.GenerateKey()
-		pub1    = crypto.FromECDSAPub(&prv1.PublicKey)[1:]
-		hs1     = &protoHandshake{Version: 3, ID: pub1, Caps: []Cap{{"c", 1}, {"d", 3}}}
-
-		wg sync.WaitGroup
-	)
-
-	fd0, fd1, err := pipes.TCPPipe()
+func TestRLPXFrameFake(t *testing.T) {
+	c0, _, err := pipes.TCPPipe()
 	if err != nil {
 		t.Fatal(err)
 	}
 
-	wg.Add(2)
-	go func() {
-		defer wg.Done()
-		defer fd0.Close()
-		rlpx := newRLPX(fd0)
-		rpubkey, err := rlpx.doEncHandshake(prv0, &prv1.PublicKey)
-		if err != nil {
-			t.Errorf("dial side enc handshake failed: %v", err)
-			return
-		}
-		if !reflect.DeepEqual(rpubkey, &prv1.PublicKey) {
-			t.Errorf("dial side remote pubkey mismatch: got %v, want %v", rpubkey, &prv1.PublicKey)
-			return
-		}
-
-		phs, err := rlpx.doProtoHandshake(hs0)
-		if err != nil {
-			t.Errorf("dial side proto handshake error: %v", err)
-			return
-		}
-		phs.Rest = nil
-		if !reflect.DeepEqual(phs, hs1) {
-			t.Errorf("dial side proto handshake mismatch:\ngot: %s\nwant: %s\n", spew.Sdump(phs), spew.Sdump(hs1))
-			return
-		}
-		rlpx.close(DiscQuitting)
-	}()
-	go func() {
-		defer wg.Done()
-		defer fd1.Close()
-		rlpx := newRLPX(fd1)
-		rpubkey, err := rlpx.doEncHandshake(prv1, nil)
-		if err != nil {
-			t.Errorf("listen side enc handshake failed: %v", err)
-			return
-		}
-		if !reflect.DeepEqual(rpubkey, &prv0.PublicKey) {
-			t.Errorf("listen side remote pubkey mismatch: got %v, want %v", rpubkey, &prv0.PublicKey)
-			return
-		}
-
-		phs, err := rlpx.doProtoHandshake(hs1)
-		if err != nil {
-			t.Errorf("listen side proto handshake error: %v", err)
-			return
-		}
-		phs.Rest = nil
-		if !reflect.DeepEqual(phs, hs0) {
-			t.Errorf("listen side proto handshake mismatch:\ngot: %s\nwant: %s\n", spew.Sdump(phs), spew.Sdump(hs0))
-			return
-		}
-
-		if err := ExpectMsg(rlpx, discMsg, []DiscReason{DiscQuitting}); err != nil {
-			t.Errorf("error receiving disconnect: %v", err)
-		}
-	}()
-	wg.Wait()
-}
-
-func TestProtocolHandshakeErrors(t *testing.T) {
-	tests := []struct {
-		code uint64
-		msg  interface{}
-		err  error
-	}{
-		{
-			code: discMsg,
-			msg:  []DiscReason{DiscQuitting},
-			err:  DiscQuitting,
-		},
-		{
-			code: 0x989898,
-			msg:  []byte{1},
-			err:  errors.New("expected handshake, got 989898"),
-		},
-		{
-			code: handshakeMsg,
-			msg:  make([]byte, baseProtocolMaxMsgSize+2),
-			err:  errors.New("message too big"),
-		},
-		{
-			code: handshakeMsg,
-			msg:  []byte{1, 2, 3},
-			err:  newPeerError(errInvalidMsg, "(code 0) (size 4) rlp: expected input list for p2p.protoHandshake"),
-		},
-		{
-			code: handshakeMsg,
-			msg:  &protoHandshake{Version: 3},
-			err:  DiscInvalidIdentity,
-		},
-	}
-
-	for i, test := range tests {
-		p1, p2 := MsgPipe()
-		go Send(p1, test.code, test.msg)
-		_, err := readProtocolHandshake(p2)
-		if !reflect.DeepEqual(err, test.err) {
-			t.Errorf("test %d: error mismatch: got %q, want %q", i, err, test.err)
-		}
-	}
-}
-
-func TestRLPXFrameFake(t *testing.T) {
-	buf := new(bytes.Buffer)
 	hash := fakeHash([]byte{1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1})
-	rw := newRLPXFrameRW(buf, secrets{
+	sec := Secrets{
 		AES:        crypto.Keccak256(),
 		MAC:        crypto.Keccak256(),
 		IngressMAC: hash,
 		EgressMAC:  hash,
-	})
+	}
+	conn := NewConn(c0, nil)
+	// TODO somehow add info from sec into conn.handshake (otherwise nil pointer)
 
 	golden := unhex(`
 00828ddae471818bb0bfa6b551d1cb42
@@ -282,29 +151,41 @@ ba628a4ba590cb43f7848f41c4382885
 `)
 
 	// Check WriteMsg. This puts a message into the buffer.
-	if err := Send(rw, 8, []uint{1, 2, 3, 4}); err != nil {
+	size, payload, err := rlp.EncodeToReader([]uint{1, 2, 3, 4})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	_, err = conn.WriteMsg(8, uint32(size), payload)
+	if err != nil {
 		t.Fatalf("WriteMsg error: %v", err)
 	}
-	written := buf.Bytes()
-	if !bytes.Equal(written, golden) {
-		t.Fatalf("output mismatch:\n  got:  %x\n  want: %x", written, golden)
+
+	buf := make([]byte, len(golden))
+	_, err = payload.Read(buf)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if !bytes.Equal(buf, golden) {
+		t.Fatalf("output mismatch:\n  got:  %x\n  want: %x", buf, golden)
 	}
 
 	// Check ReadMsg. It reads the message encoded by WriteMsg, which
 	// is equivalent to the golden message above.
-	msg, err := rw.ReadMsg()
+	msgCode, msgSize, msgPayload, err := conn.ReadMsg()
 	if err != nil {
 		t.Fatalf("ReadMsg error: %v", err)
 	}
-	if msg.Size != 5 {
-		t.Errorf("msg size mismatch: got %d, want %d", msg.Size, 5)
+	if msgSize != 5 {
+		t.Errorf("msg size mismatch: got %d, want %d", msgSize, 5)
 	}
-	if msg.Code != 8 {
-		t.Errorf("msg code mismatch: got %d, want %d", msg.Code, 8)
+	if msgCode != 8 {
+		t.Errorf("msg code mismatch: got %d, want %d", msgCode, 8)
 	}
-	payload, _ := ioutil.ReadAll(msg.Payload)
+	payloadBytes, _ := ioutil.ReadAll(msgPayload)
 	wantPayload := unhex("C401020304")
-	if !bytes.Equal(payload, wantPayload) {
+	if !bytes.Equal(payloadBytes, wantPayload) {
 		t.Errorf("msg payload mismatch:\ngot  %x\nwant %x", payload, wantPayload)
 	}
 }
@@ -317,6 +198,15 @@ func (fakeHash) BlockSize() int              { return 0 }
 
 func (h fakeHash) Size() int           { return len(h) }
 func (h fakeHash) Sum(b []byte) []byte { return append(b, h...) }
+
+func unhex(str string) []byte {
+	r := strings.NewReplacer("\t", "", " ", "", "\n", "")
+	b, err := hex.DecodeString(r.Replace(str))
+	if err != nil {
+		panic(fmt.Sprintf("invalid hex string: %q", str))
+	}
+	return b
+}
 
 func TestRLPXFrameRW(t *testing.T) {
 	var (
@@ -514,15 +404,15 @@ func TestHandshakeForwardCompatibility(t *testing.T) {
 		authSignature = unhex("299ca6acfd35e3d72d8ba3d1e2b60b5561d5af5218eb5bc182045769eb4226910a301acae3b369fffc4a4899d6b02531e89fd4fe36a2cf0d93607ba470b50f7800")
 		_             = authSignature
 	)
-	makeAuth := func(test handshakeAuthTest) *authMsgV4 {
-		msg := &authMsgV4{Version: test.wantVersion, Rest: test.wantRest, gotPlain: test.isPlain}
+	makeAuth := func(test handshakeAuthTest) *rlpx.authMsgV4 {
+		msg := &rlpx.authMsgV4{Version: test.wantVersion, Rest: test.wantRest, gotPlain: test.isPlain}
 		copy(msg.Signature[:], authSignature)
 		copy(msg.InitiatorPubkey[:], pubA)
 		copy(msg.Nonce[:], nonceA)
 		return msg
 	}
-	makeAck := func(test handshakeAckTest) *authRespV4 {
-		msg := &authRespV4{Version: test.wantVersion, Rest: test.wantRest}
+	makeAck := func(test handshakeAckTest) *rlpx.authRespV4 {
+		msg := &rlpx.authRespV4{Version: test.wantVersion, Rest: test.wantRest}
 		copy(msg.RandomPubkey[:], ephPubB)
 		copy(msg.Nonce[:], nonceB)
 		return msg
@@ -531,8 +421,8 @@ func TestHandshakeForwardCompatibility(t *testing.T) {
 	// check auth msg parsing
 	for _, test := range eip8HandshakeAuthTests {
 		r := bytes.NewReader(unhex(test.input))
-		msg := new(authMsgV4)
-		ciphertext, err := readHandshakeMsg(msg, encAuthMsgLen, keyB, r)
+		msg := new(rlpx.authMsgV4)
+		ciphertext, err := rlpx.readHandshakeMsg(msg, encAuthMsgLen, keyB, r)
 		if err != nil {
 			t.Errorf("error for input %x:\n  %v", unhex(test.input), err)
 			continue
@@ -550,8 +440,8 @@ func TestHandshakeForwardCompatibility(t *testing.T) {
 	for _, test := range eip8HandshakeRespTests {
 		input := unhex(test.input)
 		r := bytes.NewReader(input)
-		msg := new(authRespV4)
-		ciphertext, err := readHandshakeMsg(msg, encAuthRespLen, keyA, r)
+		msg := new(rlpx.authRespV4)
+		ciphertext, err := rlpx.readHandshakeMsg(msg, encAuthRespLen, keyA, r)
 		if err != nil {
 			t.Errorf("error for input %x:\n  %v", input, err)
 			continue
@@ -567,7 +457,7 @@ func TestHandshakeForwardCompatibility(t *testing.T) {
 
 	// check derivation for (Auth₂, Ack₂) on recipient side
 	var (
-		hs = &encHandshake{
+		hs = &rlpx.encHandshake{
 			initiator:     false,
 			respNonce:     nonceB,
 			randomPrivKey: ecies.ImportECDSA(ephB),
