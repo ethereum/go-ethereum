@@ -37,9 +37,9 @@ func NewLegacyGasPool(chainConfig *params.ChainConfig, height, gasLimit *big.Int
 
 // NewEIP1559GasPool returns a GasPool filled to the EIP1559 gas limit
 func NewEIP1559GasPool(chainConfig *params.ChainConfig, height, gasLimit *big.Int) *GasPool {
-	// EIP1559 gas limit is 2x the EIP1559GasTarget
+	// EIP1559 gas limit is slack coefficient * EIP1559GasTarget
 	eip1559GasTarget := misc.CalcEIP1559GasTarget(chainConfig, height, gasLimit)
-	return new(GasPool).AddGas(2 * eip1559GasTarget.Uint64())
+	return new(GasPool).AddGas(chainConfig.EIP1559.EIP1559SlackCoefficient * eip1559GasTarget.Uint64())
 }
 
 // AddGas makes gas available for execution.

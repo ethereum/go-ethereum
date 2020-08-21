@@ -18,7 +18,6 @@ package misc
 
 import (
 	"errors"
-	"fmt"
 	"math/big"
 
 	"github.com/ethereum/go-ethereum/common"
@@ -30,7 +29,7 @@ var (
 	errInvalidBaseFee       = errors.New("invalid BaseFee")
 	errMissingParentBaseFee = errors.New("parent header is missing BaseFee")
 	errMissingBaseFee       = errors.New("current header is missing BaseFee")
-	errHaveBaseFee          = fmt.Errorf("BaseFee should not be set before block %d", params.EIP1559ForkBlockNumber)
+	errHaveBaseFee          = errors.New("BaseFee should not be set before EIP1559 activation %d")
 )
 
 // VerifyEIP1559BaseFee verifies that the EIP1559 BaseFee field is valid for the current block height
@@ -79,7 +78,6 @@ func CalcBaseFee(config *params.ChainConfig, parent *types.Header) *big.Int {
 	mul := new(big.Int).Mul(parent.BaseFee, delta)
 	div := new(big.Int).Div(mul, parentGasTarget)
 	div2 := new(big.Int).Div(div, new(big.Int).SetUint64(config.EIP1559.EIP1559BaseFeeMaxChangeDenominator))
-
 	baseFee := new(big.Int).Add(parent.BaseFee, div2)
 
 	// A valid BASEFEE is one such that abs(BASEFEE - PARENT_BASEFEE) <= max(1, PARENT_BASEFEE // BASEFEE_MAX_CHANGE_DENOMINATOR)
@@ -99,6 +97,10 @@ func CalcBaseFee(config *params.ChainConfig, parent *types.Header) *big.Int {
 			max.Neg(max)
 		}
 		baseFee.Set(new(big.Int).Add(parent.BaseFee, max))
+	}
+	// Prevent BaseFee from dropping to zero
+	if baseFee.Cmp(common.Big0) == 0 {
+		baseFee.Set(common.Big1)
 	}
 	return baseFee
 }
