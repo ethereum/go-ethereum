@@ -54,11 +54,7 @@ func testInsert(t *testing.T, hc *HeaderChain, chain []*types.Header, expInsert,
 	t.Helper()
 	gotInsert, gotCanon, gotSide := 0, 0, 0
 
-	_, err := hc.InsertHeaderChain(chain, func(header *types.Header) error {
-		status, err := hc.WriteHeader(header)
-		if err != nil{
-			return err
-		}
+	_, err := hc.InsertHeaderChain(chain, func(header *types.Header, status WriteStatus) {
 		gotInsert++
 		switch status {
 		case CanonStatTy:
@@ -66,8 +62,6 @@ func testInsert(t *testing.T, hc *HeaderChain, chain []*types.Header, expInsert,
 		default:
 			gotSide++
 		}
-		return nil
-
 	}, time.Now())
 
 	if gotInsert != expInsert {
@@ -109,7 +103,7 @@ func TestHeaderInsertion(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	// Inserting 64 indentical headers, expecting
+	// Inserting 64 inentical headers, expecting
 	// 0 callbacks, 0 canon-status, 0 sidestatus,
 	if err := testInsert(t, hc, chainA[:64], 0, 0, 0); err != nil {
 		t.Fatal(err)
