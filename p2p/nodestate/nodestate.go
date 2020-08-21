@@ -668,19 +668,21 @@ func (ns *NodeStateMachine) SetState(n *enode.Node, setFlags, resetFlags Flags, 
 				sub.callback(n, Flags{mask: oldState & sub.mask, setup: ns.setup}, Flags{mask: newState & sub.mask, setup: ns.setup}, caller)
 			}
 		}
-		if newState == 0 {
-			// call field subscriptions for discarded fields
-			for i, v := range node.fields {
-				if v != nil {
-					if debugPrints {
-						fmt.Println("discardField", n.ID(), ns.setup.fields[i].name, v)
-					}
-					f := ns.fields[i]
-					if len(f.subs) > 0 {
-						for _, cb := range f.subs {
-							cb(n, Flags{setup: ns.setup}, v, nil, caller)
-						}
-					}
+		if newState != 0 {
+			return
+		}
+		// call field subscriptions for discarded fields
+		for i, v := range node.fields {
+			if v == nil {
+				continue
+			}
+			if debugPrints {
+				fmt.Println("discardField", n.ID(), ns.setup.fields[i].name, v)
+			}
+			f := ns.fields[i]
+			if len(f.subs) > 0 {
+				for _, cb := range f.subs {
+					cb(n, Flags{setup: ns.setup}, v, nil, caller)
 				}
 			}
 		}
@@ -730,22 +732,24 @@ func (ns *NodeStateMachine) offlineCallbacks(start bool) {
 			for _, sub := range ns.stateSubs {
 				offState := offlineState & sub.mask
 				onState := cb.state & sub.mask
-				if offState != onState {
-					if start {
-						sub.callback(cb.node.node, Flags{mask: offState, setup: ns.setup}, Flags{mask: onState, setup: ns.setup}, caller)
-					} else {
-						sub.callback(cb.node.node, Flags{mask: onState, setup: ns.setup}, Flags{mask: offState, setup: ns.setup}, caller)
-					}
+				if offState == onState {
+					continue
+				}
+				if start {
+					sub.callback(cb.node.node, Flags{mask: offState, setup: ns.setup}, Flags{mask: onState, setup: ns.setup}, caller)
+				} else {
+					sub.callback(cb.node.node, Flags{mask: onState, setup: ns.setup}, Flags{mask: offState, setup: ns.setup}, caller)
 				}
 			}
 			for i, f := range cb.fields {
-				if f != nil && ns.fields[i].subs != nil {
-					for _, fsub := range ns.fields[i].subs {
-						if start {
-							fsub(cb.node.node, Flags{mask: offlineState, setup: ns.setup}, nil, f, caller)
-						} else {
-							fsub(cb.node.node, Flags{mask: offlineState, setup: ns.setup}, f, nil, caller)
-						}
+				if f == nil || ns.fields[i].subs == nil {
+					continue
+				}
+				for _, fsub := range ns.fields[i].subs {
+					if start {
+						fsub(cb.node.node, Flags{mask: offlineState, setup: ns.setup}, nil, f, caller)
+					} else {
+						fsub(cb.node.node, Flags{mask: offlineState, setup: ns.setup}, f, nil, caller)
 					}
 				}
 			}
@@ -870,10 +874,8 @@ func (ns *NodeStateMachine) SetField(n *enode.Node, field Field, value interface
 
 	state := node.state
 	callback := func() {
-		if len(f.subs) > 0 {
-			for _, cb := range f.subs {
-				cb(n, Flags{mask: state, setup: ns.setup}, oldValue, value, caller)
-			}
+		for _, cb := range f.subs {
+			cb(n, Flags{mask: state, setup: ns.setup}, oldValue, value, caller)
 		}
 	}
 	callNow := caller == nil
