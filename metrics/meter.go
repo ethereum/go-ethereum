@@ -101,8 +101,12 @@ func NewRegisteredMeterForced(name string, r Registry) Meter {
 
 // MeterSnapshot is a read-only copy of another Meter.
 type MeterSnapshot struct {
-	count                          int64
+	// WARNING: The `temp` field is accessed atomically.
+	// On 32 bit platforms, only 64-bit aligned fields can be atomic. The struct is
+	// guaranteed to be so aligned, so take advantage of that. For more information,
+	// see https://golang.org/pkg/sync/atomic/#pkg-note-BUG.
 	temp                           int64
+	count                          int64
 	rate1, rate5, rate15, rateMean float64
 }
 
