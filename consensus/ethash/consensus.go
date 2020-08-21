@@ -271,9 +271,18 @@ func (ethash *Ethash) verifyHeader(chain consensus.ChainHeaderReader, header, pa
 	if header.GasLimit > max {
 		return fmt.Errorf("invalid gasLimit: have %v, max %v", header.GasLimit, max)
 	}
-	// Verify that the gasUsed is <= gasLimit
-	if header.GasUsed > header.GasLimit {
-		return fmt.Errorf("invalid gasUsed: have %d, gasLimit %d", header.GasUsed, header.GasLimit)
+
+	// Verify that total gas usage is below the gas limit
+	// Before EIP1559 activation, the "gasLimit" field in the header directly represents the gas limit
+	// After EIP1559 activation, the "gasLimit" field in the header represents the total gas target
+	// After EIP1559 activation, the *total* gas limit is equal to total gas target * slack coefficient
+	// The individual limits on legacy and EIP1559 gas usage during the transition period are enforced in the core/block_validator.go
+	var slackCoefficient uint64 = 1
+	if chain.Config().IsEIP1559(header.Number) {
+		slackCoefficient = chain.Config().EIP1559.EIP1559SlackCoefficient
+	}
+	if header.GasUsed > header.GasLimit*slackCoefficient {
+		return fmt.Errorf("invalid gasUsed: have %d, gasLimit %d, slack coefficient %d", header.GasUsed, header.GasLimit, chain.Config().EIP1559.EIP1559SlackCoefficient)
 	}
 
 	// Verify that the gas limit remains within allowed bounds
