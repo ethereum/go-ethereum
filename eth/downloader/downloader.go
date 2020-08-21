@@ -109,7 +109,7 @@ type Downloader struct {
 	peers      *peerSet // Set of active peers from which download can proceed
 
 	stateDB    ethdb.Database  // Database to state sync into (and deduplicate via)
-	stateBloom *trie.SyncBloom // Bloom filter for fast trie node existence checks
+	stateBloom *trie.SyncBloom // Bloom filter for fast trie node and contract code existence checks
 
 	// Statistics
 	syncStatsChainOrigin uint64 // Origin block number where syncing started at

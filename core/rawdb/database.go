@@ -258,6 +258,7 @@ func InspectDatabase(db ethdb.Database) error {
 		numHashPairing  common.StorageSize
 		hashNumPairing  common.StorageSize
 		trieSize        common.StorageSize
+		codeSize        common.StorageSize
 		txlookupSize    common.StorageSize
 		accountSnapSize common.StorageSize
 		storageSnapSize common.StorageSize
@@ -316,6 +317,8 @@ func InspectDatabase(db ethdb.Database) error {
 			chtTrieNodes += size
 		case bytes.HasPrefix(key, []byte("blt-")) && len(key) == 4+common.HashLength:
 			bloomTrieNodes += size
+		case bytes.HasPrefix(key, codePrefix) && len(key) == len(codePrefix)+common.HashLength:
+			codeSize += size
 		case len(key) == common.HashLength:
 			trieSize += size
 		default:
@@ -355,6 +358,7 @@ func InspectDatabase(db ethdb.Database) error {
 		{"Key-Value store", "Block hash->number", hashNumPairing.String()},
 		{"Key-Value store", "Transaction index", txlookupSize.String()},
 		{"Key-Value store", "Bloombit index", bloomBitsSize.String()},
+		{"Key-Value store", "Contract codes", codeSize.String()},
 		{"Key-Value store", "Trie nodes", trieSize.String()},
 		{"Key-Value store", "Trie preimages", preimageSize.String()},
 		{"Key-Value store", "Account snapshot", accountSnapSize.String()},
