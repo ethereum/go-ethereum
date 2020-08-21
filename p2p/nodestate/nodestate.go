@@ -18,7 +18,6 @@ package nodestate
 
 import (
 	"errors"
-	"fmt"
 	"reflect"
 	"sync"
 	"time"
@@ -32,8 +31,6 @@ import (
 	"github.com/ethereum/go-ethereum/p2p/enr"
 	"github.com/ethereum/go-ethereum/rlp"
 )
-
-const debugPrints = false
 
 type (
 	// NodeStateMachine connects different system components operating on subsets of
@@ -633,9 +630,6 @@ func (ns *NodeStateMachine) SetState(n *enode.Node, setFlags, resetFlags Flags, 
 	}
 	oldState := node.state
 	newState := (node.state & (^reset)) | set
-	if debugPrints {
-		fmt.Println("SetState", n.ID(), "old", Flags{oldState, ns.setup}, "new", Flags{newState, ns.setup}, "set", setFlags, "reset", resetFlags, "timeout", timeout)
-	}
 	changed := oldState ^ newState
 	node.state = newState
 
@@ -675,9 +669,6 @@ func (ns *NodeStateMachine) SetState(n *enode.Node, setFlags, resetFlags Flags, 
 		for i, v := range node.fields {
 			if v == nil {
 				continue
-			}
-			if debugPrints {
-				fmt.Println("discardField", n.ID(), ns.setup.fields[i].name, v)
 			}
 			f := ns.fields[i]
 			if len(f.subs) > 0 {
@@ -788,9 +779,6 @@ func (ns *NodeStateMachine) addTimeout(n *enode.Node, mask bitMask, timeout time
 	ns.removeTimeouts(node, mask)
 	t := &nodeStateTimeout{mask: mask}
 	t.timer = ns.clock.AfterFunc(timeout, func() {
-		if debugPrints {
-			fmt.Println("timeout", n.ID(), Flags{mask, ns.setup})
-		}
 		ns.SetState(n, Flags{}, Flags{mask: t.mask, setup: ns.setup}, 0, nil)
 	})
 	node.timeouts = append(node.timeouts, t)
@@ -860,9 +848,6 @@ func (ns *NodeStateMachine) SetField(n *enode.Node, field Field, value interface
 		return errors.New("invalid field type")
 	}
 	oldValue := node.fields[fieldIndex]
-	if debugPrints {
-		fmt.Println("SetField", n.ID(), Flags{node.state, ns.setup}, field.setup.fields[field.index].name, oldValue, value)
-	}
 	if value == oldValue {
 		ns.lock.Unlock()
 		return nil
