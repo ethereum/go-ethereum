@@ -1502,6 +1502,8 @@ func (d *Downloader) processHeaders(origin uint64, pivot uint64, td *big.Int) er
 					head := chunk[len(chunk)-1].Number.Uint64()
 					if head-rollback > uint64(fsHeaderSafetyNet) {
 						rollback = head - uint64(fsHeaderSafetyNet)
+					} else {
+						rollback = 1
 					}
 				}
 				// Unless we're doing light chains, schedule the headers for associated content retrieval
