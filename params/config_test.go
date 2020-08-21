@@ -76,6 +76,17 @@ func TestCheckCompatible(t *testing.T) {
 			head:    40,
 			wantErr: nil,
 		},
+		{
+			stored: &ChainConfig{ConstantinopleBlock: big.NewInt(30)},
+			new:    &ChainConfig{ConstantinopleBlock: big.NewInt(30), PetersburgBlock: big.NewInt(31)},
+			head:   40,
+			wantErr: &ConfigCompatError{
+				What:         "Petersburg fork block",
+				StoredConfig: nil,
+				NewConfig:    big.NewInt(31),
+				RewindTo:     30,
+			},
+		},
 	}
 
 	for _, test := range tests {
