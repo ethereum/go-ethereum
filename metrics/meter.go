@@ -253,7 +253,7 @@ func (m *StandardMeter) updateSnapshot() {
 
 func (m *StandardMeter) updateMeter() {
 	// should only run with write lock held on m.lock
-	n := atomic.LoadInt64(&m.snapshot.temp)
+	n := atomic.SwapInt64(&m.snapshot.temp, 0)
 	m.snapshot.count += n
 	m.a1.Update(n)
 	m.a5.Update(n)
