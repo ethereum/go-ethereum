@@ -410,8 +410,12 @@ func (pm *ProtocolManager) handleMsg(p *peer) error {
 			bytes   common.StorageSize
 			headers []*types.Header
 			unknown bool
+			lookups int
 		)
-		for !unknown && len(headers) < int(query.Amount) && bytes < softResponseLimit && len(headers) < downloader.MaxHeaderFetch {
+		for !unknown && len(headers) < int(query.Amount) && bytes < softResponseLimit &&
+			len(headers) < downloader.MaxHeaderFetch &&
+			lookups < 2*downloader.MaxHeaderFetch {
+			lookups++
 			// Retrieve the next header satisfying the query
 			var origin *types.Header
 			if hashMode {
@@ -543,11 +547,14 @@ func (pm *ProtocolManager) handleMsg(p *peer) error {
 		}
 		// Gather blocks until the fetch or network limits is reached
 		var (
-			hash   common.Hash
-			bytes  int
-			bodies []rlp.RawValue
+			hash    common.Hash
+			bytes   int
+			bodies  []rlp.RawValue
+			lookups int
 		)
-		for bytes < softResponseLimit && len(bodies) < downloader.MaxBlockFetch {
+		for bytes < softResponseLimit && len(bodies) < downloader.MaxBlockFetch &&
+			lookups < 2*downloader.MaxBlockFetch {
+			lookups++
 			// Retrieve the hash of the next block
 			if err := msgStream.Decode(&hash); err == rlp.EOL {
 				break
@@ -596,11 +603,14 @@ func (pm *ProtocolManager) handleMsg(p *peer) error {
 		}
 		// Gather state data until the fetch or network limits is reached
 		var (
-			hash  common.Hash
-			bytes int
-			data  [][]byte
+			hash    common.Hash
+			bytes   int
+			data    [][]byte
+			lookups int
 		)
-		for bytes < softResponseLimit && len(data) < downloader.MaxStateFetch {
+		for bytes < softResponseLimit && len(data) < downloader.MaxStateFetch &&
+			lookups < downloader.MaxStateFetch*2 {
+			lookups++
 			// Retrieve the hash of the next state entry
 			if err := msgStream.Decode(&hash); err == rlp.EOL {
 				break
@@ -612,6 +622,7 @@ func (pm *ProtocolManager) handleMsg(p *peer) error {
 				data = append(data, entry)
 				bytes += len(entry)
 			}
+			lookups++
 		}
 		return p.SendNodeData(data)
 
@@ -637,8 +648,11 @@ func (pm *ProtocolManager) handleMsg(p *peer) error {
 			hash     common.Hash
 			bytes    int
 			receipts []rlp.RawValue
+			lookups  int
 		)
-		for bytes < softResponseLimit && len(receipts) < downloader.MaxReceiptFetch {
+		for bytes < softResponseLimit && len(receipts) < downloader.MaxReceiptFetch &&
+			lookups < downloader.MaxReceiptFetch*2 {
+			lookups++
 			// Retrieve the hash of the next block
 			if err := msgStream.Decode(&hash); err == rlp.EOL {
 				break
