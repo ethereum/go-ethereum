@@ -289,7 +289,7 @@ func (d *Downloader) Synchronising() bool {
 //
 // While the bloom is being initialized (or is closed), all queries will return true.
 func (d *Downloader) SyncBloomContains(hash []byte) bool {
-	return d.stateBloom.Contains(hash)
+	return d.stateBloom == nil || d.stateBloom.Contains(hash)
 }
 
 // RegisterPeer injects a new download peer into the set of block source to be
