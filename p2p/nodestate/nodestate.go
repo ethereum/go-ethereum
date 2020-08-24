@@ -698,7 +698,7 @@ func (ns *NodeStateMachine) opCheck() {
 }
 
 func (ns *NodeStateMachine) opStart() {
-	if ns.opFlag {
+	for ns.opFlag {
 		ns.opWait.Wait()
 	}
 	ns.opFlag = true
@@ -721,6 +721,16 @@ func (ns *NodeStateMachine) opEnd() {
 	ns.pending = nil
 	ns.opFlag = false
 	ns.opWait.Signal()
+}
+
+func (ns *NodeStateMachine) Operation(fn func()) {
+	ns.lock.Lock()
+	ns.opStart()
+	ns.lock.Unlock()
+	fn()
+	ns.lock.Lock()
+	ns.opEnd()
+	ns.lock.Unlock()
 }
 
 // offlineCallbacks calls state update callbacks at startup or shutdown
