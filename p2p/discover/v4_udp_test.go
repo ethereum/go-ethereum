@@ -496,6 +496,8 @@ func TestUDPv4_EIP868(t *testing.T) {
 
 // This test verifies that a small network of nodes can boot up into a healthy state.
 func TestUDPv4_smallNetConvergence(t *testing.T) {
+	t.Parallel()
+
 	// Start the network.
 	nodes := make([]*UDPv4, 4)
 	for i := range nodes {
