@@ -54,23 +54,107 @@ func TestVhosts(t *testing.T) {
 
 // TestWebsocketOrigins makes sure the websocket origins are properly handled on the websocket server.
 func TestWebsocketOrigins(t *testing.T) {
+	tryWebsocketOriginsSimpleRule(t)
+	tryWebsocketOriginsRuleWithScheme(t)
+	tryWebsocketOriginsIPRuleWithScheme(t)
+	tryWebsocketOriginsRuleWithPort(t)
+	tryWebsocketOriginsRuleWithSchemeAndPort(t)
+}
+
+func tryWebsocketOriginsSimpleRule(t *testing.T) {
 	srv := createAndStartServer(t, httpConfig{}, true, wsConfig{Origins: []string{"test"}})
 	defer srv.stop()
 
-	dialer := websocket.DefaultDialer
-	_, _, err := dialer.Dial("ws://"+srv.listenAddr(), http.Header{
-		"Content-type":          []string{"application/json"},
-		"Sec-WebSocket-Version": []string{"13"},
-		"Origin":                []string{"test"},
-	})
-	assert.NoError(t, err)
+	assert.NoError(t, attemptWebsocketConnectionFromOrigin(t, srv, "http://test"))
+	assert.NoError(t, attemptWebsocketConnectionFromOrigin(t, srv, "https://test"))
+	assert.NoError(t, attemptWebsocketConnectionFromOrigin(t, srv, "http://test:8540"))
+	assert.NoError(t, attemptWebsocketConnectionFromOrigin(t, srv, "https://test:8540"))
 
-	_, _, err = dialer.Dial("ws://"+srv.listenAddr(), http.Header{
-		"Content-type":          []string{"application/json"},
-		"Sec-WebSocket-Version": []string{"13"},
-		"Origin":                []string{"bad"},
-	})
-	assert.Error(t, err)
+	// Host mismatch (set):
+	assert.Error(t, attemptWebsocketConnectionFromOrigin(t, srv, "http://bad"))
+	assert.Error(t, attemptWebsocketConnectionFromOrigin(t, srv, "https://bad"))
+	assert.Error(t, attemptWebsocketConnectionFromOrigin(t, srv, "http://bad:8540"))
+	assert.Error(t, attemptWebsocketConnectionFromOrigin(t, srv, "https://bad:8540"))
+}
+
+func tryWebsocketOriginsRuleWithScheme(t *testing.T) {
+	srv := createAndStartServer(t, httpConfig{}, true, wsConfig{Origins: []string{"https://test"}})
+	defer srv.stop()
+
+	// Scheme mismatch:
+	assert.Error(t, attemptWebsocketConnectionFromOrigin(t, srv, "http://test"))
+	assert.NoError(t, attemptWebsocketConnectionFromOrigin(t, srv, "https://test"))
+
+	// Scheme mismatch:
+	assert.Error(t, attemptWebsocketConnectionFromOrigin(t, srv, "http://test:8540"))
+	assert.NoError(t, attemptWebsocketConnectionFromOrigin(t, srv, "https://test:8540"))
+
+	// Host mismatch (set):
+	assert.Error(t, attemptWebsocketConnectionFromOrigin(t, srv, "http://bad"))
+	assert.Error(t, attemptWebsocketConnectionFromOrigin(t, srv, "https://bad"))
+	assert.Error(t, attemptWebsocketConnectionFromOrigin(t, srv, "http://bad:8540"))
+	assert.Error(t, attemptWebsocketConnectionFromOrigin(t, srv, "https://bad:8540"))
+}
+
+func tryWebsocketOriginsIPRuleWithScheme(t *testing.T) {
+	srv := createAndStartServer(t, httpConfig{}, true, wsConfig{Origins: []string{"https://12.34.56.78"}})
+	defer srv.stop()
+
+	// Scheme mismatch:
+	assert.Error(t, attemptWebsocketConnectionFromOrigin(t, srv, "http://12.34.56.78"))
+	assert.NoError(t, attemptWebsocketConnectionFromOrigin(t, srv, "https://12.34.56.78"))
+
+	// Scheme mismatch:
+	assert.Error(t, attemptWebsocketConnectionFromOrigin(t, srv, "http://12.34.56.78:8540"))
+	assert.NoError(t, attemptWebsocketConnectionFromOrigin(t, srv, "https://12.34.56.78:8540"))
+
+	// Host mismatch (set):
+	assert.Error(t, attemptWebsocketConnectionFromOrigin(t, srv, "http://87.65.43.21"))
+	assert.Error(t, attemptWebsocketConnectionFromOrigin(t, srv, "https://87.65.43.21"))
+	assert.Error(t, attemptWebsocketConnectionFromOrigin(t, srv, "http://87.65.43.21:8540"))
+	assert.Error(t, attemptWebsocketConnectionFromOrigin(t, srv, "https://87.65.43.21:8540"))
+}
+
+func tryWebsocketOriginsRuleWithPort(t *testing.T) {
+	srv := createAndStartServer(t, httpConfig{}, true, wsConfig{Origins: []string{"test:8540"}})
+	defer srv.stop()
+
+	assert.NoError(t, attemptWebsocketConnectionFromOrigin(t, srv, "http://test"))
+	assert.NoError(t, attemptWebsocketConnectionFromOrigin(t, srv, "https://test"))
+	assert.NoError(t, attemptWebsocketConnectionFromOrigin(t, srv, "http://test:8540"))
+	assert.NoError(t, attemptWebsocketConnectionFromOrigin(t, srv, "https://test:8540"))
+
+	// Port mismatch (set):
+	assert.Error(t, attemptWebsocketConnectionFromOrigin(t, srv, "http://test:8541"))
+	assert.Error(t, attemptWebsocketConnectionFromOrigin(t, srv, "https://test:8541"))
+
+	// Host mismatch (set):
+	assert.Error(t, attemptWebsocketConnectionFromOrigin(t, srv, "http://bad"))
+	assert.Error(t, attemptWebsocketConnectionFromOrigin(t, srv, "https://bad"))
+	assert.Error(t, attemptWebsocketConnectionFromOrigin(t, srv, "http://bad:8540"))
+	assert.Error(t, attemptWebsocketConnectionFromOrigin(t, srv, "https://bad:8540"))
+}
+
+func tryWebsocketOriginsRuleWithSchemeAndPort(t *testing.T) {
+	srv := createAndStartServer(t, httpConfig{}, true, wsConfig{Origins: []string{"https://test:8540"}})
+	defer srv.stop()
+
+	// Scheme mismatch:
+	assert.Error(t, attemptWebsocketConnectionFromOrigin(t, srv, "http://test"))
+	assert.NoError(t, attemptWebsocketConnectionFromOrigin(t, srv, "https://test"))
+	// Scheme mismatch:
+	assert.Error(t, attemptWebsocketConnectionFromOrigin(t, srv, "http://test:8540"))
+	assert.NoError(t, attemptWebsocketConnectionFromOrigin(t, srv, "https://test:8540"))
+
+	// Port mismatch (set):
+	assert.Error(t, attemptWebsocketConnectionFromOrigin(t, srv, "http://test:8541"))
+	assert.Error(t, attemptWebsocketConnectionFromOrigin(t, srv, "https://test:8541"))
+
+	// Host mismatch (set):
+	assert.Error(t, attemptWebsocketConnectionFromOrigin(t, srv, "http://bad"))
+	assert.Error(t, attemptWebsocketConnectionFromOrigin(t, srv, "https://bad"))
+	assert.Error(t, attemptWebsocketConnectionFromOrigin(t, srv, "http://bad:8540"))
+	assert.Error(t, attemptWebsocketConnectionFromOrigin(t, srv, "https://bad:8540"))
 }
 
 // TestIsWebsocket tests if an incoming websocket upgrade request is handled properly.
@@ -101,6 +185,17 @@ func createAndStartServer(t *testing.T, conf httpConfig, ws bool, wsConf wsConfi
 	assert.NoError(t, srv.start())
 
 	return srv
+}
+
+func attemptWebsocketConnectionFromOrigin(t *testing.T, srv *httpServer, browserOrigin string) error {
+	t.Helper()
+	dialer := websocket.DefaultDialer
+	_, _, err := dialer.Dial("ws://"+srv.listenAddr(), http.Header{
+		"Content-type":          []string{"application/json"},
+		"Sec-WebSocket-Version": []string{"13"},
+		"Origin":                []string{browserOrigin},
+	})
+	return err
 }
 
 func testRequest(t *testing.T, key, value, host string, srv *httpServer) *http.Response {
