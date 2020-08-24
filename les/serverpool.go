@@ -243,18 +243,20 @@ func (s *serverPool) start() {
 		}
 	}
 	unixTime := s.unixTime()
-	s.ns.ForEach(sfHasValue, nodestate.Flags{}, func(node *enode.Node, state nodestate.Flags) {
-		s.calculateWeight(node)
-		if n, ok := s.ns.GetField(node, sfiNodeHistory).(nodeHistory); ok && n.redialWaitEnd > unixTime {
-			wait := n.redialWaitEnd - unixTime
-			lastWait := n.redialWaitEnd - n.redialWaitStart
-			if wait > lastWait {
-				// if the time until expiration is larger than the last suggested
-				// waiting time then the system clock was probably adjusted
-				wait = lastWait
+	s.ns.Operation(func() {
+		s.ns.ForEach(sfHasValue, nodestate.Flags{}, func(node *enode.Node, state nodestate.Flags) {
+			s.calculateWeight(node)
+			if n, ok := s.ns.GetField(node, sfiNodeHistory).(nodeHistory); ok && n.redialWaitEnd > unixTime {
+				wait := n.redialWaitEnd - unixTime
+				lastWait := n.redialWaitEnd - n.redialWaitStart
+				if wait > lastWait {
+					// if the time until expiration is larger than the last suggested
+					// waiting time then the system clock was probably adjusted
+					wait = lastWait
+				}
+				s.ns.SetStateSub(node, sfRedialWait, nodestate.Flags{}, time.Duration(wait)*time.Second)
 			}
-			s.ns.SetStateSub(node, sfRedialWait, nodestate.Flags{}, time.Duration(wait)*time.Second)
-		}
+		})
 	})
 }
 
@@ -264,9 +266,11 @@ func (s *serverPool) stop() {
 	if s.fillSet != nil {
 		s.fillSet.Close()
 	}
-	s.ns.ForEach(sfConnected, nodestate.Flags{}, func(n *enode.Node, state nodestate.Flags) {
-		// recalculate weight of connected nodes in order to update hasValue flag if necessary
-		s.calculateWeight(n)
+	s.ns.Operation(func() {
+		s.ns.ForEach(sfConnected, nodestate.Flags{}, func(n *enode.Node, state nodestate.Flags) {
+			// recalculate weight of connected nodes in order to update hasValue flag if necessary
+			s.calculateWeight(n)
+		})
 	})
 	s.ns.Stop()
 }

@@ -102,7 +102,7 @@ func TestFillSet(t *testing.T) {
 	expNotWaiting()
 	// remove all previosly set flags
 	ns.ForEach(sfTest1, nodestate.Flags{}, func(node *enode.Node, state nodestate.Flags) {
-		ns.SetStateSub(node, nodestate.Flags{}, sfTest1, 0)
+		ns.SetState(node, nodestate.Flags{}, sfTest1, 0)
 	})
 	// now expect FillSet to fill the set up again with 10 new nodes
 	expWaiting(10, true)

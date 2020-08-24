@@ -916,11 +916,12 @@ func (ns *NodeStateMachine) setField(n *enode.Node, field Field, value interface
 }
 
 // ForEach calls the callback for each node having all of the required and none of the
-// disabled flags set
+// disabled flags set.
+// Note that this callback is not an operation callback but ForEach can be called from an
+// Operation callback or Operation can also be called from a ForEach callback if necessary.
 func (ns *NodeStateMachine) ForEach(requireFlags, disableFlags Flags, cb func(n *enode.Node, state Flags)) {
 	ns.lock.Lock()
 	ns.checkStarted()
-	ns.opStart()
 	type callback struct {
 		node  *enode.Node
 		state bitMask
@@ -936,9 +937,6 @@ func (ns *NodeStateMachine) ForEach(requireFlags, disableFlags Flags, cb func(n 
 	for _, c := range callbacks {
 		cb(c.node, Flags{mask: c.state, setup: ns.setup})
 	}
-	ns.lock.Lock()
-	ns.opFinish()
-	ns.lock.Unlock()
 }
 
 // GetNode returns the enode currently associated with the given ID
