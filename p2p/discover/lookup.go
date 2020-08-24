@@ -149,13 +149,11 @@ func (it *lookup) query(n *node, reply chan<- []*node) {
 		fails++
 		it.tab.db.UpdateFindFails(n.ID(), n.IP(), fails)
 		it.tab.log.Trace("Findnode failed", "id", n.ID(), "failcount", fails, "results", len(r), "err", err)
-		if fails >= maxFindnodeFailures {
-			if len(it.tab.bucket(n.ID()).entries) >= bucketSize/2 {
-				it.tab.log.Trace("Too many findnode failures, dropping", "id", n.ID(), "failcount", fails)
-				it.tab.delete(n)
-			} else {
-				it.tab.log.Trace("Too many findnode failures, not dropping node because we have too little alternatives", "id", n.ID(), "failcount", fails)
-			}
+		// Remove the node from the local table if it fails to return anything useful too
+		// many times, but only if there are enough other nodes in the bucket.
+		if fails >= maxFindnodeFailures && it.tab.bucketLen(n.ID()) >= bucketSize/2 {
+			it.tab.log.Trace("Too many findnode failures, dropping", "id", n.ID(), "failcount", fails)
+			it.tab.delete(n)
 		}
 	} else if fails > 0 {
 		// Reset failure counter because it counts _consecutive_ failures.
