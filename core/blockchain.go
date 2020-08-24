@@ -712,7 +712,7 @@ func (bc *BlockChain) writeHeadBlock(block *types.Block) {
 	// Add the block to the canonical chain number scheme and mark as the head
 	batch := bc.db.NewBatch()
 	rawdb.WriteCanonicalHash(batch, block.Hash(), block.NumberU64())
-	rawdb.WriteTxLookupEntries(batch, block)
+	rawdb.WriteTxLookupEntriesByBlock(batch, block)
 	rawdb.WriteHeadBlockHash(batch, block.Hash())
 
 	// If the block is better than our head or is on a different chain, force update heads
@@ -1217,9 +1217,9 @@ func (bc *BlockChain) InsertReceiptChain(blockChain types.Blocks, receiptChain [
 			// range. In this case, all tx indices of newly imported blocks should be
 			// generated.
 			if bc.txLookupLimit == 0 || ancientLimit <= bc.txLookupLimit || block.NumberU64() >= ancientLimit-bc.txLookupLimit {
-				rawdb.WriteTxLookupEntries(batch, block)
+				rawdb.WriteTxLookupEntriesByBlock(batch, block)
 			} else if rawdb.ReadTxIndexTail(bc.db) != nil {
-				rawdb.WriteTxLookupEntries(batch, block)
+				rawdb.WriteTxLookupEntriesByBlock(batch, block)
 			}
 			stats.processed++
 		}
@@ -1303,7 +1303,7 @@ func (bc *BlockChain) InsertReceiptChain(blockChain types.Blocks, receiptChain [
 			// Write all the data out into the database
 			rawdb.WriteBody(batch, block.Hash(), block.NumberU64(), block.Body())
 			rawdb.WriteReceipts(batch, block.Hash(), block.NumberU64(), receiptChain[i])
-			rawdb.WriteTxLookupEntries(batch, block) // Always write tx indices for live blocks, we assume they are needed
+			rawdb.WriteTxLookupEntriesByBlock(batch, block) // Always write tx indices for live blocks, we assume they are needed
 
 			// Write everything belongs to the blocks into the database. So that
 			// we can ensure all components of body is completed(body, receipts,
