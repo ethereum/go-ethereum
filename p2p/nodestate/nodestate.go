@@ -33,25 +33,29 @@ import (
 )
 
 type (
-	// NodeStateMachine connects different system components operating on subsets of
-	// network nodes. Node states are represented by 64 bit vectors with each bit assigned
-	// to a state flag. Each state flag has a descriptor structure and the mapping is
-	// created automatically. It is possible to subscribe to subsets of state flags and
-	// receive a callback if one of the nodes has a relevant state flag changed.
-	// Callbacks can also modify further flags of the same node or other nodes. State
-	// updates only return after all immediate effects throughout the system have happened
-	// (deadlocks should be avoided by design of the implemented state logic). The caller
-	// can also add timeouts assigned to a certain node and a subset of state flags.
-	// If the timeout elapses, the flags are reset. If all relevant flags are reset then
-	// the timer is dropped. State flags with no timeout are persisted in the database
-	// if the flag descriptor enables saving. If a node has no state flags set at any
-	// moment then it is discarded.
-	//
-	// Extra node fields can also be registered so system components can also store more
-	// complex state for each node that is relevant to them, without creating a custom
-	// peer set. Fields can be shared across multiple components if they all know the
-	// field ID. Subscription to fields is also possible. Persistent fields should have
-	// an encoder and a decoder function.
+	// NodeStateMachine implements a network node-related event subscription system.
+	// It can assign binary state flags and fields of arbitrary type to each node and allows
+	// subscriptions to flag/field changes which can also modify further flags and fields,
+	// potentially triggering further subscriptions. An operation includes an initial change
+	// and all resulting subsequent changes and always ends in a consistent global state.
+	// It is initiated by a "top level" SetState/SetField call that blocks (also blocking other
+	// top-level functions) until the operation is finished. Callbacks making further changes
+	// should use the non-blocking SetStateSub/SetFieldSub functions. The tree of events
+	// resulting from the initial changes is traversed in a breadth-first order, ensuring for
+	// each subscription callback that all other callbacks caused by the same change triggering
+	// the current callback are processed before anything is triggered by the changes made in the
+	// current callback. In practice this logic ensures that all subscriptions "see" events in
+	// the logical order, callbacks are never called concurrently and "back and forth" effects
+	// are also possible. The state machine design should ensure that infinite event cycles
+	// cannot happen.
+	// The caller can also add timeouts assigned to a certain node and a subset of state flags.
+	// If the timeout elapses, the flags are reset. If all relevant flags are reset then the timer
+	// is dropped. State flags with no timeout are persisted in the database if the flag
+	// descriptor enables saving. If a node has no state flags set at any moment then it is discarded.
+	// Note: in order to avoid mutex deadlocks the callbacks should never lock a mutex that
+	// might be locked when the top level SetState/SetField functions are called. If a function
+	// potentially performs state/field changes then it is recommended to mention this fact in the
+	// function description, along with whether it should run inside an operation callback.
 	NodeStateMachine struct {
 		started, stopped    bool
 		lock                sync.Mutex
@@ -62,7 +66,7 @@ type (
 		offlineCallbackList []offlineCallback
 		opFlag              bool       // an operation has started
 		opWait              *sync.Cond // signaled when the operation ends
-		pending             []func()   // pending callback list of the current operation
+		opPending           []func()   // pending callback list of the current operation
 
 		// Registered state flags or fields. Modifications are allowed
 		// only when the node state machine has not been started.
@@ -361,10 +365,12 @@ func (ns *NodeStateMachine) fieldIndex(field Field) int {
 }
 
 // SubscribeState adds a node state subscription. The callback is called while the state
-// machine mutex is not held and it is allowed to make further state updates. All immediate
-// changes throughout the system are processed in the same thread/goroutine. It is the
-// responsibility of the implemented state logic to avoid deadlocks caused by the callbacks,
-// infinite toggling of flags or hazardous/non-deterministic state changes.
+// machine mutex is not held and it is allowed to make further state updates using the
+// non-blocking SetStateSub/SetFieldSub functions. All callbacks of an operation are running
+// from the thread/goroutine of the initial caller and parallel operations are not permitted.
+// Therefore the callback is never called concurrently. It is the responsibility of the
+// implemented state logic to avoid deadlocks and to reach a stable state in a finite amount
+// of steps.
 // State subscriptions should be installed before loading the node database or making the
 // first state update.
 func (ns *NodeStateMachine) SubscribeState(flags Flags, callback StateCallback) {
@@ -603,19 +609,19 @@ func (ns *NodeStateMachine) Persist(n *enode.Node) error {
 	return nil
 }
 
-// SetState updates the given node state flags and processes all resulting callbacks.
-// It only returns after all subsequent immediate changes (including those changed by the
-// callbacks) have been processed. If a flag with a timeout is set again, the operation
-// removes or replaces the existing timeout.
+// SetState updates the given node state flags and blocks until the operation is finished.
+// If a flag with a timeout is set again, the operation removes or replaces the existing timeout.
 func (ns *NodeStateMachine) SetState(n *enode.Node, setFlags, resetFlags Flags, timeout time.Duration) {
 	ns.lock.Lock()
 	defer ns.lock.Unlock()
 
 	ns.opStart()
 	ns.setState(n, setFlags, resetFlags, timeout)
-	ns.opEnd()
+	ns.opFinish()
 }
 
+// SetStateSub updates the given node state flags without blocking (should be called
+// from a subscription/operation callback).
 func (ns *NodeStateMachine) SetStateSub(n *enode.Node, setFlags, resetFlags Flags, timeout time.Duration) {
 	ns.lock.Lock()
 	defer ns.lock.Unlock()
@@ -688,15 +694,17 @@ func (ns *NodeStateMachine) setState(n *enode.Node, setFlags, resetFlags Flags, 
 			}
 		}
 	}
-	ns.pending = append(ns.pending, callback)
+	ns.opPending = append(ns.opPending, callback)
 }
 
+// opCheck checks whether an operation is active
 func (ns *NodeStateMachine) opCheck() {
 	if !ns.opFlag {
 		panic("Operation has not started")
 	}
 }
 
+// opStart waits until other operations are finished and starts a new one
 func (ns *NodeStateMachine) opStart() {
 	for ns.opFlag {
 		ns.opWait.Wait()
@@ -704,32 +712,35 @@ func (ns *NodeStateMachine) opStart() {
 	ns.opFlag = true
 }
 
-// processCallbacks runs pending callbacks of a given node in a guaranteed correct order.
+// opFinish finishes the current operation by running all pending callbacks.
 // Callbacks resulting from a state/field change performed in a previous callback are always
 // put at the end of the pending list and therefore processed after all callbacks resulting
 // from the previous state/field change.
-func (ns *NodeStateMachine) opEnd() {
-	for len(ns.pending) != 0 {
-		list := ns.pending
+func (ns *NodeStateMachine) opFinish() {
+	for len(ns.opPending) != 0 {
+		list := ns.opPending
 		ns.lock.Unlock()
 		for _, cb := range list {
 			cb()
 		}
 		ns.lock.Lock()
-		ns.pending = ns.pending[len(list):]
+		ns.opPending = ns.opPending[len(list):]
 	}
-	ns.pending = nil
+	ns.opPending = nil
 	ns.opFlag = false
 	ns.opWait.Signal()
 }
 
+// Operation calls the given function as an operation callback. This allows the caller
+// to start an operation with multiple initial changes. The same rules apply as for
+// subscription callbacks.
 func (ns *NodeStateMachine) Operation(fn func()) {
 	ns.lock.Lock()
 	ns.opStart()
 	ns.lock.Unlock()
 	fn()
 	ns.lock.Lock()
-	ns.opEnd()
+	ns.opFinish()
 	ns.lock.Unlock()
 }
 
@@ -767,10 +778,10 @@ func (ns *NodeStateMachine) offlineCallbacks(start bool) {
 				}
 			}
 		}
-		ns.pending = append(ns.pending, callback)
+		ns.opPending = append(ns.opPending, callback)
 	}
 	ns.offlineCallbackList = nil
-	ns.opEnd()
+	ns.opFinish()
 }
 
 // AddTimeout adds a node state timeout associated to the given state flag(s).
@@ -832,7 +843,9 @@ func (ns *NodeStateMachine) removeTimeouts(node *nodeInfo, mask bitMask) {
 	}
 }
 
-// GetField retrieves the given field of the given node
+// GetField retrieves the given field of the given node. Note that when used in a
+// subscription callback the result can be out of sync with the state change represented
+// by the callback parameters so extra safety checks might be necessary.
 func (ns *NodeStateMachine) GetField(n *enode.Node, field Field) interface{} {
 	ns.lock.Lock()
 	defer ns.lock.Unlock()
@@ -847,17 +860,19 @@ func (ns *NodeStateMachine) GetField(n *enode.Node, field Field) interface{} {
 	return nil
 }
 
-// SetField sets the given field of the given node
+// SetField sets the given field of the given node and blocks until the operation is finished
 func (ns *NodeStateMachine) SetField(n *enode.Node, field Field, value interface{}) error {
 	ns.lock.Lock()
 	defer ns.lock.Unlock()
 
 	ns.opStart()
 	err := ns.setField(n, field, value)
-	ns.opEnd()
+	ns.opFinish()
 	return err
 }
 
+// SetFieldSub sets the given field of the given node without blocking (should be called
+// from a subscription/operation callback).
 func (ns *NodeStateMachine) SetFieldSub(n *enode.Node, field Field, value interface{}) error {
 	ns.lock.Lock()
 	defer ns.lock.Unlock()
@@ -896,7 +911,7 @@ func (ns *NodeStateMachine) setField(n *enode.Node, field Field, value interface
 			cb(n, Flags{mask: state, setup: ns.setup}, oldValue, value)
 		}
 	}
-	ns.pending = append(ns.pending, callback)
+	ns.opPending = append(ns.opPending, callback)
 	return nil
 }
 
@@ -922,7 +937,7 @@ func (ns *NodeStateMachine) ForEach(requireFlags, disableFlags Flags, cb func(n 
 		cb(c.node, Flags{mask: c.state, setup: ns.setup})
 	}
 	ns.lock.Lock()
-	ns.opEnd()
+	ns.opFinish()
 	ns.lock.Unlock()
 }
 
