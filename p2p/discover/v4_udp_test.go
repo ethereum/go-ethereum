@@ -278,7 +278,7 @@ func TestUDPv4_findnode(t *testing.T) {
 	test.table.db.UpdateLastPongReceived(remoteID, test.remoteaddr.IP, time.Now())
 
 	// check that closest neighbors are returned.
-	expected := test.table.closest(testTarget.ID(), bucketSize, true)
+	expected := test.table.findnodeByID(testTarget.ID(), bucketSize, true)
 	test.packetIn(nil, &v4wire.Findnode{Target: testTarget, Expiration: futureExp})
 	waitNeighbors := func(want []*node) {
 		test.waitPacketOut(func(p *v4wire.Neighbors, to *net.UDPAddr, hash []byte) {

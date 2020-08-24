@@ -104,9 +104,7 @@ func (it *lookup) startQueries() bool {
 
 	// The first query returns nodes from the local table.
 	if it.queries == -1 {
-		it.tab.mutex.Lock()
-		closest := it.tab.closest(it.result.target, bucketSize, false)
-		it.tab.mutex.Unlock()
+		closest := it.tab.findnodeByID(it.result.target, bucketSize, false)
 		// Avoid finishing the lookup too quickly if table is empty. It'd be better to wait
 		// for the table to fill in this case, but there is no good mechanism for that
 		// yet.

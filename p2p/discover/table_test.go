@@ -190,7 +190,7 @@ func checkIPLimitInvariant(t *testing.T, tab *Table) {
 	}
 }
 
-func TestTable_closest(t *testing.T) {
+func TestTable_findnodeByID(t *testing.T) {
 	t.Parallel()
 
 	test := func(test *closeTest) bool {
@@ -202,7 +202,7 @@ func TestTable_closest(t *testing.T) {
 		fillTable(tab, test.All)
 
 		// check that closest(Target, N) returns nodes
-		result := tab.closest(test.Target, test.N, false).entries
+		result := tab.findnodeByID(test.Target, test.N, false).entries
 		if hasDuplicates(result) {
 			t.Errorf("result contains duplicates")
 			return false
