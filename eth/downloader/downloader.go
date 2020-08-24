@@ -283,6 +283,15 @@ func (d *Downloader) Synchronising() bool {
 	return atomic.LoadInt32(&d.synchronising) > 0
 }
 
+// SyncBloomContains tests if the syncbloom filter contains the given hash:
+//   - false: the bloom definitely does not contain hash
+//   - true:  the bloom maybe contains hash
+//
+// While the bloom is being initialized (or is closed), all queries will return true.
+func (d *Downloader) SyncBloomContains(hash []byte) bool {
+	return d.stateBloom == nil || d.stateBloom.Contains(hash)
+}
+
 // RegisterPeer injects a new download peer into the set of block source to be
 // used for fetching hashes and blocks from.
 func (d *Downloader) RegisterPeer(id string, version int, peer Peer) error {

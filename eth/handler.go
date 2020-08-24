@@ -610,6 +610,10 @@ func (pm *ProtocolManager) handleMsg(p *peer) error {
 			// Retrieve the requested state entry, stopping if enough was found
 			// todo now the code and trienode is mixed in the protocol level,
 			// separate these two types.
+			if !pm.downloader.SyncBloomContains(hash[:]) {
+				// Only lookup the trie node if there's chance that we actually have it
+				continue
+			}
 			entry, err := pm.blockchain.TrieNode(hash)
 			if len(entry) == 0 || err != nil {
 				// Read the contract code with prefix only to save unnecessary lookups.
