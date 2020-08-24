@@ -2017,3 +2017,38 @@ func benchmarkPoolBatchInsert(b *testing.B, size int, local bool) {
 		}
 	}
 }
+
+func BenchmarkInsertRemoteWithAllLocals(b *testing.B) {
+	// Allocate keys for testing
+	key, _ := crypto.GenerateKey()
+	account := crypto.PubkeyToAddress(key.PublicKey)
+
+	remoteKey, _ := crypto.GenerateKey()
+	remoteAddr := crypto.PubkeyToAddress(remoteKey.PublicKey)
+
+	locals := make([]*types.Transaction, 4096+1024) // Occupy all slots
+	for i := 0; i < len(locals); i++ {
+		locals[i] = transaction(uint64(i), 100000, key)
+	}
+	remotes := make([]*types.Transaction, 1000)
+	for i := 0; i < len(remotes); i++ {
+		remotes[i] = pricedTransaction(uint64(i), 100000, big.NewInt(2), remoteKey) // Higher gasprice
+	}
+	// Benchmark importing the transactions into the queue
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		b.StopTimer()
+		pool, _ := setupTxPool()
+		pool.currentState.AddBalance(account, big.NewInt(100000000))
+		for _, local := range locals {
+			pool.AddLocal(local)
+		}
+		b.StartTimer()
+		// Assign a high enough balance for testing
+		pool.currentState.AddBalance(remoteAddr, big.NewInt(100000000))
+		for i := 0; i < len(remotes); i++ {
+			pool.AddRemotes([]*types.Transaction{remotes[i]})
+		}
+		pool.Stop()
+	}
+}
