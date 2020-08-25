@@ -62,19 +62,19 @@ type Miner struct {
 	engine   consensus.Engine
 	exitCh   chan struct{}
 
-	startStopMutex sync.Mutex
-	canStart       bool // can start indicates whether we can start the mining operation
-	shouldStart    bool // should start indicates whether we should start after sync
+	mu          sync.Mutex
+	syncing     bool // indicates whether we should suspend mining due to the node syncing
+	shouldStart bool // indicates whether we should start mining after sync
 }
 
 func New(eth Backend, config *Config, chainConfig *params.ChainConfig, mux *event.TypeMux, engine consensus.Engine, isLocalBlock func(block *types.Block) bool) *Miner {
 	miner := &Miner{
-		eth:      eth,
-		mux:      mux,
-		engine:   engine,
-		exitCh:   make(chan struct{}),
-		worker:   newWorker(config, chainConfig, engine, eth, mux, isLocalBlock, true),
-		canStart: true,
+		eth:     eth,
+		mux:     mux,
+		engine:  engine,
+		exitCh:  make(chan struct{}),
+		worker:  newWorker(config, chainConfig, engine, eth, mux, isLocalBlock, true),
+		syncing: false,
 	}
 	go miner.update()
 
@@ -107,13 +107,13 @@ func (miner *Miner) update() {
 				// checks then calls start after stop is called here. Resulting
 				// in the miner starting immediately after this call to stop
 				// whilst canstart is set to false.
-				miner.startStopMutex.Lock()
-				miner.canStart = false
+				miner.mu.Lock()
+				miner.syncing = true
 				if miner.Mining() {
 					miner.stop()
 					log.Info("Mining aborted due to sync")
 				}
-				miner.startStopMutex.Unlock()
+				miner.mu.Unlock()
 			case downloader.DoneEvent, downloader.FailedEvent:
 				// When syncing completes, we start the miner if it is expected
 				// to start, we also unset the flag preventing calls to Start
@@ -124,12 +124,12 @@ func (miner *Miner) update() {
 				// concurrent call to Stop occurs between the check of
 				// shouldStart and the call to start resulting in the miner
 				// being started after Stop has been called.
-				miner.startStopMutex.Lock()
-				miner.canStart = true
+				miner.mu.Lock()
+				miner.syncing = false
 				if miner.shouldStart {
 					miner.start(miner.coinbase)
 				}
-				miner.startStopMutex.Unlock()
+				miner.mu.Unlock()
 				// stop immediately and ignore all further pending events
 				return
 			}
@@ -142,13 +142,9 @@ func (miner *Miner) update() {
 // Start starts the miner mining, unless it has been paused by the downloader
 // during sync, in which case it will start mining once the sync has completed.
 func (miner *Miner) Start(coinbase common.Address) {
-	miner.startStopMutex.Lock()
-	defer miner.startStopMutex.Unlock()
+	miner.mu.Lock()
+	defer miner.mu.Unlock()
 	miner.shouldStart = true
-	if !miner.canStart {
-		log.Info("Network syncing, will start miner afterwards")
-		return
-	}
 	miner.start(coinbase)
 }
 
@@ -156,13 +152,17 @@ func (miner *Miner) Start(coinbase common.Address) {
 // flags.
 func (miner *Miner) start(coinbase common.Address) {
 	miner.SetEtherbase(coinbase)
+	if miner.syncing {
+		log.Info("Network syncing, will start miner afterwards")
+		return
+	}
 	miner.worker.start()
 }
 
 // Stop stops the miner from mining.
 func (miner *Miner) Stop() {
-	miner.startStopMutex.Lock()
-	defer miner.startStopMutex.Unlock()
+	miner.mu.Lock()
+	defer miner.mu.Unlock()
 	miner.shouldStart = false
 	miner.stop()
 }
