@@ -107,11 +107,11 @@ func validateTxPoolInternals(pool *TxPool) error {
 	if total := pool.all.Count(); total != pending+queued {
 		return fmt.Errorf("total transaction count %d != %d pending + %d queued", total, pending, queued)
 	}
-	remote := pool.all.RemoteCount()
-	if priced := pool.priced.remotes.Len() - pool.priced.stales; priced != remote {
+	pool.priced.Rebuild()
+	priced, remote := pool.priced.remotes.Len(), pool.all.RemoteCount()
+	if priced != remote {
 		return fmt.Errorf("total priced transaction count %d != %d", priced, remote)
 	}
-
 	// Ensure the next nonce to assign is the correct one
 	for addr, txs := range pool.pending {
 		// Find the last transaction

@@ -472,14 +472,7 @@ func (l *txPricedList) Removed(count int) {
 		return
 	}
 	// Seems we've reached a critical number of stale transactions, reheap
-	reheap := make(priceHeap, 0, l.all.RemoteCount())
-
-	l.stales, l.remotes = 0, &reheap
-	l.all.Range(func(hash common.Hash, tx *types.Transaction, local bool) bool {
-		*l.remotes = append(*l.remotes, tx)
-		return true
-	}, false, true) // Only iterate remotes
-	heap.Init(l.remotes)
+	l.Rebuild()
 }
 
 // Cap finds all the transactions below the given price threshold, drops them
@@ -554,4 +547,17 @@ func (l *txPricedList) Discard(slots int, force bool) (types.Transactions, bool)
 		return nil, false
 	}
 	return drop, true
+}
+
+// Rebuild forcibly rebuilds the heap based on the current remote transaction set.
+// This function is mainly used in testing for verifying the content of heap.
+func (l *txPricedList) Rebuild() {
+	reheap := make(priceHeap, 0, l.all.RemoteCount())
+
+	l.stales, l.remotes = 0, &reheap
+	l.all.Range(func(hash common.Hash, tx *types.Transaction, local bool) bool {
+		*l.remotes = append(*l.remotes, tx)
+		return true
+	}, false, true) // Only iterate remotes
+	heap.Init(l.remotes)
 }
