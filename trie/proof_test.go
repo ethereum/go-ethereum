@@ -451,7 +451,7 @@ func TestBadRangeProof(t *testing.T) {
 			// with the first/last second element(since small values are
 			// embedded in the parent). Avoid this case.
 			index = mrand.Intn(end - start)
-			if (index == end-start-1 || index == 0) && end <= 100 {
+			if (index == 0 && start < 100) || (index == end-start-1 && end <= 100) {
 				continue
 			}
 			keys = append(keys[:index], keys[index+1:]...)
