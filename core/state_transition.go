@@ -28,7 +28,7 @@ import (
 
 var (
 	errInsufficientBalanceForGas      = errors.New("insufficient balance to pay for gas")
-	ErrEIP1559GasPriceLessThanBaseFee = errors.New("EIP11559 GasPrice is less than the current BaseFee")
+	ErrEIP1559GasPriceLessThanBaseFee = errors.New("EIP1559 GasPrice is less than the current BaseFee")
 )
 
 /*
