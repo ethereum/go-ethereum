@@ -101,12 +101,7 @@ func (miner *Miner) update() {
 				// ensure calls to Start do not start the miner before sync is
 				// finished.
 
-				// We need to lock over setting canStart, checking Mining and
-				// the call to stop, to prevent the race condition where a
-				// prior concurrent call to Start which has passed all its
-				// checks then calls start after stop is called here. Resulting
-				// in the miner starting immediately after this call to stop
-				// whilst canstart is set to false.
+				// Prevent a race between this and Start/Stop
 				miner.mu.Lock()
 				miner.syncing = true
 				if miner.Mining() {
@@ -119,11 +114,7 @@ func (miner *Miner) update() {
 				// to start, we also unset the flag preventing calls to Start
 				// from starting the miner.
 
-				// We need to lock over both the check on shouldStart and the
-				// call to start, to prevent the race condition where a
-				// concurrent call to Stop occurs between the check of
-				// shouldStart and the call to start resulting in the miner
-				// being started after Stop has been called.
+				// Prevent a race between this and Start/Stop
 				miner.mu.Lock()
 				miner.syncing = false
 				if miner.shouldStart {
