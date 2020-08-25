@@ -107,9 +107,9 @@ func init() {
 	tx, _ = types.SignTx(types.NewTransaction(1, testUserAddress, big.NewInt(1000), params.TxGas, new(big.Int), nil, nil, nil), types.HomesteadSigner{}, testBankKey)
 	newTxs = append(newTxs, tx)
 	newLegacyAndEIP1559Txs = append(newLegacyAndEIP1559Txs, tx)
-	tx, _ = types.SignTx(types.NewTransaction(0, testUserAddress, big.NewInt(1000), params.TxGas, nil, nil, new(big.Int), new(big.Int)), types.HomesteadSigner{}, testBankKey)
+	tx, _ = types.SignTx(types.NewTransaction(0, testUserAddress, big.NewInt(1000), params.TxGas, nil, nil, new(big.Int), new(big.Int).SetUint64(params.EIP1559InitialBaseFee*2)), types.HomesteadSigner{}, testBankKey)
 	pendingEIP1559Txs = append(pendingEIP1559Txs, tx)
-	tx, _ = types.SignTx(types.NewTransaction(1, testUserAddress, big.NewInt(1000), params.TxGas, nil, nil, new(big.Int), new(big.Int)), types.HomesteadSigner{}, testBankKey)
+	tx, _ = types.SignTx(types.NewTransaction(1, testUserAddress, big.NewInt(1000), params.TxGas, nil, nil, new(big.Int), new(big.Int).SetUint64(params.EIP1559InitialBaseFee*2)), types.HomesteadSigner{}, testBankKey)
 	newEIP1559Txs = append(newEIP1559Txs, tx)
 	rand.Seed(time.Now().UnixNano())
 }
@@ -196,13 +196,13 @@ func (b *testWorkerBackend) newRandomTx(creation, eip1559 bool) *types.Transacti
 	var tx *types.Transaction
 	if creation {
 		if eip1559 {
-			tx, _ = types.SignTx(types.NewContractCreation(b.txPool.Nonce(testBankAddress), big.NewInt(0), testGas, nil, common.FromHex(testCode), new(big.Int), new(big.Int)), types.HomesteadSigner{}, testBankKey)
+			tx, _ = types.SignTx(types.NewContractCreation(b.txPool.Nonce(testBankAddress), big.NewInt(0), testGas, nil, common.FromHex(testCode), new(big.Int), new(big.Int).SetUint64(params.EIP1559InitialBaseFee*2)), types.HomesteadSigner{}, testBankKey)
 		} else {
 			tx, _ = types.SignTx(types.NewContractCreation(b.txPool.Nonce(testBankAddress), big.NewInt(0), testGas, new(big.Int), common.FromHex(testCode), nil, nil), types.HomesteadSigner{}, testBankKey)
 		}
 	} else {
 		if eip1559 {
-			tx, _ = types.SignTx(types.NewTransaction(b.txPool.Nonce(testBankAddress), testUserAddress, big.NewInt(1000), params.TxGas, nil, nil, new(big.Int), new(big.Int)), types.HomesteadSigner{}, testBankKey)
+			tx, _ = types.SignTx(types.NewTransaction(b.txPool.Nonce(testBankAddress), testUserAddress, big.NewInt(1000), params.TxGas, nil, nil, new(big.Int), new(big.Int).SetUint64(params.EIP1559InitialBaseFee*2)), types.HomesteadSigner{}, testBankKey)
 		} else {
 			tx, _ = types.SignTx(types.NewTransaction(b.txPool.Nonce(testBankAddress), testUserAddress, big.NewInt(1000), params.TxGas, new(big.Int), nil, nil, nil), types.HomesteadSigner{}, testBankKey)
 		}
@@ -212,7 +212,12 @@ func (b *testWorkerBackend) newRandomTx(creation, eip1559 bool) *types.Transacti
 
 func newTestWorker(t *testing.T, chainConfig *params.ChainConfig, engine consensus.Engine, db ethdb.Database, blocks int, baseFee *big.Int, txs []*types.Transaction) (*worker, *testWorkerBackend) {
 	backend := newTestWorkerBackend(t, chainConfig, engine, db, blocks, baseFee)
-	backend.txPool.AddLocals(txs)
+	errs := backend.txPool.AddLocals(txs)
+	for _, err := range errs {
+		if err != nil {
+			t.Fatal(err.Error())
+		}
+	}
 	w := newWorker(testConfig, chainConfig, engine, backend, new(event.TypeMux), nil, false)
 	w.setEtherbase(testBankAddress)
 	return w, backend
@@ -225,16 +230,16 @@ func TestGenerateBlockAndImportClique(t *testing.T) {
 	testGenerateBlockAndImport(t, true, params.AllCliqueProtocolChanges, nil, pendingTxs, false, false)
 }
 func TestGenerateBlockAndImportEthashEIP1559(t *testing.T) {
-	testGenerateBlockAndImport(t, false, params.EIP1559ChainConfig, new(big.Int), pendingLegacyAndEIP1559Txs, true, false)
+	testGenerateBlockAndImport(t, false, params.EIP1559ChainConfig, new(big.Int).SetUint64(params.EIP1559InitialBaseFee), pendingLegacyAndEIP1559Txs, true, false)
 }
 func TestGenerateBlockAndImportCliqueEIP1559(t *testing.T) {
-	testGenerateBlockAndImport(t, true, params.EIP1559ChainConfig, new(big.Int), pendingLegacyAndEIP1559Txs, true, false)
+	testGenerateBlockAndImport(t, true, params.EIP1559ChainConfig, new(big.Int).SetUint64(params.EIP1559InitialBaseFee), pendingLegacyAndEIP1559Txs, true, false)
 }
 func TestGenerateBlockAndImportEthashEIP1559Finalized(t *testing.T) {
-	testGenerateBlockAndImport(t, false, params.EIP1559FinalizedChainConfig, new(big.Int), pendingEIP1559Txs, true, true)
+	testGenerateBlockAndImport(t, false, params.EIP1559FinalizedChainConfig, new(big.Int).SetUint64(params.EIP1559InitialBaseFee), pendingEIP1559Txs, true, true)
 }
 func TestGenerateBlockAndImportCliqueEIP1559Finalized(t *testing.T) {
-	testGenerateBlockAndImport(t, true, params.EIP1559FinalizedChainConfig, new(big.Int), pendingEIP1559Txs, true, true)
+	testGenerateBlockAndImport(t, true, params.EIP1559FinalizedChainConfig, new(big.Int).SetUint64(params.EIP1559InitialBaseFee), pendingEIP1559Txs, true, true)
 }
 
 func testGenerateBlockAndImport(t *testing.T, isClique bool, c *params.ChainConfig, baseFee *big.Int, pTxs []*types.Transaction, eip1559, eip1559Finalized bool) {
@@ -271,8 +276,12 @@ func testGenerateBlockAndImport(t *testing.T, isClique bool, c *params.ChainConf
 	w.start()
 
 	for i := 0; i < 5; i++ {
-		b.txPool.AddLocal(b.newRandomTx(true, eip1559))
-		b.txPool.AddLocal(b.newRandomTx(false, eip1559Finalized))
+		if err := b.txPool.AddLocal(b.newRandomTx(true, eip1559)); err != nil {
+			t.Fatal(err.Error())
+		}
+		if err := b.txPool.AddLocal(b.newRandomTx(false, eip1559Finalized)); err != nil {
+			t.Fatal(err.Error())
+		}
 		w.postSideBlock(core.ChainSideEvent{Block: b.newRandomUncle()})
 		w.postSideBlock(core.ChainSideEvent{Block: b.newRandomUncle()})
 
@@ -295,16 +304,16 @@ func TestEmptyWorkClique(t *testing.T) {
 	testEmptyWork(t, cliqueChainConfig, clique.New(cliqueChainConfig.Clique, rawdb.NewMemoryDatabase()), pendingTxs, nil)
 }
 func TestEmptyWorkEthashEIP1559(t *testing.T) {
-	testEmptyWork(t, eip1559ChainConfig, ethash.NewFaker(), pendingLegacyAndEIP1559Txs, new(big.Int))
+	testEmptyWork(t, eip1559ChainConfig, ethash.NewFaker(), pendingLegacyAndEIP1559Txs, new(big.Int).SetUint64(params.EIP1559InitialBaseFee))
 }
 func TestEmptyWorkCliqueEIP1559(t *testing.T) {
-	testEmptyWork(t, eip1559CliqueChainConfig, clique.New(cliqueChainConfig.Clique, rawdb.NewMemoryDatabase()), pendingLegacyAndEIP1559Txs, new(big.Int))
+	testEmptyWork(t, eip1559CliqueChainConfig, clique.New(cliqueChainConfig.Clique, rawdb.NewMemoryDatabase()), pendingLegacyAndEIP1559Txs, new(big.Int).SetUint64(params.EIP1559InitialBaseFee))
 }
 func TestEmptyWorkEthashEIP1559Finalized(t *testing.T) {
-	testEmptyWork(t, eip1559FinalizedChainConfig, ethash.NewFaker(), pendingEIP1559Txs, new(big.Int))
+	testEmptyWork(t, eip1559FinalizedChainConfig, ethash.NewFaker(), pendingEIP1559Txs, new(big.Int).SetUint64(params.EIP1559InitialBaseFee))
 }
 func TestEmptyWorkCliqueEIP1559Finalized(t *testing.T) {
-	testEmptyWork(t, eip1559FinalizedCliqueChainConfig, clique.New(cliqueChainConfig.Clique, rawdb.NewMemoryDatabase()), pendingEIP1559Txs, new(big.Int))
+	testEmptyWork(t, eip1559FinalizedCliqueChainConfig, clique.New(cliqueChainConfig.Clique, rawdb.NewMemoryDatabase()), pendingEIP1559Txs, new(big.Int).SetUint64(params.EIP1559InitialBaseFee))
 }
 
 func testEmptyWork(t *testing.T, chainConfig *params.ChainConfig, engine consensus.Engine, pTxs []*types.Transaction, baseFee *big.Int) {
@@ -422,19 +431,19 @@ func TestRegenerateMiningBlockClique(t *testing.T) {
 }
 
 func TestRegenerateMiningBlockEthashEIP1559(t *testing.T) {
-	testRegenerateMiningBlock(t, eip1559ChainConfig, ethash.NewFaker(), pendingLegacyAndEIP1559Txs, newLegacyAndEIP1559Txs, new(big.Int))
+	testRegenerateMiningBlock(t, eip1559ChainConfig, ethash.NewFaker(), pendingLegacyAndEIP1559Txs, newLegacyAndEIP1559Txs, new(big.Int).SetUint64(params.EIP1559InitialBaseFee))
 }
 
 func TestRegenerateMiningBlockCliqueEIP1559(t *testing.T) {
-	testRegenerateMiningBlock(t, eip1559CliqueChainConfig, clique.New(cliqueChainConfig.Clique, rawdb.NewMemoryDatabase()), pendingLegacyAndEIP1559Txs, newLegacyAndEIP1559Txs, new(big.Int))
+	testRegenerateMiningBlock(t, eip1559CliqueChainConfig, clique.New(cliqueChainConfig.Clique, rawdb.NewMemoryDatabase()), pendingLegacyAndEIP1559Txs, newLegacyAndEIP1559Txs, new(big.Int).SetUint64(params.EIP1559InitialBaseFee))
 }
 
 func TestRegenerateMiningBlockEthashEIP1559Finalized(t *testing.T) {
-	testRegenerateMiningBlock(t, eip1559FinalizedChainConfig, ethash.NewFaker(), pendingEIP1559Txs, newEIP1559Txs, new(big.Int))
+	testRegenerateMiningBlock(t, eip1559FinalizedChainConfig, ethash.NewFaker(), pendingEIP1559Txs, newEIP1559Txs, new(big.Int).SetUint64(params.EIP1559InitialBaseFee))
 }
 
 func TestRegenerateMiningBlockCliqueEIP1559Finalized(t *testing.T) {
-	testRegenerateMiningBlock(t, eip1559FinalizedCliqueChainConfig, clique.New(cliqueChainConfig.Clique, rawdb.NewMemoryDatabase()), pendingEIP1559Txs, newEIP1559Txs, new(big.Int))
+	testRegenerateMiningBlock(t, eip1559FinalizedCliqueChainConfig, clique.New(cliqueChainConfig.Clique, rawdb.NewMemoryDatabase()), pendingEIP1559Txs, newEIP1559Txs, new(big.Int).SetUint64(params.EIP1559InitialBaseFee))
 }
 
 func testRegenerateMiningBlock(t *testing.T, chainConfig *params.ChainConfig, engine consensus.Engine, pTxs, nTxs []*types.Transaction, baseFee *big.Int) {
@@ -479,7 +488,12 @@ func testRegenerateMiningBlock(t *testing.T, chainConfig *params.ChainConfig, en
 			t.Error("new task timeout")
 		}
 	}
-	b.txPool.AddLocals(nTxs)
+	errs := b.txPool.AddLocals(nTxs)
+	for _, err := range errs {
+		if err != nil {
+			t.Fatal(err.Error())
+		}
+	}
 	time.Sleep(time.Second)
 
 	select {

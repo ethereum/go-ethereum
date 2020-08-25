@@ -282,7 +282,7 @@ func (ethash *Ethash) verifyHeader(chain consensus.ChainHeaderReader, header, pa
 		slackCoefficient = chain.Config().EIP1559.EIP1559SlackCoefficient
 	}
 	if header.GasUsed > header.GasLimit*slackCoefficient {
-		return fmt.Errorf("invalid gasUsed: have %d, gasLimit %d, slack coefficient %d", header.GasUsed, header.GasLimit, chain.Config().EIP1559.EIP1559SlackCoefficient)
+		return fmt.Errorf("invalid gasUsed: have %d, gasLimit %d, slack coefficient %d", header.GasUsed, header.GasLimit, slackCoefficient)
 	}
 
 	// Verify that the gas limit remains within allowed bounds
