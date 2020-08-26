@@ -675,14 +675,16 @@ func (b *SimulatedBackend) SubscribeNewHead(ctx context.Context, ch chan<- *type
 }
 
 // AdjustTime adds a time shift to the simulated clock.
+// It can only be called on empty blocks.
 func (b *SimulatedBackend) AdjustTime(adjustment time.Duration) error {
 	b.mu.Lock()
 	defer b.mu.Unlock()
 
+	if len(b.pendingBlock.Transactions()) != 0 {
+		return errors.New("Could not adjust time on non-empty block")
+	}
+
 	blocks, _ := core.GenerateChain(b.config, b.blockchain.CurrentBlock(), ethash.NewFaker(), b.database, 1, func(number int, block *core.BlockGen) {
-		for _, tx := range b.pendingBlock.Transactions() {
-			block.AddTx(tx)
-		}
 		block.OffsetTime(int64(adjustment.Seconds()))
 	})
 	statedb, _ := b.blockchain.State()
