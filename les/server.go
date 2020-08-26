@@ -229,6 +229,9 @@ func (s *LesServer) capacityManagement() {
 
 	processCh := make(chan bool, 100)
 	sub := s.handler.blockchain.SubscribeBlockProcessingEvent(processCh)
+	if sub == nil {
+		return
+	}
 	defer sub.Unsubscribe()
 
 	totalRechargeCh := make(chan uint64, 100)

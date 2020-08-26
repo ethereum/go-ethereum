@@ -43,7 +43,9 @@ func (e ethEntry) ENRKey() string {
 func (eth *Ethereum) startEthEntryUpdate(ln *enode.LocalNode) {
 	var newHead = make(chan core.ChainHeadEvent, 10)
 	sub := eth.blockchain.SubscribeChainHeadEvent(newHead)
-
+	if sub == nil {
+		return
+	}
 	go func() {
 		defer sub.Unsubscribe()
 		for {

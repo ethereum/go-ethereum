@@ -911,8 +911,12 @@ func (h *serverHandler) broadcastHeaders() {
 
 	headCh := make(chan core.ChainHeadEvent, 10)
 	headSub := h.blockchain.SubscribeChainHeadEvent(headCh)
+	if headSub == nil {
+		// headSub can be nil, if the blockchain (and bc.scope)is Stop():ed very quickly, which
+		// can happen during tests. In that case, we're done here
+		return
+	}
 	defer headSub.Unsubscribe()
-
 	var (
 		lastHead *types.Header
 		lastTd   = common.Big0
