@@ -122,7 +122,7 @@ type EVM struct {
 	chainRules params.Rules
 	// virtual machine configuration options used to initialise the
 	// evm.
-	vmConfig Config
+	vmConfig *Config
 	// global (to this context) ethereum virtual machine
 	// used throughout the execution of the tx.
 	interpreters []Interpreter
@@ -138,7 +138,7 @@ type EVM struct {
 
 // NewEVM returns a new EVM. The returned EVM is not thread safe and should
 // only ever be used *once*.
-func NewEVM(ctx Context, statedb StateDB, chainConfig *params.ChainConfig, vmConfig Config) *EVM {
+func NewEVM(ctx Context, statedb StateDB, chainConfig *params.ChainConfig, vmConfig *Config) *EVM {
 	evm := &EVM{
 		Context:      ctx,
 		StateDB:      statedb,

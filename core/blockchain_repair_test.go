@@ -1576,7 +1576,7 @@ func testRepair(t *testing.T, tt *rewindTest) {
 		genesis = new(Genesis).MustCommit(db)
 		engine  = ethash.NewFullFaker()
 	)
-	chain, err := NewBlockChain(db, nil, params.AllEthashProtocolChanges, engine, vm.Config{}, nil, nil)
+	chain, err := NewBlockChain(db, nil, params.AllEthashProtocolChanges, engine, new(vm.Config), nil, nil)
 	if err != nil {
 		t.Fatalf("Failed to create chain: %v", err)
 	}
@@ -1624,7 +1624,7 @@ func testRepair(t *testing.T, tt *rewindTest) {
 	}
 	defer db.Close()
 
-	chain, err = NewBlockChain(db, nil, params.AllEthashProtocolChanges, engine, vm.Config{}, nil, nil)
+	chain, err = NewBlockChain(db, nil, params.AllEthashProtocolChanges, engine, new(vm.Config), nil, nil)
 	if err != nil {
 		t.Fatalf("Failed to recreate chain: %v", err)
 	}

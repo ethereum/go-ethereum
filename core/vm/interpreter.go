@@ -82,7 +82,7 @@ type keccakState interface {
 // EVMInterpreter represents an EVM interpreter
 type EVMInterpreter struct {
 	evm *EVM
-	cfg Config
+	cfg *Config
 
 	hasher    keccakState // Keccak256 hasher instance shared across opcodes
 	hasherBuf common.Hash // Keccak256 hasher result array shared aross opcodes
@@ -92,7 +92,7 @@ type EVMInterpreter struct {
 }
 
 // NewEVMInterpreter returns a new instance of the Interpreter.
-func NewEVMInterpreter(evm *EVM, cfg Config) *EVMInterpreter {
+func NewEVMInterpreter(evm *EVM, cfg *Config) *EVMInterpreter {
 	// We use the STOP instruction whether to see
 	// the jump table was initialised. If it was not
 	// we'll set the default jump table.
