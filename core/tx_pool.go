@@ -18,7 +18,6 @@ package core
 
 import (
 	"errors"
-	"fmt"
 	"math"
 	"math/big"
 	"sort"
@@ -685,9 +684,10 @@ func (pool *TxPool) enqueueTx(hash common.Hash, tx *types.Transaction, local boo
 		// Nothing was replaced, bump the queued counter
 		queuedGauge.Inc(1)
 	}
-	// If the transaction isn't in lookup set but it's expected to be there, boom
+	// If the transaction isn't in lookup set but it's expected to be there,
+	// show the error log.
 	if pool.all.Get(hash) == nil && !addAll {
-		panic(fmt.Sprintf("missing transaction %s in lookup set", hash))
+		log.Error("Missing transaction in lookup set, please report the issue", "hash", hash)
 	}
 	if addAll {
 		pool.all.Add(tx, local)
