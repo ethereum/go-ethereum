@@ -107,7 +107,7 @@ func validateTxPoolInternals(pool *TxPool) error {
 	if total := pool.all.Count(); total != pending+queued {
 		return fmt.Errorf("total transaction count %d != %d pending + %d queued", total, pending, queued)
 	}
-	pool.priced.Rebuild()
+	pool.priced.Reheap()
 	priced, remote := pool.priced.remotes.Len(), pool.all.RemoteCount()
 	if priced != remote {
 		return fmt.Errorf("total priced transaction count %d != %d", priced, remote)
