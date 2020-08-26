@@ -354,7 +354,7 @@ func (api *PrivateDebugAPI) GetBadBlocks(ctx context.Context) ([]*BadBlockArgs, 
 // AccountRangeMaxResults is the maximum number of results to be returned per call
 const AccountRangeMaxResults = 256
 
-// AccountRangeAt enumerates all accounts in the given block and start point in paging request
+// AccountRange enumerates all accounts in the given block and start point in paging request
 func (api *PublicDebugAPI) AccountRange(blockNrOrHash rpc.BlockNumberOrHash, start []byte, maxResults int, nocode, nostorage, incompletes bool) (state.IteratorDump, error) {
 	var stateDb *state.StateDB
 	var err error
