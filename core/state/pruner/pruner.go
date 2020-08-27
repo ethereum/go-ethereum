@@ -20,6 +20,7 @@ import (
 	"bytes"
 	"errors"
 	"fmt"
+	"math/big"
 	"os"
 	"path/filepath"
 	"time"
@@ -27,13 +28,23 @@ import (
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/rawdb"
 	"github.com/ethereum/go-ethereum/core/state/snapshot"
+	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/ethdb"
 	"github.com/ethereum/go-ethereum/log"
+	"github.com/ethereum/go-ethereum/rlp"
 	"github.com/ethereum/go-ethereum/trie"
 )
 
 // temporaryStateDatabase is the directory name of temporary database for pruning usage.
 const temporaryStateDatabase = "pruning.tmp"
+
+var (
+	// emptyRoot is the known root hash of an empty trie.
+	emptyRoot = common.HexToHash("56e81f171bcc55a6ff8345e692c0f86e5b48e01b996cadc001622fb5e363b421")
+
+	// emptyCode is the known hash of the empty EVM bytecode.
+	emptyCode = crypto.Keccak256(nil)
+)
 
 type Pruner struct {
 	db, tmpdb ethdb.Database
@@ -84,6 +95,12 @@ func (p *Pruner) Prune(root common.Hash) error {
 	if err := p.tmpdb.(commiter).Commit(); err != nil {
 		return err
 	}
+	// Extract all node refs belong to the genesis. We have to keep the
+	// genesis all the time.
+	marker, err := extractGenesis(p.db, p.snaptree)
+	if err != nil {
+		return err
+	}
 	// Delete all old trie nodes in the disk(it's safe since we already commit
 	// a complete trie to the temporary db, any crash happens we can recover
 	// a complete state from it).
@@ -102,8 +119,17 @@ func (p *Pruner) Prune(root common.Hash) error {
 
 		// Note all entries with 32byte length key(trie nodes,
 		// contract codes) are deleted here.
-		isCode, _ := rawdb.IsCodeKey(key)
+		isCode, codeKey := rawdb.IsCodeKey(key)
 		if len(key) == common.HashLength || isCode {
+			if isCode {
+				if _, ok := marker[common.BytesToHash(codeKey)]; ok {
+					continue // Genesis contract code
+				}
+			} else {
+				if _, ok := marker[common.BytesToHash(key)]; ok {
+					continue // Genesis state trie node
+				}
+			}
 			size += common.StorageSize(len(key) + len(iter.Value()))
 			batch.Delete(key)
 
@@ -236,4 +262,67 @@ func RecoverTemporaryDatabase(homedir string, db ethdb.Database) error {
 	migrateState(db, recoverdb, homedir)
 	wipeTemporaryDatabase(homedir, recoverdb)
 	return nil
+}
+
+// extractGenesis loads the genesis state and creates the nodes marker.
+// So that it can be used as an present indicator for all genesis trie nodes.
+func extractGenesis(db ethdb.Database, snaptree *snapshot.Tree) (map[common.Hash]struct{}, error) {
+	genesisHash := rawdb.ReadCanonicalHash(db, 0)
+	if genesisHash == (common.Hash{}) {
+		return nil, errors.New("missing genesis hash")
+	}
+	genesis := rawdb.ReadBlock(db, genesisHash, 0)
+	if genesis == nil {
+		return nil, errors.New("missing genesis block")
+	}
+	t, err := trie.New(genesis.Root(), trie.NewDatabase(db))
+	if err != nil {
+		return nil, err
+	}
+	marker := make(map[common.Hash]struct{})
+	accIter := t.NodeIterator(nil)
+	for accIter.Next(true) {
+		node := accIter.Hash()
+		if node == (common.Hash{}) {
+			continue
+		}
+		marker[node] = struct{}{}
+
+		// If it's a leaf node, yes we are touching an account,
+		// dig into the storage trie further.
+		if accIter.Leaf() {
+			var acc struct {
+				Nonce    uint64
+				Balance  *big.Int
+				Root     common.Hash
+				CodeHash []byte
+			}
+			if err := rlp.DecodeBytes(accIter.LeafBlob(), &acc); err != nil {
+				return nil, err
+			}
+			if acc.Root != emptyRoot {
+				storageTrie, err := trie.NewSecure(acc.Root, trie.NewDatabase(db))
+				if err != nil {
+					return nil, err
+				}
+				storageIter := storageTrie.NodeIterator(nil)
+				for storageIter.Next(true) {
+					node := storageIter.Hash()
+					if node != (common.Hash{}) {
+						marker[node] = struct{}{}
+					}
+				}
+				if storageIter.Error() != nil {
+					return nil, storageIter.Error()
+				}
+			}
+			if !bytes.Equal(acc.CodeHash, emptyCode) {
+				marker[common.BytesToHash(acc.CodeHash)] = struct{}{}
+			}
+		}
+	}
+	if accIter.Error() != nil {
+		return nil, accIter.Error()
+	}
+	return marker, nil
 }
