@@ -70,12 +70,16 @@ type freezer struct {
 	// WARNING: The `frozen` field is accessed atomically. On 32 bit platforms, only
 	// 64-bit aligned fields can be atomic. The struct is guaranteed to be so aligned,
 	// so take advantage of that (https://golang.org/pkg/sync/atomic/#pkg-note-BUG).
-	frozen uint64 // Number of blocks already frozen
+	frozen    uint64 // Number of blocks already frozen
+	threshold uint64 // Number of recent blocks not to freeze (params.FullImmutabilityThreshold apart from tests)
 
 	tables       map[string]*freezerTable // Data tables for storing everything
 	instanceLock fileutil.Releaser        // File-system lock to prevent double opens
-	quit         chan struct{}
-	closeOnce    sync.Once
+
+	trigger chan chan struct{} // Manual blocking freeze trigger, test determinism
+
+	quit      chan struct{}
+	closeOnce sync.Once
 }
 
 // newFreezer creates a chain freezer that moves ancient chain data into
@@ -102,8 +106,10 @@ func newFreezer(datadir string, namespace string) (*freezer, error) {
 	}
 	// Open all the supported data tables
 	freezer := &freezer{
+		threshold:    params.FullImmutabilityThreshold,
 		tables:       make(map[string]*freezerTable),
 		instanceLock: lock,
+		trigger:      make(chan chan struct{}),
 		quit:         make(chan struct{}),
 	}
 	for name, disableSnappy := range freezerNoSnappy {
@@ -261,7 +267,10 @@ func (f *freezer) Sync() error {
 func (f *freezer) freeze(db ethdb.KeyValueStore) {
 	nfdb := &nofreezedb{KeyValueStore: db}
 
-	backoff := false
+	var (
+		backoff   bool
+		triggered chan struct{} // Used in tests
+	)
 	for {
 		select {
 		case <-f.quit:
@@ -270,8 +279,15 @@ func (f *freezer) freeze(db ethdb.KeyValueStore) {
 		default:
 		}
 		if backoff {
+			// If we were doing a manual trigger, notify it
+			if triggered != nil {
+				triggered <- struct{}{}
+				triggered = nil
+			}
 			select {
 			case <-time.NewTimer(freezerRecheckInterval).C:
+				backoff = false
+			case triggered = <-f.trigger:
 				backoff = false
 			case <-f.quit:
 				return
@@ -285,18 +301,20 @@ func (f *freezer) freeze(db ethdb.KeyValueStore) {
 			continue
 		}
 		number := ReadHeaderNumber(nfdb, hash)
+		threshold := atomic.LoadUint64(&f.threshold)
+
 		switch {
 		case number == nil:
 			log.Error("Current full block number unavailable", "hash", hash)
 			backoff = true
 			continue
 
-		case *number < params.FullImmutabilityThreshold:
-			log.Debug("Current full block not old enough", "number", *number, "hash", hash, "delay", params.FullImmutabilityThreshold)
+		case *number < threshold:
+			log.Debug("Current full block not old enough", "number", *number, "hash", hash, "delay", threshold)
 			backoff = true
 			continue
 
-		case *number-params.FullImmutabilityThreshold <= f.frozen:
+		case *number-threshold <= f.frozen:
 			log.Debug("Ancient blocks frozen already", "number", *number, "hash", hash, "frozen", f.frozen)
 			backoff = true
 			continue
@@ -308,7 +326,7 @@ func (f *freezer) freeze(db ethdb.KeyValueStore) {
 			continue
 		}
 		// Seems we have data ready to be frozen, process in usable batches
-		limit := *number - params.FullImmutabilityThreshold
+		limit := *number - threshold
 		if limit-f.frozen > freezerBatchLimit {
 			limit = f.frozen + freezerBatchLimit
 		}
@@ -317,7 +335,7 @@ func (f *freezer) freeze(db ethdb.KeyValueStore) {
 			first    = f.frozen
 			ancients = make([]common.Hash, 0, limit-f.frozen)
 		)
-		for f.frozen < limit {
+		for f.frozen <= limit {
 			// Retrieves all the components of the canonical block
 			hash := ReadCanonicalHash(nfdb, f.frozen)
 			if hash == (common.Hash{}) {
@@ -368,17 +386,56 @@ func (f *freezer) freeze(db ethdb.KeyValueStore) {
 			log.Crit("Failed to delete frozen canonical blocks", "err", err)
 		}
 		batch.Reset()
-		// Wipe out side chain also.
+
+		// Wipe out side chains also and track dangling side chians
+		var dangling []common.Hash
 		for number := first; number < f.frozen; number++ {
 			// Always keep the genesis block in active database
 			if number != 0 {
-				for _, hash := range ReadAllHashes(db, number) {
+				dangling = ReadAllHashes(db, number)
+				for _, hash := range dangling {
+					log.Trace("Deleting side chain", "number", number, "hash", hash)
 					DeleteBlock(batch, hash, number)
 				}
 			}
 		}
 		if err := batch.Write(); err != nil {
 			log.Crit("Failed to delete frozen side blocks", "err", err)
+		}
+		batch.Reset()
+
+		// Step into the future and delete and dangling side chains
+		if f.frozen > 0 {
+			tip := f.frozen
+			for len(dangling) > 0 {
+				drop := make(map[common.Hash]struct{})
+				for _, hash := range dangling {
+					log.Debug("Dangling parent from freezer", "number", tip-1, "hash", hash)
+					drop[hash] = struct{}{}
+				}
+				children := ReadAllHashes(db, tip)
+				for i := 0; i < len(children); i++ {
+					// Dig up the child and ensure it's dangling
+					child := ReadHeader(nfdb, children[i], tip)
+					if child == nil {
+						log.Error("Missing dangling header", "number", tip, "hash", children[i])
+						continue
+					}
+					if _, ok := drop[child.ParentHash]; !ok {
+						children = append(children[:i], children[i+1:]...)
+						i--
+						continue
+					}
+					// Delete all block data associated with the child
+					log.Debug("Deleting dangling block", "number", tip, "hash", children[i], "parent", child.ParentHash)
+					DeleteBlock(batch, children[i], tip)
+				}
+				dangling = children
+				tip++
+			}
+			if err := batch.Write(); err != nil {
+				log.Crit("Failed to delete dangling side blocks", "err", err)
+			}
 		}
 		// Log something friendly for the user
 		context := []interface{}{

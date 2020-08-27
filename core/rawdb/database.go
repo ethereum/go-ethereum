@@ -21,6 +21,7 @@ import (
 	"errors"
 	"fmt"
 	"os"
+	"sync/atomic"
 	"time"
 
 	"github.com/ethereum/go-ethereum/common"
@@ -51,6 +52,22 @@ func (frdb *freezerdb) Close() error {
 		return fmt.Errorf("%v", errs)
 	}
 	return nil
+}
+
+// Freeze is a helper method used for external testing to trigger and block until
+// a freeze cycle completes, without having to sleep for a minute to trigger the
+// automatic background run.
+func (frdb *freezerdb) Freeze(threshold uint64) {
+	// Set the freezer threshold to a temporary value
+	defer func(old uint64) {
+		atomic.StoreUint64(&frdb.AncientStore.(*freezer).threshold, old)
+	}(atomic.LoadUint64(&frdb.AncientStore.(*freezer).threshold))
+	atomic.StoreUint64(&frdb.AncientStore.(*freezer).threshold, threshold)
+
+	// Trigger a freeze cycle and block until it's done
+	trigger := make(chan struct{}, 1)
+	frdb.AncientStore.(*freezer).trigger <- trigger
+	<-trigger
 }
 
 // nofreezedb is a database wrapper that disables freezer data retrievals.
@@ -241,6 +258,7 @@ func InspectDatabase(db ethdb.Database) error {
 		numHashPairing  common.StorageSize
 		hashNumPairing  common.StorageSize
 		trieSize        common.StorageSize
+		codeSize        common.StorageSize
 		txlookupSize    common.StorageSize
 		accountSnapSize common.StorageSize
 		storageSnapSize common.StorageSize
@@ -299,6 +317,8 @@ func InspectDatabase(db ethdb.Database) error {
 			chtTrieNodes += size
 		case bytes.HasPrefix(key, []byte("blt-")) && len(key) == 4+common.HashLength:
 			bloomTrieNodes += size
+		case bytes.HasPrefix(key, codePrefix) && len(key) == len(codePrefix)+common.HashLength:
+			codeSize += size
 		case len(key) == common.HashLength:
 			trieSize += size
 		default:
@@ -338,6 +358,7 @@ func InspectDatabase(db ethdb.Database) error {
 		{"Key-Value store", "Block hash->number", hashNumPairing.String()},
 		{"Key-Value store", "Transaction index", txlookupSize.String()},
 		{"Key-Value store", "Bloombit index", bloomBitsSize.String()},
+		{"Key-Value store", "Contract codes", codeSize.String()},
 		{"Key-Value store", "Trie nodes", trieSize.String()},
 		{"Key-Value store", "Trie preimages", preimageSize.String()},
 		{"Key-Value store", "Account snapshot", accountSnapSize.String()},

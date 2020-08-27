@@ -271,15 +271,25 @@ func peerToSyncOp(mode downloader.SyncMode, p *peer) *chainSyncOp {
 }
 
 func (cs *chainSyncer) modeAndLocalHead() (downloader.SyncMode, *big.Int) {
+	// If we're in fast sync mode, return that directly
 	if atomic.LoadUint32(&cs.pm.fastSync) == 1 {
 		block := cs.pm.blockchain.CurrentFastBlock()
 		td := cs.pm.blockchain.GetTdByHash(block.Hash())
 		return downloader.FastSync, td
-	} else {
-		head := cs.pm.blockchain.CurrentHeader()
-		td := cs.pm.blockchain.GetTd(head.Hash(), head.Number.Uint64())
-		return downloader.FullSync, td
 	}
+	// We are probably in full sync, but we might have rewound to before the
+	// fast sync pivot, check if we should reenable
+	if pivot := rawdb.ReadLastPivotNumber(cs.pm.chaindb); pivot != nil {
+		if head := cs.pm.blockchain.CurrentBlock(); head.NumberU64() < *pivot {
+			block := cs.pm.blockchain.CurrentFastBlock()
+			td := cs.pm.blockchain.GetTdByHash(block.Hash())
+			return downloader.FastSync, td
+		}
+	}
+	// Nope, we're really full syncing
+	head := cs.pm.blockchain.CurrentHeader()
+	td := cs.pm.blockchain.GetTd(head.Hash(), head.Number.Uint64())
+	return downloader.FullSync, td
 }
 
 // startSync launches doSync in a new goroutine.

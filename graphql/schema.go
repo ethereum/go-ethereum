@@ -314,6 +314,8 @@ const schema string = `
         protocolVersion: Int!
         # Syncing returns information on the current synchronisation state.
         syncing: SyncState
+        # ChainID returns the current chain ID for transaction replay protection.
+        chainID: BigInt!
     }
 
     type Mutation {

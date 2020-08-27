@@ -193,7 +193,7 @@ func (dl *diskLayer) Journal(buffer *bytes.Buffer) (common.Hash, error) {
 		dl.genAbort <- abort
 
 		if stats = <-abort; stats != nil {
-			stats.Log("Journalling in-progress snapshot", dl.genMarker)
+			stats.Log("Journalling in-progress snapshot", dl.root, dl.genMarker)
 		}
 	}
 	// Ensure the layer didn't get stale

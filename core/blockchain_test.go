@@ -36,6 +36,7 @@ import (
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/ethdb"
 	"github.com/ethereum/go-ethereum/params"
+	"github.com/ethereum/go-ethereum/trie"
 )
 
 // So we can deterministically seed different blockchains
@@ -681,12 +682,12 @@ func TestFastVsFullChains(t *testing.T) {
 		}
 		if fblock, arblock, anblock := fast.GetBlockByHash(hash), archive.GetBlockByHash(hash), ancient.GetBlockByHash(hash); fblock.Hash() != arblock.Hash() || anblock.Hash() != arblock.Hash() {
 			t.Errorf("block #%d [%x]: block mismatch: fastdb %v, ancientdb %v, archivedb %v", num, hash, fblock, anblock, arblock)
-		} else if types.DeriveSha(fblock.Transactions()) != types.DeriveSha(arblock.Transactions()) || types.DeriveSha(anblock.Transactions()) != types.DeriveSha(arblock.Transactions()) {
+		} else if types.DeriveSha(fblock.Transactions(), new(trie.Trie)) != types.DeriveSha(arblock.Transactions(), new(trie.Trie)) || types.DeriveSha(anblock.Transactions(), new(trie.Trie)) != types.DeriveSha(arblock.Transactions(), new(trie.Trie)) {
 			t.Errorf("block #%d [%x]: transactions mismatch: fastdb %v, ancientdb %v, archivedb %v", num, hash, fblock.Transactions(), anblock.Transactions(), arblock.Transactions())
 		} else if types.CalcUncleHash(fblock.Uncles()) != types.CalcUncleHash(arblock.Uncles()) || types.CalcUncleHash(anblock.Uncles()) != types.CalcUncleHash(arblock.Uncles()) {
 			t.Errorf("block #%d [%x]: uncles mismatch: fastdb %v, ancientdb %v, archivedb %v", num, hash, fblock.Uncles(), anblock, arblock.Uncles())
 		}
-		if freceipts, anreceipts, areceipts := rawdb.ReadReceipts(fastDb, hash, *rawdb.ReadHeaderNumber(fastDb, hash), fast.Config()), rawdb.ReadReceipts(ancientDb, hash, *rawdb.ReadHeaderNumber(ancientDb, hash), fast.Config()), rawdb.ReadReceipts(archiveDb, hash, *rawdb.ReadHeaderNumber(archiveDb, hash), fast.Config()); types.DeriveSha(freceipts) != types.DeriveSha(areceipts) {
+		if freceipts, anreceipts, areceipts := rawdb.ReadReceipts(fastDb, hash, *rawdb.ReadHeaderNumber(fastDb, hash), fast.Config()), rawdb.ReadReceipts(ancientDb, hash, *rawdb.ReadHeaderNumber(ancientDb, hash), fast.Config()), rawdb.ReadReceipts(archiveDb, hash, *rawdb.ReadHeaderNumber(archiveDb, hash), fast.Config()); types.DeriveSha(freceipts, new(trie.Trie)) != types.DeriveSha(areceipts, new(trie.Trie)) {
 			t.Errorf("block #%d [%x]: receipts mismatch: fastdb %v, ancientdb %v, archivedb %v", num, hash, freceipts, anreceipts, areceipts)
 		}
 	}
@@ -731,12 +732,12 @@ func TestLightVsFastVsFullChainHeads(t *testing.T) {
 		return db, func() { os.RemoveAll(dir) }
 	}
 	// Configure a subchain to roll back
-	remove := []common.Hash{}
-	for _, block := range blocks[height/2:] {
-		remove = append(remove, block.Hash())
-	}
+	remove := blocks[height/2].NumberU64()
+
 	// Create a small assertion method to check the three heads
 	assert := func(t *testing.T, kind string, chain *BlockChain, header uint64, fast uint64, block uint64) {
+		t.Helper()
+
 		if num := chain.CurrentBlock().NumberU64(); num != block {
 			t.Errorf("%s head block mismatch: have #%v, want #%v", kind, num, block)
 		}
@@ -750,14 +751,18 @@ func TestLightVsFastVsFullChainHeads(t *testing.T) {
 	// Import the chain as an archive node and ensure all pointers are updated
 	archiveDb, delfn := makeDb()
 	defer delfn()
-	archive, _ := NewBlockChain(archiveDb, nil, gspec.Config, ethash.NewFaker(), vm.Config{}, nil, nil)
+
+	archiveCaching := *defaultCacheConfig
+	archiveCaching.TrieDirtyDisabled = true
+
+	archive, _ := NewBlockChain(archiveDb, &archiveCaching, gspec.Config, ethash.NewFaker(), vm.Config{}, nil, nil)
 	if n, err := archive.InsertChain(blocks); err != nil {
 		t.Fatalf("failed to process block %d: %v", n, err)
 	}
 	defer archive.Stop()
 
 	assert(t, "archive", archive, height, height, height)
-	archive.Rollback(remove)
+	archive.SetHead(remove - 1)
 	assert(t, "archive", archive, height/2, height/2, height/2)
 
 	// Import the chain as a non-archive node and ensure all pointers are updated
@@ -777,7 +782,7 @@ func TestLightVsFastVsFullChainHeads(t *testing.T) {
 		t.Fatalf("failed to insert receipt %d: %v", n, err)
 	}
 	assert(t, "fast", fast, height, height, 0)
-	fast.Rollback(remove)
+	fast.SetHead(remove - 1)
 	assert(t, "fast", fast, height/2, height/2, 0)
 
 	// Import the chain as a ancient-first node and ensure all pointers are updated
@@ -793,12 +798,12 @@ func TestLightVsFastVsFullChainHeads(t *testing.T) {
 		t.Fatalf("failed to insert receipt %d: %v", n, err)
 	}
 	assert(t, "ancient", ancient, height, height, 0)
-	ancient.Rollback(remove)
-	assert(t, "ancient", ancient, height/2, height/2, 0)
-	if frozen, err := ancientDb.Ancients(); err != nil || frozen != height/2+1 {
-		t.Fatalf("failed to truncate ancient store, want %v, have %v", height/2+1, frozen)
-	}
+	ancient.SetHead(remove - 1)
+	assert(t, "ancient", ancient, 0, 0, 0)
 
+	if frozen, err := ancientDb.Ancients(); err != nil || frozen != 1 {
+		t.Fatalf("failed to truncate ancient store, want %v, have %v", 1, frozen)
+	}
 	// Import the chain as a light node and ensure all pointers are updated
 	lightDb, delfn := makeDb()
 	defer delfn()
@@ -809,7 +814,7 @@ func TestLightVsFastVsFullChainHeads(t *testing.T) {
 	defer light.Stop()
 
 	assert(t, "light", light, height, 0, 0)
-	light.Rollback(remove)
+	light.SetHead(remove - 1)
 	assert(t, "light", light, height/2, 0, 0)
 }
 
@@ -1585,6 +1590,7 @@ func TestBlockchainRecovery(t *testing.T) {
 		t.Fatalf("failed to create temp freezer dir: %v", err)
 	}
 	defer os.Remove(frdir)
+
 	ancientDb, err := rawdb.NewDatabaseWithFreezer(rawdb.NewMemoryDatabase(), frdir, "")
 	if err != nil {
 		t.Fatalf("failed to create temp freezer db: %v", err)
@@ -1602,6 +1608,7 @@ func TestBlockchainRecovery(t *testing.T) {
 	if n, err := ancient.InsertReceiptChain(blocks, receipts, uint64(3*len(blocks)/4)); err != nil {
 		t.Fatalf("failed to insert receipt %d: %v", n, err)
 	}
+	rawdb.WriteLastPivotNumber(ancientDb, blocks[len(blocks)-1].NumberU64()) // Force fast sync behavior
 	ancient.Stop()
 
 	// Destroy head fast block manually
@@ -1912,11 +1919,9 @@ func testInsertKnownChainData(t *testing.T, typ string) {
 	asserter(t, blocks[len(blocks)-1])
 
 	// Import a long canonical chain with some known data as prefix.
-	var rollback []common.Hash
-	for i := len(blocks) / 2; i < len(blocks); i++ {
-		rollback = append(rollback, blocks[i].Hash())
-	}
-	chain.Rollback(rollback)
+	rollback := blocks[len(blocks)/2].NumberU64()
+
+	chain.SetHead(rollback - 1)
 	if err := inserter(append(blocks, blocks2...), append(receipts, receipts2...)); err != nil {
 		t.Fatalf("failed to insert chain data: %v", err)
 	}
@@ -1936,11 +1941,7 @@ func testInsertKnownChainData(t *testing.T, typ string) {
 	asserter(t, blocks3[len(blocks3)-1])
 
 	// Rollback the heavier chain and re-insert the longer chain again
-	for i := 0; i < len(blocks3); i++ {
-		rollback = append(rollback, blocks3[i].Hash())
-	}
-	chain.Rollback(rollback)
-
+	chain.SetHead(rollback - 1)
 	if err := inserter(append(blocks, blocks2...), append(receipts, receipts2...)); err != nil {
 		t.Fatalf("failed to insert chain data: %v", err)
 	}

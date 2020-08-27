@@ -17,9 +17,12 @@
 package state
 
 import (
+	"errors"
 	"fmt"
 
+	"github.com/VictoriaMetrics/fastcache"
 	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/core/rawdb"
 	"github.com/ethereum/go-ethereum/ethdb"
 	"github.com/ethereum/go-ethereum/trie"
 	lru "github.com/hashicorp/golang-lru"
@@ -28,6 +31,9 @@ import (
 const (
 	// Number of codehash->size associations to keep.
 	codeSizeCacheSize = 100000
+
+	// Cache size granted for caching clean code.
+	codeCacheSize = 64 * 1024 * 1024
 )
 
 // Database wraps access to tries and contract code.
@@ -111,12 +117,14 @@ func NewDatabaseWithCache(db ethdb.Database, cache int, journal string) Database
 	return &cachingDB{
 		db:            trie.NewDatabaseWithCache(db, cache, journal),
 		codeSizeCache: csc,
+		codeCache:     fastcache.New(codeCacheSize),
 	}
 }
 
 type cachingDB struct {
 	db            *trie.Database
 	codeSizeCache *lru.Cache
+	codeCache     *fastcache.Cache
 }
 
 // OpenTrie opens the main account trie at a specific root hash.
@@ -141,11 +149,32 @@ func (db *cachingDB) CopyTrie(t Trie) Trie {
 
 // ContractCode retrieves a particular contract's code.
 func (db *cachingDB) ContractCode(addrHash, codeHash common.Hash) ([]byte, error) {
-	code, err := db.db.Node(codeHash)
-	if err == nil {
-		db.codeSizeCache.Add(codeHash, len(code))
+	if code := db.codeCache.Get(nil, codeHash.Bytes()); len(code) > 0 {
+		return code, nil
 	}
-	return code, err
+	code := rawdb.ReadCode(db.db.DiskDB(), codeHash)
+	if len(code) > 0 {
+		db.codeCache.Set(codeHash.Bytes(), code)
+		db.codeSizeCache.Add(codeHash, len(code))
+		return code, nil
+	}
+	return nil, errors.New("not found")
+}
+
+// ContractCodeWithPrefix retrieves a particular contract's code. If the
+// code can't be found in the cache, then check the existence with **new**
+// db scheme.
+func (db *cachingDB) ContractCodeWithPrefix(addrHash, codeHash common.Hash) ([]byte, error) {
+	if code := db.codeCache.Get(nil, codeHash.Bytes()); len(code) > 0 {
+		return code, nil
+	}
+	code := rawdb.ReadCodeWithPrefix(db.db.DiskDB(), codeHash)
+	if len(code) > 0 {
+		db.codeCache.Set(codeHash.Bytes(), code)
+		db.codeSizeCache.Add(codeHash, len(code))
+		return code, nil
+	}
+	return nil, errors.New("not found")
 }
 
 // ContractCodeSize retrieves a particular contracts code's size.
