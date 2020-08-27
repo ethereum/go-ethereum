@@ -14,6 +14,7 @@ import (
 type dropNotification struct {
 	TxHash common.Hash `json:"txhash"`
 	Reason string `json:"reason"`
+	Replacement string `json:"replacedby,omitempty"`
 }
 
 type rejectNotification struct {
@@ -47,6 +48,12 @@ func newRPCPendingTransaction(tx *types.Transaction) *ethapi.RPCTransaction {
 	return result
 }
 
+func replacementHashString(h common.Hash) string {
+	if h == (common.Hash{}) {
+		return ""
+	}
+	return h.String()
+}
 
 // DroppedTransactions send a notification each time a transaction is dropped from the mempool
 func (api *PublicFilterAPI) DroppedTransactions(ctx context.Context) (*rpc.Subscription, error) {
@@ -65,7 +72,7 @@ func (api *PublicFilterAPI) DroppedTransactions(ctx context.Context) (*rpc.Subsc
 			select {
 			case d := <-dropped:
 				for _, tx := range d.Txs {
-					notifier.Notify(rpcSub.ID, &dropNotification{TxHash: tx.Hash(), Reason: d.Reason})
+					notifier.Notify(rpcSub.ID, &dropNotification{TxHash: tx.Hash(), Reason: d.Reason, Replacement: replacementHashString(d.Replacement) })
 				}
 			case <-rpcSub.Err():
 				droppedSub.Unsubscribe()
