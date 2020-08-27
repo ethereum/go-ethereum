@@ -155,10 +155,7 @@ func (h *serverHandler) handle(p *clientPeer) error {
 		p.active = true
 	}
 	p.deactivate = func() {
-		h.server.peers.unregister(p)
-		//if p.version < lpv4 {
-		h.server.peers.disconnect(p.id)
-		//}
+		h.server.peers.unregister(p.id)
 		clientConnectionGauge.Update(int64(h.server.peers.len()))
 		connectionTimer.Update(time.Duration(mclock.Now() - connectedAt))
 		p.active = false
@@ -173,7 +170,7 @@ func (h *serverHandler) handle(p *clientPeer) error {
 		return err
 	} else if capacity != p.fcParams.MinRecharge {
 		//if p.version < lpv4 {
-		//h.server.peers.disconnect(p.id) //TODO ???
+		//h.server.peers.unregister(p.id) //TODO ???
 		return p2p.DiscTooManyPeers
 		/*} else {
 			p.updateCapacity(capacity)
@@ -195,7 +192,7 @@ func (h *serverHandler) handle(p *clientPeer) error {
 		p.deactivate = nil
 		p.balance = nil
 		p.responseLock.Unlock()
-		h.server.peers.disconnect(p.id)
+		h.server.peers.unregister(p.id)
 	}()
 	// Mark the peer starts to be served.
 	atomic.StoreUint32(&p.serving, 1)

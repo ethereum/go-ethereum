@@ -86,7 +86,7 @@ func TestPeerSubscription(t *testing.T) {
 	checkIds([]string{peer.id})
 	checkPeers(sub.regCh)
 
-	peers.unregister(peer)
+	peers.unregister(peer.id)
 	checkIds([]string{})
 	checkPeers(sub.unregCh)
 }

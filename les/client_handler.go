@@ -129,7 +129,7 @@ func (h *clientHandler) handle(p *serverPeer) error {
 		lastActive = true
 	}
 	deactivate := func() {
-		h.backend.peers.unregister(p)
+		h.backend.peers.unregister(p.id)
 		connectionTimer.Update(time.Duration(mclock.Now() - connectedAt))
 		serverConnectionGauge.Update(int64(h.backend.peers.len()))
 		lastActive = false
@@ -138,7 +138,7 @@ func (h *clientHandler) handle(p *serverPeer) error {
 		if lastActive {
 			deactivate()
 		}
-		h.backend.peers.disconnect(p.id)
+		h.backend.peers.unregister(p.id)
 	}()
 
 	// Mark the peer starts to be served.
@@ -360,7 +360,7 @@ func (h *clientHandler) handleMsg(p *serverPeer) error {
 }
 
 func (h *clientHandler) removePeer(id string) {
-	h.backend.peers.disconnect(id)
+	h.backend.peers.unregister(id)
 }
 
 type peerConnection struct {

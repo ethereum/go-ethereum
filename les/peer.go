@@ -1016,7 +1016,7 @@ type clientPeerSubscriber interface {
 // clientPeerSet represents the set of active client peers currently
 // participating in the Light Ethereum sub-protocol.
 type clientPeerSet struct {
-	active, inactive map[string]*clientPeer
+	peers map[string]*clientPeer
 	// subscribers is a batch of subscribers and peerset will notify
 	// these subscribers when the peerset changes(new client peer is
 	// added or removed)
@@ -1027,23 +1027,17 @@ type clientPeerSet struct {
 
 // newClientPeerSet creates a new peer set to track the client peers.
 func newClientPeerSet() *clientPeerSet {
-	return &clientPeerSet{
-		active:   make(map[string]*clientPeer),
-		inactive: make(map[string]*clientPeer),
-	}
+	return &clientPeerSet{peers: make(map[string]*clientPeer)}
 }
 
 // subscribe adds a service to be notified about added or removed
 // peers and also register all active peers into the given service.
 func (ps *clientPeerSet) subscribe(sub clientPeerSubscriber) {
 	ps.lock.Lock()
+	defer ps.lock.Unlock()
+
 	ps.subscribers = append(ps.subscribers, sub)
-	notify := make([]*clientPeer, 0, len(ps.active))
-	for _, p := range ps.active {
-		notify = append(notify, p)
-	}
-	ps.lock.Unlock()
-	for _, p := range notify {
+	for _, p := range ps.peers {
 		sub.registerPeer(p)
 	}
 }
@@ -1063,25 +1057,19 @@ func (ps *clientPeerSet) unSubscribe(sub clientPeerSubscriber) {
 
 // register adds a new peer into the peer set, or returns an error if the
 // peer is already known.
-func (ps *clientPeerSet) register(p *clientPeer) error {
+func (ps *clientPeerSet) register(peer *clientPeer) error {
 	ps.lock.Lock()
+	defer ps.lock.Unlock()
+
 	if ps.closed {
-		ps.lock.Unlock()
 		return errClosed
 	}
-	if _, ok := ps.active[p.id]; ok {
-		ps.lock.Unlock()
+	if _, exist := ps.peers[peer.id]; exist {
 		return errAlreadyRegistered
 	}
-	delete(ps.inactive, p.id)
-	ps.active[p.id] = p
-
-	peers := make([]clientPeerSubscriber, len(ps.subscribers))
-	copy(peers, ps.subscribers)
-	ps.lock.Unlock()
-
-	for _, n := range peers {
-		n.registerPeer(p)
+	ps.peers[peer.id] = peer
+	for _, sub := range ps.subscribers {
+		sub.registerPeer(peer)
 	}
 	return nil
 }
@@ -1089,60 +1077,29 @@ func (ps *clientPeerSet) register(p *clientPeer) error {
 // unregister removes a remote peer from the peer set, disabling any further
 // actions to/from that particular entity. It also initiates disconnection
 // at the networking layer.
-func (ps *clientPeerSet) unregister(p *clientPeer) error {
+func (ps *clientPeerSet) unregister(id string) error {
 	ps.lock.Lock()
-	if _, ok := ps.active[p.id]; !ok {
-		ps.lock.Unlock()
-		return errNotRegistered
-	} else {
-		delete(ps.active, p.id)
-		ps.inactive[p.id] = p
-		peers := make([]clientPeerSubscriber, len(ps.subscribers))
-		copy(peers, ps.subscribers)
-		ps.lock.Unlock()
+	defer ps.lock.Unlock()
 
-		for _, n := range peers {
-			n.unregisterPeer(p)
-		}
-		return nil
-	}
-}
-
-// disconnect removes a remote peer from either the active or inactive set and
-// initiates disconnection at the networking layer.
-func (ps *clientPeerSet) disconnect(id string) error {
-	ps.lock.Lock()
-
-	var (
-		peers []clientPeerSubscriber
-		p     *clientPeer
-		ok    bool
-	)
-	if p, ok = ps.active[id]; ok {
-		delete(ps.active, p.id)
-		peers = make([]clientPeerSubscriber, len(ps.subscribers))
-		copy(peers, ps.subscribers)
-	} else if p, ok = ps.inactive[id]; ok {
-		delete(ps.inactive, id)
-	} else {
-		ps.lock.Unlock()
+	p, ok := ps.peers[id]
+	if !ok {
 		return errNotRegistered
 	}
-	ps.lock.Unlock()
-	for _, n := range peers {
-		n.unregisterPeer(p)
+	delete(ps.peers, id)
+	for _, sub := range ps.subscribers {
+		sub.unregisterPeer(p)
 	}
-	p.Peer.Disconnect(p2p.DiscUselessPeer)
+	p.Peer.Disconnect(p2p.DiscRequested)
 	return nil
 }
 
-// ids returns a list of all active peer IDs
+// ids returns a list of all registered peer IDs
 func (ps *clientPeerSet) ids() []string {
 	ps.lock.RLock()
 	defer ps.lock.RUnlock()
 
 	var ids []string
-	for id := range ps.active {
+	for id := range ps.peers {
 		ids = append(ids, id)
 	}
 	return ids
@@ -1153,27 +1110,24 @@ func (ps *clientPeerSet) peer(id string) *clientPeer {
 	ps.lock.RLock()
 	defer ps.lock.RUnlock()
 
-	if p, ok := ps.active[id]; ok {
-		return p
-	}
-	return ps.inactive[id]
+	return ps.peers[id]
 }
 
-// len returns if the current number of peers in the active set.
+// len returns if the current number of peers in the set.
 func (ps *clientPeerSet) len() int {
 	ps.lock.RLock()
 	defer ps.lock.RUnlock()
 
-	return len(ps.active)
+	return len(ps.peers)
 }
 
-// allClientPeers returns all active client peers in a list.
+// allClientPeers returns all client peers in a list.
 func (ps *clientPeerSet) allPeers() []*clientPeer {
 	ps.lock.RLock()
 	defer ps.lock.RUnlock()
 
-	list := make([]*clientPeer, 0, len(ps.active))
-	for _, p := range ps.active {
+	list := make([]*clientPeer, 0, len(ps.peers))
+	for _, p := range ps.peers {
 		list = append(list, p)
 	}
 	return list
@@ -1185,10 +1139,7 @@ func (ps *clientPeerSet) close() {
 	ps.lock.Lock()
 	defer ps.lock.Unlock()
 
-	for _, p := range ps.active {
-		p.Disconnect(p2p.DiscQuitting)
-	}
-	for _, p := range ps.inactive {
+	for _, p := range ps.peers {
 		p.Disconnect(p2p.DiscQuitting)
 	}
 	ps.closed = true
@@ -1197,7 +1148,7 @@ func (ps *clientPeerSet) close() {
 // serverPeerSet represents the set of active server peers currently
 // participating in the Light Ethereum sub-protocol.
 type serverPeerSet struct {
-	active, inactive map[string]*serverPeer
+	peers map[string]*serverPeer
 	// subscribers is a batch of subscribers and peerset will notify
 	// these subscribers when the peerset changes(new server peer is
 	// added or removed)
@@ -1208,23 +1159,17 @@ type serverPeerSet struct {
 
 // newServerPeerSet creates a new peer set to track the active server peers.
 func newServerPeerSet() *serverPeerSet {
-	return &serverPeerSet{
-		active:   make(map[string]*serverPeer),
-		inactive: make(map[string]*serverPeer),
-	}
+	return &serverPeerSet{peers: make(map[string]*serverPeer)}
 }
 
 // subscribe adds a service to be notified about added or removed
 // peers and also register all active peers into the given service.
 func (ps *serverPeerSet) subscribe(sub serverPeerSubscriber) {
 	ps.lock.Lock()
+	defer ps.lock.Unlock()
+
 	ps.subscribers = append(ps.subscribers, sub)
-	notify := make([]*serverPeer, 0, len(ps.active))
-	for _, p := range ps.active {
-		notify = append(notify, p)
-	}
-	ps.lock.Unlock()
-	for _, p := range notify {
+	for _, p := range ps.peers {
 		sub.registerPeer(p)
 	}
 }
@@ -1244,25 +1189,19 @@ func (ps *serverPeerSet) unSubscribe(sub serverPeerSubscriber) {
 
 // register adds a new server peer into the set, or returns an error if the
 // peer is already known.
-func (ps *serverPeerSet) register(p *serverPeer) error {
+func (ps *serverPeerSet) register(peer *serverPeer) error {
 	ps.lock.Lock()
+	defer ps.lock.Unlock()
+
 	if ps.closed {
-		ps.lock.Unlock()
 		return errClosed
 	}
-	if _, ok := ps.active[p.id]; ok {
-		ps.lock.Unlock()
+	if _, exist := ps.peers[peer.id]; exist {
 		return errAlreadyRegistered
 	}
-	delete(ps.inactive, p.id)
-	ps.active[p.id] = p
-
-	peers := make([]serverPeerSubscriber, len(ps.subscribers))
-	copy(peers, ps.subscribers)
-	ps.lock.Unlock()
-
-	for _, n := range peers {
-		n.registerPeer(p)
+	ps.peers[peer.id] = peer
+	for _, sub := range ps.subscribers {
+		sub.registerPeer(peer)
 	}
 	return nil
 }
@@ -1270,60 +1209,29 @@ func (ps *serverPeerSet) register(p *serverPeer) error {
 // unregister removes a remote peer from the active set, disabling any further
 // actions to/from that particular entity. It also initiates disconnection at
 // the networking layer.
-func (ps *serverPeerSet) unregister(p *serverPeer) error {
+func (ps *serverPeerSet) unregister(id string) error {
 	ps.lock.Lock()
-	if _, ok := ps.active[p.id]; !ok {
-		ps.lock.Unlock()
-		return errNotRegistered
-	} else {
-		delete(ps.active, p.id)
-		ps.inactive[p.id] = p
-		peers := make([]serverPeerSubscriber, len(ps.subscribers))
-		copy(peers, ps.subscribers)
-		ps.lock.Unlock()
+	defer ps.lock.Unlock()
 
-		for _, n := range peers {
-			n.unregisterPeer(p)
-		}
-		return nil
-	}
-}
-
-// disconnect removes a remote peer from either the active or inactive set and
-// initiates disconnection at the networking layer.
-func (ps *serverPeerSet) disconnect(id string) error {
-	ps.lock.Lock()
-
-	var (
-		peers []serverPeerSubscriber
-		p     *serverPeer
-		ok    bool
-	)
-	if p, ok = ps.active[id]; ok {
-		delete(ps.active, p.id)
-		peers = make([]serverPeerSubscriber, len(ps.subscribers))
-		copy(peers, ps.subscribers)
-	} else if p, ok = ps.inactive[id]; ok {
-		delete(ps.inactive, id)
-	} else {
-		ps.lock.Unlock()
+	p, ok := ps.peers[id]
+	if !ok {
 		return errNotRegistered
 	}
-	ps.lock.Unlock()
-	for _, n := range peers {
-		n.unregisterPeer(p)
+	delete(ps.peers, id)
+	for _, sub := range ps.subscribers {
+		sub.unregisterPeer(p)
 	}
-	p.Peer.Disconnect(p2p.DiscUselessPeer)
+	p.Peer.Disconnect(p2p.DiscRequested)
 	return nil
 }
 
-// ids returns a list of all active peer IDs
+// ids returns a list of all registered peer IDs
 func (ps *serverPeerSet) ids() []string {
 	ps.lock.RLock()
 	defer ps.lock.RUnlock()
 
 	var ids []string
-	for id := range ps.active {
+	for id := range ps.peers {
 		ids = append(ids, id)
 	}
 	return ids
@@ -1334,18 +1242,15 @@ func (ps *serverPeerSet) peer(id string) *serverPeer {
 	ps.lock.RLock()
 	defer ps.lock.RUnlock()
 
-	if p, ok := ps.active[id]; ok {
-		return p
-	}
-	return ps.inactive[id]
+	return ps.peers[id]
 }
 
-// len returns if the current number of peers in the active set.
+// len returns if the current number of peers in the set.
 func (ps *serverPeerSet) len() int {
 	ps.lock.RLock()
 	defer ps.lock.RUnlock()
 
-	return len(ps.active)
+	return len(ps.peers)
 }
 
 // bestPeer retrieves the known peer with the currently highest total difficulty.
@@ -1359,7 +1264,7 @@ func (ps *serverPeerSet) bestPeer() *serverPeer {
 		bestPeer *serverPeer
 		bestTd   *big.Int
 	)
-	for _, p := range ps.active {
+	for _, p := range ps.peers {
 		if td := p.Td(); bestTd == nil || td.Cmp(bestTd) > 0 {
 			bestPeer, bestTd = p, td
 		}
@@ -1367,13 +1272,13 @@ func (ps *serverPeerSet) bestPeer() *serverPeer {
 	return bestPeer
 }
 
-// allPeers returns all active server peers in a list.
+// allServerPeers returns all server peers in a list.
 func (ps *serverPeerSet) allPeers() []*serverPeer {
 	ps.lock.RLock()
 	defer ps.lock.RUnlock()
 
-	list := make([]*serverPeer, 0, len(ps.active))
-	for _, p := range ps.active {
+	list := make([]*serverPeer, 0, len(ps.peers))
+	for _, p := range ps.peers {
 		list = append(list, p)
 	}
 	return list
@@ -1385,10 +1290,7 @@ func (ps *serverPeerSet) close() {
 	ps.lock.Lock()
 	defer ps.lock.Unlock()
 
-	for _, p := range ps.active {
-		p.Disconnect(p2p.DiscQuitting)
-	}
-	for _, p := range ps.inactive {
+	for _, p := range ps.peers {
 		p.Disconnect(p2p.DiscQuitting)
 	}
 	ps.closed = true
