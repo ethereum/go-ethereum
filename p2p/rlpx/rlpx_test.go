@@ -42,7 +42,7 @@ func TestConn_ReadWriteMsg(t *testing.T) {
 
 	doHandshake(t, peer1, peer2, key1, key2)
 
-	msgChan := make(chan testRLPXMsg)
+	msgChan := make(chan testRLPXMsg, 1)
 
 	go func(msgChan chan testRLPXMsg) {
 		var msg testRLPXMsg
@@ -67,7 +67,7 @@ func TestConn_ReadWriteMsg(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	assert.Equal(t, "success", string(buf[1:8]))
+	assert.Equal(t, "success", string(buf[1:8])) // TODO janky
 }
 
 func doHandshake(t *testing.T, peer1, peer2 *Conn, key1, key2 *ecdsa.PrivateKey) {

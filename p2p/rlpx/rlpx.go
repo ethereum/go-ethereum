@@ -52,7 +52,7 @@ func NewConn(conn net.Conn, dialDest *ecdsa.PublicKey) *Conn { // TODO will need
 	return &Conn{
 		dialDest: dialDest,
 		conn:     conn,
-		handshake: &Handshake{},
+		handshake: new(Handshake),
 	}
 }
 
@@ -68,6 +68,16 @@ func (c *Conn) SetReadDeadline(time time.Time) error {
 	defer c.rmu.Unlock()
 
 	return c.conn.SetReadDeadline(time)
+}
+
+func (c *Conn) Read() (code uint64, data []byte, err error) {
+	code, size, r, err := c.ReadMsg()
+	if err != nil {
+		return 0, nil, nil
+	}
+	data = make([]byte, size)
+	_, err = io.ReadFull(r, data)
+	return code, data, err
 }
 
 func (c *Conn) ReadMsg() (code uint64, size uint32, payload io.Reader, err error) {
@@ -244,7 +254,9 @@ func (c *Conn) Handshake(prv *ecdsa.PrivateKey) (*ecdsa.PublicKey, error) { // T
 	if c.dialDest == nil {
 		sec, err = receiverEncHandshake(c.conn, prv)
 	}
-	// TODO err check here?
+	if err != nil {
+		return nil, err
+	}
 
 	macc, err := aes.NewCipher(sec.MAC)
 	if err != nil {

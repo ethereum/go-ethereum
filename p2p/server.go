@@ -914,7 +914,13 @@ func (srv *Server) checkInboundConn(fd net.Conn, remoteIP net.IP) error {
 // as a peer. It returns when the connection has been added as a peer
 // or the handshakes have failed.
 func (srv *Server) SetupConn(fd net.Conn, flags connFlag, dialDest *enode.Node) error {
-	c := &conn{fd: fd, transport: srv.newTransport(fd, dialDest.Pubkey()), flags: flags, cont: make(chan error)}
+	c := &conn{fd: fd, flags: flags, cont: make(chan error)}
+	if dialDest == nil {
+		c.transport = srv.newTransport(fd, nil)
+	} else {
+		c.transport = srv.newTransport(fd, dialDest.Pubkey())
+	}
+
 	err := srv.setupConn(c, flags, dialDest)
 	if err != nil {
 		c.close(err)
