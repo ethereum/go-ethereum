@@ -100,6 +100,26 @@ will traverse the whole trie from the given root and will abort if any reference
 node is missing. This command can be used for trie integrity verification.
 `,
 			},
+			{
+				Name:      "traverse-rawstate",
+				Usage:     "Traverse the state with given root hash for verification",
+				ArgsUsage: "<root>",
+				Action:    utils.MigrateFlags(traverseRawState),
+				Category:  "MISCELLANEOUS COMMANDS",
+				Flags: []cli.Flag{
+					utils.DataDirFlag,
+					utils.RopstenFlag,
+					utils.RinkebyFlag,
+					utils.GoerliFlag,
+					utils.LegacyTestnetFlag,
+				},
+				Description: `
+geth snapshot traverse-rawstate <state-root>
+will traverse the whole trie from the given root and will abort if any referenced
+node/code is missing. This command can be used for trie integrity verification.
+It's basically identical to traverse-state, but the check granularity is smaller.
+`,
+			},
 		},
 	}
 )
@@ -237,5 +257,101 @@ func traverseState(ctx *cli.Context) error {
 		log.Crit("Failed to traverse state trie", "root", root, "error", accIter.Err)
 	}
 	log.Info("State is complete", "accounts", accounts, "slots", slots, "codes", codes, "elapsed", common.PrettyDuration(time.Since(start)))
+	return nil
+}
+
+// traverseRawState is a helper function used for pruning verification.
+// Basically it just iterates the trie, ensure all nodes and assoicated
+// contract codes are present. It's basically identical to traverseState
+// but it will check each trie node.
+func traverseRawState(ctx *cli.Context) error {
+	glogger := log.NewGlogHandler(log.StreamHandler(os.Stderr, log.TerminalFormat(true)))
+	glogger.Verbosity(log.LvlInfo)
+	log.Root().SetHandler(glogger)
+
+	stack, _ := makeConfigNode(ctx)
+	defer stack.Close()
+
+	_, chaindb := utils.MakeChain(ctx, stack, true)
+	defer chaindb.Close()
+
+	if ctx.NArg() > 1 {
+		log.Crit("Too many arguments given")
+	}
+	var root = rawdb.ReadSnapshotRoot(chaindb)
+	if ctx.NArg() == 1 {
+		root = common.HexToHash(ctx.Args()[0])
+	}
+	t, err := trie.NewSecure(root, trie.NewDatabase(chaindb))
+	if err != nil {
+		log.Crit("Failed to open trie", "root", root, "error", err)
+	}
+	log.Info("Opened the state trie", "root", root)
+	var (
+		nodes      int
+		accounts   int
+		slots      int
+		codes      int
+		lastReport time.Time
+		start      = time.Now()
+	)
+	accIter := t.NodeIterator(nil)
+	for accIter.Next(true) {
+		node := accIter.Hash()
+		if node == (common.Hash{}) {
+			continue
+		}
+		nodes += 1
+
+		// If it's a leaf node, yes we are touching an account,
+		// dig into the storage trie further.
+		if accIter.Leaf() {
+			accounts += 1
+			var acc struct {
+				Nonce    uint64
+				Balance  *big.Int
+				Root     common.Hash
+				CodeHash []byte
+			}
+			if err := rlp.DecodeBytes(accIter.LeafBlob(), &acc); err != nil {
+				log.Crit("Invalid account encountered during traversal", "error", err)
+			}
+			if acc.Root != emptyRoot {
+				storageTrie, err := trie.NewSecure(acc.Root, trie.NewDatabase(chaindb))
+				if err != nil {
+					log.Crit("Failed to open storage trie", "root", acc.Root, "error", err)
+				}
+				storageIter := storageTrie.NodeIterator(nil)
+				for storageIter.Next(true) {
+					node := storageIter.Hash()
+					if node == (common.Hash{}) {
+						continue
+					}
+					nodes += 1
+					if storageIter.Leaf() {
+						slots += 1
+					}
+				}
+				if storageIter.Error() != nil {
+					log.Crit("Failed to traverse storage trie", "root", acc.Root, "error", storageIter.Error())
+				}
+			}
+			if !bytes.Equal(acc.CodeHash, emptyCode) {
+				code := rawdb.ReadCode(chaindb, common.BytesToHash(acc.CodeHash))
+				if len(code) == 0 {
+					log.Crit("Code is missing", "account", common.BytesToHash(accIter.LeafKey()))
+				}
+				codes += 1
+			}
+			if time.Since(lastReport) > time.Second*8 {
+				log.Info("Traversing state", "nodes", nodes, "accounts", accounts, "slots", slots, "codes", codes, "elapsed", common.PrettyDuration(time.Since(start)))
+				lastReport = time.Now()
+			}
+		}
+	}
+	if accIter.Error() != nil {
+		log.Crit("Failed to traverse state trie", "root", root, "error", accIter.Error())
+	}
+	log.Info("State is complete", "nodes", nodes, "accounts", accounts, "slots", slots, "codes", codes, "elapsed", common.PrettyDuration(time.Since(start)))
 	return nil
 }
