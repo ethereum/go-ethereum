@@ -1,10 +1,3 @@
-## Disclaimer
-
-**The software and related documentation are under active development, 
-all subject to potential future change without notification and not ready for production use. 
-The code and security audit have not been fully completed and not ready for any bug bounty.
-We advise you to be careful and experiment on the network at your own risk. Stay safe out there.**
-
 ## Binance Smart Chain
 
 The goal of Binance Smart Chain is to bring programmability and interoperability to Binance Chain. In order to embrace the existing popular community and advanced technology, it will bring huge benefits by staying compatible with all the existing smart contracts on Ethereum and Ethereum tooling. And to achieve that, the easiest solution is to develop based on go-ethereum fork, as we respect the great work of Ethereum very much.
