@@ -68,6 +68,7 @@ func TestUpdateLeaks(t *testing.T) {
 }
 
 func TestStateChangesEmittedFromCommit(t *testing.T) {
+	//TODO: test that we're able to set a storage value back to zero
 	// Create an empty state database
 	db := rawdb.NewMemoryDatabase()
 	state, _ := New(common.Hash{}, NewDatabase(db), nil)
@@ -91,8 +92,9 @@ func TestStateChangesEmittedFromCommit(t *testing.T) {
 		modifiedAccount.Account.Balance = newBalance
 
 		if i%2 == 0 {
-			storageKey := common.BytesToHash([]byte{i, i, i})
-			storageValue := common.BytesToHash([]byte{i, i, i, i})
+			// adding 1 to these so that we're not starting with zero values
+			storageKey := common.BytesToHash([]byte{i + 1, i, i})
+			storageValue := common.BytesToHash([]byte{i + 1, i, i, i})
 			modifiedAccount.Storage[storageKey] = storageValue
 
 			state.SetState(addr, storageKey, storageValue)
@@ -172,7 +174,6 @@ func assertStateChanges(actualChanges, expectedChanges StateChanges, t *testing.
 			t.Errorf("Account Storage does not match expected. actual: %v, expected: %v", account.Storage, expected.Storage)
 		}
 	}
-
 }
 
 // Tests that no intermediate state of an object is stored into the database,
