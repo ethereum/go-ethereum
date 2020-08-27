@@ -105,7 +105,7 @@ node is missing. This command can be used for trie integrity verification.
 )
 
 func pruneState(ctx *cli.Context) error {
-	stack, _ := makeFullNode(ctx)
+	stack, _ := makeConfigNode(ctx)
 	defer stack.Close()
 
 	chain, chaindb := utils.MakeChain(ctx, stack, true)
@@ -130,7 +130,7 @@ func pruneState(ctx *cli.Context) error {
 }
 
 func verifyState(ctx *cli.Context) error {
-	stack, _ := makeFullNode(ctx)
+	stack, _ := makeConfigNode(ctx)
 	defer stack.Close()
 
 	chain, chaindb := utils.MakeChain(ctx, stack, true)
@@ -172,7 +172,7 @@ func traverseState(ctx *cli.Context) error {
 	glogger.Verbosity(log.LvlInfo)
 	log.Root().SetHandler(glogger)
 
-	stack, _ := makeFullNode(ctx)
+	stack, _ := makeConfigNode(ctx)
 	defer stack.Close()
 
 	_, chaindb := utils.MakeChain(ctx, stack, true)

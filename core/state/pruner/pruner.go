@@ -102,7 +102,8 @@ func (p *Pruner) Prune(root common.Hash) error {
 
 		// Note all entries with 32byte length key(trie nodes,
 		// contract codes) are deleted here.
-		if len(key) == common.HashLength {
+		isCode, _ := rawdb.IsCodeKey(key)
+		if len(key) == common.HashLength || isCode {
 			size += common.StorageSize(len(key) + len(iter.Value()))
 			batch.Delete(key)
 
@@ -136,10 +137,6 @@ func (p *Pruner) Prune(root common.Hash) error {
 	iter.Release() // Please release the iterator here, otherwise will block the compactor
 	log.Info("Pruned state data", "count", count, "size", size, "elapsed", common.PrettyDuration(time.Since(pstart)))
 
-	// Migrate the state from the temporary db to main one.
-	committed := migrateState(p.db, p.tmpdb, p.homedir)
-	wipeTemporaryDatabase(p.homedir, p.tmpdb)
-
 	// Start compactions, will remove the deleted data from the disk immediately.
 	cstart := time.Now()
 	log.Info("Start compacting the database")
@@ -148,6 +145,9 @@ func (p *Pruner) Prune(root common.Hash) error {
 	}
 	log.Info("Compacted the whole database", "elapsed", common.PrettyDuration(time.Since(cstart)))
 
+	// Migrate the state from the temporary db to main one.
+	committed := migrateState(p.db, p.tmpdb, p.homedir)
+	wipeTemporaryDatabase(p.homedir, p.tmpdb)
 	log.Info("Successfully prune the state", "committed", committed, "pruned", size, "released", size-committed, "elasped", common.PrettyDuration(time.Since(start)))
 	return nil
 }
@@ -192,7 +192,10 @@ func migrateState(db, tmpdb ethdb.Database, homedir string) common.StorageSize {
 		// Note all entries with 32byte length key(trie nodes,
 		// contract codes are migrated here).
 		if len(key) != common.HashLength {
-			panic("invalid entry in database")
+			iscode, _ := rawdb.IsCodeKey(key)
+			if !iscode {
+				panic("invalid entry in database")
+			}
 		}
 		size += common.StorageSize(len(key) + len(iter.Value()))
 		batch.Put(key, iter.Value())

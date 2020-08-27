@@ -109,17 +109,11 @@ func CommitAndVerifyState(snaptree *Tree, root common.Hash, db, commitdb ethdb.D
 	got, err := generateTrieRoot(commitdb, acctIt, common.Hash{}, stdGenerate, func(commitdb ethdb.Database, accountHash, codeHash common.Hash, stat *generateStats) (common.Hash, error) {
 		// Migrate the code first, commit the contract code into the tmp db.
 		if codeHash != emptyCode {
-			// todo the notion of contract code should be integrated into snapshot.
-			code, err := db.Get(codeHash.Bytes())
-			if err != nil {
-				return common.Hash{}, err
-			}
+			code := rawdb.ReadCode(db, codeHash)
 			if len(code) == 0 {
 				return common.Hash{}, errors.New("failed to migrate contract code")
 			}
-			if err := commitdb.Put(codeHash.Bytes(), code); err != nil {
-				return common.Hash{}, err
-			}
+			rawdb.WriteCode(commitdb, codeHash, code)
 		}
 		// Then migrate all storage trie nodes into the tmp db.
 		storageIt, err := snaptree.StorageIterator(root, accountHash, common.Hash{})
