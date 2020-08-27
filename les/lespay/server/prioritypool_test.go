@@ -72,7 +72,11 @@ func TestPriorityPool(t *testing.T) {
 	clients := make([]*ppTestClient, 100)
 	raise := func(c *ppTestClient) {
 		for {
-			if _, ok := pp.RequestCapacity(c.node, c.cap+c.cap/testCapacityStepDiv, 0, true); !ok {
+			var ok bool
+			ns.Operation(func() {
+				_, ok = pp.RequestCapacity(c.node, c.cap+c.cap/testCapacityStepDiv, 0, true)
+			})
+			if !ok {
 				return
 			}
 		}

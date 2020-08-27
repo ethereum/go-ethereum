@@ -485,7 +485,7 @@ func TestNegativeBalanceCalculation(t *testing.T) {
 		pool.disconnect(newPoolTestPeer(i, nil))
 		_, nb := getBalance(pool, newPoolTestPeer(i, nil))
 		if checkDiff(nb, uint64(time.Minute)/1000) {
-			t.Fatalf("Negative balance mismatch, want %v, got %v", time.Minute, nb)
+			t.Fatalf("Negative balance mismatch, want %v, got %v", uint64(time.Minute)/1000, nb)
 		}
 	}
 }

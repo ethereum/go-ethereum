@@ -127,13 +127,13 @@ func NewBalanceTracker(ns *nodestate.NodeStateMachine, setup BalanceTrackerSetup
 
 	ns.SubscribeField(bt.connAddressField, func(node *enode.Node, state nodestate.Flags, oldValue, newValue interface{}) {
 		if newValue != nil {
-			ns.SetField(node, bt.BalanceField, bt.newNodeBalance(node, newValue.(string)))
+			ns.SetFieldSub(node, bt.BalanceField, bt.newNodeBalance(node, newValue.(string)))
 		} else {
 			if n, _ := ns.GetField(node, bt.BalanceField).(*NodeBalance); n != nil {
 				n.deactivate()
 			}
-			ns.SetState(node, nodestate.Flags{}, bt.PriorityFlag, 0)
-			ns.SetField(node, bt.BalanceField, nil)
+			ns.SetStateSub(node, nodestate.Flags{}, bt.PriorityFlag, 0)
+			ns.SetFieldSub(node, bt.BalanceField, nil)
 		}
 	})
 
@@ -229,6 +229,7 @@ func (bt *BalanceTracker) GetExpirationTCs() (pos, neg uint64) {
 // newNodeBalance loads balances from the database and creates a NodeBalance instance
 // for the given node. It also sets the PriorityFlag and adds balanceCallbackZero if
 // the node has a positive balance.
+// Note: this function should run inside a NodeStateMachine operation
 func (bt *BalanceTracker) newNodeBalance(node *enode.Node, negBalanceKey string) *NodeBalance {
 	pb := bt.ndb.getOrNewBalance(node.ID().Bytes(), false)
 	nb := bt.ndb.getOrNewBalance([]byte(negBalanceKey), true)
@@ -244,7 +245,7 @@ func (bt *BalanceTracker) newNodeBalance(node *enode.Node, negBalanceKey string)
 		n.callbackIndex[i] = -1
 	}
 	if n.checkPriorityStatus() {
-		n.bt.ns.SetState(n.node, n.bt.PriorityFlag, nodestate.Flags{}, 0)
+		n.bt.ns.SetStateSub(n.node, n.bt.PriorityFlag, nodestate.Flags{}, 0)
 	}
 	return n
 }

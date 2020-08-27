@@ -150,7 +150,7 @@ func newClientPool(lespayDb ethdb.Database, minCap, freeClientCap uint64, connec
 			ns.AddTimeout(node, pool.InactiveFlag, inactiveTimeout)
 		}
 		if oldState.Equals(pool.InactiveFlag) && newState.Equals(pool.InactiveFlag.Or(pool.PriorityFlag)) {
-			ns.SetState(node, pool.InactiveFlag, nodestate.Flags{}, 0) // remove timeout
+			ns.SetStateSub(node, pool.InactiveFlag, nodestate.Flags{}, 0) // remove timeout
 		}
 	})
 
@@ -194,9 +194,11 @@ func (f *clientPool) stop() {
 	f.lock.Lock()
 	f.closed = true
 	f.lock.Unlock()
-	f.ns.ForEach(f.ActiveFlag.Or(f.InactiveFlag), nodestate.Flags{}, func(node *enode.Node, state nodestate.Flags) {
-		// enforces saving all balances in BalanceTracker
-		f.disconnectNode(node)
+	f.ns.Operation(func() {
+		f.ns.ForEach(f.ActiveFlag.Or(f.InactiveFlag), nodestate.Flags{}, func(node *enode.Node, state nodestate.Flags) {
+			// enforces saving all balances in BalanceTracker
+			f.disconnectNode(node)
+		})
 	})
 	f.bt.Stop()
 	f.ns.Stop()
@@ -244,7 +246,11 @@ func (f *clientPool) connect(peer clientPoolPeer, reqCapacity uint64) (uint64, e
 	}
 
 	f.ns.SetState(node, f.InactiveFlag, nodestate.Flags{}, 0)
-	if _, allowed := f.pp.RequestCapacity(node, reqCapacity, f.connectedBias, true); allowed {
+	var allowed bool
+	f.ns.Operation(func() {
+		_, allowed = f.pp.RequestCapacity(node, reqCapacity, f.connectedBias, true)
+	})
+	if allowed {
 		return reqCapacity, nil
 	}
 	if !peer.allowInactive() {
@@ -268,14 +274,15 @@ func (f *clientPool) setConnectedBias(bias time.Duration) {
 // was initiated by the pool itself using disconnectFn then calling disconnect is
 // not necessary but permitted.
 func (f *clientPool) disconnect(p clientPoolPeer) {
-	f.disconnectNode(p.Node())
+	f.ns.Operation(func() { f.disconnectNode(p.Node()) })
 }
 
 // disconnectNode removes node fields and flags related to connected status
+// Note: this function should run inside a NodeStateMachine operation
 func (f *clientPool) disconnectNode(node *enode.Node) {
-	f.ns.SetField(node, connAddressField, nil)
-	f.ns.SetField(node, clientField, nil)
-	f.ns.SetState(node, nodestate.Flags{}, f.ActiveFlag.Or(f.InactiveFlag).Or(clientFlag), 0)
+	f.ns.SetFieldSub(node, connAddressField, nil)
+	f.ns.SetFieldSub(node, clientField, nil)
+	f.ns.SetStateSub(node, nodestate.Flags{}, f.ActiveFlag.Or(f.InactiveFlag).Or(clientFlag), 0)
 }
 
 // setDefaultFactors sets the default price factors applied to subsequently connected clients
@@ -328,7 +335,13 @@ func (f *clientPool) setCapacity(node *enode.Node, freeID string, capacity uint6
 			f.ns.SetState(node, nodestate.Flags{}, clientFlag, 0)
 		}()
 	}
-	minPriority, allowed := f.pp.RequestCapacity(node, capacity, bias, setCap)
+	var (
+		minPriority int64
+		allowed     bool
+	)
+	f.ns.Operation(func() {
+		minPriority, allowed = f.pp.RequestCapacity(node, capacity, bias, setCap)
+	})
 	if allowed {
 		return 0, nil
 	}
