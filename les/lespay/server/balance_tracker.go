@@ -125,13 +125,16 @@ func NewBalanceTracker(ns *nodestate.NodeStateMachine, setup BalanceTrackerSetup
 		}
 	})
 
+	ns.SubscribeField(bt.BalanceField, func(node *enode.Node, state nodestate.Flags, oldValue, newValue interface{}) {
+		if newValue == nil {
+			oldValue.(*NodeBalance).deactivate()
+		}
+	})
+
 	ns.SubscribeField(bt.connAddressField, func(node *enode.Node, state nodestate.Flags, oldValue, newValue interface{}) {
 		if newValue != nil {
 			ns.SetFieldSub(node, bt.BalanceField, bt.newNodeBalance(node, newValue.(string)))
 		} else {
-			if n, _ := ns.GetField(node, bt.BalanceField).(*NodeBalance); n != nil {
-				n.deactivate()
-			}
 			ns.SetStateSub(node, nodestate.Flags{}, bt.PriorityFlag, 0)
 			ns.SetFieldSub(node, bt.BalanceField, nil)
 		}
