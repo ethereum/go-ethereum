@@ -21,6 +21,7 @@ import (
 	"errors"
 	"fmt"
 	"os"
+	"strconv"
 	"sync/atomic"
 	"time"
 
@@ -238,6 +239,10 @@ func NewLevelDBDatabaseWithFreezer(file string, cache int, handles int, freezer 
 	return frdb, nil
 }
 
+func formatCounter(counter uint64) string {
+	return strconv.FormatUint(counter, 10)
+}
+
 // InspectDatabase traverses the entire database and checks the size
 // of all different categories of data.
 func InspectDatabase(db ethdb.Database) error {
@@ -280,6 +285,26 @@ func InspectDatabase(db ethdb.Database) error {
 		// Meta- and unaccounted data
 		metadata    common.StorageSize
 		unaccounted common.StorageSize
+
+		// Totals
+		headerSizeCount      uint64
+		bodySizeCount        uint64
+		receiptSizeCount     uint64
+		tdSizeCount          uint64
+		numHashPairingCount  uint64
+		hashNumPairingCount  uint64
+		trieSizeCount        uint64
+		codeSizeCount        uint64
+		txlookupSizeCount    uint64
+		accountSnapSizeCount uint64
+		storageSnapSizeCount uint64
+		preimageSizeCount    uint64
+		bloomBitsSizeCount   uint64
+		cliqueSnapsSizeCount uint64
+		chtTrieNodesCount    uint64
+		bloomTrieNodesCount  uint64
+		metadataCount        uint64
+		unaccountedCount     uint64
 	)
 	// Inspect key-value database first.
 	for it.Next() {
@@ -291,47 +316,65 @@ func InspectDatabase(db ethdb.Database) error {
 		switch {
 		case bytes.HasPrefix(key, headerPrefix) && bytes.HasSuffix(key, headerTDSuffix):
 			tdSize += size
+			tdSizeCount++
 		case bytes.HasPrefix(key, headerPrefix) && bytes.HasSuffix(key, headerHashSuffix):
 			numHashPairing += size
+			numHashPairingCount++
 		case bytes.HasPrefix(key, headerPrefix) && len(key) == (len(headerPrefix)+8+common.HashLength):
 			headerSize += size
+			headerSizeCount++
 		case bytes.HasPrefix(key, headerNumberPrefix) && len(key) == (len(headerNumberPrefix)+common.HashLength):
 			hashNumPairing += size
+			hashNumPairingCount++
 		case bytes.HasPrefix(key, blockBodyPrefix) && len(key) == (len(blockBodyPrefix)+8+common.HashLength):
 			bodySize += size
+			bodySizeCount++
 		case bytes.HasPrefix(key, blockReceiptsPrefix) && len(key) == (len(blockReceiptsPrefix)+8+common.HashLength):
 			receiptSize += size
+			receiptSizeCount++
 		case bytes.HasPrefix(key, txLookupPrefix) && len(key) == (len(txLookupPrefix)+common.HashLength):
 			txlookupSize += size
+			txlookupSizeCount++
 		case bytes.HasPrefix(key, SnapshotAccountPrefix) && len(key) == (len(SnapshotAccountPrefix)+common.HashLength):
 			accountSnapSize += size
+			accountSnapSizeCount++
 		case bytes.HasPrefix(key, SnapshotStoragePrefix) && len(key) == (len(SnapshotStoragePrefix)+2*common.HashLength):
 			storageSnapSize += size
+			storageSnapSizeCount++
 		case bytes.HasPrefix(key, preimagePrefix) && len(key) == (len(preimagePrefix)+common.HashLength):
 			preimageSize += size
+			preimageSizeCount++
 		case bytes.HasPrefix(key, bloomBitsPrefix) && len(key) == (len(bloomBitsPrefix)+10+common.HashLength):
 			bloomBitsSize += size
+			bloomBitsSizeCount++
 		case bytes.HasPrefix(key, []byte("clique-")) && len(key) == 7+common.HashLength:
 			cliqueSnapsSize += size
+			cliqueSnapsSizeCount++
 		case bytes.HasPrefix(key, []byte("cht-")) && len(key) == 4+common.HashLength:
 			chtTrieNodes += size
+			chtTrieNodesCount++
 		case bytes.HasPrefix(key, []byte("blt-")) && len(key) == 4+common.HashLength:
 			bloomTrieNodes += size
+			bloomTrieNodesCount++
 		case bytes.HasPrefix(key, codePrefix) && len(key) == len(codePrefix)+common.HashLength:
 			codeSize += size
+			codeSizeCount++
 		case len(key) == common.HashLength:
 			trieSize += size
+			trieSizeCount++
 		default:
 			var accounted bool
 			for _, meta := range [][]byte{databaseVerisionKey, headHeaderKey, headBlockKey, headFastBlockKey, fastTrieProgressKey} {
 				if bytes.Equal(key, meta) {
 					metadata += size
+					metadataCount++
 					accounted = true
 					break
 				}
 			}
 			if !accounted {
 				unaccounted += size
+				unaccountedCount++
 			}
 		}
 		count += 1
@@ -350,37 +393,37 @@ func InspectDatabase(db ethdb.Database) error {
 	}
 	// Display the database statistic.
 	stats := [][]string{
-		{"Key-Value store", "Headers", headerSize.String()},
-		{"Key-Value store", "Bodies", bodySize.String()},
-		{"Key-Value store", "Receipts", receiptSize.String()},
-		{"Key-Value store", "Difficulties", tdSize.String()},
-		{"Key-Value store", "Block number->hash", numHashPairing.String()},
-		{"Key-Value store", "Block hash->number", hashNumPairing.String()},
-		{"Key-Value store", "Transaction index", txlookupSize.String()},
-		{"Key-Value store", "Bloombit index", bloomBitsSize.String()},
-		{"Key-Value store", "Contract codes", codeSize.String()},
-		{"Key-Value store", "Trie nodes", trieSize.String()},
-		{"Key-Value store", "Trie preimages", preimageSize.String()},
-		{"Key-Value store", "Account snapshot", accountSnapSize.String()},
-		{"Key-Value store", "Storage snapshot", storageSnapSize.String()},
-		{"Key-Value store", "Clique snapshots", cliqueSnapsSize.String()},
-		{"Key-Value store", "Singleton metadata", metadata.String()},
-		{"Ancient store", "Headers", ancientHeaders.String()},
-		{"Ancient store", "Bodies", ancientBodies.String()},
-		{"Ancient store", "Receipts", ancientReceipts.String()},
-		{"Ancient store", "Difficulties", ancientTds.String()},
-		{"Ancient store", "Block number->hash", ancientHashes.String()},
-		{"Light client", "CHT trie nodes", chtTrieNodes.String()},
-		{"Light client", "Bloom trie nodes", bloomTrieNodes.String()},
+		{"Key-Value store", "Headers", headerSize.String(), formatCounter(headerSizeCount)},
+		{"Key-Value store", "Bodies", bodySize.String(), formatCounter(bodySizeCount)},
+		{"Key-Value store", "Receipts", receiptSize.String(), formatCounter(receiptSizeCount)},
+		{"Key-Value store", "Difficulties", tdSize.String(), formatCounter(tdSizeCount)},
+		{"Key-Value store", "Block number->hash", numHashPairing.String(), formatCounter(numHashPairingCount)},
+		{"Key-Value store", "Block hash->number", hashNumPairing.String(), formatCounter(hashNumPairingCount)},
+		{"Key-Value store", "Transaction index", txlookupSize.String(), formatCounter(txlookupSizeCount)},
+		{"Key-Value store", "Bloombit index", bloomBitsSize.String(), formatCounter(bloomBitsSizeCount)},
+		{"Key-Value store", "Contract codes", codeSize.String(), formatCounter(codeSizeCount)},
+		{"Key-Value store", "Trie nodes", trieSize.String(), formatCounter(trieSizeCount)},
+		{"Key-Value store", "Trie preimages", preimageSize.String(), formatCounter(preimageSizeCount)},
+		{"Key-Value store", "Account snapshot", accountSnapSize.String(), formatCounter(accountSnapSizeCount)},
+		{"Key-Value store", "Storage snapshot", storageSnapSize.String(), formatCounter(storageSnapSizeCount)},
+		{"Key-Value store", "Clique snapshots", cliqueSnapsSize.String(), formatCounter(cliqueSnapsSizeCount)},
+		{"Key-Value store", "Singleton metadata", metadata.String(), formatCounter(metadataCount)},
+		{"Ancient store", "Headers", ancientHeaders.String(), "NA"},
+		{"Ancient store", "Bodies", ancientBodies.String(), "NA"},
+		{"Ancient store", "Receipts", ancientReceipts.String(), "NA"},
+		{"Ancient store", "Difficulties", ancientTds.String(), "NA"},
+		{"Ancient store", "Block number->hash", ancientHashes.String(), "NA"},
+		{"Light client", "CHT trie nodes", chtTrieNodes.String(), formatCounter(chtTrieNodesCount)},
+		{"Light client", "Bloom trie nodes", bloomTrieNodes.String(), formatCounter(bloomTrieNodesCount)},
 	}
 	table := tablewriter.NewWriter(os.Stdout)
-	table.SetHeader([]string{"Database", "Category", "Size"})
-	table.SetFooter([]string{"", "Total", total.String()})
+	table.SetHeader([]string{"Database", "Category", "Size", "Count"})
+	table.SetFooter([]string{"", "Total", total.String(), ""})
 	table.AppendBulk(stats)
 	table.Render()
 
 	if unaccounted > 0 {
-		log.Error("Database contains unaccounted data", "size", unaccounted)
+		log.Error("Database contains unaccounted data", "size", unaccounted, "count", unaccountedCount)
 	}
 	return nil
 }
