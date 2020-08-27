@@ -130,10 +130,10 @@ func pruneState(ctx *cli.Context) error {
 }
 
 func verifyState(ctx *cli.Context) error {
-	stack := makeFullNode(ctx)
+	stack, _ := makeFullNode(ctx)
 	defer stack.Close()
 
-	chain, chaindb := utils.MakeChain(ctx, stack)
+	chain, chaindb := utils.MakeChain(ctx, stack, true)
 	defer chaindb.Close()
 
 	snaptree, err := snapshot.New(chaindb, trie.NewDatabase(chaindb), 256, chain.CurrentBlock().Root(), false, false)
@@ -172,10 +172,10 @@ func traverseState(ctx *cli.Context) error {
 	glogger.Verbosity(log.LvlInfo)
 	log.Root().SetHandler(glogger)
 
-	stack := makeFullNode(ctx)
+	stack, _ := makeFullNode(ctx)
 	defer stack.Close()
 
-	_, chaindb := utils.MakeChain(ctx, stack)
+	_, chaindb := utils.MakeChain(ctx, stack, true)
 	defer chaindb.Close()
 
 	if ctx.NArg() > 1 {

@@ -349,7 +349,7 @@ func stdGenerate(db ethdb.Database, in chan trieKV, out chan common.Hash) {
 		if err != nil {
 			panic(err)
 		}
-		if err := triedb.Commit(root, false); err != nil {
+		if err := triedb.Commit(root, false, nil); err != nil {
 			panic(err)
 		}
 	}
