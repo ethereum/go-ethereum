@@ -283,11 +283,11 @@ func extractGenesis(db ethdb.Database, snaptree *snapshot.Tree) (map[common.Hash
 	accIter := t.NodeIterator(nil)
 	for accIter.Next(true) {
 		node := accIter.Hash()
-		if node == (common.Hash{}) {
-			continue
-		}
-		marker[node] = struct{}{}
 
+		// Embeded nodes don't have hash.
+		if node != (common.Hash{}) {
+			marker[node] = struct{}{}
+		}
 		// If it's a leaf node, yes we are touching an account,
 		// dig into the storage trie further.
 		if accIter.Leaf() {

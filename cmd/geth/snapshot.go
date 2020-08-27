@@ -242,9 +242,9 @@ func traverseState(ctx *cli.Context) error {
 			}
 		}
 		if !bytes.Equal(acc.CodeHash, emptyCode) {
-			has, _ := chaindb.Has(acc.CodeHash)
-			if !has {
-				log.Crit("Code is missing", "account", common.BytesToHash(accIter.Key))
+			code := rawdb.ReadCode(chaindb, common.BytesToHash(acc.CodeHash))
+			if len(code) == 0 {
+				log.Crit("Code is missing", "hash", common.BytesToHash(acc.CodeHash))
 			}
 			codes += 1
 		}
@@ -297,12 +297,17 @@ func traverseRawState(ctx *cli.Context) error {
 	)
 	accIter := t.NodeIterator(nil)
 	for accIter.Next(true) {
-		node := accIter.Hash()
-		if node == (common.Hash{}) {
-			continue
-		}
 		nodes += 1
+		node := accIter.Hash()
 
+		if node != (common.Hash{}) {
+			// Check the present for non-empty hash node(embeded node doesn't
+			// have their own hash).
+			blob := rawdb.ReadTrieNode(chaindb, node)
+			if len(blob) == 0 {
+				log.Crit("Missing trie node(account)", "hash", node)
+			}
+		}
 		// If it's a leaf node, yes we are touching an account,
 		// dig into the storage trie further.
 		if accIter.Leaf() {
@@ -323,11 +328,18 @@ func traverseRawState(ctx *cli.Context) error {
 				}
 				storageIter := storageTrie.NodeIterator(nil)
 				for storageIter.Next(true) {
-					node := storageIter.Hash()
-					if node == (common.Hash{}) {
-						continue
-					}
 					nodes += 1
+					node := storageIter.Hash()
+
+					// Check the present for non-empty hash node(embeded node doesn't
+					// have their own hash).
+					if node != (common.Hash{}) {
+						blob := rawdb.ReadTrieNode(chaindb, node)
+						if len(blob) == 0 {
+							log.Crit("Missing trie node(storage)", "hash", node)
+						}
+					}
+					// Bump the counter if it's leaf node.
 					if storageIter.Leaf() {
 						slots += 1
 					}
