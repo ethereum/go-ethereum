@@ -172,16 +172,17 @@ func (test *udpV5Test) expectNodes(wantReqID []byte, wantTotal uint8, wantNodes 
 	for _, n := range wantNodes {
 		nodeSet[n.ID()] = n.Record()
 	}
+
 	for {
 		test.waitPacketOut(func(p *nodesV5, addr *net.UDPAddr, authTag []byte) {
+			if !bytes.Equal(p.ReqID, wantReqID) {
+				test.t.Fatalf("wrong request ID %v in response, want %v", p.ReqID, wantReqID)
+			}
 			if len(p.Nodes) > 3 {
 				test.t.Fatalf("too many nodes in response")
 			}
 			if p.Total != wantTotal {
-				test.t.Fatalf("wrong total response count %d", p.Total)
-			}
-			if !bytes.Equal(p.ReqID, wantReqID) {
-				test.t.Fatalf("wrong request ID in response: %v", p.ReqID)
+				test.t.Fatalf("wrong total response count %d, want %d", p.Total, wantTotal)
 			}
 			for _, record := range p.Nodes {
 				n, _ := enode.New(enode.ValidSchemesForTesting, record)
@@ -689,6 +690,7 @@ func (test *udpV5Test) getNode(key *ecdsa.PrivateKey, addr *net.UDPAddr) *enode.
 
 func (test *udpV5Test) waitPacketOut(validate interface{}) (closed bool) {
 	test.t.Helper()
+
 	fn := reflect.ValueOf(validate)
 	exptype := fn.Type().In(0)
 

@@ -785,12 +785,12 @@ func (p *findnodeV5) kind() byte         { return p_findnodeV5 }
 func (p *findnodeV5) setreqid(id []byte) { p.ReqID = id }
 
 func (p *findnodeV5) handle(t *UDPv5, fromID enode.ID, fromAddr *net.UDPAddr) {
-	nodes := t.collectTableNodes(fromAddr.IP, p.Distances)
+	nodes := t.collectTableNodes(fromAddr.IP, p.Distances, findnodeResultLimit)
 	t.sendNodes(fromID, fromAddr, p.ReqID, nodes)
 }
 
 // collectTableNodes creates a FINDNODE result set for the given distances.
-func (t *UDPv5) collectTableNodes(rip net.IP, distances []uint) []*enode.Node {
+func (t *UDPv5) collectTableNodes(rip net.IP, distances []uint, limit int) []*enode.Node {
 	var nodes []*enode.Node
 	var processed = make(map[uint]struct{})
 	for _, dist := range distances {
@@ -818,7 +818,7 @@ func (t *UDPv5) collectTableNodes(rip net.IP, distances []uint) []*enode.Node {
 				continue
 			}
 			nodes = append(nodes, n)
-			if len(nodes) >= nodesResponseItemLimit {
+			if len(nodes) >= limit {
 				return nodes
 			}
 		}
