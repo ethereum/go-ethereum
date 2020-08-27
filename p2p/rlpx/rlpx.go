@@ -52,6 +52,7 @@ func NewConn(conn net.Conn, dialDest *ecdsa.PublicKey) *Conn { // TODO will need
 	return &Conn{
 		dialDest: dialDest,
 		conn:     conn,
+		handshake: &Handshake{},
 	}
 }
 
@@ -243,6 +244,7 @@ func (c *Conn) Handshake(prv *ecdsa.PrivateKey) (*ecdsa.PublicKey, error) { // T
 	if c.dialDest == nil {
 		sec, err = receiverEncHandshake(c.conn, prv)
 	}
+	// TODO err check here?
 
 	macc, err := aes.NewCipher(sec.MAC)
 	if err != nil {
@@ -462,6 +464,7 @@ func initiatorEncHandshake(conn io.ReadWriter, prv *ecdsa.PrivateKey, remote *ec
 	if err != nil {
 		return s, err
 	}
+
 	if _, err = conn.Write(authPacket); err != nil {
 		return s, err
 	}
