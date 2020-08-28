@@ -410,10 +410,11 @@ func InspectDatabase(db ethdb.Database) error {
 			ancientReceipts += countReceiptsRLP(data)
 		}
 		if blockNumber%1000 == 0 && time.Since(logged) > 8*time.Second {
-			log.Info("Counting ancient database receipts", "number", blockNumber, "percentage", ancients.Percentage(blockNumber), "elapsed", common.PrettyDuration(time.Since(start)))
+			log.Info("Counting ancient database receipts", "blocknumber", blockNumber, "percentage", ancients.Percentage(blockNumber), "elapsed", common.PrettyDuration(time.Since(start)))
 			logged = time.Now()
 		}
 	}
+	log.Info("Counting ancient database receipts", "blocknumber", uint64(ancients), "percentage", "100", "elapsed", common.PrettyDuration(time.Since(start)))
 	// Display the database statistic.
 	stats := [][]string{
 		{"Key-Value store", "Headers", headers.Size(), headers.Count()},
@@ -449,6 +450,5 @@ func InspectDatabase(db ethdb.Database) error {
 		log.Error("Database contains unaccounted data", "size", unaccounted.size, "count", unaccounted.count)
 	}
 
-	log.Info("Inspection completed", "elapsed", common.PrettyDuration(time.Since(start)))
 	return nil
 }
