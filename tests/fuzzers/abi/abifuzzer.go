@@ -73,7 +73,7 @@ func createABI(name string, stateMutability, payable *string, inputs []args) (ab
 		sig += fmt.Sprintf(`, "payable": %v `, *payable)
 	}
 	if len(inputs) > 0 {
-		sig += fmt.Sprint(`, "inputs" : [ {`)
+		sig += `, "inputs" : [ {`
 		for i, inp := range inputs {
 			sig += fmt.Sprintf(`"name" : "%v", "type" : "%v" `, inp.name, inp.typ)
 			if i+1 < len(inputs) {
@@ -81,7 +81,7 @@ func createABI(name string, stateMutability, payable *string, inputs []args) (ab
 			}
 		}
 		sig += "} ]"
-		sig += fmt.Sprint(`, "outputs" : [ {`)
+		sig += `, "outputs" : [ {`
 		for i, inp := range inputs {
 			sig += fmt.Sprintf(`"name" : "%v", "type" : "%v" `, inp.name, inp.typ)
 			if i+1 < len(inputs) {
