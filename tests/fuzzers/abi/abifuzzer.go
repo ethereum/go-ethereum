@@ -73,7 +73,7 @@ func createABI(name string, stateMutability, payable *string, inputs []args) (ab
 		sig += fmt.Sprintf(`, "payable": %v `, *payable)
 	}
 	if len(inputs) > 0 {
-		sig += fmt.Sprintf(`, "inputs" : [ {`)
+		sig += fmt.Sprint(`, "inputs" : [ {`)
 		for i, inp := range inputs {
 			sig += fmt.Sprintf(`"name" : "%v", "type" : "%v" `, inp.name, inp.typ)
 			if i+1 < len(inputs) {
@@ -81,7 +81,7 @@ func createABI(name string, stateMutability, payable *string, inputs []args) (ab
 			}
 		}
 		sig += "} ]"
-		sig += fmt.Sprintf(`, "outputs" : [ {`)
+		sig += fmt.Sprint(`, "outputs" : [ {`)
 		for i, inp := range inputs {
 			sig += fmt.Sprintf(`"name" : "%v", "type" : "%v" `, inp.name, inp.typ)
 			if i+1 < len(inputs) {
@@ -92,11 +92,7 @@ func createABI(name string, stateMutability, payable *string, inputs []args) (ab
 	}
 	sig += `}]`
 
-	abi, err := abi.JSON(strings.NewReader(sig))
-	if err != nil {
-		//panic(fmt.Sprintf("err: %v, abi: %v", err.Error(), sig))
-	}
-	return abi, err
+	return abi.JSON(strings.NewReader(sig))
 }
 
 func fillStruct(structs []interface{}, data []byte) {
