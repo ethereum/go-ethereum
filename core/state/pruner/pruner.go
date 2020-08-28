@@ -97,7 +97,7 @@ func (p *Pruner) Prune(root common.Hash) error {
 	}
 	// Extract all node refs belong to the genesis. We have to keep the
 	// genesis all the time.
-	marker, err := extractGenesis(p.db, p.snaptree)
+	marker, err := extractGenesis(p.db)
 	if err != nil {
 		return err
 	}
@@ -266,7 +266,7 @@ func RecoverTemporaryDatabase(homedir string, db ethdb.Database) error {
 
 // extractGenesis loads the genesis state and creates the nodes marker.
 // So that it can be used as an present indicator for all genesis trie nodes.
-func extractGenesis(db ethdb.Database, snaptree *snapshot.Tree) (map[common.Hash]struct{}, error) {
+func extractGenesis(db ethdb.Database) (map[common.Hash]struct{}, error) {
 	genesisHash := rawdb.ReadCanonicalHash(db, 0)
 	if genesisHash == (common.Hash{}) {
 		return nil, errors.New("missing genesis hash")
