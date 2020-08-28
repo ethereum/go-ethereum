@@ -434,14 +434,15 @@ func InspectDatabase(db ethdb.Database) error {
 		{"Key-Value store", "Singleton metadata", metadata.Size(), metadata.Count()},
 		{"Ancient store", "Headers", ancientHeadersSize.String(), ancients.String()},
 		{"Ancient store", "Bodies", ancientBodiesSize.String(), ancients.String()},
-		{"Ancient store", "Receipts", ancientReceiptsSize.String(), ancientReceipts.String()},
+		{"Ancient store", "Receipt lists", ancientReceiptsSize.String(), ancients.String()},
+		{"Ancient store", "└ counted receipts", "--", ancientReceipts.String()},
 		{"Ancient store", "Difficulties", ancientTdsSize.String(), ancients.String()},
 		{"Ancient store", "Block number->hash", ancientHashesSize.String(), ancients.String()},
 		{"Light client", "CHT trie nodes", chtTrieNodes.Size(), chtTrieNodes.Count()},
 		{"Light client", "Bloom trie nodes", bloomTrieNodes.Size(), bloomTrieNodes.Count()},
 	}
 	table := tablewriter.NewWriter(os.Stdout)
-	table.SetHeader([]string{"Database", "Category", "Size", "Count"})
+	table.SetHeader([]string{"Database", "Category", "Size", "Items"})
 	table.SetFooter([]string{"", "Total", total.String(), " "})
 	table.AppendBulk(stats)
 	table.Render()
