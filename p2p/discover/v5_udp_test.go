@@ -158,13 +158,17 @@ func TestUDPv5_findnodeHandling(t *testing.T) {
 	test.packetIn(&findnodeV5{ReqID: []byte{1}, Distances: []uint{4234098}})
 	test.expectNodes([]byte{1}, 1, nil)
 
-	// This request gets no nodes because the corresponding bucket is empty.
-	test.packetIn(&findnodeV5{ReqID: []byte{2}, Distances: []uint{254}})
+	// Requesting with empty distance list shouldn't crash either.
+	test.packetIn(&findnodeV5{ReqID: []byte{2}, Distances: []uint{}})
 	test.expectNodes([]byte{2}, 1, nil)
 
+	// This request gets no nodes because the corresponding bucket is empty.
+	test.packetIn(&findnodeV5{ReqID: []byte{3}, Distances: []uint{254}})
+	test.expectNodes([]byte{3}, 1, nil)
+
 	// This request gets all test nodes.
-	test.packetIn(&findnodeV5{ReqID: []byte{3}, Distances: []uint{253}})
-	test.expectNodes([]byte{3}, 4, nodes)
+	test.packetIn(&findnodeV5{ReqID: []byte{4}, Distances: []uint{253}})
+	test.expectNodes([]byte{4}, 4, nodes)
 }
 
 func (test *udpV5Test) expectNodes(wantReqID []byte, wantTotal uint8, wantNodes []*enode.Node) {
