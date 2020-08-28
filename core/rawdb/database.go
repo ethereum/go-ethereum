@@ -396,7 +396,7 @@ func InspectDatabase(db ethdb.Database) error {
 	}
 	// Count receipts in ancient db
 	ancientReceipts := counter(0)
-	for blockNumber := uint64(0); blockNumber <= uint64(ancients-1); blockNumber++ {
+	for blockNumber := uint64(0); blockNumber < uint64(ancients); blockNumber++ {
 		data, err := db.Ancient(freezerReceiptTable, blockNumber)
 		if err != nil {
 			log.Error("Error reading ancient receipts from block", "number", blockNumber, "err", err)
