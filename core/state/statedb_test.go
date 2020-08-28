@@ -68,41 +68,33 @@ func TestUpdateLeaks(t *testing.T) {
 }
 
 func TestStateChangesEmittedFromCommit(t *testing.T) {
-	//TODO: test that we're able to set a storage value back to zero
 	// Create an empty state database
 	db := rawdb.NewMemoryDatabase()
 	state, _ := New(common.Hash{}, NewDatabase(db), nil)
+	addr1 := common.BytesToAddress([]byte{1, 2, 3, 4})
+	addr2 := common.BytesToAddress([]byte{5, 6, 7, 8})
+	expectedModifiedAccount1 := getNewModifiedAccount()
+	expectedModifiedAccount2 := getNewModifiedAccount()
 
-	// Commit 1: Create accounts with storage
+	// Commit 1
+	// set balance and storage for addr1
+	addr1Balance := big.NewInt(rand.Int63())
+	state.SetBalance(addr1, addr1Balance)
+	expectedModifiedAccount1.Account.Balance = addr1Balance
+
+	storageKey := common.BytesToHash([]byte{1})
+	storageValue := common.BytesToHash([]byte{1, 2, 3})
+	state.SetState(addr1, storageKey, storageValue)
+	expectedModifiedAccount1.Storage[storageKey] = storageValue
+
+	// set balance for addr2
+	addr2Balance := big.NewInt(rand.Int63())
+	state.SetBalance(addr2, addr2Balance)
+	expectedModifiedAccount2.Account.Balance = addr2Balance
+
 	expectedStateChangesOne := make(StateChanges)
-
-	for i := byte(0); i < 2; i++ {
-		addr := common.BytesToAddress([]byte{i})
-		modifiedAccount := ModifiedAccount{
-			Storage: make(map[common.Hash]common.Hash),
-			Account: Account{
-				Nonce:    0,
-				Balance:  big.NewInt(0),
-				Root:     emptyRoot,
-				CodeHash: emptyCodeHash,
-			},
-		}
-		newBalance := big.NewInt(int64(i))
-		state.SetBalance(addr, newBalance)
-		modifiedAccount.Account.Balance = newBalance
-
-		if i%2 == 0 {
-			// adding 1 to these so that we're not starting with zero values
-			storageKey := common.BytesToHash([]byte{i + 1, i, i})
-			storageValue := common.BytesToHash([]byte{i + 1, i, i, i})
-			modifiedAccount.Storage[storageKey] = storageValue
-
-			state.SetState(addr, storageKey, storageValue)
-		}
-
-		// Collect modified accounts to assert against
-		expectedStateChangesOne[addr] = modifiedAccount
-	}
+	expectedStateChangesOne[addr1] = expectedModifiedAccount1
+	expectedStateChangesOne[addr2] = expectedModifiedAccount2
 
 	_, actualStateChangesOne, commitErr := state.Commit(false)
 	if commitErr != nil {
@@ -111,29 +103,19 @@ func TestStateChangesEmittedFromCommit(t *testing.T) {
 
 	assertStateChanges(actualStateChangesOne, expectedStateChangesOne, t)
 
-	// Commit 2: Update existing account storage
+	// Commit 2: Update existing accounts
 	expectedStateChangesTwo := make(StateChanges)
 
-	var counter int
-	for addr, account := range expectedStateChangesOne {
-		// Only update some of the account storage
-		if counter%2 == 0 {
-			newBalance := big.NewInt(100)
-			account.Balance = newBalance
-			state.AddBalance(addr, newBalance)
+	//  update balance and storage for addr1
+	newBalanceToAdd := big.NewInt(100)
+	state.AddBalance(addr1, newBalanceToAdd)
+	newAddr1Balance := newBalanceToAdd.Int64() + addr1Balance.Int64()
+	expectedModifiedAccount1.Account.Balance = big.NewInt(newAddr1Balance)
 
-			for storageKey := range account.Storage {
-				updatedStorageValue := common.BytesToHash([]byte{0})
-
-				// Collect modified accounts to assert against
-				account.Storage[storageKey] = updatedStorageValue
-				expectedStateChangesTwo[addr] = account
-
-				state.SetState(addr, storageKey, updatedStorageValue)
-			}
-		}
-		counter++
-	}
+	updatedStorageValue := common.BytesToHash([]byte{0}) // setting storage value back to zero to make sure that we're capturing zero value diffs
+	state.SetState(addr1, storageKey, updatedStorageValue)
+	expectedModifiedAccount1.Storage[storageKey] = updatedStorageValue
+	expectedStateChangesTwo[addr1] = expectedModifiedAccount1
 
 	_, stateChangesTwo, commitTwoErr := state.Commit(false)
 	if commitTwoErr != nil {
@@ -141,6 +123,18 @@ func TestStateChangesEmittedFromCommit(t *testing.T) {
 	}
 
 	assertStateChanges(stateChangesTwo, expectedStateChangesTwo, t)
+}
+
+func getNewModifiedAccount() ModifiedAccount {
+	return ModifiedAccount{
+		Storage: make(map[common.Hash]common.Hash),
+		Account: Account{
+			Nonce:    0,
+			Balance:  big.NewInt(0),
+			Root:     emptyRoot,
+			CodeHash: emptyCodeHash,
+		},
+	}
 }
 
 func assertStateChanges(actualChanges, expectedChanges StateChanges, t *testing.T) {
