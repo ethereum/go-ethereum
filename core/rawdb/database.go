@@ -25,7 +25,6 @@ import (
 	"time"
 
 	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/ethdb"
 	"github.com/ethereum/go-ethereum/ethdb/leveldb"
 	"github.com/ethereum/go-ethereum/ethdb/memorydb"
@@ -272,13 +271,16 @@ func (s *stat) Count() string {
 
 // countReceiptsRLP counts how many receipts are stored in a RLP raw value
 func countReceiptsRLP(data rlp.RawValue) counter {
-	// Convert the receipts from their storage form to their internal representation
-	storageReceipts := []*types.ReceiptForStorage{}
-	if err := rlp.DecodeBytes(data, &storageReceipts); err != nil {
-		log.Error("Invalid receipt array RLP")
+	it, err := rlp.NewListIterator(data)
+	if err != nil {
+		log.Warn("Receipt iteration error", "error", err)
 		return counter(0)
 	}
-	return counter(len(storageReceipts))
+	count := counter(0)
+	for it.Next() {
+		count++
+	}
+	return count
 }
 
 // InspectDatabase traverses the entire database and checks the size
