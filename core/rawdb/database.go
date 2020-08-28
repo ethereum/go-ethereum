@@ -246,6 +246,10 @@ func (c counter) String() string {
 	return fmt.Sprintf("%d", c)
 }
 
+func (c counter) Percentage(current uint64) string {
+	return fmt.Sprintf("%d", current*100/uint64(c))
+}
+
 // stat stores sizes and count for a parameter
 type stat struct {
 	size  common.StorageSize
@@ -404,7 +408,7 @@ func InspectDatabase(db ethdb.Database) error {
 			ancientReceipts += countReceiptsRLP(data)
 		}
 		if blockNumber%1000 == 0 && time.Since(logged) > 8*time.Second {
-			log.Info("Inspecting ancient database", "number", blockNumber, "elapsed", common.PrettyDuration(time.Since(start)))
+			log.Info("Counting ancient database receipts", "number", blockNumber, "percentage", ancients.Percentage(blockNumber), "elapsed", common.PrettyDuration(time.Since(start)))
 			logged = time.Now()
 		}
 	}
