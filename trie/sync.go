@@ -52,6 +52,39 @@ type request struct {
 	callback LeafCallback // Callback to invoke if a leaf node it reached on this branch
 }
 
+// SyncPath is a path tuple identifying a particular trie node either in a single
+// trie (account) or a layered trie (account -> storage).
+//
+// Content wise the tuple either has 1 element if it addresses a node in a single
+// trie or 2 elements if it addresses a node in a stacked trie.
+//
+// To support aiming arbitrary trie nodes, the path needs to support odd nibble
+// lengths. To avoid transferring expanded hex form over the network, the last
+// part of the tuple (which needs to index into the middle of a trie) is compact
+// encoded. In case of a 2-tuple, the first item is always 32 bytes so that is
+// simple binary encoded.
+//
+// Examples:
+//   - Path 0x9  -> {0x19}
+//   - Path 0x99 -> {0x0099}
+//   - Path 0x01234567890123456789012345678901012345678901234567890123456789019  -> {0x0123456789012345678901234567890101234567890123456789012345678901, 0x19}
+//   - Path 0x012345678901234567890123456789010123456789012345678901234567890199 -> {0x0123456789012345678901234567890101234567890123456789012345678901, 0x0099}
+type SyncPath [][]byte
+
+// newSyncPath converts an expanded trie path from nibble form into a compact
+// version that can be sent over the network.
+func newSyncPath(path []byte) SyncPath {
+	// If the hash is from the account trie, append a single item, if it
+	// is from the a storage trie, append a tuple. Note, the length 64 is
+	// clashing between account leaf and storage root. It's fine though
+	// because having a trie node at 64 depth means a hash collision was
+	// found and we're long dead.
+	if len(path) < 64 {
+		return SyncPath{hexToCompact(path)}
+	}
+	return SyncPath{hexToKeybytes(path[:64]), hexToCompact(path[64:])}
+}
+
 // SyncResult is a response with requested data along with it's hash.
 type SyncResult struct {
 	Hash common.Hash // Hash of the originally unknown trie node
@@ -193,10 +226,16 @@ func (s *Sync) AddCodeEntry(hash common.Hash, path []byte, parent common.Hash) {
 	s.schedule(req)
 }
 
-// Missing retrieves the known missing nodes from the trie for retrieval.
-func (s *Sync) Missing(max int) []common.Hash {
-	var requests []common.Hash
-	for !s.queue.Empty() && (max == 0 || len(requests) < max) {
+// Missing retrieves the known missing nodes from the trie for retrieval. To aid
+// both eth/6x style fast sync and snap/1x style state sync, the paths of trie
+// nodes are returned too, as well as separate hash list for codes.
+func (s *Sync) Missing(max int) (nodes []common.Hash, paths []SyncPath, codes []common.Hash) {
+	var (
+		nodeHashes []common.Hash
+		nodePaths  []SyncPath
+		codeHashes []common.Hash
+	)
+	for !s.queue.Empty() && (max == 0 || len(nodeHashes)+len(codeHashes) < max) {
 		// Retrieve th enext item in line
 		item, prio := s.queue.Peek()
 
@@ -208,9 +247,16 @@ func (s *Sync) Missing(max int) []common.Hash {
 		// Item is allowed to be scheduled, add it to the task list
 		s.queue.Pop()
 		s.fetches[depth]++
-		requests = append(requests, item.(common.Hash))
+
+		hash := item.(common.Hash)
+		if req, ok := s.nodeReqs[hash]; ok {
+			nodeHashes = append(nodeHashes, hash)
+			nodePaths = append(nodePaths, newSyncPath(req.path))
+		} else {
+			codeHashes = append(codeHashes, hash)
+		}
 	}
-	return requests
+	return nodeHashes, nodePaths, codeHashes
 }
 
 // Process injects the received data for requested item. Note it can
@@ -322,9 +368,13 @@ func (s *Sync) children(req *request, object node) ([]*request, error) {
 
 	switch node := (object).(type) {
 	case *shortNode:
+		key := node.Key
+		if hasTerm(key) {
+			key = key[:len(key)-1]
+		}
 		children = []child{{
 			node: node.Val,
-			path: append(append([]byte(nil), req.path...), node.Key...),
+			path: append(append([]byte(nil), req.path...), key...),
 		}}
 	case *fullNode:
 		for i := 0; i < 17; i++ {
@@ -344,7 +394,7 @@ func (s *Sync) children(req *request, object node) ([]*request, error) {
 		// Notify any external watcher of a new key/value node
 		if req.callback != nil {
 			if node, ok := (child.node).(valueNode); ok {
-				if err := req.callback(req.path, node, req.hash); err != nil {
+				if err := req.callback(child.path, node, req.hash); err != nil {
 					return nil, err
 				}
 			}

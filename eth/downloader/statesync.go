@@ -34,14 +34,15 @@ import (
 // stateReq represents a batch of state fetch requests grouped together into
 // a single data retrieval network packet.
 type stateReq struct {
-	nItems    uint16                     // Number of items requested for download (max is 384, so uint16 is sufficient)
-	tasks     map[common.Hash]*stateTask // Download tasks to track previous attempts
-	timeout   time.Duration              // Maximum round trip time for this to complete
-	timer     *time.Timer                // Timer to fire when the RTT timeout expires
-	peer      *peerConnection            // Peer that we're requesting from
-	delivered time.Time                  // Time when the packet was delivered (independent when we process it)
-	response  [][]byte                   // Response data of the peer (nil for timeouts)
-	dropped   bool                       // Flag whether the peer dropped off early
+	nItems    uint16                    // Number of items requested for download (max is 384, so uint16 is sufficient)
+	trieTasks map[common.Hash]*trieTask // Trie node download tasks to track previous attempts
+	codeTasks map[common.Hash]*codeTask // Byte code download tasks to track previous attempts
+	timeout   time.Duration             // Maximum round trip time for this to complete
+	timer     *time.Timer               // Timer to fire when the RTT timeout expires
+	peer      *peerConnection           // Peer that we're requesting from
+	delivered time.Time                 // Time when the packet was delivered (independent when we process it)
+	response  [][]byte                  // Response data of the peer (nil for timeouts)
+	dropped   bool                      // Flag whether the peer dropped off early
 }
 
 // timedOut returns if this request timed out.
@@ -251,9 +252,11 @@ func (d *Downloader) spindownStateSync(active map[string]*stateReq, finished []*
 type stateSync struct {
 	d *Downloader // Downloader instance to access and manage current peerset
 
-	sched  *trie.Sync                 // State trie sync scheduler defining the tasks
-	keccak hash.Hash                  // Keccak256 hasher to verify deliveries with
-	tasks  map[common.Hash]*stateTask // Set of tasks currently queued for retrieval
+	sched  *trie.Sync // State trie sync scheduler defining the tasks
+	keccak hash.Hash  // Keccak256 hasher to verify deliveries with
+
+	trieTasks map[common.Hash]*trieTask // Set of trie node tasks currently queued for retrieval
+	codeTasks map[common.Hash]*codeTask // Set of byte code tasks currently queued for retrieval
 
 	numUncommitted   int
 	bytesUncommitted int
@@ -269,9 +272,16 @@ type stateSync struct {
 	root common.Hash
 }
 
-// stateTask represents a single trie node download task, containing a set of
+// trieTask represents a single trie node download task, containing a set of
 // peers already attempted retrieval from to detect stalled syncs and abort.
-type stateTask struct {
+type trieTask struct {
+	path     [][]byte
+	attempts map[string]struct{}
+}
+
+// codeTask represents a single byte code download task, containing a set of
+// peers already attempted retrieval from to detect stalled syncs and abort.
+type codeTask struct {
 	attempts map[string]struct{}
 }
 
@@ -279,15 +289,16 @@ type stateTask struct {
 // yet start the sync. The user needs to call run to initiate.
 func newStateSync(d *Downloader, root common.Hash) *stateSync {
 	return &stateSync{
-		d:       d,
-		sched:   state.NewStateSync(root, d.stateDB, d.stateBloom),
-		keccak:  sha3.NewLegacyKeccak256(),
-		tasks:   make(map[common.Hash]*stateTask),
-		deliver: make(chan *stateReq),
-		cancel:  make(chan struct{}),
-		done:    make(chan struct{}),
-		started: make(chan struct{}),
-		root:    root,
+		d:         d,
+		sched:     state.NewStateSync(root, d.stateDB, d.stateBloom),
+		keccak:    sha3.NewLegacyKeccak256(),
+		trieTasks: make(map[common.Hash]*trieTask),
+		codeTasks: make(map[common.Hash]*codeTask),
+		deliver:   make(chan *stateReq),
+		cancel:    make(chan struct{}),
+		done:      make(chan struct{}),
+		started:   make(chan struct{}),
+		root:      root,
 	}
 }
 
@@ -411,14 +422,15 @@ func (s *stateSync) assignTasks() {
 		// Assign a batch of fetches proportional to the estimated latency/bandwidth
 		cap := p.NodeDataCapacity(s.d.requestRTT())
 		req := &stateReq{peer: p, timeout: s.d.requestTTL()}
-		items := s.fillTasks(cap, req)
+
+		nodes, _, codes := s.fillTasks(cap, req)
 
 		// If the peer was assigned tasks to fetch, send the network request
-		if len(items) > 0 {
-			req.peer.log.Trace("Requesting new batch of data", "type", "state", "count", len(items), "root", s.root)
+		if len(nodes)+len(codes) > 0 {
+			req.peer.log.Trace("Requesting batch of state data", "nodes", len(nodes), "codes", len(codes), "root", s.root)
 			select {
 			case s.d.trackStateReq <- req:
-				req.peer.FetchNodeData(items)
+				req.peer.FetchNodeData(append(nodes, codes...)) // Unified retrieval under eth/6x
 			case <-s.cancel:
 			case <-s.d.cancelCh:
 			}
@@ -428,20 +440,34 @@ func (s *stateSync) assignTasks() {
 
 // fillTasks fills the given request object with a maximum of n state download
 // tasks to send to the remote peer.
-func (s *stateSync) fillTasks(n int, req *stateReq) []common.Hash {
+func (s *stateSync) fillTasks(n int, req *stateReq) (nodes []common.Hash, paths []trie.SyncPath, codes []common.Hash) {
 	// Refill available tasks from the scheduler.
-	if len(s.tasks) < n {
-		new := s.sched.Missing(n - len(s.tasks))
-		for _, hash := range new {
-			s.tasks[hash] = &stateTask{make(map[string]struct{})}
+	if fill := n - (len(s.trieTasks) + len(s.codeTasks)); fill > 0 {
+		nodes, paths, codes := s.sched.Missing(fill)
+		for i, hash := range nodes {
+			s.trieTasks[hash] = &trieTask{
+				path:     paths[i],
+				attempts: make(map[string]struct{}),
+			}
+		}
+		for _, hash := range codes {
+			s.codeTasks[hash] = &codeTask{
+				attempts: make(map[string]struct{}),
+			}
 		}
 	}
-	// Find tasks that haven't been tried with the request's peer.
-	items := make([]common.Hash, 0, n)
-	req.tasks = make(map[common.Hash]*stateTask, n)
-	for hash, t := range s.tasks {
+	// Find tasks that haven't been tried with the request's peer. Prefer code
+	// over trie nodes as those can be written to disk and forgotten about.
+	nodes = make([]common.Hash, 0, n)
+	paths = make([]trie.SyncPath, 0, n)
+	codes = make([]common.Hash, 0, n)
+
+	req.trieTasks = make(map[common.Hash]*trieTask, n)
+	req.codeTasks = make(map[common.Hash]*codeTask, n)
+
+	for hash, t := range s.codeTasks {
 		// Stop when we've gathered enough requests
-		if len(items) == n {
+		if len(nodes)+len(codes) == n {
 			break
 		}
 		// Skip any requests we've already tried from this peer
@@ -450,12 +476,30 @@ func (s *stateSync) fillTasks(n int, req *stateReq) []common.Hash {
 		}
 		// Assign the request to this peer
 		t.attempts[req.peer.id] = struct{}{}
-		items = append(items, hash)
-		req.tasks[hash] = t
-		delete(s.tasks, hash)
+		codes = append(codes, hash)
+		req.codeTasks[hash] = t
+		delete(s.codeTasks, hash)
 	}
-	req.nItems = uint16(len(items))
-	return items
+	for hash, t := range s.trieTasks {
+		// Stop when we've gathered enough requests
+		if len(nodes)+len(codes) == n {
+			break
+		}
+		// Skip any requests we've already tried from this peer
+		if _, ok := t.attempts[req.peer.id]; ok {
+			continue
+		}
+		// Assign the request to this peer
+		t.attempts[req.peer.id] = struct{}{}
+
+		nodes = append(nodes, hash)
+		paths = append(paths, t.path)
+
+		req.trieTasks[hash] = t
+		delete(s.trieTasks, hash)
+	}
+	req.nItems = uint16(len(nodes) + len(codes))
+	return nodes, paths, codes
 }
 
 // process iterates over a batch of delivered state data, injecting each item
@@ -487,11 +531,13 @@ func (s *stateSync) process(req *stateReq) (int, error) {
 		default:
 			return successful, fmt.Errorf("invalid state node %s: %v", hash.TerminalString(), err)
 		}
-		delete(req.tasks, hash)
+		// Delete from both queues (one delivery is enough for the syncer)
+		delete(req.trieTasks, hash)
+		delete(req.codeTasks, hash)
 	}
 	// Put unfulfilled tasks back into the retry queue
 	npeers := s.d.peers.Len()
-	for hash, task := range req.tasks {
+	for hash, task := range req.trieTasks {
 		// If the node did deliver something, missing items may be due to a protocol
 		// limit or a previous timeout + delayed delivery. Both cases should permit
 		// the node to retry the missing items (to avoid single-peer stalls).
@@ -501,10 +547,25 @@ func (s *stateSync) process(req *stateReq) (int, error) {
 		// If we've requested the node too many times already, it may be a malicious
 		// sync where nobody has the right data. Abort.
 		if len(task.attempts) >= npeers {
-			return successful, fmt.Errorf("state node %s failed with all peers (%d tries, %d peers)", hash.TerminalString(), len(task.attempts), npeers)
+			return successful, fmt.Errorf("trie node %s failed with all peers (%d tries, %d peers)", hash.TerminalString(), len(task.attempts), npeers)
 		}
 		// Missing item, place into the retry queue.
-		s.tasks[hash] = task
+		s.trieTasks[hash] = task
+	}
+	for hash, task := range req.codeTasks {
+		// If the node did deliver something, missing items may be due to a protocol
+		// limit or a previous timeout + delayed delivery. Both cases should permit
+		// the node to retry the missing items (to avoid single-peer stalls).
+		if len(req.response) > 0 || req.timedOut() {
+			delete(task.attempts, req.peer.id)
+		}
+		// If we've requested the node too many times already, it may be a malicious
+		// sync where nobody has the right data. Abort.
+		if len(task.attempts) >= npeers {
+			return successful, fmt.Errorf("byte code %s failed with all peers (%d tries, %d peers)", hash.TerminalString(), len(task.attempts), npeers)
+		}
+		// Missing item, place into the retry queue.
+		s.codeTasks[hash] = task
 	}
 	return successful, nil
 }
@@ -533,7 +594,7 @@ func (s *stateSync) updateStats(written, duplicate, unexpected int, duration tim
 	s.d.syncStatsState.unexpected += uint64(unexpected)
 
 	if written > 0 || duplicate > 0 || unexpected > 0 {
-		log.Info("Imported new state entries", "count", written, "elapsed", common.PrettyDuration(duration), "processed", s.d.syncStatsState.processed, "pending", s.d.syncStatsState.pending, "retry", len(s.tasks), "duplicate", s.d.syncStatsState.duplicate, "unexpected", s.d.syncStatsState.unexpected)
+		log.Info("Imported new state entries", "count", written, "elapsed", common.PrettyDuration(duration), "processed", s.d.syncStatsState.processed, "pending", s.d.syncStatsState.pending, "trieretry", len(s.trieTasks), "coderetry", len(s.codeTasks), "duplicate", s.d.syncStatsState.duplicate, "unexpected", s.d.syncStatsState.unexpected)
 	}
 	if written > 0 {
 		rawdb.WriteFastTrieProgress(s.d.stateDB, s.d.syncStatsState.processed)
