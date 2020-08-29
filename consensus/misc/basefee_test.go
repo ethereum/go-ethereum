@@ -225,7 +225,7 @@ func TestCalcBaseFee(t *testing.T) {
 			big.NewInt(1000000000),
 			10000000,
 			10000000,
-			big.NewInt(1000000000),
+			big.NewInt(999999999), // baseFee diff is -1 when usage == target
 		},
 		{
 			params.EIP1559ChainConfig,
@@ -308,7 +308,7 @@ func TestCalcBaseFee(t *testing.T) {
 			big.NewInt(1),
 		},
 
-		/* fails
+		// Low parent baseFee tests
 		{
 			params.EIP1559ChainConfig,
 			big.NewInt(1000),
@@ -319,7 +319,6 @@ func TestCalcBaseFee(t *testing.T) {
 			8,
 			big.NewInt(2),
 		},
-		*/
 		{
 			params.EIP1559ChainConfig,
 			big.NewInt(1000),
@@ -330,29 +329,6 @@ func TestCalcBaseFee(t *testing.T) {
 			9,
 			big.NewInt(2),
 		},
-		/* fails
-		{
-			params.EIP1559ChainConfig,
-			big.NewInt(1000),
-			1000,
-			big.NewInt(2000),
-			big.NewInt(1),
-			100000,
-			899999,
-			big.NewInt(2),
-		},
-		*/
-		{
-			params.EIP1559ChainConfig,
-			big.NewInt(1000),
-			1000,
-			big.NewInt(2000),
-			big.NewInt(1),
-			100000,
-			900000,
-			big.NewInt(2),
-		},
-		/* fails
 		{
 			params.EIP1559ChainConfig,
 			big.NewInt(1000),
@@ -363,7 +339,6 @@ func TestCalcBaseFee(t *testing.T) {
 			899999999,
 			big.NewInt(2),
 		},
-		*/
 		{
 			params.EIP1559ChainConfig,
 			big.NewInt(1000),
@@ -374,7 +349,6 @@ func TestCalcBaseFee(t *testing.T) {
 			900000000,
 			big.NewInt(2),
 		},
-		/* fails
 		{
 			params.EIP1559ChainConfig,
 			big.NewInt(1000),
@@ -385,7 +359,6 @@ func TestCalcBaseFee(t *testing.T) {
 			4,
 			big.NewInt(3),
 		},
-		*/
 		{
 			params.EIP1559ChainConfig,
 			big.NewInt(1000),
@@ -396,40 +369,16 @@ func TestCalcBaseFee(t *testing.T) {
 			5,
 			big.NewInt(3),
 		},
-		/* fails
 		{
 			params.EIP1559ChainConfig,
 			big.NewInt(1000),
 			1000,
 			big.NewInt(2000),
 			big.NewInt(2),
-			100000,
-			499999,
+			100000000,
+			499999999,
 			big.NewInt(3),
 		},
-		*/
-		{
-			params.EIP1559ChainConfig,
-			big.NewInt(1000),
-			1000,
-			big.NewInt(2000),
-			big.NewInt(2),
-			100000,
-			500000,
-			big.NewInt(3),
-		},
-		/*
-			{
-				params.EIP1559ChainConfig,
-				big.NewInt(1000),
-				1000,
-				big.NewInt(2000),
-				big.NewInt(2),
-				100000000,
-				499999999,
-				big.NewInt(3),
-			},
-		*/
 		{
 			params.EIP1559ChainConfig,
 			big.NewInt(1000),
@@ -439,73 +388,6 @@ func TestCalcBaseFee(t *testing.T) {
 			100000000,
 			500000000,
 			big.NewInt(3),
-		},
-
-		/* fails
-		{
-			params.EIP1559ChainConfig,
-			big.NewInt(1000),
-			1000,
-			big.NewInt(2000),
-			big.NewInt(3),
-			1,
-			3,
-			big.NewInt(4),
-		},
-		*/
-		{
-			params.EIP1559ChainConfig,
-			big.NewInt(1000),
-			1000,
-			big.NewInt(2000),
-			big.NewInt(3),
-			1,
-			4,
-			big.NewInt(4),
-		},
-		/* fails
-		{
-			params.EIP1559ChainConfig,
-			big.NewInt(1000),
-			1000,
-			big.NewInt(2000),
-			big.NewInt(3),
-			100000,
-			366666,
-			big.NewInt(4),
-		},
-		*/
-		{
-			params.EIP1559ChainConfig,
-			big.NewInt(1000),
-			1000,
-			big.NewInt(2000),
-			big.NewInt(3),
-			100000,
-			366667,
-			big.NewInt(4),
-		},
-		/* fails
-		{
-			params.EIP1559ChainConfig,
-			big.NewInt(1000),
-			1000,
-			big.NewInt(2000),
-			big.NewInt(3),
-			100000000,
-			366666666,
-			big.NewInt(4),
-		},
-		*/
-		{
-			params.EIP1559ChainConfig,
-			big.NewInt(1000),
-			1000,
-			big.NewInt(2000),
-			big.NewInt(3),
-			100000000,
-			366666667,
-			big.NewInt(4),
 		},
 	}
 	for i, test := range testConditions {
