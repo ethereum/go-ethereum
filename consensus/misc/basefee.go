@@ -72,35 +72,43 @@ func CalcBaseFee(config *params.ChainConfig, parent *types.Header) *big.Int {
 
 	// Otherwise,
 	// BASEFEE = PARENT_BASEFEE + PARENT_BASEFEE * delta // PARENT_EIP1559_GAS_TARGET // BASEFEE_MAX_CHANGE_DENOMINATOR
-	// Where delta = parent.GasUsed - PARENT_EIP1559_GAS_TARGET
+	// Where delta = PARENT_GAS_USED - PARENT_EIP1559_GAS_TARGET (possibly negative)
 	parentGasTarget := CalcEIP1559GasTarget(config, parent.Number, new(big.Int).SetUint64(parent.GasLimit))
 	delta := new(big.Int).Sub(new(big.Int).SetUint64(parent.GasUsed), parentGasTarget)
+	// If delta is 0, BASEFEE is unchanged
+	if delta.Cmp(common.Big0) == 0 {
+		return new(big.Int).Sub(parent.BaseFee, common.Big1)
+	}
 	mul := new(big.Int).Mul(parent.BaseFee, delta)
 	div := new(big.Int).Div(mul, parentGasTarget)
 	div2 := new(big.Int).Div(div, new(big.Int).SetUint64(config.EIP1559.EIP1559BaseFeeMaxChangeDenominator))
 	baseFee := new(big.Int).Add(parent.BaseFee, div2)
 
-	// A valid BASEFEE is one such that abs(BASEFEE - PARENT_BASEFEE) <= max(1, PARENT_BASEFEE // BASEFEE_MAX_CHANGE_DENOMINATOR)
+	// A valid BASEFEE is one such that
+	// abs(BASEFEE - PARENT_BASEFEE) <= max(1, PARENT_BASEFEE // BASEFEE_MAX_CHANGE_DENOMINATOR)
+	// abs(BASEFEE - PARENT_BASEFEE) >= 1
 	diff := new(big.Int).Sub(baseFee, parent.BaseFee)
 	neg := false
 	if diff.Sign() < 0 {
 		neg = true
 		diff.Neg(diff)
 	}
+	min := common.Big1
 	max := new(big.Int).Div(parent.BaseFee, new(big.Int).SetUint64(config.EIP1559.EIP1559BaseFeeMaxChangeDenominator))
 	if max.Cmp(common.Big1) < 0 {
 		max = common.Big1
 	}
-	// If derived BaseFee is not valid, restrict it within the bounds
+	// If BASEFEE is not valid, restrict it within the bounds
 	if diff.Cmp(max) > 0 {
 		if neg {
 			max.Neg(max)
 		}
 		baseFee.Set(new(big.Int).Add(parent.BaseFee, max))
-	}
-	// Prevent BaseFee from dropping to zero
-	if baseFee.Cmp(common.Big0) == 0 {
-		baseFee.Set(common.Big1)
+	} else if diff.Cmp(min) < 0 {
+		if neg {
+			min.Neg(min)
+		}
+		baseFee.Set(new(big.Int).Add(parent.BaseFee, min))
 	}
 	return baseFee
 }
