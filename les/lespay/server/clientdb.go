@@ -202,7 +202,6 @@ func (db *nodeDB) forEachBalance(neg bool, callback func(id enode.ID, balance ut
 			return
 		}
 	}
-	return
 }
 
 func (db *nodeDB) expirer() {

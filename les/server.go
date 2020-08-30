@@ -118,7 +118,7 @@ func NewLesServer(node *node.Node, e *eth.Ethereum, config *eth.Config) (*LesSer
 	}
 	srv.fcManager.SetCapacityLimits(srv.freeCapacity, srv.maxCapacity, srv.freeCapacity*2)
 	srv.clientPool = newClientPool(srv.chainDb, srv.minCapacity, srv.freeCapacity, defaultConnectedBias, mclock.System{}, func(id enode.ID) { go srv.peers.unregister(id.String()) })
-	srv.clientPool.setDefaultFactors(lps.PriceFactors{0, 1, 1}, lps.PriceFactors{0, 1, 1})
+	srv.clientPool.setDefaultFactors(lps.PriceFactors{TimeFactor: 0, CapacityFactor: 1, RequestFactor: 1}, lps.PriceFactors{TimeFactor: 0, CapacityFactor: 1, RequestFactor: 1})
 
 	checkpoint := srv.latestLocalCheckpoint()
 	if !checkpoint.Empty() {

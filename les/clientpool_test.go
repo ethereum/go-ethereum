@@ -137,7 +137,7 @@ func testClientPool(t *testing.T, activeLimit, clientCount, paidCount int, rando
 	)
 
 	pool.setLimits(activeLimit, uint64(activeLimit))
-	pool.setDefaultFactors(lps.PriceFactors{1, 0, 1}, lps.PriceFactors{1, 0, 1})
+	pool.setDefaultFactors(lps.PriceFactors{TimeFactor: 1, CapacityFactor: 0, RequestFactor: 1}, lps.PriceFactors{TimeFactor: 1, CapacityFactor: 0, RequestFactor: 1})
 
 	// pool should accept new peers up to its connected limit
 	for i := 0; i < activeLimit; i++ {
@@ -221,7 +221,7 @@ func TestConnectPaidClient(t *testing.T) {
 	pool := newClientPool(db, 1, 1, defaultConnectedBias, &clock, func(id enode.ID) {})
 	defer pool.stop()
 	pool.setLimits(10, uint64(10))
-	pool.setDefaultFactors(lps.PriceFactors{1, 0, 1}, lps.PriceFactors{1, 0, 1})
+	pool.setDefaultFactors(lps.PriceFactors{TimeFactor: 1, CapacityFactor: 0, RequestFactor: 1}, lps.PriceFactors{TimeFactor: 1, CapacityFactor: 0, RequestFactor: 1})
 
 	// Add balance for an external client and mark it as paid client
 	addBalance(pool, newPoolTestPeer(0, nil).node.ID(), int64(time.Minute))
@@ -239,7 +239,7 @@ func TestConnectPaidClientToSmallPool(t *testing.T) {
 	pool := newClientPool(db, 1, 1, defaultConnectedBias, &clock, func(id enode.ID) {})
 	defer pool.stop()
 	pool.setLimits(10, uint64(10)) // Total capacity limit is 10
-	pool.setDefaultFactors(lps.PriceFactors{1, 0, 1}, lps.PriceFactors{1, 0, 1})
+	pool.setDefaultFactors(lps.PriceFactors{TimeFactor: 1, CapacityFactor: 0, RequestFactor: 1}, lps.PriceFactors{TimeFactor: 1, CapacityFactor: 0, RequestFactor: 1})
 
 	// Add balance for an external client and mark it as paid client
 	addBalance(pool, newPoolTestPeer(0, nil).node.ID(), int64(time.Minute))
@@ -259,7 +259,7 @@ func TestConnectPaidClientToFullPool(t *testing.T) {
 	pool := newClientPool(db, 1, 1, defaultConnectedBias, &clock, removeFn)
 	defer pool.stop()
 	pool.setLimits(10, uint64(10)) // Total capacity limit is 10
-	pool.setDefaultFactors(lps.PriceFactors{1, 0, 1}, lps.PriceFactors{1, 0, 1})
+	pool.setDefaultFactors(lps.PriceFactors{TimeFactor: 1, CapacityFactor: 0, RequestFactor: 1}, lps.PriceFactors{TimeFactor: 1, CapacityFactor: 0, RequestFactor: 1})
 
 	for i := 0; i < 10; i++ {
 		addBalance(pool, newPoolTestPeer(i, nil).node.ID(), int64(time.Second*20))
@@ -289,7 +289,7 @@ func TestPaidClientKickedOut(t *testing.T) {
 	pool.bt.SetExpirationTCs(0, 0)
 	defer pool.stop()
 	pool.setLimits(10, uint64(10)) // Total capacity limit is 10
-	pool.setDefaultFactors(lps.PriceFactors{1, 0, 1}, lps.PriceFactors{1, 0, 1})
+	pool.setDefaultFactors(lps.PriceFactors{TimeFactor: 1, CapacityFactor: 0, RequestFactor: 1}, lps.PriceFactors{TimeFactor: 1, CapacityFactor: 0, RequestFactor: 1})
 
 	for i := 0; i < 10; i++ {
 		addBalance(pool, newPoolTestPeer(i, kickedCh).node.ID(), 10000000000) // 10 second allowance
@@ -318,7 +318,7 @@ func TestConnectFreeClient(t *testing.T) {
 	pool := newClientPool(db, 1, 1, defaultConnectedBias, &clock, func(id enode.ID) {})
 	defer pool.stop()
 	pool.setLimits(10, uint64(10))
-	pool.setDefaultFactors(lps.PriceFactors{1, 0, 1}, lps.PriceFactors{1, 0, 1})
+	pool.setDefaultFactors(lps.PriceFactors{TimeFactor: 1, CapacityFactor: 0, RequestFactor: 1}, lps.PriceFactors{TimeFactor: 1, CapacityFactor: 0, RequestFactor: 1})
 	if cap, _ := pool.connect(newPoolTestPeer(0, nil), 1); cap == 0 {
 		t.Fatalf("Failed to connect free client")
 	}
@@ -336,7 +336,7 @@ func TestConnectFreeClientToFullPool(t *testing.T) {
 	pool := newClientPool(db, 1, 1, defaultConnectedBias, &clock, removeFn)
 	defer pool.stop()
 	pool.setLimits(10, uint64(10)) // Total capacity limit is 10
-	pool.setDefaultFactors(lps.PriceFactors{1, 0, 1}, lps.PriceFactors{1, 0, 1})
+	pool.setDefaultFactors(lps.PriceFactors{TimeFactor: 1, CapacityFactor: 0, RequestFactor: 1}, lps.PriceFactors{TimeFactor: 1, CapacityFactor: 0, RequestFactor: 1})
 
 	for i := 0; i < 10; i++ {
 		pool.connect(newPoolTestPeer(i, nil), 1)
@@ -365,7 +365,7 @@ func TestFreeClientKickedOut(t *testing.T) {
 	pool := newClientPool(db, 1, 1, defaultConnectedBias, &clock, removeFn)
 	defer pool.stop()
 	pool.setLimits(10, uint64(10)) // Total capacity limit is 10
-	pool.setDefaultFactors(lps.PriceFactors{1, 0, 1}, lps.PriceFactors{1, 0, 1})
+	pool.setDefaultFactors(lps.PriceFactors{TimeFactor: 1, CapacityFactor: 0, RequestFactor: 1}, lps.PriceFactors{TimeFactor: 1, CapacityFactor: 0, RequestFactor: 1})
 
 	for i := 0; i < 10; i++ {
 		pool.connect(newPoolTestPeer(i, kicked), 1)
@@ -406,7 +406,7 @@ func TestPositiveBalanceCalculation(t *testing.T) {
 	pool := newClientPool(db, 1, 1, defaultConnectedBias, &clock, removeFn)
 	defer pool.stop()
 	pool.setLimits(10, uint64(10)) // Total capacity limit is 10
-	pool.setDefaultFactors(lps.PriceFactors{1, 0, 1}, lps.PriceFactors{1, 0, 1})
+	pool.setDefaultFactors(lps.PriceFactors{TimeFactor: 1, CapacityFactor: 0, RequestFactor: 1}, lps.PriceFactors{TimeFactor: 1, CapacityFactor: 0, RequestFactor: 1})
 
 	addBalance(pool, newPoolTestPeer(0, kicked).node.ID(), int64(time.Minute*3))
 	pool.connect(newPoolTestPeer(0, kicked), 10)
@@ -429,7 +429,7 @@ func TestDowngradePriorityClient(t *testing.T) {
 	pool := newClientPool(db, 1, 1, defaultConnectedBias, &clock, removeFn)
 	defer pool.stop()
 	pool.setLimits(10, uint64(10)) // Total capacity limit is 10
-	pool.setDefaultFactors(lps.PriceFactors{1, 0, 1}, lps.PriceFactors{1, 0, 1})
+	pool.setDefaultFactors(lps.PriceFactors{TimeFactor: 1, CapacityFactor: 0, RequestFactor: 1}, lps.PriceFactors{TimeFactor: 1, CapacityFactor: 0, RequestFactor: 1})
 
 	p := newPoolTestPeer(0, kicked)
 	addBalance(pool, p.node.ID(), int64(time.Minute))
@@ -463,7 +463,7 @@ func TestNegativeBalanceCalculation(t *testing.T) {
 	pool := newClientPool(db, 1, 1, defaultConnectedBias, &clock, func(id enode.ID) {})
 	defer pool.stop()
 	pool.setLimits(10, uint64(10)) // Total capacity limit is 10
-	pool.setDefaultFactors(lps.PriceFactors{1e-3, 0, 1}, lps.PriceFactors{1e-3, 0, 1})
+	pool.setDefaultFactors(lps.PriceFactors{TimeFactor: 1e-3, CapacityFactor: 0, RequestFactor: 1}, lps.PriceFactors{TimeFactor: 1e-3, CapacityFactor: 0, RequestFactor: 1})
 
 	for i := 0; i < 10; i++ {
 		pool.connect(newPoolTestPeer(i, nil), 1)
@@ -539,7 +539,7 @@ func TestInactiveClient(t *testing.T) {
 	if p2.cap != 0 {
 		t.Fatalf("Failed to deactivate peer #2")
 	}
-	pool.setDefaultFactors(lps.PriceFactors{1, 0, 0}, lps.PriceFactors{1, 0, 0})
+	pool.setDefaultFactors(lps.PriceFactors{TimeFactor: 1, CapacityFactor: 0, RequestFactor: 0}, lps.PriceFactors{TimeFactor: 1, CapacityFactor: 0, RequestFactor: 0})
 	p4 := newPoolTestPeer(4, nil)
 	addBalance(pool, p4.node.ID(), 1500*int64(time.Second))
 	// p1: 1000  p2: 500  p3: 2000  p4: 1500
