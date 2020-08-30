@@ -127,7 +127,6 @@ type peerCommons struct {
 	announceType uint64    // New block announcement type.
 	serving      uint32    // The status indicates the peer is served.
 	headInfo     blockInfo // Latest block information.
-	active       bool
 
 	// Background task queue for caching peer tasks and executing in order.
 	sendQueue *utils.ExecQueue
@@ -546,12 +545,10 @@ func (p *serverPeer) updateFlowControl(update keyValueMap) {
 
 	// If any of the flow control params is nil, refuse to update.
 	var params flowcontrol.ServerParams
-	updated := false
 	if update.get("flowControl/BL", &params.BufLimit) == nil && update.get("flowControl/MRR", &params.MinRecharge) == nil {
 		// todo can light client set a minimal acceptable flow control params?
 		p.fcParams = params
 		p.fcServer.UpdateParams(params)
-		updated = true
 	}
 	var MRC RequestCostList
 	if update.get("flowControl/MRC", &MRC) == nil {
@@ -559,18 +556,7 @@ func (p *serverPeer) updateFlowControl(update keyValueMap) {
 		for code, cost := range costUpdate {
 			p.fcCosts[code] = cost
 		}
-		updated = true
 	}
-	if updated {
-		p.active = p.paramsUseful()
-	}
-}
-
-// paramsUseful returns true if the server parameters ensure the minimum required
-// buffer limit and recharge
-func (p *serverPeer) paramsUseful() bool {
-	reqRecharge, reqBufLimit := p.fcCosts.reqParams()
-	return p.fcParams.MinRecharge >= reqRecharge && p.fcParams.BufLimit >= reqBufLimit
 }
 
 // updateHead updates the head information based on the announcement from
@@ -628,7 +614,6 @@ func (p *serverPeer) Handshake(td *big.Int, head common.Hash, headNum uint64, ge
 		p.fcParams = sParams
 		p.fcServer = flowcontrol.NewServerNode(sParams, &mclock.System{})
 		p.fcCosts = MRC.decode(ProtocolLengths[uint(p.version)])
-		p.active = p.paramsUseful()
 
 		recv.get("checkpoint/value", &p.checkpoint)
 		recv.get("checkpoint/registerHeight", &p.checkpointNumber)
@@ -730,14 +715,12 @@ func (p *serverPeer) answeredRequest(id uint64) {
 type clientPeer struct {
 	peerCommons
 
-	activate, deactivate func()
-	balance              *lps.NodeBalance
-	//getBalance           func() uint64
-
 	// responseLock ensures that responses are queued in the same order as
 	// RequestProcessed is called
 	responseLock  sync.Mutex
 	responseCount uint64 // Counter to generate an unique id for request processing.
+
+	balance *lps.NodeBalance
 
 	// invalidLock is used for protecting invalidCount.
 	invalidLock  sync.RWMutex
@@ -822,11 +805,6 @@ func (p *clientPeer) freeze() {
 	}
 }
 
-// allowInactive implements clientPoolPeer
-func (p *clientPeer) allowInactive() bool {
-	return false
-}
-
 // reply struct represents a reply with the actual data already RLP encoded and
 // only the bv (buffer value) missing. This allows the serving mechanism to
 // calculate the bv value which depends on the data size before sending the reply.
@@ -901,29 +879,59 @@ func (p *clientPeer) sendAnnounce(request announceData) error {
 	return p2p.Send(p.rw, AnnounceMsg, request)
 }
 
+// allowInactive implements clientPoolPeer
+func (p *clientPeer) allowInactive() bool {
+	return false
+}
+
 // updateCapacity updates the request serving capacity assigned to a given client
 // and also sends an announcement about the updated flow control parameters
 func (p *clientPeer) updateCapacity(cap uint64) {
 	p.lock.Lock()
 	defer p.lock.Unlock()
 
-	if !p.active && cap != 0 && p.activate != nil {
-		p.activate()
-	}
-	//	if cap != 0 { //|| p.version >= lpv4 {
 	if cap != p.fcParams.MinRecharge {
-		fmt.Println("updateCap", cap, p.fcParams.MinRecharge)
 		p.fcParams = flowcontrol.ServerParams{MinRecharge: cap, BufLimit: cap * bufLimitRatio}
 		p.fcClient.UpdateParams(p.fcParams)
 		var kvList keyValueList
-		kvList = kvList.add("flowControl/BL", cap*bufLimitRatio)
 		kvList = kvList.add("flowControl/MRR", cap)
+		kvList = kvList.add("flowControl/BL", cap*bufLimitRatio)
 		p.queueSend(func() { p.sendAnnounce(announceData{Update: kvList}) })
 	}
-	if p.active && cap == 0 && p.deactivate != nil {
-		p.deactivate()
-	}
+}
 
+// freezeClient temporarily puts the client in a frozen state which means all
+// unprocessed and subsequent requests are dropped. Unfreezing happens automatically
+// after a short time if the client's buffer value is at least in the slightly positive
+// region. The client is also notified about being frozen/unfrozen with a Stop/Resume
+// message.
+func (p *clientPeer) freezeClient() {
+	if p.version < lpv3 {
+		// if Stop/Resume is not supported then just drop the peer after setting
+		// its frozen status permanently
+		atomic.StoreUint32(&p.frozen, 1)
+		p.Peer.Disconnect(p2p.DiscUselessPeer)
+		return
+	}
+	if atomic.SwapUint32(&p.frozen, 1) == 0 {
+		go func() {
+			p.sendStop()
+			time.Sleep(freezeTimeBase + time.Duration(rand.Int63n(int64(freezeTimeRandom))))
+			for {
+				bufValue, bufLimit := p.fcClient.BufferStatus()
+				if bufLimit == 0 {
+					return
+				}
+				if bufValue <= bufLimit/8 {
+					time.Sleep(freezeCheckPeriod)
+				} else {
+					atomic.StoreUint32(&p.frozen, 0)
+					p.sendResume(bufValue)
+					break
+				}
+			}
+		}()
+	}
 }
 
 // Handshake executes the les protocol handshake, negotiating version number,
@@ -945,14 +953,8 @@ func (p *clientPeer) Handshake(td *big.Int, head common.Hash, headNum uint64, ge
 			*lists = (*lists).add("serveRecentState", stateRecent)
 			*lists = (*lists).add("txRelay", nil)
 		}
-		p.active = true // p.version < lpv4
-		if p.active {
-			p.fcParams = server.defParams
-		} else {
-			p.fcParams = flowcontrol.ServerParams{}
-		}
-		*lists = (*lists).add("flowControl/BL", p.fcParams.BufLimit)
-		*lists = (*lists).add("flowControl/MRR", p.fcParams.MinRecharge)
+		*lists = (*lists).add("flowControl/BL", server.defParams.BufLimit)
+		*lists = (*lists).add("flowControl/MRR", server.defParams.MinRecharge)
 
 		var costList RequestCostList
 		if server.costTracker.testCostList != nil {
@@ -962,6 +964,7 @@ func (p *clientPeer) Handshake(td *big.Int, head common.Hash, headNum uint64, ge
 		}
 		*lists = (*lists).add("flowControl/MRC", costList)
 		p.fcCosts = costList.decode(ProtocolLengths[uint(p.version)])
+		p.fcParams = server.defParams
 
 		// Add advertised checkpoint and register block height which
 		// client can verify the checkpoint validity.

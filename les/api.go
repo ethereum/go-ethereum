@@ -200,8 +200,8 @@ func (api *PrivateLightServerAPI) SetConnectedBias(bias time.Duration) error {
 	return nil
 }
 
-// AddBalance updates the balance of a client (either overwrites it or adds to it).
-// It also updates the balance meta info string.
+// AddBalance adds the given amount to the balance of a client if possible and returns
+// the balance before and after the operation
 func (api *PrivateLightServerAPI) AddBalance(id enode.ID, amount int64) (balance [2]uint64, err error) {
 	api.server.clientPool.forClients([]enode.ID{id}, func(c *clientInfo) {
 		balance[0], balance[1], err = c.balance.AddBalance(amount)
