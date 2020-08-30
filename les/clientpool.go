@@ -33,8 +33,7 @@ import (
 )
 
 const (
-	defaultPosExpTC = 36000 // default time constant (in seconds) for exponentially reducing positive balance
-	defaultNegExpTC = 3600  // default time constant (in seconds) for exponentially reducing negative balance
+	defaultNegExpTC = 3600 // default time constant (in seconds) for exponentially reducing negative balance
 
 	// defaultConnectedBias is applied to already connected clients So that
 	// already connected client won't be kicked out very soon and we
@@ -143,7 +142,6 @@ func newClientPool(lespayDb ethdb.Database, minCap, freeClientCap uint64, connec
 	// set default expiration constants used by tests
 	// Note: server overwrites this if token sale is active
 	pool.bt.SetExpirationTCs(0, defaultNegExpTC)
-	// calculate total token balance amount
 
 	ns.SubscribeState(pool.InactiveFlag.Or(pool.PriorityFlag), func(node *enode.Node, oldState, newState nodestate.Flags) {
 		if newState.Equals(pool.InactiveFlag) {
@@ -164,7 +162,17 @@ func newClientPool(lespayDb ethdb.Database, minCap, freeClientCap uint64, connec
 	})
 
 	ns.SubscribeState(pool.InactiveFlag.Or(pool.ActiveFlag), func(node *enode.Node, oldState, newState nodestate.Flags) {
+		if oldState.IsEmpty() {
+			clientConnectedMeter.Mark(1)
+			log.Debug("Client connected", "id", node.ID())
+		}
+		if oldState.Equals(pool.InactiveFlag) && newState.Equals(pool.ActiveFlag) {
+			clientActivatedMeter.Mark(1)
+			log.Debug("Client activated", "id", node.ID())
+		}
 		if oldState.Equals(pool.ActiveFlag) && newState.Equals(pool.InactiveFlag) {
+			clientDeactivatedMeter.Mark(1)
+			log.Debug("Client deactivated", "id", node.ID())
 			c, _ := ns.GetField(node, clientField).(*clientInfo)
 			if c == nil || !c.peer.allowInactive() {
 				pool.disconnectNode(node)
@@ -172,16 +180,22 @@ func newClientPool(lespayDb ethdb.Database, minCap, freeClientCap uint64, connec
 			}
 		}
 		if newState.IsEmpty() {
+			clientDisconnectedMeter.Mark(1)
+			log.Debug("Client disconnected", "id", node.ID())
 			pool.disconnectNode(node)
 			pool.removePeer(node.ID())
 		}
 	})
 
+	var totalConnected uint64
 	ns.SubscribeField(pool.CapacityField, func(node *enode.Node, state nodestate.Flags, oldValue, newValue interface{}) {
+		oldCap, _ := oldValue.(uint64)
+		newCap, _ := newValue.(uint64)
+		totalConnected += newCap - oldCap
+		totalConnectedGauge.Update(int64(totalConnected))
 		c, _ := ns.GetField(node, clientField).(*clientInfo)
 		if c != nil {
-			cap, _ := newValue.(uint64)
-			c.peer.updateCapacity(cap)
+			c.peer.updateCapacity(newCap)
 		}
 	})
 
@@ -217,7 +231,6 @@ func (f *clientPool) connect(peer clientPoolPeer, reqCapacity uint64) (uint64, e
 	// Dedup connected peers.
 	node, freeID := peer.Node(), peer.freeClientId()
 	if f.ns.GetField(node, clientField) != nil {
-		clientRejectedMeter.Mark(1)
 		log.Debug("Client already connected", "address", freeID, "id", node.ID().String())
 		return 0, fmt.Errorf("Client already connected address=%s id=%s", freeID, node.ID().String())
 	}
