@@ -369,6 +369,7 @@ func InspectDatabase(db ethdb.Database) error {
 			chtTrieNodes.Add(size)
 		case bytes.HasPrefix(key, []byte("blt-")) && len(key) == 4+common.HashLength:
 			bloomTrieNodes.Add(size)
+		default:
 			var accounted bool
 			for _, meta := range [][]byte{databaseVerisionKey, headHeaderKey, headBlockKey, headFastBlockKey, fastTrieProgressKey} {
 				if bytes.Equal(key, meta) {
@@ -381,7 +382,7 @@ func InspectDatabase(db ethdb.Database) error {
 				unaccounted.Add(size)
 			}
 		}
-		count += 1
+		count++
 		if count%1000 == 0 && time.Since(logged) > 8*time.Second {
 			log.Info("Inspecting database", "count", count, "elapsed", common.PrettyDuration(time.Since(start)))
 			logged = time.Now()
