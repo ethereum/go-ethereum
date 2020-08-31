@@ -38,6 +38,11 @@ web3._extend({
 	property: 'chequebook',
 	methods: [
 		new web3._extend.Method({
+			name: 'chainId',
+			call: 'eth_chainId',
+			params: 0
+		}),
+		new web3._extend.Method({
 			name: 'deposit',
 			call: 'chequebook_deposit',
 			params: 1,
