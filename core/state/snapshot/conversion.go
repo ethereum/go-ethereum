@@ -197,6 +197,25 @@ func (stat *generateStats) reportDone() {
 	log.Info("Iterated snapshot", ctx...)
 }
 
+// runReport periodically prints the progress information.
+func runReport(stats *generateStats, stop chan bool) {
+	timer := time.NewTimer(0)
+	defer timer.Stop()
+
+	for {
+		select {
+		case <-timer.C:
+			stats.report()
+			timer.Reset(time.Second * 8)
+		case success := <-stop:
+			if success {
+				stats.reportDone()
+			}
+			return
+		}
+	}
+}
+
 // generateTrieRoot generates the trie hash based on the snapshot iterator.
 // It can be used for generating account trie, storage trie or even the
 // whole state which connects the accounts and the corresponding storages.
@@ -213,28 +232,12 @@ func generateTrieRoot(db ethdb.Database, it Iterator, account common.Hash, gener
 		defer wg.Done()
 		generatorFn(db, in, out)
 	}()
-
 	// Spin up a go-routine for progress logging
 	if report && stats != nil {
 		wg.Add(1)
 		go func() {
 			defer wg.Done()
-
-			timer := time.NewTimer(0)
-			defer timer.Stop()
-
-			for {
-				select {
-				case <-timer.C:
-					stats.report()
-					timer.Reset(time.Second * 8)
-				case success := <-stoplog:
-					if success {
-						stats.reportDone()
-					}
-					return
-				}
-			}
+			runReport(stats, stoplog)
 		}()
 	}
 	// stop is a helper function to shutdown the background threads
