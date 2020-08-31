@@ -147,9 +147,6 @@ func NewPriorityPool(ns *nodestate.NodeStateMachine, setup PriorityPoolSetup, cl
 				inactiveIndex: -1,
 			}
 			ns.SetFieldSub(node, pp.ppNodeInfoField, c)
-			if !state.HasNone(pp.ActiveFlag.Or(pp.InactiveFlag)) {
-				pp.connectedNode(c)
-			}
 		} else {
 			ns.SetStateSub(node, nodestate.Flags{}, pp.ActiveFlag.Or(pp.InactiveFlag), 0)
 			ns.SetFieldSub(node, pp.ppNodeInfoField, nil)
@@ -216,6 +213,7 @@ func (pp *PriorityPool) RequestCapacity(node *enode.Node, targetCap uint64, bias
 	pp.setCapacity(c, targetCap)
 	c.forced = true
 	pp.activeQueue.Remove(c.activeIndex)
+	pp.inactiveQueue.Remove(c.inactiveIndex)
 	pp.activeQueue.Push(c)
 	minPriority = pp.enforceLimits()
 	// if capacity update is possible now then minPriority == math.MinInt64

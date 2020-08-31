@@ -176,13 +176,11 @@ func newClientPool(lespayDb ethdb.Database, minCap, freeClientCap uint64, connec
 			c, _ := ns.GetField(node, clientField).(*clientInfo)
 			if c == nil || !c.peer.allowInactive() {
 				pool.disconnectNode(node)
-				return
 			}
 		}
 		if newState.IsEmpty() {
 			clientDisconnectedMeter.Mark(1)
 			log.Debug("Client disconnected", "id", node.ID())
-			pool.disconnectNode(node)
 			pool.removePeer(node.ID())
 		}
 	})

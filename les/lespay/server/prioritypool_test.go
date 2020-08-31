@@ -29,6 +29,7 @@ import (
 
 var (
 	testSetup         = &nodestate.Setup{}
+	ppTestClientFlag  = testSetup.NewFlag("ppTestClientFlag")
 	ppTestClientField = testSetup.NewField("ppTestClient", reflect.TypeOf(&ppTestClient{}))
 	ppUpdateFlag      = testSetup.NewFlag("ppUpdateFlag")
 	ppTestSetup       = NewPriorityPoolSetup(testSetup)
@@ -98,8 +99,9 @@ func TestPriorityPool(t *testing.T) {
 		}
 		sumBalance += c.balance
 		clients[i] = c
-		ns.SetState(c.node, ppTestSetup.InactiveFlag, nodestate.Flags{}, 0)
+		ns.SetState(c.node, ppTestClientFlag, nodestate.Flags{}, 0)
 		ns.SetField(c.node, ppTestSetup.priorityField, c)
+		ns.SetState(c.node, ppTestSetup.InactiveFlag, nodestate.Flags{}, 0)
 		raise(c)
 		check(c)
 	}
