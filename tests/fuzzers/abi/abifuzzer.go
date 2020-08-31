@@ -33,6 +33,11 @@ func unpackPack(abi abi.ABI, method string, inputType []interface{}, input []byt
 	if err := abi.Unpack(outptr.Interface(), method, input); err == nil {
 		output, err := abi.Pack(method, input)
 		if err != nil {
+			// We have some false positives as we can unpack these type successfully, but not pack them
+			if err.Error() == "abi: cannot use []uint8 as type [0]int8 as argument" ||
+				err.Error() == "abi: cannot use uint8 as type int8 as argument" {
+				return false
+			}
 			panic(err)
 		}
 		if !bytes.Equal(input, output[4:]) {

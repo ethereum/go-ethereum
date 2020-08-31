@@ -17,12 +17,7 @@
 package abi
 
 import (
-	"crypto/sha1"
-	"fmt"
-	"io/ioutil"
 	"testing"
-
-	"github.com/ethereum/go-ethereum/common"
 )
 
 // TestReplicate can be used to replicate crashers from the fuzzing tests.
@@ -43,11 +38,13 @@ func TestReplicate(t *testing.T) {
 // TestGenerateCorpus can be used to add corpus for the fuzzer.
 // Just replace corpusHex with the hexEncoded output you want to add to the fuzzer.
 func TestGenerateCorpus(t *testing.T) {
-	corpusHex := "ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff"
-	data := common.FromHex(corpusHex)
-	checksum := sha1.Sum(data)
-	outf := fmt.Sprintf("corpus/%x", checksum)
-	if err := ioutil.WriteFile(outf, data, 0777); err != nil {
-		panic(err)
-	}
+	/*
+		corpusHex := "ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff"
+		data := common.FromHex(corpusHex)
+		checksum := sha1.Sum(data)
+		outf := fmt.Sprintf("corpus/%x", checksum)
+		if err := ioutil.WriteFile(outf, data, 0777); err != nil {
+			panic(err)
+		}
+	*/
 }
