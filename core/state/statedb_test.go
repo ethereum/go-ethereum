@@ -328,6 +328,20 @@ func newTestAction(addr common.Address, r *rand.Rand) testAction {
 			},
 			args: make([]int64, 1),
 		},
+		{
+			name: "AddAddrToAccessList",
+			fn: func(a testAction, s *StateDB) {
+				s.AddAddrToAccessList(addr)
+			},
+		},
+		{
+			name: "AddSlotToAccessList",
+			fn: func(a testAction, s *StateDB) {
+				s.AddSlotToAccessList(addr,
+					common.Hash{byte(a.args[0])})
+			},
+			args: make([]int64, 1),
+		},
 	}
 	action := actions[r.Intn(len(actions))]
 	var nameargs []string
@@ -725,5 +739,144 @@ func TestMissingTrieNodes(t *testing.T) {
 	root, err := state.Commit(false)
 	if err == nil {
 		t.Fatalf("expected error, got root :%x", root)
+	}
+}
+
+func TestStateDBAccessList(t *testing.T) {
+	// Some helpers
+	addr := func(a string) common.Address {
+		return common.HexToAddress(a)
+	}
+	slot := func(a string) common.Hash {
+		return common.HexToHash(a)
+	}
+
+	memDb := rawdb.NewMemoryDatabase()
+	db := NewDatabase(memDb)
+	state, _ := New(common.Hash{}, db, nil)
+	state.accessList = NewAccessList()
+
+	verifyAddrs := func(a ...string) {
+		t.Helper()
+		for _, address := range a {
+			if !state.AddrInAccessList(addr(address)) {
+				t.Fatalf("expected %x to be in access list", a)
+			}
+		}
+	}
+	verifySlots := func(a string, slots ...string) {
+		if !state.AddrInAccessList(addr(a)) {
+			t.Fatalf("scope missing address/slots %v", a)
+		}
+		for i, s := range slots {
+			if _, slotPresent := state.SlotInAccessList(addr(a), slot(s)); !slotPresent {
+				t.Fatalf("input %d: scope missing slot %v (address %v)", i, s, a)
+			}
+		}
+	}
+
+	state.AddAddrToAccessList(addr("aa"))             // 1
+	state.AddSlotToAccessList(addr("bb"), slot("01")) // 2,3
+	state.AddSlotToAccessList(addr("bb"), slot("02")) // 4
+	verifyAddrs("aa", "bb")
+	verifySlots("bb", "01", "02")
+
+	// Make a copy
+	stateCopy1 := state.Copy()
+	if exp, got := 4, state.journal.length(); exp != got {
+		t.Fatalf("journal length wrong, expected %d got %d", exp, got)
+	}
+
+	// same again, should cause no journal entries
+	state.AddSlotToAccessList(addr("bb"), slot("01"))
+	state.AddSlotToAccessList(addr("bb"), slot("02"))
+	state.AddAddrToAccessList(addr("aa"))
+	if exp, got := 4, state.journal.length(); exp != got {
+		t.Fatalf("journal length wrong, expected %d got %d", exp, got)
+	}
+	// some new ones
+	state.AddSlotToAccessList(addr("bb"), slot("03")) // 5
+	state.AddSlotToAccessList(addr("aa"), slot("01")) // 6
+	state.AddSlotToAccessList(addr("cc"), slot("01")) // 7,8
+	state.AddAddrToAccessList(addr("cc"))
+	if exp, got := 8, state.journal.length(); exp != got {
+		t.Fatalf("journal length wrong, expected %d got %d", exp, got)
+	}
+
+	verifyAddrs("aa", "bb", "cc")
+	verifySlots("aa", "01")
+	verifySlots("bb", "01", "02", "03")
+	verifySlots("cc", "01")
+
+	// now start rolling back changes
+	state.journal.revert(state, 7)
+	if _, ok := state.SlotInAccessList(addr("cc"), slot("01")); ok {
+		t.Fatalf("slot present, expected missing")
+	}
+	verifyAddrs("aa", "bb", "cc")
+	verifySlots("aa", "01")
+	verifySlots("bb", "01", "02", "03")
+
+	state.journal.revert(state, 6)
+	if state.AddrInAccessList(addr("cc")) {
+		t.Fatalf("addr present, expected missing")
+	}
+	verifyAddrs("aa", "bb")
+	verifySlots("aa", "01")
+	verifySlots("bb", "01", "02", "03")
+
+	state.journal.revert(state, 5)
+	if _, ok := state.SlotInAccessList(addr("aa"), slot("01")); ok {
+		t.Fatalf("slot present, expected missing")
+	}
+	verifyAddrs("aa", "bb")
+	verifySlots("bb", "01", "02", "03")
+
+	state.journal.revert(state, 4)
+	if _, ok := state.SlotInAccessList(addr("bb"), slot("03")); ok {
+		t.Fatalf("slot present, expected missing")
+	}
+	verifyAddrs("aa", "bb")
+	verifySlots("bb", "01", "02")
+
+	state.journal.revert(state, 3)
+	if _, ok := state.SlotInAccessList(addr("bb"), slot("02")); ok {
+		t.Fatalf("slot present, expected missing")
+	}
+	verifyAddrs("aa", "bb")
+	verifySlots("bb", "01")
+
+	state.journal.revert(state, 2)
+	if _, ok := state.SlotInAccessList(addr("bb"), slot("01")); ok {
+		t.Fatalf("slot present, expected missing")
+	}
+	verifyAddrs("aa", "bb")
+
+	state.journal.revert(state, 1)
+	if state.AddrInAccessList(addr("bb")) {
+		t.Fatalf("addr present, expected missing")
+	}
+	verifyAddrs("aa")
+
+	state.journal.revert(state, 0)
+	if state.AddrInAccessList(addr("aa")) {
+		t.Fatalf("addr present, expected missing")
+	}
+	if got, exp := len(state.accessList.addresses), 0; got != exp {
+		t.Fatalf("expected empty, got %d", got)
+	}
+	if got, exp := len(state.accessList.slots), 0; got != exp {
+		t.Fatalf("expected empty, got %d", got)
+	}
+	// Check the copy
+	// Make a copy
+	state = stateCopy1
+	verifyAddrs("aa", "bb")
+	verifySlots("bb", "01", "02")
+	if got, exp := len(state.accessList.addresses), 2; got != exp {
+		t.Fatalf("expected empty, got %d", got)
+	}
+	if got, exp := len(state.accessList.slots), 1; got != exp {
+		t.Fatalf("expected empty, got %d", got)
 	}
 }

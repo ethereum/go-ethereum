@@ -130,6 +130,14 @@ type (
 	touchChange struct {
 		account *common.Address
 	}
+	// Changes to the access list
+	accessListAddAccountChange struct {
+		address *common.Address
+	}
+	accessListAddSlotChange struct {
+		address *common.Address
+		slot    *common.Hash
+	}
 )
 
 func (ch createObjectChange) revert(s *StateDB) {
@@ -232,5 +240,43 @@ func (ch addPreimageChange) revert(s *StateDB) {
 }
 
 func (ch addPreimageChange) dirtied() *common.Address {
+	return nil
+}
+
+func (ch accessListAddAccountChange) revert(s *StateDB) {
+	/*
+		One important invariant here, is that whenever a (addr, slot) is added, if the
+		addr is not already present, the add causes two journal entries:
+		- one for the address,
+		- one for the (address,slot)
+		Therefore, when unrolling the change, we can always blindly delete the
+		(addr) at this point, since no storage adds can remain when come upon
+		a single (addr) change.
+	*/
+	delete(s.accessList.addresses, *ch.address)
+}
+
+func (ch accessListAddAccountChange) dirtied() *common.Address {
+	return nil
+}
+
+func (ch accessListAddSlotChange) revert(s *StateDB) {
+	idx, addrOk := s.accessList.addresses[*ch.address]
+	// There are two ways this can fail
+	if !addrOk {
+		panic("reverting slot change, address not present in list")
+	}
+	slotmap := s.accessList.slots[idx]
+	delete(slotmap, *ch.slot)
+	// If that was the last (first) slot, remove it
+	// Since additions and rollbacks are always performed in order,
+	// we can delete the item without worrying about screwing up later indices
+	if len(slotmap) == 0 {
+		s.accessList.slots = s.accessList.slots[:idx]
+		s.accessList.addresses[*ch.address] = -1
+	}
+}
+
+func (ch accessListAddSlotChange) dirtied() *common.Address {
 	return nil
 }
