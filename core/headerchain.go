@@ -488,8 +488,10 @@ func (hc *HeaderChain) SetCurrentHeader(head *types.Header) {
 
 type (
 	// UpdateHeadBlocksCallback is a callback function that is called by SetHead
-	// before head header is updated.
-	UpdateHeadBlocksCallback func(ethdb.KeyValueWriter, *types.Header)
+	// before head header is updated. The method will return the actual block it
+	// updated the head to (missing state) and a flag if setHead should continue
+	// rewinding till that forcefully (exceeded ancient limits)
+	UpdateHeadBlocksCallback func(ethdb.KeyValueWriter, *types.Header) (uint64, bool)
 
 	// DeleteBlockContentCallback is a callback function that is called by SetHead
 	// before each header is deleted.
@@ -502,9 +504,10 @@ func (hc *HeaderChain) SetHead(head uint64, updateFn UpdateHeadBlocksCallback, d
 	var (
 		parentHash common.Hash
 		batch      = hc.chainDb.NewBatch()
+		origin     = true
 	)
 	for hdr := hc.CurrentHeader(); hdr != nil && hdr.Number.Uint64() > head; hdr = hc.CurrentHeader() {
-		hash, num := hdr.Hash(), hdr.Number.Uint64()
+		num := hdr.Number.Uint64()
 
 		// Rewind block chain to new head.
 		parent := hc.GetHeader(hdr.ParentHash, num-1)
@@ -512,16 +515,21 @@ func (hc *HeaderChain) SetHead(head uint64, updateFn UpdateHeadBlocksCallback, d
 			parent = hc.genesisHeader
 		}
 		parentHash = hdr.ParentHash
+
 		// Notably, since geth has the possibility for setting the head to a low
 		// height which is even lower than ancient head.
 		// In order to ensure that the head is always no higher than the data in
-		// the database(ancient store or active store), we need to update head
+		// the database (ancient store or active store), we need to update head
 		// first then remove the relative data from the database.
 		//
 		// Update head first(head fast block, head full block) before deleting the data.
 		markerBatch := hc.chainDb.NewBatch()
 		if updateFn != nil {
-			updateFn(markerBatch, parent)
+			newHead, force := updateFn(markerBatch, parent)
+			if force && newHead < head {
+				log.Warn("Force rewinding till ancient limit", "head", newHead)
+				head = newHead
+			}
 		}
 		// Update head header then.
 		rawdb.WriteHeadHeaderHash(markerBatch, parentHash)
@@ -532,14 +540,34 @@ func (hc *HeaderChain) SetHead(head uint64, updateFn UpdateHeadBlocksCallback, d
 		hc.currentHeaderHash = parentHash
 		headHeaderGauge.Update(parent.Number.Int64())
 
-		// Remove the relative data from the database.
-		if delFn != nil {
-			delFn(batch, hash, num)
+		// If this is the first iteration, wipe any leftover data upwards too so
+		// we don't end up with dangling daps in the database
+		var nums []uint64
+		if origin {
+			for n := num + 1; len(rawdb.ReadAllHashes(hc.chainDb, n)) > 0; n++ {
+				nums = append([]uint64{n}, nums...) // suboptimal, but we don't really expect this path
+			}
+			origin = false
 		}
-		// Rewind header chain to new head.
-		rawdb.DeleteHeader(batch, hash, num)
-		rawdb.DeleteTd(batch, hash, num)
-		rawdb.DeleteCanonicalHash(batch, num)
+		nums = append(nums, num)
+
+		// Remove the related data from the database on all sidechains
+		for _, num := range nums {
+			// Gather all the side fork hashes
+			hashes := rawdb.ReadAllHashes(hc.chainDb, num)
+			if len(hashes) == 0 {
+				// No hashes in the database whatsoever, probably frozen already
+				hashes = append(hashes, hdr.Hash())
+			}
+			for _, hash := range hashes {
+				if delFn != nil {
+					delFn(batch, hash, num)
+				}
+				rawdb.DeleteHeader(batch, hash, num)
+				rawdb.DeleteTd(batch, hash, num)
+			}
+			rawdb.DeleteCanonicalHash(batch, num)
+		}
 	}
 	// Flush all accumulated deletions.
 	if err := batch.Write(); err != nil {

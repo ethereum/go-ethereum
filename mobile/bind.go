@@ -32,7 +32,7 @@ import (
 // Signer is an interface defining the callback when a contract requires a
 // method to sign the transaction before submission.
 type Signer interface {
-	Sign(*Address, *Transaction) (tx *Transaction, _ error)
+	Sign(addr *Address, unsignedTx *Transaction) (tx *Transaction, _ error)
 }
 
 type MobileSigner struct {

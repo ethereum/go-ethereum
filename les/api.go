@@ -202,6 +202,18 @@ func (api *PrivateLightServerAPI) SetDefaultParams(params map[string]interface{}
 	return err
 }
 
+// SetConnectedBias set the connection bias, which is applied to already connected clients
+// So that already connected client won't be kicked out very soon and we can ensure all
+// connected clients can have enough time to request or sync some data.
+// When the input parameter `bias` < 0 (illegal), return error.
+func (api *PrivateLightServerAPI) SetConnectedBias(bias time.Duration) error {
+	if bias < time.Duration(0) {
+		return fmt.Errorf("bias illegal: %v less than 0", bias)
+	}
+	api.server.clientPool.setConnectedBias(bias)
+	return nil
+}
+
 // Benchmark runs a request performance benchmark with a given set of measurement setups
 // in multiple passes specified by passCount. The measurement time for each setup in each
 // pass is specified in milliseconds by length.

@@ -448,7 +448,7 @@ func (b *SimulatedBackend) EstimateGas(ctx context.Context, call ethereum.CallMs
 		hi = b.pendingBlock.GasLimit()
 	}
 	// Recap the highest gas allowance with account's balance.
-	if call.GasPrice != nil && call.GasPrice.Uint64() != 0 {
+	if call.GasPrice != nil && call.GasPrice.BitLen() != 0 {
 		balance := b.pendingState.GetBalance(call.From) // from can't be nil
 		available := new(big.Int).Set(balance)
 		if call.Value != nil {
@@ -458,7 +458,7 @@ func (b *SimulatedBackend) EstimateGas(ctx context.Context, call ethereum.CallMs
 			available.Sub(available, call.Value)
 		}
 		allowance := new(big.Int).Div(available, call.GasPrice)
-		if hi > allowance.Uint64() {
+		if allowance.IsUint64() && hi > allowance.Uint64() {
 			transfer := call.Value
 			if transfer == nil {
 				transfer = new(big.Int)
@@ -675,14 +675,16 @@ func (b *SimulatedBackend) SubscribeNewHead(ctx context.Context, ch chan<- *type
 }
 
 // AdjustTime adds a time shift to the simulated clock.
+// It can only be called on empty blocks.
 func (b *SimulatedBackend) AdjustTime(adjustment time.Duration) error {
 	b.mu.Lock()
 	defer b.mu.Unlock()
 
+	if len(b.pendingBlock.Transactions()) != 0 {
+		return errors.New("Could not adjust time on non-empty block")
+	}
+
 	blocks, _ := core.GenerateChain(b.config, b.blockchain.CurrentBlock(), ethash.NewFaker(), b.database, 1, func(number int, block *core.BlockGen) {
-		for _, tx := range b.pendingBlock.Transactions() {
-			block.AddTx(tx)
-		}
 		block.OffsetTime(int64(adjustment.Seconds()))
 	})
 	statedb, _ := b.blockchain.State()

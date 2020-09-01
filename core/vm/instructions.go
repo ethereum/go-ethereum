@@ -563,7 +563,7 @@ func opJumpSub(pc *uint64, interpreter *EVMInterpreter, callContext *callCtx) ([
 	if !callContext.contract.validJumpSubdest(posU64) {
 		return nil, ErrInvalidJump
 	}
-	callContext.rstack.push(*pc)
+	callContext.rstack.push(uint32(*pc))
 	*pc = posU64 + 1
 	return nil, nil
 }
@@ -575,7 +575,7 @@ func opReturnSub(pc *uint64, interpreter *EVMInterpreter, callContext *callCtx) 
 	// Other than the check that the return stack is not empty, there is no
 	// need to validate the pc from 'returns', since we only ever push valid
 	//values onto it via jumpsub.
-	*pc = callContext.rstack.pop() + 1
+	*pc = uint64(callContext.rstack.pop()) + 1
 	return nil, nil
 }
 
@@ -608,7 +608,13 @@ func opCreate(pc *uint64, interpreter *EVMInterpreter, callContext *callCtx) ([]
 	stackvalue := size
 
 	callContext.contract.UseGas(gas)
-	res, addr, returnGas, suberr := interpreter.evm.Create(callContext.contract, input, gas, value.ToBig())
+	//TODO: use uint256.Int instead of converting with toBig()
+	var bigVal = big0
+	if !value.IsZero() {
+		bigVal = value.ToBig()
+	}
+
+	res, addr, returnGas, suberr := interpreter.evm.Create(callContext.contract, input, gas, bigVal)
 	// Push item on the stack based on the returned error. If the ruleset is
 	// homestead we must check for CodeStoreOutOfGasError (homestead only
 	// rule) and treat as an error, if the ruleset is frontier we must
@@ -643,8 +649,13 @@ func opCreate2(pc *uint64, interpreter *EVMInterpreter, callContext *callCtx) ([
 	callContext.contract.UseGas(gas)
 	// reuse size int for stackvalue
 	stackvalue := size
+	//TODO: use uint256.Int instead of converting with toBig()
+	bigEndowment := big0
+	if !endowment.IsZero() {
+		bigEndowment = endowment.ToBig()
+	}
 	res, addr, returnGas, suberr := interpreter.evm.Create2(callContext.contract, input, gas,
-		endowment.ToBig(), salt.ToBig())
+		bigEndowment, &salt)
 	// Push item on the stack based on the returned error.
 	if suberr != nil {
 		stackvalue.Clear()
@@ -672,10 +683,17 @@ func opCall(pc *uint64, interpreter *EVMInterpreter, callContext *callCtx) ([]by
 	// Get the arguments from the memory.
 	args := callContext.memory.GetPtr(int64(inOffset.Uint64()), int64(inSize.Uint64()))
 
+	var bigVal = big0
+	//TODO: use uint256.Int instead of converting with toBig()
+	// By using big0 here, we save an alloc for the most common case (non-ether-transferring contract calls),
+	// but it would make more sense to extend the usage of uint256.Int
 	if !value.IsZero() {
 		gas += params.CallStipend
+		bigVal = value.ToBig()
 	}
-	ret, returnGas, err := interpreter.evm.Call(callContext.contract, toAddr, args, gas, value.ToBig())
+
+	ret, returnGas, err := interpreter.evm.Call(callContext.contract, toAddr, args, gas, bigVal)
+
 	if err != nil {
 		temp.Clear()
 	} else {
@@ -702,10 +720,14 @@ func opCallCode(pc *uint64, interpreter *EVMInterpreter, callContext *callCtx) (
 	// Get arguments from the memory.
 	args := callContext.memory.GetPtr(int64(inOffset.Uint64()), int64(inSize.Uint64()))
 
+	//TODO: use uint256.Int instead of converting with toBig()
+	var bigVal = big0
 	if !value.IsZero() {
 		gas += params.CallStipend
+		bigVal = value.ToBig()
 	}
-	ret, returnGas, err := interpreter.evm.CallCode(callContext.contract, toAddr, args, gas, value.ToBig())
+
+	ret, returnGas, err := interpreter.evm.CallCode(callContext.contract, toAddr, args, gas, bigVal)
 	if err != nil {
 		temp.Clear()
 	} else {

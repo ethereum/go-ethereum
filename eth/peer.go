@@ -262,7 +262,7 @@ func (p *peer) announceTransactions(removePeer func(string)) {
 			queue = append(queue, hashes...)
 			if len(queue) > maxQueuedTxAnns {
 				// Fancy copy and resize to ensure buffer doesn't grow indefinitely
-				queue = queue[:copy(queue, queue[len(queue)-maxQueuedTxs:])]
+				queue = queue[:copy(queue, queue[len(queue)-maxQueuedTxAnns:])]
 			}
 
 		case <-done:
