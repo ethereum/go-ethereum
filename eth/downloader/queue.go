@@ -143,7 +143,7 @@ type queue struct {
 }
 
 // newQueue creates a new download queue for scheduling block retrieval.
-func newQueue(blockCacheLimit int, thresholdInitialSize uint64) *queue {
+func newQueue(blockCacheLimit int, thresholdInitialSize int) *queue {
 	lock := new(sync.RWMutex)
 	q := &queue{
 		headerContCh:     make(chan bool),
@@ -157,7 +157,7 @@ func newQueue(blockCacheLimit int, thresholdInitialSize uint64) *queue {
 }
 
 // Reset clears out the queue contents.
-func (q *queue) Reset(blockCacheLimit int, thresholdInitialSize uint64) {
+func (q *queue) Reset(blockCacheLimit int, thresholdInitialSize int) {
 	q.lock.Lock()
 	defer q.lock.Unlock()
 
@@ -176,7 +176,7 @@ func (q *queue) Reset(blockCacheLimit int, thresholdInitialSize uint64) {
 	q.receiptPendPool = make(map[string]*fetchRequest)
 
 	q.resultCache = newResultStore(blockCacheLimit)
-	q.resultCache.SetThrottleThreshold(thresholdInitialSize)
+	q.resultCache.SetThrottleThreshold(uint64(thresholdInitialSize))
 }
 
 // Close marks the end of the sync, unblocking Results.
