@@ -382,7 +382,7 @@ func (q *queue) Results(block bool) []*fetchResult {
 	throttleThreshold = q.resultCache.SetThrottleThreshold(throttleThreshold)
 
 	// Log some info at certain times
-	if time.Since(q.lastStatLog) > 10*time.Second {
+	if time.Since(q.lastStatLog) > 60*time.Second {
 		q.lastStatLog = time.Now()
 		info := q.Stats()
 		info = append(info, "throttle", throttleThreshold)
