@@ -32,7 +32,6 @@ import (
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/node"
 	"github.com/ethereum/go-ethereum/params"
-	"github.com/ethereum/whisper"
 	"github.com/naoina/toml"
 )
 
@@ -76,7 +75,6 @@ type ethstatsConfig struct {
 
 type gethConfig struct {
 	Eth      eth.Config
-	Shh      whisper.Config
 	Node     node.Config
 	Ethstats ethstatsConfig
 }
@@ -111,7 +109,6 @@ func makeConfigNode(ctx *cli.Context) (*node.Node, gethConfig) {
 	// Load defaults.
 	cfg := gethConfig{
 		Eth:  eth.DefaultConfig,
-		Shh:  whisper.DefaultConfig,
 		Node: defaultNodeConfig(),
 	}
 
@@ -132,7 +129,7 @@ func makeConfigNode(ctx *cli.Context) (*node.Node, gethConfig) {
 	if ctx.GlobalIsSet(utils.EthStatsURLFlag.Name) {
 		cfg.Ethstats.URL = ctx.GlobalString(utils.EthStatsURLFlag.Name)
 	}
-	utils.SetShhConfig(ctx, stack, &cfg.Shh)
+	utils.SetShhConfig(ctx, stack)
 
 	return stack, cfg
 }
