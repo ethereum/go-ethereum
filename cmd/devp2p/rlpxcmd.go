@@ -37,7 +37,7 @@ var (
 	}
 	rlpxPingCommand = cli.Command{
 		Name:      "ping",
-		Usage:     "Perform a RLPx Handshake",
+		Usage:     "Perform a RLPx handshake",
 		ArgsUsage: "<node>",
 		Action:    rlpxPing,
 	}

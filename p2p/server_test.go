@@ -18,7 +18,10 @@ package p2p
 
 import (
 	"crypto/ecdsa"
+	"crypto/sha256"
 	"errors"
+	"github.com/ethereum/go-ethereum/crypto/ecies"
+	"github.com/ethereum/go-ethereum/p2p/rlpx"
 	"io"
 	"math/rand"
 	"net"
@@ -34,20 +37,20 @@ import (
 )
 
 type testTransport struct {
-	rpub *ecdsa.PublicKey
 	*frameRW
-
+	rpub *ecdsa.PublicKey
 	closeErr error
 }
 
-func newTestTransport(rpub *ecdsa.PublicKey, fd net.Conn) transport {
-	wrapped := newRLPX(fd, nil).(*frameRW)
-	//wrapped.rw = newRLPXFrameRW(fd, secrets{
-	//	MAC:        zero16,
-	//	AES:        zero16,
-	//	IngressMAC: sha3.NewLegacyKeccak256(),
-	//	EgressMAC:  sha3.NewLegacyKeccak256(),
-	//})
+func newTestTransport(rpub *ecdsa.PublicKey, fd net.Conn, dialDest *ecdsa.PublicKey) transport {
+	wrapped := newRLPX(fd, dialDest).(*frameRW)
+	wrapped.rlpx.InitWithSecrets(rlpx.Secrets{
+		Remote:     ecies.ImportECDSAPublic(rpub),
+		AES:        make([]byte, 16),
+		MAC:        make([]byte, 16),
+		EgressMAC:  sha256.New(),
+		IngressMAC: sha256.New(),
+	})
 	return &testTransport{rpub: rpub, frameRW: wrapped}
 }
 
@@ -61,7 +64,7 @@ func (c *testTransport) doProtoHandshake(our *protoHandshake) (*protoHandshake, 
 }
 
 func (c *testTransport) close(err error) {
-	c.frameRW.close(err)
+	c.frameRW.rlpx.Close()
 	c.closeErr = err
 }
 
@@ -77,7 +80,9 @@ func startTestServer(t *testing.T, remoteKey *ecdsa.PublicKey, pf func(*Peer)) *
 	server := &Server{
 		Config:       config,
 		newPeerHook:  pf,
-		newTransport: func(fd net.Conn, dialDest *ecdsa.PublicKey) transport { return newTestTransport(remoteKey, fd) },
+		newTransport: func(fd net.Conn, dialDest *ecdsa.PublicKey) transport {
+			return newTestTransport(remoteKey, fd, dialDest)
+		},
 	}
 	if err := server.Start(); err != nil {
 		t.Fatalf("Could not start server: %v", err)
@@ -252,7 +257,7 @@ func TestServerAtCap(t *testing.T) {
 
 	newconn := func(id enode.ID) *conn {
 		fd, _ := net.Pipe()
-		tx := newTestTransport(&trustedNode.PublicKey, fd)
+		tx := newTestTransport(&trustedNode.PublicKey, fd, nil)
 		node := enode.SignNull(new(enr.Record), id)
 		return &conn{fd: fd, transport: tx, flags: inboundConn, node: node, cont: make(chan error)}
 	}

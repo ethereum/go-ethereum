@@ -16,7 +16,6 @@ import (
 	"io/ioutil"
 	mrand "math/rand"
 	"net"
-	"sync"
 	"time"
 
 	"github.com/ethereum/go-ethereum/crypto"
@@ -27,19 +26,13 @@ import (
 )
 
 type Conn struct {
-	rmu, wmu sync.Mutex
-
 	dialDest *ecdsa.PublicKey // determines whether conn is server or client type
-
 	conn net.Conn
-
-	handshake *Handshake
-
-	snappy bool // TODO is this ok?
+	handshake *handshakeState
+	snappy bool
 }
 
-type Handshake struct {
-	conn io.ReadWriter
+type handshakeState struct {
 	enc  cipher.Stream
 	dec  cipher.Stream
 
@@ -48,25 +41,18 @@ type Handshake struct {
 	ingressMAC hash.Hash
 }
 
-func NewConn(conn net.Conn, dialDest *ecdsa.PublicKey) *Conn { // TODO will need prvKey
+func NewConn(conn net.Conn, dialDest *ecdsa.PublicKey) *Conn {
 	return &Conn{
 		dialDest: dialDest,
 		conn:     conn,
-		handshake: new(Handshake),
 	}
 }
 
 func (c *Conn) SetSnappy(snappy bool) {
-	c.wmu.Lock()
-	defer c.wmu.Unlock()
-
 	c.snappy = snappy
 }
 
 func (c *Conn) SetReadDeadline(time time.Time) error {
-	c.rmu.Lock()
-	defer c.rmu.Unlock()
-
 	return c.conn.SetReadDeadline(time)
 }
 
@@ -81,8 +67,9 @@ func (c *Conn) Read() (code uint64, data []byte, err error) {
 }
 
 func (c *Conn) ReadMsg() (code uint64, size uint32, payload io.Reader, err error) {
-	c.rmu.Lock()
-	defer c.rmu.Unlock()
+	if c.handshake == nil {
+		panic("can't ReadMsg before handshake")
+	}
 
 	// read the header
 	headbuf := make([]byte, 32)
@@ -159,15 +146,13 @@ func readInt24(b []byte) uint32 {
 }
 
 func (c *Conn) SetWriteDeadline(time time.Time) error {
-	c.wmu.Lock()
-	defer c.wmu.Unlock()
-
 	return c.conn.SetWriteDeadline(time)
 }
 
 func (c *Conn) WriteMsg(code uint64, size uint32, payload io.Reader) (uint32, error) {
-	c.wmu.Lock()
-	defer c.wmu.Unlock()
+	if c.handshake == nil {
+		panic("can't WriteMsg before handshake")
+	}
 
 	ptype, _ := rlp.EncodeToBytes(code)
 
@@ -186,6 +171,7 @@ func (c *Conn) WriteMsg(code uint64, size uint32, payload io.Reader) (uint32, er
 	}
 	putInt24(fsize, headbuf)
 	copy(headbuf[3:], zeroHeader)
+
 	c.handshake.enc.XORKeyStream(headbuf[:16], headbuf[:16]) // first half is now encrypted
 
 	// write header MAC
@@ -257,33 +243,37 @@ func (c *Conn) Handshake(prv *ecdsa.PrivateKey) (*ecdsa.PublicKey, error) { // T
 	if err != nil {
 		return nil, err
 	}
+	c.InitWithSecrets(sec)
+	return sec.Remote.ExportECDSA(), err
+}
+
+func (c *Conn) InitWithSecrets(sec Secrets) {
+	if c.handshake != nil {
+		panic("can't handshake twice")
+	}
 
 	macc, err := aes.NewCipher(sec.MAC)
 	if err != nil {
 		panic("invalid MAC secret: " + err.Error())
 	}
-	c.handshake.macCipher = macc
-
 	encc, err := aes.NewCipher(sec.AES)
 	if err != nil {
 		panic("invalid AES secret: " + err.Error())
 	}
+
 	// we use an all-zeroes IV for AES because the key used
 	// for encryption is ephemeral.
 	iv := make([]byte, encc.BlockSize())
-	c.handshake.enc = cipher.NewCTR(encc, iv)
-	c.handshake.dec = cipher.NewCTR(encc, iv)
-
-	c.handshake.egressMAC = sec.EgressMAC
-	c.handshake.ingressMAC = sec.IngressMAC
-
-	return sec.Remote.ExportECDSA(), err
+	c.handshake = &handshakeState{
+		enc:        cipher.NewCTR(encc, iv),
+		dec:        cipher.NewCTR(encc, iv),
+		macCipher:  macc,
+		egressMAC:  sec.EgressMAC,
+		ingressMAC: sec.IngressMAC,
+	}
 }
 
 func (c *Conn) Close() error {
-	c.wmu.Lock()
-	defer c.wmu.Unlock()
-
 	return c.conn.Close()
 }
 

@@ -71,6 +71,7 @@ func newRLPX(conn net.Conn, dialDest *ecdsa.PublicKey) transport {
 func (t *frameRW) ReadMsg() (Msg, error) {
 	t.rmu.Lock()
 	defer t.rmu.Unlock()
+
 	t.rlpx.SetReadDeadline(time.Now().Add(frameReadTimeout))
 
 	var (
@@ -80,7 +81,7 @@ func (t *frameRW) ReadMsg() (Msg, error) {
 
 	msg.Code, msg.Size, msg.Payload, err = t.rlpx.ReadMsg()
 	msg.meterSize = msg.Size
-	// TODO how to get msg.ReceivedAt?
+	msg.ReceivedAt = time.Now()
 
 	return msg, err
 }
@@ -88,6 +89,7 @@ func (t *frameRW) ReadMsg() (Msg, error) {
 func (t *frameRW) WriteMsg(msg Msg) error {
 	t.wmu.Lock()
 	defer t.wmu.Unlock()
+
 	t.rlpx.SetWriteDeadline(time.Now().Add(frameWriteTimeout))
 	// write message
 	size, err := t.rlpx.WriteMsg(msg.Code, msg.Size, msg.Payload)
@@ -107,6 +109,7 @@ func (t *frameRW) WriteMsg(msg Msg) error {
 func (t *frameRW) close(err error) {
 	t.wmu.Lock()
 	defer t.wmu.Unlock()
+
 	// Tell the remote end why we're disconnecting if possible.
 	if t.rlpx != nil {
 		if r, ok := err.(DiscReason); ok && r != DiscNetworkError {
@@ -115,8 +118,10 @@ func (t *frameRW) close(err error) {
 			// it hangs forever, since net.Pipe does not implement
 			// a write deadline. Because of this only try to send
 			// the disconnect reason message if there is no error.
-			if err := t.rlpx.SetWriteDeadline(time.Now().Add(discWriteTimeout)); err == nil {
-				SendItems(t, discMsg, r)
+			deadline := time.Now().Add(discWriteTimeout)
+			if err := t.rlpx.SetWriteDeadline(deadline); err == nil {
+				size, data, _ := rlp.EncodeToReader([]interface{}{r})
+				t.rlpx.WriteMsg(discMsg, uint32(size), data)
 			}
 		}
 	}

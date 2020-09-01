@@ -67,7 +67,7 @@ func TestConn_ReadWriteMsg(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	assert.Equal(t, "success", string(buf[1:8])) // TODO janky
+	assert.Equal(t, "success", string(buf[1:8]))
 }
 
 func doHandshake(t *testing.T, peer1, peer2 *Conn, key1, key2 *ecdsa.PrivateKey) {
@@ -90,7 +90,7 @@ func doHandshake(t *testing.T, peer1, peer2 *Conn, key1, key2 *ecdsa.PrivateKey)
 
 	// confirm successful handshake
 	if !assert.Equal(t, pubKey1, &key1.PublicKey) || !assert.Equal(t, pubKey2, &key2.PublicKey) {
-		t.Fatal("unsuccessful handshake") // TODO err message
+		t.Fatal("unsuccessful handshake")
 	}
 }
 
