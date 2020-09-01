@@ -250,7 +250,9 @@ func runSubTasks(in chan subTask, out chan error, stop chan struct{}) {
 		}
 		if task.root != root {
 			done <- fmt.Errorf("invalid subroot(%x), want %x, got %x", task.account, task.root, root)
+			return
 		}
+		done <- nil
 	}
 	for {
 		select {
@@ -327,6 +329,9 @@ func generateTrieRoot(db ethdb.Database, it Iterator, account common.Hash, gener
 		subStop chan struct{}
 	)
 	if leafCallback != nil {
+		// The channel size here is quite arbitrary. We don't
+		// want to block the main thread for iterating the state
+		// trie, but also need to prevent OOM.
 		subIn = make(chan subTask, 1024)
 		subOut = make(chan error, 1)
 		subStop = make(chan struct{})
