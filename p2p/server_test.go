@@ -20,8 +20,6 @@ import (
 	"crypto/ecdsa"
 	"crypto/sha256"
 	"errors"
-	"github.com/ethereum/go-ethereum/crypto/ecies"
-	"github.com/ethereum/go-ethereum/p2p/rlpx"
 	"io"
 	"math/rand"
 	"net"
@@ -30,15 +28,17 @@ import (
 	"time"
 
 	"github.com/ethereum/go-ethereum/crypto"
+	"github.com/ethereum/go-ethereum/crypto/ecies"
 	"github.com/ethereum/go-ethereum/internal/testlog"
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/p2p/enode"
 	"github.com/ethereum/go-ethereum/p2p/enr"
+	"github.com/ethereum/go-ethereum/p2p/rlpx"
 )
 
 type testTransport struct {
 	*frameRW
-	rpub *ecdsa.PublicKey
+	rpub     *ecdsa.PublicKey
 	closeErr error
 }
 
@@ -78,8 +78,8 @@ func startTestServer(t *testing.T, remoteKey *ecdsa.PublicKey, pf func(*Peer)) *
 		Logger:      testlog.Logger(t, log.LvlTrace),
 	}
 	server := &Server{
-		Config:       config,
-		newPeerHook:  pf,
+		Config:      config,
+		newPeerHook: pf,
 		newTransport: func(fd net.Conn, dialDest *ecdsa.PublicKey) transport {
 			return newTestTransport(remoteKey, fd, dialDest)
 		},

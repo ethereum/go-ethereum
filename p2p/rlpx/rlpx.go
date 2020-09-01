@@ -42,15 +42,15 @@ import (
 )
 
 type Conn struct {
-	dialDest *ecdsa.PublicKey // determines whether conn is server or client type
-	conn net.Conn
+	dialDest  *ecdsa.PublicKey // determines whether conn is server or client type
+	conn      net.Conn
 	handshake *handshakeState
-	snappy bool
+	snappy    bool
 }
 
 type handshakeState struct {
-	enc  cipher.Stream
-	dec  cipher.Stream
+	enc cipher.Stream
+	dec cipher.Stream
 
 	macCipher  cipher.Block
 	egressMAC  hash.Hash

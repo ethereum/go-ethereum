@@ -18,19 +18,20 @@ package rlpx
 
 import (
 	"crypto/ecdsa"
-	"github.com/ethereum/go-ethereum/crypto"
-	"github.com/ethereum/go-ethereum/rlp"
-	"github.com/stretchr/testify/assert"
 	"io"
 	"net"
 	"testing"
+
+	"github.com/ethereum/go-ethereum/crypto"
+	"github.com/ethereum/go-ethereum/rlp"
+	"github.com/stretchr/testify/assert"
 )
 
 type testRLPXMsg struct {
-	code uint64
-	size uint32
+	code    uint64
+	size    uint32
 	payload io.Reader
-	err error
+	err     error
 }
 
 func TestConn_Handshake(t *testing.T) {
@@ -41,7 +42,7 @@ func TestConn_Handshake(t *testing.T) {
 	key2 := newkey()
 
 	peer1 := NewConn(conn1, &key2.PublicKey) // dialer
-	peer2 := NewConn(conn2, nil) // listener
+	peer2 := NewConn(conn2, nil)             // listener
 
 	doHandshake(t, peer1, peer2, key1, key2)
 }
@@ -54,7 +55,7 @@ func TestConn_ReadWriteMsg(t *testing.T) {
 	key2 := newkey()
 
 	peer1 := NewConn(conn1, &key2.PublicKey) // dialer
-	peer2 := NewConn(conn2, nil) // listener
+	peer2 := NewConn(conn2, nil)             // listener
 
 	doHandshake(t, peer1, peer2, key1, key2)
 
@@ -76,7 +77,7 @@ func TestConn_ReadWriteMsg(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	msg := <- msgChan
+	msg := <-msgChan
 
 	buf := make([]byte, 8)
 	if _, err := msg.payload.Read(buf); err != nil {
@@ -102,7 +103,7 @@ func doHandshake(t *testing.T, peer1, peer2 *Conn, key1, key2 *ecdsa.PrivateKey)
 		t.Fatalf("peer1 could not do handshake: %v", err)
 	}
 
-	pubKey1 := <- keyChan
+	pubKey1 := <-keyChan
 
 	// confirm successful handshake
 	if !assert.Equal(t, pubKey1, &key1.PublicKey) || !assert.Equal(t, pubKey2, &key2.PublicKey) {
