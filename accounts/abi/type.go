@@ -386,7 +386,7 @@ func isDynamicType(t Type) bool {
 func getTypeSize(t Type) int {
 	if t.T == ArrayTy && !isDynamicType(*t.Elem) {
 		// Recursively calculate type size if it is a nested array
-		if t.Elem.T == ArrayTy {
+		if t.Elem.T == ArrayTy || t.Elem.T == TupleTy {
 			return t.Size * getTypeSize(*t.Elem)
 		}
 		return t.Size * 32
