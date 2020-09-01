@@ -229,7 +229,7 @@ func updateMAC(mac hash.Hash, block cipher.Block, seed []byte) []byte {
 	return mac.Sum(nil)[:16]
 }
 
-func (c *Conn) Handshake(prv *ecdsa.PrivateKey) (*ecdsa.PublicKey, error) { // TODO probs dont need to return secrets..
+func (c *Conn) Handshake(prv *ecdsa.PrivateKey) (*ecdsa.PublicKey, error) {
 	var (
 		sec Secrets
 		err error
