@@ -19,6 +19,7 @@ package bind
 import (
 	"crypto/ecdsa"
 	"errors"
+	"fmt"
 	"io"
 	"io/ioutil"
 	"math/big"
@@ -33,7 +34,10 @@ import (
 
 // NewTransactor is a utility method to easily create a transaction signer from
 // an encrypted json key stream and the associated passphrase.
-func NewTransactor(keyin io.Reader, passphrase string, chainID *big.Int) (*TransactOpts, error) {
+//
+// WARNING: NewTransactor has been deprecated in favour of NewTransactorWithChainID.
+func NewTransactor(keyin io.Reader, passphrase string) (*TransactOpts, error) {
+	fmt.Println("WARNING: NewTransactor has been deprecated in favour of NewTransactorWithChainID")
 	json, err := ioutil.ReadAll(keyin)
 	if err != nil {
 		return nil, err
@@ -42,12 +46,71 @@ func NewTransactor(keyin io.Reader, passphrase string, chainID *big.Int) (*Trans
 	if err != nil {
 		return nil, err
 	}
-	return NewKeyedTransactor(key.PrivateKey, chainID), nil
+	return NewKeyedTransactor(key.PrivateKey), nil
 }
 
 // NewKeyStoreTransactor is a utility method to easily create a transaction signer from
 // an decrypted key from a keystore.
-func NewKeyStoreTransactor(keystore *keystore.KeyStore, account accounts.Account, chainID *big.Int) (*TransactOpts, error) {
+//
+// WARNING: NewKeyStoreTransactor has been deprecated in favour of NewTransactorWithChainID.
+func NewKeyStoreTransactor(keystore *keystore.KeyStore, account accounts.Account) (*TransactOpts, error) {
+	fmt.Println("WARNING: NewKeyStoreTransactor has been deprecated in favour of NewTransactorWithChainID")
+	signer := types.HomesteadSigner{}
+	return &TransactOpts{
+		From: account.Address,
+		Signer: func(address common.Address, tx *types.Transaction) (*types.Transaction, error) {
+			if address != account.Address {
+				return nil, errors.New("not authorized to sign this account")
+			}
+			signature, err := keystore.SignHash(account, signer.Hash(tx).Bytes())
+			if err != nil {
+				return nil, err
+			}
+			return tx.WithSignature(signer, signature)
+		},
+	}, nil
+}
+
+// NewKeyedTransactor is a utility method to easily create a transaction signer
+// from a single private key.
+//
+// WARNING: NewKeyedTransactor has been deprecated in favour of NewKeyedTransactorWithChainID.
+func NewKeyedTransactor(key *ecdsa.PrivateKey) *TransactOpts {
+	fmt.Println("WARNING: NewKeyedTransactor has been deprecated in favour of NewKeyedTransactorWithChainID")
+	keyAddr := crypto.PubkeyToAddress(key.PublicKey)
+	signer := types.HomesteadSigner{}
+	return &TransactOpts{
+		From: keyAddr,
+		Signer: func(address common.Address, tx *types.Transaction) (*types.Transaction, error) {
+			if address != keyAddr {
+				return nil, errors.New("not authorized to sign this account")
+			}
+			signature, err := crypto.Sign(signer.Hash(tx).Bytes(), key)
+			if err != nil {
+				return nil, err
+			}
+			return tx.WithSignature(signer, signature)
+		},
+	}
+}
+
+// NewTransactorWithChainID is a utility method to easily create a transaction signer from
+// an encrypted json key stream and the associated passphrase.
+func NewTransactorWithChainID(keyin io.Reader, passphrase string, chainID *big.Int) (*TransactOpts, error) {
+	json, err := ioutil.ReadAll(keyin)
+	if err != nil {
+		return nil, err
+	}
+	key, err := keystore.DecryptKey(json, passphrase)
+	if err != nil {
+		return nil, err
+	}
+	return NewKeyedTransactorWithChainID(key.PrivateKey, chainID), nil
+}
+
+// NewKeyStoreTransactorWithChainID is a utility method to easily create a transaction signer from
+// an decrypted key from a keystore
+func NewKeyStoreTransactorWithChainID(keystore *keystore.KeyStore, account accounts.Account, chainID *big.Int) (*TransactOpts, error) {
 	if chainID == nil {
 		// If no chainID is explicitly passed, sign for mainnet
 		chainID = common.Big1
@@ -68,9 +131,9 @@ func NewKeyStoreTransactor(keystore *keystore.KeyStore, account accounts.Account
 	}, nil
 }
 
-// NewKeyedTransactor is a utility method to easily create a transaction signer
+// NewKeyedTransactorWithChainID is a utility method to easily create a transaction signer
 // from a single private key.
-func NewKeyedTransactor(key *ecdsa.PrivateKey, chainID *big.Int) *TransactOpts {
+func NewKeyedTransactorWithChainID(key *ecdsa.PrivateKey, chainID *big.Int) *TransactOpts {
 	keyAddr := crypto.PubkeyToAddress(key.PublicKey)
 	if chainID == nil {
 		// If no chainID is explicitly passed, sign for mainnet

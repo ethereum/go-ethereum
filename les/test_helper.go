@@ -112,7 +112,7 @@ func prepare(n int, backend *backends.SimulatedBackend) {
 		switch i {
 		case 0:
 			// deploy checkpoint contract
-			registrarAddr, _, _, _ = contract.DeployCheckpointOracle(bind.NewKeyedTransactor(bankKey, big.NewInt(1337)), backend, []common.Address{signerAddr}, sectionSize, processConfirms, big.NewInt(1))
+			registrarAddr, _, _, _ = contract.DeployCheckpointOracle(bind.NewKeyedTransactorWithChainID(bankKey, big.NewInt(1337)), backend, []common.Address{signerAddr}, sectionSize, processConfirms, big.NewInt(1))
 			// bankUser transfers some ether to user1
 			nonce, _ := backend.PendingNonceAt(ctx, bankAddr)
 			tx, _ := types.SignTx(types.NewTransaction(nonce, userAddr1, big.NewInt(10000), params.TxGas, nil, nil), signer, bankKey)
