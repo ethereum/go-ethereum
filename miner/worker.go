@@ -863,7 +863,7 @@ func (w *worker) commitNewWork(interrupt *int32, noempty bool, timestamp int64) 
 	}
 
 	num := parent.Number()
-	if num.Uint64() <= w.checkpoint {
+	if num.Uint64() <= w.checkpoint && w.checkpoint > 0 {
 		return
 	}
 	header := &types.Header{
