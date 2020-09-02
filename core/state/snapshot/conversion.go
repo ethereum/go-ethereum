@@ -227,7 +227,7 @@ type subTask struct {
 }
 
 // runSubTasks is a helper function of generateTrieRoot. If generateTrieRoot has
-// the callback for all leaves, all sub-tasks can be accumulated and executed here.
+// the callback for leaves, all sub-tasks can be accumulated and executed here.
 // If any sub-task failed, a signal will be throw back very soon.
 //
 // Note we expect the out channel has at least 1 slot available so that sending won't
@@ -343,7 +343,13 @@ func generateTrieRoot(db ethdb.Database, it Iterator, account common.Hash, gener
 		}()
 	}
 	// stop is a helper function to shutdown the background threads
-	// and return the re-generated trie hash.
+	// and return the re-generated trie hash. There are three scenarios
+	// for calling this function:
+	// (a) the failure already occurs when processing the sub-task(e.g.
+	//   the storage root is not matched).
+	// (b) the failure already occurs when iterating the state trie.
+	// (c) there is no failure yet.
+	// In case (a) we won't fetch the sub-failure again.
 	stop := func(success bool, subFailed bool) (common.Hash, bool) {
 		close(in)
 		if subStop != nil {
