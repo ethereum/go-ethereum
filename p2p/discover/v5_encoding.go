@@ -100,6 +100,7 @@ const (
 )
 
 var (
+	sizeofMaskingIV           = 16
 	sizeofPacketHeaderV5      = binary.Size(packetHeaderV5{})
 	sizeofWhoareyouAuthDataV5 = binary.Size(whoareyouAuthDataV5{})
 	sizeofHandshakeAuthDataV5 = binary.Size(handshakeAuthDataV5{}.h)
@@ -453,11 +454,11 @@ func (c *wireCodec) decode(input []byte, addr string) (src enode.ID, n *enode.No
 	c.sc.handshakeGC()
 
 	// Unmask the header.
-	if len(input) < sizeofPacketHeaderV5+maskIVSize {
+	if len(input) < sizeofPacketHeaderV5+sizeofMaskingIV {
 		return enode.ID{}, nil, nil, errTooShort
 	}
 	mask := headerMask(c.localnode.ID(), input)
-	input = input[maskIVSize:]
+	input = input[sizeofMaskingIV:]
 	headerData := input[:sizeofPacketHeaderV5]
 	mask.XORKeyStream(headerData, headerData)
 
@@ -803,23 +804,21 @@ func decryptGCM(key, nonce, ct, authData []byte) ([]byte, error) {
 	return aesgcm.Open(pt, nonce, ct, authData)
 }
 
-// header masking
-
-const maskIVSize = 16
-
+// headerMask returns a cipher for 'masking' / 'unmasking' packet headers.
 func headerMask(destID enode.ID, input []byte) cipher.Stream {
 	block, err := aes.NewCipher(destID[:16])
 	if err != nil {
 		panic("can't create cipher")
 	}
-	return cipher.NewCTR(block, input[:maskIVSize])
+	return cipher.NewCTR(block, input[:sizeofMaskingIV])
 }
 
+// maskOutputPacket applies protocol header masking to a packet sent to destID.
 func maskOutputPacket(destID enode.ID, output []byte, headerDataLen int) []byte {
-	masked := make([]byte, maskIVSize+len(output))
-	crand.Read(masked[:maskIVSize])
+	masked := make([]byte, sizeofMaskingIV+len(output))
+	crand.Read(masked[:sizeofMaskingIV])
 	mask := headerMask(destID, masked)
-	copy(masked[maskIVSize:], output)
-	mask.XORKeyStream(masked[maskIVSize:], output[:headerDataLen])
+	copy(masked[sizeofMaskingIV:], output)
+	mask.XORKeyStream(masked[sizeofMaskingIV:], output[:headerDataLen])
 	return masked
 }
