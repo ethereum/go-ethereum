@@ -147,8 +147,12 @@ func TestUDPv5_findnodeHandling(t *testing.T) {
 	defer test.close()
 
 	// Create test nodes and insert them into the table.
-	nodes := nodesAtDistance(test.table.self().ID(), 253, 10)
-	fillTable(test.table, wrapNodes(nodes))
+	nodes253 := nodesAtDistance(test.table.self().ID(), 253, 10)
+	nodes249 := nodesAtDistance(test.table.self().ID(), 249, 4)
+	nodes248 := nodesAtDistance(test.table.self().ID(), 248, 10)
+	fillTable(test.table, wrapNodes(nodes253))
+	fillTable(test.table, wrapNodes(nodes249))
+	fillTable(test.table, wrapNodes(nodes248))
 
 	// Requesting with distance zero should return the node's own record.
 	test.packetIn(&findnodeV5{ReqID: []byte{0}, Distances: []uint{0}})
@@ -166,9 +170,17 @@ func TestUDPv5_findnodeHandling(t *testing.T) {
 	test.packetIn(&findnodeV5{ReqID: []byte{3}, Distances: []uint{254}})
 	test.expectNodes([]byte{3}, 1, nil)
 
-	// This request gets all test nodes.
+	// This request gets all the distance-253 nodes.
 	test.packetIn(&findnodeV5{ReqID: []byte{4}, Distances: []uint{253}})
-	test.expectNodes([]byte{4}, 4, nodes)
+	test.expectNodes([]byte{4}, 4, nodes253)
+
+	// This request gets all the distance-249 nodes and some more at 248 because
+	// the bucket at 249 is not full.
+	test.packetIn(&findnodeV5{ReqID: []byte{5}, Distances: []uint{249, 248}})
+	var nodes []*enode.Node
+	nodes = append(nodes, nodes249...)
+	nodes = append(nodes, nodes248[:10]...)
+	test.expectNodes([]byte{5}, 5, nodes)
 }
 
 func (test *udpV5Test) expectNodes(wantReqID []byte, wantTotal uint8, wantNodes []*enode.Node) {
