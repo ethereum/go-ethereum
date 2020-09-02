@@ -45,7 +45,7 @@ var (
 var runCommand = cli.Command{
 	Action:      runCmd,
 	Name:        "run",
-	Usage:       "run and arbitrary ewasm module",
+	Usage:       "run an arbitrary ewasm module",
 	ArgsUsage:   "<module name> <input> <gas>",
 	Description: `The run command runs an arbitrary ewasm module.`,
 }
