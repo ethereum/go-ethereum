@@ -398,6 +398,7 @@ func (s *serverPool) updateWeight(node *enode.Node, totalValue float64, totalDia
 	} else {
 		s.ns.SetStateSub(node, nodestate.Flags{}, sfHasValue, 0)
 		s.ns.SetFieldSub(node, sfiNodeWeight, nil)
+		s.ns.SetFieldSub(node, sfiNodeHistory, nil)
 	}
 	s.ns.Persist(node) // saved if node history or hasValue changed
 }
