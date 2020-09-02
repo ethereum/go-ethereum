@@ -149,12 +149,11 @@ func NewPriorityPool(ns *nodestate.NodeStateMachine, setup PriorityPoolSetup, cl
 			ns.SetFieldSub(node, pp.ppNodeInfoField, c)
 		} else {
 			ns.SetStateSub(node, nodestate.Flags{}, pp.ActiveFlag.Or(pp.InactiveFlag), 0)
+			if n, _ := pp.ns.GetField(node, pp.ppNodeInfoField).(*ppNodeInfo); n != nil {
+				pp.disconnectedNode(n)
+			}
+			ns.SetFieldSub(node, pp.CapacityField, nil)
 			ns.SetFieldSub(node, pp.ppNodeInfoField, nil)
-		}
-	})
-	ns.SubscribeField(pp.ppNodeInfoField, func(node *enode.Node, state nodestate.Flags, oldValue, newValue interface{}) {
-		if newValue == nil {
-			pp.disconnectedNode(oldValue.(*ppNodeInfo))
 		}
 	})
 	ns.SubscribeState(pp.ActiveFlag.Or(pp.InactiveFlag), func(node *enode.Node, oldState, newState nodestate.Flags) {
@@ -446,12 +445,14 @@ type capUpdate struct {
 // Note: this function should run inside a NodeStateMachine operation
 func (pp *PriorityPool) updateFlags(updates []capUpdate) {
 	for _, f := range updates {
-		pp.ns.SetFieldSub(f.node, pp.CapacityField, f.newCap)
 		if f.oldCap == 0 {
 			pp.ns.SetStateSub(f.node, pp.ActiveFlag, pp.InactiveFlag, 0)
 		}
 		if f.newCap == 0 {
 			pp.ns.SetStateSub(f.node, pp.InactiveFlag, pp.ActiveFlag, 0)
+			pp.ns.SetFieldSub(f.node, pp.CapacityField, nil)
+		} else {
+			pp.ns.SetFieldSub(f.node, pp.CapacityField, f.newCap)
 		}
 	}
 }

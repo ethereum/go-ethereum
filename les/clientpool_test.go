@@ -82,9 +82,6 @@ func (i *poolTestPeer) freeClientId() string {
 
 func (i *poolTestPeer) updateCapacity(cap uint64) {
 	i.cap = cap
-	/*if cap == 0 && i.disconnCh != nil {
-		i.disconnCh <- i.index
-	}*/
 }
 
 func (i *poolTestPeer) freeze() {}
@@ -96,14 +93,12 @@ func (i *poolTestPeer) allowInactive() bool {
 func getBalance(pool *clientPool, p *poolTestPeer) (pos, neg uint64) {
 	temp := pool.ns.GetField(p.node, clientField) == nil
 	if temp {
-		pool.ns.SetState(p.node, clientFlag, nodestate.Flags{}, 0)
 		pool.ns.SetField(p.node, connAddressField, p.freeClientId())
 	}
 	n, _ := pool.ns.GetField(p.node, pool.BalanceField).(*lps.NodeBalance)
 	pos, neg = n.GetBalance()
 	if temp {
 		pool.ns.SetField(p.node, connAddressField, nil)
-		pool.ns.SetState(p.node, nodestate.Flags{}, clientFlag, 0)
 	}
 	return
 }
