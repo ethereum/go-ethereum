@@ -937,7 +937,7 @@ func (srv *Server) setupConn(c *conn, flags connFlag, dialDest *enode.Node) erro
 		return errServerStopped
 	}
 
-	// If dialing, figure out the remote public key. // TODO move this into rlpx
+	// If dialing, figure out the remote public key.
 
 	var dialPubkey *ecdsa.PublicKey
 	if dialDest != nil {
