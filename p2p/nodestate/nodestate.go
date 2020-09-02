@@ -135,11 +135,12 @@ type (
 
 	// nodeInfo contains node state, fields and state timeouts
 	nodeInfo struct {
-		node      *enode.Node
-		state     bitMask
-		timeouts  []*nodeStateTimeout
-		fields    []interface{}
-		db, dirty bool
+		node       *enode.Node
+		state      bitMask
+		timeouts   []*nodeStateTimeout
+		fields     []interface{}
+		fieldCount int
+		db, dirty  bool
 	}
 
 	nodeInfoEnc struct {
@@ -490,6 +491,7 @@ func (ns *NodeStateMachine) decodeNode(id enode.ID, data []byte) {
 		if decode := ns.fields[i].decode; decode != nil {
 			if field, err := decode(encField); err == nil {
 				node.fields[i] = field
+				node.fieldCount++
 			} else {
 				log.Error("Failed to decode node field", "id", id, "field name", ns.fields[i].name, "error", err)
 				return
@@ -518,15 +520,6 @@ func (ns *NodeStateMachine) saveNode(id enode.ID, node *nodeInfo) error {
 	for _, t := range node.timeouts {
 		storedState &= ^t.mask
 	}
-	if storedState == 0 {
-		if node.db {
-			node.db = false
-			ns.deleteNode(id)
-		}
-		node.dirty = false
-		return nil
-	}
-
 	enc := nodeInfoEnc{
 		Enr:     *node.node.Record(),
 		Version: ns.setup.Version,
@@ -549,6 +542,14 @@ func (ns *NodeStateMachine) saveNode(id enode.ID, node *nodeInfo) error {
 		}
 		enc.Fields[i] = blob
 		lastIndex = i
+	}
+	if storedState == 0 && lastIndex == -1 {
+		if node.db {
+			node.db = false
+			ns.deleteNode(id)
+		}
+		node.dirty = false
+		return nil
 	}
 	enc.Fields = enc.Fields[:lastIndex+1]
 	data, err := rlp.EncodeToBytes(&enc)
@@ -654,15 +655,14 @@ func (ns *NodeStateMachine) setState(n *enode.Node, setFlags, resetFlags Flags, 
 	// even they are not existent(it's noop).
 	ns.removeTimeouts(node, set|reset)
 
-	// Register the timeout callback if the new state is not empty
-	// and timeout itself is required.
-	if timeout != 0 && newState != 0 {
+	// Register the timeout callback if required
+	if timeout != 0 && set != 0 {
 		ns.addTimeout(n, set, timeout)
 	}
 	if newState == oldState {
 		return
 	}
-	if newState == 0 {
+	if newState == 0 && node.fieldCount == 0 {
 		delete(ns.nodes, id)
 		if node.db {
 			ns.deleteNode(id)
@@ -676,21 +676,6 @@ func (ns *NodeStateMachine) setState(n *enode.Node, setFlags, resetFlags Flags, 
 		for _, sub := range ns.stateSubs {
 			if changed&sub.mask != 0 {
 				sub.callback(n, Flags{mask: oldState & sub.mask, setup: ns.setup}, Flags{mask: newState & sub.mask, setup: ns.setup})
-			}
-		}
-		if newState != 0 {
-			return
-		}
-		// call field subscriptions for discarded fields
-		for i, v := range node.fields {
-			if v == nil {
-				continue
-			}
-			f := ns.fields[i]
-			if len(f.subs) > 0 {
-				for _, cb := range f.subs {
-					cb(n, Flags{setup: ns.setup}, v, nil)
-				}
 			}
 		}
 	}
@@ -886,9 +871,13 @@ func (ns *NodeStateMachine) setField(n *enode.Node, field Field, value interface
 	if ns.stopped {
 		return nil
 	}
-	_, node := ns.updateEnode(n)
+	id, node := ns.updateEnode(n)
 	if node == nil {
-		return nil
+		if value == nil {
+			return nil
+		}
+		node = ns.newNode(n)
+		ns.nodes[id] = node
 	}
 	fieldIndex := ns.fieldIndex(field)
 	f := ns.fields[fieldIndex]
@@ -900,11 +889,23 @@ func (ns *NodeStateMachine) setField(n *enode.Node, field Field, value interface
 	if value == oldValue {
 		return nil
 	}
-	node.fields[fieldIndex] = value
-	if f.encode != nil {
-		node.dirty = true
+	if oldValue != nil {
+		node.fieldCount--
 	}
-
+	if value != nil {
+		node.fieldCount++
+	}
+	node.fields[fieldIndex] = value
+	if node.state == 0 && node.fieldCount == 0 {
+		delete(ns.nodes, id)
+		if node.db {
+			ns.deleteNode(id)
+		}
+	} else {
+		if f.encode != nil {
+			node.dirty = true
+		}
+	}
 	state := node.state
 	callback := func() {
 		for _, cb := range f.subs {
