@@ -297,6 +297,12 @@ func TestCalcBaseFee(t *testing.T) {
 			12000000,
 			big.NewInt(1025000000),
 		},
+
+		// Low parent baseFee tests
+
+		// parent gas usage >>>> parent gas limit
+		// parent baseFee == 0
+		// as expected, increment baseFee by 1
 		{
 			params.EIP1559ChainConfig,
 			big.NewInt(1000),
@@ -307,8 +313,40 @@ func TestCalcBaseFee(t *testing.T) {
 			1000000000000000,
 			big.NewInt(1),
 		},
-
-		// Low parent baseFee tests
+		// parent gas usage <<<< parent gas limit
+		// parent baseFee == 0
+		// would normally expect decrement
+		// but with parent baseFee == 0 the base fee calculation
+		// reduces down to parent basefee + 0 = 0
+		// this means the diff between parent and new basefee == 0 which is less than the minimum of |1|
+		// so we default to incrementing by 1, it is a positive increment since the diff == 0 is non-negative
+		{
+			params.EIP1559ChainConfig,
+			big.NewInt(1000),
+			1000,
+			big.NewInt(2000),
+			big.NewInt(0),
+			1000000000000000,
+			1,
+			big.NewInt(1),
+		},
+		// parent gas usage == parent gas limit
+		// parent baseFee == 0
+		// would normally expect decrement of 1
+		// but that would go to negative numbers so it remains at 0
+		{
+			params.EIP1559ChainConfig,
+			big.NewInt(1000),
+			1000,
+			big.NewInt(2000),
+			big.NewInt(0),
+			1,
+			1,
+			big.NewInt(0),
+		},
+		// parent gas usage >>>> parent gas limit
+		// parent baseFee == 1
+		// as expected, increment baseFee by 1
 		{
 			params.EIP1559ChainConfig,
 			big.NewInt(1000),
@@ -316,9 +354,25 @@ func TestCalcBaseFee(t *testing.T) {
 			big.NewInt(2000),
 			big.NewInt(1),
 			1,
-			8,
+			1000000000000000,
 			big.NewInt(2),
 		},
+		// parent gas usage <<<< parent gas limit
+		// parent baseFee == 1
+		// as expected, decrement by 1
+		{
+			params.EIP1559ChainConfig,
+			big.NewInt(1000),
+			1000,
+			big.NewInt(2000),
+			big.NewInt(1),
+			1000000000000000,
+			1,
+			big.NewInt(0),
+		},
+		// parent gas usage == parent gas limit
+		// parent baseFee == 1
+		// as expected, decrement by 1 when gas usage equals the gas target
 		{
 			params.EIP1559ChainConfig,
 			big.NewInt(1000),
@@ -326,68 +380,8 @@ func TestCalcBaseFee(t *testing.T) {
 			big.NewInt(2000),
 			big.NewInt(1),
 			1,
-			9,
-			big.NewInt(2),
-		},
-		{
-			params.EIP1559ChainConfig,
-			big.NewInt(1000),
-			1000,
-			big.NewInt(2000),
-			big.NewInt(1),
-			100000000,
-			899999999,
-			big.NewInt(2),
-		},
-		{
-			params.EIP1559ChainConfig,
-			big.NewInt(1000),
-			1000,
-			big.NewInt(2000),
-			big.NewInt(1),
-			100000000,
-			900000000,
-			big.NewInt(2),
-		},
-		{
-			params.EIP1559ChainConfig,
-			big.NewInt(1000),
-			1000,
-			big.NewInt(2000),
-			big.NewInt(2),
 			1,
-			4,
-			big.NewInt(3),
-		},
-		{
-			params.EIP1559ChainConfig,
-			big.NewInt(1000),
-			1000,
-			big.NewInt(2000),
-			big.NewInt(2),
-			1,
-			5,
-			big.NewInt(3),
-		},
-		{
-			params.EIP1559ChainConfig,
-			big.NewInt(1000),
-			1000,
-			big.NewInt(2000),
-			big.NewInt(2),
-			100000000,
-			499999999,
-			big.NewInt(3),
-		},
-		{
-			params.EIP1559ChainConfig,
-			big.NewInt(1000),
-			1000,
-			big.NewInt(2000),
-			big.NewInt(2),
-			100000000,
-			500000000,
-			big.NewInt(3),
+			big.NewInt(0),
 		},
 	}
 	for i, test := range testConditions {
@@ -404,13 +398,13 @@ func TestCalcBaseFee(t *testing.T) {
 		gasTarget := CalcBaseFee(&config, parent)
 		if gasTarget != nil {
 			if test.baseFee != nil && gasTarget.Cmp(test.baseFee) != 0 {
-				t.Errorf("test %d expected BaseFee %d got %d", i+1, test.baseFee.Uint64(), gasTarget.Uint64())
+				t.Errorf("test %d expected BaseFee %d got %d", i+1, test.baseFee.Int64(), gasTarget.Int64())
 			}
 			if test.baseFee == nil {
-				t.Errorf("test %d expected nil BaseFee got %d", i+1, gasTarget.Uint64())
+				t.Errorf("test %d expected nil BaseFee got %d", i+1, gasTarget.Int64())
 			}
 		} else if test.baseFee != nil {
-			t.Errorf("test %d expected BaseFee %d got nil", i+1, test.baseFee.Uint64())
+			t.Errorf("test %d expected BaseFee %d got nil", i+1, test.baseFee.Int64())
 		}
 	}
 }
