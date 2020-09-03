@@ -35,29 +35,11 @@ type testRLPXMsg struct {
 }
 
 func TestConn_Handshake(t *testing.T) {
-	// make 2 peers
-	conn1, conn2 := net.Pipe()
-	// make key pairs
-	key1 := newkey()
-	key2 := newkey()
-
-	peer1 := NewConn(conn1, &key2.PublicKey) // dialer
-	peer2 := NewConn(conn2, nil)             // listener
-
-	doHandshake(t, peer1, peer2, key1, key2)
+	createPeers(t)
 }
 
 func TestConn_ReadWriteMsg(t *testing.T) {
-	// make 2 peers
-	conn1, conn2 := net.Pipe()
-	// make key pairs
-	key1 := newkey()
-	key2 := newkey()
-
-	peer1 := NewConn(conn1, &key2.PublicKey) // dialer
-	peer2 := NewConn(conn2, nil)             // listener
-
-	doHandshake(t, peer1, peer2, key1, key2)
+	peer1, peer2 := createPeers(t)
 
 	msgChan := make(chan testRLPXMsg, 1)
 
@@ -87,6 +69,29 @@ func TestConn_ReadWriteMsg(t *testing.T) {
 	assert.Equal(t, "success", string(buf[1:8]))
 }
 
+func createPeers(t *testing.T) (peer1, peer2 *Conn) {
+	// make 2 peers
+	conn1, conn2 := net.Pipe()
+	// make key pairs
+	key1 := newkey()
+	key2 := newkey()
+
+	peer1 = NewConn(conn1, &key2.PublicKey) // dialer
+	peer2 = NewConn(conn2, nil)             // listener
+
+	doHandshake(t, peer1, peer2, key1, key2)
+
+	return peer1, peer2
+}
+
+func newkey() *ecdsa.PrivateKey {
+	key, err := crypto.GenerateKey()
+	if err != nil {
+		panic("couldn't generate key: " + err.Error())
+	}
+	return key
+}
+
 func doHandshake(t *testing.T, peer1, peer2 *Conn, key1, key2 *ecdsa.PrivateKey) {
 	keyChan := make(chan *ecdsa.PublicKey)
 
@@ -109,12 +114,4 @@ func doHandshake(t *testing.T, peer1, peer2 *Conn, key1, key2 *ecdsa.PrivateKey)
 	if !assert.Equal(t, pubKey1, &key1.PublicKey) || !assert.Equal(t, pubKey2, &key2.PublicKey) {
 		t.Fatal("unsuccessful handshake")
 	}
-}
-
-func newkey() *ecdsa.PrivateKey {
-	key, err := crypto.GenerateKey()
-	if err != nil {
-		panic("couldn't generate key: " + err.Error())
-	}
-	return key
 }
