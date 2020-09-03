@@ -59,15 +59,22 @@ func VerifyEIP1559BaseFee(config *params.ChainConfig, header, parent *types.Head
 }
 
 // CalcBaseFee returns the baseFee for the current block provided the parent header and config parameters
-func CalcBaseFee(config *params.ChainConfig, parent *types.Header) *big.Int {
+func CalcBaseFee(config *params.ChainConfig, parent *types.Header) (baseFee *big.Int) {
 	height := new(big.Int).Add(parent.Number, common.Big1)
 	// If we are before EIP1559 activation, the baseFee is nil
 	if !config.IsEIP1559(height) {
-		return nil
+		return
 	}
+	// never let baseFee drop below 0
+	defer func() {
+		if baseFee.Cmp(common.Big0) < 0 {
+			baseFee.Set(common.Big0)
+		}
+	}()
 	// If we are at the block of EIP1559 activation then the BaseFee is set to the initial value
 	if config.EIP1559Block.Cmp(height) == 0 {
-		return new(big.Int).SetUint64(config.EIP1559.InitialBaseFee)
+		baseFee = new(big.Int).SetUint64(config.EIP1559.InitialBaseFee)
+		return
 	}
 
 	// Otherwise,
@@ -75,14 +82,15 @@ func CalcBaseFee(config *params.ChainConfig, parent *types.Header) *big.Int {
 	// Where delta = PARENT_GAS_USED - PARENT_EIP1559_GAS_TARGET (possibly negative)
 	parentGasTarget := CalcEIP1559GasTarget(config, parent.Number, new(big.Int).SetUint64(parent.GasLimit))
 	delta := new(big.Int).Sub(new(big.Int).SetUint64(parent.GasUsed), parentGasTarget)
-	// If delta is 0, BASEFEE is unchanged
+	// If PARENT_GAS_USAGE == TARGET_GAS_USAGE; BASEFEE = PARENT_BASEFEE - 1
 	if delta.Cmp(common.Big0) == 0 {
-		return new(big.Int).Sub(parent.BaseFee, common.Big1)
+		baseFee = new(big.Int).Sub(parent.BaseFee, common.Big1)
+		return
 	}
 	mul := new(big.Int).Mul(parent.BaseFee, delta)
 	div := new(big.Int).Div(mul, parentGasTarget)
 	div2 := new(big.Int).Div(div, new(big.Int).SetUint64(config.EIP1559.EIP1559BaseFeeMaxChangeDenominator))
-	baseFee := new(big.Int).Add(parent.BaseFee, div2)
+	baseFee = new(big.Int).Add(parent.BaseFee, div2)
 
 	// A valid BASEFEE is one such that
 	// abs(BASEFEE - PARENT_BASEFEE) <= max(1, PARENT_BASEFEE // BASEFEE_MAX_CHANGE_DENOMINATOR)
