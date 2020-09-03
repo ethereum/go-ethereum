@@ -343,6 +343,10 @@ var (
 		Usage: "Maximum amount of time non-executable transaction are queued",
 		Value: eth.DefaultConfig.TxPool.Lifetime,
 	}
+	TxPoolProcessTxsFlag = cli.BoolFlag{
+		Name:  "txpool.processtxs",
+		Usage: "Enables transaction processing upon node launch (if set to `false` the processing is enabled when node is synced)",
+	}
 	// Performance tuning settings
 	CacheFlag = cli.IntFlag{
 		Name:  "cache",
@@ -1340,6 +1344,9 @@ func setTxPool(ctx *cli.Context, cfg *core.TxPoolConfig) {
 	}
 	if ctx.GlobalIsSet(TxPoolLifetimeFlag.Name) {
 		cfg.Lifetime = ctx.GlobalDuration(TxPoolLifetimeFlag.Name)
+	}
+	if ctx.GlobalIsSet(TxPoolProcessTxsFlag.Name) {
+		cfg.ProcessTxs = ctx.GlobalBool(TxPoolProcessTxsFlag.Name)
 	}
 }
 
