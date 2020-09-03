@@ -217,7 +217,8 @@ func (c *curvePoint) MakeAffine() {
 	}
 
 	zInv := &gfP{}
-	zInv.Invert(&c.z)
+	zInv.EaaInvert(&c.z)
+	// zInv.Invert(&c.z)
 
 	t, zInv2 := &gfP{}, &gfP{}
 	gfpMul(t, &c.y, zInv)
