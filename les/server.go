@@ -18,6 +18,7 @@ package les
 
 import (
 	"crypto/ecdsa"
+	"reflect"
 	"time"
 
 	"github.com/ethereum/go-ethereum/common/mclock"
@@ -31,13 +32,28 @@ import (
 	"github.com/ethereum/go-ethereum/p2p/discv5"
 	"github.com/ethereum/go-ethereum/p2p/enode"
 	"github.com/ethereum/go-ethereum/p2p/enr"
+	"github.com/ethereum/go-ethereum/p2p/nodestate"
 	"github.com/ethereum/go-ethereum/params"
 	"github.com/ethereum/go-ethereum/rpc"
 )
 
+var (
+	serverSetup         = &nodestate.Setup{}
+	clientField         = serverSetup.NewField("clientInfo", reflect.TypeOf(&clientInfo{}))
+	connAddressField    = serverSetup.NewField("connAddr", reflect.TypeOf(""))
+	balanceTrackerSetup = lps.NewBalanceTrackerSetup(serverSetup)
+	priorityPoolSetup   = lps.NewPriorityPoolSetup(serverSetup)
+)
+
+func init() {
+	balanceTrackerSetup.Connect(connAddressField, priorityPoolSetup.CapacityField)
+	priorityPoolSetup.Connect(balanceTrackerSetup.BalanceField, balanceTrackerSetup.UpdateFlag) // NodeBalance implements nodePriority
+}
+
 type LesServer struct {
 	lesCommons
 
+	ns          *nodestate.NodeStateMachine
 	archiveMode bool // Flag whether the ethereum node runs in archive mode.
 	peers       *clientPeerSet
 	serverset   *serverSet
@@ -60,6 +76,7 @@ type LesServer struct {
 }
 
 func NewLesServer(node *node.Node, e *eth.Ethereum, config *eth.Config) (*LesServer, error) {
+	ns := nodestate.NewNodeStateMachine(nil, nil, mclock.System{}, serverSetup)
 	// Collect les protocol version information supported by local node.
 	lesTopics := make([]discv5.Topic, len(AdvertiseProtocolVersions))
 	for i, pv := range AdvertiseProtocolVersions {
@@ -83,6 +100,7 @@ func NewLesServer(node *node.Node, e *eth.Ethereum, config *eth.Config) (*LesSer
 			bloomTrieIndexer: light.NewBloomTrieIndexer(e.ChainDb(), nil, params.BloomBitsBlocks, params.BloomTrieFrequency, true),
 			closeCh:          make(chan struct{}),
 		},
+		ns:           ns,
 		archiveMode:  e.ArchiveMode(),
 		peers:        newClientPeerSet(),
 		serverset:    newServerSet(),
@@ -116,7 +134,7 @@ func NewLesServer(node *node.Node, e *eth.Ethereum, config *eth.Config) (*LesSer
 		srv.maxCapacity = totalRecharge
 	}
 	srv.fcManager.SetCapacityLimits(srv.minCapacity, srv.maxCapacity, srv.minCapacity*2)
-	srv.clientPool = newClientPool(srv.chainDb, srv.minCapacity, defaultConnectedBias, mclock.System{}, func(id enode.ID) { go srv.peers.unregister(id.String()) })
+	srv.clientPool = newClientPool(ns, srv.chainDb, srv.minCapacity, defaultConnectedBias, mclock.System{}, func(id enode.ID) { go srv.peers.unregister(id.String()) })
 	srv.clientPool.setDefaultFactors(lps.PriceFactors{TimeFactor: 0, CapacityFactor: 1, RequestFactor: 1}, lps.PriceFactors{TimeFactor: 0, CapacityFactor: 1, RequestFactor: 1})
 
 	checkpoint := srv.latestLocalCheckpoint()

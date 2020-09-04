@@ -18,7 +18,6 @@ package les
 
 import (
 	"fmt"
-	"reflect"
 	"sync"
 	"time"
 
@@ -45,19 +44,6 @@ const (
 	defaultConnectedBias = time.Minute * 3
 	inactiveTimeout      = time.Second * 10
 )
-
-var (
-	clientPoolSetup     = &nodestate.Setup{}
-	clientField         = clientPoolSetup.NewField("clientInfo", reflect.TypeOf(&clientInfo{}))
-	connAddressField    = clientPoolSetup.NewField("connAddr", reflect.TypeOf(""))
-	balanceTrackerSetup = lps.NewBalanceTrackerSetup(clientPoolSetup)
-	priorityPoolSetup   = lps.NewPriorityPoolSetup(clientPoolSetup)
-)
-
-func init() {
-	balanceTrackerSetup.Connect(connAddressField, priorityPoolSetup.CapacityField)
-	priorityPoolSetup.Connect(balanceTrackerSetup.BalanceField, balanceTrackerSetup.UpdateFlag) // NodeBalance implements nodePriority
-}
 
 // clientPool implements a client database that assigns a priority to each client
 // based on a positive and negative balance. Positive balance is externally assigned
@@ -119,8 +105,7 @@ type clientInfo struct {
 }
 
 // newClientPool creates a new client pool
-func newClientPool(lespayDb ethdb.Database, minCap uint64, connectedBias time.Duration, clock mclock.Clock, removePeer func(enode.ID)) *clientPool {
-	ns := nodestate.NewNodeStateMachine(nil, nil, clock, clientPoolSetup)
+func newClientPool(ns *nodestate.NodeStateMachine, lespayDb ethdb.Database, minCap uint64, connectedBias time.Duration, clock mclock.Clock, removePeer func(enode.ID)) *clientPool {
 	pool := &clientPool{
 		ns:                  ns,
 		BalanceTrackerSetup: balanceTrackerSetup,
