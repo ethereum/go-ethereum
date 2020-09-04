@@ -22,6 +22,7 @@ import (
 	"math/big"
 
 	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/core/vm"
 	"github.com/ethereum/go-ethereum/params"
 )
@@ -51,6 +52,7 @@ type StateTransition struct {
 	initialGas uint64
 	value      *big.Int
 	data       []byte
+	accessList *types.AccessList
 	state      vm.StateDB
 	evm        *vm.EVM
 }
@@ -67,6 +69,7 @@ type Message interface {
 	Nonce() uint64
 	CheckNonce() bool
 	Data() []byte
+	AccessList() *types.AccessList
 }
 
 // ExecutionResult includes all output after executing given evm
@@ -105,10 +108,10 @@ func (result *ExecutionResult) Revert() []byte {
 }
 
 // IntrinsicGas computes the 'intrinsic gas' for a message with the given data.
-func IntrinsicGas(data []byte, contractCreation, isHomestead bool, isEIP2028 bool) (uint64, error) {
+func IntrinsicGas(data []byte, accessList *types.AccessList, isContractCreation bool, isHomestead, isEIP2028, isEIP2718 bool) (uint64, error) {
 	// Set the starting gas for the raw transaction
 	var gas uint64
-	if contractCreation && isHomestead {
+	if isContractCreation && isHomestead {
 		gas = params.TxGasContractCreation
 	} else {
 		gas = params.TxGas
@@ -138,19 +141,26 @@ func IntrinsicGas(data []byte, contractCreation, isHomestead bool, isEIP2028 boo
 		}
 		gas += z * params.TxDataZeroGas
 	}
+
+	if isEIP2718 && accessList != nil {
+		gas += uint64(accessList.Addresses()) * params.TxAccessListAddress
+		gas += uint64(accessList.StorageKeys()) * params.TxAccessListStorageKey
+	}
+
 	return gas, nil
 }
 
 // NewStateTransition initialises and returns a new state transition object.
 func NewStateTransition(evm *vm.EVM, msg Message, gp *GasPool) *StateTransition {
 	return &StateTransition{
-		gp:       gp,
-		evm:      evm,
-		msg:      msg,
-		gasPrice: msg.GasPrice(),
-		value:    msg.Value(),
-		data:     msg.Data(),
-		state:    evm.StateDB,
+		gp:         gp,
+		evm:        evm,
+		msg:        msg,
+		gasPrice:   msg.GasPrice(),
+		value:      msg.Value(),
+		data:       msg.Data(),
+		state:      evm.StateDB,
+		accessList: msg.AccessList(),
 	}
 }
 
@@ -235,10 +245,11 @@ func (st *StateTransition) TransitionDb() (*ExecutionResult, error) {
 	sender := vm.AccountRef(msg.From())
 	homestead := st.evm.ChainConfig().IsHomestead(st.evm.Context.BlockNumber)
 	istanbul := st.evm.ChainConfig().IsIstanbul(st.evm.Context.BlockNumber)
+	yoloV2 := st.evm.ChainConfig().IsYoloV2(st.evm.Context.BlockNumber)
 	contractCreation := msg.To() == nil
 
 	// Check clauses 4-5, subtract intrinsic gas if everything is correct
-	gas, err := IntrinsicGas(st.data, contractCreation, homestead, istanbul)
+	gas, err := IntrinsicGas(st.data, st.accessList, contractCreation, homestead, istanbul, yoloV2)
 	if err != nil {
 		return nil, err
 	}

@@ -45,7 +45,7 @@ type ttFork struct {
 }
 
 func (tt *TransactionTest) Run(config *params.ChainConfig) error {
-	validateTx := func(rlpData hexutil.Bytes, signer types.Signer, isHomestead bool, isIstanbul bool) (*common.Address, *common.Hash, error) {
+	validateTx := func(rlpData hexutil.Bytes, signer types.Signer, isHomestead bool, isIstanbul bool, isYoloV2 bool) (*common.Address, *common.Hash, error) {
 		tx := new(types.Transaction)
 		if err := rlp.DecodeBytes(rlpData, tx); err != nil {
 			return nil, nil, err
@@ -55,7 +55,7 @@ func (tt *TransactionTest) Run(config *params.ChainConfig) error {
 			return nil, nil, err
 		}
 		// Intrinsic gas
-		requiredGas, err := core.IntrinsicGas(tx.Data(), tx.To() == nil, isHomestead, isIstanbul)
+		requiredGas, err := core.IntrinsicGas(tx.Data(), tx.AccessList(), tx.To() == nil, isHomestead, isIstanbul, isYoloV2)
 		if err != nil {
 			return nil, nil, err
 		}
@@ -72,16 +72,17 @@ func (tt *TransactionTest) Run(config *params.ChainConfig) error {
 		fork        ttFork
 		isHomestead bool
 		isIstanbul  bool
+		isYoloV2    bool
 	}{
-		{"Frontier", types.FrontierSigner{}, tt.Frontier, false, false},
-		{"Homestead", types.HomesteadSigner{}, tt.Homestead, true, false},
-		{"EIP150", types.HomesteadSigner{}, tt.EIP150, true, false},
-		{"EIP158", types.NewEIP155Signer(config.ChainID), tt.EIP158, true, false},
-		{"Byzantium", types.NewEIP155Signer(config.ChainID), tt.Byzantium, true, false},
-		{"Constantinople", types.NewEIP155Signer(config.ChainID), tt.Constantinople, true, false},
-		{"Istanbul", types.NewEIP155Signer(config.ChainID), tt.Istanbul, true, true},
+		{"Frontier", types.FrontierSigner{}, tt.Frontier, false, false, false},
+		{"Homestead", types.HomesteadSigner{}, tt.Homestead, true, false, false},
+		{"EIP150", types.HomesteadSigner{}, tt.EIP150, true, false, false},
+		{"EIP158", types.NewEIP155Signer(config.ChainID), tt.EIP158, true, false, false},
+		{"Byzantium", types.NewEIP155Signer(config.ChainID), tt.Byzantium, true, false, false},
+		{"Constantinople", types.NewEIP155Signer(config.ChainID), tt.Constantinople, true, false, false},
+		{"Istanbul", types.NewEIP155Signer(config.ChainID), tt.Istanbul, true, true, false},
 	} {
-		sender, txhash, err := validateTx(tt.RLP, testcase.signer, testcase.isHomestead, testcase.isIstanbul)
+		sender, txhash, err := validateTx(tt.RLP, testcase.signer, testcase.isHomestead, testcase.isIstanbul, testcase.isYoloV2)
 
 		if testcase.fork.Sender == (common.UnprefixedAddress{}) {
 			if err == nil {

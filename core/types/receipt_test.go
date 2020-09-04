@@ -157,6 +157,7 @@ func TestDeriveFields(t *testing.T) {
 	txs := Transactions{
 		NewContractCreation(1, big.NewInt(1), 1, big.NewInt(1), nil),
 		NewTransaction(2, common.HexToAddress("0x2"), big.NewInt(2), 2, big.NewInt(2), nil),
+		NewAccessListTransaction(big.NewInt(3), 3, common.HexToAddress("0x3"), big.NewInt(3), 3, big.NewInt(3), nil, nil),
 	}
 	// Create the corresponding receipts
 	receipts := Receipts{
@@ -182,6 +183,18 @@ func TestDeriveFields(t *testing.T) {
 			ContractAddress: common.BytesToAddress([]byte{0x02, 0x22, 0x22}),
 			GasUsed:         2,
 		},
+		&Receipt{
+			Type:              AccessListTxId,
+			PostState:         common.Hash{3}.Bytes(),
+			CumulativeGasUsed: 6,
+			Logs: []*Log{
+				{Address: common.BytesToAddress([]byte{0x33})},
+				{Address: common.BytesToAddress([]byte{0x03, 0x33})},
+			},
+			TxHash:          txs[2].Hash(),
+			ContractAddress: common.BytesToAddress([]byte{0x03, 0x33, 0x33}),
+			GasUsed:         3,
+		},
 	}
 	// Clear all the computed fields and re-derive them
 	number := big.NewInt(1)
@@ -196,6 +209,9 @@ func TestDeriveFields(t *testing.T) {
 
 	logIndex := uint(0)
 	for i := range receipts {
+		if receipts[i].Type != txs[i].Type() {
+			t.Errorf("receipts[%d].Type = %d, want %d", i, receipts[i].Type, txs[i].Type())
+		}
 		if receipts[i].TxHash != txs[i].Hash() {
 			t.Errorf("receipts[%d].TxHash = %s, want %s", i, receipts[i].TxHash.String(), txs[i].Hash().String())
 		}
