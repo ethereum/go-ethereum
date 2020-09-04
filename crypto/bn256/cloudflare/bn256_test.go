@@ -104,9 +104,18 @@ func TestBinaryEAA(t *testing.T) {
 		tmpBinaryEAA := &gfP{}
 		tmpBinaryEAA.EaaInvert(&Ga.p.x)
 
+		tmpBinaryEAASelfSet := &gfP{}
+		tmpBinaryEAASelfSet.Set(&Ga.p.x)
+		tmpBinaryEAASelfSet.EaaInvert(tmpBinaryEAASelfSet)
+
 		eq := equals(tmpLittleFermat, tmpBinaryEAA)
 		if eq == false {
 			t.Fatalf("results of different inversion do not agree")
+		}
+
+		eq = equals(tmpLittleFermat, tmpBinaryEAASelfSet)
+		if eq == false {
+			t.Fatalf("self-assigned inversion is invalid")
 		}
 	}
 }
