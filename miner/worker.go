@@ -829,6 +829,11 @@ func (w *worker) commitTransactions(txs *types.TransactionsByPriceAndNonce, coin
 			w.current.tcount++
 			txs.Shift()
 
+		case errors.Is(err, core.ErrTxTypeInvalid):
+			// Pop the unsupported transaction without shifting in the next from the account
+			log.Trace("Skipping unsupported transaction type", "sender", from, "type", tx.Type())
+			txs.Pop()
+
 		default:
 			// Strange error, discard the transaction and get the next in line (note, the
 			// nonce-too-high clause will prevent us from executing in vain).

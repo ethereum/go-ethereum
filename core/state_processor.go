@@ -89,7 +89,14 @@ func (p *StateProcessor) Process(block *types.Block, statedb *state.StateDB, cfg
 	return receipts, allLogs, *usedGas, nil
 }
 
+// ApplyTransaction attempts to apply a transaction to the given state database
+// and uses the input parameters for its environment. It returns the receipt
+// for the transaction, gas used and an error if the transaction failed,
+// indicating the block was invalid.
 func applyTransaction(msg types.Message, config *params.ChainConfig, bc ChainContext, author *common.Address, gp *GasPool, statedb *state.StateDB, header *types.Header, tx *types.Transaction, usedGas *uint64, evm *vm.EVM) (*types.Receipt, error) {
+	if !config.IsYoloV2(header.Number) && tx.Type() != types.LegacyTxId {
+		return nil, ErrTxTypeNotSupported
+	}
 	// Create a new context to be used in the EVM environment
 	txContext := NewEVMTxContext(msg)
 	// Add addresses to access list if applicable
@@ -101,6 +108,14 @@ func applyTransaction(msg types.Message, config *params.ChainConfig, bc ChainCon
 		}
 		for _, addr := range evm.ActivePrecompiles() {
 			statedb.AddAddressToAccessList(addr)
+		}
+		if al := msg.AccessList(); al != nil {
+			for _, el := range *al {
+				statedb.AddAddressToAccessList(*el.Address)
+				for _, key := range el.StorageKeys {
+					statedb.AddSlotToAccessList(*el.Address, *key)
+				}
+			}
 		}
 	}
 
@@ -122,7 +137,12 @@ func applyTransaction(msg types.Message, config *params.ChainConfig, bc ChainCon
 
 	// Create a new receipt for the transaction, storing the intermediate root and gas used by the tx
 	// based on the eip phase, we're passing whether the root touch-delete accounts.
-	receipt := types.NewReceipt(root, result.Failed(), *usedGas)
+	var receipt *types.Receipt
+	if config.IsYoloV2(header.Number) {
+		receipt = types.NewEIP2718Receipt(tx.Type(), root, result.Failed(), *usedGas)
+	} else {
+		receipt = types.NewReceipt(root, result.Failed(), *usedGas)
+	}
 	receipt.TxHash = tx.Hash()
 	receipt.GasUsed = result.UsedGas
 	// if the transaction created a contract, store the creation address in the receipt.
