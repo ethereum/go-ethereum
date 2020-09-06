@@ -17,6 +17,7 @@
 package les
 
 import (
+	"crypto/ecdsa"
 	"encoding/binary"
 	"encoding/json"
 	"errors"
@@ -36,6 +37,8 @@ import (
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/metrics"
 	"github.com/ethereum/go-ethereum/p2p"
+	"github.com/ethereum/go-ethereum/p2p/enode"
+	"github.com/ethereum/go-ethereum/p2p/nodestate"
 	"github.com/ethereum/go-ethereum/rlp"
 	"github.com/ethereum/go-ethereum/trie"
 )
@@ -91,7 +94,7 @@ func newServerHandler(server *LesServer, blockchain *core.BlockChain, chainDb et
 // start starts the server handler.
 func (h *serverHandler) start() {
 	h.wg.Add(1)
-	go h.broadcastHeaders()
+	go h.broadcastLoop()
 }
 
 // stop stops the server handler.
@@ -136,7 +139,12 @@ func (h *serverHandler) handle(p *clientPeer) error {
 		p.Log().Debug("Light server not synced, rejecting peer")
 		return p2p.DiscRequested
 	}
-	defer p.fcClient.Disconnect()
+	h.server.ns.SetField(p.Node(), clientPeerField, p)
+
+	defer func() {
+		h.server.ns.SetField(p.Node(), clientPeerField, nil)
+		p.fcClient.Disconnect()
+	}()
 
 	// Disconnect the inbound peer if it's rejected by clientPool
 	if cap, err := h.server.clientPool.connect(p); cap != p.fcParams.MinRecharge || err != nil {
@@ -911,11 +919,11 @@ func (h *serverHandler) txStatus(hash common.Hash) light.TxStatus {
 	return stat
 }
 
-// broadcastHeaders broadcasts new block information to all connected light
+// broadcastLoop broadcasts new block information to all connected light
 // clients. According to the agreement between client and server, server should
 // only broadcast new announcement if the total difficulty is higher than the
 // last one. Besides server will add the signature if client requires.
-func (h *serverHandler) broadcastHeaders() {
+func (h *serverHandler) broadcastLoop() {
 	defer h.wg.Done()
 
 	headCh := make(chan core.ChainHeadEvent, 10)
@@ -944,33 +952,75 @@ func (h *serverHandler) broadcastHeaders() {
 				reorg = lastHead.Number.Uint64() - rawdb.FindCommonAncestor(h.chainDb, header, lastHead).Number.Uint64()
 			}
 			lastHead, lastTd = header, td
-
 			log.Debug("Announcing block to peers", "number", number, "hash", hash, "td", td, "reorg", reorg)
-			var (
-				signed         bool
-				signedAnnounce announceData
-			)
-			announce := announceData{Hash: hash, Number: number, Td: td, ReorgDepth: reorg}
-			for _, p := range peers {
-				p := p
-				switch p.announceType {
-				case announceTypeSimple:
-					if !p.queueSend(func() { p.sendAnnounce(announce) }) {
-						log.Debug("Drop announcement because queue is full", "number", number, "hash", hash)
-					}
-				case announceTypeSigned:
-					if !signed {
-						signedAnnounce = announce
-						signedAnnounce.sign(h.server.privateKey)
-						signed = true
-					}
-					if !p.queueSend(func() { p.sendAnnounce(signedAnnounce) }) {
-						log.Debug("Drop announcement because queue is full", "number", number, "hash", hash)
-					}
-				}
-			}
+			h.server.broadcaster.broadcast(announceData{Hash: hash, Number: number, Td: td, ReorgDepth: reorg})
 		case <-h.closeCh:
 			return
+		}
+	}
+}
+
+// broadcaster sends new header announcements to active client peers
+type broadcaster struct {
+	ns                           *nodestate.NodeStateMachine
+	privateKey                   *ecdsa.PrivateKey
+	lastAnnounce, signedAnnounce announceData
+	signed                       bool
+}
+
+// newBroadcaster creates a new broadcaster
+func newBroadcaster(ns *nodestate.NodeStateMachine) *broadcaster {
+	b := &broadcaster{ns: ns}
+	ns.SubscribeState(priorityPoolSetup.ActiveFlag, func(node *enode.Node, oldState, newState nodestate.Flags) {
+		if newState.Equals(priorityPoolSetup.ActiveFlag) {
+			// send last announcement to activated peers
+			b.sendTo(node)
+		}
+	})
+	return b
+}
+
+// setSignerKey sets the signer key for signed announcements. Should be called before
+// starting the protocol handler.
+func (b *broadcaster) setSignerKey(privateKey *ecdsa.PrivateKey) {
+	b.privateKey = privateKey
+}
+
+// broadcast sends the given announcements to all active peers
+func (b *broadcaster) broadcast(announce announceData) {
+	b.ns.Operation(func() {
+		// iterate in an Operation to ensure that the active set does not change while iterating
+		b.lastAnnounce = announce
+		b.ns.ForEach(priorityPoolSetup.ActiveFlag, nodestate.Flags{}, func(node *enode.Node, state nodestate.Flags) {
+			b.sendTo(node)
+		})
+	})
+}
+
+// sendTo sends the most recent announcement to the given node unless the same or higher Td
+// announcement has already been sent.
+func (b *broadcaster) sendTo(node *enode.Node) {
+	if b.lastAnnounce.Td == nil {
+		return
+	}
+	if p, _ := b.ns.GetField(node, clientPeerField).(*clientPeer); p != nil {
+		if p.headInfo.Td == nil || b.lastAnnounce.Td.Cmp(p.headInfo.Td) > 0 {
+			switch p.announceType {
+			case announceTypeSimple:
+				if !p.queueSend(func() { p.sendAnnounce(b.lastAnnounce) }) {
+					log.Debug("Drop announcement because queue is full", "number", b.lastAnnounce.Number, "hash", b.lastAnnounce.Hash)
+				}
+			case announceTypeSigned:
+				if !b.signed {
+					b.signedAnnounce = b.lastAnnounce
+					b.signedAnnounce.sign(b.privateKey)
+					b.signed = true
+				}
+				if !p.queueSend(func() { p.sendAnnounce(b.signedAnnounce) }) {
+					log.Debug("Drop announcement because queue is full", "number", b.lastAnnounce.Number, "hash", b.lastAnnounce.Hash)
+				}
+			}
+			p.headInfo = blockInfo{b.lastAnnounce.Hash, b.lastAnnounce.Number, b.lastAnnounce.Td}
 		}
 	}
 }

@@ -96,7 +96,7 @@ func (i *poolTestPeer) allowInactive() bool {
 }
 
 func getBalance(pool *clientPool, p *poolTestPeer) (pos, neg uint64) {
-	temp := pool.ns.GetField(p.node, clientField) == nil
+	temp := pool.ns.GetField(p.node, clientInfoField) == nil
 	if temp {
 		pool.ns.SetField(p.node, connAddressField, p.freeClientId())
 	}

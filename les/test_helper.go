@@ -277,6 +277,7 @@ func newTestServerHandler(blocks int, indexers []*core.ChainIndexer, db ethdb.Da
 			closeCh:     make(chan struct{}),
 		},
 		ns:           ns,
+		broadcaster:  newBroadcaster(ns),
 		peers:        peers,
 		servingQueue: newServingQueue(int64(time.Millisecond*10), 1),
 		defParams: flowcontrol.ServerParams{

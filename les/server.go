@@ -39,7 +39,8 @@ import (
 
 var (
 	serverSetup         = &nodestate.Setup{}
-	clientField         = serverSetup.NewField("clientInfo", reflect.TypeOf(&clientInfo{}))
+	clientPeerField     = serverSetup.NewField("clientPeer", reflect.TypeOf(&clientPeer{}))
+	clientInfoField     = serverSetup.NewField("clientInfo", reflect.TypeOf(&clientInfo{}))
 	connAddressField    = serverSetup.NewField("connAddr", reflect.TypeOf(""))
 	balanceTrackerSetup = lps.NewBalanceTrackerSetup(serverSetup)
 	priorityPoolSetup   = lps.NewPriorityPoolSetup(serverSetup)
@@ -58,6 +59,7 @@ type LesServer struct {
 	peers       *clientPeerSet
 	serverset   *serverSet
 	handler     *serverHandler
+	broadcaster *broadcaster
 	lesTopics   []discv5.Topic
 	privateKey  *ecdsa.PrivateKey
 
@@ -104,6 +106,7 @@ func NewLesServer(node *node.Node, e *eth.Ethereum, config *eth.Config) (*LesSer
 		archiveMode:  e.ArchiveMode(),
 		peers:        newClientPeerSet(),
 		serverset:    newServerSet(),
+		broadcaster:  newBroadcaster(ns),
 		lesTopics:    lesTopics,
 		fcManager:    flowcontrol.NewClientManager(nil, &mclock.System{}),
 		servingQueue: newServingQueue(int64(time.Millisecond*10), float64(config.LightServ)/100),
@@ -191,6 +194,7 @@ func (s *LesServer) Protocols() []p2p.Protocol {
 // Start starts the LES server
 func (s *LesServer) Start() error {
 	s.privateKey = s.p2pSrv.PrivateKey
+	s.broadcaster.setSignerKey(s.privateKey)
 	s.handler.start()
 
 	s.wg.Add(1)
