@@ -126,7 +126,7 @@ type peerCommons struct {
 	frozen       uint32    // Flag whether the peer is frozen.
 	announceType uint64    // New block announcement type.
 	serving      uint32    // The status indicates the peer is served.
-	headInfo     blockInfo // Latest block information.
+	headInfo     blockInfo // Last announced block information.
 
 	// Background task queue for caching peer tasks and executing in order.
 	sendQueue *utils.ExecQueue
@@ -273,22 +273,12 @@ func (p *peerCommons) handshake(td *big.Int, head common.Hash, headNum uint64, g
 	if size > allowedUpdateBytes {
 		return errResp(ErrRequestRejected, "")
 	}
-	var rGenesis, rHash common.Hash
-	var rVersion, rNetwork, rNum uint64
-	var rTd *big.Int
+	var rGenesis common.Hash
+	var rVersion, rNetwork uint64
 	if err := recv.get("protocolVersion", &rVersion); err != nil {
 		return err
 	}
 	if err := recv.get("networkId", &rNetwork); err != nil {
-		return err
-	}
-	if err := recv.get("headTd", &rTd); err != nil {
-		return err
-	}
-	if err := recv.get("headHash", &rHash); err != nil {
-		return err
-	}
-	if err := recv.get("headNum", &rNum); err != nil {
 		return err
 	}
 	if err := recv.get("genesisHash", &rGenesis); err != nil {
@@ -303,7 +293,6 @@ func (p *peerCommons) handshake(td *big.Int, head common.Hash, headNum uint64, g
 	if int(rVersion) != p.version {
 		return errResp(ErrProtocolVersionMismatch, "%d (!= %d)", rVersion, p.version)
 	}
-	p.headInfo = blockInfo{Hash: rHash, Number: rNum, Td: rTd}
 	if recvCallback != nil {
 		return recvCallback(recv)
 	}
@@ -569,9 +558,11 @@ func (p *serverPeer) updateHead(hash common.Hash, number uint64, td *big.Int) {
 }
 
 // Handshake executes the les protocol handshake, negotiating version number,
-// network IDs, difficulties, head and genesis blocks.
-func (p *serverPeer) Handshake(td *big.Int, head common.Hash, headNum uint64, genesis common.Hash, server *LesServer) error {
-	return p.handshake(td, head, headNum, genesis, func(lists *keyValueList) {
+// network IDs and genesis blocks.
+func (p *serverPeer) Handshake(genesis common.Hash, server *LesServer) error {
+	// Note: there is no need to share local head with a server but older servers still
+	// require these fields so we announce zero values.
+	return p.handshake(common.Big0, common.Hash{}, 0, genesis, func(lists *keyValueList) {
 		// Add some client-specific handshake fields
 		//
 		// Enable signed announcement randomly even the server is not trusted.
@@ -581,6 +572,21 @@ func (p *serverPeer) Handshake(td *big.Int, head common.Hash, headNum uint64, ge
 		}
 		*lists = (*lists).add("announceType", p.announceType)
 	}, func(recv keyValueMap) error {
+		var (
+			rHash common.Hash
+			rNum  uint64
+			rTd   *big.Int
+		)
+		if err := recv.get("headTd", &rTd); err != nil {
+			return err
+		}
+		if err := recv.get("headHash", &rHash); err != nil {
+			return err
+		}
+		if err := recv.get("headNum", &rNum); err != nil {
+			return err
+		}
+		p.headInfo = blockInfo{Hash: rHash, Number: rNum, Td: rTd}
 		if recv.get("serveChainSince", &p.chainSince) != nil {
 			p.onlyAnnounce = true
 		}
@@ -937,6 +943,7 @@ func (p *clientPeer) freezeClient() {
 // Handshake executes the les protocol handshake, negotiating version number,
 // network IDs, difficulties, head and genesis blocks.
 func (p *clientPeer) Handshake(td *big.Int, head common.Hash, headNum uint64, genesis common.Hash, server *LesServer) error {
+	p.headInfo = blockInfo{Hash: head, Number: headNum, Td: td}
 	return p.handshake(td, head, headNum, genesis, func(lists *keyValueList) {
 		// Add some information which services server can offer.
 		if !server.config.UltraLightOnlyAnnounce {
