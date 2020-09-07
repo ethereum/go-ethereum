@@ -146,7 +146,7 @@ func (pre *Prestate) Apply(vmConfig vm.Config, chainConfig *params.ChainConfig,
 		vmContext.GasPrice = msg.GasPrice()
 		vmContext.Origin = msg.From()
 
-		evm := vm.NewEVM(vmContext, statedb, chainConfig, vmConfig)
+		evm := vm.NewEVM(vmContext, statedb, chainConfig, &vmConfig)
 		snapshot := statedb.Snapshot()
 		// (ret []byte, usedGas uint64, failed bool, err error)
 		msgResult, err := core.ApplyMessage(evm, msg, gaspool)

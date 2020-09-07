@@ -400,7 +400,7 @@ func (api *RetestethAPI) SetChainParams(ctx context.Context, chainParams ChainPa
 	}
 	engine := &NoRewardEngine{inner: inner, rewardsOn: chainParams.SealEngine != "NoReward"}
 
-	blockchain, err := core.NewBlockChain(ethDb, nil, chainConfig, engine, vm.Config{}, nil, nil)
+	blockchain, err := core.NewBlockChain(ethDb, nil, chainConfig, engine, new(vm.Config), nil, nil)
 	if err != nil {
 		return false, err
 	}
@@ -522,7 +522,7 @@ func (api *RetestethAPI) mineBlock() error {
 					&api.author,
 					gasPool,
 					statedb,
-					header, tx, &header.GasUsed, *api.blockchain.GetVMConfig(),
+					header, tx, &header.GasUsed, api.blockchain.GetVMConfig(),
 				)
 				if err != nil {
 					statedb.RevertToSnapshot(snap)
@@ -677,7 +677,7 @@ func (api *RetestethAPI) AccountRange(ctx context.Context,
 			msg, _ := tx.AsMessage(signer)
 			context := core.NewEVMContext(msg, block.Header(), api.blockchain, nil)
 			// Not yet the searched for transaction, execute on top of the current state
-			vmenv := vm.NewEVM(context, statedb, api.blockchain.Config(), vm.Config{})
+			vmenv := vm.NewEVM(context, statedb, api.blockchain.Config(), new(vm.Config))
 			if _, err := core.ApplyMessage(vmenv, msg, new(core.GasPool).AddGas(tx.Gas())); err != nil {
 				return AccountRangeResult{}, fmt.Errorf("transaction %#x failed: %v", tx.Hash(), err)
 			}
@@ -787,7 +787,7 @@ func (api *RetestethAPI) StorageRangeAt(ctx context.Context,
 			msg, _ := tx.AsMessage(signer)
 			context := core.NewEVMContext(msg, block.Header(), api.blockchain, nil)
 			// Not yet the searched for transaction, execute on top of the current state
-			vmenv := vm.NewEVM(context, statedb, api.blockchain.Config(), vm.Config{})
+			vmenv := vm.NewEVM(context, statedb, api.blockchain.Config(), new(vm.Config))
 			if _, err := core.ApplyMessage(vmenv, msg, new(core.GasPool).AddGas(tx.Gas())); err != nil {
 				return StorageRangeResult{}, fmt.Errorf("transaction %#x failed: %v", tx.Hash(), err)
 			}

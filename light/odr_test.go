@@ -196,7 +196,7 @@ func odrContractCall(ctx context.Context, db ethdb.Database, bc *core.BlockChain
 		st.SetBalance(testBankAddress, math.MaxBig256)
 		msg := callmsg{types.NewMessage(testBankAddress, &testContractAddr, 0, new(big.Int), 1000000, new(big.Int), data, false)}
 		context := core.NewEVMContext(msg, header, chain, nil)
-		vmenv := vm.NewEVM(context, st, config, vm.Config{})
+		vmenv := vm.NewEVM(context, st, config, new(vm.Config))
 		gp := new(core.GasPool).AddGas(math.MaxUint64)
 		result, _ := core.ApplyMessage(vmenv, msg, gp)
 		res = append(res, result.Return()...)
@@ -257,7 +257,7 @@ func testChainOdr(t *testing.T, protocol int, fn odrTestFn) {
 	)
 	gspec.MustCommit(ldb)
 	// Assemble the test environment
-	blockchain, _ := core.NewBlockChain(sdb, nil, params.TestChainConfig, ethash.NewFullFaker(), vm.Config{}, nil, nil)
+	blockchain, _ := core.NewBlockChain(sdb, nil, params.TestChainConfig, ethash.NewFullFaker(), new(vm.Config), nil, nil)
 	gchain, _ := core.GenerateChain(params.TestChainConfig, genesis, ethash.NewFaker(), sdb, 4, testChainGen)
 	if _, err := blockchain.InsertChain(gchain); err != nil {
 		t.Fatal(err)

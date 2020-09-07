@@ -184,7 +184,7 @@ func (t *StateTest) RunNoVerify(subtest StateSubtest, vmconfig vm.Config, snapsh
 	}
 	context := core.NewEVMContext(msg, block.Header(), nil, &t.json.Env.Coinbase)
 	context.GetHash = vmTestBlockHash
-	evm := vm.NewEVM(context, statedb, config, vmconfig)
+	evm := vm.NewEVM(context, statedb, config, &vmconfig)
 
 	gaspool := new(core.GasPool)
 	gaspool.AddGas(block.GasLimit())
