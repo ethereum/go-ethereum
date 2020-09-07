@@ -236,7 +236,7 @@ func (e *G2) Marshal() []byte {
 		e.p = &twistPoint{}
 	}
 
-	e.p.MakeAffine()
+	e.p.MakeAffineConstantTime()
 	ret := make([]byte, numBytes*4)
 	if e.p.IsInfinity() {
 		return ret

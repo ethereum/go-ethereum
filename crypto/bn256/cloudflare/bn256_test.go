@@ -99,14 +99,14 @@ func TestBinaryEAA(t *testing.T) {
 			t.Fatal(err)
 		}
 		tmpLittleFermat := &gfP{}
-		tmpLittleFermat.Invert(&Ga.p.x)
+		tmpLittleFermat.InvertConstantTime(&Ga.p.x)
 
 		tmpBinaryEAA := &gfP{}
-		tmpBinaryEAA.EaaInvert(&Ga.p.x)
+		tmpBinaryEAA.InvertVariableTime(&Ga.p.x)
 
 		tmpBinaryEAASelfSet := &gfP{}
 		tmpBinaryEAASelfSet.Set(&Ga.p.x)
-		tmpBinaryEAASelfSet.EaaInvert(tmpBinaryEAASelfSet)
+		tmpBinaryEAASelfSet.InvertVariableTime(tmpBinaryEAASelfSet)
 
 		eq := equals(tmpLittleFermat, tmpBinaryEAA)
 		if eq == false {
@@ -127,7 +127,7 @@ func BenchmarkLittleFermatInversion(b *testing.B) {
 
 	tmp := &gfP{}
 	for i := 0; i < b.N; i++ {
-		tmp.Invert(&el)
+		tmp.InvertConstantTime(&el)
 	}
 }
 
@@ -138,7 +138,7 @@ func BenchmarkBinaryEEAInversion(b *testing.B) {
 
 	tmp := &gfP{}
 	for i := 0; i < b.N; i++ {
-		tmp.EaaInvert(&el)
+		tmp.InvertVariableTime(&el)
 	}
 }
 

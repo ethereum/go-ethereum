@@ -31,7 +31,7 @@ func (e *gfP) Set(f *gfP) {
 	e[3] = f[3]
 }
 
-func (e *gfP) Invert(f *gfP) {
+func (e *gfP) InvertConstantTime(f *gfP) {
 	bits := [4]uint64{0x3c208c16d87cfd45, 0x97816a916871ca8d, 0xb85045b68181585d, 0x30644e72e131a029}
 
 	sum, power := &gfP{}, &gfP{}
@@ -129,7 +129,7 @@ func equals(a, b *gfP) bool {
 
 // Performs inversion of the field element using binary EEA.
 // If element is zero (no inverse exists) then set `e` to zero
-func (e *gfP) EaaInvert(f *gfP) {
+func (e *gfP) InvertVariableTime(f *gfP) {
 	if isZero(f) {
 		e.Set(&gfP{0, 0, 0, 0})
 		return
