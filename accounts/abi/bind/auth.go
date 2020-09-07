@@ -19,7 +19,6 @@ package bind
 import (
 	"crypto/ecdsa"
 	"errors"
-	"fmt"
 	"io"
 	"io/ioutil"
 	"math/big"
@@ -30,14 +29,15 @@ import (
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/crypto"
+	"github.com/ethereum/go-ethereum/log"
 )
 
 // NewTransactor is a utility method to easily create a transaction signer from
 // an encrypted json key stream and the associated passphrase.
 //
-// WARNING: NewTransactor has been deprecated in favour of NewTransactorWithChainID.
+// Deprecated: Use NewTransactorWithChainID instead.
 func NewTransactor(keyin io.Reader, passphrase string) (*TransactOpts, error) {
-	fmt.Println("WARNING: NewTransactor has been deprecated in favour of NewTransactorWithChainID")
+	log.Warn("WARNING: NewTransactor has been deprecated in favour of NewTransactorWithChainID")
 	json, err := ioutil.ReadAll(keyin)
 	if err != nil {
 		return nil, err
@@ -52,9 +52,9 @@ func NewTransactor(keyin io.Reader, passphrase string) (*TransactOpts, error) {
 // NewKeyStoreTransactor is a utility method to easily create a transaction signer from
 // an decrypted key from a keystore.
 //
-// WARNING: NewKeyStoreTransactor has been deprecated in favour of NewTransactorWithChainID.
+// Deprecated: Use NewKeyStoreTransactorWithChainID instead.
 func NewKeyStoreTransactor(keystore *keystore.KeyStore, account accounts.Account) (*TransactOpts, error) {
-	fmt.Println("WARNING: NewKeyStoreTransactor has been deprecated in favour of NewTransactorWithChainID")
+	log.Warn("WARNING: NewKeyStoreTransactor has been deprecated in favour of NewTransactorWithChainID")
 	signer := types.HomesteadSigner{}
 	return &TransactOpts{
 		From: account.Address,
@@ -74,9 +74,9 @@ func NewKeyStoreTransactor(keystore *keystore.KeyStore, account accounts.Account
 // NewKeyedTransactor is a utility method to easily create a transaction signer
 // from a single private key.
 //
-// WARNING: NewKeyedTransactor has been deprecated in favour of NewKeyedTransactorWithChainID.
+// Deprecated: Use NewKeyedTransactorWithChainID instead.
 func NewKeyedTransactor(key *ecdsa.PrivateKey) *TransactOpts {
-	fmt.Println("WARNING: NewKeyedTransactor has been deprecated in favour of NewKeyedTransactorWithChainID")
+	log.Warn("WARNING: NewKeyedTransactor has been deprecated in favour of NewKeyedTransactorWithChainID")
 	keyAddr := crypto.PubkeyToAddress(key.PublicKey)
 	signer := types.HomesteadSigner{}
 	return &TransactOpts{
@@ -109,7 +109,7 @@ func NewTransactorWithChainID(keyin io.Reader, passphrase string, chainID *big.I
 }
 
 // NewKeyStoreTransactorWithChainID is a utility method to easily create a transaction signer from
-// an decrypted key from a keystore
+// an decrypted key from a keystore.
 func NewKeyStoreTransactorWithChainID(keystore *keystore.KeyStore, account accounts.Account, chainID *big.Int) (*TransactOpts, error) {
 	if chainID == nil {
 		// If no chainID is explicitly passed, sign for mainnet
