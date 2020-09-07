@@ -40,22 +40,22 @@ type mockCaller struct {
 	pendingCallContractCalled bool
 }
 
-func (mc *mockCaller) CodeAt(ctx context.Context, contract common.Address, blockNumber *big.Int) ([]byte, error) {
+func (mc *mockCaller) CodeAt(_ context.Context, _ common.Address, blockNumber *big.Int) ([]byte, error) {
 	mc.codeAtBlockNumber = blockNumber
 	return []byte{1, 2, 3}, nil
 }
 
-func (mc *mockCaller) CallContract(ctx context.Context, call ethereum.CallMsg, blockNumber *big.Int) ([]byte, error) {
+func (mc *mockCaller) CallContract(_ context.Context, _ ethereum.CallMsg, blockNumber *big.Int) ([]byte, error) {
 	mc.callContractBlockNumber = blockNumber
 	return nil, nil
 }
 
-func (mc *mockCaller) PendingCodeAt(ctx context.Context, contract common.Address) ([]byte, error) {
+func (mc *mockCaller) PendingCodeAt(_ context.Context, _ common.Address) ([]byte, error) {
 	mc.pendingCodeAtCalled = true
 	return nil, nil
 }
 
-func (mc *mockCaller) PendingCallContract(ctx context.Context, call ethereum.CallMsg) ([]byte, error) {
+func (mc *mockCaller) PendingCallContract(_ context.Context, _ ethereum.CallMsg) ([]byte, error) {
 	mc.pendingCallContractCalled = true
 	return nil, nil
 }
