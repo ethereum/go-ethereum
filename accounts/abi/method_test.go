@@ -21,7 +21,7 @@ import (
 	"testing"
 )
 
-const methoddata = `
+const methodData = `
 [
 	{"type": "function", "name": "balance", "stateMutability": "view"},
 	{"type": "function", "name": "send", "inputs": [{ "name": "amount", "type": "uint256" }]},
@@ -77,7 +77,7 @@ func TestMethodString(t *testing.T) {
 		},
 	}
 
-	abi, err := JSON(strings.NewReader(methoddata))
+	abi, err := JSON(strings.NewReader(methodData))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -131,7 +131,7 @@ func TestMethodSig(t *testing.T) {
 			expect: "complexTuple((uint256,uint256)[5][])",
 		},
 	}
-	abi, err := JSON(strings.NewReader(methoddata))
+	abi, err := JSON(strings.NewReader(methodData))
 	if err != nil {
 		t.Fatal(err)
 	}

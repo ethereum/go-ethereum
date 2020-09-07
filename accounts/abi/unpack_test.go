@@ -40,17 +40,17 @@ func TestUnpack(t *testing.T) {
 			if err != nil {
 				t.Fatalf("invalid ABI definition %s: %v", def, err)
 			}
-			encb, err := hex.DecodeString(test.packed)
+			encB, err := hex.DecodeString(test.packed)
 			if err != nil {
 				t.Fatalf("invalid hex %s: %v", test.packed, err)
 			}
-			outptr := reflect.New(reflect.TypeOf(test.unpacked))
-			err = abi.Unpack(outptr.Interface(), "method", encb)
+			outPtr := reflect.New(reflect.TypeOf(test.unpacked))
+			err = abi.Unpack(outPtr.Interface(), "method", encB)
 			if err != nil {
 				t.Errorf("test %d (%v) failed: %v", i, test.def, err)
 				return
 			}
-			out := outptr.Elem().Interface()
+			out := outPtr.Elem().Interface()
 			if !reflect.DeepEqual(test.unpacked, out) {
 				t.Errorf("test %d (%v) failed: expected %v, got %v", i, test.def, test.unpacked, out)
 			}
@@ -216,17 +216,17 @@ func TestLocalUnpackTests(t *testing.T) {
 			if err != nil {
 				t.Fatalf("invalid ABI definition %s: %v", def, err)
 			}
-			encb, err := hex.DecodeString(test.enc)
+			encB, err := hex.DecodeString(test.enc)
 			if err != nil {
 				t.Fatalf("invalid hex %s: %v", test.enc, err)
 			}
-			outptr := reflect.New(reflect.TypeOf(test.want))
-			err = abi.Unpack(outptr.Interface(), "method", encb)
+			outPtr := reflect.New(reflect.TypeOf(test.want))
+			err = abi.Unpack(outPtr.Interface(), "method", encB)
 			if err := test.checkError(err); err != nil {
 				t.Errorf("test %d (%v) failed: %v", i, test.def, err)
 				return
 			}
-			out := outptr.Elem().Interface()
+			out := outPtr.Elem().Interface()
 			if !reflect.DeepEqual(test.want, out) {
 				t.Errorf("test %d (%v) failed: expected %v, got %v", i, test.def, test.want, out)
 			}
@@ -909,11 +909,11 @@ func TestOOMMaliciousInput(t *testing.T) {
 		if err != nil {
 			t.Fatalf("invalid ABI definition %s: %v", def, err)
 		}
-		encb, err := hex.DecodeString(test.enc)
+		encB, err := hex.DecodeString(test.enc)
 		if err != nil {
 			t.Fatalf("invalid hex: %s" + test.enc)
 		}
-		_, err = abi.Methods["method"].Outputs.UnpackValues(encb)
+		_, err = abi.Methods["method"].Outputs.UnpackValues(encB)
 		if err == nil {
 			t.Fatalf("Expected error on malicious input, test %d", i)
 		}
