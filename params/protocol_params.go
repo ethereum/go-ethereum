@@ -116,7 +116,10 @@ const (
 	Ripemd160PerWordGas uint64 = 120  // Per-word price for a RIPEMD160 operation
 	IdentityBaseGas     uint64 = 15   // Base price for a data copy operation
 	IdentityPerWordGas  uint64 = 3    // Per-work price for a data copy operation
-	ModExpQuadCoeffDiv  uint64 = 20   // Divisor for the quadratic particle of the big int modular exponentiation
+
+	// Divisor for the quadratic particle of the big int modular exponentiation
+	ModExpQuadCoeffDiv        uint64 = 20 // Original byzantium value
+	ModExpQuadCoeffDivEIP2565 uint64 = 3  // EIP-2565 repricing value
 
 	Bn256AddGasByzantium             uint64 = 500    // Byzantium gas needed for an elliptic curve addition
 	Bn256AddGasIstanbul              uint64 = 150    // Gas needed for an elliptic curve addition
