@@ -378,7 +378,7 @@ func (w *wallet) selfDerive() {
 					// of legacy-ledger, the first account on the legacy-path will
 					// be shown to the user, even if we don't actively track it
 					if i < len(nextAddrs)-1 {
-						w.log.Info("Skipping acc, use personal.deriveAccount(<url>,<path>, false) to track",
+						w.log.Info("Skipping trakcking first account on legacy path, use personal.deriveAccount(<url>,<path>, false) to track",
 							"path", path, "address", nextAddrs[i])
 						break
 					}
