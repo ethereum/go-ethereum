@@ -356,7 +356,7 @@ func (api *SignerAPI) startUSBListener() {
 						if err != nil {
 							log.Warn("Account derivation failed", "error", err)
 						} else {
-							log.Info("derived account", "address", acc.Address, "path", nextPath)
+							log.Info("Derived account", "address", acc.Address, "path", nextPath)
 						}
 						nextPath[len(nextPath)-1]++
 					}
