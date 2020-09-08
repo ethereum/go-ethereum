@@ -30,6 +30,7 @@ import (
 // precompiledTest defines the input/output pairs for precompiled contract tests.
 type precompiledTest struct {
 	Input, Expected string
+	Gas             uint64
 	Name            string
 	NoBenchmark     bool // Benchmark primarily the worst-cases
 }
@@ -77,6 +78,9 @@ func testPrecompiled(addr string, test precompiledTest, t *testing.T) {
 			t.Error(err)
 		} else if common.Bytes2Hex(res) != test.Expected {
 			t.Errorf("Expected %v, got %v", test.Expected, common.Bytes2Hex(res))
+		}
+		if expGas := test.Gas; expGas != gas {
+			t.Errorf("%v: gas wrong, expected %d, got %d", test.Name, expGas, gas)
 		}
 		// Verify that the precompile did not touch the input buffer
 		exp := common.Hex2Bytes(test.Input)
