@@ -66,11 +66,13 @@ type Miner struct {
 
 func New(eth Backend, config *Config, chainConfig *params.ChainConfig, mux *event.TypeMux, engine consensus.Engine, isLocalBlock func(block *types.Block) bool) *Miner {
 	miner := &Miner{
-		eth:    eth,
-		mux:    mux,
-		engine: engine,
-		exitCh: make(chan struct{}),
-		worker: newWorker(config, chainConfig, engine, eth, mux, isLocalBlock, true),
+		eth:     eth,
+		mux:     mux,
+		engine:  engine,
+		exitCh:  make(chan struct{}),
+		startCh: make(chan common.Address),
+		stopCh:  make(chan struct{}),
+		worker:  newWorker(config, chainConfig, engine, eth, mux, isLocalBlock, true),
 	}
 	go miner.update()
 
@@ -121,7 +123,6 @@ func (miner *Miner) update() {
 
 func (miner *Miner) Start(coinbase common.Address) {
 	miner.startCh <- coinbase
-
 }
 
 func (miner *Miner) Stop() {
