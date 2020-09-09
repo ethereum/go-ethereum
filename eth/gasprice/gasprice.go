@@ -31,7 +31,7 @@ import (
 
 const sampleNumber = 3 // Number of transactions sampled in a block
 
-var MaxPrice = big.NewInt(500 * params.GWei)
+var DefaultMaxPrice = big.NewInt(500 * params.GWei)
 
 type Config struct {
 	Blocks     int
@@ -80,7 +80,7 @@ func NewOracle(backend OracleBackend, params Config) *Oracle {
 	}
 	maxPrice := params.MaxPrice
 	if maxPrice == nil || maxPrice.Int64() <= 0 {
-		maxPrice = MaxPrice
+		maxPrice = DefaultMaxPrice
 		log.Warn("Sanitizing invalid gasprice oracle price cap", "provided", params.MaxPrice, "updated", maxPrice)
 	}
 	return &Oracle{
