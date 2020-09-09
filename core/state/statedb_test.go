@@ -75,22 +75,14 @@ func TestStateChangesEmittedFromCommit(t *testing.T) {
 	addr2 := common.BytesToAddress([]byte{5, 6, 7, 8})
 	expectedModifiedAccount1 := getNewModifiedAccount()
 	expectedModifiedAccount2 := getNewModifiedAccount()
+	storageKey := common.BytesToHash([]byte{1})
 
 	// Commit 1
-	// set balance and storage for addr1
-	addr1Balance := big.NewInt(rand.Int63())
-	state.SetBalance(addr1, addr1Balance)
-	expectedModifiedAccount1.Account.Balance = addr1Balance
-
-	storageKey := common.BytesToHash([]byte{1})
+	expectedModifiedAccount1 = setBalanceForAddr(state, addr1, expectedModifiedAccount1)
 	storageValue := common.BytesToHash([]byte{1, 2, 3})
-	state.SetState(addr1, storageKey, storageValue)
-	expectedModifiedAccount1.Storage[storageKey] = storageValue
+	expectedModifiedAccount1 = setStorageForAddr(state, addr1, storageKey, storageValue, expectedModifiedAccount1)
 
-	// set balance for addr2
-	addr2Balance := big.NewInt(rand.Int63())
-	state.SetBalance(addr2, addr2Balance)
-	expectedModifiedAccount2.Account.Balance = addr2Balance
+	expectedModifiedAccount2 = setBalanceForAddr(state, addr2, expectedModifiedAccount2)
 
 	expectedStateChangesOne := make(StateChanges)
 	expectedStateChangesOne[addr1] = expectedModifiedAccount1
@@ -103,18 +95,13 @@ func TestStateChangesEmittedFromCommit(t *testing.T) {
 
 	assertStateChanges(actualStateChangesOne, expectedStateChangesOne, t)
 
-	// Commit 2: Update existing accounts
-	expectedStateChangesTwo := make(StateChanges)
-
-	//  update balance and storage for addr1
+	// Commit 2
 	newBalanceToAdd := big.NewInt(100)
-	state.AddBalance(addr1, newBalanceToAdd)
-	newAddr1Balance := newBalanceToAdd.Int64() + addr1Balance.Int64()
-	expectedModifiedAccount1.Account.Balance = big.NewInt(newAddr1Balance)
-
+	expectedModifiedAccount1 = addBalanceForAddr(state, addr1, newBalanceToAdd, expectedModifiedAccount1)
 	updatedStorageValue := common.BytesToHash([]byte{0}) // setting storage value back to zero to make sure that we're capturing zero value diffs
-	state.SetState(addr1, storageKey, updatedStorageValue)
-	expectedModifiedAccount1.Storage[storageKey] = updatedStorageValue
+	expectedModifiedAccount1 = setStorageForAddr(state, addr1, storageKey, updatedStorageValue, expectedModifiedAccount1)
+
+	expectedStateChangesTwo := make(StateChanges)
 	expectedStateChangesTwo[addr1] = expectedModifiedAccount1
 
 	_, stateChangesTwo, commitTwoErr := state.Commit(false)
@@ -135,6 +122,29 @@ func getNewModifiedAccount() ModifiedAccount {
 			CodeHash: emptyCodeHash,
 		},
 	}
+}
+
+func setBalanceForAddr(state *StateDB, addr common.Address, expectedModifiedAccount ModifiedAccount) ModifiedAccount {
+	balance := big.NewInt(rand.Int63())
+	state.SetBalance(addr, balance)
+	expectedModifiedAccount.Account.Balance = balance
+
+	return expectedModifiedAccount
+}
+
+func addBalanceForAddr(state *StateDB, addr common.Address, additionalBalance *big.Int, expectedModifiedAccount ModifiedAccount) ModifiedAccount {
+	state.AddBalance(addr, additionalBalance)
+	newBalance := additionalBalance.Int64() + expectedModifiedAccount.Balance.Int64()
+	expectedModifiedAccount.Account.Balance = big.NewInt(newBalance)
+
+	return expectedModifiedAccount
+}
+
+func setStorageForAddr(state *StateDB, addr common.Address, storageKey, storageValue common.Hash, expectedModifiedAccount ModifiedAccount) ModifiedAccount {
+	state.SetState(addr, storageKey, storageValue)
+	expectedModifiedAccount.Storage[storageKey] = storageValue
+
+	return expectedModifiedAccount
 }
 
 func assertStateChanges(actualChanges, expectedChanges StateChanges, t *testing.T) {
