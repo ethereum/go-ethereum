@@ -189,6 +189,7 @@ var AppHelpFlagGroups = []flags.FlagGroup{
 		Flags: []cli.Flag{
 			utils.GpoBlocksFlag,
 			utils.GpoPercentileFlag,
+			utils.GpoMaxGasPriceFlag,
 		},
 	},
 	{
