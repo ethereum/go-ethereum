@@ -32,6 +32,11 @@ import (
 	"github.com/ethereum/go-ethereum/rlp"
 )
 
+var (
+	ErrInvalidField = errors.New("invalid field type")
+	ErrClosed       = errors.New("already closed")
+)
+
 type (
 	// NodeStateMachine implements a network node-related event subscription system.
 	// It can assign binary state flags and fields of arbitrary type to each node and allows
@@ -57,7 +62,7 @@ type (
 	// potentially performs state/field changes then it is recommended to mention this fact in the
 	// function description, along with whether it should run inside an operation callback.
 	NodeStateMachine struct {
-		started, stopped    bool
+		started, closed     bool
 		lock                sync.Mutex
 		clock               mclock.Clock
 		db                  ethdb.KeyValueStore
@@ -419,29 +424,33 @@ func (ns *NodeStateMachine) Start() {
 	if ns.db != nil {
 		ns.loadFromDb()
 	}
-	ns.lock.Unlock()
+
+	ns.opStart()
 	ns.offlineCallbacks(true)
+	ns.opFinish()
+	ns.lock.Unlock()
 }
 
 // Stop stops the state machine and saves its state if a database was supplied
 func (ns *NodeStateMachine) Stop() {
 	ns.lock.Lock()
-	if ns.opFlag {
-		ns.opWait.Wait()
+	defer ns.lock.Unlock()
+
+	ns.checkStarted()
+	if !ns.opStart() {
+		panic("already closed")
 	}
 	for _, node := range ns.nodes {
 		fields := make([]interface{}, len(node.fields))
 		copy(fields, node.fields)
 		ns.offlineCallbackList = append(ns.offlineCallbackList, offlineCallback{node, node.state, fields})
 	}
-	ns.stopped = true
 	if ns.db != nil {
 		ns.saveToDb()
-		ns.lock.Unlock()
-	} else {
-		ns.lock.Unlock()
 	}
 	ns.offlineCallbacks(false)
+	ns.closed = true
+	ns.opFinish()
 }
 
 // loadFromDb loads persisted node states from the database
@@ -612,13 +621,16 @@ func (ns *NodeStateMachine) Persist(n *enode.Node) error {
 
 // SetState updates the given node state flags and blocks until the operation is finished.
 // If a flag with a timeout is set again, the operation removes or replaces the existing timeout.
-func (ns *NodeStateMachine) SetState(n *enode.Node, setFlags, resetFlags Flags, timeout time.Duration) {
+func (ns *NodeStateMachine) SetState(n *enode.Node, setFlags, resetFlags Flags, timeout time.Duration) error {
 	ns.lock.Lock()
 	defer ns.lock.Unlock()
 
-	ns.opStart()
+	if !ns.opStart() {
+		return ErrClosed
+	}
 	ns.setState(n, setFlags, resetFlags, timeout)
 	ns.opFinish()
+	return nil
 }
 
 // SetStateSub updates the given node state flags without blocking (should be called
@@ -633,10 +645,6 @@ func (ns *NodeStateMachine) SetStateSub(n *enode.Node, setFlags, resetFlags Flag
 
 func (ns *NodeStateMachine) setState(n *enode.Node, setFlags, resetFlags Flags, timeout time.Duration) {
 	ns.checkStarted()
-	if ns.stopped {
-		return
-	}
-
 	set, reset := ns.stateMask(setFlags), ns.stateMask(resetFlags)
 	id, node := ns.updateEnode(n)
 	if node == nil {
@@ -680,6 +688,7 @@ func (ns *NodeStateMachine) setState(n *enode.Node, setFlags, resetFlags Flags, 
 		}
 	}
 	ns.opPending = append(ns.opPending, callback)
+	return
 }
 
 // opCheck checks whether an operation is active
@@ -690,11 +699,15 @@ func (ns *NodeStateMachine) opCheck() {
 }
 
 // opStart waits until other operations are finished and starts a new one
-func (ns *NodeStateMachine) opStart() {
+func (ns *NodeStateMachine) opStart() bool {
 	for ns.opFlag {
 		ns.opWait.Wait()
 	}
+	if ns.closed {
+		return false
+	}
 	ns.opFlag = true
+	return true
 }
 
 // opFinish finishes the current operation by running all pending callbacks.
@@ -719,22 +732,22 @@ func (ns *NodeStateMachine) opFinish() {
 // Operation calls the given function as an operation callback. This allows the caller
 // to start an operation with multiple initial changes. The same rules apply as for
 // subscription callbacks.
-func (ns *NodeStateMachine) Operation(fn func()) {
+func (ns *NodeStateMachine) Operation(fn func()) error {
 	ns.lock.Lock()
-	ns.opStart()
+	started := ns.opStart()
 	ns.lock.Unlock()
+	if !started {
+		return ErrClosed
+	}
 	fn()
 	ns.lock.Lock()
 	ns.opFinish()
 	ns.lock.Unlock()
+	return nil
 }
 
 // offlineCallbacks calls state update callbacks at startup or shutdown
 func (ns *NodeStateMachine) offlineCallbacks(start bool) {
-	ns.lock.Lock()
-	defer ns.lock.Unlock()
-
-	ns.opStart()
 	for _, cb := range ns.offlineCallbackList {
 		cb := cb
 		callback := func() {
@@ -766,20 +779,20 @@ func (ns *NodeStateMachine) offlineCallbacks(start bool) {
 		ns.opPending = append(ns.opPending, callback)
 	}
 	ns.offlineCallbackList = nil
-	ns.opFinish()
 }
 
 // AddTimeout adds a node state timeout associated to the given state flag(s).
 // After the specified time interval, the relevant states will be reset.
-func (ns *NodeStateMachine) AddTimeout(n *enode.Node, flags Flags, timeout time.Duration) {
+func (ns *NodeStateMachine) AddTimeout(n *enode.Node, flags Flags, timeout time.Duration) error {
 	ns.lock.Lock()
 	defer ns.lock.Unlock()
 
 	ns.checkStarted()
-	if ns.stopped {
-		return
+	if ns.closed {
+		return ErrClosed
 	}
 	ns.addTimeout(n, ns.stateMask(flags), timeout)
+	return nil
 }
 
 // addTimeout adds a node state timeout associated to the given state flag(s).
@@ -836,7 +849,7 @@ func (ns *NodeStateMachine) GetField(n *enode.Node, field Field) interface{} {
 	defer ns.lock.Unlock()
 
 	ns.checkStarted()
-	if ns.stopped {
+	if ns.closed {
 		return nil
 	}
 	if _, node := ns.updateEnode(n); node != nil {
@@ -850,7 +863,9 @@ func (ns *NodeStateMachine) SetField(n *enode.Node, field Field, value interface
 	ns.lock.Lock()
 	defer ns.lock.Unlock()
 
-	ns.opStart()
+	if !ns.opStart() {
+		return ErrClosed
+	}
 	err := ns.setField(n, field, value)
 	ns.opFinish()
 	return err
@@ -868,9 +883,6 @@ func (ns *NodeStateMachine) SetFieldSub(n *enode.Node, field Field, value interf
 
 func (ns *NodeStateMachine) setField(n *enode.Node, field Field, value interface{}) error {
 	ns.checkStarted()
-	if ns.stopped {
-		return nil
-	}
 	id, node := ns.updateEnode(n)
 	if node == nil {
 		if value == nil {
@@ -883,7 +895,7 @@ func (ns *NodeStateMachine) setField(n *enode.Node, field Field, value interface
 	f := ns.fields[fieldIndex]
 	if value != nil && reflect.TypeOf(value) != f.ftype {
 		log.Error("Invalid field type", "type", reflect.TypeOf(value), "required", f.ftype)
-		return errors.New("invalid field type")
+		return ErrInvalidField
 	}
 	oldValue := node.fields[fieldIndex]
 	if value == oldValue {
