@@ -82,64 +82,55 @@ func (bc *testBlockChain) SubscribeChainHeadEvent(ch chan<- core.ChainHeadEvent)
 func TestMiner(t *testing.T) {
 	miner, mux := createMiner(t)
 	miner.Start(common.HexToAddress("0x12345"))
-	if !miner.Mining() {
-		t.Fatal("miner should be mining")
-	}
+	waitForMiningState(t, miner, true)
 	// Start the downloader
 	mux.Post(downloader.StartEvent{})
-	if miner.Mining() {
-		t.Fatal("miner should not be mining")
-	}
+	waitForMiningState(t, miner, false)
 	// Stop the downloader and wait for the update loop to run
 	mux.Post(downloader.DoneEvent{})
-	time.Sleep(time.Millisecond)
-	if !miner.Mining() {
-		t.Fatal("miner should be mining")
-	}
+	waitForMiningState(t, miner, true)
 	// Start the downloader and wait for the update loop to run
 	mux.Post(downloader.StartEvent{})
-	time.Sleep(time.Millisecond)
-	if miner.Mining() {
-		t.Fatal("miner should not be mining")
-	}
+	waitForMiningState(t, miner, false)
 	// Stop the downloader and wait for the update loop to run
 	mux.Post(downloader.FailedEvent{})
-	time.Sleep(time.Millisecond)
-	if !miner.Mining() {
-		t.Fatal("miner should be mining")
-	}
+	waitForMiningState(t, miner, true)
 }
 
 func TestStartStopMiner(t *testing.T) {
 	miner, _ := createMiner(t)
-	if miner.Mining() {
-		t.Fatal("miner should not be mining")
-	}
+	waitForMiningState(t, miner, false)
 	miner.Start(common.HexToAddress("0x12345"))
-	if !miner.Mining() {
-		t.Fatal("miner should be mining")
-	}
+	waitForMiningState(t, miner, true)
 	miner.Stop()
-	if miner.Mining() {
-		t.Fatal("miner should not be mining")
-	}
+	waitForMiningState(t, miner, false)
 }
 
 func TestCloseMiner(t *testing.T) {
 	miner, _ := createMiner(t)
-	if miner.Mining() {
-		t.Fatal("miner should not be mining")
-	}
+	waitForMiningState(t, miner, false)
 	miner.Start(common.HexToAddress("0x12345"))
-	if !miner.Mining() {
-		t.Fatal("miner should be mining")
-	}
+	waitForMiningState(t, miner, true)
 	// Terminate the miner and wait for the update loop to run
 	miner.Close()
 	time.Sleep(time.Millisecond)
-	if miner.Mining() {
-		t.Fatal("miner should not be mining")
+	waitForMiningState(t, miner, false)
+}
+
+// waitForMiningState waits until either
+// * the desired mining state was reached
+// * a timeout was reached which fails the test
+func waitForMiningState(t *testing.T, m *Miner, mining bool) {
+	t.Helper()
+
+	var state bool
+	for i := 0; i < 100; i++ {
+		if state = m.Mining(); state == mining {
+			return
+		}
+		time.Sleep(10 * time.Millisecond)
 	}
+	t.Fatalf("Mining() == %t, want %t", state, mining)
 }
 
 func createMiner(t *testing.T) (*Miner, *event.TypeMux) {
