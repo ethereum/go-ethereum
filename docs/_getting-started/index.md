@@ -130,9 +130,9 @@ to the second account you created:
 eth.sendTransaction({from:"<ADDRESS_0>",to:"<ADDRESS_1>", value: web3.toWei(0.01,"ether")})
 ```
 
-This action does require signing, so Clef prompts you to approve it, and if you
-do, asks you for the password you are sending the ETH from.
-If the password is correct, Geth proceeds with the transaction.
+This action does require signing the transaction, so Clef prompts you to approve it, and
+if you do, asks you for the password you are sending the ETH from. If the password is
+correct, Geth proceeds with the transaction.
 
 To check, get the account balance of the second account:
 
