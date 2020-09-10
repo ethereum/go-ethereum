@@ -5,14 +5,15 @@ sort_key: A
 ---
 
 To use Geth, you need to install it first. You can install Geth in a variety
-of ways that you can find in the "[Install and Build](install-and-build/installing-geth)" section. 
+of ways that you can find in the "[Install and Build](install-and-build/installing-geth)" section.
 These include installing it via your favorite package manager, downloading a
 standalone pre-built binary, running it as a docker container or building it yourself.
 
-For this guide, we assume you have Geth installed and are ready to find  out how to use it. 
-The guide shows you how to create accounts, sync to a network, and then send transactions between accounts.
+For this guide, we assume you have Geth installed and are ready to find out how to use it.
+The guide shows you how to create accounts, sync to a network, and then send transactions
+between accounts.
 
-This guide uses [Clef](clef/tutorial), which is our preferred tool for signing transactions with Geth, 
+This guide uses [Clef](clef/tutorial), which is our preferred tool for signing transactions with Geth,
 and will replace Geth's account management.
 
 ## Initialize Clef
@@ -39,8 +40,8 @@ Clef outputs a debug message about `Failed to reload keystore contents`, we fix 
 
 ### Networks
 
-You can connect a Geth node to several different networks using the network name as an argument. 
-These include the main Ethereum network, [a private network](getting-started/private-net) you  create, 
+You can connect a Geth node to several different networks using the network name as an argument.
+These include the main Ethereum network, [a private network](getting-started/private-net) you create,
 and three test networks that use different consensus algorithms:
 
 -   **Ropsten**: Proof-of-work test network
@@ -77,7 +78,7 @@ To begin with, you see errors about a missing keystore, and we fix that soon.
 
 ## Start Geth
 
-The command below also enables the [Geth RPC interface](clef/tutorial) 
+The command below also enables the [Geth RPC interface](clef/tutorial)
 (which we cover below), and sets Clef as the transaction signer.
 
 ```shell
@@ -99,7 +100,7 @@ with accounts, but you need direct access to the node.
 
 RPC allows remote applications to access your node but has limitations and security
 considerations, and by default only allows access to methods in the `eth` and `shh`
-namespaces. Find out how to override this setting [in the RPC docs](rpc/server#http-server). 
+namespaces. Find out how to override this setting [in the RPC docs](rpc/server#http-server).
 
 ## Using IPC
 
@@ -130,7 +131,7 @@ eth.sendTransaction({from:"<ADDRESS_0>",to:"<ADDRESS_1>", value: web3.toWei(0.01
 ```
 
 This action does require signing, so Clef prompts you to approve it, and if you
-do, asks you for the password you are sending the ETH from. 
+do, asks you for the password you are sending the ETH from.
 If the password is correct, Geth proceeds with the transaction.
 
 To check, get the account balance of the second account:
