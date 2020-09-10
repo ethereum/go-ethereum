@@ -52,9 +52,9 @@ type LesServer struct {
 	servingQueue *servingQueue
 	clientPool   *clientPool
 
-	minCapacity, maxCapacity, freeCapacity uint64
-	threadsIdle                            int // Request serving threads count when system is idle.
-	threadsBusy                            int // Request serving threads count when system is busy(block insertion).
+	minCapacity, maxCapacity uint64
+	threadsIdle              int // Request serving threads count when system is idle.
+	threadsBusy              int // Request serving threads count when system is busy(block insertion).
 
 	p2pSrv *p2p.Server
 }
@@ -95,7 +95,6 @@ func NewLesServer(node *node.Node, e *eth.Ethereum, config *eth.Config) (*LesSer
 	}
 	srv.handler = newServerHandler(srv, e.BlockChain(), e.ChainDb(), e.TxPool(), e.Synced)
 	srv.costTracker, srv.minCapacity = newCostTracker(e.ChainDb(), config)
-	srv.freeCapacity = srv.minCapacity
 	srv.oracle = srv.setupOracle(node, e.BlockChain().Genesis().Hash(), config)
 
 	// Initialize the bloom trie indexer.
@@ -103,8 +102,8 @@ func NewLesServer(node *node.Node, e *eth.Ethereum, config *eth.Config) (*LesSer
 
 	// Initialize server capacity management fields.
 	srv.defParams = flowcontrol.ServerParams{
-		BufLimit:    srv.freeCapacity * bufLimitRatio,
-		MinRecharge: srv.freeCapacity,
+		BufLimit:    srv.minCapacity * bufLimitRatio,
+		MinRecharge: srv.minCapacity,
 	}
 	// LES flow control tries to more or less guarantee the possibility for the
 	// clients to send a certain amount of requests at any time and get a quick
@@ -112,12 +111,12 @@ func NewLesServer(node *node.Node, e *eth.Ethereum, config *eth.Config) (*LesSer
 	// to send requests most of the time. Our goal is to serve as many clients as
 	// possible while the actually used server capacity does not exceed the limits
 	totalRecharge := srv.costTracker.totalRecharge()
-	srv.maxCapacity = srv.freeCapacity * uint64(srv.config.LightPeers)
+	srv.maxCapacity = srv.minCapacity * uint64(srv.config.LightPeers)
 	if totalRecharge > srv.maxCapacity {
 		srv.maxCapacity = totalRecharge
 	}
-	srv.fcManager.SetCapacityLimits(srv.freeCapacity, srv.maxCapacity, srv.freeCapacity*2)
-	srv.clientPool = newClientPool(srv.chainDb, srv.minCapacity, srv.freeCapacity, defaultConnectedBias, mclock.System{}, func(id enode.ID) { go srv.peers.unregister(id.String()) })
+	srv.fcManager.SetCapacityLimits(srv.minCapacity, srv.maxCapacity, srv.minCapacity*2)
+	srv.clientPool = newClientPool(srv.chainDb, srv.minCapacity, defaultConnectedBias, mclock.System{}, func(id enode.ID) { go srv.peers.unregister(id.String()) })
 	srv.clientPool.setDefaultFactors(lps.PriceFactors{TimeFactor: 0, CapacityFactor: 1, RequestFactor: 1}, lps.PriceFactors{TimeFactor: 0, CapacityFactor: 1, RequestFactor: 1})
 
 	checkpoint := srv.latestLocalCheckpoint()
@@ -269,7 +268,7 @@ func (s *LesServer) capacityManagement() {
 			updateRecharge()
 		case totalCapacity = <-totalCapacityCh:
 			totalCapacityGauge.Update(int64(totalCapacity))
-			newFreePeers := totalCapacity / s.freeCapacity
+			newFreePeers := totalCapacity / s.minCapacity
 			if newFreePeers < freePeers && newFreePeers < uint64(s.config.LightPeers) {
 				log.Warn("Reduced free peer connections", "from", freePeers, "to", newFreePeers)
 			}

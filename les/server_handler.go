@@ -139,7 +139,7 @@ func (h *serverHandler) handle(p *clientPeer) error {
 	defer p.fcClient.Disconnect()
 
 	// Disconnect the inbound peer if it's rejected by clientPool
-	if cap, err := h.server.clientPool.connect(p, 0); cap != p.fcParams.MinRecharge || err != nil {
+	if cap, err := h.server.clientPool.connect(p); cap != p.fcParams.MinRecharge || err != nil {
 		p.Log().Debug("Light Ethereum peer rejected", "err", errFullClientPool)
 		return errFullClientPool
 	}

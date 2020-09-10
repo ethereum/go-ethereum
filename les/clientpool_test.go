@@ -128,7 +128,7 @@ func testClientPool(t *testing.T, activeLimit, clientCount, paidCount int, rando
 		disconnFn = func(id enode.ID) {
 			disconnCh <- int(id[0]) + int(id[1])<<8
 		}
-		pool = newClientPool(db, 1, 1, 0, &clock, disconnFn)
+		pool = newClientPool(db, 1, 0, &clock, disconnFn)
 	)
 
 	pool.setLimits(activeLimit, uint64(activeLimit))
@@ -136,7 +136,7 @@ func testClientPool(t *testing.T, activeLimit, clientCount, paidCount int, rando
 
 	// pool should accept new peers up to its connected limit
 	for i := 0; i < activeLimit; i++ {
-		if cap, _ := pool.connect(newPoolTestPeer(i, disconnCh), 0); cap != 0 {
+		if cap, _ := pool.connect(newPoolTestPeer(i, disconnCh)); cap != 0 {
 			connected[i] = true
 		} else {
 			t.Fatalf("Test peer #%d rejected", i)
@@ -162,7 +162,7 @@ func testClientPool(t *testing.T, activeLimit, clientCount, paidCount int, rando
 				connTicks[i] += tickCounter
 			}
 		} else {
-			if cap, _ := pool.connect(newPoolTestPeer(i, disconnCh), 0); cap != 0 {
+			if cap, _ := pool.connect(newPoolTestPeer(i, disconnCh)); cap != 0 {
 				connected[i] = true
 				connTicks[i] -= tickCounter
 			} else {
@@ -208,22 +208,39 @@ func testClientPool(t *testing.T, activeLimit, clientCount, paidCount int, rando
 	pool.stop()
 }
 
+func testPriorityConnect(t *testing.T, pool *clientPool, p *poolTestPeer, cap uint64, expSuccess bool) {
+	if cap, _ := pool.connect(p); cap == 0 {
+		if expSuccess {
+			t.Fatalf("Failed to connect paid client")
+		} else {
+			return
+		}
+	}
+	if _, err := pool.setCapacity(p.node, "", cap, defaultConnectedBias, true); err != nil {
+		if expSuccess {
+			t.Fatalf("Failed to raise capacity of paid client")
+		} else {
+			return
+		}
+	}
+	if !expSuccess {
+		t.Fatalf("Should reject high capacity paid client")
+	}
+}
+
 func TestConnectPaidClient(t *testing.T) {
 	var (
 		clock mclock.Simulated
 		db    = rawdb.NewMemoryDatabase()
 	)
-	pool := newClientPool(db, 1, 1, defaultConnectedBias, &clock, func(id enode.ID) {})
+	pool := newClientPool(db, 1, defaultConnectedBias, &clock, func(id enode.ID) {})
 	defer pool.stop()
 	pool.setLimits(10, uint64(10))
 	pool.setDefaultFactors(lps.PriceFactors{TimeFactor: 1, CapacityFactor: 0, RequestFactor: 1}, lps.PriceFactors{TimeFactor: 1, CapacityFactor: 0, RequestFactor: 1})
 
 	// Add balance for an external client and mark it as paid client
 	addBalance(pool, newPoolTestPeer(0, nil).node.ID(), int64(time.Minute))
-
-	if cap, _ := pool.connect(newPoolTestPeer(0, nil), 10); cap == 0 {
-		t.Fatalf("Failed to connect paid client")
-	}
+	testPriorityConnect(t, pool, newPoolTestPeer(0, nil), 10, true)
 }
 
 func TestConnectPaidClientToSmallPool(t *testing.T) {
@@ -231,7 +248,7 @@ func TestConnectPaidClientToSmallPool(t *testing.T) {
 		clock mclock.Simulated
 		db    = rawdb.NewMemoryDatabase()
 	)
-	pool := newClientPool(db, 1, 1, defaultConnectedBias, &clock, func(id enode.ID) {})
+	pool := newClientPool(db, 1, defaultConnectedBias, &clock, func(id enode.ID) {})
 	defer pool.stop()
 	pool.setLimits(10, uint64(10)) // Total capacity limit is 10
 	pool.setDefaultFactors(lps.PriceFactors{TimeFactor: 1, CapacityFactor: 0, RequestFactor: 1}, lps.PriceFactors{TimeFactor: 1, CapacityFactor: 0, RequestFactor: 1})
@@ -240,9 +257,7 @@ func TestConnectPaidClientToSmallPool(t *testing.T) {
 	addBalance(pool, newPoolTestPeer(0, nil).node.ID(), int64(time.Minute))
 
 	// Connect a fat paid client to pool, should reject it.
-	if cap, _ := pool.connect(newPoolTestPeer(0, nil), 100); cap != 0 {
-		t.Fatalf("Connected fat paid client, should reject it")
-	}
+	testPriorityConnect(t, pool, newPoolTestPeer(0, nil), 100, false)
 }
 
 func TestConnectPaidClientToFullPool(t *testing.T) {
@@ -251,22 +266,22 @@ func TestConnectPaidClientToFullPool(t *testing.T) {
 		db    = rawdb.NewMemoryDatabase()
 	)
 	removeFn := func(enode.ID) {} // Noop
-	pool := newClientPool(db, 1, 1, defaultConnectedBias, &clock, removeFn)
+	pool := newClientPool(db, 1, defaultConnectedBias, &clock, removeFn)
 	defer pool.stop()
 	pool.setLimits(10, uint64(10)) // Total capacity limit is 10
 	pool.setDefaultFactors(lps.PriceFactors{TimeFactor: 1, CapacityFactor: 0, RequestFactor: 1}, lps.PriceFactors{TimeFactor: 1, CapacityFactor: 0, RequestFactor: 1})
 
 	for i := 0; i < 10; i++ {
 		addBalance(pool, newPoolTestPeer(i, nil).node.ID(), int64(time.Second*20))
-		pool.connect(newPoolTestPeer(i, nil), 1)
+		pool.connect(newPoolTestPeer(i, nil))
 	}
 	addBalance(pool, newPoolTestPeer(11, nil).node.ID(), int64(time.Second*2)) // Add low balance to new paid client
-	if cap, _ := pool.connect(newPoolTestPeer(11, nil), 1); cap != 0 {
+	if cap, _ := pool.connect(newPoolTestPeer(11, nil)); cap != 0 {
 		t.Fatalf("Low balance paid client should be rejected")
 	}
 	clock.Run(time.Second)
 	addBalance(pool, newPoolTestPeer(12, nil).node.ID(), int64(time.Minute*5)) // Add high balance to new paid client
-	if cap, _ := pool.connect(newPoolTestPeer(12, nil), 1); cap == 0 {
+	if cap, _ := pool.connect(newPoolTestPeer(12, nil)); cap == 0 {
 		t.Fatalf("High balance paid client should be accepted")
 	}
 }
@@ -280,7 +295,7 @@ func TestPaidClientKickedOut(t *testing.T) {
 	removeFn := func(id enode.ID) {
 		kickedCh <- int(id[0])
 	}
-	pool := newClientPool(db, 1, 1, defaultConnectedBias, &clock, removeFn)
+	pool := newClientPool(db, 1, defaultConnectedBias, &clock, removeFn)
 	pool.bt.SetExpirationTCs(0, 0)
 	defer pool.stop()
 	pool.setLimits(10, uint64(10)) // Total capacity limit is 10
@@ -288,11 +303,11 @@ func TestPaidClientKickedOut(t *testing.T) {
 
 	for i := 0; i < 10; i++ {
 		addBalance(pool, newPoolTestPeer(i, kickedCh).node.ID(), 10000000000) // 10 second allowance
-		pool.connect(newPoolTestPeer(i, kickedCh), 1)
+		pool.connect(newPoolTestPeer(i, kickedCh))
 		clock.Run(time.Millisecond)
 	}
 	clock.Run(defaultConnectedBias + time.Second*11)
-	if cap, _ := pool.connect(newPoolTestPeer(11, kickedCh), 0); cap == 0 {
+	if cap, _ := pool.connect(newPoolTestPeer(11, kickedCh)); cap == 0 {
 		t.Fatalf("Free client should be accepted")
 	}
 	select {
@@ -310,16 +325,14 @@ func TestConnectFreeClient(t *testing.T) {
 		clock mclock.Simulated
 		db    = rawdb.NewMemoryDatabase()
 	)
-	pool := newClientPool(db, 1, 1, defaultConnectedBias, &clock, func(id enode.ID) {})
+	pool := newClientPool(db, 1, defaultConnectedBias, &clock, func(id enode.ID) {})
 	defer pool.stop()
 	pool.setLimits(10, uint64(10))
 	pool.setDefaultFactors(lps.PriceFactors{TimeFactor: 1, CapacityFactor: 0, RequestFactor: 1}, lps.PriceFactors{TimeFactor: 1, CapacityFactor: 0, RequestFactor: 1})
-	if cap, _ := pool.connect(newPoolTestPeer(0, nil), 1); cap == 0 {
+	if cap, _ := pool.connect(newPoolTestPeer(0, nil)); cap == 0 {
 		t.Fatalf("Failed to connect free client")
 	}
-	if cap, _ := pool.connect(newPoolTestPeer(0, nil), 2); cap != 0 {
-		t.Fatalf("Should reject free client with high capacity")
-	}
+	testPriorityConnect(t, pool, newPoolTestPeer(0, nil), 2, false)
 }
 
 func TestConnectFreeClientToFullPool(t *testing.T) {
@@ -328,24 +341,24 @@ func TestConnectFreeClientToFullPool(t *testing.T) {
 		db    = rawdb.NewMemoryDatabase()
 	)
 	removeFn := func(enode.ID) {} // Noop
-	pool := newClientPool(db, 1, 1, defaultConnectedBias, &clock, removeFn)
+	pool := newClientPool(db, 1, defaultConnectedBias, &clock, removeFn)
 	defer pool.stop()
 	pool.setLimits(10, uint64(10)) // Total capacity limit is 10
 	pool.setDefaultFactors(lps.PriceFactors{TimeFactor: 1, CapacityFactor: 0, RequestFactor: 1}, lps.PriceFactors{TimeFactor: 1, CapacityFactor: 0, RequestFactor: 1})
 
 	for i := 0; i < 10; i++ {
-		pool.connect(newPoolTestPeer(i, nil), 1)
+		pool.connect(newPoolTestPeer(i, nil))
 	}
-	if cap, _ := pool.connect(newPoolTestPeer(11, nil), 1); cap != 0 {
+	if cap, _ := pool.connect(newPoolTestPeer(11, nil)); cap != 0 {
 		t.Fatalf("New free client should be rejected")
 	}
 	clock.Run(time.Minute)
-	if cap, _ := pool.connect(newPoolTestPeer(12, nil), 1); cap != 0 {
+	if cap, _ := pool.connect(newPoolTestPeer(12, nil)); cap != 0 {
 		t.Fatalf("New free client should be rejected")
 	}
 	clock.Run(time.Millisecond)
 	clock.Run(4 * time.Minute)
-	if cap, _ := pool.connect(newPoolTestPeer(13, nil), 1); cap == 0 {
+	if cap, _ := pool.connect(newPoolTestPeer(13, nil)); cap == 0 {
 		t.Fatalf("Old client connects more than 5min should be kicked")
 	}
 }
@@ -357,16 +370,16 @@ func TestFreeClientKickedOut(t *testing.T) {
 		kicked = make(chan int, 100)
 	)
 	removeFn := func(id enode.ID) { kicked <- int(id[0]) }
-	pool := newClientPool(db, 1, 1, defaultConnectedBias, &clock, removeFn)
+	pool := newClientPool(db, 1, defaultConnectedBias, &clock, removeFn)
 	defer pool.stop()
 	pool.setLimits(10, uint64(10)) // Total capacity limit is 10
 	pool.setDefaultFactors(lps.PriceFactors{TimeFactor: 1, CapacityFactor: 0, RequestFactor: 1}, lps.PriceFactors{TimeFactor: 1, CapacityFactor: 0, RequestFactor: 1})
 
 	for i := 0; i < 10; i++ {
-		pool.connect(newPoolTestPeer(i, kicked), 1)
+		pool.connect(newPoolTestPeer(i, kicked))
 		clock.Run(time.Millisecond)
 	}
-	if cap, _ := pool.connect(newPoolTestPeer(10, kicked), 1); cap != 0 {
+	if cap, _ := pool.connect(newPoolTestPeer(10, kicked)); cap != 0 {
 		t.Fatalf("New free client should be rejected")
 	}
 	select {
@@ -377,7 +390,7 @@ func TestFreeClientKickedOut(t *testing.T) {
 	pool.disconnect(newPoolTestPeer(10, kicked))
 	clock.Run(5 * time.Minute)
 	for i := 0; i < 10; i++ {
-		pool.connect(newPoolTestPeer(i+10, kicked), 1)
+		pool.connect(newPoolTestPeer(i+10, kicked))
 	}
 	for i := 0; i < 10; i++ {
 		select {
@@ -398,13 +411,13 @@ func TestPositiveBalanceCalculation(t *testing.T) {
 		kicked = make(chan int, 10)
 	)
 	removeFn := func(id enode.ID) { kicked <- int(id[0]) } // Noop
-	pool := newClientPool(db, 1, 1, defaultConnectedBias, &clock, removeFn)
+	pool := newClientPool(db, 1, defaultConnectedBias, &clock, removeFn)
 	defer pool.stop()
 	pool.setLimits(10, uint64(10)) // Total capacity limit is 10
 	pool.setDefaultFactors(lps.PriceFactors{TimeFactor: 1, CapacityFactor: 0, RequestFactor: 1}, lps.PriceFactors{TimeFactor: 1, CapacityFactor: 0, RequestFactor: 1})
 
 	addBalance(pool, newPoolTestPeer(0, kicked).node.ID(), int64(time.Minute*3))
-	pool.connect(newPoolTestPeer(0, kicked), 10)
+	testPriorityConnect(t, pool, newPoolTestPeer(0, kicked), 10, true)
 	clock.Run(time.Minute)
 
 	pool.disconnect(newPoolTestPeer(0, kicked))
@@ -421,14 +434,14 @@ func TestDowngradePriorityClient(t *testing.T) {
 		kicked = make(chan int, 10)
 	)
 	removeFn := func(id enode.ID) { kicked <- int(id[0]) } // Noop
-	pool := newClientPool(db, 1, 1, defaultConnectedBias, &clock, removeFn)
+	pool := newClientPool(db, 1, defaultConnectedBias, &clock, removeFn)
 	defer pool.stop()
 	pool.setLimits(10, uint64(10)) // Total capacity limit is 10
 	pool.setDefaultFactors(lps.PriceFactors{TimeFactor: 1, CapacityFactor: 0, RequestFactor: 1}, lps.PriceFactors{TimeFactor: 1, CapacityFactor: 0, RequestFactor: 1})
 
 	p := newPoolTestPeer(0, kicked)
 	addBalance(pool, p.node.ID(), int64(time.Minute))
-	p.cap, _ = pool.connect(p, 10)
+	testPriorityConnect(t, pool, p, 10, true)
 	if p.cap != 10 {
 		t.Fatalf("The capacity of priority peer hasn't been updated, got: %d", p.cap)
 	}
@@ -455,13 +468,13 @@ func TestNegativeBalanceCalculation(t *testing.T) {
 		clock mclock.Simulated
 		db    = rawdb.NewMemoryDatabase()
 	)
-	pool := newClientPool(db, 1, 1, defaultConnectedBias, &clock, func(id enode.ID) {})
+	pool := newClientPool(db, 1, defaultConnectedBias, &clock, func(id enode.ID) {})
 	defer pool.stop()
 	pool.setLimits(10, uint64(10)) // Total capacity limit is 10
 	pool.setDefaultFactors(lps.PriceFactors{TimeFactor: 1e-3, CapacityFactor: 0, RequestFactor: 1}, lps.PriceFactors{TimeFactor: 1e-3, CapacityFactor: 0, RequestFactor: 1})
 
 	for i := 0; i < 10; i++ {
-		pool.connect(newPoolTestPeer(i, nil), 1)
+		pool.connect(newPoolTestPeer(i, nil))
 	}
 	clock.Run(time.Second)
 
@@ -473,7 +486,7 @@ func TestNegativeBalanceCalculation(t *testing.T) {
 		}
 	}
 	for i := 0; i < 10; i++ {
-		pool.connect(newPoolTestPeer(i, nil), 1)
+		pool.connect(newPoolTestPeer(i, nil))
 	}
 	clock.Run(time.Minute)
 	for i := 0; i < 10; i++ {
@@ -490,7 +503,7 @@ func TestInactiveClient(t *testing.T) {
 		clock mclock.Simulated
 		db    = rawdb.NewMemoryDatabase()
 	)
-	pool := newClientPool(db, 1, 1, defaultConnectedBias, &clock, func(id enode.ID) {})
+	pool := newClientPool(db, 1, defaultConnectedBias, &clock, func(id enode.ID) {})
 	defer pool.stop()
 	pool.setLimits(2, uint64(2))
 
@@ -503,15 +516,15 @@ func TestInactiveClient(t *testing.T) {
 	addBalance(pool, p1.node.ID(), 1000*int64(time.Second))
 	addBalance(pool, p3.node.ID(), 2000*int64(time.Second))
 	// p1: 1000  p2: 0  p3: 2000
-	p1.cap, _ = pool.connect(p1, 1)
+	p1.cap, _ = pool.connect(p1)
 	if p1.cap != 1 {
 		t.Fatalf("Failed to connect peer #1")
 	}
-	p2.cap, _ = pool.connect(p2, 1)
+	p2.cap, _ = pool.connect(p2)
 	if p2.cap != 1 {
 		t.Fatalf("Failed to connect peer #2")
 	}
-	p3.cap, _ = pool.connect(p3, 1)
+	p3.cap, _ = pool.connect(p3)
 	if p3.cap != 1 {
 		t.Fatalf("Failed to connect peer #3")
 	}
@@ -538,7 +551,7 @@ func TestInactiveClient(t *testing.T) {
 	p4 := newPoolTestPeer(4, nil)
 	addBalance(pool, p4.node.ID(), 1500*int64(time.Second))
 	// p1: 1000  p2: 500  p3: 2000  p4: 1500
-	p4.cap, _ = pool.connect(p4, 1)
+	p4.cap, _ = pool.connect(p4)
 	if p4.cap != 1 {
 		t.Fatalf("Failed to activate peer #4")
 	}

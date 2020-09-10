@@ -93,7 +93,6 @@ type clientPool struct {
 	minCap                               uint64 // The minimal capacity value allowed for any client
 	connectedBias                        time.Duration
 	capLimit                             uint64
-	freeClientCap                        uint64 // The capacity value of each free client
 }
 
 // clientPoolPeer represents a client peer in the pool.
@@ -120,10 +119,7 @@ type clientInfo struct {
 }
 
 // newClientPool creates a new client pool
-func newClientPool(lespayDb ethdb.Database, minCap, freeClientCap uint64, connectedBias time.Duration, clock mclock.Clock, removePeer func(enode.ID)) *clientPool {
-	if minCap > freeClientCap {
-		panic(nil)
-	}
+func newClientPool(lespayDb ethdb.Database, minCap uint64, connectedBias time.Duration, clock mclock.Clock, removePeer func(enode.ID)) *clientPool {
 	ns := nodestate.NewNodeStateMachine(nil, nil, clock, clientPoolSetup)
 	pool := &clientPool{
 		ns:                  ns,
@@ -132,7 +128,6 @@ func newClientPool(lespayDb ethdb.Database, minCap, freeClientCap uint64, connec
 		clock:               clock,
 		minCap:              minCap,
 		connectedBias:       connectedBias,
-		freeClientCap:       freeClientCap,
 		removePeer:          removePeer,
 	}
 	pool.bt = lps.NewBalanceTracker(ns, balanceTrackerSetup, lespayDb, clock, &utils.Expirer{}, &utils.Expirer{})
@@ -154,8 +149,8 @@ func newClientPool(lespayDb ethdb.Database, minCap, freeClientCap uint64, connec
 	ns.SubscribeState(pool.ActiveFlag.Or(pool.PriorityFlag), func(node *enode.Node, oldState, newState nodestate.Flags) {
 		if newState.Equals(pool.ActiveFlag) {
 			cap, _ := ns.GetField(node, pool.CapacityField).(uint64)
-			if cap > freeClientCap {
-				pool.pp.RequestCapacity(node, freeClientCap, 0, true)
+			if cap > minCap {
+				pool.pp.RequestCapacity(node, minCap, 0, true)
 			}
 		}
 	})
@@ -205,7 +200,7 @@ func (f *clientPool) stop() {
 	f.lock.Lock()
 	f.closed = true
 	f.lock.Unlock()
-	f.ns.ForEach(f.ActiveFlag.Or(f.InactiveFlag), nodestate.Flags{}, func(node *enode.Node, state nodestate.Flags) {
+	f.ns.ForEach(nodestate.Flags{}, nodestate.Flags{}, func(node *enode.Node, state nodestate.Flags) {
 		// enforces saving all balances in BalanceTracker
 		f.disconnectNode(node)
 	})
@@ -215,7 +210,7 @@ func (f *clientPool) stop() {
 
 // connect should be called after a successful handshake. If the connection was
 // rejected, there is no need to call disconnect.
-func (f *clientPool) connect(peer clientPoolPeer, reqCapacity uint64) (uint64, error) {
+func (f *clientPool) connect(peer clientPoolPeer) (uint64, error) {
 	f.lock.Lock()
 	defer f.lock.Unlock()
 
@@ -244,21 +239,14 @@ func (f *clientPool) connect(peer clientPoolPeer, reqCapacity uint64) (uint64, e
 		return 0, nil
 	}
 	c.balance.SetPriceFactors(f.defaultPosFactors, f.defaultNegFactors)
-	if reqCapacity < f.minCap {
-		reqCapacity = f.minCap
-	}
-	if reqCapacity > f.freeClientCap && c.balance.Priority(now, reqCapacity) <= 0 {
-		f.disconnect(peer)
-		return 0, nil
-	}
 
 	f.ns.SetState(node, f.InactiveFlag, nodestate.Flags{}, 0)
 	var allowed bool
 	f.ns.Operation(func() {
-		_, allowed = f.pp.RequestCapacity(node, reqCapacity, f.connectedBias, true)
+		_, allowed = f.pp.RequestCapacity(node, f.minCap, f.connectedBias, true)
 	})
 	if allowed {
-		return reqCapacity, nil
+		return f.minCap, nil
 	}
 	if !peer.allowInactive() {
 		f.disconnect(peer)
@@ -373,7 +361,7 @@ func (f *clientPool) forClients(ids []enode.ID, cb func(client *clientInfo)) {
 	defer f.lock.Unlock()
 
 	if len(ids) == 0 {
-		f.ns.ForEach(f.ActiveFlag.Or(f.InactiveFlag), nodestate.Flags{}, func(node *enode.Node, state nodestate.Flags) {
+		f.ns.ForEach(nodestate.Flags{}, nodestate.Flags{}, func(node *enode.Node, state nodestate.Flags) {
 			c, _ := f.ns.GetField(node, clientField).(*clientInfo)
 			if c != nil {
 				cb(c)
