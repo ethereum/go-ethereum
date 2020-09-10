@@ -42,7 +42,12 @@ import (
 	"golang.org/x/crypto/sha3"
 )
 
-// Conn represents an RLPx connection. It wraps an underlying network connection.
+// Conn is an RLPx network connection. It wraps a low-level network connection. The
+// underlying connection should not be used for other activity when it is wrapped by Conn.
+//
+// Before sending messages, a handshake must be performed by calling the Handshake method.
+// This type is not generally safe for concurrent use, but reading and writing of messages
+// may happen concurrently after the handshake.
 type Conn struct {
 	dialDest  *ecdsa.PublicKey
 	conn      net.Conn
