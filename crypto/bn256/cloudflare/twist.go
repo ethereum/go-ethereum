@@ -31,7 +31,7 @@ var twistGen = &twistPoint{
 }
 
 func (c *twistPoint) String() string {
-	c.MakeAffineConstantTime()
+	c.MakeAffine()
 	x, y := gfP2Decode(&c.x), gfP2Decode(&c.y)
 	return "(" + x.String() + ", " + y.String() + ")"
 }
@@ -45,7 +45,7 @@ func (c *twistPoint) Set(a *twistPoint) {
 
 // IsOnCurve returns true iff c is on the curve.
 func (c *twistPoint) IsOnCurve() bool {
-	c.MakeAffineConstantTime()
+	c.MakeAffine()
 	if c.IsInfinity() {
 		return true
 	}
@@ -196,7 +196,7 @@ func (c *twistPoint) MakeAffineVariableTime() {
 	c.t.SetOne()
 }
 
-func (c *twistPoint) MakeAffineConstantTime() {
+func (c *twistPoint) MakeAffine() {
 	if c.z.IsOne() {
 		return
 	} else if c.z.IsZero() {
@@ -206,7 +206,7 @@ func (c *twistPoint) MakeAffineConstantTime() {
 		return
 	}
 
-	zInv := (&gfP2{}).InvertConstantTime(&c.z)
+	zInv := (&gfP2{}).Invert(&c.z)
 	t := (&gfP2{}).Mul(&c.y, zInv)
 	zInv2 := (&gfP2{}).Square(zInv)
 	c.y.Mul(t, zInv2)

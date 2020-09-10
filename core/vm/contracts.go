@@ -338,7 +338,7 @@ func runBn256Add(input []byte) ([]byte, error) {
 	}
 	res := new(bn256.G1)
 	res.Add(x, y)
-	return res.Marshal(), nil
+	return res.MarshalVariableTime(), nil
 }
 
 // bn256Add implements a native elliptic curve point addition conforming to
@@ -376,7 +376,7 @@ func runBn256ScalarMul(input []byte) ([]byte, error) {
 	}
 	res := new(bn256.G1)
 	res.ScalarMult(p, new(big.Int).SetBytes(getData(input, 64, 32)))
-	return res.Marshal(), nil
+	return res.MarshalVariableTime(), nil
 }
 
 // bn256ScalarMulIstanbul implements a native elliptic curve scalar

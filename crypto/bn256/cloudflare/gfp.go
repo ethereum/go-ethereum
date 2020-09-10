@@ -31,7 +31,7 @@ func (e *gfP) Set(f *gfP) {
 	e[3] = f[3]
 }
 
-func (e *gfP) InvertConstantTime(f *gfP) {
+func (e *gfP) Invert(f *gfP) {
 	bits := [4]uint64{0x3c208c16d87cfd45, 0x97816a916871ca8d, 0xb85045b68181585d, 0x30644e72e131a029}
 
 	sum, power := &gfP{}, &gfP{}
@@ -82,7 +82,7 @@ func montEncode(c, a *gfP) { gfpMul(c, a, r2) }
 func montDecode(c, a *gfP) { gfpMul(c, a, &gfP{1}) }
 
 func isZero(a *gfP) bool {
-	return a[0] == 0 && a[1] == 0 && a[2] == 0 && a[3] == 0
+	return (a[0] | a[1] | a[2] | a[3]) == 0
 }
 
 func isEven(a *gfP) bool {

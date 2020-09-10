@@ -155,7 +155,7 @@ func (e *gfP2) InvertVariableTime(a *gfP2) *gfP2 {
 	return e
 }
 
-func (e *gfP2) InvertConstantTime(a *gfP2) *gfP2 {
+func (e *gfP2) Invert(a *gfP2) *gfP2 {
 	// See "Implementing cryptographic pairings", M. Scott, section 3.2.
 	// ftp://136.206.11.249/pub/crypto/pairings.pdf
 	t1, t2 := &gfP{}, &gfP{}
@@ -164,7 +164,7 @@ func (e *gfP2) InvertConstantTime(a *gfP2) *gfP2 {
 	gfpAdd(t1, t1, t2)
 
 	inv := &gfP{}
-	inv.InvertConstantTime(t1)
+	inv.Invert(t1)
 
 	gfpNeg(t1, &a.x)
 

@@ -168,7 +168,7 @@ func (e *gfP6) Square(a *gfP6) *gfP6 {
 	return e
 }
 
-func (e *gfP6) InvertConstantTime(a *gfP6) *gfP6 {
+func (e *gfP6) Invert(a *gfP6) *gfP6 {
 	// See "Implementing cryptographic pairings", M. Scott, section 3.2.
 	// ftp://136.206.11.249/pub/crypto/pairings.pdf
 
@@ -204,7 +204,7 @@ func (e *gfP6) InvertConstantTime(a *gfP6) *gfP6 {
 	t1.Mul(B, &a.x).MulXi(t1)
 	F.Add(F, t1)
 
-	F.InvertVariableTime(F)
+	F.Invert(F)
 
 	e.x.Mul(C, F)
 	e.y.Mul(B, F)
@@ -248,7 +248,7 @@ func (e *gfP6) InvertVariableTime(a *gfP6) *gfP6 {
 	t1.Mul(B, &a.x).MulXi(t1)
 	F.Add(F, t1)
 
-	F.InvertConstantTime(F)
+	F.InvertVariableTime(F)
 
 	e.x.Mul(C, F)
 	e.y.Mul(B, F)

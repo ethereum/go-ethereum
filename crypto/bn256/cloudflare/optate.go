@@ -124,7 +124,7 @@ func miller(q *twistPoint, p *curvePoint) *gfP12 {
 
 	aAffine := &twistPoint{}
 	aAffine.Set(q)
-	aAffine.MakeAffineConstantTime()
+	aAffine.MakeAffine()
 
 	bAffine := &curvePoint{}
 	bAffine.Set(p)
@@ -217,7 +217,7 @@ func finalExponentiation(in *gfP12) *gfP12 {
 	t1.y.Set(&in.y)
 
 	inv := &gfP12{}
-	inv.InvertConstantTime(in)
+	inv.Invert(in)
 	t1.Mul(t1, inv)
 
 	t2 := (&gfP12{}).FrobeniusP2(t1)

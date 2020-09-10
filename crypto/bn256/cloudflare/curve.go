@@ -206,7 +206,7 @@ func (c *curvePoint) Mul(a *curvePoint, scalar *big.Int) {
 	c.Set(sum)
 }
 
-func (c *curvePoint) MakeAffine() {
+func (c *curvePoint) MakeAffineVariableTime() {
 	if c.z == *newGFp(1) {
 		return
 	} else if c.z == *newGFp(0) {
@@ -230,7 +230,7 @@ func (c *curvePoint) MakeAffine() {
 	c.t = *newGFp(1)
 }
 
-func (c *curvePoint) MakeAffineConstantTime() {
+func (c *curvePoint) MakeAffine() {
 	if c.z == *newGFp(1) {
 		return
 	} else if c.z == *newGFp(0) {
@@ -241,7 +241,7 @@ func (c *curvePoint) MakeAffineConstantTime() {
 	}
 
 	zInv := &gfP{}
-	zInv.InvertConstantTime(&c.z)
+	zInv.Invert(&c.z)
 
 	t, zInv2 := &gfP{}, &gfP{}
 	gfpMul(t, &c.y, zInv)

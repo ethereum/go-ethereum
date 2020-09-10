@@ -99,7 +99,7 @@ func TestBinaryEAA(t *testing.T) {
 			t.Fatal(err)
 		}
 		tmpLittleFermat := &gfP{}
-		tmpLittleFermat.InvertConstantTime(&Ga.p.x)
+		tmpLittleFermat.Invert(&Ga.p.x)
 
 		tmpBinaryEAA := &gfP{}
 		tmpBinaryEAA.InvertVariableTime(&Ga.p.x)
@@ -127,7 +127,7 @@ func BenchmarkLittleFermatInversion(b *testing.B) {
 
 	tmp := &gfP{}
 	for i := 0; i < b.N; i++ {
-		tmp.InvertConstantTime(&el)
+		tmp.Invert(&el)
 	}
 }
 
