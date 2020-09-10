@@ -148,16 +148,16 @@ You can use standard HTTP requests to connect to a Geth node using the RPC APIs,
 
 ```shell
 curl -X POST http://<GETH_IP_ADDRESS>:8545 --data \
-    '{"jsonrpc":"2.0", "method":"<API_METHOD>", "params":[], "id":1}' \
-    -H "Content-Type:application/json"
+    -H "Content-Type: application/json" \
+    '{"jsonrpc":"2.0", "method":"<API_METHOD>", "params":[], "id":1}'
 ```
 
 ### Check account balance
 
 ```shell
 curl -X POST http://<GETH_IP_ADDRESS>:8545 --data \
-    '{"jsonrpc":"2.0", "method":"eth_getBalance", "params":["<ADDRESS_1>","latest"], "id":1}' \
-    -H "Content-Type:application/json"
+    -H "Content-Type: application/json" \
+    '{"jsonrpc":"2.0", "method":"eth_getBalance", "params":["<ADDRESS_1>","latest"], "id":1}'
 ```
 
 Getting the balance of an account does not require a signed transaction,
@@ -169,8 +169,8 @@ Send 0.01 ETH from the account that you added ETH to with the Görli faucet, to 
 
 ```shell
 curl -X POST http://<GETH_IP_ADDRESS>:8545 --data \
+    -H "Content-Type: application/json" \
     '{"jsonrpc":"2.0", "method":"eth_sendTransaction", "params":[{"from": "<ADDRESS_0>","to": "<ADDRESS_1>","value": "0x9184e72a"}], "id":1}'
-    -H "Content-Type:application/json"
 ```
 
 This action does require signing, so Clef prompts you to approve it, and if you do,
@@ -181,6 +181,6 @@ To check, get the account balance of the second account:
 
 ```shell
 curl -X POST http://<GETH_IP_ADDRESS>:8545 --data \
+    -H "Content-Type: application/json" \
     '{"jsonrpc":"2.0", "method":"eth_getBalance", "params":["<ADDRESS_1>","latest"], "id":1}'
-    -H "Content-Type:application/json"
 ```
