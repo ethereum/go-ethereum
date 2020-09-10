@@ -113,7 +113,6 @@ func TestCloseMiner(t *testing.T) {
 	waitForMiningState(t, miner, true)
 	// Terminate the miner and wait for the update loop to run
 	miner.Close()
-	time.Sleep(time.Millisecond)
 	waitForMiningState(t, miner, false)
 }
 
