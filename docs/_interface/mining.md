@@ -116,7 +116,7 @@ your short vanity tag.
 You can check your hashrate with [miner.hashrate](../interface/javascript-console), the
 result is in H/s (Hash operations per second).
 
-    > miner.hashrate
+    > eth.hashrate
     712000
 
 After you successfully mined some blocks, you can check the ether balance of your
