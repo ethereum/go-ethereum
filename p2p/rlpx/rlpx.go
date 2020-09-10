@@ -14,6 +14,7 @@
 // You should have received a copy of the GNU Lesser General Public License
 // along with the go-ethereum library. If not, see <http://www.gnu.org/licenses/>.
 
+// Package rlpx implements the RLPx transport protocol.
 package rlpx
 
 import (
@@ -41,8 +42,9 @@ import (
 	"golang.org/x/crypto/sha3"
 )
 
+// Conn represents an RLPx connection. It wraps an underlying network connection.
 type Conn struct {
-	dialDest  *ecdsa.PublicKey // determines whether conn is server or client type
+	dialDest  *ecdsa.PublicKey
 	conn      net.Conn
 	handshake *handshakeState
 	snappy    bool
@@ -57,6 +59,8 @@ type handshakeState struct {
 	ingressMAC hash.Hash
 }
 
+// NewConn wraps the given network connection. If dialDest is non-nil, the connection
+// behaves as the initiator during the handshake.
 func NewConn(conn net.Conn, dialDest *ecdsa.PublicKey) *Conn {
 	return &Conn{
 		dialDest: dialDest,
@@ -64,14 +68,19 @@ func NewConn(conn net.Conn, dialDest *ecdsa.PublicKey) *Conn {
 	}
 }
 
+// SetSnappy enables or disables snappy compression of messages. This is usually called
+// after the devp2p Hello message exchange when the negotiated version indicates that
+// compression is available on both ends of the connection.
 func (c *Conn) SetSnappy(snappy bool) {
 	c.snappy = snappy
 }
 
+// SetReadDeadline sets the deadline for all future read operations.
 func (c *Conn) SetReadDeadline(time time.Time) error {
 	return c.conn.SetReadDeadline(time)
 }
 
+// Read reads a message from the connection.
 func (c *Conn) Read() (code uint64, data []byte, err error) {
 	code, size, r, err := c.ReadMsg()
 	if err != nil {
@@ -82,6 +91,11 @@ func (c *Conn) Read() (code uint64, data []byte, err error) {
 	return code, data, err
 }
 
+// ReadMsg reads a message frame header from the connection. The header only contains the
+// message type code and size of the message. The actual message data must be received
+// through the 'payload' reader.
+//
+// The caller must consume 'size' bytes from the payload reader before calling ReadMsg again.
 func (c *Conn) ReadMsg() (code uint64, size uint32, payload io.Reader, err error) {
 	if c.handshake == nil {
 		panic("can't ReadMsg before handshake")
@@ -161,10 +175,16 @@ func readInt24(b []byte) uint32 {
 	return uint32(b[2]) | uint32(b[1])<<8 | uint32(b[0])<<16
 }
 
+// SetWriteDeadline sets the deadline for all future write operations.
 func (c *Conn) SetWriteDeadline(time time.Time) error {
 	return c.conn.SetWriteDeadline(time)
 }
 
+// WriteMsg writes a message frame with the given message type 'code' to the connection.
+// The data of the message is read from the 'payload' reader.
+//
+// WriteMsg returns the written size of the message. This may be less than or equal to the
+// given 'size' parameter depending on whether snappy compression is enabled.
 func (c *Conn) WriteMsg(code uint64, size uint32, payload io.Reader) (uint32, error) {
 	if c.handshake == nil {
 		panic("can't WriteMsg before handshake")
@@ -223,7 +243,6 @@ func (c *Conn) WriteMsg(code uint64, size uint32, payload io.Reader) (uint32, er
 func compress(payload io.Reader) (uint32, io.Reader) {
 	comressedPayload, _ := ioutil.ReadAll(payload)
 	comressedPayload = snappy.Encode(nil, comressedPayload)
-
 	return uint32(len(comressedPayload)), bytes.NewReader(comressedPayload)
 }
 
@@ -245,6 +264,8 @@ func updateMAC(mac hash.Hash, block cipher.Block, seed []byte) []byte {
 	return mac.Sum(nil)[:16]
 }
 
+// Handshake performs the handshake. This must be called before any data is written
+// or read from the connection.
 func (c *Conn) Handshake(prv *ecdsa.PrivateKey) (*ecdsa.PublicKey, error) {
 	var (
 		sec Secrets
@@ -263,6 +284,8 @@ func (c *Conn) Handshake(prv *ecdsa.PrivateKey) (*ecdsa.PublicKey, error) {
 	return sec.Remote.ExportECDSA(), err
 }
 
+// InitWithSecrets injects connection secrets as if a handshake had
+// been performed. This cannot be called after the handshake.
 func (c *Conn) InitWithSecrets(sec Secrets) {
 	if c.handshake != nil {
 		panic("can't handshake twice")
@@ -289,6 +312,7 @@ func (c *Conn) InitWithSecrets(sec Secrets) {
 	}
 }
 
+// Close closes the underlying network connection.
 func (c *Conn) Close() error {
 	return c.conn.Close()
 }
@@ -322,8 +346,7 @@ var (
 	errPlainMessageTooLarge = errors.New("message length >= 16MB")
 )
 
-// Secrets represents the connection Secrets
-// which are negotiated during the encryption handshake.
+// Secrets represents the connection secrets which are negotiated during the handshake.
 type Secrets struct {
 	Remote                *ecies.PublicKey
 	AES, MAC              []byte
