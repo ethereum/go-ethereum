@@ -20,7 +20,6 @@ package miner
 import (
 	"fmt"
 	"math/big"
-	"sync/atomic"
 	"time"
 
 	"github.com/ethereum/go-ethereum/common"
@@ -61,19 +60,19 @@ type Miner struct {
 	eth      Backend
 	engine   consensus.Engine
 	exitCh   chan struct{}
-
-	canStart    int32 // can start indicates whether we can start the mining operation
-	shouldStart int32 // should start indicates whether we should start after sync
+	startCh  chan common.Address
+	stopCh   chan struct{}
 }
 
 func New(eth Backend, config *Config, chainConfig *params.ChainConfig, mux *event.TypeMux, engine consensus.Engine, isLocalBlock func(block *types.Block) bool) *Miner {
 	miner := &Miner{
-		eth:      eth,
-		mux:      mux,
-		engine:   engine,
-		exitCh:   make(chan struct{}),
-		worker:   newWorker(config, chainConfig, engine, eth, mux, isLocalBlock, true),
-		canStart: 1,
+		eth:     eth,
+		mux:     mux,
+		engine:  engine,
+		exitCh:  make(chan struct{}),
+		startCh: make(chan common.Address),
+		stopCh:  make(chan struct{}),
+		worker:  newWorker(config, chainConfig, engine, eth, mux, isLocalBlock, true),
 	}
 	go miner.update()
 
@@ -88,6 +87,7 @@ func (miner *Miner) update() {
 	events := miner.mux.Subscribe(downloader.StartEvent{}, downloader.DoneEvent{}, downloader.FailedEvent{})
 	defer events.Unsubscribe()
 
+	shouldStart := false
 	for {
 		select {
 		case ev := <-events.Chan():
@@ -96,47 +96,40 @@ func (miner *Miner) update() {
 			}
 			switch ev.Data.(type) {
 			case downloader.StartEvent:
-				atomic.StoreInt32(&miner.canStart, 0)
-				if miner.Mining() {
-					miner.Stop()
-					atomic.StoreInt32(&miner.shouldStart, 1)
+				wasMining := miner.Mining()
+				miner.worker.stop()
+				if wasMining {
+					// Resume mining after sync was finished
+					shouldStart = true
 					log.Info("Mining aborted due to sync")
 				}
 			case downloader.DoneEvent, downloader.FailedEvent:
-				shouldStart := atomic.LoadInt32(&miner.shouldStart) == 1
-
-				atomic.StoreInt32(&miner.canStart, 1)
-				atomic.StoreInt32(&miner.shouldStart, 0)
 				if shouldStart {
-					miner.Start(miner.coinbase)
+					miner.SetEtherbase(miner.coinbase)
+					miner.worker.start()
 				}
-				// stop immediately and ignore all further pending events
-				return
 			}
+		case addr := <-miner.startCh:
+			miner.SetEtherbase(addr)
+			miner.worker.start()
+		case <-miner.stopCh:
+			miner.worker.stop()
 		case <-miner.exitCh:
+			miner.worker.close()
 			return
 		}
 	}
 }
 
 func (miner *Miner) Start(coinbase common.Address) {
-	atomic.StoreInt32(&miner.shouldStart, 1)
-	miner.SetEtherbase(coinbase)
-
-	if atomic.LoadInt32(&miner.canStart) == 0 {
-		log.Info("Network syncing, will start miner afterwards")
-		return
-	}
-	miner.worker.start()
+	miner.startCh <- coinbase
 }
 
 func (miner *Miner) Stop() {
-	miner.worker.stop()
-	atomic.StoreInt32(&miner.shouldStart, 0)
+	miner.stopCh <- struct{}{}
 }
 
 func (miner *Miner) Close() {
-	miner.worker.close()
 	close(miner.exitCh)
 }
 
