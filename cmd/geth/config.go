@@ -130,7 +130,7 @@ func makeConfigNode(ctx *cli.Context) (*node.Node, gethConfig) {
 		}
 
 		if cfg.Shh != (whisperDeprecatedConfig{}) {
-			log.Warn("deprecated whisper config detected. Whisper has been moved to github.com/ethereum/whisper")
+			log.Warn("Deprecated whisper config detected. Whisper has been moved to github.com/ethereum/whisper")
 		}
 	}
 
