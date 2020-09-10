@@ -306,9 +306,9 @@ func (b *bridge) Sign(call jsre.Call) (goja.Value, error) {
 	}
 
 	// Send the request to the backend and return
-	sign, callable := goja.AssertFunction(getJeth(call.VM).Get("unlockAccount"))
+	sign, callable := goja.AssertFunction(getJeth(call.VM).Get("sign"))
 	if !callable {
-		return nil, fmt.Errorf("jeth.unlockAccount is not callable")
+		return nil, fmt.Errorf("jeth.sign is not callable")
 	}
 	return sign(goja.Null(), message, account, passwd)
 }
