@@ -316,7 +316,7 @@ type Tracer struct {
 // New instantiates a new tracer instance. code specifies a Javascript snippet,
 // which must evaluate to an expression returning an object with 'step', 'fault'
 // and 'result' functions.
-func New(code string) (*Tracer, error) {
+func New(code string, txCtx vm.TxContext) (*Tracer, error) {
 	// Resolve any tracers by name and assemble the tracer object
 	if tracer, ok := tracer(code); ok {
 		code = tracer
@@ -335,6 +335,8 @@ func New(code string) (*Tracer, error) {
 		depthValue:      new(uint),
 		refundValue:     new(uint),
 	}
+	tracer.ctx["gasPrice"] = txCtx.GasPrice
+
 	// Set up builtins for this environment
 	tracer.vm.PushGlobalGoFunction("toHex", func(ctx *duktape.Context) int {
 		ctx.PushString(hexutil.Encode(popSlice(ctx)))
