@@ -688,7 +688,6 @@ func (ns *NodeStateMachine) setState(n *enode.Node, setFlags, resetFlags Flags, 
 		}
 	}
 	ns.opPending = append(ns.opPending, callback)
-	return
 }
 
 // opCheck checks whether an operation is active
