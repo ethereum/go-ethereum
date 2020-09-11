@@ -97,6 +97,19 @@ func TestMiner(t *testing.T) {
 	waitForMiningState(t, miner, true)
 }
 
+func TestStartWhileDownload(t *testing.T) {
+	miner, mux := createMiner(t)
+	waitForMiningState(t, miner, false)
+	miner.Start(common.HexToAddress("0x12345"))
+	waitForMiningState(t, miner, true)
+	// Stop the downloader and wait for the update loop to run
+	mux.Post(downloader.StartEvent{})
+	waitForMiningState(t, miner, false)
+	// Starting the miner after the downloader should not work
+	miner.Start(common.HexToAddress("0x12345"))
+	waitForMiningState(t, miner, false)
+}
+
 func TestStartStopMiner(t *testing.T) {
 	miner, _ := createMiner(t)
 	waitForMiningState(t, miner, false)
