@@ -33,6 +33,8 @@ import (
 	"github.com/ethereum/go-ethereum/trie"
 )
 
+const journalVersion uint64 = 0
+
 // journalGenerator is a disk layer entry containing the generator progress marker.
 type journalGenerator struct {
 	Wiping   bool // Whether the database was in progress of being wiped
@@ -79,6 +81,9 @@ func loadSnapshot(diskdb ethdb.KeyValueStore, triedb *trie.Database, cache int, 
 	// we've already generated the snapshot or are in progress only
 	journal := rawdb.ReadSnapshotJournal(diskdb)
 	if len(journal) == 0 {
+		// Scenario: the disk layer is still generating while there
+		// is no journal be persisted at all. In this case, try to
+		// reuse the exsitent disk layer if possible.
 		return nil, errors.New("missing or corrupted snapshot journal")
 	}
 	r := rlp.NewStream(bytes.NewReader(journal), 0)
@@ -96,6 +101,16 @@ func loadSnapshot(diskdb ethdb.KeyValueStore, triedb *trie.Database, cache int, 
 	// Entire snapshot journal loaded, sanity check the head and return
 	// Journal doesn't exist, don't worry if it's not supposed to
 	if head := snapshot.Root(); head != root {
+		// If the loaded snapshot is not matched with current
+		// state root, try to recover the "almost broken" snapshot.
+
+		// Scenario a: Geth was crashed and then restart, in this
+		// case the head is rewound to the point with available
+		// state(trie). So the head block is may lower than snapshot head
+
+		// Scenario b: Geth was crashed and then restart, but the
+		// rewound head is higher than snapshot.
+
 		return nil, fmt.Errorf("head doesn't match snapshot: have %#x, want %#x", head, root)
 	}
 	// Everything loaded correctly, resume any suspended operations
@@ -202,6 +217,11 @@ func (dl *diskLayer) Journal(buffer *bytes.Buffer) (common.Hash, error) {
 
 	if dl.stale {
 		return common.Hash{}, ErrSnapshotStale
+	}
+	// Firstly write out the root of disk layer. The
+	// root is the state root of some canonical block.
+	if err := rlp.Encode(buffer, dl.root); err != nil {
+		return common.Hash{}, err
 	}
 	// Write out the generator marker
 	entry := journalGenerator{

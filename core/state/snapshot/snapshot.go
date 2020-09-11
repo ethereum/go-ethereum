@@ -29,6 +29,7 @@ import (
 	"github.com/ethereum/go-ethereum/ethdb"
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/metrics"
+	"github.com/ethereum/go-ethereum/rlp"
 	"github.com/ethereum/go-ethereum/trie"
 )
 
@@ -554,7 +555,12 @@ func (t *Tree) Journal(root common.Hash) (common.Hash, error) {
 	t.lock.Lock()
 	defer t.lock.Unlock()
 
+	// Firstly write out the metadata of journal
 	journal := new(bytes.Buffer)
+	if err := rlp.Encode(journal, journalVersion); err != nil {
+		return common.Hash{}, err
+	}
+	// Secondly write out the journal of each layer in reverse order.
 	base, err := snap.(snapshot).Journal(journal)
 	if err != nil {
 		return common.Hash{}, err
