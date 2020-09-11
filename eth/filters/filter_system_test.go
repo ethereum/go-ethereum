@@ -700,14 +700,14 @@ func TestStateChangeSubscription(t *testing.T) {
 		chan0 := make(chan Payload)
 		sub0 := api.events.SubscribeStateChanges(test.crit, chan0)
 
-		var payloads = make(map[int]Payload)
+		payloads := make([]Payload, 0, len(test.expectedPayloads))
 		go func() {
 			// simulate client
 			// keep this loop open for numberOfBlocks - 1 because the first block has no StateChangeEvents and should
 			// not send an event to the client via the subscription
 			for index := 0; index < numberOfBlocks-1; index++ {
 				payload := <-chan0
-				payloads[index] = payload
+				payloads = append(payloads, payload)
 			}
 
 			sub0.Unsubscribe()
@@ -747,23 +747,42 @@ func TestStateChangeSubscription(t *testing.T) {
 				t.Errorf("Test failure: %s: %s", t.Name(), test.description)
 				t.Logf("Actual payload block hash equal expected.\nactual:%+v\nexpected: %+v", actualStateDiff.BlockHash, expectedStateDiff.BlockHash)
 			}
-			for i, e := range expectedStateDiff.UpdatedAccounts {
-				if !bytes.Equal(actualStateDiff.UpdatedAccounts[i].Key, e.Key) {
+
+			// The updated accounts are not necessarily in the same order for the state diffs.
+			// Put the actual in a map for easier lookup.
+			actualUpdatedAccounts := make(map[string]AccountDiff)
+			for _, account := range actualStateDiff.UpdatedAccounts {
+				actualUpdatedAccounts[string(account.Key)] = account
+			}
+
+			for _, e := range expectedStateDiff.UpdatedAccounts {
+				actualUpdatedAccount := actualUpdatedAccounts[string(e.Key)]
+
+				if !bytes.Equal(actualUpdatedAccount.Key, e.Key) {
 					t.Errorf("Test failure: %s: %s", t.Name(), test.description)
-					t.Logf("Actual payload updated account key equal expected.\nactual:%+v\nexpected: %+v", actualStateDiff.UpdatedAccounts[i].Key, e.Key)
+					t.Logf("Actual payload updated account key equal expected.\nactual:%+v\nexpected: %+v", actualUpdatedAccount.Key, e.Key)
 				}
-				if !bytes.Equal(actualStateDiff.UpdatedAccounts[i].Value, e.Value) {
+
+				if !bytes.Equal(actualUpdatedAccount.Value, e.Value) {
 					t.Errorf("Test failure: %s: %s", t.Name(), test.description)
-					t.Logf("Actual payload updated account value equal expected.\nactual:%+v\nexpected: %+v", actualStateDiff.UpdatedAccounts[i].Value, e.Value)
+					t.Logf("Actual payload updated account value equal expected.\nactual:%+v\nexpected: %+v", actualUpdatedAccount.Value, e.Value)
 				}
-				for si, se := range e.Storage {
-					if !bytes.Equal(actualStateDiff.UpdatedAccounts[i].Storage[si].Key, se.Key) {
+
+				// Store storage keys for this updatedAccount in a map to avoid errors from order
+				actualUpdatedStorageDiffs := make(map[string]StorageDiff)
+				for _, storageDiff := range actualUpdatedAccount.Storage {
+					actualUpdatedStorageDiffs[string(storageDiff.Key)] = storageDiff
+				}
+				for _, se := range e.Storage {
+					actualStorageDiff := actualUpdatedStorageDiffs[string(se.Key)]
+
+					if !bytes.Equal(actualStorageDiff.Key, se.Key) {
 						t.Errorf("Test failure: %s: %s", t.Name(), test.description)
-						t.Logf("Actual payload updated account storage key equal expected.\nactual:%+v\nexpected: %+v", actualStateDiff.UpdatedAccounts[i].Storage[si].Key, se.Key)
+						t.Logf("Actual payload updated account storage key equal expected.\nactual:%+v\nexpected: %+v", actualStorageDiff.Key, se.Key)
 					}
-					if !bytes.Equal(actualStateDiff.UpdatedAccounts[i].Storage[si].Value, se.Value) {
+					if !bytes.Equal(actualStorageDiff.Value, se.Value) {
 						t.Errorf("Test failure: %s: %s", t.Name(), test.description)
-						t.Logf("Actual payload updated account storage value equal expected.\nactual:%+v\nexpected: %+v", actualStateDiff.UpdatedAccounts[i].Storage[si].Value, se.Value)
+						t.Logf("Actual payload updated account storage value equal expected.\nactual:%+v\nexpected: %+v", actualStorageDiff.Value, se.Value)
 					}
 				}
 
