@@ -85,39 +85,55 @@ func (c *Conn) SetReadDeadline(time time.Time) error {
 	return c.conn.SetReadDeadline(time)
 }
 
-// Read reads a message from the connection.
-func (c *Conn) Read() (code uint64, data []byte, err error) {
-	code, size, r, err := c.ReadMsg()
-	if err != nil {
-		return 0, nil, nil
-	}
-	data = make([]byte, size)
-	_, err = io.ReadFull(r, data)
-	return code, data, err
+// ReadMsg reads a message frame from the connection. The actual message data must be
+// received through the 'payload' reader.
+func (c *Conn) ReadMsg() (code uint64, size uint32, payload io.Reader, err error) {
+	code, data, err := c.Read()
+	payload = bytes.NewReader(data)
+	return code, uint32(len(data)), payload, err
 }
 
-// ReadMsg reads a message frame header from the connection. The header only contains the
-// message type code and size of the message. The actual message data must be received
-// through the 'payload' reader.
-//
-// The caller must consume 'size' bytes from the payload reader before calling ReadMsg again.
-func (c *Conn) ReadMsg() (code uint64, size uint32, payload io.Reader, err error) {
+// Read reads a message from the connection.
+func (c *Conn) Read() (code uint64, data []byte, err error) {
 	if c.handshake == nil {
 		panic("can't ReadMsg before handshake")
 	}
 
+	frame, err := c.handshake.readFrame(c.conn)
+	if err != nil {
+		return 0, nil, err
+	}
+	code, data, err = rlp.SplitUint64(frame)
+	if err != nil {
+		return 0, nil, fmt.Errorf("invalid message code: %v", err)
+	}
+	// If snappy is enabled, verify and decompress message.
+	if c.snappy {
+		actualSize, err := snappy.DecodedLen(data)
+		if err != nil {
+			return code, nil, err
+		}
+		if actualSize > int(maxUint24) {
+			return code, nil, errPlainMessageTooLarge
+		}
+		data, err = snappy.Decode(nil, data)
+	}
+	return code, data, err
+}
+
+func (h *handshakeState) readFrame(conn io.Reader) ([]byte, error) {
 	// read the header
 	headbuf := make([]byte, 32)
-	if _, err := io.ReadFull(c.conn, headbuf); err != nil {
-		return code, size, payload, err
+	if _, err := io.ReadFull(conn, headbuf); err != nil {
+		return nil, err
 	}
 
 	// verify header mac
-	shouldMAC := updateMAC(c.handshake.ingressMAC, c.handshake.macCipher, headbuf[:16])
+	shouldMAC := updateMAC(h.ingressMAC, h.macCipher, headbuf[:16])
 	if !hmac.Equal(shouldMAC, headbuf[16:]) {
-		return code, size, payload, errors.New("bad header MAC")
+		return nil, errors.New("bad header MAC")
 	}
-	c.handshake.dec.XORKeyStream(headbuf[:16], headbuf[:16]) // first half is now decrypted
+	h.dec.XORKeyStream(headbuf[:16], headbuf[:16]) // first half is now decrypted
 	fsize := readInt24(headbuf)
 	// ignore protocol type for now
 
@@ -127,53 +143,24 @@ func (c *Conn) ReadMsg() (code uint64, size uint32, payload io.Reader, err error
 		rsize += 16 - padding
 	}
 	framebuf := make([]byte, rsize)
-	if _, err := io.ReadFull(c.conn, framebuf); err != nil {
-		return code, size, payload, err
+	if _, err := io.ReadFull(conn, framebuf); err != nil {
+		return nil, err
 	}
 
 	// read and validate frame MAC. we can re-use headbuf for that.
-	c.handshake.ingressMAC.Write(framebuf)
-	fmacseed := c.handshake.ingressMAC.Sum(nil)
-	if _, err := io.ReadFull(c.conn, headbuf[:16]); err != nil {
-		return code, size, payload, err
+	h.ingressMAC.Write(framebuf)
+	fmacseed := h.ingressMAC.Sum(nil)
+	if _, err := io.ReadFull(conn, headbuf[:16]); err != nil {
+		return nil, err
 	}
-	shouldMAC = updateMAC(c.handshake.ingressMAC, c.handshake.macCipher, fmacseed)
+	shouldMAC = updateMAC(h.ingressMAC, h.macCipher, fmacseed)
 	if !hmac.Equal(shouldMAC, headbuf[:16]) {
-		return code, size, payload, errors.New("bad frame MAC")
+		return nil, errors.New("bad frame MAC")
 	}
 
 	// decrypt frame content
-	c.handshake.dec.XORKeyStream(framebuf, framebuf)
-
-	// decode message code
-	content := bytes.NewReader(framebuf[:fsize])
-	if err := rlp.Decode(content, &code); err != nil {
-		return code, size, payload, err
-	}
-
-	size = uint32(content.Len())
-	payload = content
-
-	// if snappy is enabled, verify and decompress message
-	if c.snappy {
-		payloadBytes, err := ioutil.ReadAll(payload)
-		if err != nil {
-			return code, size, payload, err
-		}
-		payloadSize, err := snappy.DecodedLen(payloadBytes)
-		if err != nil {
-			return code, size, payload, err
-		}
-		if payloadSize > int(maxUint24) {
-			return code, size, payload, errPlainMessageTooLarge
-		}
-		payloadBytes, err = snappy.Decode(nil, payloadBytes)
-		if err != nil {
-			return code, size, payload, err
-		}
-		size, payload = uint32(payloadSize), bytes.NewReader(payloadBytes)
-	}
-	return code, size, payload, nil
+	h.dec.XORKeyStream(framebuf, framebuf)
+	return framebuf[:fsize], nil
 }
 
 func readInt24(b []byte) uint32 {
@@ -195,54 +182,59 @@ func (c *Conn) WriteMsg(code uint64, size uint32, payload io.Reader) (uint32, er
 		panic("can't WriteMsg before handshake")
 	}
 
-	ptype, _ := rlp.EncodeToBytes(code)
-
+	// compress message when snappy is enabled.
 	if c.snappy {
 		if size > maxUint24 {
 			return size, errPlainMessageTooLarge
 		}
 		size, payload = compress(payload)
 	}
+	// write it to the connection.
+	err := c.handshake.writeFrame(c.conn, code, size, payload)
+	return size, err
+}
+
+func (h *handshakeState) writeFrame(conn io.Writer, code uint64, size uint32, payload io.Reader) error {
+	ptype, _ := rlp.EncodeToBytes(code)
 
 	// write header
 	headbuf := make([]byte, 32)
 	fsize := uint32(len(ptype)) + size
 	if fsize > maxUint24 {
-		return size, errors.New("message size overflows uint24")
+		return errPlainMessageTooLarge
 	}
 	putInt24(fsize, headbuf)
 	copy(headbuf[3:], zeroHeader)
 
-	c.handshake.enc.XORKeyStream(headbuf[:16], headbuf[:16]) // first half is now encrypted
+	h.enc.XORKeyStream(headbuf[:16], headbuf[:16]) // first half is now encrypted
 
 	// write header MAC
-	copy(headbuf[16:], updateMAC(c.handshake.egressMAC, c.handshake.macCipher, headbuf[:16]))
-	if _, err := c.conn.Write(headbuf); err != nil {
-		return size, err
+	copy(headbuf[16:], updateMAC(h.egressMAC, h.macCipher, headbuf[:16]))
+	if _, err := conn.Write(headbuf); err != nil {
+		return err
 	}
 
 	// write encrypted frame, updating the egress MAC hash with
 	// the data written to conn.
-	tee := cipher.StreamWriter{S: c.handshake.enc, W: io.MultiWriter(c.conn, c.handshake.egressMAC)}
+	tee := cipher.StreamWriter{S: h.enc, W: io.MultiWriter(conn, h.egressMAC)}
 	if _, err := tee.Write(ptype); err != nil {
-		return size, err
+		return err
 	}
 	if _, err := io.Copy(tee, payload); err != nil {
-		return size, err
+		return err
 	}
 	if padding := fsize % 16; padding > 0 {
 		if _, err := tee.Write(zero16[:16-padding]); err != nil {
-			return size, err
+			return err
 		}
 	}
 
 	// write frame MAC. egress MAC hash is up to date because
 	// frame content was written to it as well.
-	fmacseed := c.handshake.egressMAC.Sum(nil)
-	mac := updateMAC(c.handshake.egressMAC, c.handshake.macCipher, fmacseed)
-
-	_, err := c.conn.Write(mac)
-	return size, err
+	fmacseed := h.egressMAC.Sum(nil)
+	mac := updateMAC(h.egressMAC, h.macCipher, fmacseed)
+	_, err := conn.Write(mac)
+	return err
 }
 
 func compress(payload io.Reader) (uint32, io.Reader) {
@@ -295,7 +287,6 @@ func (c *Conn) InitWithSecrets(sec Secrets) {
 	if c.handshake != nil {
 		panic("can't handshake twice")
 	}
-
 	macc, err := aes.NewCipher(sec.MAC)
 	if err != nil {
 		panic("invalid MAC secret: " + err.Error())
@@ -304,7 +295,6 @@ func (c *Conn) InitWithSecrets(sec Secrets) {
 	if err != nil {
 		panic("invalid AES secret: " + err.Error())
 	}
-
 	// we use an all-zeroes IV for AES because the key used
 	// for encryption is ephemeral.
 	iv := make([]byte, encc.BlockSize())
@@ -322,6 +312,7 @@ func (c *Conn) Close() error {
 	return c.conn.Close()
 }
 
+// Constants for the handshake.
 const (
 	maxUint24 = ^uint32(0) >> 8
 
