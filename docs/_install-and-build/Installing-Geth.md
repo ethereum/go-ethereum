@@ -168,8 +168,14 @@ With Go installed, you can download the project into you `GOPATH` workspace via:
 ```shell
 go get -d github.com/ethereum/go-ethereum
 ```
+You can also install specific versions via:
+Our stable releases can be found [here](https://github.com/ethereum/go-ethereum/releases).
 
-The above command does not build any executables. To do that you can either build one specifically:
+```shell
+go get -d github.com/ethereum/go-ethereum@v1.9.21
+```
+
+The above commands do not build any executables. To do that you can either build one specifically:
 
 ```shell
 go install github.com/ethereum/go-ethereum/cmd/geth
@@ -178,6 +184,8 @@ go install github.com/ethereum/go-ethereum/cmd/geth
 Or you can build the entire project and install `geth` along with all developer tools by running `go install ./...` in the `ethereum/go-ethereum` repository root inside your `GOPATH` workspace.
 
 If you are using macOS and see errors related to macOS header files, install XCode Command Line Tools with `xcode-select --install`, and try again.
+
+If you encounter `go: cannot use path@version syntax in GOPATH mode` or similar errors, enable gomodules using `export GO111MODULE=on`.
 
 ### Windows
 
@@ -246,3 +254,10 @@ make geth
 ```
 
 These commands create a `geth` executable file in the `go-ethereum/build/bin` folder that you can move wherever you want to run from. The binary is standalone and doesn't require any additional files.
+
+If you want to build a stable release you can use `git checkout v1.9.21` before running `make geth` to switch to a stable branch.
+
+## Updating Geth
+
+Updating go-ethereum is as easy as it gets. You just need to download and install the newer version of geth, shutdown your node and restart with the new software. 
+Geth will automatically use the data of your old node and sync the latest blocks that were mined since you shutdown the old software.
