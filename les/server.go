@@ -56,8 +56,6 @@ type LesServer struct {
 
 	ns          *nodestate.NodeStateMachine
 	archiveMode bool // Flag whether the ethereum node runs in archive mode.
-	peers       *clientPeerSet
-	serverset   *serverSet
 	handler     *serverHandler
 	broadcaster *broadcaster
 	lesTopics   []discv5.Topic
@@ -104,8 +102,6 @@ func NewLesServer(node *node.Node, e *eth.Ethereum, config *eth.Config) (*LesSer
 		},
 		ns:           ns,
 		archiveMode:  e.ArchiveMode(),
-		peers:        newClientPeerSet(),
-		serverset:    newServerSet(),
 		broadcaster:  newBroadcaster(ns),
 		lesTopics:    lesTopics,
 		fcManager:    flowcontrol.NewClientManager(nil, &mclock.System{}),
@@ -137,7 +133,7 @@ func NewLesServer(node *node.Node, e *eth.Ethereum, config *eth.Config) (*LesSer
 		srv.maxCapacity = totalRecharge
 	}
 	srv.fcManager.SetCapacityLimits(srv.minCapacity, srv.maxCapacity, srv.minCapacity*2)
-	srv.clientPool = newClientPool(ns, srv.chainDb, srv.minCapacity, defaultConnectedBias, mclock.System{}, func(id enode.ID) { go srv.peers.unregister(id.String()) })
+	srv.clientPool = newClientPool(ns, srv.chainDb, srv.minCapacity, defaultConnectedBias, mclock.System{}, srv.dropClient)
 	srv.clientPool.setDefaultFactors(lps.PriceFactors{TimeFactor: 0, CapacityFactor: 1, RequestFactor: 1}, lps.PriceFactors{TimeFactor: 0, CapacityFactor: 1, RequestFactor: 1})
 
 	checkpoint := srv.latestLocalCheckpoint()
@@ -179,7 +175,7 @@ func (s *LesServer) APIs() []rpc.API {
 
 func (s *LesServer) Protocols() []p2p.Protocol {
 	ps := s.makeProtocols(ServerProtocolVersions, s.handler.runPeer, func(id enode.ID) interface{} {
-		if p := s.peers.peer(id.String()); p != nil {
+		if p := s.getClient(id); p != nil {
 			return p.Info()
 		}
 		return nil
@@ -220,19 +216,11 @@ func (s *LesServer) Start() error {
 func (s *LesServer) Stop() error {
 	close(s.closeCh)
 
-	// Disconnect existing connections with other LES servers.
-	s.serverset.close()
-
-	// Disconnect existing sessions.
-	// This also closes the gate for any new registrations on the peer set.
-	// sessions which are already established but not added to pm.peers yet
-	// will exit when they try to register.
-	s.peers.close()
-
+	s.clientPool.stop()
+	s.ns.Stop()
 	s.fcManager.Stop()
 	s.costTracker.stop()
 	s.handler.stop()
-	s.clientPool.stop() // client pool should be closed after handler.
 	s.servingQueue.stop()
 
 	// Note, bloom trie indexer is closed by parent bloombits indexer.
@@ -299,5 +287,20 @@ func (s *LesServer) capacityManagement() {
 		case <-s.closeCh:
 			return
 		}
+	}
+}
+
+func (s *LesServer) getClient(id enode.ID) *clientPeer {
+	if node := s.ns.GetNode(id); node != nil {
+		if p, ok := s.ns.GetField(node, clientPeerField).(*clientPeer); ok {
+			return p
+		}
+	}
+	return nil
+}
+
+func (s *LesServer) dropClient(id enode.ID) {
+	if p := s.getClient(id); p != nil {
+		p.Peer.Disconnect(p2p.DiscRequested)
 	}
 }

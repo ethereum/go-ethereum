@@ -126,52 +126,54 @@ func (h *serverHandler) handle(p *clientPeer) error {
 		p.Log().Debug("Light Ethereum handshake failed", "err", err)
 		return err
 	}
-	if p.server {
-		if err := h.server.serverset.register(p); err != nil {
-			return err
-		}
-		// connected to another server, no messages expected, just wait for disconnection
-		_, err := p.rw.ReadMsg()
-		return err
-	}
 	// Reject light clients if server is not synced.
 	if !h.synced() {
 		p.Log().Debug("Light server not synced, rejecting peer")
 		return p2p.DiscRequested
 	}
-	h.server.ns.SetField(p.Node(), clientPeerField, p)
+	var registered bool
+	h.server.ns.Operation(func() {
+		if h.server.ns.GetField(p.Node(), clientPeerField) != nil {
+			registered = true
+		} else {
+			h.server.ns.SetFieldSub(p.Node(), clientPeerField, p)
+		}
+	})
+	if registered {
+		return errAlreadyRegistered
+	}
 
 	defer func() {
 		h.server.ns.SetField(p.Node(), clientPeerField, nil)
 		p.fcClient.Disconnect()
 	}()
+	if p.server {
+		// connected to another server, no messages expected, just wait for disconnection
+		_, err := p.rw.ReadMsg()
+		return err
+	}
 
 	// Disconnect the inbound peer if it's rejected by clientPool
 	if cap, err := h.server.clientPool.connect(p); cap != p.fcParams.MinRecharge || err != nil {
 		p.Log().Debug("Light Ethereum peer rejected", "err", errFullClientPool)
 		return errFullClientPool
 	}
-	p.balance, _ = h.server.clientPool.ns.GetField(p.Node(), h.server.clientPool.BalanceField).(*lps.NodeBalance)
+	p.balance, _ = h.server.ns.GetField(p.Node(), h.server.clientPool.BalanceField).(*lps.NodeBalance)
 	if p.balance == nil {
 		return p2p.DiscRequested
 	}
-	// Register the peer locally
-	if err := h.server.peers.register(p); err != nil {
-		h.server.clientPool.disconnect(p)
-		p.Log().Error("Light Ethereum peer registration failed", "err", err)
-		return err
-	}
-	clientConnectionGauge.Update(int64(h.server.peers.len()))
+	activeCount, _ := h.server.clientPool.pp.Active()
+	clientConnectionGauge.Update(int64(activeCount))
 
 	var wg sync.WaitGroup // Wait group used to track all in-flight task routines.
 
 	connectedAt := mclock.Now()
 	defer func() {
 		wg.Wait() // Ensure all background task routines have exited.
-		h.server.peers.unregister(p.id)
 		h.server.clientPool.disconnect(p)
 		p.balance = nil
-		clientConnectionGauge.Update(int64(h.server.peers.len()))
+		activeCount, _ := h.server.clientPool.pp.Active()
+		clientConnectionGauge.Update(int64(activeCount))
 		connectionTimer.Update(time.Duration(mclock.Now() - connectedAt))
 	}()
 	// Mark the peer starts to be served.
@@ -937,10 +939,6 @@ func (h *serverHandler) broadcastLoop() {
 	for {
 		select {
 		case ev := <-headCh:
-			peers := h.server.peers.allPeers()
-			if len(peers) == 0 {
-				continue
-			}
 			header := ev.Block.Header()
 			hash, number := header.Hash(), header.Number.Uint64()
 			td := h.blockchain.GetTd(hash, number)

@@ -132,7 +132,7 @@ func newClientPool(ns *nodestate.NodeStateMachine, lespayDb ethdb.Database, minC
 	})
 
 	ns.SubscribeState(pool.ActiveFlag.Or(pool.PriorityFlag), func(node *enode.Node, oldState, newState nodestate.Flags) {
-		c, _ := ns.GetField(node, clientField).(*clientInfo)
+		c, _ := ns.GetField(node, clientInfoField).(*clientInfo)
 		if c == nil {
 			return
 		}
@@ -195,7 +195,6 @@ func (f *clientPool) stop() {
 		f.disconnectNode(node)
 	})
 	f.bt.Stop()
-	f.ns.Stop()
 }
 
 // connect should be called after a successful handshake. If the connection was
@@ -284,7 +283,8 @@ func (f *clientPool) capacityInfo() (uint64, uint64, uint64) {
 	defer f.lock.Unlock()
 
 	// total priority active cap will be supported when the token issuer module is added
-	return f.capLimit, f.pp.ActiveCapacity(), 0
+	_, activeCap := f.pp.Active()
+	return f.capLimit, activeCap, 0
 }
 
 // setLimits sets the maximum number and total capacity of connected clients,
