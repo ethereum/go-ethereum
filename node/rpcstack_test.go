@@ -19,6 +19,7 @@ package node
 import (
 	"bytes"
 	"net/http"
+	"strings"
 	"testing"
 
 	"github.com/ethereum/go-ethereum/internal/testlog"
@@ -52,109 +53,104 @@ func TestVhosts(t *testing.T) {
 	assert.Equal(t, resp2.StatusCode, http.StatusForbidden)
 }
 
+type originTest struct {
+	spec    string
+	expOk   []string
+	expFail []string
+}
+
+// splitAndTrim splits input separated by a comma
+// and trims excessive white space from the substrings.
+// Copied over from flags.go
+func splitAndTrim(input string) (ret []string) {
+	l := strings.Split(input, ",")
+	for _, r := range l {
+		r = strings.TrimSpace(r)
+		if len(r) > 0 {
+			ret = append(ret, r)
+		}
+	}
+	return ret
+}
+
 // TestWebsocketOrigins makes sure the websocket origins are properly handled on the websocket server.
 func TestWebsocketOrigins(t *testing.T) {
-	tryWebsocketOriginsSimpleRule(t)
-	tryWebsocketOriginsRuleWithScheme(t)
-	tryWebsocketOriginsIPRuleWithScheme(t)
-	tryWebsocketOriginsRuleWithPort(t)
-	tryWebsocketOriginsRuleWithSchemeAndPort(t)
-}
-
-func tryWebsocketOriginsSimpleRule(t *testing.T) {
-	srv := createAndStartServer(t, httpConfig{}, true, wsConfig{Origins: []string{"test"}})
-	defer srv.stop()
-
-	assert.NoError(t, attemptWebsocketConnectionFromOrigin(t, srv, "http://test"))
-	assert.NoError(t, attemptWebsocketConnectionFromOrigin(t, srv, "https://test"))
-	assert.NoError(t, attemptWebsocketConnectionFromOrigin(t, srv, "http://test:8540"))
-	assert.NoError(t, attemptWebsocketConnectionFromOrigin(t, srv, "https://test:8540"))
-
-	// Host mismatch (set):
-	assert.Error(t, attemptWebsocketConnectionFromOrigin(t, srv, "http://bad"))
-	assert.Error(t, attemptWebsocketConnectionFromOrigin(t, srv, "https://bad"))
-	assert.Error(t, attemptWebsocketConnectionFromOrigin(t, srv, "http://bad:8540"))
-	assert.Error(t, attemptWebsocketConnectionFromOrigin(t, srv, "https://bad:8540"))
-}
-
-func tryWebsocketOriginsRuleWithScheme(t *testing.T) {
-	srv := createAndStartServer(t, httpConfig{}, true, wsConfig{Origins: []string{"https://test"}})
-	defer srv.stop()
-
-	// Scheme mismatch:
-	assert.Error(t, attemptWebsocketConnectionFromOrigin(t, srv, "http://test"))
-	assert.NoError(t, attemptWebsocketConnectionFromOrigin(t, srv, "https://test"))
-
-	// Scheme mismatch:
-	assert.Error(t, attemptWebsocketConnectionFromOrigin(t, srv, "http://test:8540"))
-	assert.NoError(t, attemptWebsocketConnectionFromOrigin(t, srv, "https://test:8540"))
-
-	// Host mismatch (set):
-	assert.Error(t, attemptWebsocketConnectionFromOrigin(t, srv, "http://bad"))
-	assert.Error(t, attemptWebsocketConnectionFromOrigin(t, srv, "https://bad"))
-	assert.Error(t, attemptWebsocketConnectionFromOrigin(t, srv, "http://bad:8540"))
-	assert.Error(t, attemptWebsocketConnectionFromOrigin(t, srv, "https://bad:8540"))
-}
-
-func tryWebsocketOriginsIPRuleWithScheme(t *testing.T) {
-	srv := createAndStartServer(t, httpConfig{}, true, wsConfig{Origins: []string{"https://12.34.56.78"}})
-	defer srv.stop()
-
-	// Scheme mismatch:
-	assert.Error(t, attemptWebsocketConnectionFromOrigin(t, srv, "http://12.34.56.78"))
-	assert.NoError(t, attemptWebsocketConnectionFromOrigin(t, srv, "https://12.34.56.78"))
-
-	// Scheme mismatch:
-	assert.Error(t, attemptWebsocketConnectionFromOrigin(t, srv, "http://12.34.56.78:8540"))
-	assert.NoError(t, attemptWebsocketConnectionFromOrigin(t, srv, "https://12.34.56.78:8540"))
-
-	// Host mismatch (set):
-	assert.Error(t, attemptWebsocketConnectionFromOrigin(t, srv, "http://87.65.43.21"))
-	assert.Error(t, attemptWebsocketConnectionFromOrigin(t, srv, "https://87.65.43.21"))
-	assert.Error(t, attemptWebsocketConnectionFromOrigin(t, srv, "http://87.65.43.21:8540"))
-	assert.Error(t, attemptWebsocketConnectionFromOrigin(t, srv, "https://87.65.43.21:8540"))
-}
-
-func tryWebsocketOriginsRuleWithPort(t *testing.T) {
-	srv := createAndStartServer(t, httpConfig{}, true, wsConfig{Origins: []string{"test:8540"}})
-	defer srv.stop()
-
-	assert.NoError(t, attemptWebsocketConnectionFromOrigin(t, srv, "http://test"))
-	assert.NoError(t, attemptWebsocketConnectionFromOrigin(t, srv, "https://test"))
-	assert.NoError(t, attemptWebsocketConnectionFromOrigin(t, srv, "http://test:8540"))
-	assert.NoError(t, attemptWebsocketConnectionFromOrigin(t, srv, "https://test:8540"))
-
-	// Port mismatch (set):
-	assert.Error(t, attemptWebsocketConnectionFromOrigin(t, srv, "http://test:8541"))
-	assert.Error(t, attemptWebsocketConnectionFromOrigin(t, srv, "https://test:8541"))
-
-	// Host mismatch (set):
-	assert.Error(t, attemptWebsocketConnectionFromOrigin(t, srv, "http://bad"))
-	assert.Error(t, attemptWebsocketConnectionFromOrigin(t, srv, "https://bad"))
-	assert.Error(t, attemptWebsocketConnectionFromOrigin(t, srv, "http://bad:8540"))
-	assert.Error(t, attemptWebsocketConnectionFromOrigin(t, srv, "https://bad:8540"))
-}
-
-func tryWebsocketOriginsRuleWithSchemeAndPort(t *testing.T) {
-	srv := createAndStartServer(t, httpConfig{}, true, wsConfig{Origins: []string{"https://test:8540"}})
-	defer srv.stop()
-
-	// Scheme mismatch:
-	assert.Error(t, attemptWebsocketConnectionFromOrigin(t, srv, "http://test"))
-	assert.NoError(t, attemptWebsocketConnectionFromOrigin(t, srv, "https://test"))
-	// Scheme mismatch:
-	assert.Error(t, attemptWebsocketConnectionFromOrigin(t, srv, "http://test:8540"))
-	assert.NoError(t, attemptWebsocketConnectionFromOrigin(t, srv, "https://test:8540"))
-
-	// Port mismatch (set):
-	assert.Error(t, attemptWebsocketConnectionFromOrigin(t, srv, "http://test:8541"))
-	assert.Error(t, attemptWebsocketConnectionFromOrigin(t, srv, "https://test:8541"))
-
-	// Host mismatch (set):
-	assert.Error(t, attemptWebsocketConnectionFromOrigin(t, srv, "http://bad"))
-	assert.Error(t, attemptWebsocketConnectionFromOrigin(t, srv, "https://bad"))
-	assert.Error(t, attemptWebsocketConnectionFromOrigin(t, srv, "http://bad:8540"))
-	assert.Error(t, attemptWebsocketConnectionFromOrigin(t, srv, "https://bad:8540"))
+	tests := []originTest{
+		{
+			spec: "*", // allow all
+			expOk: []string{"", "http://test", "https://test", "http://test:8540", "https://test:8540",
+				"http://test.com", "https://foo.test", "http://testa", "http://atestb:8540", "https://atestb:8540"},
+		},
+		{
+			spec:    "test",
+			expOk:   []string{"http://test", "https://test", "http://test:8540", "https://test:8540"},
+			expFail: []string{"http://test.com", "https://foo.test", "http://testa", "http://atestb:8540", "https://atestb:8540"},
+		},
+		// scheme tests
+		{
+			spec:  "https://test",
+			expOk: []string{"https://test", "https://test:9999"},
+			expFail: []string{
+				"test",                                // no scheme, required by spec
+				"http://test",                         // wrong scheme
+				"http://test.foo", "https://a.test.x", // subdomain variatoins
+				"http://testx:8540", "https://xtest:8540"},
+		},
+		// ip tests
+		{
+			spec:  "https://12.34.56.78",
+			expOk: []string{"https://12.34.56.78", "https://12.34.56.78:8540"},
+			expFail: []string{
+				"http://12.34.56.78",     // wrong scheme
+				"http://12.34.56.78:443", // wrong scheme
+				"http://1.12.34.56.78",   // wrong 'domain name'
+				"http://12.34.56.78.a",   // wrong 'domain name'
+				"https://87.65.43.21", "http://87.65.43.21:8540", "https://87.65.43.21:8540"},
+		},
+		// port tests
+		{
+			spec:  "test:8540",
+			expOk: []string{"http://test:8540", "https://test:8540"},
+			expFail: []string{
+				"http://test", "https://test", // spec says port required
+				"http://test:8541", "https://test:8541", // wrong port
+				"http://bad", "https://bad", "http://bad:8540", "https://bad:8540"},
+		},
+		// scheme and port
+		{
+			spec:  "https://test:8540",
+			expOk: []string{"https://test:8540"},
+			expFail: []string{
+				"https://test",                          // missing port
+				"http://test",                           // missing port, + wrong scheme
+				"http://test:8540",                      // wrong scheme
+				"http://test:8541", "https://test:8541", // wrong port
+				"http://bad", "https://bad", "http://bad:8540", "https://bad:8540"},
+		},
+		// several allowed origins
+		{
+			spec: "localhost,http://127.0.0.1",
+			expOk: []string{"localhost", "http://localhost", "https://localhost:8443",
+				"http://127.0.0.1", "http://127.0.0.1:8080"},
+			expFail: []string{
+				"https://127.0.0.1", // wrong scheme
+				"http://bad", "https://bad", "http://bad:8540", "https://bad:8540"},
+		},
+	}
+	for _, tc := range tests {
+		srv := createAndStartServer(t, httpConfig{}, true, wsConfig{Origins: splitAndTrim(tc.spec)})
+		for _, origin := range tc.expOk {
+			if err := attemptWebsocketConnectionFromOrigin(t, srv, origin); err != nil {
+				t.Errorf("spec '%v', origin '%v': expected ok, got %v", tc.spec, origin, err)
+			}
+		}
+		for _, origin := range tc.expFail {
+			if err := attemptWebsocketConnectionFromOrigin(t, srv, origin); err == nil {
+				t.Errorf("spec '%v', origin '%v': expected not to allow,  got ok", tc.spec, origin)
+			}
+		}
+		srv.stop()
+	}
 }
 
 // TestIsWebsocket tests if an incoming websocket upgrade request is handled properly.

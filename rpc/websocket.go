@@ -131,43 +131,52 @@ func originIsAllowed(allowedOrigins mapset.Set, browserOrigin string) bool {
 }
 
 func ruleAllowsOrigin(allowedOrigin string, browserOrigin string) bool {
-	allowedScheme, allowedHostname, allowedPort, parsedAllowedErr := parseOriginURL(allowedOrigin)
-	browserScheme, browserHostname, browserPort, browserOriginErr := parseOriginURL(browserOrigin)
-	if parsedAllowedErr == nil && browserOriginErr == nil {
-		if allowedScheme != "" && browserScheme != "" && allowedScheme != browserScheme {
-			return false
-		}
-		if allowedHostname != "" && allowedHostname != browserHostname {
-			return false
-		}
-		if allowedPort != "" && browserPort != "" && allowedPort != browserPort {
-			return false
-		}
-		return true
-	} else { // parse error
-		log.Warn("Error parsing Origin URL in comparison for match.", "allowedOrigin", allowedOrigin, "browserOrigin", browserOrigin)
+	var (
+		allowedScheme, allowedHostname, allowedPort string
+		browserScheme, browserHostname, browserPort string
+		err                                         error
+	)
+	allowedScheme, allowedHostname, allowedPort, err = parseOriginURL(allowedOrigin)
+	if err != nil {
+		log.Warn("Error parsing allowed origin specification", "spec", allowedOrigin, "error", err)
 		return false
 	}
+	browserScheme, browserHostname, browserPort, err = parseOriginURL(browserOrigin)
+	if err != nil {
+		log.Warn("Error parsing browser 'Origin' field", "Origin", browserOrigin, "error", err)
+		return false
+	}
+	if allowedScheme != "" && allowedScheme != browserScheme {
+		return false
+	}
+	if allowedHostname != "" && allowedHostname != browserHostname {
+		return false
+	}
+	if allowedPort != "" && allowedPort != browserPort {
+		return false
+	}
+	return true
 }
 
 func parseOriginURL(origin string) (string, string, string, error) {
-	parsedURL, parseError := url.Parse(strings.ToLower(origin))
+	parsedURL, err := url.Parse(strings.ToLower(origin))
+	if err != nil {
+		return "", "", "", err
+	}
 	var scheme, hostname, port string
-	if parseError == nil {
-		if strings.Contains(origin, "://") {
-			scheme = parsedURL.Scheme
-			hostname = parsedURL.Hostname()
-			port = parsedURL.Port()
-		} else {
-			scheme = ""
-			hostname = parsedURL.Scheme
-			port = parsedURL.Opaque
-			if hostname == "" {
-				hostname = origin
-			}
+	if strings.Contains(origin, "://") {
+		scheme = parsedURL.Scheme
+		hostname = parsedURL.Hostname()
+		port = parsedURL.Port()
+	} else {
+		scheme = ""
+		hostname = parsedURL.Scheme
+		port = parsedURL.Opaque
+		if hostname == "" {
+			hostname = origin
 		}
 	}
-	return scheme, hostname, port, parseError
+	return scheme, hostname, port, nil
 }
 
 // DialWebsocketWithDialer creates a new RPC client that communicates with a JSON-RPC server
