@@ -110,12 +110,12 @@ type clientPoolPeer interface {
 
 // clientInfo defines all information required by clientpool.
 type clientInfo struct {
-	node        *enode.Node
-	address     string
-	peer        clientPoolPeer
-	connected   bool
-	connectedAt mclock.AbsTime
-	balance     *lps.NodeBalance
+	node                *enode.Node
+	address             string
+	peer                clientPoolPeer
+	connected, priority bool
+	connectedAt         mclock.AbsTime
+	balance             *lps.NodeBalance
 }
 
 // newClientPool creates a new client pool
@@ -147,6 +147,11 @@ func newClientPool(lespayDb ethdb.Database, minCap uint64, connectedBias time.Du
 	})
 
 	ns.SubscribeState(pool.ActiveFlag.Or(pool.PriorityFlag), func(node *enode.Node, oldState, newState nodestate.Flags) {
+		c, _ := ns.GetField(node, clientField).(*clientInfo)
+		if c == nil {
+			return
+		}
+		c.priority = newState.HasAll(pool.PriorityFlag)
 		if newState.Equals(pool.ActiveFlag) {
 			cap, _ := ns.GetField(node, pool.CapacityField).(uint64)
 			if cap > minCap {
@@ -331,7 +336,10 @@ func (f *clientPool) setCapacity(node *enode.Node, freeID string, capacity uint6
 		allowed     bool
 	)
 	f.ns.Operation(func() {
-		minPriority, allowed = f.pp.RequestCapacity(node, capacity, bias, setCap)
+		if !setCap || c.priority {
+			// check clientInfo.priority inside Operation to ensure thread safety
+			minPriority, allowed = f.pp.RequestCapacity(node, capacity, bias, setCap)
+		}
 	})
 	if allowed {
 		return 0, nil
