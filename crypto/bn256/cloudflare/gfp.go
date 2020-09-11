@@ -86,7 +86,7 @@ func isZero(a *gfP) bool {
 }
 
 func isEven(a *gfP) bool {
-	return bits.TrailingZeros64((a[0])) > 0
+	return a[0]&1 == 0
 }
 
 func div2(a *gfP) {
@@ -123,10 +123,6 @@ func gte(a, b *gfP) bool {
 	return borrow == 0
 }
 
-func equals(a, b *gfP) bool {
-	return a[0] == b[0] && a[1] == b[1] && a[2] == b[2] && a[3] == b[3]
-}
-
 // Performs inversion of the field element using binary EEA.
 // If element is zero (no inverse exists) then set `e` to zero
 func (e *gfP) InvertVariableTime(f *gfP) {
@@ -145,63 +141,47 @@ func (e *gfP) InvertVariableTime(f *gfP) {
 	u.Set(f)
 	b.Set(r2)
 
-	v := gfP{p2[0], p2[1], p2[2], p2[3]}
+	v := gfP(p2)
 	c := gfP{0, 0, 0, 0}
-	modulus := gfP{p2[0], p2[1], p2[2], p2[3]}
+	modulus := gfP(p2)
 
-	for {
-		if equals(&u, &one) || equals(&v, &one) {
-			break
-		}
-
+	for u != one && v != one {
 		// while u is even
-		for {
-			if !isEven(&u) {
-				break
-			}
-
+		for isEven(&u) {
 			div2(&u)
-			if isEven(&b) {
-				div2(&b)
-			} else {
+			if !isEven(&b) {
 				// we will not overflow a modulus here,
 				// so we can use specialized function
 				// do perform addition without reduction
 				b.addNocarry(&modulus)
-				div2(&b)
 			}
+			div2(&b)
 		}
 
 		// while v is even
-		for {
-			if !isEven(&v) {
-				break
-			}
-
+		for isEven(&v) {
 			div2(&v)
-			if isEven(&c) {
-				div2(&c)
-			} else {
+			if !isEven(&c) {
 				// we will not overflow a modulus here,
 				// so we can use specialized function
 				// do perform addition without reduction
 				c.addNocarry(&modulus)
-				div2(&c)
+			} else {
+
 			}
+			div2(&c)
 		}
 
-		if gte(&v, &u) {
-			// v >= u
-			v.subNoborrow(&u)
-			gfpSub(&c, &c, &b)
-		} else {
-			// if v < u
+		if gte(&u, &v) {
 			u.subNoborrow(&v)
 			gfpSub(&b, &b, &c)
+		} else {
+			v.subNoborrow(&u)
+			gfpSub(&c, &c, &b)
 		}
 	}
 
-	if equals(&u, &one) {
+	if u == one {
 		e.Set(&b)
 	} else {
 		e.Set(&c)

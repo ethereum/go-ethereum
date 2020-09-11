@@ -108,13 +108,11 @@ func TestBinaryEAA(t *testing.T) {
 		tmpBinaryEAASelfSet.Set(&Ga.p.x)
 		tmpBinaryEAASelfSet.InvertVariableTime(tmpBinaryEAASelfSet)
 
-		eq := equals(tmpLittleFermat, tmpBinaryEAA)
-		if eq == false {
+		if *tmpLittleFermat != *tmpBinaryEAA {
 			t.Fatalf("results of different inversion do not agree")
 		}
 
-		eq = equals(tmpLittleFermat, tmpBinaryEAASelfSet)
-		if eq == false {
+		if *tmpLittleFermat != *tmpBinaryEAASelfSet {
 			t.Fatalf("self-assigned inversion is invalid")
 		}
 	}
