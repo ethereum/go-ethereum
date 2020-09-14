@@ -259,4 +259,4 @@ make geth
 
 These commands create a `geth` executable file in the `go-ethereum/build/bin` folder that you can move wherever you want to run from. The binary is standalone and doesn't require any additional files.
 
-If you want to build a stable release you can use `git checkout v1.9.21` before running `make geth` to switch to a stable branch.
+If you want to build a stable release, the v1.9.21 release for example, you can use `git checkout v1.9.21` before running `make geth` to switch to a stable branch.
