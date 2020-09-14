@@ -37,21 +37,21 @@ import (
 )
 
 type testTransport struct {
-	*frameRW
+	*rlpxTransport
 	rpub     *ecdsa.PublicKey
 	closeErr error
 }
 
 func newTestTransport(rpub *ecdsa.PublicKey, fd net.Conn, dialDest *ecdsa.PublicKey) transport {
-	wrapped := newRLPX(fd, dialDest).(*frameRW)
-	wrapped.rlpx.InitWithSecrets(rlpx.Secrets{
+	wrapped := newRLPX(fd, dialDest).(*rlpxTransport)
+	wrapped.conn.InitWithSecrets(rlpx.Secrets{
 		Remote:     ecies.ImportECDSAPublic(rpub),
 		AES:        make([]byte, 16),
 		MAC:        make([]byte, 16),
 		EgressMAC:  sha256.New(),
 		IngressMAC: sha256.New(),
 	})
-	return &testTransport{rpub: rpub, frameRW: wrapped}
+	return &testTransport{rpub: rpub, rlpxTransport: wrapped}
 }
 
 func (c *testTransport) doEncHandshake(prv *ecdsa.PrivateKey) (*ecdsa.PublicKey, error) {
@@ -64,7 +64,7 @@ func (c *testTransport) doProtoHandshake(our *protoHandshake) (*protoHandshake, 
 }
 
 func (c *testTransport) close(err error) {
-	c.frameRW.rlpx.Close()
+	c.conn.Close()
 	c.closeErr = err
 }
 

@@ -25,7 +25,7 @@ import (
 
 	"github.com/ethereum/go-ethereum/common/bitutil"
 	"github.com/ethereum/go-ethereum/metrics"
-	r "github.com/ethereum/go-ethereum/p2p/rlpx"
+	"github.com/ethereum/go-ethereum/p2p/rlpx"
 	"github.com/ethereum/go-ethereum/rlp"
 )
 
@@ -40,44 +40,43 @@ const (
 	discWriteTimeout = 1 * time.Second
 )
 
-// frameRW is the transport protocol used by actual (non-test) connections.
-// It wraps the frame encoder with locks and read/write deadlines.
-type frameRW struct {
+// rlpxTransport is the transport used by actual (non-test) connections.
+// It wraps an RLPx connection with locks and read/write deadlines.
+type rlpxTransport struct {
 	rmu, wmu sync.Mutex
-
-	rlpx *r.Conn
+	conn     *rlpx.Conn
 }
 
 func newRLPX(conn net.Conn, dialDest *ecdsa.PublicKey) transport {
 	conn.SetDeadline(time.Now().Add(handshakeTimeout))
-	return &frameRW{rlpx: r.NewConn(conn, dialDest)}
+	return &rlpxTransport{conn: rlpx.NewConn(conn, dialDest)}
 }
 
-func (t *frameRW) ReadMsg() (Msg, error) {
+func (t *rlpxTransport) ReadMsg() (Msg, error) {
 	t.rmu.Lock()
 	defer t.rmu.Unlock()
 
-	t.rlpx.SetReadDeadline(time.Now().Add(frameReadTimeout))
+	t.conn.SetReadDeadline(time.Now().Add(frameReadTimeout))
 
 	var (
 		msg Msg
 		err error
 	)
 
-	msg.Code, msg.Size, msg.Payload, err = t.rlpx.ReadMsg()
+	msg.Code, msg.Size, msg.Payload, err = t.conn.ReadMsg()
 	msg.meterSize = msg.Size
 	msg.ReceivedAt = time.Now()
 
 	return msg, err
 }
 
-func (t *frameRW) WriteMsg(msg Msg) error {
+func (t *rlpxTransport) WriteMsg(msg Msg) error {
 	t.wmu.Lock()
 	defer t.wmu.Unlock()
 
-	t.rlpx.SetWriteDeadline(time.Now().Add(frameWriteTimeout))
+	t.conn.SetWriteDeadline(time.Now().Add(frameWriteTimeout))
 	// write message
-	size, err := t.rlpx.WriteMsg(msg.Code, msg.Size, msg.Payload)
+	size, err := t.conn.WriteMsg(msg.Code, msg.Size, msg.Payload)
 	if err != nil {
 		return err
 	}
@@ -91,12 +90,12 @@ func (t *frameRW) WriteMsg(msg Msg) error {
 	return nil
 }
 
-func (t *frameRW) close(err error) {
+func (t *rlpxTransport) close(err error) {
 	t.wmu.Lock()
 	defer t.wmu.Unlock()
 
 	// Tell the remote end why we're disconnecting if possible.
-	if t.rlpx != nil {
+	if t.conn != nil {
 		if r, ok := err.(DiscReason); ok && r != DiscNetworkError {
 			// frameRW tries to send DiscReason to disconnected peer
 			// if the connection is net.Pipe (in-memory simulation)
@@ -104,20 +103,20 @@ func (t *frameRW) close(err error) {
 			// a write deadline. Because of this only try to send
 			// the disconnect reason message if there is no error.
 			deadline := time.Now().Add(discWriteTimeout)
-			if err := t.rlpx.SetWriteDeadline(deadline); err == nil {
+			if err := t.conn.SetWriteDeadline(deadline); err == nil {
 				size, data, _ := rlp.EncodeToReader([]interface{}{r})
-				t.rlpx.WriteMsg(discMsg, uint32(size), data)
+				t.conn.WriteMsg(discMsg, uint32(size), data)
 			}
 		}
 	}
-	t.rlpx.Close()
+	t.conn.Close()
 }
 
-func (t *frameRW) doEncHandshake(prv *ecdsa.PrivateKey) (*ecdsa.PublicKey, error) {
-	return t.rlpx.Handshake(prv)
+func (t *rlpxTransport) doEncHandshake(prv *ecdsa.PrivateKey) (*ecdsa.PublicKey, error) {
+	return t.conn.Handshake(prv)
 }
 
-func (t *frameRW) doProtoHandshake(our *protoHandshake) (their *protoHandshake, err error) {
+func (t *rlpxTransport) doProtoHandshake(our *protoHandshake) (their *protoHandshake, err error) {
 	// Writing our handshake happens concurrently, we prefer
 	// returning the handshake read error. If the remote side
 	// disconnects us early with a valid reason, we should return it
@@ -132,7 +131,7 @@ func (t *frameRW) doProtoHandshake(our *protoHandshake) (their *protoHandshake, 
 		return nil, fmt.Errorf("write error: %v", err)
 	}
 	// If the protocol version supports Snappy encoding, upgrade immediately
-	t.rlpx.SetSnappy(their.Version >= snappyProtocolVersion)
+	t.conn.SetSnappy(their.Version >= snappyProtocolVersion)
 
 	return their, nil
 }
