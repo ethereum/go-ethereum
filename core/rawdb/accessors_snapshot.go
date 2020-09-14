@@ -118,3 +118,26 @@ func DeleteSnapshotJournal(db ethdb.KeyValueWriter) {
 		log.Crit("Failed to remove snapshot journal", "err", err)
 	}
 }
+
+// ReadSnapshotGenerator retrieves the serialized snapshot generator saved at
+// the last shutdown.
+func ReadSnapshotGenerator(db ethdb.KeyValueReader) []byte {
+	data, _ := db.Get(snapshotGeneratorKey)
+	return data
+}
+
+// WriteSnapshotGenerator stores the serialized snapshot generator to save at
+// shutdown.
+func WriteSnapshotGenerator(db ethdb.KeyValueWriter, generator []byte) {
+	if err := db.Put(snapshotGeneratorKey, generator); err != nil {
+		log.Crit("Failed to store snapshot generator", "err", err)
+	}
+}
+
+// DeleteSnapshotGenerator deletes the serialized snapshot generator saved at
+// the last shutdown
+func DeleteSnapshotGenerator(db ethdb.KeyValueWriter) {
+	if err := db.Delete(snapshotGeneratorKey); err != nil {
+		log.Crit("Failed to remove snapshot generator", "err", err)
+	}
+}

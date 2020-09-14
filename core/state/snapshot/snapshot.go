@@ -199,7 +199,7 @@ func New(diskdb ethdb.KeyValueStore, triedb *trie.Database, cache int, root comm
 }
 
 // waitBuild blocks until the snapshot finishes rebuilding. This method is meant
-// to  be used by tests to ensure we're testing what we believe we are.
+// to be used by tests to ensure we're testing what we believe we are.
 func (t *Tree) waitBuild() {
 	// Find the rebuild termination channel
 	var done chan struct{}
@@ -506,7 +506,22 @@ func diffToDisk(bottom *diffLayer) *diskLayer {
 	// Update the snapshot block marker and write any remainder data
 	rawdb.WriteSnapshotRoot(batch, bottom.root)
 
-	// todo write snapshot generator
+	// Write out the generator marker
+	entry := journalGenerator{
+		Done:   base.genMarker == nil,
+		Marker: base.genMarker,
+	}
+	if stats != nil {
+		entry.Wiping = (stats.wiping != nil)
+		entry.Accounts = stats.accounts
+		entry.Slots = stats.slots
+		entry.Storage = uint64(stats.storage)
+	}
+	blob, err := rlp.EncodeToBytes(entry)
+	if err != nil {
+		panic(fmt.Sprintf("Failed to RLP encode generator %v", err))
+	}
+	rawdb.WriteSnapshotGenerator(batch, blob)
 
 	// Flush all the updates in the single db operation. Ensure the
 	// disk layer transition is atomic.
@@ -555,7 +570,12 @@ func (t *Tree) Journal(root common.Hash) (common.Hash, error) {
 	if err := rlp.Encode(journal, journalVersion); err != nil {
 		return common.Hash{}, err
 	}
-	// Secondly write out the journal of each layer in reverse order.
+	// Secondly write out the disk layer root, ensure the
+	// diff journal is continuous with disk.
+	if err := rlp.Encode(journal, t.disklayer().root); err != nil {
+		return common.Hash{}, err
+	}
+	// Finally write out the journal of each layer in reverse order.
 	base, err := snap.(snapshot).Journal(journal)
 	if err != nil {
 		return common.Hash{}, err
