@@ -95,15 +95,13 @@ func (t *rlpxTransport) close(err error) {
 	defer t.wmu.Unlock()
 
 	// Tell the remote end why we're disconnecting if possible.
+	// We only bother doing this if the underlying connection supports
+	// setting a timeout tough.
 	if t.conn != nil {
 		if r, ok := err.(DiscReason); ok && r != DiscNetworkError {
-			// frameRW tries to send DiscReason to disconnected peer
-			// if the connection is net.Pipe (in-memory simulation)
-			// it hangs forever, since net.Pipe does not implement
-			// a write deadline. Because of this only try to send
-			// the disconnect reason message if there is no error.
 			deadline := time.Now().Add(discWriteTimeout)
 			if err := t.conn.SetWriteDeadline(deadline); err == nil {
+				// Connection supports write deadline.
 				size, data, _ := rlp.EncodeToReader([]interface{}{r})
 				t.conn.WriteMsg(discMsg, uint32(size), data)
 			}
