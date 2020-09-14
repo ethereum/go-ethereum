@@ -401,21 +401,6 @@ func InspectDatabase(db ethdb.Database) error {
 	if count, err := db.Ancients(); err == nil {
 		ancients = counter(count)
 	}
-	// Count receipts in ancient db
-	ancientReceipts := counter(0)
-	for blockNumber := uint64(0); blockNumber < uint64(ancients); blockNumber++ {
-		data, err := db.Ancient(freezerReceiptTable, blockNumber)
-		if err != nil {
-			log.Error("Error reading ancient receipts from block", "number", blockNumber, "err", err)
-		} else {
-			ancientReceipts += countReceiptsRLP(data)
-		}
-		if blockNumber%1000 == 0 && time.Since(logged) > 8*time.Second {
-			log.Info("Counting ancient database receipts", "blocknumber", blockNumber, "percentage", ancients.Percentage(blockNumber), "elapsed", common.PrettyDuration(time.Since(start)))
-			logged = time.Now()
-		}
-	}
-	log.Info("Counting ancient database receipts", "blocknumber", uint64(ancients), "percentage", "100", "elapsed", common.PrettyDuration(time.Since(start)))
 	// Display the database statistic.
 	stats := [][]string{
 		{"Key-Value store", "Headers", headers.Size(), headers.Count()},
@@ -436,7 +421,6 @@ func InspectDatabase(db ethdb.Database) error {
 		{"Ancient store", "Headers", ancientHeadersSize.String(), ancients.String()},
 		{"Ancient store", "Bodies", ancientBodiesSize.String(), ancients.String()},
 		{"Ancient store", "Receipt lists", ancientReceiptsSize.String(), ancients.String()},
-		{"Ancient store", "└ counted receipts", "--", ancientReceipts.String()},
 		{"Ancient store", "Difficulties", ancientTdsSize.String(), ancients.String()},
 		{"Ancient store", "Block number->hash", ancientHashesSize.String(), ancients.String()},
 		{"Light client", "CHT trie nodes", chtTrieNodes.Size(), chtTrieNodes.Count()},
