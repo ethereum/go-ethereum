@@ -91,7 +91,7 @@ func (ec *Client) BlockByNumber(ctx context.Context, number *big.Int) (*types.Bl
 // BlockNumber returns the most recent block number
 func (ec *Client) BlockNumber(ctx context.Context) (uint64, error) {
 	var result hexutil.Uint64
-	err := ec.c.CallContext(ctx, &result, "eth_getBlockNumber", nil)
+	err := ec.c.CallContext(ctx, &result, "eth_blockNumber")
 	return uint64(result), err
 }
 
