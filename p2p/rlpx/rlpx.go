@@ -109,7 +109,8 @@ func (c *Conn) Read() (code uint64, data []byte, err error) {
 	}
 	// If snappy is enabled, verify and decompress message.
 	if c.snappy {
-		actualSize, err := snappy.DecodedLen(data)
+		var actualSize int
+		actualSize, err = snappy.DecodedLen(data)
 		if err != nil {
 			return code, nil, err
 		}
