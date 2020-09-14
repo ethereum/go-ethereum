@@ -61,7 +61,14 @@
 			if (this.callstack[left-1].calls === undefined) {
 				this.callstack[left-1].calls = [];
 			}
-			this.callstack[left-1].calls.push({type: op});
+			this.callstack[left-1].calls.push({
+				type:    op,
+				from:    toHex(log.contract.getAddress()),
+				to:      toHex(toAddress(log.stack.peek(0).toString(16))),
+				gasIn:   log.getGas(),
+				gasCost: log.getCost(),
+				value:   '0x' + db.getBalance(log.contract.getAddress()).toString(16)
+			});
 			return
 		}
 		// If a new method invocation is being done, add to the call stack
