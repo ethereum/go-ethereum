@@ -364,7 +364,7 @@ func TestBlockNumber(t *testing.T) {
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
-	if blockNumber != 1  {
+	if blockNumber != 1 {
 		t.Fatalf("BlockNumber returned wrong number: %d", blockNumber)
 	}
 }
