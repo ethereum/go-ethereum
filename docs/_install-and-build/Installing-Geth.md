@@ -3,11 +3,16 @@ title: Installing Geth
 sort_key: A
 ---
 
-You can install the Go implementation of Ethereum using a variety of ways. These include installing it via your favorite package manager; downloading a standalone pre-built bundle; running as a docker container; or building it yourself. This document details all of the possibilities to get you joining the Ethereum network using whatever means you prefer.
+You can install the Go implementation of Ethereum using a variety of ways. These include installing it via your favorite package manager; downloading a standalone pre-built bundle; running as a docker container; or building it yourself. This document details all of the possibilities to get you joining the Ethereum network using whatever means you prefer. A list of stable releases can be found [here](https://github.com/ethereum/go-ethereum/releases).
 
 {:toc}
 
 -   this will be removed by the toc
+
+## Updating Geth
+
+Updating go-ethereum is as easy as it gets. You just need to download and install the newer version of geth, shutdown your node and restart with the new software. 
+Geth will automatically use the data of your old node and sync the latest blocks that were mined since you shutdown the old software.
 
 ## Install from a package manager
 
@@ -169,7 +174,6 @@ With Go installed, you can download the project into you `GOPATH` workspace via:
 go get -d github.com/ethereum/go-ethereum
 ```
 You can also install specific versions via:
-Our stable releases can be found [here](https://github.com/ethereum/go-ethereum/releases).
 
 ```shell
 go get -d github.com/ethereum/go-ethereum@v1.9.21
@@ -256,8 +260,3 @@ make geth
 These commands create a `geth` executable file in the `go-ethereum/build/bin` folder that you can move wherever you want to run from. The binary is standalone and doesn't require any additional files.
 
 If you want to build a stable release you can use `git checkout v1.9.21` before running `make geth` to switch to a stable branch.
-
-## Updating Geth
-
-Updating go-ethereum is as easy as it gets. You just need to download and install the newer version of geth, shutdown your node and restart with the new software. 
-Geth will automatically use the data of your old node and sync the latest blocks that were mined since you shutdown the old software.
