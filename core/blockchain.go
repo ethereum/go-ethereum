@@ -285,6 +285,11 @@ func NewBlockChain(db ethdb.Database, cacheConfig *CacheConfig, chainConfig *par
 		if err := bc.SetHead(head.NumberU64()); err != nil {
 			return nil, err
 		}
+		// If the blockchain is already rewound to a lower point, in
+		// this case we hold the strong assumpution that the snapshot
+		// journal is broken if it's exsitent.
+		//
+		// todo return all deleted blocks.
 	}
 	// Ensure that a previous crash in SetHead doesn't leave extra ancients
 	if frozen, err := bc.db.Ancients(); err == nil && frozen > 0 {

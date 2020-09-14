@@ -416,6 +416,9 @@ func (t *Tree) cap(diff *diffLayer, layers int) *diskLayer {
 
 // diffToDisk merges a bottom-most diff into the persistent disk layer underneath
 // it. The method will panic if called onto a non-bottom-most diff layer.
+//
+// The disk layer persistence should be operated in an atomic way. All updates should
+// be discarded if the whole transition if not finished.
 func diffToDisk(bottom *diffLayer) *diskLayer {
 	var (
 		base  = bottom.parent.(*diskLayer)
@@ -428,8 +431,7 @@ func diffToDisk(bottom *diffLayer) *diskLayer {
 		base.genAbort <- abort
 		stats = <-abort
 	}
-	// Start by temporarily deleting the current snapshot block marker. This
-	// ensures that in the case of a crash, the entire snapshot is invalidated.
+	// Put the deletion in the batch writer, flush all updates in the final step.
 	rawdb.DeleteSnapshotRoot(batch)
 
 	// Mark the original base as stale as we're going to create a new wrapper
@@ -472,12 +474,6 @@ func diffToDisk(bottom *diffLayer) *diskLayer {
 		base.cache.Set(hash[:], data)
 		snapshotCleanAccountWriteMeter.Mark(int64(len(data)))
 
-		if batch.ValueSize() > ethdb.IdealBatchSize {
-			if err := batch.Write(); err != nil {
-				log.Crit("Failed to write account snapshot", "err", err)
-			}
-			batch.Reset()
-		}
 		snapshotFlushAccountItemMeter.Mark(1)
 		snapshotFlushAccountSizeMeter.Mark(int64(len(data)))
 	}
@@ -506,15 +502,14 @@ func diffToDisk(bottom *diffLayer) *diskLayer {
 			snapshotFlushStorageItemMeter.Mark(1)
 			snapshotFlushStorageSizeMeter.Mark(int64(len(data)))
 		}
-		if batch.ValueSize() > ethdb.IdealBatchSize {
-			if err := batch.Write(); err != nil {
-				log.Crit("Failed to write storage snapshot", "err", err)
-			}
-			batch.Reset()
-		}
 	}
 	// Update the snapshot block marker and write any remainder data
 	rawdb.WriteSnapshotRoot(batch, bottom.root)
+
+	// todo write snapshot generator
+
+	// Flush all the updates in the single db operation. Ensure the
+	// disk layer transition is atomic.
 	if err := batch.Write(); err != nil {
 		log.Crit("Failed to write leftover snapshot", "err", err)
 	}
