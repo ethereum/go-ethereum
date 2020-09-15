@@ -384,10 +384,10 @@ func DefaultGoerliGenesisBlock() *Genesis {
 func DefaultLuksoGenesisBlock() *Genesis {
 	return &Genesis{
 		Config:     params.LuksoChainConfig,
-		Timestamp:  1548854791,
-		ExtraData:  hexutil.MustDecode("0x22466c6578692069732061207468696e6722202d204166726900000000000000e0a2bd4258d2768837baa26a28fe71dc079f84c70000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000"),
-		GasLimit:   10485760,
-		Difficulty: big.NewInt(1),
+		Timestamp:  0,
+		ExtraData:  hexutil.MustDecode("0x"),
+		GasLimit:   6000000,
+		Difficulty: big.NewInt(131072),
 		Alloc:      decodePrealloc(luksoAllocData),
 	}
 }
