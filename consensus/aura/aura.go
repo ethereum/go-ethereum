@@ -14,7 +14,7 @@
 // You should have received a copy of the GNU Lesser General Public License
 // along with the go-ethereum library. If not, see <http://www.gnu.org/licenses/>.
 
-// Package clique implements the proof-of-authority consensus engine.
+// Package Aura implements the proof-of-authority consensus engine.
 package aura
 
 import (
@@ -52,7 +52,7 @@ const (
 	wiggleTime = 500 * time.Millisecond // Random delay (per signer) to allow concurrent signers
 )
 
-// Clique proof-of-authority protocol constants.
+// Aura proof-of-authority protocol constants.
 var (
 	epochLength = uint64(30000) // Default number of blocks after which to checkpoint and reset the pending votes
 
@@ -185,7 +185,7 @@ type Aura struct {
 	fakeDiff bool // Skip difficulty verifications
 }
 
-// New creates a Clique proof-of-authority consensus engine with the initial
+// New creates a Aura proof-of-authority consensus engine with the initial
 // signers set to the ones provided by the user.
 func New(config *params.AuraConfig, db ethdb.Database) *Aura {
 	// Set any missing consensus parameters to their defaults
@@ -701,7 +701,7 @@ func SealHash(header *types.Header) (hash common.Hash) {
 	return hash
 }
 
-// CliqueRLP returns the rlp bytes which needs to be signed for the proof-of-authority
+// AuraRLP returns the rlp bytes which needs to be signed for the proof-of-authority
 // sealing. The RLP to sign consists of the entire header apart from the 65 byte signature
 // contained at the end of the extra data.
 //
