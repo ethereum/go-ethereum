@@ -37,8 +37,13 @@ const (
 	// nodeDBVersion is the version identifier of the node data in db
 	//
 	// Changelog:
+	// Version 0 => 1
 	// * Replace `lastTotal` with `meta` in positive balance: version 0=>1
-	nodeDBVersion = 1
+	//
+	// Version 1 => 2
+	// * Positive Balance and negative balance is changed:
+	// * Cumulative time is replaced with expiration
+	nodeDBVersion = 2
 
 	// dbCleanupCycle is the cycle of db for useless data cleanup
 	dbCleanupCycle = time.Hour
