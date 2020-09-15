@@ -110,7 +110,7 @@ func (t *rlpxTransport) close(err error) {
 }
 
 func (t *rlpxTransport) doEncHandshake(prv *ecdsa.PrivateKey) (*ecdsa.PublicKey, error) {
-	conn.SetDeadline(time.Now().Add(handshakeTimeout))
+	t.conn.SetDeadline(time.Now().Add(handshakeTimeout))
 	return t.conn.Handshake(prv)
 }
 

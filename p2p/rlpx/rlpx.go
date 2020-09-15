@@ -85,6 +85,16 @@ func (c *Conn) SetReadDeadline(time time.Time) error {
 	return c.conn.SetReadDeadline(time)
 }
 
+// SetWriteDeadline sets the deadline for all future write operations.
+func (c *Conn) SetWriteDeadline(time time.Time) error {
+	return c.conn.SetWriteDeadline(time)
+}
+
+// SetDeadline sets the deadline for all future read and write operations.
+func (c *Conn) SetDeadline(time time.Time) error {
+	return c.conn.SetDeadline(time)
+}
+
 // ReadMsg reads a message frame from the connection. The actual message data must be
 // received through the 'payload' reader.
 func (c *Conn) ReadMsg() (code uint64, size uint32, payload io.Reader, err error) {
@@ -166,11 +176,6 @@ func (h *handshakeState) readFrame(conn io.Reader) ([]byte, error) {
 
 func readInt24(b []byte) uint32 {
 	return uint32(b[2]) | uint32(b[1])<<8 | uint32(b[0])<<16
-}
-
-// SetWriteDeadline sets the deadline for all future write operations.
-func (c *Conn) SetWriteDeadline(time time.Time) error {
-	return c.conn.SetWriteDeadline(time)
 }
 
 // WriteMsg writes a message frame with the given message type 'code' to the connection.
