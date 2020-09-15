@@ -95,41 +95,35 @@ func (c *Conn) SetDeadline(time time.Time) error {
 	return c.conn.SetDeadline(time)
 }
 
-// ReadMsg reads a message frame from the connection. The actual message data must be
-// received through the 'payload' reader.
-func (c *Conn) ReadMsg() (code uint64, size uint32, payload io.Reader, err error) {
-	code, data, err := c.Read()
-	payload = bytes.NewReader(data)
-	return code, uint32(len(data)), payload, err
-}
-
 // Read reads a message from the connection.
-func (c *Conn) Read() (code uint64, data []byte, err error) {
+func (c *Conn) Read() (code uint64, data []byte, wireSize int, err error) {
 	if c.handshake == nil {
 		panic("can't ReadMsg before handshake")
 	}
 
 	frame, err := c.handshake.readFrame(c.conn)
 	if err != nil {
-		return 0, nil, err
+		return 0, nil, 0, err
 	}
 	code, data, err = rlp.SplitUint64(frame)
 	if err != nil {
-		return 0, nil, fmt.Errorf("invalid message code: %v", err)
+		return 0, nil, 0, fmt.Errorf("invalid message code: %v", err)
 	}
+	wireSize = len(data)
+
 	// If snappy is enabled, verify and decompress message.
 	if c.snappy {
 		var actualSize int
 		actualSize, err = snappy.DecodedLen(data)
 		if err != nil {
-			return code, nil, err
+			return code, nil, 0, err
 		}
 		if actualSize > int(maxUint24) {
-			return code, nil, errPlainMessageTooLarge
+			return code, nil, 0, errPlainMessageTooLarge
 		}
 		data, err = snappy.Decode(nil, data)
 	}
-	return code, data, err
+	return code, data, wireSize, err
 }
 
 func (h *handshakeState) readFrame(conn io.Reader) ([]byte, error) {

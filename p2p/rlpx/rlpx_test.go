@@ -36,8 +36,7 @@ import (
 
 type message struct {
 	code uint64
-	size uint32
-	data io.Reader
+	data []byte
 	err  error
 }
 
@@ -68,7 +67,7 @@ func checkMsgReadWrite(t *testing.T, p1, p2 *Conn, msgCode uint64, msgData []byt
 	ch := make(chan message, 1)
 	go func() {
 		var msg message
-		msg.code, msg.size, msg.data, msg.err = p1.ReadMsg()
+		msg.code, msg.data, _, msg.err = p1.Read()
 		ch <- msg
 	}()
 
@@ -80,12 +79,8 @@ func checkMsgReadWrite(t *testing.T, p1, p2 *Conn, msgCode uint64, msgData []byt
 
 	// Check it was received correctly.
 	msg := <-ch
-	buf := make([]byte, msg.size)
-	if _, err = msg.data.Read(buf); err != nil {
-		t.Fatal(err)
-	}
-	assert.Equal(t, msgData, buf, "wrong message data returned from ReadMsg")
 	assert.Equal(t, msgCode, msg.code, "wrong message code returned from ReadMsg")
+	assert.Equal(t, msgData, msg.data, "wrong message data returned from ReadMsg")
 }
 
 func createPeers(t *testing.T) (peer1, peer2 *Conn) {
