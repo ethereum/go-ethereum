@@ -29,7 +29,6 @@ import (
 	"github.com/ethereum/go-ethereum/ethdb/leveldb"
 	"github.com/ethereum/go-ethereum/ethdb/memorydb"
 	"github.com/ethereum/go-ethereum/log"
-	"github.com/ethereum/go-ethereum/rlp"
 	"github.com/olekukonko/tablewriter"
 )
 
@@ -269,20 +268,6 @@ func (s *stat) Count() string {
 	return s.count.String()
 }
 
-// countReceiptsRLP counts how many receipts are stored in a RLP raw value
-func countReceiptsRLP(data rlp.RawValue) counter {
-	it, err := rlp.NewListIterator(data)
-	if err != nil {
-		log.Warn("Receipt iteration error", "error", err)
-		return counter(0)
-	}
-	count := counter(0)
-	for it.Next() {
-		count++
-	}
-	return count
-}
-
 // InspectDatabase traverses the entire database and checks the size
 // of all different categories of data.
 func InspectDatabase(db ethdb.Database) error {
@@ -341,8 +326,7 @@ func InspectDatabase(db ethdb.Database) error {
 		case bytes.HasPrefix(key, blockBodyPrefix) && len(key) == (len(blockBodyPrefix)+8+common.HashLength):
 			bodies.Add(size)
 		case bytes.HasPrefix(key, blockReceiptsPrefix) && len(key) == (len(blockReceiptsPrefix)+8+common.HashLength):
-			receipts.size += size
-			receipts.count += countReceiptsRLP(it.Value())
+			receipts.Add(size)
 		case bytes.HasPrefix(key, headerPrefix) && bytes.HasSuffix(key, headerTDSuffix):
 			tds.Add(size)
 		case bytes.HasPrefix(key, headerPrefix) && bytes.HasSuffix(key, headerHashSuffix):
@@ -405,7 +389,7 @@ func InspectDatabase(db ethdb.Database) error {
 	stats := [][]string{
 		{"Key-Value store", "Headers", headers.Size(), headers.Count()},
 		{"Key-Value store", "Bodies", bodies.Size(), bodies.Count()},
-		{"Key-Value store", "Receipts", receipts.Size(), receipts.Count()},
+		{"Key-Value store", "Receipt lists", receipts.Size(), receipts.Count()},
 		{"Key-Value store", "Difficulties", tds.Size(), tds.Count()},
 		{"Key-Value store", "Block number->hash", numHashPairings.Size(), numHashPairings.Count()},
 		{"Key-Value store", "Block hash->number", hashNumPairings.Size(), hashNumPairings.Count()},
