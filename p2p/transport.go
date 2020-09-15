@@ -48,7 +48,6 @@ type rlpxTransport struct {
 }
 
 func newRLPX(conn net.Conn, dialDest *ecdsa.PublicKey) transport {
-	conn.SetDeadline(time.Now().Add(handshakeTimeout))
 	return &rlpxTransport{conn: rlpx.NewConn(conn, dialDest)}
 }
 
@@ -111,6 +110,7 @@ func (t *rlpxTransport) close(err error) {
 }
 
 func (t *rlpxTransport) doEncHandshake(prv *ecdsa.PrivateKey) (*ecdsa.PublicKey, error) {
+	conn.SetDeadline(time.Now().Add(handshakeTimeout))
 	return t.conn.Handshake(prv)
 }
 
