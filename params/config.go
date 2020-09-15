@@ -234,7 +234,7 @@ var (
 			Authorities: []string{
 				"0x540a9fe3d2381016dec8ffba7235c6fb00b0f942",
 			},
-			Difficulty: 131072,
+			Difficulty: big.NewInt(131072),
 		},
 	}
 
@@ -376,10 +376,10 @@ func (c *CliqueConfig) String() string {
 
 // AuraConfig is the consensus engine configs for proof-of-authority based sealing.
 type AuraConfig struct {
-	Period uint64 		`json:"period"` // Number of seconds between blocks to enforce
-	Epoch  uint64 		`json:"epoch"`  // Epoch length to reset votes and checkpoint
-	Difficulty uint64 	`json:"difficulty"` // Constant block difficulty
-	Authorities []string `json:"authorities"` // list of addresses of authorities
+	Period uint64 			`json:"period"` // Number of seconds between blocks to enforce
+	Epoch  uint64 			`json:"epoch"`  // Epoch length to reset votes and checkpoint
+	Difficulty *big.Int 	`json:"difficulty"` // Constant block difficulty
+	Authorities []string 	`json:"authorities"` // list of addresses of authorities
 }
 
 // String implements the stringer interface, returning the consensus engine details.
@@ -389,7 +389,7 @@ func (a *AuraConfig) String() string {
 
 // Return diffulty rate for Aura concensus
 func (a *AuraConfig) GetDifficulty() (num *big.Int) {
-	return new(big.Int).SetUint64(a.Difficulty)
+	return a.Difficulty
 }
 
 // String implements the fmt.Stringer interface.

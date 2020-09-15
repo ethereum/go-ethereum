@@ -22,7 +22,6 @@ import (
 	"errors"
 	"io"
 	"math/big"
-	"math/rand"
 	"sync"
 	"time"
 
@@ -520,18 +519,18 @@ func (a *Aura) Prepare(chain consensus.ChainHeaderReader, header *types.Header) 
 			}
 		}
 		// If there's pending proposals, cast a vote on them
-		if len(addresses) > 0 {
-			header.Coinbase = addresses[rand.Intn(len(addresses))]
-			if a.proposals[header.Coinbase] {
-				copy(header.Nonce[:], nonceAuthVote)
-			} else {
-				copy(header.Nonce[:], nonceDropVote)
-			}
-		}
+		//if len(addresses) > 0 {
+		//	header.Coinbase = addresses[rand.Intn(len(addresses))]
+		//	if a.proposals[header.Coinbase] {
+		//		copy(header.Nonce[:], nonceAuthVote)
+		//	} else {
+		//		copy(header.Nonce[:], nonceDropVote)
+		//	}
+		//}
 		a.lock.RUnlock()
 	}
 	// Set the correct difficulty
-	header.Difficulty = CalcDifficulty(chain, snap, a.signer)
+	header.Difficulty = chain.Config().Aura.GetDifficulty()
 
 	// Ensure the extra data has all its components
 	if len(header.Extra) < extraVanity {
@@ -630,13 +629,13 @@ func (a *Aura) Seal(chain consensus.ChainHeaderReader, block *types.Block, resul
 	}
 	// Sweet, the protocol permits us to sign the block, wait for our time
 	delay := time.Unix(int64(header.Time), 0).Sub(time.Now()) // nolint: gosimple
-	if header.Difficulty.Cmp(diffNoTurn) == 0 {
-		// It's not our turn explicitly to sign, delay it a bit
-		wiggle := time.Duration(len(snap.Signers)/2+1) * wiggleTime
-		delay += time.Duration(rand.Int63n(int64(wiggle)))
-
-		log.Trace("Out-of-turn signing requested", "wiggle", common.PrettyDuration(wiggle))
-	}
+	//if header.Difficulty.Cmp(diffNoTurn) == 0 {
+	//	// It's not our turn explicitly to sign, delay it a bit
+	//	wiggle := time.Duration(len(snap.Signers)/2+1) * wiggleTime
+	//	delay += time.Duration(rand.Int63n(int64(wiggle)))
+	//
+	//	log.Trace("Out-of-turn signing requested", "wiggle", common.PrettyDuration(wiggle))
+	//}
 	// Sign all the things!
 	sighash, err := signFn(accounts.Account{Address: signer}, accounts.MimetypeClique, AuraRLP(header))
 	if err != nil {
@@ -666,14 +665,14 @@ func (a *Aura) Seal(chain consensus.ChainHeaderReader, block *types.Block, resul
 // that a new block should have based on the previous blocks in the chain and the
 // current signer.
 func (a *Aura) CalcDifficulty(chain consensus.ChainHeaderReader, time uint64, parent *types.Header) *big.Int {
-	return new(big.Int).SetUint64(chain.Config().Aura.Difficulty)
+	return chain.Config().Aura.Difficulty
 }
 
 // CalcDifficulty is the difficulty adjustment algorithm. It returns the difficulty
 // that a new block should have based on the previous blocks in the chain and the
 // current signer.
 func CalcDifficulty(chain consensus.ChainHeaderReader, snap *Snapshot, signer common.Address) *big.Int {
-	return new(big.Int).SetUint64(chain.Config().Aura.Difficulty)
+	return chain.Config().Aura.Difficulty
 }
 
 // SealHash returns the hash of a block prior to it being sealed.
