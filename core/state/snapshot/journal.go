@@ -91,7 +91,7 @@ func loadAndParseLegacyJournal(db ethdb.KeyValueStore, base *diskLayer) (snapsho
 func loadAndParseJournal(db ethdb.KeyValueStore, base *diskLayer) (snapshot, journalGenerator, error) {
 	// Retrieve the disk layer generator. It must exist, no matter the
 	// snapshot is fully generated or not. Otherwise the entire disk
-	// layer should be discarded.
+	// layer is invalid.
 	generatorBlob := rawdb.ReadSnapshotGenerator(db)
 	if len(generatorBlob) == 0 {
 		return nil, journalGenerator{}, errors.New("missing snapshot generator")
@@ -103,8 +103,8 @@ func loadAndParseJournal(db ethdb.KeyValueStore, base *diskLayer) (snapshot, jou
 	// Retrieve the diff layer journal. It's possible that the journal is
 	// not existent, e.g. the disk layer is generating while that the Geth
 	// crashes without persisting the diff journal.
-	// So if there is no journal, we just discard all diffs and try to recover
-	// them later.
+	// So if there is no journal, or the journal is not matched with disk
+	// layer, we just discard all diffs and try to recover them later.
 	journal := rawdb.ReadSnapshotJournal(db)
 	if len(journal) == 0 {
 		return base, generator, nil
@@ -117,7 +117,7 @@ func loadAndParseJournal(db ethdb.KeyValueStore, base *diskLayer) (snapshot, jou
 		return nil, journalGenerator{}, err
 	}
 	if version != journalVersion {
-		return nil, journalGenerator{}, errors.New("version mismatch")
+		return nil, journalGenerator{}, fmt.Errorf("journal version mismatch, want %d got %v", journalVersion, version)
 	}
 	// Secondly, resolve the disk layer root, ensure it's continuous
 	// with disk layer.
@@ -125,7 +125,9 @@ func loadAndParseJournal(db ethdb.KeyValueStore, base *diskLayer) (snapshot, jou
 	if err := r.Decode(&root); err != nil {
 		return nil, journalGenerator{}, errors.New("missing disk layer root")
 	}
-	// If they are not continuous, keep the disk layer only.
+	// The diff journal is not matched with disk, discard them.
+	// It can happen that Geth crashes without persisting the latest
+	// diff journal.
 	if !bytes.Equal(root.Bytes(), base.root.Bytes()) {
 		return base, generator, nil
 	}
@@ -159,14 +161,14 @@ func loadSnapshot(diskdb ethdb.KeyValueStore, triedb *trie.Database, cache int, 
 		return nil, err
 	}
 	// Entire snapshot journal loaded, sanity check the head. If the loaded
-	// snapshot is not matched with current state root, ensure the state is
-	// below the snapshot so that the broken snapshot can be recovered.
+	// snapshot is not matched with current state root, print a warning log.
 	//
 	// Possible scenario: Geth was crashed without persisting journal and then
-	// restart, the head is rewound to the point with available state(trie) which
-	// is below the snapshot.
+	// restart, the head is rewound to the point with available state(trie)
+	// which is below the snapshot. In this case the snapshot can be recovered
+	// by re-executing blocks but right now it's unavailable.
 	if head := snapshot.Root(); head != root {
-		log.Warn("Snapshot is not synced, wait recovery")
+		log.Warn("Snapshot is not continous with chain", "snaproot", head, "chainroot", root)
 	}
 	// Everything loaded correctly, resume any suspended operations
 	if !generator.Done {

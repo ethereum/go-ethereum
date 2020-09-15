@@ -169,9 +169,10 @@ type Tree struct {
 // store (with a number of memory layers from a journal), ensuring that the head
 // of the snapshot matches the expected one.
 //
-// If the snapshot is missing or inconsistent, the entirety is deleted and will
-// be reconstructed from scratch based on the tries in the key-value store, on a
-// background thread.
+// If the snapshot is missing or the disk layer is broken, the entire is deleted
+// and will be reconstructed from scratch based on the tries in the key-value
+// store, on a background thread. If the memory layers from the journal is not
+// continuous with disk layer or the journal is missing, all diffs will be discarded.
 func New(diskdb ethdb.KeyValueStore, triedb *trie.Database, cache int, root common.Hash, async bool) *Tree {
 	// Create a new, empty snapshot tree
 	snap := &Tree{
