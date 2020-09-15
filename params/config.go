@@ -231,8 +231,8 @@ var (
 		Aura: &AuraConfig{
 			Period: 15,
 			Epoch:  30000,
-			Authorities: []string{
-				"0x540a9fe3d2381016dec8ffba7235c6fb00b0f942",
+			Authorities: []common.Address{
+				common.HexToAddress("0x540a9fe3d2381016dec8ffba7235c6fb00b0f942"),
 			},
 			Difficulty: big.NewInt(131072),
 		},
@@ -376,10 +376,10 @@ func (c *CliqueConfig) String() string {
 
 // AuraConfig is the consensus engine configs for proof-of-authority based sealing.
 type AuraConfig struct {
-	Period uint64 			`json:"period"` // Number of seconds between blocks to enforce
-	Epoch  uint64 			`json:"epoch"`  // Epoch length to reset votes and checkpoint
-	Difficulty *big.Int 	`json:"difficulty"` // Constant block difficulty
-	Authorities []string 	`json:"authorities"` // list of addresses of authorities
+	Period uint64 					`json:"period"` // Number of seconds between blocks to enforce
+	Epoch  uint64 					`json:"epoch"`  // Epoch length to reset votes and checkpoint
+	Difficulty *big.Int 			`json:"difficulty"` // Constant block difficulty
+	Authorities []common.Address 	`json:"authorities"` // list of addresses of authorities
 }
 
 // String implements the stringer interface, returning the consensus engine details.
