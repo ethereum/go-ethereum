@@ -520,7 +520,7 @@ func (a *Aura) Prepare(chain consensus.ChainHeaderReader, header *types.Header) 
 		a.lock.RUnlock()
 	}
 	// Set the correct difficulty
-	header.Difficulty = CalcDifficulty(snap, a.signer)
+	header.Difficulty = CalcDifficulty(chain, snap, a.signer)
 
 	// Ensure the extra data has all its components
 	if len(header.Extra) < extraVanity {
@@ -655,21 +655,14 @@ func (a *Aura) Seal(chain consensus.ChainHeaderReader, block *types.Block, resul
 // that a new block should have based on the previous blocks in the chain and the
 // current signer.
 func (a *Aura) CalcDifficulty(chain consensus.ChainHeaderReader, time uint64, parent *types.Header) *big.Int {
-	snap, err := a.snapshot(chain, parent.Number.Uint64(), parent.Hash(), nil)
-	if err != nil {
-		return nil
-	}
-	return CalcDifficulty(snap, a.signer)
+	return new(big.Int).SetUint64(chain.Config().Aura.Difficulty)
 }
 
 // CalcDifficulty is the difficulty adjustment algorithm. It returns the difficulty
 // that a new block should have based on the previous blocks in the chain and the
 // current signer.
-func CalcDifficulty(snap *Snapshot, signer common.Address) *big.Int {
-	if snap.inturn(snap.Number+1, signer) {
-		return new(big.Int).Set(diffInTurn)
-	}
-	return new(big.Int).Set(diffNoTurn)
+func CalcDifficulty(chain consensus.ChainHeaderReader, snap *Snapshot, signer common.Address) *big.Int {
+	return new(big.Int).SetUint64(chain.Config().Aura.Difficulty)
 }
 
 // SealHash returns the hash of a block prior to it being sealed.
