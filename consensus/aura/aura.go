@@ -101,6 +101,10 @@ var (
 	// their extra-data fields.
 	errExtraSigners = errors.New("non-checkpoint block contains extra signer list")
 
+	// errInvalidValidatorSeal is returned if the extra data field length is not
+	// equal to the length of a seal
+	errInvalidExtraData = errors.New("extra data field in block header is invalid")
+
 	// errInvalidCheckpointSigners is returned if a checkpoint block contains an
 	// invalid list of signers (i.e. non divisible by 20 bytes).
 	errInvalidCheckpointSigners = errors.New("invalid signer list on checkpoint block")
@@ -253,32 +257,39 @@ func (a *Aura) verifyHeader(chain consensus.ChainHeaderReader, header *types.Hea
 		return consensus.ErrFutureBlock
 	}
 	// Checkpoint blocks need to enforce zero beneficiary
-	checkpoint := (number % a.config.Epoch) == 0
-	if checkpoint && header.Coinbase != (common.Address{}) {
-		return errInvalidCheckpointBeneficiary
-	}
-	// Nonces must be 0x00..0 or 0xff..f, zeroes enforced on checkpoints
-	if !bytes.Equal(header.Nonce[:], nonceAuthVote) && !bytes.Equal(header.Nonce[:], nonceDropVote) {
-		return errInvalidVote
-	}
-	if checkpoint && !bytes.Equal(header.Nonce[:], nonceDropVote) {
-		return errInvalidCheckpointVote
-	}
-	// Check that the extra-data contains both the vanity and signature
-	if len(header.Extra) < extraVanity {
-		return errMissingVanity
-	}
-	if len(header.Extra) < extraVanity+extraSeal {
-		return errMissingSignature
-	}
+	//checkpoint := (number % a.config.Epoch) == 0
+	//if checkpoint && header.Coinbase != (common.Address{}) {
+	//	return errInvalidCheckpointBeneficiary
+	//}
+	//// Nonces must be 0x00..0 or 0xff..f, zeroes enforced on checkpoints
+	//if !bytes.Equal(header.Nonce[:], nonceAuthVote) && !bytes.Equal(header.Nonce[:], nonceDropVote) {
+	//	return errInvalidVote
+	//}
+	//if checkpoint && !bytes.Equal(header.Nonce[:], nonceDropVote) {
+	//	return errInvalidCheckpointVote
+	//}
+	//// Check that the extra-data contains both the vanity and signature
+	//if len(header.Extra) < extraVanity {
+	//	return errMissingVanity
+	//}
+	//if len(header.Extra) < extraVanity+extraSeal {
+	//	return errMissingSignature
+	//}
 	// Ensure that the extra-data contains a signer list on checkpoint, but none otherwise
-	signersBytes := len(header.Extra) - extraVanity - extraSeal
-	if !checkpoint && signersBytes != 0 {
-		return errExtraSigners
+	//signersBytes := len(header.Extra) - extraVanity - extraSeal
+	//if !checkpoint && signersBytes != 0 {
+	//	return errExtraSigners
+	//}
+	//if checkpoint && signersBytes%common.AddressLength != 0 {
+	//	return errInvalidCheckpointSigners
+	//}
+
+	// Ensure that the extra-data contains a single signature
+	signersBytes := len(header.Extra) - extraSeal
+	if signersBytes != 0 {
+		return errInvalidExtraData
 	}
-	if checkpoint && signersBytes%common.AddressLength != 0 {
-		return errInvalidCheckpointSigners
-	}
+
 	// Ensure that the mix digest is zero as we don't have fork protection currently
 	if header.MixDigest != (common.Hash{}) {
 		return errInvalidMixDigest
@@ -287,9 +298,9 @@ func (a *Aura) verifyHeader(chain consensus.ChainHeaderReader, header *types.Hea
 	if header.UncleHash != uncleHash {
 		return errInvalidUncleHash
 	}
-	// Ensure that the block's difficulty is meaningful (may not be correct at this point)
+	// Ensure that the block's difficulty is correct (it should be constant)
 	if number > 0 {
-		if header.Difficulty == nil || (header.Difficulty.Cmp(diffInTurn) != 0 && header.Difficulty.Cmp(diffNoTurn) != 0) {
+		if header.Difficulty != chain.Config().Aura.GetDifficulty() {
 			return errInvalidDifficulty
 		}
 	}
