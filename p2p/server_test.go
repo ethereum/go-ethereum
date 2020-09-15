@@ -28,7 +28,6 @@ import (
 	"time"
 
 	"github.com/ethereum/go-ethereum/crypto"
-	"github.com/ethereum/go-ethereum/crypto/ecies"
 	"github.com/ethereum/go-ethereum/internal/testlog"
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/p2p/enode"
@@ -45,7 +44,7 @@ type testTransport struct {
 func newTestTransport(rpub *ecdsa.PublicKey, fd net.Conn, dialDest *ecdsa.PublicKey) transport {
 	wrapped := newRLPX(fd, dialDest).(*rlpxTransport)
 	wrapped.conn.InitWithSecrets(rlpx.Secrets{
-		Remote:     ecies.ImportECDSAPublic(rpub),
+		Remote:     rpub,
 		AES:        make([]byte, 16),
 		MAC:        make([]byte, 16),
 		EgressMAC:  sha256.New(),

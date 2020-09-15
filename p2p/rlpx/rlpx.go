@@ -268,7 +268,7 @@ func (c *Conn) Handshake(prv *ecdsa.PrivateKey) (*ecdsa.PublicKey, error) {
 		return nil, err
 	}
 	c.InitWithSecrets(sec)
-	return sec.Remote.ExportECDSA(), err
+	return sec.Remote, err
 }
 
 // InitWithSecrets injects connection secrets as if a handshake had
@@ -334,7 +334,7 @@ var (
 
 // Secrets represents the connection secrets which are negotiated during the handshake.
 type Secrets struct {
-	Remote                *ecies.PublicKey
+	Remote                *ecdsa.PublicKey
 	AES, MAC              []byte
 	EgressMAC, IngressMAC hash.Hash
 	Token                 []byte
@@ -450,7 +450,7 @@ func (h *encHandshake) secrets(auth, authResp []byte) (Secrets, error) {
 	sharedSecret := crypto.Keccak256(ecdheSecret, crypto.Keccak256(h.respNonce, h.initNonce))
 	aesSecret := crypto.Keccak256(ecdheSecret, sharedSecret)
 	s := Secrets{
-		Remote: h.remote,
+		Remote: h.remote.ExportECDSA(),
 		AES:    aesSecret,
 		MAC:    crypto.Keccak256(ecdheSecret, aesSecret),
 	}
