@@ -30,7 +30,6 @@ import (
 	"fmt"
 	"hash"
 	"io"
-	"io/ioutil"
 	mrand "math/rand"
 	"net"
 	"time"
@@ -168,44 +167,49 @@ func (h *handshakeState) readFrame(conn io.Reader) ([]byte, error) {
 	return framebuf[:fsize], nil
 }
 
-func readInt24(b []byte) uint32 {
-	return uint32(b[2]) | uint32(b[1])<<8 | uint32(b[0])<<16
-}
-
 // WriteMsg writes a message frame with the given message type 'code' to the connection.
 // The data of the message is read from the 'payload' reader.
 //
 // WriteMsg returns the written size of the message. This may be less than or equal to the
-// given 'size' parameter depending on whether snappy compression is enabled.
 func (c *Conn) WriteMsg(code uint64, size uint32, payload io.Reader) (uint32, error) {
+	data := make([]byte, size)
+	if _, err := io.ReadFull(payload, data); err != nil {
+		return 0, err
+	}
+	return c.Write(code, data)
+}
+
+// Write writes a message to the connection.
+//
+// Write returns the written size of the message data. This may be less than or equal to
+// len(data) depending on whether snappy compression is enabled.
+func (c *Conn) Write(code uint64, data []byte) (uint32, error) {
 	if c.handshake == nil {
 		panic("can't WriteMsg before handshake")
 	}
-
-	// compress message when snappy is enabled.
-	if c.snappy {
-		if size > maxUint24 {
-			return size, errPlainMessageTooLarge
-		}
-		size, payload = compress(payload)
+	if len(data) > maxUint24 {
+		return 0, errPlainMessageTooLarge
 	}
-	// write it to the connection.
-	err := c.handshake.writeFrame(c.conn, code, size, payload)
-	return size, err
+	if c.snappy {
+		data = snappy.Encode(nil, data)
+	}
+
+	wireSize := uint32(len(data))
+	err := c.handshake.writeFrame(c.conn, code, data)
+	return wireSize, err
 }
 
-func (h *handshakeState) writeFrame(conn io.Writer, code uint64, size uint32, payload io.Reader) error {
+func (h *handshakeState) writeFrame(conn io.Writer, code uint64, data []byte) error {
 	ptype, _ := rlp.EncodeToBytes(code)
 
 	// write header
 	headbuf := make([]byte, 32)
-	fsize := uint32(len(ptype)) + size
+	fsize := len(ptype) + len(data)
 	if fsize > maxUint24 {
 		return errPlainMessageTooLarge
 	}
-	putInt24(fsize, headbuf)
+	putInt24(uint32(fsize), headbuf)
 	copy(headbuf[3:], zeroHeader)
-
 	h.enc.XORKeyStream(headbuf[:16], headbuf[:16]) // first half is now encrypted
 
 	// write header MAC
@@ -220,7 +224,7 @@ func (h *handshakeState) writeFrame(conn io.Writer, code uint64, size uint32, pa
 	if _, err := tee.Write(ptype); err != nil {
 		return err
 	}
-	if _, err := io.Copy(tee, payload); err != nil {
+	if _, err := tee.Write(data); err != nil {
 		return err
 	}
 	if padding := fsize % 16; padding > 0 {
@@ -237,10 +241,8 @@ func (h *handshakeState) writeFrame(conn io.Writer, code uint64, size uint32, pa
 	return err
 }
 
-func compress(payload io.Reader) (uint32, io.Reader) {
-	comressedPayload, _ := ioutil.ReadAll(payload)
-	comressedPayload = snappy.Encode(nil, comressedPayload)
-	return uint32(len(comressedPayload)), bytes.NewReader(comressedPayload)
+func readInt24(b []byte) uint32 {
+	return uint32(b[2]) | uint32(b[1])<<8 | uint32(b[0])<<16
 }
 
 func putInt24(v uint32, b []byte) {
@@ -314,7 +316,7 @@ func (c *Conn) Close() error {
 
 // Constants for the handshake.
 const (
-	maxUint24 = ^uint32(0) >> 8
+	maxUint24 = int(^uint32(0) >> 8)
 
 	sskLen = 16                     // ecies.MaxSharedKeyLength(pubKey) / 2
 	sigLen = crypto.SignatureLength // elliptic S256

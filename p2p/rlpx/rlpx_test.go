@@ -72,7 +72,7 @@ func checkMsgReadWrite(t *testing.T, p1, p2 *Conn, msgCode uint64, msgData []byt
 	}()
 
 	// Write the message.
-	_, err := p2.WriteMsg(msgCode, uint32(len(msgData)), bytes.NewReader(msgData))
+	_, err := p2.Write(msgCode, msgData)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -134,11 +134,11 @@ func TestFrameReadWrite(t *testing.T) {
 	`)
 	msgCode := uint64(8)
 	msg := []uint{1, 2, 3, 4}
-	msgSize, msgEnc, _ := rlp.EncodeToReader(msg)
+	msgEnc, _ := rlp.EncodeToBytes(msg)
 
 	// Check writeFrame. The frame that's written should be equal to the test vector.
 	buf := new(bytes.Buffer)
-	if err := h.writeFrame(buf, msgCode, uint32(msgSize), msgEnc); err != nil {
+	if err := h.writeFrame(buf, msgCode, msgEnc); err != nil {
 		t.Fatalf("WriteMsg error: %v", err)
 	}
 	if !bytes.Equal(buf.Bytes(), golden) {
