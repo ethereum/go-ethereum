@@ -59,7 +59,7 @@ func rlpxPing(ctx *cli.Context) error {
 		return err
 	}
 
-	code, data, err := conn.Read()
+	code, data, _, err := conn.Read()
 	if err != nil {
 		return err
 	}
