@@ -167,18 +167,6 @@ func (h *handshakeState) readFrame(conn io.Reader) ([]byte, error) {
 	return framebuf[:fsize], nil
 }
 
-// WriteMsg writes a message frame with the given message type 'code' to the connection.
-// The data of the message is read from the 'payload' reader.
-//
-// WriteMsg returns the written size of the message. This may be less than or equal to the
-func (c *Conn) WriteMsg(code uint64, size uint32, payload io.Reader) (uint32, error) {
-	data := make([]byte, size)
-	if _, err := io.ReadFull(payload, data); err != nil {
-		return 0, err
-	}
-	return c.Write(code, data)
-}
-
 // Write writes a message to the connection.
 //
 // Write returns the written size of the message data. This may be less than or equal to
