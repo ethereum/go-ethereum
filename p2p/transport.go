@@ -20,6 +20,7 @@ import (
 	"bytes"
 	"crypto/ecdsa"
 	"fmt"
+	"io"
 	"net"
 	"sync"
 	"time"
@@ -45,6 +46,7 @@ const (
 // It wraps an RLPx connection with locks and read/write deadlines.
 type rlpxTransport struct {
 	rmu, wmu sync.Mutex
+	wbuf     bytes.Buffer
 	conn     *rlpx.Conn
 }
 
@@ -75,14 +77,20 @@ func (t *rlpxTransport) WriteMsg(msg Msg) error {
 	t.wmu.Lock()
 	defer t.wmu.Unlock()
 
-	// write message
+	// Copy message data to write buffer.
+	t.wbuf.Reset()
+	if _, err := io.CopyN(&t.wbuf, msg.Payload, int64(msg.Size)); err != nil {
+		return err
+	}
+
+	// Write the message.
 	t.conn.SetWriteDeadline(time.Now().Add(frameWriteTimeout))
-	size, err := t.conn.WriteMsg(msg.Code, msg.Size, msg.Payload)
+	size, err := t.conn.Write(msg.Code, t.wbuf.Bytes())
 	if err != nil {
 		return err
 	}
 
-	// set metrics
+	// Set metrics.
 	msg.meterSize = size
 	if metrics.Enabled && msg.meterCap.Name != "" { // don't meter non-subprotocol messages
 		m := fmt.Sprintf("%s/%s/%d/%#02x", egressMeterName, msg.meterCap.Name, msg.meterCap.Version, msg.meterCode)
@@ -104,8 +112,9 @@ func (t *rlpxTransport) close(err error) {
 			deadline := time.Now().Add(discWriteTimeout)
 			if err := t.conn.SetWriteDeadline(deadline); err == nil {
 				// Connection supports write deadline.
-				size, data, _ := rlp.EncodeToReader([]interface{}{r})
-				t.conn.WriteMsg(discMsg, uint32(size), data)
+				t.wbuf.Reset()
+				rlp.Encode(&t.wbuf, []DiscReason{r})
+				t.conn.Write(discMsg, t.wbuf.Bytes())
 			}
 		}
 	}
