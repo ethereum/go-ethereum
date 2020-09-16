@@ -44,6 +44,14 @@ import (
 
 var errGenesisNoConfig = errors.New("genesis has no chain configuration")
 
+
+type Signature [65]byte
+
+type Seal struct {
+	Step 		[]byte
+	Signature 	[]byte
+}
+
 // Genesis specifies the header fields, state of a genesis block. It also defines hard
 // fork switch-over blocks through the chain configuration.
 type Genesis struct {
@@ -62,6 +70,8 @@ type Genesis struct {
 	Number     uint64      `json:"number"`
 	GasUsed    uint64      `json:"gasUsed"`
 	ParentHash common.Hash `json:"parentHash"`
+
+	Seal 		Seal		`json:"seal"`
 }
 
 // GenesisAlloc specifies the initial state that is part of the genesis block.
@@ -253,6 +263,7 @@ func (g *Genesis) configOrDefault(ghash common.Hash) *params.ChainConfig {
 // ToBlock creates the genesis block and writes state of a genesis specification
 // to the given database (or discards it if nil).
 func (g *Genesis) ToBlock(db ethdb.Database) *types.Block {
+	log.Debug("Getting genesis", "genesis", g)
 	if db == nil {
 		db = rawdb.NewMemoryDatabase()
 	}
@@ -267,18 +278,31 @@ func (g *Genesis) ToBlock(db ethdb.Database) *types.Block {
 	}
 	root := statedb.IntermediateRoot(false)
 	head := &types.Header{
-		Number:     new(big.Int).SetUint64(g.Number),
-		Nonce:      types.EncodeNonce(g.Nonce),
-		Time:       g.Timestamp,
+		//MixDigest:  g.Mixhash,
+		//Nonce:      types.EncodeNonce(g.Nonce),
 		ParentHash: g.ParentHash,
-		Extra:      g.ExtraData,
-		GasLimit:   g.GasLimit,
-		GasUsed:    g.GasUsed,
-		Difficulty: g.Difficulty,
-		MixDigest:  g.Mixhash,
+		Time:       g.Timestamp,
+		Number:     new(big.Int).SetUint64(g.Number),
 		Coinbase:   g.Coinbase,
+		TxHash:     types.EmptyRootHash,
+		UncleHash:  types.EmptyUncleHash,
+		Extra:      g.ExtraData,
 		Root:       root,
+		ReceiptHash: types.EmptyRootHash,
+		Bloom:      types.BytesToBloom([]byte{0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0}),
+		GasUsed:    g.GasUsed,
+		GasLimit:   g.GasLimit,
+		Difficulty: g.Difficulty,
+		Seal: 		make([][]byte, 2),
 	}
+
+	// this segment of code is for testing purpose
+	g.Seal.Step = nil
+	g.Seal.Signature = []byte{0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0}
+	head.Seal[0], _ = rlp.EncodeToBytes(g.Seal.Step)
+	head.Seal[1], _ = rlp.EncodeToBytes(g.Seal.Signature)
+	log.Debug("Getting rlp encoded data of seal", "rlpEncodedStep", head.Seal[0], "rlpEncodedSignature", head.Seal[1])
+
 	if g.GasLimit == 0 {
 		head.GasLimit = params.GenesisGasLimit
 	}
