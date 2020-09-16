@@ -256,11 +256,12 @@ func (a *Aura) verifyHeader(chain consensus.ChainHeaderReader, header *types.Hea
 		return consensus.ErrFutureBlock
 	}
 
+	log.Debug("Extra data field", "extraData", header.Extra)
 	// Ensure that the extra-data contains a single signature
-	signersBytes := len(header.Extra) - extraSeal
-	if signersBytes != 0 {
-		return errInvalidExtraData
-	}
+	//signersBytes := len(header.Extra) - extraSeal
+	//if signersBytes != 0 {
+	//	return errInvalidExtraData
+	//}
 
 	// Ensure that the mix digest is zero as we don't have fork protection currently
 	if header.MixDigest != (common.Hash{}) {
@@ -270,6 +271,8 @@ func (a *Aura) verifyHeader(chain consensus.ChainHeaderReader, header *types.Hea
 	if header.UncleHash != uncleHash {
 		return errInvalidUncleHash
 	}
+
+	log. Debug("Header difficulty and config difficulty", "header.Difficulty", header.Difficulty, "Aura.GetDifficulty", chain.Config().Aura.GetDifficulty())
 	// Ensure that the block's difficulty is correct (it should be constant)
 	if number > 0 {
 		if header.Difficulty != chain.Config().Aura.GetDifficulty() {
