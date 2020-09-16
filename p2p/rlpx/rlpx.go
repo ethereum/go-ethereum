@@ -117,7 +117,7 @@ func (c *Conn) Read() (code uint64, data []byte, wireSize int, err error) {
 		if err != nil {
 			return code, nil, 0, err
 		}
-		if actualSize > int(maxUint24) {
+		if actualSize > maxUint24 {
 			return code, nil, 0, errPlainMessageTooLarge
 		}
 		data, err = snappy.Decode(nil, data)
@@ -260,8 +260,7 @@ func (c *Conn) Handshake(prv *ecdsa.PrivateKey) (*ecdsa.PublicKey, error) {
 	)
 	if c.dialDest != nil {
 		sec, err = initiatorEncHandshake(c.conn, prv, c.dialDest)
-	}
-	if c.dialDest == nil {
+	} else {
 		sec, err = receiverEncHandshake(c.conn, prv)
 	}
 	if err != nil {
