@@ -938,7 +938,6 @@ func (srv *Server) setupConn(c *conn, flags connFlag, dialDest *enode.Node) erro
 	}
 
 	// If dialing, figure out the remote public key.
-
 	var dialPubkey *ecdsa.PublicKey
 	if dialDest != nil {
 		dialPubkey = new(ecdsa.PublicKey)
@@ -956,10 +955,6 @@ func (srv *Server) setupConn(c *conn, flags connFlag, dialDest *enode.Node) erro
 		return err
 	}
 	if dialDest != nil {
-		// For dialed connections, check that the remote public key matches.
-		if dialPubkey.X.Cmp(remotePubkey.X) != 0 || dialPubkey.Y.Cmp(remotePubkey.Y) != 0 { // TODO move this into rlpx (felix will do later)
-			return DiscUnexpectedIdentity
-		}
 		c.node = dialDest
 	} else {
 		c.node = nodeFromConn(remotePubkey, c.fd)

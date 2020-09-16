@@ -393,13 +393,6 @@ func TestServerSetupConn(t *testing.T) {
 			wantCloseErr: errors.New("read error"),
 		},
 		{
-			tt:           &setupTransport{pubkey: clientpub},
-			dialDest:     enode.NewV4(&newkey().PublicKey, nil, 0, 0),
-			flags:        dynDialedConn,
-			wantCalls:    "doEncHandshake,close,",
-			wantCloseErr: DiscUnexpectedIdentity,
-		},
-		{
 			tt:           &setupTransport{pubkey: clientpub, phs: protoHandshake{ID: randomID().Bytes()}},
 			dialDest:     enode.NewV4(clientpub, nil, 0, 0),
 			flags:        dynDialedConn,
