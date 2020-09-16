@@ -44,7 +44,6 @@ type testTransport struct {
 func newTestTransport(rpub *ecdsa.PublicKey, fd net.Conn, dialDest *ecdsa.PublicKey) transport {
 	wrapped := newRLPX(fd, dialDest).(*rlpxTransport)
 	wrapped.conn.InitWithSecrets(rlpx.Secrets{
-		Remote:     rpub,
 		AES:        make([]byte, 16),
 		MAC:        make([]byte, 16),
 		EgressMAC:  sha256.New(),
