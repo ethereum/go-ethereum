@@ -226,7 +226,7 @@ func (a *Aura) VerifyHeader(chain consensus.ChainHeaderReader, header *types.Hea
 func (a *Aura) VerifyHeaders(chain consensus.ChainHeaderReader, headers []*types.Header, seals []bool) (chan<- struct{}, <-chan error) {
 	abort := make(chan struct{})
 	results := make(chan error, len(headers))
-
+	log.Debug("Tracking-4: Invalid header encountered in Aura")
 	go func() {
 		for i, header := range headers {
 			err := a.verifyHeader(chain, header, headers[:i])
@@ -238,6 +238,7 @@ func (a *Aura) VerifyHeaders(chain consensus.ChainHeaderReader, headers []*types
 			}
 		}
 	}()
+	log.Debug("Tracking-5: Invalid header encountered")
 	return abort, results
 }
 
@@ -249,7 +250,7 @@ func (a *Aura) verifyHeader(chain consensus.ChainHeaderReader, header *types.Hea
 	if header.Number == nil {
 		return errUnknownBlock
 	}
-	number := header.Number.Uint64()
+	//number := header.Number.Uint64()
 
 	// Don't waste time checking blocks from the future
 	if header.Time > uint64(time.Now().Unix()) {
@@ -273,12 +274,7 @@ func (a *Aura) verifyHeader(chain consensus.ChainHeaderReader, header *types.Hea
 	}
 
 	log. Debug("Header difficulty and config difficulty", "header.Difficulty", header.Difficulty, "Aura.GetDifficulty", chain.Config().Aura.GetDifficulty())
-	// Ensure that the block's difficulty is correct (it should be constant)
-	if number > 0 {
-		if header.Difficulty != chain.Config().Aura.GetDifficulty() {
-			return errInvalidDifficulty
-		}
-	}
+
 	// If all checks passed, validate any special fields for hard forks
 	if err := misc.VerifyForkHashes(chain.Config(), header, false); err != nil {
 		return err
@@ -310,22 +306,7 @@ func (a *Aura) verifyCascadingFields(chain consensus.ChainHeaderReader, header *
 	if parent.Time+a.config.Period > header.Time {
 		return errInvalidTimestamp
 	}
-	// Retrieve the snapshot needed to verify this header and cache it
-	snap, err := a.snapshot(chain, number-1, header.ParentHash, parents)
-	if err != nil {
-		return err
-	}
-	// If the block is a checkpoint block, verify the signer list
-	if number % a.config.Epoch == 0 {
-		signers := make([]byte, len(snap.Signers)*common.AddressLength)
-		for i, signer := range snap.signers() {
-			copy(signers[i*common.AddressLength:], signer[:])
-		}
-		extraSuffix := len(header.Extra) - extraSeal
-		if !bytes.Equal(header.Extra[extraVanity:extraSuffix], signers) {
-			return errMismatchingCheckpointSigners
-		}
-	}
+
 	// All basic checks passed, verify the seal and return
 	return a.verifySeal(chain, header, parents)
 }
@@ -526,6 +507,7 @@ func (a *Aura) Authorize(signer common.Address, signFn SignerFn) {
 // Seal implements consensus.Engine, attempting to create a sealed block using
 // the local signing credentials.
 func (a *Aura) Seal(chain consensus.ChainHeaderReader, block *types.Block, results chan<- *types.Block, stop <-chan struct{}) error {
+	log.Trace("Strating sealing in Aura engine", "block", block.Hash())
 	header := block.Header()
 
 	// Sealing the genesis block is not supported
