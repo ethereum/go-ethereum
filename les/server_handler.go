@@ -145,7 +145,9 @@ func (h *serverHandler) handle(p *clientPeer) error {
 
 	defer func() {
 		h.server.ns.SetField(p.Node(), clientPeerField, nil)
-		p.fcClient.Disconnect()
+		if p.fcClient != nil { // is nil when connecting another server
+			p.fcClient.Disconnect()
+		}
 	}()
 	if p.server {
 		// connected to another server, no messages expected, just wait for disconnection
