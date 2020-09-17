@@ -304,7 +304,7 @@ func (c *wireCodec) encodeRandom(toID enode.ID) ([]byte, packetNonce, error) {
 	c.buf.Reset()
 	binary.Write(&c.buf, binary.BigEndian, c.makeHeader(toID, flagMessage, 0))
 	binary.Write(&c.buf, binary.BigEndian, &auth)
-	output := maskOutputPacket(toID, c.buf.Bytes(), c.buf.Len())
+	output := c.maskOutputPacket(toID, c.buf.Bytes(), c.buf.Len())
 	return output, auth.Nonce, nil
 }
 
@@ -324,7 +324,7 @@ func (c *wireCodec) encodeWhoareyou(toID enode.ID, packet *whoareyouV5) ([]byte,
 	c.buf.Reset()
 	binary.Write(&c.buf, binary.BigEndian, head)
 	binary.Write(&c.buf, binary.BigEndian, auth)
-	output := maskOutputPacket(toID, c.buf.Bytes(), c.buf.Len())
+	output := c.maskOutputPacket(toID, c.buf.Bytes(), c.buf.Len())
 	return output, nil
 }
 
@@ -368,7 +368,7 @@ func (c *wireCodec) encodeHandshakeMessage(toID enode.ID, addr string, packet pa
 	headerData := output
 	output, err = encryptGCM(output, session.writeKey, auth.h.Nonce[:], messagePT, headerData)
 	if err == nil {
-		output = maskOutputPacket(toID, output, len(headerData))
+		output = c.maskOutputPacket(toID, output, len(headerData))
 	}
 	return output, auth.h.Nonce, err
 }
@@ -376,9 +376,14 @@ func (c *wireCodec) encodeHandshakeMessage(toID enode.ID, addr string, packet pa
 // encodeAuthHeader creates the auth header on a call packet following WHOAREYOU.
 func (c *wireCodec) makeHandshakeHeader(toID enode.ID, addr string, challenge *whoareyouV5) (*handshakeAuthDataV5, *session, error) {
 	session := new(session)
+	nonce, err := c.sc.nextNonce(session)
+	if err != nil {
+		return nil, nil, fmt.Errorf("can't generate nonce: %v", err)
+	}
+
 	auth := new(handshakeAuthDataV5)
 	auth.h.Version = handshakeVersion
-	auth.h.Nonce = c.sc.nextNonce(session)
+	auth.h.Nonce = nonce
 
 	// Create the ephemeral key. This needs to be first because the
 	// key is part of the ID nonce signature.
@@ -386,7 +391,7 @@ func (c *wireCodec) makeHandshakeHeader(toID enode.ID, addr string, challenge *w
 	if err := challenge.node.Load((*enode.Secp256k1)(remotePubkey)); err != nil {
 		return nil, nil, fmt.Errorf("can't find secp256k1 key for recipient")
 	}
-	ephkey, err := crypto.GenerateKey()
+	ephkey, err := c.sc.ephemeralKeyGen()
 	if err != nil {
 		return nil, nil, fmt.Errorf("can't generate ephemeral key")
 	}
@@ -420,10 +425,18 @@ func (c *wireCodec) makeHandshakeHeader(toID enode.ID, addr string, challenge *w
 // encodeMessage encodes an encrypted message packet.
 func (c *wireCodec) encodeMessage(toID enode.ID, s *session, packet packetV5) ([]byte, packetNonce, error) {
 	var (
-		auth messageAuthDataV5
 		head = c.makeHeader(toID, flagMessage, 0)
+		auth messageAuthDataV5
 	)
-	auth.Nonce = c.sc.nextNonce(s)
+
+	// Create the nonce.
+	nonce, err := c.sc.nextNonce(s)
+	if err != nil {
+		return nil, auth.Nonce, fmt.Errorf("can't generate nonce: %v", err)
+	}
+	auth.Nonce = nonce
+
+	// Encode the header.
 	c.buf.Reset()
 	binary.Write(&c.buf, binary.BigEndian, head)
 	binary.Write(&c.buf, binary.BigEndian, &auth)
@@ -437,11 +450,11 @@ func (c *wireCodec) encodeMessage(toID enode.ID, s *session, packet packetV5) ([
 	}
 	messagePT := c.msgbuf.Bytes()
 
-	// Encrypt message data.
+	// Encrypt the message.
 	headerData := output
-	output, err := encryptGCM(output, s.writeKey, auth.Nonce[:], messagePT, headerData)
+	output, err = encryptGCM(output, s.writeKey, nonce[:], messagePT, headerData)
 	if err == nil {
-		output = maskOutputPacket(toID, output, len(headerData))
+		output = c.maskOutputPacket(toID, output, len(headerData))
 	}
 	return output, auth.Nonce, err
 }
@@ -764,6 +777,25 @@ func (c *wireCodec) sha256sum(inputs ...[]byte) []byte {
 	return c.sha256.Sum(nil)
 }
 
+// maskOutputPacket applies protocol header masking to a packet sent to destID.
+func (c *wireCodec) maskOutputPacket(destID enode.ID, output []byte, headerDataLen int) []byte {
+	masked := make([]byte, sizeofMaskingIV+len(output))
+	c.sc.maskingIVGen(masked[:sizeofMaskingIV])
+	mask := headerMask(destID, masked)
+	copy(masked[sizeofMaskingIV:], output)
+	mask.XORKeyStream(masked[sizeofMaskingIV:], output[:headerDataLen])
+	return masked
+}
+
+// headerMask returns a cipher for 'masking' / 'unmasking' packet headers.
+func headerMask(destID enode.ID, input []byte) cipher.Stream {
+	block, err := aes.NewCipher(destID[:16])
+	if err != nil {
+		panic("can't create cipher")
+	}
+	return cipher.NewCTR(block, input[:sizeofMaskingIV])
+}
+
 // ecdh creates a shared secret.
 func ecdh(privkey *ecdsa.PrivateKey, pubkey *ecdsa.PublicKey) []byte {
 	secX, secY := pubkey.ScalarMult(pubkey.X, pubkey.Y, privkey.D.Bytes())
@@ -804,23 +836,4 @@ func decryptGCM(key, nonce, ct, authData []byte) ([]byte, error) {
 	}
 	pt := make([]byte, 0, len(ct))
 	return aesgcm.Open(pt, nonce, ct, authData)
-}
-
-// headerMask returns a cipher for 'masking' / 'unmasking' packet headers.
-func headerMask(destID enode.ID, input []byte) cipher.Stream {
-	block, err := aes.NewCipher(destID[:16])
-	if err != nil {
-		panic("can't create cipher")
-	}
-	return cipher.NewCTR(block, input[:sizeofMaskingIV])
-}
-
-// maskOutputPacket applies protocol header masking to a packet sent to destID.
-func maskOutputPacket(destID enode.ID, output []byte, headerDataLen int) []byte {
-	masked := make([]byte, sizeofMaskingIV+len(output))
-	crand.Read(masked[:sizeofMaskingIV])
-	mask := headerMask(destID, masked)
-	copy(masked[sizeofMaskingIV:], output)
-	mask.XORKeyStream(masked[sizeofMaskingIV:], output[:headerDataLen])
-	return masked
 }

@@ -42,9 +42,10 @@ import (
 var writeTestVectorsFlag = flag.Bool("write-test-vectors", false, "Overwrite discv5 test vectors in testdata/")
 
 var (
-	testKeyA, _ = crypto.HexToECDSA("eef77acb6c6a6eebc5b363a475ac583ec7eccdb42b6481424c60f59aa326547f")
-	testKeyB, _ = crypto.HexToECDSA("66fb62bfbd66b9177a138c1e5cddbe4f7c30c343e94e68df8769459cb1cde628")
-	testIDnonce = [32]byte{5, 6, 7, 8, 9, 10, 11, 12}
+	testKeyA, _   = crypto.HexToECDSA("eef77acb6c6a6eebc5b363a475ac583ec7eccdb42b6481424c60f59aa326547f")
+	testKeyB, _   = crypto.HexToECDSA("66fb62bfbd66b9177a138c1e5cddbe4f7c30c343e94e68df8769459cb1cde628")
+	testEphKey, _ = crypto.HexToECDSA("0288ef00023598499cb6c940146d050d2b1fb914198c327f76aad590bead68b6")
+	testIDnonce   = [32]byte{5, 6, 7, 8, 9, 10, 11, 12}
 )
 
 func TestDeriveKeysV5(t *testing.T) {
@@ -276,10 +277,8 @@ func TestTestVectorsV5(t *testing.T) {
 	}
 	tests := []testVectorTest{
 		{
-			name: "v5.1-whoareyou",
-			packet: &whoareyouV5{
-				AuthTag: packetNonce{1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12},
-			},
+			name:   "v5.1-whoareyou",
+			packet: challenge0,
 		},
 		{
 			name: "v5.1-ping-message",
@@ -296,7 +295,7 @@ func TestTestVectorsV5(t *testing.T) {
 			name: "v5.1-ping-handshake",
 			packet: &pingV5{
 				ReqID:  []byte{0, 0, 0, 1},
-				ENRSeq: 2,
+				ENRSeq: 1,
 			},
 			challenge: challenge1,
 			prep: func(net *handshakeTest) {
@@ -309,7 +308,7 @@ func TestTestVectorsV5(t *testing.T) {
 			name: "v5.1-ping-handshake-enr",
 			packet: &pingV5{
 				ReqID:  []byte{0, 0, 0, 1},
-				ENRSeq: 2,
+				ENRSeq: 1,
 			},
 			challenge: challenge0,
 			prep: func(net *handshakeTest) {
@@ -324,9 +323,6 @@ func TestTestVectorsV5(t *testing.T) {
 		test := test
 		t.Run(test.name, func(t *testing.T) {
 			net := newHandshakeTest()
-			net.nodeA.c.sc.nonceFunc = func(counter uint32) packetNonce {
-				return packetNonce{0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF}
-			}
 			defer net.close()
 
 			if test.prep != nil {
@@ -335,6 +331,17 @@ func TestTestVectorsV5(t *testing.T) {
 
 			file := filepath.Join("testdata", test.name+".txt")
 			if *writeTestVectorsFlag {
+				// Override all random inputs.
+				net.nodeA.c.sc.nonceGen = func(counter uint32) (packetNonce, error) {
+					return packetNonce{0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF}, nil
+				}
+				net.nodeA.c.sc.maskingIVGen = func(buf []byte) error {
+					return nil // all zero
+				}
+				net.nodeA.c.sc.ephemeralKeyGen = func() (*ecdsa.PrivateKey, error) {
+					return testEphKey, nil
+				}
+				// Encode the packet.
 				d, nonce := net.nodeA.encodeWithChallenge(t, net.nodeB, test.challenge, test.packet)
 				comment := testVectorComment(net, test.packet, test.challenge, nonce)
 				writeTestVector(file, comment, d)
@@ -348,34 +355,32 @@ func TestTestVectorsV5(t *testing.T) {
 // testVectorComment creates the commentary for discv5 test vector files.
 func testVectorComment(net *handshakeTest, p packetV5, challenge *whoareyouV5, nonce packetNonce) string {
 	o := new(strings.Builder)
-	fmt.Fprintf(o, "src-node-id = %#x\n", net.nodeA.id().Bytes())
-	fmt.Fprintf(o, "dest-node-id = %#x\n", net.nodeB.id().Bytes())
-
 	printWhoareyou := func(p *whoareyouV5) {
-		fmt.Fprintf(o, "whoareyou.auth-tag = %#x\n", p.AuthTag[:])
+		fmt.Fprintf(o, "whoareyou.request-nonce = %#x\n", p.AuthTag[:])
 		fmt.Fprintf(o, "whoareyou.id-nonce = %#x\n", p.IDNonce[:])
 		fmt.Fprintf(o, "whoareyou.enr-seq = %d\n", p.RecordSeq)
 	}
 
+	fmt.Fprintf(o, "src-node-id = %#x\n", net.nodeA.id().Bytes())
+	fmt.Fprintf(o, "dest-node-id = %#x\n", net.nodeB.id().Bytes())
 	switch p := p.(type) {
 	case *whoareyouV5:
 		// WHOAREYOU packet.
 		printWhoareyou(p)
 	case *pingV5:
+		fmt.Fprintf(o, "nonce = %#x\n", nonce[:])
+		fmt.Fprintf(o, "read-key = %#x\n", net.nodeA.c.sc.session(net.nodeB.id(), net.nodeB.addr()).writeKey)
+		fmt.Fprintf(o, "ping.req-id = %#x\n", p.ReqID)
+		fmt.Fprintf(o, "ping.enr-seq = %d\n", p.ENRSeq)
 		if challenge != nil {
 			// Handshake message packet.
+			fmt.Fprint(o, "\nhandshake inputs:\n\n")
 			printWhoareyou(challenge)
-		} else {
-			// Ordinary message packet.
-			fmt.Fprintf(o, "read-key = %#x\n", net.nodeB.c.sc.readKey(net.nodeA.id(), net.nodeA.addr()))
+			fmt.Fprintf(o, "ephemeral-key = %#x\n", testEphKey.D.Bytes())
 		}
-		fmt.Fprintf(o, "auth-tag = %#x\n", nonce[:])
-		fmt.Fprintf(o, "ping.req-id = %#x\n", p.ReqID)
-		fmt.Fprintf(o, "ping.enr-seq = %d", p.ENRSeq)
 	default:
 		panic(fmt.Errorf("unhandled packet type %T", p))
 	}
-
 	return o.String()
 }
 

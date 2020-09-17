@@ -17,10 +17,12 @@
 package discover
 
 import (
+	"crypto/ecdsa"
 	crand "crypto/rand"
 	"encoding/binary"
 
 	"github.com/ethereum/go-ethereum/common/mclock"
+	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/p2p/enode"
 	"github.com/hashicorp/golang-lru/simplelru"
 )
@@ -31,9 +33,10 @@ type sessionCache struct {
 	sessions   *simplelru.LRU
 	handshakes map[sessionID]*whoareyouV5
 	clock      mclock.Clock
-
-	// test hook for overriding the random nonce generator.
-	nonceFunc func(counter uint32) packetNonce
+	// hooks for overriding randomness.
+	nonceGen        func(uint32) (packetNonce, error)
+	maskingIVGen    func([]byte) error
+	ephemeralKeyGen func() (*ecdsa.PrivateKey, error)
 }
 
 // sessionID identifies a session or handshake.
@@ -60,24 +63,30 @@ func newSessionCache(maxItems int, clock mclock.Clock) *sessionCache {
 		panic("can't create session cache")
 	}
 	return &sessionCache{
-		sessions:   cache,
-		handshakes: make(map[sessionID]*whoareyouV5),
-		clock:      clock,
-		nonceFunc:  generateNonce,
+		sessions:        cache,
+		handshakes:      make(map[sessionID]*whoareyouV5),
+		clock:           clock,
+		nonceGen:        generateNonce,
+		maskingIVGen:    generateMaskingIV,
+		ephemeralKeyGen: crypto.GenerateKey,
 	}
 }
 
-func generateNonce(counter uint32) (n packetNonce) {
-	binary.BigEndian.PutUint32(n[:], counter)
-	crand.Read(n[4:])
-	return n
+func generateNonce(counter uint32) (n packetNonce, err error) {
+	binary.BigEndian.PutUint32(n[:4], counter)
+	_, err = crand.Read(n[4:])
+	return n, err
+}
+
+func generateMaskingIV(buf []byte) error {
+	_, err := crand.Read(buf)
+	return err
 }
 
 // nextNonce creates a nonce for encrypting a message to the given session.
-func (sc *sessionCache) nextNonce(s *session) packetNonce {
-	n := sc.nonceFunc(s.nonceCounter)
+func (sc *sessionCache) nextNonce(s *session) (packetNonce, error) {
 	s.nonceCounter++
-	return n
+	return sc.nonceGen(s.nonceCounter)
 }
 
 // session returns the current session for the given node, if any.
