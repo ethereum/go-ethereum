@@ -377,6 +377,7 @@ func testVectorComment(net *handshakeTest, p packetV5, challenge *whoareyouV5, n
 			fmt.Fprint(o, "\nhandshake inputs:\n\n")
 			printWhoareyou(challenge)
 			fmt.Fprintf(o, "ephemeral-key = %#x\n", testEphKey.D.Bytes())
+			fmt.Fprintf(o, "ephemeral-pubkey = %#x\n", crypto.CompressPubkey(&testEphKey.PublicKey))
 		}
 	default:
 		panic(fmt.Errorf("unhandled packet type %T", p))
