@@ -79,7 +79,7 @@ func TestHandshakeV5(t *testing.T) {
 	whoareyou, _ := net.nodeB.encode(t, net.nodeA, challenge)
 	net.nodeA.expectDecode(t, p_whoareyouV5, whoareyou)
 
-	// A -> B   FINDNODE
+	// A -> B   FINDNODE (handshake packet)
 	findnode, _ := net.nodeA.encodeWithChallenge(t, net.nodeB, challenge, &findnodeV5{})
 	net.nodeB.expectDecode(t, p_findnodeV5, findnode)
 	if len(net.nodeB.c.sc.handshakes) > 0 {
@@ -110,7 +110,7 @@ func TestHandshakeV5_timeout(t *testing.T) {
 	whoareyou, _ := net.nodeB.encode(t, net.nodeA, challenge)
 	net.nodeA.expectDecode(t, p_whoareyouV5, whoareyou)
 
-	// A -> B   FINDNODE after timeout
+	// A -> B   FINDNODE (handshake packet) after timeout
 	net.clock.Run(handshakeTimeout + 1)
 	findnode, _ := net.nodeA.encodeWithChallenge(t, net.nodeB, challenge, &findnodeV5{})
 	net.nodeB.expectDecodeErr(t, errUnexpectedHandshake, findnode)
@@ -156,11 +156,11 @@ func TestHandshakeV5_rekey(t *testing.T) {
 	net := newHandshakeTest()
 	defer net.close()
 
-	initKeys := &handshakeSecrets{
+	session := &session{
 		readKey:  []byte("BBBBBBBBBBBBBBBB"),
 		writeKey: []byte("AAAAAAAAAAAAAAAA"),
 	}
-	net.nodeA.c.sc.storeNewSession(net.nodeB.id(), net.nodeB.addr(), initKeys.readKey, initKeys.writeKey)
+	net.nodeA.c.sc.storeNewSession(net.nodeB.id(), net.nodeB.addr(), session)
 
 	// A -> B   FINDNODE (encrypted with zero keys)
 	findnode, authTag := net.nodeA.encode(t, net.nodeB, &findnodeV5{})
@@ -172,7 +172,8 @@ func TestHandshakeV5_rekey(t *testing.T) {
 	net.nodeA.expectDecode(t, p_whoareyouV5, whoareyou)
 
 	// Check that new keys haven't been stored yet.
-	if s := net.nodeA.c.sc.session(net.nodeB.id(), net.nodeB.addr()); !bytes.Equal(s.writeKey, initKeys.writeKey) || !bytes.Equal(s.readKey, initKeys.readKey) {
+	sa := net.nodeA.c.sc.session(net.nodeB.id(), net.nodeB.addr())
+	if !bytes.Equal(sa.writeKey, session.writeKey) || !bytes.Equal(sa.readKey, session.readKey) {
 		t.Fatal("node A stored keys too early")
 	}
 	if s := net.nodeB.c.sc.session(net.nodeA.id(), net.nodeA.addr()); s != nil {
@@ -194,16 +195,16 @@ func TestHandshakeV5_rekey2(t *testing.T) {
 	net := newHandshakeTest()
 	defer net.close()
 
-	initKeysA := &handshakeSecrets{
+	initKeysA := &session{
 		readKey:  []byte("BBBBBBBBBBBBBBBB"),
 		writeKey: []byte("AAAAAAAAAAAAAAAA"),
 	}
-	initKeysB := &handshakeSecrets{
+	initKeysB := &session{
 		readKey:  []byte("CCCCCCCCCCCCCCCC"),
 		writeKey: []byte("DDDDDDDDDDDDDDDD"),
 	}
-	net.nodeA.c.sc.storeNewSession(net.nodeB.id(), net.nodeB.addr(), initKeysA.readKey, initKeysA.writeKey)
-	net.nodeB.c.sc.storeNewSession(net.nodeA.id(), net.nodeA.addr(), initKeysB.readKey, initKeysA.writeKey)
+	net.nodeA.c.sc.storeNewSession(net.nodeB.id(), net.nodeB.addr(), initKeysA)
+	net.nodeB.c.sc.storeNewSession(net.nodeA.id(), net.nodeA.addr(), initKeysB)
 
 	// A -> B   FINDNODE encrypted with initKeysA
 	findnode, authTag := net.nodeA.encode(t, net.nodeB, &findnodeV5{Distances: []uint{3}})
@@ -214,7 +215,7 @@ func TestHandshakeV5_rekey2(t *testing.T) {
 	whoareyou, _ := net.nodeB.encode(t, net.nodeA, challenge)
 	net.nodeA.expectDecode(t, p_whoareyouV5, whoareyou)
 
-	// A -> B   FINDNODE encrypted with new keys
+	// A -> B   FINDNODE (handshake packet)
 	findnode, _ = net.nodeA.encodeWithChallenge(t, net.nodeB, challenge, &findnodeV5{})
 	net.nodeB.expectDecode(t, p_findnodeV5, findnode)
 
@@ -242,7 +243,7 @@ func BenchmarkV5_DecodeHandshakePingSecp256k1(b *testing.B) {
 
 	var (
 		idA       = net.nodeA.id()
-		challenge = &whoareyouV5{AuthTag: []byte("authresp"), node: net.nodeB.n()}
+		challenge = &whoareyouV5{node: net.nodeB.n()}
 		message   = &pingV5{ReqID: []byte("reqid")}
 	)
 	enc, _, err := net.nodeA.c.encode(net.nodeB.id(), "", message, challenge)
@@ -268,10 +269,12 @@ func BenchmarkV5_DecodePing(b *testing.B) {
 	net := newHandshakeTest()
 	defer net.close()
 
-	r := []byte{233, 203, 93, 195, 86, 47, 177, 186, 227, 43, 2, 141, 244, 230, 120, 17}
-	w := []byte{79, 145, 252, 171, 167, 216, 252, 161, 208, 190, 176, 106, 214, 39, 178, 134}
-	net.nodeA.c.sc.storeNewSession(net.nodeB.id(), net.nodeB.addr(), r, w)
-	net.nodeB.c.sc.storeNewSession(net.nodeA.id(), net.nodeA.addr(), w, r)
+	session := &session{
+		readKey:  []byte{233, 203, 93, 195, 86, 47, 177, 186, 227, 43, 2, 141, 244, 230, 120, 17},
+		writeKey: []byte{79, 145, 252, 171, 167, 216, 252, 161, 208, 190, 176, 106, 214, 39, 178, 134},
+	}
+	net.nodeA.c.sc.storeNewSession(net.nodeB.id(), net.nodeB.addr(), session)
+	net.nodeB.c.sc.storeNewSession(net.nodeA.id(), net.nodeA.addr(), session.keysFlipped())
 	addrB := net.nodeA.addr()
 	ping := &pingV5{ReqID: []byte("reqid"), ENRSeq: 5}
 	enc, _, err := net.nodeA.c.encode(net.nodeB.id(), addrB, ping, nil)
@@ -321,12 +324,12 @@ func (n *handshakeTestNode) init(key *ecdsa.PrivateKey, ip net.IP, clock mclock.
 	n.c = newWireCodec(n.ln, key, clock)
 }
 
-func (n *handshakeTestNode) encode(t testing.TB, to handshakeTestNode, p packetV5) ([]byte, []byte) {
+func (n *handshakeTestNode) encode(t testing.TB, to handshakeTestNode, p packetV5) ([]byte, packetNonce) {
 	t.Helper()
 	return n.encodeWithChallenge(t, to, nil, p)
 }
 
-func (n *handshakeTestNode) encodeWithChallenge(t testing.TB, to handshakeTestNode, c *whoareyouV5, p packetV5) ([]byte, []byte) {
+func (n *handshakeTestNode) encodeWithChallenge(t testing.TB, to handshakeTestNode, c *whoareyouV5, p packetV5) ([]byte, packetNonce) {
 	t.Helper()
 	// Copy challenge and add destination node. This avoids sharing 'c' among the two codecs.
 	var challenge *whoareyouV5
@@ -336,12 +339,12 @@ func (n *handshakeTestNode) encodeWithChallenge(t testing.TB, to handshakeTestNo
 		challenge.node = to.n()
 	}
 	// Encode to destination.
-	enc, authTag, err := n.c.encode(to.id(), to.addr(), p, challenge)
+	enc, nonce, err := n.c.encode(to.id(), to.addr(), p, challenge)
 	if err != nil {
 		t.Fatal(fmt.Errorf("(%s) %v", n.ln.ID().TerminalString(), err))
 	}
 	t.Logf("(%s) -> (%s)   %s\n%s", n.ln.ID().TerminalString(), to.id().TerminalString(), p.name(), hex.Dump(enc))
-	return enc, authTag
+	return enc, nonce
 }
 
 func (n *handshakeTestNode) expectDecode(t *testing.T, ptype byte, p []byte) packetV5 {

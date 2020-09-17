@@ -71,25 +71,27 @@ type (
 	}
 
 	whoareyouAuthDataV5 struct {
-		Nonce     [gcmNonceSize]byte // nonce of request packet
-		IDNonce   [32]byte           // ID proof data
-		RecordSeq uint64             // highest known ENR sequence of requester
+		Nonce     packetNonce // nonce of request packet
+		IDNonce   [32]byte    // ID proof data
+		RecordSeq uint64      // highest known ENR sequence of requester
 	}
 
 	handshakeAuthDataV5 struct {
 		h struct {
-			Version    uint8              // protocol version
-			Nonce      [gcmNonceSize]byte // AES-GCM nonce of message
-			SigSize    byte               // ignature data
-			PubkeySize byte               // offset of
+			Version    uint8       // protocol version
+			Nonce      packetNonce // AES-GCM nonce of message
+			SigSize    byte        // ignature data
+			PubkeySize byte        // offset of
 		}
 		// Trailing variable-size data.
 		signature, pubkey, record []byte
 	}
 
 	messageAuthDataV5 struct {
-		Nonce [gcmNonceSize]byte // AES-GCM nonce of message
+		Nonce packetNonce // AES-GCM nonce of message
 	}
+
+	packetNonce [gcmNonceSize]byte
 )
 
 // Packet header flag values.
@@ -112,12 +114,12 @@ var (
 type (
 	// unknownV5 represents any packet that can't be decrypted.
 	unknownV5 struct {
-		AuthTag []byte
+		AuthTag packetNonce
 	}
 
 	// WHOAREYOU contains the handshake challenge.
 	whoareyouV5 struct {
-		AuthTag   []byte
+		AuthTag   packetNonce
 		IDNonce   [32]byte // To be signed by recipient.
 		RecordSeq uint64   // ENR sequence number of recipient
 
@@ -233,10 +235,6 @@ type wireCodec struct {
 	sc        *sessionCache
 }
 
-type handshakeSecrets struct {
-	writeKey, readKey []byte
-}
-
 // newWireCodec creates a wire codec.
 func newWireCodec(ln *enode.LocalNode, key *ecdsa.PrivateKey, clock mclock.Clock) *wireCodec {
 	c := &wireCodec{
@@ -251,21 +249,21 @@ func newWireCodec(ln *enode.LocalNode, key *ecdsa.PrivateKey, clock mclock.Clock
 // encode encodes a packet to a node. 'id' and 'addr' specify the destination node. The
 // 'challenge' parameter should be the most recently received WHOAREYOU packet from that
 // node.
-func (c *wireCodec) encode(id enode.ID, addr string, packet packetV5, challenge *whoareyouV5) ([]byte, []byte, error) {
+func (c *wireCodec) encode(id enode.ID, addr string, packet packetV5, challenge *whoareyouV5) ([]byte, packetNonce, error) {
 	if packet.kind() == p_whoareyouV5 {
 		p := packet.(*whoareyouV5)
 		enc, err := c.encodeWhoareyou(id, p)
 		if err == nil {
 			c.sc.storeSentHandshake(id, addr, p)
 		}
-		return enc, nil, err
+		return enc, packetNonce{}, err
 	}
 
 	if challenge != nil {
 		return c.encodeHandshakeMessage(id, addr, packet, challenge)
 	}
-	if key := c.sc.writeKey(id, addr); key != nil {
-		return c.encodeMessage(id, addr, packet, key)
+	if session := c.sc.session(id, addr); session != nil {
+		return c.encodeMessage(id, session, packet)
 	}
 	// No keys, no handshake: send random data to kick off the handshake.
 	return c.encodeRandom(id)
@@ -297,17 +295,17 @@ func (c *wireCodec) makeHeader(toID enode.ID, flags byte, authsizeExtra int) *pa
 }
 
 // encodeRandom encodes a packet with random content.
-func (c *wireCodec) encodeRandom(toID enode.ID) ([]byte, []byte, error) {
+func (c *wireCodec) encodeRandom(toID enode.ID) ([]byte, packetNonce, error) {
 	var auth messageAuthDataV5
 	if _, err := crand.Read(auth.Nonce[:]); err != nil {
-		return nil, nil, fmt.Errorf("can't get random data: %v", err)
+		return nil, auth.Nonce, fmt.Errorf("can't get random data: %v", err)
 	}
 
 	c.buf.Reset()
 	binary.Write(&c.buf, binary.BigEndian, c.makeHeader(toID, flagMessage, 0))
 	binary.Write(&c.buf, binary.BigEndian, &auth)
 	output := maskOutputPacket(toID, c.buf.Bytes(), c.buf.Len())
-	return output, auth.Nonce[:], nil
+	return output, auth.Nonce, nil
 }
 
 // encodeWhoareyou encodes a WHOAREYOU packet.
@@ -317,10 +315,10 @@ func (c *wireCodec) encodeWhoareyou(toID enode.ID, packet *whoareyouV5) ([]byte,
 		panic("BUG: missing node in whoareyouV5 with non-zero seq")
 	}
 	auth := &whoareyouAuthDataV5{
+		Nonce:     packet.AuthTag,
 		IDNonce:   packet.IDNonce,
 		RecordSeq: packet.RecordSeq,
 	}
-	copy(auth.Nonce[:], packet.AuthTag)
 	head := c.makeHeader(toID, flagWhoareyou, 0)
 
 	c.buf.Reset()
@@ -332,20 +330,20 @@ func (c *wireCodec) encodeWhoareyou(toID enode.ID, packet *whoareyouV5) ([]byte,
 
 // encodeHandshakeMessage encodes an encrypted message with a handshake
 // response header.
-func (c *wireCodec) encodeHandshakeMessage(toID enode.ID, addr string, packet packetV5, challenge *whoareyouV5) ([]byte, []byte, error) {
+func (c *wireCodec) encodeHandshakeMessage(toID enode.ID, addr string, packet packetV5, challenge *whoareyouV5) ([]byte, packetNonce, error) {
 	// Ensure calling code sets challenge.node.
 	if challenge.node == nil {
 		panic("BUG: missing challenge.node in encode")
 	}
 
 	// Generate new secrets.
-	auth, sec, err := c.makeHandshakeHeader(toID, addr, challenge)
+	auth, session, err := c.makeHandshakeHeader(toID, addr, challenge)
 	if err != nil {
-		return nil, nil, err
+		return nil, packetNonce{}, err
 	}
 
 	// TODO: this should happen when the first authenticated message is received
-	c.sc.storeNewSession(toID, addr, sec.readKey, sec.writeKey)
+	c.sc.storeNewSession(toID, addr, session)
 
 	// Encode header and auth header.
 	var (
@@ -364,22 +362,23 @@ func (c *wireCodec) encodeHandshakeMessage(toID enode.ID, addr string, packet pa
 	c.msgbuf.Reset()
 	c.msgbuf.WriteByte(packet.kind())
 	if err := rlp.Encode(&c.msgbuf, packet); err != nil {
-		return nil, nil, err
+		return nil, auth.h.Nonce, err
 	}
 	messagePT := c.msgbuf.Bytes()
 	headerData := output
-	output, err = encryptGCM(output, sec.writeKey, auth.h.Nonce[:], messagePT, headerData)
+	output, err = encryptGCM(output, session.writeKey, auth.h.Nonce[:], messagePT, headerData)
 	if err == nil {
 		output = maskOutputPacket(toID, output, len(headerData))
 	}
-	return output, auth.h.Nonce[:], err
+	return output, auth.h.Nonce, err
 }
 
 // encodeAuthHeader creates the auth header on a call packet following WHOAREYOU.
-func (c *wireCodec) makeHandshakeHeader(toID enode.ID, addr string, challenge *whoareyouV5) (*handshakeAuthDataV5, *handshakeSecrets, error) {
+func (c *wireCodec) makeHandshakeHeader(toID enode.ID, addr string, challenge *whoareyouV5) (*handshakeAuthDataV5, *session, error) {
+	session := new(session)
 	auth := new(handshakeAuthDataV5)
 	auth.h.Version = handshakeVersion
-	auth.h.Nonce = c.sc.nextNonce(toID, addr)
+	auth.h.Nonce = c.sc.nextNonce(session)
 
 	// Create the ephemeral key. This needs to be first because the
 	// key is part of the ID nonce signature.
@@ -419,12 +418,12 @@ func (c *wireCodec) makeHandshakeHeader(toID enode.ID, addr string, challenge *w
 }
 
 // encodeMessage encodes an encrypted message packet.
-func (c *wireCodec) encodeMessage(toID enode.ID, addr string, packet packetV5, writeKey []byte) (enc []byte, authTag []byte, err error) {
+func (c *wireCodec) encodeMessage(toID enode.ID, s *session, packet packetV5) ([]byte, packetNonce, error) {
 	var (
 		auth messageAuthDataV5
 		head = c.makeHeader(toID, flagMessage, 0)
 	)
-	auth.Nonce = c.sc.nextNonce(toID, addr)
+	auth.Nonce = c.sc.nextNonce(s)
 	c.buf.Reset()
 	binary.Write(&c.buf, binary.BigEndian, head)
 	binary.Write(&c.buf, binary.BigEndian, &auth)
@@ -434,17 +433,17 @@ func (c *wireCodec) encodeMessage(toID enode.ID, addr string, packet packetV5, w
 	c.msgbuf.Reset()
 	c.msgbuf.WriteByte(packet.kind())
 	if err := rlp.Encode(&c.msgbuf, packet); err != nil {
-		return nil, nil, err
+		return nil, auth.Nonce, err
 	}
 	messagePT := c.msgbuf.Bytes()
 
 	// Encrypt message data.
 	headerData := output
-	output, err = encryptGCM(output, writeKey, auth.Nonce[:], messagePT, headerData)
+	output, err := encryptGCM(output, s.writeKey, auth.Nonce[:], messagePT, headerData)
 	if err == nil {
 		output = maskOutputPacket(toID, output, len(headerData))
 	}
-	return output, auth.Nonce[:], err
+	return output, auth.Nonce, err
 }
 
 // decode decodes a discovery packet.
@@ -501,7 +500,7 @@ func (c *wireCodec) decodeWhoareyou(head *packetHeaderV5) (packetV5, error) {
 	auth := new(whoareyouAuthDataV5)
 	binary.Read(&c.reader, binary.BigEndian, auth)
 	p := &whoareyouV5{
-		AuthTag:   auth.Nonce[:],
+		AuthTag:   auth.Nonce,
 		IDNonce:   auth.IDNonce,
 		RecordSeq: auth.RecordSeq,
 	}
@@ -509,50 +508,53 @@ func (c *wireCodec) decodeWhoareyou(head *packetHeaderV5) (packetV5, error) {
 }
 
 func (c *wireCodec) decodeHandshakeMessage(fromAddr string, head *packetHeaderV5, input []byte) (n *enode.Node, p packetV5, err error) {
-	node, nonce, sec, err := c.decodeHandshake(fromAddr, head)
+	node, nonce, session, err := c.decodeHandshake(fromAddr, head)
 	if err != nil {
 		return nil, nil, err
 	}
 
-	// Handshake OK, drop the challenge and store the new session keys.
-	sec.readKey, sec.writeKey = sec.writeKey, sec.readKey
-	c.sc.storeNewSession(head.SrcID, fromAddr, sec.readKey, sec.writeKey)
-	c.sc.deleteHandshake(head.SrcID, fromAddr)
-
 	// Decrypt the message using the new session keys.
-	msg, err := c.decryptMessage(input, nonce, sec.readKey)
-	return node, msg, err
+	msg, err := c.decryptMessage(input, nonce, session.readKey)
+	if err != nil {
+		return node, msg, err
+	}
+
+	// Handshake OK, drop the challenge and store the new session keys.
+	c.sc.storeNewSession(head.SrcID, fromAddr, session)
+	c.sc.deleteHandshake(head.SrcID, fromAddr)
+	return node, msg, nil
 }
 
-func (c *wireCodec) decodeHandshake(fromAddr string, head *packetHeaderV5) (*enode.Node, []byte, *handshakeSecrets, error) {
+func (c *wireCodec) decodeHandshake(fromAddr string, head *packetHeaderV5) (*enode.Node, packetNonce, *session, error) {
 	auth, err := c.decodeHandshakeAuthData(head)
 	if err != nil {
-		return nil, nil, nil, err
+		return nil, packetNonce{}, nil, err
 	}
 
 	// Verify against our last WHOAREYOU.
 	challenge := c.sc.getHandshake(head.SrcID, fromAddr)
 	if challenge == nil {
-		return nil, nil, nil, errUnexpectedHandshake
+		return nil, packetNonce{}, nil, errUnexpectedHandshake
 	}
 	// Get node record.
 	node, err := c.decodeHandshakeRecord(challenge.node, head.SrcID, auth.record)
 	if err != nil {
-		return nil, nil, nil, err
+		return nil, packetNonce{}, nil, err
 	}
 	// Verify ephemeral key is on curve.
 	ephkey, err := decodePubkey(c.privkey.Curve, auth.pubkey)
 	if err != nil {
-		return nil, nil, nil, errInvalidAuthKey
+		return nil, packetNonce{}, nil, errInvalidAuthKey
 	}
 	// Verify ID nonce signature.
 	err = c.verifyIDSignature(challenge.IDNonce[:], auth.pubkey, auth.signature, node)
 	if err != nil {
-		return nil, nil, nil, err
+		return nil, packetNonce{}, nil, err
 	}
 	// Derive sesssion keys.
-	sec := c.deriveKeys(head.SrcID, c.localnode.ID(), c.privkey, ephkey, challenge)
-	return node, auth.h.Nonce[:], sec, nil
+	session := c.deriveKeys(head.SrcID, c.localnode.ID(), c.privkey, ephkey, challenge)
+	session = session.keysFlipped()
+	return node, auth.h.Nonce, session, nil
 }
 
 // decodeHandshakeAuthData reads the authdata section of a handshake packet.
@@ -630,23 +632,23 @@ func (c *wireCodec) decodeMessage(fromAddr string, head *packetHeaderV5, input [
 	if c.reader.Len() < sizeofMessageAuthDataV5 {
 		return nil, errTooShort
 	}
-	key := c.sc.readKey(head.SrcID, fromAddr)
 	auth := new(messageAuthDataV5)
 	binary.Read(&c.reader, binary.BigEndian, auth)
 
 	// Try decrypting the message.
-	msg, err := c.decryptMessage(input, auth.Nonce[:], key)
+	key := c.sc.readKey(head.SrcID, fromAddr)
+	msg, err := c.decryptMessage(input, auth.Nonce, key)
 	if err == errMessageDecrypt {
 		// It didn't work. Start the handshake since this is an ordinary message packet.
-		return &unknownV5{AuthTag: auth.Nonce[:]}, nil
+		return &unknownV5{AuthTag: auth.Nonce}, nil
 	}
 	return msg, err
 }
 
-func (c *wireCodec) decryptMessage(input, nonce, key []byte) (packetV5, error) {
+func (c *wireCodec) decryptMessage(input []byte, nonce packetNonce, readKey []byte) (packetV5, error) {
 	headerData := input[:len(input)-c.reader.Len()]
 	messageCT := input[len(headerData):]
-	message, err := decryptGCM(key, nonce, messageCT, headerData)
+	message, err := decryptGCM(readKey, nonce[:], messageCT, headerData)
 	if err != nil {
 		return nil, errMessageDecrypt
 	}
@@ -725,7 +727,7 @@ func (c *wireCodec) verifyIDSignature(nonce, ephkey, sig []byte, n *enode.Node) 
 }
 
 // deriveKeys generates session keys using elliptic-curve Diffie-Hellman key agreement.
-func (c *wireCodec) deriveKeys(n1, n2 enode.ID, priv *ecdsa.PrivateKey, pub *ecdsa.PublicKey, challenge *whoareyouV5) *handshakeSecrets {
+func (c *wireCodec) deriveKeys(n1, n2 enode.ID, priv *ecdsa.PrivateKey, pub *ecdsa.PublicKey, challenge *whoareyouV5) *session {
 	eph := ecdh(priv, pub)
 	if eph == nil {
 		return nil
@@ -735,7 +737,7 @@ func (c *wireCodec) deriveKeys(n1, n2 enode.ID, priv *ecdsa.PrivateKey, pub *ecd
 	info = append(info, n1[:]...)
 	info = append(info, n2[:]...)
 	kdf := hkdf.New(c.sha256reset, eph, challenge.IDNonce[:], info)
-	sec := handshakeSecrets{
+	sec := session{
 		writeKey: make([]byte, aesKeySize),
 		readKey:  make([]byte, aesKeySize),
 	}

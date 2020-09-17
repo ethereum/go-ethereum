@@ -52,7 +52,7 @@ const (
 type codecV5 interface {
 	// encode encodes a packet. The 'challenge' parameter is non-nil for calls which got a
 	// WHOAREYOU response.
-	encode(fromID enode.ID, fromAddr string, p packetV5, challenge *whoareyouV5) (enc []byte, authTag []byte, err error)
+	encode(fromID enode.ID, fromAddr string, p packetV5, challenge *whoareyouV5) ([]byte, packetNonce, error)
 
 	// decode decodes a packet. It returns an *unknownV5 packet if decryption fails.
 	// The fromNode return value is non-nil when the input contains a handshake response.
@@ -117,7 +117,7 @@ type callV5 struct {
 	err          chan error    // errors sent here
 
 	// Valid for active calls only:
-	authTag        []byte       // authTag of request packet
+	authTag        packetNonce  // nonce of request packet
 	handshakeCount int          // # times we attempted handshake for this call
 	challenge      *whoareyouV5 // last sent handshake challenge
 	timeout        mclock.Timer
@@ -517,7 +517,7 @@ func (t *UDPv5) dispatch() {
 				panic("BUG: callDone for inactive call")
 			}
 			c.timeout.Stop()
-			delete(t.activeCallByAuth, string(c.authTag))
+			delete(t.activeCallByAuth, string(c.authTag[:]))
 			delete(t.activeCallByNode, id)
 			t.sendNextCall(id)
 
@@ -537,7 +537,7 @@ func (t *UDPv5) dispatch() {
 			for id, c := range t.activeCallByNode {
 				c.err <- errClosed
 				delete(t.activeCallByNode, id)
-				delete(t.activeCallByAuth, string(c.authTag))
+				delete(t.activeCallByAuth, string(c.authTag[:]))
 			}
 			return
 		}
@@ -587,13 +587,13 @@ func (t *UDPv5) sendCall(c *callV5) {
 		// The call already has an authTag from a previous handshake attempt. Remove the
 		// entry for the authTag because we're about to generate a new authTag for this
 		// call.
-		delete(t.activeCallByAuth, string(c.authTag))
+		delete(t.activeCallByAuth, string(c.authTag[:]))
 	}
 
 	addr := &net.UDPAddr{IP: c.node.IP(), Port: c.node.UDP()}
 	newTag, _ := t.send(c.node.ID(), addr, c.packet, c.challenge)
 	c.authTag = newTag
-	t.activeCallByAuth[string(c.authTag)] = c
+	t.activeCallByAuth[string(c.authTag[:])] = c
 	t.startResponseTimeout(c)
 }
 
@@ -605,7 +605,7 @@ func (t *UDPv5) sendResponse(toID enode.ID, toAddr *net.UDPAddr, packet packetV5
 }
 
 // send sends a packet to the given node.
-func (t *UDPv5) send(toID enode.ID, toAddr *net.UDPAddr, packet packetV5, c *whoareyouV5) ([]byte, error) {
+func (t *UDPv5) send(toID enode.ID, toAddr *net.UDPAddr, packet packetV5, c *whoareyouV5) (packetNonce, error) {
 	addr := toAddr.String()
 	enc, authTag, err := t.codec.encode(toID, addr, packet, c)
 	if err != nil {
@@ -741,8 +741,8 @@ var (
 )
 
 // matchWithCall checks whether the handshake attempt matches the active call.
-func (p *whoareyouV5) matchWithCall(t *UDPv5, authTag []byte) (*callV5, error) {
-	c := t.activeCallByAuth[string(authTag)]
+func (p *whoareyouV5) matchWithCall(t *UDPv5, authTag packetNonce) (*callV5, error) {
+	c := t.activeCallByAuth[string(authTag[:])]
 	if c == nil {
 		return nil, errChallengeNoCall
 	}
