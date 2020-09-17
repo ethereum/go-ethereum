@@ -20,7 +20,6 @@ package types
 import (
 	"encoding/binary"
 	"fmt"
-	"github.com/ethereum/go-ethereum/log"
 	"io"
 	"math/big"
 	"reflect"
@@ -102,11 +101,9 @@ type headerMarshaling struct {
 
 // Hash returns the block hash of the header, which is simply the keccak256 hash of its
 // RLP encoding.
-// Lukso aura- Need a condition for checking whether this is aura header or clique or pow header
 func (h *Header) Hash() common.Hash {
-	log.Debug("Getting header for rlphash", "header", h)
+	// Check the condition for ethash and clique or other future consensus engine
 	if h.Seal != nil {
-		log.Debug("Getting aura header")
 		return rlpHash([]interface{} {
 			h.ParentHash,
 			h.UncleHash,
@@ -115,8 +112,8 @@ func (h *Header) Hash() common.Hash {
 			h.TxHash,
 			h.ReceiptHash,
 			h.Bloom,
-			uint64(131072),
-			uint64(0),
+			h.Difficulty,
+			h.Number,
 			h.GasLimit,
 			h.GasUsed,
 			h.Time,
@@ -127,7 +124,6 @@ func (h *Header) Hash() common.Hash {
 	} else {
 		return rlpHash(h)
 	}
-
 }
 
 var headerSize = common.StorageSize(reflect.TypeOf(Header{}).Size())
@@ -168,7 +164,6 @@ func rlpHash(x interface{}) (h common.Hash) {
 	sha := hasherPool.Get().(crypto.KeccakState)
 	defer hasherPool.Put(sha)
 	sha.Reset()
-	log.Debug("Rlp hash of aura header", "auraHeader", x)
 	rlp.Encode(sha, x)
 	sha.Read(h[:])
 	return h
@@ -262,7 +257,6 @@ func NewBlock(header *Header, txs []*Transaction, uncles []*Header, receipts []*
 
 	if len(receipts) == 0 {
 		b.header.ReceiptHash = EmptyRootHash
-		b.header.Bloom = BytesToBloom([]byte{0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0})
 	} else {
 		b.header.ReceiptHash = DeriveSha(Receipts(receipts), hasher)
 		b.header.Bloom = CreateBloom(receipts)
@@ -277,7 +271,6 @@ func NewBlock(header *Header, txs []*Transaction, uncles []*Header, receipts []*
 			b.uncles[i] = CopyHeader(uncles[i])
 		}
 	}
-	log.Debug("Genesis header", "header", b.header)
 	return b
 }
 
@@ -438,7 +431,6 @@ func (b *Block) Hash() common.Hash {
 		return hash.(common.Hash)
 	}
 	v := b.header.Hash()
-	log.Debug("Getting header rlp hash", "headerRlpHash", v)
 	b.hash.Store(v)
 	return v
 }

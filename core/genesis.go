@@ -41,16 +41,9 @@ import (
 
 //go:generate gencodec -type Genesis -field-override genesisSpecMarshaling -out gen_genesis.go
 //go:generate gencodec -type GenesisAccount -field-override genesisAccountMarshaling -out gen_genesis_account.go
+//go:generate gencodec -type Seal -field-override genesisSealMarshaling -out gen_genesis_seal.go
 
 var errGenesisNoConfig = errors.New("genesis has no chain configuration")
-
-
-type Signature [65]byte
-
-type Seal struct {
-	Step 		[]byte
-	Signature 	[]byte
-}
 
 // Genesis specifies the header fields, state of a genesis block. It also defines hard
 // fork switch-over blocks through the chain configuration.
@@ -89,6 +82,11 @@ func (ga *GenesisAlloc) UnmarshalJSON(data []byte) error {
 	return nil
 }
 
+type Seal struct {
+	Step 		[]byte		`json:"step,omitempty"`
+	Signature 	[]byte      `json:"signature,omitempty"`
+}
+
 // GenesisAccount is an account in the state of the genesis block.
 type GenesisAccount struct {
 	Code       []byte                      `json:"code,omitempty"`
@@ -116,6 +114,11 @@ type genesisAccountMarshaling struct {
 	Nonce      math.HexOrDecimal64
 	Storage    map[storageJSON]storageJSON
 	PrivateKey hexutil.Bytes
+}
+
+type genesisSealMarshaling struct {
+	Step       hexutil.Bytes
+	Signature  hexutil.Bytes
 }
 
 // storageJSON represents a 256 bit byte array, but allows less than 256 bits when
@@ -263,7 +266,6 @@ func (g *Genesis) configOrDefault(ghash common.Hash) *params.ChainConfig {
 // ToBlock creates the genesis block and writes state of a genesis specification
 // to the given database (or discards it if nil).
 func (g *Genesis) ToBlock(db ethdb.Database) *types.Block {
-	log.Debug("Getting genesis", "genesis", g)
 	if db == nil {
 		db = rawdb.NewMemoryDatabase()
 	}
@@ -278,8 +280,6 @@ func (g *Genesis) ToBlock(db ethdb.Database) *types.Block {
 	}
 	root := statedb.IntermediateRoot(false)
 	head := &types.Header{
-		//MixDigest:  g.Mixhash,
-		//Nonce:      types.EncodeNonce(g.Nonce),
 		ParentHash: g.ParentHash,
 		Time:       g.Timestamp,
 		Number:     new(big.Int).SetUint64(g.Number),
@@ -289,17 +289,14 @@ func (g *Genesis) ToBlock(db ethdb.Database) *types.Block {
 		Extra:      g.ExtraData,
 		Root:       root,
 		ReceiptHash: types.EmptyRootHash,
-		Bloom:      types.BytesToBloom([]byte{0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0}),
 		GasUsed:    g.GasUsed,
 		GasLimit:   g.GasLimit,
 		Difficulty: g.Difficulty,
 		Seal: 		make([][]byte, 2),
 	}
 
-	// this segment of code is for testing purpose
-	head.Seal[0] = nil
-	head.Seal[1] = []byte{0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0}
-	log.Debug("Getting rlp encoded data of seal", "rlpEncodedStep", head.Seal[0], "rlpEncodedSignature", head.Seal[1])
+	head.Seal[0] = g.Seal.Step
+	head.Seal[1] = g.Seal.Signature
 
 	if g.GasLimit == 0 {
 		head.GasLimit = params.GenesisGasLimit

@@ -353,7 +353,7 @@ type ChainConfig struct {
 	// Various consensus engines
 	Ethash *EthashConfig `json:"ethash,omitempty"`
 	Clique *CliqueConfig `json:"clique,omitempty"`
-	Aura *AuraConfig `json:"aura,omitempty"`
+	Aura *AuraConfig 	 `json:"aura,omitempty"`
 
 }
 
