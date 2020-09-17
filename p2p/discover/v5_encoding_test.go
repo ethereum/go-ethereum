@@ -20,16 +20,26 @@ import (
 	"bytes"
 	"crypto/ecdsa"
 	"encoding/hex"
+	"flag"
 	"fmt"
 	"net"
+	"path/filepath"
 	"reflect"
+	"strings"
 	"testing"
 
 	"github.com/davecgh/go-spew/spew"
+	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/ethereum/go-ethereum/common/mclock"
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/p2p/enode"
 )
+
+// To regenerate discv5 test vectors, run
+//
+//     go test -run TestVectors -write-test-vectors
+//
+var writeTestVectorsFlag = flag.Bool("write-test-vectors", false, "Overwrite discv5 test vectors in testdata/")
 
 var (
 	testKeyA, _ = crypto.HexToECDSA("eef77acb6c6a6eebc5b363a475ac583ec7eccdb42b6481424c60f59aa326547f")
@@ -236,6 +246,139 @@ func TestDecodeErrorsV5(t *testing.T) {
 	// - check invalid handshake data sizes
 }
 
+// This test checks that all test vectors can be decoded.
+func TestTestVectorsV5(t *testing.T) {
+	var (
+		idA     = enode.PubkeyToIDV4(&testKeyA.PublicKey)
+		idB     = enode.PubkeyToIDV4(&testKeyB.PublicKey)
+		addr    = "127.0.0.1"
+		session = &session{
+			writeKey: hexutil.MustDecode("0x00000000000000000000000000000000"),
+			readKey:  hexutil.MustDecode("0x01010101010101010101010101010101"),
+		}
+		challenge0 = &whoareyouV5{
+			AuthTag:   packetNonce{1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12},
+			IDNonce:   [32]byte{1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16},
+			RecordSeq: 0,
+		}
+		challenge1 = &whoareyouV5{
+			AuthTag:   packetNonce{1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12},
+			IDNonce:   [32]byte{1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16},
+			RecordSeq: 1,
+		}
+	)
+
+	type testVectorTest struct {
+		name      string               // test vector name
+		packet    packetV5             // the packet to be encoded
+		challenge *whoareyouV5         // handshake challenge passed to encoder
+		prep      func(*handshakeTest) // called before encode/decode
+	}
+	tests := []testVectorTest{
+		{
+			name: "v5.1-whoareyou",
+			packet: &whoareyouV5{
+				AuthTag: packetNonce{1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12},
+			},
+		},
+		{
+			name: "v5.1-ping-message",
+			packet: &pingV5{
+				ReqID:  []byte{0, 0, 0, 1},
+				ENRSeq: 2,
+			},
+			prep: func(net *handshakeTest) {
+				net.nodeA.c.sc.storeNewSession(idB, addr, session)
+				net.nodeB.c.sc.storeNewSession(idA, addr, session.keysFlipped())
+			},
+		},
+		{
+			name: "v5.1-ping-handshake",
+			packet: &pingV5{
+				ReqID:  []byte{0, 0, 0, 1},
+				ENRSeq: 2,
+			},
+			challenge: challenge1,
+			prep: func(net *handshakeTest) {
+				c := *challenge1
+				c.node = net.nodeA.n()
+				net.nodeB.c.sc.storeSentHandshake(idA, addr, &c)
+			},
+		},
+		{
+			name: "v5.1-ping-handshake-enr",
+			packet: &pingV5{
+				ReqID:  []byte{0, 0, 0, 1},
+				ENRSeq: 2,
+			},
+			challenge: challenge0,
+			prep: func(net *handshakeTest) {
+				c := *challenge0
+				c.node = net.nodeA.n()
+				net.nodeB.c.sc.storeSentHandshake(idA, addr, &c)
+			},
+		},
+	}
+
+	for _, test := range tests {
+		test := test
+		t.Run(test.name, func(t *testing.T) {
+			net := newHandshakeTest()
+			net.nodeA.c.sc.nonceFunc = func(counter uint32) packetNonce {
+				return packetNonce{0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF}
+			}
+			defer net.close()
+
+			if test.prep != nil {
+				test.prep(net)
+			}
+
+			file := filepath.Join("testdata", test.name+".txt")
+			if *writeTestVectorsFlag {
+				d, nonce := net.nodeA.encodeWithChallenge(t, net.nodeB, test.challenge, test.packet)
+				comment := testVectorComment(net, test.packet, test.challenge, nonce)
+				writeTestVector(file, comment, d)
+			}
+			enc := hexFile(file)
+			net.nodeB.expectDecode(t, test.packet.kind(), enc)
+		})
+	}
+}
+
+// testVectorComment creates the commentary for discv5 test vector files.
+func testVectorComment(net *handshakeTest, p packetV5, challenge *whoareyouV5, nonce packetNonce) string {
+	o := new(strings.Builder)
+	fmt.Fprintf(o, "src-node-id = %#x\n", net.nodeA.id().Bytes())
+	fmt.Fprintf(o, "dest-node-id = %#x\n", net.nodeB.id().Bytes())
+
+	printWhoareyou := func(p *whoareyouV5) {
+		fmt.Fprintf(o, "whoareyou.auth-tag = %#x\n", p.AuthTag[:])
+		fmt.Fprintf(o, "whoareyou.id-nonce = %#x\n", p.IDNonce[:])
+		fmt.Fprintf(o, "whoareyou.enr-seq = %d\n", p.RecordSeq)
+	}
+
+	switch p := p.(type) {
+	case *whoareyouV5:
+		// WHOAREYOU packet.
+		printWhoareyou(p)
+	case *pingV5:
+		if challenge != nil {
+			// Handshake message packet.
+			printWhoareyou(challenge)
+		} else {
+			// Ordinary message packet.
+			fmt.Fprintf(o, "read-key = %#x\n", net.nodeB.c.sc.readKey(net.nodeA.id(), net.nodeA.addr()))
+		}
+		fmt.Fprintf(o, "auth-tag = %#x\n", nonce[:])
+		fmt.Fprintf(o, "ping.req-id = %#x\n", p.ReqID)
+		fmt.Fprintf(o, "ping.enr-seq = %d", p.ENRSeq)
+	default:
+		panic(fmt.Errorf("unhandled packet type %T", p))
+	}
+
+	return o.String()
+}
+
 // This benchmark checks performance of handshake packet decoding.
 func BenchmarkV5_DecodeHandshakePingSecp256k1(b *testing.B) {
 	net := newHandshakeTest()
@@ -321,6 +464,9 @@ func (n *handshakeTestNode) init(key *ecdsa.PrivateKey, ip net.IP, clock mclock.
 	db, _ := enode.OpenDB("")
 	n.ln = enode.NewLocalNode(db, key)
 	n.ln.SetStaticIP(ip)
+	if n.ln.Node().Seq() != 1 {
+		panic(fmt.Errorf("unexpected seq %d", n.ln.Node().Seq()))
+	}
 	n.c = newWireCodec(n.ln, key, clock)
 }
 
