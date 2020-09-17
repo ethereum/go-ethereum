@@ -22,6 +22,7 @@ import (
 	"encoding/hex"
 	"errors"
 	"fmt"
+	"io/ioutil"
 	"math/rand"
 	"net"
 	"sort"
@@ -227,6 +228,7 @@ func sortedByDistanceTo(distbase enode.ID, slice []*node) bool {
 	})
 }
 
+// hexEncPrivkey decodes h as a private key.
 func hexEncPrivkey(h string) *ecdsa.PrivateKey {
 	b, err := hex.DecodeString(h)
 	if err != nil {
@@ -239,6 +241,7 @@ func hexEncPrivkey(h string) *ecdsa.PrivateKey {
 	return key
 }
 
+// hexEncPubkey decodes h as a public key.
 func hexEncPubkey(h string) (ret encPubkey) {
 	b, err := hex.DecodeString(h)
 	if err != nil {
@@ -249,4 +252,21 @@ func hexEncPubkey(h string) (ret encPubkey) {
 	}
 	copy(ret[:], b)
 	return ret
+}
+
+// hexFile reads the given file and decodes the hex data contained in it.
+func hexFile(file string) []byte {
+	text, err := ioutil.ReadFile(file)
+	if err != nil {
+		panic(err)
+	}
+	text = bytes.TrimSpace(text)
+	if bytes.HasPrefix(text, []byte("0x")) {
+		text = text[2:]
+	}
+	data := make([]byte, hex.DecodedLen(len(text)))
+	if _, err := hex.Decode(data, text); err != nil {
+		panic("invalid hex in " + file)
+	}
+	return data
 }
