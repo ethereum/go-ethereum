@@ -297,10 +297,8 @@ func (g *Genesis) ToBlock(db ethdb.Database) *types.Block {
 	}
 
 	// this segment of code is for testing purpose
-	g.Seal.Step = nil
-	g.Seal.Signature = []byte{0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0}
-	head.Seal[0], _ = rlp.EncodeToBytes(g.Seal.Step)
-	head.Seal[1], _ = rlp.EncodeToBytes(g.Seal.Signature)
+	head.Seal[0] = nil
+	head.Seal[1] = []byte{0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0}
 	log.Debug("Getting rlp encoded data of seal", "rlpEncodedStep", head.Seal[0], "rlpEncodedSignature", head.Seal[1])
 
 	if g.GasLimit == 0 {

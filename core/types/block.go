@@ -102,8 +102,32 @@ type headerMarshaling struct {
 
 // Hash returns the block hash of the header, which is simply the keccak256 hash of its
 // RLP encoding.
+// Lukso aura- Need a condition for checking whether this is aura header or clique or pow header
 func (h *Header) Hash() common.Hash {
-	return rlpHash(h)
+	log.Debug("Getting header for rlphash", "header", h)
+	if h.Seal != nil {
+		log.Debug("Getting aura header")
+		return rlpHash([]interface{} {
+			h.ParentHash,
+			h.UncleHash,
+			h.Coinbase,
+			h.Root,
+			h.TxHash,
+			h.ReceiptHash,
+			h.Bloom,
+			uint64(131072),
+			uint64(0),
+			h.GasLimit,
+			h.GasUsed,
+			h.Time,
+			h.Extra,
+			h.Seal[0],
+			h.Seal[1],
+		})
+	} else {
+		return rlpHash(h)
+	}
+
 }
 
 var headerSize = common.StorageSize(reflect.TypeOf(Header{}).Size())
@@ -144,6 +168,7 @@ func rlpHash(x interface{}) (h common.Hash) {
 	sha := hasherPool.Get().(crypto.KeccakState)
 	defer hasherPool.Put(sha)
 	sha.Reset()
+	log.Debug("Rlp hash of aura header", "auraHeader", x)
 	rlp.Encode(sha, x)
 	sha.Read(h[:])
 	return h
@@ -413,6 +438,7 @@ func (b *Block) Hash() common.Hash {
 		return hash.(common.Hash)
 	}
 	v := b.header.Hash()
+	log.Debug("Getting header rlp hash", "headerRlpHash", v)
 	b.hash.Store(v)
 	return v
 }
