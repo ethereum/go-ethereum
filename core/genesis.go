@@ -64,6 +64,7 @@ type Genesis struct {
 	GasUsed    uint64      `json:"gasUsed"`
 	ParentHash common.Hash `json:"parentHash"`
 
+	// Seal field is used for aura consensus engine
 	Seal 		Seal		`json:"seal"`
 }
 
@@ -82,6 +83,7 @@ func (ga *GenesisAlloc) UnmarshalJSON(data []byte) error {
 	return nil
 }
 
+// Seal is a struct for aura consensus engine
 type Seal struct {
 	Step 		[]byte		`json:"step,omitempty"`
 	Signature 	[]byte      `json:"signature,omitempty"`
@@ -116,6 +118,7 @@ type genesisAccountMarshaling struct {
 	PrivateKey hexutil.Bytes
 }
 
+// Seal marshaling struct used for gencodec
 type genesisSealMarshaling struct {
 	Step       hexutil.Bytes
 	Signature  hexutil.Bytes
@@ -295,6 +298,7 @@ func (g *Genesis) ToBlock(db ethdb.Database) *types.Block {
 		Seal: 		make([][]byte, 2),
 	}
 
+	// assign step and signature in header
 	head.Seal[0] = g.Seal.Step
 	head.Seal[1] = g.Seal.Signature
 
@@ -399,7 +403,7 @@ func DefaultGoerliGenesisBlock() *Genesis {
 	}
 }
 
-// DefaultGoerliGenesisBlock returns the Görli network genesis block.
+// DefaultLuksoGenesisBlock returns the Lukso-aura network genesis block.
 func DefaultLuksoGenesisBlock() *Genesis {
 	return &Genesis{
 		Config:     params.LuksoChainConfig,

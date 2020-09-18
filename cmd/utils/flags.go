@@ -137,8 +137,8 @@ var (
 		Usage: "Görli network: pre-configured proof-of-authority test network",
 	}
 	LuksoFlag = cli.BoolFlag{
-		Name: "lukso",
-		Usage: "Lukso network: pre-configured proof-of-authority(Aura) test network",
+		Name: "luksoAura",
+		Usage: "Lukso aura network: pre-configured proof-of-authority(Aura) test network",
 	}
 	YoloV1Flag = cli.BoolFlag{
 		Name:  "yolov1",

@@ -354,7 +354,6 @@ func geth(ctx *cli.Context) error {
 		return fmt.Errorf("invalid command: %q", args[0])
 	}
 
-	log.Debug("Starting Lukso Network..........")
 	prepare(ctx)
 	stack, backend := makeFullNode(ctx)
 	defer stack.Close()

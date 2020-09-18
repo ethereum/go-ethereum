@@ -214,7 +214,7 @@ var (
 		Threshold: 2,
 	}
 
-	// GoerliChainConfig contains the chain parameters to run a node on the Görli test network.
+	// LuksoChainConfig contains the chain parameters to run a node on the lukso-aura test network.
 	LuksoChainConfig = &ChainConfig{
 		ChainID:             big.NewInt(5),
 		HomesteadBlock:      big.NewInt(0),

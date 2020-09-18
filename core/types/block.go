@@ -85,6 +85,8 @@ type Header struct {
 	Extra       []byte         `json:"extraData"        gencodec:"required"`
 	MixDigest   common.Hash    `json:"mixHash"`
 	Nonce       BlockNonce     `json:"nonce"`
+
+	// seal field for aura engine
 	Seal		[][]byte  	   `json:"seal"`
 }
 
@@ -102,7 +104,7 @@ type headerMarshaling struct {
 // Hash returns the block hash of the header, which is simply the keccak256 hash of its
 // RLP encoding.
 func (h *Header) Hash() common.Hash {
-	// Check the condition for ethash and clique or other future consensus engine
+	// TODO : Keccak256 of RLP encoded Aura header. Needs to check when header sync and sealing work
 	if h.Seal != nil {
 		return rlpHash([]interface{} {
 			h.ParentHash,
@@ -271,6 +273,7 @@ func NewBlock(header *Header, txs []*Transaction, uncles []*Header, receipts []*
 			b.uncles[i] = CopyHeader(uncles[i])
 		}
 	}
+
 	return b
 }
 
