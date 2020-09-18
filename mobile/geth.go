@@ -90,6 +90,22 @@ func NewNodeConfig() *NodeConfig {
 	return &config
 }
 
+// AddBootstrapNode adds an additional bootstrap node to the node config.
+func (conf *NodeConfig) AddBootstrapNode(node *Enode) {
+	conf.BootstrapNodes.Append(node)
+}
+
+// EncodeJSON encodes a NodeConfig into a JSON data dump.
+func (conf *NodeConfig) EncodeJSON() (string, error) {
+	data, err := json.Marshal(conf)
+	return string(data), err
+}
+
+// String returns a printable representation of the node config.
+func (conf *NodeConfig) String() string {
+	return encodeOrError(conf)
+}
+
 // Node represents a Geth Ethereum node instance.
 type Node struct {
 	node *node.Node

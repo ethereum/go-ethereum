@@ -87,7 +87,7 @@ func (h *Hash) GetHex() string {
 	return h.hash.Hex()
 }
 
-// String implements Stringer interface for printable representation of the address.
+// String implements Stringer interface for printable representation of the hash.
 func (h *Hash) String() string {
 	return h.GetHex()
 }
@@ -193,7 +193,7 @@ func (a *Address) GetHex() string {
 	return a.address.Hex()
 }
 
-// String implements Stringer interface for printable representation of the address.
+// String returns a printable representation of the address.
 func (a *Address) String() string {
 	return a.GetHex()
 }
