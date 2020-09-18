@@ -24,8 +24,9 @@ import (
 	"github.com/ethereum/go-ethereum/eth/tracers/internal/tracers"
 )
 
-// all contains all the built in JavaScript tracers by name.
-var all = make(map[string]string)
+// allJs contains allJs the built in JavaScript tracers by name.
+var allJs = make(map[string]string)
+var allWasm = make(map[string]string)
 
 // camel converts a snake cased input string into a camel cased output.
 func camel(str string) string {
@@ -39,15 +40,23 @@ func camel(str string) string {
 // init retrieves the JavaScript transaction tracers included in go-ethereum.
 func init() {
 	for _, file := range tracers.AssetNames() {
-		name := camel(strings.TrimSuffix(file, ".js"))
-		all[name] = string(tracers.MustAsset(file))
+		if strings.HasSuffix(file, ".js") {
+			name := camel(strings.TrimSuffix(file, ".js"))
+			allJs[name] = string(tracers.MustAsset(file))
+		} else {
+			name := camel(strings.TrimSuffix(file, ".wasm"))
+			allWasm[name] = string(tracers.MustAsset(file))
+		}
 	}
 }
 
-// tracer retrieves a specific JavaScript tracer by name.
-func tracer(name string) (string, bool) {
-	if tracer, ok := all[name]; ok {
-		return tracer, true
+// tracer retrieves a specific JavaScript or Wasm tracer by name.
+func tracer(name string) (string, bool, bool) {
+	if tracer, ok := allJs[name]; ok {
+		return tracer, false, true
 	}
-	return "", false
+	if tracer, ok := allWasm[name]; ok {
+		return tracer, true, true
+	}
+	return "", false, false
 }
