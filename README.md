@@ -4,7 +4,7 @@ Official Golang implementation of the Ethereum protocol.
 
 [![API Reference](
 https://camo.githubusercontent.com/915b7be44ada53c290eb157634330494ebe3e30a/68747470733a2f2f676f646f632e6f72672f6769746875622e636f6d2f676f6c616e672f6764646f3f7374617475732e737667
-)](https://godoc.org/github.com/ethereum/go-ethereum)
+)](https://pkg.go.dev/github.com/ethereum/go-ethereum?tab=doc)
 [![Go Report Card](https://goreportcard.com/badge/github.com/ethereum/go-ethereum)](https://goreportcard.com/report/github.com/ethereum/go-ethereum)
 [![Travis](https://travis-ci.org/ethereum/go-ethereum.svg?branch=master)](https://travis-ci.org/ethereum/go-ethereum)
 [![Discord](https://img.shields.io/badge/discord-join%20chat-blue.svg)](https://discord.gg/nthXNEv)
@@ -108,7 +108,7 @@ accounts available between them.*
 
 ### Full node on the Rinkeby test network
 
-Go Ethereum also supports connecting to the older proof-of-authority based test network 
+Go Ethereum also supports connecting to the older proof-of-authority based test network
 called [*Rinkeby*](https://www.rinkeby.io) which is operated by members of the community.
 
 ```shell
@@ -117,10 +117,10 @@ $ geth --rinkeby console
 
 ### Full node on the Ropsten test network
 
-In addition to Görli and Rinkeby, Geth also supports the ancient Ropsten testnet. The 
+In addition to Görli and Rinkeby, Geth also supports the ancient Ropsten testnet. The
 Ropsten test network is based on the Ethash proof-of-work consensus algorithm. As such,
 it has certain extra overhead and is more susceptible to reorganization attacks due to the
-network's low difficulty/security. 
+network's low difficulty/security.
 
 ```shell
 $ geth --ropsten console
@@ -162,7 +162,7 @@ above command does.  It will also create a persistent volume in your home direct
 saving your blockchain as well as map the default ports. There is also an `alpine` tag
 available for a slim version of the image.
 
-Do not forget `--rpcaddr 0.0.0.0`, if you want to access RPC from other containers
+Do not forget `--http.addr 0.0.0.0`, if you want to access RPC from other containers
 and/or hosts. By default, `geth` binds to the local interface and RPC endpoints is not
 accessible from the outside.
 
@@ -182,16 +182,16 @@ you'd expect.
 
 HTTP based JSON-RPC API options:
 
-  * `--rpc` Enable the HTTP-RPC server
-  * `--rpcaddr` HTTP-RPC server listening interface (default: `localhost`)
-  * `--rpcport` HTTP-RPC server listening port (default: `8545`)
-  * `--rpcapi` API's offered over the HTTP-RPC interface (default: `eth,net,web3`)
-  * `--rpccorsdomain` Comma separated list of domains from which to accept cross origin requests (browser enforced)
+  * `--http` Enable the HTTP-RPC server
+  * `--http.addr` HTTP-RPC server listening interface (default: `localhost`)
+  * `--http.port` HTTP-RPC server listening port (default: `8545`)
+  * `--http.api` API's offered over the HTTP-RPC interface (default: `eth,net,web3`)
+  * `--http.corsdomain` Comma separated list of domains from which to accept cross origin requests (browser enforced)
   * `--ws` Enable the WS-RPC server
-  * `--wsaddr` WS-RPC server listening interface (default: `localhost`)
-  * `--wsport` WS-RPC server listening port (default: `8546`)
-  * `--wsapi` API's offered over the WS-RPC interface (default: `eth,net,web3`)
-  * `--wsorigins` Origins from which to accept websockets requests
+  * `--ws.addr` WS-RPC server listening interface (default: `localhost`)
+  * `--ws.port` WS-RPC server listening port (default: `8546`)
+  * `--ws.api` API's offered over the WS-RPC interface (default: `eth,net,web3`)
+  * `--ws.origins` Origins from which to accept websockets requests
   * `--ipcdisable` Disable the IPC-RPC server
   * `--ipcapi` API's offered over the IPC-RPC interface (default: `admin,debug,eth,miner,net,personal,shh,txpool,web3`)
   * `--ipcpath` Filename for IPC socket/pipe within the datadir (explicit paths escape it)

@@ -368,18 +368,22 @@ func (w *wallet) selfDerive() {
 					w.log.Warn("USB wallet nonce retrieval failed", "err", err)
 					break
 				}
-				// If the next account is empty, stop self-derivation, but add for the last base path
+				// We've just self-derived a new account, start tracking it locally
+				// unless the account was empty.
+				path := make(accounts.DerivationPath, len(nextPaths[i]))
+				copy(path[:], nextPaths[i][:])
 				if balance.Sign() == 0 && nonce == 0 {
 					empty = true
+					// If it indeed was empty, make a log output for it anyway. In the case
+					// of legacy-ledger, the first account on the legacy-path will
+					// be shown to the user, even if we don't actively track it
 					if i < len(nextAddrs)-1 {
+						w.log.Info("Skipping trakcking first account on legacy path, use personal.deriveAccount(<url>,<path>, false) to track",
+							"path", path, "address", nextAddrs[i])
 						break
 					}
 				}
-				// We've just self-derived a new account, start tracking it locally
-				path := make(accounts.DerivationPath, len(nextPaths[i]))
-				copy(path[:], nextPaths[i][:])
 				paths = append(paths, path)
-
 				account := accounts.Account{
 					Address: nextAddrs[i],
 					URL:     accounts.URL{Scheme: w.url.Scheme, Path: fmt.Sprintf("%s/%s", w.url.Path, path)},

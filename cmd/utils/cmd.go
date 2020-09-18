@@ -73,7 +73,7 @@ func StartNode(stack *node.Node) {
 		defer signal.Stop(sigc)
 		<-sigc
 		log.Info("Got interrupt, shutting down...")
-		go stack.Stop()
+		go stack.Close()
 		for i := 10; i > 0; i-- {
 			<-sigc
 			if i > 1 {

@@ -207,7 +207,7 @@ func (e *fp2) exp(c, a *fe2, s *big.Int) {
 	c.set(z)
 }
 
-func (e *fp2) frobeniousMap(c, a *fe2, power uint) {
+func (e *fp2) frobeniusMap(c, a *fe2, power uint) {
 	c[0].set(&a[0])
 	if power%2 == 1 {
 		neg(&c[1], &a[1])
@@ -216,7 +216,7 @@ func (e *fp2) frobeniousMap(c, a *fe2, power uint) {
 	c[1].set(&a[1])
 }
 
-func (e *fp2) frobeniousMapAssign(a *fe2, power uint) {
+func (e *fp2) frobeniusMapAssign(a *fe2, power uint) {
 	if power%2 == 1 {
 		neg(&a[1], &a[1])
 		return

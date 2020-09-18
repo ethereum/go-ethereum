@@ -129,8 +129,8 @@ func TestNewSimulatedBackend(t *testing.T) {
 		t.Errorf("expected sim blockchain config to equal params.AllEthashProtocolChanges, got %v", sim.config)
 	}
 
-	statedb, _ := sim.blockchain.State()
-	bal := statedb.GetBalance(testAddr)
+	stateDB, _ := sim.blockchain.State()
+	bal := stateDB.GetBalance(testAddr)
 	if bal.Cmp(expectedBal) != 0 {
 		t.Errorf("expected balance for test address not received. expected: %v actual: %v", expectedBal, bal)
 	}
@@ -143,14 +143,51 @@ func TestSimulatedBackend_AdjustTime(t *testing.T) {
 	defer sim.Close()
 
 	prevTime := sim.pendingBlock.Time()
-	err := sim.AdjustTime(time.Second)
-	if err != nil {
+	if err := sim.AdjustTime(time.Second); err != nil {
 		t.Error(err)
 	}
 	newTime := sim.pendingBlock.Time()
 
 	if newTime-prevTime != uint64(time.Second.Seconds()) {
 		t.Errorf("adjusted time not equal to a second. prev: %v, new: %v", prevTime, newTime)
+	}
+}
+
+func TestNewSimulatedBackend_AdjustTimeFail(t *testing.T) {
+	testAddr := crypto.PubkeyToAddress(testKey.PublicKey)
+	sim := simTestBackend(testAddr)
+	// Create tx and send
+	tx := types.NewTransaction(0, testAddr, big.NewInt(1000), params.TxGas, big.NewInt(1), nil)
+	signedTx, err := types.SignTx(tx, types.HomesteadSigner{}, testKey)
+	if err != nil {
+		t.Errorf("could not sign tx: %v", err)
+	}
+	sim.SendTransaction(context.Background(), signedTx)
+	// AdjustTime should fail on non-empty block
+	if err := sim.AdjustTime(time.Second); err == nil {
+		t.Error("Expected adjust time to error on non-empty block")
+	}
+	sim.Commit()
+
+	prevTime := sim.pendingBlock.Time()
+	if err := sim.AdjustTime(time.Minute); err != nil {
+		t.Error(err)
+	}
+	newTime := sim.pendingBlock.Time()
+	if newTime-prevTime != uint64(time.Minute.Seconds()) {
+		t.Errorf("adjusted time not equal to a minute. prev: %v, new: %v", prevTime, newTime)
+	}
+	// Put a transaction after adjusting time
+	tx2 := types.NewTransaction(1, testAddr, big.NewInt(1000), params.TxGas, big.NewInt(1), nil)
+	signedTx2, err := types.SignTx(tx2, types.HomesteadSigner{}, testKey)
+	if err != nil {
+		t.Errorf("could not sign tx: %v", err)
+	}
+	sim.SendTransaction(context.Background(), signedTx2)
+	sim.Commit()
+	newTime = sim.pendingBlock.Time()
+	if newTime-prevTime >= uint64(time.Minute.Seconds()) {
+		t.Errorf("time adjusted, but shouldn't be: prev: %v, new: %v", prevTime, newTime)
 	}
 }
 
@@ -484,7 +521,7 @@ func TestSimulatedBackend_EstimateGasWithPrice(t *testing.T) {
 	sim := NewSimulatedBackend(core.GenesisAlloc{addr: {Balance: big.NewInt(params.Ether*2 + 2e17)}}, 10000000)
 	defer sim.Close()
 
-	receipant := common.HexToAddress("deadbeef")
+	recipient := common.HexToAddress("deadbeef")
 	var cases = []struct {
 		name        string
 		message     ethereum.CallMsg
@@ -493,7 +530,7 @@ func TestSimulatedBackend_EstimateGasWithPrice(t *testing.T) {
 	}{
 		{"EstimateWithoutPrice", ethereum.CallMsg{
 			From:     addr,
-			To:       &receipant,
+			To:       &recipient,
 			Gas:      0,
 			GasPrice: big.NewInt(0),
 			Value:    big.NewInt(1000),
@@ -502,7 +539,7 @@ func TestSimulatedBackend_EstimateGasWithPrice(t *testing.T) {
 
 		{"EstimateWithPrice", ethereum.CallMsg{
 			From:     addr,
-			To:       &receipant,
+			To:       &recipient,
 			Gas:      0,
 			GasPrice: big.NewInt(1000),
 			Value:    big.NewInt(1000),
@@ -511,7 +548,7 @@ func TestSimulatedBackend_EstimateGasWithPrice(t *testing.T) {
 
 		{"EstimateWithVeryHighPrice", ethereum.CallMsg{
 			From:     addr,
-			To:       &receipant,
+			To:       &recipient,
 			Gas:      0,
 			GasPrice: big.NewInt(1e14), // gascost = 2.1ether
 			Value:    big.NewInt(1e17), // the remaining balance for fee is 2.1ether
@@ -520,7 +557,7 @@ func TestSimulatedBackend_EstimateGasWithPrice(t *testing.T) {
 
 		{"EstimateWithSuperhighPrice", ethereum.CallMsg{
 			From:     addr,
-			To:       &receipant,
+			To:       &recipient,
 			Gas:      0,
 			GasPrice: big.NewInt(2e14), // gascost = 4.2ether
 			Value:    big.NewInt(1000),
@@ -1049,12 +1086,12 @@ func TestSimulatedBackend_CallContractRevert(t *testing.T) {
 				t.Errorf("result from %v was not nil: %v", key, res)
 			}
 			if val != nil {
-				rerr, ok := err.(*revertError)
+				rErr, ok := err.(*revertError)
 				if !ok {
 					t.Errorf("expect revert error")
 				}
-				if rerr.Error() != "execution reverted: "+val.(string) {
-					t.Errorf("error was malformed: got %v want %v", rerr.Error(), val)
+				if rErr.Error() != "execution reverted: "+val.(string) {
+					t.Errorf("error was malformed: got %v want %v", rErr.Error(), val)
 				}
 			} else {
 				// revert(0x0,0x0)

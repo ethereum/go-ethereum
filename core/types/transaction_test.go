@@ -22,6 +22,7 @@ import (
 	"encoding/json"
 	"math/big"
 	"testing"
+	"time"
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/crypto"
@@ -127,8 +128,8 @@ func TestTransactionPriceNonceSort(t *testing.T) {
 	for i := 0; i < len(keys); i++ {
 		keys[i], _ = crypto.GenerateKey()
 	}
-
 	signer := HomesteadSigner{}
+
 	// Generate a batch of transactions with overlapping values, but shifted nonces
 	groups := map[common.Address]Transactions{}
 	for start, key := range keys {
@@ -155,18 +156,64 @@ func TestTransactionPriceNonceSort(t *testing.T) {
 		// Make sure the nonce order is valid
 		for j, txj := range txs[i+1:] {
 			fromj, _ := Sender(signer, txj)
-
 			if fromi == fromj && txi.Nonce() > txj.Nonce() {
 				t.Errorf("invalid nonce ordering: tx #%d (A=%x N=%v) < tx #%d (A=%x N=%v)", i, fromi[:4], txi.Nonce(), i+j, fromj[:4], txj.Nonce())
 			}
 		}
-
 		// If the next tx has different from account, the price must be lower than the current one
 		if i+1 < len(txs) {
 			next := txs[i+1]
 			fromNext, _ := Sender(signer, next)
 			if fromi != fromNext && txi.GasPrice().Cmp(next.GasPrice()) < 0 {
 				t.Errorf("invalid gasprice ordering: tx #%d (A=%x P=%v) < tx #%d (A=%x P=%v)", i, fromi[:4], txi.GasPrice(), i+1, fromNext[:4], next.GasPrice())
+			}
+		}
+	}
+}
+
+// Tests that if multiple transactions have the same price, the ones seen earlier
+// are prioritized to avoid network spam attacks aiming for a specific ordering.
+func TestTransactionTimeSort(t *testing.T) {
+	// Generate a batch of accounts to start with
+	keys := make([]*ecdsa.PrivateKey, 5)
+	for i := 0; i < len(keys); i++ {
+		keys[i], _ = crypto.GenerateKey()
+	}
+	signer := HomesteadSigner{}
+
+	// Generate a batch of transactions with overlapping prices, but different creation times
+	groups := map[common.Address]Transactions{}
+	for start, key := range keys {
+		addr := crypto.PubkeyToAddress(key.PublicKey)
+
+		tx, _ := SignTx(NewTransaction(0, common.Address{}, big.NewInt(100), 100, big.NewInt(1), nil), signer, key)
+		tx.time = time.Unix(0, int64(len(keys)-start))
+
+		groups[addr] = append(groups[addr], tx)
+	}
+	// Sort the transactions and cross check the nonce ordering
+	txset := NewTransactionsByPriceAndNonce(signer, groups)
+
+	txs := Transactions{}
+	for tx := txset.Peek(); tx != nil; tx = txset.Peek() {
+		txs = append(txs, tx)
+		txset.Shift()
+	}
+	if len(txs) != len(keys) {
+		t.Errorf("expected %d transactions, found %d", len(keys), len(txs))
+	}
+	for i, txi := range txs {
+		fromi, _ := Sender(signer, txi)
+		if i+1 < len(txs) {
+			next := txs[i+1]
+			fromNext, _ := Sender(signer, next)
+
+			if txi.GasPrice().Cmp(next.GasPrice()) < 0 {
+				t.Errorf("invalid gasprice ordering: tx #%d (A=%x P=%v) < tx #%d (A=%x P=%v)", i, fromi[:4], txi.GasPrice(), i+1, fromNext[:4], next.GasPrice())
+			}
+			// Make sure time order is ascending if the txs have the same gas price
+			if txi.GasPrice().Cmp(next.GasPrice()) == 0 && txi.time.After(next.time) {
+				t.Errorf("invalid received time ordering: tx #%d (A=%x T=%v) > tx #%d (A=%x T=%v)", i, fromi[:4], txi.time, i+1, fromNext[:4], next.time)
 			}
 		}
 	}
