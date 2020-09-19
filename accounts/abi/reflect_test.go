@@ -180,9 +180,9 @@ func TestReflectNameToStruct(t *testing.T) {
 				if err != nil {
 					t.Fatalf("Unexpected error: %v", err)
 				}
-				for fName := range test.want {
-					if m[fName] != test.want[fName] {
-						t.Fatalf("Incorrect value for field %s: expected %v, got %v", fName, test.want[fName], m[fName])
+				for fname := range test.want {
+					if m[fname] != test.want[fname] {
+						t.Fatalf("Incorrect value for field %s: expected %v, got %v", fname, test.want[fname], m[fname])
 					}
 				}
 			}

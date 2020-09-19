@@ -32,8 +32,8 @@ import (
 
 // NewTransactor is a utility method to easily create a transaction signer from
 // an encrypted json key stream and the associated passphrase.
-func NewTransactor(keyIn io.Reader, passphrase string) (*TransactOpts, error) {
-	json, err := ioutil.ReadAll(keyIn)
+func NewTransactor(keyin io.Reader, passphrase string) (*TransactOpts, error) {
+	json, err := ioutil.ReadAll(keyin)
 	if err != nil {
 		return nil, err
 	}

@@ -54,7 +54,7 @@ type Method struct {
 	// the raw name and a suffix will be added in the case of a function overload.
 	//
 	// e.g.
-	// These are two functions that have same name:
+	// These are two functions that have the same name:
 	// * foo(int,int)
 	// * foo(uint,uint)
 	// The method name of the first one will be resolved as foo while the second one

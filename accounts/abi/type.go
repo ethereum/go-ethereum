@@ -90,18 +90,18 @@ func NewType(t string, internalType string, components []ArgumentMarshaling) (ty
 		sliced := t[i:]
 		// grab the slice size with regexp
 		re := regexp.MustCompile("[0-9]+")
-		intZ := re.FindAllString(sliced, -1)
+		intz := re.FindAllString(sliced, -1)
 
-		if len(intZ) == 0 {
+		if len(intz) == 0 {
 			// is a slice
 			typ.T = SliceTy
 			typ.Elem = &embeddedType
 			typ.stringKind = embeddedType.stringKind + sliced
-		} else if len(intZ) == 1 {
+		} else if len(intz) == 1 {
 			// is an array
 			typ.T = ArrayTy
 			typ.Elem = &embeddedType
-			typ.Size, err = strconv.Atoi(intZ[0])
+			typ.Size, err = strconv.Atoi(intz[0])
 			if err != nil {
 				return Type{}, fmt.Errorf("abi: error parsing variable size: %v", err)
 			}
@@ -316,7 +316,7 @@ func (t Type) pack(v reflect.Value) ([]byte, error) {
 		//     head(X(i)) = enc(len(head(X(1)) ... head(X(k)) tail(X(1)) ... tail(X(i-1))))
 		//     tail(X(i)) = enc(X(i))
 		// otherwise, i.e. if Ti is a dynamic type.
-		fieldMap, err := mapArgNamesToStructFields(t.TupleRawNames, v)
+		fieldmap, err := mapArgNamesToStructFields(t.TupleRawNames, v)
 		if err != nil {
 			return nil, err
 		}
@@ -327,7 +327,7 @@ func (t Type) pack(v reflect.Value) ([]byte, error) {
 		}
 		var ret, tail []byte
 		for i, elem := range t.TupleElems {
-			field := v.FieldByName(fieldMap[t.TupleRawNames[i]])
+			field := v.FieldByName(fieldmap[t.TupleRawNames[i]])
 			if !field.IsValid() {
 				return nil, fmt.Errorf("field %s for tuple not found in the given struct", t.TupleRawNames[i])
 			}

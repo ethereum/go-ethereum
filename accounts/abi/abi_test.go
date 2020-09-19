@@ -31,7 +31,7 @@ import (
 	"github.com/ethereum/go-ethereum/crypto"
 )
 
-const jsonData = `
+const jsondata = `
 [
 	{ "type" : "function", "name" : "", "stateMutability" : "view" },
 	{ "type" : "function", "name" : "balance", "stateMutability" : "view" },
@@ -121,7 +121,7 @@ func TestReader(t *testing.T) {
 		Methods: methods,
 	}
 
-	exp, err := JSON(strings.NewReader(jsonData))
+	exp, err := JSON(strings.NewReader(jsondata))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -198,7 +198,7 @@ func TestConstructor(t *testing.T) {
 }
 
 func TestTestNumbers(t *testing.T) {
-	abi, err := JSON(strings.NewReader(jsonData))
+	abi, err := JSON(strings.NewReader(jsondata))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -241,9 +241,9 @@ func TestMethodSignature(t *testing.T) {
 		t.Error("signature mismatch", exp, "!=", m.Sig)
 	}
 
-	idExp := crypto.Keccak256([]byte(exp))[:4]
-	if !bytes.Equal(m.ID, idExp) {
-		t.Errorf("expected ids to match %x != %x", m.ID, idExp)
+	idexp := crypto.Keccak256([]byte(exp))[:4]
+	if !bytes.Equal(m.ID, idexp) {
+		t.Errorf("expected ids to match %x != %x", m.ID, idexp)
 	}
 
 	m = NewMethod("foo", "foo", Function, "", false, false, []Argument{{"bar", Uint256, false}}, nil)
@@ -296,7 +296,7 @@ func TestOverloadedMethodSignature(t *testing.T) {
 }
 
 func TestMultiPack(t *testing.T) {
-	abi, err := JSON(strings.NewReader(jsonData))
+	abi, err := JSON(strings.NewReader(jsondata))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -345,8 +345,8 @@ func TestInputVariableInputLength(t *testing.T) {
 	}
 
 	// test one string
-	strIn := "hello world"
-	strPack, err := abi.Pack("strOne", strIn)
+	strin := "hello world"
+	strpack, err := abi.Pack("strOne", strin)
 	if err != nil {
 		t.Error(err)
 	}
@@ -354,25 +354,25 @@ func TestInputVariableInputLength(t *testing.T) {
 	offset := make([]byte, 32)
 	offset[31] = 32
 	length := make([]byte, 32)
-	length[31] = byte(len(strIn))
-	value := common.RightPadBytes([]byte(strIn), 32)
+	length[31] = byte(len(strin))
+	value := common.RightPadBytes([]byte(strin), 32)
 	exp := append(offset, append(length, value...)...)
 
 	// ignore first 4 bytes of the output. This is the function identifier
-	strPack = strPack[4:]
-	if !bytes.Equal(strPack, exp) {
-		t.Errorf("expected %x, got %x\n", exp, strPack)
+	strpack = strpack[4:]
+	if !bytes.Equal(strpack, exp) {
+		t.Errorf("expected %x, got %x\n", exp, strpack)
 	}
 
 	// test one bytes
-	btsPack, err := abi.Pack("bytesOne", []byte(strIn))
+	btspack, err := abi.Pack("bytesOne", []byte(strin))
 	if err != nil {
 		t.Error(err)
 	}
 	// ignore first 4 bytes of the output. This is the function identifier
-	btsPack = btsPack[4:]
-	if !bytes.Equal(btsPack, exp) {
-		t.Errorf("expected %x, got %x\n", exp, btsPack)
+	btspack = btspack[4:]
+	if !bytes.Equal(btspack, exp) {
+		t.Errorf("expected %x, got %x\n", exp, btspack)
 	}
 
 	//  test two strings
@@ -461,15 +461,15 @@ func TestInputVariableInputLength(t *testing.T) {
 }
 
 func TestInputFixedArrayAndVariableInputLength(t *testing.T) {
-	abi, err := JSON(strings.NewReader(jsonData))
+	abi, err := JSON(strings.NewReader(jsondata))
 	if err != nil {
 		t.Error(err)
 	}
 
 	// test string, fixed array uint256[2]
-	strIn := "hello world"
-	arrIn := [2]*big.Int{big.NewInt(1), big.NewInt(2)}
-	fixedArrStrPack, err := abi.Pack("fixedArrStr", strIn, arrIn)
+	strin := "hello world"
+	arrin := [2]*big.Int{big.NewInt(1), big.NewInt(2)}
+	fixedArrStrPack, err := abi.Pack("fixedArrStr", strin, arrin)
 	if err != nil {
 		t.Error(err)
 	}
@@ -478,13 +478,13 @@ func TestInputFixedArrayAndVariableInputLength(t *testing.T) {
 	offset := make([]byte, 32)
 	offset[31] = 96
 	length := make([]byte, 32)
-	length[31] = byte(len(strIn))
-	strValue := common.RightPadBytes([]byte(strIn), 32)
-	arrInValue1 := common.LeftPadBytes(arrIn[0].Bytes(), 32)
-	arrInValue2 := common.LeftPadBytes(arrIn[1].Bytes(), 32)
-	exp := append(offset, arrInValue1...)
-	exp = append(exp, arrInValue2...)
-	exp = append(exp, append(length, strValue...)...)
+	length[31] = byte(len(strin))
+	strvalue := common.RightPadBytes([]byte(strin), 32)
+	arrinvalue1 := common.LeftPadBytes(arrin[0].Bytes(), 32)
+	arrinvalue2 := common.LeftPadBytes(arrin[1].Bytes(), 32)
+	exp := append(offset, arrinvalue1...)
+	exp = append(exp, arrinvalue2...)
+	exp = append(exp, append(length, strvalue...)...)
 
 	// ignore first 4 bytes of the output. This is the function identifier
 	fixedArrStrPack = fixedArrStrPack[4:]
@@ -493,9 +493,9 @@ func TestInputFixedArrayAndVariableInputLength(t *testing.T) {
 	}
 
 	// test byte array, fixed array uint256[2]
-	bytesIn := []byte(strIn)
-	arrIn = [2]*big.Int{big.NewInt(1), big.NewInt(2)}
-	fixedArrBytesPack, err := abi.Pack("fixedArrBytes", bytesIn, arrIn)
+	bytesIn := []byte(strin)
+	arrin = [2]*big.Int{big.NewInt(1), big.NewInt(2)}
+	fixedArrBytesPack, err := abi.Pack("fixedArrBytes", bytesIn, arrin)
 	if err != nil {
 		t.Error(err)
 	}
@@ -504,13 +504,13 @@ func TestInputFixedArrayAndVariableInputLength(t *testing.T) {
 	offset = make([]byte, 32)
 	offset[31] = 96
 	length = make([]byte, 32)
-	length[31] = byte(len(strIn))
-	strValue = common.RightPadBytes([]byte(strIn), 32)
-	arrInValue1 = common.LeftPadBytes(arrIn[0].Bytes(), 32)
-	arrInValue2 = common.LeftPadBytes(arrIn[1].Bytes(), 32)
-	exp = append(offset, arrInValue1...)
-	exp = append(exp, arrInValue2...)
-	exp = append(exp, append(length, strValue...)...)
+	length[31] = byte(len(strin))
+	strvalue = common.RightPadBytes([]byte(strin), 32)
+	arrinvalue1 = common.LeftPadBytes(arrin[0].Bytes(), 32)
+	arrinvalue2 = common.LeftPadBytes(arrin[1].Bytes(), 32)
+	exp = append(offset, arrinvalue1...)
+	exp = append(exp, arrinvalue2...)
+	exp = append(exp, append(length, strvalue...)...)
 
 	// ignore first 4 bytes of the output. This is the function identifier
 	fixedArrBytesPack = fixedArrBytesPack[4:]
@@ -519,37 +519,37 @@ func TestInputFixedArrayAndVariableInputLength(t *testing.T) {
 	}
 
 	// test string, fixed array uint256[2], dynamic array uint256[]
-	strIn = "hello world"
-	fixedArrIn := [2]*big.Int{big.NewInt(1), big.NewInt(2)}
-	dynArrIn := []*big.Int{big.NewInt(1), big.NewInt(2), big.NewInt(3)}
-	mixedArrStrPack, err := abi.Pack("mixedArrStr", strIn, fixedArrIn, dynArrIn)
+	strin = "hello world"
+	fixedarrin := [2]*big.Int{big.NewInt(1), big.NewInt(2)}
+	dynarrin := []*big.Int{big.NewInt(1), big.NewInt(2), big.NewInt(3)}
+	mixedArrStrPack, err := abi.Pack("mixedArrStr", strin, fixedarrin, dynarrin)
 	if err != nil {
 		t.Error(err)
 	}
 
 	// generate expected output
-	strOffset := make([]byte, 32)
-	strOffset[31] = 128
-	strLength := make([]byte, 32)
-	strLength[31] = byte(len(strIn))
-	strValue = common.RightPadBytes([]byte(strIn), 32)
-	fixedArrInValue1 := common.LeftPadBytes(fixedArrIn[0].Bytes(), 32)
-	fixedArrInValue2 := common.LeftPadBytes(fixedArrIn[1].Bytes(), 32)
-	dynArrOffset := make([]byte, 32)
-	dynArrOffset[31] = byte(160 + ((len(strIn)/32)+1)*32)
-	dynArrLength := make([]byte, 32)
-	dynArrLength[31] = byte(len(dynArrIn))
-	dynArrInValue1 := common.LeftPadBytes(dynArrIn[0].Bytes(), 32)
-	dynArrInValue2 := common.LeftPadBytes(dynArrIn[1].Bytes(), 32)
-	dynArrInValue3 := common.LeftPadBytes(dynArrIn[2].Bytes(), 32)
-	exp = append(strOffset, fixedArrInValue1...)
-	exp = append(exp, fixedArrInValue2...)
-	exp = append(exp, dynArrOffset...)
-	exp = append(exp, append(strLength, strValue...)...)
-	dynArrArg := append(dynArrLength, dynArrInValue1...)
-	dynArrArg = append(dynArrArg, dynArrInValue2...)
-	dynArrArg = append(dynArrArg, dynArrInValue3...)
-	exp = append(exp, dynArrArg...)
+	stroffset := make([]byte, 32)
+	stroffset[31] = 128
+	strlength := make([]byte, 32)
+	strlength[31] = byte(len(strin))
+	strvalue = common.RightPadBytes([]byte(strin), 32)
+	fixedarrinvalue1 := common.LeftPadBytes(fixedarrin[0].Bytes(), 32)
+	fixedarrinvalue2 := common.LeftPadBytes(fixedarrin[1].Bytes(), 32)
+	dynarroffset := make([]byte, 32)
+	dynarroffset[31] = byte(160 + ((len(strin)/32)+1)*32)
+	dynarrlength := make([]byte, 32)
+	dynarrlength[31] = byte(len(dynarrin))
+	dynarrinvalue1 := common.LeftPadBytes(dynarrin[0].Bytes(), 32)
+	dynarrinvalue2 := common.LeftPadBytes(dynarrin[1].Bytes(), 32)
+	dynarrinvalue3 := common.LeftPadBytes(dynarrin[2].Bytes(), 32)
+	exp = append(stroffset, fixedarrinvalue1...)
+	exp = append(exp, fixedarrinvalue2...)
+	exp = append(exp, dynarroffset...)
+	exp = append(exp, append(strlength, strvalue...)...)
+	dynarrarg := append(dynarrlength, dynarrinvalue1...)
+	dynarrarg = append(dynarrarg, dynarrinvalue2...)
+	dynarrarg = append(dynarrarg, dynarrinvalue3...)
+	exp = append(exp, dynarrarg...)
 
 	// ignore first 4 bytes of the output. This is the function identifier
 	mixedArrStrPack = mixedArrStrPack[4:]
@@ -558,31 +558,31 @@ func TestInputFixedArrayAndVariableInputLength(t *testing.T) {
 	}
 
 	// test string, fixed array uint256[2], fixed array uint256[3]
-	strIn = "hello world"
-	fixedArrIn1 := [2]*big.Int{big.NewInt(1), big.NewInt(2)}
-	fixedArrIn2 := [3]*big.Int{big.NewInt(1), big.NewInt(2), big.NewInt(3)}
-	doubleFixedArrStrPack, err := abi.Pack("doubleFixedArrStr", strIn, fixedArrIn1, fixedArrIn2)
+	strin = "hello world"
+	fixedarrin1 := [2]*big.Int{big.NewInt(1), big.NewInt(2)}
+	fixedarrin2 := [3]*big.Int{big.NewInt(1), big.NewInt(2), big.NewInt(3)}
+	doubleFixedArrStrPack, err := abi.Pack("doubleFixedArrStr", strin, fixedarrin1, fixedarrin2)
 	if err != nil {
 		t.Error(err)
 	}
 
 	// generate expected output
-	strOffset = make([]byte, 32)
-	strOffset[31] = 192
-	strLength = make([]byte, 32)
-	strLength[31] = byte(len(strIn))
-	strValue = common.RightPadBytes([]byte(strIn), 32)
-	fixedArrIn1Value1 := common.LeftPadBytes(fixedArrIn1[0].Bytes(), 32)
-	fixedArrIn1Value2 := common.LeftPadBytes(fixedArrIn1[1].Bytes(), 32)
-	fixedArrIn2Value1 := common.LeftPadBytes(fixedArrIn2[0].Bytes(), 32)
-	fixedArrIn2Value2 := common.LeftPadBytes(fixedArrIn2[1].Bytes(), 32)
-	fixedArrIn2Value3 := common.LeftPadBytes(fixedArrIn2[2].Bytes(), 32)
-	exp = append(strOffset, fixedArrIn1Value1...)
-	exp = append(exp, fixedArrIn1Value2...)
-	exp = append(exp, fixedArrIn2Value1...)
-	exp = append(exp, fixedArrIn2Value2...)
-	exp = append(exp, fixedArrIn2Value3...)
-	exp = append(exp, append(strLength, strValue...)...)
+	stroffset = make([]byte, 32)
+	stroffset[31] = 192
+	strlength = make([]byte, 32)
+	strlength[31] = byte(len(strin))
+	strvalue = common.RightPadBytes([]byte(strin), 32)
+	fixedarrin1value1 := common.LeftPadBytes(fixedarrin1[0].Bytes(), 32)
+	fixedarrin1value2 := common.LeftPadBytes(fixedarrin1[1].Bytes(), 32)
+	fixedarrin2value1 := common.LeftPadBytes(fixedarrin2[0].Bytes(), 32)
+	fixedarrin2value2 := common.LeftPadBytes(fixedarrin2[1].Bytes(), 32)
+	fixedarrin2value3 := common.LeftPadBytes(fixedarrin2[2].Bytes(), 32)
+	exp = append(stroffset, fixedarrin1value1...)
+	exp = append(exp, fixedarrin1value2...)
+	exp = append(exp, fixedarrin2value1...)
+	exp = append(exp, fixedarrin2value2...)
+	exp = append(exp, fixedarrin2value3...)
+	exp = append(exp, append(strlength, strvalue...)...)
 
 	// ignore first 4 bytes of the output. This is the function identifier
 	doubleFixedArrStrPack = doubleFixedArrStrPack[4:]
@@ -591,41 +591,41 @@ func TestInputFixedArrayAndVariableInputLength(t *testing.T) {
 	}
 
 	// test string, fixed array uint256[2], dynamic array uint256[], fixed array uint256[3]
-	strIn = "hello world"
-	fixedArrIn1 = [2]*big.Int{big.NewInt(1), big.NewInt(2)}
-	dynArrIn = []*big.Int{big.NewInt(1), big.NewInt(2)}
-	fixedArrIn2 = [3]*big.Int{big.NewInt(1), big.NewInt(2), big.NewInt(3)}
-	multipleMixedArrStrPack, err := abi.Pack("multipleMixedArrStr", strIn, fixedArrIn1, dynArrIn, fixedArrIn2)
+	strin = "hello world"
+	fixedarrin1 = [2]*big.Int{big.NewInt(1), big.NewInt(2)}
+	dynarrin = []*big.Int{big.NewInt(1), big.NewInt(2)}
+	fixedarrin2 = [3]*big.Int{big.NewInt(1), big.NewInt(2), big.NewInt(3)}
+	multipleMixedArrStrPack, err := abi.Pack("multipleMixedArrStr", strin, fixedarrin1, dynarrin, fixedarrin2)
 	if err != nil {
 		t.Error(err)
 	}
 
 	// generate expected output
-	strOffset = make([]byte, 32)
-	strOffset[31] = 224
-	strLength = make([]byte, 32)
-	strLength[31] = byte(len(strIn))
-	strValue = common.RightPadBytes([]byte(strIn), 32)
-	fixedArrIn1Value1 = common.LeftPadBytes(fixedArrIn1[0].Bytes(), 32)
-	fixedArrIn1Value2 = common.LeftPadBytes(fixedArrIn1[1].Bytes(), 32)
-	dynArrOffset = math.U256Bytes(big.NewInt(int64(256 + ((len(strIn)/32)+1)*32)))
-	dynArrLength = make([]byte, 32)
-	dynArrLength[31] = byte(len(dynArrIn))
-	dynArrInValue1 = common.LeftPadBytes(dynArrIn[0].Bytes(), 32)
-	dynArrInValue2 = common.LeftPadBytes(dynArrIn[1].Bytes(), 32)
-	fixedArrIn2Value1 = common.LeftPadBytes(fixedArrIn2[0].Bytes(), 32)
-	fixedArrIn2Value2 = common.LeftPadBytes(fixedArrIn2[1].Bytes(), 32)
-	fixedArrIn2Value3 = common.LeftPadBytes(fixedArrIn2[2].Bytes(), 32)
-	exp = append(strOffset, fixedArrIn1Value1...)
-	exp = append(exp, fixedArrIn1Value2...)
-	exp = append(exp, dynArrOffset...)
-	exp = append(exp, fixedArrIn2Value1...)
-	exp = append(exp, fixedArrIn2Value2...)
-	exp = append(exp, fixedArrIn2Value3...)
-	exp = append(exp, append(strLength, strValue...)...)
-	dynArrArg = append(dynArrLength, dynArrInValue1...)
-	dynArrArg = append(dynArrArg, dynArrInValue2...)
-	exp = append(exp, dynArrArg...)
+	stroffset = make([]byte, 32)
+	stroffset[31] = 224
+	strlength = make([]byte, 32)
+	strlength[31] = byte(len(strin))
+	strvalue = common.RightPadBytes([]byte(strin), 32)
+	fixedarrin1value1 = common.LeftPadBytes(fixedarrin1[0].Bytes(), 32)
+	fixedarrin1value2 = common.LeftPadBytes(fixedarrin1[1].Bytes(), 32)
+	dynarroffset = math.U256Bytes(big.NewInt(int64(256 + ((len(strin)/32)+1)*32)))
+	dynarrlength = make([]byte, 32)
+	dynarrlength[31] = byte(len(dynarrin))
+	dynarrinvalue1 = common.LeftPadBytes(dynarrin[0].Bytes(), 32)
+	dynarrinvalue2 = common.LeftPadBytes(dynarrin[1].Bytes(), 32)
+	fixedarrin2value1 = common.LeftPadBytes(fixedarrin2[0].Bytes(), 32)
+	fixedarrin2value2 = common.LeftPadBytes(fixedarrin2[1].Bytes(), 32)
+	fixedarrin2value3 = common.LeftPadBytes(fixedarrin2[2].Bytes(), 32)
+	exp = append(stroffset, fixedarrin1value1...)
+	exp = append(exp, fixedarrin1value2...)
+	exp = append(exp, dynarroffset...)
+	exp = append(exp, fixedarrin2value1...)
+	exp = append(exp, fixedarrin2value2...)
+	exp = append(exp, fixedarrin2value3...)
+	exp = append(exp, append(strlength, strvalue...)...)
+	dynarrarg = append(dynarrlength, dynarrinvalue1...)
+	dynarrarg = append(dynarrarg, dynarrinvalue2...)
+	exp = append(exp, dynarrarg...)
 
 	// ignore first 4 bytes of the output. This is the function identifier
 	multipleMixedArrStrPack = multipleMixedArrStrPack[4:]
@@ -727,8 +727,8 @@ func TestUnpackEvent(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	const hexData = `000000000000000000000000376c47978271565f56deb45495afa69e59c16ab200000000000000000000000000000000000000000000000000000000000000010000000000000000000000000000000000000000000000000000000000000060000000000000000000000000000000000000000000000000000000000000000158`
-	data, err := hex.DecodeString(hexData)
+	const hexdata = `000000000000000000000000376c47978271565f56deb45495afa69e59c16ab200000000000000000000000000000000000000000000000000000000000000010000000000000000000000000000000000000000000000000000000000000060000000000000000000000000000000000000000000000000000000000000000158`
+	data, err := hex.DecodeString(hexdata)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -765,8 +765,8 @@ func TestUnpackEventIntoMap(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	const hexData = `000000000000000000000000376c47978271565f56deb45495afa69e59c16ab200000000000000000000000000000000000000000000000000000000000000010000000000000000000000000000000000000000000000000000000000000060000000000000000000000000000000000000000000000000000000000000000158`
-	data, err := hex.DecodeString(hexData)
+	const hexdata = `000000000000000000000000376c47978271565f56deb45495afa69e59c16ab200000000000000000000000000000000000000000000000000000000000000010000000000000000000000000000000000000000000000000000000000000060000000000000000000000000000000000000000000000000000000000000000158`
+	data, err := hex.DecodeString(hexdata)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -814,8 +814,8 @@ func TestUnpackMethodIntoMap(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	const hexData = `00000000000000000000000000000000000000000000000000000000000000010000000000000000000000000000000000000000000000000000000000000060000000000000000000000000000000000000000000000000000000000000015800000000000000000000000000000000000000000000000000000000000000600000000000000000000000000000000000000000000000000000000000000158000000000000000000000000000000000000000000000000000000000000006000000000000000000000000000000000000000000000000000000000000001580000000000000000000000000000000000000000000000000000000000000060000000000000000000000000000000000000000000000000000000000000015800000000000000000000000000000000000000000000000000000000000000600000000000000000000000000000000000000000000000000000000000000158`
-	data, err := hex.DecodeString(hexData)
+	const hexdata = `00000000000000000000000000000000000000000000000000000000000000010000000000000000000000000000000000000000000000000000000000000060000000000000000000000000000000000000000000000000000000000000015800000000000000000000000000000000000000000000000000000000000000600000000000000000000000000000000000000000000000000000000000000158000000000000000000000000000000000000000000000000000000000000006000000000000000000000000000000000000000000000000000000000000001580000000000000000000000000000000000000000000000000000000000000060000000000000000000000000000000000000000000000000000000000000015800000000000000000000000000000000000000000000000000000000000000600000000000000000000000000000000000000000000000000000000000000158`
+	data, err := hex.DecodeString(hexdata)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -865,8 +865,8 @@ func TestUnpackIntoMapNamingConflict(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	var hexData = `00000000000000000000000000000000000000000000000000000000000000010000000000000000000000000000000000000000000000000000000000000060000000000000000000000000000000000000000000000000000000000000000158`
-	data, err := hex.DecodeString(hexData)
+	var hexdata = `00000000000000000000000000000000000000000000000000000000000000010000000000000000000000000000000000000000000000000000000000000060000000000000000000000000000000000000000000000000000000000000000158`
+	data, err := hex.DecodeString(hexdata)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -884,8 +884,8 @@ func TestUnpackIntoMapNamingConflict(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	hexData = `000000000000000000000000376c47978271565f56deb45495afa69e59c16ab200000000000000000000000000000000000000000000000000000000000000010000000000000000000000000000000000000000000000000000000000000060000000000000000000000000000000000000000000000000000000000000000158`
-	data, err = hex.DecodeString(hexData)
+	hexdata = `000000000000000000000000376c47978271565f56deb45495afa69e59c16ab200000000000000000000000000000000000000000000000000000000000000010000000000000000000000000000000000000000000000000000000000000060000000000000000000000000000000000000000000000000000000000000000158`
+	data, err = hex.DecodeString(hexdata)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -942,7 +942,7 @@ func TestUnpackIntoMapNamingConflict(t *testing.T) {
 }
 
 func TestABI_MethodById(t *testing.T) {
-	abi, err := JSON(strings.NewReader(jsonData))
+	abi, err := JSON(strings.NewReader(jsondata))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -1009,7 +1009,7 @@ func TestABI_EventById(t *testing.T) {
 		},
 	}
 
-	for testNum, test := range tests {
+	for testnum, test := range tests {
 		abi, err := JSON(strings.NewReader(test.json))
 		if err != nil {
 			t.Error(err)
@@ -1020,23 +1020,23 @@ func TestABI_EventById(t *testing.T) {
 
 		event, err := abi.EventByID(topicID)
 		if err != nil {
-			t.Fatalf("Failed to look up ABI method: %v, test #%d", err, testNum)
+			t.Fatalf("Failed to look up ABI method: %v, test #%d", err, testnum)
 		}
 		if event == nil {
-			t.Errorf("We should find a event for topic %s, test #%d", topicID.Hex(), testNum)
+			t.Errorf("We should find a event for topic %s, test #%d", topicID.Hex(), testnum)
 		}
 
 		if event.ID != topicID {
-			t.Errorf("Event id %s does not match topic %s, test #%d", event.ID.Hex(), topicID.Hex(), testNum)
+			t.Errorf("Event id %s does not match topic %s, test #%d", event.ID.Hex(), topicID.Hex(), testnum)
 		}
 
-		unknownTopicID := crypto.Keccak256Hash([]byte("unknownEvent"))
-		unknownEvent, err := abi.EventByID(unknownTopicID)
+		unknowntopicID := crypto.Keccak256Hash([]byte("unknownEvent"))
+		unknownEvent, err := abi.EventByID(unknowntopicID)
 		if err == nil {
-			t.Errorf("EventByID should return an error if a topic is not found, test #%d", testNum)
+			t.Errorf("EventByID should return an error if a topic is not found, test #%d", testnum)
 		}
 		if unknownEvent != nil {
-			t.Errorf("We should not find any event for topic %s, test #%d", unknownTopicID.Hex(), testNum)
+			t.Errorf("We should not find any event for topic %s, test #%d", unknowntopicID.Hex(), testnum)
 		}
 	}
 }

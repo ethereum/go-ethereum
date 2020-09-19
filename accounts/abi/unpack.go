@@ -159,7 +159,7 @@ func forEachUnpack(t Type, output []byte, start, size int) (interface{}, error) 
 }
 
 func forTupleUnpack(t Type, output []byte) (interface{}, error) {
-	retVal := reflect.New(t.GetType()).Elem()
+	retval := reflect.New(t.GetType()).Elem()
 	virtualArgs := 0
 	for index, elem := range t.TupleElems {
 		marshalledValue, err := toGoType((index+virtualArgs)*32, *elem, output)
@@ -183,9 +183,9 @@ func forTupleUnpack(t Type, output []byte) (interface{}, error) {
 		if err != nil {
 			return nil, err
 		}
-		retVal.Field(index).Set(reflect.ValueOf(marshalledValue))
+		retval.Field(index).Set(reflect.ValueOf(marshalledValue))
 	}
-	return retVal.Interface(), nil
+	return retval.Interface(), nil
 }
 
 // toGoType parses the output bytes and recursively assigns the value of these bytes

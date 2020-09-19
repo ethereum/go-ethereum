@@ -34,7 +34,7 @@ import (
 func TestPack(t *testing.T) {
 	for i, test := range packUnpackTests {
 		t.Run(strconv.Itoa(i), func(t *testing.T) {
-			encB, err := hex.DecodeString(test.packed)
+			encb, err := hex.DecodeString(test.packed)
 			if err != nil {
 				t.Fatalf("invalid hex %s: %v", test.packed, err)
 			}
@@ -60,15 +60,15 @@ func TestPack(t *testing.T) {
 			if err != nil {
 				t.Fatalf("test %d (%v) failed: %v", i, test.def, err)
 			}
-			if !reflect.DeepEqual(packed[4:], encB) {
-				t.Errorf("test %d (%v) failed: expected %v, got %v", i, test.def, encB, packed[4:])
+			if !reflect.DeepEqual(packed[4:], encb) {
+				t.Errorf("test %d (%v) failed: expected %v, got %v", i, test.def, encb, packed[4:])
 			}
 		})
 	}
 }
 
 func TestMethodPack(t *testing.T) {
-	abi, err := JSON(strings.NewReader(jsonData))
+	abi, err := JSON(strings.NewReader(jsondata))
 	if err != nil {
 		t.Fatal(err)
 	}

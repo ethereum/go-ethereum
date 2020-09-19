@@ -178,7 +178,7 @@ func (arguments Arguments) unpackTuple(v interface{}, marshalledValues []interfa
 // values. An atomic argument will be a list with one element.
 func (arguments Arguments) UnpackValues(data []byte) ([]interface{}, error) {
 	nonIndexedArgs := arguments.NonIndexed()
-	retVal := make([]interface{}, 0, len(nonIndexedArgs))
+	retval := make([]interface{}, 0, len(nonIndexedArgs))
 	virtualArgs := 0
 	for index, arg := range nonIndexedArgs {
 		marshalledValue, err := toGoType((index+virtualArgs)*32, arg.Type, data)
@@ -202,9 +202,9 @@ func (arguments Arguments) UnpackValues(data []byte) ([]interface{}, error) {
 		if err != nil {
 			return nil, err
 		}
-		retVal = append(retVal, marshalledValue)
+		retval = append(retval, marshalledValue)
 	}
-	return retVal, nil
+	return retval, nil
 }
 
 // PackValues performs the operation Go format -> Hexdata.
