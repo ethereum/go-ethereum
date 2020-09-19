@@ -493,9 +493,9 @@ func TestInputFixedArrayAndVariableInputLength(t *testing.T) {
 	}
 
 	// test byte array, fixed array uint256[2]
-	bytesIn := []byte(strin)
+	bytesin := []byte(strin)
 	arrin = [2]*big.Int{big.NewInt(1), big.NewInt(2)}
-	fixedArrBytesPack, err := abi.Pack("fixedArrBytes", bytesIn, arrin)
+	fixedArrBytesPack, err := abi.Pack("fixedArrBytes", bytesin, arrin)
 	if err != nil {
 		t.Error(err)
 	}
