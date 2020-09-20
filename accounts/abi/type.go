@@ -44,7 +44,7 @@ const (
 	FunctionTy
 )
 
-// Type is the reflection of the supported argument type
+// Type is the reflection of the supported argument type.
 type Type struct {
 	Elem *Type
 	Size int
@@ -264,7 +264,7 @@ func overloadedArgName(rawName string, names map[string]string) (string, error) 
 	return fieldName, nil
 }
 
-// String implements Stringer
+// String implements Stringer.
 func (t Type) String() (out string) {
 	return t.stringKind
 }

@@ -80,7 +80,7 @@ func (abi ABI) Pack(name string, args ...interface{}) ([]byte, error) {
 	return append(method.ID, arguments...), nil
 }
 
-// Unpack output in v according to the abi specification
+// Unpack output in v according to the abi specification.
 func (abi ABI) Unpack(v interface{}, name string, data []byte) (err error) {
 	// since there can't be naming collisions with contracts and events,
 	// we need to decide whether we're calling a method or an event
@@ -96,7 +96,7 @@ func (abi ABI) Unpack(v interface{}, name string, data []byte) (err error) {
 	return fmt.Errorf("abi: could not locate named method or event")
 }
 
-// UnpackIntoMap unpacks a log into the provided map[string]interface{}
+// UnpackIntoMap unpacks a log into the provided map[string]interface{}.
 func (abi ABI) UnpackIntoMap(v map[string]interface{}, name string, data []byte) (err error) {
 	// since there can't be naming collisions with contracts and events,
 	// we need to decide whether we're calling a method or an event
@@ -112,7 +112,7 @@ func (abi ABI) UnpackIntoMap(v map[string]interface{}, name string, data []byte)
 	return fmt.Errorf("abi: could not locate named method or event")
 }
 
-// UnmarshalJSON implements json.Unmarshaler interface
+// UnmarshalJSON implements json.Unmarshaler interface.
 func (abi *ABI) UnmarshalJSON(data []byte) error {
 	var fields []struct {
 		Type    string
@@ -201,8 +201,8 @@ func (abi *ABI) overloadedEventName(rawName string) string {
 	return name
 }
 
-// MethodById looks up a method by the 4-byte id
-// returns nil if none found
+// MethodById looks up a method by the 4-byte id,
+// returns nil if none found.
 func (abi *ABI) MethodById(sigdata []byte) (*Method, error) {
 	if len(sigdata) < 4 {
 		return nil, fmt.Errorf("data too short (%d bytes) for abi method lookup", len(sigdata))

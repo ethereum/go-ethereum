@@ -61,7 +61,7 @@ func reflectIntType(unsigned bool, size int) reflect.Type {
 	return reflect.TypeOf(&big.Int{})
 }
 
-// mustArrayToBytesSlice creates a new byte slice with the exact same size as value
+// mustArrayToByteSlice creates a new byte slice with the exact same size as value
 // and copies the bytes in value to the new slice.
 func mustArrayToByteSlice(value reflect.Value) reflect.Value {
 	slice := reflect.MakeSlice(reflect.TypeOf([]byte{}), value.Len(), value.Len())

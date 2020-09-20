@@ -27,7 +27,7 @@ import (
 )
 
 // packBytesSlice packs the given bytes as [L, V] as the canonical representation
-// bytes slice
+// bytes slice.
 func packBytesSlice(bytes []byte, l int) []byte {
 	len := packNum(reflect.ValueOf(l))
 	return append(len, common.RightPadBytes(bytes, (l+31)/32*32)...)
@@ -70,7 +70,7 @@ func packElement(t Type, reflectValue reflect.Value) ([]byte, error) {
 	}
 }
 
-// packNum packs the given number (using the reflect value) and will cast it to appropriate number representation
+// packNum packs the given number (using the reflect value) and will cast it to appropriate number representation.
 func packNum(value reflect.Value) []byte {
 	switch kind := value.Kind(); kind {
 	case reflect.Uint, reflect.Uint8, reflect.Uint16, reflect.Uint32, reflect.Uint64:
@@ -82,5 +82,4 @@ func packNum(value reflect.Value) []byte {
 	default:
 		panic("abi: fatal error")
 	}
-
 }

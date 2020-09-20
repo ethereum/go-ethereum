@@ -30,7 +30,7 @@ type tmplData struct {
 type tmplContract struct {
 	Type        string                 // Type name of the main contract binding
 	InputABI    string                 // JSON ABI used as the input to generate the binding from
-	InputBin    string                 // Optional EVM bytecode used to denetare deploy code from
+	InputBin    string                 // Optional EVM bytecode used to generate deploy code from
 	FuncSigs    map[string]string      // Optional map: string signature -> 4-byte signature
 	Constructor abi.Method             // Contract constructor for deploy parametrization
 	Calls       map[string]*tmplMethod // Contract calls that only read state data
@@ -50,7 +50,8 @@ type tmplMethod struct {
 	Structured bool       // Whether the returns should be accumulated into a struct
 }
 
-// tmplEvent is a wrapper around an a
+// tmplEvent is a wrapper around an abi.Event that contains a few preprocessed
+// and cached data fields.
 type tmplEvent struct {
 	Original   abi.Event // Original event as parsed by the abi package
 	Normalized abi.Event // Normalized version of the parsed fields
@@ -64,7 +65,7 @@ type tmplField struct {
 	SolKind abi.Type // Raw abi type information
 }
 
-// tmplStruct is a wrapper around an abi.tuple contains an auto-generated
+// tmplStruct is a wrapper around an abi.tuple and contains an auto-generated
 // struct name.
 type tmplStruct struct {
 	Name   string       // Auto-generated struct name(before solidity v0.5.11) or raw name.
@@ -78,8 +79,8 @@ var tmplSource = map[Lang]string{
 	LangJava: tmplSourceJava,
 }
 
-// tmplSourceGo is the Go source template use to generate the contract binding
-// based on.
+// tmplSourceGo is the Go source template that the generated Go contract binding
+// is based on.
 const tmplSourceGo = `
 // Code generated - DO NOT EDIT.
 // This file is a generated binding and any manual changes will be lost.
@@ -543,8 +544,8 @@ var (
 {{end}}
 `
 
-// tmplSourceJava is the Java source template use to generate the contract binding
-// based on.
+// tmplSourceJava is the Java source template that the generated Java contract binding
+// is based on.
 const tmplSourceJava = `
 // This file is an automatically generated Java binding. Do not modify as any
 // change will likely be lost upon the next re-generation!

@@ -1092,7 +1092,7 @@ func TestDoubleDuplicateEventNames(t *testing.T) {
 }
 
 // TestUnnamedEventParam checks that an event with unnamed parameters is
-// correctly handled
+// correctly handled.
 // The test runs the abi of the following contract.
 // 	contract TestEvent {
 //		event send(uint256, uint256);
