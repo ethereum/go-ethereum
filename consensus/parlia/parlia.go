@@ -680,7 +680,7 @@ func (p *Parlia) Finalize(chain consensus.ChainReader, header *types.Header, sta
 			}
 		}
 		if !signedRecently {
-			log.Info("slash validator", "block hash", header.Hash(), "address", spoiledVal)
+			log.Trace("slash validator", "block hash", header.Hash(), "address", spoiledVal)
 			err = p.slash(spoiledVal, state, header, cx, txs, receipts, systemTxs, usedGas, false)
 			if err != nil {
 				// it is possible that slash validator failed because of the slash channel is disabled.
@@ -947,11 +947,11 @@ func (p *Parlia) distributeIncoming(val common.Address, state *state.StateDB, he
 			if err != nil {
 				return err
 			}
-			// log.Info("distribute to system reward pool", "block hash", header.Hash(), "amount", rewards)
+			log.Trace("distribute to system reward pool", "block hash", header.Hash(), "amount", rewards)
 			balance = balance.Sub(balance, rewards)
 		}
 	}
-	/// log.Info("distribute to validator contract", "block hash", header.Hash(), "amount", balance)
+	log.Trace("distribute to validator contract", "block hash", header.Hash(), "amount", balance)
 	return p.distributeToValidator(balance, val, state, header, chain, txs, receipts, receivedTxs, usedGas, mining)
 }
 
@@ -999,7 +999,7 @@ func (p *Parlia) initContract(state *state.StateDB, header *types.Header, chain 
 	for _, c := range contracts {
 		msg := p.getSystemMessage(header.Coinbase, common.HexToAddress(c), data, common.Big0)
 		// apply message
-		log.Info("init contract", "block hash", header.Hash(), "contract", c)
+		log.Trace("init contract", "block hash", header.Hash(), "contract", c)
 		err = p.applyTransaction(msg, state, header, chain, txs, receipts, receivedTxs, usedGas, mining)
 		if err != nil {
 			return err
