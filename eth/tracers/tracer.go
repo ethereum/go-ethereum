@@ -293,6 +293,7 @@ type Tracer interface {
 	CaptureFault(env *vm.EVM, pc uint64, op vm.OpCode, gas, cost uint64, memory *vm.Memory, stack *vm.Stack, rStack *vm.ReturnStack, contract *vm.Contract, depth int, err error) error
 	CaptureEnd(output []byte, gasUsed uint64, t time.Duration, err error) error
 	GetResult() (json.RawMessage, error)
+	Stop(error)
 }
 
 // Tracer provides an implementation of Tracer that evaluates a Javascript
@@ -358,7 +359,7 @@ func checkWasm(code string) bool {
 }
 
 func newWasm(code string) (Tracer, error) {
-	module, err := wasm.ReadModule(bytes.NewReader([]byte(code)), func(name string) (*Module, error) {
+	module, err := wasm.ReadModule(bytes.NewReader([]byte(code)), func(name string) (*wasm.Module, error) {
 		if name == "tracer" {
 			tracerModule := wasm.NewModule()
 			tracerModule.Types = &wasm.SectionTypes{
@@ -801,4 +802,7 @@ func (wt *WasmTracer) GetResult() (json.RawMessage, error) {
 		return nil, errors.New("expected get_result to return []byte")
 	}
 	return json.RawMessage(result), execErr
+}
+
+func (wt *WasmTracer) Stop(err error) {
 }
