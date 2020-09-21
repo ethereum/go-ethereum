@@ -30,6 +30,7 @@ import (
 	"github.com/ethereum/go-ethereum/core/vm"
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/log"
+	"github.com/ethereum/go-ethereum/params"
 	duktape "gopkg.in/olebedev/go-duktape.v3"
 )
 
@@ -336,6 +337,7 @@ func New(code string, vmctx vm.Context) (*Tracer, error) {
 		refundValue:     new(uint),
 	}
 	tracer.ctx["gasPrice"] = vmctx.GasPrice
+	tracer.ctx["txGas"] = params.TxGas
 
 	// Set up builtins for this environment
 	tracer.vm.PushGlobalGoFunction("toHex", func(ctx *duktape.Context) int {
