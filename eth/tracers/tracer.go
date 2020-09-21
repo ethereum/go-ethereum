@@ -30,7 +30,8 @@ import (
 	"github.com/ethereum/go-ethereum/core/vm"
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/log"
-	"gopkg.in/olebedev/go-duktape.v3"
+	"github.com/ethereum/go-ethereum/params"
+	duktape "gopkg.in/olebedev/go-duktape.v3"
 )
 
 // bigIntegerJS is the minified version of https://github.com/peterolson/BigInteger.js.
@@ -336,6 +337,7 @@ func New(code string, txCtx vm.TxContext) (*Tracer, error) {
 		refundValue:     new(uint),
 	}
 	tracer.ctx["gasPrice"] = txCtx.GasPrice
+	tracer.ctx["txGas"] = params.TxGas
 
 	// Set up builtins for this environment
 	tracer.vm.PushGlobalGoFunction("toHex", func(ctx *duktape.Context) int {
