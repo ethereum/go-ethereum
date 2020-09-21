@@ -16,11 +16,8 @@ package bn256
 import (
 	"crypto/rand"
 	"errors"
-	"fmt"
 	"io"
 	"math/big"
-
-	fuzz "github.com/google/gofuzz"
 )
 
 func randomK(r io.Reader) (k *big.Int, err error) {
@@ -50,20 +47,6 @@ func RandomG1(r io.Reader) (*big.Int, *G1, error) {
 
 func (g *G1) String() string {
 	return "bn256.G1" + g.p.String()
-}
-
-func Fuzz(data []byte) int {
-	var gfpTest gfP
-	f := fuzz.NewFromGoFuzz(data)
-	f.Fuzz(&gfpTest)
-	zInvVar := &gfP{}
-	zInvVar.InvertVariableTime(&gfpTest)
-	zInv := &gfP{}
-	zInv.Invert(&gfpTest)
-	if zInv[0] != zInvVar[0] || zInv[1] != zInvVar[1] || zInv[2] != zInvVar[2] || zInv[3] != zInvVar[3] {
-		panic(fmt.Sprintf("invalid invert: %v %v", zInv, zInvVar))
-	}
-	return 0
 }
 
 // ScalarBaseMult sets e to g*k where g is the generator of the group and then
