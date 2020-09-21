@@ -111,6 +111,42 @@ func TestTracing(t *testing.T) {
 	}
 }
 
+// wasmTraceCode is the []byte-serialized compiled WASM output of the
+// following C code:
+// #define WASM_EXPORT __attribute__((visibility("default")))
+//
+// static int count = 0;
+//
+// WASM_EXPORT
+// void step() {
+//   count++;
+// }
+//
+// WASM_EXPORT
+// void fault() {
+// }
+//
+// WASM_EXPORT
+// unsigned char *result() {
+//   return &count;
+// }
+var wasmTraceCode []byte = []byte{0, 97, 115, 109, 1, 0, 0, 0, 1, 8, 2, 96, 0, 0, 96, 0, 1, 127, 3, 5, 4, 0, 0, 0, 1, 4, 5, 1, 112, 1, 1, 1, 5, 3, 1, 0, 2, 6, 21, 3, 127, 1, 65, 144, 136, 4, 11, 127, 0, 65, 144, 136, 4, 11, 127, 0, 65, 132, 8, 11, 7, 61, 6, 4, 115, 116, 101, 112, 0, 1, 5, 102, 97, 117, 108, 116, 0, 2, 6, 114, 101, 115, 117, 108, 116, 0, 3, 6, 109, 101, 109, 111, 114, 121, 2, 0, 11, 95, 95, 104, 101, 97, 112, 95, 98, 97, 115, 101, 3, 1, 10, 95, 95, 100, 97, 116, 97, 95, 101, 110, 100, 3, 2, 10, 31, 4, 2, 0, 11, 17, 0, 65, 0, 65, 0, 40, 2, 128, 8, 65, 1, 106, 54, 2, 128, 8, 11, 2, 0, 11, 5, 0, 65, 128, 8, 11, 11, 11, 1, 0, 65, 128, 8, 11, 4, 0, 0, 0, 0, 0, 59, 4, 110, 97, 109, 101, 1, 41, 4, 0, 17, 95, 95, 119, 97, 115, 109, 95, 99, 97, 108, 108, 95, 99, 116, 111, 114, 115, 1, 4, 115, 116, 101, 112, 2, 5, 102, 97, 117, 108, 116, 3, 6, 114, 101, 115, 117, 108, 116, 2, 9, 4, 0, 0, 1, 0, 2, 0, 3, 0}
+
+func TestWasmTracing(t *testing.T) {
+	tracer, err := New(string(wasmTraceCode))
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	ret, err := runTrace(tracer)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !bytes.Equal(ret, []byte("3")) {
+		t.Errorf("Expected return value to be 3, got %s", string(ret))
+	}
+}
+
 func TestStack(t *testing.T) {
 	tracer, err := New("{depths: [], step: function(log) { this.depths.push(log.stack.length()); }, fault: function() {}, result: function() { return this.depths; }}")
 	if err != nil {
