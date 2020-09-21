@@ -62,6 +62,8 @@ type ExternalAPI interface {
 	EcRecover(ctx context.Context, data hexutil.Bytes, sig hexutil.Bytes) (common.Address, error)
 	// Version info about the APIs
 	Version(ctx context.Context) (string, error)
+	// SignGnosisSafeTransaction signs/confirms a gnosis-safe multisig transaction
+	SignGnosisTx(ctx context.Context, signerAddress common.MixedcaseAddress, gnosisTx accounts.GnosisSafeTx, methodSelector *string) (*GnosisSigningResult, error)
 }
 
 // UIClientAPI specifies what method a UI needs to implement to be able to be used as a
@@ -234,6 +236,7 @@ type (
 		Address     common.MixedcaseAddress `json:"address"`
 		Rawdata     []byte                  `json:"raw_data"`
 		Messages    []*NameValueType        `json:"messages"`
+		Callinfo    []ValidationInfo        `json:"call_info"`
 		Hash        hexutil.Bytes           `json:"hash"`
 		Meta        Metadata                `json:"meta"`
 	}
@@ -579,6 +582,112 @@ func (api *SignerAPI) SignTransaction(ctx context.Context, args SendTxArgs, meth
 	// ...and to the external caller
 	return &response, nil
 
+}
+
+type GnosisSigningResult struct {
+	Signature  hexutil.Bytes `json:"signature"`
+	HashToSign common.Hash   `json:"hashToSign"`
+	SafeTxHash common.Hash   `json:"safeTxHash"`
+}
+
+func (api *SignerAPI) SignGnosisTx(ctx context.Context, signerAddress common.MixedcaseAddress, gnosisTx accounts.GnosisSafeTx, methodSelector *string) (*GnosisSigningResult, error) {
+	// Do the usual validations, but on the last-stage transaction
+	args := &SendTxArgs{
+		From:     gnosisTx.Safe,
+		To:       &gnosisTx.To,
+		Gas:      hexutil.Uint64(gnosisTx.SafeTxGas.Uint64()),
+		GasPrice: hexutil.Big(gnosisTx.GasPrice),
+		Value:    hexutil.Big(gnosisTx.Value),
+		Nonce:    hexutil.Uint64(gnosisTx.Nonce.Uint64()),
+		Data:     gnosisTx.Data,
+		Input:    nil,
+	}
+	msgs, err := api.validator.ValidateTransaction(methodSelector, args)
+	if err != nil {
+		return nil, err
+	}
+	// If we are in 'rejectMode', then reject rather than show the user warnings
+	if api.rejectMode {
+		if err := msgs.getWarnings(); err != nil {
+			return nil, err
+		}
+	}
+
+	safeTxHash, hashToSign, err := accounts.GnosisSafeSigningHash(&gnosisTx)
+	if err != nil {
+		return nil, err
+	}
+	weival := big.Int(gnosisTx.Value)
+	var messages = []*NameValueType{
+		&NameValueType{
+			Name:  "This is a signing-request for a Gnosis multisig transaction",
+			Value: "info", Typ: "",
+		},
+		&NameValueType{
+			Name:  "Multisig address",
+			Value: gnosisTx.Safe.Address().String(), Typ: "address",
+		},
+		&NameValueType{
+			Name:  "  Value",
+			Value: fmt.Sprintf("%v wei", &weival), Typ: "uint256",
+		},
+		&NameValueType{
+			Name:  " Gas price",
+			Value: gnosisTx.SafeTxGas.String(), Typ: "uint256",
+		},
+		&NameValueType{
+			Name:  " Nonce",
+			Value: gnosisTx.Nonce.String(), Typ: "uint256",
+		},
+	}
+	if gnosisTx.Data != nil {
+		messages = append(messages, &NameValueType{
+			Name:  " Data",
+			Value: gnosisTx.Data, Typ: "hexdata",
+		})
+	}
+
+	req := SignDataRequest{
+		ContentType: "application/gnosis",
+		Address:     signerAddress,
+		//Rawdata:     hashToSign[:],
+		Messages: messages,
+		Callinfo: msgs.Messages,
+		Hash:     hashToSign.Bytes(),
+		Meta:     MetadataFromContext(ctx),
+	}
+	// Process approval
+	result, err := api.UI.ApproveSignData(&req)
+	if err != nil {
+		return nil, err
+	}
+	if !result.Approved {
+		return nil, ErrRequestDenied
+	}
+	account := accounts.Account{Address: signerAddress.Address()}
+	wallet, err := api.am.Find(account)
+	if err != nil {
+		return nil, err
+	}
+	pw, err := api.lookupOrQueryPassword(account.Address,
+		"Password for signing",
+		fmt.Sprintf("Please enter password for signing data with account %s", account.Address.Hex()))
+	if err != nil {
+		return nil, err
+	}
+	// Sign the data with the wallet
+	signature, err := wallet.SignDataWithPassphrase(account, pw, req.ContentType, hashToSign[:])
+	if err != nil {
+		return nil, err
+	}
+	if signature[64] < 2 {
+		signature[64] += 27 // Transform V from 0/1 to 27/28 according to the yellow paper
+	}
+	return &GnosisSigningResult{
+		signature,
+		hashToSign,
+		safeTxHash,
+	}, nil
 }
 
 // Returns the external api version. This method does not require user acceptance. Available methods are
