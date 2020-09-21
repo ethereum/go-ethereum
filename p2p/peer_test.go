@@ -140,6 +140,29 @@ func TestPeerProtoReadMsg(t *testing.T) {
 	}
 }
 
+func BenchmarkPeerProtoReadMsg(b *testing.B) {
+	rounds := b.N
+	proto := Protocol{
+		Name:   "a",
+		Length: 5,
+		Run: func(peer *Peer, rw MsgReadWriter) error {
+			for i := 0; i < rounds; i++ {
+				if err := ExpectMsg(rw, 3, []uint{uint(i)}); err != nil {
+					b.Error(err)
+				}
+			}
+			return nil
+		},
+	}
+
+	closer, rw, _, _ := testPeer([]Protocol{proto})
+	defer closer()
+
+	for i := 0; i < rounds; i++ {
+		Send(rw, baseProtocolLength+3, []uint{uint(i)})
+	}
+}
+
 func TestPeerProtoEncodeMsg(t *testing.T) {
 	proto := Protocol{
 		Name:   "a",

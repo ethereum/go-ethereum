@@ -266,6 +266,11 @@ func (p *Peer) pingLoop() {
 }
 
 func (p *Peer) readLoop(errc chan<- error) {
+	defer func() {
+		if r := recover(); r != nil {
+			p.log.Error("ReadLoop for peer panic'd: %v", r)
+		}
+	}()
 	defer p.wg.Done()
 	for {
 		msg, err := p.rw.ReadMsg()
