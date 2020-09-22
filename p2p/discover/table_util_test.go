@@ -187,15 +187,16 @@ func hasDuplicates(slice []*node) bool {
 	return false
 }
 
+// checkNodesEqual checks whether the two given node lists contain the same nodes.
 func checkNodesEqual(got, want []*enode.Node) error {
 	if len(got) == len(want) {
 		for i := range got {
 			if !nodeEqual(got[i], want[i]) {
 				goto NotEqual
 			}
-			return nil
 		}
 	}
+	return nil
 
 NotEqual:
 	output := new(bytes.Buffer)

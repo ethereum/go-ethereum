@@ -24,6 +24,7 @@ import (
 	"math/rand"
 	"net"
 	"reflect"
+	"sort"
 	"testing"
 	"time"
 
@@ -36,11 +37,12 @@ import (
 )
 
 // Real sockets, real crypto: this test checks end-to-end connectivity for UDPv5.
-func TestEndToEndV5(t *testing.T) {
+func TestUDPv5_lookupE2E(t *testing.T) {
 	t.Parallel()
 
+	const N = 5
 	var nodes []*UDPv5
-	for i := 0; i < 5; i++ {
+	for i := 0; i < N; i++ {
 		var cfg Config
 		if len(nodes) > 0 {
 			bn := nodes[0].Self()
@@ -50,12 +52,22 @@ func TestEndToEndV5(t *testing.T) {
 		nodes = append(nodes, node)
 		defer node.Close()
 	}
+	last := nodes[N-1]
+	target := nodes[rand.Intn(N-2)].Self()
 
-	last := nodes[len(nodes)-1]
-	target := nodes[rand.Intn(len(nodes)-2)].Self()
+	// It is expected that all nodes can be found.
+	expectedResult := make([]*enode.Node, len(nodes))
+	for i := range nodes {
+		expectedResult[i] = nodes[i].Self()
+	}
+	sort.Slice(expectedResult, func(i, j int) bool {
+		return enode.DistCmp(target.ID(), expectedResult[i].ID(), expectedResult[j].ID()) < 0
+	})
+
+	// Do the lookup.
 	results := last.Lookup(target.ID())
-	if len(results) == 0 || results[0].ID() != target.ID() {
-		t.Fatalf("lookup returned wrong results: %v", results)
+	if err := checkNodesEqual(results, expectedResult); err != nil {
+		t.Fatalf("lookup returned wrong results: %v", err)
 	}
 }
 
@@ -526,7 +538,8 @@ func TestUDPv5_lookup(t *testing.T) {
 	}
 
 	// Seed table with initial node.
-	fillTable(test.table, []*node{wrapNode(lookupTestnet.node(256, 0))})
+	initialNode := lookupTestnet.node(256, 0)
+	fillTable(test.table, []*node{wrapNode(initialNode)})
 
 	// Start the lookup.
 	resultC := make(chan []*enode.Node, 1)
@@ -536,6 +549,7 @@ func TestUDPv5_lookup(t *testing.T) {
 	}()
 
 	// Answer lookup packets.
+	asked := make(map[enode.ID]bool)
 	for done := false; !done; {
 		done = test.waitPacketOut(func(p v5wire.Packet, to *net.UDPAddr, _ v5wire.Nonce) {
 			recipient, key := lookupTestnet.nodeByAddr(to)
@@ -543,15 +557,22 @@ func TestUDPv5_lookup(t *testing.T) {
 			case *v5wire.Ping:
 				test.packetInFrom(key, to, &v5wire.Pong{ReqID: p.ReqID})
 			case *v5wire.Findnode:
-				nodes := lookupTestnet.neighborsAtDistance(recipient, p.Distances[0], 3)
-				response := &v5wire.Nodes{ReqID: p.ReqID, Total: 1, Nodes: nodesToRecords(nodes)}
-				test.packetInFrom(key, to, response)
+				if asked[recipient.ID()] {
+					t.Error("Asked node", recipient.ID(), "twice")
+				}
+				asked[recipient.ID()] = true
+				nodes := lookupTestnet.neighborsAtDistances(recipient, p.Distances, 16)
+				t.Logf("Got FINDNODE for %v, returning %d nodes", p.Distances, len(nodes))
+				for _, resp := range packNodes(p.ReqID, nodes) {
+					test.packetInFrom(key, to, resp)
+				}
 			}
 		})
 	}
 
 	// Verify result nodes.
-	checkLookupResults(t, lookupTestnet, <-resultC)
+	results := <-resultC
+	checkLookupResults(t, lookupTestnet, results)
 }
 
 // This test checks the local node can be utilised to set key-values.

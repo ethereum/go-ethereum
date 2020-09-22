@@ -679,7 +679,7 @@ func (t *UDPv5) getNode(id enode.ID) *enode.Node {
 	return nil
 }
 
-// handle handles incoming packets according to their message type.
+// handle processes incoming packets according to their message type.
 func (t *UDPv5) handle(p v5wire.Packet, fromID enode.ID, fromAddr *net.UDPAddr) {
 	switch p := p.(type) {
 	case *v5wire.Unknown:
@@ -722,7 +722,7 @@ var (
 func (t *UDPv5) handleWhoareyou(p *v5wire.Whoareyou, fromID enode.ID, fromAddr *net.UDPAddr) {
 	c, err := t.matchWithCall(fromID, p.AuthTag)
 	if err != nil {
-		t.log.Debug("Invalid "+p.Name(), "addr", fromAddr, "err", err)
+		t.log.Debug("Invalid "+p.Name(), "id", fromID, "addr", fromAddr, "err", err)
 		return
 	}
 
@@ -759,7 +759,9 @@ func (t *UDPv5) handlePing(p *v5wire.Ping, fromID enode.ID, fromAddr *net.UDPAdd
 // handleFindnode returns nodes to the requester.
 func (t *UDPv5) handleFindnode(p *v5wire.Findnode, fromID enode.ID, fromAddr *net.UDPAddr) {
 	nodes := t.collectTableNodes(fromAddr.IP, p.Distances, findnodeResultLimit)
-	t.sendNodes(fromID, fromAddr, p.ReqID, nodes)
+	for _, resp := range packNodes(p.ReqID, nodes) {
+		t.sendResponse(fromID, fromAddr, resp)
+	}
 }
 
 // collectTableNodes creates a FINDNODE result set for the given distances.
@@ -799,27 +801,24 @@ func (t *UDPv5) collectTableNodes(rip net.IP, distances []uint, limit int) []*en
 	return nodes
 }
 
-// sendNodes sends the given records in one or more NODES packets.
-func (t *UDPv5) sendNodes(toID enode.ID, toAddr *net.UDPAddr, reqid []byte, nodes []*enode.Node) {
+// packNodes creates NODES response packets for the given node list.
+func packNodes(reqid []byte, nodes []*enode.Node) []*v5wire.Nodes {
+	if len(nodes) == 0 {
+		return []*v5wire.Nodes{{ReqID: reqid, Total: 1}}
+	}
+
 	total := uint8(math.Ceil(float64(len(nodes)) / 3))
-	resp := &v5wire.Nodes{ReqID: reqid, Total: total, Nodes: make([]*enr.Record, 3)}
-	sent := false
+	var resp []*v5wire.Nodes
 	for len(nodes) > 0 {
+		p := &v5wire.Nodes{ReqID: reqid, Total: total}
 		items := min(nodesResponseItemLimit, len(nodes))
-		resp.Nodes = resp.Nodes[:items]
 		for i := 0; i < items; i++ {
-			resp.Nodes[i] = nodes[i].Record()
+			p.Nodes = append(p.Nodes, nodes[i].Record())
 		}
-		t.sendResponse(toID, toAddr, resp)
 		nodes = nodes[items:]
-		sent = true
+		resp = append(resp, p)
 	}
-	// Ensure at least one response is sent.
-	if !sent {
-		resp.Total = 1
-		resp.Nodes = nil
-		t.sendResponse(toID, toAddr, resp)
-	}
+	return resp
 }
 
 // handleTalkRequest runs the talk request handler of the requested protocol.
