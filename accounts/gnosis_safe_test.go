@@ -51,7 +51,7 @@ func TestGnosisSafe(t *testing.T) {
 	if err := json.Unmarshal([]byte(txjson), &tx); err != nil {
 		t.Fatal(err)
 	}
-	_, signingHash, err := GnosisSafeSigningHash(&tx)
+	signingHash, _, err := GnosisSafeSigningHash(&tx)
 	if err != nil {
 		t.Fatal(err)
 	}

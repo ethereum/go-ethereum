@@ -38,11 +38,11 @@ func (safe *gnosisSafe) domainSeparator() []byte {
 //
 // This method calculates the hash to sign based on a 'GnosisSafeTx' (the tx that is the end-goal
 // of the entire signing round).
-func GnosisSafeSigningHash(tx *GnosisSafeTx) (txHash, signingHash common.Hash, err error) {
+func GnosisSafeSigningHash(tx *GnosisSafeTx) (signingHash common.Hash, preimage []byte, err error) {
 	// Calc the particular "safetx"-hash for the transaction
 	safeTxHash, err := tx.hash()
 	if err != nil {
-		return common.Hash{}, common.Hash{}, err
+		return common.Hash{}, nil, err
 	}
 	safe := gnosisSafe{tx.Safe.Address()}
 
@@ -55,19 +55,18 @@ func GnosisSafeSigningHash(tx *GnosisSafeTx) (txHash, signingHash common.Hash, e
 	signingHash = crypto.Keccak256Hash(msg)
 
 	if tx.InputExpHash != (common.Hash{}) && tx.InputExpHash != signingHash {
-		return common.Hash{},
-			common.Hash{},
+		return common.Hash{}, nil,
 			fmt.Errorf("expected hash differs from calculated, input-expectation was %x, got %x",
 				tx.InputExpHash, signingHash)
 	}
-	return safeTxHash, signingHash, nil
+	return signingHash, msg, nil
 }
 
 type GnosisSafeTx struct {
 	Safe           common.MixedcaseAddress `json:"safe"`
 	To             common.MixedcaseAddress `json:"to"`
-	Value          math.HexOrDecimal256    `json:"value"`
-	GasPrice       math.HexOrDecimal256    `json:"gasPrice"`
+	Value          math.Decimal256         `json:"value"`
+	GasPrice       math.Decimal256         `json:"gasPrice"`
 	Data           *hexutil.Bytes          `json:"data"`
 	Operation      uint8                   `json:"operation"`
 	GasToken       common.Address          `json:"gasToken"`
@@ -129,7 +128,7 @@ func (tx *GnosisSafeTx) hash() (common.Hash, error) {
 	gasPrice := big.Int(tx.GasPrice)
 	// Pack the fields
 	var data []byte
-	if tx.Data != nil{
+	if tx.Data != nil {
 		data = []byte(*tx.Data)
 	}
 	packed, err := abispec.Methods["encodeTransactionData"].Inputs.Pack(

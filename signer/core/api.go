@@ -31,6 +31,7 @@ import (
 	"github.com/ethereum/go-ethereum/accounts/usbwallet"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/hexutil"
+	"github.com/ethereum/go-ethereum/common/math"
 	"github.com/ethereum/go-ethereum/internal/ethapi"
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/rlp"
@@ -584,10 +585,24 @@ func (api *SignerAPI) SignTransaction(ctx context.Context, args SendTxArgs, meth
 
 }
 
+// GnosisSigningResult conforms to the API required by the Gnosis Safe tx relay service.
+// See 'SafeMultisigTransaction' on https://safe-transaction.mainnet.gnosis.io/
 type GnosisSigningResult struct {
-	Signature  hexutil.Bytes `json:"signature"`
-	HashToSign common.Hash   `json:"hashToSign"`
-	SafeTxHash common.Hash   `json:"safeTxHash"`
+	Signature  hexutil.Bytes           `json:"signature"`
+	SafeTxHash common.Hash             `json:"contractTransactionHash"`
+	Sender     common.MixedcaseAddress `json:"sender"`
+	// Other fields that are required for the tx relay service
+	Safe           common.MixedcaseAddress `json:"safe"`
+	To             common.MixedcaseAddress `json:"to"`
+	Value          math.Decimal256         `json:"value"`
+	GasPrice       math.Decimal256         `json:"gasPrice"`
+	Data           *hexutil.Bytes          `json:"data"`
+	Operation      uint8                   `json:"operation"`
+	GasToken       common.Address          `json:"gasToken"`
+	RefundReceiver common.Address          `json:"refundReceiver"`
+	BaseGas        big.Int                 `json:"baseGas"`
+	SafeTxGas      big.Int                 `json:"safeTxGas"`
+	Nonce          big.Int                 `json:"nonce"`
 }
 
 func (api *SignerAPI) SignGnosisTx(ctx context.Context, signerAddress common.MixedcaseAddress, gnosisTx accounts.GnosisSafeTx, methodSelector *string) (*GnosisSigningResult, error) {
@@ -613,7 +628,7 @@ func (api *SignerAPI) SignGnosisTx(ctx context.Context, signerAddress common.Mix
 		}
 	}
 
-	safeTxHash, hashToSign, err := accounts.GnosisSafeSigningHash(&gnosisTx)
+	safeTxHash, preImage, err := accounts.GnosisSafeSigningHash(&gnosisTx)
 	if err != nil {
 		return nil, err
 	}
@@ -630,6 +645,10 @@ func (api *SignerAPI) SignGnosisTx(ctx context.Context, signerAddress common.Mix
 		&NameValueType{
 			Name:  "  Value",
 			Value: fmt.Sprintf("%v wei", &weival), Typ: "uint256",
+		},
+		&NameValueType{
+			Name:  " To",
+			Value: gnosisTx.To.String(), Typ: "address",
 		},
 		&NameValueType{
 			Name:  " Gas price",
@@ -650,11 +669,11 @@ func (api *SignerAPI) SignGnosisTx(ctx context.Context, signerAddress common.Mix
 	req := SignDataRequest{
 		ContentType: "application/gnosis",
 		Address:     signerAddress,
-		//Rawdata:     hashToSign[:],
-		Messages: messages,
-		Callinfo: msgs.Messages,
-		Hash:     hashToSign.Bytes(),
-		Meta:     MetadataFromContext(ctx),
+		Rawdata:     preImage,
+		Messages:    messages,
+		Callinfo:    msgs.Messages,
+		Hash:        safeTxHash.Bytes(),
+		Meta:        MetadataFromContext(ctx),
 	}
 	// Process approval
 	result, err := api.UI.ApproveSignData(&req)
@@ -676,17 +695,29 @@ func (api *SignerAPI) SignGnosisTx(ctx context.Context, signerAddress common.Mix
 		return nil, err
 	}
 	// Sign the data with the wallet
-	signature, err := wallet.SignDataWithPassphrase(account, pw, req.ContentType, hashToSign[:])
+	signature, err := wallet.SignDataWithPassphrase(account, pw, req.ContentType, req.Rawdata)
 	if err != nil {
 		return nil, err
 	}
 	if signature[64] < 2 {
 		signature[64] += 27 // Transform V from 0/1 to 27/28 according to the yellow paper
 	}
+	checkSummedSender, _ := common.NewMixedcaseAddressFromString(account.Address.Hex())
 	return &GnosisSigningResult{
-		signature,
-		hashToSign,
-		safeTxHash,
+		Signature:      signature,
+		SafeTxHash:     safeTxHash,
+		Sender:         *checkSummedSender, // Must be checksummed
+		Safe:           gnosisTx.Safe,
+		To:             gnosisTx.To,
+		Value:          gnosisTx.Value,    // must be decimal string
+		GasPrice:       gnosisTx.GasPrice, // must be decimal string
+		Data:           gnosisTx.Data,
+		Operation:      gnosisTx.Operation,
+		GasToken:       gnosisTx.GasToken,
+		RefundReceiver: gnosisTx.RefundReceiver,
+		BaseGas:        gnosisTx.BaseGas,
+		SafeTxGas:      gnosisTx.SafeTxGas,
+		Nonce:          gnosisTx.Nonce,
 	}, nil
 }
 
