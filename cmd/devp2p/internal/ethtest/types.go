@@ -2,13 +2,14 @@ package ethtest
 
 import (
 	"fmt"
+	"io"
+	"math/big"
+
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/forkid"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/p2p"
 	"github.com/ethereum/go-ethereum/rlp"
-	"io"
-	"math/big"
 )
 
 type Message interface {
@@ -64,6 +65,7 @@ type NewBlockHashes []struct {
 	Hash   common.Hash // Hash of one particular block being announced
 	Number uint64      // Number of one particular block being announced
 }
+
 func (nbh NewBlockHashes) Code() int { return 17 }
 
 // NewBlock is the network packet for the block propagation message.
@@ -71,6 +73,7 @@ type NewBlock struct {
 	Block *types.Block
 	TD    *big.Int
 }
+
 func (nb NewBlock) Code() int { return 23 }
 
 // GetBlockHeaders represents a block header query.
@@ -80,9 +83,11 @@ type GetBlockHeaders struct {
 	Skip    uint64       // Blocks to skip between consecutive headers
 	Reverse bool         // Query direction (false = rising towards latest, true = falling towards genesis)
 }
+
 func (g GetBlockHeaders) Code() int { return 19 }
 
 type BlockHeaders []*types.Header
+
 func (bh BlockHeaders) Code() int { return 20 }
 
 // HashOrNumber is a combined field for specifying an origin block.
@@ -123,8 +128,10 @@ func (hn *hashOrNumber) DecodeRLP(s *rlp.Stream) error {
 
 // GetBlockBodies represents a GetBlockBodies request
 type GetBlockBodies []common.Hash
+
 func (gbb GetBlockBodies) Code() int { return 21 }
 
 // BlockBodies is the network packet for block content distribution.
 type BlockBodies []*types.Body
+
 func (bb BlockBodies) Code() int { return 22 }

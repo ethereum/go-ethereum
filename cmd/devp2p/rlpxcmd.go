@@ -18,6 +18,9 @@ package main
 
 import (
 	"fmt"
+	"net"
+	"os"
+
 	"github.com/ethereum/go-ethereum/cmd/devp2p/internal/ethtest"
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/internal/utesting"
@@ -25,8 +28,6 @@ import (
 	"github.com/ethereum/go-ethereum/p2p/rlpx"
 	"github.com/ethereum/go-ethereum/rlp"
 	"gopkg.in/urfave/cli.v1"
-	"net"
-	"os"
 )
 
 var (
@@ -39,16 +40,16 @@ var (
 		},
 	}
 	rlpxPingCommand = cli.Command{
-		Name: "ping",
-		Usage: "ping <node>",
+		Name:   "ping",
+		Usage:  "ping <node>",
 		Action: rlpxPing,
 	}
 	rlpxEthTestCommand = cli.Command{
-		Name:   "eth-test",
-		Usage:  "Runs tests against a node",
+		Name:      "eth-test",
+		Usage:     "Runs tests against a node",
 		ArgsUsage: "<node> <path_to_chain.rlp_file>",
-		Action: rlpxEthTest,
-		Flags:  []cli.Flag{testPatternFlag},
+		Action:    rlpxEthTest,
+		Flags:     []cli.Flag{testPatternFlag},
 	}
 )
 

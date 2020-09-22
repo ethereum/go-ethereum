@@ -4,16 +4,17 @@ import (
 	"compress/gzip"
 	"encoding/json"
 	"fmt"
-	"github.com/ethereum/go-ethereum/core"
-	"github.com/ethereum/go-ethereum/core/forkid"
-	"github.com/ethereum/go-ethereum/core/types"
-	"github.com/ethereum/go-ethereum/params"
-	"github.com/ethereum/go-ethereum/rlp"
 	"io"
 	"io/ioutil"
 	"math/big"
 	"os"
 	"strings"
+
+	"github.com/ethereum/go-ethereum/core"
+	"github.com/ethereum/go-ethereum/core/forkid"
+	"github.com/ethereum/go-ethereum/core/types"
+	"github.com/ethereum/go-ethereum/params"
+	"github.com/ethereum/go-ethereum/rlp"
 )
 
 type Chain struct {
@@ -27,7 +28,6 @@ func (c *Chain) WriteTo(writer io.Writer) error {
 			return err
 		}
 	}
-
 
 	return nil
 }
@@ -58,7 +58,7 @@ func (c *Chain) Shorten(height int) *Chain {
 
 	config := *c.chainConfig
 	return &Chain{
-		blocks: blocks,
+		blocks:      blocks,
 		chainConfig: &config,
 	}
 }

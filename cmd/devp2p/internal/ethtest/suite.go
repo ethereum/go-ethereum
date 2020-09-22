@@ -3,18 +3,18 @@ package ethtest
 import (
 	"crypto/ecdsa"
 	"fmt"
-	"github.com/ethereum/go-ethereum/core/types"
-	"github.com/ethereum/go-ethereum/rlp"
+	"net"
+	"reflect"
 	"time"
 
+	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/internal/utesting"
 	"github.com/ethereum/go-ethereum/p2p"
 	"github.com/ethereum/go-ethereum/p2p/enode"
 	"github.com/ethereum/go-ethereum/p2p/rlpx"
+	"github.com/ethereum/go-ethereum/rlp"
 	"github.com/stretchr/testify/assert"
-	"net"
-	"reflect"
 )
 
 // Suite represents a structure used to test the eth
@@ -84,7 +84,7 @@ func (c *Conn) handshake(t *utesting.T) Message {
 	pub0 := crypto.FromECDSAPub(&c.ourKey.PublicKey)[1:]
 	ourHandshake := &Hello{
 		Version: 3,
-		Caps:    []p2p.Cap{{"eth", 64}, {"eth", 65}},
+		Caps:    []p2p.Cap{{Name: "eth", Version: 64}, {Name: "eth", Version: 65}},
 		ID:      pub0,
 	}
 	if err := c.Write(ourHandshake); err != nil {
@@ -129,8 +129,7 @@ func (c *Conn) statusExchange(t *utesting.T, chain *Chain) Message {
 		Genesis:         chain.blocks[0].Hash(),
 		ForkID:          chain.ForkID(),
 	}
-	if err := c.Write(status)
-		err != nil {
+	if err := c.Write(status); err != nil {
 		t.Fatalf("could not write to connection: %v", err)
 	}
 
@@ -151,7 +150,7 @@ func (c *Conn) waitForBlock(block *types.Block) error {
 			if len(*msg) > 0 {
 				return nil
 			}
-			time.Sleep(100*time.Millisecond)
+			time.Sleep(100 * time.Millisecond)
 		default:
 			return fmt.Errorf("invalid message: %v", msg)
 		}
@@ -175,11 +174,11 @@ func NewSuite(dest *enode.Node, chainfile string, genesisfile string) *Suite {
 
 func (s *Suite) AllTests() []utesting.Test {
 	return []utesting.Test{
-		{"Ping", s.TestPing},
-		{"Status", s.TestStatus},
-		{"GetBlockHeaders", s.TestGetBlockHeaders},
-		{"Broadcast", s.TestBroadcast},
-		{"GetBlockBodies", s.TestGetBlockBodies},
+		{Name: "Ping", Fn: s.TestPing},
+		{Name: "Status", Fn: s.TestStatus},
+		{Name: "GetBlockHeaders", Fn: s.TestGetBlockHeaders},
+		{Name: "Broadcast", Fn: s.TestBroadcast},
+		{Name: "GetBlockBodies", Fn: s.TestGetBlockBodies},
 	}
 }
 
