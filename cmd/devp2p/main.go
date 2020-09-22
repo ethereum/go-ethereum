@@ -63,6 +63,7 @@ func init() {
 		discv5Command,
 		dnsCommand,
 		nodesetCommand,
+		rlpxCommand,
 	}
 }
 
