@@ -153,21 +153,27 @@ func loadSnapshot(diskdb ethdb.KeyValueStore, triedb *trie.Database, cache int, 
 		cache:  fastcache.New(cache * 1024 * 1024),
 		root:   baseRoot,
 	}
+	var legacy bool
 	snapshot, generator, err := loadAndParseJournal(diskdb, base)
 	if err != nil {
 		snapshot, generator, err = loadAndParseLegacyJournal(diskdb, base)
+		legacy = true
 	}
 	if err != nil {
 		return nil, err
 	}
 	// Entire snapshot journal loaded, sanity check the head. If the loaded
-	// snapshot is not matched with current state root, print a warning log.
+	// snapshot is not matched with current state root, print a warning log
+	// or discard the entire snapshot it's legacy snapshot.
 	//
 	// Possible scenario: Geth was crashed without persisting journal and then
 	// restart, the head is rewound to the point with available state(trie)
 	// which is below the snapshot. In this case the snapshot can be recovered
 	// by re-executing blocks but right now it's unavailable.
 	if head := snapshot.Root(); head != root {
+		if legacy {
+			return nil, fmt.Errorf("head doesn't match snapshot: have %#x, want %#x", head, root)
+		}
 		log.Warn("Snapshot is not continous with chain", "snaproot", head, "chainroot", root)
 	}
 	// Everything loaded correctly, resume any suspended operations

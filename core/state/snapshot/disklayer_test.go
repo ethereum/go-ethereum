@@ -18,7 +18,6 @@ package snapshot
 
 import (
 	"bytes"
-	"github.com/ethereum/go-ethereum/rlp"
 	"io/ioutil"
 	"os"
 	"testing"
@@ -29,6 +28,7 @@ import (
 	"github.com/ethereum/go-ethereum/ethdb"
 	"github.com/ethereum/go-ethereum/ethdb/leveldb"
 	"github.com/ethereum/go-ethereum/ethdb/memorydb"
+	"github.com/ethereum/go-ethereum/rlp"
 )
 
 // reverse reverses the contents of a byte slice. It's used to update random accs
