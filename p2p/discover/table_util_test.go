@@ -146,7 +146,6 @@ func (t *pingRecorder) updateRecord(n *enode.Node) {
 func (t *pingRecorder) Self() *enode.Node           { return nullNode }
 func (t *pingRecorder) lookupSelf() []*enode.Node   { return nil }
 func (t *pingRecorder) lookupRandom() []*enode.Node { return nil }
-func (t *pingRecorder) close()                      {}
 
 // ping simulates a ping request.
 func (t *pingRecorder) ping(n *enode.Node) (seq uint64, err error) {
