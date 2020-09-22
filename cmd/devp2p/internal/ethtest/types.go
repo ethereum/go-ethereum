@@ -1,66 +1,18 @@
 package ethtest
 
 import (
-"fmt"
-"github.com/ethereum/go-ethereum/common"
-"github.com/ethereum/go-ethereum/core/forkid"
-"github.com/ethereum/go-ethereum/core/types"
-"github.com/ethereum/go-ethereum/p2p"
-"github.com/ethereum/go-ethereum/p2p/rlpx"
-"github.com/ethereum/go-ethereum/rlp"
-"io"
-"math/big"
+	"fmt"
+	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/core/forkid"
+	"github.com/ethereum/go-ethereum/core/types"
+	"github.com/ethereum/go-ethereum/p2p"
+	"github.com/ethereum/go-ethereum/rlp"
+	"io"
+	"math/big"
 )
 
 type Message interface {
 	Code() int
-	//Protocol() int // TODO
-}
-
-func Read(conn *rlpx.Conn) Message {
-	code, rawData, err := conn.Read()
-	if err != nil {
-		return &Error{fmt.Errorf("could not read from connection: %v", err)}
-	}
-
-	var msg Message
-	switch int(code) {
-	case (Hello{}).Code():
-		msg = new(Hello)
-	case (Disc{}).Code():
-		msg = new(Disc)
-	case (Status{}).Code():
-		msg = new(Status)
-	case (GetBlockHeaders{}).Code():
-		msg = new(GetBlockHeaders)
-	case (BlockHeaders{}).Code():
-		msg = new(BlockHeaders)
-	case (GetBlockBodies{}).Code():
-		msg = new(GetBlockBodies)
-	case (BlockBodies{}).Code():
-		msg = new(BlockBodies)
-	case (NewBlock{}).Code():
-		msg = new(NewBlock)
-	case (NewBlockHashes{}).Code():
-		msg = new(NewBlockHashes)
-	default:
-		return &Error{fmt.Errorf("invalid message code: %d", code)}
-	}
-
-	if err := rlp.DecodeBytes(rawData, msg); err != nil {
-		return &Error{fmt.Errorf("could not rlp decode message: %v", err)}
-	}
-
-	return msg
-}
-
-func Write(conn *rlpx.Conn, msg Message) error { // TODO eventually put this method on the Conn
-	size, payload, err := rlp.EncodeToReader(msg)
-	if err != nil {
-		return err
-	}
-	_, err = conn.WriteMsg(uint64(msg.Code()), uint32(size), payload)
-	return err
 }
 
 type Error struct {

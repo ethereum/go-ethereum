@@ -4,6 +4,7 @@ import (
 	"crypto/ecdsa"
 	"fmt"
 	"github.com/ethereum/go-ethereum/core/types"
+	"github.com/ethereum/go-ethereum/rlp"
 	"time"
 
 	"github.com/ethereum/go-ethereum/crypto"
@@ -30,6 +31,53 @@ type Conn struct {
 	ourKey *ecdsa.PrivateKey
 }
 
+func (c *Conn) Read() Message {
+	code, rawData, _, err := c.Conn.Read()
+	if err != nil {
+		return &Error{fmt.Errorf("could not read from connection: %v", err)}
+	}
+
+	var msg Message
+	switch int(code) {
+	case (Hello{}).Code():
+		msg = new(Hello)
+	case (Disc{}).Code():
+		msg = new(Disc)
+	case (Status{}).Code():
+		msg = new(Status)
+	case (GetBlockHeaders{}).Code():
+		msg = new(GetBlockHeaders)
+	case (BlockHeaders{}).Code():
+		msg = new(BlockHeaders)
+	case (GetBlockBodies{}).Code():
+		msg = new(GetBlockBodies)
+	case (BlockBodies{}).Code():
+		msg = new(BlockBodies)
+	case (NewBlock{}).Code():
+		msg = new(NewBlock)
+	case (NewBlockHashes{}).Code():
+		msg = new(NewBlockHashes)
+	default:
+		return &Error{fmt.Errorf("invalid message code: %d", code)}
+	}
+
+	if err := rlp.DecodeBytes(rawData, msg); err != nil {
+		return &Error{fmt.Errorf("could not rlp decode message: %v", err)}
+	}
+
+	return msg
+}
+
+func (c *Conn) Write(msg Message) error {
+	payload, err := rlp.EncodeToBytes(msg)
+	if err != nil {
+		return err
+	}
+	_, err = c.Conn.Write(uint64(msg.Code()), payload)
+	return err
+
+}
+
 // handshake checks to make sure a `HELLO` is received.
 func (c *Conn) handshake(t *utesting.T) Message {
 	// write protoHandshake to client
@@ -39,11 +87,11 @@ func (c *Conn) handshake(t *utesting.T) Message {
 		Caps:    []p2p.Cap{{"eth", 64}, {"eth", 65}},
 		ID:      pub0,
 	}
-	if err := Write(c.Conn, ourHandshake); err != nil {
+	if err := c.Write(ourHandshake); err != nil {
 		t.Fatalf("could not write to connection: %v", err)
 	}
 	// read protoHandshake from client
-	switch msg := Read(c.Conn).(type) {
+	switch msg := c.Read().(type) {
 	case *Hello:
 		return msg
 	default:
@@ -57,7 +105,7 @@ func (c *Conn) handshake(t *utesting.T) Message {
 func (c *Conn) statusExchange(t *utesting.T, chain *Chain) Message {
 	// read status message from client
 	var message Message
-	switch msg := Read(c.Conn).(type) {
+	switch msg := c.Read().(type) {
 	case *Status:
 		if msg.Head != chain.blocks[chain.Len()-1].Hash() {
 			t.Fatalf("wrong head in status: %v", msg.Head)
@@ -81,7 +129,7 @@ func (c *Conn) statusExchange(t *utesting.T, chain *Chain) Message {
 		Genesis:         chain.blocks[0].Hash(),
 		ForkID:          chain.ForkID(),
 	}
-	if err := Write(c.Conn, status)
+	if err := c.Write(status)
 		err != nil {
 		t.Fatalf("could not write to connection: %v", err)
 	}
@@ -94,11 +142,11 @@ func (c *Conn) statusExchange(t *utesting.T, chain *Chain) Message {
 func (c *Conn) waitForBlock(block *types.Block) error {
 	for {
 		req := &GetBlockHeaders{Origin: hashOrNumber{Hash: block.Hash()}, Amount: 1}
-		if err := Write(c.Conn, req); err != nil {
+		if err := c.Write(req); err != nil {
 			return err
 		}
 
-		switch msg := Read(c.Conn).(type) {
+		switch msg := c.Read().(type) {
 		case *BlockHeaders:
 			if len(*msg) > 0 {
 				return nil
@@ -183,11 +231,11 @@ func (s *Suite) TestGetBlockHeaders(t *utesting.T) {
 		Reverse: false,
 	}
 
-	if err := Write(conn.Conn, req); err != nil {
+	if err := conn.Write(req); err != nil {
 		t.Fatalf("could not write to connection: %v", err)
 	}
 
-	msg := Read(conn.Conn)
+	msg := conn.Read()
 	switch msg.Code() {
 	case 20:
 		headers, ok := msg.(*BlockHeaders)
@@ -214,11 +262,11 @@ func (s *Suite) TestGetBlockBodies(t *utesting.T) {
 	conn.statusExchange(t, s.chain)
 	// create block bodies request
 	req := &GetBlockBodies{s.chain.blocks[54].Hash(), s.chain.blocks[75].Hash()}
-	if err := Write(conn.Conn, req); err != nil {
+	if err := conn.Write(req); err != nil {
 		t.Fatalf("could not write to connection: %v", err)
 	}
 
-	msg := Read(conn.Conn)
+	msg := conn.Read()
 	switch msg.Code() {
 	case 22:
 		bodies, ok := msg.(*BlockBodies)
@@ -257,11 +305,11 @@ func (s *Suite) TestBroadcast(t *utesting.T) {
 		Block: s.fullChain.blocks[1000],
 		TD:    s.fullChain.TD(1001),
 	}
-	if err := Write(sendConn.Conn, blockAnnouncement); err != nil {
+	if err := sendConn.Write(blockAnnouncement); err != nil {
 		t.Fatalf("could not write to connection: %v", err)
 	}
 
-	switch msg := Read(receiveConn.Conn).(type) {
+	switch msg := receiveConn.Read().(type) {
 	case *NewBlock:
 		assert.Equal(t, blockAnnouncement.Block.Header(), msg.Block.Header(),
 			"wrong block header in announcement")

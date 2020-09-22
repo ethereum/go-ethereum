@@ -29,9 +29,6 @@ import (
 	"os"
 )
 
-// TODO TO TEST:
-// TODO: - GETBLOCKHEADERS, GETBLOCKBODIES, 2 CONN BLOCK PROPAGATION TEST
-
 var (
 	rlpxCommand = cli.Command{
 		Name:  "rlpx",
@@ -49,7 +46,7 @@ var (
 	rlpxEthTestCommand = cli.Command{
 		Name:   "eth-test",
 		Usage:  "Runs tests against a node",
-		ArgsUsage: "<node> <path_to_chain.rlp_file>", // TODO maybe better?
+		ArgsUsage: "<node> <path_to_chain.rlp_file>",
 		Action: rlpxEthTest,
 		Flags:  []cli.Flag{testPatternFlag},
 	}
@@ -67,7 +64,7 @@ func rlpxPing(ctx *cli.Context) error {
 	if err != nil {
 		return err
 	}
-	code, data, err := conn.Read()
+	code, data, _, err := conn.Read()
 	if err != nil {
 		return err
 	}
