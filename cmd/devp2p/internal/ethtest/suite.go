@@ -239,15 +239,13 @@ func (s *Suite) TestGetBlockHeaders(t *utesting.T) {
 		t.Fatalf("could not write to connection: %v", err)
 	}
 
-	msg := conn.Read()
-	switch msg.Code() {
-	case 20:
-		headers, ok := msg.(*BlockHeaders)
-		if !ok {
-			t.Fatalf("message %v does not match code %d", msg, msg.Code())
-		}
+	switch msg := conn.Read().(type) {
+	case *BlockHeaders:
+		headers := msg
 		for _, header := range *headers {
-			t.Logf("\nHEADER FOR BLOCK NUMBER %d: %+v\n", header.Number, header) // TODO eventually check against our own data
+			num := header.Number.Uint64()
+			assert.Equal(t, s.chain.blocks[int(num)].Header(), header)
+			t.Logf("\nHEADER FOR BLOCK NUMBER %d: %+v\n", header.Number, header)
 		}
 	default:
 		t.Fatalf("error: %v", msg)
@@ -270,13 +268,9 @@ func (s *Suite) TestGetBlockBodies(t *utesting.T) {
 		t.Fatalf("could not write to connection: %v", err)
 	}
 
-	msg := conn.Read()
-	switch msg.Code() {
-	case 22:
-		bodies, ok := msg.(*BlockBodies)
-		if !ok {
-			t.Fatalf("message %v does not match code %d", msg, msg.Code()) // TODO eventually check against our own data
-		}
+	switch msg := conn.Read().(type) {
+	case *BlockBodies:
+		bodies := msg
 		for _, body := range *bodies {
 			t.Logf("\nBODY: %+v\n", body)
 		}
