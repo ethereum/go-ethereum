@@ -206,8 +206,12 @@ func (s *Suite) TestStatus(t *utesting.T) {
 	// get protoHandshake
 	conn.handshake(t)
 	// get status
-	msg := conn.statusExchange(t, s.chain) // todo make this a switch
-	t.Logf("%+v\n", msg)
+	switch msg := conn.statusExchange(t, s.chain).(type) {
+	case *Status:
+		t.Logf("%+v\n", msg)
+	default:
+		t.Fatalf("error: %v", msg)
+	}
 }
 
 // TestGetBlockHeaders tests whether the given node can respond to
@@ -221,7 +225,7 @@ func (s *Suite) TestGetBlockHeaders(t *utesting.T) {
 	conn.handshake(t)
 	conn.statusExchange(t, s.chain)
 
-	// get block headers // TODO eventually make this customizable with CL args (take from a file)?
+	// get block headers
 	req := &GetBlockHeaders{
 		Origin: hashOrNumber{
 			Hash: s.chain.blocks[1].Hash(),
@@ -246,7 +250,7 @@ func (s *Suite) TestGetBlockHeaders(t *utesting.T) {
 			t.Logf("\nHEADER FOR BLOCK NUMBER %d: %+v\n", header.Number, header) // TODO eventually check against our own data
 		}
 	default:
-		t.Fatalf("error reading message: %v", msg)
+		t.Fatalf("error: %v", msg)
 	}
 }
 
@@ -277,11 +281,12 @@ func (s *Suite) TestGetBlockBodies(t *utesting.T) {
 			t.Logf("\nBODY: %+v\n", body)
 		}
 	default:
-		t.Fatalf("error reading message: %v", msg)
+		t.Fatalf("error: %v", msg)
 	}
 }
 
-// TestBroadcast // TODO how to make sure this is compatible with the imported blockchain of the node?
+// TestBroadcast tests whether a block announcement is correctly
+// propagated to the given node's peer(s).
 func (s *Suite) TestBroadcast(t *utesting.T) {
 	// create conn to send block announcement
 	sendConn, err := s.dial()
