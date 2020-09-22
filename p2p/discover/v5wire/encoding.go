@@ -21,7 +21,6 @@ import (
 	"crypto/aes"
 	"crypto/cipher"
 	"crypto/ecdsa"
-	"crypto/elliptic"
 	crand "crypto/rand"
 	"crypto/sha256"
 	"encoding/binary"
@@ -30,9 +29,7 @@ import (
 	"hash"
 	"time"
 
-	"github.com/ethereum/go-ethereum/common/math"
 	"github.com/ethereum/go-ethereum/common/mclock"
-	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/p2p/enode"
 	"github.com/ethereum/go-ethereum/p2p/enr"
 	"github.com/ethereum/go-ethereum/rlp"
@@ -43,9 +40,6 @@ import (
 // TODO deal with WHOAREYOU amplification factor (min packet size?)
 // TODO add counter to nonce
 // TODO rehandshake after X packets
-
-// Nonce represents a nonce used for AES/GCM.
-type Nonce [gcmNonceSize]byte
 
 // Discovery v5 packet structures.
 type (
@@ -95,13 +89,8 @@ var (
 )
 
 const (
-	// Encryption/authentication parameters.
-	aesKeySize       = 16
-	gcmNonceSize     = 12
-	idNoncePrefix    = "discovery-id-nonce"
-	handshakeTimeout = time.Second
-
 	// Protocol constants.
+	handshakeTimeout = time.Second
 	handshakeVersion = 1
 	minVersion       = 1
 )
@@ -293,7 +282,7 @@ func (c *Codec) makeHandshakeHeader(toID enode.ID, addr string, challenge *Whoar
 	auth.h.PubkeySize = byte(len(auth.pubkey))
 
 	// Add ID nonce signature to response.
-	idsig, err := c.signIDNonce(challenge.IDNonce[:], ephpubkey[:])
+	idsig, err := makeIDSignature(c.sha256, c.privkey, challenge.IDNonce[:], ephpubkey[:])
 	if err != nil {
 		return nil, nil, fmt.Errorf("can't sign: %v", err)
 	}
@@ -455,7 +444,7 @@ func (c *Codec) decodeHandshake(fromAddr string, head *packetHeader) (*enode.Nod
 		return nil, Nonce{}, nil, errInvalidAuthKey
 	}
 	// Verify ID nonce signature.
-	err = c.verifyIDSignature(challenge.IDNonce[:], auth.pubkey, auth.signature, node)
+	err = verifyIDSignature(c.sha256, challenge.IDNonce[:], auth.pubkey, auth.signature, node)
 	if err != nil {
 		return nil, Nonce{}, nil, err
 	}
@@ -566,39 +555,6 @@ func (c *Codec) decryptMessage(input []byte, nonce Nonce, readKey []byte) (Packe
 	return DecodeMessage(message[0], message[1:])
 }
 
-// signIDNonce creates the ID nonce signature.
-func (c *Codec) signIDNonce(nonce, ephkey []byte) ([]byte, error) {
-	idsig, err := crypto.Sign(c.idNonceHash(nonce, ephkey), c.privkey)
-	if err != nil {
-		return nil, fmt.Errorf("can't sign: %v", err)
-	}
-	return idsig[:len(idsig)-1], nil // remove recovery ID
-}
-
-// idNonceHash computes the hash of id nonce with prefix.
-func (c *Codec) idNonceHash(nonce, ephkey []byte) []byte {
-	h := c.sha256reset()
-	h.Write([]byte(idNoncePrefix))
-	h.Write(nonce)
-	h.Write(ephkey)
-	return h.Sum(nil)
-}
-
-// verifyIDSignature checks that signature over idnonce was made by the node with given record.
-func (c *Codec) verifyIDSignature(nonce, ephkey, sig []byte, n *enode.Node) error {
-	switch idscheme := n.Record().IdentityScheme(); idscheme {
-	case "v4":
-		var pk ecdsa.PublicKey
-		n.Load((*enode.Secp256k1)(&pk)) // cannot fail because record is valid
-		if !crypto.VerifySignature(crypto.FromECDSAPub(&pk), c.idNonceHash(nonce, ephkey), sig) {
-			return errInvalidNonceSig
-		}
-		return nil
-	default:
-		return fmt.Errorf("can't verify ID nonce signature against scheme %q", idscheme)
-	}
-}
-
 // deriveKeys generates session keys using elliptic-curve Diffie-Hellman key agreement.
 func (c *Codec) deriveKeys(n1, n2 enode.ID, priv *ecdsa.PrivateKey, pub *ecdsa.PublicKey, challenge *Whoareyou) *session {
 	eph := ecdh(priv, pub)
@@ -622,7 +578,7 @@ func (c *Codec) deriveKeys(n1, n2 enode.ID, priv *ecdsa.PrivateKey, pub *ecdsa.P
 	return &sec
 }
 
-// sha256reset returns the shared hash instance.
+// sha256 returns the shared hash instance.
 func (c *Codec) sha256reset() hash.Hash {
 	c.sha256.Reset()
 	return c.sha256
@@ -645,67 +601,4 @@ func headerMask(destID enode.ID, input []byte) cipher.Stream {
 		panic("can't create cipher")
 	}
 	return cipher.NewCTR(block, input[:sizeofMaskingIV])
-}
-
-// ecdh creates a shared secret.
-func ecdh(privkey *ecdsa.PrivateKey, pubkey *ecdsa.PublicKey) []byte {
-	secX, secY := pubkey.ScalarMult(pubkey.X, pubkey.Y, privkey.D.Bytes())
-	if secX == nil {
-		return nil
-	}
-	sec := make([]byte, 33)
-	sec[0] = 0x02 | byte(secY.Bit(0))
-	math.ReadBits(secX, sec[1:])
-	return sec
-}
-
-// encryptGCM encrypts pt using AES-GCM with the given key and nonce.
-func encryptGCM(dest, key, nonce, pt, authData []byte) ([]byte, error) {
-	block, err := aes.NewCipher(key)
-	if err != nil {
-		panic(fmt.Errorf("can't create block cipher: %v", err))
-	}
-	aesgcm, err := cipher.NewGCMWithNonceSize(block, gcmNonceSize)
-	if err != nil {
-		panic(fmt.Errorf("can't create GCM: %v", err))
-	}
-	return aesgcm.Seal(dest, nonce, pt, authData), nil
-}
-
-// decryptGCM decrypts ct using AES-GCM with the given key and nonce.
-func decryptGCM(key, nonce, ct, authData []byte) ([]byte, error) {
-	block, err := aes.NewCipher(key)
-	if err != nil {
-		return nil, fmt.Errorf("can't create block cipher: %v", err)
-	}
-	if len(nonce) != gcmNonceSize {
-		return nil, fmt.Errorf("invalid GCM nonce size: %d", len(nonce))
-	}
-	aesgcm, err := cipher.NewGCMWithNonceSize(block, gcmNonceSize)
-	if err != nil {
-		return nil, fmt.Errorf("can't create GCM: %v", err)
-	}
-	pt := make([]byte, 0, len(ct))
-	return aesgcm.Open(pt, nonce, ct, authData)
-}
-
-// Pubkey represents an encoded public key.
-type Pubkey [33]byte
-
-// EncodePubkey encodes a public key into the 33-byte compressed format.
-func EncodePubkey(key *ecdsa.PublicKey) Pubkey {
-	var enc Pubkey
-	copy(enc[:], crypto.CompressPubkey(key))
-	return enc
-}
-
-// DecodePubkey decodes a public key from the 33-byte compressed format.
-func DecodePubkey(curve elliptic.Curve, e []byte) (*ecdsa.PublicKey, error) {
-	if len(e) != len(Pubkey{}) {
-		return nil, errors.New("wrong size public key data")
-	}
-	if curve != crypto.S256() {
-		return nil, errors.New("curves other than secp256k1 are not supported")
-	}
-	return crypto.DecompressPubkey(e)
 }
