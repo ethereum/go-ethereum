@@ -107,15 +107,14 @@ const (
 )
 
 var (
-	errTooShort               = errors.New("packet too short")
-	errInvalidHeader          = errors.New("invalid packet header")
-	errUnexpectedHandshake    = errors.New("unexpected auth response, not in handshake")
-	errHandshakeNonceMismatch = errors.New("wrong nonce in auth response")
-	errInvalidAuthKey         = errors.New("invalid ephemeral pubkey")
-	errNoRecord               = errors.New("expected ENR in handshake but none sent")
-	errInvalidNonceSig        = errors.New("invalid ID nonce signature")
-	errMessageTooShort        = errors.New("message contains no data")
-	errMessageDecrypt         = errors.New("cannot decrypt message")
+	errTooShort            = errors.New("packet too short")
+	errInvalidHeader       = errors.New("invalid packet header")
+	errUnexpectedHandshake = errors.New("unexpected auth response, not in handshake")
+	errInvalidAuthKey      = errors.New("invalid ephemeral pubkey")
+	errNoRecord            = errors.New("expected ENR in handshake but none sent")
+	errInvalidNonceSig     = errors.New("invalid ID nonce signature")
+	errMessageTooShort     = errors.New("message contains no data")
+	errMessageDecrypt      = errors.New("cannot decrypt message")
 )
 
 // Codec encodes and decodes discovery v5 packets.
@@ -624,15 +623,6 @@ func (c *Codec) deriveKeys(n1, n2 enode.ID, priv *ecdsa.PrivateKey, pub *ecdsa.P
 func (c *Codec) sha256reset() hash.Hash {
 	c.sha256.Reset()
 	return c.sha256
-}
-
-// sha256sum computes sha256 on the concatenation of inputs.
-func (c *Codec) sha256sum(inputs ...[]byte) []byte {
-	c.sha256.Reset()
-	for _, b := range inputs {
-		c.sha256.Write(b)
-	}
-	return c.sha256.Sum(nil)
 }
 
 // maskOutputPacket applies protocol header masking to a packet sent to destID.
