@@ -52,7 +52,7 @@ type (
 	packetHeader struct {
 		ProtocolID [8]byte
 		SrcID      enode.ID
-		Flags      byte
+		Flag       byte
 		AuthSize   uint16
 	}
 
@@ -109,6 +109,7 @@ const (
 var (
 	errTooShort            = errors.New("packet too short")
 	errInvalidHeader       = errors.New("invalid packet header")
+	errInvalidFlag         = errors.New("invalid flag value in header")
 	errUnexpectedHandshake = errors.New("unexpected auth response, not in handshake")
 	errInvalidAuthKey      = errors.New("invalid ephemeral pubkey")
 	errNoRecord            = errors.New("expected ENR in handshake but none sent")
@@ -181,7 +182,7 @@ func (c *Codec) makeHeader(toID enode.ID, flags byte, authsizeExtra int) *packet
 	return &packetHeader{
 		ProtocolID: protocolIDV5,
 		SrcID:      c.localnode.ID(),
-		Flags:      flags,
+		Flag:       flags,
 		AuthSize:   uint16(authsize),
 	}
 }
@@ -383,13 +384,15 @@ func (c *Codec) Decode(input []byte, addr string) (src enode.ID, n *enode.Node, 
 	mask.XORKeyStream(authData, authData)
 
 	// Decode auth part and message.
-	switch {
-	case head.Flags&flagWhoareyou != 0:
+	switch head.Flag {
+	case flagWhoareyou:
 		p, err = c.decodeWhoareyou(&head)
-	case head.Flags&flagHandshake != 0:
+	case flagHandshake:
 		n, p, err = c.decodeHandshakeMessage(addr, &head, input)
-	default:
+	case flagMessage:
 		p, err = c.decodeMessage(addr, &head, input)
+	default:
+		err = errInvalidFlag
 	}
 	return src, n, p, err
 }
