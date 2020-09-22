@@ -18,7 +18,6 @@ package core
 
 import (
 	"context"
-	"github.com/ethereum/go-ethereum/accounts"
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/hexutil"
@@ -69,7 +68,7 @@ func (l *AuditLogger) SignData(ctx context.Context, contentType string, addr com
 	return b, e
 }
 
-func (l *AuditLogger) SignGnosisTx(ctx context.Context, addr common.MixedcaseAddress, gnosisTx accounts.GnosisSafeTx, methodSelector *string) (*GnosisSigningResult, error) {
+func (l *AuditLogger) SignGnosisTx(ctx context.Context, addr common.MixedcaseAddress, gnosisTx GnosisSafeTx, methodSelector *string) (*GnosisSafeTx, error) {
 	sel := "<nil>"
 	if methodSelector != nil {
 		sel = *methodSelector

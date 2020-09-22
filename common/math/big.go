@@ -90,10 +90,15 @@ func (i *Decimal256) UnmarshalText(input []byte) error {
 
 // MarshalText implements encoding.TextMarshaler.
 func (i *Decimal256) MarshalText() ([]byte, error) {
+	return []byte(i.String()), nil
+}
+
+// String implements Stringer.
+func (i *Decimal256) String() string {
 	if i == nil {
-		return []byte("0"), nil
+		return "0"
 	}
-	return []byte(fmt.Sprintf("%#d", (*big.Int)(i))), nil
+	return fmt.Sprintf("%#d", (*big.Int)(i))
 }
 
 // ParseBig256 parses s as a 256 bit integer in decimal or hexadecimal syntax.

@@ -31,7 +31,6 @@ import (
 	"github.com/ethereum/go-ethereum/accounts/usbwallet"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/hexutil"
-	"github.com/ethereum/go-ethereum/common/math"
 	"github.com/ethereum/go-ethereum/internal/ethapi"
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/rlp"
@@ -42,7 +41,7 @@ const (
 	// numberOfAccountsToDerive For hardware wallets, the number of accounts to derive
 	numberOfAccountsToDerive = 10
 	// ExternalAPIVersion -- see extapi_changelog.md
-	ExternalAPIVersion = "6.0.0"
+	ExternalAPIVersion = "6.1.0"
 	// InternalAPIVersion -- see intapi_changelog.md
 	InternalAPIVersion = "7.0.1"
 )
@@ -64,7 +63,7 @@ type ExternalAPI interface {
 	// Version info about the APIs
 	Version(ctx context.Context) (string, error)
 	// SignGnosisSafeTransaction signs/confirms a gnosis-safe multisig transaction
-	SignGnosisTx(ctx context.Context, signerAddress common.MixedcaseAddress, gnosisTx accounts.GnosisSafeTx, methodSelector *string) (*GnosisSigningResult, error)
+	SignGnosisTx(ctx context.Context, signerAddress common.MixedcaseAddress, gnosisTx GnosisSafeTx, methodSelector *string) (*GnosisSafeTx, error)
 }
 
 // UIClientAPI specifies what method a UI needs to implement to be able to be used as a
@@ -585,38 +584,9 @@ func (api *SignerAPI) SignTransaction(ctx context.Context, args SendTxArgs, meth
 
 }
 
-// GnosisSigningResult conforms to the API required by the Gnosis Safe tx relay service.
-// See 'SafeMultisigTransaction' on https://safe-transaction.mainnet.gnosis.io/
-type GnosisSigningResult struct {
-	Signature  hexutil.Bytes           `json:"signature"`
-	SafeTxHash common.Hash             `json:"contractTransactionHash"`
-	Sender     common.MixedcaseAddress `json:"sender"`
-	// Other fields that are required for the tx relay service
-	Safe           common.MixedcaseAddress `json:"safe"`
-	To             common.MixedcaseAddress `json:"to"`
-	Value          math.Decimal256         `json:"value"`
-	GasPrice       math.Decimal256         `json:"gasPrice"`
-	Data           *hexutil.Bytes          `json:"data"`
-	Operation      uint8                   `json:"operation"`
-	GasToken       common.Address          `json:"gasToken"`
-	RefundReceiver common.Address          `json:"refundReceiver"`
-	BaseGas        big.Int                 `json:"baseGas"`
-	SafeTxGas      big.Int                 `json:"safeTxGas"`
-	Nonce          big.Int                 `json:"nonce"`
-}
-
-func (api *SignerAPI) SignGnosisTx(ctx context.Context, signerAddress common.MixedcaseAddress, gnosisTx accounts.GnosisSafeTx, methodSelector *string) (*GnosisSigningResult, error) {
+func (api *SignerAPI) SignGnosisTx(ctx context.Context, signerAddress common.MixedcaseAddress, gnosisTx GnosisSafeTx, methodSelector *string) (*GnosisSafeTx, error) {
 	// Do the usual validations, but on the last-stage transaction
-	args := &SendTxArgs{
-		From:     gnosisTx.Safe,
-		To:       &gnosisTx.To,
-		Gas:      hexutil.Uint64(gnosisTx.SafeTxGas.Uint64()),
-		GasPrice: hexutil.Big(gnosisTx.GasPrice),
-		Value:    hexutil.Big(gnosisTx.Value),
-		Nonce:    hexutil.Uint64(gnosisTx.Nonce.Uint64()),
-		Data:     gnosisTx.Data,
-		Input:    nil,
-	}
+	args := gnosisTx.ArgsForValidation()
 	msgs, err := api.validator.ValidateTransaction(methodSelector, args)
 	if err != nil {
 		return nil, err
@@ -627,98 +597,18 @@ func (api *SignerAPI) SignGnosisTx(ctx context.Context, signerAddress common.Mix
 			return nil, err
 		}
 	}
+	typedData := gnosisTx.ToTypedData()
+	signature, preimage, err := api.signTypedData(ctx, signerAddress, typedData)
+	if err != nil {
+		return nil, err
+	}
+	checkSummedSender, _ := common.NewMixedcaseAddressFromString(signerAddress.Address().Hex())
 
-	safeTxHash, preImage, err := accounts.GnosisSafeSigningHash(&gnosisTx)
-	if err != nil {
-		return nil, err
-	}
-	weival := big.Int(gnosisTx.Value)
-	var messages = []*NameValueType{
-		&NameValueType{
-			Name:  "This is a signing-request for a Gnosis multisig transaction",
-			Value: "info", Typ: "",
-		},
-		&NameValueType{
-			Name:  "Multisig address",
-			Value: gnosisTx.Safe.Address().String(), Typ: "address",
-		},
-		&NameValueType{
-			Name:  "  Value",
-			Value: fmt.Sprintf("%v wei", &weival), Typ: "uint256",
-		},
-		&NameValueType{
-			Name:  " To",
-			Value: gnosisTx.To.String(), Typ: "address",
-		},
-		&NameValueType{
-			Name:  " Gas price",
-			Value: gnosisTx.SafeTxGas.String(), Typ: "uint256",
-		},
-		&NameValueType{
-			Name:  " Nonce",
-			Value: gnosisTx.Nonce.String(), Typ: "uint256",
-		},
-	}
-	if gnosisTx.Data != nil {
-		messages = append(messages, &NameValueType{
-			Name:  " Data",
-			Value: gnosisTx.Data, Typ: "hexdata",
-		})
-	}
+	gnosisTx.Signature = signature
+	gnosisTx.SafeTxHash = common.BytesToHash(preimage)
+	gnosisTx.Sender = *checkSummedSender // Must be checksumed to be accepted by relay
 
-	req := SignDataRequest{
-		ContentType: "application/gnosis",
-		Address:     signerAddress,
-		Rawdata:     preImage,
-		Messages:    messages,
-		Callinfo:    msgs.Messages,
-		Hash:        safeTxHash.Bytes(),
-		Meta:        MetadataFromContext(ctx),
-	}
-	// Process approval
-	result, err := api.UI.ApproveSignData(&req)
-	if err != nil {
-		return nil, err
-	}
-	if !result.Approved {
-		return nil, ErrRequestDenied
-	}
-	account := accounts.Account{Address: signerAddress.Address()}
-	wallet, err := api.am.Find(account)
-	if err != nil {
-		return nil, err
-	}
-	pw, err := api.lookupOrQueryPassword(account.Address,
-		"Password for signing",
-		fmt.Sprintf("Please enter password for signing data with account %s", account.Address.Hex()))
-	if err != nil {
-		return nil, err
-	}
-	// Sign the data with the wallet
-	signature, err := wallet.SignDataWithPassphrase(account, pw, req.ContentType, req.Rawdata)
-	if err != nil {
-		return nil, err
-	}
-	if signature[64] < 2 {
-		signature[64] += 27 // Transform V from 0/1 to 27/28 according to the yellow paper
-	}
-	checkSummedSender, _ := common.NewMixedcaseAddressFromString(account.Address.Hex())
-	return &GnosisSigningResult{
-		Signature:      signature,
-		SafeTxHash:     safeTxHash,
-		Sender:         *checkSummedSender, // Must be checksummed
-		Safe:           gnosisTx.Safe,
-		To:             gnosisTx.To,
-		Value:          gnosisTx.Value,    // must be decimal string
-		GasPrice:       gnosisTx.GasPrice, // must be decimal string
-		Data:           gnosisTx.Data,
-		Operation:      gnosisTx.Operation,
-		GasToken:       gnosisTx.GasToken,
-		RefundReceiver: gnosisTx.RefundReceiver,
-		BaseGas:        gnosisTx.BaseGas,
-		SafeTxGas:      gnosisTx.SafeTxGas,
-		Nonce:          gnosisTx.Nonce,
-	}, nil
+	return &gnosisTx, nil
 }
 
 // Returns the external api version. This method does not require user acceptance. Available methods are
