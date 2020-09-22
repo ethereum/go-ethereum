@@ -294,7 +294,11 @@ func listen(ln *enode.LocalNode, addr string) *net.UDPConn {
 func parseBootnodes(ctx *cli.Context) ([]*enode.Node, error) {
 	s := params.RinkebyBootnodes
 	if ctx.IsSet(bootnodesFlag.Name) {
-		s = strings.Split(ctx.String(bootnodesFlag.Name), ",")
+		input := ctx.String(bootnodesFlag.Name)
+		if input == "" {
+			return nil, nil
+		}
+		s = strings.Split(input, ",")
 	}
 	nodes := make([]*enode.Node, len(s))
 	var err error
