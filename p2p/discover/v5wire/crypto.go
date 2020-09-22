@@ -71,14 +71,21 @@ func makeIDSignature(hash hash.Hash, key *ecdsa.PrivateKey, nonce, ephkey []byte
 	}
 }
 
+// s256raw is an unparsed secp256k1 public key ENR entry.
+type s256raw []byte
+
+func (s256raw) ENRKey() string { return "secp256k1" }
+
 // verifyIDSignature checks that signature over idnonce was made by the given node.
 func verifyIDSignature(hash hash.Hash, nonce, ephkey, sig []byte, n *enode.Node) error {
 	switch idscheme := n.Record().IdentityScheme(); idscheme {
 	case "v4":
-		var pk ecdsa.PublicKey
-		n.Load((*enode.Secp256k1)(&pk)) // cannot fail because record is valid
+		var pubkey s256raw
+		if n.Load(&pubkey) != nil {
+			return errors.New("no secp256k1 public key in record")
+		}
 		input := idNonceHash(hash, nonce, ephkey)
-		if !crypto.VerifySignature(crypto.FromECDSAPub(&pk), input, sig) {
+		if !crypto.VerifySignature(pubkey, input, sig) {
 			return errInvalidNonceSig
 		}
 		return nil
