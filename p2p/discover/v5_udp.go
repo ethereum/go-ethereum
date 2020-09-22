@@ -31,6 +31,7 @@ import (
 
 	"github.com/ethereum/go-ethereum/common/mclock"
 	"github.com/ethereum/go-ethereum/log"
+	"github.com/ethereum/go-ethereum/p2p/discover/v5wire"
 	"github.com/ethereum/go-ethereum/p2p/enode"
 	"github.com/ethereum/go-ethereum/p2p/enr"
 	"github.com/ethereum/go-ethereum/p2p/netutil"
@@ -45,29 +46,17 @@ const (
 	respTimeoutV5 = 700 * time.Millisecond
 )
 
-// codecV5 is implemented by wireCodec (and testCodec).
+// codecV5 is implemented by v5wire.Codec (and testCodec).
 //
 // The UDPv5 transport is split into two objects: the codec object deals with
 // encoding/decoding and with the handshake; the UDPv5 object handles higher-level concerns.
 type codecV5 interface {
-	// encode encodes a packet. The 'challenge' parameter is non-nil for calls which got a
-	// WHOAREYOU response.
-	encode(fromID enode.ID, fromAddr string, p packetV5, challenge *whoareyouV5) ([]byte, packetNonce, error)
+	// Encode encodes a packet.
+	Encode(enode.ID, string, v5wire.Packet, *v5wire.Whoareyou) ([]byte, v5wire.Nonce, error)
 
-	// decode decodes a packet. It returns an *unknownV5 packet if decryption fails.
-	// The fromNode return value is non-nil when the input contains a handshake response.
-	decode(input []byte, fromAddr string) (fromID enode.ID, fromNode *enode.Node, p packetV5, err error)
-}
-
-// packetV5 is implemented by all discv5 packet type structs.
-type packetV5 interface {
-	// These methods provide information and set the request ID.
-	name() string
-	kind() byte
-	setreqid([]byte)
-	// handle should perform the appropriate action to handle the packet, i.e. this is the
-	// place to send the response.
-	handle(t *UDPv5, fromID enode.ID, fromAddr *net.UDPAddr)
+	// decode decodes a packet. It returns a *v5wire.Unknown packet if decryption fails.
+	// The *enode.Node return value is non-nil when the input contains a handshake response.
+	Decode([]byte, string) (enode.ID, *enode.Node, v5wire.Packet, error)
 }
 
 // UDPv5 is the implementation of protocol version 5.
@@ -110,16 +99,16 @@ type UDPv5 struct {
 // callV5 represents a remote procedure call against another node.
 type callV5 struct {
 	node         *enode.Node
-	packet       packetV5
+	packet       v5wire.Packet
 	responseType byte // expected packet type of response
 	reqid        []byte
-	ch           chan packetV5 // responses sent here
-	err          chan error    // errors sent here
+	ch           chan v5wire.Packet // responses sent here
+	err          chan error         // errors sent here
 
 	// Valid for active calls only:
-	authTag        packetNonce  // nonce of request packet
-	handshakeCount int          // # times we attempted handshake for this call
-	challenge      *whoareyouV5 // last sent handshake challenge
+	authTag        v5wire.Nonce      // nonce of request packet
+	handshakeCount int               // # times we attempted handshake for this call
+	challenge      *v5wire.Whoareyou // last sent handshake challenge
 	timeout        mclock.Timer
 }
 
@@ -164,7 +153,7 @@ func newUDPv5(conn UDPConn, ln *enode.LocalNode, cfg Config) (*UDPv5, error) {
 		callDoneCh:    make(chan *callV5),
 		respTimeoutCh: make(chan *callTimeout),
 		// state of dispatch
-		codec:            newWireCodec(ln, cfg.PrivateKey, cfg.Clock),
+		codec:            v5wire.NewCodec(ln, cfg.PrivateKey, cfg.Clock),
 		activeCallByNode: make(map[enode.ID]*callV5),
 		activeCallByAuth: make(map[string]*callV5),
 		callQueue:        make(map[enode.ID][]*callV5),
@@ -252,11 +241,12 @@ func (t *UDPv5) RegisterTalkHandler(protocol string, handler func([]byte) []byte
 
 // TalkRequest sends a talk request to n and waits for a response.
 func (t *UDPv5) TalkRequest(n *enode.Node, protocol string, request []byte) ([]byte, error) {
-	resp := t.call(n, p_talkrespV5, &talkreqV5{Protocol: protocol, Message: request})
+	req := &v5wire.TalkRequest{Protocol: protocol, Message: request}
+	resp := t.call(n, v5wire.TalkResponseMsg, req)
 	defer t.callDone(resp)
 	select {
 	case respMsg := <-resp.ch:
-		return respMsg.(*talkrespV5).Message, nil
+		return respMsg.(*v5wire.TalkResponse).Message, nil
 	case err := <-resp.err:
 		return nil, err
 	}
@@ -342,11 +332,13 @@ func lookupDistances(target, dest enode.ID) (dists []uint) {
 
 // ping calls PING on a node and waits for a PONG response.
 func (t *UDPv5) ping(n *enode.Node) (uint64, error) {
-	resp := t.call(n, p_pongV5, &pingV5{ENRSeq: t.localNode.Node().Seq()})
+	req := &v5wire.Ping{ENRSeq: t.localNode.Node().Seq()}
+	resp := t.call(n, v5wire.PongMsg, req)
 	defer t.callDone(resp)
+
 	select {
 	case pong := <-resp.ch:
-		return pong.(*pongV5).ENRSeq, nil
+		return pong.(*v5wire.Pong).ENRSeq, nil
 	case err := <-resp.err:
 		return 0, err
 	}
@@ -364,21 +356,9 @@ func (t *UDPv5) RequestENR(n *enode.Node) (*enode.Node, error) {
 	return nodes[0], nil
 }
 
-// requestTicket calls REQUESTTICKET on a node and waits for a TICKET response.
-func (t *UDPv5) requestTicket(n *enode.Node) ([]byte, error) {
-	resp := t.call(n, p_ticketV5, &pingV5{})
-	defer t.callDone(resp)
-	select {
-	case response := <-resp.ch:
-		return response.(*ticketV5).Ticket, nil
-	case err := <-resp.err:
-		return nil, err
-	}
-}
-
 // findnode calls FINDNODE on a node and waits for responses.
 func (t *UDPv5) findnode(n *enode.Node, distances []uint) ([]*enode.Node, error) {
-	resp := t.call(n, p_nodesV5, &findnodeV5{Distances: distances})
+	resp := t.call(n, v5wire.NodesMsg, &v5wire.Findnode{Distances: distances})
 	return t.waitForNodes(resp, distances)
 }
 
@@ -394,11 +374,11 @@ func (t *UDPv5) waitForNodes(c *callV5, distances []uint) ([]*enode.Node, error)
 	for {
 		select {
 		case responseP := <-c.ch:
-			response := responseP.(*nodesV5)
+			response := responseP.(*v5wire.Nodes)
 			for _, record := range response.Nodes {
 				node, err := t.verifyResponseNode(c, record, distances, seen)
 				if err != nil {
-					t.log.Debug("Invalid record in "+response.name(), "id", c.node.ID(), "err", err)
+					t.log.Debug("Invalid record in "+response.Name(), "id", c.node.ID(), "err", err)
 					continue
 				}
 				nodes = append(nodes, node)
@@ -449,20 +429,20 @@ func containsUint(x uint, xs []uint) bool {
 	return false
 }
 
-// call sends the given call and sets up a handler for response packets (of type c.responseType).
-// Responses are dispatched to the call's response channel.
-func (t *UDPv5) call(node *enode.Node, responseType byte, packet packetV5) *callV5 {
+// call sends the given call and sets up a handler for response packets (of message type
+// responseType). Responses are dispatched to the call's response channel.
+func (t *UDPv5) call(node *enode.Node, responseType byte, packet v5wire.Packet) *callV5 {
 	c := &callV5{
 		node:         node,
 		packet:       packet,
 		responseType: responseType,
 		reqid:        make([]byte, 8),
-		ch:           make(chan packetV5, 1),
+		ch:           make(chan v5wire.Packet, 1),
 		err:          make(chan error, 1),
 	}
 	// Assign request ID.
 	crand.Read(c.reqid)
-	packet.setreqid(c.reqid)
+	packet.SetReqID(c.reqid)
 	// Send call to dispatch.
 	select {
 	case t.callCh <- c:
@@ -599,21 +579,21 @@ func (t *UDPv5) sendCall(c *callV5) {
 
 // sendResponse sends a response packet to the given node.
 // This doesn't trigger a handshake even if no keys are available.
-func (t *UDPv5) sendResponse(toID enode.ID, toAddr *net.UDPAddr, packet packetV5) error {
+func (t *UDPv5) sendResponse(toID enode.ID, toAddr *net.UDPAddr, packet v5wire.Packet) error {
 	_, err := t.send(toID, toAddr, packet, nil)
 	return err
 }
 
 // send sends a packet to the given node.
-func (t *UDPv5) send(toID enode.ID, toAddr *net.UDPAddr, packet packetV5, c *whoareyouV5) (packetNonce, error) {
+func (t *UDPv5) send(toID enode.ID, toAddr *net.UDPAddr, packet v5wire.Packet, c *v5wire.Whoareyou) (v5wire.Nonce, error) {
 	addr := toAddr.String()
-	enc, authTag, err := t.codec.encode(toID, addr, packet, c)
+	enc, authTag, err := t.codec.Encode(toID, addr, packet, c)
 	if err != nil {
-		t.log.Warn(">> "+packet.name(), "id", toID, "addr", addr, "err", err)
+		t.log.Warn(">> "+packet.Name(), "id", toID, "addr", addr, "err", err)
 		return authTag, err
 	}
 	_, err = t.conn.WriteToUDP(enc, toAddr)
-	t.log.Trace(">> "+packet.name(), "id", toID, "addr", addr)
+	t.log.Trace(">> "+packet.Name(), "id", toID, "addr", addr)
 	return authTag, err
 }
 
@@ -652,7 +632,7 @@ func (t *UDPv5) dispatchReadPacket(from *net.UDPAddr, content []byte) bool {
 // handlePacket decodes and processes an incoming packet from the network.
 func (t *UDPv5) handlePacket(rawpacket []byte, fromAddr *net.UDPAddr) error {
 	addr := fromAddr.String()
-	fromID, fromNode, packet, err := t.codec.decode(rawpacket, addr)
+	fromID, fromNode, packet, err := t.codec.Decode(rawpacket, addr)
 	if err != nil {
 		t.log.Debug("Bad discv5 packet", "id", fromID, "addr", addr, "err", err)
 		return err
@@ -661,27 +641,27 @@ func (t *UDPv5) handlePacket(rawpacket []byte, fromAddr *net.UDPAddr) error {
 		// Handshake succeeded, add to table.
 		t.tab.addSeenNode(wrapNode(fromNode))
 	}
-	if packet.kind() != p_whoareyouV5 {
-		// WHOAREYOU logged separately to report the sender ID.
-		t.log.Trace("<< "+packet.name(), "id", fromID, "addr", addr)
+	if packet.Kind() != v5wire.WhoareyouPacket {
+		// WHOAREYOU logged separately to report errors.
+		t.log.Trace("<< "+packet.Name(), "id", fromID, "addr", addr)
 	}
-	packet.handle(t, fromID, fromAddr)
+	t.handle(packet, fromID, fromAddr)
 	return nil
 }
 
 // handleCallResponse dispatches a response packet to the call waiting for it.
-func (t *UDPv5) handleCallResponse(fromID enode.ID, fromAddr *net.UDPAddr, reqid []byte, p packetV5) {
+func (t *UDPv5) handleCallResponse(fromID enode.ID, fromAddr *net.UDPAddr, reqid []byte, p v5wire.Packet) {
 	ac := t.activeCallByNode[fromID]
 	if ac == nil || !bytes.Equal(reqid, ac.reqid) {
-		t.log.Debug(fmt.Sprintf("Unsolicited/late %s response", p.name()), "id", fromID, "addr", fromAddr)
+		t.log.Debug(fmt.Sprintf("Unsolicited/late %s response", p.Name()), "id", fromID, "addr", fromAddr)
 		return
 	}
 	if !fromAddr.IP.Equal(ac.node.IP()) || fromAddr.Port != ac.node.UDP() {
-		t.log.Debug(fmt.Sprintf("%s from wrong endpoint", p.name()), "id", fromID, "addr", fromAddr)
+		t.log.Debug(fmt.Sprintf("%s from wrong endpoint", p.Name()), "id", fromID, "addr", fromAddr)
 		return
 	}
-	if p.kind() != ac.responseType {
-		t.log.Debug(fmt.Sprintf("Wrong disv5 response type %s", p.name()), "id", fromID, "addr", fromAddr)
+	if p.Kind() != ac.responseType {
+		t.log.Debug(fmt.Sprintf("Wrong discv5 response type %s", p.Name()), "id", fromID, "addr", fromAddr)
 		return
 	}
 	t.startResponseTimeout(ac)
@@ -699,40 +679,38 @@ func (t *UDPv5) getNode(id enode.ID) *enode.Node {
 	return nil
 }
 
-// UNKNOWN
+// handle handles incoming packets according to their message type.
+func (t *UDPv5) handle(p v5wire.Packet, fromID enode.ID, fromAddr *net.UDPAddr) {
+	switch p := p.(type) {
+	case *v5wire.Unknown:
+		t.handleUnknown(p, fromID, fromAddr)
+	case *v5wire.Whoareyou:
+		t.handleWhoareyou(p, fromID, fromAddr)
+	case *v5wire.Ping:
+		t.handlePing(p, fromID, fromAddr)
+	case *v5wire.Pong:
+		t.localNode.UDPEndpointStatement(fromAddr, &net.UDPAddr{IP: p.ToIP, Port: int(p.ToPort)})
+		t.handleCallResponse(fromID, fromAddr, p.ReqID, p)
+	case *v5wire.Findnode:
+		t.handleFindnode(p, fromID, fromAddr)
+	case *v5wire.Nodes:
+		t.handleCallResponse(fromID, fromAddr, p.ReqID, p)
+	case *v5wire.TalkRequest:
+		t.handleTalkRequest(p, fromID, fromAddr)
+	case *v5wire.TalkResponse:
+		t.handleCallResponse(fromID, fromAddr, p.ReqID, p)
+	}
+}
 
-func (p *unknownV5) name() string       { return "UNKNOWN/v5" }
-func (p *unknownV5) kind() byte         { return p_unknownV5 }
-func (p *unknownV5) setreqid(id []byte) {}
-
-func (p *unknownV5) handle(t *UDPv5, fromID enode.ID, fromAddr *net.UDPAddr) {
-	challenge := &whoareyouV5{AuthTag: p.AuthTag}
+// handleUnknown initiates a handshake by responding with WHOAREYOU.
+func (t *UDPv5) handleUnknown(p *v5wire.Unknown, fromID enode.ID, fromAddr *net.UDPAddr) {
+	challenge := &v5wire.Whoareyou{AuthTag: p.AuthTag}
 	crand.Read(challenge.IDNonce[:])
 	if n := t.getNode(fromID); n != nil {
-		challenge.node = n
+		challenge.Node = n
 		challenge.RecordSeq = n.Seq()
 	}
 	t.sendResponse(fromID, fromAddr, challenge)
-}
-
-// WHOAREYOU
-
-func (p *whoareyouV5) name() string       { return "WHOAREYOU/v5" }
-func (p *whoareyouV5) kind() byte         { return p_whoareyouV5 }
-func (p *whoareyouV5) setreqid(id []byte) {}
-
-func (p *whoareyouV5) handle(t *UDPv5, fromID enode.ID, fromAddr *net.UDPAddr) {
-	c, err := p.matchWithCall(t, p.AuthTag)
-	if err != nil {
-		t.log.Debug("Invalid WHOAREYOU/v5", "addr", fromAddr, "err", err)
-		return
-	}
-	// Resend the call that was answered by WHOAREYOU.
-	t.log.Trace("<< "+p.name(), "id", c.node.ID(), "addr", fromAddr)
-	c.handshakeCount++
-	c.challenge = p
-	p.node = c.node
-	t.sendCall(c)
 }
 
 var (
@@ -740,10 +718,26 @@ var (
 	errChallengeTwice  = errors.New("second handshake")
 )
 
-// matchWithCall checks whether the handshake attempt matches the active call.
-func (p *whoareyouV5) matchWithCall(t *UDPv5, authTag packetNonce) (*callV5, error) {
+// handleWhoareyou resends the active call as a handshake packet.
+func (t *UDPv5) handleWhoareyou(p *v5wire.Whoareyou, fromID enode.ID, fromAddr *net.UDPAddr) {
+	c, err := t.matchWithCall(fromID, p.AuthTag)
+	if err != nil {
+		t.log.Debug("Invalid "+p.Name(), "addr", fromAddr, "err", err)
+		return
+	}
+
+	// Resend the call that was answered by WHOAREYOU.
+	t.log.Trace("<< "+p.Name(), "id", c.node.ID(), "addr", fromAddr)
+	c.handshakeCount++
+	c.challenge = p
+	p.Node = c.node
+	t.sendCall(c)
+}
+
+// matchWithCall checks whether a handshake attempt matches the active call.
+func (t *UDPv5) matchWithCall(fromID enode.ID, authTag v5wire.Nonce) (*callV5, error) {
 	c := t.activeCallByAuth[string(authTag[:])]
-	if c == nil {
+	if c == nil || c.node.ID() != fromID {
 		return nil, errChallengeNoCall
 	}
 	if c.handshakeCount > 0 {
@@ -752,14 +746,9 @@ func (p *whoareyouV5) matchWithCall(t *UDPv5, authTag packetNonce) (*callV5, err
 	return c, nil
 }
 
-// PING
-
-func (p *pingV5) name() string       { return "PING/v5" }
-func (p *pingV5) kind() byte         { return p_pingV5 }
-func (p *pingV5) setreqid(id []byte) { p.ReqID = id }
-
-func (p *pingV5) handle(t *UDPv5, fromID enode.ID, fromAddr *net.UDPAddr) {
-	t.sendResponse(fromID, fromAddr, &pongV5{
+// handlePing sends a PONG response.
+func (t *UDPv5) handlePing(p *v5wire.Ping, fromID enode.ID, fromAddr *net.UDPAddr) {
+	t.sendResponse(fromID, fromAddr, &v5wire.Pong{
 		ReqID:  p.ReqID,
 		ToIP:   fromAddr.IP,
 		ToPort: uint16(fromAddr.Port),
@@ -767,24 +756,8 @@ func (p *pingV5) handle(t *UDPv5, fromID enode.ID, fromAddr *net.UDPAddr) {
 	})
 }
 
-// PONG
-
-func (p *pongV5) name() string       { return "PONG/v5" }
-func (p *pongV5) kind() byte         { return p_pongV5 }
-func (p *pongV5) setreqid(id []byte) { p.ReqID = id }
-
-func (p *pongV5) handle(t *UDPv5, fromID enode.ID, fromAddr *net.UDPAddr) {
-	t.localNode.UDPEndpointStatement(fromAddr, &net.UDPAddr{IP: p.ToIP, Port: int(p.ToPort)})
-	t.handleCallResponse(fromID, fromAddr, p.ReqID, p)
-}
-
-// FINDNODE
-
-func (p *findnodeV5) name() string       { return "FINDNODE/v5" }
-func (p *findnodeV5) kind() byte         { return p_findnodeV5 }
-func (p *findnodeV5) setreqid(id []byte) { p.ReqID = id }
-
-func (p *findnodeV5) handle(t *UDPv5, fromID enode.ID, fromAddr *net.UDPAddr) {
+// handleFindnode returns nodes to the requester.
+func (t *UDPv5) handleFindnode(p *v5wire.Findnode, fromID enode.ID, fromAddr *net.UDPAddr) {
 	nodes := t.collectTableNodes(fromAddr.IP, p.Distances, findnodeResultLimit)
 	t.sendNodes(fromID, fromAddr, p.ReqID, nodes)
 }
@@ -829,7 +802,7 @@ func (t *UDPv5) collectTableNodes(rip net.IP, distances []uint, limit int) []*en
 // sendNodes sends the given records in one or more NODES packets.
 func (t *UDPv5) sendNodes(toID enode.ID, toAddr *net.UDPAddr, reqid []byte, nodes []*enode.Node) {
 	total := uint8(math.Ceil(float64(len(nodes)) / 3))
-	resp := &nodesV5{ReqID: reqid, Total: total, Nodes: make([]*enr.Record, 3)}
+	resp := &v5wire.Nodes{ReqID: reqid, Total: total, Nodes: make([]*enr.Record, 3)}
 	sent := false
 	for len(nodes) > 0 {
 		items := min(nodesResponseItemLimit, len(nodes))
@@ -849,23 +822,8 @@ func (t *UDPv5) sendNodes(toID enode.ID, toAddr *net.UDPAddr, reqid []byte, node
 	}
 }
 
-// NODES
-
-func (p *nodesV5) name() string       { return "NODES/v5" }
-func (p *nodesV5) kind() byte         { return p_nodesV5 }
-func (p *nodesV5) setreqid(id []byte) { p.ReqID = id }
-
-func (p *nodesV5) handle(t *UDPv5, fromID enode.ID, fromAddr *net.UDPAddr) {
-	t.handleCallResponse(fromID, fromAddr, p.ReqID, p)
-}
-
-// TALKREQ
-
-func (p *talkreqV5) name() string       { return "TALKREQ/v5" }
-func (p *talkreqV5) kind() byte         { return p_talkreqV5 }
-func (p *talkreqV5) setreqid(id []byte) { p.ReqID = id }
-
-func (p *talkreqV5) handle(t *UDPv5, fromID enode.ID, fromAddr *net.UDPAddr) {
+// handleTalkRequest runs the talk request handler of the requested protocol.
+func (t *UDPv5) handleTalkRequest(p *v5wire.TalkRequest, fromID enode.ID, fromAddr *net.UDPAddr) {
 	t.trlock.Lock()
 	handler := t.trhandlers[p.Protocol]
 	t.trlock.Unlock()
@@ -874,66 +832,6 @@ func (p *talkreqV5) handle(t *UDPv5, fromID enode.ID, fromAddr *net.UDPAddr) {
 	if handler != nil {
 		response = handler(p.Message)
 	}
-	if len(p.ReqID) > 0 {
-		t.sendResponse(fromID, fromAddr, &talkrespV5{ReqID: p.ReqID, Message: response})
-	}
-}
-
-// TALKRESP
-
-func (p *talkrespV5) name() string       { return "TALKRESP/v5" }
-func (p *talkrespV5) kind() byte         { return p_talkrespV5 }
-func (p *talkrespV5) setreqid(id []byte) { p.ReqID = id }
-
-func (p *talkrespV5) handle(t *UDPv5, fromID enode.ID, fromAddr *net.UDPAddr) {
-	t.handleCallResponse(fromID, fromAddr, p.ReqID, p)
-}
-
-// REQUESTTICKET
-
-func (p *requestTicketV5) name() string       { return "REQUESTTICKET/v5" }
-func (p *requestTicketV5) kind() byte         { return p_requestTicketV5 }
-func (p *requestTicketV5) setreqid(id []byte) { p.ReqID = id }
-
-func (p *requestTicketV5) handle(t *UDPv5, fromID enode.ID, fromAddr *net.UDPAddr) {
-	t.sendResponse(fromID, fromAddr, &ticketV5{ReqID: p.ReqID})
-}
-
-// TICKET
-
-func (p *ticketV5) name() string       { return "TICKET/v5" }
-func (p *ticketV5) kind() byte         { return p_ticketV5 }
-func (p *ticketV5) setreqid(id []byte) { p.ReqID = id }
-
-func (p *ticketV5) handle(t *UDPv5, fromID enode.ID, fromAddr *net.UDPAddr) {
-	t.handleCallResponse(fromID, fromAddr, p.ReqID, p)
-}
-
-// REGTOPIC
-
-func (p *regtopicV5) name() string       { return "REGTOPIC/v5" }
-func (p *regtopicV5) kind() byte         { return p_regtopicV5 }
-func (p *regtopicV5) setreqid(id []byte) { p.ReqID = id }
-
-func (p *regtopicV5) handle(t *UDPv5, fromID enode.ID, fromAddr *net.UDPAddr) {
-	t.sendResponse(fromID, fromAddr, &regconfirmationV5{ReqID: p.ReqID, Registered: false})
-}
-
-// REGCONFIRMATION
-
-func (p *regconfirmationV5) name() string       { return "REGCONFIRMATION/v5" }
-func (p *regconfirmationV5) kind() byte         { return p_regconfirmationV5 }
-func (p *regconfirmationV5) setreqid(id []byte) { p.ReqID = id }
-
-func (p *regconfirmationV5) handle(t *UDPv5, fromID enode.ID, fromAddr *net.UDPAddr) {
-	t.handleCallResponse(fromID, fromAddr, p.ReqID, p)
-}
-
-// TOPICQUERY
-
-func (p *topicqueryV5) name() string       { return "TOPICQUERY/v5" }
-func (p *topicqueryV5) kind() byte         { return p_topicqueryV5 }
-func (p *topicqueryV5) setreqid(id []byte) { p.ReqID = id }
-
-func (p *topicqueryV5) handle(t *UDPv5, fromID enode.ID, fromAddr *net.UDPAddr) {
+	resp := &v5wire.TalkResponse{ReqID: p.ReqID, Message: response}
+	t.sendResponse(fromID, fromAddr, resp)
 }

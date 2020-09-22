@@ -14,20 +14,20 @@
 // You should have received a copy of the GNU Lesser General Public License
 // along with the go-ethereum library. If not, see <http://www.gnu.org/licenses/>.
 
-package discover
+package v5wire
 
 import (
 	"bytes"
 	"crypto/aes"
 	"crypto/cipher"
 	"crypto/ecdsa"
+	"crypto/elliptic"
 	crand "crypto/rand"
 	"crypto/sha256"
 	"encoding/binary"
 	"errors"
 	"fmt"
 	"hash"
-	"net"
 	"time"
 
 	"github.com/ethereum/go-ethereum/common/math"
@@ -44,54 +44,38 @@ import (
 // TODO add counter to nonce
 // TODO rehandshake after X packets
 
-// Discovery v5 packet types.
-const (
-	p_pingV5 byte = iota + 1
-	p_pongV5
-	p_findnodeV5
-	p_nodesV5
-	p_talkreqV5
-	p_talkrespV5
-	p_requestTicketV5
-	p_ticketV5
-	p_regtopicV5
-	p_regconfirmationV5
-	p_topicqueryV5
-	p_unknownV5   = byte(255) // any non-decryptable packet
-	p_whoareyouV5 = byte(254) // the WHOAREYOU packet
-)
+// Nonce represents a nonce used for AES/GCM.
+type Nonce [gcmNonceSize]byte
 
 // Discovery v5 packet structures.
 type (
-	packetHeaderV5 struct {
+	packetHeader struct {
 		ProtocolID [8]byte
 		SrcID      enode.ID
 		Flags      byte
 		AuthSize   uint16
 	}
 
-	whoareyouAuthDataV5 struct {
-		Nonce     packetNonce // nonce of request packet
-		IDNonce   [32]byte    // ID proof data
-		RecordSeq uint64      // highest known ENR sequence of requester
+	whoareyouAuthData struct {
+		Nonce     Nonce    // nonce of request packet
+		IDNonce   [32]byte // ID proof data
+		RecordSeq uint64   // highest known ENR sequence of requester
 	}
 
-	handshakeAuthDataV5 struct {
+	handshakeAuthData struct {
 		h struct {
-			Version    uint8       // protocol version
-			Nonce      packetNonce // AES-GCM nonce of message
-			SigSize    byte        // ignature data
-			PubkeySize byte        // offset of
+			Version    uint8 // protocol version
+			Nonce      Nonce // AES-GCM nonce of message
+			SigSize    byte  // ignature data
+			PubkeySize byte  // offset of
 		}
 		// Trailing variable-size data.
 		signature, pubkey, record []byte
 	}
 
-	messageAuthDataV5 struct {
-		Nonce packetNonce // AES-GCM nonce of message
+	messageAuthData struct {
+		Nonce Nonce // AES-GCM nonce of message
 	}
-
-	packetNonce [gcmNonceSize]byte
 )
 
 // Packet header flag values.
@@ -103,100 +87,11 @@ const (
 
 var (
 	sizeofMaskingIV           = 16
-	sizeofPacketHeaderV5      = binary.Size(packetHeaderV5{})
-	sizeofWhoareyouAuthDataV5 = binary.Size(whoareyouAuthDataV5{})
-	sizeofHandshakeAuthDataV5 = binary.Size(handshakeAuthDataV5{}.h)
-	sizeofMessageAuthDataV5   = binary.Size(messageAuthDataV5{})
+	sizeofPacketHeaderV5      = binary.Size(packetHeader{})
+	sizeofWhoareyouAuthDataV5 = binary.Size(whoareyouAuthData{})
+	sizeofHandshakeAuthDataV5 = binary.Size(handshakeAuthData{}.h)
+	sizeofMessageAuthDataV5   = binary.Size(messageAuthData{})
 	protocolIDV5              = [8]byte{'d', 'i', 's', 'c', 'v', '5', ' ', ' '}
-)
-
-// Discovery v5 messages.
-type (
-	// unknownV5 represents any packet that can't be decrypted.
-	unknownV5 struct {
-		AuthTag packetNonce
-	}
-
-	// WHOAREYOU contains the handshake challenge.
-	whoareyouV5 struct {
-		AuthTag   packetNonce
-		IDNonce   [32]byte // To be signed by recipient.
-		RecordSeq uint64   // ENR sequence number of recipient
-
-		node *enode.Node
-		sent mclock.AbsTime
-	}
-
-	// PING is sent during liveness checks.
-	pingV5 struct {
-		ReqID  []byte
-		ENRSeq uint64
-	}
-
-	// PONG is the reply to PING.
-	pongV5 struct {
-		ReqID  []byte
-		ENRSeq uint64
-		ToIP   net.IP // These fields should mirror the UDP envelope address of the ping
-		ToPort uint16 // packet, which provides a way to discover the the external address (after NAT).
-	}
-
-	// FINDNODE is a query for nodes in the given bucket.
-	findnodeV5 struct {
-		ReqID     []byte
-		Distances []uint
-	}
-
-	// NODES is the reply to FINDNODE and TOPICQUERY.
-	nodesV5 struct {
-		ReqID []byte
-		Total uint8
-		Nodes []*enr.Record
-	}
-
-	// TALKREQ is an application-level request.
-	talkreqV5 struct {
-		ReqID    []byte
-		Protocol string
-		Message  []byte
-	}
-
-	// TALKRESP is the reply to TALKREQ.
-	talkrespV5 struct {
-		ReqID   []byte
-		Message []byte
-	}
-
-	// REQUESTTICKET requests a ticket for a topic queue.
-	requestTicketV5 struct {
-		ReqID []byte
-		Topic []byte
-	}
-
-	// TICKET is the response to REQUESTTICKET.
-	ticketV5 struct {
-		ReqID  []byte
-		Ticket []byte
-	}
-
-	// REGTOPIC registers the sender in a topic queue using a ticket.
-	regtopicV5 struct {
-		ReqID  []byte
-		Ticket []byte
-		ENR    *enr.Record
-	}
-
-	// REGCONFIRMATION is the reply to REGTOPIC.
-	regconfirmationV5 struct {
-		ReqID      []byte
-		Registered bool
-	}
-
-	// TOPICQUERY asks for nodes with the given topic.
-	topicqueryV5 struct {
-		ReqID []byte
-		Topic []byte
-	}
 )
 
 const (
@@ -217,46 +112,44 @@ var (
 	errUnexpectedHandshake    = errors.New("unexpected auth response, not in handshake")
 	errHandshakeNonceMismatch = errors.New("wrong nonce in auth response")
 	errInvalidAuthKey         = errors.New("invalid ephemeral pubkey")
-	errUnknownAuthScheme      = errors.New("unknown auth scheme in handshake")
 	errNoRecord               = errors.New("expected ENR in handshake but none sent")
 	errInvalidNonceSig        = errors.New("invalid ID nonce signature")
 	errMessageTooShort        = errors.New("message contains no data")
 	errMessageDecrypt         = errors.New("cannot decrypt message")
 )
 
-// wireCodec encodes and decodes discovery v5 packets.
-type wireCodec struct {
+// Codec encodes and decodes discovery v5 packets.
+type Codec struct {
 	sha256    hash.Hash
 	localnode *enode.LocalNode
 	privkey   *ecdsa.PrivateKey
 	buf       bytes.Buffer // used for encoding of packets
 	msgbuf    bytes.Buffer // used for encoding of message content
 	reader    bytes.Reader // used for decoding
-	sc        *sessionCache
+	sc        *SessionCache
 }
 
-// newWireCodec creates a wire codec.
-func newWireCodec(ln *enode.LocalNode, key *ecdsa.PrivateKey, clock mclock.Clock) *wireCodec {
-	c := &wireCodec{
+// NewCodec creates a wire codec.
+func NewCodec(ln *enode.LocalNode, key *ecdsa.PrivateKey, clock mclock.Clock) *Codec {
+	c := &Codec{
 		sha256:    sha256.New(),
 		localnode: ln,
 		privkey:   key,
-		sc:        newSessionCache(1024, clock),
+		sc:        NewSessionCache(1024, clock),
 	}
 	return c
 }
 
-// encode encodes a packet to a node. 'id' and 'addr' specify the destination node. The
+// Encode encodes a packet to a node. 'id' and 'addr' specify the destination node. The
 // 'challenge' parameter should be the most recently received WHOAREYOU packet from that
 // node.
-func (c *wireCodec) encode(id enode.ID, addr string, packet packetV5, challenge *whoareyouV5) ([]byte, packetNonce, error) {
-	if packet.kind() == p_whoareyouV5 {
-		p := packet.(*whoareyouV5)
+func (c *Codec) Encode(id enode.ID, addr string, packet Packet, challenge *Whoareyou) ([]byte, Nonce, error) {
+	if p, ok := packet.(*Whoareyou); ok {
 		enc, err := c.encodeWhoareyou(id, p)
 		if err == nil {
 			c.sc.storeSentHandshake(id, addr, p)
 		}
-		return enc, packetNonce{}, err
+		return enc, Nonce{}, err
 	}
 
 	if challenge != nil {
@@ -270,7 +163,7 @@ func (c *wireCodec) encode(id enode.ID, addr string, packet packetV5, challenge 
 }
 
 // makeHeader creates a packet header.
-func (c *wireCodec) makeHeader(toID enode.ID, flags byte, authsizeExtra int) *packetHeaderV5 {
+func (c *Codec) makeHeader(toID enode.ID, flags byte, authsizeExtra int) *packetHeader {
 	var authsize int
 	switch flags {
 	case flagMessage:
@@ -286,7 +179,7 @@ func (c *wireCodec) makeHeader(toID enode.ID, flags byte, authsizeExtra int) *pa
 	if authsize > int(^uint16(0)) {
 		panic(fmt.Errorf("BUG: auth size %d overflows uint16", authsize))
 	}
-	return &packetHeaderV5{
+	return &packetHeader{
 		ProtocolID: protocolIDV5,
 		SrcID:      c.localnode.ID(),
 		Flags:      flags,
@@ -295,8 +188,8 @@ func (c *wireCodec) makeHeader(toID enode.ID, flags byte, authsizeExtra int) *pa
 }
 
 // encodeRandom encodes a packet with random content.
-func (c *wireCodec) encodeRandom(toID enode.ID) ([]byte, packetNonce, error) {
-	var auth messageAuthDataV5
+func (c *Codec) encodeRandom(toID enode.ID) ([]byte, Nonce, error) {
+	var auth messageAuthData
 	if _, err := crand.Read(auth.Nonce[:]); err != nil {
 		return nil, auth.Nonce, fmt.Errorf("can't get random data: %v", err)
 	}
@@ -309,12 +202,12 @@ func (c *wireCodec) encodeRandom(toID enode.ID) ([]byte, packetNonce, error) {
 }
 
 // encodeWhoareyou encodes a WHOAREYOU packet.
-func (c *wireCodec) encodeWhoareyou(toID enode.ID, packet *whoareyouV5) ([]byte, error) {
+func (c *Codec) encodeWhoareyou(toID enode.ID, packet *Whoareyou) ([]byte, error) {
 	// Sanity check node field to catch misbehaving callers.
-	if packet.RecordSeq > 0 && packet.node == nil {
+	if packet.RecordSeq > 0 && packet.Node == nil {
 		panic("BUG: missing node in whoareyouV5 with non-zero seq")
 	}
-	auth := &whoareyouAuthDataV5{
+	auth := &whoareyouAuthData{
 		Nonce:     packet.AuthTag,
 		IDNonce:   packet.IDNonce,
 		RecordSeq: packet.RecordSeq,
@@ -330,16 +223,16 @@ func (c *wireCodec) encodeWhoareyou(toID enode.ID, packet *whoareyouV5) ([]byte,
 
 // encodeHandshakeMessage encodes an encrypted message with a handshake
 // response header.
-func (c *wireCodec) encodeHandshakeMessage(toID enode.ID, addr string, packet packetV5, challenge *whoareyouV5) ([]byte, packetNonce, error) {
+func (c *Codec) encodeHandshakeMessage(toID enode.ID, addr string, packet Packet, challenge *Whoareyou) ([]byte, Nonce, error) {
 	// Ensure calling code sets challenge.node.
-	if challenge.node == nil {
-		panic("BUG: missing challenge.node in encode")
+	if challenge.Node == nil {
+		panic("BUG: missing challenge.Node in encode")
 	}
 
 	// Generate new secrets.
 	auth, session, err := c.makeHandshakeHeader(toID, addr, challenge)
 	if err != nil {
-		return nil, packetNonce{}, err
+		return nil, Nonce{}, err
 	}
 
 	// TODO: this should happen when the first authenticated message is received
@@ -360,7 +253,7 @@ func (c *wireCodec) encodeHandshakeMessage(toID enode.ID, addr string, packet pa
 
 	// Encrypt packet body.
 	c.msgbuf.Reset()
-	c.msgbuf.WriteByte(packet.kind())
+	c.msgbuf.WriteByte(packet.Kind())
 	if err := rlp.Encode(&c.msgbuf, packet); err != nil {
 		return nil, auth.h.Nonce, err
 	}
@@ -374,28 +267,28 @@ func (c *wireCodec) encodeHandshakeMessage(toID enode.ID, addr string, packet pa
 }
 
 // encodeAuthHeader creates the auth header on a call packet following WHOAREYOU.
-func (c *wireCodec) makeHandshakeHeader(toID enode.ID, addr string, challenge *whoareyouV5) (*handshakeAuthDataV5, *session, error) {
+func (c *Codec) makeHandshakeHeader(toID enode.ID, addr string, challenge *Whoareyou) (*handshakeAuthData, *session, error) {
 	session := new(session)
 	nonce, err := c.sc.nextNonce(session)
 	if err != nil {
 		return nil, nil, fmt.Errorf("can't generate nonce: %v", err)
 	}
 
-	auth := new(handshakeAuthDataV5)
+	auth := new(handshakeAuthData)
 	auth.h.Version = handshakeVersion
 	auth.h.Nonce = nonce
 
 	// Create the ephemeral key. This needs to be first because the
 	// key is part of the ID nonce signature.
 	var remotePubkey = new(ecdsa.PublicKey)
-	if err := challenge.node.Load((*enode.Secp256k1)(remotePubkey)); err != nil {
+	if err := challenge.Node.Load((*enode.Secp256k1)(remotePubkey)); err != nil {
 		return nil, nil, fmt.Errorf("can't find secp256k1 key for recipient")
 	}
 	ephkey, err := c.sc.ephemeralKeyGen()
 	if err != nil {
 		return nil, nil, fmt.Errorf("can't generate ephemeral key")
 	}
-	ephpubkey := encodePubkey(&ephkey.PublicKey)
+	ephpubkey := EncodePubkey(&ephkey.PublicKey)
 	auth.pubkey = ephpubkey[:]
 	auth.h.PubkeySize = byte(len(auth.pubkey))
 
@@ -415,7 +308,7 @@ func (c *wireCodec) makeHandshakeHeader(toID enode.ID, addr string, challenge *w
 	}
 
 	// Create session keys.
-	sec := c.deriveKeys(c.localnode.ID(), challenge.node.ID(), ephkey, remotePubkey, challenge)
+	sec := c.deriveKeys(c.localnode.ID(), challenge.Node.ID(), ephkey, remotePubkey, challenge)
 	if sec == nil {
 		return nil, nil, fmt.Errorf("key derivation failed")
 	}
@@ -423,10 +316,10 @@ func (c *wireCodec) makeHandshakeHeader(toID enode.ID, addr string, challenge *w
 }
 
 // encodeMessage encodes an encrypted message packet.
-func (c *wireCodec) encodeMessage(toID enode.ID, s *session, packet packetV5) ([]byte, packetNonce, error) {
+func (c *Codec) encodeMessage(toID enode.ID, s *session, packet Packet) ([]byte, Nonce, error) {
 	var (
 		head = c.makeHeader(toID, flagMessage, 0)
-		auth messageAuthDataV5
+		auth messageAuthData
 	)
 
 	// Create the nonce.
@@ -444,7 +337,7 @@ func (c *wireCodec) encodeMessage(toID enode.ID, s *session, packet packetV5) ([
 
 	// Encode the message plaintext.
 	c.msgbuf.Reset()
-	c.msgbuf.WriteByte(packet.kind())
+	c.msgbuf.WriteByte(packet.Kind())
 	if err := rlp.Encode(&c.msgbuf, packet); err != nil {
 		return nil, auth.Nonce, err
 	}
@@ -459,8 +352,8 @@ func (c *wireCodec) encodeMessage(toID enode.ID, s *session, packet packetV5) ([
 	return output, auth.Nonce, err
 }
 
-// decode decodes a discovery packet.
-func (c *wireCodec) decode(input []byte, addr string) (src enode.ID, n *enode.Node, p packetV5, err error) {
+// Decode decodes a discovery packet.
+func (c *Codec) Decode(input []byte, addr string) (src enode.ID, n *enode.Node, p Packet, err error) {
 	// Delete timed-out handshakes. This must happen before decoding to avoid
 	// processing the same handshake twice.
 	c.sc.handshakeGC()
@@ -475,7 +368,7 @@ func (c *wireCodec) decode(input []byte, addr string) (src enode.ID, n *enode.No
 	mask.XORKeyStream(headerData, headerData)
 
 	// Decode and verify the header.
-	var head packetHeaderV5
+	var head packetHeader
 	c.reader.Reset(input)
 	binary.Read(&c.reader, binary.BigEndian, &head)
 	if head.ProtocolID != protocolIDV5 {
@@ -503,16 +396,16 @@ func (c *wireCodec) decode(input []byte, addr string) (src enode.ID, n *enode.No
 }
 
 // decodeWhoareyou reads packet data after the header as a WHOAREYOU packet.
-func (c *wireCodec) decodeWhoareyou(head *packetHeaderV5) (packetV5, error) {
+func (c *Codec) decodeWhoareyou(head *packetHeader) (Packet, error) {
 	if c.reader.Len() < sizeofWhoareyouAuthDataV5 {
 		return nil, errTooShort
 	}
 	if int(head.AuthSize) != sizeofWhoareyouAuthDataV5 {
 		return nil, fmt.Errorf("invalid auth size for whoareyou")
 	}
-	auth := new(whoareyouAuthDataV5)
+	auth := new(whoareyouAuthData)
 	binary.Read(&c.reader, binary.BigEndian, auth)
-	p := &whoareyouV5{
+	p := &Whoareyou{
 		AuthTag:   auth.Nonce,
 		IDNonce:   auth.IDNonce,
 		RecordSeq: auth.RecordSeq,
@@ -520,7 +413,7 @@ func (c *wireCodec) decodeWhoareyou(head *packetHeaderV5) (packetV5, error) {
 	return p, nil
 }
 
-func (c *wireCodec) decodeHandshakeMessage(fromAddr string, head *packetHeaderV5, input []byte) (n *enode.Node, p packetV5, err error) {
+func (c *Codec) decodeHandshakeMessage(fromAddr string, head *packetHeader, input []byte) (n *enode.Node, p Packet, err error) {
 	node, nonce, session, err := c.decodeHandshake(fromAddr, head)
 	if err != nil {
 		return nil, nil, err
@@ -538,31 +431,31 @@ func (c *wireCodec) decodeHandshakeMessage(fromAddr string, head *packetHeaderV5
 	return node, msg, nil
 }
 
-func (c *wireCodec) decodeHandshake(fromAddr string, head *packetHeaderV5) (*enode.Node, packetNonce, *session, error) {
+func (c *Codec) decodeHandshake(fromAddr string, head *packetHeader) (*enode.Node, Nonce, *session, error) {
 	auth, err := c.decodeHandshakeAuthData(head)
 	if err != nil {
-		return nil, packetNonce{}, nil, err
+		return nil, Nonce{}, nil, err
 	}
 
 	// Verify against our last WHOAREYOU.
 	challenge := c.sc.getHandshake(head.SrcID, fromAddr)
 	if challenge == nil {
-		return nil, packetNonce{}, nil, errUnexpectedHandshake
+		return nil, Nonce{}, nil, errUnexpectedHandshake
 	}
 	// Get node record.
-	node, err := c.decodeHandshakeRecord(challenge.node, head.SrcID, auth.record)
+	node, err := c.decodeHandshakeRecord(challenge.Node, head.SrcID, auth.record)
 	if err != nil {
-		return nil, packetNonce{}, nil, err
+		return nil, Nonce{}, nil, err
 	}
 	// Verify ephemeral key is on curve.
-	ephkey, err := decodePubkey(c.privkey.Curve, auth.pubkey)
+	ephkey, err := DecodePubkey(c.privkey.Curve, auth.pubkey)
 	if err != nil {
-		return nil, packetNonce{}, nil, errInvalidAuthKey
+		return nil, Nonce{}, nil, errInvalidAuthKey
 	}
 	// Verify ID nonce signature.
 	err = c.verifyIDSignature(challenge.IDNonce[:], auth.pubkey, auth.signature, node)
 	if err != nil {
-		return nil, packetNonce{}, nil, err
+		return nil, Nonce{}, nil, err
 	}
 	// Derive sesssion keys.
 	session := c.deriveKeys(head.SrcID, c.localnode.ID(), c.privkey, ephkey, challenge)
@@ -571,7 +464,7 @@ func (c *wireCodec) decodeHandshake(fromAddr string, head *packetHeaderV5) (*eno
 }
 
 // decodeHandshakeAuthData reads the authdata section of a handshake packet.
-func (c *wireCodec) decodeHandshakeAuthData(head *packetHeaderV5) (*handshakeAuthDataV5, error) {
+func (c *Codec) decodeHandshakeAuthData(head *packetHeader) (*handshakeAuthData, error) {
 	if int(head.AuthSize) < sizeofHandshakeAuthDataV5 {
 		return nil, fmt.Errorf("header authsize %d too low for handshake", head.AuthSize)
 	}
@@ -580,7 +473,7 @@ func (c *wireCodec) decodeHandshakeAuthData(head *packetHeaderV5) (*handshakeAut
 	}
 
 	// Decode fixed size part.
-	var auth handshakeAuthDataV5
+	var auth handshakeAuthData
 	binary.Read(&c.reader, binary.BigEndian, &auth.h)
 	if auth.h.Version > handshakeVersion || auth.h.Version < minVersion {
 		return nil, fmt.Errorf("invalid handshake version %d", auth.h.Version)
@@ -616,7 +509,7 @@ func readNew(data *[]byte, length int, r *bytes.Reader) bool {
 // decodeHandshakeRecord verifies the node record contained in a handshake packet. The
 // remote node should include the record if we don't have one or if ours is older than the
 // latest sequence number.
-func (c *wireCodec) decodeHandshakeRecord(local *enode.Node, wantID enode.ID, remote []byte) (node *enode.Node, err error) {
+func (c *Codec) decodeHandshakeRecord(local *enode.Node, wantID enode.ID, remote []byte) (node *enode.Node, err error) {
 	node = local
 	if len(remote) > 0 {
 		var record enr.Record
@@ -641,11 +534,11 @@ func (c *wireCodec) decodeHandshakeRecord(local *enode.Node, wantID enode.ID, re
 }
 
 // decodeMessage reads packet data following the header as an ordinary message packet.
-func (c *wireCodec) decodeMessage(fromAddr string, head *packetHeaderV5, input []byte) (packetV5, error) {
+func (c *Codec) decodeMessage(fromAddr string, head *packetHeader, input []byte) (Packet, error) {
 	if c.reader.Len() < sizeofMessageAuthDataV5 {
 		return nil, errTooShort
 	}
-	auth := new(messageAuthDataV5)
+	auth := new(messageAuthData)
 	binary.Read(&c.reader, binary.BigEndian, auth)
 
 	// Try decrypting the message.
@@ -653,12 +546,12 @@ func (c *wireCodec) decodeMessage(fromAddr string, head *packetHeaderV5, input [
 	msg, err := c.decryptMessage(input, auth.Nonce, key)
 	if err == errMessageDecrypt {
 		// It didn't work. Start the handshake since this is an ordinary message packet.
-		return &unknownV5{AuthTag: auth.Nonce}, nil
+		return &Unknown{AuthTag: auth.Nonce}, nil
 	}
 	return msg, err
 }
 
-func (c *wireCodec) decryptMessage(input []byte, nonce packetNonce, readKey []byte) (packetV5, error) {
+func (c *Codec) decryptMessage(input []byte, nonce Nonce, readKey []byte) (Packet, error) {
 	headerData := input[:len(input)-c.reader.Len()]
 	messageCT := input[len(headerData):]
 	message, err := decryptGCM(readKey, nonce[:], messageCT, headerData)
@@ -668,46 +561,11 @@ func (c *wireCodec) decryptMessage(input []byte, nonce packetNonce, readKey []by
 	if len(message) == 0 {
 		return nil, errMessageTooShort
 	}
-	return decodePacketBodyV5(message[0], message[1:])
-}
-
-// decodePacketBody decodes the body of an encrypted discovery packet.
-func decodePacketBodyV5(ptype byte, body []byte) (packetV5, error) {
-	var dec packetV5
-	switch ptype {
-	case p_pingV5:
-		dec = new(pingV5)
-	case p_pongV5:
-		dec = new(pongV5)
-	case p_findnodeV5:
-		dec = new(findnodeV5)
-	case p_nodesV5:
-		dec = new(nodesV5)
-	case p_talkreqV5:
-		dec = new(talkreqV5)
-	case p_talkrespV5:
-		dec = new(talkrespV5)
-	case p_requestTicketV5:
-		dec = new(requestTicketV5)
-	case p_ticketV5:
-		dec = new(ticketV5)
-	case p_regtopicV5:
-		dec = new(regtopicV5)
-	case p_regconfirmationV5:
-		dec = new(regconfirmationV5)
-	case p_topicqueryV5:
-		dec = new(topicqueryV5)
-	default:
-		return nil, fmt.Errorf("unknown packet type %d", ptype)
-	}
-	if err := rlp.DecodeBytes(body, dec); err != nil {
-		return nil, err
-	}
-	return dec, nil
+	return DecodeMessage(message[0], message[1:])
 }
 
 // signIDNonce creates the ID nonce signature.
-func (c *wireCodec) signIDNonce(nonce, ephkey []byte) ([]byte, error) {
+func (c *Codec) signIDNonce(nonce, ephkey []byte) ([]byte, error) {
 	idsig, err := crypto.Sign(c.idNonceHash(nonce, ephkey), c.privkey)
 	if err != nil {
 		return nil, fmt.Errorf("can't sign: %v", err)
@@ -716,7 +574,7 @@ func (c *wireCodec) signIDNonce(nonce, ephkey []byte) ([]byte, error) {
 }
 
 // idNonceHash computes the hash of id nonce with prefix.
-func (c *wireCodec) idNonceHash(nonce, ephkey []byte) []byte {
+func (c *Codec) idNonceHash(nonce, ephkey []byte) []byte {
 	h := c.sha256reset()
 	h.Write([]byte(idNoncePrefix))
 	h.Write(nonce)
@@ -725,7 +583,7 @@ func (c *wireCodec) idNonceHash(nonce, ephkey []byte) []byte {
 }
 
 // verifyIDSignature checks that signature over idnonce was made by the node with given record.
-func (c *wireCodec) verifyIDSignature(nonce, ephkey, sig []byte, n *enode.Node) error {
+func (c *Codec) verifyIDSignature(nonce, ephkey, sig []byte, n *enode.Node) error {
 	switch idscheme := n.Record().IdentityScheme(); idscheme {
 	case "v4":
 		var pk ecdsa.PublicKey
@@ -740,7 +598,7 @@ func (c *wireCodec) verifyIDSignature(nonce, ephkey, sig []byte, n *enode.Node) 
 }
 
 // deriveKeys generates session keys using elliptic-curve Diffie-Hellman key agreement.
-func (c *wireCodec) deriveKeys(n1, n2 enode.ID, priv *ecdsa.PrivateKey, pub *ecdsa.PublicKey, challenge *whoareyouV5) *session {
+func (c *Codec) deriveKeys(n1, n2 enode.ID, priv *ecdsa.PrivateKey, pub *ecdsa.PublicKey, challenge *Whoareyou) *session {
 	eph := ecdh(priv, pub)
 	if eph == nil {
 		return nil
@@ -763,13 +621,13 @@ func (c *wireCodec) deriveKeys(n1, n2 enode.ID, priv *ecdsa.PrivateKey, pub *ecd
 }
 
 // sha256reset returns the shared hash instance.
-func (c *wireCodec) sha256reset() hash.Hash {
+func (c *Codec) sha256reset() hash.Hash {
 	c.sha256.Reset()
 	return c.sha256
 }
 
 // sha256sum computes sha256 on the concatenation of inputs.
-func (c *wireCodec) sha256sum(inputs ...[]byte) []byte {
+func (c *Codec) sha256sum(inputs ...[]byte) []byte {
 	c.sha256.Reset()
 	for _, b := range inputs {
 		c.sha256.Write(b)
@@ -778,7 +636,7 @@ func (c *wireCodec) sha256sum(inputs ...[]byte) []byte {
 }
 
 // maskOutputPacket applies protocol header masking to a packet sent to destID.
-func (c *wireCodec) maskOutputPacket(destID enode.ID, output []byte, headerDataLen int) []byte {
+func (c *Codec) maskOutputPacket(destID enode.ID, output []byte, headerDataLen int) []byte {
 	masked := make([]byte, sizeofMaskingIV+len(output))
 	c.sc.maskingIVGen(masked[:sizeofMaskingIV])
 	mask := headerMask(destID, masked)
@@ -836,4 +694,25 @@ func decryptGCM(key, nonce, ct, authData []byte) ([]byte, error) {
 	}
 	pt := make([]byte, 0, len(ct))
 	return aesgcm.Open(pt, nonce, ct, authData)
+}
+
+// Pubkey represents an encoded public key.
+type Pubkey [33]byte
+
+// EncodePubkey encodes a public key into the 33-byte compressed format.
+func EncodePubkey(key *ecdsa.PublicKey) Pubkey {
+	var enc Pubkey
+	copy(enc[:], crypto.CompressPubkey(key))
+	return enc
+}
+
+// DecodePubkey decodes a public key from the 33-byte compressed format.
+func DecodePubkey(curve elliptic.Curve, e []byte) (*ecdsa.PublicKey, error) {
+	if len(e) != len(Pubkey{}) {
+		return nil, errors.New("wrong size public key data")
+	}
+	if curve != crypto.S256() {
+		return nil, errors.New("curves other than secp256k1 are not supported")
+	}
+	return crypto.DecompressPubkey(e)
 }

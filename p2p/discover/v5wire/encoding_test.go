@@ -14,7 +14,7 @@
 // You should have received a copy of the GNU Lesser General Public License
 // along with the go-ethereum library. If not, see <http://www.gnu.org/licenses/>.
 
-package discover
+package v5wire
 
 import (
 	"bytes"
@@ -22,7 +22,9 @@ import (
 	"encoding/hex"
 	"flag"
 	"fmt"
+	"io/ioutil"
 	"net"
+	"os"
 	"path/filepath"
 	"reflect"
 	"strings"
@@ -54,10 +56,10 @@ func TestDeriveKeysV5(t *testing.T) {
 	var (
 		n1        = enode.ID{1}
 		n2        = enode.ID{2}
-		challenge = &whoareyouV5{}
+		challenge = &Whoareyou{}
 		db, _     = enode.OpenDB("")
 		ln        = enode.NewLocalNode(db, testKeyA)
-		c         = newWireCodec(ln, testKeyA, mclock.System{})
+		c         = NewCodec(ln, testKeyA, mclock.System{})
 	)
 	defer db.Close()
 
@@ -78,28 +80,28 @@ func TestHandshakeV5(t *testing.T) {
 	defer net.close()
 
 	// A -> B   RANDOM PACKET
-	packet, _ := net.nodeA.encode(t, net.nodeB, &findnodeV5{})
-	resp := net.nodeB.expectDecode(t, p_unknownV5, packet)
+	packet, _ := net.nodeA.encode(t, net.nodeB, &Findnode{})
+	resp := net.nodeB.expectDecode(t, UnknownPacket, packet)
 
 	// A <- B   WHOAREYOU
-	challenge := &whoareyouV5{
-		AuthTag:   resp.(*unknownV5).AuthTag,
+	challenge := &Whoareyou{
+		AuthTag:   resp.(*Unknown).AuthTag,
 		IDNonce:   testIDnonce,
 		RecordSeq: 0,
 	}
 	whoareyou, _ := net.nodeB.encode(t, net.nodeA, challenge)
-	net.nodeA.expectDecode(t, p_whoareyouV5, whoareyou)
+	net.nodeA.expectDecode(t, WhoareyouPacket, whoareyou)
 
 	// A -> B   FINDNODE (handshake packet)
-	findnode, _ := net.nodeA.encodeWithChallenge(t, net.nodeB, challenge, &findnodeV5{})
-	net.nodeB.expectDecode(t, p_findnodeV5, findnode)
+	findnode, _ := net.nodeA.encodeWithChallenge(t, net.nodeB, challenge, &Findnode{})
+	net.nodeB.expectDecode(t, FindnodeMsg, findnode)
 	if len(net.nodeB.c.sc.handshakes) > 0 {
 		t.Fatalf("node B didn't remove handshake from challenge map")
 	}
 
 	// A <- B   NODES
-	nodes, _ := net.nodeB.encode(t, net.nodeA, &nodesV5{Total: 1})
-	net.nodeA.expectDecode(t, p_nodesV5, nodes)
+	nodes, _ := net.nodeB.encode(t, net.nodeA, &Nodes{Total: 1})
+	net.nodeA.expectDecode(t, NodesMsg, nodes)
 }
 
 // This test checks that handshake attempts are removed within the timeout.
@@ -109,21 +111,21 @@ func TestHandshakeV5_timeout(t *testing.T) {
 	defer net.close()
 
 	// A -> B   RANDOM PACKET
-	packet, _ := net.nodeA.encode(t, net.nodeB, &findnodeV5{})
-	resp := net.nodeB.expectDecode(t, p_unknownV5, packet)
+	packet, _ := net.nodeA.encode(t, net.nodeB, &Findnode{})
+	resp := net.nodeB.expectDecode(t, UnknownPacket, packet)
 
 	// A <- B   WHOAREYOU
-	challenge := &whoareyouV5{
-		AuthTag:   resp.(*unknownV5).AuthTag,
+	challenge := &Whoareyou{
+		AuthTag:   resp.(*Unknown).AuthTag,
 		IDNonce:   testIDnonce,
 		RecordSeq: 0,
 	}
 	whoareyou, _ := net.nodeB.encode(t, net.nodeA, challenge)
-	net.nodeA.expectDecode(t, p_whoareyouV5, whoareyou)
+	net.nodeA.expectDecode(t, WhoareyouPacket, whoareyou)
 
 	// A -> B   FINDNODE (handshake packet) after timeout
 	net.clock.Run(handshakeTimeout + 1)
-	findnode, _ := net.nodeA.encodeWithChallenge(t, net.nodeB, challenge, &findnodeV5{})
+	findnode, _ := net.nodeA.encodeWithChallenge(t, net.nodeB, challenge, &Findnode{})
 	net.nodeB.expectDecodeErr(t, errUnexpectedHandshake, findnode)
 }
 
@@ -134,30 +136,30 @@ func TestHandshakeV5_norecord(t *testing.T) {
 	defer net.close()
 
 	// A -> B   RANDOM PACKET
-	packet, _ := net.nodeA.encode(t, net.nodeB, &findnodeV5{})
-	resp := net.nodeB.expectDecode(t, p_unknownV5, packet)
+	packet, _ := net.nodeA.encode(t, net.nodeB, &Findnode{})
+	resp := net.nodeB.expectDecode(t, UnknownPacket, packet)
 
 	// A <- B   WHOAREYOU
 	nodeA := net.nodeA.n()
 	if nodeA.Seq() == 0 {
 		t.Fatal("need non-zero sequence number")
 	}
-	challenge := &whoareyouV5{
-		AuthTag:   resp.(*unknownV5).AuthTag,
+	challenge := &Whoareyou{
+		AuthTag:   resp.(*Unknown).AuthTag,
 		IDNonce:   testIDnonce,
 		RecordSeq: nodeA.Seq(),
-		node:      nodeA,
+		Node:      nodeA,
 	}
 	whoareyou, _ := net.nodeB.encode(t, net.nodeA, challenge)
-	net.nodeA.expectDecode(t, p_whoareyouV5, whoareyou)
+	net.nodeA.expectDecode(t, WhoareyouPacket, whoareyou)
 
 	// A -> B   FINDNODE
-	findnode, _ := net.nodeA.encodeWithChallenge(t, net.nodeB, challenge, &findnodeV5{})
-	net.nodeB.expectDecode(t, p_findnodeV5, findnode)
+	findnode, _ := net.nodeA.encodeWithChallenge(t, net.nodeB, challenge, &Findnode{})
+	net.nodeB.expectDecode(t, FindnodeMsg, findnode)
 
 	// A <- B   NODES
-	nodes, _ := net.nodeB.encode(t, net.nodeA, &nodesV5{Total: 1})
-	net.nodeA.expectDecode(t, p_nodesV5, nodes)
+	nodes, _ := net.nodeB.encode(t, net.nodeA, &Nodes{Total: 1})
+	net.nodeA.expectDecode(t, NodesMsg, nodes)
 }
 
 // In this test, A tries to send FINDNODE with existing secrets but B doesn't know
@@ -174,13 +176,13 @@ func TestHandshakeV5_rekey(t *testing.T) {
 	net.nodeA.c.sc.storeNewSession(net.nodeB.id(), net.nodeB.addr(), session)
 
 	// A -> B   FINDNODE (encrypted with zero keys)
-	findnode, authTag := net.nodeA.encode(t, net.nodeB, &findnodeV5{})
-	net.nodeB.expectDecode(t, p_unknownV5, findnode)
+	findnode, authTag := net.nodeA.encode(t, net.nodeB, &Findnode{})
+	net.nodeB.expectDecode(t, UnknownPacket, findnode)
 
 	// A <- B   WHOAREYOU
-	challenge := &whoareyouV5{AuthTag: authTag, IDNonce: testIDnonce}
+	challenge := &Whoareyou{AuthTag: authTag, IDNonce: testIDnonce}
 	whoareyou, _ := net.nodeB.encode(t, net.nodeA, challenge)
-	net.nodeA.expectDecode(t, p_whoareyouV5, whoareyou)
+	net.nodeA.expectDecode(t, WhoareyouPacket, whoareyou)
 
 	// Check that new keys haven't been stored yet.
 	sa := net.nodeA.c.sc.session(net.nodeB.id(), net.nodeB.addr())
@@ -192,12 +194,12 @@ func TestHandshakeV5_rekey(t *testing.T) {
 	}
 
 	// A -> B   FINDNODE encrypted with new keys
-	findnode, _ = net.nodeA.encodeWithChallenge(t, net.nodeB, challenge, &findnodeV5{})
-	net.nodeB.expectDecode(t, p_findnodeV5, findnode)
+	findnode, _ = net.nodeA.encodeWithChallenge(t, net.nodeB, challenge, &Findnode{})
+	net.nodeB.expectDecode(t, FindnodeMsg, findnode)
 
 	// A <- B   NODES
-	nodes, _ := net.nodeB.encode(t, net.nodeA, &nodesV5{Total: 1})
-	net.nodeA.expectDecode(t, p_nodesV5, nodes)
+	nodes, _ := net.nodeB.encode(t, net.nodeA, &Nodes{Total: 1})
+	net.nodeA.expectDecode(t, NodesMsg, nodes)
 }
 
 // In this test A and B have different keys before the handshake.
@@ -218,21 +220,21 @@ func TestHandshakeV5_rekey2(t *testing.T) {
 	net.nodeB.c.sc.storeNewSession(net.nodeA.id(), net.nodeA.addr(), initKeysB)
 
 	// A -> B   FINDNODE encrypted with initKeysA
-	findnode, authTag := net.nodeA.encode(t, net.nodeB, &findnodeV5{Distances: []uint{3}})
-	net.nodeB.expectDecode(t, p_unknownV5, findnode)
+	findnode, authTag := net.nodeA.encode(t, net.nodeB, &Findnode{Distances: []uint{3}})
+	net.nodeB.expectDecode(t, UnknownPacket, findnode)
 
 	// A <- B   WHOAREYOU
-	challenge := &whoareyouV5{AuthTag: authTag, IDNonce: testIDnonce}
+	challenge := &Whoareyou{AuthTag: authTag, IDNonce: testIDnonce}
 	whoareyou, _ := net.nodeB.encode(t, net.nodeA, challenge)
-	net.nodeA.expectDecode(t, p_whoareyouV5, whoareyou)
+	net.nodeA.expectDecode(t, WhoareyouPacket, whoareyou)
 
 	// A -> B   FINDNODE (handshake packet)
-	findnode, _ = net.nodeA.encodeWithChallenge(t, net.nodeB, challenge, &findnodeV5{})
-	net.nodeB.expectDecode(t, p_findnodeV5, findnode)
+	findnode, _ = net.nodeA.encodeWithChallenge(t, net.nodeB, challenge, &Findnode{})
+	net.nodeB.expectDecode(t, FindnodeMsg, findnode)
 
 	// A <- B   NODES
-	nodes, _ := net.nodeB.encode(t, net.nodeA, &nodesV5{Total: 1})
-	net.nodeA.expectDecode(t, p_nodesV5, nodes)
+	nodes, _ := net.nodeB.encode(t, net.nodeA, &Nodes{Total: 1})
+	net.nodeA.expectDecode(t, NodesMsg, nodes)
 }
 
 // This test checks some malformed packets.
@@ -257,13 +259,13 @@ func TestTestVectorsV5(t *testing.T) {
 			writeKey: hexutil.MustDecode("0x00000000000000000000000000000000"),
 			readKey:  hexutil.MustDecode("0x01010101010101010101010101010101"),
 		}
-		challenge0 = &whoareyouV5{
-			AuthTag:   packetNonce{1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12},
+		challenge0 = &Whoareyou{
+			AuthTag:   Nonce{1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12},
 			IDNonce:   [32]byte{1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16},
 			RecordSeq: 0,
 		}
-		challenge1 = &whoareyouV5{
-			AuthTag:   packetNonce{1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12},
+		challenge1 = &Whoareyou{
+			AuthTag:   Nonce{1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12},
 			IDNonce:   [32]byte{1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16},
 			RecordSeq: 1,
 		}
@@ -271,8 +273,8 @@ func TestTestVectorsV5(t *testing.T) {
 
 	type testVectorTest struct {
 		name      string               // test vector name
-		packet    packetV5             // the packet to be encoded
-		challenge *whoareyouV5         // handshake challenge passed to encoder
+		packet    Packet               // the packet to be encoded
+		challenge *Whoareyou           // handshake challenge passed to encoder
 		prep      func(*handshakeTest) // called before encode/decode
 	}
 	tests := []testVectorTest{
@@ -282,7 +284,7 @@ func TestTestVectorsV5(t *testing.T) {
 		},
 		{
 			name: "v5.1-ping-message",
-			packet: &pingV5{
+			packet: &Ping{
 				ReqID:  []byte{0, 0, 0, 1},
 				ENRSeq: 2,
 			},
@@ -293,27 +295,27 @@ func TestTestVectorsV5(t *testing.T) {
 		},
 		{
 			name: "v5.1-ping-handshake",
-			packet: &pingV5{
+			packet: &Ping{
 				ReqID:  []byte{0, 0, 0, 1},
 				ENRSeq: 1,
 			},
 			challenge: challenge1,
 			prep: func(net *handshakeTest) {
 				c := *challenge1
-				c.node = net.nodeA.n()
+				c.Node = net.nodeA.n()
 				net.nodeB.c.sc.storeSentHandshake(idA, addr, &c)
 			},
 		},
 		{
 			name: "v5.1-ping-handshake-enr",
-			packet: &pingV5{
+			packet: &Ping{
 				ReqID:  []byte{0, 0, 0, 1},
 				ENRSeq: 1,
 			},
 			challenge: challenge0,
 			prep: func(net *handshakeTest) {
 				c := *challenge0
-				c.node = net.nodeA.n()
+				c.Node = net.nodeA.n()
 				net.nodeB.c.sc.storeSentHandshake(idA, addr, &c)
 			},
 		},
@@ -332,8 +334,8 @@ func TestTestVectorsV5(t *testing.T) {
 			file := filepath.Join("testdata", test.name+".txt")
 			if *writeTestVectorsFlag {
 				// Override all random inputs.
-				net.nodeA.c.sc.nonceGen = func(counter uint32) (packetNonce, error) {
-					return packetNonce{0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF}, nil
+				net.nodeA.c.sc.nonceGen = func(counter uint32) (Nonce, error) {
+					return Nonce{0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF}, nil
 				}
 				net.nodeA.c.sc.maskingIVGen = func(buf []byte) error {
 					return nil // all zero
@@ -347,15 +349,15 @@ func TestTestVectorsV5(t *testing.T) {
 				writeTestVector(file, comment, d)
 			}
 			enc := hexFile(file)
-			net.nodeB.expectDecode(t, test.packet.kind(), enc)
+			net.nodeB.expectDecode(t, test.packet.Kind(), enc)
 		})
 	}
 }
 
 // testVectorComment creates the commentary for discv5 test vector files.
-func testVectorComment(net *handshakeTest, p packetV5, challenge *whoareyouV5, nonce packetNonce) string {
+func testVectorComment(net *handshakeTest, p Packet, challenge *Whoareyou, nonce Nonce) string {
 	o := new(strings.Builder)
-	printWhoareyou := func(p *whoareyouV5) {
+	printWhoareyou := func(p *Whoareyou) {
 		fmt.Fprintf(o, "whoareyou.request-nonce = %#x\n", p.AuthTag[:])
 		fmt.Fprintf(o, "whoareyou.id-nonce = %#x\n", p.IDNonce[:])
 		fmt.Fprintf(o, "whoareyou.enr-seq = %d\n", p.RecordSeq)
@@ -364,10 +366,10 @@ func testVectorComment(net *handshakeTest, p packetV5, challenge *whoareyouV5, n
 	fmt.Fprintf(o, "src-node-id = %#x\n", net.nodeA.id().Bytes())
 	fmt.Fprintf(o, "dest-node-id = %#x\n", net.nodeB.id().Bytes())
 	switch p := p.(type) {
-	case *whoareyouV5:
+	case *Whoareyou:
 		// WHOAREYOU packet.
 		printWhoareyou(p)
-	case *pingV5:
+	case *Ping:
 		fmt.Fprintf(o, "nonce = %#x\n", nonce[:])
 		fmt.Fprintf(o, "read-key = %#x\n", net.nodeA.c.sc.session(net.nodeB.id(), net.nodeB.addr()).writeKey)
 		fmt.Fprintf(o, "ping.req-id = %#x\n", p.ReqID)
@@ -392,21 +394,21 @@ func BenchmarkV5_DecodeHandshakePingSecp256k1(b *testing.B) {
 
 	var (
 		idA       = net.nodeA.id()
-		challenge = &whoareyouV5{node: net.nodeB.n()}
-		message   = &pingV5{ReqID: []byte("reqid")}
+		challenge = &Whoareyou{Node: net.nodeB.n()}
+		message   = &Ping{ReqID: []byte("reqid")}
 	)
-	enc, _, err := net.nodeA.c.encode(net.nodeB.id(), "", message, challenge)
+	enc, _, err := net.nodeA.c.Encode(net.nodeB.id(), "", message, challenge)
 	if err != nil {
 		b.Fatal("can't encode handshake packet")
 	}
-	challenge.node = nil // force ENR signature verification in decoder
+	challenge.Node = nil // force ENR signature verification in decoder
 	b.ResetTimer()
 
 	input := make([]byte, len(enc))
 	for i := 0; i < b.N; i++ {
 		copy(input, enc)
 		net.nodeB.c.sc.storeSentHandshake(idA, "", challenge)
-		_, _, _, err := net.nodeB.c.decode(input, "")
+		_, _, _, err := net.nodeB.c.Decode(input, "")
 		if err != nil {
 			b.Fatal(err)
 		}
@@ -425,8 +427,8 @@ func BenchmarkV5_DecodePing(b *testing.B) {
 	net.nodeA.c.sc.storeNewSession(net.nodeB.id(), net.nodeB.addr(), session)
 	net.nodeB.c.sc.storeNewSession(net.nodeA.id(), net.nodeA.addr(), session.keysFlipped())
 	addrB := net.nodeA.addr()
-	ping := &pingV5{ReqID: []byte("reqid"), ENRSeq: 5}
-	enc, _, err := net.nodeA.c.encode(net.nodeB.id(), addrB, ping, nil)
+	ping := &Ping{ReqID: []byte("reqid"), ENRSeq: 5}
+	enc, _, err := net.nodeA.c.Encode(net.nodeB.id(), addrB, ping, nil)
 	if err != nil {
 		b.Fatalf("can't encode: %v", err)
 	}
@@ -435,8 +437,8 @@ func BenchmarkV5_DecodePing(b *testing.B) {
 	input := make([]byte, len(enc))
 	for i := 0; i < b.N; i++ {
 		copy(input, enc)
-		_, _, packet, _ := net.nodeB.c.decode(input, addrB)
-		if _, ok := packet.(*pingV5); !ok {
+		_, _, packet, _ := net.nodeB.c.Decode(input, addrB)
+		if _, ok := packet.(*Ping); !ok {
 			b.Fatalf("wrong packet type %T", packet)
 		}
 	}
@@ -451,7 +453,7 @@ type handshakeTest struct {
 
 type handshakeTestNode struct {
 	ln *enode.LocalNode
-	c  *wireCodec
+	c  *Codec
 }
 
 func newHandshakeTest() *handshakeTest {
@@ -473,41 +475,43 @@ func (n *handshakeTestNode) init(key *ecdsa.PrivateKey, ip net.IP, clock mclock.
 	if n.ln.Node().Seq() != 1 {
 		panic(fmt.Errorf("unexpected seq %d", n.ln.Node().Seq()))
 	}
-	n.c = newWireCodec(n.ln, key, clock)
+	n.c = NewCodec(n.ln, key, clock)
 }
 
-func (n *handshakeTestNode) encode(t testing.TB, to handshakeTestNode, p packetV5) ([]byte, packetNonce) {
+func (n *handshakeTestNode) encode(t testing.TB, to handshakeTestNode, p Packet) ([]byte, Nonce) {
 	t.Helper()
 	return n.encodeWithChallenge(t, to, nil, p)
 }
 
-func (n *handshakeTestNode) encodeWithChallenge(t testing.TB, to handshakeTestNode, c *whoareyouV5, p packetV5) ([]byte, packetNonce) {
+func (n *handshakeTestNode) encodeWithChallenge(t testing.TB, to handshakeTestNode, c *Whoareyou, p Packet) ([]byte, Nonce) {
 	t.Helper()
+
 	// Copy challenge and add destination node. This avoids sharing 'c' among the two codecs.
-	var challenge *whoareyouV5
+	var challenge *Whoareyou
 	if c != nil {
 		challengeCopy := *c
 		challenge = &challengeCopy
-		challenge.node = to.n()
+		challenge.Node = to.n()
 	}
 	// Encode to destination.
-	enc, nonce, err := n.c.encode(to.id(), to.addr(), p, challenge)
+	enc, nonce, err := n.c.Encode(to.id(), to.addr(), p, challenge)
 	if err != nil {
 		t.Fatal(fmt.Errorf("(%s) %v", n.ln.ID().TerminalString(), err))
 	}
-	t.Logf("(%s) -> (%s)   %s\n%s", n.ln.ID().TerminalString(), to.id().TerminalString(), p.name(), hex.Dump(enc))
+	t.Logf("(%s) -> (%s)   %s\n%s", n.ln.ID().TerminalString(), to.id().TerminalString(), p.Name(), hex.Dump(enc))
 	return enc, nonce
 }
 
-func (n *handshakeTestNode) expectDecode(t *testing.T, ptype byte, p []byte) packetV5 {
+func (n *handshakeTestNode) expectDecode(t *testing.T, ptype byte, p []byte) Packet {
 	t.Helper()
+
 	dec, err := n.decode(p)
 	if err != nil {
 		t.Fatal(fmt.Errorf("(%s) %v", n.ln.ID().TerminalString(), err))
 	}
 	t.Logf("(%s) %#v", n.ln.ID().TerminalString(), pp.NewFormatter(dec))
-	if dec.kind() != ptype {
-		t.Fatalf("expected packet type %d, got %d", ptype, dec.kind())
+	if dec.Kind() != ptype {
+		t.Fatalf("expected packet type %d, got %d", ptype, dec.Kind())
 	}
 	return dec
 }
@@ -519,8 +523,8 @@ func (n *handshakeTestNode) expectDecodeErr(t *testing.T, wantErr error, p []byt
 	}
 }
 
-func (n *handshakeTestNode) decode(input []byte) (packetV5, error) {
-	_, _, p, err := n.c.decode(input, "127.0.0.1")
+func (n *handshakeTestNode) decode(input []byte) (Packet, error) {
+	_, _, p, err := n.c.Decode(input, "127.0.0.1")
 	return p, err
 }
 
@@ -534,4 +538,59 @@ func (n *handshakeTestNode) addr() string {
 
 func (n *handshakeTestNode) id() enode.ID {
 	return n.ln.ID()
+}
+
+// hexFile reads the given file and decodes the hex data contained in it.
+// Whitespace and any lines beginning with the # character are ignored.
+func hexFile(file string) []byte {
+	fileContent, err := ioutil.ReadFile(file)
+	if err != nil {
+		panic(err)
+	}
+
+	// Gather hex data, ignore comments.
+	var text []byte
+	for _, line := range bytes.Split(fileContent, []byte("\n")) {
+		line = bytes.TrimSpace(line)
+		if len(line) > 0 && line[0] == '#' {
+			continue
+		}
+		text = append(text, line...)
+	}
+
+	// Parse the hex.
+	if bytes.HasPrefix(text, []byte("0x")) {
+		text = text[2:]
+	}
+	data := make([]byte, hex.DecodedLen(len(text)))
+	if _, err := hex.Decode(data, text); err != nil {
+		panic("invalid hex in " + file)
+	}
+	return data
+}
+
+// writeTestVector writes a test vector file with the given commentary and binary data.
+func writeTestVector(file, comment string, data []byte) {
+	fd, err := os.OpenFile(file, os.O_WRONLY|os.O_CREATE|os.O_TRUNC, 0644)
+	if err != nil {
+		panic(err)
+	}
+	defer fd.Close()
+
+	if len(comment) > 0 {
+		for _, line := range strings.Split(strings.TrimSpace(comment), "\n") {
+			fmt.Fprintf(fd, "# %s\n", line)
+		}
+		fmt.Fprintln(fd)
+	}
+	for len(data) > 0 {
+		var chunk []byte
+		if len(data) < 32 {
+			chunk = data
+		} else {
+			chunk = data[:32]
+		}
+		data = data[len(chunk):]
+		fmt.Fprintf(fd, "%x\n", chunk)
+	}
 }

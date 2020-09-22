@@ -29,6 +29,7 @@ import (
 
 	"github.com/ethereum/go-ethereum/internal/testlog"
 	"github.com/ethereum/go-ethereum/log"
+	"github.com/ethereum/go-ethereum/p2p/discover/v5wire"
 	"github.com/ethereum/go-ethereum/p2p/enode"
 	"github.com/ethereum/go-ethereum/p2p/enr"
 	"github.com/ethereum/go-ethereum/rlp"
@@ -93,8 +94,8 @@ func TestUDPv5_pingHandling(t *testing.T) {
 	test := newUDPV5Test(t)
 	defer test.close()
 
-	test.packetIn(&pingV5{ReqID: []byte("foo")})
-	test.waitPacketOut(func(p *pongV5, addr *net.UDPAddr, _ packetNonce) {
+	test.packetIn(&v5wire.Ping{ReqID: []byte("foo")})
+	test.waitPacketOut(func(p *v5wire.Pong, addr *net.UDPAddr, _ v5wire.Nonce) {
 		if !bytes.Equal(p.ReqID, []byte("foo")) {
 			t.Error("wrong request ID in response:", p.ReqID)
 		}
@@ -110,8 +111,8 @@ func TestUDPv5_unknownPacket(t *testing.T) {
 	test := newUDPV5Test(t)
 	defer test.close()
 
-	authTag := packetNonce{1, 2, 3}
-	check := func(p *whoareyouV5, wantSeq uint64) {
+	authTag := v5wire.Nonce{1, 2, 3}
+	check := func(p *v5wire.Whoareyou, wantSeq uint64) {
 		t.Helper()
 		if p.AuthTag != authTag {
 			t.Error("wrong token in WHOAREYOU:", p.AuthTag, authTag)
@@ -125,8 +126,8 @@ func TestUDPv5_unknownPacket(t *testing.T) {
 	}
 
 	// Unknown packet from unknown node.
-	test.packetIn(&unknownV5{AuthTag: authTag})
-	test.waitPacketOut(func(p *whoareyouV5, addr *net.UDPAddr, _ packetNonce) {
+	test.packetIn(&v5wire.Unknown{AuthTag: authTag})
+	test.waitPacketOut(func(p *v5wire.Whoareyou, addr *net.UDPAddr, _ v5wire.Nonce) {
 		check(p, 0)
 	})
 
@@ -134,8 +135,8 @@ func TestUDPv5_unknownPacket(t *testing.T) {
 	n := test.getNode(test.remotekey, test.remoteaddr).Node()
 	test.table.addSeenNode(wrapNode(n))
 
-	test.packetIn(&unknownV5{AuthTag: authTag})
-	test.waitPacketOut(func(p *whoareyouV5, addr *net.UDPAddr, _ packetNonce) {
+	test.packetIn(&v5wire.Unknown{AuthTag: authTag})
+	test.waitPacketOut(func(p *v5wire.Whoareyou, addr *net.UDPAddr, _ v5wire.Nonce) {
 		check(p, n.Seq())
 	})
 }
@@ -155,28 +156,28 @@ func TestUDPv5_findnodeHandling(t *testing.T) {
 	fillTable(test.table, wrapNodes(nodes248))
 
 	// Requesting with distance zero should return the node's own record.
-	test.packetIn(&findnodeV5{ReqID: []byte{0}, Distances: []uint{0}})
+	test.packetIn(&v5wire.Findnode{ReqID: []byte{0}, Distances: []uint{0}})
 	test.expectNodes([]byte{0}, 1, []*enode.Node{test.udp.Self()})
 
 	// Requesting with distance > 256 shouldn't crash.
-	test.packetIn(&findnodeV5{ReqID: []byte{1}, Distances: []uint{4234098}})
+	test.packetIn(&v5wire.Findnode{ReqID: []byte{1}, Distances: []uint{4234098}})
 	test.expectNodes([]byte{1}, 1, nil)
 
 	// Requesting with empty distance list shouldn't crash either.
-	test.packetIn(&findnodeV5{ReqID: []byte{2}, Distances: []uint{}})
+	test.packetIn(&v5wire.Findnode{ReqID: []byte{2}, Distances: []uint{}})
 	test.expectNodes([]byte{2}, 1, nil)
 
 	// This request gets no nodes because the corresponding bucket is empty.
-	test.packetIn(&findnodeV5{ReqID: []byte{3}, Distances: []uint{254}})
+	test.packetIn(&v5wire.Findnode{ReqID: []byte{3}, Distances: []uint{254}})
 	test.expectNodes([]byte{3}, 1, nil)
 
 	// This request gets all the distance-253 nodes.
-	test.packetIn(&findnodeV5{ReqID: []byte{4}, Distances: []uint{253}})
+	test.packetIn(&v5wire.Findnode{ReqID: []byte{4}, Distances: []uint{253}})
 	test.expectNodes([]byte{4}, 4, nodes253)
 
 	// This request gets all the distance-249 nodes and some more at 248 because
 	// the bucket at 249 is not full.
-	test.packetIn(&findnodeV5{ReqID: []byte{5}, Distances: []uint{249, 248}})
+	test.packetIn(&v5wire.Findnode{ReqID: []byte{5}, Distances: []uint{249, 248}})
 	var nodes []*enode.Node
 	nodes = append(nodes, nodes249...)
 	nodes = append(nodes, nodes248[:10]...)
@@ -190,7 +191,7 @@ func (test *udpV5Test) expectNodes(wantReqID []byte, wantTotal uint8, wantNodes 
 	}
 
 	for {
-		test.waitPacketOut(func(p *nodesV5, addr *net.UDPAddr, _ packetNonce) {
+		test.waitPacketOut(func(p *v5wire.Nodes, addr *net.UDPAddr, _ v5wire.Nonce) {
 			if !bytes.Equal(p.ReqID, wantReqID) {
 				test.t.Fatalf("wrong request ID %v in response, want %v", p.ReqID, wantReqID)
 			}
@@ -232,7 +233,7 @@ func TestUDPv5_pingCall(t *testing.T) {
 		_, err := test.udp.ping(remote)
 		done <- err
 	}()
-	test.waitPacketOut(func(p *pingV5, addr *net.UDPAddr, _ packetNonce) {})
+	test.waitPacketOut(func(p *v5wire.Ping, addr *net.UDPAddr, _ v5wire.Nonce) {})
 	if err := <-done; err != errTimeout {
 		t.Fatalf("want errTimeout, got %q", err)
 	}
@@ -242,8 +243,8 @@ func TestUDPv5_pingCall(t *testing.T) {
 		_, err := test.udp.ping(remote)
 		done <- err
 	}()
-	test.waitPacketOut(func(p *pingV5, addr *net.UDPAddr, _ packetNonce) {
-		test.packetInFrom(test.remotekey, test.remoteaddr, &pongV5{ReqID: p.ReqID})
+	test.waitPacketOut(func(p *v5wire.Ping, addr *net.UDPAddr, _ v5wire.Nonce) {
+		test.packetInFrom(test.remotekey, test.remoteaddr, &v5wire.Pong{ReqID: p.ReqID})
 	})
 	if err := <-done; err != nil {
 		t.Fatal(err)
@@ -254,9 +255,9 @@ func TestUDPv5_pingCall(t *testing.T) {
 		_, err := test.udp.ping(remote)
 		done <- err
 	}()
-	test.waitPacketOut(func(p *pingV5, addr *net.UDPAddr, _ packetNonce) {
+	test.waitPacketOut(func(p *v5wire.Ping, addr *net.UDPAddr, _ v5wire.Nonce) {
 		wrongAddr := &net.UDPAddr{IP: net.IP{33, 44, 55, 22}, Port: 10101}
-		test.packetInFrom(test.remotekey, wrongAddr, &pongV5{ReqID: p.ReqID})
+		test.packetInFrom(test.remotekey, wrongAddr, &v5wire.Pong{ReqID: p.ReqID})
 	})
 	if err := <-done; err != errTimeout {
 		t.Fatalf("want errTimeout for reply from wrong IP, got %q", err)
@@ -285,16 +286,16 @@ func TestUDPv5_findnodeCall(t *testing.T) {
 	}()
 
 	// Serve the responses:
-	test.waitPacketOut(func(p *findnodeV5, addr *net.UDPAddr, _ packetNonce) {
+	test.waitPacketOut(func(p *v5wire.Findnode, addr *net.UDPAddr, _ v5wire.Nonce) {
 		if !reflect.DeepEqual(p.Distances, distances) {
 			t.Fatalf("wrong distances in request: %v", p.Distances)
 		}
-		test.packetIn(&nodesV5{
+		test.packetIn(&v5wire.Nodes{
 			ReqID: p.ReqID,
 			Total: 2,
 			Nodes: nodesToRecords(nodes[:4]),
 		})
-		test.packetIn(&nodesV5{
+		test.packetIn(&v5wire.Nodes{
 			ReqID: p.ReqID,
 			Total: 2,
 			Nodes: nodesToRecords(nodes[4:]),
@@ -331,16 +332,16 @@ func TestUDPv5_callResend(t *testing.T) {
 	}()
 
 	// Ping answered by WHOAREYOU.
-	test.waitPacketOut(func(p *pingV5, addr *net.UDPAddr, authTag packetNonce) {
-		test.packetIn(&whoareyouV5{AuthTag: authTag})
+	test.waitPacketOut(func(p *v5wire.Ping, addr *net.UDPAddr, authTag v5wire.Nonce) {
+		test.packetIn(&v5wire.Whoareyou{AuthTag: authTag})
 	})
 	// Ping should be re-sent.
-	test.waitPacketOut(func(p *pingV5, addr *net.UDPAddr, _ packetNonce) {
-		test.packetIn(&pongV5{ReqID: p.ReqID})
+	test.waitPacketOut(func(p *v5wire.Ping, addr *net.UDPAddr, _ v5wire.Nonce) {
+		test.packetIn(&v5wire.Pong{ReqID: p.ReqID})
 	})
 	// Answer the other ping.
-	test.waitPacketOut(func(p *pingV5, addr *net.UDPAddr, _ packetNonce) {
-		test.packetIn(&pongV5{ReqID: p.ReqID})
+	test.waitPacketOut(func(p *v5wire.Ping, addr *net.UDPAddr, _ v5wire.Nonce) {
+		test.packetIn(&v5wire.Pong{ReqID: p.ReqID})
 	})
 	if err := <-done; err != nil {
 		t.Fatalf("unexpected ping error: %v", err)
@@ -364,12 +365,12 @@ func TestUDPv5_multipleHandshakeRounds(t *testing.T) {
 	}()
 
 	// Ping answered by WHOAREYOU.
-	test.waitPacketOut(func(p *pingV5, addr *net.UDPAddr, authTag packetNonce) {
-		test.packetIn(&whoareyouV5{AuthTag: authTag})
+	test.waitPacketOut(func(p *v5wire.Ping, addr *net.UDPAddr, authTag v5wire.Nonce) {
+		test.packetIn(&v5wire.Whoareyou{AuthTag: authTag})
 	})
 	// Ping answered by WHOAREYOU again.
-	test.waitPacketOut(func(p *pingV5, addr *net.UDPAddr, authTag packetNonce) {
-		test.packetIn(&whoareyouV5{AuthTag: authTag})
+	test.waitPacketOut(func(p *v5wire.Ping, addr *net.UDPAddr, authTag v5wire.Nonce) {
+		test.packetIn(&v5wire.Whoareyou{AuthTag: authTag})
 	})
 	if err := <-done; err != errTimeout {
 		t.Fatalf("unexpected ping error: %q", err)
@@ -395,16 +396,16 @@ func TestUDPv5_callTimeoutReset(t *testing.T) {
 	}()
 
 	// Serve two responses, slowly.
-	test.waitPacketOut(func(p *findnodeV5, addr *net.UDPAddr, _ packetNonce) {
+	test.waitPacketOut(func(p *v5wire.Findnode, addr *net.UDPAddr, _ v5wire.Nonce) {
 		time.Sleep(respTimeout - 50*time.Millisecond)
-		test.packetIn(&nodesV5{
+		test.packetIn(&v5wire.Nodes{
 			ReqID: p.ReqID,
 			Total: 2,
 			Nodes: nodesToRecords(nodes[:4]),
 		})
 
 		time.Sleep(respTimeout - 50*time.Millisecond)
-		test.packetIn(&nodesV5{
+		test.packetIn(&v5wire.Nodes{
 			ReqID: p.ReqID,
 			Total: 2,
 			Nodes: nodesToRecords(nodes[4:]),
@@ -428,12 +429,12 @@ func TestUDPv5_talkHandling(t *testing.T) {
 	})
 
 	// Successful case:
-	test.packetIn(&talkreqV5{
+	test.packetIn(&v5wire.TalkRequest{
 		ReqID:    []byte("foo"),
 		Protocol: "test",
 		Message:  []byte("test request"),
 	})
-	test.waitPacketOut(func(p *talkrespV5, addr *net.UDPAddr, _ packetNonce) {
+	test.waitPacketOut(func(p *v5wire.TalkResponse, addr *net.UDPAddr, _ v5wire.Nonce) {
 		if !bytes.Equal(p.ReqID, []byte("foo")) {
 			t.Error("wrong request ID in response:", p.ReqID)
 		}
@@ -447,12 +448,12 @@ func TestUDPv5_talkHandling(t *testing.T) {
 
 	// Check that empty response is returned for unregistered protocols.
 	recvMessage = nil
-	test.packetIn(&talkreqV5{
+	test.packetIn(&v5wire.TalkRequest{
 		ReqID:    []byte("2"),
 		Protocol: "wrong",
 		Message:  []byte("test request"),
 	})
-	test.waitPacketOut(func(p *talkrespV5, addr *net.UDPAddr, _ packetNonce) {
+	test.waitPacketOut(func(p *v5wire.TalkResponse, addr *net.UDPAddr, _ v5wire.Nonce) {
 		if !bytes.Equal(p.ReqID, []byte("2")) {
 			t.Error("wrong request ID in response:", p.ReqID)
 		}
@@ -479,7 +480,7 @@ func TestUDPv5_talkRequest(t *testing.T) {
 		_, err := test.udp.TalkRequest(remote, "test", []byte("test request"))
 		done <- err
 	}()
-	test.waitPacketOut(func(p *talkreqV5, addr *net.UDPAddr, _ packetNonce) {})
+	test.waitPacketOut(func(p *v5wire.TalkRequest, addr *net.UDPAddr, _ v5wire.Nonce) {})
 	if err := <-done; err != errTimeout {
 		t.Fatalf("want errTimeout, got %q", err)
 	}
@@ -489,14 +490,14 @@ func TestUDPv5_talkRequest(t *testing.T) {
 		_, err := test.udp.TalkRequest(remote, "test", []byte("test request"))
 		done <- err
 	}()
-	test.waitPacketOut(func(p *talkreqV5, addr *net.UDPAddr, _ packetNonce) {
+	test.waitPacketOut(func(p *v5wire.TalkRequest, addr *net.UDPAddr, _ v5wire.Nonce) {
 		if p.Protocol != "test" {
 			t.Errorf("wrong protocol ID in talk request: %q", p.Protocol)
 		}
 		if string(p.Message) != "test request" {
 			t.Errorf("wrong message talk request: %q", p.Message)
 		}
-		test.packetInFrom(test.remotekey, test.remoteaddr, &talkrespV5{
+		test.packetInFrom(test.remotekey, test.remoteaddr, &v5wire.TalkResponse{
 			ReqID:   p.ReqID,
 			Message: []byte("test response"),
 		})
@@ -536,14 +537,14 @@ func TestUDPv5_lookup(t *testing.T) {
 
 	// Answer lookup packets.
 	for done := false; !done; {
-		done = test.waitPacketOut(func(p packetV5, to *net.UDPAddr, _ packetNonce) {
+		done = test.waitPacketOut(func(p v5wire.Packet, to *net.UDPAddr, _ v5wire.Nonce) {
 			recipient, key := lookupTestnet.nodeByAddr(to)
 			switch p := p.(type) {
-			case *pingV5:
-				test.packetInFrom(key, to, &pongV5{ReqID: p.ReqID})
-			case *findnodeV5:
+			case *v5wire.Ping:
+				test.packetInFrom(key, to, &v5wire.Pong{ReqID: p.ReqID})
+			case *v5wire.Findnode:
 				nodes := lookupTestnet.neighborsAtDistance(recipient, p.Distances[0], 3)
-				response := &nodesV5{ReqID: p.ReqID, Total: 1, Nodes: nodesToRecords(nodes)}
+				response := &v5wire.Nodes{ReqID: p.ReqID, Total: 1, Nodes: nodesToRecords(nodes)}
 				test.packetInFrom(key, to, response)
 			}
 		})
@@ -598,46 +599,44 @@ type testCodec struct {
 
 type testCodecFrame struct {
 	NodeID  enode.ID
-	AuthTag packetNonce
+	AuthTag v5wire.Nonce
 	Ptype   byte
 	Packet  rlp.RawValue
 }
 
-func (c *testCodec) encode(toID enode.ID, addr string, p packetV5, _ *whoareyouV5) ([]byte, packetNonce, error) {
+func (c *testCodec) Encode(toID enode.ID, addr string, p v5wire.Packet, _ *v5wire.Whoareyou) ([]byte, v5wire.Nonce, error) {
 	c.ctr++
-	var authTag packetNonce
+	var authTag v5wire.Nonce
 	binary.BigEndian.PutUint64(authTag[:], c.ctr)
+
 	penc, _ := rlp.EncodeToBytes(p)
-	frame, err := rlp.EncodeToBytes(testCodecFrame{c.id, authTag, p.kind(), penc})
+	frame, err := rlp.EncodeToBytes(testCodecFrame{c.id, authTag, p.Kind(), penc})
 	return frame, authTag, err
 }
 
-func (c *testCodec) decode(input []byte, addr string) (enode.ID, *enode.Node, packetV5, error) {
+func (c *testCodec) Decode(input []byte, addr string) (enode.ID, *enode.Node, v5wire.Packet, error) {
 	frame, p, err := c.decodeFrame(input)
 	if err != nil {
 		return enode.ID{}, nil, nil, err
 	}
-	if p.kind() == p_whoareyouV5 {
-		frame.NodeID = enode.ID{} // match wireCodec behavior
-	}
 	return frame.NodeID, nil, p, nil
 }
 
-func (c *testCodec) decodeFrame(input []byte) (frame testCodecFrame, p packetV5, err error) {
+func (c *testCodec) decodeFrame(input []byte) (frame testCodecFrame, p v5wire.Packet, err error) {
 	if err = rlp.DecodeBytes(input, &frame); err != nil {
 		return frame, nil, fmt.Errorf("invalid frame: %v", err)
 	}
 	switch frame.Ptype {
-	case p_unknownV5:
-		dec := new(unknownV5)
+	case v5wire.UnknownPacket:
+		dec := new(v5wire.Unknown)
 		err = rlp.DecodeBytes(frame.Packet, &dec)
 		p = dec
-	case p_whoareyouV5:
-		dec := new(whoareyouV5)
+	case v5wire.WhoareyouPacket:
+		dec := new(v5wire.Whoareyou)
 		err = rlp.DecodeBytes(frame.Packet, &dec)
 		p = dec
 	default:
-		p, err = decodePacketBodyV5(frame.Ptype, frame.Packet)
+		p, err = v5wire.DecodeMessage(frame.Ptype, frame.Packet)
 	}
 	return frame, p, err
 }
@@ -670,20 +669,20 @@ func newUDPV5Test(t *testing.T) *udpV5Test {
 }
 
 // handles a packet as if it had been sent to the transport.
-func (test *udpV5Test) packetIn(packet packetV5) {
+func (test *udpV5Test) packetIn(packet v5wire.Packet) {
 	test.t.Helper()
 	test.packetInFrom(test.remotekey, test.remoteaddr, packet)
 }
 
 // handles a packet as if it had been sent to the transport by the key/endpoint.
-func (test *udpV5Test) packetInFrom(key *ecdsa.PrivateKey, addr *net.UDPAddr, packet packetV5) {
+func (test *udpV5Test) packetInFrom(key *ecdsa.PrivateKey, addr *net.UDPAddr, packet v5wire.Packet) {
 	test.t.Helper()
 
 	ln := test.getNode(key, addr)
 	codec := &testCodec{test: test, id: ln.ID()}
-	enc, _, err := codec.encode(test.udp.Self().ID(), addr.String(), packet, nil)
+	enc, _, err := codec.Encode(test.udp.Self().ID(), addr.String(), packet, nil)
 	if err != nil {
-		test.t.Errorf("%s encode error: %v", packet.name(), err)
+		test.t.Errorf("%s encode error: %v", packet.Name(), err)
 	}
 	if test.udp.dispatchReadPacket(addr, enc) {
 		<-test.udp.readNextCh // unblock UDPv5.dispatch
@@ -706,7 +705,7 @@ func (test *udpV5Test) getNode(key *ecdsa.PrivateKey, addr *net.UDPAddr) *enode.
 }
 
 // waitPacketOut waits for the next output packet and handles it using the given 'validate'
-// function. The function must be of type func (X, *net.UDPAddr, packetNonce) where X is
+// function. The function must be of type func (X, *net.UDPAddr, v5wire.Nonce) where X is
 // assignable to packetV5.
 func (test *udpV5Test) waitPacketOut(validate interface{}) (closed bool) {
 	test.t.Helper()

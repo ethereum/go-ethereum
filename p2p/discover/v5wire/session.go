@@ -14,7 +14,7 @@
 // You should have received a copy of the GNU Lesser General Public License
 // along with the go-ethereum library. If not, see <http://www.gnu.org/licenses/>.
 
-package discover
+package v5wire
 
 import (
 	"crypto/ecdsa"
@@ -27,14 +27,15 @@ import (
 	"github.com/hashicorp/golang-lru/simplelru"
 )
 
-// The sessionCache keeps negotiated encryption keys and
+// The SessionCache keeps negotiated encryption keys and
 // state for in-progress handshakes in the Discovery v5 wire protocol.
-type sessionCache struct {
+type SessionCache struct {
 	sessions   *simplelru.LRU
-	handshakes map[sessionID]*whoareyouV5
+	handshakes map[sessionID]*Whoareyou
 	clock      mclock.Clock
+
 	// hooks for overriding randomness.
-	nonceGen        func(uint32) (packetNonce, error)
+	nonceGen        func(uint32) (Nonce, error)
 	maskingIVGen    func([]byte) error
 	ephemeralKeyGen func() (*ecdsa.PrivateKey, error)
 }
@@ -57,14 +58,14 @@ func (s *session) keysFlipped() *session {
 	return &session{s.readKey, s.writeKey, s.nonceCounter}
 }
 
-func newSessionCache(maxItems int, clock mclock.Clock) *sessionCache {
+func NewSessionCache(maxItems int, clock mclock.Clock) *SessionCache {
 	cache, err := simplelru.NewLRU(maxItems, nil)
 	if err != nil {
 		panic("can't create session cache")
 	}
-	return &sessionCache{
+	return &SessionCache{
 		sessions:        cache,
-		handshakes:      make(map[sessionID]*whoareyouV5),
+		handshakes:      make(map[sessionID]*Whoareyou),
 		clock:           clock,
 		nonceGen:        generateNonce,
 		maskingIVGen:    generateMaskingIV,
@@ -72,7 +73,7 @@ func newSessionCache(maxItems int, clock mclock.Clock) *sessionCache {
 	}
 }
 
-func generateNonce(counter uint32) (n packetNonce, err error) {
+func generateNonce(counter uint32) (n Nonce, err error) {
 	binary.BigEndian.PutUint32(n[:4], counter)
 	_, err = crand.Read(n[4:])
 	return n, err
@@ -84,13 +85,13 @@ func generateMaskingIV(buf []byte) error {
 }
 
 // nextNonce creates a nonce for encrypting a message to the given session.
-func (sc *sessionCache) nextNonce(s *session) (packetNonce, error) {
+func (sc *SessionCache) nextNonce(s *session) (Nonce, error) {
 	s.nonceCounter++
 	return sc.nonceGen(s.nonceCounter)
 }
 
 // session returns the current session for the given node, if any.
-func (sc *sessionCache) session(id enode.ID, addr string) *session {
+func (sc *SessionCache) session(id enode.ID, addr string) *session {
 	item, ok := sc.sessions.Get(sessionID{id, addr})
 	if !ok {
 		return nil
@@ -99,7 +100,7 @@ func (sc *sessionCache) session(id enode.ID, addr string) *session {
 }
 
 // readKey returns the current read key for the given node.
-func (sc *sessionCache) readKey(id enode.ID, addr string) []byte {
+func (sc *SessionCache) readKey(id enode.ID, addr string) []byte {
 	if s := sc.session(id, addr); s != nil {
 		return s.readKey
 	}
@@ -107,28 +108,28 @@ func (sc *sessionCache) readKey(id enode.ID, addr string) []byte {
 }
 
 // storeNewSession stores new encryption keys in the cache.
-func (sc *sessionCache) storeNewSession(id enode.ID, addr string, s *session) {
+func (sc *SessionCache) storeNewSession(id enode.ID, addr string, s *session) {
 	sc.sessions.Add(sessionID{id, addr}, s)
 }
 
 // getHandshake gets the handshake challenge we previously sent to the given remote node.
-func (sc *sessionCache) getHandshake(id enode.ID, addr string) *whoareyouV5 {
+func (sc *SessionCache) getHandshake(id enode.ID, addr string) *Whoareyou {
 	return sc.handshakes[sessionID{id, addr}]
 }
 
 // storeSentHandshake stores the handshake challenge sent to the given remote node.
-func (sc *sessionCache) storeSentHandshake(id enode.ID, addr string, challenge *whoareyouV5) {
+func (sc *SessionCache) storeSentHandshake(id enode.ID, addr string, challenge *Whoareyou) {
 	challenge.sent = sc.clock.Now()
 	sc.handshakes[sessionID{id, addr}] = challenge
 }
 
 // deleteHandshake deletes handshake data for the given node.
-func (sc *sessionCache) deleteHandshake(id enode.ID, addr string) {
+func (sc *SessionCache) deleteHandshake(id enode.ID, addr string) {
 	delete(sc.handshakes, sessionID{id, addr})
 }
 
 // handshakeGC deletes timed-out handshakes.
-func (sc *sessionCache) handshakeGC() {
+func (sc *SessionCache) handshakeGC() {
 	deadline := sc.clock.Now().Add(-handshakeTimeout)
 	for key, challenge := range sc.handshakes {
 		if challenge.sent < deadline {
