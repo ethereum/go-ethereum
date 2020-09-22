@@ -107,6 +107,7 @@ func loadAndParseJournal(db ethdb.KeyValueStore, base *diskLayer) (snapshot, jou
 	// layer, we just discard all diffs and try to recover them later.
 	journal := rawdb.ReadSnapshotJournal(db)
 	if len(journal) == 0 {
+		log.Debug("Loaded snapshot journal", "diskroot", base.root, "diff", "missing")
 		return base, generator, nil
 	}
 	r := rlp.NewStream(bytes.NewReader(journal), 0)
@@ -129,6 +130,7 @@ func loadAndParseJournal(db ethdb.KeyValueStore, base *diskLayer) (snapshot, jou
 	// It can happen that Geth crashes without persisting the latest
 	// diff journal.
 	if !bytes.Equal(root.Bytes(), base.root.Bytes()) {
+		log.Debug("Loaded snapshot journal", "diskroot", base.root, "diff", "unmatched")
 		return base, generator, nil
 	}
 	// Load all the snapshot diffs from the journal
@@ -136,6 +138,7 @@ func loadAndParseJournal(db ethdb.KeyValueStore, base *diskLayer) (snapshot, jou
 	if err != nil {
 		return nil, journalGenerator{}, err
 	}
+	log.Debug("Loaded snapshot journal", "diskroot", base.root, "diffhead", snapshot.Root())
 	return snapshot, generator, nil
 }
 
@@ -156,6 +159,7 @@ func loadSnapshot(diskdb ethdb.KeyValueStore, triedb *trie.Database, cache int, 
 	var legacy bool
 	snapshot, generator, err := loadAndParseJournal(diskdb, base)
 	if err != nil {
+		log.Debug("Failed to load latest-format journal", "error", err)
 		snapshot, generator, err = loadAndParseLegacyJournal(diskdb, base)
 		legacy = true
 	}
@@ -298,6 +302,7 @@ func (dl *diskLayer) Journal(buffer *bytes.Buffer) (common.Hash, error) {
 	if err != nil {
 		return common.Hash{}, err
 	}
+	log.Debug("Journalled disk layer", "root", dl.root, "complete", dl.genMarker == nil)
 	rawdb.WriteSnapshotGenerator(dl.diskdb, blob)
 	return dl.root, nil
 }
@@ -348,5 +353,6 @@ func (dl *diffLayer) Journal(buffer *bytes.Buffer) (common.Hash, error) {
 	if err := rlp.Encode(buffer, storage); err != nil {
 		return common.Hash{}, err
 	}
+	log.Debug("Journalled diff layer", "root", dl.root, "parent", dl.parent.Root())
 	return base, nil
 }
