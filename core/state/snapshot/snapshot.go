@@ -172,8 +172,9 @@ type Tree struct {
 // If the snapshot is missing or the disk layer is broken, the entire is deleted
 // and will be reconstructed from scratch based on the tries in the key-value
 // store, on a background thread. If the memory layers from the journal is not
-// continuous with disk layer or the journal is missing, all diffs will be discarded.
-func New(diskdb ethdb.KeyValueStore, triedb *trie.Database, cache int, root common.Hash, async bool) *Tree {
+// continuous with disk layer or the journal is missing, all diffs will be discarded
+// iff it's in "recovery" mode, otherwise rebuild is mandatory.
+func New(diskdb ethdb.KeyValueStore, triedb *trie.Database, cache int, root common.Hash, async bool, recovery bool) *Tree {
 	// Create a new, empty snapshot tree
 	snap := &Tree{
 		diskdb: diskdb,
@@ -185,7 +186,7 @@ func New(diskdb ethdb.KeyValueStore, triedb *trie.Database, cache int, root comm
 		defer snap.waitBuild()
 	}
 	// Attempt to load a previously persisted snapshot and rebuild one if failed
-	head, err := loadSnapshot(diskdb, triedb, cache, root)
+	head, err := loadSnapshot(diskdb, triedb, cache, root, recovery)
 	if err != nil {
 		log.Warn("Failed to load snapshot, regenerating", "err", err)
 		snap.Rebuild(root)

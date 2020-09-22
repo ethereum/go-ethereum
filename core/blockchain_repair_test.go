@@ -21,6 +21,7 @@
 package core
 
 import (
+	"fmt"
 	"io/ioutil"
 	"math/big"
 	"os"
@@ -1556,7 +1557,7 @@ func TestLongReorgedFastSyncingDeepRepair(t *testing.T) {
 func testRepair(t *testing.T, tt *rewindTest) {
 	// It's hard to follow the test case, visualize the input
 	//log.Root().SetHandler(log.LvlFilterHandler(log.LvlTrace, log.StreamHandler(os.Stderr, log.TerminalFormat(true))))
-	//fmt.Println(tt.dump(true))
+	fmt.Println(tt.dump(true))
 
 	// Create a temporary persistent database
 	datadir, err := ioutil.TempDir("", "")
@@ -1573,10 +1574,15 @@ func testRepair(t *testing.T, tt *rewindTest) {
 
 	// Initialize a fresh chain
 	var (
-		genesis = new(Genesis).MustCommit(db)
-		engine  = ethash.NewFullFaker()
+		genesis     = new(Genesis).MustCommit(db)
+		engine      = ethash.NewFullFaker()
+		cacheConfig = defaultCacheConfig
 	)
-	chain, err := NewBlockChain(db, nil, params.AllEthashProtocolChanges, engine, vm.Config{}, nil, nil)
+	if !tt.enableSnapshot {
+		cacheConfig.SnapshotLimit = 0
+		cacheConfig.SnapshotWait = false
+	}
+	chain, err := NewBlockChain(db, cacheConfig, params.AllEthashProtocolChanges, engine, vm.Config{}, nil, nil)
 	if err != nil {
 		t.Fatalf("Failed to create chain: %v", err)
 	}

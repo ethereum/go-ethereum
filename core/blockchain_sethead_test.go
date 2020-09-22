@@ -37,6 +37,7 @@ import (
 
 // rewindTest is a test case for chain rollback upon user request.
 type rewindTest struct {
+	enableSnapshot  bool    // Flag whether the snapshot is enabled
 	canonicalBlocks int     // Number of blocks to generate for the canonical chain (heavier)
 	sidechainBlocks int     // Number of blocks to generate for the side chain (lighter)
 	freezeThreshold uint64  // Block number until which to move things into the freezer
@@ -55,7 +56,8 @@ type rewindTest struct {
 func (tt *rewindTest) dump(crash bool) string {
 	buffer := new(strings.Builder)
 
-	fmt.Fprint(buffer, "Chain:\n  G")
+	fmt.Fprint(buffer, fmt.Sprintf("Chain<snapshot = %t>:", tt.enableSnapshot))
+	fmt.Fprint(buffer, "\n  G")
 	for i := 0; i < tt.canonicalBlocks; i++ {
 		fmt.Fprintf(buffer, "->C%d", i+1)
 	}
@@ -1747,7 +1749,7 @@ func TestLongReorgedFastSyncingDeepSetHead(t *testing.T) {
 func testSetHead(t *testing.T, tt *rewindTest) {
 	// It's hard to follow the test case, visualize the input
 	//log.Root().SetHandler(log.LvlFilterHandler(log.LvlTrace, log.StreamHandler(os.Stderr, log.TerminalFormat(true))))
-	//fmt.Println(tt.dump(false))
+	fmt.Println(tt.dump(false))
 
 	// Create a temporary persistent database
 	datadir, err := ioutil.TempDir("", "")
@@ -1764,10 +1766,15 @@ func testSetHead(t *testing.T, tt *rewindTest) {
 
 	// Initialize a fresh chain
 	var (
-		genesis = new(Genesis).MustCommit(db)
-		engine  = ethash.NewFullFaker()
+		genesis     = new(Genesis).MustCommit(db)
+		engine      = ethash.NewFullFaker()
+		cacheConfig = defaultCacheConfig
 	)
-	chain, err := NewBlockChain(db, nil, params.AllEthashProtocolChanges, engine, vm.Config{}, nil, nil)
+	if !tt.enableSnapshot {
+		cacheConfig.SnapshotLimit = 0
+		cacheConfig.SnapshotWait = false
+	}
+	chain, err := NewBlockChain(db, cacheConfig, params.AllEthashProtocolChanges, engine, vm.Config{}, nil, nil)
 	if err != nil {
 		t.Fatalf("Failed to create chain: %v", err)
 	}

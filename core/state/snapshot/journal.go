@@ -143,7 +143,7 @@ func loadAndParseJournal(db ethdb.KeyValueStore, base *diskLayer) (snapshot, jou
 }
 
 // loadSnapshot loads a pre-existing state snapshot backed by a key-value store.
-func loadSnapshot(diskdb ethdb.KeyValueStore, triedb *trie.Database, cache int, root common.Hash) (snapshot, error) {
+func loadSnapshot(diskdb ethdb.KeyValueStore, triedb *trie.Database, cache int, root common.Hash, recovery bool) (snapshot, error) {
 	// Retrieve the block number and hash of the snapshot, failing if no snapshot
 	// is present in the database (or crashed mid-update).
 	baseRoot := rawdb.ReadSnapshotRoot(diskdb)
@@ -175,9 +175,16 @@ func loadSnapshot(diskdb ethdb.KeyValueStore, triedb *trie.Database, cache int, 
 	// which is below the snapshot. In this case the snapshot can be recovered
 	// by re-executing blocks but right now it's unavailable.
 	if head := snapshot.Root(); head != root {
-		if legacy {
+		// If it's legacy snapshot, or it's new-format snapshot but
+		// it's not in recovery mode, returns the error here for
+		// rebuilding the entire snapshot forcibly.
+		if legacy || !recovery {
 			return nil, fmt.Errorf("head doesn't match snapshot: have %#x, want %#x", head, root)
 		}
+		// It's in snapshot recovery, the assumption is held that
+		// the disk layer is higher than chain head. It can be
+		// eventually recovered when the chain head is beyond the
+		// disk layer.
 		log.Warn("Snapshot is not continous with chain", "snaproot", head, "chainroot", root)
 	}
 	// Everything loaded correctly, resume any suspended operations
