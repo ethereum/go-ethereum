@@ -674,7 +674,7 @@ func TestHasRightElement(t *testing.T) {
 		{50, 100, true},
 		{50, len(entries), false},               // No more element expected
 		{len(entries) - 1, len(entries), false}, // Single last element with two existent proofs(point to same key)
-		{len(entries) - 1, -1, false},           // Single last element with non-exsitent right proof
+		{len(entries) - 1, -1, false},           // Single last element with non-existent right proof
 		{0, len(entries), false},                // The whole set with existent left proof
 		{-1, len(entries), false},               // The whole set with non-existent left proof
 		{-1, -1, false},                         // The whole set with non-existent left/right proof
