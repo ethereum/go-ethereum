@@ -38,11 +38,12 @@ type Hello struct {
 
 func (h Hello) Code() int { return 0x00 }
 
-type Disc struct {
+// Disconnect is the RLP structure for a disconnect message.
+type Disconnect struct {
 	Reason p2p.DiscReason
 }
 
-func (d Disc) Code() int { return 0x01 }
+func (d Disconnect) Code() int { return 0x01 }
 
 // Status is the network packet for the status message for eth/64 and later.
 type Status struct {
@@ -55,10 +56,6 @@ type Status struct {
 }
 
 func (s Status) Code() int { return 16 }
-
-//func (sd *statusData) Protocol() int {
-//
-//}
 
 // NewBlockHashes is the network packet for the block announcements.
 type NewBlockHashes []struct {

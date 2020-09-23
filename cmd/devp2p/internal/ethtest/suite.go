@@ -41,8 +41,8 @@ func (c *Conn) Read() Message {
 	switch int(code) {
 	case (Hello{}).Code():
 		msg = new(Hello)
-	case (Disc{}).Code():
-		msg = new(Disc)
+	case (Disconnect{}).Code():
+		msg = new(Disconnect)
 	case (Status{}).Code():
 		msg = new(Status)
 	case (GetBlockHeaders{}).Code():
