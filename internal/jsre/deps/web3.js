@@ -4153,6 +4153,7 @@ SolidityFunction.prototype.estimateGas = function () {
     if (!callback) {
         return this._eth.estimateGas(payload);
     }
+    
     this._eth.estimateGas(payload, callback);
 };
 
