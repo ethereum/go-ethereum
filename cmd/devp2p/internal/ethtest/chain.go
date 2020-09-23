@@ -48,7 +48,7 @@ func (c *Chain) TD(height int) *big.Int { // TODO later on channge scheme so tha
 
 // ForkID gets the fork id of the chain.
 func (c *Chain) ForkID() forkid.ID {
-	return forkid.NewStaticID(c.chainConfig, c.blocks[0].Hash(), uint64(c.Len()))
+	return forkid.NewID(c.chainConfig, c.blocks[0].Hash(), uint64(c.Len()))
 }
 
 // Shorten returns a copy chain of a desired height from the imported
