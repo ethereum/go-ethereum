@@ -283,14 +283,14 @@ func NewBlockChain(db ethdb.Database, cacheConfig *CacheConfig, chainConfig *par
 	if _, err := state.New(head.Root(), bc.stateCache, bc.snaps); err != nil {
 		// Head state is missing, before the state recovery, find out the
 		// disk layer point of snapshot(if it's enabled). Make sure the
-		// rewound point is lower then disk layer.
+		// rewound point is lower than disk layer.
 		var diskRoot common.Hash
 		if bc.cacheConfig.SnapshotLimit > 0 {
 			diskRoot = rawdb.ReadSnapshotRoot(bc.db)
 			recoverSnapshot = true
 		}
-		log.Warn("Head state missing, repairing", "number", head.Number(), "hash", head.Hash())
 		if diskRoot != (common.Hash{}) {
+			log.Warn("Head state missing, repairing", "number", head.Number(), "hash", head.Hash(), "snaproot", diskRoot)
 			var marked bool
 			if err := bc.SetHeadWithCondition(head.NumberU64(), func(block *types.Block, canStop *bool) {
 				if block.Root() == diskRoot && !marked {
@@ -300,6 +300,7 @@ func NewBlockChain(db ethdb.Database, cacheConfig *CacheConfig, chainConfig *par
 				return nil, err
 			}
 		} else {
+			log.Warn("Head state missing, repairing", "number", head.Number(), "hash", head.Hash())
 			if err := bc.SetHead(head.NumberU64()); err != nil {
 				return nil, err
 			}

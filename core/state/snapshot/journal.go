@@ -159,7 +159,7 @@ func loadSnapshot(diskdb ethdb.KeyValueStore, triedb *trie.Database, cache int, 
 	var legacy bool
 	snapshot, generator, err := loadAndParseJournal(diskdb, base)
 	if err != nil {
-		log.Debug("Failed to load latest-format journal", "error", err)
+		log.Debug("Failed to load new-format journal", "error", err)
 		snapshot, generator, err = loadAndParseLegacyJournal(diskdb, base)
 		legacy = true
 	}
@@ -182,10 +182,10 @@ func loadSnapshot(diskdb ethdb.KeyValueStore, triedb *trie.Database, cache int, 
 			return nil, fmt.Errorf("head doesn't match snapshot: have %#x, want %#x", head, root)
 		}
 		// It's in snapshot recovery, the assumption is held that
-		// the disk layer is higher than chain head. It can be
-		// eventually recovered when the chain head is beyond the
+		// the disk layer is always higher than chain head. It can
+		// be eventually recovered when the chain head beyonds the
 		// disk layer.
-		log.Warn("Snapshot is not continous with chain", "snaproot", head, "chainroot", root)
+		log.Warn("Snapshot is not continous with chain, wait recovery", "snaproot", head, "chainroot", root)
 	}
 	// Everything loaded correctly, resume any suspended operations
 	if !generator.Done {
