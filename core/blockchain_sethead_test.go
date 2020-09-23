@@ -26,6 +26,7 @@ import (
 	"os"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/consensus/ethash"
@@ -37,7 +38,6 @@ import (
 
 // rewindTest is a test case for chain rollback upon user request.
 type rewindTest struct {
-	enableSnapshot  bool    // Flag whether the snapshot is enabled
 	canonicalBlocks int     // Number of blocks to generate for the canonical chain (heavier)
 	sidechainBlocks int     // Number of blocks to generate for the side chain (lighter)
 	freezeThreshold uint64  // Block number until which to move things into the freezer
@@ -56,8 +56,7 @@ type rewindTest struct {
 func (tt *rewindTest) dump(crash bool) string {
 	buffer := new(strings.Builder)
 
-	fmt.Fprint(buffer, fmt.Sprintf("Chain<snapshot = %t>:", tt.enableSnapshot))
-	fmt.Fprint(buffer, "\n  G")
+	fmt.Fprint(buffer, "Chain:\n  G")
 	for i := 0; i < tt.canonicalBlocks; i++ {
 		fmt.Fprintf(buffer, "->C%d", i+1)
 	}
@@ -1748,8 +1747,8 @@ func TestLongReorgedFastSyncingDeepSetHead(t *testing.T) {
 
 func testSetHead(t *testing.T, tt *rewindTest) {
 	// It's hard to follow the test case, visualize the input
-	//log.Root().SetHandler(log.LvlFilterHandler(log.LvlTrace, log.StreamHandler(os.Stderr, log.TerminalFormat(true))))
-	fmt.Println(tt.dump(false))
+	// log.Root().SetHandler(log.LvlFilterHandler(log.LvlTrace, log.StreamHandler(os.Stderr, log.TerminalFormat(true))))
+	// fmt.Println(tt.dump(false))
 
 	// Create a temporary persistent database
 	datadir, err := ioutil.TempDir("", "")
@@ -1768,12 +1767,13 @@ func testSetHead(t *testing.T, tt *rewindTest) {
 	var (
 		genesis     = new(Genesis).MustCommit(db)
 		engine      = ethash.NewFullFaker()
-		cacheConfig = defaultCacheConfig
+		cacheConfig = &CacheConfig{
+			TrieCleanLimit: 256,
+			TrieDirtyLimit: 256,
+			TrieTimeLimit:  5 * time.Minute,
+			SnapshotLimit:  0, // Disable snapshot
+		}
 	)
-	if !tt.enableSnapshot {
-		cacheConfig.SnapshotLimit = 0
-		cacheConfig.SnapshotWait = false
-	}
 	chain, err := NewBlockChain(db, cacheConfig, params.AllEthashProtocolChanges, engine, vm.Config{}, nil, nil)
 	if err != nil {
 		t.Fatalf("Failed to create chain: %v", err)

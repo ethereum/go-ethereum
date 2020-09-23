@@ -21,11 +21,11 @@
 package core
 
 import (
-	"fmt"
 	"io/ioutil"
 	"math/big"
 	"os"
 	"testing"
+	"time"
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/consensus/ethash"
@@ -1556,8 +1556,8 @@ func TestLongReorgedFastSyncingDeepRepair(t *testing.T) {
 
 func testRepair(t *testing.T, tt *rewindTest) {
 	// It's hard to follow the test case, visualize the input
-	//log.Root().SetHandler(log.LvlFilterHandler(log.LvlTrace, log.StreamHandler(os.Stderr, log.TerminalFormat(true))))
-	fmt.Println(tt.dump(true))
+	// log.Root().SetHandler(log.LvlFilterHandler(log.LvlTrace, log.StreamHandler(os.Stderr, log.TerminalFormat(true))))
+	// fmt.Println(tt.dump(true))
 
 	// Create a temporary persistent database
 	datadir, err := ioutil.TempDir("", "")
@@ -1576,12 +1576,13 @@ func testRepair(t *testing.T, tt *rewindTest) {
 	var (
 		genesis     = new(Genesis).MustCommit(db)
 		engine      = ethash.NewFullFaker()
-		cacheConfig = defaultCacheConfig
+		cacheConfig = &CacheConfig{
+			TrieCleanLimit: 256,
+			TrieDirtyLimit: 256,
+			TrieTimeLimit:  5 * time.Minute,
+			SnapshotLimit:  0, // Disable snapshot
+		}
 	)
-	if !tt.enableSnapshot {
-		cacheConfig.SnapshotLimit = 0
-		cacheConfig.SnapshotWait = false
-	}
 	chain, err := NewBlockChain(db, cacheConfig, params.AllEthashProtocolChanges, engine, vm.Config{}, nil, nil)
 	if err != nil {
 		t.Fatalf("Failed to create chain: %v", err)

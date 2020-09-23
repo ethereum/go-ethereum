@@ -363,3 +363,50 @@ func (dl *diffLayer) Journal(buffer *bytes.Buffer) (common.Hash, error) {
 	log.Debug("Journalled diff layer", "root", dl.root, "parent", dl.parent.Root())
 	return base, nil
 }
+
+// LegacyJournal writes the persistent layer generator stats into a buffer
+// to be stored in the database as the snapshot journal.
+//
+// Note it's the legacy version which is only used in testing right now.
+func (dl *diskLayer) LegacyJournal(buffer *bytes.Buffer) (common.Hash, error) {
+	// If the snapshot is currently being generated, abort it
+	var stats *generatorStats
+	if dl.genAbort != nil {
+		abort := make(chan *generatorStats)
+		dl.genAbort <- abort
+
+		if stats = <-abort; stats != nil {
+			stats.Log("Journalling in-progress snapshot", dl.root, dl.genMarker)
+		}
+	}
+	// Ensure the layer didn't get stale
+	dl.lock.RLock()
+	defer dl.lock.RUnlock()
+
+	if dl.stale {
+		return common.Hash{}, ErrSnapshotStale
+	}
+	// Write out the generator marker
+	entry := journalGenerator{
+		Done:   dl.genMarker == nil,
+		Marker: dl.genMarker,
+	}
+	if stats != nil {
+		entry.Wiping = (stats.wiping != nil)
+		entry.Accounts = stats.accounts
+		entry.Slots = stats.slots
+		entry.Storage = uint64(stats.storage)
+	}
+	if err := rlp.Encode(buffer, entry); err != nil {
+		return common.Hash{}, err
+	}
+	return dl.root, nil
+}
+
+// Journal writes the memory layer contents into a buffer to be stored in the
+// database as the snapshot journal.
+//
+// Note it's the legacy version which is only used in testing right now.
+func (dl *diffLayer) LegacyJournal(buffer *bytes.Buffer) (common.Hash, error) {
+	return dl.Journal(buffer)
+}
