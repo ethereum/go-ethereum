@@ -60,12 +60,8 @@ func (eth *Ethereum) startEthEntryUpdate(ln *enode.LocalNode) {
 }
 
 func (eth *Ethereum) currentEthEntry() *ethEntry {
-	return &ethEntry{ForkID:
-		forkid.NewID(
-			eth.blockchain.Config(),
-			eth.blockchain.Genesis().Hash(),
-			eth.blockchain.CurrentHeader().Number.Uint64()),
-	}
+	return &ethEntry{ForkID: forkid.NewID(eth.blockchain.Config(), eth.blockchain.Genesis().Hash(),
+		eth.blockchain.CurrentHeader().Number.Uint64())}
 }
 
 // setupDiscovery creates the node discovery source for the eth protocol.

@@ -174,24 +174,11 @@ func NewSuite(dest *enode.Node, chainfile string, genesisfile string) *Suite {
 
 func (s *Suite) AllTests() []utesting.Test {
 	return []utesting.Test{
-		{Name: "Ping", Fn: s.TestPing},
 		{Name: "Status", Fn: s.TestStatus},
 		{Name: "GetBlockHeaders", Fn: s.TestGetBlockHeaders},
 		{Name: "Broadcast", Fn: s.TestBroadcast},
 		{Name: "GetBlockBodies", Fn: s.TestGetBlockBodies},
 	}
-}
-
-// TestPing attempts to exchange `HELLO` messages
-// with the given node.
-func (s *Suite) TestPing(t *utesting.T) {
-	conn, err := s.dial()
-	if err != nil {
-		t.Fatalf("could not dial: %v", err)
-	}
-	// get protoHandshake
-	msg := conn.handshake(t)
-	t.Logf("%+v\n", msg)
 }
 
 // TestStatus attempts to connect to the given node and exchange
