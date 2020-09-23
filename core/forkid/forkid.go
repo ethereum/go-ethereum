@@ -65,19 +65,8 @@ type ID struct {
 // Filter is a fork id filter to validate a remotely advertised ID.
 type Filter func(id ID) error
 
-// NewID calculates the Ethereum fork ID from the chain config and head.
-func NewID(chain Blockchain) ID {
-	return newID(
-		chain.Config(),
-		chain.Genesis().Hash(),
-		chain.CurrentHeader().Number.Uint64(),
-	)
-}
-
-// newID is the internal version of NewID, which takes extracted values as its
-// arguments instead of a chain. The reason is to allow testing the IDs without
-// having to simulate an entire blockchain.
-func newID(config *params.ChainConfig, genesis common.Hash, head uint64) ID {
+// NewID calculates the Ethereum fork ID from the chain config, genesis hash, and head.
+func NewID(config *params.ChainConfig, genesis common.Hash, head uint64) ID {
 	// Calculate the starting checksum from the genesis hash
 	hash := crc32.ChecksumIEEE(genesis[:])
 
