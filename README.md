@@ -1,6 +1,16 @@
-## Go Ethereum
+## makerdao/go-ethereum
 
-Official Golang implementation of the Ethereum protocol.
+Fork of ethereum/go-ethereum, with added support for emitting storage diffs over websockets during sync.
+
+### Repo organization
+
+Currently, this repo is setup such that the default branch tracks the latest upstream release.
+Work supporting the subscription is on the `allow-state-diff-subscription` branch.
+New pull requests and releases should generally target the `allow-state-diff-subscription` branch.
+The default release branch should be updated periodically with changes merged to `allow-state-diff-subscription`.
+If such merges follow a new upstream release, it may be sensible to cut a new release here (in order to capture recent optimizations, etc).
+
+### Upstream README
 
 [![API Reference](
 https://camo.githubusercontent.com/915b7be44ada53c290eb157634330494ebe3e30a/68747470733a2f2f676f646f632e6f72672f6769746875622e636f6d2f676f6c616e672f6764646f3f7374617475732e737667
