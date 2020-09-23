@@ -504,7 +504,7 @@ web3._extend({
 			name: 'estimateGas',
 			call: 'eth_estimateGas',
 			params: 2,
-			inputFormatter: [web3._extend.formatters.inputTransactionFormatter, web3._extend.formatters.inputBlockNumberFormatter],
+			inputFormatter: [web3._extend.formatters.inputCallFormatter, web3._extend.formatters.inputBlockNumberFormatter],
 			outputFormatter: web3._extend.utils.toDecimal
 		}),
 		new web3._extend.Method({
