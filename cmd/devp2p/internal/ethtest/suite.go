@@ -83,7 +83,7 @@ func (c *Conn) handshake(t *utesting.T) Message {
 	// write protoHandshake to client
 	pub0 := crypto.FromECDSAPub(&c.ourKey.PublicKey)[1:]
 	ourHandshake := &Hello{
-		Version: 3,
+		Version: 5,
 		Caps:    []p2p.Cap{{Name: "eth", Version: 64}, {Name: "eth", Version: 65}},
 		ID:      pub0,
 	}
