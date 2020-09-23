@@ -4148,13 +4148,13 @@ SolidityFunction.prototype.sendTransaction = function () {
 SolidityFunction.prototype.estimateGas = function () {
     var args = Array.prototype.slice.call(arguments);
     var callback = this.extractCallback(args);
+    var defaultBlock = this.extractDefaultBlock(args);
     var payload = this.toPayload(args);
 
     if (!callback) {
-        return this._eth.estimateGas(payload);
+        return this._eth.estimateGas(payload, defaultBlock);
     }
-
-    this._eth.estimateGas(payload, callback);
+    this._eth.estimateGas(payload, callback, defaultBlock);
 };
 
 /**
@@ -5396,8 +5396,8 @@ var methods = function () {
     var estimateGas = new Method({
         name: 'estimateGas',
         call: 'eth_estimateGas',
-        params: 1,
-        inputFormatter: [formatters.inputCallFormatter],
+        params: 2,
+        inputFormatter: [formatters.inputCallFormatter, formatters.inputDefaultBlockNumberFormatter],
         outputFormatter: utils.toDecimal
     });
 
