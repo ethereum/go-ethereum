@@ -280,7 +280,7 @@ func NewBlockChain(db ethdb.Database, cacheConfig *CacheConfig, chainConfig *par
 		return nil, err
 	}
 	// Make sure the state associated with the block is available
-	head, recoverSnapshot := bc.CurrentBlock(), false
+	head := bc.CurrentBlock()
 	if _, err := state.New(head.Root(), bc.stateCache, bc.snaps); err != nil {
 		// Head state is missing, before the state recovery, find out the
 		// disk layer point of snapshot(if it's enabled). Make sure the
@@ -288,17 +288,22 @@ func NewBlockChain(db ethdb.Database, cacheConfig *CacheConfig, chainConfig *par
 		var diskRoot common.Hash
 		if bc.cacheConfig.SnapshotLimit > 0 {
 			diskRoot = rawdb.ReadSnapshotRoot(bc.db)
-			recoverSnapshot = true
 		}
 		if diskRoot != (common.Hash{}) {
 			log.Warn("Head state missing, repairing", "number", head.Number(), "hash", head.Hash(), "snaproot", diskRoot)
-			var marked bool
+
+			var snapDisk uint64
 			if err := bc.SetHeadWithCondition(head.NumberU64(), func(block *types.Block, canStop *bool) {
-				if block.Root() == diskRoot && !marked {
-					marked, *canStop = true, true
+				if block.Root() == diskRoot && snapDisk == 0 {
+					snapDisk, *canStop = block.NumberU64(), true
 				}
 			}); err != nil {
 				return nil, err
+			}
+			// Chain is rewound, persist a flag in the disk to indicate
+			// the snapshot is in recovery procedure.
+			if snapDisk != 0 {
+				rawdb.WriteSnapshotRecoveryFlag(bc.db, snapDisk)
 			}
 		} else {
 			log.Warn("Head state missing, repairing", "number", head.Number(), "hash", head.Hash())
@@ -360,7 +365,19 @@ func NewBlockChain(db ethdb.Database, cacheConfig *CacheConfig, chainConfig *par
 	}
 	// Load any existing snapshot, regenerating it if loading failed
 	if bc.cacheConfig.SnapshotLimit > 0 {
-		bc.snaps = snapshot.New(bc.db, bc.stateCache.TrieDB(), bc.cacheConfig.SnapshotLimit, bc.CurrentBlock().Root(), !bc.cacheConfig.SnapshotWait, recoverSnapshot)
+		var (
+			recovery bool
+			flag     = rawdb.ReadSnapshotRecoveryFlag(bc.db)
+		)
+		// The persisted snapshot recovery height is higher than
+		// current chain head. At least it means the snapshot disk
+		// layer is higher than current head. Enable the snapshot
+		// recovery mode.
+		if flag != nil && *flag > bc.CurrentBlock().NumberU64() {
+			recovery = true
+			log.Info("Enable snapshot recovery", "chainhead", bc.CurrentBlock().NumberU64(), "disklayer", *flag)
+		}
+		bc.snaps = snapshot.New(bc.db, bc.stateCache.TrieDB(), bc.cacheConfig.SnapshotLimit, bc.CurrentBlock().Root(), !bc.cacheConfig.SnapshotWait, recovery)
 	}
 	// Take ownership of this particular state
 	go bc.update()

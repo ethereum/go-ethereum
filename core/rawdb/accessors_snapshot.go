@@ -17,6 +17,7 @@
 package rawdb
 
 import (
+	"encoding/binary"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/ethdb"
 	"github.com/ethereum/go-ethereum/log"
@@ -139,5 +140,37 @@ func WriteSnapshotGenerator(db ethdb.KeyValueWriter, generator []byte) {
 func DeleteSnapshotGenerator(db ethdb.KeyValueWriter) {
 	if err := db.Delete(snapshotGeneratorKey); err != nil {
 		log.Crit("Failed to remove snapshot generator", "err", err)
+	}
+}
+
+// ReadSnapshotRecoveryFlag retrieves the serialized snapshot recovery flag
+// saved at the last recovery procedure.
+func ReadSnapshotRecoveryFlag(db ethdb.KeyValueReader) *uint64 {
+	data, _ := db.Get(snapshotRecoveryKey)
+	if len(data) == 0 {
+		return nil
+	}
+	if len(data) != 8 {
+		return nil
+	}
+	number := binary.BigEndian.Uint64(data)
+	return &number
+}
+
+// WriteSnapshotRecoveryFlag stores the serialized snapshot recovery flag to
+// save in the recovery procedure.
+func WriteSnapshotRecoveryFlag(db ethdb.KeyValueWriter, number uint64) {
+	var buf [8]byte
+	binary.BigEndian.PutUint64(buf[:], number)
+	if err := db.Put(snapshotRecoveryKey, buf[:]); err != nil {
+		log.Crit("Failed to store snapshot recovery flag", "err", err)
+	}
+}
+
+// DeleteSnapshotRecoveryFlag deletes the serialized snapshot recovery flag
+// saved at the last recovery procedure.
+func DeleteSnapshotRecoveryFlag(db ethdb.KeyValueWriter) {
+	if err := db.Delete(snapshotRecoveryKey); err != nil {
+		log.Crit("Failed to remove snapshot recovery flag", "err", err)
 	}
 }

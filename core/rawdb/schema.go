@@ -54,6 +54,9 @@ var (
 	// snapshotGeneratorKey tracks the snapshot generation marker across restarts.
 	snapshotGeneratorKey = []byte("SnapshotGenerator")
 
+	// snapshotRecoveryKey tracks the snapshot recovery marker across restarts.
+	snapshotRecoveryKey = []byte("SnapshotRecovery")
+
 	// txIndexTailKey tracks the oldest block whose transactions have been indexed.
 	txIndexTailKey = []byte("TransactionIndexTail")
 
