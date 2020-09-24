@@ -306,6 +306,9 @@ func (b *Block) DecodeRLP(s *rlp.Stream) error {
 	var eb extblock
 	_, size, _ := s.Kind()
 	if err := s.Decode(&eb); err != nil {
+		// [19 21 174 194]
+		//panic(fmt.Sprintf("%v", *b))
+
 		return err
 	}
 	b.header, b.uncles, b.transactions = eb.Header, eb.Uncles, eb.Txs
