@@ -57,8 +57,8 @@ func (b *Bloom) SetBytes(d []byte) {
 }
 
 // Add adds d to the filter. Future calls of Test(d) will return true.
-func (b *Bloom) Add(d *big.Int) {
-	b.SetBytes(or(b[:], bloom9(d.Bytes())))
+func (b *Bloom) Add(d []byte) {
+	b.SetBytes(or(b[:], bloom9(d)))
 }
 
 // Big converts b to a big integer.
@@ -70,12 +70,14 @@ func (b Bloom) Bytes() []byte {
 	return b[:]
 }
 
-func (b Bloom) Test(test *big.Int) bool {
-	return BloomLookup(b, test)
+type byter []byte
+
+func (b byter) Bytes() []byte {
+	return b
 }
 
-func (b Bloom) TestBytes(test []byte) bool {
-	return b.Test(new(big.Int).SetBytes(test))
+func (b Bloom) Test(test []byte) bool {
+	return BloomLookup(b, byter(test))
 }
 
 // MarshalText encodes b as a hex string with 0x prefix.
