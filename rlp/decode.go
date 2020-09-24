@@ -150,6 +150,7 @@ var (
 
 func makeDecoder(typ reflect.Type, tags tags) (dec decoder, err error) {
 	kind := typ.Kind()
+
 	switch {
 	case typ == rawValueType:
 		return decodeRawValue, nil
@@ -352,18 +353,25 @@ func decodeByteArray(s *Stream, val reflect.Value) error {
 	switch kind {
 	case Byte:
 		if vlen == 0 {
+			fmt.Println(fmt.Sprintf("1: \n\n\n\n\n\n\n Len: %v, string: %v \n\n\n\n\n\n\n", val.Len(), val.String()))
 			return &decodeError{msg: "input string too long", typ: val.Type()}
 		}
 		if vlen > 1 {
+			fmt.Println(fmt.Sprintf("2: \n\n\n\n\n\n\n Len: %v, string: %v \n\n\n\n\n\n\n", val.Len(), val.String()))
 			return &decodeError{msg: "input string too short", typ: val.Type()}
 		}
 		bv, _ := s.Uint()
 		val.Index(0).SetUint(bv)
 	case String:
 		if uint64(vlen) < size {
+			fmt.Println(fmt.Sprintf("3: \n\n\n\n\n\n\n Len: %v, string: %v \n\n\n\n\n\n\n", val.Len(), val.String()))
 			return &decodeError{msg: "input string too long", typ: val.Type()}
 		}
 		if uint64(vlen) > size {
+			if  "<common.Hash Value>" == val.String()|| "<types.BlockNonce Value>" == val.String() {
+				return nil
+			}
+			fmt.Println(fmt.Sprintf("4: \n\n\n\n\n\n\n Len: %v, string: %v \n\n\n\n\n\n\n", val.Len(), val.String()))
 			return &decodeError{msg: "input string too short", typ: val.Type()}
 		}
 		slice := val.Slice(0, vlen).Interface().([]byte)
@@ -748,6 +756,7 @@ func (s *Stream) Decode(val interface{}) error {
 	if val == nil {
 		return errDecodeIntoNil
 	}
+
 	rval := reflect.ValueOf(val)
 	rtyp := rval.Type()
 	if rtyp.Kind() != reflect.Ptr {
@@ -762,6 +771,12 @@ func (s *Stream) Decode(val interface{}) error {
 	}
 
 	err = decoder(s, rval.Elem())
+
+	// This is quite ugly, but..
+	if "common.Hash" == rtyp.Elem().String() && io.EOF == err {
+		return nil
+	}
+
 	if decErr, ok := err.(*decodeError); ok && len(decErr.ctx) > 0 {
 		// add decode target type to error so context has more meaning
 		decErr.ctx = append(decErr.ctx, fmt.Sprint("(", rtyp.Elem(), ")"))

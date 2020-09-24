@@ -459,9 +459,7 @@ var decodeTests = []decodeTest{
 	{input: "8105", ptr: new(big.Int), error: "rlp: non-canonical size information for *big.Int"},
 
 	// common hash
-	// THIS IS HOW IT IS
-	{input: "", ptr: new(common.Hash), error: "EOF"},
-	// THIS IS HOW IT SHOULD BE IN OUR SCENARIO
+	// Motivation is that in aura mixDigest is not present
 	{input: "", ptr: new(common.Hash), value: common.Hash{}},
 	{input: "C601C402C203C0", ptr: new(common.Hash), error: "rlp: expected input string or byte for common.Hash"},
 
