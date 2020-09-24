@@ -275,21 +275,18 @@ func TestEth2ValidateBlock(t *testing.T) {
 	if err != nil {
 		t.Fatalf("could not get node: %v", err)
 	}
-	var eth *Ethereum
-	n.Register(func(ctx *node.ServiceContext) (node.Service, error) {
-		config := &Config{Genesis: genesis}
-		config.Ethash.PowMode = ethash.ModeFake
-		eth, err = New(ctx, config)
-		return eth, err
-	})
+	ethservice, err := New(n, &Config{Genesis: genesis, Ethash: ethash.Config{PowMode: ethash.ModeFake}})
+	if err != nil {
+		t.Fatalf("can't create new ethereum service: %v", err)
+	}
 	if err := n.Start(); err != nil {
 		t.Fatalf("can't start test node: %v", err)
 	}
-	if _, err := eth.BlockChain().InsertChain(blocks[1:9]); err != nil {
+	if _, err := ethservice.BlockChain().InsertChain(blocks[1:9]); err != nil {
 		t.Fatalf("can't import test blocks: %v", err)
 	}
 
-	api := NewEth2API(eth)
+	api := NewEth2API(ethservice)
 	var blockRLP bytes.Buffer
 	rlp.Encode(&blockRLP, blocks[9])
 	valid, err := api.ValidateBlock(blockRLP.Bytes())
@@ -305,25 +302,22 @@ func TestEth2ProduceBlock(t *testing.T) {
 	if err != nil {
 		t.Fatalf("could not get node: %v", err)
 	}
-	var eth *Ethereum
-	n.Register(func(ctx *node.ServiceContext) (node.Service, error) {
-		config := &Config{Genesis: genesis}
-		config.Ethash.PowMode = ethash.ModeFake
-		eth, err = New(ctx, config)
-		return eth, err
-	})
+	ethservice, err := New(n, &Config{Genesis: genesis, Ethash: ethash.Config{PowMode: ethash.ModeFake}})
+	if err != nil {
+		t.Fatalf("can't create new ethereum service: %v", err)
+	}
 	if err := n.Start(); err != nil {
 		t.Fatalf("can't start test node: %v", err)
 	}
-	if _, err := eth.BlockChain().InsertChain(blocks[1:9]); err != nil {
+	if _, err := ethservice.BlockChain().InsertChain(blocks[1:9]); err != nil {
 		t.Fatalf("can't import test blocks: %v", err)
 	}
-	eth.SetEtherbase(testAddr)
+	ethservice.SetEtherbase(testAddr)
 
-	api := NewEth2API(eth)
-	signer := types.NewEIP155Signer(eth.BlockChain().Config().ChainID)
+	api := NewEth2API(ethservice)
+	signer := types.NewEIP155Signer(ethservice.BlockChain().Config().ChainID)
 	tx, err := types.SignTx(types.NewTransaction(0, blocks[8].Coinbase(), big.NewInt(1000), params.TxGas, nil, nil), signer, testKey)
-	eth.txPool.AddLocal(tx)
+	ethservice.txPool.AddLocal(tx)
 	newblockrlp, err := api.ProduceBlock(blocks[8].Hash())
 
 	if err != nil {
@@ -346,22 +340,19 @@ func TestEth2ProduceBlockWithAnotherBlocksTxs(t *testing.T) {
 	if err != nil {
 		t.Fatalf("could not get node: %v", err)
 	}
-	var eth *Ethereum
-	n.Register(func(ctx *node.ServiceContext) (node.Service, error) {
-		config := &Config{Genesis: genesis}
-		config.Ethash.PowMode = ethash.ModeFake
-		eth, err = New(ctx, config)
-		return eth, err
-	})
+	ethservice, err := New(n, &Config{Genesis: genesis, Ethash: ethash.Config{PowMode: ethash.ModeFake}})
+	if err != nil {
+		t.Fatalf("can't create new ethereum service: %v", err)
+	}
 	if err := n.Start(); err != nil {
 		t.Fatalf("can't start test node: %v", err)
 	}
-	if _, err := eth.BlockChain().InsertChain(blocks[1:9]); err != nil {
+	if _, err := ethservice.BlockChain().InsertChain(blocks[1:9]); err != nil {
 		t.Fatalf("can't import test blocks: %v", err)
 	}
-	eth.SetEtherbase(testAddr)
+	ethservice.SetEtherbase(testAddr)
 
-	api := NewEth2API(eth)
+	api := NewEth2API(ethservice)
 
 	// Put the 10th block's data with the test call
 	var blockRLP bytes.Buffer
@@ -389,21 +380,18 @@ func TestEth2InsertBlock(t *testing.T) {
 	if err != nil {
 		t.Fatalf("could not get node: %v", err)
 	}
-	var eth *Ethereum
-	n.Register(func(ctx *node.ServiceContext) (node.Service, error) {
-		config := &Config{Genesis: genesis}
-		config.Ethash.PowMode = ethash.ModeFake
-		eth, err = New(ctx, config)
-		return eth, err
-	})
+	ethservice, err := New(n, &Config{Genesis: genesis, Ethash: ethash.Config{PowMode: ethash.ModeFake}})
+	if err != nil {
+		t.Fatalf("can't create new ethereum service: %v", err)
+	}
 	if err := n.Start(); err != nil {
 		t.Fatalf("can't start test node: %v", err)
 	}
-	if _, err := eth.BlockChain().InsertChain(blocks[1:5]); err != nil {
+	if _, err := ethservice.BlockChain().InsertChain(blocks[1:5]); err != nil {
 		t.Fatalf("can't import test blocks: %v", err)
 	}
 
-	api := NewEth2API(eth)
+	api := NewEth2API(ethservice)
 	for i := 5; i < 10; i++ {
 		var blockRLP bytes.Buffer
 		rlp.Encode(&blockRLP, blocks[i])
@@ -413,7 +401,7 @@ func TestEth2InsertBlock(t *testing.T) {
 		}
 	}
 
-	if eth.BlockChain().CurrentBlock().Hash() != blocks[9].Hash() {
+	if ethservice.BlockChain().CurrentBlock().Hash() != blocks[9].Hash() {
 		t.Fatalf("Wrong head")
 	}
 
@@ -426,8 +414,8 @@ func TestEth2InsertBlock(t *testing.T) {
 		}
 	}
 
-	if eth.BlockChain().CurrentBlock().Hash() != blocks[9].Hash() {
-		t.Fatalf("Wrong head after inserting fork %x != %x", blocks[9].Hash(), eth.BlockChain().CurrentBlock().Hash())
+	if ethservice.BlockChain().CurrentBlock().Hash() != blocks[9].Hash() {
+		t.Fatalf("Wrong head after inserting fork %x != %x", blocks[9].Hash(), ethservice.BlockChain().CurrentBlock().Hash())
 	}
 }
 
@@ -438,21 +426,18 @@ func TestEth2SetHead(t *testing.T) {
 	if err != nil {
 		t.Fatalf("could not get node: %v", err)
 	}
-	var eth *Ethereum
-	n.Register(func(ctx *node.ServiceContext) (node.Service, error) {
-		config := &Config{Genesis: genesis}
-		config.Ethash.PowMode = ethash.ModeFake
-		eth, err = New(ctx, config)
-		return eth, err
-	})
+	ethservice, err := New(n, &Config{Genesis: genesis, Ethash: ethash.Config{PowMode: ethash.ModeFake}})
+	if err != nil {
+		t.Fatalf("can't create new ethereum service: %v", err)
+	}
 	if err := n.Start(); err != nil {
 		t.Fatalf("can't start test node: %v", err)
 	}
-	if _, err := eth.BlockChain().InsertChain(blocks[1:5]); err != nil {
+	if _, err := ethservice.BlockChain().InsertChain(blocks[1:5]); err != nil {
 		t.Fatalf("can't import test blocks: %v", err)
 	}
 
-	api := NewEth2API(eth)
+	api := NewEth2API(ethservice)
 	for i := 5; i < 10; i++ {
 		var blockRLP bytes.Buffer
 		rlp.Encode(&blockRLP, blocks[i])
@@ -463,7 +448,7 @@ func TestEth2SetHead(t *testing.T) {
 	}
 	api.head = blocks[9].Hash()
 
-	if eth.BlockChain().CurrentBlock().Hash() != blocks[9].Hash() {
+	if ethservice.BlockChain().CurrentBlock().Hash() != blocks[9].Hash() {
 		t.Fatalf("Wrong head")
 	}
 
@@ -478,8 +463,8 @@ func TestEth2SetHead(t *testing.T) {
 
 	api.SetHead(forkedBlocks[2].Hash())
 
-	if eth.BlockChain().CurrentBlock().Hash() == forkedBlocks[2].Hash() {
-		t.Fatalf("Wrong head after inserting fork %x != %x", blocks[9].Hash(), eth.BlockChain().CurrentBlock().Hash())
+	if ethservice.BlockChain().CurrentBlock().Hash() == forkedBlocks[2].Hash() {
+		t.Fatalf("Wrong head after inserting fork %x != %x", blocks[9].Hash(), ethservice.BlockChain().CurrentBlock().Hash())
 	}
 	if api.head != forkedBlocks[2].Hash() {
 		t.Fatalf("Registered wrong head")
