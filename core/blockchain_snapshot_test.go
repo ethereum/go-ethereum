@@ -377,12 +377,22 @@ func testSnapshot(t *testing.T, tt *snapshotTest) {
 	if tt.crash {
 		db.Close()
 
-		// Start a new blockchain back up and see where the repait leads us
+		// Start a new blockchain back up and see where the repair leads us
 		db, err = rawdb.NewLevelDBDatabaseWithFreezer(datadir, 0, 0, datadir, "")
 		if err != nil {
 			t.Fatalf("Failed to reopen persistent database: %v", err)
 		}
 		defer db.Close()
+
+		// The interesting thing is: instead of start the blockchain after
+		// the crash, we do restart twice here: one after the crash and one
+		// after the normal stop. It's used to ensure the broken snapshot
+		// can be detected all the time.
+		chain, err = NewBlockChain(db, nil, params.AllEthashProtocolChanges, engine, vm.Config{}, nil, nil)
+		if err != nil {
+			t.Fatalf("Failed to recreate chain: %v", err)
+		}
+		chain.Stop()
 
 		chain, err = NewBlockChain(db, nil, params.AllEthashProtocolChanges, engine, vm.Config{}, nil, nil)
 		if err != nil {
