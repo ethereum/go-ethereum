@@ -12,13 +12,13 @@ Additional labels for pre-release and build metadata are available as extensions
 
 ### 6.1.0
 
-The API-method `account_signGnosisTx` was added. This method takes two parameters, 
+The API-method `account_signGnosisSafeTx` was added. This method takes two parameters, 
 `[address, safeTx]`. The latter, `safeTx`, can be copy-pasted from the gnosis relay. For example: 
 
 ```
 {
   "jsonrpc": "2.0",
-  "method": "account_signGnosisTx",
+  "method": "account_signGnosisSafeTx",
   "params": ["0xfd1c4226bfD1c436672092F4eCbfC270145b7256",
     {
       "safe": "0x25a6c4BBd32B2424A9c99aEB0584Ad12045382B3",
@@ -66,7 +66,7 @@ The API-method `account_signGnosisTx` was added. This method takes two parameter
 
 Not all fields are required, though. This method is really just a UX helper, which massages the 
 input to conform to the `EIP-712` [specification](https://docs.gnosis.io/safe/docs/contracts_tx_execution/#transaction-hash) 
-for the Gnosis Safe, and making the output be directly import:able to by a relay service. 
+for the Gnosis Safe, and making the output be directly importable to by a relay service. 
 
 
 ### 6.0.0
