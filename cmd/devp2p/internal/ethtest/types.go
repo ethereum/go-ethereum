@@ -1,9 +1,31 @@
+// Copyright 2020 The go-ethereum Authors
+// This file is part of the go-ethereum library.
+//
+// The go-ethereum library is free software: you can redistribute it and/or modify
+// it under the terms of the GNU Lesser General Public License as published by
+// the Free Software Foundation, either version 3 of the License, or
+// (at your option) any later version.
+//
+// The go-ethereum library is distributed in the hope that it will be useful,
+// but WITHOUT ANY WARRANTY; without even the implied warranty of
+// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
+// GNU Lesser General Public License for more details.
+//
+// You should have received a copy of the GNU Lesser General Public License
+// along with the go-ethereum library. If not, see <http://www.gnu.org/licenses/>.
+
 package ethtest
 
 import (
+	"crypto/ecdsa"
 	"fmt"
+	"github.com/ethereum/go-ethereum/crypto"
+	"github.com/ethereum/go-ethereum/internal/utesting"
+	"github.com/ethereum/go-ethereum/p2p/rlpx"
 	"io"
 	"math/big"
+	"reflect"
+	"time"
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/forkid"
@@ -132,3 +154,161 @@ func (gbb GetBlockBodies) Code() int { return 21 }
 type BlockBodies []*types.Body
 
 func (bb BlockBodies) Code() int { return 22 }
+
+// TODO document
+type Conn struct {
+	*rlpx.Conn
+	ourKey *ecdsa.PrivateKey
+}
+
+func (c *Conn) Read() Message {
+	code, rawData, _, err := c.Conn.Read()
+	if err != nil {
+		return &Error{fmt.Errorf("could not read from connection: %v", err)}
+	}
+
+	var msg Message
+	switch int(code) {
+	case (Hello{}).Code():
+		msg = new(Hello)
+	case (Disconnect{}).Code():
+		msg = new(Disconnect)
+	case (Status{}).Code():
+		msg = new(Status)
+	case (GetBlockHeaders{}).Code():
+		msg = new(GetBlockHeaders)
+	case (BlockHeaders{}).Code():
+		msg = new(BlockHeaders)
+	case (GetBlockBodies{}).Code():
+		msg = new(GetBlockBodies)
+	case (BlockBodies{}).Code():
+		msg = new(BlockBodies)
+	case (NewBlock{}).Code():
+		msg = new(NewBlock)
+	case (NewBlockHashes{}).Code():
+		msg = new(NewBlockHashes)
+	default:
+		return &Error{fmt.Errorf("invalid message code: %d", code)}
+	}
+
+	if err := rlp.DecodeBytes(rawData, msg); err != nil {
+		return &Error{fmt.Errorf("could not rlp decode message: %v", err)}
+	}
+
+	return msg
+}
+
+// ReadAndServe serves GetBlockHeaders requests while waiting
+// on another message from the node.
+func (c *Conn) ReadAndServe(chain *Chain) Message {
+	for {
+		switch msg := c.Read().(type) {
+		case *GetBlockHeaders:
+			req := *msg
+			headers, err := chain.GetHeaders(req)
+			if err != nil {
+				return &Error{fmt.Errorf("could not get headers for inbound header request: %v", err)}
+			}
+
+			if err := c.Write(headers); err != nil {
+				return &Error{fmt.Errorf("could not write to connection: %v", err)}
+			}
+		default:
+			return msg
+		}
+	}
+}
+
+
+
+func (c *Conn) Write(msg Message) error {
+	payload, err := rlp.EncodeToBytes(msg)
+	if err != nil {
+		return err
+	}
+	_, err = c.Conn.Write(uint64(msg.Code()), payload)
+	return err
+
+}
+
+// handshake checks to make sure a `HELLO` is received.
+func (c *Conn) handshake(t *utesting.T) Message {
+	// write protoHandshake to client
+	pub0 := crypto.FromECDSAPub(&c.ourKey.PublicKey)[1:]
+	ourHandshake := &Hello{
+		Version: 5,
+		Caps:    []p2p.Cap{{Name: "eth", Version: 64}},
+		ID:      pub0,
+	}
+	if err := c.Write(ourHandshake); err != nil {
+		t.Fatalf("could not write to connection: %v", err)
+	}
+	// read protoHandshake from client
+	switch msg := c.Read().(type) {
+	case *Hello:
+		if msg.Version >= 5 {
+			c.SetSnappy(true)
+		}
+		return msg
+	default:
+		t.Fatalf("bad handshake: %#v", msg)
+		return nil
+	}
+}
+
+// statusExchange performs a `Status` message exchange with the given
+// node.
+func (c *Conn) statusExchange(t *utesting.T, chain *Chain) Message {
+	// read status message from client
+	var message Message
+	switch msg := c.Read().(type) {
+	case *Status:
+		if msg.Head != chain.blocks[chain.Len()-1].Hash() {
+			t.Fatalf("wrong head in status: %v", msg.Head)
+		}
+		if msg.TD.Cmp(chain.TD(chain.Len())) != 0 {
+			t.Fatalf("wrong TD in status: %v", msg.TD)
+		}
+		if !reflect.DeepEqual(msg.ForkID, chain.ForkID()) {
+			t.Fatalf("wrong fork ID in status: %v", msg.ForkID)
+		}
+		message = msg
+	default:
+		t.Fatalf("bad status message: %#v", msg)
+	}
+	// write status message to client
+	status := Status{
+		ProtocolVersion: 64,
+		NetworkID:       1,
+		TD:              chain.TD(chain.Len()),
+		Head:            chain.blocks[chain.Len()-1].Hash(),
+		Genesis:         chain.blocks[0].Hash(),
+		ForkID:          chain.ForkID(),
+	}
+	if err := c.Write(status); err != nil {
+		t.Fatalf("could not write to connection: %v", err)
+	}
+
+	return message
+}
+
+// waitForBlock waits for confirmation from the client that it has
+// imported the given block.
+func (c *Conn) waitForBlock(block *types.Block) error {
+	for {
+		req := &GetBlockHeaders{Origin: hashOrNumber{Hash: block.Hash()}, Amount: 1}
+		if err := c.Write(req); err != nil {
+			return err
+		}
+
+		switch msg := c.Read().(type) {
+		case *BlockHeaders:
+			if len(*msg) > 0 {
+				return nil
+			}
+			time.Sleep(100 * time.Millisecond)
+		default:
+			return fmt.Errorf("invalid message: %v", msg)
+		}
+	}
+}
