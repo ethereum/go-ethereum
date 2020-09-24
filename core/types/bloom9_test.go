@@ -39,16 +39,16 @@ func TestBloom(t *testing.T) {
 
 	var bloom Bloom
 	for _, data := range positive {
-		bloom.Add(new(big.Int).SetBytes([]byte(data)))
+		bloom.Add([]byte(data))
 	}
 
 	for _, data := range positive {
-		if !bloom.TestBytes([]byte(data)) {
+		if !bloom.Test([]byte(data)) {
 			t.Error("expected", data, "to test true")
 		}
 	}
 	for _, data := range negative {
-		if bloom.TestBytes([]byte(data)) {
+		if bloom.Test([]byte(data)) {
 			t.Error("did not expect", data, "to test true")
 		}
 	}
@@ -61,8 +61,8 @@ func TestBloomExtensively(t *testing.T) {
 	// Add 100 "random" things
 	for i := 0; i < 100; i++ {
 		data := fmt.Sprintf("xxxxxxxxxx data %d yyyyyyyyyyyyyy", i)
-		//b.Add([]byte(data))
-		b.Add(new(big.Int).SetBytes([]byte(data)))
+		b.Add([]byte(data))
+		//b.Add(new(big.Int).SetBytes([]byte(data)))
 	}
 	got := crypto.Keccak256Hash(b.Bytes())
 	if got != exp {
@@ -87,8 +87,7 @@ func BenchmarkBloom9Lookup(b *testing.B) {
 	toTest := []byte("testtest")
 	bloom := new(Bloom)
 	for i := 0; i < b.N; i++ {
-		bloom.Test(new(big.Int).SetBytes(toTest))
-		//bloom.Test(toTest)
+		bloom.Test(toTest)
 	}
 }
 

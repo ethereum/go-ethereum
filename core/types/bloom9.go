@@ -57,10 +57,8 @@ func (b *Bloom) SetBytes(d []byte) {
 }
 
 // Add adds d to the filter. Future calls of Test(d) will return true.
-func (b *Bloom) Add(d *big.Int) {
-	bin := new(big.Int).SetBytes(b[:])
-	bin.Or(bin, bloom9(d.Bytes()))
-	b.SetBytes(bin.Bytes())
+func (b *Bloom) Add(d []byte) {
+	b.SetBytes(or(b[:], bloom9(d)))
 }
 
 // Big converts b to a big integer.
@@ -72,13 +70,14 @@ func (b Bloom) Bytes() []byte {
 	return b[:]
 }
 
-func (b Bloom) Test(test *big.Int) bool {
-	return BloomLookup(b, test)
+type byter []byte
+
+func (b byter) Bytes() []byte {
+	return b
 }
 
-func (b Bloom) TestBytes(test []byte) bool {
-	return b.Test(new(big.Int).SetBytes(test))
-
+func (b Bloom) Test(test []byte) bool {
+	return BloomLookup(b, byter(test))
 }
 
 // MarshalText encodes b as a hex string with 0x prefix.
@@ -92,45 +91,60 @@ func (b *Bloom) UnmarshalText(input []byte) error {
 }
 
 func CreateBloom(receipts Receipts) Bloom {
-	bin := new(big.Int)
+	bin := make([]byte, BloomByteLength)
 	for _, receipt := range receipts {
-		bin.Or(bin, LogsBloom(receipt.Logs))
+		bin = or(bin, LogsBloom(receipt.Logs))
 	}
 
-	return BytesToBloom(bin.Bytes())
+	return BytesToBloom(bin)
 }
 
-func LogsBloom(logs []*Log) *big.Int {
-	bin := new(big.Int)
+func LogsBloom(logs []*Log) []byte {
+	bin := make([]byte, BloomByteLength)
 	for _, log := range logs {
-		bin.Or(bin, bloom9(log.Address.Bytes()))
+		bin = or(bin, bloom9(log.Address.Bytes()))
 		for _, b := range log.Topics {
-			bin.Or(bin, bloom9(b[:]))
+			bin = or(bin, bloom9(b[:]))
 		}
 	}
 
 	return bin
 }
 
-func bloom9(b []byte) *big.Int {
-	b = crypto.Keccak256(b)
-
-	r := new(big.Int)
+func bloom9(data []byte) []byte {
+	hash := make([]byte, 32)
+	sha := hasherPool.Get().(crypto.KeccakState)
+	defer hasherPool.Put(sha)
+	sha.Reset()
+	sha.Write(data)
+	sha.Read(hash)
+	r := make([]byte, BloomByteLength)
 
 	for i := 0; i < 6; i += 2 {
-		t := big.NewInt(1)
-		b := (uint(b[i+1]) + (uint(b[i]) << 8)) & 2047
-		r.Or(r, t.Lsh(t, b))
+		b := (uint(hash[i+1]) + (uint(hash[i]) << 8)) & 2047
+		byteIdx := b >> 3             // divide by 8 bit per byte
+		bitMask := byte(1 << (b % 8)) // set the b%8th's bit
+		r[BloomByteLength-byteIdx-1] |= bitMask
 	}
-
 	return r
+}
+
+func or(a, b []byte) []byte {
+	for i := range a {
+		a[i] |= b[i]
+	}
+	return a
 }
 
 var Bloom9 = bloom9
 
 func BloomLookup(bin Bloom, topic bytesBacked) bool {
-	bloom := bin.Big()
 	cmp := bloom9(topic.Bytes())
-
-	return bloom.And(bloom, cmp).Cmp(cmp) == 0
+	for i := range cmp {
+		if cmp[i] != cmp[i]&bin[i] {
+			// Every topic in cmp has to be in bin
+			return false
+		}
+	}
+	return true
 }
