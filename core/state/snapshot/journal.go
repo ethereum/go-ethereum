@@ -185,7 +185,7 @@ func loadSnapshot(diskdb ethdb.KeyValueStore, triedb *trie.Database, cache int, 
 		// the disk layer is always higher than chain head. It can
 		// be eventually recovered when the chain head beyonds the
 		// disk layer.
-		log.Warn("Snapshot is not continous with chain, wait recovery", "snaproot", head, "chainroot", root)
+		log.Warn("Snapshot is not continous with chain", "snaproot", head, "chainroot", root)
 	}
 	// Everything loaded correctly, resume any suspended operations
 	if !generator.Done {
