@@ -68,6 +68,14 @@ type Disconnect struct {
 
 func (d Disconnect) Code() int { return 0x01 }
 
+type Ping struct{}
+
+func (p Ping) Code() int { return 0x02 }
+
+type Pong struct{}
+
+func (p Pong) Code() int { return 0x03 }
+
 // Status is the network packet for the status message for eth/64 and later.
 type Status struct {
 	ProtocolVersion uint32
@@ -172,6 +180,10 @@ func (c *Conn) Read() Message {
 	switch int(code) {
 	case (Hello{}).Code():
 		msg = new(Hello)
+	case (Ping{}).Code():
+		msg = new(Ping)
+	case (Pong{}).Code():
+		msg = new(Pong)
 	case (Disconnect{}).Code():
 		msg = new(Disconnect)
 	case (Status{}).Code():
@@ -204,6 +216,8 @@ func (c *Conn) Read() Message {
 func (c *Conn) ReadAndServe(chain *Chain) Message {
 	for {
 		switch msg := c.Read().(type) {
+		case *Ping:
+			c.Write(&Pong{})
 		case *GetBlockHeaders:
 			req := *msg
 			headers, err := chain.GetHeaders(req)
@@ -260,23 +274,32 @@ func (c *Conn) handshake(t *utesting.T) Message {
 func (c *Conn) statusExchange(t *utesting.T, chain *Chain) Message {
 	// read status message from client
 	var message Message
-	switch msg := c.Read().(type) {
-	case *Status:
-		if msg.Head != chain.blocks[chain.Len()-1].Hash() {
-			t.Fatalf("wrong head in status: %v", msg.Head)
+
+	loop:
+	for {
+		switch msg := c.Read().(type) {
+		case *Status:
+			if msg.Head != chain.blocks[chain.Len()-1].Hash() {
+				t.Fatalf("wrong head in status: %v", msg.Head)
+			}
+			if msg.TD.Cmp(chain.TD(chain.Len())) != 0 {
+				t.Fatalf("wrong TD in status: %v", msg.TD)
+			}
+			if !reflect.DeepEqual(msg.ForkID, chain.ForkID()) {
+				t.Fatalf("wrong fork ID in status: %v", msg.ForkID)
+			}
+			message = msg
+			break loop
+		case *Disconnect:
+			t.Fatalf("disconnect received: %v", msg.Reason)
+		case *Ping:
+			c.Write(&Pong{}) // TODO (renaynay): in the future, this should be an error
+							// (PINGs should not be a response upon fresh connection)
+		default:
+			t.Fatalf("bad status message: %#v", msg)
 		}
-		if msg.TD.Cmp(chain.TD(chain.Len())) != 0 {
-			t.Fatalf("wrong TD in status: %v", msg.TD)
-		}
-		if !reflect.DeepEqual(msg.ForkID, chain.ForkID()) {
-			t.Fatalf("wrong fork ID in status: %v", msg.ForkID)
-		}
-		message = msg
-	case *Disconnect:
-		t.Fatalf("disconnect received: %v", msg.Reason)
-	default:
-		t.Fatalf("bad status message: %#v", msg)
 	}
+
 	// write status message to client
 	status := Status{
 		ProtocolVersion: 64,
