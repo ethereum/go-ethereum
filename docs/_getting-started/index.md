@@ -147,17 +147,17 @@ web3.fromWei(eth.getBalance("<ADDRESS_1>"),"ether")
 You can use standard HTTP requests to connect to a Geth node using the RPC APIs, for example:
 
 ```shell
-curl -X POST http://<GETH_IP_ADDRESS>:8545 --data \
+curl -X POST http://<GETH_IP_ADDRESS>:8545 \
     -H "Content-Type: application/json" \
-    '{"jsonrpc":"2.0", "method":"<API_METHOD>", "params":[], "id":1}'
+   --data'{"jsonrpc":"2.0", "method":"<API_METHOD>", "params":[], "id":1}'
 ```
 
 ### Check account balance
 
 ```shell
-curl -X POST http://<GETH_IP_ADDRESS>:8545 --data \
+curl -X POST http://<GETH_IP_ADDRESS>:8545 \
     -H "Content-Type: application/json" \
-    '{"jsonrpc":"2.0", "method":"eth_getBalance", "params":["<ADDRESS_1>","latest"], "id":1}'
+   --data '{"jsonrpc":"2.0", "method":"eth_getBalance", "params":["<ADDRESS_1>","latest"], "id":1}'
 ```
 
 Getting the balance of an account does not require a signed transaction,
@@ -168,9 +168,9 @@ so Clef does not ask for approval, and Geth returns the value.
 Send 0.01 ETH from the account that you added ETH to with the Görli faucet, to the second account you created:
 
 ```shell
-curl -X POST http://<GETH_IP_ADDRESS>:8545 --data \
+curl -X POST http://<GETH_IP_ADDRESS>:8545 \
     -H "Content-Type: application/json" \
-    '{"jsonrpc":"2.0", "method":"eth_sendTransaction", "params":[{"from": "<ADDRESS_0>","to": "<ADDRESS_1>","value": "0x9184e72a"}], "id":1}'
+   --data '{"jsonrpc":"2.0", "method":"eth_sendTransaction", "params":[{"from": "<ADDRESS_0>","to": "<ADDRESS_1>","value": "0x9184e72a"}], "id":1}'
 ```
 
 This action does require signing, so Clef prompts you to approve it, and if you do,
@@ -180,7 +180,7 @@ Geth proceeds with the transaction.
 To check, get the account balance of the second account:
 
 ```shell
-curl -X POST http://<GETH_IP_ADDRESS>:8545 --data \
+curl -X POST http://<GETH_IP_ADDRESS>:8545 \
     -H "Content-Type: application/json" \
-    '{"jsonrpc":"2.0", "method":"eth_getBalance", "params":["<ADDRESS_1>","latest"], "id":1}'
+    --data '{"jsonrpc":"2.0", "method":"eth_getBalance", "params":["<ADDRESS_1>","latest"], "id":1}'
 ```
