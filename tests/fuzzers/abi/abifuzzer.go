@@ -30,7 +30,7 @@ import (
 
 func unpackPack(abi abi.ABI, method string, inputType []interface{}, input []byte) bool {
 	outptr := reflect.New(reflect.TypeOf(inputType))
-	if err := abi.Unpack(outptr.Interface(), method, input); err == nil {
+	if err := abi.UnpackIntoInterface(outptr.Interface(), method, input); err == nil {
 		output, err := abi.Pack(method, input)
 		if err != nil {
 			// We have some false positives as we can unpack these type successfully, but not pack them
@@ -51,7 +51,7 @@ func unpackPack(abi abi.ABI, method string, inputType []interface{}, input []byt
 func packUnpack(abi abi.ABI, method string, input []interface{}) bool {
 	if packed, err := abi.Pack(method, input); err == nil {
 		outptr := reflect.New(reflect.TypeOf(input))
-		err := abi.Unpack(outptr.Interface(), method, packed)
+		err := abi.UnpackIntoInterface(outptr.Interface(), method, packed)
 		if err != nil {
 			panic(err)
 		}

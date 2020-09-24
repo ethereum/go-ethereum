@@ -92,20 +92,7 @@ func (arguments Arguments) Unpack(data []byte) ([]interface{}, error) {
 	return arguments.UnpackValues(data)
 }
 
-<<<<<<< HEAD
-func (arguments Arguments) makeDefaulArgs() []interface{} {
-	nonIndexedArgs := arguments.NonIndexed()
-	retval := make([]interface{}, len(nonIndexedArgs))
-	for index, arg := range nonIndexedArgs {
-		retval[index] = reflect.New(arg.Type.getType())
-	}
-	return retval
-}
-
 // UnpackIntoMap performs the operation hexdata -> mapping of argument name to argument value.
-=======
-// UnpackIntoMap performs the operation hexdata -> mapping of argument name to argument value
->>>>>>> 498675bc1... accounts/abi: refactored unused code
 func (arguments Arguments) UnpackIntoMap(v map[string]interface{}, data []byte) error {
 	// Make sure map is not nil
 	if v == nil {
