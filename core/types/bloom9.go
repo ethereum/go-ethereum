@@ -122,8 +122,63 @@ func bloom9(b []byte) *big.Int {
 		b := (uint(b[i+1]) + (uint(b[i]) << 8)) & 2047
 		r.Or(r, t.Lsh(t, b))
 	}
-
 	return r
+}
+
+func CreateBloom10(receipts Receipts) Bloom {
+	bin := make([]byte, BloomByteLength)
+	for _, receipt := range receipts {
+		bin = or(bin, LogsBloom10(receipt.Logs))
+	}
+
+	return BytesToBloom(bin)
+}
+
+func LogsBloom10(logs []*Log) []byte {
+	bin := make([]byte, BloomByteLength)
+	for _, log := range logs {
+		bin = or(bin, bloom10(log.Address.Bytes()))
+		for _, b := range log.Topics {
+			bin = or(bin, bloom10(b[:]))
+		}
+	}
+
+	return bin
+}
+
+func or(a, b []byte) []byte {
+	for i := range a {
+		a[i] |= b[i]
+	}
+	return a
+}
+
+func bloom10(b []byte) []byte {
+	sha := hasherPool.Get().(crypto.KeccakState)
+	defer hasherPool.Put(sha)
+	sha.Reset()
+	sha.Write(b)
+	sha.Read(b)
+	r := make([]byte, BloomByteLength)
+
+	for i := 0; i < 6; i += 2 {
+		b := (uint(b[i+1]) + (uint(b[i]) << 8)) & 2047
+		byteIdx := b >> 3             // divide by 8 bit per byte
+		bitMask := byte(1 << (b % 8)) // set the b%8th's bit
+		r[BloomByteLength-byteIdx-1] |= bitMask
+	}
+	return r
+}
+
+func Bloom10Lookup(bin Bloom, topic bytesBacked) bool {
+	cmp := bloom10(topic.Bytes())
+	for i := range cmp {
+		if cmp[i] != cmp[i]&bin[i] {
+			// Every topic in cmp has to be in bin
+			return false
+		}
+	}
+	return true
 }
 
 var Bloom9 = bloom9
