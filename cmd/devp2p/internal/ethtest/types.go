@@ -42,9 +42,10 @@ type Error struct {
 	err error
 }
 
-func (e *Error) Unwrap() error { return e.err }
-func (e *Error) Error() string { return e.err.Error() }
-func (e *Error) Code() int     { return -1 }
+func (e *Error) Unwrap() error    { return e.err }
+func (e *Error) Error() string    { return e.err.Error() }
+func (e *Error) Code() int        { return -1 }
+func (e *Error) GoString() string { return e.Error() }
 
 // Hello is the RLP structure of the protocol handshake.
 type Hello struct {
