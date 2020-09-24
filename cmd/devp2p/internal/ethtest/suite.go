@@ -18,12 +18,13 @@ package ethtest
 
 import (
 	"fmt"
+	"net"
+
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/internal/utesting"
 	"github.com/ethereum/go-ethereum/p2p/enode"
 	"github.com/ethereum/go-ethereum/p2p/rlpx"
 	"github.com/stretchr/testify/assert"
-	"net"
 )
 
 // Suite represents a structure used to test the eth

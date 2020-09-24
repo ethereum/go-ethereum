@@ -19,9 +19,6 @@ package ethtest
 import (
 	"crypto/ecdsa"
 	"fmt"
-	"github.com/ethereum/go-ethereum/crypto"
-	"github.com/ethereum/go-ethereum/internal/utesting"
-	"github.com/ethereum/go-ethereum/p2p/rlpx"
 	"io"
 	"math/big"
 	"reflect"
@@ -30,7 +27,10 @@ import (
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/forkid"
 	"github.com/ethereum/go-ethereum/core/types"
+	"github.com/ethereum/go-ethereum/crypto"
+	"github.com/ethereum/go-ethereum/internal/utesting"
 	"github.com/ethereum/go-ethereum/p2p"
+	"github.com/ethereum/go-ethereum/p2p/rlpx"
 	"github.com/ethereum/go-ethereum/rlp"
 )
 
@@ -218,8 +218,6 @@ func (c *Conn) ReadAndServe(chain *Chain) Message {
 		}
 	}
 }
-
-
 
 func (c *Conn) Write(msg Message) error {
 	payload, err := rlp.EncodeToBytes(msg)

@@ -39,13 +39,13 @@ func TestChain_GetHeaders(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	var tests = []struct{
-		req GetBlockHeaders
+	var tests = []struct {
+		req      GetBlockHeaders
 		expected BlockHeaders
 	}{
 		{
 			req: GetBlockHeaders{
-				Origin:  hashOrNumber{
+				Origin: hashOrNumber{
 					Number: uint64(2),
 				},
 				Amount:  uint64(5),
@@ -62,8 +62,8 @@ func TestChain_GetHeaders(t *testing.T) {
 		},
 		{
 			req: GetBlockHeaders{
-				Origin:  hashOrNumber{
-					Number: uint64(chain.Len()-1),
+				Origin: hashOrNumber{
+					Number: uint64(chain.Len() - 1),
 				},
 				Amount:  uint64(3),
 				Skip:    0,
@@ -77,7 +77,7 @@ func TestChain_GetHeaders(t *testing.T) {
 		},
 		{
 			req: GetBlockHeaders{
-				Origin:  hashOrNumber{
+				Origin: hashOrNumber{
 					Hash: chain.Head().Hash(),
 				},
 				Amount:  uint64(1),
