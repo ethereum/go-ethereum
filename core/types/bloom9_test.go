@@ -52,51 +52,10 @@ func TestBloom(t *testing.T) {
 	}
 }
 
-func TestBloom9(t *testing.T) {
-	tests := []string{
-		"testtest",
-		"test",
-		"hallo",
-		"other",
-		"tes",
-		"lo",
-	}
-	for _, test := range tests {
-		a := bloom9([]byte(test))
-		b := new(big.Int).SetBytes(bloom10([]byte(test)))
-		if a.Cmp(b) != 0 {
-			t.Fatalf("Different results \n %v \n %v \n %v \n", test, a, b)
-		}
-	}
-}
-
 type Byter []byte
 
 func (b Byter) Bytes() []byte {
 	return b
-}
-func TestBloomLookup(t *testing.T) {
-	tests := []Byter{
-		Byter([]byte("testtest")),
-		Byter([]byte("test")),
-		Byter([]byte("te")),
-		Byter([]byte("asdf")),
-		Byter([]byte("asdfasdf")),
-		Byter([]byte("asdfasdf")),
-		Byter([]byte("asdfasdf")),
-		Byter([]byte("12344")),
-	}
-	aBloom := new(Bloom)
-	bBloom := new(Bloom)
-	for _, test := range tests {
-		a := BloomLookup(*aBloom, test)
-		b := Bloom10Lookup(*bBloom, test)
-		aBloom.Add(new(big.Int).SetBytes(test))
-		bBloom.Add(new(big.Int).SetBytes(test))
-		if a != b {
-			t.Fatalf("Different results \n %v \n %v \n %v \n", test, a, b)
-		}
-	}
 }
 
 func BenchmarkBloom9(b *testing.B) {
@@ -106,26 +65,11 @@ func BenchmarkBloom9(b *testing.B) {
 	}
 }
 
-func BenchmarkBloom10(b *testing.B) {
-	test := []byte("testestestest")
-	for i := 0; i < b.N; i++ {
-		bloom10(test)
-	}
-}
-
 func BenchmarkBloom9Lookup(b *testing.B) {
 	test := Byter([]byte("testtest"))
 	bloom := new(Bloom)
 	for i := 0; i < b.N; i++ {
 		BloomLookup(*bloom, test)
-	}
-}
-
-func BenchmarkBloom10Lookup(b *testing.B) {
-	test := Byter([]byte("testtest"))
-	bloom := new(Bloom)
-	for i := 0; i < b.N; i++ {
-		Bloom10Lookup(*bloom, test)
 	}
 }
 
@@ -158,22 +102,9 @@ var receipts = Receipts{
 	},
 }
 
-func TestCreateBloom(t *testing.T) {
-	// Create a few transactions to have receipts for
-	if CreateBloom(receipts) != CreateBloom10(receipts) {
-		t.Fatal("wrong")
-	}
-}
-
 func BenchmarkCreateBloom(b *testing.B) {
 	for i := 0; i < b.N; i++ {
 		CreateBloom(receipts)
-	}
-}
-
-func BenchmarkCreateBloom10(b *testing.B) {
-	for i := 0; i < b.N; i++ {
-		CreateBloom10(receipts)
 	}
 }
 
