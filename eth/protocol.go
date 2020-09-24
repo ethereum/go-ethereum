@@ -198,6 +198,11 @@ type newBlockData struct {
 	TD    *big.Int
 }
 
+type auraNewBlockData struct {
+	Block *types.AuraBlock
+	TD *big.Int
+}
+
 // sanityCheck verifies that the values are reasonable, as a DoS protection
 func (request *newBlockData) sanityCheck() error {
 	if err := request.Block.SanityCheck(); err != nil {

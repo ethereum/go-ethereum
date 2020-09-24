@@ -29,6 +29,7 @@ func NewListIterator(data RawValue) (*listIterator, error) {
 		return nil, err
 	}
 	if k != List {
+		panic("a2")
 		return nil, ErrExpectedList
 	}
 	it := &listIterator{

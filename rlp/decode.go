@@ -722,6 +722,7 @@ func (s *Stream) List() (size uint64, err error) {
 		return 0, err
 	}
 	if kind != List {
+		panic("a1")
 		return 0, ErrExpectedList
 	}
 	s.stack = append(s.stack, listpos{0, size})

@@ -65,6 +65,7 @@ func SplitList(b []byte) (content, rest []byte, err error) {
 		return nil, b, err
 	}
 	if k != List {
+		panic("a3")
 		return nil, b, ErrExpectedList
 	}
 	return content, rest, nil
