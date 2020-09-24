@@ -84,7 +84,7 @@ func (c *Conn) handshake(t *utesting.T) Message {
 	pub0 := crypto.FromECDSAPub(&c.ourKey.PublicKey)[1:]
 	ourHandshake := &Hello{
 		Version: 5,
-		Caps:    []p2p.Cap{{Name: "eth", Version: 64}, {Name: "eth", Version: 65}},
+		Caps:    []p2p.Cap{{Name: "eth", Version: 64}},
 		ID:      pub0,
 	}
 	if err := c.Write(ourHandshake); err != nil {
