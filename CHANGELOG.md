@@ -1,5 +1,15 @@
 # Changelog
 
+## v1.0.3
+
+IMPROVEMENT
+* [\#36](https://github.com/binance-chain/bsc/pull/36) add max gas allwance calculation
+
+## v1.0.2
+
+IMPROVEMENT
+* [\#29](https://github.com/binance-chain/bsc/pull/29) eth/tracers: revert reason in call_tracer + error for failed internal…
+
 ## v1.0.1-beta
 
 IMPROVEMENT
