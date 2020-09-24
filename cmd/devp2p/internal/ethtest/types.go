@@ -275,7 +275,7 @@ func (c *Conn) statusExchange(t *utesting.T, chain *Chain) Message {
 	// read status message from client
 	var message Message
 
-	loop:
+loop:
 	for {
 		switch msg := c.Read().(type) {
 		case *Status:
@@ -294,7 +294,7 @@ func (c *Conn) statusExchange(t *utesting.T, chain *Chain) Message {
 			t.Fatalf("disconnect received: %v", msg.Reason)
 		case *Ping:
 			c.Write(&Pong{}) // TODO (renaynay): in the future, this should be an error
-							// (PINGs should not be a response upon fresh connection)
+			// (PINGs should not be a response upon fresh connection)
 		default:
 			t.Fatalf("bad status message: %#v", msg)
 		}
