@@ -122,7 +122,7 @@ func (c *Conn) statusExchange(t *utesting.T, chain *Chain) Message {
 	}
 	// write status message to client
 	status := Status{
-		ProtocolVersion: 65,
+		ProtocolVersion: 64,
 		NetworkID:       1,
 		TD:              chain.TD(chain.Len()),
 		Head:            chain.blocks[chain.Len()-1].Hash(),
