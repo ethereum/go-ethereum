@@ -98,7 +98,7 @@ func (c *Conn) handshake(t *utesting.T) Message {
 		}
 		return msg
 	default:
-		t.Fatalf("bad handshake: %v", msg)
+		t.Fatalf("bad handshake: %#v", msg)
 		return nil
 	}
 }
@@ -121,7 +121,7 @@ func (c *Conn) statusExchange(t *utesting.T, chain *Chain) Message {
 		}
 		message = msg
 	default:
-		t.Fatalf("bad status message: %v", msg)
+		t.Fatalf("bad status message: %#v", msg)
 	}
 	// write status message to client
 	status := Status{
@@ -199,7 +199,7 @@ func (s *Suite) TestStatus(t *utesting.T) {
 	case *Status:
 		t.Logf("%+v\n", msg)
 	default:
-		t.Fatalf("error: %v", msg)
+		t.Fatalf("unexpected: %#v", msg)
 	}
 }
 
@@ -237,7 +237,7 @@ func (s *Suite) TestGetBlockHeaders(t *utesting.T) {
 			t.Logf("\nHEADER FOR BLOCK NUMBER %d: %+v\n", header.Number, header)
 		}
 	default:
-		t.Fatalf("error: %v", msg)
+		t.Fatalf("unexpected: %#v", msg)
 	}
 }
 
@@ -264,7 +264,7 @@ func (s *Suite) TestGetBlockBodies(t *utesting.T) {
 			t.Logf("\nBODY: %+v\n", body)
 		}
 	default:
-		t.Fatalf("error: %v", msg)
+		t.Fatalf("unexpected: %#v", msg)
 	}
 }
 
@@ -308,7 +308,7 @@ func (s *Suite) TestBroadcast(t *utesting.T) {
 		assert.Equal(t, blockAnnouncement.Block.Hash(), hashes[0].Hash,
 			"wrong block hash in announcement")
 	default:
-		t.Fatal(msg)
+		t.Fatalf("unexpected: %#v", msg)
 	}
 	// update test suite chain
 	s.chain.blocks = append(s.chain.blocks, s.fullChain.blocks[1000])
