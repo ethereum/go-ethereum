@@ -83,8 +83,8 @@ type Header struct {
 	GasUsed     uint64         `json:"gasUsed"          gencodec:"required"`
 	Time        uint64         `json:"timestamp"        gencodec:"required"`
 	Extra       []byte         `json:"extraData"        gencodec:"required"`
-	MixDigest   common.Hash    `json:"mixHash"`
-	Nonce       BlockNonce     `json:"nonce"`
+	MixDigest   common.Hash    `json:"mixHash, omitempty"`
+	Nonce       BlockNonce     `json:"nonce,omitempty"`
 
 	// seal field for aura engine
 	Seal		[][]byte  	   `json:"seal"`

@@ -21,6 +21,7 @@ import (
 	"encoding/hex"
 	"errors"
 	"fmt"
+	"github.com/ethereum/go-ethereum/common"
 	"io"
 	"math/big"
 	"reflect"
@@ -456,6 +457,13 @@ var decodeTests = []decodeTest{
 	{input: "C0", ptr: new(*big.Int), error: "rlp: expected input string or byte for *big.Int"},
 	{input: "820001", ptr: new(big.Int), error: "rlp: non-canonical integer (leading zero bytes) for *big.Int"},
 	{input: "8105", ptr: new(big.Int), error: "rlp: non-canonical size information for *big.Int"},
+
+	// common hash
+	// THIS IS HOW IT IS
+	{input: "", ptr: new(common.Hash), error: "EOF"},
+	// THIS IS HOW IT SHOULD BE IN OUR SCENARIO
+	{input: "", ptr: new(common.Hash), value: common.Hash{}},
+	{input: "C601C402C203C0", ptr: new(common.Hash), error: "rlp: expected input string or byte for common.Hash"},
 
 	// structs
 	{
