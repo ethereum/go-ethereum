@@ -1571,6 +1571,7 @@ func (s *Syncer) processBytecodeResponse(res *bytecodeResponse) {
 		bytes += common.StorageSize(len(code))
 
 		rawdb.WriteCode(batch, hash, code)
+		s.bloom.Add(hash[:])
 	}
 	if err := batch.Write(); err != nil {
 		log.Crit("Failed to persist bytecodes", "err", err)
