@@ -93,6 +93,9 @@ func (c *Conn) handshake(t *utesting.T) Message {
 	// read protoHandshake from client
 	switch msg := c.Read().(type) {
 	case *Hello:
+		if msg.Version >= 5 {
+			c.SetSnappy(true)
+		}
 		return msg
 	default:
 		t.Fatalf("bad handshake: %v", msg)
