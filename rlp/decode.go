@@ -125,15 +125,13 @@ func wrapStreamError(err error, typ reflect.Type) error {
 	case ErrCanonSize:
 		return &decodeError{msg: "non-canonical size information", typ: typ}
 	case ErrExpectedList:
-		return nil
-		//return &decodeError{msg: "expected input list", typ: typ}
+		return &decodeError{msg: "expected input list", typ: typ}
 	case ErrExpectedString:
 		return &decodeError{msg: "expected input string or byte", typ: typ}
 	case errUintOverflow:
 		return &decodeError{msg: "input string too long", typ: typ}
 	case errNotAtEOL:
-
-		return &decodeError{msg: fmt.Sprintf("input list has too many elements got: %v", typ.Len()), typ: typ}
+		return &decodeError{msg: fmt.Sprintf("input list has too many elements got: %v", typ), typ: typ}
 	}
 	return err
 }
@@ -370,9 +368,9 @@ func decodeByteArray(s *Stream, val reflect.Value) error {
 			return &decodeError{msg: "input string too long", typ: val.Type()}
 		}
 		if uint64(vlen) > size {
-			if  "<common.Hash Value>" == val.String()|| "<types.BlockNonce Value>" == val.String() {
-				return nil
-			}
+			//if  "<common.Hash Value>" == val.String()|| "<types.BlockNonce Value>" == val.String() {
+			//	return nil
+			//}
 			fmt.Println(fmt.Sprintf("4: \n\n\n\n\n\n\n Len: %v, string: %v \n\n\n\n\n\n\n", val.Len(), val.String()))
 			return &decodeError{msg: "input string too short", typ: val.Type()}
 		}
@@ -774,14 +772,14 @@ func (s *Stream) Decode(val interface{}) error {
 
 	err = decoder(s, rval.Elem())
 
-	// This is quite ugly, but..
-	if "common.Hash" == rtyp.Elem().String() && io.EOF == err {
-		return nil
-	}
-
-	if nil != err {
-		//panic(fmt.Sprintf("c1 %v, %v, %v", rtyp.Elem().String(), rtyp.Elem(), err.Error()))
-	}
+	//// This is quite ugly, but..
+	//if "common.Hash" == rtyp.Elem().String() && io.EOF == err {
+	//	return nil
+	//}
+	//
+	//if nil != err {
+	//	//panic(fmt.Sprintf("c1 %v, %v, %v", rtyp.Elem().String(), rtyp.Elem(), err.Error()))
+	//}
 
 	if decErr, ok := err.(*decodeError); ok && len(decErr.ctx) > 0 {
 		// add decode target type to error so context has more meaning
