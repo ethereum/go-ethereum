@@ -106,7 +106,7 @@ type AuraHeader struct {
 	Time        uint64         `json:"timestamp"        gencodec:"required"`
 	Extra       []byte         `json:"extraData"        gencodec:"required"`
 	Field1      []uint8        `json:"field1"           gencodec:"required"`
-	Field2      []uint8        `json:"field2"           gencodec:"required"`
+	Seal        []byte         `json:"seal"           gencodec:"required"`
 }
 
 // field type overrides for gencodec
@@ -210,35 +210,22 @@ type Body struct {
 
 // TODO: I know that it can be done via inheritance but too much work for now.
 type AuraBlock struct {
-	header *AuraHeader
-	// This should be empty in aura header response
+	Header *AuraHeader
 	uncles       []*Header
-	transactions Transactions
-
-	// caches
-	hash atomic.Value
-	size atomic.Value
-
-	// Td is used by package core to store the total difficulty
-	// of the chain up to and including the block.
-	td *big.Int
-
-	// These fields are used by package eth to track
-	// inter-peer block relay.
-	ReceivedAt   interface{}
-	ReceivedFrom string
+	hash 		 atomic.Value
+	Rest []interface{} `rlp:"tail"`
 }
 
 func (auraBlock *AuraBlock) TranslateIntoBlock() (err error, block *Block) {
-	header := auraBlock.header
+	header := auraBlock.Header
 
 	if nil == header {
 		return fmt.Errorf("header in aura block is nil"), nil
 	}
 
 	seal := make([][]uint8, 2)
-	seal[0] = header.Field1
-	seal[1] = header.Field2
+	seal[0] = header.Seal
+	seal[1] = header.Field1
 
 	block = &Block{
 		header: &Header{
@@ -262,12 +249,12 @@ func (auraBlock *AuraBlock) TranslateIntoBlock() (err error, block *Block) {
 			Seal: seal,
 		},
 		uncles:       auraBlock.uncles,
-		transactions: auraBlock.transactions,
+		//transactions: auraBlock.transactions,
 		hash:         auraBlock.hash,
-		size:         auraBlock.size,
-		td:           auraBlock.td,
+		//size:         auraBlock.size,
+		//td:           auraBlock.td,
 		ReceivedAt:   time.Now(),
-		ReceivedFrom: auraBlock.ReceivedFrom,
+		//ReceivedFrom: auraBlock.ReceivedFrom,
 	}
 
 	return
