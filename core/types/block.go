@@ -211,8 +211,8 @@ type Body struct {
 // TODO: I know that it can be done via inheritance but too much work for now.
 type AuraBlock struct {
 	Header *AuraHeader
-	uncles       []*Header
-	hash 		 atomic.Value
+	Uncles       []*Header
+	Transactions Transactions
 	Rest []interface{} `rlp:"tail"`
 }
 
@@ -248,9 +248,9 @@ func (auraBlock *AuraBlock) TranslateIntoBlock() (err error, block *Block) {
 			// This is empty in aura header response
 			Seal: seal,
 		},
-		uncles:       auraBlock.uncles,
+		uncles:       auraBlock.Uncles,
 		//transactions: auraBlock.transactions,
-		hash:         auraBlock.hash,
+		//hash:         auraBlock.Hash,
 		//size:         auraBlock.size,
 		//td:           auraBlock.td,
 		ReceivedAt:   time.Now(),

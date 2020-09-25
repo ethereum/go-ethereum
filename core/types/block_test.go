@@ -87,10 +87,9 @@ func TestBlockEncodingAura(t *testing.T) {
 
 	auraBlock := mappedAuraResp.Block
 	assert.NotNil(t, auraBlock)
-	assert.Equal(t, "", mappedAuraResp.Block)
-	//err, stdBlock := auraBlock.TranslateIntoBlock()
-	//assert.Nil(t, err)
-	//assert.IsType(t, &Block{}, stdBlock)
+	err, stdBlock := auraBlock.TranslateIntoBlock()
+	assert.Nil(t, err)
+	assert.IsType(t, &Block{}, stdBlock)
 }
 
 func TestUncleHash(t *testing.T) {
