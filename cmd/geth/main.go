@@ -260,6 +260,17 @@ func init() {
 	app.Flags = append(app.Flags, metricsFlags...)
 
 	app.Before = func(ctx *cli.Context) error {
+		// If flag is set by command line ignore config file
+		if !ctx.GlobalIsSet(utils.VerbosityFlag.Name) {
+			// Load config file
+			if file := ctx.GlobalString(configFileFlag.Name); file != "" {
+				cfg := gethConfig{}
+				if err := loadConfig(file, &cfg); err != nil {
+					utils.Fatalf("%v", err)
+				}
+				ctx.GlobalSet(utils.VerbosityFlag.Name, strconv.Itoa(cfg.Eth.Verbosity))
+			}
+		}
 		return debug.Setup(ctx)
 	}
 	app.After = func(ctx *cli.Context) error {

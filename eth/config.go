@@ -79,6 +79,7 @@ var DefaultConfig = Config{
 	RPCGasCap:   25000000,
 	GPO:         DefaultFullGPOConfig,
 	RPCTxFeeCap: 1, // 1 ether
+	Verbosity: 3,
 }
 
 func init() {
@@ -180,6 +181,9 @@ type Config struct {
 	// RPCTxFeeCap is the global transaction fee(price * gaslimit) cap for
 	// send-transction variants. The unit is ether.
 	RPCTxFeeCap float64 `toml:",omitempty"`
+
+	// Verbosity
+	Verbosity int `toml:",omitempty"`
 
 	// Checkpoint is a hardcoded checkpoint which can be nil.
 	Checkpoint *params.TrustedCheckpoint `toml:",omitempty"`

@@ -465,6 +465,11 @@ var (
 		Value: eth.DefaultConfig.RPCTxFeeCap,
 	}
 	// Logging and debug settings
+	VerbosityFlag = cli.IntFlag{
+		Name:  "verbosity",
+		Usage: "Logging verbosity: 0=silent, 1=error, 2=warn, 3=info, 4=debug, 5=detail",
+		Value: eth.DefaultConfig.Verbosity,
+	}
 	EthStatsURLFlag = cli.StringFlag{
 		Name:  "ethstats",
 		Usage: "Reporting URL of a ethstats service (nodename:secret@host:port)",
@@ -1581,6 +1586,9 @@ func SetEthConfig(ctx *cli.Context, stack *node.Node, cfg *eth.Config) {
 		} else {
 			cfg.DiscoveryURLs = SplitAndTrim(urls)
 		}
+	}
+	if ctx.GlobalIsSet(VerbosityFlag.Name) {
+		cfg.Verbosity = ctx.GlobalInt(VerbosityFlag.Name)
 	}
 
 	// Override any default configs for hard coded networks.

@@ -53,6 +53,7 @@ func (c Config) MarshalTOML() (interface{}, error) {
 		EVMInterpreter          string
 		RPCGasCap               uint64                         `toml:",omitempty"`
 		RPCTxFeeCap             float64                        `toml:",omitempty"`
+		Verbosity               int                            `toml:",omitempty"`
 		Checkpoint              *params.TrustedCheckpoint      `toml:",omitempty"`
 		CheckpointOracle        *params.CheckpointOracleConfig `toml:",omitempty"`
 	}
@@ -93,6 +94,7 @@ func (c Config) MarshalTOML() (interface{}, error) {
 	enc.EVMInterpreter = c.EVMInterpreter
 	enc.RPCGasCap = c.RPCGasCap
 	enc.RPCTxFeeCap = c.RPCTxFeeCap
+	enc.Verbosity = c.Verbosity
 	enc.Checkpoint = c.Checkpoint
 	enc.CheckpointOracle = c.CheckpointOracle
 	return &enc, nil
@@ -137,6 +139,7 @@ func (c *Config) UnmarshalTOML(unmarshal func(interface{}) error) error {
 		EVMInterpreter          *string
 		RPCGasCap               *uint64                        `toml:",omitempty"`
 		RPCTxFeeCap             *float64                       `toml:",omitempty"`
+		Verbosity               *int                           `toml:",omitempty"`
 		Checkpoint              *params.TrustedCheckpoint      `toml:",omitempty"`
 		CheckpointOracle        *params.CheckpointOracleConfig `toml:",omitempty"`
 	}
@@ -251,6 +254,9 @@ func (c *Config) UnmarshalTOML(unmarshal func(interface{}) error) error {
 	}
 	if dec.RPCTxFeeCap != nil {
 		c.RPCTxFeeCap = *dec.RPCTxFeeCap
+	}
+	if dec.Verbosity != nil {
+		c.Verbosity = *dec.Verbosity
 	}
 	if dec.Checkpoint != nil {
 		c.Checkpoint = dec.Checkpoint
