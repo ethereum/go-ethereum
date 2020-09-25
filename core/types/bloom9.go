@@ -117,11 +117,12 @@ func CreateBloom(receipts Receipts) Bloom {
 
 // LogsBloom returns the bloom bytes for the given logs
 func LogsBloom(logs []*Log) []byte {
+	buf := make([]byte, 6)
 	var bin Bloom
 	for _, log := range logs {
-		bin.Add(log.Address.Bytes())
+		bin.add(log.Address.Bytes(), buf)
 		for _, b := range log.Topics {
-			bin.Add(b[:])
+			bin.add(b[:], buf)
 		}
 	}
 	return bin[:]
