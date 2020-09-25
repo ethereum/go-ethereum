@@ -67,3 +67,35 @@ func (t *UpdateTimer) UpdateAt(at mclock.AbsTime, callback func(diff time.Durati
 	}
 	return false
 }
+
+// CostFilter is used for time based request cost metering because time measurements
+// can sometimes produce very high outlier values. Each request has a prior cost estimate
+// normalized to the 0 < priorCost <= 1 range (it can be constant 1 if not used).
+// The filter uses a slowly changing upper limit that is scaled with the prior cost:
+// filteredCost = MIN(cost, limit*priorCost)
+// The limit is automatically adjusted so that AVG(filteredCost) == AVG(cost)*(1-cutRatio).
+type CostFilter struct {
+	cutRatio, updateRate, limit float64
+}
+
+func NewCostFilter(cutRatio, updateRate float64) *CostFilter {
+	return &CostFilter{
+		cutRatio:   cutRatio,
+		updateRate: updateRate,
+	}
+}
+
+// 0 < priorWeight <= 1, filteredCost <= costLimit * priorWeight
+func (cf *CostFilter) Filter(cost, priorCost float64) (filteredCost, costLimit float64) {
+	var cut float64
+	limit := cf.limit * priorCost
+	if cost > limit {
+		filteredCost = limit
+		cut = cost - limit
+	} else {
+		filteredCost = cost
+	}
+	costLimit = cf.limit
+	cf.limit += (cut - cost*cf.cutRatio) * cf.updateRate
+	return
+}

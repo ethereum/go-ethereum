@@ -45,3 +45,46 @@ func TestUpdateTimer(t *testing.T) {
 		t.Fatalf("Doesn't update the clock without threshold limitaion")
 	}
 }
+
+type (
+	cfPoint struct {
+		cost, weight float64
+	}
+	cfTest struct {
+		cutRatio, expLimit float64
+		period             []cfPoint
+	}
+)
+
+func TestCostFilter(t *testing.T) {
+	tests := []cfTest{
+		cfTest{0.5, 50, []cfPoint{{100, 1}}},
+		cfTest{0.1, 800, []cfPoint{{100, 1}, {900, 1}}},
+		cfTest{0.1, 900, []cfPoint{{0, 0.1}, {150, 0.1}, {950, 1}}},
+	}
+
+	for _, test := range tests {
+		cf := NewCostFilter(test.cutRatio, 0.01)
+		var (
+			index                int
+			fc, limit, sum, fsum float64
+		)
+		for i := 0; i < 1000000; i++ {
+			c := test.period[index]
+			fc, limit = cf.Filter(c.cost, c.weight)
+			sum += c.cost
+			fsum += fc
+			index++
+			if index == len(test.period) {
+				index = 0
+			}
+		}
+		expfsum := sum * (1 - test.cutRatio)
+		if fsum < expfsum*0.99 || fsum > expfsum*1.01 {
+			t.Fatalf("Filtered sum is incorrect (got %f, expected %f)", fsum, expfsum)
+		}
+		if limit < test.expLimit*0.99 || limit > test.expLimit*1.01 {
+			t.Fatalf("Limit is incorrect (got %f, expected %f)", limit, test.expLimit)
+		}
+	}
+}
