@@ -79,7 +79,7 @@ var DefaultConfig = Config{
 	RPCGasCap:   25000000,
 	GPO:         DefaultFullGPOConfig,
 	RPCTxFeeCap: 1, // 1 ether
-	Verbosity: 3,
+	Verbosity:   3,
 }
 
 func init() {
