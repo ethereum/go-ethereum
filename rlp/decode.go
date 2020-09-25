@@ -125,13 +125,15 @@ func wrapStreamError(err error, typ reflect.Type) error {
 	case ErrCanonSize:
 		return &decodeError{msg: "non-canonical size information", typ: typ}
 	case ErrExpectedList:
-		return &decodeError{msg: "expected input list", typ: typ}
+		return nil
+		//return &decodeError{msg: "expected input list", typ: typ}
 	case ErrExpectedString:
 		return &decodeError{msg: "expected input string or byte", typ: typ}
 	case errUintOverflow:
 		return &decodeError{msg: "input string too long", typ: typ}
 	case errNotAtEOL:
-		return &decodeError{msg: "input list has too many elements", typ: typ}
+
+		return &decodeError{msg: fmt.Sprintf("input list has too many elements got: %v", typ.Len()), typ: typ}
 	}
 	return err
 }
@@ -722,7 +724,6 @@ func (s *Stream) List() (size uint64, err error) {
 		return 0, err
 	}
 	if kind != List {
-		panic("a1")
 		return 0, ErrExpectedList
 	}
 	s.stack = append(s.stack, listpos{0, size})
@@ -776,6 +777,10 @@ func (s *Stream) Decode(val interface{}) error {
 	// This is quite ugly, but..
 	if "common.Hash" == rtyp.Elem().String() && io.EOF == err {
 		return nil
+	}
+
+	if nil != err {
+		//panic(fmt.Sprintf("c1 %v, %v, %v", rtyp.Elem().String(), rtyp.Elem(), err.Error()))
 	}
 
 	if decErr, ok := err.(*decodeError); ok && len(decErr.ctx) > 0 {

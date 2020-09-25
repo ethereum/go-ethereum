@@ -105,7 +105,8 @@ type AuraHeader struct {
 	GasUsed     uint64         `json:"gasUsed"          gencodec:"required"`
 	Time        uint64         `json:"timestamp"        gencodec:"required"`
 	Extra       []byte         `json:"extraData"        gencodec:"required"`
-	Seal		[][]byte  	   `json:"seal"`
+	Field1      []byte         `json:"field1"           gencodec:"required"`
+	Field2      []byte         `json:"field2"           gencodec:"required"`
 }
 
 // field type overrides for gencodec
@@ -210,6 +211,8 @@ type Body struct {
 // TODO: I know that it can be done via inheritance but too much work for now.
 type AuraBlock struct {
 	header *AuraHeader
+	// This should be empty in aura header response
+	uncles       []*Header
 	transactions Transactions
 
 	// caches
@@ -222,10 +225,54 @@ type AuraBlock struct {
 
 	// These fields are used by package eth to track
 	// inter-peer block relay.
-	//ReceivedAt   time.Time
+	OtherStruct []interface{}
+	ReceivetAt   time.Time
 	ReceivedFrom interface{}
 }
 
+func (auraBlock *AuraBlock) TranslateIntoBlock()(err error, block *Block) {
+	header := auraBlock.header
+
+	if nil == header {
+		return fmt.Errorf("header in aura block is nil"), nil
+	}
+
+	seal := make([][]byte, 2)
+	seal[0] = header.Field1
+	seal[1] = header.Field2
+
+	block = &Block{
+		header:       &Header{
+			ParentHash:  header.ParentHash,
+			UncleHash:   header.UncleHash,
+			Coinbase:    header.Coinbase,
+			Root:        header.Root,
+			TxHash:      header.TxHash,
+			ReceiptHash: header.ReceiptHash,
+			Bloom:       header.Bloom,
+			Difficulty:  header.Difficulty,
+			Number:      header.Number,
+			GasLimit:    header.GasLimit,
+			GasUsed:     header.GasUsed,
+			Time:        header.Time,
+			Extra:       header.Extra,
+			// This is empty in aura header response
+			MixDigest:   common.Hash{},
+			Nonce:       BlockNonce{},
+			// This is empty in aura header response
+			Seal:        seal,
+		},
+		uncles:       auraBlock.uncles,
+		transactions: auraBlock.transactions,
+		hash:         auraBlock.hash,
+		size:         auraBlock.size,
+		td:           auraBlock.td,
+		ReceivedAt:   auraBlock.ReceivetAt,
+		ReceivedFrom: auraBlock.ReceivedFrom,
+	}
+
+	return
+}
 // Block represents an entire block in the Ethereum blockchain.
 type Block struct {
 	header       *Header
