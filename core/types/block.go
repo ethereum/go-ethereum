@@ -164,7 +164,7 @@ func (h *Header) SanityCheck() error {
 		return fmt.Errorf("too large block number: bitlen %d", h.Number.BitLen())
 	}
 	if h.Difficulty != nil {
-		if diffLen := h.Difficulty.BitLen(); diffLen > 80 {
+		if diffLen := h.Difficulty.BitLen(); diffLen > 168 {
 			return fmt.Errorf("too large block difficulty: bitlen %d", diffLen)
 		}
 	}
@@ -307,6 +307,34 @@ type storageblock struct {
 	Txs    []*Transaction
 	Uncles []*Header
 	TD     *big.Int
+}
+
+func (auraHeader *AuraHeader) TranslateIntoHeader() (header *Header) {
+	currentSeal := make([][]uint8, 2)
+
+	if len(auraHeader.Seal) > 1 {
+		currentSeal[0][0] = auraHeader.Seal[0]
+		currentSeal[1][0] = auraHeader.Seal[1]
+	}
+
+	header = &Header{
+		ParentHash:  auraHeader.ParentHash,
+		UncleHash:   auraHeader.UncleHash,
+		Coinbase:    auraHeader.Coinbase,
+		Root:        auraHeader.Root,
+		TxHash:      auraHeader.TxHash,
+		ReceiptHash: auraHeader.ReceiptHash,
+		Bloom:       auraHeader.Bloom,
+		Difficulty:  auraHeader.Difficulty,
+		Number:      auraHeader.Number,
+		GasLimit:    auraHeader.GasLimit,
+		GasUsed:     auraHeader.GasUsed,
+		Time:        auraHeader.Time,
+		Extra:       auraHeader.Extra,
+		Seal:        currentSeal,
+	}
+
+	return
 }
 
 // NewBlock creates a new block. The input data is copied,

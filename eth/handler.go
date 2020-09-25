@@ -393,6 +393,10 @@ func (pm *ProtocolManager) handleMsg(p *peer) error {
 		fmt.Println(fmt.Sprintf("\n\n\n\n This is handleMsg from our peer \n msg: %v, code :%v", msg.String(), msg.Code))
 	}
 
+	// Handle aura engine separately
+	engine := pm.blockchain.Engine()
+	_, isAura := engine.(*aura.Aura)
+
 	// Handle the message depending on its contents
 	switch {
 	case msg.Code == StatusMsg:
@@ -490,8 +494,20 @@ func (pm *ProtocolManager) handleMsg(p *peer) error {
 	case msg.Code == BlockHeadersMsg:
 		// A batch of headers arrived to one of our previous requests
 		var headers []*types.Header
-		if err := msg.Decode(&headers); err != nil {
+		if err := msg.Decode(&headers); err != nil && !isAura {
 			return errResp(ErrDecode, "msg %v: %v", msg, err)
+		}
+
+		if isAura {
+			var auraHeaders []*types.AuraHeader
+			if err := msg.Decode(&auraHeaders); err != nil {
+				return errResp(ErrDecode, "msg %v: %v", msg, err)
+			}
+
+			//TODO: check whats going on here
+			for _, header := range auraHeaders {
+				headers = append(headers, header.TranslateIntoHeader())
+			}
 		}
 		// If no headers were received, but we're expencting a checkpoint header, consider it that
 		if len(headers) == 0 && p.syncDrop != nil {
@@ -710,10 +726,6 @@ func (pm *ProtocolManager) handleMsg(p *peer) error {
 		}
 
 	case msg.Code == NewBlockMsg:
-		// Handle aura engine separately
-		engine := pm.blockchain.Engine()
-		_, isAura := engine.(*aura.Aura)
-
 		// Retrieve and decode the propagated block
 		var request newBlockData
 
