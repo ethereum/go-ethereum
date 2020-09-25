@@ -17,20 +17,15 @@
 package trie
 
 import (
-	"bytes"
 	"errors"
 	"fmt"
-	"io"
 	"strings"
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/log"
-	"github.com/ethereum/go-ethereum/rlp"
-	"github.com/syndtr/goleveldb/leveldb"
-	"golang.org/x/crypto/sha3"
 )
 
-type binaryNode interface {
+type BinaryNode interface {
 	Hash() []byte
 	Commit() error
 	insert(depth int, key, value []byte, hashLeft bool) error
@@ -45,12 +40,12 @@ type BinaryHashPreimage struct {
 
 // All known implementations of binaryNode
 type (
-	// BinaryTrie is a node with two children ("left" and "right")
+	// branch is a node with two children ("left" and "right")
 	// It can be prefixed by bits that are common to all subtrie
 	// keys and it can also hold a value.
-	BinaryTrie struct {
-		left  binaryNode
-		right binaryNode
+	branch struct {
+		left  BinaryNode
+		right BinaryNode
 
 		value []byte
 
@@ -68,14 +63,23 @@ type (
 	}
 
 	hashBinaryNode []byte
+
+	empty struct{}{}
 )
 
 var (
 	errInsertIntoHash    = errors.New("trying to insert into a hash")
 	errReadFromEmptyTree = errors.New("reached an empty subtree")
+
+	// 0_32
+	zero32 = []byte{0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0}
 )
 
-func (t *BinaryTrie) Get(key []byte) []byte {
+func NewBinTrie() BinaryNode {
+	return empty(nil)
+}
+
+func (t *branch) Get(key []byte) []byte {
 	res, err := t.TryGet(key)
 	if err != nil {
 		log.Error(fmt.Sprintf("Unhandled trie error: %v", err))
@@ -83,13 +87,13 @@ func (t *BinaryTrie) Get(key []byte) []byte {
 	return res
 }
 
-func (t *BinaryTrie) TryGet(key []byte) ([]byte, error) {
+func (t *branch) TryGet(key []byte) ([]byte, error) {
 	value, err := t.tryGet(key, 0)
 	return value, err
 }
 
 // getPrefixLen returns the bit length of the current node's prefix
-func (t *BinaryTrie) getPrefixLen() int {
+func (t *branch) getPrefixLen() int {
 	if t.endBit > t.startBit {
 		return t.endBit - t.startBit
 	}
@@ -106,14 +110,14 @@ func getBit(key []byte, off int) bool {
 
 // getPrefixBit returns the boolean value of bit number `bitnum`
 // in the prefix of the current node.
-func (t *BinaryTrie) getPrefixBit(bitnum int) bool {
+func (t *branch) getPrefixBit(bitnum int) bool {
 	if bitnum > t.getPrefixLen() {
 		panic(fmt.Sprintf("Trying to get bit #%d in a %d bit-long bitfield", bitnum, t.getPrefixLen()))
 	}
 	return getBit(t.prefix, t.startBit+bitnum)
 }
 
-func (t *BinaryTrie) tryGet(key []byte, depth int) ([]byte, error) {
+func (t *branch) tryGet(key []byte, depth int) ([]byte, error) {
 	// Compare the key and the prefix. If they represent the
 	// same bitfield, recurse. Otherwise, raise an error as
 	// the value isn't present in this trie.
@@ -149,130 +153,115 @@ func (t *BinaryTrie) tryGet(key []byte, depth int) ([]byte, error) {
 	return child.tryGet(key, depth+i+1)
 }
 
-func (t *BinaryTrie) Update(key, value []byte) {
+func (t *branch) Update(key, value []byte) {
 	if err := t.TryUpdate(key, value); err != nil {
 		log.Error(fmt.Sprintf("Unhandled trie error: %v", err))
 	}
 }
 
-// bitPrefix add the "bit prefix" to a key / extension node
-func (t *BinaryTrie) bitPrefix() []byte {
-	bp := make([]byte, 1+(t.getPrefixLen()+7)/8)
-	for i := 0; i < t.getPrefixLen(); i++ {
-		if t.getPrefixBit(i) {
-			by := i / 8
-			bi := 1 << uint(7-i%8)
-			bp[1+by] |= byte(bi)
-		}
-	}
-	if t.getPrefixLen() > 0 {
-		bp[0] = byte(t.endBit-t.startBit) % 8
-	}
+// CheckKey checks for the existence of keys
+//func CheckKey(db *leveldb.DB, key, root []byte, depth int, value []byte) bool {
+//node, err := db.Get(root, nil)
+//if err != nil {
+//log.Error("could not find the node!", "error", err)
+//return false
+//}
 
-	return bp
-}
+//var out BinaryDBNode
+//err = rlp.DecodeBytes(node, &out)
 
-func Prefix2Bitfield(payload []byte) *BinaryTrie {
-	return &BinaryTrie{
-		prefix: payload[1:],
-		endBit: int(payload[0]),
-	}
-}
+//bt := Prefix2Bitfield(out.Bitprefix)
+//fulldepth := depth
+//if len(bt.prefix) > 0 {
+//fulldepth += 8*len(bt.prefix) - (8-bt.endBit)%8
+//}
 
-func CheckKey(db *leveldb.DB, key, root []byte, depth int, value []byte) bool {
-	node, err := db.Get(root, nil)
-	if err != nil {
-		log.Error("could not find the node!", "error", err)
-		return false
-	}
+//if fulldepth < 8*len(key) {
+//by := key[fulldepth/8]
+//bi := (by>>uint(7-(fulldepth%8)))&1 == 0
+//if bi {
+//if len(out.Left) == 0 {
+//log.Error("key could not be found !")
+//return false
+//}
 
-	var out BinaryDBNode
-	err = rlp.DecodeBytes(node, &out)
+//return CheckKey(db, key, out.Left, fulldepth+1, value)
+//} else {
+//if len(out.Right) == 0 {
+//log.Error("key could not be found ?")
+//return false
+//}
 
-	bt := Prefix2Bitfield(out.Bitprefix)
-	fulldepth := depth
-	if len(bt.prefix) > 0 {
-		fulldepth += 8*len(bt.prefix) - (8-bt.endBit)%8
-	}
+//return CheckKey(db, key, out.Right, fulldepth+1, value)
+//}
+//}
 
-	if fulldepth < 8*len(key) {
-		by := key[fulldepth/8]
-		bi := (by>>uint(7-(fulldepth%8)))&1 == 0
-		if bi {
-			if len(out.Left) == 0 {
-				log.Error("key could not be found !")
-				return false
-			}
-
-			return CheckKey(db, key, out.Left, fulldepth+1, value)
-		} else {
-			if len(out.Right) == 0 {
-				log.Error("key could not be found ?")
-				return false
-			}
-
-			return CheckKey(db, key, out.Right, fulldepth+1, value)
-		}
-	}
-
-	if !bytes.Equal(out.Value, value) {
-		log.Error("invalid value found", "got", out.Value, "expected", value, "fulldepth", fulldepth, "depth", depth, "key", key)
-		return false
-	}
-	return true
-}
+//if !bytes.Equal(out.Value, value) {
+//log.Error("invalid value found", "got", out.Value, "expected", value, "fulldepth", fulldepth, "depth", depth, "key", key)
+//return false
+//}
+//return true
+//}
 
 // Hash calculates the hash of an expanded (i.e. not already
 // hashed) node.
-func (t *BinaryTrie) Hash() []byte {
+func (t *branch) Hash() []byte {
 	return t.hash()
-}
-
-// BinaryDBNode represents a binary node as it is stored
-// inside the DB.
-type BinaryDBNode struct {
-	Bitprefix []byte
-	Left      []byte
-	Right     []byte
-	Value     []byte
 }
 
 // hash is a a helper function that is shared between Hash and
 // Commit. If t.CommitCh is not nil, then its behavior will be
 // that of Commit, and that of Hash otherwise.
-func (t *BinaryTrie) hash() []byte {
-	var payload bytes.Buffer
-	hasher := sha3.NewLegacyKeccak256()
+func (t *branch) hash() []byte {
+	hasher := newHasher(false)
+	defer returnHasherToPool(hasher)
+	hasher.sha.Reset()
 
 	// Check that either value is set or left+right are
 	if t.value != nil && (t.left != nil || t.right != nil) {
-		panic("Value and children can not both be set")
+		panic("Value and children can not be set at the same time")
 	}
 
+	hash := make([]byte, 32)
 	if t.value == nil {
-		// Calculate the hash of both subtrees
-		payload.Write(t.left.Hash())
-		payload.Write(t.right.Hash())
-		payload.Write([]byte{byte(t.getPrefixLen())})
+		// This is a branch node, so the rule is
+		// branch_hash = hash(left_root_hash || right_root_hash)
+		hasher.sha.Write(t.left.Hash())
+		hasher.sha.Write(t.right.Hash())
+		hasher.sha.Read(hash)
 	} else {
-		payload.Write(t.prefix)
-		payload.Write(t.value)
-		payload.Write([]byte{byte(t.getPrefixLen())})
-	}
-	value := payload.Bytes()
-	io.Copy(hasher, &payload)
-	h := hasher.Sum(nil)
-	if t.CommitCh != nil {
-		t.CommitCh <- BinaryHashPreimage{Key: h, Value: value}
+		// This is a leaf node, so the hashing rule is
+		// leaf_hash = hash(0 || hash(leaf_value))
+		hasher.sha.Write(t.value)
+		hasher.sha.Read(hash)
+		hasher.sha.Reset()
+
+		hasher.sha.Write(zero32)
+		hasher.sha.Write(hash)
+		hasher.sha.Read(hash)
 	}
 
-	return h
+	if len(t.prefix) > 0 {
+		hasher.sha.Reset()
+		hasher.sha.Write(hash)
+		hasher.sha.Write(zero32[:31])
+		hasher.sha.Write([]byte{byte(len(t.prefix) - 1)})
+		hasher.sha.Read(hash)
+	}
+
+	// if the commit channel isn't empty, send it over, along with
+	// the initial value.
+	//if t.CommitCh != nil {
+	//t.CommitCh <- BinaryHashPreimage{Key: hash, Value: value}
+	//}
+
+	return hash
 }
 
 // TryUpdate inserts a (key, value) pair into the binary trie,
 // and expects values to be inserted in order as inserting to
 // the right of a node will cause the left node to be hashed.
-func (t *BinaryTrie) TryUpdate(key, value []byte) error {
+func (t *branch) TryUpdate(key, value []byte) error {
 	// TODO check key depth
 	err := t.insert(0, key, value, true)
 	return err
@@ -281,7 +270,7 @@ func (t *BinaryTrie) TryUpdate(key, value []byte) error {
 // insert is a recursive helper function that inserts a (key, value) pair at
 // a given depth. If hashLeft is true, inserting a key into a right subnode
 // will cause the left subnode to be hashed.
-func (t *BinaryTrie) insert(depth int, key, value []byte, hashLeft bool) error {
+func (t *branch) insert(depth int, key, value []byte, hashLeft bool) error {
 	// Special case: the trie is empty
 	if depth == 0 && t.left == nil && t.right == nil && len(t.prefix) == 0 {
 		t.prefix = key
@@ -320,7 +309,7 @@ func (t *BinaryTrie) insert(depth int, key, value []byte, hashLeft bool) error {
 			// prefixes.
 
 			// Create the [ d e ... ] part
-			oldChild := new(BinaryTrie)
+			oldChild := new(branch)
 			oldChild.prefix = t.prefix
 			oldChild.startBit = depth + i + 1
 			oldChild.endBit = t.endBit
@@ -330,7 +319,7 @@ func (t *BinaryTrie) insert(depth int, key, value []byte, hashLeft bool) error {
 			oldChild.CommitCh = t.CommitCh
 
 			// Create the child3 part
-			newChild := new(BinaryTrie)
+			newChild := new(branch)
 			newChild.prefix = key
 			newChild.startBit = depth + i + 1
 			newChild.endBit = len(key) * 8
@@ -386,13 +375,13 @@ func (t *BinaryTrie) insert(depth int, key, value []byte, hashLeft bool) error {
 
 	// Create the child if it doesn't exist, otherwise recurse
 	if *child == nil {
-		*child = &BinaryTrie{nil, nil, value, nil, key, depth + i + 1, 8 * len(key)}
+		*child = &branch{nil, nil, value, nil, key, depth + i + 1, 8 * len(key)}
 		return nil
 	}
 	return (*child).insert(depth+1+i, key, value, hashLeft)
 }
 
-func dotHelper(prefix string, t *BinaryTrie) ([]string, []string) {
+func dotHelper(prefix string, t *branch) ([]string, []string) {
 	p := []byte{}
 	for i := 0; i < t.getPrefixLen(); i++ {
 		if t.getPrefixBit(i) {
@@ -409,7 +398,7 @@ func dotHelper(prefix string, t *BinaryTrie) ([]string, []string) {
 	nodes := []string{nodeName}
 	links := []string{}
 	if t.left != nil {
-		if left, ok := t.left.(*BinaryTrie); ok {
+		if left, ok := t.left.(*branch); ok {
 			n, l := dotHelper(fmt.Sprintf("%s%s%d", prefix, p, 0), left)
 			nodes = append(nodes, n...)
 			links = append(links, fmt.Sprintf("%s -> %s", nodeName, n[0]))
@@ -419,7 +408,7 @@ func dotHelper(prefix string, t *BinaryTrie) ([]string, []string) {
 		}
 	}
 	if t.right != nil {
-		if right, ok := t.right.(*BinaryTrie); ok {
+		if right, ok := t.right.(*branch); ok {
 			n, l := dotHelper(fmt.Sprintf("%s%s%d", prefix, p, 1), right)
 			nodes = append(nodes, n...)
 			links = append(links, fmt.Sprintf("%s -> %s", nodeName, n[0]))
@@ -432,7 +421,7 @@ func dotHelper(prefix string, t *BinaryTrie) ([]string, []string) {
 }
 
 // toDot creates a graphviz representation of the binary trie
-func (t *BinaryTrie) toDot() string {
+func (t *branch) toDot() string {
 	nodes, links := dotHelper("", t)
 	return fmt.Sprintf("digraph D {\nnode [shape=rect]\n%s\n%s\n}", strings.Join(nodes, "\n"), strings.Join(links, "\n"))
 }
@@ -442,7 +431,7 @@ func (t *BinaryTrie) toDot() string {
 // the conversion from hexary to binary.
 // It basically performs a hash, except that it makes sure that there is
 // a channel to stream the intermediate (hash, preimage) values to.
-func (t *BinaryTrie) Commit() error {
+func (t *branch) Commit() error {
 	if t.CommitCh == nil {
 		return fmt.Errorf("commit channel missing")
 	}
@@ -470,4 +459,20 @@ func (h hashBinaryNode) tryGet(key []byte, depth int) ([]byte, error) {
 		return []byte(h), nil
 	}
 	return nil, errReadFromEmptyTree
+}
+
+func (e empty) Hash() []byte {
+	return emptyRoot
+}
+
+func (e empty) Commit() error {
+	return errors.New("not yet implemented")
+}
+
+func (e empty) insert(depth int, key, value []byte, hashLeft bool) error {
+	return errors.New("not yet implemented")
+}
+
+func (e empty) tryGet(key []byte, depth int) ([]byte, error) {
+	return errors.New("not implemented yet")
 }

@@ -41,7 +41,7 @@ func GenerateBinaryTree(path string, it AccountIterator) common.Hash {
 		panic(fmt.Sprintf("error opening bintrie db, err=%v", err))
 	}
 	defer db.Close()
-	btrie := new(trie.BinaryTrie)
+	btrie := NewBinTrie()
 	btrie.CommitCh = make(chan trie.BinaryHashPreimage)
 
 	var nodeCount uint64
