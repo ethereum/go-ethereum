@@ -179,8 +179,10 @@ func (l *Limiter) Add(id enode.ID, address string, value float64, priorWeight ui
 	l.lock.Lock()
 	defer l.lock.Unlock()
 
+	process := make(chan chan float64, 1)
 	if l.quit {
-		return
+		close(process)
+		return process
 	}
 	if value > l.maxValue {
 		l.maxValue = value
@@ -227,6 +229,7 @@ func (l *Limiter) Add(id enode.ID, address string, value float64, priorWeight ui
 	if l.totalPriorWeight > l.totalPriorLimit {
 		l.dropRequests()
 	}
+	return process
 }
 
 // update updates the selection weights of the node queue

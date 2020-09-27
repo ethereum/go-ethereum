@@ -54,12 +54,13 @@ func init() {
 type LesServer struct {
 	lesCommons
 
-	ns          *nodestate.NodeStateMachine
-	archiveMode bool // Flag whether the ethereum node runs in archive mode.
-	handler     *serverHandler
-	broadcaster *broadcaster
-	lesTopics   []discv5.Topic
-	privateKey  *ecdsa.PrivateKey
+	ns           *nodestate.NodeStateMachine
+	archiveMode  bool // Flag whether the ethereum node runs in archive mode.
+	handler      *serverHandler
+	broadcaster  *broadcaster
+	lesTopics    []discv5.Topic
+	lespayServer *lps.Server
+	privateKey   *ecdsa.PrivateKey
 
 	// Flow control and capacity management
 	fcManager    *flowcontrol.ClientManager
@@ -103,6 +104,7 @@ func NewLesServer(node *node.Node, e *eth.Ethereum, config *eth.Config) (*LesSer
 		ns:           ns,
 		archiveMode:  e.ArchiveMode(),
 		broadcaster:  newBroadcaster(ns),
+		lespayServer: lps.NewServer(0.01, 10000),
 		lesTopics:    lesTopics,
 		fcManager:    flowcontrol.NewClientManager(nil, &mclock.System{}),
 		servingQueue: newServingQueue(int64(time.Millisecond*10), float64(config.LightServ)/100),
@@ -135,6 +137,7 @@ func NewLesServer(node *node.Node, e *eth.Ethereum, config *eth.Config) (*LesSer
 	srv.fcManager.SetCapacityLimits(srv.minCapacity, srv.maxCapacity, srv.minCapacity*2)
 	srv.clientPool = newClientPool(ns, srv.chainDb, srv.minCapacity, defaultConnectedBias, mclock.System{}, srv.dropClient)
 	srv.clientPool.setDefaultFactors(lps.PriceFactors{TimeFactor: 0, CapacityFactor: 1, RequestFactor: 1}, lps.PriceFactors{TimeFactor: 0, CapacityFactor: 1, RequestFactor: 1})
+	srv.lespayServer.RegisterHandler("capQuery", srv.clientPool.serveCapQuery)
 
 	checkpoint := srv.latestLocalCheckpoint()
 	if !checkpoint.Empty() {
@@ -214,9 +217,7 @@ func (s *LesServer) Start() error {
 				s.p2pSrv.DiscV5.RegisterTopic(topic, s.closeCh)
 			}()
 		}*/
-		s.p2pSrv.DiscV5.RegisterTalkHandler("lespay", func(req []byte) []byte {
-			return append(append([]byte("123"), req...), []byte("456")...)
-		})
+		s.p2pSrv.DiscV5.RegisterTalkHandler("lespay", s.lespayServer.Serve)
 	}
 
 	return nil
@@ -232,6 +233,7 @@ func (s *LesServer) Stop() error {
 	s.costTracker.stop()
 	s.handler.stop()
 	s.servingQueue.stop()
+	s.lespayServer.Stop()
 
 	// Note, bloom trie indexer is closed by parent bloombits indexer.
 	s.chtIndexer.Close()

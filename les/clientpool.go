@@ -382,3 +382,11 @@ func (f *clientPool) forClients(ids []enode.ID, cb func(client *clientInfo)) {
 		}
 	}
 }
+
+func (f *clientPool) serveCapQuery(id enode.ID, address string, data []byte) []byte {
+	type params struct {
+		ReqTime uint64
+		AddTokens []uint64
+	}
+	type results struct
+}
