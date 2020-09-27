@@ -353,14 +353,14 @@ func (b *bridge) SleepBlocks(call jsre.Call) (goja.Value, error) {
 	}
 
 	// Poll the current block number until either it or a timeout is reached.
-	var (
-		deadline   = time.Now().Add(time.Duration(sleep) * time.Second)
-		lastNumber = ^hexutil.Uint64(0)
-	)
+	deadline := time.Now().Add(time.Duration(sleep) * time.Second)
+	var lastNumber hexutil.Uint64
+	if err := b.client.Call(&lastNumber, "eth_blockNumber"); err != nil {
+		return nil, err
+	}
 	for time.Now().Before(deadline) {
 		var number hexutil.Uint64
-		err := b.client.Call(&number, "eth_blockNumber")
-		if err != nil {
+		if err := b.client.Call(&number, "eth_blockNumber"); err != nil {
 			return nil, err
 		}
 		if number != lastNumber {
