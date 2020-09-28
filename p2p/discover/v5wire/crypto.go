@@ -48,19 +48,20 @@ func DecodePubkey(curve elliptic.Curve, e []byte) (*ecdsa.PublicKey, error) {
 }
 
 // idNonceHash computes the ID signature hash used in the handshake.
-func idNonceHash(h hash.Hash, nonce, ephkey []byte) []byte {
+func idNonceHash(h hash.Hash, destID enode.ID, nonce, ephkey []byte) []byte {
 	h.Reset()
 	h.Write([]byte(idNoncePrefix))
 	h.Write(nonce)
 	h.Write(ephkey)
+	h.Write(destID[:])
 	return h.Sum(nil)
 }
 
 // makeIDSignature creates the ID nonce signature.
-func makeIDSignature(hash hash.Hash, key *ecdsa.PrivateKey, nonce, ephkey []byte) ([]byte, error) {
+func makeIDSignature(hash hash.Hash, key *ecdsa.PrivateKey, destID enode.ID, nonce, ephkey []byte) ([]byte, error) {
 	switch key.Curve {
 	case crypto.S256():
-		input := idNonceHash(hash, nonce, ephkey)
+		input := idNonceHash(hash, destID, nonce, ephkey)
 		idsig, err := crypto.Sign(input, key)
 		if err != nil {
 			return nil, err
@@ -77,14 +78,14 @@ type s256raw []byte
 func (s256raw) ENRKey() string { return "secp256k1" }
 
 // verifyIDSignature checks that signature over idnonce was made by the given node.
-func verifyIDSignature(hash hash.Hash, nonce, ephkey, sig []byte, n *enode.Node) error {
+func verifyIDSignature(hash hash.Hash, destID enode.ID, nonce, ephkey, sig []byte, n *enode.Node) error {
 	switch idscheme := n.Record().IdentityScheme(); idscheme {
 	case "v4":
 		var pubkey s256raw
 		if n.Load(&pubkey) != nil {
 			return errors.New("no secp256k1 public key in record")
 		}
-		input := idNonceHash(hash, nonce, ephkey)
+		input := idNonceHash(hash, destID, nonce, ephkey)
 		if !crypto.VerifySignature(pubkey, input, sig) {
 			return errInvalidNonceSig
 		}

@@ -282,7 +282,7 @@ func (c *Codec) makeHandshakeHeader(toID enode.ID, addr string, challenge *Whoar
 	auth.h.PubkeySize = byte(len(auth.pubkey))
 
 	// Add ID nonce signature to response.
-	idsig, err := makeIDSignature(c.sha256, c.privkey, challenge.IDNonce[:], ephpubkey[:])
+	idsig, err := makeIDSignature(c.sha256, c.privkey, toID, challenge.IDNonce[:], ephpubkey[:])
 	if err != nil {
 		return nil, nil, fmt.Errorf("can't sign: %v", err)
 	}
@@ -444,7 +444,7 @@ func (c *Codec) decodeHandshake(fromAddr string, head *packetHeader) (*enode.Nod
 		return nil, Nonce{}, nil, errInvalidAuthKey
 	}
 	// Verify ID nonce signature.
-	err = verifyIDSignature(c.sha256, challenge.IDNonce[:], auth.pubkey, auth.signature, node)
+	err = verifyIDSignature(c.sha256, c.localnode.ID(), challenge.IDNonce[:], auth.pubkey, auth.signature, node)
 	if err != nil {
 		return nil, Nonce{}, nil, err
 	}
