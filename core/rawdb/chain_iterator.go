@@ -218,7 +218,7 @@ func IndexTransactions(db ethdb.Database, from uint64, to uint64) {
 			// Next block available, pop it off and index it
 			delivery := queue.PopItem().(*blockTxHashes)
 			lastNum = delivery.number
-			WriteTxLookupEntriesByHash(batch, delivery.number, delivery.hashes)
+			WriteTxLookupEntries(batch, delivery.number, delivery.hashes)
 			blocks++
 			txs += len(delivery.hashes)
 			// If enough data was accumulated in memory or we're at the last block, dump to disk
@@ -276,7 +276,7 @@ func UnindexTransactions(db ethdb.Database, from uint64, to uint64) {
 	// Otherwise spin up the concurrent iterator and unindexer
 	blocks, txs := 0, 0
 	for delivery := range hashesCh {
-		DeleteTxLookupEntriesByHash(batch, delivery.hashes)
+		DeleteTxLookupEntries(batch, delivery.hashes)
 		txs += len(delivery.hashes)
 		blocks++
 

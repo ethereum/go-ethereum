@@ -30,6 +30,7 @@ import (
 // precompiledTest defines the input/output pairs for precompiled contract tests.
 type precompiledTest struct {
 	Input, Expected string
+	Gas             uint64
 	Name            string
 	NoBenchmark     bool // Benchmark primarily the worst-cases
 }
@@ -77,6 +78,9 @@ func testPrecompiled(addr string, test precompiledTest, t *testing.T) {
 			t.Error(err)
 		} else if common.Bytes2Hex(res) != test.Expected {
 			t.Errorf("Expected %v, got %v", test.Expected, common.Bytes2Hex(res))
+		}
+		if expGas := test.Gas; expGas != gas {
+			t.Errorf("%v: gas wrong, expected %d, got %d", test.Name, expGas, gas)
 		}
 		// Verify that the precompile did not touch the input buffer
 		exp := common.Hex2Bytes(test.Input)
@@ -137,20 +141,22 @@ func benchmarkPrecompiled(addr string, test precompiledTest, bench *testing.B) {
 
 	bench.Run(fmt.Sprintf("%s-Gas=%d", test.Name, reqGas), func(bench *testing.B) {
 		bench.ReportAllocs()
-		start := time.Now().Nanosecond()
+		start := time.Now()
 		bench.ResetTimer()
 		for i := 0; i < bench.N; i++ {
 			copy(data, in)
 			res, _, err = RunPrecompiledContract(p, data, reqGas)
 		}
 		bench.StopTimer()
-		elapsed := float64(time.Now().Nanosecond() - start)
+		elapsed := uint64(time.Since(start))
 		if elapsed < 1 {
 			elapsed = 1
 		}
 		gasUsed := reqGas * uint64(bench.N)
 		bench.ReportMetric(float64(reqGas), "gas/op")
-		bench.ReportMetric(float64(gasUsed*1000)/elapsed, "mgas/s")
+		// Keep it as uint64, multiply 100 to get two digit float later
+		mgasps := (100 * 1000 * gasUsed) / elapsed
+		bench.ReportMetric(float64(mgasps)/100, "mgas/s")
 		//Check if it is correct
 		if err != nil {
 			bench.Error(err)

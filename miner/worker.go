@@ -303,6 +303,7 @@ func (w *worker) isRunning() bool {
 // close terminates all background threads maintained by the worker.
 // Note the worker does not support being closed multiple times.
 func (w *worker) close() {
+	atomic.StoreInt32(&w.running, 0)
 	close(w.exitCh)
 }
 

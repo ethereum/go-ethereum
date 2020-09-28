@@ -152,7 +152,7 @@ func TestPriorityClient(t *testing.T) {
 	defer prioCli.killAndWait()
 	// 3_000_000_000 once we move to Go 1.13
 	tokens := 3000000000
-	lightServer.callRPC(nil, "les_addBalance", prioCli.getNodeInfo().ID, tokens, "foobar")
+	lightServer.callRPC(nil, "les_addBalance", prioCli.getNodeInfo().ID, tokens)
 	prioCli.addPeer(lightServer)
 
 	// Check if priority client is actually syncing and the regular client got kicked out
