@@ -431,10 +431,10 @@ func (h *priceHeap) Push(x interface{}) {
 
 func (h *priceHeap) Pop() interface{} {
 	old := *h
-	newLen := len(old) - 1
-	x := old[newLen]
-	old[newLen] = nil
-	*h = old[0:newLen]
+	n := len(old)
+	x := old[n-1]
+	old[n-1] = nil
+	*h = old[0 : n-1]
 	return x
 }
 
