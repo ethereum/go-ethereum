@@ -598,7 +598,7 @@ func (api *SignerAPI) SignGnosisSafeTx(ctx context.Context, signerAddress common
 		}
 	}
 	typedData := gnosisTx.ToTypedData()
-	signature, preimage, err := api.signTypedData(ctx, signerAddress, typedData)
+	signature, preimage, err := api.signTypedData(ctx, signerAddress, typedData, msgs)
 	if err != nil {
 		return nil, err
 	}

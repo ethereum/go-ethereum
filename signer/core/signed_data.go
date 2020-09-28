@@ -316,13 +316,14 @@ func cliqueHeaderHashAndRlp(header *types.Header) (hash, rlp []byte, err error) 
 // - the signature,
 // - and/or any error
 func (api *SignerAPI) SignTypedData(ctx context.Context, addr common.MixedcaseAddress, typedData TypedData) (hexutil.Bytes, error) {
-	signature, _, err := api.signTypedData(ctx, addr, typedData)
+	signature, _, err := api.signTypedData(ctx, addr, typedData, nil)
 	return signature, err
 }
 
 // signTypedData is identical to the capitalized version, except that it also returns the hash (preimage)
 // - the signature preimage (hash)
-func (api *SignerAPI) signTypedData(ctx context.Context, addr common.MixedcaseAddress, typedData TypedData) (hexutil.Bytes, hexutil.Bytes, error) {
+func (api *SignerAPI) signTypedData(ctx context.Context, addr common.MixedcaseAddress,
+	typedData TypedData, validationMessages *ValidationMessages) (hexutil.Bytes, hexutil.Bytes, error) {
 	domainSeparator, err := typedData.HashStruct("EIP712Domain", typedData.Domain.Map())
 	if err != nil {
 		return nil, nil, err
@@ -336,6 +337,15 @@ func (api *SignerAPI) signTypedData(ctx context.Context, addr common.MixedcaseAd
 	messages, err := typedData.Format()
 	if err != nil {
 		return nil, nil, err
+	}
+	if validationMessages != nil {
+		for _, validationMsg := range validationMessages.Messages {
+			messages = append(messages, &NameValueType{
+				Name:  "Validation message",
+				Value: validationMsg.Message,
+				Typ:   validationMsg.Typ,
+			})
+		}
 	}
 	req := &SignDataRequest{ContentType: DataTyped.Mime, Rawdata: rawData, Messages: messages, Hash: sighash, Address: addr}
 	signature, err := api.sign(req, true)
@@ -844,7 +854,11 @@ func (nvt *NameValueType) Pprint(depth int) string {
 			output.WriteString(sublevel)
 		}
 	} else {
-		output.WriteString(fmt.Sprintf("%q\n", nvt.Value))
+		if nvt.Value != nil {
+			output.WriteString(fmt.Sprintf("%q\n", nvt.Value))
+		} else {
+			output.WriteString("\n")
+		}
 	}
 	return output.String()
 }
