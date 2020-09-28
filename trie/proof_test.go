@@ -83,7 +83,7 @@ func TestStuffedProofDeletion(t *testing.T) {
 		keys = append(keys, []byte{0x13, 0x37, byte(i)})
 		vals = append(vals, []byte{})
 	}
-	err := VerifyRangeProof(trie.Hash(), keys[0], keys, vals, nil, nil)
+	err,_ := VerifyRangeProof(trie.Hash(), keys[0], keys[len(keys)-1], keys, vals, nil)
 	if err == nil {
 		t.Fatalf("expected some kind of error, but the proof was accepted")
 	}
@@ -113,7 +113,7 @@ func TestStuffedProofOverwrite(t *testing.T) {
 		keys = append(keys, entry.k)
 		vals = append(vals, entry.v)
 	}
-	err := VerifyRangeProof(trie.Hash(), keys[0], keys, vals, nil, nil)
+	err,_ := VerifyRangeProof(trie.Hash(), keys[0], keys[len(keys)-1], keys, vals, nil)
 	if err == nil {
 		t.Fatalf("expected some kind of error, but the proof was accepted")
 	}
@@ -134,7 +134,7 @@ func TestOutOfOrderProof(t *testing.T) {
 		keys = append(keys, entry.k)
 		vals = append(vals, entry.v)
 	}
-	err := VerifyRangeProof(trie.Hash(), keys[0], keys, vals, nil, nil)
+	err,_ := VerifyRangeProof(trie.Hash(), keys[0], keys[len(keys)-1], keys, vals, nil)
 	if err == nil {
 		t.Fatalf("expected some kind of error, but the proof was accepted")
 	}
@@ -152,15 +152,15 @@ func TestBloatedProof(t *testing.T) {
 	sort.Sort(entries)
 	var keys [][]byte
 	var vals [][]byte
-	firstProof, lastProof := memorydb.New(), memorydb.New()
+	proof := memorydb.New()
 	for i, entry := range entries {
-		trie.Prove(entry.k, 0, firstProof)
+		trie.Prove(entry.k, 0, proof)
 		if i == 50 {
 			keys = append(keys, entry.k)
 			vals = append(vals, entry.v)
 		}
 	}
-	err := VerifyRangeProof(trie.Hash(), keys[0], keys, vals, firstProof, lastProof)
+	err,_ := VerifyRangeProof(trie.Hash(), keys[0], keys[len(keys)-1], keys, vals, proof)
 	if err == nil {
 		t.Fatalf("expected some kind of error, but the proof was accepted")
 	}
@@ -178,19 +178,20 @@ func TestBloatedProof2(t *testing.T) {
 	sort.Sort(entries)
 	var keys [][]byte
 	var vals [][]byte
-	firstProof, lastProof := memorydb.New(), memorydb.New()
+	proof := memorydb.New()
 	// prove the leftmost element
-	trie.Prove(entries[10].k, 0, firstProof)
+	trie.Prove(entries[10].k, 0, proof)
 	// prove the rightmost element
-	trie.Prove(entries[19].k, 0, lastProof)
+	trie.Prove(entries[19].k, 0, proof)
 	for _, entry := range entries[10:20] {
 		keys = append(keys, entry.k)
 		vals = append(vals, entry.v)
 	}
 	// Now, store some junk in there too
-	firstProof.Put([]byte("donald duck"), []byte("minnie mouse"))
-	lastProof.Put([]byte("foobar"), []byte("gazonk"))
-	err := VerifyRangeProof(trie.Hash(), keys[0], keys, vals, firstProof, lastProof)
+	proof.Put([]byte("donald duck"), []byte("minnie mouse"))
+	proof.Put([]byte("foobar"), []byte("gazonk"))
+
+	err,_ := VerifyRangeProof(trie.Hash(), keys[0], keys[len(keys)-1], keys, vals, proof)
 	if err == nil {
 		t.Fatalf("expected some kind of error, but the proof was accepted")
 	} else {
