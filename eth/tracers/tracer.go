@@ -326,14 +326,19 @@ type JSTracer struct {
 	reason    error  // Textual reason for the interruption
 }
 
+// WasmTracer implements the Tracer interface using a WASM interpreter
 type WasmTracer struct {
-	module *wasm.Module
-	vm     *exec.VM
-	code   string
+	module *wasm.Module // Decoded WASM module
+	vm     *exec.VM     // WASM VM to execute the code
+	code   string       // Tracer code
 
-	stepIndex   uint32
-	faultIndex  uint32
-	resultIndex uint32
+	// Index of tracer callbacks in WASM module
+	stepIndex   int64
+	faultIndex  int64
+	resultIndex int64
+	initIndex   int64
+
+	result string // To store the result
 }
 
 // New instantiates a new tracer instance. code specifies a Javascript snippet,
@@ -359,6 +364,7 @@ func checkWasm(code string) bool {
 }
 
 func newWasm(code string) (Tracer, error) {
+	tracer := &WasmTracer{code: code, resultIndex: -1, stepIndex: -1, faultIndex: -1, initIndex: -1}
 	module, err := wasm.ReadModule(bytes.NewReader([]byte(code)), func(name string) (*wasm.Module, error) {
 		if name == "tracer" {
 			tracerModule := wasm.NewModule()
@@ -370,8 +376,13 @@ func newWasm(code string) (Tracer, error) {
 						ReturnTypes: []wasm.ValueType{},
 					},
 					{
-						/* u32/ptr, u32 -> void */
+						/* u32/ptr -> void */
 						ParamTypes:  []wasm.ValueType{wasm.ValueTypeI32},
+						ReturnTypes: []wasm.ValueType{},
+					},
+					{
+						/* u32/ptr, u32 -> void */
+						ParamTypes:  []wasm.ValueType{wasm.ValueTypeI32, wasm.ValueTypeI32},
 						ReturnTypes: []wasm.ValueType{},
 					},
 				},
@@ -397,18 +408,32 @@ func newWasm(code string) (Tracer, error) {
 					}),
 					Body: &wasm.FunctionBody{},
 				},
+				{
+					Sig: &tracerModule.Types.Entries[2],
+					Host: reflect.ValueOf(func(p *exec.Process, off, length int32) {
+						res := make([]byte, length)
+						p.ReadAt(res, int64(off))
+						tracer.result = string(res)
+					}),
+					Body: &wasm.FunctionBody{},
+				},
 			}
 			tracerModule.Export = &wasm.SectionExports{
 				Entries: map[string]wasm.ExportEntry{
-					"gasPrice": wasm.ExportEntry{
+					"gasPrice": {
 						FieldStr: "gas_price",
 						Kind:     wasm.ExternalGlobal,
 						Index:    uint32(0),
 					},
-					"log": wasm.ExportEntry{
-						FieldStr: "log",
+					"console_log": {
+						FieldStr: "console_log",
 						Kind:     wasm.ExternalFunction,
 						Index:    uint32(0),
+					},
+					"write_result": {
+						FieldStr: "write_result",
+						Kind:     wasm.ExternalFunction,
+						Index:    uint32(1),
 					},
 				},
 			}
@@ -420,20 +445,19 @@ func newWasm(code string) (Tracer, error) {
 		return nil, err
 	}
 
-	tracer := &WasmTracer{
-		module: module,
-		code:   code,
-	}
+	tracer.module = module
 
 	// TODO check all the exports and get their indices
 	for name, export := range module.Export.Entries {
 		switch name {
+		case "init":
+			tracer.initIndex = int64(export.Index)
 		case "result":
-			tracer.resultIndex = export.Index
+			tracer.resultIndex = int64(export.Index)
 		case "fault":
-			tracer.faultIndex = export.Index
+			tracer.faultIndex = int64(export.Index)
 		case "step":
-			tracer.stepIndex = export.Index
+			tracer.stepIndex = int64(export.Index)
 		default:
 		}
 	}
@@ -780,22 +804,35 @@ func (wt *WasmTracer) CaptureStart(from common.Address, to common.Address, creat
 	// Reset a previously used VM
 	wt.vm.Restart()
 
+	// Let the module reset its own local variables
+	if wt.initIndex > -1 {
+		_, err := wt.vm.ExecCode(wt.initIndex)
+		if err != nil {
+			return err
+		}
+	}
+
 	// TODO set relevant values in module variables
 	return nil
 }
 
 // CaptureState implements the Tracer interface to trace a single step of VM execution.
 func (wt *WasmTracer) CaptureState(env *vm.EVM, pc uint64, op vm.OpCode, gas, cost uint64, memory *vm.Memory, stack *vm.Stack, rStack *vm.ReturnStack, rdata []byte, contract *vm.Contract, depth int, err error) error {
-	// TODO set err if string present
-	_, execErr := wt.vm.ExecCode(int64(wt.stepIndex))
+	var execErr error
+	if wt.stepIndex > -1 {
+		_, execErr = wt.vm.ExecCode(wt.stepIndex)
+	}
 	return execErr
 }
 
 // CaptureFault implements the Tracer interface to trace an execution fault
 // while running an opcode.
 func (wt *WasmTracer) CaptureFault(env *vm.EVM, pc uint64, op vm.OpCode, gas, cost uint64, memory *vm.Memory, stack *vm.Stack, rStack *vm.ReturnStack, contract *vm.Contract, depth int, err error) error {
-	// TODO set error as value
-	_, execErr := wt.vm.ExecCode(int64(wt.faultIndex))
+	var execErr error
+	if wt.faultIndex > -1 {
+		// TODO add write_fault to the list
+		_, execErr = wt.vm.ExecCode(wt.faultIndex)
+	}
 	return execErr
 }
 
@@ -806,12 +843,15 @@ func (wt *WasmTracer) CaptureEnd(output []byte, gasUsed uint64, t time.Duration,
 
 // GetResult calls the Javascript 'result' function and returns its value, or any accumulated error
 func (wt *WasmTracer) GetResult() (json.RawMessage, error) {
-	data, execErr := wt.vm.ExecCode(int64(wt.resultIndex))
-	result, ok := data.([]byte)
+	rtrn, execErr := wt.vm.ExecCode(wt.resultIndex)
+	errCode, ok := rtrn.(uint32)
 	if !ok {
-		return nil, errors.New("expected get_result to return []byte")
+		return nil, errors.New("expected get_result to return a uint32")
 	}
-	return json.RawMessage(result), execErr
+	if errCode != 0 {
+		return nil, fmt.Errorf("non-zero error code while executing WASM binary %d", errCode)
+	}
+	return json.RawMessage(wt.result), execErr
 }
 
 func (wt *WasmTracer) Stop(err error) {
