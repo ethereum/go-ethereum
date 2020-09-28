@@ -73,10 +73,10 @@ var (
 
 	// MainnetTrustedCheckpoint contains the light client trusted checkpoint for the main network.
 	MainnetTrustedCheckpoint = &TrustedCheckpoint{
-		SectionIndex: 329,
-		SectionHead:  common.HexToHash("0x96bb6d286ded20a18480dd98d537ab503bd81110c6b9c3f8ad1f9338f3b9852d"),
-		CHTRoot:      common.HexToHash("0x10627ff648077adeaab9dbd4e5bbed8671c86005b2aef5f5d4857acca19a49d8"),
-		BloomRoot:    common.HexToHash("0xf499b0cfaf426a490b7b5ddca58d3031b008f0c15338f8f25c20f3df050bf785"),
+		SectionIndex: 333,
+		SectionHead:  common.HexToHash("0xb80784cbe88077e5911b446765edc814dd67ca3f6bdd33b6ec72d66058df4a11"),
+		CHTRoot:      common.HexToHash("0x4da9cde840dd3de39916620f7a97674c5747a89a9359e6b918e134d199a8dd45"),
+		BloomRoot:    common.HexToHash("0xdd0f4fef7fa2a5cc05d49568e38f15dab24098ffc7677a2e35d1a8d67f5458af"),
 	}
 
 	// MainnetCheckpointOracle contains a set of configs for the main network oracle.
@@ -154,10 +154,10 @@ var (
 
 	// RinkebyTrustedCheckpoint contains the light client trusted checkpoint for the Rinkeby test network.
 	RinkebyTrustedCheckpoint = &TrustedCheckpoint{
-		SectionIndex: 217,
-		SectionHead:  common.HexToHash("0x9afa4900a60cb44b102eb2eb5e5ef1d7f4cc1911c1c0588518995fb778ffe894"),
-		CHTRoot:      common.HexToHash("0xcc963e5085622c7cb6b3bf747fbfdfe71887e0d5bc9e4b3fb0474d44fc97942a"),
-		BloomRoot:    common.HexToHash("0x1064ca3a36b6f129783cff51bb18fb038bade47d2b776d1cccb9c74925106703"),
+		SectionIndex: 220,
+		SectionHead:  common.HexToHash("0x9513befa126a83c96a6408ee8b34502699094a49b2bf1064b2de31b010a03798"),
+		CHTRoot:      common.HexToHash("0x490a17d3bfbfc9bca9de087c5ee9c9f69dc2359cad9c1fe68cab639fdbcfccee"),
+		BloomRoot:    common.HexToHash("0x56bf5fda940ca4ca8346e42ef86f9092c82268c304c03c4093b21c1aa07190fc"),
 	}
 
 	// RinkebyCheckpointOracle contains a set of configs for the Rinkeby test network oracle.
@@ -194,10 +194,10 @@ var (
 
 	// GoerliTrustedCheckpoint contains the light client trusted checkpoint for the Görli test network.
 	GoerliTrustedCheckpoint = &TrustedCheckpoint{
-		SectionIndex: 101,
-		SectionHead:  common.HexToHash("0x396f5dd8e526edfb550873bcfe0e93dc00d70be4b881ab256980833b97a18c3e"),
-		CHTRoot:      common.HexToHash("0x0d145657a6595508ef878c9bbf8eca045631986f664bfab0d898fc64804a4e64"),
-		BloomRoot:    common.HexToHash("0x12df34d07cf1268abe22d40ee6deb199b8918e3d57d52f9e70f9b2883f57d74f"),
+		SectionIndex: 105,
+		SectionHead:  common.HexToHash("0x695f5b67d1985fb13d177c56d20ded0622d7f63a1623959fb4b5c5e38dc6bbee"),
+		CHTRoot:      common.HexToHash("0x4c281ef1ca63e6f9bb4ce8e46e80e478787c91da95c3727550ee418886dd6415"),
+		BloomRoot:    common.HexToHash("0xa02463cc6ee54f12990e9adb019e34696ad1efe2694cf07187d7ce0802cd653d"),
 	}
 
 	// GoerliCheckpointOracle contains a set of configs for the Goerli test network oracle.
