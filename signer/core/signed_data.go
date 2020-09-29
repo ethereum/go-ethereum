@@ -125,7 +125,7 @@ var typedDataReferenceTypeRegexp = regexp.MustCompile(`^[A-Z](\w*)(\[\])?$`)
 //
 // Note, the produced signature conforms to the secp256k1 curve R, S and V values,
 // where the V value will be 27 or 28 for legacy reasons, if legacyV==true.
-func (api *SignerAPI) sign(addr common.MixedcaseAddress, req *SignDataRequest, legacyV bool) (hexutil.Bytes, error) {
+func (api *SignerAPI) sign(req *SignDataRequest, legacyV bool) (hexutil.Bytes, error) {
 	// We make the request prior to looking up if we actually have the account, to prevent
 	// account-enumeration via the API
 	res, err := api.UI.ApproveSignData(req)
@@ -136,7 +136,7 @@ func (api *SignerAPI) sign(addr common.MixedcaseAddress, req *SignDataRequest, l
 		return nil, ErrRequestDenied
 	}
 	// Look up the wallet containing the requested signer
-	account := accounts.Account{Address: addr.Address()}
+	account := accounts.Account{Address: req.Address.Address()}
 	wallet, err := api.am.Find(account)
 	if err != nil {
 		return nil, err
@@ -167,7 +167,7 @@ func (api *SignerAPI) SignData(ctx context.Context, contentType string, addr com
 	if err != nil {
 		return nil, err
 	}
-	signature, err := api.sign(addr, req, transformV)
+	signature, err := api.sign(req, transformV)
 	if err != nil {
 		api.UI.ShowError(err.Error())
 		return nil, err
@@ -312,28 +312,47 @@ func cliqueHeaderHashAndRlp(header *types.Header) (hash, rlp []byte, err error) 
 
 // SignTypedData signs EIP-712 conformant typed data
 // hash = keccak256("\x19${byteVersion}${domainSeparator}${hashStruct(message)}")
+// It returns
+// - the signature,
+// - and/or any error
 func (api *SignerAPI) SignTypedData(ctx context.Context, addr common.MixedcaseAddress, typedData TypedData) (hexutil.Bytes, error) {
+	signature, _, err := api.signTypedData(ctx, addr, typedData, nil)
+	return signature, err
+}
+
+// signTypedData is identical to the capitalized version, except that it also returns the hash (preimage)
+// - the signature preimage (hash)
+func (api *SignerAPI) signTypedData(ctx context.Context, addr common.MixedcaseAddress,
+	typedData TypedData, validationMessages *ValidationMessages) (hexutil.Bytes, hexutil.Bytes, error) {
 	domainSeparator, err := typedData.HashStruct("EIP712Domain", typedData.Domain.Map())
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 	typedDataHash, err := typedData.HashStruct(typedData.PrimaryType, typedData.Message)
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 	rawData := []byte(fmt.Sprintf("\x19\x01%s%s", string(domainSeparator), string(typedDataHash)))
 	sighash := crypto.Keccak256(rawData)
 	messages, err := typedData.Format()
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
-	req := &SignDataRequest{ContentType: DataTyped.Mime, Rawdata: rawData, Messages: messages, Hash: sighash}
-	signature, err := api.sign(addr, req, true)
+	req := &SignDataRequest{
+		ContentType: DataTyped.Mime,
+		Rawdata:     rawData,
+		Messages:    messages,
+		Hash:        sighash,
+		Address:     addr}
+	if validationMessages != nil {
+		req.Callinfo = validationMessages.Messages
+	}
+	signature, err := api.sign(req, true)
 	if err != nil {
 		api.UI.ShowError(err.Error())
-		return nil, err
+		return nil, nil, err
 	}
-	return signature, nil
+	return signature, sighash, nil
 }
 
 // HashStruct generates a keccak256 hash of the encoding of the provided data
@@ -420,8 +439,8 @@ func (typedData *TypedData) EncodeData(primaryType string, data map[string]inter
 	buffer := bytes.Buffer{}
 
 	// Verify extra data
-	if len(typedData.Types[primaryType]) < len(data) {
-		return nil, errors.New("there is extra data provided in the message")
+	if exp, got := len(typedData.Types[primaryType]), len(data); exp < got {
+		return nil, fmt.Errorf("there is extra data provided in the message (%d < %d)", exp, got)
 	}
 
 	// Add typehash
@@ -834,7 +853,11 @@ func (nvt *NameValueType) Pprint(depth int) string {
 			output.WriteString(sublevel)
 		}
 	} else {
-		output.WriteString(fmt.Sprintf("%q\n", nvt.Value))
+		if nvt.Value != nil {
+			output.WriteString(fmt.Sprintf("%q\n", nvt.Value))
+		} else {
+			output.WriteString("\n")
+		}
 	}
 	return output.String()
 }

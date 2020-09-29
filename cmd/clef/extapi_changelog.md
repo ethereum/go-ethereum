@@ -10,6 +10,64 @@ TL;DR: Given a version number MAJOR.MINOR.PATCH, increment the:
 
 Additional labels for pre-release and build metadata are available as extensions to the MAJOR.MINOR.PATCH format.
 
+### 6.1.0
+
+The API-method `account_signGnosisSafeTx` was added. This method takes two parameters, 
+`[address, safeTx]`. The latter, `safeTx`, can be copy-pasted from the gnosis relay. For example: 
+
+```
+{
+  "jsonrpc": "2.0",
+  "method": "account_signGnosisSafeTx",
+  "params": ["0xfd1c4226bfD1c436672092F4eCbfC270145b7256",
+    {
+      "safe": "0x25a6c4BBd32B2424A9c99aEB0584Ad12045382B3",
+      "to": "0xB372a646f7F05Cc1785018dBDA7EBc734a2A20E2",
+      "value": "20000000000000000",
+      "data": null,
+      "operation": 0,
+      "gasToken": "0x0000000000000000000000000000000000000000",
+      "safeTxGas": 27845,
+      "baseGas": 0,
+      "gasPrice": "0",
+      "refundReceiver": "0x0000000000000000000000000000000000000000",
+      "nonce": 2,
+      "executionDate": null,
+      "submissionDate": "2020-09-15T21:54:49.617634Z",
+      "modified": "2020-09-15T21:54:49.617634Z",
+      "blockNumber": null,
+      "transactionHash": null,
+      "safeTxHash": "0x2edfbd5bc113ff18c0631595db32eb17182872d88d9bf8ee4d8c2dd5db6d95e2",
+      "executor": null,
+      "isExecuted": false,
+      "isSuccessful": null,
+      "ethGasPrice": null,
+      "gasUsed": null,
+      "fee": null,
+      "origin": null,
+      "dataDecoded": null,
+      "confirmationsRequired": null,
+      "confirmations": [
+        {
+          "owner": "0xAd2e180019FCa9e55CADe76E4487F126Fd08DA34",
+          "submissionDate": "2020-09-15T21:54:49.663299Z",
+          "transactionHash": null,
+          "confirmationType": "CONFIRMATION",
+          "signature": "0x95a7250bb645f831c86defc847350e7faff815b2fb586282568e96cc859e39315876db20a2eed5f7a0412906ec5ab57652a6f645ad4833f345bda059b9da2b821c",
+          "signatureType": "EOA"
+        }
+      ],
+      "signatures": null
+    }
+  ],
+  "id": 67
+}
+```
+
+Not all fields are required, though. This method is really just a UX helper, which massages the 
+input to conform to the `EIP-712` [specification](https://docs.gnosis.io/safe/docs/contracts_tx_execution/#transaction-hash) 
+for the Gnosis Safe, and making the output be directly importable to by a relay service. 
+
 
 ### 6.0.0
 

@@ -41,7 +41,7 @@ const (
 	// numberOfAccountsToDerive For hardware wallets, the number of accounts to derive
 	numberOfAccountsToDerive = 10
 	// ExternalAPIVersion -- see extapi_changelog.md
-	ExternalAPIVersion = "6.0.0"
+	ExternalAPIVersion = "6.1.0"
 	// InternalAPIVersion -- see intapi_changelog.md
 	InternalAPIVersion = "7.0.1"
 )
@@ -62,6 +62,8 @@ type ExternalAPI interface {
 	EcRecover(ctx context.Context, data hexutil.Bytes, sig hexutil.Bytes) (common.Address, error)
 	// Version info about the APIs
 	Version(ctx context.Context) (string, error)
+	// SignGnosisSafeTransaction signs/confirms a gnosis-safe multisig transaction
+	SignGnosisSafeTx(ctx context.Context, signerAddress common.MixedcaseAddress, gnosisTx GnosisSafeTx, methodSelector *string) (*GnosisSafeTx, error)
 }
 
 // UIClientAPI specifies what method a UI needs to implement to be able to be used as a
@@ -234,6 +236,7 @@ type (
 		Address     common.MixedcaseAddress `json:"address"`
 		Rawdata     []byte                  `json:"raw_data"`
 		Messages    []*NameValueType        `json:"messages"`
+		Callinfo    []ValidationInfo        `json:"call_info"`
 		Hash        hexutil.Bytes           `json:"hash"`
 		Meta        Metadata                `json:"meta"`
 	}
@@ -579,6 +582,33 @@ func (api *SignerAPI) SignTransaction(ctx context.Context, args SendTxArgs, meth
 	// ...and to the external caller
 	return &response, nil
 
+}
+
+func (api *SignerAPI) SignGnosisSafeTx(ctx context.Context, signerAddress common.MixedcaseAddress, gnosisTx GnosisSafeTx, methodSelector *string) (*GnosisSafeTx, error) {
+	// Do the usual validations, but on the last-stage transaction
+	args := gnosisTx.ArgsForValidation()
+	msgs, err := api.validator.ValidateTransaction(methodSelector, args)
+	if err != nil {
+		return nil, err
+	}
+	// If we are in 'rejectMode', then reject rather than show the user warnings
+	if api.rejectMode {
+		if err := msgs.getWarnings(); err != nil {
+			return nil, err
+		}
+	}
+	typedData := gnosisTx.ToTypedData()
+	signature, preimage, err := api.signTypedData(ctx, signerAddress, typedData, msgs)
+	if err != nil {
+		return nil, err
+	}
+	checkSummedSender, _ := common.NewMixedcaseAddressFromString(signerAddress.Address().Hex())
+
+	gnosisTx.Signature = signature
+	gnosisTx.SafeTxHash = common.BytesToHash(preimage)
+	gnosisTx.Sender = *checkSummedSender // Must be checksumed to be accepted by relay
+
+	return &gnosisTx, nil
 }
 
 // Returns the external api version. This method does not require user acceptance. Available methods are
