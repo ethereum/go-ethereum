@@ -142,13 +142,21 @@ func (w *connWrapper) Close() error {
 	return w.conn.Close()
 }
 
+// parseEthstatsURL parses the netstats connection url.
+func parseEthstatsURL(url string) (parts []string, err error) {
+	re := regexp.MustCompile("([^:@]*)(:([^@]*))?@(.+)")
+	parts = re.FindStringSubmatch(url)
+	if len(parts) != 5 {
+		return nil, fmt.Errorf("invalid netstats url: \"%s\", should be nodename:secret@host:port", url)
+	}
+	return parts, nil
+}
+
 // New returns a monitoring service ready for stats reporting.
 func New(node *node.Node, backend backend, engine consensus.Engine, url string) error {
-	// Parse the netstats connection url
-	re := regexp.MustCompile("([^:@]*)(:([^@]*))?@(.+)")
-	parts := re.FindStringSubmatch(url)
-	if len(parts) != 5 {
-		return fmt.Errorf("invalid netstats url: \"%s\", should be nodename:secret@host:port", url)
+	parts, err := parseEthstatsURL(url)
+	if err != nil {
+		return err
 	}
 	ethstats := &Service{
 		backend: backend,
