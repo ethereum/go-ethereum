@@ -338,16 +338,15 @@ func (api *SignerAPI) signTypedData(ctx context.Context, addr common.MixedcaseAd
 	if err != nil {
 		return nil, nil, err
 	}
+	req := &SignDataRequest{
+		ContentType: DataTyped.Mime,
+		Rawdata:     rawData,
+		Messages:    messages,
+		Hash:        sighash,
+		Address:     addr}
 	if validationMessages != nil {
-		for _, validationMsg := range validationMessages.Messages {
-			messages = append(messages, &NameValueType{
-				Name:  "Validation message",
-				Value: validationMsg.Message,
-				Typ:   validationMsg.Typ,
-			})
-		}
+		req.Callinfo = validationMessages.Messages
 	}
-	req := &SignDataRequest{ContentType: DataTyped.Mime, Rawdata: rawData, Messages: messages, Hash: sighash, Address: addr}
 	signature, err := api.sign(req, true)
 	if err != nil {
 		api.UI.ShowError(err.Error())

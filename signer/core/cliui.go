@@ -148,6 +148,13 @@ func (ui *CommandlineUI) ApproveSignData(request *SignDataRequest) (SignDataResp
 
 	fmt.Printf("-------- Sign data request--------------\n")
 	fmt.Printf("Account:  %s\n", request.Address.String())
+	if len(request.Callinfo) != 0 {
+		fmt.Printf("\nValidation messages:\n")
+		for _, m := range request.Callinfo {
+			fmt.Printf("  * %s : %s\n", m.Typ, m.Message)
+		}
+		fmt.Println()
+	}
 	fmt.Printf("messages:\n")
 	for _, nvt := range request.Messages {
 		fmt.Printf("\u00a0\u00a0%v\n", strings.TrimSpace(nvt.Pprint(1)))
