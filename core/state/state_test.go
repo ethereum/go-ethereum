@@ -25,7 +25,6 @@ import (
 	"github.com/ethereum/go-ethereum/core/rawdb"
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/ethdb"
-	"github.com/ethereum/go-ethereum/trie"
 )
 
 var toAddr = common.BytesToAddress
@@ -41,14 +40,10 @@ func newStateTest() *stateTest {
 	return &stateTest{db: db, state: sdb}
 }
 
-func newStateRecordingPreimage() *stateTest {
-	db := rawdb.NewMemoryDatabase()
-	sdb, _ := New(common.Hash{}, NewDatabaseWithConfig(db, &trie.Config{RecordPreimage: true}), nil)
-	return &stateTest{db: db, state: sdb}
-}
-
 func TestDump(t *testing.T) {
-	s := newStateRecordingPreimage()
+	db := rawdb.NewMemoryDatabase()
+	sdb, _ := New(common.Hash{}, NewDatabaseWithConfig(db, nil), nil)
+	s := &stateTest{db: db, state: sdb}
 
 	// generate a few entries
 	obj1 := s.state.GetOrNewStateObject(toAddr([]byte{0x01}))

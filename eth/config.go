@@ -149,7 +149,7 @@ type Config struct {
 	TrieDirtyCache          int
 	TrieTimeout             time.Duration
 	SnapshotCache           int
-	RecordPreimage          bool
+	NoPreimage              bool
 
 	// Mining options
 	Miner miner.Config

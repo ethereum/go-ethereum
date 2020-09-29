@@ -147,7 +147,7 @@ func (t *SecureTrie) GetKey(shaKey []byte) []byte {
 func (t *SecureTrie) Commit(onleaf LeafCallback) (root common.Hash, err error) {
 	// Write all the pre-images to the actual disk database
 	if len(t.getSecKeyCache()) > 0 {
-		if t.trie.db.recordPreimage {
+		if !t.trie.db.noPreimage {
 			t.trie.db.lock.Lock()
 			for hk, key := range t.secKeyCache {
 				t.trie.db.insertPreimage(common.BytesToHash([]byte(hk)), key)
