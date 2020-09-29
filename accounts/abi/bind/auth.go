@@ -32,6 +32,12 @@ import (
 	"github.com/ethereum/go-ethereum/log"
 )
 
+// NoChainID is returned whenever the user failed to specify a chain id.
+var NoChainID = errors.New("no chain id specified")
+
+// NotAuthorized is returned when an account is not properly unlocked.
+var NotAuthorized = errors.New("not authorized to sign this account")
+
 // NewTransactor is a utility method to easily create a transaction signer from
 // an encrypted json key stream and the associated passphrase.
 //
@@ -60,7 +66,7 @@ func NewKeyStoreTransactor(keystore *keystore.KeyStore, account accounts.Account
 		From: account.Address,
 		Signer: func(address common.Address, tx *types.Transaction) (*types.Transaction, error) {
 			if address != account.Address {
-				return nil, errors.New("not authorized to sign this account")
+				return nil, NotAuthorized
 			}
 			signature, err := keystore.SignHash(account, signer.Hash(tx).Bytes())
 			if err != nil {
@@ -83,7 +89,7 @@ func NewKeyedTransactor(key *ecdsa.PrivateKey) *TransactOpts {
 		From: keyAddr,
 		Signer: func(address common.Address, tx *types.Transaction) (*types.Transaction, error) {
 			if address != keyAddr {
-				return nil, errors.New("not authorized to sign this account")
+				return nil, NotAuthorized
 			}
 			signature, err := crypto.Sign(signer.Hash(tx).Bytes(), key)
 			if err != nil {
@@ -112,15 +118,14 @@ func NewTransactorWithChainID(keyin io.Reader, passphrase string, chainID *big.I
 // an decrypted key from a keystore.
 func NewKeyStoreTransactorWithChainID(keystore *keystore.KeyStore, account accounts.Account, chainID *big.Int) (*TransactOpts, error) {
 	if chainID == nil {
-		// If no chainID is explicitly passed, sign for mainnet
-		chainID = common.Big1
+		return nil, NoChainID
 	}
 	signer := types.NewEIP155Signer(chainID)
 	return &TransactOpts{
 		From: account.Address,
 		Signer: func(address common.Address, tx *types.Transaction) (*types.Transaction, error) {
 			if address != account.Address {
-				return nil, errors.New("not authorized to sign this account")
+				return nil, NotAuthorized
 			}
 			signature, err := keystore.SignHash(account, signer.Hash(tx).Bytes())
 			if err != nil {
@@ -136,15 +141,14 @@ func NewKeyStoreTransactorWithChainID(keystore *keystore.KeyStore, account accou
 func NewKeyedTransactorWithChainID(key *ecdsa.PrivateKey, chainID *big.Int) *TransactOpts {
 	keyAddr := crypto.PubkeyToAddress(key.PublicKey)
 	if chainID == nil {
-		// If no chainID is explicitly passed, sign for mainnet
-		chainID = common.Big1
+		return nol, NoChainID
 	}
 	signer := types.NewEIP155Signer(chainID)
 	return &TransactOpts{
 		From: keyAddr,
 		Signer: func(address common.Address, tx *types.Transaction) (*types.Transaction, error) {
 			if address != keyAddr {
-				return nil, errors.New("not authorized to sign this account")
+				return nil, NotAuthorized
 			}
 			signature, err := crypto.Sign(signer.Hash(tx).Bytes(), key)
 			if err != nil {
@@ -162,7 +166,7 @@ func NewClefTransactor(clef *external.ExternalSigner, account accounts.Account) 
 		From: account.Address,
 		Signer: func(address common.Address, transaction *types.Transaction) (*types.Transaction, error) {
 			if address != account.Address {
-				return nil, errors.New("not authorized to sign this account")
+				return nil, NotAuthorized
 			}
 			return clef.SignTx(account, transaction, nil) // Clef enforces its own chain id
 		},
