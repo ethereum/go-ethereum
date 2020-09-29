@@ -130,6 +130,12 @@ web3._extend({
 			inputFormatter: [null]
 		}),
 		new web3._extend.Method({
+			name: 'getAuthor',
+			call: 'bor_getAuthor',
+			params: 1,
+			inputFormatter: [null]
+		}),
+		new web3._extend.Method({
 			name: 'getSnapshotAtHash',
 			call: 'bor_getSnapshotAtHash',
 			params: 1
