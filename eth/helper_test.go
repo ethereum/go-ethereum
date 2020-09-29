@@ -94,7 +94,7 @@ type testTxPool struct {
 	pool   map[common.Hash]*types.Transaction // Hash map of collected transactions
 	added  chan<- []*types.Transaction        // Notification channel for new transactions
 
-	lock sync.Mutex // Protects the transaction pool
+	lock sync.RWMutex // Protects the transaction pool
 }
 
 // Has returns an indicator whether txpool has a transaction
