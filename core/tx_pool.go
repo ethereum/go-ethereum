@@ -1550,7 +1550,7 @@ func (as *accountSet) merge(other *accountSet) {
 // peeking into the pool in TxPool.Get without having to acquire the widely scoped
 // TxPool.mu mutex.
 //
-// This lookup set comibines the notion of "local transactions", which is useful
+// This lookup set combines the notion of "local transactions", which is useful
 // to build upper-level structure.
 type txLookup struct {
 	slots   int
