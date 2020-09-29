@@ -32,10 +32,9 @@ const leafChanSize = 200
 
 // leaf represents a trie leaf value
 type leaf struct {
-	size   int         // size of the rlp data (estimate)
-	hash   common.Hash // hash of rlp data
-	node   node        // the node to commit
-	vnodes bool        // set to true if the node (possibly) contains a valueNode
+	size int         // size of the rlp data (estimate)
+	hash common.Hash // hash of rlp data
+	node node        // the node to commit
 }
 
 // committer is a type used for the trie Commit operation. A committer has some
@@ -109,20 +108,20 @@ func (c *committer) commit(n node, db *Database) (node, error) {
 		}
 		// The key needs to be copied, since we're delivering it to database
 		collapsed.Key = hexToCompact(cn.Key)
-		hashedNode := c.store(collapsed, db, true)
+		hashedNode := c.store(collapsed, db)
 		if hn, ok := hashedNode.(hashNode); ok {
 			return hn, nil
 		}
 		return collapsed, nil
 	case *fullNode:
-		hashedKids, hasVnodes, err := c.commitChildren(cn, db)
+		hashedKids, err := c.commitChildren(cn, db)
 		if err != nil {
 			return nil, err
 		}
 		collapsed := cn.copy()
 		collapsed.Children = hashedKids
 
-		hashedNode := c.store(collapsed, db, hasVnodes)
+		hashedNode := c.store(collapsed, db)
 		if hn, ok := hashedNode.(hashNode); ok {
 			return hn, nil
 		}
@@ -137,7 +136,7 @@ func (c *committer) commit(n node, db *Database) (node, error) {
 }
 
 // commitChildren commits the children of the given fullnode
-func (c *committer) commitChildren(n *fullNode, db *Database) ([17]node, bool, error) {
+func (c *committer) commitChildren(n *fullNode, db *Database) ([17]node, error) {
 	var children [17]node
 	for i := 0; i < 16; i++ {
 		child := n.Children[i]
@@ -156,23 +155,21 @@ func (c *committer) commitChildren(n *fullNode, db *Database) ([17]node, bool, e
 		// possible the type is not hashnode.
 		hashed, err := c.commit(child, db)
 		if err != nil {
-			return children, false, err
+			return children, err
 		}
 		children[i] = hashed
 	}
 	// For the 17th child, it's possible the type is valuenode.
-	var hasValue bool
 	if n.Children[16] != nil {
-		hasValue = true
 		children[16] = n.Children[16]
 	}
-	return children, hasValue, nil
+	return children, nil
 }
 
 // store hashes the node n and if we have a storage layer specified, it writes
 // the key/value pair to it and tracks any node->child references as well as any
 // node->external trie references.
-func (c *committer) store(n node, db *Database, hasVnodeChildren bool) node {
+func (c *committer) store(n node, db *Database) node {
 	// Larger nodes are replaced by their hash and stored in the database.
 	var (
 		hash, _ = n.cache()
@@ -193,10 +190,9 @@ func (c *committer) store(n node, db *Database, hasVnodeChildren bool) node {
 	// The leaf channel will be active only when there an active leaf-callback
 	if c.leafCh != nil {
 		c.leafCh <- &leaf{
-			size:   size,
-			hash:   common.BytesToHash(hash),
-			node:   n,
-			vnodes: hasVnodeChildren,
+			size: size,
+			hash: common.BytesToHash(hash),
+			node: n,
 		}
 	} else if db != nil {
 		// No leaf-callback used, but there's still a database. Do serial
@@ -212,17 +208,16 @@ func (c *committer) store(n node, db *Database, hasVnodeChildren bool) node {
 func (c *committer) commitLoop(db *Database) {
 	for item := range c.leafCh {
 		var (
-			hash      = item.hash
-			size      = item.size
-			n         = item.node
-			hasVnodes = item.vnodes
+			hash = item.hash
+			size = item.size
+			n    = item.node
 		)
 		// We are pooling the trie nodes into an intermediate memory cache
 		db.lock.Lock()
 		db.insert(hash, size, n)
 		db.lock.Unlock()
 
-		if c.onleaf != nil && hasVnodes {
+		if c.onleaf != nil {
 			switch n := n.(type) {
 			case *shortNode:
 				if child, ok := n.Val.(valueNode); ok {
@@ -231,8 +226,8 @@ func (c *committer) commitLoop(db *Database) {
 			case *fullNode:
 				// For children in range [0, 15], it's impossible
 				// to contain valuenode. Only check the 17th child.
-				if child, ok := n.Children[16].(valueNode); ok {
-					c.onleaf(nil, child, hash)
+				if n.Children[16] != nil {
+					c.onleaf(nil, n.Children[16].(valueNode), hash)
 				}
 			}
 		}
