@@ -58,7 +58,6 @@ type (
 
 	handshakeAuthData struct {
 		h struct {
-			Version    uint8 // protocol version
 			Nonce      Nonce // AES-GCM nonce of message
 			SigSize    byte  // ignature data
 			PubkeySize byte  // offset of
@@ -79,22 +78,25 @@ const (
 	flagHandshake = 2
 )
 
+// Protocol constants.
+const (
+	handshakeTimeout = time.Second
+	handshakeVersion = 1
+	minVersion       = 1
+	protocolID       = "discv5"
+	versionOffset    = 7
+)
+
+// Packet sizes.
 var (
 	sizeofMaskingIV           = 16
 	sizeofPacketHeaderV5      = binary.Size(packetHeader{})
 	sizeofWhoareyouAuthDataV5 = binary.Size(whoareyouAuthData{})
 	sizeofHandshakeAuthDataV5 = binary.Size(handshakeAuthData{}.h)
 	sizeofMessageAuthDataV5   = binary.Size(messageAuthData{})
-	protocolIDV5              = [8]byte{'d', 'i', 's', 'c', 'v', '5', ' ', ' '}
 )
 
-const (
-	// Protocol constants.
-	handshakeTimeout = time.Second
-	handshakeVersion = 1
-	minVersion       = 1
-)
-
+// Errors.
 var (
 	errTooShort            = errors.New("packet too short")
 	errInvalidHeader       = errors.New("invalid packet header")
@@ -152,9 +154,13 @@ func (c *Codec) Encode(id enode.ID, addr string, packet Packet, challenge *Whoar
 }
 
 // makeHeader creates a packet header.
-func (c *Codec) makeHeader(toID enode.ID, flags byte, authsizeExtra int) *packetHeader {
+func (c *Codec) makeHeader(toID enode.ID, flag byte, authsizeExtra int) *packetHeader {
+	h := &packetHeader{
+		SrcID: c.localnode.ID(),
+		Flag:  flag,
+	}
 	var authsize int
-	switch flags {
+	switch flag {
 	case flagMessage:
 		authsize = sizeofMessageAuthDataV5
 	case flagWhoareyou:
@@ -162,18 +168,16 @@ func (c *Codec) makeHeader(toID enode.ID, flags byte, authsizeExtra int) *packet
 	case flagHandshake:
 		authsize = sizeofHandshakeAuthDataV5
 	default:
-		panic(fmt.Errorf("BUG: invalid packet header flags %x", flags))
+		panic(fmt.Errorf("BUG: invalid packet header flag %x", flag))
 	}
 	authsize += authsizeExtra
 	if authsize > int(^uint16(0)) {
 		panic(fmt.Errorf("BUG: auth size %d overflows uint16", authsize))
 	}
-	return &packetHeader{
-		ProtocolID: protocolIDV5,
-		SrcID:      c.localnode.ID(),
-		Flag:       flags,
-		AuthSize:   uint16(authsize),
-	}
+	h.AuthSize = uint16(authsize)
+	copy(h.ProtocolID[:], protocolID)
+	h.ProtocolID[versionOffset] = handshakeVersion
+	return h
 }
 
 // encodeRandom encodes a packet with random content.
@@ -264,7 +268,6 @@ func (c *Codec) makeHandshakeHeader(toID enode.ID, addr string, challenge *Whoar
 	}
 
 	auth := new(handshakeAuthData)
-	auth.h.Version = handshakeVersion
 	auth.h.Nonce = nonce
 
 	// Create the ephemeral key. This needs to be first because the
@@ -360,10 +363,7 @@ func (c *Codec) Decode(input []byte, addr string) (src enode.ID, n *enode.Node, 
 	var head packetHeader
 	c.reader.Reset(input)
 	binary.Read(&c.reader, binary.BigEndian, &head)
-	if head.ProtocolID != protocolIDV5 {
-		return enode.ID{}, nil, nil, errInvalidHeader
-	}
-	if int(head.AuthSize) > c.reader.Len() {
+	if !head.isValid(c.reader.Len()) {
 		return enode.ID{}, nil, nil, errInvalidHeader
 	}
 	src = head.SrcID
@@ -384,6 +384,18 @@ func (c *Codec) Decode(input []byte, addr string) (src enode.ID, n *enode.Node, 
 		err = errInvalidFlag
 	}
 	return src, n, p, err
+}
+
+func (h *packetHeader) isValid(packetLen int) bool {
+	for i := range protocolID {
+		if h.ProtocolID[i] != protocolID[i] {
+			return false
+		}
+	}
+	if h.ProtocolID[versionOffset] < minVersion {
+		return false
+	}
+	return int(h.AuthSize) <= packetLen
 }
 
 // decodeWhoareyou reads packet data after the header as a WHOAREYOU packet.
@@ -456,20 +468,17 @@ func (c *Codec) decodeHandshake(fromAddr string, head *packetHeader) (*enode.Nod
 
 // decodeHandshakeAuthData reads the authdata section of a handshake packet.
 func (c *Codec) decodeHandshakeAuthData(head *packetHeader) (*handshakeAuthData, error) {
+	// Decode fixed size part.
 	if int(head.AuthSize) < sizeofHandshakeAuthDataV5 {
 		return nil, fmt.Errorf("header authsize %d too low for handshake", head.AuthSize)
 	}
+	var auth handshakeAuthData
+	binary.Read(&c.reader, binary.BigEndian, &auth.h)
+
+	// Decode variable-size part.
 	if c.reader.Len() < int(head.AuthSize) {
 		return nil, errTooShort
 	}
-
-	// Decode fixed size part.
-	var auth handshakeAuthData
-	binary.Read(&c.reader, binary.BigEndian, &auth.h)
-	if auth.h.Version > handshakeVersion || auth.h.Version < minVersion {
-		return nil, fmt.Errorf("invalid handshake version %d", auth.h.Version)
-	}
-	// Decode variable-size part.
 	varspace := int(head.AuthSize) - sizeofHandshakeAuthDataV5
 	if int(auth.h.SigSize)+int(auth.h.PubkeySize) > varspace {
 		return nil, fmt.Errorf("invalid handshake data sizes (%d+%d > %d)", auth.h.SigSize, auth.h.PubkeySize, varspace)
