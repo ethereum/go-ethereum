@@ -259,17 +259,21 @@ func TestTestVectorsV5(t *testing.T) {
 			writeKey: hexutil.MustDecode("0x00000000000000000000000000000000"),
 			readKey:  hexutil.MustDecode("0x01010101010101010101010101010101"),
 		}
-		challenge0 = &Whoareyou{
-			Nonce:     Nonce{1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12},
-			IDNonce:   testIDnonce,
-			RecordSeq: 0,
-		}
-		challenge1 = &Whoareyou{
-			Nonce:     Nonce{1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12},
-			IDNonce:   testIDnonce,
-			RecordSeq: 1,
-		}
+		challenge0A, challenge1A, challenge0B Whoareyou
 	)
+
+	// Create challenge packets.
+	c := Whoareyou{
+		Nonce:   Nonce{1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12},
+		IDNonce: testIDnonce,
+	}
+	challenge0A, challenge1A, challenge0B = c, c, c
+	challenge1A.RecordSeq = 1
+	net := newHandshakeTest()
+	challenge0A.Node = net.nodeA.n()
+	challenge1A.Node = net.nodeA.n()
+	challenge0B.Node = net.nodeB.n()
+	net.close()
 
 	type testVectorTest struct {
 		name      string               // test vector name
@@ -280,7 +284,7 @@ func TestTestVectorsV5(t *testing.T) {
 	tests := []testVectorTest{
 		{
 			name:   "v5.1-whoareyou",
-			packet: challenge0,
+			packet: &challenge0B,
 		},
 		{
 			name: "v5.1-ping-message",
@@ -294,29 +298,29 @@ func TestTestVectorsV5(t *testing.T) {
 			},
 		},
 		{
-			name: "v5.1-ping-handshake",
-			packet: &Ping{
-				ReqID:  []byte{0, 0, 0, 1},
-				ENRSeq: 1,
-			},
-			challenge: challenge1,
-			prep: func(net *handshakeTest) {
-				challenge1.Node = net.nodeA.n()
-				net.nodeA.encode(t, net.nodeB, challenge1)
-				net.nodeB.c.sc.storeSentHandshake(idA, addr, challenge1)
-			},
-		},
-		{
 			name: "v5.1-ping-handshake-enr",
 			packet: &Ping{
 				ReqID:  []byte{0, 0, 0, 1},
 				ENRSeq: 1,
 			},
-			challenge: challenge0,
+			challenge: &challenge0A,
 			prep: func(net *handshakeTest) {
-				challenge0.Node = net.nodeA.n()
-				net.nodeA.encode(t, net.nodeB, challenge0)
-				net.nodeB.c.sc.storeSentHandshake(idA, addr, challenge0)
+				// Update challenge.Header.AuthData.
+				net.nodeA.c.encodeWhoareyou(idB, &challenge0A)
+				net.nodeB.c.sc.storeSentHandshake(idA, addr, &challenge0A)
+			},
+		},
+		{
+			name: "v5.1-ping-handshake",
+			packet: &Ping{
+				ReqID:  []byte{0, 0, 0, 1},
+				ENRSeq: 1,
+			},
+			challenge: &challenge1A,
+			prep: func(net *handshakeTest) {
+				// Update challenge.Header.AuthData.
+				net.nodeA.c.encodeWhoareyou(idB, &challenge1A)
+				net.nodeB.c.sc.storeSentHandshake(idA, addr, &challenge1A)
 			},
 		},
 	}
