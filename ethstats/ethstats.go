@@ -155,7 +155,7 @@ func parseEthstatsURL(url string) (parts []string, err error) {
 
 	passIndex := strings.LastIndex(preHost, ":")
 	if passIndex == -1 {
-		return nil, err
+		return []string{preHost, "", host}, nil
 	}
 	nodename, pass := preHost[:passIndex], ""
 	if passIndex != len(preHost)-1 {

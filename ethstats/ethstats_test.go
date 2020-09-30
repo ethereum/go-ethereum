@@ -27,6 +27,10 @@ func TestParseEthstatsURL(t *testing.T) {
 			node: "name", pass: "", host: "ws://mordor.dash.fault.dev:3000",
 		},
 		{
+			url:  `name@ws://mordor.dash.fault.dev:3000`,
+			node: "name", pass: "", host: "ws://mordor.dash.fault.dev:3000",
+		},
+		{
 			url:  `:mypass@ws://mordor.dash.fault.dev:3000`,
 			node: "", pass: "mypass", host: "ws://mordor.dash.fault.dev:3000",
 		},
