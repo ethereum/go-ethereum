@@ -93,7 +93,7 @@ const (
 	minVersion      = 1
 	sizeofMaskingIV = 16
 
-	minMessageSize      = 51 // this refers to data after static headers
+	minMessageSize      = 48 // this refers to data after static headers
 	randomPacketMsgSize = 20
 )
 
