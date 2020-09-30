@@ -51,7 +51,8 @@ type Header struct {
 
 // HeaderData contains the static fields of a packet header.
 type HeaderData struct {
-	ProtocolID [8]byte
+	ProtocolID [6]byte
+	Version    uint16
 	SrcID      enode.ID
 	Flag       byte
 	AuthSize   uint16
@@ -86,12 +87,12 @@ const (
 // Protocol constants.
 const (
 	handshakeTimeout = time.Second
-	handshakeVersion = 1
+	version          = 1
 	minVersion       = 1
-	protocolID       = "discv5"
-	versionOffset    = 7
 	sizeofMaskingIV  = 16
 )
+
+var protocolID = [6]byte{'d', 'i', 's', 'c', 'v', '5'}
 
 // Errors.
 var (
@@ -226,8 +227,8 @@ func (c *Codec) makeHeader(toID enode.ID, flag byte, authsizeExtra int) Header {
 		panic(fmt.Errorf("BUG: auth size %d overflows uint16", authsize))
 	}
 	data.AuthSize = uint16(authsize)
-	copy(data.ProtocolID[:], protocolID)
-	data.ProtocolID[versionOffset] = handshakeVersion
+	data.ProtocolID = protocolID
+	data.Version = version
 	return Header{HeaderData: data}
 }
 
@@ -636,12 +637,7 @@ func (c *Codec) maskOutputPacket(destID enode.ID, head *Header, headerBytes []by
 
 // isValid returns true if h contains a valid protocol ID and auth size.
 func (h *HeaderData) isValid(packetLen int) bool {
-	for i := range protocolID {
-		if h.ProtocolID[i] != protocolID[i] {
-			return false
-		}
-	}
-	if h.ProtocolID[versionOffset] < minVersion {
+	if h.ProtocolID != protocolID || h.Version < minVersion {
 		return false
 	}
 	return int(h.AuthSize) <= packetLen
