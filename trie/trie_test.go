@@ -19,7 +19,9 @@ package trie
 import (
 	"bytes"
 	"encoding/binary"
+	"errors"
 	"fmt"
+	"hash"
 	"io/ioutil"
 	"math/big"
 	"math/rand"
@@ -31,9 +33,11 @@ import (
 	"github.com/davecgh/go-spew/spew"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/crypto"
+	"github.com/ethereum/go-ethereum/ethdb"
 	"github.com/ethereum/go-ethereum/ethdb/leveldb"
 	"github.com/ethereum/go-ethereum/ethdb/memorydb"
 	"github.com/ethereum/go-ethereum/rlp"
+	"golang.org/x/crypto/sha3"
 )
 
 func init() {
@@ -657,6 +661,136 @@ func makeAccounts(size int) (addresses [][20]byte, accounts [][]byte) {
 		accounts[i], _ = rlp.EncodeToBytes(&account{nonce, balance, root, code})
 	}
 	return addresses, accounts
+}
+
+// spongeDb is a dummy db backend which accumulates writes in a sponge
+type spongeDb struct {
+	sponge hash.Hash
+}
+
+func (s *spongeDb) Has(key []byte) (bool, error)             { panic("implement me") }
+func (s *spongeDb) Get(key []byte) ([]byte, error)           { return nil, errors.New("no such elem") }
+func (s *spongeDb) Delete(key []byte) error                  { panic("implement me") }
+func (s *spongeDb) NewBatch() ethdb.Batch                    { return &spongeBatch{s} }
+func (s *spongeDb) Stat(property string) (string, error)     { panic("implement me") }
+func (s *spongeDb) Compact(start []byte, limit []byte) error { panic("implement me") }
+func (s *spongeDb) Close() error                             { return nil }
+func (s *spongeDb) Put(key []byte, value []byte) error {
+	s.sponge.Write(key)
+	s.sponge.Write(value)
+	return nil
+}
+func (s *spongeDb) NewIterator(prefix []byte, start []byte) ethdb.Iterator { panic("implement me") }
+
+// spongeBatch is a dummy batch which immediately writes to the underlying spongedb
+type spongeBatch struct {
+	db *spongeDb
+}
+
+func (b *spongeBatch) Put(key, value []byte) error {
+	b.db.Put(key, value)
+	return nil
+}
+func (b *spongeBatch) Delete(key []byte) error             { panic("implement me") }
+func (b *spongeBatch) ValueSize() int                      { return 100 }
+func (b *spongeBatch) Write() error                        { return nil }
+func (b *spongeBatch) Reset()                              {}
+func (b *spongeBatch) Replay(w ethdb.KeyValueWriter) error { return nil }
+
+// TestCommitSequence tests that the trie.Commit operation writes the elements of the trie
+// in the expected order, and calls the callbacks in the expected order.
+// The test data was based on the 'master' code, and is basically random. It can be used
+// to check whether changes to the trie modifies the write order or data in any way.
+func TestCommitSequence(t *testing.T) {
+	for i, tc := range []struct {
+		count              int
+		expWriteSeqHash    []byte
+		expCallbackSeqHash []byte
+	}{
+		{20, common.FromHex("68c495e45209e243eb7e4f4e8ca8f9f7be71003bd9cafb8061b4534373740193"),
+			common.FromHex("01783213033d6b7781a641ab499e680d959336d025ac16f44d02f4f0c021bbf5")},
+		{200, common.FromHex("3b20d16c13c4bc3eb3b8d0ad7a169fef3b1600e056c0665895d03d3d2b2ff236"),
+			common.FromHex("fb8db0ec82e8f02729f11228940885b181c3047ab0d654ed0110291ca57111a8")},
+		{2000, common.FromHex("34eff3d1048bebdf77e9ae8bd939f2e7c742edc3dcd1173cff1aad9dbd20451a"),
+			common.FromHex("1c981604b1a9f8ffa40e0ae66b14830a87f5a4ed8345146a3912e6b2dcb05e63")},
+	} {
+		addresses, accounts := makeAccounts(tc.count)
+		// This spongeDb is used to check the sequence of disk-db-writes
+		s := &spongeDb{sponge: sha3.NewLegacyKeccak256()}
+		db := NewDatabase(s)
+		trie, _ := New(common.Hash{}, db)
+		// Another sponge is used to check the callback-sequence
+		callbackSponge := sha3.NewLegacyKeccak256()
+		// Fill the trie with elements
+		for i := 0; i < tc.count; i++ {
+			trie.Update(crypto.Keccak256(addresses[i][:]), accounts[i])
+		}
+		// Flush trie -> database
+		root, _ := trie.Commit(nil)
+		// Flush memdb -> disk (sponge)
+		db.Commit(root, false, func(c common.Hash) {
+			// And spongify the callback-order
+			callbackSponge.Write(c[:])
+		})
+		if got, exp := s.sponge.Sum(nil), tc.expWriteSeqHash; !bytes.Equal(got, exp) {
+			t.Fatalf("test %d, disk write sequence wrong:\ngot %x exp %x\n", i, got, exp)
+		}
+		if got, exp := callbackSponge.Sum(nil), tc.expCallbackSeqHash; !bytes.Equal(got, exp) {
+			t.Fatalf("test %d, call back sequence wrong:\ngot: %x exp %x\n", i, got, exp)
+		}
+	}
+}
+
+// TestCommitSequenceRandomBlobs is identical to TestCommitSequence
+// but uses random blobs instead of 'accounts'
+func TestCommitSequenceRandomBlobs(t *testing.T) {
+	for i, tc := range []struct {
+		count              int
+		expWriteSeqHash    []byte
+		expCallbackSeqHash []byte
+	}{
+		{20, common.FromHex("8e4a01548551d139fa9e833ebc4e66fc1ba40a4b9b7259d80db32cff7b64ebbc"),
+			common.FromHex("450238d73bc36dc6cc6f926987e5428535e64be403877c4560e238a52749ba24")},
+		{200, common.FromHex("6869b4e7b95f3097a19ddb30ff735f922b915314047e041614df06958fc50554"),
+			common.FromHex("0ace0b03d6cb8c0b82f6289ef5b1a1838306b455a62dafc63cada8e2924f2550")},
+		{2000, common.FromHex("444200e6f4e2df49f77752f629a96ccf7445d4698c164f962bbd85a0526ef424"),
+			common.FromHex("117d30dafaa62a1eed498c3dfd70982b377ba2b46dd3e725ed6120c80829e518")},
+	} {
+		prng := rand.New(rand.NewSource(int64(i)))
+		// This spongeDb is used to check the sequence of disk-db-writes
+		s := &spongeDb{sponge: sha3.NewLegacyKeccak256()}
+		db := NewDatabase(s)
+		trie, _ := New(common.Hash{}, db)
+		// Another sponge is used to check the callback-sequence
+		callbackSponge := sha3.NewLegacyKeccak256()
+		// Fill the trie with elements
+		for i := 0; i < tc.count; i++ {
+			key := make([]byte, 32)
+			var val []byte
+			// 50% short elements, 50% large elements
+			if prng.Intn(2) == 0 {
+				val = make([]byte, 1+prng.Intn(32))
+			} else {
+				val = make([]byte, 1+prng.Intn(4096))
+			}
+			prng.Read(key)
+			prng.Read(val)
+			trie.Update(key, val)
+		}
+		// Flush trie -> database
+		root, _ := trie.Commit(nil)
+		// Flush memdb -> disk (sponge)
+		db.Commit(root, false, func(c common.Hash) {
+			// And spongify the callback-order
+			callbackSponge.Write(c[:])
+		})
+		if got, exp := s.sponge.Sum(nil), tc.expWriteSeqHash; !bytes.Equal(got, exp) {
+			t.Fatalf("test %d, disk write sequence wrong:\ngot %x exp %x\n", i, got, exp)
+		}
+		if got, exp := callbackSponge.Sum(nil), tc.expCallbackSeqHash; !bytes.Equal(got, exp) {
+			t.Fatalf("test %d, call back sequence wrong:\ngot: %x exp %x\n", i, got, exp)
+		}
+	}
 }
 
 // BenchmarkCommitAfterHashFixedSize benchmarks the Commit (after Hash) of a fixed number of updates to a trie.
