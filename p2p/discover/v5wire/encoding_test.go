@@ -77,17 +77,16 @@ func TestDeriveKeysV5(t *testing.T) {
 func TestMinSizes(t *testing.T) {
 	var (
 		gcmTagSize     = 16
-		whoareyou      = sizeofMaskingIV + sizeofHeaderData + sizeofWhoareyouAuthData
-		msgHeader      = sizeofMaskingIV + sizeofHeaderData + sizeofMessageAuthData
-		emptyMsg       = msgHeader + gcmTagSize
-		minMessageSize = 3 // should be fine
+		emptyMsg       = sizeofMessageAuthData + gcmTagSize
+		minMessageData = 3 // OK because message contains RLP
 	)
-	t.Log("WHOAREYOU size", whoareyou)
-	t.Log("EMPTY msg size", emptyMsg)
-	if want := emptyMsg + minMessageSize; minPacketSize != want {
-		t.Fatalf("wrong minPacketSize %d, want %d", minPacketSize, want)
+	t.Log("WHOAREYOU size", sizeofStaticPacketData+sizeofWhoareyouAuthData)
+	t.Log("EMPTY msg size", sizeofStaticPacketData+emptyMsg)
+	t.Log("MIN msg packet size", sizeofStaticPacketData+minMessageSize)
+	if want := emptyMsg + minMessageData; minMessageSize != want {
+		t.Fatalf("wrong minPacketSize %d, want %d", minMessageData, want)
 	}
-	if msgHeader+randomPacketMsgSize < minPacketSize {
+	if sizeofMessageAuthData+randomPacketMsgSize < minMessageSize {
 		t.Fatalf("randomPacketMsgSize %d too small", randomPacketMsgSize)
 	}
 }

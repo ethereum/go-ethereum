@@ -722,7 +722,7 @@ var (
 func (t *UDPv5) handleWhoareyou(p *v5wire.Whoareyou, fromID enode.ID, fromAddr *net.UDPAddr) {
 	c, err := t.matchWithCall(fromID, p.Nonce)
 	if err != nil {
-		t.log.Debug("Invalid "+p.Name(), "id", fromID, "addr", fromAddr, "err", err)
+		t.log.Debug("Invalid "+p.Name(), "addr", fromAddr, "err", err)
 		return
 	}
 
@@ -737,7 +737,7 @@ func (t *UDPv5) handleWhoareyou(p *v5wire.Whoareyou, fromID enode.ID, fromAddr *
 // matchWithCall checks whether a handshake attempt matches the active call.
 func (t *UDPv5) matchWithCall(fromID enode.ID, authTag v5wire.Nonce) (*callV5, error) {
 	c := t.activeCallByAuth[string(authTag[:])]
-	if c == nil || c.node.ID() != fromID {
+	if c == nil {
 		return nil, errChallengeNoCall
 	}
 	if c.handshakeCount > 0 {
