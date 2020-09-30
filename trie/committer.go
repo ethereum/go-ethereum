@@ -132,7 +132,6 @@ func (c *committer) commit(n node, db *Database) (node, error) {
 		// nil, valuenode shouldn't be committed
 		panic(fmt.Sprintf("%T: invalid node: %v", n, n))
 	}
-	return hash, nil
 }
 
 // commitChildren commits the children of the given fullnode
@@ -151,7 +150,7 @@ func (c *committer) commitChildren(n *fullNode, db *Database) ([17]node, error) 
 			continue
 		}
 		// Commit the child recursively and store the "hashed" value.
-		// Note the returned node can be some embeded nodes, so it's
+		// Note the returned node can be some embedded nodes, so it's
 		// possible the type is not hashnode.
 		hashed, err := c.commit(child, db)
 		if err != nil {
@@ -177,7 +176,7 @@ func (c *committer) store(n node, db *Database) node {
 	)
 	if hash == nil {
 		// This was not generated - must be a small node stored in the parent.
-		// In theory we should apply the leafCall here if it's not nil(embeded
+		// In theory we should apply the leafCall here if it's not nil(embedded
 		// node usually contains value). But small value(less than 32bytes) is
 		// not our target.
 		return n
