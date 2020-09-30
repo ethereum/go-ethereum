@@ -16,9 +16,8 @@ import (
 
 const (
 	// Encryption/authentication parameters.
-	aesKeySize    = 16
-	gcmNonceSize  = 12
-	idNoncePrefix = "discovery-id-nonce"
+	aesKeySize   = 16
+	gcmNonceSize = 12
 )
 
 // Nonce represents a nonce used for AES/GCM.
@@ -50,7 +49,7 @@ func DecodePubkey(curve elliptic.Curve, e []byte) (*ecdsa.PublicKey, error) {
 // idNonceHash computes the ID signature hash used in the handshake.
 func idNonceHash(h hash.Hash, destID enode.ID, iv, authdata, ephkey []byte) []byte {
 	h.Reset()
-	h.Write([]byte(idNoncePrefix))
+	h.Write([]byte("discovery v5 identity proof"))
 	h.Write(iv)
 	h.Write(authdata)
 	h.Write(ephkey)
