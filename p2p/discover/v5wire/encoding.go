@@ -27,7 +27,7 @@ import (
 	"errors"
 	"fmt"
 	"hash"
-	"time"
+	mrand "math/rand"
 
 	"github.com/ethereum/go-ethereum/common/mclock"
 	"github.com/ethereum/go-ethereum/p2p/enode"
@@ -86,10 +86,11 @@ const (
 
 // Protocol constants.
 const (
-	handshakeTimeout = time.Second
-	version          = 1
-	minVersion       = 1
-	sizeofMaskingIV  = 16
+	version             = 1
+	minVersion          = 1
+	sizeofMaskingIV     = 16
+	minPacketSize       = 90
+	randomPacketMsgSize = 20
 )
 
 var protocolID = [6]byte{'d', 'i', 's', 'c', 'v', '5'}
@@ -114,16 +115,6 @@ var (
 	sizeofHandshakeAuthData = binary.Size(handshakeAuthData{}.h)
 	sizeofMessageAuthData   = len(Nonce{})
 )
-
-// func init() {
-// 	var (
-// 		sizeofGCMTag    = 16
-// 		sizeofWhoareyou = sizeofHeaderData + sizeofWhoareyouAuthData
-// 		sizeofEmptyMsg  = sizeofHeaderData + sizeofMessageAuthData + sizeofGCMTag
-// 	)
-// 	fmt.Println("WHOAREYOU size:", sizeofWhoareyou)
-// 	fmt.Println("EMPTY msg size:", sizeofEmptyMsg)
-// }
 
 // Codec encodes and decodes discovery v5 packets.
 type Codec struct {
@@ -177,16 +168,13 @@ func (c *Codec) Encode(id enode.ID, addr string, packet Packet, challenge *Whoar
 		return nil, Nonce{}, err
 	}
 	enc, err := c.EncodeRaw(id, header, msgdata)
-	if err != nil {
-		return nil, Nonce{}, err
-	}
-	return enc, header.Nonce, nil
+	return enc, header.Nonce, err
 }
 
 func (c *Codec) EncodeRaw(id enode.ID, head Header, msgdata []byte) ([]byte, error) {
 	// Generate masking IV.
 	if err := c.sc.maskingIVGen(head.IV[:]); err != nil {
-		return nil, err
+		return nil, fmt.Errorf("can't generate masking IV: %v", err)
 	}
 
 	// Encode the packet.
@@ -239,7 +227,8 @@ func (c *Codec) encodeRandom(toID enode.ID) (Header, []byte, error) {
 		return head, nil, fmt.Errorf("can't get random data: %v", err)
 	}
 	head.AuthData = head.Nonce[:]
-	msgdata := make([]byte, 16)
+	msgdata := make([]byte, randomPacketMsgSize)
+	mrand.Read(msgdata)
 	return head, msgdata, nil
 }
 
@@ -390,12 +379,8 @@ func (c *Codec) encodeMessage(toID enode.ID, s *session, packet Packet) (Header,
 
 // Decode decodes a discovery packet.
 func (c *Codec) Decode(input []byte, addr string) (src enode.ID, n *enode.Node, p Packet, err error) {
-	// Delete timed-out handshakes. This must happen before decoding to avoid
-	// processing the same handshake twice.
-	c.sc.handshakeGC()
-
 	// Unmask the static header.
-	if len(input) < sizeofHeaderData+sizeofMaskingIV {
+	if len(input) < minPacketSize {
 		return enode.ID{}, nil, nil, errTooShort
 	}
 	var head Header
@@ -415,6 +400,10 @@ func (c *Codec) Decode(input []byte, addr string) (src enode.ID, n *enode.Node, 
 	head.AuthData = make([]byte, head.AuthSize)
 	copy(head.AuthData, input[sizeofHeaderData:])
 	mask.XORKeyStream(head.AuthData, head.AuthData)
+
+	// Delete timed-out handshakes. This must happen before decoding to avoid
+	// processing the same handshake twice.
+	c.sc.handshakeGC()
 
 	// Decode auth part and message.
 	msgdata := input[sizeofHeaderData+len(head.AuthData):]

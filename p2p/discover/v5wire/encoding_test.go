@@ -73,6 +73,25 @@ func TestDeriveKeysV5(t *testing.T) {
 	}
 }
 
+// This test checks that the minPacketSize and randomPacketMsgSize constants are well-defined.
+func TestMinSizes(t *testing.T) {
+	var (
+		gcmTagSize     = 16
+		whoareyou      = sizeofMaskingIV + sizeofHeaderData + sizeofWhoareyouAuthData
+		msgHeader      = sizeofMaskingIV + sizeofHeaderData + sizeofMessageAuthData
+		emptyMsg       = msgHeader + gcmTagSize
+		minMessageSize = 3 // should be fine
+	)
+	t.Log("WHOAREYOU size", whoareyou)
+	t.Log("EMPTY msg size", emptyMsg)
+	if want := emptyMsg + minMessageSize; minPacketSize != want {
+		t.Fatalf("wrong minPacketSize %d, want %d", minPacketSize, want)
+	}
+	if msgHeader+randomPacketMsgSize < minPacketSize {
+		t.Fatalf("randomPacketMsgSize %d too small", randomPacketMsgSize)
+	}
+}
+
 // This test checks the basic handshake flow where A talks to B and A has no secrets.
 func TestHandshakeV5(t *testing.T) {
 	t.Parallel()

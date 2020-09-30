@@ -20,12 +20,15 @@ import (
 	"crypto/ecdsa"
 	crand "crypto/rand"
 	"encoding/binary"
+	"time"
 
 	"github.com/ethereum/go-ethereum/common/mclock"
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/p2p/enode"
 	"github.com/hashicorp/golang-lru/simplelru"
 )
+
+const handshakeTimeout = time.Second
 
 // The SessionCache keeps negotiated encryption keys and
 // state for in-progress handshakes in the Discovery v5 wire protocol.
