@@ -48,20 +48,21 @@ func DecodePubkey(curve elliptic.Curve, e []byte) (*ecdsa.PublicKey, error) {
 }
 
 // idNonceHash computes the ID signature hash used in the handshake.
-func idNonceHash(h hash.Hash, destID enode.ID, nonce, ephkey []byte) []byte {
+func idNonceHash(h hash.Hash, destID enode.ID, iv, authdata, ephkey []byte) []byte {
 	h.Reset()
 	h.Write([]byte(idNoncePrefix))
-	h.Write(nonce)
+	h.Write(iv)
+	h.Write(authdata)
 	h.Write(ephkey)
 	h.Write(destID[:])
 	return h.Sum(nil)
 }
 
 // makeIDSignature creates the ID nonce signature.
-func makeIDSignature(hash hash.Hash, key *ecdsa.PrivateKey, destID enode.ID, nonce, ephkey []byte) ([]byte, error) {
+func makeIDSignature(hash hash.Hash, key *ecdsa.PrivateKey, destID enode.ID, ephkey []byte, challenge *Header) ([]byte, error) {
 	switch key.Curve {
 	case crypto.S256():
-		input := idNonceHash(hash, destID, nonce, ephkey)
+		input := idNonceHash(hash, destID, challenge.IV[:], challenge.AuthData, ephkey)
 		idsig, err := crypto.Sign(input, key)
 		if err != nil {
 			return nil, err
@@ -78,14 +79,14 @@ type s256raw []byte
 func (s256raw) ENRKey() string { return "secp256k1" }
 
 // verifyIDSignature checks that signature over idnonce was made by the given node.
-func verifyIDSignature(hash hash.Hash, destID enode.ID, nonce, ephkey, sig []byte, n *enode.Node) error {
+func verifyIDSignature(hash hash.Hash, sig []byte, n *enode.Node, destID enode.ID, ephkey []byte, challenge *Header) error {
 	switch idscheme := n.Record().IdentityScheme(); idscheme {
 	case "v4":
 		var pubkey s256raw
 		if n.Load(&pubkey) != nil {
 			return errors.New("no secp256k1 public key in record")
 		}
-		input := idNonceHash(hash, destID, nonce, ephkey)
+		input := idNonceHash(hash, destID, challenge.IV[:], challenge.AuthData, ephkey)
 		if !crypto.VerifySignature(pubkey, input, sig) {
 			return errInvalidNonceSig
 		}
@@ -107,8 +108,10 @@ func ecdh(privkey *ecdsa.PrivateKey, pubkey *ecdsa.PublicKey) []byte {
 	return sec
 }
 
-// encryptGCM encrypts pt using AES-GCM with the given key and nonce.
-func encryptGCM(dest, key, nonce, pt, authData []byte) ([]byte, error) {
+// encryptGCM encrypts pt using AES-GCM with the given key and nonce. The ciphertext is
+// appended to dest, which must not overlap with plaintext. The resulting ciphertext is 16
+// bytes longer than plaintext because it contains an authentication tag.
+func encryptGCM(dest, key, nonce, plaintext, authData []byte) ([]byte, error) {
 	block, err := aes.NewCipher(key)
 	if err != nil {
 		panic(fmt.Errorf("can't create block cipher: %v", err))
@@ -117,7 +120,7 @@ func encryptGCM(dest, key, nonce, pt, authData []byte) ([]byte, error) {
 	if err != nil {
 		panic(fmt.Errorf("can't create GCM: %v", err))
 	}
-	return aesgcm.Seal(dest, nonce, pt, authData), nil
+	return aesgcm.Seal(dest, nonce, plaintext, authData), nil
 }
 
 // decryptGCM decrypts ct using AES-GCM with the given key and nonce.

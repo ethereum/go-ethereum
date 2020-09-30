@@ -28,7 +28,6 @@ import (
 
 // Packet is implemented by all message types.
 type Packet interface {
-	// ??? Src() enode.ID   // Src returns the source node ID of the packet.
 	Name() string    // Name returns a string corresponding to the message type.
 	Kind() byte      // Kind returns the message type.
 	SetReqID([]byte) // Sets the request ID.
@@ -56,17 +55,21 @@ const (
 type (
 	// Unknown represents any packet that can't be decrypted.
 	Unknown struct {
-		AuthTag Nonce
+		Nonce Nonce
 	}
 
 	// WHOAREYOU contains the handshake challenge.
 	Whoareyou struct {
-		AuthTag   Nonce
-		IDNonce   [32]byte // To be signed by recipient.
+		Header    Header
+		Nonce     Nonce    // Nonce of request packet
+		IDNonce   [16]byte // Identity proof data
 		RecordSeq uint64   // ENR sequence number of recipient
 
-		Node *enode.Node // Locally known node records of recipient.
-		sent mclock.AbsTime
+		// Node is the locally known node record of recipient.
+		// This must be set by the caller of Encode.
+		Node *enode.Node
+
+		sent mclock.AbsTime // for handshake GC.
 	}
 
 	// PING is sent during liveness checks.

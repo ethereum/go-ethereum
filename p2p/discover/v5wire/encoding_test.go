@@ -47,7 +47,7 @@ var (
 	testKeyA, _   = crypto.HexToECDSA("eef77acb6c6a6eebc5b363a475ac583ec7eccdb42b6481424c60f59aa326547f")
 	testKeyB, _   = crypto.HexToECDSA("66fb62bfbd66b9177a138c1e5cddbe4f7c30c343e94e68df8769459cb1cde628")
 	testEphKey, _ = crypto.HexToECDSA("0288ef00023598499cb6c940146d050d2b1fb914198c327f76aad590bead68b6")
-	testIDnonce   = [32]byte{5, 6, 7, 8, 9, 10, 11, 12}
+	testIDnonce   = [16]byte{1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16}
 )
 
 func TestDeriveKeysV5(t *testing.T) {
@@ -85,7 +85,7 @@ func TestHandshakeV5(t *testing.T) {
 
 	// A <- B   WHOAREYOU
 	challenge := &Whoareyou{
-		AuthTag:   resp.(*Unknown).AuthTag,
+		Nonce:     resp.(*Unknown).Nonce,
 		IDNonce:   testIDnonce,
 		RecordSeq: 0,
 	}
@@ -116,7 +116,7 @@ func TestHandshakeV5_timeout(t *testing.T) {
 
 	// A <- B   WHOAREYOU
 	challenge := &Whoareyou{
-		AuthTag:   resp.(*Unknown).AuthTag,
+		Nonce:     resp.(*Unknown).Nonce,
 		IDNonce:   testIDnonce,
 		RecordSeq: 0,
 	}
@@ -145,7 +145,7 @@ func TestHandshakeV5_norecord(t *testing.T) {
 		t.Fatal("need non-zero sequence number")
 	}
 	challenge := &Whoareyou{
-		AuthTag:   resp.(*Unknown).AuthTag,
+		Nonce:     resp.(*Unknown).Nonce,
 		IDNonce:   testIDnonce,
 		RecordSeq: nodeA.Seq(),
 		Node:      nodeA,
@@ -180,7 +180,7 @@ func TestHandshakeV5_rekey(t *testing.T) {
 	net.nodeB.expectDecode(t, UnknownPacket, findnode)
 
 	// A <- B   WHOAREYOU
-	challenge := &Whoareyou{AuthTag: authTag, IDNonce: testIDnonce}
+	challenge := &Whoareyou{Nonce: authTag, IDNonce: testIDnonce}
 	whoareyou, _ := net.nodeB.encode(t, net.nodeA, challenge)
 	net.nodeA.expectDecode(t, WhoareyouPacket, whoareyou)
 
@@ -224,7 +224,7 @@ func TestHandshakeV5_rekey2(t *testing.T) {
 	net.nodeB.expectDecode(t, UnknownPacket, findnode)
 
 	// A <- B   WHOAREYOU
-	challenge := &Whoareyou{AuthTag: authTag, IDNonce: testIDnonce}
+	challenge := &Whoareyou{Nonce: authTag, IDNonce: testIDnonce}
 	whoareyou, _ := net.nodeB.encode(t, net.nodeA, challenge)
 	net.nodeA.expectDecode(t, WhoareyouPacket, whoareyou)
 
@@ -260,13 +260,13 @@ func TestTestVectorsV5(t *testing.T) {
 			readKey:  hexutil.MustDecode("0x01010101010101010101010101010101"),
 		}
 		challenge0 = &Whoareyou{
-			AuthTag:   Nonce{1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12},
-			IDNonce:   [32]byte{1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16},
+			Nonce:     Nonce{1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12},
+			IDNonce:   testIDnonce,
 			RecordSeq: 0,
 		}
 		challenge1 = &Whoareyou{
-			AuthTag:   Nonce{1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12},
-			IDNonce:   [32]byte{1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16},
+			Nonce:     Nonce{1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12},
+			IDNonce:   testIDnonce,
 			RecordSeq: 1,
 		}
 	)
@@ -301,9 +301,9 @@ func TestTestVectorsV5(t *testing.T) {
 			},
 			challenge: challenge1,
 			prep: func(net *handshakeTest) {
-				c := *challenge1
-				c.Node = net.nodeA.n()
-				net.nodeB.c.sc.storeSentHandshake(idA, addr, &c)
+				challenge1.Node = net.nodeA.n()
+				net.nodeA.encode(t, net.nodeB, challenge1)
+				net.nodeB.c.sc.storeSentHandshake(idA, addr, challenge1)
 			},
 		},
 		{
@@ -314,9 +314,9 @@ func TestTestVectorsV5(t *testing.T) {
 			},
 			challenge: challenge0,
 			prep: func(net *handshakeTest) {
-				c := *challenge0
-				c.Node = net.nodeA.n()
-				net.nodeB.c.sc.storeSentHandshake(idA, addr, &c)
+				challenge0.Node = net.nodeA.n()
+				net.nodeA.encode(t, net.nodeB, challenge0)
+				net.nodeB.c.sc.storeSentHandshake(idA, addr, challenge0)
 			},
 		},
 	}
@@ -358,7 +358,9 @@ func TestTestVectorsV5(t *testing.T) {
 func testVectorComment(net *handshakeTest, p Packet, challenge *Whoareyou, nonce Nonce) string {
 	o := new(strings.Builder)
 	printWhoareyou := func(p *Whoareyou) {
-		fmt.Fprintf(o, "whoareyou.request-nonce = %#x\n", p.AuthTag[:])
+		fmt.Fprintf(o, "whoareyou.iv = %#x\n", p.Header.IV[:])
+		fmt.Fprintf(o, "whoareyou.authdata = %#x\n", p.Header.AuthData[:])
+		fmt.Fprintf(o, "whoareyou.request-nonce = %#x\n", p.Nonce[:])
 		fmt.Fprintf(o, "whoareyou.id-nonce = %#x\n", p.IDNonce[:])
 		fmt.Fprintf(o, "whoareyou.enr-seq = %d\n", p.RecordSeq)
 	}
