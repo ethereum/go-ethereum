@@ -704,7 +704,7 @@ func (t *UDPv5) handle(p v5wire.Packet, fromID enode.ID, fromAddr *net.UDPAddr) 
 
 // handleUnknown initiates a handshake by responding with WHOAREYOU.
 func (t *UDPv5) handleUnknown(p *v5wire.Unknown, fromID enode.ID, fromAddr *net.UDPAddr) {
-	challenge := &v5wire.Whoareyou{AuthTag: p.AuthTag}
+	challenge := &v5wire.Whoareyou{Nonce: p.Nonce}
 	crand.Read(challenge.IDNonce[:])
 	if n := t.getNode(fromID); n != nil {
 		challenge.Node = n
@@ -720,7 +720,7 @@ var (
 
 // handleWhoareyou resends the active call as a handshake packet.
 func (t *UDPv5) handleWhoareyou(p *v5wire.Whoareyou, fromID enode.ID, fromAddr *net.UDPAddr) {
-	c, err := t.matchWithCall(fromID, p.AuthTag)
+	c, err := t.matchWithCall(fromID, p.Nonce)
 	if err != nil {
 		t.log.Debug("Invalid "+p.Name(), "id", fromID, "addr", fromAddr, "err", err)
 		return

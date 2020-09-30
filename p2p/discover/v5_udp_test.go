@@ -123,13 +123,13 @@ func TestUDPv5_unknownPacket(t *testing.T) {
 	test := newUDPV5Test(t)
 	defer test.close()
 
-	authTag := v5wire.Nonce{1, 2, 3}
+	nonce := v5wire.Nonce{1, 2, 3}
 	check := func(p *v5wire.Whoareyou, wantSeq uint64) {
 		t.Helper()
-		if p.AuthTag != authTag {
-			t.Error("wrong token in WHOAREYOU:", p.AuthTag, authTag)
+		if p.Nonce != nonce {
+			t.Error("wrong nonce in WHOAREYOU:", p.Nonce, nonce)
 		}
-		if p.IDNonce == ([32]byte{}) {
+		if p.IDNonce == ([16]byte{}) {
 			t.Error("all zero ID nonce")
 		}
 		if p.RecordSeq != wantSeq {
@@ -138,7 +138,7 @@ func TestUDPv5_unknownPacket(t *testing.T) {
 	}
 
 	// Unknown packet from unknown node.
-	test.packetIn(&v5wire.Unknown{AuthTag: authTag})
+	test.packetIn(&v5wire.Unknown{Nonce: nonce})
 	test.waitPacketOut(func(p *v5wire.Whoareyou, addr *net.UDPAddr, _ v5wire.Nonce) {
 		check(p, 0)
 	})
@@ -147,7 +147,7 @@ func TestUDPv5_unknownPacket(t *testing.T) {
 	n := test.getNode(test.remotekey, test.remoteaddr).Node()
 	test.table.addSeenNode(wrapNode(n))
 
-	test.packetIn(&v5wire.Unknown{AuthTag: authTag})
+	test.packetIn(&v5wire.Unknown{Nonce: nonce})
 	test.waitPacketOut(func(p *v5wire.Whoareyou, addr *net.UDPAddr, _ v5wire.Nonce) {
 		check(p, n.Seq())
 	})
@@ -344,8 +344,8 @@ func TestUDPv5_callResend(t *testing.T) {
 	}()
 
 	// Ping answered by WHOAREYOU.
-	test.waitPacketOut(func(p *v5wire.Ping, addr *net.UDPAddr, authTag v5wire.Nonce) {
-		test.packetIn(&v5wire.Whoareyou{AuthTag: authTag})
+	test.waitPacketOut(func(p *v5wire.Ping, addr *net.UDPAddr, nonce v5wire.Nonce) {
+		test.packetIn(&v5wire.Whoareyou{Nonce: nonce})
 	})
 	// Ping should be re-sent.
 	test.waitPacketOut(func(p *v5wire.Ping, addr *net.UDPAddr, _ v5wire.Nonce) {
@@ -377,12 +377,12 @@ func TestUDPv5_multipleHandshakeRounds(t *testing.T) {
 	}()
 
 	// Ping answered by WHOAREYOU.
-	test.waitPacketOut(func(p *v5wire.Ping, addr *net.UDPAddr, authTag v5wire.Nonce) {
-		test.packetIn(&v5wire.Whoareyou{AuthTag: authTag})
+	test.waitPacketOut(func(p *v5wire.Ping, addr *net.UDPAddr, nonce v5wire.Nonce) {
+		test.packetIn(&v5wire.Whoareyou{Nonce: nonce})
 	})
 	// Ping answered by WHOAREYOU again.
-	test.waitPacketOut(func(p *v5wire.Ping, addr *net.UDPAddr, authTag v5wire.Nonce) {
-		test.packetIn(&v5wire.Whoareyou{AuthTag: authTag})
+	test.waitPacketOut(func(p *v5wire.Ping, addr *net.UDPAddr, nonce v5wire.Nonce) {
+		test.packetIn(&v5wire.Whoareyou{Nonce: nonce})
 	})
 	if err := <-done; err != errTimeout {
 		t.Fatalf("unexpected ping error: %q", err)
