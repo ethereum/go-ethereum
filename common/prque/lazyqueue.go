@@ -48,8 +48,8 @@ type LazyQueue struct {
 }
 
 type (
-	PriorityCallback    func(data interface{}, now mclock.AbsTime) int64   // actual priority callback
-	MaxPriorityCallback func(data interface{}, until mclock.AbsTime) int64 // estimated maximum priority callback
+	PriorityCallback    func(data interface{}, now mclock.AbsTime) int64        // actual priority callback
+	MaxPriorityCallback func(data interface{}, now, until mclock.AbsTime) int64 // estimated maximum priority callback
 )
 
 // NewLazyQueue creates a new lazy queue
@@ -98,7 +98,7 @@ func (q *LazyQueue) refresh(now mclock.AbsTime) {
 
 // Push adds an item to the queue
 func (q *LazyQueue) Push(data interface{}) {
-	heap.Push(q.queue[1], &item{data, q.maxPriority(data, q.maxUntil)})
+	heap.Push(q.queue[1], &item{data, q.maxPriority(data, q.clock.Now(), q.maxUntil)})
 }
 
 // Update updates the upper priority estimate for the item with the given queue index

@@ -18,6 +18,7 @@ package les
 
 import (
 	"fmt"
+	"math"
 	"sync"
 	"time"
 
@@ -29,6 +30,7 @@ import (
 	"github.com/ethereum/go-ethereum/p2p/enode"
 	"github.com/ethereum/go-ethereum/p2p/enr"
 	"github.com/ethereum/go-ethereum/p2p/nodestate"
+	"github.com/ethereum/go-ethereum/rlp"
 )
 
 const (
@@ -305,14 +307,14 @@ func (f *clientPool) setCapacity(node *enode.Node, freeID string, capacity uint6
 		c = &clientInfo{node: node}
 		f.ns.SetField(node, clientInfoField, c)
 		f.ns.SetField(node, connAddressField, freeID)
-		if c.balance, _ = f.ns.GetField(node, f.BalanceField).(*lps.NodeBalance); c.balance == nil {
-			log.Error("BalanceField is missing", "node", node.ID())
-			return 0, fmt.Errorf("BalanceField of %064x is missing", node.ID())
-		}
 		defer func() {
 			f.ns.SetField(node, connAddressField, nil)
 			f.ns.SetField(node, clientInfoField, nil)
 		}()
+		if c.balance, _ = f.ns.GetField(node, f.BalanceField).(*lps.NodeBalance); c.balance == nil {
+			log.Error("BalanceField is missing", "node", node.ID())
+			return 0, fmt.Errorf("BalanceField of %064x is missing", node.ID())
+		}
 	}
 	var (
 		minPriority int64
@@ -383,10 +385,51 @@ func (f *clientPool) forClients(ids []enode.ID, cb func(client *clientInfo)) {
 	}
 }
 
-func (f *clientPool) serveCapQuery(id enode.ID, address string, data []byte) []byte {
-	type params struct {
-		ReqTime uint64
+func (f *clientPool) serveCapQuery(id enode.ID, freeID string, data []byte) []byte {
+	var req struct {
+		Bias      uint64 // seconds
 		AddTokens []uint64
 	}
-	type results struct
+	if rlp.DecodeBytes(data, &req) != nil {
+		return nil
+	}
+	node := f.ns.GetNode(id)
+	if node == nil {
+		node = enode.SignNull(&enr.Record{}, id)
+	}
+	c, _ := f.ns.GetField(node, clientInfoField).(*clientInfo)
+	if c == nil {
+		c = &clientInfo{node: node}
+		f.ns.SetField(node, clientInfoField, c)
+		f.ns.SetField(node, connAddressField, freeID)
+		defer func() {
+			f.ns.SetField(node, connAddressField, nil)
+			f.ns.SetField(node, clientInfoField, nil)
+		}()
+		if c.balance, _ = f.ns.GetField(node, f.BalanceField).(*lps.NodeBalance); c.balance == nil {
+			log.Error("BalanceField is missing", "node", node.ID())
+			return nil
+		}
+	}
+	// use lps.CapacityCurve to answer request for multiple newly bought token amounts
+	curve := f.pp.GetCapacityCurve().Exclude(id)
+	result := make([]uint64, len(req.AddTokens))
+	now := f.clock.Now()
+	bias := time.Second * time.Duration(req.Bias)
+	if f.connectedBias > bias {
+		bias = f.connectedBias
+	}
+	for i, addTokens := range req.AddTokens {
+		if addTokens > math.MaxInt64 {
+			addTokens = math.MaxInt64
+		}
+		result[i] = curve.MaxCapacity(func(capacity uint64) int64 {
+			return c.balance.EstimatePriority(now, capacity, int64(addTokens), 0, bias, false) / int64(capacity)
+		})
+		if result[i] < f.minCap {
+			result[i] = 0
+		}
+	}
+	res, _ := rlp.EncodeToBytes(&result)
+	return res
 }
