@@ -72,7 +72,7 @@ func TestWebsocketOrigins(t *testing.T) {
 	})
 	assert.Error(t, err)
 }
-
+// TestIsWebsocket tests if an incoming websocket upgrade request is handled properly.
 func TestIsWebsocket(t *testing.T) {
 	r, _ := http.NewRequest("GET", "/", nil)
 
