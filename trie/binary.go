@@ -38,6 +38,25 @@ type BinaryHashPreimage struct {
 	Value []byte
 }
 
+type binkey struct {
+	bytes []byte
+	fill  int // Number of bits used in the last list
+}
+
+type storeSlot struct {
+	key   binkey
+	value []byte
+}
+
+type store []storeSlot
+
+type BinaryTrie struct {
+	root    BinaryNode
+	store   store
+	cache   map[common.Hash]BinaryNode
+	present map[common.Hash]struct{}
+}
+
 // All known implementations of binaryNode
 type (
 	// branch is a node with two children ("left" and "right")
@@ -64,7 +83,7 @@ type (
 
 	hashBinaryNode []byte
 
-	empty struct{}{}
+	empty struct{}
 )
 
 var (
@@ -75,8 +94,44 @@ var (
 	zero32 = []byte{0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0}
 )
 
+func (b *binkey) Len() int {
+	if len(b.bytes) == 0 {
+		return 0
+	}
+	return len(b.bytes)*8 + b.fill - 8
+}
+func (b *binkey) Bit(i int) bool {
+	if len(b.bytes) == 0 || len(b.bytes)*8 + b.fill <= i {
+		panic("trying to read past the end of the key")
+	}
+
+	by := b.bytes[i/8]
+	bit := (by >> (7-i%8))
+	return bit == 1
+}
+
+func (s store) Len() int { return len(s) }
+func (s store) Less(i, j int) bool {
+	for b := 0; b < s[i].key.Len() && b < s[j].key.Len(); b++ {
+		if s[i].key.Bit(b) != s[j].key.Bit(b) {
+			// if s[j].key.Bit(b) is true, then it is
+			// the greater value of the two.
+			return s[j].key.Bit(b)
+		}
+	}
+
+	// Keys are equal on their common length, the shortest
+	// is the smaller one.
+	return s[i].key.Len() < s[j].key.Len()
+}
+func (s store) Swap(i, j int) {
+	temp := s[i]
+	s[j] = s[i]
+	s[i] = temp
+}
+
 func NewBinTrie() BinaryNode {
-	return empty(nil)
+	return empty(struct{}{})
 }
 
 func (t *branch) Get(key []byte) []byte {
