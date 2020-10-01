@@ -171,34 +171,16 @@ js:
                   <td style='font-family: monospace;'>6047 0B71 5865 392D E43D  75A3 337E 68FC E058 A81C</td>
                 </tr>
                 <tr>
-                  <td>Jeffrey Wilcke</td>
-                  <td>Jeffrey Wilcke &lt;jeffrey@ethereum.org&gt;</td>
-                  <td><a style='font-family: monospace; text-decoration: none;' href="https://keyserver.ubuntu.com/pks/lookup?op=get&search=0xA6766F7185BE4B0C" target="_blank">85BE4B0C</a></td>
-                  <td style='font-family: monospace;'>EF8F A45D 7698 A065 F1AB  3D5C A676 6F71 85BE 4B0C</td>
-                </tr>
-                <tr>
                   <td>Martin Holst Swende</td>
                   <td>Martin Holst Swende &lt;martin.swende@ethereum.org&gt;</td>
                   <td><a style='font-family: monospace; text-decoration: none;' href="https://keyserver.ubuntu.com/pks/lookup?op=get&search=0x683B438C05A5DDF0" target="_blank">05A5DDF0</a></td>
                   <td style='font-family: monospace;'>CA99 ABB5 B36E 24AD 5DA0  FD40 683B 438C 05A5 DDF0</td>
                 </tr>
                 <tr>
-                  <td>Nick Johnson</td>
-                  <td>Nick Johnson &lt;nick@ethereum.org&gt;</td>
-                  <td><a style='font-family: monospace; text-decoration: none;' href="https://keyserver.ubuntu.com/pks/lookup?op=get&search=0x6D9649932F295D12" target="_blank">2F295D12</a></td>
-                  <td style='font-family: monospace;'>DD7A 2E03 0B2F AF1C 3121  6FE6 6D96 4993 2F29 5D12</td>
-                </tr>
-                <tr>
                   <td>Péter Szilágyi</td>
                   <td>Péter Szilágyi &lt;peter@ethereum.org&gt;</td>
                   <td><a style='font-family: monospace; text-decoration: none;' href="https://keyserver.ubuntu.com/pks/lookup?op=get&search=0x119A76381CCB7DD2" target="_blank">1CCB7DD2</a></td>
                   <td style='font-family: monospace;'>4948 43FC E822 1C4C 86AB  5E2F 119A 7638 1CCB 7DD2</td>
-                </tr>
-                <tr>
-                  <td>Viktor Trón</td>
-                  <td>Viktor Tron &lt;viktor@ethereum.org&gt;</td>
-                  <td><a style='font-family: monospace; text-decoration: none;' href="https://keyserver.ubuntu.com/pks/lookup?op=get&search=0x5219CDE299E23788" target="_blank">99E23788</a></td>
-                  <td style='font-family: monospace;'>446D 939E 45C0 DC1E 2A8E  2F62 5219 CDE2 99E2 3788</td>
                 </tr>
               </tbody>
             </table>
@@ -208,7 +190,7 @@ js:
           <p>You can import the build server public keys by grabbing the individual keys directly from the keyserver network:</p>
           <pre>gpg --recv-keys F9585DE6 C2FF8BBF 9BA28146 7B9E2481 D2A67EAC</pre>
           <p>Similarly you can import all the developer public keys by grabbing them directly from the keyserver network:</p>
-          <pre>gpg --recv-keys E058A81C 85BE4B0C 05A5DDF0 2F295D12 1CCB7DD2 99E23788</pre>
+          <pre>gpg --recv-keys E058A81C  05A5DDF0 1CCB7DD2 </pre>
           <br/>
           <p>From the download listings above you should see a link both to the downloadable archives as well as detached signature files. To verify the authenticity of any downloaded data, grab both files and then run:</p>
           <pre>gpg --verify geth-linux-amd64-1.5.0-d0c820ac.tar.gz.asc</pre>
