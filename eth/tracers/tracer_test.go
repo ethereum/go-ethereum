@@ -149,7 +149,7 @@ func TestWasmTracing(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if !bytes.Equal(ret, []byte{3,0,0, 0}) {
+	if !bytes.Equal(ret, []byte{3, 0, 0, 0}) {
 		t.Errorf("Expected return value to be 0x03000000, got %#x", ret)
 	}
 }
@@ -165,12 +165,16 @@ func TestWasmTracingCallInit(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	// TODO(gballet) CaptureStart isn't called by runTrace, so fake
+	// the call so as not to rebuild a full-fledged environment at
+	// this stage.
+	tracer.CaptureStart(common.Address{}, common.Address{}, false, nil, 0, big.NewInt(0))
 	ret, err = runTrace(tracer)
 	if err != nil {
 		t.Fatal(err)
 	}
 
-	if !bytes.Equal(ret, []byte{3,0,0, 0}) {
+	if !bytes.Equal(ret, []byte{3, 0, 0, 0}) {
 		t.Errorf("Expected return value to be 0x03000000, got %#x", ret)
 	}
 }

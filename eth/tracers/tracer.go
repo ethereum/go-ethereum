@@ -366,7 +366,7 @@ func checkWasm(code string) bool {
 func newWasm(code string) (Tracer, error) {
 	tracer := &WasmTracer{code: code, resultIndex: -1, stepIndex: -1, faultIndex: -1, initIndex: -1}
 	module, err := wasm.ReadModule(bytes.NewReader([]byte(code)), func(name string) (*wasm.Module, error) {
-		if name == "tracer" {
+		if name == "env" { // "tracer"{
 			tracerModule := wasm.NewModule()
 			tracerModule.Types = &wasm.SectionTypes{
 				Entries: []wasm.FunctionSig{
@@ -447,7 +447,7 @@ func newWasm(code string) (Tracer, error) {
 
 	tracer.module = module
 
-	// TODO check all the exports and get their indices
+	// Find the index for all required exports
 	for name, export := range module.Export.Entries {
 		switch name {
 		case "init":
