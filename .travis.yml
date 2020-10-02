@@ -216,7 +216,7 @@ jobs:
         - ln -s `pwd` $GOPATH/src/github.com/ethereum/go-ethereum
         - go run build/ci.go aar -signer ANDROID_SIGNING_KEY -deploy https://oss.sonatype.org -upload gethstore/builds
 
-      # This builder does the Azure archive purges to avoid accumulating junk
+    # This builder does the Azure archive purges to avoid accumulating junk
     - stage: build
       if: type = cron
       os: linux
