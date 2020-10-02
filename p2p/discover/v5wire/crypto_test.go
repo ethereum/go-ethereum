@@ -21,6 +21,7 @@ import (
 	"crypto/ecdsa"
 	"crypto/elliptic"
 	"crypto/sha256"
+	"reflect"
 	"strings"
 	"testing"
 
@@ -41,24 +42,21 @@ func TestVector_ECDH(t *testing.T) {
 
 func TestVector_KDF(t *testing.T) {
 	var (
-		ephKey    = hexPrivkey("0xfb757dc581730490a1d7a00deea65e9b1936924caaea8f44d476014856b68736")
-		net       = newHandshakeTest()
-		challenge Whoareyou
+		ephKey = hexPrivkey("0xfb757dc581730490a1d7a00deea65e9b1936924caaea8f44d476014856b68736")
+		cdata  = hexutil.MustDecode("0x000000000000000000000000000000006469736376350001010102030405060708090a0b0c00180102030405060708090a0b0c0d0e0f100000000000000000")
+		net    = newHandshakeTest()
 	)
-	copy(challenge.Header.IV[:], hexutil.MustDecode("0x01010101010101010101010101010101"))
-	copy(challenge.IDNonce[:], hexutil.MustDecode("0x02020202020202020202020202020202"))
 	defer net.close()
 
-	destKey := &net.nodeB.c.privkey.PublicKey
-	s := net.nodeA.c.deriveKeys(net.nodeA.id(), net.nodeB.id(), ephKey, destKey, &challenge)
+	destKey := &testKeyB.PublicKey
+	s := deriveKeys(sha256.New, ephKey, destKey, net.nodeA.id(), net.nodeB.id(), cdata)
 	t.Logf("ephemeral-key = %#x", ephKey.D)
 	t.Logf("dest-pubkey = %#x", EncodePubkey(destKey))
 	t.Logf("node-id-a = %#x", net.nodeA.id().Bytes())
 	t.Logf("node-id-b = %#x", net.nodeB.id().Bytes())
-	t.Logf("whoareyou.masking-iv = %#x", challenge.Header.IV[:])
-	t.Logf("whoareyou.id-nonce = %#x", challenge.IDNonce[:])
-	check(t, "initiator-key", s.writeKey, hexutil.MustDecode("0xb10e94a89b34cfb87b65aa7f8902f40c"))
-	check(t, "recipient-key", s.readKey, hexutil.MustDecode("0xce8db25ae599c9b2c4a9d60090c9efdd"))
+	t.Logf("challenge-data = %#x", cdata)
+	check(t, "initiator-key", s.writeKey, hexutil.MustDecode("0xdccc82d81bd610f4f76d3ebe97a40571"))
+	check(t, "recipient-key", s.readKey, hexutil.MustDecode("0xac74bb8773749920b0d3a8881c173ec5"))
 }
 
 func TestVector_IDSignature(t *testing.T) {
@@ -66,22 +64,37 @@ func TestVector_IDSignature(t *testing.T) {
 		key    = hexPrivkey("0xfb757dc581730490a1d7a00deea65e9b1936924caaea8f44d476014856b68736")
 		destID = enode.HexID("0xbbbb9d047f0488c0b5a93c1c3f2d8bafc7c8ff337024a55434a0d0555de64db9")
 		ephkey = hexutil.MustDecode("0x039961e4c2356d61bedb83052c115d311acb3a96f5777296dcf297351130266231")
-		header = Header{
-			AuthData: hexutil.MustDecode("0x0102030405060708090a0b0c0d0e0f100000000000000000"),
-		}
+		cdata  = hexutil.MustDecode("0x000000000000000000000000000000006469736376350001010102030405060708090a0b0c00180102030405060708090a0b0c0d0e0f100000000000000000")
 	)
-	copy(header.IV[:], hexutil.MustDecode("0x01010101010101010101010101010101"))
 
-	sig, err := makeIDSignature(sha256.New(), key, destID, ephkey, &Header{})
+	sig, err := makeIDSignature(sha256.New(), key, cdata, ephkey, destID)
 	if err != nil {
 		t.Fatal(err)
 	}
 	t.Logf("static-key = %#x", key.D)
-	t.Logf("masking-iv = %#x", header.IV[:])
-	t.Logf("authdata = %#x", header.AuthData)
+	t.Logf("challenge-data = %#x", cdata)
 	t.Logf("ephemeral-pubkey = %#x", ephkey)
 	t.Logf("node-id-B = %#x", destID.Bytes())
-	check(t, "id-signature", sig, hexutil.MustDecode("0xd82364cfffb18101355371de84ee0def3dca31191b9add79b21a14f4442b6df02dc26df6278f71c83d43645da13071881cacdb43b0aea1e256cdec73a73faf01"))
+	expected := "0x94852a1e2318c4e5e9d422c98eaf19d1d90d876b29cd06ca7cb7546d0fff7b484fe86c09a064fe72bdbef73ba8e9c34df0cd2b53e9d65528c2c7f336d5dfc6e6"
+	check(t, "id-signature", sig, hexutil.MustDecode(expected))
+}
+
+func TestDeriveKeys(t *testing.T) {
+	t.Parallel()
+
+	var (
+		n1    = enode.ID{1}
+		n2    = enode.ID{2}
+		cdata = []byte{1, 2, 3, 4}
+	)
+	sec1 := deriveKeys(sha256.New, testKeyA, &testKeyB.PublicKey, n1, n2, cdata)
+	sec2 := deriveKeys(sha256.New, testKeyB, &testKeyA.PublicKey, n1, n2, cdata)
+	if sec1 == nil || sec2 == nil {
+		t.Fatal("key agreement failed")
+	}
+	if !reflect.DeepEqual(sec1, sec2) {
+		t.Fatalf("keys not equal:\n  %+v\n  %+v", sec1, sec2)
+	}
 }
 
 func check(t *testing.T, what string, x, y []byte) {

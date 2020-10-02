@@ -50,29 +50,6 @@ var (
 	testIDnonce   = [16]byte{1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16}
 )
 
-func TestDeriveKeysV5(t *testing.T) {
-	t.Parallel()
-
-	var (
-		n1        = enode.ID{1}
-		n2        = enode.ID{2}
-		challenge = &Whoareyou{}
-		db, _     = enode.OpenDB("")
-		ln        = enode.NewLocalNode(db, testKeyA)
-		c         = NewCodec(ln, testKeyA, mclock.System{})
-	)
-	defer db.Close()
-
-	sec1 := c.deriveKeys(n1, n2, testKeyA, &testKeyB.PublicKey, challenge)
-	sec2 := c.deriveKeys(n1, n2, testKeyB, &testKeyA.PublicKey, challenge)
-	if sec1 == nil || sec2 == nil {
-		t.Fatal("key agreement failed")
-	}
-	if !reflect.DeepEqual(sec1, sec2) {
-		t.Fatalf("keys not equal:\n  %+v\n  %+v", sec1, sec2)
-	}
-}
-
 // This test checks that the minPacketSize and randomPacketMsgSize constants are well-defined.
 func TestMinSizes(t *testing.T) {
 	var (
@@ -288,8 +265,8 @@ func TestTestVectorsV5(t *testing.T) {
 	challenge1A.RecordSeq = 1
 	net := newHandshakeTest()
 	challenge0A.Node = net.nodeA.n()
-	challenge1A.Node = net.nodeA.n()
 	challenge0B.Node = net.nodeB.n()
+	challenge1A.Node = net.nodeA.n()
 	net.close()
 
 	type testVectorTest struct {
@@ -323,7 +300,7 @@ func TestTestVectorsV5(t *testing.T) {
 			challenge: &challenge0A,
 			prep: func(net *handshakeTest) {
 				// Update challenge.Header.AuthData.
-				net.nodeA.c.encodeWhoareyou(idB, &challenge0A)
+				net.nodeA.c.Encode(idB, "", &challenge0A, nil)
 				net.nodeB.c.sc.storeSentHandshake(idA, addr, &challenge0A)
 			},
 		},
@@ -335,8 +312,8 @@ func TestTestVectorsV5(t *testing.T) {
 			},
 			challenge: &challenge1A,
 			prep: func(net *handshakeTest) {
-				// Update challenge.Header.AuthData.
-				net.nodeA.c.encodeWhoareyou(idB, &challenge1A)
+				// Update challenge data.
+				net.nodeA.c.Encode(idB, "", &challenge1A, nil)
 				net.nodeB.c.sc.storeSentHandshake(idA, addr, &challenge1A)
 			},
 		},
@@ -348,22 +325,24 @@ func TestTestVectorsV5(t *testing.T) {
 			net := newHandshakeTest()
 			defer net.close()
 
+			// Override all random inputs.
+			net.nodeA.c.sc.nonceGen = func(counter uint32) (Nonce, error) {
+				return Nonce{0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF}, nil
+			}
+			net.nodeA.c.sc.maskingIVGen = func(buf []byte) error {
+				return nil // all zero
+			}
+			net.nodeA.c.sc.ephemeralKeyGen = func() (*ecdsa.PrivateKey, error) {
+				return testEphKey, nil
+			}
+
+			// Prime the codec for encoding/decoding.
 			if test.prep != nil {
 				test.prep(net)
 			}
 
 			file := filepath.Join("testdata", test.name+".txt")
 			if *writeTestVectorsFlag {
-				// Override all random inputs.
-				net.nodeA.c.sc.nonceGen = func(counter uint32) (Nonce, error) {
-					return Nonce{0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF}, nil
-				}
-				net.nodeA.c.sc.maskingIVGen = func(buf []byte) error {
-					return nil // all zero
-				}
-				net.nodeA.c.sc.ephemeralKeyGen = func() (*ecdsa.PrivateKey, error) {
-					return testEphKey, nil
-				}
 				// Encode the packet.
 				d, nonce := net.nodeA.encodeWithChallenge(t, net.nodeB, test.challenge, test.packet)
 				comment := testVectorComment(net, test.packet, test.challenge, nonce)
@@ -379,8 +358,7 @@ func TestTestVectorsV5(t *testing.T) {
 func testVectorComment(net *handshakeTest, p Packet, challenge *Whoareyou, nonce Nonce) string {
 	o := new(strings.Builder)
 	printWhoareyou := func(p *Whoareyou) {
-		fmt.Fprintf(o, "whoareyou.iv = %#x\n", p.Header.IV[:])
-		fmt.Fprintf(o, "whoareyou.authdata = %#x\n", p.Header.AuthData[:])
+		fmt.Fprintf(o, "whoareyou.challenge-data = %#x\n", p.ChallengeData)
 		fmt.Fprintf(o, "whoareyou.request-nonce = %#x\n", p.Nonce[:])
 		fmt.Fprintf(o, "whoareyou.id-nonce = %#x\n", p.IDNonce[:])
 		fmt.Fprintf(o, "whoareyou.enr-seq = %d\n", p.RecordSeq)
