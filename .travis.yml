@@ -216,38 +216,7 @@ jobs:
         - ln -s `pwd` $GOPATH/src/github.com/ethereum/go-ethereum
         - go run build/ci.go aar -signer ANDROID_SIGNING_KEY -deploy https://oss.sonatype.org -upload gethstore/builds
 
-    # This builder does the OSX Azure, iOS CocoaPods and iOS Azure uploads
-    - stage: build
-      if: type = push
-      os: osx
-      go: 1.15.x
-      env:
-        - azure-osx
-        - azure-ios
-        - cocoapods-ios
-        - GO111MODULE=on
-      git:
-        submodules: false # avoid cloning ethereum/tests
-      script:
-        - go run build/ci.go install
-        - go run build/ci.go archive -type tar -signer OSX_SIGNING_KEY -upload gethstore/builds
-
-        # Build the iOS framework and upload it to CocoaPods and Azure
-        - gem uninstall cocoapods -a -x
-        - gem install cocoapods
-
-        - mv ~/.cocoapods/repos/master ~/.cocoapods/repos/master.bak
-        - sed -i '.bak' 's/repo.join/!repo.join/g' $(dirname `gem which cocoapods`)/cocoapods/sources_manager.rb
-        - if [ "$TRAVIS_PULL_REQUEST" = "false" ]; then git clone --depth=1 https://github.com/CocoaPods/Specs.git ~/.cocoapods/repos/master && pod setup --verbose; fi
-
-        - xctool -version
-        - xcrun simctl list
-
-        # Workaround for https://github.com/golang/go/issues/23749
-        - export CGO_CFLAGS_ALLOW='-fmodules|-fblocks|-fobjc-arc'
-        - go run build/ci.go xcode -signer IOS_SIGNING_KEY -deploy trunk -upload gethstore/builds
-
-    # This builder does the Azure archive purges to avoid accumulating junk
+      # This builder does the Azure archive purges to avoid accumulating junk
     - stage: build
       if: type = cron
       os: linux
