@@ -129,7 +129,7 @@ func (dl *diskLayer) generate(stats *generatorStats) {
 			stats.wiping = nil
 			stats.start = time.Now()
 
-		// If generator was aboted during wipe, return
+		// If generator was aborted during wipe, return
 		case abort := <-dl.genAbort:
 			abort <- stats
 			return
@@ -238,6 +238,9 @@ func (dl *diskLayer) generate(stats *generatorStats) {
 					}
 				}
 			}
+			if err := storeIt.Err; err != nil {
+				log.Crit("Generator failed to iterate storage trie", "root", acc.Root, "err", err)
+			}
 		}
 		if time.Since(logged) > 8*time.Second {
 			stats.Log("Generating state snapshot", dl.root, accIt.Key)
@@ -245,6 +248,9 @@ func (dl *diskLayer) generate(stats *generatorStats) {
 		}
 		// Some account processed, unmark the marker
 		accMarker = nil
+	}
+	if err := accIt.Err; err != nil {
+		log.Crit("Generator failed to iterate account trie", "root", dl.root, "err", err)
 	}
 	// Snapshot fully generated, set the marker to nil
 	if batch.ValueSize() > 0 {
