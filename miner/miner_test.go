@@ -89,10 +89,10 @@ func TestMiner(t *testing.T) {
 	// Stop the downloader and wait for the update loop to run
 	mux.Post(downloader.DoneEvent{})
 	waitForMiningState(t, miner, true)
-	// Start the downloader and wait for the update loop to run
+	// Start the downloader, the mining state will not change because the update loop has exited
 	mux.Post(downloader.StartEvent{})
-	waitForMiningState(t, miner, false)
-	// Stop the downloader and wait for the update loop to run
+	waitForMiningState(t, miner, true)
+	// Stop the downloader, the mining state will not change
 	mux.Post(downloader.FailedEvent{})
 	waitForMiningState(t, miner, true)
 }
