@@ -126,14 +126,11 @@ func (miner *Miner) update() {
 
 	// Handle downloader events while subscription is open.
 	go func() {
-		for {
-			select {
-			case ev := <-downloaderEvents.Chan():
-				if ev == nil {
-					return
-				}
-				handleDownloaderEvents(ev)
+		for ev := range downloaderEvents.Chan() {
+			if ev == nil {
+				return
 			}
+			handleDownloaderEvents(ev)
 		}
 	}()
 
