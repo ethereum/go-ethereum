@@ -90,7 +90,7 @@ func TestMiner(t *testing.T) {
 	mux.Post(downloader.DoneEvent{})
 	waitForMiningState(t, miner, true)
 
-	// Subsequent downloader events should not cause the
+	// Subsequent downloader events after a successful DoneEvent should not cause the
 	// miner to start or stop. This prevents a security vulnerability
 	// that would allow entities to present fake high blocks that would
 	// stop mining operations by causing a downloader sync
@@ -100,6 +100,42 @@ func TestMiner(t *testing.T) {
 
 	mux.Post(downloader.FailedEvent{})
 	waitForMiningState(t, miner, true)
+}
+
+// TestMinerDownloaderFirstFails tests that mining is only
+// permitted to run indefinitely once the downloader sees a DoneEvent (success).
+// With this, a FailEvent should not prohibit mining stopping on a subsequent
+// downloader StartEvent.
+func TestMinerDownloaderFirstFails(t *testing.T) {
+	miner, mux := createMiner(t)
+	miner.Start(common.HexToAddress("0x12345"))
+	waitForMiningState(t, miner, true)
+	// Start the downloader
+	mux.Post(downloader.StartEvent{})
+	waitForMiningState(t, miner, false)
+
+	// Stop the downloader and wait for the update loop to run
+	mux.Post(downloader.FailedEvent{})
+	waitForMiningState(t, miner, true)
+
+	// Since the downloader hasn't yet emitted a successful DoneEvent,
+	// we expect the miner to stop on next StartEvent.
+	mux.Post(downloader.StartEvent{})
+	waitForMiningState(t, miner, false)
+
+	// Downloader finally succeeds.
+	mux.Post(downloader.DoneEvent{})
+	waitForMiningState(t, miner, true)
+
+	// Downloader starts again.
+	// Since it has achieved a DoneEvent once, we expect miner
+	// state to be unchanged.
+	mux.Post(downloader.StartEvent{})
+	waitForMiningState(t, miner, true)
+
+	mux.Post(downloader.FailedEvent{})
+	waitForMiningState(t, miner, true)
+
 }
 
 func TestStartWhileDownload(t *testing.T) {
