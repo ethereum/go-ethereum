@@ -167,7 +167,8 @@ func (bb BlockBodies) Code() int { return 22 }
 // TODO document
 type Conn struct {
 	*rlpx.Conn
-	ourKey *ecdsa.PrivateKey
+	ourKey             *ecdsa.PrivateKey
+	ethProtocolVersion uint
 }
 
 func (c *Conn) Read() Message {
@@ -250,8 +251,11 @@ func (c *Conn) handshake(t *utesting.T) Message {
 	pub0 := crypto.FromECDSAPub(&c.ourKey.PublicKey)[1:]
 	ourHandshake := &Hello{
 		Version: 5,
-		Caps:    []p2p.Cap{{Name: "eth", Version: 64}},
-		ID:      pub0,
+		Caps: []p2p.Cap{
+			{Name: "eth", Version: 64},
+			{Name: "eth", Version: 65},
+		},
+		ID: pub0,
 	}
 	if err := c.Write(ourHandshake); err != nil {
 		t.Fatalf("could not write to connection: %v", err)
@@ -259,9 +263,22 @@ func (c *Conn) handshake(t *utesting.T) Message {
 	// read protoHandshake from client
 	switch msg := c.Read().(type) {
 	case *Hello:
+		// set snappy if version is at least 5
 		if msg.Version >= 5 {
 			c.SetSnappy(true)
 		}
+		// set eth protocol version to highest advertised
+		// capability from peer
+		var highestEthVersion uint
+		for _, capability := range msg.Caps {
+			if capability.Version > highestEthVersion {
+				highestEthVersion = capability.Version
+			}
+		}
+		if highestEthVersion == 0 {
+			t.Fatalf("unexpected eth protocol version")
+		}
+		c.ethProtocolVersion = highestEthVersion
 		return msg
 	default:
 		t.Fatalf("bad handshake: %#v", msg)
@@ -299,10 +316,13 @@ loop:
 			t.Fatalf("bad status message: %#v", msg)
 		}
 	}
-
+	// make sure eth protocol version is set for negotiation
+	if c.ethProtocolVersion == 0 {
+		t.Fatalf("eth protocol version must be set in Conn")
+	}
 	// write status message to client
 	status := Status{
-		ProtocolVersion: 64,
+		ProtocolVersion: uint32(c.ethProtocolVersion),
 		NetworkID:       1,
 		TD:              chain.TD(chain.Len()),
 		Head:            chain.blocks[chain.Len()-1].Hash(),
