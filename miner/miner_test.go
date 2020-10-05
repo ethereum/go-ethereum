@@ -104,7 +104,7 @@ func TestMiner(t *testing.T) {
 
 // TestMinerDownloaderFirstFails tests that mining is only
 // permitted to run indefinitely once the downloader sees a DoneEvent (success).
-// With this, a FailEvent should not prohibit mining stopping on a subsequent
+// An initial FailedEvent should allow mining to stop on a subsequent
 // downloader StartEvent.
 func TestMinerDownloaderFirstFails(t *testing.T) {
 	miner, mux := createMiner(t)
