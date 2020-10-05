@@ -473,7 +473,7 @@ func (c *Codec) decodeWhoareyou(head *Header, headerData []byte) (Packet, error)
 }
 
 func (c *Codec) decodeHandshakeMessage(fromAddr string, head *Header, headerData, msgData []byte) (n *enode.Node, p Packet, err error) {
-	node, auth, session, err := c.decodeHandshake(fromAddr, head, headerData)
+	node, auth, session, err := c.decodeHandshake(fromAddr, head)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -490,7 +490,7 @@ func (c *Codec) decodeHandshakeMessage(fromAddr string, head *Header, headerData
 	return node, msg, nil
 }
 
-func (c *Codec) decodeHandshake(fromAddr string, head *Header, headerData []byte) (*enode.Node, *handshakeAuthData, *session, error) {
+func (c *Codec) decodeHandshake(fromAddr string, head *Header) (*enode.Node, *handshakeAuthData, *session, error) {
 	auth, err := c.decodeHandshakeAuthData(head)
 	if err != nil {
 		return nil, nil, nil, err
