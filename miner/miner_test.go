@@ -97,6 +97,27 @@ func TestMiner(t *testing.T) {
 	waitForMiningState(t, miner, true)
 }
 
+// TestMiner_2 shows that TestMiner assertions 'waitForMiningState' are
+// imprecise measurements. The last two assertions use 'false' where the original
+// test uses 'true'. The test passes.
+func TestMiner_2(t *testing.T) {
+	miner, mux := createMiner(t)
+	miner.Start(common.HexToAddress("0x12345"))
+	waitForMiningState(t, miner, true)
+	// Start the downloader
+	mux.Post(downloader.StartEvent{})
+	waitForMiningState(t, miner, false)
+	// Stop the downloader and wait for the update loop to run
+	mux.Post(downloader.DoneEvent{})
+	waitForMiningState(t, miner, true)
+	// Start the downloader, the mining state will not change because the update loop has exited
+	mux.Post(downloader.StartEvent{})
+	waitForMiningState(t, miner, false)
+	// Stop the downloader, the mining state will not change
+	mux.Post(downloader.FailedEvent{})
+	waitForMiningState(t, miner, false)
+}
+
 func TestStartWhileDownload(t *testing.T) {
 	miner, mux := createMiner(t)
 	waitForMiningState(t, miner, false)
