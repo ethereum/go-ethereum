@@ -27,8 +27,8 @@ import (
 func TestBinaryKeyCreation(t *testing.T) {
 	byteKey := []byte{0, 1, 2, 3}
 	binKey := newBinKey(byteKey)
-	exp := []byte{0, 0, 0, 0, 0, 0, 0, 0,0, 0, 0, 0, 0, 0, 0, 1,0, 0, 0, 0, 0, 0, 1, 0,0, 0, 0, 0, 0, 0, 1, 1,}
-	if !bytes.Equal(binKey[:],exp) {
+	exp := []byte{0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 1, 1}
+	if !bytes.Equal(binKey[:], exp) {
 		t.Fatalf("invalid key conversion, got %x != exp %x", binKey[:], exp)
 	}
 }
@@ -36,7 +36,7 @@ func TestBinaryKeyCreationEmpty(t *testing.T) {
 	byteKey := []byte(nil)
 	binKey := newBinKey(byteKey)
 	exp := []byte(nil)
-	if !bytes.Equal(binKey[:],exp) {
+	if !bytes.Equal(binKey[:], exp) {
 		t.Fatalf("invalid key conversion, got %x != exp %x", binKey[:], exp)
 	}
 }
@@ -86,15 +86,15 @@ func TestBinaryKeyCommonLengthFirst(t *testing.T) {
 func TestBinaryStoreSort(t *testing.T) {
 	store := store{
 		{
-			key: newBinKey([]byte{2}),
+			key:   newBinKey([]byte{2}),
 			value: []byte{10},
 		},
 		{
-			key: newBinKey([]byte{0}),
+			key:   newBinKey([]byte{0}),
 			value: []byte{10},
 		},
 		{
-			key: newBinKey([]byte{1}),
+			key:   newBinKey([]byte{1}),
 			value: []byte{10},
 		},
 	}
@@ -121,7 +121,19 @@ func TestBinaryTrieInsertOneLeafAndHash(t *testing.T) {
 	trie := NewBinaryTrie()
 	trie.Update([]byte{0}, []byte{10})
 	got := trie.Hash()
-	exp := common.FromHex("d8ead31beb79e4a13c00130997c2e0e55409bb16b1e97e02129cb8d966167171")
+	exp := common.FromHex("06b42a1e2618f532aca432615e040bb1fc63fd2c3a03e94bc3a7dd8b15eb46a0")
+
+	if !bytes.Equal(got, exp) {
+		t.Fatalf("invalid empty trie hash, got %x != exp %x", got, exp)
+	}
+}
+
+func TestBinaryTrieInsertTwoLeavesAndHash(t *testing.T) {
+	trie := NewBinaryTrie()
+	trie.Update([]byte{0}, []byte{10})
+	trie.Update([]byte{8}, []byte{10})
+	got := trie.Hash()
+	exp := common.FromHex("3590925ae30faa2a566bd4fd6605a205b1a1553b223f46c58eaa73646b173245")
 
 	if !bytes.Equal(got, exp) {
 		t.Fatalf("invalid empty trie hash, got %x != exp %x", got, exp)

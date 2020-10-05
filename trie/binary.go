@@ -60,6 +60,7 @@ type (
 		left  BinaryNode
 		right BinaryNode
 
+		key   []byte // TODO split into leaf and branch
 		value []byte
 
 		// Used to send (hash, preimage) pairs when hashing
@@ -233,24 +234,31 @@ func (t *branch) hash() []byte {
 		hasher.sha.Write(t.left.Hash())
 		hasher.sha.Write(t.right.Hash())
 		hasher.sha.Read(hash)
+		hasher.sha.Reset()
 	} else {
 		// This is a leaf node, so the hashing rule is
-		// leaf_hash = hash(0 || hash(leaf_value))
+		// leaf_hash = hash(hash(key) || hash(leaf_value))
+		var kh [32]byte
+		hasher.sha.Write(t.key)
+		hasher.sha.Read(kh[:])
+		hasher.sha.Reset()
+
 		hasher.sha.Write(t.value)
 		hasher.sha.Read(hash)
 		hasher.sha.Reset()
 
-		hasher.sha.Write(zero32)
+		hasher.sha.Write(kh[:])
 		hasher.sha.Write(hash)
 		hasher.sha.Read(hash)
+		hasher.sha.Reset()
 	}
 
 	if len(t.prefix) > 0 {
-		hasher.sha.Reset()
 		hasher.sha.Write([]byte{byte(len(t.prefix) - 1)})
 		hasher.sha.Write(zero32[:31])
 		hasher.sha.Write(hash)
 		hasher.sha.Read(hash)
+		hasher.sha.Reset()
 	}
 
 	return hash
@@ -347,6 +355,7 @@ func (bt *BinaryTrie) TryUpdate(key, value []byte) error {
 			value:  value,
 			left:   hashBinaryNode(emptyRoot[:]),
 			right:  hashBinaryNode(emptyRoot[:]),
+			key:    key,
 		}
 		bt.store = append(bt.store, storeSlot{key: bk, value: value})
 		sort.Sort(bt.store)
@@ -395,11 +404,14 @@ func (bt *BinaryTrie) TryUpdate(key, value []byte) error {
 
 			// A split is needed
 			midNode := &branch{
-				prefix: currentNode.prefix[split+1:],
+				prefix: currentNode.prefix[split+1: /*off?*/],
 				left:   currentNode.left,
 				right:  currentNode.right,
+				key:    currentNode.key,
+				value:  currentNode.value,
 			}
-			currentNode.prefix = currentNode.prefix[:split]
+			currentNode.prefix = currentNode.prefix[:split /*off?*/]
+			currentNode.value = nil
 			if bk[off+split] == 1 {
 				// New node goes on the right
 				currentNode.left = midNode
@@ -408,6 +420,7 @@ func (bt *BinaryTrie) TryUpdate(key, value []byte) error {
 					left:   hashBinaryNode(emptyRoot[:]),
 					right:  hashBinaryNode(emptyRoot[:]),
 					value:  value,
+					key:    key,
 				}
 			} else {
 				// New node goes on the left
@@ -417,6 +430,7 @@ func (bt *BinaryTrie) TryUpdate(key, value []byte) error {
 					left:   hashBinaryNode(emptyRoot[:]),
 					right:  hashBinaryNode(emptyRoot[:]),
 					value:  value,
+					key:    key,
 				}
 			}
 			break
