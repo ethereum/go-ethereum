@@ -129,10 +129,14 @@ type Codec struct {
 	sha256    hash.Hash
 	localnode *enode.LocalNode
 	privkey   *ecdsa.PrivateKey
-	buf       bytes.Buffer // used for encoding of packets
-	msgbuf    bytes.Buffer // used for encoding of message content
-	reader    bytes.Reader // used for decoding
 	sc        *SessionCache
+
+	// encoder buffers
+	buf     bytes.Buffer // whole packet
+	headbuf bytes.Buffer // packet header
+	msgbuf  bytes.Buffer // message RLP plaintext
+	// decoder buffer
+	reader bytes.Reader
 }
 
 // NewCodec creates a wire codec.
@@ -256,9 +260,9 @@ func (c *Codec) encodeRandom(toID enode.ID) (Header, []byte, error) {
 	if _, err := crand.Read(head.Nonce[:]); err != nil {
 		return head, nil, fmt.Errorf("can't get random data: %v", err)
 	}
-	c.buf.Reset()
-	binary.Write(&c.buf, binary.BigEndian, auth)
-	head.AuthData = bytesCopy(&c.buf)
+	c.headbuf.Reset()
+	binary.Write(&c.headbuf, binary.BigEndian, auth)
+	head.AuthData = c.headbuf.Bytes()
 
 	msgdata := make([]byte, randomPacketMsgSize)
 	crand.Read(msgdata)
@@ -272,18 +276,19 @@ func (c *Codec) encodeWhoareyou(toID enode.ID, packet *Whoareyou) (Header, error
 		panic("BUG: missing node in whoareyouV5 with non-zero seq")
 	}
 
+	// Create header.
+	head := c.makeHeader(toID, flagWhoareyou, 0)
+	head.AuthData = bytesCopy(&c.buf)
+	head.Nonce = packet.Nonce
+
 	// Encode auth data.
 	auth := &whoareyouAuthData{
 		IDNonce:   packet.IDNonce,
 		RecordSeq: packet.RecordSeq,
 	}
-	c.buf.Reset()
-	binary.Write(&c.buf, binary.BigEndian, auth)
-
-	// Create header.
-	head := c.makeHeader(toID, flagWhoareyou, 0)
-	head.AuthData = bytesCopy(&c.buf)
-	head.Nonce = packet.Nonce
+	c.headbuf.Reset()
+	binary.Write(&c.headbuf, binary.BigEndian, auth)
+	head.AuthData = c.headbuf.Bytes()
 	return head, nil
 }
 
@@ -314,12 +319,12 @@ func (c *Codec) encodeHandshakeHeader(toID enode.ID, addr string, challenge *Who
 		authsizeExtra = len(auth.pubkey) + len(auth.signature) + len(auth.record)
 		head          = c.makeHeader(toID, flagHandshake, authsizeExtra)
 	)
-	c.buf.Reset()
-	binary.Write(&c.buf, binary.BigEndian, &auth.h)
-	c.buf.Write(auth.signature)
-	c.buf.Write(auth.pubkey)
-	c.buf.Write(auth.record)
-	head.AuthData = bytesCopy(&c.buf)
+	c.headbuf.Reset()
+	binary.Write(&c.headbuf, binary.BigEndian, &auth.h)
+	c.headbuf.Write(auth.signature)
+	c.headbuf.Write(auth.pubkey)
+	c.headbuf.Write(auth.record)
+	head.AuthData = c.headbuf.Bytes()
 	head.Nonce = nonce
 	return head, session, err
 }
