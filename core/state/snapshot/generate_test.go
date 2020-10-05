@@ -19,11 +19,12 @@ package snapshot
 import (
 	"math/big"
 	"os"
-	"os/exec"
 	"testing"
+	"time"
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/ethdb/memorydb"
+	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/rlp"
 	"github.com/ethereum/go-ethereum/trie"
 )
@@ -31,21 +32,8 @@ import (
 // Tests that snapshot generation errors out correctly in case of a missing trie
 // node in the account trie.
 func TestGenerateCorruptAccountTrie(t *testing.T) {
-	// We expect this test to exit the process, so we need to wrap it into a
-	// runner that will execute it and correctly check the exit condition.
-	if os.Getenv("RUNTEST") == "" {
-		cmd := exec.Command(os.Args[0], "-test.run=TestGenerateCorruptAccountTrie")
-		cmd.Env = append(os.Environ(), "RUNTEST=1")
-		err := cmd.Run()
+	log.Root().SetHandler(log.LvlFilterHandler(log.LvlTrace, log.StreamHandler(os.Stderr, log.TerminalFormat(true))))
 
-		// Cast the error as *exec.ExitError and compare the result
-		if e, ok := err.(*exec.ExitError); !ok {
-			t.Fatalf("Error type mismatch: have %T want *exec.ExitError", err)
-		} else if e.Success() {
-			t.Fatalf("Expected test to kill the process")
-		}
-		return
-	}
 	// We can't use statedb to make a test trie (circular dependency), so make
 	// a fake one manually. We're going with a small account trie of 3 accounts,
 	// without any storage slots to keep the test smaller.
@@ -72,8 +60,77 @@ func TestGenerateCorruptAccountTrie(t *testing.T) {
 	diskdb.Delete(common.HexToHash("0x65145f923027566669a1ae5ccac66f945b55ff6eaeb17d2ea8e048b7d381f2d7").Bytes())
 
 	snap := generateSnapshot(diskdb, triedb, 16, common.HexToHash("0xa04693ea110a31037fb5ee814308a6f1d76bdab0b11676bdf4541d2de55ba978"), nil)
-	<-snap.genPending
+	select {
+	case <-snap.genPending:
+		// Snapshot generation succeeded
+		t.Errorf("Snapshot generated against corrupt account trie")
 
+	case <-time.After(250 * time.Millisecond):
+		// Not generated fast enough, hopefully blocked inside on missing trie node fail
+	}
+	// Signal abortion to the generator and wait for it to tear down
+	stop := make(chan *generatorStats)
+	snap.genAbort <- stop
+	<-stop
+}
+
+// Tests that snapshot generation errors out correctly in case of a missing root
+// trie node for a storage trie. It's similar to internal corruption but it is
+// handled differently inside the generator.
+func TestGenerateMissingStorageTrie(t *testing.T) {
+	log.Root().SetHandler(log.LvlFilterHandler(log.LvlTrace, log.StreamHandler(os.Stderr, log.TerminalFormat(true))))
+
+	// We can't use statedb to make a test trie (circular dependency), so make
+	// a fake one manually. We're going with a small account trie of 3 accounts,
+	// two of which also has the same 3-slot storage trie attached.
+	var (
+		diskdb = memorydb.New()
+		triedb = trie.NewDatabase(diskdb)
+	)
+	stTrie, _ := trie.NewSecure(common.Hash{}, triedb)
+	stTrie.Update([]byte("key-1"), []byte("val-1")) // 0x1314700b81afc49f94db3623ef1df38f3ed18b73a1b7ea2f6c095118cf6118a0
+	stTrie.Update([]byte("key-2"), []byte("val-2")) // 0x18a0f4d79cff4459642dd7604f303886ad9d77c30cf3d7d7cedb3a693ab6d371
+	stTrie.Update([]byte("key-3"), []byte("val-3")) // 0x51c71a47af0695957647fb68766d0becee77e953df17c29b3c2f25436f055c78
+	stTrie.Commit(nil)                              // Root: 0xddefcd9376dd029653ef384bd2f0a126bb755fe84fdcc9e7cf421ba454f2bc67
+
+	accTrie, _ := trie.NewSecure(common.Hash{}, triedb)
+	acc := &Account{Balance: big.NewInt(1), Root: stTrie.Hash().Bytes(), CodeHash: emptyCode.Bytes()}
+	val, _ := rlp.EncodeToBytes(acc)
+	accTrie.Update([]byte("acc-1"), val) // 0x9250573b9c18c664139f3b6a7a8081b7d8f8916a8fcc5d94feec6c29f5fd4e9e
+
+	acc = &Account{Balance: big.NewInt(2), Root: emptyRoot.Bytes(), CodeHash: emptyCode.Bytes()}
+	val, _ = rlp.EncodeToBytes(acc)
+	accTrie.Update([]byte("acc-2"), val) // 0x65145f923027566669a1ae5ccac66f945b55ff6eaeb17d2ea8e048b7d381f2d7
+
+	acc = &Account{Balance: big.NewInt(3), Root: stTrie.Hash().Bytes(), CodeHash: emptyCode.Bytes()}
+	val, _ = rlp.EncodeToBytes(acc)
+	accTrie.Update([]byte("acc-3"), val) // 0x50815097425d000edfc8b3a4a13e175fc2bdcfee8bdfbf2d1ff61041d3c235b2
+	accTrie.Commit(nil)                  // Root: 0xe3712f1a226f3782caca78ca770ccc19ee000552813a9f59d479f8611db9b1fd
+
+	// We can only corrupt the disk database, so flush the tries out
+	triedb.Reference(
+		common.HexToHash("0xddefcd9376dd029653ef384bd2f0a126bb755fe84fdcc9e7cf421ba454f2bc67"),
+		common.HexToHash("0x9250573b9c18c664139f3b6a7a8081b7d8f8916a8fcc5d94feec6c29f5fd4e9e"),
+	)
+	triedb.Reference(
+		common.HexToHash("0xddefcd9376dd029653ef384bd2f0a126bb755fe84fdcc9e7cf421ba454f2bc67"),
+		common.HexToHash("0x50815097425d000edfc8b3a4a13e175fc2bdcfee8bdfbf2d1ff61041d3c235b2"),
+	)
+	triedb.Commit(common.HexToHash("0xe3712f1a226f3782caca78ca770ccc19ee000552813a9f59d479f8611db9b1fd"), false, nil)
+
+	// Delete a storage trie root and ensure the generator chokes
+	diskdb.Delete(common.HexToHash("0xddefcd9376dd029653ef384bd2f0a126bb755fe84fdcc9e7cf421ba454f2bc67").Bytes())
+
+	snap := generateSnapshot(diskdb, triedb, 16, common.HexToHash("0xe3712f1a226f3782caca78ca770ccc19ee000552813a9f59d479f8611db9b1fd"), nil)
+	select {
+	case <-snap.genPending:
+		// Snapshot generation succeeded
+		t.Errorf("Snapshot generated against corrupt storage trie")
+
+	case <-time.After(250 * time.Millisecond):
+		// Not generated fast enough, hopefully blocked inside on missing trie node fail
+	}
+	// Signal abortion to the generator and wait for it to tear down
 	stop := make(chan *generatorStats)
 	snap.genAbort <- stop
 	<-stop
@@ -82,21 +139,8 @@ func TestGenerateCorruptAccountTrie(t *testing.T) {
 // Tests that snapshot generation errors out correctly in case of a missing trie
 // node in a storage trie.
 func TestGenerateCorruptStorageTrie(t *testing.T) {
-	// We expect this test to exit the process, so we need to wrap it into a
-	// runner that will execute it and correctly check the exit condition.
-	if os.Getenv("RUNTEST") == "" {
-		cmd := exec.Command(os.Args[0], "-test.run=TestGenerateCorruptStorageTrie")
-		cmd.Env = append(os.Environ(), "RUNTEST=1")
-		err := cmd.Run()
+	log.Root().SetHandler(log.LvlFilterHandler(log.LvlTrace, log.StreamHandler(os.Stderr, log.TerminalFormat(true))))
 
-		// Cast the error as *exec.ExitError and compare the result
-		if e, ok := err.(*exec.ExitError); !ok {
-			t.Fatalf("Error type mismatch: have %T want *exec.ExitError", err)
-		} else if e.Success() {
-			t.Fatalf("Expected test to kill the process")
-		}
-		return
-	}
 	// We can't use statedb to make a test trie (circular dependency), so make
 	// a fake one manually. We're going with a small account trie of 3 accounts,
 	// two of which also has the same 3-slot storage trie attached.
@@ -139,8 +183,15 @@ func TestGenerateCorruptStorageTrie(t *testing.T) {
 	diskdb.Delete(common.HexToHash("0x18a0f4d79cff4459642dd7604f303886ad9d77c30cf3d7d7cedb3a693ab6d371").Bytes())
 
 	snap := generateSnapshot(diskdb, triedb, 16, common.HexToHash("0xe3712f1a226f3782caca78ca770ccc19ee000552813a9f59d479f8611db9b1fd"), nil)
-	<-snap.genPending
+	select {
+	case <-snap.genPending:
+		// Snapshot generation succeeded
+		t.Errorf("Snapshot generated against corrupt storage trie")
 
+	case <-time.After(250 * time.Millisecond):
+		// Not generated fast enough, hopefully blocked inside on missing trie node fail
+	}
+	// Signal abortion to the generator and wait for it to tear down
 	stop := make(chan *generatorStats)
 	snap.genAbort <- stop
 	<-stop
