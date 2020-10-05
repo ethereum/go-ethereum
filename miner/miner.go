@@ -90,7 +90,7 @@ func (miner *Miner) update() {
 	}()
 
 	miningRequested := false
-	canStart := true
+	isDownloading := false
 
 	// handleDownloaderEvents handles the downloader events. Please be aware that this is a one-shot type of logic.
 	// As soon as `Done` has been broadcast subsequent downloader events are not handled, and the event subscription is closed.
@@ -102,20 +102,20 @@ func (miner *Miner) update() {
 		case downloader.StartEvent:
 			wasMining := miner.Mining()
 			miner.worker.stop()
-			canStart = false
+			isDownloading = true
 			if wasMining {
 				// Resume mining after sync was finished
 				miningRequested = true
 				log.Info("Mining aborted due to sync")
 			}
 		case downloader.FailedEvent:
-			canStart = true
+			isDownloading = false
 			if miningRequested {
 				miner.SetEtherbase(miner.coinbase)
 				miner.worker.start()
 			}
 		case downloader.DoneEvent:
-			canStart = true
+			isDownloading = false
 			if miningRequested {
 				miner.SetEtherbase(miner.coinbase)
 				miner.worker.start()
@@ -124,20 +124,37 @@ func (miner *Miner) update() {
 		}
 	}
 
-	// Handle downloader events while subscription is open.
-	go func() {
-		for ev := range downloaderEvents.Chan() {
+	// withDownloaderState loop handles channeled events while the miner cares about the downloader events.
+	// This loop will be broken once the downloader emits a DoneEvent, signaling a successful sync.
+	// The following unnamed loop should be equivalent to this loop, but without the downloader event handling.
+withDownloaderState:
+	for {
+		select {
+		case ev := <-downloaderEvents.Chan():
 			if ev == nil {
-				return
+				break withDownloaderState
 			}
 			handleDownloaderEvents(ev)
+		case addr := <-miner.startCh:
+			if !isDownloading {
+				miner.SetEtherbase(addr)
+				miner.worker.start()
+			}
+			miningRequested = true
+		case <-miner.stopCh:
+			miningRequested = false
+			miner.worker.stop()
+		case <-miner.exitCh:
+			miner.worker.close()
+			return
 		}
-	}()
+	}
 
+	// Same loop as above, minus downloader event handling.
 	for {
 		select {
 		case addr := <-miner.startCh:
-			if canStart {
+			if !isDownloading {
 				miner.SetEtherbase(addr)
 				miner.worker.start()
 			}
