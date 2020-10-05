@@ -86,7 +86,7 @@ type UDPv5 struct {
 	// state of dispatch
 	codec            codecV5
 	activeCallByNode map[enode.ID]*callV5
-	activeCallByAuth map[string]*callV5
+	activeCallByAuth map[v5wire.Nonce]*callV5
 	callQueue        map[enode.ID][]*callV5
 
 	// shutdown stuff
@@ -106,7 +106,7 @@ type callV5 struct {
 	err          chan error         // errors sent here
 
 	// Valid for active calls only:
-	authTag        v5wire.Nonce      // nonce of request packet
+	nonce          v5wire.Nonce      // nonce of request packet
 	handshakeCount int               // # times we attempted handshake for this call
 	challenge      *v5wire.Whoareyou // last sent handshake challenge
 	timeout        mclock.Timer
@@ -155,7 +155,7 @@ func newUDPv5(conn UDPConn, ln *enode.LocalNode, cfg Config) (*UDPv5, error) {
 		// state of dispatch
 		codec:            v5wire.NewCodec(ln, cfg.PrivateKey, cfg.Clock),
 		activeCallByNode: make(map[enode.ID]*callV5),
-		activeCallByAuth: make(map[string]*callV5),
+		activeCallByAuth: make(map[v5wire.Nonce]*callV5),
 		callQueue:        make(map[enode.ID][]*callV5),
 		// shutdown
 		closeCtx:       closeCtx,
@@ -497,7 +497,7 @@ func (t *UDPv5) dispatch() {
 				panic("BUG: callDone for inactive call")
 			}
 			c.timeout.Stop()
-			delete(t.activeCallByAuth, string(c.authTag[:]))
+			delete(t.activeCallByAuth, c.nonce)
 			delete(t.activeCallByNode, id)
 			t.sendNextCall(id)
 
@@ -517,7 +517,7 @@ func (t *UDPv5) dispatch() {
 			for id, c := range t.activeCallByNode {
 				c.err <- errClosed
 				delete(t.activeCallByNode, id)
-				delete(t.activeCallByAuth, string(c.authTag[:]))
+				delete(t.activeCallByAuth, c.nonce)
 			}
 			return
 		}
@@ -563,17 +563,16 @@ func (t *UDPv5) sendNextCall(id enode.ID) {
 // sendCall encodes and sends a request packet to the call's recipient node.
 // This performs a handshake if needed.
 func (t *UDPv5) sendCall(c *callV5) {
-	if len(c.authTag) > 0 {
-		// The call already has an authTag from a previous handshake attempt. Remove the
-		// entry for the authTag because we're about to generate a new authTag for this
-		// call.
-		delete(t.activeCallByAuth, string(c.authTag[:]))
+	// The call might have a nonce from a previous handshake attempt. Remove the entry for
+	// the old nonce because we're about to generate a new nonce for this call.
+	if c.nonce != (v5wire.Nonce{}) {
+		delete(t.activeCallByAuth, c.nonce)
 	}
 
 	addr := &net.UDPAddr{IP: c.node.IP(), Port: c.node.UDP()}
-	newTag, _ := t.send(c.node.ID(), addr, c.packet, c.challenge)
-	c.authTag = newTag
-	t.activeCallByAuth[string(c.authTag[:])] = c
+	newNonce, _ := t.send(c.node.ID(), addr, c.packet, c.challenge)
+	c.nonce = newNonce
+	t.activeCallByAuth[newNonce] = c
 	t.startResponseTimeout(c)
 }
 
@@ -587,14 +586,14 @@ func (t *UDPv5) sendResponse(toID enode.ID, toAddr *net.UDPAddr, packet v5wire.P
 // send sends a packet to the given node.
 func (t *UDPv5) send(toID enode.ID, toAddr *net.UDPAddr, packet v5wire.Packet, c *v5wire.Whoareyou) (v5wire.Nonce, error) {
 	addr := toAddr.String()
-	enc, authTag, err := t.codec.Encode(toID, addr, packet, c)
+	enc, nonce, err := t.codec.Encode(toID, addr, packet, c)
 	if err != nil {
 		t.log.Warn(">> "+packet.Name(), "id", toID, "addr", addr, "err", err)
-		return authTag, err
+		return nonce, err
 	}
 	_, err = t.conn.WriteToUDP(enc, toAddr)
 	t.log.Trace(">> "+packet.Name(), "id", toID, "addr", addr)
-	return authTag, err
+	return nonce, err
 }
 
 // readLoop runs in its own goroutine and reads packets from the network.
@@ -735,8 +734,8 @@ func (t *UDPv5) handleWhoareyou(p *v5wire.Whoareyou, fromID enode.ID, fromAddr *
 }
 
 // matchWithCall checks whether a handshake attempt matches the active call.
-func (t *UDPv5) matchWithCall(fromID enode.ID, authTag v5wire.Nonce) (*callV5, error) {
-	c := t.activeCallByAuth[string(authTag[:])]
+func (t *UDPv5) matchWithCall(fromID enode.ID, nonce v5wire.Nonce) (*callV5, error) {
+	c := t.activeCallByAuth[nonce]
 	if c == nil {
 		return nil, errChallengeNoCall
 	}
