@@ -111,8 +111,6 @@ func (miner *Miner) update() {
 					miner.SetEtherbase(miner.coinbase)
 					miner.worker.start()
 				}
-				// stop immediately and ignore all further pending events
-				return
 			}
 		case addr := <-miner.startCh:
 			if canStart {
