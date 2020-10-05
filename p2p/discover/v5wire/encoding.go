@@ -123,7 +123,8 @@ var (
 	sizeofStaticPacketData  = sizeofMaskingIV + sizeofStaticHeader
 )
 
-// Codec encodes and decodes discovery v5 packets.
+// Codec encodes and decodes Discovery v5 packets.
+// This type is not safe for concurrent use.
 type Codec struct {
 	sha256    hash.Hash
 	localnode *enode.LocalNode
