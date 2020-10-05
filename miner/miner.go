@@ -110,14 +110,14 @@ func (miner *Miner) update() {
 				}
 			case downloader.FailedEvent:
 				canStart = true
-				if miningRequested {
+				if miningRequested && !miner.Mining() {
 					miner.SetEtherbase(miner.coinbase)
 					miner.worker.start()
 				}
 			case downloader.DoneEvent:
 				canStart = true
 				downloaderCanStop = false
-				if miningRequested {
+				if miningRequested && !miner.Mining() {
 					miner.SetEtherbase(miner.coinbase)
 					miner.worker.start()
 				}
