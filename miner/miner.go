@@ -87,7 +87,8 @@ func (miner *Miner) update() {
 	events := miner.mux.Subscribe(downloader.StartEvent{}, downloader.DoneEvent{}, downloader.FailedEvent{})
 	defer events.Unsubscribe()
 
-	shouldStart := false
+	downloaderCanStop := true
+	miningRequested := false
 	canStart := true
 	for {
 		select {
@@ -97,17 +98,26 @@ func (miner *Miner) update() {
 			}
 			switch ev.Data.(type) {
 			case downloader.StartEvent:
-				wasMining := miner.Mining()
-				miner.worker.stop()
-				canStart = false
-				if wasMining {
-					// Resume mining after sync was finished
-					shouldStart = true
-					log.Info("Mining aborted due to sync")
+				if downloaderCanStop {
+					wasMining := miner.Mining()
+					miner.worker.stop()
+					canStart = false
+					if wasMining {
+						// Resume mining after sync was finished
+						miningRequested = true
+						log.Info("Mining aborted due to sync")
+					}
 				}
-			case downloader.DoneEvent, downloader.FailedEvent:
+			case downloader.FailedEvent:
 				canStart = true
-				if shouldStart {
+				if miningRequested {
+					miner.SetEtherbase(miner.coinbase)
+					miner.worker.start()
+				}
+			case downloader.DoneEvent:
+				canStart = true
+				downloaderCanStop = false
+				if miningRequested {
 					miner.SetEtherbase(miner.coinbase)
 					miner.worker.start()
 				}
@@ -117,9 +127,9 @@ func (miner *Miner) update() {
 				miner.SetEtherbase(addr)
 				miner.worker.start()
 			}
-			shouldStart = true
+			miningRequested = true
 		case <-miner.stopCh:
-			shouldStart = false
+			miningRequested = false
 			miner.worker.stop()
 		case <-miner.exitCh:
 			miner.worker.close()
