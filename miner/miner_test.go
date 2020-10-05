@@ -90,8 +90,13 @@ func TestMiner(t *testing.T) {
 	mux.Post(downloader.DoneEvent{})
 	waitForMiningState(t, miner, true)
 
+	// Subsequent downloader events should not cause the
+	// miner to start or stop. This prevents a security vulnerability
+	// that would allow entities to present fake high blocks that would
+	// stop mining operations by causing a downloader sync
+	// until it was discovered they were invalid, whereon mining would resume.
 	mux.Post(downloader.StartEvent{})
-	waitForMiningState(t, miner, false)
+	waitForMiningState(t, miner, true)
 
 	mux.Post(downloader.FailedEvent{})
 	waitForMiningState(t, miner, true)
