@@ -35,8 +35,6 @@ import (
 )
 
 // TODO concurrent WHOAREYOU tie-breaker
-// TODO deal with WHOAREYOU amplification factor (min packet size?)
-// TODO add counter to nonce
 // TODO rehandshake after X packets
 
 // Header represents a packet header.
