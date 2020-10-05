@@ -267,23 +267,31 @@ func (c *Conn) handshake(t *utesting.T) Message {
 		if msg.Version >= 5 {
 			c.SetSnappy(true)
 		}
-		// set eth protocol version to highest advertised
-		// capability from peer
-		var highestEthVersion uint
-		for _, capability := range msg.Caps {
-			if capability.Version > highestEthVersion {
-				highestEthVersion = capability.Version
-			}
-		}
-		if highestEthVersion == 0 {
+
+		c.negotiateEthProtocol(msg.Caps)
+		if c.ethProtocolVersion == 0 {
 			t.Fatalf("unexpected eth protocol version")
 		}
-		c.ethProtocolVersion = highestEthVersion
 		return msg
 	default:
 		t.Fatalf("bad handshake: %#v", msg)
 		return nil
 	}
+}
+
+// negotiateEthProtocol sets the Conn's eth protocol version
+// to highest advertised capability from peer
+func (c *Conn) negotiateEthProtocol(caps []p2p.Cap) {
+	var highestEthVersion uint
+	for _, capability := range caps {
+		if capability.Name != "eth" {
+			continue
+		}
+		if capability.Version > highestEthVersion && capability.Version <= 65 {
+			highestEthVersion = capability.Version
+		}
+	}
+	c.ethProtocolVersion = highestEthVersion
 }
 
 // statusExchange performs a `Status` message exchange with the given

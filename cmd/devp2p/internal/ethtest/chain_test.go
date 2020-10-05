@@ -21,9 +21,57 @@ import (
 	"strconv"
 	"testing"
 
+	"github.com/ethereum/go-ethereum/p2p"
 	"github.com/stretchr/testify/assert"
 )
 
+// TestEthProtocolNegotiation tests whether the test suite
+// can negotiate the highest eth protocol in a status message exchange
+func TestEthProtocolNegotiation(t *testing.T) {
+	var tests = []struct {
+		conn     *Conn
+		caps     []p2p.Cap
+		expected uint32
+	}{
+		{
+			conn: &Conn{},
+			caps: []p2p.Cap{
+				{Name: "eth", Version: 63},
+				{Name: "eth", Version: 64},
+				{Name: "eth", Version: 65},
+			},
+			expected: uint32(65),
+		},
+		{
+			conn: &Conn{},
+			caps: []p2p.Cap{
+				{Name: "eth", Version: 0},
+				{Name: "eth", Version: 89},
+				{Name: "eth", Version: 65},
+			},
+			expected: uint32(65),
+		},
+		{
+			conn: &Conn{},
+			caps: []p2p.Cap{
+				{Name: "eth", Version: 63},
+				{Name: "eth", Version: 64},
+				{Name: "wrongProto", Version: 65},
+			},
+			expected: uint32(64),
+		},
+	}
+
+	for i, tt := range tests {
+		t.Run(strconv.Itoa(i), func(t *testing.T) {
+			tt.conn.negotiateEthProtocol(tt.caps)
+			assert.Equal(t, tt.expected, uint32(tt.conn.ethProtocolVersion))
+		})
+	}
+}
+
+// TestChain_GetHeaders tests whether the test suite can correctly
+// respond to a GetBlockHeaders request from a node.
 func TestChain_GetHeaders(t *testing.T) {
 	chainFile, err := filepath.Abs("./testdata/chain.rlp.gz")
 	if err != nil {
