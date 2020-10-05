@@ -106,6 +106,7 @@ func (miner *Miner) update() {
 					log.Info("Mining aborted due to sync")
 				}
 			case downloader.DoneEvent, downloader.FailedEvent:
+				canStart = true
 				if shouldStart {
 					miner.SetEtherbase(miner.coinbase)
 					miner.worker.start()
