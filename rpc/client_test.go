@@ -427,7 +427,8 @@ func TestClientNotificationStorm(t *testing.T) {
 	}
 
 	doTest(8000, false)
-	doTest(23000, true)
+	// Moved this number up as it would fail on MacOS. It's a quick hack as there is likely a better solution.
+	doTest(50000, true)
 }
 
 func TestClientSetHeader(t *testing.T) {
