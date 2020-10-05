@@ -132,9 +132,11 @@ type Codec struct {
 	sc        *SessionCache
 
 	// encoder buffers
-	buf     bytes.Buffer // whole packet
-	headbuf bytes.Buffer // packet header
-	msgbuf  bytes.Buffer // message RLP plaintext
+	buf      bytes.Buffer // whole packet
+	headbuf  bytes.Buffer // packet header
+	msgbuf   bytes.Buffer // message RLP plaintext
+	msgctbuf []byte       // message data ciphertext
+
 	// decoder buffer
 	reader bytes.Reader
 }
@@ -256,6 +258,8 @@ func (c *Codec) makeHeader(toID enode.ID, flag byte, authsizeExtra int) Header {
 // encodeRandom encodes a packet with random content.
 func (c *Codec) encodeRandom(toID enode.ID) (Header, []byte, error) {
 	head := c.makeHeader(toID, flagMessage, 0)
+
+	// Encode auth data.
 	auth := messageAuthData{SrcID: c.localnode.ID()}
 	if _, err := crand.Read(head.Nonce[:]); err != nil {
 		return head, nil, fmt.Errorf("can't get random data: %v", err)
@@ -264,9 +268,10 @@ func (c *Codec) encodeRandom(toID enode.ID) (Header, []byte, error) {
 	binary.Write(&c.headbuf, binary.BigEndian, auth)
 	head.AuthData = c.headbuf.Bytes()
 
-	msgdata := make([]byte, randomPacketMsgSize)
-	crand.Read(msgdata)
-	return head, msgdata, nil
+	// Fill message ciphertext buffer with random bytes.
+	c.msgctbuf = append(c.msgctbuf[:0], make([]byte, randomPacketMsgSize)...)
+	crand.Read(c.msgctbuf)
+	return head, c.msgctbuf, nil
 }
 
 // encodeWhoareyou encodes a WHOAREYOU packet.
@@ -389,13 +394,20 @@ func (c *Codec) encodeMessageHeader(toID enode.ID, s *session) (Header, error) {
 }
 
 func (c *Codec) encryptMessage(s *session, p Packet, head *Header, headerData []byte) ([]byte, error) {
+	// Encode message plaintext.
 	c.msgbuf.Reset()
 	c.msgbuf.WriteByte(p.Kind())
 	if err := rlp.Encode(&c.msgbuf, p); err != nil {
 		return nil, err
 	}
 	messagePT := c.msgbuf.Bytes()
-	return encryptGCM(nil, s.writeKey, head.Nonce[:], messagePT, headerData)
+
+	// Encrypt into message ciphertext buffer.
+	messageCT, err := encryptGCM(c.msgctbuf[:0], s.writeKey, head.Nonce[:], messagePT, headerData)
+	if err == nil {
+		c.msgctbuf = messageCT
+	}
+	return messageCT, err
 }
 
 // Decode decodes a discovery packet.
