@@ -103,8 +103,8 @@ var DefaultHTTPTimeouts = HTTPTimeouts{
 }
 
 // DialHTTPWithClient creates a new RPC client that connects to an RPC server over HTTP
-// using the provided HTTP Client.
-func DialHTTPWithClient(endpoint string, client *http.Client) (*Client, error) {
+// using the provided HTTP Client and Header.
+func DialHTTPWithClientHeaders(endpoint string, client *http.Client, headers http.Header) (*Client, error) {
 	// Sanity check URL so we don't end up with a client that will fail every request.
 	_, err := url.Parse(endpoint)
 	if err != nil {
@@ -112,7 +112,11 @@ func DialHTTPWithClient(endpoint string, client *http.Client) (*Client, error) {
 	}
 
 	initctx := context.Background()
-	headers := make(http.Header, 2)
+	if headers == nil {
+		headers = make(http.Header, 2)
+	} else {
+		headers = headers.Clone()
+	}
 	headers.Set("accept", contentType)
 	headers.Set("content-type", contentType)
 	return newClient(initctx, func(context.Context) (ServerCodec, error) {
@@ -124,6 +128,12 @@ func DialHTTPWithClient(endpoint string, client *http.Client) (*Client, error) {
 		}
 		return hc, nil
 	})
+}
+
+// DialHTTPWithClient creates a new RPC client that connects to an RPC server over HTTP
+// using the provided HTTP Client.
+func DialHTTPWithClient(endpoint string, client *http.Client) (*Client, error) {
+	return DialHTTPWithClientHeaders(endpoint, client, nil)
 }
 
 // DialHTTP creates a new RPC client that connects to an RPC server over HTTP.
