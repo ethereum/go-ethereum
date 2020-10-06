@@ -30,7 +30,6 @@ import (
 	"github.com/ethereum/go-ethereum/consensus/ethash"
 	"github.com/ethereum/go-ethereum/core/rawdb"
 	"github.com/ethereum/go-ethereum/core/types"
-	"github.com/ethereum/go-ethereum/core/vm"
 	"github.com/ethereum/go-ethereum/params"
 )
 
@@ -1576,7 +1575,7 @@ func testRepair(t *testing.T, tt *rewindTest) {
 		genesis = new(Genesis).MustCommit(db)
 		engine  = ethash.NewFullFaker()
 	)
-	chain, err := NewBlockChain(db, nil, params.AllEthashProtocolChanges, engine, new(vm.Config), nil, nil)
+	chain, err := NewBlockChain(db, nil, params.AllEthashProtocolChanges, engine, nil, nil, nil)
 	if err != nil {
 		t.Fatalf("Failed to create chain: %v", err)
 	}
@@ -1624,7 +1623,7 @@ func testRepair(t *testing.T, tt *rewindTest) {
 	}
 	defer db.Close()
 
-	chain, err = NewBlockChain(db, nil, params.AllEthashProtocolChanges, engine, new(vm.Config), nil, nil)
+	chain, err = NewBlockChain(db, nil, params.AllEthashProtocolChanges, engine, nil, nil, nil)
 	if err != nil {
 		t.Fatalf("Failed to recreate chain: %v", err)
 	}

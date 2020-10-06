@@ -400,7 +400,7 @@ func (api *RetestethAPI) SetChainParams(ctx context.Context, chainParams ChainPa
 	}
 	engine := &NoRewardEngine{inner: inner, rewardsOn: chainParams.SealEngine != "NoReward"}
 
-	blockchain, err := core.NewBlockChain(ethDb, nil, chainConfig, engine, new(vm.Config), nil, nil)
+	blockchain, err := core.NewBlockChain(ethDb, nil, chainConfig, engine, nil, nil, nil)
 	if err != nil {
 		return false, err
 	}
