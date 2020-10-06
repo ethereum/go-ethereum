@@ -100,7 +100,7 @@ func (c *Chain) GetHeaders(req GetBlockHeaders) (BlockHeaders, error) {
 		}
 	}
 	if headers[0] == nil {
-		return nil, fmt.Errorf("no headers found for origin") // TODO fix err
+		return nil, fmt.Errorf("no headers found for given origin number %v, hash %v", req.Origin.Number, req.Origin.Hash)
 	}
 
 	if req.Reverse {

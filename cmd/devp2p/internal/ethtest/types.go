@@ -164,7 +164,7 @@ type BlockBodies []*types.Body
 
 func (bb BlockBodies) Code() int { return 22 }
 
-// TODO document
+// Conn represents an individual connection with a peer
 type Conn struct {
 	*rlpx.Conn
 	ourKey             *ecdsa.PrivateKey
