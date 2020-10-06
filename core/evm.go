@@ -58,6 +58,19 @@ func NewEVMContext(msg Message, header *types.Header, chain ChainContext, author
 	}
 }
 
+func UpdateEVMContext(ctx *vm.Context, msg Message, header *types.Header, chain ChainContext, author *common.Address) {
+	// If we don't have an explicit author (i.e. not mining), extract from the header
+	var beneficiary common.Address
+	if author == nil {
+		beneficiary, _ = chain.Engine().Author(header) // Ignore error, we're past header validation
+	} else {
+		beneficiary = *author
+	}
+	ctx.Coinbase = beneficiary
+	ctx.Origin = msg.From()
+	ctx.GasPrice = msg.GasPrice()
+}
+
 // GetHashFn returns a GetHashFunc which retrieves header hashes by number
 func GetHashFn(ref *types.Header, chain ChainContext) func(n uint64) common.Hash {
 	// Cache will initially contain [refHash.parent],
