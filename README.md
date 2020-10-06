@@ -15,12 +15,10 @@ If such merges follow a new upstream release, it may be sensible to cut a new re
 [![API Reference](
 https://camo.githubusercontent.com/915b7be44ada53c290eb157634330494ebe3e30a/68747470733a2f2f676f646f632e6f72672f6769746875622e636f6d2f676f6c616e672f6764646f3f7374617475732e737667
 )](https://pkg.go.dev/github.com/ethereum/go-ethereum?tab=doc)
-[![Go Report Card](https://goreportcard.com/badge/github.com/ethereum/go-ethereum)](https://goreportcard.com/report/github.com/ethereum/go-ethereum)
-[![Travis](https://travis-ci.org/ethereum/go-ethereum.svg?branch=master)](https://travis-ci.org/ethereum/go-ethereum)
-[![Discord](https://img.shields.io/badge/discord-join%20chat-blue.svg)](https://discord.gg/nthXNEv)
+[![Go Report Card](https://goreportcard.com/badge/github.com/makerdao/go-ethereum)](https://goreportcard.com/report/github.com/makerdao/go-ethereum)
+[![Travis](https://travis-ci.org/makerdao/go-ethereum.svg?branch=master)](https://travis-ci.org/makerdao/go-ethereum)
 
-Automated builds are available for stable releases and the unstable master branch. Binary
-archives are published at https://geth.ethereum.org/downloads/.
+Automated builds are available for stable releases. Releases are published at [Github Releases](https://github.com/makerdao/go-ethereum/releases).
 
 ## Building the source
 
