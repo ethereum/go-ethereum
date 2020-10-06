@@ -112,6 +112,9 @@ func (b binkey) commonLength(other binkey) int {
 	}
 	return min(len(b), len(other))
 }
+func (b binkey) samePrefix(other binkey, off int) bool {
+	return bytes.Equal(b[off:off+len(other)], other[:])
+}
 
 func (s store) Len() int { return len(s) }
 func (s store) Less(i, j int) bool {
@@ -166,15 +169,6 @@ func getBit(key []byte, off int) bool {
 	return byte(key[uint(off)/8])&mask != byte(0)
 }
 
-// getPrefixBit returns the boolean value of bit number `bitnum`
-// in the prefix of the current node.
-//func (t *branch) getPrefixBit(bitnum int) bool {
-//if bitnum > t.getPrefixLen() {
-//panic(fmt.Sprintf("Trying to get bit #%d in a %d bit-long bitfield", bitnum, t.getPrefixLen()))
-//}
-//return getBit(t.prefix, t.startBit+bitnum)
-//}
-
 //func (t *branch) tryGet(key []byte, depth int) ([]byte, error) {
 // Compare the key and the prefix. If they represent the
 // same bitfield, recurse. Otherwise, raise an error as
@@ -213,14 +207,7 @@ func getBit(key []byte, off int) bool {
 
 // Hash calculates the hash of an expanded (i.e. not already
 // hashed) node.
-func (t *branch) Hash() []byte {
-	return t.hash()
-}
-
-// hash is a a helper function that is shared between Hash and
-// Commit. If t.CommitCh is not nil, then its behavior will be
-// that of Commit, and that of Hash otherwise.
-func (t *branch) hash() []byte {
+func (br *branch) Hash() []byte {
 	hasher := newHasher(false)
 	defer returnHasherToPool(hasher)
 	hasher.sha.Reset()
@@ -228,22 +215,22 @@ func (t *branch) hash() []byte {
 	// Check that either value is set or left+right are
 
 	hash := make([]byte, 32)
-	if t.value == nil {
+	if br.value == nil {
 		// This is a branch node, so the rule is
 		// branch_hash = hash(left_root_hash || right_root_hash)
-		hasher.sha.Write(t.left.Hash())
-		hasher.sha.Write(t.right.Hash())
+		hasher.sha.Write(br.left.Hash())
+		hasher.sha.Write(br.right.Hash())
 		hasher.sha.Read(hash)
 		hasher.sha.Reset()
 	} else {
 		// This is a leaf node, so the hashing rule is
 		// leaf_hash = hash(hash(key) || hash(leaf_value))
 		var kh [32]byte
-		hasher.sha.Write(t.key)
+		hasher.sha.Write(br.key)
 		hasher.sha.Read(kh[:])
 		hasher.sha.Reset()
 
-		hasher.sha.Write(t.value)
+		hasher.sha.Write(br.value)
 		hasher.sha.Read(hash)
 		hasher.sha.Reset()
 
@@ -253,8 +240,8 @@ func (t *branch) hash() []byte {
 		hasher.sha.Reset()
 	}
 
-	if len(t.prefix) > 0 {
-		hasher.sha.Write([]byte{byte(len(t.prefix) - 1)})
+	if len(br.prefix) > 0 {
+		hasher.sha.Write([]byte{byte(len(br.prefix) - 1)})
 		hasher.sha.Write(zero32[:31])
 		hasher.sha.Write(hash)
 		hasher.sha.Read(hash)
@@ -367,7 +354,7 @@ func (bt *BinaryTrie) TryUpdate(key, value []byte) error {
 		panic("the root node should either be empty or a branch")
 	}
 	for {
-		if bytes.Equal(bk[off:], currentNode.prefix[:]) {
+		if bk.samePrefix(currentNode.prefix, off) {
 			// The key matches the full node prefix, iterate
 			// at  the child's level.
 			var childNode *branch
@@ -394,23 +381,16 @@ func (bt *BinaryTrie) TryUpdate(key, value []byte) error {
 			split := bk[off:].commonLength(currentNode.prefix)
 			// If the split is on either the first or last bit,
 			// there is no need to create an intermediate node.
-			if split == 0 {
-				panic("not supported yet")
-			}
-			if split+1 == len(currentNode.prefix) {
-				panic("not supported yet")
-
-			}
 
 			// A split is needed
 			midNode := &branch{
-				prefix: currentNode.prefix[split+1: /*off?*/],
+				prefix: currentNode.prefix[split+1:],
 				left:   currentNode.left,
 				right:  currentNode.right,
 				key:    currentNode.key,
 				value:  currentNode.value,
 			}
-			currentNode.prefix = currentNode.prefix[:split /*off?*/]
+			currentNode.prefix = currentNode.prefix[:split]
 			currentNode.value = nil
 			if bk[off+split] == 1 {
 				// New node goes on the right
@@ -524,7 +504,7 @@ func (t *branch) Commit() error {
 	if t.CommitCh == nil {
 		return fmt.Errorf("commit channel missing")
 	}
-	t.hash()
+	t.Hash()
 	return nil
 }
 
@@ -539,10 +519,6 @@ func (h hashBinaryNode) Hash() []byte {
 	return h
 }
 
-func (h hashBinaryNode) insert(depth int, key, value []byte, hashLeft bool) error {
-	return errInsertIntoHash
-}
-
 func (h hashBinaryNode) tryGet(key []byte, depth int) ([]byte, error) {
 	if depth >= 8*len(key) {
 		return []byte(h), nil
@@ -555,10 +531,6 @@ func (e empty) Hash() []byte {
 }
 
 func (e empty) Commit() error {
-	return errors.New("not yet implemented")
-}
-
-func (e empty) insert(depth int, key, value []byte, hashLeft bool) error {
 	return errors.New("not yet implemented")
 }
 

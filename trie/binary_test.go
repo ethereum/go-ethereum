@@ -139,3 +139,39 @@ func TestBinaryTrieInsertTwoLeavesAndHash(t *testing.T) {
 		t.Fatalf("invalid empty trie hash, got %x != exp %x", got, exp)
 	}
 }
+func TestBinaryTrieInsertTwoLeavesAtFirstBitAndHash(t *testing.T) {
+	trie := NewBinaryTrie()
+	trie.Update([]byte{0}, []byte{10})
+	trie.Update([]byte{128}, []byte{10})
+	got := trie.Hash()
+	exp := common.FromHex("8724dc87faa3ecd18a24f612632f7b27e02a6060d8603c378e39c04ad8b7259a")
+
+	if !bytes.Equal(got, exp) {
+		t.Fatalf("invalid empty trie hash, got %x != exp %x", got, exp)
+	}
+}
+
+func TestBinaryTrieInsertTwoLeavesAtEndBitAndHash(t *testing.T) {
+	trie := NewBinaryTrie()
+	trie.Update([]byte{0}, []byte{10})
+	trie.Update([]byte{1}, []byte{10})
+	got := trie.Hash()
+	exp := common.FromHex("92f4d45186b0f0d8f737ce9c4a202b35ef897c660c16bd7dc235bffd1178d0cc")
+
+	if !bytes.Equal(got, exp) {
+		t.Fatalf("invalid empty trie hash, got %x != exp %x", got, exp)
+	}
+}
+
+func TestBinaryTrieInsertWithOffsetAndHash(t *testing.T) {
+	trie := NewBinaryTrie()
+	trie.Update([]byte{0}, []byte{10})
+	trie.Update([]byte{8}, []byte{18})
+	trie.Update([]byte{11}, []byte{20})
+	got := trie.Hash()
+	exp := common.FromHex("73df5c5434b663c53847bdf7ac5f67b701184152b587bfdd4d7669b6198495fe")
+
+	if !bytes.Equal(got, exp) {
+		t.Fatalf("invalid empty trie hash, got %x != exp %x", got, exp)
+	}
+}
