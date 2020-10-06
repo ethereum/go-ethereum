@@ -31,8 +31,8 @@ type Suite struct {
 	Listen1, Listen2 string // listening addresses
 }
 
-func (s *Suite) listen() *testenv {
-	return newTestEnv(s.Dest, s.Listen1, s.Listen2)
+func (s *Suite) listen() *conn {
+	return newConn(s.Dest, s.Listen1, s.Listen2)
 }
 
 func (s *Suite) AllTests() []utesting.Test {
@@ -45,21 +45,21 @@ func (s *Suite) AllTests() []utesting.Test {
 
 // This test sends PING and expects a PONG response.
 func (s *Suite) TestPing(t *utesting.T) {
-	te := s.listen()
-	defer te.close()
+	conn := s.listen()
+	defer conn.close()
 
-	id := te.nextReqID()
-	resp := te.reqresp(te.l1, &v5wire.Ping{ReqID: id})
+	id := conn.nextReqID()
+	resp := conn.reqresp(conn.l1, &v5wire.Ping{ReqID: id})
 	switch resp := resp.(type) {
 	case *v5wire.Pong:
 		if !bytes.Equal(resp.ReqID, id) {
 			t.Fatalf("wrong request ID %x in PONG, want %x", resp.ReqID, id)
 		}
-		if !resp.ToIP.Equal(laddr(te.l1).IP) {
-			t.Fatalf("wrong destination IP %v in PONG, want %v", resp.ToIP, laddr(te.l1).IP)
+		if !resp.ToIP.Equal(laddr(conn.l1).IP) {
+			t.Fatalf("wrong destination IP %v in PONG, want %v", resp.ToIP, laddr(conn.l1).IP)
 		}
-		if int(resp.ToPort) != laddr(te.l1).Port {
-			t.Fatalf("wrong destination port %v in PONG, want %v", resp.ToPort, laddr(te.l1).Port)
+		if int(resp.ToPort) != laddr(conn.l1).Port {
+			t.Fatalf("wrong destination port %v in PONG, want %v", resp.ToPort, laddr(conn.l1).Port)
 		}
 	default:
 		t.Fatal("expected PONG, got", resp.Name())
@@ -68,12 +68,12 @@ func (s *Suite) TestPing(t *utesting.T) {
 
 // This test sends TALKREQ and expects an empty TALKRESP response.
 func (s *Suite) TestTalkRequest(t *utesting.T) {
-	te := s.listen()
-	defer te.close()
+	conn := s.listen()
+	defer conn.close()
 
 	// Non-empty request ID.
-	id := te.nextReqID()
-	resp := te.reqresp(te.l1, &v5wire.TalkRequest{ReqID: id, Protocol: "test-protocol"})
+	id := conn.nextReqID()
+	resp := conn.reqresp(conn.l1, &v5wire.TalkRequest{ReqID: id, Protocol: "test-protocol"})
 	switch resp := resp.(type) {
 	case *v5wire.TalkResponse:
 		if !bytes.Equal(resp.ReqID, id) {
@@ -87,7 +87,7 @@ func (s *Suite) TestTalkRequest(t *utesting.T) {
 	}
 
 	// Empty request ID.
-	resp = te.reqresp(te.l1, &v5wire.TalkRequest{Protocol: "test-protocol"})
+	resp = conn.reqresp(conn.l1, &v5wire.TalkRequest{Protocol: "test-protocol"})
 	switch resp := resp.(type) {
 	case *v5wire.TalkResponse:
 		if len(resp.ReqID) > 0 {
@@ -103,11 +103,11 @@ func (s *Suite) TestTalkRequest(t *utesting.T) {
 
 // This test checks that the remote node returns itself for FINDNODE with distance zero.
 func (s *Suite) TestFindnodeZeroDistance(t *utesting.T) {
-	te := s.listen()
-	defer te.close()
+	conn := s.listen()
+	defer conn.close()
 
-	id := te.nextReqID()
-	resp := te.reqresp(te.l1, &v5wire.Findnode{ReqID: id, Distances: []uint{0}})
+	id := conn.nextReqID()
+	resp := conn.reqresp(conn.l1, &v5wire.Findnode{ReqID: id, Distances: []uint{0}})
 	switch resp := resp.(type) {
 	case *v5wire.Nodes:
 		if !bytes.Equal(resp.ReqID, id) {
@@ -120,8 +120,8 @@ func (s *Suite) TestFindnodeZeroDistance(t *utesting.T) {
 		if err != nil {
 			t.Errorf("invalid node in NODES response: %v", err)
 		}
-		if nodes[0].ID() != te.remote.ID() {
-			t.Errorf("ID of response node is %v, want %v", nodes[0].ID(), te.remote.ID())
+		if nodes[0].ID() != conn.remote.ID() {
+			t.Errorf("ID of response node is %v, want %v", nodes[0].ID(), conn.remote.ID())
 		}
 	default:
 		t.Fatal("expected NODES, got", resp.Name())

@@ -29,9 +29,23 @@ import (
 	"github.com/ethereum/go-ethereum/p2p/enode"
 )
 
+// errorPacket represents an error during packet reading.
+// This exists to facilitate type-switching on the result of conn.read.
+type errorPacket struct {
+	err error
+}
+
+func (p *errorPacket) Kind() byte      { return 99 }
+func (p *errorPacket) Name() string    { return fmt.Sprintf("error: %v", p.err) }
+func (p *errorPacket) SetReqID([]byte) {}
+func (p *errorPacket) Error() string   { return p.err.Error() }
+func (p *errorPacket) Unwrap() error   { return p.err }
+
+// This is the response timeout used in tests.
 const waitTime = 300 * time.Millisecond
 
-type testenv struct {
+// conn is a connection to the node under test.
+type conn struct {
 	l1, l2     net.PacketConn
 	localNode  *enode.LocalNode
 	localKey   *ecdsa.PrivateKey
@@ -44,17 +58,8 @@ type testenv struct {
 	idCounter     uint32
 }
 
-type errorPacket struct {
-	err error
-}
-
-func (p *errorPacket) Kind() byte      { return 99 }
-func (p *errorPacket) Name() string    { return fmt.Sprintf("error: %v", p.err) }
-func (p *errorPacket) SetReqID([]byte) {}
-func (p *errorPacket) Error() string   { return p.err.Error() }
-func (p *errorPacket) Unwrap() error   { return p.err }
-
-func newTestEnv(dest *enode.Node, listen1, listen2 string) *testenv {
+// newConn sets up a connection to the given node.
+func newConn(dest *enode.Node, listen1, listen2 string) *conn {
 	l1, err := net.ListenPacket("udp", fmt.Sprintf("%v:0", listen1))
 	if err != nil {
 		panic(err)
@@ -75,7 +80,7 @@ func newTestEnv(dest *enode.Node, listen1, listen2 string) *testenv {
 	ln.SetStaticIP(laddr(l1).IP)
 	ln.SetFallbackUDP(laddr(l1).Port)
 
-	return &testenv{
+	return &conn{
 		l1:         l1,
 		l2:         l2,
 		localKey:   key,
@@ -86,42 +91,48 @@ func newTestEnv(dest *enode.Node, listen1, listen2 string) *testenv {
 	}
 }
 
-func (te *testenv) close() {
-	te.l1.Close()
-	te.l2.Close()
-	te.localNode.Database().Close()
+// close shuts down the listener.
+func (tc *conn) close() {
+	tc.l1.Close()
+	tc.l2.Close()
+	tc.localNode.Database().Close()
 }
 
-func (te *testenv) nextReqID() []byte {
+// nextReqID creates a request id.
+func (tc *conn) nextReqID() []byte {
 	id := make([]byte, 4)
-	te.idCounter++
-	binary.BigEndian.PutUint32(id, te.idCounter)
+	tc.idCounter++
+	binary.BigEndian.PutUint32(id, tc.idCounter)
 	return id
 }
 
-func (te *testenv) reqresp(c net.PacketConn, req v5wire.Packet) v5wire.Packet {
-	te.write(c, req, nil)
-	resp := te.read(c)
+// reqresp performs a request/response interaction on the given connection.
+// The request is retried if a handshake is requested.
+func (tc *conn) reqresp(c net.PacketConn, req v5wire.Packet) v5wire.Packet {
+	tc.write(c, req, nil)
+	resp := tc.read(c)
 	if resp.Kind() == v5wire.WhoareyouPacket {
 		challenge := resp.(*v5wire.Whoareyou)
-		challenge.Node = te.remote
-		te.write(c, req, challenge)
-		return te.read(c)
+		challenge.Node = tc.remote
+		tc.write(c, req, challenge)
+		return tc.read(c)
 	}
 	return resp
 }
 
-func (te *testenv) write(c net.PacketConn, p v5wire.Packet, challenge *v5wire.Whoareyou) {
-	packet, _, err := te.codec.Encode(te.remote.ID(), te.remoteAddr.String(), p, challenge)
+// write sends a packet on the given connection.
+func (tc *conn) write(c net.PacketConn, p v5wire.Packet, challenge *v5wire.Whoareyou) {
+	packet, _, err := tc.codec.Encode(tc.remote.ID(), tc.remoteAddr.String(), p, challenge)
 	if err != nil {
 		panic(fmt.Errorf("can't encode %v packet: %v", p.Name(), err))
 	}
-	if _, err := c.WriteTo(packet, te.remoteAddr); err != nil {
+	if _, err := c.WriteTo(packet, tc.remoteAddr); err != nil {
 		panic(fmt.Errorf("can't send %v: %v", p.Name(), err))
 	}
 }
 
-func (te *testenv) read(c net.PacketConn) v5wire.Packet {
+// read waits for an incoming packet on the given connection.
+func (tc *conn) read(c net.PacketConn) v5wire.Packet {
 	buf := make([]byte, 1280)
 	if err := c.SetReadDeadline(time.Now().Add(waitTime)); err != nil {
 		return &errorPacket{err}
@@ -130,7 +141,7 @@ func (te *testenv) read(c net.PacketConn) v5wire.Packet {
 	if err != nil {
 		return &errorPacket{err}
 	}
-	_, _, p, err := te.codec.Decode(buf[:n], fromAddr.String())
+	_, _, p, err := tc.codec.Decode(buf[:n], fromAddr.String())
 	if err != nil {
 		return &errorPacket{err}
 	}
