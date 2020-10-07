@@ -111,6 +111,8 @@ func (s *Suite) TestPingMultiIP(t *utesting.T) {
 		t.Fatalf("remote responded to PING from %v for session on IP %v", laddr(conn.l2).IP, laddr(conn.l1).IP)
 	case *v5wire.Whoareyou:
 		t.Logf("got WHOAREYOU for new session as expected")
+		resp.Node = s.Dest
+		conn.write(conn.l2, ping2, resp)
 	default:
 		t.Fatal("expected WHOAREYOU, got", resp)
 	}
