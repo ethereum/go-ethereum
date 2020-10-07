@@ -117,10 +117,17 @@ func (s *Suite) TestPingMultiIP(t *utesting.T) {
 		t.Fatal("expected WHOAREYOU, got", resp)
 	}
 
+	// Catch the PONG on l2.
+	switch resp := conn.read(conn.l2).(type) {
+	case *v5wire.Pong:
+	default:
+		t.Fatal("expected PONG, got", resp)
+	}
+
 	// Try on l1 again.
 	ping3 := &v5wire.Ping{ReqID: conn.nextReqID()}
 	conn.write(conn.l1, ping3, nil)
-	switch resp := conn.read(conn.l2).(type) {
+	switch resp := conn.read(conn.l1).(type) {
 	case *v5wire.Pong:
 		t.Fatalf("remote responded to PING from %v for session on IP %v", laddr(conn.l1).IP, laddr(conn.l2).IP)
 	case *v5wire.Whoareyou:
