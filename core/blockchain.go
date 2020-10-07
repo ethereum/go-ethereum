@@ -292,18 +292,13 @@ func NewBlockChain(db ethdb.Database, cacheConfig *CacheConfig, chainConfig *par
 		if diskRoot != (common.Hash{}) {
 			log.Warn("Head state missing, repairing", "number", head.Number(), "hash", head.Hash(), "snaproot", diskRoot)
 
-			var snapDisk uint64
-			if err := bc.SetHeadWithCondition(head.NumberU64(), func(block *types.Block, canStop *bool) {
-				if block.Root() == diskRoot && snapDisk == 0 {
-					snapDisk, *canStop = block.NumberU64(), true
-				}
-			}); err != nil {
+			snapDisk, err := bc.SetHeadBeyondRoot(head.NumberU64(), diskRoot)
+			if err != nil {
 				return nil, err
 			}
-			// Chain is rewound, persist a flag in the disk to indicate
-			// the snapshot is in recovery procedure.
+			// Chain rewound, persist old snapshot number to indicate recovery procedure
 			if snapDisk != 0 {
-				rawdb.WriteSnapshotRecoveryFlag(bc.db, snapDisk)
+				rawdb.WriteSnapshotRecoveryNumber(bc.db, snapDisk)
 			}
 		} else {
 			log.Warn("Head state missing, repairing", "number", head.Number(), "hash", head.Hash())
@@ -367,7 +362,7 @@ func NewBlockChain(db ethdb.Database, cacheConfig *CacheConfig, chainConfig *par
 	if bc.cacheConfig.SnapshotLimit > 0 {
 		var (
 			recovery bool
-			flag     = rawdb.ReadSnapshotRecoveryFlag(bc.db)
+			flag     = rawdb.ReadSnapshotRecoveryNumber(bc.db)
 		)
 		// The persisted snapshot recovery height is higher than
 		// current chain head. At least it means the snapshot disk
@@ -478,12 +473,28 @@ func (bc *BlockChain) loadLastState() error {
 	return nil
 }
 
-// setHead rewinds the local chain to a new head. Depending on whether the node
+// SetHead rewinds the local chain to a new head. Depending on whether the node
 // was fast synced or full synced and in which state, the method will try to
 // delete minimal data from disk whilst retaining chain consistency.
-func (bc *BlockChain) setHead(head uint64, onDelete func(block *types.Block, canStop *bool)) error {
+func (bc *BlockChain) SetHead(head uint64) error {
+	_, err := bc.SetHeadBeyondRoot(head, common.Hash{})
+	return err
+}
+
+// SetHeadBeyondRoot rewinds the local chain to a new head with the extra condition
+// that the rewind must pass the specified state root. This method is meant to be
+// used when rewiding with snapshots enabled to ensure that we go back further than
+// persistent disk layer. Depending on whether the node was fast synced or full, and
+// in which state, the method will try to delete minimal data from disk whilst
+// retaining chain consistency.
+//
+// The method returns the block number where the requested root cap was found.
+func (bc *BlockChain) SetHeadBeyondRoot(head uint64, root common.Hash) (uint64, error) {
 	bc.chainmu.Lock()
 	defer bc.chainmu.Unlock()
+
+	// Track the block number of the requested root hash
+	var rootNumber uint64 // (no root == always 0)
 
 	// Retrieve the last pivot block to short circuit rollbacks beyond it and the
 	// current freezer limit to start nuking id underflown
@@ -500,14 +511,16 @@ func (bc *BlockChain) setHead(head uint64, onDelete func(block *types.Block, can
 				log.Error("Gap in the chain, rewinding to genesis", "number", header.Number, "hash", header.Hash())
 				newHeadBlock = bc.genesisBlock
 			} else {
-				// Block exists, keep rewinding until we find one with state
-				var canStop = onDelete == nil
+				// Block exists, keep rewinding until we find one with state,
+				// keeping rewinding until we exceed the optional threshold
+				// root hash
+				beyondRoot := (root == common.Hash{}) // Flag whether we're beyond the requested root (no root, always true)
+
 				for {
 					if _, err := state.New(newHeadBlock.Root(), bc.stateCache, bc.snaps); err != nil {
-						// If there is a passed callback for determining
-						// whether the rewinding should stop, call it.
-						if onDelete != nil {
-							onDelete(newHeadBlock, &canStop)
+						// If a root threshold was requested but not yet crossed, check
+						if root != (common.Hash{}) && !beyondRoot && newHeadBlock.Root() == root {
+							beyondRoot, rootNumber = true, newHeadBlock.NumberU64()
 						}
 						log.Trace("Block state missing, rewinding further", "number", newHeadBlock.NumberU64(), "hash", newHeadBlock.Hash())
 						if pivot == nil || newHeadBlock.NumberU64() > *pivot {
@@ -518,7 +531,7 @@ func (bc *BlockChain) setHead(head uint64, onDelete func(block *types.Block, can
 							newHeadBlock = bc.genesisBlock
 						}
 					}
-					if canStop || newHeadBlock.NumberU64() == 0 {
+					if beyondRoot || newHeadBlock.NumberU64() == 0 {
 						log.Debug("Rewound to block with state", "number", newHeadBlock.NumberU64(), "hash", newHeadBlock.Hash())
 						break
 					}
@@ -603,17 +616,7 @@ func (bc *BlockChain) setHead(head uint64, onDelete func(block *types.Block, can
 	bc.txLookupCache.Purge()
 	bc.futureBlocks.Purge()
 
-	return bc.loadLastState()
-}
-
-// SetHead is a wrapper of setHead for external usage.
-func (bc *BlockChain) SetHead(head uint64) error {
-	return bc.setHead(head, nil)
-}
-
-// SetHead is a wrapper of setHead for external usage.
-func (bc *BlockChain) SetHeadWithCondition(head uint64, onDelete func(block *types.Block, canStop *bool)) error {
-	return bc.setHead(head, onDelete)
+	return rootNumber, bc.loadLastState()
 }
 
 // FastSyncCommitHead sets the current head block to the one defined by the hash

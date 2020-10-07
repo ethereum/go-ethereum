@@ -479,7 +479,7 @@ func TestDiskGeneratorPersistence(t *testing.T) {
 	if err := rlp.DecodeBytes(blob, &generator); err != nil {
 		t.Fatalf("Failed to decode snapshot generator %v", err)
 	}
-	if bytes.Compare(generator.Marker, genMarker) != 0 {
+	if !bytes.Equal(generator.Marker, genMarker) {
 		t.Fatalf("Generator marker is not matched")
 	}
 	// Test senario 2, the disk layer is fully generated

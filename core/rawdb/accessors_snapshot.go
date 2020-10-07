@@ -144,9 +144,9 @@ func DeleteSnapshotGenerator(db ethdb.KeyValueWriter) {
 	}
 }
 
-// ReadSnapshotRecoveryFlag retrieves the serialized snapshot recovery flag
-// saved at the last recovery procedure.
-func ReadSnapshotRecoveryFlag(db ethdb.KeyValueReader) *uint64 {
+// ReadSnapshotRecoveryNumber retrieves the block number of the last persisted
+// snapshot layer.
+func ReadSnapshotRecoveryNumber(db ethdb.KeyValueReader) *uint64 {
 	data, _ := db.Get(snapshotRecoveryKey)
 	if len(data) == 0 {
 		return nil
@@ -158,20 +158,20 @@ func ReadSnapshotRecoveryFlag(db ethdb.KeyValueReader) *uint64 {
 	return &number
 }
 
-// WriteSnapshotRecoveryFlag stores the serialized snapshot recovery flag to
-// save in the recovery procedure.
-func WriteSnapshotRecoveryFlag(db ethdb.KeyValueWriter, number uint64) {
+// WriteSnapshotRecoveryNumber stores the block number of the last persisted
+// snapshot layer.
+func WriteSnapshotRecoveryNumber(db ethdb.KeyValueWriter, number uint64) {
 	var buf [8]byte
 	binary.BigEndian.PutUint64(buf[:], number)
 	if err := db.Put(snapshotRecoveryKey, buf[:]); err != nil {
-		log.Crit("Failed to store snapshot recovery flag", "err", err)
+		log.Crit("Failed to store snapshot recovery number", "err", err)
 	}
 }
 
-// DeleteSnapshotRecoveryFlag deletes the serialized snapshot recovery flag
-// saved at the last recovery procedure.
-func DeleteSnapshotRecoveryFlag(db ethdb.KeyValueWriter) {
+// DeleteSnapshotRecoveryNumber deletes the block number of the last persisted
+// snapshot layer.
+func DeleteSnapshotRecoveryNumber(db ethdb.KeyValueWriter) {
 	if err := db.Delete(snapshotRecoveryKey); err != nil {
-		log.Crit("Failed to remove snapshot recovery flag", "err", err)
+		log.Crit("Failed to remove snapshot recovery number", "err", err)
 	}
 }
