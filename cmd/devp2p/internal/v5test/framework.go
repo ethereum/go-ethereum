@@ -37,11 +37,12 @@ type readError struct {
 	err error
 }
 
-func (p *readError) Kind() byte      { return 99 }
-func (p *readError) Name() string    { return fmt.Sprintf("error: %v", p.err) }
-func (p *readError) SetReqID([]byte) {}
-func (p *readError) Error() string   { return p.err.Error() }
-func (p *readError) Unwrap() error   { return p.err }
+func (p *readError) Kind() byte          { return 99 }
+func (p *readError) Name() string        { return fmt.Sprintf("error: %v", p.err) }
+func (p *readError) Error() string       { return p.err.Error() }
+func (p *readError) Unwrap() error       { return p.err }
+func (p *readError) RequestID() []byte   { return nil }
+func (p *readError) SetRequestID([]byte) {}
 
 // readErrorf creates a readError with the given text.
 func readErrorf(format string, args ...interface{}) *readError {

@@ -78,9 +78,11 @@ func (s *Suite) TestPingLargeRequestID(t *utesting.T) {
 	ping := &v5wire.Ping{ReqID: make([]byte, 9)}
 	switch resp := conn.reqresp(conn.l1, ping).(type) {
 	case *v5wire.Pong:
-		t.Errorf("remote responded to PING with 9-byte request ID %x", resp.ReqID)
+		t.Errorf("PONG response with unknown request ID %x", resp.ReqID)
 	case *readError:
-		if !netutil.IsTimeout(resp.err) {
+		if resp.err == v5wire.ErrInvalidReqID {
+			t.Error("response with oversized request ID")
+		} else if !netutil.IsTimeout(resp.err) {
 			t.Error(resp)
 		}
 	}
