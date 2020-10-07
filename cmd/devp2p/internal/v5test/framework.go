@@ -117,15 +117,19 @@ func (tc *conn) nextReqID() []byte {
 // reqresp performs a request/response interaction on the given connection.
 // The request is retried if a handshake is requested.
 func (tc *conn) reqresp(c net.PacketConn, req v5wire.Packet) v5wire.Packet {
-	tc.write(c, req, nil)
-	resp := tc.read(c)
-	if resp.Kind() == v5wire.WhoareyouPacket {
-		challenge := resp.(*v5wire.Whoareyou)
-		challenge.Node = tc.remote
-		tc.write(c, req, challenge)
+	reqnonce := tc.write(c, req, nil)
+	switch resp := tc.read(c).(type) {
+	case *v5wire.Whoareyou:
+		if resp.Nonce != reqnonce {
+			return &errorPacket{fmt.Errorf("wrong nonce %x in WHOAREYOU (want %x)", resp.Nonce[:], reqnonce[:])}
+		}
+		resp.Node = tc.remote
+		resp.RecordSeq = tc.remote.Seq()
+		tc.write(c, req, resp)
 		return tc.read(c)
+	default:
+		return resp
 	}
-	return resp
 }
 
 // findnode sends a FINDNODE request and waits for its responses.
@@ -185,9 +189,10 @@ func (tc *conn) write(c net.PacketConn, p v5wire.Packet, challenge *v5wire.Whoar
 		panic(fmt.Errorf("can't encode %v packet: %v", p.Name(), err))
 	}
 	if _, err := c.WriteTo(packet, tc.remoteAddr); err != nil {
-		panic(fmt.Errorf("can't send %v: %v", p.Name(), err))
+		tc.logf("Can't send %s: %v", p.Name(), err)
+	} else {
+		tc.logf(">> %s", p.Name())
 	}
-	tc.log.Logf("(%s) >> %s", tc.localNode.ID().TerminalString(), p.Name())
 	return nonce
 }
 
@@ -205,8 +210,14 @@ func (tc *conn) read(c net.PacketConn) v5wire.Packet {
 	if err != nil {
 		return &errorPacket{err}
 	}
-	tc.log.Logf("(%s) << %s", tc.localNode.ID().TerminalString(), p.Name())
+	tc.logf("<< %s", p.Name())
 	return p
+}
+
+func (tc *conn) logf(format string, args ...interface{}) {
+	if tc.log != nil {
+		tc.log.Logf("(%s) %s", tc.localNode.ID().TerminalString(), fmt.Sprintf(format, args...))
+	}
 }
 
 func laddr(c net.PacketConn) *net.UDPAddr {

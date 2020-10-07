@@ -18,13 +18,13 @@ package v5test
 
 import (
 	"bytes"
-	"io"
 	"sync"
 	"time"
 
 	"github.com/ethereum/go-ethereum/internal/utesting"
 	"github.com/ethereum/go-ethereum/p2p/discover/v5wire"
 	"github.com/ethereum/go-ethereum/p2p/enode"
+	"github.com/ethereum/go-ethereum/p2p/netutil"
 )
 
 // Suite is the discv5 test suite.
@@ -258,7 +258,8 @@ func (bn *bystander) loop() {
 		case *v5wire.TalkRequest:
 			bn.conn.write(bn.conn.l1, &v5wire.TalkResponse{ReqID: p.ReqID}, nil)
 		case *errorPacket:
-			if p.err == io.EOF {
+			if !netutil.IsTemporaryError(p.err) {
+				bn.conn.logf("shutting down: %v", p.err)
 				return
 			}
 		}
