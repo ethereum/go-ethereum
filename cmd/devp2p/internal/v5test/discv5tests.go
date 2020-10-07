@@ -18,11 +18,13 @@ package v5test
 
 import (
 	"bytes"
+	"io"
+	"sync"
+	"time"
 
 	"github.com/ethereum/go-ethereum/internal/utesting"
 	"github.com/ethereum/go-ethereum/p2p/discover/v5wire"
 	"github.com/ethereum/go-ethereum/p2p/enode"
-	"github.com/ethereum/go-ethereum/p2p/enr"
 )
 
 // Suite is the discv5 test suite.
@@ -31,8 +33,8 @@ type Suite struct {
 	Listen1, Listen2 string // listening addresses
 }
 
-func (s *Suite) listen() *conn {
-	return newConn(s.Dest, s.Listen1, s.Listen2)
+func (s *Suite) listen(log logger) *conn {
+	return newConn(s.Dest, s.Listen1, s.Listen2, log)
 }
 
 func (s *Suite) AllTests() []utesting.Test {
@@ -40,12 +42,13 @@ func (s *Suite) AllTests() []utesting.Test {
 		{Name: "Ping", Fn: s.TestPing},
 		{Name: "TalkRequest", Fn: s.TestTalkRequest},
 		{Name: "FindnodeZeroDistance", Fn: s.TestFindnodeZeroDistance},
+		{Name: "FindnodeResults", Fn: s.TestFindnodeResults},
 	}
 }
 
 // This test sends PING and expects a PONG response.
 func (s *Suite) TestPing(t *utesting.T) {
-	conn := s.listen()
+	conn := s.listen(t)
 	defer conn.close()
 
 	id := conn.nextReqID()
@@ -68,7 +71,7 @@ func (s *Suite) TestPing(t *utesting.T) {
 
 // This test sends TALKREQ and expects an empty TALKRESP response.
 func (s *Suite) TestTalkRequest(t *utesting.T) {
-	conn := s.listen()
+	conn := s.listen(t)
 	defer conn.close()
 
 	// Non-empty request ID.
@@ -103,7 +106,7 @@ func (s *Suite) TestTalkRequest(t *utesting.T) {
 
 // This test checks that the remote node returns itself for FINDNODE with distance zero.
 func (s *Suite) TestFindnodeZeroDistance(t *utesting.T) {
-	conn := s.listen()
+	conn := s.listen(t)
 	defer conn.close()
 
 	id := conn.nextReqID()
@@ -128,14 +131,143 @@ func (s *Suite) TestFindnodeZeroDistance(t *utesting.T) {
 	}
 }
 
-func checkRecords(records []*enr.Record) ([]*enode.Node, error) {
-	nodes := make([]*enode.Node, len(records))
-	for i := range records {
-		n, err := enode.New(enode.ValidSchemes, records[i])
-		if err != nil {
-			return nil, err
-		}
-		nodes[i] = n
+// In this test, multiple nodes ping the node under test. After waiting for them to be
+// accepted into the remote table, the test checks that they are returned by FINDNODE.
+func (s *Suite) TestFindnodeResults(t *utesting.T) {
+	conn := s.listen(t)
+	defer conn.close()
+
+	// Create bystanders.
+	nodes := make([]*bystander, 5)
+	added := make(chan enode.ID, len(nodes))
+	for i := range nodes {
+		nodes[i] = newBystander(t, s, added)
+		defer nodes[i].close()
 	}
-	return nodes, nil
+
+	// Get them added to the remote table.
+	timeout := 60 * time.Second
+	timeoutCh := time.After(timeout)
+	for count := 0; count < len(nodes); {
+		select {
+		case id := <-added:
+			t.Logf("bystander node %v added to remote table", id)
+			count++
+		case <-timeoutCh:
+			t.Errorf("remote added %d bystander nodes in %v, need %d to continue", count, timeout, len(nodes))
+			t.Logf("this can happen if the node has a non-empty table from previous runs")
+			return
+		}
+	}
+	t.Logf("all %d bystander nodes were added", len(nodes))
+
+	// Collect our nodes by distance.
+	var dists []uint
+	expect := make(map[enode.ID]*enode.Node)
+	for _, bn := range nodes {
+		n := bn.conn.localNode.Node()
+		expect[n.ID()] = n
+		d := uint(enode.LogDist(n.ID(), s.Dest.ID()))
+		if !containsUint(dists, d) {
+			dists = append(dists, uint(d))
+		}
+	}
+
+	// Send FINDNODE for all distances.
+	foundNodes, err := conn.findnode(conn.l1, dists)
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Logf("remote returned %d nodes for distance list %v", len(foundNodes), dists)
+	for _, n := range foundNodes {
+		delete(expect, n.ID())
+	}
+	if len(expect) > 0 {
+		t.Errorf("missing %d nodes in FINDNODE result", len(expect))
+		t.Logf("this can happen if the test is run multiple times in quick succession")
+		t.Logf("and the remote node hasn't removed dead nodes from previous runs yet")
+	} else {
+		t.Logf("all %d expected nodes were returned", len(nodes))
+	}
+}
+
+// A bystander is a node whose only purpose is filling a spot in the remote table.
+type bystander struct {
+	dest *enode.Node
+	conn *conn
+	log  *utesting.T
+
+	addedCh chan enode.ID
+	done    sync.WaitGroup
+}
+
+func newBystander(t *utesting.T, s *Suite, added chan enode.ID) *bystander {
+	bn := &bystander{
+		conn:    s.listen(t),
+		dest:    s.Dest,
+		addedCh: added,
+	}
+	bn.done.Add(1)
+	go bn.loop()
+	return bn
+}
+
+// id returns the node ID of the bystander.
+func (bn *bystander) id() enode.ID {
+	return bn.conn.localNode.ID()
+}
+
+// close shuts down loop.
+func (bn *bystander) close() {
+	bn.conn.close()
+	bn.done.Wait()
+}
+
+// loop answers packets from the remote node until quit.
+func (bn *bystander) loop() {
+	defer bn.done.Done()
+
+	var (
+		lastPing time.Time
+		wasAdded bool
+	)
+	for {
+		// Ping the remote node.
+		if !wasAdded && time.Since(lastPing) > 10*time.Second {
+			bn.conn.reqresp(bn.conn.l1, &v5wire.Ping{
+				ReqID:  bn.conn.nextReqID(),
+				ENRSeq: bn.dest.Seq(),
+			})
+			lastPing = time.Now()
+		}
+		// Answer packets.
+		switch p := bn.conn.read(bn.conn.l1).(type) {
+		case *v5wire.Ping:
+			bn.conn.write(bn.conn.l1, &v5wire.Pong{
+				ReqID:  p.ReqID,
+				ENRSeq: bn.conn.localNode.Seq(),
+				ToIP:   bn.dest.IP(),
+				ToPort: uint16(bn.dest.UDP()),
+			}, nil)
+			wasAdded = true
+			bn.notifyAdded()
+		case *v5wire.Findnode:
+			bn.conn.write(bn.conn.l1, &v5wire.Nodes{ReqID: p.ReqID, Total: 1}, nil)
+			wasAdded = true
+			bn.notifyAdded()
+		case *v5wire.TalkRequest:
+			bn.conn.write(bn.conn.l1, &v5wire.TalkResponse{ReqID: p.ReqID}, nil)
+		case *errorPacket:
+			if p.err == io.EOF {
+				return
+			}
+		}
+	}
+}
+
+func (bn *bystander) notifyAdded() {
+	if bn.addedCh != nil {
+		bn.addedCh <- bn.id()
+		bn.addedCh = nil
+	}
 }

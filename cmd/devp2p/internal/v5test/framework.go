@@ -17,6 +17,7 @@
 package v5test
 
 import (
+	"bytes"
 	"crypto/ecdsa"
 	"encoding/binary"
 	"fmt"
@@ -27,6 +28,7 @@ import (
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/p2p/discover/v5wire"
 	"github.com/ethereum/go-ethereum/p2p/enode"
+	"github.com/ethereum/go-ethereum/p2p/enr"
 )
 
 // errorPacket represents an error during packet reading.
@@ -52,14 +54,19 @@ type conn struct {
 	remote     *enode.Node
 	remoteAddr *net.UDPAddr
 
+	log           logger
 	codec         *v5wire.Codec
 	lastRequest   v5wire.Packet
 	lastChallenge *v5wire.Whoareyou
 	idCounter     uint32
 }
 
+type logger interface {
+	Logf(string, ...interface{})
+}
+
 // newConn sets up a connection to the given node.
-func newConn(dest *enode.Node, listen1, listen2 string) *conn {
+func newConn(dest *enode.Node, listen1, listen2 string, log logger) *conn {
 	l1, err := net.ListenPacket("udp", fmt.Sprintf("%v:0", listen1))
 	if err != nil {
 		panic(err)
@@ -88,6 +95,7 @@ func newConn(dest *enode.Node, listen1, listen2 string) *conn {
 		remote:     dest,
 		remoteAddr: &net.UDPAddr{IP: dest.IP(), Port: dest.UDP()},
 		codec:      v5wire.NewCodec(ln, key, mclock.System{}),
+		log:        log,
 	}
 }
 
@@ -120,15 +128,67 @@ func (tc *conn) reqresp(c net.PacketConn, req v5wire.Packet) v5wire.Packet {
 	return resp
 }
 
+// findnode sends a FINDNODE request and waits for its responses.
+func (tc *conn) findnode(c net.PacketConn, dists []uint) ([]*enode.Node, error) {
+	var (
+		findnode = &v5wire.Findnode{ReqID: tc.nextReqID(), Distances: dists}
+		reqnonce = tc.write(c, findnode, nil)
+		first    = true
+		total    uint8
+		results  []*enode.Node
+	)
+	for n := 1; n > 0; {
+		switch resp := tc.read(c).(type) {
+		case *v5wire.Whoareyou:
+			// Handle handshake.
+			if resp.Nonce == reqnonce {
+				resp.Node = tc.remote
+				tc.write(c, findnode, resp)
+			} else {
+				return nil, fmt.Errorf("unexpected WHOAREYOU (nonce %x), waiting for NODES", resp.Nonce[:])
+			}
+		case *v5wire.Nodes:
+			// Check request ID.
+			if !bytes.Equal(resp.ReqID, findnode.ReqID) {
+				return nil, fmt.Errorf("NODES response has wrong request id %x", n, resp.ReqID)
+			}
+			// Check total count. It should be greater than one
+			// and needs to be the same across all responses.
+			if first {
+				if resp.Total <= 1 || resp.Total > 6 {
+					return nil, fmt.Errorf("invalid NODES response 'total' %d (want > 1, < 7)", resp.Total)
+				}
+				total = resp.Total
+				n = int(total) - 1
+				first = false
+			} else {
+				if resp.Total != total {
+					return nil, fmt.Errorf("invalid NODES response 'total' %d (!= %d)", resp.Total, total)
+				}
+				n--
+			}
+			// Check nodes.
+			nodes, err := checkRecords(resp.Nodes)
+			if err != nil {
+				return nil, fmt.Errorf("invalid node in NODES response: %v", err)
+			}
+			results = append(results, nodes...)
+		}
+	}
+	return results, nil
+}
+
 // write sends a packet on the given connection.
-func (tc *conn) write(c net.PacketConn, p v5wire.Packet, challenge *v5wire.Whoareyou) {
-	packet, _, err := tc.codec.Encode(tc.remote.ID(), tc.remoteAddr.String(), p, challenge)
+func (tc *conn) write(c net.PacketConn, p v5wire.Packet, challenge *v5wire.Whoareyou) v5wire.Nonce {
+	packet, nonce, err := tc.codec.Encode(tc.remote.ID(), tc.remoteAddr.String(), p, challenge)
 	if err != nil {
 		panic(fmt.Errorf("can't encode %v packet: %v", p.Name(), err))
 	}
 	if _, err := c.WriteTo(packet, tc.remoteAddr); err != nil {
 		panic(fmt.Errorf("can't send %v: %v", p.Name(), err))
 	}
+	tc.log.Logf("(%s) >> %s", tc.localNode.ID().TerminalString(), p.Name())
+	return nonce
 }
 
 // read waits for an incoming packet on the given connection.
@@ -145,9 +205,31 @@ func (tc *conn) read(c net.PacketConn) v5wire.Packet {
 	if err != nil {
 		return &errorPacket{err}
 	}
+	tc.log.Logf("(%s) << %s", tc.localNode.ID().TerminalString(), p.Name())
 	return p
 }
 
 func laddr(c net.PacketConn) *net.UDPAddr {
 	return c.LocalAddr().(*net.UDPAddr)
+}
+
+func checkRecords(records []*enr.Record) ([]*enode.Node, error) {
+	nodes := make([]*enode.Node, len(records))
+	for i := range records {
+		n, err := enode.New(enode.ValidSchemes, records[i])
+		if err != nil {
+			return nil, err
+		}
+		nodes[i] = n
+	}
+	return nodes, nil
+}
+
+func containsUint(ints []uint, x uint) bool {
+	for i := range ints {
+		if ints[i] == x {
+			return true
+		}
+	}
+	return false
 }
