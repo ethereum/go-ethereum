@@ -129,7 +129,6 @@ func (tc *conn) reqresp(c net.PacketConn, req v5wire.Packet) v5wire.Packet {
 			return readErrorf("wrong nonce %x in WHOAREYOU (want %x)", resp.Nonce[:], reqnonce[:])
 		}
 		resp.Node = tc.remote
-		resp.RecordSeq = tc.remote.Seq()
 		tc.write(c, req, resp)
 		return tc.read(c)
 	default:
