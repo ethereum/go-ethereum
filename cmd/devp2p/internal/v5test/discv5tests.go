@@ -40,6 +40,7 @@ func (s *Suite) listen(log logger) *conn {
 func (s *Suite) AllTests() []utesting.Test {
 	return []utesting.Test{
 		{Name: "Ping", Fn: s.TestPing},
+		{Name: "PingLargeRequestID", Fn: s.TestPingLargeRequestID},
 		{Name: "TalkRequest", Fn: s.TestTalkRequest},
 		{Name: "FindnodeZeroDistance", Fn: s.TestFindnodeZeroDistance},
 		{Name: "FindnodeResults", Fn: s.TestFindnodeResults},
@@ -51,12 +52,11 @@ func (s *Suite) TestPing(t *utesting.T) {
 	conn := s.listen(t)
 	defer conn.close()
 
-	id := conn.nextReqID()
-	resp := conn.reqresp(conn.l1, &v5wire.Ping{ReqID: id})
-	switch resp := resp.(type) {
+	ping := &v5wire.Ping{ReqID: conn.nextReqID()}
+	switch resp := conn.reqresp(conn.l1, ping).(type) {
 	case *v5wire.Pong:
-		if !bytes.Equal(resp.ReqID, id) {
-			t.Fatalf("wrong request ID %x in PONG, want %x", resp.ReqID, id)
+		if !bytes.Equal(resp.ReqID, ping.ReqID) {
+			t.Fatalf("wrong request ID %x in PONG, want %x", resp.ReqID, ping.ReqID)
 		}
 		if !resp.ToIP.Equal(laddr(conn.l1).IP) {
 			t.Fatalf("wrong destination IP %v in PONG, want %v", resp.ToIP, laddr(conn.l1).IP)
@@ -66,6 +66,23 @@ func (s *Suite) TestPing(t *utesting.T) {
 		}
 	default:
 		t.Fatal("expected PONG, got", resp.Name())
+	}
+}
+
+// This test sends PING with a 9-byte request ID, which isn't allowed by the spec.
+// The remote node should not respond.
+func (s *Suite) TestPingLargeRequestID(t *utesting.T) {
+	conn := s.listen(t)
+	defer conn.close()
+
+	ping := &v5wire.Ping{ReqID: make([]byte, 9)}
+	switch resp := conn.reqresp(conn.l1, ping).(type) {
+	case *v5wire.Pong:
+		t.Errorf("remote responded to PING with 9-byte request ID %x", resp.ReqID)
+	case *readError:
+		if !netutil.IsTimeout(resp.err) {
+			t.Error(resp)
+		}
 	}
 }
 
