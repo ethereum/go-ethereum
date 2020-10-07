@@ -178,7 +178,7 @@ func DecodeMessage(ptype byte, body []byte) (Packet, error) {
 		return nil, err
 	}
 	if dec.RequestID() != nil && len(dec.RequestID()) > 8 {
-		return nil, errInvalidReqID
+		return nil, ErrInvalidReqID
 	}
 	return dec, nil
 }

@@ -110,7 +110,11 @@ var (
 	errInvalidNonceSig     = errors.New("invalid ID nonce signature")
 	errMessageTooShort     = errors.New("message contains no data")
 	errMessageDecrypt      = errors.New("cannot decrypt message")
-	errInvalidReqID        = errors.New("request ID larger than 8 bytes")
+)
+
+// Public errors.
+var (
+	ErrInvalidReqID = errors.New("request ID larger than 8 bytes")
 )
 
 // Packet sizes.
