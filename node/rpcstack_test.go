@@ -73,6 +73,21 @@ func TestWebsocketOrigins(t *testing.T) {
 	assert.Error(t, err)
 }
 
+// TestIsWebsocket tests if an incoming websocket upgrade request is handled properly.
+func TestIsWebsocket(t *testing.T) {
+	r, _ := http.NewRequest("GET", "/", nil)
+
+	assert.False(t, isWebsocket(r))
+	r.Header.Set("upgrade", "websocket")
+	assert.False(t, isWebsocket(r))
+	r.Header.Set("connection", "upgrade")
+	assert.True(t, isWebsocket(r))
+	r.Header.Set("connection", "upgrade,keep-alive")
+	assert.True(t, isWebsocket(r))
+	r.Header.Set("connection", " UPGRADE,keep-alive")
+	assert.True(t, isWebsocket(r))
+}
+
 func createAndStartServer(t *testing.T, conf httpConfig, ws bool, wsConf wsConfig) *httpServer {
 	t.Helper()
 
