@@ -126,25 +126,15 @@ func (s *Suite) TestFindnodeZeroDistance(t *utesting.T) {
 	conn := s.listen(t)
 	defer conn.close()
 
-	id := conn.nextReqID()
-	resp := conn.reqresp(conn.l1, &v5wire.Findnode{ReqID: id, Distances: []uint{0}})
-	switch resp := resp.(type) {
-	case *v5wire.Nodes:
-		if !bytes.Equal(resp.ReqID, id) {
-			t.Fatalf("wrong request ID %x in NODES, want %x", resp.ReqID, id)
-		}
-		if len(resp.Nodes) != 1 {
-			t.Error("invalid number of entries in NODES response")
-		}
-		nodes, err := checkRecords(resp.Nodes)
-		if err != nil {
-			t.Errorf("invalid node in NODES response: %v", err)
-		}
-		if nodes[0].ID() != conn.remote.ID() {
-			t.Errorf("ID of response node is %v, want %v", nodes[0].ID(), conn.remote.ID())
-		}
-	default:
-		t.Fatal("expected NODES, got", resp.Name())
+	nodes, err := conn.findnode(conn.l1, []uint{0})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(nodes) != 1 {
+		t.Fatalf("remote returned more than one node for FINDNODE [0]")
+	}
+	if nodes[0].ID() != conn.remote.ID() {
+		t.Errorf("ID of response node is %v, want %v", nodes[0].ID(), conn.remote.ID())
 	}
 }
 
