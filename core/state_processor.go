@@ -66,6 +66,7 @@ func (p *StateProcessor) Process(block *types.Block, statedb *state.StateDB, cfg
 		misc.ApplyDAOHardFork(statedb)
 	}
 	blockContext := NewEVMBlockContext(header, p.bc, nil)
+	vmenv := vm.NewEVM(blockContext, vm.TxContext{}, statedb, p.config, cfg)
 	// Iterate over and process the individual transactions
 	for i, tx := range block.Transactions() {
 		msg, err := tx.AsMessage(types.MakeSigner(p.config, header.Number))
@@ -73,7 +74,7 @@ func (p *StateProcessor) Process(block *types.Block, statedb *state.StateDB, cfg
 			return nil, nil, 0, err
 		}
 		statedb.Prepare(tx.Hash(), block.Hash(), i)
-		receipt, err := applyTransaction(msg, p.config, p.bc, nil, gp, statedb, header, tx, usedGas, cfg, blockContext)
+		receipt, err := applyTransaction(msg, p.config, p.bc, nil, gp, statedb, header, tx, usedGas, vmenv)
 		if err != nil {
 			return nil, nil, 0, err
 		}
@@ -86,26 +87,25 @@ func (p *StateProcessor) Process(block *types.Block, statedb *state.StateDB, cfg
 	return receipts, allLogs, *usedGas, nil
 }
 
-func applyTransaction(msg types.Message, config *params.ChainConfig, bc ChainContext, author *common.Address, gp *GasPool, statedb *state.StateDB, header *types.Header, tx *types.Transaction, usedGas *uint64, cfg vm.Config, blockContext vm.BlockContext) (*types.Receipt, error) {
+func applyTransaction(msg types.Message, config *params.ChainConfig, bc ChainContext, author *common.Address, gp *GasPool, statedb *state.StateDB, header *types.Header, tx *types.Transaction, usedGas *uint64, evm *vm.EVM) (*types.Receipt, error) {
 	// Create a new context to be used in the EVM environment
 	txContext := NewEVMTxContext(msg)
-	// Create a new environment which holds all relevant information
-	// about the transaction and calling mechanisms.
-	vmenv := vm.NewEVM(blockContext, txContext, statedb, config, cfg)
-
+	// Add addresses to access list if applicable
 	if config.IsYoloV2(header.Number) {
 		statedb.AddAddressToAccessList(msg.From())
 		if dst := msg.To(); dst != nil {
 			statedb.AddAddressToAccessList(*dst)
 			// If it's a create-tx, the destination will be added inside evm.create
 		}
-		for _, addr := range vmenv.ActivePrecompiles() {
+		for _, addr := range evm.ActivePrecompiles() {
 			statedb.AddAddressToAccessList(addr)
 		}
 	}
 
+	// Update the evm with the new transaction context.
+	evm.Reset(txContext, statedb)
 	// Apply the transaction to the current state (included in the env)
-	result, err := ApplyMessage(vmenv, msg, gp)
+	result, err := ApplyMessage(evm, msg, gp)
 	if err != nil {
 		return nil, err
 	}
@@ -125,7 +125,7 @@ func applyTransaction(msg types.Message, config *params.ChainConfig, bc ChainCon
 	receipt.GasUsed = result.UsedGas
 	// if the transaction created a contract, store the creation address in the receipt.
 	if msg.To() == nil {
-		receipt.ContractAddress = crypto.CreateAddress(vmenv.TxContext.Origin, tx.Nonce())
+		receipt.ContractAddress = crypto.CreateAddress(evm.TxContext.Origin, tx.Nonce())
 	}
 	// Set the receipt logs and create a bloom for filtering
 	receipt.Logs = statedb.GetLogs(tx.Hash())
@@ -148,5 +148,6 @@ func ApplyTransaction(config *params.ChainConfig, bc ChainContext, author *commo
 	}
 	// Create a new context to be used in the EVM environment
 	blockContext := NewEVMBlockContext(header, bc, author)
-	return applyTransaction(msg, config, bc, author, gp, statedb, header, tx, usedGas, cfg, blockContext)
+	vmenv := vm.NewEVM(blockContext, vm.TxContext{}, statedb, config, cfg)
+	return applyTransaction(msg, config, bc, author, gp, statedb, header, tx, usedGas, vmenv)
 }
