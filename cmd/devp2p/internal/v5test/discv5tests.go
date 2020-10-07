@@ -18,6 +18,7 @@ package v5test
 
 import (
 	"bytes"
+	"net"
 	"sync"
 	"time"
 
@@ -42,6 +43,7 @@ func (s *Suite) AllTests() []utesting.Test {
 		{Name: "Ping", Fn: s.TestPing},
 		{Name: "PingLargeRequestID", Fn: s.TestPingLargeRequestID},
 		{Name: "PingMultiIP", Fn: s.TestPingMultiIP},
+		{Name: "PingHandshakeInterrupted", Fn: s.TestPingHandshakeInterrupted},
 		{Name: "TalkRequest", Fn: s.TestTalkRequest},
 		{Name: "FindnodeZeroDistance", Fn: s.TestFindnodeZeroDistance},
 		{Name: "FindnodeResults", Fn: s.TestFindnodeResults},
@@ -56,17 +58,21 @@ func (s *Suite) TestPing(t *utesting.T) {
 	ping := &v5wire.Ping{ReqID: conn.nextReqID()}
 	switch resp := conn.reqresp(conn.l1, ping).(type) {
 	case *v5wire.Pong:
-		if !bytes.Equal(resp.ReqID, ping.ReqID) {
-			t.Fatalf("wrong request ID %x in PONG, want %x", resp.ReqID, ping.ReqID)
-		}
-		if !resp.ToIP.Equal(laddr(conn.l1).IP) {
-			t.Fatalf("wrong destination IP %v in PONG, want %v", resp.ToIP, laddr(conn.l1).IP)
-		}
-		if int(resp.ToPort) != laddr(conn.l1).Port {
-			t.Fatalf("wrong destination port %v in PONG, want %v", resp.ToPort, laddr(conn.l1).Port)
-		}
+		checkPong(t, resp, ping, conn.l1)
 	default:
 		t.Fatal("expected PONG, got", resp.Name())
+	}
+}
+
+func checkPong(t *utesting.T, pong *v5wire.Pong, ping *v5wire.Ping, c net.PacketConn) {
+	if !bytes.Equal(pong.ReqID, ping.ReqID) {
+		t.Fatalf("wrong request ID %x in PONG, want %x", pong.ReqID, ping.ReqID)
+	}
+	if !pong.ToIP.Equal(laddr(c).IP) {
+		t.Fatalf("wrong destination IP %v in PONG, want %v", pong.ToIP, laddr(c).IP)
+	}
+	if int(pong.ToPort) != laddr(c).Port {
+		t.Fatalf("wrong destination port %v in PONG, want %v", pong.ToPort, laddr(c).Port)
 	}
 }
 
@@ -102,6 +108,7 @@ func (s *Suite) TestPingMultiIP(t *utesting.T) {
 	if resp.Kind() != v5wire.PongMsg {
 		t.Fatal("expected PONG, got", resp)
 	}
+	checkPong(t, resp.(*v5wire.Pong), ping, conn.l1)
 
 	// Send on l2. This reuses the session because there is only one codec.
 	ping2 := &v5wire.Ping{ReqID: conn.nextReqID()}
@@ -120,6 +127,7 @@ func (s *Suite) TestPingMultiIP(t *utesting.T) {
 	// Catch the PONG on l2.
 	switch resp := conn.read(conn.l2).(type) {
 	case *v5wire.Pong:
+		checkPong(t, resp, ping2, conn.l2)
 	default:
 		t.Fatal("expected PONG, got", resp)
 	}
@@ -132,6 +140,33 @@ func (s *Suite) TestPingMultiIP(t *utesting.T) {
 		t.Fatalf("remote responded to PING from %v for session on IP %v", laddr(conn.l1).IP, laddr(conn.l2).IP)
 	case *v5wire.Whoareyou:
 		t.Logf("got WHOAREYOU for new session as expected")
+	default:
+		t.Fatal("expected WHOAREYOU, got", resp)
+	}
+}
+
+// This test starts a handshake, but doesn't finish it and sends a second ordinary message
+// packet instead of a handshake message packet. The remote node should respond with
+// another WHOAREYOU challenge for the second packet.
+func (s *Suite) TestPingHandshakeInterrupted(t *utesting.T) {
+	conn := s.listen(t)
+	defer conn.close()
+
+	// First PING triggers challenge.
+	ping := &v5wire.Ping{ReqID: conn.nextReqID()}
+	conn.write(conn.l1, ping, nil)
+	switch resp := conn.read(conn.l1).(type) {
+	case *v5wire.Whoareyou:
+		t.Logf("got WHOAREYOU for PING")
+	default:
+		t.Fatal("expected WHOAREYOU, got", resp)
+	}
+
+	// Send second PING.
+	ping2 := &v5wire.Ping{ReqID: conn.nextReqID()}
+	switch resp := conn.reqresp(conn.l1, ping2).(type) {
+	case *v5wire.Pong:
+		checkPong(t, resp, ping2, conn.l1)
 	default:
 		t.Fatal("expected WHOAREYOU, got", resp)
 	}
