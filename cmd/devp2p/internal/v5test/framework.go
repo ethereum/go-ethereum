@@ -165,7 +165,7 @@ func (tc *conn) findnode(c net.PacketConn, dists []uint) ([]*enode.Node, error) 
 		case *v5wire.Nodes:
 			// Got NODES! Check request ID.
 			if !bytes.Equal(resp.ReqID, findnode.ReqID) {
-				return nil, fmt.Errorf("NODES response has wrong request id %x", n, resp.ReqID)
+				return nil, fmt.Errorf("NODES response has wrong request id %x", resp.ReqID)
 			}
 			// Check total count. It should be greater than one
 			// and needs to be the same across all responses.

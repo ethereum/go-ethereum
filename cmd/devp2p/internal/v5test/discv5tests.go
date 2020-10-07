@@ -41,6 +41,7 @@ func (s *Suite) AllTests() []utesting.Test {
 	return []utesting.Test{
 		{Name: "Ping", Fn: s.TestPing},
 		{Name: "PingLargeRequestID", Fn: s.TestPingLargeRequestID},
+		{Name: "PingMultiIP", Fn: s.TestPingMultiIP},
 		{Name: "TalkRequest", Fn: s.TestTalkRequest},
 		{Name: "FindnodeZeroDistance", Fn: s.TestFindnodeZeroDistance},
 		{Name: "FindnodeResults", Fn: s.TestFindnodeResults},
@@ -85,6 +86,45 @@ func (s *Suite) TestPingLargeRequestID(t *utesting.T) {
 		} else if !netutil.IsTimeout(resp.err) {
 			t.Error(resp)
 		}
+	}
+}
+
+// In this test, a session is established from one IP as usual. The session is then reused
+// on another IP, which shouldn't work. The remote node should respond with WHOAREYOU for
+// the attempt from a different IP.
+func (s *Suite) TestPingMultiIP(t *utesting.T) {
+	conn := s.listen(t)
+	defer conn.close()
+
+	// Create the session on l1.
+	ping := &v5wire.Ping{ReqID: conn.nextReqID()}
+	resp := conn.reqresp(conn.l1, ping)
+	if resp.Kind() != v5wire.PongMsg {
+		t.Fatal("expected PONG, got", resp)
+	}
+
+	// Send on l2. This reuses the session because there is only one codec.
+	ping2 := &v5wire.Ping{ReqID: conn.nextReqID()}
+	conn.write(conn.l2, ping2, nil)
+	switch resp := conn.read(conn.l2).(type) {
+	case *v5wire.Pong:
+		t.Fatalf("remote responded to PING from %v for session on IP %v", laddr(conn.l2).IP, laddr(conn.l1).IP)
+	case *v5wire.Whoareyou:
+		t.Logf("got WHOAREYOU for new session as expected")
+	default:
+		t.Fatal("expected WHOAREYOU, got", resp)
+	}
+
+	// Try on l1 again.
+	ping3 := &v5wire.Ping{ReqID: conn.nextReqID()}
+	conn.write(conn.l1, ping3, nil)
+	switch resp := conn.read(conn.l2).(type) {
+	case *v5wire.Pong:
+		t.Fatalf("remote responded to PING from %v for session on IP %v", laddr(conn.l1).IP, laddr(conn.l2).IP)
+	case *v5wire.Whoareyou:
+		t.Logf("got WHOAREYOU for new session as expected")
+	default:
+		t.Fatal("expected WHOAREYOU, got", resp)
 	}
 }
 
