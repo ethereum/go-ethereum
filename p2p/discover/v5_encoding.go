@@ -383,7 +383,7 @@ func (c *wireCodec) deriveKeys(n1, n2 enode.ID, priv *ecdsa.PrivateKey, pub *ecd
 	info := []byte("discovery v5 key agreement")
 	info = append(info, n1[:]...)
 	info = append(info, n2[:]...)
-	kdf := hkdf.New(c.sha256reset, eph, challenge.IDNonce[:], info)
+	kdf := hkdf.New(sha256.New, eph, challenge.IDNonce[:], info)
 	sec := handshakeSecrets{
 		writeKey:    make([]byte, aesKeySize),
 		readKey:     make([]byte, aesKeySize),
