@@ -442,7 +442,7 @@ func (t *UDPv5) call(node *enode.Node, responseType byte, packet v5wire.Packet) 
 	}
 	// Assign request ID.
 	crand.Read(c.reqid)
-	packet.SetReqID(c.reqid)
+	packet.SetRequestID(c.reqid)
 	// Send call to dispatch.
 	select {
 	case t.callCh <- c:
@@ -649,22 +649,23 @@ func (t *UDPv5) handlePacket(rawpacket []byte, fromAddr *net.UDPAddr) error {
 }
 
 // handleCallResponse dispatches a response packet to the call waiting for it.
-func (t *UDPv5) handleCallResponse(fromID enode.ID, fromAddr *net.UDPAddr, reqid []byte, p v5wire.Packet) {
+func (t *UDPv5) handleCallResponse(fromID enode.ID, fromAddr *net.UDPAddr, p v5wire.Packet) bool {
 	ac := t.activeCallByNode[fromID]
-	if ac == nil || !bytes.Equal(reqid, ac.reqid) {
+	if ac == nil || !bytes.Equal(p.RequestID(), ac.reqid) {
 		t.log.Debug(fmt.Sprintf("Unsolicited/late %s response", p.Name()), "id", fromID, "addr", fromAddr)
-		return
+		return false
 	}
 	if !fromAddr.IP.Equal(ac.node.IP()) || fromAddr.Port != ac.node.UDP() {
 		t.log.Debug(fmt.Sprintf("%s from wrong endpoint", p.Name()), "id", fromID, "addr", fromAddr)
-		return
+		return false
 	}
 	if p.Kind() != ac.responseType {
 		t.log.Debug(fmt.Sprintf("Wrong discv5 response type %s", p.Name()), "id", fromID, "addr", fromAddr)
-		return
+		return false
 	}
 	t.startResponseTimeout(ac)
 	ac.ch <- p
+	return true
 }
 
 // getNode looks for a node record in table and database.
@@ -688,16 +689,17 @@ func (t *UDPv5) handle(p v5wire.Packet, fromID enode.ID, fromAddr *net.UDPAddr) 
 	case *v5wire.Ping:
 		t.handlePing(p, fromID, fromAddr)
 	case *v5wire.Pong:
-		t.localNode.UDPEndpointStatement(fromAddr, &net.UDPAddr{IP: p.ToIP, Port: int(p.ToPort)})
-		t.handleCallResponse(fromID, fromAddr, p.ReqID, p)
+		if t.handleCallResponse(fromID, fromAddr, p) {
+			t.localNode.UDPEndpointStatement(fromAddr, &net.UDPAddr{IP: p.ToIP, Port: int(p.ToPort)})
+		}
 	case *v5wire.Findnode:
 		t.handleFindnode(p, fromID, fromAddr)
 	case *v5wire.Nodes:
-		t.handleCallResponse(fromID, fromAddr, p.ReqID, p)
+		t.handleCallResponse(fromID, fromAddr, p)
 	case *v5wire.TalkRequest:
 		t.handleTalkRequest(p, fromID, fromAddr)
 	case *v5wire.TalkResponse:
-		t.handleCallResponse(fromID, fromAddr, p.ReqID, p)
+		t.handleCallResponse(fromID, fromAddr, p)
 	}
 }
 

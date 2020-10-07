@@ -28,9 +28,10 @@ import (
 
 // Packet is implemented by all message types.
 type Packet interface {
-	Name() string    // Name returns a string corresponding to the message type.
-	Kind() byte      // Kind returns the message type.
-	SetReqID([]byte) // Sets the request ID.
+	Name() string        // Name returns a string corresponding to the message type.
+	Kind() byte          // Kind returns the message type.
+	RequestID() []byte   // Returns the request ID.
+	SetRequestID([]byte) // Sets the request ID.
 }
 
 // Message types.
@@ -176,57 +177,73 @@ func DecodeMessage(ptype byte, body []byte) (Packet, error) {
 	if err := rlp.DecodeBytes(body, dec); err != nil {
 		return nil, err
 	}
+	if dec.RequestID() != nil && len(dec.RequestID()) > 8 {
+		return nil, errInvalidReqID
+	}
 	return dec, nil
 }
 
-func (*Whoareyou) Name() string    { return "WHOAREYOU/v5" }
-func (*Whoareyou) Kind() byte      { return WhoareyouPacket }
-func (*Whoareyou) SetReqID([]byte) {}
+func (*Whoareyou) Name() string        { return "WHOAREYOU/v5" }
+func (*Whoareyou) Kind() byte          { return WhoareyouPacket }
+func (*Whoareyou) RequestID() []byte   { return nil }
+func (*Whoareyou) SetRequestID([]byte) {}
 
-func (*Unknown) Name() string    { return "UNKNOWN/v5" }
-func (*Unknown) Kind() byte      { return UnknownPacket }
-func (*Unknown) SetReqID([]byte) {}
+func (*Unknown) Name() string        { return "UNKNOWN/v5" }
+func (*Unknown) Kind() byte          { return UnknownPacket }
+func (*Unknown) RequestID() []byte   { return nil }
+func (*Unknown) SetRequestID([]byte) {}
 
-func (*Ping) Name() string         { return "PING/v5" }
-func (*Ping) Kind() byte           { return PingMsg }
-func (p *Ping) SetReqID(id []byte) { p.ReqID = id }
+func (*Ping) Name() string             { return "PING/v5" }
+func (*Ping) Kind() byte               { return PingMsg }
+func (p *Ping) RequestID() []byte      { return p.ReqID }
+func (p *Ping) SetRequestID(id []byte) { p.ReqID = id }
 
-func (*Pong) Name() string         { return "PONG/v5" }
-func (*Pong) Kind() byte           { return PongMsg }
-func (p *Pong) SetReqID(id []byte) { p.ReqID = id }
+func (*Pong) Name() string             { return "PONG/v5" }
+func (*Pong) Kind() byte               { return PongMsg }
+func (p *Pong) RequestID() []byte      { return p.ReqID }
+func (p *Pong) SetRequestID(id []byte) { p.ReqID = id }
 
-func (*Findnode) Name() string         { return "FINDNODE/v5" }
-func (*Findnode) Kind() byte           { return FindnodeMsg }
-func (p *Findnode) SetReqID(id []byte) { p.ReqID = id }
+func (*Findnode) Name() string             { return "FINDNODE/v5" }
+func (*Findnode) Kind() byte               { return FindnodeMsg }
+func (p *Findnode) RequestID() []byte      { return p.ReqID }
+func (p *Findnode) SetRequestID(id []byte) { p.ReqID = id }
 
-func (*Nodes) Name() string         { return "NODES/v5" }
-func (*Nodes) Kind() byte           { return NodesMsg }
-func (p *Nodes) SetReqID(id []byte) { p.ReqID = id }
+func (*Nodes) Name() string             { return "NODES/v5" }
+func (*Nodes) Kind() byte               { return NodesMsg }
+func (p *Nodes) RequestID() []byte      { return p.ReqID }
+func (p *Nodes) SetRequestID(id []byte) { p.ReqID = id }
 
-func (*TalkRequest) Name() string         { return "TALKREQ/v5" }
-func (*TalkRequest) Kind() byte           { return TalkRequestMsg }
-func (p *TalkRequest) SetReqID(id []byte) { p.ReqID = id }
+func (*TalkRequest) Name() string             { return "TALKREQ/v5" }
+func (*TalkRequest) Kind() byte               { return TalkRequestMsg }
+func (p *TalkRequest) RequestID() []byte      { return p.ReqID }
+func (p *TalkRequest) SetRequestID(id []byte) { p.ReqID = id }
 
-func (*TalkResponse) Name() string         { return "TALKRESP/v5" }
-func (*TalkResponse) Kind() byte           { return TalkResponseMsg }
-func (p *TalkResponse) SetReqID(id []byte) { p.ReqID = id }
+func (*TalkResponse) Name() string             { return "TALKRESP/v5" }
+func (*TalkResponse) Kind() byte               { return TalkResponseMsg }
+func (p *TalkResponse) RequestID() []byte      { return p.ReqID }
+func (p *TalkResponse) SetRequestID(id []byte) { p.ReqID = id }
 
-func (*RequestTicket) Name() string         { return "REQTICKET/v5" }
-func (*RequestTicket) Kind() byte           { return RequestTicketMsg }
-func (p *RequestTicket) SetReqID(id []byte) { p.ReqID = id }
+func (*RequestTicket) Name() string             { return "REQTICKET/v5" }
+func (*RequestTicket) Kind() byte               { return RequestTicketMsg }
+func (p *RequestTicket) RequestID() []byte      { return p.ReqID }
+func (p *RequestTicket) SetRequestID(id []byte) { p.ReqID = id }
 
-func (*Regtopic) Name() string         { return "REGTOPIC/v5" }
-func (*Regtopic) Kind() byte           { return RegtopicMsg }
-func (p *Regtopic) SetReqID(id []byte) { p.ReqID = id }
+func (*Regtopic) Name() string             { return "REGTOPIC/v5" }
+func (*Regtopic) Kind() byte               { return RegtopicMsg }
+func (p *Regtopic) RequestID() []byte      { return p.ReqID }
+func (p *Regtopic) SetRequestID(id []byte) { p.ReqID = id }
 
-func (*Ticket) Name() string         { return "TICKET/v5" }
-func (*Ticket) Kind() byte           { return TicketMsg }
-func (p *Ticket) SetReqID(id []byte) { p.ReqID = id }
+func (*Ticket) Name() string             { return "TICKET/v5" }
+func (*Ticket) Kind() byte               { return TicketMsg }
+func (p *Ticket) RequestID() []byte      { return p.ReqID }
+func (p *Ticket) SetRequestID(id []byte) { p.ReqID = id }
 
-func (*Regconfirmation) Name() string         { return "REGCONFIRMATION/v5" }
-func (*Regconfirmation) Kind() byte           { return RegconfirmationMsg }
-func (p *Regconfirmation) SetReqID(id []byte) { p.ReqID = id }
+func (*Regconfirmation) Name() string             { return "REGCONFIRMATION/v5" }
+func (*Regconfirmation) Kind() byte               { return RegconfirmationMsg }
+func (p *Regconfirmation) RequestID() []byte      { return p.ReqID }
+func (p *Regconfirmation) SetRequestID(id []byte) { p.ReqID = id }
 
-func (*TopicQuery) Name() string         { return "TOPICQUERY/v5" }
-func (*TopicQuery) Kind() byte           { return TopicQueryMsg }
-func (p *TopicQuery) SetReqID(id []byte) { p.ReqID = id }
+func (*TopicQuery) Name() string             { return "TOPICQUERY/v5" }
+func (*TopicQuery) Kind() byte               { return TopicQueryMsg }
+func (p *TopicQuery) RequestID() []byte      { return p.ReqID }
+func (p *TopicQuery) SetRequestID(id []byte) { p.ReqID = id }
