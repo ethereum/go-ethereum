@@ -31,17 +31,22 @@ import (
 	"github.com/ethereum/go-ethereum/p2p/enr"
 )
 
-// errorPacket represents an error during packet reading.
+// readError represents an error during packet reading.
 // This exists to facilitate type-switching on the result of conn.read.
-type errorPacket struct {
+type readError struct {
 	err error
 }
 
-func (p *errorPacket) Kind() byte      { return 99 }
-func (p *errorPacket) Name() string    { return fmt.Sprintf("error: %v", p.err) }
-func (p *errorPacket) SetReqID([]byte) {}
-func (p *errorPacket) Error() string   { return p.err.Error() }
-func (p *errorPacket) Unwrap() error   { return p.err }
+func (p *readError) Kind() byte      { return 99 }
+func (p *readError) Name() string    { return fmt.Sprintf("error: %v", p.err) }
+func (p *readError) SetReqID([]byte) {}
+func (p *readError) Error() string   { return p.err.Error() }
+func (p *readError) Unwrap() error   { return p.err }
+
+// readErrorf creates a readError with the given text.
+func readErrorf(format string, args ...interface{}) *readError {
+	return &readError{fmt.Errorf(format, args...)}
+}
 
 // This is the response timeout used in tests.
 const waitTime = 300 * time.Millisecond
@@ -121,7 +126,7 @@ func (tc *conn) reqresp(c net.PacketConn, req v5wire.Packet) v5wire.Packet {
 	switch resp := tc.read(c).(type) {
 	case *v5wire.Whoareyou:
 		if resp.Nonce != reqnonce {
-			return &errorPacket{fmt.Errorf("wrong nonce %x in WHOAREYOU (want %x)", resp.Nonce[:], reqnonce[:])}
+			return readErrorf("wrong nonce %x in WHOAREYOU (want %x)", resp.Nonce[:], reqnonce[:])
 		}
 		resp.Node = tc.remote
 		resp.RecordSeq = tc.remote.Seq()
@@ -151,8 +156,14 @@ func (tc *conn) findnode(c net.PacketConn, dists []uint) ([]*enode.Node, error) 
 			} else {
 				return nil, fmt.Errorf("unexpected WHOAREYOU (nonce %x), waiting for NODES", resp.Nonce[:])
 			}
+		case *v5wire.Ping:
+			// Handle ping from remote.
+			tc.write(c, &v5wire.Pong{
+				ReqID:  resp.ReqID,
+				ENRSeq: tc.localNode.Seq(),
+			}, nil)
 		case *v5wire.Nodes:
-			// Check request ID.
+			// Got NODES! Check request ID.
 			if !bytes.Equal(resp.ReqID, findnode.ReqID) {
 				return nil, fmt.Errorf("NODES response has wrong request id %x", n, resp.ReqID)
 			}
@@ -166,10 +177,10 @@ func (tc *conn) findnode(c net.PacketConn, dists []uint) ([]*enode.Node, error) 
 				n = int(total) - 1
 				first = false
 			} else {
+				n--
 				if resp.Total != total {
 					return nil, fmt.Errorf("invalid NODES response 'total' %d (!= %d)", resp.Total, total)
 				}
-				n--
 			}
 			// Check nodes.
 			nodes, err := checkRecords(resp.Nodes)
@@ -177,6 +188,8 @@ func (tc *conn) findnode(c net.PacketConn, dists []uint) ([]*enode.Node, error) 
 				return nil, fmt.Errorf("invalid node in NODES response: %v", err)
 			}
 			results = append(results, nodes...)
+		default:
+			return nil, fmt.Errorf("expected NODES, got %v", resp)
 		}
 	}
 	return results, nil
@@ -200,20 +213,21 @@ func (tc *conn) write(c net.PacketConn, p v5wire.Packet, challenge *v5wire.Whoar
 func (tc *conn) read(c net.PacketConn) v5wire.Packet {
 	buf := make([]byte, 1280)
 	if err := c.SetReadDeadline(time.Now().Add(waitTime)); err != nil {
-		return &errorPacket{err}
+		return &readError{err}
 	}
 	n, fromAddr, err := c.ReadFrom(buf)
 	if err != nil {
-		return &errorPacket{err}
+		return &readError{err}
 	}
 	_, _, p, err := tc.codec.Decode(buf[:n], fromAddr.String())
 	if err != nil {
-		return &errorPacket{err}
+		return &readError{err}
 	}
 	tc.logf("<< %s", p.Name())
 	return p
 }
 
+// logf prints to the test log.
 func (tc *conn) logf(format string, args ...interface{}) {
 	if tc.log != nil {
 		tc.log.Logf("(%s) %s", tc.localNode.ID().TerminalString(), fmt.Sprintf(format, args...))

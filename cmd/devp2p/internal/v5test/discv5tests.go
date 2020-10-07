@@ -257,7 +257,7 @@ func (bn *bystander) loop() {
 			bn.notifyAdded()
 		case *v5wire.TalkRequest:
 			bn.conn.write(bn.conn.l1, &v5wire.TalkResponse{ReqID: p.ReqID}, nil)
-		case *errorPacket:
+		case *readError:
 			if !netutil.IsTemporaryError(p.err) {
 				bn.conn.logf("shutting down: %v", p.err)
 				return
