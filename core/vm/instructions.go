@@ -438,14 +438,14 @@ func opBlockhash(pc *uint64, interpreter *EVMInterpreter, callContext *callCtx) 
 		return nil, nil
 	}
 	var upper, lower uint64
-	upper = interpreter.evm.BlockNumber.Uint64()
+	upper = interpreter.evm.Context.BlockNumber.Uint64()
 	if upper < 257 {
 		lower = 0
 	} else {
 		lower = upper - 256
 	}
 	if num64 >= lower && num64 < upper {
-		num.SetBytes(interpreter.evm.GetHash(num64).Bytes())
+		num.SetBytes(interpreter.evm.Context.GetHash(num64).Bytes())
 	} else {
 		num.Clear()
 	}
@@ -453,30 +453,30 @@ func opBlockhash(pc *uint64, interpreter *EVMInterpreter, callContext *callCtx) 
 }
 
 func opCoinbase(pc *uint64, interpreter *EVMInterpreter, callContext *callCtx) ([]byte, error) {
-	callContext.stack.push(new(uint256.Int).SetBytes(interpreter.evm.Coinbase.Bytes()))
+	callContext.stack.push(new(uint256.Int).SetBytes(interpreter.evm.Context.Coinbase.Bytes()))
 	return nil, nil
 }
 
 func opTimestamp(pc *uint64, interpreter *EVMInterpreter, callContext *callCtx) ([]byte, error) {
-	v, _ := uint256.FromBig(interpreter.evm.Time)
+	v, _ := uint256.FromBig(interpreter.evm.Context.Time)
 	callContext.stack.push(v)
 	return nil, nil
 }
 
 func opNumber(pc *uint64, interpreter *EVMInterpreter, callContext *callCtx) ([]byte, error) {
-	v, _ := uint256.FromBig(interpreter.evm.BlockNumber)
+	v, _ := uint256.FromBig(interpreter.evm.Context.BlockNumber)
 	callContext.stack.push(v)
 	return nil, nil
 }
 
 func opDifficulty(pc *uint64, interpreter *EVMInterpreter, callContext *callCtx) ([]byte, error) {
-	v, _ := uint256.FromBig(interpreter.evm.Difficulty)
+	v, _ := uint256.FromBig(interpreter.evm.Context.Difficulty)
 	callContext.stack.push(v)
 	return nil, nil
 }
 
 func opGasLimit(pc *uint64, interpreter *EVMInterpreter, callContext *callCtx) ([]byte, error) {
-	callContext.stack.push(new(uint256.Int).SetUint64(interpreter.evm.GasLimit))
+	callContext.stack.push(new(uint256.Int).SetUint64(interpreter.evm.Context.GasLimit))
 	return nil, nil
 }
 
@@ -842,7 +842,7 @@ func makeLog(size int) executionFunc {
 			Data:    d,
 			// This is a non-consensus field, but assigned here because
 			// core/state doesn't know the current block number.
-			BlockNumber: interpreter.evm.BlockNumber.Uint64(),
+			BlockNumber: interpreter.evm.Context.BlockNumber.Uint64(),
 		})
 
 		return nil, nil

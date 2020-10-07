@@ -143,16 +143,18 @@ func TestPrestateTracerCreate2(t *testing.T) {
 	    result: 0x60f3f640a8508fC6a86d45DF051962668E1e8AC7
 	*/
 	origin, _ := signer.Sender(tx)
-	context := vm.Context{
+	txContext := vm.TxContext{
+		Origin:   origin,
+		GasPrice: big.NewInt(1),
+	}
+	context := vm.BlockContext{
 		CanTransfer: core.CanTransfer,
 		Transfer:    core.Transfer,
-		Origin:      origin,
 		Coinbase:    common.Address{},
 		BlockNumber: new(big.Int).SetUint64(8000000),
 		Time:        new(big.Int).SetUint64(5),
 		Difficulty:  big.NewInt(0x30000),
 		GasLimit:    uint64(6000000),
-		GasPrice:    big.NewInt(1),
 	}
 	alloc := core.GenesisAlloc{}
 
@@ -175,7 +177,7 @@ func TestPrestateTracerCreate2(t *testing.T) {
 	if err != nil {
 		t.Fatalf("failed to create call tracer: %v", err)
 	}
-	evm := vm.NewEVM(context, statedb, params.MainnetChainConfig, vm.Config{Debug: true, Tracer: tracer})
+	evm := vm.NewEVM(context, txContext, statedb, params.MainnetChainConfig, vm.Config{Debug: true, Tracer: tracer})
 
 	msg, err := tx.AsMessage(signer)
 	if err != nil {
@@ -230,17 +232,18 @@ func TestCallTracer(t *testing.T) {
 			}
 			signer := types.MakeSigner(test.Genesis.Config, new(big.Int).SetUint64(uint64(test.Context.Number)))
 			origin, _ := signer.Sender(tx)
-
-			context := vm.Context{
+			txContext := vm.TxContext{
+				Origin:   origin,
+				GasPrice: tx.GasPrice(),
+			}
+			context := vm.BlockContext{
 				CanTransfer: core.CanTransfer,
 				Transfer:    core.Transfer,
-				Origin:      origin,
 				Coinbase:    test.Context.Miner,
 				BlockNumber: new(big.Int).SetUint64(uint64(test.Context.Number)),
 				Time:        new(big.Int).SetUint64(uint64(test.Context.Time)),
 				Difficulty:  (*big.Int)(test.Context.Difficulty),
 				GasLimit:    uint64(test.Context.GasLimit),
-				GasPrice:    tx.GasPrice(),
 			}
 			_, statedb := tests.MakePreState(rawdb.NewMemoryDatabase(), test.Genesis.Alloc, false)
 
@@ -249,7 +252,7 @@ func TestCallTracer(t *testing.T) {
 			if err != nil {
 				t.Fatalf("failed to create call tracer: %v", err)
 			}
-			evm := vm.NewEVM(context, statedb, test.Genesis.Config, vm.Config{Debug: true, Tracer: tracer})
+			evm := vm.NewEVM(context, txContext, statedb, test.Genesis.Config, vm.Config{Debug: true, Tracer: tracer})
 
 			msg, err := tx.AsMessage(signer)
 			if err != nil {
