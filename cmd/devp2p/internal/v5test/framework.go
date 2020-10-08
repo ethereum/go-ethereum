@@ -54,11 +54,11 @@ const waitTime = 300 * time.Millisecond
 
 // conn is a connection to the node under test.
 type conn struct {
-	l1, l2     net.PacketConn
 	localNode  *enode.LocalNode
 	localKey   *ecdsa.PrivateKey
 	remote     *enode.Node
 	remoteAddr *net.UDPAddr
+	listeners  []net.PacketConn
 
 	log           logger
 	codec         *v5wire.Codec
@@ -72,15 +72,7 @@ type logger interface {
 }
 
 // newConn sets up a connection to the given node.
-func newConn(dest *enode.Node, listen1, listen2 string, log logger) *conn {
-	l1, err := net.ListenPacket("udp", fmt.Sprintf("%v:0", listen1))
-	if err != nil {
-		panic(err)
-	}
-	l2, err := net.ListenPacket("udp", fmt.Sprintf("%v:0", listen2))
-	if err != nil {
-		panic(err)
-	}
+func newConn(dest *enode.Node, log logger) *conn {
 	key, err := crypto.GenerateKey()
 	if err != nil {
 		panic(err)
@@ -90,12 +82,8 @@ func newConn(dest *enode.Node, listen1, listen2 string, log logger) *conn {
 		panic(err)
 	}
 	ln := enode.NewLocalNode(db, key)
-	ln.SetStaticIP(laddr(l1).IP)
-	ln.SetFallbackUDP(laddr(l1).Port)
 
 	return &conn{
-		l1:         l1,
-		l2:         l2,
 		localKey:   key,
 		localNode:  ln,
 		remote:     dest,
@@ -105,10 +93,25 @@ func newConn(dest *enode.Node, listen1, listen2 string, log logger) *conn {
 	}
 }
 
-// close shuts down the listener.
+func (tc *conn) setEndpoint(c net.PacketConn) {
+	tc.localNode.SetStaticIP(laddr(c).IP)
+	tc.localNode.SetFallbackUDP(laddr(c).Port)
+}
+
+func (tc *conn) listen(ip string) net.PacketConn {
+	l, err := net.ListenPacket("udp", fmt.Sprintf("%v:0", ip))
+	if err != nil {
+		panic(err)
+	}
+	tc.listeners = append(tc.listeners, l)
+	return l
+}
+
+// close shuts down all listeners and the local node.
 func (tc *conn) close() {
-	tc.l1.Close()
-	tc.l2.Close()
+	for _, l := range tc.listeners {
+		l.Close()
+	}
 	tc.localNode.Database().Close()
 }
 

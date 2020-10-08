@@ -34,8 +34,16 @@ type Suite struct {
 	Listen1, Listen2 string // listening addresses
 }
 
-func (s *Suite) listen(log logger) *conn {
-	return newConn(s.Dest, s.Listen1, s.Listen2, log)
+func (s *Suite) listen1(log logger) (*conn, net.PacketConn) {
+	c := newConn(s.Dest, log)
+	l := c.listen(s.Listen1)
+	return c, l
+}
+
+func (s *Suite) listen2(log logger) (*conn, net.PacketConn, net.PacketConn) {
+	c := newConn(s.Dest, log)
+	l1, l2 := c.listen(s.Listen1), c.listen(s.Listen2)
+	return c, l1, l2
 }
 
 func (s *Suite) AllTests() []utesting.Test {
@@ -52,13 +60,13 @@ func (s *Suite) AllTests() []utesting.Test {
 
 // This test sends PING and expects a PONG response.
 func (s *Suite) TestPing(t *utesting.T) {
-	conn := s.listen(t)
+	conn, l1 := s.listen1(t)
 	defer conn.close()
 
 	ping := &v5wire.Ping{ReqID: conn.nextReqID()}
-	switch resp := conn.reqresp(conn.l1, ping).(type) {
+	switch resp := conn.reqresp(l1, ping).(type) {
 	case *v5wire.Pong:
-		checkPong(t, resp, ping, conn.l1)
+		checkPong(t, resp, ping, l1)
 	default:
 		t.Fatal("expected PONG, got", resp.Name())
 	}
@@ -79,11 +87,11 @@ func checkPong(t *utesting.T, pong *v5wire.Pong, ping *v5wire.Ping, c net.Packet
 // This test sends PING with a 9-byte request ID, which isn't allowed by the spec.
 // The remote node should not respond.
 func (s *Suite) TestPingLargeRequestID(t *utesting.T) {
-	conn := s.listen(t)
+	conn, l1 := s.listen1(t)
 	defer conn.close()
 
 	ping := &v5wire.Ping{ReqID: make([]byte, 9)}
-	switch resp := conn.reqresp(conn.l1, ping).(type) {
+	switch resp := conn.reqresp(l1, ping).(type) {
 	case *v5wire.Pong:
 		t.Errorf("PONG response with unknown request ID %x", resp.ReqID)
 	case *readError:
@@ -99,45 +107,45 @@ func (s *Suite) TestPingLargeRequestID(t *utesting.T) {
 // on another IP, which shouldn't work. The remote node should respond with WHOAREYOU for
 // the attempt from a different IP.
 func (s *Suite) TestPingMultiIP(t *utesting.T) {
-	conn := s.listen(t)
+	conn, l1, l2 := s.listen2(t)
 	defer conn.close()
 
 	// Create the session on l1.
 	ping := &v5wire.Ping{ReqID: conn.nextReqID()}
-	resp := conn.reqresp(conn.l1, ping)
+	resp := conn.reqresp(l1, ping)
 	if resp.Kind() != v5wire.PongMsg {
 		t.Fatal("expected PONG, got", resp)
 	}
-	checkPong(t, resp.(*v5wire.Pong), ping, conn.l1)
+	checkPong(t, resp.(*v5wire.Pong), ping, l1)
 
 	// Send on l2. This reuses the session because there is only one codec.
 	ping2 := &v5wire.Ping{ReqID: conn.nextReqID()}
-	conn.write(conn.l2, ping2, nil)
-	switch resp := conn.read(conn.l2).(type) {
+	conn.write(l2, ping2, nil)
+	switch resp := conn.read(l2).(type) {
 	case *v5wire.Pong:
-		t.Fatalf("remote responded to PING from %v for session on IP %v", laddr(conn.l2).IP, laddr(conn.l1).IP)
+		t.Fatalf("remote responded to PING from %v for session on IP %v", laddr(l2).IP, laddr(l1).IP)
 	case *v5wire.Whoareyou:
 		t.Logf("got WHOAREYOU for new session as expected")
 		resp.Node = s.Dest
-		conn.write(conn.l2, ping2, resp)
+		conn.write(l2, ping2, resp)
 	default:
 		t.Fatal("expected WHOAREYOU, got", resp)
 	}
 
 	// Catch the PONG on l2.
-	switch resp := conn.read(conn.l2).(type) {
+	switch resp := conn.read(l2).(type) {
 	case *v5wire.Pong:
-		checkPong(t, resp, ping2, conn.l2)
+		checkPong(t, resp, ping2, l2)
 	default:
 		t.Fatal("expected PONG, got", resp)
 	}
 
 	// Try on l1 again.
 	ping3 := &v5wire.Ping{ReqID: conn.nextReqID()}
-	conn.write(conn.l1, ping3, nil)
-	switch resp := conn.read(conn.l1).(type) {
+	conn.write(l1, ping3, nil)
+	switch resp := conn.read(l1).(type) {
 	case *v5wire.Pong:
-		t.Fatalf("remote responded to PING from %v for session on IP %v", laddr(conn.l1).IP, laddr(conn.l2).IP)
+		t.Fatalf("remote responded to PING from %v for session on IP %v", laddr(l1).IP, laddr(l2).IP)
 	case *v5wire.Whoareyou:
 		t.Logf("got WHOAREYOU for new session as expected")
 	default:
@@ -149,13 +157,13 @@ func (s *Suite) TestPingMultiIP(t *utesting.T) {
 // packet instead of a handshake message packet. The remote node should respond with
 // another WHOAREYOU challenge for the second packet.
 func (s *Suite) TestPingHandshakeInterrupted(t *utesting.T) {
-	conn := s.listen(t)
+	conn, l1 := s.listen1(t)
 	defer conn.close()
 
 	// First PING triggers challenge.
 	ping := &v5wire.Ping{ReqID: conn.nextReqID()}
-	conn.write(conn.l1, ping, nil)
-	switch resp := conn.read(conn.l1).(type) {
+	conn.write(l1, ping, nil)
+	switch resp := conn.read(l1).(type) {
 	case *v5wire.Whoareyou:
 		t.Logf("got WHOAREYOU for PING")
 	default:
@@ -164,9 +172,9 @@ func (s *Suite) TestPingHandshakeInterrupted(t *utesting.T) {
 
 	// Send second PING.
 	ping2 := &v5wire.Ping{ReqID: conn.nextReqID()}
-	switch resp := conn.reqresp(conn.l1, ping2).(type) {
+	switch resp := conn.reqresp(l1, ping2).(type) {
 	case *v5wire.Pong:
-		checkPong(t, resp, ping2, conn.l1)
+		checkPong(t, resp, ping2, l1)
 	default:
 		t.Fatal("expected WHOAREYOU, got", resp)
 	}
@@ -174,12 +182,12 @@ func (s *Suite) TestPingHandshakeInterrupted(t *utesting.T) {
 
 // This test sends TALKREQ and expects an empty TALKRESP response.
 func (s *Suite) TestTalkRequest(t *utesting.T) {
-	conn := s.listen(t)
+	conn, l1 := s.listen1(t)
 	defer conn.close()
 
 	// Non-empty request ID.
 	id := conn.nextReqID()
-	resp := conn.reqresp(conn.l1, &v5wire.TalkRequest{ReqID: id, Protocol: "test-protocol"})
+	resp := conn.reqresp(l1, &v5wire.TalkRequest{ReqID: id, Protocol: "test-protocol"})
 	switch resp := resp.(type) {
 	case *v5wire.TalkResponse:
 		if !bytes.Equal(resp.ReqID, id) {
@@ -193,7 +201,7 @@ func (s *Suite) TestTalkRequest(t *utesting.T) {
 	}
 
 	// Empty request ID.
-	resp = conn.reqresp(conn.l1, &v5wire.TalkRequest{Protocol: "test-protocol"})
+	resp = conn.reqresp(l1, &v5wire.TalkRequest{Protocol: "test-protocol"})
 	switch resp := resp.(type) {
 	case *v5wire.TalkResponse:
 		if len(resp.ReqID) > 0 {
@@ -209,10 +217,10 @@ func (s *Suite) TestTalkRequest(t *utesting.T) {
 
 // This test checks that the remote node returns itself for FINDNODE with distance zero.
 func (s *Suite) TestFindnodeZeroDistance(t *utesting.T) {
-	conn := s.listen(t)
+	conn, l1 := s.listen1(t)
 	defer conn.close()
 
-	nodes, err := conn.findnode(conn.l1, []uint{0})
+	nodes, err := conn.findnode(l1, []uint{0})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -227,9 +235,6 @@ func (s *Suite) TestFindnodeZeroDistance(t *utesting.T) {
 // In this test, multiple nodes ping the node under test. After waiting for them to be
 // accepted into the remote table, the test checks that they are returned by FINDNODE.
 func (s *Suite) TestFindnodeResults(t *utesting.T) {
-	conn := s.listen(t)
-	defer conn.close()
-
 	// Create bystanders.
 	nodes := make([]*bystander, 5)
 	added := make(chan enode.ID, len(nodes))
@@ -267,7 +272,9 @@ func (s *Suite) TestFindnodeResults(t *utesting.T) {
 	}
 
 	// Send FINDNODE for all distances.
-	foundNodes, err := conn.findnode(conn.l1, dists)
+	conn, l1 := s.listen1(t)
+	defer conn.close()
+	foundNodes, err := conn.findnode(l1, dists)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -288,15 +295,18 @@ func (s *Suite) TestFindnodeResults(t *utesting.T) {
 type bystander struct {
 	dest *enode.Node
 	conn *conn
-	log  *utesting.T
+	l    net.PacketConn
 
 	addedCh chan enode.ID
 	done    sync.WaitGroup
 }
 
 func newBystander(t *utesting.T, s *Suite, added chan enode.ID) *bystander {
+	conn, l := s.listen1(t)
+	conn.setEndpoint(l) // bystander nodes need IP/port to get pinged
 	bn := &bystander{
-		conn:    s.listen(t),
+		conn:    conn,
+		l:       l,
 		dest:    s.Dest,
 		addedCh: added,
 	}
@@ -327,16 +337,16 @@ func (bn *bystander) loop() {
 	for {
 		// Ping the remote node.
 		if !wasAdded && time.Since(lastPing) > 10*time.Second {
-			bn.conn.reqresp(bn.conn.l1, &v5wire.Ping{
+			bn.conn.reqresp(bn.l, &v5wire.Ping{
 				ReqID:  bn.conn.nextReqID(),
 				ENRSeq: bn.dest.Seq(),
 			})
 			lastPing = time.Now()
 		}
 		// Answer packets.
-		switch p := bn.conn.read(bn.conn.l1).(type) {
+		switch p := bn.conn.read(bn.l).(type) {
 		case *v5wire.Ping:
-			bn.conn.write(bn.conn.l1, &v5wire.Pong{
+			bn.conn.write(bn.l, &v5wire.Pong{
 				ReqID:  p.ReqID,
 				ENRSeq: bn.conn.localNode.Seq(),
 				ToIP:   bn.dest.IP(),
@@ -345,11 +355,11 @@ func (bn *bystander) loop() {
 			wasAdded = true
 			bn.notifyAdded()
 		case *v5wire.Findnode:
-			bn.conn.write(bn.conn.l1, &v5wire.Nodes{ReqID: p.ReqID, Total: 1}, nil)
+			bn.conn.write(bn.l, &v5wire.Nodes{ReqID: p.ReqID, Total: 1}, nil)
 			wasAdded = true
 			bn.notifyAdded()
 		case *v5wire.TalkRequest:
-			bn.conn.write(bn.conn.l1, &v5wire.TalkResponse{ReqID: p.ReqID}, nil)
+			bn.conn.write(bn.l, &v5wire.TalkResponse{ReqID: p.ReqID}, nil)
 		case *readError:
 			if !netutil.IsTemporaryError(p.err) {
 				bn.conn.logf("shutting down: %v", p.err)
