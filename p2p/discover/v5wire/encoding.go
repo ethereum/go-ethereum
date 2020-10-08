@@ -464,9 +464,9 @@ func (c *Codec) decodeWhoareyou(head *Header, headerData []byte) (Packet, error)
 	if len(head.AuthData) != sizeofWhoareyouAuthData {
 		return nil, fmt.Errorf("invalid auth size %d for WHOAREYOU", len(head.AuthData))
 	}
+	var auth whoareyouAuthData
 	c.reader.Reset(head.AuthData)
-	auth := new(whoareyouAuthData)
-	binary.Read(&c.reader, binary.BigEndian, auth)
+	binary.Read(&c.reader, binary.BigEndian, &auth)
 	p := &Whoareyou{
 		Nonce:         head.Nonce,
 		IDNonce:       auth.IDNonce,
