@@ -511,16 +511,16 @@ func (c *Codec) decodeHandshake(fromAddr string, head *Header) (*enode.Node, *ha
 	if err != nil {
 		return nil, nil, nil, err
 	}
-	// Verify ephemeral key is on curve.
-	ephkey, err := DecodePubkey(c.privkey.Curve, auth.pubkey)
-	if err != nil {
-		return nil, nil, nil, errInvalidAuthKey
-	}
 	// Verify ID nonce signature.
 	sig := auth.signature
 	cdata := challenge.ChallengeData
 	if err = verifyIDSignature(c.sha256, sig, node, cdata, auth.pubkey, c.localnode.ID()); err != nil {
 		return nil, nil, nil, err
+	}
+	// Verify ephemeral key is on curve.
+	ephkey, err := DecodePubkey(c.privkey.Curve, auth.pubkey)
+	if err != nil {
+		return nil, nil, nil, errInvalidAuthKey
 	}
 	// Derive sesssion keys.
 	session := deriveKeys(sha256.New, c.privkey, ephkey, auth.h.SrcID, c.localnode.ID(), cdata)
