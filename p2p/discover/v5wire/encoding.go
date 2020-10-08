@@ -495,76 +495,70 @@ func (c *Codec) decodeHandshakeMessage(fromAddr string, head *Header, headerData
 	return node, msg, nil
 }
 
-func (c *Codec) decodeHandshake(fromAddr string, head *Header) (*enode.Node, *handshakeAuthData, *session, error) {
-	auth, err := c.decodeHandshakeAuthData(head)
-	if err != nil {
-		return nil, nil, nil, err
+func (c *Codec) decodeHandshake(fromAddr string, head *Header) (n *enode.Node, auth handshakeAuthData, s *session, err error) {
+	if auth, err = c.decodeHandshakeAuthData(head); err != nil {
+		return nil, auth, nil, err
 	}
 
 	// Verify against our last WHOAREYOU.
 	challenge := c.sc.getHandshake(auth.h.SrcID, fromAddr)
 	if challenge == nil {
-		return nil, nil, nil, errUnexpectedHandshake
+		return nil, auth, nil, errUnexpectedHandshake
 	}
 	// Get node record.
-	node, err := c.decodeHandshakeRecord(challenge.Node, auth.h.SrcID, auth.record)
+	n, err = c.decodeHandshakeRecord(challenge.Node, auth.h.SrcID, auth.record)
 	if err != nil {
-		return nil, nil, nil, err
+		return nil, auth, nil, err
 	}
 	// Verify ID nonce signature.
 	sig := auth.signature
 	cdata := challenge.ChallengeData
-	if err = verifyIDSignature(c.sha256, sig, node, cdata, auth.pubkey, c.localnode.ID()); err != nil {
-		return nil, nil, nil, err
+	err = verifyIDSignature(c.sha256, sig, n, cdata, auth.pubkey, c.localnode.ID())
+	if err != nil {
+		return nil, auth, nil, err
 	}
 	// Verify ephemeral key is on curve.
 	ephkey, err := DecodePubkey(c.privkey.Curve, auth.pubkey)
 	if err != nil {
-		return nil, nil, nil, errInvalidAuthKey
+		return nil, auth, nil, errInvalidAuthKey
 	}
 	// Derive sesssion keys.
 	session := deriveKeys(sha256.New, c.privkey, ephkey, auth.h.SrcID, c.localnode.ID(), cdata)
 	session = session.keysFlipped()
-	return node, auth, session, nil
+	return n, auth, session, nil
 }
 
 // decodeHandshakeAuthData reads the authdata section of a handshake packet.
-func (c *Codec) decodeHandshakeAuthData(head *Header) (*handshakeAuthData, error) {
+func (c *Codec) decodeHandshakeAuthData(head *Header) (auth handshakeAuthData, err error) {
 	// Decode fixed size part.
 	if len(head.AuthData) < sizeofHandshakeAuthData {
-		return nil, fmt.Errorf("header authsize %d too low for handshake", head.AuthSize)
+		return auth, fmt.Errorf("header authsize %d too low for handshake", head.AuthSize)
 	}
 	c.reader.Reset(head.AuthData)
-	var auth handshakeAuthData
 	binary.Read(&c.reader, binary.BigEndian, &auth.h)
 	head.src = auth.h.SrcID
 
 	// Decode variable-size part.
-	varspace := int(head.AuthSize) - sizeofHandshakeAuthData
-	if c.reader.Len() < varspace {
-		return nil, errTooShort
+	var (
+		vardata       = head.AuthData[sizeofHandshakeAuthData:]
+		sigAndKeySize = int(auth.h.SigSize) + int(auth.h.PubkeySize)
+		keyOffset     = int(auth.h.SigSize)
+		recOffset     = keyOffset + int(auth.h.PubkeySize)
+	)
+	if len(vardata) < sigAndKeySize {
+		return auth, errTooShort
 	}
-	if int(auth.h.SigSize)+int(auth.h.PubkeySize) > varspace {
-		return nil, fmt.Errorf("invalid handshake data sizes (%d+%d > %d)", auth.h.SigSize, auth.h.PubkeySize, varspace)
-	}
-	if !readNew(&auth.signature, int(auth.h.SigSize), &c.reader) {
-		return nil, fmt.Errorf("can't read auth signature")
-	}
-	if !readNew(&auth.pubkey, int(auth.h.PubkeySize), &c.reader) {
-		return nil, fmt.Errorf("can't read auth pubkey")
-	}
-	recordsize := varspace - int(auth.h.SigSize) - int(auth.h.PubkeySize)
-	if !readNew(&auth.record, recordsize, &c.reader) {
-		return nil, fmt.Errorf("can't read auth node record")
-	}
-	return &auth, nil
+	auth.signature = vardata[:keyOffset]
+	auth.pubkey = vardata[keyOffset:recOffset]
+	auth.record = vardata[recOffset:]
+	return auth, nil
 }
 
 // decodeHandshakeRecord verifies the node record contained in a handshake packet. The
 // remote node should include the record if we don't have one or if ours is older than the
 // latest sequence number.
-func (c *Codec) decodeHandshakeRecord(local *enode.Node, wantID enode.ID, remote []byte) (node *enode.Node, err error) {
-	node = local
+func (c *Codec) decodeHandshakeRecord(local *enode.Node, wantID enode.ID, remote []byte) (*enode.Node, error) {
+	node := local
 	if len(remote) > 0 {
 		var record enr.Record
 		if err := rlp.DecodeBytes(remote, &record); err != nil {
@@ -582,9 +576,9 @@ func (c *Codec) decodeHandshakeRecord(local *enode.Node, wantID enode.ID, remote
 		}
 	}
 	if node == nil {
-		err = errNoRecord
+		return nil, errNoRecord
 	}
-	return node, err
+	return node, nil
 }
 
 // decodeMessage reads packet data following the header as an ordinary message packet.
@@ -649,14 +643,4 @@ func bytesCopy(r *bytes.Buffer) []byte {
 	b := make([]byte, r.Len())
 	copy(b, r.Bytes())
 	return b
-}
-
-// readNew reads 'length' bytes from 'r' and stores them into 'data'.
-func readNew(data *[]byte, length int, r *bytes.Reader) bool {
-	if length == 0 {
-		return true
-	}
-	*data = make([]byte, length)
-	n, _ := r.Read(*data)
-	return n == length
 }
