@@ -618,12 +618,6 @@ func (c *Codec) decryptMessage(input, nonce, headerData, readKey []byte) (Packet
 	return DecodeMessage(msgdata[0], msgdata[1:])
 }
 
-// sha256 returns the shared hash instance.
-func (c *Codec) sha256reset() hash.Hash {
-	c.sha256.Reset()
-	return c.sha256
-}
-
 // checkValid performs some basic validity checks on the header.
 // The packetLen here is the length remaining after the static header.
 func (h *StaticHeader) checkValid(packetLen int) error {
