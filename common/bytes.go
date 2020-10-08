@@ -19,30 +19,7 @@ package common
 
 import (
 	"encoding/hex"
-
-	"github.com/ethereum/go-ethereum/common/hexutil"
 )
-
-// ToHex returns the hex representation of b, prefixed with '0x'.
-// For empty slices, the return value is "0x0".
-//
-// Deprecated: use hexutil.Encode instead.
-func ToHex(b []byte) string {
-	hex := Bytes2Hex(b)
-	if len(hex) == 0 {
-		hex = "0"
-	}
-	return "0x" + hex
-}
-
-// ToHexArray creates a array of hex-string based on []byte
-func ToHexArray(b [][]byte) []string {
-	r := make([]string, len(b))
-	for i := range b {
-		r[i] = hexutil.Encode(b[i])
-	}
-	return r
-}
 
 // FromHex returns the bytes represented by the hexadecimal string s.
 // s may be prefixed with "0x".

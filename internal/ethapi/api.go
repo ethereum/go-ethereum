@@ -592,6 +592,15 @@ func (s *PublicBlockChainAPI) GetProof(ctx context.Context, address common.Addre
 		codeHash = crypto.Keccak256Hash(nil)
 	}
 
+	// toHexArray creates a array of hex-string based on []byte
+	toHexArray := func(b [][]byte) []string {
+		r := make([]string, len(b))
+		for i := range b {
+			r[i] = hexutil.Encode(b[i])
+		}
+		return r
+	}
+
 	// create the proof for the storageKeys
 	for i, key := range storageKeys {
 		if storageTrie != nil {
@@ -599,7 +608,7 @@ func (s *PublicBlockChainAPI) GetProof(ctx context.Context, address common.Addre
 			if storageError != nil {
 				return nil, storageError
 			}
-			storageProof[i] = StorageResult{key, (*hexutil.Big)(state.GetState(address, common.HexToHash(key)).Big()), common.ToHexArray(proof)}
+			storageProof[i] = StorageResult{key, (*hexutil.Big)(state.GetState(address, common.HexToHash(key)).Big()), toHexArray(proof)}
 		} else {
 			storageProof[i] = StorageResult{key, &hexutil.Big{}, []string{}}
 		}
@@ -613,7 +622,7 @@ func (s *PublicBlockChainAPI) GetProof(ctx context.Context, address common.Addre
 
 	return &AccountResult{
 		Address:      address,
-		AccountProof: common.ToHexArray(accountProof),
+		AccountProof: toHexArray(accountProof),
 		Balance:      (*hexutil.Big)(state.GetBalance(address)),
 		CodeHash:     codeHash,
 		Nonce:        hexutil.Uint64(state.GetNonce(address)),
