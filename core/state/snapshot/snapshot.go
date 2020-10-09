@@ -647,13 +647,13 @@ func (t *Tree) disklayer() *diskLayer {
 	if snap == nil {
 		return nil
 	}
-	for _, ok := snap.(*diskLayer); !ok && snap != nil; _, ok = snap.(*diskLayer) {
-		snap = snap.Parent()
+	switch layer := snap.(type) {
+	case *diskLayer:
+		return layer
+	case *diffLayer:
+		return layer.origin
 	}
-	if _, ok := snap.(*diskLayer); !ok {
-		return nil
-	}
-	return snap.(*diskLayer)
+	return nil
 }
 
 // generating is an internal helper function which reports whether the snapshot
