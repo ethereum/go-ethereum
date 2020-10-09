@@ -617,3 +617,31 @@ func (t *Tree) AccountIterator(root common.Hash, seek common.Hash) (AccountItera
 func (t *Tree) StorageIterator(root common.Hash, account common.Hash, seek common.Hash) (StorageIterator, error) {
 	return newFastStorageIterator(t, root, account, seek)
 }
+
+// diskRoot is an internal helper function to return the disk layer root.
+// The lock of snapTree is assumed to be held already.
+func (t *Tree) diskRoot() common.Hash {
+	var snap snapshot
+	for _, s := range t.layers {
+		snap = s
+		break
+	}
+	if snap == nil {
+		return common.Hash{}
+	}
+	for _, ok := snap.(*diskLayer); !ok && snap != nil; _, ok = snap.(*diskLayer) {
+		snap = snap.Parent()
+	}
+	if _, ok := snap.(*diskLayer); !ok {
+		return common.Hash{}
+	}
+	return snap.Root()
+}
+
+// diskRoot is an external helper function to return the disk layer root.
+func (t *Tree) DiskRoot() common.Hash {
+	t.lock.Lock()
+	defer t.lock.Unlock()
+
+	return t.diskRoot()
+}
