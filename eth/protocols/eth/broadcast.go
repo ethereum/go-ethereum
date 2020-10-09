@@ -65,9 +65,10 @@ func (p *Peer) broadcastBlocks() {
 // node internals and at the same time rate limits queued data.
 func (p *Peer) broadcastTransactions() {
 	var (
-		queue []common.Hash         // Queue of hashes to broadcast as full transactions
-		done  chan struct{}         // Non-nil if background broadcaster is running
-		fail  = make(chan error, 1) // Channel used to receive network error
+		queue  []common.Hash         // Queue of hashes to broadcast as full transactions
+		done   chan struct{}         // Non-nil if background broadcaster is running
+		fail   = make(chan error, 1) // Channel used to receive network error
+		failed bool                  // Flag whether a send failed, discard everything onward
 	)
 	for {
 		// If there's no in-flight broadcast running, check if a new one is needed
@@ -103,6 +104,10 @@ func (p *Peer) broadcastTransactions() {
 		// Transfer goroutine may or may not have been started, listen for events
 		select {
 		case hashes := <-p.txBroadcast:
+			// If the connection failed, discard all transaction events
+			if failed {
+				continue
+			}
 			// New batch of transactions to be broadcast, queue them (with cap)
 			queue = append(queue, hashes...)
 			if len(queue) > maxQueuedTxs {
@@ -114,7 +119,7 @@ func (p *Peer) broadcastTransactions() {
 			done = nil
 
 		case <-fail:
-			return
+			failed = true
 
 		case <-p.term:
 			return
@@ -127,9 +132,10 @@ func (p *Peer) broadcastTransactions() {
 // node internals and at the same time rate limits queued data.
 func (p *Peer) announceTransactions() {
 	var (
-		queue []common.Hash         // Queue of hashes to announce as transaction stubs
-		done  chan struct{}         // Non-nil if background announcer is running
-		fail  = make(chan error, 1) // Channel used to receive network error
+		queue  []common.Hash         // Queue of hashes to announce as transaction stubs
+		done   chan struct{}         // Non-nil if background announcer is running
+		fail   = make(chan error, 1) // Channel used to receive network error
+		failed bool                  // Flag whether a send failed, discard everything onward
 	)
 	for {
 		// If there's no in-flight announce running, check if a new one is needed
@@ -165,6 +171,10 @@ func (p *Peer) announceTransactions() {
 		// Transfer goroutine may or may not have been started, listen for events
 		select {
 		case hashes := <-p.txAnnounce:
+			// If the connection failed, discard all transaction events
+			if failed {
+				continue
+			}
 			// New batch of transactions to be broadcast, queue them (with cap)
 			queue = append(queue, hashes...)
 			if len(queue) > maxQueuedTxAnns {
@@ -176,7 +186,7 @@ func (p *Peer) announceTransactions() {
 			done = nil
 
 		case <-fail:
-			return
+			failed = true
 
 		case <-p.term:
 			return
