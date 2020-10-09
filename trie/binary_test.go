@@ -175,3 +175,49 @@ func TestBinaryTrieInsertWithOffsetAndHash(t *testing.T) {
 		t.Fatalf("invalid empty trie hash, got %x != exp %x", got, exp)
 	}
 }
+
+func TestBinaryTrieReadEmpty(t *testing.T) {
+	trie := NewBinaryTrie()
+	_, err := trie.TryGet([]byte{1})
+	if err != errKeyNotPresent {
+		t.Fatalf("incorrect error received, expected '%v', got '%v'", errKeyNotPresent, err)
+	}
+}
+
+func TestBinaryTrieReadOneLeaf(t *testing.T) {
+	trie := NewBinaryTrie()
+	trie.Update([]byte{0}, []byte{10})
+
+	v, err := trie.TryGet([]byte{0})
+	if err != nil {
+		t.Fatalf("error searching for key 0 in trie, err=%v", err)
+	}
+	if bytes.Equal(v, []byte{10}) {
+		t.Fatalf("could not find correct value %x != 0a", v)
+	}
+
+	v, err = trie.TryGet([]byte{1})
+	if err != errKeyNotPresent {
+		t.Fatalf("incorrect error received, expected '%v', got '%v'", errKeyNotPresent, err)
+	}
+}
+
+func TestBinaryTrieReadOneFromManyLeaves(t *testing.T) {
+	trie := NewBinaryTrie()
+	trie.Update([]byte{0}, []byte{10})
+	trie.Update([]byte{8}, []byte{18})
+	trie.Update([]byte{11}, []byte{20})
+
+	v, err := trie.TryGet([]byte{0})
+	if err != nil {
+		t.Fatalf("error searching for key 0 in trie, err=%v", err)
+	}
+	if bytes.Equal(v, []byte{10}) {
+		t.Fatalf("could not find correct value %x != 0a", v)
+	}
+
+	v, err = trie.TryGet([]byte{1})
+	if err != errKeyNotPresent {
+		t.Fatalf("incorrect error received, expected '%v', got '%v'", errKeyNotPresent, err)
+	}
+}

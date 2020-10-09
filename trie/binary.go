@@ -79,7 +79,9 @@ type (
 
 var (
 	errInsertIntoHash    = errors.New("trying to insert into a hash")
+	errReadFromHash      = errors.New("trying to read from a hash")
 	errReadFromEmptyTree = errors.New("reached an empty subtree")
+	errKeyNotPresent     = errors.New("trie doesn't contain key")
 
 	// 0_32
 	zero32 = []byte{0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0}
@@ -140,70 +142,49 @@ func NewBinTrie() BinaryNode {
 	return empty(struct{}{})
 }
 
-//func (t *branch) Get(key []byte) []byte {
-//res, err := t.TryGet(key)
-//if err != nil {
-//log.Error(fmt.Sprintf("Unhandled trie error: %v", err))
-//}
-//return res
-//}
+func (bt *BinaryTrie) TryGet(key []byte) ([]byte, error) {
+	bk := newBinKey(key)
+	off := 0
 
-//func (t *branch) TryGet(key []byte) ([]byte, error) {
-//value, err := t.tryGet(key, 0)
-//return value, err
-//}
+	var currentNode *branch
+	switch bt.root.(type) {
+	case empty:
+		return nil, errReadFromEmptyTree
+	case *branch:
+		currentNode = bt.root.(*branch)
+	case hashBinaryNode:
+		return nil, errReadFromHash
+	}
 
-// getPrefixLen returns the bit length of the current node's prefix
-//func (t *branch) getPrefixLen() int {
-//if t.endBit > t.startBit {
-//return t.endBit - t.startBit
-//}
-//return 0
-//}
+	for {
+		fmt.Printf("%x\n", currentNode.prefix)
+		if !bk.samePrefix(currentNode.prefix, off) {
+			return nil, errKeyNotPresent
+		}
 
-// getBit returns the boolean value of bit at offset `off` in
-// the byte key `key`
-func getBit(key []byte, off int) bool {
-	mask := byte(1) << (7 - uint(off)%8)
+		// XXX if it is a leaf node, then the value needs
+		// to be returned right there and then.
 
-	return byte(key[uint(off)/8])&mask != byte(0)
+		mustBreak := false
+		// XXX ca va creer le node s'il existe pas, et on ne
+		// veut pas de ca.
+		if bk[off+len(currentNode.prefix)] == 0 {
+			currentNode, mustBreak = bt.resolveNode(currentNode.left, bk, off, nil)
+		} else {
+			currentNode, mustBreak = bt.resolveNode(currentNode.right, bk, off, nil)
+		}
+		// XXX j'aime vraiment pas ca, le mieux serait de sortir
+		// la creation du leaf dans TryUpdate pour pas qu'on melange
+		// les deux, et du coup on se debarasse de mustBreak
+		if mustBreak {
+			if currentNode == nil {
+				return nil, errKeyNotPresent
+			}
+			return currentNode.value, nil
+		}
+		off += len(currentNode.prefix) + 1
+	}
 }
-
-//func (t *branch) tryGet(key []byte, depth int) ([]byte, error) {
-// Compare the key and the prefix. If they represent the
-// same bitfield, recurse. Otherwise, raise an error as
-// the value isn't present in this trie.
-//var i int
-//for i = 0; i < t.getPrefixLen(); i++ {
-//if getBit(key, depth+i) != t.getPrefixBit(i) {
-//return nil, fmt.Errorf("Key %v isn't present in this trie", key)
-//}
-//}
-
-//// Exit condition: has the length of the key been reached?
-//if depth+i == 8*len(key) {
-//if t.value == nil {
-//return nil, fmt.Errorf("Key %v isn't present in this trie", key)
-//}
-//return t.value, nil
-//}
-
-//// End of the key hasn't been reached, recurse into left or right
-//// if the corresponding node is available.
-//child := t.left
-//isRight := getBit(key, depth+i)
-//if isRight {
-//child = t.right
-//}
-
-//if child == nil {
-//if depth+i < len(key)*8-1 || t.value == nil {
-//return nil, fmt.Errorf("could not find key %s in trie depth=%d keylen=%d value=%v", common.ToHex(key), depth+i, len(key), t.value)
-//}
-//return t.value, nil
-//}
-//return child.tryGet(key, depth+i+1)
-//}
 
 // Hash calculates the hash of an expanded (i.e. not already
 // hashed) node.
@@ -297,6 +278,10 @@ func (bt *BinaryTrie) resolveNode(childNode BinaryNode, bk binkey, off int, valu
 	// otherwise, resolve it.
 	switch childNode.(type) {
 	case empty:
+		if value == nil {
+			return nil, true
+		}
+
 		// This child does not exist, create it
 		return &branch{
 			prefix: bk[off:],
@@ -307,12 +292,15 @@ func (bt *BinaryTrie) resolveNode(childNode BinaryNode, bk binkey, off int, valu
 	case hashBinaryNode:
 		// empty root ?
 		if bytes.Equal(childNode.(hashBinaryNode)[:], emptyRoot[:]) {
-			return &branch{
-				prefix: bk[off:],
-				left:   hashBinaryNode(emptyRoot[:]),
-				right:  hashBinaryNode(emptyRoot[:]),
-				value:  value,
-			}, true
+			if value != nil {
+				return &branch{
+					prefix: bk[off:],
+					left:   hashBinaryNode(emptyRoot[:]),
+					right:  hashBinaryNode(emptyRoot[:]),
+					value:  value,
+				}, true
+			}
+			return nil, true
 		}
 
 		// The whole section of the store has to be
@@ -351,7 +339,7 @@ func (bt *BinaryTrie) TryUpdate(key, value []byte) error {
 	case *branch:
 		currentNode = bt.root.(*branch)
 	case hashBinaryNode:
-		panic("the root node should either be empty or a branch")
+		return errInsertIntoHash
 	}
 	for {
 		if bk.samePrefix(currentNode.prefix, off) {
@@ -531,9 +519,9 @@ func (e empty) Hash() []byte {
 }
 
 func (e empty) Commit() error {
-	return errors.New("not yet implemented")
+	return errors.New("can not commit empty node")
 }
 
 func (e empty) tryGet(key []byte, depth int) ([]byte, error) {
-	return nil, errors.New("not implemented yet")
+	return nil, errReadFromEmptyTree
 }
