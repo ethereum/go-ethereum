@@ -712,6 +712,7 @@ func (q *queue) DeliverHeaders(id string, headers []*types.Header, headerProcCh 
 		}
 	}
 	if accepted {
+		parentHash := headers[0].Hash()
 		for i, header := range headers[1:] {
 			hash := header.Hash()
 			if want := request.From + 1 + uint64(i); header.Number.Uint64() != want {
@@ -719,11 +720,13 @@ func (q *queue) DeliverHeaders(id string, headers []*types.Header, headerProcCh 
 				accepted = false
 				break
 			}
-			if headers[i].Hash() != header.ParentHash {
+			if parentHash != header.ParentHash {
 				log.Warn("Header broke chain ancestry", "peer", id, "number", header.Number, "hash", hash)
 				accepted = false
 				break
 			}
+			// Set-up parent hash for next round
+			parentHash = hash
 		}
 	}
 	// If the batch of headers wasn't accepted, mark as unavailable
