@@ -86,6 +86,10 @@ var (
 	// range of accounts covered.
 	ErrNotCoveredYet = errors.New("not covered yet")
 
+	// ErrNotConstructed is returned if the callers want to iterate the snapshot
+	// while the generation is not finished yet.
+	ErrNotConstructed = errors.New("snapshot is not constructed")
+
 	// errSnapshotCycle is returned if a snapshot is attempted to be inserted
 	// that forms a cycle in the snapshot tree.
 	errSnapshotCycle = errors.New("snapshot cycle")
@@ -609,39 +613,60 @@ func (t *Tree) Rebuild(root common.Hash) {
 // AccountIterator creates a new account iterator for the specified root hash and
 // seeks to a starting account hash.
 func (t *Tree) AccountIterator(root common.Hash, seek common.Hash) (AccountIterator, error) {
+	ok, err := t.generating()
+	if err != nil {
+		return nil, err
+	}
+	if ok {
+		return nil, ErrNotConstructed
+	}
 	return newFastAccountIterator(t, root, seek)
 }
 
 // StorageIterator creates a new storage iterator for the specified root hash and
 // account. The iterator will be move to the specific start position.
 func (t *Tree) StorageIterator(root common.Hash, account common.Hash, seek common.Hash) (StorageIterator, error) {
+	ok, err := t.generating()
+	if err != nil {
+		return nil, err
+	}
+	if ok {
+		return nil, ErrNotConstructed
+	}
 	return newFastStorageIterator(t, root, account, seek)
 }
 
-// diskRoot is an internal helper function to return the disk layer root.
+// disklayer is an internal helper function to return the disk layer.
 // The lock of snapTree is assumed to be held already.
-func (t *Tree) diskRoot() common.Hash {
+func (t *Tree) disklayer() *diskLayer {
 	var snap snapshot
 	for _, s := range t.layers {
 		snap = s
 		break
 	}
 	if snap == nil {
-		return common.Hash{}
+		return nil
 	}
 	for _, ok := snap.(*diskLayer); !ok && snap != nil; _, ok = snap.(*diskLayer) {
 		snap = snap.Parent()
 	}
 	if _, ok := snap.(*diskLayer); !ok {
-		return common.Hash{}
+		return nil
 	}
-	return snap.Root()
+	return snap.(*diskLayer)
 }
 
-// diskRoot is an external helper function to return the disk layer root.
-func (t *Tree) DiskRoot() common.Hash {
+// generating is an internal helper function which reports whether the snapshot
+// is still under the construction.
+func (t *Tree) generating() (bool, error) {
 	t.lock.Lock()
 	defer t.lock.Unlock()
 
-	return t.diskRoot()
+	layer := t.disklayer()
+	if layer == nil {
+		return false, errors.New("disk layer is missing")
+	}
+	layer.lock.RLock()
+	defer layer.lock.RUnlock()
+	return layer.genMarker != nil, nil
 }
