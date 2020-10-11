@@ -75,6 +75,11 @@ func (api *PublicEthereumAPI) ChainId() hexutil.Uint64 {
 	return (hexutil.Uint64)(chainID.Uint64())
 }
 
+// ChainIDFromConfig returns the chain id for the current ethereum chain config.
+func (api *PublicEthereumAPI) ChainIDFromConfig() hexutil.Uint64 {
+	return (hexutil.Uint64)(api.e.blockchain.Config().ChainID.Uint64())
+}
+
 // PublicMinerAPI provides an API to control the miner.
 // It offers only methods that operate on data that pose no security risk when it is publicly accessible.
 type PublicMinerAPI struct {
