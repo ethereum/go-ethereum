@@ -140,7 +140,7 @@ func (p *Peer) Node() *enode.Node {
 
 // Name returns the node name that the remote node advertised.
 func (p *Peer) Name() string {
-	return p.LocalAddr().String()
+	return p.rw.name
 }
 
 // Caps returns the capabilities (supported subprotocols) of the remote peer.
