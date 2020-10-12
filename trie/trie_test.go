@@ -19,7 +19,9 @@ package trie
 import (
 	"bytes"
 	"encoding/binary"
+	"errors"
 	"fmt"
+	"hash"
 	"math/big"
 	"math/rand"
 	"reflect"
@@ -28,9 +30,11 @@ import (
 
 	"github.com/XinFinOrg/XDPoSChain/common"
 	"github.com/XinFinOrg/XDPoSChain/crypto"
+	"github.com/XinFinOrg/XDPoSChain/ethdb"
 	"github.com/XinFinOrg/XDPoSChain/ethdb/memorydb"
 	"github.com/XinFinOrg/XDPoSChain/rlp"
 	"github.com/davecgh/go-spew/spew"
+	"golang.org/x/crypto/sha3"
 )
 
 func init() {
@@ -505,6 +509,100 @@ func makeAccounts(size int) (addresses [][20]byte, accounts [][]byte) {
 		accounts[i], _ = rlp.EncodeToBytes(&account{nonce, balance, root, code})
 	}
 	return addresses, accounts
+}
+
+// spongeDb is a dummy db backend which accumulates writes in a sponge
+type spongeDb struct {
+	sponge  hash.Hash
+	id      string
+	journal []string
+}
+
+func (s *spongeDb) Has(key []byte) (bool, error)             { panic("implement me") }
+func (s *spongeDb) Get(key []byte) ([]byte, error)           { return nil, errors.New("no such elem") }
+func (s *spongeDb) Delete(key []byte) error                  { panic("implement me") }
+func (s *spongeDb) NewBatch() ethdb.Batch                    { return &spongeBatch{s} }
+func (s *spongeDb) Stat(property string) (string, error)     { panic("implement me") }
+func (s *spongeDb) Compact(start []byte, limit []byte) error { panic("implement me") }
+func (s *spongeDb) Close() error                             { return nil }
+func (s *spongeDb) Put(key []byte, value []byte) error {
+	valbrief := value
+	if len(valbrief) > 8 {
+		valbrief = valbrief[:8]
+	}
+	s.journal = append(s.journal, fmt.Sprintf("%v: PUT([%x...], [%d bytes] %x...)\n", s.id, key[:8], len(value), valbrief))
+	s.sponge.Write(key)
+	s.sponge.Write(value)
+	return nil
+}
+func (s *spongeDb) NewIterator(prefix []byte, start []byte) ethdb.Iterator { panic("implement me") }
+
+// spongeBatch is a dummy batch which immediately writes to the underlying spongedb
+type spongeBatch struct {
+	db *spongeDb
+}
+
+func (b *spongeBatch) Put(key, value []byte) error {
+	b.db.Put(key, value)
+	return nil
+}
+func (b *spongeBatch) Delete(key []byte) error             { panic("implement me") }
+func (b *spongeBatch) ValueSize() int                      { return 100 }
+func (b *spongeBatch) Write() error                        { return nil }
+func (b *spongeBatch) Reset()                              {}
+func (b *spongeBatch) Replay(w ethdb.KeyValueWriter) error { return nil }
+
+func TestCommitSequenceStackTrie(t *testing.T) {
+	for count := 1; count < 200; count++ {
+		prng := rand.New(rand.NewSource(int64(count)))
+		// This spongeDb is used to check the sequence of disk-db-writes
+		s := &spongeDb{sponge: sha3.NewLegacyKeccak256(), id: "a"}
+		db := NewDatabase(s)
+		trie, _ := New(common.Hash{}, db)
+		// Another sponge is used for the stacktrie commits
+		stackTrieSponge := &spongeDb{sponge: sha3.NewLegacyKeccak256(), id: "b"}
+		stTrie := NewStackTrie(stackTrieSponge)
+		// Fill the trie with elements
+		for i := 1; i < count; i++ {
+			// For the stack trie, we need to do inserts in proper order
+			key := make([]byte, 32)
+			binary.BigEndian.PutUint64(key, uint64(i))
+			var val []byte
+			// 50% short elements, 50% large elements
+			if prng.Intn(2) == 0 {
+				val = make([]byte, 1+prng.Intn(32))
+			} else {
+				val = make([]byte, 1+prng.Intn(1024))
+			}
+			prng.Read(val)
+			trie.TryUpdate(key, common.CopyBytes(val))
+			stTrie.TryUpdate(key, common.CopyBytes(val))
+		}
+		// Flush trie -> database
+		root, _ := trie.Commit(nil)
+		// Flush memdb -> disk (sponge)
+		db.Commit(root, false)
+		// And flush stacktrie -> disk
+		stRoot, err := stTrie.Commit()
+		if err != nil {
+			t.Fatalf("Failed to commit stack trie %v", err)
+		}
+		if stRoot != root {
+			t.Fatalf("root wrong, got %x exp %x", stRoot, root)
+		}
+		if got, exp := stackTrieSponge.sponge.Sum(nil), s.sponge.Sum(nil); !bytes.Equal(got, exp) {
+			// Show the journal
+			t.Logf("Expected:")
+			for i, v := range s.journal {
+				t.Logf("op %d: %v", i, v)
+			}
+			t.Logf("Stacktrie:")
+			for i, v := range stackTrieSponge.journal {
+				t.Logf("op %d: %v", i, v)
+			}
+			t.Fatalf("test %d, disk write sequence wrong:\ngot %x exp %x\n", count, got, exp)
+		}
+	}
 }
 
 // BenchmarkCommitAfterHashFixedSize benchmarks the Commit (after Hash) of a fixed number of updates to a trie.
