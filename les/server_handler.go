@@ -967,7 +967,6 @@ type broadcaster struct {
 	ns                           *nodestate.NodeStateMachine
 	privateKey                   *ecdsa.PrivateKey
 	lastAnnounce, signedAnnounce announceData
-	signed                       bool
 }
 
 // newBroadcaster creates a new broadcaster
@@ -1013,10 +1012,9 @@ func (b *broadcaster) sendTo(node *enode.Node) {
 					log.Debug("Drop announcement because queue is full", "number", b.lastAnnounce.Number, "hash", b.lastAnnounce.Hash)
 				}
 			case announceTypeSigned:
-				if !b.signed {
+				if b.signedAnnounce.Hash != b.lastAnnounce.Hash {
 					b.signedAnnounce = b.lastAnnounce
 					b.signedAnnounce.sign(b.privateKey)
-					b.signed = true
 				}
 				if !p.queueSend(func() { p.sendAnnounce(b.signedAnnounce) }) {
 					log.Debug("Drop announcement because queue is full", "number", b.lastAnnounce.Number, "hash", b.lastAnnounce.Hash)

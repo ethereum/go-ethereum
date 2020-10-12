@@ -255,6 +255,8 @@ func (p *peerCommons) handshake(td *big.Int, head common.Hash, headNum uint64, g
 	// Add some basic handshake fields
 	send = send.add("protocolVersion", uint64(p.version))
 	send = send.add("networkId", p.network)
+	// Note: the head info announced at handshake is only used in case of server peers
+	// but dummy values are still announced by clients for compatibility with older servers
 	send = send.add("headTd", td)
 	send = send.add("headHash", head)
 	send = send.add("headNum", headNum)
@@ -943,6 +945,8 @@ func (p *clientPeer) freezeClient() {
 // Handshake executes the les protocol handshake, negotiating version number,
 // network IDs, difficulties, head and genesis blocks.
 func (p *clientPeer) Handshake(td *big.Int, head common.Hash, headNum uint64, genesis common.Hash, server *LesServer) error {
+	// Note: clientPeer.headInfo should contain the last head announced to the client by us.
+	// The values announced in the handshake are dummy values for compatibility reasons and should be ignored.
 	p.headInfo = blockInfo{Hash: head, Number: headNum, Td: td}
 	return p.handshake(td, head, headNum, genesis, func(lists *keyValueList) {
 		// Add some information which services server can offer.
