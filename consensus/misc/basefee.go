@@ -21,6 +21,7 @@ import (
 	"math/big"
 
 	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/common/math"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/params"
 )
@@ -59,66 +60,55 @@ func VerifyEIP1559BaseFee(config *params.ChainConfig, header, parent *types.Head
 }
 
 // CalcBaseFee returns the baseFee for the current block provided the parent header and config parameters
-func CalcBaseFee(config *params.ChainConfig, parent *types.Header) (baseFee *big.Int) {
+func CalcBaseFee(config *params.ChainConfig, parent *types.Header) *big.Int {
 	height := new(big.Int).Add(parent.Number, common.Big1)
+
 	// If we are before EIP1559 activation, the baseFee is nil
 	if !config.IsEIP1559(height) {
-		return
+		return nil
 	}
-	// never let baseFee drop below 0
-	defer func() {
-		if baseFee.Cmp(common.Big0) < 0 {
-			baseFee.Set(common.Big0)
-		}
-	}()
+
 	// If we are at the block of EIP1559 activation then the BaseFee is set to the initial value
 	if config.EIP1559Block.Cmp(height) == 0 {
-		baseFee = new(big.Int).SetUint64(config.EIP1559.InitialBaseFee)
-		return
+		return new(big.Int).SetUint64(config.EIP1559.InitialBaseFee)
 	}
 
-	// Otherwise,
-	// BASEFEE = PARENT_BASEFEE + PARENT_BASEFEE * delta // PARENT_EIP1559_GAS_TARGET // BASEFEE_MAX_CHANGE_DENOMINATOR
-	// Where delta = PARENT_GAS_USED - PARENT_EIP1559_GAS_TARGET (possibly negative)
-	parentGasTarget := CalcEIP1559GasTarget(config, parent.Number, new(big.Int).SetUint64(parent.GasLimit))
-	delta := new(big.Int).Sub(new(big.Int).SetUint64(parent.GasUsed), parentGasTarget)
-	// If PARENT_GAS_USAGE == TARGET_GAS_USAGE; BASEFEE = PARENT_BASEFEE - 1
-	if delta.Cmp(common.Big0) == 0 {
-		baseFee = new(big.Int).Sub(parent.BaseFee, common.Big1)
-		return
-	}
-	mul := new(big.Int).Mul(parent.BaseFee, delta)
-	div := new(big.Int).Div(mul, parentGasTarget)
-	div2 := new(big.Int).Div(div, new(big.Int).SetUint64(config.EIP1559.EIP1559BaseFeeMaxChangeDenominator))
-	baseFee = new(big.Int).Add(parent.BaseFee, div2)
+	parentBaseFee := parent.BaseFee
+	parentBlockGasUsed := new(big.Int).SetUint64(parent.GasUsed)
+	targetGasUsed := new(big.Int).SetUint64(parent.GasLimit)
+	baseFeeMaxChangeDenominator := new(big.Int).SetUint64(config.EIP1559.EIP1559BaseFeeMaxChangeDenominator)
 
-	// A valid BASEFEE is one such that
-	// abs(BASEFEE - PARENT_BASEFEE) <= max(1, PARENT_BASEFEE // BASEFEE_MAX_CHANGE_DENOMINATOR)
-	// abs(BASEFEE - PARENT_BASEFEE) >= 1
-	diff := new(big.Int).Sub(baseFee, parent.BaseFee)
-	neg := false
-	if diff.Sign() < 0 {
-		neg = true
-		diff.Neg(diff)
+	cmp := parentBlockGasUsed.Cmp(targetGasUsed)
+
+	if cmp == 0 {
+		return targetGasUsed
 	}
-	min := common.Big1
-	max := new(big.Int).Div(parent.BaseFee, new(big.Int).SetUint64(config.EIP1559.EIP1559BaseFeeMaxChangeDenominator))
-	if max.Cmp(common.Big1) < 0 {
-		max = common.Big1
+
+	if cmp > 0 {
+		gasDelta := new(big.Int).Sub(parentBlockGasUsed, targetGasUsed)
+		feeDelta := math.BigMax(
+			new(big.Int).Div(
+				new(big.Int).Div(
+					new(big.Int).Mul(parentBaseFee, gasDelta),
+					targetGasUsed,
+				),
+				baseFeeMaxChangeDenominator,
+			),
+			common.Big1,
+		)
+		return new(big.Int).Add(parentBaseFee, feeDelta)
 	}
-	// If BASEFEE is not valid, restrict it within the bounds
-	if diff.Cmp(max) > 0 {
-		if neg {
-			max.Neg(max)
-		}
-		baseFee.Set(new(big.Int).Add(parent.BaseFee, max))
-	} else if diff.Cmp(min) < 0 {
-		if neg {
-			min.Neg(min)
-		}
-		baseFee.Set(new(big.Int).Add(parent.BaseFee, min))
-	}
-	return baseFee
+
+	gasDelta := new(big.Int).Sub(targetGasUsed, parentBlockGasUsed)
+	feeDelta := new(big.Int).Div(
+		new(big.Int).Div(
+			new(big.Int).Mul(parentBaseFee, gasDelta),
+			targetGasUsed,
+		),
+		baseFeeMaxChangeDenominator,
+	)
+
+	return new(big.Int).Sub(parentBaseFee, feeDelta)
 }
 
 // CalcEIP1559GasTarget returns the EIP1559GasTarget at the current height and header.GasLimit
