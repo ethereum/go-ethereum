@@ -67,14 +67,14 @@ func VerifyState(snaptree *Tree, root common.Hash) error {
 	}
 	defer acctIt.Release()
 
-	got, err := generateTrieRoot(nil, acctIt, common.Hash{}, stdGenerate, func(db ethdb.Database, accountHash, codeHash common.Hash, stat *generateStats) (common.Hash, error) {
+	got, err := generateTrieRoot(nil, acctIt, common.Hash{}, stackTrieGenerate, func(db ethdb.Database, accountHash, codeHash common.Hash, stat *generateStats) (common.Hash, error) {
 		storageIt, err := snaptree.StorageIterator(root, accountHash, common.Hash{})
 		if err != nil {
 			return common.Hash{}, err
 		}
 		defer storageIt.Release()
 
-		hash, err := generateTrieRoot(nil, storageIt, accountHash, stdGenerate, nil, stat, false)
+		hash, err := generateTrieRoot(nil, storageIt, accountHash, stackTrieGenerate, nil, stat, false)
 		if err != nil {
 			return common.Hash{}, err
 		}
@@ -230,8 +230,8 @@ type subTask struct {
 // the callback for leaves, all sub-tasks can be accumulated and executed here.
 // If any sub-task failed, a signal will be throw back very soon.
 //
-// Note we expect the out channel has at least 1 slot available so that sending won't
-// be blocked.
+// Note we expect the out channel has at least 1 slot available so that sending
+// won't be blocked.
 func runSubTasks(in chan subTask, out chan error, stop chan struct{}) {
 	var (
 		running int
@@ -266,26 +266,26 @@ func runSubTasks(in chan subTask, out chan error, stop chan struct{}) {
 
 			// If there are too many runners, block here
 			for running >= limit {
-				result := <-done
+				failure := <-done
 				running -= 1
-				if result != nil && !failed {
+				if failure != nil && !failed {
 					failed = true
-					out <- result // won't be blocked
+					out <- failure // won't be blocked
 				}
 			}
-		case result := <-done:
+		case failure := <-done:
 			running -= 1
-			if result != nil && !failed {
+			if failure != nil && !failed {
 				failed = true
-				out <- result // won't be blocked
+				out <- failure // won't be blocked
 			}
 		case <-stop:
 			for running > 0 {
-				result := <-done
+				failure := <-done
 				running -= 1
-				if result != nil && !failed {
+				if failure != nil && !failed {
 					failed = true
-					out <- result // won't be blocked
+					out <- failure // won't be blocked
 				}
 			}
 			if !failed {
@@ -324,18 +324,14 @@ func generateTrieRoot(db ethdb.Database, it Iterator, account common.Hash, gener
 	// a go-routine for processing the sub-tasks
 	// in the background.
 	var (
-		subIn   chan subTask
-		subOut  chan error
-		subStop chan struct{}
-	)
-	if leafCallback != nil {
 		// The channel size here is quite arbitrary. We don't
 		// want to block the main thread for iterating the state
 		// trie, but also need to prevent OOM.
-		subIn = make(chan subTask, 1024)
-		subOut = make(chan error, 1)
+		subIn   = make(chan subTask, 1024)
+		subOut  = make(chan error, 1)
 		subStop = make(chan struct{})
-
+	)
+	if leafCallback != nil {
 		wg.Add(1)
 		go func() {
 			defer wg.Done()
@@ -352,12 +348,12 @@ func generateTrieRoot(db ethdb.Database, it Iterator, account common.Hash, gener
 	// In case (a) we won't fetch the sub-failure again.
 	stop := func(success bool, subFailed bool) (common.Hash, bool) {
 		close(in)
-		if subStop != nil {
+		if leafCallback != nil {
 			close(subStop)
 		}
 		result := <-out
 
-		if subStop != nil && !subFailed {
+		if leafCallback != nil && !subFailed {
 			subErr := <-subOut
 			success = success && subErr == nil
 		}
