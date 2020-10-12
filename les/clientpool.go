@@ -180,8 +180,6 @@ func newClientPool(ns *nodestate.NodeStateMachine, lespayDb ethdb.Database, minC
 			c.peer.updateCapacity(newCap)
 		}
 	})
-
-	ns.Start()
 	return pool
 }
 

@@ -132,13 +132,15 @@ func (h *serverHandler) handle(p *clientPeer) error {
 		return p2p.DiscRequested
 	}
 	var registered bool
-	h.server.ns.Operation(func() {
+	if err := h.server.ns.Operation(func() {
 		if h.server.ns.GetField(p.Node(), clientPeerField) != nil {
 			registered = true
 		} else {
 			h.server.ns.SetFieldSub(p.Node(), clientPeerField, p)
 		}
-	})
+	}); err != nil {
+		return err
+	}
 	if registered {
 		return errAlreadyRegistered
 	}

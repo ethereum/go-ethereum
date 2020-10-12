@@ -147,6 +147,13 @@ func NewLesServer(node *node.Node, e *eth.Ethereum, config *eth.Config) (*LesSer
 	node.RegisterAPIs(srv.APIs())
 	node.RegisterLifecycle(srv)
 
+	// disconnect all peers at nsm shutdown
+	ns.SubscribeField(clientPeerField, func(node *enode.Node, state nodestate.Flags, oldValue, newValue interface{}) {
+		if state.Equals(serverSetup.OfflineFlag()) && oldValue != nil {
+			oldValue.(*clientPeer).Peer.Disconnect(p2p.DiscRequested)
+		}
+	})
+	ns.Start()
 	return srv, nil
 }
 
