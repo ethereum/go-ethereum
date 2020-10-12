@@ -483,8 +483,8 @@ web3._extend({
 			params: 0
 		}),
 		new web3._extend.Method({
-			name: 'chainIDFromConfig',
-			call: 'eth_chainIDFromConfig',
+			name: 'isEIP155',
+			call: 'eth_isEIP155',
 			params: 0
 		}),
 		new web3._extend.Method({
