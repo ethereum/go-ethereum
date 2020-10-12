@@ -127,7 +127,7 @@ func (p *Pruner) Prune(root common.Hash) error {
 				}
 			} else {
 				if _, ok := marker[common.BytesToHash(key)]; ok {
-					continue // Genesis state trie node
+					continue // Genesis state trie node or legacy contract code
 				}
 			}
 			size += common.StorageSize(len(key) + len(iter.Value()))

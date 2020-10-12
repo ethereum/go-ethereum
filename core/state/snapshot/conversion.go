@@ -342,7 +342,7 @@ func generateTrieRoot(db ethdb.Database, it Iterator, account common.Hash, gener
 	// and return the re-generated trie hash. There are three scenarios
 	// for calling this function:
 	// (a) the failure already occurs when processing the sub-task(e.g.
-	//   the storage root is not matched).
+	//     the storage root is not matched).
 	// (b) the failure already occurs when iterating the state trie.
 	// (c) there is no failure yet.
 	// In case (a) we won't fetch the sub-failure again.
