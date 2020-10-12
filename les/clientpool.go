@@ -24,6 +24,7 @@ import (
 
 	"github.com/ethereum/go-ethereum/common/mclock"
 	"github.com/ethereum/go-ethereum/ethdb"
+	"github.com/ethereum/go-ethereum/les/lespay"
 	lps "github.com/ethereum/go-ethereum/les/lespay/server"
 	"github.com/ethereum/go-ethereum/les/utils"
 	"github.com/ethereum/go-ethereum/log"
@@ -386,10 +387,7 @@ func (f *clientPool) forClients(ids []enode.ID, cb func(client *clientInfo)) {
 }
 
 func (f *clientPool) serveCapQuery(id enode.ID, freeID string, data []byte) []byte {
-	var req struct {
-		Bias      uint64 // seconds
-		AddTokens []uint64
-	}
+	var req lespay.CapacityQueryReq
 	if rlp.DecodeBytes(data, &req) != nil {
 		return nil
 	}
@@ -413,7 +411,7 @@ func (f *clientPool) serveCapQuery(id enode.ID, freeID string, data []byte) []by
 	}
 	// use lps.CapacityCurve to answer request for multiple newly bought token amounts
 	curve := f.pp.GetCapacityCurve().Exclude(id)
-	result := make([]uint64, len(req.AddTokens))
+	result := make(lespay.CapacityQueryResp, len(req.AddTokens))
 	now := f.clock.Now()
 	bias := time.Second * time.Duration(req.Bias)
 	if f.connectedBias > bias {

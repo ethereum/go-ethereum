@@ -36,6 +36,7 @@ import (
 	"github.com/ethereum/go-ethereum/eth/gasprice"
 	"github.com/ethereum/go-ethereum/event"
 	"github.com/ethereum/go-ethereum/internal/ethapi"
+	"github.com/ethereum/go-ethereum/les/lespay"
 	lpc "github.com/ethereum/go-ethereum/les/lespay/client"
 	"github.com/ethereum/go-ethereum/light"
 	"github.com/ethereum/go-ethereum/log"
@@ -43,6 +44,7 @@ import (
 	"github.com/ethereum/go-ethereum/p2p"
 	"github.com/ethereum/go-ethereum/p2p/enode"
 	"github.com/ethereum/go-ethereum/params"
+	"github.com/ethereum/go-ethereum/rlp"
 	"github.com/ethereum/go-ethereum/rpc"
 )
 
@@ -116,7 +118,31 @@ func New(stack *node.Node, config *eth.Config) (*LightEthereum, error) {
 	if err != nil {
 		return nil, err
 	}
-	leth.serverPool = newServerPool(lespayDb, []byte("serverpool:"), leth.valueTracker, dnsdisc, time.Second, nil, &mclock.System{}, config.UltraLightServers)
+	prenegQuery := func(n *enode.Node) int {
+		req := lespay.CapacityQueryReq{
+			Bias:      180,
+			AddTokens: []uint64{0},
+		}
+		reqEnc, _ := rlp.EncodeToBytes(&req)
+		reqs := lespay.Requests{lespay.Request{Name: "capQuery", Params: reqEnc}}
+		reqsEnc, _ := rlp.EncodeToBytes(&reqs)
+		respsEnc, _ := leth.p2pServer.DiscV5.TalkRequest(n, "lespay", reqsEnc)
+		var (
+			resps [][]byte
+			resp  lespay.CapacityQueryResp
+		)
+		if len(respsEnc) == 0 || rlp.DecodeBytes(respsEnc, &resps) != nil || len(resps) != 1 {
+			return -1
+		}
+		if len(resps[0]) == 0 || rlp.DecodeBytes(resps[0], &resp) != nil || len(resp) != 1 {
+			return -1
+		}
+		if resp[0] > 0 {
+			return 1
+		}
+		return 0
+	}
+	leth.serverPool = newServerPool(lespayDb, []byte("serverpool:"), leth.valueTracker, dnsdisc, time.Second, prenegQuery, &mclock.System{}, config.UltraLightServers)
 	peers.subscribe(leth.serverPool)
 	leth.dialCandidates = leth.serverPool.dialIterator
 

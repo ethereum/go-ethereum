@@ -21,13 +21,14 @@ import (
 	"time"
 
 	"github.com/ethereum/go-ethereum/common/mclock"
+	"github.com/ethereum/go-ethereum/les/lespay"
 	"github.com/ethereum/go-ethereum/les/utils"
 	"github.com/ethereum/go-ethereum/p2p/enode"
 	"github.com/ethereum/go-ethereum/rlp"
 )
 
 const (
-	maxCommandLength = 16
+	maxRequestLength = 16
 	costCutRatio     = 0.1
 )
 
@@ -56,15 +57,11 @@ func (s *Server) RegisterHandler(name string, handler Handler) {
 }
 
 func (s *Server) Serve(id enode.ID, addr *net.UDPAddr, req []byte) []byte {
-	type command struct {
-		Name   string
-		Params []byte
-	}
-	var commands []command
-	if err := rlp.DecodeBytes(req, &commands); err != nil || len(commands) == 0 || len(commands) > maxCommandLength {
+	var requests lespay.Requests
+	if err := rlp.DecodeBytes(req, &requests); err != nil || len(requests) == 0 || len(requests) > maxRequestLength {
 		return nil
 	}
-	priorWeight := uint64(len(commands))
+	priorWeight := uint64(len(requests))
 	if priorWeight == 0 {
 		return nil
 	}
@@ -74,10 +71,10 @@ func (s *Server) Serve(id enode.ID, addr *net.UDPAddr, req []byte) []byte {
 		return nil
 	}
 	start := mclock.Now()
-	results := make([][]byte, len(commands))
-	for i, cmd := range commands {
-		if handler, ok := s.handlers[cmd.Name]; ok {
-			results[i] = handler(id, address, cmd.Params)
+	results := make([][]byte, len(requests))
+	for i, req := range requests {
+		if handler, ok := s.handlers[req.Name]; ok {
+			results[i] = handler(id, address, req.Params)
 		}
 	}
 	res, err := rlp.EncodeToBytes(&results)
@@ -86,7 +83,7 @@ func (s *Server) Serve(id enode.ID, addr *net.UDPAddr, req []byte) []byte {
 	if sizeCost > cost {
 		cost = sizeCost
 	}
-	fWeight := float64(priorWeight) / maxCommandLength
+	fWeight := float64(priorWeight) / maxRequestLength
 	filteredCost, limit := s.costFilter.Filter(cost, fWeight)
 	time.Sleep(time.Duration(filteredCost * s.sleepFactor))
 	if limit*fWeight <= filteredCost {
