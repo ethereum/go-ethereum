@@ -17,6 +17,7 @@
 package trie
 
 import (
+	"errors"
 	"fmt"
 	"sync"
 
@@ -25,6 +26,8 @@ import (
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/rlp"
 )
+
+var ErrCommitDisabled = errors.New("no database for committing")
 
 var stPool = sync.Pool{
 	New: func() interface{} {
@@ -391,14 +394,18 @@ func (st *StackTrie) Hash() (h common.Hash) {
 	return common.BytesToHash(st.val)
 }
 
-// Commit will commit the current node to database db
-func (st *StackTrie) Commit(db ethdb.KeyValueStore) common.Hash {
-	oldDb := st.db
-	st.db = db
-	defer func() {
-		st.db = oldDb
-	}()
+// Commit will firstly hash the entrie trie if it's still not hashed
+// and then commit all nodes to the associated database. Actually most
+// of the trie nodes MAY have been committed already. The main purpose
+// here is to commit the root node.
+//
+// The associated database is expected, otherwise the whole commit
+// functionality should be disabled.
+func (st *StackTrie) Commit() (common.Hash, error) {
+	if st.db == nil {
+		return common.Hash{}, ErrCommitDisabled
+	}
 	st.hash()
 	h := common.BytesToHash(st.val)
-	return h
+	return h, nil
 }
