@@ -395,11 +395,11 @@ func (st *StackTrie) Hash() (h common.Hash) {
 }
 
 // Commit will firstly hash the entrie trie if it's still not hashed
-// and then commit all nodes to the assoicated database. Actually most
+// and then commit all nodes to the associated database. Actually most
 // of the trie nodes MAY have been committed already. The main purpose
 // here is to commit the root node.
 //
-// The assoiciated database is expected, otherwise the whole commit
+// The associated database is expected, otherwise the whole commit
 // functionality should be disabled.
 func (st *StackTrie) Commit() (common.Hash, error) {
 	if st.db == nil {
