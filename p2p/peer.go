@@ -142,7 +142,7 @@ func (p *Peer) Node() *enode.Node {
 func (p *Peer) Name() string {
 	s := p.rw.name
 	if len(s) > 20 {
-		return s[:20] + "…"
+		return s[:20] + "..."
 	}
 	return s
 }
