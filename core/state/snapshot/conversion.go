@@ -475,16 +475,15 @@ func stdGenerate(db ethdb.Database, in chan trieKV, out chan common.Hash) {
 }
 
 func stackTrieGenerate(db ethdb.Database, in chan trieKV, out chan common.Hash) {
-	commit := db != nil
 	t := trie.NewStackTrie(db)
 	for leaf := range in {
 		t.TryUpdate(leaf.key[:], leaf.value)
 	}
 	var root common.Hash
-	if !commit {
+	if db == nil {
 		root = t.Hash()
 	} else {
-		root = t.Commit(db)
+		root, _ = t.Commit()
 	}
 	out <- root
 }
