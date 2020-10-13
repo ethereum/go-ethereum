@@ -113,7 +113,7 @@ func (st *StackTrie) Update(key, value []byte) {
 func (st *StackTrie) Reset() {
 	st.db = nil
 	st.key = st.key[:0]
-	st.val = st.val[:0]
+	st.val = nil
 	for i := range st.children {
 		st.children[i] = nil
 	}
