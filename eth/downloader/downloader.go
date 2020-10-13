@@ -153,7 +153,7 @@ type Downloader struct {
 	cancelWg   sync.WaitGroup // Make sure all fetcher goroutines have exited.
 
 	quitCh   chan struct{} // Quit channel to signal termination
-	quitLock sync.RWMutex  // Lock to prevent double closes
+	quitLock sync.Mutex    // Lock to prevent double closes
 
 	// Testing hooks
 	syncInitHook     func(uint64, uint64)  // Method to call upon initiating a new sync run

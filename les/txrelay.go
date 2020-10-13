@@ -35,7 +35,7 @@ type lesTxRelay struct {
 	txPending    map[common.Hash]struct{}
 	peerList     []*serverPeer
 	peerStartPos int
-	lock         sync.RWMutex
+	lock         sync.Mutex
 	stop         chan struct{}
 
 	retriever *retrieveManager
