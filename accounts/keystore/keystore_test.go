@@ -334,11 +334,11 @@ func TestWalletNotifications(t *testing.T) {
 		}
 	}
 
-	// Wait for the event collector to get scheduled.
-	time.Sleep(10 * time.Millisecond)
 	// Shut down the event collector and check events.
 	sub.Unsubscribe()
-	<-updates
+	for ev := range updates {
+		events = append(events, walletEvent{ev, ev.Wallet.Accounts()[0]})
+	}
 	checkAccounts(t, live, ks.Wallets())
 	checkEvents(t, wantEvents, events)
 }
