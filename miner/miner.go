@@ -79,88 +79,62 @@ func New(eth Backend, config *Config, chainConfig *params.ChainConfig, mux *even
 	return miner
 }
 
-// update handles miner start/stop/exit events, as well as a temporary subscription to downloader events.
-// Downloader events are used to pause and restart mining pending a successful sync operation.
+// update keeps track of the downloader events. Please be aware that this is a one shot type of update loop.
+// It's entered once and as soon as `Done` or `Failed` has been broadcasted the events are unregistered and
+// the loop is exited. This to prevent a major security vuln where external parties can DOS you with blocks
+// and halt your mining operation for as long as the DOS continues.
 func (miner *Miner) update() {
-	downloaderEvents := miner.mux.Subscribe(downloader.StartEvent{}, downloader.DoneEvent{}, downloader.FailedEvent{})
+	events := miner.mux.Subscribe(downloader.StartEvent{}, downloader.DoneEvent{}, downloader.FailedEvent{})
 	defer func() {
-		if !downloaderEvents.Closed() {
-			downloaderEvents.Unsubscribe()
+		if !events.Closed() {
+			events.Unsubscribe()
 		}
 	}()
 
-	miningRequested := false
-	isDownloading := false
-
-	// handleDownloaderEvents handles the downloader events. Please be aware that this is a one-shot type of logic.
-	// As soon as `Done` has been broadcast subsequent downloader events are not handled, and the event subscription is closed.
-	//
-	// This prevents a major security vulnerability where external parties can DOS you with blocks
-	// and halt your mining operation for as long as the DOS continues.
-	handleDownloaderEvents := func(ev *event.TypeMuxEvent) {
-		switch ev.Data.(type) {
-		case downloader.StartEvent:
-			wasMining := miner.Mining()
-			miner.worker.stop()
-			isDownloading = true
-			if wasMining {
-				// Resume mining after sync was finished
-				miningRequested = true
-				log.Info("Mining aborted due to sync")
-			}
-		case downloader.FailedEvent:
-			isDownloading = false
-			if miningRequested {
-				miner.SetEtherbase(miner.coinbase)
-				miner.worker.start()
-			}
-		case downloader.DoneEvent:
-			isDownloading = false
-			if miningRequested {
-				miner.SetEtherbase(miner.coinbase)
-				miner.worker.start()
-			}
-			downloaderEvents.Unsubscribe()
-		}
-	}
-
-	// withDownloaderState loop handles channeled events while the miner cares about the downloader events.
-	// This loop will be broken once the downloader emits a DoneEvent, signaling a successful sync.
-	// The following unnamed loop should be equivalent to this loop, but without the downloader event handling.
-withDownloaderState:
+	shouldStart := false
+	canStart := true
+	dlEventCh := events.Chan()
 	for {
 		select {
-		case ev := <-downloaderEvents.Chan():
+		case ev := <-dlEventCh:
 			if ev == nil {
-				break withDownloaderState
+				// Unsubscription done, stop listening
+				dlEventCh = nil
+				continue
 			}
-			handleDownloaderEvents(ev)
+			switch ev.Data.(type) {
+			case downloader.StartEvent:
+				wasMining := miner.Mining()
+				miner.worker.stop()
+				canStart = false
+				if wasMining {
+					// Resume mining after sync was finished
+					shouldStart = true
+					log.Info("Mining aborted due to sync")
+				}
+			case downloader.FailedEvent:
+				canStart = true
+				if shouldStart {
+					miner.SetEtherbase(miner.coinbase)
+					miner.worker.start()
+				}
+			case downloader.DoneEvent:
+				canStart = true
+				if shouldStart {
+					miner.SetEtherbase(miner.coinbase)
+					miner.worker.start()
+				}
+				// Stop reacting to downloader events
+				events.Unsubscribe()
+			}
 		case addr := <-miner.startCh:
-			if !isDownloading {
+			if canStart {
 				miner.SetEtherbase(addr)
 				miner.worker.start()
 			}
-			miningRequested = true
+			shouldStart = true
 		case <-miner.stopCh:
-			miningRequested = false
-			miner.worker.stop()
-		case <-miner.exitCh:
-			miner.worker.close()
-			return
-		}
-	}
-
-	// Same loop as above, minus downloader event handling.
-	for {
-		select {
-		case addr := <-miner.startCh:
-			if !isDownloading {
-				miner.SetEtherbase(addr)
-				miner.worker.start()
-			}
-			miningRequested = true
-		case <-miner.stopCh:
-			miningRequested = false
+			shouldStart = false
 			miner.worker.stop()
 		case <-miner.exitCh:
 			miner.worker.close()
