@@ -304,7 +304,6 @@ func TestWalletNotifications(t *testing.T) {
 			}
 		}
 	}()
-
 	// Randomly add and remove accounts.
 	var (
 		live       = make(map[common.Address]accounts.Account)
@@ -333,7 +332,8 @@ func TestWalletNotifications(t *testing.T) {
 			wantEvents = append(wantEvents, walletEvent{accounts.WalletEvent{Kind: accounts.WalletDropped}, account})
 		}
 	}
-
+	// Wait for the event collector to get scheduled.
+	time.Sleep(10 * time.Millisecond)
 	// Shut down the event collector and check events.
 	sub.Unsubscribe()
 	<-updates
