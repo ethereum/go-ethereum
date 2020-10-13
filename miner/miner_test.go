@@ -89,12 +89,75 @@ func TestMiner(t *testing.T) {
 	// Stop the downloader and wait for the update loop to run
 	mux.Post(downloader.DoneEvent{})
 	waitForMiningState(t, miner, true)
-	// Start the downloader and wait for the update loop to run
+
+	// Subsequent downloader events after a successful DoneEvent should not cause the
+	// miner to start or stop. This prevents a security vulnerability
+	// that would allow entities to present fake high blocks that would
+	// stop mining operations by causing a downloader sync
+	// until it was discovered they were invalid, whereon mining would resume.
+	mux.Post(downloader.StartEvent{})
+	waitForMiningState(t, miner, true)
+
+	mux.Post(downloader.FailedEvent{})
+	waitForMiningState(t, miner, true)
+}
+
+// TestMinerDownloaderFirstFails tests that mining is only
+// permitted to run indefinitely once the downloader sees a DoneEvent (success).
+// An initial FailedEvent should allow mining to stop on a subsequent
+// downloader StartEvent.
+func TestMinerDownloaderFirstFails(t *testing.T) {
+	miner, mux := createMiner(t)
+	miner.Start(common.HexToAddress("0x12345"))
+	waitForMiningState(t, miner, true)
+	// Start the downloader
 	mux.Post(downloader.StartEvent{})
 	waitForMiningState(t, miner, false)
+
 	// Stop the downloader and wait for the update loop to run
 	mux.Post(downloader.FailedEvent{})
 	waitForMiningState(t, miner, true)
+
+	// Since the downloader hasn't yet emitted a successful DoneEvent,
+	// we expect the miner to stop on next StartEvent.
+	mux.Post(downloader.StartEvent{})
+	waitForMiningState(t, miner, false)
+
+	// Downloader finally succeeds.
+	mux.Post(downloader.DoneEvent{})
+	waitForMiningState(t, miner, true)
+
+	// Downloader starts again.
+	// Since it has achieved a DoneEvent once, we expect miner
+	// state to be unchanged.
+	mux.Post(downloader.StartEvent{})
+	waitForMiningState(t, miner, true)
+
+	mux.Post(downloader.FailedEvent{})
+	waitForMiningState(t, miner, true)
+}
+
+func TestMinerStartStopAfterDownloaderEvents(t *testing.T) {
+	miner, mux := createMiner(t)
+
+	miner.Start(common.HexToAddress("0x12345"))
+	waitForMiningState(t, miner, true)
+	// Start the downloader
+	mux.Post(downloader.StartEvent{})
+	waitForMiningState(t, miner, false)
+
+	// Downloader finally succeeds.
+	mux.Post(downloader.DoneEvent{})
+	waitForMiningState(t, miner, true)
+
+	miner.Stop()
+	waitForMiningState(t, miner, false)
+
+	miner.Start(common.HexToAddress("0x678910"))
+	waitForMiningState(t, miner, true)
+
+	miner.Stop()
+	waitForMiningState(t, miner, false)
 }
 
 func TestStartWhileDownload(t *testing.T) {
@@ -137,10 +200,10 @@ func waitForMiningState(t *testing.T, m *Miner, mining bool) {
 
 	var state bool
 	for i := 0; i < 100; i++ {
+		time.Sleep(10 * time.Millisecond)
 		if state = m.Mining(); state == mining {
 			return
 		}
-		time.Sleep(10 * time.Millisecond)
 	}
 	t.Fatalf("Mining() == %t, want %t", state, mining)
 }
