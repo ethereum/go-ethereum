@@ -128,8 +128,8 @@ func (miner *Miner) update() {
 				events.Unsubscribe()
 			}
 		case addr := <-miner.startCh:
+			miner.SetEtherbase(addr)
 			if canStart {
-				miner.SetEtherbase(addr)
 				miner.worker.start()
 			}
 			shouldStart = true
