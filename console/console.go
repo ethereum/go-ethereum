@@ -324,6 +324,7 @@ func (c *Console) Welcome() {
 		sort.Strings(modules)
 		message += " modules: " + strings.Join(modules, " ") + "\n"
 	}
+	message += "\nTo exit, press ctrl-d"
 	fmt.Fprintln(c.printer, message)
 }
 
