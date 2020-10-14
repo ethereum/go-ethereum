@@ -342,13 +342,13 @@ func (c *Console) Evaluate(statement string) {
 // the configured user prompter.
 func (c *Console) Interactive() {
 	var (
-		prompt           = c.prompt             // the current prompt line (used for multi-line inputs)
-		indents          = 0                    // the current number of input indents (used for multi-line inputs)
-		input            = ""                   // the current user input
-		inputLine        = make(chan string, 1) // receives user input
-		inputErr         = make(chan error, 1)  // receives liner errors
-		requestLine      = make(chan string)    // requests a line of input
-		interrupt        = make(chan os.Signal, 1)
+		prompt      = c.prompt             // the current prompt line (used for multi-line inputs)
+		indents     = 0                    // the current number of input indents (used for multi-line inputs)
+		input       = ""                   // the current user input
+		inputLine   = make(chan string, 1) // receives user input
+		inputErr    = make(chan error, 1)  // receives liner errors
+		requestLine = make(chan string)    // requests a line of input
+		interrupt   = make(chan os.Signal, 1)
 	)
 
 	// Monitor Ctrl-C. While liner does turn on the relevant terminal mode bits to avoid
