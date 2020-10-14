@@ -148,6 +148,10 @@ func (db *FlatDatabase) Put(key []byte, value []byte) error {
 	offset += copy(db.buff[offset:], value)
 	db.buff = db.buff[:offset]
 	db.items += 1
+
+	// db.offset is monotonic increasing in "WRITE" mode which
+	// indicates the offset of the last written entry in GLOBAL
+	// view. So everytime only the diff is added.
 	db.offset += uint64(offset) - uint64(previous)
 	return db.writeChunk(false)
 }
