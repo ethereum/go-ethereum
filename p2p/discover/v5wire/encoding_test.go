@@ -231,6 +231,45 @@ func TestHandshakeV5_rekey2(t *testing.T) {
 	net.nodeA.expectDecode(t, NodesMsg, nodes)
 }
 
+func TestHandshakeV5_BadHandshakeAttack(t *testing.T) {
+	t.Parallel()
+	net := newHandshakeTest()
+	defer net.close()
+
+	// A -> B   RANDOM PACKET
+	packet, _ := net.nodeA.encode(t, net.nodeB, &Findnode{})
+	resp := net.nodeB.expectDecode(t, UnknownPacket, packet)
+
+	// A <- B   WHOAREYOU
+	challenge := &Whoareyou{
+		Nonce:     resp.(*Unknown).Nonce,
+		IDNonce:   testIDnonce,
+		RecordSeq: 0,
+	}
+	whoareyou, _ := net.nodeB.encode(t, net.nodeA, challenge)
+	net.nodeA.expectDecode(t, WhoareyouPacket, whoareyou)
+
+	// A -> B   FINDNODE
+	incorrect_challenge := &Whoareyou{
+		IDNonce:   [16]byte{5, 6, 7, 8, 9, 6, 11, 12},
+		RecordSeq: challenge.RecordSeq,
+		Node:      challenge.Node,
+		sent:      challenge.sent,
+	}
+	incorrect_findnode, _ := net.nodeA.encodeWithChallenge(t, net.nodeB, incorrect_challenge, &Findnode{})
+	incorrect_findnode2 := make([]byte, len(incorrect_findnode))
+	copy(incorrect_findnode2, incorrect_findnode)
+
+	net.nodeB.expectDecodeErr(t, errInvalidNonceSig, incorrect_findnode)
+
+	// Reject new findnode as previous handshake is now deleted.
+	net.nodeB.expectDecodeErr(t, errUnexpectedHandshake, incorrect_findnode2)
+
+	// The findnode packet is again rejected even with a valid challenge this time.
+	findnode, _ := net.nodeA.encodeWithChallenge(t, net.nodeB, challenge, &Findnode{})
+	net.nodeB.expectDecodeErr(t, errUnexpectedHandshake, findnode)
+}
+
 // This test checks some malformed packets.
 func TestDecodeErrorsV5(t *testing.T) {
 	t.Parallel()
