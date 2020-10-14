@@ -267,7 +267,7 @@ func (s *Suite) TestFindnodeResults(t *utesting.T) {
 		expect[n.ID()] = n
 		d := uint(enode.LogDist(n.ID(), s.Dest.ID()))
 		if !containsUint(dists, d) {
-			dists = append(dists, uint(d))
+			dists = append(dists, d)
 		}
 	}
 
