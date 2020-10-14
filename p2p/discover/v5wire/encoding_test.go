@@ -68,7 +68,7 @@ func TestMinSizes(t *testing.T) {
 }
 
 // This test checks the basic handshake flow where A talks to B and A has no secrets.
-func TestHandshakeV5(t *testing.T) {
+func TestHandshake(t *testing.T) {
 	t.Parallel()
 	net := newHandshakeTest()
 	defer net.close()
@@ -99,7 +99,7 @@ func TestHandshakeV5(t *testing.T) {
 }
 
 // This test checks that handshake attempts are removed within the timeout.
-func TestHandshakeV5_timeout(t *testing.T) {
+func TestHandshake_timeout(t *testing.T) {
 	t.Parallel()
 	net := newHandshakeTest()
 	defer net.close()
@@ -124,7 +124,7 @@ func TestHandshakeV5_timeout(t *testing.T) {
 }
 
 // This test checks handshake behavior when no record is sent in the auth response.
-func TestHandshakeV5_norecord(t *testing.T) {
+func TestHandshake_norecord(t *testing.T) {
 	t.Parallel()
 	net := newHandshakeTest()
 	defer net.close()
@@ -158,7 +158,7 @@ func TestHandshakeV5_norecord(t *testing.T) {
 
 // In this test, A tries to send FINDNODE with existing secrets but B doesn't know
 // anything about A.
-func TestHandshakeV5_rekey(t *testing.T) {
+func TestHandshake_rekey(t *testing.T) {
 	t.Parallel()
 	net := newHandshakeTest()
 	defer net.close()
@@ -197,7 +197,7 @@ func TestHandshakeV5_rekey(t *testing.T) {
 }
 
 // In this test A and B have different keys before the handshake.
-func TestHandshakeV5_rekey2(t *testing.T) {
+func TestHandshake_rekey2(t *testing.T) {
 	t.Parallel()
 	net := newHandshakeTest()
 	defer net.close()
@@ -231,7 +231,7 @@ func TestHandshakeV5_rekey2(t *testing.T) {
 	net.nodeA.expectDecode(t, NodesMsg, nodes)
 }
 
-func TestHandshakeV5_BadHandshakeAttack(t *testing.T) {
+func TestHandshake_BadHandshakeAttack(t *testing.T) {
 	t.Parallel()
 	net := newHandshakeTest()
 	defer net.close()

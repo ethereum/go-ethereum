@@ -281,7 +281,7 @@ func (c *Codec) encodeRandom(toID enode.ID) (Header, []byte, error) {
 func (c *Codec) encodeWhoareyou(toID enode.ID, packet *Whoareyou) (Header, error) {
 	// Sanity check node field to catch misbehaving callers.
 	if packet.RecordSeq > 0 && packet.Node == nil {
-		panic("BUG: missing node in whoareyouV5 with non-zero seq")
+		panic("BUG: missing node in whoareyou with non-zero seq")
 	}
 
 	// Create header.
