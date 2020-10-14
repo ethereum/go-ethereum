@@ -25,7 +25,7 @@ type accessList struct {
 	slots     []map[common.Hash]struct{}
 }
 
-// Contains returns true if the address is in the access list
+// Contains returns true if the address is in the access list.
 func (al *accessList) ContainsAddr(address common.Address) bool {
 	_, ok := al.addresses[address]
 	return ok
@@ -46,7 +46,7 @@ func (al *accessList) Contains(address common.Address, slot common.Hash) (addres
 	return true, slotPresent
 }
 
-// NewAcessList creates a new accessList
+// NewAcessList creates a new accessList.
 func NewAccessList() *accessList {
 	return &accessList{
 		addresses: make(map[common.Address]int),
@@ -55,13 +55,13 @@ func NewAccessList() *accessList {
 }
 
 // Clear cleans out the access list. This can be used instead of creating a new object
-// at every transacton
+// at every transacton.
 func (a *accessList) Clear() {
 	a.addresses = make(map[common.Address]int)
 	a.slots = a.slots[:0]
 }
 
-// Copy creates an independent copy of a
+// Copy creates an independent copy of an accessList.
 func (a *accessList) Copy() *accessList {
 	cp := NewAccessList()
 	for k, v := range a.addresses {
@@ -78,7 +78,7 @@ func (a *accessList) Copy() *accessList {
 }
 
 // AddAddr adds an address to the access list, and returns 'true' if the operation
-// caused a change (addr was not previously in the list)
+// caused a change (addr was not previously in the list).
 func (al *accessList) AddAddr(address common.Address) bool {
 	if _, present := al.addresses[address]; present {
 		return false
@@ -91,22 +91,17 @@ func (al *accessList) AddAddr(address common.Address) bool {
 // Return values are:
 // - address added
 // - slot added
-// For any 'true' value returned, a corresponding journal entry must be made
+// For any 'true' value returned, a corresponding journal entry must be made.
 func (al *accessList) AddSlot(address common.Address, slot common.Hash) (addrChange bool, slotChange bool) {
-	idx, addrOk := al.addresses[address]
-	if !addrOk || idx == -1 {
+	idx, addrPresent := al.addresses[address]
+	if !addrPresent || idx == -1 {
 		// Address not present, or addr present but no slots there
 		slotmap := make(map[common.Hash]struct{})
 		slotmap[slot] = struct{}{}
 		idx = len(al.slots)
 		al.addresses[address] = idx
 		al.slots = append(al.slots, slotmap)
-
-		if !addrOk {
-			addrChange = true
-		}
-		// Journal add slot change
-		return addrChange, true
+		return !addrPresent, true
 	}
 	// There is already an (address,slot) mapping
 	slotmap := al.slots[idx]

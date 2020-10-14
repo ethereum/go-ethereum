@@ -49,16 +49,22 @@ func gasSStoreEIP2929(evm *EVM, contract *Contract, stack *Stack, mem *Memory, m
 	}
 	// Gas sentry honoured, do the actual gas calculation based on the stored value
 	var (
-		y, x    = stack.Back(1), stack.Back(0)
+		y, x    = stack.Back(1), stack.peek()
 		slot    = common.Hash(x.Bytes32())
 		current = evm.StateDB.GetState(contract.Address(), slot)
 		cost    = uint64(0)
 	)
 	// Check slot presence in the access list
-	if _, slotPresent := evm.StateDB.SlotInAccessList(contract.Address(), slot); !slotPresent {
+	if addrPresent, slotPresent := evm.StateDB.SlotInAccessList(contract.Address(), slot); !slotPresent {
 		cost = ColdSloadCostEIP2929
 		// If the caller cannot afford the cost, this change will be rolled back
 		evm.StateDB.AddSlotToAccessList(contract.Address(), slot)
+		if !addrPresent {
+			// Once we're done with YOLOv2 and schedule this for mainnet, might
+			// be good to remove this panic here, which is just really a
+			// canary to have during testing
+			panic("impossible case: address was not present in access list during sstore op")
+		}
 	}
 	value := common.Hash(y.Bytes32())
 
@@ -105,7 +111,7 @@ func gasSStoreEIP2929(evm *EVM, contract *Contract, stack *Stack, mem *Memory, m
 	return cost + WarmStorageReadCostEIP2929, nil // dirty update (2.2)
 }
 
-// gasSLoadEIP2929 calculates dynamic gas for SLOAD according to EIP-XXX
+// gasSLoadEIP2929 calculates dynamic gas for SLOAD according to EIP-2929
 // For SLOAD, if the (address, storage_key) pair (where address is the address of the contract
 // whose storage is being read) is not yet in accessed_storage_keys,
 // charge 2000 gas and add the pair to accessed_storage_keys.
@@ -198,7 +204,7 @@ var (
 func gasSelfdestructEIP2929(evm *EVM, contract *Contract, stack *Stack, mem *Memory, memorySize uint64) (uint64, error) {
 	var (
 		gas     uint64
-		address = common.Address(stack.Back(0).Bytes20())
+		address = common.Address(stack.peek().Bytes20())
 	)
 	if !evm.StateDB.AddrInAccessList(address) {
 		// If the caller cannot afford the cost, this change will be rolled back
