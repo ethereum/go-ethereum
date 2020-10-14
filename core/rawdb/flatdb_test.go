@@ -91,6 +91,30 @@ func (tester *flatDBTester) checkIteration(t *testing.T, keys [][]byte, vals [][
 	}
 }
 
+func (tester *flatDBTester) checkIterationNoOrder(t *testing.T, entries map[string][]byte) {
+	iter := tester.Iterate()
+	var index int
+	for iter.Next() {
+		val, ok := entries[string(iter.Key())]
+		if !ok {
+			t.Fatalf("Unexpected key %v", iter.Key())
+		}
+		if !bytes.Equal(iter.Value(), val) {
+			t.Fatalf("Entry value mismatch %v -> %v", val, iter.Value())
+		}
+		index += 1
+	}
+	if iter.Error() != nil {
+		t.Fatalf("Iteration error %v", iter.Error())
+	}
+	iter.Release()
+
+	// The assumption is held there is no duplicated entry.
+	if index != len(entries) {
+		t.Fatalf("Missing entries, want %d, got %d", len(entries), index)
+	}
+}
+
 func newTestCases(size int) ([][]byte, [][]byte) {
 	var (
 		keys [][]byte
@@ -180,7 +204,11 @@ func TestFlatDatabaseConcurrentWrite(t *testing.T) {
 	}
 	defer tester.teardown()
 
-	var wg sync.WaitGroup
+	var (
+		wg      sync.WaitGroup
+		mixLock sync.Mutex
+		mix     = make(map[string][]byte)
+	)
 	writer := func() {
 		defer wg.Done()
 		keys, vals := newTestCases(1024 * 1024)
@@ -193,11 +221,18 @@ func TestFlatDatabaseConcurrentWrite(t *testing.T) {
 			}
 		}
 		batch.Write()
+
+		mixLock.Lock()
+		for i := 0; i < len(keys); i++ {
+			mix[string(keys[i])] = vals[i]
+		}
+		mixLock.Unlock()
 	}
 	wg.Add(2)
-	go writer()
-	go writer()
-
+	for i := 0; i < 2; i++ {
+		go writer()
+	}
 	wg.Wait()
 	tester.Commit()
+	tester.checkIterationNoOrder(t, mix)
 }
