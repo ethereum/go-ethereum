@@ -345,7 +345,6 @@ func (c *Console) Interactive() {
 		prompt           = c.prompt             // the current prompt line (used for multi-line inputs)
 		indents          = 0                    // the current number of input indents (used for multi-line inputs)
 		input            = ""                   // the current user input
-		interruptCounter = 0                    // keeps track of interrupts, killing the console if pressed twice in a row
 		inputLine        = make(chan string, 1) // receives user input
 		inputErr         = make(chan error, 1)  // receives liner errors
 		requestLine      = make(chan string)    // requests a line of input
@@ -373,12 +372,10 @@ func (c *Console) Interactive() {
 			return
 
 		case err := <-inputErr:
-			if err == liner.ErrPromptAborted && interruptCounter < 1 {
+			if err == liner.ErrPromptAborted {
 				// When prompting for multi-line input, the first Ctrl-C resets
 				// the multi-line state.
 				prompt, indents, input = c.prompt, 0, ""
-				interruptCounter++
-				fmt.Fprintln(c.printer, "(To exit, press ^C again or ^D or type exit)")
 				continue
 			}
 			return
@@ -412,8 +409,6 @@ func (c *Console) Interactive() {
 				c.Evaluate(input)
 				input = ""
 			}
-
-			interruptCounter = 0
 		}
 	}
 }
