@@ -85,6 +85,10 @@ func (tester *flatDBTester) checkIteration(t *testing.T, keys [][]byte, vals [][
 		t.Fatalf("Iteration error %v", iter.Error())
 	}
 	iter.Release()
+
+	if index != len(keys) {
+		t.Fatalf("Missing entries, want %d, got %d", len(keys), index)
+	}
 }
 
 func newTestCases(size int) ([][]byte, [][]byte) {
