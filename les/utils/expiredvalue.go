@@ -259,7 +259,7 @@ var (
 	fixedToLogFactor = math.Log(2) / float64(fixedFactor)
 )
 
-// pow2Fixed returns the base 2 power of the fixed point value.
+// Pow2 returns the base 2 power of the fixed point value.
 func (f64 Fixed64) Pow2() float64 {
 	return math.Exp(float64(f64) * fixedToLogFactor)
 }

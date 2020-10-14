@@ -417,7 +417,7 @@ func (f *clientPool) serveCapQuery(id enode.ID, freeID string, data []byte) []by
 	if f.connectedBias > bias {
 		bias = f.connectedBias
 	}
-	for i, addTokens := range req.AddTokens {
+	for i, addTokens := range req.AddTokens { //TODO limit length
 		if addTokens > math.MaxInt64 {
 			addTokens = math.MaxInt64
 		}

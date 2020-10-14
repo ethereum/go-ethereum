@@ -124,7 +124,7 @@ func New(stack *node.Node, config *eth.Config) (*LightEthereum, error) {
 			AddTokens: []uint64{0},
 		}
 		reqEnc, _ := rlp.EncodeToBytes(&req)
-		reqs := lespay.Requests{lespay.Request{Name: "capQuery", Params: reqEnc}}
+		reqs := lespay.Requests{lespay.Request{Service: "les", Name: lespay.CapacityQueryName, Params: reqEnc}} //TODO filter
 		reqsEnc, _ := rlp.EncodeToBytes(&reqs)
 		respsEnc, _ := leth.p2pServer.DiscV5.TalkRequest(n, "lespay", reqsEnc)
 		var (

@@ -24,6 +24,7 @@ import (
 	"github.com/ethereum/go-ethereum/common/mclock"
 	"github.com/ethereum/go-ethereum/eth"
 	"github.com/ethereum/go-ethereum/les/flowcontrol"
+	"github.com/ethereum/go-ethereum/les/lespay"
 	lps "github.com/ethereum/go-ethereum/les/lespay/server"
 	"github.com/ethereum/go-ethereum/light"
 	"github.com/ethereum/go-ethereum/log"
@@ -54,13 +55,14 @@ func init() {
 type LesServer struct {
 	lesCommons
 
-	ns           *nodestate.NodeStateMachine
-	archiveMode  bool // Flag whether the ethereum node runs in archive mode.
-	handler      *serverHandler
-	broadcaster  *broadcaster
-	lesTopics    []discv5.Topic
-	lespayServer *lps.Server
-	privateKey   *ecdsa.PrivateKey
+	ns             *nodestate.NodeStateMachine
+	archiveMode    bool // Flag whether the ethereum node runs in archive mode.
+	handler        *serverHandler
+	broadcaster    *broadcaster
+	lesTopics      []discv5.Topic
+	lespayServer   *lps.Server
+	lespayDbAccess *lps.DbAccess
+	privateKey     *ecdsa.PrivateKey
 
 	// Flow control and capacity management
 	fcManager    *flowcontrol.ClientManager
@@ -77,6 +79,10 @@ type LesServer struct {
 }
 
 func NewLesServer(node *node.Node, e *eth.Ethereum, config *eth.Config) (*LesServer, error) {
+	lespayDb, err := node.OpenDatabase("lespay", 0, 0, "eth/db/lespay")
+	if err != nil {
+		return nil, err
+	}
 	ns := nodestate.NewNodeStateMachine(nil, nil, mclock.System{}, serverSetup)
 	// Collect les protocol version information supported by local node.
 	lesTopics := make([]discv5.Topic, len(AdvertiseProtocolVersions))
@@ -104,7 +110,7 @@ func NewLesServer(node *node.Node, e *eth.Ethereum, config *eth.Config) (*LesSer
 		ns:           ns,
 		archiveMode:  e.ArchiveMode(),
 		broadcaster:  newBroadcaster(ns),
-		lespayServer: lps.NewServer(0.01, 10000),
+		lespayServer: lps.NewServer(ns, lespayDb, 0.01, 10000),
 		lesTopics:    lesTopics,
 		fcManager:    flowcontrol.NewClientManager(nil, &mclock.System{}),
 		servingQueue: newServingQueue(int64(time.Millisecond*10), float64(config.LightServ)/100),
@@ -112,6 +118,7 @@ func NewLesServer(node *node.Node, e *eth.Ethereum, config *eth.Config) (*LesSer
 		threadsIdle:  threads,
 		p2pSrv:       node.Server(),
 	}
+	srv.lespayDbAccess = srv.lespayServer.Register(srv)
 	srv.handler = newServerHandler(srv, e.BlockChain(), e.ChainDb(), e.TxPool(), e.Synced)
 	srv.costTracker, srv.minCapacity = newCostTracker(e.ChainDb(), config)
 	srv.oracle = srv.setupOracle(node, e.BlockChain().Genesis().Hash(), config)
@@ -135,9 +142,8 @@ func NewLesServer(node *node.Node, e *eth.Ethereum, config *eth.Config) (*LesSer
 		srv.maxCapacity = totalRecharge
 	}
 	srv.fcManager.SetCapacityLimits(srv.minCapacity, srv.maxCapacity, srv.minCapacity*2)
-	srv.clientPool = newClientPool(ns, srv.chainDb, srv.minCapacity, defaultConnectedBias, mclock.System{}, srv.dropClient)
+	srv.clientPool = newClientPool(ns, lespayDb, srv.minCapacity, defaultConnectedBias, mclock.System{}, srv.dropClient)
 	srv.clientPool.setDefaultFactors(lps.PriceFactors{TimeFactor: 0, CapacityFactor: 1, RequestFactor: 1}, lps.PriceFactors{TimeFactor: 0, CapacityFactor: 1, RequestFactor: 1})
-	srv.lespayServer.RegisterHandler("capQuery", srv.clientPool.serveCapQuery)
 
 	checkpoint := srv.latestLocalCheckpoint()
 	if !checkpoint.Empty() {
@@ -314,5 +320,18 @@ func (s *LesServer) getClient(id enode.ID) *clientPeer {
 func (s *LesServer) dropClient(id enode.ID) {
 	if p := s.getClient(id); p != nil {
 		p.Peer.Disconnect(p2p.DiscRequested)
+	}
+}
+
+func (s *LesServer) ServiceInfo() (string, string) {
+	return "les", "Ethereum light client service"
+}
+
+func (s *LesServer) Handle(id enode.ID, address string, name string, data []byte) []byte {
+	switch name {
+	case lespay.CapacityQueryName:
+		return s.clientPool.serveCapQuery(id, address, data)
+	default:
+		return nil
 	}
 }

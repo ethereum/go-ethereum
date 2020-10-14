@@ -16,10 +16,14 @@
 
 package lespay
 
+const (
+	CapacityQueryName = "cq"
+)
+
 type (
 	Request struct {
-		Name   string
-		Params []byte
+		Service, Name string
+		Params        []byte
 	}
 	Requests []Request
 
