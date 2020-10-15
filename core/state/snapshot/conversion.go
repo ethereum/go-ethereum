@@ -284,7 +284,7 @@ func runSubTasks(in chan subTask, out chan error, stop chan struct{}) {
 			}
 		case <-stop:
 			// Drain all cached tasks first
-			drain:
+		drain:
 			for {
 				select {
 				case task := <-in:

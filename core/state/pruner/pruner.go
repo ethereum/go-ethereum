@@ -47,9 +47,9 @@ var (
 )
 
 type Pruner struct {
-	db, tmpdb ethdb.Database
-	homedir   string
-	snaptree  *snapshot.Tree
+	db, statedb ethdb.Database
+	homedir     string
+	snaptree    *snapshot.Tree
 }
 
 // NewPruner creates the pruner instance.
@@ -58,46 +58,22 @@ func NewPruner(db ethdb.Database, root common.Hash, homedir string) (*Pruner, er
 	if err != nil {
 		return nil, err // The relevant snapshot(s) might not exist
 	}
-	tmpdb, err := openTemporaryDatabase(homedir)
+	statedb, err := openTemporaryDatabase(homedir)
 	if err != nil {
 		return nil, err
 	}
 	return &Pruner{
 		db:       db,
-		tmpdb:    tmpdb,
+		statedb:  statedb,
 		homedir:  homedir,
 		snaptree: snaptree,
 	}, nil
 }
 
-// Prune deletes all historical state nodes except the nodes belong to the
-// specified state version. If user doesn't specify the state version, use
-// the persisted snapshot disk layer as the target.
-func (p *Pruner) Prune(root common.Hash) error {
-	// If the target state root is not specified, use the oldest layer
-	// (disk layer). Fresh new layer as the target is not recommended,
-	// since it might be non-canonical.
-	if root == (common.Hash{}) {
-		root = rawdb.ReadSnapshotRoot(p.db)
-		if root == (common.Hash{}) {
-			return errors.New("no target state specified")
-		}
-	}
-	start := time.Now()
-	// Traverse the target state, re-construct the whole state trie and
-	// commit to the given temporary database.
-	if err := snapshot.CommitAndVerifyState(p.snaptree, root, p.db, p.tmpdb); err != nil {
-		return err
-	}
-	type commiter interface {
-		Commit() error
-	}
-	if err := p.tmpdb.(commiter).Commit(); err != nil {
-		return err
-	}
+func prune(maindb ethdb.Database, statedb ethdb.Database, start time.Time) error {
 	// Extract all node refs belong to the genesis. We have to keep the
 	// genesis all the time.
-	marker, err := extractGenesis(p.db)
+	marker, err := extractGenesis(maindb)
 	if err != nil {
 		return err
 	}
@@ -109,8 +85,8 @@ func (p *Pruner) Prune(root common.Hash) error {
 		size   common.StorageSize
 		pstart = time.Now()
 		logged = time.Now()
-		batch  = p.db.NewBatch()
-		iter   = p.db.NewIterator(nil, nil)
+		batch  = maindb.NewBatch()
+		iter   = maindb.NewIterator(nil, nil)
 
 		rangestart, rangelimit []byte
 	)
@@ -166,31 +142,63 @@ func (p *Pruner) Prune(root common.Hash) error {
 	// Start compactions, will remove the deleted data from the disk immediately.
 	cstart := time.Now()
 	log.Info("Start compacting the database")
-	if err := p.db.Compact(rangestart, rangelimit); err != nil {
+	if err := maindb.Compact(rangestart, rangelimit); err != nil {
 		log.Error("Failed to compact the whole database", "error", err)
 	}
 	log.Info("Compacted the whole database", "elapsed", common.PrettyDuration(time.Since(cstart)))
 
-	// Migrate the state from the temporary db to main one.
-	committed := migrateState(p.db, p.tmpdb, p.homedir)
-	wipeTemporaryDatabase(p.homedir, p.tmpdb)
+	// Migrate the state from the state db to main one.
+	committed := migrateState(maindb, statedb)
 	log.Info("Successfully prune the state", "committed", committed, "pruned", size, "released", size-committed, "elasped", common.PrettyDuration(time.Since(start)))
+	return nil
+}
+
+// Prune deletes all historical state nodes except the nodes belong to the
+// specified state version. If user doesn't specify the state version, use
+// the persisted snapshot disk layer as the target.
+func (p *Pruner) Prune(root common.Hash) error {
+	// If the target state root is not specified, use the oldest layer
+	// (disk layer). Fresh new layer as the target is not recommended,
+	// since it might be non-canonical.
+	if root == (common.Hash{}) {
+		root = rawdb.ReadSnapshotRoot(p.db)
+		if root == (common.Hash{}) {
+			return errors.New("no target state specified")
+		}
+	}
+	start := time.Now()
+	// Traverse the target state, re-construct the whole state trie and
+	// commit to the given temporary database.
+	if err := snapshot.CommitAndVerifyState(p.snaptree, root, p.db, p.statedb); err != nil {
+		return err
+	}
+	type commiter interface {
+		Commit() error
+	}
+	if err := p.statedb.(commiter).Commit(); err != nil {
+		return err
+	}
+	if err := prune(p.db, p.statedb, start); err != nil {
+		return err
+	}
+	wipeTemporaryDatabase(p.homedir, p.statedb)
 	return nil
 }
 
 // openTemporaryDatabase opens the temporary state database under the given
 // instance directory.
 func openTemporaryDatabase(homedir string) (ethdb.Database, error) {
-	// First open as the read mode. If it works it means there already exists
-	// one complete db, abort.
+	// Firstly try to open the db in read-only mode. If no error
+	// returned, it means there already exists one complete statedb.
+	// In this case, abort the entire procedure.
 	dir := filepath.Join(homedir, temporaryStateDatabase)
 	db, err := rawdb.NewFlatDatabase(dir, true)
 	if err == nil {
 		db.Close()
 		return nil, fmt.Errorf("backup state database<%s> is existent, don't run `prune-state` again", dir)
 	}
-	// Then open as the write mode. It will automatically truncate all existent
-	// content which is regarded as "incomplete".
+	// Then open as the write-only mode. It will automatically truncate
+	// all existent content which is regarded as "incomplete".
 	return rawdb.NewFlatDatabase(dir, false)
 }
 
@@ -200,16 +208,15 @@ func wipeTemporaryDatabase(homedir string, db ethdb.Database) {
 	os.RemoveAll(filepath.Join(homedir, temporaryStateDatabase))
 }
 
-// migrateState moves all states in temporary database to main db.
-// Wipe the whole temporary db if success.
-func migrateState(db, tmpdb ethdb.Database, homedir string) common.StorageSize {
+// migrateState moves all states in state database to main db.
+func migrateState(maindb, statedb ethdb.Database) common.StorageSize {
 	var (
 		count  int
 		size   common.StorageSize
 		start  = time.Now()
 		logged = time.Now()
-		batch  = db.NewBatch()
-		iter   = tmpdb.NewIterator(nil, nil)
+		batch  = maindb.NewBatch()
+		iter   = statedb.NewIterator(nil, nil)
 	)
 	defer iter.Release()
 
@@ -244,23 +251,31 @@ func migrateState(db, tmpdb ethdb.Database, homedir string) common.StorageSize {
 	return size
 }
 
-// RecoverTemporaryDatabase migrates all state data from temporary database to
-// given main db. If the state database is broken, then interrupt the migration.
+// RecoverTemporaryDatabase migrates all state data from external state database
+// to given main db. If the state database is broken(not complete), then interrupt
+// the recovery.
+//
+// Note before the migration, the main db still needs to be pruned, otherwise the
+// dangling nodes will be left.
 //
 // This function is used in this case: user tries to prune state data, but after
-// creating the state backup, the system exits(maually or crashed). Next time
-// before launching the system, the backup state should be merged into main db.
+// creating the backup for specific version, the system exits(maually or crashed).
+// In the next restart, the paused pruning should be continued.
 func RecoverTemporaryDatabase(homedir string, db ethdb.Database) error {
 	dir := filepath.Join(homedir, temporaryStateDatabase)
 	if _, err := os.Stat(dir); os.IsNotExist(err) {
 		return nil // nothing to recover
 	}
-	recoverdb, err := rawdb.NewFlatDatabase(dir, true)
+	// Open the flatdb in read-only mode. Error will be returned if it's
+	// an incomplete database. TODO in this case, please drop it.
+	statedb, err := rawdb.NewFlatDatabase(dir, true)
 	if err != nil {
-		return err // incomplete database, remove
+		return err
 	}
-	migrateState(db, recoverdb, homedir)
-	wipeTemporaryDatabase(homedir, recoverdb)
+	if err := prune(db, statedb, time.Now()); err != nil {
+		return err
+	}
+	wipeTemporaryDatabase(homedir, statedb)
 	return nil
 }
 
