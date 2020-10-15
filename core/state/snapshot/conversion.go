@@ -254,25 +254,28 @@ func runSubTasks(in chan subTask, out chan error, stop chan struct{}) {
 		}
 		done <- nil
 	}
+	schedule := func(task subTask) {
+		// Short circuit if failure already occurs.
+		if failed {
+			return
+		}
+		running += 1
+		go run(task)
+
+		// If there are too many runners, block here
+		for running >= limit {
+			failure := <-done
+			running -= 1
+			if failure != nil && !failed {
+				failed = true
+				out <- failure // won't be blocked
+			}
+		}
+	}
 	for {
 		select {
 		case task := <-in:
-			// Short circuit if failure already occurs.
-			if failed {
-				continue
-			}
-			running += 1
-			go run(task)
-
-			// If there are too many runners, block here
-			for running >= limit {
-				failure := <-done
-				running -= 1
-				if failure != nil && !failed {
-					failed = true
-					out <- failure // won't be blocked
-				}
-			}
+			schedule(task)
 		case failure := <-done:
 			running -= 1
 			if failure != nil && !failed {
@@ -280,6 +283,16 @@ func runSubTasks(in chan subTask, out chan error, stop chan struct{}) {
 				out <- failure // won't be blocked
 			}
 		case <-stop:
+			// Drain all cached tasks first
+			drain:
+			for {
+				select {
+				case task := <-in:
+					schedule(task)
+				default:
+					break drain
+				}
+			}
 			for running > 0 {
 				failure := <-done
 				running -= 1
