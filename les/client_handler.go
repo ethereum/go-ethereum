@@ -102,7 +102,7 @@ func (h *clientHandler) handle(p *serverPeer) error {
 	p.Log().Debug("Light Ethereum peer connected", "name", p.Name())
 
 	// Execute the LES handshake
-	if err := p.Handshake(h.backend.blockchain.Genesis().Hash(), nil); err != nil {
+	if err := p.Handshake(h.backend.blockchain.Genesis().Hash()); err != nil {
 		p.Log().Debug("Light Ethereum handshake failed", "err", err)
 		return err
 	}

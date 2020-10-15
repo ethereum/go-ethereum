@@ -561,7 +561,7 @@ func (p *serverPeer) updateHead(hash common.Hash, number uint64, td *big.Int) {
 
 // Handshake executes the les protocol handshake, negotiating version number,
 // network IDs and genesis blocks.
-func (p *serverPeer) Handshake(genesis common.Hash, server *LesServer) error {
+func (p *serverPeer) Handshake(genesis common.Hash) error {
 	// Note: there is no need to share local head with a server but older servers still
 	// require these fields so we announce zero values.
 	return p.handshake(common.Big0, common.Hash{}, 0, genesis, func(lists *keyValueList) {

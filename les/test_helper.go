@@ -294,6 +294,7 @@ func newTestServerHandler(blocks int, indexers []*core.ChainIndexer, db ethdb.Da
 		server.oracle.Start(simulation)
 	}
 	server.servingQueue.setThreads(4)
+	ns.Start()
 	server.handler.start()
 	return server.handler, simulation
 }
