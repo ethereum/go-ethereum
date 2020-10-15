@@ -129,7 +129,7 @@ func (dl *diskLayer) generate(stats *generatorStats) {
 			stats.wiping = nil
 			stats.start = time.Now()
 
-		// If generator was aboted during wipe, return
+		// If generator was aborted during wipe, return
 		case abort := <-dl.genAbort:
 			abort <- stats
 			return
@@ -203,7 +203,10 @@ func (dl *diskLayer) generate(stats *generatorStats) {
 		if acc.Root != emptyRoot {
 			storeTrie, err := trie.NewSecure(acc.Root, dl.triedb)
 			if err != nil {
-				log.Crit("Storage trie inaccessible for snapshot generation", "err", err)
+				log.Error("Generator failed to access storage trie", "accroot", dl.root, "acchash", common.BytesToHash(accIt.Key), "stroot", acc.Root, "err", err)
+				abort := <-dl.genAbort
+				abort <- stats
+				return
 			}
 			var storeMarker []byte
 			if accMarker != nil && bytes.Equal(accountHash[:], accMarker) && len(dl.genMarker) > common.HashLength {
@@ -238,6 +241,12 @@ func (dl *diskLayer) generate(stats *generatorStats) {
 					}
 				}
 			}
+			if err := storeIt.Err; err != nil {
+				log.Error("Generator failed to iterate storage trie", "accroot", dl.root, "acchash", common.BytesToHash(accIt.Key), "stroot", acc.Root, "err", err)
+				abort := <-dl.genAbort
+				abort <- stats
+				return
+			}
 		}
 		if time.Since(logged) > 8*time.Second {
 			stats.Log("Generating state snapshot", dl.root, accIt.Key)
@@ -245,6 +254,12 @@ func (dl *diskLayer) generate(stats *generatorStats) {
 		}
 		// Some account processed, unmark the marker
 		accMarker = nil
+	}
+	if err := accIt.Err; err != nil {
+		log.Error("Generator failed to iterate account trie", "root", dl.root, "err", err)
+		abort := <-dl.genAbort
+		abort <- stats
+		return
 	}
 	// Snapshot fully generated, set the marker to nil
 	if batch.ValueSize() > 0 {

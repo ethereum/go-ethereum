@@ -322,20 +322,21 @@ func (t *mdLogger) CaptureStart(from common.Address, to common.Address, create b
 func (t *mdLogger) CaptureState(env *EVM, pc uint64, op OpCode, gas, cost uint64, memory *Memory, stack *Stack, rStack *ReturnStack, rData []byte, contract *Contract, depth int, err error) error {
 	fmt.Fprintf(t.out, "| %4d  | %10v  |  %3d |", pc, op, cost)
 
-	if !t.cfg.DisableStack { // format stack
+	if !t.cfg.DisableStack {
+		// format stack
 		var a []string
 		for _, elem := range stack.data {
 			a = append(a, fmt.Sprintf("%d", elem))
 		}
 		b := fmt.Sprintf("[%v]", strings.Join(a, ","))
 		fmt.Fprintf(t.out, "%10v |", b)
-	}
-	if !t.cfg.DisableStack { // format return stack
-		var a []string
+
+		// format return stack
+		a = a[:0]
 		for _, elem := range rStack.data {
 			a = append(a, fmt.Sprintf("%2d", elem))
 		}
-		b := fmt.Sprintf("[%v]", strings.Join(a, ","))
+		b = fmt.Sprintf("[%v]", strings.Join(a, ","))
 		fmt.Fprintf(t.out, "%10v |", b)
 	}
 	fmt.Fprintln(t.out, "")

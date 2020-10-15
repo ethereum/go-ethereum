@@ -18,6 +18,7 @@ package core
 
 import (
 	"context"
+	"encoding/json"
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/hexutil"
@@ -61,11 +62,30 @@ func (l *AuditLogger) SignTransaction(ctx context.Context, args SendTxArgs, meth
 }
 
 func (l *AuditLogger) SignData(ctx context.Context, contentType string, addr common.MixedcaseAddress, data interface{}) (hexutil.Bytes, error) {
+	marshalledData, _ := json.Marshal(data) // can ignore error, marshalling what we just unmarshalled
 	l.log.Info("SignData", "type", "request", "metadata", MetadataFromContext(ctx).String(),
-		"addr", addr.String(), "data", data, "content-type", contentType)
+		"addr", addr.String(), "data", marshalledData, "content-type", contentType)
 	b, e := l.api.SignData(ctx, contentType, addr, data)
 	l.log.Info("SignData", "type", "response", "data", common.Bytes2Hex(b), "error", e)
 	return b, e
+}
+
+func (l *AuditLogger) SignGnosisSafeTx(ctx context.Context, addr common.MixedcaseAddress, gnosisTx GnosisSafeTx, methodSelector *string) (*GnosisSafeTx, error) {
+	sel := "<nil>"
+	if methodSelector != nil {
+		sel = *methodSelector
+	}
+	data, _ := json.Marshal(gnosisTx) // can ignore error, marshalling what we just unmarshalled
+	l.log.Info("SignGnosisSafeTx", "type", "request", "metadata", MetadataFromContext(ctx).String(),
+		"addr", addr.String(), "data", string(data), "selector", sel)
+	res, e := l.api.SignGnosisSafeTx(ctx, addr, gnosisTx, methodSelector)
+	if res != nil {
+		data, _ := json.Marshal(res) // can ignore error, marshalling what we just unmarshalled
+		l.log.Info("SignGnosisSafeTx", "type", "response", "data", string(data), "error", e)
+	} else {
+		l.log.Info("SignGnosisSafeTx", "type", "response", "data", res, "error", e)
+	}
+	return res, e
 }
 
 func (l *AuditLogger) SignTypedData(ctx context.Context, addr common.MixedcaseAddress, data TypedData) (hexutil.Bytes, error) {

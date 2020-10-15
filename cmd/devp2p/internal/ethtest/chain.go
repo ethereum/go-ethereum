@@ -1,3 +1,19 @@
+// Copyright 2020 The go-ethereum Authors
+// This file is part of the go-ethereum library.
+//
+// The go-ethereum library is free software: you can redistribute it and/or modify
+// it under the terms of the GNU Lesser General Public License as published by
+// the Free Software Foundation, either version 3 of the License, or
+// (at your option) any later version.
+//
+// The go-ethereum library is distributed in the hope that it will be useful,
+// but WITHOUT ANY WARRANTY; without even the implied warranty of
+// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
+// GNU Lesser General Public License for more details.
+//
+// You should have received a copy of the GNU Lesser General Public License
+// along with the go-ethereum library. If not, see <http://www.gnu.org/licenses/>.
+
 package ethtest
 
 import (
@@ -66,6 +82,43 @@ func (c *Chain) Shorten(height int) *Chain {
 // Head returns the chain head.
 func (c *Chain) Head() *types.Block {
 	return c.blocks[c.Len()-1]
+}
+
+func (c *Chain) GetHeaders(req GetBlockHeaders) (BlockHeaders, error) {
+	if req.Amount < 1 {
+		return nil, fmt.Errorf("no block headers requested")
+	}
+
+	headers := make(BlockHeaders, req.Amount)
+	var blockNumber uint64
+
+	// range over blocks to check if our chain has the requested header
+	for _, block := range c.blocks {
+		if block.Hash() == req.Origin.Hash || block.Number().Uint64() == req.Origin.Number {
+			headers[0] = block.Header()
+			blockNumber = block.Number().Uint64()
+		}
+	}
+	if headers[0] == nil {
+		return nil, fmt.Errorf("no headers found for given origin number %v, hash %v", req.Origin.Number, req.Origin.Hash)
+	}
+
+	if req.Reverse {
+		for i := 1; i < int(req.Amount); i++ {
+			blockNumber -= (1 - req.Skip)
+			headers[i] = c.blocks[blockNumber].Header()
+
+		}
+
+		return headers, nil
+	}
+
+	for i := 1; i < int(req.Amount); i++ {
+		blockNumber += (1 + req.Skip)
+		headers[i] = c.blocks[blockNumber].Header()
+	}
+
+	return headers, nil
 }
 
 // loadChain takes the given chain.rlp file, and decodes and returns

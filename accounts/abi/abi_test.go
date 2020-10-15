@@ -181,18 +181,15 @@ func TestConstructor(t *testing.T) {
 	if err != nil {
 		t.Error(err)
 	}
-	v := struct {
-		A *big.Int
-		B *big.Int
-	}{new(big.Int), new(big.Int)}
-	//abi.Unpack(&v, "", packed)
-	if err := abi.Constructor.Inputs.Unpack(&v, packed); err != nil {
+	unpacked, err := abi.Constructor.Inputs.Unpack(packed)
+	if err != nil {
 		t.Error(err)
 	}
-	if !reflect.DeepEqual(v.A, big.NewInt(1)) {
+
+	if !reflect.DeepEqual(unpacked[0], big.NewInt(1)) {
 		t.Error("Unable to pack/unpack from constructor")
 	}
-	if !reflect.DeepEqual(v.B, big.NewInt(2)) {
+	if !reflect.DeepEqual(unpacked[1], big.NewInt(2)) {
 		t.Error("Unable to pack/unpack from constructor")
 	}
 }
@@ -743,7 +740,7 @@ func TestUnpackEvent(t *testing.T) {
 	}
 	var ev ReceivedEvent
 
-	err = abi.Unpack(&ev, "received", data)
+	err = abi.UnpackIntoInterface(&ev, "received", data)
 	if err != nil {
 		t.Error(err)
 	}
@@ -752,7 +749,7 @@ func TestUnpackEvent(t *testing.T) {
 		Sender common.Address
 	}
 	var receivedAddrEv ReceivedAddrEvent
-	err = abi.Unpack(&receivedAddrEv, "receivedAddr", data)
+	err = abi.UnpackIntoInterface(&receivedAddrEv, "receivedAddr", data)
 	if err != nil {
 		t.Error(err)
 	}
