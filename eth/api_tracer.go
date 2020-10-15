@@ -775,7 +775,7 @@ func traceTransaction(ctx context.Context, eth *Ethereum, hash common.Hash, conf
 		"blockNumber":         block.NumberU64(),
 		"blockHash":           blockHash.Hex(),
 		"transactionHash":     tx.Hash().Hex(),
-		"transactionPosition": uint64(index),
+		"transactionPosition": index,
 	}
 
 	// Trace the transaction and return
