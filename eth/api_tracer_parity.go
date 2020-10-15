@@ -151,9 +151,7 @@ func (api *PrivateTraceAPI) Block(ctx context.Context, number rpc.BlockNumber, c
 		if err := json.Unmarshal(result.Result.(json.RawMessage), &tmp); err != nil {
 			return nil, err
 		}
-		for _, item := range tmp {
-			results = append(results, item)
-		}
+		results = append(results, tmp...)
 	}
 
 	results = append(results, traceReward)
