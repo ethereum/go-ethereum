@@ -64,12 +64,9 @@ You can exit the console by typing `exit` or simply with `CTRL-C`.
 
 ## Caveats
 
-go-ethereum uses the [Otto JS VM](https://github.com/robertkrimen/otto) which has some
-limitations:
+go-ethereum now uses the [GoJa JS VM](https://github.com/dop251/goja) which is compatible with ECMAScript 5.1. There are some limitations though:
 
-* `"use strict"` will parse, but does nothing.
-* The regular expression engine (re2/regexp) is not fully compatible with the ECMA5
-  specification.
+  * Promises and `async` won't work.
 
 `web3.js` uses the [`bignumber.js`](https://github.com/MikeMcl/bignumber.js) library.
 This library is auto-loaded into the console.
