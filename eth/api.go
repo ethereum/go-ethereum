@@ -390,7 +390,7 @@ func (api *PublicDebugAPI) AccountRange(blockNrOrHash rpc.BlockNumberOrHash, sta
 			return state.IteratorDump{}, err
 		}
 	} else {
-		return state.IteratorDump{}, fmt.Errorf("must specify either block number or block hash")
+		return state.IteratorDump{}, errors.New("either block number or block hash must be specified")
 	}
 
 	if maxResults > AccountRangeMaxResults || maxResults <= 0 {
