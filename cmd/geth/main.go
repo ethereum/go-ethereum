@@ -240,6 +240,8 @@ func init() {
 		dumpCommand,
 		dumpGenesisCommand,
 		inspectCommand,
+		// See catalystcmd.go,
+		catalystCommand,
 		// See accountcmd.go:
 		accountCommand,
 		walletCommand,
