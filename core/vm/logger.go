@@ -68,7 +68,7 @@ type StructLog struct {
 	MemorySize    int                         `json:"memSize"`
 	Stack         []*big.Int                  `json:"stack"`
 	ReturnStack   []uint32                    `json:"returnStack"`
-	ReturnData    hexutil.Bytes               `json:"returnData"`
+	ReturnData    []byte                      `json:"returnData"`
 	Storage       map[common.Hash]common.Hash `json:"-"`
 	Depth         int                         `json:"depth"`
 	RefundCounter uint64                      `json:"refund"`
@@ -82,7 +82,7 @@ type structLogMarshaling struct {
 	Gas         math.HexOrDecimal64
 	GasCost     math.HexOrDecimal64
 	Memory      hexutil.Bytes
-	ReturnData  string
+	ReturnData  hexutil.Bytes
 	OpName      string `json:"opName"` // adds call to OpName() in MarshalJSON
 	ErrorString string `json:"error"`  // adds call to ErrorString() in MarshalJSON
 }
