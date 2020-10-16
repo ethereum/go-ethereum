@@ -25,7 +25,7 @@ import (
 
 var stackPool = sync.Pool{
 	New: func() interface{} {
-		return &Stack{data: make([]uint256.Int, 0, 16)}
+		return &Stack{data: make([]uint256.Int, 0, 1024)}
 	},
 }
 
