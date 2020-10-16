@@ -38,7 +38,7 @@ and debugging ("debug"), they must be configured via the `--http.api` flag. We d
 not recommend enabling such APIs over HTTP, however, since access to these
 methods increases the attack surface.
 
-    geth --http --http.api personal,eth,net,web3b
+    geth --http --http.api personal,eth,net,web3
 
 Since the HTTP server is reachable from any local application, additional
 protection is built into the server to prevent misuse of the API from web pages.
