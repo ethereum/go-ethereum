@@ -5,7 +5,6 @@ import (
 	"math/big"
 
 	"github.com/maticnetwork/bor/common"
-	"github.com/maticnetwork/bor/crypto"
 	"github.com/maticnetwork/bor/rlp"
 )
 
@@ -96,13 +95,13 @@ func decodeStoredBorReceiptRLP(r *BorReceiptForStorage, blob []byte) error {
 // DeriveFields fills the receipts with their computed fields based on consensus
 // data and contextual infos like containing block and transactions.
 func (r *BorReceipt) DeriveFields(hash common.Hash, number uint64) error {
-	txHash := common.BytesToHash(crypto.Keccak256(append([]byte("matic-receipt-"), hash.Bytes()...)))
+	// txHash := common.BytesToHash(crypto.Keccak256(append([]byte("bor-receipt-"), hash.Bytes()...)))
 
 	// The derived log fields can simply be set from the block and transaction
 	for j := 0; j < len(r.Logs); j++ {
 		r.Logs[j].BlockNumber = number
 		r.Logs[j].BlockHash = hash
-		r.Logs[j].TxHash = txHash
+		// r.Logs[j].TxHash = txHash
 		r.Logs[j].TxIndex = uint(0)
 		r.Logs[j].Index = uint(j)
 	}
