@@ -32,8 +32,6 @@ func BenchmarkStackPop(b *testing.B) {
 	env.interpreter = evmInterpreter
 	value := new(uint256.Int).SetUint64(0x1337)
 
-	// TODO how to make sure that b.N is limited to 1024?  why does this crash when the stack is massive?
-
 	for i := 0; i < b.N; i++ {
 		stack.push(value)
 	}
