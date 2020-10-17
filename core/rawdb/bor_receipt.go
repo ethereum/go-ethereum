@@ -1,8 +1,6 @@
 package rawdb
 
 import (
-	"fmt"
-
 	"github.com/maticnetwork/bor/common"
 	"github.com/maticnetwork/bor/core/types"
 	"github.com/maticnetwork/bor/ethdb"
@@ -13,7 +11,7 @@ import (
 var (
 	borReceiptPrefix = []byte("bor-receipt-") // borReceiptPrefix + number + block hash -> bor block receipt
 
-	// freezerReceiptTable indicates the name of the freezer bor receipts table.
+	// freezerBorReceiptTable indicates the name of the freezer bor receipts table.
 	freezerBorReceiptTable = "bor-receipts"
 )
 
@@ -51,14 +49,13 @@ func ReadBorReceiptRLP(db ethdb.Reader, hash common.Hash, number uint64) rlp.Raw
 	// Then try to look up the data in leveldb.
 	data, _ = db.Get(borReceiptKey(number, hash))
 	if len(data) > 0 {
-		fmt.Println("==> RAWDB IN ReadBorReceiptRLP", common.Bytes2Hex(data))
 		return data
 	}
 	// In the background freezer is moving data from leveldb to flatten files.
 	// So during the first check for ancient db, the data is not yet in there,
 	// but when we reach into leveldb, the data was already moved. That would
 	// result in a not found error.
-	data, _ = db.Ancient(freezerReceiptTable, number)
+	data, _ = db.Ancient(freezerBorReceiptTable, number)
 	if len(data) > 0 {
 		h, _ := db.Ancient(freezerHashTable, number)
 		if common.BytesToHash(h) == hash {
