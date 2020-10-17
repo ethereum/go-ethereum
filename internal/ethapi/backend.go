@@ -65,7 +65,10 @@ type Backend interface {
 	SubscribeStateSyncEvent(ch chan<- core.StateSyncEvent) event.Subscription
 	SubscribeChainHeadEvent(ch chan<- core.ChainHeadEvent) event.Subscription
 	SubscribeChainSideEvent(ch chan<- core.ChainSideEvent) event.Subscription
+
+	// Bor API
 	GetRootHash(ctx context.Context, starBlockNr uint64, endBlockNr uint64) (string, error)
+	GetBorBlockReceipt(ctx context.Context, hash common.Hash) (*types.BorReceipt, error)
 
 	// Transaction pool API
 	SendTx(ctx context.Context, signedTx *types.Transaction) error

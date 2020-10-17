@@ -76,8 +76,8 @@ func (t *table) AncientSize(kind string) (uint64, error) {
 
 // AppendAncient is a noop passthrough that just forwards the request to the underlying
 // database.
-func (t *table) AppendAncient(number uint64, hash, header, body, receipts, td []byte) error {
-	return t.db.AppendAncient(number, hash, header, body, receipts, td)
+func (t *table) AppendAncient(number uint64, hash, header, body, receipts, td, borBlockReceipt []byte) error {
+	return t.db.AppendAncient(number, hash, header, body, receipts, td, borBlockReceipt)
 }
 
 // TruncateAncients is a noop passthrough that just forwards the request to the underlying

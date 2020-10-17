@@ -287,3 +287,7 @@ func (b *LesApiBackend) ServiceFilter(ctx context.Context, session *bloombits.Ma
 func (b *LesApiBackend) GetRootHash(ctx context.Context, starBlockNr uint64, endBlockNr uint64) (string, error) {
 	return "", errors.New("Not implemented")
 }
+
+func (b *LesApiBackend) GetBorBlockReceipt(ctx context.Context, hash common.Hash) (*types.BorReceipt, error) {
+	return nil, errors.New("Not implemented")
+}

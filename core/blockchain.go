@@ -196,6 +196,8 @@ type BlockChain struct {
 	badBlocks       *lru.Cache                     // Bad block cache
 	shouldPreserve  func(*types.Block) bool        // Function used to determine whether should preserve the given block.
 	terminateInsert func(common.Hash, uint64) bool // Testing hook used to terminate ancient receipt chain insertion.
+
+	borReceiptsCache *lru.Cache // Cache for the most recent bor receipt receipts per block
 }
 
 // NewBlockChain returns a fully initialised block chain using information
@@ -219,6 +221,8 @@ func NewBlockChain(db ethdb.Database, cacheConfig *CacheConfig, chainConfig *par
 	futureBlocks, _ := lru.New(maxFutureBlocks)
 	badBlocks, _ := lru.New(badBlockLimit)
 
+	borReceiptsCache, _ := lru.New(receiptsCacheLimit)
+
 	bc := &BlockChain{
 		chainConfig:    chainConfig,
 		cacheConfig:    cacheConfig,
@@ -236,6 +240,8 @@ func NewBlockChain(db ethdb.Database, cacheConfig *CacheConfig, chainConfig *par
 		engine:         engine,
 		vmConfig:       vmConfig,
 		badBlocks:      badBlocks,
+
+		borReceiptsCache: borReceiptsCache,
 	}
 	bc.validator = NewBlockValidator(chainConfig, bc, engine)
 	bc.prefetcher = newStatePrefetcher(chainConfig, bc, engine)
@@ -1155,7 +1161,7 @@ func (bc *BlockChain) InsertReceiptChain(blockChain types.Blocks, receiptChain [
 				}
 				h := rawdb.ReadCanonicalHash(bc.db, frozen)
 				b := rawdb.ReadBlock(bc.db, h, frozen)
-				size += rawdb.WriteAncientBlock(bc.db, b, rawdb.ReadReceipts(bc.db, h, frozen, bc.chainConfig), rawdb.ReadTd(bc.db, h, frozen))
+				size += rawdb.WriteAncientBlock(bc.db, b, rawdb.ReadReceipts(bc.db, h, frozen, bc.chainConfig), rawdb.ReadTd(bc.db, h, frozen), rawdb.ReadBorReceipt(bc.db, h, frozen))
 				count += 1
 
 				// Always keep genesis block in active database.
@@ -1198,7 +1204,7 @@ func (bc *BlockChain) InsertReceiptChain(blockChain types.Blocks, receiptChain [
 				log.Info("Migrated ancient blocks", "count", count, "elapsed", common.PrettyDuration(time.Since(start)))
 			}
 			// Flush data into ancient database.
-			size += rawdb.WriteAncientBlock(bc.db, block, receiptChain[i], bc.GetTd(block.Hash(), block.NumberU64()))
+			size += rawdb.WriteAncientBlock(bc.db, block, receiptChain[i], bc.GetTd(block.Hash(), block.NumberU64()), bc.GetBorReceiptByHash(block.Hash()))
 
 			// Write tx indices if any condition is satisfied:
 			// * If user requires to reserve all tx indices(txlookuplimit=0)
@@ -1438,6 +1444,15 @@ func (bc *BlockChain) writeBlockWithState(block *types.Block, receipts []*types.
 	rawdb.WriteTd(blockBatch, block.Hash(), block.NumberU64(), externTd)
 	rawdb.WriteBlock(blockBatch, block)
 	rawdb.WriteReceipts(blockBatch, block.Hash(), block.NumberU64(), receipts)
+
+	// storing bor block receipt
+	blockLogs := state.Logs()
+	if len(blockLogs) > len(logs) {
+		rawdb.WriteBorReceipt(blockBatch, block.Hash(), block.NumberU64(), &types.BorReceiptForStorage{
+			Logs: blockLogs[len(logs):],
+		})
+	}
+
 	rawdb.WritePreimages(blockBatch, state.Preimages())
 	if err := blockBatch.Write(); err != nil {
 		log.Crit("Failed to write block into disk", "err", err)

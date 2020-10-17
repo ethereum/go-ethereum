@@ -87,7 +87,7 @@ type AncientReader interface {
 type AncientWriter interface {
 	// AppendAncient injects all binary blobs belong to block at the end of the
 	// append-only immutable table files.
-	AppendAncient(number uint64, hash, header, body, receipt, td []byte) error
+	AppendAncient(number uint64, hash, header, body, receipt, td, borBlockReceipt []byte) error
 
 	// TruncateAncients discards all but the first n ancient data from the ancient store.
 	TruncateAncients(n uint64) error

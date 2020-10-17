@@ -180,7 +180,7 @@ func (f *freezer) AncientSize(kind string) (uint64, error) {
 // Notably, this function is lock free but kind of thread-safe. All out-of-order
 // injection will be rejected. But if two injections with same number happen at
 // the same time, we can get into the trouble.
-func (f *freezer) AppendAncient(number uint64, hash, header, body, receipts, td []byte) (err error) {
+func (f *freezer) AppendAncient(number uint64, hash, header, body, receipts, td, borBlockReceipt []byte) (err error) {
 	// Ensure the binary blobs we are appending is continuous with freezer.
 	if atomic.LoadUint64(&f.frozen) != number {
 		return errOutOrderInsertion
@@ -217,6 +217,11 @@ func (f *freezer) AppendAncient(number uint64, hash, header, body, receipts, td 
 		log.Error("Failed to append ancient difficulty", "number", f.frozen, "hash", hash, "err", err)
 		return err
 	}
+	if err := f.tables[freezerBorReceiptTable].Append(f.frozen, borBlockReceipt); err != nil {
+		log.Error("Failed to append bor block receipt", "number", f.frozen, "hash", hash, "err", err)
+		return err
+	}
+
 	atomic.AddUint64(&f.frozen, 1) // Only modify atomically
 	return nil
 }
@@ -340,9 +345,13 @@ func (f *freezer) freeze(db ethdb.KeyValueStore) {
 				log.Error("Total difficulty missing, can't freeze", "number", f.frozen, "hash", hash)
 				break
 			}
+
+			// bor block receipt
+			borBlockReceipt := ReadBorReceiptRLP(nfdb, hash, f.frozen)
+
 			log.Trace("Deep froze ancient block", "number", f.frozen, "hash", hash)
 			// Inject all the components into the relevant data tables
-			if err := f.AppendAncient(f.frozen, hash[:], header, body, receipts, td); err != nil {
+			if err := f.AppendAncient(f.frozen, hash[:], header, body, receipts, td, borBlockReceipt); err != nil {
 				break
 			}
 			ancients = append(ancients, hash)
