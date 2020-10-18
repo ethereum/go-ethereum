@@ -69,6 +69,7 @@ type Backend interface {
 	// Bor API
 	GetRootHash(ctx context.Context, starBlockNr uint64, endBlockNr uint64) (string, error)
 	GetBorBlockReceipt(ctx context.Context, hash common.Hash) (*types.BorReceipt, error)
+	GetBorBlockLogs(ctx context.Context, hash common.Hash) ([]*types.Log, error)
 
 	// Transaction pool API
 	SendTx(ctx context.Context, signedTx *types.Transaction) error

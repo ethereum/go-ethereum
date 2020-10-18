@@ -291,3 +291,7 @@ func (b *LesApiBackend) GetRootHash(ctx context.Context, starBlockNr uint64, end
 func (b *LesApiBackend) GetBorBlockReceipt(ctx context.Context, hash common.Hash) (*types.BorReceipt, error) {
 	return nil, errors.New("Not implemented")
 }
+
+func (b *LesApiBackend) GetBorBlockLogs(ctx context.Context, hash common.Hash) ([]*types.Log, error) {
+	return nil, errors.New("Not implemented")
+}

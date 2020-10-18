@@ -33,14 +33,10 @@ func (b *EthAPIBackend) GetBorBlockReceipt(ctx context.Context, hash common.Hash
 	return receipt, nil
 }
 
-// func (b *EthAPIBackend) GetBorBlockLogs(ctx context.Context, hash common.Hash) ([][]*types.Log, error) {
-// 	receipts := b.eth.blockchain.GetReceiptsByHash(hash)
-// 	if receipts == nil {
-// 		return nil, nil
-// 	}
-// 	logs := make([][]*types.Log, len(receipts))
-// 	for i, receipt := range receipts {
-// 		logs[i] = receipt.Logs
-// 	}
-// 	return logs, nil
-// }
+func (b *EthAPIBackend) GetBorBlockLogs(ctx context.Context, hash common.Hash) ([]*types.Log, error) {
+	receipt := b.eth.blockchain.GetBorReceiptByHash(hash)
+	if receipt == nil {
+		return nil, nil
+	}
+	return receipt.Logs, nil
+}
