@@ -1447,6 +1447,12 @@ func (bc *BlockChain) writeBlockWithState(block *types.Block, receipts []*types.
 
 	// storing bor block receipt
 	blockLogs := state.Logs()
+	if len(blockLogs) > 0 {
+		sort.SliceStable(blockLogs, func(i, j int) bool {
+			return blockLogs[i].Index < blockLogs[j].Index
+		})
+	}
+
 	if len(blockLogs) > len(logs) {
 		rawdb.WriteBorReceipt(blockBatch, block.Hash(), block.NumberU64(), &types.BorReceiptForStorage{
 			Logs: blockLogs[len(logs):],
