@@ -93,8 +93,12 @@ func (f *BorBlockLogsFilter) Logs(ctx context.Context) ([]*types.Log, error) {
 	head := header.Number.Uint64()
 
 	if f.begin == -1 {
-		f.begin = int64(nextSprintEnd(head))
+		f.begin = int64(head)
 	}
+
+	// adjust begin for sprint
+	f.begin = nextSprintEnd(f.begin)
+
 	end := f.end
 	if f.end == -1 {
 		end = int64(head)
@@ -140,7 +144,7 @@ func (f *BorBlockLogsFilter) borBlockLogs(ctx context.Context, receipt *types.Bo
 	return logs, nil
 }
 
-func nextSprintEnd(n uint64) uint64 {
+func nextSprintEnd(n int64) int64 {
 	m := n % 64
 	if m == 0 {
 		return n
