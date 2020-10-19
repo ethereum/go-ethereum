@@ -25,13 +25,14 @@ type accessList struct {
 	slots     []map[common.Hash]struct{}
 }
 
-// Contains returns true if the address is in the access list.
-func (al *accessList) ContainsAddr(address common.Address) bool {
+// ContainsAddress returns true if the address is in the access list.
+func (al *accessList) ContainsAddress(address common.Address) bool {
 	_, ok := al.addresses[address]
 	return ok
 }
 
-// Contains returns whether the (address, slot) is present.
+// Contains checks if a slot within an account is present in the access list, returning
+// separate flags for the presence of the account and the slot respectively.
 func (al *accessList) Contains(address common.Address, slot common.Hash) (addressPresent bool, slotPresent bool) {
 	idx, ok := al.addresses[address]
 	if !ok {
@@ -46,40 +47,33 @@ func (al *accessList) Contains(address common.Address, slot common.Hash) (addres
 	return true, slotPresent
 }
 
-// NewAcessList creates a new accessList.
-func NewAccessList() *accessList {
+// newAccessList creates a new accessList.
+func newAccessList() *accessList {
 	return &accessList{
 		addresses: make(map[common.Address]int),
-		slots:     nil,
 	}
-}
-
-// Clear cleans out the access list. This can be used instead of creating a new object
-// at every transacton.
-func (a *accessList) Clear() {
-	a.addresses = make(map[common.Address]int)
-	a.slots = a.slots[:0]
 }
 
 // Copy creates an independent copy of an accessList.
 func (a *accessList) Copy() *accessList {
-	cp := NewAccessList()
+	cp := newAccessList()
 	for k, v := range a.addresses {
 		cp.addresses[k] = v
 	}
-	for _, slotMap := range a.slots {
-		newSlotmap := make(map[common.Hash]struct{})
+	cp.slots = make([]map[common.Hash]struct{}, len(a.slots))
+	for i, slotMap := range a.slots {
+		newSlotmap := make(map[common.Hash]struct{}, len(slotMap))
 		for k := range slotMap {
 			newSlotmap[k] = struct{}{}
 		}
-		cp.slots = append(cp.slots, newSlotmap)
+		cp.slots[i] = newSlotmap
 	}
 	return cp
 }
 
-// AddAddr adds an address to the access list, and returns 'true' if the operation
+// AddAddress adds an address to the access list, and returns 'true' if the operation
 // caused a change (addr was not previously in the list).
-func (al *accessList) AddAddr(address common.Address) bool {
+func (al *accessList) AddAddress(address common.Address) bool {
 	if _, present := al.addresses[address]; present {
 		return false
 	}
@@ -96,10 +90,8 @@ func (al *accessList) AddSlot(address common.Address, slot common.Hash) (addrCha
 	idx, addrPresent := al.addresses[address]
 	if !addrPresent || idx == -1 {
 		// Address not present, or addr present but no slots there
-		slotmap := make(map[common.Hash]struct{})
-		slotmap[slot] = struct{}{}
-		idx = len(al.slots)
-		al.addresses[address] = idx
+		al.addresses[address] = len(al.slots)
+		slotmap := map[common.Hash]struct{}{slot: {}}
 		al.slots = append(al.slots, slotmap)
 		return !addrPresent, true
 	}
@@ -112,4 +104,33 @@ func (al *accessList) AddSlot(address common.Address, slot common.Hash) (addrCha
 	}
 	// No changes required
 	return false, false
+}
+
+// DeleteSlot removes an (address, slot)-tuple from the access list.
+// This operation needs to be performed in the same order as the addition happened.
+// This method is meant to be used  by the journal, which maintains ordering of
+// operations.
+func (al *accessList) DeleteSlot(address common.Address, slot common.Hash) {
+	idx, addrOk := al.addresses[address]
+	// There are two ways this can fail
+	if !addrOk {
+		panic("reverting slot change, address not present in list")
+	}
+	slotmap := al.slots[idx]
+	delete(slotmap, slot)
+	// If that was the last (first) slot, remove it
+	// Since additions and rollbacks are always performed in order,
+	// we can delete the item without worrying about screwing up later indices
+	if len(slotmap) == 0 {
+		al.slots = al.slots[:idx]
+		al.addresses[address] = -1
+	}
+}
+
+// DeleteAddress removes an address from the access list. This operation
+// needs to be performed in the same order as the addition happened.
+// This method is meant to be used  by the journal, which maintains ordering of
+// operations.
+func (al *accessList) DeleteAddress(address common.Address) {
+	delete(al.addresses, address)
 }

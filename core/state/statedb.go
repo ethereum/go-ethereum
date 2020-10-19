@@ -132,7 +132,7 @@ func New(root common.Hash, db Database, snaps *snapshot.Tree) (*StateDB, error) 
 		logs:                make(map[common.Hash][]*types.Log),
 		preimages:           make(map[common.Hash][]byte),
 		journal:             newJournal(),
-		accessList:          NewAccessList(),
+		accessList:          newAccessList(),
 	}
 	if sdb.snaps != nil {
 		if sdb.snap = sdb.snaps.Snapshot(root); sdb.snap != nil {
@@ -182,7 +182,7 @@ func (s *StateDB) Reset(root common.Hash) error {
 			s.snapStorage = make(map[common.Hash]map[common.Hash][]byte)
 		}
 	}
-	s.accessList = NewAccessList()
+	s.accessList = newAccessList()
 	return nil
 }
 
@@ -809,7 +809,7 @@ func (s *StateDB) Prepare(thash, bhash common.Hash, ti int) {
 	s.thash = thash
 	s.bhash = bhash
 	s.txIndex = ti
-	s.accessList.Clear()
+	s.accessList = newAccessList()
 }
 
 func (s *StateDB) clearJournalAndRefund() {
@@ -890,22 +890,24 @@ func (s *StateDB) Commit(deleteEmptyObjects bool) (common.Hash, error) {
 	return root, err
 }
 
-func (s *StateDB) AddAddrToAccessList(addr common.Address) {
-	if s.accessList.AddAddr(addr) {
+// AddAddressToAccessList adds the given address to the access list
+func (s *StateDB) AddAddressToAccessList(addr common.Address) {
+	if s.accessList.AddAddress(addr) {
 		s.journal.append(accessListAddAccountChange{&addr})
 	}
 }
 
+// AddSlotToAccessList adds the given (address, slot)-tuple to the access list
 func (s *StateDB) AddSlotToAccessList(addr common.Address, slot common.Hash) {
-	addrCh, slotCh := s.accessList.AddSlot(addr, slot)
-	if addrCh {
+	addrMod, slotMod := s.accessList.AddSlot(addr, slot)
+	if addrMod {
 		// In practice, this should not happen, since there is no way to enter the
 		// scope of 'address' without having the 'address' become already added
 		// to the access list (via call-variant, create, etc).
 		// Better safe than sorry, though
 		s.journal.append(accessListAddAccountChange{&addr})
 	}
-	if slotCh {
+	if slotMod {
 		s.journal.append(accessListAddSlotChange{
 			address: &addr,
 			slot:    &slot,
@@ -913,10 +915,12 @@ func (s *StateDB) AddSlotToAccessList(addr common.Address, slot common.Hash) {
 	}
 }
 
-func (s *StateDB) AddrInAccessList(addr common.Address) bool {
-	return s.accessList.ContainsAddr(addr)
+// AddressInAccessList returns true if the given address is in the access list.
+func (s *StateDB) AddressInAccessList(addr common.Address) bool {
+	return s.accessList.ContainsAddress(addr)
 }
 
+// SlotInAccessList returns true if the given (address, slot)-tuple is in the access list.
 func (s *StateDB) SlotInAccessList(addr common.Address, slot common.Hash) (addressPresent bool, slotPresent bool) {
 	return s.accessList.Contains(addr, slot)
 }

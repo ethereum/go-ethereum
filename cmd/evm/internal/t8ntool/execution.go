@@ -148,13 +148,13 @@ func (pre *Prestate) Apply(vmConfig vm.Config, chainConfig *params.ChainConfig,
 
 		evm := vm.NewEVM(vmContext, statedb, chainConfig, vmConfig)
 		if chainConfig.IsYoloV2(vmContext.BlockNumber) {
-			statedb.AddAddrToAccessList(msg.From())
+			statedb.AddAddressToAccessList(msg.From())
 			if dst := msg.To(); dst != nil {
-				statedb.AddAddrToAccessList(*dst)
+				statedb.AddAddressToAccessList(*dst)
 				// If it's a create-tx, the destination will be added inside evm.create
 			}
 			for _, addr := range evm.ActivePrecompiles() {
-				statedb.AddAddrToAccessList(addr)
+				statedb.AddAddressToAccessList(addr)
 			}
 		}
 		snapshot := statedb.Snapshot()

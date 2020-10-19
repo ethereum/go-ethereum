@@ -101,10 +101,12 @@ var PrecompiledContractsYoloV2 = map[common.Address]PrecompiledContract{
 	common.BytesToAddress([]byte{18}): &bls12381MapG2{},
 }
 
-var PrecompiledAddressesYoloV2 []common.Address
-var PrecompiledAddressesIstanbul []common.Address
-var PrecompiledAddressesByzantium []common.Address
-var PrecompiledAddressesHomestead []common.Address
+var (
+	PrecompiledAddressesYoloV2    []common.Address
+	PrecompiledAddressesIstanbul  []common.Address
+	PrecompiledAddressesByzantium []common.Address
+	PrecompiledAddressesHomestead []common.Address
+)
 
 func init() {
 	for k := range PrecompiledContractsHomestead {

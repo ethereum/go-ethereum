@@ -329,9 +329,9 @@ func newTestAction(addr common.Address, r *rand.Rand) testAction {
 			args: make([]int64, 1),
 		},
 		{
-			name: "AddAddrToAccessList",
+			name: "AddAddressToAccessList",
 			fn: func(a testAction, s *StateDB) {
-				s.AddAddrToAccessList(addr)
+				s.AddAddressToAccessList(addr)
 			},
 		},
 		{
@@ -754,28 +754,63 @@ func TestStateDBAccessList(t *testing.T) {
 	memDb := rawdb.NewMemoryDatabase()
 	db := NewDatabase(memDb)
 	state, _ := New(common.Hash{}, db, nil)
-	state.accessList = NewAccessList()
+	state.accessList = newAccessList()
 
-	verifyAddrs := func(a ...string) {
+	verifyAddrs := func(astrings ...string) {
 		t.Helper()
-		for _, address := range a {
-			if !state.AddrInAccessList(addr(address)) {
-				t.Fatalf("expected %x to be in access list", a)
+		// convert to common.Address form
+		var addresses []common.Address
+		var addressMap = make(map[common.Address]struct{})
+		for _, astring := range astrings {
+			address := addr(astring)
+			addresses = append(addresses, address)
+			addressMap[address] = struct{}{}
+		}
+		// Check that the given addresses are in the access list
+		for _, address := range addresses {
+			if !state.AddressInAccessList(address) {
+				t.Fatalf("expected %x to be in access list", address)
+			}
+		}
+		// Check that only the expected addresses are present in the acesslist
+		for address, _ := range state.accessList.addresses {
+			if _, exist := addressMap[address]; !exist {
+				t.Fatalf("extra address %x in access list", address)
 			}
 		}
 	}
-	verifySlots := func(a string, slots ...string) {
-		if !state.AddrInAccessList(addr(a)) {
-			t.Fatalf("scope missing address/slots %v", a)
+	verifySlots := func(addrString string, slotStrings ...string) {
+		if !state.AddressInAccessList(addr(addrString)) {
+			t.Fatalf("scope missing address/slots %v", addrString)
 		}
+		var address = addr(addrString)
+		// convert to common.Hash form
+		var slots []common.Hash
+		var slotMap = make(map[common.Hash]struct{})
+		for _, slotString := range slotStrings {
+			s := slot(slotString)
+			slots = append(slots, s)
+			slotMap[s] = struct{}{}
+		}
+		// Check that the expected items are in the access list
 		for i, s := range slots {
-			if _, slotPresent := state.SlotInAccessList(addr(a), slot(s)); !slotPresent {
-				t.Fatalf("input %d: scope missing slot %v (address %v)", i, s, a)
+			if _, slotPresent := state.SlotInAccessList(address, s); !slotPresent {
+				t.Fatalf("input %d: scope missing slot %v (address %v)", i, s, addrString)
+			}
+		}
+		// Check that no extra elements are in the access list
+		index := state.accessList.addresses[address]
+		if index >= 0 {
+			stateSlots := state.accessList.slots[index]
+			for s, _ := range stateSlots {
+				if _, slotPresent := slotMap[s]; !slotPresent {
+					t.Fatalf("scope has extra slot %v (address %v)", s, addrString)
+				}
 			}
 		}
 	}
 
-	state.AddAddrToAccessList(addr("aa"))             // 1
+	state.AddAddressToAccessList(addr("aa"))          // 1
 	state.AddSlotToAccessList(addr("bb"), slot("01")) // 2,3
 	state.AddSlotToAccessList(addr("bb"), slot("02")) // 4
 	verifyAddrs("aa", "bb")
@@ -784,23 +819,23 @@ func TestStateDBAccessList(t *testing.T) {
 	// Make a copy
 	stateCopy1 := state.Copy()
 	if exp, got := 4, state.journal.length(); exp != got {
-		t.Fatalf("journal length wrong, expected %d got %d", exp, got)
+		t.Fatalf("journal length mismatch: have %d, want %d", got, exp)
 	}
 
 	// same again, should cause no journal entries
 	state.AddSlotToAccessList(addr("bb"), slot("01"))
 	state.AddSlotToAccessList(addr("bb"), slot("02"))
-	state.AddAddrToAccessList(addr("aa"))
+	state.AddAddressToAccessList(addr("aa"))
 	if exp, got := 4, state.journal.length(); exp != got {
-		t.Fatalf("journal length wrong, expected %d got %d", exp, got)
+		t.Fatalf("journal length mismatch: have %d, want %d", got, exp)
 	}
 	// some new ones
 	state.AddSlotToAccessList(addr("bb"), slot("03")) // 5
 	state.AddSlotToAccessList(addr("aa"), slot("01")) // 6
 	state.AddSlotToAccessList(addr("cc"), slot("01")) // 7,8
-	state.AddAddrToAccessList(addr("cc"))
+	state.AddAddressToAccessList(addr("cc"))
 	if exp, got := 8, state.journal.length(); exp != got {
-		t.Fatalf("journal length wrong, expected %d got %d", exp, got)
+		t.Fatalf("journal length mismatch: have %d, want %d", got, exp)
 	}
 
 	verifyAddrs("aa", "bb", "cc")
@@ -818,7 +853,7 @@ func TestStateDBAccessList(t *testing.T) {
 	verifySlots("bb", "01", "02", "03")
 
 	state.journal.revert(state, 6)
-	if state.AddrInAccessList(addr("cc")) {
+	if state.AddressInAccessList(addr("cc")) {
 		t.Fatalf("addr present, expected missing")
 	}
 	verifyAddrs("aa", "bb")
@@ -853,13 +888,13 @@ func TestStateDBAccessList(t *testing.T) {
 	verifyAddrs("aa", "bb")
 
 	state.journal.revert(state, 1)
-	if state.AddrInAccessList(addr("bb")) {
+	if state.AddressInAccessList(addr("bb")) {
 		t.Fatalf("addr present, expected missing")
 	}
 	verifyAddrs("aa")
 
 	state.journal.revert(state, 0)
-	if state.AddrInAccessList(addr("aa")) {
+	if state.AddressInAccessList(addr("aa")) {
 		t.Fatalf("addr present, expected missing")
 	}
 	if got, exp := len(state.accessList.addresses), 0; got != exp {

@@ -143,8 +143,8 @@ func gasExtCodeCopyEIP2929(evm *EVM, contract *Contract, stack *Stack, mem *Memo
 	}
 	addr := common.Address(stack.peek().Bytes20())
 	// Check slot presence in the access list
-	if !evm.StateDB.AddrInAccessList(addr) {
-		evm.StateDB.AddAddrToAccessList(addr)
+	if !evm.StateDB.AddressInAccessList(addr) {
+		evm.StateDB.AddAddressToAccessList(addr)
 		var overflow bool
 		// We charge (cold-warm), since 'warm' is already charged as constantGas
 		if gas, overflow = math.SafeAdd(gas, ColdAccountAccessCostEIP2929-WarmStorageReadCostEIP2929); overflow {
@@ -165,9 +165,9 @@ func gasExtCodeCopyEIP2929(evm *EVM, contract *Contract, stack *Stack, mem *Memo
 func gasEip2929AccountCheck(evm *EVM, contract *Contract, stack *Stack, mem *Memory, memorySize uint64) (uint64, error) {
 	addr := common.Address(stack.peek().Bytes20())
 	// Check slot presence in the access list
-	if !evm.StateDB.AddrInAccessList(addr) {
+	if !evm.StateDB.AddressInAccessList(addr) {
 		// If the caller cannot afford the cost, this change will be rolled back
-		evm.StateDB.AddAddrToAccessList(addr)
+		evm.StateDB.AddAddressToAccessList(addr)
 		// The warm storage read cost is already charged as constantGas
 		return ColdAccountAccessCostEIP2929 - WarmStorageReadCostEIP2929, nil
 	}
@@ -178,8 +178,8 @@ func makeCallVariantGasCalEip2929(oldCalculator gasFunc) gasFunc {
 	return func(evm *EVM, contract *Contract, stack *Stack, mem *Memory, memorySize uint64) (uint64, error) {
 		addr := common.Address(stack.Back(1).Bytes20())
 		// Check slot presence in the access list
-		if !evm.StateDB.AddrInAccessList(addr) {
-			evm.StateDB.AddAddrToAccessList(addr)
+		if !evm.StateDB.AddressInAccessList(addr) {
+			evm.StateDB.AddAddressToAccessList(addr)
 			// The WarmStorageReadCostEIP2929 (100) is already deducted in the form of a constant cost
 			if !contract.UseGas(ColdAccountAccessCostEIP2929 - WarmStorageReadCostEIP2929) {
 				return 0, ErrOutOfGas
@@ -206,9 +206,9 @@ func gasSelfdestructEIP2929(evm *EVM, contract *Contract, stack *Stack, mem *Mem
 		gas     uint64
 		address = common.Address(stack.peek().Bytes20())
 	)
-	if !evm.StateDB.AddrInAccessList(address) {
+	if !evm.StateDB.AddressInAccessList(address) {
 		// If the caller cannot afford the cost, this change will be rolled back
-		evm.StateDB.AddAddrToAccessList(address)
+		evm.StateDB.AddAddressToAccessList(address)
 		gas = ColdAccountAccessCostEIP2929
 	}
 	// if empty and transfers value
