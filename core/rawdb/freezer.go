@@ -115,6 +115,19 @@ func newFreezer(datadir string, namespace string) (*freezer, error) {
 		}
 		freezer.tables[name] = table
 	}
+
+	// Adjust table length for bor-receipt freezer for already synced nodes.
+	//
+	// Since, table only supports sequential data, this will fill empty-data upto current
+	// synced block (till current total header number).
+	//
+	// This way they don't have to sync again from block 0 and still be compatible
+	// for block logs for future blocks. Note that already synced nodes
+	// won't have past block logs. Newly synced node will have all the data.
+	if err := freezer.tables[freezerBorReceiptTable].Fill(freezer.tables[freezerHeaderTable].items); err != nil {
+		return nil, err
+	}
+
 	if err := freezer.repair(); err != nil {
 		for _, table := range freezer.tables {
 			table.Close()
