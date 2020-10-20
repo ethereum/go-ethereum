@@ -362,9 +362,28 @@ func (bt *BinaryTrie) TryUpdate(key, value []byte) error {
 			currentNode = childNode
 			off += 1
 		} else {
+			// Starting from the following context:
+			//
+			//          ...
+			// parent <                     child1
+			//          [ a b c d e ... ] <
+			//                ^             child2
+			//                |
+			//             cut-off
+			//
+			// This needs to be turned into:
+			//
+			//          ...                    child1
+			// parent <          [ d e ... ] <
+			//          [ a b ] <              child2
+			//                    child3
+			//
+			// where `c` determines which child is left
+			// or right.
+			//
+			// Both [ a b ] and [ d e ... ] can be empty
+			// prefixes.
 			split := bk[off:].commonLength(currentNode.prefix)
-			// If the split is on either the first or last bit,
-			// there is no need to create an intermediate node.
 
 			// A split is needed
 			midNode := &branch{
@@ -411,73 +430,6 @@ func (bt *BinaryTrie) TryUpdate(key, value []byte) error {
 
 	return nil
 }
-
-// Starting from the following context:
-//
-//          ...
-// parent <                     child1
-//          [ a b c d e ... ] <
-//                ^             child2
-//                |
-//             cut-off
-//
-// This needs to be turned into:
-//
-//          ...                    child1
-// parent <          [ d e ... ] <
-//          [ a b ] <              child2
-//                    child3
-//
-// where `c` determines which child is left
-// or right.
-//
-// Both [ a b ] and [ d e ... ] can be empty
-// prefixes.
-
-//func dotHelper(prefix string, t *branch) ([]string, []string) {
-//p := []byte{}
-//for i := 0; i < t.getPrefixLen(); i++ {
-//if t.getPrefixBit(i) {
-//p = append(p, []byte("1")...)
-//} else {
-//p = append(p, []byte("0")...)
-//}
-//}
-//typ := "node"
-//if t.left == nil && t.right == nil {
-//typ = "leaf"
-//}
-//nodeName := fmt.Sprintf("bin%s%s_%s", typ, prefix, p)
-//nodes := []string{nodeName}
-//links := []string{}
-//if t.left != nil {
-//if left, ok := t.left.(*branch); ok {
-//n, l := dotHelper(fmt.Sprintf("%s%s%d", prefix, p, 0), left)
-//nodes = append(nodes, n...)
-//links = append(links, fmt.Sprintf("%s -> %s", nodeName, n[0]))
-//links = append(links, l...)
-//} else {
-//nodes = append(nodes, fmt.Sprintf("hash%s", prefix))
-//}
-//}
-//if t.right != nil {
-//if right, ok := t.right.(*branch); ok {
-//n, l := dotHelper(fmt.Sprintf("%s%s%d", prefix, p, 1), right)
-//nodes = append(nodes, n...)
-//links = append(links, fmt.Sprintf("%s -> %s", nodeName, n[0]))
-//links = append(links, l...)
-//} else {
-//nodes = append(nodes, fmt.Sprintf("hash%s", prefix))
-//}
-//}
-//return nodes, links
-//}
-
-// toDot creates a graphviz representation of the binary trie
-//func (t *branch) toDot() string {
-//nodes, links := dotHelper("", t)
-//return fmt.Sprintf("digraph D {\nnode [shape=rect]\n%s\n%s\n}", strings.Join(nodes, "\n"), strings.Join(links, "\n"))
-//}
 
 // Commit stores all the values in the binary trie into the database.
 // This version does not perform any caching, it is intended to perform
