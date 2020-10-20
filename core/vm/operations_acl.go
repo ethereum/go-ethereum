@@ -116,9 +116,6 @@ func gasSStoreEIP2929(evm *EVM, contract *Contract, stack *Stack, mem *Memory, m
 // whose storage is being read) is not yet in accessed_storage_keys,
 // charge 2100 gas and add the pair to accessed_storage_keys.
 // If the pair is already in accessed_storage_keys, charge 100 gas.
-//
-// Note: Internally, we charge 100 as a static cost, and this this method charges
-// either 0 or 2000, so the total is either 100 or 2100
 func gasSLoadEIP2929(evm *EVM, contract *Contract, stack *Stack, mem *Memory, memorySize uint64) (uint64, error) {
 	loc := stack.peek()
 	slot := common.Hash(loc.Bytes32())
@@ -127,10 +124,9 @@ func gasSLoadEIP2929(evm *EVM, contract *Contract, stack *Stack, mem *Memory, me
 		// If the caller cannot afford the cost, this change will be rolled back
 		// If he does afford it, we can skip checking the same thing later on, during execution
 		evm.StateDB.AddSlotToAccessList(contract.Address(), slot)
-		// We return (cold-warm), since 'warm' is already charged as constantGas
-		return ColdSloadCostEIP2929 - WarmStorageReadCostEIP2929, nil
+		return ColdSloadCostEIP2929, nil
 	}
-	return 0, nil
+	return WarmStorageReadCostEIP2929, nil
 }
 
 // gasExtCodeCopyEIP2929 implements extcodecopy according to EIP-2929

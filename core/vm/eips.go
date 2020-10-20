@@ -141,7 +141,7 @@ func enable2315(jt *JumpTable) {
 func enable2929(jt *JumpTable) {
 	jt[SSTORE].dynamicGas = gasSStoreEIP2929
 
-	jt[SLOAD].constantGas = WarmStorageReadCostEIP2929
+	jt[SLOAD].constantGas = 0
 	jt[SLOAD].dynamicGas = gasSLoadEIP2929
 
 	jt[EXTCODECOPY].constantGas = WarmStorageReadCostEIP2929
