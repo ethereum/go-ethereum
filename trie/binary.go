@@ -27,6 +27,7 @@ import (
 
 type BinaryNode interface {
 	Hash() []byte
+	hash(off int) []byte
 	Commit() error
 	//tryGet(key []byte, depth int) ([]byte, error)
 }
@@ -189,18 +190,20 @@ func (bt *BinaryTrie) TryGet(key []byte) ([]byte, error) {
 // Hash calculates the hash of an expanded (i.e. not already
 // hashed) node.
 func (br *branch) Hash() []byte {
+	return br.hash(0)
+}
+
+func (br *branch) hash(off int) []byte {
 	hasher := newHasher(false)
 	defer returnHasherToPool(hasher)
 	hasher.sha.Reset()
-
-	// Check that either value is set or left+right are
 
 	hash := make([]byte, 32)
 	if br.value == nil {
 		// This is a branch node, so the rule is
 		// branch_hash = hash(left_root_hash || right_root_hash)
-		hasher.sha.Write(br.left.Hash())
-		hasher.sha.Write(br.right.Hash())
+		hasher.sha.Write(br.left.hash(off + len(br.prefix) + 1))
+		hasher.sha.Write(br.right.hash(off + len(br.prefix) + 1))
 		hasher.sha.Read(hash)
 		hasher.sha.Reset()
 	} else {
@@ -222,8 +225,9 @@ func (br *branch) Hash() []byte {
 	}
 
 	if len(br.prefix) > 0 {
-		hasher.sha.Write([]byte{byte(len(br.prefix) - 1)})
-		hasher.sha.Write(zero32[:31])
+		fpLen := len(br.prefix) + off
+		hasher.sha.Write([]byte{byte(fpLen), byte(fpLen >> 8)})
+		hasher.sha.Write(zero32[:30])
 		hasher.sha.Write(hash)
 		hasher.sha.Read(hash)
 		hasher.sha.Reset()
@@ -507,6 +511,10 @@ func (h hashBinaryNode) Hash() []byte {
 	return h
 }
 
+func (h hashBinaryNode) hash(off int) []byte {
+	return h
+}
+
 func (h hashBinaryNode) tryGet(key []byte, depth int) ([]byte, error) {
 	if depth >= 8*len(key) {
 		return []byte(h), nil
@@ -515,6 +523,10 @@ func (h hashBinaryNode) tryGet(key []byte, depth int) ([]byte, error) {
 }
 
 func (e empty) Hash() []byte {
+	return emptyRoot[:]
+}
+
+func (e empty) hash(off int) []byte {
 	return emptyRoot[:]
 }
 

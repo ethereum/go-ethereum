@@ -121,7 +121,7 @@ func TestBinaryTrieInsertOneLeafAndHash(t *testing.T) {
 	trie := NewBinaryTrie()
 	trie.Update([]byte{0}, []byte{10})
 	got := trie.Hash()
-	exp := common.FromHex("06b42a1e2618f532aca432615e040bb1fc63fd2c3a03e94bc3a7dd8b15eb46a0")
+	exp := common.FromHex("5ef9138daa6dfb4ca211fdb6ca4db27400233b7506e63edcd2576efd31cd5e5c")
 
 	if !bytes.Equal(got, exp) {
 		t.Fatalf("invalid empty trie hash, got %x != exp %x", got, exp)
@@ -133,7 +133,7 @@ func TestBinaryTrieInsertTwoLeavesAndHash(t *testing.T) {
 	trie.Update([]byte{0}, []byte{10})
 	trie.Update([]byte{8}, []byte{10})
 	got := trie.Hash()
-	exp := common.FromHex("3590925ae30faa2a566bd4fd6605a205b1a1553b223f46c58eaa73646b173245")
+	exp := common.FromHex("378da00155c1019b0a1afef1709e1f37cddbb4e0d373feee849c54971cac9928")
 
 	if !bytes.Equal(got, exp) {
 		t.Fatalf("invalid empty trie hash, got %x != exp %x", got, exp)
@@ -144,7 +144,7 @@ func TestBinaryTrieInsertTwoLeavesAtFirstBitAndHash(t *testing.T) {
 	trie.Update([]byte{0}, []byte{10})
 	trie.Update([]byte{128}, []byte{10})
 	got := trie.Hash()
-	exp := common.FromHex("8724dc87faa3ecd18a24f612632f7b27e02a6060d8603c378e39c04ad8b7259a")
+	exp := common.FromHex("83cbe1f4e4ddfdc66074424d54d64c34deafd6517970e9f6e96c21f506235a4e")
 
 	if !bytes.Equal(got, exp) {
 		t.Fatalf("invalid empty trie hash, got %x != exp %x", got, exp)
@@ -156,7 +156,7 @@ func TestBinaryTrieInsertTwoLeavesAtEndBitAndHash(t *testing.T) {
 	trie.Update([]byte{0}, []byte{10})
 	trie.Update([]byte{1}, []byte{10})
 	got := trie.Hash()
-	exp := common.FromHex("92f4d45186b0f0d8f737ce9c4a202b35ef897c660c16bd7dc235bffd1178d0cc")
+	exp := common.FromHex("05b8807c3d0b42b8ff79ee3e157473564eba0154281af1755476f7154d753556")
 
 	if !bytes.Equal(got, exp) {
 		t.Fatalf("invalid empty trie hash, got %x != exp %x", got, exp)
@@ -169,7 +169,7 @@ func TestBinaryTrieInsertWithOffsetAndHash(t *testing.T) {
 	trie.Update([]byte{8}, []byte{18})
 	trie.Update([]byte{11}, []byte{20})
 	got := trie.Hash()
-	exp := common.FromHex("73df5c5434b663c53847bdf7ac5f67b701184152b587bfdd4d7669b6198495fe")
+	exp := common.FromHex("b73bb5b26278b862d872455f83eb71b34a3702b85761f6ca8fc7e7e98b4b5fe6")
 
 	if !bytes.Equal(got, exp) {
 		t.Fatalf("invalid empty trie hash, got %x != exp %x", got, exp)
