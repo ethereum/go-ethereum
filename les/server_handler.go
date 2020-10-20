@@ -32,6 +32,8 @@ import (
 	"github.com/ethereum/go-ethereum/core/state"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/ethdb"
+	"github.com/ethereum/go-ethereum/les/lespay/payment"
+	"github.com/ethereum/go-ethereum/les/lespay/payment/lotterypmt"
 	lps "github.com/ethereum/go-ethereum/les/lespay/server"
 	"github.com/ethereum/go-ethereum/light"
 	"github.com/ethereum/go-ethereum/log"
@@ -115,6 +117,10 @@ func (h *serverHandler) runPeer(version uint, p *p2p.Peer, rw p2p.MsgReadWriter)
 func (h *serverHandler) handle(p *clientPeer) error {
 	p.Log().Debug("Light Ethereum peer connected", "name", p.Name())
 
+	// Reject light clients if payment module is still initializing.
+	if h.server.lotteryAddress != (common.Address{}) && atomic.LoadUint32(&h.server.lotteryInited) == 0 {
+		return errors.New("payment hasn't been initialized")
+	}
 	// Execute the LES handshake
 	var (
 		head   = h.blockchain.CurrentHeader()
@@ -180,10 +186,10 @@ func (h *serverHandler) handle(p *clientPeer) error {
 		clientConnectionGauge.Update(int64(activeCount))
 		connectionTimer.Update(time.Duration(mclock.Now() - connectedAt))
 	}()
+
 	// Mark the peer starts to be served.
 	atomic.StoreUint32(&p.serving, 1)
 	defer atomic.StoreUint32(&p.serving, 0)
-
 	// Spawn a main loop to handle all incoming messages.
 	for {
 		select {
@@ -348,7 +354,6 @@ func (h *serverHandler) handleMsg(p *clientPeer, wg *sync.WaitGroup) error {
 						origin = h.blockchain.GetHeaderByNumber(query.Origin.Number)
 					}
 					if origin == nil {
-						p.bumpInvalid()
 						break
 					}
 					headers = append(headers, origin)
@@ -853,7 +858,19 @@ func (h *serverHandler) handleMsg(p *clientPeer, wg *sync.WaitGroup) error {
 				}
 			}()
 		}
-
+	case PaymentMsg:
+		var packet payment.PaymentPacket
+		if err := msg.Decode(&packet); err != nil {
+			clientErrorMeter.Mark(1)
+			return errResp(ErrDecode, "msg %v: %v", msg, err)
+		}
+		switch {
+		case packet.Identity == lotterypmt.Identity && p.senderList[lotterypmt.Identity] != (common.Address{}):
+			amount, _ := h.server.lotteryReceiver.Receive(p.senderList[lotterypmt.Identity], packet.ProofOfPayment)
+			log.Info("Received payment", "amount", amount, "sender", p.senderList[lotterypmt.Identity])
+		default:
+			return errResp(ErrDecode, "identity: %s", packet.Identity)
+		}
 	default:
 		p.Log().Trace("Received invalid message", "code", msg.Code)
 		clientErrorMeter.Mark(1)
@@ -954,7 +971,7 @@ func (h *serverHandler) broadcastLoop() {
 				reorg = lastHead.Number.Uint64() - rawdb.FindCommonAncestor(h.chainDb, header, lastHead).Number.Uint64()
 			}
 			lastHead, lastTd = header, td
-			log.Debug("Announcing block to peers", "number", number, "hash", hash, "td", td, "reorg", reorg)
+			log.Debug("Announcing header to peers", "number", number, "hash", hash, "td", td, "reorg", reorg)
 			h.server.broadcaster.broadcast(announceData{Hash: hash, Number: number, Td: td, ReorgDepth: reorg})
 		case <-h.closeCh:
 			return
@@ -1008,16 +1025,22 @@ func (b *broadcaster) sendTo(node *enode.Node) {
 		if p.headInfo.Td == nil || b.lastAnnounce.Td.Cmp(p.headInfo.Td) > 0 {
 			switch p.announceType {
 			case announceTypeSimple:
-				if !p.queueSend(func() { p.sendAnnounce(b.lastAnnounce) }) {
-					log.Debug("Drop announcement because queue is full", "number", b.lastAnnounce.Number, "hash", b.lastAnnounce.Hash)
+				announce := b.lastAnnounce
+				if !p.queueSend(func() { p.sendAnnounce(announce) }) {
+					log.Debug("Drop announcement because queue is full", "number", announce.Number, "hash", announce.Hash)
+				} else {
+					log.Debug("Sent announcement", "number", announce.Number, "hash", announce.Hash)
 				}
 			case announceTypeSigned:
 				if b.signedAnnounce.Hash != b.lastAnnounce.Hash {
 					b.signedAnnounce = b.lastAnnounce
 					b.signedAnnounce.sign(b.privateKey)
 				}
+				announce := b.signedAnnounce
 				if !p.queueSend(func() { p.sendAnnounce(b.signedAnnounce) }) {
-					log.Debug("Drop announcement because queue is full", "number", b.lastAnnounce.Number, "hash", b.lastAnnounce.Hash)
+					log.Debug("Drop announcement because queue is full", "number", announce.Number, "hash", announce.Hash)
+				} else {
+					log.Debug("Sent announcement", "number", announce.Number, "hash", announce.Hash)
 				}
 			}
 			p.headInfo = blockInfo{b.lastAnnounce.Hash, b.lastAnnounce.Number, b.lastAnnounce.Td}

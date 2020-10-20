@@ -873,6 +873,10 @@ web3._extend({
 			name: 'serverInfo',
 			getter: 'les_serverInfo'
 		}),
+		new web3._extend.Property({
+			name: 'openedChannels',
+			getter: 'les_openedChannels'
+		}),
 	]
 });
 `

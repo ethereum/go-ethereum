@@ -65,6 +65,7 @@ var AppHelpFlagGroups = []flags.FlagGroup{
 			utils.UltraLightFractionFlag,
 			utils.UltraLightOnlyAnnounceFlag,
 			utils.LightNoPruneFlag,
+			utils.LotteryPaymentAddressFlag,
 		},
 	},
 	{

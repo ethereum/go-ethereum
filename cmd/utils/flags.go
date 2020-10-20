@@ -251,6 +251,11 @@ var (
 		Name:  "light.nopruning",
 		Usage: "Disable ancient light chain data pruning",
 	}
+	// Les server incentivization settings
+	LotteryPaymentAddressFlag = cli.StringFlag{
+		Name:  "light.lottery.address",
+		Usage: "Account address of the server/client used to pay/charge by lottery payment(disable if empty)",
+	}
 	// Ethash settings
 	EthashCacheDirFlag = DirectoryFlag{
 		Name:  "ethash.cachedir",
@@ -1038,6 +1043,9 @@ func setLes(ctx *cli.Context, cfg *eth.Config) {
 	}
 	if ctx.GlobalIsSet(LightNoPruneFlag.Name) {
 		cfg.LightNoPrune = ctx.GlobalBool(LightNoPruneFlag.Name)
+	}
+	if ctx.GlobalIsSet(LotteryPaymentAddressFlag.Name) {
+		cfg.LotteryPaymentAddress = common.HexToAddress(ctx.GlobalString(LotteryPaymentAddressFlag.Name))
 	}
 }
 

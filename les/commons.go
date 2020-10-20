@@ -21,6 +21,7 @@ import (
 	"math/big"
 	"sync"
 
+	"github.com/ethereum/go-ethereum/accounts"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core"
 	"github.com/ethereum/go-ethereum/core/rawdb"
@@ -28,7 +29,9 @@ import (
 	"github.com/ethereum/go-ethereum/eth"
 	"github.com/ethereum/go-ethereum/ethclient"
 	"github.com/ethereum/go-ethereum/ethdb"
+	"github.com/ethereum/go-ethereum/event"
 	"github.com/ethereum/go-ethereum/les/checkpointoracle"
+	"github.com/ethereum/go-ethereum/les/lespay/payment"
 	"github.com/ethereum/go-ethereum/light"
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/node"
@@ -54,7 +57,14 @@ func lesTopic(genesisHash common.Hash, protocolVersion uint) discv5.Topic {
 }
 
 type chainReader interface {
+	// CurrentHeader retrieves the current header from the local chain.
 	CurrentHeader() *types.Header
+
+	// GetHeaderByNumber retrieves a block header from the database by number.
+	GetHeaderByNumber(number uint64) *types.Header
+
+	// SubscribeChainHeadEvent registers a subscription of ChainHeadEvent.
+	SubscribeChainHeadEvent(ch chan<- core.ChainHeadEvent) event.Subscription
 }
 
 // lesCommons contains fields needed by both server and client.
@@ -67,6 +77,11 @@ type lesCommons struct {
 	chainReader                  chainReader
 	chtIndexer, bloomTrieIndexer *core.ChainIndexer
 	oracle                       *checkpointoracle.CheckpointOracle
+
+	// Payment channel relative fields
+	paymentDb ethdb.Database      // The database used to store all received payments or payment records
+	am        *accounts.Manager   // The global account manager which holds the local account
+	schemas   []payment.SchemaRLP // A list of local supported payemnt schemas
 
 	closeCh chan struct{}
 	wg      sync.WaitGroup

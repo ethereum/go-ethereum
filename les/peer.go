@@ -33,6 +33,8 @@ import (
 	"github.com/ethereum/go-ethereum/eth"
 	"github.com/ethereum/go-ethereum/les/flowcontrol"
 	lpc "github.com/ethereum/go-ethereum/les/lespay/client"
+	"github.com/ethereum/go-ethereum/les/lespay/payment"
+	"github.com/ethereum/go-ethereum/les/lespay/payment/lotterypmt"
 	lps "github.com/ethereum/go-ethereum/les/lespay/server"
 	"github.com/ethereum/go-ethereum/les/utils"
 	"github.com/ethereum/go-ethereum/light"
@@ -134,6 +136,8 @@ type peerCommons struct {
 	// Flow control agreement.
 	fcParams flowcontrol.ServerParams // The config for token bucket.
 	fcCosts  requestCostTable         // The Maximum request cost table.
+
+	// Payment relative fields
 
 	closeCh chan struct{}
 	lock    sync.RWMutex // Lock used to protect all thread-sensitive fields.
@@ -335,6 +339,9 @@ type serverPeer struct {
 
 	// Test callback hooks
 	hasBlockHook func(common.Hash, uint64, bool) bool // Used to determine whether the server has the specified block.
+
+	// Payment fields
+	receiverList map[string]common.Address // Receiver addresses for all supported payements
 }
 
 func newServerPeer(version int, network uint64, trusted bool, p *p2p.Peer, rw p2p.MsgReadWriter) *serverPeer {
@@ -348,8 +355,9 @@ func newServerPeer(version int, network uint64, trusted bool, p *p2p.Peer, rw p2
 			sendQueue: utils.NewExecQueue(100),
 			closeCh:   make(chan struct{}),
 		},
-		trusted:  trusted,
-		errCount: utils.LinearExpiredValue{Rate: mclock.AbsTime(time.Hour)},
+		trusted:      trusted,
+		errCount:     utils.LinearExpiredValue{Rate: mclock.AbsTime(time.Hour)},
+		receiverList: make(map[string]common.Address),
 	}
 }
 
@@ -561,7 +569,7 @@ func (p *serverPeer) updateHead(hash common.Hash, number uint64, td *big.Int) {
 
 // Handshake executes the les protocol handshake, negotiating version number,
 // network IDs and genesis blocks.
-func (p *serverPeer) Handshake(genesis common.Hash) error {
+func (p *serverPeer) Handshake(genesis common.Hash, backend *LightEthereum) error {
 	// Note: there is no need to share local head with a server but older servers still
 	// require these fields so we announce zero values.
 	return p.handshake(common.Big0, common.Hash{}, 0, genesis, func(lists *keyValueList) {
@@ -573,6 +581,11 @@ func (p *serverPeer) Handshake(genesis common.Hash) error {
 			p.announceType = announceTypeSigned
 		}
 		*lists = (*lists).add("announceType", p.announceType)
+
+		// Add local supported payment schemas
+		if len(backend.schemas) > 0 {
+			*lists = (*lists).add("payment/schemas", backend.schemas)
+		}
 	}, func(recv keyValueMap) error {
 		var (
 			rHash common.Hash
@@ -630,6 +643,24 @@ func (p *serverPeer) Handshake(genesis common.Hash) error {
 			for msgCode := range reqAvgTimeCost {
 				if p.fcCosts[msgCode] == nil {
 					return errResp(ErrUselessPeer, "peer does not support message %d", msgCode)
+				}
+			}
+		}
+		// Parse payment relative handshake, create the payment routes
+		var schemas []payment.SchemaRLP
+		if err := recv.get("payment/schemas", &schemas); err == nil {
+			for _, s := range schemas {
+				switch {
+				case s.Key == lotterypmt.Identity && backend.lotterySender != nil:
+					scheme, err := lotterypmt.ResolveSchema(s.Value, backend.lotterySender.Contract(), true)
+					if err != nil {
+						continue
+					}
+					item, err := scheme.Load("Receiver")
+					if err != nil {
+						continue
+					}
+					p.receiverList[lotterypmt.Identity] = item.(common.Address)
 				}
 			}
 		}
@@ -718,6 +749,11 @@ func (p *serverPeer) answeredRequest(id uint64) {
 	vt.Served(nvt, vtReqs[:reqCount], dt)
 }
 
+// SendPayment sends a payment proof to this peer.
+func (p *serverPeer) SendPayment(proofOfPayment []byte, identity string) error {
+	return p2p.Send(p.rw, PaymentMsg, payment.PaymentPacket{Identity: identity, ProofOfPayment: proofOfPayment})
+}
+
 // clientPeer represents each node to which the les server is connected.
 // The node here refers to the light client.
 type clientPeer struct {
@@ -737,6 +773,9 @@ type clientPeer struct {
 	server   bool
 	errCh    chan error
 	fcClient *flowcontrol.ClientNode // Server side mirror token bucket.
+
+	// Payment fields
+	senderList map[string]common.Address // The sender addresses for all supported payments
 }
 
 func newClientPeer(version int, network uint64, p *p2p.Peer, rw p2p.MsgReadWriter) *clientPeer {
@@ -752,6 +791,7 @@ func newClientPeer(version int, network uint64, p *p2p.Peer, rw p2p.MsgReadWrite
 		},
 		invalidCount: utils.LinearExpiredValue{Rate: mclock.AbsTime(time.Hour)},
 		errCh:        make(chan error, 1),
+		senderList:   make(map[string]common.Address),
 	}
 }
 
@@ -986,6 +1026,10 @@ func (p *clientPeer) Handshake(td *big.Int, head common.Hash, headNum uint64, ge
 				*lists = (*lists).add("checkpoint/registerHeight", height)
 			}
 		}
+		// Add local supported payment schemas
+		if len(server.schemas) > 0 {
+			*lists = (*lists).add("payment/schemas", server.schemas)
+		}
 	}, func(recv keyValueMap) error {
 		p.server = recv.get("flowControl/MRR", nil) == nil
 		if p.server {
@@ -996,6 +1040,25 @@ func (p *clientPeer) Handshake(td *big.Int, head common.Hash, headNum uint64, ge
 				p.announceType = announceTypeSimple
 			}
 			p.fcClient = flowcontrol.NewClientNode(server.fcManager, p.fcParams)
+
+			// Parse payment relative handshake
+			var schemas []payment.SchemaRLP
+			if err := recv.get("payment/schemas", &schemas); err == nil {
+				for _, s := range schemas {
+					switch {
+					case s.Key == lotterypmt.Identity && server.lotteryReceiver != nil:
+						scheme, err := lotterypmt.ResolveSchema(s.Value, server.lotteryReceiver.Contract(), false)
+						if err != nil {
+							continue
+						}
+						item, err := scheme.Load("Sender")
+						if err != nil {
+							continue
+						}
+						p.senderList[lotterypmt.Identity] = item.(common.Address)
+					}
+				}
+			}
 		}
 		return nil
 	})

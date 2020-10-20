@@ -19,6 +19,7 @@ package les
 import (
 	"context"
 	"errors"
+	"sync/atomic"
 	"time"
 
 	"github.com/ethereum/go-ethereum/common"
@@ -181,6 +182,13 @@ func (h *clientHandler) synchronise(peer *serverPeer) {
 	if err := h.downloader.Synchronise(peer.id, peer.Head(), peer.Td(), downloader.LightSync); err != nil {
 		log.Debug("Synchronise failed", "reason", err)
 		return
+	}
+	// If we've successfully finished a sync cycle and passed any required checkpoint,
+	// mark local chain as synced. Since light client fetch headers based on a highest
+	// checkpoint, so there is no need to check checkpoint anymore.
+	head := h.backend.blockchain.CurrentHeader()
+	if head.Time >= uint64(time.Now().AddDate(0, 0, -1).Unix()) {
+		atomic.StoreUint32(&h.synced, 1)
 	}
 	log.Debug("Synchronise finished", "elapsed", common.PrettyDuration(time.Since(start)))
 }
