@@ -192,7 +192,7 @@ func TestBinaryTrieReadOneLeaf(t *testing.T) {
 	if err != nil {
 		t.Fatalf("error searching for key 0 in trie, err=%v", err)
 	}
-	if bytes.Equal(v, []byte{10}) {
+	if !bytes.Equal(v, []byte{10}) {
 		t.Fatalf("could not find correct value %x != 0a", v)
 	}
 
@@ -212,7 +212,7 @@ func TestBinaryTrieReadOneFromManyLeaves(t *testing.T) {
 	if err != nil {
 		t.Fatalf("error searching for key 0 in trie, err=%v", err)
 	}
-	if bytes.Equal(v, []byte{10}) {
+	if !bytes.Equal(v, []byte{10}) {
 		t.Fatalf("could not find correct value %x != 0a", v)
 	}
 
