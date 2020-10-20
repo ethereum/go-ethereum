@@ -1,4 +1,4 @@
-// Copyright 2015 The go-ethereum Authors
+// Copyright 2020 The go-ethereum Authors
 // This file is part of the go-ethereum library.
 //
 // The go-ethereum library is free software: you can redistribute it and/or modify
@@ -107,7 +107,7 @@ func gasSStoreEIP2929(evm *EVM, contract *Contract, stack *Stack, mem *Memory, m
 		}
 	}
 	// EIP-2200 original clause:
-	//return cost + params.SstoreDirtyGasEIP2200, nil // dirty update (2.2)
+	//return params.SloadGasEIP2200, nil // dirty update (2.2)
 	return cost + WarmStorageReadCostEIP2929, nil // dirty update (2.2)
 }
 

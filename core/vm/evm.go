@@ -52,8 +52,9 @@ func (evm *EVM) ActivePrecompiles() []common.Address {
 		return PrecompiledAddressesIstanbul
 	case evm.chainRules.IsByzantium:
 		return PrecompiledAddressesByzantium
+	default:
+		return PrecompiledAddressesHomestead
 	}
-	return PrecompiledAddressesHomestead
 }
 
 func (evm *EVM) precompile(addr common.Address) (PrecompiledContract, bool) {
