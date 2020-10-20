@@ -229,10 +229,12 @@ type bigModExp struct {
 var (
 	big0      = big.NewInt(0)
 	big1      = big.NewInt(1)
+	big3      = big.NewInt(3)
 	big4      = big.NewInt(4)
 	big7      = big.NewInt(7)
 	big8      = big.NewInt(8)
 	big16     = big.NewInt(16)
+	big20     = big.NewInt(20)
 	big32     = big.NewInt(32)
 	big64     = big.NewInt(64)
 	big96     = big.NewInt(96)
@@ -242,7 +244,7 @@ var (
 	big199680 = big.NewInt(199680)
 )
 
-// multComplexity implements bigModexp multComplexity formula, as defined in EIP-198
+// modexpMultComplexity implements bigModexp multComplexity formula, as defined in EIP-198
 //
 // def mult_complexity(x):
 //    if x <= 64: return x ** 2
@@ -250,7 +252,7 @@ var (
 //    else: return x ** 2 // 16 + 480 * x - 199680
 //
 // where is x is max(length_of_MODULUS, length_of_BASE)
-func multComplexity(x *big.Int) *big.Int {
+func modexpMultComplexity(x *big.Int) *big.Int {
 	switch {
 	case x.Cmp(big64) <= 0:
 		x.Mul(x, x) // x ** 2
@@ -268,20 +270,6 @@ func multComplexity(x *big.Int) *big.Int {
 		)
 	}
 	return x
-}
-
-// multComplexityEIP2565 implements bigModexp multComplexity formula, as defined
-// in EIP-2565 (https://eips.ethereum.org/EIPS/eip-2565)
-//
-// def mult_complexity(x):
-//    ceiling(x/8)^2
-//
-//where is x is max(length_of_MODULUS, length_of_BASE)
-func multComplexityEIP2565(x *big.Int) *big.Int {
-	// ceil(x / 8) : (x + 7) /8
-	x = x.Add(x, big7)
-	x = x.Div(x, big8)
-	return x.Mul(x, x)
 }
 
 // RequiredGas returns the gas required to execute the pre-compiled contract.
@@ -322,11 +310,20 @@ func (c *bigModExp) RequiredGas(input []byte) uint64 {
 	gas := new(big.Int).Set(math.BigMax(modLen, baseLen))
 	if c.eip2565 {
 		// EIP-2565 has three changes
-		// 1. Different multComplexity
-		gas = multComplexityEIP2565(gas)
+		// 1. Different multComplexity (inlined here)
+		// in EIP-2565 (https://eips.ethereum.org/EIPS/eip-2565):
+		//
+		// def mult_complexity(x):
+		//    ceiling(x/8)^2
+		//
+		//where is x is max(length_of_MODULUS, length_of_BASE)
+		gas = gas.Add(gas, big7)
+		gas = gas.Div(gas, big8)
+		gas.Mul(gas, gas)
+
 		gas.Mul(gas, math.BigMax(adjExpLen, big1))
-		// 2. Different divisor (`GQUADDIVISOR`)
-		gas.Div(gas, new(big.Int).SetUint64(params.ModExpQuadCoeffDivEIP2565))
+		// 2. Different divisor (`GQUADDIVISOR`) (3)
+		gas.Div(gas, big3)
 		if gas.BitLen() > 64 {
 			return math.MaxUint64
 		}
@@ -336,9 +333,9 @@ func (c *bigModExp) RequiredGas(input []byte) uint64 {
 		}
 		return gas.Uint64()
 	}
-	gas = multComplexity(gas)
+	gas = modexpMultComplexity(gas)
 	gas.Mul(gas, math.BigMax(adjExpLen, big1))
-	gas.Div(gas, new(big.Int).SetUint64(params.ModExpQuadCoeffDiv))
+	gas.Div(gas, big20)
 
 	if gas.BitLen() > 64 {
 		return math.MaxUint64

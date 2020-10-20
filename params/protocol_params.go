@@ -117,10 +117,6 @@ const (
 	IdentityBaseGas     uint64 = 15   // Base price for a data copy operation
 	IdentityPerWordGas  uint64 = 3    // Per-work price for a data copy operation
 
-	// Divisor for the quadratic particle of the big int modular exponentiation
-	ModExpQuadCoeffDiv        uint64 = 20 // Original byzantium value
-	ModExpQuadCoeffDivEIP2565 uint64 = 3  // EIP-2565 repricing value
-
 	Bn256AddGasByzantium             uint64 = 500    // Byzantium gas needed for an elliptic curve addition
 	Bn256AddGasIstanbul              uint64 = 150    // Gas needed for an elliptic curve addition
 	Bn256ScalarMulGasByzantium       uint64 = 40000  // Byzantium gas needed for an elliptic curve scalar multiplication
