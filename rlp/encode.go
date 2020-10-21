@@ -604,6 +604,19 @@ func makeEncoderWriter(typ reflect.Type) writer {
 	return w
 }
 
+func PutInt(b []byte, i int) (size int) {
+	if i == 0 {
+		b[0] = 0x80
+		return 1
+	} else if i < 128 {
+		b[0] = byte(i)
+		return 1
+	}
+	s := putint(b[1:], uint64(i))
+	b[0] = 0x80 + byte(s)
+	return s + 1
+}
+
 // putint writes i to the beginning of b in big endian byte
 // order, using the least number of bytes needed to represent i.
 func putint(b []byte, i uint64) (size int) {
