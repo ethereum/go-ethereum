@@ -59,6 +59,10 @@ func (st *Stack) pushN(ds ...uint256.Int) {
 	st.data = append(st.data, ds...)
 }
 
+func (st *Stack) discard() {
+	st.data = st.data[:len(st.data)-1]
+}
+
 func (st *Stack) pop() (ret uint256.Int) {
 	ret = st.data[len(st.data)-1]
 	st.data = st.data[:len(st.data)-1]
