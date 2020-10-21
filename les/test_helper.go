@@ -46,6 +46,7 @@ import (
 	"github.com/ethereum/go-ethereum/light"
 	"github.com/ethereum/go-ethereum/p2p"
 	"github.com/ethereum/go-ethereum/p2p/enode"
+	"github.com/ethereum/go-ethereum/p2p/nodestate"
 	"github.com/ethereum/go-ethereum/params"
 )
 
@@ -227,7 +228,7 @@ func newTestClientHandler(backend *backends.SimulatedBackend, odr *LesOdr, index
 	return client.handler
 }
 
-func newTestServerHandler(blocks int, indexers []*core.ChainIndexer, db ethdb.Database, peers *clientPeerSet, clock mclock.Clock) (*serverHandler, *backends.SimulatedBackend) {
+func newTestServerHandler(blocks int, indexers []*core.ChainIndexer, db ethdb.Database, clock mclock.Clock) (*serverHandler, *backends.SimulatedBackend) {
 	var (
 		gspec = core.Genesis{
 			Config:   params.AllEthashProtocolChanges,
@@ -263,6 +264,7 @@ func newTestServerHandler(blocks int, indexers []*core.ChainIndexer, db ethdb.Da
 		}
 		oracle = checkpointoracle.New(checkpointConfig, getLocal)
 	}
+	ns := nodestate.NewNodeStateMachine(nil, nil, mclock.System{}, serverSetup)
 	server := &LesServer{
 		lesCommons: lesCommons{
 			genesis:     genesis.Hash(),
@@ -274,7 +276,8 @@ func newTestServerHandler(blocks int, indexers []*core.ChainIndexer, db ethdb.Da
 			oracle:      oracle,
 			closeCh:     make(chan struct{}),
 		},
-		peers:        peers,
+		ns:           ns,
+		broadcaster:  newBroadcaster(ns),
 		servingQueue: newServingQueue(int64(time.Millisecond*10), 1),
 		defParams: flowcontrol.ServerParams{
 			BufLimit:    testBufLimit,
@@ -284,13 +287,14 @@ func newTestServerHandler(blocks int, indexers []*core.ChainIndexer, db ethdb.Da
 	}
 	server.costTracker, server.minCapacity = newCostTracker(db, server.config)
 	server.costTracker.testCostList = testCostList(0) // Disable flow control mechanism.
-	server.clientPool = newClientPool(db, testBufRecharge, defaultConnectedBias, clock, func(id enode.ID) {})
+	server.clientPool = newClientPool(ns, db, testBufRecharge, defaultConnectedBias, clock, func(id enode.ID) {})
 	server.clientPool.setLimits(10000, 10000) // Assign enough capacity for clientpool
 	server.handler = newServerHandler(server, simulation.Blockchain(), db, txpool, func() bool { return true })
 	if server.oracle != nil {
 		server.oracle.Start(simulation)
 	}
 	server.servingQueue.setThreads(4)
+	ns.Start()
 	server.handler.start()
 	return server.handler, simulation
 }
@@ -463,7 +467,7 @@ func newServerEnv(t *testing.T, blocks int, protocol int, callback indexerCallba
 	if simClock {
 		clock = &mclock.Simulated{}
 	}
-	handler, b := newTestServerHandler(blocks, indexers, db, newClientPeerSet(), clock)
+	handler, b := newTestServerHandler(blocks, indexers, db, clock)
 
 	var peer *testPeer
 	if newPeer {
@@ -502,7 +506,7 @@ func newServerEnv(t *testing.T, blocks int, protocol int, callback indexerCallba
 
 func newClientServerEnv(t *testing.T, blocks int, protocol int, callback indexerCallback, ulcServers []string, ulcFraction int, simClock bool, connect bool, disablePruning bool) (*testServer, *testClient, func()) {
 	sdb, cdb := rawdb.NewMemoryDatabase(), rawdb.NewMemoryDatabase()
-	speers, cpeers := newServerPeerSet(), newClientPeerSet()
+	speers := newServerPeerSet()
 
 	var clock mclock.Clock = &mclock.System{}
 	if simClock {
@@ -519,7 +523,7 @@ func newClientServerEnv(t *testing.T, blocks int, protocol int, callback indexer
 	ccIndexer, cbIndexer, cbtIndexer := cIndexers[0], cIndexers[1], cIndexers[2]
 	odr.SetIndexers(ccIndexer, cbIndexer, cbtIndexer)
 
-	server, b := newTestServerHandler(blocks, sindexers, sdb, cpeers, clock)
+	server, b := newTestServerHandler(blocks, sindexers, sdb, clock)
 	client := newTestClientHandler(b, odr, cIndexers, cdb, speers, ulcServers, ulcFraction)
 
 	scIndexer.Start(server.blockchain)

@@ -126,7 +126,7 @@ type peerCommons struct {
 	frozen       uint32    // Flag whether the peer is frozen.
 	announceType uint64    // New block announcement type.
 	serving      uint32    // The status indicates the peer is served.
-	headInfo     blockInfo // Latest block information.
+	headInfo     blockInfo // Last announced block information.
 
 	// Background task queue for caching peer tasks and executing in order.
 	sendQueue *utils.ExecQueue
@@ -255,6 +255,8 @@ func (p *peerCommons) handshake(td *big.Int, head common.Hash, headNum uint64, g
 	// Add some basic handshake fields
 	send = send.add("protocolVersion", uint64(p.version))
 	send = send.add("networkId", p.network)
+	// Note: the head info announced at handshake is only used in case of server peers
+	// but dummy values are still announced by clients for compatibility with older servers
 	send = send.add("headTd", td)
 	send = send.add("headHash", head)
 	send = send.add("headNum", headNum)
@@ -273,22 +275,12 @@ func (p *peerCommons) handshake(td *big.Int, head common.Hash, headNum uint64, g
 	if size > allowedUpdateBytes {
 		return errResp(ErrRequestRejected, "")
 	}
-	var rGenesis, rHash common.Hash
-	var rVersion, rNetwork, rNum uint64
-	var rTd *big.Int
+	var rGenesis common.Hash
+	var rVersion, rNetwork uint64
 	if err := recv.get("protocolVersion", &rVersion); err != nil {
 		return err
 	}
 	if err := recv.get("networkId", &rNetwork); err != nil {
-		return err
-	}
-	if err := recv.get("headTd", &rTd); err != nil {
-		return err
-	}
-	if err := recv.get("headHash", &rHash); err != nil {
-		return err
-	}
-	if err := recv.get("headNum", &rNum); err != nil {
 		return err
 	}
 	if err := recv.get("genesisHash", &rGenesis); err != nil {
@@ -303,7 +295,6 @@ func (p *peerCommons) handshake(td *big.Int, head common.Hash, headNum uint64, g
 	if int(rVersion) != p.version {
 		return errResp(ErrProtocolVersionMismatch, "%d (!= %d)", rVersion, p.version)
 	}
-	p.headInfo = blockInfo{Hash: rHash, Number: rNum, Td: rTd}
 	if recvCallback != nil {
 		return recvCallback(recv)
 	}
@@ -569,9 +560,11 @@ func (p *serverPeer) updateHead(hash common.Hash, number uint64, td *big.Int) {
 }
 
 // Handshake executes the les protocol handshake, negotiating version number,
-// network IDs, difficulties, head and genesis blocks.
-func (p *serverPeer) Handshake(td *big.Int, head common.Hash, headNum uint64, genesis common.Hash, server *LesServer) error {
-	return p.handshake(td, head, headNum, genesis, func(lists *keyValueList) {
+// network IDs and genesis blocks.
+func (p *serverPeer) Handshake(genesis common.Hash) error {
+	// Note: there is no need to share local head with a server but older servers still
+	// require these fields so we announce zero values.
+	return p.handshake(common.Big0, common.Hash{}, 0, genesis, func(lists *keyValueList) {
 		// Add some client-specific handshake fields
 		//
 		// Enable signed announcement randomly even the server is not trusted.
@@ -581,6 +574,21 @@ func (p *serverPeer) Handshake(td *big.Int, head common.Hash, headNum uint64, ge
 		}
 		*lists = (*lists).add("announceType", p.announceType)
 	}, func(recv keyValueMap) error {
+		var (
+			rHash common.Hash
+			rNum  uint64
+			rTd   *big.Int
+		)
+		if err := recv.get("headTd", &rTd); err != nil {
+			return err
+		}
+		if err := recv.get("headHash", &rHash); err != nil {
+			return err
+		}
+		if err := recv.get("headNum", &rNum); err != nil {
+			return err
+		}
+		p.headInfo = blockInfo{Hash: rHash, Number: rNum, Td: rTd}
 		if recv.get("serveChainSince", &p.chainSince) != nil {
 			p.onlyAnnounce = true
 		}
@@ -937,6 +945,9 @@ func (p *clientPeer) freezeClient() {
 // Handshake executes the les protocol handshake, negotiating version number,
 // network IDs, difficulties, head and genesis blocks.
 func (p *clientPeer) Handshake(td *big.Int, head common.Hash, headNum uint64, genesis common.Hash, server *LesServer) error {
+	// Note: clientPeer.headInfo should contain the last head announced to the client by us.
+	// The values announced in the handshake are dummy values for compatibility reasons and should be ignored.
+	p.headInfo = blockInfo{Hash: head, Number: headNum, Td: td}
 	return p.handshake(td, head, headNum, genesis, func(lists *keyValueList) {
 		// Add some information which services server can offer.
 		if !server.config.UltraLightOnlyAnnounce {
@@ -1007,145 +1018,6 @@ func (p *clientPeer) getInvalid() uint64 {
 type serverPeerSubscriber interface {
 	registerPeer(*serverPeer)
 	unregisterPeer(*serverPeer)
-}
-
-// clientPeerSubscriber is an interface to notify services about added or
-// removed client peers
-type clientPeerSubscriber interface {
-	registerPeer(*clientPeer)
-	unregisterPeer(*clientPeer)
-}
-
-// clientPeerSet represents the set of active client peers currently
-// participating in the Light Ethereum sub-protocol.
-type clientPeerSet struct {
-	peers map[string]*clientPeer
-	// subscribers is a batch of subscribers and peerset will notify
-	// these subscribers when the peerset changes(new client peer is
-	// added or removed)
-	subscribers []clientPeerSubscriber
-	closed      bool
-	lock        sync.RWMutex
-}
-
-// newClientPeerSet creates a new peer set to track the client peers.
-func newClientPeerSet() *clientPeerSet {
-	return &clientPeerSet{peers: make(map[string]*clientPeer)}
-}
-
-// subscribe adds a service to be notified about added or removed
-// peers and also register all active peers into the given service.
-func (ps *clientPeerSet) subscribe(sub clientPeerSubscriber) {
-	ps.lock.Lock()
-	defer ps.lock.Unlock()
-
-	ps.subscribers = append(ps.subscribers, sub)
-	for _, p := range ps.peers {
-		sub.registerPeer(p)
-	}
-}
-
-// unSubscribe removes the specified service from the subscriber pool.
-func (ps *clientPeerSet) unSubscribe(sub clientPeerSubscriber) {
-	ps.lock.Lock()
-	defer ps.lock.Unlock()
-
-	for i, s := range ps.subscribers {
-		if s == sub {
-			ps.subscribers = append(ps.subscribers[:i], ps.subscribers[i+1:]...)
-			return
-		}
-	}
-}
-
-// register adds a new peer into the peer set, or returns an error if the
-// peer is already known.
-func (ps *clientPeerSet) register(peer *clientPeer) error {
-	ps.lock.Lock()
-	defer ps.lock.Unlock()
-
-	if ps.closed {
-		return errClosed
-	}
-	if _, exist := ps.peers[peer.id]; exist {
-		return errAlreadyRegistered
-	}
-	ps.peers[peer.id] = peer
-	for _, sub := range ps.subscribers {
-		sub.registerPeer(peer)
-	}
-	return nil
-}
-
-// unregister removes a remote peer from the peer set, disabling any further
-// actions to/from that particular entity. It also initiates disconnection
-// at the networking layer.
-func (ps *clientPeerSet) unregister(id string) error {
-	ps.lock.Lock()
-	defer ps.lock.Unlock()
-
-	p, ok := ps.peers[id]
-	if !ok {
-		return errNotRegistered
-	}
-	delete(ps.peers, id)
-	for _, sub := range ps.subscribers {
-		sub.unregisterPeer(p)
-	}
-	p.Peer.Disconnect(p2p.DiscRequested)
-	return nil
-}
-
-// ids returns a list of all registered peer IDs
-func (ps *clientPeerSet) ids() []string {
-	ps.lock.RLock()
-	defer ps.lock.RUnlock()
-
-	var ids []string
-	for id := range ps.peers {
-		ids = append(ids, id)
-	}
-	return ids
-}
-
-// peer retrieves the registered peer with the given id.
-func (ps *clientPeerSet) peer(id string) *clientPeer {
-	ps.lock.RLock()
-	defer ps.lock.RUnlock()
-
-	return ps.peers[id]
-}
-
-// len returns if the current number of peers in the set.
-func (ps *clientPeerSet) len() int {
-	ps.lock.RLock()
-	defer ps.lock.RUnlock()
-
-	return len(ps.peers)
-}
-
-// allClientPeers returns all client peers in a list.
-func (ps *clientPeerSet) allPeers() []*clientPeer {
-	ps.lock.RLock()
-	defer ps.lock.RUnlock()
-
-	list := make([]*clientPeer, 0, len(ps.peers))
-	for _, p := range ps.peers {
-		list = append(list, p)
-	}
-	return list
-}
-
-// close disconnects all peers. No new peers can be registered
-// after close has returned.
-func (ps *clientPeerSet) close() {
-	ps.lock.Lock()
-	defer ps.lock.Unlock()
-
-	for _, p := range ps.peers {
-		p.Disconnect(p2p.DiscQuitting)
-	}
-	ps.closed = true
 }
 
 // serverPeerSet represents the set of active server peers currently
@@ -1297,43 +1169,4 @@ func (ps *serverPeerSet) close() {
 		p.Disconnect(p2p.DiscQuitting)
 	}
 	ps.closed = true
-}
-
-// serverSet is a special set which contains all connected les servers.
-// Les servers will also be discovered by discovery protocol because they
-// also run the LES protocol. We can't drop them although they are useless
-// for us(server) but for other protocols(e.g. ETH) upon the devp2p they
-// may be useful.
-type serverSet struct {
-	lock   sync.Mutex
-	set    map[string]*clientPeer
-	closed bool
-}
-
-func newServerSet() *serverSet {
-	return &serverSet{set: make(map[string]*clientPeer)}
-}
-
-func (s *serverSet) register(peer *clientPeer) error {
-	s.lock.Lock()
-	defer s.lock.Unlock()
-
-	if s.closed {
-		return errClosed
-	}
-	if _, exist := s.set[peer.id]; exist {
-		return errAlreadyRegistered
-	}
-	s.set[peer.id] = peer
-	return nil
-}
-
-func (s *serverSet) close() {
-	s.lock.Lock()
-	defer s.lock.Unlock()
-
-	for _, p := range s.set {
-		p.Disconnect(p2p.DiscQuitting)
-	}
-	s.closed = true
 }
