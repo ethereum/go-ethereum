@@ -729,7 +729,7 @@ func TestConcurrentDiskCacheGeneration(t *testing.T) {
 
 		go func(idx int) {
 			defer pend.Done()
-			ethash := New(Config{cachedir, 0, 1, false, "", 0, 0, false, ModeNormal, nil}, nil, false)
+			ethash := New(Config{cachedir, 0, 1, false, "", 0, 0, false, ModeNormal, nil, nil}, nil, false)
 			defer ethash.Close()
 			if err := ethash.VerifySeal(nil, block.Header()); err != nil {
 				t.Errorf("proc %d: block verification failed: %v", idx, err)
@@ -739,7 +739,7 @@ func TestConcurrentDiskCacheGeneration(t *testing.T) {
 	pend.Wait()
 }
 
-// Benchmarks the cache generation performance.
+// BenchmarkCacheGeneration benchmarks the cache generation performance.
 func BenchmarkCacheGeneration(b *testing.B) {
 	for i := 0; i < b.N; i++ {
 		cache := make([]uint32, cacheSize(1)/4)
@@ -747,7 +747,7 @@ func BenchmarkCacheGeneration(b *testing.B) {
 	}
 }
 
-// Benchmarks the dataset (small) generation performance.
+// BenchmarkSmallDatasetGeneration benchmarks the dataset (small) generation performance.
 func BenchmarkSmallDatasetGeneration(b *testing.B) {
 	cache := make([]uint32, 65536/4)
 	generateCache(cache, 0, make([]byte, 32))
@@ -759,7 +759,7 @@ func BenchmarkSmallDatasetGeneration(b *testing.B) {
 	}
 }
 
-// Benchmarks the light verification performance.
+// BenchmarkHashimotoLight benchmarks the light verification performance.
 func BenchmarkHashimotoLight(b *testing.B) {
 	cache := make([]uint32, cacheSize(1)/4)
 	generateCache(cache, 0, make([]byte, 32))
@@ -772,7 +772,22 @@ func BenchmarkHashimotoLight(b *testing.B) {
 	}
 }
 
-// Benchmarks the full (small) verification performance.
+// BenchmarkProgpowLight benchmarks the light verification performance (not counting cDag generation).
+func BenchmarkProgpowLight(b *testing.B) {
+	cache := make([]uint32, cacheSize(1)/4)
+	generateCache(cache, 0, make([]byte, 32))
+
+	hash := hexutil.MustDecode("0xc9149cc0386e689d789a1c2f3d5d169a61a6218ed30e74414dc736e442ef3d1f")
+	cDag := make([]uint32, progpowCacheWords)
+	generateCDag(cDag, cache, 0)
+
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		progpowLight(datasetSize(1), cache, hash, 0, 0, cDag)
+	}
+}
+
+// BenchmarkHashimotoFullSmall benchmarks the full (small) verification performance.
 func BenchmarkHashimotoFullSmall(b *testing.B) {
 	cache := make([]uint32, 65536/4)
 	generateCache(cache, 0, make([]byte, 32))
@@ -811,4 +826,20 @@ func benchmarkHashimotoFullMmap(b *testing.B, name string, lock bool) {
 func BenchmarkHashimotoFullMmap(b *testing.B) {
 	benchmarkHashimotoFullMmap(b, "WithLock", true)
 	benchmarkHashimotoFullMmap(b, "WithoutLock", false)
+}
+
+// BenchmarkProgpowFullSmall benchmarks the full (small) verification performance.
+func BenchmarkProgpowFullSmall(b *testing.B) {
+	cache := make([]uint32, 65536/4)
+	generateCache(cache, 0, make([]byte, 32))
+
+	dataset := make([]uint32, 32*65536/4)
+	generateDataset(dataset, 0, cache)
+
+	hash := hexutil.MustDecode("0xc9149cc0386e689d789a1c2f3d5d169a61a6218ed30e74414dc736e442ef3d1f")
+
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		progpowFull(dataset, hash, 0, 0)
+	}
 }

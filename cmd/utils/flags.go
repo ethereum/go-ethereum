@@ -1822,6 +1822,7 @@ func MakeChain(ctx *cli.Context, stack *node.Node, readOnly bool) (chain *core.B
 				DatasetsInMem:    eth.DefaultConfig.Ethash.DatasetsInMem,
 				DatasetsOnDisk:   eth.DefaultConfig.Ethash.DatasetsOnDisk,
 				DatasetsLockMmap: eth.DefaultConfig.Ethash.DatasetsLockMmap,
+				ProgpowBlock:     config.ProgpowBlock,
 			}, nil, false)
 		}
 	}

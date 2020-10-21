@@ -137,6 +137,7 @@ func (ethash *Ethash) mine(block *types.Block, id int, seed uint64, abort chan s
 		target  = new(big.Int).Div(two256, header.Difficulty)
 		number  = header.Number.Uint64()
 		dataset = ethash.dataset(number, false)
+		powFull = ethash.fullPow(header.Number)
 	)
 	// Start generating random nonces until we abort or find a good one
 	var (
@@ -162,7 +163,7 @@ search:
 				attempts = 0
 			}
 			// Compute the PoW value of this nonce
-			digest, result := hashimotoFull(dataset.dataset, hash, nonce)
+			digest, result := powFull(dataset.dataset, hash, nonce, number)
 			if new(big.Int).SetBytes(result).Cmp(target) <= 0 {
 				// Correct nonce found, create a new header with it
 				header = types.CopyHeader(header)
