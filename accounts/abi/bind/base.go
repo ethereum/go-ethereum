@@ -151,7 +151,7 @@ func (c *BoundContract) Call(opts *CallOpts, results *[]interface{}, method stri
 			}
 		}
 	} else {
-		output, err = c.caller.CallContract(ctx, msg, opts.BlockNumber)
+		output, err = c.caller.CallContract(ctx, msg, opts.BlockNumber, nil)
 		if err == nil && len(output) == 0 {
 			// Make sure we have a contract to operate on, and bail out otherwise.
 			if code, err = c.caller.CodeAt(ctx, c.address, opts.BlockNumber); err != nil {
