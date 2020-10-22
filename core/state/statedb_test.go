@@ -773,7 +773,7 @@ func TestStateDBAccessList(t *testing.T) {
 			}
 		}
 		// Check that only the expected addresses are present in the acesslist
-		for address, _ := range state.accessList.addresses {
+		for address := range state.accessList.addresses {
 			if _, exist := addressMap[address]; !exist {
 				t.Fatalf("extra address %x in access list", address)
 			}
@@ -802,7 +802,7 @@ func TestStateDBAccessList(t *testing.T) {
 		index := state.accessList.addresses[address]
 		if index >= 0 {
 			stateSlots := state.accessList.slots[index]
-			for s, _ := range stateSlots {
+			for s := range stateSlots {
 				if _, slotPresent := slotMap[s]; !slotPresent {
 					t.Fatalf("scope has extra slot %v (address %v)", s, addrString)
 				}
