@@ -151,9 +151,9 @@ func Create(input []byte, cfg *Config) ([]byte, common.Address, uint64, error) {
 		sender = vm.AccountRef(cfg.Origin)
 	)
 	if cfg.ChainConfig.IsYoloV2(vmenv.BlockNumber) {
-		cfg.State.AddAddrToAccessList(cfg.Origin)
+		cfg.State.AddAddressToAccessList(cfg.Origin)
 		for _, addr := range vmenv.ActivePrecompiles() {
-			cfg.State.AddAddrToAccessList(addr)
+			cfg.State.AddAddressToAccessList(addr)
 		}
 	}
 
@@ -179,10 +179,10 @@ func Call(address common.Address, input []byte, cfg *Config) ([]byte, uint64, er
 
 	sender := cfg.State.GetOrNewStateObject(cfg.Origin)
 	if cfg.ChainConfig.IsYoloV2(vmenv.BlockNumber) {
-		cfg.State.AddAddrToAccessList(cfg.Origin)
-		cfg.State.AddAddrToAccessList(address)
+		cfg.State.AddAddressToAccessList(cfg.Origin)
+		cfg.State.AddAddressToAccessList(address)
 		for _, addr := range vmenv.ActivePrecompiles() {
-			cfg.State.AddAddrToAccessList(addr)
+			cfg.State.AddAddressToAccessList(addr)
 		}
 	}
 
