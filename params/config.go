@@ -216,7 +216,7 @@ var (
 
 	// YoloV2ChainConfig contains the chain parameters to run a node on the YOLOv2 test network.
 	YoloV2ChainConfig = &ChainConfig{
-		ChainID:             big.NewInt(133519467574833),
+		ChainID:             big.NewInt(133519467574834),
 		HomesteadBlock:      big.NewInt(0),
 		DAOForkBlock:        nil,
 		DAOForkSupport:      true,
