@@ -384,7 +384,7 @@ func DefaultYoloV2GenesisBlock() *Genesis {
 	// TODO: Update with yolov2 values + regenerate alloc data
 	return &Genesis{
 		Config:     params.YoloV2ChainConfig,
-		Timestamp:  0x5ed754f1,
+		Timestamp:  0x5f91b932,
 		ExtraData:  hexutil.MustDecode("0x00000000000000000000000000000000000000000000000000000000000000008a37866fd3627c9205a37c8685666f32ec07bb1b0000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000"),
 		GasLimit:   0x47b760,
 		Difficulty: big.NewInt(1),
