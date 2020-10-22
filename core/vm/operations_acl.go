@@ -173,7 +173,7 @@ func gasEip2929AccountCheck(evm *EVM, contract *Contract, stack *Stack, mem *Mem
 	return 0, nil
 }
 
-func makeCallVariantGasCallEip2929(oldCalculator gasFunc) gasFunc {
+func makeCallVariantGasCallEIP2929(oldCalculator gasFunc) gasFunc {
 	return func(evm *EVM, contract *Contract, stack *Stack, mem *Memory, memorySize uint64) (uint64, error) {
 		addr := common.Address(stack.Back(1).Bytes20())
 		// Check slot presence in the access list
@@ -194,10 +194,10 @@ func makeCallVariantGasCallEip2929(oldCalculator gasFunc) gasFunc {
 }
 
 var (
-	gasCallEIP2929         = makeCallVariantGasCallEip2929(gasCall)
-	gasDelegateCallEIP2929 = makeCallVariantGasCallEip2929(gasDelegateCall)
-	gasStaticCallEIP2929   = makeCallVariantGasCallEip2929(gasStaticCall)
-	gasCallCodeEIP2929     = makeCallVariantGasCallEip2929(gasCallCode)
+	gasCallEIP2929         = makeCallVariantGasCallEIP2929(gasCall)
+	gasDelegateCallEIP2929 = makeCallVariantGasCallEIP2929(gasDelegateCall)
+	gasStaticCallEIP2929   = makeCallVariantGasCallEIP2929(gasStaticCall)
+	gasCallCodeEIP2929     = makeCallVariantGasCallEIP2929(gasCallCode)
 )
 
 func gasSelfdestructEIP2929(evm *EVM, contract *Contract, stack *Stack, mem *Memory, memorySize uint64) (uint64, error) {
