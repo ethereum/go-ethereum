@@ -331,7 +331,7 @@ loop:
 	// write status message to client
 	status := Status{
 		ProtocolVersion: uint32(c.ethProtocolVersion),
-		NetworkID:       1,
+		NetworkID:       chain.chainConfig.ChainID.Uint64(),
 		TD:              chain.TD(chain.Len()),
 		Head:            chain.blocks[chain.Len()-1].Hash(),
 		Genesis:         chain.blocks[0].Hash(),
