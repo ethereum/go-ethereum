@@ -722,3 +722,115 @@ func BenchmarkSimpleLoop(b *testing.B) {
 	//benchmarkNonModifyingCode(10000000, staticCallIdentity, "staticcall-identity-10M", b)
 	//benchmarkNonModifyingCode(10000000, loopingCode, "loop-10M", b)
 }
+
+// TestEip2929Cases contains various testcases that are used for
+// EIP-2929 about gas repricings
+func TestEip2929Cases(t *testing.T) {
+
+	id := 1
+	prettyPrint := func(comment string, code []byte) {
+
+		instrs := make([]string, 0)
+		it := asm.NewInstructionIterator(code)
+		for it.Next() {
+			if it.Arg() != nil && 0 < len(it.Arg()) {
+				instrs = append(instrs, fmt.Sprintf("%v 0x%x", it.Op(), it.Arg()))
+			} else {
+				instrs = append(instrs, fmt.Sprintf("%v", it.Op()))
+			}
+		}
+		ops := strings.Join(instrs, ", ")
+		fmt.Printf("### Case %d\n\n", id)
+		id++
+		fmt.Printf("%v\n\nBytecode: \n```\n0x%x\n```\nOperations: \n```\n%v\n```\n\n",
+			comment,
+			code, ops)
+		Execute(code, nil, &Config{
+			EVMConfig: vm.Config{
+				Debug:     true,
+				Tracer:    vm.NewMarkdownLogger(nil, os.Stdout),
+				ExtraEips: []int{2929},
+			},
+		})
+	}
+
+	{ // First eip testcase
+		code := []byte{
+			// Three checks against a precompile
+			byte(vm.PUSH1), 1, byte(vm.EXTCODEHASH), byte(vm.POP),
+			byte(vm.PUSH1), 2, byte(vm.EXTCODESIZE), byte(vm.POP),
+			byte(vm.PUSH1), 3, byte(vm.BALANCE), byte(vm.POP),
+			// Three checks against a non-precompile
+			byte(vm.PUSH1), 0xf1, byte(vm.EXTCODEHASH), byte(vm.POP),
+			byte(vm.PUSH1), 0xf2, byte(vm.EXTCODESIZE), byte(vm.POP),
+			byte(vm.PUSH1), 0xf3, byte(vm.BALANCE), byte(vm.POP),
+			// Same three checks (should be cheaper)
+			byte(vm.PUSH1), 0xf2, byte(vm.EXTCODEHASH), byte(vm.POP),
+			byte(vm.PUSH1), 0xf3, byte(vm.EXTCODESIZE), byte(vm.POP),
+			byte(vm.PUSH1), 0xf1, byte(vm.BALANCE), byte(vm.POP),
+			// Check the origin, and the 'this'
+			byte(vm.ORIGIN), byte(vm.BALANCE), byte(vm.POP),
+			byte(vm.ADDRESS), byte(vm.BALANCE), byte(vm.POP),
+
+			byte(vm.STOP),
+		}
+		prettyPrint("This checks `EXT`(codehash,codesize,balance) of precompiles, which should be `100`, "+
+			"and later checks the same operations twice against some non-precompiles. "+
+			"Those are cheaper second time they are accessed. Lastly, it checks the `BALANCE` of `origin` and `this`.", code)
+	}
+
+	{ // EXTCODECOPY
+		code := []byte{
+			// extcodecopy( 0xff,0,0,0,0)
+			byte(vm.PUSH1), 0x00, byte(vm.PUSH1), 0x00, byte(vm.PUSH1), 0x00, //length, codeoffset, memoffset
+			byte(vm.PUSH1), 0xff, byte(vm.EXTCODECOPY),
+			// extcodecopy( 0xff,0,0,0,0)
+			byte(vm.PUSH1), 0x00, byte(vm.PUSH1), 0x00, byte(vm.PUSH1), 0x00, //length, codeoffset, memoffset
+			byte(vm.PUSH1), 0xff, byte(vm.EXTCODECOPY),
+			// extcodecopy( this,0,0,0,0)
+			byte(vm.PUSH1), 0x00, byte(vm.PUSH1), 0x00, byte(vm.PUSH1), 0x00, //length, codeoffset, memoffset
+			byte(vm.ADDRESS), byte(vm.EXTCODECOPY),
+
+			byte(vm.STOP),
+		}
+		prettyPrint("This checks `extcodecopy( 0xff,0,0,0,0)` twice, (should be expensive first time), "+
+			"and then does `extcodecopy( this,0,0,0,0)`.", code)
+	}
+
+	{ // SLOAD + SSTORE
+		code := []byte{
+
+			// Add slot `0x1` to access list
+			byte(vm.PUSH1), 0x01, byte(vm.SLOAD), byte(vm.POP), // SLOAD( 0x1) (add to access list)
+			// Write to `0x1` which is already in access list
+			byte(vm.PUSH1), 0x11, byte(vm.PUSH1), 0x01, byte(vm.SSTORE), // SSTORE( loc: 0x01, val: 0x11)
+			// Write to `0x2` which is not in access list
+			byte(vm.PUSH1), 0x11, byte(vm.PUSH1), 0x02, byte(vm.SSTORE), // SSTORE( loc: 0x02, val: 0x11)
+			// Write again to `0x2`
+			byte(vm.PUSH1), 0x11, byte(vm.PUSH1), 0x02, byte(vm.SSTORE), // SSTORE( loc: 0x02, val: 0x11)
+			// Read slot in access list (0x2)
+			byte(vm.PUSH1), 0x02, byte(vm.SLOAD), // SLOAD( 0x2)
+			// Read slot in access list (0x1)
+			byte(vm.PUSH1), 0x01, byte(vm.SLOAD), // SLOAD( 0x1)
+		}
+		prettyPrint("This checks `sload( 0x1)` followed by `sstore(loc: 0x01, val:0x11)`, then 'naked' sstore:"+
+			"`sstore(loc: 0x02, val:0x11)` twice, and `sload(0x2)`, `sload(0x1)`. ", code)
+	}
+	{ // Call variants
+		code := []byte{
+			// identity precompile
+			byte(vm.PUSH1), 0x0, byte(vm.DUP1), byte(vm.DUP1), byte(vm.DUP1), byte(vm.DUP1),
+			byte(vm.PUSH1), 0x04, byte(vm.PUSH1), 0x0, byte(vm.CALL), byte(vm.POP),
+
+			// random account - call 1
+			byte(vm.PUSH1), 0x0, byte(vm.DUP1), byte(vm.DUP1), byte(vm.DUP1), byte(vm.DUP1),
+			byte(vm.PUSH1), 0xff, byte(vm.PUSH1), 0x0, byte(vm.CALL), byte(vm.POP),
+
+			// random account - call 2
+			byte(vm.PUSH1), 0x0, byte(vm.DUP1), byte(vm.DUP1), byte(vm.DUP1), byte(vm.DUP1),
+			byte(vm.PUSH1), 0xff, byte(vm.PUSH1), 0x0, byte(vm.STATICCALL), byte(vm.POP),
+		}
+		prettyPrint("This calls the `identity`-precompile (cheap), then calls an account (expensive) and `staticcall`s the same"+
+			"account (cheap)", code)
+	}
+}
