@@ -242,12 +242,14 @@ func (c *Conn) Write(msg Message) error {
 	}
 	_, err = c.Conn.Write(uint64(msg.Code()), payload)
 	return err
-
 }
 
 // handshake checks to make sure a `HELLO` is received.
 func (c *Conn) handshake(t *utesting.T) Message {
-	// write protoHandshake to client
+	defer c.SetDeadline(time.Time{})
+	c.SetDeadline(time.Now().Add(10 * time.Second))
+
+	// write hello to client
 	pub0 := crypto.FromECDSAPub(&c.ourKey.PublicKey)[1:]
 	ourHandshake := &Hello{
 		Version: 5,
@@ -260,14 +262,13 @@ func (c *Conn) handshake(t *utesting.T) Message {
 	if err := c.Write(ourHandshake); err != nil {
 		t.Fatalf("could not write to connection: %v", err)
 	}
-	// read protoHandshake from client
+	// read hello from client
 	switch msg := c.Read().(type) {
 	case *Hello:
 		// set snappy if version is at least 5
 		if msg.Version >= 5 {
 			c.SetSnappy(true)
 		}
-
 		c.negotiateEthProtocol(msg.Caps)
 		if c.ethProtocolVersion == 0 {
 			t.Fatalf("unexpected eth protocol version")
@@ -297,9 +298,11 @@ func (c *Conn) negotiateEthProtocol(caps []p2p.Cap) {
 // statusExchange performs a `Status` message exchange with the given
 // node.
 func (c *Conn) statusExchange(t *utesting.T, chain *Chain) Message {
+	defer c.SetDeadline(time.Time{})
+	c.SetDeadline(time.Now().Add(20 * time.Second))
+
 	// read status message from client
 	var message Message
-
 loop:
 	for {
 		switch msg := c.Read().(type) {
@@ -331,7 +334,7 @@ loop:
 	// write status message to client
 	status := Status{
 		ProtocolVersion: uint32(c.ethProtocolVersion),
-		NetworkID:       1,
+		NetworkID:       chain.chainConfig.ChainID.Uint64(),
 		TD:              chain.TD(chain.Len()),
 		Head:            chain.blocks[chain.Len()-1].Hash(),
 		Genesis:         chain.blocks[0].Hash(),
@@ -347,12 +350,15 @@ loop:
 // waitForBlock waits for confirmation from the client that it has
 // imported the given block.
 func (c *Conn) waitForBlock(block *types.Block) error {
+	defer c.SetReadDeadline(time.Time{})
+
+	timeout := time.Now().Add(20 * time.Second)
+	c.SetReadDeadline(timeout)
 	for {
 		req := &GetBlockHeaders{Origin: hashOrNumber{Hash: block.Hash()}, Amount: 1}
 		if err := c.Write(req); err != nil {
 			return err
 		}
-
 		switch msg := c.Read().(type) {
 		case *BlockHeaders:
 			if len(*msg) > 0 {
