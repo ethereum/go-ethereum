@@ -28,6 +28,7 @@ import (
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/ethereum/go-ethereum/core/types"
+	"github.com/ethereum/go-ethereum/internal/ethapi"
 	"github.com/ethereum/go-ethereum/rlp"
 	"github.com/ethereum/go-ethereum/rpc"
 )
@@ -364,6 +365,14 @@ func (ec *Client) StorageAt(ctx context.Context, account common.Address, key com
 	var result hexutil.Bytes
 	err := ec.c.CallContext(ctx, &result, "eth_getStorageAt", account, key, toBlockNumArg(blockNumber))
 	return result, err
+}
+
+// GetProof returns the account and storage values of the specified account including the Merkle-proof.
+// The block number can be nil, in which case the value is taken from the latest known block.
+func (ec *Client) GetProof(ctx context.Context, account common.Address, keys []string, blockNumber *big.Int) (*ethapi.AccountResult, error) {
+	var result ethapi.AccountResult
+	err := ec.c.CallContext(ctx, &result, "eth_getProof", account, keys, toBlockNumArg(blockNumber))
+	return &result, err
 }
 
 // CodeAt returns the contract code of the given account.
