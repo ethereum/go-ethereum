@@ -949,6 +949,7 @@ func DoEstimateGas(ctx context.Context, b Backend, args CallArgs, blockNrOrHash 
 		lo  uint64 = params.TxGas - 1
 		hi  uint64
 		cap uint64
+		top uint64
 	)
 	// Use zero address if sender unspecified.
 	if args.From == nil {
@@ -1018,7 +1019,7 @@ func DoEstimateGas(ctx context.Context, b Backend, args CallArgs, blockNrOrHash 
 	// Execute the binary search and hone in on an executable gas limit
 	for lo+1 < hi {
 		mid := (hi + lo) / 2
-		failed, _, err := executable(mid)
+		failed, result, err := executable(mid)
 
 		// If the error is not nil(consensus error), it means the provided message
 		// call or transaction will never be accepted no matter how much gas it is
@@ -1029,9 +1030,13 @@ func DoEstimateGas(ctx context.Context, b Backend, args CallArgs, blockNrOrHash 
 		if failed {
 			lo = mid
 		} else {
+			if result.UsedGas > top {
+				top = result.UsedGas
+			}
 			hi = mid
 		}
 	}
+	hi = top
 	// Reject the transaction as invalid if it still fails at the highest allowance
 	if hi == cap {
 		failed, result, err := executable(hi)
