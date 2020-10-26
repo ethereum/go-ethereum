@@ -57,24 +57,16 @@ func newLegacyTransaction(nonce uint64, to *common.Address, amount *big.Int, gas
 	}
 }
 
-func (tx *LegacyTransaction) ChainId() *big.Int {
-	return deriveChainId(tx.V)
-}
-
-func (tx *LegacyTransaction) Protected() bool {
-	return isProtectedV(tx.V)
-}
-
-func (tx *LegacyTransaction) Data() []byte       { return common.CopyBytes(tx.Payload) }
-func (tx *LegacyTransaction) Gas() uint64        { return tx.GasLimit }
-func (tx *LegacyTransaction) GasPrice() *big.Int { return new(big.Int).Set(tx.Price) }
-func (tx *LegacyTransaction) Value() *big.Int    { return new(big.Int).Set(tx.Amount) }
-func (tx *LegacyTransaction) Nonce() uint64      { return tx.AccountNonce }
-func (tx *LegacyTransaction) CheckNonce() bool   { return true }
-
-func (tx *LegacyTransaction) Hash() common.Hash {
-	return rlpHash(tx)
-}
+func (tx *LegacyTransaction) ChainId() *big.Int       { return deriveChainId(tx.V) }
+func (tx *LegacyTransaction) Protected() bool         { return isProtectedV(tx.V) }
+func (tx *LegacyTransaction) Data() []byte            { return common.CopyBytes(tx.Payload) }
+func (tx *LegacyTransaction) Gas() uint64             { return tx.GasLimit }
+func (tx *LegacyTransaction) GasPrice() *big.Int      { return new(big.Int).Set(tx.Price) }
+func (tx *LegacyTransaction) Value() *big.Int         { return new(big.Int).Set(tx.Amount) }
+func (tx *LegacyTransaction) Nonce() uint64           { return tx.AccountNonce }
+func (tx *LegacyTransaction) CheckNonce() bool        { return true }
+func (tx *LegacyTransaction) Hash() common.Hash       { return rlpHash(tx) }
+func (tx *LegacyTransaction) AccessList() *AccessList { return nil }
 
 // To returns the recipient address of the transaction.
 // It returns nil if the transaction is a contract creation.
@@ -84,10 +76,6 @@ func (tx *LegacyTransaction) To() *common.Address {
 	}
 	to := *tx.Recipient
 	return &to
-}
-
-func (tx *LegacyTransaction) AccessList() *AccessList {
-	return nil
 }
 
 // RawSignatureValues returns the V, R, S signature values of the transaction.

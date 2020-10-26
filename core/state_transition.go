@@ -141,12 +141,10 @@ func IntrinsicGas(data []byte, accessList *types.AccessList, isContractCreation 
 		}
 		gas += z * params.TxDataZeroGas
 	}
-
 	if isEIP2718 && accessList != nil {
-		gas += uint64(accessList.Addresses()) * params.TxAccessListAddress
-		gas += uint64(accessList.StorageKeys()) * params.TxAccessListStorageKey
+		gas += uint64(accessList.Addresses()) * params.TxAccessListAddressGas
+		gas += uint64(accessList.StorageKeys()) * params.TxAccessListStorageKeyGas
 	}
-
 	return gas, nil
 }
 

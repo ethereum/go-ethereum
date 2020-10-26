@@ -227,7 +227,7 @@ var (
 		ConstantinopleBlock: big.NewInt(0),
 		PetersburgBlock:     big.NewInt(0),
 		IstanbulBlock:       big.NewInt(0),
-		MuirGlacierBlock:    big.NewInt(0),
+		MuirGlacierBlock:    nil,
 		YoloV2Block:         big.NewInt(0),
 		Clique: &CliqueConfig{
 			Period: 15,

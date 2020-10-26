@@ -95,7 +95,7 @@ func (p *StateProcessor) Process(block *types.Block, statedb *state.StateDB, cfg
 // indicating the block was invalid.
 func applyTransaction(msg types.Message, config *params.ChainConfig, bc ChainContext, author *common.Address, gp *GasPool, statedb *state.StateDB, header *types.Header, tx *types.Transaction, usedGas *uint64, evm *vm.EVM) (*types.Receipt, error) {
 	if !config.IsYoloV2(header.Number) && tx.Type() != types.LegacyTxId {
-		return nil, ErrTxTypeInvalid
+		return nil, ErrTxTypeNotSupported
 	}
 	// Create a new context to be used in the EVM environment
 	txContext := NewEVMTxContext(msg)

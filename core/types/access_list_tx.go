@@ -11,6 +11,11 @@ import (
 	"github.com/ethereum/go-ethereum/common/hexutil"
 )
 
+type AccessTuple struct {
+	Address     *common.Address
+	StorageKeys []*common.Hash
+}
+
 type AccessList []AccessTuple
 
 func (al *AccessList) Addresses() int { return len(*al) }
@@ -21,11 +26,6 @@ func (al *AccessList) StorageKeys() int {
 	}
 
 	return count
-}
-
-type AccessTuple struct {
-	Address     *common.Address
-	StorageKeys []*common.Hash
 }
 
 type AccessListTransaction struct {

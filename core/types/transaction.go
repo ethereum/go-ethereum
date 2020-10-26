@@ -65,7 +65,9 @@ type inner interface {
 	// UnmarshalJSON unmarshals from JSON.
 	UnmarshalJSON(input []byte) error
 
+	// AccessList returns the transactions optional EIP-2930 access list.
 	AccessList() *AccessList
+
 	Data() []byte
 	Gas() uint64
 	GasPrice() *big.Int

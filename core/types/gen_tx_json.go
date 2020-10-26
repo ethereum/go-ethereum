@@ -25,9 +25,7 @@ func (t *LegacyTransaction) MarshalJSONWithHash(hash *common.Hash) ([]byte, erro
 		S            *hexutil.Big    `json:"s" gencodec:"required"`
 		Hash         *common.Hash    `json:"hash" rlp:"-"`
 	}
-
 	var enc txdata
-
 	enc.AccountNonce = hexutil.Uint64(t.AccountNonce)
 	enc.Price = (*hexutil.Big)(t.Price)
 	enc.GasLimit = hexutil.Uint64(t.GasLimit)
@@ -38,7 +36,6 @@ func (t *LegacyTransaction) MarshalJSONWithHash(hash *common.Hash) ([]byte, erro
 	enc.R = (*hexutil.Big)(t.R)
 	enc.S = (*hexutil.Big)(t.S)
 	enc.Hash = hash
-
 	return json.Marshal(&enc)
 }
 
@@ -94,6 +91,5 @@ func (t *LegacyTransaction) UnmarshalJSON(input []byte) error {
 		return errors.New("missing required field 's' for txdata")
 	}
 	t.S = (*big.Int)(dec.S)
-
 	return nil
 }

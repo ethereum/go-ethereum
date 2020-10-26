@@ -3094,7 +3094,8 @@ func TestEIP2718Transition(t *testing.T) {
 
 	block := chain.GetBlockByNumber(1)
 
-	expected := params.TxGas + params.TxAccessListAddress + params.TxAccessListStorageKey + vm.GasQuickStep*2 + vm.WarmStorageReadCostEIP2929 + vm.ColdSloadCostEIP2929
+	// expected gas is intrinsic + 2 * PC + hot load + cold load, since only one load is in the access list
+	expected := params.TxGas + params.TxAccessListAddressGas + params.TxAccessListStorageKeyGas + vm.GasQuickStep*2 + vm.WarmStorageReadCostEIP2929 + vm.ColdSloadCostEIP2929
 	if block.GasUsed() != expected {
 		t.Fatalf("incorrect amount of gas spent: expected %d, got %d", expected, block.GasUsed())
 

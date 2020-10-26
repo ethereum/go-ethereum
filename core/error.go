@@ -64,5 +64,7 @@ var (
 	// than required to start the invocation.
 	ErrIntrinsicGas = errors.New("intrinsic gas too low")
 
-	ErrTxTypeInvalid = errors.New("invalid tx type")
+	// ErrTxTypeNotSupported is returned if a transaction is not supported in the
+	// current network configuration.
+	ErrTxTypeNotSupported = errors.New("tx type not supported")
 )
