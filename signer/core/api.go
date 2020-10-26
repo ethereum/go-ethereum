@@ -349,10 +349,13 @@ func (api *SignerAPI) startUSBListener() {
 			case accounts.WalletOpened:
 				status, _ := event.Wallet.Status()
 				log.Info("New wallet appeared", "url", event.Wallet.URL(), "status", status)
-				var derive = func(numToDerive int, base accounts.DerivationPath) {
+				var derive = func(numToDerive int, base accounts.DerivationPath, incrOffset int) {
 					// Derive first N accounts, hardcoded for now
 					var nextPath = make(accounts.DerivationPath, len(base))
 					copy(nextPath[:], base[:])
+					if incrOffset < 0 {
+						incrOffset += len(nextPath)
+					}
 
 					for i := 0; i < numToDerive; i++ {
 						acc, err := event.Wallet.Derive(nextPath, true)
@@ -361,16 +364,16 @@ func (api *SignerAPI) startUSBListener() {
 						} else {
 							log.Info("Derived account", "address", acc.Address, "path", nextPath)
 						}
-						nextPath[len(nextPath)-1]++
+						nextPath[incrOffset]++
 					}
 				}
 				if event.Wallet.URL().Scheme == "ledger" {
 					log.Info("Deriving ledger default paths")
-					derive(numberOfAccountsToDerive/2, accounts.DefaultBaseDerivationPath)
+					derive(numberOfAccountsToDerive, accounts.DefaultBaseDerivationPath, 2)
 					log.Info("Deriving ledger legacy paths")
-					derive(numberOfAccountsToDerive/2, accounts.LegacyLedgerBaseDerivationPath)
+					derive(numberOfAccountsToDerive, accounts.LegacyLedgerBaseDerivationPath, -1)
 				} else {
-					derive(numberOfAccountsToDerive, accounts.DefaultBaseDerivationPath)
+					derive(numberOfAccountsToDerive, accounts.DefaultBaseDerivationPath, -1)
 				}
 			case accounts.WalletDropped:
 				log.Info("Old wallet dropped", "url", event.Wallet.URL())
