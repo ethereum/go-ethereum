@@ -8,7 +8,7 @@ import (
 	"github.com/maticnetwork/bor/core/types"
 )
 
-func (fb *filterBackend) GetBorBlockReceipt(ctx context.Context, hash common.Hash) (*types.BorReceipt, error) {
+func (fb *filterBackend) GetBorBlockReceipt(ctx context.Context, hash common.Hash) (*types.Receipt, error) {
 	number := rawdb.ReadHeaderNumber(fb.db, hash)
 	if number == nil {
 		return nil, nil

@@ -97,7 +97,7 @@ func (f *BorBlockLogsFilter) Logs(ctx context.Context) ([]*types.Log, error) {
 	}
 
 	// adjust begin for sprint
-	f.begin = nextSprintEnd(f.begin)
+	f.begin = currentSprintEnd(f.begin)
 
 	end := f.end
 	if f.end == -1 {
@@ -136,15 +136,14 @@ func (f *BorBlockLogsFilter) unindexedLogs(ctx context.Context, end uint64) ([]*
 }
 
 // borBlockLogs returns the logs matching the filter criteria within a single block.
-func (f *BorBlockLogsFilter) borBlockLogs(ctx context.Context, receipt *types.BorReceipt) (logs []*types.Log, err error) {
+func (f *BorBlockLogsFilter) borBlockLogs(ctx context.Context, receipt *types.Receipt) (logs []*types.Log, err error) {
 	if bloomFilter(receipt.Bloom, f.addresses, f.topics) {
-		found := filterLogs(receipt.Logs, nil, nil, f.addresses, f.topics)
-		logs = append(logs, found...)
+		logs = filterLogs(receipt.Logs, nil, nil, f.addresses, f.topics)
 	}
 	return logs, nil
 }
 
-func nextSprintEnd(n int64) int64 {
+func currentSprintEnd(n int64) int64 {
 	m := n % 64
 	if m == 0 {
 		return n

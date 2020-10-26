@@ -1,109 +1,73 @@
 package types
 
 import (
-	"io"
+	"encoding/binary"
 	"math/big"
+	"sort"
 
 	"github.com/maticnetwork/bor/common"
-	"github.com/maticnetwork/bor/rlp"
+	"github.com/maticnetwork/bor/crypto"
 )
 
-// BorReceipt represents the results of a block state syncs
-type BorReceipt struct {
-	// Consensus fields
-	Bloom Bloom  `json:"logsBloom"         gencodec:"required"`
-	Logs  []*Log `json:"logs"              gencodec:"required"`
+var (
+	borReceiptPrefix = []byte("matic-bor-receipt-") // borReceiptPrefix + number + block hash -> bor block receipt
 
-	// Inclusion information: These fields provide information about the inclusion of the
-	// transaction corresponding to this receipt.
-	BlockHash   common.Hash `json:"blockHash,omitempty"`
-	BlockNumber *big.Int    `json:"blockNumber,omitempty"`
+	// SystemAddress address for system sender
+	SystemAddress = common.HexToAddress("0xffffFFFfFFffffffffffffffFfFFFfffFFFfFFfE")
+)
+
+// BorReceiptKey = borReceiptPrefix + num (uint64 big endian) + hash
+func BorReceiptKey(number uint64, hash common.Hash) []byte {
+	enc := make([]byte, 8)
+	binary.BigEndian.PutUint64(enc, number)
+	return append(append(borReceiptPrefix, enc...), hash.Bytes()...)
 }
 
-// borReceiptRLP is the consensus encoding of a block receipt.
-type borReceiptRLP struct {
-	Bloom Bloom
-	Logs  []*Log
+// GetDerivedBorTxHash get derived tx hash from receipt key
+func GetDerivedBorTxHash(receiptKey []byte) common.Hash {
+	return common.BytesToHash(crypto.Keccak256(receiptKey))
 }
 
-// storedBorReceiptRLP is the storage encoding of a block receipt.
-type storedBorReceiptRLP struct {
-	Logs []*LogForStorage
+// NewBorTransaction create new bor transaction for bor receipt
+func NewBorTransaction() *Transaction {
+	return NewTransaction(0, common.Address{}, big.NewInt(0), 0, big.NewInt(0), make([]byte, 0))
 }
 
-// EncodeRLP implements rlp.Encoder, and flattens the consensus fields of a block receipt
-// into an RLP stream. If no post state is present, byzantium fork is assumed.
-func (r *BorReceipt) EncodeRLP(w io.Writer) error {
-	return rlp.Encode(w, &borReceiptRLP{r.Bloom, r.Logs})
-}
-
-// DecodeRLP implements rlp.Decoder, and loads the consensus fields of a block receipt
-// from an RLP stream.
-func (r *BorReceipt) DecodeRLP(s *rlp.Stream) error {
-	var dec receiptRLP
-	if err := s.Decode(&dec); err != nil {
-		return err
-	}
-	r.Bloom, r.Logs = dec.Bloom, dec.Logs
-	return nil
-}
-
-// BorReceiptForStorage is a wrapper around a Bor Receipt that flattens and parses the
-// entire content of a receipt, as opposed to only the consensus fields originally.
-type BorReceiptForStorage BorReceipt
-
-// EncodeRLP implements rlp.Encoder, and flattens all content fields of a receipt
-// into an RLP stream.
-func (r *BorReceiptForStorage) EncodeRLP(w io.Writer) error {
-	enc := &storedBorReceiptRLP{
-		Logs: make([]*LogForStorage, len(r.Logs)),
-	}
-
-	for i, log := range r.Logs {
-		enc.Logs[i] = (*LogForStorage)(log)
-	}
-	return rlp.Encode(w, enc)
-}
-
-// DecodeRLP implements rlp.Decoder, and loads both consensus and implementation
-// fields of a receipt from an RLP stream.
-func (r *BorReceiptForStorage) DecodeRLP(s *rlp.Stream) error {
-	// Retrieve the entire receipt blob as we need to try multiple decoders
-	blob, err := s.Raw()
-	if err != nil {
-		return err
-	}
-
-	return decodeStoredBorReceiptRLP(r, blob)
-}
-
-func decodeStoredBorReceiptRLP(r *BorReceiptForStorage, blob []byte) error {
-	var stored storedBorReceiptRLP
-	if err := rlp.DecodeBytes(blob, &stored); err != nil {
-		return err
-	}
-
-	r.Logs = make([]*Log, len(stored.Logs))
-	for i, log := range stored.Logs {
-		r.Logs[i] = (*Log)(log)
-	}
-	r.Bloom = BytesToBloom(LogsBloom(r.Logs).Bytes())
-
-	return nil
-}
-
-// DeriveFields fills the receipts with their computed fields based on consensus
+// DeriveFieldsForBorReceipt fills the receipts with their computed fields based on consensus
 // data and contextual infos like containing block and transactions.
-func (r *BorReceipt) DeriveFields(hash common.Hash, number uint64) error {
-	// txHash := common.BytesToHash(crypto.Keccak256(append([]byte("bor-receipt-"), hash.Bytes()...)))
+func DeriveFieldsForBorReceipt(receipt *Receipt, hash common.Hash, number uint64, receipts Receipts) error {
+	// get derived tx hash
+	txHash := GetDerivedBorTxHash(BorReceiptKey(number, hash))
+	txIndex := uint(len(receipts))
+
+	// set tx hash and tx index
+	receipt.TxHash = txHash
+	receipt.TransactionIndex = txIndex
+	receipt.BlockHash = hash
+	receipt.BlockNumber = big.NewInt(0).SetUint64(number)
+
+	logIndex := 0
+	for i := 0; i < len(receipts); i++ {
+		logIndex += len(receipts[i].Logs)
+	}
 
 	// The derived log fields can simply be set from the block and transaction
-	for j := 0; j < len(r.Logs); j++ {
-		r.Logs[j].BlockNumber = number
-		r.Logs[j].BlockHash = hash
-		// r.Logs[j].TxHash = txHash
-		r.Logs[j].TxIndex = uint(0)
-		r.Logs[j].Index = uint(j)
+	for j := 0; j < len(receipt.Logs); j++ {
+		receipt.Logs[j].BlockNumber = number
+		receipt.Logs[j].BlockHash = hash
+		receipt.Logs[j].TxHash = txHash
+		receipt.Logs[j].TxIndex = txIndex
+		receipt.Logs[j].Index = uint(logIndex)
+		logIndex++
 	}
 	return nil
+}
+
+// MergeBorLogs merges receipt logs and block receipt logs
+func MergeBorLogs(logs []*Log, borLogs []*Log) []*Log {
+	result := append(logs, borLogs...)
+	sort.SliceStable(result, func(i int, j int) bool {
+		return (result[i].BlockNumber*100000 + uint64(result[i].Index)) < (result[j].BlockNumber*100000 + uint64(result[j].Index))
+	})
+	return result
 }

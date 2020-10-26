@@ -7,9 +7,9 @@ import (
 )
 
 // GetBorReceiptByHash retrieves the bor block receipt in a given block.
-func (bc *BlockChain) GetBorReceiptByHash(hash common.Hash) *types.BorReceipt {
+func (bc *BlockChain) GetBorReceiptByHash(hash common.Hash) *types.Receipt {
 	if receipt, ok := bc.borReceiptsCache.Get(hash); ok {
-		return receipt.(*types.BorReceipt)
+		return receipt.(*types.Receipt)
 	}
 
 	// read header from hash

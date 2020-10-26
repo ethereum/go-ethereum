@@ -497,6 +497,7 @@ func (bc *BlockChain) SetHead(head uint64) error {
 			// removed in the hc.SetHead function.
 			rawdb.DeleteBody(db, hash, num)
 			rawdb.DeleteReceipts(db, hash, num)
+			rawdb.DeleteBorReceipt(db, hash, num)
 		}
 		// Todo(rjl493456442) txlookup, bloombits, etc
 	}
@@ -509,6 +510,7 @@ func (bc *BlockChain) SetHead(head uint64) error {
 	bc.blockCache.Purge()
 	bc.txLookupCache.Purge()
 	bc.futureBlocks.Purge()
+	bc.borReceiptsCache.Purge()
 
 	return bc.loadLastState()
 }
@@ -1460,8 +1462,9 @@ func (bc *BlockChain) writeBlockWithState(block *types.Block, receipts []*types.
 		})
 
 		if len(blockLogs) > len(logs) {
-			rawdb.WriteBorReceipt(blockBatch, block.Hash(), block.NumberU64(), &types.BorReceiptForStorage{
-				Logs: blockLogs[len(logs):], // get state-sync logs from `state.Logs()`
+			rawdb.WriteBorReceipt(blockBatch, block.Hash(), block.NumberU64(), &types.ReceiptForStorage{
+				Status: types.ReceiptStatusSuccessful, // make receipt status successful
+				Logs:   blockLogs[len(logs):],         // get state-sync logs from `state.Logs()`
 			})
 		}
 	}

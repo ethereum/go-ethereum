@@ -1,6 +1,8 @@
 package rawdb
 
 import (
+	"math/big"
+
 	"github.com/maticnetwork/bor/common"
 	"github.com/maticnetwork/bor/core/types"
 	"github.com/maticnetwork/bor/ethdb"
@@ -9,15 +11,19 @@ import (
 )
 
 var (
-	borReceiptPrefix = []byte("bor-receipt-") // borReceiptPrefix + number + block hash -> bor block receipt
+	// bor receipt key
+	borReceiptKey = types.BorReceiptKey
+
+	// borTxLookupPrefix + hash -> transaction/receipt lookup metadata
+	borTxLookupPrefix = []byte("matic-bor-tx-lookup-")
 
 	// freezerBorReceiptTable indicates the name of the freezer bor receipts table.
-	freezerBorReceiptTable = "bor-receipts"
+	freezerBorReceiptTable = "matic-bor-receipts"
 )
 
-// borReceiptKey = borReceiptPrefix + num (uint64 big endian) + hash
-func borReceiptKey(number uint64, hash common.Hash) []byte {
-	return append(append(borReceiptPrefix, encodeBlockNumber(number)...), hash.Bytes()...)
+// borTxLookupKey = borTxLookupPrefix + hash
+func borTxLookupKey(hash common.Hash) []byte {
+	return append(borTxLookupPrefix, hash.Bytes()...)
 }
 
 // HasBorReceipt verifies the existence of all block receipt belonging
@@ -68,7 +74,7 @@ func ReadBorReceiptRLP(db ethdb.Reader, hash common.Hash, number uint64) rlp.Raw
 // ReadRawBorReceipt retrieves the block receipt belonging to a block.
 // The receipt metadata fields are not guaranteed to be populated, so they
 // should not be used. Use ReadBorReceipt instead if the metadata is needed.
-func ReadRawBorReceipt(db ethdb.Reader, hash common.Hash, number uint64) *types.BorReceipt {
+func ReadRawBorReceipt(db ethdb.Reader, hash common.Hash, number uint64) *types.Receipt {
 	// Retrieve the flattened receipt slice
 	data := ReadBorReceiptRLP(db, hash, number)
 	if data == nil || len(data) == 0 {
@@ -76,22 +82,28 @@ func ReadRawBorReceipt(db ethdb.Reader, hash common.Hash, number uint64) *types.
 	}
 
 	// Convert the receipts from their storage form to their internal representation
-	var storageReceipt types.BorReceiptForStorage
+	var storageReceipt types.ReceiptForStorage
 	if err := rlp.DecodeBytes(data, &storageReceipt); err != nil {
 		log.Error("Invalid receipt array RLP", "hash", hash, "err", err)
 		return nil
 	}
 
-	return (*types.BorReceipt)(&storageReceipt)
+	return (*types.Receipt)(&storageReceipt)
 }
 
 // ReadBorReceipt retrieves all the bor block receipts belonging to a block, including
 // its correspoinding metadata fields. If it is unable to populate these metadata
 // fields then nil is returned.
-func ReadBorReceipt(db ethdb.Reader, hash common.Hash, number uint64) *types.BorReceipt {
+func ReadBorReceipt(db ethdb.Reader, hash common.Hash, number uint64) *types.Receipt {
 	// We're deriving many fields from the block body, retrieve beside the receipt
 	borReceipt := ReadRawBorReceipt(db, hash, number)
 	if borReceipt == nil {
+		return nil
+	}
+
+	// We're deriving many fields from the block body, retrieve beside the receipt
+	receipts := ReadRawReceipts(db, hash, number)
+	if receipts == nil {
 		return nil
 	}
 
@@ -101,7 +113,7 @@ func ReadBorReceipt(db ethdb.Reader, hash common.Hash, number uint64) *types.Bor
 		return nil
 	}
 
-	if err := borReceipt.DeriveFields(hash, number); err != nil {
+	if err := types.DeriveFieldsForBorReceipt(borReceipt, hash, number, receipts); err != nil {
 		log.Error("Failed to derive bor receipt fields", "hash", hash, "number", number, "err", err)
 		return nil
 	}
@@ -109,7 +121,7 @@ func ReadBorReceipt(db ethdb.Reader, hash common.Hash, number uint64) *types.Bor
 }
 
 // WriteBorReceipt stores all the bor receipt belonging to a block.
-func WriteBorReceipt(db ethdb.KeyValueWriter, hash common.Hash, number uint64, borReceipt *types.BorReceiptForStorage) {
+func WriteBorReceipt(db ethdb.KeyValueWriter, hash common.Hash, number uint64, borReceipt *types.ReceiptForStorage) {
 	// Convert the bor receipt into their storage form and serialize them
 	bytes, err := rlp.EncodeToBytes(borReceipt)
 	if err != nil {
@@ -117,14 +129,73 @@ func WriteBorReceipt(db ethdb.KeyValueWriter, hash common.Hash, number uint64, b
 	}
 
 	// Store the flattened receipt slice
-	if err := db.Put(borReceiptKey(number, hash), bytes); err != nil {
+	key := borReceiptKey(number, hash)
+	if err := db.Put(key, bytes); err != nil {
 		log.Crit("Failed to store bor receipt", "err", err)
 	}
+
+	// Write bor tx reverse lookup
+	WriteBorTxLookupEntry(db, types.GetDerivedBorTxHash(key), big.NewInt(0).SetUint64(number))
 }
 
 // DeleteBorReceipt removes receipt data associated with a block hash.
 func DeleteBorReceipt(db ethdb.KeyValueWriter, hash common.Hash, number uint64) {
-	if err := db.Delete(borReceiptKey(number, hash)); err != nil {
+	key := borReceiptKey(number, hash)
+
+	if err := db.Delete(key); err != nil {
 		log.Crit("Failed to delete bor receipt", "err", err)
+	}
+}
+
+// ReadBorTransaction retrieves a specific bor (fake) transaction, along with
+// its added positional metadata.
+func ReadBorTransaction(db ethdb.Reader, hash common.Hash) (*types.Transaction, common.Hash, uint64, uint64) {
+	blockNumber := ReadBorTxLookupEntry(db, hash)
+	if blockNumber == nil {
+		return nil, common.Hash{}, 0, 0
+	}
+
+	blockHash := ReadCanonicalHash(db, *blockNumber)
+	if blockHash == (common.Hash{}) {
+		return nil, common.Hash{}, 0, 0
+	}
+
+	body := ReadBody(db, blockHash, *blockNumber)
+	if body == nil {
+		log.Error("Transaction referenced missing", "number", blockNumber, "hash", blockHash)
+		return nil, common.Hash{}, 0, 0
+	}
+
+	// fetch receipt and return it
+	return types.NewBorTransaction(), blockHash, *blockNumber, uint64(len(body.Transactions))
+}
+
+//
+// Indexes for reverse lookup
+//
+
+// ReadBorTxLookupEntry retrieves the positional metadata associated with a transaction
+// hash to allow retrieving the bor transaction or bor receipt by hash.
+func ReadBorTxLookupEntry(db ethdb.Reader, hash common.Hash) *uint64 {
+	data, _ := db.Get(borTxLookupKey(hash))
+	if len(data) == 0 {
+		return nil
+	}
+
+	number := new(big.Int).SetBytes(data).Uint64()
+	return &number
+}
+
+// WriteBorTxLookupEntry stores a positional metadata for bor transaction.
+func WriteBorTxLookupEntry(db ethdb.KeyValueWriter, hash common.Hash, number *big.Int) {
+	if err := db.Put(borTxLookupKey(hash), number.Bytes()); err != nil {
+		log.Crit("Failed to store bor transaction lookup entry", "err", err)
+	}
+}
+
+// DeleteBorTxLookupEntry removes bor transaction data associated with a hash.
+func DeleteBorTxLookupEntry(db ethdb.KeyValueWriter, hash common.Hash) {
+	if err := db.Delete(borTxLookupKey(hash)); err != nil {
+		log.Crit("Failed to delete bor transaction lookup entry", "err", err)
 	}
 }

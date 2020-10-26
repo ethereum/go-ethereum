@@ -18,8 +18,8 @@ func (ec *Client) GetRootHash(ctx context.Context, startBlockNumber uint64, endB
 }
 
 // GetBorBlockReceipt returns bor block receipt
-func (ec *Client) GetBorBlockReceipt(ctx context.Context, hash common.Hash) (*types.BorReceipt, error) {
-	var r *types.BorReceipt
+func (ec *Client) GetBorBlockReceipt(ctx context.Context, hash common.Hash) (*types.Receipt, error) {
+	var r *types.Receipt
 	err := ec.c.CallContext(ctx, &r, "eth_getBorBlockReceipt", hash)
 	if err == nil {
 		if r == nil {

@@ -705,6 +705,16 @@ func (api *PrivateDebugAPI) TraceTransaction(ctx context.Context, hash common.Ha
 	// Retrieve the transaction and assemble its EVM context
 	tx, blockHash, _, index := rawdb.ReadTransaction(api.eth.ChainDb(), hash)
 	if tx == nil {
+		// For BorTransaction, there will be no trace available
+		tx, _, _, _ = rawdb.ReadBorTransaction(api.eth.ChainDb(), hash)
+		if tx != nil {
+			return &ethapi.ExecutionResult{
+				StructLogs: make([]ethapi.StructLogRes, 0),
+			}, nil
+		}
+	}
+
+	if tx == nil {
 		return nil, fmt.Errorf("transaction %#x not found", hash)
 	}
 	reexec := defaultTraceReexec

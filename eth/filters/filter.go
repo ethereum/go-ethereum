@@ -36,7 +36,7 @@ type Backend interface {
 	HeaderByHash(ctx context.Context, blockHash common.Hash) (*types.Header, error)
 	GetReceipts(ctx context.Context, blockHash common.Hash) (types.Receipts, error)
 	GetLogs(ctx context.Context, blockHash common.Hash) ([][]*types.Log, error)
-	GetBorBlockReceipt(ctx context.Context, blockHash common.Hash) (*types.BorReceipt, error)
+	GetBorBlockReceipt(ctx context.Context, blockHash common.Hash) (*types.Receipt, error)
 	GetBorBlockLogs(ctx context.Context, blockHash common.Hash) ([]*types.Log, error)
 
 	SubscribeNewTxsEvent(chan<- core.NewTxsEvent) event.Subscription

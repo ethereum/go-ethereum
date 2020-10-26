@@ -357,9 +357,12 @@ func (api *PublicFilterAPI) NewFilter(crit FilterCriteria) (rpc.ID, error) {
 // https://github.com/ethereum/wiki/wiki/JSON-RPC#eth_getlogs
 func (api *PublicFilterAPI) GetLogs(ctx context.Context, crit FilterCriteria) ([]*types.Log, error) {
 	var filter *Filter
+	var borLogsFilter *BorBlockLogsFilter
 	if crit.BlockHash != nil {
 		// Block filter requested, construct a single-shot filter
 		filter = NewBlockFilter(api.backend, *crit.BlockHash, crit.Addresses, crit.Topics)
+		// Block bor filter
+		borLogsFilter = NewBorBlockLogsFilter(api.backend, *crit.BlockHash, crit.Addresses, crit.Topics)
 	} else {
 		// Convert the RPC block numbers into internal representations
 		begin := rpc.LatestBlockNumber.Int64()
@@ -372,13 +375,23 @@ func (api *PublicFilterAPI) GetLogs(ctx context.Context, crit FilterCriteria) ([
 		}
 		// Construct the range filter
 		filter = NewRangeFilter(api.backend, begin, end, crit.Addresses, crit.Topics)
+		// Block bor filter
+		borLogsFilter = NewBorBlockLogsRangeFilter(api.backend, begin, end, crit.Addresses, crit.Topics)
 	}
+
 	// Run the filter and return all the logs
 	logs, err := filter.Logs(ctx)
 	if err != nil {
 		return nil, err
 	}
-	return returnLogs(logs), err
+	// Run the filter and return all the logs
+	borBlockLogs, err := borLogsFilter.Logs(ctx)
+	if err != nil {
+		return nil, err
+	}
+
+	// merge bor block logs and receipt logs and return it
+	return returnLogs(types.MergeBorLogs(logs, borBlockLogs)), err
 }
 
 // UninstallFilter removes the filter with the given filter id.
