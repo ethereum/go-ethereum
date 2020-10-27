@@ -14,6 +14,9 @@ var (
 	// bor receipt key
 	borReceiptKey = types.BorReceiptKey
 
+	// bor derived tx hash
+	getDerivedBorTxHash = types.GetDerivedBorTxHash
+
 	// borTxLookupPrefix + hash -> transaction/receipt lookup metadata
 	borTxLookupPrefix = []byte("matic-bor-tx-lookup-")
 
@@ -21,7 +24,7 @@ var (
 	freezerBorReceiptTable = "matic-bor-receipts"
 )
 
-// borTxLookupKey = borTxLookupPrefix + hash
+// borTxLookupKey = borTxLookupPrefix + bor tx hash
 func borTxLookupKey(hash common.Hash) []byte {
 	return append(borTxLookupPrefix, hash.Bytes()...)
 }
@@ -129,13 +132,9 @@ func WriteBorReceipt(db ethdb.KeyValueWriter, hash common.Hash, number uint64, b
 	}
 
 	// Store the flattened receipt slice
-	key := borReceiptKey(number, hash)
-	if err := db.Put(key, bytes); err != nil {
+	if err := db.Put(borReceiptKey(number, hash), bytes); err != nil {
 		log.Crit("Failed to store bor receipt", "err", err)
 	}
-
-	// Write bor tx reverse lookup
-	WriteBorTxLookupEntry(db, types.GetDerivedBorTxHash(key), big.NewInt(0).SetUint64(number))
 }
 
 // DeleteBorReceipt removes receipt data associated with a block hash.
@@ -175,9 +174,9 @@ func ReadBorTransaction(db ethdb.Reader, hash common.Hash) (*types.Transaction, 
 //
 
 // ReadBorTxLookupEntry retrieves the positional metadata associated with a transaction
-// hash to allow retrieving the bor transaction or bor receipt by hash.
-func ReadBorTxLookupEntry(db ethdb.Reader, hash common.Hash) *uint64 {
-	data, _ := db.Get(borTxLookupKey(hash))
+// hash to allow retrieving the bor transaction or bor receipt using tx hash.
+func ReadBorTxLookupEntry(db ethdb.Reader, txHash common.Hash) *uint64 {
+	data, _ := db.Get(borTxLookupKey(txHash))
 	if len(data) == 0 {
 		return nil
 	}
@@ -186,16 +185,23 @@ func ReadBorTxLookupEntry(db ethdb.Reader, hash common.Hash) *uint64 {
 	return &number
 }
 
-// WriteBorTxLookupEntry stores a positional metadata for bor transaction.
-func WriteBorTxLookupEntry(db ethdb.KeyValueWriter, hash common.Hash, number *big.Int) {
-	if err := db.Put(borTxLookupKey(hash), number.Bytes()); err != nil {
+// WriteBorTxLookupEntry stores a positional metadata for bor transaction using block hash and block number
+func WriteBorTxLookupEntry(db ethdb.KeyValueWriter, hash common.Hash, number uint64) {
+	txHash := types.GetDerivedBorTxHash(borReceiptKey(number, hash))
+	if err := db.Put(borTxLookupKey(txHash), big.NewInt(0).SetUint64(number).Bytes()); err != nil {
 		log.Crit("Failed to store bor transaction lookup entry", "err", err)
 	}
 }
 
-// DeleteBorTxLookupEntry removes bor transaction data associated with a hash.
-func DeleteBorTxLookupEntry(db ethdb.KeyValueWriter, hash common.Hash) {
-	if err := db.Delete(borTxLookupKey(hash)); err != nil {
+// DeleteBorTxLookupEntry removes bor transaction data associated with block hash and block number
+func DeleteBorTxLookupEntry(db ethdb.KeyValueWriter, hash common.Hash, number uint64) {
+	txHash := types.GetDerivedBorTxHash(borReceiptKey(number, hash))
+	DeleteBorTxLookupEntryByTxHash(db, txHash)
+}
+
+// DeleteBorTxLookupEntryByTxHash removes bor transaction data associated with a bor tx hash.
+func DeleteBorTxLookupEntryByTxHash(db ethdb.KeyValueWriter, txHash common.Hash) {
+	if err := db.Delete(borTxLookupKey(txHash)); err != nil {
 		log.Crit("Failed to delete bor transaction lookup entry", "err", err)
 	}
 }
