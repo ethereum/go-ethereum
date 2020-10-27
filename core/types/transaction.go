@@ -18,7 +18,6 @@ package types
 
 import (
 	"container/heap"
-	"encoding/json"
 	"errors"
 	"io"
 	"math/big"
@@ -26,7 +25,6 @@ import (
 	"time"
 
 	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/rlp"
 )
@@ -58,10 +56,6 @@ type inner interface {
 	ChainId() *big.Int
 	// Protected returns whether the transaction is protected from replay protection.
 	Protected() bool
-	// MarshalJSONWithHash marshals as JSON with a given hash.
-	MarshalJSONWithHash(hash *common.Hash) ([]byte, error)
-	// UnmarshalJSON unmarshals from JSON.
-	UnmarshalJSON(input []byte) error
 	// AccessList returns the transactions optional EIP-2930 access list.
 	AccessList() *AccessList
 	Data() []byte
@@ -132,39 +126,6 @@ func (tx *Transaction) DecodeRLP(s *rlp.Stream) error {
 		tx.time = time.Now()
 	}
 	return err
-}
-
-// MarshalJSON encodes the web3 RPC transaction format.
-func (tx *Transaction) MarshalJSON() ([]byte, error) {
-	hash := tx.Hash()
-	return tx.inner.MarshalJSONWithHash(&hash)
-}
-
-// UnmarshalJSON decodes the web3 RPC transaction format.
-func (tx *Transaction) UnmarshalJSON(input []byte) error {
-	type id struct {
-		Type *hexutil.Uint64 `json:"type" rlp:"-"`
-		Hash *common.Hash    `json:"hash" rlp:"-"`
-	}
-	var dec id
-	if err := json.Unmarshal(input, &dec); err != nil {
-		return err
-	}
-	tx.hash.Store(*dec.Hash)
-	if dec.Type == nil || *dec.Type == hexutil.Uint64(0) {
-		var dec LegacyTransaction
-		if err := dec.UnmarshalJSON(input); err != nil {
-			return err
-		}
-		withSignature := dec.V.Sign() != 0 || dec.R.Sign() != 0 || dec.S.Sign() != 0
-		if withSignature {
-			if err := sanityCheckSignature(dec.V, dec.R, dec.S); err != nil {
-				return err
-			}
-		}
-		tx.inner = &dec
-	}
-	return nil
 }
 
 func sanityCheckSignature(v *big.Int, r *big.Int, s *big.Int) error {
