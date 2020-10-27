@@ -52,7 +52,6 @@ type StateTransition struct {
 	initialGas uint64
 	value      *big.Int
 	data       []byte
-	accessList *types.AccessList
 	state      vm.StateDB
 	evm        *vm.EVM
 }
@@ -151,14 +150,13 @@ func IntrinsicGas(data []byte, accessList *types.AccessList, isContractCreation 
 // NewStateTransition initialises and returns a new state transition object.
 func NewStateTransition(evm *vm.EVM, msg Message, gp *GasPool) *StateTransition {
 	return &StateTransition{
-		gp:         gp,
-		evm:        evm,
-		msg:        msg,
-		gasPrice:   msg.GasPrice(),
-		value:      msg.Value(),
-		data:       msg.Data(),
-		state:      evm.StateDB,
-		accessList: msg.AccessList(),
+		gp:       gp,
+		evm:      evm,
+		msg:      msg,
+		gasPrice: msg.GasPrice(),
+		value:    msg.Value(),
+		data:     msg.Data(),
+		state:    evm.StateDB,
 	}
 }
 
@@ -247,7 +245,7 @@ func (st *StateTransition) TransitionDb() (*ExecutionResult, error) {
 	contractCreation := msg.To() == nil
 
 	// Check clauses 4-5, subtract intrinsic gas if everything is correct
-	gas, err := IntrinsicGas(st.data, st.accessList, contractCreation, homestead, istanbul, yoloV2)
+	gas, err := IntrinsicGas(st.data, st.msg.AccessList(), contractCreation, homestead, istanbul, yoloV2)
 	if err != nil {
 		return nil, err
 	}
