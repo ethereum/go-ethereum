@@ -187,9 +187,9 @@ func (api *PrivateDebugAPI) traceChain(ctx context.Context, start, end *types.Bl
 	// Execute all the transaction contained within the chain concurrently for each block
 	blocks := int(end.NumberU64() - origin)
 
-	threads := int(*config.Threads)
-	if threads > runtime.NumCPU() {
-		threads = runtime.NumCPU()
+	threads := runtime.NumCPU()
+	if config != nil && config.Threads != nil {
+		threads = int(*config.Threads)
 	}
 	if threads > blocks {
 		threads = blocks
@@ -471,9 +471,9 @@ func (api *PrivateDebugAPI) traceBlock(ctx context.Context, block *types.Block, 
 		pend = new(sync.WaitGroup)
 		jobs = make(chan *txTraceTask, len(txs))
 	)
-	threads := int(*config.Threads)
-	if threads > runtime.NumCPU() {
-		threads = runtime.NumCPU()
+	threads := runtime.NumCPU()
+	if config != nil && config.Threads != nil {
+		threads = int(*config.Threads)
 	}
 	if threads > len(txs) {
 		threads = len(txs)
