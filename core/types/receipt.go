@@ -116,13 +116,7 @@ type v3StoredReceiptRLP struct {
 
 // NewReceipt creates a barebone transaction receipt, copying the init fields.
 func NewReceipt(root []byte, failed bool, cumulativeGasUsed uint64) *Receipt {
-	r := &Receipt{Type: LegacyTxId, PostState: common.CopyBytes(root), CumulativeGasUsed: cumulativeGasUsed}
-	if failed {
-		r.Status = ReceiptStatusFailed
-	} else {
-		r.Status = ReceiptStatusSuccessful
-	}
-	return r
+	return NewEIP2718Receipt(LegacyTxId, root, failed, cumulativeGasUsed)
 }
 
 // NewEIP2718Receipt creates a barebone transaction receipt for typed transactions, copying the init fields.
@@ -140,7 +134,9 @@ func NewEIP2718Receipt(typ uint8, root []byte, failed bool, cumulativeGasUsed ui
 // into an RLP stream. If no post state is present, byzantium fork is assumed.
 func (r *Receipt) EncodeRLP(w io.Writer) error {
 	if r.Type != LegacyTxId {
-		w.Write([]byte{r.Type})
+		if _, err := w.Write([]byte{r.Type}); err != nil {
+			return err
+		}
 	}
 	return rlp.Encode(w, &receiptRLP{r.statusEncoding(), r.CumulativeGasUsed, r.Bloom, r.Logs})
 }
@@ -149,11 +145,12 @@ func (r *Receipt) EncodeRLP(w io.Writer) error {
 // from an RLP stream.
 func (r *Receipt) DecodeRLP(s *rlp.Stream) error {
 	typ := uint64(LegacyTxId)
-
-	// If the receipt isn't an RLP list, it's likely typed so pop off the first byte.
-	if k, _, err := s.Kind(); err != nil {
+	k, _, err := s.Kind()
+	if err != nil {
 		return err
-	} else if k != rlp.List {
+	}
+	// If the receipt isn't a list, it's likely typed - so pop off the first byte.
+	if k != rlp.List {
 		if typ, err = s.Uint(); err != nil {
 			return err
 		}

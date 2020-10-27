@@ -32,8 +32,9 @@ import (
 )
 
 var (
-	ErrInvalidSig = errors.New("invalid transaction v, r, s values")
-	ErrBadTxType  = errors.New("transaction type not valid in this context")
+	ErrInvalidSig         = errors.New("invalid transaction v, r, s values")
+	ErrInvalidTxType      = errors.New("transaction type not valid in this context")
+	ErrTxTypeNotSupported = errors.New("tx type not supported")
 )
 
 const (
@@ -55,19 +56,14 @@ type Transaction struct {
 type inner interface {
 	// ChainId returns which chain id this transaction was signed for (if at all)
 	ChainId() *big.Int
-
 	// Protected returns whether the transaction is protected from replay protection.
 	Protected() bool
-
-	// MarshalJSONWithHash marshals as JSON with a hash.
+	// MarshalJSONWithHash marshals as JSON with a given hash.
 	MarshalJSONWithHash(hash *common.Hash) ([]byte, error)
-
 	// UnmarshalJSON unmarshals from JSON.
 	UnmarshalJSON(input []byte) error
-
 	// AccessList returns the transactions optional EIP-2930 access list.
 	AccessList() *AccessList
-
 	Data() []byte
 	Gas() uint64
 	GasPrice() *big.Int
@@ -75,11 +71,9 @@ type inner interface {
 	Nonce() uint64
 	CheckNonce() bool
 	Hash() common.Hash
-
 	// To returns the recipient address of the transaction.
 	// It returns nil if the transaction is a contract creation.
 	To() *common.Address
-
 	// RawSignatureValues returns the V, R, S signature values of the transaction.
 	// The return values should not be modified by the caller.
 	RawSignatureValues() (v, r, s *big.Int)
@@ -98,20 +92,20 @@ func isProtectedV(V *big.Int) bool {
 	return true
 }
 
+// EncodeRLP implements rlp.Encoder
 func (tx *Transaction) EncodeRLP(w io.Writer) error {
 	if tx.typ != LegacyTxId {
 		if _, err := w.Write([]byte{tx.typ}); err != nil {
 			return err
 		}
 	}
-
 	return rlp.Encode(w, tx.inner)
 }
 
+// DecodeRLP implements rlp.Decoder
 func (tx *Transaction) DecodeRLP(s *rlp.Stream) error {
 	typ := uint64(LegacyTxId)
 	var size uint64
-
 	// If the tx isn't an RLP list, it's likely typed so pop off the first byte.
 	kind, size, err := s.Kind()
 	if err != nil {
@@ -121,25 +115,22 @@ func (tx *Transaction) DecodeRLP(s *rlp.Stream) error {
 			return err
 		}
 	}
-
-	var i inner
+	tx.typ = uint8(typ)
 	if typ == LegacyTxId {
-		var l *LegacyTransaction
-		err = s.Decode(&l)
-		i = l
+		var i *LegacyTransaction
+		err = s.Decode(&i)
+		tx.inner = i
 	} else if typ == AccessListTxId {
-		var l *AccessListTransaction
-		err = s.Decode(&l)
-		i = l
+		var i *AccessListTransaction
+		err = s.Decode(&i)
+		tx.inner = i
+	} else {
+		return ErrTxTypeNotSupported
 	}
-
 	if err == nil {
 		tx.size.Store(common.StorageSize(rlp.ListSize(size)))
 		tx.time = time.Now()
 	}
-
-	tx.typ = uint8(typ)
-	tx.inner = i
 	return err
 }
 
@@ -155,29 +146,24 @@ func (tx *Transaction) UnmarshalJSON(input []byte) error {
 		Type *hexutil.Uint64 `json:"type" rlp:"-"`
 		Hash *common.Hash    `json:"hash" rlp:"-"`
 	}
-
 	var dec id
 	if err := json.Unmarshal(input, &dec); err != nil {
 		return err
 	}
 	tx.hash.Store(*dec.Hash)
-
 	if dec.Type == nil || *dec.Type == hexutil.Uint64(0) {
 		var dec LegacyTransaction
 		if err := dec.UnmarshalJSON(input); err != nil {
 			return err
 		}
-
 		withSignature := dec.V.Sign() != 0 || dec.R.Sign() != 0 || dec.S.Sign() != 0
 		if withSignature {
 			if err := sanityCheckSignature(dec.V, dec.R, dec.S); err != nil {
 				return err
 			}
 		}
-
 		tx.inner = &dec
 	}
-
 	return nil
 }
 
@@ -292,7 +278,7 @@ func (tx *Transaction) WithSignature(signer Signer, sig []byte) (*Transaction, e
 		}
 
 	} else {
-		return nil, ErrBadTxType
+		return nil, ErrInvalidTxType
 	}
 
 	return ret, nil
