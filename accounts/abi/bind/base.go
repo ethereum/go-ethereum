@@ -154,7 +154,8 @@ func (c *BoundContract) Call(opts *CallOpts, results *[]interface{}, method stri
 		output, err = c.caller.CallContract(ctx, msg, opts.BlockNumber)
 		if err != nil {
 			return err
-		} else if len(output) == 0 {
+		}
+		if len(output) == 0 {
 			// Make sure we have a contract to operate on, and bail out otherwise.
 			if code, err = c.caller.CodeAt(ctx, c.address, opts.BlockNumber); err != nil {
 				return err
