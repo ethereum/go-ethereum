@@ -109,8 +109,8 @@ func applyTransaction(msg types.Message, config *params.ChainConfig, bc ChainCon
 		for _, addr := range evm.ActivePrecompiles() {
 			statedb.AddAddressToAccessList(addr)
 		}
-		if msg.AccessList() != nil {
-			for _, el := range *msg.AccessList() {
+		if al := msg.AccessList(); al != nil {
+			for _, el := range *al {
 				statedb.AddAddressToAccessList(*el.Address)
 				for _, key := range el.StorageKeys {
 					statedb.AddSlotToAccessList(*el.Address, *key)
