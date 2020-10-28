@@ -56,32 +56,84 @@ func TestTest(t *testing.T) {
 	}
 }
 
+var outputTests = []Test{
+	{
+		Name: "TestWithLogs",
+		Fn: func(t *T) {
+			t.Log("output line 1")
+			t.Log("output line 2\noutput line 3")
+		},
+	},
+	{
+		Name: "TestNoLogs",
+		Fn:   func(t *T) {},
+	},
+	{
+		Name: "FailWithLogs",
+		Fn: func(t *T) {
+			t.Log("output line 1")
+			t.Error("failed 1")
+		},
+	},
+	{
+		Name: "FailMessage",
+		Fn: func(t *T) {
+			t.Error("failed 2")
+		},
+	},
+	{
+		Name: "FailNoOutput",
+		Fn: func(t *T) {
+			t.Fail()
+		},
+	},
+}
+
 func TestOutput(t *testing.T) {
-	tests := []Test{
-		{
-			Name: "TestWithLogs",
-			Fn: func(t *T) {
-				t.Log("output line 1")
-				t.Log("output line 2\noutput line 3")
-			},
-		},
-		{
-			Name: "TestNoLogs",
-			Fn:   func(t *T) {},
-		},
-	}
 	var buf bytes.Buffer
-	RunTests(tests, &buf)
+	RunTests(outputTests, &buf)
 
 	want := regexp.MustCompile(`
--- RUN TestWithLogs
+^-- RUN TestWithLogs
  output line 1
  output line 2
  output line 3
 -- OK TestWithLogs \([^)]+\)
 -- OK TestNoLogs \([^)]+\)
-`[1:])
+-- RUN FailWithLogs
+ output line 1
+ failed 1
+-- FAIL FailWithLogs \([^)]+\)
+-- RUN FailMessage
+ failed 2
+-- FAIL FailMessage \([^)]+\)
+-- FAIL FailNoOutput \([^)]+\)
+$`[1:])
 	if !want.MatchString(buf.String()) {
+		t.Fatalf("output does not match: %q", buf.String())
+	}
+}
+
+func TestOutputTAP(t *testing.T) {
+	var buf bytes.Buffer
+	RunTAP(outputTests, &buf)
+
+	want := `
+TAP version 13
+1..5
+ok 1 TestWithLogs
+# output line 1
+# output line 2
+# output line 3
+ok 2 TestNoLogs
+not ok 3 FailWithLogs
+# output line 1
+# failed 1
+not ok 4 FailMessage
+# failed 2
+not ok 5 FailNoOutput
+`
+	if buf.String() != want[1:] {
 		t.Fatalf("output does not match: %q", buf.String())
 	}
 }
