@@ -69,7 +69,7 @@ func RunTests(tests []Test, report io.Writer) []Result {
 		buffer := new(bytes.Buffer)
 		output = buffer
 		if report != nil {
-			output = io.MultiWriter(buffer, report)
+			output = io.MultiWriter(buffer, newIndentWriter(test.Name, report))
 		}
 		start := time.Now()
 		results[i].Name = test.Name
@@ -90,6 +90,53 @@ func printResult(r Result, w io.Writer) {
 	} else {
 		fmt.Fprintf(w, "-- OK %s (%v)\n", r.Name, pd)
 	}
+}
+
+// testOutputWriter indents all written text.
+type testOutputWriter struct {
+	test        string
+	out         io.Writer
+	indent      string
+	inLine      bool
+	wroteHeader bool
+}
+
+func newIndentWriter(test string, out io.Writer) *testOutputWriter {
+	return &testOutputWriter{test: test, out: out, indent: " "}
+}
+
+func (w *testOutputWriter) Write(b []byte) (n int, err error) {
+	if !w.wroteHeader {
+		// This is the first output line from the test. Print a "-- RUN" header.
+		fmt.Fprintln(w.out, "-- RUN", w.test)
+		w.wroteHeader = true
+	}
+
+	for len(b) > 0 {
+		if !w.inLine {
+			if _, err = io.WriteString(w.out, w.indent); err != nil {
+				return n, err
+			}
+			w.inLine = true
+		}
+
+		end := bytes.IndexByte(b, '\n')
+		if end == -1 {
+			nn, err := w.out.Write(b)
+			n += nn
+			return n, err
+		}
+
+		line := b[:end+1]
+		nn, err := w.out.Write(line)
+		n += nn
+		if err != nil {
+			return n, err
+		}
+		b = b[end+1:]
+		w.inLine = false
+	}
+	return n, err
 }
 
 // CountFailures returns the number of failed tests in the result slice.
@@ -136,6 +183,9 @@ type T struct {
 	failed bool
 	output io.Writer
 }
+
+// Helper exists for compatibility with testing.T.
+func (t *T) Helper() {}
 
 // FailNow marks the test as having failed and stops its execution by calling
 // runtime.Goexit (which then runs all deferred calls in the current goroutine).

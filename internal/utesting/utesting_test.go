@@ -17,6 +17,8 @@
 package utesting
 
 import (
+	"bytes"
+	"regexp"
 	"strings"
 	"testing"
 )
@@ -51,5 +53,35 @@ func TestTest(t *testing.T) {
 	}
 	if !results[2].Failed || !strings.HasPrefix(results[2].Output, "panic: oh no\n") {
 		t.Fatalf("wrong result for panicking test: %#v", results[2])
+	}
+}
+
+func TestOutput(t *testing.T) {
+	tests := []Test{
+		{
+			Name: "TestWithLogs",
+			Fn: func(t *T) {
+				t.Log("output line 1")
+				t.Log("output line 2\noutput line 3")
+			},
+		},
+		{
+			Name: "TestNoLogs",
+			Fn:   func(t *T) {},
+		},
+	}
+	var buf bytes.Buffer
+	RunTests(tests, &buf)
+
+	want := regexp.MustCompile(`
+-- RUN TestWithLogs
+ output line 1
+ output line 2
+ output line 3
+-- OK TestWithLogs \([^)]+\)
+-- OK TestNoLogs \([^)]+\)
+`[1:])
+	if !want.MatchString(buf.String()) {
+		t.Fatalf("output does not match: %q", buf.String())
 	}
 }
