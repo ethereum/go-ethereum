@@ -29,7 +29,6 @@ import (
 	"github.com/ethereum/go-ethereum/consensus/ethash"
 	"github.com/ethereum/go-ethereum/core/rawdb"
 	"github.com/ethereum/go-ethereum/core/vm"
-	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/params"
 )
 
@@ -316,7 +315,7 @@ func TestSetHeadWithLegacySnapshot(t *testing.T) {
 
 func testSnapshot(t *testing.T, tt *snapshotTest) {
 	// It's hard to follow the test case, visualize the input
-	log.Root().SetHandler(log.LvlFilterHandler(log.LvlTrace, log.StreamHandler(os.Stderr, log.TerminalFormat(true))))
+	// log.Root().SetHandler(log.LvlFilterHandler(log.LvlTrace, log.StreamHandler(os.Stderr, log.TerminalFormat(true))))
 	// fmt.Println(tt.dump(true))
 
 	// Create a temporary persistent database
