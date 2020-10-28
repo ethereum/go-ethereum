@@ -408,5 +408,49 @@ func (dl *diskLayer) LegacyJournal(buffer *bytes.Buffer) (common.Hash, error) {
 //
 // Note it's the legacy version which is only used in testing right now.
 func (dl *diffLayer) LegacyJournal(buffer *bytes.Buffer) (common.Hash, error) {
-	return dl.Journal(buffer)
+	// Journal the parent first
+	base, err := dl.parent.LegacyJournal(buffer)
+	if err != nil {
+		return common.Hash{}, err
+	}
+	// Ensure the layer didn't get stale
+	dl.lock.RLock()
+	defer dl.lock.RUnlock()
+
+	if dl.Stale() {
+		return common.Hash{}, ErrSnapshotStale
+	}
+	// Everything below was journalled, persist this layer too
+	if err := rlp.Encode(buffer, dl.root); err != nil {
+		return common.Hash{}, err
+	}
+	destructs := make([]journalDestruct, 0, len(dl.destructSet))
+	for hash := range dl.destructSet {
+		destructs = append(destructs, journalDestruct{Hash: hash})
+	}
+	if err := rlp.Encode(buffer, destructs); err != nil {
+		return common.Hash{}, err
+	}
+	accounts := make([]journalAccount, 0, len(dl.accountData))
+	for hash, blob := range dl.accountData {
+		accounts = append(accounts, journalAccount{Hash: hash, Blob: blob})
+	}
+	if err := rlp.Encode(buffer, accounts); err != nil {
+		return common.Hash{}, err
+	}
+	storage := make([]journalStorage, 0, len(dl.storageData))
+	for hash, slots := range dl.storageData {
+		keys := make([]common.Hash, 0, len(slots))
+		vals := make([][]byte, 0, len(slots))
+		for key, val := range slots {
+			keys = append(keys, key)
+			vals = append(vals, val)
+		}
+		storage = append(storage, journalStorage{Hash: hash, Keys: keys, Vals: vals})
+	}
+	if err := rlp.Encode(buffer, storage); err != nil {
+		return common.Hash{}, err
+	}
+	log.Debug("Journalled diff layer", "root", dl.root, "parent", dl.parent.Root())
+	return base, nil
 }

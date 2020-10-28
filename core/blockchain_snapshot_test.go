@@ -29,6 +29,7 @@ import (
 	"github.com/ethereum/go-ethereum/consensus/ethash"
 	"github.com/ethereum/go-ethereum/core/rawdb"
 	"github.com/ethereum/go-ethereum/core/vm"
+	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/params"
 )
 
@@ -101,7 +102,8 @@ func TestRestartWithLegacySnapshot(t *testing.T) {
 // In this case the chain head should be rewound to the point
 // with available state. And also the new head should must be lower
 // than disk layer. But there is no committed point so the chain
-// should be rewound to genesis.
+// should be rewound to genesis and the disk layer should be left
+// for recovery.
 func TestNoCommitCrashWithNewSnapshot(t *testing.T) {
 	testSnapshot(t, &snapshotTest{
 		legacy:             false,
@@ -123,7 +125,8 @@ func TestNoCommitCrashWithNewSnapshot(t *testing.T) {
 // In this case the chain head should be rewound to the point
 // with available state. And also the new head should must be lower
 // than disk layer. But there is only a low committed point so the
-// chain should be rewound to committed point.
+// chain should be rewound to committed point and the disk layer
+// should be left for recovery.
 func TestLowCommitCrashWithNewSnapshot(t *testing.T) {
 	testSnapshot(t, &snapshotTest{
 		legacy:             false,
@@ -145,7 +148,8 @@ func TestLowCommitCrashWithNewSnapshot(t *testing.T) {
 // In this case the chain head should be rewound to the point
 // with available state. And also the new head should must be lower
 // than disk layer. But there is only a high committed point so the
-// chain should be rewound to genesis.
+// chain should be rewound to genesis and the disk layer should be
+// left for recovery.
 func TestHighCommitCrashWithNewSnapshot(t *testing.T) {
 	testSnapshot(t, &snapshotTest{
 		legacy:             false,
@@ -165,7 +169,8 @@ func TestHighCommitCrashWithNewSnapshot(t *testing.T) {
 
 // Tests a Geth was crashed and restarts with a broken and "legacy format"
 // snapshot. In this case the entire legacy snapshot should be discared
-// and rebuild from the new chain head.
+// and rebuild from the new chain head. The new head here refers to the
+// genesis because there is no committed point.
 func TestNoCommitCrashWithLegacySnapshot(t *testing.T) {
 	testSnapshot(t, &snapshotTest{
 		legacy:             true,
@@ -179,17 +184,14 @@ func TestNoCommitCrashWithLegacySnapshot(t *testing.T) {
 		expHeadHeader:      8,
 		expHeadFastBlock:   8,
 		expHeadBlock:       0,
-		expSnapshotBottom:  4, // Last committed disk layer, wait recovery
+		expSnapshotBottom:  0, // Rebuilt snapshot from the latest HEAD(genesis)
 	})
 }
 
 // Tests a Geth was crashed and restarts with a broken and "legacy format"
 // snapshot. In this case the entire legacy snapshot should be discared
-// and rebuild from the new chain head.
-//
-// The special thing in this test case is: we only persist the snasphot
-// journal during the shutdown previously. In this case after the crash
-// there is no journal at all.
+// and rebuild from the new chain head. The new head here refers to the
+// block-2 because it's committed into the disk.
 func TestLowCommitCrashWithLegacySnapshot(t *testing.T) {
 	testSnapshot(t, &snapshotTest{
 		legacy:             true,
@@ -203,13 +205,18 @@ func TestLowCommitCrashWithLegacySnapshot(t *testing.T) {
 		expHeadHeader:      8,
 		expHeadFastBlock:   8,
 		expHeadBlock:       2,
-		expSnapshotBottom:  4, // Last committed disk layer, wait recovery
+		expSnapshotBottom:  2, // Rebuilt snapshot from the latest HEAD
 	})
 }
 
 // Tests a Geth was crashed and restarts with a broken and "legacy format"
 // snapshot. In this case the entire legacy snapshot should be discared
 // and rebuild from the new chain head.
+// The new head here refers to the the genesis, the reason is:
+// - the state of block-6 is committed into the disk
+// - the legacy disk layer of block-4 is committed into the disk
+// - the head is rewound the genesis in order to find an available
+//   state lower than disk layer
 func TestHighCommitCrashWithLegacySnapshot(t *testing.T) {
 	testSnapshot(t, &snapshotTest{
 		legacy:             true,
@@ -223,7 +230,7 @@ func TestHighCommitCrashWithLegacySnapshot(t *testing.T) {
 		expHeadHeader:      8,
 		expHeadFastBlock:   8,
 		expHeadBlock:       0,
-		expSnapshotBottom:  4, // Last committed disk layer, wait recovery
+		expSnapshotBottom:  0, // Rebuilt snapshot from the latest HEAD(genesis)
 	})
 }
 
@@ -243,7 +250,7 @@ func TestGappedNewSnapshot(t *testing.T) {
 		expHeadHeader:      10,
 		expHeadFastBlock:   10,
 		expHeadBlock:       10,
-		expSnapshotBottom:  10, // rebuild from the head
+		expSnapshotBottom:  10, // Rebuilt snapshot from the latest HEAD
 	})
 }
 
@@ -263,12 +270,13 @@ func TestGappedLegacySnapshot(t *testing.T) {
 		expHeadHeader:      10,
 		expHeadFastBlock:   10,
 		expHeadBlock:       10,
-		expSnapshotBottom:  10, // rebuild from the head
+		expSnapshotBottom:  10, // Rebuilt snapshot from the latest HEAD
 	})
 }
 
-// Tests the Geth was running with snapshot enabled and then a resetHead
-// is required. Check after the reset everything is rollbacked correctly.
+// Tests the Geth was running with snapshot enabled and resetHead is applied.
+// In this case the head is rewound to the target(with state available). After
+// that the chain is restarted and the original disk layer is kept.
 func TestSetHeadWithNewSnapshot(t *testing.T) {
 	testSnapshot(t, &snapshotTest{
 		legacy:             false,
@@ -277,17 +285,18 @@ func TestSetHeadWithNewSnapshot(t *testing.T) {
 		setHead:            4,
 		chainBlocks:        8,
 		snapshotBlock:      0,
-		commitBlock:        2,
+		commitBlock:        0,
 		expCanonicalBlocks: 4,
 		expHeadHeader:      4,
 		expHeadFastBlock:   4,
-		expHeadBlock:       2,
-		expSnapshotBottom:  2, // rebuild from the head
+		expHeadBlock:       4,
+		expSnapshotBottom:  0, // The inital disk layer is built from the genesis
 	})
 }
 
-// Tests the Geth was running with legacy snapshot enabled and then a resetHead
-// is required. Check after the reset everything is rollbacked correctly.
+// Tests the Geth was running with snapshot(legacy-format) enabled and resetHead
+// is applied. In this case the head is rewound to the target(with state available).
+// After that the chain is restarted and the original disk layer is kept.
 func TestSetHeadWithLegacySnapshot(t *testing.T) {
 	testSnapshot(t, &snapshotTest{
 		legacy:             true,
@@ -296,18 +305,18 @@ func TestSetHeadWithLegacySnapshot(t *testing.T) {
 		setHead:            4,
 		chainBlocks:        8,
 		snapshotBlock:      0,
-		commitBlock:        2,
+		commitBlock:        0,
 		expCanonicalBlocks: 4,
 		expHeadHeader:      4,
 		expHeadFastBlock:   4,
-		expHeadBlock:       2,
-		expSnapshotBottom:  2, // rebuild from the head
+		expHeadBlock:       4,
+		expSnapshotBottom:  0, // The inital disk layer is built from the genesis
 	})
 }
 
 func testSnapshot(t *testing.T, tt *snapshotTest) {
 	// It's hard to follow the test case, visualize the input
-	// log.Root().SetHandler(log.LvlFilterHandler(log.LvlTrace, log.StreamHandler(os.Stderr, log.TerminalFormat(true))))
+	log.Root().SetHandler(log.LvlFilterHandler(log.LvlTrace, log.StreamHandler(os.Stderr, log.TerminalFormat(true))))
 	// fmt.Println(tt.dump(true))
 
 	// Create a temporary persistent database
@@ -358,11 +367,16 @@ func testSnapshot(t *testing.T, tt *snapshotTest) {
 			chain.stateCache.TrieDB().Commit(blocks[point-1].Root(), true, nil)
 		}
 		if tt.snapshotBlock > 0 && tt.snapshotBlock == point {
-			chain.snaps.Cap(blocks[point-1].Root(), 0)
-
-			diskRoot, blockRoot := chain.snaps.DiskRoot(), blocks[point-1].Root()
-			if !bytes.Equal(diskRoot.Bytes(), blockRoot.Bytes()) {
-				t.Fatalf("Failed to flush disk layer change, want %x, got %x", blockRoot, diskRoot)
+			if tt.legacy {
+				// Here we commit the snapshot disk root to simulate
+				// committing the legacy snapshot.
+				rawdb.WriteSnapshotRoot(db, blocks[point-1].Root())
+			} else {
+				chain.snaps.Cap(blocks[point-1].Root(), 0)
+				diskRoot, blockRoot := chain.snaps.DiskRoot(), blocks[point-1].Root()
+				if !bytes.Equal(diskRoot.Bytes(), blockRoot.Bytes()) {
+					t.Fatalf("Failed to flush disk layer change, want %x, got %x", blockRoot, diskRoot)
+				}
 			}
 		}
 	}
@@ -399,52 +413,51 @@ func testSnapshot(t *testing.T, tt *snapshotTest) {
 			t.Fatalf("Failed to recreate chain: %v", err)
 		}
 		defer chain.Stop()
-	} else {
-		// Stop the chain normally, then restart
+	} else if tt.gapped > 0 {
+		// Insert blocks without enabling snapshot if gapping is required.
 		chain.Stop()
 
-		// Insert blocks without enabling snapshot if gapping is required.
-		if tt.gapped > 0 {
-			gappedBlocks, _ := GenerateChain(params.TestChainConfig, blocks[len(blocks)-1], engine, gendb, tt.gapped, func(i int, b *BlockGen) {})
+		gappedBlocks, _ := GenerateChain(params.TestChainConfig, blocks[len(blocks)-1], engine, gendb, tt.gapped, func(i int, b *BlockGen) {})
 
-			// Insert a few more blocks without enabling snapshot
-			var cacheConfig = &CacheConfig{
-				TrieCleanLimit: 256,
-				TrieDirtyLimit: 256,
-				TrieTimeLimit:  5 * time.Minute,
-				SnapshotLimit:  0,
-			}
-			chain, err = NewBlockChain(db, cacheConfig, params.AllEthashProtocolChanges, engine, vm.Config{}, nil, nil)
-			if err != nil {
-				t.Fatalf("Failed to recreate chain: %v", err)
-			}
-			chain.InsertChain(gappedBlocks)
-			chain.Stop()
-
-			chain, err = NewBlockChain(db, nil, params.AllEthashProtocolChanges, engine, vm.Config{}, nil, nil)
-			if err != nil {
-				t.Fatalf("Failed to recreate chain: %v", err)
-			}
-			defer chain.Stop()
-		} else if tt.setHead != 0 {
-			// Rewind the chain if setHead operation is required.
-			chain.SetHead(tt.setHead)
-			chain.Stop()
-
-			chain, err = NewBlockChain(db, nil, params.AllEthashProtocolChanges, engine, vm.Config{}, nil, nil)
-			if err != nil {
-				t.Fatalf("Failed to recreate chain: %v", err)
-			}
-			defer chain.Stop()
-		} else {
-			// Restart the chain normally
-			chain, err = NewBlockChain(db, nil, params.AllEthashProtocolChanges, engine, vm.Config{}, nil, nil)
-			if err != nil {
-				t.Fatalf("Failed to recreate chain: %v", err)
-			}
-			defer chain.Stop()
+		// Insert a few more blocks without enabling snapshot
+		var cacheConfig = &CacheConfig{
+			TrieCleanLimit: 256,
+			TrieDirtyLimit: 256,
+			TrieTimeLimit:  5 * time.Minute,
+			SnapshotLimit:  0,
 		}
+		chain, err = NewBlockChain(db, cacheConfig, params.AllEthashProtocolChanges, engine, vm.Config{}, nil, nil)
+		if err != nil {
+			t.Fatalf("Failed to recreate chain: %v", err)
+		}
+		chain.InsertChain(gappedBlocks)
+		chain.Stop()
+
+		chain, err = NewBlockChain(db, nil, params.AllEthashProtocolChanges, engine, vm.Config{}, nil, nil)
+		if err != nil {
+			t.Fatalf("Failed to recreate chain: %v", err)
+		}
+		defer chain.Stop()
+	} else if tt.setHead != 0 {
+		// Rewind the chain if setHead operation is required.
+		chain.SetHead(tt.setHead)
+		chain.Stop()
+
+		chain, err = NewBlockChain(db, nil, params.AllEthashProtocolChanges, engine, vm.Config{}, nil, nil)
+		if err != nil {
+			t.Fatalf("Failed to recreate chain: %v", err)
+		}
+		defer chain.Stop()
+	} else {
+		chain.Stop()
+		// Restart the chain normally
+		chain, err = NewBlockChain(db, nil, params.AllEthashProtocolChanges, engine, vm.Config{}, nil, nil)
+		if err != nil {
+			t.Fatalf("Failed to recreate chain: %v", err)
+		}
+		defer chain.Stop()
 	}
+
 	// Iterate over all the remaining blocks and ensure there are no gaps
 	verifyNoGaps(t, chain, true, blocks)
 	verifyCutoff(t, chain, true, blocks, tt.expCanonicalBlocks)
@@ -458,12 +471,11 @@ func testSnapshot(t *testing.T, tt *snapshotTest) {
 	if head := chain.CurrentBlock(); head.NumberU64() != tt.expHeadBlock {
 		t.Errorf("Head block mismatch: have %d, want %d", head.NumberU64(), tt.expHeadBlock)
 	}
-	if tt.expSnapshotBottom != 0 {
-		block := chain.GetBlockByNumber(tt.expSnapshotBottom)
-		if block == nil {
-			t.Errorf("The correspnding block[%d] of snapshot disk layer is missing", tt.expSnapshotBottom)
-		} else if !bytes.Equal(chain.snaps.DiskRoot().Bytes(), block.Root().Bytes()) {
-			t.Errorf("The snapshot disk layer root is incorrect, want %x, get %x", block.Root(), chain.snaps.DiskRoot())
-		}
+	// Check the disk layer, ensure they are matched
+	block := chain.GetBlockByNumber(tt.expSnapshotBottom)
+	if block == nil {
+		t.Errorf("The correspnding block[%d] of snapshot disk layer is missing", tt.expSnapshotBottom)
+	} else if !bytes.Equal(chain.snaps.DiskRoot().Bytes(), block.Root().Bytes()) {
+		t.Errorf("The snapshot disk layer root is incorrect, want %x, get %x", block.Root(), chain.snaps.DiskRoot())
 	}
 }
