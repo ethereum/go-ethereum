@@ -172,9 +172,9 @@ func (bt *BinaryTrie) TryGet(key []byte) ([]byte, error) {
 		// This node is a fork, get the child node
 		var childNode *branch
 		if bk[off+len(currentNode.prefix)] == 0 {
-			childNode = bt.resolveNode(currentNode.left, bk, off+1, nil)
+			childNode = bt.resolveNode(currentNode.left, bk, off+1)
 		} else {
-			childNode = bt.resolveNode(currentNode.right, bk, off+1, nil)
+			childNode = bt.resolveNode(currentNode.right, bk, off+1)
 		}
 
 		// if no child node could be found, the key
@@ -276,7 +276,7 @@ func (bt *BinaryTrie) subTreeFromKey(path binkey) *branch {
 	return rootbranch
 }
 
-func (bt *BinaryTrie) resolveNode(childNode BinaryNode, bk binkey, off int, value []byte) *branch {
+func (bt *BinaryTrie) resolveNode(childNode BinaryNode, bk binkey, off int) *branch {
 
 	// Check if the node has already been resolved,
 	// otherwise, resolve it.
@@ -334,9 +334,9 @@ func (bt *BinaryTrie) TryUpdate(key, value []byte) error {
 			var childNode *branch
 			off += len(currentNode.prefix)
 			if bk[off] == 0 {
-				childNode = bt.resolveNode(currentNode.left, bk, off+1, value)
+				childNode = bt.resolveNode(currentNode.left, bk, off+1)
 			} else {
-				childNode = bt.resolveNode(currentNode.right, bk, off+1, value)
+				childNode = bt.resolveNode(currentNode.right, bk, off+1)
 			}
 			var isLeaf bool
 			if childNode == nil {
