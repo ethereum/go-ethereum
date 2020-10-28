@@ -108,6 +108,7 @@ func TestOutput(t *testing.T) {
  failed 2
 -- FAIL FailMessage \([^)]+\)
 -- FAIL FailNoOutput \([^)]+\)
+2/5 tests passed.
 $`[1:])
 	if !want.MatchString(buf.String()) {
 		t.Fatalf("output does not match: %q", buf.String())

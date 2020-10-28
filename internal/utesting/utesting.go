@@ -67,7 +67,10 @@ func RunTests(tests []Test, report io.Writer) []Result {
 	if report == nil {
 		report = ioutil.Discard
 	}
-	return run(tests, newConsoleOutput(report))
+	results := run(tests, newConsoleOutput(report))
+	fails := CountFailures(results)
+	fmt.Fprintf(report, "%v/%v tests passed.\n", len(tests)-fails, len(tests))
+	return results
 }
 
 // RunTAP runs the given tests and writes Test Anything Protocol output
