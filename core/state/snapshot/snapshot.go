@@ -652,8 +652,9 @@ func (t *Tree) disklayer() *diskLayer {
 		return layer
 	case *diffLayer:
 		return layer.origin
+	default:
+		panic(fmt.Sprintf("%T: undefined layer", snap))
 	}
-	return nil
 }
 
 // generating is an internal helper function which reports whether the snapshot
