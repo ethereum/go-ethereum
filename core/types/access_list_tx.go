@@ -8,7 +8,7 @@ import (
 )
 
 type AccessTuple struct {
-	Address     *common.Address `json:"address"    gencodec:"required"`
+	Address     *common.Address `json:"address"        gencodec:"required"`
 	StorageKeys []*common.Hash  `json:"storageKeys"    gencodec:"required"`
 }
 
@@ -16,22 +16,21 @@ type AccessList []AccessTuple
 
 func (al *AccessList) Addresses() int { return len(*al) }
 func (al *AccessList) StorageKeys() int {
-	count := 0
+	sum := 0
 	for _, tuple := range *al {
-		count += len(tuple.StorageKeys)
+		sum += len(tuple.StorageKeys)
 	}
-
-	return count
+	return sum
 }
 
 type AccessListTransaction struct {
 	Chain        *big.Int
-	AccountNonce uint64          `json:"nonce"    gencodec:"required"`
-	Price        *big.Int        `json:"gasPrice" gencodec:"required"`
-	GasLimit     uint64          `json:"gas"      gencodec:"required"`
-	Recipient    *common.Address `json:"to"       rlp:"nil"` // nil means contract creation
-	Amount       *big.Int        `json:"value"    gencodec:"required"`
-	Payload      []byte          `json:"input"    gencodec:"required"`
+	AccountNonce uint64          `json:"nonce"      gencodec:"required"`
+	Price        *big.Int        `json:"gasPrice"   gencodec:"required"`
+	GasLimit     uint64          `json:"gas"        gencodec:"required"`
+	Recipient    *common.Address `json:"to"         rlp:"nil"` // nil means contract creation
+	Amount       *big.Int        `json:"value"      gencodec:"required"`
+	Payload      []byte          `json:"input"      gencodec:"required"`
 	Accesses     *AccessList     `json:"accessList" rlp:"nil"`
 
 	// Signature values

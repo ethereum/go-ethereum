@@ -14,6 +14,8 @@ import (
 // MarshalJSONWithHash marshals as JSON with a hash.
 func (t *Transaction) MarshalJSON() ([]byte, error) {
 	type txdata struct {
+		Type         hexutil.Uint64  `json:"type"     rlp:"-"`
+		Chain        *hexutil.Big    `json:"chainId"  rlp:"-"`
 		AccountNonce hexutil.Uint64  `json:"nonce"    gencodec:"required"`
 		Price        *hexutil.Big    `json:"gasPrice" gencodec:"required"`
 		GasLimit     hexutil.Uint64  `json:"gas"      gencodec:"required"`
@@ -40,6 +42,8 @@ func (t *Transaction) MarshalJSON() ([]byte, error) {
 	hash := t.Hash()
 	enc.Hash = &hash
 	if t.Type() == AccessListTxId {
+		enc.Type = hexutil.Uint64(t.Type())
+		enc.Chain = (*hexutil.Big)(t.ChainId())
 		enc.AccessList = t.AccessList()
 	}
 	return json.Marshal(&enc)
@@ -51,6 +55,7 @@ func (t *Transaction) UnmarshalJSON(input []byte) error {
 		Type *hexutil.Uint64 `json:"type" rlp:"-"`
 	}
 	type txdata struct {
+		Chain        *hexutil.Big    `json:"chainId"  rlp:"-"`
 		AccountNonce *hexutil.Uint64 `json:"nonce"    gencodec:"required"`
 		Price        *hexutil.Big    `json:"gasPrice" gencodec:"required"`
 		GasLimit     *hexutil.Uint64 `json:"gas"      gencodec:"required"`
@@ -80,6 +85,9 @@ func (t *Transaction) UnmarshalJSON(input []byte) error {
 
 	if decType.Type == nil || *decType.Type == hexutil.Uint64(LegacyTxId) {
 		var i LegacyTransaction
+		if dec.AccountNonce == nil {
+			return errors.New("missing required field 'nonce' for txdata")
+		}
 		i.AccountNonce = uint64(*dec.AccountNonce)
 		if dec.Price == nil {
 			return errors.New("missing required field 'gasPrice' for txdata")
@@ -117,13 +125,20 @@ func (t *Transaction) UnmarshalJSON(input []byte) error {
 		}
 		withSignature := i.V.Sign() != 0 || i.R.Sign() != 0 || i.S.Sign() != 0
 		if withSignature {
-			if err := sanityCheckSignature(i.V, i.R, i.S); err != nil {
+			if err := sanityCheckSignature(i.V, i.R, i.S, true); err != nil {
 				return err
 			}
 		}
 		t.inner = &i
 	} else if *decType.Type == hexutil.Uint64(AccessListTxId) {
 		var i AccessListTransaction
+		if dec.Chain == nil {
+			return errors.New("missing required field 'chainId' for txdata")
+		}
+		i.Chain = (*big.Int)(dec.Chain)
+		if dec.AccountNonce == nil {
+			return errors.New("missing required field 'nonce' for txdata")
+		}
 		i.AccountNonce = uint64(*dec.AccountNonce)
 		if dec.Price == nil {
 			return errors.New("missing required field 'gasPrice' for txdata")
@@ -165,7 +180,7 @@ func (t *Transaction) UnmarshalJSON(input []byte) error {
 		}
 		withSignature := i.V.Sign() != 0 || i.R.Sign() != 0 || i.S.Sign() != 0
 		if withSignature {
-			if err := sanityCheckSignature(i.V, i.R, i.S); err != nil {
+			if err := sanityCheckSignature(i.V, i.R, i.S, false); err != nil {
 				return err
 			}
 		}

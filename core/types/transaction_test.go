@@ -271,16 +271,25 @@ func TestTransactionJSON(t *testing.T) {
 	if err != nil {
 		t.Fatalf("could not generate key: %v", err)
 	}
-	signer := NewEIP155Signer(common.Big1)
+	signer := NewEIP2718Signer(common.Big1)
 
 	transactions := make([]*Transaction, 0, 50)
 	for i := uint64(0); i < 25; i++ {
 		var tx *Transaction
-		switch i % 2 {
+		switch i % 3 {
 		case 0:
 			tx = NewTransaction(i, common.Address{1}, common.Big0, 1, common.Big2, []byte("abcdef"))
 		case 1:
 			tx = NewContractCreation(i, common.Big0, 1, common.Big2, []byte("abcdef"))
+		case 2:
+			addr := common.HexToAddress("0x0000000000000000000000000000000000000001")
+			accesses := AccessList{AccessTuple{
+				Address: &addr,
+				StorageKeys: []*common.Hash{
+					{0},
+				},
+			}}
+			tx = NewAccessListTransaction(big.NewInt(1), 0, common.HexToAddress("095e7baea6a6c7c4c2dfeb977efac326af552d87"), big.NewInt(0), 123457, big.NewInt(10), nil, &accesses)
 		}
 		transactions = append(transactions, tx)
 

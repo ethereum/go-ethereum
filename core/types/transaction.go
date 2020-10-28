@@ -30,9 +30,10 @@ import (
 )
 
 var (
-	ErrInvalidSig         = errors.New("invalid transaction v, r, s values")
-	ErrInvalidTxType      = errors.New("transaction type not valid in this context")
-	ErrTxTypeNotSupported = errors.New("tx type not supported")
+	ErrInvalidSig           = errors.New("invalid transaction v, r, s values")
+	ErrUnexpectedProtection = errors.New("transaction type does not supported EIP-155 protected signatures")
+	ErrInvalidTxType        = errors.New("transaction type not valid in this context")
+	ErrTxTypeNotSupported   = errors.New("transaction type not supported")
 )
 
 const (
@@ -128,7 +129,11 @@ func (tx *Transaction) DecodeRLP(s *rlp.Stream) error {
 	return err
 }
 
-func sanityCheckSignature(v *big.Int, r *big.Int, s *big.Int) error {
+func sanityCheckSignature(v *big.Int, r *big.Int, s *big.Int, maybeProtected bool) error {
+	if isProtectedV(v) && !maybeProtected {
+		return ErrUnexpectedProtection
+	}
+
 	var plainV byte
 	if isProtectedV(v) {
 		chainID := deriveChainId(v).Uint64()
