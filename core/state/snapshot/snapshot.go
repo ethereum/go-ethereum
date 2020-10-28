@@ -577,9 +577,13 @@ func (t *Tree) Journal(root common.Hash) (common.Hash, error) {
 	if err := rlp.Encode(journal, journalVersion); err != nil {
 		return common.Hash{}, err
 	}
+	diskroot := t.diskRoot()
+	if diskroot == (common.Hash{}) {
+		return common.Hash{}, errors.New("invalid disk root")
+	}
 	// Secondly write out the disk layer root, ensure the
 	// diff journal is continuous with disk.
-	if err := rlp.Encode(journal, t.disklayer().root); err != nil {
+	if err := rlp.Encode(journal, diskroot); err != nil {
 		return common.Hash{}, err
 	}
 	// Finally write out the journal of each layer in reverse order.
@@ -710,6 +714,16 @@ func (t *Tree) disklayer() *diskLayer {
 	default:
 		panic(fmt.Sprintf("%T: undefined layer", snap))
 	}
+}
+
+// diskRoot is a internal helper function to return the disk layer root.
+// The lock of snapTree is assumed to be held already.
+func (t *Tree) diskRoot() common.Hash {
+	disklayer := t.disklayer()
+	if disklayer == nil {
+		return common.Hash{}
+	}
+	return disklayer.Root()
 }
 
 // generating is an internal helper function which reports whether the snapshot
