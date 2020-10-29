@@ -21,8 +21,10 @@ package core
 
 import (
 	"bytes"
+	"fmt"
 	"io/ioutil"
 	"os"
+	"strings"
 	"testing"
 	"time"
 
@@ -57,10 +59,75 @@ type snapshotTest struct {
 	expSnapshotBottom  uint64 // The block height corresponding to the snapshot disk layer
 }
 
+func (tt *snapshotTest) dump() string {
+	buffer := new(strings.Builder)
+
+	fmt.Fprint(buffer, "Chain:\n  G")
+	for i := 0; i < tt.chainBlocks; i++ {
+		fmt.Fprintf(buffer, "->C%d", i+1)
+	}
+	fmt.Fprint(buffer, " (HEAD)\n\n")
+
+	fmt.Fprintf(buffer, "Commit:   G")
+	if tt.commitBlock > 0 {
+		fmt.Fprintf(buffer, ", C%d", tt.commitBlock)
+	}
+	fmt.Fprint(buffer, "\n")
+
+	fmt.Fprintf(buffer, "Snapshot: G")
+	if tt.snapshotBlock > 0 {
+		fmt.Fprintf(buffer, ", C%d", tt.snapshotBlock)
+	}
+	fmt.Fprint(buffer, "\n")
+
+	if tt.crash {
+		fmt.Fprintf(buffer, "\nCRASH\n\n")
+	} else {
+		fmt.Fprintf(buffer, "\nSetHead(%d)\n\n", tt.setHead)
+	}
+	fmt.Fprintf(buffer, "------------------------------\n\n")
+
+	fmt.Fprint(buffer, "Expected in leveldb:\n  G")
+	for i := 0; i < tt.expCanonicalBlocks; i++ {
+		fmt.Fprintf(buffer, "->C%d", i+1)
+	}
+	fmt.Fprintf(buffer, "\n\n")
+	fmt.Fprintf(buffer, "Expected head header    : C%d\n", tt.expHeadHeader)
+	fmt.Fprintf(buffer, "Expected head fast block: C%d\n", tt.expHeadFastBlock)
+	if tt.expHeadBlock == 0 {
+		fmt.Fprintf(buffer, "Expected head block     : G\n")
+	} else {
+		fmt.Fprintf(buffer, "Expected head block     : C%d\n", tt.expHeadBlock)
+	}
+	if tt.expSnapshotBottom == 0 {
+		fmt.Fprintf(buffer, "Expected snapshot disk  : G\n")
+	} else {
+		fmt.Fprintf(buffer, "Expected snapshot disk  : C%d\n", tt.expSnapshotBottom)
+	}
+	return buffer.String()
+}
+
 // Tests a Geth restart with valid snapshot. Before the shutdown, all snapshot
 // journal will be persisted correctly. In this case no snapshot recovery is
 // required.
 func TestRestartWithNewSnapshot(t *testing.T) {
+	// Chain:
+	//   G->C1->C2->C3->C4->C5->C6->C7->C8 (HEAD)
+	//
+	// Commit:   G
+	// Snapshot: G
+	//
+	// SetHead(0)
+	//
+	// ------------------------------
+	//
+	// Expected in leveldb:
+	//   G->C1->C2->C3->C4->C5->C6->C7->C8
+	//
+	// Expected head header    : C8
+	// Expected head fast block: C8
+	// Expected head block     : C8
+	// Expected snapshot disk  : G
 	testSnapshot(t, &snapshotTest{
 		legacy:             false,
 		crash:              false,
@@ -81,6 +148,23 @@ func TestRestartWithNewSnapshot(t *testing.T) {
 // all snapshot journal will be persisted correctly. In this case no snapshot
 // recovery is required.
 func TestRestartWithLegacySnapshot(t *testing.T) {
+	// Chain:
+	//   G->C1->C2->C3->C4->C5->C6->C7->C8 (HEAD)
+	//
+	// Commit:   G
+	// Snapshot: G
+	//
+	// SetHead(0)
+	//
+	// ------------------------------
+	//
+	// Expected in leveldb:
+	//   G->C1->C2->C3->C4->C5->C6->C7->C8
+	//
+	// Expected head header    : C8
+	// Expected head fast block: C8
+	// Expected head block     : C8
+	// Expected snapshot disk  : G
 	testSnapshot(t, &snapshotTest{
 		legacy:             true,
 		crash:              false,
@@ -97,13 +181,29 @@ func TestRestartWithLegacySnapshot(t *testing.T) {
 	})
 }
 
-// Tests a Geth was crashed and restarts with a broken snapshot.
-// In this case the chain head should be rewound to the point
-// with available state. And also the new head should must be lower
-// than disk layer. But there is no committed point so the chain
-// should be rewound to genesis and the disk layer should be left
+// Tests a Geth was crashed and restarts with a broken snapshot. In this case the
+// chain head should be rewound to the point with available state. And also the
+// new head should must be lower than disk layer. But there is no committed point
+// so the chain should be rewound to genesis and the disk layer should be left
 // for recovery.
 func TestNoCommitCrashWithNewSnapshot(t *testing.T) {
+	// Chain:
+	//   G->C1->C2->C3->C4->C5->C6->C7->C8 (HEAD)
+	//
+	// Commit:   G
+	// Snapshot: G, C4
+	//
+	// CRASH
+	//
+	// ------------------------------
+	//
+	// Expected in leveldb:
+	//   G->C1->C2->C3->C4->C5->C6->C7->C8
+	//
+	// Expected head header    : C8
+	// Expected head fast block: C8
+	// Expected head block     : G
+	// Expected snapshot disk  : C4
 	testSnapshot(t, &snapshotTest{
 		legacy:             false,
 		crash:              true,
@@ -120,13 +220,29 @@ func TestNoCommitCrashWithNewSnapshot(t *testing.T) {
 	})
 }
 
-// Tests a Geth was crashed and restarts with a broken snapshot.
-// In this case the chain head should be rewound to the point
-// with available state. And also the new head should must be lower
-// than disk layer. But there is only a low committed point so the
-// chain should be rewound to committed point and the disk layer
+// Tests a Geth was crashed and restarts with a broken snapshot. In this case the
+// chain head should be rewound to the point with available state. And also the
+// new head should must be lower than disk layer. But there is only a low committed
+// point so the chain should be rewound to committed point and the disk layer
 // should be left for recovery.
 func TestLowCommitCrashWithNewSnapshot(t *testing.T) {
+	// Chain:
+	//   G->C1->C2->C3->C4->C5->C6->C7->C8 (HEAD)
+	//
+	// Commit:   G, C2
+	// Snapshot: G, C4
+	//
+	// CRASH
+	//
+	// ------------------------------
+	//
+	// Expected in leveldb:
+	//   G->C1->C2->C3->C4->C5->C6->C7->C8
+	//
+	// Expected head header    : C8
+	// Expected head fast block: C8
+	// Expected head block     : C2
+	// Expected snapshot disk  : C4
 	testSnapshot(t, &snapshotTest{
 		legacy:             false,
 		crash:              true,
@@ -143,13 +259,29 @@ func TestLowCommitCrashWithNewSnapshot(t *testing.T) {
 	})
 }
 
-// Tests a Geth was crashed and restarts with a broken snapshot.
-// In this case the chain head should be rewound to the point
-// with available state. And also the new head should must be lower
-// than disk layer. But there is only a high committed point so the
-// chain should be rewound to genesis and the disk layer should be
-// left for recovery.
+// Tests a Geth was crashed and restarts with a broken snapshot. In this case
+// the chain head should be rewound to the point with available state. And also
+// the new head should must be lower than disk layer. But there is only a high
+// committed point so the chain should be rewound to genesis and the disk layer
+// should be left for recovery.
 func TestHighCommitCrashWithNewSnapshot(t *testing.T) {
+	// Chain:
+	//   G->C1->C2->C3->C4->C5->C6->C7->C8 (HEAD)
+	//
+	// Commit:   G, C6
+	// Snapshot: G, C4
+	//
+	// CRASH
+	//
+	// ------------------------------
+	//
+	// Expected in leveldb:
+	//   G->C1->C2->C3->C4->C5->C6->C7->C8
+	//
+	// Expected head header    : C8
+	// Expected head fast block: C8
+	// Expected head block     : G
+	// Expected snapshot disk  : C4
 	testSnapshot(t, &snapshotTest{
 		legacy:             false,
 		crash:              true,
@@ -171,6 +303,23 @@ func TestHighCommitCrashWithNewSnapshot(t *testing.T) {
 // and rebuild from the new chain head. The new head here refers to the
 // genesis because there is no committed point.
 func TestNoCommitCrashWithLegacySnapshot(t *testing.T) {
+	// Chain:
+	//   G->C1->C2->C3->C4->C5->C6->C7->C8 (HEAD)
+	//
+	// Commit:   G
+	// Snapshot: G, C4
+	//
+	// CRASH
+	//
+	// ------------------------------
+	//
+	// Expected in leveldb:
+	//   G->C1->C2->C3->C4->C5->C6->C7->C8
+	//
+	// Expected head header    : C8
+	// Expected head fast block: C8
+	// Expected head block     : G
+	// Expected snapshot disk  : G
 	testSnapshot(t, &snapshotTest{
 		legacy:             true,
 		crash:              true,
@@ -192,6 +341,23 @@ func TestNoCommitCrashWithLegacySnapshot(t *testing.T) {
 // and rebuild from the new chain head. The new head here refers to the
 // block-2 because it's committed into the disk.
 func TestLowCommitCrashWithLegacySnapshot(t *testing.T) {
+	// Chain:
+	//   G->C1->C2->C3->C4->C5->C6->C7->C8 (HEAD)
+	//
+	// Commit:   G, C2
+	// Snapshot: G, C4
+	//
+	// CRASH
+	//
+	// ------------------------------
+	//
+	// Expected in leveldb:
+	//   G->C1->C2->C3->C4->C5->C6->C7->C8
+	//
+	// Expected head header    : C8
+	// Expected head fast block: C8
+	// Expected head block     : C2
+	// Expected snapshot disk  : C2
 	testSnapshot(t, &snapshotTest{
 		legacy:             true,
 		crash:              true,
@@ -211,12 +377,30 @@ func TestLowCommitCrashWithLegacySnapshot(t *testing.T) {
 // Tests a Geth was crashed and restarts with a broken and "legacy format"
 // snapshot. In this case the entire legacy snapshot should be discared
 // and rebuild from the new chain head.
+//
 // The new head here refers to the the genesis, the reason is:
-// - the state of block-6 is committed into the disk
-// - the legacy disk layer of block-4 is committed into the disk
-// - the head is rewound the genesis in order to find an available
-//   state lower than disk layer
+//   - the state of block-6 is committed into the disk
+//   - the legacy disk layer of block-4 is committed into the disk
+//   - the head is rewound the genesis in order to find an available
+//     state lower than disk layer
 func TestHighCommitCrashWithLegacySnapshot(t *testing.T) {
+	// Chain:
+	//   G->C1->C2->C3->C4->C5->C6->C7->C8 (HEAD)
+	//
+	// Commit:   G, C6
+	// Snapshot: G, C4
+	//
+	// CRASH
+	//
+	// ------------------------------
+	//
+	// Expected in leveldb:
+	//   G->C1->C2->C3->C4->C5->C6->C7->C8
+	//
+	// Expected head header    : C8
+	// Expected head fast block: C8
+	// Expected head block     : G
+	// Expected snapshot disk  : G
 	testSnapshot(t, &snapshotTest{
 		legacy:             true,
 		crash:              true,
@@ -237,6 +421,23 @@ func TestHighCommitCrashWithLegacySnapshot(t *testing.T) {
 // enabling snapshot and after that re-enable the snapshot again. In this
 // case the snapshot should be rebuilt with latest chain head.
 func TestGappedNewSnapshot(t *testing.T) {
+	// Chain:
+	//   G->C1->C2->C3->C4->C5->C6->C7->C8 (HEAD)
+	//
+	// Commit:   G
+	// Snapshot: G
+	//
+	// SetHead(0)
+	//
+	// ------------------------------
+	//
+	// Expected in leveldb:
+	//   G->C1->C2->C3->C4->C5->C6->C7->C8->C9->C10
+	//
+	// Expected head header    : C10
+	// Expected head fast block: C10
+	// Expected head block     : C10
+	// Expected snapshot disk  : C10
 	testSnapshot(t, &snapshotTest{
 		legacy:             false,
 		crash:              false,
@@ -257,6 +458,23 @@ func TestGappedNewSnapshot(t *testing.T) {
 // without enabling snapshot and after that re-enable the snapshot again.
 // In this case the snapshot should be rebuilt with latest chain head.
 func TestGappedLegacySnapshot(t *testing.T) {
+	// Chain:
+	//   G->C1->C2->C3->C4->C5->C6->C7->C8 (HEAD)
+	//
+	// Commit:   G
+	// Snapshot: G
+	//
+	// SetHead(0)
+	//
+	// ------------------------------
+	//
+	// Expected in leveldb:
+	//   G->C1->C2->C3->C4->C5->C6->C7->C8->C9->C10
+	//
+	// Expected head header    : C10
+	// Expected head fast block: C10
+	// Expected head block     : C10
+	// Expected snapshot disk  : C10
 	testSnapshot(t, &snapshotTest{
 		legacy:             true,
 		crash:              false,
@@ -277,6 +495,23 @@ func TestGappedLegacySnapshot(t *testing.T) {
 // In this case the head is rewound to the target(with state available). After
 // that the chain is restarted and the original disk layer is kept.
 func TestSetHeadWithNewSnapshot(t *testing.T) {
+	// Chain:
+	//   G->C1->C2->C3->C4->C5->C6->C7->C8 (HEAD)
+	//
+	// Commit:   G
+	// Snapshot: G
+	//
+	// SetHead(4)
+	//
+	// ------------------------------
+	//
+	// Expected in leveldb:
+	//   G->C1->C2->C3->C4
+	//
+	// Expected head header    : C4
+	// Expected head fast block: C4
+	// Expected head block     : C4
+	// Expected snapshot disk  : G
 	testSnapshot(t, &snapshotTest{
 		legacy:             false,
 		crash:              false,
@@ -289,7 +524,7 @@ func TestSetHeadWithNewSnapshot(t *testing.T) {
 		expHeadHeader:      4,
 		expHeadFastBlock:   4,
 		expHeadBlock:       4,
-		expSnapshotBottom:  0, // The inital disk layer is built from the genesis
+		expSnapshotBottom:  0, // The initial disk layer is built from the genesis
 	})
 }
 
@@ -297,6 +532,23 @@ func TestSetHeadWithNewSnapshot(t *testing.T) {
 // is applied. In this case the head is rewound to the target(with state available).
 // After that the chain is restarted and the original disk layer is kept.
 func TestSetHeadWithLegacySnapshot(t *testing.T) {
+	// Chain:
+	//   G->C1->C2->C3->C4->C5->C6->C7->C8 (HEAD)
+	//
+	// Commit:   G
+	// Snapshot: G
+	//
+	// SetHead(4)
+	//
+	// ------------------------------
+	//
+	// Expected in leveldb:
+	//   G->C1->C2->C3->C4
+	//
+	// Expected head header    : C4
+	// Expected head fast block: C4
+	// Expected head block     : C4
+	// Expected snapshot disk  : G
 	testSnapshot(t, &snapshotTest{
 		legacy:             true,
 		crash:              false,
@@ -309,14 +561,14 @@ func TestSetHeadWithLegacySnapshot(t *testing.T) {
 		expHeadHeader:      4,
 		expHeadFastBlock:   4,
 		expHeadBlock:       4,
-		expSnapshotBottom:  0, // The inital disk layer is built from the genesis
+		expSnapshotBottom:  0, // The initial disk layer is built from the genesis
 	})
 }
 
 func testSnapshot(t *testing.T, tt *snapshotTest) {
 	// It's hard to follow the test case, visualize the input
-	// log.Root().SetHandler(log.LvlFilterHandler(log.LvlTrace, log.StreamHandler(os.Stderr, log.TerminalFormat(true))))
-	// fmt.Println(tt.dump(true))
+	//log.Root().SetHandler(log.LvlFilterHandler(log.LvlTrace, log.StreamHandler(os.Stderr, log.TerminalFormat(true))))
+	//fmt.Println(tt.dump())
 
 	// Create a temporary persistent database
 	datadir, err := ioutil.TempDir("", "")
