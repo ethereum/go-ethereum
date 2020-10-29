@@ -1457,16 +1457,23 @@ func (bc *BlockChain) writeBlockWithState(block *types.Block, receipts []*types.
 	//
 	// block logs = receipt logs + state sync logs = `state.Logs()`
 	blockLogs := state.Logs()
+	var stateSyncLogs []*types.Log
 	if len(blockLogs) > 0 {
 		sort.SliceStable(blockLogs, func(i, j int) bool {
 			return blockLogs[i].Index < blockLogs[j].Index
 		})
 
 		if len(blockLogs) > len(logs) {
+			stateSyncLogs = blockLogs[len(logs):] // get state-sync logs from `state.Logs()`
+
+			// State sync logs don't have tx index, tx hash and other necessary fields
+			// DeriveFieldsForBorLogs will fill those fields for websocket subscriptions
+			types.DeriveFieldsForBorLogs(stateSyncLogs, block.Hash(), block.NumberU64(), uint(len(receipts)), uint(len(logs)))
+
 			// Write bor receipt
 			rawdb.WriteBorReceipt(blockBatch, block.Hash(), block.NumberU64(), &types.ReceiptForStorage{
 				Status: types.ReceiptStatusSuccessful, // make receipt status successful
-				Logs:   blockLogs[len(logs):],         // get state-sync logs from `state.Logs()`
+				Logs:   stateSyncLogs,
 			})
 
 			// Write bor tx reverse lookup
@@ -1577,6 +1584,12 @@ func (bc *BlockChain) writeBlockWithState(block *types.Block, receipts []*types.
 		if len(logs) > 0 {
 			bc.logsFeed.Send(logs)
 		}
+
+		// send state sync logs into logs feed
+		if len(stateSyncLogs) > 0 {
+			bc.logsFeed.Send(stateSyncLogs)
+		}
+
 		// In theory we should fire a ChainHeadEvent when we inject
 		// a canonical block, but sometimes we can insert a batch of
 		// canonicial blocks. Avoid firing too much ChainHeadEvents,
@@ -2090,6 +2103,12 @@ func (bc *BlockChain) reorg(oldBlock, newBlock *types.Block) error {
 				return
 			}
 			receipts := rawdb.ReadReceipts(bc.db, hash, *number, bc.chainConfig)
+
+			// Append bor receipt
+			borReceipt := rawdb.ReadBorReceipt(bc.db, hash, *number)
+			if borReceipt != nil {
+				receipts = append(receipts, borReceipt)
+			}
 
 			var logs []*types.Log
 			for _, receipt := range receipts {

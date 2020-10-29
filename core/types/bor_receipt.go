@@ -63,6 +63,23 @@ func DeriveFieldsForBorReceipt(receipt *Receipt, hash common.Hash, number uint64
 	return nil
 }
 
+// DeriveFieldsForBorLogs fills the receipts with their computed fields based on consensus
+// data and contextual infos like containing block and transactions.
+func DeriveFieldsForBorLogs(logs []*Log, hash common.Hash, number uint64, txIndex uint, logIndex uint) {
+	// get derived tx hash
+	txHash := GetDerivedBorTxHash(BorReceiptKey(number, hash))
+
+	// the derived log fields can simply be set from the block and transaction
+	for j := 0; j < len(logs); j++ {
+		logs[j].BlockNumber = number
+		logs[j].BlockHash = hash
+		logs[j].TxHash = txHash
+		logs[j].TxIndex = txIndex
+		logs[j].Index = logIndex
+		logIndex++
+	}
+}
+
 // MergeBorLogs merges receipt logs and block receipt logs
 func MergeBorLogs(logs []*Log, borLogs []*Log) []*Log {
 	result := append(logs, borLogs...)
