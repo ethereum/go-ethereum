@@ -34,17 +34,18 @@ import (
 const (
 	lpv2 = 2
 	lpv3 = 3
+	lpv4 = 4
 )
 
 // Supported versions of the les protocol (first is primary)
 var (
-	ClientProtocolVersions    = []uint{lpv2, lpv3}
-	ServerProtocolVersions    = []uint{lpv2, lpv3}
+	ClientProtocolVersions    = []uint{lpv2, lpv3, lpv4}
+	ServerProtocolVersions    = []uint{lpv2, lpv3, lpv4}
 	AdvertiseProtocolVersions = []uint{lpv2} // clients are searching for the first advertised protocol in the list
 )
 
 // Number of implemented message corresponding to different protocol versions.
-var ProtocolLengths = map[uint]uint64{lpv2: 22, lpv3: 24}
+var ProtocolLengths = map[uint]uint64{lpv2: 22, lpv3: 24, lpv4: 25}
 
 const (
 	NetworkId          = 1
@@ -75,6 +76,8 @@ const (
 	// Protocol messages introduced in LPV3
 	StopMsg   = 0x16
 	ResumeMsg = 0x17
+	// Protocol messages introduced in LPV4
+	PaymentMsg = 0x18
 )
 
 type requestInfo struct {

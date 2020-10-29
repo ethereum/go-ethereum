@@ -17,6 +17,7 @@
 package les
 
 import (
+	"errors"
 	"math/big"
 	"sync"
 	"sync/atomic"
@@ -35,6 +36,7 @@ import (
 // clientHandler is responsible for receiving and processing all incoming server
 // responses.
 type clientHandler struct {
+	synced     uint32 // Flag whether we are considered synchronised
 	ulc        *ulc
 	checkpoint *params.TrustedCheckpoint
 	fetcher    *lightFetcher
@@ -99,10 +101,14 @@ func (h *clientHandler) handle(p *serverPeer) error {
 	if h.backend.peers.len() >= h.backend.config.LightPeers && !p.Peer.Info().Network.Trusted {
 		return p2p.DiscTooManyPeers
 	}
+	// Reject les server if lottery payment module is still initializing.
+	if h.backend.lotteryAddress != (common.Address{}) && atomic.LoadUint32(&h.backend.lotteryInited) == 0 {
+		return errors.New("payment hasn't been initialized")
+	}
 	p.Log().Debug("Light Ethereum peer connected", "name", p.Name())
 
 	// Execute the LES handshake
-	if err := p.Handshake(h.backend.blockchain.Genesis().Hash()); err != nil {
+	if err := p.Handshake(h.backend.blockchain.Genesis().Hash(), h.backend); err != nil {
 		p.Log().Debug("Light Ethereum handshake failed", "err", err)
 		return err
 	}
@@ -124,6 +130,12 @@ func (h *clientHandler) handle(p *serverPeer) error {
 	// Mark the peer starts to be served.
 	atomic.StoreUint32(&p.serving, 1)
 	defer atomic.StoreUint32(&p.serving, 0)
+
+	// Testing code, should be removed
+	//closed := make(chan struct{})
+	//defer close(closed)
+	//robot := NewPaymentRobot(h.backend.lotterySender, p.receiverList[lotterypmt.Identity], closed)
+	//go robot.Run(p.SendPayment)
 
 	// Spawn a main loop to handle all incoming messages.
 	for {

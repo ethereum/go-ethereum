@@ -19,9 +19,11 @@ package les
 
 import (
 	"fmt"
+	"sync/atomic"
 	"time"
 
 	"github.com/ethereum/go-ethereum/accounts"
+	"github.com/ethereum/go-ethereum/accounts/abi/bind"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/ethereum/go-ethereum/common/mclock"
@@ -34,9 +36,11 @@ import (
 	"github.com/ethereum/go-ethereum/eth/downloader"
 	"github.com/ethereum/go-ethereum/eth/filters"
 	"github.com/ethereum/go-ethereum/eth/gasprice"
+	"github.com/ethereum/go-ethereum/ethclient"
 	"github.com/ethereum/go-ethereum/event"
 	"github.com/ethereum/go-ethereum/internal/ethapi"
 	lpc "github.com/ethereum/go-ethereum/les/lespay/client"
+	"github.com/ethereum/go-ethereum/les/lespay/payment/lotterypmt"
 	"github.com/ethereum/go-ethereum/light"
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/node"
@@ -62,14 +66,18 @@ type LightEthereum struct {
 	dialCandidates enode.Iterator
 	pruner         *pruner
 
+	// Payment relative handlers
+	lotterySender  *lotterypmt.PaymentSender // Off-chain lottery payment sender
+	lotteryAddress common.Address            // The address used to pay by lottery payment
+	lotteryInited  uint32                    // The status indicator whether lottery payment method are allocated.
+
 	bloomRequests chan chan *bloombits.Retrieval // Channel receiving bloom data retrieval requests
 	bloomIndexer  *core.ChainIndexer             // Bloom indexer operating during block imports
 
-	ApiBackend     *LesApiBackend
-	eventMux       *event.TypeMux
-	engine         consensus.Engine
-	accountManager *accounts.Manager
-	netRPCService  *ethapi.PublicNetAPI
+	ApiBackend    *LesApiBackend
+	eventMux      *event.TypeMux
+	engine        consensus.Engine
+	netRPCService *ethapi.PublicNetAPI
 
 	p2pServer *p2p.Server
 }
@@ -99,16 +107,16 @@ func New(stack *node.Node, config *eth.Config) (*LightEthereum, error) {
 			iConfig:     light.DefaultClientIndexerConfig,
 			chainDb:     chainDb,
 			closeCh:     make(chan struct{}),
+			am:          stack.AccountManager(),
 		},
-		peers:          peers,
-		eventMux:       stack.EventMux(),
-		reqDist:        newRequestDistributor(peers, &mclock.System{}),
-		accountManager: stack.AccountManager(),
-		engine:         eth.CreateConsensusEngine(stack, chainConfig, &config.Ethash, nil, false, chainDb),
-		bloomRequests:  make(chan chan *bloombits.Retrieval),
-		bloomIndexer:   eth.NewBloomIndexer(chainDb, params.BloomBitsBlocksClient, params.HelperTrieConfirmations),
-		valueTracker:   lpc.NewValueTracker(lespayDb, &mclock.System{}, requestList, time.Minute, 1/float64(time.Hour), 1/float64(time.Hour*100), 1/float64(time.Hour*1000)),
-		p2pServer:      stack.Server(),
+		peers:         peers,
+		eventMux:      stack.EventMux(),
+		reqDist:       newRequestDistributor(peers, &mclock.System{}),
+		engine:        eth.CreateConsensusEngine(stack, chainConfig, &config.Ethash, nil, false, chainDb),
+		bloomRequests: make(chan chan *bloombits.Retrieval),
+		bloomIndexer:  eth.NewBloomIndexer(chainDb, params.BloomBitsBlocksClient, params.HelperTrieConfirmations),
+		valueTracker:  lpc.NewValueTracker(lespayDb, &mclock.System{}, requestList, time.Minute, 1/float64(time.Hour), 1/float64(time.Hour*100), 1/float64(time.Hour*1000)),
+		p2pServer:     stack.Server(),
 	}
 	peers.subscribe((*vtSubscription)(leth.valueTracker))
 
@@ -140,7 +148,7 @@ func New(stack *node.Node, config *eth.Config) (*LightEthereum, error) {
 	leth.chainReader = leth.blockchain
 	leth.txPool = light.NewTxPool(leth.chainConfig, leth.blockchain, leth.relay)
 
-	// Set up checkpoint oracle.
+	// Set up checkpoint oracle and lotterybook
 	leth.oracle = leth.setupOracle(stack, genesisHash, config)
 
 	// Note: AddChildIndexer starts the update process for the child
@@ -171,6 +179,13 @@ func New(stack *node.Node, config *eth.Config) (*LightEthereum, error) {
 		leth.blockchain.DisableCheckFreq()
 	}
 
+	// If the payment address of lottery book is set, enable the payment by default.
+	if config.LotteryPaymentAddress != (common.Address{}) {
+		leth.paymentDb = lespayDb
+		leth.lotteryAddress = config.LotteryPaymentAddress
+		log.Info("Lottery payment is enabled", "address", leth.lotteryAddress, "payementdb", stack.ResolvePath("lespay"))
+	}
+	go leth.setupLotteryPayment(stack)
 	leth.netRPCService = ethapi.NewPublicNetAPI(leth.p2pServer, leth.config.NetworkId)
 
 	// Register the backend on the node
@@ -270,6 +285,7 @@ func (s *LightEthereum) Engine() consensus.Engine           { return s.engine }
 func (s *LightEthereum) LesVersion() int                    { return int(ClientProtocolVersions[0]) }
 func (s *LightEthereum) Downloader() *downloader.Downloader { return s.handler.downloader }
 func (s *LightEthereum) EventMux() *event.TypeMux           { return s.eventMux }
+func (s *LightEthereum) Synced() bool                       { return atomic.LoadUint32(&s.handler.synced) == 1 }
 
 // Protocols returns all the currently configured network protocols to start.
 func (s *LightEthereum) Protocols() []p2p.Protocol {
@@ -314,7 +330,46 @@ func (s *LightEthereum) Stop() error {
 	s.pruner.close()
 	s.eventMux.Stop()
 	s.chainDb.Close()
+	if s.paymentDb != nil {
+		s.paymentDb.Close()
+	}
 	s.wg.Wait()
 	log.Info("Light ethereum stopped")
 	return nil
+}
+
+func (s *LightEthereum) setupLotteryPayment(node *node.Node) {
+	// Ensure the payment contract is deployed.
+	paymentContract, exist := params.PaymentContracts[s.genesis]
+	if !exist {
+		return
+	}
+	// This function can block the thread(e.g. clef needs the interaction)
+	account := accounts.Account{Address: s.lotteryAddress}
+	wallet, err := s.am.Find(account)
+	if err != nil {
+		log.Warn("Failed to setup lottery payment manager", "error", err)
+		return
+	}
+	chequeSigner := func(data []byte) ([]byte, error) {
+		return wallet.SignData(account, accounts.MimetypeDataWithValidator, data)
+	}
+	rpcClient, _ := node.Attach()
+	client := ethclient.NewClient(rpcClient)
+
+	sender, err := lotterypmt.NewPaymentSender(s.chainReader, bind.NewRawTransactor(wallet.SignTx, account), chequeSigner, s.lotteryAddress, paymentContract, client, client, s.paymentDb)
+	if err != nil {
+		log.Warn("Failed to setup lottery payment manager", "error", err)
+		return
+	}
+	s.lotterySender = sender
+
+	schema, err := lotterypmt.GenerateSchema(paymentContract, s.lotteryAddress, true)
+	if err != nil {
+		log.Warn("Invalid payment schema", "error", err)
+		return
+	}
+	s.schemas = append(s.schemas, schema)
+	atomic.StoreUint32(&s.lotteryInited, 1) // Mark payment channel is available now
+	log.Info("Succeed to setup lottery payment manager", "address", s.lotteryAddress)
 }

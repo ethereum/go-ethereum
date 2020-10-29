@@ -19,11 +19,17 @@ package les
 import (
 	"crypto/ecdsa"
 	"reflect"
+	"sync/atomic"
 	"time"
 
+	"github.com/ethereum/go-ethereum/accounts"
+	"github.com/ethereum/go-ethereum/accounts/abi/bind"
+	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/mclock"
 	"github.com/ethereum/go-ethereum/eth"
+	"github.com/ethereum/go-ethereum/ethclient"
 	"github.com/ethereum/go-ethereum/les/flowcontrol"
+	"github.com/ethereum/go-ethereum/les/lespay/payment/lotterypmt"
 	lps "github.com/ethereum/go-ethereum/les/lespay/server"
 	"github.com/ethereum/go-ethereum/light"
 	"github.com/ethereum/go-ethereum/log"
@@ -60,6 +66,7 @@ type LesServer struct {
 	broadcaster *broadcaster
 	lesTopics   []discv5.Topic
 	privateKey  *ecdsa.PrivateKey
+	synced      func() bool
 
 	// Flow control and capacity management
 	fcManager    *flowcontrol.ClientManager
@@ -67,6 +74,11 @@ type LesServer struct {
 	defParams    flowcontrol.ServerParams
 	servingQueue *servingQueue
 	clientPool   *clientPool
+
+	// Payment relative handlers
+	lotteryReceiver *lotterypmt.PaymentReceiver // Off-chain lottery payment receiver
+	lotteryAddress  common.Address              // The address used to charge by lottery payment
+	lotteryInited   uint32                      // The status indicator whether lottery payment method is setup
 
 	minCapacity, maxCapacity uint64
 	threadsIdle              int // Request serving threads count when system is idle.
@@ -99,6 +111,7 @@ func NewLesServer(node *node.Node, e *eth.Ethereum, config *eth.Config) (*LesSer
 			chtIndexer:       light.NewChtIndexer(e.ChainDb(), nil, params.CHTFrequency, params.HelperTrieProcessConfirmations, true),
 			bloomTrieIndexer: light.NewBloomTrieIndexer(e.ChainDb(), nil, params.BloomBitsBlocks, params.BloomTrieFrequency, true),
 			closeCh:          make(chan struct{}),
+			am:               node.AccountManager(),
 		},
 		ns:           ns,
 		archiveMode:  e.ArchiveMode(),
@@ -109,6 +122,7 @@ func NewLesServer(node *node.Node, e *eth.Ethereum, config *eth.Config) (*LesSer
 		threadsBusy:  config.LightServ/100 + 1,
 		threadsIdle:  threads,
 		p2pSrv:       node.Server(),
+		synced:       e.Synced,
 	}
 	srv.handler = newServerHandler(srv, e.BlockChain(), e.ChainDb(), e.TxPool(), e.Synced)
 	srv.costTracker, srv.minCapacity = newCostTracker(e.ChainDb(), config)
@@ -142,6 +156,17 @@ func NewLesServer(node *node.Node, e *eth.Ethereum, config *eth.Config) (*LesSer
 			"chtroot", checkpoint.CHTRoot, "bloomroot", checkpoint.BloomRoot)
 	}
 	srv.chtIndexer.Start(e.BlockChain())
+
+	if config.LotteryPaymentAddress != (common.Address{}) {
+		paymentDb, err := node.OpenDatabase("lespay", 0, 0, "eth/db/lespay") // How to disable metrics?
+		if err != nil {
+			return nil, err
+		}
+		srv.paymentDb = paymentDb
+		srv.lotteryAddress = config.LotteryPaymentAddress
+		log.Info("Lottery payment is enabled", "address", srv.lotteryAddress, "payementdb", node.ResolvePath("lespay"))
+	}
+	go srv.setupLotteryPayment(node)
 
 	node.RegisterProtocols(srv.Protocols())
 	node.RegisterAPIs(srv.APIs())
@@ -232,6 +257,9 @@ func (s *LesServer) Stop() error {
 
 	// Note, bloom trie indexer is closed by parent bloombits indexer.
 	s.chtIndexer.Close()
+	if s.paymentDb != nil {
+		s.paymentDb.Close()
+	}
 	s.wg.Wait()
 	log.Info("Les server stopped")
 
@@ -310,4 +338,34 @@ func (s *LesServer) dropClient(id enode.ID) {
 	if p := s.getClient(id); p != nil {
 		p.Peer.Disconnect(p2p.DiscRequested)
 	}
+}
+
+func (s *LesServer) setupLotteryPayment(node *node.Node) {
+	// Ensure the payment contract is deployed.
+	paymentContract, exist := params.PaymentContracts[s.genesis]
+	if !exist {
+		return
+	}
+	account := accounts.Account{Address: s.lotteryAddress}
+	wallet, err := s.am.Find(account)
+	if err != nil {
+		return
+	}
+	rpcClient, _ := node.Attach()
+	client := ethclient.NewClient(rpcClient)
+
+	receiver, err := lotterypmt.NewPaymentReceiver(s.chainReader, bind.NewRawTransactor(wallet.SignTx, account), s.lotteryAddress, paymentContract, client, client, s.paymentDb)
+	if err != nil {
+		log.Warn("Failed to setup payment manager", "error", err)
+		return
+	}
+	s.lotteryReceiver = receiver
+	schema, err := lotterypmt.GenerateSchema(paymentContract, s.lotteryAddress, false)
+	if err != nil {
+		log.Warn("Invalid payment schema", "error", err)
+		return
+	}
+	s.schemas = append(s.schemas, schema)
+	atomic.StoreUint32(&s.lotteryInited, 1) // Mark payment channel is available now
+	log.Info("Succeed to setup payment manager", "address", s.lotteryAddress)
 }
