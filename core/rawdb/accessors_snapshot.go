@@ -17,6 +17,8 @@
 package rawdb
 
 import (
+	"encoding/binary"
+
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/ethdb"
 	"github.com/ethereum/go-ethereum/log"
@@ -116,5 +118,60 @@ func WriteSnapshotJournal(db ethdb.KeyValueWriter, journal []byte) {
 func DeleteSnapshotJournal(db ethdb.KeyValueWriter) {
 	if err := db.Delete(snapshotJournalKey); err != nil {
 		log.Crit("Failed to remove snapshot journal", "err", err)
+	}
+}
+
+// ReadSnapshotGenerator retrieves the serialized snapshot generator saved at
+// the last shutdown.
+func ReadSnapshotGenerator(db ethdb.KeyValueReader) []byte {
+	data, _ := db.Get(snapshotGeneratorKey)
+	return data
+}
+
+// WriteSnapshotGenerator stores the serialized snapshot generator to save at
+// shutdown.
+func WriteSnapshotGenerator(db ethdb.KeyValueWriter, generator []byte) {
+	if err := db.Put(snapshotGeneratorKey, generator); err != nil {
+		log.Crit("Failed to store snapshot generator", "err", err)
+	}
+}
+
+// DeleteSnapshotGenerator deletes the serialized snapshot generator saved at
+// the last shutdown
+func DeleteSnapshotGenerator(db ethdb.KeyValueWriter) {
+	if err := db.Delete(snapshotGeneratorKey); err != nil {
+		log.Crit("Failed to remove snapshot generator", "err", err)
+	}
+}
+
+// ReadSnapshotRecoveryNumber retrieves the block number of the last persisted
+// snapshot layer.
+func ReadSnapshotRecoveryNumber(db ethdb.KeyValueReader) *uint64 {
+	data, _ := db.Get(snapshotRecoveryKey)
+	if len(data) == 0 {
+		return nil
+	}
+	if len(data) != 8 {
+		return nil
+	}
+	number := binary.BigEndian.Uint64(data)
+	return &number
+}
+
+// WriteSnapshotRecoveryNumber stores the block number of the last persisted
+// snapshot layer.
+func WriteSnapshotRecoveryNumber(db ethdb.KeyValueWriter, number uint64) {
+	var buf [8]byte
+	binary.BigEndian.PutUint64(buf[:], number)
+	if err := db.Put(snapshotRecoveryKey, buf[:]); err != nil {
+		log.Crit("Failed to store snapshot recovery number", "err", err)
+	}
+}
+
+// DeleteSnapshotRecoveryNumber deletes the block number of the last persisted
+// snapshot layer.
+func DeleteSnapshotRecoveryNumber(db ethdb.KeyValueWriter) {
+	if err := db.Delete(snapshotRecoveryKey); err != nil {
+		log.Crit("Failed to remove snapshot recovery number", "err", err)
 	}
 }
