@@ -40,7 +40,7 @@ func (al *AccessList) StorageKeys() int {
 }
 
 type AccessListTransaction struct {
-	Chain        *big.Int
+	Chain        *big.Int        `json:"chainId"    gencodec:"required"`
 	AccountNonce uint64          `json:"nonce"      gencodec:"required"`
 	Price        *big.Int        `json:"gasPrice"   gencodec:"required"`
 	GasLimit     uint64          `json:"gas"        gencodec:"required"`
