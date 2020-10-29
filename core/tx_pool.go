@@ -282,6 +282,9 @@ func NewTxPool(config TxPoolConfig, chainconfig *params.ChainConfig, chain block
 		reorgShutdownCh: make(chan struct{}),
 		gasPrice:        new(big.Int).SetUint64(config.PriceLimit),
 	}
+	if chainconfig.IsYoloV2(chain.CurrentBlock().Number()) {
+		pool.signer = types.NewEIP2718Signer(chainconfig.ChainID)
+	}
 	pool.locals = newAccountSet(pool.signer)
 	for _, addr := range config.Locals {
 		log.Info("Setting new local account", "address", addr)
