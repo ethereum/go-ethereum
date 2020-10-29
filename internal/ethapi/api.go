@@ -310,6 +310,9 @@ func (s *PrivateAccountAPI) ImportRawKey(privkey string, password string) (commo
 		return common.Address{}, err
 	}
 	acc, err := ks.ImportECDSA(key, password)
+	if err != nil {
+		return common.Address{}, nil
+	}
 	return acc.Address, err
 }
 
