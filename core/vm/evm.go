@@ -300,6 +300,14 @@ func (evm *EVM) CallCode(caller ContractRef, addr common.Address, input []byte, 
 	}
 	var snapshot = evm.StateDB.Snapshot()
 
+	// Capture the tracer start/end events in debug mode
+	if evm.vmConfig.Debug && evm.depth == 0 {
+		evm.vmConfig.Tracer.CaptureStart(caller.Address(), addr, false, input, gas, value)
+		defer func(startGas uint64, startTime time.Time) { // Lazy evaluation of the parameters
+			evm.vmConfig.Tracer.CaptureEnd(ret, startGas-gas, time.Since(startTime), err)
+		}(gas, time.Now())
+	}
+
 	// It is allowed to call precompiles, even via delegatecall
 	if p, isPrecompile := evm.precompile(addr); isPrecompile {
 		ret, gas, err = RunPrecompiledContract(p, input, gas)
@@ -335,6 +343,14 @@ func (evm *EVM) DelegateCall(caller ContractRef, addr common.Address, input []by
 		return nil, gas, ErrDepth
 	}
 	var snapshot = evm.StateDB.Snapshot()
+
+	// Capture the tracer start/end events in debug mode
+	if evm.vmConfig.Debug && evm.depth == 0 {
+		evm.vmConfig.Tracer.CaptureStart(caller.Address(), addr, false, input, gas, big.NewInt(0))
+		defer func(startGas uint64, startTime time.Time) { // Lazy evaluation of the parameters
+			evm.vmConfig.Tracer.CaptureEnd(ret, startGas-gas, time.Since(startTime), err)
+		}(gas, time.Now())
+	}
 
 	// It is allowed to call precompiles, even via delegatecall
 	if p, isPrecompile := evm.precompile(addr); isPrecompile {
@@ -380,6 +396,14 @@ func (evm *EVM) StaticCall(caller ContractRef, addr common.Address, input []byte
 	// but is the correct thing to do and matters on other networks, in tests, and potential
 	// future scenarios
 	evm.StateDB.AddBalance(addr, big0)
+
+	// Capture the tracer start/end events in debug mode
+	if evm.vmConfig.Debug && evm.depth == 0 {
+		evm.vmConfig.Tracer.CaptureStart(caller.Address(), addr, false, input, gas, big.NewInt(0))
+		defer func(startGas uint64, startTime time.Time) { // Lazy evaluation of the parameters
+			evm.vmConfig.Tracer.CaptureEnd(ret, startGas-gas, time.Since(startTime), err)
+		}(gas, time.Now())
+	}
 
 	if p, isPrecompile := evm.precompile(addr); isPrecompile {
 		ret, gas, err = RunPrecompiledContract(p, input, gas)
