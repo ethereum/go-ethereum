@@ -43,7 +43,7 @@ func HasBorReceipt(db ethdb.Reader, hash common.Hash, number uint64) bool {
 	return true
 }
 
-// ReadBorReceiptRLP retrieves all the transaction receipts belonging to a block in RLP encoding.
+// ReadBorReceiptRLP retrieves the block receipt belonging to a block in RLP encoding.
 func ReadBorReceiptRLP(db ethdb.Reader, hash common.Hash, number uint64) rlp.RawValue {
 	// First try to look up the data in ancient database. Extra hash
 	// comparison is necessary since ancient database only maintains
