@@ -99,8 +99,8 @@ func TestHandshake(t *testing.T) {
 	var id enode.ID
 	rand.Read(id[:])
 
-	peer1 := newClientPeer(2, NetworkId, p2p.NewPeer(id, "name", nil), net)
-	peer2 := newServerPeer(2, NetworkId, true, p2p.NewPeer(id, "name", nil), app)
+	peer1 := newClientPeer(4, NetworkId, p2p.NewPeer(id, "name", nil), net)
+	peer2 := newServerPeer(4, NetworkId, true, p2p.NewPeer(id, "name", nil), app)
 
 	var (
 		errCh1 = make(chan error, 1)
@@ -112,13 +112,13 @@ func TestHandshake(t *testing.T) {
 		genesis = common.HexToHash("cafebabe")
 	)
 	go func() {
-		errCh1 <- peer1.handshake(td, head, headNum, genesis, func(list *keyValueList) {
+		errCh1 <- peer1.handshake(td, head, headNum, genesis, serverMetaMapping, func(list *keyValueList) {
 			var announceType uint64 = announceTypeSigned
 			*list = (*list).add("announceType", announceType)
 		}, nil)
 	}()
 	go func() {
-		errCh2 <- peer2.handshake(td, head, headNum, genesis, nil, func(recv keyValueMap) error {
+		errCh2 <- peer2.handshake(td, head, headNum, genesis, clientMetaMapping, nil, func(recv keyValueMap) error {
 			var reqType uint64
 			err := recv.get("announceType", &reqType)
 			if err != nil {

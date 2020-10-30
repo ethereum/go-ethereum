@@ -25,6 +25,7 @@ import (
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/crypto"
+	"github.com/ethereum/go-ethereum/les/lespay"
 	lpc "github.com/ethereum/go-ethereum/les/lespay/client"
 	"github.com/ethereum/go-ethereum/p2p/enode"
 	"github.com/ethereum/go-ethereum/rlp"
@@ -34,17 +35,18 @@ import (
 const (
 	lpv2 = 2
 	lpv3 = 3
+	lpv4 = 4
 )
 
 // Supported versions of the les protocol (first is primary)
 var (
-	ClientProtocolVersions    = []uint{lpv2, lpv3}
-	ServerProtocolVersions    = []uint{lpv2, lpv3}
+	ClientProtocolVersions    = []uint{lpv2, lpv3, lpv4}
+	ServerProtocolVersions    = []uint{lpv2, lpv3, lpv4}
 	AdvertiseProtocolVersions = []uint{lpv2} // clients are searching for the first advertised protocol in the list
 )
 
 // Number of implemented message corresponding to different protocol versions.
-var ProtocolLengths = map[uint]uint64{lpv2: 22, lpv3: 24}
+var ProtocolLengths = map[uint]uint64{lpv2: 22, lpv3: 24, lpv4: 28}
 
 const (
 	NetworkId          = 1
@@ -75,6 +77,11 @@ const (
 	// Protocol messages introduced in LPV3
 	StopMsg   = 0x16
 	ResumeMsg = 0x17
+	// Protocol messages introduced in LPV4
+	LespayRequestMsg   = 0x18
+	LespayReplyMsg     = 0x19
+	CapacityRequestMsg = 0x1a
+	CapacityUpdateMsg  = 0x1b
 )
 
 type requestInfo struct {
@@ -268,4 +275,130 @@ func (hn *hashOrNumber) DecodeRLP(s *rlp.Stream) error {
 // CodeData is the network response packet for a node data retrieval.
 type CodeData []struct {
 	Value []byte
+}
+
+type capacityRequest struct {
+	MinRecharge, BufLimit, Bias uint64
+}
+
+type capacityUpdate struct {
+	MinRecharge, BufLimit uint64
+}
+
+var (
+	requestMetaMapping = []string{"id"}
+	replyMetaMapping   = []string{"id", "bv", "cost", "balance"}
+	clientMetaMapping  = lespay.MetaMapping{Send: requestMetaMapping, Receive: replyMetaMapping}
+	serverMetaMapping  = lespay.MetaMapping{Send: replyMetaMapping, Receive: requestMetaMapping}
+)
+
+const (
+	requestMetaReqID  = 0
+	replyMetaReqID    = 0
+	replyMetaBV       = 1
+	replyMetaRealCost = 2
+	replyMetaBalance  = 3
+)
+
+type metaInfoField struct {
+	value uint64
+	set   bool
+}
+
+func getField(meta lespay.MetaInfo, mapping *lespay.MatchedHalfMapping, index int, field *metaInfoField) error {
+	if err := meta.Get(mapping, index, &field.value); err == nil {
+		field.set = true
+	} else {
+		if field.set {
+			return err
+		}
+	}
+	return nil
+}
+
+func setField(meta *lespay.MetaInfo, mapping *lespay.MatchedHalfMapping, index int, field *metaInfoField) {
+	if field.set {
+		meta.Set(mapping, index, &field.value)
+	}
+}
+
+type requestMetaInfo struct {
+	mapping *lespay.MatchedHalfMapping
+	reqID   metaInfoField
+}
+
+func (m requestMetaInfo) EncodeRLP(w io.Writer) error {
+	if m.mapping != nil {
+		var meta lespay.MetaInfo
+		setField(&meta, m.mapping, requestMetaReqID, &m.reqID)
+		return rlp.Encode(w, &meta)
+	} else {
+		return rlp.Encode(w, &m.reqID.value)
+	}
+}
+
+func (m *requestMetaInfo) DecodeRLP(s *rlp.Stream) error {
+	if m.mapping != nil {
+		var meta lespay.MetaInfo
+		err := s.Decode(&meta)
+		if err == nil {
+			if err := getField(meta, m.mapping, requestMetaReqID, &m.reqID); err != nil {
+				return err
+			}
+		}
+		return err
+	} else {
+		m.reqID.set = true
+		return s.Decode(&m.reqID.value)
+	}
+}
+
+type replyMetaInfo struct {
+	mapping                      *lespay.MatchedHalfMapping
+	reqID, bv, realCost, balance metaInfoField
+}
+
+func (m replyMetaInfo) EncodeRLP(w io.Writer) error {
+	if m.mapping != nil {
+		var meta lespay.MetaInfo
+		setField(&meta, m.mapping, replyMetaReqID, &m.reqID)
+		setField(&meta, m.mapping, replyMetaBV, &m.bv)
+		setField(&meta, m.mapping, replyMetaRealCost, &m.realCost)
+		setField(&meta, m.mapping, replyMetaBalance, &m.balance)
+		return rlp.Encode(w, &meta)
+	} else {
+		if err := rlp.Encode(w, &m.reqID.value); err != nil {
+			return err
+		}
+		return rlp.Encode(w, &m.bv.value)
+	}
+}
+
+func (m *replyMetaInfo) DecodeRLP(s *rlp.Stream) error {
+	if m.mapping != nil {
+		var meta lespay.MetaInfo
+		err := s.Decode(&meta)
+		if err == nil {
+			if err := getField(meta, m.mapping, replyMetaReqID, &m.reqID); err != nil {
+				return err
+			}
+			if err := getField(meta, m.mapping, replyMetaBV, &m.bv); err != nil {
+				return err
+			}
+			if err := getField(meta, m.mapping, replyMetaRealCost, &m.realCost); err != nil {
+				return err
+			}
+			if err := getField(meta, m.mapping, replyMetaBalance, &m.balance); err != nil {
+				return err
+			}
+		}
+		return err
+	} else {
+		m.reqID.set = true
+		m.bv.set = true
+		if err := s.Decode(&m.reqID.value); err != nil {
+			return err
+		}
+		return s.Decode(&m.bv.value)
+	}
 }

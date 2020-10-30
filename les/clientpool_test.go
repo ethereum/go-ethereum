@@ -89,6 +89,10 @@ func (i *poolTestPeer) updateCapacity(cap uint64) {
 	i.cap = cap
 }
 
+func (i *poolTestPeer) getCapacity() uint64 {
+	return i.cap
+}
+
 func (i *poolTestPeer) freeze() {}
 
 func (i *poolTestPeer) allowInactive() bool {
@@ -222,7 +226,7 @@ func testPriorityConnect(t *testing.T, pool *clientPool, p *poolTestPeer, cap ui
 			return
 		}
 	}
-	if _, err := pool.setCapacity(p.node, "", cap, defaultConnectedBias, true); err != nil {
+	if c, _ := pool.setCapacity(p.node, cap, defaultConnectedBias); c != cap {
 		if expSuccess {
 			t.Fatalf("Failed to raise capacity of paid client")
 		} else {

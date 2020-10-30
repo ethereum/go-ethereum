@@ -223,7 +223,7 @@ func (s *LesServer) Start() error {
 				s.p2pSrv.DiscV5.RegisterTopic(topic, s.closeCh)
 			}()
 		}*/
-		s.p2pSrv.DiscV5.RegisterTalkHandler("lespay", s.lespayServer.Serve)
+		s.p2pSrv.DiscV5.RegisterTalkHandler("lespay", s.lespayServer.HandleTalkRequest)
 	}
 
 	return nil

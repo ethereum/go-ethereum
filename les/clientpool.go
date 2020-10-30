@@ -95,6 +95,7 @@ type clientPoolPeer interface {
 	updateCapacity(uint64)
 	freeze()
 	allowInactive() bool
+	getCapacity() uint64
 }
 
 // clientInfo defines all information required by clientpool.
@@ -299,51 +300,63 @@ func (f *clientPool) setLimits(totalConn int, totalCap uint64) {
 }
 
 // setCapacity sets the assigned capacity of a connected client
-func (f *clientPool) setCapacity(node *enode.Node, freeID string, capacity uint64, bias time.Duration, setCap bool) (uint64, error) {
+func (f *clientPool) setCapacity(node *enode.Node, capacity uint64, bias time.Duration) (uint64, error) {
 	c, _ := f.ns.GetField(node, clientInfoField).(*clientInfo)
 	if c == nil {
-		if setCap {
-			return 0, fmt.Errorf("client %064x is not connected", node.ID())
+		return 0, fmt.Errorf("client %064x is not connected", node.ID())
+	}
+	if f.connectedBias > bias {
+		bias = f.connectedBias
+	}
+	if capacity < f.minCap {
+		capacity = f.minCap
+	}
+	curveBias := bias
+	var count int
+	for {
+		curveBias += time.Second * 10
+		oldCap := c.peer.getCapacity()
+		if capacity == oldCap {
+			return oldCap, nil
 		}
-		c = &clientInfo{node: node}
-		f.ns.SetField(node, clientInfoField, c)
-		f.ns.SetField(node, connAddressField, freeID)
-		defer func() {
-			f.ns.SetField(node, connAddressField, nil)
-			f.ns.SetField(node, clientInfoField, nil)
-		}()
-		if c.balance, _ = f.ns.GetField(node, f.BalanceField).(*lps.NodeBalance); c.balance == nil {
-			log.Error("BalanceField is missing", "node", node.ID())
-			return 0, fmt.Errorf("BalanceField of %064x is missing", node.ID())
+		if capacity > oldCap {
+			if pb, _ := c.balance.GetBalance(); pb == 0 {
+				return oldCap, nil
+			}
+			curve := f.pp.GetCapacityCurve().Exclude(node.ID())
+			now := f.clock.Now()
+			maxCap := curve.MaxCapacity(func(capacity uint64) int64 {
+				return c.balance.EstimatePriority(now, capacity, 0, 0, curveBias, false) / int64(capacity)
+			})
+			if maxCap < capacity {
+				if maxCap > oldCap {
+					capacity = maxCap
+				} else {
+					return oldCap, nil
+				}
+			}
+		}
+		var allowed bool
+		f.ns.Operation(func() {
+			_, allowed = f.pp.RequestCapacity(node, capacity, bias, true)
+		})
+		if allowed {
+			return capacity, nil
+		}
+		count++
+		if count == 100 {
+			log.Error("Unable to find maximum allowed capacity")
+			return oldCap, nil
 		}
 	}
-	var (
-		minPriority int64
-		allowed     bool
-	)
-	f.ns.Operation(func() {
-		if !setCap || c.priority {
-			// check clientInfo.priority inside Operation to ensure thread safety
-			minPriority, allowed = f.pp.RequestCapacity(node, capacity, bias, setCap)
-		}
-	})
-	if allowed {
-		return 0, nil
-	}
-	missing := c.balance.PosBalanceMissing(minPriority, capacity, bias)
-	if missing < 1 {
-		// ensure that we never return 0 missing and insufficient priority error
-		missing = 1
-	}
-	return missing, errNoPriority
 }
 
 // setCapacityLocked is the equivalent of setCapacity used when f.lock is already locked
-func (f *clientPool) setCapacityLocked(node *enode.Node, freeID string, capacity uint64, minConnTime time.Duration, setCap bool) (uint64, error) {
+func (f *clientPool) setCapacityLocked(node *enode.Node, capacity uint64, bias time.Duration) (uint64, error) {
 	f.lock.Lock()
 	defer f.lock.Unlock()
 
-	return f.setCapacity(node, freeID, capacity, minConnTime, setCap)
+	return f.setCapacity(node, capacity, bias)
 }
 
 // forClients calls the supplied callback for either the listed node IDs or all connected
@@ -411,12 +424,13 @@ func (f *clientPool) serveCapQuery(id enode.ID, freeID string, data []byte) []by
 	}
 	// use lps.CapacityCurve to answer request for multiple newly bought token amounts
 	curve := f.pp.GetCapacityCurve().Exclude(id)
-	result := make(lespay.CapacityQueryResp, len(req.AddTokens))
+	result := make(lespay.CapacityQueryReply, len(req.AddTokens))
 	now := f.clock.Now()
 	bias := time.Second * time.Duration(req.Bias)
 	if f.connectedBias > bias {
 		bias = f.connectedBias
 	}
+	pb, _ := c.balance.GetBalance()
 	for i, addTokens := range req.AddTokens { //TODO limit length
 		if addTokens > math.MaxInt64 {
 			addTokens = math.MaxInt64
@@ -424,10 +438,13 @@ func (f *clientPool) serveCapQuery(id enode.ID, freeID string, data []byte) []by
 		result[i] = curve.MaxCapacity(func(capacity uint64) int64 {
 			return c.balance.EstimatePriority(now, capacity, int64(addTokens), 0, bias, false) / int64(capacity)
 		})
+		if addTokens == 0 && pb == 0 && result[i] > f.minCap {
+			result[i] = f.minCap
+		}
 		if result[i] < f.minCap {
 			result[i] = 0
 		}
 	}
-	res, _ := rlp.EncodeToBytes(&result)
-	return res
+	reply, _ := rlp.EncodeToBytes(&result)
+	return reply
 }

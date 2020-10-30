@@ -137,7 +137,7 @@ func (api *PrivateLightServerAPI) setParams(params map[string]interface{}, clien
 			setFactor(&negFactors.RequestFactor)
 		case !defParams && name == "capacity":
 			if capacity, ok := value.(float64); ok && uint64(capacity) >= api.server.minCapacity {
-				_, err = api.server.clientPool.setCapacity(client.node, client.address, uint64(capacity), 0, true)
+				_, err = api.server.clientPool.setCapacity(client.node, uint64(capacity), 0)
 				// Don't have to call factor update explicitly. It's already done
 				// in setCapacity function.
 			} else {

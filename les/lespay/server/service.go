@@ -107,32 +107,44 @@ func (s *Server) Resolve(serviceID string) Service {
 	return nil
 }
 
-func (s *Server) Serve(id enode.ID, addr *net.UDPAddr, req []byte) []byte {
+func (s *Server) HandleTalkRequest(id enode.ID, addr *net.UDPAddr, req []byte) []byte {
 	var requests lespay.Requests
-	if err := rlp.DecodeBytes(req, &requests); err != nil || len(requests) == 0 || len(requests) > maxRequestLength {
+	if err := rlp.DecodeBytes(req, &requests); err != nil {
+		return nil
+	}
+	results := s.Serve(id, addr.String(), requests)
+	if results == nil {
+		return nil
+	}
+	res, _ := rlp.EncodeToBytes(&results)
+	return res
+}
+
+func (s *Server) Serve(id enode.ID, address string, requests lespay.Requests) lespay.Replies {
+	if len(requests) == 0 || len(requests) > maxRequestLength {
 		return nil
 	}
 	priorWeight := uint64(len(requests))
 	if priorWeight == 0 {
 		return nil
 	}
-	address := addr.String()
 	ch := <-s.limiter.Add(id, address, 0, priorWeight)
 	if ch == nil {
 		return nil
 	}
 	start := mclock.Now()
-	results := make([][]byte, len(requests))
+	results := make(lespay.Replies, len(requests))
 	s.alias = make(map[string]*serviceEntry)
+	var size int
 	for i, req := range requests {
 		if service := s.Resolve(req.Service); service != nil {
 			results[i] = service.Handle(id, address, req.Name, req.Params)
+			size += len(results[i]) + 2
 		}
 	}
 	s.alias = nil
-	res, err := rlp.EncodeToBytes(&results)
 	cost := float64(mclock.Now() - start)
-	sizeCost := float64(len(res)+100) * s.sizeCostFactor
+	sizeCost := float64(size+100) * s.sizeCostFactor
 	if sizeCost > cost {
 		cost = sizeCost
 	}
@@ -144,10 +156,7 @@ func (s *Server) Serve(id enode.ID, addr *net.UDPAddr, req []byte) []byte {
 	} else {
 		ch <- filteredCost / limit
 	}
-	if err != nil {
-		return nil
-	}
-	return res
+	return results
 }
 
 func (s *Server) Stop() {

@@ -119,25 +119,17 @@ func New(stack *node.Node, config *eth.Config) (*LightEthereum, error) {
 		return nil, err
 	}
 	prenegQuery := func(n *enode.Node) int {
-		req := lespay.CapacityQueryReq{
+		var requests lespay.Requests
+		requests.Add("les", lespay.CapacityQueryName, lespay.CapacityQueryReq{
 			Bias:      180,
 			AddTokens: []uint64{0},
-		}
-		reqEnc, _ := rlp.EncodeToBytes(&req)
-		reqs := lespay.Requests{lespay.Request{Service: "les", Name: lespay.CapacityQueryName, Params: reqEnc}} //TODO filter
-		reqsEnc, _ := rlp.EncodeToBytes(&reqs)
-		respsEnc, _ := leth.p2pServer.DiscV5.TalkRequest(n, "lespay", reqsEnc)
-		var (
-			resps [][]byte
-			resp  lespay.CapacityQueryResp
-		)
-		if len(respsEnc) == 0 || rlp.DecodeBytes(respsEnc, &resps) != nil || len(resps) != 1 {
+		})
+		replies := leth.LespayRequest(n, requests)
+		var cqr lespay.CapacityQueryReply
+		if replies.Get(0, &cqr) != nil || len(cqr) != 1 {
 			return -1
 		}
-		if len(resps[0]) == 0 || rlp.DecodeBytes(resps[0], &resp) != nil || len(resp) != 1 {
-			return -1
-		}
-		if resp[0] > 0 {
+		if cqr[0] > 0 {
 			return 1
 		}
 		return 0
@@ -343,4 +335,17 @@ func (s *LightEthereum) Stop() error {
 	s.wg.Wait()
 	log.Info("Light ethereum stopped")
 	return nil
+}
+
+func (s *LightEthereum) LespayRequest(n *enode.Node, reqs lespay.Requests) lespay.Replies {
+	if p := s.peers.peer(n.ID().String()); p != nil {
+		return s.handler.lespayRequest(p, reqs)
+	}
+	reqsEnc, _ := rlp.EncodeToBytes(&reqs)
+	repliesEnc, _ := s.p2pServer.DiscV5.TalkRequest(n, "lespay", reqsEnc)
+	var replies lespay.Replies
+	if len(repliesEnc) == 0 || rlp.DecodeBytes(repliesEnc, &replies) != nil {
+		return nil
+	}
+	return replies
 }

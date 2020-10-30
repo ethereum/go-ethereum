@@ -201,6 +201,9 @@ func (pp *PriorityPool) RequestCapacity(node *enode.Node, targetCap uint64, bias
 	if targetCap < pp.minCap {
 		targetCap = pp.minCap
 	}
+	if bias < pp.activeBias {
+		bias = pp.activeBias
+	}
 	c, _ := pp.ns.GetField(node, pp.ppNodeInfoField).(*ppNodeInfo)
 	if c == nil {
 		log.Error("RequestCapacity called for unknown node", "id", node.ID())

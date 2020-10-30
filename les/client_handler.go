@@ -26,6 +26,8 @@ import (
 	"github.com/ethereum/go-ethereum/common/mclock"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/eth/downloader"
+	"github.com/ethereum/go-ethereum/les/flowcontrol"
+	"github.com/ethereum/go-ethereum/les/lespay"
 	"github.com/ethereum/go-ethereum/light"
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/p2p"
@@ -41,6 +43,9 @@ type clientHandler struct {
 	downloader *downloader.Downloader
 	backend    *LightEthereum
 
+	lespayReplyLock     sync.Mutex
+	lespayReplyChannels map[uint64]chan lespay.Replies
+
 	closeCh  chan struct{}
 	wg       sync.WaitGroup // WaitGroup used to track all connected peers.
 	syncDone func()         // Test hooks when syncing is done.
@@ -48,9 +53,10 @@ type clientHandler struct {
 
 func newClientHandler(ulcServers []string, ulcFraction int, checkpoint *params.TrustedCheckpoint, backend *LightEthereum) *clientHandler {
 	handler := &clientHandler{
-		checkpoint: checkpoint,
-		backend:    backend,
-		closeCh:    make(chan struct{}),
+		checkpoint:          checkpoint,
+		backend:             backend,
+		closeCh:             make(chan struct{}),
+		lespayReplyChannels: make(map[uint64]chan lespay.Replies),
 	}
 	if ulcServers != nil {
 		ulc, err := newULC(ulcServers, ulcFraction)
@@ -102,7 +108,7 @@ func (h *clientHandler) handle(p *serverPeer) error {
 	p.Log().Debug("Light Ethereum peer connected", "name", p.Name())
 
 	// Execute the LES handshake
-	if err := p.Handshake(h.backend.blockchain.Genesis().Hash()); err != nil {
+	if err := p.Handshake(h.backend.blockchain.Genesis().Hash(), clientMetaMapping); err != nil {
 		p.Log().Debug("Light Ethereum handshake failed", "err", err)
 		return err
 	}
@@ -150,7 +156,10 @@ func (h *clientHandler) handleMsg(p *serverPeer) error {
 	}
 	defer msg.Discard()
 
-	var deliverMsg *Msg
+	var (
+		deliverMsg    *Msg
+		responseError bool
+	)
 
 	// Handle the message depending on its contents
 	switch msg.Code {
@@ -168,7 +177,6 @@ func (h *clientHandler) handleMsg(p *serverPeer) error {
 			return errResp(ErrRequestRejected, "")
 		}
 		p.updateFlowControl(update)
-		p.updateVtParams()
 
 		if req.Hash != (common.Hash{}) {
 			if p.announceType == announceTypeNone {
@@ -187,129 +195,145 @@ func (h *clientHandler) handleMsg(p *serverPeer) error {
 			p.updateHead(req.Hash, req.Number, req.Td)
 			h.fetcher.announce(p, &req)
 		}
+
 	case BlockHeadersMsg:
 		p.Log().Trace("Received block header response message")
 		var resp struct {
-			ReqID, BV uint64
-			Headers   []*types.Header
+			Meta    replyMetaInfo
+			Headers []*types.Header
 		}
+		resp.Meta.mapping, resp.Meta.reqID.set, resp.Meta.bv.set = p.mapping.Receive, true, true
 		if err := msg.Decode(&resp); err != nil {
 			return errResp(ErrDecode, "msg %v: %v", msg, err)
 		}
 		headers := resp.Headers
-		p.fcServer.ReceivedReply(resp.ReqID, resp.BV)
-		p.answeredRequest(resp.ReqID)
+		p.fcServer.ReceivedReply(resp.Meta.reqID.value, resp.Meta.bv.value)
+		p.answeredRequest(resp.Meta.reqID.value)
 
 		// Filter out any explicitly requested headers, deliver the rest to the downloader
 		filter := len(headers) == 1
 		if filter {
-			headers = h.fetcher.deliverHeaders(p, resp.ReqID, resp.Headers)
+			headers = h.fetcher.deliverHeaders(p, resp.Meta.reqID.value, resp.Headers)
 		}
 		if len(headers) != 0 || !filter {
 			if err := h.downloader.DeliverHeaders(p.id, headers); err != nil {
 				log.Debug("Failed to deliver headers", "err", err)
 			}
 		}
+
 	case BlockBodiesMsg:
 		p.Log().Trace("Received block bodies response")
 		var resp struct {
-			ReqID, BV uint64
-			Data      []*types.Body
+			Meta replyMetaInfo
+			Data []*types.Body
 		}
+		resp.Meta.mapping, resp.Meta.reqID.set, resp.Meta.bv.set = p.mapping.Receive, true, true
 		if err := msg.Decode(&resp); err != nil {
 			return errResp(ErrDecode, "msg %v: %v", msg, err)
 		}
-		p.fcServer.ReceivedReply(resp.ReqID, resp.BV)
-		p.answeredRequest(resp.ReqID)
+		p.fcServer.ReceivedReply(resp.Meta.reqID.value, resp.Meta.bv.value)
+		p.answeredRequest(resp.Meta.reqID.value)
 		deliverMsg = &Msg{
 			MsgType: MsgBlockBodies,
-			ReqID:   resp.ReqID,
+			ReqID:   resp.Meta.reqID.value,
 			Obj:     resp.Data,
 		}
+
 	case CodeMsg:
 		p.Log().Trace("Received code response")
 		var resp struct {
-			ReqID, BV uint64
-			Data      [][]byte
+			Meta replyMetaInfo
+			Data [][]byte
 		}
+		resp.Meta.mapping, resp.Meta.reqID.set, resp.Meta.bv.set = p.mapping.Receive, true, true
 		if err := msg.Decode(&resp); err != nil {
 			return errResp(ErrDecode, "msg %v: %v", msg, err)
 		}
-		p.fcServer.ReceivedReply(resp.ReqID, resp.BV)
-		p.answeredRequest(resp.ReqID)
+		p.fcServer.ReceivedReply(resp.Meta.reqID.value, resp.Meta.bv.value)
+		p.answeredRequest(resp.Meta.reqID.value)
 		deliverMsg = &Msg{
 			MsgType: MsgCode,
-			ReqID:   resp.ReqID,
+			ReqID:   resp.Meta.reqID.value,
 			Obj:     resp.Data,
 		}
+
 	case ReceiptsMsg:
 		p.Log().Trace("Received receipts response")
 		var resp struct {
-			ReqID, BV uint64
-			Receipts  []types.Receipts
+			Meta     replyMetaInfo
+			Receipts []types.Receipts
 		}
+		resp.Meta.mapping, resp.Meta.reqID.set, resp.Meta.bv.set = p.mapping.Receive, true, true
 		if err := msg.Decode(&resp); err != nil {
 			return errResp(ErrDecode, "msg %v: %v", msg, err)
 		}
-		p.fcServer.ReceivedReply(resp.ReqID, resp.BV)
-		p.answeredRequest(resp.ReqID)
+		p.fcServer.ReceivedReply(resp.Meta.reqID.value, resp.Meta.bv.value)
+		p.answeredRequest(resp.Meta.reqID.value)
 		deliverMsg = &Msg{
 			MsgType: MsgReceipts,
-			ReqID:   resp.ReqID,
+			ReqID:   resp.Meta.reqID.value,
 			Obj:     resp.Receipts,
 		}
+
 	case ProofsV2Msg:
 		p.Log().Trace("Received les/2 proofs response")
 		var resp struct {
-			ReqID, BV uint64
-			Data      light.NodeList
+			Meta replyMetaInfo
+			Data light.NodeList
 		}
+		resp.Meta.mapping, resp.Meta.reqID.set, resp.Meta.bv.set = p.mapping.Receive, true, true
 		if err := msg.Decode(&resp); err != nil {
 			return errResp(ErrDecode, "msg %v: %v", msg, err)
 		}
-		p.fcServer.ReceivedReply(resp.ReqID, resp.BV)
-		p.answeredRequest(resp.ReqID)
+		p.fcServer.ReceivedReply(resp.Meta.reqID.value, resp.Meta.bv.value)
+		p.answeredRequest(resp.Meta.reqID.value)
 		deliverMsg = &Msg{
 			MsgType: MsgProofsV2,
-			ReqID:   resp.ReqID,
+			ReqID:   resp.Meta.reqID.value,
 			Obj:     resp.Data,
 		}
+
 	case HelperTrieProofsMsg:
 		p.Log().Trace("Received helper trie proof response")
 		var resp struct {
-			ReqID, BV uint64
-			Data      HelperTrieResps
+			Meta replyMetaInfo
+			Data HelperTrieResps
 		}
+		resp.Meta.mapping, resp.Meta.reqID.set, resp.Meta.bv.set = p.mapping.Receive, true, true
 		if err := msg.Decode(&resp); err != nil {
 			return errResp(ErrDecode, "msg %v: %v", msg, err)
 		}
-		p.fcServer.ReceivedReply(resp.ReqID, resp.BV)
-		p.answeredRequest(resp.ReqID)
+		p.fcServer.ReceivedReply(resp.Meta.reqID.value, resp.Meta.bv.value)
+		p.answeredRequest(resp.Meta.reqID.value)
 		deliverMsg = &Msg{
 			MsgType: MsgHelperTrieProofs,
-			ReqID:   resp.ReqID,
+			ReqID:   resp.Meta.reqID.value,
 			Obj:     resp.Data,
 		}
+
 	case TxStatusMsg:
 		p.Log().Trace("Received tx status response")
 		var resp struct {
-			ReqID, BV uint64
-			Status    []light.TxStatus
+			Meta   replyMetaInfo
+			Status []light.TxStatus
 		}
+		resp.Meta.mapping, resp.Meta.reqID.set, resp.Meta.bv.set = p.mapping.Receive, true, true
 		if err := msg.Decode(&resp); err != nil {
 			return errResp(ErrDecode, "msg %v: %v", msg, err)
 		}
-		p.fcServer.ReceivedReply(resp.ReqID, resp.BV)
-		p.answeredRequest(resp.ReqID)
+		p.fcServer.ReceivedReply(resp.Meta.reqID.value, resp.Meta.bv.value)
+		p.answeredRequest(resp.Meta.reqID.value)
 		deliverMsg = &Msg{
 			MsgType: MsgTxStatus,
-			ReqID:   resp.ReqID,
+			ReqID:   resp.Meta.reqID.value,
 			Obj:     resp.Status,
 		}
+
 	case StopMsg:
 		p.freeze()
 		h.backend.retriever.frozen(p)
 		p.Log().Debug("Service stopped")
+
 	case ResumeMsg:
 		var bv uint64
 		if err := msg.Decode(&bv); err != nil {
@@ -318,6 +342,44 @@ func (h *clientHandler) handleMsg(p *serverPeer) error {
 		p.fcServer.ResumeFreeze(bv)
 		p.unfreeze()
 		p.Log().Debug("Service resumed")
+
+	case LespayReplyMsg:
+		p.Log().Trace("Received lespay response")
+		var resp struct {
+			Meta    replyMetaInfo
+			Replies lespay.Replies
+		}
+		resp.Meta.mapping, resp.Meta.reqID.set, resp.Meta.bv.set = p.mapping.Receive, true, true
+		if err := msg.Decode(&resp); err != nil {
+			return errResp(ErrDecode, "msg %v: %v", msg, err)
+		}
+		h.lespayReplyLock.Lock()
+		if ch := h.lespayReplyChannels[resp.Meta.reqID.value]; ch != nil {
+			delete(h.lespayReplyChannels, resp.Meta.reqID.value)
+			ch <- resp.Replies
+		} else {
+			responseError = true
+		}
+		h.lespayReplyLock.Unlock()
+
+	case CapacityUpdateMsg:
+		p.Log().Trace("Received capacity update")
+		var resp struct {
+			Meta   replyMetaInfo
+			Update capacityUpdate
+		}
+		resp.Meta.mapping = p.mapping.Receive
+		if err := msg.Decode(&resp); err != nil {
+			return errResp(ErrDecode, "msg %v: %v", msg, err)
+		}
+		if p.rejectUpdate(uint64(msg.Size)) {
+			return errResp(ErrRequestRejected, "")
+		}
+		p.updateCapacity(flowcontrol.ServerParams{MinRecharge: resp.Update.MinRecharge, BufLimit: resp.Update.BufLimit})
+		if resp.Meta.reqID.set && resp.Meta.bv.set {
+			p.fcServer.ReceivedReply(resp.Meta.reqID.value, resp.Meta.bv.value)
+		}
+
 	default:
 		p.Log().Trace("Received invalid message", "code", msg.Code)
 		return errResp(ErrInvalidMsgCode, "%v", msg.Code)
@@ -325,9 +387,12 @@ func (h *clientHandler) handleMsg(p *serverPeer) error {
 	// Deliver the received response to retriever.
 	if deliverMsg != nil {
 		if err := h.backend.retriever.deliver(p, deliverMsg); err != nil {
-			if val := p.errCount.Add(1, mclock.Now()); val > maxResponseErrors {
-				return err
-			}
+			responseError = true
+		}
+	}
+	if responseError {
+		if val := p.errCount.Add(1, mclock.Now()); val > maxResponseErrors {
+			return err
 		}
 	}
 	return nil
@@ -335,6 +400,24 @@ func (h *clientHandler) handleMsg(p *serverPeer) error {
 
 func (h *clientHandler) removePeer(id string) {
 	h.backend.peers.unregister(id)
+}
+
+func (h *clientHandler) lespayRequest(p *serverPeer, reqs lespay.Requests) lespay.Replies {
+	reqID := genReqID()
+	ch := make(chan lespay.Replies, 1)
+	h.lespayReplyLock.Lock()
+	h.lespayReplyChannels[reqID] = ch
+	h.lespayReplyLock.Unlock()
+	p.sendLespayRequest(reqID, reqs)
+	select {
+	case reply := <-ch:
+		return reply
+	case <-time.After(time.Second * 2):
+	}
+	h.lespayReplyLock.Lock()
+	delete(h.lespayReplyChannels, reqID)
+	h.lespayReplyLock.Unlock()
+	return nil
 }
 
 type peerConnection struct {

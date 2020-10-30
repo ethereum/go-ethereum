@@ -80,11 +80,11 @@ var (
 	// The number of confirmations needed to generate a checkpoint(only used in test).
 	processConfirms = big.NewInt(1)
 
-	// The token bucket buffer limit for testing purpose.
-	testBufLimit = uint64(1000000)
-
 	// The buffer recharging speed for testing purpose.
 	testBufRecharge = uint64(1000)
+
+	// The token bucket buffer limit for testing purpose.
+	testBufLimit = testBufRecharge * bufLimitRatio
 )
 
 /*
@@ -411,13 +411,24 @@ func (p *testPeer) handshake(t *testing.T, td *big.Int, head common.Hash, headNu
 	expList = expList.add("genesisHash", genesis)
 	sendList := make(keyValueList, len(expList))
 	copy(sendList, expList)
+
+	if p.cpeer.version >= lpv4 {
+		sendList = sendList.add("metaInfo", clientMetaMapping)
+		expList = expList.add("metaInfo", serverMetaMapping)
+	}
+
 	expList = expList.add("serveHeaders", nil)
 	expList = expList.add("serveChainSince", uint64(0))
 	expList = expList.add("serveStateSince", uint64(0))
 	expList = expList.add("serveRecentState", uint64(core.TriesInMemory-4))
 	expList = expList.add("txRelay", nil)
-	expList = expList.add("flowControl/BL", testBufLimit)
-	expList = expList.add("flowControl/MRR", testBufRecharge)
+	if p.cpeer.version >= lpv4 {
+		expList = expList.add("flowControl/BL", uint64(0))
+		expList = expList.add("flowControl/MRR", uint64(0))
+	} else {
+		expList = expList.add("flowControl/BL", testBufLimit)
+		expList = expList.add("flowControl/MRR", testBufRecharge)
+	}
 	expList = expList.add("flowControl/MRC", costList)
 
 	if err := p2p.ExpectMsg(p.app, StatusMsg, expList); err != nil {
@@ -426,10 +437,14 @@ func (p *testPeer) handshake(t *testing.T, td *big.Int, head common.Hash, headNu
 	if err := p2p.Send(p.app, StatusMsg, sendList); err != nil {
 		t.Fatalf("status send: %v", err)
 	}
-	p.cpeer.fcParams = flowcontrol.ServerParams{
-		BufLimit:    testBufLimit,
-		MinRecharge: testBufRecharge,
+	p.cpeer.lock.Lock() // ensure that handshake has been finished
+	if p.cpeer.version < lpv4 {
+		p.cpeer.fcParams = flowcontrol.ServerParams{
+			BufLimit:    testBufLimit,
+			MinRecharge: testBufRecharge,
+		}
 	}
+	p.cpeer.lock.Unlock()
 }
 
 type indexerCallback func(*core.ChainIndexer, *core.ChainIndexer, *core.ChainIndexer)
@@ -472,6 +487,20 @@ func newServerEnv(t *testing.T, blocks int, protocol int, callback indexerCallba
 	var peer *testPeer
 	if newPeer {
 		peer, _ = newTestPeer(t, "peer", protocol, handler, true, testCost)
+	}
+
+	if protocol >= lpv4 {
+		type update struct {
+			Meta replyMetaInfo
+			Data capacityUpdate
+		}
+		p2p.ExpectMsg(peer.app, CapacityUpdateMsg, update{
+			replyMetaInfo{
+				mapping: peer.cpeer.mapping.Send,
+			}, capacityUpdate{
+				MinRecharge: testBufRecharge,
+				BufLimit:    testBufLimit,
+			}})
 	}
 
 	cIndexer, bIndexer, btIndexer := indexers[0], indexers[1], indexers[2]

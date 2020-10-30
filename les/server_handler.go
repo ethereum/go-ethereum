@@ -32,6 +32,7 @@ import (
 	"github.com/ethereum/go-ethereum/core/state"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/ethdb"
+	"github.com/ethereum/go-ethereum/les/lespay"
 	lps "github.com/ethereum/go-ethereum/les/lespay/server"
 	"github.com/ethereum/go-ethereum/light"
 	"github.com/ethereum/go-ethereum/log"
@@ -122,7 +123,7 @@ func (h *serverHandler) handle(p *clientPeer) error {
 		number = head.Number.Uint64()
 		td     = h.blockchain.GetTd(hash, number)
 	)
-	if err := p.Handshake(td, hash, number, h.blockchain.Genesis().Hash(), h.server); err != nil {
+	if err := p.Handshake(td, hash, number, h.blockchain.Genesis().Hash(), serverMetaMapping, h.server); err != nil {
 		p.Log().Debug("Light Ethereum handshake failed", "err", err)
 		return err
 	}
@@ -281,6 +282,15 @@ func (h *serverHandler) handleMsg(p *clientPeer, wg *sync.WaitGroup) error {
 			}
 		}
 		bv := p.fcClient.RequestProcessed(reqID, responseCount, maxCost, realCost)
+		meta := replyMetaInfo{
+			mapping:  p.mapping.Send,
+			reqID:    metaInfoField{value: reqID, set: true},
+			bv:       metaInfoField{value: bv, set: true},
+			realCost: metaInfoField{value: realCost, set: true},
+		}
+		if p.mapping.Send.Has(replyMetaBalance) {
+			meta.balance.value, _ = p.balance.GetBalance()
+		}
 		if amount != 0 {
 			// Feed cost tracker request serving statistic.
 			h.server.costTracker.updateStats(msg.Code, amount, servingTime, realCost)
@@ -289,7 +299,7 @@ func (h *serverHandler) handleMsg(p *clientPeer, wg *sync.WaitGroup) error {
 		}
 		if reply != nil {
 			p.queueSend(func() {
-				if err := reply.send(bv); err != nil {
+				if err := reply.send(meta); err != nil {
 					select {
 					case p.errCh <- err:
 					default:
@@ -306,15 +316,16 @@ func (h *serverHandler) handleMsg(p *clientPeer, wg *sync.WaitGroup) error {
 			miscInHeaderTrafficMeter.Mark(int64(msg.Size))
 		}
 		var req struct {
-			ReqID uint64
+			Meta  requestMetaInfo
 			Query getBlockHeadersData
 		}
+		req.Meta.mapping, req.Meta.reqID.set = p.mapping.Receive, true
 		if err := msg.Decode(&req); err != nil {
 			clientErrorMeter.Mark(1)
 			return errResp(ErrDecode, "%v: %v", msg, err)
 		}
 		query := req.Query
-		if accept(req.ReqID, query.Amount, MaxHeaderFetch) {
+		if accept(req.Meta.reqID.value, query.Amount, MaxHeaderFetch) {
 			wg.Add(1)
 			go func() {
 				defer wg.Done()
@@ -330,7 +341,7 @@ func (h *serverHandler) handleMsg(p *clientPeer, wg *sync.WaitGroup) error {
 				)
 				for !unknown && len(headers) < int(query.Amount) && bytes < softResponseLimit {
 					if !first && !task.waitOrStop() {
-						sendResponse(req.ReqID, 0, nil, task.servingTime)
+						sendResponse(req.Meta.reqID.value, 0, nil, task.servingTime)
 						return
 					}
 					// Retrieve the next header satisfying the query
@@ -402,8 +413,8 @@ func (h *serverHandler) handleMsg(p *clientPeer, wg *sync.WaitGroup) error {
 					}
 					first = false
 				}
-				reply := p.replyBlockHeaders(req.ReqID, headers)
-				sendResponse(req.ReqID, query.Amount, reply, task.done())
+				reply := p.replyBlockHeaders(headers)
+				sendResponse(req.Meta.reqID.value, query.Amount, reply, task.done())
 				if metrics.EnabledExpensive {
 					miscOutHeaderPacketsMeter.Mark(1)
 					miscOutHeaderTrafficMeter.Mark(int64(reply.size()))
@@ -419,9 +430,10 @@ func (h *serverHandler) handleMsg(p *clientPeer, wg *sync.WaitGroup) error {
 			miscInBodyTrafficMeter.Mark(int64(msg.Size))
 		}
 		var req struct {
-			ReqID  uint64
+			Meta   requestMetaInfo
 			Hashes []common.Hash
 		}
+		req.Meta.mapping, req.Meta.reqID.set = p.mapping.Receive, true
 		if err := msg.Decode(&req); err != nil {
 			clientErrorMeter.Mark(1)
 			return errResp(ErrDecode, "msg %v: %v", msg, err)
@@ -431,13 +443,13 @@ func (h *serverHandler) handleMsg(p *clientPeer, wg *sync.WaitGroup) error {
 			bodies []rlp.RawValue
 		)
 		reqCnt := len(req.Hashes)
-		if accept(req.ReqID, uint64(reqCnt), MaxBodyFetch) {
+		if accept(req.Meta.reqID.value, uint64(reqCnt), MaxBodyFetch) {
 			wg.Add(1)
 			go func() {
 				defer wg.Done()
 				for i, hash := range req.Hashes {
 					if i != 0 && !task.waitOrStop() {
-						sendResponse(req.ReqID, 0, nil, task.servingTime)
+						sendResponse(req.Meta.reqID.value, 0, nil, task.servingTime)
 						return
 					}
 					if bytes >= softResponseLimit {
@@ -451,8 +463,8 @@ func (h *serverHandler) handleMsg(p *clientPeer, wg *sync.WaitGroup) error {
 					bodies = append(bodies, body)
 					bytes += len(body)
 				}
-				reply := p.replyBlockBodiesRLP(req.ReqID, bodies)
-				sendResponse(req.ReqID, uint64(reqCnt), reply, task.done())
+				reply := p.replyBlockBodiesRLP(bodies)
+				sendResponse(req.Meta.reqID.value, uint64(reqCnt), reply, task.done())
 				if metrics.EnabledExpensive {
 					miscOutBodyPacketsMeter.Mark(1)
 					miscOutBodyTrafficMeter.Mark(int64(reply.size()))
@@ -468,9 +480,10 @@ func (h *serverHandler) handleMsg(p *clientPeer, wg *sync.WaitGroup) error {
 			miscInCodeTrafficMeter.Mark(int64(msg.Size))
 		}
 		var req struct {
-			ReqID uint64
-			Reqs  []CodeReq
+			Meta requestMetaInfo
+			Reqs []CodeReq
 		}
+		req.Meta.mapping, req.Meta.reqID.set = p.mapping.Receive, true
 		if err := msg.Decode(&req); err != nil {
 			clientErrorMeter.Mark(1)
 			return errResp(ErrDecode, "msg %v: %v", msg, err)
@@ -480,13 +493,13 @@ func (h *serverHandler) handleMsg(p *clientPeer, wg *sync.WaitGroup) error {
 			data  [][]byte
 		)
 		reqCnt := len(req.Reqs)
-		if accept(req.ReqID, uint64(reqCnt), MaxCodeFetch) {
+		if accept(req.Meta.reqID.value, uint64(reqCnt), MaxCodeFetch) {
 			wg.Add(1)
 			go func() {
 				defer wg.Done()
 				for i, request := range req.Reqs {
 					if i != 0 && !task.waitOrStop() {
-						sendResponse(req.ReqID, 0, nil, task.servingTime)
+						sendResponse(req.Meta.reqID.value, 0, nil, task.servingTime)
 						return
 					}
 					// Look up the root hash belonging to the request
@@ -523,8 +536,8 @@ func (h *serverHandler) handleMsg(p *clientPeer, wg *sync.WaitGroup) error {
 						break
 					}
 				}
-				reply := p.replyCode(req.ReqID, data)
-				sendResponse(req.ReqID, uint64(reqCnt), reply, task.done())
+				reply := p.replyCode(data)
+				sendResponse(req.Meta.reqID.value, uint64(reqCnt), reply, task.done())
 				if metrics.EnabledExpensive {
 					miscOutCodePacketsMeter.Mark(1)
 					miscOutCodeTrafficMeter.Mark(int64(reply.size()))
@@ -540,9 +553,10 @@ func (h *serverHandler) handleMsg(p *clientPeer, wg *sync.WaitGroup) error {
 			miscInReceiptTrafficMeter.Mark(int64(msg.Size))
 		}
 		var req struct {
-			ReqID  uint64
+			Meta   requestMetaInfo
 			Hashes []common.Hash
 		}
+		req.Meta.mapping, req.Meta.reqID.set = p.mapping.Receive, true
 		if err := msg.Decode(&req); err != nil {
 			clientErrorMeter.Mark(1)
 			return errResp(ErrDecode, "msg %v: %v", msg, err)
@@ -552,13 +566,13 @@ func (h *serverHandler) handleMsg(p *clientPeer, wg *sync.WaitGroup) error {
 			receipts []rlp.RawValue
 		)
 		reqCnt := len(req.Hashes)
-		if accept(req.ReqID, uint64(reqCnt), MaxReceiptFetch) {
+		if accept(req.Meta.reqID.value, uint64(reqCnt), MaxReceiptFetch) {
 			wg.Add(1)
 			go func() {
 				defer wg.Done()
 				for i, hash := range req.Hashes {
 					if i != 0 && !task.waitOrStop() {
-						sendResponse(req.ReqID, 0, nil, task.servingTime)
+						sendResponse(req.Meta.reqID.value, 0, nil, task.servingTime)
 						return
 					}
 					if bytes >= softResponseLimit {
@@ -580,8 +594,8 @@ func (h *serverHandler) handleMsg(p *clientPeer, wg *sync.WaitGroup) error {
 						bytes += len(encoded)
 					}
 				}
-				reply := p.replyReceiptsRLP(req.ReqID, receipts)
-				sendResponse(req.ReqID, uint64(reqCnt), reply, task.done())
+				reply := p.replyReceiptsRLP(receipts)
+				sendResponse(req.Meta.reqID.value, uint64(reqCnt), reply, task.done())
 				if metrics.EnabledExpensive {
 					miscOutReceiptPacketsMeter.Mark(1)
 					miscOutReceiptTrafficMeter.Mark(int64(reply.size()))
@@ -597,9 +611,10 @@ func (h *serverHandler) handleMsg(p *clientPeer, wg *sync.WaitGroup) error {
 			miscInTrieProofTrafficMeter.Mark(int64(msg.Size))
 		}
 		var req struct {
-			ReqID uint64
-			Reqs  []ProofReq
+			Meta requestMetaInfo
+			Reqs []ProofReq
 		}
+		req.Meta.mapping, req.Meta.reqID.set = p.mapping.Receive, true
 		if err := msg.Decode(&req); err != nil {
 			clientErrorMeter.Mark(1)
 			return errResp(ErrDecode, "msg %v: %v", msg, err)
@@ -610,7 +625,7 @@ func (h *serverHandler) handleMsg(p *clientPeer, wg *sync.WaitGroup) error {
 			root      common.Hash
 		)
 		reqCnt := len(req.Reqs)
-		if accept(req.ReqID, uint64(reqCnt), MaxProofsFetch) {
+		if accept(req.Meta.reqID.value, uint64(reqCnt), MaxProofsFetch) {
 			wg.Add(1)
 			go func() {
 				defer wg.Done()
@@ -618,7 +633,7 @@ func (h *serverHandler) handleMsg(p *clientPeer, wg *sync.WaitGroup) error {
 
 				for i, request := range req.Reqs {
 					if i != 0 && !task.waitOrStop() {
-						sendResponse(req.ReqID, 0, nil, task.servingTime)
+						sendResponse(req.Meta.reqID.value, 0, nil, task.servingTime)
 						return
 					}
 					// Look up the root hash belonging to the request
@@ -683,8 +698,8 @@ func (h *serverHandler) handleMsg(p *clientPeer, wg *sync.WaitGroup) error {
 						break
 					}
 				}
-				reply := p.replyProofsV2(req.ReqID, nodes.NodeList())
-				sendResponse(req.ReqID, uint64(reqCnt), reply, task.done())
+				reply := p.replyProofsV2(nodes.NodeList())
+				sendResponse(req.Meta.reqID.value, uint64(reqCnt), reply, task.done())
 				if metrics.EnabledExpensive {
 					miscOutTrieProofPacketsMeter.Mark(1)
 					miscOutTrieProofTrafficMeter.Mark(int64(reply.size()))
@@ -700,9 +715,10 @@ func (h *serverHandler) handleMsg(p *clientPeer, wg *sync.WaitGroup) error {
 			miscInHelperTrieTrafficMeter.Mark(int64(msg.Size))
 		}
 		var req struct {
-			ReqID uint64
-			Reqs  []HelperTrieReq
+			Meta requestMetaInfo
+			Reqs []HelperTrieReq
 		}
+		req.Meta.mapping, req.Meta.reqID.set = p.mapping.Receive, true
 		if err := msg.Decode(&req); err != nil {
 			clientErrorMeter.Mark(1)
 			return errResp(ErrDecode, "msg %v: %v", msg, err)
@@ -713,7 +729,7 @@ func (h *serverHandler) handleMsg(p *clientPeer, wg *sync.WaitGroup) error {
 			auxData  [][]byte
 		)
 		reqCnt := len(req.Reqs)
-		if accept(req.ReqID, uint64(reqCnt), MaxHelperTrieProofsFetch) {
+		if accept(req.Meta.reqID.value, uint64(reqCnt), MaxHelperTrieProofsFetch) {
 			wg.Add(1)
 			go func() {
 				defer wg.Done()
@@ -726,7 +742,7 @@ func (h *serverHandler) handleMsg(p *clientPeer, wg *sync.WaitGroup) error {
 				nodes := light.NewNodeSet()
 				for i, request := range req.Reqs {
 					if i != 0 && !task.waitOrStop() {
-						sendResponse(req.ReqID, 0, nil, task.servingTime)
+						sendResponse(req.Meta.reqID.value, 0, nil, task.servingTime)
 						return
 					}
 					if auxTrie == nil || request.Type != lastType || request.TrieIdx != lastIdx {
@@ -758,8 +774,8 @@ func (h *serverHandler) handleMsg(p *clientPeer, wg *sync.WaitGroup) error {
 						break
 					}
 				}
-				reply := p.replyHelperTrieProofs(req.ReqID, HelperTrieResps{Proofs: nodes.NodeList(), AuxData: auxData})
-				sendResponse(req.ReqID, uint64(reqCnt), reply, task.done())
+				reply := p.replyHelperTrieProofs(HelperTrieResps{Proofs: nodes.NodeList(), AuxData: auxData})
+				sendResponse(req.Meta.reqID.value, uint64(reqCnt), reply, task.done())
 				if metrics.EnabledExpensive {
 					miscOutHelperTriePacketsMeter.Mark(1)
 					miscOutHelperTrieTrafficMeter.Mark(int64(reply.size()))
@@ -775,15 +791,16 @@ func (h *serverHandler) handleMsg(p *clientPeer, wg *sync.WaitGroup) error {
 			miscInTxsTrafficMeter.Mark(int64(msg.Size))
 		}
 		var req struct {
-			ReqID uint64
-			Txs   []*types.Transaction
+			Meta requestMetaInfo
+			Txs  []*types.Transaction
 		}
+		req.Meta.mapping, req.Meta.reqID.set = p.mapping.Receive, true
 		if err := msg.Decode(&req); err != nil {
 			clientErrorMeter.Mark(1)
 			return errResp(ErrDecode, "msg %v: %v", msg, err)
 		}
 		reqCnt := len(req.Txs)
-		if accept(req.ReqID, uint64(reqCnt), MaxTxSend) {
+		if accept(req.Meta.reqID.value, uint64(reqCnt), MaxTxSend) {
 			wg.Add(1)
 			go func() {
 				defer wg.Done()
@@ -807,8 +824,8 @@ func (h *serverHandler) handleMsg(p *clientPeer, wg *sync.WaitGroup) error {
 						stats[i] = h.txStatus(hash)
 					}
 				}
-				reply := p.replyTxStatus(req.ReqID, stats)
-				sendResponse(req.ReqID, uint64(reqCnt), reply, task.done())
+				reply := p.replyTxStatus(stats)
+				sendResponse(req.Meta.reqID.value, uint64(reqCnt), reply, task.done())
 				if metrics.EnabledExpensive {
 					miscOutTxsPacketsMeter.Mark(1)
 					miscOutTxsTrafficMeter.Mark(int64(reply.size()))
@@ -824,28 +841,29 @@ func (h *serverHandler) handleMsg(p *clientPeer, wg *sync.WaitGroup) error {
 			miscInTxStatusTrafficMeter.Mark(int64(msg.Size))
 		}
 		var req struct {
-			ReqID  uint64
+			Meta   requestMetaInfo
 			Hashes []common.Hash
 		}
+		req.Meta.mapping, req.Meta.reqID.set = p.mapping.Receive, true
 		if err := msg.Decode(&req); err != nil {
 			clientErrorMeter.Mark(1)
 			return errResp(ErrDecode, "msg %v: %v", msg, err)
 		}
 		reqCnt := len(req.Hashes)
-		if accept(req.ReqID, uint64(reqCnt), MaxTxStatus) {
+		if accept(req.Meta.reqID.value, uint64(reqCnt), MaxTxStatus) {
 			wg.Add(1)
 			go func() {
 				defer wg.Done()
 				stats := make([]light.TxStatus, len(req.Hashes))
 				for i, hash := range req.Hashes {
 					if i != 0 && !task.waitOrStop() {
-						sendResponse(req.ReqID, 0, nil, task.servingTime)
+						sendResponse(req.Meta.reqID.value, 0, nil, task.servingTime)
 						return
 					}
 					stats[i] = h.txStatus(hash)
 				}
-				reply := p.replyTxStatus(req.ReqID, stats)
-				sendResponse(req.ReqID, uint64(reqCnt), reply, task.done())
+				reply := p.replyTxStatus(stats)
+				sendResponse(req.Meta.reqID.value, uint64(reqCnt), reply, task.done())
 				if metrics.EnabledExpensive {
 					miscOutTxStatusPacketsMeter.Mark(1)
 					miscOutTxStatusTrafficMeter.Mark(int64(reply.size()))
@@ -853,6 +871,72 @@ func (h *serverHandler) handleMsg(p *clientPeer, wg *sync.WaitGroup) error {
 				}
 			}()
 		}
+
+	case LespayRequestMsg:
+		p.Log().Trace("Received lespay request")
+		if metrics.EnabledExpensive {
+			miscInLespayPacketsMeter.Mark(1)
+			miscInLespayTrafficMeter.Mark(int64(msg.Size))
+		}
+		var req struct {
+			Meta requestMetaInfo
+			Reqs lespay.Requests
+		}
+		req.Meta.mapping, req.Meta.reqID.set = p.mapping.Receive, true
+		if err := msg.Decode(&req); err != nil {
+			clientErrorMeter.Mark(1)
+			return errResp(ErrDecode, "msg %v: %v", msg, err)
+		}
+		reply := h.server.lespayServer.Serve(p.ID(), p.freeClientId(), req.Reqs) //TODO thread safety
+		// Note: lespay requests are silently dropped if the server is overloaded but this
+		// is not considered a fault from the client's part. Flow control is not applied.
+		// This is because these requests can be sent through UDP by not connected clients
+		// and therefore neither the clients nor the servers can ensure that all requests
+		// can be served.
+		if reply != nil {
+			if metrics.EnabledExpensive {
+				miscOutLespayPacketsMeter.Mark(1)
+				miscOutLespayTrafficMeter.Mark(int64(len(reply)))
+			}
+			p.queueSend(func() {
+				if err := p.sendLespayReply(req.Meta.reqID.value, reply); err != nil {
+					select {
+					case p.errCh <- err:
+					default:
+					}
+				}
+			})
+		}
+
+	case CapacityRequestMsg:
+		p.Log().Trace("Received capacity request")
+		var req struct {
+			Meta   requestMetaInfo
+			CapReq capacityRequest
+		}
+		req.Meta.mapping, req.Meta.reqID.set = p.mapping.Receive, true
+		if err := msg.Decode(&req); err != nil {
+			clientErrorMeter.Mark(1)
+			return errResp(ErrDecode, "msg %v: %v", msg, err)
+		}
+		reqCap := (req.CapReq.BufLimit + bufLimitRatio - 1) / bufLimitRatio
+		if req.CapReq.MinRecharge > reqCap {
+			reqCap = req.CapReq.MinRecharge
+		}
+		newCap, _ := h.server.clientPool.setCapacity(p.Node(), reqCap, time.Duration(req.CapReq.Bias)*time.Second)
+		bv, _ := p.fcClient.BufferStatus()
+		meta := replyMetaInfo{
+			reqID: req.Meta.reqID,
+			bv:    metaInfoField{value: bv, set: true},
+		}
+		p.queueSend(func() {
+			if err := p.sendCapacityUpdate(meta, capacityUpdate{MinRecharge: newCap, BufLimit: newCap * bufLimitRatio}); err != nil {
+				select {
+				case p.errCh <- err:
+				default:
+				}
+			}
+		})
 
 	default:
 		p.Log().Trace("Received invalid message", "code", msg.Code)

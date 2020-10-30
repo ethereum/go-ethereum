@@ -16,6 +16,14 @@
 
 package lespay
 
+import (
+	"errors"
+
+	"github.com/ethereum/go-ethereum/rlp"
+)
+
+var ErrNoReply = errors.New("no reply for given request")
+
 const (
 	CapacityQueryName = "cq"
 )
@@ -27,9 +35,31 @@ type (
 	}
 	Requests []Request
 
+	Replies [][]byte
+
 	CapacityQueryReq struct {
 		Bias      uint64 // seconds
 		AddTokens []uint64
 	}
-	CapacityQueryResp []uint64
+	CapacityQueryReply []uint64
 )
+
+func (r *Requests) Add(service, name string, val interface{}) (int, error) {
+	enc, err := rlp.EncodeToBytes(val)
+	if err != nil {
+		return -1, err
+	}
+	*r = append(*r, Request{
+		Service: service,
+		Name:    name,
+		Params:  enc,
+	})
+	return len(*r) - 1, nil
+}
+
+func (r Replies) Get(i int, val interface{}) error {
+	if i < 0 || i >= len(r) {
+		return ErrNoReply
+	}
+	return rlp.DecodeBytes(r[i], val)
+}

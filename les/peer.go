@@ -32,6 +32,7 @@ import (
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/eth"
 	"github.com/ethereum/go-ethereum/les/flowcontrol"
+	"github.com/ethereum/go-ethereum/les/lespay"
 	lpc "github.com/ethereum/go-ethereum/les/lespay/client"
 	lps "github.com/ethereum/go-ethereum/les/lespay/server"
 	"github.com/ethereum/go-ethereum/les/utils"
@@ -130,6 +131,9 @@ type peerCommons struct {
 
 	// Background task queue for caching peer tasks and executing in order.
 	sendQueue *utils.ExecQueue
+
+	// metainfo channel mapping
+	mapping lespay.MatchedMapping
 
 	// Flow control agreement.
 	fcParams flowcontrol.ServerParams // The config for token bucket.
@@ -246,7 +250,7 @@ func (p *peerCommons) sendReceiveHandshake(sendList keyValueList) (keyValueList,
 // network IDs, difficulties, head and genesis blocks. Besides the basic handshake
 // fields, server and client can exchange and resolve some specified fields through
 // two callback functions.
-func (p *peerCommons) handshake(td *big.Int, head common.Hash, headNum uint64, genesis common.Hash, sendCallback func(*keyValueList), recvCallback func(keyValueMap) error) error {
+func (p *peerCommons) handshake(td *big.Int, head common.Hash, headNum uint64, genesis common.Hash, localMapping lespay.MetaMapping, sendCallback func(*keyValueList), recvCallback func(keyValueMap) error) error {
 	p.lock.Lock()
 	defer p.lock.Unlock()
 
@@ -261,6 +265,9 @@ func (p *peerCommons) handshake(td *big.Int, head common.Hash, headNum uint64, g
 	send = send.add("headHash", head)
 	send = send.add("headNum", headNum)
 	send = send.add("genesisHash", genesis)
+	if p.version >= lpv4 {
+		send = send.add("metaInfo", localMapping)
+	}
 
 	// Add client-specified or server-specified fields
 	if sendCallback != nil {
@@ -275,8 +282,11 @@ func (p *peerCommons) handshake(td *big.Int, head common.Hash, headNum uint64, g
 	if size > allowedUpdateBytes {
 		return errResp(ErrRequestRejected, "")
 	}
-	var rGenesis common.Hash
-	var rVersion, rNetwork uint64
+	var (
+		rGenesis           common.Hash
+		rVersion, rNetwork uint64
+		remoteMapping      lespay.MetaMapping
+	)
 	if err := recv.get("protocolVersion", &rVersion); err != nil {
 		return err
 	}
@@ -285,6 +295,11 @@ func (p *peerCommons) handshake(td *big.Int, head common.Hash, headNum uint64, g
 	}
 	if err := recv.get("genesisHash", &rGenesis); err != nil {
 		return err
+	}
+	if p.version >= lpv4 {
+		if err := recv.get("metaInfo", &remoteMapping); err == nil {
+			p.mapping = localMapping.Match(remoteMapping)
+		}
 	}
 	if rGenesis != genesis {
 		return errResp(ErrGenesisBlockMismatch, "%x (!= %x)", rGenesis[:8], genesis[:8])
@@ -390,17 +405,18 @@ func (p *serverPeer) unfreeze() {
 
 // sendRequest send a request to the server based on the given message type
 // and content.
-func sendRequest(w p2p.MsgWriter, msgcode, reqID uint64, data interface{}) error {
+func sendRequest(w p2p.MsgWriter, mapping *lespay.MatchedHalfMapping, msgcode, reqID uint64, data interface{}) error {
 	type req struct {
-		ReqID uint64
-		Data  interface{}
+		Meta requestMetaInfo
+		Data interface{}
 	}
-	return p2p.Send(w, msgcode, req{reqID, data})
+	err := p2p.Send(w, msgcode, req{requestMetaInfo{mapping: mapping, reqID: metaInfoField{value: reqID, set: true}}, data})
+	return err
 }
 
 func (p *serverPeer) sendRequest(msgcode, reqID uint64, data interface{}, amount int) error {
 	p.sentRequest(reqID, uint32(msgcode), uint32(amount))
-	return sendRequest(p.rw, msgcode, reqID, data)
+	return sendRequest(p.rw, p.mapping.Send, msgcode, reqID, data)
 }
 
 // requestHeadersByHash fetches a batch of blocks' headers corresponding to the
@@ -412,7 +428,7 @@ func (p *serverPeer) requestHeadersByHash(reqID uint64, origin common.Hash, amou
 
 // requestHeadersByNumber fetches a batch of blocks' headers corresponding to the
 // specified header query, based on the number of an origin block.
-func (p *serverPeer) requestHeadersByNumber(reqID, origin uint64, amount int, skip int, reverse bool) error {
+func (p *serverPeer) requestHeadersByNumber(reqID uint64, origin uint64, amount int, skip int, reverse bool) error {
 	p.Log().Debug("Fetching batch of headers", "count", amount, "fromnum", origin, "skip", skip, "reverse", reverse)
 	return p.sendRequest(GetBlockHeadersMsg, reqID, &getBlockHeadersData{Origin: hashOrNumber{Number: origin}, Amount: uint64(amount), Skip: uint64(skip), Reverse: reverse}, amount)
 }
@@ -463,6 +479,18 @@ func (p *serverPeer) sendTxs(reqID uint64, amount int, txs rlp.RawValue) error {
 		amount = sizeFactor
 	}
 	return p.sendRequest(SendTxV2Msg, reqID, txs, amount)
+}
+
+// sendLespayRequest sends a lespay request
+func (p *serverPeer) sendLespayRequest(reqID uint64, reqs lespay.Requests) error {
+	p.Log().Debug("Sending lespay requests", "amount", len(reqs))
+	return sendRequest(p.rw, p.mapping.Send, LespayRequestMsg, reqID, reqs)
+}
+
+// sendCapacityRequest sends a capacity request
+func (p *serverPeer) sendCapacityRequest(reqID uint64, req capacityRequest) error {
+	p.Log().Debug("Sending capacity request")
+	return sendRequest(p.rw, p.mapping.Send, CapacityRequestMsg, reqID, req)
 }
 
 // waitBefore implements distPeer interface
@@ -540,6 +568,7 @@ func (p *serverPeer) updateFlowControl(update keyValueMap) {
 		// todo can light client set a minimal acceptable flow control params?
 		p.fcParams = params
 		p.fcServer.UpdateParams(params)
+		p.updateVtParams()
 	}
 	var MRC RequestCostList
 	if update.get("flowControl/MRC", &MRC) == nil {
@@ -548,6 +577,15 @@ func (p *serverPeer) updateFlowControl(update keyValueMap) {
 			p.fcCosts[code] = cost
 		}
 	}
+}
+
+func (p *serverPeer) updateCapacity(params flowcontrol.ServerParams) {
+	p.lock.Lock()
+	defer p.lock.Unlock()
+
+	p.fcParams = params
+	p.fcServer.UpdateParams(params)
+	p.updateVtParams()
 }
 
 // updateHead updates the head information based on the announcement from
@@ -561,10 +599,10 @@ func (p *serverPeer) updateHead(hash common.Hash, number uint64, td *big.Int) {
 
 // Handshake executes the les protocol handshake, negotiating version number,
 // network IDs and genesis blocks.
-func (p *serverPeer) Handshake(genesis common.Hash) error {
+func (p *serverPeer) Handshake(genesis common.Hash, localMapping lespay.MetaMapping) error {
 	// Note: there is no need to share local head with a server but older servers still
 	// require these fields so we announce zero values.
-	return p.handshake(common.Big0, common.Hash{}, 0, genesis, func(lists *keyValueList) {
+	return p.handshake(common.Big0, common.Hash{}, 0, genesis, localMapping, func(lists *keyValueList) {
 		// Add some client-specific handshake fields
 		//
 		// Enable signed announcement randomly even the server is not trusted.
@@ -817,18 +855,18 @@ func (p *clientPeer) freeze() {
 // only the bv (buffer value) missing. This allows the serving mechanism to
 // calculate the bv value which depends on the data size before sending the reply.
 type reply struct {
-	w              p2p.MsgWriter
-	msgcode, reqID uint64
-	data           rlp.RawValue
+	w       p2p.MsgWriter
+	msgcode uint64
+	data    rlp.RawValue
 }
 
-// send sends the reply with the calculated buffer value
-func (r *reply) send(bv uint64) error {
+// send sends the reply with the given metainfo
+func (r *reply) send(meta replyMetaInfo) error {
 	type resp struct {
-		ReqID, BV uint64
-		Data      rlp.RawValue
+		Meta replyMetaInfo
+		Data rlp.RawValue
 	}
-	return p2p.Send(r.w, r.msgcode, resp{r.reqID, bv, r.data})
+	return p2p.Send(r.w, r.msgcode, resp{meta, r.data})
 }
 
 // size returns the RLP encoded size of the message data
@@ -837,54 +875,72 @@ func (r *reply) size() uint32 {
 }
 
 // replyBlockHeaders creates a reply with a batch of block headers
-func (p *clientPeer) replyBlockHeaders(reqID uint64, headers []*types.Header) *reply {
+func (p *clientPeer) replyBlockHeaders(headers []*types.Header) *reply {
 	data, _ := rlp.EncodeToBytes(headers)
-	return &reply{p.rw, BlockHeadersMsg, reqID, data}
+	return &reply{p.rw, BlockHeadersMsg, data}
 }
 
 // replyBlockBodiesRLP creates a reply with a batch of block contents from
 // an already RLP encoded format.
-func (p *clientPeer) replyBlockBodiesRLP(reqID uint64, bodies []rlp.RawValue) *reply {
+func (p *clientPeer) replyBlockBodiesRLP(bodies []rlp.RawValue) *reply {
 	data, _ := rlp.EncodeToBytes(bodies)
-	return &reply{p.rw, BlockBodiesMsg, reqID, data}
+	return &reply{p.rw, BlockBodiesMsg, data}
 }
 
 // replyCode creates a reply with a batch of arbitrary internal data, corresponding to the
 // hashes requested.
-func (p *clientPeer) replyCode(reqID uint64, codes [][]byte) *reply {
+func (p *clientPeer) replyCode(codes [][]byte) *reply {
 	data, _ := rlp.EncodeToBytes(codes)
-	return &reply{p.rw, CodeMsg, reqID, data}
+	return &reply{p.rw, CodeMsg, data}
 }
 
 // replyReceiptsRLP creates a reply with a batch of transaction receipts, corresponding to the
 // ones requested from an already RLP encoded format.
-func (p *clientPeer) replyReceiptsRLP(reqID uint64, receipts []rlp.RawValue) *reply {
+func (p *clientPeer) replyReceiptsRLP(receipts []rlp.RawValue) *reply {
 	data, _ := rlp.EncodeToBytes(receipts)
-	return &reply{p.rw, ReceiptsMsg, reqID, data}
+	return &reply{p.rw, ReceiptsMsg, data}
 }
 
 // replyProofsV2 creates a reply with a batch of merkle proofs, corresponding to the ones requested.
-func (p *clientPeer) replyProofsV2(reqID uint64, proofs light.NodeList) *reply {
+func (p *clientPeer) replyProofsV2(proofs light.NodeList) *reply {
 	data, _ := rlp.EncodeToBytes(proofs)
-	return &reply{p.rw, ProofsV2Msg, reqID, data}
+	return &reply{p.rw, ProofsV2Msg, data}
 }
 
 // replyHelperTrieProofs creates a reply with a batch of HelperTrie proofs, corresponding to the ones requested.
-func (p *clientPeer) replyHelperTrieProofs(reqID uint64, resp HelperTrieResps) *reply {
+func (p *clientPeer) replyHelperTrieProofs(resp HelperTrieResps) *reply {
 	data, _ := rlp.EncodeToBytes(resp)
-	return &reply{p.rw, HelperTrieProofsMsg, reqID, data}
+	return &reply{p.rw, HelperTrieProofsMsg, data}
 }
 
 // replyTxStatus creates a reply with a batch of transaction status records, corresponding to the ones requested.
-func (p *clientPeer) replyTxStatus(reqID uint64, stats []light.TxStatus) *reply {
+func (p *clientPeer) replyTxStatus(stats []light.TxStatus) *reply {
 	data, _ := rlp.EncodeToBytes(stats)
-	return &reply{p.rw, TxStatusMsg, reqID, data}
+	return &reply{p.rw, TxStatusMsg, data}
+}
+
+// sendLespayReply sends a reply to a lespay request
+func (p *clientPeer) sendLespayReply(reqID uint64, replies lespay.Replies) error {
+	type reply struct {
+		Meta replyMetaInfo
+		Data lespay.Replies
+	}
+	return p2p.Send(p.rw, LespayReplyMsg, reply{replyMetaInfo{mapping: p.mapping.Send, reqID: metaInfoField{value: reqID, set: true}}, replies})
+}
+
+// sendCapacityUpdate sends a capacity update
+func (p *clientPeer) sendCapacityUpdate(meta replyMetaInfo, update capacityUpdate) error {
+	type capUpdate struct {
+		Meta   replyMetaInfo
+		Update capacityUpdate
+	}
+	return p2p.Send(p.rw, CapacityUpdateMsg, capUpdate{meta, update})
 }
 
 // sendAnnounce announces the availability of a number of blocks through
 // a hash notification.
-func (p *clientPeer) sendAnnounce(request announceData) error {
-	return p2p.Send(p.rw, AnnounceMsg, request)
+func (p *clientPeer) sendAnnounce(data announceData) error {
+	return p2p.Send(p.rw, AnnounceMsg, data)
 }
 
 // allowInactive implements clientPoolPeer
@@ -901,11 +957,31 @@ func (p *clientPeer) updateCapacity(cap uint64) {
 	if cap != p.fcParams.MinRecharge {
 		p.fcParams = flowcontrol.ServerParams{MinRecharge: cap, BufLimit: cap * bufLimitRatio}
 		p.fcClient.UpdateParams(p.fcParams)
-		var kvList keyValueList
-		kvList = kvList.add("flowControl/MRR", cap)
-		kvList = kvList.add("flowControl/BL", cap*bufLimitRatio)
-		p.queueSend(func() { p.sendAnnounce(announceData{Update: kvList}) })
+		p.queueSend(func() {
+			var err error
+			if p.version >= lpv4 {
+				err = p.sendCapacityUpdate(replyMetaInfo{mapping: p.mapping.Send}, capacityUpdate{MinRecharge: cap, BufLimit: cap * bufLimitRatio})
+			} else {
+				var kvList keyValueList
+				kvList = kvList.add("flowControl/MRR", cap)
+				kvList = kvList.add("flowControl/BL", cap*bufLimitRatio)
+				err = p.sendAnnounce(announceData{Update: kvList})
+			}
+			if err != nil {
+				select {
+				case p.errCh <- err:
+				default:
+				}
+			}
+		})
 	}
+}
+
+func (p *clientPeer) getCapacity() uint64 {
+	p.lock.Lock()
+	defer p.lock.Unlock()
+
+	return p.fcParams.MinRecharge
 }
 
 // freezeClient temporarily puts the client in a frozen state which means all
@@ -944,11 +1020,11 @@ func (p *clientPeer) freezeClient() {
 
 // Handshake executes the les protocol handshake, negotiating version number,
 // network IDs, difficulties, head and genesis blocks.
-func (p *clientPeer) Handshake(td *big.Int, head common.Hash, headNum uint64, genesis common.Hash, server *LesServer) error {
+func (p *clientPeer) Handshake(td *big.Int, head common.Hash, headNum uint64, genesis common.Hash, localMapping lespay.MetaMapping, server *LesServer) error {
 	// Note: clientPeer.headInfo should contain the last head announced to the client by us.
 	// The values announced in the handshake are dummy values for compatibility reasons and should be ignored.
 	p.headInfo = blockInfo{Hash: head, Number: headNum, Td: td}
-	return p.handshake(td, head, headNum, genesis, func(lists *keyValueList) {
+	return p.handshake(td, head, headNum, genesis, localMapping, func(lists *keyValueList) {
 		// Add some information which services server can offer.
 		if !server.config.UltraLightOnlyAnnounce {
 			*lists = (*lists).add("serveHeaders", nil)
@@ -964,8 +1040,11 @@ func (p *clientPeer) Handshake(td *big.Int, head common.Hash, headNum uint64, ge
 			*lists = (*lists).add("serveRecentState", stateRecent)
 			*lists = (*lists).add("txRelay", nil)
 		}
-		*lists = (*lists).add("flowControl/BL", server.defParams.BufLimit)
-		*lists = (*lists).add("flowControl/MRR", server.defParams.MinRecharge)
+		if p.version < lpv4 {
+			p.fcParams = server.defParams
+		}
+		*lists = (*lists).add("flowControl/BL", p.fcParams.BufLimit)
+		*lists = (*lists).add("flowControl/MRR", p.fcParams.MinRecharge)
 
 		var costList RequestCostList
 		if server.costTracker.testCostList != nil {
@@ -975,7 +1054,6 @@ func (p *clientPeer) Handshake(td *big.Int, head common.Hash, headNum uint64, ge
 		}
 		*lists = (*lists).add("flowControl/MRC", costList)
 		p.fcCosts = costList.decode(ProtocolLengths[uint(p.version)])
-		p.fcParams = server.defParams
 
 		// Add advertised checkpoint and register block height which
 		// client can verify the checkpoint validity.
