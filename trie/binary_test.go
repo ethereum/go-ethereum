@@ -115,6 +115,16 @@ func TestBinaryTrieEmptyHash(t *testing.T) {
 	if !bytes.Equal(got, exp) {
 		t.Fatalf("invalid empty trie hash, got %x != exp %x", got, exp)
 	}
+
+	trie = NewBinaryTrieWithBlake2b()
+	got = trie.Hash()
+	// This is the wrong empty root for blake2b. We are only focused
+	// on preformance measurements at the moment.
+	exp = emptyRoot[:]
+
+	if !bytes.Equal(got, exp) {
+		t.Fatalf("invalid empty trie hash, got %x != exp %x", got, exp)
+	}
 }
 
 func TestBinaryTrieInsertOneLeafAndHash(t *testing.T) {
@@ -122,6 +132,15 @@ func TestBinaryTrieInsertOneLeafAndHash(t *testing.T) {
 	trie.Update([]byte{0}, []byte{10})
 	got := trie.Hash()
 	exp := common.FromHex("5ef9138daa6dfb4ca211fdb6ca4db27400233b7506e63edcd2576efd31cd5e5c")
+
+	if !bytes.Equal(got, exp) {
+		t.Fatalf("invalid empty trie hash, got %x != exp %x", got, exp)
+	}
+
+	trie = NewBinaryTrieWithBlake2b()
+	trie.Update([]byte{0}, []byte{10})
+	got = trie.Hash()
+	exp = common.FromHex("59f78e329994764d27e42cf7e2802a8311cd5c45725788e6288f94850c92a7d6")
 
 	if !bytes.Equal(got, exp) {
 		t.Fatalf("invalid empty trie hash, got %x != exp %x", got, exp)

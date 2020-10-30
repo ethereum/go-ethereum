@@ -19,6 +19,7 @@ package blake2b
 import (
 	"encoding/binary"
 	"errors"
+	"fmt"
 	"hash"
 )
 
@@ -275,6 +276,15 @@ func (d *digest) Sum(sum []byte) []byte {
 	var hash [Size]byte
 	d.finalize(&hash)
 	return append(sum, hash[:d.size]...)
+}
+
+func (d *digest) Read(out []byte) (int, error) {
+	data := d.Sum(nil)
+	if len(data) != len(out) {
+		return 0, fmt.Errorf("invalid size for output buffer %d != %d", len(data), len(out))
+	}
+	copy(out, data)
+	return len(data), nil
 }
 
 func (d *digest) finalize(hash *[Size]byte) {

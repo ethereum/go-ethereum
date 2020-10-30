@@ -47,9 +47,17 @@ type storeSlot struct {
 
 type store []storeSlot
 
+type hashType int
+
+const (
+	typeKeccak256 hashType = iota
+	typeBlake2b
+)
+
 type BinaryTrie struct {
-	root  BinaryNode
-	store store
+	root     BinaryNode
+	store    store
+	hashType hashType
 }
 
 // All known implementations of binaryNode
@@ -71,6 +79,8 @@ type (
 		// binary nodes can have a prefix that is common to all
 		// subtrees.
 		prefix binkey
+
+		hType hashType
 	}
 
 	hashBinaryNode []byte
@@ -194,33 +204,37 @@ func (br *branch) Hash() []byte {
 }
 
 func (br *branch) hash(off int) []byte {
-	hasher := newHasher(false)
+	var hasher *hasher
+	if br.hType == typeBlake2b {
+		hasher = newB2Hasher(false)
+	} else {
+		hasher = newHasher(false)
+	}
 	defer returnHasherToPool(hasher)
 	hasher.sha.Reset()
 
-	hash := make([]byte, 32)
+	var hash []byte
 	if br.value == nil {
 		// This is a branch node, so the rule is
 		// branch_hash = hash(left_root_hash || right_root_hash)
 		hasher.sha.Write(br.left.hash(off + len(br.prefix) + 1))
 		hasher.sha.Write(br.right.hash(off + len(br.prefix) + 1))
-		hasher.sha.Read(hash)
+		hash = hasher.sha.Sum(nil)
 		hasher.sha.Reset()
 	} else {
 		// This is a leaf node, so the hashing rule is
 		// leaf_hash = hash(hash(key) || hash(leaf_value))
-		var kh [32]byte
 		hasher.sha.Write(br.key)
-		hasher.sha.Read(kh[:])
+		kh := hasher.sha.Sum(nil)
 		hasher.sha.Reset()
 
 		hasher.sha.Write(br.value)
-		hasher.sha.Read(hash)
+		hash = hasher.sha.Sum(nil)
 		hasher.sha.Reset()
 
-		hasher.sha.Write(kh[:])
+		hasher.sha.Write(kh)
 		hasher.sha.Write(hash)
-		hasher.sha.Read(hash)
+		hash = hasher.sha.Sum(nil)
 		hasher.sha.Reset()
 	}
 
@@ -229,7 +243,7 @@ func (br *branch) hash(off int) []byte {
 		hasher.sha.Write([]byte{byte(fpLen), byte(fpLen >> 8)})
 		hasher.sha.Write(zero32[:30])
 		hasher.sha.Write(hash)
-		hasher.sha.Read(hash)
+		hash = hasher.sha.Sum(nil)
 		hasher.sha.Reset()
 	}
 
@@ -238,8 +252,17 @@ func (br *branch) hash(off int) []byte {
 
 func NewBinaryTrie() *BinaryTrie {
 	return &BinaryTrie{
-		root:  empty(struct{}{}),
-		store: store(nil),
+		root:     empty(struct{}{}),
+		store:    store(nil),
+		hashType: typeKeccak256,
+	}
+}
+
+func NewBinaryTrieWithBlake2b() *BinaryTrie {
+	return &BinaryTrie{
+		root:     empty(struct{}{}),
+		store:    store(nil),
+		hashType: typeBlake2b,
 	}
 }
 
@@ -317,6 +340,7 @@ func (bt *BinaryTrie) TryUpdate(key, value []byte) error {
 			left:   hashBinaryNode(emptyRoot[:]),
 			right:  hashBinaryNode(emptyRoot[:]),
 			key:    key,
+			hType:  bt.hashType,
 		}
 		bt.store = append(bt.store, storeSlot{key: bk, value: value})
 		sort.Sort(bt.store)
@@ -345,6 +369,7 @@ func (bt *BinaryTrie) TryUpdate(key, value []byte) error {
 					left:   hashBinaryNode(emptyRoot[:]),
 					right:  hashBinaryNode(emptyRoot[:]),
 					value:  value,
+					hType:  bt.hashType,
 				}
 				isLeaf = true
 			}
@@ -392,6 +417,7 @@ func (bt *BinaryTrie) TryUpdate(key, value []byte) error {
 				right:  currentNode.right,
 				key:    currentNode.key,
 				value:  currentNode.value,
+				hType:  bt.hashType,
 			}
 			currentNode.prefix = currentNode.prefix[:split]
 			currentNode.value = nil
@@ -404,6 +430,7 @@ func (bt *BinaryTrie) TryUpdate(key, value []byte) error {
 					right:  hashBinaryNode(emptyRoot[:]),
 					value:  value,
 					key:    key,
+					hType:  bt.hashType,
 				}
 			} else {
 				// New node goes on the left
@@ -414,6 +441,7 @@ func (bt *BinaryTrie) TryUpdate(key, value []byte) error {
 					right:  hashBinaryNode(emptyRoot[:]),
 					value:  value,
 					key:    key,
+					hType:  bt.hashType,
 				}
 			}
 			break
