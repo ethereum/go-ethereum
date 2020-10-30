@@ -126,11 +126,7 @@ func (h *serverHandler) handle(p *clientPeer) error {
 		p.Log().Debug("Light Ethereum handshake failed", "err", err)
 		return err
 	}
-	// Reject light clients if server is not synced.
-	if !h.synced() {
-		p.Log().Debug("Light server not synced, rejecting peer")
-		return p2p.DiscRequested
-	}
+	// Reject the duplicated peer, otherwise register it to peerset.
 	var registered bool
 	if err := h.server.ns.Operation(func() {
 		if h.server.ns.GetField(p.Node(), clientPeerField) != nil {
@@ -156,7 +152,14 @@ func (h *serverHandler) handle(p *clientPeer) error {
 		_, err := p.rw.ReadMsg()
 		return err
 	}
-
+	// Reject light clients if server is not synced.
+	//
+	// Put this checking here, so that "non-synced" les-server peers are still allowed
+	// to keep the connection.
+	if !h.synced() {
+		p.Log().Debug("Light server not synced, rejecting peer")
+		return p2p.DiscRequested
+	}
 	// Disconnect the inbound peer if it's rejected by clientPool
 	if cap, err := h.server.clientPool.connect(p); cap != p.fcParams.MinRecharge || err != nil {
 		p.Log().Debug("Light Ethereum peer rejected", "err", errFullClientPool)
@@ -348,7 +351,6 @@ func (h *serverHandler) handleMsg(p *clientPeer, wg *sync.WaitGroup) error {
 						origin = h.blockchain.GetHeaderByNumber(query.Origin.Number)
 					}
 					if origin == nil {
-						p.bumpInvalid()
 						break
 					}
 					headers = append(headers, origin)
@@ -1006,18 +1008,24 @@ func (b *broadcaster) sendTo(node *enode.Node) {
 	}
 	if p, _ := b.ns.GetField(node, clientPeerField).(*clientPeer); p != nil {
 		if p.headInfo.Td == nil || b.lastAnnounce.Td.Cmp(p.headInfo.Td) > 0 {
+			announce := b.lastAnnounce
 			switch p.announceType {
 			case announceTypeSimple:
-				if !p.queueSend(func() { p.sendAnnounce(b.lastAnnounce) }) {
-					log.Debug("Drop announcement because queue is full", "number", b.lastAnnounce.Number, "hash", b.lastAnnounce.Hash)
+				if !p.queueSend(func() { p.sendAnnounce(announce) }) {
+					log.Debug("Drop announcement because queue is full", "number", announce.Number, "hash", announce.Hash)
+				} else {
+					log.Debug("Sent announcement", "number", announce.Number, "hash", announce.Hash)
 				}
 			case announceTypeSigned:
 				if b.signedAnnounce.Hash != b.lastAnnounce.Hash {
 					b.signedAnnounce = b.lastAnnounce
 					b.signedAnnounce.sign(b.privateKey)
 				}
-				if !p.queueSend(func() { p.sendAnnounce(b.signedAnnounce) }) {
-					log.Debug("Drop announcement because queue is full", "number", b.lastAnnounce.Number, "hash", b.lastAnnounce.Hash)
+				announce := b.signedAnnounce
+				if !p.queueSend(func() { p.sendAnnounce(announce) }) {
+					log.Debug("Drop announcement because queue is full", "number", announce.Number, "hash", announce.Hash)
+				} else {
+					log.Debug("Sent announcement", "number", announce.Number, "hash", announce.Hash)
 				}
 			}
 			p.headInfo = blockInfo{b.lastAnnounce.Hash, b.lastAnnounce.Number, b.lastAnnounce.Td}
