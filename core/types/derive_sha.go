@@ -41,22 +41,20 @@ func DeriveSha(list DerivableList, hasher Hasher) common.Hash {
 	// hashes in. This insertion sequence ensures that the
 	// order is correct.
 
-	buf := make([]byte, 9) // 9 bytes is the max an rlp-encoded int will ever use
-
+	var buf []byte
 	for i := 1; i < list.Len() && i <= 0x7f; i++ {
-		off := rlp.PutInt(buf, i)
-		hasher.Update(buf[:off], list.GetRlp(i))
+		buf = rlp.AppendInt(buf[:0], uint64(i))
+		hasher.Update(buf, list.GetRlp(i))
 
 	}
 	if list.Len() > 0 {
-		off := rlp.PutInt(buf, 0)
-		hasher.Update(buf[:off], list.GetRlp(0))
+		buf = rlp.AppendInt(buf[:0], 0)
+		hasher.Update(buf, list.GetRlp(0))
 
 	}
 	for i := 0x80; i < list.Len(); i++ {
-		off := rlp.PutInt(buf, i)
-		hasher.Update(buf[:off], list.GetRlp(i))
-
+		buf = rlp.AppendInt(buf[:0], uint64(i))
+		hasher.Update(buf, list.GetRlp(i))
 	}
 	return hasher.Hash()
 }
