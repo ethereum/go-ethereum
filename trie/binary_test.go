@@ -18,8 +18,10 @@ package trie
 
 import (
 	"bytes"
+	"math/rand"
 	"sort"
 	"testing"
+	"time"
 
 	"github.com/ethereum/go-ethereum/common"
 )
@@ -239,4 +241,53 @@ func TestBinaryTrieReadOneFromManyLeaves(t *testing.T) {
 	if err != errKeyNotPresent {
 		t.Fatalf("incorrect error received, expected '%v', got '%v'", errKeyNotPresent, err)
 	}
+}
+func BenchmarkTrieHash(b *testing.B) {
+	trieK := NewBinaryTrie()
+	trieK4 := NewM4BinaryTrie()
+	trieB := NewBinaryTrieWithBlake2b()
+	trieB4 := NewM4BinaryTrieWithBlake2b()
+	key := make([]byte, 32)
+	val := make([]byte, 32)
+	rand.Seed(time.Now().UnixNano())
+	for i := 0; i < 1000; i++ {
+		rand.Read(key)
+		rand.Read(val)
+		trieK.Update(key, val)
+		trieK4.Update(key, val)
+		trieB.Update(key, val)
+		trieB4.Update(key, val)
+	}
+	b.Run("m5-keccak", func(b *testing.B) {
+		b.ResetTimer()
+		b.ReportAllocs()
+
+		for i := 0; i < b.N; i++ {
+			trieK.Hash()
+		}
+	})
+	b.Run("m5-blake2b", func(b *testing.B) {
+		b.ResetTimer()
+		b.ReportAllocs()
+
+		for i := 0; i < b.N; i++ {
+			trieB.Hash()
+		}
+	})
+	b.Run("m4-keccak", func(b *testing.B) {
+		b.ResetTimer()
+		b.ReportAllocs()
+
+		for i := 0; i < b.N; i++ {
+			trieK4.Hash()
+		}
+	})
+	b.Run("m4-blake", func(b *testing.B) {
+		b.ResetTimer()
+		b.ReportAllocs()
+
+		for i := 0; i < b.N; i++ {
+			trieB4.Hash()
+		}
+	})
 }
