@@ -111,7 +111,7 @@ func NewTransactorWithChainID(keyin io.Reader, passphrase string, chainID *big.I
 	if err != nil {
 		return nil, err
 	}
-	return NewKeyedTransactorWithChainID(key.PrivateKey, chainID), nil
+	return NewKeyedTransactorWithChainID(key.PrivateKey, chainID)
 }
 
 // NewKeyStoreTransactorWithChainID is a utility method to easily create a transaction signer from
@@ -138,10 +138,10 @@ func NewKeyStoreTransactorWithChainID(keystore *keystore.KeyStore, account accou
 
 // NewKeyedTransactorWithChainID is a utility method to easily create a transaction signer
 // from a single private key.
-func NewKeyedTransactorWithChainID(key *ecdsa.PrivateKey, chainID *big.Int) *TransactOpts {
+func NewKeyedTransactorWithChainID(key *ecdsa.PrivateKey, chainID *big.Int) (*TransactOpts, error) {
 	keyAddr := crypto.PubkeyToAddress(key.PublicKey)
 	if chainID == nil {
-		return nol, NoChainID
+		return nil, NoChainID
 	}
 	signer := types.NewEIP155Signer(chainID)
 	return &TransactOpts{
@@ -156,7 +156,7 @@ func NewKeyedTransactorWithChainID(key *ecdsa.PrivateKey, chainID *big.Int) *Tra
 			}
 			return tx.WithSignature(signer, signature)
 		},
-	}
+	}, nil
 }
 
 // NewClefTransactor is a utility method to easily create a transaction signer
