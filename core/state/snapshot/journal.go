@@ -159,7 +159,7 @@ func loadSnapshot(diskdb ethdb.KeyValueStore, triedb *trie.Database, cache int, 
 	var legacy bool
 	snapshot, generator, err := loadAndParseJournal(diskdb, base)
 	if err != nil {
-		log.Debug("Failed to load new-format journal", "error", err)
+		log.Warn("Failed to load new-format journal", "error", err)
 		snapshot, generator, err = loadAndParseLegacyJournal(diskdb, base)
 		legacy = true
 	}
