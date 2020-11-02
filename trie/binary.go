@@ -220,6 +220,7 @@ func (br *branch) hash(off int) []byte {
 		lh := br.left.hash(off + len(br.prefix) + 1)
 		rh := br.right.hash(off + len(br.prefix) + 1)
 		hasher = br.getHasher()
+		defer br.putHasher(hasher)
 		hasher.sha.Write(lh)
 		hasher.sha.Write(rh)
 		hash = hasher.sha.Sum(nil)
