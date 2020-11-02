@@ -107,10 +107,11 @@ func (br *branchM4) hash(off int) []byte {
 	var hasher *hasher
 	if br.hType == typeBlake2b {
 		hasher = newB2Hasher(false)
+		defer returnHasherToB2Pool(hasher)
 	} else {
 		hasher = newHasher(false)
+		defer returnHasherToPool(hasher)
 	}
-	defer returnHasherToPool(hasher)
 	hasher.sha.Reset()
 
 	// This is a branch node, so the rule is

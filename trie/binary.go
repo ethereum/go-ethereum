@@ -118,12 +118,13 @@ func min(i, j int) int {
 	return j
 }
 func (b binkey) commonLength(other binkey) int {
-	for i := 0; i < len(b) && i < len(other); i++ {
+	length := min(len(b), len(other))
+	for i := 0; i < length; i++ {
 		if b[i] != other[i] {
 			return i
 		}
 	}
-	return min(len(b), len(other))
+	return length
 }
 func (b binkey) samePrefix(other binkey, off int) bool {
 	return bytes.Equal(b[off:off+len(other)], other[:])
@@ -131,22 +132,10 @@ func (b binkey) samePrefix(other binkey, off int) bool {
 
 func (s store) Len() int { return len(s) }
 func (s store) Less(i, j int) bool {
-	for b := 0; b < len(s[i].key) && b < len(s[j].key); b++ {
-		if s[i].key[b] != s[j].key[b] {
-			// if s[j].key.Bit(b) is true, then it is
-			// the greater value of the two.
-			return s[j].key[b] == 1
-		}
-	}
-
-	// Keys are equal on their common length, the shortest
-	// is the smaller one.
-	return len(s[i].key) < len(s[j].key)
+	return bytes.Compare(s[i].key, s[j].key) == -1
 }
 func (s store) Swap(i, j int) {
-	temp := s[i]
-	s[i] = s[j]
-	s[j] = temp
+	s[i], s[j] = s[j], s[i]
 }
 
 func NewBinTrie() BinaryNode {
@@ -203,25 +192,40 @@ func (br *branch) Hash() []byte {
 	return br.hash(0)
 }
 
-func (br *branch) hash(off int) []byte {
+func (br *branch) getHasher() *hasher {
 	var hasher *hasher
 	if br.hType == typeBlake2b {
 		hasher = newB2Hasher(false)
 	} else {
 		hasher = newHasher(false)
 	}
-	defer returnHasherToPool(hasher)
 	hasher.sha.Reset()
+	return hasher
+}
 
+func (br *branch) putHasher(hasher *hasher) {
+	if br.hType == typeBlake2b {
+		returnHasherToB2Pool(hasher)
+	} else {
+		returnHasherToPool(hasher)
+	}
+}
+
+func (br *branch) hash(off int) []byte {
+	var hasher *hasher
 	var hash []byte
 	if br.value == nil {
 		// This is a branch node, so the rule is
 		// branch_hash = hash(left_root_hash || right_root_hash)
-		hasher.sha.Write(br.left.hash(off + len(br.prefix) + 1))
-		hasher.sha.Write(br.right.hash(off + len(br.prefix) + 1))
+		lh := br.left.hash(off + len(br.prefix) + 1)
+		rh := br.right.hash(off + len(br.prefix) + 1)
+		hasher = br.getHasher()
+		hasher.sha.Write(lh)
+		hasher.sha.Write(rh)
 		hash = hasher.sha.Sum(nil)
-		hasher.sha.Reset()
 	} else {
+		hasher = br.getHasher()
+		defer br.putHasher(hasher)
 		// This is a leaf node, so the hashing rule is
 		// leaf_hash = hash(hash(key) || hash(leaf_value))
 		hasher.sha.Write(br.key)
@@ -235,16 +239,15 @@ func (br *branch) hash(off int) []byte {
 		hasher.sha.Write(kh)
 		hasher.sha.Write(hash)
 		hash = hasher.sha.Sum(nil)
-		hasher.sha.Reset()
 	}
 
 	if len(br.prefix) > 0 {
+		hasher.sha.Reset()
 		fpLen := len(br.prefix) + off
 		hasher.sha.Write([]byte{byte(fpLen), byte(fpLen >> 8)})
 		hasher.sha.Write(zero32[:30])
 		hasher.sha.Write(hash)
 		hash = hasher.sha.Sum(nil)
-		hasher.sha.Reset()
 	}
 
 	return hash
