@@ -47,7 +47,7 @@ type AccessListTransaction struct {
 	Recipient    *common.Address `json:"to"         rlp:"nil"` // nil means contract creation
 	Amount       *big.Int        `json:"value"      gencodec:"required"`
 	Payload      []byte          `json:"input"      gencodec:"required"`
-	Accesses     *AccessList     `json:"accessList" rlp:"nil"`
+	Accesses     *AccessList     `json:"accessList" gencodec:"required"`
 
 	// Signature values
 	V *big.Int `json:"v" gencodec:"required"`
@@ -97,7 +97,7 @@ func newAccessListTransaction(chainId *big.Int, nonce uint64, to *common.Address
 }
 
 func (tx *AccessListTransaction) ChainId() *big.Int       { return tx.Chain }
-func (tx *AccessListTransaction) Protected() bool         { return true }
+func (tx *AccessListTransaction) Protected() bool         { return tx.Chain.Cmp(common.Big0) == 0 }
 func (tx *AccessListTransaction) AccessList() *AccessList { return tx.Accesses }
 func (tx *AccessListTransaction) Data() []byte            { return common.CopyBytes(tx.Payload) }
 func (tx *AccessListTransaction) Gas() uint64             { return tx.GasLimit }
