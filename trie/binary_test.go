@@ -121,7 +121,7 @@ func TestBinaryTrieEmptyHash(t *testing.T) {
 	trie = NewBinaryTrieWithBlake2b()
 	got = trie.Hash()
 	// This is the wrong empty root for blake2b. We are only focused
-	// on preformance measurements at the moment.
+	// on performance measurements at the moment.
 	exp = emptyRoot[:]
 
 	if !bytes.Equal(got, exp) {
@@ -217,7 +217,7 @@ func TestBinaryTrieReadOneLeaf(t *testing.T) {
 		t.Fatalf("could not find correct value %x != 0a", v)
 	}
 
-	v, err = trie.TryGet([]byte{1})
+	_, err = trie.TryGet([]byte{1})
 	if err != errKeyNotPresent {
 		t.Fatalf("incorrect error received, expected '%v', got '%v'", errKeyNotPresent, err)
 	}
@@ -237,7 +237,7 @@ func TestBinaryTrieReadOneFromManyLeaves(t *testing.T) {
 		t.Fatalf("could not find correct value %x != 0a", v)
 	}
 
-	v, err = trie.TryGet([]byte{1})
+	_, err = trie.TryGet([]byte{1})
 	if err != errKeyNotPresent {
 		t.Fatalf("incorrect error received, expected '%v', got '%v'", errKeyNotPresent, err)
 	}

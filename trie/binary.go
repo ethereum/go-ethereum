@@ -306,12 +306,12 @@ func (bt *BinaryTrie) resolveNode(childNode BinaryNode, bk binkey, off int) *bra
 
 	// Check if the node has already been resolved,
 	// otherwise, resolve it.
-	switch childNode.(type) {
+	switch childNode := childNode.(type) {
 	case empty:
 		return nil
 	case hashBinaryNode:
 		// empty root ?
-		if bytes.Equal(childNode.(hashBinaryNode)[:], emptyRoot[:]) {
+		if bytes.Equal(childNode[:], emptyRoot[:]) {
 			return nil
 		}
 

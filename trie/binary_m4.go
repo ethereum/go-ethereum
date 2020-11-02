@@ -130,12 +130,7 @@ func (vn valueNodeM4) Hash() []byte {
 }
 
 func (vn valueNodeM4) hash(off int) []byte {
-	var hasher *hasher
-	//if br.hType == typeBlake2b {
-	//hasher = newB2Hasher(false)
-	//} else {
-	hasher = newHasher(false)
-	//}
+	hasher := newHasher(false)
 	defer returnHasherToPool(hasher)
 	hasher.sha.Reset()
 
