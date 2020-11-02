@@ -155,32 +155,54 @@ func (s *Suite) TestGetBlockBodies(t *utesting.T) {
 // TestBroadcast tests whether a block announcement is correctly
 // propagated to the given node's peer(s).
 func (s *Suite) TestBroadcast(t *utesting.T) {
-	// create conn to send block announcement
-	sendConn, err := s.dial()
-	if err != nil {
-		t.Fatalf("could not dial: %v", err)
-	}
-	// create conn to receive block announcement
-	receiveConn, err := s.dial()
-	if err != nil {
-		t.Fatalf("could not dial: %v", err)
-	}
-
-	sendConn.handshake(t)
-	receiveConn.handshake(t)
-
-	sendConn.statusExchange(t, s.chain)
-	receiveConn.statusExchange(t, s.chain)
-
-	// sendConn sends the block announcement
+	sendConn, receiveConn := s.setupConnection(t)
 	blockAnnouncement := &NewBlock{
 		Block: s.fullChain.blocks[1000],
 		TD:    s.fullChain.TD(1001),
 	}
+	s.testAnnounce(t, sendConn, receiveConn, blockAnnouncement)
+	// update test suite chain
+	s.chain.blocks = append(s.chain.blocks, s.fullChain.blocks[1000])
+	// wait for client to update its chain
+	if err := receiveConn.waitForBlock(s.chain.Head()); err != nil {
+		t.Fatal(err)
+	}
+}
+
+// TestLargeAnnounce tests the announcement mechanism with a large block.
+func (s *Suite) TestLargeAnnounce(t *utesting.T) {
+	sendConn, receiveConn := s.setupConnection(t)
+
+	blocks := []*NewBlock{
+		{
+			Block: largeBlock(),
+			TD:    s.fullChain.TD(1001),
+		},
+		{
+			Block: s.fullChain.blocks[1001],
+			TD:    largeNumber(2),
+		},
+		{
+			Block: largeBlock(),
+			TD:    largeNumber(2),
+		},
+	}
+	for _, blockAnnouncement := range blocks {
+		// sendConn sends the block announcement
+		s.testAnnounce(t, sendConn, receiveConn, blockAnnouncement)
+	}
+	// wait for client to update its chain
+	if err := receiveConn.waitForBlock(s.chain.Head()); err != nil {
+		t.Fatal(err)
+	}
+}
+
+func (s *Suite) testAnnounce(t *utesting.T, sendConn, receiveConn *Conn, blockAnnouncement *NewBlock) {
+	// Announce the block.
 	if err := sendConn.Write(blockAnnouncement); err != nil {
 		t.Fatalf("could not write to connection: %v", err)
 	}
-
+	// Wait for the announcement.
 	timeout := 20 * time.Second
 	switch msg := receiveConn.ReadAndServe(s.chain, timeout).(type) {
 	case *NewBlock:
@@ -203,12 +225,26 @@ func (s *Suite) TestBroadcast(t *utesting.T) {
 	default:
 		t.Fatalf("unexpected: %s", pretty.Sdump(msg))
 	}
-	// update test suite chain
-	s.chain.blocks = append(s.chain.blocks, s.fullChain.blocks[1000])
-	// wait for client to update its chain
-	if err := receiveConn.waitForBlock(s.chain.Head()); err != nil {
-		t.Fatal(err)
+}
+
+func (s *Suite) setupConnection(t *utesting.T) (*Conn, *Conn) {
+	// create conn to send block announcement
+	sendConn, err := s.dial()
+	if err != nil {
+		t.Fatalf("could not dial: %v", err)
 	}
+	// create conn to receive block announcement
+	receiveConn, err := s.dial()
+	if err != nil {
+		t.Fatalf("could not dial: %v", err)
+	}
+
+	sendConn.handshake(t)
+	receiveConn.handshake(t)
+
+	sendConn.statusExchange(t, s.chain)
+	receiveConn.statusExchange(t, s.chain)
+	return sendConn, receiveConn
 }
 
 // dial attempts to dial the given node and perform a handshake,
