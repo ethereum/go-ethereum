@@ -244,9 +244,7 @@ func TestBinaryTrieReadOneFromManyLeaves(t *testing.T) {
 }
 func BenchmarkTrieHash(b *testing.B) {
 	trieK := NewBinaryTrie()
-	trieK4 := NewM4BinaryTrie()
 	trieB := NewBinaryTrieWithBlake2b()
-	trieB4 := NewM4BinaryTrieWithBlake2b()
 	key := make([]byte, 32)
 	val := make([]byte, 32)
 	rand.Seed(time.Now().UnixNano())
@@ -254,9 +252,7 @@ func BenchmarkTrieHash(b *testing.B) {
 		rand.Read(key)
 		rand.Read(val)
 		trieK.Update(key, val)
-		trieK4.Update(key, val)
 		trieB.Update(key, val)
-		trieB4.Update(key, val)
 	}
 	b.Run("m5-keccak", func(b *testing.B) {
 		b.ResetTimer()
@@ -279,7 +275,7 @@ func BenchmarkTrieHash(b *testing.B) {
 		b.ReportAllocs()
 
 		for i := 0; i < b.N; i++ {
-			trieK4.Hash()
+			trieK.HashM4()
 		}
 	})
 	b.Run("m4-blake", func(b *testing.B) {
@@ -287,7 +283,10 @@ func BenchmarkTrieHash(b *testing.B) {
 		b.ReportAllocs()
 
 		for i := 0; i < b.N; i++ {
-			trieB4.Hash()
+			trieB.HashM4()
+		}
+	})
+}
 		}
 	})
 }

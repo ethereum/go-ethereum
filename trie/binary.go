@@ -27,6 +27,7 @@ import (
 
 type BinaryNode interface {
 	Hash() []byte
+	HashM4() []byte
 	hash(off int) []byte
 	Commit() error
 	//tryGet(key []byte, depth int) ([]byte, error)
@@ -249,6 +250,50 @@ func (br *branch) hash(off int) []byte {
 		hasher.sha.Write(zero32[:30])
 		hasher.sha.Write(hash)
 		hash = hasher.sha.Sum(nil)
+	}
+
+	return hash
+}
+
+func (br *branch) HashM4() []byte {
+	var hasher *hasher
+	var hash []byte
+	if br.value == nil {
+		// This is a branch node, so the rule is
+		// branch_hash = hash(left_root_hash || right_root_hash)
+		lh := br.left.HashM4()
+		rh := br.right.HashM4()
+		hasher = br.getHasher()
+		defer br.putHasher(hasher)
+		hasher.sha.Write(lh)
+		hasher.sha.Write(rh)
+		hash = hasher.sha.Sum(nil)
+	} else {
+		hasher = br.getHasher()
+		defer br.putHasher(hasher)
+		// This is a leaf node, so the hashing rule is
+		// leaf_hash = hash(0 || hash(leaf_value))
+		hasher.sha.Write(br.value)
+		hash = hasher.sha.Sum(nil)
+		hasher.sha.Reset()
+
+		hasher.sha.Write(zero32)
+		hasher.sha.Write(hash)
+		hash = hasher.sha.Sum(nil)
+	}
+
+	if len(br.prefix) > 0 {
+		for i := range br.prefix {
+			hasher.sha.Reset()
+			if br.prefix[len(br.prefix)-1-i] != 0 {
+				hasher.sha.Write(emptyRoot[:])
+			}
+			hasher.sha.Write(hash)
+			if br.prefix[len(br.prefix)-1-i] == 0 {
+				hasher.sha.Write(emptyRoot[:])
+			}
+			hash = hasher.sha.Sum(nil)
+		}
 	}
 
 	return hash
@@ -486,6 +531,9 @@ func (h hashBinaryNode) Commit() error {
 func (h hashBinaryNode) Hash() []byte {
 	return h
 }
+func (h hashBinaryNode) HashM4() []byte {
+	return h
+}
 
 func (h hashBinaryNode) hash(off int) []byte {
 	return h
@@ -499,6 +547,9 @@ func (h hashBinaryNode) tryGet(key []byte, depth int) ([]byte, error) {
 }
 
 func (e empty) Hash() []byte {
+	return emptyRoot[:]
+}
+func (e empty) HashM4() []byte {
 	return emptyRoot[:]
 }
 
