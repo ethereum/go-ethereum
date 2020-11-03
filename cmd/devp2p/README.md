@@ -88,7 +88,7 @@ Start the test by running `devp2p discv5 test -listen1 127.0.0.1 -listen2 127.0.
 
 ### Eth Protocol Test Suite
 
-The Eth Protocol test suite is a conformance test suite for the [eth protocol](https://github.com/ethereum/devp2p/blob/master/caps/eth.md)
+The Eth Protocol test suite is a conformance test suite for the [eth protocol](https://github.com/ethereum/devp2p/blob/master/caps/eth.md).
 
 To run the eth protocol test suite against your implementation, the node needs to be initialized as such:
 
