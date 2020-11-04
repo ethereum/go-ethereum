@@ -823,7 +823,7 @@ func (d *Downloader) findAncestor(p *peerConnection, remoteHeader *types.Header)
 	// If the error returned does not reflect that a common ancestor was not found, return it.
 	// If the error reflects that a common ancestor was not found, continue to binary search,
 	// where the error value will be reassigned.
-	if err != errNoAncestorFound {
+	if !errors.Is(err,errNoAncestorFound) {
 		return 0, err
 	}
 
