@@ -47,6 +47,10 @@ func (e *Error) Error() string    { return e.err.Error() }
 func (e *Error) Code() int        { return -1 }
 func (e *Error) GoString() string { return e.Error() }
 
+func errorf(format string, args ...interface{}) *Error {
+	return &Error{fmt.Errorf(format, args...)}
+}
+
 // Hello is the RLP structure of the protocol handshake.
 type Hello struct {
 	Version    uint64
@@ -174,7 +178,7 @@ type Conn struct {
 func (c *Conn) Read() Message {
 	code, rawData, _, err := c.Conn.Read()
 	if err != nil {
-		return &Error{fmt.Errorf("could not read from connection: %v", err)}
+		return errorf("could not read from connection: %v", err)
 	}
 
 	var msg Message
@@ -202,13 +206,12 @@ func (c *Conn) Read() Message {
 	case (NewBlockHashes{}).Code():
 		msg = new(NewBlockHashes)
 	default:
-		return &Error{fmt.Errorf("invalid message code: %d", code)}
+		return errorf("invalid message code: %d", code)
 	}
 
 	if err := rlp.DecodeBytes(rawData, msg); err != nil {
-		return &Error{fmt.Errorf("could not rlp decode message: %v", err)}
+		return errorf("could not rlp decode message: %v", err)
 	}
-
 	return msg
 }
 
@@ -223,11 +226,11 @@ func (c *Conn) ReadAndServe(chain *Chain) Message {
 			req := *msg
 			headers, err := chain.GetHeaders(req)
 			if err != nil {
-				return &Error{fmt.Errorf("could not get headers for inbound header request: %v", err)}
+				return errorf("could not get headers for inbound header request: %v", err)
 			}
 
 			if err := c.Write(headers); err != nil {
-				return &Error{fmt.Errorf("could not write to connection: %v", err)}
+				return errorf("could not write to connection: %v", err)
 			}
 		default:
 			return msg
