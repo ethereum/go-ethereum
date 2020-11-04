@@ -21,12 +21,20 @@ import (
 	"net"
 	"time"
 
+	"github.com/davecgh/go-spew/spew"
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/internal/utesting"
 	"github.com/ethereum/go-ethereum/p2p/enode"
 	"github.com/ethereum/go-ethereum/p2p/rlpx"
 	"github.com/stretchr/testify/assert"
 )
+
+var pretty = spew.ConfigState{
+	Indent:                  "  ",
+	DisableCapacities:       true,
+	DisablePointerAddresses: true,
+	SortKeys:                true,
+}
 
 // Suite represents a structure used to test the eth
 // protocol of a node(s).
@@ -74,9 +82,9 @@ func (s *Suite) TestStatus(t *utesting.T) {
 	// get status
 	switch msg := conn.statusExchange(t, s.chain).(type) {
 	case *Status:
-		t.Logf("got status message: %+v\n", msg)
+		t.Logf("got status message: %s", pretty.Sdump(msg))
 	default:
-		t.Fatalf("unexpected: %#v", msg)
+		t.Fatalf("unexpected: %s", pretty.Sdump(msg))
 	}
 }
 
@@ -111,11 +119,11 @@ func (s *Suite) TestGetBlockHeaders(t *utesting.T) {
 		headers := msg
 		for _, header := range *headers {
 			num := header.Number.Uint64()
+			t.Logf("received header (%d): %s", num, pretty.Sdump(header))
 			assert.Equal(t, s.chain.blocks[int(num)].Header(), header)
-			t.Logf("received header (%d): %+v", header.Number, header)
 		}
 	default:
-		t.Fatalf("unexpected: %#v", msg)
+		t.Fatalf("unexpected: %s", pretty.Sdump(msg))
 	}
 }
 
@@ -140,7 +148,7 @@ func (s *Suite) TestGetBlockBodies(t *utesting.T) {
 	case *BlockBodies:
 		t.Logf("received %d block bodies", len(*msg))
 	default:
-		t.Fatalf("unexpected: %#v", msg)
+		t.Fatalf("unexpected: %s", pretty.Sdump(msg))
 	}
 }
 
@@ -176,18 +184,24 @@ func (s *Suite) TestBroadcast(t *utesting.T) {
 	timeout := 20 * time.Second
 	switch msg := receiveConn.ReadAndServe(s.chain, timeout).(type) {
 	case *NewBlock:
-		t.Logf("received NewBlock message with hash %v", msg.Block.Hash())
-		assert.Equal(t, blockAnnouncement.Block.Header(), msg.Block.Header(),
-			"wrong block header in announcement")
-		assert.Equal(t, blockAnnouncement.TD, msg.TD,
-			"wrong TD in announcement")
+		t.Logf("received NewBlock message: %s", pretty.Sdump(msg.Block))
+		assert.Equal(t,
+			blockAnnouncement.Block.Header(), msg.Block.Header(),
+			"wrong block header in announcement",
+		)
+		assert.Equal(t,
+			blockAnnouncement.TD, msg.TD,
+			"wrong TD in announcement",
+		)
 	case *NewBlockHashes:
 		hashes := *msg
-		t.Logf("received NewBlockHashes message: %v", hashes)
-		assert.Equal(t, blockAnnouncement.Block.Hash(), hashes[0].Hash,
-			"wrong block hash in announcement")
+		t.Logf("received NewBlockHashes message: %s", pretty.Sdump(hashes))
+		assert.Equal(t,
+			blockAnnouncement.Block.Hash(), hashes[0].Hash,
+			"wrong block hash in announcement",
+		)
 	default:
-		t.Fatalf("unexpected: %#v", msg)
+		t.Fatalf("unexpected: %s", pretty.Sdump(msg))
 	}
 	// update test suite chain
 	s.chain.blocks = append(s.chain.blocks, s.fullChain.blocks[1000])

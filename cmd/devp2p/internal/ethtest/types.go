@@ -42,10 +42,10 @@ type Error struct {
 	err error
 }
 
-func (e *Error) Unwrap() error    { return e.err }
-func (e *Error) Error() string    { return e.err.Error() }
-func (e *Error) Code() int        { return -1 }
-func (e *Error) GoString() string { return e.Error() }
+func (e *Error) Unwrap() error  { return e.err }
+func (e *Error) Error() string  { return e.err.Error() }
+func (e *Error) Code() int      { return -1 }
+func (e *Error) String() string { return e.Error() }
 
 func errorf(format string, args ...interface{}) *Error {
 	return &Error{fmt.Errorf(format, args...)}
@@ -315,7 +315,7 @@ loop:
 		switch msg := c.Read().(type) {
 		case *Status:
 			if msg.Head != chain.blocks[chain.Len()-1].Hash() {
-				t.Fatalf("wrong head in status: %v", msg.Head)
+				t.Fatalf("wrong head block in status: %s", msg.Head.String())
 			}
 			if msg.TD.Cmp(chain.TD(chain.Len())) != 0 {
 				t.Fatalf("wrong TD in status: %v", msg.TD)
@@ -331,7 +331,7 @@ loop:
 			c.Write(&Pong{}) // TODO (renaynay): in the future, this should be an error
 			// (PINGs should not be a response upon fresh connection)
 		default:
-			t.Fatalf("bad status message: %#v", msg)
+			t.Fatalf("bad status message: %s", pretty.Sdump(msg))
 		}
 	}
 	// make sure eth protocol version is set for negotiation
@@ -373,7 +373,7 @@ func (c *Conn) waitForBlock(block *types.Block) error {
 			}
 			time.Sleep(100 * time.Millisecond)
 		default:
-			return fmt.Errorf("invalid message: %v", msg)
+			return fmt.Errorf("invalid message: %s", pretty.Sdump(msg))
 		}
 	}
 }
