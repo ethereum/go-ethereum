@@ -103,8 +103,9 @@ func loadAndParseJournal(db ethdb.KeyValueStore, base *diskLayer) (snapshot, jou
 	// Retrieve the diff layer journal. It's possible that the journal is
 	// not existent, e.g. the disk layer is generating while that the Geth
 	// crashes without persisting the diff journal.
-	// So if there is no journal, or the journal is not matched with disk
-	// layer, we just discard all diffs and try to recover them later.
+	// So if there is no journal, or the journal is invalid(e.g. the journal
+	// is not matched with disk layer; or the it's the legacy-format journal,
+	// etc.), we just discard all diffs and try to recover them later.
 	journal := rawdb.ReadSnapshotJournal(db)
 	if len(journal) == 0 {
 		log.Warn("Loaded snapshot journal", "diskroot", base.root, "diffs", "missing")
@@ -115,13 +116,16 @@ func loadAndParseJournal(db ethdb.KeyValueStore, base *diskLayer) (snapshot, jou
 	// Firstly, resolve the first element as the journal version
 	version, err := r.Uint()
 	if err != nil {
-		return nil, journalGenerator{}, err
+		log.Warn("Failed to resolve the journal version", "error", err)
+		return base, generator, nil
 	}
 	if version != journalVersion {
-		return nil, journalGenerator{}, fmt.Errorf("journal version mismatch, want %d got %v", journalVersion, version)
+		log.Warn("Discarded the snapshot journal with wrong version", "required", journalVersion, "got", version)
+		return base, generator, nil
 	}
 	// Secondly, resolve the disk layer root, ensure it's continuous
-	// with disk layer.
+	// with disk layer. Note now we can ensure it's the snapshot journal
+	// correct version, so we expect everything can be resolved properly.
 	var root common.Hash
 	if err := r.Decode(&root); err != nil {
 		return nil, journalGenerator{}, errors.New("missing disk layer root")
@@ -159,7 +163,7 @@ func loadSnapshot(diskdb ethdb.KeyValueStore, triedb *trie.Database, cache int, 
 	var legacy bool
 	snapshot, generator, err := loadAndParseJournal(diskdb, base)
 	if err != nil {
-		log.Debug("Failed to load new-format journal", "error", err)
+		log.Warn("Failed to load new-format journal", "error", err)
 		snapshot, generator, err = loadAndParseLegacyJournal(diskdb, base)
 		legacy = true
 	}
