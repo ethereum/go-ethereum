@@ -217,8 +217,11 @@ func (c *Conn) Read() Message {
 
 // ReadAndServe serves GetBlockHeaders requests while waiting
 // on another message from the node.
-func (c *Conn) ReadAndServe(chain *Chain) Message {
-	for {
+func (c *Conn) ReadAndServe(chain *Chain, timeout time.Duration) Message {
+	start := time.Now()
+	for time.Since(start) < timeout {
+		timeout := time.Now().Add(10 * time.Second)
+		c.SetReadDeadline(timeout)
 		switch msg := c.Read().(type) {
 		case *Ping:
 			c.Write(&Pong{})
@@ -236,6 +239,7 @@ func (c *Conn) ReadAndServe(chain *Chain) Message {
 			return msg
 		}
 	}
+	return errorf("no message received within %v", timeout)
 }
 
 func (c *Conn) Write(msg Message) error {

@@ -19,6 +19,7 @@ package ethtest
 import (
 	"fmt"
 	"net"
+	"time"
 
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/internal/utesting"
@@ -104,7 +105,8 @@ func (s *Suite) TestGetBlockHeaders(t *utesting.T) {
 		t.Fatalf("could not write to connection: %v", err)
 	}
 
-	switch msg := conn.ReadAndServe(s.chain).(type) {
+	timeout := 20 * time.Second
+	switch msg := conn.ReadAndServe(s.chain, timeout).(type) {
 	case *BlockHeaders:
 		headers := msg
 		for _, header := range *headers {
@@ -133,7 +135,8 @@ func (s *Suite) TestGetBlockBodies(t *utesting.T) {
 		t.Fatalf("could not write to connection: %v", err)
 	}
 
-	switch msg := conn.ReadAndServe(s.chain).(type) {
+	timeout := 20 * time.Second
+	switch msg := conn.ReadAndServe(s.chain, timeout).(type) {
 	case *BlockBodies:
 		bodies := msg
 		for _, body := range *bodies {
@@ -173,7 +176,8 @@ func (s *Suite) TestBroadcast(t *utesting.T) {
 		t.Fatalf("could not write to connection: %v", err)
 	}
 
-	switch msg := receiveConn.ReadAndServe(s.chain).(type) {
+	timeout := 20 * time.Second
+	switch msg := receiveConn.ReadAndServe(s.chain, timeout).(type) {
 	case *NewBlock:
 		assert.Equal(t, blockAnnouncement.Block.Header(), msg.Block.Header(),
 			"wrong block header in announcement")
