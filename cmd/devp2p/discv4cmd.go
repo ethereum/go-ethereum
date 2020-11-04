@@ -19,14 +19,12 @@ package main
 import (
 	"fmt"
 	"net"
-	"os"
 	"strings"
 	"time"
 
 	"github.com/ethereum/go-ethereum/cmd/devp2p/internal/v4test"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/crypto"
-	"github.com/ethereum/go-ethereum/internal/utesting"
 	"github.com/ethereum/go-ethereum/p2p/discover"
 	"github.com/ethereum/go-ethereum/p2p/enode"
 	"github.com/ethereum/go-ethereum/params"
@@ -82,7 +80,13 @@ var (
 		Name:   "test",
 		Usage:  "Runs tests against a node",
 		Action: discv4Test,
-		Flags:  []cli.Flag{remoteEnodeFlag, testPatternFlag, testListen1Flag, testListen2Flag},
+		Flags: []cli.Flag{
+			remoteEnodeFlag,
+			testPatternFlag,
+			testTAPFlag,
+			testListen1Flag,
+			testListen2Flag,
+		},
 	}
 )
 
@@ -112,20 +116,6 @@ var (
 		Name:   "remote",
 		Usage:  "Enode of the remote node under test",
 		EnvVar: "REMOTE_ENODE",
-	}
-	testPatternFlag = cli.StringFlag{
-		Name:  "run",
-		Usage: "Pattern of test suite(s) to run",
-	}
-	testListen1Flag = cli.StringFlag{
-		Name:  "listen1",
-		Usage: "IP address of the first tester",
-		Value: v4test.Listen1,
-	}
-	testListen2Flag = cli.StringFlag{
-		Name:  "listen2",
-		Usage: "IP address of the second tester",
-		Value: v4test.Listen2,
 	}
 )
 
@@ -213,6 +203,7 @@ func discv4Crawl(ctx *cli.Context) error {
 	return nil
 }
 
+// discv4Test runs the protocol test suite.
 func discv4Test(ctx *cli.Context) error {
 	// Configure test package globals.
 	if !ctx.IsSet(remoteEnodeFlag.Name) {
@@ -221,18 +212,7 @@ func discv4Test(ctx *cli.Context) error {
 	v4test.Remote = ctx.String(remoteEnodeFlag.Name)
 	v4test.Listen1 = ctx.String(testListen1Flag.Name)
 	v4test.Listen2 = ctx.String(testListen2Flag.Name)
-
-	// Filter and run test cases.
-	tests := v4test.AllTests
-	if ctx.IsSet(testPatternFlag.Name) {
-		tests = utesting.MatchTests(tests, ctx.String(testPatternFlag.Name))
-	}
-	results := utesting.RunTests(tests, os.Stdout)
-	if fails := utesting.CountFailures(results); fails > 0 {
-		return fmt.Errorf("%v/%v tests passed.", len(tests)-fails, len(tests))
-	}
-	fmt.Printf("%v/%v passed\n", len(tests), len(tests))
-	return nil
+	return runTests(ctx, v4test.AllTests)
 }
 
 // startV4 starts an ephemeral discovery V4 node.
