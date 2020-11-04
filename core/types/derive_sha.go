@@ -43,17 +43,15 @@ func DeriveSha(list DerivableList, hasher Hasher) common.Hash {
 
 	var buf []byte
 	for i := 1; i < list.Len() && i <= 0x7f; i++ {
-		buf = rlp.AppendInt(buf[:0], uint64(i))
+		buf = rlp.AppendUint64(buf[:0], uint64(i))
 		hasher.Update(buf, list.GetRlp(i))
-
 	}
 	if list.Len() > 0 {
-		buf = rlp.AppendInt(buf[:0], 0)
+		buf = rlp.AppendUint64(buf[:0], 0)
 		hasher.Update(buf, list.GetRlp(0))
-
 	}
 	for i := 0x80; i < list.Len(); i++ {
-		buf = rlp.AppendInt(buf[:0], uint64(i))
+		buf = rlp.AppendUint64(buf[:0], uint64(i))
 		hasher.Update(buf, list.GetRlp(i))
 	}
 	return hasher.Hash()
