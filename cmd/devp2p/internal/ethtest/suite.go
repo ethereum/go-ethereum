@@ -74,7 +74,7 @@ func (s *Suite) TestStatus(t *utesting.T) {
 	// get status
 	switch msg := conn.statusExchange(t, s.chain).(type) {
 	case *Status:
-		t.Logf("%+v\n", msg)
+		t.Logf("got status message: %+v\n", msg)
 	default:
 		t.Fatalf("unexpected: %#v", msg)
 	}
@@ -112,7 +112,7 @@ func (s *Suite) TestGetBlockHeaders(t *utesting.T) {
 		for _, header := range *headers {
 			num := header.Number.Uint64()
 			assert.Equal(t, s.chain.blocks[int(num)].Header(), header)
-			t.Logf("\nHEADER FOR BLOCK NUMBER %d: %+v\n", header.Number, header)
+			t.Logf("received header (%d): %+v", header.Number, header)
 		}
 	default:
 		t.Fatalf("unexpected: %#v", msg)
@@ -138,10 +138,7 @@ func (s *Suite) TestGetBlockBodies(t *utesting.T) {
 	timeout := 20 * time.Second
 	switch msg := conn.ReadAndServe(s.chain, timeout).(type) {
 	case *BlockBodies:
-		bodies := msg
-		for _, body := range *bodies {
-			t.Logf("\nBODY: %+v\n", body)
-		}
+		t.Logf("received %d block bodies", len(*msg))
 	default:
 		t.Fatalf("unexpected: %#v", msg)
 	}
@@ -179,12 +176,14 @@ func (s *Suite) TestBroadcast(t *utesting.T) {
 	timeout := 20 * time.Second
 	switch msg := receiveConn.ReadAndServe(s.chain, timeout).(type) {
 	case *NewBlock:
+		t.Logf("received NewBlock message with hash %v", msg.Block.Hash())
 		assert.Equal(t, blockAnnouncement.Block.Header(), msg.Block.Header(),
 			"wrong block header in announcement")
 		assert.Equal(t, blockAnnouncement.TD, msg.TD,
 			"wrong TD in announcement")
 	case *NewBlockHashes:
 		hashes := *msg
+		t.Logf("received NewBlockHashes message: %v", hashes)
 		assert.Equal(t, blockAnnouncement.Block.Hash(), hashes[0].Hash,
 			"wrong block hash in announcement")
 	default:
