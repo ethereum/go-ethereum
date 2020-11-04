@@ -153,7 +153,6 @@ type tapOutput struct {
 }
 
 func newTAP(out io.Writer, numTests int) *tapOutput {
-	fmt.Fprintln(out, "TAP version 13")
 	fmt.Fprintf(out, "1..%d\n", numTests)
 	return &tapOutput{
 		out:      out,

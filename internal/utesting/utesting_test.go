@@ -120,7 +120,6 @@ func TestOutputTAP(t *testing.T) {
 	RunTAP(outputTests, &buf)
 
 	want := `
-TAP version 13
 1..5
 ok 1 TestWithLogs
 # output line 1
