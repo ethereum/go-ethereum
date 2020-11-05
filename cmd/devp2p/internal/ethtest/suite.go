@@ -62,10 +62,13 @@ func NewSuite(dest *enode.Node, chainfile string, genesisfile string) *Suite {
 
 func (s *Suite) AllTests() []utesting.Test {
 	return []utesting.Test{
-		{Name: "Status", Fn: s.TestStatus},
-		{Name: "GetBlockHeaders", Fn: s.TestGetBlockHeaders},
-		{Name: "Broadcast", Fn: s.TestBroadcast},
-		{Name: "GetBlockBodies", Fn: s.TestGetBlockBodies},
+		/*
+			{Name: "Status", Fn: s.TestStatus},
+			{Name: "GetBlockHeaders", Fn: s.TestGetBlockHeaders},
+			{Name: "Broadcast", Fn: s.TestBroadcast},
+			{Name: "GetBlockBodies", Fn: s.TestGetBlockBodies},
+		*/
+		{Name: "TestLargeAnnounce", Fn: s.TestLargeAnnounce},
 	}
 }
 
@@ -155,7 +158,7 @@ func (s *Suite) TestGetBlockBodies(t *utesting.T) {
 // TestBroadcast tests whether a block announcement is correctly
 // propagated to the given node's peer(s).
 func (s *Suite) TestBroadcast(t *utesting.T) {
-	sendConn, receiveConn := s.setupConnection(t)
+	sendConn, receiveConn := s.setupConnection(t), s.setupConnection(t)
 	blockAnnouncement := &NewBlock{
 		Block: s.fullChain.blocks[1000],
 		TD:    s.fullChain.TD(1001),
@@ -171,28 +174,51 @@ func (s *Suite) TestBroadcast(t *utesting.T) {
 
 // TestLargeAnnounce tests the announcement mechanism with a large block.
 func (s *Suite) TestLargeAnnounce(t *utesting.T) {
-	sendConn, receiveConn := s.setupConnection(t)
-
+	nextBlock := 1000
 	blocks := []*NewBlock{
 		{
 			Block: largeBlock(),
-			TD:    s.fullChain.TD(1001),
+			TD:    s.fullChain.TD(nextBlock),
 		},
 		{
-			Block: s.fullChain.blocks[1001],
+			Block: s.fullChain.blocks[nextBlock],
 			TD:    largeNumber(2),
 		},
 		{
 			Block: largeBlock(),
 			TD:    largeNumber(2),
 		},
+		{
+			Block: s.fullChain.blocks[nextBlock],
+			TD:    s.fullChain.TD(nextBlock),
+		},
 	}
-	for _, blockAnnouncement := range blocks {
-		// sendConn sends the block announcement
-		s.testAnnounce(t, sendConn, receiveConn, blockAnnouncement)
+
+	var receiveConn *Conn
+	for i, blockAnnouncement := range blocks {
+		sendConn := s.setupConnection(t)
+		fmt.Println("Sending block announcement")
+		// Announce the block.
+		if err := sendConn.Write(blockAnnouncement); err != nil {
+			t.Fatalf("could not write to connection: %v", err)
+		}
+		if i < 3 {
+			fmt.Println("Checking for disconnect")
+			time.Sleep(time.Second)
+			// check that the peer disconnected
+			if err := sendConn.waitForMessage(Disconnect{}); err != nil {
+				fmt.Print(err)
+			}
+		}
+		if i == 3 {
+			receiveConn = s.setupConnection(t)
+		}
 	}
+	s.waitAnnounce(t, receiveConn, blocks[3])
+	// update test suite chain
+	s.chain.blocks = append(s.chain.blocks, s.fullChain.blocks[nextBlock])
 	// wait for client to update its chain
-	if err := receiveConn.waitForBlock(s.chain.Head()); err != nil {
+	if err := receiveConn.waitForBlock(s.fullChain.blocks[nextBlock]); err != nil {
 		t.Fatal(err)
 	}
 }
@@ -202,6 +228,10 @@ func (s *Suite) testAnnounce(t *utesting.T, sendConn, receiveConn *Conn, blockAn
 	if err := sendConn.Write(blockAnnouncement); err != nil {
 		t.Fatalf("could not write to connection: %v", err)
 	}
+	s.waitAnnounce(t, receiveConn, blockAnnouncement)
+}
+
+func (s *Suite) waitAnnounce(t *utesting.T, conn *Conn, blockAnnouncement *NewBlock) {
 	// Wait for the announcement.
 	timeout := 20 * time.Second
 	switch msg := receiveConn.ReadAndServe(s.chain, timeout).(type) {
@@ -227,24 +257,15 @@ func (s *Suite) testAnnounce(t *utesting.T, sendConn, receiveConn *Conn, blockAn
 	}
 }
 
-func (s *Suite) setupConnection(t *utesting.T) (*Conn, *Conn) {
-	// create conn to send block announcement
+func (s *Suite) setupConnection(t *utesting.T) *Conn {
+	// create conn
 	sendConn, err := s.dial()
 	if err != nil {
 		t.Fatalf("could not dial: %v", err)
 	}
-	// create conn to receive block announcement
-	receiveConn, err := s.dial()
-	if err != nil {
-		t.Fatalf("could not dial: %v", err)
-	}
-
 	sendConn.handshake(t)
-	receiveConn.handshake(t)
-
 	sendConn.statusExchange(t, s.chain)
-	receiveConn.statusExchange(t, s.chain)
-	return sendConn, receiveConn
+	return sendConn
 }
 
 // dial attempts to dial the given node and perform a handshake,

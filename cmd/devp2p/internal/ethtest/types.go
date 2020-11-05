@@ -377,3 +377,25 @@ func (c *Conn) waitForBlock(block *types.Block) error {
 		}
 	}
 }
+
+// waitForMessage waits for a certain message type.
+func (c *Conn) waitForMessage(msg Message) error {
+	defer c.SetReadDeadline(time.Time{})
+
+	timeout := 20 * time.Second
+	deadline := time.Now().Add(timeout)
+	c.SetReadDeadline(deadline)
+	t := time.NewTimer(timeout)
+	for {
+		msg := c.Read()
+		if msg.Code() == msg.Code() {
+			return nil
+		}
+		select {
+		case <-t.C:
+			return fmt.Errorf("no message received within timeout")
+		default:
+			time.Sleep(100 * time.Millisecond)
+		}
+	}
+}
