@@ -155,7 +155,7 @@ func TestCalcBaseFee(t *testing.T) {
 			big.NewInt(1000000000),
 			1000000,
 			10000000,
-			big.NewInt(1125000000),
+			big.NewInt(2125000000),
 		},
 		{
 			params.EIP1559ChainConfig,
@@ -165,7 +165,7 @@ func TestCalcBaseFee(t *testing.T) {
 			big.NewInt(1000000000),
 			500000,
 			10000000,
-			big.NewInt(1125000000),
+			big.NewInt(3375000000),
 		},
 		{
 			params.EIP1559ChainConfig,
@@ -175,7 +175,7 @@ func TestCalcBaseFee(t *testing.T) {
 			big.NewInt(1000000000),
 			1000000,
 			10000000,
-			big.NewInt(1125000000),
+			big.NewInt(2125000000),
 		},
 		{
 			params.EIP1559ChainConfig,
@@ -217,7 +217,7 @@ func TestCalcBaseFee(t *testing.T) {
 			10000000,
 			big.NewInt(1013888888),
 		},
-		{
+		{ // 10
 			params.EIP1559ChainConfig,
 			big.NewInt(1000),
 			1000,
@@ -225,7 +225,7 @@ func TestCalcBaseFee(t *testing.T) {
 			big.NewInt(1000000000),
 			10000000,
 			10000000,
-			big.NewInt(999999999), // baseFee diff is -1 when usage == target
+			big.NewInt(1000000000), // baseFee diff is -1 when usage == target
 		},
 		{
 			params.EIP1559ChainConfig,
@@ -235,7 +235,7 @@ func TestCalcBaseFee(t *testing.T) {
 			big.NewInt(1000000000),
 			11000000,
 			10000000,
-			big.NewInt(988636363),
+			big.NewInt(988636364),
 		},
 		{
 			params.EIP1559ChainConfig,
@@ -245,7 +245,7 @@ func TestCalcBaseFee(t *testing.T) {
 			big.NewInt(900000000),
 			1000000,
 			10000000,
-			big.NewInt(1012500000),
+			big.NewInt(1912500000),
 		},
 		{
 			params.EIP1559ChainConfig,
@@ -255,7 +255,7 @@ func TestCalcBaseFee(t *testing.T) {
 			big.NewInt(1100000000),
 			1000000,
 			10000000,
-			big.NewInt(1237500000),
+			big.NewInt(2337500000),
 		},
 		{
 			params.EIP1559ChainConfig,
@@ -265,7 +265,7 @@ func TestCalcBaseFee(t *testing.T) {
 			big.NewInt(1200000000),
 			1000000,
 			10000000,
-			big.NewInt(1350000000),
+			big.NewInt(2550000000),
 		},
 		{
 			params.EIP1559ChainConfig,
@@ -328,7 +328,7 @@ func TestCalcBaseFee(t *testing.T) {
 			big.NewInt(0),
 			1000000000000000,
 			1,
-			big.NewInt(1),
+			big.NewInt(0),
 		},
 		// parent gas usage == parent gas limit
 		// parent baseFee == 0
@@ -355,11 +355,8 @@ func TestCalcBaseFee(t *testing.T) {
 			big.NewInt(1),
 			1,
 			1000000000000000,
-			big.NewInt(2),
+			big.NewInt(125000000000000),
 		},
-		// parent gas usage <<<< parent gas limit
-		// parent baseFee == 1
-		// as expected, decrement by 1
 		{
 			params.EIP1559ChainConfig,
 			big.NewInt(1000),
@@ -368,11 +365,8 @@ func TestCalcBaseFee(t *testing.T) {
 			big.NewInt(1),
 			1000000000000000,
 			1,
-			big.NewInt(0),
+			big.NewInt(1),
 		},
-		// parent gas usage == parent gas limit
-		// parent baseFee == 1
-		// as expected, decrement by 1 when gas usage equals the gas target
 		{
 			params.EIP1559ChainConfig,
 			big.NewInt(1000),
@@ -381,7 +375,7 @@ func TestCalcBaseFee(t *testing.T) {
 			big.NewInt(1),
 			1,
 			1,
-			big.NewInt(0),
+			big.NewInt(1),
 		},
 	}
 	for i, test := range testConditions {

@@ -787,10 +787,10 @@ func (w *worker) commitTransactions(txs *types.TransactionsByPriceAndNonce, coin
 		// Set which gasPool to use based on the type of transaction
 		eip1559 := false
 		var gp *core.GasPool
-		if w.current.gp1559 != nil && tx.GasPrice() == nil && tx.GasPremium() != nil && tx.FeeCap() != nil {
+		if w.current.gp1559 != nil && tx.GasPrice() == nil && tx.MaxMinerBribe() != nil && tx.FeeCap() != nil {
 			gp = w.current.gp1559
 			eip1559 = true
-		} else if w.current.gasPool != nil && tx.GasPremium() == nil && tx.FeeCap() == nil && tx.GasPrice() != nil {
+		} else if w.current.gasPool != nil && tx.MaxMinerBribe() == nil && tx.FeeCap() == nil && tx.GasPrice() != nil {
 			gp = w.current.gasPool
 		} else {
 			log.Error("Transaction does not conform with expected format (legacy or EIP1559)")
@@ -1062,8 +1062,8 @@ func (w *worker) commit(uncles []*types.Header, interval func(), update bool, st
 			for i, tx := range block.Transactions() {
 				if tx.GasPrice() != nil {
 					feesWei.Add(feesWei, new(big.Int).Mul(new(big.Int).SetUint64(receipts[i].GasUsed), tx.GasPrice()))
-				} else if tx.GasPremium() != nil && tx.FeeCap() != nil {
-					gasPrice := new(big.Int).Add(block.BaseFee(), tx.GasPremium())
+				} else if tx.MaxMinerBribe() != nil && tx.FeeCap() != nil {
+					gasPrice := new(big.Int).Add(block.BaseFee(), tx.MaxMinerBribe())
 					if gasPrice.Cmp(tx.FeeCap()) > 0 {
 						gasPrice.Set(tx.FeeCap())
 					}

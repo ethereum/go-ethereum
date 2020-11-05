@@ -368,13 +368,13 @@ func (t *transactionsByGasPrice) Less(i, j int) bool {
 	iPrice := t.txs[i].GasPrice()
 	jPrice := t.txs[j].GasPrice()
 	if iPrice == nil {
-		iPrice = new(big.Int).Add(t.baseFee, t.txs[i].GasPremium())
+		iPrice = new(big.Int).Add(t.baseFee, t.txs[i].MaxMinerBribe())
 		if iPrice.Cmp(t.txs[i].FeeCap()) > 0 {
 			iPrice.Set(t.txs[i].FeeCap())
 		}
 	}
 	if jPrice == nil {
-		jPrice = new(big.Int).Add(t.baseFee, t.txs[j].GasPremium())
+		jPrice = new(big.Int).Add(t.baseFee, t.txs[j].MaxMinerBribe())
 		if jPrice.Cmp(t.txs[j].FeeCap()) > 0 {
 			jPrice.Set(t.txs[j].FeeCap())
 		}
@@ -390,8 +390,8 @@ type transactionsByGasPremium struct {
 func (t *transactionsByGasPremium) Len() int      { return len(t.txs) }
 func (t *transactionsByGasPremium) Swap(i, j int) { t.txs[i], t.txs[j] = t.txs[j], t.txs[i] }
 func (t *transactionsByGasPremium) Less(i, j int) bool {
-	iPremium := t.txs[i].GasPremium()
-	jPremium := t.txs[j].GasPremium()
+	iPremium := t.txs[i].MaxMinerBribe()
+	jPremium := t.txs[j].MaxMinerBribe()
 	if iPremium == nil {
 		iPremium = new(big.Int).Sub(t.txs[i].GasPrice(), t.baseFee)
 		if iPremium.Cmp(common.Big0) < 0 {
@@ -451,7 +451,7 @@ func (gpo *Oracle) getBlockPrices(ctx context.Context, signer types.Signer, bloc
 		}
 		price := tx.GasPrice()
 		if price == nil {
-			price = new(big.Int).Add(block.BaseFee(), tx.GasPremium())
+			price = new(big.Int).Add(block.BaseFee(), tx.MaxMinerBribe())
 			if price.Cmp(tx.FeeCap()) > 0 {
 				price.Set(tx.FeeCap())
 			}
@@ -488,7 +488,7 @@ func (gpo *Oracle) getBlockPremiums(ctx context.Context, signer types.Signer, bl
 		if err != nil || sender == block.Coinbase() {
 			continue
 		}
-		premium := tx.GasPremium()
+		premium := tx.MaxMinerBribe()
 		if premium == nil {
 			premium = new(big.Int).Sub(tx.GasPrice(), block.BaseFee())
 			if premium.Cmp(common.Big0) < 0 {

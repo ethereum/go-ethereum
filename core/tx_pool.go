@@ -556,16 +556,16 @@ func (pool *TxPool) validateTx(tx *types.Transaction, local bool) error {
 	if eip1559 && pool.chain.CurrentBlock().BaseFee() == nil {
 		return ErrNoBaseFee
 	}
-	if eip1559Finalized && (tx.GasPremium() == nil || tx.FeeCap() == nil || tx.GasPrice() != nil) {
+	if eip1559Finalized && (tx.MaxMinerBribe() == nil || tx.FeeCap() == nil || tx.GasPrice() != nil) {
 		return ErrTxNotEIP1559
 	}
-	if !eip1559 && (tx.GasPremium() != nil || tx.FeeCap() != nil || tx.GasPrice() == nil) {
+	if !eip1559 && (tx.MaxMinerBribe() != nil || tx.FeeCap() != nil || tx.GasPrice() == nil) {
 		return ErrTxIsEIP1559
 	}
-	if tx.GasPrice() != nil && (tx.GasPremium() != nil || tx.FeeCap() != nil) {
+	if tx.GasPrice() != nil && (tx.MaxMinerBribe() != nil || tx.FeeCap() != nil) {
 		return ErrTxSetsLegacyAndEIP1559Fields
 	}
-	if tx.GasPrice() == nil && (tx.GasPremium() == nil || tx.FeeCap() == nil) {
+	if tx.GasPrice() == nil && (tx.MaxMinerBribe() == nil || tx.FeeCap() == nil) {
 		return ErrMissingGasFields
 	}
 	// Set the gasPrice to the tx.GasPrice() if it is non nil (legacy transaction)
@@ -573,7 +573,7 @@ func (pool *TxPool) validateTx(tx *types.Transaction, local bool) error {
 	if tx.GasPrice() != nil {
 		gasPrice = tx.GasPrice()
 	} else { // Derive the gasPrice from the tx.GasPremium() and tx.FeeCap() (EIP1559 transaction)
-		gasPrice = new(big.Int).Add(pool.chain.CurrentBlock().BaseFee(), tx.GasPremium())
+		gasPrice = new(big.Int).Add(pool.chain.CurrentBlock().BaseFee(), tx.MaxMinerBribe())
 		if gasPrice.Cmp(tx.FeeCap()) > 0 {
 			gasPrice.Set(tx.FeeCap())
 		}

@@ -455,7 +455,7 @@ func TestInvalidTransactionsEIP1559(t *testing.T) {
 	}
 
 	fakeBaseFee := big.NewInt(5)
-	eip1559GasPrice := new(big.Int).Add(fakeBaseFee, tx.GasPremium())
+	eip1559GasPrice := new(big.Int).Add(fakeBaseFee, tx.MaxMinerBribe())
 
 	balance := new(big.Int).Add(tx.Value(), new(big.Int).Mul(new(big.Int).SetUint64(tx.Gas()), eip1559GasPrice))
 	pool.currentState.AddBalance(from, balance)
@@ -522,7 +522,7 @@ func TestInvalidTransactionsEIP1559Finalized(t *testing.T) {
 	}
 
 	fakeBaseFee := big.NewInt(5)
-	eip1559GasPrice := new(big.Int).Add(fakeBaseFee, tx.GasPremium())
+	eip1559GasPrice := new(big.Int).Add(fakeBaseFee, tx.MaxMinerBribe())
 
 	balance := new(big.Int).Add(tx.Value(), new(big.Int).Mul(new(big.Int).SetUint64(tx.Gas()), eip1559GasPrice))
 	pool.currentState.AddBalance(from, balance)

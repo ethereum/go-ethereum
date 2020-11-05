@@ -19,10 +19,10 @@ package core
 import (
 	"errors"
 	"fmt"
-	"math"
 	"math/big"
 
 	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/common/math"
 	"github.com/ethereum/go-ethereum/core/vm"
 	"github.com/ethereum/go-ethereum/params"
 )
@@ -77,7 +77,7 @@ type Message interface {
 	CheckNonce() bool
 	Data() []byte
 
-	GasPremium() *big.Int
+	MaxMinerBribe() *big.Int
 	FeeCap() *big.Int
 }
 
@@ -155,7 +155,7 @@ func IntrinsicGas(data []byte, contractCreation, isHomestead bool, isEIP2028 boo
 
 // NewStateTransition initialises and returns a new state transition object.
 func NewStateTransition(evm *vm.EVM, msg Message, gp, gp1559 *GasPool) *StateTransition {
-	isEIP1559 := evm.ChainConfig().IsEIP1559(evm.BlockNumber) && msg.GasPrice() == nil && msg.GasPremium() != nil && msg.FeeCap() != nil && evm.BaseFee != nil && gp1559 != nil
+	isEIP1559 := evm.ChainConfig().IsEIP1559(evm.Context.BlockNumber) && msg.GasPrice() == nil && msg.MaxMinerBribe() != nil && msg.FeeCap() != nil && evm.Context.BaseFee != nil && gp1559 != nil
 	st := &StateTransition{
 		gp:        gp,
 		gp1559:    gp1559,
@@ -168,11 +168,14 @@ func NewStateTransition(evm *vm.EVM, msg Message, gp, gp1559 *GasPool) *StateTra
 		isEIP1559: isEIP1559,
 	}
 	if isEIP1559 {
-		// EP1559 gasPrice = min(BASEFEE + tx.fee_premium, tx.fee_cap)
-		st.eip1559GasPrice = new(big.Int).Add(evm.BaseFee, msg.GasPremium())
-		if st.eip1559GasPrice.Cmp(msg.FeeCap()) > 0 {
-			st.eip1559GasPrice.Set(msg.FeeCap())
-		}
+		// # bribe is capped such that base fee is filled first
+		// bribe_per_gas = min(transaction.max_miner_bribe_per_gas, transaction.fee_cap_per_gas - block.base_fee)
+		// # signer pays both the bribe and the base fee
+		// effective_gas_price = bribe_per_gas + block.base_fee
+		st.eip1559GasPrice = new(big.Int).Add(evm.Context.BaseFee, math.BigMin(
+			new(big.Int).Set(msg.MaxMinerBribe()),
+			new(big.Int).Sub(msg.FeeCap(), evm.Context.BaseFee),
+		))
 	}
 	return st
 }
@@ -247,28 +250,28 @@ func (st *StateTransition) preCheck() error {
 		}
 	}
 	// If we have reached the EIP1559 finalization block and we do not conform with EIP1559, throw an error
-	if st.evm.ChainConfig().IsEIP1559Finalized(st.evm.BlockNumber) && !st.isEIP1559 {
+	if st.evm.ChainConfig().IsEIP1559Finalized(st.evm.Context.BlockNumber) && !st.isEIP1559 {
 		return ErrTxNotEIP1559
 	}
 	// If we are before the EIP1559 activation block, throw an error if we have EIP1559 fields or do not have a GasPrice
-	if !st.evm.ChainConfig().IsEIP1559(st.evm.BlockNumber) && (st.msg.GasPremium() != nil || st.msg.FeeCap() != nil || st.gp1559 != nil || st.evm.BaseFee != nil || st.msg.GasPrice() == nil) {
+	if !st.evm.ChainConfig().IsEIP1559(st.evm.Context.BlockNumber) && (st.msg.MaxMinerBribe() != nil || st.msg.FeeCap() != nil || st.gp1559 != nil || st.evm.Context.BaseFee != nil || st.msg.GasPrice() == nil) {
 		return ErrTxIsEIP1559
 	}
 	// If transaction has both legacy and EIP1559 fields, throw an error
-	if (st.msg.GasPremium() != nil || st.msg.FeeCap() != nil) && st.msg.GasPrice() != nil {
+	if (st.msg.MaxMinerBribe() != nil || st.msg.FeeCap() != nil) && st.msg.GasPrice() != nil {
 		return ErrTxSetsLegacyAndEIP1559Fields
 	}
 	// We need a BaseFee if we are past EIP1559 activation
-	if st.evm.ChainConfig().IsEIP1559(st.evm.BlockNumber) && st.evm.BaseFee == nil {
+	if st.evm.ChainConfig().IsEIP1559(st.evm.Context.BlockNumber) && st.evm.Context.BaseFee == nil {
 		return ErrNoBaseFee
 	}
 	// We need either a GasPrice or a FeeCap and GasPremium to be set
-	if st.msg.GasPrice() == nil && (st.msg.GasPremium() == nil || st.msg.FeeCap() == nil) {
+	if st.msg.GasPrice() == nil && (st.msg.MaxMinerBribe() == nil || st.msg.FeeCap() == nil) {
 		return ErrMissingGasFields
 	}
 	// If it is an EIp1559 transaction, make sure the derived gasPrice is >= baseFee
 	if st.isEIP1559 {
-		if st.eip1559GasPrice.Cmp(st.evm.BaseFee) < 0 {
+		if st.eip1559GasPrice.Cmp(st.evm.Context.BaseFee) < 0 {
 			return ErrEIP1559GasPriceLessThanBaseFee
 		}
 	}

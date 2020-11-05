@@ -237,8 +237,8 @@ func mkTestTx(from common.MixedcaseAddress, eip1559 bool) core.SendTxArgs {
 		Data:  &data,
 		Nonce: nonce}
 	if eip1559 {
-		tx.GasPremium = (*hexutil.Big)(big.NewInt(1000000000))
-		tx.FeeCap = (*hexutil.Big)(big.NewInt(2000000000))
+		tx.MaxMinerBribePerGas = (*hexutil.Big)(big.NewInt(1000000000))
+		tx.FeeCapPerGas = (*hexutil.Big)(big.NewInt(2000000000))
 	} else {
 		tx.GasPrice = (*hexutil.Big)(big.NewInt(2000000000))
 	}

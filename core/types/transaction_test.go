@@ -153,10 +153,10 @@ func TestEIP1159TransactionDecode(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if tx.data.FeeCap == nil || tx.data.FeeCap.Cmp(eip1559Tx.data.FeeCap) != 0 {
+	if tx.data.FeeCapPerGas == nil || tx.data.FeeCapPerGas.Cmp(eip1559Tx.data.FeeCapPerGas) != 0 {
 		t.Fatal("unexpected FeeCap")
 	}
-	if tx.data.GasPremium == nil || tx.data.GasPremium.Cmp(eip1559Tx.data.GasPremium) != 0 {
+	if tx.data.MaxMinerBribePerGas == nil || tx.data.MaxMinerBribePerGas.Cmp(eip1559Tx.data.MaxMinerBribePerGas) != 0 {
 		t.Fatal("unexpected GasPremium")
 	}
 	if tx.data.Price != nil {
@@ -369,13 +369,13 @@ func TestTransactionPriceNonceSort(t *testing.T) {
 			iPrice := txi.GasPrice()
 			nextPrice := next.GasPrice()
 			if iPrice == nil {
-				iPrice = new(big.Int).Add(baseFee, txi.GasPremium())
+				iPrice = new(big.Int).Add(baseFee, txi.MaxMinerBribe())
 				if iPrice.Cmp(txi.FeeCap()) > 0 {
 					iPrice.Set(txi.FeeCap())
 				}
 			}
 			if nextPrice == nil {
-				nextPrice = new(big.Int).Add(baseFee, next.GasPremium())
+				nextPrice = new(big.Int).Add(baseFee, next.MaxMinerBribe())
 				if nextPrice.Cmp(next.FeeCap()) > 0 {
 					nextPrice.Set(next.FeeCap())
 				}

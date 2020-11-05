@@ -58,8 +58,8 @@ func (msg *CallMsg) GetTo() *Address {
 	}
 	return nil
 }
-func (msg *CallMsg) GetGasPremium() *BigInt { return &BigInt{msg.msg.GasPremium} }
-func (msg *CallMsg) GetFeeCap() *BigInt     { return &BigInt{msg.msg.FeeCap} }
+func (msg *CallMsg) GetMaxMinerBribe() *BigInt { return &BigInt{msg.msg.MaxMinerBribePerGas} }
+func (msg *CallMsg) GetFeeCap() *BigInt        { return &BigInt{msg.msg.FeeCapPerGas} }
 
 func (msg *CallMsg) SetFrom(address *Address)  { msg.msg.From = address.address }
 func (msg *CallMsg) SetGas(gas int64)          { msg.msg.Gas = uint64(gas) }
@@ -73,8 +73,10 @@ func (msg *CallMsg) SetTo(address *Address) {
 	}
 	msg.msg.To = &address.address
 }
-func (msg *CallMsg) SetGasPremium(gasPremium *BigInt) { msg.msg.GasPremium = gasPremium.bigint }
-func (msg *CallMsg) SetFeeCap(feeCap *BigInt)         { msg.msg.FeeCap = feeCap.bigint }
+func (msg *CallMsg) SetMaxMinerBribe(maxMinerBribe *BigInt) {
+	msg.msg.MaxMinerBribePerGas = maxMinerBribe.bigint
+}
+func (msg *CallMsg) SetFeeCap(feeCap *BigInt) { msg.msg.FeeCapPerGas = feeCap.bigint }
 
 // SyncProgress gives progress indications when the node is synchronising with
 // the Ethereum network.

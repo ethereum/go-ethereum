@@ -557,23 +557,23 @@ func (b *SimulatedBackend) callContract(ctx context.Context, call ethereum.CallM
 	// If we have finalized EIP1559 and do not have a properly formed EIP1559 trx, sub in default values
 	eip1559 := b.config.IsEIP1559(block.Number())
 	eip1559Finalized := b.config.IsEIP1559Finalized(block.Number())
-	if eip1559Finalized && (call.GasPremium == nil || call.FeeCap == nil || call.GasPrice != nil) {
-		call.GasPremium = big.NewInt(1)
-		call.FeeCap = big.NewInt(10)
+	if eip1559Finalized && (call.MaxMinerBribePerGas == nil || call.FeeCapPerGas == nil || call.GasPrice != nil) {
+		call.MaxMinerBribePerGas = big.NewInt(1)
+		call.FeeCapPerGas = big.NewInt(10)
 		call.GasPrice = nil
 	}
 	// If we have not activated EIP1559 and do not have a properly formed legacy trx, sub in default values
-	if !eip1559 && (call.GasPremium != nil || call.FeeCap != nil || call.GasPrice == nil) {
-		call.GasPremium = nil
-		call.FeeCap = nil
+	if !eip1559 && (call.MaxMinerBribePerGas != nil || call.FeeCapPerGas != nil || call.GasPrice == nil) {
+		call.MaxMinerBribePerGas = nil
+		call.FeeCapPerGas = nil
 		call.GasPrice = big.NewInt(1)
 	}
 	// If we are in between activation and finalization
 	if eip1559 && !eip1559Finalized {
 		// and we have neither a properly formed legacy or EIP1559 transaction, sub in default legacy values
-		if (call.GasPremium == nil || call.FeeCap == nil && call.GasPrice == nil) || (call.GasPremium != nil || call.FeeCap != nil && call.GasPrice != nil) {
-			call.GasPremium = nil
-			call.FeeCap = nil
+		if (call.MaxMinerBribePerGas == nil || call.FeeCapPerGas == nil && call.GasPrice == nil) || (call.MaxMinerBribePerGas != nil || call.FeeCapPerGas != nil && call.GasPrice != nil) {
+			call.MaxMinerBribePerGas = nil
+			call.FeeCapPerGas = nil
 			call.GasPrice = big.NewInt(1)
 		}
 	}
@@ -614,16 +614,16 @@ func (b *SimulatedBackend) SendTransaction(ctx context.Context, tx *types.Transa
 	if eip1559 && b.pendingBlock.BaseFee() == nil {
 		return core.ErrNoBaseFee
 	}
-	if eip1559Finalized && (tx.GasPremium() == nil || tx.FeeCap() == nil || tx.GasPrice() != nil) {
+	if eip1559Finalized && (tx.MaxMinerBribe() == nil || tx.FeeCap() == nil || tx.GasPrice() != nil) {
 		return core.ErrTxNotEIP1559
 	}
-	if !eip1559 && (tx.GasPremium() != nil || tx.FeeCap() != nil || tx.GasPrice() == nil) {
+	if !eip1559 && (tx.MaxMinerBribe() != nil || tx.FeeCap() != nil || tx.GasPrice() == nil) {
 		return core.ErrTxIsEIP1559
 	}
-	if tx.GasPrice() != nil && (tx.GasPremium() != nil || tx.FeeCap() != nil) {
+	if tx.GasPrice() != nil && (tx.MaxMinerBribe() != nil || tx.FeeCap() != nil) {
 		return core.ErrTxSetsLegacyAndEIP1559Fields
 	}
-	if tx.GasPrice() == nil && (tx.GasPremium() == nil || tx.FeeCap() == nil) {
+	if tx.GasPrice() == nil && (tx.MaxMinerBribe() == nil || tx.FeeCap() == nil) {
 		return core.ErrMissingGasFields
 	}
 
@@ -775,16 +775,16 @@ type callMsg struct {
 	ethereum.CallMsg
 }
 
-func (m callMsg) From() common.Address { return m.CallMsg.From }
-func (m callMsg) Nonce() uint64        { return 0 }
-func (m callMsg) CheckNonce() bool     { return false }
-func (m callMsg) To() *common.Address  { return m.CallMsg.To }
-func (m callMsg) GasPrice() *big.Int   { return m.CallMsg.GasPrice }
-func (m callMsg) Gas() uint64          { return m.CallMsg.Gas }
-func (m callMsg) Value() *big.Int      { return m.CallMsg.Value }
-func (m callMsg) Data() []byte         { return m.CallMsg.Data }
-func (m callMsg) GasPremium() *big.Int { return m.CallMsg.GasPremium }
-func (m callMsg) FeeCap() *big.Int     { return m.CallMsg.FeeCap }
+func (m callMsg) From() common.Address    { return m.CallMsg.From }
+func (m callMsg) Nonce() uint64           { return 0 }
+func (m callMsg) CheckNonce() bool        { return false }
+func (m callMsg) To() *common.Address     { return m.CallMsg.To }
+func (m callMsg) GasPrice() *big.Int      { return m.CallMsg.GasPrice }
+func (m callMsg) Gas() uint64             { return m.CallMsg.Gas }
+func (m callMsg) Value() *big.Int         { return m.CallMsg.Value }
+func (m callMsg) Data() []byte            { return m.CallMsg.Data }
+func (m callMsg) MaxMinerBribe() *big.Int { return m.CallMsg.MaxMinerBribePerGas }
+func (m callMsg) FeeCap() *big.Int        { return m.CallMsg.FeeCapPerGas }
 
 // filterBackend implements filters.Backend to support filtering for logs without
 // taking bloom-bits acceleration structures into account.

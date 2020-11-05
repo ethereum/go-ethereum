@@ -293,7 +293,7 @@ func (l *txList) Add(tx *types.Transaction, priceBump uint64, baseFee *big.Int) 
 				}
 			} else {
 				eip1559 = true
-				newGasPrice := new(big.Int).Add(baseFee, tx.GasPremium())
+				newGasPrice := new(big.Int).Add(baseFee, tx.MaxMinerBribe())
 				if newGasPrice.Cmp(tx.FeeCap()) > 0 {
 					newGasPrice.Set(tx.FeeCap())
 				}
@@ -302,7 +302,7 @@ func (l *txList) Add(tx *types.Transaction, priceBump uint64, baseFee *big.Int) 
 				}
 			}
 		} else {
-			oldGasPrice := new(big.Int).Add(baseFee, old.GasPremium())
+			oldGasPrice := new(big.Int).Add(baseFee, old.MaxMinerBribe())
 			if oldGasPrice.Cmp(old.FeeCap()) > 0 {
 				oldGasPrice.Set(old.FeeCap())
 			}
@@ -313,7 +313,7 @@ func (l *txList) Add(tx *types.Transaction, priceBump uint64, baseFee *big.Int) 
 				}
 			} else {
 				eip1559 = true
-				newGasPrice := new(big.Int).Add(baseFee, tx.GasPremium())
+				newGasPrice := new(big.Int).Add(baseFee, tx.MaxMinerBribe())
 				if newGasPrice.Cmp(tx.FeeCap()) > 0 {
 					newGasPrice.Set(tx.FeeCap())
 				}
@@ -363,7 +363,7 @@ func (l *txList) Filter(costLimit *big.Int, legacyGasLimit, eip1559GasLimit uint
 	l.eip1559GasCap = eip1559GasLimit
 	// Filter out all the transactions above the account's funds
 	removed := l.txs.Filter(func(tx *types.Transaction) bool {
-		return tx.Cost(baseFee).Cmp(costLimit) > 0 || (tx.GasPrice() != nil && tx.Gas() > legacyGasLimit) || (tx.GasPremium()) != nil && tx.Gas() > eip1559GasLimit
+		return tx.Cost(baseFee).Cmp(costLimit) > 0 || (tx.GasPrice() != nil && tx.Gas() > legacyGasLimit) || (tx.MaxMinerBribe()) != nil && tx.Gas() > eip1559GasLimit
 	})
 
 	if len(removed) == 0 {
@@ -455,13 +455,13 @@ func (h priceHeap) Less(i, j int) bool {
 	iPrice := h.txs[i].GasPrice()
 	jPrice := h.txs[j].GasPrice()
 	if iPrice == nil {
-		iPrice = new(big.Int).Add(h.baseFee, h.txs[i].GasPremium())
+		iPrice = new(big.Int).Add(h.baseFee, h.txs[i].MaxMinerBribe())
 		if iPrice.Cmp(h.txs[i].FeeCap()) > 0 {
 			iPrice.Set(h.txs[i].FeeCap())
 		}
 	}
 	if jPrice == nil {
-		jPrice = new(big.Int).Add(h.baseFee, h.txs[j].GasPremium())
+		jPrice = new(big.Int).Add(h.baseFee, h.txs[j].MaxMinerBribe())
 		if jPrice.Cmp(h.txs[j].FeeCap()) > 0 {
 			jPrice.Set(h.txs[j].FeeCap())
 		}
@@ -548,7 +548,7 @@ func (l *txPricedList) Cap(threshold *big.Int) types.Transactions {
 		gasPrice := cheapest.GasPrice()
 		if gasPrice == nil {
 			gasPrice = new(big.Int).Set(emath.BigMin(
-				new(big.Int).Add(l.remotes.baseFee, cheapest.GasPremium()),
+				new(big.Int).Add(l.remotes.baseFee, cheapest.MaxMinerBribe()),
 				cheapest.FeeCap(),
 			))
 		}
@@ -584,14 +584,14 @@ func (l *txPricedList) Underpriced(tx *types.Transaction) bool {
 	cheapestPrice := cheapest.GasPrice()
 	if cheapestPrice == nil {
 		cheapestPrice = emath.BigMin(
-			new(big.Int).Add(l.remotes.baseFee, cheapest.GasPremium()),
+			new(big.Int).Add(l.remotes.baseFee, cheapest.MaxMinerBribe()),
 			cheapest.FeeCap(),
 		)
 	}
 	txPrice := tx.GasPrice()
 	if txPrice == nil {
 		txPrice = emath.BigMin(
-			new(big.Int).Add(l.remotes.baseFee, tx.GasPremium()),
+			new(big.Int).Add(l.remotes.baseFee, tx.MaxMinerBribe()),
 			tx.FeeCap(),
 		)
 	}

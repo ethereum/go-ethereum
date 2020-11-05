@@ -161,8 +161,8 @@ func (s EIP155Signer) Hash(tx *Transaction) common.Hash {
 		tx.data.Amount,
 		tx.data.Payload,
 	}
-	if tx.data.GasPremium != nil && tx.data.FeeCap != nil {
-		txFields = append(txFields, tx.data.GasPremium, tx.data.FeeCap)
+	if tx.data.MaxMinerBribePerGas != nil && tx.data.FeeCapPerGas != nil {
+		txFields = append(txFields, tx.data.MaxMinerBribePerGas, tx.data.FeeCapPerGas)
 	}
 	txFields = append(txFields, s.chainId, uint(0), uint(0))
 	return rlpHash(txFields)
@@ -217,8 +217,8 @@ func (fs FrontierSigner) Hash(tx *Transaction) common.Hash {
 		tx.data.Amount,
 		tx.data.Payload,
 	}
-	if tx.data.GasPremium != nil && tx.data.FeeCap != nil {
-		txFields = append(txFields, tx.data.GasPremium, tx.data.FeeCap)
+	if tx.data.MaxMinerBribePerGas != nil && tx.data.FeeCapPerGas != nil {
+		txFields = append(txFields, tx.data.MaxMinerBribePerGas, tx.data.FeeCapPerGas)
 	}
 	return rlpHash(txFields)
 }

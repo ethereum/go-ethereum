@@ -480,7 +480,7 @@ func logDiff(original *SignTxRequest, new *SignTxResponse) bool {
 		modified = true
 		log.Info("GasPrice changed by UI", "was", g0, "is", g1)
 	}
-	gp0, gp1 := (*big.Int)(original.Transaction.GasPremium), (*big.Int)(new.Transaction.GasPremium)
+	gp0, gp1 := (*big.Int)(original.Transaction.MaxMinerBribePerGas), (*big.Int)(new.Transaction.MaxMinerBribePerGas)
 	if gp0 == nil || gp1 == nil {
 		if gp0 != gp1 {
 			modified = true
@@ -490,7 +490,7 @@ func logDiff(original *SignTxRequest, new *SignTxResponse) bool {
 		modified = true
 		log.Info("GasPremium changed by UI", "was", gp0, "is", gp1)
 	}
-	f0, f1 := (*big.Int)(original.Transaction.FeeCap), (*big.Int)(new.Transaction.FeeCap)
+	f0, f1 := (*big.Int)(original.Transaction.FeeCapPerGas), (*big.Int)(new.Transaction.FeeCapPerGas)
 	if f0 == nil || f1 == nil {
 		if f0 != f1 {
 			modified = true

@@ -204,15 +204,15 @@ func (api *ExternalSigner) SignTx(account accounts.Account, tx *types.Transactio
 		to = &t
 	}
 	args := &core.SendTxArgs{
-		Data:       &data,
-		Nonce:      hexutil.Uint64(tx.Nonce()),
-		Value:      hexutil.Big(*tx.Value()),
-		Gas:        hexutil.Uint64(tx.Gas()),
-		GasPrice:   (*hexutil.Big)(tx.GasPrice()),
-		GasPremium: (*hexutil.Big)(tx.GasPremium()),
-		FeeCap:     (*hexutil.Big)(tx.FeeCap()),
-		To:         to,
-		From:       common.NewMixedcaseAddress(account.Address),
+		Data:                &data,
+		Nonce:               hexutil.Uint64(tx.Nonce()),
+		Value:               hexutil.Big(*tx.Value()),
+		Gas:                 hexutil.Uint64(tx.Gas()),
+		GasPrice:            (*hexutil.Big)(tx.GasPrice()),
+		MaxMinerBribePerGas: (*hexutil.Big)(tx.MaxMinerBribe()),
+		FeeCapPerGas:        (*hexutil.Big)(tx.FeeCap()),
+		To:                  to,
+		From:                common.NewMixedcaseAddress(account.Address),
 	}
 	var res signTransactionResult
 	if err := api.client.Call(&res, "account_signTransaction", args); err != nil {

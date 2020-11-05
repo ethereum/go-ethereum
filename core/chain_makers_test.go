@@ -245,8 +245,8 @@ func generateChainDuringTransition(t *testing.T) {
 	if state.GetBalance(addr1).Uint64() != 989000 {
 		t.Fatalf("expected balance of addr1 to equal %d got %d", 989000, state.GetBalance(addr1).Uint64())
 	}
-	if state.GetBalance(addr2).Uint64() != 4901403728000 {
-		t.Fatalf("expected balance of addr2 to equal %d got %d", 4901403728000, state.GetBalance(addr2).Uint64())
+	if state.GetBalance(addr2).Uint64() != 4911639338000 {
+		t.Fatalf("expected balance of addr2 to equal %d got %d", 4911639338000, state.GetBalance(addr2).Uint64())
 	}
 	// This value is different because the test config we use has Constantinople active (uses ConstantinopleBlockReward)
 	bal, _ := new(big.Int).SetString("7875000000000001000", 10)
@@ -389,11 +389,11 @@ func generateChainAfterFinalization2(t *testing.T) {
 	if blockchain.CurrentBlock().Number().Uint64() != 5 {
 		t.Fatalf("expected last block to equal %d got %d", 5, blockchain.CurrentBlock().Number().Uint64())
 	}
-	if state.GetBalance(addr1).Uint64() != 7536639348000 {
-		t.Fatalf("expected balance of addr1 to equal %d got %d", 7536639348000, state.GetBalance(addr1).Uint64())
+	if state.GetBalance(addr1).Uint64() != 7536639327000 {
+		t.Fatalf("expected balance of addr1 to equal %d got %d", 7536639327000, state.GetBalance(addr1).Uint64())
 	}
-	if state.GetBalance(addr2).Uint64() != 4911639359000 {
-		t.Fatalf("expected balance of addr2 to equal %d got %d", 4911639359000, state.GetBalance(addr2).Uint64())
+	if state.GetBalance(addr2).Uint64() != 4911639338000 {
+		t.Fatalf("expected balance of addr2 to equal %d got %d", 4911639338000, state.GetBalance(addr2).Uint64())
 	}
 	// This value is different than in TestGenerateChain because the test config we use has Constantinople active (uses ConstantinopleBlockReward)
 	bal, _ := new(big.Int).SetString("7875000000000001000", 10)
