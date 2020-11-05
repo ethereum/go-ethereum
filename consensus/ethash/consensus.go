@@ -653,9 +653,7 @@ func GetRewards(config *params.ChainConfig, header *types.Header, uncles []*type
 func accumulateRewards(config *params.ChainConfig, state *state.StateDB, header *types.Header, uncles []*types.Header) {
 	minerReward, uncleRewards := GetRewards(config, header, uncles)
 	for i, uncle := range uncles {
-		if i < len(uncleRewards) {
-			state.AddBalance(uncle.Coinbase, uncleRewards[i])
-		}
+		state.AddBalance(uncle.Coinbase, uncleRewards[i])
 	}
 	state.AddBalance(header.Coinbase, minerReward)
 }
