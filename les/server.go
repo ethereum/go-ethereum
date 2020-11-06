@@ -323,10 +323,12 @@ func (s *LesServer) dropClient(id enode.ID) {
 	}
 }
 
+// ServiceInfo returns the service identifier and description
 func (s *LesServer) ServiceInfo() (string, string) {
 	return "les", "Ethereum light client service"
 }
 
+// Handle handles lespay requests for the "les" service
 func (s *LesServer) Handle(id enode.ID, address string, name string, data []byte) []byte {
 	switch name {
 	case lespay.CapacityQueryName:

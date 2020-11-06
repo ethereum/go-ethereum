@@ -78,6 +78,7 @@ type CostFilter struct {
 	cutRatio, updateRate, limit float64
 }
 
+// NewCostFilter creates a new CostFilter
 func NewCostFilter(cutRatio, updateRate float64) *CostFilter {
 	return &CostFilter{
 		cutRatio:   cutRatio,
@@ -85,7 +86,8 @@ func NewCostFilter(cutRatio, updateRate float64) *CostFilter {
 	}
 }
 
-// 0 < priorWeight <= 1, filteredCost <= costLimit * priorWeight
+// Filter returns the filtered cost value and the current cost limit
+// Note: 0 < priorCost <= 1; filteredCost <= costLimit * priorCost
 func (cf *CostFilter) Filter(cost, priorCost float64) (filteredCost, costLimit float64) {
 	var cut float64
 	limit := cf.limit * priorCost

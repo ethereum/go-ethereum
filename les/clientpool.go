@@ -299,7 +299,10 @@ func (f *clientPool) setLimits(totalConn int, totalCap uint64) {
 	f.pp.SetLimits(uint64(totalConn), totalCap)
 }
 
-// setCapacity sets the assigned capacity of a connected client
+// setCapacity sets the assigned capacity of a connected client to the given value or
+// the maximum value allowed by its current balance. The final capacity is returned.
+// Note: reducing the capacity always succeeds. An increase attempt never reduces the
+// current capacity. Error is only returned if the client is not connected.
 func (f *clientPool) setCapacity(node *enode.Node, capacity uint64, bias time.Duration) (uint64, error) {
 	c, _ := f.ns.GetField(node, clientInfoField).(*clientInfo)
 	if c == nil {
@@ -399,6 +402,9 @@ func (f *clientPool) forClients(ids []enode.ID, cb func(client *clientInfo)) {
 	}
 }
 
+// serveCapQuery serves a lespay capacity query. It receives multiple token amount values
+// and a bias time value. For each given token amount it calculates the maximum achievable
+// capacity in case the amount is added to the balance.
 func (f *clientPool) serveCapQuery(id enode.ID, freeID string, data []byte) []byte {
 	var req lespay.CapacityQueryReq
 	if rlp.DecodeBytes(data, &req) != nil {

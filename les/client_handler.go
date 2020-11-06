@@ -402,6 +402,8 @@ func (h *clientHandler) removePeer(id string) {
 	h.backend.peers.unregister(id)
 }
 
+// lespayRequest sends a batch of lespay requests through an open LES connection and
+// waits for the reply
 func (h *clientHandler) lespayRequest(p *serverPeer, reqs lespay.Requests) lespay.Replies {
 	reqID := genReqID()
 	ch := make(chan lespay.Replies, 1)

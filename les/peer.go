@@ -579,6 +579,7 @@ func (p *serverPeer) updateFlowControl(update keyValueMap) {
 	}
 }
 
+// updateCapacity updates the capacity provided by the server in the local peer models
 func (p *serverPeer) updateCapacity(params flowcontrol.ServerParams) {
 	p.lock.Lock()
 	defer p.lock.Unlock()
@@ -977,6 +978,7 @@ func (p *clientPeer) updateCapacity(cap uint64) {
 	}
 }
 
+// getCapacity returns the current peer capacity
 func (p *clientPeer) getCapacity() uint64 {
 	p.lock.Lock()
 	defer p.lock.Unlock()

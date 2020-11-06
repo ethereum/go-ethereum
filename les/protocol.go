@@ -293,19 +293,25 @@ var (
 )
 
 const (
-	requestMetaReqID  = 0
-	replyMetaReqID    = 0
-	replyMetaBV       = 1
-	replyMetaRealCost = 2
-	replyMetaBalance  = 3
+	requestMetaReqID = 0
+	replyMetaReqID   = 0
+	replyMetaBV      = 1
+	replyMetaReqCost = 2
+	replyMetaBalance = 3
 )
 
+// metaInfoField is an optional uint64 field in a request or reply meta info struct.
+// When encoding the meta info, the field is encoded if the set flag is true.
+// Decoding sets the set flag true if the field was present; if the set flag was true
+// before decoding then the decode function enforces the presence of the field and
+// returns error if the field is missing in the encoded meta info.
 type metaInfoField struct {
 	value uint64
 	set   bool
 }
 
-func getField(meta lespay.MetaInfo, mapping *lespay.MatchedHalfMapping, index int, field *metaInfoField) error {
+// decodeField decodes the given metaInfoField
+func decodeField(meta lespay.MetaInfo, mapping *lespay.MatchedHalfMapping, index int, field *metaInfoField) error {
 	if err := meta.Get(mapping, index, &field.value); err == nil {
 		field.set = true
 	} else {
@@ -316,12 +322,14 @@ func getField(meta lespay.MetaInfo, mapping *lespay.MatchedHalfMapping, index in
 	return nil
 }
 
-func setField(meta *lespay.MetaInfo, mapping *lespay.MatchedHalfMapping, index int, field *metaInfoField) {
+// encodeField encodes the given metaInfoField
+func encodeField(meta *lespay.MetaInfo, mapping *lespay.MatchedHalfMapping, index int, field *metaInfoField) {
 	if field.set {
 		meta.Set(mapping, index, &field.value)
 	}
 }
 
+// requestMetaInfo contains the meta info attached to requests
 type requestMetaInfo struct {
 	mapping *lespay.MatchedHalfMapping
 	reqID   metaInfoField
@@ -330,7 +338,7 @@ type requestMetaInfo struct {
 func (m requestMetaInfo) EncodeRLP(w io.Writer) error {
 	if m.mapping != nil {
 		var meta lespay.MetaInfo
-		setField(&meta, m.mapping, requestMetaReqID, &m.reqID)
+		encodeField(&meta, m.mapping, requestMetaReqID, &m.reqID)
 		return rlp.Encode(w, &meta)
 	} else {
 		return rlp.Encode(w, &m.reqID.value)
@@ -342,7 +350,7 @@ func (m *requestMetaInfo) DecodeRLP(s *rlp.Stream) error {
 		var meta lespay.MetaInfo
 		err := s.Decode(&meta)
 		if err == nil {
-			if err := getField(meta, m.mapping, requestMetaReqID, &m.reqID); err != nil {
+			if err := decodeField(meta, m.mapping, requestMetaReqID, &m.reqID); err != nil {
 				return err
 			}
 		}
@@ -353,6 +361,7 @@ func (m *requestMetaInfo) DecodeRLP(s *rlp.Stream) error {
 	}
 }
 
+// replyMetaInfo contains the meta info attached to replies
 type replyMetaInfo struct {
 	mapping                      *lespay.MatchedHalfMapping
 	reqID, bv, realCost, balance metaInfoField
@@ -361,10 +370,10 @@ type replyMetaInfo struct {
 func (m replyMetaInfo) EncodeRLP(w io.Writer) error {
 	if m.mapping != nil {
 		var meta lespay.MetaInfo
-		setField(&meta, m.mapping, replyMetaReqID, &m.reqID)
-		setField(&meta, m.mapping, replyMetaBV, &m.bv)
-		setField(&meta, m.mapping, replyMetaRealCost, &m.realCost)
-		setField(&meta, m.mapping, replyMetaBalance, &m.balance)
+		encodeField(&meta, m.mapping, replyMetaReqID, &m.reqID)
+		encodeField(&meta, m.mapping, replyMetaBV, &m.bv)
+		encodeField(&meta, m.mapping, replyMetaReqCost, &m.realCost)
+		encodeField(&meta, m.mapping, replyMetaBalance, &m.balance)
 		return rlp.Encode(w, &meta)
 	} else {
 		if err := rlp.Encode(w, &m.reqID.value); err != nil {
@@ -379,16 +388,16 @@ func (m *replyMetaInfo) DecodeRLP(s *rlp.Stream) error {
 		var meta lespay.MetaInfo
 		err := s.Decode(&meta)
 		if err == nil {
-			if err := getField(meta, m.mapping, replyMetaReqID, &m.reqID); err != nil {
+			if err := decodeField(meta, m.mapping, replyMetaReqID, &m.reqID); err != nil {
 				return err
 			}
-			if err := getField(meta, m.mapping, replyMetaBV, &m.bv); err != nil {
+			if err := decodeField(meta, m.mapping, replyMetaBV, &m.bv); err != nil {
 				return err
 			}
-			if err := getField(meta, m.mapping, replyMetaRealCost, &m.realCost); err != nil {
+			if err := decodeField(meta, m.mapping, replyMetaReqCost, &m.realCost); err != nil {
 				return err
 			}
-			if err := getField(meta, m.mapping, replyMetaBalance, &m.balance); err != nil {
+			if err := decodeField(meta, m.mapping, replyMetaBalance, &m.balance); err != nil {
 				return err
 			}
 		}

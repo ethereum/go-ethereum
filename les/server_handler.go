@@ -923,7 +923,7 @@ func (h *serverHandler) handleMsg(p *clientPeer, wg *sync.WaitGroup) error {
 		if req.CapReq.MinRecharge > reqCap {
 			reqCap = req.CapReq.MinRecharge
 		}
-		newCap, _ := h.server.clientPool.setCapacity(p.Node(), reqCap, time.Duration(req.CapReq.Bias)*time.Second)
+		newCap, _ := h.server.clientPool.setCapacityLocked(p.Node(), reqCap, time.Duration(req.CapReq.Bias)*time.Second)
 		bv, _ := p.fcClient.BufferStatus()
 		meta := replyMetaInfo{
 			reqID: req.Meta.reqID,
