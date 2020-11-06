@@ -43,6 +43,7 @@ type Suite struct {
 
 	chain     *Chain
 	fullChain *Chain
+	head      int
 }
 
 // NewSuite creates and returns a new eth-test suite that can
@@ -57,6 +58,7 @@ func NewSuite(dest *enode.Node, chainfile string, genesisfile string) *Suite {
 		Dest:      dest,
 		chain:     chain.Shorten(1000),
 		fullChain: chain,
+		head:      999,
 	}
 }
 
@@ -159,13 +161,14 @@ func (s *Suite) TestGetBlockBodies(t *utesting.T) {
 // propagated to the given node's peer(s).
 func (s *Suite) TestBroadcast(t *utesting.T) {
 	sendConn, receiveConn := s.setupConnection(t), s.setupConnection(t)
+	block := s.nextBlock()
 	blockAnnouncement := &NewBlock{
-		Block: s.fullChain.blocks[1000],
-		TD:    s.fullChain.TD(1001),
+		Block: s.fullChain.blocks[block],
+		TD:    s.fullChain.TD(block + 1),
 	}
 	s.testAnnounce(t, sendConn, receiveConn, blockAnnouncement)
 	// update test suite chain
-	s.chain.blocks = append(s.chain.blocks, s.fullChain.blocks[1000])
+	s.chain.blocks = append(s.chain.blocks, s.fullChain.blocks[block])
 	// wait for client to update its chain
 	if err := receiveConn.waitForBlock(s.chain.Head()); err != nil {
 		t.Fatal(err)
@@ -174,11 +177,11 @@ func (s *Suite) TestBroadcast(t *utesting.T) {
 
 // TestLargeAnnounce tests the announcement mechanism with a large block.
 func (s *Suite) TestLargeAnnounce(t *utesting.T) {
-	nextBlock := 1000
+	nextBlock := s.nextBlock()
 	blocks := []*NewBlock{
 		{
 			Block: largeBlock(),
-			TD:    s.fullChain.TD(nextBlock),
+			TD:    s.fullChain.TD(nextBlock + 1),
 		},
 		{
 			Block: s.fullChain.blocks[nextBlock],
@@ -190,28 +193,21 @@ func (s *Suite) TestLargeAnnounce(t *utesting.T) {
 		},
 		{
 			Block: s.fullChain.blocks[nextBlock],
-			TD:    s.fullChain.TD(nextBlock),
+			TD:    s.fullChain.TD(nextBlock + 1),
 		},
 	}
 
 	var receiveConn *Conn
 	for i, blockAnnouncement := range blocks {
 		sendConn := s.setupConnection(t)
-		fmt.Println("Sending block announcement")
-		// Announce the block.
-		if err := sendConn.Write(blockAnnouncement); err != nil {
-			t.Fatalf("could not write to connection: %v", err)
-		}
-		if i < 3 {
-			fmt.Println("Checking for disconnect")
-			time.Sleep(time.Second)
-			// check that the peer disconnected
-			if err := sendConn.waitForMessage(Disconnect{}); err != nil {
-				fmt.Print(err)
-			}
-		}
 		if i == 3 {
 			receiveConn = s.setupConnection(t)
+			// The third block is a valid block
+			if err := sendConn.Write(blockAnnouncement); err != nil {
+				t.Fatalf("could not write to connection: %v", err)
+			}
+		} else {
+			s.testDisconnect(t, sendConn, blockAnnouncement)
 		}
 	}
 	s.waitAnnounce(t, receiveConn, blocks[3])
@@ -220,6 +216,18 @@ func (s *Suite) TestLargeAnnounce(t *utesting.T) {
 	// wait for client to update its chain
 	if err := receiveConn.waitForBlock(s.fullChain.blocks[nextBlock]); err != nil {
 		t.Fatal(err)
+	}
+}
+
+func (s *Suite) testDisconnect(t *utesting.T, conn *Conn, msg Message) {
+	// Announce the block.
+	if err := conn.Write(msg); err != nil {
+		t.Fatalf("could not write to connection: %v", err)
+	}
+	time.Sleep(100 * time.Millisecond)
+	// check that the peer disconnected
+	if err := conn.waitForMessage(Disconnect{}); err != nil {
+		t.Fatalf("connection was not disconnected: %v", err)
 	}
 }
 
@@ -287,4 +295,9 @@ func (s *Suite) dial() (*Conn, error) {
 	}
 
 	return &conn, nil
+}
+
+func (s *Suite) nextBlock() int {
+	s.head = s.head + 1
+	return s.head
 }
