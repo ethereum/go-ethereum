@@ -98,7 +98,7 @@ func TestTransactionEncode(t *testing.T) {
 	}
 }
 
-func Test2718TransactionSigHash(t *testing.T) {
+func TestEIP2718TransactionSigHash(t *testing.T) {
 	yolo := NewEIP2718Signer(big.NewInt(1))
 	if yolo.Hash(empty2718Tx) != common.HexToHash("c44faa8f50803df8edd97e72c4dbae32343b2986c91e382fc3e329e6c9a36f31") {
 		t.Errorf("empty EIP-2718 transaction hash mismatch, got %x", emptyTx.Hash())
@@ -108,7 +108,7 @@ func Test2718TransactionSigHash(t *testing.T) {
 	}
 }
 
-func Test2718TransactionEncode(t *testing.T) {
+func TestEIP2718TransactionEncode(t *testing.T) {
 	txb, err := rlp.EncodeToBytes(signed2718Tx)
 	if err != nil {
 		t.Fatalf("encode error: %v", err)
