@@ -97,7 +97,7 @@ func newAccessListTransaction(chainId *big.Int, nonce uint64, to *common.Address
 }
 
 func (tx *AccessListTransaction) ChainId() *big.Int       { return tx.Chain }
-func (tx *AccessListTransaction) Protected() bool         { return tx.Chain.BitLen() != 0 }
+func (tx *AccessListTransaction) Protected() bool         { return true }
 func (tx *AccessListTransaction) AccessList() *AccessList { return tx.Accesses }
 func (tx *AccessListTransaction) Data() []byte            { return common.CopyBytes(tx.Payload) }
 func (tx *AccessListTransaction) Gas() uint64             { return tx.GasLimit }

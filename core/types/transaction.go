@@ -81,7 +81,7 @@ func (tx *Transaction) Protected() bool   { return tx.inner.Protected() }
 func isProtectedV(V *big.Int) bool {
 	if V.BitLen() <= 8 {
 		v := V.Uint64()
-		return v != 27 && v != 28
+		return v != 27 && v != 28 && v != 1 && v != 0
 	}
 	// anything not 27 or 28 is considered protected
 	return true
@@ -138,8 +138,15 @@ func sanityCheckSignature(v *big.Int, r *big.Int, s *big.Int, maybeProtected boo
 	if isProtectedV(v) {
 		chainID := deriveChainId(v).Uint64()
 		plainV = byte(v.Uint64() - 35 - 2*chainID)
-	} else {
+	} else if maybeProtected {
+		// Only EIP-155 signatures can be optionally protected. Since
+		// we determined this v value is not protected, it must be a
+		// raw 27 or 28.
 		plainV = byte(v.Uint64() - 27)
+	} else {
+		// If the signature is not optionally protected, we assume it
+		// must already be equal to the recovery id.
+		plainV = byte(v.Uint64())
 	}
 	if !crypto.ValidateSignatureValues(plainV, r, s, false) {
 		return ErrInvalidSig

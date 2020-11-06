@@ -115,15 +115,21 @@ func NewEIP2718Signer(chainId *big.Int) EIP2718Signer {
 // Sender returns the recovered addressed from a transaction's signature.
 // It assumes V does not store the chain id, unless the tx is of legacy type.
 func (s EIP2718Signer) Sender(tx *Transaction) (common.Address, error) {
-	if tx.Protected() && tx.ChainId().Cmp(s.chainId) != 0 {
+	if !tx.Protected() {
+		return HomesteadSigner{}.Sender(tx)
+	}
+	if tx.ChainId().Cmp(s.chainId) != 0 {
 		return common.Address{}, ErrInvalidChainId
 	}
 
 	V, R, S := tx.RawSignatureValues()
 
-	if tx.Protected() && tx.Type() == LegacyTxId {
+	if tx.Type() == LegacyTxId {
 		V = new(big.Int).Sub(V, s.chainIdMul)
 		V.Sub(V, big8)
+	}
+	if tx.Type() == AccessListTxId {
+		V = new(big.Int).Add(V, big.NewInt(27))
 	}
 
 	return recoverPlain(s.Hash(tx), R, S, V, true)
@@ -138,6 +144,9 @@ func (s EIP2718Signer) SignatureValues(tx *Transaction, sig []byte) (R, S, V *bi
 	if tx.Type() == LegacyTxId && s.chainId.Sign() != 0 {
 		V = big.NewInt(int64(sig[64] + 35))
 		V.Add(V, s.chainIdMul)
+	}
+	if tx.Type() == AccessListTxId {
+		V = big.NewInt(int64(sig[64]))
 	}
 	return R, S, V, nil
 }
