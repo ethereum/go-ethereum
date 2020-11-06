@@ -24,6 +24,7 @@ import (
 	"github.com/davecgh/go-spew/spew"
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/internal/utesting"
+	"github.com/ethereum/go-ethereum/p2p"
 	"github.com/ethereum/go-ethereum/p2p/enode"
 	"github.com/ethereum/go-ethereum/p2p/rlpx"
 	"github.com/stretchr/testify/assert"
@@ -43,7 +44,6 @@ type Suite struct {
 
 	chain     *Chain
 	fullChain *Chain
-	head      int
 }
 
 // NewSuite creates and returns a new eth-test suite that can
@@ -58,19 +58,18 @@ func NewSuite(dest *enode.Node, chainfile string, genesisfile string) *Suite {
 		Dest:      dest,
 		chain:     chain.Shorten(1000),
 		fullChain: chain,
-		head:      999,
 	}
 }
 
 func (s *Suite) AllTests() []utesting.Test {
 	return []utesting.Test{
-		/*
-			{Name: "Status", Fn: s.TestStatus},
-			{Name: "GetBlockHeaders", Fn: s.TestGetBlockHeaders},
-			{Name: "Broadcast", Fn: s.TestBroadcast},
-			{Name: "GetBlockBodies", Fn: s.TestGetBlockBodies},
-		*/
+		{Name: "Status", Fn: s.TestStatus},
+		{Name: "GetBlockHeaders", Fn: s.TestGetBlockHeaders},
+		{Name: "Broadcast", Fn: s.TestBroadcast},
+		{Name: "GetBlockBodies", Fn: s.TestGetBlockBodies},
 		{Name: "TestLargeAnnounce", Fn: s.TestLargeAnnounce},
+		{Name: "TestMaliciousHandshake", Fn: s.TestMaliciousHandshake},
+		{Name: "TestMaliciousStatus", Fn: s.TestMaliciousStatus},
 	}
 }
 
@@ -85,12 +84,38 @@ func (s *Suite) TestStatus(t *utesting.T) {
 	// get protoHandshake
 	conn.handshake(t)
 	// get status
-	switch msg := conn.statusExchange(t, s.chain).(type) {
+	switch msg := conn.statusExchange(t, s.chain, nil).(type) {
 	case *Status:
 		t.Logf("got status message: %s", pretty.Sdump(msg))
 	default:
 		t.Fatalf("unexpected: %s", pretty.Sdump(msg))
 	}
+}
+
+// TestMaliciousStatus sends a status package with a large total difficulty.
+func (s *Suite) TestMaliciousStatus(t *utesting.T) {
+	conn, err := s.dial()
+	if err != nil {
+		t.Fatalf("could not dial: %v", err)
+	}
+	// get protoHandshake
+	conn.handshake(t)
+	status := &Status{
+		ProtocolVersion: uint32(conn.ethProtocolVersion),
+		NetworkID:       s.chain.chainConfig.ChainID.Uint64(),
+		TD:              largeNumber(2),
+		Head:            s.chain.blocks[s.chain.Len()-1].Hash(),
+		Genesis:         s.chain.blocks[0].Hash(),
+		ForkID:          s.chain.ForkID(),
+	}
+	// get status
+	switch msg := conn.statusExchange(t, s.chain, status).(type) {
+	case *Status:
+		t.Logf("%+v\n", msg)
+	default:
+		t.Fatalf("unexpected: %#v", msg)
+	}
+	conn.waitForMessage(Disconnect{})
 }
 
 // TestGetBlockHeaders tests whether the given node can respond to
@@ -102,7 +127,7 @@ func (s *Suite) TestGetBlockHeaders(t *utesting.T) {
 	}
 
 	conn.handshake(t)
-	conn.statusExchange(t, s.chain)
+	conn.statusExchange(t, s.chain, nil)
 
 	// get block headers
 	req := &GetBlockHeaders{
@@ -141,7 +166,7 @@ func (s *Suite) TestGetBlockBodies(t *utesting.T) {
 	}
 
 	conn.handshake(t)
-	conn.statusExchange(t, s.chain)
+	conn.statusExchange(t, s.chain, nil)
 	// create block bodies request
 	req := &GetBlockBodies{s.chain.blocks[54].Hash(), s.chain.blocks[75].Hash()}
 	if err := conn.Write(req); err != nil {
@@ -161,23 +186,81 @@ func (s *Suite) TestGetBlockBodies(t *utesting.T) {
 // propagated to the given node's peer(s).
 func (s *Suite) TestBroadcast(t *utesting.T) {
 	sendConn, receiveConn := s.setupConnection(t), s.setupConnection(t)
-	block := s.nextBlock()
+	nextBlock := len(s.chain.blocks)
 	blockAnnouncement := &NewBlock{
-		Block: s.fullChain.blocks[block],
-		TD:    s.fullChain.TD(block + 1),
+		Block: s.fullChain.blocks[nextBlock],
+		TD:    s.fullChain.TD(nextBlock + 1),
 	}
 	s.testAnnounce(t, sendConn, receiveConn, blockAnnouncement)
 	// update test suite chain
-	s.chain.blocks = append(s.chain.blocks, s.fullChain.blocks[block])
+	s.chain.blocks = append(s.chain.blocks, s.fullChain.blocks[nextBlock])
 	// wait for client to update its chain
 	if err := receiveConn.waitForBlock(s.chain.Head()); err != nil {
 		t.Fatal(err)
 	}
 }
 
+// TestMaliciousHandshake tries to send malicious data during the handshake.
+func (s *Suite) TestMaliciousHandshake(t *utesting.T) {
+	conn, err := s.dial()
+	if err != nil {
+		t.Fatalf("could not dial: %v", err)
+	}
+	// write hello to client
+	pub0 := crypto.FromECDSAPub(&conn.ourKey.PublicKey)[1:]
+	handshakes := []*Hello{
+		{
+			Version: 5,
+			Caps: []p2p.Cap{
+				{Name: largeString(2), Version: 64},
+			},
+			ID: pub0,
+		},
+		{
+			Version: 5,
+			Caps: []p2p.Cap{
+				{Name: "eth", Version: 64},
+				{Name: "eth", Version: 65},
+			},
+			ID: append(pub0, byte(0)),
+		},
+		{
+			Version: 5,
+			Caps: []p2p.Cap{
+				{Name: "eth", Version: 64},
+				{Name: "eth", Version: 65},
+			},
+			ID: append(pub0, pub0...),
+		},
+		{
+			Version: 5,
+			Caps: []p2p.Cap{
+				{Name: "eth", Version: 64},
+				{Name: "eth", Version: 65},
+			},
+			ID: largeBuffer(2),
+		},
+		{
+			Version: 5,
+			Caps: []p2p.Cap{
+				{Name: largeString(2), Version: 64},
+			},
+			ID: largeBuffer(2),
+		},
+	}
+	for _, handshake := range handshakes {
+		s.testDisconnect(t, conn, handshake)
+		// Dial for the next round
+		conn, err = s.dial()
+		if err != nil {
+			t.Fatalf("could not dial: %v", err)
+		}
+	}
+}
+
 // TestLargeAnnounce tests the announcement mechanism with a large block.
 func (s *Suite) TestLargeAnnounce(t *utesting.T) {
-	nextBlock := s.nextBlock()
+	nextBlock := len(s.chain.blocks)
 	blocks := []*NewBlock{
 		{
 			Block: largeBlock(),
@@ -272,7 +355,7 @@ func (s *Suite) setupConnection(t *utesting.T) *Conn {
 		t.Fatalf("could not dial: %v", err)
 	}
 	sendConn.handshake(t)
-	sendConn.statusExchange(t, s.chain)
+	sendConn.statusExchange(t, s.chain, nil)
 	return sendConn
 }
 
@@ -295,9 +378,4 @@ func (s *Suite) dial() (*Conn, error) {
 	}
 
 	return &conn, nil
-}
-
-func (s *Suite) nextBlock() int {
-	s.head = s.head + 1
-	return s.head
 }
