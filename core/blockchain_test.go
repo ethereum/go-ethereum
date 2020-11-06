@@ -3047,9 +3047,8 @@ func TestEIP2718Transition(t *testing.T) {
 			Config: params.YoloV2ChainConfig,
 			Alloc: GenesisAlloc{
 				address: {Balance: funds},
-				// The address 0xAAAAA selfdestructs if called
+				// The address 0xAAAA sloads 0x00 and 0x01
 				aa: {
-					// Code needs to just selfdestruct
 					Code: []byte{
 						byte(vm.PC),
 						byte(vm.PC),
@@ -3067,7 +3066,7 @@ func TestEIP2718Transition(t *testing.T) {
 	blocks, _ := GenerateChain(gspec.Config, genesis, engine, db, 1, func(i int, b *BlockGen) {
 		b.SetCoinbase(common.Address{1})
 
-		// One transaction to AAAA
+		// One transaction to 0xAAAA
 		accesses := types.AccessList{types.AccessTuple{
 			Address: &aa,
 			StorageKeys: []*common.Hash{
@@ -3094,7 +3093,7 @@ func TestEIP2718Transition(t *testing.T) {
 
 	block := chain.GetBlockByNumber(1)
 
-	// expected gas is intrinsic + 2 * PC + hot load + cold load, since only one load is in the access list
+	// Expected gas is intrinsic + 2 * pc + hot load + cold load, since only one load is in the access list
 	expected := params.TxGas + params.TxAccessListAddressGas + params.TxAccessListStorageKeyGas + vm.GasQuickStep*2 + vm.WarmStorageReadCostEIP2929 + vm.ColdSloadCostEIP2929
 	if block.GasUsed() != expected {
 		t.Fatalf("incorrect amount of gas spent: expected %d, got %d", expected, block.GasUsed())
