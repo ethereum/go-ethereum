@@ -101,15 +101,17 @@ var (
 
 func newBinKey(key []byte) binkey {
 	bits := make([]byte, 8*len(key))
-	for i := range bits {
-
-		if key[i/8]&(1<<(7-i%8)) == 0 {
-			bits[i] = 0
-		} else {
-			bits[i] = 1
-		}
+	for i, kb := range key {
+		// might be best to have this statement first, as compiler bounds-checking hint
+		bits[8*i+7] = kb & 0x1
+		bits[8*i] = (kb >> 7) & 0x1
+		bits[8*i+1] = (kb >> 6) & 0x1
+		bits[8*i+2] = (kb >> 5) & 0x1
+		bits[8*i+3] = (kb >> 4) & 0x1
+		bits[8*i+4] = (kb >> 3) & 0x1
+		bits[8*i+5] = (kb >> 2) & 0x1
+		bits[8*i+6] = (kb >> 1) & 0x1
 	}
-
 	return binkey(bits)
 }
 func min(i, j int) int {
