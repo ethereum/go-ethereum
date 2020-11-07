@@ -82,13 +82,14 @@ func fromMont(c, a *fe) {
 }
 
 func exp(c, a *fe, e *big.Int) {
-	c.set(r1)
+	z := new(fe).set(r1)
 	for i := e.BitLen(); i >= 0; i-- {
-		mul(c, c, c)
+		mul(z, z, z)
 		if e.Bit(i) == 1 {
-			mul(c, c, a)
+			mul(z, z, a)
 		}
 	}
+	c.set(z)
 }
 
 func inverse(inv, e *fe) {

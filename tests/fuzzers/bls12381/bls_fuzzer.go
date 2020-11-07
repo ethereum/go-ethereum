@@ -16,24 +16,51 @@
 
 package bls
 
+import (
+	"bytes"
+	"fmt"
+
+	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/core/vm"
+)
+
+// The function must return
+// 1 if the fuzzer should increase priority of the
+//    given input during subsequent fuzzing (for example, the input is lexically
+//    correct and was parsed successfully);
+// -1 if the input must not be added to corpus even if gives new coverage; and
+// 0  otherwise
+// other values are reserved for future use.
 func Fuzz(data []byte) int {
-	a := new(bls12381G1Add)
-	a.Run(data)
-	b := new(bls12381G1Mul)
-	b.Run(data)
-	c := new(bls12381G1MultiExp)
-	c.Run(data)
-	d := new(bls12381G2Add)
-	d.Run(data)
-	e := new(bls12381G2Mul)
-	e.Run(data)
-	f := new(bls12381G2MultiExp)
-	f.Run(data)
-	g := new(bls12381MapG1)
-	g.Run(data)
-	h := new(bls12381MapG2)
-	h.Run(data)
-	i := new(bls12381Pairing)
-	i.Run(data)
-	return 0
+
+	// The bls ones are at 10 - 18
+	var precompiles = []vm.PrecompiledContract{
+		vm.PrecompiledContractsYoloV2[common.BytesToAddress([]byte{10})],
+		vm.PrecompiledContractsYoloV2[common.BytesToAddress([]byte{11})],
+		vm.PrecompiledContractsYoloV2[common.BytesToAddress([]byte{12})],
+		vm.PrecompiledContractsYoloV2[common.BytesToAddress([]byte{13})],
+		vm.PrecompiledContractsYoloV2[common.BytesToAddress([]byte{14})],
+		vm.PrecompiledContractsYoloV2[common.BytesToAddress([]byte{15})],
+		vm.PrecompiledContractsYoloV2[common.BytesToAddress([]byte{16})],
+		vm.PrecompiledContractsYoloV2[common.BytesToAddress([]byte{17})],
+		vm.PrecompiledContractsYoloV2[common.BytesToAddress([]byte{18})],
+	}
+
+	cpy := make([]byte, len(data))
+	copy(cpy, data)
+	var useful = false
+	for i, precompile := range precompiles {
+		precompile.RequiredGas(cpy)
+		if _, err := precompile.Run(cpy); err == nil {
+			useful = true
+		}
+		if !bytes.Equal(cpy, data) {
+			panic(fmt.Sprintf("input data modified, precompile %d: %x %x", i, data, cpy))
+		}
+	}
+	if !useful {
+		// Input not great
+		return 0
+	}
+	return 1
 }
