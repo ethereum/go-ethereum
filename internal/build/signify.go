@@ -72,6 +72,11 @@ func SignifySignFile(input string, output string, key string) error {
 		return err
 	}
 
-	out.WriteString(fmt.Sprintf("untrusted comment: verify with geth.pub\n%s\n", base64.StdEncoding.EncodeToString(ed25519.Sign(skey, filedata))))
+	sigdata := []byte("Ed")
+	copy(sigdata, keydata[:2])
+	sigdata = append(sigdata, keydata[32:40]...)
+	sigdata = append(sigdata, ed25519.Sign(skey, filedata)...)
+
+	out.WriteString(fmt.Sprintf("untrusted comment: verify with geth.pub\n%s\n", base64.StdEncoding.EncodeToString(sigdata)))
 	return nil
 }
