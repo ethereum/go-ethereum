@@ -18,3 +18,39 @@
 // with the key provided, placing the signature into the output file.
 
 package build
+
+import (
+	"fmt"
+	"io/ioutil"
+	"math/rand"
+	"os"
+	"testing"
+	"time"
+)
+
+func TestSignify(t *testing.T) {
+	tmpFile, err := ioutil.TempFile("", "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer os.Remove(tmpFile.Name())
+	defer tmpFile.Close()
+
+	rand.Seed(time.Now().UnixNano())
+
+	data := make([]byte, 1024)
+	rand.Read(data)
+	tmpFile.Write(data)
+
+	if err = tmpFile.Close(); err != nil {
+		t.Fatal(err)
+	}
+
+	err = SignifySignFile(tmpFile.Name(), fmt.Sprintf("%s.sig", tmpFile.Name()), "RWRCSwAAAABVN5lr2JViGBN8DhX3/Qb/0g0wBdsNAR/APRW2qy9Fjsfr12sK2cd3URUFis1jgzQzaoayK8x4syT4G3Gvlt9RwGIwUYIQW/0mTeI+ECHu1lv5U4Wa2YHEPIesVPyRm5M=")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err = os.Remove(fmt.Sprintf("%s.sig", tmpFile.Name())); err != nil {
+		t.Fatal(err)
+	}
+}
