@@ -240,3 +240,22 @@ func TestDerivableList(t *testing.T) {
 		}
 	}
 }
+
+func TestUpdate(t *testing.T) {
+	st := NewStackTrie(nil)
+	nt, _ := New(common.Hash{}, NewDatabase(memorydb.New()))
+	kvs := []struct {
+		K string
+		V string
+	}{
+		{"63303030", "3041"}, // stacktrie.Update
+		{"65", "3000"},       // stacktrie.Update
+	}
+	for _, kv := range kvs {
+		nt.TryUpdate(common.FromHex(kv.K), common.FromHex(kv.V))
+		st.TryUpdate(common.FromHex(kv.K), common.FromHex(kv.V))
+	}
+	if nt.Hash() != st.Hash() {
+		t.Fatalf("error %x != %x", st.Hash(), nt.Hash())
+	}
+}
