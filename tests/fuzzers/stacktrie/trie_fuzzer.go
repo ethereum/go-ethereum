@@ -37,6 +37,14 @@ type fuzzer struct {
 	debugging bool
 }
 
+func (f *fuzzer) read(size int) []byte {
+	out := make([]byte, size)
+	if _, err := f.input.Read(out); err != nil {
+		f.exhausted = true
+	}
+	return out
+}
+
 func (f *fuzzer) readSlice(min, max int) []byte {
 	var a uint16
 	binary.Read(f.input, binary.LittleEndian, &a)
@@ -143,7 +151,7 @@ func (f *fuzzer) fuzz() int {
 	)
 	// Fill the trie with elements
 	for i := 0; !f.exhausted && i < maxElements; i++ {
-		k := f.readSlice(0, 32)
+		k := f.read(32)
 		v := f.readSlice(1, 500)
 		if f.exhausted {
 			// If it was exhausted while reading, the value may be all zeroes,
