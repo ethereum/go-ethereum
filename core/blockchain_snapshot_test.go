@@ -751,7 +751,7 @@ func testSnapshot(t *testing.T, tt *snapshotTest) {
 			t.Fatalf("Failed to recreate chain: %v", err)
 		}
 		chain.InsertChain(newBlocks)
-		chain.Snapshot().Cap(newBlocks[len(newBlocks)-1].Root(), 0)
+		chain.Snapshots().Cap(newBlocks[len(newBlocks)-1].Root(), 0)
 
 		// Simulate the blockchain crash
 		// Don't call chain.Stop here, so that no snapshot

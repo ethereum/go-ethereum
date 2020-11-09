@@ -157,12 +157,10 @@ func handleMessage(backend Backend, peer *Peer) error {
 		if err != nil {
 			return p2p.Send(peer.rw, accountRangeMsg, &accountRangeData{ID: req.ID})
 		}
-		it, err := backend.Chain().Snapshot().AccountIterator(req.Root, req.Origin)
+		it, err := backend.Chain().Snapshots().AccountIterator(req.Root, req.Origin)
 		if err != nil {
 			return p2p.Send(peer.rw, accountRangeMsg, &accountRangeData{ID: req.ID})
 		}
-		defer it.Release()
-
 		// Iterate over the requested range and pile accounts up
 		var (
 			accounts []*accountData
@@ -186,6 +184,8 @@ func handleMessage(backend Backend, peer *Peer) error {
 				break
 			}
 		}
+		it.Release()
+
 		// Generate the Merkle proofs for the first and last account
 		proof := light.NewNodeSet()
 		if err := tr.Prove(req.Origin[:], 0, proof); err != nil {
@@ -225,8 +225,10 @@ func handleMessage(backend Backend, peer *Peer) error {
 			if err != nil {
 				return fmt.Errorf("invalid account %x: %v", acc.Body, err)
 			}
-			keys[i] = acc.Hash
-			vals[i] = val
+			keys[i], vals[i] = acc.Hash, val
+			if i > 0 && bytes.Compare(keys[i-1][:], keys[i][:]) >= 0 {
+				return fmt.Errorf("accounts not monotonically increasing: #%d [%x] vs #%d [%x]", i-1, keys[i-1], i, keys[i])
+			}
 		}
 		return backend.OnAccounts(peer, res.ID, keys, vals, res.Proof)
 
@@ -239,6 +241,10 @@ func handleMessage(backend Backend, peer *Peer) error {
 		if req.Bytes > softResponseLimit {
 			req.Bytes = softResponseLimit
 		}
+		// TODO(karalabe): Do we want to enforce > 0 accounts and 1 account if origin is set?
+		// TODO(karalabe):   - Logging locally is not ideal as remote faulst annoy the local user
+		// TODO(karalabe):   - Dropping the remote peer is less flexible wrt client bugs (slow is better than non-functional)
+
 		// Calculate the hard limit at which to abort, even if mid storage trie
 		hardLimit := uint64(float64(req.Bytes) * (1 + stateLookupSlack))
 
@@ -264,7 +270,7 @@ func handleMessage(backend Backend, peer *Peer) error {
 				limit, req.Limit = common.BytesToHash(req.Limit), nil
 			}
 			// Retrieve the requested state and bail out if non existent
-			it, err := backend.Chain().Snapshot().StorageIterator(req.Root, account, origin)
+			it, err := backend.Chain().Snapshots().StorageIterator(req.Root, account, origin)
 			if err != nil {
 				return p2p.Send(peer.rw, storageRangesMsg, &storageRangesData{ID: req.ID})
 			}
@@ -376,7 +382,11 @@ func handleMessage(backend Backend, peer *Peer) error {
 			bytes uint64
 		)
 		for _, hash := range req.Hashes {
-			if blob, err := backend.Chain().ContractCode(hash); err == nil {
+			if hash == emptyCode {
+				// Peers should not request the empty code, but if they do, at
+				// least sent them back a correct response without db lookups
+				codes = append(codes, []byte{})
+			} else if blob, err := backend.Chain().ContractCode(hash); err == nil {
 				codes = append(codes, blob)
 				bytes += uint64(len(blob))
 			}
@@ -415,21 +425,13 @@ func handleMessage(backend Backend, peer *Peer) error {
 			// We don't have the requested state available, bail out
 			return p2p.Send(peer.rw, trieNodesMsg, &trieNodesData{ID: req.ID})
 		}
-		var snap snapshot.Snapshot
-		if snaps := backend.Chain().Snapshot(); snaps == nil {
-			// We don't have snapshots enabled, skip serving trie nodes. Note,
-			// this path should never trigger, but it's saner to avoid a crash
-			// if some bug is introduced.
-			log.Error("Snap protocol enabiled without snapshots")
+		snap := backend.Chain().Snapshots().Snapshot(req.Root)
+		if snap == nil {
+			// We don't have the requested state snapshotted yet, bail out.
+			// In reality we could still serve using the account and storage
+			// tries only, but let's protect the node a bit while it's doing
+			// snapshot generation.
 			return p2p.Send(peer.rw, trieNodesMsg, &trieNodesData{ID: req.ID})
-		} else {
-			if snap = snaps.Snapshot(req.Root); snap == nil {
-				// We don't have the requested state snapshotted yet, bail out.
-				// In reality we could still serve using the account and storage
-				// tries only, but let's protect the node a bit while it's doing
-				// snapshot generation.
-				return p2p.Send(peer.rw, trieNodesMsg, &trieNodesData{ID: req.ID})
-			}
 		}
 		// Retrieve trie nodes until the packet size limit is reached
 		var (
