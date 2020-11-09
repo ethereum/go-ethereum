@@ -18,7 +18,6 @@ package les
 
 import (
 	"fmt"
-	"math"
 	"sync"
 	"time"
 
@@ -438,13 +437,11 @@ func (f *clientPool) serveCapQuery(id enode.ID, freeID string, data []byte) []by
 	}
 	pb, _ := c.balance.GetBalance()
 	for i, addTokens := range req.AddTokens { //TODO limit length
-		if addTokens > math.MaxInt64 {
-			addTokens = math.MaxInt64
-		}
+		add := addTokens.Int64()
 		result[i] = curve.MaxCapacity(func(capacity uint64) int64 {
-			return c.balance.EstimatePriority(now, capacity, int64(addTokens), 0, bias, false) / int64(capacity)
+			return c.balance.EstimatePriority(now, capacity, add, 0, bias, false) / int64(capacity)
 		})
-		if addTokens == 0 && pb == 0 && result[i] > f.minCap {
+		if add <= 0 && uint64(-add) >= pb && result[i] > f.minCap {
 			result[i] = f.minCap
 		}
 		if result[i] < f.minCap {

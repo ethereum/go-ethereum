@@ -122,7 +122,7 @@ func New(stack *node.Node, config *eth.Config) (*LightEthereum, error) {
 		var requests lespay.Requests
 		requests.Add("les", lespay.CapacityQueryName, lespay.CapacityQueryReq{
 			Bias:      180,
-			AddTokens: []uint64{0},
+			AddTokens: []lespay.IntOrInf{{}},
 		})
 		replies := leth.LespayRequest(n, requests)
 		var cqr lespay.CapacityQueryReply
