@@ -362,13 +362,44 @@ type execNodeConfig struct {
 	PeerAddrs map[string]string `json:"peer_addrs,omitempty"`
 }
 
+func initLogging() {
+	// Initialize the logging by default first.
+	glogger := log.NewGlogHandler(log.StreamHandler(os.Stderr, log.LogfmtFormat()))
+	glogger.Verbosity(log.LvlInfo)
+	log.Root().SetHandler(glogger)
+
+	confEnv := os.Getenv(envNodeConfig)
+	if confEnv == "" {
+		return
+	}
+	var conf execNodeConfig
+	if err := json.Unmarshal([]byte(confEnv), &conf); err != nil {
+		return
+	}
+	var writer = os.Stderr
+	if conf.Node.LogFile != "" {
+		logWriter, err := os.Create(conf.Node.LogFile)
+		if err != nil {
+			return
+		}
+		writer = logWriter
+	}
+	var verbosity = log.LvlInfo
+	if conf.Node.LogVerbosity < log.LvlUndefined && conf.Node.LogVerbosity >= log.LvlCrit {
+		verbosity = conf.Node.LogVerbosity
+	}
+	// Reinitialize the logger
+	glogger = log.NewGlogHandler(log.StreamHandler(writer, log.TerminalFormat(true)))
+	glogger.Verbosity(verbosity)
+	log.Root().SetHandler(glogger)
+}
+
 // execP2PNode starts a simulation node when the current binary is executed with
 // argv[0] being "p2p-node", reading the service / ID from argv[1] / argv[2]
 // and the node config from an environment variable.
 func execP2PNode() {
-	glogger := log.NewGlogHandler(log.StreamHandler(os.Stderr, log.LogfmtFormat()))
-	glogger.Verbosity(log.LvlInfo)
-	log.Root().SetHandler(glogger)
+	initLogging()
+
 	statusURL := os.Getenv(envStatusURL)
 	if statusURL == "" {
 		log.Crit("missing " + envStatusURL)
@@ -380,7 +411,7 @@ func execP2PNode() {
 	if stackErr != nil {
 		status.Err = stackErr.Error()
 	} else {
-		status.WSEndpoint = "ws://" + stack.WSEndpoint()
+		status.WSEndpoint = stack.WSEndpoint()
 		status.NodeInfo = stack.Server().NodeInfo()
 	}
 
@@ -427,6 +458,7 @@ func startExecNodeStack() (*node.Node, error) {
 	conf.Node.initEnode(nodeTcpConn.IP, nodeTcpConn.Port, nodeTcpConn.Port)
 	conf.Stack.P2P.PrivateKey = conf.Node.PrivateKey
 	conf.Stack.Logger = log.New("node.id", conf.Node.ID.String())
+	conf.Stack.WSModules = []string{"admin"}
 
 	// initialize the devp2p stack
 	stack, err := node.New(&conf.Stack)
@@ -454,7 +486,6 @@ func startExecNodeStack() (*node.Node, error) {
 			return nil, err
 		}
 		services[name] = service
-		stack.RegisterLifecycle(service)
 	}
 
 	// Add the snapshot API.

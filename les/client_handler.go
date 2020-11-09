@@ -32,6 +32,8 @@ import (
 	"github.com/ethereum/go-ethereum/params"
 )
 
+const testLotteryPayment = true
+
 // clientHandler is responsible for receiving and processing all incoming server
 // responses.
 type clientHandler struct {
