@@ -241,7 +241,9 @@ func TestDerivableList(t *testing.T) {
 	}
 }
 
-func TestUpdate(t *testing.T) {
+// TestUpdateSmallNodes tests a case where the leaves are small (both key and value),
+// which causes a lot of node-within-node. This case was found via fuzzing.
+func TestUpdateSmallNodes(t *testing.T) {
 	st := NewStackTrie(nil)
 	nt, _ := New(common.Hash{}, NewDatabase(memorydb.New()))
 	kvs := []struct {
