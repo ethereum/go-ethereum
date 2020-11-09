@@ -295,7 +295,7 @@ func generateDataset(dest []uint32, epoch uint64, cache []uint32) {
 	var pend sync.WaitGroup
 	pend.Add(threads)
 
-	var progress uint32
+	var progress uint64
 	for i := 0; i < threads; i++ {
 		go func(id int) {
 			defer pend.Done()
@@ -311,7 +311,7 @@ func generateDataset(dest []uint32, epoch uint64, cache []uint32) {
 				limit = uint32(size / hashBytes)
 			}
 			// Calculate the dataset segment
-			percent := uint32(size / hashBytes / 100)
+			percent := size / hashBytes / 100
 			for index := first; index < limit; index++ {
 				item := generateDatasetItem(cache, index, keccak512)
 				if swapped {
@@ -319,8 +319,8 @@ func generateDataset(dest []uint32, epoch uint64, cache []uint32) {
 				}
 				copy(dataset[index*hashBytes:], item)
 
-				if status := atomic.AddUint32(&progress, 1); status%percent == 0 {
-					logger.Info("Generating DAG in progress", "percentage", uint64(status*100)/(size/hashBytes), "elapsed", common.PrettyDuration(time.Since(start)))
+				if status := atomic.AddUint64(&progress, 1); status%percent == 0 {
+					logger.Info("Generating DAG in progress", "percentage", (status*100)/(size/hashBytes), "elapsed", common.PrettyDuration(time.Since(start)))
 				}
 			}
 		}(i)
