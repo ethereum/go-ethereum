@@ -323,9 +323,8 @@ func (s *Suite) testAnnounce(t *utesting.T, sendConn, receiveConn *Conn, blockAn
 }
 
 func (s *Suite) waitAnnounce(t *utesting.T, conn *Conn, blockAnnouncement *NewBlock) {
-	// Wait for the announcement.
 	timeout := 20 * time.Second
-	switch msg := receiveConn.ReadAndServe(s.chain, timeout).(type) {
+	switch msg := conn.ReadAndServe(s.chain, timeout).(type) {
 	case *NewBlock:
 		t.Logf("received NewBlock message: %s", pretty.Sdump(msg.Block))
 		assert.Equal(t,
