@@ -384,8 +384,8 @@ func (st *StackTrie) Hash() (h common.Hash) {
 	st.hash()
 	if len(st.val) != 32 {
 		// If the node's RLP isn't 32 bytes long, the node will not
-		// be committed, and instead contain the  rlp-encoding of the
-		// node. For the top level node, we need to force the committing.
+		// be hashed, and instead contain the  rlp-encoding of the
+		// node. For the top level node, we need to force the hashing.
 		ret := make([]byte, 32)
 		h := newHasher(false)
 		defer returnHasherToPool(h)
@@ -411,8 +411,8 @@ func (st *StackTrie) Commit() (common.Hash, error) {
 	st.hash()
 	if len(st.val) != 32 {
 		// If the node's RLP isn't 32 bytes long, the node will not
-		// be hashed, and instead contain the  rlp-encoding of the
-		// node. For the top level node, we need to force the hashing.
+		// be hashed (and committed), and instead contain the  rlp-encoding of the
+		// node. For the top level node, we need to force the hashing+commit.
 		ret := make([]byte, 32)
 		h := newHasher(false)
 		defer returnHasherToPool(h)
