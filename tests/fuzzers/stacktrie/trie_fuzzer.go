@@ -21,13 +21,13 @@ import (
 	"encoding/binary"
 	"errors"
 	"fmt"
-	"github.com/ethereum/go-ethereum/trie"
 	"hash"
 	"io"
 	"sort"
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/ethdb"
+	"github.com/ethereum/go-ethereum/trie"
 	"golang.org/x/crypto/sha3"
 )
 
@@ -72,7 +72,7 @@ func (s *spongeDb) Close() error                             { return nil }
 
 func (s *spongeDb) Put(key []byte, value []byte) error {
 	if s.debug {
-		fmt.Print("db.Put %x : %x\n", key, value)
+		fmt.Printf("db.Put %x : %x\n", key, value)
 	}
 	s.sponge.Write(key)
 	s.sponge.Write(value)
@@ -158,7 +158,7 @@ func (f *fuzzer) fuzz() int {
 			// thus 'deletion' which is not supported on stacktrie
 			break
 		}
-		vals = append(vals, kv{k: k, v: common.CopyBytes(v)})
+		vals = append(vals, kv{k: k, v: v})
 		trieA.Update(k, v)
 		useful = true
 	}
