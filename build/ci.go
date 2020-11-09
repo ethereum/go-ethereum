@@ -135,11 +135,11 @@ var (
 	// Note: artful is unsupported because it was officially deprecated on Launchpad.
 	// Note: cosmic is unsupported because it was officially deprecated on Launchpad.
 	// Note: disco is unsupported because it was officially deprecated on Launchpad.
+	// Note: eoan is unsupported because it was officially deprecated on Launchpad.
 	debDistroGoBoots = map[string]string{
 		"trusty": "golang-1.11",
 		"xenial": "golang-go",
 		"bionic": "golang-go",
-		"eoan":   "golang-go",
 		"focal":  "golang-go",
 		"groovy": "golang-go",
 	}
