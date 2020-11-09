@@ -184,7 +184,19 @@ func (n *ExecNode) Start(snapshots map[string][]byte) (err error) {
 	if err != nil {
 		return fmt.Errorf("error generating node config: %s", err)
 	}
-
+	// expose the admin namespace via websocket if it's not enabled
+	exposed := confCopy.Stack.WSExposeAll
+	if !exposed {
+		for _, api := range confCopy.Stack.WSModules {
+			if api == "admin" {
+				exposed = true
+				break
+			}
+		}
+	}
+	if !exposed {
+		confCopy.Stack.WSModules = append(confCopy.Stack.WSModules, "admin")
+	}
 	// start the one-shot server that waits for startup information
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
@@ -458,7 +470,6 @@ func startExecNodeStack() (*node.Node, error) {
 	conf.Node.initEnode(nodeTcpConn.IP, nodeTcpConn.Port, nodeTcpConn.Port)
 	conf.Stack.P2P.PrivateKey = conf.Node.PrivateKey
 	conf.Stack.Logger = log.New("node.id", conf.Node.ID.String())
-	conf.Stack.WSModules = []string{"admin"}
 
 	// initialize the devp2p stack
 	stack, err := node.New(&conf.Stack)
