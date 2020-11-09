@@ -43,6 +43,7 @@ import (
 	"github.com/ethereum/go-ethereum/event"
 	"github.com/ethereum/go-ethereum/les/checkpointoracle"
 	"github.com/ethereum/go-ethereum/les/flowcontrol"
+	lps "github.com/ethereum/go-ethereum/les/lespay/server"
 	"github.com/ethereum/go-ethereum/light"
 	"github.com/ethereum/go-ethereum/p2p"
 	"github.com/ethereum/go-ethereum/p2p/enode"
@@ -81,10 +82,11 @@ var (
 	processConfirms = big.NewInt(1)
 
 	// The buffer recharging speed for testing purpose.
-	testBufRecharge = uint64(1000)
+	testMinCap   = uint64(1000)
+	testTotalCap = uint64(10000)
 
 	// The token bucket buffer limit for testing purpose.
-	testBufLimit = testBufRecharge * bufLimitRatio
+	testBufLimit = testMinCap * bufLimitRatio
 )
 
 /*
@@ -281,14 +283,16 @@ func newTestServerHandler(blocks int, indexers []*core.ChainIndexer, db ethdb.Da
 		servingQueue: newServingQueue(int64(time.Millisecond*10), 1),
 		defParams: flowcontrol.ServerParams{
 			BufLimit:    testBufLimit,
-			MinRecharge: testBufRecharge,
+			MinRecharge: testMinCap,
 		},
-		fcManager: flowcontrol.NewClientManager(nil, clock),
+		fcManager:    flowcontrol.NewClientManager(nil, clock),
+		lespayServer: lps.NewServer(ns, db, 0.01, 10000),
 	}
+	server.lespayServer.Register(server)
 	server.costTracker, server.minCapacity = newCostTracker(db, server.config)
 	server.costTracker.testCostList = testCostList(0) // Disable flow control mechanism.
-	server.clientPool = newClientPool(ns, db, testBufRecharge, defaultConnectedBias, clock, func(id enode.ID) {})
-	server.clientPool.setLimits(10000, 10000) // Assign enough capacity for clientpool
+	server.clientPool = newClientPool(ns, db, testMinCap, defaultConnectedBias, clock, func(id enode.ID) {})
+	server.clientPool.setLimits(1000, testTotalCap) // Assign enough capacity for clientpool
 	server.handler = newServerHandler(server, simulation.Blockchain(), db, txpool, func() bool { return true })
 	if server.oracle != nil {
 		server.oracle.Start(simulation)
@@ -427,7 +431,7 @@ func (p *testPeer) handshake(t *testing.T, td *big.Int, head common.Hash, headNu
 		expList = expList.add("flowControl/MRR", uint64(0))
 	} else {
 		expList = expList.add("flowControl/BL", testBufLimit)
-		expList = expList.add("flowControl/MRR", testBufRecharge)
+		expList = expList.add("flowControl/MRR", testMinCap)
 	}
 	expList = expList.add("flowControl/MRC", costList)
 
@@ -441,7 +445,7 @@ func (p *testPeer) handshake(t *testing.T, td *big.Int, head common.Hash, headNu
 	if p.cpeer.version < lpv4 {
 		p.cpeer.fcParams = flowcontrol.ServerParams{
 			BufLimit:    testBufLimit,
-			MinRecharge: testBufRecharge,
+			MinRecharge: testMinCap,
 		}
 	}
 	p.cpeer.lock.Unlock()
@@ -498,7 +502,7 @@ func newServerEnv(t *testing.T, blocks int, protocol int, callback indexerCallba
 			replyMetaInfo{
 				mapping: peer.cpeer.mapping.Send,
 			}, capacityUpdate{
-				MinRecharge: testBufRecharge,
+				MinRecharge: testMinCap,
 				BufLimit:    testBufLimit,
 			}})
 	}

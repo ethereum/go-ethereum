@@ -649,13 +649,44 @@ func testStopResume(t *testing.T, protocol int) {
 			t.Errorf("expected StopMsg and failed: %v", err)
 		}
 		// wait until the buffer is recharged by half of the limit
-		wait := testBufLimit / testBufRecharge / 2
+		wait := testBufLimit / testMinCap / 2
 		server.clock.(*mclock.Simulated).Run(time.Millisecond * time.Duration(wait))
 
 		// expect a ResumeMsg with the partially recharged buffer value
-		expBuf += testBufRecharge * wait
+		expBuf += testMinCap * wait
 		if err := p2p.ExpectMsg(server.peer.app, ResumeMsg, expBuf); err != nil {
 			t.Errorf("expected ResumeMsg and failed: %v", err)
 		}
+	}
+}
+
+func TestLespayLes4(t *testing.T) {
+	server, tearDown := newServerEnv(t, 0, 4, nil, true, true, 0)
+	defer tearDown()
+
+	var (
+		requests lespay.Requests
+		replies  lespay.Replies
+	)
+
+	cq := lespay.CapacityQueryReq{
+		Bias:      0,
+		AddTokens: []lespay.IntOrInf{{}, {}},
+	}
+	cq.AddTokens[1].SetInt64(1000)
+	requests.Add("les", lespay.CapacityQueryName, cq)
+	enc, _ := rlp.EncodeToBytes(&lespay.CapacityQueryReply{testMinCap, testTotalCap})
+	replies = append(replies, enc)
+
+	sendRequest(server.peer.app, server.peer.cpeer.mapping.Receive, LespayRequestMsg, 42, requests)
+	type resp struct {
+		Meta replyMetaInfo
+		Data lespay.Replies
+	}
+	if err := p2p.ExpectMsg(server.peer.app, LespayReplyMsg, resp{replyMetaInfo{
+		mapping: server.peer.cpeer.mapping.Send,
+		reqID:   metaInfoField{value: 42, set: true},
+	}, replies}); err != nil {
+		t.Errorf("Lespay reply mismatch: %v", err)
 	}
 }
