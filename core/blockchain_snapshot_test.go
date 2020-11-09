@@ -675,7 +675,7 @@ func testSnapshot(t *testing.T, tt *snapshotTest) {
 	if _, err := chain.InsertChain(blocks[startPoint:]); err != nil {
 		t.Fatalf("Failed to import canonical chain tail: %v", err)
 	}
-	// Set the flag for writing legacy journal if ncessary
+	// Set the flag for writing legacy journal if necessary
 	if tt.legacy {
 		chain.writeLegacyJournal = true
 	}
@@ -708,7 +708,6 @@ func testSnapshot(t *testing.T, tt *snapshotTest) {
 	} else if tt.gapped > 0 {
 		// Insert blocks without enabling snapshot if gapping is required.
 		chain.Stop()
-
 		gappedBlocks, _ := GenerateChain(params.TestChainConfig, blocks[len(blocks)-1], engine, gendb, tt.gapped, func(i int, b *BlockGen) {})
 
 		// Insert a few more blocks without enabling snapshot
@@ -766,6 +765,7 @@ func testSnapshot(t *testing.T, tt *snapshotTest) {
 		defer chain.Stop()
 	} else {
 		chain.Stop()
+
 		// Restart the chain normally
 		chain, err = NewBlockChain(db, nil, params.AllEthashProtocolChanges, engine, vm.Config{}, nil, nil)
 		if err != nil {

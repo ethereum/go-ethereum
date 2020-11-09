@@ -276,8 +276,8 @@ func loadDiffLayer(parent snapshot, r *rlp.Stream) (snapshot, error) {
 	return loadDiffLayer(newDiffLayer(parent, root, destructSet, accountData, storageData), r)
 }
 
-// Journal writes the persistent layer generator stats into a buffer to be stored
-// in the database as the snapshot journal.
+// Journal terminates any in-progress snapshot generation, also implicitly pushing
+// the progress into the database.
 func (dl *diskLayer) Journal(buffer *bytes.Buffer) (common.Hash, error) {
 	// If the snapshot is currently being generated, abort it
 	var stats *generatorStats
@@ -296,25 +296,10 @@ func (dl *diskLayer) Journal(buffer *bytes.Buffer) (common.Hash, error) {
 	if dl.stale {
 		return common.Hash{}, ErrSnapshotStale
 	}
-	// Write out the generator marker. Note it's a standalone disk layer generator
-	// which is not mixed with journal. It's ok if the generator is persisted while
-	// journal is not.
-	entry := journalGenerator{
-		Done:   dl.genMarker == nil,
-		Marker: dl.genMarker,
-	}
-	if stats != nil {
-		entry.Wiping = (stats.wiping != nil)
-		entry.Accounts = stats.accounts
-		entry.Slots = stats.slots
-		entry.Storage = uint64(stats.storage)
-	}
-	blob, err := rlp.EncodeToBytes(entry)
-	if err != nil {
-		return common.Hash{}, err
-	}
-	log.Debug("Journalled disk layer", "root", dl.root, "complete", dl.genMarker == nil)
-	rawdb.WriteSnapshotGenerator(dl.diskdb, blob)
+	// Ensure the generator stats is written even if none was ran this cycle
+	journalProgress(dl.diskdb, dl.genMarker, stats)
+
+	log.Debug("Journalled disk layer", "root", dl.root)
 	return dl.root, nil
 }
 
@@ -401,6 +386,7 @@ func (dl *diskLayer) LegacyJournal(buffer *bytes.Buffer) (common.Hash, error) {
 		entry.Slots = stats.slots
 		entry.Storage = uint64(stats.storage)
 	}
+	log.Debug("Legacy journalled disk layer", "root", dl.root)
 	if err := rlp.Encode(buffer, entry); err != nil {
 		return common.Hash{}, err
 	}
@@ -455,6 +441,6 @@ func (dl *diffLayer) LegacyJournal(buffer *bytes.Buffer) (common.Hash, error) {
 	if err := rlp.Encode(buffer, storage); err != nil {
 		return common.Hash{}, err
 	}
-	log.Debug("Journalled diff layer", "root", dl.root, "parent", dl.parent.Root())
+	log.Debug("Legacy journalled disk layer", "root", dl.root, "parent", dl.parent.Root())
 	return base, nil
 }
