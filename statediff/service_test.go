@@ -31,8 +31,9 @@ import (
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/rlp"
 	"github.com/ethereum/go-ethereum/rpc"
-	statediff "github.com/ethereum/go-ethereum/statediff"
+	"github.com/ethereum/go-ethereum/statediff"
 	"github.com/ethereum/go-ethereum/statediff/testhelpers/mocks"
+	sdtypes "github.com/ethereum/go-ethereum/statediff/types"
 )
 
 func TestServiceLoop(t *testing.T) {
@@ -75,7 +76,7 @@ var (
 	event2 = core.ChainEvent{Block: testBlock2}
 	event3 = core.ChainEvent{Block: testBlock3}
 
-	defaultParams = statediff.Params{
+	defaultParams = sdtypes.Params{
 		IncludeBlock:    true,
 		IncludeReceipts: true,
 		IncludeTD:       true,
@@ -93,9 +94,9 @@ func testErrorInChainEventLoop(t *testing.T) {
 		BlockChain:        &blockChain,
 		QuitChan:          serviceQuit,
 		Subscriptions:     make(map[common.Hash]map[rpc.ID]statediff.Subscription),
-		SubscriptionTypes: make(map[common.Hash]statediff.Params),
+		SubscriptionTypes: make(map[common.Hash]sdtypes.Params),
 	}
-	payloadChan := make(chan statediff.Payload, 2)
+	payloadChan := make(chan sdtypes.Payload, 2)
 	quitChan := make(chan bool)
 	service.Subscribe(rpc.NewID(), payloadChan, quitChan, defaultParams)
 	testRoot2 = common.HexToHash("0xTestRoot2")
@@ -107,7 +108,7 @@ func testErrorInChainEventLoop(t *testing.T) {
 	blockChain.SetReceiptsForHash(testBlock1.Hash(), testReceipts1)
 	blockChain.SetReceiptsForHash(testBlock2.Hash(), testReceipts2)
 
-	payloads := make([]statediff.Payload, 0, 2)
+	payloads := make([]sdtypes.Payload, 0, 2)
 	wg := new(sync.WaitGroup)
 	go func() {
 		wg.Add(1)
@@ -176,9 +177,9 @@ func testErrorInBlockLoop(t *testing.T) {
 		BlockChain:        &blockChain,
 		QuitChan:          make(chan bool),
 		Subscriptions:     make(map[common.Hash]map[rpc.ID]statediff.Subscription),
-		SubscriptionTypes: make(map[common.Hash]statediff.Params),
+		SubscriptionTypes: make(map[common.Hash]sdtypes.Params),
 	}
-	payloadChan := make(chan statediff.Payload)
+	payloadChan := make(chan sdtypes.Payload)
 	quitChan := make(chan bool)
 	service.Subscribe(rpc.NewID(), payloadChan, quitChan, defaultParams)
 	blockMapping := make(map[common.Hash]*types.Block)
@@ -216,7 +217,7 @@ func TestGetStateDiffAt(t *testing.T) {
 }
 
 func testErrorInStateDiffAt(t *testing.T) {
-	mockStateDiff := statediff.StateObject{
+	mockStateDiff := sdtypes.StateObject{
 		BlockNumber: testBlock1.Number(),
 		BlockHash:   testBlock1.Hash(),
 	}
@@ -232,7 +233,7 @@ func testErrorInStateDiffAt(t *testing.T) {
 	if err != nil {
 		t.Error(err)
 	}
-	expectedStateDiffPayload := statediff.Payload{
+	expectedStateDiffPayload := sdtypes.Payload{
 		StateObjectRlp: expectedStateDiffRlp,
 		ReceiptsRlp:    expectedReceiptsRlp,
 		BlockRlp:       expectedBlockRlp,
@@ -255,7 +256,7 @@ func testErrorInStateDiffAt(t *testing.T) {
 		BlockChain:        &blockChain,
 		QuitChan:          make(chan bool),
 		Subscriptions:     make(map[common.Hash]map[rpc.ID]statediff.Subscription),
-		SubscriptionTypes: make(map[common.Hash]statediff.Params),
+		SubscriptionTypes: make(map[common.Hash]sdtypes.Params),
 	}
 	stateDiffPayload, err := service.StateDiffAt(testBlock1.NumberU64(), defaultParams)
 	if err != nil {

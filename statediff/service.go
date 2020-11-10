@@ -128,12 +128,13 @@ func New(stack *node.Node, ethServ *eth.Ethereum, dbParams *DBParams, enableWrit
 			GenesisBlock: blockChain.Genesis().Hash().Hex(),
 			NetworkID:    strconv.FormatUint(ethServ.NetVersion(), 10),
 			ChainID:      blockChain.Config().ChainID.Uint64(),
-			ID:           dbParams.ID,
-			ClientName:   dbParams.ClientName,
+			ID:           dbParams[1],
+			ClientName:   dbParams[2],
 		}
 
 		// TODO: pass max idle, open, lifetime?
-		db, err := postgres.NewDB(dbParams.ConnectionURL, postgres.ConnectionConfig{}, info)
+		params := postgres.ConnectionParams{} // FIXME
+		db, err := postgres.NewDB(params, postgres.ConnectionConfig{}, info)
 		if err != nil {
 			return err
 		}
@@ -172,6 +173,7 @@ func (sds *Service) APIs() []rpc.API {
 	}
 }
 
+// Swap out the cached block
 func (lbc *lastBlockCache) replace(currentBlock *types.Block, bc blockChain) *types.Block {
 	lbc.Lock()
 	parentHash := currentBlock.ParentHash()
@@ -510,6 +512,10 @@ func (sds *Service) StreamCodeAndCodeHash(blockNumber uint64, outChan chan<- Cod
 // This operation cannot be performed back past the point of db pruning; it requires an archival node
 // for historical data
 func (sds *Service) WriteStateDiffAt(blockNumber uint64, params Params) error {
+	if sds.indexer == nil {
+		return fmt.Errorf("Database not configured for direct statediff writing")
+	}
+	log.Info(fmt.Sprintf("writing state diff at block %d", blockNumber))
 	currentBlock := sds.BlockChain.GetBlockByNumber(blockNumber)
 	parentRoot := common.Hash{}
 	if blockNumber != 0 {

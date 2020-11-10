@@ -19,7 +19,12 @@
 
 package types
 
-import "github.com/ethereum/go-ethereum/common"
+import (
+	"encoding/json"
+	"math/big"
+
+	"github.com/ethereum/go-ethereum/common"
+)
 
 // NodeType for explicitly setting type of node
 type NodeType string
@@ -59,3 +64,62 @@ type CodeAndCodeHash struct {
 type StateNodeSink func(StateNode) error
 type StorageNodeSink func(StorageNode) error
 type CodeSink func(CodeAndCodeHash) error
+
+// Params is used to carry in parameters from subscribing/requesting clients configuration
+type Params struct {
+	IntermediateStateNodes   bool
+	IntermediateStorageNodes bool
+	IncludeBlock             bool
+	IncludeReceipts          bool
+	IncludeTD                bool
+	IncludeCode              bool
+	WatchedAddresses         []common.Address
+	WatchedStorageSlots      []common.Hash
+}
+
+// Args bundles the arguments for the state diff builder
+type Args struct {
+	OldStateRoot, NewStateRoot, BlockHash common.Hash
+	BlockNumber                           *big.Int
+}
+
+type StateRoots struct {
+	OldStateRoot, NewStateRoot common.Hash
+}
+
+// Payload packages the data to send to statediff subscriptions
+type Payload struct {
+	BlockRlp        []byte   `json:"blockRlp"`
+	TotalDifficulty *big.Int `json:"totalDifficulty"`
+	ReceiptsRlp     []byte   `json:"receiptsRlp"`
+	StateObjectRlp  []byte   `json:"stateObjectRlp"    gencodec:"required"`
+
+	encoded []byte
+	err     error
+}
+
+func (sd *Payload) ensureEncoded() {
+	if sd.encoded == nil && sd.err == nil {
+		sd.encoded, sd.err = json.Marshal(sd)
+	}
+}
+
+// Length to implement Encoder interface for Payload
+func (sd *Payload) Length() int {
+	sd.ensureEncoded()
+	return len(sd.encoded)
+}
+
+// Encode to implement Encoder interface for Payload
+func (sd *Payload) Encode() ([]byte, error) {
+	sd.ensureEncoded()
+	return sd.encoded, sd.err
+}
+
+// StateObject is the final output structure from the builder
+type StateObject struct {
+	BlockNumber       *big.Int          `json:"blockNumber"     gencodec:"required"`
+	BlockHash         common.Hash       `json:"blockHash"       gencodec:"required"`
+	Nodes             []StateNode       `json:"nodes"           gencodec:"required"`
+	CodeAndCodeHashes []CodeAndCodeHash `json:"codeMapping"`
+}

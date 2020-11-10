@@ -18,23 +18,22 @@ package mocks
 
 import (
 	"github.com/ethereum/go-ethereum/core/types"
-	"github.com/ethereum/go-ethereum/statediff"
 	sdtypes "github.com/ethereum/go-ethereum/statediff/types"
 )
 
 // Builder is a mock state diff builder
 type Builder struct {
-	Args         statediff.Args
-	Params       statediff.Params
-	StateRoots   statediff.StateRoots
-	stateDiff    statediff.StateObject
+	Args         sdtypes.Args
+	Params       sdtypes.Params
+	StateRoots   sdtypes.StateRoots
+	stateDiff    sdtypes.StateObject
 	block        *types.Block
-	stateTrie    statediff.StateObject
+	stateTrie    sdtypes.StateObject
 	builderError error
 }
 
 // BuildStateDiffObject mock method
-func (builder *Builder) BuildStateDiffObject(args statediff.Args, params statediff.Params) (statediff.StateObject, error) {
+func (builder *Builder) BuildStateDiffObject(args sdtypes.Args, params sdtypes.Params) (sdtypes.StateObject, error) {
 	builder.Args = args
 	builder.Params = params
 
@@ -42,7 +41,7 @@ func (builder *Builder) BuildStateDiffObject(args statediff.Args, params statedi
 }
 
 // BuildStateDiffObject mock method
-func (builder *Builder) WriteStateDiffObject(args statediff.StateRoots, params statediff.Params, output sdtypes.StateNodeSink, codeOutput sdtypes.CodeSink) error {
+func (builder *Builder) WriteStateDiffObject(args sdtypes.StateRoots, params sdtypes.Params, output sdtypes.StateNodeSink, codeOutput sdtypes.CodeSink) error {
 	builder.StateRoots = args
 	builder.Params = params
 
@@ -50,14 +49,14 @@ func (builder *Builder) WriteStateDiffObject(args statediff.StateRoots, params s
 }
 
 // BuildStateTrieObject mock method
-func (builder *Builder) BuildStateTrieObject(block *types.Block) (statediff.StateObject, error) {
+func (builder *Builder) BuildStateTrieObject(block *types.Block) (sdtypes.StateObject, error) {
 	builder.block = block
 
 	return builder.stateTrie, builder.builderError
 }
 
 // SetStateDiffToBuild mock method
-func (builder *Builder) SetStateDiffToBuild(stateDiff statediff.StateObject) {
+func (builder *Builder) SetStateDiffToBuild(stateDiff sdtypes.StateObject) {
 	builder.stateDiff = stateDiff
 }
 

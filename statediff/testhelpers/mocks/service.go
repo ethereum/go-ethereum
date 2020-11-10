@@ -46,7 +46,7 @@ type MockStateDiffService struct {
 	ParentBlockChan   chan *types.Block
 	QuitChan          chan bool
 	Subscriptions     map[common.Hash]map[rpc.ID]statediff.Subscription
-	SubscriptionTypes map[common.Hash]statediff.Params
+	SubscriptionTypes map[common.Hash]sdtypes.Params
 }
 
 // Protocols mock method
@@ -120,7 +120,7 @@ func (sds *MockStateDiffService) streamStateDiff(currentBlock *types.Block, pare
 }
 
 // StateDiffAt mock method
-func (sds *MockStateDiffService) StateDiffAt(blockNumber uint64, params statediff.Params) (*statediff.Payload, error) {
+func (sds *MockStateDiffService) StateDiffAt(blockNumber uint64, params sdtypes.Params) (*sdtypes.Payload, error) {
 	currentBlock := sds.BlockChain.GetBlockByNumber(blockNumber)
 	log.Info(fmt.Sprintf("sending state diff at %d", blockNumber))
 	if blockNumber == 0 {
@@ -131,8 +131,8 @@ func (sds *MockStateDiffService) StateDiffAt(blockNumber uint64, params statedif
 }
 
 // processStateDiff method builds the state diff payload from the current block, parent state root, and provided params
-func (sds *MockStateDiffService) processStateDiff(currentBlock *types.Block, parentRoot common.Hash, params statediff.Params) (*statediff.Payload, error) {
-	stateDiff, err := sds.Builder.BuildStateDiffObject(statediff.Args{
+func (sds *MockStateDiffService) processStateDiff(currentBlock *types.Block, parentRoot common.Hash, params sdtypes.Params) (*sdtypes.Payload, error) {
+	stateDiff, err := sds.Builder.BuildStateDiffObject(sdtypes.Args{
 		NewStateRoot: currentBlock.Root(),
 		OldStateRoot: parentRoot,
 		BlockHash:    currentBlock.Hash(),
@@ -148,8 +148,8 @@ func (sds *MockStateDiffService) processStateDiff(currentBlock *types.Block, par
 	return sds.newPayload(stateDiffRlp, currentBlock, params)
 }
 
-func (sds *MockStateDiffService) newPayload(stateObject []byte, block *types.Block, params statediff.Params) (*statediff.Payload, error) {
-	payload := &statediff.Payload{
+func (sds *MockStateDiffService) newPayload(stateObject []byte, block *types.Block, params sdtypes.Params) (*sdtypes.Payload, error) {
+	payload := &sdtypes.Payload{
 		StateObjectRlp: stateObject,
 	}
 	if params.IncludeBlock {
@@ -174,7 +174,7 @@ func (sds *MockStateDiffService) newPayload(stateObject []byte, block *types.Blo
 }
 
 // WriteStateDiffAt mock method
-func (sds *MockStateDiffService) WriteStateDiffAt(blockNumber uint64, params statediff.Params) error {
+func (sds *MockStateDiffService) WriteStateDiffAt(blockNumber uint64, params sdtypes.Params) error {
 	// TODO: something useful here
 	return nil
 }
@@ -195,7 +195,7 @@ func (sds *MockStateDiffService) WriteLoop(chan core.ChainEvent) {
 				continue
 			}
 			// TODO:
-			// sds.writeStateDiff(currentBlock, parentBlock.Root(), statediff.Params{})
+			// sds.writeStateDiff(currentBlock, parentBlock.Root(), sdtypes.Params{})
 		case <-sds.QuitChan:
 			log.Debug("Quitting the statediff block channel")
 			sds.close()
@@ -205,13 +205,13 @@ func (sds *MockStateDiffService) WriteLoop(chan core.ChainEvent) {
 }
 
 // StateTrieAt mock method
-func (sds *MockStateDiffService) StateTrieAt(blockNumber uint64, params statediff.Params) (*statediff.Payload, error) {
+func (sds *MockStateDiffService) StateTrieAt(blockNumber uint64, params sdtypes.Params) (*sdtypes.Payload, error) {
 	currentBlock := sds.BlockChain.GetBlockByNumber(blockNumber)
 	log.Info(fmt.Sprintf("sending state trie at %d", blockNumber))
 	return sds.stateTrieAt(currentBlock, params)
 }
 
-func (sds *MockStateDiffService) stateTrieAt(block *types.Block, params statediff.Params) (*statediff.Payload, error) {
+func (sds *MockStateDiffService) stateTrieAt(block *types.Block, params sdtypes.Params) (*sdtypes.Payload, error) {
 	stateNodes, err := sds.Builder.BuildStateTrieObject(block)
 	if err != nil {
 		return nil, err
@@ -224,7 +224,7 @@ func (sds *MockStateDiffService) stateTrieAt(block *types.Block, params statedif
 }
 
 // Subscribe is used by the API to subscribe to the service loop
-func (sds *MockStateDiffService) Subscribe(id rpc.ID, sub chan<- statediff.Payload, quitChan chan<- bool, params statediff.Params) {
+func (sds *MockStateDiffService) Subscribe(id rpc.ID, sub chan<- sdtypes.Payload, quitChan chan<- bool, params sdtypes.Params) {
 	// Subscription type is defined as the hash of the rlp-serialized subscription params
 	by, err := rlp.EncodeToBytes(params)
 	if err != nil {

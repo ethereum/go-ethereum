@@ -35,14 +35,13 @@ func ExpectEqual(t *testing.T, got interface{}, want interface{}) {
 
 // SetupDB is use to setup a db for watcher tests
 func SetupDB() (*postgres.DB, error) {
-	uri := postgres.DbConnectionString(postgres.ConnectionParams{
-		User:     "postgres",
-		Password: "",
+	params := postgres.ConnectionParams{
+		User:     "vulcanize",
 		Hostname: "localhost",
 		Name:     "vulcanize_testing",
 		Port:     5432,
-	})
-	return postgres.NewDB(uri, postgres.ConnectionConfig{}, node.Info{})
+	}
+	return postgres.NewDB(params, postgres.ConnectionConfig{}, node.Info{})
 }
 
 // ListContainsString used to check if a list of strings contains a particular string
