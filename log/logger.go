@@ -24,7 +24,6 @@ const (
 	LvlInfo
 	LvlDebug
 	LvlTrace
-	LvlUndefined
 )
 
 // AlignedString returns a 5-character string containing the name of a Lvl.

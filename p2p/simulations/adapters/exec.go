@@ -397,7 +397,7 @@ func initLogging() {
 		writer = logWriter
 	}
 	var verbosity = log.LvlInfo
-	if conf.Node.LogVerbosity < log.LvlUndefined && conf.Node.LogVerbosity >= log.LvlCrit {
+	if conf.Node.LogVerbosity <= log.LvlTrace && conf.Node.LogVerbosity >= log.LvlCrit {
 		verbosity = conf.Node.LogVerbosity
 	}
 	// Reinitialize the logger
