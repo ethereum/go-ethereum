@@ -110,6 +110,8 @@ type BlockContext struct {
 	Difficulty  *big.Int       // Provides information for DIFFICULTY
 }
 
+// TxContext provides the EVM with information about a transaction.
+// All fields can change between transactions.
 type TxContext struct {
 	// Message information
 	Origin   common.Address // Provides information for ORIGIN
