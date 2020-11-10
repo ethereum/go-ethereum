@@ -45,7 +45,7 @@ func largeBuffer(megabytes int) []byte {
 func largeString(megabytes int) string {
 	buf := make([]byte, megabytes*1024*1024)
 	rand.Read(buf)
-	return string(hexutil.Encode(buf))
+	return hexutil.Encode(buf)
 }
 
 func largeBlock() *types.Block {
