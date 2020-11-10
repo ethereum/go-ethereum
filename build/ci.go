@@ -46,12 +46,11 @@ import (
 	"encoding/base64"
 	"flag"
 	"fmt"
-	"go/parser"
-	"go/token"
 	"io/ioutil"
 	"log"
 	"os"
 	"os/exec"
+	"path"
 	"path/filepath"
 	"regexp"
 	"runtime"
@@ -148,6 +147,11 @@ var (
 		"golang-1.11": "/usr/lib/go-1.11",
 		"golang-go":   "/usr/lib/go",
 	}
+
+	// This is the version of go that will be downloaded by
+	//
+	//     go run ci.go install -dlgo
+	dlgoVersion = "1.15.4"
 )
 
 var GOBIN, _ = filepath.Abs(filepath.Join("build", "bin"))
@@ -198,19 +202,19 @@ func main() {
 
 func doInstall(cmdline []string) {
 	var (
+		dlgo = flag.Bool("dlgo", false, "Download Go and build with it")
 		arch = flag.String("arch", "", "Architecture to cross build for")
 		cc   = flag.String("cc", "", "C compiler to cross build with")
 	)
 	flag.CommandLine.Parse(cmdline)
 	env := build.Env()
 
-	// Check Go version. People regularly open issues about compilation
+	// Check local Go version. People regularly open issues about compilation
 	// failure with outdated Go. This should save them the trouble.
 	if !strings.Contains(runtime.Version(), "devel") {
 		// Figure out the minor version number since we can't textually compare (1.10 < 1.9)
 		var minor int
 		fmt.Sscanf(strings.TrimPrefix(runtime.Version(), "go1."), "%d", &minor)
-
 		if minor < 13 {
 			log.Println("You have Go version", runtime.Version())
 			log.Println("go-ethereum requires at least Go version 1.13 and cannot")
@@ -218,77 +222,100 @@ func doInstall(cmdline []string) {
 			os.Exit(1)
 		}
 	}
-	// Compile packages given as arguments, or everything if there are no arguments.
-	packages := []string{"./..."}
-	if flag.NArg() > 0 {
-		packages = flag.Args()
-	}
 
+	// Choose which go command we're going to use.
+	var gobuild *exec.Cmd
 	if *arch == "" || *arch == runtime.GOARCH {
-		goinstall := goTool("install", buildFlags(env)...)
-		if runtime.GOARCH == "arm64" {
-			goinstall.Args = append(goinstall.Args, "-p", "1")
+		if !*dlgo {
+			// Default behavior: use the go version which runs ci.go right now.
+			gobuild = goTool("build")
+		} else {
+			// Download of Go requested. This is for build environments where the
+			// installed version is too old and cannot be upgraded easily.
+			cachedir := filepath.Join("build", "cache")
+			goroot := downloadGo(runtime.GOARCH, runtime.GOOS, dlgoVersion, cachedir)
+			gobuild = localGoTool(goroot, "build")
 		}
-		goinstall.Args = append(goinstall.Args, "-trimpath")
-		goinstall.Args = append(goinstall.Args, "-v")
-		goinstall.Args = append(goinstall.Args, packages...)
-		build.MustRun(goinstall)
-		return
+	} else {
+		// Cross-build requested.
+		gobuild = goToolArch(*arch, *cc, "build")
 	}
 
-	// Seems we are cross compiling, work around forbidden GOBIN
-	goinstall := goToolArch(*arch, *cc, "install", buildFlags(env)...)
-	goinstall.Args = append(goinstall.Args, "-trimpath")
-	goinstall.Args = append(goinstall.Args, "-v")
-	goinstall.Args = append(goinstall.Args, []string{"-buildmode", "archive"}...)
-	goinstall.Args = append(goinstall.Args, packages...)
-	build.MustRun(goinstall)
+	// arm64 CI builders are slow and can't handle concurrent builds,
+	// better disable it. This check isn't the best, it should probably
+	// check for something in env instead.
+	if runtime.GOARCH == "arm64" {
+		gobuild.Args = append(gobuild.Args, "-p", "1")
+	}
 
-	if cmds, err := ioutil.ReadDir("cmd"); err == nil {
-		for _, cmd := range cmds {
-			pkgs, err := parser.ParseDir(token.NewFileSet(), filepath.Join(".", "cmd", cmd.Name()), nil, parser.PackageClauseOnly)
-			if err != nil {
-				log.Fatal(err)
-			}
-			for name := range pkgs {
-				if name == "main" {
-					gobuild := goToolArch(*arch, *cc, "build", buildFlags(env)...)
-					gobuild.Args = append(gobuild.Args, "-v")
-					gobuild.Args = append(gobuild.Args, []string{"-o", executablePath(cmd.Name())}...)
-					gobuild.Args = append(gobuild.Args, "."+string(filepath.Separator)+filepath.Join("cmd", cmd.Name()))
-					build.MustRun(gobuild)
-					break
-				}
-			}
-		}
+	// Put the default settings in.
+	gobuild.Args = append(gobuild.Args, buildFlags(env)...)
+
+	// Show packages during build.
+	gobuild.Args = append(gobuild.Args, "-v")
+
+	// Now we choose what we're even building.
+	// Default: collect all 'main' packages in cmd/ and build those.
+	packages := flag.Args()
+	if len(packages) == 0 {
+		packages = build.FindMainPackages("./cmd")
+	}
+
+	// Do the build!
+	for _, pkg := range packages {
+		args := make([]string, len(gobuild.Args))
+		copy(args, gobuild.Args)
+		args = append(args, "-o", executablePath(path.Base(pkg)))
+		args = append(args, pkg)
+		build.MustRun(&exec.Cmd{Path: gobuild.Path, Args: args, Env: gobuild.Env})
 	}
 }
 
+// buildFlags returns the go tool flags for building.
 func buildFlags(env build.Environment) (flags []string) {
 	var ld []string
 	if env.Commit != "" {
 		ld = append(ld, "-X", "main.gitCommit="+env.Commit)
 		ld = append(ld, "-X", "main.gitDate="+env.Date)
 	}
+	// Strip DWARF on darwin. This used to be required for certain things,
+	// and there is no downside to this, so we just keep doing it.
 	if runtime.GOOS == "darwin" {
 		ld = append(ld, "-s")
 	}
-
 	if len(ld) > 0 {
 		flags = append(flags, "-ldflags", strings.Join(ld, " "))
 	}
+	// We use -trimpath to avoid leaking local paths into the built executables.
+	flags = append(flags, "-trimpath")
 	return flags
 }
 
+// goTool returns the go tool. This uses the Go version which runs ci.go.
 func goTool(subcmd string, args ...string) *exec.Cmd {
 	return goToolArch(runtime.GOARCH, os.Getenv("CC"), subcmd, args...)
 }
 
+// goToolArch returns the go tool configured for a specific architecture.
 func goToolArch(arch string, cc string, subcmd string, args ...string) *exec.Cmd {
 	cmd := build.GoTool(subcmd, args...)
-	if arch == "" || arch == runtime.GOARCH {
-		cmd.Env = append(cmd.Env, "GOBIN="+GOBIN)
-	} else {
+	goToolSetEnv(cmd, arch, cc)
+	return cmd
+}
+
+// localGoTool returns the go tool from the given GOROOT.
+func localGoTool(goroot string, subcmd string, args ...string) *exec.Cmd {
+	gotool := filepath.Join(goroot, "bin", "go")
+	cmd := exec.Command(gotool, subcmd)
+	goToolSetEnv(cmd, runtime.GOARCH, os.Getenv("CC"))
+	cmd.Env = append(cmd.Env, "GOROOT="+goroot)
+	cmd.Args = append(cmd.Args, args...)
+	return cmd
+}
+
+// goToolSetEnv configures some default environment variables.
+func goToolSetEnv(cmd *exec.Cmd, arch string, cc string) {
+	if arch != "" && arch != runtime.GOARCH {
 		cmd.Env = append(cmd.Env, "CGO_ENABLED=1")
 		cmd.Env = append(cmd.Env, "GOARCH="+arch)
 	}
@@ -301,7 +328,6 @@ func goToolArch(arch string, cc string, subcmd string, args ...string) *exec.Cmd
 		}
 		cmd.Env = append(cmd.Env, e)
 	}
-	return cmd
 }
 
 // Running The Tests
@@ -541,7 +567,8 @@ func doDebianSource(cmdline []string) {
 	}
 }
 
-func downloadGoSources(version string, cachedir string) string {
+// downloadGoSources downloads the Go source tarball.
+func downloadGoSources(version, cachedir string) string {
 	csdb := build.MustLoadChecksums("build/checksums.txt")
 	file := fmt.Sprintf("go%s.src.tar.gz", version)
 	url := "https://dl.google.com/go/" + file
@@ -550,6 +577,37 @@ func downloadGoSources(version string, cachedir string) string {
 		log.Fatal(err)
 	}
 	return dst
+}
+
+// downloadGo downloads the Go binary distribution and unpacks it into a temporary
+// directory. It returns the GOROOT of the unpacked toolchain.
+func downloadGo(goarch, goos, version, cachedir string) string {
+	csdb := build.MustLoadChecksums("build/checksums.txt")
+	file := fmt.Sprintf("go%s.%s-%s", version, goos, goarch)
+	if goos == "windows" {
+		file += ".zip"
+	} else {
+		file += ".tar.gz"
+	}
+	url := "https://golang.org/dl/" + file
+	dst := filepath.Join(cachedir, file)
+	if err := csdb.DownloadFile(url, dst); err != nil {
+		log.Fatal(err)
+	}
+
+	temp, err := ioutil.TempDir("", "geth-build-go")
+	if err != nil {
+		log.Fatal(err)
+	}
+	godir := filepath.Join(temp, fmt.Sprintf("go-%s-%s-%s", version, goos, goarch))
+	if err := build.ExtractArchive(dst, godir); err != nil {
+		log.Fatal(err)
+	}
+	goroot, err := filepath.Abs(filepath.Join(godir, "go"))
+	if err != nil {
+		log.Fatal(err)
+	}
+	return goroot
 }
 
 func ppaUpload(workdir, ppa, sshUser string, files []string) {
