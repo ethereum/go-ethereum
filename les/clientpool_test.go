@@ -85,7 +85,7 @@ func (i *poolTestPeer) freeClientId() string {
 	return fmt.Sprintf("addr #%d", i.index)
 }
 
-func (i *poolTestPeer) updateCapacity(cap uint64) {
+func (i *poolTestPeer) updateCapacity(cap, reqID uint64, requested bool) {
 	i.cap = cap
 }
 
@@ -226,7 +226,7 @@ func testPriorityConnect(t *testing.T, pool *clientPool, p *poolTestPeer, cap ui
 			return
 		}
 	}
-	if c, _ := pool.setCapacity(p.node, cap, defaultConnectedBias); c != cap {
+	if c, _ := pool.setCapacity(p.node, cap, defaultConnectedBias, 0, false); c != cap {
 		if expSuccess {
 			t.Fatalf("Failed to raise capacity of paid client")
 		} else {

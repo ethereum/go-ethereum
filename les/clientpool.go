@@ -91,10 +91,10 @@ type clientPool struct {
 type clientPoolPeer interface {
 	Node() *enode.Node
 	freeClientId() string
-	updateCapacity(uint64)
+	updateCapacity(uint64, uint64, bool)
+	getCapacity() uint64
 	freeze()
 	allowInactive() bool
-	getCapacity() uint64
 }
 
 // clientInfo defines all information required by clientpool.
@@ -180,7 +180,7 @@ func newClientPool(ns *nodestate.NodeStateMachine, lespayDb ethdb.Database, minC
 		totalConnectedGauge.Update(int64(totalConnected))
 		c, _ := ns.GetField(node, clientInfoField).(*clientInfo)
 		if c != nil {
-			c.peer.updateCapacity(newCap)
+			c.peer.updateCapacity(newCap, 0, false)
 		}
 	})
 	return pool
@@ -302,7 +302,7 @@ func (f *clientPool) setLimits(totalConn int, totalCap uint64) {
 // the maximum value allowed by its current balance. The final capacity is returned.
 // Note: reducing the capacity always succeeds. An increase attempt never reduces the
 // current capacity. Error is only returned if the client is not connected.
-func (f *clientPool) setCapacity(node *enode.Node, capacity uint64, bias time.Duration) (uint64, error) {
+func (f *clientPool) setCapacity(node *enode.Node, reqCap uint64, bias time.Duration, reqID uint64, requested bool) (capacity uint64, err error) {
 	c, _ := f.ns.GetField(node, clientInfoField).(*clientInfo)
 	if c == nil {
 		return 0, fmt.Errorf("client %064x is not connected", node.ID())
@@ -314,51 +314,66 @@ func (f *clientPool) setCapacity(node *enode.Node, capacity uint64, bias time.Du
 		capacity = f.minCap
 	}
 	curveBias := bias
-	var count int
-	for {
-		curveBias += time.Second * 10
-		oldCap := c.peer.getCapacity()
-		if capacity == oldCap {
-			return oldCap, nil
+	f.ns.Operation(func() {
+		var (
+			count   int
+			updated bool
+		)
+		if requested {
+			defer func() {
+				if !updated {
+					c.peer.updateCapacity(capacity, reqID, true)
+				}
+			}()
 		}
-		if capacity > oldCap {
-			if pb, _ := c.balance.GetBalance(); pb == 0 {
-				return oldCap, nil
+		for {
+			curveBias += time.Second * 10
+			capacity = c.peer.getCapacity()
+			count++
+			if count == 100 {
+				log.Error("Unable to find maximum allowed capacity")
+				return
 			}
-			curve := f.pp.GetCapacityCurve().Exclude(node.ID())
-			now := f.clock.Now()
-			maxCap := curve.MaxCapacity(func(capacity uint64) int64 {
-				return c.balance.EstimatePriority(now, capacity, 0, 0, curveBias, false) / int64(capacity)
-			})
-			if maxCap < capacity {
-				if maxCap > oldCap {
-					capacity = maxCap
+			if reqCap == capacity {
+				return
+			}
+			if reqCap > capacity {
+				if pb, _ := c.balance.GetBalance(); pb == 0 {
+					return
+				}
+				curve := f.pp.GetCapacityCurve().Exclude(node.ID())
+				now := f.clock.Now()
+				maxCap := curve.MaxCapacity(func(capacity uint64) int64 {
+					return c.balance.EstimatePriority(now, capacity, 0, 0, curveBias, false) / int64(capacity)
+				})
+				if maxCap < reqCap {
+					if maxCap > capacity {
+						capacity = maxCap
+					} else {
+						return
+					}
 				} else {
-					return oldCap, nil
+					capacity = reqCap
 				}
 			}
+			if _, allowed := f.pp.RequestCapacity(node, capacity, bias, true); allowed {
+				if requested {
+					c.peer.updateCapacity(capacity, reqID, true)
+					updated = true
+				}
+				return
+			}
 		}
-		var allowed bool
-		f.ns.Operation(func() {
-			_, allowed = f.pp.RequestCapacity(node, capacity, bias, true)
-		})
-		if allowed {
-			return capacity, nil
-		}
-		count++
-		if count == 100 {
-			log.Error("Unable to find maximum allowed capacity")
-			return oldCap, nil
-		}
-	}
+	})
+	return
 }
 
 // setCapacityLocked is the equivalent of setCapacity used when f.lock is already locked
-func (f *clientPool) setCapacityLocked(node *enode.Node, capacity uint64, bias time.Duration) (uint64, error) {
+func (f *clientPool) setCapacityLocked(node *enode.Node, capacity uint64, bias time.Duration, reqID uint64, requested bool) (uint64, error) {
 	f.lock.Lock()
 	defer f.lock.Unlock()
 
-	return f.setCapacity(node, capacity, bias)
+	return f.setCapacity(node, capacity, bias, reqID, requested)
 }
 
 // forClients calls the supplied callback for either the listed node IDs or all connected

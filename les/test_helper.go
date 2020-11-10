@@ -501,6 +501,7 @@ func newServerEnv(t *testing.T, blocks int, protocol int, callback indexerCallba
 		p2p.ExpectMsg(peer.app, CapacityUpdateMsg, update{
 			replyMetaInfo{
 				mapping: peer.cpeer.mapping.Send,
+				bv:      metaInfoField{value: testBufLimit, set: true},
 			}, capacityUpdate{
 				MinRecharge: testMinCap,
 				BufLimit:    testBufLimit,

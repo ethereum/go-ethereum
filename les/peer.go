@@ -951,17 +951,25 @@ func (p *clientPeer) allowInactive() bool {
 
 // updateCapacity updates the request serving capacity assigned to a given client
 // and also sends an announcement about the updated flow control parameters
-func (p *clientPeer) updateCapacity(cap uint64) {
+func (p *clientPeer) updateCapacity(cap, reqID uint64, requested bool) {
 	p.lock.Lock()
 	defer p.lock.Unlock()
 
-	if cap != p.fcParams.MinRecharge {
+	if cap != p.fcParams.MinRecharge || requested {
 		p.fcParams = flowcontrol.ServerParams{MinRecharge: cap, BufLimit: cap * bufLimitRatio}
 		p.fcClient.UpdateParams(p.fcParams)
+		bv, _ := p.fcClient.BufferStatus()
 		p.queueSend(func() {
 			var err error
 			if p.version >= lpv4 {
-				err = p.sendCapacityUpdate(replyMetaInfo{mapping: p.mapping.Send}, capacityUpdate{MinRecharge: cap, BufLimit: cap * bufLimitRatio})
+				meta := replyMetaInfo{
+					mapping: p.mapping.Send,
+					bv:      metaInfoField{value: bv, set: true},
+				}
+				if requested {
+					meta.reqID = metaInfoField{value: reqID, set: true}
+				}
+				err = p.sendCapacityUpdate(meta, capacityUpdate{MinRecharge: cap, BufLimit: cap * bufLimitRatio})
 			} else {
 				var kvList keyValueList
 				kvList = kvList.add("flowControl/MRR", cap)

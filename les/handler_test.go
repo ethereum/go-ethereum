@@ -32,6 +32,7 @@ import (
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/eth/downloader"
 	"github.com/ethereum/go-ethereum/les/lespay"
+	lps "github.com/ethereum/go-ethereum/les/lespay/server"
 	"github.com/ethereum/go-ethereum/light"
 	"github.com/ethereum/go-ethereum/p2p"
 	"github.com/ethereum/go-ethereum/params"
@@ -689,4 +690,52 @@ func TestLespayLes4(t *testing.T) {
 	}, replies}); err != nil {
 		t.Errorf("Lespay reply mismatch: %v", err)
 	}
+}
+
+func TestCapacityUpdateLes4(t *testing.T) {
+	server, tearDown := newServerEnv(t, 0, 4, nil, true, true, 0)
+
+	defer tearDown()
+
+	reqID := uint64(10)
+	req := func(cap uint64) {
+		reqID++
+		sendRequest(server.peer.app, server.peer.cpeer.mapping.Receive, CapacityRequestMsg, reqID, capacityRequest{
+			MinRecharge: cap,
+			BufLimit:    cap * bufLimitRatio,
+		})
+	}
+	exp := func(cap uint64, expID bool) {
+		type update struct {
+			Meta replyMetaInfo
+			Data capacityUpdate
+		}
+		meta := replyMetaInfo{
+			mapping: server.peer.cpeer.mapping.Send,
+			bv:      metaInfoField{value: cap * bufLimitRatio, set: true},
+		}
+		if expID {
+			meta.reqID = metaInfoField{value: reqID, set: true}
+		}
+		if err := p2p.ExpectMsg(server.peer.app, CapacityUpdateMsg, update{meta, capacityUpdate{
+			MinRecharge: cap,
+			BufLimit:    cap * bufLimitRatio,
+		}}); err != nil {
+			t.Errorf("Capacity update mismatch: %v", err)
+		}
+	}
+	req(testMinCap)
+	exp(testMinCap, true)
+	req(testMinCap * 2)
+	exp(testMinCap, true)
+	req(testMinCap - 1)
+	exp(testMinCap, true)
+	req(0)
+	exp(testMinCap, true)
+	balance, _ := server.handler.server.ns.GetField(server.peer.cpeer.Node(), balanceTrackerSetup.BalanceField).(*lps.NodeBalance)
+	balance.AddBalance(1000)
+	req(testMinCap * 2)
+	exp(testMinCap*2, true)
+	balance.AddBalance(-1000)
+	exp(testMinCap, false)
 }
