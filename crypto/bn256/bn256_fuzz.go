@@ -76,11 +76,18 @@ func FuzzMul(data []byte) int {
 		return 0
 	}
 	// Add the two points and ensure they result in the same output
+	remaining := input.Len()
+	if remaining == 0 {
+		return 0
+	}
+	buf := make([]byte, remaining)
+	input.Read(buf)
+
 	rc := new(cloudflare.G1)
-	rc.ScalarMult(pc, new(big.Int).SetBytes(data[64:]))
+	rc.ScalarMult(pc, new(big.Int).SetBytes(buf))
 
 	rg := new(google.G1)
-	rg.ScalarMult(pg, new(big.Int).SetBytes(data[64:]))
+	rg.ScalarMult(pg, new(big.Int).SetBytes(buf))
 
 	if !bytes.Equal(rc.Marshal(), rg.Marshal()) {
 		panic("scalar mul mismatch")
@@ -95,6 +102,9 @@ func FuzzPair(data []byte) int {
 		return 0
 	}
 	tc, tg := getG2Points(input)
+	if tc == nil {
+		return 0
+	}
 	// Pair the two points and ensure thet result in the same output
 	if cloudflare.PairingCheck([]*cloudflare.G1{pc}, []*cloudflare.G2{tc}) != google.PairingCheck([]*google.G1{pg}, []*google.G2{tg}) {
 		panic("pair mismatch")
