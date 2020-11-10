@@ -229,7 +229,7 @@ type TxPool struct {
 	mu          sync.RWMutex
 
 	istanbul bool // Fork indicator whether we are in the istanbul stage.
-	yoloV2   bool // Fork indicator whether we are in the YoloV2 stage.
+	eip2718  bool // Fork indicator whether we are using EIp-2718 type transactions.
 
 	currentState  *state.StateDB // Current state in the blockchain head
 	pendingNonces *txNoncer      // Pending state tracking virtual nonces
@@ -269,7 +269,7 @@ func NewTxPool(config TxPoolConfig, chainconfig *params.ChainConfig, chain block
 		config:          config,
 		chainconfig:     chainconfig,
 		chain:           chain,
-		signer:          types.NewEIP155Signer(chainconfig.ChainID),
+		signer:          types.NewEIP2718Signer(chainconfig.ChainID),
 		pending:         make(map[common.Address]*txList),
 		queue:           make(map[common.Address]*txList),
 		beats:           make(map[common.Address]time.Time),
@@ -281,9 +281,6 @@ func NewTxPool(config TxPoolConfig, chainconfig *params.ChainConfig, chain block
 		reorgDoneCh:     make(chan chan struct{}),
 		reorgShutdownCh: make(chan struct{}),
 		gasPrice:        new(big.Int).SetUint64(config.PriceLimit),
-	}
-	if chainconfig.IsYoloV2(chain.CurrentBlock().Number()) {
-		pool.signer = types.NewEIP2718Signer(chainconfig.ChainID)
 	}
 	pool.locals = newAccountSet(pool.signer)
 	for _, addr := range config.Locals {
@@ -540,11 +537,11 @@ func (pool *TxPool) validateTx(tx *types.Transaction, local bool) error {
 		return ErrGasLimit
 	}
 	// Accept only legacy transactions if before yoloV2.
-	if tx.Type() != types.LegacyTxId && !pool.yoloV2 {
+	if tx.Type() != types.LegacyTxId && !pool.eip2718 {
 		return ErrTxTypeNotSupported
 	}
 	// After yoloV2, accept both legacy transactions and access list transactions.
-	if pool.yoloV2 && (tx.Type() != types.LegacyTxId && tx.Type() != types.AccessListTxId) {
+	if pool.eip2718 && (tx.Type() != types.LegacyTxId && tx.Type() != types.AccessListTxId) {
 		return ErrTxTypeNotSupported
 	}
 	// Make sure the transaction is signed properly
@@ -1211,7 +1208,7 @@ func (pool *TxPool) reset(oldHead, newHead *types.Header) {
 	// Update all fork indicator by next pending block number.
 	next := new(big.Int).Add(newHead.Number, big.NewInt(1))
 	pool.istanbul = pool.chainconfig.IsIstanbul(next)
-	pool.yoloV2 = pool.chainconfig.IsYoloV2(next)
+	pool.eip2718 = pool.chainconfig.IsYoloV2(next)
 }
 
 // promoteExecutables moves transactions that have become processable from the

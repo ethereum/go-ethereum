@@ -1,0 +1,39 @@
+{
+ "config": {
+  "chainId": 133519467574834,
+  "homesteadBlock": 0,
+  "daoForkSupport": true,
+  "eip150Block": 0,
+  "eip150Hash": "0x0000000000000000000000000000000000000000000000000000000000000000",
+  "eip155Block": 0,
+  "eip158Block": 0,
+  "byzantiumBlock": 0,
+  "constantinopleBlock": 0,
+  "petersburgBlock": 0,
+  "istanbulBlock": 0,
+  "yoloV2Block": 0,
+  "clique": {
+   "period": 15,
+   "epoch": 30000
+  }
+ },
+ "nonce": "0x0",
+ "timestamp": "0x0",
+ "extraData": "0x",
+ "gasLimit": "0x0",
+ "difficulty": null,
+ "mixHash": "0x0000000000000000000000000000000000000000000000000000000000000000",
+ "coinbase": "0x0000000000000000000000000000000000000000",
+ "alloc": {
+  "000000000000000000000000000000000000aaaa": {
+   "code": "0x58585454",
+   "balance": "0x0"
+  },
+  "71562b71999873db5b286df957af199ec94617f7": {
+   "balance": "0x3b9aca00"
+  }
+ },
+ "number": "0x0",
+ "gasUsed": "0x0",
+ "parentHash": "0x0000000000000000000000000000000000000000000000000000000000000000"
+}

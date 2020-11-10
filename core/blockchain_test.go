@@ -17,6 +17,7 @@
 package core
 
 import (
+	"encoding/json"
 	"errors"
 	"fmt"
 	"io/ioutil"
@@ -37,6 +38,7 @@ import (
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/ethdb"
 	"github.com/ethereum/go-ethereum/params"
+	"github.com/ethereum/go-ethereum/rlp"
 	"github.com/ethereum/go-ethereum/trie"
 )
 
@@ -3031,6 +3033,11 @@ func TestInitThenFailCreateContract(t *testing.T) {
 	}
 }
 
+// TestEIP2718Transition tests that an EIP-2718 transaction will be accepted
+// after the fork block has passed. This is verified by sending an EIP-2930
+// access list transaction, which specifies a single slot access, and then
+// checking that the gas usage of a hot SLOAD and a cold SLOAD are calculated
+// correctly.
 func TestEIP2718Transition(t *testing.T) {
 	var (
 		aa = common.HexToAddress("0x000000000000000000000000000000000000aaaa")
@@ -3098,5 +3105,132 @@ func TestEIP2718Transition(t *testing.T) {
 	if block.GasUsed() != expected {
 		t.Fatalf("incorrect amount of gas spent: expected %d, got %d", expected, block.GasUsed())
 
+	}
+}
+
+type blockTest struct {
+	Header   *types.Header        `json:"header"`
+	Txs      []*types.Transaction `json:"transactions"`
+	Uncles   []*types.Header      `json:"uncles"`
+	Receipts []*types.Receipt     `json:"receipts"`
+}
+type jsonFormat struct {
+	Rlp  string    `json:"rlp"`
+	Json blockTest `json:"json"`
+}
+
+//XTestGenerateACLJsonFiles creates files in ./testdata/ , to be used for cross-client
+//testing
+func XTestGenerateACLJsonFilesEip2718(t *testing.T) {
+	var (
+		aa = common.HexToAddress("0x000000000000000000000000000000000000aaaa")
+		// Generate a canonical chain to act as the main dataset
+		engine = ethash.NewFaker()
+		db     = rawdb.NewMemoryDatabase()
+		// A sender who makes transactions, has some funds
+		key, _  = crypto.HexToECDSA("b71c71a67e1177ad4e901695e1b4b9ee17ae16c6668d313eac2f96dbcda3f291")
+		address = crypto.PubkeyToAddress(key.PublicKey)
+		funds   = big.NewInt(1000000000)
+		gspec   = &Genesis{
+			Config: params.YoloV2ChainConfig,
+			Alloc: GenesisAlloc{
+				address: {Balance: funds},
+				// The address 0xAAAA sloads 0x00 and 0x01
+				aa: {
+					Code: []byte{
+						byte(vm.PC), byte(vm.PC),
+						byte(vm.SLOAD), byte(vm.SLOAD),
+					},
+					Nonce:   0,
+					Balance: big.NewInt(0),
+				},
+			},
+		}
+		genesis        = gspec.MustCommit(db)
+		signer         = types.NewEIP2718Signer(gspec.Config.ChainID)
+		nonce   uint64 = 0
+	)
+	var signTx = func(tx *types.Transaction) *types.Transaction {
+		t.Helper()
+		signed, err := types.SignTx(tx, signer, key)
+		if err != nil {
+			t.Fatal(err)
+		}
+		nonce++
+		return signed
+	}
+	var mkAclTx = func(aclCount int) *types.Transaction {
+		t.Helper()
+		var accesses types.AccessList
+		for ii := 0; ii < aclCount; ii++ {
+			accesses = append(accesses, types.AccessTuple{
+				Address:     &common.Address{byte(ii)},
+				StorageKeys: []*common.Hash{{0}, {byte(ii)}},
+			})
+		}
+		return signTx(types.NewAccessListTransaction(gspec.Config.ChainID, nonce,
+			aa, big.NewInt(0), 123457, big.NewInt(10), nil, &accesses))
+	}
+	var mkLegacyTx = func(i int) *types.Transaction {
+		t.Helper()
+		return signTx(types.NewTransaction(nonce, aa, big.NewInt(0), 123457, big.NewInt(10), nil))
+	}
+
+	blocks, _ := GenerateChain(gspec.Config, genesis, engine, db, 10, func(i int, b *BlockGen) {
+		b.SetCoinbase(common.Address{1})
+		// Add n acl transactions
+		for ii := 0; ii < i; ii++ {
+			b.AddTx(mkAclTx(i))
+		}
+		// Add one legacy tx
+		b.AddTx(mkLegacyTx(i))
+	})
+	// Import the canonical chain
+	diskdb := rawdb.NewMemoryDatabase()
+	gspec.MustCommit(diskdb)
+
+	chain, err := NewBlockChain(diskdb, nil, gspec.Config, engine, vm.Config{}, nil, nil)
+	if err != nil {
+		t.Fatalf("failed to create tester chain: %v", err)
+	}
+	if n, err := chain.InsertChain(blocks); err != nil {
+		t.Fatalf("block %d: failed to insert into chain: %v", n, err)
+	}
+	// export the genesis
+	{
+		x, err := json.MarshalIndent(gspec, "", " ")
+		if err != nil {
+			t.Fatal(err)
+		}
+		outFile, err := os.Create("testdata/acl_genesis.json")
+		outFile.Write(x)
+		if err != nil {
+			t.Fatal(err)
+		}
+		outFile.Close()
+	}
+	// Export the chain
+	for i, block := range blocks {
+		rlpData, err := rlp.EncodeToBytes(block)
+		if err != nil {
+			t.Fatal(err)
+		}
+		jsonData, err := json.MarshalIndent(&jsonFormat{
+			Rlp: fmt.Sprintf("%x", rlpData),
+			Json: blockTest{
+				Header: block.Header(),
+				Txs:    block.Transactions(),
+				Uncles: block.Uncles(),
+			}},
+			"", "  ")
+		if err != nil {
+			t.Fatal(err)
+		}
+		outFile, err := os.Create(fmt.Sprintf("testdata/acl_block_%d.json", i))
+		if err != nil {
+			t.Fatal(err)
+		}
+		defer outFile.Close()
+		outFile.Write(jsonData)
 	}
 }

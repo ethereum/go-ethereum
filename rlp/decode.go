@@ -741,18 +741,6 @@ func (s *Stream) ListEnd() error {
 	return nil
 }
 
-func (s *Stream) ListRemaining() (uint64, error) {
-	if len(s.stack) == 0 {
-		return 0, errNotInList
-	}
-	tos := s.stack[len(s.stack)-1]
-	if tos.pos != tos.size {
-		return tos.size - tos.pos, nil
-	} else {
-		return 0, nil
-	}
-}
-
 // Decode decodes a value and stores the result in the value pointed
 // to by val. Please see the documentation for the Decode function
 // to learn about the decoding rules.

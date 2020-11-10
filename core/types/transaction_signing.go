@@ -113,25 +113,23 @@ func NewEIP2718Signer(chainId *big.Int) EIP2718Signer {
 }
 
 // Sender returns the recovered addressed from a transaction's signature.
-// It assumes V does not store the chain id, unless the tx is of legacy type.
 func (s EIP2718Signer) Sender(tx *Transaction) (common.Address, error) {
-	if !tx.Protected() {
-		return HomesteadSigner{}.Sender(tx)
-	}
-	if tx.ChainId().Cmp(s.chainId) != 0 {
-		return common.Address{}, ErrInvalidChainId
-	}
-
 	V, R, S := tx.RawSignatureValues()
-
 	if tx.Type() == LegacyTxId {
+		if !tx.Protected() {
+			return HomesteadSigner{}.Sender(tx)
+		}
 		V = new(big.Int).Sub(V, s.chainIdMul)
 		V.Sub(V, big8)
 	}
 	if tx.Type() == AccessListTxId {
+		// ACL txs are defined to use 0 and 1 as their recovery id, add
+		// 27 to become equivalent to unprotected Homestead signatures.
 		V = new(big.Int).Add(V, big.NewInt(27))
 	}
-
+	if tx.ChainId().Cmp(s.chainId) != 0 {
+		return common.Address{}, ErrInvalidChainId
+	}
 	return recoverPlain(s.Hash(tx), R, S, V, true)
 }
 
@@ -154,9 +152,9 @@ func (s EIP2718Signer) SignatureValues(tx *Transaction, sig []byte) (R, S, V *bi
 // Hash returns the hash to be signed by the sender.
 // It does not uniquely identify the transaction.
 func (s EIP2718Signer) Hash(tx *Transaction) common.Hash {
-	var h common.Hash
-	if tx.typ == LegacyTxId {
-		h = rlpHash([]interface{}{
+	switch tx.typ {
+	case LegacyTxId:
+		return rlpHash([]interface{}{
 			tx.Nonce(),
 			tx.GasPrice(),
 			tx.Gas(),
@@ -165,23 +163,25 @@ func (s EIP2718Signer) Hash(tx *Transaction) common.Hash {
 			tx.Data(),
 			s.chainId, uint(0), uint(0),
 		})
-	} else if tx.typ == AccessListTxId {
-		h = typedRlpHash(
+	case AccessListTxId:
+		return rlpHash([]interface{}{
 			tx.Type(),
-			[]interface{}{
-				tx.ChainId(),
-				tx.Nonce(),
-				tx.GasPrice(),
-				tx.Gas(),
-				tx.To(),
-				tx.Value(),
-				tx.Data(),
-				tx.AccessList(),
-			},
-		)
+			tx.ChainId(),
+			tx.Nonce(),
+			tx.GasPrice(),
+			tx.Gas(),
+			tx.To(),
+			tx.Value(),
+			tx.Data(),
+			tx.AccessList(),
+		})
+	default:
+		// This _should_ not happen, but in case someone sends in a bad
+		// json struct via RPC, it's probably more prudent to return an
+		// empty hash instead of killing the node with a panic
+		//panic("Unsupported transaction type: %d", tx.typ)
+		return common.Hash{}
 	}
-
-	return h
 }
 
 // EIP155Transaction implements Signer using the EIP155 rules.
