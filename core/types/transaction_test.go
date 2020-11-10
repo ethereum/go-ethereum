@@ -20,7 +20,9 @@ import (
 	"bytes"
 	"crypto/ecdsa"
 	"encoding/json"
+	"fmt"
 	"math/big"
+	"reflect"
 	"testing"
 	"time"
 
@@ -265,59 +267,91 @@ func TestTransactionTimeSort(t *testing.T) {
 	}
 }
 
-// TestTransactionJSON tests serializing/de-serializing to/from JSON.
-func TestTransactionJSON(t *testing.T) {
+func encodeDecodeJSON(tx *Transaction) (*Transaction, error) {
+	data, err := json.Marshal(tx)
+	if err != nil {
+		return nil, fmt.Errorf("json encoding failed: %v", err)
+	}
+	var parsedTx = &Transaction{}
+	if err := json.Unmarshal(data, &parsedTx); err != nil {
+		return nil, fmt.Errorf("json decoding failed: %v", err)
+	}
+	return parsedTx, nil
+}
+
+func encodeDecodeRLP(tx *Transaction) (*Transaction, error) {
+	data, err := rlp.EncodeToBytes(tx)
+	if err != nil {
+		return nil, fmt.Errorf("rlp encoding failed: %v", err)
+	}
+	var parsedTx = &Transaction{}
+	if err := rlp.DecodeBytes(data, parsedTx); err != nil {
+		return nil, fmt.Errorf("rlp decoding failed: %v", err)
+	}
+	return parsedTx, nil
+}
+
+func assertEqual(orig *Transaction, cpy *Transaction) error {
+	// compare nonce, price, gaslimit, recipient, amount, payload, V, R, S
+	if want, got := orig.Hash(), cpy.Hash(); want != got {
+		return fmt.Errorf("parsed tx differs from original tx, want %v, got %v", want, got)
+	}
+	if want, got := orig.ChainId(), cpy.ChainId(); want.Cmp(got) != 0 {
+		return fmt.Errorf("invalid chain id, want %d, got %d", want, got)
+	}
+	if orig.AccessList() != nil {
+		if !reflect.DeepEqual(orig.AccessList(), cpy.AccessList()) {
+			return fmt.Errorf("access list wrong!")
+		}
+	}
+	return nil
+}
+
+// TestTransactionCoding tests serializing/de-serializing to/from rlp and JSON.
+func TestTransactionCoding(t *testing.T) {
 	key, err := crypto.GenerateKey()
 	if err != nil {
 		t.Fatalf("could not generate key: %v", err)
 	}
-	signer := NewEIP2718Signer(common.Big1)
-
-	transactions := make([]*Transaction, 0, 50)
-	for i := uint64(0); i < 25; i++ {
-		var tx *Transaction
-		switch i % 3 {
-		case 0:
-			tx = NewTransaction(i, common.Address{1}, common.Big0, 1, common.Big2, []byte("abcdef"))
-		case 1:
-			tx = NewContractCreation(i, common.Big0, 1, common.Big2, []byte("abcdef"))
-		case 2:
-			addr := common.HexToAddress("0x0000000000000000000000000000000000000001")
-			accesses := AccessList{AccessTuple{
-				Address: &addr,
-				StorageKeys: []*common.Hash{
-					{0},
-				},
-			}}
-			tx = NewAccessListTransaction(big.NewInt(1), 0, common.HexToAddress("095e7baea6a6c7c4c2dfeb977efac326af552d87"), big.NewInt(0), 123457, big.NewInt(10), nil, &accesses)
+	var (
+		signer   = NewEIP2718Signer(common.Big1)
+		rawTx    *Transaction
+		addr     = common.HexToAddress("0x0000000000000000000000000000000000000001")
+		accesses = AccessList{
+			AccessTuple{
+				Address:     &addr,
+				StorageKeys: []*common.Hash{{0}},
+			},
 		}
-		transactions = append(transactions, tx)
-
-		signedTx, err := SignTx(tx, signer, key)
+	)
+	for i := uint64(0); i < 500; i++ {
+		switch i % 6 {
+		case 0:
+			rawTx = NewTransaction(i, common.Address{1}, common.Big0, 1, common.Big2, []byte("abcdef"))
+		case 1:
+			rawTx = NewContractCreation(i, common.Big0, 1, common.Big2, []byte("abcdef"))
+		case 2:
+			rawTx = NewAccessListTransaction(big.NewInt(1), 0, common.HexToAddress("095e7baea6a6c7c4c2dfeb977efac326af552d87"), big.NewInt(0), 123457, big.NewInt(10), nil, &accesses)
+		case 4:
+			rawTx = NewAccessListContractCreation(big.NewInt(1), 0, big.NewInt(0), 123457, big.NewInt(10), nil, &accesses)
+		case 5:
+			rawTx = NewAccessListTransaction(big.NewInt(1), 0, common.HexToAddress("095e7baea6a6c7c4c2dfeb977efac326af552d87"), big.NewInt(0), 123457, big.NewInt(10), nil, nil)
+		}
+		tx, err := SignTx(rawTx, signer, key)
 		if err != nil {
 			t.Fatalf("could not sign transaction: %v", err)
 		}
-
-		transactions = append(transactions, signedTx)
-	}
-
-	for _, tx := range transactions {
-		data, err := json.Marshal(tx)
+		// RLP
+		parsedTx, err := encodeDecodeRLP(tx)
 		if err != nil {
-			t.Fatalf("json.Marshal failed: %v", err)
+			t.Fatal(err)
 		}
-
-		var parsedTx *Transaction
-		if err := json.Unmarshal(data, &parsedTx); err != nil {
-			t.Fatalf("json.Unmarshal failed: %v", err)
+		assertEqual(parsedTx, tx)
+		// JSON
+		parsedTx, err = encodeDecodeJSON(tx)
+		if err != nil {
+			t.Fatal(err)
 		}
-
-		// compare nonce, price, gaslimit, recipient, amount, payload, V, R, S
-		if tx.Hash() != parsedTx.Hash() {
-			t.Errorf("parsed tx differs from original tx, want %v, got %v", tx, parsedTx)
-		}
-		if tx.ChainId().Cmp(parsedTx.ChainId()) != 0 {
-			t.Errorf("invalid chain id, want %d, got %d", tx.ChainId(), parsedTx.ChainId())
-		}
+		assertEqual(parsedTx, tx)
 	}
 }
