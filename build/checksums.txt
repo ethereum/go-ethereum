@@ -1,7 +1,6 @@
 # This file contains sha256 checksums of optional build dependencies.
 
-69438f7ed4f532154ffaf878f3dfd83747e7a00b70b3556eddabf7aaee28ac3a  go1.15.src.tar.gz
-
+063da6a9a4186b8118a0e584532c8c94e65582e2cd951ed078bfd595d27d2367  go1.15.4.src.tar.gz
 aaf8c5323e0557211680960a8f51bedf98ab9a368775a687d6cf1f0079232b1d  go1.15.4.darwin-amd64.tar.gz
 6b2f6d8afddfb198bf0e36044084dc4db4cb0be1107375240b34d215aa5ff6ad  go1.15.4.linux-386.tar.gz
 eb61005f0b932c93b424a3a4eaa67d72196c79129d9a3ea8578047683e2c80d5  go1.15.4.linux-amd64.tar.gz

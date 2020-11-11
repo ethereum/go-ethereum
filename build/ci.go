@@ -233,7 +233,7 @@ func doInstall(cmdline []string) {
 			// Download of Go requested. This is for build environments where the
 			// installed version is too old and cannot be upgraded easily.
 			cachedir := filepath.Join("build", "cache")
-			goroot := downloadGo(runtime.GOARCH, runtime.GOOS, dlgoVersion, cachedir)
+			goroot := downloadGo(runtime.GOARCH, runtime.GOOS, cachedir)
 			gobuild = localGoTool(goroot, "build")
 		}
 	} else {
@@ -495,13 +495,12 @@ func maybeSkipArchive(env build.Environment) {
 // Debian Packaging
 func doDebianSource(cmdline []string) {
 	var (
-		goversion = flag.String("goversion", "", `Go version to build with (will be included in the source package)`)
-		cachedir  = flag.String("cachedir", "./build/cache", `Filesystem path to cache the downloaded Go bundles at`)
-		signer    = flag.String("signer", "", `Signing key name, also used as package author`)
-		upload    = flag.String("upload", "", `Where to upload the source package (usually "ethereum/ethereum")`)
-		sshUser   = flag.String("sftp-user", "", `Username for SFTP upload (usually "geth-ci")`)
-		workdir   = flag.String("workdir", "", `Output directory for packages (uses temp dir if unset)`)
-		now       = time.Now()
+		cachedir = flag.String("cachedir", "./build/cache", `Filesystem path to cache the downloaded Go bundles at`)
+		signer   = flag.String("signer", "", `Signing key name, also used as package author`)
+		upload   = flag.String("upload", "", `Where to upload the source package (usually "ethereum/ethereum")`)
+		sshUser  = flag.String("sftp-user", "", `Username for SFTP upload (usually "geth-ci")`)
+		workdir  = flag.String("workdir", "", `Output directory for packages (uses temp dir if unset)`)
+		now      = time.Now()
 	)
 	flag.CommandLine.Parse(cmdline)
 	*workdir = makeWorkdir(*workdir)
@@ -516,7 +515,7 @@ func doDebianSource(cmdline []string) {
 	}
 
 	// Download and verify the Go source package.
-	gobundle := downloadGoSources(*goversion, *cachedir)
+	gobundle := downloadGoSources(*cachedir)
 
 	// Download all the dependencies needed to build the sources and run the ci script
 	srcdepfetch := goTool("install", "-n", "./...")
@@ -568,9 +567,9 @@ func doDebianSource(cmdline []string) {
 }
 
 // downloadGoSources downloads the Go source tarball.
-func downloadGoSources(version, cachedir string) string {
+func downloadGoSources(cachedir string) string {
 	csdb := build.MustLoadChecksums("build/checksums.txt")
-	file := fmt.Sprintf("go%s.src.tar.gz", version)
+	file := fmt.Sprintf("go%s.src.tar.gz", dlgoVersion)
 	url := "https://dl.google.com/go/" + file
 	dst := filepath.Join(cachedir, file)
 	if err := csdb.DownloadFile(url, dst); err != nil {
@@ -581,9 +580,9 @@ func downloadGoSources(version, cachedir string) string {
 
 // downloadGo downloads the Go binary distribution and unpacks it into a temporary
 // directory. It returns the GOROOT of the unpacked toolchain.
-func downloadGo(goarch, goos, version, cachedir string) string {
+func downloadGo(goarch, goos, cachedir string) string {
 	csdb := build.MustLoadChecksums("build/checksums.txt")
-	file := fmt.Sprintf("go%s.%s-%s", version, goos, goarch)
+	file := fmt.Sprintf("go%s.%s-%s", dlgoVersion, goos, goarch)
 	if goos == "windows" {
 		file += ".zip"
 	} else {
@@ -599,7 +598,7 @@ func downloadGo(goarch, goos, version, cachedir string) string {
 	if err != nil {
 		log.Fatal(err)
 	}
-	godir := filepath.Join(temp, fmt.Sprintf("go-%s-%s-%s", version, goos, goarch))
+	godir := filepath.Join(temp, fmt.Sprintf("go-%s-%s-%s", dlgoVersion, goos, goarch))
 	if err := build.ExtractArchive(dst, godir); err != nil {
 		log.Fatal(err)
 	}
