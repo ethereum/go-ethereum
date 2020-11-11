@@ -514,7 +514,7 @@ func doDebianSource(cmdline []string) {
 	gobundle := downloadGoSources(*cachedir)
 
 	// Download all the dependencies needed to build the sources and run the ci script
-	srcdepfetch := goTool("install", "-n", "./...")
+	srcdepfetch := goTool("mod", "download")
 	srcdepfetch.Env = append(os.Environ(), "GOPATH="+filepath.Join(*workdir, "modgopath"))
 	build.MustRun(srcdepfetch)
 
