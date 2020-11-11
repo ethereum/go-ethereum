@@ -225,23 +225,31 @@ func doInstall(cmdline []string) {
 
 	// Choose which go command we're going to use.
 	var gobuild *exec.Cmd
-	if *arch == "" || *arch == runtime.GOARCH {
-		if !*dlgo {
-			// Default behavior: use the go version which runs ci.go right now.
-			gobuild = goTool("build")
-		} else {
-			// Download of Go requested. This is for build environments where the
-			// installed version is too old and cannot be upgraded easily.
-			cachedir := filepath.Join("build", "cache")
-			goroot := downloadGo(runtime.GOARCH, runtime.GOOS, cachedir)
-			gobuild = localGoTool(goroot, "build")
-		}
+	if !*dlgo {
+		// Default behavior: use the go version which runs ci.go right now.
+		gobuild = goTool("build")
 	} else {
-		// Cross-build requested.
-		gobuild = goToolArch(*arch, *cc, "build")
+		// Download of Go requested. This is for build environments where the
+		// installed version is too old and cannot be upgraded easily.
+		cachedir := filepath.Join("build", "cache")
+		goroot := downloadGo(runtime.GOARCH, runtime.GOOS, cachedir)
+		gobuild = localGoTool(goroot, "build")
 	}
 
-	// arm64 CI builders are slow and can't handle concurrent builds,
+	// Configure environment for cross build.
+	if *arch != "" || *arch != runtime.GOARCH {
+		gobuild.Env = append(gobuild.Env, "CGO_ENABLED=1")
+		gobuild.Env = append(gobuild.Env, "GOARCH="+*arch)
+	}
+
+	// Configure C compiler.
+	if *cc == "" {
+		gobuild.Env = append(gobuild.Env, "CC="+*cc)
+	} else if os.Getenv("CC") != "" {
+		gobuild.Env = append(gobuild.Env, "CC="+os.Getenv("CC"))
+	}
+
+	// arm64 CI builders are memory-constrained and can't handle concurrent builds,
 	// better disable it. This check isn't the best, it should probably
 	// check for something in env instead.
 	if runtime.GOARCH == "arm64" {
@@ -293,13 +301,8 @@ func buildFlags(env build.Environment) (flags []string) {
 
 // goTool returns the go tool. This uses the Go version which runs ci.go.
 func goTool(subcmd string, args ...string) *exec.Cmd {
-	return goToolArch(runtime.GOARCH, os.Getenv("CC"), subcmd, args...)
-}
-
-// goToolArch returns the go tool configured for a specific architecture.
-func goToolArch(arch string, cc string, subcmd string, args ...string) *exec.Cmd {
 	cmd := build.GoTool(subcmd, args...)
-	goToolSetEnv(cmd, arch, cc)
+	goToolSetEnv(cmd)
 	return cmd
 }
 
@@ -307,23 +310,16 @@ func goToolArch(arch string, cc string, subcmd string, args ...string) *exec.Cmd
 func localGoTool(goroot string, subcmd string, args ...string) *exec.Cmd {
 	gotool := filepath.Join(goroot, "bin", "go")
 	cmd := exec.Command(gotool, subcmd)
-	goToolSetEnv(cmd, runtime.GOARCH, os.Getenv("CC"))
+	goToolSetEnv(cmd)
 	cmd.Env = append(cmd.Env, "GOROOT="+goroot)
 	cmd.Args = append(cmd.Args, args...)
 	return cmd
 }
 
-// goToolSetEnv configures some default environment variables.
-func goToolSetEnv(cmd *exec.Cmd, arch string, cc string) {
-	if arch != "" && arch != runtime.GOARCH {
-		cmd.Env = append(cmd.Env, "CGO_ENABLED=1")
-		cmd.Env = append(cmd.Env, "GOARCH="+arch)
-	}
-	if cc != "" {
-		cmd.Env = append(cmd.Env, "CC="+cc)
-	}
+// goToolSetEnv forwards the build environment to the go tool.
+func goToolSetEnv(cmd *exec.Cmd) {
 	for _, e := range os.Environ() {
-		if strings.HasPrefix(e, "GOBIN=") {
+		if strings.HasPrefix(e, "GOBIN=") || strings.HasPrefix(e, "CC=") {
 			continue
 		}
 		cmd.Env = append(cmd.Env, e)
