@@ -43,7 +43,7 @@ jobs:
       env:
         - GO111MODULE=on
       script:
-        - go run build/ci.go install
+        - go run build/ci.go install -dlgo
         - go run build/ci.go test -coverage $TEST_PACKAGES
 
     - stage: build
@@ -55,7 +55,7 @@ jobs:
       env:
         - GO111MODULE=on
       script:
-        - go run build/ci.go install
+        - go run build/ci.go install -dlgo
         - go run build/ci.go test -coverage $TEST_PACKAGES
 
     - stage: build
