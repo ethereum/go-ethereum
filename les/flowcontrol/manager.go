@@ -323,9 +323,8 @@ func (cm *ClientManager) updateNodeRc(node *ClientNode, bvc int64, params *Serve
 		node.rcLastIntValue = cm.rcLastIntValue
 	}
 	node.corrBufValue += bvc
-	diff := int64(params.BufLimit - node.params.BufLimit)
-	if diff > 0 {
-		node.corrBufValue += diff
+	if params.BufLimit > node.params.BufLimit {
+		node.corrBufValue += int64(params.BufLimit - node.params.BufLimit)
 	}
 	isFull := false
 	if node.corrBufValue >= int64(params.BufLimit) {

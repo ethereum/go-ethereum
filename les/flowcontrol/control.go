@@ -47,25 +47,18 @@ type ServerParams struct {
 	BufLimit, MinRecharge uint64
 }
 
-// scheduledUpdate represents a delayed flow control parameter update
-type scheduledUpdate struct {
-	time   mclock.AbsTime
-	params ServerParams
-}
-
 // ClientNode is the flow control system's representation of a client
 // (used in server mode only)
 type ClientNode struct {
-	params         ServerParams
-	bufValue       int64
-	lastTime       mclock.AbsTime
-	updateSchedule []scheduledUpdate
-	sumCost        uint64            // sum of req costs received from this client
-	accepted       map[uint64]uint64 // value = sumCost after accepting the given req
-	connected      bool
-	lock           sync.Mutex
-	cm             *ClientManager
-	log            *logger
+	params                 ServerParams
+	bufValue, bufTolerance int64
+	lastTime, bufTolUntil  mclock.AbsTime
+	sumCost                uint64            // sum of req costs received from this client
+	accepted               map[uint64]uint64 // value = sumCost after accepting the given req
+	connected              bool
+	lock                   sync.Mutex
+	cm                     *ClientManager
+	log                    *logger
 	cmNodeFields
 }
 
@@ -137,19 +130,8 @@ func (node *ClientNode) Freeze() {
 	node.cm.reduceTotalCapacity(frozenCap)
 }
 
-// update recalculates the buffer value at a specified time while also performing
-// scheduled flow control parameter updates if necessary
+// update recalculates the buffer value at a specified time
 func (node *ClientNode) update(now mclock.AbsTime) {
-	for len(node.updateSchedule) > 0 && node.updateSchedule[0].time <= now {
-		node.recalcBV(node.updateSchedule[0].time)
-		node.updateParams(node.updateSchedule[0].params, now)
-		node.updateSchedule = node.updateSchedule[1:]
-	}
-	node.recalcBV(now)
-}
-
-// recalcBV recalculates the buffer value at a specified time
-func (node *ClientNode) recalcBV(now mclock.AbsTime) {
 	dt := uint64(now - node.lastTime)
 	if now < node.lastTime {
 		dt = 0
@@ -171,30 +153,23 @@ func (node *ClientNode) UpdateParams(params ServerParams) {
 
 	now := node.cm.clock.Now()
 	node.update(now)
-	if params.MinRecharge >= node.params.MinRecharge {
-		node.updateSchedule = nil
-		node.updateParams(params, now)
-	} else {
-		for i, s := range node.updateSchedule {
-			if params.MinRecharge >= s.params.MinRecharge {
-				s.params = params
-				node.updateSchedule = node.updateSchedule[:i+1]
-				return
-			}
-		}
-		node.updateSchedule = append(node.updateSchedule, scheduledUpdate{time: now + mclock.AbsTime(DecParamDelay), params: params})
-	}
-}
 
-// updateParams updates the flow control parameters of the node
-func (node *ClientNode) updateParams(params ServerParams, now mclock.AbsTime) {
-	diff := int64(params.BufLimit - node.params.BufLimit)
-	if diff > 0 {
-		node.bufValue += diff
-	} else if node.bufValue > int64(params.BufLimit) {
+	if params.BufLimit > node.params.BufLimit {
+		node.bufValue += int64(params.BufLimit - node.params.BufLimit)
+	}
+	var tol int64
+	if params.MinRecharge < node.params.MinRecharge {
+		tol = int64((node.params.MinRecharge - params.MinRecharge) * uint64(DecParamDelay) / uint64(fcTimeConst))
+	}
+	if node.bufValue > int64(params.BufLimit) {
+		tol += node.bufValue - int64(params.BufLimit)
 		node.bufValue = int64(params.BufLimit)
 	}
-	node.cm.updateParams(node, params, now)
+	if tol > 0 {
+		node.bufTolerance += tol
+		node.bufTolUntil = now + mclock.AbsTime(DecParamDelay)
+	}
+	node.cm.updateParams(node, params, now) // updates node.params
 }
 
 // AcceptRequest returns whether a new request can be accepted and the missing
@@ -206,14 +181,21 @@ func (node *ClientNode) AcceptRequest(reqID, index, maxCost uint64) (accepted bo
 
 	now := node.cm.clock.Now()
 	node.update(now)
-	if int64(maxCost) > node.bufValue {
+	if node.bufTolerance != 0 && node.bufTolUntil <= now {
+		node.bufTolerance = 0
+	}
+	if int64(maxCost) > node.bufValue+node.bufTolerance {
 		if node.log != nil {
-			node.log.add(now, fmt.Sprintf("rejected  reqID=%d  bv=%d  maxCost=%d", reqID, node.bufValue, maxCost))
+			node.log.add(now, fmt.Sprintf("rejected  reqID=%d  bv=%d  tol=%d  maxCost=%d", reqID, node.bufValue, node.bufTolerance, maxCost))
 			node.log.dump(now)
 		}
-		return false, maxCost - uint64(node.bufValue), 0
+		return false, maxCost - uint64(node.bufValue+node.bufTolerance), 0
 	}
 	node.bufValue -= int64(maxCost)
+	if node.bufValue < 0 {
+		node.bufTolerance += node.bufValue
+		node.bufValue = 0
+	}
 	node.sumCost += maxCost
 	if node.log != nil {
 		node.log.add(now, fmt.Sprintf("accepted  reqID=%d  bv=%d  maxCost=%d  sumCost=%d", reqID, node.bufValue, maxCost, node.sumCost))
@@ -277,6 +259,7 @@ func (node *ServerNode) UpdateParams(params ServerParams) {
 	defer node.lock.Unlock()
 
 	node.recalcBLE(mclock.Now())
+
 	if params.BufLimit > node.params.BufLimit {
 		node.bufEstimate += params.BufLimit - node.params.BufLimit
 	} else {

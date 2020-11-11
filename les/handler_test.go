@@ -705,14 +705,14 @@ func TestCapacityUpdateLes4(t *testing.T) {
 			BufLimit:    cap * bufLimitRatio,
 		})
 	}
-	exp := func(cap uint64, expID bool) {
+	exp := func(cap, buf uint64, expID bool) {
 		type update struct {
 			Meta replyMetaInfo
 			Data capacityUpdate
 		}
 		meta := replyMetaInfo{
 			mapping: server.peer.cpeer.mapping.Send,
-			bv:      metaInfoField{value: cap * bufLimitRatio, set: true},
+			bv:      metaInfoField{value: buf * bufLimitRatio, set: true},
 		}
 		if expID {
 			meta.reqID = metaInfoField{value: reqID, set: true}
@@ -725,17 +725,17 @@ func TestCapacityUpdateLes4(t *testing.T) {
 		}
 	}
 	req(testMinCap)
-	exp(testMinCap, true)
+	exp(testMinCap, testMinCap, true)
 	req(testMinCap * 2)
-	exp(testMinCap, true)
+	exp(testMinCap, testMinCap, true)
 	req(testMinCap - 1)
-	exp(testMinCap, true)
+	exp(testMinCap, testMinCap, true)
 	req(0)
-	exp(testMinCap, true)
+	exp(testMinCap, testMinCap, true)
 	balance, _ := server.handler.server.ns.GetField(server.peer.cpeer.Node(), balanceTrackerSetup.BalanceField).(*lps.NodeBalance)
-	balance.AddBalance(1000)
+	balance.AddBalance(1000000000000000)
 	req(testMinCap * 2)
-	exp(testMinCap*2, true)
-	balance.AddBalance(-1000)
-	exp(testMinCap, false)
+	exp(testMinCap*2, testMinCap*2, true)
+	balance.AddBalance(-1000000000000000)
+	exp(testMinCap, testMinCap, false)
 }
