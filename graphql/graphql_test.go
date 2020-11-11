@@ -86,8 +86,7 @@ func TestGraphQLHTTPOnSamePort_GQLRequest_Unsuccessful(t *testing.T) {
 		t.Fatalf("could not read from response body: %v", err)
 	}
 	// make sure the request is not handled successfully
-	assert.Equal(t, 404, resp.StatusCode)
-	assert.Equal(t, "404 page not found\n", string(bodyBytes))
+	assert.True(t, strings.Contains(string(bodyBytes), "invalid request"))
 }
 
 func createNode(t *testing.T, gqlEnabled bool) *node.Node {
