@@ -702,6 +702,61 @@ func DeleteBlockWithoutNumber(db ethdb.KeyValueWriter, hash common.Hash, number 
 	DeleteTd(db, hash, number)
 }
 
+type badBlock struct {
+	Header *types.Header
+	Body   *types.Body
+}
+
+// ReadBadBlock retrieves the bad block with the corresponding block hash.
+func ReadBadBlock(db ethdb.Reader, hash common.Hash) *types.Block {
+	blob, err := db.Get(badBlockKey(hash))
+	if err != nil {
+		return nil
+	}
+	var block badBlock
+	if err := rlp.DecodeBytes(blob, &block); err != nil {
+		return nil
+	}
+	return types.NewBlockWithHeader(block.Header).WithBody(block.Body.Transactions, block.Body.Uncles)
+}
+
+// ReadAllBadBlocks retrieves all the bad blocks in the database
+func ReadAllBadBlocks(db ethdb.Database) ([]*types.Block, error) {
+	var blocks []*types.Block
+	iterator := db.NewIterator(badBlockPrefix, nil)
+	for iterator.Next() {
+		blob := iterator.Value()
+		var block badBlock
+		if err := rlp.DecodeBytes(blob, &block); err != nil {
+			return nil, nil
+		}
+		blocks = append(blocks, types.NewBlockWithHeader(block.Header).WithBody(block.Body.Transactions, block.Body.Uncles))
+	}
+	iterator.Release()
+	return blocks, nil
+}
+
+// WriteBadBlock serializes the bad block into the database
+func WriteBadBlock(db ethdb.KeyValueWriter, block *types.Block) {
+	blockRLP, err := rlp.EncodeToBytes(&badBlock{
+		Header: block.Header(),
+		Body:   block.Body(),
+	})
+	if err != nil {
+		log.Crit("Failed to RLP encode bad block", "err", err)
+	}
+	if err := db.Put(badBlockKey(block.Hash()), blockRLP); err != nil {
+		log.Crit("Failed to store bad block", "err", err)
+	}
+}
+
+// DeleteBadBlock deletes the specific bad block from the database.
+func DeleteBadBlock(db ethdb.KeyValueWriter, hash common.Hash) {
+	if err := db.Delete(badBlockKey(hash)); err != nil {
+		log.Crit("Failed to delete block body", "err", err)
+	}
+}
+
 // FindCommonAncestor returns the last common ancestor of two block headers
 func FindCommonAncestor(db ethdb.Reader, a, b *types.Header) *types.Header {
 	for bn := b.Number.Uint64(); a.Number.Uint64() > bn; {

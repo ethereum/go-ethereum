@@ -83,6 +83,7 @@ var (
 
 	preimagePrefix = []byte("secure-key-")      // preimagePrefix + hash -> preimage
 	configPrefix   = []byte("ethereum-config-") // config prefix for the db
+	badBlockPrefix = []byte("BadBlock")         // badBlockPrefix + hash -> bad block
 
 	uncleanShutdownKey = []byte("unclean-shutdown") // config prefix for the db
 
@@ -188,6 +189,11 @@ func storageSnapshotKey(accountHash, storageHash common.Hash) []byte {
 // storageSnapshotsKey = SnapshotStoragePrefix + account hash + storage hash
 func storageSnapshotsKey(accountHash common.Hash) []byte {
 	return append(SnapshotStoragePrefix, accountHash.Bytes()...)
+}
+
+// badBlockKey = badBlockPrefix + block hash
+func badBlockKey(hash common.Hash) []byte {
+	return append(badBlockPrefix, hash.Bytes()...)
 }
 
 // bloomBitsKey = bloomBitsPrefix + bit (uint16 big endian) + section (uint64 big endian) + hash

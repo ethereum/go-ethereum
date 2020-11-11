@@ -188,6 +188,34 @@ func TestPartialBlockStorage(t *testing.T) {
 	}
 }
 
+// Tests block storage and retrieval operations.
+func TestBadBlockStorage(t *testing.T) {
+	db := NewMemoryDatabase()
+
+	// Create a test block to move around the database and make sure it's really new
+	block := types.NewBlockWithHeader(&types.Header{
+		Extra:       []byte("bad block"),
+		UncleHash:   types.EmptyUncleHash,
+		TxHash:      types.EmptyRootHash,
+		ReceiptHash: types.EmptyRootHash,
+	})
+	if entry := ReadBadBlock(db, block.Hash()); entry != nil {
+		t.Fatalf("Non existent block returned: %v", entry)
+	}
+	// Write and verify the block in the database
+	WriteBadBlock(db, block)
+	if entry := ReadBadBlock(db, block.Hash()); entry == nil {
+		t.Fatalf("Stored block not found")
+	} else if entry.Hash() != block.Hash() {
+		t.Fatalf("Retrieved block mismatch: have %v, want %v", entry, block)
+	}
+	// Delete the block and verify the execution
+	DeleteBadBlock(db, block.Hash())
+	if entry := ReadBadBlock(db, block.Hash()); entry != nil {
+		t.Fatalf("Deleted block returned: %v", entry)
+	}
+}
+
 // Tests block total difficulty storage and retrieval operations.
 func TestTdStorage(t *testing.T) {
 	db := NewMemoryDatabase()
