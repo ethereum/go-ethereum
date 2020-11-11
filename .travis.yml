@@ -121,7 +121,7 @@ jobs:
         # Build for the primary platforms that Trusty can manage
         - go run build/ci.go install -dlgo
         - go run build/ci.go archive -type tar -signer LINUX_SIGNING_KEY -upload gethstore/builds
-        - go run build/ci.go install -arch 386
+        - go run build/ci.go install -dlgo -arch 386
         - go run build/ci.go archive -arch 386 -type tar -signer LINUX_SIGNING_KEY -upload gethstore/builds
 
         # Switch over GCC to cross compilation (breaks 386, hence why do it here only)
