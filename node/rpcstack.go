@@ -184,17 +184,14 @@ func (h *httpServer) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 	// fall back to JSON-RPC
-	if r.RequestURI == "/" {
-		// Serve JSON-RPC on the root path.
-		ws := h.wsHandler.Load().(*rpcHandler)
-		if ws != nil && isWebsocket(r) {
-			ws.ServeHTTP(w, r)
-			return
-		}
-		if rpc != nil {
-			rpc.ServeHTTP(w, r)
-			return
-		}
+	ws := h.wsHandler.Load().(*rpcHandler)
+	if ws != nil && isWebsocket(r) {
+		ws.ServeHTTP(w, r)
+		return
+	}
+	if rpc != nil {
+		rpc.ServeHTTP(w, r)
+		return
 	}
 	w.WriteHeader(404)
 }
