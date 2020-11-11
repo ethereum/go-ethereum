@@ -24,37 +24,6 @@ jobs:
       script:
         - go run build/ci.go lint
 
-    - stage: build
-      os: linux
-      dist: xenial
-      go: 1.14.x
-      env:
-        - GO111MODULE=on
-      script:
-        - go run build/ci.go test -coverage $TEST_PACKAGES
-
-    # These are the latest Go versions.
-    - stage: build
-      os: linux
-      arch: amd64
-      dist: xenial
-      go: 1.15.x
-      env:
-        - GO111MODULE=on
-      script:
-        - go run build/ci.go test -coverage $TEST_PACKAGES
-
-    - stage: build
-      if: type = pull_request
-      os: linux
-      arch: arm64
-      dist: xenial
-      go: 1.15.x
-      env:
-        - GO111MODULE=on
-      script:
-        - go run build/ci.go test -coverage $TEST_PACKAGES
-
     # This builder does the Ubuntu PPA upload
     - stage: build
       if: type = push
@@ -214,6 +183,37 @@ jobs:
         # Workaround for https://github.com/golang/go/issues/23749
         - export CGO_CFLAGS_ALLOW='-fmodules|-fblocks|-fobjc-arc'
         - go run build/ci.go xcode -signer IOS_SIGNING_KEY -deploy trunk -upload gethstore/builds
+
+    # These builders run the tests
+    - stage: build
+      os: linux
+      arch: amd64
+      dist: xenial
+      go: 1.15.x
+      env:
+        - GO111MODULE=on
+      script:
+        - go run build/ci.go test -coverage $TEST_PACKAGES
+
+    - stage: build
+      if: type = pull_request
+      os: linux
+      arch: arm64
+      dist: xenial
+      go: 1.15.x
+      env:
+        - GO111MODULE=on
+      script:
+        - go run build/ci.go test -coverage $TEST_PACKAGES
+
+    - stage: build
+      os: linux
+      dist: xenial
+      go: 1.14.x
+      env:
+        - GO111MODULE=on
+      script:
+        - go run build/ci.go test -coverage $TEST_PACKAGES
 
     # This builder does the Azure archive purges to avoid accumulating junk
     - stage: build
