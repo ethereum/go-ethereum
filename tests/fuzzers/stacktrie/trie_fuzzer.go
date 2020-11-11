@@ -158,21 +158,21 @@ func (f *fuzzer) fuzz() int {
 			// thus 'deletion' which is not supported on stacktrie
 			break
 		}
-		found := false
-		for _, val := range vals {
-			if bytes.Equal(val.k, k) {
-				found = true
-			}
-		}
-		if found {
-			continue
-		}
 		vals = append(vals, kv{k: k, v: v})
-		trieA.Update(k, v)
 		useful = true
 	}
 	if !useful {
 		return 0
+	}
+	// Stacktrie requires sorted insertion
+	sort.Sort(vals)
+	var sortedVals kvs
+	for i, val := range vals[:1] {
+		if bytes.Equal(val.k, vals[i+1].k) {
+			continue
+		}
+		sortedVals = append(sortedVals, val)
+		trieA.Update(val.k, val.v)
 	}
 	// Flush trie -> database
 	rootA, err := trieA.Commit(nil)
@@ -182,9 +182,7 @@ func (f *fuzzer) fuzz() int {
 	// Flush memdb -> disk (sponge)
 	dbA.Commit(rootA, false, nil)
 
-	// Stacktrie requires sorted insertion
-	sort.Sort(vals)
-	for _, kv := range vals {
+	for _, kv := range sortedVals {
 		if f.debugging {
 			fmt.Printf("{\"0x%x\" , \"0x%x\"} // stacktrie.Update\n", kv.k, kv.v)
 		}
