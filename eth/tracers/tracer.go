@@ -299,12 +299,15 @@ type Tracer struct {
 	contractWrapper *contractWrapper // Wrapper around the contract object
 	dbWrapper       *dbWrapper       // Wrapper around the VM environment
 
-	pcValue     *uint   // Swappable pc value wrapped by a log accessor
-	gasValue    *uint   // Swappable gas value wrapped by a log accessor
-	costValue   *uint   // Swappable cost value wrapped by a log accessor
-	depthValue  *uint   // Swappable depth value wrapped by a log accessor
-	errorValue  *string // Swappable error value wrapped by a log accessor
-	refundValue *uint   // Swappable refund value wrapped by a log accessor
+	pcValue           *uint   // Swappable pc value wrapped by a log accessor
+	gasValue          *uint   // Swappable gas value wrapped by a log accessor
+	availableGasValue *uint   // Swappable available gas value for this specific call wrapped by a log accessor
+	costValue         *uint   // Swappable cost value wrapped by a log accessor
+	depthValue        *uint   // Swappable depth value wrapped by a log accessor
+	returnData        *[]byte // Swappable return data wrapped by a log accessor
+	errorValue        *string // Swappable error value wrapped by a log accessor
+	opErrorValue      *string // Swappable error value for this specific call wrapped by a log accessor. NOTE: the error is for the previous call trace
+	refundValue       *uint   // Swappable refund value wrapped by a log accessor
 
 	ctx map[string]interface{} // Transaction context gathered throughout execution
 	err error                  // Error, if one has occurred
@@ -322,18 +325,20 @@ func New(code string) (*Tracer, error) {
 		code = tracer
 	}
 	tracer := &Tracer{
-		vm:              duktape.New(),
-		ctx:             make(map[string]interface{}),
-		opWrapper:       new(opWrapper),
-		stackWrapper:    new(stackWrapper),
-		memoryWrapper:   new(memoryWrapper),
-		contractWrapper: new(contractWrapper),
-		dbWrapper:       new(dbWrapper),
-		pcValue:         new(uint),
-		gasValue:        new(uint),
-		costValue:       new(uint),
-		depthValue:      new(uint),
-		refundValue:     new(uint),
+		vm:                duktape.New(),
+		ctx:               make(map[string]interface{}),
+		opWrapper:         new(opWrapper),
+		stackWrapper:      new(stackWrapper),
+		memoryWrapper:     new(memoryWrapper),
+		contractWrapper:   new(contractWrapper),
+		dbWrapper:         new(dbWrapper),
+		pcValue:           new(uint),
+		gasValue:          new(uint),
+		availableGasValue: new(uint),
+		costValue:         new(uint),
+		depthValue:        new(uint),
+		returnData:        new([]byte),
+		refundValue:       new(uint),
 	}
 	// Set up builtins for this environment
 	tracer.vm.PushGlobalGoFunction("toHex", func(ctx *duktape.Context) int {
@@ -469,14 +474,34 @@ func New(code string) (*Tracer, error) {
 	tracer.vm.PushGoFunction(func(ctx *duktape.Context) int { ctx.PushUint(*tracer.gasValue); return 1 })
 	tracer.vm.PutPropString(logObject, "getGas")
 
+	tracer.vm.PushGoFunction(func(ctx *duktape.Context) int { ctx.PushUint(*tracer.availableGasValue); return 1 })
+	tracer.vm.PutPropString(logObject, "getAvailableGas")
+
 	tracer.vm.PushGoFunction(func(ctx *duktape.Context) int { ctx.PushUint(*tracer.costValue); return 1 })
 	tracer.vm.PutPropString(logObject, "getCost")
 
 	tracer.vm.PushGoFunction(func(ctx *duktape.Context) int { ctx.PushUint(*tracer.depthValue); return 1 })
 	tracer.vm.PutPropString(logObject, "getDepth")
 
+	tracer.vm.PushGoFunction(func(ctx *duktape.Context) int {
+		ptr := ctx.PushFixedBuffer(len(*tracer.returnData))
+		copy(makeSlice(ptr, uint(len(*tracer.returnData))), *tracer.returnData)
+		return 1
+	})
+	tracer.vm.PutPropString(logObject, "getReturnData")
+
 	tracer.vm.PushGoFunction(func(ctx *duktape.Context) int { ctx.PushUint(*tracer.refundValue); return 1 })
 	tracer.vm.PutPropString(logObject, "getRefund")
+
+	tracer.vm.PushGoFunction(func(ctx *duktape.Context) int {
+		if tracer.opErrorValue != nil {
+			ctx.PushString(*tracer.opErrorValue)
+		} else {
+			ctx.PushUndefined()
+		}
+		return 1
+	})
+	tracer.vm.PutPropString(logObject, "getCallError")
 
 	tracer.vm.PushGoFunction(func(ctx *duktape.Context) int {
 		if tracer.errorValue != nil {
@@ -540,6 +565,13 @@ func (jst *Tracer) CaptureStart(from common.Address, to common.Address, create b
 	return nil
 }
 
+func (jst *Tracer) CaptureExtraContext(inputs map[string]interface{}) error {
+	for key, val := range inputs {
+		jst.ctx[key] = val
+	}
+	return nil
+}
+
 // CaptureState implements the Tracer interface to trace a single step of VM execution.
 func (jst *Tracer) CaptureState(env *vm.EVM, pc uint64, op vm.OpCode, gas, cost uint64, memory *vm.Memory, stack *vm.Stack, rStack *vm.ReturnStack, rdata []byte, contract *vm.Contract, depth int, err error) error {
 	if jst.err == nil {
@@ -561,10 +593,19 @@ func (jst *Tracer) CaptureState(env *vm.EVM, pc uint64, op vm.OpCode, gas, cost 
 
 		*jst.pcValue = uint(pc)
 		*jst.gasValue = uint(gas)
+		*jst.availableGasValue = uint(env.CallGasTemp)
 		*jst.costValue = uint(cost)
 		*jst.depthValue = uint(depth)
+		*jst.returnData = rdata
 		*jst.refundValue = uint(env.StateDB.GetRefund())
 
+		jst.opErrorValue = nil
+		if env.CallErrorTemp != nil {
+			jst.opErrorValue = new(string)
+			*jst.opErrorValue = env.CallErrorTemp.Error()
+
+			env.CallErrorTemp = nil // clean temp error storage, for debug tracing
+		}
 		jst.errorValue = nil
 		if err != nil {
 			jst.errorValue = new(string)
