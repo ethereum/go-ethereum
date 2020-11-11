@@ -72,7 +72,7 @@ func newAccessListTransaction(chainId *big.Int, nonce uint64, to *common.Address
 		AccountNonce: nonce,
 		Recipient:    to,
 		Payload:      data,
-		Accesses:     accesses,
+		Accesses:     &AccessList{},
 		Amount:       new(big.Int),
 		GasLimit:     gasLimit,
 		Price:        new(big.Int),
@@ -88,6 +88,9 @@ func newAccessListTransaction(chainId *big.Int, nonce uint64, to *common.Address
 	}
 	if gasPrice != nil {
 		i.Price.Set(gasPrice)
+	}
+	if accesses != nil {
+		i.Accesses = accesses
 	}
 	return &Transaction{
 		typ:   AccessListTxId,
