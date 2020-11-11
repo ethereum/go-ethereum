@@ -577,6 +577,10 @@ func downloadGoSources(cachedir string) string {
 // downloadGo downloads the Go binary distribution and unpacks it into a temporary
 // directory. It returns the GOROOT of the unpacked toolchain.
 func downloadGo(goarch, goos, cachedir string) string {
+	if goarch == "arm" {
+		goarch = "armv6l"
+	}
+
 	csdb := build.MustLoadChecksums("build/checksums.txt")
 	file := fmt.Sprintf("go%s.%s-%s", dlgoVersion, goos, goarch)
 	if goos == "windows" {
