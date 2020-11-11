@@ -304,16 +304,16 @@ func generateDataset(dest []uint32, epoch uint64, cache []uint32) {
 			keccak512 := makeHasher(sha3.NewLegacyKeccak512())
 
 			// Calculate the data segment this thread should generate
-			batch := uint32((size + hashBytes*uint64(threads) - 1) / (hashBytes * uint64(threads)))
-			first := uint32(id) * batch
+			batch := (size + hashBytes*uint64(threads) - 1) / (hashBytes * uint64(threads))
+			first := uint64(id) * batch
 			limit := first + batch
-			if limit > uint32(size/hashBytes) {
-				limit = uint32(size / hashBytes)
+			if limit > size/hashBytes {
+				limit = size / hashBytes
 			}
 			// Calculate the dataset segment
 			percent := size / hashBytes / 100
 			for index := first; index < limit; index++ {
-				item := generateDatasetItem(cache, index, keccak512)
+				item := generateDatasetItem(cache, uint32(index), keccak512)
 				if swapped {
 					swap(item)
 				}
