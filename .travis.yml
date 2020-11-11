@@ -119,7 +119,7 @@ jobs:
             - gcc-multilib
       script:
         # Build for the primary platforms that Trusty can manage
-        - go run build/ci.go install
+        - go run build/ci.go install -dlgo
         - go run build/ci.go archive -type tar -signer LINUX_SIGNING_KEY -upload gethstore/builds
         - go run build/ci.go install -arch 386
         - go run build/ci.go archive -arch 386 -type tar -signer LINUX_SIGNING_KEY -upload gethstore/builds
@@ -219,7 +219,7 @@ jobs:
       git:
         submodules: false # avoid cloning ethereum/tests
       script:
-        - go run build/ci.go install
+        - go run build/ci.go install -dlgo
         - go run build/ci.go archive -type tar -signer OSX_SIGNING_KEY -upload gethstore/builds
 
         # Build the iOS framework and upload it to CocoaPods and Azure
