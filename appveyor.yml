@@ -30,7 +30,6 @@ install:
   - gcc --version
 
 build_script:
-  - curl -sflL 'https://raw.githubusercontent.com/appveyor/ci/master/scripts/enable-ssh.sh' | bash -e -
   - go run build\ci.go install -dlgo
 
 after_build:
