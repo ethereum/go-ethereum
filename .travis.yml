@@ -13,65 +13,65 @@ jobs:
 
   include:
     # This builder only tests code linters on latest version of Go
-    # - stage: lint
-    #   os: linux
-    #   dist: xenial
-    #   go: 1.15.x
-    #   env:
-    #     - lint
-    #   git:
-    #     submodules: false # avoid cloning ethereum/tests
-    #   script:
-    #     - go run build/ci.go lint
+    - stage: lint
+      os: linux
+      dist: xenial
+      go: 1.15.x
+      env:
+        - lint
+      git:
+        submodules: false # avoid cloning ethereum/tests
+      script:
+        - go run build/ci.go lint
 
-    # - stage: build
-    #   os: linux
-    #   dist: xenial
-    #   go: 1.14.x
-    #   env:
-    #     - GO111MODULE=on
-    #   script:
-    #     - go run build/ci.go test -coverage $TEST_PACKAGES
+    - stage: build
+      os: linux
+      dist: xenial
+      go: 1.14.x
+      env:
+        - GO111MODULE=on
+      script:
+        - go run build/ci.go test -coverage $TEST_PACKAGES
 
     # These are the latest Go versions.
-    # - stage: build
-    #   os: linux
-    #   arch: amd64
-    #   dist: xenial
-    #   go: 1.15.x
-    #   env:
-    #     - GO111MODULE=on
-    #   script:
-    #     - go run build/ci.go test -coverage $TEST_PACKAGES
+    - stage: build
+      os: linux
+      arch: amd64
+      dist: xenial
+      go: 1.15.x
+      env:
+        - GO111MODULE=on
+      script:
+        - go run build/ci.go test -coverage $TEST_PACKAGES
 
-    # - stage: build
-    #   if: type = pull_request
-    #   os: linux
-    #   arch: arm64
-    #   dist: xenial
-    #   go: 1.15.x
-    #   env:
-    #     - GO111MODULE=on
-    #   script:
-    #     - go run build/ci.go test -coverage $TEST_PACKAGES
+    - stage: build
+      if: type = pull_request
+      os: linux
+      arch: arm64
+      dist: xenial
+      go: 1.15.x
+      env:
+        - GO111MODULE=on
+      script:
+        - go run build/ci.go test -coverage $TEST_PACKAGES
 
-    # - stage: build
-    #   os: osx
-    #   osx_image: xcode11.3
-    #   go: 1.15.x
-    #   env:
-    #     - GO111MODULE=on
-    #   script:
-    #     - echo "Increase the maximum number of open file descriptors on macOS"
-    #     - NOFILE=20480
-    #     - sudo sysctl -w kern.maxfiles=$NOFILE
-    #     - sudo sysctl -w kern.maxfilesperproc=$NOFILE
-    #     - sudo launchctl limit maxfiles $NOFILE $NOFILE
-    #     - sudo launchctl limit maxfiles
-    #     - ulimit -S -n $NOFILE
-    #     - ulimit -n
-    #     - unset -f cd # workaround for https://github.com/travis-ci/travis-ci/issues/8703
-    #     - go run build/ci.go test -coverage $TEST_PACKAGES
+    - stage: build
+      os: osx
+      osx_image: xcode11.3
+      go: 1.15.x
+      env:
+        - GO111MODULE=on
+      script:
+        - echo "Increase the maximum number of open file descriptors on macOS"
+        - NOFILE=20480
+        - sudo sysctl -w kern.maxfiles=$NOFILE
+        - sudo sysctl -w kern.maxfilesperproc=$NOFILE
+        - sudo launchctl limit maxfiles $NOFILE $NOFILE
+        - sudo launchctl limit maxfiles
+        - ulimit -S -n $NOFILE
+        - ulimit -n
+        - unset -f cd # workaround for https://github.com/travis-ci/travis-ci/issues/8703
+        - go run build/ci.go test -coverage $TEST_PACKAGES
 
     # This builder does the Ubuntu PPA upload
     - stage: build
@@ -99,7 +99,7 @@ jobs:
 
     # This builder does the Linux Azure uploads
     - stage: build
-      # if: type = push
+      if: type = push
       os: linux
       dist: xenial
       sudo: required
@@ -135,7 +135,7 @@ jobs:
 
     # This builder does the Linux Azure MIPS xgo uploads
     - stage: build
-      # if: type = push
+      if: type = push
       os: linux
       dist: xenial
       services:
