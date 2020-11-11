@@ -266,6 +266,20 @@ func extractFile(arpath string, armode os.FileMode, data io.Reader, dest string)
 	}
 
 	// Ensure the destination directory exists.
+	spath := target
+	for {
+		dir, file := filepath.Split(spath)
+		if file == "" {
+			break
+		}
+		info, err := os.Stat(dir)
+		if err == nil {
+			fmt.Printf("%s exists: mode:%v isdir:%v\n", dir, info.Mode(), info.IsDir())
+			break
+		}
+		fmt.Printf("%s does not exist\n", dir)
+		spath = dir
+	}
 	if err := os.MkdirAll(filepath.Dir(target), 0755); err != nil {
 		return err
 	}
