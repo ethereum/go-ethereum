@@ -31,7 +31,6 @@ jobs:
       env:
         - GO111MODULE=on
       script:
-        - go run build/ci.go install
         - go run build/ci.go test -coverage $TEST_PACKAGES
 
     # These are the latest Go versions.
@@ -43,7 +42,6 @@ jobs:
       env:
         - GO111MODULE=on
       script:
-        - go run build/ci.go install -dlgo
         - go run build/ci.go test -coverage $TEST_PACKAGES
 
     - stage: build
@@ -55,7 +53,6 @@ jobs:
       env:
         - GO111MODULE=on
       script:
-        - go run build/ci.go install -dlgo
         - go run build/ci.go test -coverage $TEST_PACKAGES
 
     - stage: build
@@ -74,7 +71,6 @@ jobs:
         - ulimit -S -n $NOFILE
         - ulimit -n
         - unset -f cd # workaround for https://github.com/travis-ci/travis-ci/issues/8703
-        - go run build/ci.go install
         - go run build/ci.go test -coverage $TEST_PACKAGES
 
     # This builder does the Ubuntu PPA upload
