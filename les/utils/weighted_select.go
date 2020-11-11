@@ -83,7 +83,7 @@ func (w *WeightedRandomSelect) Choose() WrsItem {
 		if w.root.sumWeight == 0 {
 			return nil
 		}
-		val := uint64(rand.Int63n(int64(w.root.sumWeight)))
+		val := rand.Uint64() % w.root.sumWeight
 		choice, lastWeight := w.root.choose(val)
 		weight := w.wfn(choice)
 		if weight != lastWeight {

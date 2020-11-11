@@ -66,3 +66,18 @@ func TestWeightedRandomSelect(t *testing.T) {
 	testFn(100000)
 	testFn(1000000)
 }
+
+// TestOOB tests values which doesn't fit in int64
+func TestOOB(t *testing.T) {
+	s := NewWeightedRandomSelect(func(i interface{}) uint64 {
+		// Dummy weight function to return a very large weight
+		return uint64(0xffffffffffffffee)
+	})
+	s.Update(testWrsItem{idx: 0, widx: nil})
+	s.Update(testWrsItem{idx: 1, widx: nil})
+	// int64 conversion should make the sumweight negative
+	if int64(s.root.sumWeight) >= 0 {
+		t.Fatalf("test is dysfunctional, sumweight not negative: %d", int64(s.root.sumWeight))
+	}
+	s.Choose()
+}
