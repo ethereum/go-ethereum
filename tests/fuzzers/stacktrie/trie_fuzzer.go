@@ -158,6 +158,15 @@ func (f *fuzzer) fuzz() int {
 			// thus 'deletion' which is not supported on stacktrie
 			break
 		}
+		found := false
+		for _, val := range vals {
+			if bytes.Equal(val.k, k) {
+				found = true
+			}
+		}
+		if found {
+			continue
+		}
 		vals = append(vals, kv{k: k, v: v})
 		trieA.Update(k, v)
 		useful = true
