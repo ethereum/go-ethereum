@@ -95,7 +95,7 @@ func TestRPCCall_NotOnRootPath(t *testing.T) {
 	paths := []string{"/", "/testing/test/123", "/testing", ""}
 
 	srv := createAndStartServer(t, httpConfig{}, true, wsConfig{})
-	body :=  bytes.NewReader([]byte(`{"jsonrpc":"2.0","id":1,method":"rpc_modules"}`))
+	body := bytes.NewReader([]byte(`{"jsonrpc":"2.0","id":1,method":"rpc_modules"}`))
 
 	for _, path := range paths {
 		req := createReq(srv, body, path)
