@@ -1,6 +1,13 @@
 # This file contains sha256 checksums of optional build dependencies.
 
-69438f7ed4f532154ffaf878f3dfd83747e7a00b70b3556eddabf7aaee28ac3a  go1.15.src.tar.gz
+063da6a9a4186b8118a0e584532c8c94e65582e2cd951ed078bfd595d27d2367  go1.15.4.src.tar.gz
+aaf8c5323e0557211680960a8f51bedf98ab9a368775a687d6cf1f0079232b1d  go1.15.4.darwin-amd64.tar.gz
+6b2f6d8afddfb198bf0e36044084dc4db4cb0be1107375240b34d215aa5ff6ad  go1.15.4.linux-386.tar.gz
+eb61005f0b932c93b424a3a4eaa67d72196c79129d9a3ea8578047683e2c80d5  go1.15.4.linux-amd64.tar.gz
+6f083b453484fc5f95afb345547a58ccc957cde91348b7a7c68f5b060e488c85  go1.15.4.linux-arm64.tar.gz
+fe449ad3e121472e5db2f70becc0fef9d1a7188616c0605ada63f1e3bbad280e  go1.15.4.linux-armv6l.tar.gz
+3be3cfc08ccc7e7056fdee17b6f5d18e9d7f3d1351dcfec8de34b1c95cb05b50  go1.15.4.windows-386.zip
+3593204e3851be577e4209900ece031b36f1e9ce1671f3f3221c9af7a090a941  go1.15.4.windows-amd64.zip
 
 d998a84eea42f2271aca792a7b027ca5c1edfcba229e8e5a844c9ac3f336df35  golangci-lint-1.27.0-linux-armv7.tar.gz
 bf781f05b0d393b4bf0a327d9e62926949a4f14d7774d950c4e009fc766ed1d4  golangci-lint.exe-1.27.0-windows-amd64.zip

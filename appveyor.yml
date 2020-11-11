@@ -30,7 +30,7 @@ install:
   - gcc --version
 
 build_script:
-  - go run build\ci.go install
+  - go run build\ci.go install -dlgo
 
 after_build:
   - go run build\ci.go archive -type zip -signer WINDOWS_SIGNING_KEY -upload gethstore/builds
