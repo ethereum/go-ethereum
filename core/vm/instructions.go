@@ -621,8 +621,10 @@ func opCreate(pc *uint64, interpreter *EVMInterpreter, callContext *callCtx) ([]
 	// ignore this error and pretend the operation was successful.
 	if interpreter.evm.chainRules.IsHomestead && suberr == ErrCodeStoreOutOfGas {
 		stackvalue.Clear()
+		interpreter.evm.CallErrorTemp = suberr // temp storage, for debug tracing
 	} else if suberr != nil && suberr != ErrCodeStoreOutOfGas {
 		stackvalue.Clear()
+		interpreter.evm.CallErrorTemp = suberr // temp storage, for debug tracing
 	} else {
 		stackvalue.SetBytes(addr.Bytes())
 	}
@@ -659,6 +661,7 @@ func opCreate2(pc *uint64, interpreter *EVMInterpreter, callContext *callCtx) ([
 	// Push item on the stack based on the returned error.
 	if suberr != nil {
 		stackvalue.Clear()
+		interpreter.evm.CallErrorTemp = suberr // temp storage, for debug tracing
 	} else {
 		stackvalue.SetBytes(addr.Bytes())
 	}
@@ -696,6 +699,7 @@ func opCall(pc *uint64, interpreter *EVMInterpreter, callContext *callCtx) ([]by
 
 	if err != nil {
 		temp.Clear()
+		interpreter.evm.CallErrorTemp = err // temp storage, for debug tracing
 	} else {
 		temp.SetOne()
 	}
@@ -730,6 +734,7 @@ func opCallCode(pc *uint64, interpreter *EVMInterpreter, callContext *callCtx) (
 	ret, returnGas, err := interpreter.evm.CallCode(callContext.contract, toAddr, args, gas, bigVal)
 	if err != nil {
 		temp.Clear()
+		interpreter.evm.CallErrorTemp = err // temp storage, for debug tracing
 	} else {
 		temp.SetOne()
 	}
@@ -757,6 +762,7 @@ func opDelegateCall(pc *uint64, interpreter *EVMInterpreter, callContext *callCt
 	ret, returnGas, err := interpreter.evm.DelegateCall(callContext.contract, toAddr, args, gas)
 	if err != nil {
 		temp.Clear()
+		interpreter.evm.CallErrorTemp = err // temp storage, for debug tracing
 	} else {
 		temp.SetOne()
 	}
@@ -784,6 +790,7 @@ func opStaticCall(pc *uint64, interpreter *EVMInterpreter, callContext *callCtx)
 	ret, returnGas, err := interpreter.evm.StaticCall(callContext.contract, toAddr, args, gas)
 	if err != nil {
 		temp.Clear()
+		interpreter.evm.CallErrorTemp = err // temp storage, for debug tracing
 	} else {
 		temp.SetOne()
 	}
