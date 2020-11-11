@@ -18,10 +18,13 @@ package ethtest
 
 import (
 	"fmt"
+	"math/big"
 	"net"
 	"time"
 
 	"github.com/davecgh/go-spew/spew"
+	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/internal/utesting"
 	"github.com/ethereum/go-ethereum/p2p"
@@ -64,12 +67,15 @@ func NewSuite(dest *enode.Node, chainfile string, genesisfile string) *Suite {
 func (s *Suite) AllTests() []utesting.Test {
 	return []utesting.Test{
 		{Name: "Status", Fn: s.TestStatus},
-		{Name: "GetBlockHeaders", Fn: s.TestGetBlockHeaders},
-		{Name: "Broadcast", Fn: s.TestBroadcast},
-		{Name: "GetBlockBodies", Fn: s.TestGetBlockBodies},
-		{Name: "TestLargeAnnounce", Fn: s.TestLargeAnnounce},
-		{Name: "TestMaliciousHandshake", Fn: s.TestMaliciousHandshake},
-		{Name: "TestMaliciousStatus", Fn: s.TestMaliciousStatus},
+		/*
+			{Name: "GetBlockHeaders", Fn: s.TestGetBlockHeaders},
+			{Name: "Broadcast", Fn: s.TestBroadcast},
+			{Name: "GetBlockBodies", Fn: s.TestGetBlockBodies},
+			{Name: "TestLargeAnnounce", Fn: s.TestLargeAnnounce},
+			{Name: "TestMaliciousHandshake", Fn: s.TestMaliciousHandshake},
+			{Name: "TestMaliciousStatus", Fn: s.TestMaliciousStatus},
+		*/
+		{Name: "TestTransactions", Fn: s.TestTransaction},
 	}
 }
 
@@ -397,4 +403,34 @@ func (s *Suite) dial() (*Conn, error) {
 	}
 
 	return &conn, nil
+}
+
+func (s *Suite) TestTransaction(t *utesting.T) {
+	sendConn, recvConn := s.setupConnection(t), s.setupConnection(t)
+	// Create a new transaction
+	tx := types.NewTransaction(123, common.HexToAddress("0x01234"), big.NewInt(1234), 21000, big.NewInt(12345), []byte{})
+	privateKey, err := crypto.HexToECDSA("fad9c8855b740a0b7ed4c221dbad0f33a83a49cad6b3fe8d5817ac83d38b6a19")
+	if err != nil {
+		t.Fatal(err)
+	}
+	tx, err = types.SignTx(tx, types.FrontierSigner{}, privateKey)
+	if err != nil {
+		t.Fatal(err)
+	}
+	// Send the transaction
+	if err := sendConn.Write(Transactions([]*types.Transaction{tx})); err != nil {
+		t.Fatal(err)
+	}
+	// Wait for the transaction announcement
+	rawTxMsg, err := recvConn.waitForMessage(Transactions{})
+	if err != nil {
+		t.Fatalf("waiting for transaction propagation failed: %v", err)
+	}
+	recTxs := rawTxMsg.(Transactions)
+	if len(recTxs) != 1 {
+		t.Fatalf("received transactions do not match send: %v", recTxs)
+	}
+	if tx.Hash() != recTxs[0].Hash() {
+		t.Fatalf("received transactions do not match send: got %v want %v", tx, recTxs)
+	}
 }
