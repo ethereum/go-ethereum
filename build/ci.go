@@ -259,6 +259,9 @@ func doInstall(cmdline []string) {
 	// Put the default settings in.
 	gobuild.Args = append(gobuild.Args, buildFlags(env)...)
 
+	// We use -trimpath to avoid leaking local paths into the built executables.
+	gobuild.Args = append(gobuild.Args, "-trimpath")
+
 	// Show packages during build.
 	gobuild.Args = append(gobuild.Args, "-v")
 
@@ -294,8 +297,6 @@ func buildFlags(env build.Environment) (flags []string) {
 	if len(ld) > 0 {
 		flags = append(flags, "-ldflags", strings.Join(ld, " "))
 	}
-	// We use -trimpath to avoid leaking local paths into the built executables.
-	flags = append(flags, "-trimpath")
 	return flags
 }
 
