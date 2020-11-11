@@ -19,6 +19,7 @@ package node
 import (
 	"bytes"
 	"net/http"
+	"strconv"
 	"strings"
 	"testing"
 
@@ -34,10 +35,10 @@ func TestCorsHandler(t *testing.T) {
 	srv := createAndStartServer(t, httpConfig{CorsAllowedOrigins: []string{"test", "test.com"}}, false, wsConfig{})
 	defer srv.stop()
 
-	resp := testRequest(t, "origin", "test.com", "", srv)
+	resp := testRequest(t, "origin", "test.com", "", srv, "")
 	assert.Equal(t, "test.com", resp.Header.Get("Access-Control-Allow-Origin"))
 
-	resp2 := testRequest(t, "origin", "bad", "", srv)
+	resp2 := testRequest(t, "origin", "bad", "", srv, "")
 	assert.Equal(t, "", resp2.Header.Get("Access-Control-Allow-Origin"))
 }
 
@@ -46,10 +47,10 @@ func TestVhosts(t *testing.T) {
 	srv := createAndStartServer(t, httpConfig{Vhosts: []string{"test"}}, false, wsConfig{})
 	defer srv.stop()
 
-	resp := testRequest(t, "", "", "test", srv)
+	resp := testRequest(t, "", "", "test", srv, "")
 	assert.Equal(t, resp.StatusCode, http.StatusOK)
 
-	resp2 := testRequest(t, "", "", "bad", srv)
+	resp2 := testRequest(t, "", "", "bad", srv, "")
 	assert.Equal(t, resp2.StatusCode, http.StatusForbidden)
 }
 
@@ -168,12 +169,110 @@ func TestIsWebsocket(t *testing.T) {
 	assert.True(t, isWebsocket(r))
 }
 
+// TestRPCCall_CustomPath tests whether an RPC call on a custom path
+// will be successfully completed.
+func TestRPCCall_CustomPath(t *testing.T) {
+	tests := []struct {
+		httpConf  httpConfig
+		wsConf    wsConfig
+		wsEnabled bool
+	}{
+		{
+			httpConf: httpConfig{
+				path: "/",
+			},
+			wsConf: wsConfig{
+				path: "/test",
+			},
+			wsEnabled: false,
+		},
+		{
+			httpConf: httpConfig{
+				path: "/test",
+			},
+			wsConf: wsConfig{
+				path: "/test",
+			},
+			wsEnabled: false,
+		},
+		{
+			httpConf: httpConfig{
+				path: "/test",
+			},
+			wsConf: wsConfig{
+				path: "/test",
+			},
+			wsEnabled: true,
+		},
+		{
+			httpConf: httpConfig{
+				path: "/testing/test/123",
+			},
+			wsConf: wsConfig{
+				path: "/test",
+			},
+			wsEnabled: true,
+		},
+		{
+			httpConf: httpConfig{
+				path: "/",
+			},
+			wsConf: wsConfig{
+				path: "/test",
+			},
+			wsEnabled: true,
+		},
+	}
+
+	for i, test := range tests {
+		t.Run(strconv.Itoa(i), func(t *testing.T) {
+			srv := createAndStartServer(t, test.httpConf, test.wsEnabled, test.wsConf)
+
+			resp := testRequest(t, "", "", "", srv, test.httpConf.path)
+			assert.True(t, resp.StatusCode != http.StatusNotFound)
+
+			resp = testRequest(t, "", "", "", srv, "/fail")
+			assert.True(t, resp.StatusCode == http.StatusNotFound)
+
+			if test.wsEnabled {
+				dialer := websocket.DefaultDialer
+				// make sure ws dial is successful
+				_, _, err := dialer.Dial("ws://"+srv.listenAddr()+test.wsConf.path, http.Header{
+					"Content-type":          []string{"application/json"},
+					"Sec-WebSocket-Version": []string{"13"},
+				})
+				assert.NoError(t, err)
+				// make sure ws dial fails
+				_, _, err = dialer.Dial("ws://"+srv.listenAddr()+"/fail", http.Header{
+					"Content-type":          []string{"application/json"},
+					"Sec-WebSocket-Version": []string{"13"},
+				})
+				assert.Error(t, err)
+			}
+		})
+	}
+}
+
 func createAndStartServer(t *testing.T, conf httpConfig, ws bool, wsConf wsConfig) *httpServer {
 	t.Helper()
+
+	// set http path
+	if conf.path == "" {
+		conf.path = "/"
+	}
+	if wsConf.path == "" {
+		wsConf.path = "/"
+	}
 
 	srv := newHTTPServer(testlog.Logger(t, log.LvlDebug), rpc.DefaultHTTPTimeouts)
 
 	assert.NoError(t, srv.enableRPC(nil, conf))
+
+	if srv.httpConfig.path != "/" {
+		srv.mux.Handle(srv.httpConfig.path, srv.httpHandler.Load().(*rpcHandler))
+		srv.handlerNames[srv.httpConfig.path] = "http-rpc"
+	}
+
 	if ws {
 		assert.NoError(t, srv.enableWS(nil, wsConf))
 	}
@@ -194,11 +293,11 @@ func attemptWebsocketConnectionFromOrigin(t *testing.T, srv *httpServer, browser
 	return err
 }
 
-func testRequest(t *testing.T, key, value, host string, srv *httpServer) *http.Response {
+func testRequest(t *testing.T, key, value, host string, srv *httpServer, path string) *http.Response {
 	t.Helper()
 
 	body := bytes.NewReader([]byte(`{"jsonrpc":"2.0","id":1,method":"rpc_modules"}`))
-	req, _ := http.NewRequest("POST", "http://"+srv.listenAddr(), body)
+	req, _ := http.NewRequest("POST", "http://"+srv.listenAddr()+path, body)
 	req.Header.Set("content-type", "application/json")
 	if key != "" && value != "" {
 		req.Header.Set(key, value)

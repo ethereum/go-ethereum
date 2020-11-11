@@ -25,6 +25,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/ethereum/go-ethereum/p2p"
 	"github.com/ethereum/go-ethereum/rpc"
 	"github.com/stretchr/testify/assert"
 )
@@ -69,7 +70,7 @@ func TestStartRPC(t *testing.T) {
 			name: "rpc enabled through API",
 			cfg:  Config{},
 			fn: func(t *testing.T, n *Node, api *privateAdminAPI) {
-				_, err := api.StartRPC(sp("127.0.0.1"), ip(0), nil, nil, nil)
+				_, err := api.StartRPC(sp("127.0.0.1"), ip(0), nil, nil, nil, nil)
 				assert.NoError(t, err)
 			},
 			wantReachable: true,
@@ -90,14 +91,14 @@ func TestStartRPC(t *testing.T) {
 				port := listener.Addr().(*net.TCPAddr).Port
 
 				// Now try to start RPC on that port. This should fail.
-				_, err = api.StartRPC(sp("127.0.0.1"), ip(port), nil, nil, nil)
+				_, err = api.StartRPC(sp("127.0.0.1"), ip(port), nil, nil, nil, nil)
 				if err == nil {
 					t.Fatal("StartRPC should have failed on port", port)
 				}
 
 				// Try again after unblocking the port. It should work this time.
 				listener.Close()
-				_, err = api.StartRPC(sp("127.0.0.1"), ip(port), nil, nil, nil)
+				_, err = api.StartRPC(sp("127.0.0.1"), ip(port), nil, nil, nil, nil)
 				assert.NoError(t, err)
 			},
 			wantReachable: true,
@@ -144,7 +145,7 @@ func TestStartRPC(t *testing.T) {
 			name: "ws enabled through API",
 			cfg:  Config{},
 			fn: func(t *testing.T, n *Node, api *privateAdminAPI) {
-				_, err := api.StartWS(sp("127.0.0.1"), ip(0), nil, nil)
+				_, err := api.StartWS(sp("127.0.0.1"), ip(0), nil, nil, nil)
 				assert.NoError(t, err)
 			},
 			wantReachable: true,
@@ -184,7 +185,7 @@ func TestStartRPC(t *testing.T) {
 			cfg:  Config{HTTPHost: "127.0.0.1"},
 			fn: func(t *testing.T, n *Node, api *privateAdminAPI) {
 				wsport := n.http.port
-				_, err := api.StartWS(sp("127.0.0.1"), ip(wsport), nil, nil)
+				_, err := api.StartWS(sp("127.0.0.1"), ip(wsport), nil, nil, nil)
 				assert.NoError(t, err)
 			},
 			wantReachable: true,
@@ -197,7 +198,7 @@ func TestStartRPC(t *testing.T) {
 			cfg:  Config{HTTPHost: "127.0.0.1"},
 			fn: func(t *testing.T, n *Node, api *privateAdminAPI) {
 				wsport := n.http.port
-				_, err := api.StartWS(sp("127.0.0.1"), ip(wsport), nil, nil)
+				_, err := api.StartWS(sp("127.0.0.1"), ip(wsport), nil, nil, nil)
 				assert.NoError(t, err)
 
 				_, err = api.StopWS()
@@ -211,11 +212,11 @@ func TestStartRPC(t *testing.T) {
 		{
 			name: "rpc stopped with ws enabled",
 			fn: func(t *testing.T, n *Node, api *privateAdminAPI) {
-				_, err := api.StartRPC(sp("127.0.0.1"), ip(0), nil, nil, nil)
+				_, err := api.StartRPC(sp("127.0.0.1"), ip(0), nil, nil, nil, nil)
 				assert.NoError(t, err)
 
 				wsport := n.http.port
-				_, err = api.StartWS(sp("127.0.0.1"), ip(wsport), nil, nil)
+				_, err = api.StartWS(sp("127.0.0.1"), ip(wsport), nil, nil, nil)
 				assert.NoError(t, err)
 
 				_, err = api.StopRPC()
@@ -229,11 +230,11 @@ func TestStartRPC(t *testing.T) {
 		{
 			name: "rpc enabled after ws",
 			fn: func(t *testing.T, n *Node, api *privateAdminAPI) {
-				_, err := api.StartWS(sp("127.0.0.1"), ip(0), nil, nil)
+				_, err := api.StartWS(sp("127.0.0.1"), ip(0), nil, nil, nil)
 				assert.NoError(t, err)
 
 				wsport := n.http.port
-				_, err = api.StartRPC(sp("127.0.0.1"), ip(wsport), nil, nil, nil)
+				_, err = api.StartRPC(sp("127.0.0.1"), ip(wsport), nil, nil, nil, nil)
 				assert.NoError(t, err)
 			},
 			wantReachable: true,
@@ -290,6 +291,78 @@ func TestStartRPC(t *testing.T) {
 				t.Errorf("WS RPC %savailable, want it %savailable", not(wsAvailable), not(test.wantWS))
 			}
 		})
+	}
+}
+
+// TestRPC_OnPath tests whether RPC will be handled on a custom path.
+func TestRPC_OnPath(t *testing.T) {
+	// Create Node.
+	stack, err := New(&Config{
+		NoUSB: true,
+		P2P: p2p.Config{
+			NoDiscovery: true,
+		},
+	})
+	if err != nil {
+		t.Fatal("can't create node:", err)
+	}
+	defer stack.Close()
+
+	if err := stack.Start(); err != nil {
+		t.Fatal("can't start node:", err)
+	}
+
+	api := &privateAdminAPI{stack}
+
+	paths := []string{"/test", "/testtesttest", "/t", "/"}
+
+	for _, path := range paths {
+		_, err := api.StartRPC(sp("127.0.0.1"), ip(0), sp(path), nil, nil, nil)
+		assert.NoError(t, err)
+
+		baseURL := stack.HTTPEndpoint()
+		assert.True(t, checkReachable(baseURL+path))
+		assert.True(t, checkRPC(baseURL+path))
+		assert.False(t, checkRPC(baseURL+"/fail"))
+
+		_, err = api.StopRPC()
+		assert.NoError(t, err)
+	}
+}
+
+// TestWS_OnPath tests whether RPC will be handled on a custom path.
+func TestWS_OnPath(t *testing.T) {
+	// Create Node.
+	stack, err := New(&Config{
+		NoUSB: true,
+		P2P: p2p.Config{
+			NoDiscovery: true,
+		},
+	})
+	if err != nil {
+		t.Fatal("can't create node:", err)
+	}
+	defer stack.Close()
+
+	if err := stack.Start(); err != nil {
+		t.Fatal("can't start node:", err)
+	}
+
+	api := &privateAdminAPI{stack}
+
+	paths := []string{"/test", "/testtesttest", "/t", "/"}
+
+	for _, path := range paths {
+		_, err := api.StartWS(sp("127.0.0.1"), ip(0), sp(path), nil, nil)
+		assert.NoError(t, err)
+
+		baseURL := stack.WSEndpoint()
+		assert.True(t, checkReachable(baseURL+path))
+		assert.True(t, checkRPC(baseURL+path))
+		assert.False(t, checkRPC(baseURL+"/fail"))
+
+		_, err = api.StopWS()
+		assert.NoError(t, err)
 	}
 }
 

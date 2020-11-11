@@ -532,6 +532,11 @@ var (
 		Usage: "API's offered over the HTTP-RPC interface",
 		Value: "",
 	}
+	HTTPPathFlag = cli.StringFlag{
+		Name:  "http.path",
+		Usage: "Path on which to mount the http server. Default value is root",
+		Value: "/",
+	}
 	GraphQLEnabledFlag = cli.BoolFlag{
 		Name:  "graphql",
 		Usage: "Enable GraphQL on the HTTP-RPC server. Note that GraphQL can only be started if an HTTP server is started as well.",
@@ -569,6 +574,11 @@ var (
 		Name:  "ws.origins",
 		Usage: "Origins from which to accept websockets requests",
 		Value: "",
+	}
+	WSPathFlag = cli.StringFlag{
+		Name:  "ws.path",
+		Usage: "Path on which to mount the ws server. Default value is root",
+		Value: "/",
 	}
 	ExecFlag = cli.StringFlag{
 		Name:  "exec",
@@ -955,6 +965,12 @@ func setHTTP(ctx *cli.Context, cfg *node.Config) {
 	if ctx.GlobalIsSet(HTTPVirtualHostsFlag.Name) {
 		cfg.HTTPVirtualHosts = SplitAndTrim(ctx.GlobalString(HTTPVirtualHostsFlag.Name))
 	}
+
+	if ctx.GlobalIsSet(HTTPPathFlag.Name) {
+		cfg.HTTPPath = ctx.GlobalString(HTTPPathFlag.Name)
+	} else {
+		cfg.HTTPPath = HTTPPathFlag.Value
+	}
 }
 
 // setGraphQL creates the GraphQL listener interface string from the set
@@ -1003,6 +1019,12 @@ func setWS(ctx *cli.Context, cfg *node.Config) {
 	}
 	if ctx.GlobalIsSet(WSApiFlag.Name) {
 		cfg.WSModules = SplitAndTrim(ctx.GlobalString(WSApiFlag.Name))
+	}
+
+	if ctx.GlobalIsSet(WSPathFlag.Name) {
+		cfg.WSPath = ctx.GlobalString(WSPathFlag.Name)
+	} else {
+		cfg.WSPath = WSPathFlag.Value
 	}
 }
 

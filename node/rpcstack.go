@@ -39,12 +39,14 @@ type httpConfig struct {
 	Modules            []string
 	CorsAllowedOrigins []string
 	Vhosts             []string
+	path               string // path on which to mount http handler
 }
 
 // wsConfig is the JSON-RPC/Websocket configuration
 type wsConfig struct {
 	Origins []string
 	Modules []string
+	path    string // path on which to mount ws handler
 }
 
 type rpcHandler struct {
@@ -79,6 +81,7 @@ type httpServer struct {
 
 func newHTTPServer(log log.Logger, timeouts rpc.HTTPTimeouts) *httpServer {
 	h := &httpServer{log: log, timeouts: timeouts, handlerNames: make(map[string]string)}
+
 	h.httpHandler.Store((*rpcHandler)(nil))
 	h.wsHandler.Store((*rpcHandler)(nil))
 	return h
@@ -170,26 +173,41 @@ func (h *httpServer) start() error {
 }
 
 func (h *httpServer) ServeHTTP(w http.ResponseWriter, r *http.Request) {
-	rpc := h.httpHandler.Load().(*rpcHandler)
-	if r.RequestURI == "/" {
-		// Serve JSON-RPC on the root path.
-		ws := h.wsHandler.Load().(*rpcHandler)
-		if ws != nil && isWebsocket(r) {
+	// check if ws request and serve if ws enabled
+	ws := h.wsHandler.Load().(*rpcHandler)
+	if ws != nil && isWebsocket(r) {
+		if checkPath(r, h.wsConfig.path) {
 			ws.ServeHTTP(w, r)
 			return
 		}
-		if rpc != nil {
+	}
+	// if http-rpc is enabled, try to serve request
+	rpc := h.httpHandler.Load().(*rpcHandler)
+	if rpc != nil {
+		if checkPath(r, h.httpConfig.path) {
 			rpc.ServeHTTP(w, r)
 			return
 		}
-	} else if rpc != nil {
 		// Requests to a path below root are handled by the mux,
 		// which has all the handlers registered via Node.RegisterHandler.
 		// These are made available when RPC is enabled.
-		h.mux.ServeHTTP(w, r)
-		return
+		muxHandler, pattern := h.mux.Handler(r)
+		if pattern != "" {
+			muxHandler.ServeHTTP(w, r)
+			return
+		}
 	}
 	w.WriteHeader(404)
+}
+
+// checkPath checks whether a request path matches a given path or path prefix.
+func checkPath(r *http.Request, path string) bool {
+	// if the path is root and the request URI is below root,
+	// return false and fall through to mux
+	if path == "/" {
+		return r.RequestURI == "/"
+	}
+	return len(r.RequestURI) >= len(path) && r.RequestURI[:len(path)] == path
 }
 
 // stop shuts down the HTTP server.

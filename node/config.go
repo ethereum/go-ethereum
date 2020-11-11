@@ -139,6 +139,10 @@ type Config struct {
 	// interface.
 	HTTPTimeouts rpc.HTTPTimeouts
 
+	// HTTPPath specifies a path on which http-rpc is to be served. The default is the
+	// root path.
+	HTTPPath string `toml:",omitempty"`
+
 	// WSHost is the host interface on which to start the websocket RPC server. If
 	// this field is empty, no websocket API endpoint will be started.
 	WSHost string
@@ -147,6 +151,10 @@ type Config struct {
 	// default zero value is/ valid and will pick a port number randomly (useful for
 	// ephemeral nodes).
 	WSPort int `toml:",omitempty"`
+
+	// WSPath specifies a path on which ws-rpc is to be served. The default is the
+	// root path.
+	WSPath string `toml:",omitempty"`
 
 	// WSOrigins is the list of domain to accept websocket requests from. Please be
 	// aware that the server can only act upon the HTTP request the client sends and
