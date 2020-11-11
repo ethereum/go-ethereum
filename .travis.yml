@@ -99,7 +99,7 @@ jobs:
 
     # This builder does the Linux Azure uploads
     - stage: build
-      # if: type = push
+      if: type = push
       os: linux
       dist: xenial
       sudo: required
@@ -165,7 +165,7 @@ jobs:
 
     # This builder does the Android Maven and Azure uploads
     - stage: build
-      if: type = push
+      # if: type = push
       os: linux
       dist: xenial
       addons:
