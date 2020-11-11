@@ -287,6 +287,3 @@ func BenchmarkTrieHash(b *testing.B) {
 		}
 	})
 }
-		}
-	})
-}

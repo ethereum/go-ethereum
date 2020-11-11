@@ -321,6 +321,10 @@ func (t *BinaryTrie) Hash() []byte {
 	return t.root.Hash()
 }
 
+func (t *BinaryTrie) HashM4() []byte {
+	return t.root.HashM4()
+}
+
 func (t *BinaryTrie) Update(key, value []byte) {
 	if err := t.TryUpdate(key, value); err != nil {
 		log.Error(fmt.Sprintf("Unhandled trie error: %v", err))
