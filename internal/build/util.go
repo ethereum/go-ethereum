@@ -156,12 +156,8 @@ func UploadSFTP(identityFile, host, dir string, files []string) error {
 }
 
 // FindMainPackages finds all 'main' packages in the given directory and returns their
-// package paths. dir must start with a single '.' component.
+// package paths.
 func FindMainPackages(dir string) []string {
-	if !strings.HasPrefix(dir, "."+string(os.PathSeparator)) {
-		panic("bad dir: " + dir)
-	}
-
 	var commands []string
 	cmds, err := ioutil.ReadDir(dir)
 	if err != nil {
