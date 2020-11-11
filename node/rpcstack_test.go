@@ -18,6 +18,7 @@ package node
 
 import (
 	"bytes"
+	"io"
 	"net/http"
 	"testing"
 
@@ -88,6 +89,23 @@ func TestIsWebsocket(t *testing.T) {
 	assert.True(t, isWebsocket(r))
 }
 
+// TestRPCCall_NotOnRootPath tests whether an RPC call that is not on
+// the root path will be successfully completed.
+func TestRPCCall_NotOnRootPath(t *testing.T) {
+	paths := []string{"/", "/testing/test/123", "/testing", ""}
+
+	srv := createAndStartServer(t, httpConfig{}, true, wsConfig{})
+	body :=  bytes.NewReader([]byte(`{"jsonrpc":"2.0","id":1,method":"rpc_modules"}`))
+
+	for _, path := range paths {
+		req := createReq(srv, body, path)
+		req.Header.Set("content-type", "application/json")
+
+		resp := doReq(t, req)
+		assert.True(t, resp.StatusCode != http.StatusNotFound)
+	}
+}
+
 func createAndStartServer(t *testing.T, conf httpConfig, ws bool, wsConf wsConfig) *httpServer {
 	t.Helper()
 
@@ -103,11 +121,22 @@ func createAndStartServer(t *testing.T, conf httpConfig, ws bool, wsConf wsConfi
 	return srv
 }
 
+func doReq(t *testing.T, req *http.Request) *http.Response {
+	t.Helper()
+
+	client := http.DefaultClient
+	resp, err := client.Do(req)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return resp
+}
+
 func testRequest(t *testing.T, key, value, host string, srv *httpServer) *http.Response {
 	t.Helper()
 
 	body := bytes.NewReader([]byte(`{"jsonrpc":"2.0","id":1,method":"rpc_modules"}`))
-	req, _ := http.NewRequest("POST", "http://"+srv.listenAddr(), body)
+	req := createReq(srv, body, "")
 	req.Header.Set("content-type", "application/json")
 	if key != "" && value != "" {
 		req.Header.Set(key, value)
@@ -116,10 +145,10 @@ func testRequest(t *testing.T, key, value, host string, srv *httpServer) *http.R
 		req.Host = host
 	}
 
-	client := http.DefaultClient
-	resp, err := client.Do(req)
-	if err != nil {
-		t.Fatal(err)
-	}
-	return resp
+	return doReq(t, req)
+}
+
+func createReq(srv *httpServer, body io.Reader, path string) *http.Request {
+	req, _ := http.NewRequest("POST", "http://"+srv.listenAddr()+path, body)
+	return req
 }
