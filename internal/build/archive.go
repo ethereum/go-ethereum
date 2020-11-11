@@ -244,6 +244,10 @@ func extractZip(ar *os.File, dest string) error {
 	}
 
 	for _, zf := range zr.File {
+		if !zf.Mode().IsRegular() {
+			continue
+		}
+
 		data, err := zf.Open()
 		if err != nil {
 			return err
