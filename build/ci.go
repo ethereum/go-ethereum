@@ -318,6 +318,7 @@ func localGoTool(goroot string, subcmd string, args ...string) *exec.Cmd {
 
 // goToolSetEnv forwards the build environment to the go tool.
 func goToolSetEnv(cmd *exec.Cmd) {
+	cmd.Env = append(cmd.Env, "GOBIN="+GOBIN)
 	for _, e := range os.Environ() {
 		if strings.HasPrefix(e, "GOBIN=") || strings.HasPrefix(e, "CC=") {
 			continue
