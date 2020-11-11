@@ -243,7 +243,7 @@ func doInstall(cmdline []string) {
 	}
 
 	// Configure C compiler.
-	if *cc == "" {
+	if *cc != "" {
 		gobuild.Env = append(gobuild.Env, "CC="+*cc)
 	} else if os.Getenv("CC") != "" {
 		gobuild.Env = append(gobuild.Env, "CC="+os.Getenv("CC"))
