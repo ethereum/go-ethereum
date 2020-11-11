@@ -590,11 +590,11 @@ func downloadGo(goarch, goos, cachedir string) string {
 		log.Fatal(err)
 	}
 
-	temp, err := ioutil.TempDir("", "geth-build-go")
+	ucache, err := os.UserCacheDir()
 	if err != nil {
 		log.Fatal(err)
 	}
-	godir := filepath.Join(temp, fmt.Sprintf("go-%s-%s-%s", dlgoVersion, goos, goarch))
+	godir := filepath.Join(ucache, fmt.Sprintf("geth-go-%s-%s-%s", dlgoVersion, goos, goarch))
 	if err := build.ExtractArchive(dst, godir); err != nil {
 		log.Fatal(err)
 	}
