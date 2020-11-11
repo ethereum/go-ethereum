@@ -573,13 +573,13 @@ func (api *PrivateDebugAPI) standardTraceBlockToFile(ctx context.Context, block 
 	// in order to obtain the state.
 	// Therefore, it's perfectly valid to specify `"futureForkBlock": 0`, to enable `futureFork`
 
-	if config != nil && config.Overrides != nil {
+	if config != nil && config.LogConfig != nil && config.LogConfig.Overrides != nil {
 		// Copy the config, to not screw up the main config
 		// Note: the Clique-part is _not_ deep copied
 		chainConfigCopy := new(params.ChainConfig)
 		*chainConfigCopy = *chainConfig
 		chainConfig = chainConfigCopy
-		if yolov2 := config.Overrides.YoloV2Block; yolov2 != nil {
+		if yolov2 := config.LogConfig.Overrides.YoloV2Block; yolov2 != nil {
 			chainConfig.YoloV2Block = yolov2
 			canon = false
 		}
