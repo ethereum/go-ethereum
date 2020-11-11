@@ -27,25 +27,34 @@ import (
 var ErrNoReply = errors.New("no reply for given request")
 
 const (
-	CapacityQueryName = "cq"
+	MaxRequestLength    = 16 // max number of individual requests in a batch
+	CapacityQueryName   = "cq"
+	CapacityQueryMaxLen = 16
 )
 
 type (
+	// Request describes a single lespay request inside a batch. Service and request
+	// type are identified by strings, parameters are RLP encoded.
 	Request struct {
 		Service, Name string
 		Params        []byte
 	}
+	// Requests are a batch of lespay requests
 	Requests []Request
 
+	// Replies are the replies to a batch of requests
 	Replies [][]byte
 
+	// CapacityQueryReq is the encoding format of the capacity query
 	CapacityQueryReq struct {
 		Bias      uint64 // seconds
 		AddTokens []IntOrInf
 	}
+	// CapacityQueryReq is the encoding format of the response to the capacity query
 	CapacityQueryReply []uint64
 )
 
+// Add encodes and adds a new request to the batch
 func (r *Requests) Add(service, name string, val interface{}) (int, error) {
 	enc, err := rlp.EncodeToBytes(val)
 	if err != nil {
@@ -59,6 +68,7 @@ func (r *Requests) Add(service, name string, val interface{}) (int, error) {
 	return len(*r) - 1, nil
 }
 
+// Get decodes the reply to the i-th request in the batch
 func (r Replies) Get(i int, val interface{}) error {
 	if i < 0 || i >= len(r) {
 		return ErrNoReply
@@ -70,14 +80,17 @@ const (
 	IntNonNegative = iota
 	IntNegative
 	IntPlusInf
-	IntMinusInf //TODO is this needed?
+	IntMinusInf
 )
 
+// IntOrInf is the encoding format for arbitrary length signed integers that can also
+// hold the values of +Inf or -Inf
 type IntOrInf struct {
 	Type  uint8
 	Value big.Int
 }
 
+// BigInt returns the value as a big.Int or panics if the value is infinity
 func (i *IntOrInf) BigInt() *big.Int {
 	switch i.Type {
 	case IntNonNegative:
@@ -92,6 +105,7 @@ func (i *IntOrInf) BigInt() *big.Int {
 	return &big.Int{} // invalid type decodes to 0 value
 }
 
+// Inf returns 1 if the value is +Inf, -1 if it is -Inf, 0 otherwise
 func (i *IntOrInf) Inf() int {
 	switch i.Type {
 	case IntPlusInf:
@@ -102,6 +116,7 @@ func (i *IntOrInf) Inf() int {
 	return 0 // invalid type decodes to 0 value
 }
 
+// Int64 limits the value between MinInt64 and MaxInt64 (even if it is +-Inf) and returns an int64 type
 func (i *IntOrInf) Int64() int64 {
 	switch i.Type {
 	case IntNonNegative:
@@ -124,6 +139,7 @@ func (i *IntOrInf) Int64() int64 {
 	return 0 // invalid type decodes to 0 value
 }
 
+// SetBigInt sets the value to the given big.Int
 func (i *IntOrInf) SetBigInt(v *big.Int) {
 	if v.Sign() >= 0 {
 		i.Type = IntNonNegative
@@ -134,6 +150,8 @@ func (i *IntOrInf) SetBigInt(v *big.Int) {
 	}
 }
 
+// SetInt64 sets the value to the given int64. Note that MaxInt64 translates to +Inf
+// while MinInt64 translates to -Inf.
 func (i *IntOrInf) SetInt64(v int64) {
 	if v >= 0 {
 		if v == math.MaxInt64 {
@@ -152,6 +170,7 @@ func (i *IntOrInf) SetInt64(v int64) {
 	}
 }
 
+// SetInf sets the value to +Inf or -Inf
 func (i *IntOrInf) SetInf(sign int) {
 	if sign == 1 {
 		i.Type = IntPlusInf

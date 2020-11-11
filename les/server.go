@@ -55,14 +55,13 @@ func init() {
 type LesServer struct {
 	lesCommons
 
-	ns             *nodestate.NodeStateMachine
-	archiveMode    bool // Flag whether the ethereum node runs in archive mode.
-	handler        *serverHandler
-	broadcaster    *broadcaster
-	lesTopics      []discv5.Topic
-	lespayServer   *lps.Server
-	lespayDbAccess *lps.DbAccess
-	privateKey     *ecdsa.PrivateKey
+	ns           *nodestate.NodeStateMachine
+	archiveMode  bool // Flag whether the ethereum node runs in archive mode.
+	handler      *serverHandler
+	broadcaster  *broadcaster
+	lesTopics    []discv5.Topic
+	lespayServer *lps.Server
+	privateKey   *ecdsa.PrivateKey
 
 	// Flow control and capacity management
 	fcManager    *flowcontrol.ClientManager
@@ -110,7 +109,7 @@ func NewLesServer(node *node.Node, e *eth.Ethereum, config *eth.Config) (*LesSer
 		ns:           ns,
 		archiveMode:  e.ArchiveMode(),
 		broadcaster:  newBroadcaster(ns),
-		lespayServer: lps.NewServer(ns, lespayDb, 0.01, 10000),
+		lespayServer: lps.NewServer(0.01, 10000),
 		lesTopics:    lesTopics,
 		fcManager:    flowcontrol.NewClientManager(nil, &mclock.System{}),
 		servingQueue: newServingQueue(int64(time.Millisecond*10), float64(config.LightServ)/100),
@@ -118,7 +117,7 @@ func NewLesServer(node *node.Node, e *eth.Ethereum, config *eth.Config) (*LesSer
 		threadsIdle:  threads,
 		p2pSrv:       node.Server(),
 	}
-	srv.lespayDbAccess = srv.lespayServer.Register(srv)
+	srv.lespayServer.Register(srv)
 	srv.handler = newServerHandler(srv, e.BlockChain(), e.ChainDb(), e.TxPool(), e.Synced)
 	srv.costTracker, srv.minCapacity = newCostTracker(e.ChainDb(), config)
 	srv.oracle = srv.setupOracle(node, e.BlockChain().Genesis().Hash(), config)
@@ -223,7 +222,7 @@ func (s *LesServer) Start() error {
 				s.p2pSrv.DiscV5.RegisterTopic(topic, s.closeCh)
 			}()
 		}*/
-		s.p2pSrv.DiscV5.RegisterTalkHandler("lespay", s.lespayServer.HandleTalkRequest)
+		s.p2pSrv.DiscV5.RegisterTalkHandler("lespay", s.lespayServer.ServeEncoded)
 	}
 
 	return nil

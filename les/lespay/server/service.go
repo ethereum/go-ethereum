@@ -22,63 +22,47 @@ import (
 	"time"
 
 	"github.com/ethereum/go-ethereum/common/mclock"
-	"github.com/ethereum/go-ethereum/ethdb"
 	"github.com/ethereum/go-ethereum/les/lespay"
 	"github.com/ethereum/go-ethereum/les/utils"
 	"github.com/ethereum/go-ethereum/p2p/enode"
-	"github.com/ethereum/go-ethereum/p2p/nodestate"
 	"github.com/ethereum/go-ethereum/rlp"
 )
 
-const (
-	maxRequestLength = 16
-	costCutRatio     = 0.1
-)
-
 type (
+	// Server serves lespay requests
 	Server struct {
-		ns                          *nodestate.NodeStateMachine
-		db                          ethdb.Database
 		costFilter                  *utils.CostFilter
 		limiter                     *utils.Limiter
 		services, alias             map[string]*serviceEntry
 		priority                    []*serviceEntry
 		sleepFactor, sizeCostFactor float64
-
-		opService *serviceEntry
-		opBatch   ethdb.Batch
 	}
 
+	// Service is a service registered at the Server and identified by a string id
 	Service interface {
-		ServiceInfo() (string, string) // only called during registration
-		Handle(id enode.ID, address string, name string, data []byte) []byte
+		ServiceInfo() (id, desc string)                                      // only called during registration
+		Handle(id enode.ID, address string, name string, data []byte) []byte // never called concurrently
 	}
 
 	serviceEntry struct {
 		id, desc string
 		backend  Service
 	}
-
-	DbAccess struct {
-		server  *Server
-		service *serviceEntry
-		prefix  []byte
-	}
 )
 
-func NewServer(ns *nodestate.NodeStateMachine, db ethdb.Database, maxThreadTime, maxBandwidth float64) *Server {
+// NewServer creates a new Server
+func NewServer(maxThreadTime, maxBandwidth float64) *Server {
 	return &Server{
-		ns:             ns,
-		db:             db,
-		costFilter:     utils.NewCostFilter(costCutRatio, 0.01),
+		costFilter:     utils.NewCostFilter(0.1, 0.01),
 		limiter:        utils.NewLimiter(1000),
-		sleepFactor:    (1/maxThreadTime - 1) / (1 - costCutRatio),
+		sleepFactor:    (1/maxThreadTime - 1) / 0.9,
 		sizeCostFactor: maxThreadTime * 1000000000 / maxBandwidth,
 		services:       make(map[string]*serviceEntry),
 	}
 }
 
-func (s *Server) Register(b Service) *DbAccess {
+// Register registers a Service
+func (s *Server) Register(b Service) {
 	srv := &serviceEntry{backend: b}
 	srv.id, srv.desc = b.ServiceInfo()
 	if strings.Contains(srv.id, ":") {
@@ -86,13 +70,9 @@ func (s *Server) Register(b Service) *DbAccess {
 	}
 	s.services[srv.id] = srv
 	s.priority = append(s.priority, srv)
-	return &DbAccess{
-		server:  s,
-		service: srv,
-		prefix:  append([]byte(srv.id), byte(':')),
-	}
 }
 
+// Resolve returns the Service registered under the given id
 func (s *Server) Resolve(serviceID string) Service {
 	var srv *serviceEntry
 	if len(serviceID) > 0 && serviceID[0] == ':' {
@@ -107,21 +87,12 @@ func (s *Server) Resolve(serviceID string) Service {
 	return nil
 }
 
-func (s *Server) HandleTalkRequest(id enode.ID, addr *net.UDPAddr, req []byte) []byte {
-	var requests lespay.Requests
-	if err := rlp.DecodeBytes(req, &requests); err != nil {
-		return nil
-	}
-	results := s.Serve(id, addr.String(), requests)
-	if results == nil {
-		return nil
-	}
-	res, _ := rlp.EncodeToBytes(&results)
-	return res
-}
-
+// Serve serves a lespay request batch
+// Note: requests are served by the Handle functions of the registered services. Serve
+// may be called concurrently but the Handle functions are called sequentially and
+// therefore thread safety is guaranteed.
 func (s *Server) Serve(id enode.ID, address string, requests lespay.Requests) lespay.Replies {
-	if len(requests) == 0 || len(requests) > maxRequestLength {
+	if len(requests) == 0 || len(requests) > lespay.MaxRequestLength {
 		return nil
 	}
 	priorWeight := uint64(len(requests))
@@ -132,6 +103,7 @@ func (s *Server) Serve(id enode.ID, address string, requests lespay.Requests) le
 	if ch == nil {
 		return nil
 	}
+	// Note: the following section is protected from concurrency by the limiter
 	start := mclock.Now()
 	results := make(lespay.Replies, len(requests))
 	s.alias = make(map[string]*serviceEntry)
@@ -148,9 +120,11 @@ func (s *Server) Serve(id enode.ID, address string, requests lespay.Requests) le
 	if sizeCost > cost {
 		cost = sizeCost
 	}
-	fWeight := float64(priorWeight) / maxRequestLength
+	fWeight := float64(priorWeight) / lespay.MaxRequestLength
 	filteredCost, limit := s.costFilter.Filter(cost, fWeight)
 	time.Sleep(time.Duration(filteredCost * s.sleepFactor))
+	// The protected section ends by sending the cost value to the channel and thereby
+	// allowing the limiter to start the next request
 	if limit*fWeight <= filteredCost {
 		ch <- fWeight
 	} else {
@@ -159,63 +133,21 @@ func (s *Server) Serve(id enode.ID, address string, requests lespay.Requests) le
 	return results
 }
 
+// ServeEncoded serves an encoded lespay request batch and returns the encoded replies
+func (s *Server) ServeEncoded(id enode.ID, addr *net.UDPAddr, req []byte) []byte {
+	var requests lespay.Requests
+	if err := rlp.DecodeBytes(req, &requests); err != nil {
+		return nil
+	}
+	results := s.Serve(id, addr.String(), requests)
+	if results == nil {
+		return nil
+	}
+	res, _ := rlp.EncodeToBytes(&results)
+	return res
+}
+
+// Stop shuts downs the server
 func (s *Server) Stop() {
 	s.limiter.Stop()
-}
-
-func (d *DbAccess) Operation(fn func(), write bool) {
-	d.server.opService = d.service
-	if write {
-		d.server.opBatch = d.server.db.NewBatch()
-	}
-	d.server.ns.Operation(fn)
-	d.server.opService = nil
-	if write {
-		d.server.opBatch.Write()
-		d.server.opBatch = nil
-	}
-}
-
-func (d *DbAccess) SubOperation(srv *serviceEntry, fn func()) {
-	if d.server.opService != d.service {
-		panic("Database access not allowed")
-	}
-	d.server.opService = srv
-	fn()
-	d.server.opService = d.service
-}
-
-func (d *DbAccess) Has(key []byte) (bool, error) {
-	if d.server.opService != d.service {
-		panic("Database access not allowed")
-	}
-	return d.server.db.Has(append(d.prefix, key...))
-}
-
-func (d *DbAccess) Get(key []byte) ([]byte, error) {
-	if d.server.opService != d.service {
-		panic("Database access not allowed")
-	}
-	return d.server.db.Get(append(d.prefix, key...))
-}
-
-func (d *DbAccess) Put(key []byte, value []byte) error {
-	if d.server.opService != d.service {
-		panic("Database access not allowed")
-	}
-	return d.server.opBatch.Put(append(d.prefix, key...), value)
-}
-
-func (d *DbAccess) Delete(key []byte) error {
-	if d.server.opService != d.service {
-		panic("Database access not allowed")
-	}
-	return d.server.opBatch.Delete(append(d.prefix, key...))
-}
-
-func (d *DbAccess) NewIterator(prefix []byte, start []byte) ethdb.Iterator {
-	if d.server.opService != d.service {
-		panic("Database access not allowed")
-	}
-	return d.server.db.NewIterator(append(d.prefix, prefix...), start)
 }

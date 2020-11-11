@@ -286,7 +286,7 @@ func newTestServerHandler(blocks int, indexers []*core.ChainIndexer, db ethdb.Da
 			MinRecharge: testMinCap,
 		},
 		fcManager:    flowcontrol.NewClientManager(nil, clock),
-		lespayServer: lps.NewServer(ns, db, 0.01, 10000),
+		lespayServer: lps.NewServer(0.01, 10000),
 	}
 	server.lespayServer.Register(server)
 	server.costTracker, server.minCapacity = newCostTracker(db, server.config)

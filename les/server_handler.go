@@ -887,7 +887,7 @@ func (h *serverHandler) handleMsg(p *clientPeer, wg *sync.WaitGroup) error {
 			clientErrorMeter.Mark(1)
 			return errResp(ErrDecode, "msg %v: %v", msg, err)
 		}
-		reply := h.server.lespayServer.Serve(p.ID(), p.freeClientId(), req.Reqs) //TODO thread safety
+		reply := h.server.lespayServer.Serve(p.ID(), p.freeClientId(), req.Reqs)
 		// Note: lespay requests are silently dropped if the server is overloaded but this
 		// is not considered a fault from the client's part. Flow control is not applied.
 		// This is because these requests can be sent through UDP by not connected clients

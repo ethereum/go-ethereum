@@ -424,6 +424,9 @@ func (f *clientPool) serveCapQuery(id enode.ID, freeID string, data []byte) []by
 	if rlp.DecodeBytes(data, &req) != nil {
 		return nil
 	}
+	if l := len(req.AddTokens); l == 0 || l > lespay.CapacityQueryMaxLen {
+		return nil
+	}
 	node := f.ns.GetNode(id)
 	if node == nil {
 		node = enode.SignNull(&enr.Record{}, id)
@@ -451,7 +454,7 @@ func (f *clientPool) serveCapQuery(id enode.ID, freeID string, data []byte) []by
 		bias = f.connectedBias
 	}
 	pb, _ := c.balance.GetBalance()
-	for i, addTokens := range req.AddTokens { //TODO limit length
+	for i, addTokens := range req.AddTokens {
 		add := addTokens.Int64()
 		result[i] = curve.MaxCapacity(func(capacity uint64) int64 {
 			return c.balance.EstimatePriority(now, capacity, add, 0, bias, false) / int64(capacity)
