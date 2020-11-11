@@ -17,6 +17,7 @@
 package types
 
 import (
+	"bytes"
 	"container/heap"
 	"errors"
 	"io"
@@ -65,7 +66,6 @@ type inner interface {
 	Value() *big.Int
 	Nonce() uint64
 	CheckNonce() bool
-	Hash() common.Hash
 	// To returns the recipient address of the transaction.
 	// It returns nil if the transaction is a contract creation.
 	To() *common.Address
@@ -88,44 +88,60 @@ func isProtectedV(V *big.Int) bool {
 }
 
 // EncodeRLP implements rlp.Encoder
+// For legacy transactions, it outputs rlp(tx.inner). For typed transactions
+// it outputs rlp(tx.type || tx.inner).
 func (tx *Transaction) EncodeRLP(w io.Writer) error {
-	if tx.typ != LegacyTxId {
-		if _, err := w.Write([]byte{tx.typ}); err != nil {
-			return err
-		}
+	if tx.typ == LegacyTxId {
+		return rlp.Encode(w, tx.inner)
 	}
-	return rlp.Encode(w, tx.inner)
+	buf := new(bytes.Buffer)
+	if _, err := buf.Write([]byte{tx.typ}); err != nil {
+		return err
+	}
+	if err := rlp.Encode(buf, tx.inner); err != nil {
+		return err
+	}
+	return rlp.Encode(w, buf.Bytes())
 }
 
 // DecodeRLP implements rlp.Decoder
 func (tx *Transaction) DecodeRLP(s *rlp.Stream) error {
-	typ := uint64(LegacyTxId)
 	var size uint64
 	// If the tx isn't an RLP list, it's likely typed so pop off the first byte.
 	kind, size, err := s.Kind()
 	if err != nil {
 		return err
-	} else if kind != rlp.List {
-		if typ, err = s.Uint(); err != nil {
-			return err
-		}
-	}
-	tx.typ = uint8(typ)
-	if typ == LegacyTxId {
+	} else if kind == rlp.List {
+		tx.typ = LegacyTxId
 		var i *LegacyTransaction
 		err = s.Decode(&i)
 		tx.inner = i
-	} else if typ == AccessListTxId {
-		var i *AccessListTransaction
-		err = s.Decode(&i)
-		tx.inner = i
+	} else if kind == rlp.String {
+		var b []byte
+		b, err = s.Bytes()
+		if err != nil {
+			return err
+		}
+
+		tx.typ = b[0]
+		size = uint64(len(b))
+
+		if tx.typ == AccessListTxId {
+			var i *AccessListTransaction
+			err = rlp.DecodeBytes(b[1:], &i)
+			tx.inner = i
+		} else {
+			return ErrTxTypeNotSupported
+		}
 	} else {
-		return ErrTxTypeNotSupported
+		return rlp.ErrExpectedList
 	}
+
 	if err == nil {
 		tx.size.Store(common.StorageSize(rlp.ListSize(size)))
 		tx.time = time.Now()
 	}
+
 	return err
 }
 
@@ -173,18 +189,11 @@ func (tx *Transaction) Hash() common.Hash {
 	if hash := tx.hash.Load(); hash != nil {
 		return hash.(common.Hash)
 	}
+	n := rawtx(*tx)
+	h := rlpHash(&n)
+	tx.hash.Store(h)
 
-	var v common.Hash
-
-	if tx.typ == LegacyTxId {
-		v = rlpHash(tx.inner)
-	} else {
-		v = rlpHash([]interface{}{tx.typ, tx.inner})
-	}
-
-	tx.hash.Store(v)
-
-	return v
+	return h
 }
 
 // Size returns the true RLP encoded storage size of the transaction, either by
@@ -263,6 +272,21 @@ func (tx *Transaction) Cost() *big.Int {
 }
 func (tx *Transaction) RawSignatureValues() (v, r, s *big.Int) { return tx.inner.RawSignatureValues() }
 
+// Raw transactions are used for internal processes which need the raw
+// consensus representation of typed transactions, not the RLP string
+// wrapped version.
+type rawtx Transaction
+
+func (tx *rawtx) EncodeRLP(w io.Writer) error {
+	if tx.typ != LegacyTxId {
+		if _, err := w.Write([]byte{tx.typ}); err != nil {
+			return err
+		}
+	}
+
+	return rlp.Encode(w, tx.inner)
+}
+
 // Transactions is a Transaction slice type for basic sorting.
 type Transactions []*Transaction
 
@@ -274,7 +298,8 @@ func (s Transactions) Swap(i, j int) { s[i], s[j] = s[j], s[i] }
 
 // GetRlp implements Rlpable and returns the i'th element of s in rlp.
 func (s Transactions) GetRlp(i int) []byte {
-	enc, _ := rlp.EncodeToBytes(s[i])
+	raw := rawtx(*s[i])
+	enc, _ := rlp.EncodeToBytes(&raw)
 	return enc
 }
 

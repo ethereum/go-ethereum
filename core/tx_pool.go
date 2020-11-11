@@ -539,6 +539,14 @@ func (pool *TxPool) validateTx(tx *types.Transaction, local bool) error {
 	if pool.currentMaxGas < tx.Gas() {
 		return ErrGasLimit
 	}
+	// Accept only legacy transactions if before yoloV2.
+	if tx.Type() != types.LegacyTxId && !pool.yoloV2 {
+		return ErrTxTypeNotSupported
+	}
+	// After yoloV2, accept both legacy transactions and access list transactions.
+	if pool.yoloV2 && (tx.Type() != types.LegacyTxId && tx.Type() != types.AccessListTxId) {
+		return ErrTxTypeNotSupported
+	}
 	// Make sure the transaction is signed properly
 	from, err := types.Sender(pool.signer, tx)
 	if err != nil {
@@ -558,7 +566,7 @@ func (pool *TxPool) validateTx(tx *types.Transaction, local bool) error {
 		return ErrInsufficientFunds
 	}
 	// Ensure the transaction has more gas than the basic tx fee.
-	intrGas, err := IntrinsicGas(tx.Data(), tx.AccessList(), tx.To() == nil, true, pool.istanbul, pool.yoloV2)
+	intrGas, err := IntrinsicGas(tx.Data(), tx.AccessList(), tx.To() == nil, true, pool.istanbul)
 	if err != nil {
 		return err
 	}

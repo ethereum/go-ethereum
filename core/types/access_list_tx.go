@@ -72,7 +72,7 @@ func newAccessListTransaction(chainId *big.Int, nonce uint64, to *common.Address
 		AccountNonce: nonce,
 		Recipient:    to,
 		Payload:      data,
-		Accesses:     accesses,
+		Accesses:     &AccessList{},
 		Amount:       new(big.Int),
 		GasLimit:     gasLimit,
 		Price:        new(big.Int),
@@ -88,6 +88,9 @@ func newAccessListTransaction(chainId *big.Int, nonce uint64, to *common.Address
 	}
 	if gasPrice != nil {
 		i.Price.Set(gasPrice)
+	}
+	if accesses != nil {
+		i.Accesses = accesses
 	}
 	return &Transaction{
 		typ:   AccessListTxId,
@@ -105,7 +108,6 @@ func (tx *AccessListTransaction) GasPrice() *big.Int      { return new(big.Int).
 func (tx *AccessListTransaction) Value() *big.Int         { return new(big.Int).Set(tx.Amount) }
 func (tx *AccessListTransaction) Nonce() uint64           { return tx.AccountNonce }
 func (tx *AccessListTransaction) CheckNonce() bool        { return true }
-func (tx *AccessListTransaction) Hash() common.Hash       { return rlpHash(tx) }
 
 // To returns the recipient address of the transaction.
 // It returns nil if the transaction is a contract creation.

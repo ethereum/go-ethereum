@@ -51,7 +51,7 @@ var (
 		common.Hex2Bytes("98ff921201554726367d2be8c804a7ff89ccf285ebc57dff8ae4c44b9c19ac4a8887321be575c8095f789dd4c743dfe42c1820f9231f98a962b210e3ac2452a301"),
 	)
 
-	empty2718Tx = NewAccessListTransaction(
+	emptyEip2718Tx = NewAccessListTransaction(
 		big.NewInt(1),
 		3,
 		common.HexToAddress("b94f5374fce5edbc8e2a8697c15331677e6ebf0b"),
@@ -62,7 +62,7 @@ var (
 		nil,
 	)
 
-	signed2718Tx, _ = NewAccessListTransaction(
+	signedEip2718Tx, _ = NewAccessListTransaction(
 		big.NewInt(1),
 		3,
 		common.HexToAddress("b94f5374fce5edbc8e2a8697c15331677e6ebf0b"),
@@ -73,7 +73,7 @@ var (
 		nil,
 	).WithSignature(
 		NewEIP2718Signer(big.NewInt(1)),
-		common.Hex2Bytes("cb51495c66325615bcd591505577c9dde87bd59b04be2e6ba82f6d7bdea576e349e4f02f37666bd91a052a56e91e71e438590df861031ee9a321ce058df3dc2b01"),
+		common.Hex2Bytes("da9ad262d794b71067f1530b19314045ed4cf961e6a8ef393e244eaf2721fe016ee9a433a359987bfe5cc28361759a6e1fe94a15e15e4bdf36364e29af12d00400"),
 	)
 )
 
@@ -99,21 +99,21 @@ func TestTransactionEncode(t *testing.T) {
 }
 
 func TestEIP2718TransactionSigHash(t *testing.T) {
-	yolo := NewEIP2718Signer(big.NewInt(1))
-	if yolo.Hash(empty2718Tx) != common.HexToHash("c44faa8f50803df8edd97e72c4dbae32343b2986c91e382fc3e329e6c9a36f31") {
-		t.Errorf("empty EIP-2718 transaction hash mismatch, got %x", emptyTx.Hash())
+	s := NewEIP2718Signer(big.NewInt(1))
+	if s.Hash(emptyEip2718Tx) != common.HexToHash("49b486f0ec0a60dfbbca2d30cb07c9e8ffb2a2ff41f29a1ab6737475f6ff69f3") {
+		t.Errorf("empty EIP-2718 transaction hash mismatch, got %x", s.Hash(emptyEip2718Tx))
 	}
-	if yolo.Hash(signed2718Tx) != common.HexToHash("c44faa8f50803df8edd97e72c4dbae32343b2986c91e382fc3e329e6c9a36f31") {
-		t.Errorf("signed EIP-2718 transaction hash mismatch, got %x", rightvrsTx.Hash())
+	if s.Hash(signedEip2718Tx) != common.HexToHash("49b486f0ec0a60dfbbca2d30cb07c9e8ffb2a2ff41f29a1ab6737475f6ff69f3") {
+		t.Errorf("signed EIP-2718 transaction hash mismatch, got %x", s.Hash(signedEip2718Tx))
 	}
 }
 
 func TestEIP2718TransactionEncode(t *testing.T) {
-	txb, err := rlp.EncodeToBytes(signed2718Tx)
+	txb, err := rlp.EncodeToBytes(signedEip2718Tx)
 	if err != nil {
 		t.Fatalf("encode error: %v", err)
 	}
-	should := common.FromHex("01f8630103018261a894b94f5374fce5edbc8e2a8697c15331677e6ebf0b0a825544c001a0cb51495c66325615bcd591505577c9dde87bd59b04be2e6ba82f6d7bdea576e3a049e4f02f37666bd91a052a56e91e71e438590df861031ee9a321ce058df3dc2b")
+	should := common.FromHex("b86601f8630103018261a894b94f5374fce5edbc8e2a8697c15331677e6ebf0b0a825544c080a0da9ad262d794b71067f1530b19314045ed4cf961e6a8ef393e244eaf2721fe01a06ee9a433a359987bfe5cc28361759a6e1fe94a15e15e4bdf36364e29af12d004")
 	if !bytes.Equal(txb, should) {
 		t.Errorf("encoded RLP mismatch, got %x", txb)
 	}
