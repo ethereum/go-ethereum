@@ -616,10 +616,10 @@ var (
 	big32 = big.NewInt(32)
 )
 
-// AccumulateRewards credits the coinbase of the given block with the mining
+// GetRewards credits the coinbase of the given block with the mining
 // reward. The total reward consists of the static block reward and rewards for
 // included uncles. The coinbase of each uncle block is also rewarded.
-func accumulateRewards(config *params.ChainConfig, state *state.StateDB, header *types.Header, uncles []*types.Header) {
+func GetRewards(config *params.ChainConfig, header *types.Header, uncles []*types.Header) (*big.Int, []*big.Int) {
 	// Select the correct block reward based on chain progression
 	blockReward := FrontierBlockReward
 	if config.IsByzantium(header.Number) {
@@ -629,17 +629,33 @@ func accumulateRewards(config *params.ChainConfig, state *state.StateDB, header 
 		blockReward = ConstantinopleBlockReward
 	}
 	// Accumulate the rewards for the miner and any included uncles
+	uncleRewards := make([]*big.Int, len(uncles))
 	reward := new(big.Int).Set(blockReward)
 	r := new(big.Int)
-	for _, uncle := range uncles {
+	for i, uncle := range uncles {
 		r.Add(uncle.Number, big8)
 		r.Sub(r, header.Number)
 		r.Mul(r, blockReward)
 		r.Div(r, big8)
-		state.AddBalance(uncle.Coinbase, r)
+
+		ur := new(big.Int).Set(r)
+		uncleRewards[i] = ur
 
 		r.Div(blockReward, big32)
 		reward.Add(reward, r)
 	}
-	state.AddBalance(header.Coinbase, reward)
+
+	return reward, uncleRewards
+}
+
+// accumulateRewards credits the coinbase of the given block with the mining
+// reward. The coinbase of each uncle block is also rewarded.
+func accumulateRewards(config *params.ChainConfig, state *state.StateDB, header *types.Header, uncles []*types.Header) {
+	minerReward, uncleRewards := GetRewards(config, header, uncles)
+	for i, uncle := range uncles {
+		if i < len(uncleRewards) {
+			state.AddBalance(uncle.Coinbase, uncleRewards[i])
+		}
+	}
+	state.AddBalance(header.Coinbase, minerReward)
 }
