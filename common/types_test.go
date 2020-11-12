@@ -17,8 +17,11 @@
 package common
 
 import (
+	"bytes"
 	"database/sql/driver"
 	"encoding/json"
+	"fmt"
+	"io"
 	"math/big"
 	"reflect"
 	"strings"
@@ -367,6 +370,63 @@ func TestAddress_Value(t *testing.T) {
 			}
 			if !reflect.DeepEqual(got, tt.want) {
 				t.Errorf("Address.Value() = %v, want %v", got, tt.want)
+			}
+		})
+	}
+}
+
+func TestAddress_Format(t *testing.T) {
+	b := []byte{
+		0xb2, 0x6f, 0x2b, 0x34, 0x2a, 0xab, 0x24, 0xbc, 0xf6, 0x3e,
+		0xa2, 0x18, 0xc6, 0xa9, 0x27, 0x4d, 0x30, 0xab, 0x9a, 0x15,
+	}
+	var addr Address
+	addr.SetBytes(b)
+	tests := []struct {
+		name string
+		f    func(io.Writer, Address)
+		a    Address
+		want string
+	}{
+		{
+			name: "Fprintln",
+			f: func(buf io.Writer, a Address) {
+				fmt.Fprintln(buf, a)
+			},
+			a:    addr,
+			want: "0xB26f2b342AAb24BCF63ea218c6A9274D30Ab9A15\n",
+		},
+		{
+			name: "Fprint",
+			f: func(buf io.Writer, a Address) {
+				fmt.Fprint(buf, a)
+			},
+			a:    addr,
+			want: "0xB26f2b342AAb24BCF63ea218c6A9274D30Ab9A15",
+		},
+		{
+			name: "Fprintf",
+			f: func(buf io.Writer, a Address) {
+				fmt.Fprintf(buf, "%x", a)
+			},
+			a:    addr,
+			want: "b26f2b342aab24bcf63ea218c6a9274d30ab9a15",
+		},
+		// The original default formatter for byte slice
+		{
+			name: "Fprintf",
+			f: func(buf io.Writer, a Address) {
+				fmt.Fprintf(buf, "%d", a)
+			},
+			a:    addr,
+			want: "[178 111 43 52 42 171 36 188 246 62 162 24 198 169 39 77 48 171 154 21]",
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			var buf bytes.Buffer
+			if tt.f(&buf, tt.a); buf.String() != tt.want {
+				t.Errorf("%s does not render as expected, want %s, got %s", tt.name, tt.want, buf.String())
 			}
 		})
 	}

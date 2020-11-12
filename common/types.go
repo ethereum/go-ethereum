@@ -236,7 +236,11 @@ func (a Address) String() string {
 // Format implements fmt.Formatter, forcing the byte slice to be formatted as is,
 // without going through the stringer interface used for logging.
 func (a Address) Format(s fmt.State, c rune) {
-	fmt.Fprintf(s, "%"+string(c), a[:])
+	if string(c) == "v" {
+		fmt.Fprintf(s, "%v", a.Hex())
+	} else {
+		fmt.Fprintf(s, "%"+string(c), a[:])
+	}
 }
 
 // SetBytes sets the address to the value of b.
