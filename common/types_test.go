@@ -407,10 +407,10 @@ func TestAddress_Format(t *testing.T) {
 		{
 			name: "Fprintf",
 			f: func(buf io.Writer, a Address) {
-				fmt.Fprintf(buf, "%x", a)
+				fmt.Fprintf(buf, "%s", a)
 			},
 			a:    addr,
-			want: "b26f2b342aab24bcf63ea218c6a9274d30ab9a15",
+			want: "0xB26f2b342AAb24BCF63ea218c6A9274D30Ab9A15",
 		},
 		// The original default formatter for byte slice
 		{
