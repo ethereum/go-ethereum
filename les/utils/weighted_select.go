@@ -89,7 +89,7 @@ func (w *WeightedRandomSelect) Choose() WrsItem {
 		if weight != lastWeight {
 			w.setWeight(choice, weight)
 		}
-		if weight >= lastWeight || uint64(rand.Int63n(int64(lastWeight))) < weight {
+		if weight >= lastWeight || rand.Uint64()%lastWeight < weight {
 			return choice
 		}
 	}
