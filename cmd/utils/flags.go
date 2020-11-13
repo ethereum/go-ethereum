@@ -383,9 +383,9 @@ var (
 		Name:  "cache.noprefetch",
 		Usage: "Disable heuristic state prefetch during block import (less CPU and disk IO, more time waiting for data)",
 	}
-	CacheNoPreimageFlag = cli.BoolFlag{
-		Name:  "cache.nopreimage",
-		Usage: "Disable recording the SHA3/keccak preimages of trie keys",
+	CachePreimagesFlag = cli.BoolTFlag{
+		Name:  "cache.preimages",
+		Usage: "Enable recording the SHA3/keccak preimages of trie keys",
 	}
 	// Miner settings
 	MiningEnabledFlag = cli.BoolFlag{
@@ -1530,9 +1530,9 @@ func SetEthConfig(ctx *cli.Context, stack *node.Node, cfg *eth.Config) {
 	if ctx.GlobalIsSet(CacheNoPrefetchFlag.Name) {
 		cfg.NoPrefetch = ctx.GlobalBool(CacheNoPrefetchFlag.Name)
 	}
-	if ctx.GlobalIsSet(CacheNoPreimageFlag.Name) {
-		cfg.NoPreimage = ctx.GlobalBool(CacheNoPreimageFlag.Name)
-	}
+	// Read the value from the flag no matter it's set or not.
+	// The default value is true.
+	cfg.Preimages = ctx.GlobalBool(CachePreimagesFlag.Name)
 	if ctx.GlobalIsSet(TxLookupLimitFlag.Name) {
 		cfg.TxLookupLimit = ctx.GlobalUint64(TxLookupLimitFlag.Name)
 	}
@@ -1842,7 +1842,7 @@ func MakeChain(ctx *cli.Context, stack *node.Node, readOnly bool) (chain *core.B
 		TrieDirtyDisabled:   ctx.GlobalString(GCModeFlag.Name) == "archive",
 		TrieTimeLimit:       eth.DefaultConfig.TrieTimeout,
 		SnapshotLimit:       eth.DefaultConfig.SnapshotCache,
-		NoPreimage:          ctx.GlobalBool(CacheNoPreimageFlag.Name),
+		Preimages:           ctx.GlobalBool(CachePreimagesFlag.Name),
 	}
 	if !ctx.GlobalIsSet(SnapshotFlag.Name) {
 		cache.SnapshotLimit = 0 // Disabled

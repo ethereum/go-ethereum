@@ -43,7 +43,7 @@ func (c Config) MarshalTOML() (interface{}, error) {
 		TrieDirtyCache          int
 		TrieTimeout             time.Duration
 		SnapshotCache           int
-		NoPreimage              bool
+		Preimages               bool
 		Miner                   miner.Config
 		Ethash                  ethash.Config
 		TxPool                  core.TxPoolConfig
@@ -84,7 +84,7 @@ func (c Config) MarshalTOML() (interface{}, error) {
 	enc.TrieDirtyCache = c.TrieDirtyCache
 	enc.TrieTimeout = c.TrieTimeout
 	enc.SnapshotCache = c.SnapshotCache
-	enc.NoPreimage = c.NoPreimage
+	enc.Preimages = c.Preimages
 	enc.Miner = c.Miner
 	enc.Ethash = c.Ethash
 	enc.TxPool = c.TxPool
@@ -129,7 +129,7 @@ func (c *Config) UnmarshalTOML(unmarshal func(interface{}) error) error {
 		TrieDirtyCache          *int
 		TrieTimeout             *time.Duration
 		SnapshotCache           *int
-		NoPreimage              *bool
+		Preimages               *bool
 		Miner                   *miner.Config
 		Ethash                  *ethash.Config
 		TxPool                  *core.TxPoolConfig
@@ -225,8 +225,8 @@ func (c *Config) UnmarshalTOML(unmarshal func(interface{}) error) error {
 	if dec.SnapshotCache != nil {
 		c.SnapshotCache = *dec.SnapshotCache
 	}
-	if dec.NoPreimage != nil {
-		c.NoPreimage = *dec.NoPreimage
+	if dec.Preimages != nil {
+		c.Preimages = *dec.Preimages
 	}
 	if dec.Miner != nil {
 		c.Miner = *dec.Miner

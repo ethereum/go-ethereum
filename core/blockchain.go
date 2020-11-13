@@ -125,11 +125,11 @@ type CacheConfig struct {
 	TrieCleanJournal    string        // Disk journal for saving clean cache entries.
 	TrieCleanRejournal  time.Duration // Time interval to dump clean cache to disk periodically
 	TrieCleanNoPrefetch bool          // Whether to disable heuristic state prefetching for followup blocks
-	TrieDirtyLimit      int           // Memory limit (MB) at which to start flushing dirty trie nodes to disk
-	TrieDirtyDisabled   bool          // Whether to disable trie write caching and GC altogether (archive node)
-	TrieTimeLimit       time.Duration // Time limit after which to flush the current in-memory trie to disk
-	SnapshotLimit       int           // Memory allowance (MB) to use for caching snapshot entries in memory
-	NoPreimage          bool          // Whether to store preimage of trie key to the disk
+	TrieDirtyLimit    int             // Memory limit (MB) at which to start flushing dirty trie nodes to disk
+	TrieDirtyDisabled bool            // Whether to disable trie write caching and GC altogether (archive node)
+	TrieTimeLimit     time.Duration   // Time limit after which to flush the current in-memory trie to disk
+	SnapshotLimit     int             // Memory allowance (MB) to use for caching snapshot entries in memory
+	Preimages         bool            // Whether to store preimage of trie key to the disk
 
 	SnapshotWait bool // Wait for snapshot construction on startup. TODO(karalabe): This is a dirty hack for testing, nuke it
 }
@@ -235,9 +235,9 @@ func NewBlockChain(db ethdb.Database, cacheConfig *CacheConfig, chainConfig *par
 		db:          db,
 		triegc:      prque.New(nil),
 		stateCache: state.NewDatabaseWithConfig(db, &trie.Config{
-			Cache:      cacheConfig.TrieCleanLimit,
-			Journal:    cacheConfig.TrieCleanJournal,
-			NoPreimage: cacheConfig.NoPreimage,
+			Cache:     cacheConfig.TrieCleanLimit,
+			Journal:   cacheConfig.TrieCleanJournal,
+			Preimages: cacheConfig.Preimages,
 		}),
 		quit:           make(chan struct{}),
 		shouldPreserve: shouldPreserve,

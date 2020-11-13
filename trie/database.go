@@ -74,8 +74,8 @@ type Database struct {
 	oldest  common.Hash                 // Oldest tracked node, flush-list head
 	newest  common.Hash                 // Newest tracked node, flush-list tail
 
-	noPreimage bool                   // Flag whether the preimage should be recorded
-	preimages  map[common.Hash][]byte // Preimages of nodes from the secure trie
+	persistPreimages bool                   // Flag whether the preimage should be recorded
+	preimages        map[common.Hash][]byte // Preimages of nodes from the secure trie
 
 	gctime  time.Duration      // Time spent on garbage collection since last commit
 	gcnodes uint64             // Nodes garbage collected since last commit
@@ -275,9 +275,9 @@ func expandNode(hash hashNode, n node) node {
 
 // Config defines all necessary options for database.
 type Config struct {
-	Cache      int    // Memory allowance (MB) to use for caching trie nodes in memory
-	Journal    string // Journal of clean cache to survive node restarts
-	NoPreimage bool   // Flag whether the preimage of trie key is recorded
+	Cache     int    // Memory allowance (MB) to use for caching trie nodes in memory
+	Journal   string // Journal of clean cache to survive node restarts
+	Preimages bool   // Flag whether the preimage of trie key is recorded
 }
 
 // NewDatabase creates a new trie database to store ephemeral trie content before
@@ -299,14 +299,19 @@ func NewDatabaseWithConfig(diskdb ethdb.KeyValueStore, config *Config) *Database
 			cleans = fastcache.LoadFromFileOrNew(config.Journal, config.Cache*1024*1024)
 		}
 	}
+	persistPreimages := true // Enable the preimages recording by default
+	if config != nil && !config.Preimages {
+		persistPreimages = false
+		log.Info("Disable recording the key preimages")
+	}
 	return &Database{
 		diskdb: diskdb,
 		cleans: cleans,
 		dirties: map[common.Hash]*cachedNode{{}: {
 			children: make(map[common.Hash]uint16),
 		}},
-		noPreimage: config != nil && config.NoPreimage,
-		preimages:  make(map[common.Hash][]byte),
+		persistPreimages: persistPreimages,
+		preimages:        make(map[common.Hash][]byte),
 	}
 }
 
