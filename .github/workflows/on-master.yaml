@@ -3,10 +3,9 @@ name: Docker Build and publish to Github
 on:
   push:
     branches:
-      - statediff_at_anyblock-1.9.11
-      - v1.9.23-statediff-0.0.11
-      - v1.9.23-statediff-0.0.10
-      - v1.9.23-statediff-0.0.9
+      - v1.9.24-statediff
+      - v1.9.23-statediff
+      - v1.9.11-statediff
 
 jobs:
   build:
