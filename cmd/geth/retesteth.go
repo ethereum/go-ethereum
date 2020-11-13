@@ -671,12 +671,13 @@ func (api *RetestethAPI) AccountRange(ctx context.Context,
 		}
 		// Recompute transactions up to the target index.
 		signer := types.MakeSigner(api.blockchain.Config(), block.Number())
+		context := core.NewEVMBlockContext(block.Header(), api.blockchain, nil)
 		for idx, tx := range block.Transactions() {
 			// Assemble the transaction call message and return if the requested offset
 			msg, _ := tx.AsMessage(signer)
-			context := core.NewEVMContext(msg, block.Header(), api.blockchain, nil)
+			txContext := core.NewEVMTxContext(msg)
 			// Not yet the searched for transaction, execute on top of the current state
-			vmenv := vm.NewEVM(context, statedb, api.blockchain.Config(), vm.Config{})
+			vmenv := vm.NewEVM(context, txContext, statedb, api.blockchain.Config(), vm.Config{})
 			if _, err := core.ApplyMessage(vmenv, msg, new(core.GasPool).AddGas(tx.Gas())); err != nil {
 				return AccountRangeResult{}, fmt.Errorf("transaction %#x failed: %v", tx.Hash(), err)
 			}
@@ -781,12 +782,13 @@ func (api *RetestethAPI) StorageRangeAt(ctx context.Context,
 		}
 		// Recompute transactions up to the target index.
 		signer := types.MakeSigner(api.blockchain.Config(), block.Number())
+		context := core.NewEVMBlockContext(block.Header(), api.blockchain, nil)
 		for idx, tx := range block.Transactions() {
 			// Assemble the transaction call message and return if the requested offset
 			msg, _ := tx.AsMessage(signer)
-			context := core.NewEVMContext(msg, block.Header(), api.blockchain, nil)
+			txContext := core.NewEVMTxContext(msg)
 			// Not yet the searched for transaction, execute on top of the current state
-			vmenv := vm.NewEVM(context, statedb, api.blockchain.Config(), vm.Config{})
+			vmenv := vm.NewEVM(context, txContext, statedb, api.blockchain.Config(), vm.Config{})
 			if _, err := core.ApplyMessage(vmenv, msg, new(core.GasPool).AddGas(tx.Gas())); err != nil {
 				return StorageRangeResult{}, fmt.Errorf("transaction %#x failed: %v", tx.Hash(), err)
 			}

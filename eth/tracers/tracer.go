@@ -545,7 +545,7 @@ func (jst *Tracer) CaptureState(env *vm.EVM, pc uint64, op vm.OpCode, gas, cost 
 	if jst.err == nil {
 		// Initialize the context if it wasn't done yet
 		if !jst.inited {
-			jst.ctx["block"] = env.BlockNumber.Uint64()
+			jst.ctx["block"] = env.Context.BlockNumber.Uint64()
 			jst.inited = true
 		}
 		// If tracing was interrupted, set the error and stop
