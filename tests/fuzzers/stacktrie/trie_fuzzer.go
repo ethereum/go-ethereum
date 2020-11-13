@@ -149,7 +149,7 @@ func (f *fuzzer) fuzz() int {
 		useful      bool
 		maxElements = 10000
 		// operate on unique keys only
-		keys = make(map[string][]struct{})
+		keys = make(map[string]struct{})
 	)
 	// Fill the trie with elements
 	for i := 0; !f.exhausted && i < maxElements; i++ {
