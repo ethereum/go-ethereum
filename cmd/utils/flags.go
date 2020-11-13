@@ -385,7 +385,7 @@ var (
 	}
 	CachePreimagesFlag = cli.BoolTFlag{
 		Name:  "cache.preimages",
-		Usage: "Enable recording the SHA3/keccak preimages of trie keys",
+		Usage: "Enable recording the SHA3/keccak preimages of trie keys (enable by default)",
 	}
 	// Miner settings
 	MiningEnabledFlag = cli.BoolFlag{
@@ -1533,6 +1533,10 @@ func SetEthConfig(ctx *cli.Context, stack *node.Node, cfg *eth.Config) {
 	// Read the value from the flag no matter it's set or not.
 	// The default value is true.
 	cfg.Preimages = ctx.GlobalBool(CachePreimagesFlag.Name)
+	if cfg.NoPruning && !cfg.Preimages {
+		cfg.Preimages = true
+		log.Info("Enable recording the key preimages for archive node")
+	}
 	if ctx.GlobalIsSet(TxLookupLimitFlag.Name) {
 		cfg.TxLookupLimit = ctx.GlobalUint64(TxLookupLimitFlag.Name)
 	}
@@ -1843,6 +1847,10 @@ func MakeChain(ctx *cli.Context, stack *node.Node, readOnly bool) (chain *core.B
 		TrieTimeLimit:       eth.DefaultConfig.TrieTimeout,
 		SnapshotLimit:       eth.DefaultConfig.SnapshotCache,
 		Preimages:           ctx.GlobalBool(CachePreimagesFlag.Name),
+	}
+	if cache.TrieDirtyDisabled && !cache.Preimages {
+		cache.Preimages = true
+		log.Info("Enable recording the key preimages for archive node")
 	}
 	if !ctx.GlobalIsSet(SnapshotFlag.Name) {
 		cache.SnapshotLimit = 0 // Disabled
