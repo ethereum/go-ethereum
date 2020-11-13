@@ -37,13 +37,13 @@ func decodeEncode(input []byte, val interface{}, i int) {
 }
 
 func Fuzz(input []byte) int {
-	if len(input) == 0{
+	if len(input) == 0 {
 		return 0
 	}
 
 	var i int
 	{
-			rlp.Split(input)
+		rlp.Split(input)
 	}
 	{
 		if elems, _, err := rlp.SplitList(input); err == nil {

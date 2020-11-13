@@ -125,7 +125,7 @@ func Fuzz(input []byte) int {
 				announceIdxs[i] = (int(annBuf[0])*256 + int(annBuf[1])) % len(txs)
 				announces[i] = txs[announceIdxs[i]].Hash()
 			}
-			if verbose{
+			if verbose {
 				fmt.Println("Notify", peer, announceIdxs)
 			}
 			if err := f.Notify(peer, announces); err != nil {
@@ -166,7 +166,7 @@ func Fuzz(input []byte) int {
 				return 0
 			}
 			direct := (directFlag % 2) == 0
-			if verbose{
+			if verbose {
 				fmt.Println("Enqueue", peer, deliverIdxs, direct)
 			}
 			if err := f.Enqueue(peer, deliveries, direct); err != nil {
@@ -181,7 +181,7 @@ func Fuzz(input []byte) int {
 				return 0
 			}
 			peer := peers[int(peerIdx)%len(peers)]
-			if verbose{
+			if verbose {
 				fmt.Println("Drop", peer)
 			}
 			if err := f.Drop(peer); err != nil {
@@ -196,7 +196,7 @@ func Fuzz(input []byte) int {
 				return 0
 			}
 			tick := time.Duration(tickCnt) * 100 * time.Millisecond
-			if verbose{
+			if verbose {
 				fmt.Println("Sleep", tick)
 			}
 			clock.Run(tick)
