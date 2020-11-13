@@ -21,15 +21,15 @@ import (
 	"math/big"
 	"sync"
 
-	ethereum "github.com/maticnetwork/bor"
-	"github.com/maticnetwork/bor/accounts"
-	"github.com/maticnetwork/bor/common"
-	"github.com/maticnetwork/bor/common/hexutil"
-	"github.com/maticnetwork/bor/core/types"
-	"github.com/maticnetwork/bor/event"
-	"github.com/maticnetwork/bor/log"
-	"github.com/maticnetwork/bor/rpc"
-	"github.com/maticnetwork/bor/signer/core"
+	"github.com/ethereum/go-ethereum"
+	"github.com/ethereum/go-ethereum/accounts"
+	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/common/hexutil"
+	"github.com/ethereum/go-ethereum/core/types"
+	"github.com/ethereum/go-ethereum/event"
+	"github.com/ethereum/go-ethereum/log"
+	"github.com/ethereum/go-ethereum/rpc"
+	"github.com/ethereum/go-ethereum/signer/core"
 )
 
 type ExternalBackend struct {

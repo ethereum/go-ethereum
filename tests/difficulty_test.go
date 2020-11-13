@@ -20,8 +20,8 @@ import (
 	"math/big"
 	"testing"
 
-	"github.com/maticnetwork/bor/common"
-	"github.com/maticnetwork/bor/params"
+	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/params"
 )
 
 var (

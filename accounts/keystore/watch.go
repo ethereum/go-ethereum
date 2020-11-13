@@ -21,7 +21,7 @@ package keystore
 import (
 	"time"
 
-	"github.com/maticnetwork/bor/log"
+	"github.com/ethereum/go-ethereum/log"
 	"github.com/rjeczalik/notify"
 )
 

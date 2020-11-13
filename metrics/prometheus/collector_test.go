@@ -5,7 +5,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/maticnetwork/bor/metrics"
+	"github.com/ethereum/go-ethereum/metrics"
 )
 
 func TestMain(m *testing.M) {

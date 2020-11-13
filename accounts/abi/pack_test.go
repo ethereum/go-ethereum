@@ -27,7 +27,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/maticnetwork/bor/common"
+	"github.com/ethereum/go-ethereum/common"
 )
 
 // TestPack tests the general pack/unpack tests in packing_test.go
@@ -44,18 +44,7 @@ func TestPack(t *testing.T) {
 				t.Fatalf("invalid ABI definition %s, %v", inDef, err)
 			}
 			var packed []byte
-			if reflect.TypeOf(test.unpacked).Kind() != reflect.Struct {
-				packed, err = inAbi.Pack("method", test.unpacked)
-			} else {
-				// if want is a struct we need to use the components.
-				elem := reflect.ValueOf(test.unpacked)
-				var values []interface{}
-				for i := 0; i < elem.NumField(); i++ {
-					field := elem.Field(i)
-					values = append(values, field.Interface())
-				}
-				packed, err = inAbi.Pack("method", values...)
-			}
+			packed, err = inAbi.Pack("method", test.unpacked)
 
 			if err != nil {
 				t.Fatalf("test %d (%v) failed: %v", i, test.def, err)

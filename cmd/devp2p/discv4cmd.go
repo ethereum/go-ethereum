@@ -23,13 +23,13 @@ import (
 	"strings"
 	"time"
 
-	"github.com/maticnetwork/bor/cmd/devp2p/internal/v4test"
-	"github.com/maticnetwork/bor/common"
-	"github.com/maticnetwork/bor/crypto"
-	"github.com/maticnetwork/bor/internal/utesting"
-	"github.com/maticnetwork/bor/p2p/discover"
-	"github.com/maticnetwork/bor/p2p/enode"
-	"github.com/maticnetwork/bor/params"
+	"github.com/ethereum/go-ethereum/cmd/devp2p/internal/v4test"
+	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/crypto"
+	"github.com/ethereum/go-ethereum/internal/utesting"
+	"github.com/ethereum/go-ethereum/p2p/discover"
+	"github.com/ethereum/go-ethereum/p2p/enode"
+	"github.com/ethereum/go-ethereum/params"
 	"gopkg.in/urfave/cli.v1"
 )
 
@@ -286,7 +286,11 @@ func listen(ln *enode.LocalNode, addr string) *net.UDPConn {
 	}
 	usocket := socket.(*net.UDPConn)
 	uaddr := socket.LocalAddr().(*net.UDPAddr)
-	ln.SetFallbackIP(net.IP{127, 0, 0, 1})
+	if uaddr.IP.IsUnspecified() {
+		ln.SetFallbackIP(net.IP{127, 0, 0, 1})
+	} else {
+		ln.SetFallbackIP(uaddr.IP)
+	}
 	ln.SetFallbackUDP(uaddr.Port)
 	return usocket
 }
@@ -294,7 +298,11 @@ func listen(ln *enode.LocalNode, addr string) *net.UDPConn {
 func parseBootnodes(ctx *cli.Context) ([]*enode.Node, error) {
 	s := params.RinkebyBootnodes
 	if ctx.IsSet(bootnodesFlag.Name) {
-		s = strings.Split(ctx.String(bootnodesFlag.Name), ",")
+		input := ctx.String(bootnodesFlag.Name)
+		if input == "" {
+			return nil, nil
+		}
+		s = strings.Split(input, ",")
 	}
 	nodes := make([]*enode.Node, len(s))
 	var err error

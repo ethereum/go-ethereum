@@ -19,8 +19,8 @@ package miner
 import (
 	"testing"
 
-	"github.com/maticnetwork/bor/common"
-	"github.com/maticnetwork/bor/core/types"
+	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/core/types"
 )
 
 // noopChainRetriever is an implementation of headerRetriever that always

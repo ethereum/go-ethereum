@@ -21,9 +21,9 @@ import (
 	"encoding/binary"
 	"fmt"
 
-	"github.com/maticnetwork/bor/common"
-	"github.com/maticnetwork/bor/ethdb/memorydb"
-	"github.com/maticnetwork/bor/trie"
+	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/ethdb/memorydb"
+	"github.com/ethereum/go-ethereum/trie"
 )
 
 // randTest performs random trie operations.

@@ -17,9 +17,9 @@
 package rawdb
 
 import (
-	"github.com/maticnetwork/bor/common"
-	"github.com/maticnetwork/bor/ethdb"
-	"github.com/maticnetwork/bor/log"
+	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/ethdb"
+	"github.com/ethereum/go-ethereum/log"
 )
 
 // ReadSnapshotRoot retrieves the root of the block whose state is contained in

@@ -24,9 +24,9 @@ import (
 	"net"
 	"time"
 
-	"github.com/maticnetwork/bor/common/math"
-	"github.com/maticnetwork/bor/crypto"
-	"github.com/maticnetwork/bor/p2p/enode"
+	"github.com/ethereum/go-ethereum/common/math"
+	"github.com/ethereum/go-ethereum/crypto"
+	"github.com/ethereum/go-ethereum/p2p/enode"
 )
 
 // node represents a host on the network.
@@ -46,7 +46,10 @@ func encodePubkey(key *ecdsa.PublicKey) encPubkey {
 	return e
 }
 
-func decodePubkey(curve elliptic.Curve, e encPubkey) (*ecdsa.PublicKey, error) {
+func decodePubkey(curve elliptic.Curve, e []byte) (*ecdsa.PublicKey, error) {
+	if len(e) != len(encPubkey{}) {
+		return nil, errors.New("wrong size public key data")
+	}
 	p := &ecdsa.PublicKey{Curve: curve, X: new(big.Int), Y: new(big.Int)}
 	half := len(e) / 2
 	p.X.SetBytes(e[:half])

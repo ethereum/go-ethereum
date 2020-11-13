@@ -24,19 +24,20 @@ import (
 	"sync/atomic"
 	"time"
 
-	"github.com/maticnetwork/bor/common"
-	"github.com/maticnetwork/bor/common/mclock"
-	"github.com/maticnetwork/bor/core"
-	"github.com/maticnetwork/bor/core/rawdb"
-	"github.com/maticnetwork/bor/core/state"
-	"github.com/maticnetwork/bor/core/types"
-	"github.com/maticnetwork/bor/ethdb"
-	"github.com/maticnetwork/bor/light"
-	"github.com/maticnetwork/bor/log"
-	"github.com/maticnetwork/bor/metrics"
-	"github.com/maticnetwork/bor/p2p"
-	"github.com/maticnetwork/bor/rlp"
-	"github.com/maticnetwork/bor/trie"
+	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/common/mclock"
+	"github.com/ethereum/go-ethereum/core"
+	"github.com/ethereum/go-ethereum/core/rawdb"
+	"github.com/ethereum/go-ethereum/core/state"
+	"github.com/ethereum/go-ethereum/core/types"
+	"github.com/ethereum/go-ethereum/ethdb"
+	lps "github.com/ethereum/go-ethereum/les/lespay/server"
+	"github.com/ethereum/go-ethereum/light"
+	"github.com/ethereum/go-ethereum/log"
+	"github.com/ethereum/go-ethereum/metrics"
+	"github.com/ethereum/go-ethereum/p2p"
+	"github.com/ethereum/go-ethereum/rlp"
+	"github.com/ethereum/go-ethereum/trie"
 )
 
 const (
@@ -123,6 +124,9 @@ func (h *serverHandler) handle(p *clientPeer) error {
 		return err
 	}
 	if p.server {
+		if err := h.server.serverset.register(p); err != nil {
+			return err
+		}
 		// connected to another server, no messages expected, just wait for disconnection
 		_, err := p.rw.ReadMsg()
 		return err
@@ -135,9 +139,13 @@ func (h *serverHandler) handle(p *clientPeer) error {
 	defer p.fcClient.Disconnect()
 
 	// Disconnect the inbound peer if it's rejected by clientPool
-	if !h.server.clientPool.connect(p, 0) {
-		p.Log().Debug("Light Ethereum peer registration failed", "err", errFullClientPool)
+	if cap, err := h.server.clientPool.connect(p); cap != p.fcParams.MinRecharge || err != nil {
+		p.Log().Debug("Light Ethereum peer rejected", "err", errFullClientPool)
 		return errFullClientPool
+	}
+	p.balance, _ = h.server.clientPool.ns.GetField(p.Node(), h.server.clientPool.BalanceField).(*lps.NodeBalance)
+	if p.balance == nil {
+		return p2p.DiscRequested
 	}
 	// Register the peer locally
 	if err := h.server.peers.register(p); err != nil {
@@ -154,6 +162,7 @@ func (h *serverHandler) handle(p *clientPeer) error {
 		wg.Wait() // Ensure all background task routines have exited.
 		h.server.peers.unregister(p.id)
 		h.server.clientPool.disconnect(p)
+		p.balance = nil
 		clientConnectionGauge.Update(int64(h.server.peers.len()))
 		connectionTimer.Update(time.Duration(mclock.Now() - connectedAt))
 	}()
@@ -253,13 +262,16 @@ func (h *serverHandler) handleMsg(p *clientPeer, wg *sync.WaitGroup) error {
 			realCost = maxCost // Assign a fake cost for testing purpose
 		} else {
 			realCost = h.server.costTracker.realCost(servingTime, msg.Size, replySize)
+			if realCost > maxCost {
+				realCost = maxCost
+			}
 		}
 		bv := p.fcClient.RequestProcessed(reqID, responseCount, maxCost, realCost)
 		if amount != 0 {
 			// Feed cost tracker request serving statistic.
 			h.server.costTracker.updateStats(msg.Code, amount, servingTime, realCost)
 			// Reduce priority "balance" for the specific peer.
-			h.server.clientPool.requestCost(p, realCost)
+			p.balance.RequestServed(realCost)
 		}
 		if reply != nil {
 			p.queueSend(func() {
@@ -322,7 +334,7 @@ func (h *serverHandler) handleMsg(p *clientPeer, wg *sync.WaitGroup) error {
 						origin = h.blockchain.GetHeaderByNumber(query.Origin.Number)
 					}
 					if origin == nil {
-						atomic.AddUint32(&p.invalidCount, 1)
+						p.bumpInvalid()
 						break
 					}
 					headers = append(headers, origin)
@@ -377,7 +389,7 @@ func (h *serverHandler) handleMsg(p *clientPeer, wg *sync.WaitGroup) error {
 					first = false
 				}
 				reply := p.replyBlockHeaders(req.ReqID, headers)
-				sendResponse(req.ReqID, query.Amount, p.replyBlockHeaders(req.ReqID, headers), task.done())
+				sendResponse(req.ReqID, query.Amount, reply, task.done())
 				if metrics.EnabledExpensive {
 					miscOutHeaderPacketsMeter.Mark(1)
 					miscOutHeaderTrafficMeter.Mark(int64(reply.size()))
@@ -419,7 +431,7 @@ func (h *serverHandler) handleMsg(p *clientPeer, wg *sync.WaitGroup) error {
 					}
 					body := h.blockchain.GetBodyRLP(hash)
 					if body == nil {
-						atomic.AddUint32(&p.invalidCount, 1)
+						p.bumpInvalid()
 						continue
 					}
 					bodies = append(bodies, body)
@@ -467,7 +479,7 @@ func (h *serverHandler) handleMsg(p *clientPeer, wg *sync.WaitGroup) error {
 					header := h.blockchain.GetHeaderByHash(request.BHash)
 					if header == nil {
 						p.Log().Warn("Failed to retrieve associate header for code", "hash", request.BHash)
-						atomic.AddUint32(&p.invalidCount, 1)
+						p.bumpInvalid()
 						continue
 					}
 					// Refuse to search stale state data in the database since looking for
@@ -475,7 +487,7 @@ func (h *serverHandler) handleMsg(p *clientPeer, wg *sync.WaitGroup) error {
 					local := h.blockchain.CurrentHeader().Number.Uint64()
 					if !h.server.archiveMode && header.Number.Uint64()+core.TriesInMemory <= local {
 						p.Log().Debug("Reject stale code request", "number", header.Number.Uint64(), "head", local)
-						atomic.AddUint32(&p.invalidCount, 1)
+						p.bumpInvalid()
 						continue
 					}
 					triedb := h.blockchain.StateCache().TrieDB()
@@ -483,10 +495,10 @@ func (h *serverHandler) handleMsg(p *clientPeer, wg *sync.WaitGroup) error {
 					account, err := h.getAccount(triedb, header.Root, common.BytesToHash(request.AccKey))
 					if err != nil {
 						p.Log().Warn("Failed to retrieve account for code", "block", header.Number, "hash", header.Hash(), "account", common.BytesToHash(request.AccKey), "err", err)
-						atomic.AddUint32(&p.invalidCount, 1)
+						p.bumpInvalid()
 						continue
 					}
-					code, err := triedb.Node(common.BytesToHash(account.CodeHash))
+					code, err := h.blockchain.StateCache().ContractCode(common.BytesToHash(request.AccKey), common.BytesToHash(account.CodeHash))
 					if err != nil {
 						p.Log().Warn("Failed to retrieve account code", "block", header.Number, "hash", header.Hash(), "account", common.BytesToHash(request.AccKey), "codehash", common.BytesToHash(account.CodeHash), "err", err)
 						continue
@@ -542,7 +554,7 @@ func (h *serverHandler) handleMsg(p *clientPeer, wg *sync.WaitGroup) error {
 					results := h.blockchain.GetReceiptsByHash(hash)
 					if results == nil {
 						if header := h.blockchain.GetHeaderByHash(hash); header == nil || header.ReceiptHash != types.EmptyRootHash {
-							atomic.AddUint32(&p.invalidCount, 1)
+							p.bumpInvalid()
 							continue
 						}
 					}
@@ -605,7 +617,7 @@ func (h *serverHandler) handleMsg(p *clientPeer, wg *sync.WaitGroup) error {
 
 						if header = h.blockchain.GetHeaderByHash(request.BHash); header == nil {
 							p.Log().Warn("Failed to retrieve header for proof", "hash", request.BHash)
-							atomic.AddUint32(&p.invalidCount, 1)
+							p.bumpInvalid()
 							continue
 						}
 						// Refuse to search stale state data in the database since looking for
@@ -613,14 +625,14 @@ func (h *serverHandler) handleMsg(p *clientPeer, wg *sync.WaitGroup) error {
 						local := h.blockchain.CurrentHeader().Number.Uint64()
 						if !h.server.archiveMode && header.Number.Uint64()+core.TriesInMemory <= local {
 							p.Log().Debug("Reject stale trie request", "number", header.Number.Uint64(), "head", local)
-							atomic.AddUint32(&p.invalidCount, 1)
+							p.bumpInvalid()
 							continue
 						}
 						root = header.Root
 					}
 					// If a header lookup failed (non existent), ignore subsequent requests for the same header
 					if root == (common.Hash{}) {
-						atomic.AddUint32(&p.invalidCount, 1)
+						p.bumpInvalid()
 						continue
 					}
 					// Open the account or storage trie for the request
@@ -639,7 +651,7 @@ func (h *serverHandler) handleMsg(p *clientPeer, wg *sync.WaitGroup) error {
 						account, err := h.getAccount(statedb.TrieDB(), root, common.BytesToHash(request.AccKey))
 						if err != nil {
 							p.Log().Warn("Failed to retrieve account for proof", "block", header.Number, "hash", header.Hash(), "account", common.BytesToHash(request.AccKey), "err", err)
-							atomic.AddUint32(&p.invalidCount, 1)
+							p.bumpInvalid()
 							continue
 						}
 						trie, err = statedb.OpenStorageTrie(common.BytesToHash(request.AccKey), account.Root)
@@ -833,9 +845,9 @@ func (h *serverHandler) handleMsg(p *clientPeer, wg *sync.WaitGroup) error {
 		clientErrorMeter.Mark(1)
 		return errResp(ErrInvalidMsgCode, "%v", msg.Code)
 	}
-	// If the client has made too much invalid request(e.g. request a non-exist data),
+	// If the client has made too much invalid request(e.g. request a non-existent data),
 	// reject them to prevent SPAM attack.
-	if atomic.LoadUint32(&p.invalidCount) > maxRequestErrors {
+	if p.getInvalid() > maxRequestErrors {
 		clientErrorMeter.Mark(1)
 		return errTooManyInvalidRequest
 	}

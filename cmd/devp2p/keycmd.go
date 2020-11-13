@@ -20,8 +20,8 @@ import (
 	"fmt"
 	"net"
 
-	"github.com/maticnetwork/bor/crypto"
-	"github.com/maticnetwork/bor/p2p/enode"
+	"github.com/ethereum/go-ethereum/crypto"
+	"github.com/ethereum/go-ethereum/p2p/enode"
 	"gopkg.in/urfave/cli.v1"
 )
 

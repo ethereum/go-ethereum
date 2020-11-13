@@ -19,16 +19,16 @@ package clique
 import (
 	"fmt"
 
-	"github.com/maticnetwork/bor/common"
-	"github.com/maticnetwork/bor/consensus"
-	"github.com/maticnetwork/bor/core/types"
-	"github.com/maticnetwork/bor/rpc"
+	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/consensus"
+	"github.com/ethereum/go-ethereum/core/types"
+	"github.com/ethereum/go-ethereum/rpc"
 )
 
 // API is a user facing RPC API to allow controlling the signer and voting
 // mechanisms of the proof-of-authority scheme.
 type API struct {
-	chain  consensus.ChainReader
+	chain  consensus.ChainHeaderReader
 	clique *Clique
 }
 

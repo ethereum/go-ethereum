@@ -26,7 +26,7 @@ import (
 	"os"
 	"strings"
 
-	"github.com/maticnetwork/bor/rlp"
+	"github.com/ethereum/go-ethereum/rlp"
 )
 
 var (

@@ -23,14 +23,14 @@ import (
 	"time"
 
 	"github.com/VictoriaMetrics/fastcache"
-	"github.com/maticnetwork/bor/common"
-	"github.com/maticnetwork/bor/common/math"
-	"github.com/maticnetwork/bor/core/rawdb"
-	"github.com/maticnetwork/bor/crypto"
-	"github.com/maticnetwork/bor/ethdb"
-	"github.com/maticnetwork/bor/log"
-	"github.com/maticnetwork/bor/rlp"
-	"github.com/maticnetwork/bor/trie"
+	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/common/math"
+	"github.com/ethereum/go-ethereum/core/rawdb"
+	"github.com/ethereum/go-ethereum/crypto"
+	"github.com/ethereum/go-ethereum/ethdb"
+	"github.com/ethereum/go-ethereum/log"
+	"github.com/ethereum/go-ethereum/rlp"
+	"github.com/ethereum/go-ethereum/trie"
 )
 
 var (
@@ -54,9 +54,11 @@ type generatorStats struct {
 
 // Log creates an contextual log with the given message and the context pulled
 // from the internally maintained statistics.
-func (gs *generatorStats) Log(msg string, marker []byte) {
+func (gs *generatorStats) Log(msg string, root common.Hash, marker []byte) {
 	var ctx []interface{}
-
+	if root != (common.Hash{}) {
+		ctx = append(ctx, []interface{}{"root", root}...)
+	}
 	// Figure out whether we're after or within an account
 	switch len(marker) {
 	case common.HashLength:
@@ -120,14 +122,14 @@ func generateSnapshot(diskdb ethdb.KeyValueStore, triedb *trie.Database, cache i
 func (dl *diskLayer) generate(stats *generatorStats) {
 	// If a database wipe is in operation, wait until it's done
 	if stats.wiping != nil {
-		stats.Log("Wiper running, state snapshotting paused", dl.genMarker)
+		stats.Log("Wiper running, state snapshotting paused", common.Hash{}, dl.genMarker)
 		select {
 		// If wiper is done, resume normal mode of operation
 		case <-stats.wiping:
 			stats.wiping = nil
 			stats.start = time.Now()
 
-		// If generator was aboted during wipe, return
+		// If generator was aborted during wipe, return
 		case abort := <-dl.genAbort:
 			abort <- stats
 			return
@@ -137,13 +139,13 @@ func (dl *diskLayer) generate(stats *generatorStats) {
 	accTrie, err := trie.NewSecure(dl.root, dl.triedb)
 	if err != nil {
 		// The account trie is missing (GC), surf the chain until one becomes available
-		stats.Log("Trie missing, state snapshotting paused", dl.genMarker)
+		stats.Log("Trie missing, state snapshotting paused", dl.root, dl.genMarker)
 
 		abort := <-dl.genAbort
 		abort <- stats
 		return
 	}
-	stats.Log("Resuming state snapshot generation", dl.genMarker)
+	stats.Log("Resuming state snapshot generation", dl.root, dl.genMarker)
 
 	var accMarker []byte
 	if len(dl.genMarker) > 0 { // []byte{} is the start, use nil for that
@@ -192,7 +194,7 @@ func (dl *diskLayer) generate(stats *generatorStats) {
 				dl.lock.Unlock()
 			}
 			if abort != nil {
-				stats.Log("Aborting state snapshot generation", accountHash[:])
+				stats.Log("Aborting state snapshot generation", dl.root, accountHash[:])
 				abort <- stats
 				return
 			}
@@ -201,7 +203,10 @@ func (dl *diskLayer) generate(stats *generatorStats) {
 		if acc.Root != emptyRoot {
 			storeTrie, err := trie.NewSecure(acc.Root, dl.triedb)
 			if err != nil {
-				log.Crit("Storage trie inaccessible for snapshot generation", "err", err)
+				log.Error("Generator failed to access storage trie", "accroot", dl.root, "acchash", common.BytesToHash(accIt.Key), "stroot", acc.Root, "err", err)
+				abort := <-dl.genAbort
+				abort <- stats
+				return
 			}
 			var storeMarker []byte
 			if accMarker != nil && bytes.Equal(accountHash[:], accMarker) && len(dl.genMarker) > common.HashLength {
@@ -230,19 +235,31 @@ func (dl *diskLayer) generate(stats *generatorStats) {
 						dl.lock.Unlock()
 					}
 					if abort != nil {
-						stats.Log("Aborting state snapshot generation", append(accountHash[:], storeIt.Key...))
+						stats.Log("Aborting state snapshot generation", dl.root, append(accountHash[:], storeIt.Key...))
 						abort <- stats
 						return
 					}
 				}
 			}
+			if err := storeIt.Err; err != nil {
+				log.Error("Generator failed to iterate storage trie", "accroot", dl.root, "acchash", common.BytesToHash(accIt.Key), "stroot", acc.Root, "err", err)
+				abort := <-dl.genAbort
+				abort <- stats
+				return
+			}
 		}
 		if time.Since(logged) > 8*time.Second {
-			stats.Log("Generating state snapshot", accIt.Key)
+			stats.Log("Generating state snapshot", dl.root, accIt.Key)
 			logged = time.Now()
 		}
 		// Some account processed, unmark the marker
 		accMarker = nil
+	}
+	if err := accIt.Err; err != nil {
+		log.Error("Generator failed to iterate account trie", "root", dl.root, "err", err)
+		abort := <-dl.genAbort
+		abort <- stats
+		return
 	}
 	// Snapshot fully generated, set the marker to nil
 	if batch.ValueSize() > 0 {

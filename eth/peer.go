@@ -24,11 +24,11 @@ import (
 	"time"
 
 	mapset "github.com/deckarep/golang-set"
-	"github.com/maticnetwork/bor/common"
-	"github.com/maticnetwork/bor/core/forkid"
-	"github.com/maticnetwork/bor/core/types"
-	"github.com/maticnetwork/bor/p2p"
-	"github.com/maticnetwork/bor/rlp"
+	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/core/forkid"
+	"github.com/ethereum/go-ethereum/core/types"
+	"github.com/ethereum/go-ethereum/p2p"
+	"github.com/ethereum/go-ethereum/rlp"
 )
 
 var (
@@ -262,7 +262,7 @@ func (p *peer) announceTransactions(removePeer func(string)) {
 			queue = append(queue, hashes...)
 			if len(queue) > maxQueuedTxAnns {
 				// Fancy copy and resize to ensure buffer doesn't grow indefinitely
-				queue = queue[:copy(queue, queue[len(queue)-maxQueuedTxs:])]
+				queue = queue[:copy(queue, queue[len(queue)-maxQueuedTxAnns:])]
 			}
 
 		case <-done:

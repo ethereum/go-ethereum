@@ -57,6 +57,32 @@ func SplitString(b []byte) (content, rest []byte, err error) {
 	return content, rest, nil
 }
 
+// SplitUint64 decodes an integer at the beginning of b.
+// It also returns the remaining data after the integer in 'rest'.
+func SplitUint64(b []byte) (x uint64, rest []byte, err error) {
+	content, rest, err := SplitString(b)
+	if err != nil {
+		return 0, b, err
+	}
+	switch {
+	case len(content) == 0:
+		return 0, rest, nil
+	case len(content) == 1:
+		if content[0] == 0 {
+			return 0, b, ErrCanonInt
+		}
+		return uint64(content[0]), rest, nil
+	case len(content) > 8:
+		return 0, b, errUintOverflow
+	default:
+		x, err = readSize(content, byte(len(content)))
+		if err != nil {
+			return 0, b, ErrCanonInt
+		}
+		return x, rest, nil
+	}
+}
+
 // SplitList splits b into the content of a list and any remaining
 // bytes after the list.
 func SplitList(b []byte) (content, rest []byte, err error) {

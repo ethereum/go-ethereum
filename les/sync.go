@@ -21,11 +21,11 @@ import (
 	"errors"
 	"time"
 
-	"github.com/maticnetwork/bor/common"
-	"github.com/maticnetwork/bor/core/rawdb"
-	"github.com/maticnetwork/bor/eth/downloader"
-	"github.com/maticnetwork/bor/light"
-	"github.com/maticnetwork/bor/log"
+	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/core/rawdb"
+	"github.com/ethereum/go-ethereum/eth/downloader"
+	"github.com/ethereum/go-ethereum/light"
+	"github.com/ethereum/go-ethereum/log"
 )
 
 var errInvalidCheckpoint = errors.New("invalid advertised checkpoint")

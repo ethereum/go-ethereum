@@ -21,7 +21,7 @@ package p2p
 import (
 	"net"
 
-	"github.com/maticnetwork/bor/metrics"
+	"github.com/ethereum/go-ethereum/metrics"
 )
 
 const (

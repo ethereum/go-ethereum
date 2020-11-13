@@ -27,13 +27,13 @@ import (
 	"testing"
 	"time"
 
-	"github.com/maticnetwork/bor/accounts/abi/bind"
-	"github.com/maticnetwork/bor/accounts/abi/bind/backends"
-	"github.com/maticnetwork/bor/common"
-	"github.com/maticnetwork/bor/contracts/checkpointoracle/contract"
-	"github.com/maticnetwork/bor/core"
-	"github.com/maticnetwork/bor/crypto"
-	"github.com/maticnetwork/bor/params"
+	"github.com/ethereum/go-ethereum/accounts/abi/bind"
+	"github.com/ethereum/go-ethereum/accounts/abi/bind/backends"
+	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/contracts/checkpointoracle/contract"
+	"github.com/ethereum/go-ethereum/core"
+	"github.com/ethereum/go-ethereum/crypto"
+	"github.com/ethereum/go-ethereum/params"
 )
 
 var (

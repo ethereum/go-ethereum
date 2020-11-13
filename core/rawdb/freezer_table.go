@@ -26,10 +26,10 @@ import (
 	"sync"
 	"sync/atomic"
 
+	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/log"
+	"github.com/ethereum/go-ethereum/metrics"
 	"github.com/golang/snappy"
-	"github.com/maticnetwork/bor/common"
-	"github.com/maticnetwork/bor/log"
-	"github.com/maticnetwork/bor/metrics"
 )
 
 var (
@@ -330,7 +330,8 @@ func (t *freezerTable) truncate(items uint64) error {
 	defer t.lock.Unlock()
 
 	// If our item count is correct, don't do anything
-	if atomic.LoadUint64(&t.items) <= items {
+	existing := atomic.LoadUint64(&t.items)
+	if existing <= items {
 		return nil
 	}
 	// We need to truncate, save the old size for metrics tracking
@@ -339,7 +340,11 @@ func (t *freezerTable) truncate(items uint64) error {
 		return err
 	}
 	// Something's out of sync, truncate the table's offset index
-	t.logger.Warn("Truncating freezer table", "items", t.items, "limit", items)
+	log := t.logger.Debug
+	if existing > items+1 {
+		log = t.logger.Warn // Only loud warn if we delete multiple items
+	}
+	log("Truncating freezer table", "items", existing, "limit", items)
 	if err := truncateFreezerFile(t.index, int64(items+1)*indexEntrySize); err != nil {
 		return err
 	}

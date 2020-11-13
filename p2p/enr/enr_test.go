@@ -24,7 +24,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/maticnetwork/bor/rlp"
+	"github.com/ethereum/go-ethereum/rlp"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )

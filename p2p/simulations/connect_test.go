@@ -19,15 +19,15 @@ package simulations
 import (
 	"testing"
 
-	"github.com/maticnetwork/bor/node"
-	"github.com/maticnetwork/bor/p2p/enode"
-	"github.com/maticnetwork/bor/p2p/simulations/adapters"
+	"github.com/ethereum/go-ethereum/node"
+	"github.com/ethereum/go-ethereum/p2p/enode"
+	"github.com/ethereum/go-ethereum/p2p/simulations/adapters"
 )
 
 func newTestNetwork(t *testing.T, nodeCount int) (*Network, []enode.ID) {
 	t.Helper()
-	adapter := adapters.NewSimAdapter(adapters.Services{
-		"noopwoop": func(ctx *adapters.ServiceContext) (node.Service, error) {
+	adapter := adapters.NewSimAdapter(adapters.LifecycleConstructors{
+		"noopwoop": func(ctx *adapters.ServiceContext, stack *node.Node) (node.Lifecycle, error) {
 			return NewNoopService(nil), nil
 		},
 	})

@@ -22,8 +22,8 @@ import (
 	"errors"
 	"math/big"
 
-	"github.com/maticnetwork/bor/common"
-	"github.com/maticnetwork/bor/core/types"
+	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/core/types"
 )
 
 // NotFound is returned by API methods if the requested item does not exist.
@@ -148,11 +148,6 @@ type FilterQuery struct {
 	// {{A}, {B}}         matches topic A in first position AND B in second position
 	// {{A, B}, {C, D}}   matches topic (A OR B) in first position AND (C OR D) in second position
 	Topics [][]common.Hash
-}
-
-type FilterState struct {
-	Did      uint64
-	Contract common.Address
 }
 
 // LogFilterer provides access to contract log events using a one-off query or continuous

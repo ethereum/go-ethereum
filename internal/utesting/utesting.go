@@ -65,10 +65,17 @@ func MatchTests(tests []Test, expr string) []Test {
 func RunTests(tests []Test, report io.Writer) []Result {
 	results := make([]Result, len(tests))
 	for i, test := range tests {
+		var output io.Writer
+		buffer := new(bytes.Buffer)
+		output = buffer
+		if report != nil {
+			output = io.MultiWriter(buffer, report)
+		}
 		start := time.Now()
 		results[i].Name = test.Name
-		results[i].Failed, results[i].Output = Run(test)
+		results[i].Failed = run(test, output)
 		results[i].Duration = time.Since(start)
+		results[i].Output = buffer.String()
 		if report != nil {
 			printResult(results[i], report)
 		}
@@ -80,7 +87,6 @@ func printResult(r Result, w io.Writer) {
 	pd := r.Duration.Truncate(100 * time.Microsecond)
 	if r.Failed {
 		fmt.Fprintf(w, "-- FAIL %s (%v)\n", r.Name, pd)
-		fmt.Fprintln(w, r.Output)
 	} else {
 		fmt.Fprintf(w, "-- OK %s (%v)\n", r.Name, pd)
 	}
@@ -99,7 +105,13 @@ func CountFailures(rr []Result) int {
 
 // Run executes a single test.
 func Run(test Test) (bool, string) {
-	t := new(T)
+	output := new(bytes.Buffer)
+	failed := run(test, output)
+	return failed, output.String()
+}
+
+func run(test Test, output io.Writer) bool {
+	t := &T{output: output}
 	done := make(chan struct{})
 	go func() {
 		defer close(done)
@@ -114,7 +126,7 @@ func Run(test Test) (bool, string) {
 		test.Fn(t)
 	}()
 	<-done
-	return t.failed, t.output.String()
+	return t.failed
 }
 
 // T is the value given to the test function. The test can signal failures
@@ -122,7 +134,7 @@ func Run(test Test) (bool, string) {
 type T struct {
 	mu     sync.Mutex
 	failed bool
-	output bytes.Buffer
+	output io.Writer
 }
 
 // FailNow marks the test as having failed and stops its execution by calling
@@ -151,7 +163,7 @@ func (t *T) Failed() bool {
 func (t *T) Log(vs ...interface{}) {
 	t.mu.Lock()
 	defer t.mu.Unlock()
-	fmt.Fprintln(&t.output, vs...)
+	fmt.Fprintln(t.output, vs...)
 }
 
 // Logf formats its arguments according to the format, analogous to Printf, and records
@@ -162,7 +174,7 @@ func (t *T) Logf(format string, vs ...interface{}) {
 	if len(format) == 0 || format[len(format)-1] != '\n' {
 		format += "\n"
 	}
-	fmt.Fprintf(&t.output, format, vs...)
+	fmt.Fprintf(t.output, format, vs...)
 }
 
 // Error is equivalent to Log followed by Fail.

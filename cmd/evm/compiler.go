@@ -21,7 +21,7 @@ import (
 	"fmt"
 	"io/ioutil"
 
-	"github.com/maticnetwork/bor/cmd/evm/internal/compiler"
+	"github.com/ethereum/go-ethereum/cmd/evm/internal/compiler"
 
 	cli "gopkg.in/urfave/cli.v1"
 )

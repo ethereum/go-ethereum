@@ -22,7 +22,7 @@ import (
 	"errors"
 	"math/big"
 
-	"github.com/maticnetwork/bor/common"
+	"github.com/ethereum/go-ethereum/common"
 )
 
 // A BigInt represents a signed multi-precision integer.
@@ -33,6 +33,16 @@ type BigInt struct {
 // NewBigInt allocates and returns a new BigInt set to x.
 func NewBigInt(x int64) *BigInt {
 	return &BigInt{big.NewInt(x)}
+}
+
+// NewBigIntFromString allocates and returns a new BigInt set to x
+// interpreted in the provided base.
+func NewBigIntFromString(x string, base int) *BigInt {
+	b, success := new(big.Int).SetString(x, base)
+	if !success {
+		return nil
+	}
+	return &BigInt{b}
 }
 
 // GetBytes returns the absolute value of x as a big-endian byte slice.
