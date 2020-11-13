@@ -387,7 +387,8 @@ func (b *SimulatedBackend) CallContract(ctx context.Context, call ethereum.CallM
 	if err != nil {
 		return nil, err
 	}
-	res, err := b.callContract(ctx, call, b.blockchain.CurrentBlock(), stateDB)
+	// We can pass the state here since it will be dropped eventually.
+	res, _, err := b.callContract(ctx, call, &callContext{state: stateDB, header: b.blockchain.CurrentBlock().Header()})
 	if err != nil {
 		return nil, err
 	}
@@ -402,9 +403,10 @@ func (b *SimulatedBackend) CallContract(ctx context.Context, call ethereum.CallM
 func (b *SimulatedBackend) PendingCallContract(ctx context.Context, call ethereum.CallMsg) ([]byte, error) {
 	b.mu.Lock()
 	defer b.mu.Unlock()
-	defer b.pendingState.RevertToSnapshot(b.pendingState.Snapshot())
 
-	res, err := b.callContract(ctx, call, b.pendingBlock, b.pendingState)
+	// It's necessary to pass the copied state here, the state will be modified
+	// during the call.
+	res, _, err := b.callContract(ctx, call, &callContext{state: b.pendingState.Copy(), header: b.pendingBlock.Header()})
 	if err != nil {
 		return nil, err
 	}
@@ -430,12 +432,19 @@ func (b *SimulatedBackend) SuggestGasPrice(ctx context.Context) (*big.Int, error
 	return big.NewInt(1), nil
 }
 
-// EstimateGas executes the requested code against the currently pending block/state and
-// returns the used amount of gas.
-func (b *SimulatedBackend) EstimateGas(ctx context.Context, call ethereum.CallMsg) (uint64, error) {
+// estimateGas is the internal version of EstimateGas. It accepts the call message as
+// well as the call context. It can be used to execute a single call or a serial calls
+// with the supplied call context(the intermediate state can be saved).
+func (b *SimulatedBackend) estimateGas(ctx context.Context, call ethereum.CallMsg, callctx *callContext) (uint64, *callContext, error) {
 	b.mu.Lock()
 	defer b.mu.Unlock()
 
+	if callctx == nil {
+		callctx = &callContext{
+			state:  b.pendingState,
+			header: b.pendingBlock.Header(),
+		}
+	}
 	// Determine the lowest and highest possible gas limits to binary search in between
 	var (
 		lo  uint64 = params.TxGas - 1
@@ -453,7 +462,7 @@ func (b *SimulatedBackend) EstimateGas(ctx context.Context, call ethereum.CallMs
 		available := new(big.Int).Set(balance)
 		if call.Value != nil {
 			if call.Value.Cmp(available) >= 0 {
-				return 0, errors.New("insufficient funds for transfer")
+				return 0, nil, errors.New("insufficient funds for transfer")
 			}
 			available.Sub(available, call.Value)
 		}
@@ -471,61 +480,100 @@ func (b *SimulatedBackend) EstimateGas(ctx context.Context, call ethereum.CallMs
 	cap = hi
 
 	// Create a helper to check if a gas allowance results in an executable transaction
-	executable := func(gas uint64) (bool, *core.ExecutionResult, error) {
+	executable := func(gas uint64) (bool, *core.ExecutionResult, *callContext, error) {
 		call.Gas = gas
-
-		snapshot := b.pendingState.Snapshot()
-		res, err := b.callContract(ctx, call, b.pendingBlock, b.pendingState)
-		b.pendingState.RevertToSnapshot(snapshot)
-
+		res, after, err := b.callContract(ctx, call, callctx.copy()) // only pass the copy
 		if err != nil {
 			if err == core.ErrIntrinsicGas {
-				return true, nil, nil // Special case, raise gas limit
+				return true, nil, nil, nil // Special case, raise gas limit
 			}
-			return true, nil, err // Bail out
+			return true, nil, nil, err // Bail out
 		}
-		return res.Failed(), res, nil
+		return res.Failed(), res, after, nil
 	}
 	// Execute the binary search and hone in on an executable gas limit
+	var after *callContext
 	for lo+1 < hi {
 		mid := (hi + lo) / 2
-		failed, _, err := executable(mid)
+		failed, _, callctx, err := executable(mid)
 
 		// If the error is not nil(consensus error), it means the provided message
 		// call or transaction will never be accepted no matter how much gas it is
 		// assigned. Return the error directly, don't struggle any more
 		if err != nil {
-			return 0, err
+			return 0, nil, err
 		}
 		if failed {
 			lo = mid
 		} else {
-			hi = mid
+			hi, after = mid, callctx
 		}
 	}
 	// Reject the transaction as invalid if it still fails at the highest allowance
 	if hi == cap {
-		failed, result, err := executable(hi)
+		failed, result, callctx, err := executable(hi)
 		if err != nil {
-			return 0, err
+			return 0, nil, err
 		}
 		if failed {
 			if result != nil && result.Err != vm.ErrOutOfGas {
 				if len(result.Revert()) > 0 {
-					return 0, newRevertError(result)
+					return 0, nil, newRevertError(result)
 				}
-				return 0, result.Err
+				return 0, nil, result.Err
 			}
 			// Otherwise, the specified gas cap is too low
-			return 0, fmt.Errorf("gas required exceeds allowance (%d)", cap)
+			return 0, nil, fmt.Errorf("gas required exceeds allowance (%d)", cap)
 		}
+		after = callctx
 	}
-	return hi, nil
+	return hi, after, nil
+}
+
+// EstimateGas executes the requested code against the currently pending block/state and
+// returns the used amount of gas.
+func (b *SimulatedBackend) EstimateGas(ctx context.Context, call ethereum.CallMsg) (uint64, error) {
+	res, _, err := b.estimateGas(ctx, call, nil)
+	return res, err
+}
+
+// EstimateGasList returns an estimate of the amount of gas needed to execute list of
+// given transactions against the current pending block.
+func (b *SimulatedBackend) EstimateGasList(ctx context.Context, calls []ethereum.CallMsg) ([]uint64, error) {
+	var (
+		gas     uint64
+		err     error
+		callctx *callContext
+	)
+	res := make([]uint64, len(calls))
+	for idx, call := range calls {
+		gas, callctx, err = b.estimateGas(ctx, call, callctx)
+		if err != nil {
+			return nil, err
+		}
+		res[idx] = gas
+	}
+	return res, nil
+}
+
+// callContext is the environment for one call or a serial calls execution
+type callContext struct {
+	state  *state.StateDB // The state used to execute call
+	header *types.Header  // The associated header, it should be **immutable**
+}
+
+// copy returns the copied instance of call environment.
+func (callctx *callContext) copy() *callContext {
+	return &callContext{
+		state:  callctx.state.Copy(),
+		header: callctx.header,
+	}
 }
 
 // callContract implements common code between normal and pending contract calls.
-// state is modified during execution, make sure to copy it if necessary.
-func (b *SimulatedBackend) callContract(ctx context.Context, call ethereum.CallMsg, block *types.Block, stateDB *state.StateDB) (*core.ExecutionResult, error) {
+// State in the callctx is modified during execution, make sure to copy it if
+// necessary. The callctx is always assumed not nil.
+func (b *SimulatedBackend) callContract(ctx context.Context, call ethereum.CallMsg, callctx *callContext) (*core.ExecutionResult, *callContext, error) {
 	// Ensure message is initialized properly.
 	if call.GasPrice == nil {
 		call.GasPrice = big.NewInt(1)
@@ -537,18 +585,24 @@ func (b *SimulatedBackend) callContract(ctx context.Context, call ethereum.CallM
 		call.Value = new(big.Int)
 	}
 	// Set infinite balance to the fake caller account.
-	from := stateDB.GetOrNewStateObject(call.From)
+	from := callctx.state.GetOrNewStateObject(call.From)
 	from.SetBalance(math.MaxBig256)
 	// Execute the call.
 	msg := callMsg{call}
 
-	evmContext := core.NewEVMContext(msg, block.Header(), b.blockchain, nil)
+	evmContext := core.NewEVMContext(msg, callctx.header, b.blockchain, nil)
 	// Create a new environment which holds all relevant information
 	// about the transaction and calling mechanisms.
-	vmEnv := vm.NewEVM(evmContext, stateDB, b.config, vm.Config{})
-	gasPool := new(core.GasPool).AddGas(math.MaxUint64)
+	vmenv := vm.NewEVM(evmContext, callctx.state, b.config, vm.Config{})
+	gaspool := new(core.GasPool).AddGas(math.MaxUint64)
 
-	return core.NewStateTransition(vmEnv, msg, gasPool).TransitionDb()
+	res, err := core.NewStateTransition(vmenv, msg, gaspool).TransitionDb()
+	if err != nil {
+		return nil, nil, err
+	}
+	// It's necessary to call finalise if we are executing a batch of calls.
+	callctx.state.Finalise(b.blockchain.Config().IsEIP158(callctx.header.Number))
+	return res, callctx, nil
 }
 
 // SendTransaction updates the pending block to include the given transaction.
