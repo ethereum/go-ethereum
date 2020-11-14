@@ -74,7 +74,7 @@ The dumpgenesis command dumps the genesis block configuration in JSON format to 
 		Action:    utils.MigrateFlags(importChain),
 		Name:      "import",
 		Usage:     "Import a blockchain file",
-		ArgsUsage: "<filename> (<filename 2> ... <filename N>) ",
+		ArgsUsage: "<filename> (<filename 2> ... <filename N>) <genesisPath>",
 		Flags: []cli.Flag{
 			utils.DataDirFlag,
 			utils.CacheFlag,
@@ -94,6 +94,10 @@ The dumpgenesis command dumps the genesis block configuration in JSON format to 
 			utils.MetricsInfluxDBPasswordFlag,
 			utils.MetricsInfluxDBTagsFlag,
 			utils.TxLookupLimitFlag,
+
+			// bor related flags
+			utils.HeimdallURLFlag,
+			utils.WithoutHeimdallFlag,
 		},
 		Category: "BLOCKCHAIN COMMANDS",
 		Description: `

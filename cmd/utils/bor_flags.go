@@ -29,6 +29,12 @@ var (
 		Name:  "bor.withoutheimdall",
 		Usage: "Run without Heimdall service (for testing purpose)",
 	}
+
+	// BorFlags all bor related flags
+	BorFlags = []cli.Flag{
+		HeimdallURLFlag,
+		WithoutHeimdallFlag,
+	}
 )
 
 func getGenesis(genesisPath string) (*core.Genesis, error) {
