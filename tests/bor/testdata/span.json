@@ -1,0 +1,67 @@
+{
+	"height": "42841",
+	"result": {
+		"span_id": 1,
+		"start_block": 256,
+		"end_block": 6655,
+		"validator_set": {
+			"validators": [{
+				"ID": 5,
+				"startEpoch": 0,
+				"endEpoch": 0,
+				"power": 30,
+				"pubKey": "0x04a36f6ed1f93acb0a38f4cacbe2467c72458ac41ce3b12b34d758205b2bc5d930a4e059462da7a0976c32fce766e1f7e8d73933ae72ac2af231fe161187743932",
+				"signer": "0x9fB29AAc15b9A4B7F17c3385939b007540f4d791",
+				"last_updated": 0,
+				"accum": 10000
+			}, {
+				"ID": 1,
+				"startEpoch": 0,
+				"endEpoch": 0,
+				"power": 20,
+				"pubKey": "0x04a312814042a6655c8e5ecf0c52cba0b6a6f3291c87cc42260a3c0222410c0d0d59b9139d1c56542e5df0ce2fce3a86ce13e93bd9bde0dc8ff664f8dd5294dead",
+				"signer": "0x96C42C56fdb78294F96B0cFa33c92bed7D75F96a",
+				"last_updated": 0,
+				"accum": 10000
+			}, {
+				"ID": 2,
+				"startEpoch": 0,
+				"endEpoch": 0,
+				"power": 10,
+				"pubKey": "0x0469536ae98030a7e83ec5ef3baffed2d05a32e31d978e58486f6bdb0fbbf240293838325116090190c0639db03f9cbd8b9aecfd269d016f46e3a2287fbf9ad232",
+				"signer": "0xc787af4624cb3e80ee23ae7faac0f2acea2be34c",
+				"last_updated": 0,
+				"accum": 5000
+			}]
+		},
+		"selected_producers": [{
+			"ID": 5,
+			"startEpoch": 0,
+			"endEpoch": 0,
+			"power": 30,
+			"pubKey": "0x04a36f6ed1f93acb0a38f4cacbe2467c72458ac41ce3b12b34d758205b2bc5d930a4e059462da7a0976c32fce766e1f7e8d73933ae72ac2af231fe161187743932",
+			"signer": "0x9fB29AAc15b9A4B7F17c3385939b007540f4d791",
+			"last_updated": 0,
+			"accum": 10000
+		}, {
+			"ID": 1,
+			"startEpoch": 0,
+			"endEpoch": 0,
+			"power": 20,
+			"pubKey": "0x04a312814042a6655c8e5ecf0c52cba0b6a6f3291c87cc42260a3c0222410c0d0d59b9139d1c56542e5df0ce2fce3a86ce13e93bd9bde0dc8ff664f8dd5294dead",
+			"signer": "0x96C42C56fdb78294F96B0cFa33c92bed7D75F96a",
+			"last_updated": 0,
+			"accum": 10000
+		}, {
+			"ID": 2,
+			"startEpoch": 0,
+			"endEpoch": 0,
+			"power": 10,
+			"pubKey": "0x0469536ae98030a7e83ec5ef3baffed2d05a32e31d978e58486f6bdb0fbbf240293838325116090190c0639db03f9cbd8b9aecfd269d016f46e3a2287fbf9ad232",
+			"signer": "0xc787af4624cb3e80ee23ae7faac0f2acea2be34c",
+			"last_updated": 0,
+			"accum": 5000
+		}],
+		"bor_chain_id": "15001"
+	}
+}
