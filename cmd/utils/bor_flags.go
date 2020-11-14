@@ -52,7 +52,7 @@ func getGenesis(genesisPath string) (*core.Genesis, error) {
 	return genesis, nil
 }
 
-func createBorEthereum(ctx *cli.Context, cfg *eth.Config) *eth.Ethereum {
+func createBorEthereum(cfg *eth.Config) *eth.Ethereum {
 	workspace, err := ioutil.TempDir("", "bor-command-node-")
 	if err != nil {
 		Fatalf("failed to create temporary keystore: %v", err)

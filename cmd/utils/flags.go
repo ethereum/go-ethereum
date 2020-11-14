@@ -1816,7 +1816,7 @@ func MakeChain(ctx *cli.Context, stack *node.Node, readOnly bool) (chain *core.B
 	if config.Clique != nil {
 		engine = clique.New(config.Clique, chainDb)
 	} else if config.Bor != nil {
-		engine = createBorEthereum(ctx, &eth.Config{
+		engine = createBorEthereum(&eth.Config{
 			Genesis:         genesis,
 			HeimdallURL:     ctx.GlobalString(HeimdallURLFlag.Name),
 			WithoutHeimdall: ctx.GlobalBool(WithoutHeimdallFlag.Name),
