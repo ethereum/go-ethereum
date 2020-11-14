@@ -371,6 +371,8 @@ func (c *ChainConfig) String() string {
 		engine = c.Ethash
 	case c.Clique != nil:
 		engine = c.Clique
+	case c.Bor != nil:
+		engine = c.Bor
 	default:
 		engine = "unknown"
 	}
