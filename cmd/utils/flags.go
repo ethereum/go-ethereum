@@ -1813,14 +1813,16 @@ func MakeChain(ctx *cli.Context, stack *node.Node, readOnly bool) (chain *core.B
 		Fatalf("%v", err)
 	}
 	var engine consensus.Engine
+	var ethereum *eth.Ethereum
 	if config.Clique != nil {
 		engine = clique.New(config.Clique, chainDb)
 	} else if config.Bor != nil {
-		engine = createBorEthereum(&eth.Config{
+		ethereum = CreateBorEthereum(&eth.Config{
 			Genesis:         genesis,
 			HeimdallURL:     ctx.GlobalString(HeimdallURLFlag.Name),
 			WithoutHeimdall: ctx.GlobalBool(WithoutHeimdallFlag.Name),
-		}).Engine()
+		})
+		engine = ethereum.Engine()
 	} else {
 		engine = ethash.NewFaker()
 		if !ctx.GlobalBool(FakePoWFlag.Name) {
@@ -1865,6 +1867,9 @@ func MakeChain(ctx *cli.Context, stack *node.Node, readOnly bool) (chain *core.B
 	chain, err = core.NewBlockChain(chainDb, cache, config, engine, vmcfg, nil, limit)
 	if err != nil {
 		Fatalf("Can't create BlockChain: %v", err)
+	}
+	if ethereum != nil {
+		ethereum.SetBlockchain(chain)
 	}
 	return chain, chainDb
 }
