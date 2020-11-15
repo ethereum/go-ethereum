@@ -18,6 +18,7 @@ package statediff
 
 import (
 	"bytes"
+	"errors"
 	"math/big"
 	"strconv"
 	"sync"
@@ -40,7 +41,6 @@ import (
 	ind "github.com/ethereum/go-ethereum/statediff/indexer"
 	nodeinfo "github.com/ethereum/go-ethereum/statediff/indexer/node"
 	"github.com/ethereum/go-ethereum/statediff/indexer/postgres"
-	"github.com/ethereum/go-ethereum/statediff/indexer/prom"
 	. "github.com/ethereum/go-ethereum/statediff/types"
 )
 
@@ -119,28 +119,33 @@ type lastBlockCache struct {
 	block *types.Block
 }
 
-// New creates a new statediff.Service
+type DBParams struct {
+	ConnectionURL string
+	NodeID        string
+	ClientName    string
+}
+
+// New creates a new statediff Service
 func New(stack *node.Node, ethServ *eth.Ethereum, dbParams *DBParams, enableWriteLoop bool) error {
-	blockChain := ethServ.BlockChain()
 	var indexer ind.Indexer
+	blockChain := ethServ.BlockChain()
 	if dbParams != nil {
 		info := nodeinfo.Info{
 			GenesisBlock: blockChain.Genesis().Hash().Hex(),
 			NetworkID:    strconv.FormatUint(ethServ.NetVersion(), 10),
 			ChainID:      blockChain.Config().ChainID.Uint64(),
-			ID:           dbParams[1],
-			ClientName:   dbParams[2],
+			ID:           dbParams.NodeID,
+			ClientName:   dbParams.ClientName,
 		}
 
 		// TODO: pass max idle, open, lifetime?
-		params := postgres.ConnectionParams{} // FIXME
-		db, err := postgres.NewDB(params, postgres.ConnectionConfig{}, info)
+		db, err := postgres.NewDB(dbParams.ConnectionURL, postgres.ConnectionConfig{}, info)
 		if err != nil {
 			return err
 		}
 		indexer = ind.NewStateDiffIndexer(blockChain.Config(), db)
 	}
-	prom.Init()
+
 	sds := &Service{
 		Mutex:             sync.Mutex{},
 		BlockChain:        blockChain,
@@ -513,9 +518,9 @@ func (sds *Service) StreamCodeAndCodeHash(blockNumber uint64, outChan chan<- Cod
 // for historical data
 func (sds *Service) WriteStateDiffAt(blockNumber uint64, params Params) error {
 	if sds.indexer == nil {
-		return fmt.Errorf("Database not configured for direct statediff writing")
+		return errors.New("Database not configured for direct statediff writing")
 	}
-	log.Info(fmt.Sprintf("writing state diff at block %d", blockNumber))
+	log.Info("Writing state diff", "block height", blockNumber)
 	currentBlock := sds.BlockChain.GetBlockByNumber(blockNumber)
 	parentRoot := common.Hash{}
 	if blockNumber != 0 {
@@ -527,7 +532,6 @@ func (sds *Service) WriteStateDiffAt(blockNumber uint64, params Params) error {
 
 // Writes a state diff from the current block, parent state root, and provided params
 func (sds *Service) writeStateDiff(block *types.Block, parentRoot common.Hash, params Params) error {
-	log.Info("writing state diff", "block height", block.Number().Uint64())
 	var totalDifficulty *big.Int
 	var receipts types.Receipts
 	if params.IncludeTD {

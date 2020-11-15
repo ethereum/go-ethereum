@@ -31,8 +31,7 @@ type DB struct {
 	NodeID int64
 }
 
-func NewDB(params ConnectionParams, config ConnectionConfig, node node.Info) (*DB, error) {
-	connectString := DbConnectionString(params)
+func NewDB(connectString string, config ConnectionConfig, node node.Info) (*DB, error) {
 	db, connectErr := sqlx.Connect("postgres", connectString)
 	if connectErr != nil {
 		return &DB{}, ErrDBConnectionFailed(connectErr)

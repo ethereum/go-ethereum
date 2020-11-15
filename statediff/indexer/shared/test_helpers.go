@@ -41,7 +41,7 @@ func SetupDB() (*postgres.DB, error) {
 		Name:     "vulcanize_testing",
 		Port:     5432,
 	}
-	return postgres.NewDB(params, postgres.ConnectionConfig{}, node.Info{})
+	return postgres.NewDB(postgres.DbConnectionString(params), postgres.ConnectionConfig{}, node.Info{})
 }
 
 // ListContainsString used to check if a list of strings contains a particular string

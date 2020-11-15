@@ -182,7 +182,7 @@ func makeFullNode(ctx *cli.Context) (*node.Node, ethapi.Backend) {
 			dbParams = new(statediff.DBParams)
 			dbParams.ConnectionURL = ctx.GlobalString(utils.StateDiffDBFlag.Name)
 			if ctx.GlobalIsSet(utils.StateDiffDBNodeIDFlag.Name) {
-				dbParams.ID = ctx.GlobalString(utils.StateDiffDBNodeIDFlag.Name)
+				dbParams.NodeID = ctx.GlobalString(utils.StateDiffDBNodeIDFlag.Name)
 			} else {
 				utils.Fatalf("Must specify node ID for statediff DB output")
 			}
