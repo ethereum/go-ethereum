@@ -71,8 +71,8 @@ services:
       - FAUCET_MINUTES={{.FaucetMinutes}}
       - FAUCET_TIERS={{.FaucetTiers}}
       - CAPTCHA_TOKEN={{.CaptchaToken}}
-	  - CAPTCHA_SECRET={{.CaptchaSecret}}
-	  - TWITTER_TOKEN={{.TwitterToken}}
+      - CAPTCHA_SECRET={{.CaptchaSecret}}
+      - TWITTER_TOKEN={{.TwitterToken}}
       - NO_AUTH={{.NoAuth}}{{if .VHost}}
       - VIRTUAL_HOST={{.VHost}}
       - VIRTUAL_PORT=8080{{end}}
