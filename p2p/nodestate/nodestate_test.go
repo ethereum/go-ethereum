@@ -240,9 +240,8 @@ func uint64FieldEnc(field interface{}) ([]byte, error) {
 	if u, ok := field.(uint64); ok {
 		enc, err := rlp.EncodeToBytes(&u)
 		return enc, err
-	} else {
-		return nil, errors.New("invalid field type")
 	}
+	return nil, errors.New("invalid field type")
 }
 
 func uint64FieldDec(enc []byte) (interface{}, error) {
@@ -254,9 +253,8 @@ func uint64FieldDec(enc []byte) (interface{}, error) {
 func stringFieldEnc(field interface{}) ([]byte, error) {
 	if s, ok := field.(string); ok {
 		return []byte(s), nil
-	} else {
-		return nil, errors.New("invalid field type")
 	}
+	return nil, errors.New("invalid field type")
 }
 
 func stringFieldDec(enc []byte) (interface{}, error) {
