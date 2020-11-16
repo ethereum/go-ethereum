@@ -11,7 +11,7 @@ Vulnerabilies can typically take two forms:
 2. Vulnerabilies that, if exploited, would harm the Ethereum mainnet. In the case of go-ethereum, examples would be: 
     - Consensus vulnerabilities, which would cause a chain split, 
     - Denial-of-service during block processing, whereby a malicious transaction could cause the geth-portion of the network to crash.  
-    - Denial-of-service via p2p networking, whereby portions of the network could be made inaccessible dur to crashes or resource consumption.
+    - Denial-of-service via p2p networking, whereby portions of the network could be made inaccessible due to crashes or resource consumption.
 
 Historically, vulnerabilities in `geth` predominantly been of the second type, where the health of the network is a concern, rather than individual node operators. 
 
@@ -20,14 +20,12 @@ For vulnerabilities in category `2` above, we reserve the right to silently patc
 ### Why silent patches
 
 In the case of Ethereum, it takes a lot of time (weeks, months) to get node operators to update even to a scheduled hard fork. 
-If we were to highlight that a release contains important consensus or DoS fixes, there is always a risk of someone trying to beat updaters 
-to the punch line and exploit the vulnerability. We do not strive for "security via obscurity", but delaying a potential attack 
-sufficiently to make the majority of node operators immune may be worth the temporary "hit" to transparency.
+If we were to highlight that a release contains important consensus or DoS fixes, there is always a risk of someone trying to beat 
+node operators to the punch, and exploit the vulnerability. Delaying a potential attack 
+sufficiently to make the majority of node operators immune may be worth the temporary loss of transparency.
 
-The primary goal for the Geth team is the health of the Ethereum network as a whole.
-
-The decision whether or not to publish details about a serious vulnerability boils down to what the 
-fallout would be in both cases and picking the one where the damage is smaller. 
+The primary goal for the Geth team is the health of the Ethereum network as a whole, and the decision whether or not to publish details about a serious vulnerability boils down 
+to minimizing the risk and/or impact of discovery and exploitation. 
 
 At certain times, it's better to remain silent as shown by other projects 
 too such as [Monero](https://www.getmonero.org/2017/05/17/disclosure-of-a-major-bug-in-cryptonote-based-currencies.html), 
