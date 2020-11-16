@@ -458,7 +458,7 @@ func archiveUpload(archive string, blobstore string, signer string, signify stri
 	}
 	if signify != "" {
 		key := getenvBase64(string(signify))
-		if err := build.SignifySignFile(archive, archive+".sig", key); err != nil {
+		if err := build.SignifySignFile(archive, archive+".sig", string(key)); err != nil {
 			return err
 		}
 	}
@@ -474,6 +474,11 @@ func archiveUpload(archive string, blobstore string, signer string, signify stri
 		}
 		if signer != "" {
 			if err := build.AzureBlobstoreUpload(archive+".asc", filepath.Base(archive+".asc"), auth); err != nil {
+				return err
+			}
+		}
+		if signify != "" {
+			if err := build.AzureBlobstoreUpload(archive+".sig", filepath.Base(archive+".sig"), auth); err != nil {
 				return err
 			}
 		}

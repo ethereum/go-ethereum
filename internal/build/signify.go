@@ -62,9 +62,12 @@ func SignifySignFile(input string, output string, key string) error {
 	defer out.Close()
 
 	keydata, err := base64.StdEncoding.DecodeString(key)
+	if err != nil {
+		return err
+	}
 	skey, err := readSKey(keydata)
 	if err != nil {
-		return nil
+		return err
 	}
 
 	filedata, err := ioutil.ReadAll(in)
