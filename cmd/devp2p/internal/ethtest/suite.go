@@ -18,12 +18,10 @@ package ethtest
 
 import (
 	"fmt"
-	"math/big"
 	"net"
 	"time"
 
 	"github.com/davecgh/go-spew/spew"
-	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/internal/utesting"
@@ -407,15 +405,14 @@ func (s *Suite) dial() (*Conn, error) {
 
 func (s *Suite) TestTransaction(t *utesting.T) {
 	sendConn, recvConn := s.setupConnection(t), s.setupConnection(t)
-	// Create a new transaction
-	tx := types.NewTransaction(123, common.HexToAddress("0x01234"), big.NewInt(1234), 21000, big.NewInt(12345), []byte{})
-	privateKey, err := crypto.HexToECDSA("fad9c8855b740a0b7ed4c221dbad0f33a83a49cad6b3fe8d5817ac83d38b6a19")
-	if err != nil {
-		t.Fatal(err)
-	}
-	tx, err = types.SignTx(tx, types.FrontierSigner{}, privateKey)
-	if err != nil {
-		t.Fatal(err)
+	// Get a new transaction
+	var tx *types.Transaction
+	for _, blocks := range s.fullChain.blocks[s.chain.Len():] {
+		txs := blocks.Transactions()
+		if txs.Len() != 0 {
+			tx = txs[0]
+			break
+		}
 	}
 	// Send the transaction
 	if err := sendConn.Write(Transactions([]*types.Transaction{tx})); err != nil {
