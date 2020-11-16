@@ -445,10 +445,10 @@ func (f *faucet) apiHandler(w http.ResponseWriter, r *http.Request) {
 		}
 		// Retrieve the Ethereum address to fund, the requesting user and a profile picture
 		var (
-			unique_id string
-			username  string
-			avatar    string
-			address   common.Address
+			id       string
+			username string
+			avatar   string
+			address  common.Address
 		)
 		switch {
 		case strings.HasPrefix(msg.URL, "https://gist.github.com/"):
@@ -465,13 +465,13 @@ func (f *faucet) apiHandler(w http.ResponseWriter, r *http.Request) {
 			}
 			continue
 		case strings.HasPrefix(msg.URL, "https://twitter.com/"):
-			unique_id, username, avatar, address, err = authTwitter(msg.URL, *twitterBearerToken)
+			id, username, avatar, address, err = authTwitter(msg.URL, *twitterBearerToken)
 		case strings.HasPrefix(msg.URL, "https://www.facebook.com/"):
 			username, avatar, address, err = authFacebook(msg.URL)
-			unique_id = username
+			id = username
 		case *noauthFlag:
 			username, avatar, address, err = authNoAuth(msg.URL)
-			unique_id = username
+			id = username
 		default:
 			//lint:ignore ST1005 This error is to be displayed in the browser
 			err = errors.New("Something funky happened, please open an issue at https://github.com/ethereum/go-ethereum/issues")
@@ -491,7 +491,7 @@ func (f *faucet) apiHandler(w http.ResponseWriter, r *http.Request) {
 			fund    bool
 			timeout time.Time
 		)
-		if timeout = f.timeouts[unique_id]; time.Now().After(timeout) {
+		if timeout = f.timeouts[id]; time.Now().After(timeout) {
 			// User wasn't funded recently, create the funding transaction
 			amount := new(big.Int).Mul(big.NewInt(int64(*payoutFlag)), ether)
 			amount = new(big.Int).Mul(amount, new(big.Int).Exp(big.NewInt(5), big.NewInt(int64(msg.Tier)), nil))
@@ -525,7 +525,7 @@ func (f *faucet) apiHandler(w http.ResponseWriter, r *http.Request) {
 			timeout := time.Duration(*minutesFlag*int(math.Pow(3, float64(msg.Tier)))) * time.Minute
 			grace := timeout / 288 // 24h timeout => 5m grace
 
-			f.timeouts[unique_id] = time.Now().Add(timeout - grace)
+			f.timeouts[id] = time.Now().Add(timeout - grace)
 			fund = true
 		}
 		f.lock.Unlock()
@@ -739,7 +739,7 @@ func authTwitter(url string, token string) (string, string, string, common.Addre
 	if parts = regexp.MustCompile("src=\"([^\"]+twimg.com/profile_images[^\"]+)\"").FindStringSubmatch(string(body)); len(parts) == 2 {
 		avatar = parts[1]
 	}
-	return username + "@twitter", username + "@twitter", avatar, address, nil
+	return username + "@twitter", username, avatar, address, nil
 }
 
 // authTwitterWithToken tries to authenticate a faucet request using Twitter's API, returning
