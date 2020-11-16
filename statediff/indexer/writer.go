@@ -22,7 +22,6 @@ import (
 
 	"github.com/ethereum/go-ethereum/statediff/indexer/models"
 	"github.com/ethereum/go-ethereum/statediff/indexer/postgres"
-	"github.com/ethereum/go-ethereum/statediff/indexer/prom"
 	"github.com/ethereum/go-ethereum/statediff/indexer/shared"
 )
 
@@ -51,7 +50,7 @@ func (in *PostgresCIDWriter) upsertHeaderCID(tx *sqlx.Tx, header models.HeaderMo
 		header.BlockNumber, header.BlockHash, header.ParentHash, header.CID, header.TotalDifficulty, in.db.NodeID, header.Reward, header.StateRoot, header.TxRoot,
 		header.RctRoot, header.UncleRoot, header.Bloom, header.Timestamp, header.MhKey, 1).Scan(&headerID)
 	if err == nil {
-		prom.BlockInc()
+		indexerMetrics.blocks.Inc(1)
 	}
 	return headerID, err
 }
@@ -73,7 +72,7 @@ func (in *PostgresCIDWriter) upsertTransactionAndReceiptCIDs(tx *sqlx.Tx, payloa
 		if err != nil {
 			return err
 		}
-		prom.TransactionInc()
+		indexerMetrics.transactions.Inc(1)
 		receiptCidMeta, ok := payload.ReceiptCIDs[common.HexToHash(trxCidMeta.TxHash)]
 		if ok {
 			if err := in.upsertReceiptCID(tx, receiptCidMeta, txID); err != nil {
@@ -91,7 +90,7 @@ func (in *PostgresCIDWriter) upsertTransactionCID(tx *sqlx.Tx, transaction model
 									RETURNING id`,
 		headerID, transaction.TxHash, transaction.CID, transaction.Dst, transaction.Src, transaction.Index, transaction.MhKey, transaction.Data).Scan(&txID)
 	if err == nil {
-		prom.TransactionInc()
+		indexerMetrics.transactions.Inc(1)
 	}
 	return txID, err
 }
@@ -101,7 +100,7 @@ func (in *PostgresCIDWriter) upsertReceiptCID(tx *sqlx.Tx, rct models.ReceiptMod
 							  ON CONFLICT (tx_id) DO UPDATE SET (cid, contract, contract_hash, topic0s, topic1s, topic2s, topic3s, log_contracts, mh_key) = ($2, $3, $4, $5, $6, $7, $8, $9, $10)`,
 		txID, rct.CID, rct.Contract, rct.ContractHash, rct.Topic0s, rct.Topic1s, rct.Topic2s, rct.Topic3s, rct.LogContracts, rct.MhKey)
 	if err == nil {
-		prom.ReceiptInc()
+		indexerMetrics.receipts.Inc(1)
 	}
 	return err
 }

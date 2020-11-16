@@ -19,7 +19,6 @@ var (
 
 	lenPayloadChan prometheus.Gauge
 
-	tPayloadDecode             prometheus.Histogram
 	tFreePostgres              prometheus.Histogram
 	tPostgresCommit            prometheus.Histogram
 	tHeaderProcessing          prometheus.Histogram
@@ -89,7 +88,7 @@ func Init() {
 		Namespace: namespace,
 		Subsystem: statsSubsystem,
 		Name:      "t_state_store_code_processing",
-		Help:      "State, storage, and code combinedprocessing time",
+		Help:      "State, storage, and code combined processing time",
 	})
 }
 
@@ -118,13 +117,6 @@ func TransactionInc() {
 func ReceiptInc() {
 	if metrics {
 		receipts.Inc()
-	}
-}
-
-// SetLenPayloadChan set chan length
-func SetLenPayloadChan(ln int) {
-	if metrics {
-		lenPayloadChan.Set(float64(ln))
 	}
 }
 

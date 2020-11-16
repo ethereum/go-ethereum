@@ -26,6 +26,7 @@ import (
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/log"
+	"github.com/ethereum/go-ethereum/metrics"
 	"github.com/ethereum/go-ethereum/params"
 	"github.com/ethereum/go-ethereum/rlp"
 
@@ -36,10 +37,11 @@ import (
 	"github.com/ethereum/go-ethereum/statediff/indexer/ipfs/ipld"
 	"github.com/ethereum/go-ethereum/statediff/indexer/models"
 	"github.com/ethereum/go-ethereum/statediff/indexer/postgres"
-	"github.com/ethereum/go-ethereum/statediff/indexer/prom"
 	"github.com/ethereum/go-ethereum/statediff/indexer/shared"
 	sdtypes "github.com/ethereum/go-ethereum/statediff/types"
 )
+
+var indexerMetrics = RegisterIndexerMetrics(metrics.DefaultRegistry)
 
 // Indexer interface to allow substitution of mocks for testing
 type Indexer interface {
@@ -109,12 +111,12 @@ func (sdi *StateDiffIndexer) PushBlock(block *types.Block, receipts types.Receip
 				panic(p)
 			} else {
 				tDiff := time.Now().Sub(t)
-				prom.SetTimeMetric("t_state_store_code_processing", tDiff)
+				indexerMetrics.tStateStoreCodeProcessing.Update(tDiff)
 				traceMsg += fmt.Sprintf("state, storage, and code storage processing time: %s\r\n", tDiff.String())
 				t = time.Now()
 				err = tx.Commit()
 				tDiff = time.Now().Sub(t)
-				prom.SetTimeMetric("t_postgres_commit", tDiff)
+				indexerMetrics.tPostgresCommit.Update(tDiff)
 				traceMsg += fmt.Sprintf("postgres transaction commit duration: %s\r\n", tDiff.String())
 			}
 			traceMsg += fmt.Sprintf(" TOTAL PROCESSING DURATION: %s\r\n", time.Now().Sub(start).String())
@@ -123,7 +125,8 @@ func (sdi *StateDiffIndexer) PushBlock(block *types.Block, receipts types.Receip
 		},
 	}
 	tDiff := time.Now().Sub(t)
-	prom.SetTimeMetric("t_free_postgres", tDiff)
+	indexerMetrics.tFreePostgres.Update(tDiff)
+
 	traceMsg += fmt.Sprintf("time spent waiting for free postgres tx: %s:\r\n", tDiff.String())
 	t = time.Now()
 
@@ -133,7 +136,7 @@ func (sdi *StateDiffIndexer) PushBlock(block *types.Block, receipts types.Receip
 		return nil, err
 	}
 	tDiff = time.Now().Sub(t)
-	prom.SetTimeMetric("t_header_processing", tDiff)
+	indexerMetrics.tHeaderProcessing.Update(tDiff)
 	traceMsg += fmt.Sprintf("header processing time: %s\r\n", tDiff.String())
 	t = time.Now()
 	// Publish and index uncles
@@ -141,7 +144,7 @@ func (sdi *StateDiffIndexer) PushBlock(block *types.Block, receipts types.Receip
 		return nil, err
 	}
 	tDiff = time.Now().Sub(t)
-	prom.SetTimeMetric("t_uncle_processing", tDiff)
+	indexerMetrics.tUncleProcessing.Update(tDiff)
 	traceMsg += fmt.Sprintf("uncle processing time: %s\r\n", tDiff.String())
 	t = time.Now()
 	// Publish and index receipts and txs
@@ -158,7 +161,7 @@ func (sdi *StateDiffIndexer) PushBlock(block *types.Block, receipts types.Receip
 		return nil, err
 	}
 	tDiff = time.Now().Sub(t)
-	prom.SetTimeMetric("t_tx_receipt_processing", tDiff)
+	indexerMetrics.tTxAndRecProcessing.Update(tDiff)
 	traceMsg += fmt.Sprintf("tx and receipt processing time: %s\r\n", tDiff.String())
 	t = time.Now()
 
