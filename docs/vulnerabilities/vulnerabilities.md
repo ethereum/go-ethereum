@@ -3,18 +3,19 @@
 In the software world, it is expected for security vulnerabilities to be immediately announced, thus giving operators an opportunity to take protective measure against attackers. 
 
 Vulnerabilies can typically take two forms: 
-1. Bugs that, if exploited, would harm the software operator. In the case of go-ethereum, examples of such bugs would be:
+
+1. Vulnerabilies that, if exploited, would harm the software operator. In the case of go-ethereum, examples would be:
     - A bug that would allow remote reading or writing of OS files, or 
     - Remote command execution, or
     - Bugs that would leak cryptographic keys  
-2. Bugs that, if exploited, would harm the Ethereum mainnet. In the case of go-ethereum, such bugs would typically be: 
+2. Vulnerabilies that, if exploited, would harm the Ethereum mainnet. In the case of go-ethereum, examples would be: 
     - Consensus vulnerabilities, which would cause a chain split, 
     - Denial-of-service during block processing, whereby a malicious transaction could cause the geth-portion of the network to crash.  
     - Denial-of-service via p2p networking, whereby portions of the network could be made inaccessible dur to crashes or resource consumption.
 
 Historically, vulnerabilities in `geth` predominantly been of the second type, where the health of the network is a concern, rather than individual node operators. 
 
-For bugs in category `2` above, we reserve the right to silently patch and ship fixes in new releases. 
+For vulnerabilities in category `2` above, we reserve the right to silently patch and ship fixes in new releases. 
 
 ### Why silent patches
 
@@ -25,7 +26,7 @@ sufficiently to make the majority of node operators immune may be worth the temp
 
 The primary goal for the Geth team is the health of the Ethereum network as a whole.
 
-The decision whether or not to publish details about a serious bug boils down to what the 
+The decision whether or not to publish details about a serious vulnerability boils down to what the 
 fallout would be in both cases and picking the one where the damage is smaller. 
 
 At certain times, it's better to remain silent as shown by other projects 
@@ -53,27 +54,27 @@ In this folder, you can find a JSON-formatted list of some of the known security
 The file itself is hosted in the Github repository, on the `gh-pages`-branch. 
 The list was started in November 2020, and covers mainly `v1.9.7` and forward.
 
-The JSON file of known bugs below is a list of objects, one for each bug, with the following keys:
+The JSON file of known vulnerabilities below is a list of objects, one for each vulnerability, with the following keys:
 
 - `name` 
-  - Unique name given to the bug.
+  - Unique name given to the vulnerability.
 - `uid` 
-  - Unique identifier of the bug. Format `GETH-<year>-<sequential id>`
+  - Unique identifier of the vulnerability. Format `GETH-<year>-<sequential id>`
 - `summary`
-    - Short description of the bug.
+  - Short description of the vulnerability.
 - `description`
-    - Detailed description of the bug.
+  - Detailed description of the vulnerability.
 - `links`
-    - List of releavnt URLs with more detailed information (optional).
+  - List of relevant URLs with more detailed information (optional).
 - `introduced`
-    - The first published compiler version that contained the bug (optional).
+  - The first published Geth version that contained the vulnerability (optional).
 - `fixed`
-    - The first published compiler version that did not contain the bug anymore.
+  - The first published Geth version that did not contain the vulnerability anymore.
 - `published`
-    - The date at which the bug became known publicly (optional).
+  - The date at which the vulnerability became known publicly (optional).
 - `severity`
-    - Severity of the bug: `low`, `medium`, `high`, `critical`. 
-    - Takes into account the severity of impact and likelihood of exploitation.
+  - Severity of the vulnerability: `low`, `medium`, `high`, `critical`. 
+  - Takes into account the severity of impact and likelihood of exploitation.
 - `check`
-    - This field contains a regular expression, which can be used against the reported `web3_clientVersion` of a node. If the check 
+  - This field contains a regular expression, which can be used against the reported `web3_clientVersion` of a node. If the check 
     matches, the node is with a high likelyhood affected by the vulnerability.
