@@ -67,6 +67,17 @@ Regular users do not need to execute it.
 The output of this command is supposed to be machine-readable.
 `,
 	}
+	versionCheckCommand = cli.Command{
+		Action:    utils.MigrateFlags(versionCheck),
+		Name:      "version-check",
+		Usage:     "Checks (online) whether the current version suffers from any known security vulnerabilities",
+		ArgsUsage: "<versionstring (optional)>",
+		Category:  "MISCELLANEOUS COMMANDS",
+		Description: `
+The version-check command fetches vulnerability-information from https://geth.ethereum.org/docs/vulnerabilities/vulnerabilities.json, 
+and displays information about any security vulnerabilities that affect the currently executing version.
+`,
+	}
 	licenseCommand = cli.Command{
 		Action:    utils.MigrateFlags(license),
 		Name:      "license",
