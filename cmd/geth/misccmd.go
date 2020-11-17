@@ -31,6 +31,18 @@ import (
 )
 
 var (
+	VersionCheckUrlFlag = cli.StringFlag{
+		Name:  "check.url",
+		Usage: "URL to use when checking vulnerabilities",
+		Value: "https://geth.ethereum.org/docs/vulnerabilities/vulnerabilities.json",
+	}
+	VersionCheckVersionFlag = cli.StringFlag{
+		Name:  "check.version",
+		Usage: "Version to check",
+		Value: fmt.Sprintf("Geth/v%v/%v-%v/%v",
+			params.VersionWithCommit(gitCommit, gitDate),
+			runtime.GOOS, runtime.GOARCH, runtime.Version()),
+	}
 	makecacheCommand = cli.Command{
 		Action:    utils.MigrateFlags(makecache),
 		Name:      "makecache",
@@ -68,7 +80,11 @@ The output of this command is supposed to be machine-readable.
 `,
 	}
 	versionCheckCommand = cli.Command{
-		Action:    utils.MigrateFlags(versionCheck),
+		Action: utils.MigrateFlags(versionCheck),
+		Flags: []cli.Flag{
+			VersionCheckUrlFlag,
+			VersionCheckVersionFlag,
+		},
 		Name:      "version-check",
 		Usage:     "Checks (online) whether the current version suffers from any known security vulnerabilities",
 		ArgsUsage: "<versionstring (optional)>",

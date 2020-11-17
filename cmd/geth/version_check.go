@@ -19,16 +19,17 @@ package main
 import (
 	"encoding/json"
 	"fmt"
-	"github.com/ethereum/go-ethereum/log"
-	"github.com/ethereum/go-ethereum/params"
-	"gopkg.in/urfave/cli.v1"
 	"io/ioutil"
 	"net/http"
 	"regexp"
-	"runtime"
+
+	"github.com/ethereum/go-ethereum/log"
+	"github.com/jedisct1/go-minisign"
+	"gopkg.in/urfave/cli.v1"
 )
 
-const versionFeed = "https://geth.ethereum.org/docs/vulnerabilities/vulnerabilities.json"
+// TODO(@holiman) replace this later on with an actual key (or keys)
+const GethPubkey = "RWQkliYstQBOKOdtClfgC3IypIPX6TAmoEi7beZ4gyR3wsaezvqOMWsp"
 
 type vulnJson struct {
 	Name        string
@@ -44,32 +45,29 @@ type vulnJson struct {
 }
 
 func versionCheck(ctx *cli.Context) error {
-	args := ctx.Args()
-	version := fmt.Sprintf("Geth/v%v/%v-%v/%v",
-		params.VersionWithCommit(gitCommit, gitDate),
-		runtime.GOOS,
-		runtime.GOARCH,
-		runtime.Version())
-	if len(args) > 0 {
-		// Explicit version string given
-		version = args[0]
-	}
-	log.Info("Checking vulnerabilities", "version", version)
-	return checkCurrent(version)
+	url := ctx.String(VersionCheckUrlFlag.Name)
+	version := ctx.String(VersionCheckVersionFlag.Name)
+	log.Info("Checking vulnerabilities", "version", version, "url", url)
+	return checkCurrent(url, version)
 }
 
-func checkCurrent(current string) error {
-	res, err := http.Get(versionFeed)
-	if err != nil {
-		return err
+func checkCurrent(url, current string) error {
+	var (
+		data []byte
+		sig  []byte
+		err  error
+	)
+	if data, err = fetch(url); err != nil {
+		return fmt.Errorf("could not retrieve data: %w", err)
 	}
-	defer res.Body.Close()
-	body, err := ioutil.ReadAll(res.Body)
-	if err != nil {
+	if sig, err = fetch(fmt.Sprintf("%v.minisig", url)); err != nil {
+		return fmt.Errorf("could not retrieve signature: %w", err)
+	}
+	if err = verifySignature(GethPubkey, data, sig); err != nil {
 		return err
 	}
 	var vulns []vulnJson
-	if err = json.Unmarshal(body, &vulns); err != nil {
+	if err = json.Unmarshal(data, &vulns); err != nil {
 		return err
 	}
 	for _, vuln := range vulns {
@@ -92,4 +90,33 @@ func checkCurrent(current string) error {
 		}
 	}
 	return nil
+}
+
+// fetch makes an HTTP request to the given url and returns the response body
+func fetch(url string) ([]byte, error) {
+	res, err := http.Get(url)
+	if err != nil {
+		return nil, err
+	}
+	defer res.Body.Close()
+	body, err := ioutil.ReadAll(res.Body)
+	if err != nil {
+		return nil, err
+	}
+	return body, nil
+}
+
+// verifySignature checks that the sigData is a valid signature of the given
+// data, for pubkey GethPubkey
+func verifySignature(pubkey string, data, sigdata []byte) error {
+	pub, err := minisign.NewPublicKey(pubkey)
+	if err != nil {
+		return err
+	}
+	sig, err := minisign.DecodeSignature(string(sigdata))
+	if err != nil {
+		return err
+	}
+	_, err = pub.Verify(data, sig)
+	return err
 }
