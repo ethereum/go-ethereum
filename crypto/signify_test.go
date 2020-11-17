@@ -28,6 +28,8 @@ import (
 	"runtime"
 	"testing"
 	"time"
+
+	"github.com/jedisct1/go-minisign"
 )
 
 var (
@@ -82,5 +84,24 @@ func TestSignify(t *testing.T) {
 				t.Fatalf("could not verify the file: %v", err)
 			}
 		}
+	}
+
+	// Verify the signature using a golang library
+	sig, err := minisign.NewSignatureFromFile(tmpFile.Name() + ".sig")
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	pKey, err := minisign.NewPublicKey(testPubKey)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	valid, err := pKey.VerifyFromFile(tmpFile.Name(), sig)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !valid {
+		t.Fatal("invalid signature")
 	}
 }
