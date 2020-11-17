@@ -17,7 +17,7 @@
     "coinbase": "0x0000000000000000000000000000000000000000",
     "alloc": {
         "71562b71999873db5b286df957af199ec94617f7": {
-            "balance": "0xffffffff"
+            "balance": "0xffffffffffffffffffffffffff"
         }
     },
     "number": "0x0",

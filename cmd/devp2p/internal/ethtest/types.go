@@ -312,7 +312,7 @@ func (c *Conn) negotiateEthProtocol(caps []p2p.Cap) {
 // node.
 func (c *Conn) statusExchange(t *utesting.T, chain *Chain, status *Status) Message {
 	defer c.SetDeadline(time.Time{})
-	c.SetDeadline(time.Now().Add(20 * time.Second))
+	c.SetDeadline(time.Now().Add(10 * time.Second))
 
 	// read status message from client
 	var message Message
@@ -368,7 +368,7 @@ loop:
 func (c *Conn) waitForBlock(block *types.Block) error {
 	defer c.SetReadDeadline(time.Time{})
 
-	timeout := time.Now().Add(20 * time.Second)
+	timeout := time.Now().Add(10 * time.Second)
 	c.SetReadDeadline(timeout)
 	for {
 		req := &GetBlockHeaders{Origin: hashOrNumber{Hash: block.Hash()}, Amount: 1}

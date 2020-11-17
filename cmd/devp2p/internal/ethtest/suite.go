@@ -65,9 +65,9 @@ func NewSuite(dest *enode.Node, chainfile string, genesisfile string) *Suite {
 func (s *Suite) AllTests() []utesting.Test {
 	return []utesting.Test{
 		{Name: "Status", Fn: s.TestStatus},
+		{Name: "GetBlockHeaders", Fn: s.TestGetBlockHeaders},
+		{Name: "Broadcast", Fn: s.TestBroadcast},
 		/*
-			{Name: "GetBlockHeaders", Fn: s.TestGetBlockHeaders},
-			{Name: "Broadcast", Fn: s.TestBroadcast},
 			{Name: "GetBlockBodies", Fn: s.TestGetBlockBodies},
 			{Name: "TestLargeAnnounce", Fn: s.TestLargeAnnounce},
 			{Name: "TestMaliciousHandshake", Fn: s.TestMaliciousHandshake},
@@ -414,6 +414,10 @@ func (s *Suite) TestTransaction(t *utesting.T) {
 			break
 		}
 	}
+	if tx == nil {
+		t.Fatal("could not find transaction")
+	}
+	fmt.Printf("tx %v %v %v\n", tx.Hash(), tx.GasPrice(), tx.Gas())
 	// Send the transaction
 	if err := sendConn.Write(Transactions([]*types.Transaction{tx})); err != nil {
 		t.Fatal(err)
@@ -423,7 +427,7 @@ func (s *Suite) TestTransaction(t *utesting.T) {
 	if err != nil {
 		t.Fatalf("waiting for transaction propagation failed: %v", err)
 	}
-	recTxs := rawTxMsg.(Transactions)
+	recTxs := *rawTxMsg.(*Transactions)
 	if len(recTxs) != 1 {
 		t.Fatalf("received transactions do not match send: %v", recTxs)
 	}
