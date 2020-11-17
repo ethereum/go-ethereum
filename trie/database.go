@@ -74,8 +74,7 @@ type Database struct {
 	oldest  common.Hash                 // Oldest tracked node, flush-list head
 	newest  common.Hash                 // Newest tracked node, flush-list tail
 
-	persistPreimages bool                   // Flag whether the preimage should be recorded
-	preimages        map[common.Hash][]byte // Preimages of nodes from the secure trie
+	preimages map[common.Hash][]byte // Preimages of nodes from the secure trie
 
 	gctime  time.Duration      // Time spent on garbage collection since last commit
 	gcnodes uint64             // Nodes garbage collected since last commit
@@ -299,20 +298,17 @@ func NewDatabaseWithConfig(diskdb ethdb.KeyValueStore, config *Config) *Database
 			cleans = fastcache.LoadFromFileOrNew(config.Journal, config.Cache*1024*1024)
 		}
 	}
-	persistPreimages := true // Enable the preimages recording by default
-	if config != nil && !config.Preimages {
-		persistPreimages = false
-		log.Info("Disable recording the key preimages")
-	}
-	return &Database{
+	db := &Database{
 		diskdb: diskdb,
 		cleans: cleans,
 		dirties: map[common.Hash]*cachedNode{{}: {
 			children: make(map[common.Hash]uint16),
 		}},
-		persistPreimages: persistPreimages,
-		preimages:        make(map[common.Hash][]byte),
 	}
+	if config == nil || config.Preimages { // TODO(karalabe): Flip to default off in the future
+		db.preimages = make(map[common.Hash][]byte)
+	}
+	return db
 }
 
 // DiskDB retrieves the persistent storage backing the trie database.
@@ -359,6 +355,11 @@ func (db *Database) insert(hash common.Hash, size int, node node) {
 //
 // Note, this method assumes that the database's lock is held!
 func (db *Database) insertPreimage(hash common.Hash, preimage []byte) {
+	// Short circuit if preimage collection is disabled
+	if db.preimages == nil {
+		return
+	}
+	// Track the preimage if a yet unknown one
 	if _, ok := db.preimages[hash]; ok {
 		return
 	}
@@ -445,6 +446,10 @@ func (db *Database) Node(hash common.Hash) ([]byte, error) {
 // preimage retrieves a cached trie node pre-image from memory. If it cannot be
 // found cached, the method queries the persistent database for the content.
 func (db *Database) preimage(hash common.Hash) []byte {
+	// Short circuit if preimage collection is disabled
+	if db.preimages == nil {
+		return nil
+	}
 	// Retrieve the node from cache if available
 	db.lock.RLock()
 	preimage := db.preimages[hash]
@@ -602,12 +607,16 @@ func (db *Database) Cap(limit common.StorageSize) error {
 	// leave for later to deduplicate writes.
 	flushPreimages := db.preimagesSize > 4*1024*1024
 	if flushPreimages {
-		rawdb.WritePreimages(batch, db.preimages)
-		if batch.ValueSize() > ethdb.IdealBatchSize {
-			if err := batch.Write(); err != nil {
-				return err
+		if db.preimages == nil {
+			log.Error("Attempted to write preimages whilst disabled")
+		} else {
+			rawdb.WritePreimages(batch, db.preimages)
+			if batch.ValueSize() > ethdb.IdealBatchSize {
+				if err := batch.Write(); err != nil {
+					return err
+				}
+				batch.Reset()
 			}
-			batch.Reset()
 		}
 	}
 	// Keep committing nodes from the flush-list until we're below allowance
@@ -644,7 +653,11 @@ func (db *Database) Cap(limit common.StorageSize) error {
 	defer db.lock.Unlock()
 
 	if flushPreimages {
-		db.preimages, db.preimagesSize = make(map[common.Hash][]byte), 0
+		if db.preimages == nil {
+			log.Error("Attempted to reset preimage cache whilst disabled")
+		} else {
+			db.preimages, db.preimagesSize = make(map[common.Hash][]byte), 0
+		}
 	}
 	for db.oldest != oldest {
 		node := db.dirties[db.oldest]
@@ -688,20 +701,21 @@ func (db *Database) Commit(node common.Hash, report bool, callback func(common.H
 	batch := db.diskdb.NewBatch()
 
 	// Move all of the accumulated preimages into a write batch
-	rawdb.WritePreimages(batch, db.preimages)
-	if batch.ValueSize() > ethdb.IdealBatchSize {
+	if db.preimages != nil {
+		rawdb.WritePreimages(batch, db.preimages)
+		if batch.ValueSize() > ethdb.IdealBatchSize {
+			if err := batch.Write(); err != nil {
+				return err
+			}
+			batch.Reset()
+		}
+		// Since we're going to replay trie node writes into the clean cache, flush out
+		// any batched pre-images before continuing.
 		if err := batch.Write(); err != nil {
 			return err
 		}
 		batch.Reset()
 	}
-	// Since we're going to replay trie node writes into the clean cache, flush out
-	// any batched pre-images before continuing.
-	if err := batch.Write(); err != nil {
-		return err
-	}
-	batch.Reset()
-
 	// Move the trie itself into the batch, flushing if enough data is accumulated
 	nodes, storage := len(db.dirties), db.dirtiesSize
 
@@ -723,8 +737,9 @@ func (db *Database) Commit(node common.Hash, report bool, callback func(common.H
 	batch.Reset()
 
 	// Reset the storage counters and bumpd metrics
-	db.preimages, db.preimagesSize = make(map[common.Hash][]byte), 0
-
+	if db.preimages != nil {
+		db.preimages, db.preimagesSize = make(map[common.Hash][]byte), 0
+	}
 	memcacheCommitTimeTimer.Update(time.Since(start))
 	memcacheCommitSizeMeter.Mark(int64(storage - db.dirtiesSize))
 	memcacheCommitNodesMeter.Mark(int64(nodes - len(db.dirties)))
