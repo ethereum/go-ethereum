@@ -32,9 +32,10 @@ import (
 var maxPrice = big.NewInt(500 * params.GWei)
 
 type Config struct {
-	Blocks     int
-	Percentile int
-	Default    *big.Int `toml:",omitempty"`
+	Blocks          int
+	Percentile      int
+	Default         *big.Int `toml:",omitempty"`
+	OracleThreshold int      `toml:",omitempty"`
 }
 
 // Oracle recommends gas prices based on the content of recent
@@ -45,6 +46,9 @@ type Oracle struct {
 	lastPrice *big.Int
 	cacheLock sync.RWMutex
 	fetchLock sync.Mutex
+
+	defaultPrice      *big.Int
+	sampleTxThreshold int
 
 	checkBlocks, maxEmpty, maxBlocks int
 	percentile                       int
@@ -64,12 +68,14 @@ func NewOracle(backend ethapi.Backend, params Config) *Oracle {
 		percent = 100
 	}
 	return &Oracle{
-		backend:     backend,
-		lastPrice:   params.Default,
-		checkBlocks: blocks,
-		maxEmpty:    blocks / 2,
-		maxBlocks:   blocks * 5,
-		percentile:  percent,
+		backend:           backend,
+		lastPrice:         params.Default,
+		defaultPrice:      params.Default,
+		checkBlocks:       blocks,
+		maxEmpty:          blocks / 2,
+		maxBlocks:         blocks * 5,
+		percentile:        percent,
+		sampleTxThreshold: params.OracleThreshold,
 	}
 }
 
@@ -103,6 +109,7 @@ func (gpo *Oracle) SuggestPrice(ctx context.Context) (*big.Int, error) {
 	sent := 0
 	exp := 0
 	var blockPrices []*big.Int
+	var totalTxSamples int
 	for sent < gpo.checkBlocks && blockNum > 0 {
 		go gpo.getBlockPrices(ctx, types.MakeSigner(gpo.backend.ChainConfig(), big.NewInt(int64(blockNum))), blockNum, ch)
 		sent++
@@ -118,6 +125,7 @@ func (gpo *Oracle) SuggestPrice(ctx context.Context) (*big.Int, error) {
 		exp--
 		if res.price != nil {
 			blockPrices = append(blockPrices, res.price)
+			totalTxSamples = totalTxSamples + res.number
 			continue
 		}
 		if maxEmpty > 0 {
@@ -132,9 +140,11 @@ func (gpo *Oracle) SuggestPrice(ctx context.Context) (*big.Int, error) {
 		}
 	}
 	price := lastPrice
-	if len(blockPrices) > 0 {
+	if len(blockPrices) > 0 && totalTxSamples > gpo.sampleTxThreshold {
 		sort.Sort(bigIntArray(blockPrices))
 		price = blockPrices[(len(blockPrices)-1)*gpo.percentile/100]
+	} else {
+		price = gpo.defaultPrice
 	}
 	if price.Cmp(maxPrice) > 0 {
 		price = new(big.Int).Set(maxPrice)
@@ -148,8 +158,9 @@ func (gpo *Oracle) SuggestPrice(ctx context.Context) (*big.Int, error) {
 }
 
 type getBlockPricesResult struct {
-	price *big.Int
-	err   error
+	number int
+	price  *big.Int
+	err    error
 }
 
 type transactionsByGasPrice []*types.Transaction
@@ -163,7 +174,7 @@ func (t transactionsByGasPrice) Less(i, j int) bool { return t[i].GasPrice().Cmp
 func (gpo *Oracle) getBlockPrices(ctx context.Context, signer types.Signer, blockNum uint64, ch chan getBlockPricesResult) {
 	block, err := gpo.backend.BlockByNumber(ctx, rpc.BlockNumber(blockNum))
 	if block == nil {
-		ch <- getBlockPricesResult{nil, err}
+		ch <- getBlockPricesResult{0, nil, err}
 		return
 	}
 
@@ -175,11 +186,11 @@ func (gpo *Oracle) getBlockPrices(ctx context.Context, signer types.Signer, bloc
 	for _, tx := range txs {
 		sender, err := types.Sender(signer, tx)
 		if err == nil && sender != block.Coinbase() {
-			ch <- getBlockPricesResult{tx.GasPrice(), nil}
+			ch <- getBlockPricesResult{len(txs), tx.GasPrice(), nil}
 			return
 		}
 	}
-	ch <- getBlockPricesResult{nil, nil}
+	ch <- getBlockPricesResult{0, nil, nil}
 }
 
 type bigIntArray []*big.Int
