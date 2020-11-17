@@ -1,5 +1,10 @@
 # Changelog
 
+## v1.0.4
+
+IMPROVEMENT
+* [\#47](https://github.com/binance-chain/bsc/pull/47) upgrade to golang1.15.5
+
 ## v1.0.3
 
 IMPROVEMENT
