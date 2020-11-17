@@ -24,8 +24,15 @@ import (
 	"io/ioutil"
 	"math/rand"
 	"os"
+	"os/exec"
+	"runtime"
 	"testing"
 	"time"
+)
+
+var (
+	testSecKey = "RWRCSwAAAABVN5lr2JViGBN8DhX3/Qb/0g0wBdsNAR/APRW2qy9Fjsfr12sK2cd3URUFis1jgzQzaoayK8x4syT4G3Gvlt9RwGIwUYIQW/0mTeI+ECHu1lv5U4Wa2YHEPIesVPyRm5M="
+	testPubKey = "RWTAPRW2qy9FjsBiMFGCEFv9Jk3iPhAh7tZb+VOFmtmBxDyHrFT8kZuT"
 )
 
 func TestSignify(t *testing.T) {
@@ -46,11 +53,34 @@ func TestSignify(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	err = SignifySignFile(tmpFile.Name(), fmt.Sprintf("%s.sig", tmpFile.Name()), "RWRCSwAAAABVN5lr2JViGBN8DhX3/Qb/0g0wBdsNAR/APRW2qy9Fjsfr12sK2cd3URUFis1jgzQzaoayK8x4syT4G3Gvlt9RwGIwUYIQW/0mTeI+ECHu1lv5U4Wa2YHEPIesVPyRm5M=")
+	err = SignifySignFile(tmpFile.Name(), fmt.Sprintf("%s.sig", tmpFile.Name()), testSecKey)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if err = os.Remove(fmt.Sprintf("%s.sig", tmpFile.Name())); err != nil {
-		t.Fatal(err)
+	defer os.Remove(fmt.Sprintf("%s.sig", tmpFile.Name()))
+
+	// if signify-openbsd is present, check the signature.
+	// signify-openbsd will be present in CI.
+	if runtime.GOOS == "linux" {
+		cmd := exec.Command("which", "signify-openbsd")
+		if err = cmd.Run(); err == nil {
+			// Write the public key into the file to pass it as
+			// an argument to signify-openbsd
+			pubKeyFile, err := ioutil.TempFile("", "")
+			if err != nil {
+				t.Fatal(err)
+			}
+			defer os.Remove(pubKeyFile.Name())
+			defer pubKeyFile.Close()
+			pubKeyFile.WriteString("untrusted comment: signify public key\n")
+			pubKeyFile.WriteString(testPubKey)
+			pubKeyFile.WriteString("\n")
+
+			cmd := exec.Command("signify-openbsd", "-V", "-p", pubKeyFile.Name(), "-x", fmt.Sprintf("%s.sig", tmpFile.Name()), "-m", tmpFile.Name())
+			if output, err := cmd.CombinedOutput(); err != nil {
+				fmt.Println(string(output))
+				t.Fatalf("could not verify the file: %v", err)
+			}
+		}
 	}
 }
