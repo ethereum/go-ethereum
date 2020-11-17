@@ -17,7 +17,7 @@
 // signFile reads the contents of an input file and signs it (in armored format)
 // with the key provided, placing the signature into the output file.
 
-package build
+package crypto
 
 import (
 	"encoding/base64"
@@ -26,7 +26,7 @@ import (
 	"io/ioutil"
 	"os"
 
-	"crypto/ed25519"
+	"golang.org/x/crypto/ed25519"
 )
 
 var (

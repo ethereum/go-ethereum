@@ -17,7 +17,7 @@
 // signFile reads the contents of an input file and signs it (in armored format)
 // with the key provided, placing the signature into the output file.
 
-package build
+package crypto
 
 import (
 	"fmt"
