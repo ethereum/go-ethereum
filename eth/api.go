@@ -328,25 +328,60 @@ type BadBlockArgs struct {
 	RLP   string                 `json:"rlp"`
 }
 
+// BadBlockCriteria represents a request to retrieve the bad blocks.
+type BadBlockCriteria struct {
+	From    *int          `json:"from"`
+	To      *int          `json:"to"`
+	Targets []common.Hash `json:"targets"`
+}
+
 // GetBadBlocks returns a list of the last 'bad blocks' that the client has seen on the network
 // and returns them as a JSON list of block-hashes
-func (api *PrivateDebugAPI) GetBadBlocks(ctx context.Context) ([]*BadBlockArgs, error) {
-	blocks := api.eth.BlockChain().BadBlocks()
-	results := make([]*BadBlockArgs, len(blocks))
-
-	var err error
+func (api *PrivateDebugAPI) GetBadBlocks(ctx context.Context, criteria *BadBlockCriteria) ([]*BadBlockArgs, error) {
+	var (
+		err     error
+		targets map[common.Hash]struct{}
+		blocks  = api.eth.BlockChain().BadBlocks()
+		results = make([]*BadBlockArgs, 0, len(blocks))
+	)
+	if criteria != nil {
+		targets = make(map[common.Hash]struct{})
+		for _, target := range criteria.Targets {
+			targets[target] = struct{}{}
+		}
+	}
 	for i, block := range blocks {
-		results[i] = &BadBlockArgs{
-			Hash: block.Hash(),
+		// Filter out the blocks if the criteria is specified
+		if criteria != nil {
+			if criteria.From != nil && i < *criteria.From {
+				continue
+			}
+			if criteria.To != nil && i >= *criteria.To {
+				continue
+			}
+			if targets != nil {
+				if _, exist := targets[block.Hash()]; !exist {
+					continue
+				}
+			}
 		}
+		var (
+			blockRlp  string
+			blockJSON map[string]interface{}
+		)
 		if rlpBytes, err := rlp.EncodeToBytes(block); err != nil {
-			results[i].RLP = err.Error() // Hacky, but hey, it works
+			blockRlp = err.Error() // Hacky, but hey, it works
 		} else {
-			results[i].RLP = fmt.Sprintf("0x%x", rlpBytes)
+			blockRlp = fmt.Sprintf("0x%x", rlpBytes)
 		}
-		if results[i].Block, err = ethapi.RPCMarshalBlock(block, true, true); err != nil {
-			results[i].Block = map[string]interface{}{"error": err.Error()}
+		if blockJSON, err = ethapi.RPCMarshalBlock(block, true, true); err != nil {
+			blockJSON = map[string]interface{}{"error": err.Error()}
 		}
+		results = append(results, &BadBlockArgs{
+			Hash:  block.Hash(),
+			RLP:   blockRlp,
+			Block: blockJSON,
+		})
 	}
 	return results, nil
 }
