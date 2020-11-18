@@ -48,7 +48,7 @@ func readSKey(key []byte) (ed25519.PrivateKey, error) {
 }
 
 // SignifySignFile creates a signature of the input file.
-func SignifySignFile(input string, output string, key string) error {
+func SignifySignFile(input string, output string, key string, trustedComment string) error {
 	in, err := os.Open(input)
 	if err != nil {
 		return err
@@ -75,14 +75,24 @@ func SignifySignFile(input string, output string, key string) error {
 		return err
 	}
 
+	rawSig := ed25519.Sign(skey, filedata)
 	header := keydata[:2]
 	keyNum := keydata[32:40]
 
 	var sigdata []byte
 	sigdata = append(sigdata, header...)
 	sigdata = append(sigdata, keyNum...)
-	sigdata = append(sigdata, ed25519.Sign(skey, filedata)...)
+	sigdata = append(sigdata, rawSig...)
 
 	out.WriteString(fmt.Sprintf("untrusted comment: verify with geth.pub\n%s\n", base64.StdEncoding.EncodeToString(sigdata)))
+
+	// Add the trusted comment if available (minisign only)
+	if trustedComment != "" {
+		var sigAndComment []byte
+		sigAndComment = append(sigAndComment, rawSig...)
+		sigAndComment = append(sigAndComment, []byte(trustedComment)...)
+		out.WriteString(fmt.Sprintf("trusted comment: %s\n%s\n", trustedComment, base64.StdEncoding.EncodeToString(ed25519.Sign(skey, sigAndComment))))
+	}
+
 	return nil
 }

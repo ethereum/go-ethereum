@@ -55,7 +55,7 @@ func TestSignify(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	err = SignifySignFile(tmpFile.Name(), fmt.Sprintf("%s.sig", tmpFile.Name()), testSecKey)
+	err = SignifySignFile(tmpFile.Name(), fmt.Sprintf("%s.sig", tmpFile.Name()), testSecKey, "croissants")
 	if err != nil {
 		t.Fatal(err)
 	}
