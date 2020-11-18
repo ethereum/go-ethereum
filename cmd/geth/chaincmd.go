@@ -274,7 +274,7 @@ func dumpGenesis(ctx *cli.Context) error {
 }
 
 func importChain(ctx *cli.Context) error {
-	if len(ctx.Args()) < 1 {
+	if len(ctx.Args()) < 2 {
 		utils.Fatalf("This command requires an argument.")
 	}
 	// Start metrics export if enabled
@@ -308,13 +308,14 @@ func importChain(ctx *cli.Context) error {
 
 	var importErr error
 
-	if len(ctx.Args()) == 1 {
+	// ArgsUsage: "<filename> (<filename 2> ... <filename N>) <genesisPath>",
+	if len(ctx.Args()) == 2 {
 		if err := utils.ImportChain(chain, ctx.Args().First()); err != nil {
 			importErr = err
 			log.Error("Import error", "err", err)
 		}
 	} else {
-		for _, arg := range ctx.Args() {
+		for _, arg := range ctx.Args()[:len(ctx.Args())-1] {
 			if err := utils.ImportChain(chain, arg); err != nil {
 				importErr = err
 				log.Error("Import error", "file", arg, "err", err)
