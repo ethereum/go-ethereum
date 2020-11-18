@@ -25,6 +25,7 @@ import (
 	"fmt"
 	"io/ioutil"
 	"os"
+	"strings"
 
 	"golang.org/x/crypto/ed25519"
 )
@@ -88,6 +89,13 @@ func SignifySignFile(input string, output string, key string, trustedComment str
 
 	// Add the trusted comment if available (minisign only)
 	if trustedComment != "" {
+		// Check that the trusted comment fits in one line
+		firstCRIndex := strings.IndexByte(trustedComment, 13)
+		firstLFIndex := strings.IndexByte(trustedComment, 10)
+		if (firstCRIndex >= 0 && firstCRIndex < len(trustedComment)-1) || (firstLFIndex >= 0 && firstLFIndex < len(trustedComment)-1) {
+			return errors.New("trusted comment must fit on a single line")
+		}
+
 		var sigAndComment []byte
 		sigAndComment = append(sigAndComment, rawSig...)
 		sigAndComment = append(sigAndComment, []byte(trustedComment)...)

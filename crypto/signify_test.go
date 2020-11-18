@@ -105,3 +105,30 @@ func TestSignify(t *testing.T) {
 		t.Fatal("invalid signature")
 	}
 }
+
+func TestSignifyTrustedCommentTooManyLines(t *testing.T) {
+	tmpFile, err := ioutil.TempFile("", "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer os.Remove(tmpFile.Name())
+	defer tmpFile.Close()
+
+	rand.Seed(time.Now().UnixNano())
+
+	data := make([]byte, 1024)
+	rand.Read(data)
+	tmpFile.Write(data)
+
+	if err = tmpFile.Close(); err != nil {
+		t.Fatal(err)
+	}
+
+	err = SignifySignFile(tmpFile.Name(), fmt.Sprintf("%s.sig", tmpFile.Name()), testSecKey, "crois\nsants")
+	fmt.Println(err)
+	if err == nil || err.Error() == "" {
+		t.Fatalf("should have errored on a multi-line trusted comment, got %v", err)
+	}
+	defer os.Remove(fmt.Sprintf("%s.sig", tmpFile.Name()))
+
+}
