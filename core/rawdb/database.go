@@ -294,6 +294,7 @@ func InspectDatabase(db ethdb.Database) error {
 		preimages       stat
 		bloomBits       stat
 		cliqueSnaps     stat
+		badBlocks       stat
 
 		// Ancient store statistics
 		ancientHeadersSize  common.StorageSize
@@ -353,6 +354,8 @@ func InspectDatabase(db ethdb.Database) error {
 			chtTrieNodes.Add(size)
 		case bytes.HasPrefix(key, []byte("blt-")) && len(key) == 4+common.HashLength:
 			bloomTrieNodes.Add(size)
+		case bytes.HasPrefix(key, badBlockPrefix) && len(key) == (len(badBlockPrefix)+common.HashLength):
+			badBlocks.Add(size)
 		default:
 			var accounted bool
 			for _, meta := range [][]byte{databaseVersionKey, headHeaderKey, headBlockKey, headFastBlockKey, fastTrieProgressKey, uncleanShutdownKey} {
@@ -401,6 +404,7 @@ func InspectDatabase(db ethdb.Database) error {
 		{"Key-Value store", "Account snapshot", accountSnaps.Size(), accountSnaps.Count()},
 		{"Key-Value store", "Storage snapshot", storageSnaps.Size(), storageSnaps.Count()},
 		{"Key-Value store", "Clique snapshots", cliqueSnaps.Size(), cliqueSnaps.Count()},
+		{"Key-Value store", "Bad blocks", badBlocks.Size(), badBlocks.Count()},
 		{"Key-Value store", "Singleton metadata", metadata.Size(), metadata.Count()},
 		{"Ancient store", "Headers", ancientHeadersSize.String(), ancients.String()},
 		{"Ancient store", "Bodies", ancientBodiesSize.String(), ancients.String()},
