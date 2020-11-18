@@ -20,7 +20,6 @@
 package crypto
 
 import (
-	"fmt"
 	"io/ioutil"
 	"math/rand"
 	"os"
@@ -55,11 +54,11 @@ func TestSignify(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	err = SignifySignFile(tmpFile.Name(), fmt.Sprintf("%s.sig", tmpFile.Name()), testSecKey, "clé", "croissants")
+	err = SignifySignFile(tmpFile.Name(), tmpFile.Name()+".sig", testSecKey, "clé", "croissants")
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer os.Remove(fmt.Sprintf("%s.sig", tmpFile.Name()))
+	defer os.Remove(tmpFile.Name() + ".sig")
 
 	// if signify-openbsd is present, check the signature.
 	// signify-openbsd will be present in CI.
@@ -78,10 +77,9 @@ func TestSignify(t *testing.T) {
 			pubKeyFile.WriteString(testPubKey)
 			pubKeyFile.WriteString("\n")
 
-			cmd := exec.Command("signify-openbsd", "-V", "-p", pubKeyFile.Name(), "-x", fmt.Sprintf("%s.sig", tmpFile.Name()), "-m", tmpFile.Name())
+			cmd := exec.Command("signify-openbsd", "-V", "-p", pubKeyFile.Name(), "-x", tmpFile.Name()+".sig", "-m", tmpFile.Name())
 			if output, err := cmd.CombinedOutput(); err != nil {
-				fmt.Println(string(output))
-				t.Fatalf("could not verify the file: %v", err)
+				t.Fatalf("could not verify the file: %v, output: \n%s", err, output)
 			}
 		}
 	}
@@ -124,11 +122,10 @@ func TestSignifyTrustedCommentTooManyLines(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	err = SignifySignFile(tmpFile.Name(), fmt.Sprintf("%s.sig", tmpFile.Name()), testSecKey, "", "crois\nsants")
-	fmt.Println(err)
+	err = SignifySignFile(tmpFile.Name(), tmpFile.Name()+".sig", testSecKey, "", "crois\nsants")
 	if err == nil || err.Error() == "" {
 		t.Fatalf("should have errored on a multi-line trusted comment, got %v", err)
 	}
-	defer os.Remove(fmt.Sprintf("%s.sig", tmpFile.Name()))
+	defer os.Remove(tmpFile.Name() + ".sig")
 
 }
