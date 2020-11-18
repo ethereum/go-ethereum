@@ -23,22 +23,37 @@ import (
 )
 
 func TestVerification(t *testing.T) {
-	// For this test, the pubkey is in testdata/minisign.pub
-	// (the privkey is there aswell, if we want to expand this test. Password 'test' )
-	pub := "RWQkliYstQBOKOdtClfgC3IypIPX6TAmoEi7beZ4gyR3wsaezvqOMWsp"
+	// Signatures generated with `minisign`
+	t.Run("minisig", func(t *testing.T) {
+		// For this test, the pubkey is in testdata/minisign.pub
+		// (the privkey is `minisign.sec`, if we want to expand this test. Password 'test' )
+		pub := "RWQkliYstQBOKOdtClfgC3IypIPX6TAmoEi7beZ4gyR3wsaezvqOMWsp"
+		testVerification(t, pub, "./testdata/vcheck/minisig-sigs/")
+	})
+	// Signatures generated with `signify-openbsd`
+	t.Run("signify-openbsd", func(t *testing.T) {
+		t.Skip("This currently fails, minisign expects 4 lines of data, signify provides only 2")
+		// For this test, the pubkey is in testdata/signifykey.pub
+		// (the privkey is `signifykey.sec`, if we want to expand this test. Password 'test' )
+		pub := "RWSKLNhZb0KdATtRT7mZC/bybI3t3+Hv/O2i3ye04Dq9fnT9slpZ1a2/"
+		testVerification(t, pub, "./testdata/vcheck/signify-sigs/")
+	})
+}
+
+func testVerification(t *testing.T, pubkey, sigdir string) {
 	// Data to verify
 	data, err := ioutil.ReadFile("./testdata/vcheck/data.json")
 	// Signatures, with and without comments, both trusted and untrusted
-	files, err := ioutil.ReadDir("./testdata/vcheck/sigs/")
+	files, err := ioutil.ReadDir(sigdir)
 	if err != nil {
 		t.Fatal(err)
 	}
 	for _, f := range files {
-		sig, err := ioutil.ReadFile(filepath.Join(".", "testdata", "vcheck", "sigs", f.Name()))
+		sig, err := ioutil.ReadFile(filepath.Join(sigdir, f.Name()))
 		if err != nil {
 			t.Fatal(err)
 		}
-		err = verifySignature(pub, data, sig)
+		err = verifySignature(pubkey, data, sig)
 		if err != nil {
 			t.Fatal(err)
 		}
