@@ -52,6 +52,12 @@ func getGenesis(genesisPath string) (*core.Genesis, error) {
 	return genesis, nil
 }
 
+// SetBorConfig sets bor config
+func SetBorConfig(ctx *cli.Context, cfg *eth.Config) {
+	cfg.HeimdallURL = ctx.GlobalString(HeimdallURLFlag.Name)
+	cfg.WithoutHeimdall = ctx.GlobalBool(WithoutHeimdallFlag.Name)
+}
+
 // CreateBorEthereum Creates bor ethereum object from eth.Config
 func CreateBorEthereum(cfg *eth.Config) *eth.Ethereum {
 	workspace, err := ioutil.TempDir("", "bor-command-node-")

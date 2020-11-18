@@ -146,6 +146,9 @@ func makeConfigNode(ctx *cli.Context) (*node.Node, gethConfig) {
 	}
 	utils.SetShhConfig(ctx, stack)
 
+	// Set Bor config flags
+	utils.SetBorConfig(ctx, &cfg.Eth)
+
 	return stack, cfg
 }
 
