@@ -28,6 +28,7 @@ func StartIPCEndpoint(ipcEndpoint string, apis []API) (net.Listener, *Server, er
 	handler := NewServer()
 	for _, api := range apis {
 		if err := handler.RegisterName(api.Namespace, api.Service); err != nil {
+			log.Info("IPC registration failed", "namespace", api.Namespace, "error", err)
 			return nil, nil, err
 		}
 		log.Debug("IPC registered", "namespace", api.Namespace)
