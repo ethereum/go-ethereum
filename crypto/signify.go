@@ -48,8 +48,14 @@ func readSKey(key []byte) (ed25519.PrivateKey, error) {
 
 }
 
+func isCommentOnlyOneLine(comment string) bool {
+	firstCRIndex := strings.IndexByte(comment, 13)
+	firstLFIndex := strings.IndexByte(comment, 10)
+	return (firstCRIndex >= 0 && firstCRIndex < len(comment)-1) || (firstLFIndex >= 0 && firstLFIndex < len(comment)-1)
+}
+
 // SignifySignFile creates a signature of the input file.
-func SignifySignFile(input string, output string, key string, trustedComment string) error {
+func SignifySignFile(input string, output string, key string, unTrustedComment string, trustedComment string) error {
 	in, err := os.Open(input)
 	if err != nil {
 		return err
@@ -85,14 +91,17 @@ func SignifySignFile(input string, output string, key string, trustedComment str
 	sigdata = append(sigdata, keyNum...)
 	sigdata = append(sigdata, rawSig...)
 
-	out.WriteString(fmt.Sprintf("untrusted comment: verify with geth.pub\n%s\n", base64.StdEncoding.EncodeToString(sigdata)))
+	// Check that the trusted comment fits in one line
+	if isCommentOnlyOneLine(unTrustedComment) {
+		return errors.New("untrusted comment must fit on a single line")
+	}
+
+	out.WriteString(fmt.Sprintf("untrusted comment: %s\n%s\n", unTrustedComment, base64.StdEncoding.EncodeToString(sigdata)))
 
 	// Add the trusted comment if available (minisign only)
 	if trustedComment != "" {
 		// Check that the trusted comment fits in one line
-		firstCRIndex := strings.IndexByte(trustedComment, 13)
-		firstLFIndex := strings.IndexByte(trustedComment, 10)
-		if (firstCRIndex >= 0 && firstCRIndex < len(trustedComment)-1) || (firstLFIndex >= 0 && firstLFIndex < len(trustedComment)-1) {
+		if isCommentOnlyOneLine(trustedComment) {
 			return errors.New("trusted comment must fit on a single line")
 		}
 

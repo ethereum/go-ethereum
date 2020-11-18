@@ -459,7 +459,7 @@ func archiveUpload(archive string, blobstore string, signer string, signify stri
 	}
 	if signify != "" {
 		key := getenvBase64(string(signify))
-		if err := crypto.SignifySignFile(archive, archive+".sig", string(key), fmt.Sprintf("%d", time.Now().UTC().Unix())); err != nil {
+		if err := crypto.SignifySignFile(archive, archive+".sig", string(key), "verify with geth.pub", fmt.Sprintf("%d", time.Now().UTC().Unix())); err != nil {
 			return err
 		}
 	}

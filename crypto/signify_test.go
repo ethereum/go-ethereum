@@ -55,7 +55,7 @@ func TestSignify(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	err = SignifySignFile(tmpFile.Name(), fmt.Sprintf("%s.sig", tmpFile.Name()), testSecKey, "croissants")
+	err = SignifySignFile(tmpFile.Name(), fmt.Sprintf("%s.sig", tmpFile.Name()), testSecKey, "clé", "croissants")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -124,7 +124,7 @@ func TestSignifyTrustedCommentTooManyLines(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	err = SignifySignFile(tmpFile.Name(), fmt.Sprintf("%s.sig", tmpFile.Name()), testSecKey, "crois\nsants")
+	err = SignifySignFile(tmpFile.Name(), fmt.Sprintf("%s.sig", tmpFile.Name()), testSecKey, "", "crois\nsants")
 	fmt.Println(err)
 	if err == nil || err.Error() == "" {
 		t.Fatalf("should have errored on a multi-line trusted comment, got %v", err)
