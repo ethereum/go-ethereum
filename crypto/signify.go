@@ -31,7 +31,7 @@ import (
 
 var (
 	errInvalidKeyHeader = errors.New("Incorrect key header")
-	errInvalidKeyLength = errors.New("invalid, key length != 42")
+	errInvalidKeyLength = errors.New("invalid, key length != 104")
 )
 
 func readSKey(key []byte) (ed25519.PrivateKey, error) {
@@ -75,9 +75,12 @@ func SignifySignFile(input string, output string, key string) error {
 		return err
 	}
 
-	sigdata := []byte("Ed")
-	copy(sigdata, keydata[:2])
-	sigdata = append(sigdata, keydata[32:40]...)
+	header := keydata[:2]
+	keyNum := keydata[32:40]
+
+	var sigdata []byte
+	sigdata = append(sigdata, header...)
+	sigdata = append(sigdata, keyNum...)
 	sigdata = append(sigdata, ed25519.Sign(skey, filedata)...)
 
 	out.WriteString(fmt.Sprintf("untrusted comment: verify with geth.pub\n%s\n", base64.StdEncoding.EncodeToString(sigdata)))
