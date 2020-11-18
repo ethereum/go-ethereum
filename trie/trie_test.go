@@ -594,21 +594,20 @@ func benchmarkCommitAfterHash(b *testing.B, onleaf LeafCallback) {
 
 func TestTinyTrie(t *testing.T) {
 	// Create a realistic account trie to hash
-	_, accounts := makeAccounts(10000)
+	_, accounts := makeAccounts(5)
 	trie := newEmpty()
 	trie.Update(common.Hex2Bytes("0000000000000000000000000000000000000000000000000000000000001337"), accounts[3])
-	if exp, root := common.HexToHash("4fa6efd292cffa2db0083b8bedd23add2798ae73802442f52486e95c3df7111c"), trie.Hash(); exp != root {
-		t.Fatalf("1: got %x, exp %x", root, exp)
+	if exp, root := common.HexToHash("1ac66c2d9a7dcf6cbe7bea52f0a4b1ebc03819f1f3b83f809c94e8092bcf20f2"), trie.Hash(); exp != root {
+		t.Errorf("1: got %x, exp %x", root, exp)
 	}
 	trie.Update(common.Hex2Bytes("0000000000000000000000000000000000000000000000000000000000001338"), accounts[4])
-	if exp, root := common.HexToHash("cb5fb1213826dad9e604f095f8ceb5258fe6b5c01805ce6ef019a50699d2d479"), trie.Hash(); exp != root {
-		t.Fatalf("2: got %x, exp %x", root, exp)
+	if exp, root := common.HexToHash("5e0d41b0cfe3385ae8a4e0faaa711fea49d3da7ac12985eda78e40d6f5519d67"), trie.Hash(); exp != root {
+		t.Errorf("2: got %x, exp %x", root, exp)
 	}
 	trie.Update(common.Hex2Bytes("0000000000000000000000000000000000000000000000000000000000001339"), accounts[4])
-	if exp, root := common.HexToHash("ed7e06b4010057d8703e7b9a160a6d42cf4021f9020da3c8891030349a646987"), trie.Hash(); exp != root {
-		t.Fatalf("3: got %x, exp %x", root, exp)
+	if exp, root := common.HexToHash("4cb93711417bba89c3075ef35ff450bd346fd7c9ccaa4abbb05fd00d4f7e3474"), trie.Hash(); exp != root {
+		t.Errorf("3: got %x, exp %x", root, exp)
 	}
-
 	checktr, _ := New(common.Hash{}, trie.db)
 	it := NewIterator(trie.NodeIterator(nil))
 	for it.Next() {
@@ -630,7 +629,7 @@ func TestCommitAfterHash(t *testing.T) {
 	trie.Hash()
 	trie.Commit(nil)
 	root := trie.Hash()
-	exp := common.HexToHash("e5e9c29bb50446a4081e6d1d748d2892c6101c1e883a1f77cf21d4094b697822")
+	exp := common.HexToHash("860714ae1325ec4bd9ee9171f22e9c29c0720bca9d19e47e3027653c12c66263")
 	if exp != root {
 		t.Errorf("got %x, exp %x", root, exp)
 	}
@@ -646,19 +645,26 @@ func makeAccounts(size int) (addresses [][20]byte, accounts [][]byte) {
 	// Create a realistic account trie to hash
 	addresses = make([][20]byte, size)
 	for i := 0; i < len(addresses); i++ {
-		for j := 0; j < len(addresses[i]); j++ {
-			addresses[i][j] = byte(random.Intn(256))
-		}
+		data := make([]byte, 20)
+		random.Read(data)
+		copy(addresses[i][:], data)
 	}
 	accounts = make([][]byte, len(addresses))
 	for i := 0; i < len(accounts); i++ {
 		var (
-			nonce   = uint64(random.Int63())
-			balance = new(big.Int).Rand(random, new(big.Int).Exp(common.Big2, common.Big256, nil))
-			root    = emptyRoot
-			code    = crypto.Keccak256(nil)
+			nonce = uint64(random.Int63())
+			root  = emptyRoot
+			code  = crypto.Keccak256(nil)
 		)
-		accounts[i], _ = rlp.EncodeToBytes(&account{nonce, balance, root, code})
+		// The big.Rand function is not deterministic with regards to 64 vs 32 bit systems,
+		// and will consume different amount of data from the rand source.
+		//balance = new(big.Int).Rand(random, new(big.Int).Exp(common.Big2, common.Big256, nil))
+		// Therefore, we instead just read into a byte byffer
+		balanceBytes := make([]byte, 32)
+		random.Read(balanceBytes)
+		balance := new(big.Int).SetBytes(balanceBytes)
+		data, _ := rlp.EncodeToBytes(&account{nonce, balance, root, code})
+		accounts[i] = data
 	}
 	return addresses, accounts
 }
@@ -714,12 +720,12 @@ func TestCommitSequence(t *testing.T) {
 		expWriteSeqHash    []byte
 		expCallbackSeqHash []byte
 	}{
-		{20, common.FromHex("68c495e45209e243eb7e4f4e8ca8f9f7be71003bd9cafb8061b4534373740193"),
-			common.FromHex("01783213033d6b7781a641ab499e680d959336d025ac16f44d02f4f0c021bbf5")},
-		{200, common.FromHex("3b20d16c13c4bc3eb3b8d0ad7a169fef3b1600e056c0665895d03d3d2b2ff236"),
-			common.FromHex("fb8db0ec82e8f02729f11228940885b181c3047ab0d654ed0110291ca57111a8")},
-		{2000, common.FromHex("34eff3d1048bebdf77e9ae8bd939f2e7c742edc3dcd1173cff1aad9dbd20451a"),
-			common.FromHex("1c981604b1a9f8ffa40e0ae66b14830a87f5a4ed8345146a3912e6b2dcb05e63")},
+		{20, common.FromHex("9078cc6549a8359f2ec7cb4750f3441f0e1199357bf37990cc40e44cdbaab7b5"),
+			common.FromHex("0a65f78f35c3847732f81b672fef9180076d0afeb77f323cd870842d8c048eb4")},
+		{200, common.FromHex("51a2e7d86b7edf129a6599de2404a5c9f3b91ff610fa62eabf044b11c634b0af"),
+			common.FromHex("9c7b41b9eae6ac8fbe7ad75ec86ecdf15ca821af464bab4e60d35c05033b0247")},
+		{2000, common.FromHex("94ef2ed89147435f8e45aaaecb3bf443f7f49dc796a1367fe82cd8fa7519a217"),
+			common.FromHex("142349d5df2ff9f11d0b9e1c8162df74d0245c796d9d1eec41ec2d58558ce0d2")},
 	} {
 		addresses, accounts := makeAccounts(tc.count)
 		// This spongeDb is used to check the sequence of disk-db-writes
@@ -740,10 +746,10 @@ func TestCommitSequence(t *testing.T) {
 			callbackSponge.Write(c[:])
 		})
 		if got, exp := s.sponge.Sum(nil), tc.expWriteSeqHash; !bytes.Equal(got, exp) {
-			t.Fatalf("test %d, disk write sequence wrong:\ngot %x exp %x\n", i, got, exp)
+			t.Errorf("test %d, disk write sequence wrong:\ngot %x exp %x\n", i, got, exp)
 		}
 		if got, exp := callbackSponge.Sum(nil), tc.expCallbackSeqHash; !bytes.Equal(got, exp) {
-			t.Fatalf("test %d, call back sequence wrong:\ngot: %x exp %x\n", i, got, exp)
+			t.Errorf("test %d, call back sequence wrong:\ngot: %x exp %x\n", i, got, exp)
 		}
 	}
 }
