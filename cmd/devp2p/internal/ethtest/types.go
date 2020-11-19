@@ -136,6 +136,11 @@ type NewBlock struct {
 
 func (nb NewBlock) Code() int { return 23 }
 
+// NewPooledTransactionHashes is the network packet for the tx hash propagation message.
+type NewPooledTransactionHashes [][32]byte
+
+func (nb NewPooledTransactionHashes) Code() int { return 24 }
+
 // HashOrNumber is a combined field for specifying an origin block.
 type hashOrNumber struct {
 	Hash   common.Hash // Block hash from which to retrieve headers (excludes Number)
@@ -211,6 +216,8 @@ func (c *Conn) Read() Message {
 		msg = new(NewBlockHashes)
 	case (Transactions{}).Code():
 		msg = new(Transactions)
+	case (NewPooledTransactionHashes{}).Code():
+		msg = new(NewPooledTransactionHashes)
 	default:
 		return errorf("invalid message code: %d", code)
 	}

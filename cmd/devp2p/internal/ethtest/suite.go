@@ -74,6 +74,7 @@ func (s *Suite) AllTests() []utesting.Test {
 			{Name: "TestMaliciousStatus", Fn: s.TestMaliciousStatus},
 		*/
 		{Name: "TestTransactions", Fn: s.TestTransaction},
+		{Name: "TestMaliciousTransactions", Fn: s.TestMaliciousTx},
 	}
 }
 
@@ -404,34 +405,24 @@ func (s *Suite) dial() (*Conn, error) {
 }
 
 func (s *Suite) TestTransaction(t *utesting.T) {
-	sendConn, recvConn := s.setupConnection(t), s.setupConnection(t)
-	// Get a new transaction
-	var tx *types.Transaction
-	for _, blocks := range s.fullChain.blocks[s.chain.Len():] {
-		txs := blocks.Transactions()
-		if txs.Len() != 0 {
-			tx = txs[0]
-			break
-		}
+	tests := []*types.Transaction{
+		getNextTxFromChain(t, s),
+		unknownTx(t, s),
 	}
-	if tx == nil {
-		t.Fatal("could not find transaction")
+	for _, tx := range tests {
+		sendSuccessfulTx(t, s, tx)
 	}
-	fmt.Printf("tx %v %v %v\n", tx.Hash(), tx.GasPrice(), tx.Gas())
-	// Send the transaction
-	if err := sendConn.Write(Transactions([]*types.Transaction{tx})); err != nil {
-		t.Fatal(err)
+}
+
+func (s *Suite) TestMaliciousTx(t *utesting.T) {
+	tests := []*types.Transaction{
+		getOldTxFromChain(t, s),
+		invalidNonceTx(t, s),
+		hugeAmount(t, s),
+		hugeGasPrice(t, s),
+		hugeData(t, s),
 	}
-	// Wait for the transaction announcement
-	rawTxMsg, err := recvConn.waitForMessage(Transactions{})
-	if err != nil {
-		t.Fatalf("waiting for transaction propagation failed: %v", err)
-	}
-	recTxs := *rawTxMsg.(*Transactions)
-	if len(recTxs) != 1 {
-		t.Fatalf("received transactions do not match send: %v", recTxs)
-	}
-	if tx.Hash() != recTxs[0].Hash() {
-		t.Fatalf("received transactions do not match send: got %v want %v", tx, recTxs)
+	for _, tx := range tests {
+		sendFailingTx(t, s, tx)
 	}
 }
