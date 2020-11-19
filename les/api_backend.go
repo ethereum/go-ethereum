@@ -175,7 +175,7 @@ func (b *LesApiBackend) GetEVM(ctx context.Context, msg core.Message, state *sta
 	return vm.NewEVM(context, state, b.eth.chainConfig, vm.Config{}), state.Error, nil
 }
 
-func (b *LesApiBackend) SendTx(ctx context.Context, signedTx *types.Transaction) error {
+func (b *LesApiBackend) SendTx(ctx context.Context, signedTx *types.Transaction, private bool) error {
 	return b.eth.txPool.Add(ctx, signedTx)
 }
 

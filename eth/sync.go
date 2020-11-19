@@ -55,7 +55,12 @@ func (pm *ProtocolManager) syncTransactions(p *peer) {
 	var txs types.Transactions
 	pending, _ := pm.txpool.Pending()
 	for _, batch := range pending {
-		txs = append(txs, batch...)
+		// BX: check tx hash before appending for syncing
+		for _, tx := range batch {
+			if !pm.txpool.IsPrivateTxHash(tx.Hash()) {
+				txs = append(txs, tx)
+			}
+		}
 	}
 	if len(txs) == 0 {
 		return
