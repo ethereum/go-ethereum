@@ -602,7 +602,7 @@ func (pool *TxPool) add(tx *types.Transaction, local bool) (replaced bool, err e
 		// Otherwise if we can't make enough room for new one, abort the operation.
 		drop, success := pool.priced.Discard(pool.all.Slots()-int(pool.config.GlobalSlots+pool.config.GlobalQueue)+numSlots(tx), isLocal)
 
-		// Special case, We still can't make the room for the new remote one.
+		// Special case, we still can't make the room for the new remote one.
 		if !isLocal && !success {
 			log.Trace("Discarding overflowed transaction", "hash", hash)
 			overflowedTxMeter.Mark(1)
@@ -649,7 +649,7 @@ func (pool *TxPool) add(tx *types.Transaction, local bool) (replaced bool, err e
 	if local && !pool.locals.contains(from) {
 		log.Info("Setting new local account", "address", from)
 		pool.locals.add(from)
-		pool.priced.Removed(pool.all.Shuffle(pool.locals)) // Migrate the remotes if it's marked as local first time.
+		pool.priced.Removed(pool.all.RemoteToLocals(pool.locals)) // Migrate the remotes if it's marked as local first time.
 	}
 	if isLocal {
 		localGauge.Inc(1)
@@ -1683,9 +1683,9 @@ func (t *txLookup) Remove(hash common.Hash) {
 	delete(t.remotes, hash)
 }
 
-// Shuffle migrates the transactions belongs to the given locals to locals set.
-// The assumption is held the locals set is thread-safe to be used.
-func (t *txLookup) Shuffle(locals *accountSet) int {
+// RemoteToLocals migrates the transactions belongs to the given locals to locals
+// set. The assumption is held the locals set is thread-safe to be used.
+func (t *txLookup) RemoteToLocals(locals *accountSet) int {
 	t.lock.Lock()
 	defer t.lock.Unlock()
 

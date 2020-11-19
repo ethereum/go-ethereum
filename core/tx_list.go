@@ -493,7 +493,6 @@ func (l *txPricedList) Cap(threshold *big.Int) types.Transactions {
 			heap.Push(l.remotes, tx)
 			break
 		}
-		// Non stale transaction found, discard unless local
 		drop = append(drop, tx)
 	}
 	return drop
@@ -517,7 +516,7 @@ func (l *txPricedList) Underpriced(tx *types.Transaction) bool {
 		return false // There is no remote transaction at all.
 	}
 	// If the remote transaction is even cheaper than the
-	// cheapest one tracked locally, please reject it.
+	// cheapest one tracked locally, reject it.
 	cheapest := []*types.Transaction(*l.remotes)[0]
 	return cheapest.GasPriceCmp(tx) >= 0
 }
@@ -550,7 +549,6 @@ func (l *txPricedList) Discard(slots int, force bool) (types.Transactions, bool)
 }
 
 // Reheap forcibly rebuilds the heap based on the current remote transaction set.
-// This function is mainly used in testing for verifying the content of heap.
 func (l *txPricedList) Reheap() {
 	reheap := make(priceHeap, 0, l.all.RemoteCount())
 
