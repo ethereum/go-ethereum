@@ -1569,7 +1569,7 @@ func newTxLookup() *txLookup {
 
 // Range calls f on each key and value present in the map. The callback passed
 // should return the indicator whether the iteration needs to be continued.
-// Callers need to specify which set(or both)to be iterated.
+// Callers need to specify which set (or both) to be iterated.
 func (t *txLookup) Range(f func(hash common.Hash, tx *types.Transaction, local bool) bool, local bool, remote bool) {
 	t.lock.RLock()
 	defer t.lock.RUnlock()
@@ -1674,7 +1674,8 @@ func (t *txLookup) Remove(hash common.Hash) {
 		tx, ok = t.remotes[hash]
 	}
 	if !ok {
-		return // transaction not found
+		log.Error("No transaction found to be deleted", "hash", hash)
+		return
 	}
 	t.slots -= numSlots(tx)
 	slotsGauge.Update(int64(t.slots))
