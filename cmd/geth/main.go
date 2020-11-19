@@ -245,8 +245,6 @@ func init() {
 		licenseCommand,
 		// See config.go
 		dumpConfigCommand,
-		// See retesteth.go
-		retestethCommand,
 		// See cmd/utils/flags_legacy.go
 		utils.ShowDeprecated,
 	}
