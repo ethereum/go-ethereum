@@ -129,17 +129,19 @@ func ipcEndpoint(ipcPath, datadir string) string {
 var nextIPC = uint32(0)
 
 func startGethWithIpc(t *testing.T, name string, args ...string) *gethrpc {
-	g := &gethrpc{name: name}
 	ipcName := fmt.Sprintf("geth-%d.ipc", atomic.AddUint32(&nextIPC, 1))
-	args = append([]string{"--networkid=42", "--port=0", "--nousb", "--ipcpath",ipcName }, args...)
+	args = append([]string{"--networkid=42", "--port=0", "--nousb", "--ipcpath", ipcName}, args...)
 	t.Logf("Starting %v with rpc: %v", name, args)
-	g.geth = runGeth(t, args...)
+
+	g := &gethrpc{
+		name: name,
+		geth: runGeth(t, args...),
+	}
 	// wait before we can attach to it. TODO: probe for it properly
 	time.Sleep(1 * time.Second)
 	var err error
 	ipcpath := ipcEndpoint(ipcName, g.geth.Datadir)
-	g.rpc, err = rpc.Dial(ipcpath)
-	if err != nil {
+	if g.rpc, err = rpc.Dial(ipcpath); err != nil {
 		t.Fatalf("%v rpc connect to %v: %v", name, ipcpath, err)
 	}
 	return g
