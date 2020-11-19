@@ -483,17 +483,18 @@ func (l *txPricedList) Cap(threshold *big.Int) types.Transactions {
 	drop := make(types.Transactions, 0, 128) // Remote underpriced transactions to drop
 	for len(*l.remotes) > 0 {
 		// Discard stale transactions if found during cleanup
-		tx := heap.Pop(l.remotes).(*types.Transaction)
-		if l.all.GetRemote(tx.Hash()) == nil { // Removed or migrated
+		cheapest := (*l.remotes)[0]
+		if l.all.GetRemote(cheapest.Hash()) == nil { // Removed or migrated
+			heap.Pop(l.remotes)
 			l.stales--
 			continue
 		}
 		// Stop the discards if we've reached the threshold
-		if tx.GasPriceIntCmp(threshold) >= 0 {
-			heap.Push(l.remotes, tx)
+		if cheapest.GasPriceIntCmp(threshold) >= 0 {
 			break
 		}
-		drop = append(drop, tx)
+		heap.Pop(l.remotes)
+		drop = append(drop, cheapest)
 	}
 	return drop
 }
