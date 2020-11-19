@@ -22,6 +22,7 @@ import (
 	"fmt"
 	"sort"
 
+	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/log"
 )
 
@@ -54,6 +55,8 @@ const (
 	typeKeccak256 hashType = iota
 	typeBlake2b
 )
+
+var blake2bEmptyRoot = common.FromHex("45b0cfc220ceec5b7c1c62c4d4193d38e4eba48e8815729ce75f9c0ab0e4c1c0")
 
 // BinaryTrie represents a multi-level binary trie.
 //
@@ -197,8 +200,8 @@ func (bt *BinaryTrie) TryGet(key []byte) ([]byte, error) {
 func newBranchNode(prefix binkey, key []byte, value []byte, ht hashType) *branch {
 	return &branch{
 		prefix: prefix,
-		left:   hashBinaryNode(emptyRoot[:]),
-		right:  hashBinaryNode(emptyRoot[:]),
+		left:   empty(struct{}{}),
+		right:  empty(struct{}{}),
 		key:    key,
 		value:  value,
 		hType:  ht,
@@ -355,7 +358,8 @@ func (bt *BinaryTrie) Update(key, value []byte) {
 	}
 }
 
-func (bt *BinaryTrie) subTreeFromKey(path binkey) *branch {
+// subTreeFromPath rebuilds the subtrie rooted at path `path` from the db.
+func (bt *BinaryTrie) subTreeFromPath(path binkey) *branch {
 	subtrie := NewBinaryTrie()
 	for _, keyval := range bt.store {
 		// keyval.key is a full key from the store,
@@ -554,6 +558,7 @@ func (h hashBinaryNode) tryGet(key []byte, depth int) ([]byte, error) {
 func (e empty) Hash() []byte {
 	return emptyRoot[:]
 }
+
 func (e empty) HashM4() []byte {
 	return emptyRoot[:]
 }
