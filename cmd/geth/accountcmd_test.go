@@ -180,8 +180,8 @@ Fatal: could not decrypt key with given password
 func TestUnlockFlag(t *testing.T) {
 	datadir := tmpDatadirWithKeystore(t)
 	geth := runGeth(t,
-		"--nat", "none", "--nodiscover", "--maxpeers", "0", "--port", "0","--nousb","--cache","256","--ipcdisable",
-		"--datadir", datadir,"--unlock", "f466859ead1932d743d622cb74fc058882e8648a",
+		"--nat", "none", "--nodiscover", "--maxpeers", "0", "--port", "0", "--nousb", "--cache", "256", "--ipcdisable",
+		"--datadir", datadir, "--unlock", "f466859ead1932d743d622cb74fc058882e8648a",
 		"js", "testdata/empty.js")
 	geth.Expect(`
 Unlocking account f466859ead1932d743d622cb74fc058882e8648a | Attempt 1/3
