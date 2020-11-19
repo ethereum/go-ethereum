@@ -96,7 +96,7 @@ var (
 	}
 	aliasFlag = cli.StringFlag{
 		Name:  "alias",
-		Usage: "Comma separated aliases for function and event renaming, e.g. foo=bar",
+		Usage: "Comma separated aliases for function and event renaming, e.g. foo=_foo, bar=_bar",
 	}
 )
 
