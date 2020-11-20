@@ -129,15 +129,20 @@ func dial(server string, pubkey []byte) (*sshClient, error) {
 			fmt.Printf("SSH key fingerprint is %s [MD5]\n", ssh.FingerprintLegacyMD5(key))
 			fmt.Printf("Are you sure you want to continue connecting (yes/no)? ")
 
-			text, err := bufio.NewReader(os.Stdin).ReadString('\n')
-			switch {
-			case err != nil:
-				return err
-			case strings.TrimSpace(text) == "yes":
-				pubkey = key.Marshal()
-				return nil
-			default:
-				return fmt.Errorf("unknown auth choice: %v", text)
+			for {
+				text, err := bufio.NewReader(os.Stdin).ReadString('\n')
+				switch {
+				case err != nil:
+					return err
+				case strings.TrimSpace(text) == "yes":
+					pubkey = key.Marshal()
+					return nil
+				case strings.TrimSpace(text) == "no":
+					return errors.New("users says no")
+				default:
+					fmt.Println("Please answer 'yes' or 'no'")
+					continue
+				}
 			}
 		}
 		// If a public key exists for this SSH server, check that it matches

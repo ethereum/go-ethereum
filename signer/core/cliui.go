@@ -1,18 +1,18 @@
 // Copyright 2018 The go-ethereum Authors
-// This file is part of go-ethereum.
+// This file is part of the go-ethereum library.
 //
-// go-ethereum is free software: you can redistribute it and/or modify
-// it under the terms of the GNU General Public License as published by
+// The go-ethereum library is free software: you can redistribute it and/or modify
+// it under the terms of the GNU Lesser General Public License as published by
 // the Free Software Foundation, either version 3 of the License, or
 // (at your option) any later version.
 //
-// go-ethereum is distributed in the hope that it will be useful,
+// The go-ethereum library is distributed in the hope that it will be useful,
 // but WITHOUT ANY WARRANTY; without even the implied warranty of
 // MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
-// GNU General Public License for more details.
+// GNU Lesser General Public License for more details.
 //
-// You should have received a copy of the GNU General Public License
-// along with go-ethereum. If not, see <http://www.gnu.org/licenses/>.
+// You should have received a copy of the GNU Lesser General Public License
+// along with the go-ethereum library. If not, see <http://www.gnu.org/licenses/>.
 
 package core
 
@@ -25,9 +25,9 @@ import (
 	"sync"
 
 	"github.com/maticnetwork/bor/common/hexutil"
+	"github.com/maticnetwork/bor/console/prompt"
 	"github.com/maticnetwork/bor/internal/ethapi"
 	"github.com/maticnetwork/bor/log"
-	"golang.org/x/crypto/ssh/terminal"
 )
 
 type CommandlineUI struct {
@@ -58,48 +58,19 @@ func (ui *CommandlineUI) readString() string {
 	}
 }
 
-// readPassword reads a single line from stdin, trimming it from the trailing new
-// line and returns it. The input will not be echoed.
-func (ui *CommandlineUI) readPassword() string {
-	fmt.Printf("Enter password to approve:\n")
-	fmt.Printf("> ")
-
-	text, err := terminal.ReadPassword(int(os.Stdin.Fd()))
-	if err != nil {
-		log.Crit("Failed to read password", "err", err)
-	}
-	fmt.Println()
-	fmt.Println("-----------------------")
-	return string(text)
-}
-
-// readPassword reads a single line from stdin, trimming it from the trailing new
-// line and returns it. The input will not be echoed.
-func (ui *CommandlineUI) readPasswordText(inputstring string) string {
-	fmt.Printf("Enter %s:\n", inputstring)
-	fmt.Printf("> ")
-	text, err := terminal.ReadPassword(int(os.Stdin.Fd()))
-	if err != nil {
-		log.Crit("Failed to read password", "err", err)
-	}
-	fmt.Println("-----------------------")
-	return string(text)
-}
-
 func (ui *CommandlineUI) OnInputRequired(info UserInputRequest) (UserInputResponse, error) {
 
 	fmt.Printf("## %s\n\n%s\n", info.Title, info.Prompt)
+	defer fmt.Println("-----------------------")
 	if info.IsPassword {
-		fmt.Printf("> ")
-		text, err := terminal.ReadPassword(int(os.Stdin.Fd()))
+		text, err := prompt.Stdin.PromptPassword("> ")
 		if err != nil {
-			log.Error("Failed to read password", "err", err)
+			log.Error("Failed to read password", "error", err)
+			return UserInputResponse{}, err
 		}
-		fmt.Println("-----------------------")
-		return UserInputResponse{string(text)}, err
+		return UserInputResponse{text}, nil
 	}
 	text := ui.readString()
-	fmt.Println("-----------------------")
 	return UserInputResponse{text}, nil
 }
 
@@ -113,10 +84,19 @@ func (ui *CommandlineUI) confirm() bool {
 	return false
 }
 
+// sanitize quotes and truncates 'txt' if longer than 'limit'. If truncated,
+// and ellipsis is added after the quoted string
+func sanitize(txt string, limit int) string {
+	if len(txt) > limit {
+		return fmt.Sprintf("%q...", txt[:limit])
+	}
+	return fmt.Sprintf("%q", txt)
+}
+
 func showMetadata(metadata Metadata) {
 	fmt.Printf("Request context:\n\t%v -> %v -> %v\n", metadata.Remote, metadata.Scheme, metadata.Local)
 	fmt.Printf("\nAdditional HTTP header data, provided by the external caller:\n")
-	fmt.Printf("\tUser-Agent: %v\n\tOrigin: %v\n", metadata.UserAgent, metadata.Origin)
+	fmt.Printf("\tUser-Agent: %v\n\tOrigin: %v\n", sanitize(metadata.UserAgent, 200), sanitize(metadata.Origin, 100))
 }
 
 // ApproveTx prompt the user for confirmation to request to sign Transaction
@@ -141,7 +121,6 @@ func (ui *CommandlineUI) ApproveTx(request *SignTxRequest) (SignTxResponse, erro
 	if request.Transaction.Data != nil {
 		d := *request.Transaction.Data
 		if len(d) > 0 {
-
 			fmt.Printf("data:     %v\n", hexutil.Encode(d))
 		}
 	}
@@ -173,7 +152,7 @@ func (ui *CommandlineUI) ApproveSignData(request *SignDataRequest) (SignDataResp
 	for _, nvt := range request.Messages {
 		fmt.Printf("\u00a0\u00a0%v\n", strings.TrimSpace(nvt.Pprint(1)))
 	}
-	fmt.Printf("raw data:  \n%q\n", request.Rawdata)
+	fmt.Printf("raw data:  \n\t%q\n", request.Rawdata)
 	fmt.Printf("data hash:  %v\n", request.Hash)
 	fmt.Printf("-------------------------------------------\n")
 	showMetadata(request.Meta)

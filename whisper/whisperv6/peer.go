@@ -44,6 +44,8 @@ type Peer struct {
 	known mapset.Set // Messages already known by the peer to avoid wasting bandwidth
 
 	quit chan struct{}
+
+	wg sync.WaitGroup
 }
 
 // newPeer creates a new whisper peer object, but does not run the handshake itself.
@@ -64,6 +66,7 @@ func newPeer(host *Whisper, remote *p2p.Peer, rw p2p.MsgReadWriter) *Peer {
 // start initiates the peer updater, periodically broadcasting the whisper packets
 // into the network.
 func (peer *Peer) start() {
+	peer.wg.Add(1)
 	go peer.update()
 	log.Trace("start", "peer", peer.ID())
 }
@@ -71,6 +74,7 @@ func (peer *Peer) start() {
 // stop terminates the peer updater, stopping message forwarding to it.
 func (peer *Peer) stop() {
 	close(peer.quit)
+	peer.wg.Wait()
 	log.Trace("stop", "peer", peer.ID())
 }
 
@@ -81,7 +85,9 @@ func (peer *Peer) handshake() error {
 	errc := make(chan error, 1)
 	isLightNode := peer.host.LightClientMode()
 	isRestrictedLightNodeConnection := peer.host.LightClientModeConnectionRestricted()
+	peer.wg.Add(1)
 	go func() {
+		defer peer.wg.Done()
 		pow := peer.host.MinPow()
 		powConverted := math.Float64bits(pow)
 		bloom := peer.host.BloomFilter()
@@ -130,7 +136,7 @@ func (peer *Peer) handshake() error {
 		}
 	}
 
-	isRemotePeerLightNode, err := s.Bool()
+	isRemotePeerLightNode, _ := s.Bool()
 	if isRemotePeerLightNode && isLightNode && isRestrictedLightNodeConnection {
 		return fmt.Errorf("peer [%x] is useless: two light client communication restricted", peer.ID())
 	}
@@ -144,9 +150,12 @@ func (peer *Peer) handshake() error {
 // update executes periodic operations on the peer, including message transmission
 // and expiration.
 func (peer *Peer) update() {
+	defer peer.wg.Done()
 	// Start the tickers for the updates
 	expire := time.NewTicker(expirationCycle)
+	defer expire.Stop()
 	transmit := time.NewTicker(transmissionCycle)
+	defer transmit.Stop()
 
 	// Loop and transmit until termination is requested
 	for {

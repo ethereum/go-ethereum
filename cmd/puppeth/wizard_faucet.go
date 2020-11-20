@@ -147,7 +147,7 @@ func (w *wizard) deployFaucet() {
 		infos.node.keyPass = w.readPassword()
 
 		if _, err := keystore.DecryptKey([]byte(infos.node.keyJSON), infos.node.keyPass); err != nil {
-			log.Error("Failed to decrypt key with given passphrase")
+			log.Error("Failed to decrypt key with given password")
 			infos.node.keyJSON = ""
 			infos.node.keyPass = ""
 		}

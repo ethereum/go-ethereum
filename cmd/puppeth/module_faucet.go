@@ -213,7 +213,7 @@ func checkFaucet(client *sshClient, network string) (*faucetInfos, error) {
 	minutes, _ := strconv.Atoi(infos.envvars["FAUCET_MINUTES"])
 	tiers, _ := strconv.Atoi(infos.envvars["FAUCET_TIERS"])
 
-	// Retrieve the funding account informations
+	// Retrieve the funding account information
 	var out []byte
 	keyJSON, keyPass := "", ""
 	if out, err = client.Run(fmt.Sprintf("docker exec %s_faucet_1 cat /account.json", network)); err == nil {

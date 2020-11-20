@@ -22,6 +22,7 @@ package eth
 import (
 	"crypto/ecdsa"
 	"crypto/rand"
+	"fmt"
 	"math/big"
 	"sort"
 	"sync"
@@ -30,6 +31,7 @@ import (
 	"github.com/maticnetwork/bor/common"
 	"github.com/maticnetwork/bor/consensus/ethash"
 	"github.com/maticnetwork/bor/core"
+	"github.com/maticnetwork/bor/core/forkid"
 	"github.com/maticnetwork/bor/core/rawdb"
 	"github.com/maticnetwork/bor/core/types"
 	"github.com/maticnetwork/bor/core/vm"
@@ -60,13 +62,13 @@ func newTestProtocolManager(mode downloader.SyncMode, blocks int, generator func
 			Alloc:  core.GenesisAlloc{testBank: {Balance: big.NewInt(1000000)}},
 		}
 		genesis       = gspec.MustCommit(db)
-		blockchain, _ = core.NewBlockChain(db, nil, gspec.Config, engine, vm.Config{}, nil)
+		blockchain, _ = core.NewBlockChain(db, nil, gspec.Config, engine, vm.Config{}, nil, nil)
 	)
 	chain, _ := core.GenerateChain(gspec.Config, genesis, ethash.NewFaker(), db, blocks, generator)
 	if _, err := blockchain.InsertChain(chain); err != nil {
 		panic(err)
 	}
-	pm, err := NewProtocolManager(gspec.Config, nil, mode, DefaultConfig.NetworkId, evmux, &testTxPool{added: newtx}, engine, blockchain, db, 1, nil)
+	pm, err := NewProtocolManager(gspec.Config, nil, mode, DefaultConfig.NetworkId, evmux, &testTxPool{added: newtx, pool: make(map[common.Hash]*types.Transaction)}, engine, blockchain, db, 1, nil)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -89,10 +91,28 @@ func newTestProtocolManagerMust(t *testing.T, mode downloader.SyncMode, blocks i
 // testTxPool is a fake, helper transaction pool for testing purposes
 type testTxPool struct {
 	txFeed event.Feed
-	pool   []*types.Transaction        // Collection of all transactions
-	added  chan<- []*types.Transaction // Notification channel for new transactions
+	pool   map[common.Hash]*types.Transaction // Hash map of collected transactions
+	added  chan<- []*types.Transaction        // Notification channel for new transactions
 
 	lock sync.RWMutex // Protects the transaction pool
+}
+
+// Has returns an indicator whether txpool has a transaction
+// cached with the given hash.
+func (p *testTxPool) Has(hash common.Hash) bool {
+	p.lock.Lock()
+	defer p.lock.Unlock()
+
+	return p.pool[hash] != nil
+}
+
+// Get retrieves the transaction from local txpool with given
+// tx hash.
+func (p *testTxPool) Get(hash common.Hash) *types.Transaction {
+	p.lock.Lock()
+	defer p.lock.Unlock()
+
+	return p.pool[hash]
 }
 
 // AddRemotes appends a batch of transactions to the pool, and notifies any
@@ -101,10 +121,13 @@ func (p *testTxPool) AddRemotes(txs []*types.Transaction) []error {
 	p.lock.Lock()
 	defer p.lock.Unlock()
 
-	p.pool = append(p.pool, txs...)
+	for _, tx := range txs {
+		p.pool[tx.Hash()] = tx
+	}
 	if p.added != nil {
 		p.added <- txs
 	}
+	p.txFeed.Send(core.NewTxsEvent{Txs: txs})
 	return make([]error, len(txs))
 }
 
@@ -147,23 +170,14 @@ func newTestPeer(name string, version int, pm *ProtocolManager, shake bool) (*te
 	// Create a message pipe to communicate through
 	app, net := p2p.MsgPipe()
 
-	// Generate a random id and create the peer
+	// Start the peer on a new thread
 	var id enode.ID
 	rand.Read(id[:])
-
-	peer := pm.newPeer(version, p2p.NewPeer(id, name, nil), net)
-
-	// Start the peer on a new thread
+	peer := pm.newPeer(version, p2p.NewPeer(id, name, nil), net, pm.txpool.Get)
 	errc := make(chan error, 1)
-	go func() {
-		select {
-		case pm.newPeerCh <- peer:
-			errc <- pm.handle(peer)
-		case <-pm.quitSync:
-			errc <- p2p.DiscQuitting
-		}
-	}()
+	go func() { errc <- pm.runPeer(peer) }()
 	tp := &testPeer{app: app, net: net, peer: peer}
+
 	// Execute any implicitly requested handshakes and return
 	if shake {
 		var (
@@ -171,20 +185,35 @@ func newTestPeer(name string, version int, pm *ProtocolManager, shake bool) (*te
 			head    = pm.blockchain.CurrentHeader()
 			td      = pm.blockchain.GetTd(head.Hash(), head.Number.Uint64())
 		)
-		tp.handshake(nil, td, head.Hash(), genesis.Hash())
+		tp.handshake(nil, td, head.Hash(), genesis.Hash(), forkid.NewID(pm.blockchain), forkid.NewFilter(pm.blockchain))
 	}
 	return tp, errc
 }
 
 // handshake simulates a trivial handshake that expects the same state from the
 // remote side as we are simulating locally.
-func (p *testPeer) handshake(t *testing.T, td *big.Int, head common.Hash, genesis common.Hash) {
-	msg := &statusData{
-		ProtocolVersion: uint32(p.version),
-		NetworkId:       DefaultConfig.NetworkId,
-		TD:              td,
-		CurrentBlock:    head,
-		GenesisBlock:    genesis,
+func (p *testPeer) handshake(t *testing.T, td *big.Int, head common.Hash, genesis common.Hash, forkID forkid.ID, forkFilter forkid.Filter) {
+	var msg interface{}
+	switch {
+	case p.version == eth63:
+		msg = &statusData63{
+			ProtocolVersion: uint32(p.version),
+			NetworkId:       DefaultConfig.NetworkId,
+			TD:              td,
+			CurrentBlock:    head,
+			GenesisBlock:    genesis,
+		}
+	case p.version >= eth64:
+		msg = &statusData{
+			ProtocolVersion: uint32(p.version),
+			NetworkID:       DefaultConfig.NetworkId,
+			TD:              td,
+			Head:            head,
+			Genesis:         genesis,
+			ForkID:          forkID,
+		}
+	default:
+		panic(fmt.Sprintf("unsupported eth protocol version: %d", p.version))
 	}
 	if err := p2p.ExpectMsg(p.app, StatusMsg, msg); err != nil {
 		t.Fatalf("status recv: %v", err)

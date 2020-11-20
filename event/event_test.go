@@ -203,6 +203,7 @@ func BenchmarkPostConcurrent(b *testing.B) {
 // for comparison
 func BenchmarkChanSend(b *testing.B) {
 	c := make(chan interface{})
+	defer close(c)
 	closed := make(chan struct{})
 	go func() {
 		for range c {

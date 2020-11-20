@@ -203,7 +203,7 @@ func (b *testChainIndexBackend) assertBlocks(headNum, failNum uint64) (uint64, b
 }
 
 func (b *testChainIndexBackend) reorg(headNum uint64) uint64 {
-	firstChanged := headNum / b.indexer.sectionSize
+	firstChanged := (headNum + 1) / b.indexer.sectionSize
 	if firstChanged < b.stored {
 		b.stored = firstChanged
 	}

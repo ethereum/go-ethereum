@@ -1,4 +1,4 @@
-// Copyright 2015 The go-ethereum Authors
+// Copyright 2018 The go-ethereum Authors
 // This file is part of the go-ethereum library.
 //
 // The go-ethereum library is free software: you can redistribute it and/or modify
@@ -17,8 +17,10 @@
 package discover
 
 import (
+	"bytes"
 	"crypto/ecdsa"
 	"encoding/hex"
+	"errors"
 	"fmt"
 	"math/rand"
 	"net"
@@ -51,6 +53,23 @@ func nodeAtDistance(base enode.ID, ld int, ip net.IP) *node {
 	var r enr.Record
 	r.Set(enr.IP(ip))
 	return wrapNode(enode.SignNull(&r, idAtDistance(base, ld)))
+}
+
+// nodesAtDistance creates n nodes for which enode.LogDist(base, node.ID()) == ld.
+func nodesAtDistance(base enode.ID, ld int, n int) []*enode.Node {
+	results := make([]*enode.Node, n)
+	for i := range results {
+		results[i] = unwrapNode(nodeAtDistance(base, ld, intIP(i)))
+	}
+	return results
+}
+
+func nodesToRecords(nodes []*enode.Node) []*enr.Record {
+	records := make([]*enr.Record, len(nodes))
+	for i := range nodes {
+		records[i] = nodes[i].Record()
+	}
+	return records
 }
 
 // idAtDistance returns a random hash such that enode.LogDist(a, b) == n
@@ -167,6 +186,39 @@ func hasDuplicates(slice []*node) bool {
 		seen[e.ID()] = true
 	}
 	return false
+}
+
+func checkNodesEqual(got, want []*enode.Node) error {
+	if len(got) == len(want) {
+		for i := range got {
+			if !nodeEqual(got[i], want[i]) {
+				goto NotEqual
+			}
+			return nil
+		}
+	}
+
+NotEqual:
+	output := new(bytes.Buffer)
+	fmt.Fprintf(output, "got %d nodes:\n", len(got))
+	for _, n := range got {
+		fmt.Fprintf(output, "  %v %v\n", n.ID(), n)
+	}
+	fmt.Fprintf(output, "want %d:\n", len(want))
+	for _, n := range want {
+		fmt.Fprintf(output, "  %v %v\n", n.ID(), n)
+	}
+	return errors.New(output.String())
+}
+
+func nodeEqual(n1 *enode.Node, n2 *enode.Node) bool {
+	return n1.ID() == n2.ID() && n1.IP().Equal(n2.IP())
+}
+
+func sortByID(nodes []*enode.Node) {
+	sort.Slice(nodes, func(i, j int) bool {
+		return string(nodes[i].ID().Bytes()) < string(nodes[j].ID().Bytes())
+	})
 }
 
 func sortedByDistanceTo(distbase enode.ID, slice []*node) bool {

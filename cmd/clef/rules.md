@@ -70,7 +70,7 @@ The Otto vm has a few [caveats](https://github.com/robertkrimen/otto):
 Additionally, a few more have been added
 
 * The rule execution cannot load external javascript files.
-* The only preloaded libary is [`bignumber.js`](https://github.com/MikeMcl/bignumber.js) version `2.0.3`. This one is fairly old, and is not aligned with the documentation at the github repository.
+* The only preloaded library is [`bignumber.js`](https://github.com/MikeMcl/bignumber.js) version `2.0.3`. This one is fairly old, and is not aligned with the documentation at the github repository.
 * Each invocation is made in a fresh virtual machine. This means that you cannot store data in global variables between invocations. This is a deliberate choice -- if you want to store data, use the disk-backed `storage`, since rules should not rely on ephemeral data.
 * Javascript API parameters are _always_ an object. This is also a design choice, to ensure that parameters are accessed by _key_ and not by order. This is to prevent mistakes due to missing parameters or parameter changes.
 * The JS engine has access to `storage` and `console`.

@@ -1,4 +1,4 @@
-// Copyright 2017 The go-ethereum Authors
+// Copyright 2018 The go-ethereum Authors
 // This file is part of the go-ethereum library.
 //
 // The go-ethereum library is free software: you can redistribute it and/or modify
@@ -242,6 +242,7 @@ func (s *ProtocolSession) testExchange(e Exchange) error {
 		t = 2000 * time.Millisecond
 	}
 	alarm := time.NewTimer(t)
+	defer alarm.Stop()
 	select {
 	case err := <-errc:
 		return err

@@ -14,12 +14,8 @@
 // You should have received a copy of the GNU Lesser General Public License
 // along with the go-ethereum library. If not, see <http://www.gnu.org/licenses/>.
 
-// Package discv5 implements the RLPx v5 Topic Discovery Protocol.
-//
-// The Topic Discovery protocol provides a way to find RLPx nodes that
-// can be connected to. It uses a Kademlia-like protocol to maintain a
-// distributed database of the IDs and endpoints of all listening
-// nodes.
+// Package discv5 is a prototype implementation of Discvery v5.
+// Deprecated: do not use this package.
 package discv5
 
 import (

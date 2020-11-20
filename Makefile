@@ -8,7 +8,7 @@
 .PHONY: bor-darwin bor-darwin-386 bor-darwin-amd64
 .PHONY: bor-windows bor-windows-386 bor-windows-amd64
 
-GOBIN = $(shell pwd)/build/bin
+GOBIN = ./build/bin
 GO ?= latest
 GORUN = go run
 GOPATH = $(shell go env GOPATH)
@@ -17,8 +17,6 @@ bor:
 	$(GORUN) build/ci.go install ./cmd/bor
 	mkdir -p $(GOPATH)/bin/
 	cp $(GOBIN)/bor $(GOPATH)/bin/
-	@echo "Done building."
-	@echo "Run \"$(GOBIN)/bor\" to launch bor."
 
 all:
 	$(GORUN) build/ci.go install
@@ -36,13 +34,17 @@ ios:
 	@echo "Import \"$(GOBIN)/bor.framework\" to use the library."
 
 test: bor
-	go test github.com/maticnetwork/bor/consensus/bor/bor_test
+	go test github.com/maticnetwork/bor/consensus/bor
+	go test github.com/maticnetwork/bor/tests/bor
+
+# test: all
+# 	$(GORUN) build/ci.go test
 
 lint: ## Run linters.
 	$(GORUN) build/ci.go lint
 
 clean:
-	./build/clean_go_build_cache.sh
+	env GO111MODULE=on go clean -cache
 	rm -fr build/_workspace/pkg/ $(GOBIN)/*
 
 # The devtools target installs tools required for 'go generate'.

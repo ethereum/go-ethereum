@@ -27,7 +27,7 @@ import (
 )
 
 var (
-	// ErrBadProDAOExtra is returned if a header doens't support the DAO fork on a
+	// ErrBadProDAOExtra is returned if a header doesn't support the DAO fork on a
 	// pro-fork client.
 	ErrBadProDAOExtra = errors.New("bad DAO pro-fork extra-data")
 

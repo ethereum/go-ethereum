@@ -1,4 +1,4 @@
-// Copyright 2018 The go-ethereum Authors
+// Copyright 2019 The go-ethereum Authors
 // This file is part of the go-ethereum library.
 //
 // The go-ethereum library is free software: you can redistribute it and/or modify
@@ -21,6 +21,7 @@ import (
 	"fmt"
 	"math/big"
 	"math/rand"
+	"sync"
 	"time"
 
 	"github.com/maticnetwork/bor/common"
@@ -39,9 +40,9 @@ import (
 // requestBenchmark is an interface for different randomized request generators
 type requestBenchmark interface {
 	// init initializes the generator for generating the given number of randomized requests
-	init(pm *ProtocolManager, count int) error
+	init(h *serverHandler, count int) error
 	// request initiates sending a single request to the given peer
-	request(peer *peer, index int) error
+	request(peer *serverPeer, index int) error
 }
 
 // benchmarkBlockHeaders implements requestBenchmark
@@ -52,10 +53,10 @@ type benchmarkBlockHeaders struct {
 	hashes          []common.Hash
 }
 
-func (b *benchmarkBlockHeaders) init(pm *ProtocolManager, count int) error {
+func (b *benchmarkBlockHeaders) init(h *serverHandler, count int) error {
 	d := int64(b.amount-1) * int64(b.skip+1)
 	b.offset = 0
-	b.randMax = pm.blockchain.CurrentHeader().Number.Int64() + 1 - d
+	b.randMax = h.blockchain.CurrentHeader().Number.Int64() + 1 - d
 	if b.randMax < 0 {
 		return fmt.Errorf("chain is too short")
 	}
@@ -65,17 +66,17 @@ func (b *benchmarkBlockHeaders) init(pm *ProtocolManager, count int) error {
 	if b.byHash {
 		b.hashes = make([]common.Hash, count)
 		for i := range b.hashes {
-			b.hashes[i] = rawdb.ReadCanonicalHash(pm.chainDb, uint64(b.offset+rand.Int63n(b.randMax)))
+			b.hashes[i] = rawdb.ReadCanonicalHash(h.chainDb, uint64(b.offset+rand.Int63n(b.randMax)))
 		}
 	}
 	return nil
 }
 
-func (b *benchmarkBlockHeaders) request(peer *peer, index int) error {
+func (b *benchmarkBlockHeaders) request(peer *serverPeer, index int) error {
 	if b.byHash {
-		return peer.RequestHeadersByHash(0, 0, b.hashes[index], b.amount, b.skip, b.reverse)
+		return peer.requestHeadersByHash(0, b.hashes[index], b.amount, b.skip, b.reverse)
 	} else {
-		return peer.RequestHeadersByNumber(0, 0, uint64(b.offset+rand.Int63n(b.randMax)), b.amount, b.skip, b.reverse)
+		return peer.requestHeadersByNumber(0, uint64(b.offset+rand.Int63n(b.randMax)), b.amount, b.skip, b.reverse)
 	}
 }
 
@@ -85,20 +86,20 @@ type benchmarkBodiesOrReceipts struct {
 	hashes   []common.Hash
 }
 
-func (b *benchmarkBodiesOrReceipts) init(pm *ProtocolManager, count int) error {
-	randMax := pm.blockchain.CurrentHeader().Number.Int64() + 1
+func (b *benchmarkBodiesOrReceipts) init(h *serverHandler, count int) error {
+	randMax := h.blockchain.CurrentHeader().Number.Int64() + 1
 	b.hashes = make([]common.Hash, count)
 	for i := range b.hashes {
-		b.hashes[i] = rawdb.ReadCanonicalHash(pm.chainDb, uint64(rand.Int63n(randMax)))
+		b.hashes[i] = rawdb.ReadCanonicalHash(h.chainDb, uint64(rand.Int63n(randMax)))
 	}
 	return nil
 }
 
-func (b *benchmarkBodiesOrReceipts) request(peer *peer, index int) error {
+func (b *benchmarkBodiesOrReceipts) request(peer *serverPeer, index int) error {
 	if b.receipts {
-		return peer.RequestReceipts(0, 0, []common.Hash{b.hashes[index]})
+		return peer.requestReceipts(0, []common.Hash{b.hashes[index]})
 	} else {
-		return peer.RequestBodies(0, 0, []common.Hash{b.hashes[index]})
+		return peer.requestBodies(0, []common.Hash{b.hashes[index]})
 	}
 }
 
@@ -108,18 +109,18 @@ type benchmarkProofsOrCode struct {
 	headHash common.Hash
 }
 
-func (b *benchmarkProofsOrCode) init(pm *ProtocolManager, count int) error {
-	b.headHash = pm.blockchain.CurrentHeader().Hash()
+func (b *benchmarkProofsOrCode) init(h *serverHandler, count int) error {
+	b.headHash = h.blockchain.CurrentHeader().Hash()
 	return nil
 }
 
-func (b *benchmarkProofsOrCode) request(peer *peer, index int) error {
+func (b *benchmarkProofsOrCode) request(peer *serverPeer, index int) error {
 	key := make([]byte, 32)
 	rand.Read(key)
 	if b.code {
-		return peer.RequestCode(0, 0, []CodeReq{{BHash: b.headHash, AccKey: key}})
+		return peer.requestCode(0, []CodeReq{{BHash: b.headHash, AccKey: key}})
 	} else {
-		return peer.RequestProofs(0, 0, []ProofReq{{BHash: b.headHash, Key: key}})
+		return peer.requestProofs(0, []ProofReq{{BHash: b.headHash, Key: key}})
 	}
 }
 
@@ -130,11 +131,11 @@ type benchmarkHelperTrie struct {
 	sectionCount, headNum uint64
 }
 
-func (b *benchmarkHelperTrie) init(pm *ProtocolManager, count int) error {
+func (b *benchmarkHelperTrie) init(h *serverHandler, count int) error {
 	if b.bloom {
-		b.sectionCount, b.headNum, _ = pm.server.bloomTrieIndexer.Sections()
+		b.sectionCount, b.headNum, _ = h.server.bloomTrieIndexer.Sections()
 	} else {
-		b.sectionCount, _, _ = pm.server.chtIndexer.Sections()
+		b.sectionCount, _, _ = h.server.chtIndexer.Sections()
 		b.headNum = b.sectionCount*params.CHTFrequency - 1
 	}
 	if b.sectionCount == 0 {
@@ -143,7 +144,7 @@ func (b *benchmarkHelperTrie) init(pm *ProtocolManager, count int) error {
 	return nil
 }
 
-func (b *benchmarkHelperTrie) request(peer *peer, index int) error {
+func (b *benchmarkHelperTrie) request(peer *serverPeer, index int) error {
 	reqs := make([]HelperTrieReq, b.reqCount)
 
 	if b.bloom {
@@ -162,7 +163,7 @@ func (b *benchmarkHelperTrie) request(peer *peer, index int) error {
 		}
 	}
 
-	return peer.RequestHelperTrieProofs(0, 0, reqs)
+	return peer.requestHelperTrieProofs(0, reqs)
 }
 
 // benchmarkTxSend implements requestBenchmark
@@ -170,7 +171,7 @@ type benchmarkTxSend struct {
 	txs types.Transactions
 }
 
-func (b *benchmarkTxSend) init(pm *ProtocolManager, count int) error {
+func (b *benchmarkTxSend) init(h *serverHandler, count int) error {
 	key, _ := crypto.GenerateKey()
 	addr := crypto.PubkeyToAddress(key.PublicKey)
 	signer := types.NewEIP155Signer(big.NewInt(18))
@@ -188,22 +189,22 @@ func (b *benchmarkTxSend) init(pm *ProtocolManager, count int) error {
 	return nil
 }
 
-func (b *benchmarkTxSend) request(peer *peer, index int) error {
+func (b *benchmarkTxSend) request(peer *serverPeer, index int) error {
 	enc, _ := rlp.EncodeToBytes(types.Transactions{b.txs[index]})
-	return peer.SendTxs(0, 0, enc)
+	return peer.sendTxs(0, 1, enc)
 }
 
 // benchmarkTxStatus implements requestBenchmark
 type benchmarkTxStatus struct{}
 
-func (b *benchmarkTxStatus) init(pm *ProtocolManager, count int) error {
+func (b *benchmarkTxStatus) init(h *serverHandler, count int) error {
 	return nil
 }
 
-func (b *benchmarkTxStatus) request(peer *peer, index int) error {
+func (b *benchmarkTxStatus) request(peer *serverPeer, index int) error {
 	var hash common.Hash
 	rand.Read(hash[:])
-	return peer.RequestTxStatus(0, 0, []common.Hash{hash})
+	return peer.requestTxStatus(0, []common.Hash{hash})
 }
 
 // benchmarkSetup stores measurement data for a single benchmark type
@@ -217,7 +218,7 @@ type benchmarkSetup struct {
 
 // runBenchmark runs a benchmark cycle for all benchmark types in the specified
 // number of passes
-func (pm *ProtocolManager) runBenchmark(benchmarks []requestBenchmark, passCount int, targetTime time.Duration) []*benchmarkSetup {
+func (h *serverHandler) runBenchmark(benchmarks []requestBenchmark, passCount int, targetTime time.Duration) []*benchmarkSetup {
 	setup := make([]*benchmarkSetup, len(benchmarks))
 	for i, b := range benchmarks {
 		setup[i] = &benchmarkSetup{req: b}
@@ -239,7 +240,7 @@ func (pm *ProtocolManager) runBenchmark(benchmarks []requestBenchmark, passCount
 				if next.totalTime > 0 {
 					count = int(uint64(next.totalCount) * uint64(targetTime) / uint64(next.totalTime))
 				}
-				if err := pm.measure(next, count); err != nil {
+				if err := h.measure(next, count); err != nil {
 					next.err = err
 				}
 			}
@@ -275,26 +276,26 @@ func (m *meteredPipe) WriteMsg(msg p2p.Msg) error {
 
 // measure runs a benchmark for a single type in a single pass, with the given
 // number of requests
-func (pm *ProtocolManager) measure(setup *benchmarkSetup, count int) error {
+func (h *serverHandler) measure(setup *benchmarkSetup, count int) error {
 	clientPipe, serverPipe := p2p.MsgPipe()
 	clientMeteredPipe := &meteredPipe{rw: clientPipe}
 	serverMeteredPipe := &meteredPipe{rw: serverPipe}
 	var id enode.ID
 	rand.Read(id[:])
-	clientPeer := pm.newPeer(lpv2, NetworkId, p2p.NewPeer(id, "client", nil), clientMeteredPipe)
-	serverPeer := pm.newPeer(lpv2, NetworkId, p2p.NewPeer(id, "server", nil), serverMeteredPipe)
-	serverPeer.sendQueue = newExecQueue(count)
-	serverPeer.announceType = announceTypeNone
-	serverPeer.fcCosts = make(requestCostTable)
+
+	peer1 := newServerPeer(lpv2, NetworkId, false, p2p.NewPeer(id, "client", nil), clientMeteredPipe)
+	peer2 := newClientPeer(lpv2, NetworkId, p2p.NewPeer(id, "server", nil), serverMeteredPipe)
+	peer2.announceType = announceTypeNone
+	peer2.fcCosts = make(requestCostTable)
 	c := &requestCosts{}
 	for code := range requests {
-		serverPeer.fcCosts[code] = c
+		peer2.fcCosts[code] = c
 	}
-	serverPeer.fcParams = flowcontrol.ServerParams{BufLimit: 1, MinRecharge: 1}
-	serverPeer.fcClient = flowcontrol.NewClientNode(pm.server.fcManager, serverPeer.fcParams)
-	defer serverPeer.fcClient.Disconnect()
+	peer2.fcParams = flowcontrol.ServerParams{BufLimit: 1, MinRecharge: 1}
+	peer2.fcClient = flowcontrol.NewClientNode(h.server.fcManager, peer2.fcParams)
+	defer peer2.fcClient.Disconnect()
 
-	if err := setup.req.init(pm, count); err != nil {
+	if err := setup.req.init(h, count); err != nil {
 		return err
 	}
 
@@ -303,7 +304,7 @@ func (pm *ProtocolManager) measure(setup *benchmarkSetup, count int) error {
 
 	go func() {
 		for i := 0; i < count; i++ {
-			if err := setup.req.request(clientPeer, i); err != nil {
+			if err := setup.req.request(peer1, i); err != nil {
 				errCh <- err
 				return
 			}
@@ -311,7 +312,7 @@ func (pm *ProtocolManager) measure(setup *benchmarkSetup, count int) error {
 	}()
 	go func() {
 		for i := 0; i < count; i++ {
-			if err := pm.handleMsg(serverPeer); err != nil {
+			if err := h.handleMsg(peer2, &sync.WaitGroup{}); err != nil {
 				errCh <- err
 				return
 			}
@@ -336,7 +337,7 @@ func (pm *ProtocolManager) measure(setup *benchmarkSetup, count int) error {
 		if err != nil {
 			return err
 		}
-	case <-pm.quitSync:
+	case <-h.closeCh:
 		clientPipe.Close()
 		serverPipe.Close()
 		return fmt.Errorf("Benchmark cancelled")

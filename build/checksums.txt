@@ -1,0 +1,20 @@
+# This file contains sha256 checksums of optional build dependencies.
+
+98de84e69726a66da7b4e58eac41b99cbe274d7e8906eeb8a5b7eb0aadee7f7c  go1.14.2.src.tar.gz
+
+d998a84eea42f2271aca792a7b027ca5c1edfcba229e8e5a844c9ac3f336df35  golangci-lint-1.27.0-linux-armv7.tar.gz
+bf781f05b0d393b4bf0a327d9e62926949a4f14d7774d950c4e009fc766ed1d4  golangci-lint.exe-1.27.0-windows-amd64.zip
+bf781f05b0d393b4bf0a327d9e62926949a4f14d7774d950c4e009fc766ed1d4  golangci-lint-1.27.0-windows-amd64.zip
+0e2a57d6ba709440d3ed018ef1037465fa010ed02595829092860e5cf863042e  golangci-lint-1.27.0-freebsd-386.tar.gz
+90205fc42ab5ed0096413e790d88ac9b4ed60f4c47e576d13dc0660f7ed4b013  golangci-lint-1.27.0-linux-arm64.tar.gz
+8d345e4e88520e21c113d81978e89ad77fc5b13bfdf20e5bca86b83fc4261272  golangci-lint-1.27.0-linux-amd64.tar.gz
+cc619634a77f18dc73df2a0725be13116d64328dc35131ca1737a850d6f76a59  golangci-lint-1.27.0-freebsd-armv7.tar.gz
+fe683583cfc9eeec83e498c0d6159d87b5e1919dbe4b6c3b3913089642906069  golangci-lint-1.27.0-linux-s390x.tar.gz
+058f5579bee75bdaacbaf75b75e1369f7ad877fd8b3b145aed17a17545de913e  golangci-lint-1.27.0-freebsd-armv6.tar.gz
+38e1e3dadbe3f56ab62b4de82ee0b88e8fad966d8dfd740a26ef94c2edef9818  golangci-lint-1.27.0-linux-armv6.tar.gz
+071b34af5516f4e1ddcaea6011e18208f4f043e1af8ba21eeccad4585cb3d095  golangci-lint.exe-1.27.0-windows-386.zip
+071b34af5516f4e1ddcaea6011e18208f4f043e1af8ba21eeccad4585cb3d095  golangci-lint-1.27.0-windows-386.zip
+5f37e2b33914ecddb7cad38186ef4ec61d88172fc04f930fa0267c91151ff306  golangci-lint-1.27.0-linux-386.tar.gz
+4d94cfb51fdebeb205f1d5a349ac2b683c30591c5150708073c1c329e15965f0  golangci-lint-1.27.0-freebsd-amd64.tar.gz
+52572ba8ff07d5169c2365d3de3fec26dc55a97522094d13d1596199580fa281  golangci-lint-1.27.0-linux-ppc64le.tar.gz
+3fb1a1683a29c6c0a8cd76135f62b606fbdd538d5a7aeab94af1af70ffdc2fd4  golangci-lint-1.27.0-darwin-amd64.tar.gz

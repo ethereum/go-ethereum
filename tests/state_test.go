@@ -19,12 +19,10 @@ package tests
 import (
 	"bufio"
 	"bytes"
-	"flag"
 	"fmt"
 	"reflect"
 	"testing"
 
-	"github.com/maticnetwork/bor/cmd/utils"
 	"github.com/maticnetwork/bor/core/vm"
 )
 
@@ -39,52 +37,67 @@ func TestState(t *testing.T) {
 	st.slow(`^stQuadraticComplexityTest/`)
 	st.slow(`^stStaticCall/static_Call50000`)
 	st.slow(`^stStaticCall/static_Return50000`)
-	st.slow(`^stStaticCall/static_Call1MB`)
 	st.slow(`^stSystemOperationsTest/CallRecursiveBomb`)
 	st.slow(`^stTransactionTest/Opcodes_TransactionInit`)
-	// Broken tests:
-	st.skipLoad(`^stTransactionTest/OverflowGasRequire\.json`) // gasLimit > 256 bits
-	st.skipLoad(`^stTransactionTest/zeroSigTransa[^/]*\.json`) // EIP-86 is not supported yet
-	// Expected failures:
-	st.fails(`^stRevertTest/RevertPrecompiledTouch(_storage)?\.json/Byzantium/0`, "bug in test")
-	st.fails(`^stRevertTest/RevertPrecompiledTouch(_storage)?\.json/Byzantium/3`, "bug in test")
-	st.fails(`^stRevertTest/RevertPrecompiledTouch(_storage)?\.json/Constantinople/0`, "bug in test")
-	st.fails(`^stRevertTest/RevertPrecompiledTouch(_storage)?\.json/Constantinople/3`, "bug in test")
-	st.fails(`^stRevertTest/RevertPrecompiledTouch(_storage)?\.json/ConstantinopleFix/0`, "bug in test")
-	st.fails(`^stRevertTest/RevertPrecompiledTouch(_storage)?\.json/ConstantinopleFix/3`, "bug in test")
 
-	st.walk(t, stateTestDir, func(t *testing.T, name string, test *StateTest) {
-		for _, subtest := range test.Subtests() {
-			subtest := subtest
-			key := fmt.Sprintf("%s/%d", subtest.Fork, subtest.Index)
-			name := name + "/" + key
-			t.Run(key, func(t *testing.T) {
-				withTrace(t, test.gasLimit(subtest), func(vmconfig vm.Config) error {
-					_, err := test.Run(subtest, vmconfig)
-					return st.checkFailure(t, name, err)
+	// Very time consuming
+	st.skipLoad(`^stTimeConsuming/`)
+
+	// Uses 1GB RAM per tested fork
+	st.skipLoad(`^stStaticCall/static_Call1MB`)
+
+	// Broken tests:
+	// Expected failures:
+	//st.fails(`^stRevertTest/RevertPrecompiledTouch(_storage)?\.json/Byzantium/0`, "bug in test")
+	//st.fails(`^stRevertTest/RevertPrecompiledTouch(_storage)?\.json/Byzantium/3`, "bug in test")
+	//st.fails(`^stRevertTest/RevertPrecompiledTouch(_storage)?\.json/Constantinople/0`, "bug in test")
+	//st.fails(`^stRevertTest/RevertPrecompiledTouch(_storage)?\.json/Constantinople/3`, "bug in test")
+	//st.fails(`^stRevertTest/RevertPrecompiledTouch(_storage)?\.json/ConstantinopleFix/0`, "bug in test")
+	//st.fails(`^stRevertTest/RevertPrecompiledTouch(_storage)?\.json/ConstantinopleFix/3`, "bug in test")
+
+	// For Istanbul, older tests were moved into LegacyTests
+	for _, dir := range []string{
+		stateTestDir,
+		legacyStateTestDir,
+	} {
+		st.walk(t, dir, func(t *testing.T, name string, test *StateTest) {
+			for _, subtest := range test.Subtests() {
+				subtest := subtest
+				key := fmt.Sprintf("%s/%d", subtest.Fork, subtest.Index)
+				name := name + "/" + key
+
+				t.Run(key+"/trie", func(t *testing.T) {
+					withTrace(t, test.gasLimit(subtest), func(vmconfig vm.Config) error {
+						_, _, err := test.Run(subtest, vmconfig, false)
+						return st.checkFailure(t, name+"/trie", err)
+					})
 				})
-			})
-		}
-	})
+				t.Run(key+"/snap", func(t *testing.T) {
+					withTrace(t, test.gasLimit(subtest), func(vmconfig vm.Config) error {
+						snaps, statedb, err := test.Run(subtest, vmconfig, true)
+						if _, err := snaps.Journal(statedb.IntermediateRoot(false)); err != nil {
+							return err
+						}
+						return st.checkFailure(t, name+"/snap", err)
+					})
+				})
+			}
+		})
+	}
 }
 
 // Transactions with gasLimit above this value will not get a VM trace on failure.
 const traceErrorLimit = 400000
 
-// The VM config for state tests that accepts --vm.* command line arguments.
-var testVMConfig = func() vm.Config {
-	vmconfig := vm.Config{}
-	flag.StringVar(&vmconfig.EVMInterpreter, utils.EVMInterpreterFlag.Name, utils.EVMInterpreterFlag.Value, utils.EVMInterpreterFlag.Usage)
-	flag.StringVar(&vmconfig.EWASMInterpreter, utils.EWASMInterpreterFlag.Name, utils.EWASMInterpreterFlag.Value, utils.EWASMInterpreterFlag.Usage)
-	flag.Parse()
-	return vmconfig
-}()
-
 func withTrace(t *testing.T, gasLimit uint64, test func(vm.Config) error) {
-	err := test(testVMConfig)
+	// Use config from command line arguments.
+	config := vm.Config{EVMInterpreter: *testEVM, EWASMInterpreter: *testEWASM}
+	err := test(config)
 	if err == nil {
 		return
 	}
+
+	// Test failed, re-run with tracing enabled.
 	t.Error(err)
 	if gasLimit > traceErrorLimit {
 		t.Log("gas limit too high for EVM trace")
@@ -93,7 +106,8 @@ func withTrace(t *testing.T, gasLimit uint64, test func(vm.Config) error) {
 	buf := new(bytes.Buffer)
 	w := bufio.NewWriter(buf)
 	tracer := vm.NewJSONLogger(&vm.LogConfig{DisableMemory: true}, w)
-	err2 := test(vm.Config{Debug: true, Tracer: tracer})
+	config.Debug, config.Tracer = true, tracer
+	err2 := test(config)
 	if !reflect.DeepEqual(err, err2) {
 		t.Errorf("different error for second run: %v", err2)
 	}

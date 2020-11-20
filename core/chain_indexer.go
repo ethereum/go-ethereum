@@ -439,6 +439,9 @@ func (c *ChainIndexer) Sections() (uint64, uint64, common.Hash) {
 
 // AddChildIndexer adds a child ChainIndexer that can use the output of this one
 func (c *ChainIndexer) AddChildIndexer(indexer *ChainIndexer) {
+	if indexer == c {
+		panic("can't add indexer as a child of itself")
+	}
 	c.lock.Lock()
 	defer c.lock.Unlock()
 

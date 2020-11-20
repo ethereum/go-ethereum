@@ -86,6 +86,7 @@ func TestFeed(t *testing.T) {
 		subchan := make(chan int)
 		sub := feed.Subscribe(subchan)
 		timeout := time.NewTimer(2 * time.Second)
+		defer timeout.Stop()
 		subscribed.Done()
 
 		select {

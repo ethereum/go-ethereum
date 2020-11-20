@@ -16,8 +16,8 @@ light/                          @zsfelfoldi @rjl493456442
 mobile/                         @karalabe @ligi
 p2p/                            @fjl @zsfelfoldi
 rpc/                            @fjl @holiman
-p2p/simulations                 @zelig @nonsense @janos @justelad
-p2p/protocols                   @zelig @nonsense @janos @justelad
-p2p/testing                     @zelig @nonsense @janos @justelad
+p2p/simulations                 @zelig @janos @justelad
+p2p/protocols                   @zelig @janos @justelad
+p2p/testing                     @zelig @janos @justelad
 signer/                         @holiman
 whisper/                        @gballet @gluk256

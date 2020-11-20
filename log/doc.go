@@ -65,7 +65,7 @@ This will output a log line that includes the path context that is attached to t
 
 Handlers
 
-The Handler interface defines where log lines are printed to and how they are formated. Handler is a
+The Handler interface defines where log lines are printed to and how they are formatted. Handler is a
 single interface that is inspired by net/http's handler interface:
 
     type Handler interface {
