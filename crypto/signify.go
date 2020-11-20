@@ -27,7 +27,7 @@ import (
 	"os"
 	"strings"
 
-	"golang.org/x/crypto/ed25519"
+	"crypto/ed25519"
 )
 
 var (
