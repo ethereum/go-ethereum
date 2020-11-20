@@ -17,8 +17,6 @@
 package types
 
 import (
-	"bytes"
-
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/rlp"
 )
@@ -37,26 +35,24 @@ type Hasher interface {
 
 func DeriveSha(list DerivableList, hasher Hasher) common.Hash {
 	hasher.Reset()
-	keybuf := new(bytes.Buffer)
 
 	// StackTrie requires values to be inserted in increasing
 	// hash order, which is not the order that `list` provides
 	// hashes in. This insertion sequence ensures that the
 	// order is correct.
+
+	var buf []byte
 	for i := 1; i < list.Len() && i <= 0x7f; i++ {
-		keybuf.Reset()
-		rlp.Encode(keybuf, uint(i))
-		hasher.Update(keybuf.Bytes(), list.GetRlp(i))
+		buf = rlp.AppendUint64(buf[:0], uint64(i))
+		hasher.Update(buf, list.GetRlp(i))
 	}
 	if list.Len() > 0 {
-		keybuf.Reset()
-		rlp.Encode(keybuf, uint(0))
-		hasher.Update(keybuf.Bytes(), list.GetRlp(0))
+		buf = rlp.AppendUint64(buf[:0], 0)
+		hasher.Update(buf, list.GetRlp(0))
 	}
 	for i := 0x80; i < list.Len(); i++ {
-		keybuf.Reset()
-		rlp.Encode(keybuf, uint(i))
-		hasher.Update(keybuf.Bytes(), list.GetRlp(i))
+		buf = rlp.AppendUint64(buf[:0], uint64(i))
+		hasher.Update(buf, list.GetRlp(i))
 	}
 	return hasher.Hash()
 }

@@ -853,6 +853,42 @@ func TestCommitSequenceStackTrie(t *testing.T) {
 	}
 }
 
+// TestCommitSequenceSmallRoot tests that a trie which is essentially only a
+// small (<32 byte) shortnode with an included value is properly committed to a
+// database.
+// This case might not matter, since in practice, all keys are 32 bytes, which means
+// that even a small trie which contains a leaf will have an extension making it
+// not fit into 32 bytes, rlp-encoded. However, it's still the correct thing to do.
+func TestCommitSequenceSmallRoot(t *testing.T) {
+	s := &spongeDb{sponge: sha3.NewLegacyKeccak256(), id: "a"}
+	db := NewDatabase(s)
+	trie, _ := New(common.Hash{}, db)
+	// Another sponge is used for the stacktrie commits
+	stackTrieSponge := &spongeDb{sponge: sha3.NewLegacyKeccak256(), id: "b"}
+	stTrie := NewStackTrie(stackTrieSponge)
+	// Add a single small-element to the trie(s)
+	key := make([]byte, 5)
+	key[0] = 1
+	trie.TryUpdate(key, []byte{0x1})
+	stTrie.TryUpdate(key, []byte{0x1})
+	// Flush trie -> database
+	root, _ := trie.Commit(nil)
+	// Flush memdb -> disk (sponge)
+	db.Commit(root, false, nil)
+	// And flush stacktrie -> disk
+	stRoot, err := stTrie.Commit()
+	if err != nil {
+		t.Fatalf("Failed to commit stack trie %v", err)
+	}
+	if stRoot != root {
+		t.Fatalf("root wrong, got %x exp %x", stRoot, root)
+	}
+	fmt.Printf("root: %x\n", stRoot)
+	if got, exp := stackTrieSponge.sponge.Sum(nil), s.sponge.Sum(nil); !bytes.Equal(got, exp) {
+		t.Fatalf("test, disk write sequence wrong:\ngot %x exp %x\n", got, exp)
+	}
+}
+
 // BenchmarkCommitAfterHashFixedSize benchmarks the Commit (after Hash) of a fixed number of updates to a trie.
 // This benchmark is meant to capture the difference on efficiency of small versus large changes. Typically,
 // storage tries are small (a couple of entries), whereas the full post-block account trie update is large (a couple

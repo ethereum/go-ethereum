@@ -25,6 +25,7 @@ import (
 )
 
 var activators = map[int]func(*JumpTable){
+	2929: enable2929,
 	2200: enable2200,
 	1884: enable1884,
 	1344: enable1344,
@@ -133,4 +134,42 @@ func enable2315(jt *JumpTable) {
 		maxStack:    maxStack(0, 0),
 		jumps:       true,
 	}
+}
+
+// enable2929 enables "EIP-2929: Gas cost increases for state access opcodes"
+// https://eips.ethereum.org/EIPS/eip-2929
+func enable2929(jt *JumpTable) {
+	jt[SSTORE].dynamicGas = gasSStoreEIP2929
+
+	jt[SLOAD].constantGas = 0
+	jt[SLOAD].dynamicGas = gasSLoadEIP2929
+
+	jt[EXTCODECOPY].constantGas = WarmStorageReadCostEIP2929
+	jt[EXTCODECOPY].dynamicGas = gasExtCodeCopyEIP2929
+
+	jt[EXTCODESIZE].constantGas = WarmStorageReadCostEIP2929
+	jt[EXTCODESIZE].dynamicGas = gasEip2929AccountCheck
+
+	jt[EXTCODEHASH].constantGas = WarmStorageReadCostEIP2929
+	jt[EXTCODEHASH].dynamicGas = gasEip2929AccountCheck
+
+	jt[BALANCE].constantGas = WarmStorageReadCostEIP2929
+	jt[BALANCE].dynamicGas = gasEip2929AccountCheck
+
+	jt[CALL].constantGas = WarmStorageReadCostEIP2929
+	jt[CALL].dynamicGas = gasCallEIP2929
+
+	jt[CALLCODE].constantGas = WarmStorageReadCostEIP2929
+	jt[CALLCODE].dynamicGas = gasCallCodeEIP2929
+
+	jt[STATICCALL].constantGas = WarmStorageReadCostEIP2929
+	jt[STATICCALL].dynamicGas = gasStaticCallEIP2929
+
+	jt[DELEGATECALL].constantGas = WarmStorageReadCostEIP2929
+	jt[DELEGATECALL].dynamicGas = gasDelegateCallEIP2929
+
+	// This was previously part of the dynamic cost, but we're using it as a constantGas
+	// factor here
+	jt[SELFDESTRUCT].constantGas = params.SelfdestructGasEIP150
+	jt[SELFDESTRUCT].dynamicGas = gasSelfdestructEIP2929
 }

@@ -18,6 +18,7 @@ package les
 
 import (
 	"crypto/ecdsa"
+	"reflect"
 	"time"
 
 	"github.com/ethereum/go-ethereum/common/mclock"
@@ -31,17 +32,32 @@ import (
 	"github.com/ethereum/go-ethereum/p2p/discv5"
 	"github.com/ethereum/go-ethereum/p2p/enode"
 	"github.com/ethereum/go-ethereum/p2p/enr"
+	"github.com/ethereum/go-ethereum/p2p/nodestate"
 	"github.com/ethereum/go-ethereum/params"
 	"github.com/ethereum/go-ethereum/rpc"
 )
 
+var (
+	serverSetup         = &nodestate.Setup{}
+	clientPeerField     = serverSetup.NewField("clientPeer", reflect.TypeOf(&clientPeer{}))
+	clientInfoField     = serverSetup.NewField("clientInfo", reflect.TypeOf(&clientInfo{}))
+	connAddressField    = serverSetup.NewField("connAddr", reflect.TypeOf(""))
+	balanceTrackerSetup = lps.NewBalanceTrackerSetup(serverSetup)
+	priorityPoolSetup   = lps.NewPriorityPoolSetup(serverSetup)
+)
+
+func init() {
+	balanceTrackerSetup.Connect(connAddressField, priorityPoolSetup.CapacityField)
+	priorityPoolSetup.Connect(balanceTrackerSetup.BalanceField, balanceTrackerSetup.UpdateFlag) // NodeBalance implements nodePriority
+}
+
 type LesServer struct {
 	lesCommons
 
+	ns          *nodestate.NodeStateMachine
 	archiveMode bool // Flag whether the ethereum node runs in archive mode.
-	peers       *clientPeerSet
-	serverset   *serverSet
 	handler     *serverHandler
+	broadcaster *broadcaster
 	lesTopics   []discv5.Topic
 	privateKey  *ecdsa.PrivateKey
 
@@ -60,6 +76,7 @@ type LesServer struct {
 }
 
 func NewLesServer(node *node.Node, e *eth.Ethereum, config *eth.Config) (*LesServer, error) {
+	ns := nodestate.NewNodeStateMachine(nil, nil, mclock.System{}, serverSetup)
 	// Collect les protocol version information supported by local node.
 	lesTopics := make([]discv5.Topic, len(AdvertiseProtocolVersions))
 	for i, pv := range AdvertiseProtocolVersions {
@@ -83,9 +100,9 @@ func NewLesServer(node *node.Node, e *eth.Ethereum, config *eth.Config) (*LesSer
 			bloomTrieIndexer: light.NewBloomTrieIndexer(e.ChainDb(), nil, params.BloomBitsBlocks, params.BloomTrieFrequency, true),
 			closeCh:          make(chan struct{}),
 		},
+		ns:           ns,
 		archiveMode:  e.ArchiveMode(),
-		peers:        newClientPeerSet(),
-		serverset:    newServerSet(),
+		broadcaster:  newBroadcaster(ns),
 		lesTopics:    lesTopics,
 		fcManager:    flowcontrol.NewClientManager(nil, &mclock.System{}),
 		servingQueue: newServingQueue(int64(time.Millisecond*10), float64(config.LightServ)/100),
@@ -116,7 +133,7 @@ func NewLesServer(node *node.Node, e *eth.Ethereum, config *eth.Config) (*LesSer
 		srv.maxCapacity = totalRecharge
 	}
 	srv.fcManager.SetCapacityLimits(srv.minCapacity, srv.maxCapacity, srv.minCapacity*2)
-	srv.clientPool = newClientPool(srv.chainDb, srv.minCapacity, defaultConnectedBias, mclock.System{}, func(id enode.ID) { go srv.peers.unregister(id.String()) })
+	srv.clientPool = newClientPool(ns, srv.chainDb, srv.minCapacity, defaultConnectedBias, mclock.System{}, srv.dropClient)
 	srv.clientPool.setDefaultFactors(lps.PriceFactors{TimeFactor: 0, CapacityFactor: 1, RequestFactor: 1}, lps.PriceFactors{TimeFactor: 0, CapacityFactor: 1, RequestFactor: 1})
 
 	checkpoint := srv.latestLocalCheckpoint()
@@ -130,6 +147,13 @@ func NewLesServer(node *node.Node, e *eth.Ethereum, config *eth.Config) (*LesSer
 	node.RegisterAPIs(srv.APIs())
 	node.RegisterLifecycle(srv)
 
+	// disconnect all peers at nsm shutdown
+	ns.SubscribeField(clientPeerField, func(node *enode.Node, state nodestate.Flags, oldValue, newValue interface{}) {
+		if state.Equals(serverSetup.OfflineFlag()) && oldValue != nil {
+			oldValue.(*clientPeer).Peer.Disconnect(p2p.DiscRequested)
+		}
+	})
+	ns.Start()
 	return srv, nil
 }
 
@@ -158,7 +182,7 @@ func (s *LesServer) APIs() []rpc.API {
 
 func (s *LesServer) Protocols() []p2p.Protocol {
 	ps := s.makeProtocols(ServerProtocolVersions, s.handler.runPeer, func(id enode.ID) interface{} {
-		if p := s.peers.peer(id.String()); p != nil {
+		if p := s.getClient(id); p != nil {
 			return p.Info()
 		}
 		return nil
@@ -173,6 +197,7 @@ func (s *LesServer) Protocols() []p2p.Protocol {
 // Start starts the LES server
 func (s *LesServer) Start() error {
 	s.privateKey = s.p2pSrv.PrivateKey
+	s.broadcaster.setSignerKey(s.privateKey)
 	s.handler.start()
 
 	s.wg.Add(1)
@@ -198,19 +223,11 @@ func (s *LesServer) Start() error {
 func (s *LesServer) Stop() error {
 	close(s.closeCh)
 
-	// Disconnect existing connections with other LES servers.
-	s.serverset.close()
-
-	// Disconnect existing sessions.
-	// This also closes the gate for any new registrations on the peer set.
-	// sessions which are already established but not added to pm.peers yet
-	// will exit when they try to register.
-	s.peers.close()
-
+	s.clientPool.stop()
+	s.ns.Stop()
 	s.fcManager.Stop()
 	s.costTracker.stop()
 	s.handler.stop()
-	s.clientPool.stop() // client pool should be closed after handler.
 	s.servingQueue.stop()
 
 	// Note, bloom trie indexer is closed by parent bloombits indexer.
@@ -277,5 +294,20 @@ func (s *LesServer) capacityManagement() {
 		case <-s.closeCh:
 			return
 		}
+	}
+}
+
+func (s *LesServer) getClient(id enode.ID) *clientPeer {
+	if node := s.ns.GetNode(id); node != nil {
+		if p, ok := s.ns.GetField(node, clientPeerField).(*clientPeer); ok {
+			return p
+		}
+	}
+	return nil
+}
+
+func (s *LesServer) dropClient(id enode.ID) {
+	if p := s.getClient(id); p != nil {
+		p.Peer.Disconnect(p2p.DiscRequested)
 	}
 }
