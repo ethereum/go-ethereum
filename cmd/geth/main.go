@@ -46,7 +46,8 @@ import (
 )
 
 const (
-	clientIdentifier = "geth" // Client identifier to advertise over the network
+	clientIdentifier     = "bor" // Client identifier to advertise over the network
+	repositoryIdentifier = "go-bor"
 )
 
 var (
@@ -54,7 +55,7 @@ var (
 	gitCommit = ""
 	gitDate   = ""
 	// The app that holds all commands and flags.
-	app = flags.NewApp(gitCommit, gitDate, "the go-ethereum command line interface")
+	app = flags.NewApp(gitCommit, gitDate, fmt.Sprintf("the %s command line interface", repositoryIdentifier))
 	// flags that configure the node
 	nodeFlags = []cli.Flag{
 		utils.IdentityFlag,
@@ -258,6 +259,9 @@ func init() {
 	app.Flags = append(app.Flags, debug.DeprecatedFlags...)
 	app.Flags = append(app.Flags, whisperFlags...)
 	app.Flags = append(app.Flags, metricsFlags...)
+
+	// add bor flags
+	app.Flags = append(app.Flags, utils.BorFlags...)
 
 	app.Before = func(ctx *cli.Context) error {
 		return debug.Setup(ctx)

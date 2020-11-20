@@ -1801,15 +1801,28 @@ func MakeGenesis(ctx *cli.Context) *core.Genesis {
 
 // MakeChain creates a chain manager from set command line flags.
 func MakeChain(ctx *cli.Context, stack *node.Node, readOnly bool) (chain *core.BlockChain, chainDb ethdb.Database) {
-	var err error
+	// expecting the last argument to be the genesis file
+	genesis, err := getGenesis(ctx.Args().Get(len(ctx.Args()) - 1))
+	if err != nil {
+		Fatalf("Valid genesis file is required as argument: {}", err)
+	}
+
 	chainDb = MakeChainDatabase(ctx, stack)
-	config, _, err := core.SetupGenesisBlock(chainDb, MakeGenesis(ctx))
+	config, _, err := core.SetupGenesisBlock(chainDb, genesis)
 	if err != nil {
 		Fatalf("%v", err)
 	}
 	var engine consensus.Engine
+	var ethereum *eth.Ethereum
 	if config.Clique != nil {
 		engine = clique.New(config.Clique, chainDb)
+	} else if config.Bor != nil {
+		ethereum = CreateBorEthereum(&eth.Config{
+			Genesis:         genesis,
+			HeimdallURL:     ctx.GlobalString(HeimdallURLFlag.Name),
+			WithoutHeimdall: ctx.GlobalBool(WithoutHeimdallFlag.Name),
+		})
+		engine = ethereum.Engine()
 	} else {
 		engine = ethash.NewFaker()
 		if !ctx.GlobalBool(FakePoWFlag.Name) {
@@ -1854,6 +1867,9 @@ func MakeChain(ctx *cli.Context, stack *node.Node, readOnly bool) (chain *core.B
 	chain, err = core.NewBlockChain(chainDb, cache, config, engine, vmcfg, nil, limit)
 	if err != nil {
 		Fatalf("Can't create BlockChain: %v", err)
+	}
+	if ethereum != nil {
+		ethereum.SetBlockchain(chain)
 	}
 	return chain, chainDb
 }

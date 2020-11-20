@@ -214,6 +214,9 @@ func (st *StateTransition) preCheck() error {
 // However if any consensus issue encountered, return the error directly with
 // nil evm execution result.
 func (st *StateTransition) TransitionDb() (*ExecutionResult, error) {
+	input1 := st.state.GetBalance(st.msg.From())
+	input2 := st.state.GetBalance(st.evm.Coinbase)
+
 	// First check this message satisfies all consensus rules before
 	// applying the message. The rules include these clauses
 	//
@@ -261,6 +264,24 @@ func (st *StateTransition) TransitionDb() (*ExecutionResult, error) {
 	}
 	st.refundGas()
 	st.state.AddBalance(st.evm.Coinbase, new(big.Int).Mul(new(big.Int).SetUint64(st.gasUsed()), st.gasPrice))
+
+	amount := new(big.Int).Mul(new(big.Int).SetUint64(st.gasUsed()), st.gasPrice)
+	output1 := new(big.Int).SetBytes(input1.Bytes())
+	output2 := new(big.Int).SetBytes(input2.Bytes())
+
+	// add transfer log
+	AddFeeTransferLog(
+		st.state,
+
+		msg.From(),
+		st.evm.Coinbase,
+
+		amount,
+		input1,
+		input2,
+		output1.Sub(output1, amount),
+		output2.Add(output2, amount),
+	)
 
 	return &ExecutionResult{
 		UsedGas:    st.gasUsed(),

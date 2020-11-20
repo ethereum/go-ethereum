@@ -7,7 +7,7 @@ executors:
   golang:
     docker:
       - image: circleci/golang:1.13
-    working_directory: /go/src/github.com/maticnetwork/bor
+    working_directory: /go/src/github.com/ethereum/go-ethereum
 
 jobs:
   build:

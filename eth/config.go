@@ -186,4 +186,10 @@ type Config struct {
 
 	// CheckpointOracle is the configuration for checkpoint oracle.
 	CheckpointOracle *params.CheckpointOracleConfig `toml:",omitempty"`
+
+	// URL to connect to Heimdall node
+	HeimdallURL string
+
+	// No heimdall service
+	WithoutHeimdall bool
 }
