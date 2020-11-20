@@ -51,6 +51,16 @@ compile_fuzzer tests/fuzzers/rlp        Fuzz fuzzRlp
 compile_fuzzer tests/fuzzers/trie       Fuzz fuzzTrie
 compile_fuzzer tests/fuzzers/stacktrie  Fuzz fuzzStackTrie
 
+compile_fuzzer tests/fuzzers/bls12381  FuzzG1Add fuzzG1Add
+compile_fuzzer tests/fuzzers/bls12381  FuzzG1Mul fuzzG1Mul
+compile_fuzzer tests/fuzzers/bls12381  FuzzG1MultiExp fuzzG1MultiExp
+compile_fuzzer tests/fuzzers/bls12381  FuzzG2Add fuzzG2Add
+compile_fuzzer tests/fuzzers/bls12381  FuzzG2Mul fuzzG2Mul
+compile_fuzzer tests/fuzzers/bls12381  FuzzG2MultiExp fuzzG2MultiExp
+compile_fuzzer tests/fuzzers/bls12381  FuzzPairing fuzzPairing
+compile_fuzzer tests/fuzzers/bls12381  FuzzMapG1 fuzzMapG1
+compile_fuzzer tests/fuzzers/bls12381  FuzzMapG2 fuzzMapG2
+
 # This doesn't work very well @TODO
 #compile_fuzzertests/fuzzers/abi Fuzz fuzzAbi
 

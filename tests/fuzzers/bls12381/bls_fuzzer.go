@@ -24,42 +24,77 @@ import (
 	"github.com/ethereum/go-ethereum/core/vm"
 )
 
-// The function must return
+const (
+	blsG1Add      = byte(10)
+	blsG1Mul      = byte(11)
+	blsG1MultiExp = byte(12)
+	blsG2Add      = byte(13)
+	blsG2Mul      = byte(14)
+	blsG2MultiExp = byte(15)
+	blsPairing    = byte(16)
+	blsMapG1      = byte(17)
+	blsMapG2      = byte(18)
+)
+
+func FuzzG1Add(data []byte) int      { return fuzz(blsG1Add, data) }
+func FuzzG1Mul(data []byte) int      { return fuzz(blsG1Mul, data) }
+func FuzzG1MultiExp(data []byte) int { return fuzz(blsG1MultiExp, data) }
+func FuzzG2Add(data []byte) int      { return fuzz(blsG2Add, data) }
+func FuzzG2Mul(data []byte) int      { return fuzz(blsG2Mul, data) }
+func FuzzG2MultiExp(data []byte) int { return fuzz(blsG2MultiExp, data) }
+func FuzzPairing(data []byte) int    { return fuzz(blsPairing, data) }
+func FuzzMapG1(data []byte) int      { return fuzz(blsMapG1, data) }
+func FuzzMapG2(data []byte) int      { return fuzz(blsMapG2, data) }
+
+func checkInput(id byte, inputLen int) bool {
+	switch id {
+	case blsG1Add:
+		return inputLen == 256
+	case blsG1Mul:
+		return inputLen == 160
+	case blsG1MultiExp:
+		return inputLen%160 == 0
+	case blsG2Add:
+		return inputLen == 512
+	case blsG2Mul:
+		return inputLen == 288
+	case blsG2MultiExp:
+		return inputLen%288 == 0
+	case blsPairing:
+		return inputLen%384 == 0
+	case blsMapG1:
+		return inputLen == 64
+	case blsMapG2:
+		return inputLen == 128
+	}
+	panic("programmer error")
+}
+
+// The fuzzer functions must return
 // 1 if the fuzzer should increase priority of the
 //    given input during subsequent fuzzing (for example, the input is lexically
 //    correct and was parsed successfully);
 // -1 if the input must not be added to corpus even if gives new coverage; and
 // 0  otherwise
 // other values are reserved for future use.
-func Fuzz(data []byte) int {
-
-	// The bls ones are at 10 - 18
-	var precompiles = []vm.PrecompiledContract{
-		vm.PrecompiledContractsYoloV2[common.BytesToAddress([]byte{10})],
-		vm.PrecompiledContractsYoloV2[common.BytesToAddress([]byte{11})],
-		vm.PrecompiledContractsYoloV2[common.BytesToAddress([]byte{12})],
-		vm.PrecompiledContractsYoloV2[common.BytesToAddress([]byte{13})],
-		vm.PrecompiledContractsYoloV2[common.BytesToAddress([]byte{14})],
-		vm.PrecompiledContractsYoloV2[common.BytesToAddress([]byte{15})],
-		vm.PrecompiledContractsYoloV2[common.BytesToAddress([]byte{16})],
-		vm.PrecompiledContractsYoloV2[common.BytesToAddress([]byte{17})],
-		vm.PrecompiledContractsYoloV2[common.BytesToAddress([]byte{18})],
+func fuzz(id byte, data []byte) int {
+	// Even on bad input, it should not crash, so we still test the gas calc
+	precompile := vm.PrecompiledContractsYoloV2[common.BytesToAddress([]byte{id})]
+	gas := precompile.RequiredGas(data)
+	if !checkInput(id, len(data)) {
+		return 0
 	}
-
+	// If the gas cost is too large (25M), bail out
+	if gas > 25*1000*1000 {
+		return 0
+	}
 	cpy := make([]byte, len(data))
 	copy(cpy, data)
-	var useful = false
-	for i, precompile := range precompiles {
-		precompile.RequiredGas(cpy)
-		if _, err := precompile.Run(cpy); err == nil {
-			useful = true
-		}
-		if !bytes.Equal(cpy, data) {
-			panic(fmt.Sprintf("input data modified, precompile %d: %x %x", i, data, cpy))
-		}
+	_, err := precompile.Run(cpy)
+	if !bytes.Equal(cpy, data) {
+		panic(fmt.Sprintf("input data modified, precompile %d: %x %x", id, data, cpy))
 	}
-	if !useful {
-		// Input not great
+	if err != nil {
 		return 0
 	}
 	return 1
