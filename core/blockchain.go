@@ -2164,20 +2164,6 @@ func (bc *BlockChain) reorg(oldBlock, newBlock *types.Block) error {
 			}
 			return ret
 		}
-		// mergeLogs returns a merged log slice with specified sort order.
-		mergeLogs = func(logs [][]*types.Log, reverse bool) []*types.Log {
-			var ret []*types.Log
-			if reverse {
-				for i := len(logs) - 1; i >= 0; i-- {
-					ret = append(ret, logs[i]...)
-				}
-			} else {
-				for i := 0; i < len(logs); i++ {
-					ret = append(ret, logs[i]...)
-				}
-			}
-			return ret
-		}
 	)
 	// Reduce the longer chain to the same number as the shorter one
 	if oldBlock.NumberU64() > newBlock.NumberU64() {
