@@ -580,3 +580,9 @@ func (lc *LightChain) DisableCheckFreq() {
 func (lc *LightChain) EnableCheckFreq() {
 	atomic.StoreInt32(&lc.disableCheckFreq, 0)
 }
+
+// SubscribeStateSyncEvent implements the interface of filters.Backend
+// LightChain does not send core.NewStateChangeSyncEvent, so return an empty subscription.
+func (lc *LightChain) SubscribeStateSyncEvent(ch chan<- core.StateSyncEvent) event.Subscription {
+	return lc.scope.Track(new(event.Feed).Subscribe(ch))
+}

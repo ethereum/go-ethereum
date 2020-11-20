@@ -45,6 +45,8 @@ type Backend interface {
 
 	BloomStatus() (uint64, uint64)
 	ServiceFilter(ctx context.Context, session *bloombits.MatcherSession)
+
+	SubscribeStateSyncEvent(ch chan<- core.StateSyncEvent) event.Subscription
 }
 
 // Filter can be used to retrieve and filter logs.

@@ -209,3 +209,9 @@ type GasEstimator interface {
 type PendingStateEventer interface {
 	SubscribePendingTransactions(ctx context.Context, ch chan<- *types.Transaction) (Subscription, error)
 }
+
+// StateSyncFilter state sync filter
+type StateSyncFilter struct {
+	ID       uint64
+	Contract common.Address
+}

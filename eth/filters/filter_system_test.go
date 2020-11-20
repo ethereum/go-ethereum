@@ -47,6 +47,8 @@ type testBackend struct {
 	rmLogsFeed      event.Feed
 	pendingLogsFeed event.Feed
 	chainFeed       event.Feed
+
+	stateSyncFeed event.Feed
 }
 
 func (b *testBackend) ChainDb() ethdb.Database {
@@ -150,6 +152,10 @@ func (b *testBackend) ServiceFilter(ctx context.Context, session *bloombits.Matc
 			}
 		}
 	}()
+}
+
+func (b *testBackend) SubscribeStateSyncEvent(ch chan<- core.StateSyncEvent) event.Subscription {
+	return b.stateSyncFeed.Subscribe(ch)
 }
 
 // TestBlockSubscription tests if a block subscription returns block hashes for posted chain events.

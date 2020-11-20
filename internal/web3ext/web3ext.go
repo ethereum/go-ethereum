@@ -34,6 +34,9 @@ var Modules = map[string]string{
 	"txpool":     TxpoolJs,
 	"les":        LESJs,
 	"lespay":     LESPayJs,
+
+	// Bor related apis
+	"bor": BorJs,
 }
 
 const ChequebookJs = `
