@@ -854,16 +854,18 @@ func (srv *Server) listenLoop() {
 		<-slots
 
 		var (
-			fd        net.Conn
-			err       error
-			tmpErrors = uint64(0)
+			fd      net.Conn
+			err     error
+			lastLog time.Time
 		)
 		for {
 			fd, err = srv.listener.Accept()
-			if netutil.IsTemporaryError(err) && tmpErrors < 200 {
-				srv.log.Debug("Temporary read error", "err", err)
-				tmpErrors++
-				time.Sleep(time.Millisecond * 10)
+			if netutil.IsTemporaryError(err) {
+				if time.Since(lastLog) > 1*time.Second {
+					srv.log.Debug("Temporary read error", "err", err)
+					lastLog = time.Now()
+				}
+				time.Sleep(time.Millisecond * 200)
 				continue
 			} else if err != nil {
 				srv.log.Debug("Read error", "err", err)
@@ -872,7 +874,6 @@ func (srv *Server) listenLoop() {
 			}
 			break
 		}
-		tmpErrors = 0
 
 		remoteIP := netutil.AddrIP(fd.RemoteAddr())
 		if err := srv.checkInboundConn(fd, remoteIP); err != nil {
