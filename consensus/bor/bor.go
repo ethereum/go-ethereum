@@ -224,8 +224,7 @@ type Bor struct {
 	HeimdallClient         IHeimdallClient
 	WithoutHeimdall        bool
 
-	stateSyncFeed event.Feed
-	scope         event.SubscriptionScope
+	scope event.SubscriptionScope
 	// The fields below are for testing only
 	fakeDiff bool // Skip difficulty verifications
 }
@@ -653,6 +652,8 @@ func (c *Bor) Prepare(chain consensus.ChainHeaderReader, header *types.Header) e
 // Finalize implements consensus.Engine, ensuring no uncles are set, nor block
 // rewards given.
 func (c *Bor) Finalize(chain consensus.ChainHeaderReader, header *types.Header, state *state.StateDB, txs []*types.Transaction, uncles []*types.Header) {
+	stateSyncData := []*types.StateSyncData{}
+
 	var err error
 	headerNumber := header.Number.Uint64()
 	if headerNumber%c.config.Sprint == 0 {
@@ -665,7 +666,7 @@ func (c *Bor) Finalize(chain consensus.ChainHeaderReader, header *types.Header, 
 
 		if !c.WithoutHeimdall {
 			// commit statees
-			_, err = c.CommitStates(state, header, cx)
+			stateSyncData, err = c.CommitStates(state, header, cx)
 			if err != nil {
 				log.Error("Error while committing states", "error", err)
 				return
@@ -676,11 +677,17 @@ func (c *Bor) Finalize(chain consensus.ChainHeaderReader, header *types.Header, 
 	// No block rewards in PoA, so the state remains as is and uncles are dropped
 	header.Root = state.IntermediateRoot(chain.Config().IsEIP158(header.Number))
 	header.UncleHash = types.CalcUncleHash(nil)
+
+	// Set state sync data to blockchain
+	bc := chain.(*core.BlockChain)
+	bc.SetStateSync(stateSyncData)
 }
 
 // FinalizeAndAssemble implements consensus.Engine, ensuring no uncles are set,
 // nor block rewards given, and returns the final block.
 func (c *Bor) FinalizeAndAssemble(chain consensus.ChainHeaderReader, header *types.Header, state *state.StateDB, txs []*types.Transaction, uncles []*types.Header, receipts []*types.Receipt) (*types.Block, error) {
+	stateSyncData := []*types.StateSyncData{}
+
 	headerNumber := header.Number.Uint64()
 	if headerNumber%c.config.Sprint == 0 {
 		cx := chainContext{Chain: chain, Bor: c}
@@ -694,7 +701,7 @@ func (c *Bor) FinalizeAndAssemble(chain consensus.ChainHeaderReader, header *typ
 
 		if !c.WithoutHeimdall {
 			// commit states
-			_, err = c.CommitStates(state, header, cx)
+			stateSyncData, err = c.CommitStates(state, header, cx)
 			if err != nil {
 				log.Error("Error while committing states", "error", err)
 				return nil, err
@@ -708,6 +715,11 @@ func (c *Bor) FinalizeAndAssemble(chain consensus.ChainHeaderReader, header *typ
 
 	// Assemble block
 	block := types.NewBlock(header, txs, nil, receipts, new(trie.Trie))
+
+	// set state sync
+	bc := chain.(*core.BlockChain)
+	bc.SetStateSync(stateSyncData)
+
 	// return the final block for sealing
 	return block, nil
 }
@@ -1090,8 +1102,8 @@ func (c *Bor) CommitStates(
 	state *state.StateDB,
 	header *types.Header,
 	chain chainContext,
-) ([]*types.StateData, error) {
-	stateSyncs := make([]*types.StateData, 0)
+) ([]*types.StateSyncData, error) {
+	stateSyncs := make([]*types.StateSyncData, 0)
 	number := header.Number.Uint64()
 	_lastStateID, err := c.GenesisContractsClient.LastStateId(number - 1)
 	if err != nil {
@@ -1116,8 +1128,8 @@ func (c *Bor) CommitStates(
 			break
 		}
 
-		stateData := types.StateData{
-			Did:      eventRecord.ID,
+		stateData := types.StateSyncData{
+			ID:       eventRecord.ID,
 			Contract: eventRecord.Contract,
 			Data:     hex.EncodeToString(eventRecord.Data),
 			TxHash:   eventRecord.TxHash,

@@ -86,6 +86,10 @@ type Backend interface {
 	SubscribePendingLogsEvent(ch chan<- []*types.Log) event.Subscription
 	SubscribeRemovedLogsEvent(ch chan<- core.RemovedLogsEvent) event.Subscription
 
+	// Bor related APIs
+	SubscribeStateSyncEvent(ch chan<- core.StateSyncEvent) event.Subscription
+	GetRootHash(ctx context.Context, starBlockNr uint64, endBlockNr uint64) (string, error)
+
 	ChainConfig() *params.ChainConfig
 	Engine() consensus.Engine
 }

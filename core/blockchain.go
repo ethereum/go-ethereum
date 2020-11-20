@@ -211,6 +211,10 @@ type BlockChain struct {
 	shouldPreserve     func(*types.Block) bool        // Function used to determine whether should preserve the given block.
 	terminateInsert    func(common.Hash, uint64) bool // Testing hook used to terminate ancient receipt chain insertion.
 	writeLegacyJournal bool                           // Testing flag used to flush the snapshot journal in legacy format.
+
+	// Bor related changes
+	stateSyncData []*types.StateSyncData // State sync data
+	stateSyncFeed event.Feed             // State sync feed
 }
 
 // NewBlockChain returns a fully initialised block chain using information
@@ -1630,6 +1634,11 @@ func (bc *BlockChain) writeBlockWithState(block *types.Block, receipts []*types.
 		// event here.
 		if emitHeadEvent {
 			bc.chainHeadFeed.Send(ChainHeadEvent{Block: block})
+			// BOR state sync feed related changes
+			for _, data := range bc.stateSyncData {
+				bc.stateSyncFeed.Send(StateSyncEvent{Data: data})
+			}
+			// BOR
 		}
 	} else {
 		bc.chainSideFeed.Send(ChainSideEvent{Block: block})
@@ -1887,6 +1896,12 @@ func (bc *BlockChain) insertChain(chain types.Blocks, verifySeals bool) (int, er
 			atomic.StoreUint32(&followupInterrupt, 1)
 			return it.index, err
 		}
+		// BOR state sync feed related changes
+		for _, data := range bc.stateSyncData {
+			bc.stateSyncFeed.Send(StateSyncEvent{Data: data})
+		}
+		// BOR
+
 		// Update the metrics touched during block processing
 		accountReadTimer.Update(statedb.AccountReads)                 // Account reads are complete, we can mark them
 		storageReadTimer.Update(statedb.StorageReads)                 // Storage reads are complete, we can mark them
@@ -2554,4 +2569,18 @@ func (bc *BlockChain) SubscribeLogsEvent(ch chan<- []*types.Log) event.Subscript
 // block processing has started while false means it has stopped.
 func (bc *BlockChain) SubscribeBlockProcessingEvent(ch chan<- bool) event.Subscription {
 	return bc.scope.Track(bc.blockProcFeed.Subscribe(ch))
+}
+
+//
+// Bor related changes
+//
+
+// SetStateSync set sync data in state_data
+func (bc *BlockChain) SetStateSync(stateData []*types.StateSyncData) {
+	bc.stateSyncData = stateData
+}
+
+// SubscribeStateSyncEvent registers a subscription of StateSyncEvent.
+func (bc *BlockChain) SubscribeStateSyncEvent(ch chan<- StateSyncEvent) event.Subscription {
+	return bc.scope.Track(bc.stateSyncFeed.Subscribe(ch))
 }
