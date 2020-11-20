@@ -314,19 +314,22 @@ func (st *StackTrie) hash() {
 			panic(err)
 		}
 	case extNode:
+		st.children[0].hash()
 		h = newHasher(false)
 		defer returnHasherToPool(h)
 		h.tmp.Reset()
-		st.children[0].hash()
-		// This is also possible:
-		//sz := hexToCompactInPlace(st.key)
-		//n := [][]byte{
-		//	st.key[:sz],
-		//	st.children[0].val,
-		//}
-		n := [][]byte{
-			hexToCompact(st.key),
-			st.children[0].val,
+		var valuenode node
+		if len(st.children[0].val) < 32 {
+			valuenode = rawNode(st.children[0].val)
+		} else {
+			valuenode = hashNode(st.children[0].val)
+		}
+		n := struct {
+			Key []byte
+			Val node
+		}{
+			Key: hexToCompact(st.key),
+			Val: valuenode,
 		}
 		if err := rlp.Encode(&h.tmp, n); err != nil {
 			panic(err)
@@ -406,6 +409,18 @@ func (st *StackTrie) Commit() (common.Hash, error) {
 		return common.Hash{}, ErrCommitDisabled
 	}
 	st.hash()
-	h := common.BytesToHash(st.val)
-	return h, nil
+	if len(st.val) != 32 {
+		// If the node's RLP isn't 32 bytes long, the node will not
+		// be hashed (and committed), and instead contain the  rlp-encoding of the
+		// node. For the top level node, we need to force the hashing+commit.
+		ret := make([]byte, 32)
+		h := newHasher(false)
+		defer returnHasherToPool(h)
+		h.sha.Reset()
+		h.sha.Write(st.val)
+		h.sha.Read(ret)
+		st.db.Put(ret, st.val)
+		return common.BytesToHash(ret), nil
+	}
+	return common.BytesToHash(st.val), nil
 }
