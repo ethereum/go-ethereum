@@ -41,7 +41,11 @@ var (
 	errBlockInvariant = errors.New("block objects must be instantiated with at least one of num or hash")
 )
 
-type Long int64
+type Long uint64
+
+func (b Long) String() string {
+	return string(b)
+}
 
 // ImplementsGraphQLType returns true if Long implements the provided GraphQL type.
 func (b Long) ImplementsGraphQLType(name string) bool { return name == "Long" }
@@ -51,20 +55,10 @@ func (b *Long) UnmarshalGraphQL(input interface{}) error {
 	var err error
 	switch input := input.(type) {
 	case string:
-		// uncomment to support hex values
-		//if strings.HasPrefix(input, "0x") {
-		//	// apply leniency and support hex representations of longs.
-		//	value, err := hexutil.DecodeUint64(input)
-		//	*b = Long(value)
-		//	return err
-		//} else {
-		value, err := strconv.ParseInt(input, 10, 64)
+		value, err := strconv.ParseUint(input, 10, 64)
 		*b = Long(value)
 		return err
-		//}
 	case int32:
-		*b = Long(input)
-	case int64:
 		*b = Long(input)
 	default:
 		err = fmt.Errorf("unexpected type %T for Long", input)
