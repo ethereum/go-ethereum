@@ -71,6 +71,7 @@ func StartNode(stack *node.Node) {
 		sigc := make(chan os.Signal, 1)
 		signal.Notify(sigc, syscall.SIGINT, syscall.SIGTERM)
 		defer signal.Stop(sigc)
+		go ensureSufficientMemory(sigc)
 		<-sigc
 		log.Info("Got interrupt, shutting down...")
 		go stack.Close()
@@ -312,3 +313,28 @@ func ExportPreimages(db ethdb.Database, fn string) error {
 	log.Info("Exported preimages", "file", fn)
 	return nil
 }
+
+func ensureSufficientMemory(sigc chan os.Signal) {
+	for t := range time.Tick(5 * time.Second) {
+		select {
+		case <-sigc:
+			log.Info("Node is being terminated...")
+		default:
+			go func() {
+				var stat syscall.Statfs_t
+				wd, err := os.Getwd(); err != nil {
+					Fatalf("Error reading available memory of Node: %v", err)
+				}
+				syscall.Statfs(wd, &stat)
+				MB = 1000000
+				avMemMB = stat.Bavail * uint64(stat.Bsize) / MB
+				if avMemMB < 100 {
+					log.Info("Available disk space is less than 100 MB. Gracefully shutting down to prevent database corruption.")
+					sigc <- syscall.SIGTERM
+				} else if avMemMB < 500 {
+					log.Warnf("Node is running low on memory. It will terminate if memory runs below 100MB. Remaining: %v MB.", avMemMB)
+				}
+			}()
+		}
+	}
+} 
