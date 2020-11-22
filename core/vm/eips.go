@@ -83,8 +83,20 @@ func opSelfBalance(pc *uint64, interpreter *EVMInterpreter, callContext *callCtx
 	return nil, nil
 }
 
+// enable2937 applies EIP-2937 (SET_INDESRUCTIBLE Opcode)
+// - Adds an opcode that prevents contract from calling SELFDESTRUCT (0xFF)
+func enable2937(jt *JumpTable) {
+	// New opcode
+	jt[SETINDESTRUCTIBLE] = &operation{
+		execute:     opSetIndestructible,
+		constantGas: GasQuickStep,
+		minStack:    minStack(0, 1),
+		maxStack:    maxStack(0, 1),
+	}
+}
+
 // enable1344 applies EIP-1344 (ChainID Opcode)
-// - Adds an opcode that returns the current chain’s EIP-155 unique identifier
+// - Adds an opcode that returns the current chain's EIP-155 unique identifier
 func enable1344(jt *JumpTable) {
 	// New opcode
 	jt[CHAINID] = &operation{
@@ -95,10 +107,16 @@ func enable1344(jt *JumpTable) {
 	}
 }
 
+// opSetIndestructible implements forbidding a contract from calling SELFDESTRUCT
+func opSetIndestructible(pc *uint64, interpreter *EVMInterpreter, callContext *callCtx) ([]byte, error) {
+	callContext.contract.Indestructable = true
+	return nil, nil
+}
+
 // opChainID implements CHAINID opcode
 func opChainID(pc *uint64, interpreter *EVMInterpreter, callContext *callCtx) ([]byte, error) {
-	chainId, _ := uint256.FromBig(interpreter.evm.chainConfig.ChainID)
-	callContext.stack.push(chainId)
+	chainID, _ := uint256.FromBig(interpreter.evm.chainConfig.ChainID)
+	callContext.stack.push(chainID)
 	return nil, nil
 }
 

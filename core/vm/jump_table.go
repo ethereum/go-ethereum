@@ -57,10 +57,19 @@ var (
 	constantinopleInstructionSet   = newConstantinopleInstructionSet()
 	istanbulInstructionSet         = newIstanbulInstructionSet()
 	yoloV2InstructionSet           = newYoloV2InstructionSet()
+	bastanchuryInstructionSet      = newBastanchuryInstructionSet()
 )
 
 // JumpTable contains the EVM opcodes supported at a given fork.
 type JumpTable [256]*operation
+
+// newBastanchuryInstructionSet returns the instruction set containing
+// - "EIP-2937: SET_INDESTRUCTIBLE opcode"
+func newBastanchuryInstructionSet() JumpTable {
+	instructionSet := newIstanbulInstructionSet()
+	enable2937(&instructionSet)
+	return instructionSet
+}
 
 // newYoloV2InstructionSet creates an instructionset containing
 // - "EIP-2315: Simple Subroutines"
