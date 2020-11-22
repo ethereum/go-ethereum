@@ -236,6 +236,8 @@ func init() {
 		dumpCommand,
 		dumpGenesisCommand,
 		inspectCommand,
+		statDbCommand,
+		compactDbCommand,
 		// See accountcmd.go:
 		accountCommand,
 		walletCommand,
@@ -251,6 +253,9 @@ func init() {
 		licenseCommand,
 		// See config.go
 		dumpConfigCommand,
+		dbGetCommand,
+		dbDeleteCommand,
+		dbPutCommand,
 		// See cmd/utils/flags_legacy.go
 		utils.ShowDeprecated,
 	}

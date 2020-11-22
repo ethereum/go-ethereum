@@ -1,0 +1,347 @@
+// Copyright 2020 The go-ethereum Authors
+// This file is part of go-ethereum.
+//
+// go-ethereum is free software: you can redistribute it and/or modify
+// it under the terms of the GNU General Public License as published by
+// the Free Software Foundation, either version 3 of the License, or
+// (at your option) any later version.
+//
+// go-ethereum is distributed in the hope that it will be useful,
+// but WITHOUT ANY WARRANTY; without even the implied warranty of
+// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
+// GNU General Public License for more details.
+//
+// You should have received a copy of the GNU General Public License
+// along with go-ethereum. If not, see <http://www.gnu.org/licenses/>.
+
+package main
+
+import (
+	"fmt"
+	"os"
+	"path/filepath"
+	"time"
+
+	"github.com/ethereum/go-ethereum/cmd/utils"
+	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/common/hexutil"
+	"github.com/ethereum/go-ethereum/console/prompt"
+	"github.com/ethereum/go-ethereum/core/rawdb"
+	"github.com/ethereum/go-ethereum/ethdb"
+	"github.com/ethereum/go-ethereum/ethdb/leveldb"
+	"github.com/ethereum/go-ethereum/log"
+	"gopkg.in/urfave/cli.v1"
+)
+
+var (
+	removedbCommand = cli.Command{
+		Action:    utils.MigrateFlags(removeDB),
+		Name:      "removedb",
+		Usage:     "Remove blockchain and state databases",
+		ArgsUsage: " ",
+		Flags: []cli.Flag{
+			utils.DataDirFlag,
+		},
+		Category: "DATABASE COMMANDS",
+		Description: `
+Remove blockchain and state databases`,
+	}
+	inspectCommand = cli.Command{
+		Action:    utils.MigrateFlags(inspect),
+		Name:      "db.inspect",
+		Usage:     "Inspect the storage size for each type of data in the database",
+		ArgsUsage: " ",
+		Flags: []cli.Flag{
+			utils.DataDirFlag,
+			utils.AncientFlag,
+			utils.CacheFlag,
+			utils.MainnetFlag,
+			utils.RopstenFlag,
+			utils.RinkebyFlag,
+			utils.GoerliFlag,
+			utils.YoloV3Flag,
+			utils.LegacyTestnetFlag,
+			utils.SyncModeFlag,
+		},
+		Category: "DATABASE COMMANDS",
+	}
+	statDbCommand = cli.Command{
+		Action:    utils.MigrateFlags(leveldbStats),
+		Name:      "db.stats",
+		Usage:     "Print leveldb statistics",
+		ArgsUsage: " ",
+		Flags: []cli.Flag{
+			utils.DataDirFlag,
+			utils.CacheFlag,
+			utils.MainnetFlag,
+			utils.RopstenFlag,
+			utils.RinkebyFlag,
+			utils.GoerliFlag,
+			utils.YoloV3Flag,
+			utils.LegacyTestnetFlag,
+		},
+		Category: "DATABASE COMMANDS",
+	}
+	compactDbCommand = cli.Command{
+		Action:    utils.MigrateFlags(leveldbCompact),
+		Name:      "db.compact",
+		Usage:     "Compact leveldb database. WARNING: May take a very long time",
+		ArgsUsage: " ",
+		Flags: []cli.Flag{
+			utils.DataDirFlag,
+			utils.CacheFlag,
+			utils.MainnetFlag,
+			utils.RopstenFlag,
+			utils.RinkebyFlag,
+			utils.GoerliFlag,
+			utils.YoloV3Flag,
+			utils.LegacyTestnetFlag,
+		},
+		Category: "DATABASE COMMANDS",
+	}
+	dbGetCommand = cli.Command{
+		Action:    utils.MigrateFlags(dbGet),
+		Name:      "db.get",
+		Usage:     "Show the value of a database key",
+		ArgsUsage: "<hex-encoded key>",
+		Flags: []cli.Flag{
+			utils.DataDirFlag,
+			utils.MainnetFlag,
+			utils.RopstenFlag,
+			utils.RinkebyFlag,
+			utils.GoerliFlag,
+			utils.YoloV3Flag,
+			utils.LegacyTestnetFlag,
+		},
+		Category: "DATABASE COMMANDS",
+	}
+	dbDeleteCommand = cli.Command{
+		Action:    utils.MigrateFlags(dbDelete),
+		Name:      "db.delete",
+		Usage:     "Delete a database key (WARNING: may corrupt your database)",
+		ArgsUsage: "<hex-encoded key>",
+		Flags: []cli.Flag{
+			utils.DataDirFlag,
+			utils.RopstenFlag,
+			utils.RinkebyFlag,
+			utils.GoerliFlag,
+			utils.YoloV3Flag,
+		},
+		Category: "DATABASE COMMANDS",
+	}
+	dbPutCommand = cli.Command{
+		Action:    utils.MigrateFlags(dbPut),
+		Name:      "db.put",
+		Usage:     "Set the value of a database key (WARNING: may corrupt your database)",
+		ArgsUsage: "<hex-encoded key> <hex-encoded value>",
+		Flags: []cli.Flag{
+			utils.DataDirFlag,
+			utils.MainnetFlag,
+			utils.RopstenFlag,
+			utils.RinkebyFlag,
+			utils.GoerliFlag,
+			utils.YoloV3Flag,
+			utils.LegacyTestnetFlag,
+		},
+		Category: "DATABASE COMMANDS",
+	}
+)
+
+func removeDB(ctx *cli.Context) error {
+	stack, config := makeConfigNode(ctx)
+
+	// Remove the full node state database
+	path := stack.ResolvePath("chaindata")
+	if common.FileExist(path) {
+		confirmAndRemoveDB(path, "full node state database")
+	} else {
+		log.Info("Full node state database missing", "path", path)
+	}
+	// Remove the full node ancient database
+	path = config.Eth.DatabaseFreezer
+	switch {
+	case path == "":
+		path = filepath.Join(stack.ResolvePath("chaindata"), "ancient")
+	case !filepath.IsAbs(path):
+		path = config.Node.ResolvePath(path)
+	}
+	if common.FileExist(path) {
+		confirmAndRemoveDB(path, "full node ancient database")
+	} else {
+		log.Info("Full node ancient database missing", "path", path)
+	}
+	// Remove the light node database
+	path = stack.ResolvePath("lightchaindata")
+	if common.FileExist(path) {
+		confirmAndRemoveDB(path, "light node database")
+	} else {
+		log.Info("Light node database missing", "path", path)
+	}
+	return nil
+}
+
+// confirmAndRemoveDB prompts the user for a last confirmation and removes the
+// folder if accepted.
+func confirmAndRemoveDB(database string, kind string) {
+	confirm, err := prompt.Stdin.PromptConfirm(fmt.Sprintf("Remove %s (%s)?", kind, database))
+	switch {
+	case err != nil:
+		utils.Fatalf("%v", err)
+	case !confirm:
+		log.Info("Database deletion skipped", "path", database)
+	default:
+		start := time.Now()
+		filepath.Walk(database, func(path string, info os.FileInfo, err error) error {
+			// If we're at the top level folder, recurse into
+			if path == database {
+				return nil
+			}
+			// Delete all the files, but not subfolders
+			if !info.IsDir() {
+				os.Remove(path)
+				return nil
+			}
+			return filepath.SkipDir
+		})
+		log.Info("Database successfully deleted", "path", database, "elapsed", common.PrettyDuration(time.Since(start)))
+	}
+}
+
+func inspect(ctx *cli.Context) error {
+	node, _ := makeConfigNode(ctx)
+	defer node.Close()
+
+	_, chainDb := utils.MakeChain(ctx, node, true)
+	defer chainDb.Close()
+
+	return rawdb.InspectDatabase(chainDb)
+}
+
+func showLeveldbStats(db ethdb.Stater) {
+	if stats, err := db.Stat("leveldb.stats"); err != nil {
+		log.Warn("Failed to read database stats", "error", err)
+	} else {
+		fmt.Println(stats)
+	}
+	if ioStats, err := db.Stat("leveldb.iostats"); err != nil {
+		log.Warn("Failed to read database iostats", "error", err)
+	} else {
+		fmt.Println(ioStats)
+	}
+}
+
+func leveldbStats(ctx *cli.Context) error {
+	stack, _ := makeConfigNode(ctx)
+	defer stack.Close()
+	path := stack.ResolvePath("chaindata")
+	db, err := leveldb.New(path, 1024, 1000, "")
+	if err != nil {
+		return err
+	}
+	showLeveldbStats(db)
+	err = db.Close()
+	if err != nil {
+		log.Info("Close err", "error", err)
+	}
+	return nil
+}
+
+func leveldbCompact(ctx *cli.Context) error {
+	stack, _ := makeConfigNode(ctx)
+	defer stack.Close()
+	path := stack.ResolvePath("chaindata")
+	db, err := leveldb.New(path, 1024, 1000, "")
+	if err != nil {
+		return err
+	}
+	showLeveldbStats(db)
+	log.Info("Triggering compaction")
+	err = db.Compact(nil, nil)
+	if err != nil {
+		log.Info("Compact err", "error", err)
+	}
+	showLeveldbStats(db)
+	log.Info("Closing db")
+	err = db.Close()
+	if err != nil {
+		log.Info("Close err", "error", err)
+	}
+	log.Info("Exiting")
+	return err
+}
+
+// dbGet shows the value of a given database key
+func dbGet(ctx *cli.Context) error {
+	if len(ctx.Args()) < 1 {
+		utils.Fatalf("This command requires a key as an argument.")
+	}
+	stack, _ := makeConfigNode(ctx)
+	defer stack.Close()
+	db := utils.MakeChainDatabase(ctx, stack)
+	defer db.Close()
+	key, err := hexutil.Decode(ctx.Args().Get(0))
+	if err != nil {
+		log.Info("Could not decode the key", "error", err)
+		return err
+	}
+	data, err := db.Get(key)
+	if err != nil {
+		log.Info("Get operation failed", "error", err)
+		return err
+	}
+	fmt.Printf("key %x:\n\t%x\n", key, data)
+	return nil
+}
+
+// dbDelete deletes a key from the database
+func dbDelete(ctx *cli.Context) error {
+	if len(ctx.Args()) < 1 {
+		utils.Fatalf("This command requires a key as an argument.")
+	}
+	stack, _ := makeConfigNode(ctx)
+	defer stack.Close()
+	db := utils.MakeChainDatabase(ctx, stack)
+	defer db.Close()
+	key, err := hexutil.Decode(ctx.Args().Get(0))
+	if err != nil {
+		log.Info("Could not decode the key", "error", err)
+		return err
+	}
+	if err = db.Delete(key); err != nil {
+		log.Info("Delete operation returned an error", "error", err)
+		return err
+	}
+	return nil
+}
+
+// dbPut overwrite a value in the database
+func dbPut(ctx *cli.Context) error {
+	if len(ctx.Args()) < 2 {
+		utils.Fatalf("This command requires a key and a value as arguments.")
+	}
+	stack, _ := makeConfigNode(ctx)
+	defer stack.Close()
+	db := utils.MakeChainDatabase(ctx, stack)
+	defer db.Close()
+	var (
+		key   []byte
+		value []byte
+		data  []byte
+		err   error
+	)
+	key, err = hexutil.Decode(ctx.Args().Get(0))
+	if err != nil {
+		log.Info("Could not decode the key", "error", err)
+		return err
+	}
+	value, err = hexutil.Decode(ctx.Args().Get(1))
+	if err != nil {
+		log.Info("Could not decode the value", "error", err)
+		return err
+	}
+	data, err = db.Get(key)
+	if err == nil {
+		fmt.Printf("Previous value:\n%x\n", data)
+	}
+	return db.Put(key, value)
+}
