@@ -34,6 +34,7 @@ import (
 	"github.com/ethereum/go-ethereum/core/state"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/eth/downloader"
+	"github.com/ethereum/go-ethereum/ethdb/leveldb"
 	"github.com/ethereum/go-ethereum/event"
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/metrics"
@@ -216,6 +217,20 @@ Use "ethereum dump 0" to dump the genesis block.`,
 			utils.YoloV2Flag,
 			utils.LegacyTestnetFlag,
 			utils.SyncModeFlag,
+		},
+		Category: "BLOCKCHAIN COMMANDS",
+	}
+	statDbCommand = cli.Command{
+		Action:    utils.MigrateFlags(statDb),
+		Name:      "dbstats",
+		Usage:     "Print stats about the leveldb database",
+		ArgsUsage: " ",
+		Flags: []cli.Flag{
+			utils.DataDirFlag,
+			utils.CacheFlag,
+			utils.RopstenFlag,
+			utils.RinkebyFlag,
+			utils.GoerliFlag,
 		},
 		Category: "BLOCKCHAIN COMMANDS",
 	}
@@ -604,6 +619,23 @@ func inspect(ctx *cli.Context) error {
 	defer chainDb.Close()
 
 	return rawdb.InspectDatabase(chainDb)
+}
+
+func statDb(ctx *cli.Context) error {
+	stack, _ := makeConfigNode(ctx)
+	defer stack.Close()
+	path := stack.ResolvePath("chaindata")
+	db, err := leveldb.New(path, 1024, 1000, "")
+	if err != nil {
+		return err
+	}
+	log.Info("Checking stats")
+	stats, err := db.Stat("leveldb.stats")
+	if err != nil {
+		return err
+	}
+	fmt.Println(stats)
+	return nil
 }
 
 // hashish returns true for strings that look like hashes.
