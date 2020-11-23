@@ -96,6 +96,9 @@ func SignifySignFile(input string, output string, key string, unTrustedComment s
 		return errors.New("untrusted comment must fit on a single line")
 	}
 
+	if unTrustedComment == "" {
+		unTrustedComment = "verify with " + input + ".pub"
+	}
 	out.WriteString(fmt.Sprintf("untrusted comment: %s\n%s\n", unTrustedComment, base64.StdEncoding.EncodeToString(sigdata)))
 
 	// Add the trusted comment if available (minisign only)
