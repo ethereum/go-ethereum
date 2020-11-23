@@ -73,12 +73,14 @@ func checkCurrent(url, current string) error {
 	if err = json.Unmarshal(data, &vulns); err != nil {
 		return err
 	}
+	allOk := true
 	for _, vuln := range vulns {
 		r, err := regexp.Compile(vuln.Check)
 		if err != nil {
 			return err
 		}
 		if r.MatchString(current) {
+			allOk = false
 			fmt.Printf("## Vulnerable to %v (%v)\n\n", vuln.Uid, vuln.Name)
 			fmt.Printf("Severity: %v\n", vuln.Severity)
 			fmt.Printf("Summary : %v\n", vuln.Summary)
@@ -91,6 +93,9 @@ func checkCurrent(url, current string) error {
 			}
 			fmt.Println()
 		}
+	}
+	if allOk {
+		fmt.Println("No vulnerabilities found")
 	}
 	return nil
 }
@@ -116,15 +121,27 @@ func verifySignature(pubkeys []string, data, sigdata []byte) error {
 	if err != nil {
 		return err
 	}
+	// find the used key
+	var key *minisign.PublicKey
 	for _, pubkey := range pubkeys {
 		pub, err := minisign.NewPublicKey(pubkey)
 		if err != nil {
 			// our pubkeys should be parseable
 			return err
 		}
-		if ok, err := pub.Verify(data, sig); ok && err == nil {
-			return nil
+		if pub.KeyId != sig.KeyId {
+			continue
 		}
+		key = &pub
+		break
 	}
-	return errors.New("signature could not be verified")
+	if key == nil {
+		log.Info("Signing key not trusted", "key", sig.KeyId, "error", err)
+		return errors.New("signature could not be verified")
+	}
+	if ok, err := key.Verify(data, sig); !ok || err != nil {
+		log.Info("Verification failed error", "key", fmt.Sprintf("%x", key.KeyId), "error", err)
+		return errors.New("signature could not be verified")
+	}
+	return nil
 }
