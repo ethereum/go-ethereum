@@ -34,6 +34,7 @@ import (
 	"github.com/ethereum/go-ethereum/core/state"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/eth/downloader"
+	"github.com/ethereum/go-ethereum/ethdb"
 	"github.com/ethereum/go-ethereum/ethdb/leveldb"
 	"github.com/ethereum/go-ethereum/event"
 	"github.com/ethereum/go-ethereum/log"
@@ -221,9 +222,23 @@ Use "ethereum dump 0" to dump the genesis block.`,
 		Category: "BLOCKCHAIN COMMANDS",
 	}
 	statDbCommand = cli.Command{
-		Action:    utils.MigrateFlags(statDb),
-		Name:      "dbstats",
-		Usage:     "Print stats about the leveldb database",
+		Action:    utils.MigrateFlags(leveldbStats),
+		Name:      "leveldb.stats",
+		Usage:     "Print leveldb statistics",
+		ArgsUsage: " ",
+		Flags: []cli.Flag{
+			utils.DataDirFlag,
+			utils.CacheFlag,
+			utils.RopstenFlag,
+			utils.RinkebyFlag,
+			utils.GoerliFlag,
+		},
+		Category: "BLOCKCHAIN COMMANDS",
+	}
+	compactDbCommand = cli.Command{
+		Action:    utils.MigrateFlags(leveldbCompact),
+		Name:      "leveldb.compact",
+		Usage:     "Compact leveldb database",
 		ArgsUsage: " ",
 		Flags: []cli.Flag{
 			utils.DataDirFlag,
@@ -336,17 +351,7 @@ func importChain(ctx *cli.Context) error {
 	fmt.Printf("Import done in %v.\n\n", time.Since(start))
 
 	// Output pre-compaction stats mostly to see the import trashing
-	stats, err := db.Stat("leveldb.stats")
-	if err != nil {
-		utils.Fatalf("Failed to read database stats: %v", err)
-	}
-	fmt.Println(stats)
-
-	ioStats, err := db.Stat("leveldb.iostats")
-	if err != nil {
-		utils.Fatalf("Failed to read database iostats: %v", err)
-	}
-	fmt.Println(ioStats)
+	showLeveldbStats(db)
 
 	// Print the memory statistics used by the importing
 	mem := new(runtime.MemStats)
@@ -364,22 +369,12 @@ func importChain(ctx *cli.Context) error {
 	// Compact the entire database to more accurately measure disk io and print the stats
 	start = time.Now()
 	fmt.Println("Compacting entire database...")
-	if err = db.Compact(nil, nil); err != nil {
+	if err := db.Compact(nil, nil); err != nil {
 		utils.Fatalf("Compaction failed: %v", err)
 	}
 	fmt.Printf("Compaction done in %v.\n\n", time.Since(start))
 
-	stats, err = db.Stat("leveldb.stats")
-	if err != nil {
-		utils.Fatalf("Failed to read database stats: %v", err)
-	}
-	fmt.Println(stats)
-
-	ioStats, err = db.Stat("leveldb.iostats")
-	if err != nil {
-		utils.Fatalf("Failed to read database iostats: %v", err)
-	}
-	fmt.Println(ioStats)
+	showLeveldbStats(db)
 	return importErr
 }
 
@@ -621,7 +616,20 @@ func inspect(ctx *cli.Context) error {
 	return rawdb.InspectDatabase(chainDb)
 }
 
-func statDb(ctx *cli.Context) error {
+func showLeveldbStats(db ethdb.Stater) {
+	if stats, err := db.Stat("leveldb.stats"); err != nil {
+		log.Warn("Failed to read database stats", "error", err)
+	} else {
+		fmt.Println(stats)
+	}
+	if ioStats, err := db.Stat("leveldb.iostats"); err != nil {
+		log.Warn("Failed to read database iostats", "error", err)
+	} else {
+		fmt.Println(ioStats)
+	}
+}
+
+func leveldbStats(ctx *cli.Context) error {
 	stack, _ := makeConfigNode(ctx)
 	defer stack.Close()
 	path := stack.ResolvePath("chaindata")
@@ -629,13 +637,36 @@ func statDb(ctx *cli.Context) error {
 	if err != nil {
 		return err
 	}
-	log.Info("Checking stats")
-	stats, err := db.Stat("leveldb.stats")
+	showLeveldbStats(db)
+	err = db.Close()
+	if err != nil {
+		log.Info("Close err", "error", err)
+	}
+	return nil
+}
+
+func leveldbCompact(ctx *cli.Context) error {
+	stack, _ := makeConfigNode(ctx)
+	defer stack.Close()
+	path := stack.ResolvePath("chaindata")
+	db, err := leveldb.New(path, 1024, 1000, "")
 	if err != nil {
 		return err
 	}
-	fmt.Println(stats)
-	return nil
+	showLeveldbStats(db)
+	log.Info("Triggering compaction")
+	err = db.Compact(nil, nil)
+	if err != nil {
+		log.Info("Compact err", "error", err)
+	}
+	showLeveldbStats(db)
+	log.Info("Closing db")
+	err = db.Close()
+	if err != nil {
+		log.Info("Close err", "error", err)
+	}
+	log.Info("Exiting")
+	return err
 }
 
 // hashish returns true for strings that look like hashes.
