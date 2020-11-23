@@ -728,4 +728,3 @@ func FindCommonAncestor(db ethdb.Reader, a, b *types.Header) *types.Header {
 	}
 	return a
 }
-
