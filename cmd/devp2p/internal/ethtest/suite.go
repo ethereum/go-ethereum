@@ -309,10 +309,10 @@ func (s *Suite) TestLargeAnnounce(t *utesting.T) {
 	}
 }
 
-func (s *Suite) testDisconnect(t *utesting.T, conn *Conn, msg Message) {
+func (s *Suite) testDisconnect(t *utesting.T, conn *Conn, msg Message) error {
 	// Announce the block.
 	if err := conn.Write(msg); err != nil {
-		t.Fatalf("could not write to connection: %v", err)
+		return fmt.Errorf("could not write to connection: %v", err)
 	}
 	time.Sleep(100 * time.Millisecond)
 	// check that the peer disconnected
@@ -320,8 +320,10 @@ func (s *Suite) testDisconnect(t *utesting.T, conn *Conn, msg Message) {
 	switch msg := conn.ReadAndServe(s.chain, timeout).(type) {
 	case *Disconnect:
 		return
+	case *Error:
+		return
 	default:
-		t.Fatalf("unexpected: %s", pretty.Sdump(msg))
+		return fmt.Errorf("unexpected: %s", pretty.Sdump(msg))
 	}
 }
 
