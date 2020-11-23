@@ -113,15 +113,16 @@ func (s *Suite) TestMaliciousStatus(t *utesting.T) {
 	case *Status:
 		t.Logf("%+v\n", msg)
 	default:
-		t.Fatalf("unexpected: %#v", msg)
+		t.Fatalf("expected status, got: %#v ", msg)
 	}
 	timeout := 20 * time.Second
 	// wait for disconnect
 	switch msg := conn.ReadAndServe(s.chain, timeout).(type) {
 	case *Disconnect:
+	case *Error:
 		return
 	default:
-		t.Fatalf("unexpected: %s", pretty.Sdump(msg))
+		t.Fatalf("expected disconnect, got: %s", pretty.Sdump(msg))
 	}
 }
 
@@ -255,8 +256,26 @@ func (s *Suite) TestMaliciousHandshake(t *utesting.T) {
 			ID: largeBuffer(2),
 		},
 	}
-	for _, handshake := range handshakes {
-		s.testDisconnect(t, conn, handshake)
+	for i, handshake := range handshakes {
+		fmt.Printf("Testing malicious handshake %v\n", i)
+		// Init the handshake
+		if err := conn.Write(handshake); err != nil {
+			t.Fatalf("could not write to connection: %v", err)
+		}
+		// check that the peer disconnected
+		timeout := 20 * time.Second
+		// Discard one hello
+		for i := 0; i < 2; i++ {
+			switch msg := conn.ReadAndServe(s.chain, timeout).(type) {
+			case *Disconnect:
+			case *Error:
+			case *Hello:
+				// Hello's are send concurrently, so ignore them
+				continue
+			default:
+				t.Fatalf("unexpected: %s", pretty.Sdump(msg))
+			}
+		}
 		// Dial for the next round
 		conn, err = s.dial()
 		if err != nil {
@@ -287,43 +306,31 @@ func (s *Suite) TestLargeAnnounce(t *utesting.T) {
 		},
 	}
 
-	var receiveConn *Conn
-	for i, blockAnnouncement := range blocks {
+	for i, blockAnnouncement := range blocks[0:3] {
+		fmt.Printf("Testing malicious announcement: %v\n", i)
 		sendConn := s.setupConnection(t)
-		if i == 3 {
-			receiveConn = s.setupConnection(t)
-			// The third block is a valid block
-			if err := sendConn.Write(blockAnnouncement); err != nil {
-				t.Fatalf("could not write to connection: %v", err)
-			}
-		} else {
-			s.testDisconnect(t, sendConn, blockAnnouncement)
+		if err := sendConn.Write(blockAnnouncement); err != nil {
+			t.Fatalf("could not write to connection: %v", err)
+		}
+		// Invalid announcement, check that peer disconnected
+		timeout := 20 * time.Second
+		switch msg := sendConn.ReadAndServe(s.chain, timeout).(type) {
+		case *Disconnect:
+		case *Error:
+			break
+		default:
+			t.Fatalf("unexpected: %s wanted disconnect", pretty.Sdump(msg))
 		}
 	}
-	s.waitAnnounce(t, receiveConn, blocks[3])
+	// Test the last block as a valid block
+	sendConn := s.setupConnection(t)
+	receiveConn := s.setupConnection(t)
+	s.testAnnounce(t, sendConn, receiveConn, blocks[3])
 	// update test suite chain
 	s.chain.blocks = append(s.chain.blocks, s.fullChain.blocks[nextBlock])
 	// wait for client to update its chain
 	if err := receiveConn.waitForBlock(s.fullChain.blocks[nextBlock]); err != nil {
 		t.Fatal(err)
-	}
-}
-
-func (s *Suite) testDisconnect(t *utesting.T, conn *Conn, msg Message) error {
-	// Announce the block.
-	if err := conn.Write(msg); err != nil {
-		return fmt.Errorf("could not write to connection: %v", err)
-	}
-	time.Sleep(100 * time.Millisecond)
-	// check that the peer disconnected
-	timeout := 20 * time.Second
-	switch msg := conn.ReadAndServe(s.chain, timeout).(type) {
-	case *Disconnect:
-		return
-	case *Error:
-		return
-	default:
-		return fmt.Errorf("unexpected: %s", pretty.Sdump(msg))
 	}
 }
 
