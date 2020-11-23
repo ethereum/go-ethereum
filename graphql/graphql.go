@@ -442,13 +442,13 @@ func (b *Block) resolveReceipts(ctx context.Context) ([]*types.Receipt, error) {
 	return b.receipts, nil
 }
 
-func (b *Block) Number(ctx context.Context) (hexutil.Uint64, error) {
+func (b *Block) Number(ctx context.Context) (Long, error) {
 	header, err := b.resolveHeader(ctx)
 	if err != nil {
 		return 0, err
 	}
 
-	return hexutil.Uint64(header.Number.Uint64()), nil
+	return Long(header.Number.Uint64()), nil
 }
 
 func (b *Block) Hash(ctx context.Context) (common.Hash, error) {
@@ -918,9 +918,11 @@ func (p *Pending) Call(ctx context.Context, args struct {
 
 func (p *Pending) EstimateGas(ctx context.Context, args struct {
 	Data ethapi.CallArgs
-}) (hexutil.Uint64, error) {
+}) (Long, error) {
 	pendingBlockNr := rpc.BlockNumberOrHashWithNumber(rpc.PendingBlockNumber)
-	return ethapi.DoEstimateGas(ctx, p.backend, args.Data, pendingBlockNr, p.backend.RPCGasCap())
+
+	long, err := ethapi.DoEstimateGas(ctx, p.backend, args.Data, pendingBlockNr, p.backend.RPCGasCap())
+	return Long(long), err
 }
 
 // Resolver is the top-level object in the GraphQL hierarchy.
