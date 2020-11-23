@@ -179,13 +179,18 @@ func New(stack *node.Node, config *eth.Config) (*LightEthereum, error) {
 	stack.RegisterLifecycle(leth)
 
 	// Check for unclean shutdown
-	if uncleanShutdown, _ := rawdb.ReadUncleanShutdowMarker(chainDb); len(uncleanShutdown) > 0 {
-		latest := uncleanShutdown[len(uncleanShutdown)-1]
-		log.Warn("Unclean shutdown(s) detected", "latest", fmt.Sprintf("%v ago",
-			common.PrettyAge(time.Unix(int64(latest), 0))), "count", len(uncleanShutdown))
+	if uncleanShutdowns, discards, err := rawdb.UpdateUncleanShutdownMarker(chainDb); err != nil {
+		log.Error("Could not update unclean-shutdown-marker list", "error", err)
+	} else {
+		if discards > 0 {
+			log.Warn("Old unclean shutdowns found", "count", discards)
+		}
+		for _, tstamp := range uncleanShutdowns {
+			t := time.Unix(int64(tstamp), 0)
+			log.Warn("Unclean shutdown detected", "time", t,
+				"age", common.PrettyAge(t))
+		}
 	}
-	// Place new shutdown marker
-	rawdb.WriteUncleanShutdowMarker(chainDb)
 	return leth, nil
 }
 
