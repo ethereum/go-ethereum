@@ -53,7 +53,7 @@ func testVerification(t *testing.T, pubkey, sigdir string) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		err = verifySignature(pubkey, data, sig)
+		err = verifySignature([]string{pubkey}, data, sig)
 		if err != nil {
 			t.Fatal(err)
 		}

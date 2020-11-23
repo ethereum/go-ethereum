@@ -18,6 +18,7 @@ package main
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io/ioutil"
 	"net/http"
@@ -28,8 +29,11 @@ import (
 	"gopkg.in/urfave/cli.v1"
 )
 
-// TODO(@holiman) replace this later on with an actual key (or keys)
-const GethPubkey = "RWQkliYstQBOKOdtClfgC3IypIPX6TAmoEi7beZ4gyR3wsaezvqOMWsp"
+// TODO(@holiman) replace this later on with actual keys
+var gethPubKeys []string = []string{
+	"RWQkliYstQBOKOdtClfgC3IypIPX6TAmoEi7beZ4gyR3wsaezvqOMWsp", // Test-key,
+	"RWTq+byAzWOfZZ56S/WBPsDtl6TQu5Y3ud2HYuqi5yZqHpQ0ES8Lf5oU", // Test-key 2,
+}
 
 type vulnJson struct {
 	Name        string
@@ -63,7 +67,7 @@ func checkCurrent(url, current string) error {
 	if sig, err = fetch(fmt.Sprintf("%v.minisig", url)); err != nil {
 		return fmt.Errorf("could not retrieve signature: %w", err)
 	}
-	if err = verifySignature(GethPubkey, data, sig); err != nil {
+	if err = verifySignature(gethPubKeys, data, sig); err != nil {
 		return err
 	}
 	var vulns []vulnJson
@@ -108,15 +112,20 @@ func fetch(url string) ([]byte, error) {
 
 // verifySignature checks that the sigData is a valid signature of the given
 // data, for pubkey GethPubkey
-func verifySignature(pubkey string, data, sigdata []byte) error {
-	pub, err := minisign.NewPublicKey(pubkey)
-	if err != nil {
-		return err
-	}
+func verifySignature(pubkeys []string, data, sigdata []byte) error {
 	sig, err := minisign.DecodeSignature(string(sigdata))
 	if err != nil {
 		return err
 	}
-	_, err = pub.Verify(data, sig)
-	return err
+	for _, pubkey := range pubkeys {
+		pub, err := minisign.NewPublicKey(pubkey)
+		if err != nil {
+			// our pubkeys should be parseable
+			return err
+		}
+		if ok, err := pub.Verify(data, sig); ok && err == nil {
+			return nil
+		}
+	}
+	return errors.New("signature could not be verified")
 }
