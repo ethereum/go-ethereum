@@ -30,7 +30,8 @@ function compile_fuzzer {
   path=$SRC/go-ethereum/$1
   func=$2
   fuzzer=$3
-  echo "Building $fuzzer"
+  corpusfile="${path}/testdata/${fuzzer}_seed_corpus.zip"
+  echo "Building $fuzzer (expecting corpus at $corpusfile)"
   (cd $path && \
         go-fuzz -func $func -o $WORK/$fuzzer.a . && \
         echo "First stage built OK" && \
@@ -38,7 +39,6 @@ function compile_fuzzer {
         echo "Second stage built ok" )
 
         ## Check if there exists a seed corpus file
-        corpusfile="$path/testdata/$fuzzer_seed_corpus.zip"
         if [ -f $corpusfile ]
         then
           cp $corpusfile $OUT/
