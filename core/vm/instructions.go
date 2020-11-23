@@ -815,11 +815,14 @@ func opStop(pc *uint64, interpreter *EVMInterpreter, callContext *callCtx) ([]by
 }
 
 func opSuicide(pc *uint64, interpreter *EVMInterpreter, callContext *callCtx) ([]byte, error) {
-	beneficiary := callContext.stack.pop()
-	balance := interpreter.evm.StateDB.GetBalance(callContext.contract.Address())
-	interpreter.evm.StateDB.AddBalance(common.Address(beneficiary.Bytes20()), balance)
-	interpreter.evm.StateDB.Suicide(callContext.contract.Address())
-	return nil, nil
+	if !callContext.contract.Indestructible {
+		beneficiary := callContext.stack.pop()
+		balance := interpreter.evm.StateDB.GetBalance(callContext.contract.Address())
+		interpreter.evm.StateDB.AddBalance(common.Address(beneficiary.Bytes20()), balance)
+		interpreter.evm.StateDB.Suicide(callContext.contract.Address())
+		return nil, nil
+	}
+	return nil, ErrContractIndestructible
 }
 
 // following functions are used by the instruction jump  table
@@ -855,7 +858,7 @@ func opPush1(pc *uint64, interpreter *EVMInterpreter, callContext *callCtx) ([]b
 		codeLen = uint64(len(callContext.contract.Code))
 		integer = new(uint256.Int)
 	)
-	*pc += 1
+	*pc++
 	if *pc < codeLen {
 		callContext.stack.push(integer.SetUint64(uint64(callContext.contract.Code[*pc])))
 	} else {
