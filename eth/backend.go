@@ -222,9 +222,10 @@ func New(stack *node.Node, config *Config) (*Ethereum, error) {
 	stack.RegisterProtocols(eth.Protocols())
 	stack.RegisterLifecycle(eth)
 	// Check for unclean shutdown
-	if uncleanShutdown, _ := rawdb.ReadUncleanShutdowMarker(chainDb); uncleanShutdown != 0 {
-		log.Warn("Unclean shutdown detected", "latest", fmt.Sprintf("%v ago",
-			common.PrettyAge(time.Unix(uncleanShutdown, 0))))
+	if uncleanShutdown, _ := rawdb.ReadUncleanShutdowMarker(chainDb); len(uncleanShutdown) > 0 {
+		latest := uncleanShutdown[len(uncleanShutdown)-1]
+		log.Warn("Unclean shutdown(s) detected", "latest", fmt.Sprintf("%v ago",
+			common.PrettyAge(time.Unix(int64(latest), 0))), "count", len(uncleanShutdown))
 	}
 	// Place new shutdown marker
 	rawdb.WriteUncleanShutdowMarker(chainDb)

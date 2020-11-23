@@ -17,7 +17,6 @@
 package rawdb
 
 import (
-	"encoding/binary"
 	"encoding/json"
 	"time"
 
@@ -82,29 +81,51 @@ func WriteChainConfig(db ethdb.KeyValueWriter, hash common.Hash, cfg *params.Cha
 	}
 }
 
-// ReadUncleanShutdowMarker reads the unclean shutdown marker
-func ReadUncleanShutdowMarker(db ethdb.Reader) (int64, error) {
-	data, err := db.Get(uncleanShutdownPrefix)
+// ReadUncleanShutdowMarker reads the unclean shutdown marker list
+func ReadUncleanShutdowMarker(db ethdb.KeyValueReader) ([]uint64, error) {
+	data, err := db.Get(uncleanShutdownKey)
 	if err != nil {
-		return 0, err
+		return nil, err
 	}
-	return int64(binary.BigEndian.Uint64(data)), nil
+	var uncleanShutdowns = make([]uint64, 0)
+	if err := rlp.DecodeBytes(data, &uncleanShutdowns); err != nil {
+		return nil, err
+	}
+	return uncleanShutdowns, nil
 }
 
-// WriteUncleanShutdowMarker writes the unclean shutdown marker
-func WriteUncleanShutdowMarker(db ethdb.KeyValueWriter) error {
-	var data = make([]byte, 8)
-	binary.BigEndian.PutUint64(data, uint64(time.Now().Unix()))
-	if err := db.Put(uncleanShutdownPrefix, data); err != nil {
+// WriteUncleanShutdowMarker appends a new unclean shutdown marker
+func WriteUncleanShutdowMarker(db ethdb.KeyValueStore) error {
+	// Read old data
+	shutdowns, err := ReadUncleanShutdowMarker(db)
+	if err != nil {
+		log.Warn("Error reading USM", "error", err)
+	}
+	shutdowns = append(shutdowns, uint64(time.Now().Unix()))
+	data, err := rlp.EncodeToBytes(shutdowns)
+	if err != nil {
+		log.Warn("Failed to write unclean-shutdown marker", "err", err)
+		return err
+	}
+	if err := db.Put(uncleanShutdownKey, data); err != nil {
 		log.Warn("Failed to write unclean-shutdown marker", "err", err)
 		return err
 	}
 	return nil
 }
 
-// ClearUncleanShutdowMarker removes the unclean shutdown marker
-func ClearUncleanShutdowMarker(db ethdb.KeyValueWriter) {
-	if err := db.Delete(uncleanShutdownPrefix); err != nil {
-		log.Warn("Failed to remove unclean-shutdown marker", "err", err)
+// ClearUncleanShutdowMarker removes the last unclean shutdown marker
+func ClearUncleanShutdowMarker(db ethdb.KeyValueStore) {
+	shutdowns, err := ReadUncleanShutdowMarker(db)
+	if err != nil {
+		log.Warn("Error reading USM", "error", err)
+	}
+	// Pop the last one off
+	if len(shutdowns) > 0 {
+		shutdowns = shutdowns[:len(shutdowns)-1]
+	}
+	data, _ := rlp.EncodeToBytes(shutdowns)
+	if err := db.Put(uncleanShutdownKey, data); err != nil {
+		log.Warn("Failed to clear unclean-shutdown marker", "err", err)
 	}
 }

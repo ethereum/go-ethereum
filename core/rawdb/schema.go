@@ -81,7 +81,7 @@ var (
 	preimagePrefix = []byte("secure-key-")      // preimagePrefix + hash -> preimage
 	configPrefix   = []byte("ethereum-config-") // config prefix for the db
 
-	uncleanShutdownPrefix   = []byte("unclean-shutdown") // config prefix for the db
+	uncleanShutdownKey = []byte("unclean-shutdown") // config prefix for the db
 
 	// Chain index prefixes (use `i` + single byte to avoid mixing data types).
 	BloomBitsIndexPrefix = []byte("iB") // BloomBitsIndexPrefix is the data table of a chain indexer to track its progress
