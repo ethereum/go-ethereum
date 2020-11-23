@@ -17,7 +17,10 @@
 package utils
 
 import (
+	"math"
 	"math/rand"
+
+	"github.com/ethereum/go-ethereum/log"
 )
 
 type (
@@ -54,6 +57,14 @@ func (w *WeightedRandomSelect) IsEmpty() bool {
 
 // setWeight sets an item's weight to a specific value (removes it if zero)
 func (w *WeightedRandomSelect) setWeight(item WrsItem, weight uint64) {
+	if weight > math.MaxInt64-w.root.sumWeight {
+		// old weight is still included in sumWeight, remove and check again
+		w.setWeight(item, 0)
+		if weight > math.MaxInt64-w.root.sumWeight {
+			log.Error("WeightedRandomSelect overflow", "sumWeight", w.root.sumWeight, "new weight", weight)
+			weight = math.MaxInt64 - w.root.sumWeight
+		}
+	}
 	idx, ok := w.idx[item]
 	if ok {
 		w.root.setWeight(idx, weight)
