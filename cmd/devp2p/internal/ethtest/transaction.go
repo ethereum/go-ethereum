@@ -36,16 +36,17 @@ func sendSuccessfulTx(t *utesting.T, s *Suite, tx *types.Transaction) {
 		t.Fatal(err)
 	}
 	// Wait for the transaction announcement
-	rawTxMsg, err := recvConn.waitForMessage(Transactions{})
-	if err != nil {
-		t.Fatalf("waiting for transaction propagation failed: %v", err)
-	}
-	recTxs := *rawTxMsg.(*Transactions)
-	if len(recTxs) != 1 {
-		t.Fatalf("received transactions do not match send: %v", recTxs)
-	}
-	if tx.Hash() != recTxs[0].Hash() {
-		t.Fatalf("received transactions do not match send: got %v want %v", tx, recTxs)
+	switch msg := recvConn.ReadAndServe(s.chain, timeout).(type) {
+	case *Transactions:
+		recTxs := *msg
+		if len(recTxs) != 1 {
+			t.Fatalf("received transactions do not match send: %v", recTxs)
+		}
+		if tx.Hash() != recTxs[0].Hash() {
+			t.Fatalf("received transactions do not match send: got %v want %v", tx, recTxs)
+		}
+	default:
+		t.Fatalf("unexpected: %s", pretty.Sdump(msg))
 	}
 }
 
@@ -56,9 +57,11 @@ func sendFailingTx(t *utesting.T, s *Suite, tx *types.Transaction) {
 		t.Fatal(err)
 	}
 	// Wait for the transaction announcement
-	_, err := recvConn.waitForMessage(Transactions{})
-	if err == nil {
-		t.Fatalf("received a transaction, but wanted none", err)
+	switch msg := recvConn.ReadAndServe(s.chain, timeout).(type) {
+	case *Transactions:
+		t.Fatalf("Received unexpected transaction announcement: %v", msg)
+	default:
+		t.Fatalf("unexpected: %s", pretty.Sdump(msg))
 	}
 }
 

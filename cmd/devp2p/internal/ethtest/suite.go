@@ -38,6 +38,8 @@ var pretty = spew.ConfigState{
 	SortKeys:                true,
 }
 
+var timeout = 20 * time.Second
+
 // Suite represents a structure used to test the eth
 // protocol of a node(s).
 type Suite struct {
@@ -120,7 +122,6 @@ func (s *Suite) TestMaliciousStatus(t *utesting.T) {
 	default:
 		t.Fatalf("expected status, got: %#v ", msg)
 	}
-	timeout := 20 * time.Second
 	// wait for disconnect
 	switch msg := conn.ReadAndServe(s.chain, timeout).(type) {
 	case *Disconnect:
@@ -156,7 +157,6 @@ func (s *Suite) TestGetBlockHeaders(t *utesting.T) {
 		t.Fatalf("could not write to connection: %v", err)
 	}
 
-	timeout := 20 * time.Second
 	switch msg := conn.ReadAndServe(s.chain, timeout).(type) {
 	case *BlockHeaders:
 		headers := msg
@@ -186,7 +186,6 @@ func (s *Suite) TestGetBlockBodies(t *utesting.T) {
 		t.Fatalf("could not write to connection: %v", err)
 	}
 
-	timeout := 20 * time.Second
 	switch msg := conn.ReadAndServe(s.chain, timeout).(type) {
 	case *BlockBodies:
 		t.Logf("received %d block bodies", len(*msg))
@@ -318,7 +317,6 @@ func (s *Suite) TestLargeAnnounce(t *utesting.T) {
 			t.Fatalf("could not write to connection: %v", err)
 		}
 		// Invalid announcement, check that peer disconnected
-		timeout := 20 * time.Second
 		switch msg := sendConn.ReadAndServe(s.chain, timeout).(type) {
 		case *Disconnect:
 		case *Error:
