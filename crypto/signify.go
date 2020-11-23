@@ -36,17 +36,21 @@ var (
 	errInvalidKeyLength = errors.New("invalid, key length != 104")
 )
 
-func readSKey(key []byte) (ed25519.PrivateKey, error) {
-	if len(key) != 104 {
-		return nil, errInvalidKeyLength
+func parsePrivateKey(key string) (ed25519.PrivateKey, []byte, []byte, error) {
+	keydata, err := base64.StdEncoding.DecodeString(key)
+	if err != nil {
+		return nil, nil, nil, err
 	}
 
-	if string(key[:2]) != "Ed" {
-		return nil, errInvalidKeyHeader
+	if len(keydata) != 104 {
+		return nil, nil, nil, errInvalidKeyLength
 	}
 
-	return ed25519.PrivateKey(key[40:]), nil
+	if string(keydata[:2]) != "Ed" {
+		return nil, nil, nil, errInvalidKeyHeader
+	}
 
+	return ed25519.PrivateKey(keydata[40:]), keydata[:2], keydata[32:40], nil
 }
 
 func commentHasManyLines(comment string) bool {
@@ -69,11 +73,7 @@ func SignifySignFile(input string, output string, key string, unTrustedComment s
 	}
 	defer out.Close()
 
-	keydata, err := base64.StdEncoding.DecodeString(key)
-	if err != nil {
-		return err
-	}
-	skey, err := readSKey(keydata)
+	skey, header, keyNum, err := parsePrivateKey(key)
 	if err != nil {
 		return err
 	}
@@ -84,8 +84,6 @@ func SignifySignFile(input string, output string, key string, unTrustedComment s
 	}
 
 	rawSig := ed25519.Sign(skey, filedata)
-	header := keydata[:2]
-	keyNum := keydata[32:40]
 
 	var sigdata []byte
 	sigdata = append(sigdata, header...)
