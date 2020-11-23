@@ -29,10 +29,9 @@ import (
 	"gopkg.in/urfave/cli.v1"
 )
 
-// TODO(@holiman) replace this later on with actual keys
+// TODO(@holiman) add more keys
 var gethPubKeys []string = []string{
-	"RWQkliYstQBOKOdtClfgC3IypIPX6TAmoEi7beZ4gyR3wsaezvqOMWsp", // Test-key,
-	"RWTq+byAzWOfZZ56S/WBPsDtl6TQu5Y3ud2HYuqi5yZqHpQ0ES8Lf5oU", // Test-key 2,
+	"RWQk7Lo5TQgd+wxBNZM+Zoy+7UhhMHaWKzqoes9tvSbFLJYZhNTbrIjx", //@holiman, minisign public key FB1D084D39BAEC24
 }
 
 type vulnJson struct {
