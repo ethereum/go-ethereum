@@ -178,15 +178,12 @@ func New(stack *node.Node, config *eth.Config) (*LightEthereum, error) {
 	stack.RegisterProtocols(leth.Protocols())
 	stack.RegisterLifecycle(leth)
 
-	// Check for invalid shutdown
-	invalidShutdown, _ := chainDb.Get([]byte("unsafe-shutdown"))
-	if invalidShutdown != nil {
-		log.Error("unsafe shutdown detected", "time", string(invalidShutdown))
+	// Check for unclean shutdown
+	if uncleanShutdown, _ := rawdb.ReadUncleanShutdowMarker(chainDb); uncleanShutdown != 0 {
+		log.Error("Unclean shutdown detected", "time", time.Unix(uncleanShutdown, 0))
 	}
-	// Create an invalid shutdown in database in case the app crashed
-	if err = chainDb.Put([]byte("unsafe-shutdown"), []byte(time.Now().String())); err != nil {
-		log.Warn("Failed to record possible future unsafe shutdown", "err", err)
-	}
+	// Place new shutdown marker
+	rawdb.WriteUncleanShutdowMarker(chainDb)
 	return leth, nil
 }
 
@@ -322,11 +319,7 @@ func (s *LightEthereum) Stop() error {
 	s.engine.Close()
 	s.pruner.close()
 	s.eventMux.Stop()
-	// Delete the unsafe shutdown from DB if shutting down safely
-	if err := s.chainDb.Delete([]byte("unsafe-shutdown")); err != nil {
-		log.Error("err", err)
-	}
-
+	rawdb.ClearUncleanShutdowMarker(s.chainDb)
 	s.chainDb.Close()
 	s.wg.Wait()
 	log.Info("Light ethereum stopped")
