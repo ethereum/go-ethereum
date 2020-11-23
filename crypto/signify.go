@@ -49,7 +49,7 @@ func readSKey(key []byte) (ed25519.PrivateKey, error) {
 
 }
 
-func isCommentOnlyOneLine(comment string) bool {
+func commentHasManyLines(comment string) bool {
 	firstCRIndex := strings.IndexByte(comment, 13)
 	firstLFIndex := strings.IndexByte(comment, 10)
 	return (firstCRIndex >= 0 && firstCRIndex < len(comment)-1) || (firstLFIndex >= 0 && firstLFIndex < len(comment)-1)
@@ -93,7 +93,7 @@ func SignifySignFile(input string, output string, key string, unTrustedComment s
 	sigdata = append(sigdata, rawSig...)
 
 	// Check that the trusted comment fits in one line
-	if isCommentOnlyOneLine(unTrustedComment) {
+	if commentHasManyLines(unTrustedComment) {
 		return errors.New("untrusted comment must fit on a single line")
 	}
 
