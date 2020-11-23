@@ -115,7 +115,14 @@ func (s *Suite) TestMaliciousStatus(t *utesting.T) {
 	default:
 		t.Fatalf("unexpected: %#v", msg)
 	}
-	conn.waitForMessage(Disconnect{})
+	timeout := 20 * time.Second
+	// wait for disconnect
+	switch msg := conn.ReadAndServe(s.chain, timeout).(type) {
+	case *Disconnect:
+		return
+	default:
+		t.Fatalf("unexpected: %s", pretty.Sdump(msg))
+	}
 }
 
 // TestGetBlockHeaders tests whether the given node can respond to
@@ -309,8 +316,12 @@ func (s *Suite) testDisconnect(t *utesting.T, conn *Conn, msg Message) {
 	}
 	time.Sleep(100 * time.Millisecond)
 	// check that the peer disconnected
-	if err := conn.waitForMessage(Disconnect{}); err != nil {
-		t.Fatalf("connection was not disconnected: %v", err)
+	timeout := 20 * time.Second
+	switch msg := conn.ReadAndServe(s.chain, timeout).(type) {
+	case *Disconnect:
+		return
+	default:
+		t.Fatalf("unexpected: %s", pretty.Sdump(msg))
 	}
 }
 
