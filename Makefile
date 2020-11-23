@@ -15,11 +15,6 @@ XDC:
 	@echo "Done building."
 	@echo "Run \"$(GOBIN)/XDC\" to launch XDC."
 
-gc:
-	build/env.sh go run build/ci.go install ./cmd/gc
-	@echo "Done building."
-	@echo "Run \"$(GOBIN)/gc\" to launch gc."
-
 bootnode:
 	build/env.sh go run build/ci.go install ./cmd/bootnode
 	@echo "Done building."
@@ -36,7 +31,11 @@ all:
 test: all
 	build/env.sh go run build/ci.go test
 
+lint: ## Run linters.
+	build/env.sh go run build/ci.go lint
+
 clean:
+	./build/clean_go_build_cache.sh
 	rm -fr build/_workspace/pkg/ $(GOBIN)/*
 
 # Cross Compilation Targets (xgo)

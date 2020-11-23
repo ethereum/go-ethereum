@@ -19,10 +19,10 @@ package types
 import (
 	"container/heap"
 	"errors"
-	"fmt"
 	"io"
 	"math/big"
 	"sync/atomic"
+	"fmt"
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/hexutil"
@@ -34,7 +34,6 @@ import (
 
 var (
 	ErrInvalidSig = errors.New("invalid transaction v, r, s values")
-	errNoSigner   = errors.New("missing signing methods")
 )
 
 // deriveSigner makes a *best* guess about which signer to use.
@@ -414,9 +413,9 @@ func (s Transactions) GetRlp(i int) []byte {
 	return enc
 }
 
-// TxDifference returns a new set t which is the difference between a to b.
-func TxDifference(a, b Transactions) (keep Transactions) {
-	keep = make(Transactions, 0, len(a))
+// TxDifference returns a new set which is the difference between a and b.
+func TxDifference(a, b Transactions) Transactions {
+	keep := make(Transactions, 0, len(a))
 
 	remove := make(map[common.Hash]struct{})
 	for _, tx := range b {
@@ -479,8 +478,11 @@ type TransactionsByPriceAndNonce struct {
 // It also classifies special txs and normal txs
 func NewTransactionsByPriceAndNonce(signer Signer, txs map[common.Address]Transactions, signers map[common.Address]struct{}) (*TransactionsByPriceAndNonce, Transactions) {
 	// Initialize a price based heap with the head transactions
-	heads := TxByPrice{}
+	heads := make(TxByPrice, 0, len(txs))
 	specialTxs := Transactions{}
+	// for from, accTxs := range txs {
+	// 	heads = append(heads, accTxs[0])
+		// Ensure the sender address is from the signer
 	for _, accTxs := range txs {
 		from, _ := Sender(signer, accTxs[0])
 		var normalTxs Transactions
@@ -507,6 +509,12 @@ func NewTransactionsByPriceAndNonce(signer Signer, txs map[common.Address]Transa
 			// Ensure the sender address is from the signer
 			txs[from] = normalTxs[1:]
 		}
+		// TODO : Check later
+		// acc, _ := Sender(signer, accTxs[0])
+		// txs[acc] = accTxs[1:]
+		// if from != acc {
+		// 	delete(txs, from)
+		// }
 	}
 	heap.Init(&heads)
 

@@ -45,6 +45,30 @@ func (self *FDUsage) Get() error {
 	})
 }
 
+func (self *HugeTLBPages) Get() error {
+	table, err := parseMeminfo()
+	if err != nil {
+		return err
+	}
+
+	self.Total, _ = table["HugePages_Total"]
+	self.Free, _ = table["HugePages_Free"]
+	self.Reserved, _ = table["HugePages_Rsvd"]
+	self.Surplus, _ = table["HugePages_Surp"]
+	self.DefaultSize, _ = table["Hugepagesize"]
+
+	if totalSize, found := table["Hugetlb"]; found {
+		self.TotalAllocatedSize = totalSize
+	} else {
+		// If Hugetlb is not present, or huge pages of different sizes
+		// are used, this figure can be unaccurate.
+		// TODO (jsoriano): Extract information from /sys/kernel/mm/hugepages too
+		self.TotalAllocatedSize = (self.Total - self.Free + self.Reserved) * self.DefaultSize
+	}
+
+	return nil
+}
+
 func (self *ProcFDUsage) Get(pid int) error {
 	err := readFile(procFileName(pid, "limits"), func(line string) bool {
 		if strings.HasPrefix(line, "Max open files") {

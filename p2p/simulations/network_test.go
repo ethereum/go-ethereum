@@ -41,7 +41,8 @@ func TestNetworkSimulation(t *testing.T) {
 	nodeCount := 20
 	ids := make([]discover.NodeID, nodeCount)
 	for i := 0; i < nodeCount; i++ {
-		node, err := network.NewNode()
+		conf := adapters.RandomNodeConfig()
+		node, err := network.NewNodeWithConfig(conf)
 		if err != nil {
 			t.Fatalf("error creating node: %s", err)
 		}

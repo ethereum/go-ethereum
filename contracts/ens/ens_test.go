@@ -55,7 +55,7 @@ func TestENS(t *testing.T) {
 	if err != nil {
 		t.Fatalf("can't deploy resolver: %v", err)
 	}
-	if _, err := ens.SetResolver(ensNode(name), resolverAddr); err != nil {
+	if _, err := ens.SetResolver(EnsNode(name), resolverAddr); err != nil {
 		t.Fatalf("can't set resolver: %v", err)
 	}
 	contractBackend.Commit()

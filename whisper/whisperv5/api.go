@@ -32,10 +32,6 @@ import (
 	"github.com/ethereum/go-ethereum/rpc"
 )
 
-const (
-	filterTimeout = 300 // filters are considered timeout out after filterTimeout seconds
-)
-
 var (
 	ErrSymAsym              = errors.New("specify either a symmetric or an asymmetric key")
 	ErrInvalidSymmetricKey  = errors.New("invalid symmetric key")
@@ -93,7 +89,7 @@ func (api *PublicWhisperAPI) SetMaxMessageSize(ctx context.Context, size uint32)
 	return true, api.w.SetMaxMessageSize(size)
 }
 
-// SetMinPow sets the minimum PoW for a message before it is accepted.
+// SetMinPoW sets the minimum PoW for a message before it is accepted.
 func (api *PublicWhisperAPI) SetMinPoW(ctx context.Context, pow float64) (bool, error) {
 	return true, api.w.SetMinimumPoW(pow)
 }
@@ -146,7 +142,7 @@ func (api *PublicWhisperAPI) GetPublicKey(ctx context.Context, id string) (hexut
 	return crypto.FromECDSAPub(&key.PublicKey), nil
 }
 
-// GetPublicKey returns the private key associated with the given key. The key is the hex
+// GetPrivateKey returns the private key associated with the given key. The key is the hex
 // encoded representation of a key in the form specified in section 4.3.6 of ANSI X9.62.
 func (api *PublicWhisperAPI) GetPrivateKey(ctx context.Context, id string) (hexutil.Bytes, error) {
 	key, err := api.w.GetPrivateKey(id)
@@ -256,8 +252,7 @@ func (api *PublicWhisperAPI) Post(ctx context.Context, req NewMessage) (bool, er
 
 	// Set asymmetric key that is used to encrypt the message
 	if pubKeyGiven {
-		params.Dst = crypto.ToECDSAPub(req.PublicKey)
-		if !ValidatePublicKey(params.Dst) {
+		if params.Dst, err = crypto.UnmarshalPubkey(req.PublicKey); err != nil {
 			return false, ErrInvalidPublicKey
 		}
 	}
@@ -333,8 +328,7 @@ func (api *PublicWhisperAPI) Messages(ctx context.Context, crit Criteria) (*rpc.
 	}
 
 	if len(crit.Sig) > 0 {
-		filter.Src = crypto.ToECDSAPub(crit.Sig)
-		if !ValidatePublicKey(filter.Src) {
+		if filter.Src, err = crypto.UnmarshalPubkey(crit.Sig); err != nil {
 			return nil, ErrInvalidSigningPubKey
 		}
 	}
@@ -517,8 +511,7 @@ func (api *PublicWhisperAPI) NewMessageFilter(req Criteria) (string, error) {
 	}
 
 	if len(req.Sig) > 0 {
-		src = crypto.ToECDSAPub(req.Sig)
-		if !ValidatePublicKey(src) {
+		if src, err = crypto.UnmarshalPubkey(req.Sig); err != nil {
 			return "", ErrInvalidSigningPubKey
 		}
 	}

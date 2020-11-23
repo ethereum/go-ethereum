@@ -47,10 +47,8 @@ type Method struct {
 // Please note that "int" is substitute for its canonical representation "int256"
 func (method Method) Sig() string {
 	types := make([]string, len(method.Inputs))
-	i := 0
-	for _, input := range method.Inputs {
+	for i, input := range method.Inputs {
 		types[i] = input.Type.String()
-		i++
 	}
 	return fmt.Sprintf("%v(%v)", method.Name, strings.Join(types, ","))
 }

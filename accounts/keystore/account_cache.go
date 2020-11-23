@@ -27,10 +27,10 @@ import (
 	"sync"
 	"time"
 
+	mapset "github.com/deckarep/golang-set"
 	"github.com/ethereum/go-ethereum/accounts"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/log"
-	"gopkg.in/fatih/set.v0"
 )
 
 // Minimum amount of time between cache reloads. This limit applies if the platform does
@@ -79,7 +79,7 @@ func newAccountCache(keydir string) (*accountCache, chan struct{}) {
 		keydir: keydir,
 		byAddr: make(map[common.Address][]accounts.Account),
 		notify: make(chan struct{}, 1),
-		fileC:  fileCache{all: set.NewNonTS()},
+		fileC:  fileCache{all: mapset.NewThreadUnsafeSet()},
 	}
 	ac.watcher = newWatcher(ac)
 	return ac, ac.notify
@@ -237,7 +237,7 @@ func (ac *accountCache) scanAccounts() error {
 		log.Debug("Failed to reload keystore contents", "err", err)
 		return err
 	}
-	if creates.Size() == 0 && deletes.Size() == 0 && updates.Size() == 0 {
+	if creates.Cardinality() == 0 && deletes.Cardinality() == 0 && updates.Cardinality() == 0 {
 		return nil
 	}
 	// Create a helper method to scan the contents of the key files
@@ -272,15 +272,15 @@ func (ac *accountCache) scanAccounts() error {
 	// Process all the file diffs
 	start := time.Now()
 
-	for _, p := range creates.List() {
+	for _, p := range creates.ToSlice() {
 		if a := readAccount(p.(string)); a != nil {
 			ac.add(*a)
 		}
 	}
-	for _, p := range deletes.List() {
+	for _, p := range deletes.ToSlice() {
 		ac.deleteByFile(p.(string))
 	}
-	for _, p := range updates.List() {
+	for _, p := range updates.ToSlice() {
 		path := p.(string)
 		ac.deleteByFile(path)
 		if a := readAccount(path); a != nil {

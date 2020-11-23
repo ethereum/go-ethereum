@@ -24,6 +24,7 @@ import (
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core"
+	"github.com/ethereum/go-ethereum/core/rawdb"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/ethdb"
 )
@@ -112,7 +113,7 @@ type BlockRequest struct {
 
 // StoreResult stores the retrieved data in local database
 func (req *BlockRequest) StoreResult(db ethdb.Database) {
-	core.WriteBodyRLP(db, req.Hash, req.Number, req.Rlp)
+	rawdb.WriteBodyRLP(db, req.Hash, req.Number, req.Rlp)
 }
 
 // ReceiptsRequest is the ODR request type for retrieving block bodies
@@ -125,7 +126,7 @@ type ReceiptsRequest struct {
 
 // StoreResult stores the retrieved data in local database
 func (req *ReceiptsRequest) StoreResult(db ethdb.Database) {
-	core.WriteBlockReceipts(db, req.Hash, req.Number, req.Receipts)
+	rawdb.WriteReceipts(db, req.Hash, req.Number, req.Receipts)
 }
 
 // ChtRequest is the ODR request type for state/storage trie entries
@@ -140,11 +141,11 @@ type ChtRequest struct {
 
 // StoreResult stores the retrieved data in local database
 func (req *ChtRequest) StoreResult(db ethdb.Database) {
-	// if there is a canonical hash, there is a header too
-	core.WriteHeader(db, req.Header)
 	hash, num := req.Header.Hash(), req.Header.Number.Uint64()
-	core.WriteTd(db, hash, num, req.Td)
-	core.WriteCanonicalHash(db, hash, num)
+
+	rawdb.WriteHeader(db, req.Header)
+	rawdb.WriteTd(db, hash, num, req.Td)
+	rawdb.WriteCanonicalHash(db, hash, num)
 }
 
 // BloomRequest is the ODR request type for retrieving bloom filters from a CHT structure
@@ -161,11 +162,11 @@ type BloomRequest struct {
 // StoreResult stores the retrieved data in local database
 func (req *BloomRequest) StoreResult(db ethdb.Database) {
 	for i, sectionIdx := range req.SectionIdxList {
-		sectionHead := core.GetCanonicalHash(db, (sectionIdx+1)*BloomTrieFrequency-1)
+		sectionHead := rawdb.ReadCanonicalHash(db, (sectionIdx+1)*BloomTrieFrequency-1)
 		// if we don't have the canonical hash stored for this section head number, we'll still store it under
 		// a key with a zero sectionHead. GetBloomBits will look there too if we still don't have the canonical
 		// hash. In the unlikely case we've retrieved the section head hash since then, we'll just retrieve the
 		// bit vector again from the network.
-		core.WriteBloomBits(db, req.BitIdx, sectionIdx, sectionHead, req.BloomBits[i])
+		rawdb.WriteBloomBits(db, req.BitIdx, sectionIdx, sectionHead, req.BloomBits[i])
 	}
 }

@@ -26,6 +26,7 @@ type Sigar interface {
 	GetLoadAverage() (LoadAverage, error)
 	GetMem() (Mem, error)
 	GetSwap() (Swap, error)
+	GetHugeTLBPages(HugeTLBPages, error)
 	GetFileSystemUsage(string) (FileSystemUsage, error)
 	GetFDUsage() (FDUsage, error)
 	GetRusage(who int) (Rusage, error)
@@ -80,6 +81,15 @@ type Swap struct {
 	Total uint64
 	Used  uint64
 	Free  uint64
+}
+
+type HugeTLBPages struct {
+	Total              uint64
+	Free               uint64
+	Reserved           uint64
+	Surplus            uint64
+	DefaultSize        uint64
+	TotalAllocatedSize uint64
 }
 
 type CpuList struct {

@@ -379,12 +379,16 @@ func parseMeminfo() (map[string]uint64, error) {
 			return true // skip on errors
 		}
 
-		num := strings.TrimLeft(fields[1], " ")
-		val, err := strtoull(strings.Fields(num)[0])
+		valueUnit := strings.Fields(fields[1])
+		value, err := strtoull(valueUnit[0])
 		if err != nil {
 			return true // skip on errors
 		}
-		table[fields[0]] = val * 1024 //in bytes
+
+		if len(valueUnit) > 1 && valueUnit[1] == "kB" {
+			value *= 1024
+		}
+		table[fields[0]] = value
 
 		return true
 	})
@@ -420,8 +424,18 @@ func procFileName(pid int, name string) string {
 	return Procd + "/" + strconv.Itoa(pid) + "/" + name
 }
 
-func readProcFile(pid int, name string) ([]byte, error) {
+func readProcFile(pid int, name string) (content []byte, err error) {
 	path := procFileName(pid, name)
+
+	// Panics have been reported when reading proc files, let's recover and
+	// report the path if this happens
+	// See https://github.com/elastic/beats/issues/6692
+	defer func() {
+		if r := recover(); r != nil {
+			content = nil
+			err = fmt.Errorf("recovered panic when reading proc file '%s': %v", path, r)
+		}
+	}()
 	contents, err := ioutil.ReadFile(path)
 
 	if err != nil {
