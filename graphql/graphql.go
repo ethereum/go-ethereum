@@ -295,21 +295,21 @@ func (t *Transaction) Status(ctx context.Context) (*hexutil.Uint64, error) {
 	return &ret, nil
 }
 
-func (t *Transaction) GasUsed(ctx context.Context) (*hexutil.Uint64, error) {
+func (t *Transaction) GasUsed(ctx context.Context) (*Long, error) {
 	receipt, err := t.getReceipt(ctx)
 	if err != nil || receipt == nil {
 		return nil, err
 	}
-	ret := hexutil.Uint64(receipt.GasUsed)
+	ret := Long(receipt.GasUsed)
 	return &ret, nil
 }
 
-func (t *Transaction) CumulativeGasUsed(ctx context.Context) (*hexutil.Uint64, error) {
+func (t *Transaction) CumulativeGasUsed(ctx context.Context) (*Long, error) {
 	receipt, err := t.getReceipt(ctx)
 	if err != nil || receipt == nil {
 		return nil, err
 	}
-	ret := hexutil.Uint64(receipt.CumulativeGasUsed)
+	ret := Long(receipt.CumulativeGasUsed)
 	return &ret, nil
 }
 
@@ -805,7 +805,7 @@ type CallData struct {
 // CallResult encapsulates the result of an invocation of the `call` accessor.
 type CallResult struct {
 	data    hexutil.Bytes  // The return data from the call
-	gasUsed hexutil.Uint64 // The amount of gas used
+	gasUsed Long // The amount of gas used
 	status  hexutil.Uint64 // The return status of the call - 0 for failure or 1 for success.
 }
 
@@ -813,8 +813,8 @@ func (c *CallResult) Data() hexutil.Bytes {
 	return c.data
 }
 
-func (c *CallResult) GasUsed() hexutil.Uint64 {
-	return c.gasUsed
+func (c *CallResult) GasUsed() Long {
+	return Long(c.gasUsed)
 }
 
 func (c *CallResult) Status() hexutil.Uint64 {
@@ -841,22 +841,22 @@ func (b *Block) Call(ctx context.Context, args struct {
 
 	return &CallResult{
 		data:    result.ReturnData,
-		gasUsed: hexutil.Uint64(result.UsedGas),
+		gasUsed: Long(result.UsedGas),
 		status:  status,
 	}, nil
 }
 
 func (b *Block) EstimateGas(ctx context.Context, args struct {
 	Data ethapi.CallArgs
-}) (hexutil.Uint64, error) {
+}) (Long, error) {
 	if b.numberOrHash == nil {
 		_, err := b.resolveHeader(ctx)
 		if err != nil {
-			return hexutil.Uint64(0), err
+			return Long(0), err
 		}
 	}
 	gas, err := ethapi.DoEstimateGas(ctx, b.backend, args.Data, *b.numberOrHash, b.backend.RPCGasCap())
-	return gas, err
+	return Long(gas), err
 }
 
 type Pending struct {
@@ -911,7 +911,7 @@ func (p *Pending) Call(ctx context.Context, args struct {
 
 	return &CallResult{
 		data:    result.ReturnData,
-		gasUsed: hexutil.Uint64(result.UsedGas),
+		gasUsed: Long(result.UsedGas),
 		status:  status,
 	}, nil
 }
@@ -920,7 +920,6 @@ func (p *Pending) EstimateGas(ctx context.Context, args struct {
 	Data ethapi.CallArgs
 }) (Long, error) {
 	pendingBlockNr := rpc.BlockNumberOrHashWithNumber(rpc.PendingBlockNumber)
-
 	long, err := ethapi.DoEstimateGas(ctx, p.backend, args.Data, pendingBlockNr, p.backend.RPCGasCap())
 	return Long(long), err
 }
