@@ -71,3 +71,9 @@ collections:
     caption: Whisper
     sidebar_index: 8
     frontpage: _whisper/Whisper-Overview.md
+  vulnerabilities:
+    output: true
+    permalink: docs/:collection/:slug
+    caption: Vulnerabilities
+    sidebar_index: 9
+    frontpage: _vulnerabilies/vulnerabilities.md
