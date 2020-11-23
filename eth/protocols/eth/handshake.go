@@ -95,6 +95,11 @@ func (p *Peer) Handshake(network uint64, td *big.Int, head common.Hash, genesis 
 	default:
 		panic(fmt.Sprintf("unsupported eth protocol version: %d", p.version))
 	}
+	// TD at mainnet block #7753254 is 76 bits. If it becomes 100 million times
+	// larger, it will still fit within 100 bits
+	if tdlen := p.td.BitLen(); tdlen > 100 {
+		return fmt.Errorf("too large block TD: bitlen %d", tdlen)
+	}
 	return nil
 }
 
