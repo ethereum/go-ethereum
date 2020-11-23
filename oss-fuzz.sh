@@ -37,6 +37,13 @@ function compile_fuzzer {
         $CXX $CXXFLAGS $LIB_FUZZING_ENGINE $WORK/$fuzzer.a -o $OUT/$fuzzer && \
         echo "Second stage built ok" )
 
+        ## Check if there exists a seed corpus file
+        corpusfile="$path/testdata/$fuzzer_seed_corpus.zip"
+        if [ -f $corpusfile ]
+        then
+          cp $corpusfile $OUT/
+          echo "Found seed corpus: $corpusfile"
+        fi
 }
 
 compile_fuzzer common/bitutil  Fuzz      fuzzBitutilCompress
@@ -51,15 +58,15 @@ compile_fuzzer tests/fuzzers/rlp        Fuzz fuzzRlp
 compile_fuzzer tests/fuzzers/trie       Fuzz fuzzTrie
 compile_fuzzer tests/fuzzers/stacktrie  Fuzz fuzzStackTrie
 
-compile_fuzzer tests/fuzzers/bls12381  FuzzG1Add fuzzG1Add
-compile_fuzzer tests/fuzzers/bls12381  FuzzG1Mul fuzzG1Mul
-compile_fuzzer tests/fuzzers/bls12381  FuzzG1MultiExp fuzzG1MultiExp
-compile_fuzzer tests/fuzzers/bls12381  FuzzG2Add fuzzG2Add
-compile_fuzzer tests/fuzzers/bls12381  FuzzG2Mul fuzzG2Mul
-compile_fuzzer tests/fuzzers/bls12381  FuzzG2MultiExp fuzzG2MultiExp
-compile_fuzzer tests/fuzzers/bls12381  FuzzPairing fuzzPairing
-compile_fuzzer tests/fuzzers/bls12381  FuzzMapG1 fuzzMapG1
-compile_fuzzer tests/fuzzers/bls12381  FuzzMapG2 fuzzMapG2
+compile_fuzzer tests/fuzzers/bls12381  FuzzG1Add fuzz_g1_add
+compile_fuzzer tests/fuzzers/bls12381  FuzzG1Mul fuzz_g1_mul
+compile_fuzzer tests/fuzzers/bls12381  FuzzG1MultiExp fuzz_g1_multiexp
+compile_fuzzer tests/fuzzers/bls12381  FuzzG2Add fuzz_g2_add
+compile_fuzzer tests/fuzzers/bls12381  FuzzG2Mul fuzz_g2_mul
+compile_fuzzer tests/fuzzers/bls12381  FuzzG2MultiExp fuzz_g2_multiexp
+compile_fuzzer tests/fuzzers/bls12381  FuzzPairing fuzz_pairing
+compile_fuzzer tests/fuzzers/bls12381  FuzzMapG1 fuzz_map_g1
+compile_fuzzer tests/fuzzers/bls12381  FuzzMapG2 fuzz_map_g2
 
 # This doesn't work very well @TODO
 #compile_fuzzertests/fuzzers/abi Fuzz fuzzAbi
