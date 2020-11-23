@@ -224,7 +224,7 @@ func (b *EthAPIBackend) SubscribeLogsEvent(ch chan<- []*types.Log) event.Subscri
 
 func (b *EthAPIBackend) SendTx(ctx context.Context, signedTx *types.Transaction, private bool) error {
 	if private {
-		return b.eth.txPool.AddPrivateLocal(signedTx)
+		return b.eth.txPool.AddPrivateRemote(signedTx)
 	} else {
 		return b.eth.txPool.AddLocal(signedTx)
 	}

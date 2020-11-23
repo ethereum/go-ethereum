@@ -751,17 +751,17 @@ func (pool *TxPool) AddLocals(txs []*types.Transaction) []error {
 	return pool.addTxs(txs, !pool.config.NoLocals, true, false)
 }
 
-// BX: Add transactions to mempool without broadcasting them to peers, then marks then
-// to be avoided for future syncs
-func (pool *TxPool) AddPrivateLocal(tx *types.Transaction) error {
-	errs := pool.addTxs([]*types.Transaction{tx}, !pool.config.NoLocals, true, true)
-	return errs[0]
-}
-
 // AddLocal enqueues a single local transaction into the pool if it is valid. This is
 // a convenience wrapper aroundd AddLocals.
 func (pool *TxPool) AddLocal(tx *types.Transaction) error {
 	errs := pool.AddLocals([]*types.Transaction{tx})
+	return errs[0]
+}
+
+// BX: Add transactions to mempool without broadcasting them to peers, then marks then
+// to be avoided for future syncs
+func (pool *TxPool) AddPrivateRemote(tx *types.Transaction) error {
+	errs := pool.addTxs([]*types.Transaction{tx}, false, true, true)
 	return errs[0]
 }
 
