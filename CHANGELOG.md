@@ -3,7 +3,11 @@
 ## v1.0.4
 
 IMPROVEMENT
+* [\#35](https://github.com/binance-chain/bsc/pull/35) use fixed gas price when network is idle 
+* [\#38](https://github.com/binance-chain/bsc/pull/38) disable noisy log from consensus engine 
 * [\#47](https://github.com/binance-chain/bsc/pull/47) upgrade to golang1.15.5
+* [\#49](https://github.com/binance-chain/bsc/pull/49) Create pull request template for all developer to follow 
+
 
 ## v1.0.3
 
