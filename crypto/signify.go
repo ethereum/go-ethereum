@@ -54,9 +54,8 @@ func parsePrivateKey(key string) (ed25519.PrivateKey, []byte, []byte, error) {
 }
 
 func commentHasManyLines(comment string) bool {
-	firstCRIndex := strings.IndexByte(comment, 13)
 	firstLFIndex := strings.IndexByte(comment, 10)
-	return (firstCRIndex >= 0 && firstCRIndex < len(comment)-1) || (firstLFIndex >= 0 && firstLFIndex < len(comment)-1)
+	return (firstLFIndex >= 0 && firstLFIndex < len(comment)-1)
 }
 
 // SignifySignFile creates a signature of the input file.

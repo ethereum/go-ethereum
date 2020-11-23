@@ -153,6 +153,55 @@ func TestSignifyTrustedCommentTooManyLines(t *testing.T) {
 	}
 }
 
+func TestSignifyTrustedCommentTooManyLinesLF(t *testing.T) {
+	tmpFile, err := ioutil.TempFile("", "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer os.Remove(tmpFile.Name())
+	defer tmpFile.Close()
+
+	rand.Seed(time.Now().UnixNano())
+
+	data := make([]byte, 1024)
+	rand.Read(data)
+	tmpFile.Write(data)
+
+	if err = tmpFile.Close(); err != nil {
+		t.Fatal(err)
+	}
+
+	err = SignifySignFile(tmpFile.Name(), tmpFile.Name()+".sig", testSecKey, "crois\rsants", "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer os.Remove(tmpFile.Name() + ".sig")
+
+	// if signify-openbsd is present, check the signature.
+	// signify-openbsd will be present in CI.
+	if runtime.GOOS == "linux" {
+		cmd := exec.Command("which", "signify-openbsd")
+		if err = cmd.Run(); err == nil {
+			// Write the public key into the file to pass it as
+			// an argument to signify-openbsd
+			pubKeyFile, err := ioutil.TempFile("", "")
+			if err != nil {
+				t.Fatal(err)
+			}
+			defer os.Remove(pubKeyFile.Name())
+			defer pubKeyFile.Close()
+			pubKeyFile.WriteString("untrusted comment: signify public key\n")
+			pubKeyFile.WriteString(testPubKey)
+			pubKeyFile.WriteString("\n")
+
+			cmd := exec.Command("signify-openbsd", "-V", "-p", pubKeyFile.Name(), "-x", tmpFile.Name()+".sig", "-m", tmpFile.Name())
+			if output, err := cmd.CombinedOutput(); err != nil {
+				t.Fatalf("could not verify the file: %v, output: \n%s", err, output)
+			}
+		}
+	}
+}
+
 func TestSignifyTrustedCommentEmpty(t *testing.T) {
 	tmpFile, err := ioutil.TempFile("", "")
 	if err != nil {
