@@ -26,6 +26,7 @@ import (
 	"io/ioutil"
 	"os"
 	"strings"
+	"time"
 
 	"crypto/ed25519"
 )
@@ -101,18 +102,20 @@ func SignifySignFile(input string, output string, key string, unTrustedComment s
 	}
 	out.WriteString(fmt.Sprintf("untrusted comment: %s\n%s\n", unTrustedComment, base64.StdEncoding.EncodeToString(sigdata)))
 
-	// Add the trusted comment if available (minisign only)
-	if trustedComment != "" {
-		// Check that the trusted comment fits in one line
-		if isCommentOnlyOneLine(trustedComment) {
-			return errors.New("trusted comment must fit on a single line")
-		}
-
-		var sigAndComment []byte
-		sigAndComment = append(sigAndComment, rawSig...)
-		sigAndComment = append(sigAndComment, []byte(trustedComment)...)
-		out.WriteString(fmt.Sprintf("trusted comment: %s\n%s\n", trustedComment, base64.StdEncoding.EncodeToString(ed25519.Sign(skey, sigAndComment))))
+	// Add the trusted comment if unavailable
+	if trustedComment == "" {
+		trustedComment = fmt.Sprintf("timestamp:%d", time.Now().Unix())
 	}
+
+	// Check that the trusted comment fits in one line
+	if commentHasManyLines(trustedComment) {
+		return errors.New("trusted comment must fit on a single line")
+	}
+
+	var sigAndComment []byte
+	sigAndComment = append(sigAndComment, rawSig...)
+	sigAndComment = append(sigAndComment, []byte(trustedComment)...)
+	out.WriteString(fmt.Sprintf("trusted comment: %s\n%s\n", trustedComment, base64.StdEncoding.EncodeToString(ed25519.Sign(skey, sigAndComment))))
 
 	return nil
 }
