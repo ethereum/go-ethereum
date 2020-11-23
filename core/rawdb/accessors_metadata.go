@@ -17,7 +17,9 @@
 package rawdb
 
 import (
+	"encoding/binary"
 	"encoding/json"
+	"time"
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/ethdb"
@@ -77,5 +79,32 @@ func WriteChainConfig(db ethdb.KeyValueWriter, hash common.Hash, cfg *params.Cha
 	}
 	if err := db.Put(configKey(hash), data); err != nil {
 		log.Crit("Failed to store chain config", "err", err)
+	}
+}
+
+// ReadUncleanShutdowMarker reads the unclean shutdown marker
+func ReadUncleanShutdowMarker(db ethdb.Reader) (int64, error) {
+	data, err := db.Get(uncleanShutdownPrefix)
+	if err != nil {
+		return 0, err
+	}
+	return int64(binary.BigEndian.Uint64(data)), nil
+}
+
+// WriteUncleanShutdowMarker writes the unclean shutdown marker
+func WriteUncleanShutdowMarker(db ethdb.KeyValueWriter) error {
+	var data = make([]byte, 8)
+	binary.BigEndian.PutUint64(data, uint64(time.Now().Unix()))
+	if err := db.Put(uncleanShutdownPrefix, data); err != nil {
+		log.Warn("Failed to write unclean-shutdown marker", "err", err)
+		return err
+	}
+	return nil
+}
+
+// ClearUncleanShutdowMarker removes the unclean shutdown marker
+func ClearUncleanShutdowMarker(db ethdb.KeyValueWriter) {
+	if err := db.Delete(uncleanShutdownPrefix); err != nil {
+		log.Warn("Failed to remove unclean-shutdown marker", "err", err)
 	}
 }
