@@ -165,28 +165,13 @@ func TestTransactionPriceNonceSort(t *testing.T) {
 				t.Errorf("invalid nonce ordering: tx #%d (A=%x N=%v) < tx #%d (A=%x N=%v)", i, fromi[:4], txi.Nonce(), i+j, fromj[:4], txj.Nonce())
 			}
 		}
-		// Find the previous and next nonce of this account
-		prev, next := i-1, i+1
-		for j := i - 1; j >= 0; j-- {
-			if fromj, _ := Sender(signer, txs[j]); fromi == fromj {
-				prev = j
-				break
-			}
-		}
-		for j := i + 1; j < len(txs); j++ {
-			if fromj, _ := Sender(signer, txs[j]); fromi == fromj {
-				next = j
-				break
-			}
-		}
-		// Make sure that in between the neighbor nonces, the transaction is correctly positioned price wise
-		for j := prev + 1; j < next; j++ {
-			fromj, _ := Sender(signer, txs[j])
-			if j < i && txs[j].GasPrice().Cmp(txi.GasPrice()) < 0 {
-				t.Errorf("invalid gasprice ordering: tx #%d (A=%x P=%v) < tx #%d (A=%x P=%v)", j, fromj[:4], txs[j].GasPrice(), i, fromi[:4], txi.GasPrice())
-			}
-			if j > i && txs[j].GasPrice().Cmp(txi.GasPrice()) > 0 {
-				t.Errorf("invalid gasprice ordering: tx #%d (A=%x P=%v) > tx #%d (A=%x P=%v)", j, fromj[:4], txs[j].GasPrice(), i, fromi[:4], txi.GasPrice())
+
+		// If the next tx has different from account, the price must be lower than the current one
+		if i+1 < len(txs) {
+			next := txs[i+1]
+			fromNext, _ := Sender(signer, next)
+			if fromi != fromNext && txi.GasPrice().Cmp(next.GasPrice()) < 0 {
+				t.Errorf("invalid gasprice ordering: tx #%d (A=%x P=%v) < tx #%d (A=%x P=%v)", i, fromi[:4], txi.GasPrice(), i+1, fromNext[:4], next.GasPrice())
 			}
 		}
 	}

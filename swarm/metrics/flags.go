@@ -20,9 +20,9 @@ import (
 	"time"
 
 	"github.com/ethereum/go-ethereum/cmd/utils"
-	"github.com/ethereum/go-ethereum/log"
 	gethmetrics "github.com/ethereum/go-ethereum/metrics"
 	"github.com/ethereum/go-ethereum/metrics/influxdb"
+	"github.com/ethereum/go-ethereum/swarm/log"
 	"gopkg.in/urfave/cli.v1"
 )
 
@@ -80,6 +80,9 @@ func Setup(ctx *cli.Context) {
 			password     = ctx.GlobalString(metricsInfluxDBPasswordFlag.Name)
 			hosttag      = ctx.GlobalString(metricsInfluxDBHostTagFlag.Name)
 		)
+
+		// Start system runtime metrics collection
+		go gethmetrics.CollectProcessMetrics(2 * time.Second)
 
 		if enableExport {
 			log.Info("Enabling swarm metrics export to InfluxDB")

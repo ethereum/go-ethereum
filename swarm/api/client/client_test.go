@@ -25,28 +25,47 @@ import (
 	"sort"
 	"testing"
 
+	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/swarm/api"
+	swarmhttp "github.com/ethereum/go-ethereum/swarm/api/http"
+	"github.com/ethereum/go-ethereum/swarm/multihash"
+	"github.com/ethereum/go-ethereum/swarm/storage/mru"
 	"github.com/ethereum/go-ethereum/swarm/testutil"
 )
 
+func serverFunc(api *api.API) testutil.TestServer {
+	return swarmhttp.NewServer(api, "")
+}
+
 // TestClientUploadDownloadRaw test uploading and downloading raw data to swarm
 func TestClientUploadDownloadRaw(t *testing.T) {
-	srv := testutil.NewTestSwarmServer(t)
+	testClientUploadDownloadRaw(false, t)
+}
+func TestClientUploadDownloadRawEncrypted(t *testing.T) {
+	testClientUploadDownloadRaw(true, t)
+}
+
+func testClientUploadDownloadRaw(toEncrypt bool, t *testing.T) {
+	srv := testutil.NewTestSwarmServer(t, serverFunc)
 	defer srv.Close()
 
 	client := NewClient(srv.URL)
 
 	// upload some raw data
 	data := []byte("foo123")
-	hash, err := client.UploadRaw(bytes.NewReader(data), int64(len(data)))
+	hash, err := client.UploadRaw(bytes.NewReader(data), int64(len(data)), toEncrypt)
 	if err != nil {
 		t.Fatal(err)
 	}
 
 	// check we can download the same data
-	res, err := client.DownloadRaw(hash)
+	res, isEncrypted, err := client.DownloadRaw(hash)
 	if err != nil {
 		t.Fatal(err)
+	}
+	if isEncrypted != toEncrypt {
+		t.Fatalf("Expected encyption status %v got %v", toEncrypt, isEncrypted)
 	}
 	defer res.Close()
 	gotData, err := ioutil.ReadAll(res)
@@ -61,7 +80,15 @@ func TestClientUploadDownloadRaw(t *testing.T) {
 // TestClientUploadDownloadFiles test uploading and downloading files to swarm
 // manifests
 func TestClientUploadDownloadFiles(t *testing.T) {
-	srv := testutil.NewTestSwarmServer(t)
+	testClientUploadDownloadFiles(false, t)
+}
+
+func TestClientUploadDownloadFilesEncrypted(t *testing.T) {
+	testClientUploadDownloadFiles(true, t)
+}
+
+func testClientUploadDownloadFiles(toEncrypt bool, t *testing.T) {
+	srv := testutil.NewTestSwarmServer(t, serverFunc)
 	defer srv.Close()
 
 	client := NewClient(srv.URL)
@@ -74,7 +101,7 @@ func TestClientUploadDownloadFiles(t *testing.T) {
 				Size:        int64(len(data)),
 			},
 		}
-		hash, err := client.Upload(file, manifest)
+		hash, err := client.Upload(file, manifest, toEncrypt)
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -159,7 +186,7 @@ func newTestDirectory(t *testing.T) string {
 // TestClientUploadDownloadDirectory tests uploading and downloading a
 // directory of files to a swarm manifest
 func TestClientUploadDownloadDirectory(t *testing.T) {
-	srv := testutil.NewTestSwarmServer(t)
+	srv := testutil.NewTestSwarmServer(t, serverFunc)
 	defer srv.Close()
 
 	dir := newTestDirectory(t)
@@ -168,7 +195,7 @@ func TestClientUploadDownloadDirectory(t *testing.T) {
 	// upload the directory
 	client := NewClient(srv.URL)
 	defaultPath := filepath.Join(dir, testDirFiles[0])
-	hash, err := client.UploadDirectory(dir, defaultPath, "")
+	hash, err := client.UploadDirectory(dir, defaultPath, "", false)
 	if err != nil {
 		t.Fatalf("error uploading directory: %s", err)
 	}
@@ -217,14 +244,22 @@ func TestClientUploadDownloadDirectory(t *testing.T) {
 
 // TestClientFileList tests listing files in a swarm manifest
 func TestClientFileList(t *testing.T) {
-	srv := testutil.NewTestSwarmServer(t)
+	testClientFileList(false, t)
+}
+
+func TestClientFileListEncrypted(t *testing.T) {
+	testClientFileList(true, t)
+}
+
+func testClientFileList(toEncrypt bool, t *testing.T) {
+	srv := testutil.NewTestSwarmServer(t, serverFunc)
 	defer srv.Close()
 
 	dir := newTestDirectory(t)
 	defer os.RemoveAll(dir)
 
 	client := NewClient(srv.URL)
-	hash, err := client.UploadDirectory(dir, "", "")
+	hash, err := client.UploadDirectory(dir, "", "", toEncrypt)
 	if err != nil {
 		t.Fatalf("error uploading directory: %s", err)
 	}
@@ -275,7 +310,7 @@ func TestClientFileList(t *testing.T) {
 // TestClientMultipartUpload tests uploading files to swarm using a multipart
 // upload
 func TestClientMultipartUpload(t *testing.T) {
-	srv := testutil.NewTestSwarmServer(t)
+	srv := testutil.NewTestSwarmServer(t, serverFunc)
 	defer srv.Close()
 
 	// define an uploader which uploads testDirFiles with some data
@@ -322,4 +357,160 @@ func TestClientMultipartUpload(t *testing.T) {
 	for _, file := range testDirFiles {
 		checkDownloadFile(file)
 	}
+}
+
+func newTestSigner() (*mru.GenericSigner, error) {
+	privKey, err := crypto.HexToECDSA("deadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeef")
+	if err != nil {
+		return nil, err
+	}
+	return mru.NewGenericSigner(privKey), nil
+}
+
+// test the transparent resolving of multihash resource types with bzz:// scheme
+//
+// first upload data, and store the multihash to the resulting manifest in a resource update
+// retrieving the update with the multihash should return the manifest pointing directly to the data
+// and raw retrieve of that hash should return the data
+func TestClientCreateResourceMultihash(t *testing.T) {
+
+	signer, _ := newTestSigner()
+
+	srv := testutil.NewTestSwarmServer(t, serverFunc)
+	client := NewClient(srv.URL)
+	defer srv.Close()
+
+	// add the data our multihash aliased manifest will point to
+	databytes := []byte("bar")
+
+	swarmHash, err := client.UploadRaw(bytes.NewReader(databytes), int64(len(databytes)), false)
+	if err != nil {
+		t.Fatalf("Error uploading raw test data: %s", err)
+	}
+
+	s := common.FromHex(swarmHash)
+	mh := multihash.ToMultihash(s)
+
+	// our mutable resource "name"
+	resourceName := "foo.eth"
+
+	createRequest, err := mru.NewCreateUpdateRequest(&mru.ResourceMetadata{
+		Name:      resourceName,
+		Frequency: 13,
+		StartTime: srv.GetCurrentTime(),
+		Owner:     signer.Address(),
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	createRequest.SetData(mh, true)
+	if err := createRequest.Sign(signer); err != nil {
+		t.Fatalf("Error signing update: %s", err)
+	}
+
+	resourceManifestHash, err := client.CreateResource(createRequest)
+
+	if err != nil {
+		t.Fatalf("Error creating resource: %s", err)
+	}
+
+	correctManifestAddrHex := "6d3bc4664c97d8b821cb74bcae43f592494fb46d2d9cd31e69f3c7c802bbbd8e"
+	if resourceManifestHash != correctManifestAddrHex {
+		t.Fatalf("Response resource key mismatch, expected '%s', got '%s'", correctManifestAddrHex, resourceManifestHash)
+	}
+
+	reader, err := client.GetResource(correctManifestAddrHex)
+	if err != nil {
+		t.Fatalf("Error retrieving resource: %s", err)
+	}
+	defer reader.Close()
+	gotData, err := ioutil.ReadAll(reader)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !bytes.Equal(mh, gotData) {
+		t.Fatalf("Expected: %v, got %v", mh, gotData)
+	}
+
+}
+
+// TestClientCreateUpdateResource will check that mutable resources can be created and updated via the HTTP client.
+func TestClientCreateUpdateResource(t *testing.T) {
+
+	signer, _ := newTestSigner()
+
+	srv := testutil.NewTestSwarmServer(t, serverFunc)
+	client := NewClient(srv.URL)
+	defer srv.Close()
+
+	// set raw data for the resource
+	databytes := []byte("En un lugar de La Mancha, de cuyo nombre no quiero acordarme...")
+
+	// our mutable resource name
+	resourceName := "El Quijote"
+
+	createRequest, err := mru.NewCreateUpdateRequest(&mru.ResourceMetadata{
+		Name:      resourceName,
+		Frequency: 13,
+		StartTime: srv.GetCurrentTime(),
+		Owner:     signer.Address(),
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	createRequest.SetData(databytes, false)
+	if err := createRequest.Sign(signer); err != nil {
+		t.Fatalf("Error signing update: %s", err)
+	}
+
+	resourceManifestHash, err := client.CreateResource(createRequest)
+
+	correctManifestAddrHex := "cc7904c17b49f9679e2d8006fe25e87e3f5c2072c2b49cab50f15e544471b30a"
+	if resourceManifestHash != correctManifestAddrHex {
+		t.Fatalf("Response resource key mismatch, expected '%s', got '%s'", correctManifestAddrHex, resourceManifestHash)
+	}
+
+	reader, err := client.GetResource(correctManifestAddrHex)
+	if err != nil {
+		t.Fatalf("Error retrieving resource: %s", err)
+	}
+	defer reader.Close()
+	gotData, err := ioutil.ReadAll(reader)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !bytes.Equal(databytes, gotData) {
+		t.Fatalf("Expected: %v, got %v", databytes, gotData)
+	}
+
+	// define different data
+	databytes = []byte("... no ha mucho tiempo que vivía un hidalgo de los de lanza en astillero ...")
+
+	updateRequest, err := client.GetResourceMetadata(correctManifestAddrHex)
+	if err != nil {
+		t.Fatalf("Error retrieving update request template: %s", err)
+	}
+
+	updateRequest.SetData(databytes, false)
+	if err := updateRequest.Sign(signer); err != nil {
+		t.Fatalf("Error signing update: %s", err)
+	}
+
+	if err = client.UpdateResource(updateRequest); err != nil {
+		t.Fatalf("Error updating resource: %s", err)
+	}
+
+	reader, err = client.GetResource(correctManifestAddrHex)
+	if err != nil {
+		t.Fatalf("Error retrieving resource: %s", err)
+	}
+	defer reader.Close()
+	gotData, err = ioutil.ReadAll(reader)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !bytes.Equal(databytes, gotData) {
+		t.Fatalf("Expected: %v, got %v", databytes, gotData)
+	}
+
 }

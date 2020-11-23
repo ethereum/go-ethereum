@@ -68,4 +68,4 @@ export const styles = {
 	light: {
 		color: 'rgba(255, 255, 255, 0.54)',
 	},
-}
+};

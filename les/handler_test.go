@@ -26,6 +26,7 @@ import (
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/consensus/ethash"
 	"github.com/ethereum/go-ethereum/core"
+	"github.com/ethereum/go-ethereum/core/rawdb"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/eth/downloader"
@@ -50,8 +51,7 @@ func TestGetBlockHeadersLes1(t *testing.T) { testGetBlockHeaders(t, 1) }
 func TestGetBlockHeadersLes2(t *testing.T) { testGetBlockHeaders(t, 2) }
 
 func testGetBlockHeaders(t *testing.T, protocol int) {
-	db, _ := ethdb.NewMemDatabase()
-	pm := newTestProtocolManagerMust(t, false, downloader.MaxHashFetch+15, nil, nil, nil, db)
+	pm := newTestProtocolManagerMust(t, false, downloader.MaxHashFetch+15, nil, nil, nil, ethdb.NewMemDatabase())
 	bc := pm.blockchain.(*core.BlockChain)
 	peer, _ := newTestPeer(t, "peer", protocol, pm, true)
 	defer peer.close()
@@ -180,8 +180,7 @@ func TestGetBlockBodiesLes1(t *testing.T) { testGetBlockBodies(t, 1) }
 func TestGetBlockBodiesLes2(t *testing.T) { testGetBlockBodies(t, 2) }
 
 func testGetBlockBodies(t *testing.T, protocol int) {
-	db, _ := ethdb.NewMemDatabase()
-	pm := newTestProtocolManagerMust(t, false, downloader.MaxBlockFetch+15, nil, nil, nil, db)
+	pm := newTestProtocolManagerMust(t, false, downloader.MaxBlockFetch+15, nil, nil, nil, ethdb.NewMemDatabase())
 	bc := pm.blockchain.(*core.BlockChain)
 	peer, _ := newTestPeer(t, "peer", protocol, pm, true)
 	defer peer.close()
@@ -258,8 +257,7 @@ func TestGetCodeLes2(t *testing.T) { testGetCode(t, 2) }
 
 func testGetCode(t *testing.T, protocol int) {
 	// Assemble the test environment
-	db, _ := ethdb.NewMemDatabase()
-	pm := newTestProtocolManagerMust(t, false, 4, testChainGen, nil, nil, db)
+	pm := newTestProtocolManagerMust(t, false, 4, testChainGen, nil, nil, ethdb.NewMemDatabase())
 	bc := pm.blockchain.(*core.BlockChain)
 	peer, _ := newTestPeer(t, "peer", protocol, pm, true)
 	defer peer.close()
@@ -292,7 +290,7 @@ func TestGetReceiptLes2(t *testing.T) { testGetReceipt(t, 2) }
 
 func testGetReceipt(t *testing.T, protocol int) {
 	// Assemble the test environment
-	db, _ := ethdb.NewMemDatabase()
+	db := ethdb.NewMemDatabase()
 	pm := newTestProtocolManagerMust(t, false, 4, testChainGen, nil, nil, db)
 	bc := pm.blockchain.(*core.BlockChain)
 	peer, _ := newTestPeer(t, "peer", protocol, pm, true)
@@ -304,7 +302,7 @@ func testGetReceipt(t *testing.T, protocol int) {
 		block := bc.GetBlockByNumber(i)
 
 		hashes = append(hashes, block.Hash())
-		receipts = append(receipts, core.GetBlockReceipts(db, block.Hash(), block.NumberU64()))
+		receipts = append(receipts, rawdb.ReadReceipts(db, block.Hash(), block.NumberU64()))
 	}
 	// Send the hash request and verify the response
 	cost := peer.GetRequestCost(GetReceiptsMsg, len(hashes))
@@ -320,7 +318,7 @@ func TestGetProofsLes2(t *testing.T) { testGetProofs(t, 2) }
 
 func testGetProofs(t *testing.T, protocol int) {
 	// Assemble the test environment
-	db, _ := ethdb.NewMemDatabase()
+	db := ethdb.NewMemDatabase()
 	pm := newTestProtocolManagerMust(t, false, 4, testChainGen, nil, nil, db)
 	bc := pm.blockchain.(*core.BlockChain)
 	peer, _ := newTestPeer(t, "peer", protocol, pm, true)
@@ -383,7 +381,7 @@ func testGetCHTProofs(t *testing.T, protocol int) {
 		frequency = uint64(light.CHTFrequencyServer)
 	}
 	// Assemble the test environment
-	db, _ := ethdb.NewMemDatabase()
+	db := ethdb.NewMemDatabase()
 	pm := newTestProtocolManagerMust(t, false, int(frequency)+light.HelperTrieProcessConfirmations, testChainGen, nil, nil, db)
 	bc := pm.blockchain.(*core.BlockChain)
 	peer, _ := newTestPeer(t, "peer", protocol, pm, true)
@@ -451,7 +449,7 @@ func testGetCHTProofs(t *testing.T, protocol int) {
 // Tests that bloombits proofs can be correctly retrieved.
 func TestGetBloombitsProofs(t *testing.T) {
 	// Assemble the test environment
-	db, _ := ethdb.NewMemDatabase()
+	db := ethdb.NewMemDatabase()
 	pm := newTestProtocolManagerMust(t, false, light.BloomTrieFrequency+256, testChainGen, nil, nil, db)
 	bc := pm.blockchain.(*core.BlockChain)
 	peer, _ := newTestPeer(t, "peer", 2, pm, true)
@@ -490,7 +488,7 @@ func TestGetBloombitsProofs(t *testing.T) {
 }
 
 func TestTransactionStatusLes2(t *testing.T) {
-	db, _ := ethdb.NewMemDatabase()
+	db := ethdb.NewMemDatabase()
 	pm := newTestProtocolManagerMust(t, false, 0, nil, nil, nil, db)
 	chain := pm.blockchain.(*core.BlockChain)
 	config := core.DefaultTxPoolConfig
@@ -555,9 +553,9 @@ func TestTransactionStatusLes2(t *testing.T) {
 	}
 
 	// check if their status is included now
-	block1hash := core.GetCanonicalHash(db, 1)
-	test(tx1, false, txStatus{Status: core.TxStatusIncluded, Lookup: &core.TxLookupEntry{BlockHash: block1hash, BlockIndex: 1, Index: 0}})
-	test(tx2, false, txStatus{Status: core.TxStatusIncluded, Lookup: &core.TxLookupEntry{BlockHash: block1hash, BlockIndex: 1, Index: 1}})
+	block1hash := rawdb.ReadCanonicalHash(db, 1)
+	test(tx1, false, txStatus{Status: core.TxStatusIncluded, Lookup: &rawdb.TxLookupEntry{BlockHash: block1hash, BlockIndex: 1, Index: 0}})
+	test(tx2, false, txStatus{Status: core.TxStatusIncluded, Lookup: &rawdb.TxLookupEntry{BlockHash: block1hash, BlockIndex: 1, Index: 1}})
 
 	// create a reorg that rolls them back
 	gchain, _ = core.GenerateChain(params.TestChainConfig, chain.GetBlockByNumber(0), ethash.NewFaker(), db, 2, func(i int, block *core.BlockGen) {})

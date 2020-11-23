@@ -33,15 +33,15 @@ type Event struct {
 	Inputs    Arguments
 }
 
-func (event Event) String() string {
-	inputs := make([]string, len(event.Inputs))
-	for i, input := range event.Inputs {
+func (e Event) String() string {
+	inputs := make([]string, len(e.Inputs))
+	for i, input := range e.Inputs {
 		inputs[i] = fmt.Sprintf("%v %v", input.Name, input.Type)
 		if input.Indexed {
 			inputs[i] = fmt.Sprintf("%v indexed %v", input.Name, input.Type)
 		}
 	}
-	return fmt.Sprintf("event %v(%v)", event.Name, strings.Join(inputs, ", "))
+	return fmt.Sprintf("e %v(%v)", e.Name, strings.Join(inputs, ", "))
 }
 
 // Id returns the canonical representation of the event's signature used by the

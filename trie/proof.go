@@ -37,11 +37,11 @@ import (
 func (t *Trie) Prove(key []byte, fromLevel uint, proofDb ethdb.Putter) error {
 	// Collect all nodes on the path to key.
 	key = keybytesToHex(key)
-	nodes := []Node{}
+	nodes := []node{}
 	tn := t.root
 	for len(key) > 0 && tn != nil {
 		switch n := tn.(type) {
-		case *ShortNode:
+		case *shortNode:
 			if len(key) < len(n.Key) || !bytes.Equal(n.Key, key[:len(n.Key)]) {
 				// The trie doesn't contain the key.
 				tn = nil
@@ -50,11 +50,11 @@ func (t *Trie) Prove(key []byte, fromLevel uint, proofDb ethdb.Putter) error {
 				key = key[len(n.Key):]
 			}
 			nodes = append(nodes, n)
-		case *FullNode:
+		case *fullNode:
 			tn = n.Children[key[0]]
 			key = key[1:]
 			nodes = append(nodes, n)
-		case HashNode:
+		case hashNode:
 			var err error
 			tn, err = t.resolveHash(n, nil)
 			if err != nil {
@@ -71,7 +71,7 @@ func (t *Trie) Prove(key []byte, fromLevel uint, proofDb ethdb.Putter) error {
 		// if encoding doesn't work and we're not writing to any database.
 		n, _, _ = hasher.hashChildren(n, nil)
 		hn, _ := hasher.store(n, nil, false)
-		if hash, ok := hn.(HashNode); ok || i == 0 {
+		if hash, ok := hn.(hashNode); ok || i == 0 {
 			// If the node's database encoding is a hash (or is the
 			// root node), it becomes a proof element.
 			if fromLevel > 0 {
@@ -102,49 +102,49 @@ func (t *SecureTrie) Prove(key []byte, fromLevel uint, proofDb ethdb.Putter) err
 // VerifyProof checks merkle proofs. The given proof must contain the value for
 // key in a trie with the given root hash. VerifyProof returns an error if the
 // proof contains invalid trie nodes or the wrong value.
-func VerifyProof(rootHash common.Hash, key []byte, proofDb DatabaseReader) (value []byte, err error, nodes int) {
+func VerifyProof(rootHash common.Hash, key []byte, proofDb DatabaseReader) (value []byte, nodes int, err error) {
 	key = keybytesToHex(key)
 	wantHash := rootHash
 	for i := 0; ; i++ {
 		buf, _ := proofDb.Get(wantHash[:])
 		if buf == nil {
-			return nil, fmt.Errorf("proof node %d (hash %064x) missing", i, wantHash), i
+			return nil, i, fmt.Errorf("proof node %d (hash %064x) missing", i, wantHash)
 		}
 		n, err := decodeNode(wantHash[:], buf, 0)
 		if err != nil {
-			return nil, fmt.Errorf("bad proof node %d: %v", i, err), i
+			return nil, i, fmt.Errorf("bad proof node %d: %v", i, err)
 		}
 		keyrest, cld := get(n, key)
 		switch cld := cld.(type) {
 		case nil:
 			// The trie doesn't contain the key.
-			return nil, nil, i
-		case HashNode:
+			return nil, i, nil
+		case hashNode:
 			key = keyrest
 			copy(wantHash[:], cld)
-		case ValueNode:
-			return cld, nil, i + 1
+		case valueNode:
+			return cld, i + 1, nil
 		}
 	}
 }
 
-func get(tn Node, key []byte) ([]byte, Node) {
+func get(tn node, key []byte) ([]byte, node) {
 	for {
 		switch n := tn.(type) {
-		case *ShortNode:
+		case *shortNode:
 			if len(key) < len(n.Key) || !bytes.Equal(n.Key, key[:len(n.Key)]) {
 				return nil, nil
 			}
 			tn = n.Val
 			key = key[len(n.Key):]
-		case *FullNode:
+		case *fullNode:
 			tn = n.Children[key[0]]
 			key = key[1:]
-		case HashNode:
+		case hashNode:
 			return key, n
 		case nil:
 			return key, nil
-		case ValueNode:
+		case valueNode:
 			return nil, n
 		default:
 			panic(fmt.Sprintf("%T: invalid node: %v", tn, tn))

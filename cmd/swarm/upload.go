@@ -40,12 +40,13 @@ func upload(ctx *cli.Context) {
 	args := ctx.Args()
 	var (
 		bzzapi       = strings.TrimRight(ctx.GlobalString(SwarmApiFlag.Name), "/")
-		recursive    = ctx.GlobalBool(SwarmRecursiveUploadFlag.Name)
+		recursive    = ctx.GlobalBool(SwarmRecursiveFlag.Name)
 		wantManifest = ctx.GlobalBoolT(SwarmWantManifestFlag.Name)
 		defaultPath  = ctx.GlobalString(SwarmUploadDefaultPath.Name)
 		fromStdin    = ctx.GlobalBool(SwarmUpFromStdinFlag.Name)
 		mimeType     = ctx.GlobalString(SwarmUploadMimeType.Name)
 		client       = swarm.NewClient(bzzapi)
+		toEncrypt    = ctx.Bool(SwarmEncryptedFlag.Name)
 		file         string
 	)
 
@@ -76,7 +77,7 @@ func upload(ctx *cli.Context) {
 			utils.Fatalf("Error opening file: %s", err)
 		}
 		defer f.Close()
-		hash, err := client.UploadRaw(f, f.Size)
+		hash, err := client.UploadRaw(f, f.Size, toEncrypt)
 		if err != nil {
 			utils.Fatalf("Upload failed: %s", err)
 		}
@@ -97,7 +98,7 @@ func upload(ctx *cli.Context) {
 			if !recursive {
 				return "", errors.New("Argument is a directory and recursive upload is disabled")
 			}
-			return client.UploadDirectory(file, defaultPath, "")
+			return client.UploadDirectory(file, defaultPath, "", toEncrypt)
 		}
 	} else {
 		doUpload = func() (string, error) {
@@ -110,7 +111,7 @@ func upload(ctx *cli.Context) {
 				mimeType = detectMimeType(file)
 			}
 			f.ContentType = mimeType
-			return client.Upload(f, "")
+			return client.Upload(f, "", toEncrypt)
 		}
 	}
 	hash, err := doUpload()

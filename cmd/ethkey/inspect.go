@@ -60,7 +60,7 @@ make sure to use this feature with great caution!`,
 		}
 
 		// Decrypt key with passphrase.
-		passphrase := getPassPhrase(ctx, false)
+		passphrase := getPassphrase(ctx)
 		key, err := keystore.DecryptKey(keyjson, passphrase)
 		if err != nil {
 			utils.Fatalf("Error decrypting key: %v", err)

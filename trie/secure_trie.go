@@ -155,14 +155,19 @@ func (t *SecureTrie) Commit(onleaf LeafCallback) (root common.Hash, err error) {
 	return t.trie.Commit(onleaf)
 }
 
+// Hash returns the root hash of SecureTrie. It does not write to the
+// database and can be used even if the trie doesn't have one.
 func (t *SecureTrie) Hash() common.Hash {
 	return t.trie.Hash()
 }
 
+// Root returns the root hash of SecureTrie.
+// Deprecated: use Hash instead.
 func (t *SecureTrie) Root() []byte {
 	return t.trie.Root()
 }
 
+// Copy returns a copy of SecureTrie.
 func (t *SecureTrie) Copy() *SecureTrie {
 	cpy := *t
 	return &cpy

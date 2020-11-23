@@ -17,60 +17,259 @@
 package main
 
 import (
+	"bytes"
+	"flag"
+	"fmt"
 	"io"
 	"io/ioutil"
 	"net/http"
 	"os"
+	"path"
+	"path/filepath"
+	"strings"
 	"testing"
+	"time"
+
+	"github.com/ethereum/go-ethereum/log"
+	swarm "github.com/ethereum/go-ethereum/swarm/api/client"
+	colorable "github.com/mattn/go-colorable"
 )
+
+var loglevel = flag.Int("loglevel", 3, "verbosity of logs")
+
+func init() {
+	log.PrintOrigins(true)
+	log.Root().SetHandler(log.LvlFilterHandler(log.Lvl(*loglevel), log.StreamHandler(colorable.NewColorableStderr(), log.TerminalFormat(true))))
+}
 
 // TestCLISwarmUp tests that running 'swarm up' makes the resulting file
 // available from all nodes via the HTTP API
 func TestCLISwarmUp(t *testing.T) {
-	// start 3 node cluster
-	t.Log("starting 3 node cluster")
+	testCLISwarmUp(false, t)
+}
+func TestCLISwarmUpRecursive(t *testing.T) {
+	testCLISwarmUpRecursive(false, t)
+}
+
+// TestCLISwarmUpEncrypted tests that running 'swarm encrypted-up' makes the resulting file
+// available from all nodes via the HTTP API
+func TestCLISwarmUpEncrypted(t *testing.T) {
+	testCLISwarmUp(true, t)
+}
+func TestCLISwarmUpEncryptedRecursive(t *testing.T) {
+	testCLISwarmUpRecursive(true, t)
+}
+
+func testCLISwarmUp(toEncrypt bool, t *testing.T) {
+	log.Info("starting 3 node cluster")
 	cluster := newTestCluster(t, 3)
 	defer cluster.Shutdown()
 
 	// create a tmp file
 	tmp, err := ioutil.TempFile("", "swarm-test")
-	assertNil(t, err)
-	defer tmp.Close()
-	defer os.Remove(tmp.Name())
-	_, err = io.WriteString(tmp, "data")
-	assertNil(t, err)
-
-	// upload the file with 'swarm up' and expect a hash
-	t.Log("uploading file with 'swarm up'")
-	up := runSwarm(t, "--bzzapi", cluster.Nodes[0].URL, "up", tmp.Name())
-	_, matches := up.ExpectRegexp(`[a-f\d]{64}`)
-	up.ExpectExit()
-	hash := matches[0]
-	t.Logf("file uploaded with hash %s", hash)
-
-	// get the file from the HTTP API of each node
-	for _, node := range cluster.Nodes {
-		t.Logf("getting file from %s", node.Name)
-		res, err := http.Get(node.URL + "/bzz:/" + hash)
-		assertNil(t, err)
-		assertHTTPResponse(t, res, http.StatusOK, "data")
-	}
-}
-
-func assertNil(t *testing.T, err error) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	defer tmp.Close()
+	defer os.Remove(tmp.Name())
+
+	// write data to file
+	data := "notsorandomdata"
+	_, err = io.WriteString(tmp, data)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	hashRegexp := `[a-f\d]{64}`
+	flags := []string{
+		"--bzzapi", cluster.Nodes[0].URL,
+		"up",
+		tmp.Name()}
+	if toEncrypt {
+		hashRegexp = `[a-f\d]{128}`
+		flags = []string{
+			"--bzzapi", cluster.Nodes[0].URL,
+			"up",
+			"--encrypt",
+			tmp.Name()}
+	}
+	// upload the file with 'swarm up' and expect a hash
+	log.Info(fmt.Sprintf("uploading file with 'swarm up'"))
+	up := runSwarm(t, flags...)
+	_, matches := up.ExpectRegexp(hashRegexp)
+	up.ExpectExit()
+	hash := matches[0]
+	log.Info("file uploaded", "hash", hash)
+
+	// get the file from the HTTP API of each node
+	for _, node := range cluster.Nodes {
+		log.Info("getting file from node", "node", node.Name)
+
+		res, err := http.Get(node.URL + "/bzz:/" + hash)
+		if err != nil {
+			t.Fatal(err)
+		}
+		defer res.Body.Close()
+
+		reply, err := ioutil.ReadAll(res.Body)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if res.StatusCode != 200 {
+			t.Fatalf("expected HTTP status 200, got %s", res.Status)
+		}
+		if string(reply) != data {
+			t.Fatalf("expected HTTP body %q, got %q", data, reply)
+		}
+		log.Debug("verifying uploaded file using `swarm down`")
+		//try to get the content with `swarm down`
+		tmpDownload, err := ioutil.TempDir("", "swarm-test")
+		tmpDownload = path.Join(tmpDownload, "tmpfile.tmp")
+		if err != nil {
+			t.Fatal(err)
+		}
+		defer os.RemoveAll(tmpDownload)
+
+		bzzLocator := "bzz:/" + hash
+		flags = []string{
+			"--bzzapi", cluster.Nodes[0].URL,
+			"down",
+			bzzLocator,
+			tmpDownload,
+		}
+
+		down := runSwarm(t, flags...)
+		down.ExpectExit()
+
+		fi, err := os.Stat(tmpDownload)
+		if err != nil {
+			t.Fatalf("could not stat path: %v", err)
+		}
+
+		switch mode := fi.Mode(); {
+		case mode.IsRegular():
+			downloadedBytes, err := ioutil.ReadFile(tmpDownload)
+			if err != nil {
+				t.Fatalf("had an error reading the downloaded file: %v", err)
+			}
+			if !bytes.Equal(downloadedBytes, bytes.NewBufferString(data).Bytes()) {
+				t.Fatalf("retrieved data and posted data not equal!")
+			}
+
+		default:
+			t.Fatalf("expected to download regular file, got %s", fi.Mode())
+		}
+	}
+
+	timeout := time.Duration(2 * time.Second)
+	httpClient := http.Client{
+		Timeout: timeout,
+	}
+
+	// try to squeeze a timeout by getting an non-existent hash from each node
+	for _, node := range cluster.Nodes {
+		_, err := httpClient.Get(node.URL + "/bzz:/1023e8bae0f70be7d7b5f74343088ba408a218254391490c85ae16278e230340")
+		// we're speeding up the timeout here since netstore has a 60 seconds timeout on a request
+		if err != nil && !strings.Contains(err.Error(), "Client.Timeout exceeded while awaiting headers") {
+			t.Fatal(err)
+		}
+		// this is disabled since it takes 60s due to netstore timeout
+		// if res.StatusCode != 404 {
+		// 	t.Fatalf("expected HTTP status 404, got %s", res.Status)
+		// }
+	}
 }
 
-func assertHTTPResponse(t *testing.T, res *http.Response, expectedStatus int, expectedBody string) {
-	defer res.Body.Close()
-	if res.StatusCode != expectedStatus {
-		t.Fatalf("expected HTTP status %d, got %s", expectedStatus, res.Status)
+func testCLISwarmUpRecursive(toEncrypt bool, t *testing.T) {
+	fmt.Println("starting 3 node cluster")
+	cluster := newTestCluster(t, 3)
+	defer cluster.Shutdown()
+
+	tmpUploadDir, err := ioutil.TempDir("", "swarm-test")
+	if err != nil {
+		t.Fatal(err)
 	}
-	data, err := ioutil.ReadAll(res.Body)
-	assertNil(t, err)
-	if string(data) != expectedBody {
-		t.Fatalf("expected HTTP body %q, got %q", expectedBody, data)
+	defer os.RemoveAll(tmpUploadDir)
+	// create tmp files
+	data := "notsorandomdata"
+	for _, path := range []string{"tmp1", "tmp2"} {
+		if err := ioutil.WriteFile(filepath.Join(tmpUploadDir, path), bytes.NewBufferString(data).Bytes(), 0644); err != nil {
+			t.Fatal(err)
+		}
+	}
+
+	hashRegexp := `[a-f\d]{64}`
+	flags := []string{
+		"--bzzapi", cluster.Nodes[0].URL,
+		"--recursive",
+		"up",
+		tmpUploadDir}
+	if toEncrypt {
+		hashRegexp = `[a-f\d]{128}`
+		flags = []string{
+			"--bzzapi", cluster.Nodes[0].URL,
+			"--recursive",
+			"up",
+			"--encrypt",
+			tmpUploadDir}
+	}
+	// upload the file with 'swarm up' and expect a hash
+	log.Info(fmt.Sprintf("uploading file with 'swarm up'"))
+	up := runSwarm(t, flags...)
+	_, matches := up.ExpectRegexp(hashRegexp)
+	up.ExpectExit()
+	hash := matches[0]
+	log.Info("dir uploaded", "hash", hash)
+
+	// get the file from the HTTP API of each node
+	for _, node := range cluster.Nodes {
+		log.Info("getting file from node", "node", node.Name)
+		//try to get the content with `swarm down`
+		tmpDownload, err := ioutil.TempDir("", "swarm-test")
+		if err != nil {
+			t.Fatal(err)
+		}
+		defer os.RemoveAll(tmpDownload)
+		bzzLocator := "bzz:/" + hash
+		flagss := []string{}
+		flagss = []string{
+			"--bzzapi", cluster.Nodes[0].URL,
+			"down",
+			"--recursive",
+			bzzLocator,
+			tmpDownload,
+		}
+
+		fmt.Println("downloading from swarm with recursive")
+		down := runSwarm(t, flagss...)
+		down.ExpectExit()
+
+		files, err := ioutil.ReadDir(tmpDownload)
+		for _, v := range files {
+			fi, err := os.Stat(path.Join(tmpDownload, v.Name()))
+			if err != nil {
+				t.Fatalf("got an error: %v", err)
+			}
+
+			switch mode := fi.Mode(); {
+			case mode.IsRegular():
+				if file, err := swarm.Open(path.Join(tmpDownload, v.Name())); err != nil {
+					t.Fatalf("encountered an error opening the file returned from the CLI: %v", err)
+				} else {
+					ff := make([]byte, len(data))
+					io.ReadFull(file, ff)
+					buf := bytes.NewBufferString(data)
+
+					if !bytes.Equal(ff, buf.Bytes()) {
+						t.Fatalf("retrieved data and posted data not equal!")
+					}
+				}
+			default:
+				t.Fatalf("this shouldnt happen")
+			}
+		}
+		if err != nil {
+			t.Fatalf("could not list files at: %v", files)
+		}
 	}
 }

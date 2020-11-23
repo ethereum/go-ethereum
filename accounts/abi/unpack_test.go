@@ -57,6 +57,23 @@ var unpackTests = []unpackTest{
 		want: true,
 	},
 	{
+		def:  `[{ "type": "bool" }]`,
+		enc:  "0000000000000000000000000000000000000000000000000000000000000000",
+		want: false,
+	},
+	{
+		def:  `[{ "type": "bool" }]`,
+		enc:  "0000000000000000000000000000000000000000000000000001000000000001",
+		want: false,
+		err:  "abi: improperly encoded boolean value",
+	},
+	{
+		def:  `[{ "type": "bool" }]`,
+		enc:  "0000000000000000000000000000000000000000000000000000000000000003",
+		want: false,
+		err:  "abi: improperly encoded boolean value",
+	},
+	{
 		def:  `[{"type": "uint32"}]`,
 		enc:  "0000000000000000000000000000000000000000000000000000000000000001",
 		want: uint32(1),

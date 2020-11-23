@@ -25,7 +25,7 @@ import (
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/mclock"
 	"github.com/ethereum/go-ethereum/consensus"
-	"github.com/ethereum/go-ethereum/core"
+	"github.com/ethereum/go-ethereum/core/rawdb"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/light"
 	"github.com/ethereum/go-ethereum/log"
@@ -267,9 +267,16 @@ func (f *lightFetcher) announce(p *peer, head *announceData) {
 		}
 		n = n.parent
 	}
+	// n is now the reorg common ancestor, add a new branch of nodes
+	if n != nil && (head.Number >= n.number+maxNodeCount || head.Number <= n.number) {
+		// if announced head block height is lower or same as n or too far from it to add
+		// intermediate nodes then discard previous announcement info and trigger a resync
+		n = nil
+		fp.nodeCnt = 0
+		fp.nodeByHash = make(map[common.Hash]*fetcherTreeNode)
+	}
 	if n != nil {
-		// n is now the reorg common ancestor, add a new branch of nodes
-		// check if the node count is too high to add new nodes
+		// check if the node count is too high to add new nodes, discard oldest ones if necessary
 		locked := false
 		for uint64(fp.nodeCnt)+head.Number-n.number > maxNodeCount && fp.root != nil {
 			if !locked {
@@ -280,7 +287,7 @@ func (f *lightFetcher) announce(p *peer, head *announceData) {
 			// if one of root's children is canonical, keep it, delete other branches and root itself
 			var newRoot *fetcherTreeNode
 			for i, nn := range fp.root.children {
-				if core.GetCanonicalHash(f.pm.chainDb, nn.number) == nn.hash {
+				if rawdb.ReadCanonicalHash(f.pm.chainDb, nn.number) == nn.hash {
 					fp.root.children = append(fp.root.children[:i], fp.root.children[i+1:]...)
 					nn.parent = nil
 					newRoot = nn
@@ -363,7 +370,7 @@ func (f *lightFetcher) peerHasBlock(p *peer, hash common.Hash, number uint64) bo
 	//
 	// when syncing, just check if it is part of the known chain, there is nothing better we
 	// can do since we do not know the most recent block hash yet
-	return core.GetCanonicalHash(f.pm.chainDb, fp.root.number) == fp.root.hash && core.GetCanonicalHash(f.pm.chainDb, number) == hash
+	return rawdb.ReadCanonicalHash(f.pm.chainDb, fp.root.number) == fp.root.hash && rawdb.ReadCanonicalHash(f.pm.chainDb, number) == hash
 }
 
 // requestAmount calculates the amount of headers to be downloaded starting

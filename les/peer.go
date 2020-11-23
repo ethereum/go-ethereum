@@ -545,9 +545,11 @@ func (ps *peerSet) notify(n peerSetNotify) {
 func (ps *peerSet) Register(p *peer) error {
 	ps.lock.Lock()
 	if ps.closed {
+		ps.lock.Unlock()
 		return errClosed
 	}
 	if _, ok := ps.peers[p.id]; ok {
+		ps.lock.Unlock()
 		return errAlreadyRegistered
 	}
 	ps.peers[p.id] = p

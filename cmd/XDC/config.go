@@ -145,7 +145,8 @@ func makeConfigNode(ctx *cli.Context) (*node.Node, XDCConfig) {
 		cfg.StakeEnable = ctx.GlobalBool(utils.StakingEnabledFlag.Name)
 	}
 	if !ctx.GlobalIsSet(debug.VerbosityFlag.Name) {
-		debug.Glogger.Verbosity(log.Lvl(cfg.Verbosity))
+		glogger := log.NewGlogHandler(log.StreamHandler(os.Stderr, log.TerminalFormat(false)))
+		glogger.Verbosity(log.Lvl(cfg.Verbosity))
 	}
 
 	if !ctx.GlobalIsSet(utils.NATFlag.Name) && cfg.NAT != "" {

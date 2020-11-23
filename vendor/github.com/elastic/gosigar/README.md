@@ -26,6 +26,7 @@ The features vary by operating system.
 | FDUsage         |   X   |        |         |         |    X    |
 | FileSystemList  |   X   |    X   |    X    |    X    |    X    |
 | FileSystemUsage |   X   |    X   |    X    |    X    |    X    |
+| HugeTLBPages    |   X   |        |         |         |         |
 | LoadAverage     |   X   |    X   |         |    X    |    X    |
 | Mem             |   X   |    X   |    X    |    X    |    X    |
 | ProcArgs        |   X   |    X   |    X    |         |    X    |

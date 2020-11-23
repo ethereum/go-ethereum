@@ -33,7 +33,7 @@ import (
 var AppHelpTemplate = `NAME:
    {{.App.Name}} - {{.App.Usage}}
 
-   Copyright (c) 2018 XDCchain
+   Copyright 2017-2020 The XDC.Network Authors
 
 USAGE:
    {{.App.HelpName}} [options]{{if .App.Commands}} command [command options]{{end}} {{if .App.ArgsUsage}}{{.App.ArgsUsage}}{{else}}[arguments...]{{end}}
@@ -78,9 +78,27 @@ var AppHelpFlagGroups = []flagGroup{
 			utils.GCModeFlag,
 			utils.EthStatsURLFlag,
 			utils.IdentityFlag,
-			//utils.LightServFlag,
-			//utils.LightPeersFlag,
-			//utils.LightKDFFlag,
+			utils.LightServFlag,
+			utils.LightPeersFlag,
+			utils.LightKDFFlag,
+		},
+	},
+	{
+		Name: "DEVELOPER CHAIN",
+		Flags: []cli.Flag{
+			utils.DeveloperFlag,
+			utils.DeveloperPeriodFlag,
+		},
+	},
+	{
+		Name: "ETHASH",
+		Flags: []cli.Flag{
+			utils.EthashCacheDirFlag,
+			utils.EthashCachesInMemoryFlag,
+			utils.EthashCachesOnDiskFlag,
+			utils.EthashDatasetDirFlag,
+			utils.EthashDatasetsInMemoryFlag,
+			utils.EthashDatasetsOnDiskFlag,
 		},
 	},
 	//{Name: "DEVELOPER CHAIN",
@@ -206,15 +224,26 @@ var AppHelpFlagGroups = []flagGroup{
 	{
 		Name: "LOGGING AND DEBUGGING",
 		Flags: append([]cli.Flag{
-			utils.MetricsEnabledFlag,
-			//utils.FakePoWFlag,
-			//utils.NoCompactionFlag,
+			utils.FakePoWFlag,
+			utils.NoCompactionFlag,
 		}, debug.Flags...),
 	},
-	//{
-	//	Name:  "WHISPER (EXPERIMENTAL)",
-	//	Flags: whisperFlags,
-	//},
+	{
+		Name: "METRICS AND STATS",
+		Flags: []cli.Flag{
+			utils.MetricsEnabledFlag,
+			utils.MetricsEnableInfluxDBFlag,
+			utils.MetricsInfluxDBEndpointFlag,
+			utils.MetricsInfluxDBDatabaseFlag,
+			utils.MetricsInfluxDBUsernameFlag,
+			utils.MetricsInfluxDBPasswordFlag,
+			utils.MetricsInfluxDBHostTagFlag,
+		},
+	},
+	{
+		Name:  "WHISPER (EXPERIMENTAL)",
+		Flags: whisperFlags,
+	},
 	{
 		Name: "DEPRECATED",
 		Flags: []cli.Flag{

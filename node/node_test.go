@@ -507,8 +507,8 @@ func TestAPIGather(t *testing.T) {
 	}
 	// Register a batch of services with some configured APIs
 	calls := make(chan string, 1)
-	makeAPI := func(result string) *OneMethodApi {
-		return &OneMethodApi{fun: func() { calls <- result }}
+	makeAPI := func(result string) *OneMethodAPI {
+		return &OneMethodAPI{fun: func() { calls <- result }}
 	}
 	services := map[string]struct {
 		APIs  []rpc.API

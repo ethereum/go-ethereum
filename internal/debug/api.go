@@ -21,6 +21,7 @@
 package debug
 
 import (
+	"bytes"
 	"errors"
 	"io"
 	"os"
@@ -53,19 +54,19 @@ type HandlerT struct {
 // Verbosity sets the log verbosity ceiling. The verbosity of individual packages
 // and source files can be raised using Vmodule.
 func (*HandlerT) Verbosity(level int) {
-	Glogger.Verbosity(log.Lvl(level))
+	glogger.Verbosity(log.Lvl(level))
 }
 
 // Vmodule sets the log verbosity pattern. See package log for details on the
 // pattern syntax.
 func (*HandlerT) Vmodule(pattern string) error {
-	return Glogger.Vmodule(pattern)
+	return glogger.Vmodule(pattern)
 }
 
 // BacktraceAt sets the log backtrace location. See package log for details on
 // the pattern syntax.
 func (*HandlerT) BacktraceAt(location string) error {
-	return Glogger.BacktraceAt(location)
+	return glogger.BacktraceAt(location)
 }
 
 // MemStats returns detailed runtime memory statistics.
@@ -190,9 +191,9 @@ func (*HandlerT) WriteMemProfile(file string) error {
 
 // Stacks returns a printed representation of the stacks of all goroutines.
 func (*HandlerT) Stacks() string {
-	buf := make([]byte, 1024*1024)
-	buf = buf[:runtime.Stack(buf, true)]
-	return string(buf)
+	buf := new(bytes.Buffer)
+	pprof.Lookup("goroutine").WriteTo(buf, 2)
+	return buf.String()
 }
 
 // FreeOSMemory returns unused memory to the OS.

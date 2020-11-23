@@ -97,9 +97,8 @@ func (p *testDistPeer) waitBefore(cost uint64) (time.Duration, float64) {
 	p.lock.RUnlock()
 	if sumCost < testDistBufLimit {
 		return 0, float64(testDistBufLimit-sumCost) / float64(testDistBufLimit)
-	} else {
-		return time.Duration(sumCost - testDistBufLimit), 0
 	}
+	return time.Duration(sumCost - testDistBufLimit), 0
 }
 
 func (p *testDistPeer) canQueue() bool {

@@ -340,7 +340,7 @@ func importWallet(ctx *cli.Context) error {
 	if len(keyfile) == 0 {
 		utils.Fatalf("keyfile must be given as argument")
 	}
-	keyJson, err := ioutil.ReadFile(keyfile)
+	keyJSON, err := ioutil.ReadFile(keyfile)
 	if err != nil {
 		utils.Fatalf("Could not read wallet file: %v", err)
 	}
@@ -349,7 +349,7 @@ func importWallet(ctx *cli.Context) error {
 	passphrase := getPassPhrase("", false, 0, utils.MakePasswordList(ctx))
 
 	ks := stack.AccountManager().Backends(keystore.KeyStoreType)[0].(*keystore.KeyStore)
-	acct, err := ks.ImportPreSaleKey(keyJson, passphrase)
+	acct, err := ks.ImportPreSaleKey(keyJSON, passphrase)
 	if err != nil {
 		utils.Fatalf("%v", err)
 	}

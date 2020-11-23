@@ -39,7 +39,7 @@ import (
 // actually committing the state.
 func TestUpdateLeaks(t *testing.T) {
 	// Create an empty state database
-	db, _ := ethdb.NewMemDatabase()
+	db := ethdb.NewMemDatabase()
 	state, _ := New(common.Hash{}, NewDatabase(db))
 
 	// Update it with some accounts
@@ -66,8 +66,8 @@ func TestUpdateLeaks(t *testing.T) {
 // only the one right before the commit.
 func TestIntermediateLeaks(t *testing.T) {
 	// Create two state databases, one transitioning to the final state, the other final from the beginning
-	transDb, _ := ethdb.NewMemDatabase()
-	finalDb, _ := ethdb.NewMemDatabase()
+	transDb := ethdb.NewMemDatabase()
+	finalDb := ethdb.NewMemDatabase()
 	transState, _ := New(common.Hash{}, NewDatabase(transDb))
 	finalState, _ := New(common.Hash{}, NewDatabase(finalDb))
 
@@ -122,8 +122,7 @@ func TestIntermediateLeaks(t *testing.T) {
 // https://github.com/ethereum/go-ethereum/pull/15549.
 func TestCopy(t *testing.T) {
 	// Create a random state test to copy and modify "independently"
-	db, _ := ethdb.NewMemDatabase()
-	orig, _ := New(common.Hash{}, NewDatabase(db))
+	orig, _ := New(common.Hash{}, NewDatabase(ethdb.NewMemDatabase()))
 
 	for i := byte(0); i < 255; i++ {
 		obj := orig.GetOrNewStateObject(common.BytesToAddress([]byte{i}))
@@ -334,8 +333,7 @@ func (test *snapshotTest) String() string {
 func (test *snapshotTest) run() bool {
 	// Run all actions and create snapshots.
 	var (
-		db, _        = ethdb.NewMemDatabase()
-		state, _     = New(common.Hash{}, NewDatabase(db))
+		state, _     = New(common.Hash{}, NewDatabase(ethdb.NewMemDatabase()))
 		snapshotRevs = make([]int, len(test.snapshots))
 		sindex       = 0
 	)
@@ -413,11 +411,27 @@ func (s *StateSuite) TestTouchDelete(c *check.C) {
 
 	snapshot := s.state.Snapshot()
 	s.state.AddBalance(common.Address{}, new(big.Int))
-	if len(s.state.stateObjectsDirty) != 1 {
+
+	if len(s.state.journal.dirties) != 1 {
 		c.Fatal("expected one dirty state object")
 	}
 	s.state.RevertToSnapshot(snapshot)
-	if len(s.state.stateObjectsDirty) != 0 {
+	if len(s.state.journal.dirties) != 0 {
 		c.Fatal("expected no dirty state object")
+	}
+}
+
+// TestCopyOfCopy tests that modified objects are carried over to the copy, and the copy of the copy.
+// See https://github.com/ethereum/go-ethereum/pull/15225#issuecomment-380191512
+func TestCopyOfCopy(t *testing.T) {
+	sdb, _ := New(common.Hash{}, NewDatabase(ethdb.NewMemDatabase()))
+	addr := common.HexToAddress("aaaa")
+	sdb.SetBalance(addr, big.NewInt(42))
+
+	if got := sdb.Copy().GetBalance(addr).Uint64(); got != 42 {
+		t.Fatalf("1st copy fail, expected 42, got %v", got)
+	}
+	if got := sdb.Copy().Copy().GetBalance(addr).Uint64(); got != 42 {
+		t.Fatalf("2nd copy fail, expected 42, got %v", got)
 	}
 }
