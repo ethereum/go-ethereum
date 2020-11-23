@@ -24,10 +24,10 @@ import (
 	"strings"
 	"sync"
 
-	"github.com/maticnetwork/bor/common/hexutil"
-	"github.com/maticnetwork/bor/console/prompt"
-	"github.com/maticnetwork/bor/internal/ethapi"
-	"github.com/maticnetwork/bor/log"
+	"github.com/ethereum/go-ethereum/common/hexutil"
+	"github.com/ethereum/go-ethereum/console/prompt"
+	"github.com/ethereum/go-ethereum/internal/ethapi"
+	"github.com/ethereum/go-ethereum/log"
 )
 
 type CommandlineUI struct {
@@ -148,6 +148,13 @@ func (ui *CommandlineUI) ApproveSignData(request *SignDataRequest) (SignDataResp
 
 	fmt.Printf("-------- Sign data request--------------\n")
 	fmt.Printf("Account:  %s\n", request.Address.String())
+	if len(request.Callinfo) != 0 {
+		fmt.Printf("\nValidation messages:\n")
+		for _, m := range request.Callinfo {
+			fmt.Printf("  * %s : %s\n", m.Typ, m.Message)
+		}
+		fmt.Println()
+	}
 	fmt.Printf("messages:\n")
 	for _, nvt := range request.Messages {
 		fmt.Printf("\u00a0\u00a0%v\n", strings.TrimSpace(nvt.Pprint(1)))

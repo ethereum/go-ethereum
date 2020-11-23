@@ -6,8 +6,8 @@ import (
 	"encoding/json"
 	"math/big"
 
-	"github.com/maticnetwork/bor/common"
-	"github.com/maticnetwork/bor/common/math"
+	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/common/math"
 )
 
 var _ = (*difficultyTestMarshaling)(nil)

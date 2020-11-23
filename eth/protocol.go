@@ -21,12 +21,12 @@ import (
 	"io"
 	"math/big"
 
-	"github.com/maticnetwork/bor/common"
-	"github.com/maticnetwork/bor/core"
-	"github.com/maticnetwork/bor/core/forkid"
-	"github.com/maticnetwork/bor/core/types"
-	"github.com/maticnetwork/bor/event"
-	"github.com/maticnetwork/bor/rlp"
+	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/core"
+	"github.com/ethereum/go-ethereum/core/forkid"
+	"github.com/ethereum/go-ethereum/core/types"
+	"github.com/ethereum/go-ethereum/event"
+	"github.com/ethereum/go-ethereum/rlp"
 )
 
 // Constants to match up protocol versions and messages

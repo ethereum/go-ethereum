@@ -20,7 +20,7 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/maticnetwork/bor/common/mclock"
+	"github.com/ethereum/go-ethereum/common/mclock"
 )
 
 // logger collects events in string format and discards events older than the

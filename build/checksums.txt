@@ -1,6 +1,13 @@
 # This file contains sha256 checksums of optional build dependencies.
 
-98de84e69726a66da7b4e58eac41b99cbe274d7e8906eeb8a5b7eb0aadee7f7c  go1.14.2.src.tar.gz
+c1076b90cf94b73ebed62a81d802cd84d43d02dea8c07abdc922c57a071c84f1  go1.15.5.src.tar.gz
+359a4334b8c8f5e3067e5a76f16419791ac3fef4613d8e8e1eac0b9719915f6d  go1.15.5.darwin-amd64.tar.gz
+4c8179d406136979724c71732009c7e2e7c794dbeaaa2a043c00da34d4be0559  go1.15.5.linux-386.tar.gz
+9a58494e8da722c3aef248c9227b0e9c528c7318309827780f16220998180a0d  go1.15.5.linux-amd64.tar.gz
+a72a0b036beb4193a0214bca3fca4c5d68a38a4ccf098c909f7ce8bf08567c48  go1.15.5.linux-arm64.tar.gz
+5ea6456620d3efed5dda99238c7f23866eafdd915e5348736e631bc283c0238a  go1.15.5.linux-armv6l.tar.gz
+d812436c7e3482ba3c97172edf26afaf35aca60a5621ff4a5f6a08386505ab9c  go1.15.5.windows-386.zip
+1d24be3a200201a74be25e4134fbec467750e834e84e9c7789a9fc13248c5507  go1.15.5.windows-amd64.zip
 
 d998a84eea42f2271aca792a7b027ca5c1edfcba229e8e5a844c9ac3f336df35  golangci-lint-1.27.0-linux-armv7.tar.gz
 bf781f05b0d393b4bf0a327d9e62926949a4f14d7774d950c4e009fc766ed1d4  golangci-lint.exe-1.27.0-windows-amd64.zip

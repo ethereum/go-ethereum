@@ -21,12 +21,13 @@ import (
 	"errors"
 	"fmt"
 
-	"github.com/maticnetwork/bor/common"
-	"github.com/maticnetwork/bor/core/state"
-	"github.com/maticnetwork/bor/core/types"
-	"github.com/maticnetwork/bor/crypto"
-	"github.com/maticnetwork/bor/ethdb"
-	"github.com/maticnetwork/bor/trie"
+	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/core/rawdb"
+	"github.com/ethereum/go-ethereum/core/state"
+	"github.com/ethereum/go-ethereum/core/types"
+	"github.com/ethereum/go-ethereum/crypto"
+	"github.com/ethereum/go-ethereum/ethdb"
+	"github.com/ethereum/go-ethereum/trie"
 )
 
 func NewState(ctx context.Context, head *types.Header, odr OdrBackend) *state.StateDB {
@@ -70,7 +71,8 @@ func (db *odrDatabase) ContractCode(addrHash, codeHash common.Hash) ([]byte, err
 	if codeHash == sha3Nil {
 		return nil, nil
 	}
-	if code, err := db.backend.Database().Get(codeHash[:]); err == nil {
+	code := rawdb.ReadCode(db.backend.Database(), codeHash)
+	if len(code) != 0 {
 		return code, nil
 	}
 	id := *db.id

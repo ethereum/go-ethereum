@@ -19,9 +19,9 @@ package types
 import (
 	"io"
 
-	"github.com/maticnetwork/bor/common"
-	"github.com/maticnetwork/bor/common/hexutil"
-	"github.com/maticnetwork/bor/rlp"
+	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/common/hexutil"
+	"github.com/ethereum/go-ethereum/rlp"
 )
 
 //go:generate gencodec -type Log -field-override logMarshaling -out gen_log_json.go
@@ -44,11 +44,11 @@ type Log struct {
 	// hash of the transaction
 	TxHash common.Hash `json:"transactionHash" gencodec:"required"`
 	// index of the transaction in the block
-	TxIndex uint `json:"transactionIndex" gencodec:"required"`
+	TxIndex uint `json:"transactionIndex"`
 	// hash of the block in which the transaction was included
 	BlockHash common.Hash `json:"blockHash"`
 	// index of the log in the block
-	Index uint `json:"logIndex" gencodec:"required"`
+	Index uint `json:"logIndex"`
 
 	// The Removed field is true if this log was reverted due to a chain reorganisation.
 	// You must pay attention to this field if you receive logs through a filter query.

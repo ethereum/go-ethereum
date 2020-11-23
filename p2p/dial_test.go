@@ -27,11 +27,11 @@ import (
 	"testing"
 	"time"
 
-	"github.com/maticnetwork/bor/common/mclock"
-	"github.com/maticnetwork/bor/internal/testlog"
-	"github.com/maticnetwork/bor/log"
-	"github.com/maticnetwork/bor/p2p/enode"
-	"github.com/maticnetwork/bor/p2p/netutil"
+	"github.com/ethereum/go-ethereum/common/mclock"
+	"github.com/ethereum/go-ethereum/internal/testlog"
+	"github.com/ethereum/go-ethereum/log"
+	"github.com/ethereum/go-ethereum/p2p/enode"
+	"github.com/ethereum/go-ethereum/p2p/netutil"
 )
 
 // This test checks that dynamic dials are launched from discovery results.

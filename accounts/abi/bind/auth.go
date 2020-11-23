@@ -22,12 +22,12 @@ import (
 	"io"
 	"io/ioutil"
 
-	"github.com/maticnetwork/bor/accounts"
-	"github.com/maticnetwork/bor/accounts/external"
-	"github.com/maticnetwork/bor/accounts/keystore"
-	"github.com/maticnetwork/bor/common"
-	"github.com/maticnetwork/bor/core/types"
-	"github.com/maticnetwork/bor/crypto"
+	"github.com/ethereum/go-ethereum/accounts"
+	"github.com/ethereum/go-ethereum/accounts/external"
+	"github.com/ethereum/go-ethereum/accounts/keystore"
+	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/core/types"
+	"github.com/ethereum/go-ethereum/crypto"
 )
 
 // NewTransactor is a utility method to easily create a transaction signer from
@@ -45,7 +45,7 @@ func NewTransactor(keyin io.Reader, passphrase string) (*TransactOpts, error) {
 }
 
 // NewKeyStoreTransactor is a utility method to easily create a transaction signer from
-// an decrypted key from a keystore
+// a decrypted key from a keystore.
 func NewKeyStoreTransactor(keystore *keystore.KeyStore, account accounts.Account) (*TransactOpts, error) {
 	return &TransactOpts{
 		From: account.Address,

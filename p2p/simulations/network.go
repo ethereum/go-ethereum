@@ -27,11 +27,11 @@ import (
 	"sync"
 	"time"
 
-	"github.com/maticnetwork/bor/event"
-	"github.com/maticnetwork/bor/log"
-	"github.com/maticnetwork/bor/p2p"
-	"github.com/maticnetwork/bor/p2p/enode"
-	"github.com/maticnetwork/bor/p2p/simulations/adapters"
+	"github.com/ethereum/go-ethereum/event"
+	"github.com/ethereum/go-ethereum/log"
+	"github.com/ethereum/go-ethereum/p2p"
+	"github.com/ethereum/go-ethereum/p2p/enode"
+	"github.com/ethereum/go-ethereum/p2p/simulations/adapters"
 )
 
 var DialBanTimeout = 200 * time.Millisecond
@@ -110,8 +110,8 @@ func (net *Network) NewNodeWithConfig(conf *adapters.NodeConfig) (*Node, error) 
 	}
 
 	// if no services are configured, use the default service
-	if len(conf.Services) == 0 {
-		conf.Services = []string{net.DefaultService}
+	if len(conf.Lifecycles) == 0 {
+		conf.Lifecycles = []string{net.DefaultService}
 	}
 
 	// use the NodeAdapter to create the node
@@ -913,19 +913,19 @@ func (net *Network) snapshot(addServices []string, removeServices []string) (*Sn
 		snap.Nodes[i].Snapshots = snapshots
 		for _, addSvc := range addServices {
 			haveSvc := false
-			for _, svc := range snap.Nodes[i].Node.Config.Services {
+			for _, svc := range snap.Nodes[i].Node.Config.Lifecycles {
 				if svc == addSvc {
 					haveSvc = true
 					break
 				}
 			}
 			if !haveSvc {
-				snap.Nodes[i].Node.Config.Services = append(snap.Nodes[i].Node.Config.Services, addSvc)
+				snap.Nodes[i].Node.Config.Lifecycles = append(snap.Nodes[i].Node.Config.Lifecycles, addSvc)
 			}
 		}
 		if len(removeServices) > 0 {
 			var cleanedServices []string
-			for _, svc := range snap.Nodes[i].Node.Config.Services {
+			for _, svc := range snap.Nodes[i].Node.Config.Lifecycles {
 				haveSvc := false
 				for _, rmSvc := range removeServices {
 					if rmSvc == svc {
@@ -938,7 +938,7 @@ func (net *Network) snapshot(addServices []string, removeServices []string) (*Sn
 				}
 
 			}
-			snap.Nodes[i].Node.Config.Services = cleanedServices
+			snap.Nodes[i].Node.Config.Lifecycles = cleanedServices
 		}
 	}
 	for _, conn := range net.Conns {

@@ -25,12 +25,12 @@ import (
 	"time"
 
 	"github.com/dop251/goja"
-	"github.com/maticnetwork/bor/accounts/scwallet"
-	"github.com/maticnetwork/bor/accounts/usbwallet"
-	"github.com/maticnetwork/bor/common/hexutil"
-	"github.com/maticnetwork/bor/console/prompt"
-	"github.com/maticnetwork/bor/internal/jsre"
-	"github.com/maticnetwork/bor/rpc"
+	"github.com/ethereum/go-ethereum/accounts/scwallet"
+	"github.com/ethereum/go-ethereum/accounts/usbwallet"
+	"github.com/ethereum/go-ethereum/common/hexutil"
+	"github.com/ethereum/go-ethereum/console/prompt"
+	"github.com/ethereum/go-ethereum/internal/jsre"
+	"github.com/ethereum/go-ethereum/rpc"
 )
 
 // bridge is a collection of JavaScript utility methods to bride the .js runtime
@@ -306,9 +306,9 @@ func (b *bridge) Sign(call jsre.Call) (goja.Value, error) {
 	}
 
 	// Send the request to the backend and return
-	sign, callable := goja.AssertFunction(getJeth(call.VM).Get("unlockAccount"))
+	sign, callable := goja.AssertFunction(getJeth(call.VM).Get("sign"))
 	if !callable {
-		return nil, fmt.Errorf("jeth.unlockAccount is not callable")
+		return nil, fmt.Errorf("jeth.sign is not callable")
 	}
 	return sign(goja.Null(), message, account, passwd)
 }
@@ -353,14 +353,14 @@ func (b *bridge) SleepBlocks(call jsre.Call) (goja.Value, error) {
 	}
 
 	// Poll the current block number until either it or a timeout is reached.
-	var (
-		deadline   = time.Now().Add(time.Duration(sleep) * time.Second)
-		lastNumber = ^hexutil.Uint64(0)
-	)
+	deadline := time.Now().Add(time.Duration(sleep) * time.Second)
+	var lastNumber hexutil.Uint64
+	if err := b.client.Call(&lastNumber, "eth_blockNumber"); err != nil {
+		return nil, err
+	}
 	for time.Now().Before(deadline) {
 		var number hexutil.Uint64
-		err := b.client.Call(&number, "eth_blockNumber")
-		if err != nil {
+		if err := b.client.Call(&number, "eth_blockNumber"); err != nil {
 			return nil, err
 		}
 		if number != lastNumber {

@@ -20,11 +20,11 @@ import (
 	"encoding/json"
 	"fmt"
 
-	"github.com/maticnetwork/bor/common"
-	"github.com/maticnetwork/bor/common/hexutil"
-	"github.com/maticnetwork/bor/log"
-	"github.com/maticnetwork/bor/rlp"
-	"github.com/maticnetwork/bor/trie"
+	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/common/hexutil"
+	"github.com/ethereum/go-ethereum/log"
+	"github.com/ethereum/go-ethereum/rlp"
+	"github.com/ethereum/go-ethereum/trie"
 )
 
 // DumpCollector interface which the state trie calls during iteration

@@ -28,20 +28,20 @@ import (
 	"sync"
 	"testing"
 
-	"github.com/maticnetwork/bor/common"
-	"github.com/maticnetwork/bor/consensus/ethash"
-	"github.com/maticnetwork/bor/core"
-	"github.com/maticnetwork/bor/core/forkid"
-	"github.com/maticnetwork/bor/core/rawdb"
-	"github.com/maticnetwork/bor/core/types"
-	"github.com/maticnetwork/bor/core/vm"
-	"github.com/maticnetwork/bor/crypto"
-	"github.com/maticnetwork/bor/eth/downloader"
-	"github.com/maticnetwork/bor/ethdb"
-	"github.com/maticnetwork/bor/event"
-	"github.com/maticnetwork/bor/p2p"
-	"github.com/maticnetwork/bor/p2p/enode"
-	"github.com/maticnetwork/bor/params"
+	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/consensus/ethash"
+	"github.com/ethereum/go-ethereum/core"
+	"github.com/ethereum/go-ethereum/core/forkid"
+	"github.com/ethereum/go-ethereum/core/rawdb"
+	"github.com/ethereum/go-ethereum/core/types"
+	"github.com/ethereum/go-ethereum/core/vm"
+	"github.com/ethereum/go-ethereum/crypto"
+	"github.com/ethereum/go-ethereum/eth/downloader"
+	"github.com/ethereum/go-ethereum/ethdb"
+	"github.com/ethereum/go-ethereum/event"
+	"github.com/ethereum/go-ethereum/p2p"
+	"github.com/ethereum/go-ethereum/p2p/enode"
+	"github.com/ethereum/go-ethereum/params"
 )
 
 var (
@@ -185,7 +185,8 @@ func newTestPeer(name string, version int, pm *ProtocolManager, shake bool) (*te
 			head    = pm.blockchain.CurrentHeader()
 			td      = pm.blockchain.GetTd(head.Hash(), head.Number.Uint64())
 		)
-		tp.handshake(nil, td, head.Hash(), genesis.Hash(), forkid.NewID(pm.blockchain), forkid.NewFilter(pm.blockchain))
+		forkID := forkid.NewID(pm.blockchain.Config(), pm.blockchain.Genesis().Hash(), pm.blockchain.CurrentHeader().Number.Uint64())
+		tp.handshake(nil, td, head.Hash(), genesis.Hash(), forkID, forkid.NewFilter(pm.blockchain))
 	}
 	return tp, errc
 }

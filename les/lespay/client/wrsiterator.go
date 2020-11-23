@@ -19,9 +19,9 @@ package client
 import (
 	"sync"
 
-	"github.com/maticnetwork/bor/les/utils"
-	"github.com/maticnetwork/bor/p2p/enode"
-	"github.com/maticnetwork/bor/p2p/nodestate"
+	"github.com/ethereum/go-ethereum/les/utils"
+	"github.com/ethereum/go-ethereum/p2p/enode"
+	"github.com/ethereum/go-ethereum/p2p/nodestate"
 )
 
 // WrsIterator returns nodes from the specified selectable set with a weighted random

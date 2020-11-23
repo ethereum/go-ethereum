@@ -24,8 +24,8 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/maticnetwork/bor/crypto"
-	"github.com/maticnetwork/bor/p2p/enr"
+	"github.com/ethereum/go-ethereum/crypto"
+	"github.com/ethereum/go-ethereum/p2p/enr"
 )
 
 func init() {

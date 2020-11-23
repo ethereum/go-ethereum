@@ -20,7 +20,7 @@ import (
 	"context"
 	"time"
 
-	"github.com/maticnetwork/bor/p2p/enode"
+	"github.com/ethereum/go-ethereum/p2p/enode"
 )
 
 // Simulation provides a framework for running actions in a simulated network

@@ -24,20 +24,20 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/maticnetwork/bor/core/state/snapshot"
+	"github.com/ethereum/go-ethereum/core/state/snapshot"
 
-	"github.com/maticnetwork/bor/common"
-	"github.com/maticnetwork/bor/common/hexutil"
-	"github.com/maticnetwork/bor/common/math"
-	"github.com/maticnetwork/bor/core"
-	"github.com/maticnetwork/bor/core/rawdb"
-	"github.com/maticnetwork/bor/core/state"
-	"github.com/maticnetwork/bor/core/types"
-	"github.com/maticnetwork/bor/core/vm"
-	"github.com/maticnetwork/bor/crypto"
-	"github.com/maticnetwork/bor/ethdb"
-	"github.com/maticnetwork/bor/params"
-	"github.com/maticnetwork/bor/rlp"
+	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/common/hexutil"
+	"github.com/ethereum/go-ethereum/common/math"
+	"github.com/ethereum/go-ethereum/core"
+	"github.com/ethereum/go-ethereum/core/rawdb"
+	"github.com/ethereum/go-ethereum/core/state"
+	"github.com/ethereum/go-ethereum/core/types"
+	"github.com/ethereum/go-ethereum/core/vm"
+	"github.com/ethereum/go-ethereum/crypto"
+	"github.com/ethereum/go-ethereum/ethdb"
+	"github.com/ethereum/go-ethereum/params"
+	"github.com/ethereum/go-ethereum/rlp"
 	"golang.org/x/crypto/sha3"
 )
 
@@ -186,6 +186,16 @@ func (t *StateTest) RunNoVerify(subtest StateSubtest, vmconfig vm.Config, snapsh
 	context.GetHash = vmTestBlockHash
 	evm := vm.NewEVM(context, statedb, config, vmconfig)
 
+	if config.IsYoloV2(context.BlockNumber) {
+		statedb.AddAddressToAccessList(msg.From())
+		if dst := msg.To(); dst != nil {
+			statedb.AddAddressToAccessList(*dst)
+			// If it's a create-tx, the destination will be added inside evm.create
+		}
+		for _, addr := range evm.ActivePrecompiles() {
+			statedb.AddAddressToAccessList(addr)
+		}
+	}
 	gaspool := new(core.GasPool)
 	gaspool.AddGas(block.GasLimit())
 	snapshot := statedb.Snapshot()
@@ -225,7 +235,7 @@ func MakePreState(db ethdb.Database, accounts core.GenesisAlloc, snapshotter boo
 
 	var snaps *snapshot.Tree
 	if snapshotter {
-		snaps = snapshot.New(db, sdb.TrieDB(), 1, root, false)
+		snaps = snapshot.New(db, sdb.TrieDB(), 1, root, false, false)
 	}
 	statedb, _ = state.New(root, sdb, snaps)
 	return snaps, statedb

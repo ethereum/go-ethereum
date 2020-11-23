@@ -21,21 +21,22 @@ import (
 	"errors"
 	"math/big"
 
-	"github.com/maticnetwork/bor/accounts"
-	"github.com/maticnetwork/bor/common"
-	"github.com/maticnetwork/bor/consensus/bor"
-	"github.com/maticnetwork/bor/core"
-	"github.com/maticnetwork/bor/core/bloombits"
-	"github.com/maticnetwork/bor/core/rawdb"
-	"github.com/maticnetwork/bor/core/state"
-	"github.com/maticnetwork/bor/core/types"
-	"github.com/maticnetwork/bor/core/vm"
-	"github.com/maticnetwork/bor/eth/downloader"
-	"github.com/maticnetwork/bor/eth/gasprice"
-	"github.com/maticnetwork/bor/ethdb"
-	"github.com/maticnetwork/bor/event"
-	"github.com/maticnetwork/bor/params"
-	"github.com/maticnetwork/bor/rpc"
+	"github.com/ethereum/go-ethereum/accounts"
+	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/consensus"
+	"github.com/ethereum/go-ethereum/core"
+	"github.com/ethereum/go-ethereum/core/bloombits"
+	"github.com/ethereum/go-ethereum/core/rawdb"
+	"github.com/ethereum/go-ethereum/core/state"
+	"github.com/ethereum/go-ethereum/core/types"
+	"github.com/ethereum/go-ethereum/core/vm"
+	"github.com/ethereum/go-ethereum/eth/downloader"
+	"github.com/ethereum/go-ethereum/eth/gasprice"
+	"github.com/ethereum/go-ethereum/ethdb"
+	"github.com/ethereum/go-ethereum/event"
+	"github.com/ethereum/go-ethereum/miner"
+	"github.com/ethereum/go-ethereum/params"
+	"github.com/ethereum/go-ethereum/rpc"
 )
 
 // EthAPIBackend implements ethapi.Backend for full nodes
@@ -186,8 +187,8 @@ func (b *EthAPIBackend) GetLogs(ctx context.Context, hash common.Hash) ([][]*typ
 	return logs, nil
 }
 
-func (b *EthAPIBackend) GetTd(blockHash common.Hash) *big.Int {
-	return b.eth.blockchain.GetTdByHash(blockHash)
+func (b *EthAPIBackend) GetTd(ctx context.Context, hash common.Hash) *big.Int {
+	return b.eth.blockchain.GetTdByHash(hash)
 }
 
 func (b *EthAPIBackend) GetEVM(ctx context.Context, msg core.Message, state *state.StateDB, header *types.Header) (*vm.EVM, func() error, error) {
@@ -215,10 +216,6 @@ func (b *EthAPIBackend) SubscribeChainHeadEvent(ch chan<- core.ChainHeadEvent) e
 
 func (b *EthAPIBackend) SubscribeChainSideEvent(ch chan<- core.ChainSideEvent) event.Subscription {
 	return b.eth.BlockChain().SubscribeChainSideEvent(ch)
-}
-
-func (b *EthAPIBackend) SubscribeStateSyncEvent(ch chan<- core.StateSyncEvent) event.Subscription {
-	return b.eth.BlockChain().SubscribeStateSyncEvent(ch)
 }
 
 func (b *EthAPIBackend) SubscribeLogsEvent(ch chan<- []*types.Log) event.Subscription {
@@ -260,6 +257,10 @@ func (b *EthAPIBackend) Stats() (pending int, queued int) {
 
 func (b *EthAPIBackend) TxPoolContent() (map[common.Address]types.Transactions, map[common.Address]types.Transactions) {
 	return b.eth.TxPool().Content()
+}
+
+func (b *EthAPIBackend) TxPool() *core.TxPool {
+	return b.eth.TxPool()
 }
 
 func (b *EthAPIBackend) SubscribeNewTxsEvent(ch chan<- core.NewTxsEvent) event.Subscription {
@@ -313,16 +314,18 @@ func (b *EthAPIBackend) ServiceFilter(ctx context.Context, session *bloombits.Ma
 	}
 }
 
-func (b *EthAPIBackend) GetRootHash(ctx context.Context, starBlockNr uint64, endBlockNr uint64) (string, error) {
-	var api *bor.API
-	for _, _api := range b.eth.Engine().APIs(b.eth.BlockChain()) {
-		if _api.Namespace == "bor" {
-			api = _api.Service.(*bor.API)
-		}
-	}
-	root, err := api.GetRootHash(starBlockNr, endBlockNr)
-	if err != nil {
-		return "", err
-	}
-	return root, nil
+func (b *EthAPIBackend) Engine() consensus.Engine {
+	return b.eth.engine
+}
+
+func (b *EthAPIBackend) CurrentHeader() *types.Header {
+	return b.eth.blockchain.CurrentHeader()
+}
+
+func (b *EthAPIBackend) Miner() *miner.Miner {
+	return b.eth.Miner()
+}
+
+func (b *EthAPIBackend) StartMining(threads int) error {
+	return b.eth.StartMining(threads)
 }

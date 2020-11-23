@@ -24,6 +24,29 @@ import (
 	"strings"
 )
 
+// ConvertType converts an interface of a runtime type into a interface of the
+// given type
+// e.g. turn
+// var fields []reflect.StructField
+// fields = append(fields, reflect.StructField{
+// 		Name: "X",
+//		Type: reflect.TypeOf(new(big.Int)),
+//		Tag:  reflect.StructTag("json:\"" + "x" + "\""),
+// }
+// into
+// type TupleT struct { X *big.Int }
+func ConvertType(in interface{}, proto interface{}) interface{} {
+	protoType := reflect.TypeOf(proto)
+	if reflect.TypeOf(in).ConvertibleTo(protoType) {
+		return reflect.ValueOf(in).Convert(protoType).Interface()
+	}
+	// Use set as a last ditch effort
+	if err := set(reflect.ValueOf(proto), reflect.ValueOf(in)); err != nil {
+		panic(err)
+	}
+	return proto
+}
+
 // indirect recursively dereferences the value until it either gets the value
 // or finds a big.Int
 func indirect(v reflect.Value) reflect.Value {
@@ -61,7 +84,7 @@ func reflectIntType(unsigned bool, size int) reflect.Type {
 	return reflect.TypeOf(&big.Int{})
 }
 
-// mustArrayToBytesSlice creates a new byte slice with the exact same size as value
+// mustArrayToByteSlice creates a new byte slice with the exact same size as value
 // and copies the bytes in value to the new slice.
 func mustArrayToByteSlice(value reflect.Value) reflect.Value {
 	slice := reflect.MakeSlice(reflect.TypeOf([]byte{}), value.Len(), value.Len())
@@ -119,6 +142,9 @@ func setSlice(dst, src reflect.Value) error {
 }
 
 func setArray(dst, src reflect.Value) error {
+	if src.Kind() == reflect.Ptr {
+		return set(dst, indirect(src))
+	}
 	array := reflect.New(dst.Type()).Elem()
 	min := src.Len()
 	if src.Len() > dst.Len() {

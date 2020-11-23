@@ -24,17 +24,17 @@ import (
 	"sync"
 	"time"
 
-	"github.com/maticnetwork/bor/common"
-	"github.com/maticnetwork/bor/common/mclock"
-	"github.com/maticnetwork/bor/core/rawdb"
-	"github.com/maticnetwork/bor/core/types"
-	"github.com/maticnetwork/bor/crypto"
-	"github.com/maticnetwork/bor/les/flowcontrol"
-	"github.com/maticnetwork/bor/log"
-	"github.com/maticnetwork/bor/p2p"
-	"github.com/maticnetwork/bor/p2p/enode"
-	"github.com/maticnetwork/bor/params"
-	"github.com/maticnetwork/bor/rlp"
+	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/common/mclock"
+	"github.com/ethereum/go-ethereum/core/rawdb"
+	"github.com/ethereum/go-ethereum/core/types"
+	"github.com/ethereum/go-ethereum/crypto"
+	"github.com/ethereum/go-ethereum/les/flowcontrol"
+	"github.com/ethereum/go-ethereum/log"
+	"github.com/ethereum/go-ethereum/p2p"
+	"github.com/ethereum/go-ethereum/p2p/enode"
+	"github.com/ethereum/go-ethereum/params"
+	"github.com/ethereum/go-ethereum/rlp"
 )
 
 // requestBenchmark is an interface for different randomized request generators

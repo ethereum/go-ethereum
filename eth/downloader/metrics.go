@@ -19,7 +19,7 @@
 package downloader
 
 import (
-	"github.com/maticnetwork/bor/metrics"
+	"github.com/ethereum/go-ethereum/metrics"
 )
 
 var (
@@ -40,4 +40,6 @@ var (
 
 	stateInMeter   = metrics.NewRegisteredMeter("eth/downloader/states/in", nil)
 	stateDropMeter = metrics.NewRegisteredMeter("eth/downloader/states/drop", nil)
+
+	throttleCounter = metrics.NewRegisteredCounter("eth/downloader/throttle", nil)
 )

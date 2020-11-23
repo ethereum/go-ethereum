@@ -24,14 +24,14 @@ import (
 	"sync"
 	"time"
 
-	ethereum "github.com/maticnetwork/bor"
-	"github.com/maticnetwork/bor/common"
-	"github.com/maticnetwork/bor/core"
-	"github.com/maticnetwork/bor/core/rawdb"
-	"github.com/maticnetwork/bor/core/types"
-	"github.com/maticnetwork/bor/event"
-	"github.com/maticnetwork/bor/log"
-	"github.com/maticnetwork/bor/rpc"
+	ethereum "github.com/ethereum/go-ethereum"
+	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/core"
+	"github.com/ethereum/go-ethereum/core/rawdb"
+	"github.com/ethereum/go-ethereum/core/types"
+	"github.com/ethereum/go-ethereum/event"
+	"github.com/ethereum/go-ethereum/log"
+	"github.com/ethereum/go-ethereum/rpc"
 )
 
 // Type determines the kind of filter and is used to put the filter in to
@@ -52,8 +52,8 @@ const (
 	PendingTransactionsSubscription
 	// BlocksSubscription queries hashes for blocks that are imported
 	BlocksSubscription
-	//StateSubscription to listen main chain state
-	StateSubscription
+	// StateSyncSubscription to listen main chain state
+	StateSyncSubscription
 	// LastIndexSubscription keeps track of the last index
 	LastIndexSubscription
 )
@@ -68,7 +68,7 @@ const (
 	logsChanSize = 10
 	// chainEvChanSize is the size of channel listening to ChainEvent.
 	chainEvChanSize = 10
-	// stateEvChanSize is the size of channel listening to ChainEvent.
+	// stateEvChanSize is the size of channel listening to StateSyncEvent.
 	stateEvChanSize = 10
 )
 
@@ -80,9 +80,10 @@ type subscription struct {
 	logs      chan []*types.Log
 	hashes    chan []common.Hash
 	headers   chan *types.Header
-	stateData chan *types.StateData
 	installed chan struct{} // closed when the filter is installed
 	err       chan error    // closed when the filter is uninstalled
+
+	stateSyncData chan *types.StateSyncData
 }
 
 // EventSystem creates subscriptions, processes events and broadcasts them to the
@@ -98,7 +99,6 @@ type EventSystem struct {
 	rmLogsSub      event.Subscription // Subscription for removed log event
 	pendingLogsSub event.Subscription // Subscription for pending log event
 	chainSub       event.Subscription // Subscription for new chain event
-	stateSyncSub   event.Subscription // Subscription for new state event
 
 	// Channels
 	install       chan *subscription         // install filter for event notification
@@ -108,7 +108,10 @@ type EventSystem struct {
 	pendingLogsCh chan []*types.Log          // Channel to receive new log event
 	rmLogsCh      chan core.RemovedLogsEvent // Channel to receive removed log event
 	chainCh       chan core.ChainEvent       // Channel to receive new chain event
-	stateCh       chan core.StateSyncEvent   // Channel to receive deposit state change event
+
+	// Bor related subscription and channels
+	stateSyncSub event.Subscription       // Subscription for new state event
+	stateSyncCh  chan core.StateSyncEvent // Channel to receive deposit state change event
 }
 
 // NewEventSystem creates a new manager that listens for event on the given mux,
@@ -128,7 +131,7 @@ func NewEventSystem(backend Backend, lightMode bool) *EventSystem {
 		rmLogsCh:      make(chan core.RemovedLogsEvent, rmLogsChanSize),
 		pendingLogsCh: make(chan []*types.Log, logsChanSize),
 		chainCh:       make(chan core.ChainEvent, chainEvChanSize),
-		stateCh:       make(chan core.StateSyncEvent, stateEvChanSize),
+		stateSyncCh:   make(chan core.StateSyncEvent, stateEvChanSize),
 	}
 
 	// Subscribe events
@@ -136,8 +139,8 @@ func NewEventSystem(backend Backend, lightMode bool) *EventSystem {
 	m.logsSub = m.backend.SubscribeLogsEvent(m.logsCh)
 	m.rmLogsSub = m.backend.SubscribeRemovedLogsEvent(m.rmLogsCh)
 	m.chainSub = m.backend.SubscribeChainEvent(m.chainCh)
-	m.stateSyncSub = m.backend.SubscribeStateSyncEvent(m.stateCh)
 	m.pendingLogsSub = m.backend.SubscribePendingLogsEvent(m.pendingLogsCh)
+	m.stateSyncSub = m.backend.SubscribeStateSyncEvent(m.stateSyncCh)
 
 	// Make sure none of the subscriptions are empty
 	if m.txsSub == nil || m.logsSub == nil || m.rmLogsSub == nil || m.chainSub == nil || m.pendingLogsSub == nil {
@@ -375,12 +378,6 @@ func (es *EventSystem) handleChainEvent(filters filterIndex, ev core.ChainEvent)
 	}
 }
 
-func (es *EventSystem) handleStateSyncEvent(filters filterIndex, ev core.StateSyncEvent) {
-	for _, f := range filters[StateSubscription] {
-		f.stateData <- ev.StateData
-	}
-}
-
 func (es *EventSystem) lightFilterNewHead(newHeader *types.Header, callBack func(*types.Header, bool)) {
 	oldh := es.lastHead
 	es.lastHead = newHeader
@@ -483,7 +480,7 @@ func (es *EventSystem) eventLoop() {
 			es.handlePendingLogs(index, ev)
 		case ev := <-es.chainCh:
 			es.handleChainEvent(index, ev)
-		case ev := <-es.stateCh:
+		case ev := <-es.stateSyncCh:
 			es.handleStateSyncEvent(index, ev)
 
 		case f := <-es.install:
@@ -515,24 +512,6 @@ func (es *EventSystem) eventLoop() {
 			return
 		case <-es.chainSub.Err():
 			return
-		case <-es.stateSyncSub.Err():
-			return
 		}
 	}
-}
-
-// SubscribeNewDeposits creates a subscription that writes details about the new state sync events (from mainchain to Bor)
-func (es *EventSystem) SubscribeNewDeposits(stateData chan *types.StateData) *Subscription {
-	sub := &subscription{
-		id:        rpc.NewID(),
-		typ:       StateSubscription,
-		created:   time.Now(),
-		logs:      make(chan []*types.Log),
-		hashes:    make(chan []common.Hash),
-		headers:   make(chan *types.Header),
-		stateData: stateData,
-		installed: make(chan struct{}),
-		err:       make(chan error),
-	}
-	return es.subscribe(sub)
 }

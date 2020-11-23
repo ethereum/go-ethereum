@@ -19,7 +19,7 @@ package snapshot
 import (
 	"bytes"
 
-	"github.com/maticnetwork/bor/common"
+	"github.com/ethereum/go-ethereum/common"
 )
 
 // hashes is a helper to implement sort.Interface.

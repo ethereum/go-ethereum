@@ -22,13 +22,13 @@ import (
 	"math/big"
 	"strings"
 
-	"github.com/maticnetwork/bor/common"
-	"github.com/maticnetwork/bor/common/hexutil"
-	math2 "github.com/maticnetwork/bor/common/math"
-	"github.com/maticnetwork/bor/consensus/ethash"
-	"github.com/maticnetwork/bor/core"
-	"github.com/maticnetwork/bor/core/types"
-	"github.com/maticnetwork/bor/params"
+	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/common/hexutil"
+	math2 "github.com/ethereum/go-ethereum/common/math"
+	"github.com/ethereum/go-ethereum/consensus/ethash"
+	"github.com/ethereum/go-ethereum/core"
+	"github.com/ethereum/go-ethereum/core/types"
+	"github.com/ethereum/go-ethereum/params"
 )
 
 // alethGenesisSpec represents the genesis specification format used by the

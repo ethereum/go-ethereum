@@ -26,9 +26,9 @@ import (
 	"regexp"
 	"strconv"
 
-	"github.com/maticnetwork/bor/common/math"
-	"github.com/maticnetwork/bor/crypto"
-	"github.com/maticnetwork/bor/p2p/enr"
+	"github.com/ethereum/go-ethereum/common/math"
+	"github.com/ethereum/go-ethereum/crypto"
+	"github.com/ethereum/go-ethereum/p2p/enr"
 )
 
 var (

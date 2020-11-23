@@ -22,7 +22,7 @@ import (
 	"sync/atomic"
 
 	mapset "github.com/deckarep/golang-set"
-	"github.com/maticnetwork/bor/log"
+	"github.com/ethereum/go-ethereum/log"
 )
 
 const MetadataApi = "rpc"

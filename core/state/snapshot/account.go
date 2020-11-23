@@ -20,8 +20,8 @@ import (
 	"bytes"
 	"math/big"
 
-	"github.com/maticnetwork/bor/common"
-	"github.com/maticnetwork/bor/rlp"
+	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/rlp"
 )
 
 // Account is a modified version of a state.Account, where the root is replaced

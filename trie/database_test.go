@@ -19,8 +19,8 @@ package trie
 import (
 	"testing"
 
-	"github.com/maticnetwork/bor/common"
-	"github.com/maticnetwork/bor/ethdb/memorydb"
+	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/ethdb/memorydb"
 )
 
 // Tests that the trie database returns a missing trie node error if attempting

@@ -23,12 +23,12 @@ import (
 	"sync/atomic"
 	"time"
 
-	"github.com/maticnetwork/bor/common/mclock"
-	"github.com/maticnetwork/bor/eth"
-	"github.com/maticnetwork/bor/ethdb"
-	"github.com/maticnetwork/bor/les/flowcontrol"
-	"github.com/maticnetwork/bor/log"
-	"github.com/maticnetwork/bor/metrics"
+	"github.com/ethereum/go-ethereum/common/mclock"
+	"github.com/ethereum/go-ethereum/eth"
+	"github.com/ethereum/go-ethereum/ethdb"
+	"github.com/ethereum/go-ethereum/les/flowcontrol"
+	"github.com/ethereum/go-ethereum/log"
+	"github.com/ethereum/go-ethereum/metrics"
 )
 
 const makeCostStats = false // make request cost statistics during operation

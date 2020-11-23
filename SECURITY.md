@@ -6,13 +6,13 @@ Please see Releases. We recommend to use the most recent released version.
 
 ## Audit reports
 
-Audit reports are published in the `docs` folder: https://github.com/maticnetwork/bor/tree/master/docs/audits 
+Audit reports are published in the `docs` folder: https://github.com/ethereum/go-ethereum/tree/master/docs/audits 
 
 
 | Scope | Date | Report Link |
 | ------- | ------- | ----------- |
-| `geth` | 20170425 | [pdf](https://github.com/maticnetwork/bor/blob/master/docs/audits/2017-04-25_Geth-audit_Truesec.pdf) |
-| `clef` | 20180914 | [pdf](https://github.com/maticnetwork/bor/blob/master/docs/audits/2018-09-14_Clef-audit_NCC.pdf) |
+| `geth` | 20170425 | [pdf](https://github.com/ethereum/go-ethereum/blob/master/docs/audits/2017-04-25_Geth-audit_Truesec.pdf) |
+| `clef` | 20180914 | [pdf](https://github.com/ethereum/go-ethereum/blob/master/docs/audits/2018-09-14_Clef-audit_NCC.pdf) |
 
 
 

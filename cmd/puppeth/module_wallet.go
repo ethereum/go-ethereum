@@ -25,7 +25,7 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/maticnetwork/bor/log"
+	"github.com/ethereum/go-ethereum/log"
 )
 
 // walletDockerfile is the Dockerfile required to run a web wallet.

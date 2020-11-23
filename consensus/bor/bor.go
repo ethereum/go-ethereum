@@ -10,42 +10,40 @@ import (
 	"io"
 	"math"
 	"math/big"
-
 	"sort"
 	"strings"
 	"sync"
 	"time"
 
-	ethereum "github.com/maticnetwork/bor"
-	"github.com/maticnetwork/bor/accounts"
-	"github.com/maticnetwork/bor/accounts/abi"
-	"github.com/maticnetwork/bor/common"
-	"github.com/maticnetwork/bor/common/hexutil"
-	"github.com/maticnetwork/bor/consensus"
-	"github.com/maticnetwork/bor/consensus/misc"
-	"github.com/maticnetwork/bor/core"
-	"github.com/maticnetwork/bor/core/state"
-	"github.com/maticnetwork/bor/core/types"
-	"github.com/maticnetwork/bor/core/vm"
-	"github.com/maticnetwork/bor/crypto"
-	"github.com/maticnetwork/bor/ethdb"
-	"github.com/maticnetwork/bor/event"
-	"github.com/maticnetwork/bor/internal/ethapi"
-	"github.com/maticnetwork/bor/log"
-	"github.com/maticnetwork/bor/params"
-	"github.com/maticnetwork/bor/rlp"
-	"github.com/maticnetwork/bor/rpc"
-
 	lru "github.com/hashicorp/golang-lru"
 	"golang.org/x/crypto/sha3"
+
+	ethereum "github.com/ethereum/go-ethereum"
+	"github.com/ethereum/go-ethereum/accounts"
+	"github.com/ethereum/go-ethereum/accounts/abi"
+	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/common/hexutil"
+	"github.com/ethereum/go-ethereum/consensus"
+	"github.com/ethereum/go-ethereum/consensus/misc"
+	"github.com/ethereum/go-ethereum/core"
+	"github.com/ethereum/go-ethereum/core/state"
+	"github.com/ethereum/go-ethereum/core/types"
+	"github.com/ethereum/go-ethereum/core/vm"
+	"github.com/ethereum/go-ethereum/crypto"
+	"github.com/ethereum/go-ethereum/ethdb"
+	"github.com/ethereum/go-ethereum/event"
+	"github.com/ethereum/go-ethereum/internal/ethapi"
+	"github.com/ethereum/go-ethereum/log"
+	"github.com/ethereum/go-ethereum/params"
+	"github.com/ethereum/go-ethereum/rlp"
+	"github.com/ethereum/go-ethereum/rpc"
+	"github.com/ethereum/go-ethereum/trie"
 )
 
 const (
 	checkpointInterval = 1024 // Number of blocks after which to save the vote snapshot to the database
 	inmemorySnapshots  = 128  // Number of recent vote snapshots to keep in memory
 	inmemorySignatures = 4096 // Number of recent block signatures to keep in memory
-
-	wiggleTime = 5000 * time.Millisecond // Random delay (per signer) to allow concurrent signers
 )
 
 // Bor protocol constants.
@@ -226,8 +224,7 @@ type Bor struct {
 	HeimdallClient         IHeimdallClient
 	WithoutHeimdall        bool
 
-	stateSyncFeed event.Feed
-	scope         event.SubscriptionScope
+	scope event.SubscriptionScope
 	// The fields below are for testing only
 	fakeDiff bool // Skip difficulty verifications
 }
@@ -279,14 +276,14 @@ func (c *Bor) Author(header *types.Header) (common.Address, error) {
 }
 
 // VerifyHeader checks whether a header conforms to the consensus rules.
-func (c *Bor) VerifyHeader(chain consensus.ChainReader, header *types.Header, seal bool) error {
+func (c *Bor) VerifyHeader(chain consensus.ChainHeaderReader, header *types.Header, seal bool) error {
 	return c.verifyHeader(chain, header, nil)
 }
 
 // VerifyHeaders is similar to VerifyHeader, but verifies a batch of headers. The
 // method returns a quit channel to abort the operations and a results channel to
 // retrieve the async verifications (the order is that of the input slice).
-func (c *Bor) VerifyHeaders(chain consensus.ChainReader, headers []*types.Header, seals []bool) (chan<- struct{}, <-chan error) {
+func (c *Bor) VerifyHeaders(chain consensus.ChainHeaderReader, headers []*types.Header, seals []bool) (chan<- struct{}, <-chan error) {
 	abort := make(chan struct{})
 	results := make(chan error, len(headers))
 
@@ -308,7 +305,7 @@ func (c *Bor) VerifyHeaders(chain consensus.ChainReader, headers []*types.Header
 // caller may optionally pass in a batch of parents (ascending order) to avoid
 // looking those up from the database. This is useful for concurrently verifying
 // a batch of new headers.
-func (c *Bor) verifyHeader(chain consensus.ChainReader, header *types.Header, parents []*types.Header) error {
+func (c *Bor) verifyHeader(chain consensus.ChainHeaderReader, header *types.Header, parents []*types.Header) error {
 	if header.Number == nil {
 		return errUnknownBlock
 	}
@@ -372,7 +369,7 @@ func validateHeaderExtraField(extraBytes []byte) error {
 // rather depend on a batch of previous headers. The caller may optionally pass
 // in a batch of parents (ascending order) to avoid looking those up from the
 // database. This is useful for concurrently verifying a batch of new headers.
-func (c *Bor) verifyCascadingFields(chain consensus.ChainReader, header *types.Header, parents []*types.Header) error {
+func (c *Bor) verifyCascadingFields(chain consensus.ChainHeaderReader, header *types.Header, parents []*types.Header) error {
 	// The genesis block is the always valid dead-end
 	number := header.Number.Uint64()
 	if number == 0 {
@@ -423,7 +420,7 @@ func (c *Bor) verifyCascadingFields(chain consensus.ChainReader, header *types.H
 }
 
 // snapshot retrieves the authorization snapshot at a given point in time.
-func (c *Bor) snapshot(chain consensus.ChainReader, number uint64, hash common.Hash, parents []*types.Header) (*Snapshot, error) {
+func (c *Bor) snapshot(chain consensus.ChainHeaderReader, number uint64, hash common.Hash, parents []*types.Header) (*Snapshot, error) {
 	// Search for a snapshot in memory or on disk for checkpoints
 	var (
 		headers []*types.Header
@@ -530,7 +527,7 @@ func (c *Bor) VerifyUncles(chain consensus.ChainReader, block *types.Block) erro
 
 // VerifySeal implements consensus.Engine, checking whether the signature contained
 // in the header satisfies the consensus protocol requirements.
-func (c *Bor) VerifySeal(chain consensus.ChainReader, header *types.Header) error {
+func (c *Bor) VerifySeal(chain consensus.ChainHeaderReader, header *types.Header) error {
 	return c.verifySeal(chain, header, nil)
 }
 
@@ -538,7 +535,7 @@ func (c *Bor) VerifySeal(chain consensus.ChainReader, header *types.Header) erro
 // consensus protocol requirements. The method accepts an optional list of parent
 // headers that aren't yet part of the local blockchain to generate the snapshots
 // from.
-func (c *Bor) verifySeal(chain consensus.ChainReader, header *types.Header, parents []*types.Header) error {
+func (c *Bor) verifySeal(chain consensus.ChainHeaderReader, header *types.Header, parents []*types.Header) error {
 	// Verifying the genesis block is not supported
 	number := header.Number.Uint64()
 	if number == 0 {
@@ -589,7 +586,7 @@ func (c *Bor) verifySeal(chain consensus.ChainReader, header *types.Header, pare
 
 // Prepare implements consensus.Engine, preparing all the consensus fields of the
 // header for running the transactions on top.
-func (c *Bor) Prepare(chain consensus.ChainReader, header *types.Header) error {
+func (c *Bor) Prepare(chain consensus.ChainHeaderReader, header *types.Header) error {
 	// If the block isn't a checkpoint, cast a random vote (good enough for now)
 	header.Coinbase = common.Address{}
 	header.Nonce = types.BlockNonce{}
@@ -654,8 +651,9 @@ func (c *Bor) Prepare(chain consensus.ChainReader, header *types.Header) error {
 
 // Finalize implements consensus.Engine, ensuring no uncles are set, nor block
 // rewards given.
-func (c *Bor) Finalize(chain consensus.ChainReader, header *types.Header, state *state.StateDB, txs []*types.Transaction, uncles []*types.Header) {
-	stateSyncData := []*types.StateData{}
+func (c *Bor) Finalize(chain consensus.ChainHeaderReader, header *types.Header, state *state.StateDB, txs []*types.Transaction, uncles []*types.Header) {
+	stateSyncData := []*types.StateSyncData{}
+
 	var err error
 	headerNumber := header.Number.Uint64()
 	if headerNumber%c.config.Sprint == 0 {
@@ -679,14 +677,17 @@ func (c *Bor) Finalize(chain consensus.ChainReader, header *types.Header, state 
 	// No block rewards in PoA, so the state remains as is and uncles are dropped
 	header.Root = state.IntermediateRoot(chain.Config().IsEIP158(header.Number))
 	header.UncleHash = types.CalcUncleHash(nil)
+
+	// Set state sync data to blockchain
 	bc := chain.(*core.BlockChain)
 	bc.SetStateSync(stateSyncData)
 }
 
 // FinalizeAndAssemble implements consensus.Engine, ensuring no uncles are set,
 // nor block rewards given, and returns the final block.
-func (c *Bor) FinalizeAndAssemble(chain consensus.ChainReader, header *types.Header, state *state.StateDB, txs []*types.Transaction, uncles []*types.Header, receipts []*types.Receipt) (*types.Block, error) {
-	stateSyncData := []*types.StateData{}
+func (c *Bor) FinalizeAndAssemble(chain consensus.ChainHeaderReader, header *types.Header, state *state.StateDB, txs []*types.Transaction, uncles []*types.Header, receipts []*types.Receipt) (*types.Block, error) {
+	stateSyncData := []*types.StateSyncData{}
+
 	headerNumber := header.Number.Uint64()
 	if headerNumber%c.config.Sprint == 0 {
 		cx := chainContext{Chain: chain, Bor: c}
@@ -699,7 +700,7 @@ func (c *Bor) FinalizeAndAssemble(chain consensus.ChainReader, header *types.Hea
 		}
 
 		if !c.WithoutHeimdall {
-			// commit statees
+			// commit states
 			stateSyncData, err = c.CommitStates(state, header, cx)
 			if err != nil {
 				log.Error("Error while committing states", "error", err)
@@ -713,9 +714,12 @@ func (c *Bor) FinalizeAndAssemble(chain consensus.ChainReader, header *types.Hea
 	header.UncleHash = types.CalcUncleHash(nil)
 
 	// Assemble block
-	block := types.NewBlock(header, txs, nil, receipts)
+	block := types.NewBlock(header, txs, nil, receipts, new(trie.Trie))
+
+	// set state sync
 	bc := chain.(*core.BlockChain)
 	bc.SetStateSync(stateSyncData)
+
 	// return the final block for sealing
 	return block, nil
 }
@@ -732,7 +736,7 @@ func (c *Bor) Authorize(signer common.Address, signFn SignerFn) {
 
 // Seal implements consensus.Engine, attempting to create a sealed block using
 // the local signing credentials.
-func (c *Bor) Seal(chain consensus.ChainReader, block *types.Block, results chan<- *types.Block, stop <-chan struct{}) error {
+func (c *Bor) Seal(chain consensus.ChainHeaderReader, block *types.Block, results chan<- *types.Block, stop <-chan struct{}) error {
 	header := block.Header()
 	// Sealing the genesis block is not supported
 	number := header.Number.Uint64()
@@ -812,7 +816,7 @@ func (c *Bor) Seal(chain consensus.ChainReader, block *types.Block, results chan
 // CalcDifficulty is the difficulty adjustment algorithm. It returns the difficulty
 // that a new block should have based on the previous blocks in the chain and the
 // current signer.
-func (c *Bor) CalcDifficulty(chain consensus.ChainReader, time uint64, parent *types.Header) *big.Int {
+func (c *Bor) CalcDifficulty(chain consensus.ChainHeaderReader, time uint64, parent *types.Header) *big.Int {
 	snap, err := c.snapshot(chain, parent.Number.Uint64(), parent.Hash(), nil)
 	if err != nil {
 		return nil
@@ -827,7 +831,7 @@ func (c *Bor) SealHash(header *types.Header) common.Hash {
 
 // APIs implements consensus.Engine, returning the user facing RPC API to allow
 // controlling the signer voting.
-func (c *Bor) APIs(chain consensus.ChainReader) []rpc.API {
+func (c *Bor) APIs(chain consensus.ChainHeaderReader) []rpc.API {
 	return []rpc.API{{
 		Namespace: "bor",
 		Version:   "1.0",
@@ -873,7 +877,7 @@ func (c *Bor) GetCurrentSpan(snapshotNumber uint64) (*Span, error) {
 		StartBlock *big.Int
 		EndBlock   *big.Int
 	})
-	if err := c.validatorSetABI.Unpack(ret, method, result); err != nil {
+	if err := c.validatorSetABI.UnpackIntoInterface(ret, method, result); err != nil {
 		return nil, err
 	}
 
@@ -924,7 +928,7 @@ func (c *Bor) GetCurrentValidators(snapshotNumber uint64, blockNumber uint64) ([
 		ret1,
 	}
 
-	if err := c.validatorSetABI.Unpack(out, method, result); err != nil {
+	if err := c.validatorSetABI.UnpackIntoInterface(out, method, result); err != nil {
 		return nil, err
 	}
 
@@ -1086,7 +1090,7 @@ func (c *Bor) GetPendingStateProposals(snapshotNumber uint64) ([]*big.Int, error
 	}
 
 	var ret = new([]*big.Int)
-	if err := c.stateReceiverABI.Unpack(ret, method, result); err != nil {
+	if err = c.stateReceiverABI.UnpackIntoInterface(ret, method, result); err != nil {
 		return nil, err
 	}
 
@@ -1098,8 +1102,8 @@ func (c *Bor) CommitStates(
 	state *state.StateDB,
 	header *types.Header,
 	chain chainContext,
-) ([]*types.StateData, error) {
-	stateSyncs := make([]*types.StateData, 0)
+) ([]*types.StateSyncData, error) {
+	stateSyncs := make([]*types.StateSyncData, 0)
 	number := header.Number.Uint64()
 	_lastStateID, err := c.GenesisContractsClient.LastStateId(number - 1)
 	if err != nil {
@@ -1124,8 +1128,8 @@ func (c *Bor) CommitStates(
 			break
 		}
 
-		stateData := types.StateData{
-			Did:      eventRecord.ID,
+		stateData := types.StateSyncData{
+			ID:       eventRecord.ID,
 			Contract: eventRecord.Contract,
 			Data:     hex.EncodeToString(eventRecord.Data),
 			TxHash:   eventRecord.TxHash,
@@ -1205,7 +1209,7 @@ func (c *Bor) getNextHeimdallSpanForTest(
 
 // chain context
 type chainContext struct {
-	Chain consensus.ChainReader
+	Chain consensus.ChainHeaderReader
 	Bor   consensus.Engine
 }
 

@@ -25,7 +25,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/maticnetwork/bor/log"
+	"github.com/ethereum/go-ethereum/log"
 )
 
 // handler handles JSON-RPC messages. There is one handler per connection. Note that

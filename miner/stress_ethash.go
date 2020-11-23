@@ -28,21 +28,21 @@ import (
 	"path/filepath"
 	"time"
 
-	"github.com/maticnetwork/bor/accounts/keystore"
-	"github.com/maticnetwork/bor/common"
-	"github.com/maticnetwork/bor/common/fdlimit"
-	"github.com/maticnetwork/bor/consensus/ethash"
-	"github.com/maticnetwork/bor/core"
-	"github.com/maticnetwork/bor/core/types"
-	"github.com/maticnetwork/bor/crypto"
-	"github.com/maticnetwork/bor/eth"
-	"github.com/maticnetwork/bor/eth/downloader"
-	"github.com/maticnetwork/bor/log"
-	"github.com/maticnetwork/bor/miner"
-	"github.com/maticnetwork/bor/node"
-	"github.com/maticnetwork/bor/p2p"
-	"github.com/maticnetwork/bor/p2p/enode"
-	"github.com/maticnetwork/bor/params"
+	"github.com/ethereum/go-ethereum/accounts/keystore"
+	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/common/fdlimit"
+	"github.com/ethereum/go-ethereum/consensus/ethash"
+	"github.com/ethereum/go-ethereum/core"
+	"github.com/ethereum/go-ethereum/core/types"
+	"github.com/ethereum/go-ethereum/crypto"
+	"github.com/ethereum/go-ethereum/eth"
+	"github.com/ethereum/go-ethereum/eth/downloader"
+	"github.com/ethereum/go-ethereum/log"
+	"github.com/ethereum/go-ethereum/miner"
+	"github.com/ethereum/go-ethereum/node"
+	"github.com/ethereum/go-ethereum/p2p"
+	"github.com/ethereum/go-ethereum/p2p/enode"
+	"github.com/ethereum/go-ethereum/params"
 )
 
 func main() {
@@ -61,43 +61,39 @@ func main() {
 	genesis := makeGenesis(faucets)
 
 	var (
-		nodes  []*node.Node
+		nodes  []*eth.Ethereum
 		enodes []*enode.Node
 	)
 	for i := 0; i < 4; i++ {
 		// Start the node and wait until it's up
-		node, err := makeMiner(genesis)
+		stack, ethBackend, err := makeMiner(genesis)
 		if err != nil {
 			panic(err)
 		}
-		defer node.Close()
+		defer stack.Close()
 
-		for node.Server().NodeInfo().Ports.Listener == 0 {
+		for stack.Server().NodeInfo().Ports.Listener == 0 {
 			time.Sleep(250 * time.Millisecond)
 		}
-		// Connect the node to al the previous ones
+		// Connect the node to all the previous ones
 		for _, n := range enodes {
-			node.Server().AddPeer(n)
+			stack.Server().AddPeer(n)
 		}
-		// Start tracking the node and it's enode
-		nodes = append(nodes, node)
-		enodes = append(enodes, node.Server().Self())
+		// Start tracking the node and its enode
+		nodes = append(nodes, ethBackend)
+		enodes = append(enodes, stack.Server().Self())
 
 		// Inject the signer key and start sealing with it
-		store := node.AccountManager().Backends(keystore.KeyStoreType)[0].(*keystore.KeyStore)
+		store := stack.AccountManager().Backends(keystore.KeyStoreType)[0].(*keystore.KeyStore)
 		if _, err := store.NewAccount(""); err != nil {
 			panic(err)
 		}
 	}
-	// Iterate over all the nodes and start signing with them
-	time.Sleep(3 * time.Second)
 
+	// Iterate over all the nodes and start mining
+	time.Sleep(3 * time.Second)
 	for _, node := range nodes {
-		var ethereum *eth.Ethereum
-		if err := node.Service(&ethereum); err != nil {
-			panic(err)
-		}
-		if err := ethereum.StartMining(1); err != nil {
+		if err := node.StartMining(1); err != nil {
 			panic(err)
 		}
 	}
@@ -106,25 +102,22 @@ func main() {
 	// Start injecting transactions from the faucets like crazy
 	nonces := make([]uint64, len(faucets))
 	for {
+		// Pick a random mining node
 		index := rand.Intn(len(faucets))
+		backend := nodes[index%len(nodes)]
 
-		// Fetch the accessor for the relevant signer
-		var ethereum *eth.Ethereum
-		if err := nodes[index%len(nodes)].Service(&ethereum); err != nil {
-			panic(err)
-		}
 		// Create a self transaction and inject into the pool
 		tx, err := types.SignTx(types.NewTransaction(nonces[index], crypto.PubkeyToAddress(faucets[index].PublicKey), new(big.Int), 21000, big.NewInt(100000000000+rand.Int63n(65536)), nil), types.HomesteadSigner{}, faucets[index])
 		if err != nil {
 			panic(err)
 		}
-		if err := ethereum.TxPool().AddLocal(tx); err != nil {
+		if err := backend.TxPool().AddLocal(tx); err != nil {
 			panic(err)
 		}
 		nonces[index]++
 
 		// Wait if we're too saturated
-		if pend, _ := ethereum.TxPool().Stats(); pend > 2048 {
+		if pend, _ := backend.TxPool().Stats(); pend > 2048 {
 			time.Sleep(100 * time.Millisecond)
 		}
 	}
@@ -149,12 +142,12 @@ func makeGenesis(faucets []*ecdsa.PrivateKey) *core.Genesis {
 	return genesis
 }
 
-func makeMiner(genesis *core.Genesis) (*node.Node, error) {
+func makeMiner(genesis *core.Genesis) (*node.Node, *eth.Ethereum, error) {
 	// Define the basic configurations for the Ethereum node
 	datadir, _ := ioutil.TempDir("", "")
 
 	config := &node.Config{
-		Name:    "bor",
+		Name:    "geth",
 		Version: params.Version,
 		DataDir: datadir,
 		P2P: p2p.Config{
@@ -165,31 +158,31 @@ func makeMiner(genesis *core.Genesis) (*node.Node, error) {
 		NoUSB:             true,
 		UseLightweightKDF: true,
 	}
-	// Start the node and configure a full Ethereum node on it
+	// Create the node and configure a full Ethereum node on it
 	stack, err := node.New(config)
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
-	if err := stack.Register(func(ctx *node.ServiceContext) (node.Service, error) {
-		return eth.New(ctx, &eth.Config{
-			Genesis:         genesis,
-			NetworkId:       genesis.Config.ChainID.Uint64(),
-			SyncMode:        downloader.FullSync,
-			DatabaseCache:   256,
-			DatabaseHandles: 256,
-			TxPool:          core.DefaultTxPoolConfig,
-			GPO:             eth.DefaultConfig.GPO,
-			Ethash:          eth.DefaultConfig.Ethash,
-			Miner: miner.Config{
-				GasFloor: genesis.GasLimit * 9 / 10,
-				GasCeil:  genesis.GasLimit * 11 / 10,
-				GasPrice: big.NewInt(1),
-				Recommit: time.Second,
-			},
-		})
-	}); err != nil {
-		return nil, err
+	ethBackend, err := eth.New(stack, &eth.Config{
+		Genesis:         genesis,
+		NetworkId:       genesis.Config.ChainID.Uint64(),
+		SyncMode:        downloader.FullSync,
+		DatabaseCache:   256,
+		DatabaseHandles: 256,
+		TxPool:          core.DefaultTxPoolConfig,
+		GPO:             eth.DefaultConfig.GPO,
+		Ethash:          eth.DefaultConfig.Ethash,
+		Miner: miner.Config{
+			GasFloor: genesis.GasLimit * 9 / 10,
+			GasCeil:  genesis.GasLimit * 11 / 10,
+			GasPrice: big.NewInt(1),
+			Recommit: time.Second,
+		},
+	})
+	if err != nil {
+		return nil, nil, err
 	}
-	// Start the node and return if successful
-	return stack, stack.Start()
+
+	err = stack.Start()
+	return stack, ethBackend, err
 }

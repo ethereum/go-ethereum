@@ -24,14 +24,14 @@ import (
 	"net"
 	"os"
 
-	"github.com/maticnetwork/bor/cmd/utils"
-	"github.com/maticnetwork/bor/crypto"
-	"github.com/maticnetwork/bor/log"
-	"github.com/maticnetwork/bor/p2p/discover"
-	"github.com/maticnetwork/bor/p2p/discv5"
-	"github.com/maticnetwork/bor/p2p/enode"
-	"github.com/maticnetwork/bor/p2p/nat"
-	"github.com/maticnetwork/bor/p2p/netutil"
+	"github.com/ethereum/go-ethereum/cmd/utils"
+	"github.com/ethereum/go-ethereum/crypto"
+	"github.com/ethereum/go-ethereum/log"
+	"github.com/ethereum/go-ethereum/p2p/discover"
+	"github.com/ethereum/go-ethereum/p2p/discv5"
+	"github.com/ethereum/go-ethereum/p2p/enode"
+	"github.com/ethereum/go-ethereum/p2p/nat"
+	"github.com/ethereum/go-ethereum/p2p/netutil"
 )
 
 func main() {
@@ -44,7 +44,7 @@ func main() {
 		natdesc     = flag.String("nat", "none", "port mapping mechanism (any|none|upnp|pmp|extip:<IP>)")
 		netrestrict = flag.String("netrestrict", "", "restrict network communication to the given IP networks (CIDR masks)")
 		runv5       = flag.Bool("v5", false, "run a v5 topic discovery bootnode")
-		verbosity   = flag.Int("verbosity", int(log.LvlInfo), "log verbosity (0-9)")
+		verbosity   = flag.Int("verbosity", int(log.LvlInfo), "log verbosity (0-5)")
 		vmodule     = flag.String("vmodule", "", "log verbosity pattern")
 
 		nodeKey *ecdsa.PrivateKey

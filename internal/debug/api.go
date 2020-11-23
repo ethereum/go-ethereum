@@ -34,7 +34,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/maticnetwork/bor/log"
+	"github.com/ethereum/go-ethereum/log"
 )
 
 // Handler is the global debugging handler.
@@ -196,7 +196,7 @@ func (*HandlerT) Stacks() string {
 	return buf.String()
 }
 
-// FreeOSMemory returns unused memory to the OS.
+// FreeOSMemory forces a garbage collection.
 func (*HandlerT) FreeOSMemory() {
 	debug.FreeOSMemory()
 }

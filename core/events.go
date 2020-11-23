@@ -17,8 +17,8 @@
 package core
 
 import (
-	"github.com/maticnetwork/bor/common"
-	"github.com/maticnetwork/bor/core/types"
+	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/core/types"
 )
 
 // NewTxsEvent is posted when a batch of transactions enter the transaction pool.
@@ -34,10 +34,6 @@ type ChainEvent struct {
 	Block *types.Block
 	Hash  common.Hash
 	Logs  []*types.Log
-}
-
-type StateSyncEvent struct {
-	StateData *types.StateData
 }
 
 type ChainSideEvent struct {

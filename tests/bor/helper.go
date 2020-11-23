@@ -8,16 +8,16 @@ import (
 	"sort"
 	"testing"
 
-	"github.com/maticnetwork/bor/common"
-	"github.com/maticnetwork/bor/consensus/bor"
-	"github.com/maticnetwork/bor/core"
-	"github.com/maticnetwork/bor/core/types"
-	"github.com/maticnetwork/bor/crypto"
-	"github.com/maticnetwork/bor/crypto/secp256k1"
-	"github.com/maticnetwork/bor/eth"
-	"github.com/maticnetwork/bor/ethdb"
-	"github.com/maticnetwork/bor/node"
-	"github.com/maticnetwork/bor/params"
+	"github.com/ethereum/go-ethereum/cmd/utils"
+	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/consensus/bor"
+	"github.com/ethereum/go-ethereum/core"
+	"github.com/ethereum/go-ethereum/core/types"
+	"github.com/ethereum/go-ethereum/crypto"
+	"github.com/ethereum/go-ethereum/crypto/secp256k1"
+	"github.com/ethereum/go-ethereum/eth"
+	"github.com/ethereum/go-ethereum/ethdb"
+	"github.com/ethereum/go-ethereum/params"
 )
 
 var (
@@ -58,36 +58,11 @@ func buildEthereumInstance(t *testing.T, db ethdb.Database) *initializeData {
 	}
 	ethConf.Genesis.MustCommit(db)
 
-	// Create a temporary storage for the node keys and initialize it
-	workspace, err := ioutil.TempDir("", "console-tester-")
-	if err != nil {
-		t.Fatalf("failed to create temporary keystore: %v", err)
-	}
-
-	// Create a networkless protocol stack and start an Ethereum service within
-	stack, err := node.New(&node.Config{DataDir: workspace, UseLightweightKDF: true, Name: "console-tester"})
-	if err != nil {
-		t.Fatalf("failed to create node: %v", err)
-	}
-	err = stack.Register(func(ctx *node.ServiceContext) (node.Service, error) {
-		s, err := eth.New(ctx, ethConf)
-		return s, err
-	})
+	ethereum := utils.CreateBorEthereum(ethConf)
 	if err != nil {
 		t.Fatalf("failed to register Ethereum protocol: %v", err)
 	}
 
-	// Start the node and assemble the JavaScript console around it
-	if err = stack.Start(); err != nil {
-		t.Fatalf("failed to start test stack: %v", err)
-	}
-	_, err = stack.Attach()
-	if err != nil {
-		t.Fatalf("failed to attach to node: %v", err)
-	}
-
-	var ethereum *eth.Ethereum
-	stack.Service(&ethereum)
 	ethConf.Genesis.MustCommit(ethereum.ChainDb())
 	return &initializeData{
 		genesis:  gen,

@@ -5,13 +5,13 @@ package eth
 import (
 	"time"
 
-	"github.com/maticnetwork/bor/common"
-	"github.com/maticnetwork/bor/consensus/ethash"
-	"github.com/maticnetwork/bor/core"
-	"github.com/maticnetwork/bor/eth/downloader"
-	"github.com/maticnetwork/bor/eth/gasprice"
-	"github.com/maticnetwork/bor/miner"
-	"github.com/maticnetwork/bor/params"
+	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/consensus/ethash"
+	"github.com/ethereum/go-ethereum/core"
+	"github.com/ethereum/go-ethereum/eth/downloader"
+	"github.com/ethereum/go-ethereum/eth/gasprice"
+	"github.com/ethereum/go-ethereum/miner"
+	"github.com/ethereum/go-ethereum/params"
 )
 
 // MarshalTOML marshals as TOML.
@@ -29,6 +29,7 @@ func (c Config) MarshalTOML() (interface{}, error) {
 		LightIngress            int                    `toml:",omitempty"`
 		LightEgress             int                    `toml:",omitempty"`
 		LightPeers              int                    `toml:",omitempty"`
+		LightNoPrune            bool                   `toml:",omitempty"`
 		UltraLightServers       []string               `toml:",omitempty"`
 		UltraLightFraction      int                    `toml:",omitempty"`
 		UltraLightOnlyAnnounce  bool                   `toml:",omitempty"`
@@ -37,6 +38,8 @@ func (c Config) MarshalTOML() (interface{}, error) {
 		DatabaseCache           int
 		DatabaseFreezer         string
 		TrieCleanCache          int
+		TrieCleanCacheJournal   string        `toml:",omitempty"`
+		TrieCleanCacheRejournal time.Duration `toml:",omitempty"`
 		TrieDirtyCache          int
 		TrieTimeout             time.Duration
 		SnapshotCache           int
@@ -66,6 +69,7 @@ func (c Config) MarshalTOML() (interface{}, error) {
 	enc.LightIngress = c.LightIngress
 	enc.LightEgress = c.LightEgress
 	enc.LightPeers = c.LightPeers
+	enc.LightNoPrune = c.LightNoPrune
 	enc.UltraLightServers = c.UltraLightServers
 	enc.UltraLightFraction = c.UltraLightFraction
 	enc.UltraLightOnlyAnnounce = c.UltraLightOnlyAnnounce
@@ -74,6 +78,8 @@ func (c Config) MarshalTOML() (interface{}, error) {
 	enc.DatabaseCache = c.DatabaseCache
 	enc.DatabaseFreezer = c.DatabaseFreezer
 	enc.TrieCleanCache = c.TrieCleanCache
+	enc.TrieCleanCacheJournal = c.TrieCleanCacheJournal
+	enc.TrieCleanCacheRejournal = c.TrieCleanCacheRejournal
 	enc.TrieDirtyCache = c.TrieDirtyCache
 	enc.TrieTimeout = c.TrieTimeout
 	enc.SnapshotCache = c.SnapshotCache
@@ -107,6 +113,7 @@ func (c *Config) UnmarshalTOML(unmarshal func(interface{}) error) error {
 		LightIngress            *int                   `toml:",omitempty"`
 		LightEgress             *int                   `toml:",omitempty"`
 		LightPeers              *int                   `toml:",omitempty"`
+		LightNoPrune            *bool                  `toml:",omitempty"`
 		UltraLightServers       []string               `toml:",omitempty"`
 		UltraLightFraction      *int                   `toml:",omitempty"`
 		UltraLightOnlyAnnounce  *bool                  `toml:",omitempty"`
@@ -115,6 +122,8 @@ func (c *Config) UnmarshalTOML(unmarshal func(interface{}) error) error {
 		DatabaseCache           *int
 		DatabaseFreezer         *string
 		TrieCleanCache          *int
+		TrieCleanCacheJournal   *string        `toml:",omitempty"`
+		TrieCleanCacheRejournal *time.Duration `toml:",omitempty"`
 		TrieDirtyCache          *int
 		TrieTimeout             *time.Duration
 		SnapshotCache           *int
@@ -171,6 +180,9 @@ func (c *Config) UnmarshalTOML(unmarshal func(interface{}) error) error {
 	if dec.LightPeers != nil {
 		c.LightPeers = *dec.LightPeers
 	}
+	if dec.LightNoPrune != nil {
+		c.LightNoPrune = *dec.LightNoPrune
+	}
 	if dec.UltraLightServers != nil {
 		c.UltraLightServers = dec.UltraLightServers
 	}
@@ -194,6 +206,12 @@ func (c *Config) UnmarshalTOML(unmarshal func(interface{}) error) error {
 	}
 	if dec.TrieCleanCache != nil {
 		c.TrieCleanCache = *dec.TrieCleanCache
+	}
+	if dec.TrieCleanCacheJournal != nil {
+		c.TrieCleanCacheJournal = *dec.TrieCleanCacheJournal
+	}
+	if dec.TrieCleanCacheRejournal != nil {
+		c.TrieCleanCacheRejournal = *dec.TrieCleanCacheRejournal
 	}
 	if dec.TrieDirtyCache != nil {
 		c.TrieDirtyCache = *dec.TrieDirtyCache
@@ -233,12 +251,6 @@ func (c *Config) UnmarshalTOML(unmarshal func(interface{}) error) error {
 	}
 	if dec.RPCTxFeeCap != nil {
 		c.RPCTxFeeCap = *dec.RPCTxFeeCap
-	}
-	if dec.Checkpoint != nil {
-		c.Checkpoint = dec.Checkpoint
-	}
-	if dec.CheckpointOracle != nil {
-		c.CheckpointOracle = dec.CheckpointOracle
 	}
 	if dec.Checkpoint != nil {
 		c.Checkpoint = dec.Checkpoint

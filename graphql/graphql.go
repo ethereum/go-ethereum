@@ -22,17 +22,17 @@ import (
 	"errors"
 	"time"
 
-	ethereum "github.com/maticnetwork/bor"
-	"github.com/maticnetwork/bor/common"
-	"github.com/maticnetwork/bor/common/hexutil"
-	"github.com/maticnetwork/bor/core/rawdb"
-	"github.com/maticnetwork/bor/core/state"
-	"github.com/maticnetwork/bor/core/types"
-	"github.com/maticnetwork/bor/core/vm"
-	"github.com/maticnetwork/bor/eth/filters"
-	"github.com/maticnetwork/bor/internal/ethapi"
-	"github.com/maticnetwork/bor/rlp"
-	"github.com/maticnetwork/bor/rpc"
+	"github.com/ethereum/go-ethereum"
+	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/common/hexutil"
+	"github.com/ethereum/go-ethereum/core/rawdb"
+	"github.com/ethereum/go-ethereum/core/state"
+	"github.com/ethereum/go-ethereum/core/types"
+	"github.com/ethereum/go-ethereum/core/vm"
+	"github.com/ethereum/go-ethereum/eth/filters"
+	"github.com/ethereum/go-ethereum/internal/ethapi"
+	"github.com/ethereum/go-ethereum/rlp"
+	"github.com/ethereum/go-ethereum/rpc"
 )
 
 var (
@@ -584,7 +584,7 @@ func (b *Block) TotalDifficulty(ctx context.Context) (hexutil.Big, error) {
 		}
 		h = header.Hash()
 	}
-	return hexutil.Big(*b.backend.GetTd(h)), nil
+	return hexutil.Big(*b.backend.GetTd(ctx, h)), nil
 }
 
 // BlockNumberArgs encapsulates arguments to accessors that specify a block number.
@@ -1042,6 +1042,10 @@ func (r *Resolver) GasPrice(ctx context.Context) (hexutil.Big, error) {
 
 func (r *Resolver) ProtocolVersion(ctx context.Context) (int32, error) {
 	return int32(r.backend.ProtocolVersion()), nil
+}
+
+func (r *Resolver) ChainID(ctx context.Context) (hexutil.Big, error) {
+	return hexutil.Big(*r.backend.ChainConfig().ChainID), nil
 }
 
 // SyncState represents the synchronisation status returned from the `syncing` accessor.
