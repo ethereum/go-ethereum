@@ -407,7 +407,8 @@ func (s *Suite) TestTransaction(t *utesting.T) {
 		getNextTxFromChain(t, s),
 		unknownTx(t, s),
 	}
-	for _, tx := range tests {
+	for i, tx := range tests {
+		fmt.Printf("Testing tx propagation: %v\n", i)
 		sendSuccessfulTx(t, s, tx)
 	}
 }
@@ -420,7 +421,8 @@ func (s *Suite) TestMaliciousTx(t *utesting.T) {
 		hugeGasPrice(t, s),
 		hugeData(t, s),
 	}
-	for _, tx := range tests {
+	for i, tx := range tests {
+		fmt.Printf("Testing malicious tx propagation: %v\n", i)
 		sendFailingTx(t, s, tx)
 	}
 }

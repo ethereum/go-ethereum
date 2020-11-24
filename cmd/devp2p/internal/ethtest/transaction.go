@@ -18,6 +18,7 @@ package ethtest
 
 import (
 	"fmt"
+	"time"
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/types"
@@ -30,44 +31,70 @@ var faucetKey, _ = crypto.HexToECDSA("b71c71a67e1177ad4e901695e1b4b9ee17ae16c666
 
 func sendSuccessfulTx(t *utesting.T, s *Suite, tx *types.Transaction) {
 	sendConn, recvConn := s.setupConnection(t), s.setupConnection(t)
-	fmt.Printf("tx %v %v %v\n", tx.Hash(), tx.GasPrice(), tx.Gas())
+	fmt.Printf("tx %v %v %v\n", tx.Hash().String(), tx.GasPrice(), tx.Gas())
 	// Send the transaction
 	if err := sendConn.Write(Transactions([]*types.Transaction{tx})); err != nil {
 		t.Fatal(err)
 	}
+	time.Sleep(100 * time.Millisecond)
 	// Wait for the transaction announcement
-	switch msg := recvConn.ReadAndServe(s.chain, timeout).(type) {
-	case *Transactions:
-		recTxs := *msg
-		if len(recTxs) != 1 {
-			t.Fatalf("received transactions do not match send: %v", recTxs)
+	for i := 0; i < 2; i++ {
+		switch msg := recvConn.ReadAndServe(s.chain, timeout).(type) {
+		case *Transactions:
+			recTxs := *msg
+			if len(recTxs) < 1 {
+				t.Fatalf("received transactions do not match send: %v", recTxs)
+			}
+			if tx.Hash() != recTxs[len(recTxs)-1].Hash() {
+				t.Fatalf("received transactions do not match send: got %v want %v", recTxs, tx)
+			}
+		case *NewPooledTransactionHashes:
+			txHashes := *msg
+			if len(txHashes) < 1 {
+				t.Fatalf("received transactions do not match send: %v", txHashes)
+			}
+			if tx.Hash() == txHashes[len(txHashes)-1] {
+				// Tx announcement received
+				return
+			}
+			// ignore other tx announcements
+		default:
+			t.Fatalf("unexpected message in sendSuccessfulTx: %s", pretty.Sdump(msg))
 		}
-		if tx.Hash() != recTxs[0].Hash() {
-			t.Fatalf("received transactions do not match send: got %v want %v", tx, recTxs)
-		}
-	default:
-		t.Fatalf("unexpected: %s", pretty.Sdump(msg))
 	}
+	t.Fatalf("No tx announcement received, wanted %v", tx)
 }
 
 func sendFailingTx(t *utesting.T, s *Suite, tx *types.Transaction) {
 	sendConn, recvConn := s.setupConnection(t), s.setupConnection(t)
+	// Wait for a transaction announcement
+	switch msg := recvConn.ReadAndServe(s.chain, timeout).(type) {
+	case *NewPooledTransactionHashes:
+		break
+	default:
+		fmt.Printf("unexpected message, logging: %v", pretty.Sdump(msg))
+	}
 	// Send the transaction
 	if err := sendConn.Write(Transactions([]*types.Transaction{tx})); err != nil {
 		t.Fatal(err)
 	}
-	// Wait for the transaction announcement
+	// Wait for another transaction announcement
 	switch msg := recvConn.ReadAndServe(s.chain, timeout).(type) {
 	case *Transactions:
 		t.Fatalf("Received unexpected transaction announcement: %v", msg)
+	case *NewPooledTransactionHashes:
+		t.Fatalf("Received unexpected pooledTx announcement: %v", msg)
+	case *Error:
+		// Transaction should not be announced -> wait for timeout
+		return
 	default:
-		t.Fatalf("unexpected: %s", pretty.Sdump(msg))
+		t.Fatalf("unexpected message in sendFailingTx: %s", pretty.Sdump(msg))
 	}
 }
 
 func unknownTx(t *utesting.T, s *Suite) *types.Transaction {
 	tx := getNextTxFromChain(t, s)
-	txNew := types.NewTransaction(tx.Nonce(), *tx.To(), tx.Value(), tx.Gas(), tx.GasPrice(), tx.Data())
+	txNew := types.NewTransaction(tx.Nonce()+1, *tx.To(), tx.Value(), tx.Gas(), tx.GasPrice(), tx.Data())
 	return signWithFaucet(t, txNew)
 }
 
