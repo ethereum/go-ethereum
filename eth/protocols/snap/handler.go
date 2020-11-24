@@ -23,7 +23,6 @@ import (
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core"
 	"github.com/ethereum/go-ethereum/core/state"
-	"github.com/ethereum/go-ethereum/core/state/snapshot"
 	"github.com/ethereum/go-ethereum/light"
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/p2p"
@@ -67,25 +66,13 @@ type Backend interface {
 	// inbound messages going forward.
 	RunPeer(peer *Peer, handler Handler) error
 
-	// PeerInfo retrieves all known `eth` information about a peer.
+	// PeerInfo retrieves all known `snap` information about a peer.
 	PeerInfo(id enode.ID) interface{}
 
-	// OnAccounts is a callback method to invoke when a range of accounts are
-	// received from a remote peer.
-	OnAccounts(peer *Peer, id uint64, hashes []common.Hash, accounts [][]byte, proof [][]byte) error
-
-	// OnStorage is a callback method to invoke when ranges of storage slots
-	// are received from a remote peer. The data might contain multiple storage
-	// tries, but proofs can only be attached for the last one.
-	OnStorage(peer *Peer, id uint64, hashes [][]common.Hash, slots [][][]byte, proof [][]byte) error
-
-	// OnByteCodes is a callback method to invoke when a batch of contract
-	// bytes codes are received from a remote peer.
-	OnByteCodes(peer *Peer, id uint64, bytecodes [][]byte) error
-
-	// OnTrieNodes is a callback method to invoke when a batch of trie nodes
-	// are received from a remote peer.
-	OnTrieNodes(peer *Peer, id uint64, nodes [][]byte) error
+	// Handle is a callback to be invoked when a data packet is received from
+	// the remote peer. Only packets not consumed by the protocol handler will
+	// be forwarded to the backend.
+	Handle(peer *Peer, packet Packet) error
 }
 
 // MakeProtocols constructs the P2P protocol definitions for `snap`.
@@ -143,9 +130,9 @@ func handleMessage(backend Backend, peer *Peer) error {
 
 	// Handle the message depending on its contents
 	switch {
-	case msg.Code == getAccountRangeMsg:
+	case msg.Code == GetAccountRangeMsg:
 		// Decode the account retrieval request
-		var req getAccountRangeData
+		var req GetAccountRangePacket
 		if err := msg.Decode(&req); err != nil {
 			return fmt.Errorf("%w: message %v: %v", errDecode, msg, err)
 		}
@@ -155,15 +142,15 @@ func handleMessage(backend Backend, peer *Peer) error {
 		// Retrieve the requested state and bail out if non existent
 		tr, err := trie.New(req.Root, backend.Chain().StateCache().TrieDB())
 		if err != nil {
-			return p2p.Send(peer.rw, accountRangeMsg, &accountRangeData{ID: req.ID})
+			return p2p.Send(peer.rw, AccountRangeMsg, &AccountRangePacket{ID: req.ID})
 		}
 		it, err := backend.Chain().Snapshots().AccountIterator(req.Root, req.Origin)
 		if err != nil {
-			return p2p.Send(peer.rw, accountRangeMsg, &accountRangeData{ID: req.ID})
+			return p2p.Send(peer.rw, AccountRangeMsg, &AccountRangePacket{ID: req.ID})
 		}
 		// Iterate over the requested range and pile accounts up
 		var (
-			accounts []*accountData
+			accounts []*AccountData
 			size     uint64
 			last     common.Hash
 		)
@@ -175,7 +162,7 @@ func handleMessage(backend Backend, peer *Peer) error {
 
 			// Assemble the reply item
 			size += uint64(common.HashLength + len(account))
-			accounts = append(accounts, &accountData{
+			accounts = append(accounts, &AccountData{
 				Hash: hash,
 				Body: account,
 			})
@@ -190,12 +177,12 @@ func handleMessage(backend Backend, peer *Peer) error {
 		proof := light.NewNodeSet()
 		if err := tr.Prove(req.Origin[:], 0, proof); err != nil {
 			log.Warn("Failed to prove account range", "origin", req.Origin, "err", err)
-			return p2p.Send(peer.rw, accountRangeMsg, &accountRangeData{ID: req.ID})
+			return p2p.Send(peer.rw, AccountRangeMsg, &AccountRangePacket{ID: req.ID})
 		}
 		if last != (common.Hash{}) {
 			if err := tr.Prove(last[:], 0, proof); err != nil {
 				log.Warn("Failed to prove account range", "last", last, "err", err)
-				return p2p.Send(peer.rw, accountRangeMsg, &accountRangeData{ID: req.ID})
+				return p2p.Send(peer.rw, AccountRangeMsg, &AccountRangePacket{ID: req.ID})
 			}
 		}
 		var proofs [][]byte
@@ -203,38 +190,29 @@ func handleMessage(backend Backend, peer *Peer) error {
 			proofs = append(proofs, blob)
 		}
 		// Send back anything accumulated
-		return p2p.Send(peer.rw, accountRangeMsg, &accountRangeData{
+		return p2p.Send(peer.rw, AccountRangeMsg, &AccountRangePacket{
 			ID:       req.ID,
 			Accounts: accounts,
 			Proof:    proofs,
 		})
 
-	case msg.Code == accountRangeMsg:
+	case msg.Code == AccountRangeMsg:
 		// A range of accounts arrived to one of our previous requests
-		var res accountRangeData
-		if err := msg.Decode(&res); err != nil {
+		res := new(AccountRangePacket)
+		if err := msg.Decode(res); err != nil {
 			return fmt.Errorf("%w: message %v: %v", errDecode, msg, err)
 		}
-		// Transform the snap slim format into the consensus representation
-		var (
-			keys = make([]common.Hash, len(res.Accounts))
-			vals = make([][]byte, len(res.Accounts))
-		)
-		for i, acc := range res.Accounts {
-			val, err := snapshot.FullAccountRLP(acc.Body)
-			if err != nil {
-				return fmt.Errorf("invalid account %x: %v", acc.Body, err)
-			}
-			keys[i], vals[i] = acc.Hash, val
-			if i > 0 && bytes.Compare(keys[i-1][:], keys[i][:]) >= 0 {
-				return fmt.Errorf("accounts not monotonically increasing: #%d [%x] vs #%d [%x]", i-1, keys[i-1], i, keys[i])
+		// Ensure the range is monotonically increasing
+		for i := 1; i < len(res.Accounts); i++ {
+			if bytes.Compare(res.Accounts[i-1].Hash[:], res.Accounts[i].Hash[:]) >= 0 {
+				return fmt.Errorf("accounts not monotonically increasing: #%d [%x] vs #%d [%x]", i-1, res.Accounts[i-1].Hash[:], i, res.Accounts[i].Hash[:])
 			}
 		}
-		return backend.OnAccounts(peer, res.ID, keys, vals, res.Proof)
+		return backend.Handle(peer, res)
 
-	case msg.Code == getStorageRangesMsg:
+	case msg.Code == GetStorageRangesMsg:
 		// Decode the storage retrieval request
-		var req getStorageRangesData
+		var req GetStorageRangesPacket
 		if err := msg.Decode(&req); err != nil {
 			return fmt.Errorf("%w: message %v: %v", errDecode, msg, err)
 		}
@@ -250,7 +228,7 @@ func handleMessage(backend Backend, peer *Peer) error {
 
 		// Retrieve storage ranges until the packet limit is reached
 		var (
-			slots  [][]*storageData
+			slots  [][]*StorageData
 			proofs [][]byte
 			size   uint64
 		)
@@ -272,11 +250,11 @@ func handleMessage(backend Backend, peer *Peer) error {
 			// Retrieve the requested state and bail out if non existent
 			it, err := backend.Chain().Snapshots().StorageIterator(req.Root, account, origin)
 			if err != nil {
-				return p2p.Send(peer.rw, storageRangesMsg, &storageRangesData{ID: req.ID})
+				return p2p.Send(peer.rw, StorageRangesMsg, &StorageRangesPacket{ID: req.ID})
 			}
 			// Iterate over the requested range and pile slots up
 			var (
-				storage []*storageData
+				storage []*StorageData
 				last    common.Hash
 			)
 			for it.Next() && size < hardLimit {
@@ -287,7 +265,7 @@ func handleMessage(backend Backend, peer *Peer) error {
 
 				// Assemble the reply item
 				size += uint64(common.HashLength + len(slot))
-				storage = append(storage, &storageData{
+				storage = append(storage, &StorageData{
 					Hash: hash,
 					Body: slot,
 				})
@@ -307,25 +285,25 @@ func handleMessage(backend Backend, peer *Peer) error {
 				// the endpoint Merkle proofs
 				accTrie, err := trie.New(req.Root, backend.Chain().StateCache().TrieDB())
 				if err != nil {
-					return p2p.Send(peer.rw, storageRangesMsg, &storageRangesData{ID: req.ID})
+					return p2p.Send(peer.rw, StorageRangesMsg, &StorageRangesPacket{ID: req.ID})
 				}
 				var acc state.Account
 				if err := rlp.DecodeBytes(accTrie.Get(account[:]), &acc); err != nil {
-					return p2p.Send(peer.rw, storageRangesMsg, &storageRangesData{ID: req.ID})
+					return p2p.Send(peer.rw, StorageRangesMsg, &StorageRangesPacket{ID: req.ID})
 				}
 				stTrie, err := trie.New(acc.Root, backend.Chain().StateCache().TrieDB())
 				if err != nil {
-					return p2p.Send(peer.rw, storageRangesMsg, &storageRangesData{ID: req.ID})
+					return p2p.Send(peer.rw, StorageRangesMsg, &StorageRangesPacket{ID: req.ID})
 				}
 				proof := light.NewNodeSet()
 				if err := stTrie.Prove(origin[:], 0, proof); err != nil {
 					log.Warn("Failed to prove storage range", "origin", req.Origin, "err", err)
-					return p2p.Send(peer.rw, storageRangesMsg, &storageRangesData{ID: req.ID})
+					return p2p.Send(peer.rw, StorageRangesMsg, &StorageRangesPacket{ID: req.ID})
 				}
 				if last != (common.Hash{}) {
 					if err := stTrie.Prove(last[:], 0, proof); err != nil {
 						log.Warn("Failed to prove storage range", "last", last, "err", err)
-						return p2p.Send(peer.rw, storageRangesMsg, &storageRangesData{ID: req.ID})
+						return p2p.Send(peer.rw, StorageRangesMsg, &StorageRangesPacket{ID: req.ID})
 					}
 				}
 				for _, blob := range proof.NodeList() {
@@ -338,35 +316,31 @@ func handleMessage(backend Backend, peer *Peer) error {
 			}
 		}
 		// Send back anything accumulated
-		return p2p.Send(peer.rw, storageRangesMsg, &storageRangesData{
+		return p2p.Send(peer.rw, StorageRangesMsg, &StorageRangesPacket{
 			ID:    req.ID,
 			Slots: slots,
 			Proof: proofs,
 		})
 
-	case msg.Code == storageRangesMsg:
-		// A range of accounts arrived to one of our previous requests
-		var res storageRangesData
-		if err := msg.Decode(&res); err != nil {
+	case msg.Code == StorageRangesMsg:
+		// A range of storage slots arrived to one of our previous requests
+		res := new(StorageRangesPacket)
+		if err := msg.Decode(res); err != nil {
 			return fmt.Errorf("%w: message %v: %v", errDecode, msg, err)
 		}
-		var (
-			keys = make([][]common.Hash, len(res.Slots))
-			vals = make([][][]byte, len(res.Slots))
-		)
+		// Ensure the ranges ae monotonically increasing
 		for i, slots := range res.Slots {
-			keys[i] = make([]common.Hash, len(slots))
-			vals[i] = make([][]byte, len(slots))
-			for j, slot := range slots {
-				keys[i][j] = slot.Hash
-				vals[i][j] = slot.Body
+			for j := 1; j < len(slots); j++ {
+				if bytes.Compare(slots[j-1].Hash[:], slots[j].Hash[:]) >= 0 {
+					return fmt.Errorf("storage slots not monotonically increasing for account #%d: #%d [%x] vs #%d [%x]", i, j-1, slots[j-1].Hash[:], j, slots[j].Hash[:])
+				}
 			}
 		}
-		return backend.OnStorage(peer, res.ID, keys, vals, res.Proof)
+		return backend.Handle(peer, res)
 
-	case msg.Code == getByteCodesMsg:
+	case msg.Code == GetByteCodesMsg:
 		// Decode bytecode retrieval request
-		var req getByteCodesData
+		var req GetByteCodesPacket
 		if err := msg.Decode(&req); err != nil {
 			return fmt.Errorf("%w: message %v: %v", errDecode, msg, err)
 		}
@@ -395,22 +369,22 @@ func handleMessage(backend Backend, peer *Peer) error {
 			}
 		}
 		// Send back anything accumulated
-		return p2p.Send(peer.rw, byteCodesMsg, &byteCodesData{
+		return p2p.Send(peer.rw, ByteCodesMsg, &ByteCodesPacket{
 			ID:    req.ID,
 			Codes: codes,
 		})
 
-	case msg.Code == byteCodesMsg:
+	case msg.Code == ByteCodesMsg:
 		// A batch of byte codes arrived to one of our previous requests
-		var res byteCodesData
-		if err := msg.Decode(&res); err != nil {
+		res := new(ByteCodesPacket)
+		if err := msg.Decode(res); err != nil {
 			return fmt.Errorf("%w: message %v: %v", errDecode, msg, err)
 		}
-		return backend.OnByteCodes(peer, res.ID, res.Codes)
+		return backend.Handle(peer, res)
 
-	case msg.Code == getTrieNodesMsg:
+	case msg.Code == GetTrieNodesMsg:
 		// Decode trie node retrieval request
-		var req getTrieNodesData
+		var req GetTrieNodesPacket
 		if err := msg.Decode(&req); err != nil {
 			return fmt.Errorf("%w: message %v: %v", errDecode, msg, err)
 		}
@@ -423,7 +397,7 @@ func handleMessage(backend Backend, peer *Peer) error {
 		accTrie, err := trie.NewSecure(req.Root, triedb)
 		if err != nil {
 			// We don't have the requested state available, bail out
-			return p2p.Send(peer.rw, trieNodesMsg, &trieNodesData{ID: req.ID})
+			return p2p.Send(peer.rw, TrieNodesMsg, &TrieNodesPacket{ID: req.ID})
 		}
 		snap := backend.Chain().Snapshots().Snapshot(req.Root)
 		if snap == nil {
@@ -431,7 +405,7 @@ func handleMessage(backend Backend, peer *Peer) error {
 			// In reality we could still serve using the account and storage
 			// tries only, but let's protect the node a bit while it's doing
 			// snapshot generation.
-			return p2p.Send(peer.rw, trieNodesMsg, &trieNodesData{ID: req.ID})
+			return p2p.Send(peer.rw, TrieNodesMsg, &TrieNodesPacket{ID: req.ID})
 		}
 		// Retrieve trie nodes until the packet size limit is reached
 		var (
@@ -488,18 +462,18 @@ func handleMessage(backend Backend, peer *Peer) error {
 			}
 		}
 		// Send back anything accumulated
-		return p2p.Send(peer.rw, trieNodesMsg, &trieNodesData{
+		return p2p.Send(peer.rw, TrieNodesMsg, &TrieNodesPacket{
 			ID:    req.ID,
 			Nodes: nodes,
 		})
 
-	case msg.Code == trieNodesMsg:
+	case msg.Code == TrieNodesMsg:
 		// A batch of trie nodes arrived to one of our previous requests
-		var res trieNodesData
-		if err := msg.Decode(&res); err != nil {
+		res := new(TrieNodesPacket)
+		if err := msg.Decode(res); err != nil {
 			return fmt.Errorf("%w: message %v: %v", errDecode, msg, err)
 		}
-		return backend.OnTrieNodes(peer, res.ID, res.Nodes)
+		return backend.Handle(peer, res)
 
 	default:
 		return fmt.Errorf("%w: %v", errInvalidMsgCode, msg.Code)

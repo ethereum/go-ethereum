@@ -690,15 +690,6 @@ func (bc *BlockChain) StateAt(root common.Hash) (*state.StateDB, error) {
 	return state.New(root, bc.stateCache, bc.snaps)
 }
 
-// AccountIterator creates a new account iterator for the specified root hash and
-// seeks to a starting account hash.
-func (bc *BlockChain) AccountIterator(root common.Hash, seek common.Hash) (snapshot.AccountIterator, error) {
-	if bc.snaps == nil {
-		return nil, errors.New("snapshots disabled")
-	}
-	return bc.snaps.AccountIterator(root, seek)
-}
-
 // StateCache returns the caching database underpinning the blockchain instance.
 func (bc *BlockChain) StateCache() state.Database {
 	return bc.stateCache

@@ -18,6 +18,7 @@ package eth
 
 import (
 	"errors"
+	"fmt"
 	"math/big"
 	"sync/atomic"
 	"time"
@@ -52,9 +53,60 @@ func (h *ethHandler) PeerInfo(id enode.ID) interface{} {
 	return nil
 }
 
-// OnHeaders is invoked from a peer's message handler when it transmits a batch
+// AcceptTxs retrieves whether transaction processing is enabled on the node
+// or if inbound transactions should simply be dropped.
+func (h *ethHandler) AcceptTxs() bool {
+	return atomic.LoadUint32(&h.acceptTxs) == 1
+}
+
+// Handle is invoked from a peer's message handler when it receives a new remote
+// message that the handler couldn't consume and serve itself.
+func (h *ethHandler) Handle(peer *eth.Peer, packet eth.Packet) error {
+	// Consume any broadcasts and announces, forwarding the rest to the downloader
+	switch packet := packet.(type) {
+	case *eth.BlockHeadersPacket:
+		return h.handleHeaders(peer, *packet)
+
+	case *eth.BlockBodiesPacket:
+		txset, uncleset := packet.Unpack()
+		return h.handleBodies(peer, txset, uncleset)
+
+	case *eth.NodeDataPacket:
+		if err := h.downloader.DeliverNodeData(peer.ID(), *packet); err != nil {
+			log.Debug("Failed to deliver node state data", "err", err)
+		}
+		return nil
+
+	case *eth.ReceiptsPacket:
+		if err := h.downloader.DeliverReceipts(peer.ID(), *packet); err != nil {
+			log.Debug("Failed to deliver receipts", "err", err)
+		}
+		return nil
+
+	case *eth.NewBlockHashesPacket:
+		hashes, numbers := packet.Unpack()
+		return h.handleBlockAnnounces(peer, hashes, numbers)
+
+	case *eth.NewBlockPacket:
+		return h.handleBlockBroadcast(peer, packet.Block, packet.TD)
+
+	case *eth.NewPooledTransactionHashesPacket:
+		return h.txFetcher.Notify(peer.ID(), *packet)
+
+	case *eth.TransactionsPacket:
+		return h.txFetcher.Enqueue(peer.ID(), *packet, false)
+
+	case *eth.PooledTransactionsPacket:
+		return h.txFetcher.Enqueue(peer.ID(), *packet, true)
+
+	default:
+		return fmt.Errorf("unexpected eth packet type: %T", packet)
+	}
+}
+
+// handleHeaders is invoked from a peer's message handler when it transmits a batch
 // of headers for the local node to process.
-func (h *ethHandler) OnHeaders(peer *eth.Peer, headers []*types.Header) error {
+func (h *ethHandler) handleHeaders(peer *eth.Peer, headers []*types.Header) error {
 	p := h.peers.ethPeer(peer.ID())
 	if p == nil {
 		return errors.New("unregistered during callback")
@@ -108,9 +160,9 @@ func (h *ethHandler) OnHeaders(peer *eth.Peer, headers []*types.Header) error {
 	return nil
 }
 
-// OnBodies is invoked from a peer's message handler when it transmits a batch
+// handleBodies is invoked from a peer's message handler when it transmits a batch
 // of block bodies for the local node to process.
-func (h *ethHandler) OnBodies(peer *eth.Peer, txs [][]*types.Transaction, uncles [][]*types.Header) error {
+func (h *ethHandler) handleBodies(peer *eth.Peer, txs [][]*types.Transaction, uncles [][]*types.Header) error {
 	// Filter out any explicitly requested bodies, deliver the rest to the downloader
 	filter := len(txs) > 0 || len(uncles) > 0
 	if filter {
@@ -125,29 +177,9 @@ func (h *ethHandler) OnBodies(peer *eth.Peer, txs [][]*types.Transaction, uncles
 	return nil
 }
 
-// OnNodeData is invoked from a peer's message handler when it transmits a batch
-// of trie nodes for the local node to process.
-func (h *ethHandler) OnNodeData(peer *eth.Peer, nodes [][]byte) error {
-	// Deliver all to the downloader
-	if err := h.downloader.DeliverNodeData(peer.ID(), nodes); err != nil {
-		log.Debug("Failed to deliver node state data", "err", err)
-	}
-	return nil
-}
-
-// OnReceipts is invoked from a peer's message handler when it transmits a batch
-// of transaction receipts for the local node to process.
-func (h *ethHandler) OnReceipts(peer *eth.Peer, receipts [][]*types.Receipt) error {
-	// Deliver all to the downloader
-	if err := h.downloader.DeliverReceipts(peer.ID(), receipts); err != nil {
-		log.Debug("Failed to deliver receipts", "err", err)
-	}
-	return nil
-}
-
-// OnBlockAnnounces is invoked from a peer's message handler when it transmits a
+// handleBlockAnnounces is invoked from a peer's message handler when it transmits a
 // batch of block announcements for the local node to process.
-func (h *ethHandler) OnBlockAnnounces(peer *eth.Peer, hashes []common.Hash, numbers []uint64) error {
+func (h *ethHandler) handleBlockAnnounces(peer *eth.Peer, hashes []common.Hash, numbers []uint64) error {
 	// Schedule all the unknown hashes for retrieval
 	var (
 		unknownHashes  = make([]common.Hash, 0, len(hashes))
@@ -165,9 +197,9 @@ func (h *ethHandler) OnBlockAnnounces(peer *eth.Peer, hashes []common.Hash, numb
 	return nil
 }
 
-// OnBlockBroadcast is invoked from a peer's message handler when it transmits a
+// handleBlockBroadcast is invoked from a peer's message handler when it transmits a
 // block broadcast for the local node to process.
-func (h *ethHandler) OnBlockBroadcast(peer *eth.Peer, block *types.Block, td *big.Int) error {
+func (h *ethHandler) handleBlockBroadcast(peer *eth.Peer, block *types.Block, td *big.Int) error {
 	// Schedule the block for import
 	h.blockFetcher.Enqueue(peer.ID(), block)
 
@@ -182,25 +214,5 @@ func (h *ethHandler) OnBlockBroadcast(peer *eth.Peer, block *types.Block, td *bi
 		peer.SetHead(trueHead, trueTD)
 		h.chainSync.handlePeerEvent(peer)
 	}
-	return nil
-}
-
-// AcceptTxs retrieves whether transaction processing is enabled on the node
-// or if inbound transactions should simply be dropped.
-func (h *ethHandler) AcceptTxs() bool {
-	return atomic.LoadUint32(&h.acceptTxs) == 1
-}
-
-// OnTxAnnounces is invoked from a peer's message handler when it transmits a
-// batch of transaction announcements for the local node to process.
-func (h *ethHandler) OnTxAnnounces(peer *eth.Peer, hashes []common.Hash) error {
-	h.txFetcher.Notify(peer.ID(), hashes)
-	return nil
-}
-
-// OnTxBroadcasts is invoked from a peer's message handler when it transmits a
-// batch of transaction broadcasts for the local node to process.
-func (h *ethHandler) OnTxBroadcasts(peer *eth.Peer, txs []*types.Transaction, direct bool) error {
-	h.txFetcher.Enqueue(peer.ID(), txs, direct)
 	return nil
 }

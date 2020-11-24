@@ -76,6 +76,10 @@ type Backend interface {
 	// TxPool retrieves the transaction pool object to serve data.
 	TxPool() TxPool
 
+	// AcceptTxs retrieves whether transaction processing is enabled on the node
+	// or if inbound transactions should simply be dropped.
+	AcceptTxs() bool
+
 	// RunPeer is invoked when a peer joins on the `eth` protocol. The handler
 	// should do any peer maintenance work, handshakes and validations. If all
 	// is passed, control should be given back to the `handler` to process the
@@ -85,41 +89,10 @@ type Backend interface {
 	// PeerInfo retrieves all known `eth` information about a peer.
 	PeerInfo(id enode.ID) interface{}
 
-	// OnHeaders is a callback method to invoke when a batch of headers are
-	// received from a remote peer.
-	OnHeaders(peer *Peer, headers []*types.Header) error
-
-	// OnBodies is a callback method to invoke when a batch of block bodies are
-	// received from a remote peer.
-	OnBodies(peer *Peer, txs [][]*types.Transaction, uncles [][]*types.Header) error
-
-	// OnNodeData is a callback method to invoke when a batch of trie nodes are
-	// received from a remote peer.
-	OnNodeData(peer *Peer, nodes [][]byte) error
-
-	// OnReceipts is a callback method to invoke when a batch of transaction
-	// receipts are received from a remote peer.
-	OnReceipts(peer *Peer, receipts [][]*types.Receipt) error
-
-	// OnBlockAnnounces is a callback method to invoke when a batch of block
-	// announcements are received from a remote peer.
-	OnBlockAnnounces(peer *Peer, hashes []common.Hash, numbers []uint64) error
-
-	// OnBlockBroadcast is a callback method to invoke when a batch of block
-	// broadcast is received from a remote peer.
-	OnBlockBroadcast(peer *Peer, block *types.Block, td *big.Int) error
-
-	// AcceptTxs retrieves whether transaction processing is enabled on the node
-	// or if inbound transactions should simply be dropped.
-	AcceptTxs() bool
-
-	// OnTxAnnounces is a callback method to invoke when a batch of transaction
-	// announcements are received from a remote peer.
-	OnTxAnnounces(peer *Peer, hashes []common.Hash) error
-
-	// OnTxBroadcasts is a callback method to invoke when a batch of transaction
-	// broadcasts are received from a remote peer.
-	OnTxBroadcasts(peer *Peer, txs []*types.Transaction, direct bool) error
+	// Handle is a callback to be invoked when a data packet is received from
+	// the remote peer. Only packets not consumed by the protocol handler will
+	// be forwarded to the backend.
+	Handle(peer *Peer, packet Packet) error
 }
 
 // TxPool defines the methods needed by the protocol handler to serve transactions.
@@ -208,14 +181,14 @@ func handleMessage(backend Backend, peer *Peer) error {
 
 	// Handle the message depending on its contents
 	switch {
-	case msg.Code == statusMsg:
+	case msg.Code == StatusMsg:
 		// Status messages should never arrive after the handshake
 		return fmt.Errorf("%w: uncontrolled status message", errExtraStatusMsg)
 
 	// Block header query, collect the requested headers and reply
-	case msg.Code == getBlockHeadersMsg:
+	case msg.Code == GetBlockHeadersMsg:
 		// Decode the complex header query
-		var query getBlockHeadersData
+		var query GetBlockHeadersPacket
 		if err := msg.Decode(&query); err != nil {
 			return fmt.Errorf("%w: message %v: %v", errDecode, msg, err)
 		}
@@ -300,34 +273,29 @@ func handleMessage(backend Backend, peer *Peer) error {
 		}
 		return peer.SendBlockHeaders(headers)
 
-	case msg.Code == blockHeadersMsg:
+	case msg.Code == BlockHeadersMsg:
 		// A batch of headers arrived to one of our previous requests
-		var headers []*types.Header
-		if err := msg.Decode(&headers); err != nil {
+		res := new(BlockHeadersPacket)
+		if err := msg.Decode(res); err != nil {
 			return fmt.Errorf("%w: message %v: %v", errDecode, msg, err)
 		}
-		return backend.OnHeaders(peer, headers)
+		return backend.Handle(peer, res)
 
-	case msg.Code == getBlockBodiesMsg:
-		// Decode the retrieval message
-		msgStream := rlp.NewStream(msg.Payload, uint64(msg.Size))
-		if _, err := msgStream.List(); err != nil {
-			return err
+	case msg.Code == GetBlockBodiesMsg:
+		// Decode the block body retrieval message
+		var query GetBlockBodiesPacket
+		if err := msg.Decode(&query); err != nil {
+			return fmt.Errorf("%w: message %v: %v", errDecode, msg, err)
 		}
 		// Gather blocks until the fetch or network limits is reached
 		var (
-			hash   common.Hash
 			bytes  int
 			bodies []rlp.RawValue
 		)
-		for bytes < softResponseLimit && len(bodies) < maxBodiesServe {
-			// Retrieve the hash of the next block
-			if err := msgStream.Decode(&hash); err == rlp.EOL {
+		for _, hash := range query {
+			if bytes >= softResponseLimit || len(bodies) >= maxBodiesServe {
 				break
-			} else if err != nil {
-				return fmt.Errorf("%w: message %v: %v", errDecode, msg, err)
 			}
-			// Retrieve the requested block body, stopping if enough was found
 			if data := backend.Chain().GetBodyRLP(hash); len(data) != 0 {
 				bodies = append(bodies, data)
 				bytes += len(data)
@@ -335,42 +303,30 @@ func handleMessage(backend Backend, peer *Peer) error {
 		}
 		return peer.SendBlockBodiesRLP(bodies)
 
-	case msg.Code == blockBodiesMsg:
+	case msg.Code == BlockBodiesMsg:
 		// A batch of block bodies arrived to one of our previous requests
-		var request blockBodiesData
-		if err := msg.Decode(&request); err != nil {
+		res := new(BlockBodiesPacket)
+		if err := msg.Decode(res); err != nil {
 			return fmt.Errorf("%w: message %v: %v", errDecode, msg, err)
 		}
-		// Deliver them all to the backend for queuing
-		txs := make([][]*types.Transaction, len(request))
-		uncles := make([][]*types.Header, len(request))
+		return backend.Handle(peer, res)
 
-		for i, body := range request {
-			txs[i] = body.Transactions
-			uncles[i] = body.Uncles
-		}
-		return backend.OnBodies(peer, txs, uncles)
-
-	case msg.Code == getNodeDataMsg:
-		// Decode the retrieval message
-		msgStream := rlp.NewStream(msg.Payload, uint64(msg.Size))
-		if _, err := msgStream.List(); err != nil {
-			return err
+	case msg.Code == GetNodeDataMsg:
+		// Decode the trie node data retrieval message
+		var query GetNodeDataPacket
+		if err := msg.Decode(&query); err != nil {
+			return fmt.Errorf("%w: message %v: %v", errDecode, msg, err)
 		}
 		// Gather state data until the fetch or network limits is reached
 		var (
-			hash  common.Hash
 			bytes int
-			data  [][]byte
+			nodes [][]byte
 		)
-		for bytes < softResponseLimit && len(data) < maxNodeDataServe {
-			// Retrieve the hash of the next state entry
-			if err := msgStream.Decode(&hash); err == rlp.EOL {
+		for _, hash := range query {
+			if bytes >= softResponseLimit || len(nodes) >= maxNodeDataServe {
 				break
-			} else if err != nil {
-				return fmt.Errorf("%w: message %v: %v", errDecode, msg, err)
 			}
-			// Retrieve the requested state entry, stopping if enough was found
+			// Retrieve the requested state entry
 			if bloom := backend.StateBloom(); bloom != nil && !bloom.Contains(hash[:]) {
 				// Only lookup the trie node if there's chance that we actually have it
 				continue
@@ -381,40 +337,36 @@ func handleMessage(backend Backend, peer *Peer) error {
 				entry, err = backend.Chain().ContractCodeWithPrefix(hash)
 			}
 			if err == nil && len(entry) > 0 {
-				data = append(data, entry)
+				nodes = append(nodes, entry)
 				bytes += len(entry)
 			}
 		}
-		return peer.SendNodeData(data)
+		return peer.SendNodeData(nodes)
 
-	case msg.Code == nodeDataMsg:
+	case msg.Code == NodeDataMsg:
 		// A batch of node state data arrived to one of our previous requests
-		var nodes [][]byte
-		if err := msg.Decode(&nodes); err != nil {
+		res := new(NodeDataPacket)
+		if err := msg.Decode(res); err != nil {
 			return fmt.Errorf("%w: message %v: %v", errDecode, msg, err)
 		}
-		return backend.OnNodeData(peer, nodes)
+		return backend.Handle(peer, res)
 
-	case msg.Code == getReceiptsMsg:
-		// Decode the retrieval message
-		msgStream := rlp.NewStream(msg.Payload, uint64(msg.Size))
-		if _, err := msgStream.List(); err != nil {
-			return err
+	case msg.Code == GetReceiptsMsg:
+		// Decode the block receipts retrieval message
+		var query GetReceiptsPacket
+		if err := msg.Decode(&query); err != nil {
+			return fmt.Errorf("%w: message %v: %v", errDecode, msg, err)
 		}
 		// Gather state data until the fetch or network limits is reached
 		var (
-			hash     common.Hash
 			bytes    int
 			receipts []rlp.RawValue
 		)
-		for bytes < softResponseLimit && len(receipts) < maxReceiptsServe {
-			// Retrieve the hash of the next block
-			if err := msgStream.Decode(&hash); err == rlp.EOL {
+		for _, hash := range query {
+			if bytes >= softResponseLimit || len(receipts) >= maxReceiptsServe {
 				break
-			} else if err != nil {
-				return fmt.Errorf("%w: message %v: %v", errDecode, msg, err)
 			}
-			// Retrieve the requested block's receipts, skipping if unknown to us
+			// Retrieve the requested block's receipts
 			results := backend.Chain().GetReceiptsByHash(hash)
 			if results == nil {
 				if header := backend.Chain().GetHeaderByHash(hash); header == nil || header.ReceiptHash != types.EmptyRootHash {
@@ -431,92 +383,83 @@ func handleMessage(backend Backend, peer *Peer) error {
 		}
 		return peer.SendReceiptsRLP(receipts)
 
-	case msg.Code == receiptsMsg:
+	case msg.Code == ReceiptsMsg:
 		// A batch of receipts arrived to one of our previous requests
-		var receipts [][]*types.Receipt
-		if err := msg.Decode(&receipts); err != nil {
+		res := new(ReceiptsPacket)
+		if err := msg.Decode(res); err != nil {
 			return fmt.Errorf("%w: message %v: %v", errDecode, msg, err)
 		}
-		return backend.OnReceipts(peer, receipts)
+		return backend.Handle(peer, res)
 
-	case msg.Code == newBlockHashesMsg:
-		var announces newBlockHashesData
-		if err := msg.Decode(&announces); err != nil {
+	case msg.Code == NewBlockHashesMsg:
+		// A batch of new block announcements just arrived
+		ann := new(NewBlockHashesPacket)
+		if err := msg.Decode(ann); err != nil {
 			return fmt.Errorf("%w: message %v: %v", errDecode, msg, err)
 		}
 		// Mark the hashes as present at the remote node
-		for _, block := range announces {
+		for _, block := range *ann {
 			peer.markBlock(block.Hash)
 		}
 		// Deliver them all to the backend for queuing
-		hashes := make([]common.Hash, len(announces))
-		numbers := make([]uint64, len(announces))
+		return backend.Handle(peer, ann)
 
-		for i, body := range announces {
-			hashes[i] = body.Hash
-			numbers[i] = body.Number
-		}
-		return backend.OnBlockAnnounces(peer, hashes, numbers)
-
-	case msg.Code == newBlockMsg:
+	case msg.Code == NewBlockMsg:
 		// Retrieve and decode the propagated block
-		var request newBlockData
-		if err := msg.Decode(&request); err != nil {
+		ann := new(NewBlockPacket)
+		if err := msg.Decode(ann); err != nil {
 			return fmt.Errorf("%w: message %v: %v", errDecode, msg, err)
 		}
-		if hash := types.CalcUncleHash(request.Block.Uncles()); hash != request.Block.UncleHash() {
-			log.Warn("Propagated block has invalid uncles", "have", hash, "exp", request.Block.UncleHash())
+		if hash := types.CalcUncleHash(ann.Block.Uncles()); hash != ann.Block.UncleHash() {
+			log.Warn("Propagated block has invalid uncles", "have", hash, "exp", ann.Block.UncleHash())
 			break // TODO(karalabe): return error eventually, but wait a few releases
 		}
-		if hash := types.DeriveSha(request.Block.Transactions(), trie.NewStackTrie(nil)); hash != request.Block.TxHash() {
-			log.Warn("Propagated block has invalid body", "have", hash, "exp", request.Block.TxHash())
+		if hash := types.DeriveSha(ann.Block.Transactions(), trie.NewStackTrie(nil)); hash != ann.Block.TxHash() {
+			log.Warn("Propagated block has invalid body", "have", hash, "exp", ann.Block.TxHash())
 			break // TODO(karalabe): return error eventually, but wait a few releases
 		}
-		if err := request.sanityCheck(); err != nil {
+		if err := ann.sanityCheck(); err != nil {
 			return err
 		}
-		request.Block.ReceivedAt = msg.ReceivedAt
-		request.Block.ReceivedFrom = peer
+		ann.Block.ReceivedAt = msg.ReceivedAt
+		ann.Block.ReceivedFrom = peer
 
 		// Mark the peer as owning the block
-		peer.markBlock(request.Block.Hash())
-		return backend.OnBlockBroadcast(peer, request.Block, request.TD)
+		peer.markBlock(ann.Block.Hash())
 
-	case msg.Code == newPooledTransactionHashesMsg && peer.version >= ETH65:
+		return backend.Handle(peer, ann)
+
+	case msg.Code == NewPooledTransactionHashesMsg && peer.version >= ETH65:
 		// New transaction announcement arrived, make sure we have
 		// a valid and fresh chain to handle them
 		if !backend.AcceptTxs() {
 			break
 		}
-		var hashes []common.Hash
-		if err := msg.Decode(&hashes); err != nil {
+		ann := new(NewPooledTransactionHashesPacket)
+		if err := msg.Decode(ann); err != nil {
 			return fmt.Errorf("%w: message %v: %v", errDecode, msg, err)
 		}
 		// Schedule all the unknown hashes for retrieval
-		for _, hash := range hashes {
+		for _, hash := range *ann {
 			peer.markTransaction(hash)
 		}
-		return backend.OnTxAnnounces(peer, hashes)
+		return backend.Handle(peer, ann)
 
-	case msg.Code == getPooledTransactionsMsg && peer.version >= ETH65:
-		// Decode the retrieval message
-		msgStream := rlp.NewStream(msg.Payload, uint64(msg.Size))
-		if _, err := msgStream.List(); err != nil {
-			return err
+	case msg.Code == GetPooledTransactionsMsg && peer.version >= ETH65:
+		// Decode the pooled transactions retrieval message
+		var query GetPooledTransactionsPacket
+		if err := msg.Decode(&query); err != nil {
+			return fmt.Errorf("%w: message %v: %v", errDecode, msg, err)
 		}
 		// Gather transactions until the fetch or network limits is reached
 		var (
-			hash   common.Hash
 			bytes  int
 			hashes []common.Hash
 			txs    []rlp.RawValue
 		)
-		for bytes < softResponseLimit {
-			// Retrieve the hash of the next block
-			if err := msgStream.Decode(&hash); err == rlp.EOL {
+		for _, hash := range query {
+			if bytes >= softResponseLimit {
 				break
-			} else if err != nil {
-				return fmt.Errorf("%w: message %v: %v", errDecode, msg, err)
 			}
 			// Retrieve the requested transaction, skipping if unknown to us
 			tx := backend.TxPool().Get(hash)
@@ -534,7 +477,7 @@ func handleMessage(backend Backend, peer *Peer) error {
 		}
 		return peer.SendPooledTransactionsRLP(hashes, txs)
 
-	case msg.Code == transactionMsg || (msg.Code == pooledTransactionsMsg && peer.version >= ETH65):
+	case msg.Code == TransactionsMsg || (msg.Code == PooledTransactionsMsg && peer.version >= ETH65):
 		// Transactions arrived, make sure we have a valid and fresh chain to handle them
 		if !backend.AcceptTxs() {
 			break
@@ -551,7 +494,10 @@ func handleMessage(backend Backend, peer *Peer) error {
 			}
 			peer.markTransaction(tx.Hash())
 		}
-		return backend.OnTxBroadcasts(peer, txs, msg.Code == pooledTransactionsMsg)
+		if msg.Code == PooledTransactionsMsg {
+			return backend.Handle(peer, (*PooledTransactionsPacket)(&txs))
+		}
+		return backend.Handle(peer, (*TransactionsPacket)(&txs))
 
 	default:
 		return fmt.Errorf("%w: %v", errInvalidMsgCode, msg.Code)

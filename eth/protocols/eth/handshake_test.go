@@ -27,62 +27,6 @@ import (
 )
 
 // Tests that handshake failures are detected and reported correctly.
-func TestHandshake63(t *testing.T) {
-	t.Parallel()
-
-	// Create a test backend only to have some valid genesis chain
-	backend := newTestBackend(3)
-	defer backend.close()
-
-	var (
-		genesis = backend.chain.Genesis()
-		head    = backend.chain.CurrentBlock()
-		td      = backend.chain.GetTd(head.Hash(), head.NumberU64())
-	)
-	tests := []struct {
-		code uint64
-		data interface{}
-		want error
-	}{
-		{
-			code: transactionMsg, data: []interface{}{},
-			want: errNoStatusMsg,
-		},
-		{
-			code: statusMsg, data: statusData63{10, 1, td, head.Hash(), genesis.Hash()},
-			want: errProtocolVersionMismatch,
-		},
-		{
-			code: statusMsg, data: statusData63{63, 999, td, head.Hash(), genesis.Hash()},
-			want: errNetworkIDMismatch,
-		},
-		{
-			code: statusMsg, data: statusData63{63, 1, td, head.Hash(), common.Hash{3}},
-			want: errGenesisMismatch,
-		},
-	}
-	for i, test := range tests {
-		// Create the two peers to shake with each other
-		app, net := p2p.MsgPipe()
-		defer app.Close()
-		defer net.Close()
-
-		peer := NewPeer(63, p2p.NewPeer(enode.ID{}, "peer", nil), net, nil)
-		defer peer.Close()
-
-		// Send the junk test with one peer, check the handshake failure
-		go p2p.Send(app, test.code, test.data)
-
-		err := peer.Handshake(1, td, head.Hash(), genesis.Hash(), forkid.ID{}, nil)
-		if err == nil {
-			t.Errorf("test %d: protocol returned nil error, want %q", i, test.want)
-		} else if !errors.Is(err, test.want) {
-			t.Errorf("test %d: wrong error: got %q, want %q", i, err, test.want)
-		}
-	}
-}
-
-// Tests that handshake failures are detected and reported correctly.
 func TestHandshake64(t *testing.T) { testHandshake(t, 64) }
 func TestHandshake65(t *testing.T) { testHandshake(t, 65) }
 
@@ -105,23 +49,23 @@ func testHandshake(t *testing.T, protocol uint) {
 		want error
 	}{
 		{
-			code: transactionMsg, data: []interface{}{},
+			code: TransactionsMsg, data: []interface{}{},
 			want: errNoStatusMsg,
 		},
 		{
-			code: statusMsg, data: statusData{10, 1, td, head.Hash(), genesis.Hash(), forkID},
+			code: StatusMsg, data: StatusPacket{10, 1, td, head.Hash(), genesis.Hash(), forkID},
 			want: errProtocolVersionMismatch,
 		},
 		{
-			code: statusMsg, data: statusData{uint32(protocol), 999, td, head.Hash(), genesis.Hash(), forkID},
+			code: StatusMsg, data: StatusPacket{uint32(protocol), 999, td, head.Hash(), genesis.Hash(), forkID},
 			want: errNetworkIDMismatch,
 		},
 		{
-			code: statusMsg, data: statusData{uint32(protocol), 1, td, head.Hash(), common.Hash{3}, forkID},
+			code: StatusMsg, data: StatusPacket{uint32(protocol), 1, td, head.Hash(), common.Hash{3}, forkID},
 			want: errGenesisMismatch,
 		},
 		{
-			code: statusMsg, data: statusData{uint32(protocol), 1, td, head.Hash(), genesis.Hash(), forkid.ID{Hash: [4]byte{0x00, 0x01, 0x02, 0x03}}},
+			code: StatusMsg, data: StatusPacket{uint32(protocol), 1, td, head.Hash(), genesis.Hash(), forkid.ID{Hash: [4]byte{0x00, 0x01, 0x02, 0x03}}},
 			want: errForkIDRejected,
 		},
 	}

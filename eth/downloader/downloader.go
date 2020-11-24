@@ -1915,50 +1915,52 @@ func (d *Downloader) commitPivotBlock(result *fetchResult) error {
 // DeliverHeaders injects a new batch of block headers received from a remote
 // node into the download schedule.
 func (d *Downloader) DeliverHeaders(id string, headers []*types.Header) error {
-	return d.deliver(id, d.headerCh, &headerPack{id, headers}, headerInMeter, headerDropMeter)
+	return d.deliver(d.headerCh, &headerPack{id, headers}, headerInMeter, headerDropMeter)
 }
 
 // DeliverBodies injects a new batch of block bodies received from a remote node.
 func (d *Downloader) DeliverBodies(id string, transactions [][]*types.Transaction, uncles [][]*types.Header) error {
-	return d.deliver(id, d.bodyCh, &bodyPack{id, transactions, uncles}, bodyInMeter, bodyDropMeter)
+	return d.deliver(d.bodyCh, &bodyPack{id, transactions, uncles}, bodyInMeter, bodyDropMeter)
 }
 
 // DeliverReceipts injects a new batch of receipts received from a remote node.
 func (d *Downloader) DeliverReceipts(id string, receipts [][]*types.Receipt) error {
-	return d.deliver(id, d.receiptCh, &receiptPack{id, receipts}, receiptInMeter, receiptDropMeter)
+	return d.deliver(d.receiptCh, &receiptPack{id, receipts}, receiptInMeter, receiptDropMeter)
 }
 
 // DeliverNodeData injects a new batch of node state data received from a remote node.
 func (d *Downloader) DeliverNodeData(id string, data [][]byte) error {
-	return d.deliver(id, d.stateCh, &statePack{id, data}, stateInMeter, stateDropMeter)
+	return d.deliver(d.stateCh, &statePack{id, data}, stateInMeter, stateDropMeter)
 }
 
-// DeliverSnapshotAccounts is invoked from a peer's message handler when it transmits a range
-// of accounts for the local node to process.
-func (d *Downloader) DeliverSnapshotAccounts(peer *snap.Peer, id uint64, keys []common.Hash, accounts [][]byte, proof [][]byte) error {
-	return d.SnapSyncer.OnAccounts(peer, id, keys, accounts, proof)
-}
+// DeliverSnapPacket is invoked from a peer's message handler when it transmits a
+// data packet for the local node to consume.
+func (d *Downloader) DeliverSnapPacket(peer *snap.Peer, packet snap.Packet) error {
+	switch packet := packet.(type) {
+	case *snap.AccountRangePacket:
+		hashes, accounts, err := packet.Unpack()
+		if err != nil {
+			return err
+		}
+		return d.SnapSyncer.OnAccounts(peer, packet.ID, hashes, accounts, packet.Proof)
 
-// DeliverSnapshotStorage is invoked from a peer's message handler when it transmits ranges
-// of storage slots for the local node to process.
-func (d *Downloader) DeliverSnapshotStorage(peer *snap.Peer, id uint64, keys [][]common.Hash, slots [][][]byte, proof [][]byte) error {
-	return d.SnapSyncer.OnStorage(peer, id, keys, slots, proof)
-}
+	case *snap.StorageRangesPacket:
+		hashset, slotset := packet.Unpack()
+		return d.SnapSyncer.OnStorage(peer, packet.ID, hashset, slotset, packet.Proof)
 
-// DeliverSnapshotByteCodes is invoked from a peer's message handler when it transmits a batch
-// of byte codes for the local node to process.
-func (d *Downloader) DeliverSnapshotByteCodes(peer *snap.Peer, id uint64, codes [][]byte) error {
-	return d.SnapSyncer.OnByteCodes(peer, id, codes)
-}
+	case *snap.ByteCodesPacket:
+		return d.SnapSyncer.OnByteCodes(peer, packet.ID, packet.Codes)
 
-// DeliverSnapshotTrieNodes is invoked from a peer's message handler when it transmits a batch
-// of trie nodes for the local node to process.
-func (d *Downloader) DeliverSnapshotTrieNodes(peer *snap.Peer, id uint64, nodes [][]byte) error {
-	return d.SnapSyncer.OnTrieNodes(peer, id, nodes)
+	case *snap.TrieNodesPacket:
+		return d.SnapSyncer.OnTrieNodes(peer, packet.ID, packet.Nodes)
+
+	default:
+		return fmt.Errorf("unexpected snap packet type: %T", packet)
+	}
 }
 
 // deliver injects a new batch of data received from a remote node.
-func (d *Downloader) deliver(id string, destCh chan dataPack, packet dataPack, inMeter, dropMeter metrics.Meter) (err error) {
+func (d *Downloader) deliver(destCh chan dataPack, packet dataPack, inMeter, dropMeter metrics.Meter) (err error) {
 	// Update the delivery metrics for both good and failed deliveries
 	inMeter.Mark(int64(packet.Items()))
 	defer func() {

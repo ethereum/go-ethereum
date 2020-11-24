@@ -32,19 +32,19 @@ func TestGetBlockHeadersDataEncodeDecode(t *testing.T) {
 	}
 	// Assemble some table driven tests
 	tests := []struct {
-		packet *getBlockHeadersData
+		packet *GetBlockHeadersPacket
 		fail   bool
 	}{
 		// Providing the origin as either a hash or a number should both work
-		{fail: false, packet: &getBlockHeadersData{Origin: hashOrNumber{Number: 314}}},
-		{fail: false, packet: &getBlockHeadersData{Origin: hashOrNumber{Hash: hash}}},
+		{fail: false, packet: &GetBlockHeadersPacket{Origin: HashOrNumber{Number: 314}}},
+		{fail: false, packet: &GetBlockHeadersPacket{Origin: HashOrNumber{Hash: hash}}},
 
 		// Providing arbitrary query field should also work
-		{fail: false, packet: &getBlockHeadersData{Origin: hashOrNumber{Number: 314}, Amount: 314, Skip: 1, Reverse: true}},
-		{fail: false, packet: &getBlockHeadersData{Origin: hashOrNumber{Hash: hash}, Amount: 314, Skip: 1, Reverse: true}},
+		{fail: false, packet: &GetBlockHeadersPacket{Origin: HashOrNumber{Number: 314}, Amount: 314, Skip: 1, Reverse: true}},
+		{fail: false, packet: &GetBlockHeadersPacket{Origin: HashOrNumber{Hash: hash}, Amount: 314, Skip: 1, Reverse: true}},
 
 		// Providing both the origin hash and origin number must fail
-		{fail: true, packet: &getBlockHeadersData{Origin: hashOrNumber{Hash: hash, Number: 314}}},
+		{fail: true, packet: &GetBlockHeadersPacket{Origin: HashOrNumber{Hash: hash, Number: 314}}},
 	}
 	// Iterate over each of the tests and try to encode and then decode
 	for i, tt := range tests {
@@ -55,7 +55,7 @@ func TestGetBlockHeadersDataEncodeDecode(t *testing.T) {
 			t.Fatalf("test %d: encode should have failed", i)
 		}
 		if !tt.fail {
-			packet := new(getBlockHeadersData)
+			packet := new(GetBlockHeadersPacket)
 			if err := rlp.DecodeBytes(bytes, packet); err != nil {
 				t.Fatalf("test %d: failed to decode packet: %v", i, err)
 			}

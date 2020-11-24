@@ -1116,7 +1116,7 @@ func (s *Syncer) assignTrienodeHealTasks(cancel chan struct{}) {
 		var (
 			hashes   = make([]common.Hash, 0, maxTrieRequestCount)
 			paths    = make([]trie.SyncPath, 0, maxTrieRequestCount)
-			pathsets = make([]trieNodePathSet, 0, maxTrieRequestCount)
+			pathsets = make([]TrieNodePathSet, 0, maxTrieRequestCount)
 		)
 		for hash, pathset := range s.healer.trieTasks {
 			delete(s.healer.trieTasks, hash)

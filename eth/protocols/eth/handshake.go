@@ -38,42 +38,20 @@ func (p *Peer) Handshake(network uint64, td *big.Int, head common.Hash, genesis 
 	// Send out own handshake in a new thread
 	errc := make(chan error, 2)
 
-	var (
-		status63 statusData63 // safe to read after two values have been received from errc
-		status   statusData   // safe to read after two values have been received from errc
-	)
+	var status StatusPacket // safe to read after two values have been received from errc
+
 	go func() {
-		switch {
-		case p.version == ETH63:
-			errc <- p2p.Send(p.rw, statusMsg, &statusData63{
-				ProtocolVersion: uint32(p.version),
-				NetworkId:       network,
-				TD:              td,
-				CurrentBlock:    head,
-				GenesisBlock:    genesis,
-			})
-		case p.version >= ETH64:
-			errc <- p2p.Send(p.rw, statusMsg, &statusData{
-				ProtocolVersion: uint32(p.version),
-				NetworkID:       network,
-				TD:              td,
-				Head:            head,
-				Genesis:         genesis,
-				ForkID:          forkID,
-			})
-		default:
-			panic(fmt.Sprintf("unsupported eth protocol version: %d", p.version))
-		}
+		errc <- p2p.Send(p.rw, StatusMsg, &StatusPacket{
+			ProtocolVersion: uint32(p.version),
+			NetworkID:       network,
+			TD:              td,
+			Head:            head,
+			Genesis:         genesis,
+			ForkID:          forkID,
+		})
 	}()
 	go func() {
-		switch {
-		case p.version == ETH63:
-			errc <- p.readStatusLegacy(network, &status63, genesis)
-		case p.version >= ETH64:
-			errc <- p.readStatus(network, &status, genesis, forkFilter)
-		default:
-			panic(fmt.Sprintf("unsupported eth protocol version: %d", p.version))
-		}
+		errc <- p.readStatus(network, &status, genesis, forkFilter)
 	}()
 	timeout := time.NewTimer(handshakeTimeout)
 	defer timeout.Stop()
@@ -87,58 +65,24 @@ func (p *Peer) Handshake(network uint64, td *big.Int, head common.Hash, genesis 
 			return p2p.DiscReadTimeout
 		}
 	}
-	switch {
-	case p.version == ETH63:
-		p.td, p.head = status63.TD, status63.CurrentBlock
-	case p.version >= ETH64:
-		p.td, p.head = status.TD, status.Head
-	default:
-		panic(fmt.Sprintf("unsupported eth protocol version: %d", p.version))
-	}
+	p.td, p.head = status.TD, status.Head
+
 	// TD at mainnet block #7753254 is 76 bits. If it becomes 100 million times
 	// larger, it will still fit within 100 bits
 	if tdlen := p.td.BitLen(); tdlen > 100 {
-		return fmt.Errorf("too large block TD: bitlen %d", tdlen)
+		return fmt.Errorf("too large total difficulty: bitlen %d", tdlen)
 	}
 	return nil
 }
 
-// readStatusLegacy reads the remote handshake message for eth/63 and older.
-func (p *Peer) readStatusLegacy(network uint64, status *statusData63, genesis common.Hash) error {
+// readStatus reads the remote handshake message.
+func (p *Peer) readStatus(network uint64, status *StatusPacket, genesis common.Hash, forkFilter forkid.Filter) error {
 	msg, err := p.rw.ReadMsg()
 	if err != nil {
 		return err
 	}
-	if msg.Code != statusMsg {
-		return fmt.Errorf("%w: first msg has code %x (!= %x)", errNoStatusMsg, msg.Code, statusMsg)
-	}
-	if msg.Size > maxMessageSize {
-		return fmt.Errorf("%w: %v > %v", errMsgTooLarge, msg.Size, maxMessageSize)
-	}
-	// Decode the handshake and make sure everything matches
-	if err := msg.Decode(&status); err != nil {
-		return fmt.Errorf("%w: message %v: %v", errDecode, msg, err)
-	}
-	if status.GenesisBlock != genesis {
-		return fmt.Errorf("%w: %x (!= %x)", errGenesisMismatch, status.GenesisBlock[:8], genesis[:8])
-	}
-	if status.NetworkId != network {
-		return fmt.Errorf("%w: %d (!= %d)", errNetworkIDMismatch, status.NetworkId, network)
-	}
-	if uint(status.ProtocolVersion) != p.version {
-		return fmt.Errorf("%w: %d (!= %d)", errProtocolVersionMismatch, status.ProtocolVersion, p.version)
-	}
-	return nil
-}
-
-// readStatus reads the remote handshake message for eth/64 and newer.
-func (p *Peer) readStatus(network uint64, status *statusData, genesis common.Hash, forkFilter forkid.Filter) error {
-	msg, err := p.rw.ReadMsg()
-	if err != nil {
-		return err
-	}
-	if msg.Code != statusMsg {
-		return fmt.Errorf("%w: first msg has code %x (!= %x)", errNoStatusMsg, msg.Code, statusMsg)
+	if msg.Code != StatusMsg {
+		return fmt.Errorf("%w: first msg has code %x (!= %x)", errNoStatusMsg, msg.Code, StatusMsg)
 	}
 	if msg.Size > maxMessageSize {
 		return fmt.Errorf("%w: %v > %v", errMsgTooLarge, msg.Size, maxMessageSize)

@@ -60,7 +60,7 @@ func (p *Peer) Version() uint {
 // trie, starting with the origin.
 func (p *Peer) RequestAccountRange(id uint64, root common.Hash, origin, limit common.Hash, bytes uint64) error {
 	p.logger.Trace("Fetching range of accounts", "reqid", id, "root", root, "origin", origin, "limit", limit, "bytes", common.StorageSize(bytes))
-	return p2p.Send(p.rw, getAccountRangeMsg, &getAccountRangeData{
+	return p2p.Send(p.rw, GetAccountRangeMsg, &GetAccountRangePacket{
 		ID:     id,
 		Root:   root,
 		Origin: origin,
@@ -78,7 +78,7 @@ func (p *Peer) RequestStorageRanges(id uint64, root common.Hash, accounts []comm
 	} else {
 		p.logger.Trace("Fetching ranges of small storage slots", "reqid", id, "root", root, "accounts", len(accounts), "first", accounts[0], "bytes", common.StorageSize(bytes))
 	}
-	return p2p.Send(p.rw, getStorageRangesMsg, &getStorageRangesData{
+	return p2p.Send(p.rw, GetStorageRangesMsg, &GetStorageRangesPacket{
 		ID:       id,
 		Root:     root,
 		Accounts: accounts,
@@ -91,7 +91,7 @@ func (p *Peer) RequestStorageRanges(id uint64, root common.Hash, accounts []comm
 // RequestByteCodes fetches a batch of bytecodes by hash.
 func (p *Peer) RequestByteCodes(id uint64, hashes []common.Hash, bytes uint64) error {
 	p.logger.Trace("Fetching set of byte codes", "reqid", id, "hashes", len(hashes), "bytes", common.StorageSize(bytes))
-	return p2p.Send(p.rw, getByteCodesMsg, &getByteCodesData{
+	return p2p.Send(p.rw, GetByteCodesMsg, &GetByteCodesPacket{
 		ID:     id,
 		Hashes: hashes,
 		Bytes:  bytes,
@@ -100,9 +100,9 @@ func (p *Peer) RequestByteCodes(id uint64, hashes []common.Hash, bytes uint64) e
 
 // RequestTrieNodes fetches a batch of account or storage trie nodes rooted in
 // a specificstate trie.
-func (p *Peer) RequestTrieNodes(id uint64, root common.Hash, paths []trieNodePathSet, bytes uint64) error {
+func (p *Peer) RequestTrieNodes(id uint64, root common.Hash, paths []TrieNodePathSet, bytes uint64) error {
 	p.logger.Trace("Fetching set of trie nodes", "reqid", id, "root", root, "pathsets", len(paths), "bytes", common.StorageSize(bytes))
-	return p2p.Send(p.rw, getTrieNodesMsg, &getTrieNodesData{
+	return p2p.Send(p.rw, GetTrieNodesMsg, &GetTrieNodesPacket{
 		ID:    id,
 		Root:  root,
 		Paths: paths,

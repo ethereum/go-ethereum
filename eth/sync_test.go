@@ -17,28 +17,23 @@
 package eth
 
 import (
-	"os"
 	"sync/atomic"
 	"testing"
 	"time"
 
 	"github.com/ethereum/go-ethereum/eth/downloader"
 	"github.com/ethereum/go-ethereum/eth/protocols/eth"
-	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/p2p"
 	"github.com/ethereum/go-ethereum/p2p/enode"
 )
 
 // Tests that fast sync is disabled after a successful sync cycle.
-func TestFastSyncDisabling63(t *testing.T) { testFastSyncDisabling(t, 63) }
 func TestFastSyncDisabling64(t *testing.T) { testFastSyncDisabling(t, 64) }
 func TestFastSyncDisabling65(t *testing.T) { testFastSyncDisabling(t, 65) }
 
 // Tests that fast sync gets disabled as soon as a real block is successfully
 // imported into the blockchain.
 func testFastSyncDisabling(t *testing.T, protocol uint) {
-	log.Root().SetHandler(log.LvlFilterHandler(log.LvlTrace, log.StreamHandler(os.Stderr, log.TerminalFormat(true))))
-
 	t.Parallel()
 
 	// Create an empty handler and ensure it's in fast sync mode
