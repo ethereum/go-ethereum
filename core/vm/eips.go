@@ -30,6 +30,7 @@ var activators = map[int]func(*JumpTable){
 	1884: enable1884,
 	1344: enable1344,
 	2315: enable2315,
+	2937: enable2937,
 }
 
 // EnableEIP enables the given EIP on the config.
@@ -44,10 +45,13 @@ func EnableEIP(eipNum int, jt *JumpTable) error {
 	return nil
 }
 
+// ValidEip checks if an eip is in the activators table
 func ValidEip(eipNum int) bool {
 	_, ok := activators[eipNum]
 	return ok
 }
+
+// ActivateableEips returns the available activatble eips
 func ActivateableEips() []string {
 	var nums []string
 	for k := range activators {

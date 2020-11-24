@@ -66,7 +66,7 @@ type JumpTable [256]*operation
 // newBastanchuryInstructionSet returns the instruction set containing
 // - "EIP-2937: SET_INDESTRUCTIBLE opcode"
 func newBastanchuryInstructionSet() JumpTable {
-	instructionSet := newIstanbulInstructionSet()
+	instructionSet := newYoloV2InstructionSet()
 	enable2937(&instructionSet)
 	return instructionSet
 }

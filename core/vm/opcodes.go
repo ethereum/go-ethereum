@@ -199,7 +199,7 @@ const (
 	LOG2
 	LOG3
 	LOG4
-	SETINDESTRUCTIBLE
+	SETINDESTRUCTIBLE OpCode = 0xa8
 )
 
 // unofficial opcodes used for parsing.
