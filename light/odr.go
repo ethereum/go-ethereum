@@ -28,9 +28,9 @@ import (
 	"github.com/ethereum/go-ethereum/ethdb"
 )
 
-// NoOdr is the default context passed to an ODR capable function when the ODR
-// service is not required.
-var NoOdr = context.Background()
+// DefaultContext is the default context passed to an ODR capable function when
+// the ODR service has no latency limitation.
+var DefaultContext = context.Background()
 
 // ErrNoPeers is returned if no peers capable of serving a queued request are available
 var ErrNoPeers = errors.New("no suitable peers available")

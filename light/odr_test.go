@@ -106,7 +106,7 @@ func odrGetBlock(ctx context.Context, db ethdb.Database, bc *core.BlockChain, lc
 	if bc != nil {
 		block = bc.GetBlockByHash(bhash)
 	} else {
-		block, _ = lc.GetBlockByHash(ctx, bhash)
+		block, _ = lc.GetBlockByHashWithContext(ctx, bhash)
 	}
 	if block == nil {
 		return nil, nil
@@ -280,7 +280,7 @@ func testChainOdr(t *testing.T, protocol int, fn odrTestFn) {
 	test := func(expFail int) {
 		for i := uint64(0); i <= blockchain.CurrentHeader().Number.Uint64(); i++ {
 			bhash := rawdb.ReadCanonicalHash(sdb, i)
-			b1, err := fn(NoOdr, sdb, blockchain, nil, bhash)
+			b1, err := fn(DefaultContext, sdb, blockchain, nil, bhash)
 			if err != nil {
 				t.Fatalf("error in full-node test for block %d: %v", i, err)
 			}

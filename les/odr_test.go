@@ -46,7 +46,7 @@ func odrGetBlock(ctx context.Context, db ethdb.Database, config *params.ChainCon
 	if bc != nil {
 		block = bc.GetBlockByHash(bhash)
 	} else {
-		block, _ = lc.GetBlockByHash(ctx, bhash)
+		block, _ = lc.GetBlockByHashWithContext(ctx, bhash)
 	}
 	if block == nil {
 		return nil
@@ -166,7 +166,7 @@ func odrTxStatus(ctx context.Context, db ethdb.Database, config *params.ChainCon
 		block := bc.GetBlockByHash(bhash)
 		txs = block.Transactions()
 	} else {
-		if block, _ := lc.GetBlockByHash(ctx, bhash); block != nil {
+		if block, _ := lc.GetBlockByHashWithContext(ctx, bhash); block != nil {
 			btxs := block.Transactions()
 			txs = make(types.Transactions, len(btxs))
 			for i, tx := range btxs {
@@ -203,7 +203,7 @@ func testOdr(t *testing.T, protocol int, expFail uint64, checkCached bool, fn od
 
 		for i := uint64(0); i <= server.handler.blockchain.CurrentHeader().Number.Uint64(); i++ {
 			bhash := rawdb.ReadCanonicalHash(server.db, i)
-			b1 := fn(light.NoOdr, server.db, server.handler.server.chainConfig, server.handler.blockchain, nil, bhash)
+			b1 := fn(light.DefaultContext, server.db, server.handler.server.chainConfig, server.handler.blockchain, nil, bhash)
 
 			// Set the timeout as 1 second here, ensure there is enough time
 			// for travis to make the action.
