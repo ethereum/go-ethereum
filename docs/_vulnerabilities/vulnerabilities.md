@@ -86,6 +86,7 @@ The JSON file of known vulnerabilities below is a list of objects, one for each 
 - `CVE`
   - The assigned `CVE` identifier, if available (optional)
 
-### Why not use Github Security advisories
+### What about Github security advisories
 
-We prefer to not rely on Github as the only/primary publishing protocol for security advisories. However, we do plan to also post public disclosures as advisories via the Github security infrastructure.
+We prefer to not rely on Github as the only/primary publishing protocol for security advisories, but 
+we plan use the Github-advisory process as a second channel for disseminating vulnerability-information. 
