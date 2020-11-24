@@ -18,6 +18,7 @@ package threadpool
 
 import (
 	"fmt"
+	"sync"
 	"testing"
 )
 
@@ -32,5 +33,34 @@ func TestThreadPool(t *testing.T) {
 	g := tp.Get()
 	tp.Put(1)
 	tp.Get()
-	panic(fmt.Sprintf("%v %v %v %v %v %v %v", a, b, c, d, e, f, g))
+	fmt.Printf("%v %v %v %v %v %v %v", a, b, c, d, e, f, g)
+}
+
+func TestThreadPoolRandom(t *testing.T) {
+	tp := NewThreadPool(10)
+	wg := sync.WaitGroup{}
+	wg.Add(1000)
+	for i := 0; i < 1000; i++ {
+		go func(i int) {
+			a := tp.Get()
+			fmt.Printf("%v has %v threads\n", i, a)
+			tp.Put(a)
+			wg.Done()
+		}(i)
+	}
+	wg.Wait()
+}
+
+func BenchmarkThreadPool(t *testing.B) {
+	tp := NewThreadPool(10)
+	wg := sync.WaitGroup{}
+	wg.Add(t.N)
+	for i := 0; i < t.N; i++ {
+		go func(i int) {
+			a := tp.Get()
+			tp.Put(a)
+			wg.Done()
+		}(i)
+	}
+	wg.Wait()
 }

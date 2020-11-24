@@ -43,8 +43,9 @@ func NewThreadPool(maxThreads int) *Threadpool {
 }
 
 // Get requests threads from the pool.
-// If the pool is not used much, a caller can get up to log(maxThreads) threads.
+// If the pool is not used much, a caller can get up to 1/3 of the available threads.
 // Otherwise the caller gets only a single thread (once available).
+// It uses len(chan) which is a bit racy but shouldn't matter to much.
 func (t *Threadpool) Get() int {
 	threads := 1
 	if len(t.pool) > t.max/2 {
