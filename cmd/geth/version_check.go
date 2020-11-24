@@ -45,6 +45,7 @@ type vulnJson struct {
 	Published   string
 	Severity    string
 	Check       string
+	CVE         string
 }
 
 func versionCheck(ctx *cli.Context) error {
@@ -85,6 +86,9 @@ func checkCurrent(url, current string) error {
 			fmt.Printf("Severity: %v\n", vuln.Severity)
 			fmt.Printf("Summary : %v\n", vuln.Summary)
 			fmt.Printf("Fixed in: %v\n", vuln.Fixed)
+			if len(vuln.CVE) > 0 {
+				fmt.Printf("CVE: %v\n", vuln.CVE)
+			}
 			if len(vuln.Links) > 0 {
 				fmt.Printf("References:\n")
 				for _, ref := range vuln.Links {

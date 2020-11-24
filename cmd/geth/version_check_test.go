@@ -17,6 +17,7 @@
 package main
 
 import (
+	"encoding/json"
 	"io/ioutil"
 	"path/filepath"
 	"testing"
@@ -60,5 +61,19 @@ func testVerification(t *testing.T, pubkey, sigdir string) {
 		if err != nil {
 			t.Fatal(err)
 		}
+	}
+}
+
+func TestJson(t *testing.T) {
+	data, _ := ioutil.ReadFile("./testdata/vcheck/data2.json")
+	var vulns []vulnJson
+	if err := json.Unmarshal(data, &vulns); err != nil {
+		t.Fatal(err)
+	}
+	if len(vulns) == 0 {
+		t.Fatal("expected data, got none")
+	}
+	if have, want := vulns[0].CVE, "correct"; have != want {
+		t.Errorf("have %v, want %v", have, want)
 	}
 }
