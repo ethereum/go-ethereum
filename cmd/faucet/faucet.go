@@ -748,6 +748,11 @@ func authTwitterWithToken(tweetID string, token string) (string, string, string,
 	// Strip any query parameters from the tweet id
 	sanitizedTweetID := strings.Split(tweetID, "?")[0]
 
+	// Ensure numeric tweetID
+	if !regexp.MustCompile("^[0-9]+$").MatchString(sanitizedTweetID) {
+		return "", "", "", common.Address{}, errors.New("Invalid Tweet URL")
+	}
+
 	// Query the tweet details from Twitter
 	url := fmt.Sprintf("https://api.twitter.com/2/tweets/%s?expansions=author_id&user.fields=profile_image_url", sanitizedTweetID)
 	req, err := http.NewRequest("GET", url, nil)
