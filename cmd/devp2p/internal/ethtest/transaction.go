@@ -29,39 +29,35 @@ import (
 var faucetKey, _ = crypto.HexToECDSA("b71c71a67e1177ad4e901695e1b4b9ee17ae16c6668d313eac2f96dbcda3f291")
 
 func sendSuccessfulTx(t *utesting.T, s *Suite, tx *types.Transaction) {
-	sendConn, recvConn := s.setupConnection(t), s.setupConnection(t)
+	sendConn := s.setupConnection(t)
 	fmt.Printf("tx %v %v %v\n", tx.Hash().String(), tx.GasPrice(), tx.Gas())
 	// Send the transaction
 	if err := sendConn.Write(Transactions([]*types.Transaction{tx})); err != nil {
 		t.Fatal(err)
 	}
 	time.Sleep(100 * time.Millisecond)
+	recvConn := s.setupConnection(t)
 	// Wait for the transaction announcement
-	for i := 0; i < 2; i++ {
-		switch msg := recvConn.ReadAndServe(s.chain, timeout).(type) {
-		case *Transactions:
-			recTxs := *msg
-			if len(recTxs) < 1 {
-				t.Fatalf("received transactions do not match send: %v", recTxs)
-			}
-			if tx.Hash() != recTxs[len(recTxs)-1].Hash() {
-				t.Fatalf("received transactions do not match send: got %v want %v", recTxs, tx)
-			}
-		case *NewPooledTransactionHashes:
-			txHashes := *msg
-			if len(txHashes) < 1 {
-				t.Fatalf("received transactions do not match send: %v", txHashes)
-			}
-			if tx.Hash() == txHashes[len(txHashes)-1] {
-				// Tx announcement received
-				return
-			}
-			// ignore other tx announcements
-		default:
-			t.Fatalf("unexpected message in sendSuccessfulTx: %s", pretty.Sdump(msg))
+	switch msg := recvConn.ReadAndServe(s.chain, timeout).(type) {
+	case *Transactions:
+		recTxs := *msg
+		if len(recTxs) < 1 {
+			t.Fatalf("received transactions do not match send: %v", recTxs)
 		}
+		if tx.Hash() != recTxs[len(recTxs)-1].Hash() {
+			t.Fatalf("received transactions do not match send: got %v want %v", recTxs, tx)
+		}
+	case *NewPooledTransactionHashes:
+		txHashes := *msg
+		if len(txHashes) < 1 {
+			t.Fatalf("received transactions do not match send: %v", txHashes)
+		}
+		if tx.Hash() != txHashes[len(txHashes)-1] {
+			t.Fatalf("wrong announcement received, wanted %v got %v", tx, txHashes)
+		}
+	default:
+		t.Fatalf("unexpected message in sendSuccessfulTx: %s", pretty.Sdump(msg))
 	}
-	t.Fatalf("No tx announcement received, wanted %v", tx)
 }
 
 func sendFailingTx(t *utesting.T, s *Suite, tx *types.Transaction) {
