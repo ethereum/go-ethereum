@@ -1,4 +1,9 @@
-## Vulnerability disclosures
+---
+title: Vulnerability disclosure
+sort_key: A
+---
+
+## About disclosures
 
 In the software world, it is expected for security vulnerabilities to be immediately announced, thus giving operators an opportunity to take protective measure against attackers. 
 
@@ -47,7 +52,9 @@ In keeping with this policy, we have taken inspiration from [Solidity bug disclo
 
 ## Disclosed vulnerabilities
 
-In this folder, you can find a JSON-formatted list of some of the known security-relevant vulnerabilities concerning `geth`. 
+In this folder, you can find a JSON-formatted list ([`vulnerabilities.json`](vulnerabilities.json)) of some of the known security-relevant vulnerabilities concerning `geth`. 
+
+As of `geth` version `1.9.25`, geth has a built-in command to check whether it is affected by any publically disclosed vulnerability, using the command `geth version-check`. This command will fetch the latest json file (and the accompanying [signature-file](vulnerabilities.json.minisig), and cross-check the data against it's own version number.
 
 The file itself is hosted in the Github repository, on the `gh-pages`-branch. 
 The list was started in November 2020, and covers mainly `v1.9.7` and forward.
@@ -76,3 +83,12 @@ The JSON file of known vulnerabilities below is a list of objects, one for each 
 - `check`
   - This field contains a regular expression, which can be used against the reported `web3_clientVersion` of a node. If the check 
     matches, the node is with a high likelyhood affected by the vulnerability.
+- `CVE`
+  - The assigned `CVE` identifier, if available (optional)
+
+### What about Github security advisories
+
+We prefer to not rely on Github as the only/primary publishing protocol for security advisories, but 
+we plan use the Github-advisory process as a second channel for disseminating vulnerability-information. 
+
+Advisories published via Github can be accessed [here](https://github.com/ethereum/go-ethereum/security/advisories?state=published).
