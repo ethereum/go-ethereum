@@ -16,7 +16,7 @@
 
 // +build gofuzz
 
-package crypto
+package signify
 
 import (
 	"bufio"
