@@ -379,7 +379,7 @@ func (d *Downloader) synchronise(id string, hash common.Hash, td *big.Int, mode 
 	// sync mode. Long term we could drop fast sync or merge the two together,
 	// but until snap becomes prevalent, we should support both. TODO(karalabe).
 	if mode == SnapSync {
-		if d.snapSync == false {
+		if !d.snapSync {
 			log.Warn("Enabling snapshot sync prototype")
 			d.snapSync = true
 		}
