@@ -304,7 +304,7 @@ func (c *Conn) negotiateEthProtocol(caps []p2p.Cap) {
 
 // statusExchange performs a `Status` message exchange with the given
 // node.
-func (c *Conn) statusExchange(t *utesting.T, chain *Chain) Message {
+func (c *Conn) statusExchange(t *utesting.T, chain *Chain, status *Status) Message {
 	defer c.SetDeadline(time.Time{})
 	c.SetDeadline(time.Now().Add(20 * time.Second))
 
@@ -338,16 +338,19 @@ loop:
 	if c.ethProtocolVersion == 0 {
 		t.Fatalf("eth protocol version must be set in Conn")
 	}
-	// write status message to client
-	status := Status{
-		ProtocolVersion: uint32(c.ethProtocolVersion),
-		NetworkID:       chain.chainConfig.ChainID.Uint64(),
-		TD:              chain.TD(chain.Len()),
-		Head:            chain.blocks[chain.Len()-1].Hash(),
-		Genesis:         chain.blocks[0].Hash(),
-		ForkID:          chain.ForkID(),
+	if status == nil {
+		// write status message to client
+		status = &Status{
+			ProtocolVersion: uint32(c.ethProtocolVersion),
+			NetworkID:       chain.chainConfig.ChainID.Uint64(),
+			TD:              chain.TD(chain.Len()),
+			Head:            chain.blocks[chain.Len()-1].Hash(),
+			Genesis:         chain.blocks[0].Hash(),
+			ForkID:          chain.ForkID(),
+		}
 	}
-	if err := c.Write(status); err != nil {
+
+	if err := c.Write(*status); err != nil {
 		t.Fatalf("could not write to connection: %v", err)
 	}
 
