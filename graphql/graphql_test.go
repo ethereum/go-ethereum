@@ -133,6 +133,10 @@ func TestGraphQLBlockSerialization(t *testing.T) {
 			t.Errorf("testcase %d %s,\nwrong statuscode, have: %v, want: %v", i, tt.body, resp.StatusCode, tt.code)
 		}
 	}
+
+	expected := "{\"data\":{\"block\":{\"number\":0}}}"
+	assert.Equal(t, 200, resp.StatusCode)
+	assert.Equal(t, expected, string(bodyBytes))
 }
 
 // Tests that a graphQL request is successfully handled when graphql is enabled on the specified endpoint
@@ -156,7 +160,7 @@ func TestGraphQLBlockSerialization(t *testing.T) {
 	if err != nil {
 		t.Fatalf("could not read from response body: %v", err)
 	}
-	expected := "{\"data\":{\"block\":{\"number\":\"0x0\",\"gasUsed\":0,\"gasLimit\":5000}}}"
+	expected := "{\"data\":{\"block\":{\"number\":0,\"gasUsed\":0,\"gasLimit\":11500000}}}"
 	assert.Equal(t, expected, string(bodyBytes))
 }
 
