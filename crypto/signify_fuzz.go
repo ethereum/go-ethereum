@@ -69,30 +69,26 @@ func Fuzz(data []byte) int {
 		signify = path
 	}
 
-	// if signify-openbsd is present, check the signature.
-	// signify-openbsd will be present in CI.
-	if runtime.GOOS == "linux" {
-		cmd := exec.Command("which", signify)
-		if err = cmd.Run(); err == nil {
-			// Write the public key into the file to pass it as
-			// an argument to signify-openbsd
-			pubKeyFile, err := ioutil.TempFile("", "")
-			if err != nil {
-				panic(err)
-			}
-			defer os.Remove(pubKeyFile.Name())
-			defer pubKeyFile.Close()
-			pubKeyFile.WriteString("untrusted comment: signify public key\n")
-			pubKeyFile.WriteString(testPubKey)
-			pubKeyFile.WriteString("\n")
+	_, err := exec.LookPath(signify)
+	if err != nil {
+		panic(err)
+	}
 
-			cmd := exec.Command(signify, "-V", "-p", pubKeyFile.Name(), "-x", tmpFile.Name()+".sig", "-m", tmpFile.Name())
-			if output, err := cmd.CombinedOutput(); err != nil {
-				panic(fmt.Sprintf("could not verify the file: %v, output: \n%s", err, output))
-			}
-		} else {
-			panic(err)
-		}
+	// Write the public key into the file to pass it as
+	// an argument to signify-openbsd
+	pubKeyFile, err := ioutil.TempFile("", "")
+	if err != nil {
+		panic(err)
+	}
+	defer os.Remove(pubKeyFile.Name())
+	defer pubKeyFile.Close()
+	pubKeyFile.WriteString("untrusted comment: signify public key\n")
+	pubKeyFile.WriteString(testPubKey)
+	pubKeyFile.WriteString("\n")
+
+	cmd := exec.Command(signify, "-V", "-p", pubKeyFile.Name(), "-x", tmpFile.Name()+".sig", "-m", tmpFile.Name())
+	if output, err := cmd.CombinedOutput(); err != nil {
+		panic(fmt.Sprintf("could not verify the file: %v, output: \n%s", err, output))
 	}
 
 	// Verify the signature using a golang library
