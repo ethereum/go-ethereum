@@ -31,7 +31,7 @@ import (
 func ReadDatabaseVersion(db ethdb.KeyValueReader) *uint64 {
 	var version uint64
 
-	enc, _ := db.Get(databaseVerisionKey)
+	enc, _ := db.Get(databaseVersionKey)
 	if len(enc) == 0 {
 		return nil
 	}
@@ -48,7 +48,7 @@ func WriteDatabaseVersion(db ethdb.KeyValueWriter, version uint64) {
 	if err != nil {
 		log.Crit("Failed to encode database version", "err", err)
 	}
-	if err = db.Put(databaseVerisionKey, enc); err != nil {
+	if err = db.Put(databaseVersionKey, enc); err != nil {
 		log.Crit("Failed to store the database version", "err", err)
 	}
 }
@@ -81,22 +81,24 @@ func WriteChainConfig(db ethdb.KeyValueWriter, hash common.Hash, cfg *params.Cha
 	}
 }
 
-// ucmList is a list of unclean-shutdown-markers, for rlp-encoding to the
+// crashList is a list of unclean-shutdown-markers, for rlp-encoding to the
 // database
-type ucmList struct {
+type crashList struct {
 	Discarded uint64   // how many ucs have we deleted
 	Recent    []uint64 // unix timestamps of 10 latest unclean shutdowns
 }
 
-// UpdateUncleanShutdownMarker appends a new unclean shutdown marker and returns
+const crashesToKeep = 10
+
+// PushUncleanShutdownMarker appends a new unclean shutdown marker and returns
 // the previous data
 // - a list of timestamps
 // - a count of how many old unclean-shutdowns have been discarded
-func UpdateUncleanShutdownMarker(db ethdb.KeyValueStore) ([]uint64, uint64, error) {
-	var uncleanShutdowns ucmList
+func PushUncleanShutdownMarker(db ethdb.KeyValueStore) ([]uint64, uint64, error) {
+	var uncleanShutdowns crashList
 	// Read old data
 	if data, err := db.Get(uncleanShutdownKey); err != nil {
-		log.Warn("Error reading USM", "error", err)
+		log.Warn("Error reading unclean shutdown markers", "error", err)
 	} else if err := rlp.DecodeBytes(data, &uncleanShutdowns); err != nil {
 		return nil, 0, err
 	}
@@ -105,8 +107,8 @@ func UpdateUncleanShutdownMarker(db ethdb.KeyValueStore) ([]uint64, uint64, erro
 	copy(previous, uncleanShutdowns.Recent)
 	// Add a new (but cap it)
 	uncleanShutdowns.Recent = append(uncleanShutdowns.Recent, uint64(time.Now().Unix()))
-	if l := len(uncleanShutdowns.Recent); l > 11 {
-		uncleanShutdowns.Recent = uncleanShutdowns.Recent[l-11:]
+	if l := len(uncleanShutdowns.Recent); l > crashesToKeep+1 {
+		uncleanShutdowns.Recent = uncleanShutdowns.Recent[l-crashesToKeep-1:]
 		uncleanShutdowns.Discarded++
 	}
 	// And save it again
@@ -118,14 +120,14 @@ func UpdateUncleanShutdownMarker(db ethdb.KeyValueStore) ([]uint64, uint64, erro
 	return previous, discarded, nil
 }
 
-// ClearUncleanShutdowMarker removes the last unclean shutdown marker
-func ClearUncleanShutdowMarker(db ethdb.KeyValueStore) {
-	var uncleanShutdowns ucmList
+// PopUncleanShutdownMarker removes the last unclean shutdown marker
+func PopUncleanShutdownMarker(db ethdb.KeyValueStore) {
+	var uncleanShutdowns crashList
 	// Read old data
 	if data, err := db.Get(uncleanShutdownKey); err != nil {
-		log.Warn("Error reading USM", "error", err)
+		log.Warn("Error reading unclean shutdown markers", "error", err)
 	} else if err := rlp.DecodeBytes(data, &uncleanShutdowns); err != nil {
-		log.Error("Error reading USM", "error", err) // Should mos def _not_ happen
+		log.Error("Error decoding unclean shutdown markers", "error", err) // Should mos def _not_ happen
 	}
 	if l := len(uncleanShutdowns.Recent); l > 0 {
 		uncleanShutdowns.Recent = uncleanShutdowns.Recent[:l-1]

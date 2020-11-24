@@ -27,8 +27,8 @@ import (
 
 // The fields below define the low level database schema prefixing.
 var (
-	// databaseVerisionKey tracks the current database version.
-	databaseVerisionKey = []byte("DatabaseVersion")
+	// databaseVersionKey tracks the current database version.
+	databaseVersionKey = []byte("DatabaseVersion")
 
 	// headHeaderKey tracks the latest known header's hash.
 	headHeaderKey = []byte("LastHeader")
