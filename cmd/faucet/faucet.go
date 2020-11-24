@@ -732,7 +732,10 @@ func authTwitter(url string) (string, string, common.Address, error) {
 // returning the username, avatar URL and Ethereum address to fund on success.
 func authFacebook(url string) (string, string, common.Address, error) {
 	// Ensure the user specified a meaningful URL, no fancy nonsense
-	parts := strings.Split(url, "/")
+	parts := strings.Split(strings.Split(url, "?")[0], "/")
+	if parts[len(parts)-1] == "" {
+		parts = parts[0 : len(parts)-1]
+	}
 	if len(parts) < 4 || parts[len(parts)-2] != "posts" {
 		//lint:ignore ST1005 This error is to be displayed in the browser
 		return "", "", common.Address{}, errors.New("Invalid Facebook post URL")
