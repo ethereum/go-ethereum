@@ -43,10 +43,6 @@ var (
 
 type Long uint64
 
-func (b Long) String() string {
-	return string(b)
-}
-
 // ImplementsGraphQLType returns true if Long implements the provided GraphQL type.
 func (b Long) ImplementsGraphQLType(name string) bool { return name == "Long" }
 
@@ -442,13 +438,13 @@ func (b *Block) resolveReceipts(ctx context.Context) ([]*types.Receipt, error) {
 	return b.receipts, nil
 }
 
-func (b *Block) Number(ctx context.Context) (hexutil.Uint64, error) {
+func (b *Block) Number(ctx context.Context) (Long, error) {
 	header, err := b.resolveHeader(ctx)
 	if err != nil {
-		return 0, err
+		return Long(0), err
 	}
 
-	return hexutil.Uint64(header.Number.Uint64()), nil
+	return Long(header.Number.Uint64()), nil
 }
 
 func (b *Block) Hash(ctx context.Context) (common.Hash, error) {
