@@ -83,6 +83,8 @@ The JSON file of known vulnerabilities below is a list of objects, one for each 
 - `check`
   - This field contains a regular expression, which can be used against the reported `web3_clientVersion` of a node. If the check 
     matches, the node is with a high likelyhood affected by the vulnerability.
+- `CVE`
+  - The assigned `CVE` identifier, if available (optional)
 
 ### Why not use Github Security advisories
 
