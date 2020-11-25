@@ -68,9 +68,7 @@ func (api *PublicEthereumAPI) Hashrate() hexutil.Uint64 {
 
 // ChainId is the chain id for the current ethereum chain config.
 func (api *PublicEthereumAPI) ChainId() hexutil.Uint64 {
-	chainID := new(big.Int)
-	chainID = api.e.blockchain.Config().ChainID
-	return (hexutil.Uint64)(chainID.Uint64())
+	return (hexutil.Uint64)(api.e.blockchain.Config().ChainID.Uint64())
 }
 
 // IsEIP155 returns whether the current chain is on or past the
