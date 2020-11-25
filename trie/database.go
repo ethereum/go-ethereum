@@ -100,7 +100,7 @@ func (n rawNode) cache() (hashNode, bool)   { panic("this should never end up in
 func (n rawNode) fstring(ind string) string { panic("this should never end up in a live trie") }
 
 func (n rawNode) EncodeRLP(w io.Writer) error {
-	_, err := w.Write([]byte(n))
+	_, err := w.Write(n)
 	return err
 }
 
