@@ -288,9 +288,8 @@ func activePriority(a interface{}, now mclock.AbsTime) int64 {
 	}
 	if c.bias == 0 {
 		return invertPriority(c.nodePriority.Priority(now, c.capacity))
-	} else {
-		return invertPriority(c.nodePriority.EstMinPriority(now+mclock.AbsTime(c.bias), c.capacity, true))
 	}
+	return invertPriority(c.nodePriority.EstMinPriority(now+mclock.AbsTime(c.bias), c.capacity, true))
 }
 
 // activeMaxPriority callback returns estimated maximum priority of ppNodeInfo item in activeQueue
