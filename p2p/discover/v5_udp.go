@@ -454,15 +454,15 @@ func (t *UDPv5) call(node *enode.Node, responseType byte, packet v5wire.Packet) 
 
 // callDone tells dispatch that the active call is done.
 func (t *UDPv5) callDone(c *callV5) {
-	// In a rare instance, where we still receive response packets
-	// in the event of a finished call.( after response timeout) We
-	//  continue alleviating and reading the packets from the channel
-	// in order to prevent any deadlocks in dispatch.
+	// This needs a loop because further responses may be incoming until the
+	// send to callDoneCh has completed. Such responses need to be discarded
+	// in order to avoid blocking the dispatch loop.
 	for {
 		select {
 		case <-c.ch:
-			// do nothing and continue waiting for the
-			// other channels to be ready.
+			// late response, discard.
+		case <-c.err:
+			// late error, discard.
 		case t.callDoneCh <- c:
 			return
 		case <-t.closeCtx.Done():
