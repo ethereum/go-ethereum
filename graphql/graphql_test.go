@@ -22,8 +22,13 @@ import (
 	"net/http"
 	"strings"
 	"testing"
+	"time"
 
+	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/consensus/ethash"
+	"github.com/ethereum/go-ethereum/core"
 	"github.com/ethereum/go-ethereum/eth"
+	"github.com/ethereum/go-ethereum/miner"
 	"github.com/ethereum/go-ethereum/node"
 	"github.com/stretchr/testify/assert"
 )
@@ -137,8 +142,24 @@ func createNode(t *testing.T, gqlEnabled bool) *node.Node {
 }
 
 func createGQLService(t *testing.T, stack *node.Node, endpoint string) {
-	// create backend
-	ethBackend, err := eth.New(stack, &eth.DefaultConfig)
+	// create backend (use a config which is light on mem consumption)
+	ethConf := &eth.Config{
+		Genesis: core.DeveloperGenesisBlock(15, common.Address{}),
+		Miner: miner.Config{
+			Etherbase: common.HexToAddress("0xaabb"),
+		},
+		Ethash: ethash.Config{
+			PowMode: ethash.ModeTest,
+		},
+		NetworkId:               1337,
+		TrieCleanCache:          5,
+		TrieCleanCacheJournal:   "triecache",
+		TrieCleanCacheRejournal: 60 * time.Minute,
+		TrieDirtyCache:          5,
+		TrieTimeout:             60 * time.Minute,
+		SnapshotCache:           5,
+	}
+	ethBackend, err := eth.New(stack, ethConf)
 	if err != nil {
 		t.Fatalf("could not create eth backend: %v", err)
 	}
