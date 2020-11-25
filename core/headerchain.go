@@ -132,7 +132,6 @@ func (hc *HeaderChain) GetBlockNumber(hash common.Hash) *uint64 {
 type headerWriteResult struct {
 	ignored    int
 	imported   int
-	status     WriteStatus
 	lastHash   common.Hash
 	lastHeader *types.Header
 }
@@ -155,12 +154,12 @@ func (hc *HeaderChain) WriteHeaders(headers []*types.Header, postWriteFn PostWri
 		return &headerWriteResult{}, consensus.ErrUnknownAncestor
 	}
 	var (
-		lastHeader         *types.Header // Last successfully imported header
-		lastNumber         uint64        // Last successfully imported number
-		lastHash           common.Hash
-		externTd           *big.Int     // TD of successfully imported chain
-		inserted           []numberHash // Ephemeral lookup of number/hash for the chain
-		firstInsertedIndex = -1         // Index of the first non-ignored header
+		lastHeader    *types.Header // Last successfully imported header
+		lastNumber    uint64        // Last successfully imported number
+		lastHash      common.Hash
+		externTd      *big.Int     // TD of successfully imported chain
+		inserted      []numberHash // Ephemeral lookup of number/hash for the chain
+		firstInserted = -1         // Index of the first non-ignored header
 	)
 	lastHash, lastNumber = headers[0].ParentHash, headers[0].Number.Uint64()-1 // Already validated above
 	batch := hc.chainDb.NewBatch()
@@ -178,7 +177,7 @@ func (hc *HeaderChain) WriteHeaders(headers []*types.Header, postWriteFn PostWri
 		}
 		hash, number := header.Hash(), header.Number.Uint64()
 		if header.ParentHash != lastHash {
-			log.Warn("Non-contiguous header insertion", "header.parent", header.ParentHash, "expected", hash, "number", number)
+			log.Warn("Non-contiguous header insertion", "parent", header.ParentHash, "expected", lastHash, "number", number)
 			break
 		}
 		externTd = new(big.Int).Add(header.Difficulty, ptd)
@@ -193,8 +192,8 @@ func (hc *HeaderChain) WriteHeaders(headers []*types.Header, postWriteFn PostWri
 			inserted = append(inserted, numberHash{number, hash})
 			hc.headerCache.Add(hash, header)
 			hc.numberCache.Add(hash, number)
-			if firstInsertedIndex < 0 {
-				firstInsertedIndex = i
+			if firstInserted < 0 {
+				firstInserted = i
 			}
 		}
 		lastHeader, lastHash, lastNumber, ptd = header, hash, number, externTd
@@ -253,7 +252,7 @@ func (hc *HeaderChain) WriteHeaders(headers []*types.Header, postWriteFn PostWri
 			// during this import batch, then we need to write that now
 			// Further down, we continue writing the staus for the ones that
 			// were not already known
-			for i := 0; i < firstInsertedIndex; i++ {
+			for i := 0; i < firstInserted; i++ {
 				hash := headers[i].Hash()
 				num := headers[i].Number.Uint64()
 				rawdb.WriteCanonicalHash(markerBatch, hash, num)
@@ -279,30 +278,23 @@ func (hc *HeaderChain) WriteHeaders(headers []*types.Header, postWriteFn PostWri
 	// Execute any post-write callback function
 	// - unless we're exiting
 	// - and unless we ignored everything
-	if postWriteFn != nil && !hc.procInterrupt() && firstInsertedIndex >= 0 {
-		// TODO: Is it really necessary to invoke this N times, instead of just
-		// invoking it for the last header?
-		// It is only used for lightchain event aggregation
-		for _, header := range headers[firstInsertedIndex:] {
-			if header.Number.Uint64() > lastNumber {
-				break
-			}
-			postWriteFn(header, status)
-		}
+	if postWriteFn != nil && !hc.procInterrupt() && len(inserted) > 0 {
+		// The postwrite function is called only for the last imported header.
+		// It is only used for lightchain event aggregation.
+		postWriteFn(lastHeader, status)
 	}
 	return &headerWriteResult{
 		ignored:    len(headers) - len(inserted),
 		imported:   len(inserted),
-		status:     status,
 		lastHash:   lastHash,
 		lastHeader: lastHeader,
 	}, nil
 }
 
 // PostWriteCallback is a callback function for inserting headers,
-// which is called after each header is inserted.
-// The reson for having it is:
-// In light-chain mode, status should be  processed and light chain events sent,
+// which is called once, with the last successfully imported header in the batch.
+// The raeson for having it is:
+// In light-chain mode, status should be processed and light chain events sent,
 // whereas in a non-light mode this is not necessary since chain events are sent after inserting blocks.
 type PostWriteCallback func(header *types.Header, status WriteStatus)
 

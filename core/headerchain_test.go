@@ -98,23 +98,23 @@ func TestHeaderInsertion(t *testing.T) {
 	log.Root().SetHandler(log.StdoutHandler)
 
 	// Inserting 64 headers on an empty chain, expecting
-	// 64 callbacks, 64 canon-status, 0 sidestatus,
-	if err := testInsert(t, hc, chainA[:64], 64, 64, 0); err != nil {
+	// 1 callbacks, 1 canon-status, 0 sidestatus,
+	if err := testInsert(t, hc, chainA[:64], 1, 1, 0); err != nil {
 		t.Fatal(err)
 	}
 
-	// Inserting 64 inentical headers, expecting
+	// Inserting 64 identical headers, expecting
 	// 0 callbacks, 0 canon-status, 0 sidestatus,
 	if err := testInsert(t, hc, chainA[:64], 0, 0, 0); err != nil {
 		t.Fatal(err)
 	}
 	// Inserting the same some old, some new headers
-	// 32 callbacks, 32 canon, 0 side
-	if err := testInsert(t, hc, chainA[32:96], 32, 32, 0); err != nil {
+	// 1 callbacks, 1 canon, 0 side
+	if err := testInsert(t, hc, chainA[32:96], 1, 1, 0); err != nil {
 		t.Fatal(err)
 	}
 	// Inserting side blocks, but not overtaking the canon chain
-	if err := testInsert(t, hc, chainB[0:32], 32, 0, 32); err != nil {
+	if err := testInsert(t, hc, chainB[0:32], 1, 0, 1); err != nil {
 		t.Fatal(err)
 	}
 	// Inserting more side blocks, but we don't have the parent
@@ -122,19 +122,19 @@ func TestHeaderInsertion(t *testing.T) {
 		t.Fatal(fmt.Errorf("Expected %v, got %v", consensus.ErrUnknownAncestor, err))
 	}
 	// Inserting more sideblocks, overtaking the canon chain
-	if err := testInsert(t, hc, chainB[32:97], 65, 65, 0); err != nil {
+	if err := testInsert(t, hc, chainB[32:97], 1, 1, 0); err != nil {
 		t.Fatal(err)
 	}
 	// Inserting more A-headers, taking back the canonicality
-	if err := testInsert(t, hc, chainA[90:100], 4, 4, 0); err != nil {
+	if err := testInsert(t, hc, chainA[90:100], 1, 1, 0); err != nil {
 		t.Fatal(err)
 	}
 	// And B becomes canon again
-	if err := testInsert(t, hc, chainB[97:107], 10, 10, 0); err != nil {
+	if err := testInsert(t, hc, chainB[97:107], 1, 1, 0); err != nil {
 		t.Fatal(err)
 	}
 	// And B becomes even longer
-	if err := testInsert(t, hc, chainB[107:128], 21, 21, 0); err != nil {
+	if err := testInsert(t, hc, chainB[107:128], 1, 1, 0); err != nil {
 		t.Fatal(err)
 	}
 }
