@@ -130,8 +130,7 @@ func (odr *LesOdr) Retrieve(ctx context.Context, req light.OdrRequest) (err erro
 		requestRTT.Update(time.Duration(mclock.Now() - sent))
 	}(mclock.Now())
 
-	err = odr.retriever.retrieve(ctx, reqID, rq, func(p distPeer, msg *Msg) error { return lreq.Validate(odr.db, msg) }, odr.stop)
-	if err != nil {
+	if err := odr.retriever.retrieve(ctx, reqID, rq, func(p distPeer, msg *Msg) error { return lreq.Validate(odr.db, msg) }, odr.stop); err != nil {
 		return err
 	}
 	req.StoreResult(odr.db)
