@@ -53,7 +53,7 @@ func testCheckpointSyncing(t *testing.T, protocol int, syncMode int) {
 			time.Sleep(10 * time.Millisecond)
 		}
 	}
-	// Generate 512+4 blocks (totally 1 CHT sections)
+	// Generate 128+1 blocks (totally 1 CHT sections)
 	server, client, tearDown := newClientServerEnv(t, int(config.ChtSize+config.ChtConfirms), protocol, waitIndexers, nil, 0, false, false, true)
 	defer tearDown()
 

@@ -32,7 +32,7 @@ import (
 var sha3Nil = crypto.Keccak256Hash(nil)
 
 // GetHeaderByNumber retrieves the canonical block header corresponding to the
-// given number.
+// given number. The returned header is proven by local CHT.
 func GetHeaderByNumber(ctx context.Context, odr OdrBackend, number uint64) (*types.Header, error) {
 	// Try to find it in the local database first.
 	db := odr.Database()
@@ -56,25 +56,6 @@ func GetHeaderByNumber(ctx context.Context, odr OdrBackend, number uint64) (*typ
 		ChtNum:   chts - 1,
 		BlockNum: number,
 		Config:   odr.IndexerConfig(),
-	}
-	if err := odr.Retrieve(ctx, r); err != nil {
-		return nil, err
-	}
-	return r.Header, nil
-}
-
-// GetUntrustedHeaderByNumber retrieves specified block header without
-// correctness checking. Note this function should only be used in light
-// client checkpoint syncing.
-func GetUntrustedHeaderByNumber(ctx context.Context, odr OdrBackend, number uint64, peerId string) (*types.Header, error) {
-	// todo(rjl493456442) it's a hack to retrieve headers which is not covered
-	// by CHT. Fix it in LES4
-	r := &ChtRequest{
-		BlockNum:  number,
-		ChtNum:    number / odr.IndexerConfig().ChtSize,
-		Untrusted: true,
-		PeerId:    peerId,
-		Config:    odr.IndexerConfig(),
 	}
 	if err := odr.Retrieve(ctx, r); err != nil {
 		return nil, err
