@@ -69,12 +69,10 @@ func (s *Suite) AllTests() []utesting.Test {
 		{Name: "Status", Fn: s.TestStatus},
 		{Name: "GetBlockHeaders", Fn: s.TestGetBlockHeaders},
 		{Name: "Broadcast", Fn: s.TestBroadcast},
-		/*
-			{Name: "GetBlockBodies", Fn: s.TestGetBlockBodies},
-			{Name: "TestLargeAnnounce", Fn: s.TestLargeAnnounce},
-			{Name: "TestMaliciousHandshake", Fn: s.TestMaliciousHandshake},
-			{Name: "TestMaliciousStatus", Fn: s.TestMaliciousStatus},
-		*/
+		{Name: "GetBlockBodies", Fn: s.TestGetBlockBodies},
+		{Name: "TestLargeAnnounce", Fn: s.TestLargeAnnounce},
+		{Name: "TestMaliciousHandshake", Fn: s.TestMaliciousHandshake},
+		{Name: "TestMaliciousStatus", Fn: s.TestMaliciousStatus},
 		{Name: "TestTransactions", Fn: s.TestTransaction},
 		{Name: "TestMaliciousTransactions", Fn: s.TestMaliciousTx},
 	}

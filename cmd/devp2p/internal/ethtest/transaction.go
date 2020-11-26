@@ -20,6 +20,7 @@ import (
 	"fmt"
 	"time"
 
+	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/internal/utesting"
@@ -89,7 +90,11 @@ func sendFailingTx(t *utesting.T, s *Suite, tx *types.Transaction) {
 
 func unknownTx(t *utesting.T, s *Suite) *types.Transaction {
 	tx := getNextTxFromChain(t, s)
-	txNew := types.NewTransaction(tx.Nonce()+1, *tx.To(), tx.Value(), tx.Gas(), tx.GasPrice(), tx.Data())
+	var to common.Address
+	if tx.To() != nil {
+		to = *tx.To()
+	}
+	txNew := types.NewTransaction(tx.Nonce()+1, to, tx.Value(), tx.Gas(), tx.GasPrice(), tx.Data())
 	return signWithFaucet(t, txNew)
 }
 
@@ -126,27 +131,43 @@ func getOldTxFromChain(t *utesting.T, s *Suite) *types.Transaction {
 
 func invalidNonceTx(t *utesting.T, s *Suite) *types.Transaction {
 	tx := getNextTxFromChain(t, s)
-	txNew := types.NewTransaction(tx.Nonce()-2, *tx.To(), tx.Value(), tx.Gas(), tx.GasPrice(), tx.Data())
+	var to common.Address
+	if tx.To() != nil {
+		to = *tx.To()
+	}
+	txNew := types.NewTransaction(tx.Nonce()-2, to, tx.Value(), tx.Gas(), tx.GasPrice(), tx.Data())
 	return signWithFaucet(t, txNew)
 }
 
 func hugeAmount(t *utesting.T, s *Suite) *types.Transaction {
 	tx := getNextTxFromChain(t, s)
 	amount := largeNumber(2)
-	txNew := types.NewTransaction(tx.Nonce(), *tx.To(), amount, tx.Gas(), tx.GasPrice(), tx.Data())
+	var to common.Address
+	if tx.To() != nil {
+		to = *tx.To()
+	}
+	txNew := types.NewTransaction(tx.Nonce(), to, amount, tx.Gas(), tx.GasPrice(), tx.Data())
 	return signWithFaucet(t, txNew)
 }
 
 func hugeGasPrice(t *utesting.T, s *Suite) *types.Transaction {
 	tx := getNextTxFromChain(t, s)
 	gasPrice := largeNumber(2)
-	txNew := types.NewTransaction(tx.Nonce(), *tx.To(), tx.Value(), tx.Gas(), gasPrice, tx.Data())
+	var to common.Address
+	if tx.To() != nil {
+		to = *tx.To()
+	}
+	txNew := types.NewTransaction(tx.Nonce(), to, tx.Value(), tx.Gas(), gasPrice, tx.Data())
 	return signWithFaucet(t, txNew)
 }
 
 func hugeData(t *utesting.T, s *Suite) *types.Transaction {
 	tx := getNextTxFromChain(t, s)
-	txNew := types.NewTransaction(tx.Nonce(), *tx.To(), tx.Value(), tx.Gas(), tx.GasPrice(), largeBuffer(2))
+	var to common.Address
+	if tx.To() != nil {
+		to = *tx.To()
+	}
+	txNew := types.NewTransaction(tx.Nonce(), to, tx.Value(), tx.Gas(), tx.GasPrice(), largeBuffer(2))
 	return signWithFaucet(t, txNew)
 }
 
