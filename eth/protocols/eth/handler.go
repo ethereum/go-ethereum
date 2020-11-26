@@ -201,8 +201,11 @@ func handleMessage(backend Backend, peer *Peer) error {
 			bytes   common.StorageSize
 			headers []*types.Header
 			unknown bool
+			lookups int
 		)
-		for !unknown && len(headers) < int(query.Amount) && bytes < softResponseLimit && len(headers) < maxHeadersServe {
+		for !unknown && len(headers) < int(query.Amount) && bytes < softResponseLimit &&
+			len(headers) < maxHeadersServe && lookups < 2*maxHeadersServe {
+			lookups++
 			// Retrieve the next header satisfying the query
 			var origin *types.Header
 			if hashMode {
@@ -292,8 +295,9 @@ func handleMessage(backend Backend, peer *Peer) error {
 			bytes  int
 			bodies []rlp.RawValue
 		)
-		for _, hash := range query {
-			if bytes >= softResponseLimit || len(bodies) >= maxBodiesServe {
+		for lookups, hash := range query {
+			if bytes >= softResponseLimit || len(bodies) >= maxBodiesServe ||
+				lookups >= 2*maxBodiesServe {
 				break
 			}
 			if data := backend.Chain().GetBodyRLP(hash); len(data) != 0 {
@@ -322,8 +326,9 @@ func handleMessage(backend Backend, peer *Peer) error {
 			bytes int
 			nodes [][]byte
 		)
-		for _, hash := range query {
-			if bytes >= softResponseLimit || len(nodes) >= maxNodeDataServe {
+		for lookups, hash := range query {
+			if bytes >= softResponseLimit || len(nodes) >= maxNodeDataServe ||
+				lookups >= 2*maxNodeDataServe {
 				break
 			}
 			// Retrieve the requested state entry
@@ -362,8 +367,9 @@ func handleMessage(backend Backend, peer *Peer) error {
 			bytes    int
 			receipts []rlp.RawValue
 		)
-		for _, hash := range query {
-			if bytes >= softResponseLimit || len(receipts) >= maxReceiptsServe {
+		for lookups, hash := range query {
+			if bytes >= softResponseLimit || len(receipts) >= maxReceiptsServe ||
+				lookups >= 2*maxReceiptsServe {
 				break
 			}
 			// Retrieve the requested block's receipts
