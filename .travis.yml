@@ -84,16 +84,16 @@ jobs:
         - go run build/ci.go install -dlgo -arch arm64 -cc aarch64-linux-gnu-gcc
         - go run build/ci.go archive -arch arm64 -type tar -signer LINUX_SIGNING_KEY -signify LINUX_SIGNIFY_KEY -upload gethstore/builds
 
-            # This builder does the Linux Azure MIPS xgo uploads
-            - stage: build
-              if: type = push
-              os: linux
-              dist: xenial
-              services:
-                - docker
-              go: 1.15.x
-              env:
-                - azure-linux-mips
+    # This builder does the Linux Azure MIPS xgo uploads
+    - stage: build
+      if: type = push
+      os: linux
+      dist: xenial
+      services:
+        - docker
+      go: 1.15.x
+      env:
+        - azure-linux-mips
         - GO111MODULE=on
       git:
         submodules: false # avoid cloning ethereum/tests
