@@ -58,7 +58,7 @@ import (
 	"time"
 
 	"github.com/cespare/cp"
-	"github.com/ethereum/go-ethereum/crypto"
+	signifyPkg "github.com/ethereum/go-ethereum/crypto/signify"
 	"github.com/ethereum/go-ethereum/internal/build"
 	"github.com/ethereum/go-ethereum/params"
 )
@@ -459,7 +459,7 @@ func archiveUpload(archive string, blobstore string, signer string, signify stri
 	}
 	if signify != "" {
 		key := getenvBase64(string(signify))
-		if err := crypto.SignifySignFile(archive, archive+".sig", string(key), "verify with geth.pub", fmt.Sprintf("%d", time.Now().UTC().Unix())); err != nil {
+		if err := signifyPkg.SignifySignFile(archive, archive+".sig", string(key), "verify with geth.pub", fmt.Sprintf("%d", time.Now().UTC().Unix())); err != nil {
 			return err
 		}
 	}
