@@ -178,3 +178,34 @@ func TestHaltBetweenSteps(t *testing.T) {
 		t.Errorf("Expected timeout error, got %v", err)
 	}
 }
+
+// TestPanicLargeTrace tests a large trace, e.g. this tx
+// https://etherscan.io/tx/0x0c10fafe0cdbfff32abfe53d57ec861d09986cc1050c850481f79b1a862bb10a
+// has 1025 nested calls as output, and crashes duktape
+func TestPanicDeepNesting(t *testing.T) {
+	// This test crashes if i is set to 1000. It's not related to the actual
+	// size of the bulk data, but rather some magic limit at exactly 1000 nested
+	// levels
+	tracer, err := New(`
+	{ 	depths: [], 
+		step: function(log, db) {}, 
+		fault: function() {}, 
+		result: function() {
+			x = {"i": 0}
+			y = x
+			for (i = 0 ; i < 1000 ; i++){
+				var z = {"i" : i}
+				y.v = z
+				y = z
+			}
+			return x
+		}
+	}
+	`)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if data, err := runTrace(tracer); err != nil {
+		t.Fatal(err)
+	}
+}
