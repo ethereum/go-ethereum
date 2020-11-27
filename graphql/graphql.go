@@ -441,7 +441,7 @@ func (b *Block) resolveReceipts(ctx context.Context) ([]*types.Receipt, error) {
 func (b *Block) Number(ctx context.Context) (Long, error) {
 	header, err := b.resolveHeader(ctx)
 	if err != nil {
-		return Long(0), err
+		return 0, err
 	}
 
 	return Long(header.Number.Uint64()), nil
