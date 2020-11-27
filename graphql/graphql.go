@@ -925,7 +925,7 @@ type Resolver struct {
 }
 
 func (r *Resolver) Block(ctx context.Context, args struct {
-	Number *Long
+	Number *int64
 	Hash   *common.Hash
 }) (*Block, error) {
 	var block *Block

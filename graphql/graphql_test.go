@@ -164,6 +164,31 @@ func TestGraphQLBlockSerialization(t *testing.T) {
 	assert.Equal(t, expected, string(bodyBytes))
 }
 
+// Tests that a graphQL request with a stringified block number returns an error.
+func TestGraphQLBlockSerializationZeroString(t *testing.T) {
+	stack := createNode(t, true)
+	defer stack.Close()
+	// start node
+	if err := stack.Start(); err != nil {
+		t.Fatalf("could not start node: %v", err)
+	}
+	// create http request
+	body := strings.NewReader(`{"query": "{block(number:\"0\"){number,gasUsed,gasLimit}}","variables": null}`)
+	gqlReq, err := http.NewRequest(http.MethodGet, fmt.Sprintf("http://%s/graphql", "127.0.0.1:9393"), body)
+	if err != nil {
+		t.Error("could not issue new http request ", err)
+	}
+	gqlReq.Header.Set("Content-Type", "application/json")
+	// read from response
+	resp := doHTTPRequest(t, gqlReq)
+	bodyBytes, err := ioutil.ReadAll(resp.Body)
+	if err != nil {
+		t.Fatalf("could not read from response body: %v", err)
+	}
+	expected := "{\"errors\":[{\"message\":\"could not unmarshal \\\"0\\\" (string) into int64: incompatible type\"}],\"data\":{}}"
+	assert.Equal(t, expected, string(bodyBytes))
+}
+
 // Tests that a graphQL request is not handled successfully when graphql is not enabled on the specified endpoint
 func TestGraphQLHTTPOnSamePort_GQLRequest_Unsuccessful(t *testing.T) {
 	stack := createNode(t, false)
