@@ -143,7 +143,9 @@ func TestGraphQLHTTPOnSamePort_GQLRequest_Unsuccessful(t *testing.T) {
 	}
 	body := strings.NewReader(`{"query": "{block{number}}","variables": null}`)
 	resp, err := http.Post(fmt.Sprintf("http://%s/graphql", "127.0.0.1:9393"), "application/json", body)
-
+	if err != nil {
+		t.Fatalf("could not post: %v", err)
+	}
 	bodyBytes, err := ioutil.ReadAll(resp.Body)
 	if err != nil {
 		t.Fatalf("could not read from response body: %v", err)
