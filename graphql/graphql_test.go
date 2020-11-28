@@ -53,46 +53,87 @@ func TestGraphQLBlockSerialization(t *testing.T) {
 	}
 
 	for i, tt := range []struct {
+		name string
 		body string
 		want string
 		code int
 	}{
 		{
+			name: "get_number",
 			body: `{"query": "{block{number}}","variables": null}`,
 			want: `{"data":{"block":{"number":0}}}`,
 			code: 200,
 		},
 		{
+			name: "get_numeric_fields",
 			body: `{"query": "{block{number,gasUsed,gasLimit}}","variables": null}`,
 			want: `{"data":{"block":{"number":0,"gasUsed":0,"gasLimit":11500000}}}`,
 			code: 200,
 		},
 		{
-			// TODO - this test should work.
-			// This fails due to graphql.go:L938, where int64 is used for number, but int32 is used for block.
-			// TODO: use one of them, not mixed.
+			name: "number_0",
 			body: `{"query": "{block(number:0){number,gasUsed,gasLimit}}","variables": null}`,
 			want: `{"data":{"block":{"number":0,"gasUsed":0,"gasLimit":11500000}}}`,
 			code: 200,
 		},
-		//{
-		// What's the expected return value on negative block numbers?
-		// TODO: enable these tests once the int32/int64
-		//	body: `{"query": "{block(number:-1){number,gasUsed,gasLimit}}","variables": null}`,
-		//	want: `{"data":{"block":{"number":0,"gasUsed":0,"gasLimit":11500000}}}`,
-		//	code: 200,
-		//},
-		//{
-		//	body: `{"query": "{block(number:-500){number,gasUsed,gasLimit}}","variables": null}`,
-		//	want: `{"data":{"block":{"number":0,"gasUsed":0,"gasLimit":11500000}}}`,
-		//	code: 200,
-		//},
 		{
-			body: `{"query": "{block(number:\"0\"){number,gasUsed,gasLimit}}","variables": null}`,
-			want: `{"errors":[{"message":"could not unmarshal \"0\" (string) into int64: incompatible type"}],"data":{}}`,
-			code: 400,
+			name: "number_-1",
+			body: `{"query": "{block(number:-1){number,gasUsed,gasLimit}}","variables": null}`,
+			want: `{"data":{"block":null}}`,
+			code: 200,
 		},
 		{
+			name: "number_-500",
+			body: `{"query": "{block(number:-500){number,gasUsed,gasLimit}}","variables": null}`,
+			want: `{"data":{"block":null}}`,
+			code: 200,
+		},
+		{
+			name: "string_0",
+			body: `{"query": "{block(number:\"0\"){number,gasUsed,gasLimit}}","variables": null}`,
+			want: `{"data":{"block":{"number":0,"gasUsed":0,"gasLimit":11500000}}}`,
+			code: 200,
+		},
+		{
+			name: "string_-33",
+			body: `{"query": "{block(number:\"-33\"){number,gasUsed,gasLimit}}","variables": null}`,
+			want: `{"data":{"block":null}}`,
+			code: 200,
+		},
+		{
+			name: "string_1337",
+			body: `{"query": "{block(number:\"1337\"){number,gasUsed,gasLimit}}","variables": null}`,
+			want: `{"data":{"block":null}}`,
+			code: 200,
+		},
+		// remove to allow hex string support
+		{
+			name: "string_1337",
+			body: `{"query": "{block(number:\"0xbad\"){number,gasUsed,gasLimit}}","variables": null}`,
+			want: `{"errors":[{"message":"strconv.ParseInt: parsing \"0xbad\": invalid syntax"}],"data":{}}`,
+			code: 400,
+		},
+		// uncomment to test hex string support
+		//{
+		//	name: "string_0x0",
+		//	body: `{"query": "{block(number:\"0x0\"){number,gasUsed,gasLimit}}","variables": null}`,
+		//	want: `{"data":{"block":{"number":0,"gasUsed":0,"gasLimit":11500000}}}`,
+		//	code: 200,
+		//},
+		//{
+		//	name: "string_0xbad",
+		//	body: `{"query": "{block(number:\"0xxxxbad\"){number,gasUsed,gasLimit}}","variables": null}`,
+		//	want: `{"errors":[{"message":"invalid hex string"}],"data":{}}`,
+		//	code: 400,
+		//},
+		//{
+		//	name: "string_0xa",
+		//	body: `{"query": "{block(number:\"0xa\"){number,gasUsed,gasLimit}}","variables": null}`,
+		//	want: `{"data":{"block":null}}`,
+		//	code: 200,
+		//},
+		{
+			name: "bleh_query",
 			body: `{"query": "{bleh{number}}","variables": null}"`,
 			want: `{"errors":[{"message":"Cannot query field \"bleh\" on type \"Query\".","locations":[{"line":1,"column":2}]}]}`,
 			code: 400,
@@ -104,10 +145,10 @@ func TestGraphQLBlockSerialization(t *testing.T) {
 			t.Fatalf("could not read from response body: %v", err)
 		}
 		if have := string(bodyBytes); have != tt.want {
-			t.Errorf("testcase %d, have:\n%v\nwant:\n%v", i, have, tt.want)
+			t.Errorf("testcase %s (%d), have:\n%v\nwant:\n%v", tt.name, i, have, tt.want)
 		}
 		if tt.code != resp.StatusCode {
-			t.Errorf("testcase %d, wrong statuscode, have:\n%v\nwant:%v", i, resp.StatusCode, tt.code)
+			t.Errorf("testcase %s (%d), wrong statuscode, have:\n%v\nwant:%v", tt.name, i, resp.StatusCode, tt.code)
 		}
 	}
 }
