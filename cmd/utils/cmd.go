@@ -26,6 +26,7 @@ import (
 	"runtime"
 	"strings"
 	"syscall"
+	"time"
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core"
@@ -71,7 +72,7 @@ func StartNode(stack *node.Node) {
 		sigc := make(chan os.Signal, 1)
 		signal.Notify(sigc, syscall.SIGINT, syscall.SIGTERM)
 		defer signal.Stop(sigc)
-		go ensureSufficientMemory(sigc)
+		go ensureSufficientDiskSpace(sigc, stack.DataDir())
 		<-sigc
 		log.Info("Got interrupt, shutting down...")
 		go stack.Close()
@@ -314,27 +315,33 @@ func ExportPreimages(db ethdb.Database, fn string) error {
 	return nil
 }
 
-func ensureSufficientMemory(sigc chan os.Signal) {
-	for t := range time.Tick(5 * time.Second) {
-		select {
-		case <-sigc:
-			log.Info("Node is being terminated...")
-		default:
-			go func() {
-				var stat syscall.Statfs_t
-				wd, err := os.Getwd(); err != nil {
-					Fatalf("Error reading available memory of Node: %v", err)
-				}
-				syscall.Statfs(wd, &stat)
-				MB = 1000000
-				avMemMB = stat.Bavail * uint64(stat.Bsize) / MB
-				if avMemMB < 100 {
-					log.Info("Available disk space is less than 100 MB. Gracefully shutting down to prevent database corruption.")
-					sigc <- syscall.SIGTERM
-				} else if avMemMB < 500 {
-					log.Warnf("Node is running low on memory. It will terminate if memory runs below 100MB. Remaining: %v MB.", avMemMB)
-				}
-			}()
+// ensureSufficientDiskSpace guards Geth from hard crashing due to low disk space.
+// It monitors remaining disk space under dataDir and gracefully exits Geth if the space is low.
+func ensureSufficientDiskSpace(sigc chan os.Signal, dataDirPath string) {
+	monitorDiskSpace := func(sigc chan os.Signal, dataDirPath string) {
+		var stat syscall.Statfs_t
+		if err := syscall.Statfs(dataDirPath, &stat); err != nil {
+			log.Info("Could not list information about the disk containing path '%v': %v", dataDirPath, err)
+			sigc <- syscall.SIGTERM
+			return
+		}
+		MB := 1000000
+		avMemMB := int(stat.Bavail*uint64(stat.Bsize)) / MB
+		lowDiskWarning := 500
+		lowDiskCritical := 100
+		if avMemMB < lowDiskCritical {
+			log.Info("Available disk space critically low: %v MB remaining. Gracefully shutting down Geth to prevent database corruption.", avMemMB)
+			sigc <- syscall.SIGTERM
+		} else if avMemMB < lowDiskWarning {
+			log.Info("Node is running low on disk: %v remaining. It will terminate if disk space runs below %v MB.", avMemMB, lowDiskCritical)
 		}
 	}
-} 
+	for range time.Tick(5 * time.Second) {
+		select {
+		case <-sigc:
+			log.Info("Can't monitor disk space as the Node is being terminated.")
+		default:
+			go monitorDiskSpace(sigc, dataDirPath)
+		}
+	}
+}
