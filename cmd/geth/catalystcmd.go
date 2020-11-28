@@ -49,7 +49,7 @@ func initCatalyst(ctx *cli.Context) error {
 
 func catalyst(ctx *cli.Context) error {
 	ctx.GlobalSet(utils.LegacyRPCApiFlag.Name, "eth2,eth")
-	ctx.GlobalSet(utils.NoDiscoverFlag, true)
+	ctx.GlobalSet(utils.NoDiscoverFlag.Name, "true")
 
 	// TODO check etherbase is set
 

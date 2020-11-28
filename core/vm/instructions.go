@@ -480,6 +480,32 @@ func opGasLimit(pc *uint64, interpreter *EVMInterpreter, callContext *callCtx) (
 	return nil, nil
 }
 
+func opBeaconStateRoot(pc *uint64, interpreter *EVMInterpreter, callContext *callCtx) ([]byte, error) {
+	num := callContext.stack.peek()
+	num64, overflow := num.Uint64WithOverflow()
+	if overflow {
+		num.Clear()
+		return nil, nil
+	}
+	var upper, lower uint64
+	upper = interpreter.evm.BlockNumber.Uint64()
+	if upper < 257 {
+		lower = 0
+	} else {
+		lower = upper - 256
+	}
+	if num64 >= lower && num64 < upper {
+		num.SetBytes(interpreter.evm.Context.BeaconCtx.BeaconRoots[num64-lower].Bytes())
+	} else {
+		num.Clear()
+	}
+	return nil, nil
+}
+func opRandaoMix(pc *uint64, interpreter *EVMInterpreter, callContext *callCtx) ([]byte, error) {
+	callContext.stack.push(new(uint256.Int).SetBytes(interpreter.evm.Context.BeaconCtx.RandaoMix.Bytes()))
+	return nil, nil
+}
+
 func opPop(pc *uint64, interpreter *EVMInterpreter, callContext *callCtx) ([]byte, error) {
 	callContext.stack.pop()
 	return nil, nil

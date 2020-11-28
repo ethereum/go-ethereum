@@ -17,7 +17,6 @@
 package eth
 
 import (
-	"bytes"
 	"compress/gzip"
 	"context"
 	"errors"
@@ -35,9 +34,10 @@ import (
 	"github.com/ethereum/go-ethereum/core/rawdb"
 	"github.com/ethereum/go-ethereum/core/state"
 	"github.com/ethereum/go-ethereum/core/types"
+	"github.com/ethereum/go-ethereum/core/vm"
 	"github.com/ethereum/go-ethereum/internal/ethapi"
 	"github.com/ethereum/go-ethereum/log"
-	"github.com/ethereum/go-ethereum/params"
+	chainParams "github.com/ethereum/go-ethereum/params"
 	"github.com/ethereum/go-ethereum/rlp"
 	"github.com/ethereum/go-ethereum/rpc"
 	"github.com/ethereum/go-ethereum/trie"
@@ -315,41 +315,6 @@ func NewEth2API(eth *Ethereum) *Eth2API {
 	return &Eth2API{eth: eth}
 }
 
-func (api *Eth2API) ValidateBlock(blockRLP []byte) (bool, error) {
-	blockchain := api.eth.BlockChain()
-	// Deserializer le block
-	var block types.Block
-	if err := rlp.DecodeBytes(blockRLP, &block); err != nil {
-		return false, err
-	}
-
-	// Validate the block using the consensus engine - this will
-	// allow for testing against Rinkeby/Görli
-	if err := api.eth.Engine().VerifyHeader(blockchain, block.Header(), false); err != nil {
-		return false, err
-	}
-
-	if err := blockchain.Validator().ValidateBody(&block); err != nil {
-		return false, err
-	}
-
-	parent := blockchain.GetBlockByHash(block.ParentHash())
-	statedb, err := state.New(parent.Root(), blockchain.StateCache(), blockchain.Snapshot())
-	if err != nil {
-		return false, err
-	}
-	receipts, _, usedGas, err := blockchain.Processor().Process(&block, statedb, *blockchain.GetVMConfig())
-	if err != nil {
-		return false, err
-	}
-
-	if err := blockchain.Validator().ValidateState(&block, statedb, receipts, usedGas); err != nil {
-		return false, err
-	}
-
-	return true, api.InsertBlock(blockRLP)
-}
-
 type eth2bpenv struct {
 	state   *state.StateDB
 	tcount  int
@@ -360,11 +325,11 @@ type eth2bpenv struct {
 	receipts []*types.Receipt
 }
 
-func (api *Eth2API) commitTransaction(tx *types.Transaction, coinbase common.Address) error {
+func (api *Eth2API) commitTransaction(tx *types.Transaction, coinbase common.Address, bcParentRoots []common.Hash, randao common.Hash) error {
 	//snap := eth2rpc.current.state.Snapshot()
 
 	chain := api.eth.BlockChain()
-	receipt, err := core.ApplyTransaction(chain.Config(), chain, &coinbase, api.env.gasPool, api.env.state, api.env.header, tx, &api.env.header.GasUsed, *chain.GetVMConfig())
+	receipt, err := core.ApplyTransaction(chain.Config(), chain, &coinbase, api.env.gasPool, api.env.state, api.env.header, tx, &api.env.header.GasUsed, *chain.GetVMConfig(), &vm.BeaconChainContext{bcParentRoots, randao})
 	if err != nil {
 		//w.current.state.RevertToSnapshot(snap)
 		return err
@@ -388,20 +353,41 @@ func (api *Eth2API) makeEnv(parent *types.Block, header *types.Header) error {
 	return nil
 }
 
-func (api *Eth2API) ProduceBlock(parentHash common.Hash) ([]byte, error) {
-	log.Info("Produce block", "parentHash", parentHash)
+// Structure described at https://hackmd.io/T9x2mMA4S7us8tJwEB3FDQ
+type ProduceBlockParams struct {
+	ParentRoot             common.Hash   `json:"parent_root"`
+	RandaoMix              common.Hash   `json:"randao_mix"`
+	Slot                   uint64        `json:"slot"`
+	Timestamp              uint64        `json:"timestamp"`
+	RecentBeaconBlockRoots []common.Hash `json:"recent_beacon_block_roots"`
+}
+
+// Structure described at https://ethresear.ch/t/executable-beacon-chain/8271
+type ExecutableData struct {
+	Coinbase     common.Address       `json:"coinbase"`
+	StateRoot    common.Hash          `json:"state_root"`
+	GasLimit     uint64               `json:"gas_limit"`
+	GasUsed      uint64               `json:"gas_used"`
+	Transactions []*types.Transaction `json:"transactions"`
+	ReceiptRoot  common.Hash          `json:"receipt_root"`
+	LogsBloom    []byte               `json:"logs_bloom"`
+	BlockHash    common.Hash          `json:"block_hash"`
+	Difficulty   *big.Int             `json:"difficulty"`
+}
+
+func (api *Eth2API) ProduceBlock(params ProduceBlockParams) (*ExecutableData, error) {
+	log.Info("Produce block", "parentHash", params.ParentRoot)
 
 	bc := api.eth.BlockChain()
-	parent := bc.GetBlockByHash(parentHash)
+	parent := bc.GetBlockByHash(params.ParentRoot)
 	pool := api.eth.TxPool()
 
-	timestamp := time.Now().Unix()
-	if parent.Time() >= uint64(timestamp) {
-		timestamp = int64(parent.Time() + 1)
+	if parent.Time() >= params.Timestamp {
+		return nil, fmt.Errorf("child timestamp lower than parent's: %d >= %d", parent.Time(), params.Timestamp)
 	}
 	// this will ensure we're not going off too far in the future
-	if now := time.Now().Unix(); timestamp > now+1 {
-		wait := time.Duration(timestamp-now) * time.Second
+	if now := uint64(time.Now().Unix()); params.Timestamp > now+1 {
+		wait := time.Duration(params.Timestamp-now) * time.Second
 		log.Info("Producing block too far in the future", "wait", common.PrettyDuration(wait))
 		time.Sleep(wait)
 	}
@@ -422,7 +408,7 @@ func (api *Eth2API) ProduceBlock(parentHash common.Hash) ([]byte, error) {
 		Coinbase:   coinbase,
 		GasLimit:   parent.GasLimit(), // Keep the gas limit constant in this prototype
 		Extra:      []byte{},
-		Time:       uint64(timestamp),
+		Time:       params.Timestamp,
 	}
 	err = api.eth.Engine().Prepare(bc, header)
 	if err != nil {
@@ -439,8 +425,8 @@ func (api *Eth2API) ProduceBlock(parentHash common.Hash) ([]byte, error) {
 	var transactions []*types.Transaction
 
 	for {
-		if api.env.gasPool.Gas() < params.TxGas {
-			log.Trace("Not enough gas for further transactions", "have", api.env.gasPool, "want", params.TxGas)
+		if api.env.gasPool.Gas() < chainParams.TxGas {
+			log.Trace("Not enough gas for further transactions", "have", api.env.gasPool, "want", chainParams.TxGas)
 			break
 		}
 
@@ -454,7 +440,7 @@ func (api *Eth2API) ProduceBlock(parentHash common.Hash) ([]byte, error) {
 
 		// Execute the transaction
 		api.env.state.Prepare(tx.Hash(), common.Hash{}, api.env.tcount)
-		err := api.commitTransaction(tx, coinbase)
+		err := api.commitTransaction(tx, coinbase, params.RecentBeaconBlockRoots, params.RandaoMix)
 		switch err {
 		case core.ErrGasLimitReached:
 			// Pop the current out-of-gas transaction without shifting in the next from the account
@@ -510,27 +496,59 @@ func (api *Eth2API) ProduceBlock(parentHash common.Hash) ([]byte, error) {
 	}
 
 	block.Header().ReceiptHash = types.DeriveSha(receipts, new(trie.Trie))
-	var rlpbuf bytes.Buffer
-	block.EncodeRLP(&rlpbuf)
-	return rlpbuf.Bytes(), nil
+
+	return &ExecutableData{
+		Coinbase:     block.Coinbase(),
+		StateRoot:    block.Root(),
+		GasLimit:     block.GasLimit(),
+		GasUsed:      block.GasUsed(),
+		Transactions: []*types.Transaction(block.Transactions()),
+		ReceiptRoot:  block.ReceiptHash(),
+		LogsBloom:    block.Bloom().Bytes(),
+		BlockHash:    block.Hash(),
+		Difficulty:   block.Difficulty(),
+	}, nil
 }
 
-func (api *Eth2API) InsertBlock(blockRLP []byte) error {
-	var block types.Block
-	if err := rlp.DecodeBytes(blockRLP, &block); err != nil {
-		return err
-	}
+// Structure described at https://hackmd.io/T9x2mMA4S7us8tJwEB3FDQ
+type InsertBlockParams struct {
+	ProduceBlockParams
+	BeaconBlockRoot common.Hash    `json:"beacon_block_root"`
+	ExecutableData  ExecutableData `json:"executable_data"`
+}
 
-	_, err := api.eth.BlockChain().InsertChainWithoutSealVerification(types.Blocks([]*types.Block{&block}))
+var zeroNonce [8]byte
+
+func insertBlockParamsToBlock(params InsertBlockParams) *types.Block {
+	header := &types.Header{
+		ParentHash:  params.ProduceBlockParams.ParentRoot,
+		UncleHash:   types.EmptyUncleHash,
+		Coinbase:    params.ExecutableData.Coinbase,
+		Root:        params.ExecutableData.StateRoot,
+		TxHash:      types.DeriveSha(types.Transactions(params.ExecutableData.Transactions), trie.NewStackTrie(nil)),
+		ReceiptHash: params.ExecutableData.ReceiptRoot,
+		Bloom:       types.BytesToBloom(params.ExecutableData.LogsBloom),
+		Difficulty:  params.ExecutableData.Difficulty,
+		Number:      big.NewInt(int64(params.ProduceBlockParams.Slot)),
+		GasLimit:    params.ExecutableData.GasLimit,
+		GasUsed:     params.ExecutableData.GasUsed,
+		Time:        params.Timestamp,
+		Extra:       nil,
+		MixDigest:   common.Hash{},
+		Nonce:       zeroNonce,
+	}
+	block := types.NewBlockWithHeader(header).WithBody(params.ExecutableData.Transactions, nil /* uncles */)
+
+	return block
+}
+
+func (api *Eth2API) InsertBlock(params InsertBlockParams) error {
+	block := insertBlockParamsToBlock(params)
+	_, err := api.eth.BlockChain().InsertChainWithoutSealVerification(types.Blocks([]*types.Block{block}))
 	return err
 }
 
-func (api *Eth2API) AddBlockTxs(blockRLP []byte) error {
-	var block types.Block
-	if err := rlp.DecodeBytes(blockRLP, &block); err != nil {
-		return err
-	}
-
+func (api *Eth2API) AddBlockTxs(block *types.Block) error {
 	for _, tx := range block.Transactions() {
 		api.eth.txPool.AddLocal(tx)
 	}
@@ -538,22 +556,22 @@ func (api *Eth2API) AddBlockTxs(blockRLP []byte) error {
 	return nil
 }
 
-func (api *Eth2API) SetHead(newHead common.Hash) error {
-	oldBlock := api.eth.BlockChain().CurrentBlock()
+//func (api *Eth2API) SetHead(newHead common.Hash) error {
+//oldBlock := api.eth.BlockChain().CurrentBlock()
 
-	if oldBlock.Hash() == newHead {
-		return nil
-	}
+//if oldBlock.Hash() == newHead {
+//return nil
+//}
 
-	newBlock := api.eth.BlockChain().GetBlockByHash(newHead)
+//newBlock := api.eth.BlockChain().GetBlockByHash(newHead)
 
-	err := api.eth.BlockChain().Reorg(oldBlock, newBlock)
-	if err != nil {
-		return err
-	}
-	api.head = newHead
-	return nil
-}
+//err := api.eth.BlockChain().Reorg(oldBlock, newBlock)
+//if err != nil {
+//return err
+//}
+//api.head = newHead
+//return nil
+//}
 
 // PrivateDebugAPI is the collection of Ethereum full node APIs exposed over
 // the private debugging endpoint.
