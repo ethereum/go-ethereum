@@ -132,10 +132,6 @@ func TestGraphQLBlockSerialization(t *testing.T) {
 			t.Errorf("testcase %d %s,\nwrong statuscode, have: %v, want: %v", i, tt.body, resp.StatusCode, tt.code)
 		}
 	}
-
-	expected := "{\"data\":{\"block\":{\"number\":0}}}"
-	assert.Equal(t, 200, resp.StatusCode)
-	assert.Equal(t, expected, string(bodyBytes))
 }
 
 // Tests that a graphQL request is not handled successfully when graphql is not enabled on the specified endpoint
