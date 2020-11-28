@@ -18,6 +18,7 @@ package graphql
 
 import (
 	"fmt"
+	"github.com/ethereum/go-ethereum/params"
 	"io/ioutil"
 	"math/big"
 	"net/http"
