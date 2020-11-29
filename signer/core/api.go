@@ -322,62 +322,65 @@ func (api *SignerAPI) openTrezor(url accounts.URL) {
 
 // startUSBListener starts a listener for USB events, for hardware wallet interaction
 func (api *SignerAPI) startUSBListener() {
-	events := make(chan accounts.WalletEvent, 16)
+	eventCh := make(chan accounts.WalletEvent, 16)
 	am := api.am
-	am.Subscribe(events)
-	go func() {
+	am.Subscribe(eventCh)
+	// Open any wallets already attached
+	for _, wallet := range am.Wallets() {
+		if err := wallet.Open(""); err != nil {
+			log.Warn("Failed to open wallet", "url", wallet.URL(), "err", err)
+			if err == usbwallet.ErrTrezorPINNeeded {
+				go api.openTrezor(wallet.URL())
+			}
+		}
+	}
+	go api.derivationLoop(eventCh)
+}
 
-		// Open any wallets already attached
-		for _, wallet := range am.Wallets() {
-			if err := wallet.Open(""); err != nil {
-				log.Warn("Failed to open wallet", "url", wallet.URL(), "err", err)
+// derivationLoop listens for wallet events
+func (api *SignerAPI) derivationLoop(events chan accounts.WalletEvent) {
+	// Listen for wallet event till termination
+	for event := range events {
+		switch event.Kind {
+		case accounts.WalletArrived:
+			if err := event.Wallet.Open(""); err != nil {
+				log.Warn("New wallet appeared, failed to open", "url", event.Wallet.URL(), "err", err)
 				if err == usbwallet.ErrTrezorPINNeeded {
-					go api.openTrezor(wallet.URL())
+					go api.openTrezor(event.Wallet.URL())
 				}
 			}
-		}
-		// Listen for wallet event till termination
-		for event := range events {
-			switch event.Kind {
-			case accounts.WalletArrived:
-				if err := event.Wallet.Open(""); err != nil {
-					log.Warn("New wallet appeared, failed to open", "url", event.Wallet.URL(), "err", err)
-					if err == usbwallet.ErrTrezorPINNeeded {
-						go api.openTrezor(event.Wallet.URL())
+		case accounts.WalletOpened:
+			status, _ := event.Wallet.Status()
+			log.Info("New wallet appeared", "url", event.Wallet.URL(), "status", status)
+			var derive = func(limit int, next func() accounts.DerivationPath) {
+				// Derive first N accounts, hardcoded for now
+				for i := 0; i < limit; i++ {
+					path := next()
+					if acc, err := event.Wallet.Derive(path, true); err != nil {
+						log.Warn("Account derivation failed", "error", err)
+					} else {
+						log.Info("Derived account", "address", acc.Address, "path", path)
 					}
 				}
-			case accounts.WalletOpened:
-				status, _ := event.Wallet.Status()
-				log.Info("New wallet appeared", "url", event.Wallet.URL(), "status", status)
-				var derive = func(numToDerive int, base accounts.DerivationPath) {
-					// Derive first N accounts, hardcoded for now
-					var nextPath = make(accounts.DerivationPath, len(base))
-					copy(nextPath[:], base[:])
-
-					for i := 0; i < numToDerive; i++ {
-						acc, err := event.Wallet.Derive(nextPath, true)
-						if err != nil {
-							log.Warn("Account derivation failed", "error", err)
-						} else {
-							log.Info("Derived account", "address", acc.Address, "path", nextPath)
-						}
-						nextPath[len(nextPath)-1]++
-					}
-				}
-				if event.Wallet.URL().Scheme == "ledger" {
-					log.Info("Deriving ledger default paths")
-					derive(numberOfAccountsToDerive/2, accounts.DefaultBaseDerivationPath)
-					log.Info("Deriving ledger legacy paths")
-					derive(numberOfAccountsToDerive/2, accounts.LegacyLedgerBaseDerivationPath)
-				} else {
-					derive(numberOfAccountsToDerive, accounts.DefaultBaseDerivationPath)
-				}
-			case accounts.WalletDropped:
-				log.Info("Old wallet dropped", "url", event.Wallet.URL())
-				event.Wallet.Close()
 			}
+			log.Info("Deriving default paths")
+			derive(numberOfAccountsToDerive, accounts.DefaultIterator(accounts.DefaultBaseDerivationPath))
+			if event.Wallet.URL().Scheme == "ledger" {
+				log.Info("Deriving ledger legacy paths")
+				derive(numberOfAccountsToDerive, accounts.DefaultIterator(accounts.LegacyLedgerBaseDerivationPath))
+				log.Info("Deriving ledger live paths")
+				// For ledger live, since it's based off the same (DefaultBaseDerivationPath)
+				// as one we've already used, we need to step it forward one step to avoid
+				// hitting the same path again
+				nextFn := accounts.LedgerLiveIterator(accounts.DefaultBaseDerivationPath)
+				nextFn()
+				derive(numberOfAccountsToDerive, nextFn)
+			}
+		case accounts.WalletDropped:
+			log.Info("Old wallet dropped", "url", event.Wallet.URL())
+			event.Wallet.Close()
 		}
-	}()
+	}
 }
 
 // List returns the set of wallet this signer manages. Each wallet can contain
