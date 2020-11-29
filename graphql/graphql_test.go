@@ -97,28 +97,21 @@ func TestGraphQLBlockSerialization(t *testing.T) {
 			want: `{"data":{"block":null}}`,
 			code: 200,
 		},
-		// remove to allow hex string support
 		{
 			body: `{"query": "{block(number:\"0xbad\"){number,gasUsed,gasLimit}}","variables": null}`,
 			want: `{"errors":[{"message":"strconv.ParseInt: parsing \"0xbad\": invalid syntax"}],"data":{}}`,
 			code: 400,
 		},
-		// uncomment to test hex string support
-		//{
-		//	body: `{"query": "{block(number:\"0x0\"){number,gasUsed,gasLimit}}","variables": null}`,
-		//	want: `{"data":{"block":{"number":0,"gasUsed":0,"gasLimit":11500000}}}`,
-		//	code: 200,
-		//},
-		//{
-		//	body: `{"query": "{block(number:\"0xxxxbad\"){number,gasUsed,gasLimit}}","variables": null}`,
-		//	want: `{"errors":[{"message":"invalid hex string"}],"data":{}}`,
-		//	code: 400,
-		//},
-		//{
-		//	body: `{"query": "{block(number:\"0xa\"){number,gasUsed,gasLimit}}","variables": null}`,
-		//	want: `{"data":{"block":null}}`,
-		//	code: 200,
-		//},
+		{ // hex strings are currently not supported. If that's added to the spec, this test will need to change
+			body: `{"query": "{block(number:\"0x0\"){number,gasUsed,gasLimit}}","variables": null}`,
+			want: `{"errors":[{"message":"strconv.ParseInt: parsing \"0x0\": invalid syntax"}],"data":{}}`,
+			code: 400,
+		},
+		{
+			body: `{"query": "{block(number:\"a\"){number,gasUsed,gasLimit}}","variables": null}`,
+			want: `{"errors":[{"message":"strconv.ParseInt: parsing \"a\": invalid syntax"}],"data":{}}`,
+			code: 400,
+		},
 		{
 			body: `{"query": "{bleh{number}}","variables": null}"`,
 			want: `{"errors":[{"message":"Cannot query field \"bleh\" on type \"Query\".","locations":[{"line":1,"column":2}]}]}`,
@@ -134,10 +127,10 @@ func TestGraphQLBlockSerialization(t *testing.T) {
 			t.Fatalf("could not read from response body: %v", err)
 		}
 		if have := string(bodyBytes); have != tt.want {
-			t.Errorf("testcase %d %s, have:\n%v\nwant:\n%v", i, tt.body, have, tt.want)
+			t.Errorf("testcase %d %s,\nhave:\n%v\nwant:\n%v", i, tt.body, have, tt.want)
 		}
 		if tt.code != resp.StatusCode {
-			t.Errorf("testcase %d %s, wrong statuscode, have:\n%v\nwant:%v", i, tt.body, resp.StatusCode, tt.code)
+			t.Errorf("testcase %d %s,\nwrong statuscode, have: %v, want: %v", i, tt.body, resp.StatusCode, tt.code)
 		}
 	}
 }
