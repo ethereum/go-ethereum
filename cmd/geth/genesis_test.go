@@ -84,7 +84,7 @@ func TestCustomGenesis(t *testing.T) {
 		runGeth(t, "--nousb", "--datadir", datadir, "init", json).WaitExit()
 
 		// Query the custom genesis block
-		geth := runGeth(t, "--nousb",
+		geth := runGeth(t, "--nousb", "--networkid", "1337", "--syncmode=full",
 			"--datadir", datadir, "--maxpeers", "0", "--port", "0",
 			"--nodiscover", "--nat", "none", "--ipcdisable",
 			"--exec", tt.query, "console")
