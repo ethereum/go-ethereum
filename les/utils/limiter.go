@@ -76,17 +76,11 @@ func (ag *addressGroup) add(nq *nodeQueue) {
 		panic("added node queue is already in an address group")
 	}
 	l := len(ag.nodes)
-	if l == 1 {
-		ag.nodeSelect = NewWeightedRandomSelect(flatWeight)
-		ag.nodeSelect.Update(ag.nodes[0])
-	}
 	nq.groupIndex = l
 	ag.nodes = append(ag.nodes, nq)
 	ag.sumFlatWeight += nq.flatWeight
 	ag.groupWeight = ag.sumFlatWeight / uint64(l+1)
-	if l >= 1 {
-		ag.nodeSelect.Update(ag.nodes[l])
-	}
+	ag.nodeSelect.Update(ag.nodes[l])
 }
 
 // update updates the selection weight of the node queue inside the address group.
@@ -99,9 +93,7 @@ func (ag *addressGroup) update(nq *nodeQueue, weight uint64) {
 	ag.sumFlatWeight += weight - nq.flatWeight
 	nq.flatWeight = weight
 	ag.groupWeight = ag.sumFlatWeight / uint64(len(ag.nodes))
-	if ag.nodeSelect != nil {
-		ag.nodeSelect.Update(nq)
-	}
+	ag.nodeSelect.Update(nq)
 }
 
 // remove removes the node queue from the address group. It is the caller's responsibility
@@ -121,21 +113,14 @@ func (ag *addressGroup) remove(nq *nodeQueue) {
 	ag.sumFlatWeight -= nq.flatWeight
 	if l >= 1 {
 		ag.groupWeight = ag.sumFlatWeight / uint64(l)
-		if l == 1 {
-			ag.nodeSelect = nil
-		} else {
-			ag.nodeSelect.Remove(nq)
-		}
 	} else {
 		ag.groupWeight = 0
 	}
+	ag.nodeSelect.Remove(nq)
 }
 
 // choose selects one of the node queues belonging to the address group
 func (ag *addressGroup) choose() *nodeQueue {
-	if ag.nodeSelect == nil { // nodes list should never be empty here
-		return ag.nodes[0]
-	}
 	return ag.nodeSelect.Choose().(*nodeQueue)
 }
 
@@ -252,7 +237,7 @@ func (l *Limiter) addToGroup(nq *nodeQueue, address string) {
 	nq.address = address
 	ag := l.addresses[address]
 	if ag == nil {
-		ag = &addressGroup{}
+		ag = &addressGroup{nodeSelect: NewWeightedRandomSelect(flatWeight)}
 		l.addresses[address] = ag
 	}
 	ag.add(nq)
