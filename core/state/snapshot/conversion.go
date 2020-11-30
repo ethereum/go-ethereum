@@ -38,7 +38,7 @@ type trieKV struct {
 type (
 	// trieGeneratorFn is the interface of trie generation which can
 	// be implemented by different trie algorithm.
-	trieGeneratorFn func(in chan (trieKV), out chan (common.Hash))
+	trieGeneratorFn func(in chan trieKV, out chan common.Hash)
 
 	// leafCallbackFn is the callback invoked at the leaves of the trie,
 	// returns the subtrie root with the specified subtrie identifier.
@@ -266,7 +266,7 @@ func generateTrieRoot(it Iterator, account common.Hash, generatorFn trieGenerato
 
 // stdGenerate is a very basic hexary trie builder which uses the same Trie
 // as the rest of geth, with no enhancements or optimizations
-func stdGenerate(in chan (trieKV), out chan (common.Hash)) {
+func stdGenerate(in chan trieKV, out chan common.Hash) {
 	t, _ := trie.New(common.Hash{}, trie.NewDatabase(memorydb.New()))
 	for leaf := range in {
 		t.TryUpdate(leaf.key[:], leaf.value)

@@ -439,7 +439,7 @@ func (api *SignerAPI) newAccount() (common.Address, error) {
 			continue
 		}
 		if pwErr := ValidatePasswordFormat(resp.Text); pwErr != nil {
-			api.UI.ShowError(fmt.Sprintf("Account creation attempt #%d failed due to password requirements: %v", (i + 1), pwErr))
+			api.UI.ShowError(fmt.Sprintf("Account creation attempt #%d failed due to password requirements: %v", i+1, pwErr))
 		} else {
 			// No error
 			acc, err := be[0].(*keystore.KeyStore).NewAccount(resp.Text)

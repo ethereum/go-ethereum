@@ -259,7 +259,7 @@ func (w *wizard) manageGenesis() {
 
 		// Export the native genesis spec used by puppeth and Geth
 		gethJson := filepath.Join(folder, fmt.Sprintf("%s.json", w.network))
-		if err := ioutil.WriteFile((gethJson), out, 0644); err != nil {
+		if err := ioutil.WriteFile(gethJson, out, 0644); err != nil {
 			log.Error("Failed to save genesis file", "err", err)
 			return
 		}
