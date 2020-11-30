@@ -17,7 +17,6 @@
 package ethtest
 
 import (
-	"fmt"
 	"time"
 
 	"github.com/ethereum/go-ethereum/common"
@@ -31,7 +30,7 @@ var faucetKey, _ = crypto.HexToECDSA("b71c71a67e1177ad4e901695e1b4b9ee17ae16c666
 
 func sendSuccessfulTx(t *utesting.T, s *Suite, tx *types.Transaction) {
 	sendConn := s.setupConnection(t)
-	fmt.Printf("tx %v %v %v\n", tx.Hash().String(), tx.GasPrice(), tx.Gas())
+	t.Logf("sending tx: %v %v %v\n", tx.Hash().String(), tx.GasPrice(), tx.Gas())
 	// Send the transaction
 	if err := sendConn.Write(Transactions([]*types.Transaction{tx})); err != nil {
 		t.Fatal(err)
@@ -68,7 +67,7 @@ func sendFailingTx(t *utesting.T, s *Suite, tx *types.Transaction) {
 	case *NewPooledTransactionHashes:
 		break
 	default:
-		fmt.Printf("unexpected message, logging: %v", pretty.Sdump(msg))
+		t.Logf("unexpected message, logging: %v", pretty.Sdump(msg))
 	}
 	// Send the transaction
 	if err := sendConn.Write(Transactions([]*types.Transaction{tx})); err != nil {

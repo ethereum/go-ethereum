@@ -259,7 +259,7 @@ func (s *Suite) TestMaliciousHandshake(t *utesting.T) {
 		},
 	}
 	for i, handshake := range handshakes {
-		fmt.Printf("Testing malicious handshake %v\n", i)
+		t.Logf("Testing malicious handshake %v\n", i)
 		// Init the handshake
 		if err := conn.Write(handshake); err != nil {
 			t.Fatalf("could not write to connection: %v", err)
@@ -309,7 +309,7 @@ func (s *Suite) TestLargeAnnounce(t *utesting.T) {
 	}
 
 	for i, blockAnnouncement := range blocks[0:3] {
-		fmt.Printf("Testing malicious announcement: %v\n", i)
+		t.Logf("Testing malicious announcement: %v\n", i)
 		sendConn := s.setupConnection(t)
 		if err := sendConn.Write(blockAnnouncement); err != nil {
 			t.Fatalf("could not write to connection: %v", err)
@@ -406,7 +406,7 @@ func (s *Suite) TestTransaction(t *utesting.T) {
 		unknownTx(t, s),
 	}
 	for i, tx := range tests {
-		fmt.Printf("Testing tx propagation: %v\n", i)
+		t.Logf("Testing tx propagation: %v\n", i)
 		sendSuccessfulTx(t, s, tx)
 	}
 }
@@ -420,7 +420,7 @@ func (s *Suite) TestMaliciousTx(t *utesting.T) {
 		hugeData(t, s),
 	}
 	for i, tx := range tests {
-		fmt.Printf("Testing malicious tx propagation: %v\n", i)
+		t.Logf("Testing malicious tx propagation: %v\n", i)
 		sendFailingTx(t, s, tx)
 	}
 }
