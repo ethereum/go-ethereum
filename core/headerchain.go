@@ -198,7 +198,9 @@ func (hc *HeaderChain) WriteHeaders(headers []*types.Header, postWriteFn PostWri
 		}
 		lastHeader, lastHash, lastNumber, ptd = header, hash, number, externTd
 	}
-	batch.Write()
+	if err := batch.Write(); err != nil {
+		log.Crit("Failed to write headers", "error", err)
+	}
 	batch.Reset()
 	var (
 		head    = hc.CurrentHeader().Number.Uint64()
@@ -293,7 +295,7 @@ func (hc *HeaderChain) WriteHeaders(headers []*types.Header, postWriteFn PostWri
 
 // PostWriteCallback is a callback function for inserting headers,
 // which is called once, with the last successfully imported header in the batch.
-// The raeson for having it is:
+// The reason for having it is:
 // In light-chain mode, status should be processed and light chain events sent,
 // whereas in a non-light mode this is not necessary since chain events are sent after inserting blocks.
 type PostWriteCallback func(header *types.Header, status WriteStatus)
