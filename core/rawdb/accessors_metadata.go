@@ -107,9 +107,10 @@ func PushUncleanShutdownMarker(db ethdb.KeyValueStore) ([]uint64, uint64, error)
 	copy(previous, uncleanShutdowns.Recent)
 	// Add a new (but cap it)
 	uncleanShutdowns.Recent = append(uncleanShutdowns.Recent, uint64(time.Now().Unix()))
-	if l := len(uncleanShutdowns.Recent); l > crashesToKeep+1 {
-		uncleanShutdowns.Recent = uncleanShutdowns.Recent[l-crashesToKeep-1:]
-		uncleanShutdowns.Discarded++
+	if count := len(uncleanShutdowns.Recent); count > crashesToKeep+1 {
+		numDel := count - (crashesToKeep + 1)
+		uncleanShutdowns.Recent = uncleanShutdowns.Recent[numDel:]
+		uncleanShutdowns.Discarded += uint64(numDel)
 	}
 	// And save it again
 	data, _ := rlp.EncodeToBytes(uncleanShutdowns)
