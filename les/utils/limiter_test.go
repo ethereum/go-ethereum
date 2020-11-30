@@ -29,24 +29,24 @@ type (
 	ltNode struct {
 		addr, id         int
 		value, exp       float64
-		weight           uint64
+		weight           uint
 		reqRate          float64
 		reqMax, runCount int
-		lastTotalWeight  uint64
+		lastTotalWeight  uint
 
 		served, dropped int
 	}
 
 	ltResult struct {
 		node *ltNode
-		ch   chan float64
+		ch   chan struct{}
 	}
 
 	limTest struct {
 		limiter                *Limiter
 		results                chan ltResult
 		runCount               int
-		expWeight, totalWeight uint64
+		expWeight, totalWeight uint
 	}
 )
 
@@ -96,7 +96,7 @@ func (lt *limTest) process() {
 			lt.expWeight += res.node.weight
 		}
 		lt.totalWeight += res.node.weight
-		res.ch <- float64(res.node.weight)
+		close(res.ch)
 	} else {
 		res.node.dropped++
 	}

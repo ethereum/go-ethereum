@@ -31,23 +31,24 @@ type Limiter struct {
 	cond *sync.Cond
 	quit bool
 
-	nodes                                             map[enode.ID]*nodeQueue
-	addresses                                         map[string]*addressGroup
-	addressSelect, valueSelect                        *WeightedRandomSelect
-	maxValue                                          float64
-	maxPriorWeight, totalPriorWeight, totalPriorLimit uint64
-	lastValueSelected                                 bool
+	nodes                                map[enode.ID]*nodeQueue
+	addresses                            map[string]*addressGroup
+	addressSelect, valueSelect           *WeightedRandomSelect
+	maxValue                             float64
+	maxWeight, sumWeight, sumWeightLimit uint
+	selectedByValue                      bool
 }
 
 // nodeQueue represents queued requests coming from a single node ID
 type nodeQueue struct {
-	queue                                     []request
-	id                                        enode.ID
-	address                                   string
-	value                                     float64
-	flatWeight, valueWeight, totalPriorWeight uint64
-	groupIndex                                int
-	relCost                                   float64
+	queue                   []request
+	id                      enode.ID
+	address                 string
+	value                   float64
+	flatWeight, valueWeight uint64 // current selection weights in the address/value selectors
+	nextWeight              uint   // next request weight
+	sumWeight               uint   // summed weight of requests queued by the node
+	groupIndex              int
 }
 
 // addressGroup is a group of node IDs that have sent their last requests from the same
@@ -60,8 +61,8 @@ type addressGroup struct {
 
 // request represents an incoming request scheduled for processing
 type request struct {
-	process     chan chan float64
-	priorWeight uint64
+	process chan chan struct{}
+	weight  uint
 }
 
 // flatWeight distributes weights equally between each active network adress
@@ -139,13 +140,13 @@ func (ag *addressGroup) choose() *nodeQueue {
 }
 
 // NewLimiter creates a new Limiter
-func NewLimiter(totalPriorLimit uint64) *Limiter {
+func NewLimiter(sumWeightLimit uint) *Limiter {
 	l := &Limiter{
-		addressSelect:   NewWeightedRandomSelect(func(item interface{}) uint64 { return item.(*addressGroup).groupWeight }),
-		valueSelect:     NewWeightedRandomSelect(func(item interface{}) uint64 { return item.(*nodeQueue).valueWeight }),
-		nodes:           make(map[enode.ID]*nodeQueue),
-		addresses:       make(map[string]*addressGroup),
-		totalPriorLimit: totalPriorLimit,
+		addressSelect:  NewWeightedRandomSelect(func(item interface{}) uint64 { return item.(*addressGroup).groupWeight }),
+		valueSelect:    NewWeightedRandomSelect(func(item interface{}) uint64 { return item.(*nodeQueue).valueWeight }),
+		nodes:          make(map[enode.ID]*nodeQueue),
+		addresses:      make(map[string]*addressGroup),
+		sumWeightLimit: sumWeightLimit,
 	}
 	l.cond = sync.NewCond(&l.lock)
 	go l.processLoop()
@@ -153,14 +154,14 @@ func NewLimiter(totalPriorLimit uint64) *Limiter {
 }
 
 // selectionWeights calculates the selection weights of a node for both the address and
-// the value selector. The weight depends on the relative cost of the previous processed
-// request.
-func selectionWeights(relCost, value float64) (flatWeight, valueWeight uint64) {
+// the value selector. The selection weight depends on the next request weight or the
+// summed weights of recently dropped requests. relWeight is reqWeight/maxWeight.
+func selectionWeights(relWeight, value float64) (flatWeight, valueWeight uint64) {
 	var f float64
-	if relCost <= 0.001 {
+	if relWeight <= 0.001 {
 		f = 1
 	} else {
-		f = 0.001 / relCost
+		f = 0.001 / relWeight
 	}
 	f *= 1000000000
 	flatWeight, valueWeight = uint64(f), uint64(f*value)
@@ -172,14 +173,14 @@ func selectionWeights(relCost, value float64) (flatWeight, valueWeight uint64) {
 
 // Add adds a new request to the node queue belonging to the given id. Value belongs
 // to the requesting node. A higher value gives the request a higher chance of being
-// served quickly in case of heavy load or a DDoS attack. PriorWeight is a rough estimate
-// of the serving cost of the request. A lower priorWeight also gives the request a
+// served quickly in case of heavy load or a DDoS attack. weight is a rough estimate
+// of the serving cost of the request. A lower weight also gives the request a
 // better chance.
-func (l *Limiter) Add(id enode.ID, address string, value float64, priorWeight uint64) chan chan float64 {
+func (l *Limiter) Add(id enode.ID, address string, value float64, reqWeight uint) chan chan struct{} {
 	l.lock.Lock()
 	defer l.lock.Unlock()
 
-	process := make(chan chan float64, 1)
+	process := make(chan chan struct{}, 1)
 	if l.quit {
 		close(process)
 		return process
@@ -191,16 +192,16 @@ func (l *Limiter) Add(id enode.ID, address string, value float64, priorWeight ui
 		// normalize value to <= 1
 		value /= l.maxValue
 	}
-	if priorWeight == 0 {
-		priorWeight = 1
+	if reqWeight == 0 {
+		reqWeight = 1
 	}
-	if priorWeight > l.maxPriorWeight {
-		l.maxPriorWeight = priorWeight
+	if reqWeight > l.maxWeight {
+		l.maxWeight = reqWeight
 	}
 
 	if nq, ok := l.nodes[id]; ok {
-		nq.queue = append(nq.queue, request{process, priorWeight})
-		nq.totalPriorWeight += priorWeight
+		nq.queue = append(nq.queue, request{process, reqWeight})
+		nq.sumWeight += reqWeight
 		nq.value = value
 		if address != nq.address {
 			// known id sending request from a new address, move to different address group
@@ -209,13 +210,14 @@ func (l *Limiter) Add(id enode.ID, address string, value float64, priorWeight ui
 		}
 	} else {
 		nq := &nodeQueue{
-			queue:            []request{{process, priorWeight}},
-			id:               id,
-			value:            value,
-			totalPriorWeight: priorWeight,
-			groupIndex:       -1,
+			queue:      []request{{process, reqWeight}},
+			id:         id,
+			value:      value,
+			nextWeight: reqWeight,
+			sumWeight:  reqWeight,
+			groupIndex: -1,
 		}
-		nq.flatWeight, nq.valueWeight = selectionWeights(0, value)
+		nq.flatWeight, nq.valueWeight = selectionWeights(float64(reqWeight)/float64(l.maxWeight), value)
 		if len(l.nodes) == 0 {
 			l.cond.Signal()
 		}
@@ -225,8 +227,8 @@ func (l *Limiter) Add(id enode.ID, address string, value float64, priorWeight ui
 		}
 		l.addToGroup(nq, address)
 	}
-	l.totalPriorWeight += priorWeight
-	if l.totalPriorWeight > l.totalPriorLimit {
+	l.sumWeight += reqWeight
+	if l.sumWeight > l.sumWeightLimit {
 		l.dropRequests()
 	}
 	return process
@@ -234,7 +236,7 @@ func (l *Limiter) Add(id enode.ID, address string, value float64, priorWeight ui
 
 // update updates the selection weights of the node queue
 func (l *Limiter) update(nq *nodeQueue) {
-	flatWeight, valueWeight := selectionWeights(nq.relCost, nq.value)
+	flatWeight, valueWeight := selectionWeights(float64(nq.nextWeight)/float64(l.maxWeight), nq.value)
 	ag := l.addresses[nq.address]
 	ag.update(nq, flatWeight)
 	l.addressSelect.Update(ag)
@@ -284,14 +286,14 @@ func (l *Limiter) remove(nq *nodeQueue) {
 // queue is removed and the next time a request comes from the same node the queue is
 // added with the highest possible weight.
 func (l *Limiter) choose() *nodeQueue {
-	if l.valueSelect.IsEmpty() || l.lastValueSelected {
+	if l.valueSelect.IsEmpty() || l.selectedByValue {
 		if ag, ok := l.addressSelect.Choose().(*addressGroup); ok {
-			l.lastValueSelected = false
+			l.selectedByValue = false
 			return ag.choose()
 		}
 	}
 	nq, _ := l.valueSelect.Choose().(*nodeQueue)
-	l.lastValueSelected = true
+	l.selectedByValue = true
 	return nq
 }
 
@@ -317,16 +319,19 @@ func (l *Limiter) processLoop() {
 		if len(nq.queue) > 0 {
 			request := nq.queue[0]
 			nq.queue = nq.queue[1:]
-			nq.totalPriorWeight -= request.priorWeight
-			l.totalPriorWeight -= request.priorWeight
-			nq.relCost = 0
+			nq.sumWeight -= request.weight
+			l.sumWeight -= request.weight
 			l.lock.Unlock()
-			costCh := make(chan float64)
-			request.process <- costCh
-			relCost := <-costCh / float64(l.maxPriorWeight)
+			ch := make(chan struct{})
+			request.process <- ch
+			<-ch
 			l.lock.Lock()
-			nq.relCost += relCost
-			l.update(nq)
+			if len(nq.queue) > 0 {
+				nq.nextWeight = nq.queue[0].weight
+				l.update(nq)
+			} else {
+				l.remove(nq)
+			}
 		} else {
 			l.remove(nq)
 		}
@@ -362,7 +367,7 @@ func (l dropList) Swap(i, j int) {
 	l[i], l[j] = l[j], l[i]
 }
 
-// dropRequests selects the nodes with the highest queued prior weight to selection
+// dropRequests selects the nodes with the highest queued request weight to selection
 // weight ratio and drops their queued request. The empty node queues stay in the
 // selectors with a low selection weight in order to penalize these nodes.
 func (l *Limiter) dropRequests() {
@@ -374,7 +379,7 @@ func (l *Limiter) dropRequests() {
 		sumValue += nq.value
 	}
 	for _, nq := range l.nodes {
-		if nq.totalPriorWeight == 0 {
+		if nq.sumWeight == 0 {
 			continue
 		}
 		w := 1 / float64(len(l.addresses)*len(l.addresses[nq.address].nodes))
@@ -383,7 +388,7 @@ func (l *Limiter) dropRequests() {
 		}
 		list = append(list, dropListItem{
 			nq:       nq,
-			priority: w / float64(nq.totalPriorWeight),
+			priority: w / float64(nq.sumWeight),
 		})
 	}
 	sort.Sort(list)
@@ -391,14 +396,14 @@ func (l *Limiter) dropRequests() {
 		for _, request := range item.nq.queue {
 			close(request.process)
 		}
-		l.totalPriorWeight -= item.nq.totalPriorWeight
+		l.sumWeight -= item.nq.sumWeight
 		// set the last relative cost as if all dropped requests were processed with
-		// the highest possible cost (which equals their prior weight).
-		item.nq.relCost += float64(item.nq.totalPriorWeight)
-		item.nq.totalPriorWeight = 0
+		// the highest possible cost (which equals their summed weight).
+		item.nq.nextWeight = item.nq.sumWeight
+		item.nq.sumWeight = 0
 		l.update(item.nq)
 		item.nq.queue = nil
-		if l.totalPriorWeight <= l.totalPriorLimit/2 {
+		if l.sumWeight <= l.sumWeightLimit/2 {
 			return
 		}
 	}
