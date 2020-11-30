@@ -593,8 +593,11 @@ func httpTestClient(srv *Server, transport string, fl *flakeyListener) (*Client,
 		fl.Listener = hs.Listener
 		hs.Listener = fl
 	}
-	// Connect the client.
+	// Start the server
 	hs.Start()
+	// Wait till the listener was scheduled
+	time.Sleep(100 + time.Millisecond)
+	// Connect the client.
 	client, err := Dial(transport + "://" + hs.Listener.Addr().String())
 	if err != nil {
 		panic(err)
