@@ -65,7 +65,7 @@ type TraceConfig struct {
 
 // StdTraceConfig holds extra parameters to standard-json trace functions.
 type StdTraceConfig struct {
-	*vm.LogConfig
+	vm.LogConfig
 	Reexec *uint64
 	TxHash common.Hash
 }
@@ -553,9 +553,7 @@ func (api *PrivateDebugAPI) standardTraceBlockToFile(ctx context.Context, block 
 		txHash    common.Hash
 	)
 	if config != nil {
-		if config.LogConfig != nil {
-			logConfig = *config.LogConfig
-		}
+		logConfig = config.LogConfig
 		txHash = config.TxHash
 	}
 	logConfig.Debug = true
@@ -573,7 +571,7 @@ func (api *PrivateDebugAPI) standardTraceBlockToFile(ctx context.Context, block 
 	// in order to obtain the state.
 	// Therefore, it's perfectly valid to specify `"futureForkBlock": 0`, to enable `futureFork`
 
-	if config != nil && config.LogConfig != nil && config.LogConfig.Overrides != nil {
+	if config != nil && config.Overrides != nil {
 		// Copy the config, to not screw up the main config
 		// Note: the Clique-part is _not_ deep copied
 		chainConfigCopy := new(params.ChainConfig)
