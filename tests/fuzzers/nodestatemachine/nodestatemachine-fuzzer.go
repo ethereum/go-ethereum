@@ -67,7 +67,6 @@ func stringFieldDec(enc []byte) (interface{}, error) {
 	return string(enc), nil
 }
 
-
 func testSetup(flagPersist []bool, fieldType []reflect.Type) (*nodestate.Setup, []nodestate.Flags, []nodestate.Field) {
 	setup := &nodestate.Setup{}
 	flags := make([]nodestate.Flags, len(flagPersist))
@@ -97,7 +96,7 @@ type fuzzer struct {
 	exhausted bool
 	debugging bool
 	enodes    []*enode.Node
-	setup *nodestate.Setup
+	setup     *nodestate.Setup
 }
 
 func (f *fuzzer) read(size int) []byte {
@@ -133,6 +132,9 @@ func (f *fuzzer) randomBool() bool {
 }
 
 func (f *fuzzer) randomInt(max int) int {
+	if max == 0 {
+		return 0
+	}
 	var a uint16
 	if err := binary.Read(f.input, binary.LittleEndian, &a); err != nil {
 		f.exhausted = true
@@ -153,7 +155,7 @@ func (f *fuzzer) randomEnode() *enode.Node {
 }
 
 func (f *fuzzer) randomField() nodestate.Field {
-	return f.setup.NewField(string(f.randomBytes(100)), reflect.TypeOf("") )
+	return f.setup.NewField(string(f.randomBytes(100)), reflect.TypeOf(""))
 }
 
 func (f *fuzzer) randomFlags() nodestate.Flags {
@@ -172,9 +174,10 @@ func (f *fuzzer) randomDuration(maxTime time.Duration) time.Duration {
 func (f *fuzzer) fuzz() int {
 	mdb, clock := rawdb.NewMemoryDatabase(), &mclock.Simulated{}
 	s, _, _ := testSetup([]bool{false, false, false, false}, nil)
-	f.setup =s
+	f.setup = s
 	ns := nodestate.NewNodeStateMachine(mdb, []byte("-ns"), clock, s)
 	ns.Start()
+	var stopped bool
 	steps := 0
 	for !f.exhausted {
 		switch f.randomInt(6) {
@@ -193,7 +196,10 @@ func (f *fuzzer) fuzz() int {
 		case 4:
 			ns.Persist(f.randomEnode())
 		case 5:
-			ns.Stop()
+			if !stopped { // double Stop causes panic, because reasons
+				ns.Stop()
+			}
+			stopped = true
 		}
 		steps++
 	}
