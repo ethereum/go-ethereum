@@ -304,10 +304,14 @@ var (
 			err := _{{$contract.Type}}.contract.Call(opts, &out, "{{.Original.Name}}" {{range .Normalized.Inputs}}, {{.Name}}{{end}})
 			{{if .Structured}}
 			outstruct := new(struct{ {{range .Normalized.Outputs}} {{.Name}} {{bindtype .Type $structs}}; {{end}} })
+			if err != nil {
+				return *outstruct, err
+			}
+
 			{{range $i, $t := .Normalized.Outputs}} 
 			outstruct.{{.Name}} = out[{{$i}}].({{bindtype .Type $structs}}){{end}}
 
-			return *outstruct, err
+			return *outstruct, nil
 			{{else}}
 			if err != nil {
 				return {{range $i, $_ := .Normalized.Outputs}}*new({{bindtype .Type $structs}}), {{end}} err
