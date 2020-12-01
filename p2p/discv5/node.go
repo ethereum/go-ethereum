@@ -22,6 +22,7 @@ import (
 	"encoding/hex"
 	"errors"
 	"fmt"
+	"github.com/ethereum/go-ethereum/internal/bytesconv"
 	"math/big"
 	"math/rand"
 	"net"
@@ -200,7 +201,7 @@ func MustParseNode(rawurl string) *Node {
 
 // MarshalText implements encoding.TextMarshaler.
 func (n *Node) MarshalText() ([]byte, error) {
-	return []byte(n.String()), nil
+	return bytesconv.StringToBytes(n.String()), nil
 }
 
 // UnmarshalText implements encoding.TextUnmarshaler.

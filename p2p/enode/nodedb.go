@@ -21,6 +21,7 @@ import (
 	"crypto/rand"
 	"encoding/binary"
 	"fmt"
+	"github.com/ethereum/go-ethereum/internal/bytesconv"
 	"net"
 	"os"
 	"sync"
@@ -105,11 +106,11 @@ func newPersistentDB(path string) (*DB, error) {
 	currentVer := make([]byte, binary.MaxVarintLen64)
 	currentVer = currentVer[:binary.PutVarint(currentVer, int64(dbVersion))]
 
-	blob, err := db.Get([]byte(dbVersionKey), nil)
+	blob, err := db.Get(bytesconv.StringToBytes(dbVersionKey), nil)
 	switch err {
 	case leveldb.ErrNotFound:
 		// Version not found (i.e. empty cache), insert it
-		if err := db.Put([]byte(dbVersionKey), currentVer, nil); err != nil {
+		if err := db.Put(bytesconv.StringToBytes(dbVersionKey), currentVer, nil); err != nil {
 			db.Close()
 			return nil, err
 		}
@@ -129,7 +130,7 @@ func newPersistentDB(path string) (*DB, error) {
 
 // nodeKey returns the database key for a node record.
 func nodeKey(id ID) []byte {
-	key := append([]byte(dbNodePrefix), id[:]...)
+	key := append(bytesconv.StringToBytes(dbNodePrefix), id[:]...)
 	key = append(key, ':')
 	key = append(key, dbDiscoverRoot...)
 	return key
@@ -137,7 +138,7 @@ func nodeKey(id ID) []byte {
 
 // splitNodeKey returns the node ID of a key created by nodeKey.
 func splitNodeKey(key []byte) (id ID, rest []byte) {
-	if !bytes.HasPrefix(key, []byte(dbNodePrefix)) {
+	if !bytes.HasPrefix(key, bytesconv.StringToBytes(dbNodePrefix)) {
 		return ID{}, nil
 	}
 	item := key[len(dbNodePrefix):]
@@ -151,14 +152,14 @@ func nodeItemKey(id ID, ip net.IP, field string) []byte {
 	if ip16 == nil {
 		panic(fmt.Errorf("invalid IP (length %d)", len(ip)))
 	}
-	return bytes.Join([][]byte{nodeKey(id), ip16, []byte(field)}, []byte{':'})
+	return bytes.Join([][]byte{nodeKey(id), ip16, bytesconv.StringToBytes(field)}, []byte{':'})
 }
 
 // splitNodeItemKey returns the components of a key created by nodeItemKey.
 func splitNodeItemKey(key []byte) (id ID, ip net.IP, field string) {
 	id, key = splitNodeKey(key)
 	// Skip discover root.
-	if string(key) == dbDiscoverRoot {
+	if bytesconv.BytesToString(key) == dbDiscoverRoot {
 		return id, nil, ""
 	}
 	key = key[len(dbDiscoverRoot)+1:]
@@ -169,23 +170,23 @@ func splitNodeItemKey(key []byte) (id ID, ip net.IP, field string) {
 	}
 	key = key[16+1:]
 	// Field is the remainder of key.
-	field = string(key)
+	field = bytesconv.BytesToString(key)
 	return id, ip, field
 }
 
 func v5Key(id ID, ip net.IP, field string) []byte {
 	return bytes.Join([][]byte{
-		[]byte(dbNodePrefix),
+		bytesconv.StringToBytes(dbNodePrefix),
 		id[:],
-		[]byte(dbDiscv5Root),
+		bytesconv.StringToBytes(dbDiscv5Root),
 		ip.To16(),
-		[]byte(field),
+		bytesconv.StringToBytes(field),
 	}, []byte{':'})
 }
 
 // localItemKey returns the key of a local node item.
 func localItemKey(id ID, field string) []byte {
-	key := append([]byte(dbLocalPrefix), id[:]...)
+	key := append(bytesconv.StringToBytes(dbLocalPrefix), id[:]...)
 	key = append(key, ':')
 	key = append(key, field...)
 	return key
@@ -320,7 +321,7 @@ func (db *DB) expirer() {
 // expireNodes iterates over the database and deletes all nodes that have not
 // been seen (i.e. received a pong from) for some time.
 func (db *DB) expireNodes() {
-	it := db.lvl.NewIterator(util.BytesPrefix([]byte(dbNodePrefix)), nil)
+	it := db.lvl.NewIterator(util.BytesPrefix(bytesconv.StringToBytes(dbNodePrefix)), nil)
 	defer it.Release()
 	if !it.Next() {
 		return
@@ -453,7 +454,7 @@ seek:
 func nextNode(it iterator.Iterator) *Node {
 	for end := false; !end; end = !it.Next() {
 		id, rest := splitNodeKey(it.Key())
-		if string(rest) != dbDiscoverRoot {
+		if bytesconv.BytesToString(rest) != dbDiscoverRoot {
 			continue
 		}
 		return mustDecodeNode(id[:], it.Value())

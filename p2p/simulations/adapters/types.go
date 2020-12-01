@@ -21,6 +21,7 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
+	"github.com/ethereum/go-ethereum/internal/bytesconv"
 	"net"
 	"os"
 	"strconv"
@@ -175,7 +176,7 @@ func (n *NodeConfig) UnmarshalJSON(data []byte) error {
 	}
 
 	if confJSON.ID != "" {
-		if err := n.ID.UnmarshalText([]byte(confJSON.ID)); err != nil {
+		if err := n.ID.UnmarshalText(bytesconv.StringToBytes(confJSON.ID)); err != nil {
 			return err
 		}
 	}

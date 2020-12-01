@@ -20,6 +20,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"github.com/ethereum/go-ethereum/internal/bytesconv"
 	"math"
 	"net"
 	"sync"
@@ -181,7 +182,7 @@ func (sn *SimNode) Close() error {
 
 // Addr returns the node's discovery address
 func (sn *SimNode) Addr() []byte {
-	return []byte(sn.Node().String())
+	return bytesconv.StringToBytes(sn.Node().String())
 }
 
 // Node returns a node descriptor representing the SimNode

@@ -22,6 +22,7 @@ import (
 	"encoding/hex"
 	"errors"
 	"fmt"
+	"github.com/ethereum/go-ethereum/internal/bytesconv"
 	"math/bits"
 	"net"
 	"strings"
@@ -174,7 +175,7 @@ func (n *Node) String() string {
 
 // MarshalText implements encoding.TextMarshaler.
 func (n *Node) MarshalText() ([]byte, error) {
-	return []byte(n.String()), nil
+	return bytesconv.StringToBytes(n.String()), nil
 }
 
 // UnmarshalText implements encoding.TextUnmarshaler.

@@ -20,6 +20,7 @@ import (
 	"bytes"
 	"encoding/binary"
 	"fmt"
+	"github.com/ethereum/go-ethereum/internal/bytesconv"
 	"sync"
 	"testing"
 
@@ -64,7 +65,7 @@ func TestTCPPipeBidirections(t *testing.T) {
 	msgs := 50
 	size := 7
 	for i := 0; i < msgs; i++ {
-		msg := []byte(fmt.Sprintf("ping %02d", i))
+		msg := bytesconv.StringToBytes(fmt.Sprintf("ping %02d", i))
 		if _, err := c1.Write(msg); err != nil {
 			t.Fatal(err)
 		}

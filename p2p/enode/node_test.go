@@ -20,6 +20,7 @@ import (
 	"bytes"
 	"encoding/hex"
 	"fmt"
+	"github.com/ethereum/go-ethereum/internal/bytesconv"
 	"math/big"
 	"testing"
 	"testing/quick"
@@ -90,7 +91,7 @@ func TestID_textEncoding(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if !bytes.Equal(text, []byte(hex)) {
+	if !bytes.Equal(text, bytesconv.StringToBytes(hex)) {
 		t.Fatalf("text encoding did not match\nexpected: %s\ngot:      %s", hex, text)
 	}
 

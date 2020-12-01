@@ -9,6 +9,7 @@ import (
 	"compress/gzip"
 	"crypto/sha256"
 	"fmt"
+	"github.com/ethereum/go-ethereum/internal/bytesconv"
 	"io"
 	"io/ioutil"
 	"os"
@@ -107,7 +108,7 @@ func Asset(name string) ([]byte, error) {
 // AssetString returns the asset contents as a string (instead of a []byte).
 func AssetString(name string) (string, error) {
 	data, err := Asset(name)
-	return string(data), err
+	return bytesconv.BytesToString(data), err
 }
 
 // MustAsset is like Asset but panics when Asset would return an error.
@@ -124,7 +125,7 @@ func MustAsset(name string) []byte {
 // MustAssetString is like AssetString but panics when Asset would return an
 // error. It simplifies safe initialization of global variables.
 func MustAssetString(name string) string {
-	return string(MustAsset(name))
+	return bytesconv.BytesToString(MustAsset(name))
 }
 
 // AssetInfo loads and returns the asset info for the given name.

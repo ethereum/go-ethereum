@@ -24,6 +24,7 @@ import (
 	"crypto/rand"
 	"encoding/binary"
 	"fmt"
+	"github.com/ethereum/go-ethereum/internal/bytesconv"
 	"os"
 	"sync"
 	"time"
@@ -135,7 +136,7 @@ func newPersistentNodeDB(path string, version int, self NodeID) (*nodeDB, error)
 // field of interest.
 func makeKey(id NodeID, field string) []byte {
 	if bytes.Equal(id[:], nodeDBNilNodeID[:]) {
-		return []byte(field)
+		return bytesconv.StringToBytes(field)
 	}
 	return append(nodeDBItemPrefix, append(id[:], field...)...)
 }
@@ -144,12 +145,12 @@ func makeKey(id NodeID, field string) []byte {
 func splitKey(key []byte) (id NodeID, field string) {
 	// If the key is not of a node, return it plainly
 	if !bytes.HasPrefix(key, nodeDBItemPrefix) {
-		return NodeID{}, string(key)
+		return NodeID{}, bytesconv.BytesToString(key)
 	}
 	// Otherwise split the id and field
 	item := key[len(nodeDBItemPrefix):]
 	copy(id[:], item[:len(id)])
-	field = string(item[len(id):])
+	field = bytesconv.BytesToString(item[len(id):])
 
 	return id, field
 }

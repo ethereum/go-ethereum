@@ -20,6 +20,7 @@ import (
 	"bytes"
 	"context"
 	"fmt"
+	"github.com/ethereum/go-ethereum/internal/bytesconv"
 	"math/rand"
 	"net"
 	"strings"
@@ -186,7 +187,7 @@ func (c *Client) doResolveEntry(ctx context.Context, domain, hash string) (entry
 		if err == errUnknownEntry {
 			continue
 		}
-		if !bytes.HasPrefix(crypto.Keccak256([]byte(txt)), wantHash) {
+		if !bytes.HasPrefix(crypto.Keccak256(bytesconv.StringToBytes(txt)), wantHash) {
 			err = nameError{name, errHashMismatch}
 		} else if err != nil {
 			err = nameError{name, err}

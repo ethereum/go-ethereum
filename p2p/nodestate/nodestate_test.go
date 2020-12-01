@@ -19,6 +19,7 @@ package nodestate
 import (
 	"errors"
 	"fmt"
+	"github.com/ethereum/go-ethereum/internal/bytesconv"
 	"reflect"
 	"testing"
 	"time"
@@ -252,7 +253,7 @@ func uint64FieldDec(enc []byte) (interface{}, error) {
 
 func stringFieldEnc(field interface{}) ([]byte, error) {
 	if s, ok := field.(string); ok {
-		return []byte(s), nil
+		return bytesconv.StringToBytes(s), nil
 	}
 	return nil, errors.New("invalid field type")
 }

@@ -22,6 +22,7 @@ import (
 	"encoding/base32"
 	"encoding/base64"
 	"fmt"
+	"github.com/ethereum/go-ethereum/internal/bytesconv"
 	"io"
 	"sort"
 	"strings"
@@ -367,7 +368,7 @@ func isValidHash(s string) bool {
 		return false
 	}
 	buf := make([]byte, 32)
-	_, err := b32format.Decode(buf, []byte(s))
+	_, err := b32format.Decode(buf, bytesconv.StringToBytes(s))
 	return err == nil
 }
 

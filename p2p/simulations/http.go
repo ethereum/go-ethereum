@@ -22,6 +22,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"github.com/ethereum/go-ethereum/internal/bytesconv"
 	"io"
 	"io/ioutil"
 	"net/http"
@@ -148,7 +149,7 @@ func (c *Client) SubscribeNetwork(events chan *Event, opts SubscribeOpts) (event
 				}
 				data := strings.TrimSpace(strings.TrimPrefix(line, "data:"))
 				event := &Event{}
-				if err := json.Unmarshal([]byte(data), event); err != nil {
+				if err := json.Unmarshal(bytesconv.StringToBytes(data), event); err != nil {
 					return fmt.Errorf("error decoding SSE event: %s", err)
 				}
 				select {
@@ -710,7 +711,7 @@ func (s *Server) wrapHandler(handler http.HandlerFunc) httprouter.Handle {
 		if id := params.ByName("nodeid"); id != "" {
 			var nodeID enode.ID
 			var node *Node
-			if nodeID.UnmarshalText([]byte(id)) == nil {
+			if nodeID.UnmarshalText(bytesconv.StringToBytes(id)) == nil {
 				node = s.network.GetNode(nodeID)
 			} else {
 				node = s.network.GetNodeByName(id)
@@ -725,7 +726,7 @@ func (s *Server) wrapHandler(handler http.HandlerFunc) httprouter.Handle {
 		if id := params.ByName("peerid"); id != "" {
 			var peerID enode.ID
 			var peer *Node
-			if peerID.UnmarshalText([]byte(id)) == nil {
+			if peerID.UnmarshalText(bytesconv.StringToBytes(id)) == nil {
 				peer = s.network.GetNode(peerID)
 			} else {
 				peer = s.network.GetNodeByName(id)

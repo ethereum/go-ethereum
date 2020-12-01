@@ -22,6 +22,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"github.com/ethereum/go-ethereum/internal/bytesconv"
 	"io"
 	"net"
 	"net/http"
@@ -152,7 +153,7 @@ func (n *ExecNode) Addr() []byte {
 	if n.Info == nil {
 		return nil
 	}
-	return []byte(n.Info.Enode)
+	return bytesconv.StringToBytes(n.Info.Enode)
 }
 
 // Client returns an rpc.Client which can be used to communicate with the
@@ -385,7 +386,7 @@ func initLogging() {
 		return
 	}
 	var conf execNodeConfig
-	if err := json.Unmarshal([]byte(confEnv), &conf); err != nil {
+	if err := json.Unmarshal(bytesconv.StringToBytes(confEnv), &conf); err != nil {
 		return
 	}
 	var writer = os.Stderr
@@ -458,7 +459,7 @@ func startExecNodeStack() (*node.Node, error) {
 		return nil, fmt.Errorf("missing " + envNodeConfig)
 	}
 	var conf execNodeConfig
-	if err := json.Unmarshal([]byte(confEnv), &conf); err != nil {
+	if err := json.Unmarshal(bytesconv.StringToBytes(confEnv), &conf); err != nil {
 		return nil, fmt.Errorf("error decoding %s: %v", envNodeConfig, err)
 	}
 
