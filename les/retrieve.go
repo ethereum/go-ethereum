@@ -92,12 +92,11 @@ const (
 )
 
 // newRetrieveManager creates the retrieve manager
-func newRetrieveManager(peers *serverPeerSet, dist *requestDistributor, srto func() time.Duration) *retrieveManager {
+func newRetrieveManager(peers *serverPeerSet, dist *requestDistributor) *retrieveManager {
 	return &retrieveManager{
-		peers:              peers,
-		dist:               dist,
-		sentReqs:           make(map[uint64]*sentReq),
-		softRequestTimeout: srto,
+		peers:    peers,
+		dist:     dist,
+		sentReqs: make(map[uint64]*sentReq),
 	}
 }
 

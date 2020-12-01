@@ -17,8 +17,11 @@
 package les
 
 import (
+	"github.com/ethereum/go-ethereum/core/forkid"
+	"github.com/ethereum/go-ethereum/p2p"
 	"github.com/ethereum/go-ethereum/p2p/dnsdisc"
 	"github.com/ethereum/go-ethereum/p2p/enode"
+	"github.com/ethereum/go-ethereum/p2p/enr"
 	"github.com/ethereum/go-ethereum/rlp"
 )
 
@@ -34,10 +37,41 @@ func (e lesEntry) ENRKey() string {
 }
 
 // setupDiscovery creates the node discovery source for the eth protocol.
-func (eth *LightEthereum) setupDiscovery() (enode.Iterator, error) {
-	if len(eth.config.EthDiscoveryURLs) == 0 {
+func (eth *LightEthereum) setupDiscovery(cfg *p2p.Config) (enode.Iterator, error) {
+	var it enode.Iterator
+	if len(eth.config.EthDiscoveryURLs) != 0 {
+		client := dnsdisc.NewClient(dnsdisc.Config{})
+		var err error
+		it, err = client.NewIterator(eth.config.EthDiscoveryURLs...)
+		if err != nil {
+			return nil, err
+		}
+	}
+	if cfg.DiscoveryV5 && eth.p2pServer.DiscV5 != nil {
+		v5 := eth.p2pServer.DiscV5.RandomNodes()
+		if it == nil {
+			it = v5
+		} else {
+			mix := enode.NewFairMix(0)
+			mix.AddSource(it)
+			mix.AddSource(v5)
+			it = mix
+		}
+	}
+	if it == nil {
 		return nil, nil
 	}
-	client := dnsdisc.NewClient(dnsdisc.Config{})
-	return client.NewIterator(eth.config.EthDiscoveryURLs...)
+	forkFilter := forkid.NewFilter(eth.blockchain)
+	return enode.Filter(it, func(n *enode.Node) bool {
+		var (
+			les struct {
+				_ []rlp.RawValue `rlp:"tail"`
+			}
+			eth struct {
+				ForkID forkid.ID
+				_      []rlp.RawValue `rlp:"tail"`
+			}
+		)
+		return n.Load(enr.WithEntry("les", &les)) == nil && n.Load(enr.WithEntry("eth", &eth)) == nil && forkFilter(eth.ForkID) == nil
+	}), nil
 }

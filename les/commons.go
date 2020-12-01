@@ -33,24 +33,12 @@ import (
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/node"
 	"github.com/ethereum/go-ethereum/p2p"
-	"github.com/ethereum/go-ethereum/p2p/discv5"
 	"github.com/ethereum/go-ethereum/p2p/enode"
 	"github.com/ethereum/go-ethereum/params"
 )
 
 func errResp(code errCode, format string, v ...interface{}) error {
 	return fmt.Errorf("%v - %v", code, fmt.Sprintf(format, v...))
-}
-
-func lesTopic(genesisHash common.Hash, protocolVersion uint) discv5.Topic {
-	var name string
-	switch protocolVersion {
-	case lpv2:
-		name = "LES2"
-	default:
-		panic(nil)
-	}
-	return discv5.Topic(name + "@" + common.Bytes2Hex(genesisHash.Bytes()[0:8]))
 }
 
 type chainReader interface {

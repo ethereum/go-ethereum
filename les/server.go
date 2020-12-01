@@ -29,7 +29,6 @@ import (
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/node"
 	"github.com/ethereum/go-ethereum/p2p"
-	"github.com/ethereum/go-ethereum/p2p/discv5"
 	"github.com/ethereum/go-ethereum/p2p/enode"
 	"github.com/ethereum/go-ethereum/p2p/enr"
 	"github.com/ethereum/go-ethereum/p2p/nodestate"
@@ -58,7 +57,6 @@ type LesServer struct {
 	archiveMode bool // Flag whether the ethereum node runs in archive mode.
 	handler     *serverHandler
 	broadcaster *broadcaster
-	lesTopics   []discv5.Topic
 	privateKey  *ecdsa.PrivateKey
 
 	// Flow control and capacity management
@@ -77,11 +75,6 @@ type LesServer struct {
 
 func NewLesServer(node *node.Node, e *eth.Ethereum, config *eth.Config) (*LesServer, error) {
 	ns := nodestate.NewNodeStateMachine(nil, nil, mclock.System{}, serverSetup)
-	// Collect les protocol version information supported by local node.
-	lesTopics := make([]discv5.Topic, len(AdvertiseProtocolVersions))
-	for i, pv := range AdvertiseProtocolVersions {
-		lesTopics[i] = lesTopic(e.BlockChain().Genesis().Hash(), pv)
-	}
 	// Calculate the number of threads used to service the light client
 	// requests based on the user-specified value.
 	threads := config.LightServ * 4 / 100
@@ -103,7 +96,6 @@ func NewLesServer(node *node.Node, e *eth.Ethereum, config *eth.Config) (*LesSer
 		ns:           ns,
 		archiveMode:  e.ArchiveMode(),
 		broadcaster:  newBroadcaster(ns),
-		lesTopics:    lesTopics,
 		fcManager:    flowcontrol.NewClientManager(nil, &mclock.System{}),
 		servingQueue: newServingQueue(int64(time.Millisecond*10), float64(config.LightServ)/100),
 		threadsBusy:  config.LightServ/100 + 1,
@@ -202,19 +194,6 @@ func (s *LesServer) Start() error {
 
 	s.wg.Add(1)
 	go s.capacityManagement()
-
-	if s.p2pSrv.DiscV5 != nil {
-		for _, topic := range s.lesTopics {
-			topic := topic
-			go func() {
-				logger := log.New("topic", topic)
-				logger.Info("Starting topic registration")
-				defer logger.Info("Terminated topic registration")
-
-				s.p2pSrv.DiscV5.RegisterTopic(topic, s.closeCh)
-			}()
-		}
-	}
 
 	return nil
 }
