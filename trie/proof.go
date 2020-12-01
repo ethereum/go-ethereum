@@ -426,7 +426,7 @@ func hasRightElement(node node, key []byte) bool {
 
 // VerifyRangeProof checks whether the given leaf nodes and edge proof
 // can prove the given trie leaves range is matched with the specific root.
-// Besides, the range should be consecutive(no gap inside) and monotonic
+// Besides, the range should be consecutive (no gap inside) and monotonic
 // increasing.
 //
 // Note the given proof actually contains two edge proofs. Both of them can
@@ -502,7 +502,16 @@ func VerifyRangeProof(rootHash common.Hash, firstKey []byte, lastKey []byte, key
 		if val != nil || hasRightElement(root, firstKey) {
 			return nil, nil, false, errors.New("more entries available")
 		}
-		return nil, nil, hasRightElement(root, firstKey), nil // TODO(karalabe): initialize the returned db
+		// TODO(holiman): Check that proofToPath consumes all nodes from the proof
+
+		// Since the entire proof is a single path, we can construct a trie and a
+		// node database directly out of the inputs, no need to generate them
+		diskdb := proof.(ethdb.KeyValueStore)
+		tr := &Trie{
+			db:   NewDatabase(diskdb),
+			root: root,
+		}
+		return diskdb, tr, hasRightElement(root, firstKey), nil
 	}
 	// Special case, there is only one element and two edge keys are same.
 	// In this case, we can't construct two edge paths. So handle it here.
@@ -517,7 +526,16 @@ func VerifyRangeProof(rootHash common.Hash, firstKey []byte, lastKey []byte, key
 		if !bytes.Equal(val, values[0]) {
 			return nil, nil, false, errors.New("correct proof but invalid data")
 		}
-		return nil, nil, hasRightElement(root, firstKey), nil // TODO(karalabe): initialize the returned db
+		// TODO(holiman): Check that proofToPath consumes all nodes from the proof
+
+		// Since the entire proof is a single path, we can construct a trie and a
+		// node database directly out of the inputs, no need to generate them
+		diskdb := proof.(ethdb.KeyValueStore)
+		tr := &Trie{
+			db:   NewDatabase(diskdb),
+			root: root,
+		}
+		return diskdb, tr, hasRightElement(root, firstKey), nil
 	}
 	// Ok, in all other cases, we require two edge paths available.
 	// First check the validity of edge keys.

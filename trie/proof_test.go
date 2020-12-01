@@ -748,12 +748,22 @@ func TestEmptyRangeProof(t *testing.T) {
 		if err := trie.Prove(first, 0, proof); err != nil {
 			t.Fatalf("Failed to prove the first node %v", err)
 		}
-		_, _, _, err := VerifyRangeProof(trie.Hash(), first, nil, nil, nil, proof)
+		db, tr, _, err := VerifyRangeProof(trie.Hash(), first, nil, nil, nil, proof)
 		if c.err && err == nil {
 			t.Fatalf("Expected error, got nil")
 		}
 		if !c.err && err != nil {
 			t.Fatalf("Expected no error, got %v", err)
+		}
+		// If no error was returned, ensure the returned trie and database contains
+		// the entire proof, since there's no value
+		if !c.err {
+			if err := tr.Prove(first, 0, memorydb.New()); err != nil {
+				t.Errorf("returned trie doesn't contain original proof: %v", err)
+			}
+			if memdb := db.(*memorydb.Database); memdb.Len() != proof.Len() {
+				t.Errorf("database entry count mismatch: have %d, want %d", memdb.Len(), proof.Len())
+			}
 		}
 	}
 }
