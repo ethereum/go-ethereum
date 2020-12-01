@@ -20,7 +20,6 @@ import (
 	"bytes"
 	"encoding/binary"
 	"fmt"
-	"github.com/ethereum/go-ethereum/internal/bytesconv"
 	"math"
 	"math/rand"
 	"time"
@@ -647,7 +646,7 @@ func (b *topicRadiusBucket) adjust(now mclock.AbsTime, inside float64) {
 }
 
 func newTopicRadius(t Topic) *topicRadius {
-	topicHash := crypto.Keccak256Hash(bytesconv.StringToBytes(t))
+	topicHash := crypto.Keccak256Hash([]byte(t))
 	topicHashPrefix := binary.BigEndian.Uint64(topicHash[0:8])
 
 	return &topicRadius{
