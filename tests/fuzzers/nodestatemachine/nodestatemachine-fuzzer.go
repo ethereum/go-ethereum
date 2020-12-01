@@ -180,7 +180,7 @@ func (f *fuzzer) fuzz() int {
 	var stopped bool
 	steps := 0
 	for !f.exhausted {
-		switch f.randomInt(6) {
+		switch f.randomInt(9) {
 		case 0:
 			ns.SetField(f.randomEnode(), f.randomField(), f.randomBytes(4))
 			// The one below panics easily,
@@ -191,7 +191,7 @@ func (f *fuzzer) fuzz() int {
 			ns.AddTimeout(f.randomEnode(), f.randomFlags(), f.randomDuration(200*time.Millisecond))
 		case 3:
 			ns.Operation(func() {
-				time.Sleep(f.randomDuration(200 * time.Millisecond))
+				//time.Sleep(f.randomDuration(200 * time.Millisecond))
 			})
 		case 4:
 			ns.Persist(f.randomEnode())
@@ -200,6 +200,12 @@ func (f *fuzzer) fuzz() int {
 				ns.Stop()
 			}
 			stopped = true
+		case 6:
+			ns.ForEach(f.randomFlags(), f.randomFlags(), func(n *enode.Node, state nodestate.Flags) {})
+		case 7:
+			ns.Persist(f.randomEnode())
+		case 8:
+			ns.GetNode(f.randomEnode().ID())
 		}
 		steps++
 	}
