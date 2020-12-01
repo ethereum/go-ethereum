@@ -1960,23 +1960,20 @@ func (s *Syncer) OnAccounts(peer *Peer, id uint64, hashes []common.Hash, account
 	if len(keys) > 0 {
 		end = keys[len(keys)-1]
 	}
-	notary := trie.NewKeyValueNotarizer(proofdb)
-	db, tr, cont, err := trie.VerifyRangeProof(root, req.origin[:], end, keys, accounts, notary)
+	db, tr, notary, cont, err := trie.VerifyRangeProof(root, req.origin[:], end, keys, accounts, proofdb)
 	if err != nil {
 		logger.Warn("Account range failed proof", "err", err)
 		return err
 	}
-	if notary.Count() != len(proof) {
-		logger.Warn("Bloated proof: got %d, needed %d", len(proof), notary.Count())
-	}
 	// Partial trie reconstructed, send it to the scheduler for storage filling
 	bounds := make(map[common.Hash]struct{})
-	hasher := sha3.NewLegacyKeccak256()
-	for _, node := range proof {
-		hasher.Reset()
-		hasher.Write(node)
-		bounds[common.BytesToHash(hasher.Sum(nil))] = struct{}{}
+
+	it := notary.Accessed().NewIterator(nil, nil)
+	for it.Next() {
+		bounds[common.BytesToHash(it.Key())] = struct{}{}
 	}
+	it.Release()
+
 	accs := make([]*state.Account, len(accounts))
 	for i, account := range accounts {
 		acc := new(state.Account)
@@ -2175,9 +2172,10 @@ func (s *Syncer) OnStorage(peer *Peer, id uint64, hashes [][]common.Hash, slots 
 
 	// Reconstruct the partial tries from the response and verify them
 	var (
-		dbs   = make([]ethdb.KeyValueStore, len(hashes))
-		tries = make([]*trie.Trie, len(hashes))
-		cont  bool
+		dbs    = make([]ethdb.KeyValueStore, len(hashes))
+		tries  = make([]*trie.Trie, len(hashes))
+		notary *trie.KeyValueNotary
+		cont   bool
 	)
 	for i := 0; i < len(hashes); i++ {
 		// Convert the keys and proofs into an internal format
@@ -2195,7 +2193,7 @@ func (s *Syncer) OnStorage(peer *Peer, id uint64, hashes [][]common.Hash, slots 
 		if len(nodes) == 0 {
 			// No proof has been attached, the response must cover the entire key
 			// space and hash to the origin root.
-			dbs[i], tries[i], _, err = trie.VerifyRangeProof(req.roots[i], nil, nil, keys, slots[i], nil)
+			dbs[i], tries[i], _, _, err = trie.VerifyRangeProof(req.roots[i], nil, nil, keys, slots[i], nil)
 			if err != nil {
 				logger.Warn("Storage slots failed proof", "err", err)
 				return err
@@ -2209,7 +2207,7 @@ func (s *Syncer) OnStorage(peer *Peer, id uint64, hashes [][]common.Hash, slots 
 			if len(keys) > 0 {
 				end = keys[len(keys)-1]
 			}
-			dbs[i], tries[i], cont, err = trie.VerifyRangeProof(req.roots[i], req.origin[:], end, keys, slots[i], proofdb)
+			dbs[i], tries[i], notary, cont, err = trie.VerifyRangeProof(req.roots[i], req.origin[:], end, keys, slots[i], proofdb)
 			if err != nil {
 				logger.Warn("Storage range failed proof", "err", err)
 				return err
@@ -2219,11 +2217,12 @@ func (s *Syncer) OnStorage(peer *Peer, id uint64, hashes [][]common.Hash, slots 
 	// Partial tries reconstructed, send them to the scheduler for storage filling
 	bounds := make(map[common.Hash]struct{})
 
-	hasher := sha3.NewLegacyKeccak256()
-	for _, node := range proof {
-		hasher.Reset()
-		hasher.Write(node)
-		bounds[common.BytesToHash(hasher.Sum(nil))] = struct{}{}
+	if notary != nil { // if all contract storages are delivered in full, no notary will be created
+		it := notary.Accessed().NewIterator(nil, nil)
+		for it.Next() {
+			bounds[common.BytesToHash(it.Key())] = struct{}{}
+		}
+		it.Release()
 	}
 	response := &storageResponse{
 		mainTask: req.mainTask,

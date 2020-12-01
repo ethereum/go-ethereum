@@ -424,28 +424,6 @@ func hasRightElement(node node, key []byte) bool {
 	return false
 }
 
-type KeyValueNotarizer struct {
-	kv    ethdb.KeyValueReader
-	reads map[string]struct{}
-}
-
-func (k *KeyValueNotarizer) Has(key []byte) (bool, error) {
-	return k.kv.Has(key)
-}
-
-func (k *KeyValueNotarizer) Get(key []byte) ([]byte, error) {
-	k.reads[string(key)] = struct{}{}
-	return k.kv.Get(key)
-}
-
-func (k *KeyValueNotarizer) Count() int {
-	return len(k.reads)
-}
-
-func NewKeyValueNotarizer(kv ethdb.KeyValueReader) *KeyValueNotarizer {
-	return &KeyValueNotarizer{kv, make(map[string]struct{})}
-}
-
 // VerifyRangeProof checks whether the given leaf nodes and edge proof
 // can prove the given trie leaves range is matched with the specific root.
 // Besides, the range should be consecutive (no gap inside) and monotonic
@@ -476,18 +454,20 @@ func NewKeyValueNotarizer(kv ethdb.KeyValueReader) *KeyValueNotarizer {
 //
 // Except returning the error to indicate the proof is valid or not, the function will
 // also return a flag to indicate whether there exists more accounts/slots in the trie.
-//
-// TODO(karalabe): Reject the proof if it contains extra data.
-func VerifyRangeProof(rootHash common.Hash, firstKey []byte, lastKey []byte, keys [][]byte, values [][]byte, proof ethdb.KeyValueReader) (ethdb.KeyValueStore, *Trie, bool, error) {
+func VerifyRangeProof(rootHash common.Hash, firstKey []byte, lastKey []byte, keys [][]byte, values [][]byte, proof ethdb.KeyValueReader) (ethdb.KeyValueStore, *Trie, *KeyValueNotary, bool, error) {
 	if len(keys) != len(values) {
-		return nil, nil, false, fmt.Errorf("inconsistent proof data, keys: %d, values: %d", len(keys), len(values))
+		return nil, nil, nil, false, fmt.Errorf("inconsistent proof data, keys: %d, values: %d", len(keys), len(values))
 	}
 	// Ensure the received batch is monotonic increasing.
 	for i := 0; i < len(keys)-1; i++ {
 		if bytes.Compare(keys[i], keys[i+1]) >= 0 {
-			return nil, nil, false, errors.New("range is not monotonically increasing")
+			return nil, nil, nil, false, errors.New("range is not monotonically increasing")
 		}
 	}
+	// Create a key-value notary to track which items from the given proof the
+	// range prover actually needed to verify the data
+	notary := NewKeyValueNotary(proof)
+
 	// Special case, there is no edge proof at all. The given range is expected
 	// to be the whole leaf-set in the trie.
 	if proof == nil {
@@ -497,95 +477,91 @@ func VerifyRangeProof(rootHash common.Hash, firstKey []byte, lastKey []byte, key
 		)
 		tr, err := New(common.Hash{}, triedb)
 		if err != nil {
-			return nil, nil, false, err
+			return nil, nil, nil, false, err
 		}
 		for index, key := range keys {
 			tr.TryUpdate(key, values[index])
 		}
 		if tr.Hash() != rootHash {
-			return nil, nil, false, fmt.Errorf("invalid proof, want hash %x, got %x", rootHash, tr.Hash())
+			return nil, nil, nil, false, fmt.Errorf("invalid proof, want hash %x, got %x", rootHash, tr.Hash())
 		}
 		// Proof seems valid, serialize all the nodes into the database
 		if _, err := tr.Commit(nil); err != nil {
-			return nil, nil, false, err
+			return nil, nil, nil, false, err
 		}
 		if err := triedb.Commit(rootHash, false, nil); err != nil {
-			return nil, nil, false, err
+			return nil, nil, nil, false, err
 		}
-		return diskdb, tr, false, nil // No more elements
+		return diskdb, tr, notary, false, nil // No more elements
 	}
 	// Special case, there is a provided edge proof but zero key/value
 	// pairs, ensure there are no more accounts / slots in the trie.
 	if len(keys) == 0 {
-		root, val, err := proofToPath(rootHash, nil, firstKey, proof, true)
+		root, val, err := proofToPath(rootHash, nil, firstKey, notary, true)
 		if err != nil {
-			return nil, nil, false, err
+			return nil, nil, nil, false, err
 		}
 		if val != nil || hasRightElement(root, firstKey) {
-			return nil, nil, false, errors.New("more entries available")
+			return nil, nil, nil, false, errors.New("more entries available")
 		}
-		// TODO(holiman): Check that proofToPath consumes all nodes from the proof
-
 		// Since the entire proof is a single path, we can construct a trie and a
 		// node database directly out of the inputs, no need to generate them
-		diskdb := proof.(ethdb.KeyValueStore)
+		diskdb := notary.Accessed()
 		tr := &Trie{
 			db:   NewDatabase(diskdb),
 			root: root,
 		}
-		return diskdb, tr, hasRightElement(root, firstKey), nil
+		return diskdb, tr, notary, hasRightElement(root, firstKey), nil
 	}
 	// Special case, there is only one element and two edge keys are same.
 	// In this case, we can't construct two edge paths. So handle it here.
 	if len(keys) == 1 && bytes.Equal(firstKey, lastKey) {
-		root, val, err := proofToPath(rootHash, nil, firstKey, proof, false)
+		root, val, err := proofToPath(rootHash, nil, firstKey, notary, false)
 		if err != nil {
-			return nil, nil, false, err
+			return nil, nil, nil, false, err
 		}
 		if !bytes.Equal(firstKey, keys[0]) {
-			return nil, nil, false, errors.New("correct proof but invalid key")
+			return nil, nil, nil, false, errors.New("correct proof but invalid key")
 		}
 		if !bytes.Equal(val, values[0]) {
-			return nil, nil, false, errors.New("correct proof but invalid data")
+			return nil, nil, nil, false, errors.New("correct proof but invalid data")
 		}
-		// TODO(holiman): Check that proofToPath consumes all nodes from the proof
-
 		// Since the entire proof is a single path, we can construct a trie and a
 		// node database directly out of the inputs, no need to generate them
-		diskdb := proof.(ethdb.KeyValueStore)
+		diskdb := notary.Accessed()
 		tr := &Trie{
 			db:   NewDatabase(diskdb),
 			root: root,
 		}
-		return diskdb, tr, hasRightElement(root, firstKey), nil
+		return diskdb, tr, notary, hasRightElement(root, firstKey), nil
 	}
 	// Ok, in all other cases, we require two edge paths available.
 	// First check the validity of edge keys.
 	if bytes.Compare(firstKey, lastKey) >= 0 {
-		return nil, nil, false, errors.New("invalid edge keys")
+		return nil, nil, nil, false, errors.New("invalid edge keys")
 	}
 	// todo(rjl493456442) different length edge keys should be supported
 	if len(firstKey) != len(lastKey) {
-		return nil, nil, false, errors.New("inconsistent edge keys")
+		return nil, nil, nil, false, errors.New("inconsistent edge keys")
 	}
 	// Convert the edge proofs to edge trie paths. Then we can
 	// have the same tree architecture with the original one.
 	// For the first edge proof, non-existent proof is allowed.
-	root, _, err := proofToPath(rootHash, nil, firstKey, proof, true)
+	root, _, err := proofToPath(rootHash, nil, firstKey, notary, true)
 	if err != nil {
-		return nil, nil, false, err
+		return nil, nil, nil, false, err
 	}
 	// Pass the root node here, the second path will be merged
 	// with the first one. For the last edge proof, non-existent
 	// proof is also allowed.
-	root, _, err = proofToPath(rootHash, root, lastKey, proof, true)
+	root, _, err = proofToPath(rootHash, root, lastKey, notary, true)
 	if err != nil {
-		return nil, nil, false, err
+		return nil, nil, nil, false, err
 	}
 	// Remove all internal references. All the removed parts should
 	// be re-filled(or re-constructed) by the given leaves range.
 	if err := unsetInternal(root, firstKey, lastKey); err != nil {
-		return nil, nil, false, err
+		return nil, nil, nil, false, err
 	}
 	// Rebuild the trie with the leaf stream, the shape of trie
 	// should be same with the original one.
@@ -598,16 +574,16 @@ func VerifyRangeProof(rootHash common.Hash, firstKey []byte, lastKey []byte, key
 		tr.TryUpdate(key, values[index])
 	}
 	if tr.Hash() != rootHash {
-		return nil, nil, false, fmt.Errorf("invalid proof, want hash %x, got %x", rootHash, tr.Hash())
+		return nil, nil, nil, false, fmt.Errorf("invalid proof, want hash %x, got %x", rootHash, tr.Hash())
 	}
 	// Proof seems valid, serialize all the nodes into the database
 	if _, err := tr.Commit(nil); err != nil {
-		return nil, nil, false, err
+		return nil, nil, nil, false, err
 	}
 	if err := triedb.Commit(rootHash, false, nil); err != nil {
-		return nil, nil, false, err
+		return nil, nil, nil, false, err
 	}
-	return diskdb, tr, hasRightElement(root, keys[len(keys)-1]), nil
+	return diskdb, tr, notary, hasRightElement(root, keys[len(keys)-1]), nil
 }
 
 // get returns the child of the given node. Return nil if the
