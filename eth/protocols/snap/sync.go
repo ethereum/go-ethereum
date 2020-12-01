@@ -1960,10 +1960,14 @@ func (s *Syncer) OnAccounts(peer *Peer, id uint64, hashes []common.Hash, account
 	if len(keys) > 0 {
 		end = keys[len(keys)-1]
 	}
-	db, tr, cont, err := trie.VerifyRangeProof(root, req.origin[:], end, keys, accounts, proofdb)
+	notary := trie.NewKeyValueNotarizer(proofdb)
+	db, tr, cont, err := trie.VerifyRangeProof(root, req.origin[:], end, keys, accounts, notary)
 	if err != nil {
 		logger.Warn("Account range failed proof", "err", err)
 		return err
+	}
+	if notary.Count() != len(proof) {
+		logger.Warn("Bloated proof: got %d, needed %d", len(proof), notary.Count())
 	}
 	// Partial trie reconstructed, send it to the scheduler for storage filling
 	bounds := make(map[common.Hash]struct{})

@@ -424,6 +424,28 @@ func hasRightElement(node node, key []byte) bool {
 	return false
 }
 
+type KeyValueNotarizer struct {
+	kv    ethdb.KeyValueReader
+	reads map[string]struct{}
+}
+
+func (k *KeyValueNotarizer) Has(key []byte) (bool, error) {
+	return k.kv.Has(key)
+}
+
+func (k *KeyValueNotarizer) Get(key []byte) ([]byte, error) {
+	k.reads[string(key)] = struct{}{}
+	return k.kv.Get(key)
+}
+
+func (k *KeyValueNotarizer) Count() int {
+	return len(k.reads)
+}
+
+func NewKeyValueNotarizer(kv ethdb.KeyValueReader) *KeyValueNotarizer {
+	return &KeyValueNotarizer{kv, make(map[string]struct{})}
+}
+
 // VerifyRangeProof checks whether the given leaf nodes and edge proof
 // can prove the given trie leaves range is matched with the specific root.
 // Besides, the range should be consecutive (no gap inside) and monotonic

@@ -19,6 +19,7 @@ package trie
 import (
 	"bytes"
 	crand "crypto/rand"
+	"encoding/binary"
 	mrand "math/rand"
 	"sort"
 	"testing"
@@ -898,4 +899,51 @@ func randBytes(n int) []byte {
 	r := make([]byte, n)
 	crand.Read(r)
 	return r
+}
+
+func nonRandomTrie(n int) (*Trie, map[string]*kv) {
+	trie := new(Trie)
+	vals := make(map[string]*kv)
+	max := uint64(0xffffffffffffffff)
+	for i := uint64(0); i < uint64(n); i++ {
+		value := make([]byte, 32)
+		key := make([]byte, 32)
+		binary.LittleEndian.PutUint64(key, i)
+		binary.LittleEndian.PutUint64(value, i-max)
+		//value := &kv{common.LeftPadBytes([]byte{i}, 32), []byte{i}, false}
+		elem := &kv{key, value, false}
+		trie.Update(elem.k, elem.v)
+		vals[string(elem.k)] = elem
+	}
+	return trie, vals
+}
+
+// TestBloatedProof tests a malicious proof, where the proof is more or less the
+// whole trie.
+func TestBloatedProof(t *testing.T) {
+	// Use a small trie
+	trie, kvs := nonRandomTrie(100)
+	var entries entrySlice
+	for _, kv := range kvs {
+		entries = append(entries, kv)
+	}
+	sort.Sort(entries)
+	var keys [][]byte
+	var vals [][]byte
+	proof := memorydb.New()
+	for i, entry := range entries {
+		trie.Prove(entry.k, 0, proof)
+		if i == 50 {
+			keys = append(keys, entry.k)
+			vals = append(vals, entry.v)
+		}
+	}
+
+	notary := NewKeyValueNotarizer(proof)
+
+	_, _, _, err := VerifyRangeProof(trie.Hash(), keys[0], keys[len(keys)-1], keys, vals, notary)
+	if err == nil {
+		t.Logf("Bloated proof: proof usage: %d", notary.Count())
+		t.Fatalf("expected some kind of error, but the proof was accepted")
+	}
 }
