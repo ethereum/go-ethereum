@@ -261,9 +261,8 @@ func (bt *BalanceTracker) storeBalance(id []byte, neg bool, value utils.ExpiredV
 func (bt *BalanceTracker) canDropBalance(now mclock.AbsTime, neg bool, b utils.ExpiredValue) bool {
 	if neg {
 		return b.Value(bt.negExp.LogOffset(now)) <= negThreshold
-	} else {
-		return b.Value(bt.posExp.LogOffset(now)) <= posThreshold
 	}
+	return b.Value(bt.posExp.LogOffset(now)) <= posThreshold
 }
 
 // updateTotalBalance adjusts the total balance after executing given callback.

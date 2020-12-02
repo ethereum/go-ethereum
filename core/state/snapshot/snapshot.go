@@ -512,22 +512,8 @@ func diffToDisk(bottom *diffLayer) *diskLayer {
 	// Update the snapshot block marker and write any remainder data
 	rawdb.WriteSnapshotRoot(batch, bottom.root)
 
-	// Write out the generator marker
-	entry := journalGenerator{
-		Done:   base.genMarker == nil,
-		Marker: base.genMarker,
-	}
-	if stats != nil {
-		entry.Wiping = (stats.wiping != nil)
-		entry.Accounts = stats.accounts
-		entry.Slots = stats.slots
-		entry.Storage = uint64(stats.storage)
-	}
-	blob, err := rlp.EncodeToBytes(entry)
-	if err != nil {
-		panic(fmt.Sprintf("Failed to RLP encode generator %v", err))
-	}
-	rawdb.WriteSnapshotGenerator(batch, blob)
+	// Write out the generator progress marker and report
+	journalProgress(batch, base.genMarker, stats)
 
 	// Flush all the updates in the single db operation. Ensure the
 	// disk layer transition is atomic.

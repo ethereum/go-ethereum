@@ -329,9 +329,8 @@ func (r *ChtRequest) CanSend(peer *serverPeer) bool {
 
 	if r.Untrusted {
 		return peer.headInfo.Number >= r.BlockNum && peer.id == r.PeerId
-	} else {
-		return peer.headInfo.Number >= r.Config.ChtConfirms && r.ChtNum <= (peer.headInfo.Number-r.Config.ChtConfirms)/r.Config.ChtSize
 	}
+	return peer.headInfo.Number >= r.Config.ChtConfirms && r.ChtNum <= (peer.headInfo.Number-r.Config.ChtConfirms)/r.Config.ChtSize
 }
 
 // Request sends an ODR request to the LES network (implementation of LesOdrRequest)

@@ -1,8 +1,10 @@
-Hi there,
-
-Please note that this is an issue tracker reserved for bug reports and feature requests.
-
-For general questions please use [discord](https://discord.gg/nthXNEv) or the Ethereum stack exchange at https://ethereum.stackexchange.com.
+---
+name: Report a bug
+about: Something with go-ethereum is not working as expected
+title: ''
+labels: 'type:bug'
+assignees: ''
+---
 
 #### System information
 

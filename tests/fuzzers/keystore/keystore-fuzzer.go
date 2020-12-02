@@ -33,5 +33,5 @@ func Fuzz(input []byte) int {
 		panic(err)
 	}
 	os.Remove(a.URL.Path)
-	return 0
+	return 1
 }
