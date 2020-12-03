@@ -9,7 +9,7 @@ controlled ethereum network is useful as a backend for network integration testi
 developers working on issues related to networking/blockchain synching/message
 propagation, etc or DAPP developers testing multi-block and multi-user scenarios).
 
-We assume you are able to build `geth` following the [build instructions](../install-and-build/build-from-source)
+We assume you are able to build `geth` following the [build instructions](../install-and-build/installing-geth)
 
 ## Setting up multiple nodes
 
