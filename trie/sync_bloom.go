@@ -132,7 +132,7 @@ func (b *SyncBloom) init(database ethdb.Iteratee) {
 	it.Release()
 
 	// Mark the bloom filter inited and return
-	log.Info("Initialized fast sync bloom", "items", b.bloom.N(), "errorrate", b.errorRate(), "elapsed", common.PrettyDuration(time.Since(start)))
+	log.Info("Initialized state bloom", "items", b.bloom.N(), "errorrate", b.errorRate(), "elapsed", common.PrettyDuration(time.Since(start)))
 	atomic.StoreUint32(&b.inited, 1)
 }
 
@@ -162,7 +162,7 @@ func (b *SyncBloom) Close() error {
 		b.pend.Wait()
 
 		// Wipe the bloom, but mark it "uninited" just in case someone attempts an access
-		log.Info("Deallocated fast sync bloom", "items", b.bloom.N(), "errorrate", b.errorRate())
+		log.Info("Deallocated state bloom", "items", b.bloom.N(), "errorrate", b.errorRate())
 
 		atomic.StoreUint32(&b.inited, 0)
 		b.bloom = nil
