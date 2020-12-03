@@ -51,7 +51,7 @@ func (k *KeyValueNotary) Accessed() ethdb.KeyValueStore {
 	for keystr := range k.reads {
 		key := []byte(keystr)
 		val, _ := k.KeyValueReader.Get(key)
-		db.Put([]byte(key), val)
+		db.Put(key, val)
 	}
 	return db
 }

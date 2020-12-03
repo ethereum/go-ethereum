@@ -117,12 +117,12 @@ func (h *ethHandler) handleHeaders(peer *eth.Peer, headers []*types.Header) erro
 		p.syncDrop.Stop()
 		p.syncDrop = nil
 
-		// If we're doing a fast sync, we must enforce the checkpoint block to avoid
+		// If we're doing a fast (or snap) sync, we must enforce the checkpoint block to avoid
 		// eclipse attacks. Unsynced nodes are welcome to connect after we're done
 		// joining the network
 		if atomic.LoadUint32(&h.fastSync) == 1 {
-			peer.Log().Warn("Dropping unsynced node during fast sync", "addr", peer.RemoteAddr(), "type", peer.Name())
-			return errors.New("unsynced node cannot serve fast sync")
+			peer.Log().Warn("Dropping unsynced node during sync", "addr", peer.RemoteAddr(), "type", peer.Name())
+			return errors.New("unsynced node cannot serve sync")
 		}
 	}
 	// Filter out any explicitly requested headers, deliver the rest to the downloader
