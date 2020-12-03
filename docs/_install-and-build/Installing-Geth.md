@@ -259,4 +259,8 @@ make geth
 
 These commands create a `geth` executable file in the `go-ethereum/build/bin` folder that you can move wherever you want to run from. The binary is standalone and doesn't require any additional files.
 
+Additionally you can compile all additional tools go-ethereum comes with by running `make all`. A list of all tools can be found [here](https://github.com/ethereum/go-ethereum/tree/master/cmd).
+
+If you want to cross-compile to another architecture check out the [cross-compilation guide](./cross-compile).
+
 If you want to build a stable release, the v1.9.21 release for example, you can use `git checkout v1.9.21` before running `make geth` to switch to a stable branch.
