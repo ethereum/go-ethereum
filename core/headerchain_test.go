@@ -50,37 +50,23 @@ func verifyUnbrokenCanonchain(hc *HeaderChain) error {
 	return nil
 }
 
-func testInsert(t *testing.T, hc *HeaderChain, chain []*types.Header, expInsert, expCanon, expSide int) error {
+func testInsert(t *testing.T, hc *HeaderChain, chain []*types.Header, wantStatus WriteStatus, wantErr error) {
 	t.Helper()
-	gotInsert, gotCanon, gotSide := 0, 0, 0
 
-	_, err := hc.InsertHeaderChain(chain, func(header *types.Header, status WriteStatus) {
-		gotInsert++
-		switch status {
-		case CanonStatTy:
-			gotCanon++
-		default:
-			gotSide++
-		}
-	}, time.Now())
-
-	if gotInsert != expInsert {
-		t.Errorf("wrong number of callback invocations, got %d, exp %d", gotInsert, expInsert)
-	}
-	if gotCanon != expCanon {
-		t.Errorf("wrong number of canon headers, got %d, exp %d", gotCanon, expCanon)
-	}
-	if gotSide != expSide {
-		t.Errorf("wrong number of side headers, got %d, exp %d", gotSide, expSide)
+	status, err := hc.InsertHeaderChain(chain, time.Now())
+	if status != wantStatus {
+		t.Errorf("wrong write status from InsertHeaderChain: got %v, want %v", status, wantStatus)
 	}
 	// Always verify that the header chain is unbroken
 	if err := verifyUnbrokenCanonchain(hc); err != nil {
 		t.Fatal(err)
-		return err
 	}
-	return err
+	if !errors.Is(err, wantErr) {
+		t.Fatalf("unexpected error from InsertHeaderChain: %v", err)
+	}
 }
 
+// This test checks status reporting of InsertHeaderChain.
 func TestHeaderInsertion(t *testing.T) {
 	var (
 		db      = rawdb.NewMemoryDatabase()
@@ -99,42 +85,31 @@ func TestHeaderInsertion(t *testing.T) {
 
 	// Inserting 64 headers on an empty chain, expecting
 	// 1 callbacks, 1 canon-status, 0 sidestatus,
-	if err := testInsert(t, hc, chainA[:64], 1, 1, 0); err != nil {
-		t.Fatal(err)
-	}
+	testInsert(t, hc, chainA[:64], CanonStatTy, nil)
 
 	// Inserting 64 identical headers, expecting
 	// 0 callbacks, 0 canon-status, 0 sidestatus,
-	if err := testInsert(t, hc, chainA[:64], 0, 0, 0); err != nil {
-		t.Fatal(err)
-	}
+	testInsert(t, hc, chainA[:64], NonStatTy, nil)
+
 	// Inserting the same some old, some new headers
 	// 1 callbacks, 1 canon, 0 side
-	if err := testInsert(t, hc, chainA[32:96], 1, 1, 0); err != nil {
-		t.Fatal(err)
-	}
+	testInsert(t, hc, chainA[32:96], CanonStatTy, nil)
+
 	// Inserting side blocks, but not overtaking the canon chain
-	if err := testInsert(t, hc, chainB[0:32], 1, 0, 1); err != nil {
-		t.Fatal(err)
-	}
+	testInsert(t, hc, chainB[0:32], SideStatTy, nil)
+
 	// Inserting more side blocks, but we don't have the parent
-	if err := testInsert(t, hc, chainB[34:36], 0, 0, 0); !errors.Is(err, consensus.ErrUnknownAncestor) {
-		t.Fatal(fmt.Errorf("Expected %v, got %v", consensus.ErrUnknownAncestor, err))
-	}
+	testInsert(t, hc, chainB[34:36], NonStatTy, consensus.ErrUnknownAncestor)
+
 	// Inserting more sideblocks, overtaking the canon chain
-	if err := testInsert(t, hc, chainB[32:97], 1, 1, 0); err != nil {
-		t.Fatal(err)
-	}
+	testInsert(t, hc, chainB[32:97], CanonStatTy, nil)
+
 	// Inserting more A-headers, taking back the canonicality
-	if err := testInsert(t, hc, chainA[90:100], 1, 1, 0); err != nil {
-		t.Fatal(err)
-	}
+	testInsert(t, hc, chainA[90:100], CanonStatTy, nil)
+
 	// And B becomes canon again
-	if err := testInsert(t, hc, chainB[97:107], 1, 1, 0); err != nil {
-		t.Fatal(err)
-	}
+	testInsert(t, hc, chainB[97:107], CanonStatTy, nil)
+
 	// And B becomes even longer
-	if err := testInsert(t, hc, chainB[107:128], 1, 1, 0); err != nil {
-		t.Fatal(err)
-	}
+	testInsert(t, hc, chainB[107:128], CanonStatTy, nil)
 }

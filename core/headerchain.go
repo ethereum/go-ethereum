@@ -130,6 +130,7 @@ func (hc *HeaderChain) GetBlockNumber(hash common.Hash) *uint64 {
 }
 
 type headerWriteResult struct {
+	status     WriteStatus
 	ignored    int
 	imported   int
 	lastHash   common.Hash
@@ -145,7 +146,7 @@ type headerWriteResult struct {
 // without the real blocks. Hence, writing headers directly should only be done
 // in two scenarios: pure-header mode of operation (light clients), or properly
 // separated header/block phases (non-archive clients).
-func (hc *HeaderChain) writeHeaders(headers []*types.Header, postWriteFn PostWriteCallback) (result *headerWriteResult, err error) {
+func (hc *HeaderChain) writeHeaders(headers []*types.Header) (result *headerWriteResult, err error) {
 	if len(headers) == 0 {
 		return &headerWriteResult{}, nil
 	}
@@ -154,39 +155,25 @@ func (hc *HeaderChain) writeHeaders(headers []*types.Header, postWriteFn PostWri
 		return &headerWriteResult{}, consensus.ErrUnknownAncestor
 	}
 	var (
-		lastHeader    *types.Header // Last successfully imported header
-		lastNumber    uint64        // Last successfully imported number
-		lastHash      common.Hash
-		externTd      *big.Int     // TD of successfully imported chain
+		lastNumber = headers[0].Number.Uint64() - 1 // Last successfully imported number
+		lastHash   = headers[0].ParentHash          // Last imported header hash
+		newTD      = new(big.Int).Set(ptd)          // Total difficulty of inserted chain
+
+		lastHeader    *types.Header
 		inserted      []numberHash // Ephemeral lookup of number/hash for the chain
 		firstInserted = -1         // Index of the first non-ignored header
 	)
-	lastHash, lastNumber = headers[0].ParentHash, headers[0].Number.Uint64()-1 // Already validated above
+
 	batch := hc.chainDb.NewBatch()
 	for i, header := range headers {
-		// Short circuit insertion if shutting down
-		if hc.procInterrupt() {
-			log.Debug("Premature abort during headers import")
-			// if we haven't done anything yet, we can return
-			if i == 0 {
-				return &headerWriteResult{}, errors.New("aborted")
-			}
-			// We only 'break' here - since we want to try and keep the
-			// db consistent
-			break
-		}
 		hash, number := header.Hash(), header.Number.Uint64()
-		if header.ParentHash != lastHash {
-			log.Warn("Non-contiguous header insertion", "parent", header.ParentHash, "expected", lastHash, "number", number)
-			break
-		}
-		externTd = new(big.Int).Add(header.Difficulty, ptd)
+		newTD.Add(newTD, header.Difficulty)
 
 		// If the header is already known, skip it, otherwise store
 		if !hc.HasHeader(hash, number) {
-			// Irrelevant of the canonical status, write the td and header to the database
-			rawdb.WriteTd(batch, hash, number, externTd)
-			hc.tdCache.Add(hash, new(big.Int).Set(externTd))
+			// Irrelevant of the canonical status, write the TD and header to the database.
+			rawdb.WriteTd(batch, hash, number, newTD)
+			hc.tdCache.Add(hash, new(big.Int).Set(newTD))
 
 			rawdb.WriteHeader(batch, header)
 			inserted = append(inserted, numberHash{number, hash})
@@ -196,22 +183,30 @@ func (hc *HeaderChain) writeHeaders(headers []*types.Header, postWriteFn PostWri
 				firstInserted = i
 			}
 		}
-		lastHeader, lastHash, lastNumber, ptd = header, hash, number, externTd
+		lastHeader, lastHash, lastNumber = header, hash, number
 	}
+
+	// Skip the slow disk write of all headers if interrupted.
+	if hc.procInterrupt() {
+		log.Debug("Premature abort during headers import")
+		return &headerWriteResult{}, errors.New("aborted")
+	}
+	// Commit to disk!
 	if err := batch.Write(); err != nil {
 		log.Crit("Failed to write headers", "error", err)
 	}
 	batch.Reset()
+
 	var (
 		head    = hc.CurrentHeader().Number.Uint64()
-		localTd = hc.GetTd(hc.currentHeaderHash, head)
+		localTD = hc.GetTd(hc.currentHeaderHash, head)
 		status  = SideStatTy
 	)
 	// If the total difficulty is higher than our known, add it to the canonical chain
 	// Second clause in the if statement reduces the vulnerability to selfish mining.
 	// Please refer to http://www.cs.cornell.edu/~ie53/publications/btcProcFC.pdf
-	reorg := externTd.Cmp(localTd) > 0
-	if !reorg && externTd.Cmp(localTd) == 0 {
+	reorg := newTD.Cmp(localTD) > 0
+	if !reorg && newTD.Cmp(localTD) == 0 {
 		if lastNumber < head {
 			reorg = true
 		} else if lastNumber == head {
@@ -275,30 +270,22 @@ func (hc *HeaderChain) writeHeaders(headers []*types.Header, postWriteFn PostWri
 		hc.currentHeader.Store(types.CopyHeader(lastHeader))
 		headHeaderGauge.Update(lastHeader.Number.Int64())
 
+		// Chain status is canonical since this insert was a reorg.
+		// Note that all inserts which have higher TD than existing are 'reorg'.
 		status = CanonStatTy
 	}
-	// Execute any post-write callback function
-	// - unless we're exiting
-	// - and unless we ignored everything
-	if postWriteFn != nil && !hc.procInterrupt() && len(inserted) > 0 {
-		// The postwrite function is called only for the last imported header.
-		// It is only used for lightchain event aggregation.
-		postWriteFn(lastHeader, status)
+
+	if len(inserted) == 0 {
+		status = NonStatTy
 	}
 	return &headerWriteResult{
+		status:     status,
 		ignored:    len(headers) - len(inserted),
 		imported:   len(inserted),
 		lastHash:   lastHash,
 		lastHeader: lastHeader,
 	}, nil
 }
-
-// PostWriteCallback is a callback function for inserting headers,
-// which is called once, with the last successfully imported header in the batch.
-// The reason for having it is:
-// In light-chain mode, status should be processed and light chain events sent,
-// whereas in a non-light mode this is not necessary since chain events are sent after inserting blocks.
-type PostWriteCallback func(header *types.Header, status WriteStatus)
 
 func (hc *HeaderChain) ValidateHeaderChain(chain []*types.Header, checkFreq int) (int, error) {
 	// Do a sanity check that the provided chain is actually ordered and linked
@@ -351,14 +338,22 @@ func (hc *HeaderChain) ValidateHeaderChain(chain []*types.Header, checkFreq int)
 	return 0, nil
 }
 
-// InsertHeaderChain inserts the given headers, and returns the
-// index at which something went wrong, and the error (if any)
-// The caller should hold applicable mutexes
-func (hc *HeaderChain) InsertHeaderChain(chain []*types.Header, postWriteFn PostWriteCallback, start time.Time) (int, error) {
+// InsertHeaderChain inserts the given headers.
+//
+// The validity of the headers is NOT CHECKED by this method, i.e. they need to be
+// validated by ValidateHeaderChain before calling InsertHeaderChain.
+//
+// This insert is all-or-nothing. If this returns an error, no headers were written,
+// otherwise they were all processed successfully.
+//
+// The returned 'write status' says if the inserted headers are part of the canonical chain
+// or a side chain.
+func (hc *HeaderChain) InsertHeaderChain(chain []*types.Header, start time.Time) (WriteStatus, error) {
 	if hc.procInterrupt() {
 		return 0, errors.New("aborted")
 	}
-	res, err := hc.writeHeaders(chain, postWriteFn)
+	res, err := hc.writeHeaders(chain)
+
 	// Report some public statistics so the user has a clue what's going on
 	context := []interface{}{
 		"count", res.imported,
@@ -377,7 +372,7 @@ func (hc *HeaderChain) InsertHeaderChain(chain []*types.Header, postWriteFn Post
 		context = append(context, []interface{}{"ignored", res.ignored}...)
 	}
 	log.Info("Imported new block headers", context...)
-	return 0, err
+	return res.status, err
 }
 
 // GetBlockHashesFromHash retrieves a number of block hashes starting at a given
