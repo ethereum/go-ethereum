@@ -89,7 +89,7 @@ func (e *ExpiredValue) Add(amount int64, logOffset Fixed64) int64 {
 		// This is a temporary fix to circumvent a golang
 		// uint conversion issue on arm64, which needs to
 		// be investigated further. FIXME
-		e.Base = uint64(int64(e.Base) + int64(base))
+		e.Base += uint64(base)
 		return amount
 	}
 	net := int64(-float64(e.Base) / factor)
