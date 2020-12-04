@@ -1328,7 +1328,7 @@ func (s *Syncer) revertRequests(peer string) {
 // revertAccountRequest cleans up an account range request and returns all failed
 // retrieval tasks to the scheduler for reassignment.
 func (s *Syncer) revertAccountRequest(req *accountRequest) {
-	log.Trace("Reverting account request", "peer", req.peer, "reqid", req.id)
+	log.Debug("Reverting account request", "peer", req.peer, "reqid", req.id)
 	select {
 	case <-req.stale:
 		log.Trace("Account request already reverted", "peer", req.peer, "reqid", req.id)
@@ -1353,7 +1353,7 @@ func (s *Syncer) revertAccountRequest(req *accountRequest) {
 // revertBytecodeRequest cleans up an bytecode request and returns all failed
 // retrieval tasks to the scheduler for reassignment.
 func (s *Syncer) revertBytecodeRequest(req *bytecodeRequest) {
-	log.Trace("Reverting bytecode request", "peer", req.peer)
+	log.Debug("Reverting bytecode request", "peer", req.peer)
 	select {
 	case <-req.stale:
 		log.Trace("Bytecode request already reverted", "peer", req.peer, "reqid", req.id)
@@ -1378,7 +1378,7 @@ func (s *Syncer) revertBytecodeRequest(req *bytecodeRequest) {
 // revertStorageRequest cleans up a storage range request and returns all failed
 // retrieval tasks to the scheduler for reassignment.
 func (s *Syncer) revertStorageRequest(req *storageRequest) {
-	log.Trace("Reverting storage request", "peer", req.peer)
+	log.Debug("Reverting storage request", "peer", req.peer)
 	select {
 	case <-req.stale:
 		log.Trace("Storage request already reverted", "peer", req.peer, "reqid", req.id)
@@ -1407,7 +1407,7 @@ func (s *Syncer) revertStorageRequest(req *storageRequest) {
 // revertTrienodeHealRequest cleans up an trienode heal request and returns all
 // failed retrieval tasks to the scheduler for reassignment.
 func (s *Syncer) revertTrienodeHealRequest(req *trienodeHealRequest) {
-	log.Trace("Reverting trienode heal request", "peer", req.peer)
+	log.Debug("Reverting trienode heal request", "peer", req.peer)
 	select {
 	case <-req.stale:
 		log.Trace("Trienode heal request already reverted", "peer", req.peer, "reqid", req.id)
@@ -1432,7 +1432,7 @@ func (s *Syncer) revertTrienodeHealRequest(req *trienodeHealRequest) {
 // revertBytecodeHealRequest cleans up an bytecode request and returns all failed
 // retrieval tasks to the scheduler for reassignment.
 func (s *Syncer) revertBytecodeHealRequest(req *bytecodeHealRequest) {
-	log.Trace("Reverting bytecode heal request", "peer", req.peer)
+	log.Debug("Reverting bytecode heal request", "peer", req.peer)
 	select {
 	case <-req.stale:
 		log.Trace("Bytecode heal request already reverted", "peer", req.peer, "reqid", req.id)
@@ -1940,6 +1940,8 @@ func (s *Syncer) OnAccounts(peer *Peer, id uint64, hashes []common.Hash, account
 		logger.Debug("Peer rejected account range request", "root", s.root)
 		s.statelessPeers[peer.id] = struct{}{}
 		s.lock.Unlock()
+		// Signal this request as failed, and ready for rescheduling
+		s.revertAccountRequest(req)
 		return nil
 	}
 	root := s.root
@@ -2055,6 +2057,8 @@ func (s *Syncer) onByteCodes(peer *Peer, id uint64, bytecodes [][]byte) error {
 		logger.Debug("Peer rejected bytecode request")
 		s.statelessPeers[peer.id] = struct{}{}
 		s.lock.Unlock()
+		// Signal this request as failed, and ready for rescheduling
+		s.revertBytecodeRequest(req)
 		return nil
 	}
 	s.lock.Unlock()
@@ -2166,6 +2170,8 @@ func (s *Syncer) OnStorage(peer *Peer, id uint64, hashes [][]common.Hash, slots 
 		logger.Debug("Peer rejected storage request")
 		s.statelessPeers[peer.id] = struct{}{}
 		s.lock.Unlock()
+		// Signal this request as failed, and ready for rescheduling
+		s.revertStorageRequest(req)
 		return nil
 	}
 	s.lock.Unlock()
@@ -2287,6 +2293,8 @@ func (s *Syncer) OnTrieNodes(peer *Peer, id uint64, trienodes [][]byte) error {
 		logger.Debug("Peer rejected trienode heal request")
 		s.statelessPeers[peer.id] = struct{}{}
 		s.lock.Unlock()
+		// Signal this request as failed, and ready for rescheduling
+		s.revertTrienodeHealRequest(req)
 		return nil
 	}
 	s.lock.Unlock()
@@ -2371,6 +2379,8 @@ func (s *Syncer) onHealByteCodes(peer *Peer, id uint64, bytecodes [][]byte) erro
 		logger.Debug("Peer rejected bytecode heal request")
 		s.statelessPeers[peer.id] = struct{}{}
 		s.lock.Unlock()
+		// Signal this request as failed, and ready for rescheduling
+		s.revertBytecodeHealRequest(req)
 		return nil
 	}
 	s.lock.Unlock()
