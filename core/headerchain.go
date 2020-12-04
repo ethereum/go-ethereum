@@ -145,7 +145,7 @@ type headerWriteResult struct {
 // without the real blocks. Hence, writing headers directly should only be done
 // in two scenarios: pure-header mode of operation (light clients), or properly
 // separated header/block phases (non-archive clients).
-func (hc *HeaderChain) WriteHeaders(headers []*types.Header, postWriteFn PostWriteCallback) (result *headerWriteResult, err error) {
+func (hc *HeaderChain) writeHeaders(headers []*types.Header, postWriteFn PostWriteCallback) (result *headerWriteResult, err error) {
 	if len(headers) == 0 {
 		return &headerWriteResult{}, nil
 	}
@@ -358,7 +358,7 @@ func (hc *HeaderChain) InsertHeaderChain(chain []*types.Header, postWriteFn Post
 	if hc.procInterrupt() {
 		return 0, errors.New("aborted")
 	}
-	res, err := hc.WriteHeaders(chain, postWriteFn)
+	res, err := hc.writeHeaders(chain, postWriteFn)
 	// Report some public statistics so the user has a clue what's going on
 	context := []interface{}{
 		"count", res.imported,
