@@ -18,12 +18,18 @@ package trie
 
 import (
 	"bytes"
+	"encoding/binary"
 	"errors"
 	"fmt"
-	"sort"
+	"math/big"
+	"sync"
 
 	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/core/rawdb"
+	"github.com/ethereum/go-ethereum/ethdb"
 	"github.com/ethereum/go-ethereum/log"
+	"github.com/fxamacker/cbor"
+	"github.com/hashicorp/golang-lru"
 )
 
 // BinaryNode represents any node in a binary trie.
@@ -42,13 +48,6 @@ type BinaryHashPreimage struct {
 
 type binkey []byte
 
-type storeSlot struct {
-	key   binkey
-	value []byte
-}
-
-type store []storeSlot
-
 type hashType int
 
 const (
@@ -64,7 +63,7 @@ var blake2bEmptyRoot = common.FromHex("45b0cfc220ceec5b7c1c62c4d4193d38e4eba48e8
 // for the first node that has two children.
 type BinaryTrie struct {
 	root     BinaryNode
-	store    store
+	db       btDatabase
 	hashType hashType
 }
 
@@ -95,6 +94,28 @@ type (
 
 	empty struct{}
 )
+
+type accountDirties struct {
+	flags   byte
+	balance *big.Int
+	nonce   uint64
+	code    []byte
+
+	// list of dirty slots. The key to the slot
+	// needs to be hashed.
+	dirties map[common.Hash]common.Hash
+}
+
+type btDatabase struct {
+	// dirty accounts and slot caches.
+	dirties map[common.Hash]*accountDirties
+
+	cache *lru.Cache
+
+	diskdb ethdb.KeyValueStore
+
+	lock sync.RWMutex
+}
 
 var (
 	errInsertIntoHash    = errors.New("trying to insert into a hash")
@@ -138,18 +159,6 @@ func (b binkey) commonLength(other binkey) int {
 }
 func (b binkey) samePrefix(other binkey, off int) bool {
 	return bytes.Equal(b[off:off+len(other)], other[:])
-}
-
-func (s store) Len() int { return len(s) }
-func (s store) Less(i, j int) bool {
-	return bytes.Compare(s[i].key, s[j].key) == -1
-}
-func (s store) Swap(i, j int) {
-	s[i], s[j] = s[j], s[i]
-}
-
-func NewBinTrie() BinaryNode {
-	return empty(struct{}{})
 }
 
 // TryGet returns the value for a key stored in the trie.
@@ -320,22 +329,113 @@ func (br *branch) HashM4() []byte {
 	return hash
 }
 
+func (db *btDatabase) insert(key, value []byte) error {
+	if len(key) != 32 && len(key) != 64 {
+		return errors.New("bintrie: can only insert a value at depth 32 or 64 bytes")
+	}
+
+	// the only value associated to a key length of 512 bits is
+	// if the subtree selector is 0b11.
+	itemSelector := key[31] & 3
+	if len(key) == 64 && itemSelector != 3 {
+		return errors.New("bintrie: trying to write at an invalid depth")
+	}
+
+	var accountKey common.Hash
+	copy(accountKey[:], key[:32])
+	accountKey[31] &= 0xFC
+	account, ok := db.dirties[accountKey]
+	if !ok {
+		account = &accountDirties{
+			balance: big.NewInt(0),
+			dirties: make(map[common.Hash]common.Hash),
+		}
+		db.dirties[accountKey] = account
+	}
+
+	switch itemSelector {
+	case 0: // Balance
+		account.balance.SetBytes(value)
+	case 1: // nonce
+		if len(value) > 8 {
+			return errors.New("bintrie: tried to write a nonce larger than u64")
+		}
+		account.nonce = binary.BigEndian.Uint64(value)
+	case 2: // code
+		account.code = value
+	case 3:
+		if len(value) != 32 {
+			return errors.New("bintrie: invalid value length in slot write")
+		}
+		slotKey := common.BytesToHash(key[32:64])
+		account.dirties[slotKey] = common.BytesToHash(value)
+	default:
+		return errors.New("bintrie: range reserved for future use")
+	}
+
+	account.flags |= (1 << itemSelector)
+
+	return nil
+}
+
+func binCacheEvictionCallback(db *btDatabase) func(interface{}, interface{}) {
+	return func(key interface{}, value interface{}) {
+		// XXX vérifier que la clé est 32 ou 64 bytes et pas 256 ou 512
+
+		switch t := value.(type) {
+		case *branch:
+		default:
+			panic(fmt.Sprintf("attempting to insert non-branch into the database, type = %v", t))
+		}
+
+		// Write the data to disk
+		payload, err := cbor.Marshal(value, cbor.CanonicalEncOptions())
+		if err != nil {
+			panic(err)
+		}
+		db.diskdb.Put(key.([]byte), payload)
+	}
+}
+
 // NewBinaryTrie creates a binary trie using Keccak256 for hashing.
 func NewBinaryTrie() *BinaryTrie {
-	return &BinaryTrie{
-		root:     empty(struct{}{}),
-		store:    store(nil),
+	bt := &BinaryTrie{
+		root: empty(struct{}{}),
+		db: btDatabase{
+			diskdb:  rawdb.NewMemoryDatabase(),
+			dirties: make(map[common.Hash]*accountDirties),
+		},
 		hashType: typeKeccak256,
 	}
+	bt.db.cache, _ = lru.NewWithEvict(1000, binCacheEvictionCallback(&bt.db))
+	return bt
+}
+
+func NewBinaryTrieWithRawDB(db ethdb.KeyValueStore) *BinaryTrie {
+	bt := &BinaryTrie{
+		root: empty(struct{}{}),
+		db: btDatabase{
+			diskdb:  rawdb.NewMemoryDatabase(),
+			dirties: make(map[common.Hash]*accountDirties),
+		},
+		hashType: typeKeccak256,
+	}
+	bt.db.cache, _ = lru.NewWithEvict(1000, binCacheEvictionCallback(&bt.db))
+	return bt
 }
 
 // NewBinaryTrieWithBlake2b creates a binary trie using Blake2b for hashing.
 func NewBinaryTrieWithBlake2b() *BinaryTrie {
-	return &BinaryTrie{
-		root:     empty(struct{}{}),
-		store:    store(nil),
+	bt := &BinaryTrie{
+		root: empty(struct{}{}),
+		db: btDatabase{
+			diskdb:  rawdb.NewMemoryDatabase(),
+			dirties: make(map[common.Hash]*accountDirties),
+		},
 		hashType: typeBlake2b,
 	}
+	bt.db.cache, _ = lru.NewWithEvict(1000, binCacheEvictionCallback(&bt.db))
+	return bt
 }
 
 // Hash returns the root hash of the binary trie, with the merkelization
@@ -361,13 +461,12 @@ func (bt *BinaryTrie) Update(key, value []byte) {
 // subTreeFromPath rebuilds the subtrie rooted at path `path` from the db.
 func (bt *BinaryTrie) subTreeFromPath(path binkey) *branch {
 	subtrie := NewBinaryTrie()
-	for _, keyval := range bt.store {
-		// keyval.key is a full key from the store,
-		// path is smaller - so the comparison only
-		// happens on the length of path.
-		if bytes.Equal(path, keyval.key[:len(path)]) {
-			subtrie.TryUpdate(keyval.key, keyval.value)
-		}
+	it := bt.db.diskdb.NewIterator(path, nil)
+	for it.Next() {
+		// TODO check if the length is 32, the last two
+		// bits 00, and if so, insert the special account
+		// node, in order to save disk space and memory.
+		subtrie.TryUpdate(it.Key(), it.Value())
 	}
 	// NOTE panics if there are no entries for this
 	// range in the store. This case must have been
@@ -395,10 +494,22 @@ func (bt *BinaryTrie) resolveNode(childNode BinaryNode, bk binkey, off int) *bra
 			return nil
 		}
 
-		// The whole section of the store has to be
-		// hashed in order to produce the correct
-		// subtrie.
-		return bt.subTreeFromKey(bk[:off])
+		// look for the hash in the cache, otherwise load
+		// it from disk.
+		if v, ok := bt.db.cache.Get([]byte(childNode)); ok {
+			return v.(*branch)
+		}
+
+		p, err := bt.db.diskdb.Get([]byte(childNode))
+		if err != nil {
+			panic(fmt.Errorf("error reading key %x from the db: %v", childNode, err))
+		}
+
+		var b branch
+		cbor.Unmarshal(p, &b)
+
+		bt.db.cache.Add([]byte(childNode), b)
+		return &b
 	}
 
 	// Nothing to be done
@@ -420,8 +531,7 @@ func (bt *BinaryTrie) TryUpdate(key, value []byte) error {
 		// into, so initialize the root as a branch
 		// node (a value, really).
 		bt.root = newBranchNode(bk, key, value, bt.hashType)
-		bt.store = append(bt.store, storeSlot{key: bk, value: value})
-		sort.Sort(bt.store)
+		bt.db.insert(key, value)
 
 		return nil
 	case *branch:
@@ -493,26 +603,24 @@ func (bt *BinaryTrie) TryUpdate(key, value []byte) error {
 			}
 			currentNode.prefix = currentNode.prefix[:split]
 			currentNode.value = nil
+			childNode := newBranchNode(bk[off+split+1:], key, value, bt.hashType)
 			if bk[off+split] == 1 {
 				// New node goes on the right
 				currentNode.left = midNode
-				currentNode.right = newBranchNode(bk[off+split+1:], key, value, bt.hashType)
+				currentNode.right = childNode
 			} else {
 				// New node goes on the left
 				currentNode.right = midNode
-				currentNode.left = newBranchNode(bk[off+split+1:], key, value, bt.hashType)
+				currentNode.left = childNode
 			}
+
+			bt.db.cache.Add(bk[:off+split+1], childNode)
 			break
 		}
 	}
 
-	// Add the node to the store and make sure it's
-	// sorted.
-	bt.store = append(bt.store, storeSlot{
-		key:   bk,
-		value: value,
-	})
-	sort.Sort(bt.store)
+	// Update the list of dirty values.
+	bt.db.insert(key, value)
 
 	return nil
 }

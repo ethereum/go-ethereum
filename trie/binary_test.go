@@ -18,12 +18,13 @@ package trie
 
 import (
 	"bytes"
+	"fmt"
 	"math/rand"
-	"sort"
 	"testing"
 	"time"
 
 	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/core/rawdb"
 )
 
 func TestBinaryKeyCreation(t *testing.T) {
@@ -34,6 +35,7 @@ func TestBinaryKeyCreation(t *testing.T) {
 		t.Fatalf("invalid key conversion, got %x != exp %x", binKey[:], exp)
 	}
 }
+
 func TestBinaryKeyCreationEmpty(t *testing.T) {
 	byteKey := []byte(nil)
 	binKey := newBinKey(byteKey)
@@ -83,30 +85,6 @@ func TestBinaryKeyCommonLengthFirst(t *testing.T) {
 		t.Fatalf("split at wrong location: got %d != exp 0", split)
 	}
 
-}
-
-func TestBinaryStoreSort(t *testing.T) {
-	store := store{
-		{
-			key:   newBinKey([]byte{2}),
-			value: []byte{10},
-		},
-		{
-			key:   newBinKey([]byte{0}),
-			value: []byte{10},
-		},
-		{
-			key:   newBinKey([]byte{1}),
-			value: []byte{10},
-		},
-	}
-
-	sort.Sort(store)
-	for i := range store {
-		if !bytes.Equal(store[i].key, newBinKey([]byte{byte(i)})) {
-			t.Fatalf("item %d out of order: %d", i, store[i])
-		}
-	}
 }
 
 func TestBinaryTrieEmptyHash(t *testing.T) {
@@ -242,6 +220,28 @@ func TestBinaryTrieReadOneFromManyLeaves(t *testing.T) {
 		t.Fatalf("incorrect error received, expected '%v', got '%v'", errKeyNotPresent, err)
 	}
 }
+
+func TestBinaryTrieNodeResolution(t *testing.T) {
+	// Put 2 keys in the database, to be resolved
+	db := rawdb.NewMemoryDatabase()
+	// balance of account 0 => 10
+	key1 := common.Hex2Bytes("0000000000000000000000000000000000000000000000000000000000000000")
+	key2 := common.Hex2Bytes("0000000000000000000000000000000000000000000000000000000000000008")
+	db.Put(key1, common.Hex2Bytes("0a"))
+	// balance of account 8 => 10
+	db.Put(key2, common.Hex2Bytes("0a"))
+
+	// Create the trie, add a non-existent value and
+	// update another one.
+	trie := NewBinaryTrieWithRawDB(db)
+	trie.Update(key1, []byte{11})
+	trie.Update(common.Hex2Bytes("000000000000000000000000000000000000000000000000000000000000000c"), []byte{10})
+
+	if len(trie.db.dirties) != 2 {
+		t.Fatalf("invalid number of dirty account entries after insert, %d != 2", len(trie.db.dirties))
+	}
+}
+
 func BenchmarkTrieHash(b *testing.B) {
 	trieK := NewBinaryTrie()
 	trieB := NewBinaryTrieWithBlake2b()
