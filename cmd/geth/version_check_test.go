@@ -18,8 +18,12 @@ package main
 
 import (
 	"encoding/json"
+	"fmt"
 	"io/ioutil"
 	"path/filepath"
+	"regexp"
+	"strconv"
+	"strings"
 	"testing"
 )
 
@@ -64,16 +68,63 @@ func testVerification(t *testing.T, pubkey, sigdir string) {
 	}
 }
 
-func TestJson(t *testing.T) {
-	data, _ := ioutil.ReadFile("./testdata/vcheck/data2.json")
+func versionUint(v string) int {
+	mustInt := func(s string) int {
+		a, err := strconv.Atoi(s)
+		if err != nil {
+			panic(v)
+		}
+		return a
+	}
+	components := strings.Split(strings.TrimPrefix(v, "v"), ".")
+	a := mustInt(components[0])
+	b := mustInt(components[1])
+	c := mustInt(components[2])
+	return a*100*100 + b*100 + c
+}
+
+// TestMatching can be used to check that the regexps are correct
+func TestMatching(t *testing.T) {
+	data, _ := ioutil.ReadFile("./testdata/vcheck/vulnerabilities.json")
 	var vulns []vulnJson
 	if err := json.Unmarshal(data, &vulns); err != nil {
 		t.Fatal(err)
 	}
-	if len(vulns) == 0 {
-		t.Fatal("expected data, got none")
+	check := func(version string) {
+		vFull := fmt.Sprintf("Geth/%v-unstable-15339cf1-20201204/linux-amd64/go1.15.4", version)
+		for _, vuln := range vulns {
+			r, err := regexp.Compile(vuln.Check)
+			vulnIntro := versionUint(vuln.Introduced)
+			vulnFixed := versionUint(vuln.Fixed)
+			current := versionUint(version)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if vuln.Name == "Denial of service due to Go CVE-2020-28362" {
+				// this one is not tied to geth-versions
+				continue
+			}
+			if vulnIntro <= current && vulnFixed > current {
+				// Should be vulnerable
+				if !r.MatchString(vFull) {
+					t.Errorf("Should be vulnerable, version %v, intro: %v, fixed: %v %v %v",
+						version, vuln.Introduced, vuln.Fixed, vuln.Name, vuln.Check)
+				}
+			} else {
+				if r.MatchString(vFull) {
+					t.Errorf("Should not be flagged vulnerable, version %v, intro: %v, fixed: %v %v %d %d %d",
+						version, vuln.Introduced, vuln.Fixed, vuln.Name, vulnIntro, current, vulnFixed)
+				}
+			}
+
+		}
 	}
-	if have, want := vulns[0].CVE, "correct"; have != want {
-		t.Errorf("have %v, want %v", have, want)
+	for major := 1; major < 2; major++ {
+		for minor := 0; minor < 30; minor++ {
+			for patch := 0; patch < 30; patch++ {
+				vShort := fmt.Sprintf("v%d.%d.%d", major, minor, patch)
+				check(vShort)
+			}
+		}
 	}
 }
