@@ -75,10 +75,11 @@ var DefaultConfig = Config{
 		GasPrice: big.NewInt(params.GWei),
 		Recommit: 3 * time.Second,
 	},
-	TxPool:      core.DefaultTxPoolConfig,
-	RPCGasCap:   25000000,
-	GPO:         DefaultFullGPOConfig,
-	RPCTxFeeCap: 1, // 1 ether
+	TxPool:       core.DefaultTxPoolConfig,
+	RPCGasCap:    25000000,
+	GPO:          DefaultFullGPOConfig,
+	RPCTxFeeCap:  1, // 1 ether
+	TraceThreads: runtime.NumCPU(),
 }
 
 func init() {
@@ -169,7 +170,7 @@ type Config struct {
 
 	// Miscellaneous options
 	DocRoot      string `toml:"-"`
-	TraceThreads int    `toml:"-"`
+	TraceThreads int
 
 	// Type of the EWASM interpreter ("" for default)
 	EWASMInterpreter string

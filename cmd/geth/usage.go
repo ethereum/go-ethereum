@@ -206,6 +206,7 @@ var AppHelpFlagGroups = []flags.FlagGroup{
 		Flags: append([]cli.Flag{
 			utils.FakePoWFlag,
 			utils.NoCompactionFlag,
+			utils.TraceThreadFlag,
 		}, debug.Flags...),
 	},
 	{

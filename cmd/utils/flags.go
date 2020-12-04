@@ -481,6 +481,11 @@ var (
 		Name:  "nocompaction",
 		Usage: "Disables db compaction after import",
 	}
+	TraceThreadFlag = cli.IntFlag{
+		Name:  "trace.threads",
+		Usage: "Maximal number of threads used for tracing",
+		Value: eth.DefaultConfig.TraceThreads,
+	}
 	// RPC settings
 	IPCDisabledFlag = cli.BoolFlag{
 		Name:  "ipcdisable",
@@ -1569,6 +1574,9 @@ func SetEthConfig(ctx *cli.Context, stack *node.Node, cfg *eth.Config) {
 	if ctx.GlobalIsSet(VMEnableDebugFlag.Name) {
 		// TODO(fjl): force-enable this in --dev mode
 		cfg.EnablePreimageRecording = ctx.GlobalBool(VMEnableDebugFlag.Name)
+	}
+	if ctx.GlobalIsSet(TraceThreadFlag.Name) {
+		cfg.TraceThreads = ctx.GlobalInt(TraceThreadFlag.Name)
 	}
 
 	if ctx.GlobalIsSet(EWASMInterpreterFlag.Name) {
