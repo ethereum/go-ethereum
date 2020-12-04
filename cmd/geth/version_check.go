@@ -148,12 +148,22 @@ func verifySignature(pubkeys []string, data, sigdata []byte) error {
 		break
 	}
 	if key == nil {
-		log.Info("Signing key not trusted", "key", sig.KeyId, "error", err)
+		log.Info("Signing key not trusted", "keyid", keyID(sig.KeyId), "error", err)
 		return errors.New("signature could not be verified")
 	}
 	if ok, err := key.Verify(data, sig); !ok || err != nil {
-		log.Info("Verification failed error", "key", fmt.Sprintf("%x", key.KeyId), "error", err)
+		log.Info("Verification failed error", "keyid", keyID(key.KeyId), "error", err)
 		return errors.New("signature could not be verified")
 	}
 	return nil
+}
+
+// keyID turns a binary minisign key ID into a hex string.
+// Note: key IDs are printed in reverse byte order.
+func keyID(id [8]byte) string {
+	var rev [8]byte
+	for i := range id {
+		rev[len(rev)-1-i] = id[i]
+	}
+	return fmt.Sprintf("%X", rev)
 }
