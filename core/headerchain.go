@@ -166,7 +166,16 @@ func (hc *HeaderChain) writeHeaders(headers []*types.Header) (result *headerWrit
 
 	batch := hc.chainDb.NewBatch()
 	for i, header := range headers {
-		hash, number := header.Hash(), header.Number.Uint64()
+		var hash common.Hash
+		// The headers have already been validated at this point, so we already
+		// know that it's a contiguous chain, where
+		// headers[i].Hash() == headers[i+1].ParentHash
+		if i < len(headers)-1 {
+			hash = headers[i+1].ParentHash
+		} else {
+			hash = header.Hash()
+		}
+		number := header.Number.Uint64()
 		newTD.Add(newTD, header.Difficulty)
 
 		// If the header is already known, skip it, otherwise store
