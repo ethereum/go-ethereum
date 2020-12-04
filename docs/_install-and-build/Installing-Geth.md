@@ -197,7 +197,7 @@ The Chocolatey package manager provides an easy way to get the required build to
 
 Then open an Administrator command prompt and install the build tools you need:
 
-```shell
+```
 C:\Windows\system32> choco install git
 C:\Windows\system32> choco install golang
 C:\Windows\system32> choco install mingw
@@ -207,11 +207,11 @@ Installing these packages sets up the path environment variables, you need to op
 
 The following steps don't need Administrator privileges. First create and set up a Go workspace directory layout, then clone the source and build it.
 
-```shell
+```
 C:\Users\xxx> mkdir src\github.com\ethereum
 C:\Users\xxx> git clone https://github.com/ethereum/go-ethereum src\github.com\ethereum\go-ethereum
 C:\Users\xxx> cd src\github.com\ethereum\go-ethereum
-C:\Users\xxx> go get -u -v golang.org/x/net/context
+C:\Users\xxx\src\github.com\ethereum\go-ethereum> go get -u -v golang.org/x/net/context
 C:\Users\xxx\src\github.com\ethereum\go-ethereum> go install -v ./cmd/...
 ```
 
