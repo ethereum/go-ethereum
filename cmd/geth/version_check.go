@@ -23,6 +23,7 @@ import (
 	"io/ioutil"
 	"net/http"
 	"regexp"
+	"strings"
 
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/jedisct1/go-minisign"
@@ -110,6 +111,9 @@ func checkCurrent(url, current string) error {
 
 // fetch makes an HTTP request to the given url and returns the response body
 func fetch(url string) ([]byte, error) {
+	if filep := strings.TrimPrefix(url, "file://"); filep != url {
+		return ioutil.ReadFile(filep)
+	}
 	res, err := http.Get(url)
 	if err != nil {
 		return nil, err
