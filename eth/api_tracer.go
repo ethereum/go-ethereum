@@ -24,7 +24,6 @@ import (
 	"fmt"
 	"io/ioutil"
 	"os"
-	"runtime"
 	"sync"
 	"time"
 
@@ -61,7 +60,6 @@ type TraceConfig struct {
 	Tracer  *string
 	Timeout *string
 	Reexec  *uint64
-	Threads *uint64
 }
 
 // StdTraceConfig holds extra parameters to standard-json trace functions.
@@ -187,10 +185,8 @@ func (api *PrivateDebugAPI) traceChain(ctx context.Context, start, end *types.Bl
 	// Execute all the transaction contained within the chain concurrently for each block
 	blocks := int(end.NumberU64() - origin)
 
-	threads := runtime.NumCPU()
-	if config != nil && config.Threads != nil {
-		threads = int(*config.Threads)
-	}
+	threads := api.tp.Get()
+	defer api.tp.Put(threads)
 	if threads > blocks {
 		threads = blocks
 	}
@@ -471,10 +467,8 @@ func (api *PrivateDebugAPI) traceBlock(ctx context.Context, block *types.Block, 
 		pend = new(sync.WaitGroup)
 		jobs = make(chan *txTraceTask, len(txs))
 	)
-	threads := runtime.NumCPU()
-	if config != nil && config.Threads != nil {
-		threads = int(*config.Threads)
-	}
+	threads := api.tp.Get()
+	defer api.tp.Put(threads)
 	if threads > len(txs) {
 		threads = len(txs)
 	}

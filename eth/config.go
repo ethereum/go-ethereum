@@ -168,7 +168,8 @@ type Config struct {
 	EnablePreimageRecording bool
 
 	// Miscellaneous options
-	DocRoot string `toml:"-"`
+	DocRoot      string `toml:"-"`
+	TraceThreads int    `toml:"-"`
 
 	// Type of the EWASM interpreter ("" for default)
 	EWASMInterpreter string
