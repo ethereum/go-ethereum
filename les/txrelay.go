@@ -20,9 +20,9 @@ import (
 	"context"
 	"sync"
 
-	"github.com/maticnetwork/bor/common"
-	"github.com/maticnetwork/bor/core/types"
-	"github.com/maticnetwork/bor/rlp"
+	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/core/types"
+	"github.com/ethereum/go-ethereum/rlp"
 )
 
 type ltrInfo struct {
@@ -35,7 +35,7 @@ type lesTxRelay struct {
 	txPending    map[common.Hash]struct{}
 	peerList     []*serverPeer
 	peerStartPos int
-	lock         sync.RWMutex
+	lock         sync.Mutex
 	stop         chan struct{}
 
 	retriever *retrieveManager

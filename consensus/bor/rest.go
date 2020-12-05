@@ -9,7 +9,7 @@ import (
 	"sort"
 	"time"
 
-	"github.com/maticnetwork/bor/log"
+	"github.com/ethereum/go-ethereum/log"
 )
 
 var (

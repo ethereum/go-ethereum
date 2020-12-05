@@ -3,10 +3,11 @@ package ethapi
 import (
 	"context"
 
-	"github.com/maticnetwork/bor/common"
-	"github.com/maticnetwork/bor/core/types"
+	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/core/types"
 )
 
+// GetRootHash returns root hash for given start and end block
 func (s *PublicBlockChainAPI) GetRootHash(ctx context.Context, starBlockNr uint64, endBlockNr uint64) (string, error) {
 	root, err := s.b.GetRootHash(ctx, starBlockNr, endBlockNr)
 	if err != nil {

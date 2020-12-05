@@ -22,8 +22,8 @@ import (
 	"errors"
 	"math/big"
 
-	"github.com/maticnetwork/bor/common"
-	"github.com/maticnetwork/bor/core/types"
+	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/core/types"
 )
 
 // NotFound is returned by API methods if the requested item does not exist.
@@ -150,11 +150,6 @@ type FilterQuery struct {
 	Topics [][]common.Hash
 }
 
-type FilterState struct {
-	Did      uint64
-	Contract common.Address
-}
-
 // LogFilterer provides access to contract log events using a one-off query or continuous
 // event subscription.
 //
@@ -213,4 +208,10 @@ type GasEstimator interface {
 // pending state.
 type PendingStateEventer interface {
 	SubscribePendingTransactions(ctx context.Context, ch chan<- *types.Transaction) (Subscription, error)
+}
+
+// StateSyncFilter state sync filter
+type StateSyncFilter struct {
+	ID       uint64
+	Contract common.Address
 }

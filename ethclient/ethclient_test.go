@@ -25,31 +25,31 @@ import (
 	"testing"
 	"time"
 
-	bor "github.com/maticnetwork/bor"
-	"github.com/maticnetwork/bor/common"
-	"github.com/maticnetwork/bor/consensus/ethash"
-	"github.com/maticnetwork/bor/core"
-	"github.com/maticnetwork/bor/core/rawdb"
-	"github.com/maticnetwork/bor/core/types"
-	"github.com/maticnetwork/bor/crypto"
-	"github.com/maticnetwork/bor/eth"
-	"github.com/maticnetwork/bor/node"
-	"github.com/maticnetwork/bor/params"
+	"github.com/ethereum/go-ethereum"
+	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/consensus/ethash"
+	"github.com/ethereum/go-ethereum/core"
+	"github.com/ethereum/go-ethereum/core/rawdb"
+	"github.com/ethereum/go-ethereum/core/types"
+	"github.com/ethereum/go-ethereum/crypto"
+	"github.com/ethereum/go-ethereum/eth"
+	"github.com/ethereum/go-ethereum/node"
+	"github.com/ethereum/go-ethereum/params"
 )
 
 // Verify that Client implements the ethereum interfaces.
 var (
-	_ = bor.ChainReader(&Client{})
-	_ = bor.TransactionReader(&Client{})
-	_ = bor.ChainStateReader(&Client{})
-	_ = bor.ChainSyncReader(&Client{})
-	_ = bor.ContractCaller(&Client{})
-	_ = bor.GasEstimator(&Client{})
-	_ = bor.GasPricer(&Client{})
-	_ = bor.LogFilterer(&Client{})
-	_ = bor.PendingStateReader(&Client{})
-	// _ = bor.PendingStateEventer(&Client{})
-	_ = bor.PendingContractCaller(&Client{})
+	_ = ethereum.ChainReader(&Client{})
+	_ = ethereum.TransactionReader(&Client{})
+	_ = ethereum.ChainStateReader(&Client{})
+	_ = ethereum.ChainSyncReader(&Client{})
+	_ = ethereum.ContractCaller(&Client{})
+	_ = ethereum.GasEstimator(&Client{})
+	_ = ethereum.GasPricer(&Client{})
+	_ = ethereum.LogFilterer(&Client{})
+	_ = ethereum.PendingStateReader(&Client{})
+	// _ = ethereum.PendingStateEventer(&Client{})
+	_ = ethereum.PendingContractCaller(&Client{})
 )
 
 func TestToFilterArg(t *testing.T) {
@@ -63,13 +63,13 @@ func TestToFilterArg(t *testing.T) {
 
 	for _, testCase := range []struct {
 		name   string
-		input  bor.FilterQuery
+		input  ethereum.FilterQuery
 		output interface{}
 		err    error
 	}{
 		{
 			"without BlockHash",
-			bor.FilterQuery{
+			ethereum.FilterQuery{
 				Addresses: addresses,
 				FromBlock: big.NewInt(1),
 				ToBlock:   big.NewInt(2),
@@ -85,7 +85,7 @@ func TestToFilterArg(t *testing.T) {
 		},
 		{
 			"with nil fromBlock and nil toBlock",
-			bor.FilterQuery{
+			ethereum.FilterQuery{
 				Addresses: addresses,
 				Topics:    [][]common.Hash{},
 			},
@@ -98,8 +98,24 @@ func TestToFilterArg(t *testing.T) {
 			nil,
 		},
 		{
+			"with negative fromBlock and negative toBlock",
+			ethereum.FilterQuery{
+				Addresses: addresses,
+				FromBlock: big.NewInt(-1),
+				ToBlock:   big.NewInt(-1),
+				Topics:    [][]common.Hash{},
+			},
+			map[string]interface{}{
+				"address":   addresses,
+				"fromBlock": "pending",
+				"toBlock":   "pending",
+				"topics":    [][]common.Hash{},
+			},
+			nil,
+		},
+		{
 			"with blockhash",
-			bor.FilterQuery{
+			ethereum.FilterQuery{
 				Addresses: addresses,
 				BlockHash: &blockHash,
 				Topics:    [][]common.Hash{},
@@ -113,7 +129,7 @@ func TestToFilterArg(t *testing.T) {
 		},
 		{
 			"with blockhash and from block",
-			bor.FilterQuery{
+			ethereum.FilterQuery{
 				Addresses: addresses,
 				BlockHash: &blockHash,
 				FromBlock: big.NewInt(1),
@@ -124,7 +140,7 @@ func TestToFilterArg(t *testing.T) {
 		},
 		{
 			"with blockhash and to block",
-			bor.FilterQuery{
+			ethereum.FilterQuery{
 				Addresses: addresses,
 				BlockHash: &blockHash,
 				ToBlock:   big.NewInt(1),
@@ -135,7 +151,7 @@ func TestToFilterArg(t *testing.T) {
 		},
 		{
 			"with blockhash and both from / to block",
-			bor.FilterQuery{
+			ethereum.FilterQuery{
 				Addresses: addresses,
 				BlockHash: &blockHash,
 				FromBlock: big.NewInt(1),
@@ -171,17 +187,18 @@ var (
 func newTestBackend(t *testing.T) (*node.Node, []*types.Block) {
 	// Generate test chain.
 	genesis, blocks := generateTestChain()
-
-	// Start Ethereum service.
-	var ethservice *eth.Ethereum
+	// Create node
 	n, err := node.New(&node.Config{})
-	n.Register(func(ctx *node.ServiceContext) (node.Service, error) {
-		config := &eth.Config{Genesis: genesis}
-		config.Ethash.PowMode = ethash.ModeFake
-		ethservice, err = eth.New(ctx, config)
-		return ethservice, err
-	})
-
+	if err != nil {
+		t.Fatalf("can't create new node: %v", err)
+	}
+	// Create Ethereum Service
+	config := &eth.Config{Genesis: genesis}
+	config.Ethash.PowMode = ethash.ModeFake
+	ethservice, err := eth.New(n, config)
+	if err != nil {
+		t.Fatalf("can't create new ethereum service: %v", err)
+	}
 	// Import the test chain.
 	if err := n.Start(); err != nil {
 		t.Fatalf("can't start test node: %v", err)
@@ -215,7 +232,7 @@ func generateTestChain() (*core.Genesis, []*types.Block) {
 func TestHeader(t *testing.T) {
 	backend, chain := newTestBackend(t)
 	client, _ := backend.Attach()
-	defer backend.Stop()
+	defer backend.Close()
 	defer client.Close()
 
 	tests := map[string]struct {
@@ -259,7 +276,7 @@ func TestHeader(t *testing.T) {
 func TestBalanceAt(t *testing.T) {
 	backend, _ := newTestBackend(t)
 	client, _ := backend.Attach()
-	defer backend.Stop()
+	defer backend.Close()
 	defer client.Close()
 
 	tests := map[string]struct {
@@ -305,7 +322,7 @@ func TestBalanceAt(t *testing.T) {
 func TestTransactionInBlockInterrupted(t *testing.T) {
 	backend, _ := newTestBackend(t)
 	client, _ := backend.Attach()
-	defer backend.Stop()
+	defer backend.Close()
 	defer client.Close()
 
 	ec := NewClient(client)
@@ -323,7 +340,7 @@ func TestTransactionInBlockInterrupted(t *testing.T) {
 func TestChainID(t *testing.T) {
 	backend, _ := newTestBackend(t)
 	client, _ := backend.Attach()
-	defer backend.Stop()
+	defer backend.Close()
 	defer client.Close()
 	ec := NewClient(client)
 
@@ -333,5 +350,21 @@ func TestChainID(t *testing.T) {
 	}
 	if id == nil || id.Cmp(params.AllEthashProtocolChanges.ChainID) != 0 {
 		t.Fatalf("ChainID returned wrong number: %+v", id)
+	}
+}
+
+func TestBlockNumber(t *testing.T) {
+	backend, _ := newTestBackend(t)
+	client, _ := backend.Attach()
+	defer backend.Close()
+	defer client.Close()
+	ec := NewClient(client)
+
+	blockNumber, err := ec.BlockNumber(context.Background())
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if blockNumber != 1 {
+		t.Fatalf("BlockNumber returned wrong number: %d", blockNumber)
 	}
 }

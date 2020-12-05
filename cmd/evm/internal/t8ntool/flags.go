@@ -20,8 +20,8 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/maticnetwork/bor/core/vm"
-	"github.com/maticnetwork/bor/tests"
+	"github.com/ethereum/go-ethereum/core/vm"
+	"github.com/ethereum/go-ethereum/tests"
 	"gopkg.in/urfave/cli.v1"
 )
 
@@ -37,6 +37,15 @@ var (
 	TraceDisableStackFlag = cli.BoolFlag{
 		Name:  "trace.nostack",
 		Usage: "Disable stack output in traces",
+	}
+	TraceDisableReturnDataFlag = cli.BoolFlag{
+		Name:  "trace.noreturndata",
+		Usage: "Disable return data output in traces",
+	}
+	OutputBasedir = cli.StringFlag{
+		Name:  "output.basedir",
+		Usage: "Specifies where output files are placed. Will be created if it does not exist.",
+		Value: "",
 	}
 	OutputAllocFlag = cli.StringFlag{
 		Name: "output.alloc",

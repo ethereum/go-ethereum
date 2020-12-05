@@ -25,13 +25,12 @@ import (
 	"sync/atomic"
 	"time"
 
-	"github.com/maticnetwork/bor/log"
-	"github.com/maticnetwork/bor/node"
-	"github.com/maticnetwork/bor/p2p"
-	"github.com/maticnetwork/bor/p2p/enode"
-	"github.com/maticnetwork/bor/p2p/simulations"
-	"github.com/maticnetwork/bor/p2p/simulations/adapters"
-	"github.com/maticnetwork/bor/rpc"
+	"github.com/ethereum/go-ethereum/log"
+	"github.com/ethereum/go-ethereum/node"
+	"github.com/ethereum/go-ethereum/p2p"
+	"github.com/ethereum/go-ethereum/p2p/enode"
+	"github.com/ethereum/go-ethereum/p2p/simulations"
+	"github.com/ethereum/go-ethereum/p2p/simulations/adapters"
 )
 
 var adapterType = flag.String("adapter", "sim", `node adapter to use (one of "sim", "exec" or "docker")`)
@@ -45,12 +44,14 @@ func main() {
 	log.Root().SetHandler(log.LvlFilterHandler(log.LvlTrace, log.StreamHandler(os.Stderr, log.TerminalFormat(false))))
 
 	// register a single ping-pong service
-	services := map[string]adapters.ServiceFunc{
-		"ping-pong": func(ctx *adapters.ServiceContext) (node.Service, error) {
-			return newPingPongService(ctx.Config.ID), nil
+	services := map[string]adapters.LifecycleConstructor{
+		"ping-pong": func(ctx *adapters.ServiceContext, stack *node.Node) (node.Lifecycle, error) {
+			pps := newPingPongService(ctx.Config.ID)
+			stack.RegisterProtocols(pps.Protocols())
+			return pps, nil
 		},
 	}
-	adapters.RegisterServices(services)
+	adapters.RegisterLifecycles(services)
 
 	// create the NodeAdapter
 	var adapter adapters.NodeAdapter
@@ -110,11 +111,7 @@ func (p *pingPongService) Protocols() []p2p.Protocol {
 	}}
 }
 
-func (p *pingPongService) APIs() []rpc.API {
-	return nil
-}
-
-func (p *pingPongService) Start(server *p2p.Server) error {
+func (p *pingPongService) Start() error {
 	p.log.Info("ping-pong service starting")
 	return nil
 }

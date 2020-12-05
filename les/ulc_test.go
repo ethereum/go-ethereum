@@ -23,9 +23,9 @@ import (
 	"testing"
 	"time"
 
-	"github.com/maticnetwork/bor/crypto"
-	"github.com/maticnetwork/bor/p2p"
-	"github.com/maticnetwork/bor/p2p/enode"
+	"github.com/ethereum/go-ethereum/crypto"
+	"github.com/ethereum/go-ethereum/p2p"
+	"github.com/ethereum/go-ethereum/p2p/enode"
 )
 
 func TestULCAnnounceThresholdLes2(t *testing.T) { testULCAnnounceThreshold(t, 2) }
@@ -138,6 +138,6 @@ func newTestServerPeer(t *testing.T, blocks int, protocol int) (*testServer, *en
 
 // newTestLightPeer creates node with light sync mode
 func newTestLightPeer(t *testing.T, protocol int, ulcServers []string, ulcFraction int) (*testClient, func()) {
-	_, c, teardown := newClientServerEnv(t, 0, protocol, nil, ulcServers, ulcFraction, false, false)
+	_, c, teardown := newClientServerEnv(t, 0, protocol, nil, ulcServers, ulcFraction, false, false, true)
 	return c, teardown
 }

@@ -24,7 +24,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/maticnetwork/bor/light"
+	"github.com/ethereum/go-ethereum/light"
 )
 
 var (

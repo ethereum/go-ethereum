@@ -3,9 +3,9 @@ package ethclient
 import (
 	"context"
 
-	ethereum "github.com/maticnetwork/bor"
-	"github.com/maticnetwork/bor/common"
-	"github.com/maticnetwork/bor/core/types"
+	ethereum "github.com/ethereum/go-ethereum"
+	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/core/types"
 )
 
 // GetRootHash returns the merkle root of the block headers

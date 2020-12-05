@@ -25,12 +25,12 @@ import (
 	"sync/atomic"
 	"time"
 
-	"github.com/maticnetwork/bor/accounts/abi/bind"
-	"github.com/maticnetwork/bor/common"
-	"github.com/maticnetwork/bor/contracts/checkpointoracle"
-	"github.com/maticnetwork/bor/crypto"
-	"github.com/maticnetwork/bor/log"
-	"github.com/maticnetwork/bor/params"
+	"github.com/ethereum/go-ethereum/accounts/abi/bind"
+	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/contracts/checkpointoracle"
+	"github.com/ethereum/go-ethereum/crypto"
+	"github.com/ethereum/go-ethereum/log"
+	"github.com/ethereum/go-ethereum/params"
 )
 
 // CheckpointOracle is responsible for offering the latest stable checkpoint
@@ -51,16 +51,6 @@ type CheckpointOracle struct {
 
 // New creates a checkpoint oracle handler with given configs and callback.
 func New(config *params.CheckpointOracleConfig, getLocal func(uint64) params.TrustedCheckpoint) *CheckpointOracle {
-	if config == nil {
-		log.Info("Checkpoint registrar is not enabled")
-		return nil
-	}
-	if config.Address == (common.Address{}) || uint64(len(config.Signers)) < config.Threshold {
-		log.Warn("Invalid checkpoint registrar config")
-		return nil
-	}
-	log.Info("Configured checkpoint registrar", "address", config.Address, "signers", len(config.Signers), "threshold", config.Threshold)
-
 	return &CheckpointOracle{
 		config:   config,
 		getLocal: getLocal,
@@ -103,8 +93,11 @@ func (oracle *CheckpointOracle) StableCheckpoint() (*params.TrustedCheckpoint, u
 	// Look it up properly
 	// Retrieve the latest checkpoint from the contract, abort if empty
 	latest, hash, height, err := oracle.contract.Contract().GetLatestCheckpoint(nil)
+	oracle.lastCheckTime = time.Now()
 	if err != nil || (latest == 0 && hash == [32]byte{}) {
-		return nil, 0
+		oracle.lastCheckPointHeight = 0
+		oracle.lastCheckPoint = nil
+		return oracle.lastCheckPoint, oracle.lastCheckPointHeight
 	}
 	local := oracle.getLocal(latest)
 
@@ -116,10 +109,9 @@ func (oracle *CheckpointOracle) StableCheckpoint() (*params.TrustedCheckpoint, u
 	//
 	// In both cases, no stable checkpoint will be returned.
 	if local.HashEqual(hash) {
-		oracle.lastCheckTime = time.Now()
 		oracle.lastCheckPointHeight = height.Uint64()
 		oracle.lastCheckPoint = &local
-		return &local, height.Uint64()
+		return oracle.lastCheckPoint, oracle.lastCheckPointHeight
 	}
 	return nil, 0
 }

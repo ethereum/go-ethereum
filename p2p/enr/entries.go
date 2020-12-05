@@ -21,7 +21,7 @@ import (
 	"io"
 	"net"
 
-	"github.com/maticnetwork/bor/rlp"
+	"github.com/ethereum/go-ethereum/rlp"
 )
 
 // Entry is implemented by known node record entry types.

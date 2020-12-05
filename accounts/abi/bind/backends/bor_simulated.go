@@ -3,9 +3,11 @@ package backends
 import (
 	"context"
 
-	"github.com/maticnetwork/bor/common"
-	"github.com/maticnetwork/bor/core/rawdb"
-	"github.com/maticnetwork/bor/core/types"
+	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/core"
+	"github.com/ethereum/go-ethereum/core/rawdb"
+	"github.com/ethereum/go-ethereum/core/types"
+	"github.com/ethereum/go-ethereum/event"
 )
 
 func (fb *filterBackend) GetBorBlockReceipt(ctx context.Context, hash common.Hash) (*types.Receipt, error) {
@@ -28,4 +30,9 @@ func (fb *filterBackend) GetBorBlockLogs(ctx context.Context, hash common.Hash) 
 	}
 
 	return receipt.Logs, nil
+}
+
+// SubscribeStateSyncEvent subscribes to state sync events
+func (fb *filterBackend) SubscribeStateSyncEvent(ch chan<- core.StateSyncEvent) event.Subscription {
+	return fb.bc.SubscribeStateSyncEvent(ch)
 }

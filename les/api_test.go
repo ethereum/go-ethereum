@@ -28,18 +28,18 @@ import (
 	"testing"
 	"time"
 
-	"github.com/maticnetwork/bor/common"
-	"github.com/maticnetwork/bor/common/hexutil"
-	"github.com/maticnetwork/bor/consensus/ethash"
-	"github.com/maticnetwork/bor/eth"
-	"github.com/maticnetwork/bor/eth/downloader"
-	"github.com/maticnetwork/bor/les/flowcontrol"
-	"github.com/maticnetwork/bor/log"
-	"github.com/maticnetwork/bor/node"
-	"github.com/maticnetwork/bor/p2p/enode"
-	"github.com/maticnetwork/bor/p2p/simulations"
-	"github.com/maticnetwork/bor/p2p/simulations/adapters"
-	"github.com/maticnetwork/bor/rpc"
+	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/common/hexutil"
+	"github.com/ethereum/go-ethereum/consensus/ethash"
+	"github.com/ethereum/go-ethereum/eth"
+	"github.com/ethereum/go-ethereum/eth/downloader"
+	"github.com/ethereum/go-ethereum/les/flowcontrol"
+	"github.com/ethereum/go-ethereum/log"
+	"github.com/ethereum/go-ethereum/node"
+	"github.com/ethereum/go-ethereum/p2p/enode"
+	"github.com/ethereum/go-ethereum/p2p/simulations"
+	"github.com/ethereum/go-ethereum/p2p/simulations/adapters"
+	"github.com/ethereum/go-ethereum/rpc"
 	"github.com/mattn/go-colorable"
 )
 
@@ -55,7 +55,7 @@ func TestMain(m *testing.M) {
 	log.Root().SetHandler(log.LvlFilterHandler(log.Lvl(*loglevel), log.StreamHandler(colorable.NewColorableStderr(), log.TerminalFormat(true))))
 	// register the Delivery service which will run as a devp2p
 	// protocol when using the exec adapter
-	adapters.RegisterServices(services)
+	adapters.RegisterLifecycles(services)
 	os.Exit(m.Run())
 }
 
@@ -107,7 +107,7 @@ func testCapacityAPI(t *testing.T, clientCount int) {
 			t.Fatalf("Failed to obtain rpc client: %v", err)
 		}
 		headNum, headHash := getHead(ctx, t, serverRpcClient)
-		minCap, freeCap, totalCap := getCapacityInfo(ctx, t, serverRpcClient)
+		minCap, totalCap := getCapacityInfo(ctx, t, serverRpcClient)
 		testCap := totalCap * 3 / 4
 		t.Logf("Server testCap: %d  minCap: %d  head number: %d  head hash: %064x\n", testCap, minCap, headNum, headHash)
 		reqMinCap := uint64(float64(testCap) * minRelCap / (minRelCap + float64(len(clients)-1)))
@@ -202,7 +202,7 @@ func testCapacityAPI(t *testing.T, clientCount int) {
 
 		weights := make([]float64, len(clients))
 		for c := 0; c < 5; c++ {
-			setCapacity(ctx, t, serverRpcClient, clients[freeIdx].ID(), freeCap)
+			setCapacity(ctx, t, serverRpcClient, clients[freeIdx].ID(), minCap)
 			freeIdx = rand.Intn(len(clients))
 			var sum float64
 			for i := range clients {
@@ -214,7 +214,7 @@ func testCapacityAPI(t *testing.T, clientCount int) {
 				sum += weights[i]
 			}
 			for i, client := range clients {
-				weights[i] *= float64(testCap-freeCap-100) / sum
+				weights[i] *= float64(testCap-minCap-100) / sum
 				capacity := uint64(weights[i])
 				if i != freeIdx && capacity < getCapacity(ctx, t, serverRpcClient, client.ID()) {
 					setCapacity(ctx, t, serverRpcClient, client.ID(), capacity)
@@ -227,7 +227,7 @@ func testCapacityAPI(t *testing.T, clientCount int) {
 					setCapacity(ctx, t, serverRpcClient, client.ID(), capacity)
 				}
 			}
-			weights[freeIdx] = float64(freeCap)
+			weights[freeIdx] = float64(minCap)
 			for i := range clients {
 				weights[i] /= float64(testCap)
 			}
@@ -247,7 +247,7 @@ func testCapacityAPI(t *testing.T, clientCount int) {
 				default:
 				}
 
-				_, _, totalCap = getCapacityInfo(ctx, t, serverRpcClient)
+				_, totalCap = getCapacityInfo(ctx, t, serverRpcClient)
 				if totalCap < testCap {
 					t.Log("Total capacity underrun")
 					close(stop)
@@ -370,7 +370,7 @@ func getCapacity(ctx context.Context, t *testing.T, server *rpc.Client, clientID
 	return uint64(vv)
 }
 
-func getCapacityInfo(ctx context.Context, t *testing.T, server *rpc.Client) (minCap, freeCap, totalCap uint64) {
+func getCapacityInfo(ctx context.Context, t *testing.T, server *rpc.Client) (minCap, totalCap uint64) {
 	var res map[string]interface{}
 	if err := server.CallContext(ctx, &res, "les_serverInfo"); err != nil {
 		t.Fatalf("Failed to query server info: %v", err)
@@ -387,12 +387,11 @@ func getCapacityInfo(ctx context.Context, t *testing.T, server *rpc.Client) (min
 		return uint64(vv)
 	}
 	minCap = decode("minimumCapacity")
-	freeCap = decode("freeClientCapacity")
 	totalCap = decode("totalCapacity")
 	return
 }
 
-var services = adapters.Services{
+var services = adapters.LifecycleConstructors{
 	"lesclient": newLesClientService,
 	"lesserver": newLesServerService,
 }
@@ -414,7 +413,7 @@ func NewNetwork() (*simulations.Network, func(), error) {
 	return net, teardown, nil
 }
 
-func NewAdapter(adapterType string, services adapters.Services) (adapter adapters.NodeAdapter, teardown func(), err error) {
+func NewAdapter(adapterType string, services adapters.LifecycleConstructors) (adapter adapters.NodeAdapter, teardown func(), err error) {
 	teardown = func() {}
 	switch adapterType {
 	case "sim":
@@ -454,7 +453,7 @@ func testSim(t *testing.T, serverCount, clientCount int, serverDir, clientDir []
 
 	for i := range clients {
 		clientconf := adapters.RandomNodeConfig()
-		clientconf.Services = []string{"lesclient"}
+		clientconf.Lifecycles = []string{"lesclient"}
 		if len(clientDir) == clientCount {
 			clientconf.DataDir = clientDir[i]
 		}
@@ -467,7 +466,7 @@ func testSim(t *testing.T, serverCount, clientCount int, serverDir, clientDir []
 
 	for i := range servers {
 		serverconf := adapters.RandomNodeConfig()
-		serverconf.Services = []string{"lesserver"}
+		serverconf.Lifecycles = []string{"lesserver"}
 		if len(serverDir) == serverCount {
 			serverconf.DataDir = serverDir[i]
 		}
@@ -492,26 +491,25 @@ func testSim(t *testing.T, serverCount, clientCount int, serverDir, clientDir []
 	return test(ctx, net, servers, clients)
 }
 
-func newLesClientService(ctx *adapters.ServiceContext) (node.Service, error) {
+func newLesClientService(ctx *adapters.ServiceContext, stack *node.Node) (node.Lifecycle, error) {
 	config := eth.DefaultConfig
 	config.SyncMode = downloader.LightSync
 	config.Ethash.PowMode = ethash.ModeFake
-	return New(ctx.NodeContext, &config)
+	return New(stack, &config)
 }
 
-func newLesServerService(ctx *adapters.ServiceContext) (node.Service, error) {
+func newLesServerService(ctx *adapters.ServiceContext, stack *node.Node) (node.Lifecycle, error) {
 	config := eth.DefaultConfig
 	config.SyncMode = downloader.FullSync
 	config.LightServ = testServerCapacity
 	config.LightPeers = testMaxClients
-	ethereum, err := eth.New(ctx.NodeContext, &config)
+	ethereum, err := eth.New(stack, &config)
 	if err != nil {
 		return nil, err
 	}
-	server, err := NewLesServer(ethereum, &config)
+	_, err = NewLesServer(stack, ethereum, &config)
 	if err != nil {
 		return nil, err
 	}
-	ethereum.AddLesServer(server)
 	return ethereum, nil
 }

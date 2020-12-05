@@ -22,8 +22,8 @@ import (
 	"sync"
 	"time"
 
-	"github.com/maticnetwork/bor/common/mclock"
-	"github.com/maticnetwork/bor/common/prque"
+	"github.com/ethereum/go-ethereum/common/mclock"
+	"github.com/ethereum/go-ethereum/common/prque"
 )
 
 // cmNodeFields are ClientNode fields used by the client manager

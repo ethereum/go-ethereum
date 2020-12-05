@@ -25,14 +25,14 @@ import (
 	"time"
 
 	mapset "github.com/deckarep/golang-set"
-	"github.com/maticnetwork/bor/log"
+	"github.com/ethereum/go-ethereum/log"
 )
 
 // fileCache is a cache of files seen during scan of keystore.
 type fileCache struct {
 	all     mapset.Set // Set of all files from the keystore folder
 	lastMod time.Time  // Last time instance when a file was modified
-	mu      sync.RWMutex
+	mu      sync.Mutex
 }
 
 // scan performs a new scan on the given directory, compares against the already

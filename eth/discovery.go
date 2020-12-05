@@ -17,12 +17,12 @@
 package eth
 
 import (
-	"github.com/maticnetwork/bor/core"
-	"github.com/maticnetwork/bor/core/forkid"
-	"github.com/maticnetwork/bor/p2p"
-	"github.com/maticnetwork/bor/p2p/dnsdisc"
-	"github.com/maticnetwork/bor/p2p/enode"
-	"github.com/maticnetwork/bor/rlp"
+	"github.com/ethereum/go-ethereum/core"
+	"github.com/ethereum/go-ethereum/core/forkid"
+	"github.com/ethereum/go-ethereum/p2p"
+	"github.com/ethereum/go-ethereum/p2p/dnsdisc"
+	"github.com/ethereum/go-ethereum/p2p/enode"
+	"github.com/ethereum/go-ethereum/rlp"
 )
 
 // ethEntry is the "eth" ENR entry which advertises eth protocol
@@ -60,7 +60,8 @@ func (eth *Ethereum) startEthEntryUpdate(ln *enode.LocalNode) {
 }
 
 func (eth *Ethereum) currentEthEntry() *ethEntry {
-	return &ethEntry{ForkID: forkid.NewID(eth.blockchain)}
+	return &ethEntry{ForkID: forkid.NewID(eth.blockchain.Config(), eth.blockchain.Genesis().Hash(),
+		eth.blockchain.CurrentHeader().Number.Uint64())}
 }
 
 // setupDiscovery creates the node discovery source for the eth protocol.

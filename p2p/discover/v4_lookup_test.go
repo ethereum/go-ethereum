@@ -23,10 +23,10 @@ import (
 	"sort"
 	"testing"
 
-	"github.com/maticnetwork/bor/crypto"
-	"github.com/maticnetwork/bor/p2p/discover/v4wire"
-	"github.com/maticnetwork/bor/p2p/enode"
-	"github.com/maticnetwork/bor/p2p/enr"
+	"github.com/ethereum/go-ethereum/crypto"
+	"github.com/ethereum/go-ethereum/p2p/discover/v4wire"
+	"github.com/ethereum/go-ethereum/p2p/enode"
+	"github.com/ethereum/go-ethereum/p2p/enr"
 )
 
 func TestUDPv4_Lookup(t *testing.T) {
@@ -34,7 +34,7 @@ func TestUDPv4_Lookup(t *testing.T) {
 	test := newUDPTest(t)
 
 	// Lookup on empty table returns no nodes.
-	targetKey, _ := decodePubkey(crypto.S256(), lookupTestnet.target)
+	targetKey, _ := decodePubkey(crypto.S256(), lookupTestnet.target[:])
 	if results := test.udp.LookupPubkey(targetKey); len(results) > 0 {
 		t.Fatalf("lookup on empty table returned %d results: %#v", len(results), results)
 	}
@@ -52,13 +52,14 @@ func TestUDPv4_Lookup(t *testing.T) {
 	// Answer lookup packets.
 	serveTestnet(test, lookupTestnet)
 
-// checkLookupResults verifies that the results of a lookup are the closest nodes to
-// the testnet's target.
-func checkLookupResults(t *testing.T, tn *preminedTestnet, results []*enode.Node) {
-	t.Helper()
+	// Verify result nodes.
+	results := <-resultC
 	t.Logf("results:")
 	for _, e := range results {
-		t.Logf("  ld=%d, %x", enode.LogDist(tn.target.id(), e.ID()), e.ID().Bytes())
+		t.Logf("  ld=%d, %x", enode.LogDist(lookupTestnet.target.id(), e.ID()), e.ID().Bytes())
+	}
+	if len(results) != bucketSize {
+		t.Errorf("wrong number of results: got %d, want %d", len(results), bucketSize)
 	}
 	checkLookupResults(t, lookupTestnet, results)
 }
@@ -278,17 +279,21 @@ func (tn *preminedTestnet) nodesAtDistance(dist int) []v4wire.Node {
 	return result
 }
 
-func (tn *preminedTestnet) neighborsAtDistance(base *enode.Node, distance uint, elems int) []*enode.Node {
-	nodes := nodesByDistance{target: base.ID()}
+func (tn *preminedTestnet) neighborsAtDistances(base *enode.Node, distances []uint, elems int) []*enode.Node {
+	var result []*enode.Node
 	for d := range lookupTestnet.dists {
 		for i := range lookupTestnet.dists[d] {
 			n := lookupTestnet.node(d, i)
-			if uint(enode.LogDist(n.ID(), base.ID())) == distance {
-				nodes.push(wrapNode(n), elems)
+			d := enode.LogDist(base.ID(), n.ID())
+			if containsUint(uint(d), distances) {
+				result = append(result, n)
+				if len(result) >= elems {
+					return result
+				}
 			}
 		}
 	}
-	return unwrapNodes(nodes.entries)
+	return result
 }
 
 func (tn *preminedTestnet) closest(n int) (nodes []*enode.Node) {

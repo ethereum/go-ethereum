@@ -22,17 +22,17 @@ import (
 	"math/big"
 	"strings"
 
-	"github.com/maticnetwork/bor/accounts/abi"
-	"github.com/maticnetwork/bor/accounts/abi/bind"
-	"github.com/maticnetwork/bor/accounts/keystore"
-	"github.com/maticnetwork/bor/common"
-	"github.com/maticnetwork/bor/core/types"
+	"github.com/ethereum/go-ethereum/accounts/abi"
+	"github.com/ethereum/go-ethereum/accounts/abi/bind"
+	"github.com/ethereum/go-ethereum/accounts/keystore"
+	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/core/types"
 )
 
 // Signer is an interface defining the callback when a contract requires a
 // method to sign the transaction before submission.
 type Signer interface {
-	Sign(*Address, *Transaction) (tx *Transaction, _ error)
+	Sign(addr *Address, unsignedTx *Transaction) (tx *Transaction, _ error)
 }
 
 type MobileSigner struct {
@@ -171,20 +171,12 @@ func (c *BoundContract) GetDeployer() *Transaction {
 // Call invokes the (constant) contract method with params as input values and
 // sets the output to result.
 func (c *BoundContract) Call(opts *CallOpts, out *Interfaces, method string, args *Interfaces) error {
-	if len(out.objects) == 1 {
-		result := out.objects[0]
-		if err := c.contract.Call(&opts.opts, result, method, args.objects...); err != nil {
-			return err
-		}
-		out.objects[0] = result
-	} else {
-		results := make([]interface{}, len(out.objects))
-		copy(results, out.objects)
-		if err := c.contract.Call(&opts.opts, &results, method, args.objects...); err != nil {
-			return err
-		}
-		copy(out.objects, results)
+	results := make([]interface{}, len(out.objects))
+	copy(results, out.objects)
+	if err := c.contract.Call(&opts.opts, &results, method, args.objects...); err != nil {
+		return err
 	}
+	copy(out.objects, results)
 	return nil
 }
 

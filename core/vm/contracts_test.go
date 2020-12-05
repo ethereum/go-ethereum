@@ -21,16 +21,16 @@ import (
 	"encoding/json"
 	"fmt"
 	"io/ioutil"
-	"math/big"
 	"testing"
 	"time"
 
-	"github.com/maticnetwork/bor/common"
+	"github.com/ethereum/go-ethereum/common"
 )
 
 // precompiledTest defines the input/output pairs for precompiled contract tests.
 type precompiledTest struct {
 	Input, Expected string
+	Gas             uint64
 	Name            string
 	NoBenchmark     bool // Benchmark primarily the worst-cases
 }
@@ -43,7 +43,7 @@ type precompiledFailureTest struct {
 	Name          string
 }
 
-var allPrecompiles = PrecompiledContractsYoloV1
+var allPrecompiles = PrecompiledContractsYoloV2
 
 // EIP-152 test vectors
 var blake2FMalformedInputTests = []precompiledFailureTest{
@@ -72,13 +72,15 @@ var blake2FMalformedInputTests = []precompiledFailureTest{
 func testPrecompiled(addr string, test precompiledTest, t *testing.T) {
 	p := allPrecompiles[common.HexToAddress(addr)]
 	in := common.Hex2Bytes(test.Input)
-	contract := NewContract(AccountRef(common.HexToAddress("1337")),
-		nil, new(big.Int), p.RequiredGas(in))
-	t.Run(fmt.Sprintf("%s-Gas=%d", test.Name, contract.Gas), func(t *testing.T) {
-		if res, err := RunPrecompiledContract(p, in, contract); err != nil {
+	gas := p.RequiredGas(in)
+	t.Run(fmt.Sprintf("%s-Gas=%d", test.Name, gas), func(t *testing.T) {
+		if res, _, err := RunPrecompiledContract(p, in, gas); err != nil {
 			t.Error(err)
 		} else if common.Bytes2Hex(res) != test.Expected {
 			t.Errorf("Expected %v, got %v", test.Expected, common.Bytes2Hex(res))
+		}
+		if expGas := test.Gas; expGas != gas {
+			t.Errorf("%v: gas wrong, expected %d, got %d", test.Name, expGas, gas)
 		}
 		// Verify that the precompile did not touch the input buffer
 		exp := common.Hex2Bytes(test.Input)
@@ -91,10 +93,10 @@ func testPrecompiled(addr string, test precompiledTest, t *testing.T) {
 func testPrecompiledOOG(addr string, test precompiledTest, t *testing.T) {
 	p := allPrecompiles[common.HexToAddress(addr)]
 	in := common.Hex2Bytes(test.Input)
-	contract := NewContract(AccountRef(common.HexToAddress("1337")),
-		nil, new(big.Int), p.RequiredGas(in)-1)
-	t.Run(fmt.Sprintf("%s-Gas=%d", test.Name, contract.Gas), func(t *testing.T) {
-		_, err := RunPrecompiledContract(p, in, contract)
+	gas := p.RequiredGas(in) - 1
+
+	t.Run(fmt.Sprintf("%s-Gas=%d", test.Name, gas), func(t *testing.T) {
+		_, _, err := RunPrecompiledContract(p, in, gas)
 		if err.Error() != "out of gas" {
 			t.Errorf("Expected error [out of gas], got [%v]", err)
 		}
@@ -109,11 +111,9 @@ func testPrecompiledOOG(addr string, test precompiledTest, t *testing.T) {
 func testPrecompiledFailure(addr string, test precompiledFailureTest, t *testing.T) {
 	p := allPrecompiles[common.HexToAddress(addr)]
 	in := common.Hex2Bytes(test.Input)
-	contract := NewContract(AccountRef(common.HexToAddress("31337")),
-		nil, new(big.Int), p.RequiredGas(in))
-
+	gas := p.RequiredGas(in)
 	t.Run(test.Name, func(t *testing.T) {
-		_, err := RunPrecompiledContract(p, in, contract)
+		_, _, err := RunPrecompiledContract(p, in, gas)
 		if err.Error() != test.ExpectedError {
 			t.Errorf("Expected error [%v], got [%v]", test.ExpectedError, err)
 		}
@@ -132,8 +132,6 @@ func benchmarkPrecompiled(addr string, test precompiledTest, bench *testing.B) {
 	p := allPrecompiles[common.HexToAddress(addr)]
 	in := common.Hex2Bytes(test.Input)
 	reqGas := p.RequiredGas(in)
-	contract := NewContract(AccountRef(common.HexToAddress("1337")),
-		nil, new(big.Int), reqGas)
 
 	var (
 		res  []byte
@@ -141,23 +139,24 @@ func benchmarkPrecompiled(addr string, test precompiledTest, bench *testing.B) {
 		data = make([]byte, len(in))
 	)
 
-	bench.Run(fmt.Sprintf("%s-Gas=%d", test.Name, contract.Gas), func(bench *testing.B) {
+	bench.Run(fmt.Sprintf("%s-Gas=%d", test.Name, reqGas), func(bench *testing.B) {
 		bench.ReportAllocs()
-		start := time.Now().Nanosecond()
+		start := time.Now()
 		bench.ResetTimer()
 		for i := 0; i < bench.N; i++ {
-			contract.Gas = reqGas
 			copy(data, in)
-			res, err = RunPrecompiledContract(p, data, contract)
+			res, _, err = RunPrecompiledContract(p, data, reqGas)
 		}
 		bench.StopTimer()
-		elapsed := float64(time.Now().Nanosecond() - start)
+		elapsed := uint64(time.Since(start))
 		if elapsed < 1 {
 			elapsed = 1
 		}
 		gasUsed := reqGas * uint64(bench.N)
 		bench.ReportMetric(float64(reqGas), "gas/op")
-		bench.ReportMetric(float64(gasUsed*1000)/elapsed, "mgas/s")
+		// Keep it as uint64, multiply 100 to get two digit float later
+		mgasps := (100 * 1000 * gasUsed) / elapsed
+		bench.ReportMetric(float64(mgasps)/100, "mgas/s")
 		//Check if it is correct
 		if err != nil {
 			bench.Error(err)

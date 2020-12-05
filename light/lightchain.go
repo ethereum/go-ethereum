@@ -26,18 +26,18 @@ import (
 	"sync/atomic"
 	"time"
 
+	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/consensus"
+	"github.com/ethereum/go-ethereum/core"
+	"github.com/ethereum/go-ethereum/core/rawdb"
+	"github.com/ethereum/go-ethereum/core/state"
+	"github.com/ethereum/go-ethereum/core/types"
+	"github.com/ethereum/go-ethereum/ethdb"
+	"github.com/ethereum/go-ethereum/event"
+	"github.com/ethereum/go-ethereum/log"
+	"github.com/ethereum/go-ethereum/params"
+	"github.com/ethereum/go-ethereum/rlp"
 	lru "github.com/hashicorp/golang-lru"
-	"github.com/maticnetwork/bor/common"
-	"github.com/maticnetwork/bor/consensus"
-	"github.com/maticnetwork/bor/core"
-	"github.com/maticnetwork/bor/core/rawdb"
-	"github.com/maticnetwork/bor/core/state"
-	"github.com/maticnetwork/bor/core/types"
-	"github.com/maticnetwork/bor/ethdb"
-	"github.com/maticnetwork/bor/event"
-	"github.com/maticnetwork/bor/log"
-	"github.com/maticnetwork/bor/params"
-	"github.com/maticnetwork/bor/rlp"
 )
 
 var (
@@ -112,7 +112,7 @@ func NewLightChain(odr OdrBackend, config *params.ChainConfig, engine consensus.
 		if header := bc.GetHeaderByHash(hash); header != nil {
 			log.Error("Found bad hash, rewinding chain", "number", header.Number, "hash", header.ParentHash)
 			bc.SetHead(header.Number.Uint64() - 1)
-			log.Error("Chain rewind was successful, resuming normal operation")
+			log.Info("Chain rewind was successful, resuming normal operation")
 		}
 	}
 	return bc, nil
@@ -155,7 +155,11 @@ func (lc *LightChain) loadLastState() error {
 		// Corrupt or empty database, init from scratch
 		lc.Reset()
 	} else {
-		if header := lc.GetHeaderByHash(head); header != nil {
+		header := lc.GetHeaderByHash(head)
+		if header == nil {
+			// Corrupt or empty database, init from scratch
+			lc.Reset()
+		} else {
 			lc.hc.SetCurrentHeader(header)
 		}
 	}
@@ -163,7 +167,6 @@ func (lc *LightChain) loadLastState() error {
 	header := lc.hc.CurrentHeader()
 	headerTd := lc.GetTd(header.Hash(), header.Number.Uint64())
 	log.Info("Loaded most recent local header", "number", header.Number, "hash", header.Hash(), "td", headerTd, "age", common.PrettyAge(time.Unix(int64(header.Time), 0)))
-
 	return nil
 }
 
@@ -431,6 +434,17 @@ func (lc *LightChain) GetTdByHash(hash common.Hash) *big.Int {
 	return lc.hc.GetTdByHash(hash)
 }
 
+// GetHeaderByNumberOdr retrieves the total difficult from the database or
+// network by hash and number, caching it (associated with its hash) if found.
+func (lc *LightChain) GetTdOdr(ctx context.Context, hash common.Hash, number uint64) *big.Int {
+	td := lc.GetTd(hash, number)
+	if td != nil {
+		return td
+	}
+	td, _ = GetTd(ctx, lc.odr, hash, number)
+	return td
+}
+
 // GetHeader retrieves a block header from the database by hash and number,
 // caching it if found.
 func (lc *LightChain) GetHeader(hash common.Hash, number uint64) *types.Header {
@@ -557,12 +571,6 @@ func (lc *LightChain) SubscribeRemovedLogsEvent(ch chan<- core.RemovedLogsEvent)
 	return lc.scope.Track(new(event.Feed).Subscribe(ch))
 }
 
-// SubscribeStateSyncEvent implements the interface of filters.Backend
-// LightChain does not send core.NewStateChangeSyncEvent, so return an empty subscription.
-func (lc *LightChain) SubscribeStateSyncEvent(ch chan<- core.StateSyncEvent) event.Subscription {
-	return lc.scope.Track(new(event.Feed).Subscribe(ch))
-}
-
 // DisableCheckFreq disables header validation. This is used for ultralight mode.
 func (lc *LightChain) DisableCheckFreq() {
 	atomic.StoreInt32(&lc.disableCheckFreq, 1)
@@ -571,4 +579,10 @@ func (lc *LightChain) DisableCheckFreq() {
 // EnableCheckFreq enables header validation.
 func (lc *LightChain) EnableCheckFreq() {
 	atomic.StoreInt32(&lc.disableCheckFreq, 0)
+}
+
+// SubscribeStateSyncEvent implements the interface of filters.Backend
+// LightChain does not send core.NewStateChangeSyncEvent, so return an empty subscription.
+func (lc *LightChain) SubscribeStateSyncEvent(ch chan<- core.StateSyncEvent) event.Subscription {
+	return lc.scope.Track(new(event.Feed).Subscribe(ch))
 }

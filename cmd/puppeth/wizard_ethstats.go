@@ -20,7 +20,7 @@ import (
 	"fmt"
 	"sort"
 
-	"github.com/maticnetwork/bor/log"
+	"github.com/ethereum/go-ethereum/log"
 )
 
 // deployEthstats queries the user for various input on deploying an ethstats

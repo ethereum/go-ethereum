@@ -24,8 +24,8 @@ import (
 	"runtime"
 	"testing"
 
-	"github.com/maticnetwork/bor/crypto"
-	"github.com/maticnetwork/bor/p2p"
+	"github.com/ethereum/go-ethereum/crypto"
+	"github.com/ethereum/go-ethereum/p2p"
 )
 
 // Tests that datadirs can be successfully created, be them manually configured
@@ -85,15 +85,15 @@ func TestIPCPathResolution(t *testing.T) {
 	}{
 		{"", "", false, ""},
 		{"data", "", false, ""},
-		{"", "bor.ipc", false, filepath.Join(os.TempDir(), "bor.ipc")},
-		{"data", "bor.ipc", false, "data/bor.ipc"},
-		{"data", "./bor.ipc", false, "./bor.ipc"},
-		{"data", "/bor.ipc", false, "/bor.ipc"},
+		{"", "geth.ipc", false, filepath.Join(os.TempDir(), "geth.ipc")},
+		{"data", "geth.ipc", false, "data/geth.ipc"},
+		{"data", "./geth.ipc", false, "./geth.ipc"},
+		{"data", "/geth.ipc", false, "/geth.ipc"},
 		{"", "", true, ``},
 		{"data", "", true, ``},
-		{"", "bor.ipc", true, `\\.\pipe\bor.ipc`},
-		{"data", "bor.ipc", true, `\\.\pipe\bor.ipc`},
-		{"data", `\\.\pipe\bor.ipc`, true, `\\.\pipe\bor.ipc`},
+		{"", "geth.ipc", true, `\\.\pipe\geth.ipc`},
+		{"data", "geth.ipc", true, `\\.\pipe\geth.ipc`},
+		{"data", `\\.\pipe\geth.ipc`, true, `\\.\pipe\geth.ipc`},
 	}
 	for i, test := range tests {
 		// Only run when platform/test match

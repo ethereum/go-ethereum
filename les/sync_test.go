@@ -22,11 +22,11 @@ import (
 	"testing"
 	"time"
 
-	"github.com/maticnetwork/bor/accounts/abi/bind"
-	"github.com/maticnetwork/bor/core"
-	"github.com/maticnetwork/bor/crypto"
-	"github.com/maticnetwork/bor/light"
-	"github.com/maticnetwork/bor/params"
+	"github.com/ethereum/go-ethereum/accounts/abi/bind"
+	"github.com/ethereum/go-ethereum/core"
+	"github.com/ethereum/go-ethereum/crypto"
+	"github.com/ethereum/go-ethereum/light"
+	"github.com/ethereum/go-ethereum/params"
 )
 
 // Test light syncing which will download all headers from genesis.
@@ -54,7 +54,7 @@ func testCheckpointSyncing(t *testing.T, protocol int, syncMode int) {
 		}
 	}
 	// Generate 512+4 blocks (totally 1 CHT sections)
-	server, client, tearDown := newClientServerEnv(t, int(config.ChtSize+config.ChtConfirms), protocol, waitIndexers, nil, 0, false, false)
+	server, client, tearDown := newClientServerEnv(t, int(config.ChtSize+config.ChtConfirms), protocol, waitIndexers, nil, 0, false, false, true)
 	defer tearDown()
 
 	expected := config.ChtSize + config.ChtConfirms
@@ -144,7 +144,7 @@ func testMissOracleBackend(t *testing.T, hasCheckpoint bool) {
 		}
 	}
 	// Generate 512+4 blocks (totally 1 CHT sections)
-	server, client, tearDown := newClientServerEnv(t, int(config.ChtSize+config.ChtConfirms), 3, waitIndexers, nil, 0, false, false)
+	server, client, tearDown := newClientServerEnv(t, int(config.ChtSize+config.ChtConfirms), 3, waitIndexers, nil, 0, false, false, true)
 	defer tearDown()
 
 	expected := config.ChtSize + config.ChtConfirms

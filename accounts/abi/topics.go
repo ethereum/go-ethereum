@@ -23,8 +23,8 @@ import (
 	"math/big"
 	"reflect"
 
-	"github.com/maticnetwork/bor/common"
-	"github.com/maticnetwork/bor/crypto"
+	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/crypto"
 )
 
 // MakeTopics converts a filter query argument list into a filter topic set.
@@ -102,7 +102,7 @@ func genIntType(rule int64, size uint) []byte {
 	var topic [common.HashLength]byte
 	if rule < 0 {
 		// if a rule is negative, we need to put it into two's complement.
-		// extended to common.Hashlength bytes.
+		// extended to common.HashLength bytes.
 		topic = [common.HashLength]byte{255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255}
 	}
 	for i := uint(0); i < size; i++ {
@@ -120,7 +120,7 @@ func ParseTopics(out interface{}, fields Arguments, topics []common.Hash) error 
 		})
 }
 
-// ParseTopicsIntoMap converts the indexed topic field-value pairs into map key-value pairs
+// ParseTopicsIntoMap converts the indexed topic field-value pairs into map key-value pairs.
 func ParseTopicsIntoMap(out map[string]interface{}, fields Arguments, topics []common.Hash) error {
 	return parseTopicWithSetter(fields, topics,
 		func(arg Argument, reconstr interface{}) {
