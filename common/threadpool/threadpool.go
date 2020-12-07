@@ -35,14 +35,18 @@ func NewThreadPool(maxThreads int) *ThreadPool {
 	return &tp
 }
 
-// Get requests threads from the pool.
+// Get requests `tasks` amount of threads from the pool.
 // If the pool is not used much, a caller can get up to 1/3 of the available threads.
 // Otherwise the caller gets only a single thread (once available).
+// If the pool has more than `tasks` threads available it will only return `tasks`.
 // It uses len(chan) which is a bit racy but shouldn't matter to much.
-func (t *ThreadPool) Get() int {
+func (t *ThreadPool) Get(tasks int) int {
 	threads := 1
 	if len(t.pool) > t.max/2 {
 		threads = len(t.pool) / 3
+	}
+	if tasks > 0 && threads > tasks {
+		threads = tasks
 	}
 	for i := 0; i < threads; i++ {
 		<-t.pool

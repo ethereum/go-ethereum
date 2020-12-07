@@ -24,16 +24,24 @@ import (
 
 func TestThreadPool(t *testing.T) {
 	tp := NewThreadPool(10)
-	a := tp.Get()
-	b := tp.Get()
-	c := tp.Get()
-	d := tp.Get()
-	e := tp.Get()
-	f := tp.Get()
-	g := tp.Get()
+	a := tp.Get(5)
+	b := tp.Get(4)
+	c := tp.Get(5)
+	d := tp.Get(1)
+	e := tp.Get(0)
+	f := tp.Get(0)
+	g := tp.Get(0)
 	tp.Put(1)
-	tp.Get()
+	tp.Get(0)
 	fmt.Printf("%v %v %v %v %v %v %v", a, b, c, d, e, f, g)
+}
+
+func TestMaxTasks(t *testing.T) {
+	tp := NewThreadPool(10)
+	a := tp.Get(1)
+	if a != 1 {
+		t.Fail()
+	}
 }
 
 func TestThreadPoolRandom(t *testing.T) {
@@ -42,7 +50,7 @@ func TestThreadPoolRandom(t *testing.T) {
 	wg.Add(1000)
 	for i := 0; i < 1000; i++ {
 		go func(i int) {
-			a := tp.Get()
+			a := tp.Get(0)
 			fmt.Printf("%v has %v threads\n", i, a)
 			tp.Put(a)
 			wg.Done()
@@ -57,7 +65,7 @@ func BenchmarkThreadPool(t *testing.B) {
 	wg.Add(t.N)
 	for i := 0; i < t.N; i++ {
 		go func(i int) {
-			a := tp.Get()
+			a := tp.Get(0)
 			tp.Put(a)
 			wg.Done()
 		}(i)
