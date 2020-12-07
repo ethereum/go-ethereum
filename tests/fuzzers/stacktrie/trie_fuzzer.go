@@ -148,6 +148,8 @@ func (f *fuzzer) fuzz() int {
 		vals        kvs
 		useful      bool
 		maxElements = 10000
+		// operate on unique keys only
+		keys = make(map[string]struct{})
 	)
 	// Fill the trie with elements
 	for i := 0; !f.exhausted && i < maxElements; i++ {
@@ -158,6 +160,11 @@ func (f *fuzzer) fuzz() int {
 			// thus 'deletion' which is not supported on stacktrie
 			break
 		}
+		if _, present := keys[string(k)]; present {
+			// This key is a duplicate, ignore it
+			continue
+		}
+		keys[string(k)] = struct{}{}
 		vals = append(vals, kv{k: k, v: v})
 		trieA.Update(k, v)
 		useful = true

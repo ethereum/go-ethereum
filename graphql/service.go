@@ -17,11 +17,43 @@
 package graphql
 
 import (
+	"encoding/json"
+	"net/http"
+
 	"github.com/ethereum/go-ethereum/internal/ethapi"
 	"github.com/ethereum/go-ethereum/node"
 	"github.com/graph-gophers/graphql-go"
-	"github.com/graph-gophers/graphql-go/relay"
 )
+
+type handler struct {
+	Schema *graphql.Schema
+}
+
+func (h handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
+	var params struct {
+		Query         string                 `json:"query"`
+		OperationName string                 `json:"operationName"`
+		Variables     map[string]interface{} `json:"variables"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&params); err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+
+	response := h.Schema.Exec(r.Context(), params.Query, params.OperationName, params.Variables)
+	responseJSON, err := json.Marshal(response)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	if len(response.Errors) > 0 {
+		w.WriteHeader(http.StatusBadRequest)
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	w.Write(responseJSON)
+
+}
 
 // New constructs a new GraphQL service instance.
 func New(stack *node.Node, backend ethapi.Backend, cors, vhosts []string) error {
@@ -41,7 +73,7 @@ func newHandler(stack *node.Node, backend ethapi.Backend, cors, vhosts []string)
 	if err != nil {
 		return err
 	}
-	h := &relay.Handler{Schema: s}
+	h := handler{Schema: s}
 	handler := node.NewHTTPHandlerStack(h, cors, vhosts)
 
 	stack.RegisterHandler("GraphQL UI", "/graphql/ui", GraphiQL{})

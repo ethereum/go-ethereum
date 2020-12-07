@@ -541,6 +541,7 @@ var (
 			if err := _{{$contract.Type}}.contract.UnpackLog(event, "{{.Original.Name}}", log); err != nil {
 				return nil, err
 			}
+			event.Raw = log
 			return event, nil
 		}
 
