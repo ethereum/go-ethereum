@@ -16,25 +16,18 @@
 
 package threadpool
 
-import (
-	"math"
-)
-
-type Threadpool struct {
+// ThreadPool allows to create a max amount of threads.
+// Users can query how many threads they are allowed to create.
+type ThreadPool struct {
 	pool chan struct{}
 	max  int
-	add  int
 }
 
-func NewThreadPool(maxThreads int) *Threadpool {
-	add := int(math.Log(float64(maxThreads)))
-	if add < 1 {
-		add = 1
-	}
-	tp := Threadpool{
+// NewThreadPool creates a new Threadpool with
+func NewThreadPool(maxThreads int) *ThreadPool {
+	tp := ThreadPool{
 		pool: make(chan struct{}, maxThreads),
 		max:  maxThreads,
-		add:  add,
 	}
 	for i := 0; i < maxThreads; i++ {
 		tp.pool <- struct{}{}
@@ -46,7 +39,7 @@ func NewThreadPool(maxThreads int) *Threadpool {
 // If the pool is not used much, a caller can get up to 1/3 of the available threads.
 // Otherwise the caller gets only a single thread (once available).
 // It uses len(chan) which is a bit racy but shouldn't matter to much.
-func (t *Threadpool) Get() int {
+func (t *ThreadPool) Get() int {
 	threads := 1
 	if len(t.pool) > t.max/2 {
 		threads = len(t.pool) / 3
@@ -58,7 +51,7 @@ func (t *Threadpool) Get() int {
 }
 
 // Put returns n threads back to the pool.
-func (t *Threadpool) Put(threads int) {
+func (t *ThreadPool) Put(threads int) {
 	for i := 0; i < threads; i++ {
 		t.pool <- struct{}{}
 	}

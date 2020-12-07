@@ -306,7 +306,7 @@ func (api *PublicDebugAPI) DumpBlock(blockNr rpc.BlockNumber) (state.Dump, error
 // the private debugging endpoint.
 type PrivateDebugAPI struct {
 	eth *Ethereum
-	tp  *threadpool.Threadpool
+	tp  *threadpool.ThreadPool
 }
 
 // NewPrivateDebugAPI creates a new API definition for the full node-related
