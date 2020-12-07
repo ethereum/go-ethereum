@@ -12,11 +12,13 @@ pre code {
 }
 
 code {
-    color: #7b8a8b;
+    color: #4b5a5b;
     background-color: #ecf0f1;
     overflow-x: scroll;
     overflow-y: hidden;
 }
+/* Darken down code highlighting */
+.highlight { color: #4b5a5b } /* Name */
 
 a code {
     color: #18bc9c;
