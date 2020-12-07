@@ -398,6 +398,7 @@ func TestAddress_Format(t *testing.T) {
 		},
 		{
 			name: "printf-s",
+			//lint:ignore S1025 intentionally calling Sprintf instead of String here
 			out:  fmt.Sprintf("%s", addr),
 			want: "0xB26f2b342AAb24BCF63ea218c6A9274D30Ab9A15",
 		},
@@ -474,6 +475,7 @@ func TestHash_Format(t *testing.T) {
 		},
 		{
 			name: "printf-s",
+			//lint:ignore S1025 intentionally calling Sprintf instead of String here
 			out:  fmt.Sprintf("%s", hash),
 			want: "0xb26f2b342aab24bcf63ea218c6a9274d30ab9a15a218c6a9274d30ab9a151000",
 		},
