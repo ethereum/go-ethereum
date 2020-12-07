@@ -43,6 +43,21 @@ func testNode(b byte) *enode.Node {
 	n, _ := enode.New(dummyIdentity{b}, r)
 	return n
 }
+
+func uint16FieldEnc(field interface{}) ([]byte, error) {
+	if u, ok := field.(uint16); ok {
+		enc, err := rlp.EncodeToBytes(&u)
+		return enc, err
+	}
+	return nil, errors.New("invalid field type")
+}
+
+func uint16FieldDec(enc []byte) (interface{}, error) {
+	var u uint16
+	err := rlp.DecodeBytes(enc, &u)
+	return u, err
+}
+
 func uint64FieldEnc(field interface{}) ([]byte, error) {
 	if u, ok := field.(uint64); ok {
 		enc, err := rlp.EncodeToBytes(&u)
@@ -55,17 +70,6 @@ func uint64FieldDec(enc []byte) (interface{}, error) {
 	var u uint64
 	err := rlp.DecodeBytes(enc, &u)
 	return u, err
-}
-
-func stringFieldEnc(field interface{}) ([]byte, error) {
-	if s, ok := field.(string); ok {
-		return []byte(s), nil
-	}
-	return nil, errors.New("invalid field type")
-}
-
-func stringFieldDec(enc []byte) (interface{}, error) {
-	return string(enc), nil
 }
 
 func testSetup(flagPersist []bool, fieldType []reflect.Type) (*nodestate.Setup, []nodestate.Flags, []nodestate.Field) {
@@ -81,10 +85,10 @@ func testSetup(flagPersist []bool, fieldType []reflect.Type) (*nodestate.Setup, 
 	fields := make([]nodestate.Field, len(fieldType))
 	for i, ftype := range fieldType {
 		switch ftype {
+		case reflect.TypeOf(uint16(0)):
+			fields[i] = setup.NewPersistentField(fmt.Sprintf("field-%d", i), ftype, uint16FieldEnc, uint16FieldDec)
 		case reflect.TypeOf(uint64(0)):
 			fields[i] = setup.NewPersistentField(fmt.Sprintf("field-%d", i), ftype, uint64FieldEnc, uint64FieldDec)
-		case reflect.TypeOf(""):
-			fields[i] = setup.NewPersistentField(fmt.Sprintf("field-%d", i), ftype, stringFieldEnc, stringFieldDec)
 		default:
 			fields[i] = setup.NewField(fmt.Sprintf("field-%d", i), ftype)
 		}
@@ -260,8 +264,8 @@ func (f *fuzzer) fuzz() int {
 					if uv, ok := v.(uint64); ok {
 						vv = 256 + uint16(byte(uv))
 					}
-					if sv, ok := v.(string); ok {
-						vv = 512 + uint16(sv[0])
+					if uv, ok := v.(uint16); ok {
+						vv = 512 + uint16(byte(uv))
 					}
 					offState[int(n.ID()[0])].fields[fieldIdx] = vv
 					return
@@ -276,8 +280,7 @@ func (f *fuzzer) fuzz() int {
 					if u, ok := newValue.(uint64); ok {
 						j = int(u%7) + 1
 					} else {
-						s := newValue.(string)
-						j = int(s[0])%7 + 1
+						j = int(u%7) + 1
 					}
 				}
 				runsub(n, fieldSubs[fieldIdx].ops[j])
@@ -341,7 +344,7 @@ func (f *fuzzer) fuzz() int {
 				} else {
 					ns.SetState(nn, set, nodestate.Flags{}, timeout)
 				}
-			case 2: // set field (nil or uint64/string value)
+			case 2: // set field (nil or uint16/uint64 value)
 				set := fields[u%fieldCount]
 				u /= fieldCount
 				vtype := u % 4
@@ -349,10 +352,9 @@ func (f *fuzzer) fuzz() int {
 				var value interface{}
 				switch vtype {
 				case 0:
-					value = uint64(byte(u))
+					value = uint16(byte(u))
 				case 1:
-					s := string([]byte{byte(u)})
-					value = s
+					value = uint64(byte(u))
 				default: // use nil with 50% chance
 				}
 				if sub {
