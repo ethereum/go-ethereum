@@ -161,8 +161,8 @@ func New(stack *node.Node, config *eth.Config) (*LightEthereum, error) {
 
 	leth.ApiBackend = &LesApiBackend{stack.Config().ExtRPCEnabled(), leth, nil}
 	gpoParams := config.GPO
-	if gpoParams.DefaultGasPrice == nil {
-		gpoParams.DefaultGasPrice = config.Miner.GasPrice
+	if gpoParams.Default == nil {
+		gpoParams.Default = config.Miner.GasPrice
 	}
 	if gpoParams.DefaultFeeCap == nil {
 		gpoParams.DefaultFeeCap = config.Miner.GasPrice

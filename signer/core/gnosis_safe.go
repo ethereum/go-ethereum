@@ -77,11 +77,12 @@ func (tx *GnosisSafeTx) ToTypedData() TypedData {
 // ArgsForValidation returns a SendTxArgs struct, which can be used for the
 // common validations, e.g. look up 4byte destinations
 func (tx *GnosisSafeTx) ArgsForValidation() *SendTxArgs {
+	gasPrice := hexutil.Big(tx.GasPrice)
 	args := &SendTxArgs{
 		From:     tx.Safe,
 		To:       &tx.To,
 		Gas:      hexutil.Uint64(tx.SafeTxGas.Uint64()),
-		GasPrice: hexutil.Big(tx.GasPrice),
+		GasPrice: &gasPrice,
 		Value:    hexutil.Big(tx.Value),
 		Nonce:    hexutil.Uint64(tx.Nonce.Uint64()),
 		Data:     tx.Data,

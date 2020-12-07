@@ -206,8 +206,8 @@ func New(stack *node.Node, config *Config) (*Ethereum, error) {
 
 	eth.APIBackend = &EthAPIBackend{stack.Config().ExtRPCEnabled(), eth, nil}
 	gpoParams := config.GPO
-	if gpoParams.DefaultGasPrice == nil {
-		gpoParams.DefaultGasPrice = config.Miner.GasPrice
+	if gpoParams.Default == nil {
+		gpoParams.Default = config.Miner.GasPrice
 	}
 	if gpoParams.DefaultFeeCap == nil {
 		gpoParams.DefaultFeeCap = config.Miner.GasPrice

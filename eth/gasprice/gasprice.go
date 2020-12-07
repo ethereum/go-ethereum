@@ -72,8 +72,8 @@ type Oracle struct {
 	cacheLock   sync.RWMutex
 	fetchLock   sync.Mutex
 
-	checkBlocks int
-	percentile  int
+	checkBlocks, maxEmpty, maxBlocks int
+	percentile                       int
 }
 
 // NewOracle returns a new gasprice oracle which can recommend suitable
@@ -104,6 +104,8 @@ func NewOracle(backend OracleBackend, params Config) *Oracle {
 		lastPremium: params.DefaultGasPremium,
 		lastCap:     params.DefaultFeeCap,
 		maxPrice:    maxPrice,
+		maxEmpty:    blocks / 2,
+		maxBlocks:   blocks * 5,
 		checkBlocks: blocks,
 		percentile:  percent,
 	}
