@@ -5,15 +5,16 @@ import (
 	"encoding/binary"
 	"errors"
 	"fmt"
+	"io"
+	"reflect"
+	"time"
+
 	"github.com/ethereum/go-ethereum/common/mclock"
 	"github.com/ethereum/go-ethereum/core/rawdb"
 	"github.com/ethereum/go-ethereum/p2p/enode"
 	"github.com/ethereum/go-ethereum/p2p/enr"
 	"github.com/ethereum/go-ethereum/p2p/nodestate"
 	"github.com/ethereum/go-ethereum/rlp"
-	"io"
-	"reflect"
-	"time"
 )
 
 // The function must return
@@ -107,21 +108,6 @@ func (f *fuzzer) read(size int) []byte {
 	return out
 }
 
-func (f *fuzzer) readSlice(min, max int) []byte {
-	var a uint16
-	binary.Read(f.input, binary.LittleEndian, &a)
-	size := min + int(a)%(max-min)
-	out := make([]byte, size)
-	if _, err := f.input.Read(out); err != nil {
-		f.exhausted = true
-	}
-	return out
-}
-
-func (f *fuzzer) randomBytes(maxlen int) []byte {
-	return f.readSlice(0, maxlen)
-}
-
 func (f *fuzzer) randomByte() byte {
 	d := f.read(1)
 	return d[0]
@@ -142,74 +128,348 @@ func (f *fuzzer) randomInt(max int) int {
 	return int(a % uint16(max))
 }
 
-func (f *fuzzer) randomEnode() *enode.Node {
-	// 50% chance of using an old enode
-	if existing := len(f.enodes); existing > 0 && f.randomBool() {
-		index := f.randomInt(existing - 1)
-		return f.enodes[index]
-	}
-	// Create a new one
-	node := testNode(f.randomByte())
-	f.enodes = append(f.enodes, node)
-	return node
-}
+const (
+	nodeCount  = 64
+	flagCount  = 10
+	fieldCount = 10
+	cbMin      = 500
+	cbMax      = 2500
+	cbLimit    = 10000
+	opRepeat   = 8
+)
 
-func (f *fuzzer) randomField() nodestate.Field {
-	return f.setup.NewField(string(f.randomBytes(100)), reflect.TypeOf(""))
-}
-
-func (f *fuzzer) randomFlags() nodestate.Flags {
-	return f.setup.NewFlag(string(f.randomBytes(100)))
-}
-
-func (f *fuzzer) randomDuration(maxTime time.Duration) time.Duration {
-	var a uint64
-	if err := binary.Read(f.input, binary.LittleEndian, &a); err != nil {
-		f.exhausted = true
-	}
-	a = a % uint64(maxTime)
-	return time.Duration(a)
+type state [nodeCount]struct {
+	mask   uint64
+	fields [fieldCount]uint16
 }
 
 func (f *fuzzer) fuzz() int {
 	mdb, clock := rawdb.NewMemoryDatabase(), &mclock.Simulated{}
-	s, _, _ := testSetup([]bool{false, false, false, false}, nil)
+	fl, fi := make([]bool, flagCount), make([]reflect.Type, fieldCount)
+	for i := range fl {
+		fl[i] = true
+	}
+	for i := range fi {
+		if f.randomBool() {
+			fi[i] = reflect.TypeOf(uint64(0))
+		} else {
+			fi[i] = reflect.TypeOf("")
+		}
+	}
+	s, flags, fields := testSetup(fl, fi)
 	f.setup = s
 	ns := nodestate.NewNodeStateMachine(mdb, []byte("-ns"), clock, s)
-	ns.Start()
-	var stopped bool
-	steps := 0
-	for !f.exhausted {
-		switch f.randomInt(9) {
-		case 0:
-			ns.SetField(f.randomEnode(), f.randomField(), f.randomBytes(4))
-			// The one below panics easily,
-			//ns.SetFieldSub(f.randomEnode(), f.randomField(), f.randomBytes(5))
-		case 1:
-			ns.SetField(f.randomEnode(), f.randomField(), f.randomBytes(4))
-		case 2:
-			ns.AddTimeout(f.randomEnode(), f.randomFlags(), f.randomDuration(200*time.Millisecond))
-		case 3:
-			ns.Operation(func() {
-				//time.Sleep(f.randomDuration(200 * time.Millisecond))
-			})
-		case 4:
-			ns.Persist(f.randomEnode())
-		case 5:
-			if !stopped { // double Stop causes panic, because reasons
-				ns.Stop()
-			}
-			stopped = true
-		case 6:
-			ns.ForEach(f.randomFlags(), f.randomFlags(), func(n *enode.Node, state nodestate.Flags) {})
-		case 7:
-			ns.Persist(f.randomEnode())
-		case 8:
-			ns.GetNode(f.randomEnode().ID())
+	var callbackCount int
+	var ops [256]func(n *enode.Node, sub bool)
+
+	runsub := func(n *enode.Node, op byte) {
+		if fn := ops[op]; fn != nil {
+			fn(n, true)
 		}
-		steps++
 	}
-	if steps > 2 {
+
+	var allFlags nodestate.Flags
+	for _, f := range flags {
+		allFlags = allFlags.Or(f)
+	}
+	var offState state
+
+	var flagSubs [16]struct {
+		a, b, c int
+		ops     [8]byte
+	}
+	shift := byte(42)
+	for i := range flagSubs {
+		x := f.randomInt(flagCount * flagCount * flagCount)
+		flagSubs[i].a = x % flagCount
+		x /= flagCount
+		flagSubs[i].b = x % flagCount
+		x /= flagCount
+		flagSubs[i].c = x % flagCount
+		var subops [8]byte
+		for j := range subops {
+			flagSubs[i].ops[j] = f.randomByte() + shift
+			shift += 77
+		}
+	}
+
+	var fieldSubs [fieldCount]struct {
+		ops [8]byte
+	}
+	for ii := range fields {
+		var subops [8]byte
+		for j := range subops {
+			fieldSubs[ii].ops[j] = f.randomByte() + shift
+			shift += 77
+		}
+	}
+
+	addSubs := func() {
+		ns.SubscribeState(allFlags.Or(s.OfflineFlag()), func(n *enode.Node, oldState, newState nodestate.Flags) {
+			o1, o2 := oldState.HasAll(s.OfflineFlag()), newState.HasAll(s.OfflineFlag())
+			if o1 != o2 {
+				var st nodestate.Flags
+				if o1 {
+					st = newState
+				} else {
+					st = oldState
+				}
+				var m uint64
+				for _, f := range flags {
+					m += m
+					if st.HasAll(f) {
+						m++
+					}
+				}
+				offState[int(n.ID()[0])].mask = m
+			}
+		})
+
+		for _, sub := range flagSubs {
+			ns.SubscribeState(nodestate.MergeFlags(s.OfflineFlag(), flags[sub.a], flags[sub.b], flags[sub.c]), func(n *enode.Node, oldState, newState nodestate.Flags) {
+				if oldState.Or(newState).HasAll(s.OfflineFlag()) {
+					return
+				}
+				callbackCount++
+				if callbackCount > cbLimit {
+					return
+				}
+				j := 0
+				if newState.HasAll(flags[sub.a]) {
+					j += 1
+				}
+				if newState.HasAll(flags[sub.b]) {
+					j += 2
+				}
+				if newState.HasAll(flags[sub.c]) {
+					j += 4
+				}
+				runsub(n, sub.ops[j])
+			})
+		}
+
+		for ii, fi := range fields {
+			fieldIdx := ii
+			ns.SubscribeField(fi, func(n *enode.Node, state nodestate.Flags, oldValue, newValue interface{}) {
+				if state.HasAll(s.OfflineFlag()) {
+					v := oldValue
+					if v == nil {
+						v = newValue
+					}
+					var vv uint16
+					if uv, ok := v.(uint64); ok {
+						vv = 256 + uint16(byte(uv))
+					}
+					if sv, ok := v.(string); ok {
+						vv = 512 + uint16(sv[0])
+					}
+					offState[int(n.ID()[0])].fields[fieldIdx] = vv
+					return
+				}
+
+				callbackCount++
+				if callbackCount > cbLimit {
+					return
+				}
+				var j int
+				if newValue != nil {
+					if u, ok := newValue.(uint64); ok {
+						j = int(u%7) + 1
+					} else {
+						s := newValue.(string)
+						j = int(s[0])%7 + 1
+					}
+				}
+				runsub(n, fieldSubs[fieldIdx].ops[j])
+			})
+		}
+	}
+	for i := range ops {
+		b := f.randomByte()
+		if b+byte(i*137) < 4 {
+			break
+		}
+		b2 := f.randomByte()
+		u := uint(b) + uint(b2)<<8
+		ops[i] = func(n *enode.Node, sub bool) {
+			u := u
+			optype := u % 5
+			u /= 5
+			nn := n
+			shift := u % 4
+			u /= 4
+			if shift < 2 {
+				nodeIdx := n.ID()[0]
+				if shift == 0 {
+					nodeIdx = (nodeIdx + nodeCount - 1) % nodeCount
+				} else {
+					nodeIdx = (nodeIdx + 1) % nodeCount
+				}
+				nn = testNode(nodeIdx)
+			}
+			switch optype {
+			case 0: // set state	(set/reset 2 flags)
+				idx1 := u % flagCount
+				u /= flagCount
+				set1 := u%2 == 1
+				u /= 2
+				idx2 := u % flagCount
+				u /= flagCount
+				set2 := u%2 == 1
+				var set, reset nodestate.Flags
+				if set1 {
+					set = set.Or(flags[idx1])
+				} else {
+					reset = reset.Or(flags[idx1])
+				}
+				if set2 {
+					set = set.Or(flags[idx2])
+				} else {
+					reset = reset.Or(flags[idx2])
+				}
+				if sub {
+					ns.SetStateSub(nn, set, reset, 0)
+				} else {
+					ns.SetState(nn, set, reset, 0)
+				}
+			case 1: // set state	(set 1 flag, add timeout)
+				set := flags[u%flagCount]
+				u /= flagCount
+				timeout := time.Second * time.Duration(u%20)
+				if sub {
+					ns.SetStateSub(nn, set, nodestate.Flags{}, timeout)
+				} else {
+					ns.SetState(nn, set, nodestate.Flags{}, timeout)
+				}
+			case 2: // set field (nil or uint64/string value)
+				set := fields[u%fieldCount]
+				u /= fieldCount
+				vtype := u % 4
+				u /= 4
+				var value interface{}
+				switch vtype {
+				case 0:
+					value = uint64(byte(u))
+				case 1:
+					s := string([]byte{byte(u)})
+					value = s
+				default: // use nil with 50% chance
+				}
+				if sub {
+					ns.SetFieldSub(nn, set, value)
+				} else {
+					ns.SetField(nn, set, value)
+				}
+			case 3: // get/set (copy) field value
+				get := fields[u%fieldCount]
+				u /= fieldCount
+				set := fields[u%fieldCount]
+				value := ns.GetField(nn, get)
+				if sub {
+					ns.SetFieldSub(nn, set, value)
+				} else {
+					ns.SetField(nn, set, value)
+				}
+			case 4: // add timeout to all flags of the node
+				timeout := time.Second * time.Duration(u%20)
+				ns.AddTimeout(nn, allFlags, timeout)
+			}
+		}
+	}
+
+	var l []byte
+	for !f.exhausted && len(l) < 1000 {
+		l = append(l, f.randomByte())
+	}
+	if len(l) == 0 || !f.exhausted {
+		return -1
+	}
+	oplist := make([]byte, len(l)*opRepeat)
+	b := byte(0)
+	for r := 0; r < opRepeat; r++ {
+		for i, o := range l {
+			oplist[r*len(l)+i] = o + b
+		}
+		b += 81
+	}
+	ll := len(oplist) / 2
+	oplist1, oplist2 := oplist[:ll], oplist[ll:]
+
+	timers := clock.ActiveTimers()
+	run := func(list []byte, nodeIdx *int) {
+		var ptr int
+		for ptr < len(list) {
+			op := list[ptr]
+			ptr++
+			if op+byte(*nodeIdx)*111 < 4 {
+				// run a batch in an ns.Operation
+				ns.Operation(func() {
+					for ptr < len(list) {
+						op := list[ptr]
+						ptr++
+						if op+byte(*nodeIdx)*111 < 32 {
+							return
+						}
+						if fn := ops[op]; fn != nil {
+							fn(testNode(byte(*nodeIdx)), true)
+						}
+					}
+				})
+			} else if fn := ops[op]; fn != nil {
+				// run single top-level operation
+				fn(testNode(byte(*nodeIdx)), false)
+				*nodeIdx = (*nodeIdx + 1) % nodeCount
+				clock.Run(time.Second)
+			}
+		}
+		for timers < clock.ActiveTimers() {
+			clock.Run(time.Minute) // wait for remaining timeouts in order to ensure consistency
+		}
+	}
+
+	var nodeIdx int
+	addSubs()
+	ns.Start()
+	run(oplist1, &nodeIdx)
+	run(oplist2, &nodeIdx)
+	offState = state{}
+	ns.Stop()
+	endState := offState
+
+	cbc := callbackCount
+	if cbc > cbLimit {
+		return -1
+	}
+	callbackCount = 0
+
+	mdb, clock = rawdb.NewMemoryDatabase(), &mclock.Simulated{}
+	ns = nodestate.NewNodeStateMachine(mdb, []byte("-ns"), clock, s)
+	addSubs()
+	nodeIdx = 0
+
+	ns.Start()
+	run(oplist1, &nodeIdx)
+	offState = state{}
+	ns.Stop()
+	savedState := offState
+
+	ns = nodestate.NewNodeStateMachine(mdb, []byte("-ns"), clock, s)
+	addSubs()
+	offState = state{}
+	ns.Start()
+	loadedState := offState
+	if loadedState != savedState {
+		panic("saved/loaded state mismatch")
+	}
+	run(oplist2, &nodeIdx)
+	offState = state{}
+	ns.Stop()
+	endState2 := offState
+	if endState != endState2 {
+		panic("end state mismatch")
+	}
+
+	if cbc >= cbMin && cbc < cbMax {
 		return 1
 	}
 	return 0
