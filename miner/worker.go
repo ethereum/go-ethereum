@@ -26,6 +26,7 @@ import (
 
 	mapset "github.com/deckarep/golang-set"
 	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/common/math"
 	"github.com/ethereum/go-ethereum/consensus"
 	"github.com/ethereum/go-ethereum/consensus/misc"
 	"github.com/ethereum/go-ethereum/core"
@@ -1057,24 +1058,9 @@ func (w *worker) commit(uncles []*types.Header, interval func(), update bool, st
 		select {
 		case w.taskCh <- &task{receipts: receipts, state: s, block: block, createdAt: time.Now()}:
 			w.unconfirmed.Shift(block.NumberU64() - 1)
-
-			feesWei := new(big.Int)
-			for i, tx := range block.Transactions() {
-				if tx.GasPrice() != nil {
-					feesWei.Add(feesWei, new(big.Int).Mul(new(big.Int).SetUint64(receipts[i].GasUsed), tx.GasPrice()))
-				} else if tx.MaxMinerBribe() != nil && tx.FeeCap() != nil {
-					gasPrice := new(big.Int).Add(block.BaseFee(), tx.MaxMinerBribe())
-					if gasPrice.Cmp(tx.FeeCap()) > 0 {
-						gasPrice.Set(tx.FeeCap())
-					}
-					feesWei.Add(feesWei, new(big.Int).Mul(new(big.Int).SetUint64(receipts[i].GasUsed), gasPrice))
-				}
-			}
-			feesEth := new(big.Float).Quo(new(big.Float).SetInt(feesWei), new(big.Float).SetInt(big.NewInt(params.Ether)))
-
 			log.Info("Commit new mining work", "number", block.Number(), "sealhash", w.engine.SealHash(block.Header()),
 				"uncles", len(uncles), "txs", w.current.tcount,
-				"gas", block.GasUsed(), "fees", feesEth,
+				"gas", block.GasUsed(), "fees", totalFees(block, receipts),
 				"elapsed", common.PrettyDuration(time.Since(start)))
 
 		case <-w.exitCh:
@@ -1107,9 +1093,27 @@ func (w *worker) postSideBlock(event core.ChainSideEvent) {
 
 // totalFees computes total consumed fees in ETH. Block transactions and receipts have to have the same order.
 func totalFees(block *types.Block, receipts []*types.Receipt) *big.Float {
-	feesWei := new(big.Int)
+	feesWei := big.NewInt(0)
 	for i, tx := range block.Transactions() {
-		feesWei.Add(feesWei, new(big.Int).Mul(new(big.Int).SetUint64(receipts[i].GasUsed), tx.GasPrice()))
+		if tx.MaxMinerBribe() != nil && tx.FeeCap() != nil {
+			gasPrice := new(big.Int).Add(
+				block.BaseFee(),
+				tx.MaxMinerBribe(),
+			)
+			gasPrice = new(big.Int).Set(math.BigMax(gasPrice, tx.FeeCap()))
+			feesWei.Add(feesWei, new(big.Int).Mul(
+				new(big.Int).SetUint64(receipts[i].GasUsed),
+				gasPrice,
+			))
+		} else {
+			feesWei.Add(feesWei, new(big.Int).Mul(
+				new(big.Int).SetUint64(receipts[i].GasUsed),
+				tx.GasPrice(),
+			))
+		}
 	}
-	return new(big.Float).Quo(new(big.Float).SetInt(feesWei), new(big.Float).SetInt(big.NewInt(params.Ether)))
+	return new(big.Float).Quo(
+		new(big.Float).SetInt(feesWei),
+		new(big.Float).SetInt(big.NewInt(params.Ether)),
+	)
 }

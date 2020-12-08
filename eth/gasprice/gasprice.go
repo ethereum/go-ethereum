@@ -35,7 +35,7 @@ const sampleNumber = 3 // Number of transactions sampled in a block
 var (
 	DefaultMaxPrice = big.NewInt(500 * params.GWei)
 
-	maxPrice   = big.NewInt(500 * params.GWei)
+	//maxPrice   = big.NewInt(500 * params.GWei)
 	maxPremium = big.NewInt(500 * params.GWei)
 	maxFeeCap  = big.NewInt(1000 * params.GWei)
 

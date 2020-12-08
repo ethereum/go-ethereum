@@ -92,7 +92,7 @@ func TestEIP1559BlockEncoding(t *testing.T) {
 	rct := NewReceipt([]byte{0}, false, 800000)
 	rcts := Receipts{rct}
 	rcts.DeriveFields(params.MainnetChainConfig, hash, 2675001, txs)
-	block := NewBlock(header, txs, nil, rcts)
+	block := NewBlock(header, txs, nil, rcts, newHasher())
 	blockBytes, err := rlp.EncodeToBytes(block)
 	if err != nil {
 		t.Fatal(err)
@@ -210,7 +210,7 @@ func makeBenchBlock() *Block {
 		amount := math.BigPow(2, int64(i))
 		price := big.NewInt(300000)
 		data := make([]byte, 100)
-		tx := NewTransaction(uint64(i), common.Address{}, amount, 123457, price, data)
+		tx := NewTransaction(uint64(i), common.Address{}, amount, 123457, price, data, nil, nil)
 		signedTx, err := SignTx(tx, signer, key)
 		if err != nil {
 			panic(err)
