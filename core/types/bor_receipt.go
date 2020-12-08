@@ -9,6 +9,11 @@ import (
 	"github.com/ethereum/go-ethereum/crypto"
 )
 
+// TenToTheFive - To be used while sorting bor logs
+//
+// Sorted using ( blockNumber * (10 ** 5) + logIndex )
+const TenToTheFive uint64 = 100000
+
 var (
 	borReceiptPrefix = []byte("matic-bor-receipt-") // borReceiptPrefix + number + block hash -> bor block receipt
 
@@ -83,8 +88,10 @@ func DeriveFieldsForBorLogs(logs []*Log, hash common.Hash, number uint64, txInde
 // MergeBorLogs merges receipt logs and block receipt logs
 func MergeBorLogs(logs []*Log, borLogs []*Log) []*Log {
 	result := append(logs, borLogs...)
+
 	sort.SliceStable(result, func(i int, j int) bool {
-		return (result[i].BlockNumber*100000 + uint64(result[i].Index)) < (result[j].BlockNumber*100000 + uint64(result[j].Index))
+		return (result[i].BlockNumber*TenToTheFive + uint64(result[i].Index)) < (result[j].BlockNumber*TenToTheFive + uint64(result[j].Index))
 	})
+
 	return result
 }
