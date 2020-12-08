@@ -312,6 +312,10 @@ func (hc *HeaderChain) ValidateHeaderChain(chain []*types.Header, checkFreq int)
 		if BadHashes[parentHash] {
 			return i - 1, ErrBlacklistedHash
 		}
+		// If it's the last header in the cunk, we need to check it too
+		if i == len(chain)-1 && BadHashes[chain[i].Hash()] {
+			return i, ErrBlacklistedHash
+		}
 	}
 
 	// Generate the list of seal verification requests, and start the parallel verifier
