@@ -29,6 +29,7 @@ import (
 // BorBlockLogsFilter can be used to retrieve and filter logs.
 type BorBlockLogsFilter struct {
 	backend Backend
+	sprint  uint64
 
 	db        ethdb.Database
 	addresses []common.Address
@@ -40,9 +41,9 @@ type BorBlockLogsFilter struct {
 
 // NewBorBlockLogsRangeFilter creates a new filter which uses a bloom filter on blocks to
 // figure out whether a particular block is interesting or not.
-func NewBorBlockLogsRangeFilter(backend Backend, begin, end int64, addresses []common.Address, topics [][]common.Hash) *BorBlockLogsFilter {
+func NewBorBlockLogsRangeFilter(backend Backend, sprint uint64, begin, end int64, addresses []common.Address, topics [][]common.Hash) *BorBlockLogsFilter {
 	// Create a generic filter and convert it into a range filter
-	filter := newBorBlockLogsFilter(backend, addresses, topics)
+	filter := newBorBlockLogsFilter(backend, sprint, addresses, topics)
 	filter.begin = begin
 	filter.end = end
 
@@ -51,18 +52,19 @@ func NewBorBlockLogsRangeFilter(backend Backend, begin, end int64, addresses []c
 
 // NewBorBlockLogsFilter creates a new filter which directly inspects the contents of
 // a block to figure out whether it is interesting or not.
-func NewBorBlockLogsFilter(backend Backend, block common.Hash, addresses []common.Address, topics [][]common.Hash) *BorBlockLogsFilter {
+func NewBorBlockLogsFilter(backend Backend, sprint uint64, block common.Hash, addresses []common.Address, topics [][]common.Hash) *BorBlockLogsFilter {
 	// Create a generic filter and convert it into a block filter
-	filter := newBorBlockLogsFilter(backend, addresses, topics)
+	filter := newBorBlockLogsFilter(backend, sprint, addresses, topics)
 	filter.block = block
 	return filter
 }
 
 // newBorBlockLogsFilter creates a generic filter that can either filter based on a block hash,
 // or based on range queries. The search criteria needs to be explicitly set.
-func newBorBlockLogsFilter(backend Backend, addresses []common.Address, topics [][]common.Hash) *BorBlockLogsFilter {
+func newBorBlockLogsFilter(backend Backend, sprint uint64, addresses []common.Address, topics [][]common.Hash) *BorBlockLogsFilter {
 	return &BorBlockLogsFilter{
 		backend:   backend,
+		sprint:    sprint,
 		addresses: addresses,
 		topics:    topics,
 		db:        backend.ChainDb(),
@@ -97,7 +99,7 @@ func (f *BorBlockLogsFilter) Logs(ctx context.Context) ([]*types.Log, error) {
 	}
 
 	// adjust begin for sprint
-	f.begin = currentSprintEnd(f.begin)
+	f.begin = currentSprintEnd(f.sprint, f.begin)
 
 	end := f.end
 	if f.end == -1 {
@@ -143,8 +145,8 @@ func (f *BorBlockLogsFilter) borBlockLogs(ctx context.Context, receipt *types.Re
 	return logs, nil
 }
 
-func currentSprintEnd(n int64) int64 {
-	m := n % 64
+func currentSprintEnd(sprint uint64, n int64) int64 {
+	m := n % int64(sprint)
 	if m == 0 {
 		return n
 	}

@@ -31,6 +31,7 @@ import (
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/ethdb"
 	"github.com/ethereum/go-ethereum/event"
+	"github.com/ethereum/go-ethereum/params"
 	"github.com/ethereum/go-ethereum/rpc"
 )
 
@@ -59,6 +60,8 @@ type PublicFilterAPI struct {
 	events    *EventSystem
 	filtersMu sync.Mutex
 	filters   map[rpc.ID]*filter
+
+	chainConfig *params.ChainConfig
 }
 
 // NewPublicFilterAPI returns a new PublicFilterAPI instance.
@@ -324,13 +327,20 @@ func (api *PublicFilterAPI) NewFilter(crit FilterCriteria) (rpc.ID, error) {
 //
 // https://github.com/ethereum/wiki/wiki/JSON-RPC#eth_getlogs
 func (api *PublicFilterAPI) GetLogs(ctx context.Context, crit FilterCriteria) ([]*types.Log, error) {
+	if api.chainConfig == nil {
+		return nil, errors.New("No chain config found. Proper PublicFilterAPI initialization required")
+	}
+
+	// get sprint from bor config
+	sprint := api.chainConfig.Bor.Sprint
+
 	var filter *Filter
 	var borLogsFilter *BorBlockLogsFilter
 	if crit.BlockHash != nil {
 		// Block filter requested, construct a single-shot filter
 		filter = NewBlockFilter(api.backend, *crit.BlockHash, crit.Addresses, crit.Topics)
 		// Block bor filter
-		borLogsFilter = NewBorBlockLogsFilter(api.backend, *crit.BlockHash, crit.Addresses, crit.Topics)
+		borLogsFilter = NewBorBlockLogsFilter(api.backend, sprint, *crit.BlockHash, crit.Addresses, crit.Topics)
 	} else {
 		// Convert the RPC block numbers into internal representations
 		begin := rpc.LatestBlockNumber.Int64()
@@ -344,7 +354,7 @@ func (api *PublicFilterAPI) GetLogs(ctx context.Context, crit FilterCriteria) ([
 		// Construct the range filter
 		filter = NewRangeFilter(api.backend, begin, end, crit.Addresses, crit.Topics)
 		// Block bor filter
-		borLogsFilter = NewBorBlockLogsRangeFilter(api.backend, begin, end, crit.Addresses, crit.Topics)
+		borLogsFilter = NewBorBlockLogsRangeFilter(api.backend, sprint, begin, end, crit.Addresses, crit.Topics)
 	}
 
 	// Run the filter and return all the logs
