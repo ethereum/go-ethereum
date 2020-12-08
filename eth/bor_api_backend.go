@@ -4,8 +4,12 @@ import (
 	"context"
 	"errors"
 
+	"github.com/ethereum/go-ethereum"
+	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/consensus/bor"
 	"github.com/ethereum/go-ethereum/core"
+	"github.com/ethereum/go-ethereum/core/rawdb"
+	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/event"
 )
 
@@ -27,6 +31,31 @@ func (b *EthAPIBackend) GetRootHash(ctx context.Context, starBlockNr uint64, end
 		return "", err
 	}
 	return root, nil
+}
+
+// GetBorBlockReceipt returns bor block receipt
+func (b *EthAPIBackend) GetBorBlockReceipt(ctx context.Context, hash common.Hash) (*types.Receipt, error) {
+	receipt := b.eth.blockchain.GetBorReceiptByHash(hash)
+	if receipt == nil {
+		return nil, ethereum.NotFound
+	}
+
+	return receipt, nil
+}
+
+// GetBorBlockLogs returns bor block logs
+func (b *EthAPIBackend) GetBorBlockLogs(ctx context.Context, hash common.Hash) ([]*types.Log, error) {
+	receipt := b.eth.blockchain.GetBorReceiptByHash(hash)
+	if receipt == nil {
+		return nil, nil
+	}
+	return receipt.Logs, nil
+}
+
+// GetBorBlockTransaction returns bor block tx
+func (b *EthAPIBackend) GetBorBlockTransaction(ctx context.Context, hash common.Hash) (*types.Transaction, common.Hash, uint64, uint64, error) {
+	tx, blockHash, blockNumber, index := rawdb.ReadBorTransaction(b.eth.ChainDb(), hash)
+	return tx, blockHash, blockNumber, index, nil
 }
 
 // SubscribeStateSyncEvent subscribes to state sync event

@@ -36,6 +36,7 @@ import (
 	"github.com/ethereum/go-ethereum/consensus/clique"
 	"github.com/ethereum/go-ethereum/consensus/ethash"
 	"github.com/ethereum/go-ethereum/core"
+	"github.com/ethereum/go-ethereum/core/rawdb"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/core/vm"
 	"github.com/ethereum/go-ethereum/crypto"
@@ -664,6 +665,12 @@ func (s *PublicBlockChainAPI) GetBlockByNumber(ctx context.Context, number rpc.B
 				response[field] = nil
 			}
 		}
+
+		// append marshalled bor transaction
+		if err == nil && response != nil {
+			response = s.appendRPCMarshalBorTransaction(ctx, block, response, fullTx)
+		}
+
 		return response, err
 	}
 	return nil, err
@@ -674,7 +681,12 @@ func (s *PublicBlockChainAPI) GetBlockByNumber(ctx context.Context, number rpc.B
 func (s *PublicBlockChainAPI) GetBlockByHash(ctx context.Context, hash common.Hash, fullTx bool) (map[string]interface{}, error) {
 	block, err := s.b.BlockByHash(ctx, hash)
 	if block != nil {
-		return s.rpcMarshalBlock(ctx, block, true, fullTx)
+		response, err := s.rpcMarshalBlock(ctx, block, true, fullTx)
+		// append marshalled bor transaction
+		if err == nil && response != nil {
+			return s.appendRPCMarshalBorTransaction(ctx, block, response, fullTx), err
+		}
+		return response, err
 	}
 	return nil, err
 }
@@ -1368,14 +1380,33 @@ func (s *PublicTransactionPoolAPI) GetTransactionCount(ctx context.Context, addr
 
 // GetTransactionByHash returns the transaction for the given hash
 func (s *PublicTransactionPoolAPI) GetTransactionByHash(ctx context.Context, hash common.Hash) (*RPCTransaction, error) {
+	borTx := false
+
 	// Try to return an already finalized transaction
 	tx, blockHash, blockNumber, index, err := s.b.GetTransaction(ctx, hash)
 	if err != nil {
 		return nil, err
 	}
-	if tx != nil {
-		return newRPCTransaction(tx, blockHash, blockNumber, index), nil
+
+	// fetch bor block tx if necessary
+	if tx == nil {
+		if tx, blockHash, blockNumber, index, err = s.b.GetBorBlockTransaction(ctx, hash); err != nil {
+			return nil, err
+		}
+
+		borTx = true
 	}
+
+	if tx != nil {
+		resultTx := newRPCTransaction(tx, blockHash, blockNumber, index)
+		if borTx {
+			// newRPCTransaction calculates hash based on RLP of the transaction data.
+			// In case of bor block tx, we need simple derived tx hash (same as function argument) instead of RLP hash
+			resultTx.Hash = hash
+		}
+		return resultTx, nil
+	}
+
 	// No finalized transaction, try to retrieve it from the pool
 	if tx := s.b.GetPoolTransaction(hash); tx != nil {
 		return newRPCPendingTransaction(tx), nil
@@ -1404,18 +1435,33 @@ func (s *PublicTransactionPoolAPI) GetRawTransactionByHash(ctx context.Context, 
 
 // GetTransactionReceipt returns the transaction receipt for the given transaction hash.
 func (s *PublicTransactionPoolAPI) GetTransactionReceipt(ctx context.Context, hash common.Hash) (map[string]interface{}, error) {
-	tx, blockHash, blockNumber, index, err := s.b.GetTransaction(ctx, hash)
-	if err != nil {
+	borTx := false
+
+	tx, blockHash, blockNumber, index := rawdb.ReadTransaction(s.b.ChainDb(), hash)
+	if tx == nil {
+		tx, blockHash, blockNumber, index = rawdb.ReadBorTransaction(s.b.ChainDb(), hash)
+		borTx = true
+	}
+
+	if tx == nil {
 		return nil, nil
 	}
-	receipts, err := s.b.GetReceipts(ctx, blockHash)
-	if err != nil {
-		return nil, err
+
+	var receipt *types.Receipt
+
+	if borTx {
+		// Fetch bor block receipt
+		receipt = rawdb.ReadBorReceipt(s.b.ChainDb(), blockHash, blockNumber)
+	} else {
+		receipts, err := s.b.GetReceipts(ctx, blockHash)
+		if err != nil {
+			return nil, err
+		}
+		if len(receipts) <= int(index) {
+			return nil, nil
+		}
+		receipt = receipts[index]
 	}
-	if len(receipts) <= int(index) {
-		return nil, nil
-	}
-	receipt := receipts[index]
 
 	var signer types.Signer = types.FrontierSigner{}
 	if tx.Protected() {

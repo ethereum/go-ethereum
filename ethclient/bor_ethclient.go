@@ -2,6 +2,10 @@ package ethclient
 
 import (
 	"context"
+
+	ethereum "github.com/ethereum/go-ethereum"
+	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/core/types"
 )
 
 // GetRootHash returns the merkle root of the block headers
@@ -11,4 +15,14 @@ func (ec *Client) GetRootHash(ctx context.Context, startBlockNumber uint64, endB
 		return "", err
 	}
 	return rootHash, nil
+}
+
+// GetBorBlockReceipt returns bor block receipt
+func (ec *Client) GetBorBlockReceipt(ctx context.Context, hash common.Hash) (*types.Receipt, error) {
+	var r *types.Receipt
+	err := ec.c.CallContext(ctx, &r, "eth_getBorBlockReceipt", hash)
+	if err == nil && r == nil {
+		return nil, ethereum.NotFound
+	}
+	return r, err
 }

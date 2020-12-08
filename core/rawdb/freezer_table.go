@@ -653,3 +653,21 @@ func (t *freezerTable) printIndex() {
 	}
 	fmt.Printf("|-----------------|\n")
 }
+
+//
+// Bor related changes
+//
+
+// Fill adds empty data till given number (convenience method for backward compatibilty)
+func (t *freezerTable) Fill(number uint64) error {
+	if t.items < number {
+		log.Info("Filling all data into freezer for backward compatablity", "name", t.name, "items", t.items, "number", number)
+		for t.items < number {
+			if err := t.Append(t.items, nil); err != nil {
+				log.Error("Failed to fill data into freezer", "name", t.name, "items", t.items, "number", number, "err", err)
+				return err
+			}
+		}
+	}
+	return nil
+}

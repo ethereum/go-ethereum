@@ -297,6 +297,13 @@ func (s *Ethereum) APIs() []rpc.API {
 	// Append any APIs exposed explicitly by the consensus engine
 	apis = append(apis, s.engine.APIs(s.BlockChain())...)
 
+	// BOR change starts
+	// set genesis to public filter api
+	publicFilterAPI := filters.NewPublicFilterAPI(s.APIBackend, false)
+	// avoiding constructor changed by introducing new method to set genesis
+	publicFilterAPI.SetChainConfig(s.blockchain.Config())
+	// BOR change ends
+
 	// Append all the local APIs and return
 	return append(apis, []rpc.API{
 		{
@@ -322,7 +329,7 @@ func (s *Ethereum) APIs() []rpc.API {
 		}, {
 			Namespace: "eth",
 			Version:   "1.0",
-			Service:   filters.NewPublicFilterAPI(s.APIBackend, false),
+			Service:   publicFilterAPI, // BOR related change
 			Public:    true,
 		}, {
 			Namespace: "admin",

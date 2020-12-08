@@ -655,7 +655,7 @@ func WriteBlock(db ethdb.KeyValueWriter, block *types.Block) {
 }
 
 // WriteAncientBlock writes entire block data into ancient store and returns the total written size.
-func WriteAncientBlock(db ethdb.AncientWriter, block *types.Block, receipts types.Receipts, td *big.Int) int {
+func WriteAncientBlock(db ethdb.AncientWriter, block *types.Block, receipts types.Receipts, td *big.Int, borReceipt *types.Receipt) int {
 	// Encode all block components to RLP format.
 	headerBlob, err := rlp.EncodeToBytes(block.Header())
 	if err != nil {
@@ -677,8 +677,17 @@ func WriteAncientBlock(db ethdb.AncientWriter, block *types.Block, receipts type
 	if err != nil {
 		log.Crit("Failed to RLP encode block total difficulty", "err", err)
 	}
+
+	borReceiptBlob := make([]byte, 0)
+	if borReceipt != nil {
+		borReceiptBlob, err = rlp.EncodeToBytes(borReceipt)
+		if err != nil {
+			log.Crit("Failed to RLP encode bor block receipt", "err", err)
+		}
+	}
+
 	// Write all blob to flatten files.
-	err = db.AppendAncient(block.NumberU64(), block.Hash().Bytes(), headerBlob, bodyBlob, receiptBlob, tdBlob)
+	err = db.AppendAncient(block.NumberU64(), block.Hash().Bytes(), headerBlob, bodyBlob, receiptBlob, tdBlob, borReceiptBlob)
 	if err != nil {
 		log.Crit("Failed to write block data to ancient store", "err", err)
 	}
@@ -691,6 +700,9 @@ func DeleteBlock(db ethdb.KeyValueWriter, hash common.Hash, number uint64) {
 	DeleteHeader(db, hash, number)
 	DeleteBody(db, hash, number)
 	DeleteTd(db, hash, number)
+
+	// delete bor receipt
+	DeleteBorReceipt(db, hash, number)
 }
 
 // DeleteBlockWithoutNumber removes all block data associated with a hash, except
@@ -700,6 +712,9 @@ func DeleteBlockWithoutNumber(db ethdb.KeyValueWriter, hash common.Hash, number 
 	deleteHeaderWithoutNumber(db, hash, number)
 	DeleteBody(db, hash, number)
 	DeleteTd(db, hash, number)
+
+	// delete bor receipt
+	DeleteBorReceipt(db, hash, number)
 }
 
 // FindCommonAncestor returns the last common ancestor of two block headers

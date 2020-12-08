@@ -112,6 +112,7 @@ var freezerNoSnappy = map[string]bool{
 	freezerHashTable:       true,
 	freezerBodiesTable:     false,
 	freezerReceiptTable:    false,
+	freezerBorReceiptTable: false,
 	freezerDifficultyTable: true,
 }
 

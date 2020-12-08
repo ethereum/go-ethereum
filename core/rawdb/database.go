@@ -96,7 +96,7 @@ func (db *nofreezedb) AncientSize(kind string) (uint64, error) {
 }
 
 // AppendAncient returns an error as we don't have a backing chain freezer.
-func (db *nofreezedb) AppendAncient(number uint64, hash, header, body, receipts, td []byte) error {
+func (db *nofreezedb) AppendAncient(number uint64, hash, header, body, receipts, td, borBlockReceipt []byte) error {
 	return errNotSupported
 }
 
