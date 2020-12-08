@@ -58,8 +58,11 @@ func commentHasManyLines(comment string) bool {
 	return (firstLFIndex >= 0 && firstLFIndex < len(comment)-1)
 }
 
-// SignifySignFile creates a signature of the input file.
-func SignifySignFile(input string, output string, key string, unTrustedComment string, trustedComment string) error {
+// SignFile creates a signature of the input file.
+//
+// This accepts base64 keys in the format created by the 'signify' tool.
+// The signature is written to the 'output' file.
+func SignFile(input string, output string, key string, unTrustedComment string, trustedComment string) error {
 	in, err := os.Open(input)
 	if err != nil {
 		return err
