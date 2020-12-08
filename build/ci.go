@@ -58,7 +58,7 @@ import (
 	"time"
 
 	"github.com/cespare/cp"
-	signifyPkg "github.com/ethereum/go-ethereum/crypto/signify"
+	"github.com/ethereum/go-ethereum/crypto/signify"
 	"github.com/ethereum/go-ethereum/internal/build"
 	"github.com/ethereum/go-ethereum/params"
 )
@@ -449,7 +449,7 @@ func archiveBasename(arch string, archiveVersion string) string {
 	return platform + "-" + archiveVersion
 }
 
-func archiveUpload(archive string, blobstore string, signer string, signify string) error {
+func archiveUpload(archive string, blobstore string, signer string, signifyVar string) error {
 	// If signing was requested, generate the signature files
 	if signer != "" {
 		key := getenvBase64(signer)
@@ -457,9 +457,9 @@ func archiveUpload(archive string, blobstore string, signer string, signify stri
 			return err
 		}
 	}
-	if signify != "" {
-		key := getenvBase64(string(signify))
-		if err := signifyPkg.SignifySignFile(archive, archive+".sig", string(key), "verify with geth.pub", fmt.Sprintf("%d", time.Now().UTC().Unix())); err != nil {
+	if signifyVar != "" {
+		key := os.Getenv(signifyVar)
+		if err := signify.SignFile(archive, archive+".sig", key, "verify with geth.pub", fmt.Sprintf("%d", time.Now().UTC().Unix())); err != nil {
 			return err
 		}
 	}
@@ -478,7 +478,7 @@ func archiveUpload(archive string, blobstore string, signer string, signify stri
 				return err
 			}
 		}
-		if signify != "" {
+		if signifyVar != "" {
 			if err := build.AzureBlobstoreUpload(archive+".sig", filepath.Base(archive+".sig"), auth); err != nil {
 				return err
 			}
