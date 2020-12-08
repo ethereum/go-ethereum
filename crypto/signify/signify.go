@@ -49,22 +49,17 @@ func parsePrivateKey(key string) (k ed25519.PrivateKey, header []byte, keyNum []
 	return ed25519.PrivateKey(keydata[40:]), keydata[:2], keydata[32:40], nil
 }
 
-func commentHasManyLines(comment string) bool {
-	firstLFIndex := strings.IndexByte(comment, 10)
-	return (firstLFIndex >= 0 && firstLFIndex < len(comment)-1)
-}
-
 // SignFile creates a signature of the input file.
 //
 // This accepts base64 keys in the format created by the 'signify' tool.
 // The signature is written to the 'output' file.
 func SignFile(input string, output string, key string, untrustedComment string, trustedComment string) error {
 	// Pre-check comments and ensure they're set to something.
-	if commentHasManyLines(untrustedComment) {
-		return errors.New("untrusted comment must fit on a single line")
+	if strings.IndexByte(untrustedComment, '\n') >= 0 {
+		return errors.New("untrusted comment must not contain newline")
 	}
-	if commentHasManyLines(trustedComment) {
-		return errors.New("trusted comment must fit on a single line")
+	if strings.IndexByte(trustedComment, '\n') >= 0 {
+		return errors.New("trusted comment must not contain newline")
 	}
 	if untrustedComment == "" {
 		untrustedComment = "verify with " + input + ".pub"
