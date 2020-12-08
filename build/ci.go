@@ -459,7 +459,9 @@ func archiveUpload(archive string, blobstore string, signer string, signifyVar s
 	}
 	if signifyVar != "" {
 		key := os.Getenv(signifyVar)
-		if err := signify.SignFile(archive, archive+".sig", key, "verify with geth.pub", fmt.Sprintf("%d", time.Now().UTC().Unix())); err != nil {
+		untrustedComment := "verify with geth-release.pub"
+		trustedComment := fmt.Sprintf("%s (%s)", archive, time.Now().UTC().Format(time.RFC1123))
+		if err := signify.SignFile(archive, archive+".sig", key, untrustedComment, trustedComment); err != nil {
 			return err
 		}
 	}
