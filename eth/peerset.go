@@ -157,7 +157,7 @@ func (ps *peerSet) unregisterEthPeer(id string) error {
 // join feed if it completes an existing `eth` peer.
 //
 // If the peer isn't yet connected on `eth` and fails to do so within a given
-// amount of time, it is dropped. This enforces that `snap` is an externsion to
+// amount of time, it is dropped. This enforces that `snap` is an extension to
 // `eth`, not a standalone leeching protocol.
 func (ps *peerSet) registerSnapPeer(peer *snap.Peer) error {
 	ps.lock.Lock()
