@@ -293,6 +293,11 @@ js:
             signatures[name] = true;
             continue;
           }
+          if (name.endsWith(".sig")) { // signify signature
+            // TODO account for these, for now ignore them
+            continue;
+          }
+
           // Otherwise add an entry to one of the release tables
           var parts = name.split("-");
           var date  = parts[parts.length-1].split(".")[0];
