@@ -31,13 +31,10 @@ const (
 	// minimumDifficulty The minimum that the difficulty may ever be.
 	minimumDifficulty = 131072
 	// expDiffPeriod is the exponential difficulty period
-	expDiffPeriodX = 100000
-)
-
-var (
+	expDiffPeriodUint = 100000
 	// difficultyBoundDivisorBitShift is the bound divisor of the difficulty (2048),
 	// This constant is the right-shifts to use for the division.
-	difficultyBoundDivisor = uint256.NewInt().SetUint64(2048)
+	difficultyBoundDivisor = 11
 )
 
 // CalcDifficultyFrontierU256 is the difficulty adjustment algorithm. It returns the
@@ -58,7 +55,7 @@ func CalcDifficultyFrontierU256(time uint64, parent *types.Header) *big.Int {
 	pDiff := uint256.NewInt()
 	pDiff.SetFromBig(parent.Difficulty) // pDiff: pdiff
 	adjust := pDiff.Clone()
-	adjust.Div(adjust, difficultyBoundDivisor) // adjust: pDiff / 2048
+	adjust.Rsh(adjust, difficultyBoundDivisor) // adjust: pDiff / 2048
 
 	if time-parent.Time < frontierDurationLimit {
 		pDiff.Add(pDiff, adjust)
@@ -71,10 +68,9 @@ func CalcDifficultyFrontierU256(time uint64, parent *types.Header) *big.Int {
 	// 'pdiff' now contains:
 	// pdiff + pdiff / 2048 * (1 if time - ptime < 13 else -1)
 
-	if periodCount := (parent.Number.Uint64() + 1) / expDiffPeriodX; periodCount > 1 {
+	if periodCount := (parent.Number.Uint64() + 1) / expDiffPeriodUint; periodCount > 1 {
 		// diff = diff + 2^(periodCount - 2)
 		expDiff := adjust.SetOne()
-		// This is probably not "endian-safe":
 		expDiff.Lsh(expDiff, uint(periodCount-2)) // expdiff: 2 ^ (periodCount -2)
 		pDiff.Add(pDiff, expDiff)
 	}
@@ -103,7 +99,7 @@ func CalcDifficultyHomesteadU256(time uint64, parent *types.Header) *big.Int {
 	pDiff := uint256.NewInt()
 	pDiff.SetFromBig(parent.Difficulty) // pDiff: pdiff
 	adjust := pDiff.Clone()
-	adjust.Div(adjust, difficultyBoundDivisor) // adjust: pDiff / 2048
+	adjust.Rsh(adjust, difficultyBoundDivisor) // adjust: pDiff / 2048
 
 	x := (time - parent.Time) / 10 // (time - ptime) / 10)
 	var neg = true
@@ -127,7 +123,7 @@ func CalcDifficultyHomesteadU256(time uint64, parent *types.Header) *big.Int {
 	}
 	// for the exponential factor, a.k.a "the bomb"
 	// diff = diff + 2^(periodCount - 2)
-	if periodCount := (1 + parent.Number.Uint64()) / expDiffPeriodX; periodCount > 1 {
+	if periodCount := (1 + parent.Number.Uint64()) / expDiffPeriodUint; periodCount > 1 {
 		expFactor := adjust.Lsh(adjust.SetOne(), uint(periodCount-2))
 		pDiff.Add(pDiff, expFactor)
 	}
@@ -168,15 +164,15 @@ func MakeDifficultyCalculatorU256(bombDelay *big.Int) func(time uint64, parent *
 		// parent_diff + (parent_diff / 2048 * max((2 if len(parent.uncles) else 1) - ((timestamp - parent.timestamp) // 9), -99))
 		y := new(uint256.Int)
 		y.SetFromBig(parent.Difficulty)    // y: p_diff
-		f := y.Clone()                     // f: p_diff
+		pDiff := y.Clone()                 // pdiff: p_diff
 		z := new(uint256.Int).SetUint64(x) //z : +-adj_factor (either pos or negative)
-		y.Div(y, difficultyBoundDivisor)   // y: p__diff / 2048
+		y.Rsh(y, difficultyBoundDivisor)   // y: p__diff / 2048
 		z.Mul(y, z)                        // z: (p_diff / 2048 ) * (+- adj_factor)
 
 		if xNeg {
-			y.Sub(f, z) // y: parent_diff + parent_diff/2048 * adjustment_factor
+			y.Sub(pDiff, z) // y: parent_diff + parent_diff/2048 * adjustment_factor
 		} else {
-			y.Add(f, z) // y: parent_diff + parent_diff/2048 * adjustment_factor
+			y.Add(pDiff, z) // y: parent_diff + parent_diff/2048 * adjustment_factor
 		}
 		// minimum difficulty can ever be (before exponential factor)
 		if y.LtUint64(minimumDifficulty) {
@@ -186,9 +182,9 @@ func MakeDifficultyCalculatorU256(bombDelay *big.Int) func(time uint64, parent *
 		// Specification: https://eips.ethereum.org/EIPS/eip-1234
 		var pNum = parent.Number.Uint64()
 		if pNum >= bombDelayFromParent {
-			if fakeBlockNumber := pNum - bombDelayFromParent; fakeBlockNumber >= 2*expDiffPeriodX {
+			if fakeBlockNumber := pNum - bombDelayFromParent; fakeBlockNumber >= 2*expDiffPeriodUint {
 				z.SetOne()
-				z.Lsh(z, uint(fakeBlockNumber/expDiffPeriodX-2))
+				z.Lsh(z, uint(fakeBlockNumber/expDiffPeriodUint-2))
 				y.Add(z, y)
 			}
 		}
