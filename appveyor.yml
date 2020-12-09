@@ -23,7 +23,6 @@ environment:
 
 install:
   - git submodule update --init
-  - rmdir C:\go /s /q
   - go version
   - gcc --version
 
