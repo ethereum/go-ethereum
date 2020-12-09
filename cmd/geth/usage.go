@@ -37,7 +37,7 @@ var AppHelpFlagGroups = []flags.FlagGroup{
 			utils.DataDirFlag,
 			utils.AncientFlag,
 			utils.KeyStoreDirFlag,
-			utils.NoUSBFlag,
+			utils.USBFlag,
 			utils.SmartCardDaemonPathFlag,
 			utils.NetworkIdFlag,
 			utils.GoerliFlag,
@@ -219,6 +219,7 @@ var AppHelpFlagGroups = []flags.FlagGroup{
 	{
 		Name: "ALIASED (deprecated)",
 		Flags: append([]cli.Flag{
+			utils.NoUSBFlag,
 			utils.LegacyRPCEnabledFlag,
 			utils.LegacyRPCListenAddrFlag,
 			utils.LegacyRPCPortFlag,
