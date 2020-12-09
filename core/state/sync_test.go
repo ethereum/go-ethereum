@@ -62,7 +62,8 @@ func makeTestState() (Database, common.Hash, []*testAccount) {
 		}
 		if i%5 == 0 {
 			for j := byte(0); j < 5; j++ {
-				obj.SetState(db, crypto.Keccak256Hash([]byte{i, i, i, i, i, j, j}), crypto.Keccak256Hash([]byte{i, i, i, i, i, j, j}))
+				hash := crypto.Keccak256Hash([]byte{i, i, i, i, i, j, j})
+				obj.SetState(db, hash, hash)
 			}
 		}
 		state.updateStateObject(obj)
@@ -447,15 +448,13 @@ func TestIncompleteStateSync(t *testing.T) {
 		batch.Write()
 		for _, result := range results {
 			added = append(added, result.Hash)
-		}
-		// Check that all known sub-tries added so far are complete or missing entirely.
-		for _, hash := range added {
-			if isCode(hash) {
+			// Check that all known sub-tries added so far are complete or missing entirely.
+			if isCode(result.Hash) {
 				continue
 			}
 			// Can't use checkStateConsistency here because subtrie keys may have odd
 			// length and crash in LeafKey.
-			if err := checkTrieConsistency(dstDb, hash); err != nil {
+			if err := checkTrieConsistency(dstDb, result.Hash); err != nil {
 				t.Fatalf("state inconsistent: %v", err)
 			}
 		}
