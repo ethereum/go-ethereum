@@ -460,7 +460,7 @@ func (d *Downloader) syncWithPeer(p *peerConnection, hash common.Hash, td *big.I
 		}
 	}()
 	if p.version < 64 {
-		return errTooOld
+		return fmt.Errorf("%w, peer version: %d", errTooOld, p.version)
 	}
 	mode := d.getMode()
 
