@@ -622,8 +622,15 @@ func (p *serverPeer) Handshake(genesis common.Hash, forkid forkid.ID, forkFilter
 		if recv.get("txRelay", nil) != nil {
 			p.onlyAnnounce = true
 		}
-		var recentTx uint
-		p.serveTxLookup = recv.get("recentTxLookup", &recentTx) != nil || recentTx == 0
+		if p.version >= lpv4 {
+			var recentTx uint
+			if err := recv.get("recentTxLookup", &recentTx); err != nil {
+				return err
+			}
+			p.serveTxLookup = recentTx == 0
+		} else {
+			p.serveTxLookup = true
+		}
 
 		if p.onlyAnnounce && !p.trusted {
 			return errResp(ErrUselessPeer, "peer cannot serve requests")
@@ -968,10 +975,10 @@ func (p *clientPeer) freezeClient() {
 func (p *clientPeer) Handshake(td *big.Int, head common.Hash, headNum uint64, genesis common.Hash, forkID forkid.ID, forkFilter forkid.Filter, server *LesServer) error {
 	recentTx := server.handler.blockchain.TxLookupLimit()
 	if recentTx > 0 { // 0 means no limit (all txs available)
-		if recentTx <= 3 {
+		if recentTx <= blockSafetyMargin {
 			recentTx = 1 // 1 means tx lookup is not served at all
 		} else {
-			recentTx -= 3 // safety margin
+			recentTx -= blockSafetyMargin
 		}
 	}
 	if server.config.UltraLightOnlyAnnounce {
@@ -992,7 +999,7 @@ func (p *clientPeer) Handshake(td *big.Int, head common.Hash, headNum uint64, ge
 
 			// If local ethereum node is running in archive mode, advertise ourselves we have
 			// all version state data. Otherwise only recent state is available.
-			stateRecent := uint64(core.TriesInMemory - 4)
+			stateRecent := uint64(core.TriesInMemory - blockSafetyMargin)
 			if server.archiveMode {
 				stateRecent = 0
 			}
