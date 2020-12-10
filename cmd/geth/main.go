@@ -246,6 +246,8 @@ func init() {
 		licenseCommand,
 		// See config.go
 		dumpConfigCommand,
+		dbGetCommand,
+		dbPutCommand,
 		// See cmd/utils/flags_legacy.go
 		utils.ShowDeprecated,
 	}

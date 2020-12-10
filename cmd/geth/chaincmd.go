@@ -19,6 +19,7 @@ package main
 import (
 	"encoding/json"
 	"fmt"
+	"github.com/ethereum/go-ethereum/common/hexutil"
 	"os"
 	"path/filepath"
 	"runtime"
@@ -218,6 +219,24 @@ Use "ethereum dump 0" to dump the genesis block.`,
 			utils.SyncModeFlag,
 		},
 		Category: "BLOCKCHAIN COMMANDS",
+	}
+	dbGetCommand = cli.Command{
+		Action:    utils.MigrateFlags(dbGet),
+		Name:      "db.get",
+		Usage:     "Show the value of a database key",
+		ArgsUsage: "<hex-encoded key>",
+		Flags: []cli.Flag{
+			utils.DataDirFlag,
+		},
+	}
+	dbPutCommand = cli.Command{
+		Action:    utils.MigrateFlags(dbPut),
+		Name:      "db.put",
+		Usage:     "Set the value of a database key",
+		ArgsUsage: "<hex-encoded key> <hex-encoded value>",
+		Flags: []cli.Flag{
+			utils.DataDirFlag,
+		},
 	}
 )
 
@@ -610,4 +629,60 @@ func inspect(ctx *cli.Context) error {
 func hashish(x string) bool {
 	_, err := strconv.Atoi(x)
 	return err != nil
+}
+
+// dbGet shows the value of a given database key
+func dbGet(ctx *cli.Context) error {
+	if len(ctx.Args()) < 1 {
+		utils.Fatalf("This command requires a key as an argument.")
+	}
+	stack, _ := makeConfigNode(ctx)
+	defer stack.Close()
+	db := utils.MakeChainDatabase(ctx, stack)
+	defer db.Close()
+	key, err := hexutil.Decode(ctx.Args().Get(0))
+	if err != nil {
+		log.Info("Could not decode the key", "error", err)
+		return err
+	}
+	data, err := db.Get(key)
+	if err != nil {
+		log.Info("Get operation failed", "error", err)
+		return err
+	}
+	fmt.Printf("key %x:\n\t%x\n", key, data)
+	return nil
+}
+
+// dbPut overwrite a value in the database
+func dbPut(ctx *cli.Context) error {
+	if len(ctx.Args()) < 2 {
+		utils.Fatalf("This command requires a key and a value as arguments.")
+	}
+	stack, _ := makeConfigNode(ctx)
+	defer stack.Close()
+	db := utils.MakeChainDatabase(ctx, stack)
+	defer db.Close()
+	var (
+		key   []byte
+		value []byte
+		data  []byte
+		err   error
+	)
+	key, err = hexutil.Decode(ctx.Args().Get(0))
+	if err != nil {
+		log.Info("Could not decode the key", "error", err)
+		return err
+	}
+	value, err = hexutil.Decode(ctx.Args().Get(1))
+	if err != nil {
+		log.Info("Could not decode the value", "error", err)
+		return err
+	}
+	data, err = db.Get(key)
+	if err == nil {
+		fmt.Printf("Previous value:\n%x\n", data)
+	}
+	err = db.Put(key, value)
+	return nil
 }
