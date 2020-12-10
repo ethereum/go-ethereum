@@ -25,6 +25,7 @@ import (
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/mclock"
+	"github.com/ethereum/go-ethereum/core/forkid"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/eth/downloader"
 	"github.com/ethereum/go-ethereum/light"
@@ -37,6 +38,7 @@ import (
 // responses.
 type clientHandler struct {
 	ulc        *ulc
+	forkFilter forkid.Filter
 	checkpoint *params.TrustedCheckpoint
 	fetcher    *lightFetcher
 	downloader *downloader.Downloader
@@ -49,6 +51,7 @@ type clientHandler struct {
 
 func newClientHandler(ulcServers []string, ulcFraction int, checkpoint *params.TrustedCheckpoint, backend *LightEthereum) *clientHandler {
 	handler := &clientHandler{
+		forkFilter: forkid.NewFilter(backend.blockchain),
 		checkpoint: checkpoint,
 		backend:    backend,
 		closeCh:    make(chan struct{}),
@@ -103,7 +106,8 @@ func (h *clientHandler) handle(p *serverPeer) error {
 	p.Log().Debug("Light Ethereum peer connected", "name", p.Name())
 
 	// Execute the LES handshake
-	if err := p.Handshake(h.backend.blockchain.Genesis().Hash()); err != nil {
+	forkid := forkid.NewID(h.backend.blockchain.Config(), h.backend.genesis, h.backend.blockchain.CurrentHeader().Number.Uint64())
+	if err := p.Handshake(h.backend.blockchain.Genesis().Hash(), forkid, h.forkFilter); err != nil {
 		p.Log().Debug("Light Ethereum handshake failed", "err", err)
 		return err
 	}
@@ -154,8 +158,8 @@ func (h *clientHandler) handleMsg(p *serverPeer) error {
 	var deliverMsg *Msg
 
 	// Handle the message depending on its contents
-	switch msg.Code {
-	case AnnounceMsg:
+	switch {
+	case msg.Code == AnnounceMsg:
 		p.Log().Trace("Received announce message")
 		var req announceData
 		if err := msg.Decode(&req); err != nil {
@@ -188,7 +192,7 @@ func (h *clientHandler) handleMsg(p *serverPeer) error {
 			p.updateHead(req.Hash, req.Number, req.Td)
 			h.fetcher.announce(p, &req)
 		}
-	case BlockHeadersMsg:
+	case msg.Code == BlockHeadersMsg:
 		p.Log().Trace("Received block header response message")
 		var resp struct {
 			ReqID, BV uint64
@@ -220,7 +224,7 @@ func (h *clientHandler) handleMsg(p *serverPeer) error {
 				}
 			}
 		}
-	case BlockBodiesMsg:
+	case msg.Code == BlockBodiesMsg:
 		p.Log().Trace("Received block bodies response")
 		var resp struct {
 			ReqID, BV uint64
@@ -236,7 +240,7 @@ func (h *clientHandler) handleMsg(p *serverPeer) error {
 			ReqID:   resp.ReqID,
 			Obj:     resp.Data,
 		}
-	case CodeMsg:
+	case msg.Code == CodeMsg:
 		p.Log().Trace("Received code response")
 		var resp struct {
 			ReqID, BV uint64
@@ -252,7 +256,7 @@ func (h *clientHandler) handleMsg(p *serverPeer) error {
 			ReqID:   resp.ReqID,
 			Obj:     resp.Data,
 		}
-	case ReceiptsMsg:
+	case msg.Code == ReceiptsMsg:
 		p.Log().Trace("Received receipts response")
 		var resp struct {
 			ReqID, BV uint64
@@ -268,7 +272,7 @@ func (h *clientHandler) handleMsg(p *serverPeer) error {
 			ReqID:   resp.ReqID,
 			Obj:     resp.Receipts,
 		}
-	case ProofsV2Msg:
+	case msg.Code == ProofsV2Msg:
 		p.Log().Trace("Received les/2 proofs response")
 		var resp struct {
 			ReqID, BV uint64
@@ -284,7 +288,7 @@ func (h *clientHandler) handleMsg(p *serverPeer) error {
 			ReqID:   resp.ReqID,
 			Obj:     resp.Data,
 		}
-	case HelperTrieProofsMsg:
+	case msg.Code == HelperTrieProofsMsg:
 		p.Log().Trace("Received helper trie proof response")
 		var resp struct {
 			ReqID, BV uint64
@@ -300,7 +304,7 @@ func (h *clientHandler) handleMsg(p *serverPeer) error {
 			ReqID:   resp.ReqID,
 			Obj:     resp.Data,
 		}
-	case TxStatusMsg:
+	case msg.Code == TxStatusMsg:
 		p.Log().Trace("Received tx status response")
 		var resp struct {
 			ReqID, BV uint64
@@ -316,11 +320,11 @@ func (h *clientHandler) handleMsg(p *serverPeer) error {
 			ReqID:   resp.ReqID,
 			Obj:     resp.Status,
 		}
-	case StopMsg:
+	case msg.Code == StopMsg && p.version >= lpv3:
 		p.freeze()
 		h.backend.retriever.frozen(p)
 		p.Log().Debug("Service stopped")
-	case ResumeMsg:
+	case msg.Code == ResumeMsg && p.version >= lpv3:
 		var bv uint64
 		if err := msg.Decode(&bv); err != nil {
 			return errResp(ErrDecode, "msg %v: %v", msg, err)
