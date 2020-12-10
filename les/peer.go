@@ -622,7 +622,8 @@ func (p *serverPeer) Handshake(genesis common.Hash, forkid forkid.ID, forkFilter
 		if recv.get("txRelay", nil) != nil {
 			p.onlyAnnounce = true
 		}
-		p.serveTxLookup = recv.get("disableTxLookup", nil) != nil
+		var recentTx uint
+		p.serveTxLookup = recv.get("recentTxLookup", &recentTx) != nil || recentTx == 0
 
 		if p.onlyAnnounce && !p.trusted {
 			return errResp(ErrUselessPeer, "peer cannot serve requests")
@@ -965,8 +966,18 @@ func (p *clientPeer) freezeClient() {
 // Handshake executes the les protocol handshake, negotiating version number,
 // network IDs, difficulties, head and genesis blocks.
 func (p *clientPeer) Handshake(td *big.Int, head common.Hash, headNum uint64, genesis common.Hash, forkID forkid.ID, forkFilter forkid.Filter, server *LesServer) error {
-	disableTxLookup := server.handler.blockchain.TxLookupLimit() != 0
-	if disableTxLookup && p.version < lpv4 {
+	recentTx := server.handler.blockchain.TxLookupLimit()
+	if recentTx > 0 { // 0 means no limit (all txs available)
+		if recentTx <= 3 {
+			recentTx = 1 // 1 means tx lookup is not served at all
+		} else {
+			recentTx -= 3 // safety margin
+		}
+	}
+	if server.config.UltraLightOnlyAnnounce {
+		recentTx = 1
+	}
+	if recentTx != 0 && p.version < lpv4 {
 		return errors.New("Cannot serve old clients without a complete tx index")
 	}
 	// Note: clientPeer.headInfo should contain the last head announced to the client by us.
@@ -988,8 +999,8 @@ func (p *clientPeer) Handshake(td *big.Int, head common.Hash, headNum uint64, ge
 			*lists = (*lists).add("serveRecentState", stateRecent)
 			*lists = (*lists).add("txRelay", nil)
 		}
-		if disableTxLookup || server.config.UltraLightOnlyAnnounce {
-			*lists = (*lists).add("disableTxLookup", nil)
+		if p.version >= lpv4 {
+			*lists = (*lists).add("recentTxLookup", recentTx)
 		}
 		*lists = (*lists).add("flowControl/BL", server.defParams.BufLimit)
 		*lists = (*lists).add("flowControl/MRR", server.defParams.MinRecharge)
