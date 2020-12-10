@@ -38,6 +38,8 @@ type BinaryNode interface {
 	HashM4() []byte
 	hash(off int) []byte
 	Commit() error
+
+	gv(string) (string, string)
 }
 
 // BinaryHashPreimage represents a tuple of a hash and its preimage
@@ -206,6 +208,11 @@ func (bt *BinaryTrie) TryGet(key []byte) ([]byte, error) {
 	}
 }
 
+func (bt *BinaryTrie) ToGraphViz() string {
+	content, _ := bt.root.gv("")
+	return fmt.Sprintf("digraph D {\nnode [shape=box]\n%s\n}", content)
+}
+
 func newBranchNode(prefix binkey, key []byte, value []byte, ht hashType) *branch {
 	return &branch{
 		prefix: prefix,
@@ -329,6 +336,26 @@ func (br *branch) HashM4() []byte {
 	return hash
 }
 
+func (br *branch) gv(path string) (string, string) {
+	me := fmt.Sprintf("br%s", path)
+	var l, r string
+	switch br.left.(type) {
+	case empty:
+	default:
+		leftPath := fmt.Sprintf("%s%x0", path, br.prefix)
+		leftGV, leftName := br.left.gv(leftPath)
+		l = fmt.Sprintf("%s -> %s\n%s", me, leftName, leftGV)
+	}
+	switch br.right.(type) {
+	case empty:
+	default:
+		rightPath := fmt.Sprintf("%s%x1", path, br.prefix)
+		rightGV, rightName := br.right.gv(rightPath)
+		r = fmt.Sprintf("%s -> %s\n%s", me, rightName, rightGV)
+	}
+	return fmt.Sprintf("%s [label=\"%x:%x\"]\n%s%s", me, br.prefix, br.value, l, r), me
+}
+
 func (db *btDatabase) insert(key, value []byte) error {
 	if len(key) != 32 && len(key) != 64 {
 		return errors.New("bintrie: can only insert a value at depth 32 or 64 bytes")
@@ -415,7 +442,7 @@ func NewBinaryTrieWithRawDB(db ethdb.KeyValueStore) *BinaryTrie {
 	bt := &BinaryTrie{
 		root: empty(struct{}{}),
 		db: btDatabase{
-			diskdb:  rawdb.NewMemoryDatabase(),
+			diskdb:  db,
 			dirties: make(map[common.Hash]*accountDirties),
 		},
 		hashType: typeKeccak256,
@@ -663,6 +690,11 @@ func (h hashBinaryNode) tryGet(key []byte, depth int) ([]byte, error) {
 	return nil, errReadFromEmptyTree
 }
 
+func (h hashBinaryNode) gv(path string) (string, string) {
+	me := fmt.Sprintf("h%s", path)
+	return fmt.Sprintf("%s [label=\"H\"]\n", me), me
+}
+
 func (e empty) Hash() []byte {
 	return emptyRoot[:]
 }
@@ -681,4 +713,9 @@ func (e empty) Commit() error {
 
 func (e empty) tryGet(key []byte, depth int) ([]byte, error) {
 	return nil, errReadFromEmptyTree
+}
+
+func (e empty) gv(path string) (string, string) {
+	me := fmt.Sprintf("e%s", path)
+	return fmt.Sprintf("%s [label=\"∅\"]\n", me), me
 }
