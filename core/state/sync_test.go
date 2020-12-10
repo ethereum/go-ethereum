@@ -402,15 +402,14 @@ func TestIncompleteStateSync(t *testing.T) {
 	// Create a random state to copy
 	srcDb, srcRoot, srcAccounts := makeTestState()
 
-	// isCode reports whether the hash is contract code hash.
-	isCode := func(hash common.Hash) bool {
-		for _, acc := range srcAccounts {
-			if hash == crypto.Keccak256Hash(acc.code) {
-				return true
-			}
+	// isCodeLookup to save some hashing
+	var isCode = make(map[common.Hash]struct{})
+	for _, acc := range srcAccounts {
+		if len(acc.code) > 0 {
+			isCode[crypto.Keccak256Hash(acc.code)] = struct{}{}
 		}
-		return false
 	}
+	isCode[common.BytesToHash(emptyCodeHash)] = struct{}{}
 	checkTrieConsistency(srcDb.TrieDB().DiskDB().(ethdb.Database), srcRoot)
 
 	// Create a destination state and sync with the scheduler
@@ -449,7 +448,7 @@ func TestIncompleteStateSync(t *testing.T) {
 		for _, result := range results {
 			added = append(added, result.Hash)
 			// Check that all known sub-tries added so far are complete or missing entirely.
-			if isCode(result.Hash) {
+			if _, ok := isCode[result.Hash]; ok {
 				continue
 			}
 			// Can't use checkStateConsistency here because subtrie keys may have odd
@@ -465,9 +464,9 @@ func TestIncompleteStateSync(t *testing.T) {
 	// Sanity check that removing any node from the database is detected
 	for _, node := range added[1:] {
 		var (
-			key  = node.Bytes()
-			code = isCode(node)
-			val  []byte
+			key     = node.Bytes()
+			_, code = isCode[node]
+			val     []byte
 		)
 		if code {
 			val = rawdb.ReadCode(dstDb, node)
