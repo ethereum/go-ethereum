@@ -485,6 +485,11 @@ func calcDifficultyFrontier(time uint64, parent *types.Header) *big.Int {
 	return diff
 }
 
+// Exported for fuzzing
+var FrontierDifficultyCalulator = calcDifficultyFrontier
+var HomesteadDifficultyCalulator = calcDifficultyHomestead
+var DynamicDifficultyCalculator = makeDifficultyCalculator
+
 // VerifySeal implements consensus.Engine, checking whether the given block satisfies
 // the PoW difficulty requirements.
 func (ethash *Ethash) VerifySeal(chain consensus.ChainHeaderReader, header *types.Header) error {
