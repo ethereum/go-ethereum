@@ -328,43 +328,15 @@ type BadBlockArgs struct {
 	RLP   string                 `json:"rlp"`
 }
 
-// BadBlockCriteria represents a request to retrieve the bad blocks.
-type BadBlockCriteria struct {
-	From    *int          `json:"from"`
-	To      *int          `json:"to"`
-	Targets []common.Hash `json:"targets"`
-}
-
 // GetBadBlocks returns a list of the last 'bad blocks' that the client has seen on the network
 // and returns them as a JSON list of block-hashes
-func (api *PrivateDebugAPI) GetBadBlocks(ctx context.Context, criteria *BadBlockCriteria) ([]*BadBlockArgs, error) {
+func (api *PrivateDebugAPI) GetBadBlocks(ctx context.Context) ([]*BadBlockArgs, error) {
 	var (
 		err     error
-		targets map[common.Hash]struct{}
-		blocks  = api.eth.BlockChain().BadBlocks()
+		blocks  = api.eth.BlockChain().BadBlocks(false) // Load last 10
 		results = make([]*BadBlockArgs, 0, len(blocks))
 	)
-	if criteria != nil {
-		targets = make(map[common.Hash]struct{})
-		for _, target := range criteria.Targets {
-			targets[target] = struct{}{}
-		}
-	}
-	for i, block := range blocks {
-		// Filter out the blocks if the criteria is specified
-		if criteria != nil {
-			if criteria.From != nil && i < *criteria.From {
-				continue
-			}
-			if criteria.To != nil && i >= *criteria.To {
-				continue
-			}
-			if targets != nil {
-				if _, exist := targets[block.Hash()]; !exist {
-					continue
-				}
-			}
-		}
+	for _, block := range blocks {
 		var (
 			blockRlp  string
 			blockJSON map[string]interface{}

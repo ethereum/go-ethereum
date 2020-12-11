@@ -722,8 +722,10 @@ func ReadBadBlock(db ethdb.Reader, hash common.Hash) *types.Block {
 
 // ReadAllBadBlocks retrieves all the bad blocks in the database
 func ReadAllBadBlocks(db ethdb.Database) ([]*types.Block, error) {
-	var blocks []*types.Block
 	iterator := db.NewIterator(badBlockPrefix, nil)
+	defer iterator.Release()
+
+	var blocks []*types.Block
 	for iterator.Next() {
 		blob := iterator.Value()
 		var block badBlock
@@ -732,7 +734,6 @@ func ReadAllBadBlocks(db ethdb.Database) ([]*types.Block, error) {
 		}
 		blocks = append(blocks, types.NewBlockWithHeader(block.Header).WithBody(block.Body.Transactions, block.Body.Uncles))
 	}
-	iterator.Release()
 	return blocks, nil
 }
 
