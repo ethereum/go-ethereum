@@ -36,7 +36,7 @@ type Limiter struct {
 	addressSelect, valueSelect     *WeightedRandomSelect
 	maxValue                       float64
 	maxCost, sumCost, sumCostLimit uint
-	selectedByValue                bool
+	selectAddressNext              bool
 }
 
 // nodeQueue represents queued requests coming from a single node ID
@@ -238,10 +238,8 @@ func (l *Limiter) update(nq *nodeQueue) {
 	ag := l.addresses[nq.address]
 	ag.update(nq, flatWeight)
 	l.addressSelect.Update(ag)
-	if valueWeight != 0 {
-		nq.valueWeight = valueWeight
-		l.valueSelect.Update(nq)
-	}
+	nq.valueWeight = valueWeight
+	l.valueSelect.Update(nq)
 }
 
 // addToGroup adds the node queue to the given address group. The group is created if
@@ -278,17 +276,15 @@ func (l *Limiter) remove(nq *nodeQueue) {
 }
 
 // choose selects the next node queue to process.
-// Note: when a node queue becomes empty it stays in the random selectors for one more
-// selection round before removed, with a weight based on the last relative cost.
 func (l *Limiter) choose() *nodeQueue {
-	if l.valueSelect.IsEmpty() || l.selectedByValue {
+	if l.valueSelect.IsEmpty() || l.selectAddressNext {
 		if ag, ok := l.addressSelect.Choose().(*addressGroup); ok {
-			l.selectedByValue = false
+			l.selectAddressNext = false
 			return ag.choose()
 		}
 	}
 	nq, _ := l.valueSelect.Choose().(*nodeQueue)
-	l.selectedByValue = true
+	l.selectAddressNext = true
 	return nq
 }
 
