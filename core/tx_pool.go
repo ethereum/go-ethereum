@@ -388,7 +388,7 @@ func (pool *TxPool) loop() {
 		// Handle inactive account transaction eviction
 		case <-evict.C:
 			pool.mu.Lock()
-			pool.priced.items.baseFee = pool.chain.CurrentBlock().BaseFee()
+			pool.priced.remotes.baseFee = pool.chain.CurrentBlock().BaseFee()
 			for addr := range pool.queue {
 				// Skip local transactions from the eviction mechanism
 				if pool.locals.contains(addr) {
@@ -452,7 +452,7 @@ func (pool *TxPool) GasPrice() *big.Int {
 func (pool *TxPool) SetGasPrice(price *big.Int) {
 	pool.mu.Lock()
 	defer pool.mu.Unlock()
-	pool.priced.items.baseFee = pool.chain.CurrentBlock().BaseFee()
+	pool.priced.remotes.baseFee = pool.chain.CurrentBlock().BaseFee()
 	pool.gasPrice = price
 	for _, tx := range pool.priced.Cap(price) {
 		pool.removeTx(tx.Hash(), false)
@@ -636,7 +636,7 @@ func (pool *TxPool) validateTx(tx *types.Transaction, local bool) error {
 // whitelisted, preventing any associated transaction from being dropped out of the pool
 // due to pricing constraints.
 func (pool *TxPool) add(tx *types.Transaction, local bool) (replaced bool, err error) {
-	pool.priced.items.baseFee = pool.chain.CurrentBlock().BaseFee()
+	pool.priced.remotes.baseFee = pool.chain.CurrentBlock().BaseFee()
 	// If the transaction is already known, discard it
 	hash := tx.Hash()
 	if pool.all.Get(hash) != nil {
@@ -1123,7 +1123,7 @@ func (pool *TxPool) runReorg(done chan struct{}, reset *txpoolResetRequest, dirt
 		promoteAddrs = dirtyAccounts.flatten()
 	}
 	pool.mu.Lock()
-	pool.priced.items.baseFee = pool.chain.CurrentBlock().BaseFee()
+	pool.priced.remotes.baseFee = pool.chain.CurrentBlock().BaseFee()
 	if reset != nil {
 		// Reset from the old head to the new, rescheduling any reorged transactions
 		pool.reset(reset.oldHead, reset.newHead)

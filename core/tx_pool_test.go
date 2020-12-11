@@ -655,7 +655,7 @@ func TestTransactionQueueEIP1559(t *testing.T) {
 	pool.currentState.AddBalance(from, big.NewInt(1000))
 	<-pool.requestReset(nil, nil)
 
-	pool.enqueueTx(tx.Hash(), tx)
+	pool.enqueueTx(tx.Hash(), tx, false, true)
 	<-pool.requestPromoteExecutables(newAccountSet(pool.signer, from))
 	if len(pool.pending) != 1 {
 		t.Error("expected valid txs to be 1 is", len(pool.pending))
@@ -664,7 +664,7 @@ func TestTransactionQueueEIP1559(t *testing.T) {
 	tx = eip1559Transaction(1, 100, key, big.NewInt(1), big.NewInt(10))
 	from, _ = deriveSender(tx)
 	pool.currentState.SetNonce(from, 2)
-	pool.enqueueTx(tx.Hash(), tx)
+	pool.enqueueTx(tx.Hash(), tx, false, true)
 
 	<-pool.requestPromoteExecutables(newAccountSet(pool.signer, from))
 	if _, ok := pool.pending[from].txs.items[tx.Nonce()]; ok {
@@ -686,7 +686,7 @@ func TestTransactionQueueEIP1559Finalized(t *testing.T) {
 	pool.currentState.AddBalance(from, big.NewInt(1000))
 	<-pool.requestReset(nil, nil)
 
-	pool.enqueueTx(tx.Hash(), tx)
+	pool.enqueueTx(tx.Hash(), tx, false, true)
 	<-pool.requestPromoteExecutables(newAccountSet(pool.signer, from))
 	if len(pool.pending) != 1 {
 		t.Error("expected valid txs to be 1 is", len(pool.pending))
@@ -695,7 +695,7 @@ func TestTransactionQueueEIP1559Finalized(t *testing.T) {
 	tx = eip1559Transaction(1, 100, key, big.NewInt(1), big.NewInt(10))
 	from, _ = deriveSender(tx)
 	pool.currentState.SetNonce(from, 2)
-	pool.enqueueTx(tx.Hash(), tx)
+	pool.enqueueTx(tx.Hash(), tx, false, true)
 
 	<-pool.requestPromoteExecutables(newAccountSet(pool.signer, from))
 	if _, ok := pool.pending[from].txs.items[tx.Nonce()]; ok {
@@ -719,9 +719,9 @@ func TestTransactionQueue2EIP1559(t *testing.T) {
 	pool.currentState.AddBalance(from, big.NewInt(1000))
 	pool.reset(nil, nil)
 
-	pool.enqueueTx(tx1.Hash(), tx1)
-	pool.enqueueTx(tx2.Hash(), tx2)
-	pool.enqueueTx(tx3.Hash(), tx3)
+	pool.enqueueTx(tx1.Hash(), tx1, false, true)
+	pool.enqueueTx(tx2.Hash(), tx2, false, true)
+	pool.enqueueTx(tx3.Hash(), tx3, false, true)
 
 	pool.promoteExecutables([]common.Address{from})
 	if len(pool.pending) != 1 {
@@ -745,9 +745,9 @@ func TestTransactionQueue2EIP1559Finalized(t *testing.T) {
 	pool.currentState.AddBalance(from, big.NewInt(1000))
 	pool.reset(nil, nil)
 
-	pool.enqueueTx(tx1.Hash(), tx1)
-	pool.enqueueTx(tx2.Hash(), tx2)
-	pool.enqueueTx(tx3.Hash(), tx3)
+	pool.enqueueTx(tx1.Hash(), tx1, false, true)
+	pool.enqueueTx(tx2.Hash(), tx2, false, true)
+	pool.enqueueTx(tx3.Hash(), tx3, false, true)
 
 	pool.promoteExecutables([]common.Address{from})
 	if len(pool.pending) != 1 {
@@ -1364,9 +1364,9 @@ func TestTransactionDroppingEIP15591(t *testing.T) {
 	pool.promoteTx(account, tx0.Hash(), tx0)
 	pool.promoteTx(account, tx1.Hash(), tx1)
 	pool.promoteTx(account, tx2.Hash(), tx2)
-	pool.enqueueTx(tx10.Hash(), tx10)
-	pool.enqueueTx(tx11.Hash(), tx11)
-	pool.enqueueTx(tx12.Hash(), tx12)
+	pool.enqueueTx(tx10.Hash(), tx10, false, true)
+	pool.enqueueTx(tx11.Hash(), tx11, false, true)
+	pool.enqueueTx(tx12.Hash(), tx12, false, true)
 
 	// Check that pre and post validations leave the pool as is
 	if pool.pending[account].Len() != 3 {
@@ -1375,8 +1375,8 @@ func TestTransactionDroppingEIP15591(t *testing.T) {
 	if pool.queue[account].Len() != 3 {
 		t.Errorf("queued transaction mismatch: have %d, want %d", pool.queue[account].Len(), 3)
 	}
-	if pool.all.Count() != 6 {
-		t.Errorf("total transaction mismatch: have %d, want %d", pool.all.Count(), 6)
+	if pool.all.Count() != 3 {
+		t.Errorf("total transaction mismatch: have %d, want %d", pool.all.Count(), 3)
 	}
 	<-pool.requestReset(nil, nil)
 	if pool.pending[account].Len() != 3 {
@@ -1385,8 +1385,8 @@ func TestTransactionDroppingEIP15591(t *testing.T) {
 	if pool.queue[account].Len() != 3 {
 		t.Errorf("queued transaction mismatch: have %d, want %d", pool.queue[account].Len(), 3)
 	}
-	if pool.all.Count() != 6 {
-		t.Errorf("total transaction mismatch: have %d, want %d", pool.all.Count(), 6)
+	if pool.all.Count() != 3 {
+		t.Errorf("total transaction mismatch: have %d, want %d", pool.all.Count(), 2)
 	}
 	// Reduce the balance of the account, and check that invalidated transactions are dropped
 	pool.currentState.AddBalance(account, big.NewInt(-500))
@@ -1410,8 +1410,8 @@ func TestTransactionDroppingEIP15591(t *testing.T) {
 	if _, ok := pool.queue[account].txs.items[tx12.Nonce()]; ok {
 		t.Errorf("out-of-fund queued transaction present: %v", tx12)
 	}
-	if pool.all.Count() != 4 {
-		t.Errorf("total transaction mismatch: have %d, want %d", pool.all.Count(), 4)
+	if pool.all.Count() != 2 {
+		t.Errorf("total transaction mismatch: have %d, want %d", pool.all.Count(), 2)
 	}
 	// Reduce the block gas limit, check that invalidated transactions are dropped
 	pool.chain.(*testBlockChain).gasLimit = 200
@@ -1429,8 +1429,8 @@ func TestTransactionDroppingEIP15591(t *testing.T) {
 	if _, ok := pool.queue[account].txs.items[tx11.Nonce()]; !ok {
 		t.Errorf("funded queued transaction missing: %v", tx11)
 	}
-	if pool.all.Count() != 3 {
-		t.Errorf("total transaction mismatch: have %d, want %d", pool.all.Count(), 3)
+	if pool.all.Count() != 2 {
+		t.Errorf("total transaction mismatch: have %d, want %d", pool.all.Count(), 2)
 	}
 }
 
@@ -1456,19 +1456,21 @@ func TestTransactionDroppingEIP1559Finalized(t *testing.T) {
 	pool.promoteTx(account, tx0.Hash(), tx0)
 	pool.promoteTx(account, tx1.Hash(), tx1)
 	pool.promoteTx(account, tx2.Hash(), tx2)
-	pool.enqueueTx(tx10.Hash(), tx10)
-	pool.enqueueTx(tx11.Hash(), tx11)
-	pool.enqueueTx(tx12.Hash(), tx12)
+	pool.enqueueTx(tx10.Hash(), tx10, true, true)
+	pool.enqueueTx(tx11.Hash(), tx11, true, true)
+	pool.enqueueTx(tx12.Hash(), tx12, true, true)
 
 	// Check that pre and post validations leave the pool as is
 	if pool.pending[account].Len() != 3 {
 		t.Errorf("pending transaction mismatch: have %d, want %d", pool.pending[account].Len(), 3)
 	}
+	fmt.Println(pool.pending[account].Len(), pool.queue[account].Len())
 	if pool.queue[account].Len() != 3 {
 		t.Errorf("queued transaction mismatch: have %d, want %d", pool.queue[account].Len(), 3)
 	}
-	if pool.all.Count() != 6 {
-		t.Errorf("total transaction mismatch: have %d, want %d", pool.all.Count(), 6)
+	fmt.Println(pool.pending[account].Len(), pool.queue[account].Len(), pool.all.Count())
+	if pool.all.Count() != 3 {
+		t.Errorf("total transaction mismatch: have %d, want %d", pool.all.Count(), 3)
 	}
 	<-pool.requestReset(nil, nil)
 	if pool.pending[account].Len() != 3 {
@@ -1477,8 +1479,8 @@ func TestTransactionDroppingEIP1559Finalized(t *testing.T) {
 	if pool.queue[account].Len() != 3 {
 		t.Errorf("queued transaction mismatch: have %d, want %d", pool.queue[account].Len(), 3)
 	}
-	if pool.all.Count() != 6 {
-		t.Errorf("total transaction mismatch: have %d, want %d", pool.all.Count(), 6)
+	if pool.all.Count() != 3 {
+		t.Errorf("total transaction mismatch: have %d, want %d", pool.all.Count(), 3)
 	}
 	// Reduce the balance of the account, and check that invalidated transactions are dropped
 	pool.currentState.AddBalance(account, big.NewInt(-500))
@@ -1502,8 +1504,8 @@ func TestTransactionDroppingEIP1559Finalized(t *testing.T) {
 	if _, ok := pool.queue[account].txs.items[tx12.Nonce()]; ok {
 		t.Errorf("out-of-fund queued transaction present: %v", tx12)
 	}
-	if pool.all.Count() != 4 {
-		t.Errorf("total transaction mismatch: have %d, want %d", pool.all.Count(), 4)
+	if pool.all.Count() != 2 {
+		t.Errorf("total transaction mismatch: have %d, want %d", pool.all.Count(), 2)
 	}
 	// Reduce the block gas limit, check that invalidated transactions are dropped
 	pool.chain.(*testBlockChain).gasLimit = 50
@@ -1521,8 +1523,8 @@ func TestTransactionDroppingEIP1559Finalized(t *testing.T) {
 	if _, ok := pool.queue[account].txs.items[tx11.Nonce()]; ok {
 		t.Errorf("over-gased queued transaction present: %v", tx11)
 	}
-	if pool.all.Count() != 2 {
-		t.Errorf("total transaction mismatch: have %d, want %d", pool.all.Count(), 2)
+	if pool.all.Count() != 1 {
+		t.Errorf("total transaction mismatch: have %d, want %d", pool.all.Count(), 1)
 	}
 }
 
@@ -5004,7 +5006,7 @@ func benchmarkFuturePromotionEIP1559(b *testing.B, size int) {
 		} else {
 			tx = eip1559Transaction(uint64(1+i), 100000, key, big.NewInt(1), big.NewInt(10))
 		}
-		pool.enqueueTx(tx.Hash(), tx)
+		pool.enqueueTx(tx.Hash(), tx, false, true)
 	}
 	// Benchmark the speed of pool validation
 	b.ResetTimer()
@@ -5033,7 +5035,7 @@ func benchmarkFuturePromotionEIP1559Finalized(b *testing.B, size int) {
 
 	for i := 0; i < size; i++ {
 		tx := eip1559Transaction(uint64(1+i), 100000, key, big.NewInt(1), big.NewInt(10))
-		pool.enqueueTx(tx.Hash(), tx)
+		pool.enqueueTx(tx.Hash(), tx, false, true)
 	}
 	// Benchmark the speed of pool validation
 	b.ResetTimer()
