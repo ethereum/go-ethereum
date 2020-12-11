@@ -109,6 +109,17 @@ func setupTxPool() (*TxPool, *ecdsa.PrivateKey) {
 	return pool, key
 }
 
+func eip1559cfg(block, finalized *big.Int) *params.ChainConfig {
+	cfg := *params.EIP1559ChainConfig
+	if block != nil {
+		cfg.EIP1559Block = block
+	}
+	if finalized != nil {
+		cfg.EIP1559FinalizedBlock = finalized
+	}
+	return &cfg
+}
+
 func setupEIP1559TxPool(baseFee *big.Int) (*TxPool, *ecdsa.PrivateKey) {
 	statedb, _ := state.New(common.Hash{}, state.NewDatabase(rawdb.NewMemoryDatabase()), nil)
 	blockchain := &testBlockChain{statedb, 1000000, new(event.Feed), baseFee}
@@ -119,12 +130,32 @@ func setupEIP1559TxPool(baseFee *big.Int) (*TxPool, *ecdsa.PrivateKey) {
 	return pool, key
 }
 
+func setupEIP1559TxPoolZeroBlock(baseFee *big.Int) (*TxPool, *ecdsa.PrivateKey) {
+	statedb, _ := state.New(common.Hash{}, state.NewDatabase(rawdb.NewMemoryDatabase()), nil)
+	blockchain := &testBlockChain{statedb, 1000000, new(event.Feed), baseFee}
+
+	key, _ := crypto.GenerateKey()
+	pool := NewTxPool(testTxPoolConfig, eip1559cfg(big.NewInt(0), nil), blockchain)
+
+	return pool, key
+}
+
 func setupEIP1559FinalizedTxPool(baseFee *big.Int) (*TxPool, *ecdsa.PrivateKey) {
 	statedb, _ := state.New(common.Hash{}, state.NewDatabase(rawdb.NewMemoryDatabase()), nil)
 	blockchain := &testBlockChain{statedb, 1000000, new(event.Feed), baseFee}
 
 	key, _ := crypto.GenerateKey()
 	pool := NewTxPool(testTxPoolConfig, params.EIP1559FinalizedChainConfig, blockchain)
+
+	return pool, key
+}
+
+func setupEIP1559FinalizedTxPoolZeroBlock(baseFee *big.Int) (*TxPool, *ecdsa.PrivateKey) {
+	statedb, _ := state.New(common.Hash{}, state.NewDatabase(rawdb.NewMemoryDatabase()), nil)
+	blockchain := &testBlockChain{statedb, 1000000, new(event.Feed), baseFee}
+
+	key, _ := crypto.GenerateKey()
+	pool := NewTxPool(testTxPoolConfig, eip1559cfg(big.NewInt(0), big.NewInt(0)), blockchain)
 
 	return pool, key
 }
@@ -282,7 +313,7 @@ func TestStateChangeDuringTransactionPoolResetEIP1559(t *testing.T) {
 	tx0 := transaction(0, 100000, key)
 	tx1 := eip1559Transaction(1, 100000, key, big.NewInt(1), big.NewInt(10))
 
-	pool := NewTxPool(testTxPoolConfig, params.EIP1559ChainConfig, blockchain)
+	pool := NewTxPool(testTxPoolConfig, eip1559cfg(big.NewInt(0), nil), blockchain)
 	defer pool.Stop()
 
 	nonce := pool.Nonce(address)
@@ -328,7 +359,7 @@ func TestStateChangeDuringTransactionPoolResetEIP1559Finalized(t *testing.T) {
 	tx0 := eip1559Transaction(0, 100000, key, big.NewInt(1), big.NewInt(10))
 	tx1 := eip1559Transaction(1, 100000, key, big.NewInt(1), big.NewInt(10))
 
-	pool := NewTxPool(testTxPoolConfig, params.EIP1559FinalizedChainConfig, blockchain)
+	pool := NewTxPool(testTxPoolConfig, eip1559cfg(big.NewInt(0), big.NewInt(0)), blockchain)
 	defer pool.Stop()
 
 	nonce := pool.Nonce(address)
@@ -365,7 +396,7 @@ func TestTransactionPoolBaseFeeEIP1559(t *testing.T) {
 	statedb, _ := state.New(common.Hash{}, state.NewDatabase(rawdb.NewMemoryDatabase()), nil)
 	blockchain := &testBlockChain{statedb, 1000000, new(event.Feed), nil}
 
-	pool := NewTxPool(testTxPoolConfig, params.EIP1559ChainConfig, blockchain)
+	pool := NewTxPool(testTxPoolConfig, eip1559cfg(big.NewInt(0), nil), blockchain)
 	defer pool.Stop()
 
 	key, _ := crypto.GenerateKey()
@@ -383,7 +414,7 @@ func TestTransactionPoolBaseFeeEIP1559Finalized(t *testing.T) {
 	statedb, _ := state.New(common.Hash{}, state.NewDatabase(rawdb.NewMemoryDatabase()), nil)
 	blockchain := &testBlockChain{statedb, 1000000, new(event.Feed), nil}
 
-	pool := NewTxPool(testTxPoolConfig, params.EIP1559FinalizedChainConfig, blockchain)
+	pool := NewTxPool(testTxPoolConfig, eip1559cfg(big.NewInt(0), big.NewInt(0)), blockchain)
 	defer pool.Stop()
 
 	key, _ := crypto.GenerateKey()
@@ -443,7 +474,7 @@ func TestInvalidTransactions(t *testing.T) {
 func TestInvalidTransactionsEIP1559(t *testing.T) {
 	t.Parallel()
 
-	pool, key := setupEIP1559TxPool(big.NewInt(5))
+	pool, key := setupEIP1559TxPoolZeroBlock(big.NewInt(5))
 	defer pool.Stop()
 
 	tx := eip1559Transaction(0, 100, key, big.NewInt(1), big.NewInt(10))
@@ -510,7 +541,7 @@ func TestInvalidTransactionsEIP1559(t *testing.T) {
 func TestInvalidTransactionsEIP1559Finalized(t *testing.T) {
 	t.Parallel()
 
-	pool, key := setupEIP1559FinalizedTxPool(big.NewInt(5))
+	pool, key := setupEIP1559FinalizedTxPoolZeroBlock(big.NewInt(5))
 	defer pool.Stop()
 
 	tx := eip1559Transaction(0, 100, key, big.NewInt(1), big.NewInt(10))
@@ -744,7 +775,7 @@ func TestTransactionNegativeValue(t *testing.T) {
 func TestTransactionNegativeValueEIP1559(t *testing.T) {
 	t.Parallel()
 
-	pool, key := setupEIP1559TxPool(big.NewInt(5))
+	pool, key := setupEIP1559TxPoolZeroBlock(big.NewInt(5))
 	defer pool.Stop()
 
 	tx, _ := types.SignTx(types.NewTransaction(0, common.Address{}, big.NewInt(-1), 100, nil, nil, big.NewInt(1), big.NewInt(10)), types.HomesteadSigner{}, key)
@@ -758,7 +789,7 @@ func TestTransactionNegativeValueEIP1559(t *testing.T) {
 func TestTransactionNegativeValueEIP1559Finalized(t *testing.T) {
 	t.Parallel()
 
-	pool, key := setupEIP1559FinalizedTxPool(big.NewInt(5))
+	pool, key := setupEIP1559FinalizedTxPoolZeroBlock(big.NewInt(5))
 	defer pool.Stop()
 
 	tx, _ := types.SignTx(types.NewTransaction(0, common.Address{}, big.NewInt(-1), 100, nil, nil, big.NewInt(1), big.NewInt(10)), types.HomesteadSigner{}, key)
@@ -801,7 +832,7 @@ func TestTransactionChainFork(t *testing.T) {
 func TestTransactionChainForkEIP1559(t *testing.T) {
 	t.Parallel()
 
-	pool, key := setupEIP1559TxPool(big.NewInt(5))
+	pool, key := setupEIP1559TxPoolZeroBlock(big.NewInt(5))
 	defer pool.Stop()
 
 	addr := crypto.PubkeyToAddress(key.PublicKey)
@@ -830,7 +861,7 @@ func TestTransactionChainForkEIP1559(t *testing.T) {
 func TestTransactionChainForkEIP1559Finalized(t *testing.T) {
 	t.Parallel()
 
-	pool, key := setupEIP1559FinalizedTxPool(big.NewInt(5))
+	pool, key := setupEIP1559FinalizedTxPoolZeroBlock(big.NewInt(5))
 	defer pool.Stop()
 
 	addr := crypto.PubkeyToAddress(key.PublicKey)
@@ -910,7 +941,7 @@ func TestTransactionDoubleNonce(t *testing.T) {
 func TestTransactionDoubleNonceEIP1559(t *testing.T) {
 	t.Parallel()
 
-	pool, key := setupEIP1559TxPool(big.NewInt(5))
+	pool, key := setupEIP1559TxPoolZeroBlock(big.NewInt(5))
 	defer pool.Stop()
 
 	addr := crypto.PubkeyToAddress(key.PublicKey)
@@ -990,7 +1021,7 @@ func TestTransactionDoubleNonceEIP1559(t *testing.T) {
 func TestTransactionDoubleNonceEIP1559Finalized(t *testing.T) {
 	t.Parallel()
 
-	pool, key := setupEIP1559FinalizedTxPool(big.NewInt(5))
+	pool, key := setupEIP1559FinalizedTxPoolZeroBlock(big.NewInt(5))
 	defer pool.Stop()
 
 	addr := crypto.PubkeyToAddress(key.PublicKey)
@@ -1006,7 +1037,7 @@ func TestTransactionDoubleNonceEIP1559Finalized(t *testing.T) {
 	account := crypto.PubkeyToAddress(key.PublicKey)
 	pool.currentState.AddBalance(account, big.NewInt(1000))
 	signer := types.HomesteadSigner{}
-	tx1, _ := types.SignTx(types.NewTransaction(0, common.Address{}, big.NewInt(100), 100000, nil, nil, big.NewInt(1), big.NewInt(10)), signer, key)
+	tx1, _ := types.SignTx(types.NewTransaction(0, common.Address{}, big.NewInt(100), 1000000, nil, nil, big.NewInt(1), big.NewInt(10)), signer, key)
 	tx2, _ := types.SignTx(types.NewTransaction(0, common.Address{}, big.NewInt(100), 1000000, nil, nil, big.NewInt(2), big.NewInt(10)), signer, key)
 	tx3, _ := types.SignTx(types.NewTransaction(0, common.Address{}, big.NewInt(100), 1000000, nil, nil, big.NewInt(1), big.NewInt(10)), signer, key)
 	tx4, _ := types.SignTx(types.NewTransaction(0, common.Address{}, big.NewInt(100), 1000000, nil, nil, big.NewInt(3), big.NewInt(10)), signer, key)
@@ -1080,7 +1111,7 @@ func TestTransactionMissingNonce(t *testing.T) {
 func TestTransactionMissingNonceEIP1559(t *testing.T) {
 	t.Parallel()
 
-	pool, key := setupEIP1559TxPool(big.NewInt(5))
+	pool, key := setupEIP1559TxPoolZeroBlock(big.NewInt(5))
 	defer pool.Stop()
 
 	addr := crypto.PubkeyToAddress(key.PublicKey)
@@ -1116,7 +1147,7 @@ func TestTransactionMissingNonceEIP1559(t *testing.T) {
 func TestTransactionMissingNonceEIP1559Finalized(t *testing.T) {
 	t.Parallel()
 
-	pool, key := setupEIP1559FinalizedTxPool(big.NewInt(5))
+	pool, key := setupEIP1559FinalizedTxPoolZeroBlock(big.NewInt(5))
 	defer pool.Stop()
 
 	addr := crypto.PubkeyToAddress(key.PublicKey)
@@ -1188,7 +1219,7 @@ func TestTransactionNonceRecoveryEIP1559Finalized(t *testing.T) {
 	t.Parallel()
 
 	const n = 10
-	pool, key := setupEIP1559FinalizedTxPool(big.NewInt(5))
+	pool, key := setupEIP1559FinalizedTxPoolZeroBlock(big.NewInt(5))
 	defer pool.Stop()
 
 	addr := crypto.PubkeyToAddress(key.PublicKey)
@@ -1315,7 +1346,7 @@ func TestTransactionDroppingEIP15591(t *testing.T) {
 	t.Parallel()
 
 	// Create a test account and fund it
-	pool, key := setupEIP1559TxPool(big.NewInt(1))
+	pool, key := setupEIP1559TxPoolZeroBlock(big.NewInt(1))
 	defer pool.Stop()
 
 	account, _ := deriveSender(transaction(0, 0, key))
@@ -1407,7 +1438,7 @@ func TestTransactionDroppingEIP1559Finalized(t *testing.T) {
 	t.Parallel()
 
 	// Create a test account and fund it
-	pool, key := setupEIP1559FinalizedTxPool(big.NewInt(1))
+	pool, key := setupEIP1559FinalizedTxPoolZeroBlock(big.NewInt(1))
 	defer pool.Stop()
 
 	account, _ := deriveSender(transaction(0, 0, key))
@@ -1616,7 +1647,7 @@ func TestTransactionPostponingEIP1559(t *testing.T) {
 	statedb, _ := state.New(common.Hash{}, state.NewDatabase(rawdb.NewMemoryDatabase()), nil)
 	blockchain := &testBlockChain{statedb, 1000000, new(event.Feed), big.NewInt(1)}
 
-	pool := NewTxPool(testTxPoolConfig, params.EIP1559ChainConfig, blockchain)
+	pool := NewTxPool(testTxPoolConfig, eip1559cfg(big.NewInt(0), nil), blockchain)
 	defer pool.Stop()
 
 	// Create two test accounts to produce different gap profiles with
@@ -1727,7 +1758,7 @@ func TestTransactionPostponingEIP1559Finalized(t *testing.T) {
 	statedb, _ := state.New(common.Hash{}, state.NewDatabase(rawdb.NewMemoryDatabase()), nil)
 	blockchain := &testBlockChain{statedb, 1000000, new(event.Feed), big.NewInt(1)}
 
-	pool := NewTxPool(testTxPoolConfig, params.EIP1559FinalizedChainConfig, blockchain)
+	pool := NewTxPool(testTxPoolConfig, eip1559cfg(big.NewInt(0), big.NewInt(0)), blockchain)
 	defer pool.Stop()
 
 	// Create two test accounts to produce different gap profiles with
@@ -1890,7 +1921,7 @@ func TestTransactionGapFillingEIP1559(t *testing.T) {
 	t.Parallel()
 
 	// Create a test account and fund it
-	pool, key := setupEIP1559TxPool(big.NewInt(1))
+	pool, key := setupEIP1559TxPoolZeroBlock(big.NewInt(1))
 	defer pool.Stop()
 
 	account, _ := deriveSender(transaction(0, 0, key))
@@ -1942,7 +1973,7 @@ func TestTransactionGapFillingEIP1559Finalized(t *testing.T) {
 	t.Parallel()
 
 	// Create a test account and fund it
-	pool, key := setupEIP1559FinalizedTxPool(big.NewInt(1))
+	pool, key := setupEIP1559FinalizedTxPoolZeroBlock(big.NewInt(1))
 	defer pool.Stop()
 
 	account, _ := deriveSender(eip1559Transaction(0, 0, key, big.NewInt(1), big.NewInt(10)))
@@ -2029,7 +2060,7 @@ func TestTransactionQueueAccountLimitingEIP1559(t *testing.T) {
 	t.Parallel()
 
 	// Create a test account and fund it
-	pool, key := setupEIP1559TxPool(big.NewInt(1))
+	pool, key := setupEIP1559TxPoolZeroBlock(big.NewInt(1))
 	defer pool.Stop()
 
 	account, _ := deriveSender(transaction(0, 0, key))
@@ -2062,7 +2093,7 @@ func TestTransactionQueueAccountLimitingEIP1559Finalized(t *testing.T) {
 	t.Parallel()
 
 	// Create a test account and fund it
-	pool, key := setupEIP1559FinalizedTxPool(big.NewInt(1))
+	pool, key := setupEIP1559FinalizedTxPoolZeroBlock(big.NewInt(1))
 	defer pool.Stop()
 
 	account, _ := deriveSender(transaction(0, 0, key))
@@ -2282,7 +2313,7 @@ func testTransactionQueueGlobalLimitingEIP1559Finalized(t *testing.T, nolocals b
 	config.NoLocals = nolocals
 	config.GlobalQueue = config.AccountQueue*3 - 1 // reduce the queue limits to shorten test time (-1 to make it non divisible)
 
-	pool := NewTxPool(config, params.EIP1559FinalizedChainConfig, blockchain)
+	pool := NewTxPool(config, eip1559cfg(big.NewInt(0), big.NewInt(0)), blockchain)
 	defer pool.Stop()
 
 	// Create a number of test accounts and fund them (last one will be the local)
@@ -2442,7 +2473,10 @@ func testTransactionQueueTimeLimitingEIP1559(t *testing.T, nolocals bool) {
 	config.Lifetime = time.Second
 	config.NoLocals = nolocals
 
-	pool := NewTxPool(config, params.EIP1559ChainConfig, blockchain)
+	cfg := *params.EIP1559ChainConfig
+	cfg.EIP1559Block = big.NewInt(0)
+
+	pool := NewTxPool(config, &cfg, blockchain)
 	defer pool.Stop()
 
 	// Create two test accounts to ensure remotes expire but locals do not
@@ -2510,7 +2544,10 @@ func testTransactionQueueTimeLimitingEIP1559Finalized(t *testing.T, nolocals boo
 	config.Lifetime = time.Second
 	config.NoLocals = nolocals
 
-	pool := NewTxPool(config, params.EIP1559FinalizedChainConfig, blockchain)
+	cfg := *params.EIP1559FinalizedChainConfig
+	cfg.EIP1559Block = big.NewInt(0)
+	cfg.EIP1559FinalizedBlock = big.NewInt(0)
+	pool := NewTxPool(config, &cfg, blockchain)
 	defer pool.Stop()
 
 	// Create two test accounts to ensure remotes expire but locals do not
@@ -2603,7 +2640,7 @@ func TestTransactionPendingLimitingEIP1559(t *testing.T) {
 	t.Parallel()
 
 	// Create a test account and fund it
-	pool, key := setupEIP1559TxPool(big.NewInt(1))
+	pool, key := setupEIP1559TxPoolZeroBlock(big.NewInt(1))
 	defer pool.Stop()
 
 	account, _ := deriveSender(transaction(0, 0, key))
@@ -2641,7 +2678,7 @@ func TestTransactionPendingLimitingEIP1559Finalized(t *testing.T) {
 	t.Parallel()
 
 	// Create a test account and fund it
-	pool, key := setupEIP1559FinalizedTxPool(big.NewInt(1))
+	pool, key := setupEIP1559FinalizedTxPoolZeroBlock(big.NewInt(1))
 	defer pool.Stop()
 
 	account, _ := deriveSender(transaction(0, 0, key))
@@ -3170,7 +3207,7 @@ func TestTransactionPoolRepricingEIP1559(t *testing.T) {
 	statedb, _ := state.New(common.Hash{}, state.NewDatabase(rawdb.NewMemoryDatabase()), nil)
 	blockchain := &testBlockChain{statedb, 1000000, new(event.Feed), big.NewInt(1)}
 
-	pool := NewTxPool(testTxPoolConfig, params.EIP1559ChainConfig, blockchain)
+	pool := NewTxPool(testTxPoolConfig, eip1559cfg(big.NewInt(0), nil), blockchain)
 	defer pool.Stop()
 
 	// Keep track of transaction events to ensure all executables get announced
@@ -3289,7 +3326,7 @@ func TestTransactionPoolRepricingEIP1559Finalized(t *testing.T) {
 	statedb, _ := state.New(common.Hash{}, state.NewDatabase(rawdb.NewMemoryDatabase()), nil)
 	blockchain := &testBlockChain{statedb, 1000000, new(event.Feed), big.NewInt(1)}
 
-	pool := NewTxPool(testTxPoolConfig, params.EIP1559FinalizedChainConfig, blockchain)
+	pool := NewTxPool(testTxPoolConfig, eip1559cfg(big.NewInt(0), big.NewInt(0)), blockchain)
 	defer pool.Stop()
 
 	// Keep track of transaction events to ensure all executables get announced
@@ -3467,7 +3504,7 @@ func TestTransactionPoolRepricingKeepsLocalsEIP1559(t *testing.T) {
 	statedb, _ := state.New(common.Hash{}, state.NewDatabase(rawdb.NewMemoryDatabase()), nil)
 	blockchain := &testBlockChain{statedb, 1000000, new(event.Feed), big.NewInt(1)}
 
-	pool := NewTxPool(testTxPoolConfig, params.EIP1559ChainConfig, blockchain)
+	pool := NewTxPool(testTxPoolConfig, eip1559cfg(big.NewInt(0), nil), blockchain)
 	defer pool.Stop()
 
 	// Create a number of test accounts and fund them
@@ -3524,7 +3561,7 @@ func TestTransactionPoolRepricingKeepsLocalsEIP1559Finalized(t *testing.T) {
 	statedb, _ := state.New(common.Hash{}, state.NewDatabase(rawdb.NewMemoryDatabase()), nil)
 	blockchain := &testBlockChain{statedb, 1000000, new(event.Feed), big.NewInt(1)}
 
-	pool := NewTxPool(testTxPoolConfig, params.EIP1559FinalizedChainConfig, blockchain)
+	pool := NewTxPool(testTxPoolConfig, eip1559cfg(big.NewInt(0), big.NewInt(0)), blockchain)
 	defer pool.Stop()
 
 	// Create a number of test accounts and fund them
@@ -3760,7 +3797,7 @@ func TestTransactionPoolStableUnderpricingEIP1559(t *testing.T) {
 	config.GlobalSlots = 128
 	config.GlobalQueue = 0
 
-	pool := NewTxPool(config, params.EIP1559ChainConfig, blockchain)
+	pool := NewTxPool(config, eip1559cfg(big.NewInt(0), nil), blockchain)
 	defer pool.Stop()
 
 	// Keep track of transaction events to ensure all executables get announced
@@ -3824,7 +3861,7 @@ func TestTransactionPoolStableUnderpricingEIP1559Finalized(t *testing.T) {
 	config.GlobalSlots = 128
 	config.GlobalQueue = 0
 
-	pool := NewTxPool(config, params.EIP1559FinalizedChainConfig, blockchain)
+	pool := NewTxPool(config, eip1559cfg(big.NewInt(0), big.NewInt(0)), blockchain)
 	defer pool.Stop()
 
 	// Keep track of transaction events to ensure all executables get announced
@@ -3949,7 +3986,7 @@ func TestTransactionDeduplicationEIP1559(t *testing.T) {
 	statedb, _ := state.New(common.Hash{}, state.NewDatabase(rawdb.NewMemoryDatabase()), nil)
 	blockchain := &testBlockChain{statedb, 1000000, new(event.Feed), big.NewInt(1)}
 
-	pool := NewTxPool(testTxPoolConfig, params.EIP1559ChainConfig, blockchain)
+	pool := NewTxPool(testTxPoolConfig, eip1559cfg(big.NewInt(0), nil), blockchain)
 	defer pool.Stop()
 
 	// Create a test account to add transactions with
@@ -4013,7 +4050,7 @@ func TestTransactionDeduplicationEIP1559Finalized(t *testing.T) {
 	statedb, _ := state.New(common.Hash{}, state.NewDatabase(rawdb.NewMemoryDatabase()), nil)
 	blockchain := &testBlockChain{statedb, 1000000, new(event.Feed), big.NewInt(1)}
 
-	pool := NewTxPool(testTxPoolConfig, params.EIP1559FinalizedChainConfig, blockchain)
+	pool := NewTxPool(testTxPoolConfig, eip1559cfg(big.NewInt(0), big.NewInt(0)), blockchain)
 	defer pool.Stop()
 
 	// Create a test account to add transactions with
@@ -4161,7 +4198,7 @@ func TestTransactionReplacementEIP1559(t *testing.T) {
 	statedb, _ := state.New(common.Hash{}, state.NewDatabase(rawdb.NewMemoryDatabase()), nil)
 	blockchain := &testBlockChain{statedb, 1000000, new(event.Feed), big.NewInt(1)}
 
-	pool := NewTxPool(testTxPoolConfig, params.EIP1559ChainConfig, blockchain)
+	pool := NewTxPool(testTxPoolConfig, eip1559cfg(big.NewInt(0), nil), blockchain)
 	defer pool.Stop()
 
 	// Keep track of transaction events to ensure all executables get announced
@@ -4239,7 +4276,7 @@ func TestTransactionReplacementEIP1559Finalized(t *testing.T) {
 	statedb, _ := state.New(common.Hash{}, state.NewDatabase(rawdb.NewMemoryDatabase()), nil)
 	blockchain := &testBlockChain{statedb, 1000000, new(event.Feed), big.NewInt(1)}
 
-	pool := NewTxPool(testTxPoolConfig, params.EIP1559FinalizedChainConfig, blockchain)
+	pool := NewTxPool(testTxPoolConfig, eip1559cfg(big.NewInt(0), big.NewInt(0)), blockchain)
 	defer pool.Stop()
 
 	// Keep track of transaction events to ensure all executables get announced
@@ -4455,7 +4492,10 @@ func testTransactionJournalingEIP1559(t *testing.T, nolocals bool) {
 	config.Journal = journal
 	config.Rejournal = time.Second
 
-	pool := NewTxPool(config, params.EIP1559ChainConfig, blockchain)
+	cfg := *params.EIP1559ChainConfig
+	cfg.EIP1559Block = big.NewInt(0)
+
+	pool := NewTxPool(config, &cfg, blockchain)
 
 	// Create two test accounts to ensure remotes expire but locals do not
 	local, _ := crypto.GenerateKey()
@@ -4492,7 +4532,7 @@ func testTransactionJournalingEIP1559(t *testing.T, nolocals bool) {
 	statedb.SetNonce(crypto.PubkeyToAddress(local.PublicKey), 1)
 	blockchain = &testBlockChain{statedb, 1000000, new(event.Feed), big.NewInt(1)}
 
-	pool = NewTxPool(config, params.EIP1559ChainConfig, blockchain)
+	pool = NewTxPool(config, eip1559cfg(big.NewInt(0), nil), blockchain)
 
 	pending, queued = pool.Stats()
 	if queued != 0 {
@@ -4571,7 +4611,7 @@ func testTransactionJournalingEIP1559Finalized(t *testing.T, nolocals bool) {
 	config.Journal = journal
 	config.Rejournal = time.Second
 
-	pool := NewTxPool(config, params.EIP1559FinalizedChainConfig, blockchain)
+	pool := NewTxPool(config, eip1559cfg(big.NewInt(0), big.NewInt(0)), blockchain)
 
 	// Create two test accounts to ensure remotes expire but locals do not
 	local, _ := crypto.GenerateKey()
@@ -4608,7 +4648,7 @@ func testTransactionJournalingEIP1559Finalized(t *testing.T, nolocals bool) {
 	statedb.SetNonce(crypto.PubkeyToAddress(local.PublicKey), 1)
 	blockchain = &testBlockChain{statedb, 1000000, new(event.Feed), big.NewInt(1)}
 
-	pool = NewTxPool(config, params.EIP1559FinalizedChainConfig, blockchain)
+	pool = NewTxPool(config, eip1559cfg(big.NewInt(0), big.NewInt(0)), blockchain)
 
 	pending, queued = pool.Stats()
 	if queued != 0 {
@@ -4635,7 +4675,7 @@ func testTransactionJournalingEIP1559Finalized(t *testing.T, nolocals bool) {
 
 	statedb.SetNonce(crypto.PubkeyToAddress(local.PublicKey), 1)
 	blockchain = &testBlockChain{statedb, 1000000, new(event.Feed), big.NewInt(1)}
-	pool = NewTxPool(config, params.EIP1559FinalizedChainConfig, blockchain)
+	pool = NewTxPool(config, eip1559cfg(big.NewInt(0), big.NewInt(0)), blockchain)
 
 	pending, queued = pool.Stats()
 	if pending != 0 {
@@ -4719,7 +4759,7 @@ func TestTransactionStatusCheckEIP1559(t *testing.T) {
 	statedb, _ := state.New(common.Hash{}, state.NewDatabase(rawdb.NewMemoryDatabase()), nil)
 	blockchain := &testBlockChain{statedb, 1000000, new(event.Feed), big.NewInt(1)}
 
-	pool := NewTxPool(testTxPoolConfig, params.EIP1559ChainConfig, blockchain)
+	pool := NewTxPool(testTxPoolConfig, eip1559cfg(big.NewInt(0), nil), blockchain)
 	defer pool.Stop()
 
 	// Create the test accounts to check various transaction statuses with
@@ -4773,7 +4813,7 @@ func TestTransactionStatusCheckEIP1559Finalized(t *testing.T) {
 	statedb, _ := state.New(common.Hash{}, state.NewDatabase(rawdb.NewMemoryDatabase()), nil)
 	blockchain := &testBlockChain{statedb, 1000000, new(event.Feed), big.NewInt(1)}
 
-	pool := NewTxPool(testTxPoolConfig, params.EIP1559FinalizedChainConfig, blockchain)
+	pool := NewTxPool(testTxPoolConfig, eip1559cfg(big.NewInt(0), big.NewInt(0)), blockchain)
 	defer pool.Stop()
 
 	// Create the test accounts to check various transaction statuses with

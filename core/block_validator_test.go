@@ -79,6 +79,9 @@ func TestHeaderVerification(t *testing.T) {
 }
 
 func TestHeaderVerificationEIP1559(t *testing.T) {
+	cfg := *params.EIP1559ChainConfig
+	cfg.EIP1559Block = big.NewInt(2)
+
 	// Create a simple chain to verify
 	var (
 		key1, _ = crypto.HexToECDSA("b71c71a67e1177ad4e901695e1b4b9ee17ae16c6668d313eac2f96dbcda3f291")
@@ -89,12 +92,13 @@ func TestHeaderVerificationEIP1559(t *testing.T) {
 		addr3   = crypto.PubkeyToAddress(key3.PublicKey)
 		testdb  = rawdb.NewMemoryDatabase()
 		gspec   = &Genesis{
-			Config:  params.EIP1559ChainConfig,
+			Config:  &cfg,
 			Alloc:   GenesisAlloc{addr1: {Balance: big.NewInt(1000000)}, addr2: {Balance: new(big.Int).SetUint64((params.EIP1559InitialBaseFee * params.TxGas) + 1000)}},
-			BaseFee: new(big.Int).SetUint64(params.EIP1559InitialBaseFee)}
+			BaseFee: new(big.Int).SetUint64(params.EIP1559InitialBaseFee),
+		}
 		genesis   = gspec.MustCommit(testdb)
 		signer    = types.HomesteadSigner{}
-		blocks, _ = GenerateChain(params.EIP1559ChainConfig, genesis, ethash.NewFaker(), testdb, 5, func(i int, gen *BlockGen) {
+		blocks, _ = GenerateChain(&cfg, genesis, ethash.NewFaker(), testdb, 5, func(i int, gen *BlockGen) {
 			switch i {
 			case 0:
 				// In block 1, addr1 sends addr2 some ether.
@@ -127,7 +131,7 @@ func TestHeaderVerificationEIP1559(t *testing.T) {
 		headers[i] = block.Header()
 	}
 	// Run the header checker for blocks one-by-one, checking for both valid and invalid nonces
-	chain, _ := NewBlockChain(testdb, nil, params.EIP1559ChainConfig, ethash.NewFaker(), vm.Config{}, nil, nil)
+	chain, _ := NewBlockChain(testdb, nil, &cfg, ethash.NewFaker(), vm.Config{}, nil, nil)
 	defer chain.Stop()
 
 	for i := 0; i < len(blocks); i++ {
@@ -162,6 +166,9 @@ func TestHeaderVerificationEIP1559(t *testing.T) {
 }
 
 func TestHeaderVerificationEIP1559Finalized(t *testing.T) {
+	cfg := *params.EIP1559FinalizedChainConfig
+	cfg.EIP1559Block = big.NewInt(0)
+	cfg.EIP1559FinalizedBlock = big.NewInt(0)
 	// Create a simple chain to verify
 	var (
 		key1, _ = crypto.HexToECDSA("b71c71a67e1177ad4e901695e1b4b9ee17ae16c6668d313eac2f96dbcda3f291")
@@ -172,13 +179,13 @@ func TestHeaderVerificationEIP1559Finalized(t *testing.T) {
 		addr3   = crypto.PubkeyToAddress(key3.PublicKey)
 		testdb  = rawdb.NewMemoryDatabase()
 		gspec   = &Genesis{
-			Config: params.EIP1559FinalizedChainConfig,
+			Config: &cfg,
 			Alloc: GenesisAlloc{addr1: {Balance: new(big.Int).SetUint64((params.EIP1559InitialBaseFee * params.TxGas * 2) + 11000)},
 				addr2: {Balance: new(big.Int).SetUint64((params.EIP1559InitialBaseFee * params.TxGas) + 1000)}},
 			BaseFee: new(big.Int).SetUint64(params.EIP1559InitialBaseFee)}
 		genesis   = gspec.MustCommit(testdb)
 		signer    = types.HomesteadSigner{}
-		blocks, _ = GenerateChain(params.EIP1559FinalizedChainConfig, genesis, ethash.NewFaker(), testdb, 5, func(i int, gen *BlockGen) {
+		blocks, _ = GenerateChain(&cfg, genesis, ethash.NewFaker(), testdb, 5, func(i int, gen *BlockGen) {
 			switch i {
 			case 0:
 				// In block 1, addr1 sends addr2 some ether.
@@ -211,7 +218,7 @@ func TestHeaderVerificationEIP1559Finalized(t *testing.T) {
 		headers[i] = block.Header()
 	}
 	// Run the header checker for blocks one-by-one, checking for both valid and invalid nonces
-	chain, _ := NewBlockChain(testdb, nil, params.EIP1559FinalizedChainConfig, ethash.NewFaker(), vm.Config{}, nil, nil)
+	chain, _ := NewBlockChain(testdb, nil, &cfg, ethash.NewFaker(), vm.Config{}, nil, nil)
 	defer chain.Stop()
 
 	for i := 0; i < len(blocks); i++ {

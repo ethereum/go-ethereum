@@ -190,9 +190,12 @@ func generateChainDuringTransition(t *testing.T) {
 		db      = rawdb.NewMemoryDatabase()
 	)
 
+	cfg := *params.EIP1559ChainConfig
+	cfg.EIP1559Block = big.NewInt(0)
+
 	// Ensure that key1 has some funds in the genesis block.
 	gspec := &Genesis{
-		Config:  params.EIP1559ChainConfig,
+		Config:  &cfg,
 		Alloc:   GenesisAlloc{addr1: {Balance: big.NewInt(1000000)}, addr2: {Balance: new(big.Int).SetUint64((params.EIP1559InitialBaseFee * params.TxGas) + 1000)}},
 		BaseFee: new(big.Int).SetUint64(params.EIP1559InitialBaseFee),
 	}
@@ -275,9 +278,13 @@ func generateChainAfterFinalization(t *testing.T) {
 		db      = rawdb.NewMemoryDatabase()
 	)
 
+	cfg := *params.EIP1559FinalizedChainConfig
+	cfg.EIP1559Block = big.NewInt(0)
+	cfg.EIP1559FinalizedBlock = big.NewInt(0)
+
 	// Ensure that key1 has some funds in the genesis block.
 	gspec := &Genesis{
-		Config:  params.EIP1559FinalizedChainConfig,
+		Config:  &cfg,
 		Alloc:   GenesisAlloc{addr1: {Balance: big.NewInt(1000000)}},
 		BaseFee: new(big.Int).SetUint64(params.EIP1559InitialBaseFee),
 	}
@@ -336,9 +343,13 @@ func generateChainAfterFinalization2(t *testing.T) {
 		db      = rawdb.NewMemoryDatabase()
 	)
 
+	cfg := *params.EIP1559FinalizedChainConfig
+	cfg.EIP1559Block = big.NewInt(0)
+	cfg.EIP1559FinalizedBlock = big.NewInt(0)
+
 	// Ensure that key1 has some funds in the genesis block.
 	gspec := &Genesis{
-		Config: params.EIP1559FinalizedChainConfig,
+		Config: &cfg,
 		Alloc: GenesisAlloc{addr1: {Balance: new(big.Int).SetUint64((params.EIP1559InitialBaseFee * params.TxGas * 2) + 11000)},
 			addr2: {Balance: new(big.Int).SetUint64((params.EIP1559InitialBaseFee * params.TxGas) + 1000)}},
 		BaseFee: new(big.Int).SetUint64(params.EIP1559InitialBaseFee),

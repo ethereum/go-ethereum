@@ -271,7 +271,7 @@ var (
 
 	// EIP1559 test configs
 	EIP1559ChainConfig          = &ChainConfig{big.NewInt(1), big.NewInt(0), nil, false, big.NewInt(0), common.Hash{}, big.NewInt(0), big.NewInt(0), big.NewInt(0), big.NewInt(0), big.NewInt(0), big.NewInt(0), big.NewInt(0), big.NewInt(0), nil, nil, nil, new(EthashConfig), nil, DefaultEIP1559Config}
-	EIP1559FinalizedChainConfig = &ChainConfig{big.NewInt(1), big.NewInt(0), nil, false, big.NewInt(0), common.Hash{}, big.NewInt(0), big.NewInt(0), big.NewInt(0), big.NewInt(0), big.NewInt(0), big.NewInt(0), big.NewInt(0), big.NewInt(0), big.NewInt(0), nil, nil, new(EthashConfig), nil, DefaultEIP1559Config}
+	EIP1559FinalizedChainConfig = &ChainConfig{big.NewInt(1), big.NewInt(0), nil, false, big.NewInt(0), common.Hash{}, big.NewInt(0), big.NewInt(0), big.NewInt(0), big.NewInt(0), big.NewInt(0), big.NewInt(0), big.NewInt(0), big.NewInt(0), nil, nil, nil, new(EthashConfig), nil, DefaultEIP1559Config}
 
 	EIP1559TestRules          = EIP1559ChainConfig.Rules(new(big.Int))
 	EIP1559FinalizedTestRules = EIP1559FinalizedChainConfig.Rules(new(big.Int))

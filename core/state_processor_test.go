@@ -58,8 +58,8 @@ func TestStateProcessorErrors(t *testing.T) {
 	}{
 		{
 			txs: []*types.Transaction{
-				makeTx(0, common.Address{}, big.NewInt(0), params.TxGas, nil, nil),
-				makeTx(0, common.Address{}, big.NewInt(0), params.TxGas, nil, nil),
+				makeTx(0, common.Address{}, big.NewInt(0), params.TxGas, new(big.Int), nil),
+				makeTx(0, common.Address{}, big.NewInt(0), params.TxGas, new(big.Int), nil),
 			},
 			want: "could not apply tx 1 [0x36bfa6d14f1cd35a1be8cc2322982a595fabc0e799f09c1de3bad7bd5b1f7626]: nonce too low: address 0x71562b71999873DB5b286dF957af199Ec94617F7, tx: 0 state: 1",
 		},
@@ -71,13 +71,13 @@ func TestStateProcessorErrors(t *testing.T) {
 		},
 		{
 			txs: []*types.Transaction{
-				makeTx(0, common.Address{}, big.NewInt(0), 21000000, nil, nil),
+				makeTx(0, common.Address{}, big.NewInt(0), 21000000, new(big.Int), nil),
 			},
 			want: "could not apply tx 0 [0x54c58b530824b0bb84b7a98183f08913b5d74e1cebc368515ef3c65edf8eb56a]: gas limit reached",
 		},
 		{
 			txs: []*types.Transaction{
-				makeTx(0, common.Address{}, big.NewInt(1), params.TxGas, nil, nil),
+				makeTx(0, common.Address{}, big.NewInt(1), params.TxGas, new(big.Int), nil),
 			},
 			want: "could not apply tx 0 [0x3094b17498940d92b13baccf356ce8bfd6f221e926abc903d642fa1466c5b50e]: insufficient funds for transfer: address 0x71562b71999873DB5b286dF957af199Ec94617F7",
 		},
@@ -89,9 +89,9 @@ func TestStateProcessorErrors(t *testing.T) {
 		},
 		{
 			txs: []*types.Transaction{
-				makeTx(0, common.Address{}, big.NewInt(0), params.TxGas, nil, nil),
-				makeTx(1, common.Address{}, big.NewInt(0), params.TxGas, nil, nil),
-				makeTx(2, common.Address{}, big.NewInt(0), params.TxGas, nil, nil),
+				makeTx(0, common.Address{}, big.NewInt(0), params.TxGas, new(big.Int), nil),
+				makeTx(1, common.Address{}, big.NewInt(0), params.TxGas, new(big.Int), nil),
+				makeTx(2, common.Address{}, big.NewInt(0), params.TxGas, new(big.Int), nil),
 				makeTx(3, common.Address{}, big.NewInt(0), params.TxGas-1000, big.NewInt(0), nil),
 			},
 			want: "could not apply tx 3 [0x836fab5882205362680e49b311a20646de03b630920f18ec6ee3b111a2cf6835]: intrinsic gas too low: have 20000, want 21000",

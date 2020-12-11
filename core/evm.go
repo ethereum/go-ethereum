@@ -44,6 +44,10 @@ func NewEVMBlockContext(header *types.Header, chain ChainContext, author *common
 	} else {
 		beneficiary = *author
 	}
+	var baseFee *big.Int = nil
+	if header.BaseFee != nil {
+		baseFee = new(big.Int).Set(header.BaseFee)
+	}
 	return vm.BlockContext{
 		CanTransfer: CanTransfer,
 		Transfer:    Transfer,
@@ -53,15 +57,19 @@ func NewEVMBlockContext(header *types.Header, chain ChainContext, author *common
 		Time:        new(big.Int).SetUint64(header.Time),
 		Difficulty:  new(big.Int).Set(header.Difficulty),
 		GasLimit:    header.GasLimit,
-		BaseFee:     new(big.Int).Set(header.BaseFee),
+		BaseFee:     baseFee,
 	}
 }
 
 // NewEVMTxContext creates a new transaction context for a single transaction.
 func NewEVMTxContext(msg Message) vm.TxContext {
+	var gasPrice *big.Int
+	if msg.GasPrice() != nil {
+		gasPrice = new(big.Int).Set(msg.GasPrice())
+	}
 	return vm.TxContext{
 		Origin:   msg.From(),
-		GasPrice: new(big.Int).Set(msg.GasPrice()),
+		GasPrice: gasPrice,
 	}
 }
 

@@ -230,16 +230,26 @@ func TestGenerateBlockAndImportClique(t *testing.T) {
 	testGenerateBlockAndImport(t, true, params.AllCliqueProtocolChanges, nil, pendingTxs, false, false)
 }
 func TestGenerateBlockAndImportEthashEIP1559(t *testing.T) {
-	testGenerateBlockAndImport(t, false, params.EIP1559ChainConfig, new(big.Int).SetUint64(params.EIP1559InitialBaseFee), pendingLegacyAndEIP1559Txs, true, false)
+	cfg := *params.EIP1559ChainConfig
+	cfg.EIP1559Block = big.NewInt(0)
+	testGenerateBlockAndImport(t, false, &cfg, new(big.Int).SetUint64(params.EIP1559InitialBaseFee), pendingLegacyAndEIP1559Txs, true, false)
 }
 func TestGenerateBlockAndImportCliqueEIP1559(t *testing.T) {
-	testGenerateBlockAndImport(t, true, params.EIP1559ChainConfig, new(big.Int).SetUint64(params.EIP1559InitialBaseFee), pendingLegacyAndEIP1559Txs, true, false)
+	cfg := *params.EIP1559ChainConfig
+	cfg.EIP1559Block = big.NewInt(0)
+	testGenerateBlockAndImport(t, true, &cfg, new(big.Int).SetUint64(params.EIP1559InitialBaseFee), pendingLegacyAndEIP1559Txs, true, false)
 }
 func TestGenerateBlockAndImportEthashEIP1559Finalized(t *testing.T) {
-	testGenerateBlockAndImport(t, false, params.EIP1559FinalizedChainConfig, new(big.Int).SetUint64(params.EIP1559InitialBaseFee), pendingEIP1559Txs, true, true)
+	cfg := *params.EIP1559ChainConfig
+	cfg.EIP1559Block = big.NewInt(0)
+	cfg.EIP1559FinalizedBlock = big.NewInt(0)
+	testGenerateBlockAndImport(t, false, &cfg, new(big.Int).SetUint64(params.EIP1559InitialBaseFee), pendingEIP1559Txs, true, true)
 }
 func TestGenerateBlockAndImportCliqueEIP1559Finalized(t *testing.T) {
-	testGenerateBlockAndImport(t, true, params.EIP1559FinalizedChainConfig, new(big.Int).SetUint64(params.EIP1559InitialBaseFee), pendingEIP1559Txs, true, true)
+	cfg := *params.EIP1559ChainConfig
+	cfg.EIP1559Block = big.NewInt(0)
+	cfg.EIP1559FinalizedBlock = big.NewInt(0)
+	testGenerateBlockAndImport(t, true, &cfg, new(big.Int).SetUint64(params.EIP1559InitialBaseFee), pendingEIP1559Txs, true, true)
 }
 
 func testGenerateBlockAndImport(t *testing.T, isClique bool, c *params.ChainConfig, baseFee *big.Int, pTxs []*types.Transaction, eip1559, eip1559Finalized bool) {
@@ -310,10 +320,16 @@ func TestEmptyWorkCliqueEIP1559(t *testing.T) {
 	testEmptyWork(t, eip1559CliqueChainConfig, clique.New(cliqueChainConfig.Clique, rawdb.NewMemoryDatabase()), pendingLegacyAndEIP1559Txs, new(big.Int).SetUint64(params.EIP1559InitialBaseFee))
 }
 func TestEmptyWorkEthashEIP1559Finalized(t *testing.T) {
-	testEmptyWork(t, eip1559FinalizedChainConfig, ethash.NewFaker(), pendingEIP1559Txs, new(big.Int).SetUint64(params.EIP1559InitialBaseFee))
+	cfg := *eip1559FinalizedChainConfig
+	cfg.EIP1559Block = big.NewInt(0)
+	cfg.EIP1559FinalizedBlock = big.NewInt(0)
+	testEmptyWork(t, &cfg, ethash.NewFaker(), pendingEIP1559Txs, new(big.Int).SetUint64(params.EIP1559InitialBaseFee))
 }
 func TestEmptyWorkCliqueEIP1559Finalized(t *testing.T) {
-	testEmptyWork(t, eip1559FinalizedCliqueChainConfig, clique.New(cliqueChainConfig.Clique, rawdb.NewMemoryDatabase()), pendingEIP1559Txs, new(big.Int).SetUint64(params.EIP1559InitialBaseFee))
+	cfg := *eip1559FinalizedChainConfig
+	cfg.EIP1559Block = big.NewInt(0)
+	cfg.EIP1559FinalizedBlock = big.NewInt(0)
+	testEmptyWork(t, &cfg, clique.New(cliqueChainConfig.Clique, rawdb.NewMemoryDatabase()), pendingEIP1559Txs, new(big.Int).SetUint64(params.EIP1559InitialBaseFee))
 }
 
 func testEmptyWork(t *testing.T, chainConfig *params.ChainConfig, engine consensus.Engine, pTxs []*types.Transaction, baseFee *big.Int) {
@@ -368,7 +384,10 @@ func TestStreamUncleBlockEIP1559(t *testing.T) {
 	testStreamUncleBlock(t, eip1559ChainConfig, pendingLegacyAndEIP1559Txs, new(big.Int))
 }
 func TestStreamUncleBlockEIP1559Finalized(t *testing.T) {
-	testStreamUncleBlock(t, eip1559FinalizedChainConfig, pendingEIP1559Txs, new(big.Int))
+	cfg := *eip1559FinalizedChainConfig
+	cfg.EIP1559Block = big.NewInt(0)
+	cfg.EIP1559FinalizedBlock = big.NewInt(0)
+	testStreamUncleBlock(t, &cfg, pendingEIP1559Txs, new(big.Int))
 }
 
 func testStreamUncleBlock(t *testing.T, chainConfig *params.ChainConfig, pTxs []*types.Transaction, baseFee *big.Int) {
@@ -439,11 +458,17 @@ func TestRegenerateMiningBlockCliqueEIP1559(t *testing.T) {
 }
 
 func TestRegenerateMiningBlockEthashEIP1559Finalized(t *testing.T) {
-	testRegenerateMiningBlock(t, eip1559FinalizedChainConfig, ethash.NewFaker(), pendingEIP1559Txs, newEIP1559Txs, new(big.Int).SetUint64(params.EIP1559InitialBaseFee))
+	cfg := *eip1559FinalizedChainConfig
+	cfg.EIP1559Block = big.NewInt(0)
+	cfg.EIP1559FinalizedBlock = big.NewInt(0)
+	testRegenerateMiningBlock(t, &cfg, ethash.NewFaker(), pendingEIP1559Txs, newEIP1559Txs, new(big.Int).SetUint64(params.EIP1559InitialBaseFee))
 }
 
 func TestRegenerateMiningBlockCliqueEIP1559Finalized(t *testing.T) {
-	testRegenerateMiningBlock(t, eip1559FinalizedCliqueChainConfig, clique.New(cliqueChainConfig.Clique, rawdb.NewMemoryDatabase()), pendingEIP1559Txs, newEIP1559Txs, new(big.Int).SetUint64(params.EIP1559InitialBaseFee))
+	cfg := *eip1559FinalizedChainConfig
+	cfg.EIP1559Block = big.NewInt(0)
+	cfg.EIP1559FinalizedBlock = big.NewInt(0)
+	testRegenerateMiningBlock(t, &cfg, clique.New(cliqueChainConfig.Clique, rawdb.NewMemoryDatabase()), pendingEIP1559Txs, newEIP1559Txs, new(big.Int).SetUint64(params.EIP1559InitialBaseFee))
 }
 
 func testRegenerateMiningBlock(t *testing.T, chainConfig *params.ChainConfig, engine consensus.Engine, pTxs, nTxs []*types.Transaction, baseFee *big.Int) {
@@ -520,11 +545,17 @@ func TestAdjustIntervalCliqueEIP1559(t *testing.T) {
 }
 
 func TestAdjustIntervalEthashEIP1559Finalized(t *testing.T) {
-	testAdjustInterval(t, eip1559FinalizedChainConfig, ethash.NewFaker(), pendingEIP1559Txs, new(big.Int))
+	cfg := *eip1559FinalizedChainConfig
+	cfg.EIP1559Block = big.NewInt(0)
+	cfg.EIP1559FinalizedBlock = big.NewInt(0)
+	testAdjustInterval(t, &cfg, ethash.NewFaker(), pendingEIP1559Txs, new(big.Int))
 }
 
 func TestAdjustIntervalCliqueEIP1559Finalized(t *testing.T) {
-	testAdjustInterval(t, eip1559FinalizedCliqueChainConfig, clique.New(cliqueChainConfig.Clique, rawdb.NewMemoryDatabase()), pendingEIP1559Txs, new(big.Int))
+	cfg := *eip1559FinalizedChainConfig
+	cfg.EIP1559Block = big.NewInt(0)
+	cfg.EIP1559FinalizedBlock = big.NewInt(0)
+	testAdjustInterval(t, &cfg, clique.New(cliqueChainConfig.Clique, rawdb.NewMemoryDatabase()), pendingEIP1559Txs, new(big.Int))
 }
 
 func testAdjustInterval(t *testing.T, chainConfig *params.ChainConfig, engine consensus.Engine, pTxs []*types.Transaction, baseFee *big.Int) {
