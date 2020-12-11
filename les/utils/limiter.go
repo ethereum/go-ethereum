@@ -41,13 +41,13 @@ type Limiter struct {
 
 // nodeQueue represents queued requests coming from a single node ID
 type nodeQueue struct {
-	queue                   []request
+	queue                   []request // always nil if penaltyCost != 0
 	id                      enode.ID
 	address                 string
 	value                   float64
 	flatWeight, valueWeight uint64 // current selection weights in the address/value selectors
-	nextCost                uint   // next request cost
 	sumCost                 uint   // summed cost of requests queued by the node
+	penaltyCost             uint   // cumulative cost of dropped requests since last processed request
 	groupIndex              int
 }
 
@@ -185,20 +185,27 @@ func (l *Limiter) Add(id enode.ID, address string, value float64, reqCost uint) 
 	}
 
 	if nq, ok := l.nodes[id]; ok {
-		nq.queue = append(nq.queue, request{process, reqCost})
-		nq.sumCost += reqCost
-		nq.value = value
-		if address != nq.address {
-			// known id sending request from a new address, move to different address group
-			l.removeFromGroup(nq)
-			l.addToGroup(nq, address)
+		if nq.queue != nil {
+			nq.queue = append(nq.queue, request{process, reqCost})
+			nq.sumCost += reqCost
+			nq.value = value
+			if address != nq.address {
+				// known id sending request from a new address, move to different address group
+				l.removeFromGroup(nq)
+				l.addToGroup(nq, address)
+			}
+		} else {
+			// already waiting on a penalty, just add to the penalty cost and drop the request
+			nq.penaltyCost += reqCost
+			l.update(nq)
+			close(process)
+			return process
 		}
 	} else {
 		nq := &nodeQueue{
 			queue:      []request{{process, reqCost}},
 			id:         id,
 			value:      value,
-			nextCost:   reqCost,
 			sumCost:    reqCost,
 			groupIndex: -1,
 		}
@@ -221,7 +228,13 @@ func (l *Limiter) Add(id enode.ID, address string, value float64, reqCost uint) 
 
 // update updates the selection weights of the node queue
 func (l *Limiter) update(nq *nodeQueue) {
-	flatWeight, valueWeight := selectionWeights(float64(nq.nextCost)/float64(l.maxCost), nq.value)
+	var cost uint
+	if nq.queue != nil {
+		cost = nq.queue[0].cost
+	} else {
+		cost = nq.penaltyCost
+	}
+	flatWeight, valueWeight := selectionWeights(float64(cost)/float64(l.maxCost), nq.value)
 	ag := l.addresses[nq.address]
 	ag.update(nq, flatWeight)
 	l.addressSelect.Update(ag)
@@ -298,7 +311,7 @@ func (l *Limiter) processLoop() {
 			l.cond.Wait()
 			continue
 		}
-		if len(nq.queue) > 0 {
+		if nq.queue != nil {
 			request := nq.queue[0]
 			nq.queue = nq.queue[1:]
 			nq.sumCost -= request.cost
@@ -309,12 +322,12 @@ func (l *Limiter) processLoop() {
 			<-ch
 			l.lock.Lock()
 			if len(nq.queue) > 0 {
-				nq.nextCost = nq.queue[0].cost
 				l.update(nq)
 			} else {
 				l.remove(nq)
 			}
 		} else {
+			// penalized queue removed, next request will be added to a clean queue
 			l.remove(nq)
 		}
 	}
@@ -378,13 +391,15 @@ func (l *Limiter) dropRequests() {
 		for _, request := range item.nq.queue {
 			close(request.process)
 		}
-		l.sumCost -= item.nq.sumCost
-		// next selection weight will be based on the sum of all dropped request costs
-		// in order to penalize the spamming node
-		item.nq.nextCost = item.nq.sumCost
+		// make the queue penalized; no more requests are accepted until the node is
+		// selected based on the penalty cost which is the cumulative cost of all dropped
+		// requests. This ensures that sending excess requests is always penalized
+		// and incentivizes the sender to stop for a while if no replies are received.
+		item.nq.queue = nil
+		item.nq.penaltyCost = item.nq.sumCost
+		l.sumCost -= item.nq.sumCost // penalty costs are not counted in sumCost
 		item.nq.sumCost = 0
 		l.update(item.nq)
-		item.nq.queue = nil
 		if l.sumCost <= l.sumCostLimit/2 {
 			return
 		}
