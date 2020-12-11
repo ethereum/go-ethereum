@@ -197,7 +197,7 @@ Here's what happens in each respective case:
 4. Does not need to replay anything, can immediately load up the state and serve the request. 
 
 There is one other option available to you, which may or may not suit your needs. That is
-to use [Evmlab](https://github.com/holiman/evmlab).
+to use [Go-evmlab](https://github.com/holiman/goevmlab).
 
     docker pull holiman/evmlab && docker run -it holiman/evmlab
 
