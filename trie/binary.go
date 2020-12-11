@@ -28,7 +28,6 @@ import (
 	"github.com/ethereum/go-ethereum/core/rawdb"
 	"github.com/ethereum/go-ethereum/ethdb"
 	"github.com/ethereum/go-ethereum/log"
-	"github.com/fxamacker/cbor"
 	"github.com/hashicorp/golang-lru"
 )
 
@@ -67,6 +66,9 @@ type BinaryTrie struct {
 	root     BinaryNode
 	db       btDatabase
 	hashType hashType
+
+	// A cache of nodes with at least N children in memory
+	cache *lru.Cache
 }
 
 // All known implementations of binaryNode
@@ -90,6 +92,13 @@ type (
 		prefix binkey
 
 		hType hashType
+
+		// Number of child leaves currently in memory. The
+		// total number of child nodes to be freed if this
+		// branch is evicted is 2*N - 2
+		childCount int
+
+		parent *branch // pointer to parent, nil for root
 	}
 
 	hashBinaryNode []byte
@@ -111,8 +120,6 @@ type accountDirties struct {
 type btDatabase struct {
 	// dirty accounts and slot caches.
 	dirties map[common.Hash]*accountDirties
-
-	cache *lru.Cache
 
 	diskdb ethdb.KeyValueStore
 
@@ -163,6 +170,7 @@ func (bt *BinaryTrie) TryGet(key []byte) ([]byte, error) {
 		} else {
 			childNode = bt.resolveNode(currentNode.right, bk, off+1)
 		}
+		childNode.parent = currentNode
 
 		// if no child node could be found, the key
 		// isn't present in the trie.
@@ -181,12 +189,13 @@ func (bt *BinaryTrie) ToGraphViz() string {
 
 func newBranchNode(prefix binkey, key []byte, value []byte, ht hashType) *branch {
 	return &branch{
-		prefix: prefix,
-		left:   empty(struct{}{}),
-		right:  empty(struct{}{}),
-		key:    key,
-		value:  value,
-		hType:  ht,
+		prefix:     prefix,
+		left:       empty(struct{}{}),
+		right:      empty(struct{}{}),
+		key:        key,
+		value:      value,
+		hType:      ht,
+		childCount: 0,
 	}
 }
 
@@ -228,6 +237,17 @@ func (br *branch) hash(off int) []byte {
 		hasher.sha.Write(lh)
 		hasher.sha.Write(rh)
 		hash = hasher.sha.Sum(nil)
+
+		// If br.CommitCh isn't nil, then it has been
+		// called by the eviction process. This won't
+		// always be true, and some extra parameter
+		// should be introduced FIXME
+		// Ongoing eviction process: replace the child
+		// subtries with their hashes.
+		if br.CommitCh != nil {
+			br.left = hashBinaryNode(lh)
+			br.right = hashBinaryNode(rh)
+		}
 	} else {
 		hasher = br.getHasher()
 		defer br.putHasher(hasher)
@@ -244,6 +264,11 @@ func (br *branch) hash(off int) []byte {
 		hasher.sha.Write(kh)
 		hasher.sha.Write(hash)
 		hash = hasher.sha.Sum(nil)
+
+		// Store the leaf
+		if br.CommitCh != nil /* && br.dirty */ {
+			br.CommitCh <- BinaryHashPreimage{Key: br.key, Value: br.value}
+		}
 	}
 
 	if len(br.prefix) > 0 {
@@ -371,22 +396,32 @@ func (db *btDatabase) insert(key, value []byte) error {
 	return nil
 }
 
-func binCacheEvictionCallback(db *btDatabase) func(interface{}, interface{}) {
+// branchCacheEvictionCallback is called when the trie is taking too much
+// memory and the oldest, deepest nodes must be evicted. It will calculate
+// the hash of the subtrie, save it to disk.
+func branchCacheEvictionCallback(bt *BinaryTrie) func(interface{}, interface{}) {
 	return func(key interface{}, value interface{}) {
-		// XXX vérifier que la clé est 32 ou 64 bytes et pas 256 ou 512
+		br := value.(*branch)
 
-		switch t := value.(type) {
-		case *branch:
-		default:
-			panic(fmt.Sprintf("attempting to insert non-branch into the database, type = %v", t))
-		}
+		// Allocate channel to receive dirty values,
+		// and store each received value to disk.
+		oldChannel := br.CommitCh
+		defer func() {
+			br.CommitCh = oldChannel
+		}()
+		br.CommitCh = make(chan BinaryHashPreimage)
+		br.Commit()
+		go func() {
+			for kv := range br.CommitCh {
+				bt.db.diskdb.Put(kv.Key, kv.Value)
+			}
+		}()
 
-		// Write the data to disk
-		payload, err := cbor.Marshal(value, cbor.CanonicalEncOptions())
-		if err != nil {
-			panic(err)
+		// Decrease child leaf counts in parents
+		childCount := br.childCount
+		for currentNode := br; currentNode.parent != nil; currentNode = currentNode.parent {
+			currentNode.childCount -= childCount
 		}
-		db.diskdb.Put(key.([]byte), payload)
 	}
 }
 
@@ -400,7 +435,7 @@ func NewBinaryTrie() *BinaryTrie {
 		},
 		hashType: typeKeccak256,
 	}
-	bt.db.cache, _ = lru.NewWithEvict(1000, binCacheEvictionCallback(&bt.db))
+	bt.cache, _ = lru.NewWithEvict(100, branchCacheEvictionCallback(bt))
 	return bt
 }
 
@@ -413,7 +448,8 @@ func NewBinaryTrieWithRawDB(db ethdb.KeyValueStore) *BinaryTrie {
 		},
 		hashType: typeKeccak256,
 	}
-	bt.db.cache, _ = lru.NewWithEvict(1000, binCacheEvictionCallback(&bt.db))
+
+	bt.cache, _ = lru.NewWithEvict(100, branchCacheEvictionCallback(bt))
 	return bt
 }
 
@@ -427,7 +463,7 @@ func NewBinaryTrieWithBlake2b() *BinaryTrie {
 		},
 		hashType: typeBlake2b,
 	}
-	bt.db.cache, _ = lru.NewWithEvict(1000, binCacheEvictionCallback(&bt.db))
+	bt.cache, _ = lru.NewWithEvict(100, branchCacheEvictionCallback(bt))
 	return bt
 }
 
@@ -487,22 +523,7 @@ func (bt *BinaryTrie) resolveNode(childNode BinaryNode, bk binkey, off int) *bra
 			return nil
 		}
 
-		// look for the hash in the cache, otherwise load
-		// it from disk.
-		if v, ok := bt.db.cache.Get([]byte(childNode)); ok {
-			return v.(*branch)
-		}
-
-		p, err := bt.db.diskdb.Get([]byte(childNode))
-		if err != nil {
-			panic(fmt.Errorf("error reading key %x from the db: %v", childNode, err))
-		}
-
-		var b branch
-		cbor.Unmarshal(p, &b)
-
-		bt.db.cache.Add([]byte(childNode), b)
-		return &b
+		return bt.subTreeFromPath(bk[:off])
 	}
 
 	// Nothing to be done
@@ -548,8 +569,18 @@ func (bt *BinaryTrie) TryUpdate(key, value []byte) error {
 				childNode = newBranchNode(bk[off+1:], nil, value, bt.hashType)
 				isLeaf = true
 			}
+			childNode.parent = currentNode
 
-			// Update the parent node's reference
+			// If the current node goes above the threshold,
+			// add it to the cache. Because every new insert
+			// updates the path to the new leaf, the least
+			// used branches will be pruned first.
+			currentNode.childCount++ // one more child
+			if currentNode.childCount > 2 {
+				bt.cache.Add(bk[:off], currentNode)
+			}
+
+			// Update the parent node's child reference
 			if bk[off] == 0 {
 				currentNode.left = childNode
 			} else {
@@ -593,10 +624,21 @@ func (bt *BinaryTrie) TryUpdate(key, value []byte) error {
 				key:    currentNode.key,
 				value:  currentNode.value,
 				hType:  bt.hashType,
+				parent: currentNode,
 			}
 			currentNode.prefix = currentNode.prefix[:split]
 			currentNode.value = nil
 			childNode := newBranchNode(bk[off+split+1:], key, value, bt.hashType)
+			childNode.parent = currentNode
+
+			// Update the cache if the child count goes
+			// over the threshold.
+			currentNode.childCount++
+			if currentNode.childCount > 2 {
+				bt.cache.Add(bk[:off], currentNode)
+			}
+
+			// Set the child node to the correct branch.
 			if bk[off+split] == 1 {
 				// New node goes on the right
 				currentNode.left = midNode
@@ -607,7 +649,6 @@ func (bt *BinaryTrie) TryUpdate(key, value []byte) error {
 				currentNode.left = childNode
 			}
 
-			bt.db.cache.Add(bk[:off+split+1], childNode)
 			break
 		}
 	}
@@ -628,6 +669,7 @@ func (br *branch) Commit() error {
 		return fmt.Errorf("commit channel missing")
 	}
 	br.Hash()
+	close(br.CommitCh)
 	return nil
 }
 

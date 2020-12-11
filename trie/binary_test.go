@@ -18,7 +18,6 @@ package trie
 
 import (
 	"bytes"
-	"fmt"
 	"math/rand"
 	"testing"
 	"time"
@@ -222,11 +221,13 @@ func TestBinaryTrieReadOneFromManyLeaves(t *testing.T) {
 }
 
 func TestBinaryTrieNodeResolution(t *testing.T) {
+	key1 := common.Hex2Bytes("0000000000000000000000000000000000000000000000000000000000000000")
+	key2 := common.Hex2Bytes("0000000000000000000000000000000000000000000000000000000000000008")
+	key3 := common.Hex2Bytes("000000000000000000000000000000000000000000000000000000000000000c")
+
 	// Put 2 keys in the database, to be resolved
 	db := rawdb.NewMemoryDatabase()
 	// balance of account 0 => 10
-	key1 := common.Hex2Bytes("0000000000000000000000000000000000000000000000000000000000000000")
-	key2 := common.Hex2Bytes("0000000000000000000000000000000000000000000000000000000000000008")
 	db.Put(key1, common.Hex2Bytes("0a"))
 	// balance of account 8 => 10
 	db.Put(key2, common.Hex2Bytes("0a"))
@@ -235,7 +236,7 @@ func TestBinaryTrieNodeResolution(t *testing.T) {
 	// update another one.
 	trie := NewBinaryTrieWithRawDB(db)
 	trie.Update(key1, []byte{11})
-	trie.Update(common.Hex2Bytes("000000000000000000000000000000000000000000000000000000000000000c"), []byte{10})
+	trie.Update(key3, []byte{10})
 
 	if len(trie.db.dirties) != 2 {
 		t.Fatalf("invalid number of dirty account entries after insert, %d != 2", len(trie.db.dirties))
