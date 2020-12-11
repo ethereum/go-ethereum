@@ -24,7 +24,6 @@ import (
 	"github.com/ethereum/go-ethereum/core"
 	"github.com/ethereum/go-ethereum/ethdb"
 	"github.com/ethereum/go-ethereum/light"
-	"github.com/ethereum/go-ethereum/log"
 )
 
 // LesOdr implements light.OdrBackend
@@ -83,7 +82,8 @@ func (odr *LesOdr) IndexerConfig() *light.IndexerConfig {
 }
 
 const (
-	MsgBlockBodies = iota
+	MsgBlockHeaders = iota
+	MsgBlockBodies
 	MsgCode
 	MsgReceipts
 	MsgProofsV2
@@ -122,13 +122,17 @@ func (odr *LesOdr) Retrieve(ctx context.Context, req light.OdrRequest) (err erro
 			return func() { lreq.Request(reqID, p) }
 		},
 	}
-	sent := mclock.Now()
-	if err = odr.retriever.retrieve(ctx, reqID, rq, func(p distPeer, msg *Msg) error { return lreq.Validate(odr.db, msg) }, odr.stop); err == nil {
-		// retrieved from network, store in db
-		req.StoreResult(odr.db)
+
+	defer func(sent mclock.AbsTime) {
+		if err != nil {
+			return
+		}
 		requestRTT.Update(time.Duration(mclock.Now() - sent))
-	} else {
-		log.Debug("Failed to retrieve data from network", "err", err)
+	}(mclock.Now())
+
+	if err := odr.retriever.retrieve(ctx, reqID, rq, func(p distPeer, msg *Msg) error { return lreq.Validate(odr.db, msg) }, odr.stop); err != nil {
+		return err
 	}
-	return
+	req.StoreResult(odr.db)
+	return nil
 }

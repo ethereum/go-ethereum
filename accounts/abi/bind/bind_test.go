@@ -296,7 +296,7 @@ var bindTests = []struct {
 		`
 			// Generate a new random account and a funded simulator
 			key, _ := crypto.GenerateKey()
-			auth := bind.NewKeyedTransactor(key)
+			auth, _ := bind.NewKeyedTransactorWithChainID(key, big.NewInt(1337))
 
 			sim := backends.NewSimulatedBackend(core.GenesisAlloc{auth.From: {Balance: big.NewInt(10000000000)}}, 10000000)
 			defer sim.Close()
@@ -351,7 +351,7 @@ var bindTests = []struct {
 		`
 			// Generate a new random account and a funded simulator
 			key, _ := crypto.GenerateKey()
-			auth := bind.NewKeyedTransactor(key)
+			auth, _ := bind.NewKeyedTransactorWithChainID(key, big.NewInt(1337))
 
 			sim := backends.NewSimulatedBackend(core.GenesisAlloc{auth.From: {Balance: big.NewInt(10000000000)}}, 10000000)
 			defer sim.Close()
@@ -397,7 +397,7 @@ var bindTests = []struct {
 		`
 			// Generate a new random account and a funded simulator
 			key, _ := crypto.GenerateKey()
-			auth := bind.NewKeyedTransactor(key)
+			auth, _ := bind.NewKeyedTransactorWithChainID(key, big.NewInt(1337))
 
 			sim := backends.NewSimulatedBackend(core.GenesisAlloc{auth.From: {Balance: big.NewInt(10000000000)}}, 10000000)
 			defer sim.Close()
@@ -455,7 +455,7 @@ var bindTests = []struct {
 		`
 			// Generate a new random account and a funded simulator
 			key, _ := crypto.GenerateKey()
-			auth := bind.NewKeyedTransactor(key)
+			auth, _ := bind.NewKeyedTransactorWithChainID(key, big.NewInt(1337))
 
 			sim := backends.NewSimulatedBackend(core.GenesisAlloc{auth.From: {Balance: big.NewInt(10000000000)}}, 10000000)
 			defer sim.Close()
@@ -503,7 +503,7 @@ var bindTests = []struct {
 		`
 			// Generate a new random account and a funded simulator
 			key, _ := crypto.GenerateKey()
-			auth := bind.NewKeyedTransactor(key)
+			auth, _ := bind.NewKeyedTransactorWithChainID(key, big.NewInt(1337))
 
 			sim := backends.NewSimulatedBackend(core.GenesisAlloc{auth.From: {Balance: big.NewInt(10000000000)}}, 10000000)
 			defer sim.Close()
@@ -598,7 +598,7 @@ var bindTests = []struct {
 		`
 			// Generate a new random account and a funded simulator
 			key, _ := crypto.GenerateKey()
-			auth := bind.NewKeyedTransactor(key)
+			auth, _ := bind.NewKeyedTransactorWithChainID(key, big.NewInt(1337))
 
 			sim := backends.NewSimulatedBackend(core.GenesisAlloc{auth.From: {Balance: big.NewInt(10000000000)}}, 10000000)
 			defer sim.Close()
@@ -648,7 +648,7 @@ var bindTests = []struct {
 		`
 			// Generate a new random account and a funded simulator
 			key, _ := crypto.GenerateKey()
-			auth := bind.NewKeyedTransactor(key)
+			auth, _ := bind.NewKeyedTransactorWithChainID(key, big.NewInt(1337))
 
 			sim := backends.NewSimulatedBackend(core.GenesisAlloc{auth.From: {Balance: big.NewInt(10000000000)}}, 10000000)
 			defer sim.Close()
@@ -723,7 +723,7 @@ var bindTests = []struct {
 		`
 			// Generate a new random account and a funded simulator
 			key, _ := crypto.GenerateKey()
-			auth := bind.NewKeyedTransactor(key)
+			auth, _ := bind.NewKeyedTransactorWithChainID(key, big.NewInt(1337))
 
 			sim := backends.NewSimulatedBackend(core.GenesisAlloc{auth.From: {Balance: big.NewInt(10000000000)}}, 10000000)
 			defer sim.Close()
@@ -817,7 +817,7 @@ var bindTests = []struct {
 		`
 			// Generate a new random account and a funded simulator
 			key, _ := crypto.GenerateKey()
-			auth := bind.NewKeyedTransactor(key)
+			auth, _ := bind.NewKeyedTransactorWithChainID(key, big.NewInt(1337))
 
 			sim := backends.NewSimulatedBackend(core.GenesisAlloc{auth.From: {Balance: big.NewInt(10000000000)}}, 10000000)
 			defer sim.Close()
@@ -1007,7 +1007,7 @@ var bindTests = []struct {
 		`
 			// Generate a new random account and a funded simulator
 			key, _ := crypto.GenerateKey()
-			auth := bind.NewKeyedTransactor(key)
+			auth, _ := bind.NewKeyedTransactorWithChainID(key, big.NewInt(1337))
 
 			sim := backends.NewSimulatedBackend(core.GenesisAlloc{auth.From: {Balance: big.NewInt(10000000000)}}, 10000000)
 			defer sim.Close()
@@ -1142,7 +1142,7 @@ var bindTests = []struct {
 
 		`
 			key, _ := crypto.GenerateKey()
-			auth := bind.NewKeyedTransactor(key)
+			auth, _ := bind.NewKeyedTransactorWithChainID(key, big.NewInt(1337))
 
 			sim := backends.NewSimulatedBackend(core.GenesisAlloc{auth.From: {Balance: big.NewInt(10000000000)}}, 10000000)
 			defer sim.Close()
@@ -1284,7 +1284,7 @@ var bindTests = []struct {
 		`
 			// Generate a new random account and a funded simulator
 			key, _ := crypto.GenerateKey()
-			auth := bind.NewKeyedTransactor(key)
+			auth, _ := bind.NewKeyedTransactorWithChainID(key, big.NewInt(1337))
 
 			sim := backends.NewSimulatedBackend(core.GenesisAlloc{auth.From: {Balance: big.NewInt(10000000000)}}, 10000000)
 			defer sim.Close()
@@ -1350,7 +1350,7 @@ var bindTests = []struct {
 		`
 		// Initialize test accounts
 		key, _ := crypto.GenerateKey()
-		auth := bind.NewKeyedTransactor(key)
+		auth, _ := bind.NewKeyedTransactorWithChainID(key, big.NewInt(1337))
 		sim := backends.NewSimulatedBackend(core.GenesisAlloc{auth.From: {Balance: big.NewInt(10000000000)}}, 10000000)
 		defer sim.Close()
 
@@ -1444,7 +1444,7 @@ var bindTests = []struct {
 		sim := backends.NewSimulatedBackend(core.GenesisAlloc{addr: {Balance: big.NewInt(1000000000)}}, 10000000)
 		defer sim.Close()
 
-		transactOpts := bind.NewKeyedTransactor(key)
+		transactOpts, _ := bind.NewKeyedTransactorWithChainID(key, big.NewInt(1337))
 		_, _, _, err := DeployIdentifierCollision(transactOpts, sim)
 		if err != nil {
 			t.Fatalf("failed to deploy contract: %v", err)
@@ -1506,7 +1506,7 @@ var bindTests = []struct {
 		sim := backends.NewSimulatedBackend(core.GenesisAlloc{addr: {Balance: big.NewInt(1000000000)}}, 10000000)
 		defer sim.Close()
 
-		transactOpts := bind.NewKeyedTransactor(key)
+		transactOpts, _ := bind.NewKeyedTransactorWithChainID(key, big.NewInt(1337))
 		_, _, c1, err := DeployContractOne(transactOpts, sim)
 		if err != nil {
 			t.Fatal("Failed to deploy contract")
@@ -1563,7 +1563,7 @@ var bindTests = []struct {
 		`
 			// Generate a new random account and a funded simulator
 			key, _ := crypto.GenerateKey()
-			auth := bind.NewKeyedTransactor(key)
+			auth, _ := bind.NewKeyedTransactorWithChainID(key, big.NewInt(1337))
 
 			sim := backends.NewSimulatedBackend(core.GenesisAlloc{auth.From: {Balance: big.NewInt(10000000000)}}, 10000000)
 			defer sim.Close()
@@ -1632,7 +1632,7 @@ var bindTests = []struct {
 			sim := backends.NewSimulatedBackend(core.GenesisAlloc{addr: {Balance: big.NewInt(1000000000)}}, 1000000)
 			defer sim.Close()
 	
-			opts := bind.NewKeyedTransactor(key)
+			opts, _ := bind.NewKeyedTransactorWithChainID(key, big.NewInt(1337))
 			_, _, c, err := DeployNewFallbacks(opts, sim)
 			if err != nil {
 				t.Fatalf("Failed to deploy contract: %v", err)

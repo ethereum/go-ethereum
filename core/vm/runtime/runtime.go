@@ -118,7 +118,6 @@ func Execute(code, input []byte, cfg *Config) ([]byte, *state.StateDB, error) {
 		cfg.State.AddAddressToAccessList(address)
 		for _, addr := range vmenv.ActivePrecompiles() {
 			cfg.State.AddAddressToAccessList(addr)
-			cfg.State.AddAddressToAccessList(addr)
 		}
 	}
 	cfg.State.CreateAccount(address)

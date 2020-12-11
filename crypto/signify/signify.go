@@ -20,99 +20,81 @@
 package signify
 
 import (
+	"bytes"
+	"crypto/ed25519"
 	"encoding/base64"
 	"errors"
 	"fmt"
 	"io/ioutil"
-	"os"
 	"strings"
 	"time"
-
-	"crypto/ed25519"
 )
 
 var (
-	errInvalidKeyHeader = errors.New("Incorrect key header")
+	errInvalidKeyHeader = errors.New("incorrect key header")
 	errInvalidKeyLength = errors.New("invalid, key length != 104")
 )
 
-func parsePrivateKey(key string) (ed25519.PrivateKey, []byte, []byte, error) {
+func parsePrivateKey(key string) (k ed25519.PrivateKey, header []byte, keyNum []byte, err error) {
 	keydata, err := base64.StdEncoding.DecodeString(key)
 	if err != nil {
 		return nil, nil, nil, err
 	}
-
 	if len(keydata) != 104 {
 		return nil, nil, nil, errInvalidKeyLength
 	}
-
 	if string(keydata[:2]) != "Ed" {
 		return nil, nil, nil, errInvalidKeyHeader
 	}
-
 	return ed25519.PrivateKey(keydata[40:]), keydata[:2], keydata[32:40], nil
 }
 
-func commentHasManyLines(comment string) bool {
-	firstLFIndex := strings.IndexByte(comment, 10)
-	return (firstLFIndex >= 0 && firstLFIndex < len(comment)-1)
-}
+// SignFile creates a signature of the input file.
+//
+// This accepts base64 keys in the format created by the 'signify' tool.
+// The signature is written to the 'output' file.
+func SignFile(input string, output string, key string, untrustedComment string, trustedComment string) error {
+	// Pre-check comments and ensure they're set to something.
+	if strings.IndexByte(untrustedComment, '\n') >= 0 {
+		return errors.New("untrusted comment must not contain newline")
+	}
+	if strings.IndexByte(trustedComment, '\n') >= 0 {
+		return errors.New("trusted comment must not contain newline")
+	}
+	if untrustedComment == "" {
+		untrustedComment = "verify with " + input + ".pub"
+	}
+	if trustedComment == "" {
+		trustedComment = fmt.Sprintf("timestamp:%d", time.Now().Unix())
+	}
 
-// SignifySignFile creates a signature of the input file.
-func SignifySignFile(input string, output string, key string, unTrustedComment string, trustedComment string) error {
-	in, err := os.Open(input)
+	filedata, err := ioutil.ReadFile(input)
 	if err != nil {
 		return err
 	}
-	defer in.Close()
-
-	out, err := os.Create(output)
-	if err != nil {
-		return err
-	}
-	defer out.Close()
-
 	skey, header, keyNum, err := parsePrivateKey(key)
 	if err != nil {
 		return err
 	}
 
-	filedata, err := ioutil.ReadAll(in)
-	if err != nil {
-		return err
-	}
-
+	// Create the main data signature.
 	rawSig := ed25519.Sign(skey, filedata)
+	var dataSig []byte
+	dataSig = append(dataSig, header...)
+	dataSig = append(dataSig, keyNum...)
+	dataSig = append(dataSig, rawSig...)
 
-	var sigdata []byte
-	sigdata = append(sigdata, header...)
-	sigdata = append(sigdata, keyNum...)
-	sigdata = append(sigdata, rawSig...)
+	// Create the comment signature.
+	var commentSigInput []byte
+	commentSigInput = append(commentSigInput, rawSig...)
+	commentSigInput = append(commentSigInput, []byte(trustedComment)...)
+	commentSig := ed25519.Sign(skey, commentSigInput)
 
-	// Check that the trusted comment fits in one line
-	if commentHasManyLines(unTrustedComment) {
-		return errors.New("untrusted comment must fit on a single line")
-	}
-
-	if unTrustedComment == "" {
-		unTrustedComment = "verify with " + input + ".pub"
-	}
-	out.WriteString(fmt.Sprintf("untrusted comment: %s\n%s\n", unTrustedComment, base64.StdEncoding.EncodeToString(sigdata)))
-
-	// Add the trusted comment if unavailable
-	if trustedComment == "" {
-		trustedComment = fmt.Sprintf("timestamp:%d", time.Now().Unix())
-	}
-
-	// Check that the trusted comment fits in one line
-	if commentHasManyLines(trustedComment) {
-		return errors.New("trusted comment must fit on a single line")
-	}
-
-	var sigAndComment []byte
-	sigAndComment = append(sigAndComment, rawSig...)
-	sigAndComment = append(sigAndComment, []byte(trustedComment)...)
-	out.WriteString(fmt.Sprintf("trusted comment: %s\n%s\n", trustedComment, base64.StdEncoding.EncodeToString(ed25519.Sign(skey, sigAndComment))))
-
-	return nil
+	// Create the output file.
+	var out = new(bytes.Buffer)
+	fmt.Fprintln(out, "untrusted comment:", untrustedComment)
+	fmt.Fprintln(out, base64.StdEncoding.EncodeToString(dataSig))
+	fmt.Fprintln(out, "trusted comment:", trustedComment)
+	fmt.Fprintln(out, base64.StdEncoding.EncodeToString(commentSig))
+	return ioutil.WriteFile(output, out.Bytes(), 0644)
 }
