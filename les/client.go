@@ -112,7 +112,7 @@ func New(stack *node.Node, config *eth.Config) (*LightEthereum, error) {
 	}
 	peers.subscribe((*vtSubscription)(leth.valueTracker))
 
-	dnsdisc, err := leth.setupDiscovery(&stack.Config().P2P)
+	dnsdisc, err := leth.setupDiscovery()
 	if err != nil {
 		return nil, err
 	}

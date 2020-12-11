@@ -588,9 +588,8 @@ func (n *NodeBalance) timeUntil(priority int64) (time.Duration, bool) {
 			}
 			dt = float64(posBalance-newBalance) / timePrice
 			return time.Duration(dt), true
-		} else {
-			dt = float64(posBalance) / timePrice
 		}
+		dt = float64(posBalance) / timePrice
 	} else {
 		if priority > 0 {
 			return 0, false

@@ -100,13 +100,9 @@ type NewBlockHashes []struct {
 
 func (nbh NewBlockHashes) Code() int { return 17 }
 
-// NewBlock is the network packet for the block propagation message.
-type NewBlock struct {
-	Block *types.Block
-	TD    *big.Int
-}
+type Transactions []*types.Transaction
 
-func (nb NewBlock) Code() int { return 23 }
+func (t Transactions) Code() int { return 18 }
 
 // GetBlockHeaders represents a block header query.
 type GetBlockHeaders struct {
@@ -121,6 +117,29 @@ func (g GetBlockHeaders) Code() int { return 19 }
 type BlockHeaders []*types.Header
 
 func (bh BlockHeaders) Code() int { return 20 }
+
+// GetBlockBodies represents a GetBlockBodies request
+type GetBlockBodies []common.Hash
+
+func (gbb GetBlockBodies) Code() int { return 21 }
+
+// BlockBodies is the network packet for block content distribution.
+type BlockBodies []*types.Body
+
+func (bb BlockBodies) Code() int { return 22 }
+
+// NewBlock is the network packet for the block propagation message.
+type NewBlock struct {
+	Block *types.Block
+	TD    *big.Int
+}
+
+func (nb NewBlock) Code() int { return 23 }
+
+// NewPooledTransactionHashes is the network packet for the tx hash propagation message.
+type NewPooledTransactionHashes [][32]byte
+
+func (nb NewPooledTransactionHashes) Code() int { return 24 }
 
 // HashOrNumber is a combined field for specifying an origin block.
 type hashOrNumber struct {
@@ -157,16 +176,6 @@ func (hn *hashOrNumber) DecodeRLP(s *rlp.Stream) error {
 	}
 	return err
 }
-
-// GetBlockBodies represents a GetBlockBodies request
-type GetBlockBodies []common.Hash
-
-func (gbb GetBlockBodies) Code() int { return 21 }
-
-// BlockBodies is the network packet for block content distribution.
-type BlockBodies []*types.Body
-
-func (bb BlockBodies) Code() int { return 22 }
 
 // Conn represents an individual connection with a peer
 type Conn struct {
@@ -205,6 +214,10 @@ func (c *Conn) Read() Message {
 		msg = new(NewBlock)
 	case (NewBlockHashes{}).Code():
 		msg = new(NewBlockHashes)
+	case (Transactions{}).Code():
+		msg = new(Transactions)
+	case (NewPooledTransactionHashes{}).Code():
+		msg = new(NewPooledTransactionHashes)
 	default:
 		return errorf("invalid message code: %d", code)
 	}
@@ -304,7 +317,7 @@ func (c *Conn) negotiateEthProtocol(caps []p2p.Cap) {
 
 // statusExchange performs a `Status` message exchange with the given
 // node.
-func (c *Conn) statusExchange(t *utesting.T, chain *Chain) Message {
+func (c *Conn) statusExchange(t *utesting.T, chain *Chain, status *Status) Message {
 	defer c.SetDeadline(time.Time{})
 	c.SetDeadline(time.Now().Add(20 * time.Second))
 
@@ -338,16 +351,19 @@ loop:
 	if c.ethProtocolVersion == 0 {
 		t.Fatalf("eth protocol version must be set in Conn")
 	}
-	// write status message to client
-	status := Status{
-		ProtocolVersion: uint32(c.ethProtocolVersion),
-		NetworkID:       chain.chainConfig.ChainID.Uint64(),
-		TD:              chain.TD(chain.Len()),
-		Head:            chain.blocks[chain.Len()-1].Hash(),
-		Genesis:         chain.blocks[0].Hash(),
-		ForkID:          chain.ForkID(),
+	if status == nil {
+		// write status message to client
+		status = &Status{
+			ProtocolVersion: uint32(c.ethProtocolVersion),
+			NetworkID:       chain.chainConfig.ChainID.Uint64(),
+			TD:              chain.TD(chain.Len()),
+			Head:            chain.blocks[chain.Len()-1].Hash(),
+			Genesis:         chain.blocks[0].Hash(),
+			ForkID:          chain.ForkID(),
+		}
 	}
-	if err := c.Write(status); err != nil {
+
+	if err := c.Write(*status); err != nil {
 		t.Fatalf("could not write to connection: %v", err)
 	}
 

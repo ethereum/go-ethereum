@@ -30,13 +30,20 @@ function compile_fuzzer {
   path=$SRC/go-ethereum/$1
   func=$2
   fuzzer=$3
-  echo "Building $fuzzer"
+  corpusfile="${path}/testdata/${fuzzer}_seed_corpus.zip"
+  echo "Building $fuzzer (expecting corpus at $corpusfile)"
   (cd $path && \
         go-fuzz -func $func -o $WORK/$fuzzer.a . && \
         echo "First stage built OK" && \
         $CXX $CXXFLAGS $LIB_FUZZING_ENGINE $WORK/$fuzzer.a -o $OUT/$fuzzer && \
         echo "Second stage built ok" )
 
+        ## Check if there exists a seed corpus file
+        if [ -f $corpusfile ]
+        then
+          cp $corpusfile $OUT/
+          echo "Found seed corpus: $corpusfile"
+        fi
 }
 
 compile_fuzzer common/bitutil  Fuzz      fuzzBitutilCompress
@@ -50,6 +57,16 @@ compile_fuzzer tests/fuzzers/txfetcher  Fuzz fuzzTxfetcher
 compile_fuzzer tests/fuzzers/rlp        Fuzz fuzzRlp
 compile_fuzzer tests/fuzzers/trie       Fuzz fuzzTrie
 compile_fuzzer tests/fuzzers/stacktrie  Fuzz fuzzStackTrie
+
+compile_fuzzer tests/fuzzers/bls12381  FuzzG1Add fuzz_g1_add
+compile_fuzzer tests/fuzzers/bls12381  FuzzG1Mul fuzz_g1_mul
+compile_fuzzer tests/fuzzers/bls12381  FuzzG1MultiExp fuzz_g1_multiexp
+compile_fuzzer tests/fuzzers/bls12381  FuzzG2Add fuzz_g2_add
+compile_fuzzer tests/fuzzers/bls12381  FuzzG2Mul fuzz_g2_mul
+compile_fuzzer tests/fuzzers/bls12381  FuzzG2MultiExp fuzz_g2_multiexp
+compile_fuzzer tests/fuzzers/bls12381  FuzzPairing fuzz_pairing
+compile_fuzzer tests/fuzzers/bls12381  FuzzMapG1 fuzz_map_g1
+compile_fuzzer tests/fuzzers/bls12381  FuzzMapG2 fuzz_map_g2
 
 # This doesn't work very well @TODO
 #compile_fuzzertests/fuzzers/abi Fuzz fuzzAbi
