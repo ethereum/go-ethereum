@@ -67,7 +67,7 @@ type request struct {
 	cost    uint
 }
 
-// flatWeight distributes weights equally between each active network adress
+// flatWeight distributes weights equally between each active network address
 func flatWeight(item interface{}) uint64 { return item.(*nodeQueue).flatWeight }
 
 // add adds the node queue to the address group. It is the caller's responsibility to
