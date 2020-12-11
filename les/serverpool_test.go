@@ -119,31 +119,28 @@ func (s *serverPoolTest) start() {
 				s.clock.Sleep(time.Second * 5)
 				s.endWait()
 				return -1
-			} else {
-				switch idx % 3 {
-				case 0:
-					// pre-neg returns true only if connection is possible
-					if canConnect {
-						return 1
-					} else {
-						return 0
-					}
-				case 1:
-					// pre-neg returns true but connection might still fail
+			}
+			switch idx % 3 {
+			case 0:
+				// pre-neg returns true only if connection is possible
+				if canConnect {
 					return 1
-				case 2:
-					// pre-neg returns true if connection is possible, otherwise timeout (node unresponsive)
-					if canConnect {
-						return 1
-					} else {
-						s.beginWait()
-						s.clock.Sleep(time.Second * 5)
-						s.endWait()
-						return -1
-					}
 				}
+				return 0
+			case 1:
+				// pre-neg returns true but connection might still fail
+				return 1
+			case 2:
+				// pre-neg returns true if connection is possible, otherwise timeout (node unresponsive)
+				if canConnect {
+					return 1
+				}
+				s.beginWait()
+				s.clock.Sleep(time.Second * 5)
+				s.endWait()
 				return -1
 			}
+			return -1
 		}
 	}
 

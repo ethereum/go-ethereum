@@ -1393,6 +1393,15 @@ func BenchmarkMultiplication(t *testing.B) {
 	}
 }
 
+func BenchmarkInverse(t *testing.B) {
+	a, _ := new(fe).rand(rand.Reader)
+	b, _ := new(fe).rand(rand.Reader)
+	t.ResetTimer()
+	for i := 0; i < t.N; i++ {
+		inverse(a, b)
+	}
+}
+
 func padBytes(in []byte, size int) []byte {
 	out := make([]byte, size)
 	if len(in) > size {

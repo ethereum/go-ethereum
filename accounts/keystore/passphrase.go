@@ -230,7 +230,7 @@ func DecryptKey(keyjson []byte, auth string) (*Key, error) {
 	key := crypto.ToECDSAUnsafe(keyBytes)
 
 	return &Key{
-		Id:         uuid.UUID(keyId),
+		Id:         keyId,
 		Address:    crypto.PubkeyToAddress(key.PublicKey),
 		PrivateKey: key,
 	}, nil

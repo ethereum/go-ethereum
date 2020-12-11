@@ -54,7 +54,7 @@ import (
 	"github.com/ethereum/go-ethereum/signer/rules"
 	"github.com/ethereum/go-ethereum/signer/storage"
 
-	colorable "github.com/mattn/go-colorable"
+	"github.com/mattn/go-colorable"
 	"github.com/mattn/go-isatty"
 	"gopkg.in/urfave/cli.v1"
 )
@@ -747,12 +747,10 @@ func DefaultConfigDir() string {
 			appdata := os.Getenv("APPDATA")
 			if appdata != "" {
 				return filepath.Join(appdata, "Signer")
-			} else {
-				return filepath.Join(home, "AppData", "Roaming", "Signer")
 			}
-		} else {
-			return filepath.Join(home, ".clef")
+			return filepath.Join(home, "AppData", "Roaming", "Signer")
 		}
+		return filepath.Join(home, ".clef")
 	}
 	// As we cannot guess a stable location, return empty and handle later
 	return ""

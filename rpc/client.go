@@ -404,9 +404,8 @@ func (c *Client) Notify(ctx context.Context, method string, args ...interface{})
 
 	if c.isHTTP {
 		return c.sendHTTP(ctx, op, msg)
-	} else {
-		return c.send(ctx, op, msg)
 	}
+	return c.send(ctx, op, msg)
 }
 
 // EthSubscribe registers a subscripion under the "eth" namespace.

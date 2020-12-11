@@ -144,15 +144,14 @@ func (b *bridge) OpenWallet(call jsre.Call) (goja.Value, error) {
 		if val, err = openWallet(goja.Null(), wallet, passwd); err != nil {
 			if !strings.HasSuffix(err.Error(), scwallet.ErrPINNeeded.Error()) {
 				return nil, err
-			} else {
-				// PIN input requested, fetch from the user and call open again
-				input, err := b.prompter.PromptPassword("Please enter current PIN: ")
-				if err != nil {
-					return nil, err
-				}
-				if val, err = openWallet(goja.Null(), wallet, call.VM.ToValue(input)); err != nil {
-					return nil, err
-				}
+			}
+			// PIN input requested, fetch from the user and call open again
+			input, err := b.prompter.PromptPassword("Please enter current PIN: ")
+			if err != nil {
+				return nil, err
+			}
+			if val, err = openWallet(goja.Null(), wallet, call.VM.ToValue(input)); err != nil {
+				return nil, err
 			}
 		}
 

@@ -8,42 +8,52 @@ package bn256
 
 import (
 	"bytes"
+	"fmt"
+	"io"
 	"math/big"
 
 	cloudflare "github.com/ethereum/go-ethereum/crypto/bn256/cloudflare"
 	google "github.com/ethereum/go-ethereum/crypto/bn256/google"
 )
 
+func getG1Points(input io.Reader) (*cloudflare.G1, *google.G1) {
+	_, xc, err := cloudflare.RandomG1(input)
+	if err != nil {
+		// insufficient input
+		return nil, nil
+	}
+	xg := new(google.G1)
+	if _, err := xg.Unmarshal(xc.Marshal()); err != nil {
+		panic(fmt.Sprintf("Could not marshal cloudflare -> google:", err))
+	}
+	return xc, xg
+}
+
+func getG2Points(input io.Reader) (*cloudflare.G2, *google.G2) {
+	_, xc, err := cloudflare.RandomG2(input)
+	if err != nil {
+		// insufficient input
+		return nil, nil
+	}
+	xg := new(google.G2)
+	if _, err := xg.Unmarshal(xc.Marshal()); err != nil {
+		panic(fmt.Sprintf("Could not marshal cloudflare -> google:", err))
+	}
+	return xc, xg
+}
+
 // FuzzAdd fuzzez bn256 addition between the Google and Cloudflare libraries.
 func FuzzAdd(data []byte) int {
-	// Ensure we have enough data in the first place
-	if len(data) != 128 {
+	input := bytes.NewReader(data)
+	xc, xg := getG1Points(input)
+	if xc == nil {
 		return 0
 	}
-	// Ensure both libs can parse the first curve point
-	xc := new(cloudflare.G1)
-	_, errc := xc.Unmarshal(data[:64])
-
-	xg := new(google.G1)
-	_, errg := xg.Unmarshal(data[:64])
-
-	if (errc == nil) != (errg == nil) {
-		panic("parse mismatch")
-	} else if errc != nil {
+	yc, yg := getG1Points(input)
+	if yc == nil {
 		return 0
 	}
 	// Ensure both libs can parse the second curve point
-	yc := new(cloudflare.G1)
-	_, errc = yc.Unmarshal(data[64:])
-
-	yg := new(google.G1)
-	_, errg = yg.Unmarshal(data[64:])
-
-	if (errc == nil) != (errg == nil) {
-		panic("parse mismatch")
-	} else if errc != nil {
-		return 0
-	}
 	// Add the two points and ensure they result in the same output
 	rc := new(cloudflare.G1)
 	rc.Add(xc, yc)
@@ -54,73 +64,56 @@ func FuzzAdd(data []byte) int {
 	if !bytes.Equal(rc.Marshal(), rg.Marshal()) {
 		panic("add mismatch")
 	}
-	return 0
+	return 1
 }
 
 // FuzzMul fuzzez bn256 scalar multiplication between the Google and Cloudflare
 // libraries.
 func FuzzMul(data []byte) int {
-	// Ensure we have enough data in the first place
-	if len(data) != 96 {
-		return 0
-	}
-	// Ensure both libs can parse the curve point
-	pc := new(cloudflare.G1)
-	_, errc := pc.Unmarshal(data[:64])
-
-	pg := new(google.G1)
-	_, errg := pg.Unmarshal(data[:64])
-
-	if (errc == nil) != (errg == nil) {
-		panic("parse mismatch")
-	} else if errc != nil {
+	input := bytes.NewReader(data)
+	pc, pg := getG1Points(input)
+	if pc == nil {
 		return 0
 	}
 	// Add the two points and ensure they result in the same output
+	remaining := input.Len()
+	if remaining == 0 {
+		return 0
+	}
+	if remaining > 128 {
+		// The evm only ever uses 32 byte integers, we need to cap this otherwise
+		// we run into slow exec. A 236Kb byte integer cause oss-fuzz to report it as slow.
+		// 128 bytes should be fine though
+		return 0
+	}
+	buf := make([]byte, remaining)
+	input.Read(buf)
+
 	rc := new(cloudflare.G1)
-	rc.ScalarMult(pc, new(big.Int).SetBytes(data[64:]))
+	rc.ScalarMult(pc, new(big.Int).SetBytes(buf))
 
 	rg := new(google.G1)
-	rg.ScalarMult(pg, new(big.Int).SetBytes(data[64:]))
+	rg.ScalarMult(pg, new(big.Int).SetBytes(buf))
 
 	if !bytes.Equal(rc.Marshal(), rg.Marshal()) {
 		panic("scalar mul mismatch")
 	}
-	return 0
+	return 1
 }
 
 func FuzzPair(data []byte) int {
-	// Ensure we have enough data in the first place
-	if len(data) != 192 {
+	input := bytes.NewReader(data)
+	pc, pg := getG1Points(input)
+	if pc == nil {
 		return 0
 	}
-	// Ensure both libs can parse the curve point
-	pc := new(cloudflare.G1)
-	_, errc := pc.Unmarshal(data[:64])
-
-	pg := new(google.G1)
-	_, errg := pg.Unmarshal(data[:64])
-
-	if (errc == nil) != (errg == nil) {
-		panic("parse mismatch")
-	} else if errc != nil {
-		return 0
-	}
-	// Ensure both libs can parse the twist point
-	tc := new(cloudflare.G2)
-	_, errc = tc.Unmarshal(data[64:])
-
-	tg := new(google.G2)
-	_, errg = tg.Unmarshal(data[64:])
-
-	if (errc == nil) != (errg == nil) {
-		panic("parse mismatch")
-	} else if errc != nil {
+	tc, tg := getG2Points(input)
+	if tc == nil {
 		return 0
 	}
 	// Pair the two points and ensure thet result in the same output
 	if cloudflare.PairingCheck([]*cloudflare.G1{pc}, []*cloudflare.G2{tc}) != google.PairingCheck([]*google.G1{pg}, []*google.G2{tg}) {
 		panic("pair mismatch")
 	}
-	return 0
+	return 1
 }

@@ -28,6 +28,7 @@ import (
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/mclock"
 	"github.com/ethereum/go-ethereum/core"
+	"github.com/ethereum/go-ethereum/core/forkid"
 	"github.com/ethereum/go-ethereum/core/rawdb"
 	"github.com/ethereum/go-ethereum/core/state"
 	"github.com/ethereum/go-ethereum/core/types"
@@ -66,6 +67,7 @@ var (
 // serverHandler is responsible for serving light client and process
 // all incoming light requests.
 type serverHandler struct {
+	forkFilter forkid.Filter
 	blockchain *core.BlockChain
 	chainDb    ethdb.Database
 	txpool     *core.TxPool
@@ -81,6 +83,7 @@ type serverHandler struct {
 
 func newServerHandler(server *LesServer, blockchain *core.BlockChain, chainDb ethdb.Database, txpool *core.TxPool, synced func() bool) *serverHandler {
 	handler := &serverHandler{
+		forkFilter: forkid.NewFilter(blockchain),
 		server:     server,
 		blockchain: blockchain,
 		chainDb:    chainDb,
@@ -121,8 +124,9 @@ func (h *serverHandler) handle(p *clientPeer) error {
 		hash   = head.Hash()
 		number = head.Number.Uint64()
 		td     = h.blockchain.GetTd(hash, number)
+		forkID = forkid.NewID(h.blockchain.Config(), h.blockchain.Genesis().Hash(), h.blockchain.CurrentBlock().NumberU64())
 	)
-	if err := p.Handshake(td, hash, number, h.blockchain.Genesis().Hash(), h.server); err != nil {
+	if err := p.Handshake(td, hash, number, h.blockchain.Genesis().Hash(), forkID, h.forkFilter, h.server); err != nil {
 		p.Log().Debug("Light Ethereum handshake failed", "err", err)
 		return err
 	}
@@ -610,6 +614,7 @@ func (h *serverHandler) handleMsg(p *clientPeer, wg *sync.WaitGroup) error {
 		var (
 			lastBHash common.Hash
 			root      common.Hash
+			header    *types.Header
 		)
 		reqCnt := len(req.Reqs)
 		if accept(req.ReqID, uint64(reqCnt), MaxProofsFetch) {
@@ -624,10 +629,6 @@ func (h *serverHandler) handleMsg(p *clientPeer, wg *sync.WaitGroup) error {
 						return
 					}
 					// Look up the root hash belonging to the request
-					var (
-						header *types.Header
-						trie   state.Trie
-					)
 					if request.BHash != lastBHash {
 						root, lastBHash = common.Hash{}, request.BHash
 
@@ -654,6 +655,7 @@ func (h *serverHandler) handleMsg(p *clientPeer, wg *sync.WaitGroup) error {
 					// Open the account or storage trie for the request
 					statedb := h.blockchain.StateCache()
 
+					var trie state.Trie
 					switch len(request.AccKey) {
 					case 0:
 						// No account key specified, open an account trie
