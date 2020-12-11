@@ -129,40 +129,6 @@ var (
 	zero32 = []byte{0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0}
 )
 
-func newBinKey(key []byte) binkey {
-	bits := make([]byte, 8*len(key))
-	for i, kb := range key {
-		// might be best to have this statement first, as compiler bounds-checking hint
-		bits[8*i+7] = kb & 0x1
-		bits[8*i] = (kb >> 7) & 0x1
-		bits[8*i+1] = (kb >> 6) & 0x1
-		bits[8*i+2] = (kb >> 5) & 0x1
-		bits[8*i+3] = (kb >> 4) & 0x1
-		bits[8*i+4] = (kb >> 3) & 0x1
-		bits[8*i+5] = (kb >> 2) & 0x1
-		bits[8*i+6] = (kb >> 1) & 0x1
-	}
-	return binkey(bits)
-}
-func min(i, j int) int {
-	if i < j {
-		return i
-	}
-	return j
-}
-func (b binkey) commonLength(other binkey) int {
-	length := min(len(b), len(other))
-	for i := 0; i < length; i++ {
-		if b[i] != other[i] {
-			return i
-		}
-	}
-	return length
-}
-func (b binkey) samePrefix(other binkey, off int) bool {
-	return bytes.Equal(b[off:off+len(other)], other[:])
-}
-
 // TryGet returns the value for a key stored in the trie.
 func (bt *BinaryTrie) TryGet(key []byte) ([]byte, error) {
 	bk := newBinKey(key)
