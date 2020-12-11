@@ -23,6 +23,8 @@ import (
 	"github.com/ethereum/go-ethereum/p2p/enode"
 )
 
+const maxSelectionWeight = 1000000000 // maximum selection weight of each individual node/address group
+
 // Limiter protects a network request serving mechanism from denial-of-service attacks.
 // It limits the total amount of resources used for serving requests while ensuring that
 // the most valuable connections always have a reasonable chance of being served.
@@ -140,15 +142,26 @@ func NewLimiter(sumCostLimit uint) *Limiter {
 
 // selectionWeights calculates the selection weights of a node for both the address and
 // the value selector. The selection weight depends on the next request cost or the
-// summed cost of recently dropped requests. relCost is reqCost/maxCost.
-func selectionWeights(relCost, value float64) (flatWeight, valueWeight uint64) {
+// summed cost of recently dropped requests.
+func (l *Limiter) selectionWeights(reqCost uint, value float64) (flatWeight, valueWeight uint64) {
+	if value > l.maxValue {
+		l.maxValue = value
+	}
+	if value > 0 {
+		// normalize value to <= 1
+		value /= l.maxValue
+	}
+	if reqCost > l.maxCost {
+		l.maxCost = reqCost
+	}
+	relCost := float64(reqCost) / float64(l.maxCost)
 	var f float64
 	if relCost <= 0.001 {
 		f = 1
 	} else {
 		f = 0.001 / relCost
 	}
-	f *= 1000000000
+	f *= maxSelectionWeight
 	flatWeight, valueWeight = uint64(f), uint64(f*value)
 	if flatWeight == 0 {
 		flatWeight = 1
@@ -170,20 +183,9 @@ func (l *Limiter) Add(id enode.ID, address string, value float64, reqCost uint) 
 		close(process)
 		return process
 	}
-	if value > l.maxValue {
-		l.maxValue = value
-	}
-	if value > 0 {
-		// normalize value to <= 1
-		value /= l.maxValue
-	}
 	if reqCost == 0 {
 		reqCost = 1
 	}
-	if reqCost > l.maxCost {
-		l.maxCost = reqCost
-	}
-
 	if nq, ok := l.nodes[id]; ok {
 		if nq.queue != nil {
 			nq.queue = append(nq.queue, request{process, reqCost})
@@ -209,7 +211,7 @@ func (l *Limiter) Add(id enode.ID, address string, value float64, reqCost uint) 
 			sumCost:    reqCost,
 			groupIndex: -1,
 		}
-		nq.flatWeight, nq.valueWeight = selectionWeights(float64(reqCost)/float64(l.maxCost), value)
+		nq.flatWeight, nq.valueWeight = l.selectionWeights(reqCost, value)
 		if len(l.nodes) == 0 {
 			l.cond.Signal()
 		}
@@ -234,7 +236,7 @@ func (l *Limiter) update(nq *nodeQueue) {
 	} else {
 		cost = nq.penaltyCost
 	}
-	flatWeight, valueWeight := selectionWeights(float64(cost)/float64(l.maxCost), nq.value)
+	flatWeight, valueWeight := l.selectionWeights(cost, nq.value)
 	ag := l.addresses[nq.address]
 	ag.update(nq, flatWeight)
 	l.addressSelect.Update(ag)
