@@ -446,8 +446,7 @@ web3._extend({
 		new web3._extend.Method({
 			name: 'getBadBlocks',
 			call: 'debug_getBadBlocks',
-			params: 1,
-			inputFormatter: [null]
+			params: 0,
 		}),
 		new web3._extend.Method({
 			name: 'storageRangeAt',
