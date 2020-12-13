@@ -1,0 +1,18 @@
+language: ruby
+rvm:
+  - 2.5.3
+
+before_script:
+  - gem install html-proofer
+
+# Assume bundler is being used, therefore
+# the `install` step will run `bundle install` by default.
+script:
+  - bundle exec jekyll build
+  - bundle exec htmlproofer ./_site --assume-extension --allow-hash-href --empty-alt-ignore
+
+env:
+  global:
+  - NOKOGIRI_USE_SYSTEM_LIBRARIES=true # speeds up installation of html-proofer
+
+cache: bundler # caching bundler gem packages will speed up build

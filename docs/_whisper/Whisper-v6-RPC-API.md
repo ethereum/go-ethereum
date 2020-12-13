@@ -1,5 +1,6 @@
 ---
 title: Whisper RPC API 6.0
+sort_key: C
 ---
 
 This is the proposed API for whisper v6.

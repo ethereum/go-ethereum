@@ -1,5 +1,6 @@
 ---
 title: Rules
+sort_key: B
 ---
 
 The `signer` binary contains a ruleset engine, implemented with [OttoVM](https://github.com/robertkrimen/otto)

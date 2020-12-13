@@ -1,6 +1,8 @@
 ---
 title: Code Review Guidelines
+sort_key: B
 ---
+
 The only way to get code into go-ethereum is to send a pull request. Those pull requests
 need to be reviewed by someone. This document is a guide that explains our expectations
 around PRs for both authors and reviewers.

@@ -1,6 +1,8 @@
 ---
-title: Managing your accounts
+title: Managing Your Accounts
+sort_key: B
 ---
+
 **WARNING**
 Remember your password. 
 
@@ -27,7 +29,7 @@ or import). Without it you are not able to unlock your account.
 Note that exporting your key in unencrypted format is NOT supported.
 
 Keys are stored under `<DATADIR>/keystore`. Make sure you backup your keys regularly! See
-[DATADIR backup & restore](../doc/Backup--restore)
+[DATADIR backup & restore](../install-and-build/backup-restore)
 for more information. If a custom datadir and keystore option are given the keystore
 option takes preference over the datadir option.
 
@@ -62,7 +64,7 @@ OPTIONS:
   --keystore                       Directory for the keystore (default = inside the datadir)
 ```
 
-Accounts can also be managed via the [Javascript Console](../interface/JavaScript-Console)
+Accounts can also be managed via the [Javascript Console](../interface/javascript-console)
 
 ## Examples
 ### Interactive use
@@ -141,7 +143,7 @@ Creates a new account and prints the address.
 On the console, use:
 
 ```
-> personal.NewAccount()
+> personal.newAccount()
 ... you will be prompted for a password ...
 
 or
@@ -335,7 +337,7 @@ That can then be executed with:
 
 Since this function will disappear after restarting geth, it can be helpful to store
 commonly used functions to be recalled later. The
-[loadScript](../interface/JavaScript-Console#loadscript)
+[loadScript](../interface/javascript-console)
 function makes this very easy.
 
 First, save the `checkAllBalances()` function definition to a file on your computer. For

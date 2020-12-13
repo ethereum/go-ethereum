@@ -1,7 +1,7 @@
 ---
 title: Diagnostic tool wnode
+sort_key: B
 ---
-# Wnode
 
 Wnode (whisper node) is a command-line diagnostic tool. It does not have a nice user interface, because its main purpose is diagnostic, and it's meant to be very light-weight rather than beautiful. Wnode might be used for different purposes, including:
 
