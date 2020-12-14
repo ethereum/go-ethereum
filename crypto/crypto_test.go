@@ -19,6 +19,7 @@ package crypto
 import (
 	"bytes"
 	"crypto/ecdsa"
+	"crypto/rand"
 	"encoding/hex"
 	"io/ioutil"
 	"math/big"
@@ -28,6 +29,7 @@ import (
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/hexutil"
+	"github.com/ethereum/go-ethereum/crypto/fixed"
 )
 
 var testAddrHex = "970e8128ab834e8eac17ab8e3812f010678cf791"
@@ -290,4 +292,53 @@ func TestPythonIntegration(t *testing.T) {
 
 	t.Logf("msg: %x, privkey: %s sig: %x\n", msg0, kh, sig0)
 	t.Logf("msg: %x, privkey: %s sig: %x\n", msg1, kh, sig1)
+}
+
+func TestFixedKeccak(t *testing.T) {
+	x := make([]byte, 20)
+	rand.Read(x)
+	if got, want := fixed.LegacyKeccak20(common.BytesToAddress(x)), Keccak256(x); !bytes.Equal(got[:], want) {
+		t.Errorf("error, want %x, got %x", want, got)
+	}
+
+	k := make([]byte, 32)
+	rand.Read(k)
+	if got, want := fixed.LegacyKeccak32(common.BytesToHash(k)), Keccak256(k); !bytes.Equal(got[:], want) {
+		t.Errorf("error, want %x, got %x", want, got)
+	}
+}
+
+func BenchmarkKeccakHash(b *testing.B) {
+	x := make([]byte, 20)
+	rand.Read(x)
+	y := common.BytesToAddress(x)
+
+	k := make([]byte, 32)
+	rand.Read(k)
+	l := common.BytesToHash(k)
+
+	b.Run("generic-20", func(b *testing.B) {
+		b.ReportAllocs()
+		for i := 0; i < b.N; i++ {
+			Keccak256(x)
+		}
+	})
+	b.Run("fixed-20", func(b *testing.B) {
+		b.ReportAllocs()
+		for i := 0; i < b.N; i++ {
+			fixed.LegacyKeccak20(y)
+		}
+	})
+	b.Run("generic-32", func(b *testing.B) {
+		b.ReportAllocs()
+		for i := 0; i < b.N; i++ {
+			Keccak256(k)
+		}
+	})
+	b.Run("fixed-32", func(b *testing.B) {
+		b.ReportAllocs()
+		for i := 0; i < b.N; i++ {
+			fixed.LegacyKeccak32(l)
+		}
+	})
 }
