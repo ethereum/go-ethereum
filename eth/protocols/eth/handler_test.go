@@ -254,8 +254,8 @@ func testGetBlockHeaders(t *testing.T, protocol uint) {
 			headers = append(headers, backend.chain.GetBlockByHash(hash).Header())
 		}
 		// Send the hash request and verify the response
-		p2p.Send(peer.app, 0x03, tt.query)
-		if err := p2p.ExpectMsg(peer.app, 0x04, headers); err != nil {
+		p2p.Send(peer.app, GetBlockHeadersMsg, tt.query)
+		if err := p2p.ExpectMsg(peer.app, BlockHeadersMsg, headers); err != nil {
 			t.Errorf("test %d: headers mismatch: %v", i, err)
 		}
 		// If the test used number origins, repeat with hashes as the too
@@ -263,8 +263,8 @@ func testGetBlockHeaders(t *testing.T, protocol uint) {
 			if origin := backend.chain.GetBlockByNumber(tt.query.Origin.Number); origin != nil {
 				tt.query.Origin.Hash, tt.query.Origin.Number = origin.Hash(), 0
 
-				p2p.Send(peer.app, 0x03, tt.query)
-				if err := p2p.ExpectMsg(peer.app, 0x04, headers); err != nil {
+				p2p.Send(peer.app, GetBlockHeadersMsg, tt.query)
+				if err := p2p.ExpectMsg(peer.app, BlockHeadersMsg, headers); err != nil {
 					t.Errorf("test %d: headers mismatch: %v", i, err)
 				}
 			}
@@ -343,8 +343,8 @@ func testGetBlockBodies(t *testing.T, protocol uint) {
 			}
 		}
 		// Send the hash request and verify the response
-		p2p.Send(peer.app, 0x05, hashes)
-		if err := p2p.ExpectMsg(peer.app, 0x06, bodies); err != nil {
+		p2p.Send(peer.app, GetBlockBodiesMsg, hashes)
+		if err := p2p.ExpectMsg(peer.app, BlockBodiesMsg, bodies); err != nil {
 			t.Errorf("test %d: bodies mismatch: %v", i, err)
 		}
 	}
@@ -410,13 +410,13 @@ func testGetNodeData(t *testing.T, protocol uint) {
 	}
 	it.Release()
 
-	p2p.Send(peer.app, 0x0d, hashes)
+	p2p.Send(peer.app, GetNodeDataMsg, hashes)
 	msg, err := peer.app.ReadMsg()
 	if err != nil {
 		t.Fatalf("failed to read node data response: %v", err)
 	}
-	if msg.Code != 0x0e {
-		t.Fatalf("response packet code mismatch: have %x, want %x", msg.Code, 0x0c)
+	if msg.Code != NodeDataMsg {
+		t.Fatalf("response packet code mismatch: have %x, want %x", msg.Code, NodeDataMsg)
 	}
 	var data [][]byte
 	if err := msg.Decode(&data); err != nil {
@@ -512,8 +512,8 @@ func testGetBlockReceipts(t *testing.T, protocol uint) {
 		receipts = append(receipts, backend.chain.GetReceiptsByHash(block.Hash()))
 	}
 	// Send the hash request and verify the response
-	p2p.Send(peer.app, 0x0f, hashes)
-	if err := p2p.ExpectMsg(peer.app, 0x10, receipts); err != nil {
+	p2p.Send(peer.app, GetReceiptsMsg, hashes)
+	if err := p2p.ExpectMsg(peer.app, ReceiptsMsg, receipts); err != nil {
 		t.Errorf("receipts mismatch: %v", err)
 	}
 }
