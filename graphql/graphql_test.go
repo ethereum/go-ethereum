@@ -19,17 +19,17 @@ package graphql
 import (
 	"fmt"
 	"io/ioutil"
+	"math/big"
 	"net/http"
 	"strings"
 	"testing"
 	"time"
 
-	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/consensus/ethash"
 	"github.com/ethereum/go-ethereum/core"
 	"github.com/ethereum/go-ethereum/eth"
-	"github.com/ethereum/go-ethereum/miner"
 	"github.com/ethereum/go-ethereum/node"
+	"github.com/ethereum/go-ethereum/params"
 )
 
 func TestBuildSchema(t *testing.T) {
@@ -57,14 +57,14 @@ func TestGraphQLBlockSerialization(t *testing.T) {
 		want string
 		code int
 	}{
-		{
+		{ // Should return latest block
 			body: `{"query": "{block{number}}","variables": null}`,
-			want: `{"data":{"block":{"number":0}}}`,
+			want: `{"data":{"block":{"number":10}}}`,
 			code: 200,
 		},
-		{
+		{ // Should return info about latest block
 			body: `{"query": "{block{number,gasUsed,gasLimit}}","variables": null}`,
-			want: `{"data":{"block":{"number":0,"gasUsed":0,"gasLimit":11500000}}}`,
+			want: `{"data":{"block":{"number":10,"gasUsed":0,"gasLimit":11500000}}}`,
 			code: 200,
 		},
 		{
@@ -178,14 +178,15 @@ func createNode(t *testing.T, gqlEnabled bool) *node.Node {
 }
 
 func createGQLService(t *testing.T, stack *node.Node, endpoint string) {
-	// create backend (use a config which is light on mem consumption)
+	// create backend
 	ethConf := &eth.Config{
-		Genesis: core.DeveloperGenesisBlock(15, common.Address{}),
-		Miner: miner.Config{
-			Etherbase: common.HexToAddress("0xaabb"),
+		Genesis: &core.Genesis{
+			Config:     params.AllEthashProtocolChanges,
+			GasLimit:   11500000,
+			Difficulty: big.NewInt(1048576),
 		},
 		Ethash: ethash.Config{
-			PowMode: ethash.ModeTest,
+			PowMode: ethash.ModeFake,
 		},
 		NetworkId:               1337,
 		TrieCleanCache:          5,
@@ -199,7 +200,13 @@ func createGQLService(t *testing.T, stack *node.Node, endpoint string) {
 	if err != nil {
 		t.Fatalf("could not create eth backend: %v", err)
 	}
-
+	// Create some blocks and import them
+	chain, _ := core.GenerateChain(params.AllEthashProtocolChanges, ethBackend.BlockChain().Genesis(),
+		ethash.NewFaker(), ethBackend.ChainDb(), 10, func(i int, gen *core.BlockGen) {})
+	_, err = ethBackend.BlockChain().InsertChain(chain)
+	if err != nil {
+		t.Fatalf("could not create import blocks: %v", err)
+	}
 	// create gql service
 	err = New(stack, ethBackend.APIBackend, []string{}, []string{})
 	if err != nil {
