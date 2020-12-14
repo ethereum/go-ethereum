@@ -51,7 +51,7 @@ func TestGetBlockHeadersLes2(t *testing.T) { testGetBlockHeaders(t, 2) }
 func TestGetBlockHeadersLes3(t *testing.T) { testGetBlockHeaders(t, 3) }
 
 func testGetBlockHeaders(t *testing.T, protocol int) {
-	server, tearDown := newServerEnv(t, downloader.MaxHashFetch+15, protocol, nil, false, true, 0)
+	server, tearDown := newServerEnv(t, downloader.MaxHeaderFetch+15, protocol, nil, false, true, 0)
 	defer tearDown()
 
 	bc := server.handler.blockchain

@@ -40,6 +40,8 @@ import (
 	"github.com/ethereum/go-ethereum/eth/downloader"
 	"github.com/ethereum/go-ethereum/eth/filters"
 	"github.com/ethereum/go-ethereum/eth/gasprice"
+	"github.com/ethereum/go-ethereum/eth/protocols/eth"
+	"github.com/ethereum/go-ethereum/eth/protocols/snap"
 	"github.com/ethereum/go-ethereum/ethdb"
 	"github.com/ethereum/go-ethereum/event"
 	"github.com/ethereum/go-ethereum/internal/ethapi"
@@ -48,7 +50,6 @@ import (
 	"github.com/ethereum/go-ethereum/node"
 	"github.com/ethereum/go-ethereum/p2p"
 	"github.com/ethereum/go-ethereum/p2p/enode"
-	"github.com/ethereum/go-ethereum/p2p/enr"
 	"github.com/ethereum/go-ethereum/params"
 	"github.com/ethereum/go-ethereum/rlp"
 	"github.com/ethereum/go-ethereum/rpc"
@@ -59,10 +60,11 @@ type Ethereum struct {
 	config *Config
 
 	// Handlers
-	txPool          *core.TxPool
-	blockchain      *core.BlockChain
-	protocolManager *ProtocolManager
-	dialCandidates  enode.Iterator
+	txPool             *core.TxPool
+	blockchain         *core.BlockChain
+	handler            *handler
+	ethDialCandidates  enode.Iterator
+	snapDialCandidates enode.Iterator
 
 	// DB interfaces
 	chainDb ethdb.Database // Block chain database
@@ -145,7 +147,7 @@ func New(stack *node.Node, config *Config) (*Ethereum, error) {
 	if bcVersion != nil {
 		dbVer = fmt.Sprintf("%d", *bcVersion)
 	}
-	log.Info("Initialising Ethereum protocol", "versions", ProtocolVersions, "network", config.NetworkId, "dbversion", dbVer)
+	log.Info("Initialising Ethereum protocol", "network", config.NetworkId, "dbversion", dbVer)
 
 	if !config.SkipBcVersionCheck {
 		if bcVersion != nil && *bcVersion > core.BlockChainVersion {
@@ -196,7 +198,17 @@ func New(stack *node.Node, config *Config) (*Ethereum, error) {
 	if checkpoint == nil {
 		checkpoint = params.TrustedCheckpoints[genesisHash]
 	}
-	if eth.protocolManager, err = NewProtocolManager(chainConfig, checkpoint, config.SyncMode, config.NetworkId, eth.eventMux, eth.txPool, eth.engine, eth.blockchain, chainDb, cacheLimit, config.Whitelist); err != nil {
+	if eth.handler, err = newHandler(&handlerConfig{
+		Database:   chainDb,
+		Chain:      eth.blockchain,
+		TxPool:     eth.txPool,
+		Network:    config.NetworkId,
+		Sync:       config.SyncMode,
+		BloomCache: uint64(cacheLimit),
+		EventMux:   eth.eventMux,
+		Checkpoint: checkpoint,
+		Whitelist:  config.Whitelist,
+	}); err != nil {
 		return nil, err
 	}
 	eth.miner = miner.New(eth, &config.Miner, chainConfig, eth.EventMux(), eth.engine, eth.isLocalBlock)
@@ -209,13 +221,16 @@ func New(stack *node.Node, config *Config) (*Ethereum, error) {
 	}
 	eth.APIBackend.gpo = gasprice.NewOracle(eth.APIBackend, gpoParams)
 
-	eth.dialCandidates, err = eth.setupDiscovery()
+	eth.ethDialCandidates, err = setupDiscovery(eth.config.EthDiscoveryURLs)
 	if err != nil {
 		return nil, err
 	}
-
+	eth.snapDialCandidates, err = setupDiscovery(eth.config.SnapDiscoveryURLs)
+	if err != nil {
+		return nil, err
+	}
 	// Start the RPC service
-	eth.netRPCService = ethapi.NewPublicNetAPI(eth.p2pServer, eth.NetVersion())
+	eth.netRPCService = ethapi.NewPublicNetAPI(eth.p2pServer)
 
 	// Register the backend on the node
 	stack.RegisterAPIs(eth.APIs())
@@ -310,7 +325,7 @@ func (s *Ethereum) APIs() []rpc.API {
 		}, {
 			Namespace: "eth",
 			Version:   "1.0",
-			Service:   downloader.NewPublicDownloaderAPI(s.protocolManager.downloader, s.eventMux),
+			Service:   downloader.NewPublicDownloaderAPI(s.handler.downloader, s.eventMux),
 			Public:    true,
 		}, {
 			Namespace: "miner",
@@ -473,7 +488,7 @@ func (s *Ethereum) StartMining(threads int) error {
 		}
 		// If mining is started, we can disable the transaction rejection mechanism
 		// introduced to speed sync times.
-		atomic.StoreUint32(&s.protocolManager.acceptTxs, 1)
+		atomic.StoreUint32(&s.handler.acceptTxs, 1)
 
 		go s.miner.Start(eb)
 	}
@@ -504,21 +519,17 @@ func (s *Ethereum) EventMux() *event.TypeMux           { return s.eventMux }
 func (s *Ethereum) Engine() consensus.Engine           { return s.engine }
 func (s *Ethereum) ChainDb() ethdb.Database            { return s.chainDb }
 func (s *Ethereum) IsListening() bool                  { return true } // Always listening
-func (s *Ethereum) EthVersion() int                    { return int(ProtocolVersions[0]) }
-func (s *Ethereum) NetVersion() uint64                 { return s.networkID }
-func (s *Ethereum) Downloader() *downloader.Downloader { return s.protocolManager.downloader }
-func (s *Ethereum) Synced() bool                       { return atomic.LoadUint32(&s.protocolManager.acceptTxs) == 1 }
+func (s *Ethereum) Downloader() *downloader.Downloader { return s.handler.downloader }
+func (s *Ethereum) Synced() bool                       { return atomic.LoadUint32(&s.handler.acceptTxs) == 1 }
 func (s *Ethereum) ArchiveMode() bool                  { return s.config.NoPruning }
 func (s *Ethereum) BloomIndexer() *core.ChainIndexer   { return s.bloomIndexer }
 
 // Protocols returns all the currently configured
 // network protocols to start.
 func (s *Ethereum) Protocols() []p2p.Protocol {
-	protos := make([]p2p.Protocol, len(ProtocolVersions))
-	for i, vsn := range ProtocolVersions {
-		protos[i] = s.protocolManager.makeProtocol(vsn)
-		protos[i].Attributes = []enr.Entry{s.currentEthEntry()}
-		protos[i].DialCandidates = s.dialCandidates
+	protos := eth.MakeProtocols((*ethHandler)(s.handler), s.networkID, s.ethDialCandidates)
+	if s.config.SnapshotCache > 0 {
+		protos = append(protos, snap.MakeProtocols((*snapHandler)(s.handler), s.snapDialCandidates)...)
 	}
 	return protos
 }
@@ -526,7 +537,7 @@ func (s *Ethereum) Protocols() []p2p.Protocol {
 // Start implements node.Lifecycle, starting all internal goroutines needed by the
 // Ethereum protocol implementation.
 func (s *Ethereum) Start() error {
-	s.startEthEntryUpdate(s.p2pServer.LocalNode())
+	eth.StartENRUpdater(s.blockchain, s.p2pServer.LocalNode())
 
 	// Start the bloom bits servicing goroutines
 	s.startBloomHandlers(params.BloomBitsBlocks)
@@ -540,7 +551,7 @@ func (s *Ethereum) Start() error {
 		maxPeers -= s.config.LightPeers
 	}
 	// Start the networking layer and the light server if requested
-	s.protocolManager.Start(maxPeers)
+	s.handler.Start(maxPeers)
 	return nil
 }
 
@@ -548,7 +559,7 @@ func (s *Ethereum) Start() error {
 // Ethereum protocol.
 func (s *Ethereum) Stop() error {
 	// Stop all the peer-related stuff first.
-	s.protocolManager.Stop()
+	s.handler.Stop()
 
 	// Then stop everything else.
 	s.bloomIndexer.Close()
@@ -560,5 +571,6 @@ func (s *Ethereum) Stop() error {
 	rawdb.PopUncleanShutdownMarker(s.chainDb)
 	s.chainDb.Close()
 	s.eventMux.Stop()
+
 	return nil
 }

@@ -1040,10 +1040,6 @@ func (r *Resolver) GasPrice(ctx context.Context) (hexutil.Big, error) {
 	return hexutil.Big(*price), err
 }
 
-func (r *Resolver) ProtocolVersion(ctx context.Context) (int32, error) {
-	return int32(r.backend.ProtocolVersion()), nil
-}
-
 func (r *Resolver) ChainID(ctx context.Context) (hexutil.Big, error) {
 	return hexutil.Big(*r.backend.ChainConfig().ChainID), nil
 }

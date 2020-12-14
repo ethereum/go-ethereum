@@ -35,9 +35,9 @@ func (e lesEntry) ENRKey() string {
 
 // setupDiscovery creates the node discovery source for the eth protocol.
 func (eth *LightEthereum) setupDiscovery() (enode.Iterator, error) {
-	if len(eth.config.DiscoveryURLs) == 0 {
+	if len(eth.config.EthDiscoveryURLs) == 0 {
 		return nil, nil
 	}
 	client := dnsdisc.NewClient(dnsdisc.Config{})
-	return client.NewIterator(eth.config.DiscoveryURLs...)
+	return client.NewIterator(eth.config.EthDiscoveryURLs...)
 }
