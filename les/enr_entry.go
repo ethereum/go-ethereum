@@ -38,28 +38,17 @@ func (e lesEntry) ENRKey() string {
 
 // setupDiscovery creates the node discovery source for the eth protocol.
 func (eth *LightEthereum) setupDiscovery(cfg *p2p.Config) (enode.Iterator, error) {
-	var it enode.Iterator
+	it := enode.NewFairMix(0)
 	if len(eth.config.EthDiscoveryURLs) != 0 {
 		client := dnsdisc.NewClient(dnsdisc.Config{})
-		var err error
-		it, err = client.NewIterator(eth.config.EthDiscoveryURLs...)
+		dns, err := client.NewIterator(eth.config.EthDiscoveryURLs...)
 		if err != nil {
 			return nil, err
 		}
+		it.AddSource(dns)
 	}
 	if cfg.DiscoveryV5 && eth.p2pServer.DiscV5 != nil {
-		v5 := eth.p2pServer.DiscV5.RandomNodes()
-		if it == nil {
-			it = v5
-		} else {
-			mix := enode.NewFairMix(0)
-			mix.AddSource(it)
-			mix.AddSource(v5)
-			it = mix
-		}
-	}
-	if it == nil {
-		return nil, nil
+		it.AddSource(eth.p2pServer.DiscV5.RandomNodes())
 	}
 	forkFilter := forkid.NewFilter(eth.blockchain)
 	return enode.Filter(it, func(n *enode.Node) bool {
