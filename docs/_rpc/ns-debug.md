@@ -424,23 +424,28 @@ specifies the options for this specific call. The possible options are:
 
 
 #### JavaScript-based tracing
-Specifying the `tracer` option in the second argument enables JavaScript-based tracing. In this mode, `tracer` is interpreted as a JavaScript expression that is expected to evaluate to an object with (at least) two methods, named `step` and `result`.
+
+Specifying the `tracer` option in the second argument enables JavaScript-based tracing. In this mode, `tracer` is interpreted as a JavaScript expression that is expected to evaluate to an object with (at least) three methods, named `step`, `result`, and `fault`.
 
 `step`is a function that takes two arguments, log and db, and is called for each step of the EVM, or when an error occurs, as the specified transaction is traced.
 
 `log` has the following fields:
 
- - `pc`: Number, the current program counter
  - `op`: Object, an OpCode object representing the current opcode
- - `gas`: Number, the amount of gas remaining
- - `gasPrice`: Number, the cost in wei of each unit of gas
- - `memory`: Object, a structure representing the contract's memory space
  - `stack`: array[big.Int], the EVM execution stack
- - `depth`: The execution depth
- - `account`: The address of the account executing the current operation
- - `err`: If an error occured, information about the error
+ - `memory`: Object, a structure representing the contract's memory space
+ - `contract`: Object, an object representing the account executing the current operation
 
-If `err` is non-null, all other fields should be ignored.
+and the following methods:
+
+ - `getPC()` - returns a Number with the current program counter
+ - `getGas()` - returns a Number with the amount of gas remaining
+ - `getCost()` - returns the cost of the opcode as a Number
+ - `getDepth()` - returns the execution depth as a Number
+ - `getRefund()` - returns the amount to be refunded as a Number
+ - `getError()` - returns information about the error if one occured, otherwise returns `undefined`
+
+If error is non-empty, all other fields should be ignored.
 
 For efficiency, the same `log` object is reused on each execution step, updated with current values; make sure to copy values you want to preserve beyond the current call. For instance, this step function will not work:
 
@@ -451,7 +456,7 @@ For efficiency, the same `log` object is reused on each execution step, updated 
 But this step function will:
 
     function(log) {
-      this.logs.append({gas: log.gas, pc: log.pc, ...});
+      this.logs.append({gas: log.getGas(), pc: log.getPC(), ...});
     }
 
 `log.op` has the following methods:
@@ -463,12 +468,19 @@ But this step function will:
 `log.memory` has the following methods:
 
  - `slice(start, stop)` - returns the specified segment of memory as a byte slice
- - `length()` - returns the length of the memory
+ - `getUint(offset)` - returns the 32 bytes at the given offset
 
 `log.stack` has the following methods:
 
  - `peek(idx)` - returns the idx-th element from the top of the stack (0 is the topmost element) as a big.Int
  - `length()` - returns the number of elements in the stack
+
+`log.contract` has the following methods:
+
+- `getCaller()` - returns the address of the caller
+- `getAddress()` - returns the address of the current contract
+- `getValue()` - returns the amount of value sent from caller to contract as a big.Int
+- `getInput()` - returns the input data passed to the contract
 
 `db` has the following methods:
 
@@ -478,9 +490,24 @@ But this step function will:
  - `getState(address, hash)` - returns the state value for the specified account and the specified hash
  - `exists(address)` - returns true if the specified address exists
 
-The second function, 'result', takes no arguments, and is expected to return a JSON-serializable value to return to the RPC caller.
-
 If the step function throws an exception or executes an illegal operation at any point, it will not be called on any further VM steps, and the error will be returned to the caller.
+
+The second function, `result`, takes two arguments `ctx` and `db`, and is expected to return a JSON-serializable value to return to the RPC caller.
+
+`ctx` is the context in which the transaction is executing and has the following fields:
+
+- `type` - String, one of the two values `CALL` and `CREATE`
+- `from` - Address, sender of the transaction
+- `to` - Address, target of the transaction
+- `input` - Buffer, input transaction data
+- `gas` - Number, gas budget of the transaction
+- `value` - big.Int, amount to be transferred in wei
+- `block` - Number, block number
+- `output` - Buffer, value returned from EVM
+- `gasUsed` - Number, amount of gas used in executing the transaction (excludes txdata costs)
+- `time` - String, execution runtime
+
+The third function, `fault`, takes two arguments, `log` and `db`, just like `step` and is invoked when an error happens during the execution of an opcode which wasn't reported in `step`. The method `log.getError()` has information about the error.
 
 Note that several values are Golang big.Int objects, not JavaScript numbers or JS bigints. As such, they have the same interface as described in the godocs. Their default serialization to JSON is as a Javascript number; to serialize large numbers accurately call `.String()` on them. For convenience, `big.NewInt(x)` is provided, and will convert a uint to a Go BigInt.
 
