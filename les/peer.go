@@ -627,7 +627,9 @@ func (p *serverPeer) Handshake(genesis common.Hash, forkid forkid.ID, forkFilter
 			if err := recv.get("recentTxLookup", &recentTx); err != nil {
 				return err
 			}
-			p.serveTxLookup = recentTx == 0
+			// Note: in the current version we only consider the tx index service useful
+			// if it is unlimited. This can be made configurable in the future.
+			p.serveTxLookup = recentTx == txIndexUnlimited
 		} else {
 			p.serveTxLookup = true
 		}
@@ -974,17 +976,17 @@ func (p *clientPeer) freezeClient() {
 // network IDs, difficulties, head and genesis blocks.
 func (p *clientPeer) Handshake(td *big.Int, head common.Hash, headNum uint64, genesis common.Hash, forkID forkid.ID, forkFilter forkid.Filter, server *LesServer) error {
 	recentTx := server.handler.blockchain.TxLookupLimit()
-	if recentTx > 0 { // 0 means no limit (all txs available)
-		if recentTx <= blockSafetyMargin {
-			recentTx = 1 // 1 means tx lookup is not served at all
+	if recentTx != txIndexUnlimited {
+		if recentTx < blockSafetyMargin {
+			recentTx = txIndexDisabled
 		} else {
-			recentTx -= blockSafetyMargin
+			recentTx -= blockSafetyMargin - txIndexRecentOffset
 		}
 	}
 	if server.config.UltraLightOnlyAnnounce {
-		recentTx = 1
+		recentTx = txIndexDisabled
 	}
-	if recentTx != 0 && p.version < lpv4 {
+	if recentTx != txIndexUnlimited && p.version < lpv4 {
 		return errors.New("Cannot serve old clients without a complete tx index")
 	}
 	// Note: clientPeer.headInfo should contain the last head announced to the client by us.
