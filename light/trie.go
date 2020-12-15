@@ -101,7 +101,7 @@ type odrTrie struct {
 	trie *trie.Trie
 }
 
-func (t *odrTrie) TryGet(key []byte) ([]byte, error) {
+func (t *odrTrie) tryGet(key []byte) ([]byte, error) {
 	key = crypto.Keccak256(key)
 	var res []byte
 	err := t.do(key, func() (err error) {
@@ -111,6 +111,16 @@ func (t *odrTrie) TryGet(key []byte) ([]byte, error) {
 	return res, err
 }
 
+// TryGetHash implements state.Trie interface
+func (t *odrTrie) TryGetHash(key common.Hash) ([]byte, error) {
+	return t.tryGet(key.Bytes())
+}
+
+// TryGetAddress implements state.Trie interface
+func (t *odrTrie) TryGetAddress(key common.Address) ([]byte, error) {
+	return t.tryGet(key.Bytes())
+}
+
 func (t *odrTrie) TryUpdate(key, value []byte) error {
 	key = crypto.Keccak256(key)
 	return t.do(key, func() error {
@@ -118,11 +128,31 @@ func (t *odrTrie) TryUpdate(key, value []byte) error {
 	})
 }
 
+// TryUpdateHash implements state.Trie interface
+func (t *odrTrie) TryUpdateHash(key common.Hash, value []byte) error {
+	return t.TryUpdate(key.Bytes(), value)
+}
+
+// TryUpdateAddress implements state.Trie interface
+func (t *odrTrie) TryUpdateAddress(key common.Address, value []byte) error {
+	return t.TryUpdate(key.Bytes(), value)
+}
+
 func (t *odrTrie) TryDelete(key []byte) error {
 	key = crypto.Keccak256(key)
 	return t.do(key, func() error {
 		return t.trie.TryDelete(key)
 	})
+}
+
+// TryDeleteHash implements state.Trie interface
+func (t *odrTrie) TryDeleteHash(key common.Hash) error {
+	return t.TryDelete(key.Bytes())
+}
+
+// TryDeleteAddress implements state.Trie interface
+func (t *odrTrie) TryDeleteAddress(key common.Address) error {
+	return t.TryDelete(key.Bytes())
 }
 
 func (t *odrTrie) Commit(onleaf trie.LeafCallback) (common.Hash, error) {

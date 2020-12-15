@@ -20,6 +20,7 @@ import (
 	"fmt"
 
 	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/crypto/fixed"
 	"github.com/ethereum/go-ethereum/log"
 )
 
@@ -65,18 +66,30 @@ func NewSecure(root common.Hash, db *Database) (*SecureTrie, error) {
 // Get returns the value for key stored in the trie.
 // The value bytes must not be modified by the caller.
 func (t *SecureTrie) Get(key []byte) []byte {
-	res, err := t.TryGet(key)
+	res, err := t.tryGet(key)
 	if err != nil {
 		log.Error(fmt.Sprintf("Unhandled trie error: %v", err))
 	}
 	return res
 }
 
-// TryGet returns the value for key stored in the trie.
+// tryGet returns the value for key stored in the trie.
 // The value bytes must not be modified by the caller.
 // If a node was not found in the database, a MissingNodeError is returned.
-func (t *SecureTrie) TryGet(key []byte) ([]byte, error) {
+func (t *SecureTrie) tryGet(key []byte) ([]byte, error) {
 	return t.trie.TryGet(t.hashKey(key))
+}
+
+// TryGetHash is identical to TryGet, but uses a common.Hash as key,
+func (t *SecureTrie) TryGetHash(key common.Hash) ([]byte, error) {
+	k := fixed.LegacyKeccak32(key)
+	return t.trie.TryGet(k[:])
+}
+
+// TryGetAddress is identical to TryGet, but uses a common.Hash as key,
+func (t *SecureTrie) TryGetAddress(key common.Address) ([]byte, error) {
+	k := fixed.LegacyKeccak20(key)
+	return t.trie.TryGet(k[:])
 }
 
 // TryGetNode attempts to retrieve a trie node by compact-encoded path. It is not
@@ -92,12 +105,12 @@ func (t *SecureTrie) TryGetNode(path []byte) ([]byte, int, error) {
 // The value bytes must not be modified by the caller while they are
 // stored in the trie.
 func (t *SecureTrie) Update(key, value []byte) {
-	if err := t.TryUpdate(key, value); err != nil {
+	if err := t.tryUpdate(key, value); err != nil {
 		log.Error(fmt.Sprintf("Unhandled trie error: %v", err))
 	}
 }
 
-// TryUpdate associates key with value in the trie. Subsequent calls to
+// tryUpdate associates key with value in the trie. Subsequent calls to
 // Get will return value. If value has length zero, any existing value
 // is deleted from the trie and calls to Get will return nil.
 //
@@ -105,7 +118,7 @@ func (t *SecureTrie) Update(key, value []byte) {
 // stored in the trie.
 //
 // If a node was not found in the database, a MissingNodeError is returned.
-func (t *SecureTrie) TryUpdate(key, value []byte) error {
+func (t *SecureTrie) tryUpdate(key, value []byte) error {
 	hk := t.hashKey(key)
 	err := t.trie.TryUpdate(hk, value)
 	if err != nil {
@@ -115,19 +128,55 @@ func (t *SecureTrie) TryUpdate(key, value []byte) error {
 	return nil
 }
 
+// TryUpdateHash implements state.Trie interface
+func (t *SecureTrie) TryUpdateHash(key common.Hash, value []byte) error {
+	hk := fixed.LegacyKeccak32(key)
+	err := t.trie.TryUpdate(hk[:], value)
+	if err != nil {
+		return err
+	}
+	t.getSecKeyCache()[string(hk[:])] = key[:]
+	return nil
+}
+
+// TryUpdateAddress implements state.Trie interface
+func (t *SecureTrie) TryUpdateAddress(key common.Address, value []byte) error {
+	hk := fixed.LegacyKeccak20(key)
+	err := t.trie.TryUpdate(hk[:], value)
+	if err != nil {
+		return err
+	}
+	t.getSecKeyCache()[string(hk[:])] = key[:]
+	return nil
+}
+
 // Delete removes any existing value for key from the trie.
 func (t *SecureTrie) Delete(key []byte) {
-	if err := t.TryDelete(key); err != nil {
+	if err := t.tryDelete(key); err != nil {
 		log.Error(fmt.Sprintf("Unhandled trie error: %v", err))
 	}
 }
 
-// TryDelete removes any existing value for key from the trie.
+// tryDelete removes any existing value for key from the trie.
 // If a node was not found in the database, a MissingNodeError is returned.
-func (t *SecureTrie) TryDelete(key []byte) error {
+func (t *SecureTrie) tryDelete(key []byte) error {
 	hk := t.hashKey(key)
 	delete(t.getSecKeyCache(), string(hk))
 	return t.trie.TryDelete(hk)
+}
+
+// TryUpdateHash implements state.Trie interface
+func (t *SecureTrie) TryDeleteHash(key common.Hash) error {
+	hk := fixed.LegacyKeccak32(key)
+	delete(t.getSecKeyCache(), string(hk[:]))
+	return t.trie.TryDelete(hk[:])
+}
+
+// TryUpdateAddress implements state.Trie interface
+func (t *SecureTrie) TryDeleteAddress(key common.Address) error {
+	hk := fixed.LegacyKeccak20(key)
+	delete(t.getSecKeyCache(), string(hk[:]))
+	return t.trie.TryDelete(hk[:])
 }
 
 // GetKey returns the sha3 preimage of a hashed key that was

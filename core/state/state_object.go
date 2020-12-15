@@ -221,7 +221,7 @@ func (s *stateObject) GetCommittedState(db Database, key common.Hash) common.Has
 		if metrics.EnabledExpensive {
 			defer func(start time.Time) { s.db.StorageReads += time.Since(start) }(time.Now())
 		}
-		if enc, err = s.getTrie(db).TryGet(key.Bytes()); err != nil {
+		if enc, err = s.getTrie(db).TryGetHash(key); err != nil {
 			s.setError(err)
 			return common.Hash{}
 		}
@@ -325,11 +325,11 @@ func (s *stateObject) updateTrie(db Database) Trie {
 
 		var v []byte
 		if (value == common.Hash{}) {
-			s.setError(tr.TryDelete(key[:]))
+			s.setError(tr.TryDeleteHash(key))
 		} else {
 			// Encoding []byte cannot fail, ok to ignore the error.
 			v, _ = rlp.EncodeToBytes(common.TrimLeftZeroes(value[:]))
-			s.setError(tr.TryUpdate(key[:], v))
+			s.setError(tr.TryUpdateHash(key, v))
 		}
 		// If state snapshotting is active, cache the data til commit
 		if storage != nil {

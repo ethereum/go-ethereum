@@ -65,20 +65,27 @@ type Trie interface {
 	// TODO(fjl): remove this when SecureTrie is removed
 	GetKey([]byte) []byte
 
-	// TryGet returns the value for key stored in the trie. The value bytes must
+	// TryGetHash returns the value for key stored in the trie. The value bytes must
 	// not be modified by the caller. If a node was not found in the database, a
 	// trie.MissingNodeError is returned.
-	TryGet(key []byte) ([]byte, error)
+	TryGetHash(key common.Hash) ([]byte, error)
 
-	// TryUpdate associates key with value in the trie. If value has length zero, any
+	// TryGetAddress is identical to TryGetHash, but uses a common.Address as key,
+	TryGetAddress(key common.Address) ([]byte, error)
+
+	// TryUpdateHash associates key with value in the trie. If value has length zero, any
 	// existing value is deleted from the trie. The value bytes must not be modified
 	// by the caller while they are stored in the trie. If a node was not found in the
 	// database, a trie.MissingNodeError is returned.
-	TryUpdate(key, value []byte) error
+	TryUpdateHash(key common.Hash, value []byte) error
+	// TryUpdateAddress is identical to TryUpdateHash but uses common.Address as key
+	TryUpdateAddress(key common.Address, value []byte) error
 
-	// TryDelete removes any existing value for key from the trie. If a node was not
+	// TryDeleteHash removes any existing value for key from the trie. If a node was not
 	// found in the database, a trie.MissingNodeError is returned.
-	TryDelete(key []byte) error
+	TryDeleteHash(key common.Hash) error
+	// TryDeleteAddress is identical to TryDeleteHash but uses common.Address as key.
+	TryDeleteAddress(key common.Address) error
 
 	// Hash returns the root hash of the trie. It does not write to the database and
 	// can be used even if the trie doesn't have one.
