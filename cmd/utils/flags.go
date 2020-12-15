@@ -133,7 +133,7 @@ var (
 	}
 	MainnetFlag = cli.BoolFlag{
 		Name:  "mainnet",
-		Usage: "Ethereum network: main network of the ETH asset",
+		Usage: "Ethereum mainnet",
 	}
 	GoerliFlag = cli.BoolFlag{
 		Name:  "goerli",
@@ -1813,7 +1813,7 @@ func MakeChainDatabase(ctx *cli.Context, stack *node.Node) ethdb.Database {
 }
 
 func MakeGenesis(ctx *cli.Context) *core.Genesis {
-	genesis := core.DefaultGenesisBlock()
+	var genesis *core.Genesis
 	switch {
 	case ctx.GlobalBool(LegacyTestnetFlag.Name) || ctx.GlobalBool(RopstenFlag.Name):
 		genesis = core.DefaultRopstenGenesisBlock()
