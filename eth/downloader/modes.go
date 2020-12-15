@@ -25,7 +25,7 @@ type SyncMode uint32
 const (
 	FullSync  SyncMode = iota // Synchronise the entire blockchain history from full blocks
 	FastSync                  // Quickly download the headers, full sync only at the chain
-	SnapSync                  // Download the chain and the state via compact snashots
+	SnapSync                  // Download the chain and the state via compact snapshots
 	LightSync                 // Download only the headers and terminate afterwards
 )
 
