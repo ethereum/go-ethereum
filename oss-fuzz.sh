@@ -32,11 +32,7 @@ function compile_fuzzer {
   fuzzer=$3
   corpusfile="${path}/testdata/${fuzzer}_seed_corpus.zip"
   echo "Building $fuzzer (expecting corpus at $corpusfile)"
-  (cd $path && \
-        go-fuzz -func $func -o $WORK/$fuzzer.a . && \
-        echo "First stage built OK" && \
-        $CXX $CXXFLAGS $LIB_FUZZING_ENGINE $WORK/$fuzzer.a -o $OUT/$fuzzer && \
-        echo "Second stage built ok" )
+  compile_go_fuzzer $path $func $fuzzer
 
         ## Check if there exists a seed corpus file
         if [ -f $corpusfile ]
