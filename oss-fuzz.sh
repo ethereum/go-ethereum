@@ -50,8 +50,7 @@ compile_fuzzer tests/fuzzers/bitutil  Fuzz      fuzzBitutilCompress
 compile_fuzzer tests/fuzzers/bn256    FuzzAdd   fuzzBn256Add
 compile_fuzzer tests/fuzzers/bn256    FuzzMul   fuzzBn256Mul
 compile_fuzzer tests/fuzzers/bn256    FuzzPair  fuzzBn256Pair
-compile_fuzzer core/vm/runtime Fuzz      fuzzVmRuntime
-compile_fuzzer crypto/blake2b  Fuzz      fuzzBlake2b
+compile_fuzzer tests/fuzzers/runtime Fuzz      fuzzVmRuntime
 compile_fuzzer tests/fuzzers/keystore   Fuzz fuzzKeystore
 compile_fuzzer tests/fuzzers/txfetcher  Fuzz fuzzTxfetcher
 compile_fuzzer tests/fuzzers/rlp        Fuzz fuzzRlp
@@ -68,6 +67,10 @@ compile_fuzzer tests/fuzzers/bls12381  FuzzG2MultiExp fuzz_g2_multiexp
 compile_fuzzer tests/fuzzers/bls12381  FuzzPairing fuzz_pairing
 compile_fuzzer tests/fuzzers/bls12381  FuzzMapG1 fuzz_map_g1
 compile_fuzzer tests/fuzzers/bls12381  FuzzMapG2 fuzz_map_g2
+
+#TODO: move this to tests/fuzzers, if possible
+compile_fuzzer crypto/blake2b  Fuzz      fuzzBlake2b
+
 
 # This doesn't work very well @TODO
 #compile_fuzzertests/fuzzers/abi Fuzz fuzzAbi
