@@ -112,7 +112,7 @@ const wrsBranches = 8 // max number of branches in the wrsNode tree
 type wrsNode struct {
 	items                    [wrsBranches]interface{}
 	weights                  [wrsBranches]uint64
-	sumCost                uint64
+	sumCost                  uint64
 	level, itemCnt, maxItems int
 }
 
