@@ -13,20 +13,17 @@ environment:
       MINGW_DIR: i686-8.1.0-posix-dwarf-rt_v6-rev0\mingw32
 
 install:
-  # - git submodule update --init
-  - dir C:\mingw-w64\%MINGW_DIR%
-  - dir C:\mingw-w64\%MINGW_DIR%\bin
+  - git submodule update --init
   - set PATH=C:\mingw-w64\%MINGW_DIR%\bin\;C:\Program Files (x86)\NSIS\;%PATH%
   - go version
   - gcc --version
 
 build_script:
-  - go run build\ci.go install -dlgo
+  - go run build\ci.go install -arch %GETH_ARCH% -dlgo
 
 after_build:
-  - go run build\ci.go archive -type zip -signer WINDOWS_SIGNING_KEY -upload gethstore/builds
-  - go run build\ci.go nsis -signer WINDOWS_SIGNING_KEY -upload gethstore/builds
+  - go run build\ci.go archive -arch %GETH_ARCH% -type zip -signer WINDOWS_SIGNING_KEY -upload gethstore/builds
+  - go run build\ci.go nsis -arch %GETH_ARCH% -signer WINDOWS_SIGNING_KEY -upload gethstore/builds
 
 test_script:
-  - set CGO_ENABLED=1
-  - go run build\ci.go test -coverage
+  - go run build\ci.go test -arch %GETH_ARCH% -coverage
