@@ -23,7 +23,10 @@ import (
 	"github.com/ethereum/go-ethereum/p2p/enode"
 )
 
-const ltTolerance = 0.15
+const (
+	ltTolerance = 0.03
+	ltRounds    = 7
+)
 
 type (
 	ltNode struct {
@@ -156,31 +159,47 @@ func TestLimiter(t *testing.T) {
 	}
 	for _, test := range limTests {
 		lt.expCost, lt.totalCost = 0, 0
-		for _, n := range test {
-			lt.request(n)
-		}
-		for i := 0; i < 50000; i++ {
-			lt.process()
+		iterCount := 10000
+		for j := 0; j < ltRounds; j++ {
+			// try to reach expected target range in multiple rounds with increasing iteration counts
+			last := j == ltRounds-1
 			for _, n := range test {
-				lt.moreRequests(n)
+				lt.request(n)
 			}
-		}
-		for lt.runCount > 0 {
-			lt.process()
-		}
-		if spamRatio := 1 - float64(lt.expCost)/float64(lt.totalCost); spamRatio > 0.5*(1+ltTolerance) {
-			t.Errorf("Spam ratio too high (%f)", spamRatio)
-		}
-		for _, n := range test {
-			if n.exp != 0 {
-				if n.dropped > 0 {
-					t.Errorf("Dropped %d requests of non-spam node", n.dropped)
-				}
-				r := float64(n.served) * float64(n.cost) / float64(lt.expCost)
-				if r < n.exp*(1-ltTolerance) || r > n.exp*(1+ltTolerance) {
-					t.Errorf("Request ratio (%f) does not match expected value (%f)", r, n.exp)
+			for i := 0; i < iterCount; i++ {
+				lt.process()
+				for _, n := range test {
+					lt.moreRequests(n)
 				}
 			}
+			for lt.runCount > 0 {
+				lt.process()
+			}
+			if spamRatio := 1 - float64(lt.expCost)/float64(lt.totalCost); spamRatio > 0.5*(1+ltTolerance) {
+				t.Errorf("Spam ratio too high (%f)", spamRatio)
+			}
+			fail, success := false, true
+			for _, n := range test {
+				if n.exp != 0 {
+					if n.dropped > 0 {
+						t.Errorf("Dropped %d requests of non-spam node", n.dropped)
+						fail = true
+					}
+					r := float64(n.served) * float64(n.cost) / float64(lt.expCost)
+					if r < n.exp*(1-ltTolerance) || r > n.exp*(1+ltTolerance) {
+						if last {
+							// print error only if the target is still not reached in the last round
+							t.Errorf("Request ratio (%f) does not match expected value (%f)", r, n.exp)
+						}
+						success = false
+					}
+				}
+			}
+			if fail || success {
+				break
+			}
+			// neither failed nor succeeded; try more iterations to reach probability targets
+			iterCount *= 2
 		}
 	}
 	lt.limiter.Stop()
