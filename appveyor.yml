@@ -17,7 +17,7 @@ environment:
 install:
   - git submodule update --init
   - go version
-  - gcc --version
+  # - gcc --version
 
 build_script:
   - go run build\ci.go install -dlgo
