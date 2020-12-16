@@ -250,11 +250,6 @@ func doInstall(cmdline []string) {
 		gobuild.Env = append(gobuild.Env, "CC="+os.Getenv("CC"))
 	}
 
-	// Add -m32 for windows.
-	if runtime.GOOS == "windows" && *arch == "386" {
-		gobuild.Env = append(gobuild.Env, "CGO_CFLAGS=-m32")
-	}
-
 	// arm64 CI builders are memory-constrained and can't handle concurrent builds,
 	// better disable it. This check isn't the best, it should probably
 	// check for something in env instead.
@@ -269,7 +264,7 @@ func doInstall(cmdline []string) {
 	gobuild.Args = append(gobuild.Args, "-trimpath")
 
 	// Show packages during build.
-	gobuild.Args = append(gobuild.Args, "-v", "-x")
+	gobuild.Args = append(gobuild.Args, "-v")
 
 	// Now we choose what we're even building.
 	// Default: collect all 'main' packages in cmd/ and build those.
