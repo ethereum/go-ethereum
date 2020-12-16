@@ -333,7 +333,7 @@ type BadBlockArgs struct {
 func (api *PrivateDebugAPI) GetBadBlocks(ctx context.Context) ([]*BadBlockArgs, error) {
 	var (
 		err     error
-		blocks  = api.eth.BlockChain().BadBlocks(false) // Load last 10
+		blocks  = rawdb.ReadAllBadBlocks(api.eth.chainDb)
 		results = make([]*BadBlockArgs, 0, len(blocks))
 	)
 	for _, block := range blocks {

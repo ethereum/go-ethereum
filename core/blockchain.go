@@ -89,7 +89,6 @@ const (
 	txLookupCacheLimit  = 1024
 	maxFutureBlocks     = 256
 	maxTimeFutureBlocks = 30
-	badBlockLimit       = 10
 	TriesInMemory       = 128
 
 	// BlockChainVersion ensures that an incompatible database forces a resync from scratch.
@@ -208,7 +207,6 @@ type BlockChain struct {
 	processor  Processor  // Block transaction processor interface
 	vmConfig   vm.Config
 
-	badBlocks          *lru.Cache                     // Bad block cache
 	shouldPreserve     func(*types.Block) bool        // Function used to determine whether should preserve the given block.
 	terminateInsert    func(common.Hash, uint64) bool // Testing hook used to terminate ancient receipt chain insertion.
 	writeLegacyJournal bool                           // Testing flag used to flush the snapshot journal in legacy format.
@@ -227,7 +225,6 @@ func NewBlockChain(db ethdb.Database, cacheConfig *CacheConfig, chainConfig *par
 	blockCache, _ := lru.New(blockCacheLimit)
 	txLookupCache, _ := lru.New(txLookupCacheLimit)
 	futureBlocks, _ := lru.New(maxFutureBlocks)
-	badBlocks, _ := lru.New(badBlockLimit)
 
 	bc := &BlockChain{
 		chainConfig: chainConfig,
@@ -249,7 +246,6 @@ func NewBlockChain(db ethdb.Database, cacheConfig *CacheConfig, chainConfig *par
 		futureBlocks:   futureBlocks,
 		engine:         engine,
 		vmConfig:       vmConfig,
-		badBlocks:      badBlocks,
 	}
 	bc.validator = NewBlockValidator(chainConfig, bc, engine)
 	bc.prefetcher = newStatePrefetcher(chainConfig, bc, engine)
@@ -399,8 +395,6 @@ func NewBlockChain(db ethdb.Database, cacheConfig *CacheConfig, chainConfig *par
 			triedb.SaveCachePeriodically(bc.cacheConfig.TrieCleanJournal, bc.cacheConfig.TrieCleanRejournal, bc.quit)
 		}()
 	}
-	// Last step, load all persisted bad blocks.
-	bc.loadBadBlocks()
 	return bc, nil
 }
 
@@ -2376,58 +2370,9 @@ func (bc *BlockChain) maintainTxIndex(ancients uint64) {
 	}
 }
 
-// BadBlocksByNumber implements the sort interface to allow sorting a list of
-// bad blocks by their number.
-type BadBlocksByNumber []*types.Block
-
-func (s BadBlocksByNumber) Len() int           { return len(s) }
-func (s BadBlocksByNumber) Less(i, j int) bool { return s[i].NumberU64() > s[j].NumberU64() }
-func (s BadBlocksByNumber) Swap(i, j int)      { s[i], s[j] = s[j], s[i] }
-
-// loadBadBlocks loads the persisted bad blocks from the database and
-// stores the latest 10 bad blocks in the cache. If the total bad block
-// is less than 10, then load all of them.
-func (bc *BlockChain) loadBadBlocks() {
-	blocks, _ := rawdb.ReadAllBadBlocks(bc.db)
-	if len(blocks) == 0 {
-		return
-	}
-	sort.Sort(BadBlocksByNumber(blocks))
-	if len(blocks) > badBlockLimit {
-		blocks = blocks[:badBlockLimit]
-	}
-	for _, block := range blocks {
-		bc.badBlocks.Add(block.Hash(), block)
-	}
-}
-
-// BadBlocks returns a list of the last 'bad blocks' that the client has seen
-// on the network. If the all is set then all the bad blocks from the database
-// will be returned.
-func (bc *BlockChain) BadBlocks(all bool) []*types.Block {
-	if all {
-		blocks, _ := rawdb.ReadAllBadBlocks(bc.db)
-		return blocks
-	}
-	blocks := make([]*types.Block, 0, bc.badBlocks.Len())
-	for _, hash := range bc.badBlocks.Keys() {
-		if blk, exist := bc.badBlocks.Peek(hash); exist {
-			block := blk.(*types.Block)
-			blocks = append(blocks, block)
-		}
-	}
-	return blocks
-}
-
-// addBadBlock adds a bad block to the bad-block LRU cache
-func (bc *BlockChain) addBadBlock(block *types.Block) {
-	rawdb.WriteBadBlock(bc.db, block)
-	bc.badBlocks.Add(block.Hash(), block)
-}
-
 // reportBlock logs a bad block error.
 func (bc *BlockChain) reportBlock(block *types.Block, receipts types.Receipts, err error) {
-	bc.addBadBlock(block)
+	rawdb.WriteBadBlock(bc.db, block)
 
 	var receiptString string
 	for i, receipt := range receipts {

@@ -194,6 +194,7 @@ func TestBadBlockStorage(t *testing.T) {
 
 	// Create a test block to move around the database and make sure it's really new
 	block := types.NewBlockWithHeader(&types.Header{
+		Number:      big.NewInt(1),
 		Extra:       []byte("bad block"),
 		UncleHash:   types.EmptyUncleHash,
 		TxHash:      types.EmptyRootHash,
@@ -209,10 +210,24 @@ func TestBadBlockStorage(t *testing.T) {
 	} else if entry.Hash() != block.Hash() {
 		t.Fatalf("Retrieved block mismatch: have %v, want %v", entry, block)
 	}
-	// Delete the block and verify the execution
-	DeleteBadBlock(db, block.Hash())
-	if entry := ReadBadBlock(db, block.Hash()); entry != nil {
-		t.Fatalf("Deleted block returned: %v", entry)
+	// Write one more bad block
+	blockTwo := types.NewBlockWithHeader(&types.Header{
+		Number:      big.NewInt(2),
+		Extra:       []byte("bad block two"),
+		UncleHash:   types.EmptyUncleHash,
+		TxHash:      types.EmptyRootHash,
+		ReceiptHash: types.EmptyRootHash,
+	})
+	WriteBadBlock(db, blockTwo)
+
+	badBlocks := ReadAllBadBlocks(db)
+	if len(badBlocks) != 2 {
+		t.Fatalf("Failed to load all bad blocks")
+	}
+	DeleteBadBlocks(db)
+	badBlocks = ReadAllBadBlocks(db)
+	if len(badBlocks) != 0 {
+		t.Fatalf("Failed to delete bad blocks")
 	}
 }
 

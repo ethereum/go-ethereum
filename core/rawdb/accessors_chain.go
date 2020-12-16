@@ -20,6 +20,7 @@ import (
 	"bytes"
 	"encoding/binary"
 	"math/big"
+	"sort"
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/types"
@@ -702,59 +703,92 @@ func DeleteBlockWithoutNumber(db ethdb.KeyValueWriter, hash common.Hash, number 
 	DeleteTd(db, hash, number)
 }
 
+const badBlockToKeep = 10
+
 type badBlock struct {
 	Header *types.Header
 	Body   *types.Body
 }
 
+// badBlockList implements the sort interface to allow sorting a list of
+// bad blocks by their number in the reverse order.
+type badBlockList []*badBlock
+
+func (s badBlockList) Len() int { return len(s) }
+func (s badBlockList) Less(i, j int) bool {
+	return s[i].Header.Number.Uint64() > s[j].Header.Number.Uint64()
+}
+func (s badBlockList) Swap(i, j int) { s[i], s[j] = s[j], s[i] }
+
 // ReadBadBlock retrieves the bad block with the corresponding block hash.
 func ReadBadBlock(db ethdb.Reader, hash common.Hash) *types.Block {
-	blob, err := db.Get(badBlockKey(hash))
+	blob, err := db.Get(badBlockKey)
 	if err != nil {
 		return nil
 	}
-	var block badBlock
-	if err := rlp.DecodeBytes(blob, &block); err != nil {
+	var badBlocks badBlockList
+	if err := rlp.DecodeBytes(blob, &badBlocks); err != nil {
 		return nil
 	}
-	return types.NewBlockWithHeader(block.Header).WithBody(block.Body.Transactions, block.Body.Uncles)
+	for _, bad := range badBlocks {
+		if bad.Header.Hash() == hash {
+			return types.NewBlockWithHeader(bad.Header).WithBody(bad.Body.Transactions, bad.Body.Uncles)
+		}
+	}
+	return nil
 }
 
 // ReadAllBadBlocks retrieves all the bad blocks in the database
-func ReadAllBadBlocks(db ethdb.Database) ([]*types.Block, error) {
-	iterator := db.NewIterator(badBlockPrefix, nil)
-	defer iterator.Release()
-
-	var blocks []*types.Block
-	for iterator.Next() {
-		blob := iterator.Value()
-		var block badBlock
-		if err := rlp.DecodeBytes(blob, &block); err != nil {
-			return nil, nil
-		}
-		blocks = append(blocks, types.NewBlockWithHeader(block.Header).WithBody(block.Body.Transactions, block.Body.Uncles))
+func ReadAllBadBlocks(db ethdb.Reader) []*types.Block {
+	blob, err := db.Get(badBlockKey)
+	if err != nil {
+		return nil
 	}
-	return blocks, nil
+	var badBlocks badBlockList
+	if err := rlp.DecodeBytes(blob, &badBlocks); err != nil {
+		return nil
+	}
+	var blocks []*types.Block
+	for _, bad := range badBlocks {
+		blocks = append(blocks, types.NewBlockWithHeader(bad.Header).WithBody(bad.Body.Transactions, bad.Body.Uncles))
+	}
+	return blocks
 }
 
-// WriteBadBlock serializes the bad block into the database
-func WriteBadBlock(db ethdb.KeyValueWriter, block *types.Block) {
-	blockRLP, err := rlp.EncodeToBytes(&badBlock{
+// WriteBadBlock serializes the bad block into the database. If the cumulated
+// bad blocks exceeds the limitation, the oldest will be dropped.
+func WriteBadBlock(db ethdb.KeyValueStore, block *types.Block) {
+	blob, err := db.Get(badBlockKey)
+	if err != nil {
+		log.Warn("Failed to load old bad blocks", "error", err)
+	}
+	var badBlocks badBlockList
+	if len(blob) > 0 {
+		if err := rlp.DecodeBytes(blob, &badBlocks); err != nil {
+			log.Crit("Failed to decode old bad blocks", "error", err)
+		}
+	}
+	badBlocks = append(badBlocks, &badBlock{
 		Header: block.Header(),
 		Body:   block.Body(),
 	})
-	if err != nil {
-		log.Crit("Failed to RLP encode bad block", "err", err)
+	sort.Sort(badBlocks)
+	if len(badBlocks) > badBlockToKeep {
+		badBlocks = badBlocks[:badBlockToKeep]
 	}
-	if err := db.Put(badBlockKey(block.Hash()), blockRLP); err != nil {
-		log.Crit("Failed to store bad block", "err", err)
+	data, err := rlp.EncodeToBytes(badBlocks)
+	if err != nil {
+		log.Crit("Failed to encode bad blocks", "err", err)
+	}
+	if err := db.Put(badBlockKey, data); err != nil {
+		log.Crit("Failed to write bad blocks", "err", err)
 	}
 }
 
-// DeleteBadBlock deletes the specific bad block from the database.
-func DeleteBadBlock(db ethdb.KeyValueWriter, hash common.Hash) {
-	if err := db.Delete(badBlockKey(hash)); err != nil {
-		log.Crit("Failed to delete block body", "err", err)
+// DeleteBadBlocks deletes all the bad blocks from the database
+func DeleteBadBlocks(db ethdb.KeyValueWriter) {
+	if err := db.Delete(badBlockKey); err != nil {
+		log.Crit("Failed to delete bad blocks", "err", err)
 	}
 }
 
