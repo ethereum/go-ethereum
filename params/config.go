@@ -274,11 +274,11 @@ func (c *TrustedCheckpoint) HashEqual(hash common.Hash) bool {
 
 // Hash returns the hash of checkpoint's four key fields(index, sectionHead, chtRoot and bloomTrieRoot).
 func (c *TrustedCheckpoint) Hash() common.Hash {
-	sectionIndex := make([]byte, 8)
-	binary.BigEndian.PutUint64(sectionIndex, c.SectionIndex)
+	var sectionIndex [8]byte
+	binary.BigEndian.PutUint64(sectionIndex[:], c.SectionIndex)
 
 	w := sha3.NewLegacyKeccak256()
-	w.Write(buf)
+	w.Write(sectionIndex[:])
 	w.Write(c.CHTRoot[:])
 	w.Write(c.BloomRoot[:])
 
