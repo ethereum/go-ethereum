@@ -10,14 +10,14 @@ environment:
     - GETH_ARCH: amd64
       MINGW_DIR: x86_64-8.1.0-posix-seh-rt_v6-rev0\mingw64
     - GETH_ARCH: 386
-      MINGW_DIR: i686-8.1.0-posix-dwarf-rt_v6-rev0\mingw32
-      CFLAGS: -m32
+      MINGW_DIR: x86_64-8.1.0-posix-seh-rt_v6-rev0\mingw64
 
 install:
   - git submodule update --init
   - set PATH=C:\mingw-w64\%MINGW_DIR%\bin\;C:\Program Files (x86)\NSIS\;%PATH%
   - go version
   - gcc --version
+  - g++ -v
 
 build_script:
   - go run build\ci.go install -arch %GETH_ARCH% -dlgo
