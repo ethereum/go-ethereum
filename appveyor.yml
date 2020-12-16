@@ -10,9 +10,10 @@ environment:
     - GETH_ARCH: amd64
       MINGW_DIR: x86_64-8.1.0-posix-seh-rt_v6-rev0\mingw64
     - GETH_ARCH: 386
-      MINGW_DIR: x86_64-8.1.0-posix-seh-rt_v6-rev0\mingw64
+      MINGW_DIR: i686-8.1.0-posix-dwarf-rt_v6-rev0\mingw32
 
 install:
+  - dir C:\mingw-w64\i686-8.1.0-posix-dwarf-rt_v6-rev0
   - git submodule update --init
   - set PATH=C:\mingw-w64\%MINGW_DIR%\bin\;C:\Program Files (x86)\NSIS\;%PATH%
   - go version
