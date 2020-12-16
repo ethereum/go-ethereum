@@ -1,13 +1,11 @@
 os: Visual Studio 2019
 
 # Clone directly into GOPATH.
-clone_folder: C:\gopath\src\github.com\ethereum\go-ethereum
 clone_depth: 5
 version: "{branch}.{build}"
 environment:
   global:
     GO111MODULE: on
-    GOPATH: C:\gopath
   matrix:
     - GETH_ARCH: amd64
       PATH: C:\mingw-w64\x86_64-8.1.0-posix-seh-rt_v6-rev0\bin;C:\Program Files (x86)\NSIS\;%PATH%
@@ -15,7 +13,8 @@ environment:
       PATH: C:\mingw-w64\i686-8.1.0-posix-dwarf-rt_v6-rev0\bin;C:\Program Files (x86)\NSIS\;%PATH%
 
 install:
-  - git submodule update --init
+  # - git submodule update --init
+  - dir C:\mingw-w64\x86_64-8.1.0-posix-seh-rt_v6-rev0
   - go version
   - gcc --version
 
