@@ -13,7 +13,7 @@ environment:
       MINGW_DIR: i686-8.1.0-posix-dwarf-rt_v6-rev0\mingw32
 
 install:
-  - dir C:\mingw-w64\i686-8.1.0-posix-dwarf-rt_v6-rev0
+  - echo %CC%
   - git submodule update --init
   - set PATH=C:\mingw-w64\%MINGW_DIR%\bin\;C:\Program Files (x86)\NSIS\;%PATH%
   - go version
@@ -28,4 +28,4 @@ after_build:
   - go run build\ci.go nsis -arch %GETH_ARCH% -signer WINDOWS_SIGNING_KEY -upload gethstore/builds
 
 test_script:
-  - go run build\ci.go test -arch %GETH_ARCH% -coverage
+  - go run build\ci.go test -coverage
