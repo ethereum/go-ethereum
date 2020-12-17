@@ -27,10 +27,10 @@ import (
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/hexutil"
+	"github.com/ethereum/go-ethereum/core"
 	"github.com/ethereum/go-ethereum/core/vm"
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/log"
-	"github.com/ethereum/go-ethereum/params"
 	duktape "gopkg.in/olebedev/go-duktape.v3"
 )
 
@@ -337,7 +337,6 @@ func New(code string, txCtx vm.TxContext) (*Tracer, error) {
 		refundValue:     new(uint),
 	}
 	tracer.ctx["gasPrice"] = txCtx.GasPrice
-	tracer.ctx["txGas"] = params.TxGas
 
 	// Set up builtins for this environment
 	tracer.vm.PushGlobalGoFunction("toHex", func(ctx *duktape.Context) int {
@@ -550,6 +549,20 @@ func (jst *Tracer) CaptureState(env *vm.EVM, pc uint64, op vm.OpCode, gas, cost 
 		// Initialize the context if it wasn't done yet
 		if !jst.inited {
 			jst.ctx["block"] = env.Context.BlockNumber.Uint64()
+
+			// Compute intrinsic gas
+			isHomestead := env.ChainConfig().IsHomestead(env.Context.BlockNumber)
+			isIstanbul := env.ChainConfig().IsIstanbul(env.Context.BlockNumber)
+			input, ok := jst.ctx["input"].([]byte)
+			if !ok {
+				return errors.New("Tracer received invalid input data")
+			}
+			intrinsicGas, err := core.IntrinsicGas(input, jst.ctx["type"] == "CREATE", isHomestead, isIstanbul)
+			if err != nil {
+				return err
+			}
+			jst.ctx["intrinsicGas"] = intrinsicGas
+
 			jst.inited = true
 		}
 		// If tracing was interrupted, set the error and stop
@@ -601,8 +614,8 @@ func (jst *Tracer) CaptureFault(env *vm.EVM, pc uint64, op vm.OpCode, gas, cost 
 // CaptureEnd is called after the call finishes to finalize the tracing.
 func (jst *Tracer) CaptureEnd(output []byte, gasUsed uint64, t time.Duration, err error) error {
 	jst.ctx["output"] = output
-	jst.ctx["gasUsed"] = gasUsed
 	jst.ctx["time"] = t.String()
+	jst.ctx["gasUsed"] = gasUsed
 
 	if err != nil {
 		jst.ctx["error"] = err.Error()

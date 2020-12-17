@@ -65,6 +65,9 @@ func runTrace(tracer *Tracer, vmctx VMContext) (json.RawMessage, error) {
 	contract := vm.NewContract(account{}, account{}, big.NewInt(0), 10000)
 	contract.Code = []byte{byte(vm.PUSH1), 0x1, byte(vm.PUSH1), 0x1, 0x0}
 
+	// Needed for intrinsic gas computation
+	tracer.ctx["input"] = []byte{}
+
 	_, err := env.Interpreter().Run(contract, []byte{}, false)
 	if err != nil {
 		return nil, err
@@ -182,6 +185,8 @@ func TestHaltBetweenSteps(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	// Needed for intrinsic gas computation
+	tracer.ctx["input"] = []byte{}
 
 	env := vm.NewEVM(vm.BlockContext{BlockNumber: big.NewInt(1)}, vm.TxContext{}, &dummyStatedb{}, params.TestChainConfig, vm.Config{Debug: true, Tracer: tracer})
 	contract := vm.NewContract(&account{}, &account{}, big.NewInt(0), 0)
