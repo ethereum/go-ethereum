@@ -108,7 +108,6 @@ func (tx *AccessListTransaction) GasPrice() *big.Int      { return new(big.Int).
 func (tx *AccessListTransaction) Value() *big.Int         { return new(big.Int).Set(tx.Amount) }
 func (tx *AccessListTransaction) Nonce() uint64           { return tx.AccountNonce }
 func (tx *AccessListTransaction) CheckNonce() bool        { return true }
-func (tx *AccessListTransaction) Hash() common.Hash       { return rlpHash(tx) }
 
 // To returns the recipient address of the transaction.
 // It returns nil if the transaction is a contract creation.

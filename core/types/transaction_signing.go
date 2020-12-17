@@ -166,17 +166,19 @@ func (s EIP2718Signer) Hash(tx *Transaction) common.Hash {
 			s.chainId, uint(0), uint(0),
 		})
 	} else if tx.typ == AccessListTxId {
-		h = rlpHash([]interface{}{
+		h = typedRlpHash(
 			tx.Type(),
-			tx.ChainId(),
-			tx.Nonce(),
-			tx.GasPrice(),
-			tx.Gas(),
-			tx.To(),
-			tx.Value(),
-			tx.Data(),
-			tx.AccessList(),
-		})
+			[]interface{}{
+				tx.ChainId(),
+				tx.Nonce(),
+				tx.GasPrice(),
+				tx.Gas(),
+				tx.To(),
+				tx.Value(),
+				tx.Data(),
+				tx.AccessList(),
+			},
+		)
 	}
 
 	return h
