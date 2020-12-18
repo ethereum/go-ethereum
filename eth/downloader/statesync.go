@@ -590,7 +590,7 @@ func (s *stateSync) processNodeData(blob []byte) (common.Hash, error) {
 	res := trie.SyncResult{Data: blob}
 	s.keccak.Reset()
 	s.keccak.Write(blob)
-	s.keccak.Read(res.Hash[:0])
+	s.keccak.Read(res.Hash[:])
 	err := s.sched.Process(res)
 	return res.Hash, err
 }
