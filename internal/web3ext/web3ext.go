@@ -633,7 +633,7 @@ web3._extend({
 	properties: [
 		new web3._extend.Property({
 			name: 'version',
-			getter: 'net_version'
+			getter: 'eth_chainId'
 		}),
 	]
 });

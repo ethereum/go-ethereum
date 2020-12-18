@@ -339,15 +339,7 @@ func (ec *Client) SubscribeNewHead(ctx context.Context, ch chan<- *types.Header)
 
 // NetworkID returns the network ID (also known as the chain ID) for this chain.
 func (ec *Client) NetworkID(ctx context.Context) (*big.Int, error) {
-	version := new(big.Int)
-	var ver string
-	if err := ec.c.CallContext(ctx, &ver, "net_version"); err != nil {
-		return nil, err
-	}
-	if _, ok := version.SetString(ver, 10); !ok {
-		return nil, fmt.Errorf("invalid net_version result %q", ver)
-	}
-	return version, nil
+	return ec.ChainID(ctx)
 }
 
 // BalanceAt returns the wei balance of the given account.
