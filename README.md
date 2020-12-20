@@ -322,6 +322,10 @@ proceedings to the account specified by `--etherbase`. You can further tune the 
 by changing the default gas limit blocks converge to (`--targetgaslimit`) and the price
 transactions are accepted at (`--gasprice`).
 
+ smart contracts in the Ethereum blockchain platform
+ 
+ Smart contracts are pieces of code that perform general-purpose computations. For instance, smart contracts have been used to implement crowdfunding initiatives.Differently from prior studies that focused on particular aspects of a subset of smart contracts, our goal is to have a broader understanding of all contracts that are currently deployed in Ethereum.New solutions to cope with Ethereum’s limited scalability should take such an activity imbalance into consideration. With regards to categories, we highlight that the new and widely advertised rich programming model of smart contracts is currently being used to develop very simple applications that tend to be token-centric (e.g., ICOs, Crowdsales, etc). Finally, with regards to code complexity, we observe that the source code of high-activity verified contracts is small, with at most 211 instructions in 80% of the cases. These contracts also commonly include at least two subcontracts and libraries in their source code. The comment ratio of these contracts is also significantly higher than that of GitHub top-starred projects written in Java, C++, and C#. Hence, the source code of high-activity verified smart contracts exhibit particular complexity characteristics compared to other popular programming languages.
+
 ## Contribution
 
 Thank you for considering to help out with the source code! We welcome contributions
