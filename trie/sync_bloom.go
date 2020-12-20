@@ -29,7 +29,7 @@ import (
 	"github.com/ethereum/go-ethereum/ethdb"
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/metrics"
-	"github.com/steakknife/bloomfilter"
+	bloomfilter "github.com/holiman/bloomfilter/v2"
 )
 
 var (
