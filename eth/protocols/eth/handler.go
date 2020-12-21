@@ -332,7 +332,7 @@ func handleMessage(backend Backend, peer *Peer) error {
 				break
 			}
 			// Retrieve the requested state entry
-			if bloom := backend.StateBloom(); bloom != nil && !bloom.Contains(hash[:]) {
+			if bloom := backend.StateBloom(); bloom != nil && !bloom.Contains(hash) {
 				// Only lookup the trie node if there's chance that we actually have it
 				continue
 			}
