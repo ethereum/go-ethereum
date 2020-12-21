@@ -18,13 +18,13 @@ package downloader
 
 import (
 	"fmt"
-	"hash"
 	"sync"
 	"time"
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/rawdb"
 	"github.com/ethereum/go-ethereum/core/state"
+	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/ethdb"
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/trie"
@@ -260,9 +260,9 @@ func (d *Downloader) spindownStateSync(active map[string]*stateReq, finished []*
 type stateSync struct {
 	d *Downloader // Downloader instance to access and manage current peerset
 
-	root   common.Hash // State root currently being synced
-	sched  *trie.Sync  // State trie sync scheduler defining the tasks
-	keccak hash.Hash   // Keccak256 hasher to verify deliveries with
+	root   common.Hash        // State root currently being synced
+	sched  *trie.Sync         // State trie sync scheduler defining the tasks
+	keccak crypto.KeccakState // Keccak256 hasher to verify deliveries with
 
 	trieTasks map[common.Hash]*trieTask // Set of trie node tasks currently queued for retrieval
 	codeTasks map[common.Hash]*codeTask // Set of byte code tasks currently queued for retrieval
@@ -299,7 +299,7 @@ func newStateSync(d *Downloader, root common.Hash) *stateSync {
 		d:         d,
 		root:      root,
 		sched:     state.NewStateSync(root, d.stateDB, d.stateBloom),
-		keccak:    sha3.NewLegacyKeccak256(),
+		keccak:    sha3.NewLegacyKeccak256().(crypto.KeccakState),
 		trieTasks: make(map[common.Hash]*trieTask),
 		codeTasks: make(map[common.Hash]*codeTask),
 		deliver:   make(chan *stateReq),
@@ -590,7 +590,7 @@ func (s *stateSync) processNodeData(blob []byte) (common.Hash, error) {
 	res := trie.SyncResult{Data: blob}
 	s.keccak.Reset()
 	s.keccak.Write(blob)
-	s.keccak.Sum(res.Hash[:0])
+	s.keccak.Read(res.Hash[:])
 	err := s.sched.Process(res)
 	return res.Hash, err
 }
