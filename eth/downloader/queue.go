@@ -893,9 +893,6 @@ func (q *queue) deliver(id string, taskPool map[common.Hash]*types.Header,
 		return accepted, nil
 	}
 	// If none of the data was good, it's a stale delivery
-	if errors.Is(failure, errInvalidChain) {
-		return accepted, failure
-	}
 	if accepted > 0 {
 		return accepted, fmt.Errorf("partial failure: %v", failure)
 	}
