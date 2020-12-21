@@ -50,25 +50,27 @@ type dummyStatedb struct {
 
 func (*dummyStatedb) GetRefund() uint64 { return 1337 }
 
-type VMContext struct {
+type vmContext struct {
 	blockCtx vm.BlockContext
 	txCtx    vm.TxContext
 }
 
-func vmContext() VMContext {
-	return VMContext{blockCtx: vm.BlockContext{BlockNumber: big.NewInt(1)}, txCtx: vm.TxContext{GasPrice: big.NewInt(100000)}}
+func testCtx() *vmContext {
+	return &vmContext{blockCtx: vm.BlockContext{BlockNumber: big.NewInt(1)}, txCtx: vm.TxContext{GasPrice: big.NewInt(100000)}}
 }
 
-func runTrace(tracer *Tracer, vmctx VMContext) (json.RawMessage, error) {
+func runTrace(tracer *Tracer, vmctx *vmContext) (json.RawMessage, error) {
 	env := vm.NewEVM(vmctx.blockCtx, vmctx.txCtx, &dummyStatedb{}, params.TestChainConfig, vm.Config{Debug: true, Tracer: tracer})
-
-	contract := vm.NewContract(account{}, account{}, big.NewInt(0), 10000)
+	var(
+		startGas uint64 = 10000
+		value = big.NewInt(0)
+	)
+	contract := vm.NewContract(account{}, account{}, value, startGas)
 	contract.Code = []byte{byte(vm.PUSH1), 0x1, byte(vm.PUSH1), 0x1, 0x0}
 
-	// Needed for intrinsic gas computation
-	tracer.ctx["input"] = []byte{}
-
-	_, err := env.Interpreter().Run(contract, []byte{}, false)
+	tracer.CaptureStart(contract.Caller(), contract.Address(), false, []byte{}, startGas, value)
+	ret, err := env.Interpreter().Run(contract, []byte{}, false)
+	tracer.CaptureEnd(ret, startGas-contract.Gas, 1, err)
 	if err != nil {
 		return nil, err
 	}
@@ -77,7 +79,7 @@ func runTrace(tracer *Tracer, vmctx VMContext) (json.RawMessage, error) {
 
 // TestRegressionPanicSlice tests that we don't panic on bad arguments to memory access
 func TestRegressionPanicSlice(t *testing.T) {
-	vmctx := vmContext()
+	vmctx := testCtx()
 	tracer, err := New("{depths: [], step: function(log) { this.depths.push(log.memory.slice(-1,-2)); }, fault: function() {}, result: function() { return this.depths; }}", vmctx.txCtx)
 	if err != nil {
 		t.Fatal(err)
@@ -89,7 +91,7 @@ func TestRegressionPanicSlice(t *testing.T) {
 
 // TestRegressionPanicSlice tests that we don't panic on bad arguments to stack peeks
 func TestRegressionPanicPeek(t *testing.T) {
-	vmctx := vmContext()
+	vmctx := testCtx()
 	tracer, err := New("{depths: [], step: function(log) { this.depths.push(log.stack.peek(-1)); }, fault: function() {}, result: function() { return this.depths; }}", vmctx.txCtx)
 	if err != nil {
 		t.Fatal(err)
@@ -101,7 +103,7 @@ func TestRegressionPanicPeek(t *testing.T) {
 
 // TestRegressionPanicSlice tests that we don't panic on bad arguments to memory getUint
 func TestRegressionPanicGetUint(t *testing.T) {
-	vmctx := vmContext()
+	vmctx := testCtx()
 	tracer, err := New("{ depths: [], step: function(log, db) { this.depths.push(log.memory.getUint(-64));}, fault: function() {}, result: function() { return this.depths; }}", vmctx.txCtx)
 	if err != nil {
 		t.Fatal(err)
@@ -112,7 +114,7 @@ func TestRegressionPanicGetUint(t *testing.T) {
 }
 
 func TestTracing(t *testing.T) {
-	vmctx := vmContext()
+	vmctx := testCtx()
 	tracer, err := New("{count: 0, step: function() { this.count += 1; }, fault: function() {}, result: function() { return this.count; }}", vmctx.txCtx)
 	if err != nil {
 		t.Fatal(err)
@@ -128,7 +130,7 @@ func TestTracing(t *testing.T) {
 }
 
 func TestStack(t *testing.T) {
-	vmctx := vmContext()
+	vmctx := testCtx()
 	tracer, err := New("{depths: [], step: function(log) { this.depths.push(log.stack.length()); }, fault: function() {}, result: function() { return this.depths; }}", vmctx.txCtx)
 	if err != nil {
 		t.Fatal(err)
@@ -144,7 +146,7 @@ func TestStack(t *testing.T) {
 }
 
 func TestOpcodes(t *testing.T) {
-	vmctx := vmContext()
+	vmctx := testCtx()
 	tracer, err := New("{opcodes: [], step: function(log) { this.opcodes.push(log.op.toString()); }, fault: function() {}, result: function() { return this.opcodes; }}", vmctx.txCtx)
 	if err != nil {
 		t.Fatal(err)
@@ -163,7 +165,7 @@ func TestHalt(t *testing.T) {
 	t.Skip("duktape doesn't support abortion")
 
 	timeout := errors.New("stahp")
-	vmctx := vmContext()
+	vmctx := testCtx()
 	tracer, err := New("{step: function() { while(1); }, result: function() { return null; }}", vmctx.txCtx)
 	if err != nil {
 		t.Fatal(err)
@@ -180,7 +182,7 @@ func TestHalt(t *testing.T) {
 }
 
 func TestHaltBetweenSteps(t *testing.T) {
-	vmctx := vmContext()
+	vmctx := testCtx()
 	tracer, err := New("{step: function() {}, fault: function() {}, result: function() { return null; }}", vmctx.txCtx)
 	if err != nil {
 		t.Fatal(err)
@@ -198,5 +200,21 @@ func TestHaltBetweenSteps(t *testing.T) {
 
 	if _, err := tracer.GetResult(); err.Error() != timeout.Error() {
 		t.Errorf("Expected timeout error, got %v", err)
+	}
+}
+
+func TestIntrinsicGas(t *testing.T) {
+	vmctx := testCtx()
+	tracer, err := New("{depths: [], step: function() {}, fault: function() {}, result: function(ctx) { return ctx.gasPrice+'.'+ctx.gasUsed+'.'+ctx.intrinsicGas; }}", vmctx.txCtx)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	ret, err := runTrace(tracer, vmctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if have, want := ret, []byte(`"100000.6.21000"`); !bytes.Equal(have, want) {
+		t.Errorf("Expected return value to be %s got %s", string(want), string(have))
 	}
 }

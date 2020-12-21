@@ -553,9 +553,9 @@ func (jst *Tracer) CaptureState(env *vm.EVM, pc uint64, op vm.OpCode, gas, cost 
 			// Compute intrinsic gas
 			isHomestead := env.ChainConfig().IsHomestead(env.Context.BlockNumber)
 			isIstanbul := env.ChainConfig().IsIstanbul(env.Context.BlockNumber)
-			input, ok := jst.ctx["input"].([]byte)
-			if !ok {
-				return errors.New("Tracer received invalid input data")
+			var input []byte
+			if data, ok := jst.ctx["input"].([]byte); ok {
+				input = data
 			}
 			intrinsicGas, err := core.IntrinsicGas(input, jst.ctx["type"] == "CREATE", isHomestead, isIstanbul)
 			if err != nil {
