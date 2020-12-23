@@ -168,6 +168,7 @@ func (s *Service) loop() {
 			select {
 			// Notify of chain head events, but drop if too frequent
 			case head := <-chainHeadCh:
+				log.Warn(">>>>>>>>>>> EthStats: receiver chain head event")
 				select {
 				case headCh <- head.Block:
 				default:
@@ -557,7 +558,7 @@ func (s *Service) assembleBlockStats(block *types.Block) *blockStats {
 		Number:     header.Number,
 		Hash:       header.Hash(),
 		ParentHash: header.ParentHash,
-		Timestamp:  header.Time,
+		Timestamp:  new(big.Int).SetUint64(header.Time),
 		Miner:      author,
 		GasUsed:    header.GasUsed,
 		GasLimit:   header.GasLimit,

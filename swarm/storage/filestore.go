@@ -19,6 +19,8 @@ package storage
 import (
 	"context"
 	"io"
+	"sort"
+	"sync"
 )
 
 /*
@@ -74,7 +76,7 @@ func NewFileStore(store ChunkStore, params *FileStoreParams) *FileStore {
 	}
 }
 
-// Public API. Main entry point for document retrieval directly. Used by the
+// Retrieve is a public API. Main entry point for document retrieval directly. Used by the
 // FS-aware API and httpaccess
 // Chunk retrieval blocks on netStore requests with a timeout so reader will
 // report error if retrieval of chunks within requested range time out.
@@ -86,7 +88,7 @@ func (f *FileStore) Retrieve(ctx context.Context, addr Address) (reader *LazyChu
 	return
 }
 
-// Public API. Main entry point for document storage directly. Used by the
+// Store is a public API. Main entry point for document storage directly. Used by the
 // FS-aware API and httpaccess
 func (f *FileStore) Store(ctx context.Context, data io.Reader, size int64, toEncrypt bool) (addr Address, wait func(context.Context) error, err error) {
 	putter := NewHasherStore(f.ChunkStore, f.hashFunc, toEncrypt)
@@ -95,4 +97,50 @@ func (f *FileStore) Store(ctx context.Context, data io.Reader, size int64, toEnc
 
 func (f *FileStore) HashSize() int {
 	return f.hashFunc().Size()
+}
+
+// GetAllReferences is a public API. This endpoint returns all chunk hashes (only) for a given file
+func (f *FileStore) GetAllReferences(ctx context.Context, data io.Reader, toEncrypt bool) (addrs AddressCollection, err error) {
+	// create a special kind of putter, which only will store the references
+	putter := &hashExplorer{
+		hasherStore: NewHasherStore(f.ChunkStore, f.hashFunc, toEncrypt),
+	}
+	// do the actual splitting anyway, no way around it
+	_, wait, err := PyramidSplit(ctx, data, putter, putter)
+	if err != nil {
+		return nil, err
+	}
+	// wait for splitting to be complete and all chunks processed
+	err = wait(ctx)
+	if err != nil {
+		return nil, err
+	}
+	// collect all references
+	addrs = NewAddressCollection(0)
+	for _, ref := range putter.references {
+		addrs = append(addrs, Address(ref))
+	}
+	sort.Sort(addrs)
+	return addrs, nil
+}
+
+// hashExplorer is a special kind of putter which will only store chunk references
+type hashExplorer struct {
+	*hasherStore
+	references []Reference
+	lock       sync.Mutex
+}
+
+// HashExplorer's Put will add just the chunk hashes to its `References`
+func (he *hashExplorer) Put(ctx context.Context, chunkData ChunkData) (Reference, error) {
+	// Need to do the actual Put, which returns the references
+	ref, err := he.hasherStore.Put(ctx, chunkData)
+	if err != nil {
+		return nil, err
+	}
+	// internally store the reference
+	he.lock.Lock()
+	he.references = append(he.references, ref)
+	he.lock.Unlock()
+	return ref, nil
 }

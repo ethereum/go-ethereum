@@ -18,174 +18,177 @@ package main
 
 import (
 	"bytes"
-	"crypto/md5"
-	"crypto/rand"
+	"context"
 	"fmt"
-	"io"
 	"io/ioutil"
-	"net/http"
+	"math/rand"
 	"os"
-	"os/exec"
-	"strings"
 	"sync"
 	"time"
 
 	"github.com/ethereum/go-ethereum/log"
+	"github.com/ethereum/go-ethereum/metrics"
+	"github.com/ethereum/go-ethereum/rpc"
+	"github.com/ethereum/go-ethereum/swarm/api"
+	"github.com/ethereum/go-ethereum/swarm/storage"
+	"github.com/ethereum/go-ethereum/swarm/testutil"
 	"github.com/pborman/uuid"
 
 	cli "gopkg.in/urfave/cli.v1"
 )
 
-func generateEndpoints(scheme string, cluster string, from int, to int) {
-	if cluster == "prod" {
-		cluster = ""
-	} else {
-		cluster = cluster + "."
-	}
+func uploadAndSyncCmd(ctx *cli.Context, tuid string) error {
+	randomBytes := testutil.RandomBytes(seed, filesize*1000)
 
-	for port := from; port <= to; port++ {
-		endpoints = append(endpoints, fmt.Sprintf("%s://%v.%sswarm-gateways.net", scheme, port, cluster))
-	}
+	errc := make(chan error)
 
-	if includeLocalhost {
-		endpoints = append(endpoints, "http://localhost:8500")
+	go func() {
+		errc <- uplaodAndSync(ctx, randomBytes, tuid)
+	}()
+
+	select {
+	case err := <-errc:
+		if err != nil {
+			metrics.GetOrRegisterCounter(fmt.Sprintf("%s.fail", commandName), nil).Inc(1)
+		}
+		return err
+	case <-time.After(time.Duration(timeout) * time.Second):
+		metrics.GetOrRegisterCounter(fmt.Sprintf("%s.timeout", commandName), nil).Inc(1)
+
+		e := fmt.Errorf("timeout after %v sec", timeout)
+		// trigger debug functionality on randomBytes
+		err := trackChunks(randomBytes[:])
+		if err != nil {
+			e = fmt.Errorf("%v; triggerChunkDebug failed: %v", e, err)
+		}
+
+		return e
 	}
 }
 
-func cliUploadAndSync(c *cli.Context) error {
-	defer func(now time.Time) { log.Info("total time", "time", time.Since(now), "size", filesize) }(time.Now())
+func trackChunks(testData []byte) error {
+	log.Warn("Test timed out; running chunk debug sequence")
 
-	generateEndpoints(scheme, cluster, from, to)
+	addrs, err := getAllRefs(testData)
+	if err != nil {
+		return err
+	}
+	log.Trace("All references retrieved")
 
-	log.Info("uploading to " + endpoints[0] + " and syncing")
+	// has-chunks
+	for _, host := range hosts {
+		httpHost := fmt.Sprintf("ws://%s:%d", host, 8546)
+		log.Trace("Calling `Has` on host", "httpHost", httpHost)
+		rpcClient, err := rpc.Dial(httpHost)
+		if err != nil {
+			log.Trace("Error dialing host", "err", err)
+			return err
+		}
+		log.Trace("rpc dial ok")
+		var hasInfo []api.HasInfo
+		err = rpcClient.Call(&hasInfo, "bzz_has", addrs)
+		if err != nil {
+			log.Trace("Error calling host", "err", err)
+			return err
+		}
+		log.Trace("rpc call ok")
+		count := 0
+		for _, info := range hasInfo {
+			if !info.Has {
+				count++
+				log.Error("Host does not have chunk", "host", httpHost, "chunk", info.Addr)
+			}
+		}
+		if count == 0 {
+			log.Info("Host reported to have all chunks", "host", httpHost)
+		}
+	}
+	return nil
+}
 
-	f, cleanup := generateRandomFile(filesize * 1000000)
-	defer cleanup()
+func getAllRefs(testData []byte) (storage.AddressCollection, error) {
+	log.Trace("Getting all references for given root hash")
+	datadir, err := ioutil.TempDir("", "chunk-debug")
+	if err != nil {
+		return nil, fmt.Errorf("unable to create temp dir: %v", err)
+	}
+	defer os.RemoveAll(datadir)
+	fileStore, err := storage.NewLocalFileStore(datadir, make([]byte, 32))
+	if err != nil {
+		return nil, err
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), time.Duration(trackTimeout)*time.Second)
+	defer cancel()
 
-	hash, err := upload(f, endpoints[0])
+	reader := bytes.NewReader(testData)
+	return fileStore.GetAllReferences(ctx, reader, false)
+}
+
+func uplaodAndSync(c *cli.Context, randomBytes []byte, tuid string) error {
+	log.Info("uploading to "+httpEndpoint(hosts[0])+" and syncing", "tuid", tuid, "seed", seed)
+
+	t1 := time.Now()
+	hash, err := upload(randomBytes, httpEndpoint(hosts[0]))
+	if err != nil {
+		log.Error(err.Error())
+		return err
+	}
+	t2 := time.Since(t1)
+	metrics.GetOrRegisterResettingTimer("upload-and-sync.upload-time", nil).Update(t2)
+
+	fhash, err := digest(bytes.NewReader(randomBytes))
 	if err != nil {
 		log.Error(err.Error())
 		return err
 	}
 
-	fhash, err := digest(f)
-	if err != nil {
-		log.Error(err.Error())
-		return err
-	}
+	log.Info("uploaded successfully", "tuid", tuid, "hash", hash, "took", t2, "digest", fmt.Sprintf("%x", fhash))
 
-	log.Info("uploaded successfully", "hash", hash, "digest", fmt.Sprintf("%x", fhash))
-
-	if filesize < 10 {
-		time.Sleep(35 * time.Second)
-	} else {
-		time.Sleep(15 * time.Second)
-		time.Sleep(2 * time.Duration(filesize) * time.Second)
-	}
+	time.Sleep(time.Duration(syncDelay) * time.Second)
 
 	wg := sync.WaitGroup{}
-	for _, endpoint := range endpoints {
-		endpoint := endpoint
+	if single {
+		randIndex := 1 + rand.Intn(len(hosts)-1)
 		ruid := uuid.New()[:8]
 		wg.Add(1)
 		go func(endpoint string, ruid string) {
 			for {
-				err := fetch(hash, endpoint, fhash, ruid)
+				start := time.Now()
+				err := fetch(hash, endpoint, fhash, ruid, tuid)
 				if err != nil {
 					continue
 				}
+				ended := time.Since(start)
 
+				metrics.GetOrRegisterResettingTimer("upload-and-sync.single.fetch-time", nil).Update(ended)
+				log.Info("fetch successful", "tuid", tuid, "ruid", ruid, "took", ended, "endpoint", endpoint)
 				wg.Done()
 				return
 			}
-		}(endpoint, ruid)
+		}(httpEndpoint(hosts[randIndex]), ruid)
+	} else {
+		for _, endpoint := range hosts[1:] {
+			ruid := uuid.New()[:8]
+			wg.Add(1)
+			go func(endpoint string, ruid string) {
+				for {
+					start := time.Now()
+					err := fetch(hash, endpoint, fhash, ruid, tuid)
+					if err != nil {
+						continue
+					}
+					ended := time.Since(start)
+
+					metrics.GetOrRegisterResettingTimer("upload-and-sync.each.fetch-time", nil).Update(ended)
+					log.Info("fetch successful", "tuid", tuid, "ruid", ruid, "took", ended, "endpoint", endpoint)
+					wg.Done()
+					return
+				}
+			}(httpEndpoint(endpoint), ruid)
+		}
 	}
 	wg.Wait()
-	log.Info("all endpoints synced random file successfully")
+	log.Info("all hosts synced random file successfully")
 
 	return nil
-}
-
-// fetch is getting the requested `hash` from the `endpoint` and compares it with the `original` file
-func fetch(hash string, endpoint string, original []byte, ruid string) error {
-	log.Trace("sleeping", "ruid", ruid)
-	time.Sleep(5 * time.Second)
-
-	log.Trace("http get request", "ruid", ruid, "api", endpoint, "hash", hash)
-	res, err := http.Get(endpoint + "/bzz:/" + hash + "/")
-	if err != nil {
-		log.Warn(err.Error(), "ruid", ruid)
-		return err
-	}
-	log.Trace("http get response", "ruid", ruid, "api", endpoint, "hash", hash, "code", res.StatusCode, "len", res.ContentLength)
-
-	if res.StatusCode != 200 {
-		err := fmt.Errorf("expected status code %d, got %v", 200, res.StatusCode)
-		log.Warn(err.Error(), "ruid", ruid)
-		return err
-	}
-
-	defer res.Body.Close()
-
-	rdigest, err := digest(res.Body)
-	if err != nil {
-		log.Warn(err.Error(), "ruid", ruid)
-		return err
-	}
-
-	if !bytes.Equal(rdigest, original) {
-		err := fmt.Errorf("downloaded imported file md5=%x is not the same as the generated one=%x", rdigest, original)
-		log.Warn(err.Error(), "ruid", ruid)
-		return err
-	}
-
-	log.Trace("downloaded file matches random file", "ruid", ruid, "len", res.ContentLength)
-
-	return nil
-}
-
-// upload is uploading a file `f` to `endpoint` via the `swarm up` cmd
-func upload(f *os.File, endpoint string) (string, error) {
-	var out bytes.Buffer
-	cmd := exec.Command("swarm", "--bzzapi", endpoint, "up", f.Name())
-	cmd.Stdout = &out
-	err := cmd.Run()
-	if err != nil {
-		return "", err
-	}
-	hash := strings.TrimRight(out.String(), "\r\n")
-	return hash, nil
-}
-
-func digest(r io.Reader) ([]byte, error) {
-	h := md5.New()
-	_, err := io.Copy(h, r)
-	if err != nil {
-		return nil, err
-	}
-	return h.Sum(nil), nil
-}
-
-// generateRandomFile is creating a temporary file with the requested byte size
-func generateRandomFile(size int) (f *os.File, teardown func()) {
-	// create a tmp file
-	tmp, err := ioutil.TempFile("", "swarm-test")
-	if err != nil {
-		panic(err)
-	}
-
-	// callback for tmp file cleanup
-	teardown = func() {
-		tmp.Close()
-		os.Remove(tmp.Name())
-	}
-
-	buf := make([]byte, size)
-	_, err = rand.Read(buf)
-	if err != nil {
-		panic(err)
-	}
-	ioutil.WriteFile(tmp.Name(), buf, 0755)
-
-	return tmp, teardown
 }

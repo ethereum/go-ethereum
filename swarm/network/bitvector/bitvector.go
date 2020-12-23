@@ -60,7 +60,3 @@ func (bv *BitVector) Set(i int, v bool) {
 func (bv *BitVector) Bytes() []byte {
 	return bv.b
 }
-
-func (bv *BitVector) Length() int {
-	return bv.len
-}

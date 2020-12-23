@@ -46,7 +46,7 @@ var (
 
 func getCommonBackend() *backends.SimulatedBackend {
 	genesis := core.GenesisAlloc{acc1Addr: {Balance: big.NewInt(1000000000000)}}
-	backend := backends.NewSimulatedBackend(genesis)
+	backend := backends.NewSimulatedBackend(genesis, 10000000)
 	backend.Commit()
 
 	return backend

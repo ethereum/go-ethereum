@@ -331,7 +331,6 @@ func (r *Cache) delete(n *Node) bool {
 			return deleted
 		}
 	}
-	return false
 }
 
 // Nodes returns number of 'cache node' in the map.

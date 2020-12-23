@@ -18,16 +18,14 @@ package stream
 import (
 	"context"
 	"fmt"
-	"os"
 	"sync"
 	"testing"
 	"time"
 
 	"github.com/ethereum/go-ethereum/node"
-	"github.com/ethereum/go-ethereum/p2p/discover"
+	"github.com/ethereum/go-ethereum/p2p/enode"
 	"github.com/ethereum/go-ethereum/p2p/simulations/adapters"
 	"github.com/ethereum/go-ethereum/swarm/log"
-	"github.com/ethereum/go-ethereum/swarm/network"
 	"github.com/ethereum/go-ethereum/swarm/network/simulation"
 	"github.com/ethereum/go-ethereum/swarm/state"
 	"github.com/ethereum/go-ethereum/swarm/storage"
@@ -76,7 +74,7 @@ func TestRetrieval(t *testing.T) {
 	//if nodes/chunks have been provided via commandline,
 	//run the tests with these values
 	if *nodes != 0 && *chunks != 0 {
-		err := runRetrievalTest(*chunks, *nodes)
+		err := runRetrievalTest(t, *chunks, *nodes)
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -95,17 +93,40 @@ func TestRetrieval(t *testing.T) {
 		}
 		for _, n := range nodeCnt {
 			for _, c := range chnkCnt {
-				err := runRetrievalTest(c, n)
-				if err != nil {
-					t.Fatal(err)
-				}
+				t.Run(fmt.Sprintf("TestRetrieval_%d_%d", n, c), func(t *testing.T) {
+					err := runRetrievalTest(t, c, n)
+					if err != nil {
+						t.Fatal(err)
+					}
+				})
 			}
 		}
 	}
 }
 
-/*
+var retrievalSimServiceMap = map[string]simulation.ServiceFunc{
+	"streamer": func(ctx *adapters.ServiceContext, bucket *sync.Map) (s node.Service, cleanup func(), err error) {
+		addr, netStore, delivery, clean, err := newNetStoreAndDelivery(ctx, bucket)
+		if err != nil {
+			return nil, nil, err
+		}
 
+		r := NewRegistry(addr.ID(), delivery, netStore, state.NewInmemoryStore(), &RegistryOptions{
+			Retrieval:       RetrievalEnabled,
+			Syncing:         SyncingAutoSubscribe,
+			SyncUpdateDelay: 3 * time.Second,
+		}, nil)
+
+		cleanup = func() {
+			r.Close()
+			clean()
+		}
+
+		return r, cleanup, nil
+	},
+}
+
+/*
 The test loads a snapshot file to construct the swarm network,
 assuming that the snapshot file identifies a healthy
 kademlia network. Nevertheless a health check runs in the
@@ -114,46 +135,16 @@ simulation's `action` function.
 The snapshot should have 'streamer' in its service list.
 */
 func runFileRetrievalTest(nodeCount int) error {
-	sim := simulation.New(map[string]simulation.ServiceFunc{
-		"streamer": func(ctx *adapters.ServiceContext, bucket *sync.Map) (s node.Service, cleanup func(), err error) {
-
-			id := ctx.Config.ID
-			addr := network.NewAddrFromNodeID(id)
-			store, datadir, err := createTestLocalStorageForID(id, addr)
-			if err != nil {
-				return nil, nil, err
-			}
-			bucket.Store(bucketKeyStore, store)
-			cleanup = func() {
-				os.RemoveAll(datadir)
-				store.Close()
-			}
-			localStore := store.(*storage.LocalStore)
-			db := storage.NewDBAPI(localStore)
-			kad := network.NewKademlia(addr.Over(), network.NewKadParams())
-			delivery := NewDelivery(kad, db)
-
-			r := NewRegistry(addr, delivery, db, state.NewInmemoryStore(), &RegistryOptions{
-				DoSync:          true,
-				SyncUpdateDelay: 3 * time.Second,
-			})
-
-			fileStore := storage.NewFileStore(storage.NewNetStore(localStore, nil), storage.NewFileStoreParams())
-			bucket.Store(bucketKeyFileStore, fileStore)
-
-			return r, cleanup, nil
-
-		},
-	})
+	sim := simulation.New(retrievalSimServiceMap)
 	defer sim.Close()
 
 	log.Info("Initializing test config")
 
 	conf := &synctestConfig{}
 	//map of discover ID to indexes of chunks expected at that ID
-	conf.idToChunksMap = make(map[discover.NodeID][]int)
+	conf.idToChunksMap = make(map[enode.ID][]int)
 	//map of overlay address to discover ID
-	conf.addrToIDMap = make(map[string]discover.NodeID)
+	conf.addrToIDMap = make(map[string]enode.ID)
 	//array where the generated chunk hashes will be stored
 	conf.hashes = make([]storage.Address, 0)
 
@@ -162,18 +153,18 @@ func runFileRetrievalTest(nodeCount int) error {
 		return err
 	}
 
-	ctx, cancelSimRun := context.WithTimeout(context.Background(), 1*time.Minute)
+	ctx, cancelSimRun := context.WithTimeout(context.Background(), 3*time.Minute)
 	defer cancelSimRun()
 
 	result := sim.Run(ctx, func(ctx context.Context, sim *simulation.Simulation) error {
 		nodeIDs := sim.UpNodeIDs()
 		for _, n := range nodeIDs {
 			//get the kademlia overlay address from this ID
-			a := network.ToOverlayAddr(n.Bytes())
+			a := n.Bytes()
 			//append it to the array of all overlay addresses
 			conf.addrs = append(conf.addrs, a)
 			//the proximity calculation is on overlay addr,
-			//the p2p/simulations check func triggers on discover.NodeID,
+			//the p2p/simulations check func triggers on enode.ID,
 			//so we need to know which overlay addr maps to which nodeID
 			conf.addrToIDMap[string(a)] = n
 		}
@@ -188,55 +179,35 @@ func runFileRetrievalTest(nodeCount int) error {
 		if err != nil {
 			return err
 		}
-		if _, err := sim.WaitTillHealthy(ctx, 2); err != nil {
+		if _, err := sim.WaitTillHealthy(ctx); err != nil {
 			return err
 		}
 
 		// File retrieval check is repeated until all uploaded files are retrieved from all nodes
 		// or until the timeout is reached.
-		allSuccess := false
-		for !allSuccess {
+	REPEAT:
+		for {
 			for _, id := range nodeIDs {
-				//for each expected chunk, check if it is in the local store
-				localChunks := conf.idToChunksMap[id]
-				localSuccess := true
-				for _, ch := range localChunks {
-					//get the real chunk by the index in the index array
-					chunk := conf.hashes[ch]
-					log.Trace(fmt.Sprintf("node has chunk: %s:", chunk))
-					//check if the expected chunk is indeed in the localstore
-					var err error
-					//check on the node's FileStore (netstore)
-					item, ok := sim.NodeItem(id, bucketKeyFileStore)
-					if !ok {
-						return fmt.Errorf("No registry")
-					}
-					fileStore := item.(*storage.FileStore)
-					//check all chunks
-					for i, hash := range conf.hashes {
-						reader, _ := fileStore.Retrieve(context.TODO(), hash)
-						//check that we can read the file size and that it corresponds to the generated file size
-						if s, err := reader.Size(ctx, nil); err != nil || s != int64(len(randomFiles[i])) {
-							allSuccess = false
-							log.Warn("Retrieve error", "err", err, "hash", hash, "nodeId", id)
-						} else {
-							log.Debug(fmt.Sprintf("File with root hash %x successfully retrieved", hash))
-						}
-					}
-					if err != nil {
-						log.Warn(fmt.Sprintf("Chunk %s NOT found for id %s", chunk, id))
-						localSuccess = false
-					} else {
-						log.Debug(fmt.Sprintf("Chunk %s IS FOUND for id %s", chunk, id))
-					}
+				//for each expected file, check if it is in the local store
+				item, ok := sim.NodeItem(id, bucketKeyFileStore)
+				if !ok {
+					return fmt.Errorf("No filestore")
 				}
-				allSuccess = localSuccess
+				fileStore := item.(*storage.FileStore)
+				//check all chunks
+				for i, hash := range conf.hashes {
+					reader, _ := fileStore.Retrieve(context.TODO(), hash)
+					//check that we can read the file size and that it corresponds to the generated file size
+					if s, err := reader.Size(ctx, nil); err != nil || s != int64(len(randomFiles[i])) {
+						log.Debug("Retrieve error", "err", err, "hash", hash, "nodeId", id)
+						time.Sleep(500 * time.Millisecond)
+						continue REPEAT
+					}
+					log.Debug(fmt.Sprintf("File with root hash %x successfully retrieved", hash))
+				}
 			}
+			return nil
 		}
-		if !allSuccess {
-			return fmt.Errorf("Not all chunks succeeded!")
-		}
-		return nil
 	})
 
 	if result.Error != nil {
@@ -256,46 +227,16 @@ simulation's `action` function.
 
 The snapshot should have 'streamer' in its service list.
 */
-func runRetrievalTest(chunkCount int, nodeCount int) error {
-	sim := simulation.New(map[string]simulation.ServiceFunc{
-		"streamer": func(ctx *adapters.ServiceContext, bucket *sync.Map) (s node.Service, cleanup func(), err error) {
-
-			id := ctx.Config.ID
-			addr := network.NewAddrFromNodeID(id)
-			store, datadir, err := createTestLocalStorageForID(id, addr)
-			if err != nil {
-				return nil, nil, err
-			}
-			bucket.Store(bucketKeyStore, store)
-			cleanup = func() {
-				os.RemoveAll(datadir)
-				store.Close()
-			}
-			localStore := store.(*storage.LocalStore)
-			db := storage.NewDBAPI(localStore)
-			kad := network.NewKademlia(addr.Over(), network.NewKadParams())
-			delivery := NewDelivery(kad, db)
-
-			r := NewRegistry(addr, delivery, db, state.NewInmemoryStore(), &RegistryOptions{
-				DoSync:          true,
-				SyncUpdateDelay: 0,
-			})
-
-			fileStore := storage.NewFileStore(storage.NewNetStore(localStore, nil), storage.NewFileStoreParams())
-			bucketKeyFileStore = simulation.BucketKey("filestore")
-			bucket.Store(bucketKeyFileStore, fileStore)
-
-			return r, cleanup, nil
-
-		},
-	})
+func runRetrievalTest(t *testing.T, chunkCount int, nodeCount int) error {
+	t.Helper()
+	sim := simulation.New(retrievalSimServiceMap)
 	defer sim.Close()
 
 	conf := &synctestConfig{}
 	//map of discover ID to indexes of chunks expected at that ID
-	conf.idToChunksMap = make(map[discover.NodeID][]int)
+	conf.idToChunksMap = make(map[enode.ID][]int)
 	//map of overlay address to discover ID
-	conf.addrToIDMap = make(map[string]discover.NodeID)
+	conf.addrToIDMap = make(map[string]enode.ID)
 	//array where the generated chunk hashes will be stored
 	conf.hashes = make([]storage.Address, 0)
 
@@ -309,77 +250,57 @@ func runRetrievalTest(chunkCount int, nodeCount int) error {
 		nodeIDs := sim.UpNodeIDs()
 		for _, n := range nodeIDs {
 			//get the kademlia overlay address from this ID
-			a := network.ToOverlayAddr(n.Bytes())
+			a := n.Bytes()
 			//append it to the array of all overlay addresses
 			conf.addrs = append(conf.addrs, a)
 			//the proximity calculation is on overlay addr,
-			//the p2p/simulations check func triggers on discover.NodeID,
+			//the p2p/simulations check func triggers on enode.ID,
 			//so we need to know which overlay addr maps to which nodeID
 			conf.addrToIDMap[string(a)] = n
 		}
 
-		//an array for the random files
-		var randomFiles []string
 		//this is the node selected for upload
-		node := sim.RandomUpNode()
-		item, ok := sim.NodeItem(node.ID, bucketKeyStore)
+		node := sim.Net.GetRandomUpNode()
+		item, ok := sim.NodeItem(node.ID(), bucketKeyStore)
 		if !ok {
 			return fmt.Errorf("No localstore")
 		}
 		lstore := item.(*storage.LocalStore)
-		conf.hashes, err = uploadFileToSingleNodeStore(node.ID, chunkCount, lstore)
+		conf.hashes, err = uploadFileToSingleNodeStore(node.ID(), chunkCount, lstore)
 		if err != nil {
 			return err
 		}
-		if _, err := sim.WaitTillHealthy(ctx, 2); err != nil {
+		if _, err := sim.WaitTillHealthy(ctx); err != nil {
 			return err
 		}
 
 		// File retrieval check is repeated until all uploaded files are retrieved from all nodes
 		// or until the timeout is reached.
-		allSuccess := false
-		for !allSuccess {
+	REPEAT:
+		for {
 			for _, id := range nodeIDs {
 				//for each expected chunk, check if it is in the local store
-				localChunks := conf.idToChunksMap[id]
-				localSuccess := true
-				for _, ch := range localChunks {
-					//get the real chunk by the index in the index array
-					chunk := conf.hashes[ch]
-					log.Trace(fmt.Sprintf("node has chunk: %s:", chunk))
-					//check if the expected chunk is indeed in the localstore
-					var err error
-					//check on the node's FileStore (netstore)
-					item, ok := sim.NodeItem(id, bucketKeyFileStore)
-					if !ok {
-						return fmt.Errorf("No registry")
-					}
-					fileStore := item.(*storage.FileStore)
-					//check all chunks
-					for i, hash := range conf.hashes {
-						reader, _ := fileStore.Retrieve(context.TODO(), hash)
-						//check that we can read the file size and that it corresponds to the generated file size
-						if s, err := reader.Size(ctx, nil); err != nil || s != int64(len(randomFiles[i])) {
-							allSuccess = false
-							log.Warn("Retrieve error", "err", err, "hash", hash, "nodeId", id)
-						} else {
-							log.Debug(fmt.Sprintf("File with root hash %x successfully retrieved", hash))
-						}
-					}
-					if err != nil {
-						log.Warn(fmt.Sprintf("Chunk %s NOT found for id %s", chunk, id))
-						localSuccess = false
-					} else {
-						log.Debug(fmt.Sprintf("Chunk %s IS FOUND for id %s", chunk, id))
-					}
+				//check on the node's FileStore (netstore)
+				item, ok := sim.NodeItem(id, bucketKeyFileStore)
+				if !ok {
+					return fmt.Errorf("No filestore")
 				}
-				allSuccess = localSuccess
+				fileStore := item.(*storage.FileStore)
+				//check all chunks
+				for _, hash := range conf.hashes {
+					reader, _ := fileStore.Retrieve(context.TODO(), hash)
+					//check that we can read the chunk size and that it corresponds to the generated chunk size
+					if s, err := reader.Size(ctx, nil); err != nil || s != int64(chunkSize) {
+						log.Debug("Retrieve error", "err", err, "hash", hash, "nodeId", id, "size", s)
+						time.Sleep(500 * time.Millisecond)
+						continue REPEAT
+					}
+					log.Debug(fmt.Sprintf("Chunk with root hash %x successfully retrieved", hash))
+				}
 			}
+			// all nodes and files found, exit loop and return without error
+			return nil
 		}
-		if !allSuccess {
-			return fmt.Errorf("Not all chunks succeeded!")
-		}
-		return nil
 	})
 
 	if result.Error != nil {

@@ -18,7 +18,6 @@ package stream
 
 import (
 	"context"
-	"math"
 	"strconv"
 	"time"
 
@@ -28,7 +27,6 @@ import (
 )
 
 const (
-	// BatchSize = 2
 	BatchSize = 128
 )
 
@@ -37,36 +35,27 @@ const (
 // * live request delivery with or without checkback
 // * (live/non-live historical) chunk syncing per proximity bin
 type SwarmSyncerServer struct {
-	po        uint8
-	db        *storage.DBAPI
-	sessionAt uint64
-	start     uint64
-	quit      chan struct{}
+	po    uint8
+	store storage.SyncChunkStore
+	quit  chan struct{}
 }
 
-// NewSwarmSyncerServer is contructor for SwarmSyncerServer
-func NewSwarmSyncerServer(live bool, po uint8, db *storage.DBAPI) (*SwarmSyncerServer, error) {
-	sessionAt := db.CurrentBucketStorageIndex(po)
-	var start uint64
-	if live {
-		start = sessionAt
-	}
+// NewSwarmSyncerServer is constructor for SwarmSyncerServer
+func NewSwarmSyncerServer(po uint8, syncChunkStore storage.SyncChunkStore) (*SwarmSyncerServer, error) {
 	return &SwarmSyncerServer{
-		po:        po,
-		db:        db,
-		sessionAt: sessionAt,
-		start:     start,
-		quit:      make(chan struct{}),
+		po:    po,
+		store: syncChunkStore,
+		quit:  make(chan struct{}),
 	}, nil
 }
 
-func RegisterSwarmSyncerServer(streamer *Registry, db *storage.DBAPI) {
-	streamer.RegisterServerFunc("SYNC", func(p *Peer, t string, live bool) (Server, error) {
+func RegisterSwarmSyncerServer(streamer *Registry, syncChunkStore storage.SyncChunkStore) {
+	streamer.RegisterServerFunc("SYNC", func(_ *Peer, t string, _ bool) (Server, error) {
 		po, err := ParseSyncBinKey(t)
 		if err != nil {
 			return nil, err
 		}
-		return NewSwarmSyncerServer(live, po, db)
+		return NewSwarmSyncerServer(po, syncChunkStore)
 	})
 	// streamer.RegisterServerFunc(stream, func(p *Peer) (Server, error) {
 	// 	return NewOutgoingProvableSwarmSyncer(po, db)
@@ -78,27 +67,25 @@ func (s *SwarmSyncerServer) Close() {
 	close(s.quit)
 }
 
-// GetSection retrieves the actual chunk from localstore
+// GetData retrieves the actual chunk from netstore
 func (s *SwarmSyncerServer) GetData(ctx context.Context, key []byte) ([]byte, error) {
-	chunk, err := s.db.Get(ctx, storage.Address(key))
-	if err == storage.ErrFetching {
-		<-chunk.ReqC
-	} else if err != nil {
+	chunk, err := s.store.Get(ctx, storage.Address(key))
+	if err != nil {
 		return nil, err
 	}
-	return chunk.SData, nil
+	return chunk.Data(), nil
+}
+
+// SessionIndex returns current storage bin (po) index.
+func (s *SwarmSyncerServer) SessionIndex() (uint64, error) {
+	return s.store.BinIndex(s.po), nil
 }
 
 // GetBatch retrieves the next batch of hashes from the dbstore
 func (s *SwarmSyncerServer) SetNextBatch(from, to uint64) ([]byte, uint64, uint64, *HandoverProof, error) {
 	var batch []byte
 	i := 0
-	if from == 0 {
-		from = s.start
-	}
-	if to <= from || from >= s.sessionAt {
-		to = math.MaxUint64
-	}
+
 	var ticker *time.Ticker
 	defer func() {
 		if ticker != nil {
@@ -119,8 +106,8 @@ func (s *SwarmSyncerServer) SetNextBatch(from, to uint64) ([]byte, uint64, uint6
 		}
 
 		metrics.GetOrRegisterCounter("syncer.setnextbatch.iterator", nil).Inc(1)
-		err := s.db.Iterator(from, to, s.po, func(addr storage.Address, idx uint64) bool {
-			batch = append(batch, addr[:]...)
+		err := s.store.Iterator(from, to, s.po, func(key storage.Address, idx uint64) bool {
+			batch = append(batch, key[:]...)
 			i++
 			to = idx
 			return i < BatchSize
@@ -134,40 +121,28 @@ func (s *SwarmSyncerServer) SetNextBatch(from, to uint64) ([]byte, uint64, uint6
 		wait = true
 	}
 
-	log.Trace("Swarm syncer offer batch", "po", s.po, "len", i, "from", from, "to", to, "current store count", s.db.CurrentBucketStorageIndex(s.po))
+	log.Trace("Swarm syncer offer batch", "po", s.po, "len", i, "from", from, "to", to, "current store count", s.store.BinIndex(s.po))
 	return batch, from, to, nil, nil
 }
 
 // SwarmSyncerClient
 type SwarmSyncerClient struct {
-	sessionAt     uint64
-	nextC         chan struct{}
-	sessionRoot   storage.Address
-	sessionReader storage.LazySectionReader
-	retrieveC     chan *storage.Chunk
-	storeC        chan *storage.Chunk
-	db            *storage.DBAPI
-	// chunker               storage.Chunker
-	currentRoot           storage.Address
-	requestFunc           func(chunk *storage.Chunk)
-	end, start            uint64
-	peer                  *Peer
-	ignoreExistingRequest bool
-	stream                Stream
+	store  storage.SyncChunkStore
+	peer   *Peer
+	stream Stream
 }
 
 // NewSwarmSyncerClient is a contructor for provable data exchange syncer
-func NewSwarmSyncerClient(p *Peer, db *storage.DBAPI, ignoreExistingRequest bool, stream Stream) (*SwarmSyncerClient, error) {
+func NewSwarmSyncerClient(p *Peer, store storage.SyncChunkStore, stream Stream) (*SwarmSyncerClient, error) {
 	return &SwarmSyncerClient{
-		db:   db,
-		peer: p,
-		ignoreExistingRequest: ignoreExistingRequest,
-		stream:                stream,
+		store:  store,
+		peer:   p,
+		stream: stream,
 	}, nil
 }
 
 // // NewIncomingProvableSwarmSyncer is a contructor for provable data exchange syncer
-// func NewIncomingProvableSwarmSyncer(po int, priority int, index uint64, sessionAt uint64, intervals []uint64, sessionRoot storage.Key, chunker *storage.PyramidChunker, store storage.ChunkStore, p Peer) *SwarmSyncerClient {
+// func NewIncomingProvableSwarmSyncer(po int, priority int, index uint64, sessionAt uint64, intervals []uint64, sessionRoot storage.Address, chunker *storage.PyramidChunker, store storage.ChunkStore, p Peer) *SwarmSyncerClient {
 // 	retrieveC := make(storage.Chunk, chunksCap)
 // 	RunChunkRequestor(p, retrieveC)
 // 	storeC := make(storage.Chunk, chunksCap)
@@ -190,7 +165,7 @@ func NewSwarmSyncerClient(p *Peer, db *storage.DBAPI, ignoreExistingRequest bool
 
 // // StartSyncing is called on the Peer to start the syncing process
 // // the idea is that it is called only after kademlia is close to healthy
-// func StartSyncing(s *Streamer, peerId discover.NodeID, po uint8, nn bool) {
+// func StartSyncing(s *Streamer, peerId enode.ID, po uint8, nn bool) {
 // 	lastPO := po
 // 	if nn {
 // 		lastPO = maxPO
@@ -204,26 +179,15 @@ func NewSwarmSyncerClient(p *Peer, db *storage.DBAPI, ignoreExistingRequest bool
 
 // RegisterSwarmSyncerClient registers the client constructor function for
 // to handle incoming sync streams
-func RegisterSwarmSyncerClient(streamer *Registry, db *storage.DBAPI) {
+func RegisterSwarmSyncerClient(streamer *Registry, store storage.SyncChunkStore) {
 	streamer.RegisterClientFunc("SYNC", func(p *Peer, t string, live bool) (Client, error) {
-		return NewSwarmSyncerClient(p, db, true, NewStream("SYNC", t, live))
+		return NewSwarmSyncerClient(p, store, NewStream("SYNC", t, live))
 	})
 }
 
 // NeedData
-func (s *SwarmSyncerClient) NeedData(ctx context.Context, key []byte) (wait func()) {
-	chunk, _ := s.db.GetOrCreateRequest(ctx, key)
-	// TODO: we may want to request from this peer anyway even if the request exists
-
-	// ignoreExistingRequest is temporary commented out until its functionality is verified.
-	// For now, this optimization can be disabled.
-	if chunk.ReqC == nil { //|| (s.ignoreExistingRequest && !created) {
-		return nil
-	}
-	// create request and wait until the chunk data arrives and is stored
-	return func() {
-		chunk.WaitToStore()
-	}
+func (s *SwarmSyncerClient) NeedData(ctx context.Context, key []byte) (wait func(context.Context) error) {
+	return s.store.FetchFunc(ctx, key)
 }
 
 // BatchDone
@@ -233,46 +197,6 @@ func (s *SwarmSyncerClient) BatchDone(stream Stream, from uint64, hashes []byte,
 	// 	return func() (*TakeoverProof, error) { return s.TakeoverProof(stream, from, hashes, root) }
 	// }
 	return nil
-}
-
-func (s *SwarmSyncerClient) TakeoverProof(stream Stream, from uint64, hashes []byte, root storage.Address) (*TakeoverProof, error) {
-	// for provable syncer currentRoot is non-zero length
-	// TODO: reenable this with putter/getter
-	// if s.chunker != nil {
-	// 	if from > s.sessionAt { // for live syncing currentRoot is always updated
-	// 		//expRoot, err := s.chunker.Append(s.currentRoot, bytes.NewReader(hashes), s.retrieveC, s.storeC)
-	// 		expRoot, _, err := s.chunker.Append(s.currentRoot, bytes.NewReader(hashes), s.retrieveC)
-	// 		if err != nil {
-	// 			return nil, err
-	// 		}
-	// 		if !bytes.Equal(root, expRoot) {
-	// 			return nil, fmt.Errorf("HandoverProof mismatch")
-	// 		}
-	// 		s.currentRoot = root
-	// 	} else {
-	// 		expHashes := make([]byte, len(hashes))
-	// 		_, err := s.sessionReader.ReadAt(expHashes, int64(s.end*HashSize))
-	// 		if err != nil && err != io.EOF {
-	// 			return nil, err
-	// 		}
-	// 		if !bytes.Equal(expHashes, hashes) {
-	// 			return nil, errors.New("invalid proof")
-	// 		}
-	// 	}
-	// 	return nil, nil
-	// }
-	s.end += uint64(len(hashes)) / HashSize
-	takeover := &Takeover{
-		Stream: stream,
-		Start:  s.start,
-		End:    s.end,
-		Root:   root,
-	}
-	// serialise and sign
-	return &TakeoverProof{
-		Takeover: takeover,
-		Sig:      nil,
-	}, nil
 }
 
 func (s *SwarmSyncerClient) Close() {}

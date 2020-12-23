@@ -25,11 +25,11 @@ import (
 	"runtime"
 
 	"github.com/ethereum/go-ethereum/log"
-	"github.com/ethereum/go-ethereum/log/term"
 	"github.com/ethereum/go-ethereum/metrics"
 	"github.com/ethereum/go-ethereum/metrics/exp"
 	"github.com/fjl/memsize/memsizeui"
 	colorable "github.com/mattn/go-colorable"
+	"github.com/mattn/go-isatty"
 	"gopkg.in/urfave/cli.v1"
 )
 
@@ -105,17 +105,17 @@ var Flags = []cli.Flag{
 
 var (
 	ostream log.Handler
-	glogger *log.GlogHandler
+	Glogger *log.GlogHandler
 )
 
 func init() {
-	usecolor := term.IsTty(os.Stderr.Fd()) && os.Getenv("TERM") != "dumb"
+	usecolor := (isatty.IsTerminal(os.Stderr.Fd()) || isatty.IsCygwinTerminal(os.Stderr.Fd())) && os.Getenv("TERM") != "dumb"
 	output := io.Writer(os.Stderr)
 	if usecolor {
 		output = colorable.NewColorableStderr()
 	}
 	ostream = log.StreamHandler(output, log.TerminalFormat(usecolor))
-	glogger = log.NewGlogHandler(ostream)
+	Glogger = log.NewGlogHandler(ostream)
 }
 
 // Setup initializes profiling and logging based on the CLI flags.
@@ -132,12 +132,12 @@ func Setup(ctx *cli.Context, logdir string) error {
 		if err != nil {
 			return err
 		}
-		glogger.SetHandler(log.MultiHandler(ostream, rfh))
+		Glogger.SetHandler(log.MultiHandler(ostream, rfh))
 	}
-	glogger.Verbosity(log.Lvl(ctx.GlobalInt(VerbosityFlag.Name)))
-	glogger.Vmodule(ctx.GlobalString(vmoduleFlag.Name))
-	glogger.BacktraceAt(ctx.GlobalString(backtraceAtFlag.Name))
-	log.Root().SetHandler(glogger)
+	Glogger.Verbosity(log.Lvl(ctx.GlobalInt(VerbosityFlag.Name)))
+	Glogger.Vmodule(ctx.GlobalString(vmoduleFlag.Name))
+	Glogger.BacktraceAt(ctx.GlobalString(backtraceAtFlag.Name))
+	log.Root().SetHandler(Glogger)
 
 	// profiling, tracing
 	runtime.MemProfileRate = ctx.GlobalInt(memprofilerateFlag.Name)

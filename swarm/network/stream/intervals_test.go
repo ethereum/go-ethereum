@@ -18,37 +18,40 @@ package stream
 
 import (
 	"context"
-	crand "crypto/rand"
 	"encoding/binary"
+	"errors"
 	"fmt"
-	"io"
-	"os"
 	"sync"
 	"testing"
 	"time"
 
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/node"
-	"github.com/ethereum/go-ethereum/p2p"
-	"github.com/ethereum/go-ethereum/p2p/discover"
+	"github.com/ethereum/go-ethereum/p2p/enode"
 	"github.com/ethereum/go-ethereum/p2p/simulations/adapters"
-	"github.com/ethereum/go-ethereum/swarm/network"
 	"github.com/ethereum/go-ethereum/swarm/network/simulation"
 	"github.com/ethereum/go-ethereum/swarm/state"
 	"github.com/ethereum/go-ethereum/swarm/storage"
+	"github.com/ethereum/go-ethereum/swarm/testutil"
 )
 
-func TestIntervals(t *testing.T) {
+func TestIntervalsLive(t *testing.T) {
 	testIntervals(t, true, nil, false)
-	testIntervals(t, false, NewRange(9, 26), false)
-	testIntervals(t, true, NewRange(9, 26), false)
-
 	testIntervals(t, true, nil, true)
+}
+
+func TestIntervalsHistory(t *testing.T) {
+	testIntervals(t, false, NewRange(9, 26), false)
 	testIntervals(t, false, NewRange(9, 26), true)
+}
+
+func TestIntervalsLiveAndHistory(t *testing.T) {
+	testIntervals(t, true, NewRange(9, 26), false)
 	testIntervals(t, true, NewRange(9, 26), true)
 }
 
 func testIntervals(t *testing.T, live bool, history *Range, skipCheck bool) {
+
 	nodes := 2
 	chunkCount := dataChunkCount
 	externalStreamName := "externalStream"
@@ -56,41 +59,32 @@ func testIntervals(t *testing.T, live bool, history *Range, skipCheck bool) {
 	externalStreamMaxKeys := uint64(100)
 
 	sim := simulation.New(map[string]simulation.ServiceFunc{
-		"intervalsStreamer": func(ctx *adapters.ServiceContext, bucket *sync.Map) (s node.Service, cleanup func(), err error) {
-
-			id := ctx.Config.ID
-			addr := network.NewAddrFromNodeID(id)
-			store, datadir, err := createTestLocalStorageForID(id, addr)
+		"intervalsStreamer": func(ctx *adapters.ServiceContext, bucket *sync.Map) (node.Service, func(), error) {
+			addr, netStore, delivery, clean, err := newNetStoreAndDelivery(ctx, bucket)
 			if err != nil {
 				return nil, nil, err
 			}
-			bucket.Store(bucketKeyStore, store)
-			cleanup = func() {
-				store.Close()
-				os.RemoveAll(datadir)
-			}
-			localStore := store.(*storage.LocalStore)
-			db := storage.NewDBAPI(localStore)
-			kad := network.NewKademlia(addr.Over(), network.NewKadParams())
-			delivery := NewDelivery(kad, db)
 
-			r := NewRegistry(addr, delivery, db, state.NewInmemoryStore(), &RegistryOptions{
+			r := NewRegistry(addr.ID(), delivery, netStore, state.NewInmemoryStore(), &RegistryOptions{
+				Retrieval: RetrievalDisabled,
+				Syncing:   SyncingRegisterOnly,
 				SkipCheck: skipCheck,
-			})
+			}, nil)
 			bucket.Store(bucketKeyRegistry, r)
 
 			r.RegisterClientFunc(externalStreamName, func(p *Peer, t string, live bool) (Client, error) {
-				return newTestExternalClient(db), nil
+				return newTestExternalClient(netStore), nil
 			})
 			r.RegisterServerFunc(externalStreamName, func(p *Peer, t string, live bool) (Server, error) {
 				return newTestExternalServer(t, externalStreamSessionAt, externalStreamMaxKeys, nil), nil
 			})
 
-			fileStore := storage.NewFileStore(localStore, storage.NewFileStoreParams())
-			bucket.Store(bucketKeyFileStore, fileStore)
+			cleanup := func() {
+				r.Close()
+				clean()
+			}
 
 			return r, cleanup, nil
-
 		},
 	})
 	defer sim.Close()
@@ -101,10 +95,14 @@ func testIntervals(t *testing.T, live bool, history *Range, skipCheck bool) {
 		t.Fatal(err)
 	}
 
-	ctx, cancel := context.WithTimeout(context.Background(), 100*time.Second)
+	ctx, cancel := context.WithTimeout(context.Background(), 20*time.Second)
 	defer cancel()
 
-	result := sim.Run(ctx, func(ctx context.Context, sim *simulation.Simulation) error {
+	if _, err := sim.WaitTillHealthy(ctx); err != nil {
+		t.Fatal(err)
+	}
+
+	result := sim.Run(ctx, func(ctx context.Context, sim *simulation.Simulation) (err error) {
 		nodeIDs := sim.UpNodeIDs()
 		storer := nodeIDs[0]
 		checker := nodeIDs[1]
@@ -116,15 +114,14 @@ func testIntervals(t *testing.T, live bool, history *Range, skipCheck bool) {
 		fileStore := item.(*storage.FileStore)
 
 		size := chunkCount * chunkSize
-		_, wait, err := fileStore.Store(ctx, io.LimitReader(crand.Reader, int64(size)), int64(size), false)
+
+		_, wait, err := fileStore.Store(ctx, testutil.RandomReader(1, size), int64(size), false)
 		if err != nil {
-			log.Error("Store error: %v", "err", err)
-			t.Fatal(err)
+			return fmt.Errorf("store: %v", err)
 		}
 		err = wait(ctx)
 		if err != nil {
-			log.Error("Wait error: %v", "err", err)
-			t.Fatal(err)
+			return fmt.Errorf("wait store: %v", err)
 		}
 
 		item, ok = sim.NodeItem(checker, bucketKeyRegistry)
@@ -136,24 +133,15 @@ func testIntervals(t *testing.T, live bool, history *Range, skipCheck bool) {
 		liveErrC := make(chan error)
 		historyErrC := make(chan error)
 
-		if _, err := sim.WaitTillHealthy(ctx, 2); err != nil {
-			log.Error("WaitKademlia error: %v", "err", err)
+		err = registry.Subscribe(storer, NewStream(externalStreamName, "", live), history, Top)
+		if err != nil {
 			return err
 		}
 
-		log.Debug("Watching for disconnections")
-		disconnections := sim.PeerEvents(
-			context.Background(),
-			sim.NodeIDs(),
-			simulation.NewPeerEventsFilter().Type(p2p.PeerEventTypeDrop),
-		)
-
-		go func() {
-			for d := range disconnections {
-				if d.Error != nil {
-					log.Error("peer drop", "node", d.NodeID, "peer", d.Event.Peer)
-					t.Fatal(d.Error)
-				}
+		disconnected := watchDisconnections(ctx, sim)
+		defer func() {
+			if err != nil && disconnected.bool() {
+				err = errors.New("disconnect events received")
 			}
 		}()
 
@@ -172,7 +160,7 @@ func testIntervals(t *testing.T, live bool, history *Range, skipCheck bool) {
 			var liveHashesChan chan []byte
 			liveHashesChan, err = getHashes(ctx, registry, storer, NewStream(externalStreamName, "", true))
 			if err != nil {
-				log.Error("Subscription error: %v", "err", err)
+				log.Error("get hashes", "err", err)
 				return
 			}
 			i := externalStreamSessionAt
@@ -216,6 +204,7 @@ func testIntervals(t *testing.T, live bool, history *Range, skipCheck bool) {
 			var historyHashesChan chan []byte
 			historyHashesChan, err = getHashes(ctx, registry, storer, NewStream(externalStreamName, "", false))
 			if err != nil {
+				log.Error("get hashes", "err", err)
 				return
 			}
 
@@ -252,10 +241,6 @@ func testIntervals(t *testing.T, live bool, history *Range, skipCheck bool) {
 			}
 		}()
 
-		err = registry.Subscribe(storer, NewStream(externalStreamName, "", live), history, Top)
-		if err != nil {
-			return err
-		}
 		if err := <-liveErrC; err != nil {
 			return err
 		}
@@ -271,7 +256,7 @@ func testIntervals(t *testing.T, live bool, history *Range, skipCheck bool) {
 	}
 }
 
-func getHashes(ctx context.Context, r *Registry, peerID discover.NodeID, s Stream) (chan []byte, error) {
+func getHashes(ctx context.Context, r *Registry, peerID enode.ID, s Stream) (chan []byte, error) {
 	peer := r.getPeer(peerID)
 
 	client, err := peer.getClient(ctx, s)
@@ -284,7 +269,7 @@ func getHashes(ctx context.Context, r *Registry, peerID discover.NodeID, s Strea
 	return c.hashes, nil
 }
 
-func enableNotifications(r *Registry, peerID discover.NodeID, s Stream) error {
+func enableNotifications(r *Registry, peerID enode.ID, s Stream) error {
 	peer := r.getPeer(peerID)
 
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
@@ -302,34 +287,32 @@ func enableNotifications(r *Registry, peerID discover.NodeID, s Stream) error {
 
 type testExternalClient struct {
 	hashes               chan []byte
-	db                   *storage.DBAPI
+	store                storage.SyncChunkStore
 	enableNotificationsC chan struct{}
 }
 
-func newTestExternalClient(db *storage.DBAPI) *testExternalClient {
+func newTestExternalClient(store storage.SyncChunkStore) *testExternalClient {
 	return &testExternalClient{
 		hashes:               make(chan []byte),
-		db:                   db,
+		store:                store,
 		enableNotificationsC: make(chan struct{}),
 	}
 }
 
-func (c *testExternalClient) NeedData(ctx context.Context, hash []byte) func() {
-	chunk, _ := c.db.GetOrCreateRequest(ctx, hash)
-	if chunk.ReqC == nil {
+func (c *testExternalClient) NeedData(ctx context.Context, hash []byte) func(context.Context) error {
+	wait := c.store.FetchFunc(ctx, storage.Address(hash))
+	if wait == nil {
 		return nil
 	}
-	c.hashes <- hash
-	//NOTE: This was failing on go1.9.x with a deadlock.
-	//Sometimes this function would just block
-	//It is commented now, but it may be well worth after the chunk refactor
-	//to re-enable this and see if the problem has been addressed
-	/*
-		return func() {
-			return chunk.WaitToStore()
+	select {
+	case c.hashes <- hash:
+	case <-ctx.Done():
+		log.Warn("testExternalClient NeedData context", "err", ctx.Err())
+		return func(_ context.Context) error {
+			return ctx.Err()
 		}
-	*/
-	return nil
+	}
+	return wait
 }
 
 func (c *testExternalClient) BatchDone(Stream, uint64, []byte, []byte) func() (*TakeoverProof, error) {
@@ -337,8 +320,6 @@ func (c *testExternalClient) BatchDone(Stream, uint64, []byte, []byte) func() (*
 }
 
 func (c *testExternalClient) Close() {}
-
-const testExternalServerBatchSize = 10
 
 type testExternalServer struct {
 	t         string
@@ -359,17 +340,11 @@ func newTestExternalServer(t string, sessionAt, maxKeys uint64, keyFunc func(key
 	}
 }
 
+func (s *testExternalServer) SessionIndex() (uint64, error) {
+	return s.sessionAt, nil
+}
+
 func (s *testExternalServer) SetNextBatch(from uint64, to uint64) ([]byte, uint64, uint64, *HandoverProof, error) {
-	if from == 0 && to == 0 {
-		from = s.sessionAt
-		to = s.sessionAt + testExternalServerBatchSize
-	}
-	if to-from > testExternalServerBatchSize {
-		to = from + testExternalServerBatchSize - 1
-	}
-	if from >= s.maxKeys && to > s.maxKeys {
-		return nil, 0, 0, nil, io.EOF
-	}
 	if to > s.maxKeys {
 		to = s.maxKeys
 	}

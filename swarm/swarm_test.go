@@ -82,17 +82,14 @@ func TestNewSwarm(t *testing.T) {
 				if s.dns != nil {
 					t.Error("dns initialized, but it should not be")
 				}
-				if s.lstore == nil {
-					t.Error("localstore not initialized")
+				if s.netStore == nil {
+					t.Error("netStore not initialized")
 				}
 				if s.streamer == nil {
 					t.Error("streamer not initialized")
 				}
 				if s.fileStore == nil {
 					t.Error("fileStore not initialized")
-				}
-				if s.lstore.Validators == nil {
-					t.Error("localstore validators not initialized")
 				}
 				if s.bzz == nil {
 					t.Error("bzz not initialized")
@@ -319,11 +316,11 @@ func TestLocalStoreAndRetrieve(t *testing.T) {
 	}
 
 	// by default, test only the lonely chunk cases
-	sizes := []int{1, 60, 4097, 524288 + 1, 7*524288 + 1, 128*524288 + 1}
+	sizes := []int{1, 60, 4097, 524288 + 1, 7*524288 + 1}
 
 	if *longrunning {
 		// test broader set of cases if -longruning flag is set
-		sizes = append(sizes, 83, 179, 253, 1024, 4095, 4096, 8191, 8192, 8193, 12287, 12288, 12289, 123456, 2345678, 67298391, 524288, 524288+4096, 524288+4097, 7*524288, 7*524288+4096, 7*524288+4097, 128*524288, 128*524288+4096, 128*524288+4097, 816778334)
+		sizes = append(sizes, 83, 179, 253, 1024, 4095, 4096, 8191, 8192, 8193, 12287, 12288, 12289, 123456, 2345678, 67298391, 524288, 524288+4096, 524288+4097, 7*524288, 7*524288+4096, 7*524288+4097, 128*524288+1, 128*524288, 128*524288+4096, 128*524288+4097, 816778334)
 	}
 	for _, n := range sizes {
 		testLocalStoreAndRetrieve(t, swarm, n, true)

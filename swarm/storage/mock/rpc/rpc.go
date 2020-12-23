@@ -73,6 +73,12 @@ func (s *GlobalStore) Put(addr common.Address, key []byte, data []byte) error {
 	return err
 }
 
+// Delete calls a Delete method to RPC server.
+func (s *GlobalStore) Delete(addr common.Address, key []byte) error {
+	err := s.client.Call(nil, "mockStore_delete", addr, key)
+	return err
+}
+
 // HasKey calls a HasKey method to RPC server.
 func (s *GlobalStore) HasKey(addr common.Address, key []byte) bool {
 	var has bool

@@ -1,4 +1,4 @@
-// Copyright 2016 The go-ethereum Authors
+// Copyright 2018 The go-ethereum Authors
 // This file is part of the go-ethereum library.
 //
 // The go-ethereum library is free software: you can redistribute it and/or modify
@@ -36,7 +36,7 @@ import (
 	"github.com/ethereum/go-ethereum/ethclient"
 	"github.com/ethereum/go-ethereum/metrics"
 	"github.com/ethereum/go-ethereum/p2p"
-	"github.com/ethereum/go-ethereum/p2p/discover"
+	"github.com/ethereum/go-ethereum/p2p/enode"
 	"github.com/ethereum/go-ethereum/p2p/protocols"
 	"github.com/ethereum/go-ethereum/params"
 	"github.com/ethereum/go-ethereum/rpc"
@@ -49,13 +49,13 @@ import (
 	"github.com/ethereum/go-ethereum/swarm/pss"
 	"github.com/ethereum/go-ethereum/swarm/state"
 	"github.com/ethereum/go-ethereum/swarm/storage"
+	"github.com/ethereum/go-ethereum/swarm/storage/feed"
 	"github.com/ethereum/go-ethereum/swarm/storage/mock"
-	"github.com/ethereum/go-ethereum/swarm/storage/mru"
+	"github.com/ethereum/go-ethereum/swarm/swap"
 	"github.com/ethereum/go-ethereum/swarm/tracing"
 )
 
 var (
-	startTime          time.Time
 	updateGaugesPeriod = 5 * time.Second
 	startCounter       = metrics.NewRegisteredCounter("stack,start", nil)
 	stopCounter        = metrics.NewRegisteredCounter("stack,stop", nil)
@@ -65,43 +65,30 @@ var (
 
 // the swarm stack
 type Swarm struct {
-	config      *api.Config        // swarm configuration
-	api         *api.API           // high level api layer (fs/manifest)
-	dns         api.Resolver       // DNS registrar
-	fileStore   *storage.FileStore // distributed preimage archive, the local API to the storage with document level storage/retrieval support
-	streamer    *stream.Registry
-	bzz         *network.Bzz       // the logistic manager
-	backend     chequebook.Backend // simple blockchain Backend
-	privateKey  *ecdsa.PrivateKey
-	corsString  string
-	swapEnabled bool
-	lstore      *storage.LocalStore // local store, needs to store for releasing resources after node stopped
-	sfs         *fuse.SwarmFS       // need this to cleanup all the active mounts on node exit
-	ps          *pss.Pss
+	config            *api.Config        // swarm configuration
+	api               *api.API           // high level api layer (fs/manifest)
+	dns               api.Resolver       // DNS registrar
+	fileStore         *storage.FileStore // distributed preimage archive, the local API to the storage with document level storage/retrieval support
+	streamer          *stream.Registry
+	bzz               *network.Bzz       // the logistic manager
+	backend           chequebook.Backend // simple blockchain Backend
+	privateKey        *ecdsa.PrivateKey
+	netStore          *storage.NetStore
+	sfs               *fuse.SwarmFS // need this to cleanup all the active mounts on node exit
+	ps                *pss.Pss
+	swap              *swap.Swap
+	stateStore        *state.DBStore
+	accountingMetrics *protocols.AccountingMetrics
+	cleanupFuncs      []func() error
 
 	tracerClose io.Closer
 }
 
-type SwarmAPI struct {
-	Api     *api.API
-	Backend chequebook.Backend
-	PrvKey  *ecdsa.PrivateKey
-}
-
-func (self *Swarm) API() *SwarmAPI {
-	return &SwarmAPI{
-		Api:     self.api,
-		Backend: self.backend,
-		PrvKey:  self.privateKey,
-	}
-}
-
-// creates a new swarm service instance
+// NewSwarm creates a new swarm service instance
 // implements node.Service
 // If mockStore is not nil, it will be used as the storage for chunk data.
 // MockStore should be used only for testing.
 func NewSwarm(config *api.Config, mockStore *mock.NodeStore) (self *Swarm, err error) {
-
 	if bytes.Equal(common.FromHex(config.PublicKey), storage.ZeroAddr) {
 		return nil, fmt.Errorf("empty public key")
 	}
@@ -119,33 +106,24 @@ func NewSwarm(config *api.Config, mockStore *mock.NodeStore) (self *Swarm, err e
 	}
 
 	self = &Swarm{
-		config:     config,
-		backend:    backend,
-		privateKey: config.ShiftPrivateKey(),
+		config:       config,
+		backend:      backend,
+		privateKey:   config.ShiftPrivateKey(),
+		cleanupFuncs: []func() error{},
 	}
-	log.Debug(fmt.Sprintf("Setting up Swarm service components"))
+	log.Debug("Setting up Swarm service components")
 
 	config.HiveParams.Discovery = true
 
-	log.Debug(fmt.Sprintf("-> swarm net store shared access layer to Swarm Chunk Store"))
-
-	nodeID, err := discover.HexID(config.NodeID)
-	if err != nil {
-		return nil, err
-	}
-	addr := &network.BzzAddr{
-		OAddr: common.FromHex(config.BzzKey),
-		UAddr: []byte(discover.NewNode(nodeID, net.IP{127, 0, 0, 1}, 30303, 30303).String()),
-	}
-
 	bzzconfig := &network.BzzConfig{
 		NetworkID:    config.NetworkID,
-		OverlayAddr:  addr.OAddr,
-		UnderlayAddr: addr.UAddr,
+		OverlayAddr:  common.FromHex(config.BzzKey),
 		HiveParams:   config.HiveParams,
+		LightNode:    config.LightNodeEnabled,
+		BootnodeMode: config.BootnodeMode,
 	}
 
-	stateStore, err := state.NewDBStore(filepath.Join(config.Path, "state-store.db"))
+	self.stateStore, err = state.NewDBStore(filepath.Join(config.Path, "state-store.db"))
 	if err != nil {
 		return
 	}
@@ -167,50 +145,78 @@ func NewSwarm(config *api.Config, mockStore *mock.NodeStore) (self *Swarm, err e
 		self.dns = resolver
 	}
 
-	self.lstore, err = storage.NewLocalStore(config.LocalStoreParams, mockStore)
+	lstore, err := storage.NewLocalStore(config.LocalStoreParams, mockStore)
 	if err != nil {
-		return
+		return nil, err
 	}
 
-	db := storage.NewDBAPI(self.lstore)
+	self.netStore, err = storage.NewNetStore(lstore, nil)
+	if err != nil {
+		return nil, err
+	}
+
 	to := network.NewKademlia(
 		common.FromHex(config.BzzKey),
 		network.NewKadParams(),
 	)
-	delivery := stream.NewDelivery(to, db)
+	delivery := stream.NewDelivery(to, self.netStore)
+	self.netStore.NewNetFetcherFunc = network.NewFetcherFactory(delivery.RequestFromPeers, config.DeliverySkipCheck).New
 
-	self.streamer = stream.NewRegistry(addr, delivery, db, stateStore, &stream.RegistryOptions{
+	if config.SwapEnabled {
+		balancesStore, err := state.NewDBStore(filepath.Join(config.Path, "balances.db"))
+		if err != nil {
+			return nil, err
+		}
+		self.swap = swap.New(balancesStore)
+		self.accountingMetrics = protocols.SetupAccountingMetrics(10*time.Second, filepath.Join(config.Path, "metrics.db"))
+	}
+
+	var nodeID enode.ID
+	if err := nodeID.UnmarshalText([]byte(config.NodeID)); err != nil {
+		return nil, err
+	}
+
+	syncing := stream.SyncingAutoSubscribe
+	if !config.SyncEnabled || config.LightNodeEnabled {
+		syncing = stream.SyncingDisabled
+	}
+
+	retrieval := stream.RetrievalEnabled
+	if config.LightNodeEnabled {
+		retrieval = stream.RetrievalClientOnly
+	}
+
+	registryOptions := &stream.RegistryOptions{
 		SkipCheck:       config.DeliverySkipCheck,
-		DoSync:          config.SyncEnabled,
-		DoRetrieve:      true,
+		Syncing:         syncing,
+		Retrieval:       retrieval,
 		SyncUpdateDelay: config.SyncUpdateDelay,
-	})
+		MaxPeerServers:  config.MaxStreamPeerServers,
+	}
+	self.streamer = stream.NewRegistry(nodeID, delivery, self.netStore, self.stateStore, registryOptions, self.swap)
 
-	// set up NetStore, the cloud storage local access layer
-	netStore := storage.NewNetStore(self.lstore, self.streamer.Retrieve)
 	// Swarm Hash Merklised Chunking for Arbitrary-length Document/File storage
-	self.fileStore = storage.NewFileStore(netStore, self.config.FileStoreParams)
+	self.fileStore = storage.NewFileStore(self.netStore, self.config.FileStoreParams)
 
-	var resourceHandler *mru.Handler
-	rhparams := &mru.HandlerParams{}
+	var feedsHandler *feed.Handler
+	fhParams := &feed.HandlerParams{}
 
-	resourceHandler, err = mru.NewHandler(rhparams)
+	feedsHandler = feed.NewHandler(fhParams)
+	feedsHandler.SetStore(self.netStore)
+
+	lstore.Validators = []storage.ChunkValidator{
+		storage.NewContentAddressValidator(storage.MakeHashFunc(storage.DefaultHash)),
+		feedsHandler,
+	}
+
+	err = lstore.Migrate()
 	if err != nil {
 		return nil, err
 	}
-	resourceHandler.SetStore(netStore)
 
-	var validators []storage.ChunkValidator
-	validators = append(validators, storage.NewContentAddressValidator(storage.MakeHashFunc(storage.DefaultHash)))
-	if resourceHandler != nil {
-		validators = append(validators, resourceHandler)
-	}
-	self.lstore.Validators = validators
+	log.Debug("Setup local storage")
 
-	// setup local store
-	log.Debug(fmt.Sprintf("Set up local storage"))
-
-	self.bzz = network.NewBzz(bzzconfig, to, stateStore, stream.Spec, self.streamer.Run)
+	self.bzz = network.NewBzz(bzzconfig, to, self.stateStore, self.streamer.GetSpec(), self.streamer.Run)
 
 	// Pss = postal service over swarm (devp2p over bzz)
 	self.ps, err = pss.NewPss(to, config.Pss)
@@ -221,12 +227,10 @@ func NewSwarm(config *api.Config, mockStore *mock.NodeStore) (self *Swarm, err e
 		pss.SetHandshakeController(self.ps, pss.NewHandshakeParams())
 	}
 
-	self.api = api.NewAPI(self.fileStore, self.dns, resourceHandler)
-	// Manifests for Smart Hosting
-	log.Debug(fmt.Sprintf("-> Web3 virtual server API"))
+	self.api = api.NewAPI(self.fileStore, self.dns, feedsHandler, self.privateKey)
 
 	self.sfs = fuse.NewSwarmFS(self.api)
-	log.Debug("-> Initializing Fuse file system")
+	log.Debug("Initialized FUSE filesystem")
 
 	return self, nil
 }
@@ -340,190 +344,203 @@ Start is called when the stack is started
 * TODO: start subservices like sword, swear, swarmdns
 */
 // implements the node.Service interface
-func (self *Swarm) Start(srv *p2p.Server) error {
-	startTime = time.Now()
+func (s *Swarm) Start(srv *p2p.Server) error {
+	startTime := time.Now()
 
-	self.tracerClose = tracing.Closer
+	s.tracerClose = tracing.Closer
 
 	// update uaddr to correct enode
-	newaddr := self.bzz.UpdateLocalAddr([]byte(srv.Self().String()))
-	log.Warn("Updated bzz local addr", "oaddr", fmt.Sprintf("%x", newaddr.OAddr), "uaddr", fmt.Sprintf("%s", newaddr.UAddr))
+	newaddr := s.bzz.UpdateLocalAddr([]byte(srv.Self().String()))
+	log.Info("Updated bzz local addr", "oaddr", fmt.Sprintf("%x", newaddr.OAddr), "uaddr", fmt.Sprintf("%s", newaddr.UAddr))
 	// set chequebook
-	if self.config.SwapEnabled {
+	//TODO: Currently if swap is enabled and no chequebook (or inexistent) contract is provided, the node would crash.
+	//Once we integrate back the contracts, this check MUST be revisited
+	if s.config.SwapEnabled && s.config.SwapAPI != "" {
 		ctx := context.Background() // The initial setup has no deadline.
-		err := self.SetChequebook(ctx)
+		err := s.SetChequebook(ctx)
 		if err != nil {
 			return fmt.Errorf("Unable to set chequebook for SWAP: %v", err)
 		}
-		log.Debug(fmt.Sprintf("-> cheque book for SWAP: %v", self.config.Swap.Chequebook()))
+		log.Debug(fmt.Sprintf("-> cheque book for SWAP: %v", s.config.Swap.Chequebook()))
 	} else {
 		log.Debug(fmt.Sprintf("SWAP disabled: no cheque book set"))
 	}
 
-	log.Warn(fmt.Sprintf("Starting Swarm service"))
+	log.Info("Starting bzz service")
 
-	err := self.bzz.Start(srv)
+	err := s.bzz.Start(srv)
 	if err != nil {
 		log.Error("bzz failed", "err", err)
 		return err
 	}
-	log.Info(fmt.Sprintf("Swarm network started on bzz address: %x", self.bzz.Hive.Overlay.BaseAddr()))
+	log.Info("Swarm network started", "bzzaddr", fmt.Sprintf("%x", s.bzz.Hive.BaseAddr()))
 
-	if self.ps != nil {
-		self.ps.Start(srv)
-		log.Info("Pss started")
+	if s.ps != nil {
+		s.ps.Start(srv)
 	}
 
 	// start swarm http proxy server
-	if self.config.Port != "" {
-		addr := net.JoinHostPort(self.config.ListenAddr, self.config.Port)
-		server := httpapi.NewServer(self.api, self.config.Cors)
+	if s.config.Port != "" {
+		addr := net.JoinHostPort(s.config.ListenAddr, s.config.Port)
+		server := httpapi.NewServer(s.api, s.config.Cors)
 
-		go server.ListenAndServe(addr)
+		if s.config.Cors != "" {
+			log.Debug("Swarm HTTP proxy CORS headers", "allowedOrigins", s.config.Cors)
+		}
+
+		log.Debug("Starting Swarm HTTP proxy", "port", s.config.Port)
+		go func() {
+			err := server.ListenAndServe(addr)
+			if err != nil {
+				log.Error("Could not start Swarm HTTP proxy", "err", err.Error())
+			}
+		}()
 	}
 
-	log.Debug(fmt.Sprintf("Swarm http proxy started on port: %v", self.config.Port))
+	doneC := make(chan struct{})
 
-	if self.config.Cors != "" {
-		log.Debug(fmt.Sprintf("Swarm http proxy started with corsdomain: %v", self.config.Cors))
-	}
+	s.cleanupFuncs = append(s.cleanupFuncs, func() error {
+		close(doneC)
+		return nil
+	})
 
-	self.periodicallyUpdateGauges()
+	go func(time.Time) {
+		for {
+			select {
+			case <-time.After(updateGaugesPeriod):
+				uptimeGauge.Update(time.Since(startTime).Nanoseconds())
+				requestsCacheGauge.Update(int64(s.netStore.RequestsCacheLen()))
+			case <-doneC:
+				return
+			}
+		}
+	}(startTime)
 
 	startCounter.Inc(1)
-	self.streamer.Start(srv)
+	s.streamer.Start(srv)
 	return nil
-}
-
-func (self *Swarm) periodicallyUpdateGauges() {
-	ticker := time.NewTicker(updateGaugesPeriod)
-
-	go func() {
-		for range ticker.C {
-			self.updateGauges()
-		}
-	}()
-}
-
-func (self *Swarm) updateGauges() {
-	uptimeGauge.Update(time.Since(startTime).Nanoseconds())
-	requestsCacheGauge.Update(int64(self.lstore.RequestsCacheLen()))
 }
 
 // implements the node.Service interface
 // stops all component services.
-func (self *Swarm) Stop() error {
-	if self.tracerClose != nil {
-		err := self.tracerClose.Close()
+func (s *Swarm) Stop() error {
+	if s.tracerClose != nil {
+		err := s.tracerClose.Close()
 		if err != nil {
 			return err
 		}
 	}
 
-	if self.ps != nil {
-		self.ps.Stop()
+	if s.ps != nil {
+		s.ps.Stop()
 	}
-	if ch := self.config.Swap.Chequebook(); ch != nil {
+	if ch := s.config.Swap.Chequebook(); ch != nil {
 		ch.Stop()
 		ch.Save()
 	}
-
-	if self.lstore != nil {
-		self.lstore.DbStore.Close()
+	if s.swap != nil {
+		s.swap.Close()
 	}
-	self.sfs.Stop()
+	if s.accountingMetrics != nil {
+		s.accountingMetrics.Close()
+	}
+	if s.netStore != nil {
+		s.netStore.Close()
+	}
+	s.sfs.Stop()
 	stopCounter.Inc(1)
-	self.streamer.Stop()
-	return self.bzz.Stop()
+	s.streamer.Stop()
+
+	err := s.bzz.Stop()
+	if s.stateStore != nil {
+		s.stateStore.Close()
+	}
+
+	for _, cleanF := range s.cleanupFuncs {
+		err = cleanF()
+		if err != nil {
+			log.Error("encountered an error while running cleanup function", "err", err)
+			break
+		}
+	}
+	return err
 }
 
-// implements the node.Service interface
-func (self *Swarm) Protocols() (protos []p2p.Protocol) {
-	protos = append(protos, self.bzz.Protocols()...)
+// Protocols implements the node.Service interface
+func (s *Swarm) Protocols() (protos []p2p.Protocol) {
+	if s.config.BootnodeMode {
+		protos = append(protos, s.bzz.Protocols()...)
+	} else {
+		protos = append(protos, s.bzz.Protocols()...)
 
-	if self.ps != nil {
-		protos = append(protos, self.ps.Protocols()...)
+		if s.ps != nil {
+			protos = append(protos, s.ps.Protocols()...)
+		}
 	}
 	return
 }
 
-func (self *Swarm) RegisterPssProtocol(spec *protocols.Spec, targetprotocol *p2p.Protocol, options *pss.ProtocolParams) (*pss.Protocol, error) {
-	if !pss.IsActiveProtocol {
-		return nil, fmt.Errorf("Pss protocols not available (built with !nopssprotocol tag)")
-	}
-	topic := pss.ProtocolTopic(spec)
-	return pss.RegisterProtocol(self.ps, &topic, spec, targetprotocol, options)
-}
-
 // implements node.Service
 // APIs returns the RPC API descriptors the Swarm implementation offers
-func (self *Swarm) APIs() []rpc.API {
+func (s *Swarm) APIs() []rpc.API {
 
 	apis := []rpc.API{
 		// public APIs
 		{
 			Namespace: "bzz",
 			Version:   "3.0",
-			Service:   &Info{self.config, chequebook.ContractParams},
+			Service:   &Info{s.config, chequebook.ContractParams},
 			Public:    true,
 		},
 		// admin APIs
 		{
 			Namespace: "bzz",
 			Version:   "3.0",
-			Service:   api.NewControl(self.api, self.bzz.Hive),
+			Service:   api.NewInspector(s.api, s.bzz.Hive, s.netStore),
 			Public:    false,
 		},
 		{
 			Namespace: "chequebook",
 			Version:   chequebook.Version,
-			Service:   chequebook.NewApi(self.config.Swap.Chequebook),
+			Service:   chequebook.NewAPI(s.config.Swap.Chequebook),
 			Public:    false,
 		},
 		{
 			Namespace: "swarmfs",
 			Version:   fuse.Swarmfs_Version,
-			Service:   self.sfs,
+			Service:   s.sfs,
 			Public:    false,
 		},
-		// storage APIs
-		// DEPRECATED: Use the HTTP API instead
 		{
-			Namespace: "bzz",
-			Version:   "0.1",
-			Service:   api.NewStorage(self.api),
-			Public:    true,
-		},
-		{
-			Namespace: "bzz",
-			Version:   "0.1",
-			Service:   api.NewFileSystem(self.api),
+			Namespace: "accounting",
+			Version:   protocols.AccountingVersion,
+			Service:   protocols.NewAccountingApi(s.accountingMetrics),
 			Public:    false,
 		},
-		// {Namespace, Version, api.NewAdmin(self), false},
 	}
 
-	apis = append(apis, self.bzz.APIs()...)
+	apis = append(apis, s.bzz.APIs()...)
 
-	if self.ps != nil {
-		apis = append(apis, self.ps.APIs()...)
+	if s.ps != nil {
+		apis = append(apis, s.ps.APIs()...)
 	}
 
 	return apis
 }
 
-func (self *Swarm) Api() *api.API {
-	return self.api
-}
-
 // SetChequebook ensures that the local checquebook is set up on chain.
-func (self *Swarm) SetChequebook(ctx context.Context) error {
-	err := self.config.Swap.SetChequebook(ctx, self.backend, self.config.Path)
+func (s *Swarm) SetChequebook(ctx context.Context) error {
+	err := s.config.Swap.SetChequebook(ctx, s.backend, s.config.Path)
 	if err != nil {
 		return err
 	}
-	log.Info(fmt.Sprintf("new chequebook set (%v): saving config file, resetting all connections in the hive", self.config.Swap.Contract.Hex()))
+	log.Info(fmt.Sprintf("new chequebook set (%v): saving config file, resetting all connections in the hive", s.config.Swap.Contract.Hex()))
 	return nil
+}
+
+// RegisterPssProtocol adds a devp2p protocol to the swarm node's Pss instance
+func (s *Swarm) RegisterPssProtocol(topic *pss.Topic, spec *protocols.Spec, targetprotocol *p2p.Protocol, options *pss.ProtocolParams) (*pss.Protocol, error) {
+	return pss.RegisterProtocol(s.ps, topic, spec, targetprotocol, options)
 }
 
 // serialisable info about swarm
@@ -532,6 +549,6 @@ type Info struct {
 	*chequebook.Params
 }
 
-func (self *Info) Info() *Info {
-	return self
+func (s *Info) Info() *Info {
+	return s
 }

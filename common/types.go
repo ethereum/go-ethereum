@@ -27,12 +27,14 @@ import (
 	"strings"
 
 	"github.com/ethereum/go-ethereum/common/hexutil"
-	"github.com/ethereum/go-ethereum/crypto/sha3"
+	"golang.org/x/crypto/sha3"
 )
 
 // Lengths of hashes and addresses in bytes.
 const (
+	// HashLength is the expected length of the hash
 	HashLength          = 32
+	// AddressLength is the expected length of the address
 	AddressLength       = 20
 	MasternodeVotingSMC = "xdc0000000000000000000000000000000000000088"
 	BlockSigners        = "xdc0000000000000000000000000000000000000089"
@@ -61,8 +63,6 @@ func BytesToHash(b []byte) Hash {
 	h.SetBytes(b)
 	return h
 }
-func StringToHash(s string) Hash { return BytesToHash([]byte(s)) }
-
 
 // BigToHash sets byte representation of b to hash.
 // If b is larger than len(h), b will be cropped from the left.
@@ -176,7 +176,6 @@ func BytesToAddress(b []byte) Address {
 	a.SetBytes(b)
 	return a
 }
-func StringToAddress(s string) Address { return BytesToAddress([]byte(s)) }
 
 // BigToAddress returns Address with byte values of b.
 // If b is larger than len(h), b will be cropped from the left.
@@ -210,7 +209,7 @@ func (a Address) Hash() Hash { return BytesToHash(a[:]) }
 // Hex returns an EIP55-compliant hex string representation of the address.
 func (a Address) Hex() string {
 	unchecksummed := hex.EncodeToString(a[:])
-	sha := sha3.NewKeccak256()
+	sha := sha3.NewLegacyKeccak256()
 	sha.Write([]byte(unchecksummed))
 	hash := sha.Sum(nil)
 
@@ -295,44 +294,6 @@ func (a UnprefixedAddress) MarshalText() ([]byte, error) {
 	return []byte(hex.EncodeToString(a[:])), nil
 }
 
-// Extract validators from byte array.
-func RemoveItemFromArray(array []Address, items []Address) []Address {
-	if len(items) == 0 {
-		return array
-	}
-
-	for _, item := range items {
-		for i := len(array) - 1; i >= 0; i-- {
-			if array[i] == item {
-				array = append(array[:i], array[i+1:]...)
-			}
-		}
-	}
-
-	return array
-}
-
-// Extract validators from byte array.
-func ExtractAddressToBytes(penalties []Address) []byte {
-	data := []byte{}
-	for _, signer := range penalties {
-		data = append(data, signer[:]...)
-	}
-	return data
-}
-
-func ExtractAddressFromBytes(bytePenalties []byte) []Address {
-	if bytePenalties != nil && len(bytePenalties) < AddressLength {
-		return []Address{}
-	}
-	penalties := make([]Address, len(bytePenalties)/AddressLength)
-	for i := 0; i < len(penalties); i++ {
-		copy(penalties[i][:], bytePenalties[i*AddressLength:])
-	}
-	return penalties
-}
-
-
 // MixedcaseAddress retains the original string, which may or may not be
 // correctly checksummed
 type MixedcaseAddress struct {
@@ -391,4 +352,41 @@ func (ma *MixedcaseAddress) ValidChecksum() bool {
 // Original returns the mixed-case input string
 func (ma *MixedcaseAddress) Original() string {
 	return ma.original
+}
+
+// Extract validators from byte array.
+func RemoveItemFromArray(array []Address, items []Address) []Address {
+	if len(items) == 0 {
+		return array
+	}
+
+	for _, item := range items {
+		for i := len(array) - 1; i >= 0; i-- {
+			if array[i] == item {
+				array = append(array[:i], array[i+1:]...)
+			}
+		}
+	}
+
+	return array
+}
+
+// Extract validators from byte array.
+func ExtractAddressToBytes(penalties []Address) []byte {
+	data := []byte{}
+	for _, signer := range penalties {
+		data = append(data, signer[:]...)
+	}
+	return data
+}
+
+func ExtractAddressFromBytes(bytePenalties []byte) []Address {
+	if bytePenalties != nil && len(bytePenalties) < AddressLength {
+		return []Address{}
+	}
+	penalties := make([]Address, len(bytePenalties)/AddressLength)
+	for i := 0; i < len(penalties); i++ {
+		copy(penalties[i][:], bytePenalties[i*AddressLength:])
+	}
+	return penalties
 }

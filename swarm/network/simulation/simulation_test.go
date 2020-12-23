@@ -26,10 +26,9 @@ import (
 
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/node"
-	"github.com/ethereum/go-ethereum/p2p"
+	"github.com/ethereum/go-ethereum/p2p/simulations"
 	"github.com/ethereum/go-ethereum/p2p/simulations/adapters"
-	"github.com/ethereum/go-ethereum/rpc"
-	colorable "github.com/mattn/go-colorable"
+	"github.com/mattn/go-colorable"
 )
 
 var (
@@ -63,12 +62,12 @@ func TestRun(t *testing.T) {
 		}
 	})
 
-	t.Run("cancelation", func(t *testing.T) {
+	t.Run("cancellation", func(t *testing.T) {
 		ctx, cancel := context.WithTimeout(context.Background(), 50*time.Millisecond)
 		defer cancel()
 
 		r := sim.Run(ctx, func(ctx context.Context, sim *Simulation) error {
-			time.Sleep(100 * time.Millisecond)
+			time.Sleep(time.Second)
 			return nil
 		})
 
@@ -125,7 +124,7 @@ func TestClose(t *testing.T) {
 
 	var upNodeCount int
 	for _, n := range sim.Net.GetNodes() {
-		if n.Up {
+		if n.Up() {
 			upNodeCount++
 		}
 	}
@@ -141,7 +140,7 @@ func TestClose(t *testing.T) {
 
 	upNodeCount = 0
 	for _, n := range sim.Net.GetNodes() {
-		if n.Up {
+		if n.Up() {
 			upNodeCount++
 		}
 	}
@@ -164,7 +163,7 @@ func TestDone(t *testing.T) {
 
 	select {
 	case <-time.After(timeout):
-		t.Error("done channel closing timmed out")
+		t.Error("done channel closing timed out")
 	case <-sim.Done():
 		if d := time.Since(start); d < sleep {
 			t.Errorf("done channel closed sooner then expected: %s", d)
@@ -172,36 +171,33 @@ func TestDone(t *testing.T) {
 	}
 }
 
-// a helper map for usual services that do not do anyting
+// a helper map for usual services that do not do anything
 var noopServiceFuncMap = map[string]ServiceFunc{
 	"noop": noopServiceFunc,
 }
 
 // a helper function for most basic noop service
-func noopServiceFunc(ctx *adapters.ServiceContext, b *sync.Map) (node.Service, func(), error) {
+func noopServiceFunc(_ *adapters.ServiceContext, _ *sync.Map) (node.Service, func(), error) {
 	return newNoopService(), nil, nil
 }
-
-// noopService is the service that does not do anything
-// but implements node.Service interface.
-type noopService struct{}
 
 func newNoopService() node.Service {
 	return &noopService{}
 }
 
-func (t *noopService) Protocols() []p2p.Protocol {
-	return []p2p.Protocol{}
+// a helper function for most basic Noop service
+// of a different type then NoopService to test
+// multiple services on one node.
+func noopService2Func(_ *adapters.ServiceContext, _ *sync.Map) (node.Service, func(), error) {
+	return new(noopService2), nil, nil
 }
 
-func (t *noopService) APIs() []rpc.API {
-	return []rpc.API{}
+// NoopService2 is the service that does not do anything
+// but implements node.Service interface.
+type noopService2 struct {
+	simulations.NoopService
 }
 
-func (t *noopService) Start(server *p2p.Server) error {
-	return nil
-}
-
-func (t *noopService) Stop() error {
-	return nil
+type noopService struct {
+	simulations.NoopService
 }

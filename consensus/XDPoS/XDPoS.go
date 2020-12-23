@@ -40,13 +40,13 @@ import (
 	"github.com/ethereum/go-ethereum/core/state"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/crypto"
-	"github.com/ethereum/go-ethereum/crypto/sha3"
 	"github.com/ethereum/go-ethereum/ethdb"
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/params"
 	"github.com/ethereum/go-ethereum/rlp"
 	"github.com/ethereum/go-ethereum/rpc"
 	"github.com/hashicorp/golang-lru"
+	"golang.org/x/crypto/sha3"
 )
 
 const (
@@ -159,7 +159,7 @@ var (
 // panics. This is done to avoid accidentally using both forms (signature present
 // or not), which could be abused to produce different hashes for the same header.
 func sigHash(header *types.Header) (hash common.Hash) {
-	hasher := sha3.NewKeccak256()
+	hasher := sha3.NewLegacyKeccak256()
 
 	rlp.Encode(hasher, []interface{}{
 		header.ParentHash,
@@ -322,7 +322,7 @@ func (c *XDPoS) verifyHeader(chain consensus.ChainReader, header *types.Header, 
 			return consensus.ErrNoValidatorSignature
 		}
 		// Don't waste time checking blocks from the future
-		if header.Time.Cmp(big.NewInt(time.Now().Unix())) > 0 {
+		if int64(header.Time) > time.Now().Unix() {
 			return consensus.ErrFutureBlock
 		}
 	}
@@ -390,7 +390,7 @@ func (c *XDPoS) verifyCascadingFields(chain consensus.ChainReader, header *types
 	if parent == nil || parent.Number.Uint64() != number-1 || parent.Hash() != header.ParentHash {
 		return consensus.ErrUnknownAncestor
 	}
-	if parent.Time.Uint64()+c.config.Period > header.Time.Uint64() {
+	if parent.Time+c.config.Period > header.Time {
 		return ErrInvalidTimestamp
 	}
 	// Retrieve the snapshot needed to verify this header and cache it
@@ -574,22 +574,23 @@ func (c *XDPoS) snapshot(chain consensus.ChainReader, number uint64, hash common
 				break
 			}
 		}
-		// If we're at block zero, make a snapshot
-		if number == 0 {
-			genesis := chain.GetHeaderByNumber(0)
-			if err := c.VerifyHeader(chain, genesis, true); err != nil {
-				return nil, err
+		// If we're at an checkpoint block, make a snapshot if it's known
+		if number == 0 || (number%c.config.Epoch == 0 && chain.GetHeaderByNumber(number-1) == nil) {
+			checkpoint := chain.GetHeaderByNumber(number)
+			if checkpoint != nil {
+				hash := checkpoint.Hash()
+
+				signers := make([]common.Address, (len(checkpoint.Extra)-extraVanity-extraSeal)/common.AddressLength)
+				for i := 0; i < len(signers); i++ {
+					copy(signers[i][:], checkpoint.Extra[extraVanity+i*common.AddressLength:])
+				}
+				snap = newSnapshot(c.config, c.signatures, number, hash, signers)
+				if err := snap.store(c.db); err != nil {
+					return nil, err
+				}
+				log.Info("Stored checkpoint snapshot to disk", "number", number, "hash", hash)
+				break
 			}
-			signers := make([]common.Address, (len(genesis.Extra)-extraVanity-extraSeal)/common.AddressLength)
-			for i := 0; i < len(signers); i++ {
-				copy(signers[i][:], genesis.Extra[extraVanity+i*common.AddressLength:])
-			}
-			snap = newSnapshot(c.config, c.signatures, 0, genesis.Hash(), signers)
-			if err := snap.store(c.db); err != nil {
-				return nil, err
-			}
-			log.Trace("Stored genesis voting snapshot to disk")
-			break
 		}
 		// No snapshot for this header, gather the header and move backward
 		var header *types.Header
@@ -857,9 +858,9 @@ func (c *XDPoS) Prepare(chain consensus.ChainReader, header *types.Header) error
 
 	// Ensure the timestamp has the correct delay
 
-	header.Time = new(big.Int).Add(parent.Time, new(big.Int).SetUint64(c.config.Period))
-	if header.Time.Int64() < time.Now().Unix() {
-		header.Time = big.NewInt(time.Now().Unix())
+	header.Time = parent.Time+ c.config.Period
+	if int64(header.Time) < time.Now().Unix() {
+		header.Time = uint64(time.Now().Unix())
 	}
 	return nil
 }
@@ -931,18 +932,18 @@ func (c *XDPoS) Authorize(signer common.Address, signFn clique.SignerFn) {
 
 // Seal implements consensus.Engine, attempting to create a sealed block using
 // the local signing credentials.
-func (c *XDPoS) Seal(chain consensus.ChainReader, block *types.Block, stop <-chan struct{}) (*types.Block, error) {
+func (c *XDPoS) Seal(chain consensus.ChainReader, block *types.Block, results chan<- *types.Block, stop <-chan struct{}) (error) {
 	header := block.Header()
 
 	// Sealing the genesis block is not supported
 	number := header.Number.Uint64()
 	if number == 0 {
-		return nil, errUnknownBlock
+		return errUnknownBlock
 	}
 	// For 0-period chains, refuse to seal empty blocks (no reward but would spin sealing)
 	// checkpoint blocks have no tx
 	if c.config.Period == 0 && len(block.Transactions()) == 0 && number%c.config.Epoch != 0 {
-		return nil, errWaitTransactions
+		return errWaitTransactions
 	}
 	// Don't hold the signer fields for the entire sealing procedure
 	c.lock.RLock()
@@ -952,7 +953,7 @@ func (c *XDPoS) Seal(chain consensus.ChainReader, block *types.Block, stop <-cha
 	// Bail out if we're unauthorized to sign a block
 	snap, err := c.snapshot(chain, number-1, header.ParentHash, nil)
 	if err != nil {
-		return nil, err
+		return err
 	}
 	masternodes := c.GetMasternodes(chain, header)
 	if _, authorized := snap.Signers[signer]; !authorized {
@@ -964,7 +965,7 @@ func (c *XDPoS) Seal(chain consensus.ChainReader, block *types.Block, stop <-cha
 			}
 		}
 		if !valid {
-			return nil, errUnauthorized
+			return errUnauthorized
 		}
 	}
 	// If we're amongst the recent signers, wait for the next block
@@ -978,32 +979,40 @@ func (c *XDPoS) Seal(chain consensus.ChainReader, block *types.Block, stop <-cha
 					// Only take into account the non-epoch blocks
 					if number%c.config.Epoch != 0 {
 						log.Info("Signed recently, must wait for others ", "len(masternodes)", len(masternodes), "number", number, "limit", limit, "seen", seen, "recent", recent.String(), "snap.Recents", snap.Recents)
-						<-stop
-						return nil, nil
+						return nil
 					}
 				}
 			}
 		}
 	}
-	select {
-	case <-stop:
-		return nil, nil
-	default:
-	}
 	// Sign all the things!
 	sighash, err := signFn(accounts.Account{Address: signer}, sigHash(header).Bytes())
 	if err != nil {
-		return nil, err
+		return err
 	}
 	copy(header.Extra[len(header.Extra)-extraSeal:], sighash)
 	m2, err := c.GetValidator(signer, chain, header)
 	if err != nil {
-		return nil, fmt.Errorf("can't get block validator: %v", err)
+		return fmt.Errorf("can't get block validator: %v", err)
 	}
 	if m2 == signer {
 		header.Validator = sighash
 	}
-	return block.WithSeal(header), nil
+
+	go func() {
+		select {
+		case <-stop:
+			return
+		default:
+		}
+
+		select {
+		case results <- block.WithSeal(header):
+		default:
+			log.Warn("Sealing result is not read by miner", "sealhash", c.SealHash(header))
+		}
+	}()
+	return nil
 }
 
 // CalcDifficulty is the difficulty adjustment algorithm. It returns the difficulty
@@ -1019,6 +1028,16 @@ func (c *XDPoS) calcDifficulty(chain consensus.ChainReader, parent *types.Header
 		return big.NewInt(int64(len + curIndex - preIndex))
 	}
 	return big.NewInt(int64(len - Hop(len, preIndex, curIndex)))
+}
+
+// SealHash returns the hash of a block prior to it being sealed.
+func (c *XDPoS) SealHash(header *types.Header) common.Hash {
+	return sigHash(header)
+}
+
+// Close implements consensus.Engine. It's a noop for XDPoS as there are no background threads.
+func (c *XDPoS) Close() error {
+	return nil
 }
 
 // APIs implements consensus.Engine, returning the user facing RPC API to allow

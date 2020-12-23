@@ -29,7 +29,7 @@ import (
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/node"
 	"github.com/ethereum/go-ethereum/p2p"
-	"github.com/ethereum/go-ethereum/p2p/discover"
+	"github.com/ethereum/go-ethereum/p2p/enode"
 	"github.com/ethereum/go-ethereum/rpc"
 )
 
@@ -78,7 +78,7 @@ type NodeAdapter interface {
 type NodeConfig struct {
 	// ID is the node's ID which is used to identify the node in the
 	// simulation network
-	ID discover.NodeID
+	ID enode.ID
 
 	// PrivateKey is the node's private key which is used by the devp2p
 	// stack to encrypt communications
@@ -97,7 +97,7 @@ type NodeConfig struct {
 	Services []string
 
 	// function to sanction or prevent suggesting a peer
-	Reachable func(id discover.NodeID) bool
+	Reachable func(id enode.ID) bool
 
 	Port uint16
 }
@@ -138,11 +138,9 @@ func (n *NodeConfig) UnmarshalJSON(data []byte) error {
 	}
 
 	if confJSON.ID != "" {
-		nodeID, err := discover.HexID(confJSON.ID)
-		if err != nil {
+		if err := n.ID.UnmarshalText([]byte(confJSON.ID)); err != nil {
 			return err
 		}
-		n.ID = nodeID
 	}
 
 	if confJSON.PrivateKey != "" {
@@ -165,6 +163,11 @@ func (n *NodeConfig) UnmarshalJSON(data []byte) error {
 	return nil
 }
 
+// Node returns the node descriptor represented by the config.
+func (n *NodeConfig) Node() *enode.Node {
+	return enode.NewV4(&n.PrivateKey.PublicKey, net.IP{127, 0, 0, 1}, int(n.Port), int(n.Port))
+}
+
 // RandomNodeConfig returns node configuration with a randomly generated ID and
 // PrivateKey
 func RandomNodeConfig() *NodeConfig {
@@ -173,7 +176,7 @@ func RandomNodeConfig() *NodeConfig {
 		panic("unable to generate key")
 	}
 
-	id := discover.PubkeyID(&key.PublicKey)
+	id := enode.PubkeyToIDV4(&key.PublicKey)
 	port, err := assignTCPPort()
 	if err != nil {
 		panic("unable to assign tcp port")
@@ -218,7 +221,7 @@ type ServiceContext struct {
 // other nodes in the network (for example a simulated Swarm node which needs
 // to connect to a Geth node to resolve ENS names)
 type RPCDialer interface {
-	DialRPC(id discover.NodeID) (*rpc.Client, error)
+	DialRPC(id enode.ID) (*rpc.Client, error)
 }
 
 // Services is a collection of services which can be run in a simulation

@@ -35,7 +35,7 @@ var (
 	// headBlockKey tracks the latest know full block's hash.
 	headBlockKey = []byte("LastBlock")
 
-	// headFastBlockKey tracks the latest known incomplete block's hash duirng fast sync.
+	// headFastBlockKey tracks the latest known incomplete block's hash during fast sync.
 	headFastBlockKey = []byte("LastFast")
 
 	// fastTrieProgressKey tracks the number of trie entries imported during fast sync.

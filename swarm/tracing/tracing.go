@@ -9,7 +9,6 @@ import (
 	"github.com/ethereum/go-ethereum/log"
 	jaeger "github.com/uber/jaeger-client-go"
 	jaegercfg "github.com/uber/jaeger-client-go/config"
-	jaegerlog "github.com/uber/jaeger-client-go/log"
 	cli "gopkg.in/urfave/cli.v1"
 )
 
@@ -85,13 +84,13 @@ func initTracer(endpoint, svc string) (closer io.Closer) {
 	// Example logger and metrics factory. Use github.com/uber/jaeger-client-go/log
 	// and github.com/uber/jaeger-lib/metrics respectively to bind to real logging and metrics
 	// frameworks.
-	jLogger := jaegerlog.StdLogger
+	//jLogger := jaegerlog.StdLogger
 	//jMetricsFactory := metrics.NullFactory
 
 	// Initialize tracer with a logger and a metrics factory
 	closer, err := cfg.InitGlobalTracer(
 		svc,
-		jaegercfg.Logger(jLogger),
+		//jaegercfg.Logger(jLogger),
 		//jaegercfg.Metrics(jMetricsFactory),
 		//jaegercfg.Observer(rpcmetrics.NewObserver(jMetricsFactory, rpcmetrics.DefaultNameNormalizer)),
 	)

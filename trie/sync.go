@@ -21,8 +21,8 @@ import (
 	"fmt"
 
 	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/common/prque"
 	"github.com/ethereum/go-ethereum/ethdb"
-	"gopkg.in/karalabe/cookiejar.v2/collections/prque"
 )
 
 // ErrNotRequested is returned by the trie sync when it's requested to process a
@@ -73,7 +73,7 @@ func newSyncMemBatch() *syncMemBatch {
 // and reconstructs the trie step by step until all is done.
 type Sync struct {
 	database DatabaseReader           // Persistent database to check for existing entries
-	membatch *syncMemBatch            // Memory buffer to avoid frequest database writes
+	membatch *syncMemBatch            // Memory buffer to avoid frequent database writes
 	requests map[common.Hash]*request // Pending requests pertaining to a key hash
 	queue    *prque.Prque             // Priority queue with the pending requests
 }
@@ -84,7 +84,7 @@ func NewSync(root common.Hash, database DatabaseReader, callback LeafCallback) *
 		database: database,
 		membatch: newSyncMemBatch(),
 		requests: make(map[common.Hash]*request),
-		queue:    prque.New(),
+		queue:    prque.New(nil),
 	}
 	ts.AddSubTrie(root, 0, common.Hash{}, callback)
 	return ts
@@ -242,27 +242,27 @@ func (s *Sync) schedule(req *request) {
 		return
 	}
 	// Schedule the request for future retrieval
-	s.queue.Push(req.hash, float32(req.depth))
+	s.queue.Push(req.hash, int64(req.depth))
 	s.requests[req.hash] = req
 }
 
 // children retrieves all the missing children of a state trie entry for future
 // retrieval scheduling.
-func (s *Sync) children(req *request, object node) ([]*request, error) {
+func (s *Sync) children(req *request, object Node) ([]*request, error) {
 	// Gather all the children of the node, irrelevant whether known or not
 	type child struct {
-		node  node
+		node  Node
 		depth int
 	}
 	children := []child{}
 
 	switch node := (object).(type) {
-	case *shortNode:
+	case *ShortNode:
 		children = []child{{
 			node:  node.Val,
 			depth: req.depth + len(node.Key),
 		}}
-	case *fullNode:
+	case *FullNode:
 		for i := 0; i < 17; i++ {
 			if node.Children[i] != nil {
 				children = append(children, child{
@@ -279,14 +279,14 @@ func (s *Sync) children(req *request, object node) ([]*request, error) {
 	for _, child := range children {
 		// Notify any external watcher of a new key/value node
 		if req.callback != nil {
-			if node, ok := (child.node).(valueNode); ok {
+			if node, ok := (child.node).(ValueNode); ok {
 				if err := req.callback(node, req.hash); err != nil {
 					return nil, err
 				}
 			}
 		}
 		// If the child references another node, resolve or schedule
-		if node, ok := (child.node).(hashNode); ok {
+		if node, ok := (child.node).(HashNode); ok {
 			// Try to resolve the node from the local database
 			hash := common.BytesToHash(node)
 			if _, ok := s.membatch.batch[hash]; ok {

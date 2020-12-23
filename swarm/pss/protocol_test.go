@@ -27,7 +27,7 @@ import (
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/p2p"
-	"github.com/ethereum/go-ethereum/p2p/discover"
+	"github.com/ethereum/go-ethereum/p2p/enode"
 	"github.com/ethereum/go-ethereum/swarm/log"
 )
 
@@ -92,12 +92,18 @@ func testProtocol(t *testing.T) {
 	lmsgC := make(chan APIMsg)
 	lctx, cancel := context.WithTimeout(context.Background(), time.Second*10)
 	defer cancel()
-	lsub, err := clients[0].Subscribe(lctx, "pss", lmsgC, "receive", topic)
+	lsub, err := clients[0].Subscribe(lctx, "pss", lmsgC, "receive", topic, false, false)
+	if err != nil {
+		t.Fatal(err)
+	}
 	defer lsub.Unsubscribe()
 	rmsgC := make(chan APIMsg)
 	rctx, cancel := context.WithTimeout(context.Background(), time.Second*10)
 	defer cancel()
-	rsub, err := clients[1].Subscribe(rctx, "pss", rmsgC, "receive", topic)
+	rsub, err := clients[1].Subscribe(rctx, "pss", rmsgC, "receive", topic, false, false)
+	if err != nil {
+		t.Fatal(err)
+	}
 	defer rsub.Unsubscribe()
 
 	// set reciprocal public keys
@@ -111,8 +117,7 @@ func testProtocol(t *testing.T) {
 	}
 
 	// add right peer's public key as protocol peer on left
-	nid, _ := discover.HexID("0x00") // this hack is needed to satisfy the p2p method
-	p := p2p.NewPeer(nid, fmt.Sprintf("%x", common.FromHex(loaddrhex)), []p2p.Cap{})
+	p := p2p.NewPeer(enode.ID{}, fmt.Sprintf("%x", common.FromHex(loaddrhex)), []p2p.Cap{})
 	_, err = pssprotocols[lnodeinfo.ID].protocol.AddPeer(p, PingTopic, true, rpubkey)
 	if err != nil {
 		t.Fatal(err)
@@ -125,6 +130,7 @@ func testProtocol(t *testing.T) {
 		log.Debug("lnode ok")
 	case cerr := <-lctx.Done():
 		t.Fatalf("test message timed out: %v", cerr)
+		return
 	}
 	select {
 	case <-rmsgC:

@@ -86,7 +86,7 @@ func Sign(msg []byte, seckey []byte) ([]byte, error) {
 	return sig, nil
 }
 
-// RecoverPubkey returns the the public key of the signer.
+// RecoverPubkey returns the public key of the signer.
 // msg must be the 32-byte hash of the message to be signed.
 // sig must be a 65-byte compact ECDSA signature containing the
 // recovery id as the last element.

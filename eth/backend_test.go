@@ -16,7 +16,7 @@ func TestRewardInflation(t *testing.T) {
 			t.Error("Fail tor calculate reward inflation for 2 -> 5 years", "chainReward", chainReward)
 		}
 
-		quarterReward := new(big.Int).Mul(new(big.Int).SetUint64(62.5*1000), new(big.Int).SetUint64(params.Finney))
+		quarterReward := new(big.Int).Mul(new(big.Int).SetUint64(62.5*1000), new(big.Int).SetUint64(1e15))
 		if 60 <= i && chainReward.Cmp(quarterReward) != 0 {
 			t.Error("Fail tor calculate reward inflation above 6 years", "chainReward", chainReward)
 		}

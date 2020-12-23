@@ -29,7 +29,7 @@ type Memory struct {
 	lastGasCost uint64
 }
 
-// NewMemory returns a new memory memory model.
+// NewMemory returns a new memory model.
 func NewMemory() *Memory {
 	return &Memory{}
 }

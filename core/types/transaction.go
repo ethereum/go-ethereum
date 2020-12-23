@@ -22,7 +22,6 @@ import (
 	"io"
 	"math/big"
 	"sync/atomic"
-	"fmt"
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/hexutil"
@@ -129,7 +128,7 @@ func isProtectedV(V *big.Int) bool {
 		v := V.Uint64()
 		return v != 27 && v != 28
 	}
-	// anything not 27 or 28 are considered unprotected
+	// anything not 27 or 28 is considered protected
 	return true
 }
 
@@ -163,16 +162,21 @@ func (tx *Transaction) UnmarshalJSON(input []byte) error {
 	if err := dec.UnmarshalJSON(input); err != nil {
 		return err
 	}
-	var V byte
-	if isProtectedV(dec.V) {
-		chainID := deriveChainId(dec.V).Uint64()
-		V = byte(dec.V.Uint64() - 35 - 2*chainID)
-	} else {
-		V = byte(dec.V.Uint64() - 27)
+
+	withSignature := dec.V.Sign() != 0 || dec.R.Sign() != 0 || dec.S.Sign() != 0
+	if withSignature {
+		var V byte
+		if isProtectedV(dec.V) {
+			chainID := deriveChainId(dec.V).Uint64()
+			V = byte(dec.V.Uint64() - 35 - 2*chainID)
+		} else {
+			V = byte(dec.V.Uint64() - 27)
+		}
+		if !crypto.ValidateSignatureValues(V, dec.R, dec.S, false) {
+			return ErrInvalidSig
+		}
 	}
-	if !crypto.ValidateSignatureValues(V, dec.R, dec.S, false) {
-		return ErrInvalidSig
-	}
+
 	*tx = Transaction{data: dec}
 	return nil
 }
@@ -257,7 +261,7 @@ func (tx *Transaction) AsMessage(s Signer) (Message, error) {
 }
 
 // WithSignature returns a new transaction with the given signature.
-// This signature needs to be formatted as described in the yellow paper (v+27).
+// This signature needs to be in the [R || S || V] format where V is 0 or 1.
 func (tx *Transaction) WithSignature(signer Signer, sig []byte) (*Transaction, error) {
 	r, s, v, err := signer.SignatureValues(tx, sig)
 	if err != nil {
@@ -346,58 +350,6 @@ func (tx *Transaction) IsVotingTransaction() (bool, *common.Address) {
 	return b, nil
 }
 
-func (tx *Transaction) String() string {
-	var from, to string
-	if tx.data.V != nil {
-		// make a best guess about the signer and use that to derive
-		// the sender.
-		signer := deriveSigner(tx.data.V)
-		if f, err := Sender(signer, tx); err != nil { // derive but don't cache
-			from = "[invalid sender: invalid sig]"
-		} else {
-			from = fmt.Sprintf("%x", f[:])
-		}
-	} else {
-		from = "[invalid sender: nil V field]"
-	}
-
-	if tx.data.Recipient == nil {
-		to = "[contract creation]"
-	} else {
-		to = fmt.Sprintf("%x", tx.data.Recipient[:])
-	}
-	enc, _ := rlp.EncodeToBytes(&tx.data)
-	return fmt.Sprintf(`
-	TX(%x)
-	Contract: %v
-	From:     %s
-	To:       %s
-	Nonce:    %v
-	GasPrice: %#x
-	GasLimit  %#x
-	Value:    %#x
-	Data:     0x%x
-	V:        %#x
-	R:        %#x
-	S:        %#x
-	Hex:      %x
-`,
-		tx.Hash(),
-		tx.data.Recipient == nil,
-		from,
-		to,
-		tx.data.AccountNonce,
-		tx.data.Price,
-		tx.data.GasLimit,
-		tx.data.Amount,
-		tx.data.Payload,
-		tx.data.V,
-		tx.data.R,
-		tx.data.S,
-		enc,
-	)
-}
-
 // Transactions is a Transaction slice type for basic sorting.
 type Transactions []*Transaction
 
@@ -478,17 +430,14 @@ type TransactionsByPriceAndNonce struct {
 // It also classifies special txs and normal txs
 func NewTransactionsByPriceAndNonce(signer Signer, txs map[common.Address]Transactions, signers map[common.Address]struct{}) (*TransactionsByPriceAndNonce, Transactions) {
 	// Initialize a price based heap with the head transactions
-	heads := make(TxByPrice, 0, len(txs))
+	heads := TxByPrice{}
 	specialTxs := Transactions{}
-	// for from, accTxs := range txs {
-	// 	heads = append(heads, accTxs[0])
-		// Ensure the sender address is from the signer
-	for _, accTxs := range txs {
-		from, _ := Sender(signer, accTxs[0])
+	for from, accTxs := range txs {
+		acc, _ := Sender(signer, accTxs[0])
 		var normalTxs Transactions
 		lastSpecialTx := -1
 		if len(signers) > 0 {
-			if _, ok := signers[from]; ok {
+			if _, ok := signers[acc]; ok {
 				for i, tx := range accTxs {
 					if tx.IsSpecialTransaction() {
 						lastSpecialTx = i
@@ -507,14 +456,11 @@ func NewTransactionsByPriceAndNonce(signer Signer, txs map[common.Address]Transa
 		if len(normalTxs) > 0 {
 			heads = append(heads, normalTxs[0])
 			// Ensure the sender address is from the signer
-			txs[from] = normalTxs[1:]
+			txs[acc] = normalTxs[1:]
+			if from != acc {
+				delete(txs, from)
+			}
 		}
-		// TODO : Check later
-		// acc, _ := Sender(signer, accTxs[0])
-		// txs[acc] = accTxs[1:]
-		// if from != acc {
-		// 	delete(txs, from)
-		// }
 	}
 	heap.Init(&heads)
 

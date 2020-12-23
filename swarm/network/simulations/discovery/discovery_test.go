@@ -18,16 +18,12 @@ package discovery
 
 import (
 	"context"
-	"encoding/json"
-	"errors"
 	"flag"
 	"fmt"
 	"io/ioutil"
-	"math/rand"
 	"os"
 	"path"
 	"strings"
-	"sync"
 	"testing"
 	"time"
 
@@ -35,7 +31,7 @@ import (
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/node"
 	"github.com/ethereum/go-ethereum/p2p"
-	"github.com/ethereum/go-ethereum/p2p/discover"
+	"github.com/ethereum/go-ethereum/p2p/enode"
 	"github.com/ethereum/go-ethereum/p2p/simulations"
 	"github.com/ethereum/go-ethereum/p2p/simulations/adapters"
 	"github.com/ethereum/go-ethereum/swarm/network"
@@ -46,7 +42,7 @@ import (
 // serviceName is used with the exec adapter so the exec'd binary knows which
 // service to execute
 const serviceName = "discovery"
-const testMinProxBinSize = 2
+const testNeighbourhoodSize = 2
 const discoveryPersistenceDatadir = "discovery_persistence_test_store"
 
 var discoveryPersistencePath = path.Join(os.TempDir(), discoveryPersistenceDatadir)
@@ -86,11 +82,10 @@ func getDbStore(nodeID string) (*state.DBStore, error) {
 }
 
 var (
-	nodeCount    = flag.Int("nodes", 10, "number of nodes to create (default 10)")
-	initCount    = flag.Int("conns", 1, "number of originally connected peers	 (default 1)")
-	snapshotFile = flag.String("snapshot", "", "create snapshot")
-	loglevel     = flag.Int("loglevel", 3, "verbosity of logs")
-	rawlog       = flag.Bool("rawlog", false, "remove terminal formatting from logs")
+	nodeCount = flag.Int("nodes", 32, "number of nodes to create (default 32)")
+	initCount = flag.Int("conns", 1, "number of originally connected peers	 (default 1)")
+	loglevel  = flag.Int("loglevel", 3, "verbosity of logs")
+	rawlog    = flag.Bool("rawlog", false, "remove terminal formatting from logs")
 )
 
 func init() {
@@ -125,22 +120,6 @@ func BenchmarkDiscovery_32_4(b *testing.B)  { benchmarkDiscovery(b, 32, 4) }
 func BenchmarkDiscovery_64_4(b *testing.B)  { benchmarkDiscovery(b, 64, 4) }
 func BenchmarkDiscovery_128_4(b *testing.B) { benchmarkDiscovery(b, 128, 4) }
 func BenchmarkDiscovery_256_4(b *testing.B) { benchmarkDiscovery(b, 256, 4) }
-
-func TestDiscoverySimulationDockerAdapter(t *testing.T) {
-	testDiscoverySimulationDockerAdapter(t, *nodeCount, *initCount)
-}
-
-func testDiscoverySimulationDockerAdapter(t *testing.T, nodes, conns int) {
-	adapter, err := adapters.NewDockerAdapter()
-	if err != nil {
-		if err == adapters.ErrLinuxOnly {
-			t.Skip(err)
-		} else {
-			t.Fatal(err)
-		}
-	}
-	testDiscoverySimulation(t, nodes, conns, adapter)
-}
 
 func TestDiscoverySimulationExecAdapter(t *testing.T) {
 	testDiscoverySimulationExecAdapter(t, *nodeCount, *initCount)
@@ -237,8 +216,8 @@ func discoverySimulation(nodes, conns int, adapter adapters.NodeAdapter) (*simul
 		DefaultService: serviceName,
 	})
 	defer net.Shutdown()
-	trigger := make(chan discover.NodeID)
-	ids := make([]discover.NodeID, nodes)
+	trigger := make(chan enode.ID)
+	ids := make([]enode.ID, nodes)
 	for i := 0; i < nodes; i++ {
 		conf := adapters.RandomNodeConfig()
 		node, err := net.NewNodeWithConfig(conf)
@@ -260,29 +239,18 @@ func discoverySimulation(nodes, conns int, adapter adapters.NodeAdapter) (*simul
 	action := func(ctx context.Context) error {
 		return nil
 	}
-	wg := sync.WaitGroup{}
 	for i := range ids {
 		// collect the overlay addresses, to
-		addrs = append(addrs, network.ToOverlayAddr(ids[i].Bytes()))
-		for j := 0; j < conns; j++ {
-			var k int
-			if j == 0 {
-				k = (i + 1) % len(ids)
-			} else {
-				k = rand.Intn(len(ids))
-			}
-			wg.Add(1)
-			go func(i, k int) {
-				defer wg.Done()
-				net.Connect(ids[i], ids[k])
-			}(i, k)
-		}
+		addrs = append(addrs, ids[i].Bytes())
 	}
-	wg.Wait()
+	err := net.ConnectNodesChain(nil)
+	if err != nil {
+		return nil, err
+	}
 	log.Debug(fmt.Sprintf("nodes: %v", len(addrs)))
 	// construct the peer pot, so that kademlia health can be checked
-	ppmap := network.NewPeerPotMap(testMinProxBinSize, addrs)
-	check := func(ctx context.Context, id discover.NodeID) (bool, error) {
+	ppmap := network.NewPeerPotMap(network.NewKadParams().NeighbourhoodSize, addrs)
+	check := func(ctx context.Context, id enode.ID) (bool, error) {
 		select {
 		case <-ctx.Done():
 			return false, ctx.Err()
@@ -297,13 +265,13 @@ func discoverySimulation(nodes, conns int, adapter adapters.NodeAdapter) (*simul
 		if err != nil {
 			return false, fmt.Errorf("error getting node client: %s", err)
 		}
+
 		healthy := &network.Health{}
-		addr := common.Bytes2Hex(network.ToOverlayAddr(id.Bytes()))
-		if err := client.Call(&healthy, "hive_healthy", ppmap[addr]); err != nil {
+		if err := client.Call(&healthy, "hive_getHealthInfo", ppmap[common.Bytes2Hex(id.Bytes())]); err != nil {
 			return false, fmt.Errorf("error getting node health: %s", err)
 		}
-		log.Debug(fmt.Sprintf("node %4s healthy: got nearest neighbours: %v, know nearest neighbours: %v, saturated: %v\n%v", id, healthy.GotNN, healthy.KnowNN, healthy.Full, healthy.Hive))
-		return healthy.KnowNN && healthy.GotNN && healthy.Full, nil
+		log.Debug(fmt.Sprintf("node %4s healthy: connected nearest neighbours: %v, know nearest neighbours: %v,\n\n%v", id, healthy.ConnectNN, healthy.KnowNN, healthy.Hive))
+		return healthy.KnowNN && healthy.ConnectNN, nil
 	}
 
 	// 64 nodes ~ 1min
@@ -322,22 +290,6 @@ func discoverySimulation(nodes, conns int, adapter adapters.NodeAdapter) (*simul
 	if result.Error != nil {
 		return result, nil
 	}
-
-	if *snapshotFile != "" {
-		snap, err := net.Snapshot()
-		if err != nil {
-			return nil, errors.New("no shapshot dude")
-		}
-		jsonsnapshot, err := json.Marshal(snap)
-		if err != nil {
-			return nil, fmt.Errorf("corrupt json snapshot: %v", err)
-		}
-		log.Info("writing snapshot", "file", *snapshotFile)
-		err = ioutil.WriteFile(*snapshotFile, jsonsnapshot, 0755)
-		if err != nil {
-			return nil, err
-		}
-	}
 	return result, nil
 }
 
@@ -351,8 +303,8 @@ func discoveryPersistenceSimulation(nodes, conns int, adapter adapters.NodeAdapt
 		DefaultService: serviceName,
 	})
 	defer net.Shutdown()
-	trigger := make(chan discover.NodeID)
-	ids := make([]discover.NodeID, nodes)
+	trigger := make(chan enode.ID)
+	ids := make([]enode.ID, nodes)
 	var addrs [][]byte
 
 	for i := 0; i < nodes; i++ {
@@ -370,15 +322,15 @@ func discoveryPersistenceSimulation(nodes, conns int, adapter adapters.NodeAdapt
 		if err := triggerChecks(trigger, net, node.ID()); err != nil {
 			return nil, fmt.Errorf("error triggering checks for node %s: %s", node.ID().TerminalString(), err)
 		}
+		// TODO we shouldn't be equating underaddr and overaddr like this, as they are not the same in production
 		ids[i] = node.ID()
-		a := network.ToOverlayAddr(ids[i].Bytes())
+		a := ids[i].Bytes()
 
 		addrs = append(addrs, a)
 	}
 
 	// run a simulation which connects the 10 nodes in a ring and waits
 	// for full peer discovery
-	ppmap := network.NewPeerPotMap(testMinProxBinSize, addrs)
 
 	var restartTime time.Time
 
@@ -398,13 +350,19 @@ func discoveryPersistenceSimulation(nodes, conns int, adapter adapters.NodeAdapt
 					return fmt.Errorf("error getting node client: %s", err)
 				}
 				healthy := &network.Health{}
-				addr := common.Bytes2Hex(network.ToOverlayAddr(id.Bytes()))
-				if err := client.Call(&healthy, "hive_healthy", ppmap[addr]); err != nil {
+				addr := id.String()
+				ppmap := network.NewPeerPotMap(network.NewKadParams().NeighbourhoodSize, addrs)
+				if err := client.Call(&healthy, "hive_getHealthInfo", ppmap[common.Bytes2Hex(id.Bytes())]); err != nil {
 					return fmt.Errorf("error getting node health: %s", err)
 				}
 
-				log.Info(fmt.Sprintf("NODE: %s, IS HEALTHY: %t", id.String(), healthy.GotNN && healthy.KnowNN && healthy.Full))
-				if !healthy.GotNN || !healthy.Full {
+				log.Info(fmt.Sprintf("NODE: %s, IS HEALTHY: %t", addr, healthy.ConnectNN && healthy.KnowNN && healthy.CountKnowNN > 0))
+				var nodeStr string
+				if err := client.Call(&nodeStr, "hive_string"); err != nil {
+					return fmt.Errorf("error getting node string %s", err)
+				}
+				log.Info(nodeStr)
+				if !healthy.ConnectNN || healthy.CountKnowNN == 0 {
 					isHealthy = false
 					break
 				}
@@ -443,26 +401,10 @@ func discoveryPersistenceSimulation(nodes, conns int, adapter adapters.NodeAdapt
 
 		return nil
 	}
-	//connects in a chain
-	wg := sync.WaitGroup{}
-	//connects in a ring
-	for i := range ids {
-		for j := 1; j <= conns; j++ {
-			k := (i + j) % len(ids)
-			if k == i {
-				k = (k + 1) % len(ids)
-			}
-			wg.Add(1)
-			go func(i, k int) {
-				defer wg.Done()
-				net.Connect(ids[i], ids[k])
-			}(i, k)
-		}
-	}
-	wg.Wait()
+	net.ConnectNodesChain(nil)
 	log.Debug(fmt.Sprintf("nodes: %v", len(addrs)))
 	// construct the peer pot, so that kademlia health can be checked
-	check := func(ctx context.Context, id discover.NodeID) (bool, error) {
+	check := func(ctx context.Context, id enode.ID) (bool, error) {
 		select {
 		case <-ctx.Done():
 			return false, ctx.Err()
@@ -478,13 +420,14 @@ func discoveryPersistenceSimulation(nodes, conns int, adapter adapters.NodeAdapt
 			return false, fmt.Errorf("error getting node client: %s", err)
 		}
 		healthy := &network.Health{}
-		addr := common.Bytes2Hex(network.ToOverlayAddr(id.Bytes()))
-		if err := client.Call(&healthy, "hive_healthy", ppmap[addr]); err != nil {
+		ppmap := network.NewPeerPotMap(network.NewKadParams().NeighbourhoodSize, addrs)
+
+		if err := client.Call(&healthy, "hive_getHealthInfo", ppmap[common.Bytes2Hex(id.Bytes())]); err != nil {
 			return false, fmt.Errorf("error getting node health: %s", err)
 		}
-		log.Info(fmt.Sprintf("node %4s healthy: got nearest neighbours: %v, know nearest neighbours: %v, saturated: %v", id, healthy.GotNN, healthy.KnowNN, healthy.Full))
+		log.Info(fmt.Sprintf("node %4s healthy: got nearest neighbours: %v, know nearest neighbours: %v", id, healthy.ConnectNN, healthy.KnowNN))
 
-		return healthy.KnowNN && healthy.GotNN && healthy.Full, nil
+		return healthy.KnowNN && healthy.ConnectNN, nil
 	}
 
 	// 64 nodes ~ 1min
@@ -510,7 +453,7 @@ func discoveryPersistenceSimulation(nodes, conns int, adapter adapters.NodeAdapt
 // triggerChecks triggers a simulation step check whenever a peer is added or
 // removed from the given node, and also every second to avoid a race between
 // peer events and kademlia becoming healthy
-func triggerChecks(trigger chan discover.NodeID, net *simulations.Network, id discover.NodeID) error {
+func triggerChecks(trigger chan enode.ID, net *simulations.Network, id enode.ID) error {
 	node := net.GetNode(id)
 	if node == nil {
 		return fmt.Errorf("unknown node: %s", id)
@@ -548,16 +491,14 @@ func triggerChecks(trigger chan discover.NodeID, net *simulations.Network, id di
 }
 
 func newService(ctx *adapters.ServiceContext) (node.Service, error) {
-	host := adapters.ExternalIP()
-
-	addr := network.NewAddrFromNodeIDAndPort(ctx.Config.ID, host, ctx.Config.Port)
+	addr := network.NewAddr(ctx.Config.Node())
 
 	kp := network.NewKadParams()
-	kp.MinProxBinSize = testMinProxBinSize
+	kp.NeighbourhoodSize = testNeighbourhoodSize
 
 	if ctx.Config.Reachable != nil {
-		kp.Reachable = func(o network.OverlayAddr) bool {
-			return ctx.Config.Reachable(o.(*network.BzzAddr).ID())
+		kp.Reachable = func(o *network.BzzAddr) bool {
+			return ctx.Config.Reachable(o.ID())
 		}
 	}
 	kad := network.NewKademlia(addr.Over(), kp)

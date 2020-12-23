@@ -17,9 +17,6 @@ type EWMA interface {
 
 // NewEWMA constructs a new EWMA with the given alpha.
 func NewEWMA(alpha float64) EWMA {
-	if !Enabled {
-		return NilEWMA{}
-	}
 	return &StandardEWMA{alpha: alpha}
 }
 

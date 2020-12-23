@@ -101,7 +101,7 @@ func (i *Intervals) add(start, end uint64) {
 	}
 }
 
-// Merge adds all the intervals from the the m Interval to current one.
+// Merge adds all the intervals from the m Interval to current one.
 func (i *Intervals) Merge(m *Intervals) {
 	m.mu.RLock()
 	defer m.mu.RUnlock()

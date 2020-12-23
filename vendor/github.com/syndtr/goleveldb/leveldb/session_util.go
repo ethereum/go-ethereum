@@ -36,7 +36,7 @@ func (s *session) logf(format string, v ...interface{}) { s.stor.Log(fmt.Sprintf
 
 func (s *session) newTemp() storage.FileDesc {
 	num := atomic.AddInt64(&s.stTempFileNum, 1) - 1
-	return storage.FileDesc{storage.TypeTemp, num}
+	return storage.FileDesc{Type: storage.TypeTemp, Num: num}
 }
 
 func (s *session) addFileRef(fd storage.FileDesc, ref int) int {
@@ -190,7 +190,7 @@ func (s *session) recordCommited(rec *sessionRecord) {
 
 // Create a new manifest file; need external synchronization.
 func (s *session) newManifest(rec *sessionRecord, v *version) (err error) {
-	fd := storage.FileDesc{storage.TypeManifest, s.allocFileNum()}
+	fd := storage.FileDesc{Type: storage.TypeManifest, Num: s.allocFileNum()}
 	writer, err := s.stor.Create(fd)
 	if err != nil {
 		return

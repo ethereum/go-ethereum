@@ -32,7 +32,6 @@ import (
 
 	"github.com/ethereum/go-ethereum/accounts"
 	"github.com/ethereum/go-ethereum/accounts/abi/bind"
-	"github.com/ethereum/go-ethereum/core/rawdb"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/ethereum/go-ethereum/consensus"
@@ -40,6 +39,7 @@ import (
 	"github.com/ethereum/go-ethereum/contracts/blocksigner/contract"
 	randomizeContract "github.com/ethereum/go-ethereum/contracts/randomize/contract"
 	"github.com/ethereum/go-ethereum/core"
+	"github.com/ethereum/go-ethereum/core/rawdb"
 	"github.com/ethereum/go-ethereum/core/state"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/ethdb"
@@ -329,8 +329,6 @@ func GetRewardForCheckpoint(c *XDPoS.XDPoS, chain consensus.ChainReader, header 
 			if !chain.Config().IsTIPSigning(header.Number) {
 				receipts := rawdb.ReadReceipts(c.GetDb(), header.Hash(), i)
 				signData = c.CacheData(header, txs, receipts)
-				// receipts := core.GetBlockReceipts(c.GetDb(), header.Hash(), i)
-				// signData = c.CacheData(header, txs, receipts)
 			} else {
 				signData = c.CacheSigner(header.Hash(), txs)
 			}

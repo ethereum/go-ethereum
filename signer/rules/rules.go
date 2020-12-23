@@ -194,6 +194,11 @@ func (r *rulesetUI) ApproveImport(request *core.ImportRequest) (core.ImportRespo
 	return r.next.ApproveImport(request)
 }
 
+// OnInputRequired not handled by rules
+func (r *rulesetUI) OnInputRequired(info core.UserInputRequest) (core.UserInputResponse, error) {
+	return r.next.OnInputRequired(info)
+}
+
 func (r *rulesetUI) ApproveListing(request *core.ListRequest) (core.ListResponse, error) {
 	jsonreq, err := json.Marshal(request)
 	approved, err := r.checkApproval("ApproveListing", jsonreq, err)
@@ -222,6 +227,7 @@ func (r *rulesetUI) ShowInfo(message string) {
 	log.Info(message)
 	r.next.ShowInfo(message)
 }
+
 func (r *rulesetUI) OnSignerStartup(info core.StartupInfo) {
 	jsonInfo, err := json.Marshal(info)
 	if err != nil {

@@ -56,14 +56,14 @@ func (method Method) Sig() string {
 func (method Method) String() string {
 	inputs := make([]string, len(method.Inputs))
 	for i, input := range method.Inputs {
-		inputs[i] = fmt.Sprintf("%v %v", input.Name, input.Type)
+		inputs[i] = fmt.Sprintf("%v %v", input.Type, input.Name)
 	}
 	outputs := make([]string, len(method.Outputs))
 	for i, output := range method.Outputs {
+		outputs[i] = output.Type.String()
 		if len(output.Name) > 0 {
-			outputs[i] = fmt.Sprintf("%v ", output.Name)
+			outputs[i] += fmt.Sprintf(" %v", output.Name)
 		}
-		outputs[i] += output.Type.String()
 	}
 	constant := ""
 	if method.Const {

@@ -58,6 +58,34 @@ func InfluxDBWithTags(r metrics.Registry, d time.Duration, url, database, userna
 	rep.run()
 }
 
+// InfluxDBWithTagsOnce runs once an InfluxDB reporter and post the given metrics.Registry with the specified tags
+func InfluxDBWithTagsOnce(r metrics.Registry, url, database, username, password, namespace string, tags map[string]string) error {
+	u, err := uurl.Parse(url)
+	if err != nil {
+		return fmt.Errorf("Unable to parse InfluxDB. url: %s, err: %v", url, err)
+	}
+
+	rep := &reporter{
+		reg:       r,
+		url:       *u,
+		database:  database,
+		username:  username,
+		password:  password,
+		namespace: namespace,
+		tags:      tags,
+		cache:     make(map[string]int64),
+	}
+	if err := rep.makeClient(); err != nil {
+		return fmt.Errorf("Unable to make InfluxDB client. err: %v", err)
+	}
+
+	if err := rep.send(); err != nil {
+		return fmt.Errorf("Unable to send to InfluxDB. err: %v", err)
+	}
+
+	return nil
+}
+
 func (r *reporter) makeClient() (err error) {
 	r.client, err = client.NewClient(client.Config{
 		URL:      r.url,

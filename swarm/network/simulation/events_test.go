@@ -59,7 +59,7 @@ func TestPeerEvents(t *testing.T) {
 		}
 	}()
 
-	err = sim.ConnectNodesChain(sim.NodeIDs())
+	err = sim.Net.ConnectNodesChain(sim.NodeIDs())
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -81,6 +81,7 @@ func TestPeerEventsTimeout(t *testing.T) {
 	events := sim.PeerEvents(ctx, sim.NodeIDs())
 
 	done := make(chan struct{})
+	errC := make(chan error)
 	go func() {
 		for e := range events {
 			if e.Error == context.Canceled {
@@ -90,14 +91,16 @@ func TestPeerEventsTimeout(t *testing.T) {
 				close(done)
 				return
 			} else {
-				t.Fatal(e.Error)
+				errC <- e.Error
 			}
 		}
 	}()
 
 	select {
 	case <-time.After(time.Second):
-		t.Error("no context deadline received")
+		t.Fatal("no context deadline received")
+	case err := <-errC:
+		t.Fatal(err)
 	case <-done:
 		// all good, context deadline detected
 	}

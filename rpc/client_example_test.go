@@ -25,7 +25,7 @@ import (
 	"github.com/ethereum/go-ethereum/rpc"
 )
 
-// In this example, our client whishes to track the latest 'block number'
+// In this example, our client wishes to track the latest 'block number'
 // known to the server. The server supports two methods:
 //
 // eth_getBlockByNumber("latest", {})
@@ -66,7 +66,7 @@ func subscribeBlocks(client *rpc.Client, subch chan Block) {
 	defer cancel()
 
 	// Subscribe to new blocks.
-	sub, err := client.EthSubscribe(ctx, subch, "newBlocks")
+	sub, err := client.EthSubscribe(ctx, subch, "newHeads")
 	if err != nil {
 		fmt.Println("subscribe error:", err)
 		return
