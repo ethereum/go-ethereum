@@ -171,7 +171,7 @@ func New(stack *node.Node, config *eth.Config) (*LightEthereum, error) {
 		leth.blockchain.DisableCheckFreq()
 	}
 
-	leth.netRPCService = ethapi.NewPublicNetAPI(leth.p2pServer)
+	leth.netRPCService = ethapi.NewPublicNetAPI(leth.p2pServer, leth.config.NetworkId)
 
 	// Register the backend on the node
 	stack.RegisterAPIs(leth.APIs())

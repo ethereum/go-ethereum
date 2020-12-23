@@ -1900,12 +1900,13 @@ func (api *PrivateDebugAPI) SetHead(number hexutil.Uint64) {
 
 // PublicNetAPI offers network related RPC methods
 type PublicNetAPI struct {
-	net *p2p.Server
+	net            *p2p.Server
+	networkVersion uint64
 }
 
 // NewPublicNetAPI creates a new net API instance.
-func NewPublicNetAPI(net *p2p.Server) *PublicNetAPI {
-	return &PublicNetAPI{net}
+func NewPublicNetAPI(net *p2p.Server, networkVersion uint64) *PublicNetAPI {
+	return &PublicNetAPI{net, networkVersion}
 }
 
 // Listening returns an indication if the node is listening for network connections.
@@ -1916,6 +1917,11 @@ func (s *PublicNetAPI) Listening() bool {
 // PeerCount returns the number of connected peers
 func (s *PublicNetAPI) PeerCount() hexutil.Uint {
 	return hexutil.Uint(s.net.PeerCount())
+}
+
+// Version returns the current ethereum protocol version.
+func (s *PublicNetAPI) Version() string {
+	return fmt.Sprintf("%d", s.networkVersion)
 }
 
 // checkTxFee is an internal function used to check whether the fee of
