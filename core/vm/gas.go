@@ -30,6 +30,18 @@ const (
 	GasExtStep     uint64 = 20
 )
 
+// createGas returns the actual gas available for the call.
+//
+// The cost of gas was changed during the homestead price change HF.
+// As part of EIP 150 (TangerineWhistle), the returned gas is gas - gas * 63 / 64.
+func createGasEip150(isEip150 bool, availableGas uint64) (uint64, error) {
+	if isEip150 {
+		gas := availableGas - availableGas/64
+		return gas, nil
+	}
+	return availableGas, nil
+}
+
 // callGas returns the actual gas cost of the call.
 //
 // The cost of gas was changed during the homestead price change HF.

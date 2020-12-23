@@ -535,3 +535,15 @@ func (api *PrivateDebugAPI) getModifiedAccounts(startBlock, endBlock *types.Bloc
 	}
 	return dirty, nil
 }
+
+// PrivateTraceAPI is the collection of Ethereum full node APIs exposed over
+// the private trace endpoint.
+type PrivateTraceAPI struct {
+	eth *Ethereum
+}
+
+// NewPrivateTraceAPI creates a new API definition for the full node-related
+// private trace methods of the Ethereum service.
+func NewPrivateTraceAPI(eth *Ethereum) *PrivateTraceAPI {
+	return &PrivateTraceAPI{eth: eth}
+}

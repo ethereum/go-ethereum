@@ -599,15 +599,11 @@ func opCreate(pc *uint64, interpreter *EVMInterpreter, callContext *callCtx) ([]
 		value        = callContext.stack.pop()
 		offset, size = callContext.stack.pop(), callContext.stack.pop()
 		input        = callContext.memory.GetCopy(int64(offset.Uint64()), int64(size.Uint64()))
-		gas          = callContext.contract.Gas
+		gas          = interpreter.evm.CallGasTemp
 	)
-	if interpreter.evm.chainRules.IsEIP150 {
-		gas -= gas / 64
-	}
 	// reuse size int for stackvalue
 	stackvalue := size
 
-	callContext.contract.UseGas(gas)
 	//TODO: use uint256.Int instead of converting with toBig()
 	var bigVal = big0
 	if !value.IsZero() {
@@ -621,8 +617,10 @@ func opCreate(pc *uint64, interpreter *EVMInterpreter, callContext *callCtx) ([]
 	// ignore this error and pretend the operation was successful.
 	if interpreter.evm.chainRules.IsHomestead && suberr == ErrCodeStoreOutOfGas {
 		stackvalue.Clear()
+		interpreter.evm.CallErrorTemp = suberr // temp storage, for debug tracing
 	} else if suberr != nil && suberr != ErrCodeStoreOutOfGas {
 		stackvalue.Clear()
+		interpreter.evm.CallErrorTemp = suberr // temp storage, for debug tracing
 	} else {
 		stackvalue.SetBytes(addr.Bytes())
 	}
@@ -641,12 +639,8 @@ func opCreate2(pc *uint64, interpreter *EVMInterpreter, callContext *callCtx) ([
 		offset, size = callContext.stack.pop(), callContext.stack.pop()
 		salt         = callContext.stack.pop()
 		input        = callContext.memory.GetCopy(int64(offset.Uint64()), int64(size.Uint64()))
-		gas          = callContext.contract.Gas
+		gas          = interpreter.evm.CallGasTemp
 	)
-
-	// Apply EIP150
-	gas -= gas / 64
-	callContext.contract.UseGas(gas)
 	// reuse size int for stackvalue
 	stackvalue := size
 	//TODO: use uint256.Int instead of converting with toBig()
@@ -659,6 +653,7 @@ func opCreate2(pc *uint64, interpreter *EVMInterpreter, callContext *callCtx) ([
 	// Push item on the stack based on the returned error.
 	if suberr != nil {
 		stackvalue.Clear()
+		interpreter.evm.CallErrorTemp = suberr // temp storage, for debug tracing
 	} else {
 		stackvalue.SetBytes(addr.Bytes())
 	}
@@ -673,10 +668,10 @@ func opCreate2(pc *uint64, interpreter *EVMInterpreter, callContext *callCtx) ([
 
 func opCall(pc *uint64, interpreter *EVMInterpreter, callContext *callCtx) ([]byte, error) {
 	stack := callContext.stack
-	// Pop gas. The actual gas in interpreter.evm.callGasTemp.
+	// Pop gas. The actual gas in interpreter.evm.CallGasTemp.
 	// We can use this as a temporary value
 	temp := stack.pop()
-	gas := interpreter.evm.callGasTemp
+	gas := interpreter.evm.CallGasTemp
 	// Pop other call parameters.
 	addr, value, inOffset, inSize, retOffset, retSize := stack.pop(), stack.pop(), stack.pop(), stack.pop(), stack.pop(), stack.pop()
 	toAddr := common.Address(addr.Bytes20())
@@ -696,6 +691,7 @@ func opCall(pc *uint64, interpreter *EVMInterpreter, callContext *callCtx) ([]by
 
 	if err != nil {
 		temp.Clear()
+		interpreter.evm.CallErrorTemp = err // temp storage, for debug tracing
 	} else {
 		temp.SetOne()
 	}
@@ -709,11 +705,11 @@ func opCall(pc *uint64, interpreter *EVMInterpreter, callContext *callCtx) ([]by
 }
 
 func opCallCode(pc *uint64, interpreter *EVMInterpreter, callContext *callCtx) ([]byte, error) {
-	// Pop gas. The actual gas is in interpreter.evm.callGasTemp.
+	// Pop gas. The actual gas is in interpreter.evm.CallGasTemp.
 	stack := callContext.stack
 	// We use it as a temporary value
 	temp := stack.pop()
-	gas := interpreter.evm.callGasTemp
+	gas := interpreter.evm.CallGasTemp
 	// Pop other call parameters.
 	addr, value, inOffset, inSize, retOffset, retSize := stack.pop(), stack.pop(), stack.pop(), stack.pop(), stack.pop(), stack.pop()
 	toAddr := common.Address(addr.Bytes20())
@@ -730,6 +726,7 @@ func opCallCode(pc *uint64, interpreter *EVMInterpreter, callContext *callCtx) (
 	ret, returnGas, err := interpreter.evm.CallCode(callContext.contract, toAddr, args, gas, bigVal)
 	if err != nil {
 		temp.Clear()
+		interpreter.evm.CallErrorTemp = err // temp storage, for debug tracing
 	} else {
 		temp.SetOne()
 	}
@@ -744,10 +741,10 @@ func opCallCode(pc *uint64, interpreter *EVMInterpreter, callContext *callCtx) (
 
 func opDelegateCall(pc *uint64, interpreter *EVMInterpreter, callContext *callCtx) ([]byte, error) {
 	stack := callContext.stack
-	// Pop gas. The actual gas is in interpreter.evm.callGasTemp.
+	// Pop gas. The actual gas is in interpreter.evm.CallGasTemp.
 	// We use it as a temporary value
 	temp := stack.pop()
-	gas := interpreter.evm.callGasTemp
+	gas := interpreter.evm.CallGasTemp
 	// Pop other call parameters.
 	addr, inOffset, inSize, retOffset, retSize := stack.pop(), stack.pop(), stack.pop(), stack.pop(), stack.pop()
 	toAddr := common.Address(addr.Bytes20())
@@ -757,6 +754,7 @@ func opDelegateCall(pc *uint64, interpreter *EVMInterpreter, callContext *callCt
 	ret, returnGas, err := interpreter.evm.DelegateCall(callContext.contract, toAddr, args, gas)
 	if err != nil {
 		temp.Clear()
+		interpreter.evm.CallErrorTemp = err // temp storage, for debug tracing
 	} else {
 		temp.SetOne()
 	}
@@ -770,11 +768,11 @@ func opDelegateCall(pc *uint64, interpreter *EVMInterpreter, callContext *callCt
 }
 
 func opStaticCall(pc *uint64, interpreter *EVMInterpreter, callContext *callCtx) ([]byte, error) {
-	// Pop gas. The actual gas is in interpreter.evm.callGasTemp.
+	// Pop gas. The actual gas is in interpreter.evm.CallGasTemp.
 	stack := callContext.stack
 	// We use it as a temporary value
 	temp := stack.pop()
-	gas := interpreter.evm.callGasTemp
+	gas := interpreter.evm.CallGasTemp
 	// Pop other call parameters.
 	addr, inOffset, inSize, retOffset, retSize := stack.pop(), stack.pop(), stack.pop(), stack.pop(), stack.pop()
 	toAddr := common.Address(addr.Bytes20())
@@ -784,6 +782,7 @@ func opStaticCall(pc *uint64, interpreter *EVMInterpreter, callContext *callCtx)
 	ret, returnGas, err := interpreter.evm.StaticCall(callContext.contract, toAddr, args, gas)
 	if err != nil {
 		temp.Clear()
+		interpreter.evm.CallErrorTemp = err // temp storage, for debug tracing
 	} else {
 		temp.SetOne()
 	}

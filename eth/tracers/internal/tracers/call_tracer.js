@@ -47,6 +47,7 @@
 				type:    op,
 				from:    toHex(log.contract.getAddress()),
 				input:   toHex(log.memory.slice(inOff, inEnd)),
+				gas:     log.getAvailableGas(),
 				gasIn:   log.getGas(),
 				gasCost: log.getCost(),
 				value:   '0x' + log.stack.peek(0).toString(16)
@@ -125,7 +126,7 @@
 
 			if (call.type == 'CREATE' || call.type == "CREATE2") {
 				// If the call was a CREATE, retrieve the contract address and output code
-				call.gasUsed = '0x' + bigInt(call.gasIn - call.gasCost - log.getGas()).toString(16);
+				call.gasUsed = '0x' + bigInt(call.gas - (log.getGas() - (call.gasIn - call.gasCost))).toString(16);
 				delete call.gasIn; delete call.gasCost;
 
 				var ret = log.stack.peek(0);
