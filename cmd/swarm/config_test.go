@@ -20,19 +20,20 @@ import (
 	"fmt"
 	"io"
 	"io/ioutil"
+	"net"
 	"os"
 	"os/exec"
 	"testing"
 	"time"
 
+	"github.com/docker/docker/pkg/reexec"
+	"github.com/ethereum/go-ethereum/cmd/utils"
 	"github.com/ethereum/go-ethereum/rpc"
 	"github.com/ethereum/go-ethereum/swarm"
 	"github.com/ethereum/go-ethereum/swarm/api"
-
-	"github.com/docker/docker/pkg/reexec"
 )
 
-func TestDumpConfig(t *testing.T) {
+func TestConfigDump(t *testing.T) {
 	swarm := runSwarm(t, "dumpconfig")
 	defaultConf := api.NewConfig()
 	out, err := tomlSettings.Marshal(&defaultConf)
@@ -90,8 +91,8 @@ func TestConfigCmdLineOverrides(t *testing.T) {
 		fmt.Sprintf("--%s", SwarmAccountFlag.Name), account.Address.String(),
 		fmt.Sprintf("--%s", SwarmDeliverySkipCheckFlag.Name),
 		fmt.Sprintf("--%s", EnsAPIFlag.Name), "",
-		"--datadir", dir,
-		"--ipcpath", conf.IPCPath,
+		fmt.Sprintf("--%s", utils.DataDirFlag.Name), dir,
+		fmt.Sprintf("--%s", utils.IPCPathFlag.Name), conf.IPCPath,
 	}
 	node.Cmd = runSwarm(t, flags...)
 	node.Cmd.InputLine(testPassphrase)
@@ -188,9 +189,9 @@ func TestConfigFileOverrides(t *testing.T) {
 	flags := []string{
 		fmt.Sprintf("--%s", SwarmTomlConfigPathFlag.Name), f.Name(),
 		fmt.Sprintf("--%s", SwarmAccountFlag.Name), account.Address.String(),
-		"--ens-api", "",
-		"--ipcpath", conf.IPCPath,
-		"--datadir", dir,
+		fmt.Sprintf("--%s", EnsAPIFlag.Name), "",
+		fmt.Sprintf("--%s", utils.DataDirFlag.Name), dir,
+		fmt.Sprintf("--%s", utils.IPCPathFlag.Name), conf.IPCPath,
 	}
 	node.Cmd = runSwarm(t, flags...)
 	node.Cmd.InputLine(testPassphrase)
@@ -406,9 +407,9 @@ func TestConfigCmdLineOverridesFile(t *testing.T) {
 		fmt.Sprintf("--%s", SwarmSyncDisabledFlag.Name),
 		fmt.Sprintf("--%s", SwarmTomlConfigPathFlag.Name), f.Name(),
 		fmt.Sprintf("--%s", SwarmAccountFlag.Name), account.Address.String(),
-		"--ens-api", "",
-		"--datadir", dir,
-		"--ipcpath", conf.IPCPath,
+		fmt.Sprintf("--%s", EnsAPIFlag.Name), "",
+		fmt.Sprintf("--%s", utils.DataDirFlag.Name), dir,
+		fmt.Sprintf("--%s", utils.IPCPathFlag.Name), conf.IPCPath,
 	}
 	node.Cmd = runSwarm(t, flags...)
 	node.Cmd.InputLine(testPassphrase)
@@ -465,7 +466,7 @@ func TestConfigCmdLineOverridesFile(t *testing.T) {
 	node.Shutdown()
 }
 
-func TestValidateConfig(t *testing.T) {
+func TestConfigValidate(t *testing.T) {
 	for _, c := range []struct {
 		cfg *api.Config
 		err string
@@ -558,4 +559,17 @@ func TestValidateConfig(t *testing.T) {
 			t.Errorf("unexpected error %q", err)
 		}
 	}
+}
+
+func assignTCPPort() (string, error) {
+	l, err := net.Listen("tcp", "127.0.0.1:0")
+	if err != nil {
+		return "", err
+	}
+	l.Close()
+	_, port, err := net.SplitHostPort(l.Addr().String())
+	if err != nil {
+		return "", err
+	}
+	return port, nil
 }

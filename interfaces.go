@@ -146,7 +146,7 @@ type FilterQuery struct {
 	// {{A}}              matches topic A in first position
 	// {{}, {B}}          matches any topic in first position, B in second position
 	// {{A}, {B}}         matches topic A in first position, B in second position
-	// {{A, B}}, {C, D}}  matches topic (A OR B) in first position, (C OR D) in second position
+	// {{A, B}, {C, D}}   matches topic (A OR B) in first position, (C OR D) in second position
 	Topics [][]common.Hash
 }
 

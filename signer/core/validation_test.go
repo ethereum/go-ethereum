@@ -85,19 +85,19 @@ func TestValidator(t *testing.T) {
 		{from: "000000000000000000000000000000000000dead", to: "000000000000000000000000000000000000dead",
 			n: "0x01", g: "0x20", gp: "0x40", value: "0x01", numMessages: 1},
 		// valid 0x000000000000000000000000000000000000dEaD
-		{from: "000000000000000000000000000000000000dead", to: "0x000000000000000000000000000000000000dEaD",
+		{from: "000000000000000000000000000000000000dead", to: "xdc000000000000000000000000000000000000dEaD",
 			n: "0x01", g: "0x20", gp: "0x40", value: "0x01", numMessages: 0},
 		// conflicting input and data
 		{from: "000000000000000000000000000000000000dead", to: "0x000000000000000000000000000000000000dEaD",
 			n: "0x01", g: "0x20", gp: "0x40", value: "0x01", d: "0x01", i: "0x02", expectErr: true},
 		// Data can't be parsed
-		{from: "000000000000000000000000000000000000dead", to: "0x000000000000000000000000000000000000dEaD",
+		{from: "000000000000000000000000000000000000dead", to: "xdc000000000000000000000000000000000000dEaD",
 			n: "0x01", g: "0x20", gp: "0x40", value: "0x01", d: "0x0102", numMessages: 1},
 		// Data (on Input) can't be parsed
-		{from: "000000000000000000000000000000000000dead", to: "0x000000000000000000000000000000000000dEaD",
+		{from: "000000000000000000000000000000000000dead", to: "xdc000000000000000000000000000000000000dEaD",
 			n: "0x01", g: "0x20", gp: "0x40", value: "0x01", i: "0x0102", numMessages: 1},
 		// Send to 0
-		{from: "000000000000000000000000000000000000dead", to: "0x0000000000000000000000000000000000000000",
+		{from: "000000000000000000000000000000000000dead", to: "xdc0000000000000000000000000000000000000000",
 			n: "0x01", g: "0x20", gp: "0x40", value: "0x01", numMessages: 1},
 		// Create empty contract (no value)
 		{from: "000000000000000000000000000000000000dead", to: "",
@@ -134,6 +134,32 @@ func TestValidator(t *testing.T) {
 				}
 				fmt.Println()
 			}
+		}
+	}
+}
+
+func TestPasswordValidation(t *testing.T) {
+	testcases := []struct {
+		pw         string
+		shouldFail bool
+	}{
+		{"test", true},
+		{"testtest\xbd\xb2\x3d\xbc\x20\xe2\x8c\x98", true},
+		{"placeOfInterest⌘", true},
+		{"password\nwith\nlinebreak", true},
+		{"password\twith\vtabs", true},
+		// Ok passwords
+		{"password WhichIsOk", false},
+		{"passwordOk!@#$%^&*()", false},
+		{"12301203123012301230123012", false},
+	}
+	for _, test := range testcases {
+		err := ValidatePasswordFormat(test.pw)
+		if err == nil && test.shouldFail {
+			t.Errorf("password '%v' should fail validation", test.pw)
+		} else if err != nil && !test.shouldFail {
+
+			t.Errorf("password '%v' shound not fail validation, but did: %v", test.pw, err)
 		}
 	}
 }

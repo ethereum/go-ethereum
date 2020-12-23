@@ -43,7 +43,8 @@ version: '2'
 services:
   ethstats:
     build: .
-    image: {{.Network}}/ethstats{{if not .VHost}}
+    image: {{.Network}}/ethstats
+    container_name: {{.Network}}_ethstats_1{{if not .VHost}}
     ports:
       - "{{.Port}}:3000"{{end}}
     environment:
@@ -100,9 +101,9 @@ func deployEthstats(client *sshClient, network string, port int, secret string, 
 
 	// Build and deploy the ethstats service
 	if nocache {
-		return nil, client.Stream(fmt.Sprintf("cd %s && docker-compose -p %s build --pull --no-cache && docker-compose -p %s up -d --force-recreate", workdir, network, network))
+		return nil, client.Stream(fmt.Sprintf("cd %s && docker-compose -p %s build --pull --no-cache && docker-compose -p %s up -d --force-recreate --timeout 60", workdir, network, network))
 	}
-	return nil, client.Stream(fmt.Sprintf("cd %s && docker-compose -p %s up -d --build --force-recreate", workdir, network))
+	return nil, client.Stream(fmt.Sprintf("cd %s && docker-compose -p %s up -d --build --force-recreate --timeout 60", workdir, network))
 }
 
 // ethstatsInfos is returned from an ethstats status check to allow reporting

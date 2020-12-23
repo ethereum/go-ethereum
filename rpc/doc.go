@@ -32,7 +32,7 @@ An example method:
  func (s *CalcService) Add(a, b int) (int, error)
 
 When the returned error isn't nil the returned integer is ignored and the error is
-send back to the client. Otherwise the returned integer is send back to the client.
+sent back to the client. Otherwise the returned integer is sent back to the client.
 
 Optional arguments are supported by accepting pointer values as arguments. E.g.
 if we want to do the addition in an optional finite field we can accept a mod

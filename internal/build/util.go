@@ -29,7 +29,6 @@ import (
 	"path/filepath"
 	"runtime"
 	"strings"
-	"text/template"
 )
 
 var DryRunFlag = flag.Bool("n", false, "dry run, don't execute commands")
@@ -89,34 +88,6 @@ func readGitFile(file string) string {
 	return strings.TrimSpace(string(content))
 }
 
-// Render renders the given template file into outputFile.
-func Render(templateFile, outputFile string, outputPerm os.FileMode, x interface{}) {
-	tpl := template.Must(template.ParseFiles(templateFile))
-	render(tpl, outputFile, outputPerm, x)
-}
-
-// RenderString renders the given template string into outputFile.
-func RenderString(templateContent, outputFile string, outputPerm os.FileMode, x interface{}) {
-	tpl := template.Must(template.New("").Parse(templateContent))
-	render(tpl, outputFile, outputPerm, x)
-}
-
-func render(tpl *template.Template, outputFile string, outputPerm os.FileMode, x interface{}) {
-	if err := os.MkdirAll(filepath.Dir(outputFile), 0755); err != nil {
-		log.Fatal(err)
-	}
-	out, err := os.OpenFile(outputFile, os.O_CREATE|os.O_WRONLY|os.O_EXCL, outputPerm)
-	if err != nil {
-		log.Fatal(err)
-	}
-	if err := tpl.Execute(out, x); err != nil {
-		log.Fatal(err)
-	}
-	if err := out.Close(); err != nil {
-		log.Fatal(err)
-	}
-}
-
 // CopyFile copies a file.
 func CopyFile(dst, src string, mode os.FileMode) {
 	if err := os.MkdirAll(filepath.Dir(dst), 0755); err != nil {
@@ -143,9 +114,9 @@ func CopyFile(dst, src string, mode os.FileMode) {
 // so that go commands executed by build use the same version of Go as the 'host' that runs
 // build code. e.g.
 //
-//     /usr/lib/go-1.8/bin/go run build/ci.go ...
+//     /usr/lib/go-1.11/bin/go run build/ci.go ...
 //
-// runs using go 1.8 and invokes go 1.8 tools from the same GOROOT. This is also important
+// runs using go 1.11 and invokes go 1.11 tools from the same GOROOT. This is also important
 // because runtime.Version checks on the host should match the tools that are run.
 func GoTool(tool string, args ...string) *exec.Cmd {
 	args = append([]string{tool}, args...)
@@ -176,4 +147,35 @@ func ExpandPackagesNoVendor(patterns []string) []string {
 		return packages
 	}
 	return patterns
+}
+
+// UploadSFTP uploads files to a remote host using the sftp command line tool.
+// The destination host may be specified either as [user@]host[: or as a URI in
+// the form sftp://[user@]host[:port].
+func UploadSFTP(identityFile, host, dir string, files []string) error {
+	sftp := exec.Command("sftp")
+	sftp.Stdout = nil
+	sftp.Stderr = os.Stderr
+	if identityFile != "" {
+		sftp.Args = append(sftp.Args, "-i", identityFile)
+	}
+	sftp.Args = append(sftp.Args, host)
+	fmt.Println(">>>", strings.Join(sftp.Args, " "))
+	if *DryRunFlag {
+		return nil
+	}
+
+	stdin, err := sftp.StdinPipe()
+	if err != nil {
+		return fmt.Errorf("can't create stdin pipe for sftp: %v", err)
+	}
+	if err := sftp.Start(); err != nil {
+		return err
+	}
+	in := io.MultiWriter(stdin, os.Stdout)
+	for _, f := range files {
+		fmt.Fprintln(in, "put", f, path.Join(dir, filepath.Base(f)))
+	}
+	stdin.Close()
+	return sftp.Wait()
 }

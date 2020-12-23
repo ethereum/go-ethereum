@@ -57,12 +57,12 @@ type Snapshot struct {
 	Tally   map[common.Address]Tally    `json:"tally"`   // Current vote tally to avoid recalculating
 }
 
-// signers implements the sort interface to allow sorting a list of addresses
-type signers []common.Address
+// signersAscending implements the sort interface to allow sorting a list of addresses
+type signersAscending []common.Address
 
-func (s signers) Len() int           { return len(s) }
-func (s signers) Less(i, j int) bool { return bytes.Compare(s[i][:], s[j][:]) < 0 }
-func (s signers) Swap(i, j int)      { s[i], s[j] = s[j], s[i] }
+func (s signersAscending) Len() int           { return len(s) }
+func (s signersAscending) Less(i, j int) bool { return bytes.Compare(s[i][:], s[j][:]) < 0 }
+func (s signersAscending) Swap(i, j int)      { s[i], s[j] = s[j], s[i] }
 
 // newSnapshot creates a new snapshot with the specified startup parameters. This
 // method does not initialize the set of recent signers, so only ever use if for
@@ -214,11 +214,11 @@ func (s *Snapshot) apply(headers []*types.Header) (*Snapshot, error) {
 			return nil, err
 		}
 		if _, ok := snap.Signers[signer]; !ok {
-			return nil, errUnauthorized
+			return nil, errUnauthorizedSigner
 		}
 		for _, recent := range snap.Recents {
 			if recent == signer {
-				return nil, errUnauthorized
+				return nil, errRecentlySigned
 			}
 		}
 		snap.Recents[number] = signer
@@ -298,7 +298,7 @@ func (s *Snapshot) signers() []common.Address {
 	for sig := range s.Signers {
 		sigs = append(sigs, sig)
 	}
-	sort.Sort(signers(sigs))
+	sort.Sort(signersAscending(sigs))
 	return sigs
 }
 

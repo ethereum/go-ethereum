@@ -26,17 +26,15 @@ import (
 
 func TestParseURI(t *testing.T) {
 	type test struct {
-		uri                       string
-		expectURI                 *URI
-		expectErr                 bool
-		expectRaw                 bool
-		expectImmutable           bool
-		expectList                bool
-		expectHash                bool
-		expectDeprecatedRaw       bool
-		expectDeprecatedImmutable bool
-		expectValidKey            bool
-		expectAddr                storage.Address
+		uri             string
+		expectURI       *URI
+		expectErr       bool
+		expectRaw       bool
+		expectImmutable bool
+		expectList      bool
+		expectHash      bool
+		expectValidKey  bool
+		expectAddr      storage.Address
 	}
 	tests := []test{
 		{

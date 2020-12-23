@@ -68,7 +68,7 @@ func stateTestCmd(ctx *cli.Context) error {
 	)
 	switch {
 	case ctx.GlobalBool(MachineFlag.Name):
-		tracer = NewJSONLogger(config, os.Stderr)
+		tracer = vm.NewJSONLogger(config, os.Stderr)
 
 	case ctx.GlobalBool(DebugFlag.Name):
 		debugger = vm.NewStructLogger(config)
@@ -97,6 +97,10 @@ func stateTestCmd(ctx *cli.Context) error {
 			// Run the test and aggregate the result
 			result := &StatetestResult{Name: key, Fork: st.Fork, Pass: true}
 			state, err := test.Run(st, cfg)
+			// print state root for evmlab tracing
+			if ctx.GlobalBool(MachineFlag.Name) && state != nil {
+				fmt.Fprintf(os.Stderr, "{\"stateRoot\": \"%x\"}\n", state.IntermediateRoot(false))
+			}
 			if err != nil {
 				// Test failed, mark as so and dump any state to aid debugging
 				result.Pass, result.Error = false, err.Error()
@@ -105,23 +109,19 @@ func stateTestCmd(ctx *cli.Context) error {
 					result.State = &dump
 				}
 			}
-			// print state root for evmlab tracing (already committed above, so no need to delete objects again
-			if ctx.GlobalBool(MachineFlag.Name) && state != nil {
-				fmt.Fprintf(ctx.App.ErrWriter, "{\"stateRoot\": \"%x\"}\n", state.IntermediateRoot(false))
-			}
 
 			results = append(results, *result)
 
 			// Print any structured logs collected
 			if ctx.GlobalBool(DebugFlag.Name) {
 				if debugger != nil {
-					fmt.Fprintln(ctx.App.ErrWriter, "#### TRACE ####")
-					vm.WriteTrace(ctx.App.ErrWriter, debugger.StructLogs())
+					fmt.Fprintln(os.Stderr, "#### TRACE ####")
+					vm.WriteTrace(os.Stderr, debugger.StructLogs())
 				}
 			}
 		}
 	}
 	out, _ := json.MarshalIndent(results, "", "  ")
-	fmt.Fprintln(ctx.App.Writer, string(out))
+	fmt.Println(string(out))
 	return nil
 }

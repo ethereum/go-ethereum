@@ -18,27 +18,12 @@ package whisperv6
 
 import (
 	"bytes"
-	"crypto/ecdsa"
 	"testing"
 	"time"
-
-	mapset "github.com/deckarep/golang-set"
-	"github.com/ethereum/go-ethereum/common"
 )
 
 func TestMultipleTopicCopyInNewMessageFilter(t *testing.T) {
-	w := &Whisper{
-		privateKeys:   make(map[string]*ecdsa.PrivateKey),
-		symKeys:       make(map[string][]byte),
-		envelopes:     make(map[common.Hash]*Envelope),
-		expirations:   make(map[uint32]mapset.Set),
-		peers:         make(map[*Peer]struct{}),
-		messageQueue:  make(chan *Envelope, messageQueueLimit),
-		p2pMsgQueue:   make(chan *Envelope, messageQueueLimit),
-		quit:          make(chan struct{}),
-		syncAllowance: DefaultSyncAllowance,
-	}
-	w.filters = NewFilters(w)
+	w := New(nil)
 
 	keyID, err := w.GenerateSymKey()
 	if err != nil {

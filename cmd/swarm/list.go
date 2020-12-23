@@ -27,6 +27,15 @@ import (
 	"gopkg.in/urfave/cli.v1"
 )
 
+var listCommand = cli.Command{
+	Action:             list,
+	CustomHelpTemplate: helpTemplate,
+	Name:               "ls",
+	Usage:              "list files and directories contained in a manifest",
+	ArgsUsage:          "<manifest> [<prefix>]",
+	Description:        "Lists files and directories contained in a manifest",
+}
+
 func list(ctx *cli.Context) {
 	args := ctx.Args()
 
@@ -44,7 +53,7 @@ func list(ctx *cli.Context) {
 
 	bzzapi := strings.TrimRight(ctx.GlobalString(SwarmApiFlag.Name), "/")
 	client := swarm.NewClient(bzzapi)
-	list, err := client.List(manifest, prefix)
+	list, err := client.List(manifest, prefix, "")
 	if err != nil {
 		utils.Fatalf("Failed to generate file and directory list: %s", err)
 	}

@@ -27,7 +27,7 @@ import (
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/node"
 	"github.com/ethereum/go-ethereum/p2p"
-	"github.com/ethereum/go-ethereum/p2p/discover"
+	"github.com/ethereum/go-ethereum/p2p/enode"
 	"github.com/ethereum/go-ethereum/p2p/simulations/pipes"
 	"github.com/ethereum/go-ethereum/rpc"
 )
@@ -37,7 +37,7 @@ import (
 type SimAdapter struct {
 	pipe     func() (net.Conn, net.Conn, error)
 	mtx      sync.RWMutex
-	nodes    map[discover.NodeID]*SimNode
+	nodes    map[enode.ID]*SimNode
 	services map[string]ServiceFunc
 }
 
@@ -48,7 +48,7 @@ type SimAdapter struct {
 func NewSimAdapter(services map[string]ServiceFunc) *SimAdapter {
 	return &SimAdapter{
 		pipe:     pipes.NetPipe,
-		nodes:    make(map[discover.NodeID]*SimNode),
+		nodes:    make(map[enode.ID]*SimNode),
 		services: services,
 	}
 }
@@ -56,7 +56,7 @@ func NewSimAdapter(services map[string]ServiceFunc) *SimAdapter {
 func NewTCPAdapter(services map[string]ServiceFunc) *SimAdapter {
 	return &SimAdapter{
 		pipe:     pipes.TCPPipe,
-		nodes:    make(map[discover.NodeID]*SimNode),
+		nodes:    make(map[enode.ID]*SimNode),
 		services: services,
 	}
 }
@@ -108,7 +108,7 @@ func (s *SimAdapter) NewNode(config *NodeConfig) (Node, error) {
 		node:      n,
 		adapter:   s,
 		running:   make(map[string]node.Service),
-		connected: make(map[discover.NodeID]bool),
+		connected: make(map[enode.ID]bool),
 	}
 	s.nodes[id] = simNode
 	return simNode, nil
@@ -116,17 +116,17 @@ func (s *SimAdapter) NewNode(config *NodeConfig) (Node, error) {
 
 // Dial implements the p2p.NodeDialer interface by connecting to the node using
 // an in-memory net.Pipe
-func (s *SimAdapter) Dial(dest *discover.Node) (conn net.Conn, err error) {
-	node, ok := s.GetNode(dest.ID)
+func (s *SimAdapter) Dial(dest *enode.Node) (conn net.Conn, err error) {
+	node, ok := s.GetNode(dest.ID())
 	if !ok {
-		return nil, fmt.Errorf("unknown node: %s", dest.ID)
+		return nil, fmt.Errorf("unknown node: %s", dest.ID())
 	}
-	if node.connected[dest.ID] {
-		return nil, fmt.Errorf("dialed node: %s", dest.ID)
+	if node.connected[dest.ID()] {
+		return nil, fmt.Errorf("dialed node: %s", dest.ID())
 	}
 	srv := node.Server()
 	if srv == nil {
-		return nil, fmt.Errorf("node not running: %s", dest.ID)
+		return nil, fmt.Errorf("node not running: %s", dest.ID())
 	}
 	// SimAdapter.pipe is net.Pipe (NewSimAdapter)
 	pipe1, pipe2, err := s.pipe()
@@ -134,16 +134,16 @@ func (s *SimAdapter) Dial(dest *discover.Node) (conn net.Conn, err error) {
 		return nil, err
 	}
 	// this is simulated 'listening'
-	// asynchronously call the dialed destintion node's p2p server
+	// asynchronously call the dialed destination node's p2p server
 	// to set up connection on the 'listening' side
 	go srv.SetupConn(pipe1, 0, nil)
-	node.connected[dest.ID] = true
+	node.connected[dest.ID()] = true
 	return pipe2, nil
 }
 
 // DialRPC implements the RPCDialer interface by creating an in-memory RPC
 // client of the given node
-func (s *SimAdapter) DialRPC(id discover.NodeID) (*rpc.Client, error) {
+func (s *SimAdapter) DialRPC(id enode.ID) (*rpc.Client, error) {
 	node, ok := s.GetNode(id)
 	if !ok {
 		return nil, fmt.Errorf("unknown node: %s", id)
@@ -156,7 +156,7 @@ func (s *SimAdapter) DialRPC(id discover.NodeID) (*rpc.Client, error) {
 }
 
 // GetNode returns the node with the given ID if it exists
-func (s *SimAdapter) GetNode(id discover.NodeID) (*SimNode, bool) {
+func (s *SimAdapter) GetNode(id enode.ID) (*SimNode, bool) {
 	s.mtx.RLock()
 	defer s.mtx.RUnlock()
 	node, ok := s.nodes[id]
@@ -168,14 +168,14 @@ func (s *SimAdapter) GetNode(id discover.NodeID) (*SimNode, bool) {
 // pipe
 type SimNode struct {
 	lock         sync.RWMutex
-	ID           discover.NodeID
+	ID           enode.ID
 	config       *NodeConfig
 	adapter      *SimAdapter
 	node         *node.Node
 	running      map[string]node.Service
 	client       *rpc.Client
 	registerOnce sync.Once
-	connected    map[discover.NodeID]bool
+	connected    map[enode.ID]bool
 }
 
 // Addr returns the node's discovery address
@@ -183,9 +183,9 @@ func (sn *SimNode) Addr() []byte {
 	return []byte(sn.Node().String())
 }
 
-// Node returns a discover.Node representing the SimNode
-func (sn *SimNode) Node() *discover.Node {
-	return discover.NewNode(sn.ID, net.IP{127, 0, 0, 1}, 30303, 30303)
+// Node returns a node descriptor representing the SimNode
+func (sn *SimNode) Node() *enode.Node {
+	return sn.config.Node()
 }
 
 // Client returns an rpc.Client which can be used to communicate with the
@@ -356,18 +356,4 @@ func (sn *SimNode) NodeInfo() *p2p.NodeInfo {
 		}
 	}
 	return server.NodeInfo()
-}
-
-func setSocketBuffer(conn net.Conn, socketReadBuffer int, socketWriteBuffer int) error {
-	if v, ok := conn.(*net.UnixConn); ok {
-		err := v.SetReadBuffer(socketReadBuffer)
-		if err != nil {
-			return err
-		}
-		err = v.SetWriteBuffer(socketWriteBuffer)
-		if err != nil {
-			return err
-		}
-	}
-	return nil
 }

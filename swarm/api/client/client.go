@@ -19,28 +19,34 @@ package client
 import (
 	"archive/tar"
 	"bytes"
+	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
 	"io/ioutil"
-	"mime"
 	"mime/multipart"
 	"net/http"
+	"net/http/httptrace"
 	"net/textproto"
+	"net/url"
 	"os"
 	"path/filepath"
 	"regexp"
 	"strconv"
 	"strings"
+	"time"
 
+	"github.com/ethereum/go-ethereum/log"
+	"github.com/ethereum/go-ethereum/metrics"
 	"github.com/ethereum/go-ethereum/swarm/api"
-	"github.com/ethereum/go-ethereum/swarm/storage/mru"
+	"github.com/ethereum/go-ethereum/swarm/spancontext"
+	"github.com/ethereum/go-ethereum/swarm/storage/feed"
+	"github.com/pborman/uuid"
 )
 
 var (
-	DefaultGateway = "http://localhost:8500"
-	DefaultClient  = NewClient(DefaultGateway)
+	ErrUnauthorized = errors.New("unauthorized")
 )
 
 func NewClient(gateway string) *Client {
@@ -119,10 +125,16 @@ func Open(path string) (*File, error) {
 		f.Close()
 		return nil, err
 	}
+
+	contentType, err := api.DetectContentType(f.Name(), f)
+	if err != nil {
+		return nil, err
+	}
+
 	return &File{
 		ReadCloser: f,
 		ManifestEntry: api.ManifestEntry{
-			ContentType: mime.TypeByExtension(filepath.Ext(path)),
+			ContentType: contentType,
 			Mode:        int64(stat.Mode()),
 			Size:        stat.Size(),
 			ModTime:     stat.ModTime(),
@@ -138,7 +150,7 @@ func (c *Client) Upload(file *File, manifest string, toEncrypt bool) (string, er
 	if file.Size <= 0 {
 		return "", errors.New("file size must be greater than zero")
 	}
-	return c.TarUpload(manifest, &FileUploader{file}, toEncrypt)
+	return c.TarUpload(manifest, &FileUploader{file}, "", toEncrypt)
 }
 
 // Download downloads a file with the given path from the swarm manifest with
@@ -175,12 +187,20 @@ func (c *Client) UploadDirectory(dir, defaultPath, manifest string, toEncrypt bo
 	} else if !stat.IsDir() {
 		return "", fmt.Errorf("not a directory: %s", dir)
 	}
-	return c.TarUpload(manifest, &DirectoryUploader{dir, defaultPath}, toEncrypt)
+	if defaultPath != "" {
+		if _, err := os.Stat(filepath.Join(dir, defaultPath)); err != nil {
+			if os.IsNotExist(err) {
+				return "", fmt.Errorf("the default path %q was not found in the upload directory %q", defaultPath, dir)
+			}
+			return "", fmt.Errorf("default path: %v", err)
+		}
+	}
+	return c.TarUpload(manifest, &DirectoryUploader{dir}, defaultPath, toEncrypt)
 }
 
 // DownloadDirectory downloads the files contained in a swarm manifest under
 // the given path into a local directory (existing files will be overwritten)
-func (c *Client) DownloadDirectory(hash, path, destDir string) error {
+func (c *Client) DownloadDirectory(hash, path, destDir, credentials string) error {
 	stat, err := os.Stat(destDir)
 	if err != nil {
 		return err
@@ -193,13 +213,20 @@ func (c *Client) DownloadDirectory(hash, path, destDir string) error {
 	if err != nil {
 		return err
 	}
+	if credentials != "" {
+		req.SetBasicAuth("", credentials)
+	}
 	req.Header.Set("Accept", "application/x-tar")
 	res, err := http.DefaultClient.Do(req)
 	if err != nil {
 		return err
 	}
 	defer res.Body.Close()
-	if res.StatusCode != http.StatusOK {
+	switch res.StatusCode {
+	case http.StatusOK:
+	case http.StatusUnauthorized:
+		return ErrUnauthorized
+	default:
 		return fmt.Errorf("unexpected HTTP status: %s", res.Status)
 	}
 	tr := tar.NewReader(res.Body)
@@ -240,7 +267,7 @@ func (c *Client) DownloadDirectory(hash, path, destDir string) error {
 // DownloadFile downloads a single file into the destination directory
 // if the manifest entry does not specify a file name - it will fallback
 // to the hash of the file as a filename
-func (c *Client) DownloadFile(hash, path, dest string) error {
+func (c *Client) DownloadFile(hash, path, dest, credentials string) error {
 	hasDestinationFilename := false
 	if stat, err := os.Stat(dest); err == nil {
 		hasDestinationFilename = !stat.IsDir()
@@ -253,9 +280,9 @@ func (c *Client) DownloadFile(hash, path, dest string) error {
 		}
 	}
 
-	manifestList, err := c.List(hash, path)
+	manifestList, err := c.List(hash, path, credentials)
 	if err != nil {
-		return fmt.Errorf("could not list manifest: %v", err)
+		return err
 	}
 
 	switch len(manifestList.Entries) {
@@ -272,13 +299,19 @@ func (c *Client) DownloadFile(hash, path, dest string) error {
 	if err != nil {
 		return err
 	}
+	if credentials != "" {
+		req.SetBasicAuth("", credentials)
+	}
 	res, err := http.DefaultClient.Do(req)
 	if err != nil {
 		return err
 	}
 	defer res.Body.Close()
-
-	if res.StatusCode != http.StatusOK {
+	switch res.StatusCode {
+	case http.StatusOK:
+	case http.StatusUnauthorized:
+		return ErrUnauthorized
+	default:
 		return fmt.Errorf("unexpected HTTP status: expected 200 OK, got %d", res.StatusCode)
 	}
 	filename := ""
@@ -359,13 +392,24 @@ func (c *Client) DownloadManifest(hash string) (*api.Manifest, bool, error) {
 // - a prefix of "dir1/" would return [dir1/dir2/, dir1/file3.txt]
 //
 // where entries ending with "/" are common prefixes.
-func (c *Client) List(hash, prefix string) (*api.ManifestList, error) {
-	res, err := http.DefaultClient.Get(c.Gateway + "/bzz-list:/" + hash + "/" + prefix)
+func (c *Client) List(hash, prefix, credentials string) (*api.ManifestList, error) {
+	req, err := http.NewRequest(http.MethodGet, c.Gateway+"/bzz-list:/"+hash+"/"+prefix, nil)
+	if err != nil {
+		return nil, err
+	}
+	if credentials != "" {
+		req.SetBasicAuth("", credentials)
+	}
+	res, err := http.DefaultClient.Do(req)
 	if err != nil {
 		return nil, err
 	}
 	defer res.Body.Close()
-	if res.StatusCode != http.StatusOK {
+	switch res.StatusCode {
+	case http.StatusOK:
+	case http.StatusUnauthorized:
+		return nil, ErrUnauthorized
+	default:
 		return nil, fmt.Errorf("unexpected HTTP status: %s", res.Status)
 	}
 	var list api.ManifestList
@@ -389,21 +433,11 @@ func (u UploaderFunc) Upload(upload UploadFn) error {
 // DirectoryUploader uploads all files in a directory, optionally uploading
 // a file to the default path
 type DirectoryUploader struct {
-	Dir         string
-	DefaultPath string
+	Dir string
 }
 
 // Upload performs the upload of the directory and default path
 func (d *DirectoryUploader) Upload(upload UploadFn) error {
-	if d.DefaultPath != "" {
-		file, err := Open(d.DefaultPath)
-		if err != nil {
-			return err
-		}
-		if err := upload(file); err != nil {
-			return err
-		}
-	}
 	return filepath.Walk(d.Dir, func(path string, f os.FileInfo, err error) error {
 		if err != nil {
 			return err
@@ -441,7 +475,12 @@ type UploadFn func(file *File) error
 
 // TarUpload uses the given Uploader to upload files to swarm as a tar stream,
 // returning the resulting manifest hash
-func (c *Client) TarUpload(hash string, uploader Uploader, toEncrypt bool) (string, error) {
+func (c *Client) TarUpload(hash string, uploader Uploader, defaultPath string, toEncrypt bool) (string, error) {
+	ctx, sp := spancontext.StartSpan(context.Background(), "api.client.tarupload")
+	defer sp.Finish()
+
+	var tn time.Time
+
 	reqR, reqW := io.Pipe()
 	defer reqR.Close()
 	addr := hash
@@ -457,7 +496,18 @@ func (c *Client) TarUpload(hash string, uploader Uploader, toEncrypt bool) (stri
 	if err != nil {
 		return "", err
 	}
+
+	trace := GetClientTrace("swarm api client - upload tar", "api.client.uploadtar", uuid.New()[:8], &tn)
+
+	req = req.WithContext(httptrace.WithClientTrace(ctx, trace))
+	transport := http.DefaultTransport
+
 	req.Header.Set("Content-Type", "application/x-tar")
+	if defaultPath != "" {
+		q := req.URL.Query()
+		q.Set("defaultpath", defaultPath)
+		req.URL.RawQuery = q.Encode()
+	}
 
 	// use 'Expect: 100-continue' so we don't send the request body if
 	// the server refuses the request
@@ -492,8 +542,8 @@ func (c *Client) TarUpload(hash string, uploader Uploader, toEncrypt bool) (stri
 		}
 		reqW.CloseWithError(err)
 	}()
-
-	res, err := http.DefaultClient.Do(req)
+	tn = time.Now()
+	res, err := transport.RoundTrip(req)
 	if err != nil {
 		return "", err
 	}
@@ -564,13 +614,15 @@ func (c *Client) MultipartUpload(hash string, uploader Uploader) (string, error)
 	return string(data), nil
 }
 
-// CreateResource creates a Mutable Resource with the given name and frequency, initializing it with the provided
-// data. Data is interpreted as multihash or not depending on the multihash parameter.
-// startTime=0 means "now"
-// Returns the resulting Mutable Resource manifest address that you can use to include in an ENS Resolver (setContent)
-// or reference future updates (Client.UpdateResource)
-func (c *Client) CreateResource(request *mru.Request) (string, error) {
-	responseStream, err := c.updateResource(request)
+// ErrNoFeedUpdatesFound is returned when Swarm cannot find updates of the given feed
+var ErrNoFeedUpdatesFound = errors.New("No updates found for this feed")
+
+// CreateFeedWithManifest creates a feed manifest, initializing it with the provided
+// data
+// Returns the resulting feed manifest address that you can use to include in an ENS Resolver (setContent)
+// or reference future updates (Client.UpdateFeed)
+func (c *Client) CreateFeedWithManifest(request *feed.Request) (string, error) {
+	responseStream, err := c.updateFeed(request, true)
 	if err != nil {
 		return "", err
 	}
@@ -588,19 +640,26 @@ func (c *Client) CreateResource(request *mru.Request) (string, error) {
 	return manifestAddress, nil
 }
 
-// UpdateResource allows you to set a new version of your content
-func (c *Client) UpdateResource(request *mru.Request) error {
-	_, err := c.updateResource(request)
+// UpdateFeed allows you to set a new version of your content
+func (c *Client) UpdateFeed(request *feed.Request) error {
+	_, err := c.updateFeed(request, false)
 	return err
 }
 
-func (c *Client) updateResource(request *mru.Request) (io.ReadCloser, error) {
-	body, err := request.MarshalJSON()
+func (c *Client) updateFeed(request *feed.Request, createManifest bool) (io.ReadCloser, error) {
+	URL, err := url.Parse(c.Gateway)
 	if err != nil {
 		return nil, err
 	}
+	URL.Path = "/bzz-feed:/"
+	values := URL.Query()
+	body := request.AppendValues(values)
+	if createManifest {
+		values.Set("manifest", "1")
+	}
+	URL.RawQuery = values.Encode()
 
-	req, err := http.NewRequest("POST", c.Gateway+"/bzz-resource:/", bytes.NewBuffer(body))
+	req, err := http.NewRequest("POST", URL.String(), bytes.NewBuffer(body))
 	if err != nil {
 		return nil, err
 	}
@@ -611,28 +670,61 @@ func (c *Client) updateResource(request *mru.Request) (io.ReadCloser, error) {
 	}
 
 	return res.Body, nil
-
 }
 
-// GetResource returns a byte stream with the raw content of the resource
-// manifestAddressOrDomain is the address you obtained in CreateResource or an ENS domain whose Resolver
+// QueryFeed returns a byte stream with the raw content of the feed update
+// manifestAddressOrDomain is the address you obtained in CreateFeedWithManifest or an ENS domain whose Resolver
 // points to that address
-func (c *Client) GetResource(manifestAddressOrDomain string) (io.ReadCloser, error) {
+func (c *Client) QueryFeed(query *feed.Query, manifestAddressOrDomain string) (io.ReadCloser, error) {
+	return c.queryFeed(query, manifestAddressOrDomain, false)
+}
 
-	res, err := http.Get(c.Gateway + "/bzz-resource:/" + manifestAddressOrDomain)
+// queryFeed returns a byte stream with the raw content of the feed update
+// manifestAddressOrDomain is the address you obtained in CreateFeedWithManifest or an ENS domain whose Resolver
+// points to that address
+// meta set to true will instruct the node return feed metainformation instead
+func (c *Client) queryFeed(query *feed.Query, manifestAddressOrDomain string, meta bool) (io.ReadCloser, error) {
+	URL, err := url.Parse(c.Gateway)
 	if err != nil {
 		return nil, err
 	}
-	return res.Body, nil
+	URL.Path = "/bzz-feed:/" + manifestAddressOrDomain
+	values := URL.Query()
+	if query != nil {
+		query.AppendValues(values) //adds query parameters
+	}
+	if meta {
+		values.Set("meta", "1")
+	}
+	URL.RawQuery = values.Encode()
+	res, err := http.Get(URL.String())
+	if err != nil {
+		return nil, err
+	}
 
+	if res.StatusCode != http.StatusOK {
+		if res.StatusCode == http.StatusNotFound {
+			return nil, ErrNoFeedUpdatesFound
+		}
+		errorMessageBytes, err := ioutil.ReadAll(res.Body)
+		var errorMessage string
+		if err != nil {
+			errorMessage = "cannot retrieve error message: " + err.Error()
+		} else {
+			errorMessage = string(errorMessageBytes)
+		}
+		return nil, fmt.Errorf("Error retrieving feed updates: %s", errorMessage)
+	}
+
+	return res.Body, nil
 }
 
-// GetResourceMetadata returns a structure that describes the Mutable Resource
-// manifestAddressOrDomain is the address you obtained in CreateResource or an ENS domain whose Resolver
+// GetFeedRequest returns a structure that describes the referenced feed status
+// manifestAddressOrDomain is the address you obtained in CreateFeedWithManifest or an ENS domain whose Resolver
 // points to that address
-func (c *Client) GetResourceMetadata(manifestAddressOrDomain string) (*mru.Request, error) {
+func (c *Client) GetFeedRequest(query *feed.Query, manifestAddressOrDomain string) (*feed.Request, error) {
 
-	responseStream, err := c.GetResource(manifestAddressOrDomain + "/meta")
+	responseStream, err := c.queryFeed(query, manifestAddressOrDomain, true)
 	if err != nil {
 		return nil, err
 	}
@@ -643,9 +735,63 @@ func (c *Client) GetResourceMetadata(manifestAddressOrDomain string) (*mru.Reque
 		return nil, err
 	}
 
-	var metadata mru.Request
+	var metadata feed.Request
 	if err := metadata.UnmarshalJSON(body); err != nil {
 		return nil, err
 	}
 	return &metadata, nil
+}
+
+func GetClientTrace(traceMsg, metricPrefix, ruid string, tn *time.Time) *httptrace.ClientTrace {
+	trace := &httptrace.ClientTrace{
+		GetConn: func(_ string) {
+			log.Trace(traceMsg+" - http get", "event", "GetConn", "ruid", ruid)
+			metrics.GetOrRegisterResettingTimer(metricPrefix+".getconn", nil).Update(time.Since(*tn))
+		},
+		GotConn: func(_ httptrace.GotConnInfo) {
+			log.Trace(traceMsg+" - http get", "event", "GotConn", "ruid", ruid)
+			metrics.GetOrRegisterResettingTimer(metricPrefix+".gotconn", nil).Update(time.Since(*tn))
+		},
+		PutIdleConn: func(err error) {
+			log.Trace(traceMsg+" - http get", "event", "PutIdleConn", "ruid", ruid, "err", err)
+			metrics.GetOrRegisterResettingTimer(metricPrefix+".putidle", nil).Update(time.Since(*tn))
+		},
+		GotFirstResponseByte: func() {
+			log.Trace(traceMsg+" - http get", "event", "GotFirstResponseByte", "ruid", ruid)
+			metrics.GetOrRegisterResettingTimer(metricPrefix+".firstbyte", nil).Update(time.Since(*tn))
+		},
+		Got100Continue: func() {
+			log.Trace(traceMsg, "event", "Got100Continue", "ruid", ruid)
+			metrics.GetOrRegisterResettingTimer(metricPrefix+".got100continue", nil).Update(time.Since(*tn))
+		},
+		DNSStart: func(_ httptrace.DNSStartInfo) {
+			log.Trace(traceMsg, "event", "DNSStart", "ruid", ruid)
+			metrics.GetOrRegisterResettingTimer(metricPrefix+".dnsstart", nil).Update(time.Since(*tn))
+		},
+		DNSDone: func(_ httptrace.DNSDoneInfo) {
+			log.Trace(traceMsg, "event", "DNSDone", "ruid", ruid)
+			metrics.GetOrRegisterResettingTimer(metricPrefix+".dnsdone", nil).Update(time.Since(*tn))
+		},
+		ConnectStart: func(network, addr string) {
+			log.Trace(traceMsg, "event", "ConnectStart", "ruid", ruid, "network", network, "addr", addr)
+			metrics.GetOrRegisterResettingTimer(metricPrefix+".connectstart", nil).Update(time.Since(*tn))
+		},
+		ConnectDone: func(network, addr string, err error) {
+			log.Trace(traceMsg, "event", "ConnectDone", "ruid", ruid, "network", network, "addr", addr, "err", err)
+			metrics.GetOrRegisterResettingTimer(metricPrefix+".connectdone", nil).Update(time.Since(*tn))
+		},
+		WroteHeaders: func() {
+			log.Trace(traceMsg, "event", "WroteHeaders(request)", "ruid", ruid)
+			metrics.GetOrRegisterResettingTimer(metricPrefix+".wroteheaders", nil).Update(time.Since(*tn))
+		},
+		Wait100Continue: func() {
+			log.Trace(traceMsg, "event", "Wait100Continue", "ruid", ruid)
+			metrics.GetOrRegisterResettingTimer(metricPrefix+".wait100continue", nil).Update(time.Since(*tn))
+		},
+		WroteRequest: func(_ httptrace.WroteRequestInfo) {
+			log.Trace(traceMsg, "event", "WroteRequest", "ruid", ruid)
+			metrics.GetOrRegisterResettingTimer(metricPrefix+".wroterequest", nil).Update(time.Since(*tn))
+		},
+	}
+	return trace
 }

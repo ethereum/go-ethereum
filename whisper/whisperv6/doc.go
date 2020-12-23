@@ -33,7 +33,6 @@ particularly the notion of singular endpoints.
 package whisperv6
 
 import (
-	"fmt"
 	"time"
 )
 
@@ -78,12 +77,6 @@ const (
 	DefaultTTL           = 50 // seconds
 	DefaultSyncAllowance = 10 // seconds
 )
-
-type unknownVersionError uint64
-
-func (e unknownVersionError) Error() string {
-	return fmt.Sprintf("invalid envelope version %d", uint64(e))
-}
 
 // MailServer represents a mail server, capable of
 // archiving the old messages for subsequent delivery

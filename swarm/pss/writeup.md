@@ -65,7 +65,7 @@ The validation phase of the TestNetwork test is done using an RPC subscription:
 
 ```
     ...
-	triggerChecks := func(trigger chan discover.NodeID, id discover.NodeID, rpcclient *rpc.Client) error {
+	triggerChecks := func(trigger chan enode.ID, id enode.ID, rpcclient *rpc.Client) error {
 		msgC := make(chan APIMsg)
 		ctx, cancel := context.WithTimeout(context.Background(), time.Second)
 		defer cancel()

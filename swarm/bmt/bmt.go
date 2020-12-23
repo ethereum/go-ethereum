@@ -55,16 +55,13 @@ Two implementations are provided:
 */
 
 const (
-	// SegmentCount is the maximum number of segments of the underlying chunk
-	// Should be equal to max-chunk-data-size / hash-size
-	SegmentCount = 128
 	// PoolSize is the maximum number of bmt trees used by the hashers, i.e,
 	// the maximum number of concurrent BMT hashing operations performed by the same hasher
 	PoolSize = 8
 )
 
 // BaseHasherFunc is a hash.Hash constructor function used for the base hash of the BMT.
-// implemented by Keccak256 SHA3 sha3.NewKeccak256
+// implemented by Keccak256 SHA3 sha3.NewLegacyKeccak256
 type BaseHasherFunc func() hash.Hash
 
 // Hasher a reusable hasher for fixed maximum size chunks representing a BMT
@@ -318,7 +315,7 @@ func (h *Hasher) Sum(b []byte) (s []byte) {
 // with every full segment calls writeSection in a go routine
 func (h *Hasher) Write(b []byte) (int, error) {
 	l := len(b)
-	if l == 0 {
+	if l == 0 || l > h.pool.Size {
 		return 0, nil
 	}
 	t := h.getTree()

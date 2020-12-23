@@ -23,9 +23,11 @@ import (
 	"io/ioutil"
 	"os"
 	"testing"
+
+	"github.com/ethereum/go-ethereum/swarm/testutil"
 )
 
-const testDataSize = 0x1000000
+const testDataSize = 0x0001000
 
 func TestFileStorerandom(t *testing.T) {
 	testFileStoreRandom(false, t)
@@ -49,11 +51,11 @@ func testFileStoreRandom(toEncrypt bool, t *testing.T) {
 	fileStore := NewFileStore(localStore, NewFileStoreParams())
 	defer os.RemoveAll("/tmp/bzz")
 
-	reader, slice := generateRandomData(testDataSize)
+	slice := testutil.RandomBytes(1, testDataSize)
 	ctx := context.TODO()
-	key, wait, err := fileStore.Store(ctx, reader, testDataSize, toEncrypt)
+	key, wait, err := fileStore.Store(ctx, bytes.NewReader(slice), testDataSize, toEncrypt)
 	if err != nil {
-		t.Errorf("Store error: %v", err)
+		t.Fatalf("Store error: %v", err)
 	}
 	err = wait(ctx)
 	if err != nil {
@@ -63,16 +65,16 @@ func testFileStoreRandom(toEncrypt bool, t *testing.T) {
 	if isEncrypted != toEncrypt {
 		t.Fatalf("isEncrypted expected %v got %v", toEncrypt, isEncrypted)
 	}
-	resultSlice := make([]byte, len(slice))
+	resultSlice := make([]byte, testDataSize)
 	n, err := resultReader.ReadAt(resultSlice, 0)
 	if err != io.EOF {
-		t.Errorf("Retrieve error: %v", err)
+		t.Fatalf("Retrieve error: %v", err)
 	}
-	if n != len(slice) {
-		t.Errorf("Slice size error got %d, expected %d.", n, len(slice))
+	if n != testDataSize {
+		t.Fatalf("Slice size error got %d, expected %d.", n, testDataSize)
 	}
 	if !bytes.Equal(slice, resultSlice) {
-		t.Errorf("Comparison error.")
+		t.Fatalf("Comparison error.")
 	}
 	ioutil.WriteFile("/tmp/slice.bzz.16M", slice, 0666)
 	ioutil.WriteFile("/tmp/result.bzz.16M", resultSlice, 0666)
@@ -86,13 +88,13 @@ func testFileStoreRandom(toEncrypt bool, t *testing.T) {
 	}
 	n, err = resultReader.ReadAt(resultSlice, 0)
 	if err != io.EOF {
-		t.Errorf("Retrieve error after removing memStore: %v", err)
+		t.Fatalf("Retrieve error after removing memStore: %v", err)
 	}
 	if n != len(slice) {
-		t.Errorf("Slice size error after removing memStore got %d, expected %d.", n, len(slice))
+		t.Fatalf("Slice size error after removing memStore got %d, expected %d.", n, len(slice))
 	}
 	if !bytes.Equal(slice, resultSlice) {
-		t.Errorf("Comparison error after removing memStore.")
+		t.Fatalf("Comparison error after removing memStore.")
 	}
 }
 
@@ -114,15 +116,15 @@ func testFileStoreCapacity(toEncrypt bool, t *testing.T) {
 		DbStore:  db,
 	}
 	fileStore := NewFileStore(localStore, NewFileStoreParams())
-	reader, slice := generateRandomData(testDataSize)
+	slice := testutil.RandomBytes(1, testDataSize)
 	ctx := context.TODO()
-	key, wait, err := fileStore.Store(ctx, reader, testDataSize, toEncrypt)
+	key, wait, err := fileStore.Store(ctx, bytes.NewReader(slice), testDataSize, toEncrypt)
 	if err != nil {
 		t.Errorf("Store error: %v", err)
 	}
 	err = wait(ctx)
 	if err != nil {
-		t.Errorf("Store error: %v", err)
+		t.Fatalf("Store error: %v", err)
 	}
 	resultReader, isEncrypted := fileStore.Retrieve(context.TODO(), key)
 	if isEncrypted != toEncrypt {
@@ -131,13 +133,13 @@ func testFileStoreCapacity(toEncrypt bool, t *testing.T) {
 	resultSlice := make([]byte, len(slice))
 	n, err := resultReader.ReadAt(resultSlice, 0)
 	if err != io.EOF {
-		t.Errorf("Retrieve error: %v", err)
+		t.Fatalf("Retrieve error: %v", err)
 	}
 	if n != len(slice) {
-		t.Errorf("Slice size error got %d, expected %d.", n, len(slice))
+		t.Fatalf("Slice size error got %d, expected %d.", n, len(slice))
 	}
 	if !bytes.Equal(slice, resultSlice) {
-		t.Errorf("Comparison error.")
+		t.Fatalf("Comparison error.")
 	}
 	// Clear memStore
 	memStore.setCapacity(0)
@@ -148,7 +150,7 @@ func testFileStoreCapacity(toEncrypt bool, t *testing.T) {
 		t.Fatalf("isEncrypted expected %v got %v", toEncrypt, isEncrypted)
 	}
 	if _, err = resultReader.ReadAt(resultSlice, 0); err == nil {
-		t.Errorf("Was able to read %d bytes from an empty memStore.", len(slice))
+		t.Fatalf("Was able to read %d bytes from an empty memStore.", len(slice))
 	}
 	// check how it works with localStore
 	fileStore.ChunkStore = localStore
@@ -162,12 +164,44 @@ func testFileStoreCapacity(toEncrypt bool, t *testing.T) {
 	}
 	n, err = resultReader.ReadAt(resultSlice, 0)
 	if err != io.EOF {
-		t.Errorf("Retrieve error after clearing memStore: %v", err)
+		t.Fatalf("Retrieve error after clearing memStore: %v", err)
 	}
 	if n != len(slice) {
-		t.Errorf("Slice size error after clearing memStore got %d, expected %d.", n, len(slice))
+		t.Fatalf("Slice size error after clearing memStore got %d, expected %d.", n, len(slice))
 	}
 	if !bytes.Equal(slice, resultSlice) {
-		t.Errorf("Comparison error after clearing memStore.")
+		t.Fatalf("Comparison error after clearing memStore.")
+	}
+}
+
+// TestGetAllReferences only tests that GetAllReferences returns an expected
+// number of references for a given file
+func TestGetAllReferences(t *testing.T) {
+	tdb, cleanup, err := newTestDbStore(false, false)
+	defer cleanup()
+	if err != nil {
+		t.Fatalf("init dbStore failed: %v", err)
+	}
+	db := tdb.LDBStore
+	memStore := NewMemStore(NewDefaultStoreParams(), db)
+	localStore := &LocalStore{
+		memStore: memStore,
+		DbStore:  db,
+	}
+	fileStore := NewFileStore(localStore, NewFileStoreParams())
+
+	// testRuns[i] and expectedLen[i] are dataSize and expected length respectively
+	testRuns := []int{1024, 8192, 16000, 30000, 1000000}
+	expectedLens := []int{1, 3, 5, 9, 248}
+	for i, r := range testRuns {
+		slice := testutil.RandomBytes(1, r)
+
+		addrs, err := fileStore.GetAllReferences(context.Background(), bytes.NewReader(slice), false)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if len(addrs) != expectedLens[i] {
+			t.Fatalf("Expected reference array length to be %d, but is %d", expectedLens[i], len(addrs))
+		}
 	}
 }

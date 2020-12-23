@@ -227,10 +227,10 @@ func (_ENS *ENSCallerSession) Resolver(node [32]byte) (common.Address, error) {
 	return _ENS.Contract.Resolver(&_ENS.CallOpts, node)
 }
 
-// Ttl is a free data retrieval call binding the contract method 0x16a25cbd.
+// TTL is a free data retrieval call binding the contract method 0x16a25cbd.
 //
 // Solidity: function ttl(node bytes32) constant returns(uint64)
-func (_ENS *ENSCaller) Ttl(opts *bind.CallOpts, node [32]byte) (uint64, error) {
+func (_ENS *ENSCaller) TTL(opts *bind.CallOpts, node [32]byte) (uint64, error) {
 	var (
 		ret0 = new(uint64)
 	)
@@ -239,18 +239,18 @@ func (_ENS *ENSCaller) Ttl(opts *bind.CallOpts, node [32]byte) (uint64, error) {
 	return *ret0, err
 }
 
-// Ttl is a free data retrieval call binding the contract method 0x16a25cbd.
+// TTL is a free data retrieval call binding the contract method 0x16a25cbd.
 //
 // Solidity: function ttl(node bytes32) constant returns(uint64)
-func (_ENS *ENSSession) Ttl(node [32]byte) (uint64, error) {
-	return _ENS.Contract.Ttl(&_ENS.CallOpts, node)
+func (_ENS *ENSSession) TTL(node [32]byte) (uint64, error) {
+	return _ENS.Contract.TTL(&_ENS.CallOpts, node)
 }
 
-// Ttl is a free data retrieval call binding the contract method 0x16a25cbd.
+// TTL is a free data retrieval call binding the contract method 0x16a25cbd.
 //
 // Solidity: function ttl(node bytes32) constant returns(uint64)
-func (_ENS *ENSCallerSession) Ttl(node [32]byte) (uint64, error) {
-	return _ENS.Contract.Ttl(&_ENS.CallOpts, node)
+func (_ENS *ENSCallerSession) TTL(node [32]byte) (uint64, error) {
+	return _ENS.Contract.TTL(&_ENS.CallOpts, node)
 }
 
 // SetOwner is a paid mutator transaction binding the contract method 0x5b0fc9c3.
@@ -682,7 +682,7 @@ func (it *ENSNewTTLIterator) Close() error {
 // ENSNewTTL represents a NewTTL event raised by the ENS contract.
 type ENSNewTTL struct {
 	Node [32]byte
-	Ttl  uint64
+	TTL  uint64
 	Raw  types.Log // Blockchain specific contextual infos
 }
 

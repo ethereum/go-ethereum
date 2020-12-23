@@ -24,7 +24,7 @@ import (
 	"github.com/ethereum/go-ethereum/p2p/simulations/adapters"
 )
 
-// TestServiceBucket tests all bucket functionalities using subtests.
+// TestServiceBucket tests all bucket functionality using subtests.
 // It constructs a simulation of two nodes by adding items to their buckets
 // in ServiceFunc constructor, then by SetNodeItem. Testing UpNodesItems
 // is done by stopping one node and validating availability of its items.
@@ -94,7 +94,7 @@ func TestServiceBucket(t *testing.T) {
 			t.Fatalf("expected %q, got %q", customValue, s)
 		}
 
-		v, ok = sim.NodeItem(id2, customKey)
+		_, ok = sim.NodeItem(id2, customKey)
 		if ok {
 			t.Fatal("bucket item should not be found")
 		}
@@ -119,7 +119,7 @@ func TestServiceBucket(t *testing.T) {
 			t.Fatalf("expected %q, got %q", testValue+id1.String(), s)
 		}
 
-		v, ok = items[id2]
+		_, ok = items[id2]
 		if ok {
 			t.Errorf("node 2 item should not be found")
 		}

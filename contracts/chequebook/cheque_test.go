@@ -46,7 +46,7 @@ func newTestBackend() *backends.SimulatedBackend {
 		addr0: {Balance: big.NewInt(1000000000)},
 		addr1: {Balance: big.NewInt(1000000000)},
 		addr2: {Balance: big.NewInt(1000000000)},
-	})
+	}, 10000000)
 }
 
 func deploy(prvKey *ecdsa.PrivateKey, amount *big.Int, backend *backends.SimulatedBackend) (common.Address, error) {

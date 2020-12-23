@@ -38,7 +38,7 @@
 			var op = log.op.toString();
 		}
 		// If a new contract is being created, add to the call stack
-		if (syscall && op == 'CREATE') {
+		if (syscall && (op == 'CREATE' || op == "CREATE2")) {
 			var inOff = log.stack.peek(1).valueOf();
 			var inEnd = inOff + log.stack.peek(2).valueOf();
 
@@ -116,7 +116,7 @@
 			// Pop off the last call and get the execution results
 			var call = this.callstack.pop();
 
-			if (call.type == 'CREATE') {
+			if (call.type == 'CREATE' || call.type == "CREATE2") {
 				// If the call was a CREATE, retrieve the contract address and output code
 				call.gasUsed = '0x' + bigInt(call.gasIn - call.gasCost - log.getGas()).toString(16);
 				delete call.gasIn; delete call.gasCost;

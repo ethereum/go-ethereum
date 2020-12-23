@@ -205,22 +205,22 @@ func (_Chequebook *ChequebookCallerSession) Sent(arg0 common.Address) (*big.Int,
 // Cash is a paid mutator transaction binding the contract method 0xfbf788d6.
 //
 // Solidity: function cash(beneficiary address, amount uint256, sig_v uint8, sig_r bytes32, sig_s bytes32) returns()
-func (_Chequebook *ChequebookTransactor) Cash(opts *bind.TransactOpts, beneficiary common.Address, amount *big.Int, sig_v uint8, sig_r [32]byte, sig_s [32]byte) (*types.Transaction, error) {
-	return _Chequebook.contract.Transact(opts, "cash", beneficiary, amount, sig_v, sig_r, sig_s)
+func (_Chequebook *ChequebookTransactor) Cash(opts *bind.TransactOpts, beneficiary common.Address, amount *big.Int, sigV uint8, sigR [32]byte, sigS [32]byte) (*types.Transaction, error) {
+	return _Chequebook.contract.Transact(opts, "cash", beneficiary, amount, sigV, sigR, sigS)
 }
 
 // Cash is a paid mutator transaction binding the contract method 0xfbf788d6.
 //
 // Solidity: function cash(beneficiary address, amount uint256, sig_v uint8, sig_r bytes32, sig_s bytes32) returns()
-func (_Chequebook *ChequebookSession) Cash(beneficiary common.Address, amount *big.Int, sig_v uint8, sig_r [32]byte, sig_s [32]byte) (*types.Transaction, error) {
-	return _Chequebook.Contract.Cash(&_Chequebook.TransactOpts, beneficiary, amount, sig_v, sig_r, sig_s)
+func (_Chequebook *ChequebookSession) Cash(beneficiary common.Address, amount *big.Int, sigV uint8, sigR [32]byte, sigS [32]byte) (*types.Transaction, error) {
+	return _Chequebook.Contract.Cash(&_Chequebook.TransactOpts, beneficiary, amount, sigV, sigR, sigS)
 }
 
 // Cash is a paid mutator transaction binding the contract method 0xfbf788d6.
 //
 // Solidity: function cash(beneficiary address, amount uint256, sig_v uint8, sig_r bytes32, sig_s bytes32) returns()
-func (_Chequebook *ChequebookTransactorSession) Cash(beneficiary common.Address, amount *big.Int, sig_v uint8, sig_r [32]byte, sig_s [32]byte) (*types.Transaction, error) {
-	return _Chequebook.Contract.Cash(&_Chequebook.TransactOpts, beneficiary, amount, sig_v, sig_r, sig_s)
+func (_Chequebook *ChequebookTransactorSession) Cash(beneficiary common.Address, amount *big.Int, sigV uint8, sigR [32]byte, sigS [32]byte) (*types.Transaction, error) {
+	return _Chequebook.Contract.Cash(&_Chequebook.TransactOpts, beneficiary, amount, sigV, sigR, sigS)
 }
 
 // Kill is a paid mutator transaction binding the contract method 0x41c0e1b5.

@@ -31,6 +31,15 @@ func ToHex(b []byte) string {
 	return "0x" + hex
 }
 
+// ToHexArray creates a array of hex-string based on []byte
+func ToHexArray(b [][]byte) []string {
+	r := make([]string, len(b))
+	for i := range b {
+		r[i] = ToHex(b[i])
+	}
+	return r
+}
+
 // FromHex returns the bytes represented by the hexadecimal string s.
 // s may be prefixed with "0x".
 func FromHex(s string) []byte {
@@ -63,6 +72,7 @@ func hasXDCPrefix(str string) bool {
 	return len(str) >= 3 && (str[0] == 'x' || str[0] == 'X') && (str[1] == 'd' || str[1] == 'D') && (str[2] == 'c' || str[2] == 'C')
 }
 
+// hasHexPrefix validates str begins with '0x' or '0X'.
 func hasHexPrefix(str string) bool {
 	return len(str) >= 2 && str[0] == '0' && (str[1] == 'x' || str[1] == 'X')
 }
@@ -106,7 +116,7 @@ func Hex2BytesFixed(str string, flen int) []byte {
 		return h[len(h)-flen:]
 	}
 	hh := make([]byte, flen)
-	copy(hh[flen-len(h):flen], h[:])
+	copy(hh[flen-len(h):flen], h)
 	return hh
 }
 

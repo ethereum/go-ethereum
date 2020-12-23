@@ -355,7 +355,7 @@ func (tn *preminedTestnet) mine(target NodeID) {
 	fmt.Printf("	target: %#v,\n", tn.target)
 	fmt.Printf("	targetSha: %#v,\n", tn.targetSha)
 	fmt.Printf("	dists: [%d][]NodeID{\n", len(tn.dists))
-	for ld, ns := range tn.dists {
+	for ld, ns := range &tn.dists {
 		if len(ns) == 0 {
 			continue
 		}

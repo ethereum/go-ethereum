@@ -112,6 +112,9 @@ func testPersistedStore(t *testing.T, store Store) {
 
 	as := []string{}
 	err = store.Get("key2", &as)
+	if err != nil {
+		t.Fatal(err)
+	}
 
 	if len(as) != 3 {
 		t.Fatalf("serialized array did not match expectation")

@@ -36,11 +36,15 @@ import (
 )
 
 const (
-	contentType             = "application/json"
-	maxRequestContentLength = 1024 * 128
+	maxRequestContentLength = 1024 * 512
 )
 
-var nullAddr, _ = net.ResolveTCPAddr("tcp", "127.0.0.1:0")
+var (
+	// https://www.jsonrpc.org/historical/json-rpc-over-http.html#id13
+	acceptedContentTypes = []string{"application/json", "application/json-rpc", "application/jsonrequest"}
+	contentType          = acceptedContentTypes[0]
+	nullAddr, _          = net.ResolveTCPAddr("tcp", "127.0.0.1:0")
+)
 
 type httpConn struct {
 	client    *http.Client
@@ -238,6 +242,12 @@ func (srv *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	ctx = context.WithValue(ctx, "remote", r.RemoteAddr)
 	ctx = context.WithValue(ctx, "scheme", r.Proto)
 	ctx = context.WithValue(ctx, "local", r.Host)
+	if ua := r.Header.Get("User-Agent"); ua != "" {
+		ctx = context.WithValue(ctx, "User-Agent", ua)
+	}
+	if origin := r.Header.Get("Origin"); origin != "" {
+		ctx = context.WithValue(ctx, "Origin", origin)
+	}
 
 	body := io.LimitReader(r.Body, maxRequestContentLength)
 	codec := NewJSONCodec(&httpReadWriteNopCloser{body, w})
@@ -257,12 +267,21 @@ func validateRequest(r *http.Request) (int, error) {
 		err := fmt.Errorf("content length too large (%d>%d)", r.ContentLength, maxRequestContentLength)
 		return http.StatusRequestEntityTooLarge, err
 	}
-	mt, _, err := mime.ParseMediaType(r.Header.Get("content-type"))
-	if r.Method != http.MethodOptions && (err != nil || mt != contentType) {
-		err := fmt.Errorf("invalid content type, only %s is supported", contentType)
-		return http.StatusUnsupportedMediaType, err
+	// Allow OPTIONS (regardless of content-type)
+	if r.Method == http.MethodOptions {
+		return 0, nil
 	}
-	return 0, nil
+	// Check content-type
+	if mt, _, err := mime.ParseMediaType(r.Header.Get("content-type")); err == nil {
+		for _, accepted := range acceptedContentTypes {
+			if accepted == mt {
+				return 0, nil
+			}
+		}
+	}
+	// Invalid content-type
+	err := fmt.Errorf("invalid content type, only %s is supported", contentType)
+	return http.StatusUnsupportedMediaType, err
 }
 
 func newCorsHandler(srv *Server, allowedOrigins []string) http.Handler {

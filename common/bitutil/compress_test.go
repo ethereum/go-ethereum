@@ -117,7 +117,7 @@ func TestDecodingCycle(t *testing.T) {
 // TestCompression tests that compression works by returning either the bitset
 // encoded input, or the actual input if the bitset version is longer.
 func TestCompression(t *testing.T) {
-	// Check the the compression returns the bitset encoding is shorter
+	// Check the compression returns the bitset encoding is shorter
 	in := hexutil.MustDecode("0x4912385c0e7b64000000")
 	out := hexutil.MustDecode("0x80fe4912385c0e7b64")
 
@@ -127,7 +127,7 @@ func TestCompression(t *testing.T) {
 	if data, err := DecompressBytes(out, len(in)); err != nil || !bytes.Equal(data, in) {
 		t.Errorf("decoding mismatch for sparse data: have %x, want %x, error %v", data, in, err)
 	}
-	// Check the the compression returns the input if the bitset encoding is longer
+	// Check the compression returns the input if the bitset encoding is longer
 	in = hexutil.MustDecode("0xdf7070533534333636313639343638373532313536346c1bc33339343837313070706336343035336336346c65fefb3930393233383838ac2f65fefb")
 	out = hexutil.MustDecode("0xdf7070533534333636313639343638373532313536346c1bc33339343837313070706336343035336336346c65fefb3930393233383838ac2f65fefb")
 
