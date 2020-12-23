@@ -14,23 +14,23 @@
 // You should have received a copy of the GNU Lesser General Public License
 // along with the go-ethereum library. If not, see <http://www.gnu.org/licenses/>.
 
-// +build gofuzz
-
 package runtime
+
+import (
+	"github.com/ethereum/go-ethereum/core/vm/runtime"
+)
 
 // Fuzz is the basic entry point for the go-fuzz tool
 //
 // This returns 1 for valid parsable/runable code, 0
 // for invalid opcode.
 func Fuzz(input []byte) int {
-	_, _, err := Execute(input, input, &Config{
-		GasLimit: 3000000,
+	_, _, err := runtime.Execute(input, input, &runtime.Config{
+		GasLimit: 12000000,
 	})
-
 	// invalid opcode
-	if err != nil && len(err.Error()) > 6 && string(err.Error()[:7]) == "invalid" {
+	if err != nil && len(err.Error()) > 6 && err.Error()[:7] == "invalid" {
 		return 0
 	}
-
 	return 1
 }

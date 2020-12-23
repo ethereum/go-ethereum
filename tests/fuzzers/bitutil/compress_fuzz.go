@@ -14,11 +14,13 @@
 // You should have received a copy of the GNU Lesser General Public License
 // along with the go-ethereum library. If not, see <http://www.gnu.org/licenses/>.
 
-// +build gofuzz
-
 package bitutil
 
-import "bytes"
+import (
+	"bytes"
+
+	"github.com/ethereum/go-ethereum/common/bitutil"
+)
 
 // Fuzz implements a go-fuzz fuzzer method to test various encoding method
 // invocations.
@@ -35,7 +37,7 @@ func Fuzz(data []byte) int {
 // fuzzEncode implements a go-fuzz fuzzer method to test the bitset encoding and
 // decoding algorithm.
 func fuzzEncode(data []byte) int {
-	proc, _ := bitsetDecodeBytes(bitsetEncodeBytes(data), len(data))
+	proc, _ := bitutil.DecompressBytes(bitutil.CompressBytes(data), len(data))
 	if !bytes.Equal(data, proc) {
 		panic("content mismatch")
 	}
@@ -45,11 +47,11 @@ func fuzzEncode(data []byte) int {
 // fuzzDecode implements a go-fuzz fuzzer method to test the bit decoding and
 // reencoding algorithm.
 func fuzzDecode(data []byte) int {
-	blob, err := bitsetDecodeBytes(data, 1024)
+	blob, err := bitutil.DecompressBytes(data, 1024)
 	if err != nil {
 		return 0
 	}
-	if comp := bitsetEncodeBytes(blob); !bytes.Equal(comp, data) {
+	if comp := bitutil.CompressBytes(blob); !bytes.Equal(comp, data) {
 		panic("content mismatch")
 	}
 	return 1

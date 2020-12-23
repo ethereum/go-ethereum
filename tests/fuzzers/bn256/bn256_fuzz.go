@@ -2,8 +2,6 @@
 // Use of this source code is governed by a BSD-style license that can be found
 // in the LICENSE file.
 
-// +build gofuzz
-
 package bn256
 
 import (
@@ -24,7 +22,7 @@ func getG1Points(input io.Reader) (*cloudflare.G1, *google.G1) {
 	}
 	xg := new(google.G1)
 	if _, err := xg.Unmarshal(xc.Marshal()); err != nil {
-		panic(fmt.Sprintf("Could not marshal cloudflare -> google:", err))
+		panic(fmt.Sprintf("Could not marshal cloudflare -> google: %v", err))
 	}
 	return xc, xg
 }
@@ -37,7 +35,7 @@ func getG2Points(input io.Reader) (*cloudflare.G2, *google.G2) {
 	}
 	xg := new(google.G2)
 	if _, err := xg.Unmarshal(xc.Marshal()); err != nil {
-		panic(fmt.Sprintf("Could not marshal cloudflare -> google:", err))
+		panic(fmt.Sprintf("Could not marshal cloudflare -> google: %v", err))
 	}
 	return xc, xg
 }
