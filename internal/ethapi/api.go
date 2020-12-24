@@ -50,12 +50,13 @@ import (
 // PublicEthereumAPI provides an API to access Ethereum related information.
 // It offers only methods that operate on public data that is freely available to anyone.
 type PublicEthereumAPI struct {
-	b Backend
+	b               Backend
+	protocolVersion uint
 }
 
 // NewPublicEthereumAPI creates a new Ethereum protocol API.
-func NewPublicEthereumAPI(b Backend) *PublicEthereumAPI {
-	return &PublicEthereumAPI{b}
+func NewPublicEthereumAPI(b Backend, protocolVersion uint) *PublicEthereumAPI {
+	return &PublicEthereumAPI{b, protocolVersion}
 }
 
 // GasPrice returns a suggestion for a gas price.
@@ -86,6 +87,11 @@ func (s *PublicEthereumAPI) Syncing() (interface{}, error) {
 		"pulledStates":  hexutil.Uint64(progress.PulledStates),
 		"knownStates":   hexutil.Uint64(progress.KnownStates),
 	}, nil
+}
+
+// ProtocolVersion returns the current Ethereum protocol version this node supports
+func (s *PublicEthereumAPI) ProtocolVersion() hexutil.Uint {
+	return hexutil.Uint(s.protocolVersion)
 }
 
 // PublicTxPoolAPI offers and API for the transaction pool. It only operates on data that is non confidential.
