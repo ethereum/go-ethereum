@@ -2,7 +2,7 @@
 
 ## Supported Versions
 
-Please see Releases. We recommend to use the most recent released version.  
+Please see [Releases](https://github.com/ethereum/go-ethereum/releases). We recommend to use the [most recent released version](https://github.com/ethereum/go-ethereum/releases/latest).  
 
 ## Audit reports
 
