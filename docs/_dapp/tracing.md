@@ -105,8 +105,8 @@ that take the above form:
 ### Generating basic traces
 
 To generate a raw EVM opcode trace, `go-ethereum` provides a few [RPC API
-endpoints](debug-api), out of which the most commonly used is
-[`debug_traceTransaction`](trace-tx).
+endpoints](../rpc/ns-debug), out of which the most commonly used is
+[`debug_traceTransaction`](../rpc/ns-debug#debug_tracetransaction).
 
 In its simplest form, `traceTransaction` accepts a transaction hash as its sole argument,
 traces the transaction, aggregates all the generated data and returns it as a **large**
@@ -125,7 +125,7 @@ $ curl -H "Content-Type: application/json" -d '{"id": 1, "method": "debug_traceT
 ```
 
 Running the above operation on the Rinkeby network (with a node retaining enough history)
-will result in this [trace dump](rinkeby-example-trace-big).
+will result in this [trace dump](https://gist.github.com/karalabe/c91f95ac57f5e57f8b950ec65ecc697f).
 
 ### Tuning basic traces
 
@@ -157,7 +157,7 @@ $ curl -H "Content-Type: application/json" -d '{"id": 1, "method": "debug_traceT
 ```
 
 Running the above operation on the Rinkeby network will result in this significantly
-shorter [trace dump](rinkeby-example-trace).
+shorter [trace dump](https://gist.github.com/karalabe/d74a7cb33a70f2af75e7824fc772c5b4).
 
 ### Limits of basic traces
 
@@ -197,7 +197,7 @@ Here's what happens in each respective case:
 4. Does not need to replay anything, can immediately load up the state and serve the request. 
 
 There is one other option available to you, which may or may not suit your needs. That is
-to use [Evmlab](evmlab).
+to use [Go-evmlab](https://github.com/holiman/goevmlab).
 
     docker pull holiman/evmlab && docker run -it holiman/evmlab
 
@@ -208,9 +208,3 @@ transaction touches (balances, code, nonce etc). It should be mentioned that the
 reproducer is strictly guaranteed to be totally exact with regards to gascosts incurred by
 the outer transaction, as evmlab does not fully calculate the gascosts for nonzero data
 etc, but is usually sufficient to analyze contracts and events.
-
-[evmlab]: https://github.com/holiman/evmlab
-[rinkeby-example-trace]: https://gist.github.com/karalabe/d74a7cb33a70f2af75e7824fc772c5b4
-[rinkeby-example-trace-big]: https://gist.github.com/karalabe/c91f95ac57f5e57f8b950ec65ecc697f
-[debug-api]: ../rpc/ns-debug
-[trace-tx]: ../rpc/ns-debug#debug_tracetransaction
