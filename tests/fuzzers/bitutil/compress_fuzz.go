@@ -51,7 +51,19 @@ func fuzzDecode(data []byte) int {
 	if err != nil {
 		return 0
 	}
-	if comp := bitutil.CompressBytes(blob); !bytes.Equal(comp, data) {
+	// re-compress it (it's OK if the re-compressed differs from the
+	// original - the first input may not have been compressed at all)
+	comp := bitutil.CompressBytes(blob)
+	if len(comp) > len(blob) {
+		// After compression, it must be smaller or equal
+		panic("bad compression")
+	}
+	// But decompressing it once again should work
+	decomp, err := bitutil.DecompressBytes(data, 1024)
+	if err != nil {
+		panic(err)
+	}
+	if !bytes.Equal(decomp, blob) {
 		panic("content mismatch")
 	}
 	return 1
