@@ -794,7 +794,7 @@ func (api *PrivateDebugAPI) traceTx(ctx context.Context, message core.Message, v
 			}
 		}
 		// Constuct the JavaScript tracer to execute with
-		if tracer, err = tracers.New(*config.Tracer); err != nil {
+		if tracer, err = tracers.New(*config.Tracer, txContext); err != nil {
 			return nil, err
 		}
 		// Handle timeouts and RPC cancellations
