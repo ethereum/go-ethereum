@@ -73,6 +73,19 @@ type ethstatsConfig struct {
 	URL string `toml:",omitempty"`
 }
 
+type metricConfig struct {
+	Enabled          bool   `toml:",omitempty"`
+	EnabledExpensive bool   `toml:",omitempty"`
+	HTTP             string `toml:",omitempty"`
+	Port             int    `toml:",omitempty"`
+	EnableInfluxDB   bool   `toml:",omitempty"`
+	InfluxDBEndpoint string `toml:",omitempty"`
+	InfluxDBDatabase string `toml:",omitempty"`
+	InfluxDBUsername string `toml:",omitempty"`
+	InfluxDBPassword string `toml:",omitempty"`
+	InfluxDBTags     string `toml:",omitempty"`
+}
+
 // whisper has been deprecated, but clients out there might still have [Shh]
 // in their config, which will crash. Cut them some slack by keeping the
 // config, and displaying a message that those config switches are ineffectual.
@@ -88,6 +101,7 @@ type gethConfig struct {
 	Shh      whisperDeprecatedConfig
 	Node     node.Config
 	Ethstats ethstatsConfig
+	Metrics  metricConfig
 }
 
 func loadConfig(file string, cfg *gethConfig) error {
@@ -146,6 +160,8 @@ func makeConfigNode(ctx *cli.Context) (*node.Node, gethConfig) {
 	}
 	utils.SetShhConfig(ctx, stack)
 
+	applyMetricConfig(ctx, &cfg)
+
 	return stack, cfg
 }
 
@@ -203,4 +219,17 @@ func dumpConfig(ctx *cli.Context) error {
 	dump.Write(out)
 
 	return nil
+}
+
+func applyMetricConfig(ctx *cli.Context, cfg *gethConfig) {
+	cfg.Metrics.Enabled = ctx.GlobalBool(utils.MetricsEnabledFlag.Name)
+	cfg.Metrics.EnabledExpensive = ctx.GlobalBool(utils.MetricsEnabledExpensiveFlag.Name)
+	cfg.Metrics.HTTP = ctx.GlobalString(utils.MetricsHTTPFlag.Name)
+	cfg.Metrics.Port = ctx.GlobalInt(utils.MetricsPortFlag.Name)
+	cfg.Metrics.EnableInfluxDB = ctx.GlobalBool(utils.MetricsEnableInfluxDBFlag.Name)
+	cfg.Metrics.InfluxDBEndpoint = ctx.GlobalString(utils.MetricsInfluxDBEndpointFlag.Name)
+	cfg.Metrics.InfluxDBDatabase = ctx.GlobalString(utils.MetricsInfluxDBDatabaseFlag.Name)
+	cfg.Metrics.InfluxDBUsername = ctx.GlobalString(utils.MetricsInfluxDBUsernameFlag.Name)
+	cfg.Metrics.InfluxDBPassword = ctx.GlobalString(utils.MetricsInfluxDBPasswordFlag.Name)
+	cfg.Metrics.InfluxDBTags = ctx.GlobalString(utils.MetricsInfluxDBTagsFlag.Name)
 }
