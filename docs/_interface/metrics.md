@@ -5,7 +5,7 @@ sort_key: C
 
 ## Meters and Timers
 
-Note, metrics collection is disabled by default in order not to incur reporting overhead for the average user. To enable it please specify the `--metrics` flag to geth.
+Note, metrics collection is disabled by default in order not to incur reporting overhead for the average user. The flag `--metrics` must therefore be used to enable the basic metrics, and the flag `--metrics.expensive` can be used to enable certain metrics that are deemed 'expensive', from a resource-consumption perspective. Examples of expensive metrics is per-packet network traffic data.  
 
 Geth has quite a nice logging system, capable of creating leveled log entries tagged with various parts of the system. This helps enormously during debugging to see exactly what the system is doing, what branches it's taking, etc. However, logs are not particularly useful when the system does work correctly, just not very optimally: one - or even a  handful - of logged events is not really statistically relevant, and tracing more in log files can quickly become unwieldy.
 
