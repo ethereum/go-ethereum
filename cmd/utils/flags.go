@@ -726,37 +726,6 @@ var (
 		Usage: "External EVM configuration (default = built-in interpreter)",
 		Value: "",
 	}
-
-	// EIP1559 Flags
-	EIP1559CLIConfigure = cli.BoolFlag{
-		Name:  "eip1559.config",
-		Usage: "Set to true to turn on CLI-configuration of EIP1559 params",
-	}
-	EIP1559InitialBaseFee = cli.Uint64Flag{
-		Name:  "eip1559.initialbasefee",
-		Usage: "External configuration of EIP1559 initial BaseFee",
-		Value: params.EIP1559InitialBaseFee,
-	}
-	EIP1559ForkBlockNumber = cli.Uint64Flag{
-		Name:  "eip1559.forkblocknumber",
-		Usage: "External configuration of EIP1559 ForkBlockNumber",
-		Value: params.EIP1559ForkBlockNumber,
-	}
-	EIP1559EIP1559BaseFeeMaxChangeDenominator = cli.Uint64Flag{
-		Name:  "eip1559.basefeemaxchangedenominator",
-		Usage: "External configuration of EIP1559 EIP1559BaseFeeMaxChangeDenominator",
-		Value: params.EIP1559BaseFeeMaxChangeDenominator,
-	}
-	EIP1559EIP1559SlackCoefficient = cli.Uint64Flag{
-		Name:  "eip1559.slackcoefficient",
-		Usage: "External configuration of EIP1559 EIP1559SlackCoefficient",
-		Value: params.EIP1559SlackCoefficient,
-	}
-	EIP1559MigrationBlockDuration = cli.Uint64Flag{
-		Name:  "eip1559.migrationblockduration",
-		Usage: "External configuration of the number of EIP1559 transition blocks",
-		Value: params.EIP1559MigrationBlockDuration,
-	}
 )
 
 // MakeDataDir retrieves the currently requested data directory, terminating
@@ -1702,14 +1671,6 @@ func SetEthConfig(ctx *cli.Context, stack *node.Node, cfg *eth.Config) {
 			SetDNSDiscoveryDefaults(cfg, params.MainnetGenesisHash)
 		}
 	}
-
-	// If we are configuring custom EIP1559 params, do so now
-	if ctx.GlobalBool(EIP1559CLIConfigure.Name) {
-		if cfg.Genesis == nil {
-			cfg.Genesis = core.DefaultGenesisBlock()
-		}
-		setEIP1559Params(ctx, cfg)
-	}
 }
 
 // SetDNSDiscoveryDefaults configures DNS discovery with the given URL if
@@ -1725,33 +1686,6 @@ func SetDNSDiscoveryDefaults(cfg *eth.Config, genesis common.Hash) {
 	}
 	if url := params.KnownDNSNetwork(genesis, protocol); url != "" {
 		cfg.DiscoveryURLs = []string{url}
-	}
-}
-
-func setEIP1559Params(ctx *cli.Context, config *eth.Config) {
-	if ctx.GlobalIsSet(EIP1559ForkBlockNumber.Name) {
-		config.Genesis.Config.EIP1559.ForkBlockNumber = ctx.GlobalUint64(EIP1559ForkBlockNumber.Name)
-	}
-	if ctx.GlobalIsSet(EIP1559InitialBaseFee.Name) {
-		config.Genesis.Config.EIP1559.InitialBaseFee = ctx.GlobalUint64(EIP1559InitialBaseFee.Name)
-	}
-	if ctx.GlobalIsSet(EIP1559EIP1559SlackCoefficient.Name) {
-		config.Genesis.Config.EIP1559.EIP1559SlackCoefficient = ctx.GlobalUint64(EIP1559EIP1559SlackCoefficient.Name)
-	}
-	if ctx.GlobalIsSet(EIP1559EIP1559BaseFeeMaxChangeDenominator.Name) {
-		config.Genesis.Config.EIP1559.EIP1559BaseFeeMaxChangeDenominator = ctx.GlobalUint64(EIP1559EIP1559BaseFeeMaxChangeDenominator.Name)
-	}
-	if ctx.GlobalIsSet(EIP1559MigrationBlockDuration.Name) {
-		config.Genesis.Config.EIP1559.MigrationBlockDuration = ctx.GlobalUint64(EIP1559MigrationBlockDuration.Name)
-	}
-	// Re-calculate the derived config params
-	config.Genesis.Config.EIP1559.ForkFinalizedBlockNumber = config.Genesis.Config.EIP1559.ForkBlockNumber + config.Genesis.Config.EIP1559.MigrationBlockDuration
-	config.Genesis.Config.EIP1559Block = new(big.Int).SetUint64(config.Genesis.Config.EIP1559.ForkBlockNumber)
-	config.Genesis.Config.EIP1559FinalizedBlock = new(big.Int).SetUint64(config.Genesis.Config.EIP1559.ForkFinalizedBlockNumber)
-
-	// If eip1559 fork block number is set to 0 then set the genesis (0th) block basefee to the default initial basefee value if none was provided
-	if config.Genesis.BaseFee == nil && config.Genesis.Config.EIP1559.ForkBlockNumber == 0 {
-		config.Genesis.BaseFee = new(big.Int).SetUint64(params.EIP1559InitialBaseFee)
 	}
 }
 

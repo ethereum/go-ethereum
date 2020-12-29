@@ -159,12 +159,6 @@ var (
 		utils.EWASMInterpreterFlag,
 		utils.EVMInterpreterFlag,
 		configFileFlag,
-		utils.EIP1559CLIConfigure,
-		utils.EIP1559ForkBlockNumber,
-		utils.EIP1559InitialBaseFee,
-		utils.EIP1559EIP1559BaseFeeMaxChangeDenominator,
-		utils.EIP1559EIP1559SlackCoefficient,
-		utils.EIP1559MigrationBlockDuration,
 	}
 
 	rpcFlags = []cli.Flag{
