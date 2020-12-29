@@ -5,9 +5,7 @@ sort_key: C
 
 ## Meters and Timers
 
-Note, metrics collection is disabled by default in order not to incur reporting overhead for the average user. The flag `--metrics` must therefore be used to enable the basic metrics, and the flag `--metrics.expensive` can be used to enable certain metrics that are deemed 'expensive', from a resource-consumption perspective. Examples of expensive metrics is per-packet network traffic data.  
-
-Geth has quite a nice logging system, capable of creating leveled log entries tagged with various parts of the system. This helps enormously during debugging to see exactly what the system is doing, what branches it's taking, etc. However, logs are not particularly useful when the system does work correctly, just not very optimally: one - or even a  handful - of logged events is not really statistically relevant, and tracing more in log files can quickly become unwieldy.
+Note, metrics collection is disabled by default in order not to incur reporting overhead for the average user. The flag `--metrics` must therefore be used to enable the basic metrics, and the flag `--metrics.expensive` can be used to enable certain metrics that are deemed 'expensive', from a resource-consumption perspective. Examples of expensive metrics is per-packet network traffic data.
 
 The goal of the Geth metrics system is that - similar to logs - we should be able to add arbitrary metric collection to any part of the code without requiring fancy constructs to analyze them (counter variables, public interfaces, crossing over the APIs, console hooks, etc). Instead, we should just "update" metrics whenever and wherever needed, and have them automatically collected, surfaced through the APIs, queryable and visualizable for analysis.
 
@@ -23,6 +21,8 @@ To that extent, Geth currently implement two types of metrics:
      * Percentile 50: well behaved samples (boring, just to give an idea)
      * Percentile 80: general performance (these should be optimised)
      * Percentile 95: worst case outliers (rare, just handle gracefully)
+ * **Counters**: A counter holds a single int64 value that can be incremented and decremented. The current value of the counter can be queried.
+ * **Gauges**: A gauge measures a single int64 value. Additionally to increment and decrement the value, as with a counter, the gauge can be set arbitrarely.
 
 ## Creating and updating metrics
 
@@ -31,6 +31,14 @@ Metrics can be added easily in the code:
 ```go
 meter := metrics.NewMeter("system/memory/allocs")
 timer := metrics.NewTimer("chain/inserts")
+```
+
+In order to use the same meter from two different packages without creating dependency cycles, the metrics can be created using `NewOrRegisteredX()` functions.
+This creates a new meter if no meter with this name is available or returns the existing meter.
+
+```go
+meter := metrics.NewOrRegisteredMeter("system/memory/allocs")
+timer := metrics.NewOrRegisteredTimer("chain/inserts")
 ```
 
 The name can be any arbitrary string, however since Geth assumes it to be some meaningful sub-system hierarchy, please name accordingly. Metrics can then be updated equally simply:
