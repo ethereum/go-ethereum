@@ -222,14 +222,21 @@ func dumpConfig(ctx *cli.Context) error {
 }
 
 func applyMetricConfig(ctx *cli.Context, cfg *gethConfig) {
-	cfg.Metrics.Enabled = ctx.GlobalBool(utils.MetricsEnabledFlag.Name)
-	cfg.Metrics.EnabledExpensive = ctx.GlobalBool(utils.MetricsEnabledExpensiveFlag.Name)
-	cfg.Metrics.HTTP = ctx.GlobalString(utils.MetricsHTTPFlag.Name)
-	cfg.Metrics.Port = ctx.GlobalInt(utils.MetricsPortFlag.Name)
-	cfg.Metrics.EnableInfluxDB = ctx.GlobalBool(utils.MetricsEnableInfluxDBFlag.Name)
-	cfg.Metrics.InfluxDBEndpoint = ctx.GlobalString(utils.MetricsInfluxDBEndpointFlag.Name)
-	cfg.Metrics.InfluxDBDatabase = ctx.GlobalString(utils.MetricsInfluxDBDatabaseFlag.Name)
-	cfg.Metrics.InfluxDBUsername = ctx.GlobalString(utils.MetricsInfluxDBUsernameFlag.Name)
-	cfg.Metrics.InfluxDBPassword = ctx.GlobalString(utils.MetricsInfluxDBPasswordFlag.Name)
-	cfg.Metrics.InfluxDBTags = ctx.GlobalString(utils.MetricsInfluxDBTagsFlag.Name)
+	cfg.Metrics = metricConfig{}
+	metricsEnabled := ctx.GlobalBool(utils.MetricsEnabledFlag.Name)
+	if metricsEnabled {
+		cfg.Metrics.Enabled = metricsEnabled
+		cfg.Metrics.EnabledExpensive = ctx.GlobalBool(utils.MetricsEnabledExpensiveFlag.Name)
+		cfg.Metrics.HTTP = ctx.GlobalString(utils.MetricsHTTPFlag.Name)
+		cfg.Metrics.Port = ctx.GlobalInt(utils.MetricsPortFlag.Name)
+		influxdbEnabled := ctx.GlobalBool(utils.MetricsEnableInfluxDBFlag.Name)
+		if influxdbEnabled {
+			cfg.Metrics.EnableInfluxDB = influxdbEnabled
+			cfg.Metrics.InfluxDBEndpoint = ctx.GlobalString(utils.MetricsInfluxDBEndpointFlag.Name)
+			cfg.Metrics.InfluxDBDatabase = ctx.GlobalString(utils.MetricsInfluxDBDatabaseFlag.Name)
+			cfg.Metrics.InfluxDBUsername = ctx.GlobalString(utils.MetricsInfluxDBUsernameFlag.Name)
+			cfg.Metrics.InfluxDBPassword = ctx.GlobalString(utils.MetricsInfluxDBPasswordFlag.Name)
+			cfg.Metrics.InfluxDBTags = ctx.GlobalString(utils.MetricsInfluxDBTagsFlag.Name)
+		}
+	}
 }
