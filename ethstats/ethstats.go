@@ -168,7 +168,6 @@ func (s *Service) loop() {
 			select {
 			// Notify of chain head events, but drop if too frequent
 			case head := <-chainHeadCh:
-				log.Warn(">>>>>>>>>>> EthStats: receiver chain head event")
 				select {
 				case headCh <- head.Block:
 				default:

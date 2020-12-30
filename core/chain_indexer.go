@@ -211,7 +211,6 @@ func (c *ChainIndexer) eventLoop(currentHeader *types.Header, events chan ChainH
 			return
 
 		case ev, ok := <-events:
-			log.Warn(">>>>>>>>>>> ChainIndexer: Received a new event, ensure it's not nil (closing) and update")
 			// Received a new event, ensure it's not nil (closing) and update
 			if !ok {
 				errc := <-c.quit
