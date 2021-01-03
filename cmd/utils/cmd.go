@@ -26,6 +26,7 @@ import (
 	"runtime"
 	"strings"
 	"syscall"
+	"time"
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core"
@@ -40,7 +41,13 @@ import (
 )
 
 const (
-	importBatchSize = 2500
+	importBatchSize       = 2500
+	freeDiskSpaceWarning  = 1024 * 1024 * 1024
+	freeDiskSpaceCritical = 300 * 1024 * 1024
+)
+
+var (
+	sigtermCh = make(chan os.Signal, 1)
 )
 
 // Fatalf formats a message to standard error and exits the program.
@@ -68,14 +75,14 @@ func StartNode(stack *node.Node) {
 		Fatalf("Error starting protocol stack: %v", err)
 	}
 	go func() {
-		sigc := make(chan os.Signal, 1)
-		signal.Notify(sigc, syscall.SIGINT, syscall.SIGTERM)
-		defer signal.Stop(sigc)
-		<-sigc
+		signal.Notify(sigtermCh, syscall.SIGINT, syscall.SIGTERM)
+		defer signal.Stop(sigtermCh)
+		go monitorFreeDiskSpace(stack.InstanceDir())
+		<-sigtermCh
 		log.Info("Got interrupt, shutting down...")
 		go stack.Close()
 		for i := 10; i > 0; i-- {
-			<-sigc
+			<-sigtermCh
 			if i > 1 {
 				log.Warn("Already shutting down, interrupt more to panic.", "times", i-1)
 			}
@@ -83,6 +90,19 @@ func StartNode(stack *node.Node) {
 		debug.Exit() // ensure trace and CPU profile data is flushed.
 		debug.LoudPanic("boom")
 	}()
+}
+
+func monitorFreeDiskSpace(path string) {
+	for {
+		freeSpace := getFreeDiskSpace(path)
+		if freeSpace < freeDiskSpaceCritical {
+			log.Error("Low disk space. Gracefully shutting down Geth to prevent database corruption.", "available", freeSpace/1024/1024)
+			sigtermCh <- syscall.SIGTERM
+		} else if freeSpace < freeDiskSpaceWarning {
+			log.Warn("Disk space is running low. Geth will shutdown if disk space runs below critical level.", "available", freeSpace/1024/1024, "critical_level", freeDiskSpaceCritical/1024/1024)
+		}
+		time.Sleep(5 * time.Second)
+	}
 }
 
 func ImportChain(chain *core.BlockChain, fn string) error {
