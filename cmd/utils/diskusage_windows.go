@@ -17,9 +17,10 @@
 package utils
 
 import (
+	"syscall"
+
 	"github.com/ethereum/go-ethereum/log"
 	"golang.org/x/sys/windows"
-	"syscall"
 )
 
 func getFreeDiskSpace(path string) uint64 {

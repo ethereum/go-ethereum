@@ -19,9 +19,10 @@
 package utils
 
 import (
+	"syscall"
+
 	"github.com/ethereum/go-ethereum/log"
 	"golang.org/x/sys/unix"
-	"syscall"
 )
 
 var stat unix.Statfs_t
