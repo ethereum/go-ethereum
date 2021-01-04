@@ -159,12 +159,13 @@ func (n *Node) Start() error {
 		return ErrNodeStopped
 	}
 	n.state = runningState
-	err := n.startNetworking()
+	// open networking and RPC endpoints
+	err := n.openEndpoints()
 	lifecycles := make([]Lifecycle, len(n.lifecycles))
 	copy(lifecycles, n.lifecycles)
 	n.lock.Unlock()
 
-	// Check if networking startup failed.
+	// Check if endpoint startup failed.
 	if err != nil {
 		n.doClose(nil)
 		return err
@@ -247,12 +248,14 @@ func (n *Node) doClose(errs []error) error {
 	}
 }
 
-// startNetworking starts all network endpoints.
-func (n *Node) startNetworking() error {
+// openEndpoints starts all network and RPC endpoints.
+func (n *Node) openEndpoints() error {
+	// start networking endpoints
 	n.log.Info("Starting peer-to-peer node", "instance", n.server.Name)
 	if err := n.server.Start(); err != nil {
 		return convertFileLockError(err)
 	}
+	// start RPC endpoints
 	err := n.startRPC()
 	if err != nil {
 		n.stopRPC()
