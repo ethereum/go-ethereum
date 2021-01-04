@@ -95,10 +95,12 @@ func monitorFreeDiskSpace(sigc chan os.Signal, path string) {
 		if err != nil {
 			log.Error("Failed to get free disk space", "path", path, "err", err)
 			sigc <- syscall.SIGTERM
+			break
 		}
 		if freeSpace < freeDiskSpaceCritical {
 			log.Error("Low disk space. Gracefully shutting down Geth to prevent database corruption.", "available", freeSpace/1024/1024)
 			sigc <- syscall.SIGTERM
+			break
 		} else if freeSpace < freeDiskSpaceWarning {
 			log.Warn("Disk space is running low. Geth will shutdown if disk space runs below critical level.", "available", freeSpace/1024/1024, "critical_level", freeDiskSpaceCritical/1024/1024)
 		}
