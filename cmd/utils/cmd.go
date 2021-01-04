@@ -93,8 +93,7 @@ func monitorFreeDiskSpace(sigc chan os.Signal, path string) {
 	for {
 		freeSpace, err := getFreeDiskSpace(path)
 		if err != nil {
-			log.Error("Failed to get free disk space", "path", path, "err", err)
-			sigc <- syscall.SIGTERM
+			log.Warn("Failed to get free disk space", "path", path, "err", err)
 			break
 		}
 		if freeSpace < freeDiskSpaceCritical {
