@@ -21,6 +21,7 @@ import (
 	"compress/gzip"
 	"fmt"
 	"io"
+	"math/big"
 	"os"
 	"os/signal"
 	"runtime"
@@ -33,16 +34,17 @@ import (
 	"github.com/ethereum/go-ethereum/core/rawdb"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/crypto"
+	"github.com/ethereum/go-ethereum/eth/downloader"
 	"github.com/ethereum/go-ethereum/ethdb"
 	"github.com/ethereum/go-ethereum/internal/debug"
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/node"
 	"github.com/ethereum/go-ethereum/rlp"
+	"gopkg.in/urfave/cli.v1"
 )
 
 const (
 	importBatchSize       = 2500
-	freeDiskSpaceWarning  = 1024 * 1024 * 1024
 	freeDiskSpaceCritical = 300 * 1024 * 1024
 )
 
@@ -66,7 +68,7 @@ func Fatalf(format string, args ...interface{}) {
 	os.Exit(1)
 }
 
-func StartNode(stack *node.Node) {
+func StartNode(ctx *cli.Context, stack *node.Node, chainID *big.Int) {
 	if err := stack.Start(); err != nil {
 		Fatalf("Error starting protocol stack: %v", err)
 	}
@@ -74,7 +76,12 @@ func StartNode(stack *node.Node) {
 		sigc := make(chan os.Signal, 1)
 		signal.Notify(sigc, syscall.SIGINT, syscall.SIGTERM)
 		defer signal.Stop(sigc)
-		go monitorFreeDiskSpace(sigc, stack.InstanceDir())
+
+		syncMode := *GlobalTextMarshaler(ctx, SyncModeFlag.Name).(*downloader.SyncMode)
+		if chainID.Int64() == 1 && syncMode != downloader.FastSync {
+			go monitorFreeDiskSpace(sigc, stack.InstanceDir())
+		}
+
 		<-sigc
 		log.Info("Got interrupt, shutting down...")
 		go stack.Close()
@@ -100,10 +107,10 @@ func monitorFreeDiskSpace(sigc chan os.Signal, path string) {
 			log.Error("Low disk space. Gracefully shutting down Geth to prevent database corruption.", "available", common.StorageSize(freeSpace))
 			sigc <- syscall.SIGTERM
 			break
-		} else if freeSpace < freeDiskSpaceWarning {
+		} else if freeSpace < 2*freeDiskSpaceCritical {
 			log.Warn("Disk space is running low. Geth will shutdown if disk space runs below critical level.", "available", common.StorageSize(freeSpace), "critical_level", common.StorageSize(freeDiskSpaceCritical))
 		}
-		time.Sleep(5 * time.Second)
+		time.Sleep(60 * time.Second)
 	}
 }
 
