@@ -19,23 +19,20 @@
 package utils
 
 import (
-	"syscall"
+	"fmt"
 
-	"github.com/ethereum/go-ethereum/log"
 	"golang.org/x/sys/unix"
 )
 
 var stat unix.Statfs_t
 
-func getFreeDiskSpace(path string) uint64 {
+func getFreeDiskSpace(path string) (uint64, error) {
 
 	err := unix.Statfs(path, &stat)
 	if err != nil {
-		log.Warn("Failed to call Statfs", "path", path, "err", err)
-		sigtermCh <- syscall.SIGTERM
-		return 0
+		return 0, fmt.Errorf("failed to call Statfs: %v", err)
 	}
 
 	// Available blocks * size per block = available space in bytes
-	return stat.Bavail * uint64(stat.Bsize)
+	return stat.Bavail * uint64(stat.Bsize), nil
 }

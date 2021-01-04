@@ -17,25 +17,22 @@
 package utils
 
 import (
-	"syscall"
+	"fmt"
 
-	"github.com/ethereum/go-ethereum/log"
 	"golang.org/x/sys/windows"
 )
 
-func getFreeDiskSpace(path string) uint64 {
+func getFreeDiskSpace(path string) (uint64, error) {
 
 	cwd, err := windows.UTF16PtrFromString(path)
 	if err != nil {
-		log.Warn("Failed to call UTF16PtrFromString", "path", path, "err", err)
-		sigtermCh <- syscall.SIGTERM
+		return 0, fmt.Errorf("failed to call UTF16PtrFromString: %v", err)
 	}
 
 	var freeBytesAvailableToCaller, totalNumberOfBytes, totalNumberOfFreeBytes uint64
 	if err := windows.GetDiskFreeSpaceEx(cwd, &freeBytesAvailableToCaller, &totalNumberOfBytes, &totalNumberOfFreeBytes); err != nil {
-		log.Warn("Failed to call GetDiskFreeSpaceEx", "path", path, "err", err)
-		sigtermCh <- syscall.SIGTERM
+		return 0, fmt.Errorf("failed to call GetDiskFreeSpaceEx: %v", err)
 	}
 
-	return freeBytesAvailableToCaller
+	return freeBytesAvailableToCaller, nil
 }

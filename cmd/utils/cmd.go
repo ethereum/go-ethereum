@@ -46,10 +46,6 @@ const (
 	freeDiskSpaceCritical = 300 * 1024 * 1024
 )
 
-var (
-	sigtermCh = make(chan os.Signal, 1)
-)
-
 // Fatalf formats a message to standard error and exits the program.
 // The message is also printed to standard output if standard error
 // is redirected to a different file.
@@ -75,14 +71,15 @@ func StartNode(stack *node.Node) {
 		Fatalf("Error starting protocol stack: %v", err)
 	}
 	go func() {
-		signal.Notify(sigtermCh, syscall.SIGINT, syscall.SIGTERM)
-		defer signal.Stop(sigtermCh)
-		go monitorFreeDiskSpace(stack.InstanceDir())
-		<-sigtermCh
+		sigc := make(chan os.Signal, 1)
+		signal.Notify(sigc, syscall.SIGINT, syscall.SIGTERM)
+		defer signal.Stop(sigc)
+		go monitorFreeDiskSpace(sigc, stack.InstanceDir())
+		<-sigc
 		log.Info("Got interrupt, shutting down...")
 		go stack.Close()
 		for i := 10; i > 0; i-- {
-			<-sigtermCh
+			<-sigc
 			if i > 1 {
 				log.Warn("Already shutting down, interrupt more to panic.", "times", i-1)
 			}
@@ -92,12 +89,16 @@ func StartNode(stack *node.Node) {
 	}()
 }
 
-func monitorFreeDiskSpace(path string) {
+func monitorFreeDiskSpace(sigc chan os.Signal, path string) {
 	for {
-		freeSpace := getFreeDiskSpace(path)
+		freeSpace, err := getFreeDiskSpace(path)
+		if err != nil {
+			log.Error("Failed to get free disk space", "path", path, "err", err)
+			sigc <- syscall.SIGTERM
+		}
 		if freeSpace < freeDiskSpaceCritical {
 			log.Error("Low disk space. Gracefully shutting down Geth to prevent database corruption.", "available", freeSpace/1024/1024)
-			sigtermCh <- syscall.SIGTERM
+			sigc <- syscall.SIGTERM
 		} else if freeSpace < freeDiskSpaceWarning {
 			log.Warn("Disk space is running low. Geth will shutdown if disk space runs below critical level.", "available", freeSpace/1024/1024, "critical_level", freeDiskSpaceCritical/1024/1024)
 		}
