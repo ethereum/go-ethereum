@@ -28,8 +28,7 @@ var stat unix.Statfs_t
 
 func getFreeDiskSpace(path string) (uint64, error) {
 
-	err := unix.Statfs(path, &stat)
-	if err != nil {
+	if err := unix.Statfs(path, &stat); err != nil {
 		return 0, fmt.Errorf("failed to call Statfs: %v", err)
 	}
 
