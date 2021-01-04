@@ -84,7 +84,8 @@ var (
 	noauthFlag = flag.Bool("noauth", false, "Enables funding requests without authentication")
 	logFlag    = flag.Int("loglevel", 3, "Log level to use for Ethereum and the faucet")
 
-	twitterBearerToken = flag.String("twitter.token", "", "Twitter bearer token to authenticate with the twitter API")
+	twitterTokenFlag   = flag.String("twitter.token", "", "Bearer token to authenticate with the v2 Twitter API")
+	twitterTokenV1Flag = flag.String("twitter.token.v1", "", "Bearer token to authenticate with the v1.1 Twitter API")
 )
 
 var (
@@ -245,6 +246,7 @@ func newFaucet(genesis *core.Genesis, port int, enodes []*discv5.Node, network u
 	cfg.NetworkId = network
 	cfg.Genesis = genesis
 	utils.SetDNSDiscoveryDefaults(&cfg, genesis.ToBlock(nil).Hash())
+
 	lesBackend, err := les.New(stack, &cfg)
 	if err != nil {
 		return nil, fmt.Errorf("Failed to register the Ethereum service: %w", err)
@@ -388,8 +390,7 @@ func (f *faucet) apiHandler(w http.ResponseWriter, r *http.Request) {
 		if err = conn.ReadJSON(&msg); err != nil {
 			return
 		}
-		if !*noauthFlag && !strings.HasPrefix(msg.URL, "https://gist.github.com/") && !strings.HasPrefix(msg.URL, "https://twitter.com/") &&
-			!strings.HasPrefix(msg.URL, "https://plus.google.com/") && !strings.HasPrefix(msg.URL, "https://www.facebook.com/") {
+		if !*noauthFlag && !strings.HasPrefix(msg.URL, "https://twitter.com/") && !strings.HasPrefix(msg.URL, "https://www.facebook.com/") {
 			if err = sendError(conn, errors.New("URL doesn't link to supported services")); err != nil {
 				log.Warn("Failed to send URL error to client", "err", err)
 				return
@@ -451,21 +452,8 @@ func (f *faucet) apiHandler(w http.ResponseWriter, r *http.Request) {
 			address  common.Address
 		)
 		switch {
-		case strings.HasPrefix(msg.URL, "https://gist.github.com/"):
-			if err = sendError(conn, errors.New("GitHub authentication discontinued at the official request of GitHub")); err != nil {
-				log.Warn("Failed to send GitHub deprecation to client", "err", err)
-				return
-			}
-			continue
-		case strings.HasPrefix(msg.URL, "https://plus.google.com/"):
-			//lint:ignore ST1005 Google is a company name and should be capitalized.
-			if err = sendError(conn, errors.New("Google+ authentication discontinued as the service was sunset")); err != nil {
-				log.Warn("Failed to send Google+ deprecation to client", "err", err)
-				return
-			}
-			continue
 		case strings.HasPrefix(msg.URL, "https://twitter.com/"):
-			id, username, avatar, address, err = authTwitter(msg.URL, *twitterBearerToken)
+			id, username, avatar, address, err = authTwitter(msg.URL, *twitterTokenV1Flag, *twitterTokenFlag)
 		case strings.HasPrefix(msg.URL, "https://www.facebook.com/"):
 			username, avatar, address, err = authFacebook(msg.URL)
 			id = username
@@ -690,23 +678,31 @@ func sendSuccess(conn *websocket.Conn, msg string) error {
 
 // authTwitter tries to authenticate a faucet request using Twitter posts, returning
 // the uniqueness identifier (user id/username), username, avatar URL and Ethereum address to fund on success.
-func authTwitter(url string, token string) (string, string, string, common.Address, error) {
+func authTwitter(url string, tokenV1, tokenV2 string) (string, string, string, common.Address, error) {
 	// Ensure the user specified a meaningful URL, no fancy nonsense
 	parts := strings.Split(url, "/")
 	if len(parts) < 4 || parts[len(parts)-2] != "status" {
 		//lint:ignore ST1005 This error is to be displayed in the browser
 		return "", "", "", common.Address{}, errors.New("Invalid Twitter status URL")
 	}
-
+	// Strip any query parameters from the tweet id and ensure it's numeric
+	tweetID := strings.Split(parts[len(parts)-1], "?")[0]
+	if !regexp.MustCompile("^[0-9]+$").MatchString(tweetID) {
+		return "", "", "", common.Address{}, errors.New("Invalid Tweet URL")
+	}
 	// Twitter's API isn't really friendly with direct links.
 	// It is restricted to 300 queries / 15 minute with an app api key.
 	// Anything more will require read only authorization from the users and that we want to avoid.
 
-	// If twitter bearer token is provided, use the twitter api
-	if token != "" {
-		return authTwitterWithToken(parts[len(parts)-1], token)
+	// If Twitter bearer token is provided, use the API, selecting the version
+	// the user would prefer (currently there's a limit of 1 v2 app / developer
+	// but unlimited v1.1 apps).
+	switch {
+	case tokenV1 != "":
+		return authTwitterWithTokenV1(tweetID, tokenV1)
+	case tokenV2 != "":
+		return authTwitterWithTokenV2(tweetID, tokenV2)
 	}
-
 	// Twiter API token isn't provided so we just load the public posts
 	// and scrape it for the Ethereum address and profile URL. We need to load
 	// the mobile page though since the main page loads tweet contents via JS.
@@ -742,19 +738,49 @@ func authTwitter(url string, token string) (string, string, string, common.Addre
 	return username + "@twitter", username, avatar, address, nil
 }
 
-// authTwitterWithToken tries to authenticate a faucet request using Twitter's API, returning
-// the uniqueness identifier (user id/username), username, avatar URL and Ethereum address to fund on success.
-func authTwitterWithToken(tweetID string, token string) (string, string, string, common.Address, error) {
-	// Strip any query parameters from the tweet id
-	sanitizedTweetID := strings.Split(tweetID, "?")[0]
-
-	// Ensure numeric tweetID
-	if !regexp.MustCompile("^[0-9]+$").MatchString(sanitizedTweetID) {
-		return "", "", "", common.Address{}, errors.New("Invalid Tweet URL")
-	}
-
+// authTwitterWithTokenV1 tries to authenticate a faucet request using Twitter's v1
+// API, returning the user id, username, avatar URL and Ethereum address to fund on
+// success.
+func authTwitterWithTokenV1(tweetID string, token string) (string, string, string, common.Address, error) {
 	// Query the tweet details from Twitter
-	url := fmt.Sprintf("https://api.twitter.com/2/tweets/%s?expansions=author_id&user.fields=profile_image_url", sanitizedTweetID)
+	url := fmt.Sprintf("https://api.twitter.com/1.1/statuses/show.json?id=%s", tweetID)
+	req, err := http.NewRequest("GET", url, nil)
+	if err != nil {
+		return "", "", "", common.Address{}, err
+	}
+	req.Header.Set("Authorization", fmt.Sprintf("Bearer %s", token))
+	res, err := http.DefaultClient.Do(req)
+	if err != nil {
+		return "", "", "", common.Address{}, err
+	}
+	defer res.Body.Close()
+
+	var result struct {
+		Text string `json:"text"`
+		User struct {
+			ID       string `json:"id_str"`
+			Username string `json:"screen_name"`
+			Avatar   string `json:"profile_image_url"`
+		} `json:"user"`
+	}
+	err = json.NewDecoder(res.Body).Decode(&result)
+	if err != nil {
+		return "", "", "", common.Address{}, err
+	}
+	address := common.HexToAddress(regexp.MustCompile("0x[0-9a-fA-F]{40}").FindString(result.Text))
+	if address == (common.Address{}) {
+		//lint:ignore ST1005 This error is to be displayed in the browser
+		return "", "", "", common.Address{}, errors.New("No Ethereum address found to fund")
+	}
+	return result.User.ID + "@twitter", result.User.Username, result.User.Avatar, address, nil
+}
+
+// authTwitterWithTokenV2 tries to authenticate a faucet request using Twitter's v2
+// API, returning the user id, username, avatar URL and Ethereum address to fund on
+// success.
+func authTwitterWithTokenV2(tweetID string, token string) (string, string, string, common.Address, error) {
+	// Query the tweet details from Twitter
+	url := fmt.Sprintf("https://api.twitter.com/2/tweets/%s?expansions=author_id&user.fields=profile_image_url", tweetID)
 	req, err := http.NewRequest("GET", url, nil)
 	if err != nil {
 		return "", "", "", common.Address{}, err
@@ -769,15 +795,13 @@ func authTwitterWithToken(tweetID string, token string) (string, string, string,
 	var result struct {
 		Data struct {
 			AuthorID string `json:"author_id"`
-			ID       string `json:"id"`
 			Text     string `json:"text"`
 		} `json:"data"`
 		Includes struct {
 			Users []struct {
-				ProfileImageURL string `json:"profile_image_url"`
-				Username        string `json:"username"`
-				ID              string `json:"id"`
-				Name            string `json:"name"`
+				ID       string `json:"id"`
+				Username string `json:"username"`
+				Avatar   string `json:"profile_image_url"`
 			} `json:"users"`
 		} `json:"includes"`
 	}
@@ -792,7 +816,7 @@ func authTwitterWithToken(tweetID string, token string) (string, string, string,
 		//lint:ignore ST1005 This error is to be displayed in the browser
 		return "", "", "", common.Address{}, errors.New("No Ethereum address found to fund")
 	}
-	return result.Data.AuthorID + "@twitter", result.Includes.Users[0].Username, result.Includes.Users[0].ProfileImageURL, address, nil
+	return result.Data.AuthorID + "@twitter", result.Includes.Users[0].Username, result.Includes.Users[0].Avatar, address, nil
 }
 
 // authFacebook tries to authenticate a faucet request using Facebook posts,
