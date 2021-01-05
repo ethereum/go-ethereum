@@ -24,10 +24,8 @@ import (
 	"golang.org/x/sys/unix"
 )
 
-var stat unix.Statfs_t
-
 func getFreeDiskSpace(path string) (uint64, error) {
-
+	var stat unix.Statfs_t
 	if err := unix.Statfs(path, &stat); err != nil {
 		return 0, fmt.Errorf("failed to call Statfs: %v", err)
 	}
