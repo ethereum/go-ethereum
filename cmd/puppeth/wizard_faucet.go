@@ -102,11 +102,10 @@ func (w *wizard) deployFaucet() {
 			infos.captchaSecret = w.readPassword()
 		}
 	}
-
-	// Accessing the twitter api requires a bearer token, request it
+	// Accessing the Twitter API requires a bearer token, request it
 	if infos.twitterToken != "" {
 		fmt.Println()
-		fmt.Println("Reuse previous twitter API Bearer token (y/n)? (default = yes)")
+		fmt.Println("Reuse previous Twitter API token (y/n)? (default = yes)")
 		if !w.readDefaultYesNo(true) {
 			infos.twitterToken = ""
 		}
@@ -114,17 +113,10 @@ func (w *wizard) deployFaucet() {
 	if infos.twitterToken == "" {
 		// No previous twitter token (or old one discarded)
 		fmt.Println()
-		fmt.Println("Enable twitter API (y/n)? (default = no)")
-		if !w.readDefaultYesNo(false) {
-			log.Warn("The faucet will fallback to using direct calls")
-		} else {
-			// Twitter api explicitly requested, read the bearer token
-			fmt.Println()
-			fmt.Printf("What is the twitter API Bearer token?\n")
-			infos.twitterToken = w.readString()
-		}
+		fmt.Println()
+		fmt.Printf("What is the Twitter API app Bearer token?\n")
+		infos.twitterToken = w.readString()
 	}
-
 	// Figure out where the user wants to store the persistent data
 	fmt.Println()
 	if infos.node.datadir == "" {

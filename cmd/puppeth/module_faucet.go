@@ -46,7 +46,7 @@ ENTRYPOINT [ \
 	"--faucet.name", "{{.FaucetName}}", "--faucet.amount", "{{.FaucetAmount}}", "--faucet.minutes", "{{.FaucetMinutes}}", "--faucet.tiers", "{{.FaucetTiers}}",             \
 	"--account.json", "/account.json", "--account.pass", "/account.pass"                                                                                                    \
 	{{if .CaptchaToken}}, "--captcha.token", "{{.CaptchaToken}}", "--captcha.secret", "{{.CaptchaSecret}}"{{end}}{{if .NoAuth}}, "--noauth"{{end}}                          \
-	{{if .TwitterToken}}, "--twitter.token", "{{.TwitterToken}}",
+	{{if .TwitterToken}}, "--twitter.token.v1", "{{.TwitterToken}}"{{end}}                                                                                                  \
 ]`
 
 // faucetComposefile is the docker-compose.yml file required to deploy and maintain
