@@ -371,7 +371,13 @@ func (f *freezer) freeze(db ethdb.KeyValueStore) {
 		}
 		// Batch of blocks have been frozen, flush them before wiping from leveldb
 		if err := f.Sync(); err != nil {
-			log.Crit("Failed to flush frozen tables", "err", err)
+			log.Error("Failed to flush frozen tables", "err", err)
+			log.Error("This indicates disk problems, please restart geth if this message repeats")
+			// At this point, we know that an fsync operation failed, but we have already
+			// written data to the actual files.
+			f.TruncateAncients(first) // Un-write the data
+			backoff = true
+			continue
 		}
 		// Wipe out all data from the active database
 		batch := db.NewBatch()
