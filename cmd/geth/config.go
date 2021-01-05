@@ -133,8 +133,9 @@ func defaultNodeConfig() node.Config {
 func makeConfigNode(ctx *cli.Context) (*node.Node, gethConfig) {
 	// Load defaults.
 	cfg := gethConfig{
-		Eth:  eth.DefaultConfig,
-		Node: defaultNodeConfig(),
+		Eth:     eth.DefaultConfig,
+		Node:    defaultNodeConfig(),
+		Metrics: metricConfig{},
 	}
 
 	// Load config file.
@@ -147,7 +148,6 @@ func makeConfigNode(ctx *cli.Context) (*node.Node, gethConfig) {
 			log.Warn("Deprecated whisper config detected. Whisper has been moved to github.com/ethereum/whisper")
 		}
 	}
-
 	// Apply flags.
 	utils.SetNodeConfig(ctx, &cfg.Node)
 	stack, err := node.New(&cfg.Node)
@@ -222,7 +222,6 @@ func dumpConfig(ctx *cli.Context) error {
 }
 
 func applyMetricConfig(ctx *cli.Context, cfg *gethConfig) {
-	cfg.Metrics = metricConfig{}
 	metricsEnabled := ctx.GlobalBool(utils.MetricsEnabledFlag.Name)
 	if metricsEnabled {
 		cfg.Metrics.Enabled = metricsEnabled
