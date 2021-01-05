@@ -19,18 +19,17 @@ package graphql
 import (
 	"fmt"
 	"io/ioutil"
+	"math/big"
 	"net/http"
 	"strings"
 	"testing"
 	"time"
 
-	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/consensus/ethash"
 	"github.com/ethereum/go-ethereum/core"
 	"github.com/ethereum/go-ethereum/eth"
-	"github.com/ethereum/go-ethereum/miner"
 	"github.com/ethereum/go-ethereum/node"
-	"github.com/stretchr/testify/assert"
+	"github.com/ethereum/go-ethereum/params"
 )
 
 func TestBuildSchema(t *testing.T) {
@@ -45,29 +44,95 @@ func TestBuildSchema(t *testing.T) {
 }
 
 // Tests that a graphQL request is successfully handled when graphql is enabled on the specified endpoint
-func TestGraphQLHTTPOnSamePort_GQLRequest_Successful(t *testing.T) {
+func TestGraphQLBlockSerialization(t *testing.T) {
 	stack := createNode(t, true)
 	defer stack.Close()
 	// start node
 	if err := stack.Start(); err != nil {
 		t.Fatalf("could not start node: %v", err)
 	}
-	// create http request
-	body := strings.NewReader("{\"query\": \"{block{number}}\",\"variables\": null}")
-	gqlReq, err := http.NewRequest(http.MethodGet, fmt.Sprintf("http://%s/graphql", "127.0.0.1:9393"), body)
-	if err != nil {
-		t.Error("could not issue new http request ", err)
+
+	for i, tt := range []struct {
+		body string
+		want string
+		code int
+	}{
+		{ // Should return latest block
+			body: `{"query": "{block{number}}","variables": null}`,
+			want: `{"data":{"block":{"number":10}}}`,
+			code: 200,
+		},
+		{ // Should return info about latest block
+			body: `{"query": "{block{number,gasUsed,gasLimit}}","variables": null}`,
+			want: `{"data":{"block":{"number":10,"gasUsed":0,"gasLimit":11500000}}}`,
+			code: 200,
+		},
+		{
+			body: `{"query": "{block(number:0){number,gasUsed,gasLimit}}","variables": null}`,
+			want: `{"data":{"block":{"number":0,"gasUsed":0,"gasLimit":11500000}}}`,
+			code: 200,
+		},
+		{
+			body: `{"query": "{block(number:-1){number,gasUsed,gasLimit}}","variables": null}`,
+			want: `{"data":{"block":null}}`,
+			code: 200,
+		},
+		{
+			body: `{"query": "{block(number:-500){number,gasUsed,gasLimit}}","variables": null}`,
+			want: `{"data":{"block":null}}`,
+			code: 200,
+		},
+		{
+			body: `{"query": "{block(number:\"0\"){number,gasUsed,gasLimit}}","variables": null}`,
+			want: `{"data":{"block":{"number":0,"gasUsed":0,"gasLimit":11500000}}}`,
+			code: 200,
+		},
+		{
+			body: `{"query": "{block(number:\"-33\"){number,gasUsed,gasLimit}}","variables": null}`,
+			want: `{"data":{"block":null}}`,
+			code: 200,
+		},
+		{
+			body: `{"query": "{block(number:\"1337\"){number,gasUsed,gasLimit}}","variables": null}`,
+			want: `{"data":{"block":null}}`,
+			code: 200,
+		},
+		{
+			body: `{"query": "{block(number:\"0xbad\"){number,gasUsed,gasLimit}}","variables": null}`,
+			want: `{"errors":[{"message":"strconv.ParseInt: parsing \"0xbad\": invalid syntax"}],"data":{}}`,
+			code: 400,
+		},
+		{ // hex strings are currently not supported. If that's added to the spec, this test will need to change
+			body: `{"query": "{block(number:\"0x0\"){number,gasUsed,gasLimit}}","variables": null}`,
+			want: `{"errors":[{"message":"strconv.ParseInt: parsing \"0x0\": invalid syntax"}],"data":{}}`,
+			code: 400,
+		},
+		{
+			body: `{"query": "{block(number:\"a\"){number,gasUsed,gasLimit}}","variables": null}`,
+			want: `{"errors":[{"message":"strconv.ParseInt: parsing \"a\": invalid syntax"}],"data":{}}`,
+			code: 400,
+		},
+		{
+			body: `{"query": "{bleh{number}}","variables": null}"`,
+			want: `{"errors":[{"message":"Cannot query field \"bleh\" on type \"Query\".","locations":[{"line":1,"column":2}]}]}`,
+			code: 400,
+		},
+	} {
+		resp, err := http.Post(fmt.Sprintf("http://%s/graphql", "127.0.0.1:9393"), "application/json", strings.NewReader(tt.body))
+		if err != nil {
+			t.Fatalf("could not post: %v", err)
+		}
+		bodyBytes, err := ioutil.ReadAll(resp.Body)
+		if err != nil {
+			t.Fatalf("could not read from response body: %v", err)
+		}
+		if have := string(bodyBytes); have != tt.want {
+			t.Errorf("testcase %d %s,\nhave:\n%v\nwant:\n%v", i, tt.body, have, tt.want)
+		}
+		if tt.code != resp.StatusCode {
+			t.Errorf("testcase %d %s,\nwrong statuscode, have: %v, want: %v", i, tt.body, resp.StatusCode, tt.code)
+		}
 	}
-	gqlReq.Header.Set("Content-Type", "application/json")
-	// read from response
-	resp := doHTTPRequest(t, gqlReq)
-	bodyBytes, err := ioutil.ReadAll(resp.Body)
-	if err != nil {
-		t.Fatalf("could not read from response body: %v", err)
-	}
-	expected := "{\"data\":{\"block\":{\"number\":\"0x0\"}}}"
-	assert.Equal(t, 200, resp.StatusCode)
-	assert.Equal(t, expected, string(bodyBytes))
 }
 
 // Tests that a graphQL request is not handled successfully when graphql is not enabled on the specified endpoint
@@ -77,49 +142,22 @@ func TestGraphQLHTTPOnSamePort_GQLRequest_Unsuccessful(t *testing.T) {
 	if err := stack.Start(); err != nil {
 		t.Fatalf("could not start node: %v", err)
 	}
-
-	// create http request
-	body := strings.NewReader("{\"query\": \"{block{number}}\",\"variables\": null}")
-	gqlReq, err := http.NewRequest(http.MethodPost, fmt.Sprintf("http://%s/graphql", "127.0.0.1:9393"), body)
+	body := strings.NewReader(`{"query": "{block{number}}","variables": null}`)
+	resp, err := http.Post(fmt.Sprintf("http://%s/graphql", "127.0.0.1:9393"), "application/json", body)
 	if err != nil {
-		t.Error("could not issue new http request ", err)
+		t.Fatalf("could not post: %v", err)
 	}
-	gqlReq.Header.Set("Content-Type", "application/json")
-	// read from response
-	resp := doHTTPRequest(t, gqlReq)
 	bodyBytes, err := ioutil.ReadAll(resp.Body)
 	if err != nil {
 		t.Fatalf("could not read from response body: %v", err)
 	}
 	// make sure the request is not handled successfully
-	assert.Equal(t, 404, resp.StatusCode)
-	assert.Equal(t, "404 page not found\n", string(bodyBytes))
-}
-
-// Tests that 400 is returned when an invalid RPC request is made.
-func TestGraphQL_BadRequest(t *testing.T) {
-	stack := createNode(t, true)
-	defer stack.Close()
-	// start node
-	if err := stack.Start(); err != nil {
-		t.Fatalf("could not start node: %v", err)
+	if want, have := "404 page not found\n", string(bodyBytes); have != want {
+		t.Errorf("have:\n%v\nwant:\n%v", have, want)
 	}
-	// create http request
-	body := strings.NewReader("{\"query\": \"{bleh{number}}\",\"variables\": null}")
-	gqlReq, err := http.NewRequest(http.MethodGet, fmt.Sprintf("http://%s/graphql", "127.0.0.1:9393"), body)
-	if err != nil {
-		t.Error("could not issue new http request ", err)
+	if want, have := 404, resp.StatusCode; want != have {
+		t.Errorf("wrong statuscode, have:\n%v\nwant:%v", have, want)
 	}
-	gqlReq.Header.Set("Content-Type", "application/json")
-	// read from response
-	resp := doHTTPRequest(t, gqlReq)
-	bodyBytes, err := ioutil.ReadAll(resp.Body)
-	if err != nil {
-		t.Fatalf("could not read from response body: %v", err)
-	}
-	expected := "{\"errors\":[{\"message\":\"Cannot query field \\\"bleh\\\" on type \\\"Query\\\".\",\"locations\":[{\"line\":1,\"column\":2}]}]}"
-	assert.Equal(t, expected, string(bodyBytes))
-	assert.Equal(t, 400, resp.StatusCode)
 }
 
 func createNode(t *testing.T, gqlEnabled bool) *node.Node {
@@ -135,21 +173,20 @@ func createNode(t *testing.T, gqlEnabled bool) *node.Node {
 	if !gqlEnabled {
 		return stack
 	}
-
 	createGQLService(t, stack, "127.0.0.1:9393")
-
 	return stack
 }
 
 func createGQLService(t *testing.T, stack *node.Node, endpoint string) {
-	// create backend (use a config which is light on mem consumption)
+	// create backend
 	ethConf := &eth.Config{
-		Genesis: core.DeveloperGenesisBlock(15, common.Address{}),
-		Miner: miner.Config{
-			Etherbase: common.HexToAddress("0xaabb"),
+		Genesis: &core.Genesis{
+			Config:     params.AllEthashProtocolChanges,
+			GasLimit:   11500000,
+			Difficulty: big.NewInt(1048576),
 		},
 		Ethash: ethash.Config{
-			PowMode: ethash.ModeTest,
+			PowMode: ethash.ModeFake,
 		},
 		NetworkId:               1337,
 		TrieCleanCache:          5,
@@ -163,20 +200,16 @@ func createGQLService(t *testing.T, stack *node.Node, endpoint string) {
 	if err != nil {
 		t.Fatalf("could not create eth backend: %v", err)
 	}
-
+	// Create some blocks and import them
+	chain, _ := core.GenerateChain(params.AllEthashProtocolChanges, ethBackend.BlockChain().Genesis(),
+		ethash.NewFaker(), ethBackend.ChainDb(), 10, func(i int, gen *core.BlockGen) {})
+	_, err = ethBackend.BlockChain().InsertChain(chain)
+	if err != nil {
+		t.Fatalf("could not create import blocks: %v", err)
+	}
 	// create gql service
 	err = New(stack, ethBackend.APIBackend, []string{}, []string{})
 	if err != nil {
 		t.Fatalf("could not create graphql service: %v", err)
 	}
-}
-
-func doHTTPRequest(t *testing.T, req *http.Request) *http.Response {
-	client := &http.Client{}
-	resp, err := client.Do(req)
-	if err != nil {
-		t.Fatal("could not issue a GET request to the given endpoint", err)
-
-	}
-	return resp
 }

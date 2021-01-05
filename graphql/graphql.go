@@ -20,6 +20,8 @@ package graphql
 import (
 	"context"
 	"errors"
+	"fmt"
+	"strconv"
 	"time"
 
 	"github.com/ethereum/go-ethereum"
@@ -38,6 +40,37 @@ import (
 var (
 	errBlockInvariant = errors.New("block objects must be instantiated with at least one of num or hash")
 )
+
+type Long int64
+
+// ImplementsGraphQLType returns true if Long implements the provided GraphQL type.
+func (b Long) ImplementsGraphQLType(name string) bool { return name == "Long" }
+
+// UnmarshalGraphQL unmarshals the provided GraphQL query data.
+func (b *Long) UnmarshalGraphQL(input interface{}) error {
+	var err error
+	switch input := input.(type) {
+	case string:
+		// uncomment to support hex values
+		//if strings.HasPrefix(input, "0x") {
+		//	// apply leniency and support hex representations of longs.
+		//	value, err := hexutil.DecodeUint64(input)
+		//	*b = Long(value)
+		//	return err
+		//} else {
+		value, err := strconv.ParseInt(input, 10, 64)
+		*b = Long(value)
+		return err
+		//}
+	case int32:
+		*b = Long(input)
+	case int64:
+		*b = Long(input)
+	default:
+		err = fmt.Errorf("unexpected type %T for Long", input)
+	}
+	return err
+}
 
 // Account represents an Ethereum account at a particular block.
 type Account struct {
@@ -415,13 +448,13 @@ func (b *Block) resolveReceipts(ctx context.Context) ([]*types.Receipt, error) {
 	return b.receipts, nil
 }
 
-func (b *Block) Number(ctx context.Context) (hexutil.Uint64, error) {
+func (b *Block) Number(ctx context.Context) (Long, error) {
 	header, err := b.resolveHeader(ctx)
 	if err != nil {
 		return 0, err
 	}
 
-	return hexutil.Uint64(header.Number.Uint64()), nil
+	return Long(header.Number.Uint64()), nil
 }
 
 func (b *Block) Hash(ctx context.Context) (common.Hash, error) {
@@ -435,20 +468,20 @@ func (b *Block) Hash(ctx context.Context) (common.Hash, error) {
 	return b.hash, nil
 }
 
-func (b *Block) GasLimit(ctx context.Context) (hexutil.Uint64, error) {
+func (b *Block) GasLimit(ctx context.Context) (Long, error) {
 	header, err := b.resolveHeader(ctx)
 	if err != nil {
 		return 0, err
 	}
-	return hexutil.Uint64(header.GasLimit), nil
+	return Long(header.GasLimit), nil
 }
 
-func (b *Block) GasUsed(ctx context.Context) (hexutil.Uint64, error) {
+func (b *Block) GasUsed(ctx context.Context) (Long, error) {
 	header, err := b.resolveHeader(ctx)
 	if err != nil {
 		return 0, err
 	}
-	return hexutil.Uint64(header.GasUsed), nil
+	return Long(header.GasUsed), nil
 }
 
 func (b *Block) Parent(ctx context.Context) (*Block, error) {
@@ -902,11 +935,14 @@ type Resolver struct {
 }
 
 func (r *Resolver) Block(ctx context.Context, args struct {
-	Number *hexutil.Uint64
+	Number *Long
 	Hash   *common.Hash
 }) (*Block, error) {
 	var block *Block
 	if args.Number != nil {
+		if *args.Number < 0 {
+			return nil, nil
+		}
 		number := rpc.BlockNumber(*args.Number)
 		numberOrHash := rpc.BlockNumberOrHashWithNumber(number)
 		block = &Block{
@@ -939,10 +975,10 @@ func (r *Resolver) Block(ctx context.Context, args struct {
 }
 
 func (r *Resolver) Blocks(ctx context.Context, args struct {
-	From hexutil.Uint64
-	To   *hexutil.Uint64
+	From *Long
+	To   *Long
 }) ([]*Block, error) {
-	from := rpc.BlockNumber(args.From)
+	from := rpc.BlockNumber(*args.From)
 
 	var to rpc.BlockNumber
 	if args.To != nil {
