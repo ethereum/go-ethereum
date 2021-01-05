@@ -443,7 +443,7 @@ func testGetCHTProofs(t *testing.T, protocol int) {
 		Type:    htCanonical,
 		TrieIdx: 0,
 		Key:     key,
-		AuxReq:  auxHeader,
+		AuxReq:  htAuxHeader,
 	}}
 	// Send the proof request and verify the response
 	sendRequest(server.peer.app, GetHelperTrieProofsMsg, 42, requestsV2)
