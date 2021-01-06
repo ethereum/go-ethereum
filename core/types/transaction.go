@@ -117,7 +117,8 @@ func (tx *Transaction) DecodeRLP(s *rlp.Stream) error {
 		err = s.Decode(&i)
 		tx.inner = i
 	} else if kind == rlp.String {
-		b, err := s.Bytes()
+		var b []byte
+		b, err = s.Bytes()
 		if err != nil {
 			return err
 		}
