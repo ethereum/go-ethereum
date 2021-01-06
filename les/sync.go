@@ -19,7 +19,6 @@ package les
 import (
 	"context"
 	"errors"
-	"github.com/ethereum/go-ethereum/params"
 	"time"
 
 	"github.com/ethereum/go-ethereum/common"
@@ -27,6 +26,7 @@ import (
 	"github.com/ethereum/go-ethereum/eth/downloader"
 	"github.com/ethereum/go-ethereum/light"
 	"github.com/ethereum/go-ethereum/log"
+	"github.com/ethereum/go-ethereum/params"
 )
 
 var errInvalidCheckpoint = errors.New("invalid advertised checkpoint")
@@ -133,7 +133,7 @@ func (h *clientHandler) synchronise(peer *serverPeer) {
 	//
 	// 1. The checkpoint is empty
 	// 2. The latest head block of the local chain is above the checkpoint.
-	// 3. The checkpoint is local(recap with local local checkpoint)
+	// 3. The checkpoint is local(replaced with local checkpoint)
 	// 4. For some networks the checkpoint syncing is not activated.
 	mode := checkpointSync
 	switch {
