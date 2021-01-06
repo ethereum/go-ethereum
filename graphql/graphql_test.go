@@ -18,7 +18,6 @@ package graphql
 
 import (
 	"fmt"
-	"github.com/ethereum/go-ethereum/params"
 	"io/ioutil"
 	"math/big"
 	"net/http"
@@ -30,6 +29,7 @@ import (
 	"github.com/ethereum/go-ethereum/core"
 	"github.com/ethereum/go-ethereum/eth"
 	"github.com/ethereum/go-ethereum/node"
+	"github.com/ethereum/go-ethereum/params"
 )
 
 func TestBuildSchema(t *testing.T) {
