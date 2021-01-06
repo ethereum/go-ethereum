@@ -237,30 +237,39 @@ func TestEthClient(t *testing.T) {
 	defer backend.Close()
 	defer client.Close()
 
-	t.Run("TestHeader", func(t *testing.T) {
-		testHeader(t, chain, client)
-	})
-	t.Run("TestBalanceAt", func(t *testing.T) {
-		testBalanceAt(t, client)
-	})
-	t.Run("TestTxInBlockInterrupted", func(t *testing.T) {
-		testTransactionInBlockInterrupted(t, client)
-	})
-	t.Run("TestChainID", func(t *testing.T) {
-		testChainID(t, client)
-	})
-	t.Run("TestGetBlock", func(t *testing.T) {
-		testGetBlock(t, client)
-	})
-	t.Run("TestStatusFunctions", func(t *testing.T) {
-		testStatusFunctions(t, client)
-	})
-	t.Run("TestCallContract", func(t *testing.T) {
-		testCallContract(t, client)
-	})
-	t.Run("TestAtFunctions", func(t *testing.T) {
-		testAtFunctions(t, client)
-	})
+	tests := map[string]struct {
+		test func(t *testing.T)
+	}{
+		"TestHeader": {
+			func(t *testing.T) { testHeader(t, chain, client) },
+		},
+		"TestBalanceAt": {
+			func(t *testing.T) { testBalanceAt(t, client) },
+		},
+		"TestTxInBlockInterrupted": {
+			func(t *testing.T) { testTransactionInBlockInterrupted(t, client) },
+		},
+		"TestChainID": {
+			func(t *testing.T) { testChainID(t, client) },
+		},
+		"TestGetBlock": {
+			func(t *testing.T) { testGetBlock(t, client) },
+		},
+		"TestStatusFunctions": {
+			func(t *testing.T) { testStatusFunctions(t, client) },
+		},
+		"TestCallContract": {
+			func(t *testing.T) { testCallContract(t, client) },
+		},
+		"TestAtFunctions": {
+			func(t *testing.T) { testAtFunctions(t, client) },
+		},
+	}
+
+	t.Parallel()
+	for name, tt := range tests {
+		t.Run(name, tt.test)
+	}
 }
 
 func testHeader(t *testing.T, chain []*types.Block, client *rpc.Client) {
