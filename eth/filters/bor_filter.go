@@ -18,7 +18,6 @@ package filters
 
 import (
 	"context"
-	"errors"
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/types"
@@ -76,13 +75,9 @@ func newBorBlockLogsFilter(backend Backend, sprint uint64, addresses []common.Ad
 func (f *BorBlockLogsFilter) Logs(ctx context.Context) ([]*types.Log, error) {
 	// If we're doing singleton block filtering, execute and return
 	if f.block != (common.Hash{}) {
-		receipt, err := f.backend.GetBorBlockReceipt(ctx, f.block)
-		if err != nil {
-			return nil, err
-		}
-
+		receipt, _ := f.backend.GetBorBlockReceipt(ctx, f.block)
 		if receipt == nil {
-			return nil, errors.New("unknown block")
+			return nil, nil
 		}
 		return f.borBlockLogs(ctx, receipt)
 	}
