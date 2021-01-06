@@ -18,8 +18,11 @@ package types
 
 import (
 	"bytes"
+	"encoding/json"
+	"fmt"
 	"hash"
 	"math/big"
+	"os"
 	"reflect"
 	"testing"
 
@@ -68,6 +71,84 @@ func TestBlockEncoding(t *testing.T) {
 	}
 }
 
+// xTestGenerateACLJsonFiles creates files in ./testdata/ , to be used for cross-client
+// testing
+func xTestGenerateACLJsonFiles(t *testing.T) {
+	var (
+		signer = NewEIP2718Signer(params.TestChainConfig.ChainID)
+		key, _ = crypto.GenerateKey()
+	)
+	type output struct {
+		Rlp  string   `json:"rlp"`
+		Json extblock `json:"json"`
+	}
+
+	common.Hex2Bytes("3dbacc8d0259f2508625e97fdfc57cd85fdd16e5821bc2c10bdd1a52649e8335476e10695b183a87b0aa292a7f4b78ef0c3fbe62aa2c42c84e1d9c3da159ef1401")
+	var mkTx = func(i int) *Transaction {
+		t.Helper()
+		var accesses AccessList
+		for ii := 0; ii < i; ii++ {
+			accesses = append(accesses, AccessTuple{
+				Address:     &common.Address{byte(ii)},
+				StorageKeys: []*common.Hash{{0}, {byte(ii)}},
+			})
+		}
+		unsigned := NewAccessListTransaction(big.NewInt(1), 0,
+			common.HexToAddress("095e7baea6a6c7c4c2dfeb977efac326af552d87"),
+			big.NewInt(0), 123457, big.NewInt(10), nil, &accesses)
+		signedAclTx, err := SignTx(unsigned, signer, key)
+		if err != nil {
+			t.Fatal(err)
+		}
+		return signedAclTx
+	}
+	for i := 0; i < 10; i++ {
+		var header = &Header{
+			ParentHash: common.Hash{},
+			UncleHash:  EmptyUncleHash,
+			Difficulty: big.NewInt(131072),
+			Number:     big.NewInt(int64(i)),
+			GasLimit:   100000,
+			GasUsed:    100000,
+			Time:       1,
+			Extra:      make([]byte, 32),
+		}
+		// Each block contains i acl-transactions
+		var txs []*Transaction
+		var receipts []*Receipt
+
+		for ii := 0; ii < i; ii++ {
+			tx := mkTx(i)
+			receipt := NewReceipt(make([]byte, 32), false, tx.Gas())
+			txs = append(txs, tx)
+			receipts = append(receipts, receipt)
+		}
+		block := NewBlock(header, txs, nil, receipts, newHasher())
+		eBlock := extblock{
+			Header: block.header,
+			Txs:    block.transactions,
+			Uncles: block.uncles,
+		}
+		rlpData, err := rlp.EncodeToBytes(eBlock)
+		if err != nil {
+			t.Fatal(err)
+		}
+		jsonData, err := json.MarshalIndent(&output{
+			Rlp:  fmt.Sprintf("%x", rlpData),
+			Json: eBlock,
+		}, "", "  ")
+		if err != nil {
+			t.Fatal(err)
+		}
+		outFile, err := os.Create(fmt.Sprintf("testdata/acl_block_%d.json", i))
+		if err != nil {
+			t.Fatal(err)
+		}
+		defer outFile.Close()
+		outFile.Write(jsonData)
+	}
+
+}
 func TestEIP2718BlockEncoding(t *testing.T) {
 	blockEnc := common.FromHex("f90319f90211a00000000000000000000000000000000000000000000000000000000000000000a01dcc4de8dec75d7aab85b567b6ccd41ad312451b948a7413f0a142fd40d49347948888f1f195afa192cfee860698584c030f4c9db1a0ef1552a40b7165c3cd773806b9e0c165b75356e0314bf0706f279c729f51e017a0e6e49996c7ec59f7a23d22b83239a60151512c65613bf84a0d7da336399ebc4aa0cafe75574d59780665a97fbfd11365c7545aa8f1abf4e5e12e8243334ef7286bb901000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000083020000820200832fefd882a410845506eb0796636f6f6c65737420626c6f636b206f6e20636861696ea0bd4472abb6659ebe3ee06ee4d7b72a00a9f4d001caca51342001075469aff49888a13a5a8c8f2bb1c4f90101f85f800a82c35094095e7baea6a6c7c4c2dfeb977efac326af552d870a801ba09bea4c4daac7c7c52e093e6a4c35dbbcf8856f1af7b059ba20253e70848d094fa08a8fae537ce25ed8cb5af9adac3f141af69bd515bd2ba031522df09b97dd72b1b89e01f89b01800a8301e24194095e7baea6a6c7c4c2dfeb977efac326af552d878080f838f7940000000000000000000000000000000000000001e1a0000000000000000000000000000000000000000000000000000000000000000001a03dbacc8d0259f2508625e97fdfc57cd85fdd16e5821bc2c10bdd1a52649e8335a0476e10695b183a87b0aa292a7f4b78ef0c3fbe62aa2c42c84e1d9c3da159ef14c0")
 	var block Block
