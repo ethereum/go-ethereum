@@ -112,9 +112,11 @@ func (tx *Transaction) DecodeRLP(s *rlp.Stream) error {
 	if err != nil {
 		return err
 	} else if kind == rlp.List {
-		var i *LegacyTransaction
-		err = s.Decode(&i)
 		tx.typ = LegacyTxId
+		var i *LegacyTransaction
+		if err = s.Decode(&i); err != nil {
+			return err
+		}
 		tx.inner = i
 	} else if kind == rlp.String {
 		b, err := s.Bytes()
@@ -126,7 +128,7 @@ func (tx *Transaction) DecodeRLP(s *rlp.Stream) error {
 			return errors.New("not enough elements")
 		}
 
-		tx.typ = uint8(b[0])
+		tx.typ = b[0]
 		size = uint64(len(b))
 
 		if tx.typ == AccessListTxId {
