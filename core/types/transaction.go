@@ -114,9 +114,7 @@ func (tx *Transaction) DecodeRLP(s *rlp.Stream) error {
 	} else if kind == rlp.List {
 		tx.typ = LegacyTxId
 		var i *LegacyTransaction
-		if err = s.Decode(&i); err != nil {
-			return err
-		}
+		err = s.Decode(&i)
 		tx.inner = i
 	} else if kind == rlp.String {
 		b, err := s.Bytes()
@@ -124,30 +122,26 @@ func (tx *Transaction) DecodeRLP(s *rlp.Stream) error {
 			return err
 		}
 
-		if len(b) == 0 {
-			return errors.New("not enough elements")
-		}
-
 		tx.typ = b[0]
 		size = uint64(len(b))
 
 		if tx.typ == AccessListTxId {
 			var i *AccessListTransaction
-			if err = rlp.DecodeBytes(b[1:], &i); err != nil {
-				return err
-			}
+			err = rlp.DecodeBytes(b[1:], &i)
 			tx.inner = i
 		} else {
 			return ErrTxTypeNotSupported
 		}
 	} else {
-		return rlp.ErrExpectedString
+		return rlp.ErrExpectedList
 	}
 
-	tx.size.Store(common.StorageSize(rlp.ListSize(size)))
-	tx.time = time.Now()
+	if err == nil {
+		tx.size.Store(common.StorageSize(rlp.ListSize(size)))
+		tx.time = time.Now()
+	}
 
-	return nil
+	return err
 }
 
 func sanityCheckSignature(v *big.Int, r *big.Int, s *big.Int, maybeProtected bool) error {
@@ -194,7 +188,7 @@ func (tx *Transaction) Hash() common.Hash {
 	if hash := tx.hash.Load(); hash != nil {
 		return hash.(common.Hash)
 	}
-	n := NakedTransaction(*tx)
+	n := rawtx(*tx)
 	h := rlpHash(&n)
 	tx.hash.Store(h)
 
@@ -277,9 +271,12 @@ func (tx *Transaction) Cost() *big.Int {
 }
 func (tx *Transaction) RawSignatureValues() (v, r, s *big.Int) { return tx.inner.RawSignatureValues() }
 
-type NakedTransaction Transaction
+// Raw transactions are used for internal processes which need the raw
+// consensus representation of typed transactions, not the RLP string
+// wrapped version.
+type rawtx Transaction
 
-func (tx *NakedTransaction) EncodeRLP(w io.Writer) error {
+func (tx *rawtx) EncodeRLP(w io.Writer) error {
 	if tx.typ != LegacyTxId {
 		if _, err := w.Write([]byte{tx.typ}); err != nil {
 			return err
@@ -300,7 +297,7 @@ func (s Transactions) Swap(i, j int) { s[i], s[j] = s[j], s[i] }
 
 // GetRlp implements Rlpable and returns the i'th element of s in rlp.
 func (s Transactions) GetRlp(i int) []byte {
-	enc, _ := rlp.EncodeToBytes(NakedTransaction(*s[i]))
+	enc, _ := rlp.EncodeToBytes(rawtx(*s[i]))
 	return enc
 }
 

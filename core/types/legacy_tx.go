@@ -82,7 +82,6 @@ func (tx *LegacyTransaction) GasPrice() *big.Int      { return new(big.Int).Set(
 func (tx *LegacyTransaction) Value() *big.Int         { return new(big.Int).Set(tx.Amount) }
 func (tx *LegacyTransaction) Nonce() uint64           { return tx.AccountNonce }
 func (tx *LegacyTransaction) CheckNonce() bool        { return true }
-func (tx *LegacyTransaction) Hash() common.Hash       { return rlpHash(tx) }
 
 // To returns the recipient address of the transaction.
 // It returns nil if the transaction is a contract creation.
