@@ -157,17 +157,17 @@ func (c *lesCommons) setupOracle(node *node.Node, genesis common.Hash, ethconfig
 		config = params.CheckpointOracles[genesis]
 	}
 	if config == nil {
-		log.Info("Checkpoint registrar is not enabled")
+		log.Info("Checkpoint oracle is not enabled")
 		return nil
 	}
 	if config.Address == (common.Address{}) || uint64(len(config.Signers)) < config.Threshold {
-		log.Warn("Invalid checkpoint registrar config")
+		log.Warn("Invalid checkpoint oracle config")
 		return nil
 	}
 	oracle := checkpointoracle.New(config, c.localCheckpoint)
 	rpcClient, _ := node.Attach()
 	client := ethclient.NewClient(rpcClient)
 	oracle.Start(client)
-	log.Info("Configured checkpoint registrar", "address", config.Address, "signers", len(config.Signers), "threshold", config.Threshold)
+	log.Info("Configured checkpoint oracle", "address", config.Address, "signers", len(config.Signers), "threshold", config.Threshold)
 	return oracle
 }
