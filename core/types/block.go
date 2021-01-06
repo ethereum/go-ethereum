@@ -179,7 +179,7 @@ type Body struct {
 type Block struct {
 	header       *Header
 	uncles       []*Header
-	transactions []*Transaction
+	transactions Transactions
 
 	// caches
 	hash atomic.Value
