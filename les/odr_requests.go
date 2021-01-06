@@ -296,7 +296,7 @@ const (
 	htBloomBits        // BloomBits trie
 
 	// helper trie auxiliary types
-	htAuxNone   = 1 // deprecated number, used in les2/3 previously.
+	// htAuxNone = 1 ; deprecated number, used in les2/3 previously.
 	htAuxHeader = 2 // applicable for htCanonical, requests for relevant headers
 )
 
