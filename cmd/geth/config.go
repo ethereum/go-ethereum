@@ -238,4 +238,38 @@ func applyMetricConfig(ctx *cli.Context, cfg *gethConfig) {
 			cfg.Metrics.InfluxDBTags = ctx.GlobalString(utils.MetricsInfluxDBTagsFlag.Name)
 		}
 	}
+	overrideMetrics(ctx, cfg)
+}
+
+func overrideMetrics(ctx *cli.Context, cfg *gethConfig) {
+	if ctx.GlobalIsSet(utils.MetricsEnabledFlag.Name) {
+		cfg.Metrics.Enabled = ctx.GlobalBool(utils.MetricsEnabledFlag.Name)
+	}
+	if ctx.GlobalIsSet(utils.MetricsEnabledExpensiveFlag.Name) {
+		cfg.Metrics.EnabledExpensive = ctx.GlobalBool(utils.MetricsEnabledExpensiveFlag.Name)
+	}
+	if ctx.GlobalIsSet(utils.MetricsHTTPFlag.Name) {
+		cfg.Metrics.HTTP = ctx.GlobalString(utils.MetricsHTTPFlag.Name)
+	}
+	if ctx.GlobalIsSet(utils.MetricsPortFlag.Name) {
+		cfg.Metrics.Port = ctx.GlobalInt(utils.MetricsPortFlag.Name)
+	}
+	if ctx.GlobalIsSet(utils.MetricsEnableInfluxDBFlag.Name) {
+		cfg.Metrics.EnableInfluxDB = ctx.GlobalBool(utils.MetricsEnableInfluxDBFlag.Name)
+	}
+	if ctx.GlobalIsSet(utils.MetricsInfluxDBEndpointFlag.Name) {
+		cfg.Metrics.InfluxDBEndpoint = ctx.GlobalString(utils.MetricsInfluxDBEndpointFlag.Name)
+	}
+	if ctx.GlobalIsSet(utils.MetricsInfluxDBDatabaseFlag.Name) {
+		cfg.Metrics.InfluxDBDatabase = ctx.GlobalString(utils.MetricsInfluxDBDatabaseFlag.Name)
+	}
+	if ctx.GlobalIsSet(utils.MetricsInfluxDBUsernameFlag.Name) {
+		cfg.Metrics.InfluxDBUsername = ctx.GlobalString(utils.MetricsInfluxDBUsernameFlag.Name)
+	}
+	if ctx.GlobalIsSet(utils.MetricsInfluxDBPasswordFlag.Name) {
+		cfg.Metrics.InfluxDBPassword = ctx.GlobalString(utils.MetricsInfluxDBPasswordFlag.Name)
+	}
+	if ctx.GlobalIsSet(utils.MetricsInfluxDBTagsFlag.Name) {
+		cfg.Metrics.InfluxDBTags = ctx.GlobalString(utils.MetricsInfluxDBTagsFlag.Name)
+	}
 }
