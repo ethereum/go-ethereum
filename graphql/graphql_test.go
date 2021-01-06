@@ -117,6 +117,12 @@ func TestGraphQLBlockSerialization(t *testing.T) {
 			want: `{"errors":[{"message":"Cannot query field \"bleh\" on type \"Query\".","locations":[{"line":1,"column":2}]}]}`,
 			code: 400,
 		},
+		// should return `estimateGas` as decimal
+		{
+			body: `{"query": "{block{ estimateGas(data:{}) }}"}`,
+			want: `{"data":{"block":{"estimateGas":53000}}}`,
+			code: 200,
+		},
 	} {
 		resp, err := http.Post(fmt.Sprintf("http://%s/graphql", "127.0.0.1:9393"), "application/json", strings.NewReader(tt.body))
 		if err != nil {
