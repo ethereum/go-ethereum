@@ -1233,9 +1233,7 @@ func SetNodeConfig(ctx *cli.Context, cfg *node.Config) {
 	if ctx.GlobalIsSet(LightKDFFlag.Name) {
 		cfg.UseLightweightKDF = ctx.GlobalBool(LightKDFFlag.Name)
 	}
-	if ctx.GlobalIsSet(USBFlag.Name) {
-		cfg.NoUSB = !ctx.GlobalBool(USBFlag.Name)
-	}
+	cfg.NoUSB = !ctx.GlobalIsSet(USBFlag.Name) || !ctx.GlobalBool(USBFlag.Name)
 	if ctx.GlobalIsSet(NoUSBFlag.Name) {
 		log.Warn("Option nousb is deprecated and USB is deactivated by default. Use --usb to enable")
 	}
