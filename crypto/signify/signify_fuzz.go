@@ -25,7 +25,6 @@ import (
 	"log"
 	"os"
 	"os/exec"
-	"runtime"
 
 	fuzz "github.com/google/gofuzz"
 	"github.com/jedisct1/go-minisign"
@@ -129,6 +128,9 @@ func getKey(fileS string) (string, error) {
 func createKeyPair() (string, string) {
 	// Create key and put it in correct format
 	tmpKey, err := ioutil.TempFile("", "")
+	if err != nil {
+		panic(err)
+	}
 	defer os.Remove(tmpKey.Name())
 	defer os.Remove(tmpKey.Name() + ".pub")
 	defer os.Remove(tmpKey.Name() + ".sec")
