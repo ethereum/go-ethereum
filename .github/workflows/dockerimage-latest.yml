@@ -3,7 +3,6 @@ name: Docker Images For Latest Branches
 on:
   push:
     branches:
-      - develop
       - master
 
 jobs:
