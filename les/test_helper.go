@@ -541,7 +541,7 @@ func newClientServerEnv(t *testing.T, blocks int, protocol int, callback indexer
 	)
 	if connect {
 		done := make(chan struct{})
-		client.syncDone = func() { close(done) }
+		client.syncEnd = func(_ *types.Header) { close(done) }
 		cpeer, speer, err = newTestPeerPair("peer", protocol, server, client)
 		if err != nil {
 			t.Fatalf("Failed to connect testing peers %v", err)

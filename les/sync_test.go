@@ -24,6 +24,7 @@ import (
 
 	"github.com/ethereum/go-ethereum/accounts/abi/bind"
 	"github.com/ethereum/go-ethereum/core"
+	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/light"
 	"github.com/ethereum/go-ethereum/params"
@@ -53,7 +54,7 @@ func testCheckpointSyncing(t *testing.T, protocol int, syncMode int) {
 			time.Sleep(10 * time.Millisecond)
 		}
 	}
-	// Generate 128+1 blocks (totally 1 CHT sections)
+	// Generate 128+1 blocks (totally 1 CHT section)
 	server, client, tearDown := newClientServerEnv(t, int(config.ChtSize+config.ChtConfirms), protocol, waitIndexers, nil, 0, false, false, true)
 	defer tearDown()
 
@@ -100,8 +101,7 @@ func testCheckpointSyncing(t *testing.T, protocol int, syncMode int) {
 	}
 
 	done := make(chan error)
-	client.handler.syncDone = func() {
-		header := client.handler.backend.blockchain.CurrentHeader()
+	client.handler.syncEnd = func(header *types.Header) {
 		if header.Number.Uint64() == expected {
 			done <- nil
 		} else {
@@ -144,7 +144,7 @@ func testMissOracleBackend(t *testing.T, hasCheckpoint bool) {
 			time.Sleep(10 * time.Millisecond)
 		}
 	}
-	// Generate 512+4 blocks (totally 1 CHT sections)
+	// Generate 128+1 blocks (totally 1 CHT section)
 	server, client, tearDown := newClientServerEnv(t, int(config.ChtSize+config.ChtConfirms), 3, waitIndexers, nil, 0, false, false, true)
 	defer tearDown()
 
@@ -198,8 +198,7 @@ func testMissOracleBackend(t *testing.T, hasCheckpoint bool) {
 	}
 
 	done := make(chan error)
-	client.handler.syncDone = func() {
-		header := client.handler.backend.blockchain.CurrentHeader()
+	client.handler.syncEnd = func(header *types.Header) {
 		if header.Number.Uint64() == expected {
 			done <- nil
 		} else {
@@ -212,6 +211,147 @@ func testMissOracleBackend(t *testing.T, hasCheckpoint bool) {
 	}
 	select {
 	case err := <-done:
+		if err != nil {
+			t.Error("sync failed", err)
+		}
+		return
+	case <-time.NewTimer(10 * time.Second).C:
+		t.Error("checkpoint syncing timeout")
+	}
+}
+
+func TestSyncFromConfiguredCheckpoint(t *testing.T) {
+	config := light.TestServerIndexerConfig
+
+	waitIndexers := func(cIndexer, bIndexer, btIndexer *core.ChainIndexer) {
+		for {
+			cs, _, _ := cIndexer.Sections()
+			bts, _, _ := btIndexer.Sections()
+			if cs >= 2 && bts >= 2 {
+				break
+			}
+			time.Sleep(10 * time.Millisecond)
+		}
+	}
+	// Generate 256+1 blocks (totally 2 CHT sections)
+	server, client, tearDown := newClientServerEnv(t, int(2*config.ChtSize+config.ChtConfirms), 3, waitIndexers, nil, 0, false, false, true)
+	defer tearDown()
+
+	// Configure the local checkpoint(the first section)
+	head := server.handler.blockchain.GetHeaderByNumber(config.ChtSize - 1).Hash()
+	cp := &params.TrustedCheckpoint{
+		SectionIndex: 0,
+		SectionHead:  head,
+		CHTRoot:      light.GetChtRoot(server.db, 0, head),
+		BloomRoot:    light.GetBloomTrieRoot(server.db, 0, head),
+	}
+	client.handler.backend.config.SyncFromCheckpoint = true
+	client.handler.backend.config.Checkpoint = cp
+	client.handler.checkpoint = cp
+	client.handler.backend.blockchain.AddTrustedCheckpoint(cp)
+
+	var (
+		start       = make(chan error, 1)
+		end         = make(chan error, 1)
+		expectStart = config.ChtSize - 1
+		expectEnd   = 2*config.ChtSize + config.ChtConfirms
+	)
+	client.handler.syncStart = func(header *types.Header) {
+		if header.Number.Uint64() == expectStart {
+			start <- nil
+		} else {
+			start <- fmt.Errorf("blockchain length mismatch, want %d, got %d", expectStart, header.Number)
+		}
+	}
+	client.handler.syncEnd = func(header *types.Header) {
+		if header.Number.Uint64() == expectEnd {
+			end <- nil
+		} else {
+			end <- fmt.Errorf("blockchain length mismatch, want %d, got %d", expectEnd, header.Number)
+		}
+	}
+	// Create connected peer pair.
+	if _, _, err := newTestPeerPair("peer", 2, server.handler, client.handler); err != nil {
+		t.Fatalf("Failed to connect testing peers %v", err)
+	}
+
+	select {
+	case err := <-start:
+		if err != nil {
+			t.Error("sync failed", err)
+		}
+		return
+	case <-time.NewTimer(10 * time.Second).C:
+		t.Error("checkpoint syncing timeout")
+	}
+
+	select {
+	case err := <-end:
+		if err != nil {
+			t.Error("sync failed", err)
+		}
+		return
+	case <-time.NewTimer(10 * time.Second).C:
+		t.Error("checkpoint syncing timeout")
+	}
+}
+
+func TestSyncAll(t *testing.T) {
+	config := light.TestServerIndexerConfig
+
+	waitIndexers := func(cIndexer, bIndexer, btIndexer *core.ChainIndexer) {
+		for {
+			cs, _, _ := cIndexer.Sections()
+			bts, _, _ := btIndexer.Sections()
+			if cs >= 2 && bts >= 2 {
+				break
+			}
+			time.Sleep(10 * time.Millisecond)
+		}
+	}
+	// Generate 256+1 blocks (totally 2 CHT sections)
+	server, client, tearDown := newClientServerEnv(t, int(2*config.ChtSize+config.ChtConfirms), 3, waitIndexers, nil, 0, false, false, true)
+	defer tearDown()
+
+	client.handler.backend.config.SyncFromCheckpoint = true
+
+	var (
+		start       = make(chan error, 1)
+		end         = make(chan error, 1)
+		expectStart = uint64(0)
+		expectEnd   = 2*config.ChtSize + config.ChtConfirms
+	)
+	client.handler.syncStart = func(header *types.Header) {
+		if header.Number.Uint64() == expectStart {
+			start <- nil
+		} else {
+			start <- fmt.Errorf("blockchain length mismatch, want %d, got %d", expectStart, header.Number)
+		}
+	}
+	client.handler.syncEnd = func(header *types.Header) {
+		if header.Number.Uint64() == expectEnd {
+			end <- nil
+		} else {
+			end <- fmt.Errorf("blockchain length mismatch, want %d, got %d", expectEnd, header.Number)
+		}
+	}
+	// Create connected peer pair.
+	if _, _, err := newTestPeerPair("peer", 2, server.handler, client.handler); err != nil {
+		t.Fatalf("Failed to connect testing peers %v", err)
+	}
+
+	select {
+	case err := <-start:
+		if err != nil {
+			t.Error("sync failed", err)
+		}
+		return
+	case <-time.NewTimer(10 * time.Second).C:
+		t.Error("checkpoint syncing timeout")
+	}
+
+	select {
+	case err := <-end:
 		if err != nil {
 			t.Error("sync failed", err)
 		}
