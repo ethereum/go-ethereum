@@ -14,7 +14,7 @@
 // You should have received a copy of the GNU General Public License
 // along with go-ethereum. If not, see <http://www.gnu.org/licenses/>.
 
-// faucet is a Ether faucet backed by a light client.
+// faucet is an Ether faucet backed by a light client.
 package main
 
 //go:generate go-bindata -nometadata -o website.go faucet.html
@@ -847,7 +847,13 @@ func authFacebook(url string) (string, string, common.Address, error) {
 	// Facebook's Graph API isn't really friendly with direct links. Still, we don't
 	// want to do ask read permissions from users, so just load the public posts and
 	// scrape it for the Ethereum address and profile URL.
-	res, err := http.Get(url)
+	//
+	// Facebook recently changed their desktop webpage to use AJAX for loading post
+	// content, so switch over to the mobile site for now. Will probably end up having
+	// to use the API eventually.
+	crawl := strings.Replace(url, "www.facebook.com", "m.facebook.com", 1)
+
+	res, err := http.Get(crawl)
 	if err != nil {
 		return "", "", common.Address{}, err
 	}
