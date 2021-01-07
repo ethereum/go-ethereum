@@ -240,7 +240,7 @@ func generateTrieRoot(it Iterator, account common.Hash, generatorFn trieGenerato
 		}
 		in <- leaf
 
-		// Accumulate the generaation statistic if it's required.
+		// Accumulate the generation statistic if it's required.
 		processed++
 		if time.Since(logged) > 3*time.Second && stats != nil {
 			if account == (common.Hash{}) {
