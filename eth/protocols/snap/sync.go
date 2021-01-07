@@ -2112,14 +2112,15 @@ func (s *Syncer) onByteCodes(peer *Peer, id uint64, bytecodes [][]byte) error {
 
 	// Cross reference the requested bytecodes with the response to find gaps
 	// that the serving node is missing
-	hasher := sha3.NewLegacyKeccak256()
+	hasher := sha3.NewLegacyKeccak256().(crypto.KeccakState)
+	hash := make([]byte, 32)
 
 	codes := make([][]byte, len(req.hashes))
 	for i, j := 0, 0; i < len(bytecodes); i++ {
 		// Find the next hash that we've been served, leaving misses with nils
 		hasher.Reset()
 		hasher.Write(bytecodes[i])
-		hash := hasher.Sum(nil)
+		hasher.Read(hash)
 
 		for j < len(req.hashes) && !bytes.Equal(hash, req.hashes[j][:]) {
 			j++
@@ -2350,14 +2351,15 @@ func (s *Syncer) OnTrieNodes(peer *Peer, id uint64, trienodes [][]byte) error {
 
 	// Cross reference the requested trienodes with the response to find gaps
 	// that the serving node is missing
-	hasher := sha3.NewLegacyKeccak256()
+	hasher := sha3.NewLegacyKeccak256().(crypto.KeccakState)
+	hash := make([]byte, 32)
 
 	nodes := make([][]byte, len(req.hashes))
 	for i, j := 0, 0; i < len(trienodes); i++ {
 		// Find the next hash that we've been served, leaving misses with nils
 		hasher.Reset()
 		hasher.Write(trienodes[i])
-		hash := hasher.Sum(nil)
+		hasher.Read(hash)
 
 		for j < len(req.hashes) && !bytes.Equal(hash, req.hashes[j][:]) {
 			j++
@@ -2437,14 +2439,15 @@ func (s *Syncer) onHealByteCodes(peer *Peer, id uint64, bytecodes [][]byte) erro
 
 	// Cross reference the requested bytecodes with the response to find gaps
 	// that the serving node is missing
-	hasher := sha3.NewLegacyKeccak256()
+	hasher := sha3.NewLegacyKeccak256().(crypto.KeccakState)
+	hash := make([]byte, 32)
 
 	codes := make([][]byte, len(req.hashes))
 	for i, j := 0, 0; i < len(bytecodes); i++ {
 		// Find the next hash that we've been served, leaving misses with nils
 		hasher.Reset()
 		hasher.Write(bytecodes[i])
-		hash := hasher.Sum(nil)
+		hasher.Read(hash)
 
 		for j < len(req.hashes) && !bytes.Equal(hash, req.hashes[j][:]) {
 			j++
