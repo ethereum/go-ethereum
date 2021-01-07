@@ -277,7 +277,7 @@ func (tx *Transaction) RawSignatureValues() (v, r, s *big.Int) { return tx.inner
 
 // Raw transactions are used for internal processes which need the raw
 // consensus representation of typed transactions, not the RLP string
-// wrapped version.
+// wrapped version (e.g. type || payload vs. rlp(type || payload)).
 type rawtx Transaction
 
 func (tx *rawtx) EncodeRLP(w io.Writer) error {
