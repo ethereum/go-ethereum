@@ -178,7 +178,6 @@ func makeSealer(genesis *core.Genesis) (*node.Node, *eth.Ethereum, error) {
 			NoDiscovery: true,
 			MaxPeers:    25,
 		},
-		NoUSB: true,
 	}
 	// Start the node and configure a full Ethereum node on it
 	stack, err := node.New(config)
