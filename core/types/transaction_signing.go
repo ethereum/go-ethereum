@@ -127,7 +127,7 @@ func (s EIP2718Signer) Sender(tx *Transaction) (common.Address, error) {
 	}
 	if tx.Type() == AccessListTxId {
 		// ACL txs are defined to use 0 and 1 as their recovery id, add
-		// 27 to become equivalent to unprotected Homestead sigantures.
+		// 27 to become equivalent to unprotected Homestead signatures.
 		V = new(big.Int).Add(V, big.NewInt(27))
 	}
 	return recoverPlain(s.Hash(tx), R, S, V, true)
