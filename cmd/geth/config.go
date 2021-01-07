@@ -129,13 +129,28 @@ func defaultNodeConfig() node.Config {
 	return cfg
 }
 
+func defaultMetricConfig(ctx *cli.Context) metricConfig {
+	return metricConfig{
+		Enabled:          ctx.GlobalBool(utils.MetricsEnabledFlag.Name),
+		EnabledExpensive: ctx.GlobalBool(utils.MetricsEnabledExpensiveFlag.Name),
+		HTTP:             ctx.GlobalString(utils.MetricsHTTPFlag.Name),
+		Port:             ctx.GlobalInt(utils.MetricsPortFlag.Name),
+		EnableInfluxDB:   ctx.GlobalBool(utils.MetricsEnableInfluxDBFlag.Name),
+		InfluxDBEndpoint: ctx.GlobalString(utils.MetricsInfluxDBEndpointFlag.Name),
+		InfluxDBDatabase: ctx.GlobalString(utils.MetricsInfluxDBDatabaseFlag.Name),
+		InfluxDBUsername: ctx.GlobalString(utils.MetricsInfluxDBUsernameFlag.Name),
+		InfluxDBPassword: ctx.GlobalString(utils.MetricsInfluxDBPasswordFlag.Name),
+		InfluxDBTags:     ctx.GlobalString(utils.MetricsInfluxDBTagsFlag.Name),
+	}
+}
+
 // makeConfigNode loads geth configuration and creates a blank node instance.
 func makeConfigNode(ctx *cli.Context) (*node.Node, gethConfig) {
 	// Load defaults.
 	cfg := gethConfig{
 		Eth:     eth.DefaultConfig,
 		Node:    defaultNodeConfig(),
-		Metrics: metricConfig{},
+		Metrics: defaultMetricConfig(ctx),
 	}
 
 	// Load config file.
@@ -222,26 +237,6 @@ func dumpConfig(ctx *cli.Context) error {
 }
 
 func applyMetricConfig(ctx *cli.Context, cfg *gethConfig) {
-	metricsEnabled := ctx.GlobalBool(utils.MetricsEnabledFlag.Name)
-	if metricsEnabled {
-		cfg.Metrics.Enabled = metricsEnabled
-		cfg.Metrics.EnabledExpensive = ctx.GlobalBool(utils.MetricsEnabledExpensiveFlag.Name)
-		cfg.Metrics.HTTP = ctx.GlobalString(utils.MetricsHTTPFlag.Name)
-		cfg.Metrics.Port = ctx.GlobalInt(utils.MetricsPortFlag.Name)
-		influxdbEnabled := ctx.GlobalBool(utils.MetricsEnableInfluxDBFlag.Name)
-		if influxdbEnabled {
-			cfg.Metrics.EnableInfluxDB = influxdbEnabled
-			cfg.Metrics.InfluxDBEndpoint = ctx.GlobalString(utils.MetricsInfluxDBEndpointFlag.Name)
-			cfg.Metrics.InfluxDBDatabase = ctx.GlobalString(utils.MetricsInfluxDBDatabaseFlag.Name)
-			cfg.Metrics.InfluxDBUsername = ctx.GlobalString(utils.MetricsInfluxDBUsernameFlag.Name)
-			cfg.Metrics.InfluxDBPassword = ctx.GlobalString(utils.MetricsInfluxDBPasswordFlag.Name)
-			cfg.Metrics.InfluxDBTags = ctx.GlobalString(utils.MetricsInfluxDBTagsFlag.Name)
-		}
-	}
-	overrideMetrics(ctx, cfg)
-}
-
-func overrideMetrics(ctx *cli.Context, cfg *gethConfig) {
 	if ctx.GlobalIsSet(utils.MetricsEnabledFlag.Name) {
 		cfg.Metrics.Enabled = ctx.GlobalBool(utils.MetricsEnabledFlag.Name)
 	}
