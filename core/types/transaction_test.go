@@ -75,7 +75,7 @@ var (
 		nil,
 	).WithSignature(
 		NewEIP2718Signer(big.NewInt(1)),
-		common.Hex2Bytes("da9ad262d794b71067f1530b19314045ed4cf961e6a8ef393e244eaf2721fe016ee9a433a359987bfe5cc28361759a6e1fe94a15e15e4bdf36364e29af12d00400"),
+		common.Hex2Bytes("c9519f4f2b30335884581971573fadf60c6204f59a911df35ee8a540456b266032f1e8e2c5dd761f9e4f88f41c8310aeaba26a8bfcdacfedfa12ec3862d3752101"),
 	)
 )
 
@@ -102,10 +102,10 @@ func TestTransactionEncode(t *testing.T) {
 
 func TestEIP2718TransactionSigHash(t *testing.T) {
 	s := NewEIP2718Signer(big.NewInt(1))
-	if s.Hash(emptyEip2718Tx) != common.HexToHash("49b486f0ec0a60dfbbca2d30cb07c9e8ffb2a2ff41f29a1ab6737475f6ff69f3") {
+	if s.Hash(emptyEip2718Tx) != common.HexToHash("c44faa8f50803df8edd97e72c4dbae32343b2986c91e382fc3e329e6c9a36f31") {
 		t.Errorf("empty EIP-2718 transaction hash mismatch, got %x", s.Hash(emptyEip2718Tx))
 	}
-	if s.Hash(signedEip2718Tx) != common.HexToHash("49b486f0ec0a60dfbbca2d30cb07c9e8ffb2a2ff41f29a1ab6737475f6ff69f3") {
+	if s.Hash(signedEip2718Tx) != common.HexToHash("c44faa8f50803df8edd97e72c4dbae32343b2986c91e382fc3e329e6c9a36f31") {
 		t.Errorf("signed EIP-2718 transaction hash mismatch, got %x", s.Hash(signedEip2718Tx))
 	}
 }
@@ -115,7 +115,7 @@ func TestEIP2718TransactionEncode(t *testing.T) {
 	if err != nil {
 		t.Fatalf("encode error: %v", err)
 	}
-	should := common.FromHex("b86601f8630103018261a894b94f5374fce5edbc8e2a8697c15331677e6ebf0b0a825544c080a0da9ad262d794b71067f1530b19314045ed4cf961e6a8ef393e244eaf2721fe01a06ee9a433a359987bfe5cc28361759a6e1fe94a15e15e4bdf36364e29af12d004")
+	should := common.FromHex("b86601f8630103018261a894b94f5374fce5edbc8e2a8697c15331677e6ebf0b0a825544c001a0c9519f4f2b30335884581971573fadf60c6204f59a911df35ee8a540456b2660a032f1e8e2c5dd761f9e4f88f41c8310aeaba26a8bfcdacfedfa12ec3862d37521")
 	if !bytes.Equal(txb, should) {
 		t.Errorf("encoded RLP mismatch, got %x", txb)
 	}
