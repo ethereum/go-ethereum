@@ -3031,6 +3031,11 @@ func TestInitThenFailCreateContract(t *testing.T) {
 	}
 }
 
+// TestEIP2718Transition tests that an EIP-2718 transaction will be accepted
+// after the fork block has passed. This is verified by sending an EIP-2930
+// access list transaction, which specifies a single slot access, and then
+// checking that the gas usage of a hot SLOAD and a cold SLOAD are calculated
+// correctly.
 func TestEIP2718Transition(t *testing.T) {
 	var (
 		aa = common.HexToAddress("0x000000000000000000000000000000000000aaaa")

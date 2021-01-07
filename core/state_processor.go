@@ -89,10 +89,6 @@ func (p *StateProcessor) Process(block *types.Block, statedb *state.StateDB, cfg
 	return receipts, allLogs, *usedGas, nil
 }
 
-// ApplyTransaction attempts to apply a transaction to the given state database
-// and uses the input parameters for its environment. It returns the receipt
-// for the transaction, gas used and an error if the transaction failed,
-// indicating the block was invalid.
 func applyTransaction(msg types.Message, config *params.ChainConfig, bc ChainContext, author *common.Address, gp *GasPool, statedb *state.StateDB, header *types.Header, tx *types.Transaction, usedGas *uint64, evm *vm.EVM) (*types.Receipt, error) {
 	if !config.IsYoloV2(header.Number) && tx.Type() != types.LegacyTxId {
 		return nil, ErrTxTypeNotSupported
