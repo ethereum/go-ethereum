@@ -565,6 +565,9 @@ func sendTransaction(ec *Client) error {
 		return err
 	}
 	signedTx, err := tx.WithSignature(signer, signature)
+	if err != nil {
+		return err
+	}
 	// Send transaction
 	return ec.SendTransaction(context.Background(), signedTx)
 }
