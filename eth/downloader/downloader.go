@@ -89,7 +89,7 @@ var (
 	errCancelContentProcessing = errors.New("content processing canceled (requested)")
 	errCanceled                = errors.New("syncing canceled (requested)")
 	errNoSyncActive            = errors.New("no sync active")
-	errTooOld                  = errors.New("peer doesn't speak recent enough protocol version (need version >= 64)")
+	errTooOld                  = errors.New("peer's protocol version too old")
 )
 
 type Downloader struct {
@@ -460,7 +460,7 @@ func (d *Downloader) syncWithPeer(p *peerConnection, hash common.Hash, td *big.I
 		}
 	}()
 	if p.version < 64 {
-		return fmt.Errorf("%w, peer version: %d", errTooOld, p.version)
+		return fmt.Errorf("%w: advertized %d < required %d", errTooOld, p.version, 64)
 	}
 	mode := d.getMode()
 
