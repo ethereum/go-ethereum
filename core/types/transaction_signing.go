@@ -113,25 +113,23 @@ func NewEIP2718Signer(chainId *big.Int) EIP2718Signer {
 }
 
 // Sender returns the recovered addressed from a transaction's signature.
-// It assumes V does not store the chain id, unless the tx is of legacy type.
 func (s EIP2718Signer) Sender(tx *Transaction) (common.Address, error) {
-	if !tx.Protected() {
-		return HomesteadSigner{}.Sender(tx)
-	}
 	if tx.ChainId().Cmp(s.chainId) != 0 {
 		return common.Address{}, ErrInvalidChainId
 	}
-
 	V, R, S := tx.RawSignatureValues()
-
 	if tx.Type() == LegacyTxId {
+		if !tx.Protected() {
+			return HomesteadSigner{}.Sender(tx)
+		}
 		V = new(big.Int).Sub(V, s.chainIdMul)
 		V.Sub(V, big8)
 	}
 	if tx.Type() == AccessListTxId {
+		// ACL txs are defined to use 0 and 1 as their recovery id, add
+		// 27 to become equivalent to unprotected Homestead sigantures.
 		V = new(big.Int).Add(V, big.NewInt(27))
 	}
-
 	return recoverPlain(s.Hash(tx), R, S, V, true)
 }
 
