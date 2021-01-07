@@ -368,7 +368,7 @@ func (t *Tree) Cap(root common.Hash, layers int) error {
 // crossed. All diffs beyond the permitted number are flattened downwards. If the
 // layer limit is reached, memory cap is also enforced (but not before).
 //
-// The method returns the new disk layer if diffs were persistend into it.
+// The method returns the new disk layer if diffs were persisted into it.
 func (t *Tree) cap(diff *diffLayer, layers int) *diskLayer {
 	// Dive until we run out of layers or reach the persistent database
 	for ; layers > 2; layers-- {
@@ -647,7 +647,7 @@ func (t *Tree) Rebuild(root common.Hash) {
 			panic(fmt.Sprintf("unknown layer type: %T", layer))
 		}
 	}
-	// Start generating a new snapshot from scratch on a backgroung thread. The
+	// Start generating a new snapshot from scratch on a background thread. The
 	// generator will run a wiper first if there's not one running right now.
 	log.Info("Rebuilding state snapshot")
 	t.layers = map[common.Hash]snapshot{

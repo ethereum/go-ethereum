@@ -44,7 +44,7 @@ var (
 	// aggregatorItemLimit is an approximate number of items that will end up
 	// in the agregator layer before it's flushed out to disk. A plain account
 	// weighs around 14B (+hash), a storage slot 32B (+hash), a deleted slot
-	// 0B (+hash). Slots are mostly set/unset in lockstep, so thet average at
+	// 0B (+hash). Slots are mostly set/unset in lockstep, so that average at
 	// 16B (+hash). All in all, the average entry seems to be 15+32=47B. Use a
 	// smaller number to be on the safe side.
 	aggregatorItemLimit = aggregatorMemoryLimit / 42
@@ -114,9 +114,9 @@ type diffLayer struct {
 	// deleted, all data in other set belongs to the "new" A.
 	destructSet map[common.Hash]struct{}               // Keyed markers for deleted (and potentially) recreated accounts
 	accountList []common.Hash                          // List of account for iteration. If it exists, it's sorted, otherwise it's nil
-	accountData map[common.Hash][]byte                 // Keyed accounts for direct retrival (nil means deleted)
+	accountData map[common.Hash][]byte                 // Keyed accounts for direct retrieval (nil means deleted)
 	storageList map[common.Hash][]common.Hash          // List of storage slots for iterated retrievals, one per account. Any existing lists are sorted if non-nil
-	storageData map[common.Hash]map[common.Hash][]byte // Keyed storage slots for direct retrival. one per account (nil means deleted)
+	storageData map[common.Hash]map[common.Hash][]byte // Keyed storage slots for direct retrieval. one per account (nil means deleted)
 
 	diffed *bloomfilter.Filter // Bloom filter tracking all the diffed items up to the disk layer
 
@@ -482,7 +482,7 @@ func (dl *diffLayer) flatten() snapshot {
 	}
 }
 
-// AccountList returns a sorted list of all accounts in this difflayer, including
+// AccountList returns a sorted list of all accounts in this diffLayer, including
 // the deleted ones.
 //
 // Note, the returned slice is not a copy, so do not modify it.
@@ -513,7 +513,7 @@ func (dl *diffLayer) AccountList() []common.Hash {
 	return dl.accountList
 }
 
-// StorageList returns a sorted list of all storage slot hashes in this difflayer
+// StorageList returns a sorted list of all storage slot hashes in this diffLayer
 // for the given account. If the whole storage is destructed in this layer, then
 // an additional flag *destructed = true* will be returned, otherwise the flag is
 // false. Besides, the returned list will include the hash of deleted storage slot.
