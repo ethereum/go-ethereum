@@ -269,7 +269,7 @@ func NewTxPool(config TxPoolConfig, chainconfig *params.ChainConfig, chain block
 		config:          config,
 		chainconfig:     chainconfig,
 		chain:           chain,
-		signer:          types.NewEIP155Signer(chainconfig.ChainID),
+		signer:          types.NewEIP2718Signer(chainconfig.ChainID),
 		pending:         make(map[common.Address]*txList),
 		queue:           make(map[common.Address]*txList),
 		beats:           make(map[common.Address]time.Time),
@@ -281,9 +281,6 @@ func NewTxPool(config TxPoolConfig, chainconfig *params.ChainConfig, chain block
 		reorgDoneCh:     make(chan chan struct{}),
 		reorgShutdownCh: make(chan struct{}),
 		gasPrice:        new(big.Int).SetUint64(config.PriceLimit),
-	}
-	if chainconfig.IsYoloV2(chain.CurrentBlock().Number()) {
-		pool.signer = types.NewEIP2718Signer(chainconfig.ChainID)
 	}
 	pool.locals = newAccountSet(pool.signer)
 	for _, addr := range config.Locals {
