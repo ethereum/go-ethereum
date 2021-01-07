@@ -57,7 +57,6 @@ func TestHashing(t *testing.T) {
 	if want != got {
 		t.Errorf("want\n%v\ngot\n%v\n", want, got)
 	}
-
 }
 
 func BenchmarkHashing(b *testing.B) {
