@@ -129,7 +129,7 @@ func defaultNodeConfig() node.Config {
 	return cfg
 }
 
-func defaultMetricConfig(ctx *cli.Context) metricConfig {
+func metricsFromCliArgs(ctx *cli.Context) metricConfig {
 	return metricConfig{
 		Enabled:          ctx.GlobalBool(utils.MetricsEnabledFlag.Name),
 		EnabledExpensive: ctx.GlobalBool(utils.MetricsEnabledExpensiveFlag.Name),
@@ -150,7 +150,7 @@ func makeConfigNode(ctx *cli.Context) (*node.Node, gethConfig) {
 	cfg := gethConfig{
 		Eth:     eth.DefaultConfig,
 		Node:    defaultNodeConfig(),
-		Metrics: defaultMetricConfig(ctx),
+		Metrics: metricsFromCliArgs(ctx),
 	}
 
 	// Load config file.
