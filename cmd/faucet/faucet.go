@@ -579,7 +579,7 @@ func (f *faucet) refresh(head *types.Header) error {
 	f.head, f.balance = head, balance
 	f.price, f.nonce = price, nonce
 	// The requests are ordered as [txN, txN-1, .. txN-M]
-	for i := len(f.reqs) - 1; i > 0; i-- {
+	for i := len(f.reqs) - 1; i >= 0; i-- {
 		if f.reqs[i].Tx.Nonce() < f.nonce {
 			f.reqs = f.reqs[:i]
 			continue
@@ -618,6 +618,7 @@ func (f *faucet) loop() {
 				continue
 			}
 			// Faucet state retrieved, update locally and send to clients
+			f.lock.RLock()
 			log.Info("Updated faucet state", "number", head.Number, "hash", head.Hash(), "age", common.PrettyAge(timestamp), "balance", f.balance, "nonce", f.nonce, "price", f.price)
 			data, _ := json.Marshal(map[string]interface{}{
 				"funds":    new(big.Int).Div(f.balance, ether),
@@ -626,7 +627,6 @@ func (f *faucet) loop() {
 				"requests": f.reqs,
 			})
 			headData, _ := json.Marshal(head)
-			f.lock.RLock()
 			for _, conn := range f.conns {
 				if err := sendMarshalled(conn, data, time.Second); err != nil {
 					log.Warn("Failed to send stats to client", "err", err)
