@@ -615,20 +615,18 @@ func (f *faucet) loop() {
 			// Faucet state retrieved, update locally and send to clients
 			f.lock.RLock()
 			log.Info("Updated faucet state", "number", head.Number, "hash", head.Hash(), "age", common.PrettyAge(timestamp), "balance", f.balance, "nonce", f.nonce, "price", f.price)
-			data, _ := json.Marshal(map[string]interface{}{
-				"funds":    new(big.Int).Div(f.balance, ether),
-				"funded":   f.nonce,
-				"peers":    f.stack.Server().PeerCount(),
-				"requests": f.reqs,
-			})
-			headData, _ := json.Marshal(head)
 			for _, conn := range f.conns {
-				if err := sendMarshalled(conn, data, time.Second); err != nil {
+				if err := send(conn, map[string]interface{}{
+					"funds":    new(big.Int).Div(f.balance, ether),
+					"funded":   f.nonce,
+					"peers":    f.stack.Server().PeerCount(),
+					"requests": f.reqs,
+				}, time.Second); err != nil {
 					log.Warn("Failed to send stats to client", "err", err)
 					conn.conn.Close()
 					continue
 				}
-				if err := sendMarshalled(conn, headData, time.Second); err != nil {
+				if err := send(conn, head, time.Second); err != nil {
 					log.Warn("Failed to send header to client", "err", err)
 					conn.conn.Close()
 				}
@@ -649,9 +647,8 @@ func (f *faucet) loop() {
 		case <-f.update:
 			// Pending requests updated, stream to clients
 			f.lock.RLock()
-			reqData, _ := json.Marshal(map[string]interface{}{"requests": f.reqs})
 			for _, conn := range f.conns {
-				if err := sendMarshalled(conn, reqData, time.Second); err != nil {
+				if err := send(conn, map[string]interface{}{"requests": f.reqs}, time.Second); err != nil {
 					log.Warn("Failed to send requests to client", "err", err)
 					conn.conn.Close()
 				}
@@ -664,28 +661,13 @@ func (f *faucet) loop() {
 // sends transmits a data packet to the remote end of the websocket, but also
 // setting a write deadline to prevent waiting forever on the node.
 func send(conn *wsConn, value interface{}, timeout time.Duration) error {
-	data, err := json.Marshal(value)
-	if err != nil {
-		return err
-	}
-	return sendMarshalled(conn, data, timeout)
-}
-
-// sendMarshalled transmits already marshalled json to the remote end of the websocket, but also
-// setting a write deadline to prevent waiting forever on the node.
-func sendMarshalled(conn *wsConn, data []byte, timeout time.Duration) error {
 	if timeout == 0 {
 		timeout = 60 * time.Second
 	}
 	conn.wlock.Lock()
 	defer conn.wlock.Unlock()
 	conn.conn.SetWriteDeadline(time.Now().Add(timeout))
-	w, err := conn.conn.NextWriter(websocket.TextMessage)
-	if err != nil {
-		return err
-	}
-	_, err = w.Write(data)
-	return err
+	return conn.conn.WriteJSON(value)
 }
 
 // sendError transmits an error to the remote end of the websocket, also setting
