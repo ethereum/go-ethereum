@@ -512,12 +512,12 @@ func (f *faucet) apiHandler(w http.ResponseWriter, r *http.Request) {
 				}
 				continue
 			}
-			f.reqs = append([]*request{{
+			f.reqs = append(f.reqs, &request{
 				Avatar:  avatar,
 				Account: address,
 				Time:    time.Now(),
 				Tx:      signed,
-			}}, f.reqs...)
+			})
 			timeout := time.Duration(*minutesFlag*int(math.Pow(3, float64(msg.Tier)))) * time.Minute
 			grace := timeout / 288 // 24h timeout => 5m grace
 
@@ -578,13 +578,8 @@ func (f *faucet) refresh(head *types.Header) error {
 	f.lock.Lock()
 	f.head, f.balance = head, balance
 	f.price, f.nonce = price, nonce
-	// The requests are ordered as [txN, txN-1, .. txN-M]
-	for i := len(f.reqs) - 1; i >= 0; i-- {
-		if f.reqs[i].Tx.Nonce() < f.nonce {
-			f.reqs = f.reqs[:i]
-			continue
-		}
-		break
+	for len(f.reqs) > 0 && f.reqs[0].Tx.Nonce() < f.nonce {
+		f.reqs = f.reqs[1:]
 	}
 	f.lock.Unlock()
 
