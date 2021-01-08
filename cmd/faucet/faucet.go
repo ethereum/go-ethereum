@@ -578,8 +578,8 @@ func (f *faucet) refresh(head *types.Header) error {
 	f.lock.Lock()
 	f.head, f.balance = head, balance
 	f.price, f.nonce = price, nonce
-	for len(f.reqs) > 0 && f.reqs[0].Tx.Nonce() < f.nonce {
-		f.reqs = f.reqs[1:]
+	for i := len(f.reqs) - 1; f.reqs[i].Tx.Nonce() < f.nonce; i-- {
+		f.reqs = f.reqs[:i]
 	}
 	f.lock.Unlock()
 
@@ -601,6 +601,8 @@ func (f *faucet) loop() {
 	update := make(chan *types.Header)
 
 	go func() {
+		var newest common.Hash
+		var oldest common.Hash
 		for head := range update {
 			// New chain head arrived, query the current stats and stream to clients
 			timestamp := time.Unix(int64(head.Time), 0)
@@ -614,12 +616,23 @@ func (f *faucet) loop() {
 			}
 			// Faucet state retrieved, update locally and send to clients
 			log.Info("Updated faucet state", "number", head.Number, "hash", head.Hash(), "age", common.PrettyAge(timestamp), "balance", f.balance, "nonce", f.nonce, "price", f.price)
-			data, _ := json.Marshal(map[string]interface{}{
+			dataPack := map[string]interface{}{
 				"funds":    new(big.Int).Div(f.balance, ether),
 				"funded":   f.nonce,
 				"peers":    f.stack.Server().PeerCount(),
-				"requests": f.reqs,
-			})
+				"requests": make([]*request, 0),
+			}
+			// No need to keep transmitting the same data over and over
+			if len(f.reqs) > 0 {
+				_newest := f.reqs[0].Tx.Hash()
+				_oldest := f.reqs[len(f.reqs)-1].Tx.Hash()
+				if newest != _newest || _oldest != oldest {
+					dataPack["requests"] = f.reqs
+					newest = _newest
+					oldest = _oldest
+				}
+			}
+			data, _ := json.Marshal(dataPack)
 			headData, _ := json.Marshal(head)
 			f.lock.RLock()
 			for _, conn := range f.conns {
@@ -668,7 +681,7 @@ func send(conn *wsConn, value interface{}, timeout time.Duration) error {
 	if err != nil {
 		return err
 	}
-	sendMarshalled(conn, data, timeout)
+	return sendMarshalled(conn, data, timeout)
 }
 
 // sendMarshalled transmits already marshalled json to the remote end of the websocket, but also
@@ -684,7 +697,8 @@ func sendMarshalled(conn *wsConn, data []byte, timeout time.Duration) error {
 	if err != nil {
 		return err
 	}
-	return w.Write(data)
+	_, err = w.Write(data)
+	return err
 }
 
 // sendError transmits an error to the remote end of the websocket, also setting
