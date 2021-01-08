@@ -67,7 +67,7 @@ type downloadTester struct {
 }
 
 // newTester creates a new downloader test mocker.
-func newTester(mode SyncMode) *downloadTester {
+func newTester() *downloadTester {
 	tester := &downloadTester{
 		genesis:     testGenesis,
 		peerDb:      testDB,
@@ -87,11 +87,7 @@ func newTester(mode SyncMode) *downloadTester {
 	tester.stateDb = rawdb.NewMemoryDatabase()
 	tester.stateDb.Put(testGenesis.Root().Bytes(), []byte{0x00})
 
-	var syncBloom *trie.SyncBloom
-	if mode == FastSync {
-		syncBloom = trie.NewSyncBloom(1, tester.stateDb)
-	}
-	tester.downloader = New(0, tester.stateDb, syncBloom, new(event.TypeMux), tester, nil, tester.dropPeer)
+	tester.downloader = New(0, tester.stateDb, trie.NewSyncBloom(1, tester.stateDb), new(event.TypeMux), tester, nil, tester.dropPeer)
 	return tester
 }
 
@@ -533,7 +529,7 @@ func TestCanonicalSynchronisation65Light(t *testing.T) {
 func testCanonicalSynchronisation(t *testing.T, protocol uint, mode SyncMode) {
 	t.Parallel()
 
-	tester := newTester(mode)
+	tester := newTester()
 	defer tester.terminate()
 
 	// Create a small enough block chain to download
@@ -556,7 +552,7 @@ func TestThrottling65Fast(t *testing.T) { testThrottling(t, 65, FastSync) }
 
 func testThrottling(t *testing.T, protocol uint, mode SyncMode) {
 	t.Parallel()
-	tester := newTester(mode)
+	tester := newTester()
 
 	// Create a long block chain to download and the tester
 	targetBlocks := testChainBase.len() - 1
@@ -642,7 +638,7 @@ func TestForkedSync65Light(t *testing.T) { testForkedSync(t, 65, LightSync) }
 func testForkedSync(t *testing.T, protocol uint, mode SyncMode) {
 	t.Parallel()
 
-	tester := newTester(mode)
+	tester := newTester()
 	defer tester.terminate()
 
 	chainA := testChainForkLightA.shorten(testChainBase.len() + 80)
@@ -673,7 +669,7 @@ func TestHeavyForkedSync65Light(t *testing.T) { testHeavyForkedSync(t, 65, Light
 func testHeavyForkedSync(t *testing.T, protocol uint, mode SyncMode) {
 	t.Parallel()
 
-	tester := newTester(mode)
+	tester := newTester()
 	defer tester.terminate()
 
 	chainA := testChainForkLightA.shorten(testChainBase.len() + 80)
@@ -706,7 +702,7 @@ func TestBoundedForkedSync65Light(t *testing.T) { testBoundedForkedSync(t, 65, L
 func testBoundedForkedSync(t *testing.T, protocol uint, mode SyncMode) {
 	t.Parallel()
 
-	tester := newTester(mode)
+	tester := newTester()
 	defer tester.terminate()
 
 	chainA := testChainForkLightA
@@ -737,7 +733,7 @@ func TestBoundedHeavyForkedSync65Light(t *testing.T) { testBoundedHeavyForkedSyn
 
 func testBoundedHeavyForkedSync(t *testing.T, protocol uint, mode SyncMode) {
 	t.Parallel()
-	tester := newTester(mode)
+	tester := newTester()
 
 	// Create a long enough forked chain
 	chainA := testChainForkLightA
@@ -763,7 +759,7 @@ func testBoundedHeavyForkedSync(t *testing.T, protocol uint, mode SyncMode) {
 func TestInactiveDownloader63(t *testing.T) {
 	t.Parallel()
 
-	tester := newTester(FullSync)
+	tester := newTester()
 	defer tester.terminate()
 
 	// Check that neither block headers nor bodies are accepted
@@ -788,7 +784,7 @@ func TestCancel65Light(t *testing.T) { testCancel(t, 65, LightSync) }
 func testCancel(t *testing.T, protocol uint, mode SyncMode) {
 	t.Parallel()
 
-	tester := newTester(mode)
+	tester := newTester()
 	defer tester.terminate()
 
 	chain := testChainBase.shorten(MaxHeaderFetch)
@@ -819,7 +815,7 @@ func TestMultiSynchronisation65Light(t *testing.T) { testMultiSynchronisation(t,
 func testMultiSynchronisation(t *testing.T, protocol uint, mode SyncMode) {
 	t.Parallel()
 
-	tester := newTester(mode)
+	tester := newTester()
 	defer tester.terminate()
 
 	// Create various peers with various parts of the chain
@@ -847,7 +843,7 @@ func TestMultiProtoSynchronisation65Light(t *testing.T) { testMultiProtoSync(t, 
 func testMultiProtoSync(t *testing.T, protocol uint, mode SyncMode) {
 	t.Parallel()
 
-	tester := newTester(mode)
+	tester := newTester()
 	defer tester.terminate()
 
 	// Create a small enough block chain to download
@@ -884,7 +880,7 @@ func TestEmptyShortCircuit65Light(t *testing.T) { testEmptyShortCircuit(t, 65, L
 func testEmptyShortCircuit(t *testing.T, protocol uint, mode SyncMode) {
 	t.Parallel()
 
-	tester := newTester(mode)
+	tester := newTester()
 	defer tester.terminate()
 
 	// Create a block chain to download
@@ -936,7 +932,7 @@ func TestMissingHeaderAttack65Light(t *testing.T) { testMissingHeaderAttack(t, 6
 func testMissingHeaderAttack(t *testing.T, protocol uint, mode SyncMode) {
 	t.Parallel()
 
-	tester := newTester(mode)
+	tester := newTester()
 	defer tester.terminate()
 
 	chain := testChainBase.shorten(blockCacheMaxItems - 15)
@@ -966,7 +962,7 @@ func TestShiftedHeaderAttack65Light(t *testing.T) { testShiftedHeaderAttack(t, 6
 func testShiftedHeaderAttack(t *testing.T, protocol uint, mode SyncMode) {
 	t.Parallel()
 
-	tester := newTester(mode)
+	tester := newTester()
 	defer tester.terminate()
 
 	chain := testChainBase.shorten(blockCacheMaxItems - 15)
@@ -998,7 +994,7 @@ func TestInvalidHeaderRollback65Fast(t *testing.T) { testInvalidHeaderRollback(t
 func testInvalidHeaderRollback(t *testing.T, protocol uint, mode SyncMode) {
 	t.Parallel()
 
-	tester := newTester(mode)
+	tester := newTester()
 
 	// Create a small enough block chain to download
 	targetBlocks := 3*fsHeaderSafetyNet + 256 + fsMinFullBlocks
@@ -1092,7 +1088,7 @@ func TestHighTDStarvationAttack65Light(t *testing.T) { testHighTDStarvationAttac
 func testHighTDStarvationAttack(t *testing.T, protocol uint, mode SyncMode) {
 	t.Parallel()
 
-	tester := newTester(mode)
+	tester := newTester()
 
 	chain := testChainBase.shorten(1)
 	tester.newPeer("attack", protocol, chain)
@@ -1131,7 +1127,7 @@ func testBlockHeaderAttackerDropping(t *testing.T, protocol uint) {
 		{errCancelContentProcessing, false}, // Synchronisation was canceled, origin may be innocent, don't drop
 	}
 	// Run the tests and check disconnection status
-	tester := newTester(FullSync)
+	tester := newTester()
 	defer tester.terminate()
 	chain := testChainBase.shorten(1)
 
@@ -1165,7 +1161,7 @@ func TestSyncProgress65Light(t *testing.T) { testSyncProgress(t, 65, LightSync) 
 func testSyncProgress(t *testing.T, protocol uint, mode SyncMode) {
 	t.Parallel()
 
-	tester := newTester(mode)
+	tester := newTester()
 	defer tester.terminate()
 	chain := testChainBase.shorten(blockCacheMaxItems - 15)
 
@@ -1247,7 +1243,7 @@ func TestForkedSyncProgress65Light(t *testing.T) { testForkedSyncProgress(t, 65,
 func testForkedSyncProgress(t *testing.T, protocol uint, mode SyncMode) {
 	t.Parallel()
 
-	tester := newTester(mode)
+	tester := newTester()
 	defer tester.terminate()
 	chainA := testChainForkLightA.shorten(testChainBase.len() + MaxHeaderFetch)
 	chainB := testChainForkLightB.shorten(testChainBase.len() + MaxHeaderFetch)
@@ -1321,7 +1317,7 @@ func TestFailedSyncProgress65Light(t *testing.T) { testFailedSyncProgress(t, 65,
 func testFailedSyncProgress(t *testing.T, protocol uint, mode SyncMode) {
 	t.Parallel()
 
-	tester := newTester(mode)
+	tester := newTester()
 	defer tester.terminate()
 	chain := testChainBase.shorten(blockCacheMaxItems - 15)
 
@@ -1392,7 +1388,7 @@ func TestFakedSyncProgress65Light(t *testing.T) { testFakedSyncProgress(t, 65, L
 func testFakedSyncProgress(t *testing.T, protocol uint, mode SyncMode) {
 	t.Parallel()
 
-	tester := newTester(mode)
+	tester := newTester()
 	defer tester.terminate()
 	chain := testChainBase.shorten(blockCacheMaxItems - 15)
 
@@ -1467,12 +1463,12 @@ func TestDeliverHeadersHang65Light(t *testing.T) { testDeliverHeadersHang(t, 65,
 func testDeliverHeadersHang(t *testing.T, protocol uint, mode SyncMode) {
 	t.Parallel()
 
-	master := newTester(mode)
+	master := newTester()
 	defer master.terminate()
 	chain := testChainBase.shorten(15)
 
 	for i := 0; i < 200; i++ {
-		tester := newTester(mode)
+		tester := newTester()
 		tester.peerDb = master.peerDb
 		tester.newPeer("peer", protocol, chain)
 
@@ -1627,7 +1623,7 @@ func testCheckpointEnforcement(t *testing.T, protocol uint, mode SyncMode) {
 	t.Parallel()
 
 	// Create a new tester with a particular hard coded checkpoint block
-	tester := newTester(mode)
+	tester := newTester()
 	defer tester.terminate()
 
 	tester.downloader.checkpoint = uint64(fsMinFullBlocks) + 256
