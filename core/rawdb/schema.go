@@ -67,7 +67,7 @@ var (
 	fastTxLookupLimitKey = []byte("FastTransactionLookupLimit")
 
 	// badBlockKey tracks the list of bad blocks seen by local
-	badBlockKey = []byte("BadBlock")
+	badBlockKey = []byte("InvalidBlock")
 
 	// uncleanShutdownKey tracks the list of local crashes
 	uncleanShutdownKey = []byte("unclean-shutdown") // config prefix for the db

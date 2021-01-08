@@ -716,7 +716,7 @@ type badBlockList []*badBlock
 
 func (s badBlockList) Len() int { return len(s) }
 func (s badBlockList) Less(i, j int) bool {
-	return s[i].Header.Number.Uint64() > s[j].Header.Number.Uint64()
+	return s[i].Header.Number.Uint64() < s[j].Header.Number.Uint64()
 }
 func (s badBlockList) Swap(i, j int) { s[i], s[j] = s[j], s[i] }
 
@@ -772,7 +772,7 @@ func WriteBadBlock(db ethdb.KeyValueStore, block *types.Block) {
 		Header: block.Header(),
 		Body:   block.Body(),
 	})
-	sort.Sort(badBlocks)
+	sort.Reverse(badBlocks)
 	if len(badBlocks) > badBlockToKeep {
 		badBlocks = badBlocks[:badBlockToKeep]
 	}
