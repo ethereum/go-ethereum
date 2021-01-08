@@ -203,7 +203,7 @@ func indexTransactions(db ethdb.Database, from uint64, to uint64, interrupt chan
 		// in to be [to-1]. Therefore, setting lastNum to means that the
 		// prqueue gap-evaluation will work correctly
 		lastNum = to
-		queue   = prque.New(nil)
+		queue   = prque.New(false, nil)
 		// for stats reporting
 		blocks, txs = 0, 0
 	)
@@ -211,10 +211,10 @@ func indexTransactions(db ethdb.Database, from uint64, to uint64, interrupt chan
 		// Push the delivery into the queue and process contiguous ranges.
 		// Since we iterate in reverse, so lower numbers have lower prio, and
 		// we can use the number directly as prio marker
-		queue.Push(chanDelivery, int64(chanDelivery.number))
+		queue.Push(chanDelivery, chanDelivery.number)
 		for !queue.Empty() {
 			// If the next available item is gapped, return
-			if _, priority := queue.Peek(); priority != int64(lastNum-1) {
+			if _, priority := queue.Peek(); priority != lastNum-1 {
 				break
 			}
 			// For testing
@@ -293,17 +293,17 @@ func unindexTransactions(db ethdb.Database, from uint64, to uint64, interrupt ch
 		// we expect the first number to come in to be [from]. Therefore, setting
 		// nextNum to from means that the prqueue gap-evaluation will work correctly
 		nextNum = from
-		queue   = prque.New(nil)
+		queue   = prque.New(true, nil)
 		// for stats reporting
 		blocks, txs = 0, 0
 	)
 	// Otherwise spin up the concurrent iterator and unindexer
 	for delivery := range hashesCh {
 		// Push the delivery into the queue and process contiguous ranges.
-		queue.Push(delivery, -int64(delivery.number))
+		queue.Push(delivery, delivery.number)
 		for !queue.Empty() {
 			// If the next available item is gapped, return
-			if _, priority := queue.Peek(); -priority != int64(nextNum) {
+			if _, priority := queue.Peek(); priority.(uint64) != nextNum {
 				break
 			}
 			// For testing

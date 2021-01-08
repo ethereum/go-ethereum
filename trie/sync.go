@@ -138,7 +138,7 @@ func NewSync(root common.Hash, database ethdb.KeyValueReader, callback LeafCallb
 		membatch: newSyncMemBatch(),
 		nodeReqs: make(map[common.Hash]*request),
 		codeReqs: make(map[common.Hash]*request),
-		queue:    prque.New(nil),
+		queue:    prque.New(false, nil),
 		fetches:  make(map[int]int),
 		bloom:    bloom,
 	}
@@ -240,7 +240,7 @@ func (s *Sync) Missing(max int) (nodes []common.Hash, paths []SyncPath, codes []
 		item, prio := s.queue.Peek()
 
 		// If we have too many already-pending tasks for this depth, throttle
-		depth := int(prio >> 56)
+		depth := int(prio.(int64) >> 56)
 		if s.fetches[depth] > maxFetchesPerDepth {
 			break
 		}

@@ -55,7 +55,7 @@ type (
 // NewLazyQueue creates a new lazy queue
 func NewLazyQueue(setIndex SetIndexCallback, priority PriorityCallback, maxPriority MaxPriorityCallback, clock mclock.Clock, refreshPeriod time.Duration) *LazyQueue {
 	q := &LazyQueue{
-		popQueue:     newSstack(nil),
+		popQueue:     newSstack(false, nil),
 		setIndex:     setIndex,
 		priority:     priority,
 		maxPriority:  maxPriority,
@@ -71,8 +71,8 @@ func NewLazyQueue(setIndex SetIndexCallback, priority PriorityCallback, maxPrior
 
 // Reset clears the contents of the queue
 func (q *LazyQueue) Reset() {
-	q.queue[0] = newSstack(q.setIndex0)
-	q.queue[1] = newSstack(q.setIndex1)
+	q.queue[0] = newSstack(q.popQueue.invert, q.setIndex0)
+	q.queue[1] = newSstack(q.popQueue.invert, q.setIndex1)
 }
 
 // Refresh performs queue re-evaluation if necessary
@@ -124,7 +124,7 @@ func (q *LazyQueue) Pop() (interface{}, int64) {
 // highest estimated priority is or -1 if both are empty
 func (q *LazyQueue) peekIndex() int {
 	if q.queue[0].Len() != 0 {
-		if q.queue[1].Len() != 0 && q.queue[1].blocks[0][0].priority > q.queue[0].blocks[0][0].priority {
+		if q.queue[1].Len() != 0 && less(q.queue[1].blocks[0][0].priority.(int64), q.queue[0].blocks[0][0].priority.(int64), q.popQueue.invert) {
 			return 1
 		}
 		return 0
@@ -145,9 +145,9 @@ func (q *LazyQueue) MultiPop(callback func(data interface{}, priority int64) boo
 		data := heap.Pop(q.queue[nextIndex]).(*item).value
 		heap.Push(q.popQueue, &item{data, q.priority(data, now)})
 		nextIndex = q.peekIndex()
-		for q.popQueue.Len() != 0 && (nextIndex == -1 || q.queue[nextIndex].blocks[0][0].priority < q.popQueue.blocks[0][0].priority) {
+		for q.popQueue.Len() != 0 && (nextIndex == -1 || !less(q.queue[nextIndex].blocks[0][0].priority.(int64), q.popQueue.blocks[0][0].priority.(int64), q.popQueue.invert)) {
 			i := heap.Pop(q.popQueue).(*item)
-			if !callback(i.value, i.priority) {
+			if !callback(i.value, i.priority.(int64)) {
 				for q.popQueue.Len() != 0 {
 					q.Push(heap.Pop(q.popQueue).(*item).value)
 				}

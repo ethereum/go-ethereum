@@ -108,7 +108,7 @@ type ClientManager struct {
 func NewClientManager(curve PieceWiseLinear, clock mclock.Clock) *ClientManager {
 	cm := &ClientManager{
 		clock:         clock,
-		rcQueue:       prque.New(func(a interface{}, i int) { a.(*ClientNode).queueIndex = i }),
+		rcQueue:       prque.New(true, func(a interface{}, i int) { a.(*ClientNode).queueIndex = i }),
 		capLastUpdate: clock.Now(),
 		stop:          make(chan chan struct{}),
 	}
@@ -295,7 +295,7 @@ func (cm *ClientManager) updateRecharge(now mclock.AbsTime) {
 		if dt < dtNext {
 			// not finished yet, put it back, update integrator according
 			// to current bonusRatio and return
-			cm.rcQueue.Push(rcqNode, -rcqNode.rcFullIntValue)
+			cm.rcQueue.Push(rcqNode, rcqNode.rcFullIntValue)
 			cm.rcLastIntValue += int64(bonusRatio * float64(dt))
 			return
 		}
@@ -345,7 +345,7 @@ func (cm *ClientManager) updateNodeRc(node *ClientNode, bvc int64, params *Serve
 		}
 		node.rcLastIntValue = cm.rcLastIntValue
 		node.rcFullIntValue = cm.rcLastIntValue + (int64(node.params.BufLimit)-node.corrBufValue)*FixedPointMultiplier/int64(node.params.MinRecharge)
-		cm.rcQueue.Push(node, -node.rcFullIntValue)
+		cm.rcQueue.Push(node, node.rcFullIntValue)
 	}
 }
 

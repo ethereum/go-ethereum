@@ -233,7 +233,7 @@ func NewBlockChain(db ethdb.Database, cacheConfig *CacheConfig, chainConfig *par
 		chainConfig: chainConfig,
 		cacheConfig: cacheConfig,
 		db:          db,
-		triegc:      prque.New(nil),
+		triegc:      prque.New(true, nil),
 		stateCache: state.NewDatabaseWithConfig(db, &trie.Config{
 			Cache:     cacheConfig.TrieCleanLimit,
 			Journal:   cacheConfig.TrieCleanJournal,
@@ -1540,7 +1540,7 @@ func (bc *BlockChain) writeBlockWithState(block *types.Block, receipts []*types.
 	} else {
 		// Full but not archive node, do proper garbage collection
 		triedb.Reference(root, common.Hash{}) // metadata reference to keep trie alive
-		bc.triegc.Push(root, -int64(block.NumberU64()))
+		bc.triegc.Push(root, block.NumberU64())
 
 		if current := block.NumberU64(); current > TriesInMemory {
 			// If we exceeded our memory allowance, flush matured singleton nodes to disk
@@ -1576,7 +1576,7 @@ func (bc *BlockChain) writeBlockWithState(block *types.Block, receipts []*types.
 			// Garbage collect anything below our required write retention
 			for !bc.triegc.Empty() {
 				root, number := bc.triegc.Pop()
-				if uint64(-number) > chosen {
+				if number.(uint64) > chosen {
 					bc.triegc.Push(root, number)
 					break
 				}

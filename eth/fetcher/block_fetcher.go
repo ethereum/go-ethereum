@@ -211,7 +211,7 @@ func NewBlockFetcher(light bool, getHeader HeaderRetrievalFn, getBlock blockRetr
 		fetching:       make(map[common.Hash]*blockAnnounce),
 		fetched:        make(map[common.Hash][]*blockAnnounce),
 		completing:     make(map[common.Hash]*blockAnnounce),
-		queue:          prque.New(nil),
+		queue:          prque.New(true, nil),
 		queues:         make(map[string]int),
 		queued:         make(map[common.Hash]*blockOrHeaderInject),
 		getHeader:      getHeader,
@@ -354,7 +354,7 @@ func (f *BlockFetcher) loop() {
 			// If too high up the chain or phase, continue later
 			number := op.number()
 			if number > height+1 {
-				f.queue.Push(op, -int64(number))
+				f.queue.Push(op, number)
 				if f.queueChangeHook != nil {
 					f.queueChangeHook(hash, true)
 				}
@@ -735,7 +735,7 @@ func (f *BlockFetcher) enqueue(peer string, header *types.Header, block *types.B
 		}
 		f.queues[peer] = count
 		f.queued[hash] = op
-		f.queue.Push(op, -int64(number))
+		f.queue.Push(op, number)
 		if f.queueChangeHook != nil {
 			f.queueChangeHook(hash, true)
 		}
