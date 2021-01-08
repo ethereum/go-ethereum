@@ -578,8 +578,13 @@ func (f *faucet) refresh(head *types.Header) error {
 	f.lock.Lock()
 	f.head, f.balance = head, balance
 	f.price, f.nonce = price, nonce
-	for i := len(f.reqs) - 1; f.reqs[i].Tx.Nonce() < f.nonce; i-- {
-		f.reqs = f.reqs[:i]
+	// The requests are ordered as [txN, txN-1, .. txN-M]
+	for i := len(f.reqs) - 1; i > 0; i-- {
+		if f.reqs[i].Tx.Nonce() < f.nonce {
+			f.reqs = f.reqs[:i]
+			continue
+		}
+		break
 	}
 	f.lock.Unlock()
 
