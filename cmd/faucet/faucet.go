@@ -648,8 +648,8 @@ func (f *faucet) loop() {
 
 		case <-f.update:
 			// Pending requests updated, stream to clients
-			reqData, _ := json.Marshal(map[string]interface{}{"requests": f.reqs})
 			f.lock.RLock()
+			reqData, _ := json.Marshal(map[string]interface{}{"requests": f.reqs})
 			for _, conn := range f.conns {
 				if err := sendMarshalled(conn, reqData, time.Second); err != nil {
 					log.Warn("Failed to send requests to client", "err", err)
