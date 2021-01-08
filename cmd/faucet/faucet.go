@@ -615,11 +615,15 @@ func (f *faucet) loop() {
 			// Faucet state retrieved, update locally and send to clients
 			f.lock.RLock()
 			log.Info("Updated faucet state", "number", head.Number, "hash", head.Hash(), "age", common.PrettyAge(timestamp), "balance", f.balance, "nonce", f.nonce, "price", f.price)
+
+			balance := new(big.Int).Div(f.balance, ether)
+			peers := f.stack.Server().PeerCount()
+
 			for _, conn := range f.conns {
 				if err := send(conn, map[string]interface{}{
-					"funds":    new(big.Int).Div(f.balance, ether),
+					"funds":    balance,
 					"funded":   f.nonce,
-					"peers":    f.stack.Server().PeerCount(),
+					"peers":    peers,
 					"requests": f.reqs,
 				}, time.Second); err != nil {
 					log.Warn("Failed to send stats to client", "err", err)
