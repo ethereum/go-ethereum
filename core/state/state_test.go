@@ -170,7 +170,7 @@ func TestSnapshot2(t *testing.T) {
 	state.setStateObject(so0)
 
 	root, _ := state.Commit(false)
-	state.Reset(root)
+	state, _ = New(root, state.db, state.snaps)
 
 	// and one with deleted == true
 	so1 := state.getStateObject(stateobjaddr1)

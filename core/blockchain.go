@@ -201,12 +201,11 @@ type BlockChain struct {
 	running       int32          // 0 if chain is running, 1 when stopped
 	procInterrupt int32          // interrupt signaler for block processing
 
-	engine         consensus.Engine
-	validator      Validator             // Block and state validator interface
-	triePrefetcher *state.TriePrefetcher // Trie prefetcher interface
-	prefetcher     Prefetcher
-	processor      Processor // Block transaction processor interface
-	vmConfig       vm.Config
+	engine     consensus.Engine
+	validator  Validator // Block and state validator interface
+	prefetcher Prefetcher
+	processor  Processor // Block transaction processor interface
+	vmConfig   vm.Config
 
 	shouldPreserve     func(*types.Block) bool        // Function used to determine whether should preserve the given block.
 	terminateInsert    func(common.Hash, uint64) bool // Testing hook used to terminate ancient receipt chain insertion.
@@ -250,15 +249,6 @@ func NewBlockChain(db ethdb.Database, cacheConfig *CacheConfig, chainConfig *par
 	}
 	bc.validator = NewBlockValidator(chainConfig, bc, engine)
 	bc.prefetcher = newStatePrefetcher(chainConfig, bc, engine)
-	tp := state.NewTriePrefetcher(bc.stateCache)
-
-	bc.wg.Add(1)
-	go func() {
-		tp.Loop()
-		bc.wg.Done()
-	}()
-	bc.triePrefetcher = tp
-
 	bc.processor = NewStateProcessor(chainConfig, bc, engine)
 
 	var err error
@@ -1001,9 +991,6 @@ func (bc *BlockChain) Stop() {
 	bc.scope.Close()
 	close(bc.quit)
 	bc.StopInsert()
-	if bc.triePrefetcher != nil {
-		bc.triePrefetcher.Close()
-	}
 	bc.wg.Wait()
 
 	// Ensure that the entirety of the state snapshot is journalled to disk.
@@ -1870,16 +1857,20 @@ func (bc *BlockChain) insertChain(chain types.Blocks, verifySeals bool) (int, er
 			parent = bc.GetHeader(block.ParentHash(), block.NumberU64()-1)
 		}
 		statedb, err := state.New(parent.Root, bc.stateCache, bc.snaps)
-		statedb.UsePrefetcher(bc.triePrefetcher)
 		if err != nil {
 			return it.index, err
 		}
+		// Enable prefetching to pull in trie node paths while processing transactions
+		statedb.StartPrefetcher("chain")
+		defer statedb.StopPrefetcher() // stopped on write anyway, defer meant to catch early error returns
+
 		// If we have a followup block, run that against the current state to pre-cache
 		// transactions and probabilistically some of the account/storage trie nodes.
 		var followupInterrupt uint32
 		if !bc.cacheConfig.TrieCleanNoPrefetch {
 			if followup, err := it.peek(); followup != nil && err == nil {
 				throwaway, _ := state.New(parent.Root, bc.stateCache, bc.snaps)
+
 				go func(start time.Time, followup *types.Block, throwaway *state.StateDB, interrupt *uint32) {
 					bc.prefetcher.Prefetch(followup, throwaway, bc.vmConfig, &followupInterrupt)
 
@@ -1933,7 +1924,6 @@ func (bc *BlockChain) insertChain(chain types.Blocks, verifySeals bool) (int, er
 		if err != nil {
 			return it.index, err
 		}
-
 		// Update the metrics touched during block commit
 		accountCommitTimer.Update(statedb.AccountCommits)   // Account commits are complete, we can mark them
 		storageCommitTimer.Update(statedb.StorageCommits)   // Storage commits are complete, we can mark them

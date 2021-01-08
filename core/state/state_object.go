@@ -162,7 +162,7 @@ func (s *stateObject) getTrie(db Database) Trie {
 		if s.data.Root != emptyRoot && s.db.prefetcher != nil {
 			// When the miner is creating the pending state, there is no
 			// prefetcher
-			s.trie = s.db.prefetcher.GetTrie(s.data.Root)
+			s.trie = s.db.prefetcher.trie(s.data.Root)
 		}
 		if s.trie == nil {
 			var err error
@@ -309,14 +309,16 @@ func (s *stateObject) setState(key, value common.Hash) {
 
 // finalise moves all dirty storage slots into the pending area to be hashed or
 // committed later. It is invoked at the end of every transaction.
-func (s *stateObject) finalise() {
-	trieChanges := make([]common.Hash, 0, len(s.dirtyStorage))
+func (s *stateObject) finalise(prefetch bool) {
+	slotsToPrefetch := make([][]byte, 0, len(s.dirtyStorage))
 	for key, value := range s.dirtyStorage {
 		s.pendingStorage[key] = value
-		trieChanges = append(trieChanges, key)
+		if value != s.originStorage[key] {
+			slotsToPrefetch = append(slotsToPrefetch, common.CopyBytes(key[:])) // Copy needed for closure
+		}
 	}
-	if len(trieChanges) > 0 && s.db.prefetcher != nil && s.data.Root != emptyRoot {
-		s.db.prefetcher.PrefetchStorage(s.data.Root, trieChanges)
+	if s.db.prefetcher != nil && prefetch && len(slotsToPrefetch) > 0 && s.data.Root != emptyRoot {
+		s.db.prefetcher.prefetch(s.data.Root, slotsToPrefetch)
 	}
 	if len(s.dirtyStorage) > 0 {
 		s.dirtyStorage = make(Storage)
@@ -327,7 +329,7 @@ func (s *stateObject) finalise() {
 // It will return nil if the trie has not been loaded and no changes have been made
 func (s *stateObject) updateTrie(db Database) Trie {
 	// Make sure all dirty slots are finalized into the pending storage area
-	s.finalise()
+	s.finalise(false) // Don't prefetch any more, pull directly if need be
 	if len(s.pendingStorage) == 0 {
 		return s.trie
 	}
@@ -340,6 +342,8 @@ func (s *stateObject) updateTrie(db Database) Trie {
 	// Insert all the pending updates into the trie
 	tr := s.getTrie(db)
 	hasher := s.db.hasher
+
+	usedStorage := make([][]byte, 0, len(s.pendingStorage))
 	for key, value := range s.pendingStorage {
 		// Skip noop changes, persist actual changes
 		if value == s.originStorage[key] {
@@ -366,6 +370,10 @@ func (s *stateObject) updateTrie(db Database) Trie {
 			}
 			storage[crypto.HashData(hasher, key[:])] = v // v will be nil if value is 0x00
 		}
+		usedStorage = append(usedStorage, common.CopyBytes(key[:])) // Copy needed for closure
+	}
+	if s.db.prefetcher != nil {
+		s.db.prefetcher.used(s.data.Root, usedStorage)
 	}
 	if len(s.pendingStorage) > 0 {
 		s.pendingStorage = make(Storage)

@@ -303,6 +303,9 @@ func (w *worker) isRunning() bool {
 // close terminates all background threads maintained by the worker.
 // Note the worker does not support being closed multiple times.
 func (w *worker) close() {
+	if w.current != nil && w.current.state != nil {
+		w.current.state.StopPrefetcher()
+	}
 	atomic.StoreInt32(&w.running, 0)
 	close(w.exitCh)
 }
@@ -642,10 +645,14 @@ func (w *worker) resultLoop() {
 
 // makeCurrent creates a new environment for the current cycle.
 func (w *worker) makeCurrent(parent *types.Block, header *types.Header) error {
+	// Retrieve the parent state to execute on top and start a prefetcher for
+	// the miner to speed block sealing up a bit
 	state, err := w.chain.StateAt(parent.Root())
 	if err != nil {
 		return err
 	}
+	state.StartPrefetcher("miner")
+
 	env := &environment{
 		signer:    types.NewEIP155Signer(w.chainConfig.ChainID),
 		state:     state,
@@ -654,7 +661,6 @@ func (w *worker) makeCurrent(parent *types.Block, header *types.Header) error {
 		uncles:    mapset.NewSet(),
 		header:    header,
 	}
-
 	// when 08 is processed ancestors contain 07 (quick block)
 	for _, ancestor := range w.chain.GetBlocksFromHash(parent.Hash(), 7) {
 		for _, uncle := range ancestor.Uncles() {
@@ -663,9 +669,14 @@ func (w *worker) makeCurrent(parent *types.Block, header *types.Header) error {
 		env.family.Add(ancestor.Hash())
 		env.ancestors.Add(ancestor.Hash())
 	}
-
 	// Keep track of transactions which return errors so they can be removed
 	env.tcount = 0
+
+	// Swap out the old work with the new one, terminating any leftover prefetcher
+	// processes in the mean time and starting a new one.
+	if w.current != nil && w.current.state != nil {
+		w.current.state.StopPrefetcher()
+	}
 	w.current = env
 	return nil
 }
@@ -719,7 +730,6 @@ func (w *worker) updateSnapshot() {
 		w.current.receipts,
 		new(trie.Trie),
 	)
-
 	w.snapshotState = w.current.state.Copy()
 }
 

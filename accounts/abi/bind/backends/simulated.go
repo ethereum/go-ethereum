@@ -125,10 +125,9 @@ func (b *SimulatedBackend) Rollback() {
 
 func (b *SimulatedBackend) rollback() {
 	blocks, _ := core.GenerateChain(b.config, b.blockchain.CurrentBlock(), ethash.NewFaker(), b.database, 1, func(int, *core.BlockGen) {})
-	stateDB, _ := b.blockchain.State()
 
 	b.pendingBlock = blocks[0]
-	b.pendingState, _ = state.New(b.pendingBlock.Root(), stateDB.Database(), nil)
+	b.pendingState, _ = state.New(b.pendingBlock.Root(), b.blockchain.StateCache(), nil)
 }
 
 // stateByBlockNumber retrieves a state by a given blocknumber.
