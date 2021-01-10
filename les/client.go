@@ -107,7 +107,7 @@ func New(stack *node.Node, config *eth.Config) (*LightEthereum, error) {
 		accountManager: stack.AccountManager(),
 		engine:         ethx.CreateConsensusEngine(stack, chainConfig, &config.Ethash, nil, false, chainDb),
 		bloomRequests:  make(chan chan *bloombits.Retrieval),
-		bloomIndexer:   ethx.NewBloomIndexer(chainDb, params.BloomBitsBlocksClient, params.HelperTrieConfirmations),
+		bloomIndexer:   core.NewBloomIndexer(chainDb, params.BloomBitsBlocksClient, params.HelperTrieConfirmations),
 		valueTracker:   lpc.NewValueTracker(lespayDb, &mclock.System{}, requestList, time.Minute, 1/float64(time.Hour), 1/float64(time.Hour*100), 1/float64(time.Hour*1000)),
 		p2pServer:      stack.Server(),
 	}

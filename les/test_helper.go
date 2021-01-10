@@ -38,7 +38,6 @@ import (
 	"github.com/ethereum/go-ethereum/core/rawdb"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/crypto"
-	ethx "github.com/ethereum/go-ethereum/eth"
 	"github.com/ethereum/go-ethereum/eth/protocols/eth"
 	"github.com/ethereum/go-ethereum/ethdb"
 	"github.com/ethereum/go-ethereum/event"
@@ -164,7 +163,7 @@ func prepare(n int, backend *backends.SimulatedBackend) {
 func testIndexers(db ethdb.Database, odr light.OdrBackend, config *light.IndexerConfig, disablePruning bool) []*core.ChainIndexer {
 	var indexers [3]*core.ChainIndexer
 	indexers[0] = light.NewChtIndexer(db, odr, config.ChtSize, config.ChtConfirms, disablePruning)
-	indexers[1] = ethx.NewBloomIndexer(db, config.BloomSize, config.BloomConfirms)
+	indexers[1] = core.NewBloomIndexer(db, config.BloomSize, config.BloomConfirms)
 	indexers[2] = light.NewBloomTrieIndexer(db, odr, config.BloomSize, config.BloomTrieSize, disablePruning)
 	// make bloomTrieIndexer as a child indexer of bloom indexer.
 	indexers[1].AddChildIndexer(indexers[2])
