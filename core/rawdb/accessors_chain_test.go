@@ -22,6 +22,7 @@ import (
 	"fmt"
 	"io/ioutil"
 	"math/big"
+	"math/rand"
 	"os"
 	"reflect"
 	"testing"
@@ -220,10 +221,36 @@ func TestBadBlockStorage(t *testing.T) {
 	})
 	WriteBadBlock(db, blockTwo)
 
+	// Write the block one again, should be filtered out.
+	WriteBadBlock(db, block)
 	badBlocks := ReadAllBadBlocks(db)
 	if len(badBlocks) != 2 {
 		t.Fatalf("Failed to load all bad blocks")
 	}
+
+	// Write a bunch of bad blocks, all the blocks are should sorted
+	// in reverse order. The extra blocks should be truncated.
+	for _, n := range rand.Perm(100) {
+		block := types.NewBlockWithHeader(&types.Header{
+			Number:      big.NewInt(int64(n)),
+			Extra:       []byte("bad block"),
+			UncleHash:   types.EmptyUncleHash,
+			TxHash:      types.EmptyRootHash,
+			ReceiptHash: types.EmptyRootHash,
+		})
+		WriteBadBlock(db, block)
+	}
+	badBlocks = ReadAllBadBlocks(db)
+	if len(badBlocks) != badBlockToKeep {
+		t.Fatalf("The number of persised bad blocks in incorrect %d", len(badBlocks))
+	}
+	for i := 0; i < len(badBlocks)-1; i++ {
+		if badBlocks[i].NumberU64() < badBlocks[i+1].NumberU64() {
+			t.Fatalf("The bad blocks are not sorted #[%d](%d) < #[%d](%d)", i, i+1, badBlocks[i].NumberU64(), badBlocks[i+1].NumberU64())
+		}
+	}
+
+	// Delete all bad blocks
 	DeleteBadBlocks(db)
 	badBlocks = ReadAllBadBlocks(db)
 	if len(badBlocks) != 0 {

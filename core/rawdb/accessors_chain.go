@@ -738,7 +738,8 @@ func ReadBadBlock(db ethdb.Reader, hash common.Hash) *types.Block {
 	return nil
 }
 
-// ReadAllBadBlocks retrieves all the bad blocks in the database
+// ReadAllBadBlocks retrieves all the bad blocks in the database.
+// All returned blocks are sorted in reverse order by number.
 func ReadAllBadBlocks(db ethdb.Reader) []*types.Block {
 	blob, err := db.Get(badBlockKey)
 	if err != nil {
@@ -768,11 +769,17 @@ func WriteBadBlock(db ethdb.KeyValueStore, block *types.Block) {
 			log.Crit("Failed to decode old bad blocks", "error", err)
 		}
 	}
+	for _, b := range badBlocks {
+		if b.Header.Number.Uint64() == block.NumberU64() && b.Header.Hash() == block.Hash() {
+			log.Info("Skip duplicated bad block", "number", block.NumberU64(), "hash", block.Hash())
+			return
+		}
+	}
 	badBlocks = append(badBlocks, &badBlock{
 		Header: block.Header(),
 		Body:   block.Body(),
 	})
-	sort.Reverse(badBlocks)
+	sort.Sort(sort.Reverse(badBlocks))
 	if len(badBlocks) > badBlockToKeep {
 		badBlocks = badBlocks[:badBlockToKeep]
 	}
