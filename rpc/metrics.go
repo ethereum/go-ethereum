@@ -37,3 +37,8 @@ func newRPCServingTimer(method string, valid bool) metrics.Timer {
 	m := fmt.Sprintf("rpc/duration/%s/%s", method, flag)
 	return metrics.GetOrRegisterTimer(m, nil)
 }
+
+func newRPCRequestGauge(method string) metrics.Gauge {
+	m := fmt.Sprintf("rpc/count/%s", method)
+	return metrics.GetOrRegisterGauge(m, nil)
+}
