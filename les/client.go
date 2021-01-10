@@ -79,7 +79,7 @@ type LightEthereum struct {
 type consensusCreatorFn func(stack *node.Node, chainConfig *params.ChainConfig, config *ethash.Config, notify []string, noverify bool, db ethdb.Database) consensus.Engine
 
 // New creates an instance of the light client.
-func New(stack *node.Node, config *eth.Config, cc consensusCreatorFn) (*LightEthereum, error) {
+func New(stack *node.Node, config *eth.Config, mkEngineFn consensusCreatorFn) (*LightEthereum, error) {
 	chainDb, err := stack.OpenDatabase("lightchaindata", config.DatabaseCache, config.DatabaseHandles, "eth/db/chaindata/")
 	if err != nil {
 		return nil, err
@@ -108,7 +108,7 @@ func New(stack *node.Node, config *eth.Config, cc consensusCreatorFn) (*LightEth
 		eventMux:       stack.EventMux(),
 		reqDist:        newRequestDistributor(peers, &mclock.System{}),
 		accountManager: stack.AccountManager(),
-		engine:         cc(stack, chainConfig, &config.Ethash, nil, false, chainDb),
+		engine:         mkEngineFn(stack, chainConfig, &config.Ethash, nil, false, chainDb),
 		bloomRequests:  make(chan chan *bloombits.Retrieval),
 		bloomIndexer:   core.NewBloomIndexer(chainDb, params.BloomBitsBlocksClient, params.HelperTrieConfirmations),
 		valueTracker:   lpc.NewValueTracker(lespayDb, &mclock.System{}, requestList, time.Minute, 1/float64(time.Hour), 1/float64(time.Hour*100), 1/float64(time.Hour*1000)),
