@@ -227,6 +227,9 @@ func (s *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	if origin := r.Header.Get("Origin"); origin != "" {
 		ctx = context.WithValue(ctx, "Origin", origin)
 	}
+	if xForward := r.Header.Get("X-Forwarded-For"); xForward != "" {
+		ctx = context.WithValue(ctx, "X-Forwarded-For", xForward)
+	}
 
 	w.Header().Set("content-type", contentType)
 	codec := newHTTPServerConn(r, w)
