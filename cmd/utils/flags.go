@@ -1717,7 +1717,7 @@ func SetDNSDiscoveryDefaults(cfg *eth.Config, genesis common.Hash) {
 // RegisterEthService adds an Ethereum client to the stack.
 func RegisterEthService(stack *node.Node, cfg *eth.Config) ethapi.Backend {
 	if cfg.SyncMode == downloader.LightSync {
-		backend, err := les.New(stack, cfg)
+		backend, err := les.New(stack, cfg, ethereum.CreateConsensusEngine)
 		if err != nil {
 			Fatalf("Failed to register the Ethereum service: %v", err)
 		}

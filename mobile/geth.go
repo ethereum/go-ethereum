@@ -25,6 +25,7 @@ import (
 	"path/filepath"
 
 	"github.com/ethereum/go-ethereum/core"
+	ethereum "github.com/ethereum/go-ethereum/eth"
 	"github.com/ethereum/go-ethereum/eth/downloader"
 	"github.com/ethereum/go-ethereum/eth/protocols/eth"
 	"github.com/ethereum/go-ethereum/ethclient"
@@ -187,7 +188,7 @@ func NewNode(datadir string, config *NodeConfig) (stack *Node, _ error) {
 		ethConf.SyncMode = downloader.LightSync
 		ethConf.NetworkId = uint64(config.EthereumNetworkID)
 		ethConf.DatabaseCache = config.EthereumDatabaseCache
-		lesBackend, err := les.New(rawStack, &ethConf)
+		lesBackend, err := les.New(rawStack, &ethConf, ethereum.CreateConsensusEngine)
 		if err != nil {
 			return nil, fmt.Errorf("ethereum init: %v", err)
 		}
