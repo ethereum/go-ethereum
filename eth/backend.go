@@ -57,7 +57,7 @@ import (
 
 // Ethereum implements the Ethereum full node service.
 type Ethereum struct {
-	config *Config
+	config *eth.Config
 
 	// Handlers
 	txPool             *core.TxPool
@@ -93,7 +93,7 @@ type Ethereum struct {
 
 // New creates a new Ethereum object (including the
 // initialisation of the common Ethereum object)
-func New(stack *node.Node, config *Config) (*Ethereum, error) {
+func New(stack *node.Node, config *eth.Config) (*Ethereum, error) {
 	// Ensure configuration values are compatible and sane
 	if config.SyncMode == downloader.LightSync {
 		return nil, errors.New("can't run eth.Ethereum in light sync mode, use les.LightEthereum")
@@ -102,8 +102,8 @@ func New(stack *node.Node, config *Config) (*Ethereum, error) {
 		return nil, fmt.Errorf("invalid sync mode %d", config.SyncMode)
 	}
 	if config.Miner.GasPrice == nil || config.Miner.GasPrice.Cmp(common.Big0) <= 0 {
-		log.Warn("Sanitizing invalid miner gas price", "provided", config.Miner.GasPrice, "updated", DefaultConfig.Miner.GasPrice)
-		config.Miner.GasPrice = new(big.Int).Set(DefaultConfig.Miner.GasPrice)
+		log.Warn("Sanitizing invalid miner gas price", "provided", config.Miner.GasPrice, "updated", eth.DefaultConfig.Miner.GasPrice)
+		config.Miner.GasPrice = new(big.Int).Set(eth.DefaultConfig.Miner.GasPrice)
 	}
 	if config.NoPruning && config.TrieDirtyCache > 0 {
 		if config.SnapshotCache > 0 {
