@@ -300,7 +300,7 @@ const schema string = `
         block(number: Long, hash: Bytes32): Block
         # Blocks returns all the blocks between two numbers, inclusive. If
         # to is not supplied, it defaults to the most recent known block.
-        blocks(from: Long!, to: Long): [Block!]!
+        blocks(from: Long, to: Long): [Block!]!
         # Pending returns the current pending state.
         pending: Pending!
         # Transaction returns a transaction specified by its hash.
