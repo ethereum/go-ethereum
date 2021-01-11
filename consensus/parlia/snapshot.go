@@ -18,6 +18,7 @@ package parlia
 
 import (
 	"bytes"
+	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"math/big"
@@ -38,10 +39,11 @@ type Snapshot struct {
 	ethAPI   *ethapi.PublicBlockChainAPI
 	sigCache *lru.ARCCache // Cache of recent block signatures to speed up ecrecover
 
-	Number     uint64                      `json:"number"`     // Block number where the snapshot was created
-	Hash       common.Hash                 `json:"hash"`       // Block hash where the snapshot was created
-	Validators map[common.Address]struct{} `json:"validators"` // Set of authorized validators at this moment
-	Recents    map[uint64]common.Address   `json:"recents"`    // Set of recent validators for spam protections
+	Number           uint64                      `json:"number"`             // Block number where the snapshot was created
+	Hash             common.Hash                 `json:"hash"`               // Block hash where the snapshot was created
+	Validators       map[common.Address]struct{} `json:"validators"`         // Set of authorized validators at this moment
+	Recents          map[uint64]common.Address   `json:"recents"`            // Set of recent validators for spam protections
+	RecentForkHashes map[uint64]string           `json:"recent_fork_hashes"` // Set of recent forkHash
 }
 
 // newSnapshot creates a new snapshot with the specified startup parameters. This
@@ -56,13 +58,14 @@ func newSnapshot(
 	ethAPI *ethapi.PublicBlockChainAPI,
 ) *Snapshot {
 	snap := &Snapshot{
-		config:     config,
-		ethAPI:     ethAPI,
-		sigCache:   sigCache,
-		Number:     number,
-		Hash:       hash,
-		Recents:    make(map[uint64]common.Address),
-		Validators: make(map[common.Address]struct{}),
+		config:           config,
+		ethAPI:           ethAPI,
+		sigCache:         sigCache,
+		Number:           number,
+		Hash:             hash,
+		Recents:          make(map[uint64]common.Address),
+		RecentForkHashes: make(map[uint64]string),
+		Validators:       make(map[common.Address]struct{}),
 	}
 	for _, v := range validators {
 		snap.Validators[v] = struct{}{}
@@ -106,13 +109,14 @@ func (s *Snapshot) store(db ethdb.Database) error {
 // copy creates a deep copy of the snapshot
 func (s *Snapshot) copy() *Snapshot {
 	cpy := &Snapshot{
-		config:     s.config,
-		ethAPI:     s.ethAPI,
-		sigCache:   s.sigCache,
-		Number:     s.Number,
-		Hash:       s.Hash,
-		Validators: make(map[common.Address]struct{}),
-		Recents:    make(map[uint64]common.Address),
+		config:           s.config,
+		ethAPI:           s.ethAPI,
+		sigCache:         s.sigCache,
+		Number:           s.Number,
+		Hash:             s.Hash,
+		Validators:       make(map[common.Address]struct{}),
+		Recents:          make(map[uint64]common.Address),
+		RecentForkHashes: make(map[uint64]string),
 	}
 
 	for v := range s.Validators {
@@ -121,7 +125,20 @@ func (s *Snapshot) copy() *Snapshot {
 	for block, v := range s.Recents {
 		cpy.Recents[block] = v
 	}
+	for block, id := range s.RecentForkHashes {
+		cpy.RecentForkHashes[block] = id
+	}
 	return cpy
+}
+
+func (s *Snapshot) isMajorityFork(forkHash string) bool {
+	ally := 0
+	for _, h := range s.RecentForkHashes {
+		if h == forkHash {
+			ally++
+		}
+	}
+	return ally > len(s.RecentForkHashes)/2
 }
 
 func (s *Snapshot) apply(headers []*types.Header, chain consensus.ChainReader, parents []*types.Header, chainId *big.Int) (*Snapshot, error) {
@@ -152,6 +169,9 @@ func (s *Snapshot) apply(headers []*types.Header, chain consensus.ChainReader, p
 		// Delete the oldest validator from the recent list to allow it signing again
 		if limit := uint64(len(snap.Validators)/2 + 1); number >= limit {
 			delete(snap.Recents, number-limit)
+		}
+		if limit := uint64(len(snap.Validators)); number >= limit {
+			delete(snap.RecentForkHashes, number-limit)
 		}
 		// Resolve the authorization key and check against signers
 		validator, err := ecrecover(header, s.sigCache, chainId)
@@ -191,8 +211,16 @@ func (s *Snapshot) apply(headers []*types.Header, chain consensus.ChainReader, p
 					delete(snap.Recents, number-uint64(newLimit)-uint64(i))
 				}
 			}
+			oldLimit = len(snap.Validators)
+			newLimit = len(newVals)
+			if newLimit < oldLimit {
+				for i := 0; i < oldLimit-newLimit; i++ {
+					delete(snap.RecentForkHashes, number-uint64(newLimit)-uint64(i))
+				}
+			}
 			snap.Validators = newVals
 		}
+		snap.RecentForkHashes[number] = hex.EncodeToString(header.Extra[extraVanity-nextForkHashSize : extraVanity])
 	}
 	snap.Number += uint64(len(headers))
 	snap.Hash = headers[len(headers)-1].Hash()

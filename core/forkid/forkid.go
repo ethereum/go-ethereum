@@ -62,6 +62,28 @@ func NewID(chain *core.BlockChain) ID {
 	)
 }
 
+func NextForkHash(config *params.ChainConfig, genesis common.Hash, head uint64) [4]byte {
+	// Calculate the starting checksum from the genesis hash
+	hash := crc32.ChecksumIEEE(genesis[:])
+
+	// Calculate the current fork checksum and the next fork block
+	var next uint64
+	for _, fork := range gatherForks(config) {
+		if fork <= head {
+			// Fork already passed, checksum the previous hash and the fork number
+			hash = checksumUpdate(hash, fork)
+			continue
+		}
+		next = fork
+		break
+	}
+	if next == 0 {
+		return checksumToBytes(hash)
+	} else {
+		return checksumToBytes(checksumUpdate(hash, next))
+	}
+}
+
 // newID is the internal version of NewID, which takes extracted values as its
 // arguments instead of a chain. The reason is to allow testing the IDs without
 // having to simulate an entire blockchain.
