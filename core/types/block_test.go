@@ -73,6 +73,17 @@ func TestBlockEncoding(t *testing.T) {
 	}
 }
 
+type blockTest struct {
+	Header   *Header        `json:"header"`
+	Txs      []*Transaction `json:"transactions"`
+	Uncles   []*Header      `json:"uncles"`
+	Receipts []*Receipt     `json:"receipts"`
+}
+type jsonFormat struct {
+	Rlp  string    `json:"rlp"`
+	Json blockTest `json:"json"`
+}
+
 //XTestGenerateACLJsonFiles creates files in ./testdata/ , to be used for cross-client
 //testing
 func XTestGenerateACLJsonFiles(t *testing.T) {
@@ -80,10 +91,6 @@ func XTestGenerateACLJsonFiles(t *testing.T) {
 		signer = NewEIP2718Signer(params.TestChainConfig.ChainID)
 		key, _ = crypto.GenerateKey()
 	)
-	type output struct {
-		Rlp  string   `json:"rlp"`
-		Json extblock `json:"json"`
-	}
 
 	common.Hex2Bytes("3dbacc8d0259f2508625e97fdfc57cd85fdd16e5821bc2c10bdd1a52649e8335476e10695b183a87b0aa292a7f4b78ef0c3fbe62aa2c42c84e1d9c3da159ef1401")
 	var mkTx = func(i int) *Transaction {
@@ -104,6 +111,18 @@ func XTestGenerateACLJsonFiles(t *testing.T) {
 		}
 		return signedAclTx
 	}
+	var mkLegacyTx = func(i int) *Transaction {
+		t.Helper()
+		unsigned := NewTransaction(0,
+			common.HexToAddress("095e7baea6a6c7c4c2dfeb977efac326af552d87"),
+			big.NewInt(0), 123457, big.NewInt(10), nil)
+		signedTx, err := SignTx(unsigned, signer, key)
+		if err != nil {
+			t.Fatal(err)
+		}
+		return signedTx
+	}
+
 	for i := 0; i < 10; i++ {
 		var header = &Header{
 			ParentHash: common.Hash{},
@@ -115,30 +134,45 @@ func XTestGenerateACLJsonFiles(t *testing.T) {
 			Time:       1,
 			Extra:      make([]byte, 32),
 		}
-		// Each block contains i acl-transactions
+		// Each block contains i acl-transactions and one legacy transaction
 		var txs []*Transaction
 		var receipts []*Receipt
 
 		for ii := 0; ii < i; ii++ {
 			tx := mkTx(i)
-			receipt := NewReceipt(make([]byte, 32), false, tx.Gas())
+			receipt := NewEIP2718Receipt(AccessListTxId, make([]byte, 32), false, tx.Gas())
+			receipt.TxHash = tx.Hash()
+			receipt.GasUsed = tx.Gas()
+			receipt.TransactionIndex = uint(ii)
+			receipt.Logs = make([]*Log, 0)
+			txs = append(txs, tx)
+			receipts = append(receipts, receipt)
+		}
+		// Append one legacy transaction
+		{
+			tx := mkLegacyTx(i)
+			receipt := NewEIP2718Receipt(LegacyTxId, make([]byte, 32), false, tx.Gas())
+			receipt.TxHash = tx.Hash()
+			receipt.GasUsed = tx.Gas()
+			receipt.TransactionIndex = uint(i)
+			receipt.Logs = make([]*Log, 0)
 			txs = append(txs, tx)
 			receipts = append(receipts, receipt)
 		}
 		block := NewBlock(header, txs, nil, receipts, newHasher())
-		eBlock := extblock{
-			Header: block.header,
-			Txs:    block.transactions,
-			Uncles: block.uncles,
-		}
-		rlpData, err := rlp.EncodeToBytes(eBlock)
+		rlpData, err := rlp.EncodeToBytes(block)
 		if err != nil {
 			t.Fatal(err)
 		}
-		jsonData, err := json.MarshalIndent(&output{
-			Rlp:  fmt.Sprintf("%x", rlpData),
-			Json: eBlock,
-		}, "", "  ")
+		jsonData, err := json.MarshalIndent(&jsonFormat{
+			Rlp: fmt.Sprintf("%x", rlpData),
+			Json: blockTest{
+				Header:   block.header,
+				Txs:      block.transactions,
+				Uncles:   block.uncles,
+				Receipts: receipts,
+			}},
+			"", "  ")
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -156,13 +190,8 @@ func TestACLJsonFiles(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	type testcase struct {
-		Rlp  string   `json:"rlp"`
-		Json extblock `json:"json"`
-	}
-
 	for _, f := range finfo {
-		var tc testcase
+		var tc jsonFormat
 		if !strings.HasPrefix(f.Name(), "acl_block_") {
 			continue
 		}
@@ -179,6 +208,9 @@ func TestACLJsonFiles(t *testing.T) {
 		}
 		if have, want := block.TxHash(), tc.Json.Header.TxHash; have != want {
 			t.Fatalf("testfile %v, txroot wrong, have %v, want %v", f.Name(), have, want)
+		}
+		if have, want := block.ReceiptHash(), tc.Json.Header.ReceiptHash; have != want {
+			t.Fatalf("testfile %v, receipt root wrong, have %v, want %v", f.Name(), have, want)
 		}
 	}
 }
