@@ -109,9 +109,9 @@ func (s *Server) serveSingleRequest(ctx context.Context, codec ServerCodec) {
 		return
 	}
 	if batch {
-		h.handleBatch(reqs)
+		h.handleBatch(ctx, reqs)
 	} else {
-		h.handleMsg(reqs[0])
+		h.handleMsg(ctx, reqs[0])
 	}
 }
 
