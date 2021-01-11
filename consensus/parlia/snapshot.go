@@ -211,7 +211,13 @@ func (s *Snapshot) apply(headers []*types.Header, chain consensus.ChainReader, p
 					delete(snap.Recents, number-uint64(newLimit)-uint64(i))
 				}
 			}
-			snap.RecentForkHashes = make(map[uint64]string, 0)
+			oldLimit = len(snap.Validators)
+			newLimit = len(newVals)
+			if newLimit < oldLimit {
+				for i := 0; i < oldLimit-newLimit; i++ {
+					delete(snap.RecentForkHashes, number-uint64(newLimit)-uint64(i))
+				}
+			}
 			snap.Validators = newVals
 		}
 		snap.RecentForkHashes[number] = hex.EncodeToString(header.Extra[extraVanity-nextForkHashSize : extraVanity])
