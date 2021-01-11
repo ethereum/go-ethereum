@@ -17,7 +17,6 @@
 package abi
 
 import (
-	"bytes"
 	"fmt"
 	"reflect"
 	"strings"
@@ -50,7 +49,7 @@ var (
 
 func unpackPack(abi abi.ABI, method string, input []byte) ([]interface{}, bool) {
 	if out, err := abi.Unpack(method, input); err == nil {
-		output, err := abi.Pack(method, input)
+		_, err := abi.Pack(method, out...)
 		if err != nil {
 			// We have some false positives as we can unpack these type successfully, but not pack them
 			if err.Error() == "abi: cannot use []uint8 as type [0]int8 as argument" ||
@@ -58,9 +57,6 @@ func unpackPack(abi abi.ABI, method string, input []byte) ([]interface{}, bool) 
 				return out, false
 			}
 			panic(err)
-		}
-		if !bytes.Equal(input, output[4:]) {
-			panic(fmt.Sprintf("unpackPack is not equal, \ninput : %x\noutput: %x", input, output[4:]))
 		}
 		return out, true
 	}
@@ -119,22 +115,6 @@ func createABI(name string, stateMutability, payable *string, inputs []args) (ab
 	return abi.JSON(strings.NewReader(sig))
 }
 
-func createStructs(args []args) []interface{} {
-	structs := make([]interface{}, len(args))
-	for i, arg := range args {
-		t, err := abi.NewType(arg.typ, "", nil)
-		if err != nil {
-			panic(err)
-		}
-		e := reflect.New(t.GetType()).Elem()
-		structs[i] = e.Interface()
-		if e.Kind() == reflect.Ptr && e.IsNil() {
-			structs[i] = reflect.Zero(t.GetType()).Interface()
-		}
-	}
-	return structs
-}
-
 func runFuzzer(input []byte) int {
 	good := false
 	fuzzer := fuzz.NewFromGoFuzz(input)
@@ -164,10 +144,6 @@ func runFuzzer(input []byte) int {
 			continue
 		}
 		structs, b := unpackPack(abi, name, input)
-		if structs != nil && len(structs) > 0 {
-			fmt.Printf("%v%v\n", arg, structs)
-			fuzzer.Fuzz(&structs)
-		}
 		c := packUnpack(abi, name, &structs)
 		good = good || b || c
 	}
