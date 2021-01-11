@@ -444,7 +444,7 @@ func (h *handler) BroadcastTransactions(txs types.Transactions, propagate bool) 
 			for _, peer := range transfer {
 				txset[peer] = append(txset[peer], tx.Hash())
 			}
-			log.Trace("Broadcast transaction", "hash", tx.Hash(), "recipients", len(txset))
+			log.Trace("Broadcast transaction", "hash", tx.Hash(), "recipients", len(transfer))
 		}
 		for peer, hashes := range txset {
 			peer.AsyncSendTransactions(hashes)
