@@ -243,9 +243,9 @@ func (ps *peerSet) ethPeersWithoutBlock(hash common.Hash) []*ethPeer {
 	return list
 }
 
-// ethPeersWithoutTransacion retrieves a list of `eth` peers that do not have a
+// ethPeersWithoutTransaction retrieves a list of `eth` peers that do not have a
 // given transaction in their set of known hashes.
-func (ps *peerSet) ethPeersWithoutTransacion(hash common.Hash) []*ethPeer {
+func (ps *peerSet) ethPeersWithoutTransaction(hash common.Hash) []*ethPeer {
 	ps.lock.RLock()
 	defer ps.lock.RUnlock()
 

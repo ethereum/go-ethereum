@@ -437,14 +437,14 @@ func (h *handler) BroadcastTransactions(txs types.Transactions, propagate bool) 
 	// Broadcast transactions to a batch of peers not knowing about it
 	if propagate {
 		for _, tx := range txs {
-			peers := h.peers.ethPeersWithoutTransacion(tx.Hash())
+			peers := h.peers.ethPeersWithoutTransaction(tx.Hash())
 
 			// Send the block to a subset of our peers
 			transfer := peers[:int(math.Sqrt(float64(len(peers))))]
 			for _, peer := range transfer {
 				txset[peer] = append(txset[peer], tx.Hash())
 			}
-			log.Trace("Broadcast transaction", "hash", tx.Hash(), "recipients", len(peers))
+			log.Trace("Broadcast transaction", "hash", tx.Hash(), "recipients", len(transfer))
 		}
 		for peer, hashes := range txset {
 			peer.AsyncSendTransactions(hashes)
@@ -453,7 +453,7 @@ func (h *handler) BroadcastTransactions(txs types.Transactions, propagate bool) 
 	}
 	// Otherwise only broadcast the announcement to peers
 	for _, tx := range txs {
-		peers := h.peers.ethPeersWithoutTransacion(tx.Hash())
+		peers := h.peers.ethPeersWithoutTransaction(tx.Hash())
 		for _, peer := range peers {
 			annos[peer] = append(annos[peer], tx.Hash())
 		}
