@@ -155,7 +155,7 @@ func (s *Sync) AddSubTrie(root common.Hash, path []byte, parent common.Hash, cal
 	if s.membatch.hasNode(root) {
 		return
 	}
-	if s.bloom == nil || s.bloom.Contains(root) {
+	if s.bloom == nil || s.bloom.Contains(root[:]) {
 		// Bloom filter says this might be a duplicate, double check.
 		// If database says yes, then at least the trie node is present
 		// and we hold the assumption that it's NOT legacy contract code.
@@ -195,7 +195,7 @@ func (s *Sync) AddCodeEntry(hash common.Hash, path []byte, parent common.Hash) {
 	if s.membatch.hasCode(hash) {
 		return
 	}
-	if s.bloom == nil || s.bloom.Contains(hash) {
+	if s.bloom == nil || s.bloom.Contains(hash[:]) {
 		// Bloom filter says this might be a duplicate, double check.
 		// If database says yes, the blob is present for sure.
 		// Note we only check the existence with new code scheme, fast
@@ -313,11 +313,11 @@ func (s *Sync) Commit(dbw ethdb.Batch) error {
 	// Dump the membatch into a database dbw
 	for key, value := range s.membatch.nodes {
 		rawdb.WriteTrieNode(dbw, key, value)
-		s.bloom.Add(key)
+		s.bloom.Add(key[:])
 	}
 	for key, value := range s.membatch.codes {
 		rawdb.WriteCode(dbw, key, value)
-		s.bloom.Add(key)
+		s.bloom.Add(key[:])
 	}
 	// Drop the membatch data and return
 	s.membatch = newSyncMemBatch()
@@ -406,7 +406,7 @@ func (s *Sync) children(req *request, object node) ([]*request, error) {
 			if s.membatch.hasNode(hash) {
 				continue
 			}
-			if s.bloom == nil || s.bloom.Contains(hash) {
+			if s.bloom == nil || s.bloom.Contains(node) {
 				// Bloom filter says this might be a duplicate, double check.
 				// If database says yes, then at least the trie node is present
 				// and we hold the assumption that it's NOT legacy contract code.

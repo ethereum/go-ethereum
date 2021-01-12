@@ -1571,7 +1571,7 @@ func (s *Syncer) processBytecodeResponse(res *bytecodeResponse) {
 		bytes += common.StorageSize(len(code))
 
 		rawdb.WriteCode(batch, hash, code)
-		s.bloom.Add(hash)
+		s.bloom.Add(hash[:])
 	}
 	if err := batch.Write(); err != nil {
 		log.Crit("Failed to persist bytecodes", "err", err)
@@ -1710,7 +1710,7 @@ func (s *Syncer) processStorageResponse(res *storageResponse) {
 			}
 			// Node is not a boundary, persist to disk
 			batch.Put(it.Key(), it.Value())
-			s.bloom.Add(common.BytesToHash(it.Key()))
+			s.bloom.Add(it.Key())
 
 			bytes += common.StorageSize(common.HashLength + len(it.Value()))
 			nodes++
@@ -1867,7 +1867,7 @@ func (s *Syncer) forwardAccountTask(task *accountTask) {
 		}
 		// Node is neither a boundary, not an incomplete account, persist to disk
 		batch.Put(it.Key(), it.Value())
-		s.bloom.Add(common.BytesToHash(it.Key()))
+		s.bloom.Add(it.Key())
 
 		bytes += common.StorageSize(common.HashLength + len(it.Value()))
 		nodes++

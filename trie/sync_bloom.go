@@ -157,11 +157,11 @@ func (b *SyncBloom) Close() error {
 }
 
 // Add inserts a new trie node hash into the bloom filter.
-func (b *SyncBloom) Add(hash common.Hash) {
+func (b *SyncBloom) Add(hash []byte) {
 	if atomic.LoadUint32(&b.closed) == 1 {
 		return
 	}
-	b.bloom.AddHash(hashToUint64(hash))
+	b.bloom.AddHash(binary.BigEndian.Uint64(hash))
 	bloomAddMeter.Mark(1)
 }
 
@@ -170,7 +170,7 @@ func (b *SyncBloom) Add(hash common.Hash) {
 //   - true:  the bloom maybe contains hash
 //
 // While the bloom is being initialized, any query will return true.
-func (b *SyncBloom) Contains(hash common.Hash) bool {
+func (b *SyncBloom) Contains(hash []byte) bool {
 	bloomTestMeter.Mark(1)
 	if atomic.LoadUint32(&b.inited) == 0 {
 		// We didn't load all the trie nodes from the previous run of Geth yet. As
@@ -179,14 +179,9 @@ func (b *SyncBloom) Contains(hash common.Hash) bool {
 		return true
 	}
 	// Bloom initialized, check the real one and report any successful misses
-	maybe := b.bloom.ContainsHash(hashToUint64(hash))
+	maybe := b.bloom.ContainsHash(binary.BigEndian.Uint64(hash))
 	if !maybe {
 		bloomMissMeter.Mark(1)
 	}
 	return maybe
-}
-
-func hashToUint64(h common.Hash) uint64 {
-	return uint64(h[7]) | uint64(h[6])<<8 | uint64(h[5])<<16 | uint64(h[4])<<24 |
-		uint64(h[3])<<32 | uint64(h[2])<<40 | uint64(h[1])<<48 | uint64(h[0])<<56
 }
