@@ -584,14 +584,15 @@ func testThrottling(t *testing.T, protocol uint, mode SyncMode) {
 			time.Sleep(25 * time.Millisecond)
 
 			tester.lock.Lock()
+			tester.downloader.queue.lock.Lock()
+			tester.downloader.queue.resultCache.lock.Lock()
 			{
-				tester.downloader.queue.resultCache.lock.Lock()
 				cached = tester.downloader.queue.resultCache.countCompleted()
-				tester.downloader.queue.resultCache.lock.Unlock()
 				frozen = int(atomic.LoadUint32(&blocked))
 				retrieved = len(tester.ownBlocks)
-
 			}
+			tester.downloader.queue.resultCache.lock.Unlock()
+			tester.downloader.queue.lock.Unlock()
 			tester.lock.Unlock()
 
 			if cached == blockCacheMaxItems ||

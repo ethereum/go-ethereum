@@ -404,8 +404,7 @@ func (api *PrivateDebugAPI) TraceBlockFromFile(ctx context.Context, file string,
 // EVM against a block pulled from the pool of bad ones and returns them as a JSON
 // object.
 func (api *PrivateDebugAPI) TraceBadBlock(ctx context.Context, hash common.Hash, config *TraceConfig) ([]*txTraceResult, error) {
-	blocks := api.eth.blockchain.BadBlocks()
-	for _, block := range blocks {
+	for _, block := range rawdb.ReadAllBadBlocks(api.eth.chainDb) {
 		if block.Hash() == hash {
 			return api.traceBlock(ctx, block, config)
 		}
@@ -428,8 +427,7 @@ func (api *PrivateDebugAPI) StandardTraceBlockToFile(ctx context.Context, hash c
 // execution of EVM against a block pulled from the pool of bad ones to the
 // local file system and returns a list of files to the caller.
 func (api *PrivateDebugAPI) StandardTraceBadBlockToFile(ctx context.Context, hash common.Hash, config *StdTraceConfig) ([]string, error) {
-	blocks := api.eth.blockchain.BadBlocks()
-	for _, block := range blocks {
+	for _, block := range rawdb.ReadAllBadBlocks(api.eth.chainDb) {
 		if block.Hash() == hash {
 			return api.standardTraceBlockToFile(ctx, block, config)
 		}
