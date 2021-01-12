@@ -339,15 +339,15 @@ func (hc *HeaderChain) ValidateHeaderChain(chain []*types.Header, checkFreq int)
 
 	// Iterate over the headers and ensure they all check out
 	for i := range chain {
-		// Wait for headers checks and ensure they pass
+		// If the chain is terminating, stop processing blocks
+		if hc.procInterrupt() {
+			log.Debug("Premature abort during headers verification")
+			return 0, errors.New("aborted")
+		}
+		// Otherwise wait for headers checks and ensure they pass
 		if err := <-results; err != nil {
 			return i, err
 		}
-	}
-	// If the chain is terminating, stop processing blocks
-	if hc.procInterrupt() {
-		log.Debug("Premature abort during headers verification")
-		return 0, errors.New("aborted")
 	}
 
 	return 0, nil
