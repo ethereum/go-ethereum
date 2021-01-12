@@ -410,7 +410,7 @@ func (s *Sync) children(req *request, object node) ([]*request, error) {
 				// Bloom filter says this might be a duplicate, double check.
 				// If database says yes, then at least the trie node is present
 				// and we hold the assumption that it's NOT legacy contract code.
-				if blob := rawdb.ReadTrieNode(s.database, common.BytesToHash(node)); len(blob) > 0 {
+				if blob := rawdb.ReadTrieNode(s.database, hash); len(blob) > 0 {
 					continue
 				}
 				// False positive, bump fault meter
