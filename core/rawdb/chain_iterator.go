@@ -203,7 +203,7 @@ func indexTransactions(db ethdb.Database, from uint64, to uint64, interrupt chan
 		// in to be [to-1]. Therefore, setting lastNum to means that the
 		// prqueue gap-evaluation will work correctly
 		lastNum = to
-		queue   = prque.New(false, nil)
+		queue   = prque.New(nil)
 		// for stats reporting
 		blocks, txs = 0, 0
 	)
@@ -293,7 +293,7 @@ func unindexTransactions(db ethdb.Database, from uint64, to uint64, interrupt ch
 		// we expect the first number to come in to be [from]. Therefore, setting
 		// nextNum to from means that the prqueue gap-evaluation will work correctly
 		nextNum = from
-		queue   = prque.New(true, nil)
+		queue   = prque.NewInverted(nil)
 		// for stats reporting
 		blocks, txs = 0, 0
 	)

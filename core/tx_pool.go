@@ -1280,7 +1280,7 @@ func (pool *TxPool) truncatePending() {
 
 	pendingBeforeCap := pending
 	// Assemble a spam order to penalize large transactors first
-	spammers := prque.New(false, nil)
+	spammers := prque.New(nil)
 	for addr, list := range pool.pending {
 		// Only evict transactions from high rollers
 		if !pool.locals.contains(addr) && uint64(list.Len()) > pool.config.AccountSlots {

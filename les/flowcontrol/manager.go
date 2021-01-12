@@ -108,7 +108,7 @@ type ClientManager struct {
 func NewClientManager(curve PieceWiseLinear, clock mclock.Clock) *ClientManager {
 	cm := &ClientManager{
 		clock:         clock,
-		rcQueue:       prque.New(true, func(a interface{}, i int) { a.(*ClientNode).queueIndex = i }),
+		rcQueue:       prque.NewInverted(func(a interface{}, i int) { a.(*ClientNode).queueIndex = i }),
 		capLastUpdate: clock.Now(),
 		stop:          make(chan chan struct{}),
 	}

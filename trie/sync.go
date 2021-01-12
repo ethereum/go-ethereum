@@ -138,7 +138,7 @@ func NewSync(root common.Hash, database ethdb.KeyValueReader, callback LeafCallb
 		membatch: newSyncMemBatch(),
 		nodeReqs: make(map[common.Hash]*request),
 		codeReqs: make(map[common.Hash]*request),
-		queue:    prque.New(false, nil),
+		queue:    prque.New(nil),
 		fetches:  make(map[int]int),
 		bloom:    bloom,
 	}

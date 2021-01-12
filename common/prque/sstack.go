@@ -129,10 +129,7 @@ func less(i, j interface{}, invert bool) bool {
 		result = bytes.Compare(iPriority, jPriority) > 0
 	}
 
-	if invert {
-		return !result
-	}
-	return result
+	return result != invert
 }
 
 // Swaps two elements in the stack. Required by sort.Interface.

@@ -27,8 +27,12 @@ type Prque struct {
 }
 
 // New creates a new priority queue.
-func New(invert bool, setIndex SetIndexCallback) *Prque {
-	return &Prque{newSstack(invert, setIndex)}
+func New(setIndex SetIndexCallback) *Prque {
+	return &Prque{newSstack(false, setIndex)}
+}
+
+func NewInverted(setIndex SetIndexCallback) *Prque {
+	return &Prque{newSstack(true, setIndex)}
 }
 
 // Pushes a value with a given priority into the queue, expanding if necessary.
@@ -74,5 +78,9 @@ func (p *Prque) Size() int {
 
 // Clears the contents of the priority queue.
 func (p *Prque) Reset() {
-	*p = *New(p.cont.invert, p.cont.setIndex)
+	if p.cont.invert {
+		*p = *NewInverted(p.cont.setIndex)
+	} else {
+		*p = *New(p.cont.setIndex)
+	}
 }

@@ -147,8 +147,8 @@ func newQueue(blockCacheLimit int, thresholdInitialSize int) *queue {
 	lock := new(sync.RWMutex)
 	q := &queue{
 		headerContCh:     make(chan bool),
-		blockTaskQueue:   prque.New(true, nil),
-		receiptTaskQueue: prque.New(true, nil),
+		blockTaskQueue:   prque.NewInverted(nil),
+		receiptTaskQueue: prque.NewInverted(nil),
 		active:           sync.NewCond(lock),
 		lock:             lock,
 	}
@@ -262,7 +262,7 @@ func (q *queue) ScheduleSkeleton(from uint64, skeleton []*types.Header) {
 	}
 	// Schedule all the header retrieval tasks for the skeleton assembly
 	q.headerTaskPool = make(map[uint64]*types.Header)
-	q.headerTaskQueue = prque.New(true, nil)
+	q.headerTaskQueue = prque.NewInverted(nil)
 	q.headerPeerMiss = make(map[string]map[uint64]struct{}) // Reset availability to correct invalid chains
 	q.headerResults = make([]*types.Header, len(skeleton)*MaxHeaderFetch)
 	q.headerProced = 0

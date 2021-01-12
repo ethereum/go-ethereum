@@ -211,7 +211,7 @@ func NewBlockFetcher(light bool, getHeader HeaderRetrievalFn, getBlock blockRetr
 		fetching:       make(map[common.Hash]*blockAnnounce),
 		fetched:        make(map[common.Hash][]*blockAnnounce),
 		completing:     make(map[common.Hash]*blockAnnounce),
-		queue:          prque.New(true, nil),
+		queue:          prque.NewInverted(nil),
 		queues:         make(map[string]int),
 		queued:         make(map[common.Hash]*blockOrHeaderInject),
 		getHeader:      getHeader,

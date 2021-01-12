@@ -132,7 +132,7 @@ func NewPriorityPool(ns *nodestate.NodeStateMachine, setup PriorityPoolSetup, cl
 		PriorityPoolSetup: setup,
 		clock:             clock,
 		activeQueue:       prque.NewLazyQueue(activeSetIndex, activePriority, activeMaxPriority, clock, lazyQueueRefresh),
-		inactiveQueue:     prque.New(false, inactiveSetIndex),
+		inactiveQueue:     prque.New(inactiveSetIndex),
 		minCap:            minCap,
 		activeBias:        activeBias,
 		capacityStepDiv:   capacityStepDiv,
