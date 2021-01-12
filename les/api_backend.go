@@ -292,3 +292,15 @@ func (b *LesApiBackend) Engine() consensus.Engine {
 func (b *LesApiBackend) CurrentHeader() *types.Header {
 	return b.eth.blockchain.CurrentHeader()
 }
+
+func (b *LesApiBackend) StateAtBlock(ctx context.Context, block *types.Block, reexec uint64) (*state.StateDB, func(), error) {
+	return b.eth.StateAtBlock(ctx, block, reexec)
+}
+
+func (b *LesApiBackend) StatesInRange(ctx context.Context, fromBlock *types.Block, toBlock *types.Block, reexec uint64) ([]*state.StateDB, func(), error) {
+	return b.eth.StatesInRange(ctx, fromBlock, toBlock, reexec)
+}
+
+func (b *LesApiBackend) StateAtTransaction(ctx context.Context, block *types.Block, txIndex int, reexec uint64) (core.Message, vm.BlockContext, *state.StateDB, func(), error) {
+	return b.eth.StateAtTransaction(ctx, block, txIndex, reexec)
+}

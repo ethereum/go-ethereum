@@ -85,6 +85,11 @@ type Backend interface {
 	SubscribePendingLogsEvent(ch chan<- []*types.Log) event.Subscription
 	SubscribeRemovedLogsEvent(ch chan<- core.RemovedLogsEvent) event.Subscription
 
+	// Tracer API
+	StateAtBlock(ctx context.Context, block *types.Block, reexec uint64) (*state.StateDB, func(), error)
+	StateAtTransaction(ctx context.Context, block *types.Block, txIndex int, reexec uint64) (core.Message, vm.BlockContext, *state.StateDB, func(), error)
+	StatesInRange(ctx context.Context, fromBlock *types.Block, toBlock *types.Block, reexec uint64) ([]*state.StateDB, func(), error)
+
 	ChainConfig() *params.ChainConfig
 	Engine() consensus.Engine
 }

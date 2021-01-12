@@ -28,6 +28,7 @@ import (
 
 	"github.com/ethereum/go-ethereum/cmd/utils"
 	"github.com/ethereum/go-ethereum/eth"
+	"github.com/ethereum/go-ethereum/eth/tracers"
 	"github.com/ethereum/go-ethereum/internal/ethapi"
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/metrics"
@@ -167,6 +168,7 @@ func makeFullNode(ctx *cli.Context) (*node.Node, ethapi.Backend) {
 	stack, cfg := makeConfigNode(ctx)
 
 	backend := utils.RegisterEthService(stack, &cfg.Eth)
+	stack.RegisterAPIs(tracers.APIs(backend))
 
 	checkWhisper(ctx)
 	// Configure GraphQL if requested
