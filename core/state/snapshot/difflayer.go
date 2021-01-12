@@ -191,19 +191,15 @@ func newDiffLayer(parent snapshot, root common.Hash, destructs map[common.Hash]s
 		if blob == nil {
 			panic(fmt.Sprintf("account %#x nil", accountHash))
 		}
+		// Determine memory size and track the dirty writes
+		dl.memory += uint64(common.HashLength + len(blob))
+		snapshotDirtyAccountWriteMeter.Mark(int64(len(blob)))
 	}
 	for accountHash, slots := range storage {
 		if slots == nil {
 			panic(fmt.Sprintf("storage %#x nil", accountHash))
 		}
-	}
-	// Determine memory size and track the dirty writes
-	for _, data := range accounts {
-		dl.memory += uint64(common.HashLength + len(data))
-		snapshotDirtyAccountWriteMeter.Mark(int64(len(data)))
-	}
-	// Determine memory size and track the dirty writes
-	for _, slots := range storage {
+		// Determine memory size and track the dirty writes
 		for _, data := range slots {
 			dl.memory += uint64(common.HashLength + len(data))
 			snapshotDirtyStorageWriteMeter.Mark(int64(len(data)))
