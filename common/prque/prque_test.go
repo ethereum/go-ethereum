@@ -21,7 +21,7 @@ func TestPrque(t *testing.T) {
 	for i := 0; i < size; i++ {
 		data[i] = rand.Int()
 	}
-	queue := New(nil)
+	queue := New(false, nil)
 	for rep := 0; rep < 2; rep++ {
 		// Fill a priority queue with the above data
 		for i := 0; i < size; i++ {
@@ -39,14 +39,14 @@ func TestPrque(t *testing.T) {
 		prevPrio := int64(size + 1)
 		for !queue.Empty() {
 			val, prio := queue.Pop()
-			if prio > prevPrio {
+			if prio.(int64) > prevPrio {
 				t.Errorf("invalid priority order: %v after %v.", prio, prevPrio)
 			}
-			prevPrio = prio
-			if val != dict[prio] {
-				t.Errorf("push/pop mismatch: have %v, want %v.", val, dict[prio])
+			prevPrio = prio.(int64)
+			if val != dict[prio.(int64)] {
+				t.Errorf("push/pop mismatch: have %v, want %v.", val, dict[prio.(int64)])
 			}
-			delete(dict, prio)
+			delete(dict, prio.(int64))
 		}
 	}
 }
@@ -59,7 +59,7 @@ func TestReset(t *testing.T) {
 	for i := 0; i < size; i++ {
 		data[i] = rand.Int()
 	}
-	queue := New(nil)
+	queue := New(false, nil)
 	for rep := 0; rep < 2; rep++ {
 		// Fill a priority queue with the above data
 		for i := 0; i < size; i++ {
@@ -77,14 +77,14 @@ func TestReset(t *testing.T) {
 		prevPrio := int64(size + 1)
 		for i := 0; i < size/2; i++ {
 			val, prio := queue.Pop()
-			if prio > prevPrio {
+			if prio.(int64) > prevPrio {
 				t.Errorf("invalid priority order: %v after %v.", prio, prevPrio)
 			}
-			prevPrio = prio
-			if val != dict[prio] {
-				t.Errorf("push/pop mismatch: have %v, want %v.", val, dict[prio])
+			prevPrio = prio.(int64)
+			if val != dict[prio.(int64)] {
+				t.Errorf("push/pop mismatch: have %v, want %v.", val, dict[prio.(int64)])
 			}
-			delete(dict, prio)
+			delete(dict, prio.(int64))
 		}
 		// Reset and ensure it's empty
 		queue.Reset()
@@ -104,7 +104,7 @@ func BenchmarkPush(b *testing.B) {
 	}
 	// Execute the benchmark
 	b.ResetTimer()
-	queue := New(nil)
+	queue := New(false, nil)
 	for i := 0; i < len(data); i++ {
 		queue.Push(data[i], prio[i])
 	}
@@ -118,7 +118,7 @@ func BenchmarkPop(b *testing.B) {
 		data[i] = rand.Int()
 		prio[i] = rand.Int63()
 	}
-	queue := New(nil)
+	queue := New(false, nil)
 	for i := 0; i < len(data); i++ {
 		queue.Push(data[i], prio[i])
 	}

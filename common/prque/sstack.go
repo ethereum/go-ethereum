@@ -12,6 +12,7 @@ package prque
 
 import (
 	"bytes"
+	"time"
 )
 
 // The size of a block of data
