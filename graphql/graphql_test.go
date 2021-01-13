@@ -33,7 +33,14 @@ import (
 )
 
 func TestBuildSchema(t *testing.T) {
-	stack, err := node.New(&node.DefaultConfig)
+	ddir, err := ioutil.TempDir("", "graphql-buildschema")
+	if err != nil {
+		t.Fatalf("failed to create temporary datadir: %v", err)
+	}
+	// Copy config
+	conf := node.DefaultConfig
+	conf.DataDir = ddir
+	stack, err := node.New(&conf)
 	if err != nil {
 		t.Fatalf("could not create new node: %v", err)
 	}
@@ -157,6 +164,7 @@ func TestGraphQLHTTPOnSamePort_GQLRequest_Unsuccessful(t *testing.T) {
 	if err != nil {
 		t.Fatalf("could not read from response body: %v", err)
 	}
+	resp.Body.Close()
 	// make sure the request is not handled successfully
 	if want, have := "404 page not found\n", string(bodyBytes); have != want {
 		t.Errorf("have:\n%v\nwant:\n%v", have, want)
