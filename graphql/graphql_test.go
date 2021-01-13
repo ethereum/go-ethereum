@@ -20,6 +20,7 @@ import (
 	"fmt"
 	"io/ioutil"
 	"math/big"
+	"math/rand"
 	"net/http"
 	"strings"
 	"testing"
@@ -131,7 +132,7 @@ func TestGraphQLBlockSerialization(t *testing.T) {
 			code: 200,
 		},
 	} {
-		resp, err := http.Post(fmt.Sprintf("http://%s/graphql", "127.0.0.1:9393"), "application/json", strings.NewReader(tt.body))
+		resp, err := http.Post(fmt.Sprintf("http://127.0.0.1:%d/graphql", stack.Config().HTTPPort), "application/json", strings.NewReader(tt.body))
 		if err != nil {
 			t.Fatalf("could not post: %v", err)
 		}
@@ -156,7 +157,7 @@ func TestGraphQLHTTPOnSamePort_GQLRequest_Unsuccessful(t *testing.T) {
 		t.Fatalf("could not start node: %v", err)
 	}
 	body := strings.NewReader(`{"query": "{block{number}}","variables": null}`)
-	resp, err := http.Post(fmt.Sprintf("http://%s/graphql", "127.0.0.1:9393"), "application/json", body)
+	resp, err := http.Post(fmt.Sprintf("http://127.0.0.1:%d/graphql", stack.Config().HTTPPort), "application/json", body)
 	if err != nil {
 		t.Fatalf("could not post: %v", err)
 	}
@@ -174,12 +175,16 @@ func TestGraphQLHTTPOnSamePort_GQLRequest_Unsuccessful(t *testing.T) {
 	}
 }
 
+// createnode starts a node, with the http/ws port being randomized between
+// 9300 and 9399. If a port is reused (without a proper delay between tests),
+// there may be spurious errors, particularly it seems to happen on go 1.14.x.
 func createNode(t *testing.T, gqlEnabled bool) *node.Node {
+	port := 9300 + rand.Intn(100)
 	stack, err := node.New(&node.Config{
 		HTTPHost: "127.0.0.1",
-		HTTPPort: 9393,
+		HTTPPort: port,
 		WSHost:   "127.0.0.1",
-		WSPort:   9393,
+		WSPort:   port,
 	})
 	if err != nil {
 		t.Fatalf("could not create node: %v", err)
@@ -187,7 +192,7 @@ func createNode(t *testing.T, gqlEnabled bool) *node.Node {
 	if !gqlEnabled {
 		return stack
 	}
-	createGQLService(t, stack, "127.0.0.1:9393")
+	createGQLService(t, stack, fmt.Sprintf("127.0.0.1:%d", port))
 	return stack
 }
 
