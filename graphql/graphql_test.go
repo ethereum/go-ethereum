@@ -20,7 +20,6 @@ import (
 	"fmt"
 	"io/ioutil"
 	"math/big"
-	"math/rand"
 	"net/http"
 	"strings"
 	"testing"
@@ -132,7 +131,7 @@ func TestGraphQLBlockSerialization(t *testing.T) {
 			code: 200,
 		},
 	} {
-		resp, err := http.Post(fmt.Sprintf("http://127.0.0.1:%d/graphql", stack.Config().HTTPPort), "application/json", strings.NewReader(tt.body))
+		resp, err := http.Post(fmt.Sprintf("%s/graphql", stack.HTTPEndpoint()), "application/json", strings.NewReader(tt.body))
 		if err != nil {
 			t.Fatalf("could not post: %v", err)
 		}
@@ -157,7 +156,7 @@ func TestGraphQLHTTPOnSamePort_GQLRequest_Unsuccessful(t *testing.T) {
 		t.Fatalf("could not start node: %v", err)
 	}
 	body := strings.NewReader(`{"query": "{block{number}}","variables": null}`)
-	resp, err := http.Post(fmt.Sprintf("http://127.0.0.1:%d/graphql", stack.Config().HTTPPort), "application/json", body)
+	resp, err := http.Post(fmt.Sprintf("%s/graphql", stack.HTTPEndpoint()), "application/json", body)
 	if err != nil {
 		t.Fatalf("could not post: %v", err)
 	}
@@ -175,16 +174,12 @@ func TestGraphQLHTTPOnSamePort_GQLRequest_Unsuccessful(t *testing.T) {
 	}
 }
 
-// createnode starts a node, with the http/ws port being randomized between
-// 9300 and 9399. If a port is reused (without a proper delay between tests),
-// there may be spurious errors, particularly it seems to happen on go 1.14.x.
 func createNode(t *testing.T, gqlEnabled bool) *node.Node {
-	port := 9300 + rand.Intn(100)
 	stack, err := node.New(&node.Config{
 		HTTPHost: "127.0.0.1",
-		HTTPPort: port,
+		HTTPPort: 0,
 		WSHost:   "127.0.0.1",
-		WSPort:   port,
+		WSPort:   0,
 	})
 	if err != nil {
 		t.Fatalf("could not create node: %v", err)
@@ -192,11 +187,11 @@ func createNode(t *testing.T, gqlEnabled bool) *node.Node {
 	if !gqlEnabled {
 		return stack
 	}
-	createGQLService(t, stack, fmt.Sprintf("127.0.0.1:%d", port))
+	createGQLService(t, stack)
 	return stack
 }
 
-func createGQLService(t *testing.T, stack *node.Node, endpoint string) {
+func createGQLService(t *testing.T, stack *node.Node) {
 	// create backend
 	ethConf := &eth.Config{
 		Genesis: &core.Genesis{
