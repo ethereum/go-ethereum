@@ -378,7 +378,7 @@ func RecoverPruning(datadir string, db ethdb.Database, trieCachePath string) err
 	}
 	if !found {
 		log.Error("Pruning target state is not existent")
-		return errors.New("non-exsitent target state")
+		return errors.New("non-existent target state")
 	}
 	if err := prune(db, stateBloom, middleRoots, time.Now()); err != nil {
 		return err
