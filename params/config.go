@@ -31,7 +31,8 @@ var (
 	RopstenGenesisHash = common.HexToHash("0x41941023680923e0fe4d74a34bdac8141f2540e3ae90623718e47d66d1ca4a2d")
 	RinkebyGenesisHash = common.HexToHash("0x6341fd3daf94b748c72ced5a5b26028f2474f5f00d824504e4fa37a75767e177")
 	GoerliGenesisHash  = common.HexToHash("0xbf7e331f7f7c1dd2e05159666b3bf8bc7a8a3a9eb1d518969eab529dd9b88c1a")
-	YoloV1GenesisHash  = common.HexToHash("0xc3fd235071f24f93865b0850bd2a2119b30f7224d18a0e34c7bbf549ad7e3d36")
+	// TODO: update with yolov2 values
+	YoloV2GenesisHash = common.HexToHash("0x498a7239036dd2cd09e2bb8a80922b78632017958c332b42044c250d603a8a3e")
 )
 
 // TrustedCheckpoints associates each known checkpoint with the genesis hash of
@@ -73,10 +74,10 @@ var (
 
 	// MainnetTrustedCheckpoint contains the light client trusted checkpoint for the main network.
 	MainnetTrustedCheckpoint = &TrustedCheckpoint{
-		SectionIndex: 329,
-		SectionHead:  common.HexToHash("0x96bb6d286ded20a18480dd98d537ab503bd81110c6b9c3f8ad1f9338f3b9852d"),
-		CHTRoot:      common.HexToHash("0x10627ff648077adeaab9dbd4e5bbed8671c86005b2aef5f5d4857acca19a49d8"),
-		BloomRoot:    common.HexToHash("0xf499b0cfaf426a490b7b5ddca58d3031b008f0c15338f8f25c20f3df050bf785"),
+		SectionIndex: 345,
+		SectionHead:  common.HexToHash("0x5453bab878704adebc934b41fd214a07ea7a72b8572ff088dca7f7956cd0ef28"),
+		CHTRoot:      common.HexToHash("0x7693d432595846c094f47cb37f5c868b0b7b1968fc6b0fc411ded1345fdaffab"),
+		BloomRoot:    common.HexToHash("0x8b0e7895bc39840d8dac857e26bdf3d0a07684b0b962b252546659e0337a9f70"),
 	}
 
 	// MainnetCheckpointOracle contains a set of configs for the main network oracle.
@@ -112,10 +113,10 @@ var (
 
 	// RopstenTrustedCheckpoint contains the light client trusted checkpoint for the Ropsten test network.
 	RopstenTrustedCheckpoint = &TrustedCheckpoint{
-		SectionIndex: 262,
-		SectionHead:  common.HexToHash("0x12b068f285789b966a983b632266484f1bc93803df6c78773538a5777f57a236"),
-		CHTRoot:      common.HexToHash("0x14000a1407e866f174f3a20fe9f271acd704bcf929b5205d83b70a1bba8c82c2"),
-		BloomRoot:    common.HexToHash("0x2f4f4a34a55e35d0691c79a79e39b6f661259345080fb880da5195c11c2413be"),
+		SectionIndex: 279,
+		SectionHead:  common.HexToHash("0x4a4912848d4c06090097073357c10015d11c6f4544a0f93cbdd584701c3b7d58"),
+		CHTRoot:      common.HexToHash("0x9053b7867ae921e80a4e2f5a4b15212e4af3d691ca712fb33dc150e9c6ea221c"),
+		BloomRoot:    common.HexToHash("0x3dc04cb1be7ddc271f3f83469b47b76184a79d7209ef51d85b1539ea6d25a645"),
 	}
 
 	// RopstenCheckpointOracle contains a set of configs for the Ropsten test network oracle.
@@ -154,10 +155,10 @@ var (
 
 	// RinkebyTrustedCheckpoint contains the light client trusted checkpoint for the Rinkeby test network.
 	RinkebyTrustedCheckpoint = &TrustedCheckpoint{
-		SectionIndex: 217,
-		SectionHead:  common.HexToHash("0x9afa4900a60cb44b102eb2eb5e5ef1d7f4cc1911c1c0588518995fb778ffe894"),
-		CHTRoot:      common.HexToHash("0xcc963e5085622c7cb6b3bf747fbfdfe71887e0d5bc9e4b3fb0474d44fc97942a"),
-		BloomRoot:    common.HexToHash("0x1064ca3a36b6f129783cff51bb18fb038bade47d2b776d1cccb9c74925106703"),
+		SectionIndex: 232,
+		SectionHead:  common.HexToHash("0x8170fca4039b11a008c11f9996ff112151cbb17411437bb2f86288e11158b2f0"),
+		CHTRoot:      common.HexToHash("0x4526560d92ae1b3a6d3ee780c3ad289ba2bbf1b5da58d9ea107f2f26412b631f"),
+		BloomRoot:    common.HexToHash("0x82a889098a35d6a21ea8894d35a1db69b94bad61b988bbe5ae4601437320e331"),
 	}
 
 	// RinkebyCheckpointOracle contains a set of configs for the Rinkeby test network oracle.
@@ -194,10 +195,10 @@ var (
 
 	// GoerliTrustedCheckpoint contains the light client trusted checkpoint for the Görli test network.
 	GoerliTrustedCheckpoint = &TrustedCheckpoint{
-		SectionIndex: 101,
-		SectionHead:  common.HexToHash("0x396f5dd8e526edfb550873bcfe0e93dc00d70be4b881ab256980833b97a18c3e"),
-		CHTRoot:      common.HexToHash("0x0d145657a6595508ef878c9bbf8eca045631986f664bfab0d898fc64804a4e64"),
-		BloomRoot:    common.HexToHash("0x12df34d07cf1268abe22d40ee6deb199b8918e3d57d52f9e70f9b2883f57d74f"),
+		SectionIndex: 116,
+		SectionHead:  common.HexToHash("0xf2d200f636f213c9c7bb4e747ff564813da7708253037103aef3d8be5203c5e1"),
+		CHTRoot:      common.HexToHash("0xb0ac83e2ccf6c2776945e099c4e3df50fe6200499c8b2045c34cafdf57d15087"),
+		BloomRoot:    common.HexToHash("0xfb580ad1c611230a4bfc56534f58bcb156d028bc6ce70e35403dc019c7c02d90"),
 	}
 
 	// GoerliCheckpointOracle contains a set of configs for the Goerli test network oracle.
@@ -213,9 +214,9 @@ var (
 		Threshold: 2,
 	}
 
-	// YoloV1ChainConfig contains the chain parameters to run a node on the YOLOv1 test network.
-	YoloV1ChainConfig = &ChainConfig{
-		ChainID:             big.NewInt(133519467574833),
+	// YoloV2ChainConfig contains the chain parameters to run a node on the YOLOv2 test network.
+	YoloV2ChainConfig = &ChainConfig{
+		ChainID:             big.NewInt(133519467574834),
 		HomesteadBlock:      big.NewInt(0),
 		DAOForkBlock:        nil,
 		DAOForkSupport:      true,
@@ -227,7 +228,7 @@ var (
 		PetersburgBlock:     big.NewInt(0),
 		IstanbulBlock:       big.NewInt(0),
 		MuirGlacierBlock:    nil,
-		YoloV1Block:         big.NewInt(0),
+		YoloV2Block:         big.NewInt(0),
 		Clique: &CliqueConfig{
 			Period: 15,
 			Epoch:  30000,
@@ -320,7 +321,7 @@ type ChainConfig struct {
 	IstanbulBlock       *big.Int `json:"istanbulBlock,omitempty"`       // Istanbul switch block (nil = no fork, 0 = already on istanbul)
 	MuirGlacierBlock    *big.Int `json:"muirGlacierBlock,omitempty"`    // Eip-2384 (bomb delay) switch block (nil = no fork, 0 = already activated)
 
-	YoloV1Block *big.Int `json:"yoloV1Block,omitempty"` // YOLO v1: https://github.com/ethereum/EIPs/pull/2657 (Ephemeral testnet)
+	YoloV2Block *big.Int `json:"yoloV2Block,omitempty"` // YOLO v2: Gas repricings TODO @holiman add EIP references
 	EWASMBlock  *big.Int `json:"ewasmBlock,omitempty"`  // EWASM switch block (nil = no fork, 0 = already activated)
 
 	// Various consensus engines
@@ -358,7 +359,7 @@ func (c *ChainConfig) String() string {
 	default:
 		engine = "unknown"
 	}
-	return fmt.Sprintf("{ChainID: %v Homestead: %v DAO: %v DAOSupport: %v EIP150: %v EIP155: %v EIP158: %v Byzantium: %v Constantinople: %v Petersburg: %v Istanbul: %v, Muir Glacier: %v, YOLO v1: %v, Engine: %v}",
+	return fmt.Sprintf("{ChainID: %v Homestead: %v DAO: %v DAOSupport: %v EIP150: %v EIP155: %v EIP158: %v Byzantium: %v Constantinople: %v Petersburg: %v Istanbul: %v, Muir Glacier: %v, YOLO v2: %v, Engine: %v}",
 		c.ChainID,
 		c.HomesteadBlock,
 		c.DAOForkBlock,
@@ -371,7 +372,7 @@ func (c *ChainConfig) String() string {
 		c.PetersburgBlock,
 		c.IstanbulBlock,
 		c.MuirGlacierBlock,
-		c.YoloV1Block,
+		c.YoloV2Block,
 		engine,
 	)
 }
@@ -428,9 +429,9 @@ func (c *ChainConfig) IsIstanbul(num *big.Int) bool {
 	return isForked(c.IstanbulBlock, num)
 }
 
-// IsYoloV1 returns whether num is either equal to the YoloV1 fork block or greater.
-func (c *ChainConfig) IsYoloV1(num *big.Int) bool {
-	return isForked(c.YoloV1Block, num)
+// IsYoloV2 returns whether num is either equal to the YoloV1 fork block or greater.
+func (c *ChainConfig) IsYoloV2(num *big.Int) bool {
+	return isForked(c.YoloV2Block, num)
 }
 
 // IsEWASM returns whether num represents a block number after the EWASM fork
@@ -476,7 +477,7 @@ func (c *ChainConfig) CheckConfigForkOrder() error {
 		{name: "petersburgBlock", block: c.PetersburgBlock},
 		{name: "istanbulBlock", block: c.IstanbulBlock},
 		{name: "muirGlacierBlock", block: c.MuirGlacierBlock, optional: true},
-		{name: "yoloV1Block", block: c.YoloV1Block},
+		{name: "yoloV2Block", block: c.YoloV2Block},
 	} {
 		if lastFork.name != "" {
 			// Next one must be higher number
@@ -528,7 +529,11 @@ func (c *ChainConfig) checkCompatible(newcfg *ChainConfig, head *big.Int) *Confi
 		return newCompatError("Constantinople fork block", c.ConstantinopleBlock, newcfg.ConstantinopleBlock)
 	}
 	if isForkIncompatible(c.PetersburgBlock, newcfg.PetersburgBlock, head) {
-		return newCompatError("Petersburg fork block", c.PetersburgBlock, newcfg.PetersburgBlock)
+		// the only case where we allow Petersburg to be set in the past is if it is equal to Constantinople
+		// mainly to satisfy fork ordering requirements which state that Petersburg fork be set if Constantinople fork is set
+		if isForkIncompatible(c.ConstantinopleBlock, newcfg.PetersburgBlock, head) {
+			return newCompatError("Petersburg fork block", c.PetersburgBlock, newcfg.PetersburgBlock)
+		}
 	}
 	if isForkIncompatible(c.IstanbulBlock, newcfg.IstanbulBlock, head) {
 		return newCompatError("Istanbul fork block", c.IstanbulBlock, newcfg.IstanbulBlock)
@@ -536,8 +541,8 @@ func (c *ChainConfig) checkCompatible(newcfg *ChainConfig, head *big.Int) *Confi
 	if isForkIncompatible(c.MuirGlacierBlock, newcfg.MuirGlacierBlock, head) {
 		return newCompatError("Muir Glacier fork block", c.MuirGlacierBlock, newcfg.MuirGlacierBlock)
 	}
-	if isForkIncompatible(c.YoloV1Block, newcfg.YoloV1Block, head) {
-		return newCompatError("YOLOv1 fork block", c.YoloV1Block, newcfg.YoloV1Block)
+	if isForkIncompatible(c.YoloV2Block, newcfg.YoloV2Block, head) {
+		return newCompatError("YOLOv2 fork block", c.YoloV2Block, newcfg.YoloV2Block)
 	}
 	if isForkIncompatible(c.EWASMBlock, newcfg.EWASMBlock, head) {
 		return newCompatError("ewasm fork block", c.EWASMBlock, newcfg.EWASMBlock)
@@ -609,7 +614,7 @@ type Rules struct {
 	ChainID                                                 *big.Int
 	IsHomestead, IsEIP150, IsEIP155, IsEIP158               bool
 	IsByzantium, IsConstantinople, IsPetersburg, IsIstanbul bool
-	IsYoloV1                                                bool
+	IsYoloV2                                                bool
 }
 
 // Rules ensures c's ChainID is not nil.
@@ -628,6 +633,6 @@ func (c *ChainConfig) Rules(num *big.Int) Rules {
 		IsConstantinople: c.IsConstantinople(num),
 		IsPetersburg:     c.IsPetersburg(num),
 		IsIstanbul:       c.IsIstanbul(num),
-		IsYoloV1:         c.IsYoloV1(num),
+		IsYoloV2:         c.IsYoloV2(num),
 	}
 }

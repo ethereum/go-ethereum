@@ -301,7 +301,7 @@ func (s *stateObject) updateTrie(db Database) Trie {
 	if len(s.pendingStorage) == 0 {
 		return s.trie
 	}
-	// Track the amount of time wasted on updating the storge trie
+	// Track the amount of time wasted on updating the storage trie
 	if metrics.EnabledExpensive {
 		defer func(start time.Time) { s.db.StorageUpdates += time.Since(start) }(time.Now())
 	}
@@ -350,7 +350,7 @@ func (s *stateObject) updateRoot(db Database) {
 	if s.updateTrie(db) == nil {
 		return
 	}
-	// Track the amount of time wasted on hashing the storge trie
+	// Track the amount of time wasted on hashing the storage trie
 	if metrics.EnabledExpensive {
 		defer func(start time.Time) { s.db.StorageHashes += time.Since(start) }(time.Now())
 	}
@@ -367,7 +367,7 @@ func (s *stateObject) CommitTrie(db Database) error {
 	if s.dbErr != nil {
 		return s.dbErr
 	}
-	// Track the amount of time wasted on committing the storge trie
+	// Track the amount of time wasted on committing the storage trie
 	if metrics.EnabledExpensive {
 		defer func(start time.Time) { s.db.StorageCommits += time.Since(start) }(time.Now())
 	}

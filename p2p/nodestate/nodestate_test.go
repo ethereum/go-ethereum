@@ -147,8 +147,13 @@ func TestSetField(t *testing.T) {
 	// Set field before setting state
 	ns.SetField(testNode(1), fields[0], "hello world")
 	field := ns.GetField(testNode(1), fields[0])
+	if field == nil {
+		t.Fatalf("Field should be set before setting states")
+	}
+	ns.SetField(testNode(1), fields[0], nil)
+	field = ns.GetField(testNode(1), fields[0])
 	if field != nil {
-		t.Fatalf("Field shouldn't be set before setting states")
+		t.Fatalf("Field should be unset")
 	}
 	// Set field after setting state
 	ns.SetState(testNode(1), flags[0], Flags{}, 0)
@@ -166,23 +171,6 @@ func TestSetField(t *testing.T) {
 	case <-saveNode:
 	case <-time.After(time.Second):
 		t.Fatalf("Timeout")
-	}
-}
-
-func TestUnsetField(t *testing.T) {
-	mdb, clock := rawdb.NewMemoryDatabase(), &mclock.Simulated{}
-
-	s, flags, fields := testSetup([]bool{false}, []reflect.Type{reflect.TypeOf("")})
-	ns := NewNodeStateMachine(mdb, []byte("-ns"), clock, s)
-
-	ns.Start()
-
-	ns.SetState(testNode(1), flags[0], Flags{}, time.Second)
-	ns.SetField(testNode(1), fields[0], "hello world")
-
-	ns.SetState(testNode(1), Flags{}, flags[0], 0)
-	if field := ns.GetField(testNode(1), fields[0]); field != nil {
-		t.Fatalf("Field should be unset")
 	}
 }
 
@@ -252,9 +240,8 @@ func uint64FieldEnc(field interface{}) ([]byte, error) {
 	if u, ok := field.(uint64); ok {
 		enc, err := rlp.EncodeToBytes(&u)
 		return enc, err
-	} else {
-		return nil, errors.New("invalid field type")
 	}
+	return nil, errors.New("invalid field type")
 }
 
 func uint64FieldDec(enc []byte) (interface{}, error) {
@@ -266,9 +253,8 @@ func uint64FieldDec(enc []byte) (interface{}, error) {
 func stringFieldEnc(field interface{}) ([]byte, error) {
 	if s, ok := field.(string); ok {
 		return []byte(s), nil
-	} else {
-		return nil, errors.New("invalid field type")
 	}
+	return nil, errors.New("invalid field type")
 }
 
 func stringFieldDec(enc []byte) (interface{}, error) {
@@ -339,6 +325,7 @@ func TestFieldSub(t *testing.T) {
 	ns2.Start()
 	check(s.OfflineFlag(), nil, uint64(100))
 	ns2.SetState(testNode(1), Flags{}, flags[0], 0)
+	ns2.SetField(testNode(1), fields[0], nil)
 	check(Flags{}, uint64(100), nil)
 	ns2.Stop()
 }
@@ -386,4 +373,35 @@ func TestDuplicatedFlags(t *testing.T) {
 
 	clock.Run(2 * time.Second)
 	check(flags[0], Flags{}, true)
+}
+
+func TestCallbackOrder(t *testing.T) {
+	mdb, clock := rawdb.NewMemoryDatabase(), &mclock.Simulated{}
+
+	s, flags, _ := testSetup([]bool{false, false, false, false}, nil)
+	ns := NewNodeStateMachine(mdb, []byte("-ns"), clock, s)
+
+	ns.SubscribeState(flags[0], func(n *enode.Node, oldState, newState Flags) {
+		if newState.Equals(flags[0]) {
+			ns.SetStateSub(n, flags[1], Flags{}, 0)
+			ns.SetStateSub(n, flags[2], Flags{}, 0)
+		}
+	})
+	ns.SubscribeState(flags[1], func(n *enode.Node, oldState, newState Flags) {
+		if newState.Equals(flags[1]) {
+			ns.SetStateSub(n, flags[3], Flags{}, 0)
+		}
+	})
+	lastState := Flags{}
+	ns.SubscribeState(MergeFlags(flags[1], flags[2], flags[3]), func(n *enode.Node, oldState, newState Flags) {
+		if !oldState.Equals(lastState) {
+			t.Fatalf("Wrong callback order")
+		}
+		lastState = newState
+	})
+
+	ns.Start()
+	defer ns.Stop()
+
+	ns.SetState(testNode(1), flags[0], Flags{}, 0)
 }

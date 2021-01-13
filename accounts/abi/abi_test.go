@@ -33,7 +33,7 @@ import (
 
 const jsondata = `
 [
-	{ "type" : "function", "name" : "", "stateMutability" : "view" },
+	{ "type" : "function", "name" : ""},
 	{ "type" : "function", "name" : "balance", "stateMutability" : "view" },
 	{ "type" : "function", "name" : "send", "inputs" : [ { "name" : "amount", "type" : "uint256" } ] },
 	{ "type" : "function", "name" : "test", "inputs" : [ { "name" : "number", "type" : "uint32" } ] },
@@ -88,7 +88,7 @@ var (
 )
 
 var methods = map[string]Method{
-	"":                    NewMethod("", "", Function, "view", false, false, nil, nil),
+	"":                    NewMethod("", "", Function, "", false, false, nil, nil),
 	"balance":             NewMethod("balance", "balance", Function, "view", false, false, nil, nil),
 	"send":                NewMethod("send", "send", Function, "", false, false, []Argument{{"amount", Uint256, false}}, nil),
 	"test":                NewMethod("test", "test", Function, "", false, false, []Argument{{"number", Uint32, false}}, nil),
@@ -181,18 +181,15 @@ func TestConstructor(t *testing.T) {
 	if err != nil {
 		t.Error(err)
 	}
-	v := struct {
-		A *big.Int
-		B *big.Int
-	}{new(big.Int), new(big.Int)}
-	//abi.Unpack(&v, "", packed)
-	if err := abi.Constructor.Inputs.Unpack(&v, packed); err != nil {
+	unpacked, err := abi.Constructor.Inputs.Unpack(packed)
+	if err != nil {
 		t.Error(err)
 	}
-	if !reflect.DeepEqual(v.A, big.NewInt(1)) {
+
+	if !reflect.DeepEqual(unpacked[0], big.NewInt(1)) {
 		t.Error("Unable to pack/unpack from constructor")
 	}
-	if !reflect.DeepEqual(v.B, big.NewInt(2)) {
+	if !reflect.DeepEqual(unpacked[1], big.NewInt(2)) {
 		t.Error("Unable to pack/unpack from constructor")
 	}
 }
@@ -743,7 +740,7 @@ func TestUnpackEvent(t *testing.T) {
 	}
 	var ev ReceivedEvent
 
-	err = abi.Unpack(&ev, "received", data)
+	err = abi.UnpackIntoInterface(&ev, "received", data)
 	if err != nil {
 		t.Error(err)
 	}
@@ -752,7 +749,7 @@ func TestUnpackEvent(t *testing.T) {
 		Sender common.Address
 	}
 	var receivedAddrEv ReceivedAddrEvent
-	err = abi.Unpack(&receivedAddrEv, "receivedAddr", data)
+	err = abi.UnpackIntoInterface(&receivedAddrEv, "receivedAddr", data)
 	if err != nil {
 		t.Error(err)
 	}
@@ -1092,7 +1089,7 @@ func TestDoubleDuplicateEventNames(t *testing.T) {
 }
 
 // TestUnnamedEventParam checks that an event with unnamed parameters is
-// correctly handled
+// correctly handled.
 // The test runs the abi of the following contract.
 // 	contract TestEvent {
 //		event send(uint256, uint256);

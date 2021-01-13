@@ -182,10 +182,21 @@ func (t *StateTest) RunNoVerify(subtest StateSubtest, vmconfig vm.Config, snapsh
 	if err != nil {
 		return nil, nil, common.Hash{}, err
 	}
-	context := core.NewEVMContext(msg, block.Header(), nil, &t.json.Env.Coinbase)
+	txContext := core.NewEVMTxContext(msg)
+	context := core.NewEVMBlockContext(block.Header(), nil, &t.json.Env.Coinbase)
 	context.GetHash = vmTestBlockHash
-	evm := vm.NewEVM(context, statedb, config, vmconfig)
+	evm := vm.NewEVM(context, txContext, statedb, config, vmconfig)
 
+	if config.IsYoloV2(context.BlockNumber) {
+		statedb.AddAddressToAccessList(msg.From())
+		if dst := msg.To(); dst != nil {
+			statedb.AddAddressToAccessList(*dst)
+			// If it's a create-tx, the destination will be added inside evm.create
+		}
+		for _, addr := range evm.ActivePrecompiles() {
+			statedb.AddAddressToAccessList(addr)
+		}
+	}
 	gaspool := new(core.GasPool)
 	gaspool.AddGas(block.GasLimit())
 	snapshot := statedb.Snapshot()
@@ -225,7 +236,7 @@ func MakePreState(db ethdb.Database, accounts core.GenesisAlloc, snapshotter boo
 
 	var snaps *snapshot.Tree
 	if snapshotter {
-		snaps = snapshot.New(db, sdb.TrieDB(), 1, root, false)
+		snaps = snapshot.New(db, sdb.TrieDB(), 1, root, false, false)
 	}
 	statedb, _ = state.New(root, sdb, snaps)
 	return snaps, statedb

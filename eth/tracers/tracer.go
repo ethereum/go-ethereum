@@ -30,7 +30,7 @@ import (
 	"github.com/ethereum/go-ethereum/core/vm"
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/log"
-	duktape "gopkg.in/olebedev/go-duktape.v3"
+	"gopkg.in/olebedev/go-duktape.v3"
 )
 
 // bigIntegerJS is the minified version of https://github.com/peterolson/BigInteger.js.
@@ -545,7 +545,7 @@ func (jst *Tracer) CaptureState(env *vm.EVM, pc uint64, op vm.OpCode, gas, cost 
 	if jst.err == nil {
 		// Initialize the context if it wasn't done yet
 		if !jst.inited {
-			jst.ctx["block"] = env.BlockNumber.Uint64()
+			jst.ctx["block"] = env.Context.BlockNumber.Uint64()
 			jst.inited = true
 		}
 		// If tracing was interrupted, set the error and stop

@@ -64,7 +64,7 @@ import (
 	"github.com/ethereum/go-ethereum/p2p/netutil"
 	"github.com/ethereum/go-ethereum/params"
 	pcsclite "github.com/gballet/go-libpcsclite"
-	cli "gopkg.in/urfave/cli.v1"
+	"gopkg.in/urfave/cli.v1"
 )
 
 func init() {
@@ -128,16 +128,16 @@ var (
 	}
 	NetworkIdFlag = cli.Uint64Flag{
 		Name:  "networkid",
-		Usage: "Network identifier (integer, 1=Frontier, 3=Ropsten, 4=Rinkeby, 5=Görli)",
+		Usage: "Explicitly set network id (integer)(For testnets: use --ropsten, --rinkeby, --goerli instead)",
 		Value: eth.DefaultConfig.NetworkId,
 	}
 	GoerliFlag = cli.BoolFlag{
 		Name:  "goerli",
 		Usage: "Görli network: pre-configured proof-of-authority test network",
 	}
-	YoloV1Flag = cli.BoolFlag{
-		Name:  "yolov1",
-		Usage: "YOLOv1 network: pre-configured proof-of-authority shortlived test network.",
+	YoloV2Flag = cli.BoolFlag{
+		Name:  "yolov2",
+		Usage: "YOLOv2 network: pre-configured proof-of-authority shortlived test network.",
 	}
 	RinkebyFlag = cli.BoolFlag{
 		Name:  "rinkeby",
@@ -162,7 +162,7 @@ var (
 	DocRootFlag = DirectoryFlag{
 		Name:  "docroot",
 		Usage: "Document Root for HTTPClient file scheme",
-		Value: DirectoryString(homeDir()),
+		Value: DirectoryString(HomeDir()),
 	}
 	ExitWhenSyncedFlag = cli.BoolFlag{
 		Name:  "exitwhensynced",
@@ -383,6 +383,10 @@ var (
 		Name:  "cache.noprefetch",
 		Usage: "Disable heuristic state prefetch during block import (less CPU and disk IO, more time waiting for data)",
 	}
+	CachePreimagesFlag = cli.BoolTFlag{
+		Name:  "cache.preimages",
+		Usage: "Enable recording the SHA3/keccak preimages of trie keys (default: true)",
+	}
 	// Miner settings
 	MiningEnabledFlag = cli.BoolFlag{
 		Name:  "mine",
@@ -454,12 +458,12 @@ var (
 		Name:  "allow-insecure-unlock",
 		Usage: "Allow insecure account unlocking when account-related RPCs are exposed by http",
 	}
-	RPCGlobalGasCap = cli.Uint64Flag{
+	RPCGlobalGasCapFlag = cli.Uint64Flag{
 		Name:  "rpc.gascap",
 		Usage: "Sets a cap on gas that can be used in eth_call/estimateGas (0=infinite)",
 		Value: eth.DefaultConfig.RPCGasCap,
 	}
-	RPCGlobalTxFeeCap = cli.Float64Flag{
+	RPCGlobalTxFeeCapFlag = cli.Float64Flag{
 		Name:  "rpc.txfeecap",
 		Usage: "Sets a cap on transaction fee (in ether) that can be sent via the RPC APIs (0 = no cap)",
 		Value: eth.DefaultConfig.RPCTxFeeCap,
@@ -631,6 +635,11 @@ var (
 		Usage: "Suggested gas price is the given percentile of a set of recent transaction gas prices",
 		Value: eth.DefaultConfig.GPO.Percentile,
 	}
+	GpoMaxGasPriceFlag = cli.Int64Flag{
+		Name:  "gpo.maxprice",
+		Usage: "Maximum gas price will be recommended by gpo",
+		Value: eth.DefaultConfig.GPO.MaxPrice.Int64(),
+	}
 	WhisperEnabledFlag = cli.BoolFlag{
 		Name:  "shh",
 		Usage: "Enable Whisper",
@@ -739,8 +748,8 @@ func MakeDataDir(ctx *cli.Context) string {
 		if ctx.GlobalBool(GoerliFlag.Name) {
 			return filepath.Join(path, "goerli")
 		}
-		if ctx.GlobalBool(YoloV1Flag.Name) {
-			return filepath.Join(path, "yolo-v1")
+		if ctx.GlobalBool(YoloV2Flag.Name) {
+			return filepath.Join(path, "yolo-v2")
 		}
 		return path
 	}
@@ -788,9 +797,9 @@ func setBootstrapNodes(ctx *cli.Context, cfg *p2p.Config) {
 	switch {
 	case ctx.GlobalIsSet(BootnodesFlag.Name) || ctx.GlobalIsSet(LegacyBootnodesV4Flag.Name):
 		if ctx.GlobalIsSet(LegacyBootnodesV4Flag.Name) {
-			urls = splitAndTrim(ctx.GlobalString(LegacyBootnodesV4Flag.Name))
+			urls = SplitAndTrim(ctx.GlobalString(LegacyBootnodesV4Flag.Name))
 		} else {
-			urls = splitAndTrim(ctx.GlobalString(BootnodesFlag.Name))
+			urls = SplitAndTrim(ctx.GlobalString(BootnodesFlag.Name))
 		}
 	case ctx.GlobalBool(LegacyTestnetFlag.Name) || ctx.GlobalBool(RopstenFlag.Name):
 		urls = params.RopstenBootnodes
@@ -798,8 +807,8 @@ func setBootstrapNodes(ctx *cli.Context, cfg *p2p.Config) {
 		urls = params.RinkebyBootnodes
 	case ctx.GlobalBool(GoerliFlag.Name):
 		urls = params.GoerliBootnodes
-	case ctx.GlobalBool(YoloV1Flag.Name):
-		urls = params.YoloV1Bootnodes
+	case ctx.GlobalBool(YoloV2Flag.Name):
+		urls = params.YoloV2Bootnodes
 	case cfg.BootstrapNodes != nil:
 		return // already set, don't apply defaults.
 	}
@@ -824,9 +833,9 @@ func setBootstrapNodesV5(ctx *cli.Context, cfg *p2p.Config) {
 	switch {
 	case ctx.GlobalIsSet(BootnodesFlag.Name) || ctx.GlobalIsSet(LegacyBootnodesV5Flag.Name):
 		if ctx.GlobalIsSet(LegacyBootnodesV5Flag.Name) {
-			urls = splitAndTrim(ctx.GlobalString(LegacyBootnodesV5Flag.Name))
+			urls = SplitAndTrim(ctx.GlobalString(LegacyBootnodesV5Flag.Name))
 		} else {
-			urls = splitAndTrim(ctx.GlobalString(BootnodesFlag.Name))
+			urls = SplitAndTrim(ctx.GlobalString(BootnodesFlag.Name))
 		}
 	case ctx.GlobalBool(RopstenFlag.Name):
 		urls = params.RopstenBootnodes
@@ -834,8 +843,8 @@ func setBootstrapNodesV5(ctx *cli.Context, cfg *p2p.Config) {
 		urls = params.RinkebyBootnodes
 	case ctx.GlobalBool(GoerliFlag.Name):
 		urls = params.GoerliBootnodes
-	case ctx.GlobalBool(YoloV1Flag.Name):
-		urls = params.YoloV1Bootnodes
+	case ctx.GlobalBool(YoloV2Flag.Name):
+		urls = params.YoloV2Bootnodes
 	case cfg.BootstrapNodesV5 != nil:
 		return // already set, don't apply defaults.
 	}
@@ -872,13 +881,12 @@ func setNAT(ctx *cli.Context, cfg *p2p.Config) {
 	}
 }
 
-// splitAndTrim splits input separated by a comma
+// SplitAndTrim splits input separated by a comma
 // and trims excessive white space from the substrings.
-func splitAndTrim(input string) (ret []string) {
+func SplitAndTrim(input string) (ret []string) {
 	l := strings.Split(input, ",")
 	for _, r := range l {
-		r = strings.TrimSpace(r)
-		if len(r) > 0 {
+		if r = strings.TrimSpace(r); r != "" {
 			ret = append(ret, r)
 		}
 	}
@@ -912,27 +920,27 @@ func setHTTP(ctx *cli.Context, cfg *node.Config) {
 	}
 
 	if ctx.GlobalIsSet(LegacyRPCCORSDomainFlag.Name) {
-		cfg.HTTPCors = splitAndTrim(ctx.GlobalString(LegacyRPCCORSDomainFlag.Name))
+		cfg.HTTPCors = SplitAndTrim(ctx.GlobalString(LegacyRPCCORSDomainFlag.Name))
 		log.Warn("The flag --rpccorsdomain is deprecated and will be removed in the future, please use --http.corsdomain")
 	}
 	if ctx.GlobalIsSet(HTTPCORSDomainFlag.Name) {
-		cfg.HTTPCors = splitAndTrim(ctx.GlobalString(HTTPCORSDomainFlag.Name))
+		cfg.HTTPCors = SplitAndTrim(ctx.GlobalString(HTTPCORSDomainFlag.Name))
 	}
 
 	if ctx.GlobalIsSet(LegacyRPCApiFlag.Name) {
-		cfg.HTTPModules = splitAndTrim(ctx.GlobalString(LegacyRPCApiFlag.Name))
+		cfg.HTTPModules = SplitAndTrim(ctx.GlobalString(LegacyRPCApiFlag.Name))
 		log.Warn("The flag --rpcapi is deprecated and will be removed in the future, please use --http.api")
 	}
 	if ctx.GlobalIsSet(HTTPApiFlag.Name) {
-		cfg.HTTPModules = splitAndTrim(ctx.GlobalString(HTTPApiFlag.Name))
+		cfg.HTTPModules = SplitAndTrim(ctx.GlobalString(HTTPApiFlag.Name))
 	}
 
 	if ctx.GlobalIsSet(LegacyRPCVirtualHostsFlag.Name) {
-		cfg.HTTPVirtualHosts = splitAndTrim(ctx.GlobalString(LegacyRPCVirtualHostsFlag.Name))
+		cfg.HTTPVirtualHosts = SplitAndTrim(ctx.GlobalString(LegacyRPCVirtualHostsFlag.Name))
 		log.Warn("The flag --rpcvhosts is deprecated and will be removed in the future, please use --http.vhosts")
 	}
 	if ctx.GlobalIsSet(HTTPVirtualHostsFlag.Name) {
-		cfg.HTTPVirtualHosts = splitAndTrim(ctx.GlobalString(HTTPVirtualHostsFlag.Name))
+		cfg.HTTPVirtualHosts = SplitAndTrim(ctx.GlobalString(HTTPVirtualHostsFlag.Name))
 	}
 }
 
@@ -940,10 +948,10 @@ func setHTTP(ctx *cli.Context, cfg *node.Config) {
 // command line flags, returning empty if the GraphQL endpoint is disabled.
 func setGraphQL(ctx *cli.Context, cfg *node.Config) {
 	if ctx.GlobalIsSet(GraphQLCORSDomainFlag.Name) {
-		cfg.GraphQLCors = splitAndTrim(ctx.GlobalString(GraphQLCORSDomainFlag.Name))
+		cfg.GraphQLCors = SplitAndTrim(ctx.GlobalString(GraphQLCORSDomainFlag.Name))
 	}
 	if ctx.GlobalIsSet(GraphQLVirtualHostsFlag.Name) {
-		cfg.GraphQLVirtualHosts = splitAndTrim(ctx.GlobalString(GraphQLVirtualHostsFlag.Name))
+		cfg.GraphQLVirtualHosts = SplitAndTrim(ctx.GlobalString(GraphQLVirtualHostsFlag.Name))
 	}
 }
 
@@ -969,19 +977,19 @@ func setWS(ctx *cli.Context, cfg *node.Config) {
 	}
 
 	if ctx.GlobalIsSet(LegacyWSAllowedOriginsFlag.Name) {
-		cfg.WSOrigins = splitAndTrim(ctx.GlobalString(LegacyWSAllowedOriginsFlag.Name))
+		cfg.WSOrigins = SplitAndTrim(ctx.GlobalString(LegacyWSAllowedOriginsFlag.Name))
 		log.Warn("The flag --wsorigins is deprecated and will be removed in the future, please use --ws.origins")
 	}
 	if ctx.GlobalIsSet(WSAllowedOriginsFlag.Name) {
-		cfg.WSOrigins = splitAndTrim(ctx.GlobalString(WSAllowedOriginsFlag.Name))
+		cfg.WSOrigins = SplitAndTrim(ctx.GlobalString(WSAllowedOriginsFlag.Name))
 	}
 
 	if ctx.GlobalIsSet(LegacyWSApiFlag.Name) {
-		cfg.WSModules = splitAndTrim(ctx.GlobalString(LegacyWSApiFlag.Name))
+		cfg.WSModules = SplitAndTrim(ctx.GlobalString(LegacyWSApiFlag.Name))
 		log.Warn("The flag --wsapi is deprecated and will be removed in the future, please use --ws.api")
 	}
 	if ctx.GlobalIsSet(WSApiFlag.Name) {
-		cfg.WSModules = splitAndTrim(ctx.GlobalString(WSApiFlag.Name))
+		cfg.WSModules = SplitAndTrim(ctx.GlobalString(WSApiFlag.Name))
 	}
 }
 
@@ -1265,8 +1273,8 @@ func setDataDir(ctx *cli.Context, cfg *node.Config) {
 		cfg.DataDir = filepath.Join(node.DefaultDataDir(), "rinkeby")
 	case ctx.GlobalBool(GoerliFlag.Name) && cfg.DataDir == node.DefaultDataDir():
 		cfg.DataDir = filepath.Join(node.DefaultDataDir(), "goerli")
-	case ctx.GlobalBool(YoloV1Flag.Name) && cfg.DataDir == node.DefaultDataDir():
-		cfg.DataDir = filepath.Join(node.DefaultDataDir(), "yolo-v1")
+	case ctx.GlobalBool(YoloV2Flag.Name) && cfg.DataDir == node.DefaultDataDir():
+		cfg.DataDir = filepath.Join(node.DefaultDataDir(), "yolo-v2")
 	}
 }
 
@@ -1290,6 +1298,9 @@ func setGPO(ctx *cli.Context, cfg *gasprice.Config, light bool) {
 	}
 	if ctx.GlobalIsSet(GpoPercentileFlag.Name) {
 		cfg.Percentile = ctx.GlobalInt(GpoPercentileFlag.Name)
+	}
+	if ctx.GlobalIsSet(GpoMaxGasPriceFlag.Name) {
+		cfg.MaxPrice = big.NewInt(ctx.GlobalInt64(GpoMaxGasPriceFlag.Name))
 	}
 }
 
@@ -1476,7 +1487,7 @@ func SetShhConfig(ctx *cli.Context, stack *node.Node) {
 // SetEthConfig applies eth-related command line flags to the config.
 func SetEthConfig(ctx *cli.Context, stack *node.Node, cfg *eth.Config) {
 	// Avoid conflicting network flags
-	CheckExclusive(ctx, DeveloperFlag, LegacyTestnetFlag, RopstenFlag, RinkebyFlag, GoerliFlag, YoloV1Flag)
+	CheckExclusive(ctx, DeveloperFlag, LegacyTestnetFlag, RopstenFlag, RinkebyFlag, GoerliFlag, YoloV2Flag)
 	CheckExclusive(ctx, LegacyLightServFlag, LightServeFlag, SyncModeFlag, "light")
 	CheckExclusive(ctx, DeveloperFlag, ExternalSignerFlag) // Can't use both ephemeral unlocked and external signer
 	CheckExclusive(ctx, GCModeFlag, "archive", TxLookupLimitFlag)
@@ -1519,6 +1530,12 @@ func SetEthConfig(ctx *cli.Context, stack *node.Node, cfg *eth.Config) {
 	if ctx.GlobalIsSet(CacheNoPrefetchFlag.Name) {
 		cfg.NoPrefetch = ctx.GlobalBool(CacheNoPrefetchFlag.Name)
 	}
+	// Read the value from the flag no matter if it's set or not.
+	cfg.Preimages = ctx.GlobalBool(CachePreimagesFlag.Name)
+	if cfg.NoPruning && !cfg.Preimages {
+		cfg.Preimages = true
+		log.Info("Enabling recording of key preimages since archive mode is used")
+	}
 	if ctx.GlobalIsSet(TxLookupLimitFlag.Name) {
 		cfg.TxLookupLimit = ctx.GlobalUint64(TxLookupLimitFlag.Name)
 	}
@@ -1556,23 +1573,25 @@ func SetEthConfig(ctx *cli.Context, stack *node.Node, cfg *eth.Config) {
 	if ctx.GlobalIsSet(EVMInterpreterFlag.Name) {
 		cfg.EVMInterpreter = ctx.GlobalString(EVMInterpreterFlag.Name)
 	}
-	if ctx.GlobalIsSet(RPCGlobalGasCap.Name) {
-		cfg.RPCGasCap = ctx.GlobalUint64(RPCGlobalGasCap.Name)
+	if ctx.GlobalIsSet(RPCGlobalGasCapFlag.Name) {
+		cfg.RPCGasCap = ctx.GlobalUint64(RPCGlobalGasCapFlag.Name)
 	}
 	if cfg.RPCGasCap != 0 {
 		log.Info("Set global gas cap", "cap", cfg.RPCGasCap)
 	} else {
 		log.Info("Global gas cap disabled")
 	}
-	if ctx.GlobalIsSet(RPCGlobalTxFeeCap.Name) {
-		cfg.RPCTxFeeCap = ctx.GlobalFloat64(RPCGlobalTxFeeCap.Name)
+	if ctx.GlobalIsSet(RPCGlobalTxFeeCapFlag.Name) {
+		cfg.RPCTxFeeCap = ctx.GlobalFloat64(RPCGlobalTxFeeCapFlag.Name)
 	}
-	if ctx.GlobalIsSet(DNSDiscoveryFlag.Name) {
+	if ctx.GlobalIsSet(NoDiscoverFlag.Name) {
+		cfg.DiscoveryURLs = []string{}
+	} else if ctx.GlobalIsSet(DNSDiscoveryFlag.Name) {
 		urls := ctx.GlobalString(DNSDiscoveryFlag.Name)
 		if urls == "" {
 			cfg.DiscoveryURLs = []string{}
 		} else {
-			cfg.DiscoveryURLs = splitAndTrim(urls)
+			cfg.DiscoveryURLs = SplitAndTrim(urls)
 		}
 	}
 
@@ -1583,24 +1602,24 @@ func SetEthConfig(ctx *cli.Context, stack *node.Node, cfg *eth.Config) {
 			cfg.NetworkId = 3
 		}
 		cfg.Genesis = core.DefaultRopstenGenesisBlock()
-		setDNSDiscoveryDefaults(cfg, params.RopstenGenesisHash)
+		SetDNSDiscoveryDefaults(cfg, params.RopstenGenesisHash)
 	case ctx.GlobalBool(RinkebyFlag.Name):
 		if !ctx.GlobalIsSet(NetworkIdFlag.Name) {
 			cfg.NetworkId = 4
 		}
 		cfg.Genesis = core.DefaultRinkebyGenesisBlock()
-		setDNSDiscoveryDefaults(cfg, params.RinkebyGenesisHash)
+		SetDNSDiscoveryDefaults(cfg, params.RinkebyGenesisHash)
 	case ctx.GlobalBool(GoerliFlag.Name):
 		if !ctx.GlobalIsSet(NetworkIdFlag.Name) {
 			cfg.NetworkId = 5
 		}
 		cfg.Genesis = core.DefaultGoerliGenesisBlock()
-		setDNSDiscoveryDefaults(cfg, params.GoerliGenesisHash)
-	case ctx.GlobalBool(YoloV1Flag.Name):
+		SetDNSDiscoveryDefaults(cfg, params.GoerliGenesisHash)
+	case ctx.GlobalBool(YoloV2Flag.Name):
 		if !ctx.GlobalIsSet(NetworkIdFlag.Name) {
-			cfg.NetworkId = 133519467574833 // "yolov1"
+			cfg.NetworkId = 133519467574834 // "yolov2"
 		}
-		cfg.Genesis = core.DefaultYoloV1GenesisBlock()
+		cfg.Genesis = core.DefaultYoloV2GenesisBlock()
 	case ctx.GlobalBool(DeveloperFlag.Name):
 		if !ctx.GlobalIsSet(NetworkIdFlag.Name) {
 			cfg.NetworkId = 1337
@@ -1649,14 +1668,14 @@ func SetEthConfig(ctx *cli.Context, stack *node.Node, cfg *eth.Config) {
 		}
 	default:
 		if cfg.NetworkId == 1 {
-			setDNSDiscoveryDefaults(cfg, params.MainnetGenesisHash)
+			SetDNSDiscoveryDefaults(cfg, params.MainnetGenesisHash)
 		}
 	}
 }
 
-// setDNSDiscoveryDefaults configures DNS discovery with the given URL if
+// SetDNSDiscoveryDefaults configures DNS discovery with the given URL if
 // no URLs are set.
-func setDNSDiscoveryDefaults(cfg *eth.Config, genesis common.Hash) {
+func SetDNSDiscoveryDefaults(cfg *eth.Config, genesis common.Hash) {
 	if cfg.DiscoveryURLs != nil {
 		return // already set through flags/config
 	}
@@ -1678,19 +1697,18 @@ func RegisterEthService(stack *node.Node, cfg *eth.Config) ethapi.Backend {
 			Fatalf("Failed to register the Ethereum service: %v", err)
 		}
 		return backend.ApiBackend
-	} else {
-		backend, err := eth.New(stack, cfg)
-		if err != nil {
-			Fatalf("Failed to register the Ethereum service: %v", err)
-		}
-		if cfg.LightServ > 0 {
-			_, err := les.NewLesServer(stack, backend, cfg)
-			if err != nil {
-				Fatalf("Failed to create the LES server: %v", err)
-			}
-		}
-		return backend.APIBackend
 	}
+	backend, err := eth.New(stack, cfg)
+	if err != nil {
+		Fatalf("Failed to register the Ethereum service: %v", err)
+	}
+	if cfg.LightServ > 0 {
+		_, err := les.NewLesServer(stack, backend, cfg)
+		if err != nil {
+			Fatalf("Failed to create the LES server: %v", err)
+		}
+	}
+	return backend.APIBackend
 }
 
 // RegisterEthStatsService configures the Ethereum Stats daemon and adds it to
@@ -1784,8 +1802,8 @@ func MakeGenesis(ctx *cli.Context) *core.Genesis {
 		genesis = core.DefaultRinkebyGenesisBlock()
 	case ctx.GlobalBool(GoerliFlag.Name):
 		genesis = core.DefaultGoerliGenesisBlock()
-	case ctx.GlobalBool(YoloV1Flag.Name):
-		genesis = core.DefaultYoloV1GenesisBlock()
+	case ctx.GlobalBool(YoloV2Flag.Name):
+		genesis = core.DefaultYoloV2GenesisBlock()
 	case ctx.GlobalBool(DeveloperFlag.Name):
 		Fatalf("Developer chains are ephemeral")
 	}
@@ -1828,6 +1846,11 @@ func MakeChain(ctx *cli.Context, stack *node.Node, readOnly bool) (chain *core.B
 		TrieDirtyDisabled:   ctx.GlobalString(GCModeFlag.Name) == "archive",
 		TrieTimeLimit:       eth.DefaultConfig.TrieTimeout,
 		SnapshotLimit:       eth.DefaultConfig.SnapshotCache,
+		Preimages:           ctx.GlobalBool(CachePreimagesFlag.Name),
+	}
+	if cache.TrieDirtyDisabled && !cache.Preimages {
+		cache.Preimages = true
+		log.Info("Enabling recording of key preimages since archive mode is used")
 	}
 	if !ctx.GlobalIsSet(SnapshotFlag.Name) {
 		cache.SnapshotLimit = 0 // Disabled

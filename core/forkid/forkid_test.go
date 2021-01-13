@@ -118,7 +118,7 @@ func TestCreation(t *testing.T) {
 	}
 	for i, tt := range tests {
 		for j, ttt := range tt.cases {
-			if have := newID(tt.config, tt.genesis, ttt.head); have != ttt.want {
+			if have := NewID(tt.config, tt.genesis, ttt.head); have != ttt.want {
 				t.Errorf("test %d, case %d: fork ID mismatch: have %x, want %x", i, j, have, ttt.want)
 			}
 		}

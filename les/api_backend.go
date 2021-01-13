@@ -171,8 +171,9 @@ func (b *LesApiBackend) GetTd(ctx context.Context, hash common.Hash) *big.Int {
 }
 
 func (b *LesApiBackend) GetEVM(ctx context.Context, msg core.Message, state *state.StateDB, header *types.Header) (*vm.EVM, func() error, error) {
-	context := core.NewEVMContext(msg, header, b.eth.blockchain, nil)
-	return vm.NewEVM(context, state, b.eth.chainConfig, vm.Config{}), state.Error, nil
+	txContext := core.NewEVMTxContext(msg)
+	context := core.NewEVMBlockContext(header, b.eth.blockchain, nil)
+	return vm.NewEVM(context, txContext, state, b.eth.chainConfig, vm.Config{}), state.Error, nil
 }
 
 func (b *LesApiBackend) SendTx(ctx context.Context, signedTx *types.Transaction) error {
