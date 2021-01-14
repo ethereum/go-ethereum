@@ -1,5 +1,6 @@
 ---
 title: Private Network Tutorial
+permalink: docs/private-net
 sort_key: B
 ---
 

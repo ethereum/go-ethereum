@@ -1,5 +1,6 @@
 ---
 title: Dev mode
+permalink: docs/dev-mode
 sort_key: B
 ---
 
