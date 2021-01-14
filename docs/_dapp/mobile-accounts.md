@@ -48,7 +48,7 @@ Cryptography](sec2), implemented by the [`libsecp256k`](secp256k1) library and w
 [`github.com/ethereum/go-ethereum/accounts`](accounts-go). Accounts are stored on disk in
 the [Web3 Secret Storage](secstore) format.*
 
-[sec2]: http://www.secg.org/sec2-v2.pdf
+[sec2]: https://www.secg.org/sec2-v2.pdf
 [accounts-go]: https://godoc.org/github.com/ethereum/go-ethereum/accounts
 [secp256k1]: https://github.com/bitcoin-core/secp256k1
 [secstore]: https://github.com/ethereum/wiki/wiki/Web3-Secret-Storage-Definition

@@ -19,7 +19,7 @@ Geth will automatically use the data of your old node and sync the latest blocks
 ### Install on macOS via Homebrew
 
 The easiest way to install go-ethereum is to use our
-Homebrew tap. If you don't have Homebrew, [install it first](http://brew.sh).
+Homebrew tap. If you don't have Homebrew, [install it first](https://brew.sh).
 
 Run the following commands to add the tap and install `geth`:
 

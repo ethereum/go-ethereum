@@ -45,7 +45,7 @@ environments.
 
 *For those interested in the cryptographic and/or implementation details, the key-store
 uses the `secp256k1` elliptic curve as defined in the [Standards for Efficient
-Cryptography](http://www.secg.org/sec2-v2.pdf), implemented by the [`libsecp256k`](https://github.com/bitcoin-core/secp256k1) library and wrapped by
+Cryptography](https://www.secg.org/sec2-v2.pdf), implemented by the [`libsecp256k`](https://github.com/bitcoin-core/secp256k1) library and wrapped by
 [`github.com/ethereum/go-ethereum/accounts`](https://godoc.org/github.com/ethereum/go-ethereum/accounts). Accounts are stored on disk in
 the [Web3 Secret Storage](https://github.com/ethereum/wiki/wiki/Web3-Secret-Storage-Definition) format.*
 

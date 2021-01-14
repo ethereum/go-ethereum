@@ -143,7 +143,7 @@ protocols (e.g. `eth`, `les`, `shh`, `bzz`).
 
 ### admin_startRPC
 
-The `startRPC` administrative method starts an HTTP based [JSON RPC](http://www.jsonrpc.org/specification)
+The `startRPC` administrative method starts an HTTP based [JSON RPC](https://www.jsonrpc.org/specification)
 API webserver to handle client requests. All the parameters are optional:
 
 * `host`: network interface to open the listener socket on (defaults to `"localhost"`)
@@ -168,7 +168,7 @@ true
 
 ### admin_startWS
 
-The `startWS` administrative method starts an WebSocket based [JSON RPC](http://www.jsonrpc.org/specification)
+The `startWS` administrative method starts an WebSocket based [JSON RPC](https://www.jsonrpc.org/specification)
 API webserver to handle client requests. All the parameters are optional:
 
 * `host`: network interface to open the listener socket on (defaults to `"localhost"`)

@@ -82,7 +82,7 @@ Take note of the path given by the last line, you'll need it soon.
 
 #### Install SolC on Mac OSX
 
-You need [brew](http://brew.sh) in order to install on your mac
+You need [brew](https://brew.sh) in order to install on your mac
 
     brew tap ethereum/ethereum
     brew install solidity
