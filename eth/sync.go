@@ -329,6 +329,10 @@ func (h *handler) doSync(op *chainSyncOp) error {
 		log.Info("Fast sync complete, auto disabling")
 		atomic.StoreUint32(&h.fastSync, 0)
 	}
+	if atomic.LoadUint32(&h.snapSync) == 1 {
+		log.Info("Snap sync complete, auto disabling")
+		atomic.StoreUint32(&h.snapSync, 0)
+	}
 	// If we've successfully finished a sync cycle and passed any required checkpoint,
 	// enable accepting transactions from the network.
 	head := h.chain.CurrentBlock()
