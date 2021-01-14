@@ -456,36 +456,32 @@ func (h *handler) BroadcastBlock(block *types.Block, propagate bool) {
 	}
 }
 
-// BroadcastTransactions will propagate a batch of transactions to all peers which are not known to
+// BroadcastTransactions will propagate a batch of transactions
+// - To a square root of all peers
+// - And, separately, as announcements to all peers which are not known to
 // already have the given transaction.
-func (h *handler) BroadcastTransactions(txs types.Transactions, propagate bool) {
+func (h *handler) BroadcastTransactions(txs types.Transactions) {
 	var (
-		txset = make(map[*ethPeer][]common.Hash)
-		annos = make(map[*ethPeer][]common.Hash)
+		txset = make(map[*ethPeer][]common.Hash) // Set peer->hash to transfer directly
+		annos = make(map[*ethPeer][]common.Hash) // Set peer->hash to announce
 	)
 	// Broadcast transactions to a batch of peers not knowing about it
-	if propagate {
-		for _, tx := range txs {
-			peers := h.peers.peersWithoutTransaction(tx.Hash())
-
-			// Send the block to a subset of our peers
-			transfer := peers[:int(math.Sqrt(float64(len(peers))))]
-			for _, peer := range transfer {
-				txset[peer] = append(txset[peer], tx.Hash())
-			}
-			log.Trace("Broadcast transaction", "hash", tx.Hash(), "recipients", len(transfer))
-		}
-		for peer, hashes := range txset {
-			peer.AsyncSendTransactions(hashes)
-		}
-		return
-	}
-	// Otherwise only broadcast the announcement to peers
 	for _, tx := range txs {
 		peers := h.peers.peersWithoutTransaction(tx.Hash())
-		for _, peer := range peers {
+		// Send the tx unconditionally to a subset of our peers
+		numDirect := int(math.Sqrt(float64(len(peers))))
+		for _, peer := range peers[:numDirect] {
+			txset[peer] = append(txset[peer], tx.Hash())
+		}
+		// For the remaining peers, send announcement only
+		for _, peer := range peers[numDirect:] {
 			annos[peer] = append(annos[peer], tx.Hash())
 		}
+		log.Trace("Broadcast transaction", "hash", tx.Hash(), "direct", numDirect,
+			"announce", len(peers)-numDirect)
+	}
+	for peer, hashes := range txset {
+		peer.AsyncSendTransactions(hashes)
 	}
 	for peer, hashes := range annos {
 		if peer.Version() >= eth.ETH65 {
@@ -515,8 +511,7 @@ func (h *handler) txBroadcastLoop() {
 	for {
 		select {
 		case event := <-h.txsCh:
-			h.BroadcastTransactions(event.Txs, true)  // First propagate transactions to peers
-			h.BroadcastTransactions(event.Txs, false) // Only then announce to the rest
+			h.BroadcastTransactions(event.Txs)
 
 		case <-h.txsSub.Err():
 			return
