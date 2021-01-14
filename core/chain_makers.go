@@ -60,10 +60,7 @@ func (b *BlockGen) SetCoinbase(addr common.Address) {
 	}
 	b.header.Coinbase = addr
 	// See core/gaspool.go for details on how these gas limit values are calculated
-	b.gasPool = NewLegacyGasPool(b.config, b.header.Number, new(big.Int).SetUint64(b.header.GasLimit))
-	if b.config.IsEIP1559(b.header.Number) {
-		b.gasPool1559 = NewEIP1559GasPool(b.config, b.header.Number, new(big.Int).SetUint64(b.header.GasLimit))
-	}
+	b.gasPool = NewGasPool(b.config, b.header.Number, new(big.Int).SetUint64(b.header.GasLimit))
 }
 
 // SetExtra sets the extra data field of the generated block.
@@ -109,7 +106,7 @@ func (b *BlockGen) AddTxWithChain(bc *BlockChain, tx *types.Transaction) {
 	}
 
 	b.statedb.Prepare(tx.Hash(), common.Hash{}, len(b.txs))
-	receipt, err := ApplyTransaction(b.config, bc, &b.header.Coinbase, b.gasPool, b.gasPool1559, b.statedb, b.header, tx, &b.header.GasUsed, vm.Config{})
+	receipt, err := ApplyTransaction(b.config, bc, &b.header.Coinbase, b.gasPool, b.statedb, b.header, tx, &b.header.GasUsed, vm.Config{})
 	if err != nil {
 		panic(err)
 	}

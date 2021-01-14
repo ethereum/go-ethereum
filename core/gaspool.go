@@ -29,16 +29,12 @@ import (
 // in a block. The zero value is a pool with zero gas available.
 type GasPool uint64
 
-// NewLegacyGasPool returns a GasPool filled to the legacy gas limit
-func NewLegacyGasPool(chainConfig *params.ChainConfig, height, gasLimit *big.Int) *GasPool {
+// NewGasPool returns a GasPool filled to the legacy gas limit or EIP1559 gas limit
+func NewGasPool(chainConfig *params.ChainConfig, height, gasLimit *big.Int) *GasPool {
 	eip1559GasTarget := misc.CalcEIP1559GasTarget(chainConfig, height, gasLimit)
-	return new(GasPool).AddGas(gasLimit.Uint64() - eip1559GasTarget.Uint64())
-}
-
-// NewEIP1559GasPool returns a GasPool filled to the EIP1559 gas limit
-func NewEIP1559GasPool(chainConfig *params.ChainConfig, height, gasLimit *big.Int) *GasPool {
-	// EIP1559 gas limit is slack coefficient * EIP1559GasTarget
-	eip1559GasTarget := misc.CalcEIP1559GasTarget(chainConfig, height, gasLimit)
+	if !chainConfig.IsEIP1559(height) {
+		new(GasPool).AddGas(gasLimit.Uint64() - eip1559GasTarget.Uint64())
+	}
 	return new(GasPool).AddGas(chainConfig.EIP1559.EIP1559SlackCoefficient * eip1559GasTarget.Uint64())
 }
 

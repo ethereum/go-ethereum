@@ -51,7 +51,6 @@ The state transitioning model does all the necessary work to work out a valid ne
 */
 type StateTransition struct {
 	gp              *GasPool
-	gp1559          *GasPool
 	msg             Message
 	gas             uint64
 	gasPrice        *big.Int
@@ -154,11 +153,10 @@ func IntrinsicGas(data []byte, contractCreation, isHomestead bool, isEIP2028 boo
 }
 
 // NewStateTransition initialises and returns a new state transition object.
-func NewStateTransition(evm *vm.EVM, msg Message, gp, gp1559 *GasPool) *StateTransition {
-	isEIP1559 := evm.ChainConfig().IsEIP1559(evm.Context.BlockNumber) && msg.GasPrice() == nil && msg.MaxMinerBribe() != nil && msg.FeeCap() != nil && evm.Context.BaseFee != nil && gp1559 != nil
+func NewStateTransition(evm *vm.EVM, msg Message, gp *GasPool) *StateTransition {
+	isEIP1559 := evm.ChainConfig().IsEIP1559(evm.Context.BlockNumber) && msg.GasPrice() == nil && msg.MaxMinerBribe() != nil && msg.FeeCap() != nil && evm.Context.BaseFee != nil
 	st := &StateTransition{
 		gp:        gp,
-		gp1559:    gp1559,
 		evm:       evm,
 		msg:       msg,
 		gasPrice:  msg.GasPrice(),
@@ -187,8 +185,8 @@ func NewStateTransition(evm *vm.EVM, msg Message, gp, gp1559 *GasPool) *StateTra
 // the gas used (which includes gas refunds) and an error if it failed. An error always
 // indicates a core error meaning that the message would always fail for that particular
 // state and would never be accepted within a block.
-func ApplyMessage(evm *vm.EVM, msg Message, gp, gp1559 *GasPool) (*ExecutionResult, error) {
-	return NewStateTransition(evm, msg, gp, gp1559).TransitionDb()
+func ApplyMessage(evm *vm.EVM, msg Message, gp *GasPool) (*ExecutionResult, error) {
+	return NewStateTransition(evm, msg, gp).TransitionDb()
 }
 
 // to returns the recipient of the message.
@@ -200,30 +198,13 @@ func (st *StateTransition) to() common.Address {
 }
 
 func (st *StateTransition) buyGas() error {
+	gasPrice := new(big.Int)
 	if st.isEIP1559 {
-		return st.buyGasEIP1559()
+		gasPrice.Set(st.eip1559GasPrice)
+	} else {
+		gasPrice.Set(st.gasPrice)
 	}
-	return st.buyGasLegacy()
-}
-
-func (st *StateTransition) buyGasEIP1559() error {
-	// tx.origin pays gasPrice * tx.gas
-	mgval := new(big.Int).Mul(new(big.Int).SetUint64(st.msg.Gas()), st.eip1559GasPrice)
-	if st.state.GetBalance(st.msg.From()).Cmp(mgval) < 0 {
-		return errInsufficientBalanceForGas
-	}
-	if err := st.gp1559.SubGas(st.msg.Gas()); err != nil {
-		return err
-	}
-	st.gas += st.msg.Gas()
-
-	st.initialGas = st.msg.Gas()
-	st.state.SubBalance(st.msg.From(), mgval)
-	return nil
-}
-
-func (st *StateTransition) buyGasLegacy() error {
-	mgval := new(big.Int).Mul(new(big.Int).SetUint64(st.msg.Gas()), st.gasPrice)
+	mgval := new(big.Int).Mul(new(big.Int).SetUint64(st.msg.Gas()), gasPrice)
 	if have, want := st.state.GetBalance(st.msg.From()), mgval; have.Cmp(want) < 0 {
 		return fmt.Errorf("%w: address %v have %v want %v", ErrInsufficientFunds, st.msg.From().Hex(), have, want)
 	}
@@ -254,7 +235,7 @@ func (st *StateTransition) preCheck() error {
 		return ErrTxNotEIP1559
 	}
 	// If we are before the EIP1559 activation block, throw an error if we have EIP1559 fields or do not have a GasPrice
-	if !st.evm.ChainConfig().IsEIP1559(st.evm.Context.BlockNumber) && (st.msg.MaxMinerBribe() != nil || st.msg.FeeCap() != nil || st.gp1559 != nil || st.evm.Context.BaseFee != nil || st.msg.GasPrice() == nil) {
+	if !st.evm.ChainConfig().IsEIP1559(st.evm.Context.BlockNumber) && (st.msg.MaxMinerBribe() != nil || st.msg.FeeCap() != nil || st.evm.Context.BaseFee != nil || st.msg.GasPrice() == nil) {
 		return ErrTxIsEIP1559
 	}
 	// If transaction has both legacy and EIP1559 fields, throw an error
@@ -359,14 +340,6 @@ func (st *StateTransition) TransitionDb() (*ExecutionResult, error) {
 }
 
 func (st *StateTransition) refundGas() {
-	if st.isEIP1559 {
-		st.refundGasEIP1559()
-		return
-	}
-	st.refundGasLegacy()
-}
-
-func (st *StateTransition) refundGasLegacy() {
 	// Apply refund counter, capped to half of the used gas.
 	refund := st.gasUsed() / 2
 	if refund > st.state.GetRefund() {
@@ -375,30 +348,18 @@ func (st *StateTransition) refundGasLegacy() {
 	st.gas += refund
 
 	// Return ETH for remaining gas, exchanged at the original rate.
-	remaining := new(big.Int).Mul(new(big.Int).SetUint64(st.gas), st.gasPrice)
+	remaining := new(big.Int)
+	if st.isEIP1559 {
+		txGasSubUsed := new(big.Int).Sub(new(big.Int).SetUint64(st.msg.Gas()), new(big.Int).SetUint64(st.gasUsed()))
+		remaining.Mul(txGasSubUsed, st.eip1559GasPrice)
+	} else {
+		remaining.Mul(new(big.Int).SetUint64(st.gas), st.gasPrice)
+	}
 	st.state.AddBalance(st.msg.From(), remaining)
 
 	// Also return remaining gas to the block gas counter so it is
 	// available for the next transaction.
 	st.gp.AddGas(st.gas)
-}
-
-func (st *StateTransition) refundGasEIP1559() {
-	// Apply refund counter, capped to half of the used gas.
-	refund := st.gasUsed() / 2
-	if refund > st.state.GetRefund() {
-		refund = st.state.GetRefund()
-	}
-	st.gas += refund
-
-	// tx.origin gets refunded gasprice * (tx.gas - gasused)
-	txGasSubUsed := new(big.Int).Sub(new(big.Int).SetUint64(st.msg.Gas()), new(big.Int).SetUint64(st.gasUsed()))
-	remaining := new(big.Int).Mul(st.eip1559GasPrice, txGasSubUsed)
-	st.state.AddBalance(st.msg.From(), remaining)
-
-	// Also return remaining gas to the block gas counter so it is
-	// available for the next transaction.
-	st.gp1559.AddGas(st.gas)
 }
 
 // gasUsed returns the amount of gas used up by the state transition.

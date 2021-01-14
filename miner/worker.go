@@ -88,7 +88,6 @@ type environment struct {
 	uncles    mapset.Set     // uncle set
 	tcount    int            // tx count in cycle
 	gasPool   *core.GasPool  // available gas used to pack transactions
-	gp1559    *core.GasPool  // available gas used to pack EIP1559 transactions
 
 	header   *types.Header
 	txs      []*types.Transaction
@@ -486,21 +485,7 @@ func (w *worker) mainLoop() {
 			// be automatically eliminated.
 			if !w.isRunning() && w.current != nil {
 				// If block is already full, abort
-				legacyGasPool := w.current.gasPool
-				eip1559GasPool := w.current.gp1559
-				// If EIP1559 is finalized we only accept 1559 transactions so if that pool is exhausted the block is full
-				if w.chainConfig.IsEIP1559Finalized(w.current.header.Number) && eip1559GasPool != nil && eip1559GasPool.Gas() < params.TxGas {
-					continue
-				}
-				// If EIP1559 has not been initialized we only accept legacy transaction so if that pool is exhausted the block is full
-				if !w.chainConfig.IsEIP1559(w.current.header.Number) && legacyGasPool != nil && legacyGasPool.Gas() < params.TxGas {
-					continue
-				}
-				// When we are between EIP1559 activation and finalization we can receive transactions of both types
-				// and one pool could be exhausted while the other is not
-				// If both pools are exhausted we know the block is full but if only one is we could still accept transactions
-				// of the other type so we need to proceed into commitTransactions()
-				if legacyGasPool != nil && legacyGasPool.Gas() < params.TxGas && eip1559GasPool != nil && eip1559GasPool.Gas() < params.TxGas {
+				if gp := w.current.gasPool; gp != nil && gp.Gas() < params.TxGas {
 					continue
 				}
 				w.mu.RLock()
@@ -742,7 +727,7 @@ func (w *worker) updateSnapshot() {
 func (w *worker) commitTransaction(tx *types.Transaction, coinbase common.Address) ([]*types.Log, error) {
 	snap := w.current.state.Snapshot()
 
-	receipt, err := core.ApplyTransaction(w.chainConfig, w.chain, &coinbase, w.current.gasPool, w.current.gp1559, w.current.state, w.current.header, tx, &w.current.header.GasUsed, *w.chain.GetVMConfig())
+	receipt, err := core.ApplyTransaction(w.chainConfig, w.chain, &coinbase, w.current.gasPool, w.current.state, w.current.header, tx, &w.current.header.GasUsed, *w.chain.GetVMConfig())
 	if err != nil {
 		w.current.state.RevertToSnapshot(snap)
 		return nil, err
@@ -759,45 +744,13 @@ func (w *worker) commitTransactions(txs *types.TransactionsByPriceAndNonce, coin
 		return true
 	}
 
-	// See core/gaspool.go for details on how these gas limit values are calculated
-	var eip1559GasLimit uint64
-	var legacyGasLimit uint64
-
 	if w.current.gasPool == nil {
-		w.current.gasPool = core.NewLegacyGasPool(w.chainConfig,
-			w.current.header.Number, new(big.Int).SetUint64(w.current.header.GasLimit))
-		legacyGasLimit = w.current.gasPool.Gas()
-	}
-	if w.chainConfig.IsEIP1559(w.current.header.Number) {
-		if w.current.gp1559 == nil {
-			w.current.gp1559 = core.NewEIP1559GasPool(w.chainConfig,
-				w.current.header.Number, new(big.Int).SetUint64(w.current.header.GasLimit))
-			eip1559GasLimit = w.current.gp1559.Gas()
-		}
+		w.current.gasPool = core.NewGasPool(w.chainConfig, w.current.header.Number, new(big.Int).SetUint64(w.current.header.GasLimit))
 	}
 
 	var coalescedLogs []*types.Log
 
 	for {
-		// Retrieve the next transaction and abort if all done
-		tx := txs.Peek()
-		if tx == nil {
-			break
-		}
-
-		// Set which gasPool to use based on the type of transaction
-		eip1559 := false
-		var gp *core.GasPool
-		if w.current.gp1559 != nil && tx.GasPrice() == nil && tx.MaxMinerBribe() != nil && tx.FeeCap() != nil {
-			gp = w.current.gp1559
-			eip1559 = true
-		} else if w.current.gasPool != nil && tx.MaxMinerBribe() == nil && tx.FeeCap() == nil && tx.GasPrice() != nil {
-			gp = w.current.gasPool
-		} else {
-			log.Error("Transaction does not conform with expected format (legacy or EIP1559)")
-			continue
-		}
-
 		// In the following three cases, we will interrupt the execution of the transaction.
 		// (1) new head block event arrival, the interrupt signal is 1
 		// (2) worker start or restart, the interrupt signal is 1
@@ -807,12 +760,7 @@ func (w *worker) commitTransactions(txs *types.TransactionsByPriceAndNonce, coin
 		if interrupt != nil && atomic.LoadInt32(interrupt) != commitInterruptNone {
 			// Notify resubmit loop to increase resubmitting interval due to too frequent commits.
 			if atomic.LoadInt32(interrupt) == commitInterruptResubmit {
-				var ratio float64
-				if eip1559 {
-					ratio = float64(eip1559GasLimit-gp.Gas()) / float64(eip1559GasLimit)
-				} else {
-					ratio = float64(legacyGasLimit-gp.Gas()) / float64(legacyGasLimit)
-				}
+				ratio := float64(w.current.header.GasLimit-w.current.gasPool.Gas()) / float64(w.current.header.GasLimit)
 				if ratio < 0.1 {
 					ratio = 0.1
 				}
@@ -823,23 +771,16 @@ func (w *worker) commitTransactions(txs *types.TransactionsByPriceAndNonce, coin
 			}
 			return atomic.LoadInt32(interrupt) == commitInterruptNewHead
 		}
-
-		// If all available gas pools are empty, break
-		if (w.current.gasPool == nil || w.current.gasPool.Gas() < params.TxGas) && (w.current.gp1559 == nil || w.current.gp1559.Gas() < params.TxGas) {
-			log.Trace("Not enough gas for further transactions", "have legacy pool", w.current.gasPool, "and eip1559 pool", w.current.gp1559, "want", params.TxGas)
+		// If we don't have enough gas for any further transactions then we're done
+		if w.current.gasPool.Gas() < params.TxGas {
+			log.Trace("Not enough gas for further transactions", "have", w.current.gasPool, "want", params.TxGas)
 			break
 		}
-
-		// If just the current gas pool is empty, continue
-		if gp.Gas() < params.TxGas {
-			if eip1559 {
-				log.Trace("Not enough gas for further EIP1559 transactions", "have", gp, "want", params.TxGas)
-			} else {
-				log.Trace("Not enough gas for further legacy transactions", "have", gp, "want", params.TxGas)
-			}
-			continue
+		// Retrieve the next transaction and abort if all done
+		tx := txs.Peek()
+		if tx == nil {
+			break
 		}
-
 		// Error may be ignored here. The error has already been checked
 		// during transaction acceptance is the transaction pool.
 		//
