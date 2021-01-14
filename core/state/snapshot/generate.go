@@ -313,13 +313,12 @@ func (dl *diskLayer) generate(stats *generatorStats) {
 		abort <- stats
 		return
 	}
-	// Snapshot fully generated, set the marker to nil
-	if batch.ValueSize() > 0 {
-		// Ensure the generator entry is in sync with the data
-		journalProgress(batch, nil, stats)
+	// Snapshot fully generated, set the marker to nil.
+	// Note even there is nothing to commit, persist the
+	// generator anyway to mark the snapshot is complete.
+	journalProgress(batch, nil, stats)
+	batch.Write()
 
-		batch.Write()
-	}
 	log.Info("Generated state snapshot", "accounts", stats.accounts, "slots", stats.slots,
 		"storage", stats.storage, "elapsed", common.PrettyDuration(time.Since(stats.start)))
 

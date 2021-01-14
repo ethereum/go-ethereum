@@ -29,6 +29,7 @@ import (
 	"time"
 
 	"github.com/ethereum/go-ethereum/consensus"
+	"github.com/ethereum/go-ethereum/core/state/snapshot"
 	"github.com/ethereum/go-ethereum/consensus/ethash"
 	"github.com/ethereum/go-ethereum/core/rawdb"
 	"github.com/ethereum/go-ethereum/core/types"
@@ -160,6 +161,11 @@ func (basic *snapshotTestBasic) verify(t *testing.T, chain *BlockChain, blocks [
 	} else if !bytes.Equal(chain.snaps.DiskRoot().Bytes(), block.Root().Bytes()) {
 		t.Errorf("The snapshot disk layer root is incorrect, want %x, get %x", block.Root(), chain.snaps.DiskRoot())
 	}
+
+	// Check the snapshot, ensure it's integrated
+	if err := snapshot.VerifyState(chain.snaps, block.Root()); err != nil {
+		t.Errorf("The disk layer is not integrated %v", err)
+	}
 }
 
 func (basic *snapshotTestBasic) dump() string {
@@ -223,6 +229,9 @@ type snapshotTest struct {
 }
 
 func (snaptest *snapshotTest) test(t *testing.T) {
+	// It's hard to follow the test case, visualize the input
+	// log.Root().SetHandler(log.LvlFilterHandler(log.LvlTrace, log.StreamHandler(os.Stderr, log.TerminalFormat(true))))
+	// fmt.Println(tt.dump())
 	chain, blocks := snaptest.prepare(t)
 
 	// Restart the chain normally
@@ -243,6 +252,9 @@ type crashSnapshotTest struct {
 }
 
 func (snaptest *crashSnapshotTest) test(t *testing.T) {
+	// It's hard to follow the test case, visualize the input
+	// log.Root().SetHandler(log.LvlFilterHandler(log.LvlTrace, log.StreamHandler(os.Stderr, log.TerminalFormat(true))))
+	// fmt.Println(tt.dump())
 	chain, blocks := snaptest.prepare(t)
 
 	// Pull the plug on the database, simulating a hard crash
@@ -286,6 +298,9 @@ type gappedSnapshotTest struct {
 }
 
 func (snaptest *gappedSnapshotTest) test(t *testing.T) {
+	// It's hard to follow the test case, visualize the input
+	// log.Root().SetHandler(log.LvlFilterHandler(log.LvlTrace, log.StreamHandler(os.Stderr, log.TerminalFormat(true))))
+	// fmt.Println(tt.dump())
 	chain, blocks := snaptest.prepare(t)
 
 	// Insert blocks without enabling snapshot if gapping is required.
@@ -326,6 +341,9 @@ type setHeadSnapshotTest struct {
 }
 
 func (snaptest *setHeadSnapshotTest) test(t *testing.T) {
+	// It's hard to follow the test case, visualize the input
+	// log.Root().SetHandler(log.LvlFilterHandler(log.LvlTrace, log.StreamHandler(os.Stderr, log.TerminalFormat(true))))
+	// fmt.Println(tt.dump())
 	chain, blocks := snaptest.prepare(t)
 
 	// Rewind the chain if setHead operation is required.
@@ -344,29 +362,53 @@ func (snaptest *setHeadSnapshotTest) test(t *testing.T) {
 // restartCrashSnapshotTest is the test type used to test this scenario:
 // - have a complete snapshot
 // - restart chain
+// - insert more blocks with/without enabling the snapshot
+// - commit(or not) the snapshot
 // - crash
 // - restart again
 type restartCrashSnapshotTest struct {
 	snapshotTestBasic
-	restartCrash int // Number of blocks to insert after the normal stop, then the crash happens
+
+	newBlocks           int  // Number of blocks to insert after the normal stop, before the crash
+	enableSnapInRestart bool // Whether to enable the snapshot during the restart
+	commitSnapInRestart bool // Whether to commit the snapshot before the crash
 }
 
 func (snaptest *restartCrashSnapshotTest) test(t *testing.T) {
+	// It's hard to follow the test case, visualize the input
+	// log.Root().SetHandler(log.LvlFilterHandler(log.LvlTrace, log.StreamHandler(os.Stderr, log.TerminalFormat(true))))
+	// fmt.Println(tt.dump())
 	chain, blocks := snaptest.prepare(t)
 
 	// Firstly, stop the chain properly, with all snapshot journal
 	// and state committed.
 	chain.Stop()
 
-	// Restart chain, forcibly flush the disk layer journal with new format
-	newBlocks, _ := GenerateChain(params.TestChainConfig, blocks[len(blocks)-1], snaptest.engine, snaptest.gendb, snaptest.restartCrash, func(i int, b *BlockGen) {})
-	newchain, err := NewBlockChain(snaptest.db, defaultCacheConfig, params.AllEthashProtocolChanges, snaptest.engine, vm.Config{}, nil, nil)
+	config := defaultCacheConfig
+	if !snaptest.enableSnapInRestart {
+		config = &CacheConfig{
+			TrieCleanLimit: 256,
+			TrieDirtyLimit: 256,
+			TrieTimeLimit:  5 * time.Minute,
+			SnapshotLimit:  0,
+		}
+	}
+	newchain, err := NewBlockChain(snaptest.db, config, params.AllEthashProtocolChanges, snaptest.engine, vm.Config{}, nil, nil)
 	if err != nil {
 		t.Fatalf("Failed to recreate chain: %v", err)
 	}
-	newchain.InsertChain(newBlocks)
-	newchain.Snapshots().Cap(newBlocks[len(newBlocks)-1].Root(), 0)
+	// Restart chain, insert a few more blocks on top.
+	if snaptest.newBlocks > 0 {
+		newBlocks, _ := GenerateChain(params.TestChainConfig, blocks[len(blocks)-1], snaptest.engine, snaptest.gendb, snaptest.newBlocks, func(i int, b *BlockGen) {})
+		newchain.InsertChain(newBlocks)
 
+		// Commit the entire snapshot into the disk if requested. Note only
+		// (a) snapshot root and (b) snapshot generator will be committed,
+		// the diff journal is not.
+		if snaptest.commitSnapInRestart && snaptest.enableSnapInRestart {
+			newchain.Snapshots().Cap(newBlocks[len(newBlocks)-1].Root(), 0)
+		}
+	}
 	// Simulate the blockchain crash
 	// Don't call chain.Stop here, so that no snapshot
 	// journal and latest state will be committed
@@ -897,7 +939,50 @@ func TestRecoverSnapshotFromCrashWithLegacyDiffJournal(t *testing.T) {
 			expHeadBlock:       8,  // The persisted state in the first running
 			expSnapshotBottom:  10, // The persisted disk layer in the second running
 		},
-		restartCrash: 2,
+		newBlocks:           2,
+		enableSnapInRestart: true,
+		commitSnapInRestart: true,
+	}
+	test.test(t)
+	test.teardown()
+}
+
+// Tests the Geth was running with a complete snapshot and then imports a few
+// more new blocks on top without enabling the snapshot. After the restart,
+// crash happens. Check everything is ok after the restart.
+func TestRecoverSnapshotFromWipingCrash(t *testing.T) {
+	// Chain:
+	//   G->C1->C2->C3->C4->C5->C6->C7->C8 (HEAD)
+	//
+	// Commit:   G
+	// Snapshot: G
+	//
+	// SetHead(0)
+	//
+	// ------------------------------
+	//
+	// Expected in leveldb:
+	//   G->C1->C2->C3->C4->C5->C6->C7->C8->C9->C10
+	//
+	// Expected head header    : C10
+	// Expected head fast block: C10
+	// Expected head block     : C8
+	// Expected snapshot disk  : C10
+	test := &restartCrashSnapshotTest{
+		snapshotTestBasic: snapshotTestBasic{
+			legacy:             false,
+			chainBlocks:        8,
+			snapshotBlock:      0,
+			commitBlock:        0,
+			expCanonicalBlocks: 10,
+			expHeadHeader:      10,
+			expHeadFastBlock:   10,
+			expHeadBlock:       0, // The snap disk layer is still at 0, rewind to this
+			expSnapshotBottom:  0, // The persisted disk layer in the second running
+		},
+		newBlocks:           2,
+		enableSnapInRestart: false,
+		commitSnapInRestart: false,
 	}
 	test.test(t)
 	test.teardown()
