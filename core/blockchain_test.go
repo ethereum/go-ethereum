@@ -24,7 +24,6 @@ import (
 	"math/big"
 	"math/rand"
 	"os"
-	"strings"
 	"sync"
 	"testing"
 	"time"
@@ -3204,6 +3203,7 @@ func XTestGenerateACLJsonFilesEip2718(t *testing.T) {
 			t.Fatal(err)
 		}
 		outFile, err := os.Create("testdata/acl_genesis.json")
+		outFile.Write(x)
 		if err != nil {
 			t.Fatal(err)
 		}
