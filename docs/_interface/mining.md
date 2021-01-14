@@ -4,7 +4,7 @@ sort_key: B
 ---
 
 This document explains how to set up geth for mining. The Ethereum wiki also has a [page
-about mining](eth-wiki-mining), be sure to check that one as well.
+about mining](https://eth.wiki/en/fundamentals/mining), be sure to check that one as well.
 
 Mining is the process through which new blocks are created. Geth actually creates new
 blocks all the time, but these blocks need to be secured through proof-of-work so they
