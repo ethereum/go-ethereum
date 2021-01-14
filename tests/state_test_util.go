@@ -198,15 +198,11 @@ func (t *StateTest) RunNoVerify(subtest StateSubtest, vmconfig vm.Config, snapsh
 		}
 	}
 
-	var gp1559 *core.GasPool
 	// See core/gaspool.go for details on how these gas limit values are calculated
-	gaspool := core.NewLegacyGasPool(config, block.Number(), new(big.Int).SetUint64(block.GasLimit()))
-	if config.IsEIP1559(block.Number()) {
-		gp1559 = core.NewEIP1559GasPool(config, block.Number(), new(big.Int).SetUint64(block.GasLimit()))
-	}
+	gaspool := core.NewGasPool(config, block.Number(), new(big.Int).SetUint64(block.GasLimit()))
 
 	snapshot := statedb.Snapshot()
-	if _, err := core.ApplyMessage(evm, msg, gaspool, gp1559); err != nil {
+	if _, err := core.ApplyMessage(evm, msg, gaspool); err != nil {
 		statedb.RevertToSnapshot(snapshot)
 	}
 	// Commit block
