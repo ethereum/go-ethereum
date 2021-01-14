@@ -29,9 +29,9 @@ import (
 	"time"
 
 	"github.com/ethereum/go-ethereum/consensus"
-	"github.com/ethereum/go-ethereum/core/state/snapshot"
 	"github.com/ethereum/go-ethereum/consensus/ethash"
 	"github.com/ethereum/go-ethereum/core/rawdb"
+	"github.com/ethereum/go-ethereum/core/state/snapshot"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/core/vm"
 	"github.com/ethereum/go-ethereum/ethdb"
@@ -362,16 +362,13 @@ func (snaptest *setHeadSnapshotTest) test(t *testing.T) {
 // restartCrashSnapshotTest is the test type used to test this scenario:
 // - have a complete snapshot
 // - restart chain
-// - insert more blocks with/without enabling the snapshot
-// - commit(or not) the snapshot
+// - insert more blocks with enabling the snapshot
+// - commit the snapshot
 // - crash
 // - restart again
 type restartCrashSnapshotTest struct {
 	snapshotTestBasic
-
-	newBlocks           int  // Number of blocks to insert after the normal stop, before the crash
-	enableSnapInRestart bool // Whether to enable the snapshot during the restart
-	commitSnapInRestart bool // Whether to commit the snapshot before the crash
+	newBlocks int
 }
 
 func (snaptest *restartCrashSnapshotTest) test(t *testing.T) {
@@ -384,31 +381,18 @@ func (snaptest *restartCrashSnapshotTest) test(t *testing.T) {
 	// and state committed.
 	chain.Stop()
 
-	config := defaultCacheConfig
-	if !snaptest.enableSnapInRestart {
-		config = &CacheConfig{
-			TrieCleanLimit: 256,
-			TrieDirtyLimit: 256,
-			TrieTimeLimit:  5 * time.Minute,
-			SnapshotLimit:  0,
-		}
-	}
-	newchain, err := NewBlockChain(snaptest.db, config, params.AllEthashProtocolChanges, snaptest.engine, vm.Config{}, nil, nil)
+	newchain, err := NewBlockChain(snaptest.db, nil, params.AllEthashProtocolChanges, snaptest.engine, vm.Config{}, nil, nil)
 	if err != nil {
 		t.Fatalf("Failed to recreate chain: %v", err)
 	}
-	// Restart chain, insert a few more blocks on top.
-	if snaptest.newBlocks > 0 {
-		newBlocks, _ := GenerateChain(params.TestChainConfig, blocks[len(blocks)-1], snaptest.engine, snaptest.gendb, snaptest.newBlocks, func(i int, b *BlockGen) {})
-		newchain.InsertChain(newBlocks)
+	newBlocks, _ := GenerateChain(params.TestChainConfig, blocks[len(blocks)-1], snaptest.engine, snaptest.gendb, snaptest.newBlocks, func(i int, b *BlockGen) {})
+	newchain.InsertChain(newBlocks)
 
-		// Commit the entire snapshot into the disk if requested. Note only
-		// (a) snapshot root and (b) snapshot generator will be committed,
-		// the diff journal is not.
-		if snaptest.commitSnapInRestart && snaptest.enableSnapInRestart {
-			newchain.Snapshots().Cap(newBlocks[len(newBlocks)-1].Root(), 0)
-		}
-	}
+	// Commit the entire snapshot into the disk if requested. Note only
+	// (a) snapshot root and (b) snapshot generator will be committed,
+	// the diff journal is not.
+	newchain.Snapshots().Cap(newBlocks[len(newBlocks)-1].Root(), 0)
+
 	// Simulate the blockchain crash
 	// Don't call chain.Stop here, so that no snapshot
 	// journal and latest state will be committed
@@ -420,6 +404,61 @@ func (snaptest *restartCrashSnapshotTest) test(t *testing.T) {
 	}
 	defer newchain.Stop()
 
+	snaptest.verify(t, newchain, blocks)
+}
+
+// wipeCrashSnapshotTest is the test type used to test this scenario:
+// - have a complete snapshot
+// - restart, insert more blocks without enabling the snapshot
+// - restart again with enabling the snapshot
+// - crash
+type wipeCrashSnapshotTest struct {
+	snapshotTestBasic
+	newBlocks int
+}
+
+func (snaptest *wipeCrashSnapshotTest) test(t *testing.T) {
+	// It's hard to follow the test case, visualize the input
+	// log.Root().SetHandler(log.LvlFilterHandler(log.LvlTrace, log.StreamHandler(os.Stderr, log.TerminalFormat(true))))
+	// fmt.Println(tt.dump())
+	chain, blocks := snaptest.prepare(t)
+
+	// Firstly, stop the chain properly, with all snapshot journal
+	// and state committed.
+	chain.Stop()
+
+	config := &CacheConfig{
+		TrieCleanLimit: 256,
+		TrieDirtyLimit: 256,
+		TrieTimeLimit:  5 * time.Minute,
+		SnapshotLimit:  0,
+	}
+	newchain, err := NewBlockChain(snaptest.db, config, params.AllEthashProtocolChanges, snaptest.engine, vm.Config{}, nil, nil)
+	if err != nil {
+		t.Fatalf("Failed to recreate chain: %v", err)
+	}
+	newBlocks, _ := GenerateChain(params.TestChainConfig, blocks[len(blocks)-1], snaptest.engine, snaptest.gendb, snaptest.newBlocks, func(i int, b *BlockGen) {})
+	newchain.InsertChain(newBlocks)
+	newchain.Stop()
+
+	// Restart the chain, the wiper should starts working
+	config = &CacheConfig{
+		TrieCleanLimit: 256,
+		TrieDirtyLimit: 256,
+		TrieTimeLimit:  5 * time.Minute,
+		SnapshotLimit:  256,
+		SnapshotWait:   false, // Don't wait rebuild
+	}
+	newchain, err = NewBlockChain(snaptest.db, config, params.AllEthashProtocolChanges, snaptest.engine, vm.Config{}, nil, nil)
+	if err != nil {
+		t.Fatalf("Failed to recreate chain: %v", err)
+	}
+	// Simulate the blockchain crash.
+
+	newchain, err = NewBlockChain(snaptest.db, nil, params.AllEthashProtocolChanges, snaptest.engine, vm.Config{}, nil, nil)
+	if err != nil {
+		t.Fatalf("Failed to recreate chain: %v", err)
+	}
 	snaptest.verify(t, newchain, blocks)
 }
 
@@ -939,9 +978,7 @@ func TestRecoverSnapshotFromCrashWithLegacyDiffJournal(t *testing.T) {
 			expHeadBlock:       8,  // The persisted state in the first running
 			expSnapshotBottom:  10, // The persisted disk layer in the second running
 		},
-		newBlocks:           2,
-		enableSnapInRestart: true,
-		commitSnapInRestart: true,
+		newBlocks: 2,
 	}
 	test.test(t)
 	test.teardown()
@@ -968,21 +1005,19 @@ func TestRecoverSnapshotFromWipingCrash(t *testing.T) {
 	// Expected head fast block: C10
 	// Expected head block     : C8
 	// Expected snapshot disk  : C10
-	test := &restartCrashSnapshotTest{
+	test := &wipeCrashSnapshotTest{
 		snapshotTestBasic: snapshotTestBasic{
 			legacy:             false,
 			chainBlocks:        8,
-			snapshotBlock:      0,
+			snapshotBlock:      4,
 			commitBlock:        0,
 			expCanonicalBlocks: 10,
 			expHeadHeader:      10,
 			expHeadFastBlock:   10,
-			expHeadBlock:       0, // The snap disk layer is still at 0, rewind to this
-			expSnapshotBottom:  0, // The persisted disk layer in the second running
+			expHeadBlock:       10,
+			expSnapshotBottom:  10,
 		},
-		newBlocks:           2,
-		enableSnapInRestart: false,
-		commitSnapInRestart: false,
+		newBlocks: 2,
 	}
 	test.test(t)
 	test.teardown()
