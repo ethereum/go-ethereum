@@ -13,7 +13,7 @@ will be accepted by other nodes. Mining is all about creating these proof-of-wor
 The proof-of-work computation can be performed in multiple ways. Geth includes a CPU
 miner, which does mining within the geth process. We discourage using the CPU miner with
 the Ethereum mainnet. If you want to mine real ether, use GPU mining. Your best option for
-doing that is the [ethminer](ethminer) software.
+doing that is the [ethminer](https://github.com/ethereum-mining/ethminer) software.
 
 Always ensure your blockchain is fully synchronised with the chain before starting to
 mine, otherwise you will not be mining on the correct chain and your block rewards will
