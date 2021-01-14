@@ -229,7 +229,7 @@ func (h *serverHandler) handleMsg(p *clientPeer, wg *sync.WaitGroup) error {
 			ID   uint64
 			Data rlp.RawValue
 		}
-		hreq      handlerRequest
+		hreq      HandlerRequest
 		decodeErr error
 	)
 	if err := msg.Decode(&req); err != nil {
