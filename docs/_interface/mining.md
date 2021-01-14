@@ -52,7 +52,7 @@ Now we're ready to start mining. In a new terminal session, run ethminer and con
     ethminer -G -P http://127.0.0.1:8545
 
 `ethminer` communicates with geth on port 8545 (the default RPC port in geth). You can
-change this by giving the [`--rpcport` option](../rpc/index) to `geth`. Ethminer will find
+change this by giving the [`--rpcport` option](../rpc/server) to `geth`. Ethminer will find
 get on any port. You also need to set the port on `ethminer` with `-P
 http://127.0.0.1:3301`. Setting up custom ports is necessary if you want several instances
 mining on the same computer. If you are testing on a private cluster, we recommend you use
