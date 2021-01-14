@@ -115,6 +115,7 @@ func TestCalcEIP1559GasTarget(t *testing.T) {
 
 // TestCalcBaseFee tests that CalcBaseFee()returns the correct value
 func TestCalcBaseFee(t *testing.T) {
+	//[10 => 11] computeBaseFee(1000000000, 0, 9007199254740991, 8)
 	testConditions := []struct {
 		// Test inputs
 		config             *params.ChainConfig
@@ -127,6 +128,16 @@ func TestCalcBaseFee(t *testing.T) {
 		// Expected result
 		baseFee *big.Int
 	}{
+		{
+			params.EIP1559ChainConfig,
+			big.NewInt(10),
+			1000,
+			big.NewInt(10),
+			big.NewInt(1000000000),
+			9007199254740991,
+			0,
+			big.NewInt(875000000),
+		},
 		{
 			params.EIP1559ChainConfig,
 			big.NewInt(1000),
