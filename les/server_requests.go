@@ -39,7 +39,7 @@ type serverBackend interface {
 	GetHelperTrie(typ uint, index uint64) *trie.Trie
 }
 
-type handlerRequest interface {
+type HandlerRequest interface {
 	ReqAmount() (uint64, uint64)
 	InMetrics(size int64)
 	OutMetrics(size int64, servingTime time.Duration)
