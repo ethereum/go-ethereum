@@ -255,7 +255,6 @@ func (h *handler) runEthPeer(peer *eth.Peer, handler eth.Handler) error {
 		// If we are running snap-sync, we want to reserve half the peer slots for
 		// peers supporting the snap protocol
 		reserved = h.maxPeers/2 - len(h.peers.snapPeers)
-		log.Info("Non-snap peer restricted", "reserved", reserved, "snap peers", len(h.peers.snapPeers))
 	}
 	if reserved < 0 {
 		reserved = 0
