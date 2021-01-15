@@ -48,6 +48,14 @@ func (b binkey) commonLength(other binkey) int {
 	}
 	return length
 }
+
+// Compare the prefix by the number of bytes; there is
+// a twist for bit #254 and #255, for which 4 out of 5
+// nodes are grouped into one.
 func (b binkey) samePrefix(other binkey, off int) bool {
-	return bytes.Equal(b[off:off+len(other)], other[:])
+	var boundary = off + len(other)
+	if boundary >= 255 && boundary <= 256 {
+		boundary = 254
+	}
+	return bytes.Equal(b[off:boundary], other[:boundary-off])
 }
