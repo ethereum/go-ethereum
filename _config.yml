@@ -7,6 +7,9 @@ keep_files:
 
 favicon: /static/images/favicon.png
 
+plugins:
+  - jekyll-redirect-from
+
 defaults:
   - scope:
       path: ""

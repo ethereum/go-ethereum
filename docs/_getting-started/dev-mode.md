@@ -2,6 +2,7 @@
 title: Dev mode
 permalink: docs/dev-mode
 sort_key: B
+redirect_from: dev-mode
 ---
 
 Geth has a development mode that sets up a single node Ethereum test network with options optimized for developing on local machines. You enable it with the `--dev` argument.

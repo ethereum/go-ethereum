@@ -2,6 +2,7 @@
 title: Private Network Tutorial
 permalink: docs/private-net
 sort_key: B
+redirect_from: private_net
 ---
 
 This page describes how to set up a local cluster of nodes, advise how to make it private,
