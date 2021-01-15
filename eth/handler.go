@@ -462,8 +462,14 @@ func (h *handler) BroadcastBlock(block *types.Block, propagate bool) {
 // already have the given transaction.
 func (h *handler) BroadcastTransactions(txs types.Transactions) {
 	var (
+		annoCount   int // Count of announcements made
+		annoPeers   int
+		directCount int // Count of the txs sent directly to peers
+		directPeers int // Count of the peers that were sent transactions directly
+
 		txset = make(map[*ethPeer][]common.Hash) // Set peer->hash to transfer directly
 		annos = make(map[*ethPeer][]common.Hash) // Set peer->hash to announce
+
 	)
 	// Broadcast transactions to a batch of peers not knowing about it
 	for _, tx := range txs {
@@ -477,19 +483,24 @@ func (h *handler) BroadcastTransactions(txs types.Transactions) {
 		for _, peer := range peers[numDirect:] {
 			annos[peer] = append(annos[peer], tx.Hash())
 		}
-		log.Trace("Broadcast transaction", "hash", tx.Hash(), "direct", numDirect,
-			"announce", len(peers)-numDirect)
 	}
 	for peer, hashes := range txset {
+		directPeers++
+		directCount += len(hashes)
 		peer.AsyncSendTransactions(hashes)
 	}
 	for peer, hashes := range annos {
+		annoPeers++
+		annoCount += len(hashes)
 		if peer.Version() >= eth.ETH65 {
 			peer.AsyncSendPooledTransactionHashes(hashes)
 		} else {
 			peer.AsyncSendTransactions(hashes)
 		}
 	}
+	log.Debug("Transaction broadcast", "txs", len(txs),
+		"announce packs", annoPeers, "announced hashes", annoCount,
+		"tx packs", directPeers, "broadcast txs", directCount)
 }
 
 // minedBroadcastLoop sends mined blocks to connected peers.
@@ -507,12 +518,10 @@ func (h *handler) minedBroadcastLoop() {
 // txBroadcastLoop announces new transactions to connected peers.
 func (h *handler) txBroadcastLoop() {
 	defer h.wg.Done()
-
 	for {
 		select {
 		case event := <-h.txsCh:
 			h.BroadcastTransactions(event.Txs)
-
 		case <-h.txsSub.Err():
 			return
 		}
