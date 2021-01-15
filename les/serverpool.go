@@ -131,7 +131,7 @@ var (
 )
 
 // newServerPool creates a new server pool
-func newServerPool(db ethdb.KeyValueStore, dbKey []byte, vt *lpc.ValueTracker, discovery enode.Iterator, mixTimeout time.Duration, query queryFunc, clock mclock.Clock, trustedURLs []string) *serverPool {
+func newServerPool(db ethdb.KeyValueStore, dbKey []byte, vt *lpc.ValueTracker, mixTimeout time.Duration, query queryFunc, clock mclock.Clock, trustedURLs []string) *serverPool {
 	s := &serverPool{
 		db:           db,
 		clock:        clock,
@@ -147,9 +147,6 @@ func newServerPool(db ethdb.KeyValueStore, dbKey []byte, vt *lpc.ValueTracker, d
 	alwaysConnect := lpc.NewQueueIterator(s.ns, sfAlwaysConnect, sfDisableSelection, true, nil)
 	s.mixSources = append(s.mixSources, knownSelector)
 	s.mixSources = append(s.mixSources, alwaysConnect)
-	if discovery != nil {
-		s.mixSources = append(s.mixSources, discovery)
-	}
 
 	iter := enode.Iterator(s.mixer)
 	if query != nil {
@@ -173,6 +170,13 @@ func newServerPool(db ethdb.KeyValueStore, dbKey []byte, vt *lpc.ValueTracker, d
 	s.ns.AddLogMetrics(sfDialing, nodestate.Flags{}, "dialed", serverDialedMeter, nil, nil)
 	s.ns.AddLogMetrics(sfConnected, nodestate.Flags{}, "connected", nil, nil, serverConnectedGauge)
 	return s
+}
+
+// addSource adds a node discovery source to the server pool (should be called before start)
+func (s *serverPool) addSource(source enode.Iterator) {
+	if source != nil {
+		s.mixSources = append(s.mixSources, source)
+	}
 }
 
 // addPreNegFilter installs a node filter mechanism that performs a pre-negotiation query.

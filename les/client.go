@@ -72,6 +72,7 @@ type LightEthereum struct {
 	netRPCService  *ethapi.PublicNetAPI
 
 	p2pServer *p2p.Server
+	p2pConfig *p2p.Config
 }
 
 // New creates an instance of the light client.
@@ -109,6 +110,7 @@ func New(stack *node.Node, config *eth.Config) (*LightEthereum, error) {
 		bloomIndexer:   eth.NewBloomIndexer(chainDb, params.BloomBitsBlocksClient, params.HelperTrieConfirmations),
 		valueTracker:   lpc.NewValueTracker(lespayDb, &mclock.System{}, requestList, time.Minute, 1/float64(time.Hour), 1/float64(time.Hour*100), 1/float64(time.Hour*1000)),
 		p2pServer:      stack.Server(),
+		p2pConfig:      &stack.Config().P2P,
 	}
 	peers.subscribe((*vtSubscription)(leth.valueTracker))
 
@@ -132,11 +134,7 @@ func New(stack *node.Node, config *eth.Config) (*LightEthereum, error) {
 	leth.chainReader = leth.blockchain
 	leth.txPool = light.NewTxPool(leth.chainConfig, leth.blockchain, leth.relay)
 
-	discovery, err := leth.setupDiscovery(&stack.Config().P2P)
-	if err != nil {
-		return nil, err
-	}
-	leth.serverPool = newServerPool(lespayDb, []byte("serverpool:"), leth.valueTracker, discovery, time.Second, nil, &mclock.System{}, config.UltraLightServers)
+	leth.serverPool = newServerPool(lespayDb, []byte("serverpool:"), leth.valueTracker, time.Second, nil, &mclock.System{}, config.UltraLightServers)
 	peers.subscribe(leth.serverPool)
 	leth.dialCandidates = leth.serverPool.dialIterator
 	leth.retriever.softRequestTimeout = leth.serverPool.getTimeout
@@ -300,6 +298,11 @@ func (s *LightEthereum) Protocols() []p2p.Protocol {
 func (s *LightEthereum) Start() error {
 	log.Warn("Light client mode is an experimental feature")
 
+	discovery, err := s.setupDiscovery(s.p2pConfig)
+	if err != nil {
+		return err
+	}
+	s.serverPool.addSource(discovery)
 	s.serverPool.start()
 	// Start bloom request workers.
 	s.wg.Add(bloomServiceThreads)
