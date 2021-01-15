@@ -114,7 +114,11 @@ func New(stack *node.Node, config *eth.Config) (*LightEthereum, error) {
 	}
 	peers.subscribe((*vtSubscription)(leth.valueTracker))
 
-	leth.retriever = newRetrieveManager(peers, leth.reqDist)
+	leth.serverPool = newServerPool(lespayDb, []byte("serverpool:"), leth.valueTracker, time.Second, nil, &mclock.System{}, config.UltraLightServers)
+	peers.subscribe(leth.serverPool)
+	leth.dialCandidates = leth.serverPool.dialIterator
+
+	leth.retriever = newRetrieveManager(peers, leth.reqDist, leth.serverPool.getTimeout)
 	leth.relay = newLesTxRelay(peers, leth.retriever)
 
 	leth.odr = NewLesOdr(chainDb, light.DefaultClientIndexerConfig, leth.retriever)
@@ -133,11 +137,6 @@ func New(stack *node.Node, config *eth.Config) (*LightEthereum, error) {
 	}
 	leth.chainReader = leth.blockchain
 	leth.txPool = light.NewTxPool(leth.chainConfig, leth.blockchain, leth.relay)
-
-	leth.serverPool = newServerPool(lespayDb, []byte("serverpool:"), leth.valueTracker, time.Second, nil, &mclock.System{}, config.UltraLightServers)
-	peers.subscribe(leth.serverPool)
-	leth.dialCandidates = leth.serverPool.dialIterator
-	leth.retriever.softRequestTimeout = leth.serverPool.getTimeout
 
 	// Set up checkpoint oracle.
 	leth.oracle = leth.setupOracle(stack, genesisHash, config)
