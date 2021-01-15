@@ -17,6 +17,8 @@
 package les
 
 import (
+	"time"
+
 	"github.com/ethereum/go-ethereum/core/forkid"
 	"github.com/ethereum/go-ethereum/p2p"
 	"github.com/ethereum/go-ethereum/p2p/dnsdisc"
@@ -51,6 +53,7 @@ func (eth *LightEthereum) setupDiscovery(cfg *p2p.Config) (enode.Iterator, error
 		it.AddSource(eth.p2pServer.DiscV5.RandomNodes())
 	}
 	forkFilter := forkid.NewFilter(eth.blockchain)
+	var delay time.Duration
 	return enode.Filter(it, func(n *enode.Node) bool {
 		var (
 			les struct {
@@ -61,6 +64,12 @@ func (eth *LightEthereum) setupDiscovery(cfg *p2p.Config) (enode.Iterator, error
 				_      []rlp.RawValue `rlp:"tail"`
 			}
 		)
-		return n.Load(enr.WithEntry("les", &les)) == nil && n.Load(enr.WithEntry("eth", &eth)) == nil && forkFilter(eth.ForkID) == nil
+		if n.Load(enr.WithEntry("les", &les)) == nil && n.Load(enr.WithEntry("eth", &eth)) == nil && forkFilter(eth.ForkID) == nil {
+			delay /= 2
+			return true
+		}
+		delay += time.Millisecond
+		time.Sleep(delay)
+		return false
 	}), nil
 }
