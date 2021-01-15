@@ -281,6 +281,10 @@ func (dl *diskLayer) generate(stats *generatorStats) {
 						abort <- stats
 						return
 					}
+					if time.Since(logged) > 8*time.Second {
+						stats.Log("Generating state snapshot", dl.root, append(accountHash[:], storeIt.Key...))
+						logged = time.Now()
+					}
 				}
 			}
 			if err := storeIt.Err; err != nil {
