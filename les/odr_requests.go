@@ -295,10 +295,9 @@ const (
 	htCanonical = iota // Canonical hash trie
 	htBloomBits        // BloomBits trie
 
-	// applicable for all helper trie requests
-	auxRoot = 1
-	// applicable for htCanonical
-	auxHeader = 2
+	// helper trie auxiliary types
+	// htAuxNone = 1 ; deprecated number, used in les2/3 previously.
+	htAuxHeader = 2 // applicable for htCanonical, requests for relevant headers
 )
 
 type HelperTrieReq struct {
@@ -339,7 +338,7 @@ func (r *ChtRequest) Request(reqID uint64, peer *serverPeer) error {
 		Type:    htCanonical,
 		TrieIdx: r.ChtNum,
 		Key:     encNum[:],
-		AuxReq:  auxHeader,
+		AuxReq:  htAuxHeader,
 	}
 	return peer.requestHelperTrieProofs(reqID, []HelperTrieReq{req})
 }

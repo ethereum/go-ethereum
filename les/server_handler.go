@@ -741,22 +741,24 @@ func (h *serverHandler) handleMsg(p *clientPeer, wg *sync.WaitGroup) error {
 							auxTrie, _ = trie.New(root, trie.NewDatabase(rawdb.NewTable(h.chainDb, prefix)))
 						}
 					}
-					if request.AuxReq == auxRoot {
-						var data []byte
-						if root != (common.Hash{}) {
-							data = root[:]
-						}
+					if auxTrie == nil {
+						sendResponse(req.ReqID, 0, nil, task.servingTime)
+						return
+					}
+					// TODO(rjl493456442) short circuit if the proving is failed.
+					// The original client side code has a dirty hack to retrieve
+					// the headers with no valid proof. Keep the compatibility for
+					// legacy les protocol and drop this hack when the les2/3 are
+					// not supported.
+					err := auxTrie.Prove(request.Key, request.FromLevel, nodes)
+					if p.version >= lpv4 && err != nil {
+						sendResponse(req.ReqID, 0, nil, task.servingTime)
+						return
+					}
+					if request.AuxReq == htAuxHeader {
+						data := h.getAuxiliaryHeaders(request)
 						auxData = append(auxData, data)
 						auxBytes += len(data)
-					} else {
-						if auxTrie != nil {
-							auxTrie.Prove(request.Key, request.FromLevel, nodes)
-						}
-						if request.AuxReq != 0 {
-							data := h.getAuxiliaryHeaders(request)
-							auxData = append(auxData, data)
-							auxBytes += len(data)
-						}
 					}
 					if nodes.DataSize()+auxBytes >= softResponseLimit {
 						break
@@ -904,7 +906,7 @@ func (h *serverHandler) getHelperTrie(typ uint, index uint64) (common.Hash, stri
 
 // getAuxiliaryHeaders returns requested auxiliary headers for the CHT request.
 func (h *serverHandler) getAuxiliaryHeaders(req HelperTrieReq) []byte {
-	if req.Type == htCanonical && req.AuxReq == auxHeader && len(req.Key) == 8 {
+	if req.Type == htCanonical && req.AuxReq == htAuxHeader && len(req.Key) == 8 {
 		blockNum := binary.BigEndian.Uint64(req.Key)
 		hash := rawdb.ReadCanonicalHash(h.chainDb, blockNum)
 		return rawdb.ReadHeaderRLP(h.chainDb, hash, blockNum)
