@@ -101,6 +101,10 @@ type PriorityPool struct {
 	minCap                 uint64
 	activeBias             time.Duration
 	capacityStepDiv        uint64
+
+	cachedCurve    *CapacityCurve
+	ccUpdatedAt    mclock.AbsTime
+	ccUpdateForced bool
 }
 
 // nodePriority interface provides current and estimated future priorities on demand
@@ -111,7 +115,7 @@ type nodePriority interface {
 	// value starting from the current moment until the given time. If the priority goes
 	// under the returned estimate before the specified moment then it is the caller's
 	// responsibility to signal with updateFlag.
-	EstMinPriority(until mclock.AbsTime, cap uint64, update bool) int64
+	EstimatePriority(now mclock.AbsTime, cap uint64, addBalance int64, future, bias time.Duration, update bool) int64
 }
 
 // ppNodeInfo is the internal node descriptor of PriorityPool
@@ -197,6 +201,9 @@ func (pp *PriorityPool) RequestCapacity(node *enode.Node, targetCap uint64, bias
 	if targetCap < pp.minCap {
 		targetCap = pp.minCap
 	}
+	if bias < pp.activeBias {
+		bias = pp.activeBias
+	}
 	c, _ := pp.ns.GetField(node, pp.ppNodeInfoField).(*ppNodeInfo)
 	if c == nil {
 		log.Error("RequestCapacity called for unknown node", "id", node.ID())
@@ -204,7 +211,7 @@ func (pp *PriorityPool) RequestCapacity(node *enode.Node, targetCap uint64, bias
 	}
 	var priority int64
 	if targetCap > c.capacity {
-		priority = c.nodePriority.EstMinPriority(pp.clock.Now()+mclock.AbsTime(bias), targetCap, false)
+		priority = c.nodePriority.EstimatePriority(pp.clock.Now(), targetCap, 0, 0, bias, false)
 	} else {
 		priority = c.nodePriority.Priority(pp.clock.Now(), targetCap)
 	}
@@ -214,7 +221,7 @@ func (pp *PriorityPool) RequestCapacity(node *enode.Node, targetCap uint64, bias
 	pp.activeQueue.Remove(c.activeIndex)
 	pp.inactiveQueue.Remove(c.inactiveIndex)
 	pp.activeQueue.Push(c)
-	minPriority = pp.enforceLimits()
+	_, minPriority = pp.enforceLimits()
 	// if capacity update is possible now then minPriority == math.MinInt64
 	// if it is not possible at all then minPriority == math.MaxInt64
 	allowed = priority > minPriority
@@ -288,17 +295,18 @@ func activePriority(a interface{}, now mclock.AbsTime) int64 {
 	}
 	if c.bias == 0 {
 		return invertPriority(c.nodePriority.Priority(now, c.capacity))
+	} else {
+		return invertPriority(c.nodePriority.EstimatePriority(now, c.capacity, 0, 0, c.bias, true))
 	}
-	return invertPriority(c.nodePriority.EstMinPriority(now+mclock.AbsTime(c.bias), c.capacity, true))
 }
 
 // activeMaxPriority callback returns estimated maximum priority of ppNodeInfo item in activeQueue
-func activeMaxPriority(a interface{}, until mclock.AbsTime) int64 {
+func activeMaxPriority(a interface{}, now, until mclock.AbsTime) int64 {
 	c := a.(*ppNodeInfo)
 	if c.forced {
 		return math.MinInt64
 	}
-	return invertPriority(c.nodePriority.EstMinPriority(until+mclock.AbsTime(c.bias), c.capacity, false))
+	return invertPriority(c.nodePriority.EstimatePriority(now, c.capacity, 0, time.Duration(until-now), c.bias, false))
 }
 
 // inactivePriority callback returns actual priority of ppNodeInfo item in inactiveQueue
@@ -379,16 +387,19 @@ func (pp *PriorityPool) setCapacity(n *ppNodeInfo, cap uint64) {
 // enforceLimits enforces active node count and total capacity limits. It returns the
 // lowest active node priority. Note that this function is performed on the temporary
 // internal state.
-func (pp *PriorityPool) enforceLimits() int64 {
+func (pp *PriorityPool) enforceLimits() (*ppNodeInfo, int64) {
 	if pp.activeCap <= pp.maxCap && pp.activeCount <= pp.maxCount {
-		return math.MinInt64
+		return nil, math.MinInt64
 	}
-	var maxActivePriority int64
+	var (
+		c                 *ppNodeInfo
+		maxActivePriority int64
+	)
 	pp.activeQueue.MultiPop(func(data interface{}, priority int64) bool {
-		c := data.(*ppNodeInfo)
+		c = data.(*ppNodeInfo)
 		pp.markForChange(c)
 		maxActivePriority = priority
-		if c.capacity == pp.minCap {
+		if c.capacity == pp.minCap || pp.activeCount > pp.maxCount {
 			pp.setCapacity(c, 0)
 		} else {
 			sub := c.capacity / pp.capacityStepDiv
@@ -400,7 +411,7 @@ func (pp *PriorityPool) enforceLimits() int64 {
 		}
 		return pp.activeCap > pp.maxCap || pp.activeCount > pp.maxCount
 	})
-	return invertPriority(maxActivePriority)
+	return c, invertPriority(maxActivePriority)
 }
 
 // finalizeChanges either commits or reverts temporary changes. The necessary capacity
@@ -430,6 +441,9 @@ func (pp *PriorityPool) finalizeChanges(commit bool) (updates []capUpdate) {
 		c.origCap = 0
 	}
 	pp.changed = nil
+	if commit {
+		pp.ccUpdateForced = true
+	}
 	return
 }
 
@@ -472,6 +486,7 @@ func (pp *PriorityPool) tryActivate() []capUpdate {
 			break
 		}
 	}
+	pp.ccUpdateForced = true
 	return pp.finalizeChanges(commit)
 }
 
@@ -499,4 +514,131 @@ func (pp *PriorityPool) updatePriority(node *enode.Node) {
 		pp.inactiveQueue.Push(c, pp.inactivePriority(c))
 	}
 	updates = pp.tryActivate()
+}
+
+// CapacityCurve is a snapshot of the priority pool contents in a format that can efficiently
+// estimate how much capacity could be granted to a given node at a given priority level.
+type CapacityCurve struct {
+	points       []curvePoint       // curve points sorted in descending order of priority
+	index        map[enode.ID][]int // curve point indexes belonging to each node
+	exclude      []int              // curve point indexes of excluded node
+	excludeFirst bool               // true if activeCount == maxCount
+}
+
+type curvePoint struct {
+	freeCap, freeCount uint64 // available capacity and node count at the current priority level
+	nextPri            int64  // next priority level where more capacity will be available
+}
+
+// GetCapacityCurve returns a new or recently cached CapacityCurve based on the contents of the pool
+func (pp *PriorityPool) GetCapacityCurve() *CapacityCurve {
+	pp.lock.Lock()
+	defer pp.lock.Unlock()
+
+	now := pp.clock.Now()
+	dt := time.Duration(now - pp.ccUpdatedAt)
+	if !pp.ccUpdateForced && pp.cachedCurve != nil && dt < time.Second*10 {
+		return pp.cachedCurve
+	}
+
+	pp.ccUpdateForced = false
+	pp.ccUpdatedAt = now
+	curve := &CapacityCurve{
+		index: make(map[enode.ID][]int),
+	}
+	pp.cachedCurve = curve
+
+	var excludeID enode.ID
+	excludeFirst := pp.maxCount == pp.activeCount
+	for pp.activeCap > 0 {
+		cp := curvePoint{
+			freeCap: pp.maxCap - pp.activeCap,
+		}
+		tempCap := cp.freeCap + 1
+		pp.activeCap += tempCap
+		var next *ppNodeInfo
+		next, cp.nextPri = pp.enforceLimits()
+		id := next.node.ID()
+		if excludeFirst {
+			curve.excludeFirst = true
+			excludeID = id
+			excludeFirst = false
+		}
+		curve.index[id] = append(curve.index[id], len(curve.points))
+		curve.points = append(curve.points, cp)
+		pp.activeCap -= tempCap
+	}
+	pp.finalizeChanges(false)
+	curve.points = append(curve.points, curvePoint{
+		freeCap: pp.maxCap,
+		nextPri: math.MaxInt64,
+	})
+	if curve.excludeFirst {
+		curve.exclude = curve.index[excludeID]
+	}
+	return curve
+}
+
+// Exclude returns a CapacityCurve with the given node excluded from the original curve
+func (cc *CapacityCurve) Exclude(id enode.ID) *CapacityCurve {
+	if exclude, ok := cc.index[id]; ok {
+		return &CapacityCurve{
+			points:  cc.points,
+			index:   cc.index,
+			exclude: exclude,
+		}
+	}
+	return cc
+}
+
+func (cc *CapacityCurve) getPoint(i int) curvePoint {
+	cp := cc.points[i]
+	if i == 0 && cc.excludeFirst {
+		cp.freeCap = 0
+		return cp
+	}
+	for ii := len(cc.exclude) - 1; ii >= 0; ii-- {
+		ei := cc.exclude[ii]
+		if ei < i {
+			break
+		}
+		e1, e2 := cc.points[ei], cc.points[ei+1]
+		cp.freeCap += e2.freeCap - e1.freeCap
+	}
+	return cp
+}
+
+// MaxCapacity calculates the maximum capacity available for a node with a given
+// (monotonically decreasing) priority vs. capacity function. Note that if the requesting
+// node is already in the pool then it should be excluded from the curve in order to get
+// the correct result.
+func (cc *CapacityCurve) MaxCapacity(priority func(cap uint64) int64) uint64 {
+	min, max := 0, len(cc.points)-1 // the curve always has at least one point
+	for min < max {
+		mid := (min + max) / 2
+		cp := cc.getPoint(mid)
+		if cp.freeCap == 0 || priority(cp.freeCap) > cp.nextPri {
+			min = mid + 1
+		} else {
+			max = mid
+		}
+	}
+	cp2 := cc.getPoint(min)
+	if cp2.freeCap == 0 || min == 0 {
+		return cp2.freeCap
+	}
+	cp1 := cc.getPoint(min - 1)
+	if priority(cp2.freeCap) > cp1.nextPri {
+		return cp2.freeCap
+	}
+	minc, maxc := cp1.freeCap, cp2.freeCap-1
+	for minc < maxc {
+		midc := (minc + maxc + 1) / 2
+		if midc == 0 || priority(midc) > cp1.nextPri {
+			minc = midc
+		} else {
+			maxc = midc - 1
+		}
+	}
+	return maxc
 }

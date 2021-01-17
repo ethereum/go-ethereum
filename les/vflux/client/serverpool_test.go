@@ -148,7 +148,7 @@ func (s *ServerPoolTest) start() {
 		requestList[i] = RequestInfo{Name: "testreq" + strconv.Itoa(i), InitAmount: 1, InitValue: 1}
 	}
 
-	s.sp, _ = NewServerPool(s.db, []byte("sp:"), 0, testQuery, s.clock, s.trusted, requestList)
+	s.sp = NewServerPool(s.db, []byte("sp:"), 0, testQuery, s.clock, s.trusted, requestList)
 	s.sp.AddSource(s.input)
 	s.sp.validSchemes = enode.ValidSchemesForTesting
 	s.sp.unixTime = func() int64 { return int64(s.clock.Now()) / int64(time.Second) }
@@ -208,9 +208,9 @@ func (s *ServerPoolTest) run() {
 		if s.conn < spTestTarget {
 			s.dialCount++
 			s.beginWait()
-			s.sp.dialIterator.Next()
+			s.sp.Next()
 			s.endWait()
-			dial := s.sp.dialIterator.Node()
+			dial := s.sp.Node()
 			id := dial.ID()
 			idx := testNodeIndex(id)
 			n := &s.testNodes[idx]

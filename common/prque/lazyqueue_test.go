@@ -44,7 +44,7 @@ func testPriority(a interface{}, now mclock.AbsTime) int64 {
 	return a.(*lazyItem).p
 }
 
-func testMaxPriority(a interface{}, until mclock.AbsTime) int64 {
+func testMaxPriority(a interface{}, now, until mclock.AbsTime) int64 {
 	i := a.(*lazyItem)
 	dt := until - i.last
 	i.maxp = i.p + int64(float64(dt)*testAvgRate)
