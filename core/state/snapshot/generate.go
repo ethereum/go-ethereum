@@ -101,18 +101,26 @@ func generateSnapshot(diskdb ethdb.KeyValueStore, triedb *trie.Database, cache i
 		wiper = wipeSnapshot(diskdb, true)
 	}
 	// Create a new disk layer with an initialized state marker at zero
-	rawdb.WriteSnapshotRoot(diskdb, root)
-
+	var (
+		stats     = &generatorStats{wiping: wiper, start: time.Now()}
+		batch     = diskdb.NewBatch()
+		genMarker = []byte{} // Initialized but empty!
+	)
+	rawdb.WriteSnapshotRoot(batch, root)
+	journalProgress(batch, genMarker, stats)
+	if err := batch.Write(); err != nil {
+		log.Crit("Failed to write initialized state marker", "error", err)
+	}
 	base := &diskLayer{
 		diskdb:     diskdb,
 		triedb:     triedb,
 		root:       root,
 		cache:      fastcache.New(cache * 1024 * 1024),
-		genMarker:  []byte{}, // Initialized but empty!
+		genMarker:  genMarker,
 		genPending: make(chan struct{}),
 		genAbort:   make(chan chan *generatorStats),
 	}
-	go base.generate(&generatorStats{wiping: wiper, start: time.Now()})
+	go base.generate(stats)
 	log.Debug("Start snapshot generation", "root", root)
 	return base
 }
@@ -137,10 +145,12 @@ func journalProgress(db ethdb.KeyValueWriter, marker []byte, stats *generatorSta
 		panic(err) // Cannot happen, here to catch dev errors
 	}
 	var logstr string
-	switch len(marker) {
-	case 0:
+	switch {
+	case marker == nil:
 		logstr = "done"
-	case common.HashLength:
+	case bytes.Equal(marker, []byte{}):
+		logstr = "empty"
+	case len(marker) == common.HashLength:
 		logstr = fmt.Sprintf("%#x", marker)
 	default:
 		logstr = fmt.Sprintf("%#x:%#x", marker[:common.HashLength], marker[common.HashLength:])
@@ -307,13 +317,12 @@ func (dl *diskLayer) generate(stats *generatorStats) {
 		abort <- stats
 		return
 	}
-	// Snapshot fully generated, set the marker to nil
-	if batch.ValueSize() > 0 {
-		// Ensure the generator entry is in sync with the data
-		journalProgress(batch, nil, stats)
+	// Snapshot fully generated, set the marker to nil.
+	// Note even there is nothing to commit, persist the
+	// generator anyway to mark the snapshot is complete.
+	journalProgress(batch, nil, stats)
+	batch.Write()
 
-		batch.Write()
-	}
 	log.Info("Generated state snapshot", "accounts", stats.accounts, "slots", stats.slots,
 		"storage", stats.storage, "elapsed", common.PrettyDuration(time.Since(stats.start)))
 
