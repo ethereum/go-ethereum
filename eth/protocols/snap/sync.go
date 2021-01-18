@@ -583,7 +583,7 @@ func (s *Syncer) Sync(root common.Hash, cancel chan struct{}) error {
 		case id := <-peerDrop:
 			s.revertRequests(id)
 		case <-cancel:
-			return nil
+			return errCancelled
 
 		case req := <-s.accountReqFails:
 			s.revertAccountRequest(req)
@@ -1978,7 +1978,7 @@ func (s *Syncer) OnAccounts(peer PeerIF, id uint64, hashes []common.Hash, accoun
 
 	// Clean up the request timeout timer, we'll see how to proceed further based
 	// on the actual delivered content
-	if !req.timeout.Stop(){
+	if !req.timeout.Stop() {
 		// The timeout is already triggered, and this request will be reverted+rescheduled
 		s.lock.Unlock()
 		return nil
@@ -2203,7 +2203,7 @@ func (s *Syncer) OnStorage(peer PeerIF, id uint64, hashes [][]common.Hash, slots
 
 	// Clean up the request timeout timer, we'll see how to proceed further based
 	// on the actual delivered content
-	if !req.timeout.Stop(){
+	if !req.timeout.Stop() {
 		// The timeout is already triggered, and this request will be reverted+rescheduled
 		s.lock.Unlock()
 		return nil
@@ -2344,7 +2344,7 @@ func (s *Syncer) OnTrieNodes(peer PeerIF, id uint64, trienodes [][]byte) error {
 
 	// Clean up the request timeout timer, we'll see how to proceed further based
 	// on the actual delivered content
-	if !req.timeout.Stop(){
+	if !req.timeout.Stop() {
 		// The timeout is already triggered, and this request will be reverted+rescheduled
 		s.lock.Unlock()
 		return nil
@@ -2436,7 +2436,7 @@ func (s *Syncer) onHealByteCodes(peer PeerIF, id uint64, bytecodes [][]byte) err
 
 	// Clean up the request timeout timer, we'll see how to proceed further based
 	// on the actual delivered content
-	if !req.timeout.Stop(){
+	if !req.timeout.Stop() {
 		// The timeout is already triggered, and this request will be reverted+rescheduled
 		s.lock.Unlock()
 		return nil
