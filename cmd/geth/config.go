@@ -30,6 +30,7 @@ import (
 	"github.com/ethereum/go-ethereum/eth"
 	"github.com/ethereum/go-ethereum/internal/ethapi"
 	"github.com/ethereum/go-ethereum/log"
+	"github.com/ethereum/go-ethereum/metrics"
 	"github.com/ethereum/go-ethereum/node"
 	"github.com/ethereum/go-ethereum/params"
 	"github.com/naoina/toml"
@@ -73,19 +74,6 @@ type ethstatsConfig struct {
 	URL string `toml:",omitempty"`
 }
 
-type metricConfig struct {
-	Enabled          bool   `toml:",omitempty"`
-	EnabledExpensive bool   `toml:",omitempty"`
-	HTTP             string `toml:",omitempty"`
-	Port             int    `toml:",omitempty"`
-	EnableInfluxDB   bool   `toml:",omitempty"`
-	InfluxDBEndpoint string `toml:",omitempty"`
-	InfluxDBDatabase string `toml:",omitempty"`
-	InfluxDBUsername string `toml:",omitempty"`
-	InfluxDBPassword string `toml:",omitempty"`
-	InfluxDBTags     string `toml:",omitempty"`
-}
-
 // whisper has been deprecated, but clients out there might still have [Shh]
 // in their config, which will crash. Cut them some slack by keeping the
 // config, and displaying a message that those config switches are ineffectual.
@@ -101,7 +89,7 @@ type gethConfig struct {
 	Shh      whisperDeprecatedConfig
 	Node     node.Config
 	Ethstats ethstatsConfig
-	Metrics  metricConfig
+	Metrics  metrics.Config
 }
 
 func loadConfig(file string, cfg *gethConfig) error {
@@ -129,28 +117,13 @@ func defaultNodeConfig() node.Config {
 	return cfg
 }
 
-func metricsFromCliArgs(ctx *cli.Context) metricConfig {
-	return metricConfig{
-		Enabled:          ctx.GlobalBool(utils.MetricsEnabledFlag.Name),
-		EnabledExpensive: ctx.GlobalBool(utils.MetricsEnabledExpensiveFlag.Name),
-		HTTP:             ctx.GlobalString(utils.MetricsHTTPFlag.Name),
-		Port:             ctx.GlobalInt(utils.MetricsPortFlag.Name),
-		EnableInfluxDB:   ctx.GlobalBool(utils.MetricsEnableInfluxDBFlag.Name),
-		InfluxDBEndpoint: ctx.GlobalString(utils.MetricsInfluxDBEndpointFlag.Name),
-		InfluxDBDatabase: ctx.GlobalString(utils.MetricsInfluxDBDatabaseFlag.Name),
-		InfluxDBUsername: ctx.GlobalString(utils.MetricsInfluxDBUsernameFlag.Name),
-		InfluxDBPassword: ctx.GlobalString(utils.MetricsInfluxDBPasswordFlag.Name),
-		InfluxDBTags:     ctx.GlobalString(utils.MetricsInfluxDBTagsFlag.Name),
-	}
-}
-
 // makeConfigNode loads geth configuration and creates a blank node instance.
 func makeConfigNode(ctx *cli.Context) (*node.Node, gethConfig) {
 	// Load defaults.
 	cfg := gethConfig{
 		Eth:     eth.DefaultConfig,
 		Node:    defaultNodeConfig(),
-		Metrics: metricsFromCliArgs(ctx),
+		Metrics: metrics.DefaultConfig,
 	}
 
 	// Load config file.
