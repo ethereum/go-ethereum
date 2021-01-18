@@ -580,7 +580,7 @@ func (s *Syncer) Sync(root common.Hash, cancel chan struct{}) error {
 		case id := <-peerDrop:
 			s.revertRequests(id)
 		case <-cancel:
-			return nil
+			return errCancelled
 
 		case req := <-s.accountReqFails:
 			s.revertAccountRequest(req)
