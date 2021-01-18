@@ -100,6 +100,7 @@ compile_fuzzer tests/fuzzers/rlp        Fuzz fuzzRlp
 compile_fuzzer tests/fuzzers/trie       Fuzz fuzzTrie
 compile_fuzzer tests/fuzzers/stacktrie  Fuzz fuzzStackTrie
 compile_fuzzer tests/fuzzers/difficulty Fuzz fuzzDifficulty
+compile_fuzzertests/fuzzers/abi         Fuzz fuzzAbi
 
 compile_fuzzer tests/fuzzers/bls12381  FuzzG1Add fuzz_g1_add
 compile_fuzzer tests/fuzzers/bls12381  FuzzG1Mul fuzz_g1_mul
@@ -113,8 +114,3 @@ compile_fuzzer tests/fuzzers/bls12381  FuzzMapG2 fuzz_map_g2
 
 #TODO: move this to tests/fuzzers, if possible
 compile_fuzzer crypto/blake2b  Fuzz      fuzzBlake2b
-
-
-# This doesn't work very well @TODO
-#compile_fuzzertests/fuzzers/abi Fuzz fuzzAbi
-
