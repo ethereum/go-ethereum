@@ -1975,7 +1975,11 @@ func (s *Syncer) OnAccounts(peer *Peer, id uint64, hashes []common.Hash, account
 
 	// Clean up the request timeout timer, we'll see how to proceed further based
 	// on the actual delivered content
-	req.timeout.Stop()
+	if !req.timeout.Stop() {
+		// The timeout is already triggered, and this request will be reverted+rescheduled
+		s.lock.Unlock()
+		return nil
+	}
 
 	// Response is valid, but check if peer is signalling that it does not have
 	// the requested data. For account range queries that means the state being
@@ -2196,7 +2200,11 @@ func (s *Syncer) OnStorage(peer *Peer, id uint64, hashes [][]common.Hash, slots 
 
 	// Clean up the request timeout timer, we'll see how to proceed further based
 	// on the actual delivered content
-	req.timeout.Stop()
+	if !req.timeout.Stop() {
+		// The timeout is already triggered, and this request will be reverted+rescheduled
+		s.lock.Unlock()
+		return nil
+	}
 
 	// Reject the response if the hash sets and slot sets don't match, or if the
 	// peer sent more data than requested.
@@ -2333,7 +2341,11 @@ func (s *Syncer) OnTrieNodes(peer *Peer, id uint64, trienodes [][]byte) error {
 
 	// Clean up the request timeout timer, we'll see how to proceed further based
 	// on the actual delivered content
-	req.timeout.Stop()
+	if !req.timeout.Stop() {
+		// The timeout is already triggered, and this request will be reverted+rescheduled
+		s.lock.Unlock()
+		return nil
+	}
 
 	// Response is valid, but check if peer is signalling that it does not have
 	// the requested data. For bytecode range queries that means the peer is not
@@ -2421,7 +2433,11 @@ func (s *Syncer) onHealByteCodes(peer *Peer, id uint64, bytecodes [][]byte) erro
 
 	// Clean up the request timeout timer, we'll see how to proceed further based
 	// on the actual delivered content
-	req.timeout.Stop()
+	if !req.timeout.Stop() {
+		// The timeout is already triggered, and this request will be reverted+rescheduled
+		s.lock.Unlock()
+		return nil
+	}
 
 	// Response is valid, but check if peer is signalling that it does not have
 	// the requested data. For bytecode range queries that means the peer is not
