@@ -912,7 +912,7 @@ func (p *Pending) Call(ctx context.Context, args struct {
 	}
 	status := Long(1)
 	if result.Failed() {
-		status = Long(0) // TODO is this necessary
+		status = 0
 	}
 
 	return &CallResult{
