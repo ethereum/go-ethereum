@@ -346,9 +346,17 @@ func emptyRequestAccountRangeFn(t *testPeer, requestId uint64, root common.Hash,
 	return nil
 }
 
+func nonResponsiveRequestAccountRangeFn(t *testPeer, requestId uint64, root common.Hash, origin common.Hash, cap uint64) error {
+	return nil
+}
+
 func emptyTrieRequestHandler(t *testPeer, requestId uint64, root common.Hash, paths []TrieNodePathSet, cap uint64) error {
 	var nodes [][]byte
 	t.remote.OnTrieNodes(t, requestId, nodes)
+	return nil
+}
+
+func nonResponsiveTrieRequestHandler(t *testPeer, requestId uint64, root common.Hash, paths []TrieNodePathSet, cap uint64) error {
 	return nil
 }
 
@@ -357,6 +365,10 @@ func emptyStorageRequestHandler(t *testPeer, requestId uint64, root common.Hash,
 	var slots [][][]byte
 	var proofs [][]byte
 	t.remote.OnStorage(t, requestId, hashes, slots, proofs)
+	return nil
+}
+
+func nonResponsiveStorageRequestHandler(t *testPeer, requestId uint64, root common.Hash, accounts []common.Hash, origin, limit []byte, max uint64) error {
 	return nil
 }
 
@@ -373,6 +385,10 @@ func starvingStorageRequestHandler(t *testPeer, requestId uint64, root common.Ha
 
 func starvingAccountRequestHandler(t *testPeer, requestId uint64, root common.Hash, origin common.Hash, cap uint64) error {
 	return defaultAccountRequestHandler(t, requestId, root, origin, 500)
+}
+
+func misdeliveringAccountRequestHandler(t *testPeer, requestId uint64, root common.Hash, origin common.Hash, cap uint64) error {
+	return defaultAccountRequestHandler(t, requestId-1, root, origin, 500)
 }
 
 // corruptStorageRequestHandler doesn't provide good proofs
@@ -461,19 +477,14 @@ func TestSyncBloatedProof(t *testing.T) {
 			proofs = append(proofs, blob)
 		}
 		if err := t.remote.OnAccounts(t, requestId, keys, vals, proofs); err != nil {
-			t.log.Error("remote error on delivery", "error", err)
+			t.log.Info("remote error on delivery", "error", err)
 			// This is actually correct, signal to exit the test successfully
 			t.cancelCh <- struct{}{}
 		}
 		return nil
 	}
 	syncer := setupSyncer(source)
-	if err := syncer.Sync(sourceAccountTrie.Hash(), cancel); err != nil {
-		t.Logf("sync failed: %v", err)
-	} else {
-		// TODO @karalabe, @holiman:
-		// A cancel, which aborts the sync before completion, should probably
-		// return an error from Sync(..) ?
+	if err := syncer.Sync(sourceAccountTrie.Hash(), cancel); err == nil {
 		t.Fatal("No error returned from incomplete/cancelled sync")
 	}
 }
@@ -544,6 +555,88 @@ func TestMultiSyncManyUseless(t *testing.T) {
 	}
 }
 
+// TestMultiSyncManyUseless contains one good peer, and many which doesn't return anything valuable at all
+func TestMultiSyncManyUselessWithLowTimeout(t *testing.T) {
+	// We're setting the timeout to very low, to increase the chance of the timeout
+	// being triggered. This was previously a cause of panic, when a response
+	// arrived simultaneously as a timeout was triggered.
+	old := requestTimeout
+	requestTimeout = 1 * time.Millisecond
+	defer func() {
+		requestTimeout = old
+	}()
+	cancel := make(chan struct{})
+
+	trieBackend := trie.NewDatabase(rawdb.NewMemoryDatabase())
+	sourceAccountTrie, elems, storageTries, storageElems := makeAccountTrieWithStorage(trieBackend, 100, 3000)
+
+	mkSource := func(name string, a, b, c bool) *testPeer {
+		source := newTestPeer(name, t, cancel)
+		source.accountTrie = sourceAccountTrie
+		source.accountValues = elems
+		source.storageTries = storageTries
+		source.storageValues = storageElems
+
+		if !a {
+			source.accountRequestHandler = emptyRequestAccountRangeFn
+		}
+		if !b {
+			source.storageRequestHandler = emptyStorageRequestHandler
+		}
+		if !c {
+			source.trieRequestHandler = emptyTrieRequestHandler
+		}
+		return source
+	}
+
+	syncer := setupSyncer(
+		mkSource("full", true, true, true),
+		mkSource("noAccounts", false, true, true),
+		mkSource("noStorage", true, false, true),
+		mkSource("noTrie", true, true, false),
+	)
+	if err := syncer.Sync(sourceAccountTrie.Hash(), cancel); err != nil {
+		t.Fatalf("sync failed: %v", err)
+	}
+}
+
+// TestMultiSyncManyUnresponsive contains one good peer, and many which doesn't respond at all
+func TestMultiSyncManyUnresponsive(t *testing.T) {
+	cancel := make(chan struct{})
+
+	trieBackend := trie.NewDatabase(rawdb.NewMemoryDatabase())
+	sourceAccountTrie, elems, storageTries, storageElems := makeAccountTrieWithStorage(trieBackend, 100, 3000)
+
+	mkSource := func(name string, a, b, c bool) *testPeer {
+		source := newTestPeer(name, t, cancel)
+		source.accountTrie = sourceAccountTrie
+		source.accountValues = elems
+		source.storageTries = storageTries
+		source.storageValues = storageElems
+
+		if !a {
+			source.accountRequestHandler = nonResponsiveRequestAccountRangeFn
+		}
+		if !b {
+			source.storageRequestHandler = nonResponsiveStorageRequestHandler
+		}
+		if !c {
+			source.trieRequestHandler = nonResponsiveTrieRequestHandler
+		}
+		return source
+	}
+
+	syncer := setupSyncer(
+		mkSource("full", true, true, true),
+		mkSource("noAccounts", false, true, true),
+		mkSource("noStorage", true, false, true),
+		mkSource("noTrie", true, true, false),
+	)
+	if err := syncer.Sync(sourceAccountTrie.Hash(), cancel); err != nil {
+		t.Fatalf("sync failed: %v", err)
+	}
+}
+
 // TestSyncNoStorageAndOneCappedPeer tests sync using accounts and no storage, where one peer is
 // consistently returning very small results
 func TestSyncNoStorageAndOneCappedPeer(t *testing.T) {
@@ -572,7 +665,7 @@ func TestSyncNoStorageAndOneCappedPeer(t *testing.T) {
 	go func() {
 		select {
 		case <-time.After(5 * time.Second):
-			t.Errorf("Sync stalled")
+			t.Log("Sync stalled")
 			cancel <- struct{}{}
 		}
 	}()
