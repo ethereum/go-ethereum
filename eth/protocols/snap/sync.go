@@ -73,10 +73,6 @@ const (
 	// waste bandwidth.
 	maxTrieRequestCount = 512
 
-	// requestTimeout is the maximum time a peer is allowed to spend on serving
-	// a single network request.
-	requestTimeout = 10 * time.Second // TODO(karalabe): Make it dynamic ala fast-sync?
-
 	// accountConcurrency is the number of chunks to split the account trie into
 	// to allow concurrent retrievals.
 	accountConcurrency = 16
@@ -84,6 +80,12 @@ const (
 	// storageConcurrency is the number of chunks to split the a large contract
 	// storage trie into to allow concurrent retrievals.
 	storageConcurrency = 16
+)
+
+var (
+	// requestTimeout is the maximum time a peer is allowed to spend on serving
+	// a single network request.
+	requestTimeout = 10 * time.Second // TODO(karalabe): Make it dynamic ala fast-sync?
 )
 
 // accountRequest tracks a pending account range request to ensure responses are
