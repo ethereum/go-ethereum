@@ -220,7 +220,6 @@ var AppHelpFlagGroups = []flags.FlagGroup{
 	{
 		Name: "ALIASED (deprecated)",
 		Flags: append([]cli.Flag{
-			utils.NoUSBFlag,
 			utils.LegacyRPCEnabledFlag,
 			utils.LegacyRPCListenAddrFlag,
 			utils.LegacyRPCPortFlag,
