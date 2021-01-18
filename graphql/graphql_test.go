@@ -130,6 +130,12 @@ func TestGraphQLBlockSerialization(t *testing.T) {
 			want: `{"data":{"block":{"estimateGas":53000}}}`,
 			code: 200,
 		},
+		// should return `status` as decimal
+		{
+			body: `{"query": "{block {number call (data : {from : \"0xa94f5374fce5edbc8e2a8697c15331677e6ebf0b\", to: \"0x6295ee1b4f6dd65047762f924ecd367c17eabf8f\", data :\"0x12a7b914\"}){data status}}}"}`,
+			want: `{"data":{"block":{"number":10,"call":{"data":"0x","status":1}}}}`,
+			code: 200,
+		},
 	} {
 		resp, err := http.Post(fmt.Sprintf("%s/graphql", stack.HTTPEndpoint()), "application/json", strings.NewReader(tt.body))
 		if err != nil {
