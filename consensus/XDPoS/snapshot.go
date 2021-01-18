@@ -24,6 +24,7 @@ import (
 	"github.com/ethereum/go-ethereum/consensus/clique"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/ethdb"
+	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/params"
 	lru "github.com/hashicorp/golang-lru"
 )
@@ -47,7 +48,7 @@ import (
 // Snapshot is the state of the authorization voting at a given point in time.
 type Snapshot struct {
 	config   *params.XDPoSConfig // Consensus engine parameters to fine tune behavior
-	sigcache *lru.ARCCache      // Cache of recent block signatures to speed up ecrecover
+	sigcache *lru.ARCCache       // Cache of recent block signatures to speed up ecrecover
 
 	Number  uint64                          `json:"number"`  // Block number where the snapshot was created
 	Hash    common.Hash                     `json:"hash"`    // Block hash where the snapshot was created
@@ -217,11 +218,16 @@ func (s *Snapshot) apply(headers []*types.Header) (*Snapshot, error) {
 		//if _, ok := snap.Signers[signer]; !ok {
 		//	return nil, errUnauthorizedSigner
 		//}
-		//for _, recent := range snap.Recents {
-		//	if recent == signer {
-		//		return nil, errRecentlySigned
-		//	}
-		//}
+		for seen, recent := range snap.Recents {
+			if recent == signer {
+				if limit := uint64(2); number < limit || seen > number-limit {
+					if number%s.config.Epoch != 0 {
+						log.Error("errRecentlySigned")
+						return nil, errRecentlySigned
+					}
+				}
+			}
+		}
 		snap.Recents[number] = signer
 
 		// Header authorized, discard any previous votes from the signer

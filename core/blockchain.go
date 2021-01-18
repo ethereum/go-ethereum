@@ -1406,9 +1406,11 @@ func (bc *BlockChain) getResultBlock(block *types.Block, verifiedM2 bool) (*Resu
 		}
 		log.Debug("Number block need calculated again", "number", block.NumberU64(), "hash", block.Hash().Hex(), "winners", len(winner))
 		// Import all the pruned blocks to make the state available
-		_, _, _, err := bc.insertChain(winner, false)
-		if err != nil {
-			return nil, err
+		if len(winner) > 0 {
+			_, _, _, err := bc.insertChain(winner, false)
+			if err != nil {
+				return nil, err
+			}
 		}
 	case err != nil:
 		bc.reportBlock(block, nil, err)

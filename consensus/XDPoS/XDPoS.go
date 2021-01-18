@@ -114,6 +114,11 @@ var (
 	// ones).
 	errInvalidCheckpointSigners = errors.New("invalid signer list on checkpoint block")
 
+	// errMismatchingCheckpointSigners is returned if a checkpoint block contains a
+	// list of signers different than the one the local node calculated.
+	errMismatchingCheckpointSigners = errors.New("mismatching signer list on checkpoint block")
+
+
 	errInvalidCheckpointPenalties = errors.New("invalid penalty list on checkpoint block")
 
 	// errInvalidMixDigest is returned if a block's mix digest is non-zero.
@@ -134,15 +139,14 @@ var (
 	// be modified via out-of-range or non-contiguous headers.
 	errInvalidVotingChain = errors.New("invalid voting chain")
 
-	// errUnauthorized is returned if a header is signed by a non-authorized entity.
-	errUnauthorized = errors.New("unauthorized")
+	// errUnauthorizedSigner is returned if a header is signed by a non-authorized entity.
+	errUnauthorizedSigner = errors.New("unauthorized signer")
+
+	// errRecentlySigned is returned if a header is signed by an authorized entity
+	// that already signed a header recently, thus is temporarily not allowed to.
+	errRecentlySigned = errors.New("recently signed")
 
 	errFailedDoubleValidation = errors.New("wrong pair of creator-validator in double validation")
-
-	// errWaitTransactions is returned if an empty block is attempted to be sealed
-	// on an instant chain (0 second period). It's important to refuse these as the
-	// block reward is zero, so an empty block just bloats the chain... fast.
-	errWaitTransactions = errors.New("waiting for transactions")
 
 	ErrInvalidCheckpointValidators = errors.New("invalid validators list on checkpoint block")
 )
@@ -431,7 +435,7 @@ func (c *XDPoS) verifyCascadingFields(chain consensus.ChainReader, header *types
 		validSigners := compareSignersLists(masternodesFromCheckpointHeader, signers)
 		if !validSigners {
 			log.Error("Masternodes lists are different in checkpoint header and snapshot", "number", number, "masternodes_from_checkpoint_header", masternodesFromCheckpointHeader, "masternodes_in_snapshot", signers, "penList", penPenalties)
-			return errInvalidCheckpointSigners
+			return errMismatchingCheckpointSigners
 		}
 		if c.HookVerifyMNs != nil {
 			err := c.HookVerifyMNs(header, signers)
@@ -702,7 +706,7 @@ func (c *XDPoS) verifySeal(chain consensus.ChainReader, header *types.Header, pa
 		}
 		if !valid {
 			log.Debug("Unauthorized creator found", "block number", number, "creator", creator.String(), "masternodes", mstring, "snapshot from parent block", nstring)
-			return errUnauthorized
+			return errUnauthorizedSigner
 		}
 	}
 	if len(masternodes) > 1 {
@@ -713,7 +717,7 @@ func (c *XDPoS) verifySeal(chain consensus.ChainReader, header *types.Header, pa
 				if limit := uint64(2); seen > number-limit {
 					// Only take into account the non-epoch blocks
 					if number%c.config.Epoch != 0 {
-						return errUnauthorized
+						return errRecentlySigned
 					}
 				}
 			}
@@ -943,7 +947,8 @@ func (c *XDPoS) Seal(chain consensus.ChainReader, block *types.Block, results ch
 	// For 0-period chains, refuse to seal empty blocks (no reward but would spin sealing)
 	// checkpoint blocks have no tx
 	if c.config.Period == 0 && len(block.Transactions()) == 0 && number%c.config.Epoch != 0 {
-		return errWaitTransactions
+		log.Info("Sealing paused, waiting for transactions")
+		return nil
 	}
 	// Don't hold the signer fields for the entire sealing procedure
 	c.lock.RLock()
@@ -965,7 +970,7 @@ func (c *XDPoS) Seal(chain consensus.ChainReader, block *types.Block, results ch
 			}
 		}
 		if !valid {
-			return errUnauthorized
+			return errUnauthorizedSigner
 		}
 	}
 	// If we're amongst the recent signers, wait for the next block

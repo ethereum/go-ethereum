@@ -29,8 +29,8 @@ import (
 	mapset "github.com/deckarep/golang-set"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/consensus"
-	"github.com/ethereum/go-ethereum/consensus/misc"
 	"github.com/ethereum/go-ethereum/consensus/XDPoS"
+	"github.com/ethereum/go-ethereum/consensus/misc"
 	"github.com/ethereum/go-ethereum/contracts"
 	"github.com/ethereum/go-ethereum/core"
 	"github.com/ethereum/go-ethereum/core/state"
@@ -174,8 +174,8 @@ type worker struct {
 	snapshotState *state.StateDB
 
 	// atomic status counters
-	running int32 // The indicator whether the consensus engine is running or not.
-	newTxs  int32 // New arrival transaction count since last sealing work submitting.
+	running               int32 // The indicator whether the consensus engine is running or not.
+	newTxs                int32 // New arrival transaction count since last sealing work submitting.
 	announceTxs           bool
 	lastParentBlockCommit string
 
@@ -213,7 +213,7 @@ func newWorker(config *params.ChainConfig, engine consensus.Engine, eth Backend,
 		startCh:            make(chan struct{}, 1),
 		resubmitIntervalCh: make(chan time.Duration),
 		resubmitAdjustCh:   make(chan *intervalAdjust, resubmitAdjustChanSize),
-		announceTxs:    announceTxs,
+		announceTxs:        announceTxs,
 	}
 	if worker.announceTxs {
 		// Subscribe NewTxsEvent for tx pool
@@ -374,13 +374,8 @@ func (w *worker) newWorkLoop(recommit time.Duration) {
 		case <-timer.C:
 			// If mining is running resubmit a new work cycle periodically to pull in
 			// higher priced transactions. Disable this overhead for pending blocks.
-			if w.isRunning() && (w.config.Clique == nil || w.config.Clique.Period > 0) {
-				// Short circuit if no new transaction arrives.
-				if atomic.LoadInt32(&w.newTxs) == 0 {
-					timer.Reset(recommit)
-					continue
-				}
-				commit(true, commitInterruptResubmit)
+			if w.isRunning() && (w.config.XDPoS == nil || w.config.XDPoS.Period > 0) {
+				commit(false, commitInterruptResubmit)
 			}
 
 		case interval := <-w.resubmitIntervalCh:
@@ -984,7 +979,7 @@ func (w *worker) commitNewWork(interrupt *int32, noempty bool, timestamp int64) 
 				return
 			}
 			if !ok {
-				log.Info("Not my turn to commit block. Waiting...")
+				log.Info("Not my turn to commit block. Waiting...", "coinbase", w.coinbase, "parent", parent.Header().Number)
 				// in case some nodes are down
 				if preIndex == -1 {
 					// first block
@@ -1150,6 +1145,7 @@ func (w *worker) commit(uncles []*types.Header, interval func(), update bool, st
 		receipts[i] = new(types.Receipt)
 		*receipts[i] = *l
 	}
+	log.Info("commit", "root", w.current.state.IntermediateRoot(true).String())
 	s := w.current.state.Copy()
 	block, err := w.engine.Finalize(w.chain, w.current.header, s, w.current.txs, uncles, w.current.receipts)
 	if err != nil {
