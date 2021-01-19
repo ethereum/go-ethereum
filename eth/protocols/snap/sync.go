@@ -2262,6 +2262,7 @@ func (s *Syncer) OnStorage(peer PeerIF, id uint64, hashes [][]common.Hash, slots
 			dbs[i], tries[i], _, _, err = trie.VerifyRangeProof(req.roots[i], nil, nil, keys, slots[i], nil)
 			if err != nil {
 				logger.Warn("Storage slots failed proof", "err", err)
+				s.scheduleRevertStorageRequest(req)
 				return err
 			}
 		} else {
@@ -2276,6 +2277,7 @@ func (s *Syncer) OnStorage(peer PeerIF, id uint64, hashes [][]common.Hash, slots
 			dbs[i], tries[i], notary, cont, err = trie.VerifyRangeProof(req.roots[i], req.origin[:], end, keys, slots[i], proofdb)
 			if err != nil {
 				logger.Warn("Storage range failed proof", "err", err)
+				s.scheduleRevertStorageRequest(req)
 				return err
 			}
 		}
