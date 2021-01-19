@@ -1,5 +1,24 @@
 # Changelog
 
+## v1.0.5
+
+SECURITY
+* [\#63](https://github.com/binance-chain/bsc/pull/63) security patches from go-ethereum 
+* [\#54](https://github.com/binance-chain/bsc/pull/54) les: fix GetProofsV2 that could potentially cause a panic.
+
+FEATURES
+* [\#56](https://github.com/binance-chain/bsc/pull/56) apply mirror sync upgrade 
+* [\#53](https://github.com/binance-chain/bsc/pull/53) support fork id in header; elegant upgrade
+
+IMPROVEMENT
+* [\#61](https://github.com/binance-chain/bsc/pull/61)Add `x-forward-for` log message when handle message failed
+* [\#60](https://github.com/binance-chain/bsc/pull/61) add rpc method request gauge
+
+BUGFIX
+* [\#59](https://github.com/binance-chain/bsc/pull/59) fix potential deadlock of pub/sub module 
+
+
+
 ## v1.0.4
 
 IMPROVEMENT
