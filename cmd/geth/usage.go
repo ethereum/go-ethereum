@@ -36,6 +36,7 @@ var AppHelpFlagGroups = []flags.FlagGroup{
 			configFileFlag,
 			utils.DataDirFlag,
 			utils.AncientFlag,
+			utils.MinFreeDiskSpaceFlag,
 			utils.KeyStoreDirFlag,
 			utils.USBFlag,
 			utils.SmartCardDaemonPathFlag,
