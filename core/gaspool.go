@@ -33,7 +33,7 @@ type GasPool uint64
 func NewGasPool(chainConfig *params.ChainConfig, height, gasLimit *big.Int) *GasPool {
 	eip1559GasTarget := misc.CalcEIP1559GasTarget(chainConfig, height, gasLimit)
 	if !chainConfig.IsEIP1559(height) {
-		new(GasPool).AddGas(gasLimit.Uint64() - eip1559GasTarget.Uint64())
+		return new(GasPool).AddGas(gasLimit.Uint64() - eip1559GasTarget.Uint64())
 	}
 	return new(GasPool).AddGas(chainConfig.EIP1559.EIP1559SlackCoefficient * eip1559GasTarget.Uint64())
 }
