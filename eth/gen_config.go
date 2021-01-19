@@ -21,6 +21,7 @@ func (c Config) MarshalTOML() (interface{}, error) {
 		NetworkId               uint64
 		SyncMode                downloader.SyncMode
 		EthDiscoveryURLs        []string
+		SnapDiscoveryURLs       []string
 		NoPruning               bool
 		NoPrefetch              bool
 		TxLookupLimit           uint64                 `toml:",omitempty"`
@@ -30,6 +31,7 @@ func (c Config) MarshalTOML() (interface{}, error) {
 		LightEgress             int                    `toml:",omitempty"`
 		LightPeers              int                    `toml:",omitempty"`
 		LightNoPrune            bool                   `toml:",omitempty"`
+		SyncFromCheckpoint      bool                   `toml:",omitempty"`
 		UltraLightServers       []string               `toml:",omitempty"`
 		UltraLightFraction      int                    `toml:",omitempty"`
 		UltraLightOnlyAnnounce  bool                   `toml:",omitempty"`
@@ -62,6 +64,7 @@ func (c Config) MarshalTOML() (interface{}, error) {
 	enc.NetworkId = c.NetworkId
 	enc.SyncMode = c.SyncMode
 	enc.EthDiscoveryURLs = c.EthDiscoveryURLs
+	enc.SnapDiscoveryURLs = c.SnapDiscoveryURLs
 	enc.NoPruning = c.NoPruning
 	enc.NoPrefetch = c.NoPrefetch
 	enc.TxLookupLimit = c.TxLookupLimit
@@ -71,6 +74,7 @@ func (c Config) MarshalTOML() (interface{}, error) {
 	enc.LightEgress = c.LightEgress
 	enc.LightPeers = c.LightPeers
 	enc.LightNoPrune = c.LightNoPrune
+	enc.SyncFromCheckpoint = c.SyncFromCheckpoint
 	enc.UltraLightServers = c.UltraLightServers
 	enc.UltraLightFraction = c.UltraLightFraction
 	enc.UltraLightOnlyAnnounce = c.UltraLightOnlyAnnounce
@@ -107,6 +111,7 @@ func (c *Config) UnmarshalTOML(unmarshal func(interface{}) error) error {
 		NetworkId               *uint64
 		SyncMode                *downloader.SyncMode
 		EthDiscoveryURLs        []string
+		SnapDiscoveryURLs       []string
 		NoPruning               *bool
 		NoPrefetch              *bool
 		TxLookupLimit           *uint64                `toml:",omitempty"`
@@ -116,6 +121,7 @@ func (c *Config) UnmarshalTOML(unmarshal func(interface{}) error) error {
 		LightEgress             *int                   `toml:",omitempty"`
 		LightPeers              *int                   `toml:",omitempty"`
 		LightNoPrune            *bool                  `toml:",omitempty"`
+		SyncFromCheckpoint      *bool                  `toml:",omitempty"`
 		UltraLightServers       []string               `toml:",omitempty"`
 		UltraLightFraction      *int                   `toml:",omitempty"`
 		UltraLightOnlyAnnounce  *bool                  `toml:",omitempty"`
@@ -159,6 +165,9 @@ func (c *Config) UnmarshalTOML(unmarshal func(interface{}) error) error {
 	if dec.EthDiscoveryURLs != nil {
 		c.EthDiscoveryURLs = dec.EthDiscoveryURLs
 	}
+	if dec.SnapDiscoveryURLs != nil {
+		c.SnapDiscoveryURLs = dec.SnapDiscoveryURLs
+	}
 	if dec.NoPruning != nil {
 		c.NoPruning = *dec.NoPruning
 	}
@@ -185,6 +194,9 @@ func (c *Config) UnmarshalTOML(unmarshal func(interface{}) error) error {
 	}
 	if dec.LightNoPrune != nil {
 		c.LightNoPrune = *dec.LightNoPrune
+	}
+	if dec.SyncFromCheckpoint != nil {
+		c.SyncFromCheckpoint = *dec.SyncFromCheckpoint
 	}
 	if dec.UltraLightServers != nil {
 		c.UltraLightServers = dec.UltraLightServers
