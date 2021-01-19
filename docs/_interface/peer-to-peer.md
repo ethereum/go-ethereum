@@ -152,3 +152,14 @@ You can also add static nodes at runtime via the js console using
 ```js
 admin.addPeer("enode://f4642fa65af50cfdea8fa7414a5def7bb7991478b768e296f5e4a54e8b995de102e0ceae2e826f293c481b5325f89be6d207b003382e18a8ecba66fbaf6416c0@33.4.2.1:30303")
 ```
+
+## Trusted nodes
+
+Geth supports trusted nodes that are always allowed to reconnect, even if the peer limit is reached.
+They can be added permanently via a config file `<datadir>/geth/trusted-nodes.json` or temporary via RPC call.
+The format for the config file is identical to the one used for static nodes.
+Nodes can be added using the `admin.addTrustedPeer()` RPC-call over the js console and removed using the `admin.removeTrustedPeer()` call.
+
+```js
+admin.addTrustedPeer("enode://f4642fa65af50cfdea8fa7414a5def7bb7991478b768e296f5e4a54e8b995de102e0ceae2e826f293c481b5325f89be6d207b003382e18a8ecba66fbaf6416c0@33.4.2.1:30303")
+```
