@@ -135,6 +135,7 @@ type CParamsParams struct {
 	ConstantinopleFixForkBlock *math.HexOrDecimal64  `json:"constantinopleFixForkBlock"`
 	IstanbulBlock              *math.HexOrDecimal64  `json:"istanbulForkBlock"`
 	RamanujanForkBlock         *math.HexOrDecimal64  `json:"ramanujanForkBlock"`
+	MirrorSyncForkBlock        *math.HexOrDecimal64  `json:"mirrorSyncForkBlock"`
 	ChainID                    *math.HexOrDecimal256 `json:"chainID"`
 	MaximumExtraDataSize       math.HexOrDecimal64   `json:"maximumExtraDataSize"`
 	TieBreakingGas             bool                  `json:"tieBreakingGas"`
@@ -325,6 +326,7 @@ func (api *RetestethAPI) SetChainParams(ctx context.Context, chainParams ChainPa
 		petersburgBlock     *big.Int
 		istanbulBlock       *big.Int
 		ramanujanBlock      *big.Int
+		mirrorSyncBlock     *big.Int
 	)
 	if chainParams.Params.HomesteadForkBlock != nil {
 		homesteadBlock = big.NewInt(int64(*chainParams.Params.HomesteadForkBlock))
@@ -357,6 +359,9 @@ func (api *RetestethAPI) SetChainParams(ctx context.Context, chainParams ChainPa
 	if chainParams.Params.RamanujanForkBlock != nil {
 		ramanujanBlock = big.NewInt(int64(*chainParams.Params.RamanujanForkBlock))
 	}
+	if chainParams.Params.MirrorSyncForkBlock != nil {
+		mirrorSyncBlock = big.NewInt(int64(*chainParams.Params.MirrorSyncForkBlock))
+	}
 
 	genesis := &core.Genesis{
 		Config: &params.ChainConfig{
@@ -372,6 +377,7 @@ func (api *RetestethAPI) SetChainParams(ctx context.Context, chainParams ChainPa
 			PetersburgBlock:     petersburgBlock,
 			IstanbulBlock:       istanbulBlock,
 			RamanujanBlock:      ramanujanBlock,
+			MirrorSyncBlock:     mirrorSyncBlock,
 		},
 		Nonce:      uint64(chainParams.Genesis.Nonce),
 		Timestamp:  uint64(chainParams.Genesis.Timestamp),

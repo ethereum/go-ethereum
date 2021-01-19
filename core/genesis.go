@@ -256,6 +256,8 @@ func (g *Genesis) configOrDefault(ghash common.Hash) *params.ChainConfig {
 		return params.RinkebyChainConfig
 	case ghash == params.GoerliGenesisHash:
 		return params.GoerliChainConfig
+	case ghash == params.BSCGenesisHash:
+		return params.BSCChainConfig
 	case ghash == params.ChapelGenesisHash:
 		return params.ChapelChainConfig
 	case ghash == params.RialtoGenesisHash:
