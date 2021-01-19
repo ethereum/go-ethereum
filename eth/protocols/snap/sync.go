@@ -2392,6 +2392,8 @@ func (s *Syncer) OnTrieNodes(peer PeerIF, id uint64, trienodes [][]byte) error {
 		}
 		// We've either ran out of hashes, or got unrequested data
 		logger.Warn("Unexpected healing trienodes", "count", len(trienodes)-i)
+		// Signal this request as failed, and ready for rescheduling
+		s.scheduleRevertTrienodeHealRequest(req)
 		return errors.New("unexpected healing trienode")
 	}
 	// Response validated, send it to the scheduler for filling
@@ -2484,6 +2486,8 @@ func (s *Syncer) onHealByteCodes(peer PeerIF, id uint64, bytecodes [][]byte) err
 		}
 		// We've either ran out of hashes, or got unrequested data
 		logger.Warn("Unexpected healing bytecodes", "count", len(bytecodes)-i)
+		// Signal this request as failed, and ready for rescheduling
+		s.scheduleRevertBytecodeHealRequest(req)
 		return errors.New("unexpected healing bytecode")
 	}
 	// Response validated, send it to the scheduler for filling
