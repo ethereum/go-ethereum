@@ -30,6 +30,26 @@ import (
 	"github.com/ethereum/go-ethereum/rlp"
 )
 
+var (
+	testAddr0  = common.Hex2Bytes("0000000000000000000000000000000000000000000000000000000000000000")
+	testAddr1  = common.Hex2Bytes("0000000000000000000000000000000000000000000000000000000000000001")
+	testAddr2  = common.Hex2Bytes("0000000000000000000000000000000000000000000000000000000000000002")
+	testAddr3  = common.Hex2Bytes("0000000000000000000000000000000000000000000000000000000000000003")
+	testAddr4  = common.Hex2Bytes("0000000000000000000000000000000000000000000000000000000000000004")
+	testAddr8  = common.Hex2Bytes("0000000000000000000000000000000000000000000000000000000000000008")
+	testAddr11 = common.Hex2Bytes("000000000000000000000000000000000000000000000000000000000000000B")
+)
+
+func int2addr(x int) []byte {
+	addr := common.Hex2Bytes("0000000000000000000000000000000000000000000000000000000000000000")
+	binary.BigEndian.PutUint64(addr[24:], uint64(x))
+	return addr
+}
+
+var emptyCodeHash = crypto.Keccak256Hash(nil)
+
+var aoe = simpleAccount{Balance: big.NewInt(100), Nonce: 1, Code: emptyCodeHash, StorageRoot: emptyRoot}
+
 func TestBinaryKeyCreation(t *testing.T) {
 	byteKey := []byte{0, 1, 2, 3}
 	binKey := newBinKey(byteKey)
@@ -186,32 +206,12 @@ func TestBinaryTrieReadEmpty(t *testing.T) {
 	}
 }
 
-var (
-	testAddr0  = common.Hex2Bytes("0000000000000000000000000000000000000000000000000000000000000000")
-	testAddr1  = common.Hex2Bytes("0000000000000000000000000000000000000000000000000000000000000001")
-	testAddr2  = common.Hex2Bytes("0000000000000000000000000000000000000000000000000000000000000002")
-	testAddr3  = common.Hex2Bytes("0000000000000000000000000000000000000000000000000000000000000003")
-	testAddr4  = common.Hex2Bytes("0000000000000000000000000000000000000000000000000000000000000004")
-	testAddr8  = common.Hex2Bytes("0000000000000000000000000000000000000000000000000000000000000008")
-	testAddr11 = common.Hex2Bytes("000000000000000000000000000000000000000000000000000000000000000B")
-)
-
-func int2addr(x int) []byte {
-	addr := common.Hex2Bytes("0000000000000000000000000000000000000000000000000000000000000000")
-	binary.BigEndian.PutUint64(addr[24:], uint64(x))
-	return addr
-}
-
 type simpleAccount struct {
 	Balance     *big.Int
 	Nonce       uint64
 	Code        common.Hash
 	StorageRoot common.Hash
 }
-
-var emptyCodeHash = crypto.Keccak256Hash(nil)
-
-var aoe = simpleAccount{Balance: big.NewInt(100), Nonce: 1, Code: emptyCodeHash, StorageRoot: emptyRoot}
 
 func TestBinaryTrieReadOneLeaf(t *testing.T) {
 	payload, err := rlp.EncodeToBytes(aoe)

@@ -40,6 +40,7 @@ type BinaryNode interface {
 	Commit() error
 	isLeaf() bool
 	Value([]byte) interface{}
+	save(path binkey) ([]byte, error)
 
 	gv(string) (string, string)
 }
@@ -620,6 +621,35 @@ func NewBinaryTrieWithBlake2b() *BinaryTrie {
 	return bt
 }
 
+// Save saves the top of the trie in the DB, which can then be loaded
+// from the db when starting the client.
+func (bt *BinaryTrie) Save() ([]byte, error) {
+	return bt.root.save(nil)
+}
+
+// Load loads a serialized trie, which is typically stored in the DB
+// when exiting geth.
+func (bt *BinaryTrie) Load(serialized []byte) {
+	keylen := serialized[0]
+	path := serialized[1 : keylen+1]
+	next := keylen + 33
+	h := serialized[keylen+1 : next]
+	root := &branch{
+		prefix: path[:len(path)-1],
+	}
+	if path[len(path)-1] == 0 {
+		root.left = hashBinaryNode(h)
+	} else {
+		panic("first hash should always be a left child")
+	}
+
+	for {
+		keylen = serialized[next]
+		root.insertHash(serialized[next+1:next+1+keylen], serialized[next+1+keylen:next+33+keylen], 0)
+		next = next + keylen + 33
+	}
+}
+
 // Hash returns the root hash of the binary trie, with the merkelization
 // rule described in EIP-3102.
 func (bt *BinaryTrie) Hash() []byte {
@@ -820,6 +850,113 @@ func (br *branch) Commit() error {
 	return nil
 }
 
+func (br *branch) save(path binkey) ([]byte, error) {
+	var ret []byte
+	childpath := append(path, br.prefix...)
+
+	// Save the left subtree
+	switch n := br.left.(type) {
+	case *branch:
+		leftpath, err := br.left.save(append(childpath, 0))
+		if err != nil {
+			return nil, err
+		}
+		ret = append(ret, leftpath...)
+	case hashBinaryNode:
+		ret = append(ret, byte(len(path)+len(br.prefix)+1))
+		ret = append(ret, br.key...)
+		ret = append(ret, 0)
+		ret = append(ret, n...)
+	default:
+		return nil, errors.New("invalid left node type")
+	}
+
+	// Save the right subtree
+	switch n := br.right.(type) {
+	case *branch:
+		rightpath, err := br.left.save(append(childpath, 1))
+		if err != nil {
+			return nil, err
+		}
+		ret = append(ret, rightpath...)
+	case hashBinaryNode:
+		ret = append(ret, byte(len(path)+len(br.prefix)+1))
+		ret = append(ret, br.key...)
+		ret = append(ret, 1)
+		ret = append(ret, n...)
+	default:
+		return nil, errors.New("invalid right node type")
+	}
+
+	return ret, nil
+}
+
+func (br *branch) insertHash(path binkey, value []byte, off int) {
+	if path.samePrefix(br.prefix, off) {
+		var child *branch
+		var ok bool
+		// The key matches the full node prefix, recurse
+		// at the child's level.
+		if path[off] == 0 {
+			child, ok = br.left.(*branch)
+		} else {
+			child, ok = br.right.(*branch)
+		}
+		if !ok {
+			panic("inserting into hash")
+		}
+		child.insertHash(path, value, off+len(br.prefix)+1)
+	} else {
+		// Starting from the following context:
+		//
+		//          ...
+		// parent <                     child1
+		//          [ a b c d e ... ] <
+		//                ^             child2
+		//                |
+		//             cut-off
+		//
+		// This needs to be turned into:
+		//
+		//          ...                    child1
+		// parent <          [ d e ... ] <
+		//          [ a b ] <              child2
+		//                    hash
+		//
+		// where `c` determines which child is left
+		// or right.
+		//
+		// Both [ a b ] and [ d e ... ] can be empty
+		// prefixes.
+		split := path[off:].commonLength(br.prefix)
+
+		// A split is needed
+		midNode := newBranchNode(br.prefix[split+1:], nil, nil, br.hType)
+		midNode.left = br.left
+		midNode.right = br.right
+		midNode.parent = br
+
+		br.prefix = br.prefix[:split]
+		br.value = nil
+
+
+		// No need to add the node to the cache, it will be
+		// when an actual leaf is inserted.
+
+		// Set the child node to the correct branch.
+		if path[off+split] == 1 {
+			// New node goes on the right
+			br.left = midNode
+			br.right = hashBinaryNode(value)
+		} else {
+			// New node goes on the left
+			br.right = midNode
+			br.left = hashBinaryNode(value)
+		}
+
+	}
+}
+
 // Commit does not commit anything, because a hash doesn't have
 // its accompanying preimage.
 func (h hashBinaryNode) Commit() error {
@@ -850,8 +987,9 @@ func (h hashBinaryNode) gv(path string) (string, string) {
 	return fmt.Sprintf("%s [label=\"H\"]\n", me), me
 }
 
-func (h hashBinaryNode) isLeaf() bool             { panic("calling isLeaf on a hash node") }
-func (h hashBinaryNode) Value([]byte) interface{} { panic("calling value on a hash node") }
+func (h hashBinaryNode) isLeaf() bool                { panic("calling isLeaf on a hash node") }
+func (h hashBinaryNode) Value([]byte) interface{}    { panic("calling value on a hash node") }
+func (h hashBinaryNode) save(binkey) ([]byte, error) { panic("calling save on a hash node") }
 
 func (e empty) Hash() []byte {
 	return emptyRoot[:]
@@ -873,8 +1011,9 @@ func (e empty) tryGet(key []byte, depth int) ([]byte, error) {
 	return nil, errReadFromEmptyTree
 }
 
-func (e empty) isLeaf() bool             { panic("calling isLeaf on an empty node") }
-func (e empty) Value([]byte) interface{} { panic("calling value on an empty node") }
+func (e empty) isLeaf() bool                { panic("calling isLeaf on an empty node") }
+func (e empty) Value([]byte) interface{}    { panic("calling value on an empty node") }
+func (e empty) save(binkey) ([]byte, error) { panic("calling save on empty node") }
 
 func (e empty) gv(path string) (string, string) {
 	me := fmt.Sprintf("e%s", path)
