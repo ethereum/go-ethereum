@@ -95,12 +95,32 @@ func (s *funcSub) Err() <-chan error {
 // Resubscribe applies backoff between calls to fn. The time between calls is adapted
 // based on the error rate, but will never exceed backoffMax.
 func Resubscribe(backoffMax time.Duration, fn ResubscribeFunc) Subscription {
+	return resubscribe(backoffMax, fn, func(error) {})
+}
+
+// ResubscribeWithErrorHandler does exactly the same as the original
+// `Resubscribe` function but allows passing a custom callback function
+// which will be invoked on subscription error.
+func ResubscribeWithErrorHandler(
+	backoffMax time.Duration,
+	fn ResubscribeFunc,
+	onSubscriptionError func(error),
+) Subscription {
+	return resubscribe(backoffMax, fn, onSubscriptionError)
+}
+
+func resubscribe(
+	backoffMax time.Duration,
+	fn ResubscribeFunc,
+	onError func(error),
+) Subscription {
 	s := &resubscribeSub{
 		waitTime:   backoffMax / 10,
 		backoffMax: backoffMax,
 		fn:         fn,
 		err:        make(chan error),
 		unsub:      make(chan struct{}),
+		onError:    onError,
 	}
 	go s.loop()
 	return s
@@ -116,6 +136,7 @@ type resubscribeSub struct {
 	unsubOnce            sync.Once
 	lastTry              mclock.AbsTime
 	waitTime, backoffMax time.Duration
+	onError              func(error)
 }
 
 func (s *resubscribeSub) Unsubscribe() {
@@ -178,6 +199,10 @@ func (s *resubscribeSub) waitForError(sub Subscription) bool {
 	defer sub.Unsubscribe()
 	select {
 	case err := <-sub.Err():
+		if err != nil {
+			s.onError(err)
+		}
+
 		return err == nil
 	case <-s.unsub:
 		return true

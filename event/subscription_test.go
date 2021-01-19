@@ -19,6 +19,7 @@ package event
 import (
 	"context"
 	"errors"
+	"fmt"
 	"testing"
 	"time"
 )
@@ -116,5 +117,49 @@ func TestResubscribeAbort(t *testing.T) {
 	sub.Unsubscribe()
 	if err := <-done; err != nil {
 		t.Fatal(err)
+	}
+}
+
+func TestResubscribeWithErrorHandler(t *testing.T) {
+	t.Parallel()
+
+	var onSubErrCalls int
+	onSubErr := func(error) {
+		onSubErrCalls++
+	}
+
+	var i int
+	nfails := 6
+	sub := ResubscribeWithErrorHandler(
+		100*time.Millisecond,
+		func(ctx context.Context) (Subscription, error) {
+			i++
+			sub := NewSubscription(func(unsubscribed <-chan struct{}) error {
+				if i < nfails {
+					return fmt.Errorf("error")
+				} else {
+					return nil
+				}
+			})
+			return sub, nil
+		},
+		onSubErr,
+	)
+
+	<-sub.Err()
+	if i != nfails {
+		t.Fatalf(
+			"resubscribe function called %d times, want %d times",
+			i,
+			nfails,
+		)
+	}
+
+	if onSubErrCalls != nfails-1 {
+		t.Fatalf(
+			"subscription error callback called %d times, want %d times",
+			onSubErrCalls,
+			nfails-1,
+		)
 	}
 }
