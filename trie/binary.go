@@ -60,6 +60,8 @@ const (
 	typeBlake2b
 )
 
+const leafThreshold = 2
+
 var blake2bEmptyRoot = common.FromHex("45b0cfc220ceec5b7c1c62c4d4193d38e4eba48e8815729ce75f9c0ab0e4c1c0")
 
 // BinaryTrie represents a multi-level binary trie.
@@ -752,12 +754,12 @@ func (bt *BinaryTrie) TryUpdate(key, value []byte) error {
 			}
 			childNode.parent = currentNode
 
-			// If the current node goes above the threshold,
-			// add it to the cache. Because every new insert
-			// updates the path to the new leaf, the least
-			// used branches will be pruned first.
+			// If the leaf count goes above the threshold,
+			// mark it as used in the cache. Because every
+			// new insert updates the path to the new leaf,
+			// the least used branches will be pruned first.
 			currentNode.childCount++ // one more child
-			if currentNode.childCount > 2 {
+			if currentNode.childCount > leafThreshold {
 				bt.cache.Add(bk[:off], currentNode)
 			}
 
@@ -808,10 +810,10 @@ func (bt *BinaryTrie) TryUpdate(key, value []byte) error {
 			childNode := newBranchNode(bk[off+split+1:], key, value, bt.hashType)
 			childNode.parent = currentNode
 
-			// Update the cache if the child count goes
+			// Update the cache if the leaf count goes
 			// over the threshold.
 			currentNode.childCount++
-			if currentNode.childCount > 2 {
+			if currentNode.childCount > leafThreshold {
 				bt.cache.Add(bk[:off], currentNode)
 			}
 
