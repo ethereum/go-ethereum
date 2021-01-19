@@ -2018,6 +2018,8 @@ func (s *Syncer) OnAccounts(peer PeerIF, id uint64, hashes []common.Hash, accoun
 	db, tr, notary, cont, err := trie.VerifyRangeProof(root, req.origin[:], end, keys, accounts, proofdb)
 	if err != nil {
 		logger.Warn("Account range failed proof", "err", err)
+		// Signal this request as failed, and ready for rescheduling
+		s.scheduleRevertAccountRequest(req)
 		return err
 	}
 	// Partial trie reconstructed, send it to the scheduler for storage filling
