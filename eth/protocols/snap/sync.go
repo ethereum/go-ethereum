@@ -2139,6 +2139,8 @@ func (s *Syncer) onByteCodes(peer PeerIF, id uint64, bytecodes [][]byte) error {
 		}
 		// We've either ran out of hashes, or got unrequested data
 		logger.Warn("Unexpected bytecodes", "count", len(bytecodes)-i)
+		// Signal this request as failed, and ready for rescheduling
+		s.scheduleRevertBytecodeRequest(req)
 		return errors.New("unexpected bytecode")
 	}
 	// Response validated, send it to the scheduler for filling
@@ -2213,11 +2215,13 @@ func (s *Syncer) OnStorage(peer PeerIF, id uint64, hashes [][]common.Hash, slots
 	// peer sent more data than requested.
 	if len(hashes) != len(slots) {
 		s.lock.Unlock()
+		s.scheduleRevertStorageRequest(req) // reschedule request
 		logger.Warn("Hash and slot set size mismatch", "hashset", len(hashes), "slotset", len(slots))
 		return errors.New("hash and slot set size mismatch")
 	}
 	if len(hashes) > len(req.accounts) {
 		s.lock.Unlock()
+		s.scheduleRevertStorageRequest(req) // reschedule request
 		logger.Warn("Hash set larger than requested", "hashset", len(hashes), "requested", len(req.accounts))
 		return errors.New("hash set larger than requested")
 	}
@@ -2229,9 +2233,7 @@ func (s *Syncer) OnStorage(peer PeerIF, id uint64, hashes [][]common.Hash, slots
 		logger.Debug("Peer rejected storage request")
 		s.statelessPeers[peer.ID()] = struct{}{}
 		s.lock.Unlock()
-
-		// Signal this request as failed, and ready for rescheduling
-		s.scheduleRevertStorageRequest(req)
+		s.scheduleRevertStorageRequest(req) // reschedule request
 		return nil
 	}
 	s.lock.Unlock()
@@ -2261,8 +2263,8 @@ func (s *Syncer) OnStorage(peer PeerIF, id uint64, hashes [][]common.Hash, slots
 			// space and hash to the origin root.
 			dbs[i], tries[i], _, _, err = trie.VerifyRangeProof(req.roots[i], nil, nil, keys, slots[i], nil)
 			if err != nil {
+				s.scheduleRevertStorageRequest(req) // reschedule request
 				logger.Warn("Storage slots failed proof", "err", err)
-				s.scheduleRevertStorageRequest(req)
 				return err
 			}
 		} else {
@@ -2276,8 +2278,8 @@ func (s *Syncer) OnStorage(peer PeerIF, id uint64, hashes [][]common.Hash, slots
 			}
 			dbs[i], tries[i], notary, cont, err = trie.VerifyRangeProof(req.roots[i], req.origin[:], end, keys, slots[i], proofdb)
 			if err != nil {
+				s.scheduleRevertStorageRequest(req) // reschedule request
 				logger.Warn("Storage range failed proof", "err", err)
-				s.scheduleRevertStorageRequest(req)
 				return err
 			}
 		}
