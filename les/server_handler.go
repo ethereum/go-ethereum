@@ -183,7 +183,7 @@ func (h *serverHandler) handle(p *clientPeer) (err error) {
 		wg.Wait() // Ensure all background task routines have exited.
 
 		if err == errTooManyInvalidRequest {
-			p.Log().Warn("Too many invalid requests, banning peer", "err", err, "peer", p)
+			p.Log().Debug("Too many invalid requests, banning peer", "peer", p.id)
 			p.Ban()
 		}
 		h.server.clientPool.disconnect(p)
