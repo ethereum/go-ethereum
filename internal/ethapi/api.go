@@ -1952,3 +1952,109 @@ func toHexSlice(b [][]byte) []string {
 	}
 	return r
 }
+
+// ---------------------------------------------------------------- FlashBots ----------------------------------------------------------------
+
+// BundleAPI offers an API for accepting bundled transactions
+type BundleAPI struct {
+	b Backend
+}
+
+// NewBundleAPI creates a new Tx Bundle API instance.
+func NewBundleAPI(b Backend) *BundleAPI {
+	return &BundleAPI{b}
+}
+
+// CallBundle will simulate a bundle of transactions at the top of a block.
+// The sender is responsible for signing the transactions and using the correct nonce and ensuring validity
+func (s *BundleAPI) CallBundle(ctx context.Context, encodedTxs []hexutil.Bytes, blockNrOrHash rpc.BlockNumberOrHash, blockTimestamp *uint64) ([]hexutil.Bytes, error) {
+	if len(encodedTxs) == 0 {
+		return nil, nil
+	}
+	var txs types.Transactions
+
+	for _, encodedTx := range encodedTxs {
+		tx := new(types.Transaction)
+		if err := rlp.DecodeBytes(encodedTx, tx); err != nil {
+			return nil, err
+		}
+		txs = append(txs, tx)
+	}
+	defer func(start time.Time) { log.Debug("Executing EVM call finished", "runtime", time.Since(start)) }(time.Now())
+
+	timeout := time.Second * 5 // TODO make an arg
+	state, parent, err := s.b.StateAndHeaderByNumberOrHash(ctx, blockNrOrHash)
+	if state == nil || err != nil {
+		return nil, err
+	}
+	blockNumber := new(big.Int).Add(parent.Number, common.Big1)
+
+	timestamp := parent.Time
+	if blockTimestamp != nil {
+		timestamp = *blockTimestamp
+	}
+	header := &types.Header{
+		ParentHash: parent.Hash(),
+		Number:     blockNumber,
+		GasLimit:   parent.GasLimit, // TODO make an arg
+		Time:       timestamp,
+		Difficulty: parent.Difficulty,
+	}
+
+	// Setup context so it may be cancelled the call has completed
+	// or, in case of unmetered gas, setup a context with a timeout.
+	var cancel context.CancelFunc
+	if timeout > 0 {
+		ctx, cancel = context.WithTimeout(ctx, timeout)
+	} else {
+		ctx, cancel = context.WithCancel(ctx)
+	}
+	// Make sure the context is cancelled when the call has completed
+	// this makes sure resources are cleaned up.
+	defer cancel()
+
+	// Get a new instance of the EVM
+	signer := types.MakeSigner(s.b.ChainConfig(), blockNumber)
+	firstMsg, err := txs[0].AsMessage(signer)
+	if err != nil {
+		return nil, err
+	}
+	evm, vmError, err := s.b.GetEVM(ctx, firstMsg, state, header)
+	if err != nil {
+		return nil, err
+	}
+	// Wait for the context to be done and cancel the evm. Even if the
+	// EVM has finished, cancelling may be done (repeatedly)
+	go func() {
+		<-ctx.Done()
+		evm.Cancel()
+	}()
+
+	// Setup the gas pool (also for unmetered requests)
+	// and apply the message.
+	gp := new(core.GasPool).AddGas(math.MaxUint64)
+
+	results := []hexutil.Bytes{}
+	for _, tx := range txs {
+		msg, err := tx.AsMessage(signer)
+		if err != nil {
+			return nil, err
+		}
+		result, err := core.ApplyMessage(evm, msg, gp)
+		if err := vmError(); err != nil {
+			return nil, err
+		}
+		// If the timer caused an abort, return an appropriate error message
+		if evm.Cancelled() {
+			return nil, fmt.Errorf("execution aborted (timeout = %v)", timeout)
+		}
+		if err != nil {
+			return nil, fmt.Errorf("err: %w; supplied gas %d; txhash %s", err, msg.Gas(), tx.Hash())
+		}
+		if result.Err != nil {
+			return nil, fmt.Errorf("err in tx: %w; supplied gas %d; txhash %s", result.Err, msg.Gas(), tx.Hash())
+		}
+		results = append(results, result.Return())
+	}
+	return results, nil
+}
