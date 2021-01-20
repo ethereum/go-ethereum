@@ -1537,7 +1537,7 @@ func (s *Syncer) processAccountResponse(res *accountResponse) {
 			break
 		}
 	}
-	// Itereate over all the accounts and assemble which ones need further sub-
+	// Iterate over all the accounts and assemble which ones need further sub-
 	// filling before the entire account range can be persisted.
 	res.task.needCode = make([]bool, len(res.accounts))
 	res.task.needState = make([]bool, len(res.accounts))
@@ -1581,7 +1581,7 @@ func (s *Syncer) processAccountResponse(res *accountResponse) {
 		}
 	}
 	// Delete any subtasks that have been aborted but not resumed. This may undo
-	// some progress if a newpeer gives us less accounts than an old one, but for
+	// some progress if a new peer gives us less accounts than an old one, but for
 	// now we have to live with that.
 	for hash := range res.task.SubTasks {
 		if _, ok := resumed[hash]; !ok {
