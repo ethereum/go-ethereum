@@ -475,8 +475,7 @@ func noProofStorageRequestHandler(t *testPeer, requestId uint64, root common.Has
 // also ship the entire trie inside the proof. If the attack is successful,
 // the remote side does not do any follow-up requests
 func TestSyncBloatedProof(t *testing.T) {
-	trieBackend := trie.NewDatabase(rawdb.NewMemoryDatabase())
-	sourceAccountTrie, elems := makeAccountTrieNoStorage(trieBackend, 100)
+	sourceAccountTrie, elems := makeAccountTrieNoStorage(100)
 	cancel := make(chan struct{})
 	source := newTestPeer("source", t, cancel)
 	source.accountTrie = sourceAccountTrie
@@ -539,7 +538,7 @@ func setupSyncer(peers ...*testPeer) *Syncer {
 // TestSync tests a basic sync with one peer
 func TestSync(t *testing.T) {
 	cancel := make(chan struct{})
-	sourceAccountTrie, elems := makeAccountTrieNoStorage(trie.NewDatabase(rawdb.NewMemoryDatabase()), 100)
+	sourceAccountTrie, elems := makeAccountTrieNoStorage(100)
 
 	mkSource := func(name string) *testPeer {
 		source := newTestPeer(name, t, cancel)
@@ -559,23 +558,17 @@ func TestSync(t *testing.T) {
 func TestSyncTinyTriePanic(t *testing.T) {
 	cancel := make(chan struct{})
 
-	sourceAccountTrie, elems, storageTries, storageElems := makeAccountTrieWithStorage(1, 1, false)
+	sourceAccountTrie, elems := makeAccountTrieNoStorage(1)
 
-	mkSource := func(name string, slow bool) *testPeer {
+	mkSource := func(name string) *testPeer {
 		source := newTestPeer(name, t, cancel)
 		source.accountTrie = sourceAccountTrie
 		source.accountValues = elems
-		source.storageTries = storageTries
-		source.storageValues = storageElems
-
-		if slow {
-			source.storageRequestHandler = starvingStorageRequestHandler
-		}
 		return source
 	}
 
 	syncer := setupSyncer(
-		mkSource("nice-a", false),
+		mkSource("nice-a"),
 	)
 	done := checkStall(t, cancel)
 	if err := syncer.Sync(sourceAccountTrie.Hash(), cancel); err != nil {
@@ -587,7 +580,7 @@ func TestSyncTinyTriePanic(t *testing.T) {
 // TestMultiSync tests a basic sync with multiple peers
 func TestMultiSync(t *testing.T) {
 	cancel := make(chan struct{})
-	sourceAccountTrie, elems := makeAccountTrieNoStorage(trie.NewDatabase(rawdb.NewMemoryDatabase()), 100)
+	sourceAccountTrie, elems := makeAccountTrieNoStorage(100)
 
 	mkSource := func(name string) *testPeer {
 		source := newTestPeer(name, t, cancel)
@@ -763,7 +756,7 @@ func checkStall(t *testing.T, cancel chan (struct{})) chan struct{} {
 func TestSyncNoStorageAndOneCappedPeer(t *testing.T) {
 	cancel := make(chan struct{})
 
-	sourceAccountTrie, elems := makeAccountTrieNoStorage(trie.NewDatabase(rawdb.NewMemoryDatabase()), 3000)
+	sourceAccountTrie, elems := makeAccountTrieNoStorage(3000)
 
 	mkSource := func(name string, slow bool) *testPeer {
 		source := newTestPeer(name, t, cancel)
@@ -794,8 +787,7 @@ func TestSyncNoStorageAndOneCappedPeer(t *testing.T) {
 func TestSyncNoStorageAndOneCodeCorruptPeer(t *testing.T) {
 	cancel := make(chan struct{})
 
-	sourceAccountTrie, elems := makeAccountTrieNoStorage(
-		trie.NewDatabase(rawdb.NewMemoryDatabase()), 3000)
+	sourceAccountTrie, elems := makeAccountTrieNoStorage(3000)
 
 	mkSource := func(name string, codeFn codeHandlerFunc) *testPeer {
 		source := newTestPeer(name, t, cancel)
@@ -822,7 +814,7 @@ func TestSyncNoStorageAndOneCodeCorruptPeer(t *testing.T) {
 func TestSyncNoStorageAndOneAccountCorruptPeer(t *testing.T) {
 	cancel := make(chan struct{})
 
-	sourceAccountTrie, elems := makeAccountTrieNoStorage(trie.NewDatabase(rawdb.NewMemoryDatabase()), 3000)
+	sourceAccountTrie, elems := makeAccountTrieNoStorage(3000)
 
 	mkSource := func(name string, accFn accountHandlerFunc) *testPeer {
 		source := newTestPeer(name, t, cancel)
@@ -851,7 +843,7 @@ func TestSyncNoStorageAndOneAccountCorruptPeer(t *testing.T) {
 func TestSyncNoStorageAndOneCodeCappedPeer(t *testing.T) {
 	cancel := make(chan struct{})
 
-	sourceAccountTrie, elems := makeAccountTrieNoStorage(trie.NewDatabase(rawdb.NewMemoryDatabase()), 3000)
+	sourceAccountTrie, elems := makeAccountTrieNoStorage(3000)
 
 	mkSource := func(name string, codeFn codeHandlerFunc) *testPeer {
 		source := newTestPeer(name, t, cancel)
@@ -986,28 +978,6 @@ func (p entrySlice) Len() int           { return len(p) }
 func (p entrySlice) Less(i, j int) bool { return bytes.Compare(p[i].k, p[j].k) < 0 }
 func (p entrySlice) Swap(i, j int)      { p[i], p[j] = p[j], p[i] }
 
-// makeAccountTrieNoStorage spits out a trie, along with the leafs
-func makeAccountTrieNoStorage(db *trie.Database, n int) (*trie.Trie, entrySlice) {
-	accTrie, _ := trie.New(common.Hash{}, db)
-	var entries entrySlice
-	for i := uint64(0); i < uint64(n); i++ {
-		value, _ := rlp.EncodeToBytes(state.Account{
-			Nonce:    i,
-			Balance:  big.NewInt(int64(i)),
-			Root:     emptyRoot,
-			CodeHash: getACodeHash(i),
-		})
-		key := key32(i)
-		elem := &kv{key, value, false}
-		accTrie.Update(elem.k, elem.v)
-		entries = append(entries, elem)
-	}
-	sort.Sort(entries)
-	// Push to disk layer
-	accTrie.Commit(nil)
-	return accTrie, entries
-}
-
 func key32(i uint64) []byte {
 	key := make([]byte, 32)
 	binary.LittleEndian.PutUint64(key, i)
@@ -1044,6 +1014,29 @@ func getCode(hash common.Hash) []byte {
 		}
 	}
 	return nil
+}
+
+// makeAccountTrieNoStorage spits out a trie, along with the leafs
+func makeAccountTrieNoStorage(n int) (*trie.Trie, entrySlice) {
+	db := trie.NewDatabase(rawdb.NewMemoryDatabase())
+	accTrie, _ := trie.New(common.Hash{}, db)
+	var entries entrySlice
+	for i := uint64(1); i <= uint64(n); i++ {
+		value, _ := rlp.EncodeToBytes(state.Account{
+			Nonce:    i,
+			Balance:  big.NewInt(int64(i)),
+			Root:     emptyRoot,
+			CodeHash: getACodeHash(i),
+		})
+		key := key32(i)
+		elem := &kv{key, value, false}
+		accTrie.Update(elem.k, elem.v)
+		entries = append(entries, elem)
+	}
+	sort.Sort(entries)
+	// Push to disk layer
+	accTrie.Commit(nil)
+	return accTrie, entries
 }
 
 // makeAccountTrieWithStorage spits out a trie, along with the leafs
