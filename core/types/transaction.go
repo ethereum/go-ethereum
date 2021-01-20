@@ -42,6 +42,7 @@ var (
 const (
 	LegacyTxType = iota
 	AccessListTxType
+	DynamicFeeTxType
 )
 
 // Transaction is an Ethereum transaction.
@@ -74,6 +75,8 @@ type TxData interface {
 	data() []byte
 	gas() uint64
 	gasPrice() *big.Int
+	tip() *big.Int
+	feeCap() *big.Int
 	value() *big.Int
 	nonce() uint64
 	to() *common.Address
@@ -177,6 +180,10 @@ func (tx *Transaction) decodeTyped(b []byte) (TxData, error) {
 		var inner AccessListTx
 		err := rlp.DecodeBytes(b[1:], &inner)
 		return &inner, err
+	case DynamicFeeTxType:
+		var inner DynamicFeeTransaction
+		err := rlp.DecodeBytes(b[1:], &inner)
+		return &inner, err
 	default:
 		return nil, ErrTxTypeNotSupported
 	}
@@ -259,6 +266,12 @@ func (tx *Transaction) Gas() uint64 { return tx.inner.gas() }
 
 // GasPrice returns the gas price of the transaction.
 func (tx *Transaction) GasPrice() *big.Int { return new(big.Int).Set(tx.inner.gasPrice()) }
+
+// Tip returns the tip per gas of the transaction.
+func (tx *Transaction) Tip() *big.Int { return new(big.Int).Set(tx.inner.tip()) }
+
+// FeeCap returns the fee cap per gas of the transaction.
+func (tx *Transaction) FeeCap() *big.Int { return new(big.Int).Set(tx.inner.feeCap()) }
 
 // Value returns the ether amount of the transaction.
 func (tx *Transaction) Value() *big.Int { return new(big.Int).Set(tx.inner.value()) }
@@ -485,20 +498,22 @@ type Message struct {
 	nonce      uint64
 	amount     *big.Int
 	gasLimit   uint64
-	gasPrice   *big.Int
+	feeCap     *big.Int
+	tip        *big.Int
 	data       []byte
 	accessList AccessList
 	checkNonce bool
 }
 
-func NewMessage(from common.Address, to *common.Address, nonce uint64, amount *big.Int, gasLimit uint64, gasPrice *big.Int, data []byte, accessList AccessList, checkNonce bool) Message {
+func NewMessage(from common.Address, to *common.Address, nonce uint64, amount *big.Int, gasLimit uint64, feeCap, tip *big.Int, data []byte, accessList AccessList, checkNonce bool) Message {
 	return Message{
 		from:       from,
 		to:         to,
 		nonce:      nonce,
 		amount:     amount,
 		gasLimit:   gasLimit,
-		gasPrice:   gasPrice,
+		feeCap:     feeCap,
+		tip:        tip,
 		data:       data,
 		accessList: accessList,
 		checkNonce: checkNonce,
@@ -510,7 +525,8 @@ func (tx *Transaction) AsMessage(s Signer) (Message, error) {
 	msg := Message{
 		nonce:      tx.Nonce(),
 		gasLimit:   tx.Gas(),
-		gasPrice:   new(big.Int).Set(tx.GasPrice()),
+		feeCap:     new(big.Int).Set(tx.FeeCap()),
+		tip:        new(big.Int).Set(tx.Tip()),
 		to:         tx.To(),
 		amount:     tx.Value(),
 		data:       tx.Data(),
@@ -525,7 +541,8 @@ func (tx *Transaction) AsMessage(s Signer) (Message, error) {
 
 func (m Message) From() common.Address   { return m.from }
 func (m Message) To() *common.Address    { return m.to }
-func (m Message) GasPrice() *big.Int     { return m.gasPrice }
+func (m Message) FeeCap() *big.Int       { return m.feeCap }
+func (m Message) Tip() *big.Int          { return m.tip }
 func (m Message) Value() *big.Int        { return m.amount }
 func (m Message) Gas() uint64            { return m.gasLimit }
 func (m Message) Nonce() uint64          { return m.nonce }

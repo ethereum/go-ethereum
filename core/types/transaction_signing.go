@@ -249,6 +249,17 @@ func (s eip2930Signer) Hash(tx *Transaction) common.Hash {
 				tx.Data(),
 				tx.AccessList(),
 			})
+	case DynamicFeeTxType:
+		return prefixedRlpHash(
+			tx.Type(),
+			[]interface{}{
+				tx.Nonce(),
+				tx.FeeCap(),
+				tx.Tip(),
+				tx.To(),
+				tx.Value(),
+				tx.Data(),
+			})
 	default:
 		// This _should_ not happen, but in case someone sends in a bad
 		// json struct via RPC, it's probably more prudent to return an
