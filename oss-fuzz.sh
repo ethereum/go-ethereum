@@ -100,7 +100,7 @@ compile_fuzzer tests/fuzzers/rlp        Fuzz fuzzRlp
 compile_fuzzer tests/fuzzers/trie       Fuzz fuzzTrie
 compile_fuzzer tests/fuzzers/stacktrie  Fuzz fuzzStackTrie
 compile_fuzzer tests/fuzzers/difficulty Fuzz fuzzDifficulty
-compile_fuzzertests/fuzzers/abi         Fuzz fuzzAbi
+compile_fuzzer tests/fuzzers/abi        Fuzz fuzzAbi
 
 compile_fuzzer tests/fuzzers/bls12381  FuzzG1Add fuzz_g1_add
 compile_fuzzer tests/fuzzers/bls12381  FuzzG1Mul fuzz_g1_mul
