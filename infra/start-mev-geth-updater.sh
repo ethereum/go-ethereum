@@ -18,6 +18,7 @@ start_node() {
         --port $netport \
         --syncmode $syncmode \
         --cache 4096 \
+        --gcmode archive \
         --maxpeers $connections \
         --goerli &
         if [ $? -ne 0 ]
@@ -30,6 +31,7 @@ start_node() {
         --port $netport \
         --syncmode $syncmode \
         --cache 4096 \
+        --gcmode archive \
         --maxpeers $connections &
         if [ $? -ne 0 ]
         then

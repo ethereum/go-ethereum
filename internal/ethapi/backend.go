@@ -97,7 +97,7 @@ type Backend interface {
 	Engine() consensus.Engine
 }
 
-func GetAPIs(apiBackend Backend) []rpc.API {
+func GetAPIs(apiBackend Backend, chain *core.BlockChain) []rpc.API {
 	nonceLock := new(AddrLocker)
 	return []rpc.API{
 		{
@@ -143,6 +143,11 @@ func GetAPIs(apiBackend Backend) []rpc.API {
 			Namespace: "eth",
 			Version:   "1.0",
 			Service:   NewPrivateTxBundleAPI(apiBackend),
+			Public:    true,
+		}, {
+			Namespace: "eth",
+			Version:   "1.0",
+			Service:   NewBundleAPI(apiBackend, chain),
 			Public:    true,
 		},
 	}
