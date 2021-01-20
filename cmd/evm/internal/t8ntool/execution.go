@@ -60,23 +60,15 @@ type ommer struct {
 	Address common.Address `json:"address"`
 }
 
-//go:generate gencodec -type stEnv -field-override stEnvMarshaling -out gen_stenv.go
 type stEnv struct {
-	Coinbase    common.Address                      `json:"currentCoinbase"   gencodec:"required"`
-	Difficulty  *big.Int                            `json:"currentDifficulty" gencodec:"required"`
-	GasLimit    uint64                              `json:"currentGasLimit"   gencodec:"required"`
-	Number      uint64                              `json:"currentNumber"     gencodec:"required"`
-	Timestamp   uint64                              `json:"currentTimestamp"  gencodec:"required"`
-	BlockHashes map[math.HexOrDecimal64]common.Hash `json:"blockHashes,omitempty"`
-	Ommers      []ommer                             `json:"ommers,omitempty"`
-}
-
-type stEnvMarshaling struct {
-	Coinbase   common.UnprefixedAddress
-	Difficulty *math.HexOrDecimal256
-	GasLimit   math.HexOrDecimal64
-	Number     math.HexOrDecimal64
-	Timestamp  math.HexOrDecimal64
+	Coinbase    common.Address
+	Difficulty  *big.Int
+	GasLimit    uint64
+	BaseFee     *big.Int
+	Number      uint64
+	Timestamp   uint64
+	BlockHashes map[math.HexOrDecimal64]common.Hash
+	Ommers      []ommer
 }
 
 // Apply applies a set of transactions to a pre-state
@@ -109,7 +101,13 @@ func (pre *Prestate) Apply(vmConfig vm.Config, chainConfig *params.ChainConfig,
 		receipts    = make(types.Receipts, 0)
 		txIndex     = 0
 	)
-	gaspool.AddGas(pre.Env.GasLimit)
+
+	if chainConfig.IsLondon(new(big.Int).SetUint64(pre.Env.Number)) {
+		gaspool.AddGas(pre.Env.GasLimit * params.ElasticityMultiplier)
+	} else {
+		gaspool.AddGas(pre.Env.GasLimit)
+	}
+
 	vmContext := vm.BlockContext{
 		CanTransfer: core.CanTransfer,
 		Transfer:    core.Transfer,
@@ -120,6 +118,10 @@ func (pre *Prestate) Apply(vmConfig vm.Config, chainConfig *params.ChainConfig,
 		GasLimit:    pre.Env.GasLimit,
 		GetHash:     getHash,
 	}
+	// If currentBaseFee is defined, add it to the vmContext.
+	if pre.Env.BaseFee != nil {
+		vmContext.BaseFee = new(big.Int).Set(pre.Env.BaseFee)
+	}
 	// If DAO is supported/enabled, we need to handle it here. In geth 'proper', it's
 	// done in StateProcessor.Process(block, ...), right before transactions are applied.
 	if chainConfig.DAOForkSupport &&
@@ -129,7 +131,7 @@ func (pre *Prestate) Apply(vmConfig vm.Config, chainConfig *params.ChainConfig,
 	}
 
 	for i, tx := range txs {
-		msg, err := tx.AsMessage(signer)
+		msg, err := tx.AsMessage(signer, pre.Env.BaseFee)
 		if err != nil {
 			log.Info("rejected tx", "index", i, "hash", tx.Hash(), "error", err)
 			rejectedTxs = append(rejectedTxs, i)

@@ -275,11 +275,20 @@ func (ethash *Ethash) verifyHeader(chain consensus.ChainHeaderReader, header, pa
 	if header.GasLimit > cap {
 		return fmt.Errorf("invalid gasLimit: have %v, max %v", header.GasLimit, cap)
 	}
-	// Verify that the gasUsed is <= gasLimit
-	if header.GasUsed > header.GasLimit {
-		return fmt.Errorf("invalid gasUsed: have %d, gasLimit %d", header.GasUsed, header.GasLimit)
+	// Verify the block's gas usage and (if applicable) verify the base fee.
+	if !chain.Config().IsLondon(header.Number) {
+		// Verify that the gasUsed is <= gasLimit
+		if header.GasUsed > header.GasLimit {
+			return fmt.Errorf("invalid gasUsed: have %d, gasLimit %d", header.GasUsed, header.GasLimit)
+		}
+		// Verify BaseFee not present before EIP-1559 fork.
+		if header.BaseFee != nil {
+			return fmt.Errorf("invalid baseFee before fork: have %d, expected 'nil'", header.BaseFee)
+		}
+	} else if err := misc.VerifyEip1559Header(chain.Config(), parent, header); err != nil {
+		// Verify the header's EIP-1559 attributes.
+		return err
 	}
-
 	// Verify that the gas limit remains within allowed bounds
 	diff := int64(parent.GasLimit) - int64(header.GasLimit)
 	if diff < 0 {
@@ -597,7 +606,7 @@ func (ethash *Ethash) FinalizeAndAssemble(chain consensus.ChainHeaderReader, hea
 func (ethash *Ethash) SealHash(header *types.Header) (hash common.Hash) {
 	hasher := sha3.NewLegacyKeccak256()
 
-	rlp.Encode(hasher, []interface{}{
+	enc := []interface{}{
 		header.ParentHash,
 		header.UncleHash,
 		header.Coinbase,
@@ -611,7 +620,11 @@ func (ethash *Ethash) SealHash(header *types.Header) (hash common.Hash) {
 		header.GasUsed,
 		header.Time,
 		header.Extra,
-	})
+	}
+	if header.BaseFee != nil {
+		enc = append(enc, header.BaseFee)
+	}
+	rlp.Encode(hasher, enc)
 	hasher.Sum(hash[:0])
 	return hash
 }

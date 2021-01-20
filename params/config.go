@@ -231,14 +231,13 @@ var (
 		IstanbulBlock:       big.NewInt(0),
 		MuirGlacierBlock:    nil,
 		BerlinBlock:         big.NewInt(0),
-		LondonBlock:         big.NewInt(0),
+		LondonBlock:         big.NewInt(500),
 		Clique: &CliqueConfig{
 			Period: 30,
 			Epoch:  30000,
 		},
 	}
 
-	// AllEthashProtocolChanges contains every protocol change (EIPs) introduced
 	// and accepted by the Ethereum core developers into the Ethash consensus.
 	//
 	// This configuration is intentionally not using keyed fields to force anyone

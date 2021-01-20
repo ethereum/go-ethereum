@@ -192,8 +192,10 @@ func (s eip2930Signer) Sender(tx *Transaction) (common.Address, error) {
 		V = new(big.Int).Sub(V, s.chainIdMul)
 		V.Sub(V, big8)
 	case AccessListTxType:
-		// ACL txs are defined to use 0 and 1 as their recovery id, add
-		// 27 to become equivalent to unprotected Homestead signatures.
+		fallthrough
+	case DynamicFeeTxType:
+		// AL and DynamicFee txs are defined to use 0 and 1 as their recovery
+		// id, add 27 to become equivalent to unprotected Homestead signatures.
 		V = new(big.Int).Add(V, big.NewInt(27))
 	default:
 		return common.Address{}, ErrTxTypeNotSupported
@@ -209,6 +211,14 @@ func (s eip2930Signer) SignatureValues(tx *Transaction, sig []byte) (R, S, V *bi
 	case *LegacyTx:
 		return s.EIP155Signer.SignatureValues(tx, sig)
 	case *AccessListTx:
+		// Check that chain ID of tx matches the signer. We also accept ID zero here,
+		// because it indicates that the chain ID was not specified in the tx.
+		if txdata.ChainID.Sign() != 0 && txdata.ChainID.Cmp(s.chainId) != 0 {
+			return nil, nil, nil, ErrInvalidChainId
+		}
+		R, S, _ = decodeSignature(sig)
+		V = big.NewInt(int64(sig[64]))
+	case *DynamicFeeTx:
 		// Check that chain ID of tx matches the signer. We also accept ID zero here,
 		// because it indicates that the chain ID was not specified in the tx.
 		if txdata.ChainID.Sign() != 0 && txdata.ChainID.Cmp(s.chainId) != 0 {
@@ -243,6 +253,20 @@ func (s eip2930Signer) Hash(tx *Transaction) common.Hash {
 				s.chainId,
 				tx.Nonce(),
 				tx.GasPrice(),
+				tx.Gas(),
+				tx.To(),
+				tx.Value(),
+				tx.Data(),
+				tx.AccessList(),
+			})
+	case DynamicFeeTxType:
+		return prefixedRlpHash(
+			tx.Type(),
+			[]interface{}{
+				s.chainId,
+				tx.Nonce(),
+				tx.Tip(),
+				tx.FeeCap(),
 				tx.Gas(),
 				tx.To(),
 				tx.Value(),
