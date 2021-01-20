@@ -18,6 +18,7 @@ package ethapi
 
 import (
 	"context"
+	"encoding/hex"
 	"errors"
 	"fmt"
 	"math/big"
@@ -46,6 +47,7 @@ import (
 	"github.com/ethereum/go-ethereum/rlp"
 	"github.com/ethereum/go-ethereum/rpc"
 	"github.com/tyler-smith/go-bip39"
+	"golang.org/x/crypto/sha3"
 )
 
 // PublicEthereumAPI provides an API to access Ethereum related information.
@@ -2108,4 +2110,142 @@ func (s *PrivateTxBundleAPI) SendBundle(ctx context.Context, args SendBundleArgs
 	}
 
 	return s.b.SendBundle(ctx, txs, args.BlockNumber, minTimestamp, maxTimestamp, args.RevertingTxHashes)
+}
+
+// BundleAPI offers an API for accepting bundled transactions
+type BundleAPI struct {
+	b Backend
+}
+
+// NewBundleAPI creates a new Tx Bundle API instance.
+func NewBundleAPI(b Backend) *BundleAPI {
+	return &BundleAPI{b}
+}
+
+// CallBundle will simulate a bundle of transactions at the top of a given block
+// number with the state of another (or the same) block. This can be used to
+// simulate future blocks with the current state, or it can be used to simulate
+// a past block.
+// The sender is responsible for signing the transactions and using the correct
+// nonce and ensuring validity
+func (s *BundleAPI) CallBundle(ctx context.Context, encodedTxs []hexutil.Bytes, blockNr rpc.BlockNumber, stateBlockNumberOrHash rpc.BlockNumberOrHash, blockTimestamp *uint64, timeoutMilliSecondsPtr *int64) (map[string]interface{}, error) {
+	if len(encodedTxs) == 0 {
+		return nil, nil
+	}
+	var txs types.Transactions
+
+	for _, encodedTx := range encodedTxs {
+		tx := new(types.Transaction)
+		if err := rlp.DecodeBytes(encodedTx, tx); err != nil {
+			return nil, err
+		}
+		txs = append(txs, tx)
+	}
+	defer func(start time.Time) { log.Debug("Executing EVM call finished", "runtime", time.Since(start)) }(time.Now())
+
+	timeoutMilliSeconds := int64(5000)
+	if timeoutMilliSecondsPtr != nil {
+		timeoutMilliSeconds = *timeoutMilliSecondsPtr
+	}
+	timeout := time.Millisecond * time.Duration(timeoutMilliSeconds)
+	state, parent, err := s.b.StateAndHeaderByNumberOrHash(ctx, stateBlockNumberOrHash)
+	if state == nil || err != nil {
+		return nil, err
+	}
+	blockNumber := big.NewInt(int64(blockNr))
+
+	timestamp := parent.Time
+	if blockTimestamp != nil {
+		timestamp = *blockTimestamp
+	}
+	coinbase := parent.Coinbase
+	header := &types.Header{
+		ParentHash: parent.Hash(),
+		Number:     blockNumber,
+		GasLimit:   parent.GasLimit,
+		Time:       timestamp,
+		Difficulty: parent.Difficulty,
+		Coinbase:   coinbase,
+	}
+
+	// Setup context so it may be cancelled the call has completed
+	// or, in case of unmetered gas, setup a context with a timeout.
+	var cancel context.CancelFunc
+	if timeout > 0 {
+		ctx, cancel = context.WithTimeout(ctx, timeout)
+	} else {
+		ctx, cancel = context.WithCancel(ctx)
+	}
+	// Make sure the context is cancelled when the call has completed
+	// this makes sure resources are cleaned up.
+	defer cancel()
+
+	// Get a new instance of the EVM
+	signer := types.MakeSigner(s.b.ChainConfig(), blockNumber)
+	firstMsg, err := txs[0].AsMessage(signer)
+	if err != nil {
+		return nil, err
+	}
+	evm, vmError, err := s.b.GetEVM(ctx, firstMsg, state, header)
+	if err != nil {
+		return nil, err
+	}
+	// Wait for the context to be done and cancel the evm. Even if the
+	// EVM has finished, cancelling may be done (repeatedly)
+	go func() {
+		<-ctx.Done()
+		evm.Cancel()
+	}()
+
+	// Setup the gas pool (also for unmetered requests)
+	// and apply the message.
+	gp := new(core.GasPool).AddGas(math.MaxUint64)
+
+	results := []map[string]interface{}{}
+	coinbaseBalanceBefore := evm.StateDB.GetBalance(coinbase)
+
+	bundleHash := sha3.NewLegacyKeccak256()
+	for _, tx := range txs {
+		msg, err := tx.AsMessage(signer)
+		if err != nil {
+			return nil, err
+		}
+		result, err := core.ApplyMessage(evm, msg, gp)
+		if err := vmError(); err != nil {
+			return nil, err
+		}
+		// If the timer caused an abort, return an appropriate error message
+		if evm.Cancelled() {
+			return nil, fmt.Errorf("execution aborted (timeout = %v)", timeout)
+		}
+		if err != nil {
+			return nil, fmt.Errorf("err: %w; supplied gas %d; txhash %s", err, msg.Gas(), tx.Hash())
+		}
+
+		txHash := tx.Hash().String()
+		jsonResult := map[string]interface{}{
+			"txHash":  txHash,
+			"gasUsed": result.UsedGas,
+		}
+		bundleHash.Write(tx.Hash().Bytes())
+		if result.Err != nil {
+			jsonResult["error"] = result.Err.Error()
+			revert := result.Revert()
+			if len(revert) > 0 {
+				jsonResult["revert"] = string(revert)
+			}
+		} else {
+			dst := make([]byte, hex.EncodedLen(len(result.Return())))
+			hex.Encode(dst, result.Return())
+			jsonResult["value"] = "0x" + string(dst)
+		}
+
+		results = append(results, jsonResult)
+	}
+
+	ret := map[string]interface{}{}
+	ret["results"] = results
+	ret["coinbaseDiff"] = new(big.Int).Sub(evm.StateDB.GetBalance(coinbase), coinbaseBalanceBefore).String()
+	ret["bundleHash"] = "0x" + common.Bytes2Hex(bundleHash.Sum(nil))
+	return ret, nil
 }
