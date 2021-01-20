@@ -566,14 +566,17 @@ func (s *Syncer) Sync(root common.Hash, cancel chan struct{}) error {
 			return nil
 		}
 		// Assign all the data retrieval tasks to any free peers
-		s.assignAccountTasks(cancel)
-		s.assignBytecodeTasks(cancel)
-		s.assignStorageTasks(cancel)
+		acTasks := s.assignAccountTasks(cancel)
+		bcTasks := s.assignBytecodeTasks(cancel)
+		stTasks := s.assignStorageTasks(cancel)
+		var tnhTasks, bchTasks int
 		if len(s.tasks) == 0 {
 			// Sync phase done, run heal phase
-			s.assignTrienodeHealTasks(cancel)
-			s.assignBytecodeHealTasks(cancel)
+			tnhTasks = s.assignTrienodeHealTasks(cancel)
+			bchTasks = s.assignBytecodeHealTasks(cancel)
 		}
+		log.Debug("Assigned tasks", "account", acTasks, "bytecode", bcTasks,
+			"storage", stTasks, "trie-heal", tnhTasks, "byte-heal", bchTasks)
 		// Wait for something to happen
 		select {
 		case <-s.update:
@@ -741,13 +744,13 @@ func (s *Syncer) cleanStorageTasks() {
 
 // assignAccountTasks attempts to match idle peers to pending account range
 // retrievals.
-func (s *Syncer) assignAccountTasks(cancel chan struct{}) {
+func (s *Syncer) assignAccountTasks(cancel chan struct{}) int {
 	s.lock.Lock()
 	defer s.lock.Unlock()
-
+	assignments := 0
 	// If there are no idle peers, short circuit assignment
 	if len(s.accountIdlers) == 0 {
-		return
+		return assignments
 	}
 	// Iterate over all the tasks and try to find a pending one
 	for _, task := range s.tasks {
@@ -769,7 +772,7 @@ func (s *Syncer) assignAccountTasks(cancel chan struct{}) {
 			break
 		}
 		if idle == "" {
-			return
+			return assignments
 		}
 		// Matched a pending task to an idle peer, allocate a unique request id
 		var reqid uint64
@@ -801,6 +804,7 @@ func (s *Syncer) assignAccountTasks(cancel chan struct{}) {
 		delete(s.accountIdlers, idle)
 
 		s.pend.Add(1)
+		assignments++
 		go func(peer PeerIF, root common.Hash) {
 			defer s.pend.Done()
 
@@ -814,16 +818,17 @@ func (s *Syncer) assignAccountTasks(cancel chan struct{}) {
 		// Inject the request into the task to block further assignments
 		task.req = req
 	}
+	return assignments
 }
 
 // assignBytecodeTasks attempts to match idle peers to pending code retrievals.
-func (s *Syncer) assignBytecodeTasks(cancel chan struct{}) {
+func (s *Syncer) assignBytecodeTasks(cancel chan struct{}) int {
 	s.lock.Lock()
 	defer s.lock.Unlock()
-
+	var assignments = 0
 	// If there are no idle peers, short circuit assignment
 	if len(s.bytecodeIdlers) == 0 {
-		return
+		return assignments
 	}
 	// Iterate over all the tasks and try to find a pending one
 	for _, task := range s.tasks {
@@ -849,7 +854,7 @@ func (s *Syncer) assignBytecodeTasks(cancel chan struct{}) {
 			break
 		}
 		if idle == "" {
-			return
+			return assignments
 		}
 		// Matched a pending task to an idle peer, allocate a unique request id
 		var reqid uint64
@@ -872,6 +877,7 @@ func (s *Syncer) assignBytecodeTasks(cancel chan struct{}) {
 				break
 			}
 		}
+		assignments++
 		req := &bytecodeRequest{
 			peer:   idle,
 			id:     reqid,
@@ -898,17 +904,18 @@ func (s *Syncer) assignBytecodeTasks(cancel chan struct{}) {
 			}
 		}(s.peers[idle]) // We're in the lock, peers[id] surely exists
 	}
+	return assignments
 }
 
 // assignStorageTasks attempts to match idle peers to pending storage range
 // retrievals.
-func (s *Syncer) assignStorageTasks(cancel chan struct{}) {
+func (s *Syncer) assignStorageTasks(cancel chan struct{}) int {
 	s.lock.Lock()
 	defer s.lock.Unlock()
-
+	var assignments = 0
 	// If there are no idle peers, short circuit assignment
 	if len(s.storageIdlers) == 0 {
-		return
+		return assignments
 	}
 	// Iterate over all the tasks and try to find a pending one
 	for _, task := range s.tasks {
@@ -934,7 +941,7 @@ func (s *Syncer) assignStorageTasks(cancel chan struct{}) {
 			break
 		}
 		if idle == "" {
-			return
+			return assignments
 		}
 		// Matched a pending task to an idle peer, allocate a unique request id
 		var reqid uint64
@@ -965,7 +972,6 @@ func (s *Syncer) assignStorageTasks(cancel chan struct{}) {
 				// Found an incomplete storage chunk, schedule it
 				accounts = append(accounts, account)
 				roots = append(roots, st.root)
-
 				subtask = st
 				break // Large contract chunks are downloaded individually
 			}
@@ -991,6 +997,7 @@ func (s *Syncer) assignStorageTasks(cancel chan struct{}) {
 		if len(accounts) == 0 {
 			continue
 		}
+		assignments++
 		req := &storageRequest{
 			peer:     idle,
 			id:       reqid,
@@ -1032,17 +1039,18 @@ func (s *Syncer) assignStorageTasks(cancel chan struct{}) {
 			subtask.req = req
 		}
 	}
+	return assignments
 }
 
 // assignTrienodeHealTasks attempts to match idle peers to trie node requests to
 // heal any trie errors caused by the snap sync's chunked retrieval model.
-func (s *Syncer) assignTrienodeHealTasks(cancel chan struct{}) {
+func (s *Syncer) assignTrienodeHealTasks(cancel chan struct{}) int {
 	s.lock.Lock()
 	defer s.lock.Unlock()
-
+	var assignments = 0
 	// If there are no idle peers, short circuit assignment
 	if len(s.trienodeHealIdlers) == 0 {
-		return
+		return assignments
 	}
 	// Iterate over pending tasks and try to find a peer to retrieve with
 	for len(s.healer.trieTasks) > 0 || s.healer.scheduler.Pending() > 0 {
@@ -1064,7 +1072,7 @@ func (s *Syncer) assignTrienodeHealTasks(cancel chan struct{}) {
 		}
 		// If all the heal tasks are bytecodes or already downloading, bail
 		if len(s.healer.trieTasks) == 0 {
-			return
+			return assignments
 		}
 		// Task pending retrieval, try to find an idle peer. If no such peer
 		// exists, we probably assigned tasks for all (or they are stateless).
@@ -1080,7 +1088,7 @@ func (s *Syncer) assignTrienodeHealTasks(cancel chan struct{}) {
 			break
 		}
 		if idle == "" {
-			return
+			return assignments
 		}
 		// Matched a pending task to an idle peer, allocate a unique request id
 		var reqid uint64
@@ -1111,6 +1119,7 @@ func (s *Syncer) assignTrienodeHealTasks(cancel chan struct{}) {
 				break
 			}
 		}
+		assignments++
 		req := &trienodeHealRequest{
 			peer:   idle,
 			id:     reqid,
@@ -1138,17 +1147,18 @@ func (s *Syncer) assignTrienodeHealTasks(cancel chan struct{}) {
 			}
 		}(s.peers[idle], s.root) // We're in the lock, peers[id] surely exists
 	}
+	return assignments
 }
 
 // assignBytecodeHealTasks attempts to match idle peers to bytecode requests to
 // heal any trie errors caused by the snap sync's chunked retrieval model.
-func (s *Syncer) assignBytecodeHealTasks(cancel chan struct{}) {
+func (s *Syncer) assignBytecodeHealTasks(cancel chan struct{}) int {
 	s.lock.Lock()
 	defer s.lock.Unlock()
-
+	var assignments = 0
 	// If there are no idle peers, short circuit assignment
 	if len(s.bytecodeHealIdlers) == 0 {
-		return
+		return assignments
 	}
 	// Iterate over pending tasks and try to find a peer to retrieve with
 	for len(s.healer.codeTasks) > 0 || s.healer.scheduler.Pending() > 0 {
@@ -1170,7 +1180,7 @@ func (s *Syncer) assignBytecodeHealTasks(cancel chan struct{}) {
 		}
 		// If all the heal tasks are trienodes or already downloading, bail
 		if len(s.healer.codeTasks) == 0 {
-			return
+			return assignments
 		}
 		// Task pending retrieval, try to find an idle peer. If no such peer
 		// exists, we probably assigned tasks for all (or they are stateless).
@@ -1186,7 +1196,7 @@ func (s *Syncer) assignBytecodeHealTasks(cancel chan struct{}) {
 			break
 		}
 		if idle == "" {
-			return
+			return assignments
 		}
 		// Matched a pending task to an idle peer, allocate a unique request id
 		var reqid uint64
@@ -1210,6 +1220,7 @@ func (s *Syncer) assignBytecodeHealTasks(cancel chan struct{}) {
 				break
 			}
 		}
+		assignments++
 		req := &bytecodeHealRequest{
 			peer:   idle,
 			id:     reqid,
@@ -1236,6 +1247,7 @@ func (s *Syncer) assignBytecodeHealTasks(cancel chan struct{}) {
 			}
 		}(s.peers[idle]) // We're in the lock, peers[id] surely exists
 	}
+	return assignments
 }
 
 // revertRequests locates all the currently pending reuqests from a particular
@@ -1952,7 +1964,7 @@ func (s *Syncer) OnAccounts(peer PeerIF, id uint64, hashes []common.Hash, accoun
 	for _, node := range proof {
 		size += common.StorageSize(len(node))
 	}
-	logger := peer.Log().New("reqid", peer.ID())
+	logger := peer.Log().New("reqid", id)
 	logger.Trace("Delivering range of accounts", "hashes", len(hashes), "accounts", len(accounts), "proofs", len(proof), "bytes", size)
 
 	// Whether or not the response is valid, we can mark the peer as idle and
