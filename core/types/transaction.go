@@ -40,6 +40,7 @@ var (
 const (
 	LegacyTxId = iota
 	AccessListTxId
+	DynamicFeeTxId
 )
 
 type Transaction struct {
@@ -62,7 +63,10 @@ type inner interface {
 	AccessList() *AccessList
 	Data() []byte
 	Gas() uint64
-	GasPrice() *big.Int
+	// FeeCap returns the max fee per gas the transaction will pay.
+	FeeCap() *big.Int
+	// Tip returns the max tip per gas the transaction will pay the coinbase.
+	Tip() *big.Int
 	Value() *big.Int
 	Nonce() uint64
 	CheckNonce() bool
@@ -130,6 +134,10 @@ func (tx *Transaction) DecodeRLP(s *rlp.Stream) error {
 			var i *AccessListTransaction
 			err = rlp.DecodeBytes(b[1:], &i)
 			tx.inner = i
+		} else if tx.typ == DynamicFeeTxId {
+			var i *DynamicFeeTransaction
+			err = rlp.DecodeBytes(b[1:], &i)
+			tx.inner = i
 		} else {
 			return ErrTxTypeNotSupported
 		}
@@ -174,13 +182,16 @@ func sanityCheckSignature(v *big.Int, r *big.Int, s *big.Int, maybeProtected boo
 func (tx *Transaction) Data() []byte            { return tx.inner.Data() }
 func (tx *Transaction) AccessList() *AccessList { return tx.inner.AccessList() }
 func (tx *Transaction) Gas() uint64             { return tx.inner.Gas() }
-func (tx *Transaction) GasPrice() *big.Int      { return new(big.Int).Set(tx.inner.GasPrice()) }
+func (tx *Transaction) FeeCap() *big.Int        { return new(big.Int).Set(tx.inner.FeeCap()) }
+func (tx *Transaction) Tip() *big.Int           { return new(big.Int).Set(tx.inner.Tip()) }
+
 func (tx *Transaction) GasPriceCmp(other *Transaction) int {
 	return tx.inner.GasPrice().Cmp(other.GasPrice())
 }
 func (tx *Transaction) GasPriceIntCmp(other *big.Int) int {
 	return tx.inner.GasPrice().Cmp(other)
 }
+
 func (tx *Transaction) Value() *big.Int     { return new(big.Int).Set(tx.inner.Value()) }
 func (tx *Transaction) Nonce() uint64       { return tx.inner.Nonce() }
 func (tx *Transaction) CheckNonce() bool    { return true }
@@ -262,12 +273,37 @@ func (tx *Transaction) WithSignature(signer Signer, sig []byte) (*Transaction, e
 			time:  tx.time,
 		}
 
+	} else if tx.typ == DynamicFeeTxId {
+		inner := tx.inner.(*DynamicFeeTransaction)
+		cpy := &DynamicFeeTransaction{
+			Chain:        inner.Chain,
+			AccountNonce: inner.AccountNonce,
+			InclusionFee: inner.InclusionFee,
+			GasFee:       inner.GasFee,
+			GasLimit:     inner.GasLimit,
+			Recipient:    inner.Recipient,
+			Amount:       inner.Amount,
+			Payload:      inner.Payload,
+
+			V: inner.V,
+			R: inner.R,
+			S: inner.S,
+		}
+		cpy.R, cpy.S, cpy.V = r, s, v
+
+		ret = &Transaction{
+			typ:   DynamicFeeTxId,
+			inner: cpy,
+			time:  tx.time,
+		}
+
 	} else {
 		return nil, ErrInvalidTxType
 	}
 
 	return ret, nil
 }
+
 func (tx *Transaction) Cost() *big.Int {
 	total := new(big.Int).Mul(tx.GasPrice(), new(big.Int).SetUint64(tx.Gas()))
 	total.Add(total, tx.Value())
@@ -432,20 +468,22 @@ type Message struct {
 	nonce      uint64
 	amount     *big.Int
 	gasLimit   uint64
-	gasPrice   *big.Int
+	feeCap     *big.Int
+	tip        *big.Int
 	data       []byte
 	accessList *AccessList
 	checkNonce bool
 }
 
-func NewMessage(from common.Address, to *common.Address, nonce uint64, amount *big.Int, gasLimit uint64, gasPrice *big.Int, data []byte, accessList *AccessList, checkNonce bool) Message {
+func NewMessage(from common.Address, to *common.Address, nonce uint64, amount *big.Int, gasLimit uint64, feeCap, tip *big.Int, data []byte, accessList *AccessList, checkNonce bool) Message {
 	return Message{
 		from:       from,
 		to:         to,
 		nonce:      nonce,
 		amount:     amount,
 		gasLimit:   gasLimit,
-		gasPrice:   gasPrice,
+		feeCap:     feeCap,
+		tip:        tip,
 		data:       data,
 		accessList: accessList,
 		checkNonce: checkNonce,
@@ -457,7 +495,8 @@ func (tx *Transaction) AsMessage(s Signer) (Message, error) {
 	msg := Message{
 		nonce:      tx.Nonce(),
 		gasLimit:   tx.Gas(),
-		gasPrice:   new(big.Int).Set(tx.GasPrice()),
+		feeCap:     new(big.Int).Set(tx.FeeCap()),
+		tip:        new(big.Int).Set(tx.Tip()),
 		to:         tx.To(),
 		amount:     tx.Value(),
 		data:       tx.Data(),
@@ -472,7 +511,8 @@ func (tx *Transaction) AsMessage(s Signer) (Message, error) {
 
 func (m Message) From() common.Address    { return m.from }
 func (m Message) To() *common.Address     { return m.to }
-func (m Message) GasPrice() *big.Int      { return m.gasPrice }
+func (m Message) FeeCap() *big.Int        { return m.feeCap }
+func (m Message) Tip() *big.Int           { return m.tip }
 func (m Message) Value() *big.Int         { return m.amount }
 func (m Message) Gas() uint64             { return m.gasLimit }
 func (m Message) Nonce() uint64           { return m.nonce }

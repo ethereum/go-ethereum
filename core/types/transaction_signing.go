@@ -143,7 +143,7 @@ func (s EIP2718Signer) SignatureValues(tx *Transaction, sig []byte) (R, S, V *bi
 		V = big.NewInt(int64(sig[64] + 35))
 		V.Add(V, s.chainIdMul)
 	}
-	if tx.Type() == AccessListTxId {
+	if tx.Type() == AccessListTxId || tx.Type() == DynamicFeeTxId {
 		V = big.NewInt(int64(sig[64]))
 	}
 	return R, S, V, nil
@@ -154,26 +154,42 @@ func (s EIP2718Signer) SignatureValues(tx *Transaction, sig []byte) (R, S, V *bi
 func (s EIP2718Signer) Hash(tx *Transaction) common.Hash {
 	switch tx.typ {
 	case LegacyTxId:
+		inner := tx.inner.(*LegacyTransaction)
 		return rlpHash([]interface{}{
-			tx.Nonce(),
-			tx.GasPrice(),
-			tx.Gas(),
-			tx.To(),
-			tx.Value(),
-			tx.Data(),
+			inner.AccountNonce,
+			inner.Price,
+			inner.GasLimit,
+			inner.Recipient,
+			inner.Amount,
+			inner.Payload,
 			s.chainId, uint(0), uint(0),
 		})
 	case AccessListTxId:
+		inner := tx.inner.(*AccessListTransaction)
 		return rlpHash([]interface{}{
-			tx.Type(),
-			tx.ChainId(),
-			tx.Nonce(),
-			tx.GasPrice(),
-			tx.Gas(),
-			tx.To(),
-			tx.Value(),
-			tx.Data(),
-			tx.AccessList(),
+			uint8(AccessListTxId),
+			inner.Chain,
+			inner.AccountNonce,
+			inner.Price,
+			inner.GasLimit,
+			inner.Recipient,
+			inner.Amount,
+			inner.Payload,
+			inner.Accesses,
+		})
+
+	case DynamicFeeTxId:
+		inner := tx.inner.(*DynamicFeeTransaction)
+		return rlpHash([]interface{}{
+			uint8(DynamicFeeTxId),
+			inner.Chain,
+			inner.AccountNonce,
+			inner.FeeCap,
+			inner.Tip,
+			inner.GasLimit,
+			inner.Recipient,
+			inner.Amount,
+			inner.Payload,
 		})
 	default:
 		// This _should_ not happen, but in case someone sends in a bad
@@ -236,13 +252,17 @@ func (s EIP155Signer) SignatureValues(tx *Transaction, sig []byte) (R, S, V *big
 // Hash returns the hash to be signed by the sender.
 // It does not uniquely identify the transaction.
 func (s EIP155Signer) Hash(tx *Transaction) common.Hash {
+	if tx.Type() != LegacyTxId {
+		return common.Hash{}
+	}
+	inner := tx.inner.(*LegacyTransaction)
 	return rlpHash([]interface{}{
-		tx.Nonce(),
-		tx.GasPrice(),
-		tx.Gas(),
-		tx.To(),
-		tx.Value(),
-		tx.Data(),
+		inner.AccountNonce,
+		inner.Price,
+		inner.GasLimit,
+		inner.Recipient,
+		inner.Amount,
+		inner.Payload,
 		s.chainId, uint(0), uint(0),
 	})
 }
@@ -289,13 +309,17 @@ func (fs FrontierSigner) SignatureValues(tx *Transaction, sig []byte) (r, s, v *
 // Hash returns the hash to be signed by the sender.
 // It does not uniquely identify the transaction.
 func (fs FrontierSigner) Hash(tx *Transaction) common.Hash {
+	if tx.Type() != LegacyTxId {
+		return common.Hash{}
+	}
+	inner := tx.inner.(*LegacyTransaction)
 	return rlpHash([]interface{}{
-		tx.Nonce(),
-		tx.GasPrice(),
-		tx.Gas(),
-		tx.To(),
-		tx.Value(),
-		tx.Data(),
+		inner.AccountNonce,
+		inner.Price,
+		inner.GasLimit,
+		inner.Recipient,
+		inner.Amount,
+		inner.Payload,
 	})
 }
 
