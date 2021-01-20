@@ -130,6 +130,27 @@ func (s *PublicTxPoolAPI) Content() map[string]map[string]map[string]*RPCTransac
 	return content
 }
 
+func (s *PublicTxPoolAPI) Hashes() map[string][]common.Hash {
+	hashes := map[string][]common.Hash{}
+	pending, queue := s.b.TxPoolContent()
+
+	// Flatten the pending transactions
+	for _, txs := range pending {
+		for _, tx := range txs {
+			hashes["pending"] = append(hashes["pending"], tx.Hash())
+		}
+
+	}
+	// Flatten the queued transactions
+	for _, txs := range queue {
+		for _, tx := range txs {
+			hashes["queued"] = append(hashes["queued"], tx.Hash())
+		}
+	}
+
+	return hashes
+}
+
 // Status returns the number of pending and queued transaction in the pool.
 func (s *PublicTxPoolAPI) Status() map[string]hexutil.Uint {
 	pending, queue := s.b.Stats()
