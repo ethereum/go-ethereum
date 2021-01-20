@@ -1672,94 +1672,90 @@ func (s *Syncer) processStorageResponse(res *storageResponse) {
 	)
 	// Iterate over all the accounts and reconstruct their storage tries from the
 	// delivered slots
-	delivered := make(map[common.Hash]bool)
-	for i := 0; i < len(res.hashes); i++ {
-		delivered[res.roots[i]] = true
-	}
 	for i, account := range res.accounts {
 		// If the account was not delivered, reschedule it
 		if i >= len(res.hashes) {
-			if !delivered[res.roots[i]] {
-				res.mainTask.stateTasks[account] = res.roots[i]
-			}
+			res.mainTask.stateTasks[account] = res.roots[i]
 			continue
 		}
 		// State was delivered, if complete mark as not needed any more, otherwise
 		// mark the account as needing healing
-		for j, acc := range res.mainTask.res.accounts {
-			if res.roots[i] == acc.Root {
-				// If the packet contains multiple contract storage slots, all
-				// but the last are surely complete. The last contract may be
-				// chunked, so check it's continuation flag.
-				if res.subTask == nil && res.mainTask.needState[j] && (i < len(res.hashes)-1 || !res.cont) {
-					res.mainTask.needState[j] = false
-					res.mainTask.pend--
-				}
-				// If the last contract was chunked, mark it as needing healing
-				// to avoid writing it out to disk prematurely.
-				if res.subTask == nil && !res.mainTask.needHeal[j] && i == len(res.hashes)-1 && res.cont {
-					res.mainTask.needHeal[j] = true
-				}
-				// If the last contract was chunked, we need to switch to large
-				// contract handling mode
-				if res.subTask == nil && i == len(res.hashes)-1 && res.cont {
-					// If we haven't yet started a large-contract retrieval, create
-					// the subtasks for it within the main account task
-					if tasks, ok := res.mainTask.SubTasks[account]; !ok {
-						var (
-							next common.Hash
-						)
-						step := new(big.Int).Sub(
-							new(big.Int).Div(
-								new(big.Int).Exp(common.Big2, common.Big256, nil),
-								big.NewInt(storageConcurrency),
-							), common.Big1,
-						)
-						for k := 0; k < storageConcurrency; k++ {
-							last := common.BigToHash(new(big.Int).Add(next.Big(), step))
-							if k == storageConcurrency-1 {
-								// Make sure we don't overflow if the step is not a proper divisor
-								last = common.HexToHash("0xffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff")
-							}
-							tasks = append(tasks, &storageTask{
-								Next: next,
-								Last: last,
-								root: acc.Root,
-							})
-							log.Debug("Created storage sync task", "account", account, "root", acc.Root, "from", next, "last", last)
-							next = common.BigToHash(new(big.Int).Add(last.Big(), common.Big1))
+		for j, hash := range res.mainTask.res.hashes {
+			if account != hash {
+				continue
+			}
+			acc := res.mainTask.res.accounts[j]
+			// If the packet contains multiple contract storage slots, all
+			// but the last are surely complete. The last contract may be
+			// chunked, so check it's continuation flag.
+			if res.subTask == nil && res.mainTask.needState[j] && (i < len(res.hashes)-1 || !res.cont) {
+				res.mainTask.needState[j] = false
+				res.mainTask.pend--
+			}
+			// If the last contract was chunked, mark it as needing healing
+			// to avoid writing it out to disk prematurely.
+			if res.subTask == nil && !res.mainTask.needHeal[j] && i == len(res.hashes)-1 && res.cont {
+				res.mainTask.needHeal[j] = true
+			}
+			// If the last contract was chunked, we need to switch to large
+			// contract handling mode
+			if res.subTask == nil && i == len(res.hashes)-1 && res.cont {
+				// If we haven't yet started a large-contract retrieval, create
+				// the subtasks for it within the main account task
+				if tasks, ok := res.mainTask.SubTasks[account]; !ok {
+					var (
+						next common.Hash
+					)
+					step := new(big.Int).Sub(
+						new(big.Int).Div(
+							new(big.Int).Exp(common.Big2, common.Big256, nil),
+							big.NewInt(storageConcurrency),
+						), common.Big1,
+					)
+					for k := 0; k < storageConcurrency; k++ {
+						last := common.BigToHash(new(big.Int).Add(next.Big(), step))
+						if k == storageConcurrency-1 {
+							// Make sure we don't overflow if the step is not a proper divisor
+							last = common.HexToHash("0xffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff")
 						}
-						res.mainTask.SubTasks[account] = tasks
+						tasks = append(tasks, &storageTask{
+							Next: next,
+							Last: last,
+							root: acc.Root,
+						})
+						log.Debug("Created storage sync task", "account", account, "root", acc.Root, "from", next, "last", last)
+						next = common.BigToHash(new(big.Int).Add(last.Big(), common.Big1))
+					}
+					res.mainTask.SubTasks[account] = tasks
 
-						// Since we've just created the sub-tasks, this response
-						// is surely for the first one (zero origin)
-						res.subTask = tasks[0]
+					// Since we've just created the sub-tasks, this response
+					// is surely for the first one (zero origin)
+					res.subTask = tasks[0]
+				}
+			}
+			// If we're in large contract delivery mode, forward the subtask
+			if res.subTask != nil {
+				// Ensure the response doesn't overflow into the subsequent task
+				last := res.subTask.Last.Big()
+				for k, hash := range res.hashes[i] {
+					if hash.Big().Cmp(last) > 0 {
+						// Chunk overflown, cut off excess, but also update the boundary
+						for l := k; l < len(res.hashes[i]); l++ {
+							if err := res.tries[i].Prove(res.hashes[i][l][:], 0, res.overflow); err != nil {
+								panic(err) // Account range was already proven, what happened
+							}
+						}
+						res.hashes[i] = res.hashes[i][:k]
+						res.slots[i] = res.slots[i][:k]
+						res.cont = false // Mark range completed
+						break
 					}
 				}
-				// If we're in large contract delivery mode, forward the subtask
-				if res.subTask != nil {
-					// Ensure the response doesn't overflow into the subsequent task
-					last := res.subTask.Last.Big()
-					for k, hash := range res.hashes[i] {
-						if hash.Big().Cmp(last) > 0 {
-							// Chunk overflown, cut off excess, but also update the boundary
-							for l := k; l < len(res.hashes[i]); l++ {
-								if err := res.tries[i].Prove(res.hashes[i][l][:], 0, res.overflow); err != nil {
-									panic(err) // Account range was already proven, what happened
-								}
-							}
-							res.hashes[i] = res.hashes[i][:k]
-							res.slots[i] = res.slots[i][:k]
-							res.cont = false // Mark range completed
-							break
-						}
-					}
-					// Forward the relevant storage chunk (even if created just now)
-					if res.cont {
-						res.subTask.Next = common.BigToHash(new(big.Int).Add(res.hashes[i][len(res.hashes[i])-1].Big(), big.NewInt(1)))
-					} else {
-						res.subTask.done = true
-					}
+				// Forward the relevant storage chunk (even if created just now)
+				if res.cont {
+					res.subTask.Next = common.BigToHash(new(big.Int).Add(res.hashes[i][len(res.hashes[i])-1].Big(), big.NewInt(1)))
+				} else {
+					res.subTask.done = true
 				}
 			}
 		}
