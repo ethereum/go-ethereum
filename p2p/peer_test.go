@@ -179,6 +179,27 @@ func TestPeerPing(t *testing.T) {
 	}
 }
 
+func TestPeerBan(t *testing.T) {
+	var (
+		fd1, _ = net.Pipe()
+		key1   = newkey()
+		t1     = newTestTransport(&key1.PublicKey, fd1, nil)
+	)
+	c1 := &conn{fd: fd1, node: newNode(uintID(1), ""), transport: t1}
+	peer := newPeer(log.Root(), c1, nil)
+	peer.Ban()
+	remoteReq, banned, err := peer.run()
+	if remoteReq {
+		t.Fatal("remote requested expected to be false")
+	}
+	if !banned {
+		t.Fatal("expected peer to be banned")
+	}
+	if err != nil {
+		t.Fatal(err)
+	}
+}
+
 // This test checks that a disconnect message sent by a peer is returned
 // as the error from Peer.run.
 func TestPeerDisconnect(t *testing.T) {

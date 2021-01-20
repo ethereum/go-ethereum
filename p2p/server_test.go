@@ -233,6 +233,42 @@ func TestServerRemovePeerDisconnect(t *testing.T) {
 	}
 }
 
+func TestServerBanPeer(t *testing.T) {
+	srv1 := &Server{Config: Config{
+		PrivateKey:  newkey(),
+		MaxPeers:    1,
+		NoDiscovery: true,
+		Logger:      testlog.Logger(t, log.LvlTrace).New("server", "1"),
+	}}
+	srv2 := &Server{Config: Config{
+		PrivateKey:  newkey(),
+		MaxPeers:    1,
+		NoDiscovery: true,
+		NoDial:      true,
+		ListenAddr:  "127.0.0.1:0",
+		Logger:      testlog.Logger(t, log.LvlTrace).New("server", "2"),
+	}}
+	srv1.Start()
+	defer srv1.Stop()
+	srv2.Start()
+	defer srv2.Stop()
+	// connecting to server2
+	if !syncAddPeer(srv1, srv2.Self()) {
+		t.Fatal("peer not connected")
+	}
+	// banning server2
+	srv1.Peers()[0].Ban()
+	// wait until ban is effective
+	time.Sleep(100 * time.Millisecond)
+	if srv1.PeerCount() > 0 {
+		t.Fatal("banned peer still connected")
+	}
+	// try to reconnect to server2
+	if syncAddPeer(srv1, srv2.Self()) {
+		t.Fatal("should not be able to connect to banned peer")
+	}
+}
+
 // This test checks that connections are disconnected just after the encryption handshake
 // when the server is at capacity. Trusted connections should still be accepted.
 func TestServerAtCap(t *testing.T) {

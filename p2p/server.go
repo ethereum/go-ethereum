@@ -1070,10 +1070,14 @@ func (srv *Server) runPeer(p *Peer) {
 	// after the send to delpeer so subscribers have a consistent view of
 	// the peer set (i.e. Server.Peers() doesn't include the peer when the
 	// event is received.
+	errString := ""
+	if err != nil {
+		errString = err.Error()
+	}
 	srv.peerFeed.Send(&PeerEvent{
 		Type:          PeerEventTypeDrop,
 		Peer:          p.ID(),
-		Error:         err.Error(),
+		Error:         errString,
 		RemoteAddress: p.RemoteAddr().String(),
 		LocalAddress:  p.LocalAddr().String(),
 	})
