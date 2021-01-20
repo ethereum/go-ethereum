@@ -348,10 +348,11 @@ type Syncer struct {
 	db    ethdb.KeyValueStore // Database to store the trie nodes into (and dedup)
 	bloom *trie.SyncBloom     // Bloom filter to deduplicate nodes for state fixup
 
-	root   common.Hash    // Current state trie root being synced
-	tasks  []*accountTask // Current account task set being synced
-	healer *healTask      // Current state healing task being executed
-	update chan struct{}  // Notification channel for possible sync progression
+	root    common.Hash    // Current state trie root being synced
+	tasks   []*accountTask // Current account task set being synced
+	snapped bool           // Flag to signal that snap phase is done
+	healer  *healTask      // Current state healing task being executed
+	update  chan struct{}  // Notification channel for possible sync progression
 
 	peers    map[string]PeerIF // Currently active peers to download from
 	peerJoin *event.Feed       // Event feed to react to peers joining
@@ -628,6 +629,7 @@ func (s *Syncer) loadSyncStatus() {
 				log.Debug("Scheduled account sync task", "from", task.Next, "last", task.Last)
 			}
 			s.tasks = progress.Tasks
+			s.snapped = len(s.tasks) == 0
 
 			s.accountSynced = progress.AccountSynced
 			s.accountBytes = progress.AccountBytes
@@ -706,6 +708,11 @@ func (s *Syncer) cleanAccountTasks() {
 			s.tasks = append(s.tasks[:i], s.tasks[i+1:]...)
 			i--
 		}
+	}
+	if len(s.tasks) == 0 {
+		s.lock.Lock()
+		s.snapped = true
+		s.lock.Unlock()
 	}
 }
 
@@ -2073,7 +2080,7 @@ func (s *Syncer) OnAccounts(peer PeerIF, id uint64, hashes []common.Hash, accoun
 // bytes codes are received from a remote peer.
 func (s *Syncer) OnByteCodes(peer PeerIF, id uint64, bytecodes [][]byte) error {
 	s.lock.RLock()
-	syncing := len(s.tasks) > 0
+	syncing := !s.snapped
 	s.lock.RUnlock()
 
 	if syncing {
