@@ -115,7 +115,7 @@ func (h *serverHandler) runPeer(version uint, p *p2p.Peer, rw p2p.MsgReadWriter)
 	return h.handle(peer)
 }
 
-func (h *serverHandler) handle(p *clientPeer) error {
+func (h *serverHandler) handle(p *clientPeer) (err error) {
 	p.Log().Debug("Light Ethereum peer connected", "name", p.Name())
 
 	// Execute the LES handshake
@@ -181,6 +181,12 @@ func (h *serverHandler) handle(p *clientPeer) error {
 	connectedAt := mclock.Now()
 	defer func() {
 		wg.Wait() // Ensure all background task routines have exited.
+
+		if err == errTooManyInvalidRequest {
+			h.server.peers.banPeer(p.id)
+		} else {
+			h.server.peers.unregister(p.id)
+		}
 		h.server.clientPool.disconnect(p)
 		p.balance = nil
 		activeCount, _ := h.server.clientPool.pp.Active()
