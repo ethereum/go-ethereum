@@ -153,7 +153,7 @@ The export-preimages command export hash preimages to an RLP encoded stream`,
 		Action:    utils.MigrateFlags(copyDb),
 		Name:      "copydb",
 		Usage:     "Create a local chain from a target chaindata folder",
-		ArgsUsage: "<sourceChaindataDir>",
+		ArgsUsage: "<sourceChaindataDir> <sourceChaindataAncientDir>",
 		Flags: []cli.Flag{
 			utils.DataDirFlag,
 			utils.CacheFlag,
@@ -169,7 +169,9 @@ The export-preimages command export hash preimages to an RLP encoded stream`,
 		},
 		Category: "BLOCKCHAIN COMMANDS",
 		Description: `
-The first argument must be the directory containing the blockchain to download from`,
+The first argument must be the directory containing the blockchain to
+download from, and the second argument must be the ancient directory for
+that same blockchain.`,
 	}
 	removedbCommand = cli.Command{
 		Action:    utils.MigrateFlags(removeDB),
