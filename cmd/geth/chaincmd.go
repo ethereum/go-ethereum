@@ -153,7 +153,7 @@ The export-preimages command export hash preimages to an RLP encoded stream`,
 		Action:    utils.MigrateFlags(copyDb),
 		Name:      "copydb",
 		Usage:     "Create a local chain from a target chaindata folder",
-		ArgsUsage: "<sourceChaindataDir>",
+		ArgsUsage: "<sourceChaindataDir> [<sourceChaindataAncientDir>]",
 		Flags: []cli.Flag{
 			utils.DataDirFlag,
 			utils.CacheFlag,
@@ -169,7 +169,9 @@ The export-preimages command export hash preimages to an RLP encoded stream`,
 		},
 		Category: "BLOCKCHAIN COMMANDS",
 		Description: `
-The first argument must be the directory containing the blockchain to download from`,
+The first argument must be the directory containing the blockchain to
+download from. The second argument is optional, and lets you specify
+a non-standard location for said blockchain's ancient directory.`,
 	}
 	removedbCommand = cli.Command{
 		Action:    utils.MigrateFlags(removeDB),
@@ -448,9 +450,16 @@ func copyDb(ctx *cli.Context) error {
 	if len(ctx.Args()) < 1 {
 		utils.Fatalf("Source chaindata directory path argument missing")
 	}
-	if len(ctx.Args()) < 2 {
-		utils.Fatalf("Source ancient chain directory path argument missing")
+	srcRoot := ctx.Args().First()
+
+	// Get user-defined ancient directory if available, otherwise use default.
+	var srcFreezer string
+	if len(ctx.Args()) >= 2 {
+		srcFreezer = ctx.Args().Get(1)
+	} else {
+		srcFreezer = filepath.Join(srcRoot, "ancient")
 	}
+
 	// Initialize a new chain for the running node to sync into
 	stack, _ := makeConfigNode(ctx)
 	defer stack.Close()
@@ -465,7 +474,7 @@ func copyDb(ctx *cli.Context) error {
 	dl := downloader.New(0, chainDb, syncBloom, new(event.TypeMux), chain, nil, nil)
 
 	// Create a source peer to satisfy downloader requests from
-	db, err := rawdb.NewLevelDBDatabaseWithFreezer(ctx.Args().First(), ctx.GlobalInt(utils.CacheFlag.Name)/2, 256, ctx.Args().Get(1), "")
+	db, err := rawdb.NewLevelDBDatabaseWithFreezer(srcRoot, ctx.GlobalInt(utils.CacheFlag.Name)/2, 256, srcFreezer, "")
 	if err != nil {
 		return err
 	}
