@@ -154,6 +154,20 @@ func (pre *Prestate) Apply(vmConfig vm.Config, chainConfig *params.ChainConfig,
 			for _, addr := range evm.ActivePrecompiles() {
 				statedb.AddAddressToAccessList(addr)
 			}
+			if al := msg.AccessList(); al != nil {
+				for _, el := range *al {
+					statedb.AddAddressToAccessList(*el.Address)
+					for _, key := range el.StorageKeys {
+						statedb.AddSlotToAccessList(*el.Address, *key)
+					}
+				}
+			}
+		} else {
+			if tx.Type() != types.LegacyTxId {
+				log.Info("rejected tx", "index", i, "hash", tx.Hash(), "error", core.ErrTxTypeNotSupported)
+				rejectedTxs = append(rejectedTxs, i)
+				continue
+			}
 		}
 		snapshot := statedb.Snapshot()
 		// (ret []byte, usedGas uint64, failed bool, err error)

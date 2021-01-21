@@ -17,6 +17,7 @@
 package t8ntool
 
 import (
+	"crypto/ecdsa"
 	"encoding/json"
 	"fmt"
 	"io/ioutil"
@@ -24,6 +25,7 @@ import (
 	"os"
 	"path"
 
+	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core"
 	"github.com/ethereum/go-ethereum/core/state"
@@ -64,9 +66,9 @@ func (n *NumberedError) Code() int {
 }
 
 type input struct {
-	Alloc core.GenesisAlloc  `json:"alloc,omitempty"`
-	Env   *stEnv             `json:"env,omitempty"`
-	Txs   types.Transactions `json:"txs,omitempty"`
+	Alloc core.GenesisAlloc `json:"alloc,omitempty"`
+	Env   *stEnv            `json:"env,omitempty"`
+	Txs   []*txWithKey      `json:"txs,omitempty"`
 }
 
 func Main(ctx *cli.Context) error {
@@ -135,7 +137,7 @@ func Main(ctx *cli.Context) error {
 		txStr     = ctx.String(InputTxsFlag.Name)
 		inputData = &input{}
 	)
-
+	// Figure out the prestate alloc
 	if allocStr == stdinSelector || envStr == stdinSelector || txStr == stdinSelector {
 		decoder := json.NewDecoder(os.Stdin)
 		decoder.Decode(inputData)
@@ -151,7 +153,9 @@ func Main(ctx *cli.Context) error {
 			return NewError(ErrorJson, fmt.Errorf("Failed unmarshaling alloc-file: %v", err))
 		}
 	}
+	prestate.Pre = inputData.Alloc
 
+	// Set the block environment
 	if envStr != stdinSelector {
 		inFile, err := os.Open(envStr)
 		if err != nil {
@@ -165,26 +169,8 @@ func Main(ctx *cli.Context) error {
 		}
 		inputData.Env = &env
 	}
-
-	if txStr != stdinSelector {
-		inFile, err := os.Open(txStr)
-		if err != nil {
-			return NewError(ErrorIO, fmt.Errorf("failed reading txs file: %v", err))
-		}
-		defer inFile.Close()
-		decoder := json.NewDecoder(inFile)
-		var txs types.Transactions
-		if err := decoder.Decode(&txs); err != nil {
-			return NewError(ErrorJson, fmt.Errorf("Failed unmarshaling txs-file: %v", err))
-		}
-		inputData.Txs = txs
-	}
-
-	prestate.Pre = inputData.Alloc
 	prestate.Env = *inputData.Env
-	txs = inputData.Txs
 
-	// Iterate over all the tests, run them and aggregate the results
 	vmConfig := vm.Config{
 		Tracer: tracer,
 		Debug:  (tracer != nil),
@@ -200,17 +186,104 @@ func Main(ctx *cli.Context) error {
 	// Set the chain id
 	chainConfig.ChainID = big.NewInt(ctx.Int64(ChainIDFlag.Name))
 
+	var txsWithKeys []*txWithKey
+	if txStr != stdinSelector {
+		inFile, err := os.Open(txStr)
+		if err != nil {
+			return NewError(ErrorIO, fmt.Errorf("failed reading txs file: %v", err))
+		}
+		defer inFile.Close()
+		decoder := json.NewDecoder(inFile)
+		if err := decoder.Decode(&txsWithKeys); err != nil {
+			return NewError(ErrorJson, fmt.Errorf("Failed unmarshaling txs-file: %v", err))
+		}
+	} else {
+		txsWithKeys = inputData.Txs
+	}
+	// We may have to sign the transactions.
+	signer := types.MakeSigner(chainConfig, big.NewInt(int64(prestate.Env.Number)))
+
+	if txs, err = signUnsignedTransactions(txsWithKeys, signer); err != nil {
+		return NewError(ErrorJson, fmt.Errorf("Failed signing transactions: %v", err))
+	}
+
+	// Iterate over all the tests, run them and aggregate the results
+
 	// Run the test and aggregate the result
 	state, result, err := prestate.Apply(vmConfig, chainConfig, txs, ctx.Int64(RewardFlag.Name), getTracer)
 	if err != nil {
 		return err
 	}
 	// Dump the excution result
-	//postAlloc := state.DumpGenesisFormat(false, false, false)
 	collector := make(Alloc)
 	state.DumpToCollector(collector, false, false, false, nil, -1)
 	return dispatchOutput(ctx, baseDir, result, collector)
 
+}
+
+// txWithKey is a helper-struct, to allow us to use the types.Transaction along with
+// a `secretKey`-field, for input
+type txWithKey struct {
+	key *ecdsa.PrivateKey
+	tx  *types.Transaction
+}
+
+func (t *txWithKey) UnmarshalJSON(input []byte) error {
+	// Read the secretKey, if present
+	type sKey struct {
+		Key *common.Hash `json:"secretKey"`
+	}
+	var key sKey
+	if err := json.Unmarshal(input, &key); err != nil {
+		return err
+	}
+	if key.Key != nil {
+		k := key.Key.Hex()[2:]
+		if ecdsaKey, err := crypto.HexToECDSA(k); err != nil {
+			return err
+		} else {
+			t.key = ecdsaKey
+		}
+	}
+	// Now, read the transaction itself
+	var tx types.Transaction
+	if err := json.Unmarshal(input, &tx); err != nil {
+		return err
+	}
+	t.tx = &tx
+	return nil
+}
+
+// signUnsignedTransactions converts the input txs to canonical transactions.
+//
+// The transactions can have two forms, either
+//   1. unsigned or
+//   2. signed
+// For (1), r, s, v, need so be zero, and the `secretKey` needs to be set.
+// If so, we sign it here and now, with the given `secretKey`
+// If the condition above is not met, then it's considered a signed transaction.
+//
+// To manage this, we read the transactions twice, first trying to read the secretKeys,
+// and secondly to read them with the standard tx json format
+func signUnsignedTransactions(txs []*txWithKey, signer types.Signer) (types.Transactions, error) {
+	var signedTxs []*types.Transaction
+	for i, txWithKey := range txs {
+		tx := txWithKey.tx
+		key := txWithKey.key
+		v, r, s := tx.RawSignatureValues()
+		if key != nil && v.BitLen()+r.BitLen()+s.BitLen() == 0 {
+			// This transaction needs to be signed
+			signed, err := types.SignTx(tx, signer, key)
+			if err != nil {
+				return nil, NewError(ErrorJson, fmt.Errorf("Tx %d: failed to sign tx: %v", i, err))
+			}
+			signedTxs = append(signedTxs, signed)
+		} else {
+			// Already signed
+			signedTxs = append(signedTxs, tx)
+		}
+	}
+	return signedTxs, nil
 }
 
 type Alloc map[common.Address]core.GenesisAccount
