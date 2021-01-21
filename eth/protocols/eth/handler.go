@@ -93,6 +93,9 @@ type Backend interface {
 	// the remote peer. Only packets not consumed by the protocol handler will
 	// be forwarded to the backend.
 	Handle(peer *Peer, packet Packet) error
+
+	// Catalist returns true if the backend in running in catalyst mode
+	Catalyst() bool
 }
 
 // TxPool defines the methods needed by the protocol handler to serve transactions.
@@ -398,42 +401,46 @@ func handleMessage(backend Backend, peer *Peer) error {
 		return backend.Handle(peer, res)
 
 	case msg.Code == NewBlockHashesMsg:
-		// A batch of new block announcements just arrived
-		ann := new(NewBlockHashesPacket)
-		if err := msg.Decode(ann); err != nil {
-			return fmt.Errorf("%w: message %v: %v", errDecode, msg, err)
+		if !backend.Catalyst() {
+			// A batch of new block announcements just arrived
+			ann := new(NewBlockHashesPacket)
+			if err := msg.Decode(ann); err != nil {
+				return fmt.Errorf("%w: message %v: %v", errDecode, msg, err)
+			}
+			// Mark the hashes as present at the remote node
+			for _, block := range *ann {
+				peer.markBlock(block.Hash)
+			}
+			// Deliver them all to the backend for queuing
+			return backend.Handle(peer, ann)
 		}
-		// Mark the hashes as present at the remote node
-		for _, block := range *ann {
-			peer.markBlock(block.Hash)
-		}
-		// Deliver them all to the backend for queuing
-		return backend.Handle(peer, ann)
 
 	case msg.Code == NewBlockMsg:
-		// Retrieve and decode the propagated block
-		ann := new(NewBlockPacket)
-		if err := msg.Decode(ann); err != nil {
-			return fmt.Errorf("%w: message %v: %v", errDecode, msg, err)
-		}
-		if hash := types.CalcUncleHash(ann.Block.Uncles()); hash != ann.Block.UncleHash() {
-			log.Warn("Propagated block has invalid uncles", "have", hash, "exp", ann.Block.UncleHash())
-			break // TODO(karalabe): return error eventually, but wait a few releases
-		}
-		if hash := types.DeriveSha(ann.Block.Transactions(), trie.NewStackTrie(nil)); hash != ann.Block.TxHash() {
-			log.Warn("Propagated block has invalid body", "have", hash, "exp", ann.Block.TxHash())
-			break // TODO(karalabe): return error eventually, but wait a few releases
-		}
-		if err := ann.sanityCheck(); err != nil {
-			return err
-		}
-		ann.Block.ReceivedAt = msg.ReceivedAt
-		ann.Block.ReceivedFrom = peer
+		if !backend.Catalyst() {
+			// Retrieve and decode the propagated block
+			ann := new(NewBlockPacket)
+			if err := msg.Decode(ann); err != nil {
+				return fmt.Errorf("%w: message %v: %v", errDecode, msg, err)
+			}
+			if hash := types.CalcUncleHash(ann.Block.Uncles()); hash != ann.Block.UncleHash() {
+				log.Warn("Propagated block has invalid uncles", "have", hash, "exp", ann.Block.UncleHash())
+				break // TODO(karalabe): return error eventually, but wait a few releases
+			}
+			if hash := types.DeriveSha(ann.Block.Transactions(), trie.NewStackTrie(nil)); hash != ann.Block.TxHash() {
+				log.Warn("Propagated block has invalid body", "have", hash, "exp", ann.Block.TxHash())
+				break // TODO(karalabe): return error eventually, but wait a few releases
+			}
+			if err := ann.sanityCheck(); err != nil {
+				return err
+			}
+			ann.Block.ReceivedAt = msg.ReceivedAt
+			ann.Block.ReceivedFrom = peer
 
-		// Mark the peer as owning the block
-		peer.markBlock(ann.Block.Hash())
+			// Mark the peer as owning the block
+			peer.markBlock(ann.Block.Hash())
 
-		return backend.Handle(peer, ann)
+			return backend.Handle(peer, ann)
+		}
 
 	case msg.Code == NewPooledTransactionHashesMsg && peer.version >= ETH65:
 		// New transaction announcement arrived, make sure we have

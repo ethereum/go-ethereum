@@ -758,6 +758,11 @@ var (
 		Usage: "External EVM configuration (default = built-in interpreter)",
 		Value: "",
 	}
+	// Catalyst
+	CatalystFlag = cli.BoolFlag{
+		Name:  "catalyst",
+		Usage: "Set geth into catalyst mode",
+	}
 )
 
 // MakeDataDir retrieves the currently requested data directory, terminating
@@ -1717,6 +1722,9 @@ func SetEthConfig(ctx *cli.Context, stack *node.Node, cfg *ethconfig.Config) {
 		if cfg.NetworkId == 1 {
 			SetDNSDiscoveryDefaults(cfg, params.MainnetGenesisHash)
 		}
+	}
+	if ctx.GlobalIsSet(CatalystFlag.Name) {
+		cfg.Catalyst = true
 	}
 }
 

@@ -488,7 +488,7 @@ func opBeaconStateRoot(pc *uint64, interpreter *EVMInterpreter, callContext *cal
 		return nil, nil
 	}
 	var upper, lower uint64
-	upper = interpreter.evm.BlockNumber.Uint64()
+	upper = interpreter.evm.Context.BlockNumber.Uint64()
 	if upper < 257 {
 		lower = 0
 	} else {
