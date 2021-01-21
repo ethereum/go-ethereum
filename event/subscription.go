@@ -95,12 +95,9 @@ func (s *funcSub) Err() <-chan error {
 // Resubscribe applies backoff between calls to fn. The time between calls is adapted
 // based on the error rate, but will never exceed backoffMax.
 func Resubscribe(backoffMax time.Duration, fn ResubscribeFunc) Subscription {
-	return ResubscribeWithErrFunc(
-		backoffMax,
-		func(ctx context.Context, _ error) (Subscription, error) {
-			return fn(ctx)
-		},
-	)
+	return ResubscribeErr(backoffMax, func(ctx context.Context, _ error) (Subscription, error) {
+		return fn(ctx)
+	})
 }
 
 // A ResubscribeFunc attempts to establish a subscription.
