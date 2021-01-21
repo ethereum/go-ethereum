@@ -199,7 +199,7 @@ func createNode(t *testing.T, gqlEnabled bool) *node.Node {
 
 func createGQLService(t *testing.T, stack *node.Node) {
 	// create backend
-	ethConf := &eth.Config{
+	ethConf := &ethconfig.Config{
 		Genesis: &core.Genesis{
 			Config:     params.AllEthashProtocolChanges,
 			GasLimit:   11500000,
