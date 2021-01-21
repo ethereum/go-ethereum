@@ -127,43 +127,30 @@ func TestResubscribeWithErrorHandler(t *testing.T) {
 	var i int
 	nfails := 6
 	subErrs := make([]string, 0)
-	sub := ResubscribeWithErrFunc(
-		100*time.Millisecond,
-		func(ctx context.Context, lastErr error) (Subscription, error) {
-			i++
-
-			var lastErrVal string
-			if lastErr != nil {
-				lastErrVal = lastErr.Error()
+	sub := ResubscribeErr(100*time.Millisecond, func(ctx context.Context, lastErr error) (Subscription, error) {
+		i++
+		var lastErrVal string
+		if lastErr != nil {
+			lastErrVal = lastErr.Error()
+		}
+		subErrs = append(subErrs, lastErrVal)
+		sub := NewSubscription(func(unsubscribed <-chan struct{}) error {
+			if i < nfails {
+				return fmt.Errorf("err-%v", i)
+			} else {
+				return nil
 			}
-			subErrs = append(subErrs, lastErrVal)
-
-			sub := NewSubscription(func(unsubscribed <-chan struct{}) error {
-				if i < nfails {
-					return fmt.Errorf("err-%v", i)
-				} else {
-					return nil
-				}
-			})
-			return sub, nil
-		},
-	)
+		})
+		return sub, nil
+	})
 
 	<-sub.Err()
 	if i != nfails {
-		t.Fatalf(
-			"resubscribe function called %d times, want %d times",
-			i,
-			nfails,
-		)
+		t.Fatalf("resubscribe function called %d times, want %d times", i, nfails)
 	}
 
 	expectedSubErrs := []string{"", "err-1", "err-2", "err-3", "err-4", "err-5"}
 	if !reflect.DeepEqual(subErrs, expectedSubErrs) {
-		t.Fatalf(
-			"unexpected subscription errors %v, want %v",
-			subErrs,
-			expectedSubErrs,
-		)
+		t.Fatalf("unexpected subscription errors %v, want %v", subErrs, expectedSubErrs)
 	}
 }
