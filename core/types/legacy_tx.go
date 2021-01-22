@@ -78,6 +78,7 @@ func (tx *LegacyTransaction) Protected() bool         { return isProtectedV(tx.V
 func (tx *LegacyTransaction) AccessList() *AccessList { return nil }
 func (tx *LegacyTransaction) Data() []byte            { return common.CopyBytes(tx.Payload) }
 func (tx *LegacyTransaction) Gas() uint64             { return tx.GasLimit }
+func (tx *LegacyTransaction) GasPrice() *big.Int      { return new(big.Int).Set(tx.Price) }
 func (tx *LegacyTransaction) FeeCap() *big.Int        { return new(big.Int).Set(tx.Price) }
 func (tx *LegacyTransaction) Tip() *big.Int           { return new(big.Int).Set(tx.Price) }
 func (tx *LegacyTransaction) Value() *big.Int         { return new(big.Int).Set(tx.Amount) }

@@ -50,7 +50,7 @@ func (t *Transaction) MarshalJSON() ([]byte, error) {
 		enc.Type = hexutil.Uint64(t.Type())
 		enc.Chain = (*hexutil.Big)(t.ChainId())
 		enc.AccessList = t.AccessList()
-		enc.Price = (*hexutil.Big)(t.FeeCap())
+		enc.Price = (*hexutil.Big)(t.GasPrice())
 	}
 	if t.Type() == DynamicFeeTxId {
 		enc.Type = hexutil.Uint64(t.Type())

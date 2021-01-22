@@ -105,6 +105,7 @@ func (tx *AccessListTransaction) AccessList() *AccessList { return tx.Accesses }
 func (tx *AccessListTransaction) Data() []byte            { return common.CopyBytes(tx.Payload) }
 func (tx *AccessListTransaction) Gas() uint64             { return tx.GasLimit }
 func (tx *AccessListTransaction) FeeCap() *big.Int        { return new(big.Int).Set(tx.Price) }
+func (tx *AccessListTransaction) GasPrice() *big.Int      { return new(big.Int).Set(tx.Price) }
 func (tx *AccessListTransaction) Tip() *big.Int           { return new(big.Int).Set(tx.Price) }
 func (tx *AccessListTransaction) Value() *big.Int         { return new(big.Int).Set(tx.Amount) }
 func (tx *AccessListTransaction) Nonce() uint64           { return tx.AccountNonce }

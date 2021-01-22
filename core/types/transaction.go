@@ -63,6 +63,7 @@ type inner interface {
 	AccessList() *AccessList
 	Data() []byte
 	Gas() uint64
+	GasPrice() *big.Int
 	// FeeCap returns the max fee per gas the transaction will pay.
 	FeeCap() *big.Int
 	// Tip returns the max tip per gas the transaction will pay the coinbase.
@@ -182,6 +183,7 @@ func sanityCheckSignature(v *big.Int, r *big.Int, s *big.Int, maybeProtected boo
 func (tx *Transaction) Data() []byte            { return tx.inner.Data() }
 func (tx *Transaction) AccessList() *AccessList { return tx.inner.AccessList() }
 func (tx *Transaction) Gas() uint64             { return tx.inner.Gas() }
+func (tx *Transaction) GasPrice() *big.Int      { return new(big.Int).Set(tx.inner.GasPrice()) }
 func (tx *Transaction) FeeCap() *big.Int        { return new(big.Int).Set(tx.inner.FeeCap()) }
 func (tx *Transaction) Tip() *big.Int           { return new(big.Int).Set(tx.inner.Tip()) }
 
@@ -468,6 +470,7 @@ type Message struct {
 	nonce      uint64
 	amount     *big.Int
 	gasLimit   uint64
+	gasPrice   *big.Int
 	feeCap     *big.Int
 	tip        *big.Int
 	data       []byte
@@ -475,13 +478,14 @@ type Message struct {
 	checkNonce bool
 }
 
-func NewMessage(from common.Address, to *common.Address, nonce uint64, amount *big.Int, gasLimit uint64, feeCap, tip *big.Int, data []byte, accessList *AccessList, checkNonce bool) Message {
+func NewMessage(from common.Address, to *common.Address, nonce uint64, amount *big.Int, gasLimit uint64, gasPrice *big.Int, feeCap, tip *big.Int, data []byte, accessList *AccessList, checkNonce bool) Message {
 	return Message{
 		from:       from,
 		to:         to,
 		nonce:      nonce,
 		amount:     amount,
 		gasLimit:   gasLimit,
+		gasPrice:   gasPrice,
 		feeCap:     feeCap,
 		tip:        tip,
 		data:       data,
@@ -495,6 +499,7 @@ func (tx *Transaction) AsMessage(s Signer) (Message, error) {
 	msg := Message{
 		nonce:      tx.Nonce(),
 		gasLimit:   tx.Gas(),
+		gasPrice:   new(big.Int).Set(tx.GasPrice()),
 		feeCap:     new(big.Int).Set(tx.FeeCap()),
 		tip:        new(big.Int).Set(tx.Tip()),
 		to:         tx.To(),
@@ -511,6 +516,7 @@ func (tx *Transaction) AsMessage(s Signer) (Message, error) {
 
 func (m Message) From() common.Address    { return m.from }
 func (m Message) To() *common.Address     { return m.to }
+func (m Message) GasPrice() *big.Int      { return m.gasPrice }
 func (m Message) FeeCap() *big.Int        { return m.feeCap }
 func (m Message) Tip() *big.Int           { return m.tip }
 func (m Message) Value() *big.Int         { return m.amount }

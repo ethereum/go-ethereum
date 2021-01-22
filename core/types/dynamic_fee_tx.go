@@ -88,6 +88,7 @@ func (tx *DynamicFeeTransaction) Protected() bool         { return true }
 func (tx *DynamicFeeTransaction) AccessList() *AccessList { return nil }
 func (tx *DynamicFeeTransaction) Data() []byte            { return common.CopyBytes(tx.Payload) }
 func (tx *DynamicFeeTransaction) Gas() uint64             { return tx.GasLimit }
+func (tx *DynamicFeeTransaction) GasPrice() *big.Int      { return new(big.Int) }
 func (tx *DynamicFeeTransaction) FeeCap() *big.Int        { return new(big.Int).Set(tx.GasFee) }
 func (tx *DynamicFeeTransaction) Tip() *big.Int           { return new(big.Int).Set(tx.InclusionFee) }
 func (tx *DynamicFeeTransaction) Value() *big.Int         { return new(big.Int).Set(tx.Amount) }
