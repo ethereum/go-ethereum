@@ -284,21 +284,34 @@ findFork:
 			return errors.New("empty range")
 		}
 		if shortForkLeft != 0 && shortForkRight != 0 {
+			// The fork point is root node, unset the entire trie
+			if parent == nil {
+				n = nil
+				return nil
+			}
 			parent.(*fullNode).Children[left[pos-1]] = nil
 			return nil
 		}
 		// Only one proof points to non-existent key.
 		if shortForkRight != 0 {
-			// Unset left proof's path
 			if _, ok := rn.Val.(valueNode); ok {
+				// The fork point is root node, unset the entire trie
+				if parent == nil {
+					n = nil
+					return nil
+				}
 				parent.(*fullNode).Children[left[pos-1]] = nil
 				return nil
 			}
 			return unset(rn, rn.Val, left[pos:], len(rn.Key), false)
 		}
 		if shortForkLeft != 0 {
-			// Unset right proof's path.
 			if _, ok := rn.Val.(valueNode); ok {
+				// The fork point is root node, unset the entire trie
+				if parent == nil {
+					n = nil
+					return nil
+				}
 				parent.(*fullNode).Children[right[pos-1]] = nil
 				return nil
 			}

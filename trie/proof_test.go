@@ -384,6 +384,25 @@ func TestOneElementRangeProof(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Expected no error, got %v", err)
 	}
+
+	// Test the mini trie with only a single element.
+	tinyTrie := new(Trie)
+	entry := &kv{randBytes(32), randBytes(20), false}
+	tinyTrie.Update(entry.k, entry.v)
+
+	first = common.HexToHash("0x0000000000000000000000000000000000000000000000000000000000000000").Bytes()
+	last = entry.k
+	proof = memorydb.New()
+	if err := tinyTrie.Prove(first, 0, proof); err != nil {
+		t.Fatalf("Failed to prove the first node %v", err)
+	}
+	if err := tinyTrie.Prove(last, 0, proof); err != nil {
+		t.Fatalf("Failed to prove the last node %v", err)
+	}
+	_, _, _, _, err = VerifyRangeProof(tinyTrie.Hash(), first, last, [][]byte{entry.k}, [][]byte{entry.v}, proof)
+	if err != nil {
+		t.Fatalf("Expected no error, got %v", err)
+	}
 }
 
 // TestAllElementsProof tests the range proof with all elements.
