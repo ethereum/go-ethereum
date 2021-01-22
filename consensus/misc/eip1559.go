@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"math/big"
 
+	"github.com/ethereum/go-ethereum/common/math"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/params"
 )
@@ -39,7 +40,7 @@ func CalcBaseFee(parent *types.Header) *big.Int {
 		gasUsedDelta := new(big.Int).SetUint64(parent.GasUsed - parent.GasLimit)
 		x := new(big.Int).Mul(parent.BaseFee, gasUsedDelta)
 		y := new(big.Int).Div(x, gasLimit)
-		baseFeeDelta := max(
+		baseFeeDelta := math.BigMax(
 			new(big.Int).Div(y, baseFeeChangeDenominator),
 			big.NewInt(1),
 		)
@@ -52,17 +53,9 @@ func CalcBaseFee(parent *types.Header) *big.Int {
 		y := new(big.Int).Div(x, gasLimit)
 		baseFeeDelta := new(big.Int).Div(y, baseFeeChangeDenominator)
 
-		return max(
+		return math.BigMax(
 			new(big.Int).Sub(parent.BaseFee, baseFeeDelta),
 			big.NewInt(0),
 		)
 	}
-}
-
-func max(x, y *big.Int) *big.Int {
-	// if x < y
-	if x.Cmp(y) == -1 {
-		return y
-	}
-	return x
 }
