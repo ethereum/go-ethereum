@@ -46,8 +46,8 @@ type (
 // configuration
 func (evm *EVM) ActivePrecompiles() []common.Address {
 	switch {
-	case evm.chainRules.IsYoloV2:
-		return PrecompiledAddressesYoloV2
+	case evm.chainRules.IsYoloV3:
+		return PrecompiledAddressesYoloV3
 	case evm.chainRules.IsIstanbul:
 		return PrecompiledAddressesIstanbul
 	case evm.chainRules.IsByzantium:
@@ -60,8 +60,8 @@ func (evm *EVM) ActivePrecompiles() []common.Address {
 func (evm *EVM) precompile(addr common.Address) (PrecompiledContract, bool) {
 	var precompiles map[common.Address]PrecompiledContract
 	switch {
-	case evm.chainRules.IsYoloV2:
-		precompiles = PrecompiledContractsYoloV2
+	case evm.chainRules.IsYoloV3:
+		precompiles = PrecompiledContractsYoloV3
 	case evm.chainRules.IsIstanbul:
 		precompiles = PrecompiledContractsIstanbul
 	case evm.chainRules.IsByzantium:
@@ -446,7 +446,7 @@ func (evm *EVM) create(caller ContractRef, codeAndHash *codeAndHash, gas uint64,
 	evm.StateDB.SetNonce(caller.Address(), nonce+1)
 	// We add this to the access list _before_ taking a snapshot. Even if the creation fails,
 	// the access-list change should not be rolled back
-	if evm.chainRules.IsYoloV2 {
+	if evm.chainRules.IsYoloV3 {
 		evm.StateDB.AddAddressToAccessList(address)
 	}
 	// Ensure there's no existing contract already at the designated address

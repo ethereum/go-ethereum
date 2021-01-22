@@ -93,7 +93,7 @@ func applyTransaction(msg types.Message, config *params.ChainConfig, bc ChainCon
 	// Create a new context to be used in the EVM environment
 	txContext := NewEVMTxContext(msg)
 	// Add addresses to access list if applicable
-	if config.IsYoloV2(header.Number) {
+	if config.IsYoloV3(header.Number) {
 		statedb.AddAddressToAccessList(msg.From())
 		if dst := msg.To(); dst != nil {
 			statedb.AddAddressToAccessList(*dst)
