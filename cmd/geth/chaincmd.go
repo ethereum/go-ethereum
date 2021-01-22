@@ -450,19 +450,14 @@ func copyDb(ctx *cli.Context) error {
 	if len(ctx.Args()) < 1 {
 		utils.Fatalf("Source chaindata directory path argument missing")
 	}
-	srcRoot := ctx.Args().First()
-
-	// Get user-defined ancient directory if available, otherwise use default.
-	var srcFreezer string
-	if len(ctx.Args()) >= 2 {
-		srcFreezer = ctx.Args().Get(1)
-	} else {
-		srcFreezer = filepath.Join(srcRoot, "ancient")
-	}
-
 	// Initialize a new chain for the running node to sync into
 	stack, _ := makeConfigNode(ctx)
 	defer stack.Close()
+
+	srcFreezer := ""
+	if len(ctx.Args()) >= 2 {
+		srcFreezer = ctx.Args()[1]
+	}
 
 	chain, chainDb := utils.MakeChain(ctx, stack, false)
 	syncMode := *utils.GlobalTextMarshaler(ctx, utils.SyncModeFlag.Name).(*downloader.SyncMode)
@@ -474,7 +469,7 @@ func copyDb(ctx *cli.Context) error {
 	dl := downloader.New(0, chainDb, syncBloom, new(event.TypeMux), chain, nil, nil)
 
 	// Create a source peer to satisfy downloader requests from
-	db, err := rawdb.NewLevelDBDatabaseWithFreezer(srcRoot, ctx.GlobalInt(utils.CacheFlag.Name)/2, 256, srcFreezer, "")
+	db, err := stack.OpenDatabaseWithFreezer(ctx.Args().First(), ctx.GlobalInt(utils.CacheFlag.Name)/2, 256, srcFreezer, "")
 	if err != nil {
 		return err
 	}
