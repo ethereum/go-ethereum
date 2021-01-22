@@ -23,17 +23,19 @@ import (
 
 	"github.com/ethereum/go-ethereum/common/mclock"
 	"github.com/ethereum/go-ethereum/les/utils"
+	"github.com/ethereum/go-ethereum/p2p/enode"
+	"github.com/ethereum/go-ethereum/p2p/nodestate"
 )
 
 // requestDistributor implements a mechanism that distributes requests to
 // suitable peers, obeying flow control rules and prioritizing them in creation
 // order (even when a resend is necessary).
 type requestDistributor struct {
+	ns           *nodestate.NodeStateMachine
+	peerField    nodestate.Field
 	clock        mclock.Clock
 	reqQueue     *list.List
 	lastReqOrder uint64
-	peers        map[distPeer]struct{}
-	peerLock     sync.RWMutex
 	loopChn      chan struct{}
 	loopNextSent bool
 	lock         sync.Mutex
@@ -74,41 +76,18 @@ type distReq struct {
 }
 
 // newRequestDistributor creates a new request distributor
-func newRequestDistributor(peers *serverPeerSet, clock mclock.Clock) *requestDistributor {
+func newRequestDistributor(ns *nodestate.NodeStateMachine, peerField nodestate.Field, clock mclock.Clock) *requestDistributor {
 	d := &requestDistributor{
-		clock:    clock,
-		reqQueue: list.New(),
-		loopChn:  make(chan struct{}, 2),
-		closeCh:  make(chan struct{}),
-		peers:    make(map[distPeer]struct{}),
-	}
-	if peers != nil {
-		peers.subscribe(d)
+		ns:        ns,
+		peerField: peerField,
+		clock:     clock,
+		reqQueue:  list.New(),
+		loopChn:   make(chan struct{}, 2),
+		closeCh:   make(chan struct{}),
 	}
 	d.wg.Add(1)
 	go d.loop()
 	return d
-}
-
-// registerPeer implements peerSetNotify
-func (d *requestDistributor) registerPeer(p *serverPeer) {
-	d.peerLock.Lock()
-	d.peers[p] = struct{}{}
-	d.peerLock.Unlock()
-}
-
-// unregisterPeer implements peerSetNotify
-func (d *requestDistributor) unregisterPeer(p *serverPeer) {
-	d.peerLock.Lock()
-	delete(d.peers, p)
-	d.peerLock.Unlock()
-}
-
-// registerTestPeer adds a new test peer
-func (d *requestDistributor) registerTestPeer(p distPeer) {
-	d.peerLock.Lock()
-	d.peers[p] = struct{}{}
-	d.peerLock.Unlock()
 }
 
 var (
@@ -197,46 +176,46 @@ func (d *requestDistributor) nextRequest() (distPeer, *distReq, time.Duration) {
 		sel      *utils.WeightedRandomSelect
 	)
 
-	d.peerLock.RLock()
-	defer d.peerLock.RUnlock()
-
-	peerCount := len(d.peers)
-	for (len(checkedPeers) < peerCount || elem == d.reqQueue.Front()) && elem != nil {
-		req := elem.Value.(*distReq)
-		canSend := false
-		now := d.clock.Now()
-		if req.waitForPeers > now {
-			canSend = true
-			wait := time.Duration(req.waitForPeers - now)
-			if bestWait == 0 || wait < bestWait {
-				bestWait = wait
-			}
-		}
-		for peer := range d.peers {
-			if _, ok := checkedPeers[peer]; !ok && peer.canQueue() && req.canSend(peer) {
+	d.ns.Operation(func() {
+		peerCount := d.ns.FieldCount(d.peerField)
+		for (len(checkedPeers) < peerCount || elem == d.reqQueue.Front()) && elem != nil {
+			req := elem.Value.(*distReq)
+			canSend := false
+			now := d.clock.Now()
+			if req.waitForPeers > now {
 				canSend = true
-				cost := req.getCost(peer)
-				wait, bufRemain := peer.waitBefore(cost)
-				if wait == 0 {
-					if sel == nil {
-						sel = utils.NewWeightedRandomSelect(selectPeerWeight)
-					}
-					sel.Update(selectPeerItem{peer: peer, req: req, weight: uint64(bufRemain*1000000) + 1})
-				} else {
-					if bestWait == 0 || wait < bestWait {
-						bestWait = wait
-					}
+				wait := time.Duration(req.waitForPeers - now)
+				if bestWait == 0 || wait < bestWait {
+					bestWait = wait
 				}
-				checkedPeers[peer] = struct{}{}
 			}
+			d.ns.ForEachWithField(d.peerField, func(n *enode.Node, value interface{}) {
+				peer := value.(distPeer)
+				if _, ok := checkedPeers[peer]; !ok && peer.canQueue() && req.canSend(peer) {
+					canSend = true
+					cost := req.getCost(peer)
+					wait, bufRemain := peer.waitBefore(cost)
+					if wait == 0 {
+						if sel == nil {
+							sel = utils.NewWeightedRandomSelect(selectPeerWeight)
+						}
+						sel.Update(selectPeerItem{peer: peer, req: req, weight: uint64(bufRemain*1000000) + 1})
+					} else {
+						if bestWait == 0 || wait < bestWait {
+							bestWait = wait
+						}
+					}
+					checkedPeers[peer] = struct{}{}
+				}
+			})
+			next := elem.Next()
+			if !canSend && elem == d.reqQueue.Front() {
+				close(req.sentChn)
+				d.remove(req)
+			}
+			elem = next
 		}
-		next := elem.Next()
-		if !canSend && elem == d.reqQueue.Front() {
-			close(req.sentChn)
-			d.remove(req)
-		}
-		elem = next
-	}
+	})
 
 	if sel != nil {
 		c := sel.Choose().(selectPeerItem)

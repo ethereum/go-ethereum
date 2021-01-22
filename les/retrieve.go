@@ -25,6 +25,7 @@ import (
 	"time"
 
 	"github.com/ethereum/go-ethereum/light"
+	"github.com/ethereum/go-ethereum/p2p/nodestate"
 )
 
 var (
@@ -36,7 +37,7 @@ var (
 // matching replies by request ID and handles timeouts and resends if necessary.
 type retrieveManager struct {
 	dist               *requestDistributor
-	peers              *serverPeerSet
+	ns                 *nodestate.NodeStateMachine
 	softRequestTimeout func() time.Duration
 
 	lock     sync.RWMutex
@@ -92,9 +93,9 @@ const (
 )
 
 // newRetrieveManager creates the retrieve manager
-func newRetrieveManager(peers *serverPeerSet, dist *requestDistributor, srto func() time.Duration) *retrieveManager {
+func newRetrieveManager(ns *nodestate.NodeStateMachine, dist *requestDistributor, srto func() time.Duration) *retrieveManager {
 	return &retrieveManager{
-		peers:              peers,
+		ns:                 ns,
 		dist:               dist,
 		sentReqs:           make(map[uint64]*sentReq),
 		softRequestTimeout: srto,
@@ -340,8 +341,8 @@ func (r *sentReq) tryRequest() {
 		pp, ok := p.(*serverPeer)
 		if hrto && ok {
 			pp.Log().Debug("Request timed out hard")
-			if r.rm.peers != nil {
-				r.rm.peers.unregister(pp.id)
+			if r.rm.ns != nil {
+				r.rm.ns.SetField(pp.Node(), serverPeerField, nil)
 			}
 		}
 	}()

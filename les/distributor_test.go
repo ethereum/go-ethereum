@@ -18,11 +18,22 @@ package les
 
 import (
 	"math/rand"
+	"reflect"
 	"sync"
 	"testing"
 	"time"
 
 	"github.com/ethereum/go-ethereum/common/mclock"
+	"github.com/ethereum/go-ethereum/core/rawdb"
+	"github.com/ethereum/go-ethereum/p2p/enode"
+	"github.com/ethereum/go-ethereum/p2p/enr"
+	"github.com/ethereum/go-ethereum/p2p/nodestate"
+)
+
+var (
+	testDistSetup     = &nodestate.Setup{}
+	testDistFlag      = testDistSetup.NewFlag("dummy")
+	testDistPeerField = testDistSetup.NewField("testDistPeer", reflect.TypeOf(&testDistPeer{}))
 )
 
 type testDistReq struct {
@@ -118,16 +129,33 @@ func TestRequestDistributorResend(t *testing.T) {
 	testRequestDistributor(t, true)
 }
 
+type dummyIdentity enode.ID
+
+func (id dummyIdentity) Verify(r *enr.Record, sig []byte) error { return nil }
+func (id dummyIdentity) NodeAddr(r *enr.Record) []byte          { return id[:] }
+
+func testNode(b byte) *enode.Node {
+	r := &enr.Record{}
+	r.SetSig(dummyIdentity{b}, []byte{42})
+	n, _ := enode.New(dummyIdentity{b}, r)
+	return n
+}
+
 func testRequestDistributor(t *testing.T, resend bool) {
 	stop := make(chan struct{})
 	defer close(stop)
 
-	dist := newRequestDistributor(nil, &mclock.System{})
+	cdb := rawdb.NewMemoryDatabase()
+	ns := nodestate.NewNodeStateMachine(cdb, []byte("ns:"), &mclock.System{}, testDistSetup)
+	ns.Start()
+	defer ns.Stop()
+
+	dist := newRequestDistributor(ns, testDistPeerField, &mclock.System{})
 	var peers [testDistPeerCount]*testDistPeer
 	for i := range peers {
 		peers[i] = &testDistPeer{}
 		go peers[i].worker(t, !resend, stop)
-		dist.registerTestPeer(peers[i])
+		ns.SetField(testNode(byte(i)), testDistPeerField, peers[i])
 	}
 	// Disable the mechanism that we will wait a few time for request
 	// even there is no suitable peer to send right now.

@@ -20,8 +20,6 @@ import (
 	"crypto/rand"
 	"errors"
 	"math/big"
-	"reflect"
-	"sort"
 	"testing"
 	"time"
 
@@ -34,67 +32,6 @@ import (
 	"github.com/ethereum/go-ethereum/p2p/enode"
 	"github.com/ethereum/go-ethereum/params"
 )
-
-type testServerPeerSub struct {
-	regCh   chan *serverPeer
-	unregCh chan *serverPeer
-}
-
-func newTestServerPeerSub() *testServerPeerSub {
-	return &testServerPeerSub{
-		regCh:   make(chan *serverPeer, 1),
-		unregCh: make(chan *serverPeer, 1),
-	}
-}
-
-func (t *testServerPeerSub) registerPeer(p *serverPeer)   { t.regCh <- p }
-func (t *testServerPeerSub) unregisterPeer(p *serverPeer) { t.unregCh <- p }
-
-func TestPeerSubscription(t *testing.T) {
-	peers := newServerPeerSet()
-	defer peers.close()
-
-	checkIds := func(expect []string) {
-		given := peers.ids()
-		if len(given) == 0 && len(expect) == 0 {
-			return
-		}
-		sort.Strings(given)
-		sort.Strings(expect)
-		if !reflect.DeepEqual(given, expect) {
-			t.Fatalf("all peer ids mismatch, want %v, given %v", expect, given)
-		}
-	}
-	checkPeers := func(peerCh chan *serverPeer) {
-		select {
-		case <-peerCh:
-		case <-time.NewTimer(100 * time.Millisecond).C:
-			t.Fatalf("timeout, no event received")
-		}
-		select {
-		case <-peerCh:
-			t.Fatalf("unexpected event received")
-		case <-time.NewTimer(10 * time.Millisecond).C:
-		}
-	}
-	checkIds([]string{})
-
-	sub := newTestServerPeerSub()
-	peers.subscribe(sub)
-
-	// Generate a random id and create the peer
-	var id enode.ID
-	rand.Read(id[:])
-	peer := newServerPeer(2, NetworkId, false, p2p.NewPeer(id, "name", nil), nil)
-	peers.register(peer)
-
-	checkIds([]string{peer.id})
-	checkPeers(sub.regCh)
-
-	peers.unregister(peer.id)
-	checkIds([]string{})
-	checkPeers(sub.unregCh)
-}
 
 type fakeChain struct{}
 

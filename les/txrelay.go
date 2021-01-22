@@ -22,6 +22,8 @@ import (
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/types"
+	"github.com/ethereum/go-ethereum/p2p/enode"
+	"github.com/ethereum/go-ethereum/p2p/nodestate"
 	"github.com/ethereum/go-ethereum/rlp"
 )
 
@@ -36,43 +38,40 @@ type lesTxRelay struct {
 	retriever *retrieveManager
 }
 
-func newLesTxRelay(ps *serverPeerSet, retriever *retrieveManager) *lesTxRelay {
+func newLesTxRelay(ns *nodestate.NodeStateMachine, retriever *retrieveManager) *lesTxRelay {
 	r := &lesTxRelay{
 		txSent:    make(map[common.Hash]*types.Transaction),
 		txPending: make(map[common.Hash]struct{}),
 		retriever: retriever,
 		stop:      make(chan struct{}),
 	}
-	ps.subscribe(r)
+	ns.SubscribeField(serverPeerField, func(node *enode.Node, state nodestate.Flags, oldValue, newValue interface{}) {
+		r.lock.Lock()
+		defer r.lock.Unlock()
+
+		if newValue != nil {
+			p := newValue.(*serverPeer)
+			// Short circuit if the peer is announce only.
+			if p.onlyAnnounce {
+				return
+			}
+			r.peerList = append(r.peerList, p)
+		} else {
+			p := oldValue.(*serverPeer)
+			for i, peer := range r.peerList {
+				if peer == p {
+					// Remove from the peer list
+					r.peerList = append(r.peerList[:i], r.peerList[i+1:]...)
+					return
+				}
+			}
+		}
+	})
 	return r
 }
 
 func (ltrx *lesTxRelay) Stop() {
 	close(ltrx.stop)
-}
-
-func (ltrx *lesTxRelay) registerPeer(p *serverPeer) {
-	ltrx.lock.Lock()
-	defer ltrx.lock.Unlock()
-
-	// Short circuit if the peer is announce only.
-	if p.onlyAnnounce {
-		return
-	}
-	ltrx.peerList = append(ltrx.peerList, p)
-}
-
-func (ltrx *lesTxRelay) unregisterPeer(p *serverPeer) {
-	ltrx.lock.Lock()
-	defer ltrx.lock.Unlock()
-
-	for i, peer := range ltrx.peerList {
-		if peer == p {
-			// Remove from the peer list
-			ltrx.peerList = append(ltrx.peerList[:i], ltrx.peerList[i+1:]...)
-			return
-		}
-	}
 }
 
 // send sends a list of transactions to at most a given number of peers.

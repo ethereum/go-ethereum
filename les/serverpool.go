@@ -91,18 +91,17 @@ type nodeHistoryEnc struct {
 type queryFunc func(*enode.Node) int
 
 var (
-	serverPoolSetup    = &nodestate.Setup{Version: 1}
-	sfHasValue         = serverPoolSetup.NewPersistentFlag("hasValue")
-	sfQueried          = serverPoolSetup.NewFlag("queried")
-	sfCanDial          = serverPoolSetup.NewFlag("canDial")
-	sfDialing          = serverPoolSetup.NewFlag("dialed")
-	sfWaitDialTimeout  = serverPoolSetup.NewFlag("dialTimeout")
-	sfConnected        = serverPoolSetup.NewFlag("connected")
-	sfRedialWait       = serverPoolSetup.NewFlag("redialWait")
-	sfAlwaysConnect    = serverPoolSetup.NewFlag("alwaysConnect")
+	sfHasValue         = clientSetup.NewPersistentFlag("hasValue")
+	sfQueried          = clientSetup.NewFlag("queried")
+	sfCanDial          = clientSetup.NewFlag("canDial")
+	sfDialing          = clientSetup.NewFlag("dialed")
+	sfWaitDialTimeout  = clientSetup.NewFlag("dialTimeout")
+	sfConnected        = clientSetup.NewFlag("connected")
+	sfRedialWait       = clientSetup.NewFlag("redialWait")
+	sfAlwaysConnect    = clientSetup.NewFlag("alwaysConnect")
 	sfDisableSelection = nodestate.MergeFlags(sfQueried, sfCanDial, sfDialing, sfConnected, sfRedialWait)
 
-	sfiNodeHistory = serverPoolSetup.NewPersistentField("nodeHistory", reflect.TypeOf(nodeHistory{}),
+	sfiNodeHistory = clientSetup.NewPersistentField("nodeHistory", reflect.TypeOf(nodeHistory{}),
 		func(field interface{}) ([]byte, error) {
 			if n, ok := field.(nodeHistory); ok {
 				ne := nodeHistoryEnc{
@@ -126,12 +125,12 @@ var (
 			return n, err
 		},
 	)
-	sfiNodeWeight     = serverPoolSetup.NewField("nodeWeight", reflect.TypeOf(uint64(0)))
-	sfiConnectedStats = serverPoolSetup.NewField("connectedStats", reflect.TypeOf(lpc.ResponseTimeStats{}))
+	sfiNodeWeight     = clientSetup.NewField("nodeWeight", reflect.TypeOf(uint64(0)))
+	sfiConnectedStats = clientSetup.NewField("connectedStats", reflect.TypeOf(lpc.ResponseTimeStats{}))
 )
 
 // newServerPool creates a new server pool
-func newServerPool(db ethdb.KeyValueStore, dbKey []byte, vt *lpc.ValueTracker, mixTimeout time.Duration, query queryFunc, clock mclock.Clock, trustedURLs []string) *serverPool {
+func newServerPool(ns *nodestate.NodeStateMachine, db ethdb.KeyValueStore, vt *lpc.ValueTracker, mixTimeout time.Duration, query queryFunc, clock mclock.Clock, trustedURLs []string) *serverPool {
 	s := &serverPool{
 		db:           db,
 		clock:        clock,
@@ -139,9 +138,8 @@ func newServerPool(db ethdb.KeyValueStore, dbKey []byte, vt *lpc.ValueTracker, m
 		validSchemes: enode.ValidSchemes,
 		trustedURLs:  trustedURLs,
 		vt:           vt,
-		ns:           nodestate.NewNodeStateMachine(db, []byte(string(dbKey)+"ns:"), clock, serverPoolSetup),
+		ns:           ns,
 	}
-	s.recalTimeout()
 	s.mixer = enode.NewFairMix(mixTimeout)
 	knownSelector := lpc.NewWrsIterator(s.ns, sfHasValue, sfDisableSelection, sfiNodeWeight)
 	alwaysConnect := lpc.NewQueueIterator(s.ns, sfAlwaysConnect, sfDisableSelection, true, nil)
@@ -163,6 +161,24 @@ func newServerPool(db ethdb.KeyValueStore, dbKey []byte, vt *lpc.ValueTracker, m
 			// dial timeout, no connection
 			s.setRedialWait(n, dialCost, dialWaitStep)
 			s.ns.SetStateSub(n, nodestate.Flags{}, sfDialing, 0)
+		}
+	})
+
+	s.ns.SubscribeField(valueTrackerSetup.ValueTrackerField, func(node *enode.Node, state nodestate.Flags, oldValue, newValue interface{}) {
+		if newValue != nil {
+			nvt := newValue.(*lpc.NodeValueTracker)
+			s.ns.SetStateSub(node, sfConnected, sfDialing.Or(sfWaitDialTimeout), 0)
+			s.ns.SetFieldSub(node, sfiConnectedStats, nvt.RtStats())
+			p := s.ns.GetField(node, serverPeerField).(*serverPeer)
+			p.setValueTracker(s.vt, nvt)
+			p.updateVtParams()
+		} else {
+			s.setRedialWait(node, dialCost, dialWaitStep)
+			s.ns.SetStateSub(node, nodestate.Flags{}, sfConnected, 0)
+			s.ns.SetFieldSub(node, sfiConnectedStats, nil)
+			if p, ok := s.ns.GetField(node, serverPeerField).(*serverPeer); ok {
+				p.setValueTracker(nil, nil)
+			}
 		}
 	})
 
@@ -232,7 +248,7 @@ func (s *serverPool) addPreNegFilter(input enode.Iterator, query queryFunc) enod
 
 // start starts the server pool. Note that NodeStateMachine should be started first.
 func (s *serverPool) start() {
-	s.ns.Start()
+	s.recalTimeout()
 	for _, iter := range s.mixSources {
 		// add sources to mixer at startup because the mixer instantly tries to read them
 		// which should only happen after NodeStateMachine has been started
@@ -275,27 +291,6 @@ func (s *serverPool) stop() {
 			s.calculateWeight(n)
 		})
 	})
-	s.ns.Stop()
-}
-
-// registerPeer implements serverPeerSubscriber
-func (s *serverPool) registerPeer(p *serverPeer) {
-	s.ns.SetState(p.Node(), sfConnected, sfDialing.Or(sfWaitDialTimeout), 0)
-	nvt := s.vt.Register(p.ID())
-	s.ns.SetField(p.Node(), sfiConnectedStats, nvt.RtStats())
-	p.setValueTracker(s.vt, nvt)
-	p.updateVtParams()
-}
-
-// unregisterPeer implements serverPeerSubscriber
-func (s *serverPool) unregisterPeer(p *serverPeer) {
-	s.ns.Operation(func() {
-		s.setRedialWait(p.Node(), dialCost, dialWaitStep)
-		s.ns.SetStateSub(p.Node(), nodestate.Flags{}, sfConnected, 0)
-		s.ns.SetFieldSub(p.Node(), sfiConnectedStats, nil)
-	})
-	s.vt.Unregister(p.ID())
-	p.setValueTracker(nil, nil)
 }
 
 // recalTimeout calculates the current recommended timeout. This value is used by

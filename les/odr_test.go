@@ -223,20 +223,20 @@ func testOdr(t *testing.T, protocol int, expFail uint64, checkCached bool, fn od
 	}
 
 	// expect retrievals to fail (except genesis block) without a les peer
-	client.handler.backend.peers.lock.Lock()
+	client.peer.speer.lock.Lock()
 	client.peer.speer.hasBlockHook = func(common.Hash, uint64, bool) bool { return false }
-	client.handler.backend.peers.lock.Unlock()
+	client.peer.speer.lock.Unlock()
 	test(expFail)
 
 	// expect all retrievals to pass
-	client.handler.backend.peers.lock.Lock()
+	client.peer.speer.lock.Lock()
 	client.peer.speer.hasBlockHook = func(common.Hash, uint64, bool) bool { return true }
-	client.handler.backend.peers.lock.Unlock()
+	client.peer.speer.lock.Unlock()
 	test(5)
 
 	// still expect all retrievals to pass, now data should be cached locally
 	if checkCached {
-		client.handler.backend.peers.unregister(client.peer.speer.id)
+		client.handler.removePeer(client.peer.speer.ID())
 		time.Sleep(time.Millisecond * 10) // ensure that all peerSetNotify callbacks are executed
 		test(5)
 	}

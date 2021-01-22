@@ -19,6 +19,7 @@ package nodestate
 import (
 	"errors"
 	"fmt"
+	"math/rand"
 	"reflect"
 	"testing"
 	"time"
@@ -404,4 +405,72 @@ func TestCallbackOrder(t *testing.T) {
 	defer ns.Stop()
 
 	ns.SetState(testNode(1), flags[0], Flags{}, 0)
+}
+
+func TestForEach(t *testing.T) {
+	mdb, clock := rawdb.NewMemoryDatabase(), &mclock.Simulated{}
+
+	s, flags, fields := testSetup([]bool{false, false}, []reflect.Type{reflect.TypeOf(uint64(0))})
+	ns := NewNodeStateMachine(mdb, []byte("-ns"), clock, s)
+
+	ns.Start()
+
+	var expFlagCount, expFieldCount int
+	setNode := func(b byte) {
+		set0 := rand.Intn(2) == 0
+		set1 := rand.Intn(2) == 0
+		if set0 {
+			ns.SetState(testNode(b), flags[0], Flags{}, 0)
+		}
+		if set1 {
+			ns.SetState(testNode(b), flags[1], Flags{}, 0)
+		}
+		if set0 && !set1 {
+			expFlagCount++
+		}
+		if rand.Intn(2) == 0 {
+			ns.SetField(testNode(b), fields[0], uint64(42))
+			expFieldCount++
+		}
+	}
+
+	check := func() {
+		var flagCount, fieldCount int
+		ns.ForEach(flags[0], flags[1], func(n *enode.Node, state Flags) {
+			flagCount++
+		})
+		if flagCount != expFlagCount {
+			t.Errorf("Flag iterator callback count (%d) does not match expected value (%d)", flagCount, expFlagCount)
+		}
+		if ns.FieldCount(fields[0]) != expFieldCount {
+			t.Errorf("FieldCount result (%d) does not match expected value (%d)", fieldCount, expFieldCount)
+		}
+		ns.ForEachWithField(fields[0], func(n *enode.Node, value interface{}) {
+			fieldCount++
+		})
+		if fieldCount != expFieldCount {
+			t.Errorf("Field iterator callback count (%d) does not match expected value (%d)", fieldCount, expFieldCount)
+		}
+	}
+
+	for b := byte(0); b < 50; b++ {
+		setNode(b)
+	}
+	check()
+	halfFlagCount, halfFieldCount := expFlagCount, expFieldCount
+	// now there is a node map for the field, add more fields to check if it still stays consistent
+	for b := byte(50); b < 100; b++ {
+		setNode(b)
+	}
+	check()
+	// clear the first half and check again
+	for b := byte(0); b < 50; b++ {
+		ns.SetState(testNode(b), Flags{}, flags[0].Or(flags[1]), 0)
+		ns.SetField(testNode(b), fields[0], nil)
+	}
+	expFlagCount -= halfFlagCount
+	expFieldCount -= halfFieldCount
+	check()
+
+	ns.Stop()
 }

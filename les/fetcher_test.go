@@ -262,7 +262,7 @@ func TestInvalidAnnounces(t *testing.T) {
 	<-done // Wait syncing
 
 	// Ensure the bad peer is evicited
-	if c.handler.backend.peers.len() != 0 {
+	if c.handler.backend.ns.FieldCount(serverPeerField) != 0 {
 		t.Fatalf("Failed to evict invalid peer")
 	}
 }

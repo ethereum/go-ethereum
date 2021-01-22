@@ -29,6 +29,7 @@ import (
 	"github.com/ethereum/go-ethereum/p2p"
 	"github.com/ethereum/go-ethereum/p2p/enode"
 	"github.com/ethereum/go-ethereum/p2p/enr"
+	"github.com/ethereum/go-ethereum/p2p/nodestate"
 )
 
 const (
@@ -51,6 +52,7 @@ func testNodeIndex(id enode.ID) int {
 }
 
 type serverPoolTest struct {
+	ns                   *nodestate.NodeStateMachine
 	db                   ethdb.KeyValueStore
 	clock                *mclock.Simulated
 	quit                 chan struct{}
@@ -79,7 +81,7 @@ func newServerPoolTest(preNeg, preNegFail bool) *serverPoolTest {
 	for i := range nodes {
 		nodes[i] = enode.SignNull(&enr.Record{}, testNodeID(i))
 	}
-	return &serverPoolTest{
+	st := &serverPoolTest{
 		clock:      &mclock.Simulated{},
 		db:         memorydb.New(),
 		input:      enode.CycleNodes(nodes),
@@ -87,6 +89,7 @@ func newServerPoolTest(preNeg, preNegFail bool) *serverPoolTest {
 		preNeg:     preNeg,
 		preNegFail: preNegFail,
 	}
+	return st
 }
 
 func (s *serverPoolTest) beginWait() {
@@ -107,6 +110,7 @@ func (s *serverPoolTest) addTrusted(i int) {
 }
 
 func (s *serverPoolTest) start() {
+	s.ns = nodestate.NewNodeStateMachine(s.db, []byte("ns:"), s.clock, clientSetup)
 	var testQuery queryFunc
 	if s.preNeg {
 		testQuery = func(node *enode.Node) int {
@@ -144,12 +148,13 @@ func (s *serverPoolTest) start() {
 		}
 	}
 
-	s.vt = lpc.NewValueTracker(s.db, s.clock, requestList, time.Minute, 1/float64(time.Hour), 1/float64(time.Hour*100), 1/float64(time.Hour*1000))
-	s.sp = newServerPool(s.db, []byte("serverpool:"), s.vt, 0, testQuery, s.clock, s.trusted)
+	s.vt = lpc.NewValueTracker(s.ns, valueTrackerSetup, s.db, s.clock, requestList, time.Minute, 1/float64(time.Hour), 1/float64(time.Hour*100), 1/float64(time.Hour*1000))
+	s.sp = newServerPool(s.ns, s.db, s.vt, 0, testQuery, s.clock, s.trusted)
 	s.sp.addSource(s.input)
 	s.sp.validSchemes = enode.ValidSchemesForTesting
 	s.sp.unixTime = func() int64 { return int64(s.clock.Now()) / int64(time.Second) }
 	s.disconnect = make(map[int][]int)
+	s.ns.Start()
 	s.sp.start()
 	s.quit = make(chan struct{})
 	go func() {
@@ -184,6 +189,7 @@ func (s *serverPoolTest) stop() {
 		n.nextConnCycle = 0
 	}
 	s.conn, s.servedConn = 0, 0
+	s.ns.Stop()
 }
 
 func (s *serverPoolTest) run() {
@@ -191,7 +197,7 @@ func (s *serverPoolTest) run() {
 		if dcList := s.disconnect[s.cycle]; dcList != nil {
 			for _, idx := range dcList {
 				n := &s.testNodes[idx]
-				s.sp.unregisterPeer(n.peer)
+				s.ns.SetField(n.peer.Node(), serverPeerField, nil)
 				n.totalConn += s.cycle
 				n.connected = false
 				n.peer = nil
@@ -222,7 +228,7 @@ func (s *serverPoolTest) run() {
 				dc := s.cycle + n.connectCycles
 				s.disconnect[dc] = append(s.disconnect[dc], idx)
 				n.peer = &serverPeer{peerCommons: peerCommons{Peer: p2p.NewPeer(id, "", nil)}}
-				s.sp.registerPeer(n.peer)
+				s.ns.SetField(n.peer.Node(), serverPeerField, n.peer)
 				if n.service {
 					s.vt.Served(s.vt.GetNode(id), []lpc.ServedRequest{{ReqType: 0, Amount: 100}}, 0)
 				}
@@ -257,7 +263,7 @@ func (s *serverPoolTest) resetNodes() {
 	for i, n := range s.testNodes {
 		if n.connected {
 			n.totalConn += s.cycle
-			s.sp.unregisterPeer(n.peer)
+			s.ns.SetField(n.peer.Node(), serverPeerField, nil)
 		}
 		s.testNodes[i] = spTestNode{totalConn: n.totalConn}
 	}

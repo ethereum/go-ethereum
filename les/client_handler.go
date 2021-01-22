@@ -31,6 +31,8 @@ import (
 	"github.com/ethereum/go-ethereum/light"
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/p2p"
+	"github.com/ethereum/go-ethereum/p2p/enode"
+	"github.com/ethereum/go-ethereum/p2p/nodestate"
 	"github.com/ethereum/go-ethereum/params"
 )
 
@@ -71,9 +73,22 @@ func newClientHandler(ulcServers []string, ulcFraction int, checkpoint *params.T
 	if checkpoint != nil {
 		height = (checkpoint.SectionIndex+1)*params.CHTFrequency - 1
 	}
-	handler.fetcher = newLightFetcher(backend.blockchain, backend.engine, backend.peers, handler.ulc, backend.chainDb, backend.reqDist, handler.synchronise)
-	handler.downloader = downloader.New(height, backend.chainDb, nil, backend.eventMux, nil, backend.blockchain, handler.removePeer)
-	handler.backend.peers.subscribe((*downloaderPeerNotify)(handler))
+	handler.fetcher = newLightFetcher(backend.blockchain, backend.engine, backend.ns, handler.ulc, backend.chainDb, backend.reqDist, handler.synchronise, handler.removePeerWithStringId)
+	handler.downloader = downloader.New(height, backend.chainDb, nil, backend.eventMux, nil, backend.blockchain, handler.removePeerWithStringId)
+	backend.ns.SubscribeField(serverPeerField, func(node *enode.Node, state nodestate.Flags, oldValue, newValue interface{}) {
+		if newValue != nil {
+			p := newValue.(*serverPeer)
+			pc := &peerConnection{
+				handler: handler,
+				peer:    p,
+			}
+			handler.downloader.RegisterLightPeer(p.id, ethVersion, pc)
+		} else {
+			p := oldValue.(*serverPeer)
+			handler.downloader.UnregisterPeer(p.id)
+			p.Peer.Disconnect(p2p.DiscUselessPeer)
+		}
+	})
 	return handler
 }
 
@@ -103,7 +118,7 @@ func (h *clientHandler) runPeer(version uint, p *p2p.Peer, rw p2p.MsgReadWriter)
 }
 
 func (h *clientHandler) handle(p *serverPeer) error {
-	if h.backend.peers.len() >= h.backend.config.LightPeers && !p.Peer.Info().Network.Trusted {
+	if h.backend.ns.FieldCount(serverPeerField) >= h.backend.config.LightPeers && !p.Peer.Info().Network.Trusted {
 		return p2p.DiscTooManyPeers
 	}
 	p.Log().Debug("Light Ethereum peer connected", "name", p.Name())
@@ -115,17 +130,17 @@ func (h *clientHandler) handle(p *serverPeer) error {
 		return err
 	}
 	// Register the peer locally
-	if err := h.backend.peers.register(p); err != nil {
+	if err := h.backend.ns.SetField(p.Node(), serverPeerField, p); err != nil {
 		p.Log().Error("Light Ethereum peer registration failed", "err", err)
 		return err
 	}
-	serverConnectionGauge.Update(int64(h.backend.peers.len()))
+	serverConnectionGauge.Update(int64(h.backend.ns.FieldCount(serverPeerField)))
 
 	connectedAt := mclock.Now()
 	defer func() {
-		h.backend.peers.unregister(p.id)
+		h.backend.ns.SetField(p.Node(), serverPeerField, nil)
 		connectionTimer.Update(time.Duration(mclock.Now() - connectedAt))
-		serverConnectionGauge.Update(int64(h.backend.peers.len()))
+		serverConnectionGauge.Update(int64(h.backend.ns.FieldCount(serverPeerField)))
 	}()
 	h.fetcher.announce(p, &announceData{Hash: p.headInfo.Hash, Number: p.headInfo.Number, Td: p.headInfo.Td})
 
@@ -350,8 +365,18 @@ func (h *clientHandler) handleMsg(p *serverPeer) error {
 	return nil
 }
 
-func (h *clientHandler) removePeer(id string) {
-	h.backend.peers.unregister(id)
+func (h *clientHandler) removePeer(id enode.ID) {
+	if node := h.backend.ns.GetNode(id); node != nil {
+		h.backend.ns.SetField(node, serverPeerField, nil)
+	}
+}
+
+func (h *clientHandler) removePeerWithStringId(id string) {
+	h.backend.ns.ForEachWithField(serverPeerField, func(n *enode.Node, value interface{}) {
+		if value.(*serverPeer).id == id {
+			h.backend.ns.SetField(n, serverPeerField, nil)
+		}
+	})
 }
 
 type peerConnection struct {
@@ -445,21 +470,4 @@ func (pc *peerConnection) RetrieveSingleHeaderByNumber(context context.Context, 
 		return nil, err
 	}
 	return header, nil
-}
-
-// downloaderPeerNotify implements peerSetNotify
-type downloaderPeerNotify clientHandler
-
-func (d *downloaderPeerNotify) registerPeer(p *serverPeer) {
-	h := (*clientHandler)(d)
-	pc := &peerConnection{
-		handler: h,
-		peer:    p,
-	}
-	h.downloader.RegisterLightPeer(p.id, ethVersion, pc)
-}
-
-func (d *downloaderPeerNotify) unregisterPeer(p *serverPeer) {
-	h := (*clientHandler)(d)
-	h.downloader.UnregisterPeer(p.id)
 }

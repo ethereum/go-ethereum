@@ -170,7 +170,7 @@ func testIndexers(db ethdb.Database, odr light.OdrBackend, config *light.Indexer
 	return indexers[:]
 }
 
-func newTestClientHandler(backend *backends.SimulatedBackend, odr *LesOdr, indexers []*core.ChainIndexer, db ethdb.Database, peers *serverPeerSet, ulcServers []string, ulcFraction int) *clientHandler {
+func newTestClientHandler(backend *backends.SimulatedBackend, odr *LesOdr, indexers []*core.ChainIndexer, db ethdb.Database, ns *nodestate.NodeStateMachine, ulcServers []string, ulcFraction int) *clientHandler {
 	var (
 		evmux  = new(event.TypeMux)
 		engine = ethash.NewFaker()
@@ -212,7 +212,7 @@ func newTestClientHandler(backend *backends.SimulatedBackend, odr *LesOdr, index
 			chainReader: chain,
 			closeCh:     make(chan struct{}),
 		},
-		peers:      peers,
+		ns:         ns,
 		reqDist:    odr.retriever.dist,
 		retriever:  odr.retriever,
 		odr:        odr,
@@ -507,13 +507,14 @@ func newServerEnv(t *testing.T, blocks int, protocol int, callback indexerCallba
 
 func newClientServerEnv(t *testing.T, blocks int, protocol int, callback indexerCallback, ulcServers []string, ulcFraction int, simClock bool, connect bool, disablePruning bool) (*testServer, *testClient, func()) {
 	sdb, cdb := rawdb.NewMemoryDatabase(), rawdb.NewMemoryDatabase()
-	speers := newServerPeerSet()
 
 	var clock mclock.Clock = &mclock.System{}
 	if simClock {
 		clock = &mclock.Simulated{}
 	}
-	dist := newRequestDistributor(speers, clock)
+
+	speers := nodestate.NewNodeStateMachine(cdb, []byte("ns:"), clock, clientSetup)
+	dist := newRequestDistributor(speers, serverPeerField, clock)
 	rm := newRetrieveManager(speers, dist, func() time.Duration { return time.Millisecond * 500 })
 	odr := NewLesOdr(cdb, light.TestClientIndexerConfig, rm)
 
@@ -527,6 +528,7 @@ func newClientServerEnv(t *testing.T, blocks int, protocol int, callback indexer
 	server, b := newTestServerHandler(blocks, sindexers, sdb, clock)
 	client := newTestClientHandler(b, odr, cIndexers, cdb, speers, ulcServers, ulcFraction)
 
+	speers.Start()
 	scIndexer.Start(server.blockchain)
 	sbIndexer.Start(server.blockchain)
 	ccIndexer.Start(client.backend.blockchain)
@@ -583,6 +585,7 @@ func newClientServerEnv(t *testing.T, blocks int, protocol int, callback indexer
 		scIndexer.Close()
 		sbIndexer.Close()
 		b.Close()
+		speers.Stop()
 	}
 	return s, c, teardown
 }
