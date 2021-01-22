@@ -52,6 +52,7 @@ func NewEVMBlockContext(header *types.Header, chain ChainContext, author *common
 		BlockNumber: new(big.Int).Set(header.Number),
 		Time:        new(big.Int).SetUint64(header.Time),
 		Difficulty:  new(big.Int).Set(header.Difficulty),
+		BaseFee:     new(big.Int).Set(header.BaseFee),
 		GasLimit:    header.GasLimit,
 	}
 }
