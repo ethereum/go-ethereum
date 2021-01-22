@@ -33,10 +33,10 @@ require (
 	github.com/holiman/bloomfilter/v2 v2.0.3
 	github.com/holiman/uint256 v1.1.1
 	github.com/huin/goupnp v1.0.0
-	github.com/influxdata/influxdb v1.2.3-0.20180221223340-01288bdb0883
+	github.com/influxdata/influxdb v1.8.3
 	github.com/jackpal/go-nat-pmp v1.0.2-0.20160603034137-1fa385a6f458
 	github.com/jedisct1/go-minisign v0.0.0-20190909160543-45766022959e
-	github.com/julienschmidt/httprouter v1.1.1-0.20170430222011-975b5c4c7c21
+	github.com/julienschmidt/httprouter v1.2.0
 	github.com/karalabe/usb v0.0.0-20190919080040-51dc0efba356
 	github.com/kr/pretty v0.1.0 // indirect
 	github.com/kylelemons/godebug v1.1.0 // indirect
