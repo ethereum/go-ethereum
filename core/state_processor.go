@@ -93,6 +93,9 @@ func applyTransaction(msg types.Message, config *params.ChainConfig, bc ChainCon
 	if !config.IsYoloV2(header.Number) && tx.Type() != types.LegacyTxId {
 		return nil, ErrTxTypeNotSupported
 	}
+	if !config.IsTokyo(header.Number) && tx.Type() == types.DynamicFeeTxId {
+		return nil, ErrTxTypeNotSupported
+	}
 	// Create a new context to be used in the EVM environment
 	txContext := NewEVMTxContext(msg)
 	// Add addresses to access list if applicable
