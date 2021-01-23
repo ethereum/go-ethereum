@@ -791,7 +791,7 @@ func (args *CallArgs) ToMessage(globalGasCap uint64) types.Message {
 	if args.Data != nil {
 		data = *args.Data
 	}
-	msg := types.NewMessage(addr, args.To, 0, value, gas, gasPrice, data, args.AccessList, false)
+	msg := types.NewMessage(addr, args.To, 0, value, gas, gasPrice, nil, nil, data, args.AccessList, false)
 	return msg
 }
 
