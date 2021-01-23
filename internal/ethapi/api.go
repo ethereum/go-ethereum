@@ -799,7 +799,7 @@ func (args *CallArgs) ToMessage(globalGasCap uint64) types.Message {
 		accessList = *args.AccessList
 	}
 
-	msg := types.NewMessage(addr, args.To, 0, value, gas, gasPrice, data, accessList, false)
+	msg := types.NewMessage(addr, args.To, 0, value, gas, gasPrice, nil, nil, data, accessList, false)
 	return msg
 }
 
