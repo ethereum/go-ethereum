@@ -25,14 +25,15 @@ import (
 	"os"
 	"path"
 
-	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core"
 	"github.com/ethereum/go-ethereum/core/state"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/core/vm"
+	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/params"
+	"github.com/ethereum/go-ethereum/rlp"
 	"github.com/ethereum/go-ethereum/tests"
 	"gopkg.in/urfave/cli.v1"
 )
@@ -133,9 +134,10 @@ func Main(ctx *cli.Context) error {
 		txs      types.Transactions // txs to apply
 		allocStr = ctx.String(InputAllocFlag.Name)
 
-		envStr    = ctx.String(InputEnvFlag.Name)
-		txStr     = ctx.String(InputTxsFlag.Name)
-		inputData = &input{}
+		envStr     = ctx.String(InputEnvFlag.Name)
+		txStr      = ctx.String(InputTxsFlag.Name)
+		bodyOutStr = ctx.String(OutputBodyFlag.Name)
+		inputData  = &input{}
 	)
 	// Figure out the prestate alloc
 	if allocStr == stdinSelector || envStr == stdinSelector || txStr == stdinSelector {
@@ -214,6 +216,17 @@ func Main(ctx *cli.Context) error {
 	if err != nil {
 		return err
 	}
+	if len(bodyOutStr) != 0 {
+		// Dump out the "block body" : the transactions in RLP-form
+		txFile, err := os.Create(bodyOutStr)
+		if err != nil {
+			return NewError(ErrorIO, fmt.Errorf("failed writing body file (txs rlp): %v", err))
+		}
+		rlp.Encode(txFile, txs)
+		txFile.Close()
+		log.Info("Wrote body file", "file", bodyOutStr, "txs", len(txs))
+	}
+
 	// Dump the excution result
 	collector := make(Alloc)
 	state.DumpToCollector(collector, false, false, false, nil, -1)
@@ -314,9 +327,11 @@ func saveFile(baseDir, filename string, data interface{}) error {
 	if err != nil {
 		return NewError(ErrorJson, fmt.Errorf("failed marshalling output: %v", err))
 	}
-	if err = ioutil.WriteFile(path.Join(baseDir, filename), b, 0644); err != nil {
+	location := path.Join(baseDir, filename)
+	if err = ioutil.WriteFile(location, b, 0644); err != nil {
 		return NewError(ErrorIO, fmt.Errorf("failed writing output: %v", err))
 	}
+	log.Info("Wrote file", "file", location)
 	return nil
 }
 
