@@ -141,7 +141,7 @@ func newTestPeer(id string, t *testing.T, cancelCh chan struct{}) *testPeer {
 		accountRequestHandler: defaultAccountRequestHandler,
 		trieRequestHandler:    defaultTrieRequestHandler,
 		storageRequestHandler: defaultStorageRequestHandler,
-		codeRequestHandler:    defaultCodeReqeustHandler,
+		codeRequestHandler:    defaultCodeRequestHandler,
 		cancelCh:              cancelCh,
 	}
 	//stderrHandler := log.StreamHandler(os.Stderr, log.TerminalFormat(true))
@@ -217,7 +217,7 @@ func defaultAccountRequestHandler(t *testPeer, id uint64, root common.Hash, orig
 		t.logger.Error("remote error on delivery", "error", err)
 		t.test.Errorf("Remote side rejected our delivery: %v", err)
 		t.remote.Unregister(t.id)
-		t.cancelCh <- struct{}{}
+		close(t.cancelCh)
 		return err
 	}
 	return nil
@@ -262,12 +262,12 @@ func defaultStorageRequestHandler(t *testPeer, requestId uint64, root common.Has
 	if err := t.remote.OnStorage(t, requestId, hashes, slots, proofs); err != nil {
 		t.logger.Error("remote error on delivery", "error", err)
 		t.test.Errorf("Remote side rejected our delivery: %v", err)
-		t.cancelCh <- struct{}{}
+		close(t.cancelCh)
 	}
 	return nil
 }
 
-func defaultCodeReqeustHandler(t *testPeer, id uint64, hashes []common.Hash, max uint64) error {
+func defaultCodeRequestHandler(t *testPeer, id uint64, hashes []common.Hash, max uint64) error {
 	var bytecodes [][]byte
 	for _, h := range hashes {
 		bytecodes = append(bytecodes, getCode(h))
@@ -275,7 +275,7 @@ func defaultCodeReqeustHandler(t *testPeer, id uint64, hashes []common.Hash, max
 	if err := t.remote.OnByteCodes(t, id, bytecodes); err != nil {
 		t.logger.Error("remote error on delivery", "error", err)
 		t.test.Errorf("Remote side rejected our delivery: %v", err)
-		t.cancelCh <- struct{}{}
+		close(t.cancelCh)
 	}
 	return nil
 }
@@ -390,7 +390,7 @@ func nonResponsiveStorageRequestHandler(t *testPeer, requestId uint64, root comm
 //	return nil
 //}
 
-func corruptCodeReqeustHandler(t *testPeer, id uint64, hashes []common.Hash, max uint64) error {
+func corruptCodeRequestHandler(t *testPeer, id uint64, hashes []common.Hash, max uint64) error {
 	var bytecodes [][]byte
 	for _, h := range hashes {
 		// Send back the hashes
@@ -513,7 +513,7 @@ func TestSyncBloatedProof(t *testing.T) {
 		if err := t.remote.OnAccounts(t, requestId, keys, vals, proofs); err != nil {
 			t.logger.Info("remote error on delivery", "error", err)
 			// This is actually correct, signal to exit the test successfully
-			t.cancelCh <- struct{}{}
+			close(t.cancelCh)
 		}
 		return nil
 	}
@@ -744,7 +744,7 @@ func checkStall(t *testing.T, cancel chan struct{}) chan struct{} {
 	testDone := make(chan struct{})
 	go func() {
 		select {
-		case <-time.After(5 * time.Second):
+		case <-time.After(15 * time.Second):
 			t.Log("Sync stalled")
 			close(cancel)
 		case <-testDone:
@@ -809,7 +809,7 @@ func TestSyncNoStorageAndOneCodeCorruptPeer(t *testing.T) {
 	// test moot
 	syncer := setupSyncer(
 		mkSource("capped", cappedCodeRequestHandler),
-		mkSource("corrupt", corruptCodeReqeustHandler),
+		mkSource("corrupt", corruptCodeRequestHandler),
 	)
 	done := checkStall(t, cancel)
 	if err := syncer.Sync(sourceAccountTrie.Hash(), cancel); err != nil {
