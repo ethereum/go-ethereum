@@ -756,6 +756,25 @@ func (api *API) traceTx(ctx context.Context, message core.Message, vmctx vm.Bloc
 	// Run the transaction with tracing enabled.
 	vmenv := vm.NewEVM(vmctx, txContext, statedb, api.backend.ChainConfig(), vm.Config{Debug: true, Tracer: tracer})
 
+	if api.backend.ChainConfig().IsYoloV2(vmctx.BlockNumber) {
+		statedb.AddAddressToAccessList(message.From())
+		if dst := message.To(); dst != nil {
+			statedb.AddAddressToAccessList(*dst)
+			// If it's a create-tx, the destination will be added inside evm.create
+		}
+		for _, addr := range vmenv.ActivePrecompiles() {
+			statedb.AddAddressToAccessList(addr)
+		}
+		if al := message.AccessList(); al != nil {
+			for _, el := range *al {
+				statedb.AddAddressToAccessList(*el.Address)
+				for _, key := range el.StorageKeys {
+					statedb.AddSlotToAccessList(*el.Address, *key)
+				}
+			}
+		}
+	}
+
 	result, err := core.ApplyMessage(vmenv, message, new(core.GasPool).AddGas(message.Gas()))
 	if err != nil {
 		return nil, fmt.Errorf("tracing failed: %v", err)
