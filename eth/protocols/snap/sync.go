@@ -333,6 +333,33 @@ type syncProgress struct {
 	BytecodeHealNops   uint64             // Number of bytecodes not requested
 }
 
+// SyncPeer abstracts out the methods required for a peer to be synced against
+// with the goal of allowing the construction of mock peers without the full
+// blown networking.
+type SyncPeer interface {
+	// ID retrieves the peer's unique identifier.
+	ID() string
+
+	// RequestAccountRange fetches a batch of accounts rooted in a specific account
+	// trie, starting with the origin.
+	RequestAccountRange(id uint64, root, origin, limit common.Hash, bytes uint64) error
+
+	// RequestStorageRange fetches a batch of storage slots belonging to one or
+	// more accounts. If slots from only one accout is requested, an origin marker
+	// may also be used to retrieve from there.
+	RequestStorageRanges(id uint64, root common.Hash, accounts []common.Hash, origin, limit []byte, bytes uint64) error
+
+	// RequestByteCodes fetches a batch of bytecodes by hash.
+	RequestByteCodes(id uint64, hashes []common.Hash, bytes uint64) error
+
+	// RequestTrieNodes fetches a batch of account or storage trie nodes rooted in
+	// a specificstate trie.
+	RequestTrieNodes(id uint64, root common.Hash, paths []TrieNodePathSet, bytes uint64) error
+
+	// Log retrieves the peer's own contextual logger.
+	Log() log.Logger
+}
+
 // Syncer is an Ethereum account and storage trie syncer based on snapshots and
 // the  snap protocol. It's purpose is to download all the accounts and storage
 // slots from remote peers and reassemble chunks of the state trie, on top of
@@ -354,9 +381,9 @@ type Syncer struct {
 	healer  *healTask      // Current state healing task being executed
 	update  chan struct{}  // Notification channel for possible sync progression
 
-	peers    map[string]PeerIF // Currently active peers to download from
-	peerJoin *event.Feed       // Event feed to react to peers joining
-	peerDrop *event.Feed       // Event feed to react to peers dropping
+	peers    map[string]SyncPeer // Currently active peers to download from
+	peerJoin *event.Feed         // Event feed to react to peers joining
+	peerDrop *event.Feed         // Event feed to react to peers dropping
 
 	// Request tracking during syncing phase
 	statelessPeers map[string]struct{} // Peers that failed to deliver state data
@@ -413,12 +440,14 @@ type Syncer struct {
 	lock sync.RWMutex   // Protects fields that can change outside of sync (peers, reqs, root)
 }
 
+// NewSyncer creates a new snapshot syncer to download the Ethereum state over the
+// snap protocol.
 func NewSyncer(db ethdb.KeyValueStore, bloom *trie.SyncBloom) *Syncer {
 	return &Syncer{
 		db:    db,
 		bloom: bloom,
 
-		peers:    make(map[string]PeerIF),
+		peers:    make(map[string]SyncPeer),
 		peerJoin: new(event.Feed),
 		peerDrop: new(event.Feed),
 		update:   make(chan struct{}, 1),
@@ -450,7 +479,7 @@ func NewSyncer(db ethdb.KeyValueStore, bloom *trie.SyncBloom) *Syncer {
 }
 
 // Register injects a new data source into the syncer's peerset.
-func (s *Syncer) Register(peer PeerIF) error {
+func (s *Syncer) Register(peer SyncPeer) error {
 	// Make sure the peer is not registered yet
 	s.lock.Lock()
 	pId := peer.ID()
@@ -812,7 +841,7 @@ func (s *Syncer) assignAccountTasks(cancel chan struct{}) int {
 
 		s.pend.Add(1)
 		assignments++
-		go func(peer PeerIF, root common.Hash) {
+		go func(peer SyncPeer, root common.Hash) {
 			defer s.pend.Done()
 
 			// Attempt to send the remote request and revert if it fails
@@ -901,7 +930,7 @@ func (s *Syncer) assignBytecodeTasks(cancel chan struct{}) int {
 		delete(s.bytecodeIdlers, idle)
 
 		s.pend.Add(1)
-		go func(peer PeerIF) {
+		go func(peer SyncPeer) {
 			defer s.pend.Done()
 
 			// Attempt to send the remote request and revert if it fails
@@ -1027,7 +1056,7 @@ func (s *Syncer) assignStorageTasks(cancel chan struct{}) int {
 		delete(s.storageIdlers, idle)
 
 		s.pend.Add(1)
-		go func(peer PeerIF, root common.Hash) {
+		go func(peer SyncPeer, root common.Hash) {
 			defer s.pend.Done()
 
 			// Attempt to send the remote request and revert if it fails
@@ -1144,7 +1173,7 @@ func (s *Syncer) assignTrienodeHealTasks(cancel chan struct{}) int {
 		delete(s.trienodeHealIdlers, idle)
 
 		s.pend.Add(1)
-		go func(peer PeerIF, root common.Hash) {
+		go func(peer SyncPeer, root common.Hash) {
 			defer s.pend.Done()
 
 			// Attempt to send the remote request and revert if it fails
@@ -1244,7 +1273,7 @@ func (s *Syncer) assignBytecodeHealTasks(cancel chan struct{}) int {
 		delete(s.bytecodeHealIdlers, idle)
 
 		s.pend.Add(1)
-		go func(peer PeerIF) {
+		go func(peer SyncPeer) {
 			defer s.pend.Done()
 
 			// Attempt to send the remote request and revert if it fails
@@ -1959,7 +1988,7 @@ func (s *Syncer) forwardAccountTask(task *accountTask) {
 
 // OnAccounts is a callback method to invoke when a range of accounts are
 // received from a remote peer.
-func (s *Syncer) OnAccounts(peer PeerIF, id uint64, hashes []common.Hash, accounts [][]byte, proof [][]byte) error {
+func (s *Syncer) OnAccounts(peer SyncPeer, id uint64, hashes []common.Hash, accounts [][]byte, proof [][]byte) error {
 	size := common.StorageSize(len(hashes) * common.HashLength)
 	for _, account := range accounts {
 		size += common.StorageSize(len(account))
@@ -2074,7 +2103,7 @@ func (s *Syncer) OnAccounts(peer PeerIF, id uint64, hashes []common.Hash, accoun
 
 // OnByteCodes is a callback method to invoke when a batch of contract
 // bytes codes are received from a remote peer.
-func (s *Syncer) OnByteCodes(peer PeerIF, id uint64, bytecodes [][]byte) error {
+func (s *Syncer) OnByteCodes(peer SyncPeer, id uint64, bytecodes [][]byte) error {
 	s.lock.RLock()
 	syncing := !s.snapped
 	s.lock.RUnlock()
@@ -2087,7 +2116,7 @@ func (s *Syncer) OnByteCodes(peer PeerIF, id uint64, bytecodes [][]byte) error {
 
 // onByteCodes is a callback method to invoke when a batch of contract
 // bytes codes are received from a remote peer in the syncing phase.
-func (s *Syncer) onByteCodes(peer PeerIF, id uint64, bytecodes [][]byte) error {
+func (s *Syncer) onByteCodes(peer SyncPeer, id uint64, bytecodes [][]byte) error {
 	var size common.StorageSize
 	for _, code := range bytecodes {
 		size += common.StorageSize(len(code))
@@ -2180,7 +2209,7 @@ func (s *Syncer) onByteCodes(peer PeerIF, id uint64, bytecodes [][]byte) error {
 
 // OnStorage is a callback method to invoke when ranges of storage slots
 // are received from a remote peer.
-func (s *Syncer) OnStorage(peer PeerIF, id uint64, hashes [][]common.Hash, slots [][][]byte, proof [][]byte) error {
+func (s *Syncer) OnStorage(peer SyncPeer, id uint64, hashes [][]common.Hash, slots [][][]byte, proof [][]byte) error {
 	// Gather some trace stats to aid in debugging issues
 	var (
 		hashCount int
@@ -2338,7 +2367,7 @@ func (s *Syncer) OnStorage(peer PeerIF, id uint64, hashes [][]common.Hash, slots
 
 // OnTrieNodes is a callback method to invoke when a batch of trie nodes
 // are received from a remote peer.
-func (s *Syncer) OnTrieNodes(peer PeerIF, id uint64, trienodes [][]byte) error {
+func (s *Syncer) OnTrieNodes(peer SyncPeer, id uint64, trienodes [][]byte) error {
 	var size common.StorageSize
 	for _, node := range trienodes {
 		size += common.StorageSize(len(node))
@@ -2432,7 +2461,7 @@ func (s *Syncer) OnTrieNodes(peer PeerIF, id uint64, trienodes [][]byte) error {
 
 // onHealByteCodes is a callback method to invoke when a batch of contract
 // bytes codes are received from a remote peer in the healing phase.
-func (s *Syncer) onHealByteCodes(peer PeerIF, id uint64, bytecodes [][]byte) error {
+func (s *Syncer) onHealByteCodes(peer SyncPeer, id uint64, bytecodes [][]byte) error {
 	var size common.StorageSize
 	for _, code := range bytecodes {
 		size += common.StorageSize(len(code))

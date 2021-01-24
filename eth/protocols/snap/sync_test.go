@@ -119,7 +119,7 @@ type testPeer struct {
 	id            string
 	test          *testing.T
 	remote        *Syncer
-	log           log.Logger
+	logger        log.Logger
 	accountTrie   *trie.Trie
 	accountValues entrySlice
 	storageTries  map[common.Hash]*trie.Trie
@@ -136,7 +136,7 @@ func newTestPeer(id string, t *testing.T, cancelCh chan struct{}) *testPeer {
 	peer := &testPeer{
 		id:                    id,
 		test:                  t,
-		log:                   log.New("id", id),
+		logger:                log.New("id", id),
 		accountRequestHandler: defaultAccountRequestHandler,
 		trieRequestHandler:    defaultTrieRequestHandler,
 		storageRequestHandler: defaultStorageRequestHandler,
@@ -144,43 +144,38 @@ func newTestPeer(id string, t *testing.T, cancelCh chan struct{}) *testPeer {
 		cancelCh:              cancelCh,
 	}
 	stdoutHandler := log.StreamHandler(os.Stdout, log.TerminalFormat(true))
-	peer.log.SetHandler(stdoutHandler)
+	peer.logger.SetHandler(stdoutHandler)
 	return peer
 
 }
 
-func (t *testPeer) ID() string {
-	return t.id
-}
-
-func (t *testPeer) Log() log.Logger {
-	return t.log
-}
+func (t *testPeer) ID() string      { return t.id }
+func (t *testPeer) Log() log.Logger { return t.logger }
 
 func (t *testPeer) RequestAccountRange(id uint64, root, origin, limit common.Hash, bytes uint64) error {
-	t.log.Trace("Fetching range of accounts", "reqid", id, "root", root, "origin", origin, "limit", limit, "bytes", common.StorageSize(bytes))
+	t.logger.Trace("Fetching range of accounts", "reqid", id, "root", root, "origin", origin, "limit", limit, "bytes", common.StorageSize(bytes))
 	go t.accountRequestHandler(t, id, root, origin, bytes)
 	return nil
 }
 
 func (t *testPeer) RequestTrieNodes(id uint64, root common.Hash, paths []TrieNodePathSet, bytes uint64) error {
-	t.log.Trace("Fetching set of trie nodes", "reqid", id, "root", root, "pathsets", len(paths), "bytes", common.StorageSize(bytes))
+	t.logger.Trace("Fetching set of trie nodes", "reqid", id, "root", root, "pathsets", len(paths), "bytes", common.StorageSize(bytes))
 	go t.trieRequestHandler(t, id, root, paths, bytes)
 	return nil
 }
 
 func (t *testPeer) RequestStorageRanges(id uint64, root common.Hash, accounts []common.Hash, origin, limit []byte, bytes uint64) error {
 	if len(accounts) == 1 && origin != nil {
-		t.log.Trace("Fetching range of large storage slots", "reqid", id, "root", root, "account", accounts[0], "origin", common.BytesToHash(origin), "limit", common.BytesToHash(limit), "bytes", common.StorageSize(bytes))
+		t.logger.Trace("Fetching range of large storage slots", "reqid", id, "root", root, "account", accounts[0], "origin", common.BytesToHash(origin), "limit", common.BytesToHash(limit), "bytes", common.StorageSize(bytes))
 	} else {
-		t.log.Trace("Fetching ranges of small storage slots", "reqid", id, "root", root, "accounts", len(accounts), "first", accounts[0], "bytes", common.StorageSize(bytes))
+		t.logger.Trace("Fetching ranges of small storage slots", "reqid", id, "root", root, "accounts", len(accounts), "first", accounts[0], "bytes", common.StorageSize(bytes))
 	}
 	go t.storageRequestHandler(t, id, root, accounts, origin, limit, bytes)
 	return nil
 }
 
 func (t *testPeer) RequestByteCodes(id uint64, hashes []common.Hash, bytes uint64) error {
-	t.log.Trace("Fetching set of byte codes", "reqid", id, "hashes", len(hashes), "bytes", common.StorageSize(bytes))
+	t.logger.Trace("Fetching set of byte codes", "reqid", id, "hashes", len(hashes), "bytes", common.StorageSize(bytes))
 	go t.codeRequestHandler(t, id, hashes, bytes)
 	return nil
 }
@@ -194,7 +189,7 @@ func defaultTrieRequestHandler(t *testPeer, requestId uint64, root common.Hash, 
 		case 1:
 			blob, _, err := t.accountTrie.TryGetNode(pathset[0])
 			if err != nil {
-				t.Log().Info("Error handling req", "error", err)
+				t.logger.Info("Error handling req", "error", err)
 				break
 			}
 			nodes = append(nodes, blob)
@@ -203,7 +198,7 @@ func defaultTrieRequestHandler(t *testPeer, requestId uint64, root common.Hash, 
 			for _, path := range pathset[1:] {
 				blob, _, err := account.TryGetNode(path)
 				if err != nil {
-					t.Log().Info("Error handling req", "error", err)
+					t.logger.Info("Error handling req", "error", err)
 					break
 				}
 				nodes = append(nodes, blob)
@@ -218,7 +213,7 @@ func defaultTrieRequestHandler(t *testPeer, requestId uint64, root common.Hash, 
 func defaultAccountRequestHandler(t *testPeer, id uint64, root common.Hash, origin common.Hash, cap uint64) error {
 	keys, vals, proofs := createAccountRequestResponse(t, root, origin, cap)
 	if err := t.remote.OnAccounts(t, id, keys, vals, proofs); err != nil {
-		t.log.Error("remote error on delivery", "error", err)
+		t.logger.Error("remote error on delivery", "error", err)
 		t.test.Errorf("Remote side rejected our delivery: %v", err)
 		t.remote.Unregister(t.id)
 		t.cancelCh <- struct{}{}
@@ -244,13 +239,13 @@ func createAccountRequestResponse(t *testPeer, root common.Hash, origin common.H
 	// quirk in go-ethereum
 	proof := light.NewNodeSet()
 	if err := t.accountTrie.Prove(origin[:], 0, proof); err != nil {
-		t.log.Error("Could not prove inexistence of origin", "origin", origin,
+		t.logger.Error("Could not prove inexistence of origin", "origin", origin,
 			"error", err)
 	}
 	if len(keys) > 0 {
 		lastK := (keys[len(keys)-1])[:]
 		if err := t.accountTrie.Prove(lastK, 0, proof); err != nil {
-			t.log.Error("Could not prove last item",
+			t.logger.Error("Could not prove last item",
 				"error", err)
 		}
 	}
@@ -264,7 +259,7 @@ func createAccountRequestResponse(t *testPeer, root common.Hash, origin common.H
 func defaultStorageRequestHandler(t *testPeer, requestId uint64, root common.Hash, accounts []common.Hash, bOrigin, bLimit []byte, max uint64) error {
 	hashes, slots, proofs := createStorageRequestResponse(t, root, accounts, bOrigin, bLimit, max)
 	if err := t.remote.OnStorage(t, requestId, hashes, slots, proofs); err != nil {
-		t.log.Error("remote error on delivery", "error", err)
+		t.logger.Error("remote error on delivery", "error", err)
 		t.test.Errorf("Remote side rejected our delivery: %v", err)
 		t.cancelCh <- struct{}{}
 	}
@@ -277,7 +272,7 @@ func defaultCodeReqeustHandler(t *testPeer, id uint64, hashes []common.Hash, max
 		bytecodes = append(bytecodes, getCode(h))
 	}
 	if err := t.remote.OnByteCodes(t, id, bytecodes); err != nil {
-		t.log.Error("remote error on delivery", "error", err)
+		t.logger.Error("remote error on delivery", "error", err)
 		t.test.Errorf("Remote side rejected our delivery: %v", err)
 		t.cancelCh <- struct{}{}
 	}
@@ -335,13 +330,13 @@ func createStorageRequestResponse(t *testPeer, root common.Hash, accounts []comm
 			// use the 'origin' slice directly, but must use the full 32-byte
 			// hash form.
 			if err := stTrie.Prove(origin[:], 0, proof); err != nil {
-				t.log.Error("Could not prove inexistence of origin", "origin", origin,
+				t.logger.Error("Could not prove inexistence of origin", "origin", origin,
 					"error", err)
 			}
 			if len(keys) > 0 {
 				lastK := (keys[len(keys)-1])[:]
 				if err := stTrie.Prove(lastK, 0, proof); err != nil {
-					t.log.Error("Could not prove last item", "error", err)
+					t.logger.Error("Could not prove last item", "error", err)
 				}
 			}
 			for _, blob := range proof.NodeList() {
@@ -401,20 +396,20 @@ func corruptCodeReqeustHandler(t *testPeer, id uint64, hashes []common.Hash, max
 		bytecodes = append(bytecodes, h[:])
 	}
 	if err := t.remote.OnByteCodes(t, id, bytecodes); err != nil {
-		t.log.Error("remote error on delivery", "error", err)
+		t.logger.Error("remote error on delivery", "error", err)
 		// Mimic the real-life handler, which drops a peer on errors
 		t.remote.Unregister(t.id)
 	}
 	return nil
 }
 
-func cappedCodeReqeustHandler(t *testPeer, id uint64, hashes []common.Hash, max uint64) error {
+func cappedCodeRequestHandler(t *testPeer, id uint64, hashes []common.Hash, max uint64) error {
 	var bytecodes [][]byte
 	for _, h := range hashes[:1] {
 		bytecodes = append(bytecodes, getCode(h))
 	}
 	if err := t.remote.OnByteCodes(t, id, bytecodes); err != nil {
-		t.log.Error("remote error on delivery", "error", err)
+		t.logger.Error("remote error on delivery", "error", err)
 		// Mimic the real-life handler, which drops a peer on errors
 		t.remote.Unregister(t.id)
 	}
@@ -440,7 +435,7 @@ func corruptAccountRequestHandler(t *testPeer, requestId uint64, root common.Has
 		proofs = proofs[1:]
 	}
 	if err := t.remote.OnAccounts(t, requestId, hashes, accounts, proofs); err != nil {
-		t.log.Info("remote error on delivery (as expected)", "error", err)
+		t.logger.Info("remote error on delivery (as expected)", "error", err)
 		// Mimic the real-life handler, which drops a peer on errors
 		t.remote.Unregister(t.id)
 	}
@@ -454,7 +449,7 @@ func corruptStorageRequestHandler(t *testPeer, requestId uint64, root common.Has
 		proofs = proofs[1:]
 	}
 	if err := t.remote.OnStorage(t, requestId, hashes, slots, proofs); err != nil {
-		t.log.Info("remote error on delivery (as expected)", "error", err)
+		t.logger.Info("remote error on delivery (as expected)", "error", err)
 		// Mimic the real-life handler, which drops a peer on errors
 		t.remote.Unregister(t.id)
 	}
@@ -464,7 +459,7 @@ func corruptStorageRequestHandler(t *testPeer, requestId uint64, root common.Has
 func noProofStorageRequestHandler(t *testPeer, requestId uint64, root common.Hash, accounts []common.Hash, origin, limit []byte, max uint64) error {
 	hashes, slots, _ := createStorageRequestResponse(t, root, accounts, origin, limit, max)
 	if err := t.remote.OnStorage(t, requestId, hashes, slots, nil); err != nil {
-		t.log.Info("remote error on delivery (as expected)", "error", err)
+		t.logger.Info("remote error on delivery (as expected)", "error", err)
 		// Mimic the real-life handler, which drops a peer on errors
 		t.remote.Unregister(t.id)
 	}
@@ -496,12 +491,12 @@ func TestSyncBloatedProof(t *testing.T) {
 		// The proofs
 		proof := light.NewNodeSet()
 		if err := t.accountTrie.Prove(origin[:], 0, proof); err != nil {
-			t.log.Error("Could not prove origin", "origin", origin, "error", err)
+			t.logger.Error("Could not prove origin", "origin", origin, "error", err)
 		}
 		// The bloat: add proof of every single element
 		for _, entry := range t.accountValues {
 			if err := t.accountTrie.Prove(entry.k, 0, proof); err != nil {
-				t.log.Error("Could not prove item", "error", err)
+				t.logger.Error("Could not prove item", "error", err)
 			}
 		}
 		// And remove one item from the elements
@@ -513,7 +508,7 @@ func TestSyncBloatedProof(t *testing.T) {
 			proofs = append(proofs, blob)
 		}
 		if err := t.remote.OnAccounts(t, requestId, keys, vals, proofs); err != nil {
-			t.log.Info("remote error on delivery", "error", err)
+			t.logger.Info("remote error on delivery", "error", err)
 			// This is actually correct, signal to exit the test successfully
 			t.cancelCh <- struct{}{}
 		}
@@ -801,7 +796,7 @@ func TestSyncNoStorageAndOneCodeCorruptPeer(t *testing.T) {
 	// non-corrupt peer, which delivers everything in one go, and makes the
 	// test moot
 	syncer := setupSyncer(
-		mkSource("capped", cappedCodeReqeustHandler),
+		mkSource("capped", cappedCodeRequestHandler),
 		mkSource("corrupt", corruptCodeReqeustHandler),
 	)
 	done := checkStall(t, cancel)
@@ -858,7 +853,7 @@ func TestSyncNoStorageAndOneCodeCappedPeer(t *testing.T) {
 	syncer := setupSyncer(
 		mkSource("capped", func(t *testPeer, id uint64, hashes []common.Hash, max uint64) error {
 			counter++
-			return cappedCodeReqeustHandler(t, id, hashes, max)
+			return cappedCodeRequestHandler(t, id, hashes, max)
 		}),
 	)
 	done := checkStall(t, cancel)
