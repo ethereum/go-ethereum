@@ -298,7 +298,7 @@ func (d *Downloader) RegisterPeer(id string, version uint, peer Peer) error {
 		// Tests use short IDs, don't choke on them
 		logger = log.New("peer", id)
 	} else {
-		logger = log.New("peer", id[:16])
+		logger = log.New("peer", id[:8])
 	}
 	logger.Trace("Registering sync peer")
 	if err := d.peers.Register(newPeerConnection(id, version, peer, logger)); err != nil {
@@ -325,7 +325,7 @@ func (d *Downloader) UnregisterPeer(id string) error {
 		// Tests use short IDs, don't choke on them
 		logger = log.New("peer", id)
 	} else {
-		logger = log.New("peer", id[:16])
+		logger = log.New("peer", id[:8])
 	}
 	logger.Trace("Unregistering sync peer")
 	if err := d.peers.Unregister(id); err != nil {
