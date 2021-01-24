@@ -1703,6 +1703,7 @@ func (s *Syncer) processStorageResponse(res *storageResponse) {
 				continue
 			}
 			acc := res.mainTask.res.accounts[j]
+
 			// If the packet contains multiple contract storage slots, all
 			// but the last are surely complete. The last contract may be
 			// chunked, so check it's continuation flag.

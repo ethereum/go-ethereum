@@ -38,6 +38,8 @@ import (
 )
 
 func TestHashing(t *testing.T) {
+	t.Parallel()
+
 	var bytecodes = make([][]byte, 10)
 	for i := 0; i < len(bytecodes); i++ {
 		buf := make([]byte, 100)
@@ -469,6 +471,8 @@ func noProofStorageRequestHandler(t *testPeer, requestId uint64, root common.Has
 // also ship the entire trie inside the proof. If the attack is successful,
 // the remote side does not do any follow-up requests
 func TestSyncBloatedProof(t *testing.T) {
+	t.Parallel()
+
 	sourceAccountTrie, elems := makeAccountTrieNoStorage(100)
 	cancel := make(chan struct{})
 	source := newTestPeer("source", t, cancel)
@@ -531,6 +535,8 @@ func setupSyncer(peers ...*testPeer) *Syncer {
 
 // TestSync tests a basic sync with one peer
 func TestSync(t *testing.T) {
+	t.Parallel()
+
 	cancel := make(chan struct{})
 	sourceAccountTrie, elems := makeAccountTrieNoStorage(100)
 
@@ -550,6 +556,8 @@ func TestSync(t *testing.T) {
 // TestSyncTinyTriePanic tests a basic sync with one peer, and a tiny trie. This caused a
 // panic within the prover
 func TestSyncTinyTriePanic(t *testing.T) {
+	t.Parallel()
+
 	cancel := make(chan struct{})
 
 	sourceAccountTrie, elems := makeAccountTrieNoStorage(1)
@@ -573,6 +581,8 @@ func TestSyncTinyTriePanic(t *testing.T) {
 
 // TestMultiSync tests a basic sync with multiple peers
 func TestMultiSync(t *testing.T) {
+	t.Parallel()
+
 	cancel := make(chan struct{})
 	sourceAccountTrie, elems := makeAccountTrieNoStorage(100)
 
@@ -591,6 +601,8 @@ func TestMultiSync(t *testing.T) {
 
 // TestSyncWithStorage tests  basic sync using accounts + storage + code
 func TestSyncWithStorage(t *testing.T) {
+	t.Parallel()
+
 	cancel := make(chan struct{})
 	sourceAccountTrie, elems, storageTries, storageElems := makeAccountTrieWithStorage(3, 3000, true)
 
@@ -610,6 +622,8 @@ func TestSyncWithStorage(t *testing.T) {
 
 // TestMultiSyncManyUseless contains one good peer, and many which doesn't return anything valuable at all
 func TestMultiSyncManyUseless(t *testing.T) {
+	t.Parallel()
+
 	cancel := make(chan struct{})
 
 	sourceAccountTrie, elems, storageTries, storageElems := makeAccountTrieWithStorage(100, 3000, true)
@@ -649,11 +663,9 @@ func TestMultiSyncManyUselessWithLowTimeout(t *testing.T) {
 	// We're setting the timeout to very low, to increase the chance of the timeout
 	// being triggered. This was previously a cause of panic, when a response
 	// arrived simultaneously as a timeout was triggered.
-	old := requestTimeout
-	requestTimeout = 1 * time.Millisecond
-	defer func() {
-		requestTimeout = old
-	}()
+	defer func(old time.Duration) { requestTimeout = old }(requestTimeout)
+	requestTimeout = time.Millisecond
+
 	cancel := make(chan struct{})
 
 	sourceAccountTrie, elems, storageTries, storageElems := makeAccountTrieWithStorage(100, 3000, true)
@@ -691,11 +703,8 @@ func TestMultiSyncManyUselessWithLowTimeout(t *testing.T) {
 // TestMultiSyncManyUnresponsive contains one good peer, and many which doesn't respond at all
 func TestMultiSyncManyUnresponsive(t *testing.T) {
 	// We're setting the timeout to very low, to make the test run a bit faster
-	old := requestTimeout
-	requestTimeout = 1 * time.Millisecond
-	defer func() {
-		requestTimeout = old
-	}()
+	defer func(old time.Duration) { requestTimeout = old }(requestTimeout)
+	requestTimeout = time.Millisecond
 
 	cancel := make(chan struct{})
 
@@ -731,13 +740,13 @@ func TestMultiSyncManyUnresponsive(t *testing.T) {
 	}
 }
 
-func checkStall(t *testing.T, cancel chan (struct{})) chan struct{} {
-	testDone := make(chan (struct{}))
+func checkStall(t *testing.T, cancel chan struct{}) chan struct{} {
+	testDone := make(chan struct{})
 	go func() {
 		select {
 		case <-time.After(5 * time.Second):
 			t.Log("Sync stalled")
-			cancel <- struct{}{}
+			close(cancel)
 		case <-testDone:
 			return
 		}
@@ -748,6 +757,8 @@ func checkStall(t *testing.T, cancel chan (struct{})) chan struct{} {
 // TestSyncNoStorageAndOneCappedPeer tests sync using accounts and no storage, where one peer is
 // consistently returning very small results
 func TestSyncNoStorageAndOneCappedPeer(t *testing.T) {
+	t.Parallel()
+
 	cancel := make(chan struct{})
 
 	sourceAccountTrie, elems := makeAccountTrieNoStorage(3000)
@@ -779,6 +790,8 @@ func TestSyncNoStorageAndOneCappedPeer(t *testing.T) {
 // TestSyncNoStorageAndOneCodeCorruptPeer has one peer which doesn't deliver
 // code requests properly.
 func TestSyncNoStorageAndOneCodeCorruptPeer(t *testing.T) {
+	t.Parallel()
+
 	cancel := make(chan struct{})
 
 	sourceAccountTrie, elems := makeAccountTrieNoStorage(3000)
@@ -806,6 +819,8 @@ func TestSyncNoStorageAndOneCodeCorruptPeer(t *testing.T) {
 }
 
 func TestSyncNoStorageAndOneAccountCorruptPeer(t *testing.T) {
+	t.Parallel()
+
 	cancel := make(chan struct{})
 
 	sourceAccountTrie, elems := makeAccountTrieNoStorage(3000)
@@ -835,6 +850,8 @@ func TestSyncNoStorageAndOneAccountCorruptPeer(t *testing.T) {
 // TestSyncNoStorageAndOneCodeCappedPeer has one peer which delivers code hashes
 // one by one
 func TestSyncNoStorageAndOneCodeCappedPeer(t *testing.T) {
+	t.Parallel()
+
 	cancel := make(chan struct{})
 
 	sourceAccountTrie, elems := makeAccountTrieNoStorage(3000)
@@ -873,6 +890,8 @@ func TestSyncNoStorageAndOneCodeCappedPeer(t *testing.T) {
 // TestSyncWithStorageAndOneCappedPeer tests sync using accounts + storage, where one peer is
 // consistently returning very small results
 func TestSyncWithStorageAndOneCappedPeer(t *testing.T) {
+	t.Parallel()
+
 	cancel := make(chan struct{})
 
 	sourceAccountTrie, elems, storageTries, storageElems := makeAccountTrieWithStorage(300, 1000, false)
@@ -904,6 +923,8 @@ func TestSyncWithStorageAndOneCappedPeer(t *testing.T) {
 // TestSyncWithStorageAndCorruptPeer tests sync using accounts + storage, where one peer is
 // sometimes sending bad proofs
 func TestSyncWithStorageAndCorruptPeer(t *testing.T) {
+	t.Parallel()
+
 	cancel := make(chan struct{})
 
 	sourceAccountTrie, elems, storageTries, storageElems := makeAccountTrieWithStorage(100, 3000, true)
@@ -932,6 +953,8 @@ func TestSyncWithStorageAndCorruptPeer(t *testing.T) {
 }
 
 func TestSyncWithStorageAndNonProvingPeer(t *testing.T) {
+	t.Parallel()
+
 	cancel := make(chan struct{})
 
 	sourceAccountTrie, elems, storageTries, storageElems := makeAccountTrieWithStorage(100, 3000, true)
@@ -993,7 +1016,7 @@ var (
 // getACodeHash returns a pseudo-random code hash
 func getACodeHash(i uint64) []byte {
 	h := codehashes[int(i)%len(codehashes)]
-	return h[:]
+	return common.CopyBytes(h[:])
 }
 
 // convenience function to lookup the code from the code hash
