@@ -22,7 +22,6 @@ import (
 	"encoding/binary"
 	"fmt"
 	"math/big"
-	"os"
 	"sort"
 	"testing"
 	"time"
@@ -143,8 +142,8 @@ func newTestPeer(id string, t *testing.T, cancelCh chan struct{}) *testPeer {
 		codeRequestHandler:    defaultCodeReqeustHandler,
 		cancelCh:              cancelCh,
 	}
-	stdoutHandler := log.StreamHandler(os.Stdout, log.TerminalFormat(true))
-	peer.logger.SetHandler(stdoutHandler)
+	//stderrHandler := log.StreamHandler(os.Stderr, log.TerminalFormat(true))
+	//peer.logger.SetHandler(stderrHandler)
 	return peer
 
 }
@@ -874,7 +873,6 @@ func TestSyncNoStorageAndOneCodeCappedPeer(t *testing.T) {
 // TestSyncWithStorageAndOneCappedPeer tests sync using accounts + storage, where one peer is
 // consistently returning very small results
 func TestSyncWithStorageAndOneCappedPeer(t *testing.T) {
-	log.Root().SetHandler(log.LvlFilterHandler(log.LvlTrace, log.StreamHandler(os.Stderr, log.TerminalFormat(true))))
 	cancel := make(chan struct{})
 
 	sourceAccountTrie, elems, storageTries, storageElems := makeAccountTrieWithStorage(300, 1000, false)
