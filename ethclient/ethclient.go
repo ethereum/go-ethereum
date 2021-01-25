@@ -28,6 +28,7 @@ import (
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/ethereum/go-ethereum/core/types"
+	"github.com/ethereum/go-ethereum/eth"
 	"github.com/ethereum/go-ethereum/rlp"
 	"github.com/ethereum/go-ethereum/rpc"
 )
@@ -333,6 +334,11 @@ func (ec *Client) SyncProgress(ctx context.Context) (*ethereum.SyncProgress, err
 // on the given channel.
 func (ec *Client) SubscribeNewHead(ctx context.Context, ch chan<- *types.Header) (ethereum.Subscription, error) {
 	return ec.c.EthSubscribe(ctx, ch, "newHeads")
+}
+
+// SubscribeTraceChain subscribes to notifications for results of tracing the chain
+func (ec *Client) SubscribeTraceChain(ctx context.Context, ch chan<- *eth.TxTraceResult, start, end int, traceCfg eth.TraceConfig) (ethereum.Subscription, error) {
+	return ec.c.DebugSubscribe(ctx, ch, "traceChain", fmt.Sprintf("%#x", start), fmt.Sprintf("%#x", end), traceCfg)
 }
 
 // State Access
