@@ -28,14 +28,14 @@ import (
 	"github.com/ethereum/go-ethereum/light"
 )
 
-// StateAtBlock retrieves the state database associated with a certain block.
-func (leth *LightEthereum) StateAtBlock(ctx context.Context, block *types.Block, reexec uint64) (*state.StateDB, func(), error) {
+// stateAtBlock retrieves the state database associated with a certain block.
+func (leth *LightEthereum) stateAtBlock(ctx context.Context, block *types.Block, reexec uint64) (*state.StateDB, func(), error) {
 	return light.NewState(ctx, block.Header(), leth.odr), func() {}, nil
 }
 
-// StatesInRange retrieves a batch of state databases associated with the specific
+// statesInRange retrieves a batch of state databases associated with the specific
 // block ranges.
-func (leth *LightEthereum) StatesInRange(ctx context.Context, fromBlock *types.Block, toBlock *types.Block, reexec uint64) ([]*state.StateDB, func(), error) {
+func (leth *LightEthereum) statesInRange(ctx context.Context, fromBlock *types.Block, toBlock *types.Block, reexec uint64) ([]*state.StateDB, func(), error) {
 	var states []*state.StateDB
 	for number := fromBlock.NumberU64(); number <= toBlock.NumberU64(); number++ {
 		header, err := leth.blockchain.GetHeaderByNumberOdr(ctx, number)
@@ -48,7 +48,7 @@ func (leth *LightEthereum) StatesInRange(ctx context.Context, fromBlock *types.B
 }
 
 // stateAtTransaction returns the execution environment of a certain transaction.
-func (leth *LightEthereum) StateAtTransaction(ctx context.Context, block *types.Block, txIndex int, reexec uint64) (core.Message, vm.BlockContext, *state.StateDB, func(), error) {
+func (leth *LightEthereum) stateAtTransaction(ctx context.Context, block *types.Block, txIndex int, reexec uint64) (core.Message, vm.BlockContext, *state.StateDB, func(), error) {
 	// Short circuit if it's genesis block.
 	if block.NumberU64() == 0 {
 		return nil, vm.BlockContext{}, nil, nil, errors.New("no transaction in genesis")
@@ -58,7 +58,7 @@ func (leth *LightEthereum) StateAtTransaction(ctx context.Context, block *types.
 	if err != nil {
 		return nil, vm.BlockContext{}, nil, nil, err
 	}
-	statedb, _, err := leth.StateAtBlock(ctx, parent, reexec)
+	statedb, _, err := leth.stateAtBlock(ctx, parent, reexec)
 	if err != nil {
 		return nil, vm.BlockContext{}, nil, nil, err
 	}

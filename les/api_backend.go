@@ -294,13 +294,13 @@ func (b *LesApiBackend) CurrentHeader() *types.Header {
 }
 
 func (b *LesApiBackend) StateAtBlock(ctx context.Context, block *types.Block, reexec uint64) (*state.StateDB, func(), error) {
-	return b.eth.StateAtBlock(ctx, block, reexec)
+	return b.eth.stateAtBlock(ctx, block, reexec)
 }
 
 func (b *LesApiBackend) StatesInRange(ctx context.Context, fromBlock *types.Block, toBlock *types.Block, reexec uint64) ([]*state.StateDB, func(), error) {
-	return b.eth.StatesInRange(ctx, fromBlock, toBlock, reexec)
+	return b.eth.statesInRange(ctx, fromBlock, toBlock, reexec)
 }
 
 func (b *LesApiBackend) StateAtTransaction(ctx context.Context, block *types.Block, txIndex int, reexec uint64) (core.Message, vm.BlockContext, *state.StateDB, func(), error) {
-	return b.eth.StateAtTransaction(ctx, block, txIndex, reexec)
+	return b.eth.stateAtTransaction(ctx, block, txIndex, reexec)
 }

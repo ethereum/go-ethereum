@@ -131,7 +131,7 @@ func (eth *Ethereum) statesInRange(fromBlock, toBlock *types.Block, reexec uint6
 		refs     = []common.Hash{fromBlock.Root()}
 		database = state.NewDatabaseWithConfig(eth.chainDb, &trie.Config{Cache: 16, Preimages: true})
 	)
-	// Release all resources(including the states referenced by `StateAtBlock`)
+	// Release all resources(including the states referenced by `stateAtBlock`)
 	// if error is returned.
 	defer func() {
 		if err != nil {
@@ -178,7 +178,7 @@ func (eth *Ethereum) statesInRange(fromBlock, toBlock *types.Block, reexec uint6
 		parent = root
 	}
 	// release is handler to release all states referenced, including
-	// the one referenced in `StateAtBlock`.
+	// the one referenced in `stateAtBlock`.
 	release = func() {
 		for _, ref := range refs {
 			database.TrieDB().Dereference(ref)
