@@ -44,14 +44,9 @@ trade-offs nonetheless.
 
 *For those interested in the cryptographic and/or implementation details, the key-store
 uses the `secp256k1` elliptic curve as defined in the [Standards for Efficient
-Cryptography](sec2), implemented by the [`libsecp256k`](secp256k1) library and wrapped by
-[`github.com/ethereum/go-ethereum/accounts`](accounts-go). Accounts are stored on disk in
-the [Web3 Secret Storage](secstore) format.*
-
-[sec2]: https://www.secg.org/sec2-v2.pdf
-[accounts-go]: https://godoc.org/github.com/ethereum/go-ethereum/accounts
-[secp256k1]: https://github.com/bitcoin-core/secp256k1
-[secstore]: https://github.com/ethereum/wiki/wiki/Web3-Secret-Storage-Definition
+Cryptography](sec2), implemented by the [`libsecp256k`][secp256k1] library and wrapped by
+[`github.com/ethereum/go-ethereum/accounts`][accounts-go]. Accounts are stored on disk in
+the [Web3 Secret Storage][secstore] format.*
 
 ### Keystores on Android (Java)
 
@@ -125,8 +120,7 @@ importing them on another device.
 
 Although the keystore defines the encryption strength it uses to store your accounts,
 there is no global master password that can grant access to all of them. Rather each
-account is maintained individually, and stored on disk in its [encrypted
-format](https://github.com/ethereum/wiki/wiki/Web3-Secret-Storage-Definition)
+account is maintained individually, and stored on disk in its [encrypted format][secstore]
 individually, ensuring a much cleaner and stricter separation of credentials.
 
 This individuality however means that any operation requiring access to an account will
@@ -261,8 +255,8 @@ can hard-code a random transaction to sign instead.
 // Create a new account to sign transactions with
 Account signer = ks.newAccount("Signer password");
 Transaction tx = new Transaction(
-	1, new Address("0x0000000000000000000000000000000000000000"),
-	new BigInt(0), new BigInt(0), new BigInt(1), null); // Random empty transaction
+    1, new Address("0x0000000000000000000000000000000000000000"),
+    new BigInt(0), new BigInt(0), new BigInt(1), null); // Random empty transaction
 BigInt chain = new BigInt(1); // Chain identifier of the main net
 ```
 
@@ -294,7 +288,7 @@ can hard-code a random transaction to sign instead.
 // Create a new account to sign transactions with
 var error: NSError?
 let signer = try! ks?.newAccount("Signer password")
-        
+
 let to    = GethNewAddressFromHex("0x0000000000000000000000000000000000000000", &error)
 let tx    = GethNewTransaction(1, to, GethNewBigInt(0), GethNewBigInt(0), GethNewBigInt(0), nil) // Random empty transaction
 let chain = GethNewBigInt(1) // Chain identifier of the main net
@@ -322,3 +316,7 @@ try! ks?.timedUnlock(signer, passphrase: "Signer password", timeout: 1000000000)
 signed = try! ks?.signTx(signer, tx: tx, chainID: chain)
 ```
 
+[sec2]: https://www.secg.org/sec2-v2.pdf
+[accounts-go]: https://godoc.org/github.com/ethereum/go-ethereum/accounts
+[secp256k1]: https://github.com/bitcoin-core/secp256k1
+[secstore]: https://github.com/ethereum/wiki/wiki/Web3-Secret-Storage-Definition
