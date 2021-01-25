@@ -23,8 +23,7 @@ embedded into third party desktop and server applications.
 
 *Note, this guide will assume you are familiar with Go development. It will make no
 attempts to cover general topics about Go project layouts, import paths or any other
-standard methodologies. If you are new to Go, consider reading its [getting started
-guides](https://github.com/golang/go/wiki#getting-started-with-go) first.*
+standard methodologies. If you are new to Go, consider reading its [getting started guides][go-guide] first.*
 
 ## Quick overview
 
@@ -37,8 +36,7 @@ Our reusable Go libraries focus on four main usage areas:
 
 You can watch a quick overview about these in Peter's (@karalabe) talk titled "Import
 Geth: Ethereum from Go and beyond", presented at the Ethereum Devcon2 developer conference
-in September, 2016 (Shanghai). Slides are [available
-here](https://ethereum.karalabe.com/talks/2016-devcon.html).
+in September, 2016 (Shanghai). Slides are [available here][peter-slides].
 
 [![Peter's Devcon2 talk](https://img.youtube.com/vi/R0Ia1U9Gxjg/0.jpg)](https://www.youtube.com/watch?v=R0Ia1U9Gxjg)
 
@@ -52,10 +50,9 @@ without needing any third party tools. External dependencies are vendored locall
 yourself too to avoid any accidental API breakages!
 
 The canonical import path for `go-ethereum` is `github.com/ethereum/go-ethereum`, with all
-packages residing underneath. Although there are [quite a
-number](https://godoc.org/github.com/ethereum/go-ethereum#pkg-subdirectories) of them,
-you'll only need to care about a limited subset, each of which will be properly introduced
-in their relevant section.
+packages residing underneath. Although there are [quite a number][go-ethereum-dir] of
+them, you'll only need to care about a limited subset, each of which will be properly
+introduced in their relevant section.
 
 You can download all our packages via:
 
@@ -63,10 +60,6 @@ You can download all our packages via:
 $ go get -d github.com/ethereum/go-ethereum/...
 ```
 
-You may also need Go's original context package. Although this was moved into the official
-Go SDK in Go 1.7, `go-ethereum` will depend on the original `golang.org/x/net/context`
-package until we officially drop support for Go 1.5 and Go 1.6.
-
-```
-$ go get -u golang.org/x/net/context
-```
+[go-guide]: https://github.com/golang/go/wiki#getting-started-with-go
+[peter-slides]: https://ethereum.karalabe.com/talks/2016-devcon.html
+[go-ethereum-dir]: https://pkg.go.dev/github.com/ethereum/go-ethereum/#section-directories
