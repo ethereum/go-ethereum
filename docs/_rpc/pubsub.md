@@ -26,7 +26,7 @@ Example:
 
 ### Considerations
 
-1. notifications are send for current events and not for past events. If your use case
+1. notifications are sent for current events and not for past events. If your use case
    requires you not to miss any notifications than subscriptions are probably not the best
    option.
 2. subscriptions require a full duplex connection. Geth offers such connections in the
@@ -41,7 +41,7 @@ Example:
 
 ## Create subscription
 
-Subscriptions are creates with a regular RPC call with `eth_subscribe` as method and the
+Subscriptions are created with a regular RPC call with `eth_subscribe` as method and the
 subscription name as first parameter. If successful it returns the subscription id.
 
 ### Parameters
