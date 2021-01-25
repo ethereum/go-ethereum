@@ -158,6 +158,16 @@ func (p *Peer) Caps() []Cap {
 	return p.rw.caps
 }
 
+// SupportsCap returns true if the peer supports the given protocol/version
+func (p *Peer) SupportsCap(protocol string, version uint) bool {
+	for _, cap := range p.rw.caps {
+		if cap.Name == protocol {
+			return version <= cap.Version
+		}
+	}
+	return false
+}
+
 // RemoteAddr returns the remote address of the network connection.
 func (p *Peer) RemoteAddr() net.Addr {
 	return p.rw.fd.RemoteAddr()
