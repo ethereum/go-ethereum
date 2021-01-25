@@ -744,7 +744,7 @@ func checkStall(t *testing.T, cancel chan struct{}) chan struct{} {
 	testDone := make(chan struct{})
 	go func() {
 		select {
-		case <-time.After(15 * time.Second):
+		case <-time.After(time.Minute): // TODO(karalabe): Make tests smaller, this is too much
 			t.Log("Sync stalled")
 			close(cancel)
 		case <-testDone:
