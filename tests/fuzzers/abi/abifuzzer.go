@@ -161,12 +161,10 @@ func getUInt(fuzzer *fuzz.Fuzzer) int {
 	var i int
 	fuzzer.Fuzz(&i)
 	if i < 0 {
-		iNew := -i
-		// The value -9,223,372,036,854,775,808 has no inverse in int64.
-		if i == iNew {
+		i = -i
+		if i < 0 {
 			return 0
 		}
-		return iNew
 	}
 	return i
 }
