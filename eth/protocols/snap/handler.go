@@ -77,12 +77,12 @@ type Backend interface {
 
 // MakeProtocols constructs the P2P protocol definitions for `snap`.
 func MakeProtocols(backend Backend, dnsdisc enode.Iterator) []p2p.Protocol {
-	protocols := make([]p2p.Protocol, len(protocolVersions))
-	for i, version := range protocolVersions {
+	protocols := make([]p2p.Protocol, len(ProtocolVersions))
+	for i, version := range ProtocolVersions {
 		version := version // Closure
 
 		protocols[i] = p2p.Protocol{
-			Name:    protocolName,
+			Name:    ProtocolName,
 			Version: version,
 			Length:  protocolLengths[version],
 			Run: func(p *p2p.Peer, rw p2p.MsgReadWriter) error {

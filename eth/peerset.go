@@ -141,14 +141,9 @@ func (ps *peerSet) unregisterEthPeer(id string) error {
 		return errPeerNotRegistered
 	}
 	delete(ps.ethPeers, id)
-
-	snap, ok := ps.snapPeers[id]
 	ps.lock.Unlock()
 
 	ps.ethDropFeed.Send(eth)
-	if ok {
-		ps.snapDropFeed.Send(snap)
-	}
 	return nil
 }
 

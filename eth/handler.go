@@ -229,7 +229,8 @@ func newHandler(config *handlerConfig) (*handler, error) {
 	return h, nil
 }
 
-// runEthPeer
+// runEthPeer registers an eth peer into the joint eth/snap peerset, adds it to
+// various subsistems and starts handling messages.
 func (h *handler) runEthPeer(peer *eth.Peer, handler eth.Handler) error {
 	if !h.chainSync.handlePeerEvent(peer) {
 		return p2p.DiscQuitting
@@ -251,12 +252,21 @@ func (h *handler) runEthPeer(peer *eth.Peer, handler eth.Handler) error {
 		return err
 	}
 	reject := false // reserved peer slots
-	if atomic.LoadUint32(&h.snapSync) == 1 && !peer.SupportsCap("snap", 1) {
-		// If we are running snap-sync, we want to reserve roughly half the peer
-		// slots for peers supporting the snap protocol.
-		// The logic here is; we only allow up to 5 more non-snap peers than snap-peers.
-		if all, snp := h.peers.Len(), h.peers.SnapLen(); all-snp > snp+5 {
-			reject = true
+	if atomic.LoadUint32(&h.snapSync) == 1 {
+		var keep bool
+		for _, ver := range snap.ProtocolVersions {
+			if peer.SupportsCap(snap.ProtocolName, ver) {
+				keep = true
+				break
+			}
+		}
+		if !keep {
+			// If we are running snap-sync, we want to reserve roughly half the peer
+			// slots for peers supporting the snap protocol.
+			// The logic here is; we only allow up to 5 more non-snap peers than snap-peers.
+			if all, snp := h.peers.Len(), h.peers.SnapLen(); all-snp > snp+5 {
+				reject = true
+			}
 		}
 	}
 	// Ignore maxPeers if this is a trusted peer
@@ -317,18 +327,34 @@ func (h *handler) runEthPeer(peer *eth.Peer, handler eth.Handler) error {
 	return handler(peer)
 }
 
-// runSnapPeer
+// runSnapPeer registers a snap peer into the joint eth/snap peerset, adds it to
+// the snapshot syncer and starts handling inbound messages.
+//
+// Note, the method does **not** remove the peer un teardown. This is because
+// snap is a satellite protocol to eth and we enforce a valid eth connection
+// beside snap, which will take care of the removal.
 func (h *handler) runSnapPeer(peer *snap.Peer, handler snap.Handler) error {
 	h.peerWG.Add(1)
 	defer h.peerWG.Done()
 
+	// Reject the peer if it advertises snap without eth as snap is only a
+	// satellite protocol.
+	var keep bool
+	for _, ver := range eth.ProtocolVersions {
+		if peer.SupportsCap(eth.ProtocolName, ver) {
+			keep = true
+			break
+		}
+	}
+	if !keep {
+		peer.Log().Warn("Rejecting snap peer without eth")
+		return errors.New("snap peer with no eth advertized")
+	}
 	// Register the peer locally
 	if err := h.peers.registerSnapPeer(peer); err != nil {
 		peer.Log().Error("Snapshot peer registration failed", "err", err)
 		return err
 	}
-	defer h.removePeer(peer.ID())
-
 	if err := h.downloader.SnapSyncer.Register(peer); err != nil {
 		return err
 	}
