@@ -58,4 +58,7 @@ If you want to test your dapps with a realistic block time use the `--dev.period
 
 ## Connect Remix to Geth
 
-With geth now running, open <https://remix.ethereum.org>. Compile the contract as normal, but when you deploy and run a contract, select _Web3 Provider_ from the _Environment_ dropdown, and add "http://127.0.0.1:8545" to the popup box. Click _Deploy_, and interact with the contract. You should see contract creation, mining, and transaction activity.
+With geth now running, open <https://remix.ethereum.org>. Compile the contract as normal,
+but when you deploy and run a contract, select _Web3 Provider_ from the _Environment_
+dropdown, and add "http://127.0.0.1:8545" to the popup box. Click _Deploy_, and interact
+with the contract. You should see contract creation, mining, and transaction activity.

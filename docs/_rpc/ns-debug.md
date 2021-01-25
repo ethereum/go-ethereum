@@ -156,7 +156,7 @@ destructive action and may severely damage your chain. Use with *extreme* cautio
 | RPC     | `{"method": "debug_setHead", "params": [number]}` |
 
 References:
-[Ethash](https://github.com/ethereum/wiki/wiki/Mining#the-algorithm)
+[Ethash](https://eth.wiki/en/concepts/ethash/ethash)
 
 ### debug_setBlockProfileRate
 

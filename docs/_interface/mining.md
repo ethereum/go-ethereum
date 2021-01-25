@@ -4,7 +4,7 @@ sort_key: B
 ---
 
 This document explains how to set up geth for mining. The Ethereum wiki also has a [page
-about mining](eth-wiki-mining), be sure to check that one as well.
+about mining](https://eth.wiki/en/fundamentals/mining), be sure to check that one as well.
 
 Mining is the process through which new blocks are created. Geth actually creates new
 blocks all the time, but these blocks need to be secured through proof-of-work so they
@@ -13,7 +13,7 @@ will be accepted by other nodes. Mining is all about creating these proof-of-wor
 The proof-of-work computation can be performed in multiple ways. Geth includes a CPU
 miner, which does mining within the geth process. We discourage using the CPU miner with
 the Ethereum mainnet. If you want to mine real ether, use GPU mining. Your best option for
-doing that is the [ethminer](ethminer) software.
+doing that is the [ethminer](https://github.com/ethereum-mining/ethminer) software.
 
 Always ensure your blockchain is fully synchronised with the chain before starting to
 mine, otherwise you will not be mining on the correct chain and your block rewards will
@@ -52,7 +52,7 @@ Now we're ready to start mining. In a new terminal session, run ethminer and con
     ethminer -G -P http://127.0.0.1:8545
 
 `ethminer` communicates with geth on port 8545 (the default RPC port in geth). You can
-change this by giving the [`--rpcport` option](../rpc/index) to `geth`. Ethminer will find
+change this by giving the [`--rpcport` option](../rpc/server) to `geth`. Ethminer will find
 get on any port. You also need to set the port on `ethminer` with `-P
 http://127.0.0.1:3301`. Setting up custom ports is necessary if you want several instances
 mining on the same computer. If you are testing on a private cluster, we recommend you use

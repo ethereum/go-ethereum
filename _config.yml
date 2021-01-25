@@ -28,6 +28,7 @@ collections:
   getting-started:
     output: true
     caption: Getting Started
+    permalink: docs/:collection/:slug
     sidebar_index: 1
     frontpage: _getting-started/index.md
   install-and-build:
