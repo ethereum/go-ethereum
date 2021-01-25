@@ -41,7 +41,7 @@ Example:
 
 ## Create subscription
 
-Subscriptions are creates with a regular RPC call with `eth_subscribe` as method and the
+Subscriptions are created with a regular RPC call with `eth_subscribe` as method and the
 subscription name as first parameter. If successful it returns the subscription id.
 
 ### Parameters
