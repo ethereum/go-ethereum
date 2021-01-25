@@ -179,11 +179,11 @@ func (api *privateAdminAPI) StartRPC(host *string, port *int, path *string, cors
 		port = &api.node.config.HTTPPort
 	}
 
-	// Check if path set on which to mount http handler
+	// Check if prefix set on which to mount http handler
 	if path == nil {
-		p := "/"
-		if api.node.config.HTTPPath != "" {
-			p = api.node.config.HTTPPath
+		p := ""
+		if api.node.config.HTTPPathPrefix != "" {
+			p = api.node.config.HTTPPathPrefix
 		}
 		path = &p
 	}
@@ -193,7 +193,7 @@ func (api *privateAdminAPI) StartRPC(host *string, port *int, path *string, cors
 		CorsAllowedOrigins: api.node.config.HTTPCors,
 		Vhosts:             api.node.config.HTTPVirtualHosts,
 		Modules:            api.node.config.HTTPModules,
-		path:               *path,
+		prefix:             prettyPath(*path),
 	}
 	if cors != nil {
 		config.CorsAllowedOrigins = nil
@@ -249,11 +249,11 @@ func (api *privateAdminAPI) StartWS(host *string, port *int, path *string, allow
 		port = &api.node.config.WSPort
 	}
 
-	// Check if path set on which to mount ws handler
+	// Check if prefix set on which to mount ws handler
 	if path == nil {
-		p := "/"
-		if api.node.config.WSPath != "" {
-			p = api.node.config.WSPath
+		p := ""
+		if api.node.config.WSPathPrefix != "" {
+			p = api.node.config.WSPathPrefix
 		}
 		path = &p
 	}
@@ -262,7 +262,7 @@ func (api *privateAdminAPI) StartWS(host *string, port *int, path *string, allow
 	config := wsConfig{
 		Modules: api.node.config.WSModules,
 		Origins: api.node.config.WSOrigins,
-		path:    *path,
+		prefix:  prettyPath(*path),
 		// ExposeAll: api.node.config.WSExposeAll,
 	}
 	if apis != nil {

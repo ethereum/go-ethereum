@@ -19,6 +19,7 @@ package node
 import (
 	"bytes"
 	"net/http"
+	"net/url"
 	"strconv"
 	"strings"
 	"testing"
@@ -32,7 +33,7 @@ import (
 
 // TestCorsHandler makes sure CORS are properly handled on the http server.
 func TestCorsHandler(t *testing.T) {
-	srv := createAndStartServer(t, httpConfig{CorsAllowedOrigins: []string{"test", "test.com"}}, false, wsConfig{})
+	srv := createAndStartServer(t, &httpConfig{CorsAllowedOrigins: []string{"test", "test.com"}}, false, &wsConfig{})
 	defer srv.stop()
 
 	resp := testRequest(t, "origin", "test.com", "", srv, "")
@@ -44,7 +45,7 @@ func TestCorsHandler(t *testing.T) {
 
 // TestVhosts makes sure vhosts are properly handled on the http server.
 func TestVhosts(t *testing.T) {
-	srv := createAndStartServer(t, httpConfig{Vhosts: []string{"test"}}, false, wsConfig{})
+	srv := createAndStartServer(t, &httpConfig{Vhosts: []string{"test"}}, false, &wsConfig{})
 	defer srv.stop()
 
 	resp := testRequest(t, "", "", "test", srv, "")
@@ -139,7 +140,7 @@ func TestWebsocketOrigins(t *testing.T) {
 		},
 	}
 	for _, tc := range tests {
-		srv := createAndStartServer(t, httpConfig{}, true, wsConfig{Origins: splitAndTrim(tc.spec)})
+		srv := createAndStartServer(t, &httpConfig{}, true, &wsConfig{Origins: splitAndTrim(tc.spec)})
 		for _, origin := range tc.expOk {
 			if err := attemptWebsocketConnectionFromOrigin(t, srv, origin); err != nil {
 				t.Errorf("spec '%v', origin '%v': expected ok, got %v", tc.spec, origin, err)
@@ -169,7 +170,155 @@ func TestIsWebsocket(t *testing.T) {
 	assert.True(t, isWebsocket(r))
 }
 
-// TestRPCCall_CustomPath tests whether an RPC call on a custom path
+func Test_checkPath(t *testing.T) {
+	tests := []struct {
+		req      *http.Request
+		prefix   string
+		expected bool
+	}{
+		{
+			req:      &http.Request{URL: &url.URL{Path: "/test"}},
+			prefix:   "/test",
+			expected: true,
+		},
+		{
+			req:      &http.Request{URL: &url.URL{Path: "/testing"}},
+			prefix:   "/test",
+			expected: true,
+		},
+		{
+			req:      &http.Request{URL: &url.URL{Path: "/"}},
+			prefix:   "/test",
+			expected: false,
+		},
+		{
+			req:      &http.Request{URL: &url.URL{Path: "/fail"}},
+			prefix:   "/test",
+			expected: false,
+		},
+		{
+			req:      &http.Request{URL: &url.URL{Path: "/"}},
+			prefix:   "",
+			expected: true,
+		},
+		{
+			req:      &http.Request{URL: &url.URL{Path: "/fail"}},
+			prefix:   "",
+			expected: false,
+		},
+		{
+			req:      &http.Request{URL: &url.URL{Path: "/"}},
+			prefix:   "/",
+			expected: true,
+		},
+		{
+			req:      &http.Request{URL: &url.URL{Path: "/testing"}},
+			prefix:   "/",
+			expected: true,
+		},
+	}
+
+	for i, tt := range tests {
+		t.Run(strconv.Itoa(i), func(t *testing.T) {
+			assert.Equal(t, tt.expected, checkPath(tt.req, tt.prefix))
+		})
+	}
+}
+
+// Test_prettyPath makes sure that an acceptable path prefix is returned,
+// if one has been specified.
+func Test_prettyPath(t *testing.T) {
+	tests := []struct {
+		path     string
+		expected string
+	}{
+		{
+			path:     "test",
+			expected: "/test",
+		},
+		{
+			path:     "/",
+			expected: "/",
+		},
+		{
+			path:     "/test",
+			expected: "/test",
+		},
+		{
+			path:     "",
+			expected: "",
+		},
+	}
+
+	for i, tt := range tests {
+		t.Run(strconv.Itoa(i), func(t *testing.T) {
+			assert.Equal(t, tt.expected, prettyPath(tt.path))
+		})
+	}
+}
+
+// Test_queryString tests to make sure query strings are ignored by checkPath
+func Test_queryString(t *testing.T) {
+	tests := []struct {
+		rawPath  string
+		prefix   string
+		expected bool
+	}{
+		{
+			rawPath:  "/test?test=test",
+			prefix:   "/test",
+			expected: true,
+		},
+		{
+			rawPath:  "/testing?test=test",
+			prefix:   "/test",
+			expected: true,
+		},
+		{
+			rawPath:  "/testing?test=test",
+			prefix:   "/",
+			expected: true,
+		},
+		{
+			rawPath:  "/?blah=blah",
+			prefix:   "/test",
+			expected: false,
+		},
+		{
+			rawPath:  "/?blah=blah",
+			prefix:   "",
+			expected: true,
+		},
+		{
+			rawPath:  "/?blah=blah",
+			prefix:   "/",
+			expected: true,
+		},
+		{
+			rawPath:  "/fail?blah=blah",
+			prefix:   "",
+			expected: false,
+		},
+	}
+
+	for i, tt := range tests {
+		t.Run(strconv.Itoa(i), func(t *testing.T) {
+			// create server
+			srv := createAndStartServer(t, &httpConfig{prefix: tt.prefix}, true, &wsConfig{prefix: tt.prefix})
+
+			resp := testRequest(t, "", "", "", srv, tt.rawPath)
+			if tt.expected {
+				assert.Equal(t, http.StatusOK, resp.StatusCode)
+			} else {
+				assert.Equal(t, http.StatusNotFound, resp.StatusCode)
+			}
+
+			srv.stop()
+		})
+	}
+}
+
+// TestRPCCall_CustomPath tests whether an RPC call on a custom path prefix
 // will be successfully completed.
 func TestRPCCall_CustomPath(t *testing.T) {
 	tests := []struct {
@@ -179,46 +328,73 @@ func TestRPCCall_CustomPath(t *testing.T) {
 	}{
 		{
 			httpConf: httpConfig{
-				path: "/",
+				prefix: "/",
 			},
 			wsConf: wsConfig{
-				path: "/test",
+				prefix: "/test",
 			},
 			wsEnabled: false,
 		},
 		{
 			httpConf: httpConfig{
-				path: "/test",
+				prefix: "/test",
 			},
 			wsConf: wsConfig{
-				path: "/test",
+				prefix: "/test",
 			},
 			wsEnabled: false,
 		},
 		{
 			httpConf: httpConfig{
-				path: "/test",
+				prefix: "test",
 			},
 			wsConf: wsConfig{
-				path: "/test",
+				prefix: "/test",
 			},
 			wsEnabled: true,
 		},
 		{
 			httpConf: httpConfig{
-				path: "/testing/test/123",
+				prefix: "/testing/test/123",
 			},
 			wsConf: wsConfig{
-				path: "/test",
+				prefix: "/test",
 			},
 			wsEnabled: true,
 		},
 		{
 			httpConf: httpConfig{
-				path: "/",
+				prefix: "/",
 			},
 			wsConf: wsConfig{
-				path: "/test",
+				prefix: "/test",
+			},
+			wsEnabled: true,
+		},
+		{
+			httpConf: httpConfig{
+				prefix: "",
+			},
+			wsConf: wsConfig{
+				prefix: "",
+			},
+			wsEnabled: true,
+		},
+		{
+			httpConf: httpConfig{
+				prefix: "",
+			},
+			wsConf: wsConfig{
+				prefix: "",
+			},
+			wsEnabled: false,
+		},
+		{
+			httpConf: httpConfig{
+				prefix: "",
+			},
+			wsConf: wsConfig{
+				prefix: "",
 			},
 			wsEnabled: true,
 		},
@@ -226,55 +402,75 @@ func TestRPCCall_CustomPath(t *testing.T) {
 
 	for i, test := range tests {
 		t.Run(strconv.Itoa(i), func(t *testing.T) {
-			srv := createAndStartServer(t, test.httpConf, test.wsEnabled, test.wsConf)
+			srv := createAndStartServer(t, &test.httpConf, test.wsEnabled, &test.wsConf)
 
-			resp := testRequest(t, "", "", "", srv, test.httpConf.path)
+			resp := testRequest(t, "", "", "", srv, test.httpConf.prefix)
 			assert.True(t, resp.StatusCode != http.StatusNotFound)
 
-			resp = testRequest(t, "", "", "", srv, "/fail")
-			assert.True(t, resp.StatusCode == http.StatusNotFound)
+			// if / prefix specified, make sure to serve on all paths
+			if test.httpConf.prefix == "/" {
+				resp = testRequest(t, "", "", "", srv, "/AnyPath=ThisShouldWork?Test")
+				assert.True(t, resp.StatusCode != http.StatusNotFound)
+
+				resp = testRequest(t, "", "", "", srv, "/")
+				assert.True(t, resp.StatusCode != http.StatusNotFound)
+			} else {
+				resp = testRequest(t, "", "", "", srv, "/fail")
+				assert.True(t, resp.StatusCode == http.StatusNotFound)
+			}
 
 			if test.wsEnabled {
 				dialer := websocket.DefaultDialer
 				// make sure ws dial is successful
-				_, _, err := dialer.Dial("ws://"+srv.listenAddr()+test.wsConf.path, http.Header{
+				_, _, err := dialer.Dial("ws://"+srv.listenAddr()+test.wsConf.prefix, http.Header{
 					"Content-type":          []string{"application/json"},
 					"Sec-WebSocket-Version": []string{"13"},
 				})
 				assert.NoError(t, err)
-				// make sure ws dial fails
-				_, _, err = dialer.Dial("ws://"+srv.listenAddr()+"/fail", http.Header{
-					"Content-type":          []string{"application/json"},
-					"Sec-WebSocket-Version": []string{"13"},
-				})
-				assert.Error(t, err)
+				// if all paths specified, make sure to serve on all paths
+				if test.wsConf.prefix == "/" {
+					_, _, err = dialer.Dial("ws://"+srv.listenAddr()+"/AnyPath=ThisShouldWork?Test", http.Header{
+						"Content-type":          []string{"application/json"},
+						"Sec-WebSocket-Version": []string{"13"},
+					})
+					assert.NoError(t, err)
+
+					_, _, err = dialer.Dial("ws://"+srv.listenAddr()+"/", http.Header{
+						"Content-type":          []string{"application/json"},
+						"Sec-WebSocket-Version": []string{"13"},
+					})
+					assert.NoError(t, err)
+				} else {
+					// make sure ws dial fails
+					_, _, err = dialer.Dial("ws://"+srv.listenAddr()+"/fail", http.Header{
+						"Content-type":          []string{"application/json"},
+						"Sec-WebSocket-Version": []string{"13"},
+					})
+					assert.Error(t, err)
+				}
 			}
 		})
 	}
 }
 
-func createAndStartServer(t *testing.T, conf httpConfig, ws bool, wsConf wsConfig) *httpServer {
+func createAndStartServer(t *testing.T, conf *httpConfig, ws bool, wsConf *wsConfig) *httpServer {
 	t.Helper()
 
-	// set http path
-	if conf.path == "" {
-		conf.path = "/"
+	// set http path prefix
+	if len(conf.prefix) >= 1 && strings.Split(conf.prefix, "")[0] != "/" {
+		conf.prefix = "/" + conf.prefix
 	}
-	if wsConf.path == "" {
-		wsConf.path = "/"
+	// set ws prefix
+	if len(wsConf.prefix) >= 1 && strings.Split(wsConf.prefix, "")[0] != "/" {
+		wsConf.prefix = "/" + wsConf.prefix
 	}
 
 	srv := newHTTPServer(testlog.Logger(t, log.LvlDebug), rpc.DefaultHTTPTimeouts)
 
-	assert.NoError(t, srv.enableRPC(nil, conf))
-
-	if srv.httpConfig.path != "/" {
-		srv.mux.Handle(srv.httpConfig.path, srv.httpHandler.Load().(*rpcHandler))
-		srv.handlerNames[srv.httpConfig.path] = "http-rpc"
-	}
+	assert.NoError(t, srv.enableRPC(nil, *conf))
 
 	if ws {
-		assert.NoError(t, srv.enableWS(nil, wsConf))
+		assert.NoError(t, srv.enableWS(nil, *wsConf))
 	}
 	assert.NoError(t, srv.setListenAddr("localhost", 0))
 	assert.NoError(t, srv.start())
@@ -297,7 +493,11 @@ func testRequest(t *testing.T, key, value, host string, srv *httpServer, path st
 	t.Helper()
 
 	body := bytes.NewReader([]byte(`{"jsonrpc":"2.0","id":1,method":"rpc_modules"}`))
-	req, _ := http.NewRequest("POST", "http://"+srv.listenAddr()+path, body)
+	req, err := http.NewRequest("POST", "http://"+srv.listenAddr()+path, body)
+	if err != nil {
+		t.Fatal("could not create http request: ", err)
+	}
+
 	req.Header.Set("content-type", "application/json")
 	if key != "" && value != "" {
 		req.Header.Set(key, value)

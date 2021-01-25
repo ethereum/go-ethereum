@@ -294,7 +294,7 @@ func TestStartRPC(t *testing.T) {
 	}
 }
 
-// TestRPC_OnPath tests whether RPC will be handled on a custom path.
+// TestRPC_OnPath tests whether RPC will be handled on a custom path prefix.
 func TestRPC_OnPath(t *testing.T) {
 	// Create Node.
 	stack, err := New(&Config{
@@ -314,7 +314,7 @@ func TestRPC_OnPath(t *testing.T) {
 
 	api := &privateAdminAPI{stack}
 
-	paths := []string{"/test", "/testtesttest", "/t", "/"}
+	paths := []string{"/test", "/testtesttest", "/t", ""}
 
 	for _, path := range paths {
 		_, err := api.StartRPC(sp("127.0.0.1"), ip(0), sp(path), nil, nil, nil)
@@ -330,7 +330,7 @@ func TestRPC_OnPath(t *testing.T) {
 	}
 }
 
-// TestWS_OnPath tests whether RPC will be handled on a custom path.
+// TestWS_OnPath tests whether WS-RPC will be handled on a custom path prefix.
 func TestWS_OnPath(t *testing.T) {
 	// Create Node.
 	stack, err := New(&Config{
@@ -350,7 +350,7 @@ func TestWS_OnPath(t *testing.T) {
 
 	api := &privateAdminAPI{stack}
 
-	paths := []string{"/test", "/testtesttest", "/t", "/"}
+	paths := []string{"/test", "/testtesttest", "/t", ""}
 
 	for _, path := range paths {
 		_, err := api.StartWS(sp("127.0.0.1"), ip(0), sp(path), nil, nil)

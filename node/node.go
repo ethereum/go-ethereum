@@ -342,15 +342,14 @@ func (n *Node) startRPC() error {
 
 	// Configure HTTP.
 	if n.config.HTTPHost != "" {
-		// set the path on which to mount the handler
-		if n.config.HTTPPath == "" {
-			n.config.HTTPPath = "/"
-		}
+		// make sure the prefix on which to mount the handler is acceptable
+		prefix := prettyPath(n.config.HTTPPathPrefix)
+
 		config := httpConfig{
 			CorsAllowedOrigins: n.config.HTTPCors,
 			Vhosts:             n.config.HTTPVirtualHosts,
 			Modules:            n.config.HTTPModules,
-			path:               n.config.HTTPPath,
+			prefix:             prefix,
 		}
 		if err := n.http.setListenAddr(n.config.HTTPHost, n.config.HTTPPort); err != nil {
 			return err
@@ -363,14 +362,13 @@ func (n *Node) startRPC() error {
 	// Configure WebSocket.
 	if n.config.WSHost != "" {
 		server := n.wsServerForPort(n.config.WSPort)
-		// set the path on which to mount the handler
-		if n.config.WSPath == "" {
-			n.config.WSPath = "/"
-		}
+		// make sure the prefix on which to mount the handler is acceptable
+		prefix := prettyPath(n.config.WSPathPrefix)
+
 		config := wsConfig{
 			Modules: n.config.WSModules,
 			Origins: n.config.WSOrigins,
-			path:    n.config.WSPath,
+			prefix:  prefix,
 		}
 		if err := server.setListenAddr(n.config.WSHost, n.config.WSPort); err != nil {
 			return err

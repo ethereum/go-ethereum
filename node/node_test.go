@@ -390,7 +390,7 @@ func TestLifecycleTerminationGuarantee(t *testing.T) {
 }
 
 // Tests whether a handler can be successfully mounted on the canonical HTTP server
-// on the given path
+// on the given prefix
 func TestRegisterHandler_Successful(t *testing.T) {
 	node := createNode(t, 7878, 7979)
 

@@ -532,10 +532,10 @@ var (
 		Usage: "API's offered over the HTTP-RPC interface",
 		Value: "",
 	}
-	HTTPPathFlag = cli.StringFlag{
-		Name:  "http.path",
-		Usage: "Path on which to mount the http server. Default value is root",
-		Value: "/",
+	HTTPPathPrefixFlag = cli.StringFlag{
+		Name:  "http.prefix",
+		Usage: "Specify a path prefix on which to mount the http-rpc server. Specify '/' to allow any path.",
+		Value: "",
 	}
 	GraphQLEnabledFlag = cli.BoolFlag{
 		Name:  "graphql",
@@ -575,10 +575,10 @@ var (
 		Usage: "Origins from which to accept websockets requests",
 		Value: "",
 	}
-	WSPathFlag = cli.StringFlag{
-		Name:  "ws.path",
-		Usage: "Path on which to mount the ws server. Default value is root",
-		Value: "/",
+	WSPathPrefixFlag = cli.StringFlag{
+		Name:  "ws.prefix",
+		Usage: "Specify a path prefix on which to mount the ws-rpc server. Specify '/' to allow any path.",
+		Value: "",
 	}
 	ExecFlag = cli.StringFlag{
 		Name:  "exec",
@@ -966,10 +966,10 @@ func setHTTP(ctx *cli.Context, cfg *node.Config) {
 		cfg.HTTPVirtualHosts = SplitAndTrim(ctx.GlobalString(HTTPVirtualHostsFlag.Name))
 	}
 
-	if ctx.GlobalIsSet(HTTPPathFlag.Name) {
-		cfg.HTTPPath = ctx.GlobalString(HTTPPathFlag.Name)
+	if ctx.GlobalIsSet(HTTPPathPrefixFlag.Name) {
+		cfg.HTTPPathPrefix = ctx.GlobalString(HTTPPathPrefixFlag.Name)
 	} else {
-		cfg.HTTPPath = HTTPPathFlag.Value
+		cfg.HTTPPathPrefix = HTTPPathPrefixFlag.Value
 	}
 }
 
@@ -1021,10 +1021,10 @@ func setWS(ctx *cli.Context, cfg *node.Config) {
 		cfg.WSModules = SplitAndTrim(ctx.GlobalString(WSApiFlag.Name))
 	}
 
-	if ctx.GlobalIsSet(WSPathFlag.Name) {
-		cfg.WSPath = ctx.GlobalString(WSPathFlag.Name)
+	if ctx.GlobalIsSet(WSPathPrefixFlag.Name) {
+		cfg.WSPathPrefix = ctx.GlobalString(WSPathPrefixFlag.Name)
 	} else {
-		cfg.WSPath = WSPathFlag.Value
+		cfg.WSPathPrefix = WSPathPrefixFlag.Value
 	}
 }
 

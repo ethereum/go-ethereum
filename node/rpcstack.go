@@ -39,14 +39,14 @@ type httpConfig struct {
 	Modules            []string
 	CorsAllowedOrigins []string
 	Vhosts             []string
-	path               string // path on which to mount http handler
+	prefix             string // path prefix on which to mount http handler
 }
 
 // wsConfig is the JSON-RPC/Websocket configuration
 type wsConfig struct {
 	Origins []string
 	Modules []string
-	path    string // path on which to mount ws handler
+	prefix  string // path prefix on which to mount ws handler
 }
 
 type rpcHandler struct {
@@ -176,18 +176,15 @@ func (h *httpServer) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	// check if ws request and serve if ws enabled
 	ws := h.wsHandler.Load().(*rpcHandler)
 	if ws != nil && isWebsocket(r) {
-		if checkPath(r, h.wsConfig.path) {
+		if checkPath(r, h.wsConfig.prefix) {
 			ws.ServeHTTP(w, r)
-			return
 		}
+		return
 	}
 	// if http-rpc is enabled, try to serve request
 	rpc := h.httpHandler.Load().(*rpcHandler)
 	if rpc != nil {
-		if checkPath(r, h.httpConfig.path) {
-			rpc.ServeHTTP(w, r)
-			return
-		}
+		// First try to route in the mux.
 		// Requests to a path below root are handled by the mux,
 		// which has all the handlers registered via Node.RegisterHandler.
 		// These are made available when RPC is enabled.
@@ -196,18 +193,31 @@ func (h *httpServer) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 			muxHandler.ServeHTTP(w, r)
 			return
 		}
+
+		if checkPath(r, h.httpConfig.prefix) {
+			rpc.ServeHTTP(w, r)
+			return
+		}
 	}
-	w.WriteHeader(404)
+	w.WriteHeader(http.StatusNotFound)
 }
 
-// checkPath checks whether a request path matches a given path or path prefix.
+// checkPath checks whether a given request URL matches a given path prefix.
 func checkPath(r *http.Request, path string) bool {
-	// if the path is root and the request URI is below root,
-	// return false and fall through to mux
-	if path == "/" {
-		return r.RequestURI == "/"
+	// if no prefix has been specified, request URL must be on root
+	if path == "" {
+		return r.URL.Path == "/"
 	}
-	return len(r.RequestURI) >= len(path) && r.RequestURI[:len(path)] == path
+	// otherwise, check to make sure prefix matches
+	return len(r.URL.Path) >= len(path) && r.URL.Path[:len(path)] == path
+}
+
+// prettyPath returns an acceptable path prefix on which to mount an rpc handler.
+func prettyPath(path string) string {
+	if path != "" && strings.Split(path, "")[0] != "/" {
+		return "/" + path
+	}
+	return path
 }
 
 // stop shuts down the HTTP server.
