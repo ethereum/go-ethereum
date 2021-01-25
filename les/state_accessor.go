@@ -47,7 +47,7 @@ func (leth *LightEthereum) StatesInRange(ctx context.Context, fromBlock *types.B
 	return states, nil, nil
 }
 
-// StateAtTransaction returns the execution environment of a certain transaction.
+// stateAtTransaction returns the execution environment of a certain transaction.
 func (leth *LightEthereum) StateAtTransaction(ctx context.Context, block *types.Block, txIndex int, reexec uint64) (core.Message, vm.BlockContext, *state.StateDB, func(), error) {
 	// Short circuit if it's genesis block.
 	if block.NumberU64() == 0 {

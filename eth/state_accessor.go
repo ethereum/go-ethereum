@@ -30,10 +30,10 @@ import (
 	"github.com/ethereum/go-ethereum/trie"
 )
 
-// StateAtBlock retrieves the state database associated with a certain block.
+// stateAtBlock retrieves the state database associated with a certain block.
 // If no state is locally available for the given block, a number of blocks are
 // attempted to be reexecuted to generate the desired state.
-func (eth *Ethereum) StateAtBlock(block *types.Block, reexec uint64) (statedb *state.StateDB, release func(), err error) {
+func (eth *Ethereum) stateAtBlock(block *types.Block, reexec uint64) (statedb *state.StateDB, release func(), err error) {
 	// If we have the state fully available, use that
 	statedb, err = eth.blockchain.StateAt(block.Root())
 	if err == nil {
@@ -111,13 +111,13 @@ func (eth *Ethereum) StateAtBlock(block *types.Block, reexec uint64) (statedb *s
 	return statedb, func() { database.TrieDB().Dereference(parent) }, nil
 }
 
-// StatesInRange retrieves a batch of state databases associated with the specific
+// statesInRange retrieves a batch of state databases associated with the specific
 // block ranges. If no state is locally available for the given range, a number of
 // blocks are attempted to be reexecuted to generate the ancestor state.
-func (eth *Ethereum) StatesInRange(fromBlock, toBlock *types.Block, reexec uint64) (states []*state.StateDB, release func(), err error) {
+func (eth *Ethereum) statesInRange(fromBlock, toBlock *types.Block, reexec uint64) (states []*state.StateDB, release func(), err error) {
 	statedb, err := eth.blockchain.StateAt(fromBlock.Root())
 	if err != nil {
-		statedb, _, err = eth.StateAtBlock(fromBlock, reexec)
+		statedb, _, err = eth.stateAtBlock(fromBlock, reexec)
 	}
 	if err != nil {
 		return nil, nil, err
@@ -187,8 +187,8 @@ func (eth *Ethereum) StatesInRange(fromBlock, toBlock *types.Block, reexec uint6
 	return states, release, nil
 }
 
-// StateAtTransaction returns the execution environment of a certain transaction.
-func (eth *Ethereum) StateAtTransaction(block *types.Block, txIndex int, reexec uint64) (core.Message, vm.BlockContext, *state.StateDB, func(), error) {
+// stateAtTransaction returns the execution environment of a certain transaction.
+func (eth *Ethereum) stateAtTransaction(block *types.Block, txIndex int, reexec uint64) (core.Message, vm.BlockContext, *state.StateDB, func(), error) {
 	// Short circuit if it's genesis block.
 	if block.NumberU64() == 0 {
 		return nil, vm.BlockContext{}, nil, nil, errors.New("no transaction in genesis")
@@ -198,7 +198,7 @@ func (eth *Ethereum) StateAtTransaction(block *types.Block, txIndex int, reexec 
 	if parent == nil {
 		return nil, vm.BlockContext{}, nil, nil, fmt.Errorf("parent %#x not found", block.ParentHash())
 	}
-	statedb, release, err := eth.StateAtBlock(parent, reexec)
+	statedb, release, err := eth.stateAtBlock(parent, reexec)
 	if err != nil {
 		return nil, vm.BlockContext{}, nil, nil, err
 	}

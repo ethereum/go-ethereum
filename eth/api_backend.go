@@ -328,13 +328,13 @@ func (b *EthAPIBackend) StartMining(threads int) error {
 }
 
 func (b *EthAPIBackend) StateAtBlock(ctx context.Context, block *types.Block, reexec uint64) (*state.StateDB, func(), error) {
-	return b.eth.StateAtBlock(block, reexec)
+	return b.eth.stateAtBlock(block, reexec)
 }
 
 func (b *EthAPIBackend) StatesInRange(ctx context.Context, fromBlock *types.Block, toBlock *types.Block, reexec uint64) ([]*state.StateDB, func(), error) {
-	return b.eth.StatesInRange(fromBlock, toBlock, reexec)
+	return b.eth.statesInRange(fromBlock, toBlock, reexec)
 }
 
 func (b *EthAPIBackend) StateAtTransaction(ctx context.Context, block *types.Block, txIndex int, reexec uint64) (core.Message, vm.BlockContext, *state.StateDB, func(), error) {
-	return b.eth.StateAtTransaction(block, txIndex, reexec)
+	return b.eth.stateAtTransaction(block, txIndex, reexec)
 }
