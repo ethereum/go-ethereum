@@ -117,6 +117,6 @@ This will dump stack traces for each instance to their respective log file.
 [code-review]: ../developers/code-review-guidelines
 [cross-compile]: ../install-and-build/cross-compile
 [go-modules]: https://github.com/golang/go/wiki/Modules
-[discord]: https://discord.gg/nthXNEv
+[discord]: https://discord.gg/invite/nthXNEv
 [go-install]: https://golang.org/doc/install
-[testflag]: https://golang.org/cmd/go/#hdr-Description_of_testing_flags
+[testflag]: https://golang.org/cmd/go/#hdr-Testing_flags
