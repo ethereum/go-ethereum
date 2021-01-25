@@ -9,7 +9,7 @@ controlled ethereum network is useful as a backend for network integration testi
 developers working on issues related to networking/blockchain synching/message
 propagation, etc or DAPP developers testing multi-block and multi-user scenarios).
 
-We assume you are able to build `geth` following the [build instructions](../docs/install-and-build/installing-geth)
+We assume you are able to build `geth` following the [build instructions][build].
 
 ## Setting up multiple nodes
 
@@ -122,4 +122,5 @@ describes how you set up your own monitoring service for a (private or public) l
 cluster.
 
 [eth-stats]: https://ethstats.org
-[monitoring]: ../doc/setting-up-monitoring-on-local-cluster
+[monitoring]: ../../doc/setting-up-monitoring-on-local-cluster
+[build]: ../../docs/install-and-build/installing-geth

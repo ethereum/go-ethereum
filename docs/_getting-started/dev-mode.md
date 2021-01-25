@@ -22,7 +22,7 @@ You can specify a data directory to maintain state between runs using the `--dat
 mkdir test-chain-dir
 ```
 
-For this guide, start geth in dev mode, and enable [RPC](../_rpc/server.md) so you can connect other applications to geth. For this guide, we use Remix, the web-based Ethereum IDE, so also allow its domains to accept cross-origin requests.
+For this guide, start geth in dev mode, and enable [RPC](../../_rpc/server.md) so you can connect other applications to geth. For this guide, we use Remix, the web-based Ethereum IDE, so also allow its domains to accept cross-origin requests.
 
 ```shell
 geth --datadir test-chain-dir --rpc --dev --rpccorsdomain "https://remix.ethereum.org,http://remix.ethereum.org"
