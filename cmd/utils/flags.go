@@ -45,6 +45,7 @@ import (
 	"github.com/ethereum/go-ethereum/eth"
 	"github.com/ethereum/go-ethereum/eth/downloader"
 	"github.com/ethereum/go-ethereum/eth/gasprice"
+	"github.com/ethereum/go-ethereum/eth/tracers"
 	"github.com/ethereum/go-ethereum/ethdb"
 	"github.com/ethereum/go-ethereum/ethstats"
 	"github.com/ethereum/go-ethereum/graphql"
@@ -1724,6 +1725,7 @@ func RegisterEthService(stack *node.Node, cfg *eth.Config) ethapi.Backend {
 		if err != nil {
 			Fatalf("Failed to register the Ethereum service: %v", err)
 		}
+		stack.RegisterAPIs(tracers.APIs(backend.ApiBackend))
 		return backend.ApiBackend
 	}
 	backend, err := eth.New(stack, cfg)
@@ -1736,6 +1738,7 @@ func RegisterEthService(stack *node.Node, cfg *eth.Config) ethapi.Backend {
 			Fatalf("Failed to create the LES server: %v", err)
 		}
 	}
+	stack.RegisterAPIs(tracers.APIs(backend.APIBackend))
 	return backend.APIBackend
 }
 
