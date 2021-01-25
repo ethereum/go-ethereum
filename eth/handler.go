@@ -252,13 +252,10 @@ func (h *handler) runEthPeer(peer *eth.Peer, handler eth.Handler) error {
 	}
 	reject := false // reserved peer slots
 	if atomic.LoadUint32(&h.snapSync) == 1 && !peer.SupportsCap("snap", 1) {
-		// If we are running snap-sync, we want to reserve half the peer slots for
-		// peers supporting the snap protocol
-		// The logic here is; we always allow up to 5 non-snap peers, but after that,
-		// we require snap-peers to fill at least a third of the peer-slots.
-		snapPeers := h.peers.SnapLen()
-		ethPeers := h.peers.Len() - snapPeers // snap-peers are a subset of eth-peers
-		if ethPeers > 5 && ethPeers > 2*snapPeers {
+		// If we are running snap-sync, we want to reserve roughly half the peer
+		// slots for peers supporting the snap protocol.
+		// The logic here is; we only allow up to 5 more non-snap peers than snap-peers.
+		if all, snp := h.peers.Len(), h.peers.SnapLen(); all-snp > snp+5 {
 			reject = true
 		}
 	}
