@@ -26,7 +26,7 @@ While the main network uses proof-of-work to secure the blockchain, Geth also su
 the 'clique' proof-of-authority consensus algorithm as an alternative for private
 networks. We strongly recommend 'clique' for new private network deployments because it is
 much less resource intensive than proof-of-work. The clique system is also used for
-several public Ethereum testnets such as [Rinkeby](https://rinkeby.io) and
+several public Ethereum testnets such as [Rinkeby](https://www.rinkeby.io) and
 [Görli](https://goerli.net).
 
 Here are the key differences between the two consensus algorithms available in Geth:
@@ -42,7 +42,7 @@ that the average block time matches the target block time.
 
 Clique consensus is a proof-of-authority system where new blocks can be created by
 authorized 'signers' only. The clique consenus protocol is specified in
-[EIP-225](clique-eip). The initial set of authorized signers is configured in the genesis
+[EIP-225][clique-eip]. The initial set of authorized signers is configured in the genesis
 block. Signers can be authorized and de-authorized using a voting mechanism, thus allowing
 the set of signers to change while the blockchain operates. Clique can be configured to
 target any block time (within reasonable limits) since it isn't tied to the difficulty
@@ -63,7 +63,7 @@ block, you need to decide on a few initial parameters for your blockchain:
   while the blockchain is running requires scheduling a hard fork.
 - Initial block gas limit (`gasLimit`). Your choice here impacts how much EVM computation
   can happen within a single block. We recommend using the main Ethereum network as a
-  [guideline to find a good amount](gaslimit-char). The block gas limit can be adjusted
+  [guideline to find a good amount][gaslimit-chart]. The block gas limit can be adjusted
   after launch using the `--targetgaslimit` command-line flag.
 - Initial allocation of ether (`alloc`). This determines how much ether is available to
   the addresses you list in the genesis block. Additional ether can be created through
