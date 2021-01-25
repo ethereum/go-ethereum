@@ -529,6 +529,70 @@ var bindTests = []struct {
 		nil,
 		nil,
 	},
+	// Tests that structs are correctly unpacked
+	{
+
+		`Structs`,
+		`
+		pragma solidity ^0.6.5;
+			pragma experimental ABIEncoderV2;
+			contract Structs {
+				struct A {
+					bytes32 B;
+				}
+				
+				function F() public view returns (A[] memory a, uint256[] memory c, bool[] memory d) {
+					A[] memory a = new A[](2);
+					a[0].B = bytes32(uint256(1234) << 96);
+					uint256[] memory c;
+					bool[] memory d;
+					return (a, c, d);
+				}
+			
+				function G() public view returns (A[] memory a) {
+					A[] memory a = new A[](2);
+					a[0].B = bytes32(uint256(1234) << 96);
+					return a;
+				}
+			}
+		`,
+		[]string{`608060405234801561001057600080fd5b50610278806100206000396000f3fe608060405234801561001057600080fd5b50600436106100365760003560e01c806328811f591461003b5780636fecb6231461005b575b600080fd5b610043610070565b604051610052939291906101a0565b60405180910390f35b6100636100d6565b6040516100529190610186565b604080516002808252606082810190935282918291829190816020015b610095610131565b81526020019060019003908161008d575050805190915061026960611b9082906000906100be57fe5b60209081029190910101515293606093508392509050565b6040805160028082526060828101909352829190816020015b6100f7610131565b8152602001906001900390816100ef575050805190915061026960611b90829060009061012057fe5b602090810291909101015152905090565b60408051602081019091526000815290565b815260200190565b6000815180845260208085019450808401835b8381101561017b578151518752958201959082019060010161015e565b509495945050505050565b600060208252610199602083018461014b565b9392505050565b6000606082526101b3606083018661014b565b6020838203818501528186516101c98185610239565b91508288019350845b818110156101f3576101e5838651610143565b9484019492506001016101d2565b505084810360408601528551808252908201925081860190845b8181101561022b57825115158552938301939183019160010161020d565b509298975050505050505050565b9081526020019056fea2646970667358221220eb85327e285def14230424c52893aebecec1e387a50bb6b75fc4fdbed647f45f64736f6c63430006050033`},
+		[]string{`[{"inputs":[],"name":"F","outputs":[{"components":[{"internalType":"bytes32","name":"B","type":"bytes32"}],"internalType":"structStructs.A[]","name":"a","type":"tuple[]"},{"internalType":"uint256[]","name":"c","type":"uint256[]"},{"internalType":"bool[]","name":"d","type":"bool[]"}],"stateMutability":"view","type":"function"},{"inputs":[],"name":"G","outputs":[{"components":[{"internalType":"bytes32","name":"B","type":"bytes32"}],"internalType":"structStructs.A[]","name":"a","type":"tuple[]"}],"stateMutability":"view","type":"function"}]`},
+		`
+			"math/big"
+
+			"github.com/ethereum/go-ethereum/accounts/abi/bind"
+			"github.com/ethereum/go-ethereum/accounts/abi/bind/backends"
+			"github.com/ethereum/go-ethereum/core"
+			"github.com/ethereum/go-ethereum/crypto"
+		`,
+		`
+			// Generate a new random account and a funded simulator
+			key, _ := crypto.GenerateKey()
+			auth, _ := bind.NewKeyedTransactorWithChainID(key, big.NewInt(1337))
+		
+			sim := backends.NewSimulatedBackend(core.GenesisAlloc{auth.From: {Balance: big.NewInt(10000000000)}}, 10000000)
+			defer sim.Close()
+		
+			// Deploy a structs method invoker contract and execute its default method
+			_, _, structs, err := DeployStructs(auth, sim)
+			if err != nil {
+				t.Fatalf("Failed to deploy defaulter contract: %v", err)
+			}
+			sim.Commit()
+			opts := bind.CallOpts{}
+			if _, err := structs.F(&opts); err != nil {
+				t.Fatalf("Failed to invoke F method: %v", err)
+			}
+			if _, err := structs.G(&opts); err != nil {
+				t.Fatalf("Failed to invoke G method: %v", err)
+			}
+		`,
+		nil,
+		nil,
+		nil,
+		nil,
+	},
 	// Tests that non-existent contracts are reported as such (though only simulator test)
 	{
 		`NonExistent`,
