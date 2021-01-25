@@ -276,6 +276,13 @@ func (d *digest) Sum(sum []byte) []byte {
 	d.finalize(&hash)
 	return append(sum, hash[:d.size]...)
 }
+func (d *digest) Read(out []byte) (int, error) {
+	if len(out) != d.Size() {
+		return 0, errors.New("invalid output buffer size")
+	}
+	copy(out, d.Sum(nil))
+	return len(out), nil
+}
 
 func (d *digest) finalize(hash *[Size]byte) {
 	var block [BlockSize]byte
