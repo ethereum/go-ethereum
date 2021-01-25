@@ -161,7 +161,10 @@ func getUInt(fuzzer *fuzz.Fuzzer) int {
 	var i int
 	fuzzer.Fuzz(&i)
 	if i < 0 {
-		i *= -1
+		i = -i
+		if i < 0 {
+			return 0
+		}
 	}
 	return i
 }
