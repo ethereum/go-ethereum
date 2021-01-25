@@ -203,7 +203,7 @@ func TestTraceCall(t *testing.T) {
 	}}
 	genBlocks := 10
 	signer := types.HomesteadSigner{}
-	api := NewTracerAPI(newTestBackend(t, genBlocks, genesis, func(i int, b *core.BlockGen) {
+	api := NewAPI(newTestBackend(t, genBlocks, genesis, func(i int, b *core.BlockGen) {
 		// Transfer from account[0] to account[1]
 		//    value: 1000 wei
 		//    fee:   0 wei
@@ -332,7 +332,7 @@ func TestTraceTransaction(t *testing.T) {
 	}}
 	target := common.Hash{}
 	signer := types.HomesteadSigner{}
-	api := NewTracerAPI(newTestBackend(t, 1, genesis, func(i int, b *core.BlockGen) {
+	api := NewAPI(newTestBackend(t, 1, genesis, func(i int, b *core.BlockGen) {
 		// Transfer from account[0] to account[1]
 		//    value: 1000 wei
 		//    fee:   0 wei
@@ -366,7 +366,7 @@ func TestTraceBlock(t *testing.T) {
 	}}
 	genBlocks := 10
 	signer := types.HomesteadSigner{}
-	api := NewTracerAPI(newTestBackend(t, genBlocks, genesis, func(i int, b *core.BlockGen) {
+	api := NewAPI(newTestBackend(t, genBlocks, genesis, func(i int, b *core.BlockGen) {
 		// Transfer from account[0] to account[1]
 		//    value: 1000 wei
 		//    fee:   0 wei

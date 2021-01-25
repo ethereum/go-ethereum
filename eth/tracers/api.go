@@ -77,8 +77,8 @@ type API struct {
 	backend Backend
 }
 
-// NewTracerAPI creates a new API definition for the tracing methods of the Ethereum service.
-func NewTracerAPI(backend Backend) *API {
+// NewAPI creates a new API definition for the tracing methods of the Ethereum service.
+func NewAPI(backend Backend) *API {
 	return &API{backend: backend}
 }
 
@@ -790,7 +790,7 @@ func APIs(backend Backend) []rpc.API {
 		{
 			Namespace: "debug",
 			Version:   "1.0",
-			Service:   NewTracerAPI(backend),
+			Service:   NewAPI(backend),
 			Public:    false,
 		},
 	}

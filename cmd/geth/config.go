@@ -167,6 +167,7 @@ func makeFullNode(ctx *cli.Context) (*node.Node, ethapi.Backend) {
 	stack, cfg := makeConfigNode(ctx)
 
 	backend := utils.RegisterEthService(stack, &cfg.Eth)
+
 	checkWhisper(ctx)
 	// Configure GraphQL if requested
 	if ctx.GlobalIsSet(utils.GraphQLEnabledFlag.Name) {
