@@ -69,7 +69,7 @@ func NewSecureChannelSession(card *pcsc.Card, keyData []byte) (*SecureChannelSes
 	}
 	cardPublic, err := crypto.UnmarshalPubkey(keyData)
 	if err != nil {
-		return nil, fmt.Errorf("could not unmarshal public key from card")
+		return nil, fmt.Errorf("could not unmarshal public key from card: %v", err)
 	}
 	secret, _ := key.Curve.ScalarMult(cardPublic.X, cardPublic.Y, key.D.Bytes())
 	return &SecureChannelSession{
