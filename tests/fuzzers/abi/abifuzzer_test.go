@@ -23,9 +23,7 @@ import (
 // TestReplicate can be used to replicate crashers from the fuzzing tests.
 // Just replace testString with the data in .quoted
 func TestReplicate(t *testing.T) {
-	testString := "N\xef\xbf0\xef\xbf99000000000000" +
-		"000000000000"
-
+	testString := "\x20\x20\x20\x20\x20\x20\x20\x20\x80\x00\x00\x00\x20\x20\x20\x20\x00"
 	data := []byte(testString)
 	runFuzzer(data)
 }
