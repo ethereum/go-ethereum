@@ -250,18 +250,23 @@ func (h *handler) runEthPeer(peer *eth.Peer, handler eth.Handler) error {
 		peer.Log().Debug("Ethereum handshake failed", "err", err)
 		return err
 	}
-	reserved := 0 // reserved peer slots
+	reject := false // reserved peer slots
 	if atomic.LoadUint32(&h.snapSync) == 1 && !peer.SupportsCap("snap", 1) {
 		// If we are running snap-sync, we want to reserve half the peer slots for
 		// peers supporting the snap protocol
-		reserved = h.maxPeers/2 - len(h.peers.snapPeers)
-	}
-	if reserved < 0 {
-		reserved = 0
+		// The logic here is; we always allow up to 5 non-snap peers, but after that,
+		// we require snap-peers to fill at least a third of the peer-slots.
+		snapPeers := h.peers.SnapLen()
+		ethPeers := h.peers.Len() - snapPeers // snap-peers are a subset of eth-peers
+		if ethPeers > 5 && ethPeers > 2*snapPeers {
+			reject = true
+		}
 	}
 	// Ignore maxPeers if this is a trusted peer
-	if h.peers.Len() >= h.maxPeers-reserved && !peer.Peer.Info().Network.Trusted {
-		return p2p.DiscTooManyPeers
+	if !peer.Peer.Info().Network.Trusted {
+		if reject || h.peers.Len() >= h.maxPeers {
+			return p2p.DiscTooManyPeers
+		}
 	}
 	peer.Log().Debug("Ethereum peer connected", "name", peer.Name())
 

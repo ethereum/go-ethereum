@@ -259,13 +259,22 @@ func (ps *peerSet) ethPeersWithoutTransaction(hash common.Hash) []*ethPeer {
 }
 
 // Len returns if the current number of `eth` peers in the set. Since the `snap`
-// peers are tied to the existnce of an `eth` connection, that will always be a
+// peers are tied to the existence of an `eth` connection, that will always be a
 // subset of `eth`.
 func (ps *peerSet) Len() int {
 	ps.lock.RLock()
 	defer ps.lock.RUnlock()
 
 	return len(ps.ethPeers)
+}
+
+// SnapLen returns if the current number of `snap` peers in the set. Since the `snap`
+// peers are tied to the existence of an `eth` connection, that will always be a
+// subset of `eth`.
+func (ps *peerSet) SnapLen() int {
+	ps.lock.RLock()
+	defer ps.lock.RUnlock()
+	return len(ps.snapPeers)
 }
 
 // ethPeerWithHighestTD retrieves the known peer with the currently highest total
