@@ -189,7 +189,8 @@ func (st *StateTransition) to() common.Address {
 func (st *StateTransition) buyGas() error {
 	price := st.gasPrice
 	if st.evm.ChainConfig().IsAleut(st.evm.Context.BlockNumber) {
-		price = cmath.BigMin(st.tip, new(big.Int).Sub(st.feeCap, st.evm.Context.BaseFee))
+		// price = min(tip, feeCap - baseFee) + baseFee
+		price = cmath.BigMin(new(big.Int).Add(st.tip, st.evm.Context.BaseFee), st.feeCap)
 	}
 	mgval := new(big.Int).Mul(new(big.Int).SetUint64(st.msg.Gas()), price)
 	if have, want := st.state.GetBalance(st.msg.From()), mgval; have.Cmp(want) < 0 {
