@@ -154,6 +154,7 @@ var (
 		utils.EthStatsURLFlag,
 		utils.FakePoWFlag,
 		utils.NoCompactionFlag,
+		utils.TraceThreadFlag,
 		utils.GpoBlocksFlag,
 		utils.LegacyGpoBlocksFlag,
 		utils.GpoPercentileFlag,

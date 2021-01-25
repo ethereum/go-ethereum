@@ -52,6 +52,7 @@ func (c Config) MarshalTOML() (interface{}, error) {
 		GPO                     gasprice.Config
 		EnablePreimageRecording bool
 		DocRoot                 string `toml:"-"`
+		TraceThreads            int
 		EWASMInterpreter        string
 		EVMInterpreter          string
 		RPCGasCap               uint64                         `toml:",omitempty"`
@@ -95,6 +96,7 @@ func (c Config) MarshalTOML() (interface{}, error) {
 	enc.GPO = c.GPO
 	enc.EnablePreimageRecording = c.EnablePreimageRecording
 	enc.DocRoot = c.DocRoot
+	enc.TraceThreads = c.TraceThreads
 	enc.EWASMInterpreter = c.EWASMInterpreter
 	enc.EVMInterpreter = c.EVMInterpreter
 	enc.RPCGasCap = c.RPCGasCap
@@ -142,6 +144,7 @@ func (c *Config) UnmarshalTOML(unmarshal func(interface{}) error) error {
 		GPO                     *gasprice.Config
 		EnablePreimageRecording *bool
 		DocRoot                 *string `toml:"-"`
+		TraceThreads            *int
 		EWASMInterpreter        *string
 		EVMInterpreter          *string
 		RPCGasCap               *uint64                        `toml:",omitempty"`
@@ -257,6 +260,9 @@ func (c *Config) UnmarshalTOML(unmarshal func(interface{}) error) error {
 	}
 	if dec.DocRoot != nil {
 		c.DocRoot = *dec.DocRoot
+	}
+	if dec.TraceThreads != nil {
+		c.TraceThreads = *dec.TraceThreads
 	}
 	if dec.EWASMInterpreter != nil {
 		c.EWASMInterpreter = *dec.EWASMInterpreter

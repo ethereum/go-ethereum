@@ -24,7 +24,6 @@ import (
 	"fmt"
 	"io/ioutil"
 	"os"
-	"runtime"
 	"sync"
 	"time"
 
@@ -186,10 +185,8 @@ func (api *PrivateDebugAPI) traceChain(ctx context.Context, start, end *types.Bl
 	// Execute all the transaction contained within the chain concurrently for each block
 	blocks := int(end.NumberU64() - origin)
 
-	threads := runtime.NumCPU()
-	if threads > blocks {
-		threads = blocks
-	}
+	threads := api.tp.Get(blocks)
+	defer api.tp.Put(threads)
 	var (
 		pend    = new(sync.WaitGroup)
 		tasks   = make(chan *blockTraceTask, threads)
@@ -466,7 +463,8 @@ func (api *PrivateDebugAPI) traceBlock(ctx context.Context, block *types.Block, 
 		pend = new(sync.WaitGroup)
 		jobs = make(chan *txTraceTask, len(txs))
 	)
-	threads := runtime.NumCPU()
+	threads := api.tp.Get(len(txs))
+	defer api.tp.Put(threads)
 	if threads > len(txs) {
 		threads = len(txs)
 	}
