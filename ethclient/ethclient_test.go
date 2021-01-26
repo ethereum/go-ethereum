@@ -352,3 +352,19 @@ func TestChainID(t *testing.T) {
 		t.Fatalf("ChainID returned wrong number: %+v", id)
 	}
 }
+
+func TestBlockNumber(t *testing.T) {
+	backend, _ := newTestBackend(t)
+	client, _ := backend.Attach()
+	defer backend.Close()
+	defer client.Close()
+	ec := NewClient(client)
+
+	blockNumber, err := ec.BlockNumber(context.Background())
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if blockNumber != 1 {
+		t.Fatalf("BlockNumber returned wrong number: %d", blockNumber)
+	}
+}

@@ -43,6 +43,7 @@ import (
 
 	"github.com/ethereum/go-ethereum/accounts"
 	"github.com/ethereum/go-ethereum/accounts/keystore"
+	"github.com/ethereum/go-ethereum/cmd/utils"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core"
 	"github.com/ethereum/go-ethereum/core/types"
@@ -241,6 +242,7 @@ func newFaucet(genesis *core.Genesis, port int, enodes []*discv5.Node, network u
 	cfg.SyncMode = downloader.LightSync
 	cfg.NetworkId = network
 	cfg.Genesis = genesis
+	utils.SetDNSDiscoveryDefaults(&cfg, genesis.ToBlock(nil).Hash())
 	lesBackend, err := les.New(stack, &cfg)
 	if err != nil {
 		return nil, fmt.Errorf("Failed to register the Ethereum service: %w", err)
@@ -730,7 +732,10 @@ func authTwitter(url string) (string, string, common.Address, error) {
 // returning the username, avatar URL and Ethereum address to fund on success.
 func authFacebook(url string) (string, string, common.Address, error) {
 	// Ensure the user specified a meaningful URL, no fancy nonsense
-	parts := strings.Split(url, "/")
+	parts := strings.Split(strings.Split(url, "?")[0], "/")
+	if parts[len(parts)-1] == "" {
+		parts = parts[0 : len(parts)-1]
+	}
 	if len(parts) < 4 || parts[len(parts)-2] != "posts" {
 		//lint:ignore ST1005 This error is to be displayed in the browser
 		return "", "", common.Address{}, errors.New("Invalid Facebook post URL")

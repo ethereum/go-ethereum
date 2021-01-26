@@ -411,7 +411,6 @@ func (dl *downloadTester) dropPeer(id string) {
 type downloadTesterPeer struct {
 	dl            *downloadTester
 	id            string
-	lock          sync.RWMutex
 	chain         *testChain
 	missingStates map[common.Hash]bool // State entries that fast sync should not return
 }
@@ -427,11 +426,7 @@ func (dlp *downloadTesterPeer) Head() (common.Hash, *big.Int) {
 // origin; associated with a particular peer in the download tester. The returned
 // function can be used to retrieve batches of headers from the particular peer.
 func (dlp *downloadTesterPeer) RequestHeadersByHash(origin common.Hash, amount int, skip int, reverse bool) error {
-	if reverse {
-		panic("reverse header requests not supported")
-	}
-
-	result := dlp.chain.headersByHash(origin, amount, skip)
+	result := dlp.chain.headersByHash(origin, amount, skip, reverse)
 	go dlp.dl.downloader.DeliverHeaders(dlp.id, result)
 	return nil
 }
@@ -440,11 +435,7 @@ func (dlp *downloadTesterPeer) RequestHeadersByHash(origin common.Hash, amount i
 // origin; associated with a particular peer in the download tester. The returned
 // function can be used to retrieve batches of headers from the particular peer.
 func (dlp *downloadTesterPeer) RequestHeadersByNumber(origin uint64, amount int, skip int, reverse bool) error {
-	if reverse {
-		panic("reverse header requests not supported")
-	}
-
-	result := dlp.chain.headersByNumber(origin, amount, skip)
+	result := dlp.chain.headersByNumber(origin, amount, skip, reverse)
 	go dlp.dl.downloader.DeliverHeaders(dlp.id, result)
 	return nil
 }
@@ -1020,10 +1011,9 @@ func testShiftedHeaderAttack(t *testing.T, protocol int, mode SyncMode) {
 // Tests that upon detecting an invalid header, the recent ones are rolled back
 // for various failure scenarios. Afterwards a full sync is attempted to make
 // sure no state was corrupted.
-func TestInvalidHeaderRollback63Fast(t *testing.T)  { testInvalidHeaderRollback(t, 63, FastSync) }
-func TestInvalidHeaderRollback64Fast(t *testing.T)  { testInvalidHeaderRollback(t, 64, FastSync) }
-func TestInvalidHeaderRollback65Fast(t *testing.T)  { testInvalidHeaderRollback(t, 65, FastSync) }
-func TestInvalidHeaderRollback65Light(t *testing.T) { testInvalidHeaderRollback(t, 65, LightSync) }
+func TestInvalidHeaderRollback63Fast(t *testing.T) { testInvalidHeaderRollback(t, 63, FastSync) }
+func TestInvalidHeaderRollback64Fast(t *testing.T) { testInvalidHeaderRollback(t, 64, FastSync) }
+func TestInvalidHeaderRollback65Fast(t *testing.T) { testInvalidHeaderRollback(t, 65, FastSync) }
 
 func testInvalidHeaderRollback(t *testing.T, protocol int, mode SyncMode) {
 	t.Parallel()
@@ -1610,7 +1600,7 @@ func TestRemoteHeaderRequestSpan(t *testing.T) {
 		{15000, 13006,
 			[]int{14823, 14839, 14855, 14871, 14887, 14903, 14919, 14935, 14951, 14967, 14983, 14999},
 		},
-		//Remote is pretty close to us. We don't have to fetch as many
+		// Remote is pretty close to us. We don't have to fetch as many
 		{1200, 1150,
 			[]int{1149, 1154, 1159, 1164, 1169, 1174, 1179, 1184, 1189, 1194, 1199},
 		},
@@ -1699,7 +1689,7 @@ func testCheckpointEnforcement(t *testing.T, protocol int, mode SyncMode) {
 	if mode == FastSync || mode == LightSync {
 		expect = errUnsyncedPeer
 	}
-	if err := tester.sync("peer", nil, mode); err != expect {
+	if err := tester.sync("peer", nil, mode); !errors.Is(err, expect) {
 		t.Fatalf("block sync error mismatch: have %v, want %v", err, expect)
 	}
 	if mode == FastSync || mode == LightSync {

@@ -42,7 +42,7 @@ import (
 	"github.com/ethereum/go-ethereum/metrics"
 	"github.com/ethereum/go-ethereum/node"
 	gopsutil "github.com/shirou/gopsutil/mem"
-	cli "gopkg.in/urfave/cli.v1"
+	"gopkg.in/urfave/cli.v1"
 )
 
 const (
@@ -113,6 +113,7 @@ var (
 		utils.CacheGCFlag,
 		utils.CacheSnapshotFlag,
 		utils.CacheNoPrefetchFlag,
+		utils.CachePreimagesFlag,
 		utils.ListenPortFlag,
 		utils.MaxPeersFlag,
 		utils.MaxPendingPeersFlag,
@@ -144,7 +145,7 @@ var (
 		utils.RopstenFlag,
 		utils.RinkebyFlag,
 		utils.GoerliFlag,
-		utils.YoloV1Flag,
+		utils.YoloV2Flag,
 		utils.VMEnableDebugFlag,
 		utils.NetworkIdFlag,
 		utils.EthStatsURLFlag,
@@ -154,6 +155,7 @@ var (
 		utils.LegacyGpoBlocksFlag,
 		utils.GpoPercentileFlag,
 		utils.LegacyGpoPercentileFlag,
+		utils.GpoMaxGasPriceFlag,
 		utils.EWASMInterpreterFlag,
 		utils.EVMInterpreterFlag,
 		configFileFlag,
@@ -187,8 +189,8 @@ var (
 		utils.IPCDisabledFlag,
 		utils.IPCPathFlag,
 		utils.InsecureUnlockAllowedFlag,
-		utils.RPCGlobalGasCap,
-		utils.RPCGlobalTxFeeCap,
+		utils.RPCGlobalGasCapFlag,
+		utils.RPCGlobalTxFeeCapFlag,
 	}
 
 	whisperFlags = []cli.Flag{
@@ -240,11 +242,10 @@ func init() {
 		makecacheCommand,
 		makedagCommand,
 		versionCommand,
+		versionCheckCommand,
 		licenseCommand,
 		// See config.go
 		dumpConfigCommand,
-		// See retesteth.go
-		retestethCommand,
 		// See cmd/utils/flags_legacy.go
 		utils.ShowDeprecated,
 	}

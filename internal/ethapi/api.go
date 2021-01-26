@@ -599,7 +599,7 @@ func (s *PublicBlockChainAPI) GetProof(ctx context.Context, address common.Addre
 			if storageError != nil {
 				return nil, storageError
 			}
-			storageProof[i] = StorageResult{key, (*hexutil.Big)(state.GetState(address, common.HexToHash(key)).Big()), common.ToHexArray(proof)}
+			storageProof[i] = StorageResult{key, (*hexutil.Big)(state.GetState(address, common.HexToHash(key)).Big()), toHexSlice(proof)}
 		} else {
 			storageProof[i] = StorageResult{key, &hexutil.Big{}, []string{}}
 		}
@@ -613,7 +613,7 @@ func (s *PublicBlockChainAPI) GetProof(ctx context.Context, address common.Addre
 
 	return &AccountResult{
 		Address:      address,
-		AccountProof: common.ToHexArray(accountProof),
+		AccountProof: toHexSlice(accountProof),
 		Balance:      (*hexutil.Big)(state.GetBalance(address)),
 		CodeHash:     codeHash,
 		Nonce:        hexutil.Uint64(state.GetNonce(address)),
@@ -793,7 +793,7 @@ func (args *CallArgs) ToMessage(globalGasCap uint64) types.Message {
 
 	var data []byte
 	if args.Data != nil {
-		data = []byte(*args.Data)
+		data = *args.Data
 	}
 
 	msg := types.NewMessage(addr, args.To, 0, value, gas, gasPrice, data, false)
@@ -963,6 +963,9 @@ func DoEstimateGas(ctx context.Context, b Backend, args CallArgs, blockNrOrHash 
 		if err != nil {
 			return 0, err
 		}
+		if block == nil {
+			return 0, errors.New("block not found")
+		}
 		hi = block.GasLimit()
 	}
 	// Recap the highest gas limit with account's available balance.
@@ -1051,9 +1054,12 @@ func DoEstimateGas(ctx context.Context, b Backend, args CallArgs, blockNrOrHash 
 
 // EstimateGas returns an estimate of the amount of gas needed to execute the
 // given transaction against the current pending block.
-func (s *PublicBlockChainAPI) EstimateGas(ctx context.Context, args CallArgs) (hexutil.Uint64, error) {
-	blockNrOrHash := rpc.BlockNumberOrHashWithNumber(rpc.PendingBlockNumber)
-	return DoEstimateGas(ctx, s.b, args, blockNrOrHash, s.b.RPCGasCap())
+func (s *PublicBlockChainAPI) EstimateGas(ctx context.Context, args CallArgs, blockNrOrHash *rpc.BlockNumberOrHash) (hexutil.Uint64, error) {
+	bNrOrHash := rpc.BlockNumberOrHashWithNumber(rpc.PendingBlockNumber)
+	if blockNrOrHash != nil {
+		bNrOrHash = *blockNrOrHash
+	}
+	return DoEstimateGas(ctx, s.b, args, bNrOrHash, s.b.RPCGasCap())
 }
 
 // ExecutionResult groups all structured logs emitted by the EVM
@@ -1936,4 +1942,13 @@ func checkTxFee(gasPrice *big.Int, gas uint64, cap float64) error {
 		return fmt.Errorf("tx fee (%.2f ether) exceeds the configured cap (%.2f ether)", feeFloat, cap)
 	}
 	return nil
+}
+
+// toHexSlice creates a slice of hex-strings based on []byte.
+func toHexSlice(b [][]byte) []string {
+	r := make([]string, len(b))
+	for i := range b {
+		r[i] = hexutil.Encode(b[i])
+	}
+	return r
 }

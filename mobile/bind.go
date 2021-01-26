@@ -40,7 +40,7 @@ type MobileSigner struct {
 }
 
 func (s *MobileSigner) Sign(addr *Address, unsignedTx *Transaction) (signedTx *Transaction, _ error) {
-	sig, err := s.sign(types.EIP155Signer{}, addr.address, unsignedTx.tx)
+	sig, err := s.sign(addr.address, unsignedTx.tx)
 	if err != nil {
 		return nil, err
 	}
@@ -82,12 +82,16 @@ func NewTransactOpts() *TransactOpts {
 
 // NewKeyedTransactOpts is a utility method to easily create a transaction signer
 // from a single private key.
-func NewKeyedTransactOpts(keyJson []byte, passphrase string) (*TransactOpts, error) {
+func NewKeyedTransactOpts(keyJson []byte, passphrase string, chainID *big.Int) (*TransactOpts, error) {
 	key, err := keystore.DecryptKey(keyJson, passphrase)
 	if err != nil {
 		return nil, err
 	}
-	return &TransactOpts{*bind.NewKeyedTransactor(key.PrivateKey)}, nil
+	auth, err := bind.NewKeyedTransactorWithChainID(key.PrivateKey, chainID)
+	if err != nil {
+		return nil, err
+	}
+	return &TransactOpts{*auth}, nil
 }
 
 func (opts *TransactOpts) GetFrom() *Address    { return &Address{opts.opts.From} }
@@ -106,7 +110,7 @@ func (opts *TransactOpts) GetGasLimit() int64   { return int64(opts.opts.GasLimi
 func (opts *TransactOpts) SetFrom(from *Address) { opts.opts.From = from.address }
 func (opts *TransactOpts) SetNonce(nonce int64)  { opts.opts.Nonce = big.NewInt(nonce) }
 func (opts *TransactOpts) SetSigner(s Signer) {
-	opts.opts.Signer = func(signer types.Signer, addr common.Address, tx *types.Transaction) (*types.Transaction, error) {
+	opts.opts.Signer = func(addr common.Address, tx *types.Transaction) (*types.Transaction, error) {
 		sig, err := s.Sign(&Address{addr}, &Transaction{tx})
 		if err != nil {
 			return nil, err
@@ -171,20 +175,12 @@ func (c *BoundContract) GetDeployer() *Transaction {
 // Call invokes the (constant) contract method with params as input values and
 // sets the output to result.
 func (c *BoundContract) Call(opts *CallOpts, out *Interfaces, method string, args *Interfaces) error {
-	if len(out.objects) == 1 {
-		result := out.objects[0]
-		if err := c.contract.Call(&opts.opts, result, method, args.objects...); err != nil {
-			return err
-		}
-		out.objects[0] = result
-	} else {
-		results := make([]interface{}, len(out.objects))
-		copy(results, out.objects)
-		if err := c.contract.Call(&opts.opts, &results, method, args.objects...); err != nil {
-			return err
-		}
-		copy(out.objects, results)
+	results := make([]interface{}, len(out.objects))
+	copy(results, out.objects)
+	if err := c.contract.Call(&opts.opts, &results, method, args.objects...); err != nil {
+		return err
 	}
+	copy(out.objects, results)
 	return nil
 }
 

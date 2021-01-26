@@ -423,7 +423,7 @@ func TestClique(t *testing.T) {
 		})
 		// Iterate through the blocks and seal them individually
 		for j, block := range blocks {
-			// Geth the header and prepare it for signing
+			// Get the header and prepare it for signing
 			header := block.Header()
 			if j > 0 {
 				header.ParentHash = blocks[j-1].Hash()

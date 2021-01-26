@@ -77,7 +77,7 @@ func (a *Account) Code(ctx context.Context) (hexutil.Bytes, error) {
 	if err != nil {
 		return hexutil.Bytes{}, err
 	}
-	return hexutil.Bytes(state.GetCode(a.address)), nil
+	return state.GetCode(a.address), nil
 }
 
 func (a *Account) Storage(ctx context.Context, args struct{ Slot common.Hash }) (common.Hash, error) {
@@ -116,7 +116,7 @@ func (l *Log) Topics(ctx context.Context) []common.Hash {
 }
 
 func (l *Log) Data(ctx context.Context) hexutil.Bytes {
-	return hexutil.Bytes(l.log.Data)
+	return l.log.Data
 }
 
 // Transaction represents an Ethereum transaction.
@@ -157,7 +157,7 @@ func (t *Transaction) InputData(ctx context.Context) (hexutil.Bytes, error) {
 	if err != nil || tx == nil {
 		return hexutil.Bytes{}, err
 	}
-	return hexutil.Bytes(tx.Data()), nil
+	return tx.Data(), nil
 }
 
 func (t *Transaction) Gas(ctx context.Context) (hexutil.Uint64, error) {
@@ -410,7 +410,7 @@ func (b *Block) resolveReceipts(ctx context.Context) ([]*types.Receipt, error) {
 		if err != nil {
 			return nil, err
 		}
-		b.receipts = []*types.Receipt(receipts)
+		b.receipts = receipts
 	}
 	return b.receipts, nil
 }
@@ -490,7 +490,7 @@ func (b *Block) Nonce(ctx context.Context) (hexutil.Bytes, error) {
 	if err != nil {
 		return hexutil.Bytes{}, err
 	}
-	return hexutil.Bytes(header.Nonce[:]), nil
+	return header.Nonce[:], nil
 }
 
 func (b *Block) MixHash(ctx context.Context) (common.Hash, error) {
@@ -564,7 +564,7 @@ func (b *Block) ExtraData(ctx context.Context) (hexutil.Bytes, error) {
 	if err != nil {
 		return hexutil.Bytes{}, err
 	}
-	return hexutil.Bytes(header.Extra), nil
+	return header.Extra, nil
 }
 
 func (b *Block) LogsBloom(ctx context.Context) (hexutil.Bytes, error) {
@@ -572,7 +572,7 @@ func (b *Block) LogsBloom(ctx context.Context) (hexutil.Bytes, error) {
 	if err != nil {
 		return hexutil.Bytes{}, err
 	}
-	return hexutil.Bytes(header.Bloom.Bytes()), nil
+	return header.Bloom.Bytes(), nil
 }
 
 func (b *Block) TotalDifficulty(ctx context.Context) (hexutil.Big, error) {
@@ -907,7 +907,7 @@ func (r *Resolver) Block(ctx context.Context, args struct {
 }) (*Block, error) {
 	var block *Block
 	if args.Number != nil {
-		number := rpc.BlockNumber(uint64(*args.Number))
+		number := rpc.BlockNumber(*args.Number)
 		numberOrHash := rpc.BlockNumberOrHashWithNumber(number)
 		block = &Block{
 			backend:      r.backend,

@@ -28,6 +28,20 @@ import (
 	"github.com/ethereum/go-ethereum/rlp"
 )
 
+type jsonEncoder interface {
+	EncodeJSON() (string, error)
+}
+
+// encodeOrError tries to encode the object into json.
+// If the encoding fails the resulting error is returned.
+func encodeOrError(encoder jsonEncoder) string {
+	enc, err := encoder.EncodeJSON()
+	if err != nil {
+		return err.Error()
+	}
+	return enc
+}
+
 // A Nonce is a 64-bit hash which proves (combined with the mix-hash) that
 // a sufficient amount of computation has been carried out on a block.
 type Nonce struct {
@@ -44,6 +58,11 @@ func (n *Nonce) GetHex() string {
 	return fmt.Sprintf("0x%x", n.nonce[:])
 }
 
+// String returns a printable representation of the nonce.
+func (n *Nonce) String() string {
+	return n.GetHex()
+}
+
 // Bloom represents a 256 bit bloom filter.
 type Bloom struct {
 	bloom types.Bloom
@@ -57,6 +76,11 @@ func (b *Bloom) GetBytes() []byte {
 // GetHex retrieves the hex string representation of the bloom filter.
 func (b *Bloom) GetHex() string {
 	return fmt.Sprintf("0x%x", b.bloom[:])
+}
+
+// String returns a printable representation of the bloom filter.
+func (b *Bloom) String() string {
+	return b.GetHex()
 }
 
 // Header represents a block header in the Ethereum blockchain.
@@ -95,6 +119,11 @@ func NewHeaderFromJSON(data string) (*Header, error) {
 func (h *Header) EncodeJSON() (string, error) {
 	data, err := json.Marshal(h.header)
 	return string(data), err
+}
+
+// String returns a printable representation of the header.
+func (h *Header) String() string {
+	return encodeOrError(h)
 }
 
 func (h *Header) GetParentHash() *Hash   { return &Hash{h.header.ParentHash} }
@@ -166,6 +195,11 @@ func NewBlockFromJSON(data string) (*Block, error) {
 func (b *Block) EncodeJSON() (string, error) {
 	data, err := json.Marshal(b.block)
 	return string(data), err
+}
+
+// String returns a printable representation of the block.
+func (b *Block) String() string {
+	return encodeOrError(b)
 }
 
 func (b *Block) GetParentHash() *Hash           { return &Hash{b.block.ParentHash()} }
@@ -242,6 +276,11 @@ func NewTransactionFromJSON(data string) (*Transaction, error) {
 func (tx *Transaction) EncodeJSON() (string, error) {
 	data, err := json.Marshal(tx.tx)
 	return string(data), err
+}
+
+// String returns a printable representation of the transaction.
+func (tx *Transaction) String() string {
+	return encodeOrError(tx)
 }
 
 func (tx *Transaction) GetData() []byte      { return tx.tx.Data() }
@@ -334,6 +373,11 @@ func NewReceiptFromJSON(data string) (*Receipt, error) {
 func (r *Receipt) EncodeJSON() (string, error) {
 	data, err := rlp.EncodeToBytes(r.receipt)
 	return string(data), err
+}
+
+// String returns a printable representation of the receipt.
+func (r *Receipt) String() string {
+	return encodeOrError(r)
 }
 
 func (r *Receipt) GetStatus() int               { return int(r.receipt.Status) }

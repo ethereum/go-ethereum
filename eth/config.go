@@ -37,12 +37,14 @@ import (
 var DefaultFullGPOConfig = gasprice.Config{
 	Blocks:     20,
 	Percentile: 60,
+	MaxPrice:   gasprice.DefaultMaxPrice,
 }
 
 // DefaultLightGPOConfig contains default gasprice oracle settings for light client.
 var DefaultLightGPOConfig = gasprice.Config{
 	Blocks:     2,
 	Percentile: 60,
+	MaxPrice:   gasprice.DefaultMaxPrice,
 }
 
 // DefaultConfig contains default settings for use on the Ethereum main net.
@@ -147,6 +149,7 @@ type Config struct {
 	TrieDirtyCache          int
 	TrieTimeout             time.Duration
 	SnapshotCache           int
+	Preimages               bool
 
 	// Mining options
 	Miner miner.Config

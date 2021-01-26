@@ -17,6 +17,8 @@
 package utesting
 
 import (
+	"bytes"
+	"regexp"
 	"strings"
 	"testing"
 )
@@ -51,5 +53,87 @@ func TestTest(t *testing.T) {
 	}
 	if !results[2].Failed || !strings.HasPrefix(results[2].Output, "panic: oh no\n") {
 		t.Fatalf("wrong result for panicking test: %#v", results[2])
+	}
+}
+
+var outputTests = []Test{
+	{
+		Name: "TestWithLogs",
+		Fn: func(t *T) {
+			t.Log("output line 1")
+			t.Log("output line 2\noutput line 3")
+		},
+	},
+	{
+		Name: "TestNoLogs",
+		Fn:   func(t *T) {},
+	},
+	{
+		Name: "FailWithLogs",
+		Fn: func(t *T) {
+			t.Log("output line 1")
+			t.Error("failed 1")
+		},
+	},
+	{
+		Name: "FailMessage",
+		Fn: func(t *T) {
+			t.Error("failed 2")
+		},
+	},
+	{
+		Name: "FailNoOutput",
+		Fn: func(t *T) {
+			t.Fail()
+		},
+	},
+}
+
+func TestOutput(t *testing.T) {
+	var buf bytes.Buffer
+	RunTests(outputTests, &buf)
+
+	want := regexp.MustCompile(`
+^-- RUN TestWithLogs
+ output line 1
+ output line 2
+ output line 3
+-- OK TestWithLogs \([^)]+\)
+-- OK TestNoLogs \([^)]+\)
+-- RUN FailWithLogs
+ output line 1
+ failed 1
+-- FAIL FailWithLogs \([^)]+\)
+-- RUN FailMessage
+ failed 2
+-- FAIL FailMessage \([^)]+\)
+-- FAIL FailNoOutput \([^)]+\)
+2/5 tests passed.
+$`[1:])
+	if !want.MatchString(buf.String()) {
+		t.Fatalf("output does not match: %q", buf.String())
+	}
+}
+
+func TestOutputTAP(t *testing.T) {
+	var buf bytes.Buffer
+	RunTAP(outputTests, &buf)
+
+	want := `
+1..5
+ok 1 TestWithLogs
+# output line 1
+# output line 2
+# output line 3
+ok 2 TestNoLogs
+not ok 3 FailWithLogs
+# output line 1
+# failed 1
+not ok 4 FailMessage
+# failed 2
+not ok 5 FailNoOutput
+`
+	if buf.String() != want[1:] {
+		t.Fatalf("output does not match: %q", buf.String())
 	}
 }
