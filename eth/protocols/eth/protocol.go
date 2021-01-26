@@ -211,6 +211,17 @@ type GetBlockBodiesPacket66 struct {
 // BlockBodiesPacket is the network packet for block content distribution.
 type BlockBodiesPacket []*BlockBody
 
+// BlockBodiesRLPPacket is used for replying to block body requests, in cases
+// where we already have them RLP-encoded, and thus can avoid the decode-encode
+// roundtrip.
+type BlockBodiesRLPPacket []rlp.RawValue
+
+// BlockBodiesRLPPacket66 is the BlockBodiesRLPPacket over ETH-66
+type BlockBodiesRLPPacket66 struct {
+	RequestId uint64
+	BlockBodiesRLPPacket
+}
+
 // BlockBodiesPacket is the network packet for block content distribution over ETH-66.
 type BlockBodiesPacket66 struct {
 	RequestId uint64
@@ -272,6 +283,15 @@ type ReceiptsPacket66 struct {
 	ReceiptsPacket
 }
 
+// ReceiptsRLPPacket is used for receipts, when we already have it encoded
+type ReceiptsRLPPacket []rlp.RawValue
+
+// ReceiptsPacket66 is the eth-66 version of ReceiptsRLPPacket
+type ReceiptsRLPPacket66 struct {
+	RequestId uint64
+	ReceiptsRLPPacket
+}
+
 // NewPooledTransactionHashesPacket represents a transaction announcement packet.
 type NewPooledTransactionHashesPacket []common.Hash
 
@@ -290,6 +310,16 @@ type PooledTransactionsPacket []*types.Transaction
 type PooledTransactionsPacket66 struct {
 	RequestId uint64
 	PooledTransactionsPacket
+}
+
+// PooledTransactionsPacket is the network packet for transaction distribution, used
+// in the cases we already have them in rlp-encoded form
+type PooledTransactionsRLPPacket []rlp.RawValue
+
+// PooledTransactionsRLPPacket66 is the ETH-66 form of PooledTransactionsRLPPacket
+type PooledTransactionsRLPPacket66 struct {
+	RequestId uint64
+	PooledTransactionsRLPPacket
 }
 
 func (*StatusPacket) Name() string { return "Status" }

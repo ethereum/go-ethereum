@@ -24,7 +24,6 @@ import (
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/p2p"
-	"github.com/ethereum/go-ethereum/rlp"
 )
 
 const (
@@ -256,7 +255,7 @@ func (p *Peer) AsyncSendPooledTransactionHashes(hashes []common.Hash) {
 //
 // Note, the method assumes the hashes are correct and correspond to the list of
 // transactions being sent.
-func (p *Peer) SendPooledTransactionsRLP(hashes []common.Hash, txs []rlp.RawValue) error {
+func (p *Peer) SendPooledTransactionsRLP(hashes []common.Hash, txs PooledTransactionsRLPPacket) error {
 	// Mark all the transactions as known, but ensure we don't overflow our limits
 	for p.knownTxs.Cardinality() > max(0, maxKnownTxs-len(hashes)) {
 		p.knownTxs.Pop()
@@ -265,6 +264,18 @@ func (p *Peer) SendPooledTransactionsRLP(hashes []common.Hash, txs []rlp.RawValu
 		p.knownTxs.Add(hash)
 	}
 	return p2p.Send(p.rw, PooledTransactionsMsg, txs) // Not packed into PooledTransactionsPacket to avoid RLP decoding
+}
+
+// ReplyPooledTransactionsRLP is the ETH-66 version of SendPooledTransactionsRLP
+func (p *Peer) ReplyPooledTransactionsRLP(id uint64, hashes []common.Hash, txs PooledTransactionsRLPPacket) error {
+	// Mark all the transactions as known, but ensure we don't overflow our limits
+	for p.knownTxs.Cardinality() > max(0, maxKnownTxs-len(hashes)) {
+		p.knownTxs.Pop()
+	}
+	for _, hash := range hashes {
+		p.knownTxs.Add(hash)
+	}
+	return p2p.Send(p.rw, PooledTransactionsMsg, PooledTransactionsRLPPacket66{id, txs}) // Not packed into PooledTransactionsPacket to avoid RLP decoding
 }
 
 // SendNewBlockHashes announces the availability of a number of blocks through
@@ -335,27 +346,36 @@ func (p *Peer) ReplyBlockHeaders(id uint64, headers BlockHeadersPacket) error {
 	return p2p.Send(p.rw, BlockHeadersMsg, BlockHeadersPacket66{id, headers})
 }
 
-// SendBlockBodies sends a batch of block contents to the remote peer.
-func (p *Peer) SendBlockBodies(bodies []*BlockBody) error {
-	return p2p.Send(p.rw, BlockBodiesMsg, BlockBodiesPacket(bodies))
-}
-
 // SendBlockBodiesRLP sends a batch of block contents to the remote peer from
 // an already RLP encoded format.
-func (p *Peer) SendBlockBodiesRLP(bodies []rlp.RawValue) error {
+func (p *Peer) SendBlockBodiesRLP(bodies BlockBodiesRLPPacket) error {
 	return p2p.Send(p.rw, BlockBodiesMsg, bodies) // Not packed into BlockBodiesPacket to avoid RLP decoding
+}
+
+func (p *Peer) ReplyBlockBodiesRLP(id uint64, bodies BlockBodiesRLPPacket) error {
+	return p2p.Send(p.rw, BlockBodiesMsg, BlockBodiesRLPPacket66{id, bodies}) // Not packed into BlockBodiesPacket to avoid RLP decoding
 }
 
 // SendNodeDataRLP sends a batch of arbitrary internal data, corresponding to the
 // hashes requested.
-func (p *Peer) SendNodeData(data [][]byte) error {
-	return p2p.Send(p.rw, NodeDataMsg, NodeDataPacket(data))
+func (p *Peer) SendNodeData(data NodeDataPacket) error {
+	return p2p.Send(p.rw, NodeDataMsg, data)
+}
+
+// ReplyNodeData is the ETH-66 response to GetNodeData
+func (p *Peer) ReplyNodeData(id uint64, data NodeDataPacket) error {
+	return p2p.Send(p.rw, NodeDataMsg, NodeDataPacket66{id, data})
 }
 
 // SendReceiptsRLP sends a batch of transaction receipts, corresponding to the
 // ones requested from an already RLP encoded format.
-func (p *Peer) SendReceiptsRLP(receipts []rlp.RawValue) error {
+func (p *Peer) SendReceiptsRLP(receipts ReceiptsRLPPacket) error {
 	return p2p.Send(p.rw, ReceiptsMsg, receipts) // Not packed into ReceiptsPacket to avoid RLP decoding
+}
+
+// ReplyReceiptsRLP is the ETH-66 response to GetReceipts
+func (p *Peer) ReplyReceiptsRLP(id uint64, receipts ReceiptsRLPPacket) error {
+	return p2p.Send(p.rw, ReceiptsMsg, ReceiptsRLPPacket66{id, receipts})
 }
 
 // RequestOneHeader is a wrapper around the header query functions to fetch a
