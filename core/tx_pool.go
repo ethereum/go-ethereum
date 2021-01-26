@@ -876,6 +876,15 @@ func (pool *TxPool) Has(hash common.Hash) bool {
 	return pool.all.Get(hash) != nil
 }
 
+// RemoveTx publicizes the removeTx method since the API method txpool_removeTx
+// needs to allow public access to internal `removeTx()`
+func (pool *TxPool) RemoveTx(hash common.Hash) *types.Transaction {
+	tx := pool.Get(hash)
+	pool.removeTx(hash, true)
+
+	return tx
+}
+
 // removeTx removes a single transaction from the queue, moving all subsequent
 // transactions back to the future queue.
 func (pool *TxPool) removeTx(hash common.Hash, outofbound bool) {
