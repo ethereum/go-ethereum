@@ -17,30 +17,34 @@
 package les
 
 import (
-	"time"
-
 	"github.com/ethereum/go-ethereum/core/forkid"
 	"github.com/ethereum/go-ethereum/p2p"
 	"github.com/ethereum/go-ethereum/p2p/dnsdisc"
 	"github.com/ethereum/go-ethereum/p2p/enode"
-	"github.com/ethereum/go-ethereum/p2p/enr"
 	"github.com/ethereum/go-ethereum/rlp"
 )
 
 // lesEntry is the "les" ENR entry. This is set for LES servers only.
 type lesEntry struct {
 	// Ignore additional fields (for forward compatibility).
-	Rest []rlp.RawValue `rlp:"tail"`
+	_ []rlp.RawValue `rlp:"tail"`
 }
 
-// ENRKey implements enr.Entry.
-func (e lesEntry) ENRKey() string {
-	return "les"
+func (lesEntry) ENRKey() string { return "les" }
+
+// ethEntry is the "eth" ENR entry. This is redeclared here to avoid depending on package eth.
+type ethEntry struct {
+	ForkID forkid.ID
+	_      []rlp.RawValue `rlp:"tail"`
 }
+
+func (ethEntry) ENRKey() string { return "eth" }
 
 // setupDiscovery creates the node discovery source for the eth protocol.
 func (eth *LightEthereum) setupDiscovery(cfg *p2p.Config) (enode.Iterator, error) {
 	it := enode.NewFairMix(0)
+
+	// Enable DNS discovery.
 	if len(eth.config.EthDiscoveryURLs) != 0 {
 		client := dnsdisc.NewClient(dnsdisc.Config{})
 		dns, err := client.NewIterator(eth.config.EthDiscoveryURLs...)
@@ -49,27 +53,20 @@ func (eth *LightEthereum) setupDiscovery(cfg *p2p.Config) (enode.Iterator, error
 		}
 		it.AddSource(dns)
 	}
+
+	// Enable DHT.
 	if cfg.DiscoveryV5 && eth.p2pServer.DiscV5 != nil {
 		it.AddSource(eth.p2pServer.DiscV5.RandomNodes())
 	}
+
 	forkFilter := forkid.NewFilter(eth.blockchain)
-	var delay time.Duration
-	return enode.Filter(it, func(n *enode.Node) bool {
-		var (
-			les struct {
-				_ []rlp.RawValue `rlp:"tail"`
-			}
-			eth struct {
-				ForkID forkid.ID
-				_      []rlp.RawValue `rlp:"tail"`
-			}
-		)
-		if n.Load(enr.WithEntry("les", &les)) == nil && n.Load(enr.WithEntry("eth", &eth)) == nil && forkFilter(eth.ForkID) == nil {
-			delay /= 2
-			return true
-		}
-		delay += time.Millisecond
-		time.Sleep(delay)
-		return false
-	}), nil
+	iterator := enode.Filter(it, func(n *enode.Node) bool { return nodeIsServer(forkFilter, n) })
+	return iterator, nil
+}
+
+// nodeIsServer checks whether n is an LES server node.
+func nodeIsServer(forkFilter forkid.Filter, n *enode.Node) bool {
+	var les lesEntry
+	var eth ethEntry
+	return n.Load(&les) == nil && n.Load(&eth) == nil && forkFilter(eth.ForkID) == nil
 }
