@@ -82,7 +82,82 @@ type Header struct {
 	Extra       []byte         `json:"extraData"        gencodec:"required"`
 	MixDigest   common.Hash    `json:"mixHash"`
 	Nonce       BlockNonce     `json:"nonce"`
-	BaseFee     *big.Int       `json:"baseFee" rlp:"-"`
+	BaseFee     *big.Int       `json:"baseFee"`
+}
+
+func (h *Header) EncodeRLP(w io.Writer) error {
+	if h.BaseFee == nil {
+		return rlp.Encode(w, extheader(*h))
+	} else {
+		return rlp.Encode(w, ext1559header(*h))
+	}
+}
+
+func (h *Header) DecodeRLP(s *rlp.Stream) error {
+	raw, err := s.Raw()
+	if err != nil {
+		return err
+	}
+	if err := decodeLegacyHeader(h, raw); err == nil {
+		return nil
+	}
+	return decodeEIP1559Header(h, raw)
+}
+
+func decodeLegacyHeader(h *Header, raw []byte) error {
+	var tmp extheader
+	if err := rlp.DecodeBytes(raw, &tmp); err != nil {
+		return err
+	}
+	*h = Header(tmp)
+	return nil
+}
+
+func decodeEIP1559Header(h *Header, raw []byte) error {
+	var tmp ext1559header
+	if err := rlp.DecodeBytes(raw, &tmp); err != nil {
+		return err
+	}
+	*h = Header(tmp)
+	return nil
+}
+
+type extheader struct {
+	ParentHash  common.Hash
+	UncleHash   common.Hash
+	Coinbase    common.Address
+	Root        common.Hash
+	TxHash      common.Hash
+	ReceiptHash common.Hash
+	Bloom       Bloom
+	Difficulty  *big.Int
+	Number      *big.Int
+	GasLimit    uint64
+	GasUsed     uint64
+	Time        uint64
+	Extra       []byte
+	MixDigest   common.Hash
+	Nonce       BlockNonce
+	BaseFee     *big.Int `rlp:"-"`
+}
+
+type ext1559header struct {
+	ParentHash  common.Hash
+	UncleHash   common.Hash
+	Coinbase    common.Address
+	Root        common.Hash
+	TxHash      common.Hash
+	ReceiptHash common.Hash
+	Bloom       Bloom
+	Difficulty  *big.Int
+	Number      *big.Int
+	GasLimit    uint64
+	GasUsed     uint64
+	Time        uint64
+	Extra       []byte
+	MixDigest   common.Hash
+	Nonce       BlockNonce
+	BaseFee     *big.Int
 }
 
 // field type overrides for gencodec
@@ -231,6 +306,10 @@ func CopyHeader(h *Header) *Header {
 	if cpy.Number = new(big.Int); h.Number != nil {
 		cpy.Number.Set(h.Number)
 	}
+	if h.BaseFee != nil {
+		cpy.BaseFee = new(big.Int)
+		cpy.BaseFee.Set(h.BaseFee)
+	}
 	if len(h.Extra) > 0 {
 		cpy.Extra = make([]byte, len(h.Extra))
 		copy(cpy.Extra, h.Extra)
@@ -290,6 +369,13 @@ func (b *Block) TxHash() common.Hash      { return b.header.TxHash }
 func (b *Block) ReceiptHash() common.Hash { return b.header.ReceiptHash }
 func (b *Block) UncleHash() common.Hash   { return b.header.UncleHash }
 func (b *Block) Extra() []byte            { return common.CopyBytes(b.header.Extra) }
+
+func (b *Block) BaseFee() *big.Int {
+	if b.header.BaseFee == nil {
+		return nil
+	}
+	return new(big.Int).Set(b.header.BaseFee)
+}
 
 func (b *Block) Header() *Header { return CopyHeader(b.header) }
 
