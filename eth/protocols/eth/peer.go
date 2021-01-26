@@ -18,6 +18,7 @@ package eth
 
 import (
 	"math/big"
+	"math/rand"
 	"sync"
 
 	mapset "github.com/deckarep/golang-set"
@@ -382,36 +383,48 @@ func (p *Peer) ReplyReceiptsRLP(id uint64, receipts ReceiptsRLPPacket) error {
 // single header. It is used solely by the fetcher.
 func (p *Peer) RequestOneHeader(hash common.Hash) error {
 	p.Log().Debug("Fetching single header", "hash", hash)
-	return p2p.Send(p.rw, GetBlockHeadersMsg, &GetBlockHeadersPacket{
+	query := GetBlockHeadersPacket{
 		Origin:  HashOrNumber{Hash: hash},
 		Amount:  uint64(1),
 		Skip:    uint64(0),
 		Reverse: false,
-	})
+	}
+	if p.Version() >= ETH66 {
+		return p2p.Send(p.rw, GetBlockHeadersMsg, &GetBlockHeadersPacket66{rand.Uint64(), query})
+	}
+	return p2p.Send(p.rw, GetBlockHeadersMsg, &query)
 }
 
 // RequestHeadersByHash fetches a batch of blocks' headers corresponding to the
 // specified header query, based on the hash of an origin block.
 func (p *Peer) RequestHeadersByHash(origin common.Hash, amount int, skip int, reverse bool) error {
 	p.Log().Debug("Fetching batch of headers", "count", amount, "fromhash", origin, "skip", skip, "reverse", reverse)
-	return p2p.Send(p.rw, GetBlockHeadersMsg, &GetBlockHeadersPacket{
+	query := GetBlockHeadersPacket{
 		Origin:  HashOrNumber{Hash: origin},
 		Amount:  uint64(amount),
 		Skip:    uint64(skip),
 		Reverse: reverse,
-	})
+	}
+	if p.Version() >= ETH66 {
+		return p2p.Send(p.rw, GetBlockHeadersMsg, &GetBlockHeadersPacket66{rand.Uint64(), query})
+	}
+	return p2p.Send(p.rw, GetBlockHeadersMsg, &query)
 }
 
 // RequestHeadersByNumber fetches a batch of blocks' headers corresponding to the
 // specified header query, based on the number of an origin block.
 func (p *Peer) RequestHeadersByNumber(origin uint64, amount int, skip int, reverse bool) error {
 	p.Log().Debug("Fetching batch of headers", "count", amount, "fromnum", origin, "skip", skip, "reverse", reverse)
-	return p2p.Send(p.rw, GetBlockHeadersMsg, &GetBlockHeadersPacket{
+	query := GetBlockHeadersPacket{
 		Origin:  HashOrNumber{Number: origin},
 		Amount:  uint64(amount),
 		Skip:    uint64(skip),
 		Reverse: reverse,
-	})
+	}
+	if p.Version() >= ETH66 {
+		return p2p.Send(p.rw, GetBlockHeadersMsg, &GetBlockHeadersPacket66{rand.Uint64(), query})
+	}
+	return p2p.Send(p.rw, GetBlockHeadersMsg, &query)
 }
 
 // ExpectRequestHeadersByNumber is a testing method to mirror the recipient side
@@ -430,6 +443,9 @@ func (p *Peer) ExpectRequestHeadersByNumber(origin uint64, amount int, skip int,
 // specified.
 func (p *Peer) RequestBodies(hashes []common.Hash) error {
 	p.Log().Debug("Fetching batch of block bodies", "count", len(hashes))
+	if p.Version() >= ETH66 {
+		return p2p.Send(p.rw, GetBlockBodiesMsg, &GetBlockBodiesPacket66{rand.Uint64(), hashes})
+	}
 	return p2p.Send(p.rw, GetBlockBodiesMsg, GetBlockBodiesPacket(hashes))
 }
 
@@ -437,17 +453,26 @@ func (p *Peer) RequestBodies(hashes []common.Hash) error {
 // data, corresponding to the specified hashes.
 func (p *Peer) RequestNodeData(hashes []common.Hash) error {
 	p.Log().Debug("Fetching batch of state data", "count", len(hashes))
+	if p.Version() >= ETH66 {
+		return p2p.Send(p.rw, GetNodeDataMsg, &GetNodeDataPacket66{rand.Uint64(), hashes})
+	}
 	return p2p.Send(p.rw, GetNodeDataMsg, GetNodeDataPacket(hashes))
 }
 
 // RequestReceipts fetches a batch of transaction receipts from a remote node.
 func (p *Peer) RequestReceipts(hashes []common.Hash) error {
 	p.Log().Debug("Fetching batch of receipts", "count", len(hashes))
+	if p.Version() >= ETH66 {
+		return p2p.Send(p.rw, GetReceiptsMsg, &GetReceiptsPacket66{rand.Uint64(), hashes})
+	}
 	return p2p.Send(p.rw, GetReceiptsMsg, GetReceiptsPacket(hashes))
 }
 
 // RequestTxs fetches a batch of transactions from a remote node.
 func (p *Peer) RequestTxs(hashes []common.Hash) error {
 	p.Log().Debug("Fetching batch of transactions", "count", len(hashes))
+	if p.Version() >= ETH66 {
+		return p2p.Send(p.rw, GetPooledTransactionsMsg, &GetPooledTransactionsPacket66{rand.Uint64(), hashes})
+	}
 	return p2p.Send(p.rw, GetPooledTransactionsMsg, GetPooledTransactionsPacket(hashes))
 }
