@@ -1386,9 +1386,9 @@ func TestFailedSyncProgress65Full(t *testing.T)  { testFailedSyncProgress(t, 65,
 func TestFailedSyncProgress65Fast(t *testing.T)  { testFailedSyncProgress(t, 65, FastSync) }
 func TestFailedSyncProgress65Light(t *testing.T) { testFailedSyncProgress(t, 65, LightSync) }
 
-func TestFailedSyncProgress65Full(t *testing.T)  { testFailedSyncProgress(t, 66, FullSync) }
-func TestFailedSyncProgress65Fast(t *testing.T)  { testFailedSyncProgress(t, 66, FastSync) }
-func TestFailedSyncProgress65Light(t *testing.T) { testFailedSyncProgress(t, 66, LightSync) }
+func TestFailedSyncProgress66Full(t *testing.T)  { testFailedSyncProgress(t, 66, FullSync) }
+func TestFailedSyncProgress66Fast(t *testing.T)  { testFailedSyncProgress(t, 66, FastSync) }
+func TestFailedSyncProgress66Light(t *testing.T) { testFailedSyncProgress(t, 66, LightSync) }
 
 func testFailedSyncProgress(t *testing.T, protocol uint, mode SyncMode) {
 	t.Parallel()
