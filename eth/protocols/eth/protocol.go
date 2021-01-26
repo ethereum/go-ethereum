@@ -129,6 +129,12 @@ type GetBlockHeadersPacket struct {
 	Reverse bool         // Query direction (false = rising towards latest, true = falling towards genesis)
 }
 
+// GetBlockHeadersPacket represents a block header query over ETH-66
+type GetBlockHeadersPacket66 struct {
+	RequestId uint64
+	GetBlockHeadersPacket
+}
+
 // HashOrNumber is a combined field for specifying an origin block.
 type HashOrNumber struct {
 	Hash   common.Hash // Block hash from which to retrieve headers (excludes Number)
@@ -168,6 +174,12 @@ func (hn *HashOrNumber) DecodeRLP(s *rlp.Stream) error {
 // BlockHeadersPacket represents a block header response.
 type BlockHeadersPacket []*types.Header
 
+// BlockHeadersPacket represents a block header response over ETH-66.
+type BlockHeadersPacket66 struct {
+	RequestId uint64
+	BlockHeadersPacket
+}
+
 // NewBlockPacket is the network packet for the block propagation message.
 type NewBlockPacket struct {
 	Block *types.Block
@@ -190,8 +202,20 @@ func (request *NewBlockPacket) sanityCheck() error {
 // GetBlockBodiesPacket represents a block body query.
 type GetBlockBodiesPacket []common.Hash
 
+// GetBlockBodiesPacket represents a block body query over ETH-66.
+type GetBlockBodiesPacket66 struct {
+	RequestId uint64
+	GetBlockBodiesPacket
+}
+
 // BlockBodiesPacket is the network packet for block content distribution.
 type BlockBodiesPacket []*BlockBody
+
+// BlockBodiesPacket is the network packet for block content distribution over ETH-66.
+type BlockBodiesPacket66 struct {
+	RequestId uint64
+	BlockBodiesPacket
+}
 
 // BlockBody represents the data content of a single block.
 type BlockBody struct {
@@ -215,14 +239,38 @@ func (p *BlockBodiesPacket) Unpack() ([][]*types.Transaction, [][]*types.Header)
 // GetNodeDataPacket represents a trie node data query.
 type GetNodeDataPacket []common.Hash
 
+// GetNodeDataPacket represents a trie node data query over ETH-66.
+type GetNodeDataPacket66 struct {
+	RequestId uint64
+	GetNodeDataPacket
+}
+
 // NodeDataPacket is the network packet for trie node data distribution.
 type NodeDataPacket [][]byte
+
+// NodeDataPacket is the network packet for trie node data distribution over ETH-66.
+type NodeDataPacket66 struct {
+	RequestId uint64
+	NodeDataPacket
+}
 
 // GetReceiptsPacket represents a block receipts query.
 type GetReceiptsPacket []common.Hash
 
+// GetReceiptsPacket represents a block receipts query over ETH-66.
+type GetReceiptsPacket66 struct {
+	RequestId uint64
+	GetReceiptsPacket
+}
+
 // ReceiptsPacket is the network packet for block receipts distribution.
 type ReceiptsPacket [][]*types.Receipt
+
+// ReceiptsPacket is the network packet for block receipts distribution over ETH-66.
+type ReceiptsPacket66 struct {
+	RequestId uint64
+	ReceiptsPacket
+}
 
 // NewPooledTransactionHashesPacket represents a transaction announcement packet.
 type NewPooledTransactionHashesPacket []common.Hash
@@ -230,8 +278,19 @@ type NewPooledTransactionHashesPacket []common.Hash
 // GetPooledTransactionsPacket represents a transaction query.
 type GetPooledTransactionsPacket []common.Hash
 
+type GetPooledTransactionsPacket66 struct {
+	RequestId uint64
+	GetPooledTransactionsPacket
+}
+
 // PooledTransactionsPacket is the network packet for transaction distribution.
 type PooledTransactionsPacket []*types.Transaction
+
+// PooledTransactionsPacket is the network packet for transaction distribution over ETH-66.
+type PooledTransactionsPacket66 struct {
+	RequestId uint64
+	PooledTransactionsPacket
+}
 
 func (*StatusPacket) Name() string { return "Status" }
 func (*StatusPacket) Kind() byte   { return StatusMsg }
