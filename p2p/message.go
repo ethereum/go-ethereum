@@ -70,7 +70,7 @@ func (msg Msg) Discard() error {
 	return err
 }
 
-func (msg Msg) Time() time.Time{
+func (msg Msg) Time() time.Time {
 	return msg.ReceivedAt
 }
 

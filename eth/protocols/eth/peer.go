@@ -331,6 +331,10 @@ func (p *Peer) SendBlockHeaders(headers []*types.Header) error {
 	return p2p.Send(p.rw, BlockHeadersMsg, BlockHeadersPacket(headers))
 }
 
+func (p *Peer) ReplyBlockHeaders(id uint64, headers BlockHeadersPacket) error {
+	return p2p.Send(p.rw, BlockHeadersMsg, BlockHeadersPacket66{id, headers})
+}
+
 // SendBlockBodies sends a batch of block contents to the remote peer.
 func (p *Peer) SendBlockBodies(bodies []*BlockBody) error {
 	return p2p.Send(p.rw, BlockBodiesMsg, BlockBodiesPacket(bodies))

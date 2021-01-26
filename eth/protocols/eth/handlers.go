@@ -34,6 +34,22 @@ func handleGetBlockHeaders(backend Backend, msg Decoder, peer *Peer) error {
 	if err := msg.Decode(&query); err != nil {
 		return fmt.Errorf("%w: message %v: %v", errDecode, msg, err)
 	}
+	response := replyToGetBlockHeaders(backend, query, peer)
+	return peer.SendBlockHeaders(response)
+}
+
+// handleGetBlockHeaders66 is the ETH-66 version of handleGetBlockHeaders
+func handleGetBlockHeaders66(backend Backend, msg Decoder, peer *Peer) error {
+	// Decode the complex header query
+	var query GetBlockHeadersPacket66
+	if err := msg.Decode(&query); err != nil {
+		return fmt.Errorf("%w: message %v: %v", errDecode, msg, err)
+	}
+	response := replyToGetBlockHeaders(backend, query.GetBlockHeadersPacket, peer)
+	return peer.ReplyBlockHeaders(query.RequestId, response)
+}
+
+func replyToGetBlockHeaders(backend Backend, query GetBlockHeadersPacket, peer *Peer) BlockHeadersPacket {
 	hashMode := query.Origin.Hash != (common.Hash{})
 	first := true
 	maxNonCanonical := uint64(100)
@@ -116,7 +132,7 @@ func handleGetBlockHeaders(backend Backend, msg Decoder, peer *Peer) error {
 			query.Origin.Number += query.Skip + 1
 		}
 	}
-	return peer.SendBlockHeaders(headers)
+	return headers
 }
 
 func handleGetBlockBodies(backend Backend, msg Decoder, peer *Peer) error {
