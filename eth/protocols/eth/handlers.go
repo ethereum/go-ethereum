@@ -413,12 +413,12 @@ func handleGetPooledTransactions(backend Backend, msg Decoder, peer *Peer) error
 
 func handleGetPooledTransactions66(backend Backend, msg Decoder, peer *Peer) error {
 	// Decode the pooled transactions retrieval message
-	var query GetPooledTransactionsPacket
+	var query GetPooledTransactionsPacket66
 	if err := msg.Decode(&query); err != nil {
 		return fmt.Errorf("%w: message %v: %v", errDecode, msg, err)
 	}
-	hashes, txs := answerGetPooledTransactions(backend, query, peer)
-	return peer.SendPooledTransactionsRLP(hashes, txs)
+	hashes, txs := answerGetPooledTransactions(backend, query.GetPooledTransactionsPacket, peer)
+	return peer.ReplyPooledTransactionsRLP(query.RequestId, hashes, txs)
 }
 
 func answerGetPooledTransactions(backend Backend, query GetPooledTransactionsPacket, peer *Peer) ([]common.Hash, PooledTransactionsRLPPacket) {
