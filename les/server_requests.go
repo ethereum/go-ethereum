@@ -53,20 +53,20 @@ type GetBlockHeadersReq struct {
 	Reverse bool         // Query direction (false = rising towards latest, true = falling towards genesis)
 }
 
-func (r *GetBlockHeadersReq) ReqAmount() (uint64, uint64) { return r.Amount, MaxHeaderFetch }
+func (r GetBlockHeadersReq) ReqAmount() (uint64, uint64) { return r.Amount, MaxHeaderFetch }
 
-func (r *GetBlockHeadersReq) InMetrics(size int64) {
+func (r GetBlockHeadersReq) InMetrics(size int64) {
 	miscInHeaderPacketsMeter.Mark(1)
 	miscInHeaderTrafficMeter.Mark(size)
 }
 
-func (r *GetBlockHeadersReq) OutMetrics(size int64, servingTime time.Duration) {
+func (r GetBlockHeadersReq) OutMetrics(size int64, servingTime time.Duration) {
 	miscOutHeaderPacketsMeter.Mark(1)
 	miscOutHeaderTrafficMeter.Mark(size)
 	miscServingTimeHeaderTimer.Update(servingTime)
 }
 
-func (r *GetBlockHeadersReq) Serve(backend serverBackend, reqID uint64, p *clientPeer, waitOrStop func() bool) *reply {
+func (r GetBlockHeadersReq) Serve(backend serverBackend, reqID uint64, p *clientPeer, waitOrStop func() bool) *reply {
 	// Gather headers until the fetch or network limits is reached
 	var (
 		bc              = backend.BlockChain()

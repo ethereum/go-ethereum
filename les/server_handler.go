@@ -240,8 +240,8 @@ func (h *serverHandler) handleMsg(p *clientPeer, wg *sync.WaitGroup) error {
 	switch msg.Code {
 	case GetBlockHeadersMsg:
 		p.Log().Trace("Received block header request")
-		r := &GetBlockHeadersReq{}
-		decodeErr = rlp.DecodeBytes(req.Data, r)
+		r := GetBlockHeadersReq{}
+		decodeErr = rlp.DecodeBytes(req.Data, &r)
 		hreq = r
 
 	case GetBlockBodiesMsg:
