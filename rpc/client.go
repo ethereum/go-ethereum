@@ -413,6 +413,12 @@ func (c *Client) EthSubscribe(ctx context.Context, channel interface{}, args ...
 	return c.Subscribe(ctx, "eth", channel, args...)
 }
 
+// ShhSubscribe registers a subscripion under the "shh" namespace.
+// Deprecated: whisper is deprecated and doesn't use subscriptions
+func (c *Client) ShhSubscribe(ctx context.Context, channel interface{}, args ...interface{}) (*ClientSubscription, error) {
+	return c.Subscribe(ctx, "shh", channel, args...)
+}
+
 // Subscribe calls the "<namespace>_subscribe" method with the given arguments,
 // registering a subscription. Server notifications for the subscription are
 // sent to the given channel. The element type of the channel must match the
