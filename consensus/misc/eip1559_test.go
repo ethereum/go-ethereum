@@ -1,12 +1,35 @@
 package misc
 
 import (
+	"fmt"
 	"math/big"
 	"testing"
 
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/params"
 )
+
+func TestBlockElasticity(t *testing.T) {
+	initial := new(big.Int).SetUint64(params.InitialBaseFee)
+	parent := &types.Header{
+		GasUsed:  10000000,
+		GasLimit: 10000000,
+		BaseFee:  initial,
+	}
+	header := &types.Header{
+		GasUsed:  20000000,
+		GasLimit: 10000000,
+		BaseFee:  initial,
+	}
+	if err := VerifyEip1559Header(parent, header); err != nil {
+		t.Errorf("Expected valid header: %s", err)
+	}
+	header.GasUsed += 1
+	expected := fmt.Sprintf("exceeded elasticity multiplier: gasUsed %d, gasTarget*elasticityMultiplier %d", header.GasUsed, header.GasLimit*params.ElasticityMultiplier)
+	if err := VerifyEip1559Header(parent, header); fmt.Sprint(err) != expected {
+		t.Errorf("Expected invalid header")
+	}
+}
 
 func TestCalcBaseFee(t *testing.T) {
 	tests := []struct {
