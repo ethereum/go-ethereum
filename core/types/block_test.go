@@ -98,13 +98,24 @@ func TestEIP1559BlockEncoding(t *testing.T) {
 
 	addr := common.HexToAddress("0x0000000000000000000000000000000000000001")
 	accesses := AccessList{AccessTuple{
-		Address: &addr,
-		StorageKeys: []*common.Hash{
+		Address: addr,
+		StorageKeys: []common.Hash{
 			{0},
 		},
 	}}
-	tx2 := NewDynamicFeeTransaction(big.NewInt(1), 0, common.HexToAddress("095e7baea6a6c7c4c2dfeb977efac326af552d87"), big.NewInt(0), 123457, new(big.Int).Set(block.BaseFee()), big.NewInt(0), nil, &accesses)
-	tx2, err := tx2.WithSignature(NewEIP2718Signer(big.NewInt(1)), common.Hex2Bytes("fe38ca4e44a30002ac54af7cf922a6ac2ba11b7d22f548e8ecb3f51f41cb31b06de6a5cbae13c0c856e33acf021b51819636cfc009d39eafb9f606d546e305a800"))
+	to := common.HexToAddress("095e7baea6a6c7c4c2dfeb977efac326af552d87")
+	txdata := &DynamicFeeTransaction{
+		ChainID:    big.NewInt(1),
+		Nonce:      0,
+		To:         &to,
+		Gas:        123457,
+		FeeCap:     new(big.Int).Set(block.BaseFee()),
+		Tip:        big.NewInt(0),
+		AccessList: accesses,
+		Data:       []byte{},
+	}
+	tx2 := NewTx(txdata)
+	tx2, err := tx2.WithSignature(LatestSignerForChainID(big.NewInt(1)), common.Hex2Bytes("fe38ca4e44a30002ac54af7cf922a6ac2ba11b7d22f548e8ecb3f51f41cb31b06de6a5cbae13c0c856e33acf021b51819636cfc009d39eafb9f606d546e305a800"))
 
 	check("len(Transactions)", len(block.Transactions()), 2)
 	check("Transactions[0].Hash", block.Transactions()[0].Hash(), tx1.Hash())

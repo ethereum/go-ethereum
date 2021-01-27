@@ -252,6 +252,7 @@ var (
 		PetersburgBlock:     big.NewInt(0),
 		IstanbulBlock:       big.NewInt(0),
 		MuirGlacierBlock:    nil,
+		BerlinBlock:         big.NewInt(0),
 		YoloV3Block:         big.NewInt(0),
 		AleutBlock:          big.NewInt(0),
 		Clique: &CliqueConfig{

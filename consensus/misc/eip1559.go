@@ -11,7 +11,7 @@ import (
 
 func VerifyEip1559Header(parent, header *types.Header) error {
 	// Verify that the gasUsed is <= gasTarget*elasticityMultiplier
-	if header.GasUsed <= header.GasLimit*params.ElasticityMultiplier {
+	if header.GasUsed > header.GasLimit*params.ElasticityMultiplier {
 		return fmt.Errorf("exceeded elasticity multiplier: gasUsed %d, gasTarget*elasticityMultiplier %d", header.GasUsed, header.GasLimit*params.ElasticityMultiplier)
 	}
 

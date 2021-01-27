@@ -67,7 +67,7 @@ func (tx *DynamicFeeTransaction) copy() TxData {
 		cpy.Tip.Set(tx.Tip)
 	}
 	if tx.FeeCap != nil {
-		cpy.Tip.Set(tx.FeeCap)
+		cpy.FeeCap.Set(tx.FeeCap)
 	}
 	if tx.V != nil {
 		cpy.V.Set(tx.V)

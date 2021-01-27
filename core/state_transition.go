@@ -317,7 +317,11 @@ func (st *StateTransition) refundGas() {
 	st.gas += refund
 
 	// Return ETH for remaining gas, exchanged at the original rate.
-	remaining := new(big.Int).Mul(new(big.Int).SetUint64(st.gas), st.gasPrice)
+	price := st.gasPrice
+	if st.evm.ChainConfig().IsAleut(st.evm.Context.BlockNumber) {
+		price = cmath.BigMin(new(big.Int).Add(st.tip, st.evm.Context.BaseFee), st.feeCap)
+	}
+	remaining := new(big.Int).Mul(new(big.Int).SetUint64(st.gas), price)
 	st.state.AddBalance(st.msg.From(), remaining)
 
 	// Also return remaining gas to the block gas counter so it is
