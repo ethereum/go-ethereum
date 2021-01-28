@@ -129,7 +129,7 @@ type GetBlockHeadersPacket struct {
 	Reverse bool         // Query direction (false = rising towards latest, true = falling towards genesis)
 }
 
-// GetBlockHeadersPacket represents a block header query over ETH-66
+// GetBlockHeadersPacket represents a block header query over eth/66
 type GetBlockHeadersPacket66 struct {
 	RequestId uint64
 	*GetBlockHeadersPacket
@@ -174,7 +174,7 @@ func (hn *HashOrNumber) DecodeRLP(s *rlp.Stream) error {
 // BlockHeadersPacket represents a block header response.
 type BlockHeadersPacket []*types.Header
 
-// BlockHeadersPacket represents a block header response over ETH-66.
+// BlockHeadersPacket represents a block header response over eth/66.
 type BlockHeadersPacket66 struct {
 	RequestId uint64
 	BlockHeadersPacket
@@ -202,7 +202,7 @@ func (request *NewBlockPacket) sanityCheck() error {
 // GetBlockBodiesPacket represents a block body query.
 type GetBlockBodiesPacket []common.Hash
 
-// GetBlockBodiesPacket represents a block body query over ETH-66.
+// GetBlockBodiesPacket represents a block body query over eth/66.
 type GetBlockBodiesPacket66 struct {
 	RequestId uint64
 	GetBlockBodiesPacket
@@ -216,13 +216,13 @@ type BlockBodiesPacket []*BlockBody
 // roundtrip.
 type BlockBodiesRLPPacket []rlp.RawValue
 
-// BlockBodiesRLPPacket66 is the BlockBodiesRLPPacket over ETH-66
+// BlockBodiesRLPPacket66 is the BlockBodiesRLPPacket over eth/66
 type BlockBodiesRLPPacket66 struct {
 	RequestId uint64
 	BlockBodiesRLPPacket
 }
 
-// BlockBodiesPacket is the network packet for block content distribution over ETH-66.
+// BlockBodiesPacket is the network packet for block content distribution over eth/66.
 type BlockBodiesPacket66 struct {
 	RequestId uint64
 	BlockBodiesPacket
@@ -250,7 +250,7 @@ func (p *BlockBodiesPacket) Unpack() ([][]*types.Transaction, [][]*types.Header)
 // GetNodeDataPacket represents a trie node data query.
 type GetNodeDataPacket []common.Hash
 
-// GetNodeDataPacket represents a trie node data query over ETH-66.
+// GetNodeDataPacket represents a trie node data query over eth/66.
 type GetNodeDataPacket66 struct {
 	RequestId uint64
 	GetNodeDataPacket
@@ -259,7 +259,7 @@ type GetNodeDataPacket66 struct {
 // NodeDataPacket is the network packet for trie node data distribution.
 type NodeDataPacket [][]byte
 
-// NodeDataPacket is the network packet for trie node data distribution over ETH-66.
+// NodeDataPacket is the network packet for trie node data distribution over eth/66.
 type NodeDataPacket66 struct {
 	RequestId uint64
 	NodeDataPacket
@@ -268,7 +268,7 @@ type NodeDataPacket66 struct {
 // GetReceiptsPacket represents a block receipts query.
 type GetReceiptsPacket []common.Hash
 
-// GetReceiptsPacket represents a block receipts query over ETH-66.
+// GetReceiptsPacket represents a block receipts query over eth/66.
 type GetReceiptsPacket66 struct {
 	RequestId uint64
 	GetReceiptsPacket
@@ -277,7 +277,7 @@ type GetReceiptsPacket66 struct {
 // ReceiptsPacket is the network packet for block receipts distribution.
 type ReceiptsPacket [][]*types.Receipt
 
-// ReceiptsPacket is the network packet for block receipts distribution over ETH-66.
+// ReceiptsPacket is the network packet for block receipts distribution over eth/66.
 type ReceiptsPacket66 struct {
 	RequestId uint64
 	ReceiptsPacket
@@ -306,7 +306,7 @@ type GetPooledTransactionsPacket66 struct {
 // PooledTransactionsPacket is the network packet for transaction distribution.
 type PooledTransactionsPacket []*types.Transaction
 
-// PooledTransactionsPacket is the network packet for transaction distribution over ETH-66.
+// PooledTransactionsPacket is the network packet for transaction distribution over eth/66.
 type PooledTransactionsPacket66 struct {
 	RequestId uint64
 	PooledTransactionsPacket
@@ -316,7 +316,7 @@ type PooledTransactionsPacket66 struct {
 // in the cases we already have them in rlp-encoded form
 type PooledTransactionsRLPPacket []rlp.RawValue
 
-// PooledTransactionsRLPPacket66 is the ETH-66 form of PooledTransactionsRLPPacket
+// PooledTransactionsRLPPacket66 is the eth/66 form of PooledTransactionsRLPPacket
 type PooledTransactionsRLPPacket66 struct {
 	RequestId uint64
 	PooledTransactionsRLPPacket

@@ -267,7 +267,7 @@ func (p *Peer) SendPooledTransactionsRLP(hashes []common.Hash, txs PooledTransac
 	return p2p.Send(p.rw, PooledTransactionsMsg, txs) // Not packed into PooledTransactionsPacket to avoid RLP decoding
 }
 
-// ReplyPooledTransactionsRLP is the ETH-66 version of SendPooledTransactionsRLP
+// ReplyPooledTransactionsRLP is the eth/66 version of SendPooledTransactionsRLP
 func (p *Peer) ReplyPooledTransactionsRLP(id uint64, hashes []common.Hash, txs PooledTransactionsRLPPacket) error {
 	// Mark all the transactions as known, but ensure we don't overflow our limits
 	for p.knownTxs.Cardinality() > max(0, maxKnownTxs-len(hashes)) {
@@ -363,7 +363,7 @@ func (p *Peer) SendNodeData(data NodeDataPacket) error {
 	return p2p.Send(p.rw, NodeDataMsg, data)
 }
 
-// ReplyNodeData is the ETH-66 response to GetNodeData
+// ReplyNodeData is the eth/66 response to GetNodeData
 func (p *Peer) ReplyNodeData(id uint64, data NodeDataPacket) error {
 	return p2p.Send(p.rw, NodeDataMsg, NodeDataPacket66{id, data})
 }
@@ -374,7 +374,7 @@ func (p *Peer) SendReceiptsRLP(receipts ReceiptsRLPPacket) error {
 	return p2p.Send(p.rw, ReceiptsMsg, receipts) // Not packed into ReceiptsPacket to avoid RLP decoding
 }
 
-// ReplyReceiptsRLP is the ETH-66 response to GetReceipts
+// ReplyReceiptsRLP is the eth/66 response to GetReceipts
 func (p *Peer) ReplyReceiptsRLP(id uint64, receipts ReceiptsRLPPacket) error {
 	return p2p.Send(p.rw, ReceiptsMsg, ReceiptsRLPPacket66{id, receipts})
 }

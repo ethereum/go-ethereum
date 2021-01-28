@@ -38,7 +38,7 @@ func handleGetBlockHeaders(backend Backend, msg Decoder, peer *Peer) error {
 	return peer.SendBlockHeaders(response)
 }
 
-// handleGetBlockHeaders66 is the ETH-66 version of handleGetBlockHeaders
+// handleGetBlockHeaders66 is the eth/66 version of handleGetBlockHeaders
 func handleGetBlockHeaders66(backend Backend, msg Decoder, peer *Peer) error {
 	// Decode the complex header query
 	var query GetBlockHeadersPacket66
