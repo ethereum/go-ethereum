@@ -187,7 +187,7 @@ func (t *StateTest) RunNoVerify(subtest StateSubtest, vmconfig vm.Config, snapsh
 	context.GetHash = vmTestBlockHash
 	evm := vm.NewEVM(context, txContext, statedb, config, vmconfig)
 
-	if config.IsYoloV2(context.BlockNumber) {
+	if config.IsYoloV3(context.BlockNumber) {
 		statedb.AddAddressToAccessList(msg.From())
 		if dst := msg.To(); dst != nil {
 			statedb.AddAddressToAccessList(*dst)

@@ -581,8 +581,8 @@ func (api *API) standardTraceBlockToFile(ctx context.Context, block *types.Block
 		chainConfigCopy := new(params.ChainConfig)
 		*chainConfigCopy = *chainConfig
 		chainConfig = chainConfigCopy
-		if yolov2 := config.LogConfig.Overrides.YoloV2Block; yolov2 != nil {
-			chainConfig.YoloV2Block = yolov2
+		if yolov3 := config.LogConfig.Overrides.YoloV3Block; yolov3 != nil {
+			chainConfig.YoloV3Block = yolov3
 			canon = false
 		}
 	}

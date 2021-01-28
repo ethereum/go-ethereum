@@ -148,7 +148,9 @@ var (
 		utils.RopstenFlag,
 		utils.RinkebyFlag,
 		utils.GoerliFlag,
-		utils.YoloV2Flag,
+		// YOLOv3 is not yet complete!
+		// TODO: enable this once 2718/2930 is added
+		//utils.YoloV3Flag,
 		utils.VMEnableDebugFlag,
 		utils.NetworkIdFlag,
 		utils.EthStatsURLFlag,

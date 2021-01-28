@@ -243,8 +243,8 @@ func (g *Genesis) configOrDefault(ghash common.Hash) *params.ChainConfig {
 		return params.RinkebyChainConfig
 	case ghash == params.GoerliGenesisHash:
 		return params.GoerliChainConfig
-	case ghash == params.YoloV2GenesisHash:
-		return params.YoloV2ChainConfig
+	case ghash == params.YoloV3GenesisHash:
+		return params.YoloV3ChainConfig
 	default:
 		return params.AllEthashProtocolChanges
 	}
@@ -380,15 +380,15 @@ func DefaultGoerliGenesisBlock() *Genesis {
 	}
 }
 
-func DefaultYoloV2GenesisBlock() *Genesis {
-	// TODO: Update with yolov2 values + regenerate alloc data
+func DefaultYoloV3GenesisBlock() *Genesis {
+	// Full genesis: https://gist.github.com/holiman/b2c32a05ff2e2712e11c0787d987d46f
 	return &Genesis{
-		Config:     params.YoloV2ChainConfig,
-		Timestamp:  0x5f91b932,
+		Config:     params.YoloV3ChainConfig,
+		Timestamp:  0x60117f8b,
 		ExtraData:  hexutil.MustDecode("0x00000000000000000000000000000000000000000000000000000000000000008a37866fd3627c9205a37c8685666f32ec07bb1b0000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000"),
 		GasLimit:   0x47b760,
 		Difficulty: big.NewInt(1),
-		Alloc:      decodePrealloc(yoloV1AllocData),
+		Alloc:      decodePrealloc(yoloV3AllocData),
 	}
 }
 

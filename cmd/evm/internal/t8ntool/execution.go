@@ -145,7 +145,7 @@ func (pre *Prestate) Apply(vmConfig vm.Config, chainConfig *params.ChainConfig,
 		txContext := core.NewEVMTxContext(msg)
 
 		evm := vm.NewEVM(vmContext, txContext, statedb, chainConfig, vmConfig)
-		if chainConfig.IsYoloV2(vmContext.BlockNumber) {
+		if chainConfig.IsYoloV3(vmContext.BlockNumber) {
 			statedb.AddAddressToAccessList(msg.From())
 			if dst := msg.To(); dst != nil {
 				statedb.AddAddressToAccessList(*dst)
