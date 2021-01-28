@@ -132,7 +132,7 @@ type GetBlockHeadersPacket struct {
 // GetBlockHeadersPacket represents a block header query over ETH-66
 type GetBlockHeadersPacket66 struct {
 	RequestId uint64
-	GetBlockHeadersPacket
+	*GetBlockHeadersPacket
 }
 
 // HashOrNumber is a combined field for specifying an origin block.

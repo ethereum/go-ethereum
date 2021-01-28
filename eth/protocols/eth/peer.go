@@ -383,7 +383,7 @@ func (p *Peer) ReplyReceiptsRLP(id uint64, receipts ReceiptsRLPPacket) error {
 // single header. It is used solely by the fetcher.
 func (p *Peer) RequestOneHeader(hash common.Hash) error {
 	p.Log().Debug("Fetching single header", "hash", hash)
-	query := GetBlockHeadersPacket{
+	query := &GetBlockHeadersPacket{
 		Origin:  HashOrNumber{Hash: hash},
 		Amount:  uint64(1),
 		Skip:    uint64(0),
@@ -406,7 +406,7 @@ func (p *Peer) RequestHeadersByHash(origin common.Hash, amount int, skip int, re
 		Reverse: reverse,
 	}
 	if p.Version() >= ETH66 {
-		return p2p.Send(p.rw, GetBlockHeadersMsg, &GetBlockHeadersPacket66{rand.Uint64(), query})
+		return p2p.Send(p.rw, GetBlockHeadersMsg, &GetBlockHeadersPacket66{rand.Uint64(), &query})
 	}
 	return p2p.Send(p.rw, GetBlockHeadersMsg, &query)
 }
@@ -422,7 +422,7 @@ func (p *Peer) RequestHeadersByNumber(origin uint64, amount int, skip int, rever
 		Reverse: reverse,
 	}
 	if p.Version() >= ETH66 {
-		return p2p.Send(p.rw, GetBlockHeadersMsg, &GetBlockHeadersPacket66{rand.Uint64(), query})
+		return p2p.Send(p.rw, GetBlockHeadersMsg, &GetBlockHeadersPacket66{rand.Uint64(), &query})
 	}
 	return p2p.Send(p.rw, GetBlockHeadersMsg, &query)
 }

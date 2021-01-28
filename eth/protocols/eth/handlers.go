@@ -34,7 +34,7 @@ func handleGetBlockHeaders(backend Backend, msg Decoder, peer *Peer) error {
 	if err := msg.Decode(&query); err != nil {
 		return fmt.Errorf("%w: message %v: %v", errDecode, msg, err)
 	}
-	response := answerGetBlockHeadersQuery(backend, query, peer)
+	response := answerGetBlockHeadersQuery(backend, &query, peer)
 	return peer.SendBlockHeaders(response)
 }
 
@@ -49,7 +49,7 @@ func handleGetBlockHeaders66(backend Backend, msg Decoder, peer *Peer) error {
 	return peer.ReplyBlockHeaders(query.RequestId, response)
 }
 
-func answerGetBlockHeadersQuery(backend Backend, query GetBlockHeadersPacket, peer *Peer) BlockHeadersPacket {
+func answerGetBlockHeadersQuery(backend Backend, query *GetBlockHeadersPacket, peer *Peer) BlockHeadersPacket {
 	hashMode := query.Origin.Hash != (common.Hash{})
 	first := true
 	maxNonCanonical := uint64(100)
