@@ -62,7 +62,7 @@ func (f *fuzzer) readInt() uint64 {
 
 func (f *fuzzer) randomTrie(n int) (*trie.Trie, map[string]*kv) {
 
-	trie := new(trie.Trie)
+	trie := trie.NewStackTrie(nil)
 	vals := make(map[string]*kv)
 	size := f.readInt()
 	// Fill it with some fluff
