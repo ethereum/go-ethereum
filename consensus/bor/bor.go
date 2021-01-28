@@ -846,9 +846,9 @@ func (c *Bor) Close() error {
 }
 
 // GetCurrentSpan get current span from contract
-func (c *Bor) GetCurrentSpan(snapshotNumber uint64) (*Span, error) {
+func (c *Bor) GetCurrentSpan(headerHash common.Hash) (*Span, error) {
 	// block
-	blockNr := rpc.BlockNumber(snapshotNumber)
+	blockNr := rpc.BlockNumberOrHashWithHash(headerHash, false)
 
 	// method
 	method := "getCurrentSpan"
@@ -866,7 +866,7 @@ func (c *Bor) GetCurrentSpan(snapshotNumber uint64) (*Span, error) {
 		Gas:  &gas,
 		To:   &toAddress,
 		Data: &msgData,
-	}, rpc.BlockNumberOrHash{BlockNumber: &blockNr}, nil)
+	}, blockNr, nil)
 	if err != nil {
 		return nil, err
 	}
@@ -949,7 +949,7 @@ func (c *Bor) checkAndCommitSpan(
 	chain core.ChainContext,
 ) error {
 	headerNumber := header.Number.Uint64()
-	span, err := c.GetCurrentSpan(headerNumber - 1)
+	span, err := c.GetCurrentSpan(header.ParentHash)
 	if err != nil {
 		return err
 	}
@@ -1167,7 +1167,7 @@ func (c *Bor) getNextHeimdallSpanForTest(
 	chain core.ChainContext,
 ) (*HeimdallSpan, error) {
 	headerNumber := header.Number.Uint64()
-	span, err := c.GetCurrentSpan(headerNumber - 1)
+	span, err := c.GetCurrentSpan(header.ParentHash)
 	if err != nil {
 		return nil, err
 	}
