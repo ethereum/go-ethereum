@@ -1115,6 +1115,7 @@ func (pool *TxPool) runReorg(done chan struct{}, reset *txpoolResetRequest, dirt
 // reset retrieves the current state of the blockchain and ensures the content
 // of the transaction pool is valid with regard to the chain state.
 func (pool *TxPool) reset(oldHead, newHead *types.Header) {
+	log.Warn("Reseting txpool")
 	// If we're reorging an old state, reinject all dropped transactions
 	var reinject types.Transactions
 
@@ -1141,6 +1142,15 @@ func (pool *TxPool) reset(oldHead, newHead *types.Header) {
 					// If the reorg ended up on a lower number, it's indicative of setHead being the cause
 					log.Debug("Skipping transaction reset caused by setHead",
 						"old", oldHead.Hash(), "oldnum", oldNum, "new", newHead.Hash(), "newnum", newNum)
+					// We still need to update the current state s.th. the lost transactions can be readded by the user
+					statedb, err := pool.chain.StateAt(newHead.Root)
+					if err != nil {
+						log.Error("Failed to reset txpool state", "err", err)
+						return
+					}
+					pool.currentState = statedb
+					pool.pendingNonces = newTxNoncer(statedb)
+					pool.currentMaxGas = newHead.GasLimit
 				} else {
 					// If we reorged to a same or higher number, then it's not a case of setHead
 					log.Warn("Transaction pool reset with missing oldhead",
