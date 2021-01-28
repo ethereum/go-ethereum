@@ -9,14 +9,19 @@ import (
 	"github.com/ethereum/go-ethereum/params"
 )
 
-func VerifyEip1559Header(parent, header *types.Header) error {
+func VerifyEip1559Header(parent, header *types.Header, notFirst bool) error {
 	// Verify that the gasUsed is <= gasTarget*elasticityMultiplier
 	if header.GasUsed > header.GasLimit*params.ElasticityMultiplier {
 		return fmt.Errorf("exceeded elasticity multiplier: gasUsed %d, gasTarget*elasticityMultiplier %d", header.GasUsed, header.GasLimit*params.ElasticityMultiplier)
 	}
 
 	// Verify the baseFee is correct based on the parent header.
-	expectedBaseFee := CalcBaseFee(parent)
+	expectedBaseFee := new(big.Int).SetUint64(params.InitialBaseFee)
+	if notFirst {
+		// Only calculate the correct baseFee if the parent header is
+		// also a EIP-1559 header.
+		expectedBaseFee = CalcBaseFee(parent)
+	}
 	if header.BaseFee.Cmp(expectedBaseFee) != 0 {
 		return fmt.Errorf("invalid baseFee: expected: %d, have %d", parent.BaseFee.Int64(), header.BaseFee.Int64())
 	}
