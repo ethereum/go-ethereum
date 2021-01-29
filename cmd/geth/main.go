@@ -102,6 +102,7 @@ var (
 		utils.UltraLightServersFlag,
 		utils.UltraLightFractionFlag,
 		utils.UltraLightOnlyAnnounceFlag,
+		utils.LightNoSyncServeFlag,
 		utils.WhitelistFlag,
 		utils.BloomFilterSizeFlag,
 		utils.CacheFlag,

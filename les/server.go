@@ -118,7 +118,11 @@ func NewLesServer(node *node.Node, e ethBackend, config *ethconfig.Config) (*Les
 		threadsIdle:  threads,
 		p2pSrv:       node.Server(),
 	}
-	srv.handler = newServerHandler(srv, e.BlockChain(), e.ChainDb(), e.TxPool(), e.Synced)
+	issync := e.Synced
+	if config.LightNoSyncServe {
+		issync = func() bool { return true }
+	}
+	srv.handler = newServerHandler(srv, e.BlockChain(), e.ChainDb(), e.TxPool(), issync)
 	srv.costTracker, srv.minCapacity = newCostTracker(e.ChainDb(), config)
 	srv.oracle = srv.setupOracle(node, e.BlockChain().Genesis().Hash(), config)
 

@@ -269,6 +269,10 @@ var (
 		Name:  "light.nopruning",
 		Usage: "Disable ancient light chain data pruning",
 	}
+	LightNoSyncServeFlag = cli.BoolFlag{
+		Name:  "light.nosyncserve",
+		Usage: "Enables serving light clients before syncing",
+	}
 	// Ethash settings
 	EthashCacheDirFlag = DirectoryFlag{
 		Name:  "ethash.cachedir",
@@ -1041,6 +1045,9 @@ func setLes(ctx *cli.Context, cfg *ethconfig.Config) {
 	}
 	if ctx.GlobalIsSet(LightNoPruneFlag.Name) {
 		cfg.LightNoPrune = ctx.GlobalBool(LightNoPruneFlag.Name)
+	}
+	if ctx.GlobalIsSet(LightNoSyncServeFlag.Name) {
+		cfg.LightNoSyncServe = ctx.GlobalBool(LightNoSyncServeFlag.Name)
 	}
 }
 
