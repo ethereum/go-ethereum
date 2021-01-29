@@ -536,11 +536,11 @@ func (pool *TxPool) validateTx(tx *types.Transaction, local bool) error {
 	if pool.currentMaxGas < tx.Gas() {
 		return ErrGasLimit
 	}
-	// Accept only legacy transactions if before yoloV2.
+	// Accept only legacy transactions if before 2718/2930.
 	if tx.Type() != types.LegacyTxId && !pool.eip2718 {
 		return ErrTxTypeNotSupported
 	}
-	// After yoloV2, accept both legacy transactions and access list transactions.
+	// After 2718/2930, accept both legacy transactions and access list transactions.
 	if pool.eip2718 && (tx.Type() != types.LegacyTxId && tx.Type() != types.AccessListTxId) {
 		return ErrTxTypeNotSupported
 	}
@@ -1208,7 +1208,7 @@ func (pool *TxPool) reset(oldHead, newHead *types.Header) {
 	// Update all fork indicator by next pending block number.
 	next := new(big.Int).Add(newHead.Number, big.NewInt(1))
 	pool.istanbul = pool.chainconfig.IsIstanbul(next)
-	pool.eip2718 = pool.chainconfig.IsYoloV2(next)
+	pool.eip2718 = pool.chainconfig.IsYoloV3(next)
 }
 
 // promoteExecutables moves transactions that have become processable from the

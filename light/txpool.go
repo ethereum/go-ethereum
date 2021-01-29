@@ -69,7 +69,7 @@ type TxPool struct {
 	clearIdx     uint64                               // earliest block nr that can contain mined tx info
 
 	istanbul bool // Fork indicator whether we are in the istanbul stage.
-	yoloV2   bool // Fork indicator whether we are in the yoloV2 stage.
+	eip2718  bool // Fork indicator whether we are in the eip2718 stage.
 }
 
 // TxRelayBackend provides an interface to the mechanism that forwards transacions
@@ -315,7 +315,7 @@ func (pool *TxPool) setNewHead(head *types.Header) {
 	// Update fork indicator by next pending block number
 	next := new(big.Int).Add(head.Number, big.NewInt(1))
 	pool.istanbul = pool.config.IsIstanbul(next)
-	pool.yoloV2 = pool.config.IsYoloV2(next)
+	pool.eip2718 = pool.config.IsYoloV3(next)
 }
 
 // Stop stops the light transaction pool

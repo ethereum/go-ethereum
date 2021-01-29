@@ -874,7 +874,7 @@ func DoCall(ctx context.Context, b Backend, args CallArgs, blockNrOrHash rpc.Blo
 	gp := new(core.GasPool).AddGas(math.MaxUint64)
 	// TODO! Refactor this check to some better place -- right now it's copy-pasted
 	// all over the place
-	if evm.ChainConfig().IsYoloV2(header.Number) {
+	if evm.ChainConfig().IsYoloV3(header.Number) {
 		state.AddAddressToAccessList(msg.From())
 		if dst := msg.To(); dst != nil {
 			state.AddAddressToAccessList(*dst)

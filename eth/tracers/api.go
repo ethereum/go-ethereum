@@ -756,7 +756,7 @@ func (api *API) traceTx(ctx context.Context, message core.Message, vmctx vm.Bloc
 	// Run the transaction with tracing enabled.
 	vmenv := vm.NewEVM(vmctx, txContext, statedb, api.backend.ChainConfig(), vm.Config{Debug: true, Tracer: tracer})
 
-	if api.backend.ChainConfig().IsYoloV2(vmctx.BlockNumber) {
+	if api.backend.ChainConfig().IsYoloV3(vmctx.BlockNumber) {
 		statedb.AddAddressToAccessList(message.From())
 		if dst := message.To(); dst != nil {
 			statedb.AddAddressToAccessList(*dst)
