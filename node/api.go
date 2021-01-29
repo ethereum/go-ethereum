@@ -163,7 +163,7 @@ func (api *privateAdminAPI) PeerEvents(ctx context.Context) (*rpc.Subscription, 
 }
 
 // StartRPC starts the HTTP RPC API server.
-func (api *privateAdminAPI) StartRPC(host *string, port *int, path *string, cors *string, apis *string, vhosts *string) (bool, error) {
+func (api *privateAdminAPI) StartRPC(host *string, port *int, cors *string, apis *string, vhosts *string) (bool, error) {
 	api.node.lock.Lock()
 	defer api.node.lock.Unlock()
 
@@ -179,21 +179,11 @@ func (api *privateAdminAPI) StartRPC(host *string, port *int, path *string, cors
 		port = &api.node.config.HTTPPort
 	}
 
-	// Check if prefix set on which to mount http handler
-	if path == nil {
-		p := ""
-		if api.node.config.HTTPPathPrefix != "" {
-			p = api.node.config.HTTPPathPrefix
-		}
-		path = &p
-	}
-
 	// Determine config.
 	config := httpConfig{
 		CorsAllowedOrigins: api.node.config.HTTPCors,
 		Vhosts:             api.node.config.HTTPVirtualHosts,
 		Modules:            api.node.config.HTTPModules,
-		prefix:             prettyPath(*path),
 	}
 	if cors != nil {
 		config.CorsAllowedOrigins = nil
@@ -233,7 +223,7 @@ func (api *privateAdminAPI) StopRPC() (bool, error) {
 }
 
 // StartWS starts the websocket RPC API server.
-func (api *privateAdminAPI) StartWS(host *string, port *int, path *string, allowedOrigins *string, apis *string) (bool, error) {
+func (api *privateAdminAPI) StartWS(host *string, port *int, allowedOrigins *string, apis *string) (bool, error) {
 	api.node.lock.Lock()
 	defer api.node.lock.Unlock()
 
@@ -249,20 +239,10 @@ func (api *privateAdminAPI) StartWS(host *string, port *int, path *string, allow
 		port = &api.node.config.WSPort
 	}
 
-	// Check if prefix set on which to mount ws handler
-	if path == nil {
-		p := ""
-		if api.node.config.WSPathPrefix != "" {
-			p = api.node.config.WSPathPrefix
-		}
-		path = &p
-	}
-
 	// Determine config.
 	config := wsConfig{
 		Modules: api.node.config.WSModules,
 		Origins: api.node.config.WSOrigins,
-		prefix:  prettyPath(*path),
 		// ExposeAll: api.node.config.WSExposeAll,
 	}
 	if apis != nil {
