@@ -805,14 +805,16 @@ func readMasterKey(ctx *cli.Context, ui core.UIClientAPI) ([]byte, error) {
 
 // checkFile is a convenience function to check if a file
 // * exists
-// * is mode 0400
+// * is mode 0400 (unix only)
 func checkFile(filename string) error {
 	info, err := os.Stat(filename)
 	if err != nil {
 		return fmt.Errorf("failed stat on %s: %v", filename, err)
 	}
 	// Check the unix permission bits
-	if info.Mode().Perm()&0377 != 0 {
+	// However, on windows, we cannot use the unix perm-bits, see
+	// https://github.com/ethereum/go-ethereum/issues/20123
+	if runtime.GOOS != "windows" && info.Mode().Perm()&0377 != 0 {
 		return fmt.Errorf("file (%v) has insecure file permissions (%v)", filename, info.Mode().String())
 	}
 	return nil
