@@ -145,12 +145,17 @@ func (h *httpServer) start() error {
 
 	// if server is websocket only, return after logging
 	if h.wsAllowed() && !h.rpcAllowed() {
-		h.log.Info("WebSocket enabled", "url", fmt.Sprintf("ws://%v", listener.Addr()))
+		url := fmt.Sprintf("ws://%v", listener.Addr())
+		if h.wsConfig.prefix != "" {
+			url += h.wsConfig.prefix
+		}
+		h.log.Info("WebSocket enabled", "url", url)
 		return nil
 	}
 	// Log http endpoint.
 	h.log.Info("HTTP server started",
 		"endpoint", listener.Addr(),
+		"prefix", h.httpConfig.prefix,
 		"cors", strings.Join(h.httpConfig.CorsAllowedOrigins, ","),
 		"vhosts", strings.Join(h.httpConfig.Vhosts, ","),
 	)
