@@ -157,6 +157,33 @@ func TestClientWebsocketPing(t *testing.T) {
 	}
 }
 
+// This checks that the websocket transport can deal with large messages.
+func TestClientWebsocketLargeMessage(t *testing.T) {
+	var (
+		srv     = NewServer()
+		httpsrv = httptest.NewServer(srv.WebsocketHandler(nil))
+		wsURL   = "ws:" + strings.TrimPrefix(httpsrv.URL, "http:")
+	)
+	defer srv.Stop()
+	defer httpsrv.Close()
+
+	respLength := wsMessageSizeLimit - 50
+	srv.RegisterName("test", largeRespService{respLength})
+
+	c, err := DialWebsocket(context.Background(), wsURL, "")
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	var r string
+	if err := c.Call(&r, "test_largeResp"); err != nil {
+		t.Fatal("call failed:", err)
+	}
+	if len(r) != respLength {
+		t.Fatalf("response has wrong length %d, want %d", len(r), respLength)
+	}
+}
+
 // wsPingTestServer runs a WebSocket server which accepts a single subscription request.
 // When a value arrives on sendPing, the server sends a ping frame, waits for a matching
 // pong and finally delivers a single subscription result.
