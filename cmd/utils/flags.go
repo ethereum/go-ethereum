@@ -533,8 +533,8 @@ var (
 		Value: "",
 	}
 	HTTPPathPrefixFlag = cli.StringFlag{
-		Name:  "http.prefix",
-		Usage: "Specify a path prefix on which to mount the http-rpc server. Specify '/' to allow any path.",
+		Name:  "http.rpcprefix",
+		Usage: "HTTP path path prefix on which JSON-RPC is served. Use '/' to serve on all paths.",
 		Value: "",
 	}
 	GraphQLEnabledFlag = cli.BoolFlag{
@@ -576,8 +576,8 @@ var (
 		Value: "",
 	}
 	WSPathPrefixFlag = cli.StringFlag{
-		Name:  "ws.prefix",
-		Usage: "Specify a path prefix on which to mount the ws-rpc server. Specify '/' to allow any path.",
+		Name:  "ws.rpcprefix",
+		Usage: "HTTP path prefix on which JSON-RPC is served. Use '/' to serve on all paths.",
 		Value: "",
 	}
 	ExecFlag = cli.StringFlag{
