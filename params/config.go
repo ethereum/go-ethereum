@@ -215,7 +215,7 @@ var (
 
 	// YoloV3ChainConfig contains the chain parameters to run a node on the YOLOv3 test network.
 	YoloV3ChainConfig = &ChainConfig{
-		ChainID:             big.NewInt(133519467574834),
+		ChainID:             new(big.Int).SetBytes([]byte("yolov3")),
 		HomesteadBlock:      big.NewInt(0),
 		DAOForkBlock:        nil,
 		DAOForkSupport:      true,

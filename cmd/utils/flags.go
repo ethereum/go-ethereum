@@ -1270,7 +1270,7 @@ func setDataDir(ctx *cli.Context, cfg *node.Config) {
 	case ctx.GlobalBool(GoerliFlag.Name) && cfg.DataDir == node.DefaultDataDir():
 		cfg.DataDir = filepath.Join(node.DefaultDataDir(), "goerli")
 	case ctx.GlobalBool(YoloV3Flag.Name) && cfg.DataDir == node.DefaultDataDir():
-		cfg.DataDir = filepath.Join(node.DefaultDataDir(), "yolo-v2")
+		cfg.DataDir = filepath.Join(node.DefaultDataDir(), "yolo-v3")
 	}
 }
 
