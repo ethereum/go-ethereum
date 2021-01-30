@@ -18,14 +18,9 @@ package types
 
 import (
 	"bytes"
-	"encoding/json"
-	"fmt"
 	"hash"
-	"io/ioutil"
 	"math/big"
-	"os"
 	"reflect"
-	"strings"
 	"testing"
 
 	"github.com/ethereum/go-ethereum/common"
