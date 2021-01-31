@@ -69,7 +69,7 @@ $ abigen --abi token.abi --pkg main --type Token --out token.go
 Where the flags are:
 
  * `--abi`: Mandatory path to the contract ABI to bind to
- * `--pgk`: Mandatory Go package name to place the Go code into
+ * `--pkg`: Mandatory Go package name to place the Go code into
  * `--type`: Optional Go type name to assign to the binding struct
  * `--out`: Optional output path for the generated Go source file (not set = stdout)
 
