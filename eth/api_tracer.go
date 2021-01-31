@@ -793,17 +793,21 @@ func (api *PrivateDebugAPI) traceTx(ctx context.Context, message core.Message, v
 				return nil, err
 			}
 		}
-		// Constuct the JavaScript tracer to execute with
-		if tracer, err = tracers.New(*config.Tracer); err != nil {
-			return nil, err
+		if *config.Tracer == "goCallTracer" {
+			tracer = tracers.NewCallTracer(statedb)
+		} else {
+			// Constuct the JavaScript tracer to execute with
+			if tracer, err = tracers.New(*config.Tracer); err != nil {
+				return nil, err
+			}
+			// Handle timeouts and RPC cancellations
+			deadlineCtx, cancel := context.WithTimeout(context.Background(), timeout)
+			go func() {
+				<-deadlineCtx.Done()
+				tracer.(*tracers.Tracer).Stop(errors.New("execution timeout"))
+			}()
+			defer cancel()
 		}
-		// Handle timeouts and RPC cancellations
-		deadlineCtx, cancel := context.WithTimeout(ctx, timeout)
-		go func() {
-			<-deadlineCtx.Done()
-			tracer.(*tracers.Tracer).Stop(errors.New("execution timeout"))
-		}()
-		defer cancel()
 
 	case config == nil:
 		tracer = vm.NewStructLogger(nil)
@@ -834,6 +838,9 @@ func (api *PrivateDebugAPI) traceTx(ctx context.Context, message core.Message, v
 		}, nil
 
 	case *tracers.Tracer:
+		return tracer.GetResult()
+
+	case tracers.TracerResult:
 		return tracer.GetResult()
 
 	default:
