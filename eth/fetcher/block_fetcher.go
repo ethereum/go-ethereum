@@ -370,6 +370,7 @@ func (f *BlockFetcher) loop() {
 			} else {
 				f.importBlocks(op.origin, op.block)
 			}
+			height = f.chainHeight()
 		}
 		// Wait for an outside event to occur
 		select {
@@ -794,15 +795,35 @@ func (f *BlockFetcher) importBlocks(peer string, block *types.Block) {
 			return
 		}
 		// Quickly validate the header and propagate the block if it passes
+		var announce bool
 		switch err := f.verifyHeader(block.Header()); err {
 		case nil:
 			// All ok, quickly propagate to our peers
 			blockBroadcastOutTimer.UpdateSince(block.ReceivedAt)
 			go f.broadcastBlock(block, true)
-
+			announce = true
 		case consensus.ErrFutureBlock:
-			// Weird future block, don't fail, but neither propagate
-
+			// Future block, don't fail, but neither propagate.
+			//
+			// Import it to the chain (it will internally be scheduled for later),
+			// but by default, don't announce it.
+			// If we do announce it, it will be marked as 'known' by the peer, but since it's
+			// not actually present in our chain, it the actual announcement will be
+			// skipped (see BroadcastBlock in eth/handler.go)
+			//
+			// This has a fairly high risk of happening on Clique-networks, where the
+			// Clique engine is a lot stricter about 'future' blocks -- ethash allows
+			// up to 15s "drift".
+			//
+			// To handle the Clique case better, we can handle some slack here:
+			// wait up to 2 seconds before trying to import + announce the block.
+			announce = false
+			if diff := int64(block.Header().Time) - time.Now().Unix(); diff > 0 && diff <= 2 {
+				// Less than two second, let's wait and then try to import
+				log.Info("Waiting before import + announce", "seconds", diff)
+				time.Sleep(time.Duration(diff) * time.Second)
+				announce = true
+			}
 		default:
 			// Something went very wrong, drop the peer
 			log.Debug("Propagated block verification failed", "peer", peer, "number", block.Number(), "hash", hash, "err", err)
@@ -814,10 +835,11 @@ func (f *BlockFetcher) importBlocks(peer string, block *types.Block) {
 			log.Debug("Propagated block import failed", "peer", peer, "number", block.Number(), "hash", hash, "err", err)
 			return
 		}
-		// If import succeeded, broadcast the block
-		blockAnnounceOutTimer.UpdateSince(block.ReceivedAt)
-		go f.broadcastBlock(block, false)
-
+		if announce {
+			// If import succeeded, broadcast the block
+			blockAnnounceOutTimer.UpdateSince(block.ReceivedAt)
+			go f.broadcastBlock(block, false)
+		}
 		// Invoke the testing hook if needed
 		if f.importedHook != nil {
 			f.importedHook(nil, block)
