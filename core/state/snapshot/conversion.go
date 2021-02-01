@@ -17,6 +17,7 @@
 package snapshot
 
 import (
+	"bytes"
 	"errors"
 	"fmt"
 	"runtime"
@@ -182,99 +183,6 @@ func runReport(stats *generateStats, stop chan bool) {
 	}
 }
 
-// subTask wraps the necessary information of a task derived by generateTrieRoot.
-type subTask struct {
-	account common.Hash
-	code    common.Hash
-	root    common.Hash
-	call    leafCallbackFn
-	db      ethdb.KeyValueWriter
-	stats   *generateStats
-}
-
-// runSubTasks is a helper function of generateTrieRoot. If generateTrieRoot has
-// the callback for leaves, all sub-tasks can be accumulated and executed here.
-// If any sub-task failed, a signal will be throw back very soon.
-//
-// Note we expect the out channel has at least 1 slot available so that sending
-// won't be blocked.
-func runSubTasks(in chan subTask, out chan error, stop chan struct{}) {
-	var (
-		running int
-		failed  bool // Flag to limit the number of reported errors to 1
-		limit   = runtime.NumCPU()
-		done    = make(chan error)
-	)
-	if cap(out) < 1 {
-		panic("require buffered channel")
-	}
-	run := func(task subTask) {
-		root, err := task.call(task.db, task.account, task.code, task.stats)
-		if err != nil {
-			done <- err
-			return
-		}
-		if task.root != root {
-			done <- fmt.Errorf("invalid subroot(%x), want %x, got %x", task.account, task.root, root)
-			return
-		}
-		done <- nil
-	}
-	schedule := func(task subTask) {
-		// Short circuit if failure already occurs.
-		if failed {
-			return
-		}
-		running += 1
-		go run(task)
-
-		// If there are too many runners, block here
-		for running >= limit {
-			failure := <-done
-			running -= 1
-			if failure != nil && !failed {
-				failed = true
-				out <- failure // won't be blocked
-			}
-		}
-	}
-	for {
-		select {
-		case task := <-in:
-			schedule(task)
-		case failure := <-done:
-			running -= 1
-			if failure != nil && !failed {
-				failed = true
-				out <- failure // won't be blocked
-			}
-		case <-stop:
-			// Drain all cached tasks first
-		drain:
-			for {
-				select {
-				case task := <-in:
-					schedule(task)
-				default:
-					break drain
-				}
-			}
-			for running > 0 {
-				failure := <-done
-				running -= 1
-				if failure != nil && !failed {
-					failed = true
-					out <- failure // won't be blocked
-				}
-			}
-			if !failed {
-				out <- nil // won't be blocked
-			}
-			return
-		}
-	}
-}
-
 // generateTrieRoot generates the trie hash based on the snapshot iterator.
 // It can be used for generating account trie, storage trie or even the
 // whole state which connects the accounts and the corresponding storages.
@@ -299,46 +207,28 @@ func generateTrieRoot(db ethdb.KeyValueWriter, it Iterator, account common.Hash,
 			runReport(stats, stoplog)
 		}()
 	}
-	// If there is a callback specified, spin up
-	// a go-routine for processing the sub-tasks
-	// in the background.
-	var (
-		// The channel size here is quite arbitrary. We don't
-		// want to block the main thread for iterating the state
-		// trie, but also need to prevent OOM.
-		subIn   = make(chan subTask, 1024)
-		subOut  = make(chan error, 1)
-		subStop = make(chan struct{})
-	)
-	if leafCallback != nil {
-		wg.Add(1)
-		go func() {
-			defer wg.Done()
-			runSubTasks(subIn, subOut, subStop)
-		}()
+	// Create a semaphore to assign tasks and collect results through. We'll pre-
+	// fill it with nils, thus using the same channel for both limiting concurrent
+	// processing and gathering results.
+	threads := runtime.NumCPU()
+	results := make(chan error, threads)
+	for i := 0; i < threads; i++ {
+		results <- nil // fill the semaphore
 	}
 	// stop is a helper function to shutdown the background threads
-	// and return the re-generated trie hash. There are three scenarios
-	// for calling this function:
-	// (a) the failure already occurs when processing the sub-task(e.g.
-	//     the storage root is not matched).
-	// (b) the failure already occurs when iterating the state trie.
-	// (c) there is no failure yet.
-	// In case (a) we won't fetch the sub-failure again.
-	stop := func(success bool, subFailed bool) (common.Hash, bool) {
+	// and return the re-generated trie hash.
+	stop := func(fail error) (common.Hash, error) {
 		close(in)
-		if leafCallback != nil {
-			close(subStop)
-		}
 		result := <-out
-
-		if leafCallback != nil && !subFailed {
-			subErr := <-subOut
-			success = success && subErr == nil
+		for i := 0; i < threads; i++ {
+			if err := <-results; err != nil && fail == nil {
+				fail = err
+			}
 		}
-		stoplog <- success
+		stoplog <- fail == nil
+
 		wg.Wait()
-		return result, success
+		return result, fail
 	}
 	var (
 		logged    = time.Now()
@@ -356,36 +246,35 @@ func generateTrieRoot(db ethdb.KeyValueWriter, it Iterator, account common.Hash,
 			if leafCallback == nil {
 				fullData, err = FullAccountRLP(it.(AccountIterator).Account())
 				if err != nil {
-					stop(false, false)
-					return common.Hash{}, err
+					return stop(err)
 				}
 			} else {
-				// Check if there is any sub failure occurs
-				select {
-				case err := <-subOut:
-					if err != nil {
-						stop(false, true)
-						return common.Hash{}, err
-					}
-				default:
+				// Wait until the semaphore allows us to continue, aborting if
+				// a sub-task failed
+				if err := <-results; err != nil {
+					results <- nil // stop will drain the results, add a noop back for this error we just consumed
+					return stop(err)
 				}
+				// Fetch the next account and process it concurrently
 				account, err := FullAccount(it.(AccountIterator).Account())
 				if err != nil {
-					stop(false, false)
-					return common.Hash{}, err
+					return stop(err)
 				}
-				subIn <- subTask{
-					account: it.Hash(),
-					code:    common.BytesToHash(account.CodeHash),
-					root:    common.BytesToHash(account.Root),
-					call:    leafCallback,
-					db:      db,
-					stats:   stats,
-				}
+				go func(hash common.Hash) {
+					subroot, err := leafCallback(db, hash, common.BytesToHash(account.CodeHash), stats)
+					if err != nil {
+						results <- err
+						return
+					}
+					if !bytes.Equal(account.Root, subroot.Bytes()) {
+						results <- fmt.Errorf("invalid subroot(%x), want %x, got %x", it.Hash(), account.Root, subroot)
+						return
+					}
+					results <- nil
+				}(it.Hash())
 				fullData, err = rlp.EncodeToBytes(account)
 				if err != nil {
-					stop(false, false)
-					return common.Hash{}, err
+					return stop(err)
 				}
 			}
 			leaf = trieKV{it.Hash(), fullData}
@@ -414,11 +303,7 @@ func generateTrieRoot(db ethdb.KeyValueWriter, it Iterator, account common.Hash,
 			stats.progress(0, processed, account, last)
 		}
 	}
-	result, success := stop(true, false)
-	if !success {
-		return common.Hash{}, errors.New("Failed to generate root")
-	}
-	return result, nil
+	return stop(nil)
 }
 
 <<<<<<< HEAD
