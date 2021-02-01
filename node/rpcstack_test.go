@@ -232,25 +232,13 @@ func Test_checkPath(t *testing.T) {
 func createAndStartServer(t *testing.T, conf *httpConfig, ws bool, wsConf *wsConfig) *httpServer {
 	t.Helper()
 
-	// set http path prefix
-	if len(conf.prefix) >= 1 && strings.Split(conf.prefix, "")[0] != "/" {
-		conf.prefix = "/" + conf.prefix
-	}
-	// set ws prefix
-	if len(wsConf.prefix) >= 1 && strings.Split(wsConf.prefix, "")[0] != "/" {
-		wsConf.prefix = "/" + wsConf.prefix
-	}
-
 	srv := newHTTPServer(testlog.Logger(t, log.LvlDebug), rpc.DefaultHTTPTimeouts)
-
 	assert.NoError(t, srv.enableRPC(nil, *conf))
-
 	if ws {
 		assert.NoError(t, srv.enableWS(nil, *wsConf))
 	}
 	assert.NoError(t, srv.setListenAddr("localhost", 0))
 	assert.NoError(t, srv.start())
-
 	return srv
 }
 
