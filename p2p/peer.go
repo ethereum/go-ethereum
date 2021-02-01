@@ -158,11 +158,16 @@ func (p *Peer) Caps() []Cap {
 	return p.rw.caps
 }
 
-// SupportsCap returns true if the peer supports the given protocol/version
-func (p *Peer) SupportsCap(protocol string, version uint) bool {
+// SupportsCap returns true if the peer supports any of the enumerated versions
+// of a specific protocol.
+func (p *Peer) SupportsCap(protocol string, versions []uint) bool {
 	for _, cap := range p.rw.caps {
 		if cap.Name == protocol {
-			return version <= cap.Version
+			for _, ver := range versions {
+				if cap.Version == ver {
+					return true
+				}
+			}
 		}
 	}
 	return false
