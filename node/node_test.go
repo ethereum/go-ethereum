@@ -557,9 +557,13 @@ func TestNodeRPCPrefix(t *testing.T) {
 
 func (test rpcPrefixTest) check(t *testing.T, node *Node) {
 	t.Helper()
-
 	httpBase := "http://" + node.http.listenAddr()
 	wsBase := "ws://" + node.http.listenAddr()
+
+	if node.WSEndpoint() != wsBase+test.wsPrefix {
+		t.Errorf("Error: node has wrong WSEndpoint %q", node.WSEndpoint())
+	}
+
 	for _, path := range test.wantHTTP {
 		resp := rpcRequest(t, httpBase+path)
 		if resp.StatusCode != 200 {
@@ -583,6 +587,7 @@ func (test rpcPrefixTest) check(t *testing.T, node *Node) {
 		if err == nil {
 			t.Errorf("Error: %s: WebSocket connection succeeded for path in wantNoWS", path)
 		}
+
 	}
 }
 
