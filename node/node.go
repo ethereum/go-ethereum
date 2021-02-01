@@ -135,6 +135,14 @@ func New(conf *Config) (*Node, error) {
 		node.server.Config.NodeDatabase = node.config.NodeDB()
 	}
 
+	// Check HTTP/WS prefixes are valid.
+	if !prefixOK(conf.HTTPPathPrefix) {
+		return nil, fmt.Errorf(`invalid HTTP path prefix %q without leading "/"`, conf.HTTPPathPrefix)
+	}
+	if !prefixOK(conf.WSPathPrefix) {
+		return nil, fmt.Errorf(`invalid WebSocket path prefix %q without leading "/"`, conf.WSPathPrefix)
+	}
+
 	// Configure RPC servers.
 	node.http = newHTTPServer(node.log, conf.HTTPTimeouts)
 	node.ws = newHTTPServer(node.log, rpc.DefaultHTTPTimeouts)
@@ -342,14 +350,11 @@ func (n *Node) startRPC() error {
 
 	// Configure HTTP.
 	if n.config.HTTPHost != "" {
-		// make sure the prefix on which to mount the handler is acceptable
-		prefix := prettyPath(n.config.HTTPPathPrefix)
-
 		config := httpConfig{
 			CorsAllowedOrigins: n.config.HTTPCors,
 			Vhosts:             n.config.HTTPVirtualHosts,
 			Modules:            n.config.HTTPModules,
-			prefix:             prefix,
+			prefix:             n.config.HTTPPathPrefix,
 		}
 		if err := n.http.setListenAddr(n.config.HTTPHost, n.config.HTTPPort); err != nil {
 			return err
@@ -362,13 +367,10 @@ func (n *Node) startRPC() error {
 	// Configure WebSocket.
 	if n.config.WSHost != "" {
 		server := n.wsServerForPort(n.config.WSPort)
-		// make sure the prefix on which to mount the handler is acceptable
-		prefix := prettyPath(n.config.WSPathPrefix)
-
 		config := wsConfig{
 			Modules: n.config.WSModules,
 			Origins: n.config.WSOrigins,
-			prefix:  prefix,
+			prefix:  n.config.WSPathPrefix,
 		}
 		if err := server.setListenAddr(n.config.WSHost, n.config.WSPort); err != nil {
 			return err

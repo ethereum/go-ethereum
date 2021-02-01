@@ -217,12 +217,9 @@ func checkPath(r *http.Request, path string) bool {
 	return len(r.URL.Path) >= len(path) && r.URL.Path[:len(path)] == path
 }
 
-// prettyPath returns an acceptable path prefix on which to mount an rpc handler.
-func prettyPath(path string) string {
-	if path != "" && strings.Split(path, "")[0] != "/" {
-		return "/" + path
-	}
-	return path
+// prefixOK checks if the given path is empty or starts with /.
+func prefixOK(path string) bool {
+	return path == "" || path[0] == '/'
 }
 
 // stop shuts down the HTTP server.

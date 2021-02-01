@@ -225,38 +225,6 @@ func Test_checkPath(t *testing.T) {
 	}
 }
 
-// Test_prettyPath makes sure that an acceptable path prefix is returned,
-// if one has been specified.
-func Test_prettyPath(t *testing.T) {
-	tests := []struct {
-		path     string
-		expected string
-	}{
-		{
-			path:     "test",
-			expected: "/test",
-		},
-		{
-			path:     "/",
-			expected: "/",
-		},
-		{
-			path:     "/test",
-			expected: "/test",
-		},
-		{
-			path:     "",
-			expected: "",
-		},
-	}
-
-	for i, tt := range tests {
-		t.Run(strconv.Itoa(i), func(t *testing.T) {
-			assert.Equal(t, tt.expected, prettyPath(tt.path))
-		})
-	}
-}
-
 // Test_queryString tests to make sure query strings are ignored by checkPath
 func Test_queryString(t *testing.T) {
 	tests := []struct {
