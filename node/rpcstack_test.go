@@ -263,10 +263,10 @@ func rpcRequest(t *testing.T, url string, extraHeaders ...string) *http.Response
 	t.Helper()
 
 	// Create the request.
-	body := bytes.NewReader([]byte(`{"jsonrpc":"2.0","id":1,method":"rpc_modules"}`))
+	body := bytes.NewReader([]byte(`{"jsonrpc":"2.0","id":1,"method":"rpc_modules","params":[]}`))
 	req, err := http.NewRequest("POST", url, body)
 	if err != nil {
-		t.Fatal("could not create http request: ", err)
+		t.Fatal("could not create http request:", err)
 	}
 	req.Header.Set("content-type", "application/json")
 
