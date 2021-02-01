@@ -968,8 +968,6 @@ func setHTTP(ctx *cli.Context, cfg *node.Config) {
 
 	if ctx.GlobalIsSet(HTTPPathPrefixFlag.Name) {
 		cfg.HTTPPathPrefix = ctx.GlobalString(HTTPPathPrefixFlag.Name)
-	} else {
-		cfg.HTTPPathPrefix = HTTPPathPrefixFlag.Value
 	}
 }
 
@@ -1023,8 +1021,6 @@ func setWS(ctx *cli.Context, cfg *node.Config) {
 
 	if ctx.GlobalIsSet(WSPathPrefixFlag.Name) {
 		cfg.WSPathPrefix = ctx.GlobalString(WSPathPrefixFlag.Name)
-	} else {
-		cfg.WSPathPrefix = WSPathPrefixFlag.Value
 	}
 }
 
