@@ -260,7 +260,7 @@ When using the console:
 or via RPC:
 ```
 # Request
-$ curl -X POST --data '{"jsonrpc":"2.0","method":"eth_accounts","params":[],"id":1} http://127.0.0.1:8545'
+$ curl -X POST --data '{"jsonrpc":"2.0","method":"eth_accounts","params":[],"id":1}' -H 'Content-type: application/json' http://127.0.0.1:8545
 
 # Result
 {
