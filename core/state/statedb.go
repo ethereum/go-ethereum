@@ -1043,3 +1043,20 @@ func (s *StateDB) AddressInAccessList(addr common.Address) bool {
 func (s *StateDB) SlotInAccessList(addr common.Address, slot common.Hash) (addressPresent bool, slotPresent bool) {
 	return s.accessList.Contains(addr, slot)
 }
+
+func (s *StateDB) AccessList() *types.AccessList {
+	list := s.accessList.Copy()
+	acl := make([]types.AccessTuple, 0, len(list.addresses))
+	for addr, idx := range list.addresses {
+		var tuple types.AccessTuple
+		tuple.Address = &addr
+		keys := make([]*common.Hash, 0, len(list.slots[idx]))
+		for key, _ := range list.slots[idx] {
+			tuple.StorageKeys = append(tuple.StorageKeys, &key)
+		}
+		tuple.StorageKeys = keys
+		acl = append(acl, tuple)
+	}
+	cast := types.AccessList(acl)
+	return &cast
+}
