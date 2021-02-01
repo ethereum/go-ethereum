@@ -18,6 +18,7 @@ package node
 
 import (
 	"bytes"
+	"fmt"
 	"net/http"
 	"net/url"
 	"strconv"
@@ -35,11 +36,12 @@ import (
 func TestCorsHandler(t *testing.T) {
 	srv := createAndStartServer(t, &httpConfig{CorsAllowedOrigins: []string{"test", "test.com"}}, false, &wsConfig{})
 	defer srv.stop()
+	url := "http://" + srv.listenAddr()
 
-	resp := testRequest(t, "origin", "test.com", "", srv, "")
+	resp := rpcRequest(t, url, "origin", "test.com")
 	assert.Equal(t, "test.com", resp.Header.Get("Access-Control-Allow-Origin"))
 
-	resp2 := testRequest(t, "origin", "bad", "", srv, "")
+	resp2 := rpcRequest(t, url, "origin", "bad")
 	assert.Equal(t, "", resp2.Header.Get("Access-Control-Allow-Origin"))
 }
 
@@ -47,11 +49,12 @@ func TestCorsHandler(t *testing.T) {
 func TestVhosts(t *testing.T) {
 	srv := createAndStartServer(t, &httpConfig{Vhosts: []string{"test"}}, false, &wsConfig{})
 	defer srv.stop()
+	url := "http://" + srv.listenAddr()
 
-	resp := testRequest(t, "", "", "test", srv, "")
+	resp := rpcRequest(t, url, "host", "test")
 	assert.Equal(t, resp.StatusCode, http.StatusOK)
 
-	resp2 := testRequest(t, "", "", "bad", srv, "")
+	resp2 := rpcRequest(t, url, "host", "bad")
 	assert.Equal(t, resp2.StatusCode, http.StatusForbidden)
 }
 
@@ -141,13 +144,14 @@ func TestWebsocketOrigins(t *testing.T) {
 	}
 	for _, tc := range tests {
 		srv := createAndStartServer(t, &httpConfig{}, true, &wsConfig{Origins: splitAndTrim(tc.spec)})
+		url := fmt.Sprintf("ws://%v", srv.listenAddr())
 		for _, origin := range tc.expOk {
-			if err := attemptWebsocketConnectionFromOrigin(t, srv, origin); err != nil {
+			if err := wsRequest(t, url, origin); err != nil {
 				t.Errorf("spec '%v', origin '%v': expected ok, got %v", tc.spec, origin, err)
 			}
 		}
 		for _, origin := range tc.expFail {
-			if err := attemptWebsocketConnectionFromOrigin(t, srv, origin); err == nil {
+			if err := wsRequest(t, url, origin); err == nil {
 				t.Errorf("spec '%v', origin '%v': expected not to allow,  got ok", tc.spec, origin)
 			}
 		}
@@ -225,202 +229,6 @@ func Test_checkPath(t *testing.T) {
 	}
 }
 
-// Test_queryString tests to make sure query strings are ignored by checkPath
-func Test_queryString(t *testing.T) {
-	tests := []struct {
-		rawPath  string
-		prefix   string
-		expected bool
-	}{
-		{
-			rawPath:  "/test?test=test",
-			prefix:   "/test",
-			expected: true,
-		},
-		{
-			rawPath:  "/testing?test=test",
-			prefix:   "/test",
-			expected: true,
-		},
-		{
-			rawPath:  "/testing?test=test",
-			prefix:   "/",
-			expected: true,
-		},
-		{
-			rawPath:  "/?blah=blah",
-			prefix:   "/test",
-			expected: false,
-		},
-		{
-			rawPath:  "/?blah=blah",
-			prefix:   "",
-			expected: true,
-		},
-		{
-			rawPath:  "/?blah=blah",
-			prefix:   "/",
-			expected: true,
-		},
-		{
-			rawPath:  "/fail?blah=blah",
-			prefix:   "",
-			expected: false,
-		},
-	}
-
-	for i, tt := range tests {
-		t.Run(strconv.Itoa(i), func(t *testing.T) {
-			// create server
-			srv := createAndStartServer(t, &httpConfig{prefix: tt.prefix}, true, &wsConfig{prefix: tt.prefix})
-
-			resp := testRequest(t, "", "", "", srv, tt.rawPath)
-			if tt.expected {
-				assert.Equal(t, http.StatusOK, resp.StatusCode)
-			} else {
-				assert.Equal(t, http.StatusNotFound, resp.StatusCode)
-			}
-
-			srv.stop()
-		})
-	}
-}
-
-// TestRPCCall_CustomPath tests whether an RPC call on a custom path prefix
-// will be successfully completed.
-func TestRPCCall_CustomPath(t *testing.T) {
-	tests := []struct {
-		httpConf  httpConfig
-		wsConf    wsConfig
-		wsEnabled bool
-	}{
-		{
-			httpConf: httpConfig{
-				prefix: "/",
-			},
-			wsConf: wsConfig{
-				prefix: "/test",
-			},
-			wsEnabled: false,
-		},
-		{
-			httpConf: httpConfig{
-				prefix: "/test",
-			},
-			wsConf: wsConfig{
-				prefix: "/test",
-			},
-			wsEnabled: false,
-		},
-		{
-			httpConf: httpConfig{
-				prefix: "test",
-			},
-			wsConf: wsConfig{
-				prefix: "/test",
-			},
-			wsEnabled: true,
-		},
-		{
-			httpConf: httpConfig{
-				prefix: "/testing/test/123",
-			},
-			wsConf: wsConfig{
-				prefix: "/test",
-			},
-			wsEnabled: true,
-		},
-		{
-			httpConf: httpConfig{
-				prefix: "/",
-			},
-			wsConf: wsConfig{
-				prefix: "/test",
-			},
-			wsEnabled: true,
-		},
-		{
-			httpConf: httpConfig{
-				prefix: "",
-			},
-			wsConf: wsConfig{
-				prefix: "",
-			},
-			wsEnabled: true,
-		},
-		{
-			httpConf: httpConfig{
-				prefix: "",
-			},
-			wsConf: wsConfig{
-				prefix: "",
-			},
-			wsEnabled: false,
-		},
-		{
-			httpConf: httpConfig{
-				prefix: "",
-			},
-			wsConf: wsConfig{
-				prefix: "",
-			},
-			wsEnabled: true,
-		},
-	}
-
-	for i, test := range tests {
-		t.Run(strconv.Itoa(i), func(t *testing.T) {
-			srv := createAndStartServer(t, &test.httpConf, test.wsEnabled, &test.wsConf)
-
-			resp := testRequest(t, "", "", "", srv, test.httpConf.prefix)
-			assert.True(t, resp.StatusCode != http.StatusNotFound)
-
-			// if / prefix specified, make sure to serve on all paths
-			if test.httpConf.prefix == "/" {
-				resp = testRequest(t, "", "", "", srv, "/AnyPath=ThisShouldWork?Test")
-				assert.True(t, resp.StatusCode != http.StatusNotFound)
-
-				resp = testRequest(t, "", "", "", srv, "/")
-				assert.True(t, resp.StatusCode != http.StatusNotFound)
-			} else {
-				resp = testRequest(t, "", "", "", srv, "/fail")
-				assert.True(t, resp.StatusCode == http.StatusNotFound)
-			}
-
-			if test.wsEnabled {
-				dialer := websocket.DefaultDialer
-				// make sure ws dial is successful
-				_, _, err := dialer.Dial("ws://"+srv.listenAddr()+test.wsConf.prefix, http.Header{
-					"Content-type":          []string{"application/json"},
-					"Sec-WebSocket-Version": []string{"13"},
-				})
-				assert.NoError(t, err)
-				// if all paths specified, make sure to serve on all paths
-				if test.wsConf.prefix == "/" {
-					_, _, err = dialer.Dial("ws://"+srv.listenAddr()+"/AnyPath=ThisShouldWork?Test", http.Header{
-						"Content-type":          []string{"application/json"},
-						"Sec-WebSocket-Version": []string{"13"},
-					})
-					assert.NoError(t, err)
-
-					_, _, err = dialer.Dial("ws://"+srv.listenAddr()+"/", http.Header{
-						"Content-type":          []string{"application/json"},
-						"Sec-WebSocket-Version": []string{"13"},
-					})
-					assert.NoError(t, err)
-				} else {
-					// make sure ws dial fails
-					_, _, err = dialer.Dial("ws://"+srv.listenAddr()+"/fail", http.Header{
-						"Content-type":          []string{"application/json"},
-						"Sec-WebSocket-Version": []string{"13"},
-					})
-					assert.Error(t, err)
-				}
-			}
-		})
-	}
-}
-
 func createAndStartServer(t *testing.T, conf *httpConfig, ws bool, wsConf *wsConfig) *httpServer {
 	t.Helper()
 
@@ -446,36 +254,50 @@ func createAndStartServer(t *testing.T, conf *httpConfig, ws bool, wsConf *wsCon
 	return srv
 }
 
-func attemptWebsocketConnectionFromOrigin(t *testing.T, srv *httpServer, browserOrigin string) error {
+// wsRequest attempts to open a WebSocket connection to the given URL.
+func wsRequest(t *testing.T, url, browserOrigin string) error {
 	t.Helper()
-	dialer := websocket.DefaultDialer
-	_, _, err := dialer.Dial("ws://"+srv.listenAddr(), http.Header{
-		"Content-type":          []string{"application/json"},
-		"Sec-WebSocket-Version": []string{"13"},
-		"Origin":                []string{browserOrigin},
-	})
+	t.Logf("checking WebSocket on %s (origin %q)", url, browserOrigin)
+
+	headers := make(http.Header)
+	if browserOrigin != "" {
+		headers.Set("Origin", browserOrigin)
+	}
+	conn, _, err := websocket.DefaultDialer.Dial(url, headers)
+	if conn != nil {
+		conn.Close()
+	}
 	return err
 }
 
-func testRequest(t *testing.T, key, value, host string, srv *httpServer, path string) *http.Response {
+// rpcRequest performs a JSON-RPC request to the given URL.
+func rpcRequest(t *testing.T, url string, extraHeaders ...string) *http.Response {
 	t.Helper()
 
+	// Create the request.
 	body := bytes.NewReader([]byte(`{"jsonrpc":"2.0","id":1,method":"rpc_modules"}`))
-	req, err := http.NewRequest("POST", "http://"+srv.listenAddr()+path, body)
+	req, err := http.NewRequest("POST", url, body)
 	if err != nil {
 		t.Fatal("could not create http request: ", err)
 	}
-
 	req.Header.Set("content-type", "application/json")
-	if key != "" && value != "" {
-		req.Header.Set(key, value)
+
+	// Apply extra headers.
+	if len(extraHeaders)%2 != 0 {
+		panic("odd extraHeaders length")
 	}
-	if host != "" {
-		req.Host = host
+	for i := 0; i < len(extraHeaders); i += 2 {
+		key, value := extraHeaders[i], extraHeaders[i+1]
+		if strings.ToLower(key) == "host" {
+			req.Host = value
+		} else {
+			req.Header.Set(key, value)
+		}
 	}
 
-	client := http.DefaultClient
-	resp, err := client.Do(req)
+	// Perform the request.
+	t.Logf("checking RPC/HTTP on %s %v", url, extraHeaders)
+	resp, err := http.DefaultClient.Do(req)
 	if err != nil {
 		t.Fatal(err)
 	}

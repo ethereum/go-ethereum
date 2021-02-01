@@ -64,6 +64,7 @@ type httpServer struct {
 	listener net.Listener // non-nil when server is running
 
 	// HTTP RPC handler things.
+
 	httpConfig  httpConfig
 	httpHandler atomic.Value // *rpcHandler
 
