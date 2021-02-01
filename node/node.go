@@ -136,11 +136,11 @@ func New(conf *Config) (*Node, error) {
 	}
 
 	// Check HTTP/WS prefixes are valid.
-	if !prefixOK(conf.HTTPPathPrefix) {
-		return nil, fmt.Errorf(`invalid HTTP path prefix %q without leading "/"`, conf.HTTPPathPrefix)
+	if err := validatePrefix("HTTP", conf.HTTPPathPrefix); err != nil {
+		return nil, err
 	}
-	if !prefixOK(conf.WSPathPrefix) {
-		return nil, fmt.Errorf(`invalid WebSocket path prefix %q without leading "/"`, conf.WSPathPrefix)
+	if err := validatePrefix("WebSocket", conf.WSPathPrefix); err != nil {
+		return nil, err
 	}
 
 	// Configure RPC servers.
