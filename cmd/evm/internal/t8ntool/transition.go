@@ -26,6 +26,7 @@ import (
 	"path"
 
 	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/ethereum/go-ethereum/core"
 	"github.com/ethereum/go-ethereum/core/state"
 	"github.com/ethereum/go-ethereum/core/types"
@@ -134,10 +135,9 @@ func Main(ctx *cli.Context) error {
 		txs      types.Transactions // txs to apply
 		allocStr = ctx.String(InputAllocFlag.Name)
 
-		envStr     = ctx.String(InputEnvFlag.Name)
-		txStr      = ctx.String(InputTxsFlag.Name)
-		bodyOutStr = ctx.String(OutputBodyFlag.Name)
-		inputData  = &input{}
+		envStr    = ctx.String(InputEnvFlag.Name)
+		txStr     = ctx.String(InputTxsFlag.Name)
+		inputData = &input{}
 	)
 	// Figure out the prestate alloc
 	if allocStr == stdinSelector || envStr == stdinSelector || txStr == stdinSelector {
@@ -216,21 +216,11 @@ func Main(ctx *cli.Context) error {
 	if err != nil {
 		return err
 	}
-	if len(bodyOutStr) != 0 {
-		// Dump out the "block body" : the transactions in RLP-form
-		txFile, err := os.Create(bodyOutStr)
-		if err != nil {
-			return NewError(ErrorIO, fmt.Errorf("failed writing body file (txs rlp): %v", err))
-		}
-		rlp.Encode(txFile, txs)
-		txFile.Close()
-		log.Info("Wrote body file", "file", bodyOutStr, "txs", len(txs))
-	}
-
+	body, _ := rlp.EncodeToBytes(txs)
 	// Dump the excution result
 	collector := make(Alloc)
 	state.DumpToCollector(collector, false, false, false, nil, -1)
-	return dispatchOutput(ctx, baseDir, result, collector)
+	return dispatchOutput(ctx, baseDir, result, collector, body)
 
 }
 
@@ -337,7 +327,7 @@ func saveFile(baseDir, filename string, data interface{}) error {
 
 // dispatchOutput writes the output data to either stderr or stdout, or to the specified
 // files
-func dispatchOutput(ctx *cli.Context, baseDir string, result *ExecutionResult, alloc Alloc) error {
+func dispatchOutput(ctx *cli.Context, baseDir string, result *ExecutionResult, alloc Alloc, body hexutil.Bytes) error {
 	stdOutObject := make(map[string]interface{})
 	stdErrObject := make(map[string]interface{})
 	dispatch := func(baseDir, fName, name string, obj interface{}) error {
@@ -346,6 +336,8 @@ func dispatchOutput(ctx *cli.Context, baseDir string, result *ExecutionResult, a
 			stdOutObject[name] = obj
 		case "stderr":
 			stdErrObject[name] = obj
+		case "":
+			// don't save
 		default: // save to file
 			if err := saveFile(baseDir, fName, obj); err != nil {
 				return err
@@ -357,6 +349,9 @@ func dispatchOutput(ctx *cli.Context, baseDir string, result *ExecutionResult, a
 		return err
 	}
 	if err := dispatch(baseDir, ctx.String(OutputResultFlag.Name), "result", result); err != nil {
+		return err
+	}
+	if err := dispatch(baseDir, ctx.String(OutputBodyFlag.Name), "body", body); err != nil {
 		return err
 	}
 	if len(stdOutObject) > 0 {
