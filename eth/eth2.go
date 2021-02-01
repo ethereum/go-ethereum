@@ -293,7 +293,8 @@ func (api *Eth2API) InsertBlock(params InsertBlockParams) (bool, error) {
 	return (err == nil), err
 }
 
-func (api *Eth2API) AddBlockTxs(block *types.Block) error {
+// Used in tests to add a the list of transactions from a block to the tx pool.
+func (api *Eth2API) addBlockTxs(block *types.Block) error {
 	for _, tx := range block.Transactions() {
 		api.eth.txPool.AddLocal(tx)
 	}

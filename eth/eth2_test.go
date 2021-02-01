@@ -142,7 +142,7 @@ func TestEth2ProduceBlockWithAnotherBlocksTxs(t *testing.T) {
 	api := NewEth2API(ethservice)
 
 	// Put the 10th block's tx in the pool and produce a new block
-	api.AddBlockTxs(blocks[9])
+	api.addBlockTxs(blocks[9])
 	blockParams := ProduceBlockParams{
 		ParentHash: blocks[9].ParentHash(),
 		Slot:       blocks[9].NumberU64(),
