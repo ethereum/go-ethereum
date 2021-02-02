@@ -99,10 +99,20 @@ type stTransaction struct {
 	GasPrice   *big.Int `json:"gasPrice"`
 	Nonce      uint64   `json:"nonce"`
 	To         string   `json:"to"`
-	Data       []string `json:"data"`
+	Data       stData   `json:"data"`
 	GasLimit   []uint64 `json:"gasLimit"`
 	Value      []string `json:"value"`
 	PrivateKey []byte   `json:"secretKey"`
+}
+
+type stData struct {
+	Data       []string       `json:"data"`
+	AccessList []stAccessList `json:"accessList"`
+}
+
+type stAccessList struct {
+	Address     string   `json:"address"`
+	StorageKeys []string `json:"storageKeys"`
 }
 
 type stTransactionMarshaling struct {
