@@ -20,12 +20,10 @@ import (
 	"errors"
 	"math/big"
 	"sync"
-	"time"
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/eth/protocols/eth"
 	"github.com/ethereum/go-ethereum/eth/protocols/snap"
-	"github.com/ethereum/go-ethereum/event"
 	"github.com/ethereum/go-ethereum/p2p"
 )
 
@@ -42,22 +40,19 @@ var (
 	// a peer set, but no peer with the given id exists.
 	errPeerNotRegistered = errors.New("peer not registered")
 
-	// ethConnectTimeout is the `snap` timeout for `eth` to connect too.
-	ethConnectTimeout = 3 * time.Second
+	// errSnapWithoutEth is returned if a peer attempts to connect only on the
+	// snap protocol without advertizing the eth main protocol.
+	errSnapWithoutEth = errors.New("peer connected on snap without compatible eth support")
 )
 
 // peerSet represents the collection of active peers currently participating in
-// the `eth` or `snap` protocols.
+// the `eth` protocol, with or without the `snap` extension.
 type peerSet struct {
-	ethPeers  map[string]*ethPeer  // Peers connected on the `eth` protocol
-	snapPeers map[string]*snapPeer // Peers connected on the `snap` protocol
+	peers     map[string]*ethPeer // Peers connected on the `eth` protocol
+	snapPeers int                 // Number of `snap` compatible peers for connection prioritization
 
-	ethJoinFeed  event.Feed // Events when an `eth` peer successfully joins
-	ethDropFeed  event.Feed // Events when an `eth` peer gets dropped
-	snapJoinFeed event.Feed // Events when a `snap` peer joins on both `eth` and `snap`
-	snapDropFeed event.Feed // Events when a `snap` peer gets dropped (only if fully joined)
-
-	scope event.SubscriptionScope // Subscription group to unsubscribe everyone at once
+	snapWait map[string]chan *snap.Peer // Peers connected on `eth` waiting for their snap extension
+	snapPend map[string]*snap.Peer      // Peers connected on the `snap` protocol, but not yet on `eth`
 
 	lock   sync.RWMutex
 	closed bool
@@ -66,176 +61,134 @@ type peerSet struct {
 // newPeerSet creates a new peer set to track the active participants.
 func newPeerSet() *peerSet {
 	return &peerSet{
-		ethPeers:  make(map[string]*ethPeer),
-		snapPeers: make(map[string]*snapPeer),
+		peers:    make(map[string]*ethPeer),
+		snapWait: make(map[string]chan *snap.Peer),
+		snapPend: make(map[string]*snap.Peer),
 	}
 }
 
-// subscribeEthJoin registers a subscription for peers joining (and completing
-// the handshake) on the `eth` protocol.
-func (ps *peerSet) subscribeEthJoin(ch chan<- *eth.Peer) event.Subscription {
-	return ps.scope.Track(ps.ethJoinFeed.Subscribe(ch))
-}
-
-// subscribeEthDrop registers a subscription for peers being dropped from the
-// `eth` protocol.
-func (ps *peerSet) subscribeEthDrop(ch chan<- *eth.Peer) event.Subscription {
-	return ps.scope.Track(ps.ethDropFeed.Subscribe(ch))
-}
-
-// subscribeSnapJoin registers a subscription for peers joining (and completing
-// the `eth` join) on the `snap` protocol.
-func (ps *peerSet) subscribeSnapJoin(ch chan<- *snap.Peer) event.Subscription {
-	return ps.scope.Track(ps.snapJoinFeed.Subscribe(ch))
-}
-
-// subscribeSnapDrop registers a subscription for peers being dropped from the
-// `snap` protocol.
-func (ps *peerSet) subscribeSnapDrop(ch chan<- *snap.Peer) event.Subscription {
-	return ps.scope.Track(ps.snapDropFeed.Subscribe(ch))
-}
-
-// registerEthPeer injects a new `eth` peer into the working set, or returns an
-// error if the peer is already known. The peer is announced on the `eth` join
-// feed and if it completes a pending `snap` peer, also on that feed.
-func (ps *peerSet) registerEthPeer(peer *eth.Peer) error {
+// registerSnapExtension unblocks an already connected `eth` peer waiting for its
+// `snap` extension, or if no such peer exists, tracks the extension for the time
+// being until the `eth` main protocol starts looking for it.
+func (ps *peerSet) registerSnapExtension(peer *snap.Peer) error {
+	// Reject the peer if it advertises `snap` without `eth` as `snap` is only a
+	// satellite protocol meaningful with the chain selection of `eth`
+	if !peer.SupportsCap(eth.ProtocolName, eth.ProtocolVersions) {
+		return errSnapWithoutEth
+	}
+	// Ensure nobody can double connect
 	ps.lock.Lock()
-	if ps.closed {
+	defer ps.lock.Unlock()
+
+	id := peer.ID()
+	if _, ok := ps.peers[id]; ok {
+		return errPeerAlreadyRegistered // avoid connections with the same id as existing ones
+	}
+	if _, ok := ps.snapPend[id]; ok {
+		return errPeerAlreadyRegistered // avoid connections with the same id as pending ones
+	}
+	// Inject the peer into an `eth` counterpart is available, otherwise save for later
+	if wait, ok := ps.snapWait[id]; ok {
+		delete(ps.snapWait, id)
+		wait <- peer
+		return nil
+	}
+	ps.snapPend[id] = peer
+	return nil
+}
+
+// waitExtensions blocks until all satellite protocols are connected and tracked
+// by the peerset.
+func (ps *peerSet) waitSnapExtension(peer *eth.Peer) (*snap.Peer, error) {
+	// If the peer does not support a compatible `snap`, don't wait
+	if !peer.SupportsCap(snap.ProtocolName, snap.ProtocolVersions) {
+		return nil, nil
+	}
+	// Ensure nobody can double connect
+	ps.lock.Lock()
+
+	id := peer.ID()
+	if _, ok := ps.peers[id]; ok {
 		ps.lock.Unlock()
+		return nil, errPeerAlreadyRegistered // avoid connections with the same id as existing ones
+	}
+	if _, ok := ps.snapWait[id]; ok {
+		ps.lock.Unlock()
+		return nil, errPeerAlreadyRegistered // avoid connections with the same id as pending ones
+	}
+	// If `snap` already connected, retrieve the peer from the pending set
+	if snap, ok := ps.snapPend[id]; ok {
+		delete(ps.snapPend, id)
+
+		ps.lock.Unlock()
+		return snap, nil
+	}
+	// Otherwise wait for `snap` to connect concurrently
+	wait := make(chan *snap.Peer)
+	ps.snapWait[id] = wait
+	ps.lock.Unlock()
+
+	return <-wait, nil
+}
+
+// registerPeer injects a new `eth` peer into the working set, or returns an error
+// if the peer is already known.
+func (ps *peerSet) registerPeer(peer *eth.Peer, ext *snap.Peer) error {
+	// Start tracking the new peer
+	ps.lock.Lock()
+	defer ps.lock.Unlock()
+
+	if ps.closed {
 		return errPeerSetClosed
 	}
 	id := peer.ID()
-	if _, ok := ps.ethPeers[id]; ok {
-		ps.lock.Unlock()
+	if _, ok := ps.peers[id]; ok {
 		return errPeerAlreadyRegistered
 	}
-	ps.ethPeers[id] = &ethPeer{Peer: peer}
-
-	snap, ok := ps.snapPeers[id]
-	ps.lock.Unlock()
-
-	if ok {
-		// Previously dangling `snap` peer, stop it's timer since `eth` connected
-		snap.lock.Lock()
-		if snap.ethDrop != nil {
-			snap.ethDrop.Stop()
-			snap.ethDrop = nil
-		}
-		snap.lock.Unlock()
+	eth := &ethPeer{
+		Peer: peer,
 	}
-	ps.ethJoinFeed.Send(peer)
-	if ok {
-		ps.snapJoinFeed.Send(snap.Peer)
+	if ext != nil {
+		eth.snapExt = &snapPeer{ext}
+		ps.snapPeers++
 	}
+	ps.peers[id] = eth
 	return nil
 }
 
-// unregisterEthPeer removes a remote peer from the active set, disabling any further
-// actions to/from that particular entity. The drop is announced on the `eth` drop
-// feed and also on the `snap` feed if the eth/snap duality was broken just now.
-func (ps *peerSet) unregisterEthPeer(id string) error {
+// unregisterPeer removes a remote peer from the active set, disabling any further
+// actions to/from that particular entity.
+func (ps *peerSet) unregisterPeer(id string) error {
 	ps.lock.Lock()
-	eth, ok := ps.ethPeers[id]
+	defer ps.lock.Unlock()
+
+	peer, ok := ps.peers[id]
 	if !ok {
-		ps.lock.Unlock()
 		return errPeerNotRegistered
 	}
-	delete(ps.ethPeers, id)
-
-	snap, ok := ps.snapPeers[id]
-	ps.lock.Unlock()
-
-	ps.ethDropFeed.Send(eth)
-	if ok {
-		ps.snapDropFeed.Send(snap)
+	delete(ps.peers, id)
+	if peer.snapExt != nil {
+		ps.snapPeers--
 	}
 	return nil
 }
 
-// registerSnapPeer injects a new `snap` peer into the working set, or returns
-// an error if the peer is already known. The peer is announced on the `snap`
-// join feed if it completes an existing `eth` peer.
-//
-// If the peer isn't yet connected on `eth` and fails to do so within a given
-// amount of time, it is dropped. This enforces that `snap` is an extension to
-// `eth`, not a standalone leeching protocol.
-func (ps *peerSet) registerSnapPeer(peer *snap.Peer) error {
-	ps.lock.Lock()
-	if ps.closed {
-		ps.lock.Unlock()
-		return errPeerSetClosed
-	}
-	id := peer.ID()
-	if _, ok := ps.snapPeers[id]; ok {
-		ps.lock.Unlock()
-		return errPeerAlreadyRegistered
-	}
-	ps.snapPeers[id] = &snapPeer{Peer: peer}
-
-	_, ok := ps.ethPeers[id]
-	if !ok {
-		// Dangling `snap` peer, start a timer to drop if `eth` doesn't connect
-		ps.snapPeers[id].ethDrop = time.AfterFunc(ethConnectTimeout, func() {
-			peer.Log().Warn("Snapshot peer missing eth, dropping", "addr", peer.RemoteAddr(), "type", peer.Name())
-			peer.Disconnect(p2p.DiscUselessPeer)
-		})
-	}
-	ps.lock.Unlock()
-
-	if ok {
-		ps.snapJoinFeed.Send(peer)
-	}
-	return nil
-}
-
-// unregisterSnapPeer removes a remote peer from the active set, disabling any
-// further actions to/from that particular entity. The drop is announced on the
-// `snap` drop feed.
-func (ps *peerSet) unregisterSnapPeer(id string) error {
-	ps.lock.Lock()
-	peer, ok := ps.snapPeers[id]
-	if !ok {
-		ps.lock.Unlock()
-		return errPeerNotRegistered
-	}
-	delete(ps.snapPeers, id)
-	ps.lock.Unlock()
-
-	peer.lock.Lock()
-	if peer.ethDrop != nil {
-		peer.ethDrop.Stop()
-		peer.ethDrop = nil
-	}
-	peer.lock.Unlock()
-
-	ps.snapDropFeed.Send(peer)
-	return nil
-}
-
-// ethPeer retrieves the registered `eth` peer with the given id.
-func (ps *peerSet) ethPeer(id string) *ethPeer {
+// peer retrieves the registered peer with the given id.
+func (ps *peerSet) peer(id string) *ethPeer {
 	ps.lock.RLock()
 	defer ps.lock.RUnlock()
 
-	return ps.ethPeers[id]
+	return ps.peers[id]
 }
 
-// snapPeer retrieves the registered `snap` peer with the given id.
-func (ps *peerSet) snapPeer(id string) *snapPeer {
+// peersWithoutBlock retrieves a list of peers that do not have a given block in
+// their set of known hashes so it might be propagated to them.
+func (ps *peerSet) peersWithoutBlock(hash common.Hash) []*ethPeer {
 	ps.lock.RLock()
 	defer ps.lock.RUnlock()
 
-	return ps.snapPeers[id]
-}
-
-// ethPeersWithoutBlock retrieves a list of `eth` peers that do not have a given
-// block in their set of known hashes so it might be propagated to them.
-func (ps *peerSet) ethPeersWithoutBlock(hash common.Hash) []*ethPeer {
-	ps.lock.RLock()
-	defer ps.lock.RUnlock()
-
-	list := make([]*ethPeer, 0, len(ps.ethPeers))
-	for _, p := range ps.ethPeers {
+	list := make([]*ethPeer, 0, len(ps.peers))
+	for _, p := range ps.peers {
 		if !p.KnownBlock(hash) {
 			list = append(list, p)
 		}
@@ -243,14 +196,14 @@ func (ps *peerSet) ethPeersWithoutBlock(hash common.Hash) []*ethPeer {
 	return list
 }
 
-// ethPeersWithoutTransaction retrieves a list of `eth` peers that do not have a
-// given transaction in their set of known hashes.
-func (ps *peerSet) ethPeersWithoutTransaction(hash common.Hash) []*ethPeer {
+// peersWithoutTransaction retrieves a list of peers that do not have a given
+// transaction in their set of known hashes.
+func (ps *peerSet) peersWithoutTransaction(hash common.Hash) []*ethPeer {
 	ps.lock.RLock()
 	defer ps.lock.RUnlock()
 
-	list := make([]*ethPeer, 0, len(ps.ethPeers))
-	for _, p := range ps.ethPeers {
+	list := make([]*ethPeer, 0, len(ps.peers))
+	for _, p := range ps.peers {
 		if !p.KnownTransaction(hash) {
 			list = append(list, p)
 		}
@@ -258,28 +211,27 @@ func (ps *peerSet) ethPeersWithoutTransaction(hash common.Hash) []*ethPeer {
 	return list
 }
 
-// Len returns if the current number of `eth` peers in the set. Since the `snap`
+// len returns if the current number of `eth` peers in the set. Since the `snap`
 // peers are tied to the existence of an `eth` connection, that will always be a
 // subset of `eth`.
-func (ps *peerSet) Len() int {
+func (ps *peerSet) len() int {
 	ps.lock.RLock()
 	defer ps.lock.RUnlock()
 
-	return len(ps.ethPeers)
+	return len(ps.peers)
 }
 
-// SnapLen returns if the current number of `snap` peers in the set. Since the `snap`
-// peers are tied to the existence of an `eth` connection, that will always be a
-// subset of `eth`.
-func (ps *peerSet) SnapLen() int {
+// snapLen returns if the current number of `snap` peers in the set.
+func (ps *peerSet) snapLen() int {
 	ps.lock.RLock()
 	defer ps.lock.RUnlock()
-	return len(ps.snapPeers)
+
+	return ps.snapPeers
 }
 
-// ethPeerWithHighestTD retrieves the known peer with the currently highest total
+// peerWithHighestTD retrieves the known peer with the currently highest total
 // difficulty.
-func (ps *peerSet) ethPeerWithHighestTD() *eth.Peer {
+func (ps *peerSet) peerWithHighestTD() *eth.Peer {
 	ps.lock.RLock()
 	defer ps.lock.RUnlock()
 
@@ -287,7 +239,7 @@ func (ps *peerSet) ethPeerWithHighestTD() *eth.Peer {
 		bestPeer *eth.Peer
 		bestTd   *big.Int
 	)
-	for _, p := range ps.ethPeers {
+	for _, p := range ps.peers {
 		if _, td := p.Head(); bestPeer == nil || td.Cmp(bestTd) > 0 {
 			bestPeer, bestTd = p.Peer, td
 		}
@@ -300,10 +252,7 @@ func (ps *peerSet) close() {
 	ps.lock.Lock()
 	defer ps.lock.Unlock()
 
-	for _, p := range ps.ethPeers {
-		p.Disconnect(p2p.DiscQuitting)
-	}
-	for _, p := range ps.snapPeers {
+	for _, p := range ps.peers {
 		p.Disconnect(p2p.DiscQuitting)
 	}
 	ps.closed = true
