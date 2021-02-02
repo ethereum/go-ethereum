@@ -106,8 +106,8 @@ type stTransaction struct {
 }
 
 type stData struct {
-	Data       string              `json:"data,omitempty"`
-	AccessList []*types.AccessList `json:"accessList,omitempty"`
+	Data       string            `json:"data,omitempty"`
+	AccessList *types.AccessList `json:"accessList,omitempty"`
 }
 
 type stTransactionMarshaling struct {
@@ -294,12 +294,16 @@ func (tx *stTransaction) toMessage(ps stPostState) (core.Message, error) {
 		}
 		value = v
 	}
-	data, err := hex.DecodeString(strings.TrimPrefix(dataHex, "0x"))
-	if err != nil {
-		return nil, fmt.Errorf("invalid tx data %q", dataHex)
+	var data []byte
+	if dataHex.Data != "" {
+		d, err := hex.DecodeString(strings.TrimPrefix(dataHex.Data, "0x"))
+		if err != nil {
+			return nil, fmt.Errorf("invalid tx data %q", dataHex)
+		}
+		data = d
 	}
 
-	msg := types.NewMessage(from, to, tx.Nonce, value, gasLimit, tx.GasPrice, data, nil, true)
+	msg := types.NewMessage(from, to, tx.Nonce, value, gasLimit, tx.GasPrice, data, dataHex.AccessList, true)
 	return msg, nil
 }
 
