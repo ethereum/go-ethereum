@@ -106,13 +106,8 @@ type stTransaction struct {
 }
 
 type stData struct {
-	Data       []string       `json:"data"`
-	AccessList []stAccessList `json:"accessList"`
-}
-
-type stAccessList struct {
-	Address     string   `json:"address"`
-	StorageKeys []string `json:"storageKeys"`
+	Data       []string            `json:"data,omitempty"`
+	AccessList []*types.AccessList `json:"accessList,omitempty"`
 }
 
 type stTransactionMarshaling struct {
