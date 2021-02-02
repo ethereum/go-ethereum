@@ -20,6 +20,7 @@ import (
 	"errors"
 	"fmt"
 	"math/big"
+	"os"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -33,6 +34,7 @@ import (
 	"github.com/ethereum/go-ethereum/eth/protocols/eth"
 	"github.com/ethereum/go-ethereum/ethdb"
 	"github.com/ethereum/go-ethereum/event"
+	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/trie"
 )
 
@@ -42,6 +44,7 @@ func init() {
 	lightMaxForkAncestry = 10000
 	blockCacheMaxItems = 1024
 	fsHeaderContCheck = 500 * time.Millisecond
+	ttlLimit = 2 * time.Second
 }
 
 // downloadTester is a test simulator for mocking out local block chain.
@@ -1383,7 +1386,11 @@ func testFailedSyncProgress(t *testing.T, protocol uint, mode SyncMode) {
 
 	// Attempt a full sync with a faulty peer
 	brokenChain := chain.shorten(chain.len())
-	missing := brokenChain.len() / 2
+	// It matters which one we delete here: we want to delete a header which is
+	// not part of the binary search for ancestor, since that will cause
+	// a very early fail. Using length/2 + 1 makes the spot-checking ancestor search
+	// pass, and the gap won't be seen until later during the sync
+	missing := brokenChain.len()/2 + 1
 	delete(brokenChain.headerm, brokenChain.chain[missing])
 	delete(brokenChain.blockm, brokenChain.chain[missing])
 	delete(brokenChain.receiptm, brokenChain.chain[missing])
@@ -1439,6 +1446,9 @@ func TestFakedSyncProgress66Light(t *testing.T) { testFakedSyncProgress(t, eth.E
 
 func testFakedSyncProgress(t *testing.T, protocol uint, mode SyncMode) {
 	t.Parallel()
+	if false {
+		log.Root().SetHandler(log.LvlFilterHandler(log.LvlTrace, log.StreamHandler(os.Stderr, log.TerminalFormat(true))))
+	}
 
 	tester := newTester()
 	defer tester.terminate()
