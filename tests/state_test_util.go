@@ -99,14 +99,14 @@ type stTransaction struct {
 	GasPrice   *big.Int `json:"gasPrice"`
 	Nonce      uint64   `json:"nonce"`
 	To         string   `json:"to"`
-	Data       stData   `json:"data"`
+	Data       []stData `json:"data"`
 	GasLimit   []uint64 `json:"gasLimit"`
 	Value      []string `json:"value"`
 	PrivateKey []byte   `json:"secretKey"`
 }
 
 type stData struct {
-	Data       []string            `json:"data,omitempty"`
+	Data       string              `json:"data,omitempty"`
 	AccessList []*types.AccessList `json:"accessList,omitempty"`
 }
 
