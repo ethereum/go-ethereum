@@ -38,7 +38,7 @@ var (
 		Action:    utils.MigrateFlags(removeDB),
 		Name:      "removedb",
 		Usage:     "Remove blockchain and state databases",
-		ArgsUsage: " ",
+		ArgsUsage: "",
 		Flags: []cli.Flag{
 			utils.DataDirFlag,
 		},
@@ -46,104 +46,61 @@ var (
 		Description: `
 Remove blockchain and state databases`,
 	}
-	inspectCommand = cli.Command{
-		Action:    utils.MigrateFlags(inspect),
-		Name:      "db.inspect",
-		Usage:     "Inspect the storage size for each type of data in the database",
-		ArgsUsage: " ",
-		Flags: []cli.Flag{
-			utils.DataDirFlag,
-			utils.AncientFlag,
-			utils.CacheFlag,
-			utils.MainnetFlag,
-			utils.RopstenFlag,
-			utils.RinkebyFlag,
-			utils.GoerliFlag,
-			utils.YoloV3Flag,
-			utils.LegacyTestnetFlag,
-			utils.SyncModeFlag,
+	dbCommand = cli.Command{
+		Name:      "db",
+		Usage:     "Low level database operations",
+		ArgsUsage: "",
+		Category:  "DATABASE COMMANDS",
+		Subcommands: []cli.Command{
+			dbInspectCmd,
+			dbStatCmd,
+			dbCompactCmd,
+			dbGetCmd,
+			dbDeleteCmd,
+			dbPutCmd,
 		},
-		Category: "DATABASE COMMANDS",
 	}
-	statDbCommand = cli.Command{
-		Action:    utils.MigrateFlags(leveldbStats),
-		Name:      "db.stats",
-		Usage:     "Print leveldb statistics",
-		ArgsUsage: " ",
-		Flags: []cli.Flag{
-			utils.DataDirFlag,
-			utils.CacheFlag,
-			utils.MainnetFlag,
-			utils.RopstenFlag,
-			utils.RinkebyFlag,
-			utils.GoerliFlag,
-			utils.YoloV3Flag,
-			utils.LegacyTestnetFlag,
-		},
-		Category: "DATABASE COMMANDS",
+
+	dbInspectCmd = cli.Command{
+		Action: utils.MigrateFlags(inspect),
+		Name:   "inspect",
+		Usage:  "Inspect the storage size for each type of data in the database",
 	}
-	compactDbCommand = cli.Command{
-		Action:    utils.MigrateFlags(leveldbCompact),
-		Name:      "db.compact",
-		Usage:     "Compact leveldb database. WARNING: May take a very long time",
-		ArgsUsage: " ",
-		Flags: []cli.Flag{
-			utils.DataDirFlag,
-			utils.CacheFlag,
-			utils.MainnetFlag,
-			utils.RopstenFlag,
-			utils.RinkebyFlag,
-			utils.GoerliFlag,
-			utils.YoloV3Flag,
-			utils.LegacyTestnetFlag,
-		},
-		Category: "DATABASE COMMANDS",
+	dbStatCmd = cli.Command{
+		Action: leveldbStats,
+		Name:   "stats",
+		Usage:  "Print leveldb statistics",
 	}
-	dbGetCommand = cli.Command{
-		Action:    utils.MigrateFlags(dbGet),
-		Name:      "db.get",
-		Usage:     "Show the value of a database key",
-		ArgsUsage: "<hex-encoded key>",
-		Flags: []cli.Flag{
-			utils.DataDirFlag,
-			utils.MainnetFlag,
-			utils.RopstenFlag,
-			utils.RinkebyFlag,
-			utils.GoerliFlag,
-			utils.YoloV3Flag,
-			utils.LegacyTestnetFlag,
-		},
-		Category: "DATABASE COMMANDS",
+	dbCompactCmd = cli.Command{
+		Action: leveldbCompact,
+		Name:   "compact",
+		Usage:  "Compact leveldb database. WARNING: May take a very long time",
+		Description: `This command performs a database compaction. 
+WARNING: This operation may take a very long time to finish, and may cause database
+corruption if it is aborted during execution'!`,
 	}
-	dbDeleteCommand = cli.Command{
-		Action:    utils.MigrateFlags(dbDelete),
-		Name:      "db.delete",
+	dbGetCmd = cli.Command{
+		Action:      dbGet,
+		Name:        "get",
+		Usage:       "Show the value of a database key",
+		ArgsUsage:   "<hex-encoded key>",
+		Description: "This command looks up the specified database key from the database.",
+	}
+	dbDeleteCmd = cli.Command{
+		Action:    dbDelete,
+		Name:      "delete",
 		Usage:     "Delete a database key (WARNING: may corrupt your database)",
 		ArgsUsage: "<hex-encoded key>",
-		Flags: []cli.Flag{
-			utils.DataDirFlag,
-			utils.RopstenFlag,
-			utils.RinkebyFlag,
-			utils.GoerliFlag,
-			utils.YoloV3Flag,
-		},
-		Category: "DATABASE COMMANDS",
+		Description: `This command deletes the specified database key from the database. 
+WARNING: This is a low-level operation which may cause database corruption!`,
 	}
-	dbPutCommand = cli.Command{
-		Action:    utils.MigrateFlags(dbPut),
-		Name:      "db.put",
+	dbPutCmd = cli.Command{
+		Action:    dbPut,
+		Name:      "put",
 		Usage:     "Set the value of a database key (WARNING: may corrupt your database)",
 		ArgsUsage: "<hex-encoded key> <hex-encoded value>",
-		Flags: []cli.Flag{
-			utils.DataDirFlag,
-			utils.MainnetFlag,
-			utils.RopstenFlag,
-			utils.RinkebyFlag,
-			utils.GoerliFlag,
-			utils.YoloV3Flag,
-			utils.LegacyTestnetFlag,
-		},
-		Category: "DATABASE COMMANDS",
+		Description: `This command sets a given database key to the given value. 
+WARNING: This is a low-level operation which may cause database corruption!`,
 	}
 )
 
@@ -272,8 +229,8 @@ func leveldbCompact(ctx *cli.Context) error {
 
 // dbGet shows the value of a given database key
 func dbGet(ctx *cli.Context) error {
-	if len(ctx.Args()) < 1 {
-		utils.Fatalf("This command requires a key as an argument.")
+	if ctx.NArg() != 1 {
+		return fmt.Errorf("required arguments: %v", ctx.Command.ArgsUsage)
 	}
 	stack, _ := makeConfigNode(ctx)
 	defer stack.Close()
@@ -295,8 +252,8 @@ func dbGet(ctx *cli.Context) error {
 
 // dbDelete deletes a key from the database
 func dbDelete(ctx *cli.Context) error {
-	if len(ctx.Args()) < 1 {
-		utils.Fatalf("This command requires a key as an argument.")
+	if ctx.NArg() != 1 {
+		return fmt.Errorf("required arguments: %v", ctx.Command.ArgsUsage)
 	}
 	stack, _ := makeConfigNode(ctx)
 	defer stack.Close()
@@ -316,8 +273,8 @@ func dbDelete(ctx *cli.Context) error {
 
 // dbPut overwrite a value in the database
 func dbPut(ctx *cli.Context) error {
-	if len(ctx.Args()) < 2 {
-		utils.Fatalf("This command requires a key and a value as arguments.")
+	if ctx.NArg() != 2 {
+		return fmt.Errorf("required arguments: %v", ctx.Command.ArgsUsage)
 	}
 	stack, _ := makeConfigNode(ctx)
 	defer stack.Close()
