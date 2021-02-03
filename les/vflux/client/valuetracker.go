@@ -20,6 +20,7 @@ import (
 	"bytes"
 	"fmt"
 	"math"
+	"reflect"
 	"sync"
 	"time"
 
@@ -28,8 +29,30 @@ import (
 	"github.com/ethereum/go-ethereum/les/utils"
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/p2p/enode"
+	"github.com/ethereum/go-ethereum/p2p/nodestate"
 	"github.com/ethereum/go-ethereum/rlp"
 )
+
+// ValueTrackerSetup contains node state flags and fields used by ValueTracker
+type ValueTrackerSetup struct {
+	// controlled by ValueTracker
+	ValueTrackerField nodestate.Field
+	// external connections
+	connPeerField nodestate.Field
+}
+
+// NewValueTrackerSetup creates a new ValueTrackerSetup and initializes the fields
+// and flags controlled by ValueTracker
+func NewValueTrackerSetup(setup *nodestate.Setup) ValueTrackerSetup {
+	return ValueTrackerSetup{
+		ValueTrackerField: setup.NewField("valueTracker", reflect.TypeOf(&NodeValueTracker{})),
+	}
+}
+
+// Connect sets the fields and flags used by ValueTracker as an input
+func (vts *ValueTrackerSetup) Connect(connPeerField nodestate.Field) {
+	vts.connPeerField = connPeerField
+}
 
 const (
 	vtVersion  = 1 // database encoding format for ValueTracker
@@ -108,11 +131,13 @@ func (nv *NodeValueTracker) RtStats() ResponseTimeStats {
 // ValueTracker coordinates service value calculation for individual servers and updates
 // global statistics
 type ValueTracker struct {
+	ns           *nodestate.NodeStateMachine
+	setup        ValueTrackerSetup
 	clock        mclock.Clock
 	lock         sync.Mutex
 	quit         chan chan struct{}
+	closed       bool
 	db           ethdb.KeyValueStore
-	connected    map[enode.ID]*NodeValueTracker
 	reqTypeCount int
 
 	refBasket      referenceBasket
@@ -152,7 +177,7 @@ type RequestInfo struct {
 
 // NewValueTracker creates a new ValueTracker and loads its previously saved state from
 // the database if possible.
-func NewValueTracker(db ethdb.KeyValueStore, clock mclock.Clock, reqInfo []RequestInfo, updatePeriod time.Duration, transferRate, statsExpRate, offlineExpRate float64) *ValueTracker {
+func NewValueTracker(ns *nodestate.NodeStateMachine, vts ValueTrackerSetup, db ethdb.KeyValueStore, clock mclock.Clock, reqInfo []RequestInfo, updatePeriod time.Duration, transferRate, statsExpRate, offlineExpRate float64) *ValueTracker {
 	now := clock.Now()
 
 	initRefBasket := requestBasket{items: make([]basketItem, len(reqInfo))}
@@ -171,8 +196,9 @@ func NewValueTracker(db ethdb.KeyValueStore, clock mclock.Clock, reqInfo []Reque
 	}
 
 	vt := &ValueTracker{
+		ns:             ns,
+		setup:          vts,
 		clock:          clock,
-		connected:      make(map[enode.ID]*NodeValueTracker),
 		quit:           make(chan chan struct{}),
 		db:             db,
 		reqTypeCount:   len(initRefBasket.items),
@@ -189,14 +215,34 @@ func NewValueTracker(db ethdb.KeyValueStore, clock mclock.Clock, reqInfo []Reque
 	}
 	vt.statsExpirer.SetRate(now, statsExpRate)
 	vt.refBasket.init(vt.reqTypeCount)
-	vt.periodicUpdate()
+	vt.statsExpFactor = utils.ExpFactor(vt.statsExpirer.LogOffset(vt.clock.Now()))
+
+	ns.SubscribeField(vts.connPeerField, func(node *enode.Node, state nodestate.Flags, oldValue, newValue interface{}) {
+		vt.lock.Lock()
+		defer vt.lock.Unlock()
+
+		if newValue != nil {
+			if vt.closed {
+				return
+			}
+			nv := vt.loadOrNewNode(node.ID())
+			nv.init(vt.clock.Now(), &vt.refBasket.reqValues)
+			ns.SetFieldSub(node, vts.ValueTrackerField, nv)
+		} else {
+			if nv, ok := ns.GetField(node, vts.ValueTrackerField).(*NodeValueTracker); ok {
+				vt.saveNode(node.ID(), nv)
+			} else {
+			}
+			ns.SetFieldSub(node, vts.ValueTrackerField, nil)
+		}
+	})
 
 	go func() {
 		for {
 			select {
 			case <-clock.After(updatePeriod):
 				vt.lock.Lock()
-				vt.periodicUpdate()
+				vt.update()
 				vt.lock.Unlock()
 			case quit := <-vt.quit:
 				close(quit)
@@ -314,39 +360,10 @@ func (vt *ValueTracker) Stop() {
 	vt.quit <- quit
 	<-quit
 	vt.lock.Lock()
-	vt.periodicUpdate()
-	for id, nv := range vt.connected {
-		vt.saveNode(id, nv)
-	}
-	vt.connected = nil
+	vt.update()
+	vt.closed = true
 	vt.saveToDb()
 	vt.lock.Unlock()
-}
-
-// Register adds a server node to the value tracker
-func (vt *ValueTracker) Register(id enode.ID) *NodeValueTracker {
-	vt.lock.Lock()
-	defer vt.lock.Unlock()
-
-	if vt.connected == nil {
-		// ValueTracker has already been stopped
-		return nil
-	}
-	nv := vt.loadOrNewNode(id)
-	nv.init(vt.clock.Now(), &vt.refBasket.reqValues)
-	vt.connected[id] = nv
-	return nv
-}
-
-// Unregister removes a server node from the value tracker
-func (vt *ValueTracker) Unregister(id enode.ID) {
-	vt.lock.Lock()
-	defer vt.lock.Unlock()
-
-	if nv := vt.connected[id]; nv != nil {
-		vt.saveNode(id, nv)
-		delete(vt.connected, id)
-	}
 }
 
 // GetNode returns an individual server node's value tracker. If it did not exist before
@@ -361,9 +378,12 @@ func (vt *ValueTracker) GetNode(id enode.ID) *NodeValueTracker {
 // loadOrNewNode returns an individual server node's value tracker. If it did not exist before
 // then a new node is created.
 func (vt *ValueTracker) loadOrNewNode(id enode.ID) *NodeValueTracker {
-	if nv, ok := vt.connected[id]; ok {
-		return nv
+	if node := vt.ns.GetNode(id); node != nil {
+		if nv, ok := vt.ns.GetField(node, vt.setup.ValueTrackerField).(*NodeValueTracker); ok {
+			return nv
+		}
 	}
+
 	nv := &NodeValueTracker{lastTransfer: vt.clock.Now()}
 	enc, err := vt.db.Get(append(vtNodeKey, id[:]...))
 	if err != nil {
@@ -400,10 +420,9 @@ func (vt *ValueTracker) loadOrNewNode(id enode.ID) *NodeValueTracker {
 
 // saveNode saves a server node's value tracker to the database
 func (vt *ValueTracker) saveNode(id enode.ID, nv *NodeValueTracker) {
-	recentRtStats := nv.rtStats
-	recentRtStats.SubStats(&nv.lastRtStats)
-	vt.rtStats.AddStats(&recentRtStats)
-	nv.lastRtStats = nv.rtStats
+	basket, rtStats := nv.transferStats(vt.clock.Now(), vt.transferRate)
+	vt.refBasket.add(basket)
+	vt.rtStats.AddStats(&rtStats)
 
 	nve := nodeValueTrackerEncV1{
 		RtStats:             nv.rtStats,
@@ -438,29 +457,31 @@ func (vt *ValueTracker) RtStats() ResponseTimeStats {
 	vt.lock.Lock()
 	defer vt.lock.Unlock()
 
-	vt.periodicUpdate()
+	vt.update()
 	return vt.rtStats
 }
 
-// periodicUpdate transfers individual node data to the global statistics, normalizes
+// update transfers individual node data to the global statistics, normalizes
 // the reference basket and updates request values. The global state is also saved to
 // the database with each update.
-func (vt *ValueTracker) periodicUpdate() {
+func (vt *ValueTracker) update() {
 	now := vt.clock.Now()
 	vt.statsExpLock.Lock()
 	vt.statsExpFactor = utils.ExpFactor(vt.statsExpirer.LogOffset(now))
 	vt.statsExpLock.Unlock()
 
-	for _, nv := range vt.connected {
+	vt.ns.ForEachWithField(vt.setup.ValueTrackerField, func(n *enode.Node, value interface{}) {
+		nv := value.(*NodeValueTracker)
 		basket, rtStats := nv.transferStats(now, vt.transferRate)
 		vt.refBasket.add(basket)
 		vt.rtStats.AddStats(&rtStats)
-	}
+	})
 	vt.refBasket.normalize()
 	vt.refBasket.updateReqValues()
-	for _, nv := range vt.connected {
+	vt.ns.ForEachWithField(vt.setup.ValueTrackerField, func(n *enode.Node, value interface{}) {
+		nv := value.(*NodeValueTracker)
 		nv.updateCosts(nv.reqCosts, &vt.refBasket.reqValues, vt.refBasket.reqValueFactor(nv.reqCosts))
-	}
+	})
 	vt.saveToDb()
 }
 
@@ -500,7 +521,7 @@ func (vt *ValueTracker) RequestStats() []RequestStatsItem {
 	vt.lock.Lock()
 	defer vt.lock.Unlock()
 
-	vt.periodicUpdate()
+	vt.update()
 	res := make([]RequestStatsItem, len(vt.refBasket.basket.items))
 	for i, item := range vt.refBasket.basket.items {
 		res[i].Name = vt.mappings[vt.currentMapping][i]

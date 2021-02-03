@@ -515,12 +515,14 @@ func newServerEnv(t *testing.T, blocks int, protocol int, callback indexerCallba
 
 func newClientServerEnv(t *testing.T, blocks int, protocol int, callback indexerCallback, ulcServers []string, ulcFraction int, simClock bool, connect bool, disablePruning bool) (*testServer, *testClient, func()) {
 	sdb, cdb := rawdb.NewMemoryDatabase(), rawdb.NewMemoryDatabase()
-	speers := newServerPeerSet()
 
 	var clock mclock.Clock = &mclock.System{}
 	if simClock {
 		clock = &mclock.Simulated{}
 	}
+
+	ns := nodestate.NewNodeStateMachine(cdb, []byte("ns:"), clock, clientSetup)
+	speers := newServerPeerSet(ns)
 	dist := newRequestDistributor(speers, clock)
 	rm := newRetrieveManager(speers, dist, func() time.Duration { return time.Millisecond * 500 })
 	odr := NewLesOdr(cdb, light.TestClientIndexerConfig, rm)
@@ -535,6 +537,7 @@ func newClientServerEnv(t *testing.T, blocks int, protocol int, callback indexer
 	server, b := newTestServerHandler(blocks, sindexers, sdb, clock)
 	client := newTestClientHandler(b, odr, cIndexers, cdb, speers, ulcServers, ulcFraction)
 
+	ns.Start()
 	scIndexer.Start(server.blockchain)
 	sbIndexer.Start(server.blockchain)
 	ccIndexer.Start(client.backend.blockchain)
@@ -591,6 +594,7 @@ func newClientServerEnv(t *testing.T, blocks int, protocol int, callback indexer
 		scIndexer.Close()
 		sbIndexer.Close()
 		b.Close()
+		ns.Stop()
 	}
 	return s, c, teardown
 }

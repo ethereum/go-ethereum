@@ -26,12 +26,14 @@ import (
 	"time"
 
 	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/common/mclock"
 	"github.com/ethereum/go-ethereum/core"
 	"github.com/ethereum/go-ethereum/core/forkid"
 	"github.com/ethereum/go-ethereum/core/rawdb"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/p2p"
 	"github.com/ethereum/go-ethereum/p2p/enode"
+	"github.com/ethereum/go-ethereum/p2p/nodestate"
 	"github.com/ethereum/go-ethereum/params"
 )
 
@@ -51,11 +53,18 @@ func (t *testServerPeerSub) registerPeer(p *serverPeer)   { t.regCh <- p }
 func (t *testServerPeerSub) unregisterPeer(p *serverPeer) { t.unregCh <- p }
 
 func TestPeerSubscription(t *testing.T) {
-	peers := newServerPeerSet()
-	defer peers.close()
+	ns := nodestate.NewNodeStateMachine(rawdb.NewMemoryDatabase(), []byte("ns:"), &mclock.System{}, clientSetup)
+	peers := newServerPeerSet(ns)
+	sub := newTestServerPeerSub()
+	peers.subscribe(sub)
+	ns.Start()
+	defer ns.Stop()
 
 	checkIds := func(expect []string) {
-		given := peers.ids()
+		var given []string
+		peers.forEach(func(peer *serverPeer) {
+			given = append(given, peer.id)
+		})
 		if len(given) == 0 && len(expect) == 0 {
 			return
 		}
@@ -79,9 +88,6 @@ func TestPeerSubscription(t *testing.T) {
 	}
 	checkIds([]string{})
 
-	sub := newTestServerPeerSub()
-	peers.subscribe(sub)
-
 	// Generate a random id and create the peer
 	var id enode.ID
 	rand.Read(id[:])
@@ -91,7 +97,7 @@ func TestPeerSubscription(t *testing.T) {
 	checkIds([]string{peer.id})
 	checkPeers(sub.regCh)
 
-	peers.unregister(peer.id)
+	peers.unregister(peer.ID())
 	checkIds([]string{})
 	checkPeers(sub.unregCh)
 }

@@ -19,6 +19,7 @@ package client
 import (
 	"math"
 	"math/rand"
+	"reflect"
 	"strconv"
 	"testing"
 	"time"
@@ -26,9 +27,19 @@ import (
 	"github.com/ethereum/go-ethereum/common/mclock"
 	"github.com/ethereum/go-ethereum/ethdb/memorydb"
 	"github.com/ethereum/go-ethereum/p2p/enode"
+	"github.com/ethereum/go-ethereum/p2p/nodestate"
 
 	"github.com/ethereum/go-ethereum/les/utils"
 )
+
+var (
+	vtTestSetup = NewValueTrackerSetup(testSetup)
+	peerField   = testSetup.NewField("peer", reflect.TypeOf(struct{}{}))
+)
+
+func init() {
+	vtTestSetup.Connect(peerField)
+}
 
 const (
 	testReqTypes  = 3
@@ -57,7 +68,9 @@ func TestValueTracker(t *testing.T) {
 			expRate = math.Log(2) / float64(time.Hour*100)
 		}
 
-		vt := NewValueTracker(db, clock, requestList, time.Minute, 1/float64(time.Hour), expRate, expRate)
+		ns := nodestate.NewNodeStateMachine(nil, nil, clock, testSetup)
+		vt := NewValueTracker(ns, vtTestSetup, db, clock, requestList, time.Minute, 1/float64(time.Hour), expRate, expRate)
+		ns.Start()
 		updateCosts := func(i int) {
 			costList := make([]uint64, testReqTypes)
 			baseCost := rand.Float64()*10000000 + 100000
@@ -67,7 +80,8 @@ func TestValueTracker(t *testing.T) {
 			vt.UpdateCosts(nodes[i], costList)
 		}
 		for i := range nodes {
-			nodes[i] = vt.Register(enode.ID{byte(i)})
+			ns.SetField(testNode(i), peerField, struct{}{})
+			nodes[i] = ns.GetField(testNode(i), vtTestSetup.ValueTrackerField).(*NodeValueTracker)
 			updateCosts(i)
 		}
 		if makeRequests {
@@ -88,7 +102,11 @@ func TestValueTracker(t *testing.T) {
 				}
 			}
 		}
+		ns.ForEachWithField(peerField, func(n *enode.Node, value interface{}) {
+			ns.SetField(n, peerField, nil)
+		})
 		vt.Stop()
+		ns.Stop()
 		var sumrp, sumrv float64
 		for i, rp := range relPrices {
 			sumrp += rp

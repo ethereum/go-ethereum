@@ -37,6 +37,8 @@ import (
 	vfs "github.com/ethereum/go-ethereum/les/vflux/server"
 	"github.com/ethereum/go-ethereum/light"
 	"github.com/ethereum/go-ethereum/p2p"
+	"github.com/ethereum/go-ethereum/p2p/enode"
+	"github.com/ethereum/go-ethereum/p2p/nodestate"
 	"github.com/ethereum/go-ethereum/params"
 	"github.com/ethereum/go-ethereum/rlp"
 )
@@ -352,6 +354,7 @@ type serverPeer struct {
 	valueTracker     *vfc.ValueTracker
 	nodeValueTracker *vfc.NodeValueTracker
 	sentReqs         map[uint64]sentReqEntry
+	fetcherPeer      *fetcherPeer
 
 	// Statistics
 	errCount    utils.LinearExpiredValue // Counter the invalid responses server has replied
@@ -1077,150 +1080,88 @@ type serverPeerSubscriber interface {
 // serverPeerSet represents the set of active server peers currently
 // participating in the Light Ethereum sub-protocol.
 type serverPeerSet struct {
-	peers map[string]*serverPeer
-	// subscribers is a batch of subscribers and peerset will notify
-	// these subscribers when the peerset changes(new server peer is
-	// added or removed)
-	subscribers []serverPeerSubscriber
-	closed      bool
-	lock        sync.RWMutex
+	ns     *nodestate.NodeStateMachine
+	closed bool
 }
 
 // newServerPeerSet creates a new peer set to track the active server peers.
-func newServerPeerSet() *serverPeerSet {
-	return &serverPeerSet{peers: make(map[string]*serverPeer)}
+func newServerPeerSet(ns *nodestate.NodeStateMachine) *serverPeerSet {
+	ns.SubscribeField(serverPeerField, func(node *enode.Node, state nodestate.Flags, oldValue, newValue interface{}) {
+		if oldValue != nil {
+			oldValue.(*serverPeer).Peer.Disconnect(p2p.DiscUselessPeer)
+		}
+	})
+	return &serverPeerSet{ns: ns}
 }
 
 // subscribe adds a service to be notified about added or removed
 // peers and also register all active peers into the given service.
 func (ps *serverPeerSet) subscribe(sub serverPeerSubscriber) {
-	ps.lock.Lock()
-	defer ps.lock.Unlock()
-
-	ps.subscribers = append(ps.subscribers, sub)
-	for _, p := range ps.peers {
-		sub.registerPeer(p)
-	}
-}
-
-// unSubscribe removes the specified service from the subscriber pool.
-func (ps *serverPeerSet) unSubscribe(sub serverPeerSubscriber) {
-	ps.lock.Lock()
-	defer ps.lock.Unlock()
-
-	for i, s := range ps.subscribers {
-		if s == sub {
-			ps.subscribers = append(ps.subscribers[:i], ps.subscribers[i+1:]...)
-			return
+	ps.ns.SubscribeField(serverPeerField, func(node *enode.Node, state nodestate.Flags, oldValue, newValue interface{}) {
+		if newValue != nil {
+			sub.registerPeer(newValue.(*serverPeer))
+		} else {
+			sub.unregisterPeer(oldValue.(*serverPeer))
 		}
-	}
-}
-
-// register adds a new server peer into the set, or returns an error if the
-// peer is already known.
-func (ps *serverPeerSet) register(peer *serverPeer) error {
-	ps.lock.Lock()
-	defer ps.lock.Unlock()
-
-	if ps.closed {
-		return errClosed
-	}
-	if _, exist := ps.peers[peer.id]; exist {
-		return errAlreadyRegistered
-	}
-	ps.peers[peer.id] = peer
-	for _, sub := range ps.subscribers {
-		sub.registerPeer(peer)
-	}
-	return nil
-}
-
-// unregister removes a remote peer from the active set, disabling any further
-// actions to/from that particular entity. It also initiates disconnection at
-// the networking layer.
-func (ps *serverPeerSet) unregister(id string) error {
-	ps.lock.Lock()
-	defer ps.lock.Unlock()
-
-	p, ok := ps.peers[id]
-	if !ok {
-		return errNotRegistered
-	}
-	delete(ps.peers, id)
-	for _, sub := range ps.subscribers {
-		sub.unregisterPeer(p)
-	}
-	p.Peer.Disconnect(p2p.DiscRequested)
-	return nil
-}
-
-// ids returns a list of all registered peer IDs
-func (ps *serverPeerSet) ids() []string {
-	ps.lock.RLock()
-	defer ps.lock.RUnlock()
-
-	var ids []string
-	for id := range ps.peers {
-		ids = append(ids, id)
-	}
-	return ids
-}
-
-// peer retrieves the registered peer with the given id.
-func (ps *serverPeerSet) peer(id string) *serverPeer {
-	ps.lock.RLock()
-	defer ps.lock.RUnlock()
-
-	return ps.peers[id]
-}
-
-// len returns if the current number of peers in the set.
-func (ps *serverPeerSet) len() int {
-	ps.lock.RLock()
-	defer ps.lock.RUnlock()
-
-	return len(ps.peers)
-}
-
-// bestPeer retrieves the known peer with the currently highest total difficulty.
-// If the peerset is "client peer set", then nothing meaningful will return. The
-// reason is client peer never send back their latest status to server.
-func (ps *serverPeerSet) bestPeer() *serverPeer {
-	ps.lock.RLock()
-	defer ps.lock.RUnlock()
-
-	var (
-		bestPeer *serverPeer
-		bestTd   *big.Int
-	)
-	for _, p := range ps.peers {
-		if td := p.Td(); bestTd == nil || td.Cmp(bestTd) > 0 {
-			bestPeer, bestTd = p, td
-		}
-	}
-	return bestPeer
-}
-
-// allServerPeers returns all server peers in a list.
-func (ps *serverPeerSet) allPeers() []*serverPeer {
-	ps.lock.RLock()
-	defer ps.lock.RUnlock()
-
-	list := make([]*serverPeer, 0, len(ps.peers))
-	for _, p := range ps.peers {
-		list = append(list, p)
-	}
-	return list
+	})
 }
 
 // close disconnects all peers. No new peers can be registered
 // after close has returned.
 func (ps *serverPeerSet) close() {
-	ps.lock.Lock()
-	defer ps.lock.Unlock()
+	ps.ns.Operation(func() {
+		ps.closed = true
+		ps.ns.ForEachWithField(serverPeerField, func(n *enode.Node, value interface{}) {
+			ps.ns.SetFieldSub(n, serverPeerField, nil)
+		})
+	})
+}
 
-	for _, p := range ps.peers {
-		p.Disconnect(p2p.DiscQuitting)
+// register adds a new server peer into the set, or returns an error if the
+// peer is already known.
+func (ps *serverPeerSet) register(peer *serverPeer) error {
+	var err error
+	ps.ns.Operation(func() {
+		if ps.closed {
+			err = errClosed
+			return
+		}
+		if ps.ns.GetField(peer.Node(), serverPeerField) == nil {
+			err = ps.ns.SetFieldSub(peer.Node(), serverPeerField, peer)
+		} else {
+			err = errAlreadyRegistered
+		}
+	})
+	return err
+}
+
+// unregister removes a remote peer from the active set, disabling any further
+// actions to/from that particular entity. It also initiates disconnection at
+// the networking layer.
+func (ps *serverPeerSet) unregister(id enode.ID) error {
+	if node := ps.ns.GetNode(id); node != nil {
+		return ps.ns.SetField(node, serverPeerField, nil)
 	}
-	ps.closed = true
+	return errNotRegistered
+}
+
+// peer retrieves the registered peer with the given id.
+func (ps *serverPeerSet) peer(id enode.ID) *serverPeer {
+	if node := ps.ns.GetNode(id); node != nil {
+		peer, _ := ps.ns.GetField(node, serverPeerField).(*serverPeer)
+		return peer
+	}
+	return nil
+}
+
+// len returns if the current number of peers in the set.
+func (ps *serverPeerSet) len() int {
+	return ps.ns.FieldCount(serverPeerField)
+}
+
+// forEach calls the given callback for each registered peer
+func (ps *serverPeerSet) forEach(cb func(peer *serverPeer)) {
+	ps.ns.ForEachWithField(serverPeerField, func(n *enode.Node, value interface{}) {
+		cb(value.(*serverPeer))
+	})
 }

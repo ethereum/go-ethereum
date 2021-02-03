@@ -341,7 +341,7 @@ func (r *sentReq) tryRequest() {
 		if hrto && ok {
 			pp.Log().Debug("Request timed out hard")
 			if r.rm.peers != nil {
-				r.rm.peers.unregister(pp.id)
+				r.rm.peers.unregister(pp.ID())
 			}
 		}
 	}()

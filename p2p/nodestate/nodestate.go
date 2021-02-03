@@ -167,7 +167,8 @@ type (
 
 	fieldInfo struct {
 		fieldDefinition
-		subs []FieldCallback
+		subs  []FieldCallback
+		nodes map[*nodeInfo]struct{}
 	}
 
 	offlineCallback struct {
@@ -501,6 +502,13 @@ func (ns *NodeStateMachine) decodeNode(id enode.ID, data []byte) {
 			if field, err := decode(encField); err == nil {
 				node.fields[i] = field
 				node.fieldCount++
+				if nodes := ns.fields[i].nodes; nodes != nil {
+					if field != nil {
+						nodes[node] = struct{}{}
+					} else {
+						delete(nodes, node)
+					}
+				}
 			} else {
 				log.Error("Failed to decode node field", "id", id, "field name", ns.fields[i].name, "error", err)
 				return
@@ -907,6 +915,13 @@ func (ns *NodeStateMachine) setField(n *enode.Node, field Field, value interface
 		node.fieldCount++
 	}
 	node.fields[fieldIndex] = value
+	if nodes := ns.fields[fieldIndex].nodes; nodes != nil {
+		if value != nil {
+			nodes[node] = struct{}{}
+		} else {
+			delete(nodes, node)
+		}
+	}
 	if node.state == 0 && node.fieldCount == 0 {
 		delete(ns.nodes, id)
 		if node.db {
@@ -948,6 +963,52 @@ func (ns *NodeStateMachine) ForEach(requireFlags, disableFlags Flags, cb func(n 
 	ns.lock.Unlock()
 	for _, c := range callbacks {
 		cb(c.node, Flags{mask: c.state, setup: ns.setup})
+	}
+}
+
+func (ns *NodeStateMachine) nodesWithField(index int) map[*nodeInfo]struct{} {
+	f := ns.fields[index]
+	if f.nodes == nil {
+		f.nodes = make(map[*nodeInfo]struct{})
+		for _, n := range ns.nodes {
+			if len(n.fields) > index && n.fields[index] != nil {
+				f.nodes[n] = struct{}{}
+			}
+		}
+	}
+	return f.nodes
+}
+
+// FieldCount returns the number of nodes having the given field set no a non-nil value.
+func (ns *NodeStateMachine) FieldCount(field Field) int {
+	ns.lock.Lock()
+	defer ns.lock.Unlock()
+
+	ns.checkStarted()
+	index := ns.fieldIndex(field)
+	return len(ns.nodesWithField(index))
+}
+
+// ForEachWithField calls the callback for each node having the given field set no a non-nil value.
+func (ns *NodeStateMachine) ForEachWithField(field Field, cb func(n *enode.Node, value interface{})) {
+	ns.lock.Lock()
+	ns.checkStarted()
+
+	index := ns.fieldIndex(field)
+	nodes := ns.nodesWithField(index)
+
+	type callback struct {
+		node  *enode.Node
+		value interface{}
+	}
+	var callbacks []callback
+	for n := range nodes {
+		callbacks = append(callbacks, callback{n.node, n.fields[index]})
+	}
+	ns.lock.Unlock()
+
+	for _, c := range callbacks {
+		cb(c.node, c.value)
 	}
 }
 

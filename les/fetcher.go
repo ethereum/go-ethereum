@@ -136,10 +136,6 @@ type lightFetcher struct {
 	chain   *light.LightChain     // The local light chain which maintains the canonical header chain.
 	fetcher *fetcher.BlockFetcher // The underlying fetcher which takes care block header retrieval.
 
-	// Peerset maintained by fetcher
-	plock sync.RWMutex
-	peers map[enode.ID]*fetcherPeer
-
 	// Various channels
 	announceCh chan *announce
 	requestCh  chan *request
@@ -159,14 +155,13 @@ type lightFetcher struct {
 }
 
 // newLightFetcher creates a light fetcher instance.
-func newLightFetcher(chain *light.LightChain, engine consensus.Engine, peers *serverPeerSet, ulc *ulc, chaindb ethdb.Database, reqDist *requestDistributor, syncFn func(p *serverPeer)) *lightFetcher {
+func newLightFetcher(chain *light.LightChain, engine consensus.Engine, peers *serverPeerSet, ulc *ulc, chaindb ethdb.Database, reqDist *requestDistributor, syncFn func(p *serverPeer), dropFn func(id string)) *lightFetcher {
 	// Construct the fetcher by offering all necessary APIs
 	validator := func(header *types.Header) error {
 		// Disable seal verification explicitly if we are running in ulc mode.
 		return engine.VerifyHeader(chain, header, ulc == nil)
 	}
 	heighter := func() uint64 { return chain.CurrentHeader().Number.Uint64() }
-	dropper := func(id string) { peers.unregister(id) }
 	inserter := func(headers []*types.Header) (int, error) {
 		// Disable PoW checking explicitly if we are running in ulc mode.
 		checkFreq := 1
@@ -181,8 +176,7 @@ func newLightFetcher(chain *light.LightChain, engine consensus.Engine, peers *se
 		chaindb:     chaindb,
 		chain:       chain,
 		reqDist:     reqDist,
-		fetcher:     fetcher.NewBlockFetcher(true, chain.GetHeaderByHash, nil, validator, nil, heighter, inserter, nil, dropper),
-		peers:       make(map[enode.ID]*fetcherPeer),
+		fetcher:     fetcher.NewBlockFetcher(true, chain.GetHeaderByHash, nil, validator, nil, heighter, inserter, nil, dropFn),
 		synchronise: syncFn,
 		announceCh:  make(chan *announce),
 		requestCh:   make(chan *request),
@@ -208,39 +202,12 @@ func (f *lightFetcher) stop() {
 
 // registerPeer adds an new peer to the fetcher's peer set
 func (f *lightFetcher) registerPeer(p *serverPeer) {
-	f.plock.Lock()
-	defer f.plock.Unlock()
-
-	f.peers[p.ID()] = &fetcherPeer{announces: make(map[common.Hash]*announce)}
+	p.fetcherPeer = &fetcherPeer{announces: make(map[common.Hash]*announce)}
 }
 
 // unregisterPeer removes the specified peer from the fetcher's peer set
 func (f *lightFetcher) unregisterPeer(p *serverPeer) {
-	f.plock.Lock()
-	defer f.plock.Unlock()
-
-	delete(f.peers, p.ID())
-}
-
-// peer returns the peer from the fetcher peerset.
-func (f *lightFetcher) peer(id enode.ID) *fetcherPeer {
-	f.plock.RLock()
-	defer f.plock.RUnlock()
-
-	return f.peers[id]
-}
-
-// forEachPeer iterates the fetcher peerset, abort the iteration if the
-// callback returns false.
-func (f *lightFetcher) forEachPeer(check func(id enode.ID, p *fetcherPeer) bool) {
-	f.plock.RLock()
-	defer f.plock.RUnlock()
-
-	for id, peer := range f.peers {
-		if !check(id, peer) {
-			return
-		}
-	}
+	p.fetcherPeer = nil
 }
 
 // mainloop is the main event loop of the light fetcher, which is responsible for
@@ -288,15 +255,14 @@ func (f *lightFetcher) mainloop() {
 			agreed  []enode.ID
 			trusted bool
 		)
-		f.forEachPeer(func(id enode.ID, p *fetcherPeer) bool {
-			if anno := p.announces[hash]; anno != nil && anno.trust && anno.data.Number == number {
-				agreed = append(agreed, id)
+		f.peerset.forEach(func(p *serverPeer) {
+			if anno := p.fetcherPeer.announces[hash]; anno != nil && anno.trust && anno.data.Number == number {
+				agreed = append(agreed, p.ID())
 				if 100*len(agreed)/len(f.ulc.keys) >= f.ulc.fraction {
 					trusted = true
-					return false // abort iteration
+					return
 				}
 			}
-			return true
 		})
 		return trusted, agreed
 	}
@@ -306,15 +272,16 @@ func (f *lightFetcher) mainloop() {
 			peerid, data := anno.peerid, anno.data
 			log.Debug("Received new announce", "peer", peerid, "number", data.Number, "hash", data.Hash, "reorg", data.ReorgDepth)
 
-			peer := f.peer(peerid)
-			if peer == nil {
+			p := f.peerset.peer(peerid)
+			if p == nil {
 				log.Debug("Receive announce from unknown peer", "peer", peerid)
 				continue
 			}
+			peer := p.fetcherPeer
 			// Announced tds should be strictly monotonic, drop the peer if
 			// the announce is out-of-order.
 			if peer.latest != nil && data.Td.Cmp(peer.latest.Td) <= 0 {
-				f.peerset.unregister(peerid.String())
+				f.peerset.unregister(peerid)
 				log.Debug("Non-monotonic td", "peer", peerid, "current", data.Td, "previous", peer.latest.Td)
 				continue
 			}
@@ -370,7 +337,7 @@ func (f *lightFetcher) mainloop() {
 			for reqid, request := range fetching {
 				if time.Since(request.sendAt) > blockDelayTimeout-gatherSlack {
 					delete(fetching, reqid)
-					f.peerset.unregister(request.peerid.String())
+					f.peerset.unregister(request.peerid)
 					log.Debug("Request timeout", "peer", request.peerid, "reqid", reqid)
 				}
 			}
@@ -386,12 +353,12 @@ func (f *lightFetcher) mainloop() {
 				// delivery some mismatched header. So it can't be punished by the underlying fetcher.
 				// We have to add two more rules here to detect.
 				if len(resp.headers) != 1 {
-					f.peerset.unregister(req.peerid.String())
+					f.peerset.unregister(req.peerid)
 					log.Debug("Deliver more than requested", "peer", req.peerid, "reqid", req.reqid)
 					continue
 				}
 				if resp.headers[0].Hash() != req.hash {
-					f.peerset.unregister(req.peerid.String())
+					f.peerset.unregister(req.peerid)
 					log.Debug("Deliver invalid header", "peer", req.peerid, "reqid", req.reqid)
 					continue
 				}
@@ -410,7 +377,8 @@ func (f *lightFetcher) mainloop() {
 
 			// Clean stale announcements from les-servers.
 			var droplist []enode.ID
-			f.forEachPeer(func(id enode.ID, p *fetcherPeer) bool {
+			f.peerset.forEach(func(peer *serverPeer) {
+				p, id := peer.fetcherPeer, peer.ID()
 				removed := p.forwardAnno(localTd)
 				for _, anno := range removed {
 					if header := f.chain.GetHeaderByHash(anno.data.Hash); header != nil {
@@ -426,10 +394,9 @@ func (f *lightFetcher) mainloop() {
 						}
 					}
 				}
-				return true
 			})
 			for _, id := range droplist {
-				f.peerset.unregister(id.String())
+				f.peerset.unregister(id)
 				log.Debug("Kicked out peer for invalid announcement")
 			}
 			if f.newHeadHook != nil {
@@ -528,7 +495,7 @@ func (f *lightFetcher) startSync(id enode.ID) {
 		f.syncDone <- header
 	}(f.chain.CurrentHeader())
 
-	peer := f.peerset.peer(id.String())
+	peer := f.peerset.peer(id)
 	if peer == nil || peer.onlyAnnounce {
 		return
 	}

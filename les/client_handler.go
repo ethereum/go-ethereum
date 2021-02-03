@@ -31,6 +31,7 @@ import (
 	"github.com/ethereum/go-ethereum/light"
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/p2p"
+	"github.com/ethereum/go-ethereum/p2p/enode"
 	"github.com/ethereum/go-ethereum/params"
 )
 
@@ -71,8 +72,8 @@ func newClientHandler(ulcServers []string, ulcFraction int, checkpoint *params.T
 	if checkpoint != nil {
 		height = (checkpoint.SectionIndex+1)*params.CHTFrequency - 1
 	}
-	handler.fetcher = newLightFetcher(backend.blockchain, backend.engine, backend.peers, handler.ulc, backend.chainDb, backend.reqDist, handler.synchronise)
-	handler.downloader = downloader.New(height, backend.chainDb, nil, backend.eventMux, nil, backend.blockchain, handler.removePeer)
+	handler.fetcher = newLightFetcher(backend.blockchain, backend.engine, backend.peers, handler.ulc, backend.chainDb, backend.reqDist, handler.synchronise, handler.removePeerWithStringId)
+	handler.downloader = downloader.New(height, backend.chainDb, nil, backend.eventMux, nil, backend.blockchain, handler.removePeerWithStringId)
 	handler.backend.peers.subscribe((*downloaderPeerNotify)(handler))
 	return handler
 }
@@ -123,7 +124,7 @@ func (h *clientHandler) handle(p *serverPeer) error {
 
 	connectedAt := mclock.Now()
 	defer func() {
-		h.backend.peers.unregister(p.id)
+		h.backend.peers.unregister(p.ID())
 		connectionTimer.Update(time.Duration(mclock.Now() - connectedAt))
 		serverConnectionGauge.Update(int64(h.backend.peers.len()))
 	}()
@@ -350,8 +351,16 @@ func (h *clientHandler) handleMsg(p *serverPeer) error {
 	return nil
 }
 
-func (h *clientHandler) removePeer(id string) {
+func (h *clientHandler) removePeer(id enode.ID) {
 	h.backend.peers.unregister(id)
+}
+
+func (h *clientHandler) removePeerWithStringId(id string) {
+	h.backend.peers.forEach(func(peer *serverPeer) {
+		if peer.id == id {
+			h.backend.peers.unregister(peer.ID())
+		}
+	})
 }
 
 type peerConnection struct {
