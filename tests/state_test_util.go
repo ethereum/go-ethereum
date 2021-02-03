@@ -188,14 +188,7 @@ func (t *StateTest) RunNoVerify(subtest StateSubtest, vmconfig vm.Config, snapsh
 	evm := vm.NewEVM(context, txContext, statedb, config, vmconfig)
 
 	if config.IsYoloV3(context.BlockNumber) {
-		statedb.AddAddressToAccessList(msg.From())
-		if dst := msg.To(); dst != nil {
-			statedb.AddAddressToAccessList(*dst)
-			// If it's a create-tx, the destination will be added inside evm.create
-		}
-		for _, addr := range evm.ActivePrecompiles() {
-			statedb.AddAddressToAccessList(addr)
-		}
+		statedb.PrepareAccessList(msg.From(), msg.To(), evm.ActivePrecompiles(), msg.AccessList())
 	}
 	gaspool := new(core.GasPool)
 	gaspool.AddGas(block.GasLimit())

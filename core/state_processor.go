@@ -97,22 +97,7 @@ func applyTransaction(msg types.Message, config *params.ChainConfig, bc ChainCon
 	txContext := NewEVMTxContext(msg)
 	// Add addresses to access list if applicable
 	if config.IsYoloV3(header.Number) {
-		statedb.AddAddressToAccessList(msg.From())
-		if dst := msg.To(); dst != nil {
-			statedb.AddAddressToAccessList(*dst)
-			// If it's a create-tx, the destination will be added inside evm.create
-		}
-		for _, addr := range evm.ActivePrecompiles() {
-			statedb.AddAddressToAccessList(addr)
-		}
-		if al := msg.AccessList(); al != nil {
-			for _, el := range *al {
-				statedb.AddAddressToAccessList(*el.Address)
-				for _, key := range el.StorageKeys {
-					statedb.AddSlotToAccessList(*el.Address, *key)
-				}
-			}
-		}
+		statedb.PrepareAccessList(msg.From(), msg.To(), evm.ActivePrecompiles(), msg.AccessList())
 	}
 
 	// Update the evm with the new transaction context.

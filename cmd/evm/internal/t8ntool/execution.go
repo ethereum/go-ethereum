@@ -144,32 +144,18 @@ func (pre *Prestate) Apply(vmConfig vm.Config, chainConfig *params.ChainConfig,
 		statedb.Prepare(tx.Hash(), blockHash, txIndex)
 		txContext := core.NewEVMTxContext(msg)
 
-		evm := vm.NewEVM(vmContext, txContext, statedb, chainConfig, vmConfig)
-		if chainConfig.IsYoloV3(vmContext.BlockNumber) {
-			statedb.AddAddressToAccessList(msg.From())
-			if dst := msg.To(); dst != nil {
-				statedb.AddAddressToAccessList(*dst)
-				// If it's a create-tx, the destination will be added inside evm.create
-			}
-			for _, addr := range evm.ActivePrecompiles() {
-				statedb.AddAddressToAccessList(addr)
-			}
-			if al := msg.AccessList(); al != nil {
-				for _, el := range *al {
-					statedb.AddAddressToAccessList(*el.Address)
-					for _, key := range el.StorageKeys {
-						statedb.AddSlotToAccessList(*el.Address, *key)
-					}
-				}
-			}
-		} else {
-			if tx.Type() != types.LegacyTxId {
-				log.Info("rejected tx", "index", i, "hash", tx.Hash(), "error", core.ErrTxTypeNotSupported)
-				rejectedTxs = append(rejectedTxs, i)
-				continue
-			}
+		if !chainConfig.IsYoloV3(vmContext.BlockNumber) && tx.Type() != types.LegacyTxId {
+			log.Info("rejected tx", "index", i, "hash", tx.Hash(), "error", core.ErrTxTypeNotSupported)
+			rejectedTxs = append(rejectedTxs, i)
+			continue
 		}
 		snapshot := statedb.Snapshot()
+
+		evm := vm.NewEVM(vmContext, txContext, statedb, chainConfig, vmConfig)
+		if chainConfig.IsYoloV3(vmContext.BlockNumber) {
+			statedb.PrepareAccessList(msg.From(), msg.To(), evm.ActivePrecompiles(), msg.AccessList())
+		}
+
 		// (ret []byte, usedGas uint64, failed bool, err error)
 		msgResult, err := core.ApplyMessage(evm, msg, gaspool)
 		if err != nil {

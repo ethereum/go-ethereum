@@ -872,25 +872,9 @@ func DoCall(ctx context.Context, b Backend, args CallArgs, blockNrOrHash rpc.Blo
 	// Setup the gas pool (also for unmetered requests)
 	// and apply the message.
 	gp := new(core.GasPool).AddGas(math.MaxUint64)
-	// TODO! Refactor this check to some better place -- right now it's copy-pasted
-	// all over the place
+	// Apply access list
 	if evm.ChainConfig().IsYoloV3(header.Number) {
-		state.AddAddressToAccessList(msg.From())
-		if dst := msg.To(); dst != nil {
-			state.AddAddressToAccessList(*dst)
-			// If it's a create-tx, the destination will be added inside evm.create
-		}
-		for _, addr := range evm.ActivePrecompiles() {
-			state.AddAddressToAccessList(addr)
-		}
-		if al := msg.AccessList(); al != nil {
-			for _, el := range *al {
-				state.AddAddressToAccessList(*el.Address)
-				for _, key := range el.StorageKeys {
-					state.AddSlotToAccessList(*el.Address, *key)
-				}
-			}
-		}
+		state.PrepareAccessList(msg.From(), msg.To(), evm.ActivePrecompiles(), msg.AccessList())
 	}
 
 	result, err := core.ApplyMessage(evm, msg, gp)
