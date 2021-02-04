@@ -1299,8 +1299,8 @@ func setGPO(ctx *cli.Context, cfg *gasprice.Config, light bool) {
 	// If we are running the light client, apply another group
 	// settings for gas oracle.
 	if light {
-		cfg.Blocks = ethconfig.DefaultLightGPOConfig.Blocks
-		cfg.Percentile = ethconfig.DefaultLightGPOConfig.Percentile
+		cfg.Blocks = ethconfig.LightGPO.Blocks
+		cfg.Percentile = ethconfig.LightGPO.Percentile
 	}
 	if ctx.GlobalIsSet(LegacyGpoBlocksFlag.Name) {
 		cfg.Blocks = ctx.GlobalInt(LegacyGpoBlocksFlag.Name)

@@ -40,15 +40,15 @@ import (
 	"github.com/ethereum/go-ethereum/params"
 )
 
-// DefaultFullGPOConfig contains default gasprice oracle settings for full node.
-var DefaultFullGPOConfig = gasprice.Config{
+// FullNodeGPO contains default gasprice oracle settings for full node.
+var FullNodeGPO = gasprice.Config{
 	Blocks:     20,
 	Percentile: 60,
 	MaxPrice:   gasprice.DefaultMaxPrice,
 }
 
-// DefaultLightGPOConfig contains default gasprice oracle settings for light client.
-var DefaultLightGPOConfig = gasprice.Config{
+// LightGPO contains default gasprice oracle settings for light client.
+var LightGPO = gasprice.Config{
 	Blocks:     2,
 	Percentile: 60,
 	MaxPrice:   gasprice.DefaultMaxPrice,
@@ -84,7 +84,7 @@ var Defaults = Config{
 	},
 	TxPool:      core.DefaultTxPoolConfig,
 	RPCGasCap:   25000000,
-	GPO:         DefaultFullGPOConfig,
+	GPO:         DefaultFullGPO,
 	RPCTxFeeCap: 1, // 1 ether
 }
 
