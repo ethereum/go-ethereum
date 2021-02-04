@@ -54,8 +54,8 @@ var DefaultLightGPOConfig = gasprice.Config{
 	MaxPrice:   gasprice.DefaultMaxPrice,
 }
 
-// DefaultConfig contains default settings for use on the Ethereum main net.
-var DefaultConfig = Config{
+// Defaults contains default settings for use on the Ethereum main net.
+var Defaults = Config{
 	SyncMode: downloader.FastSync,
 	Ethash: ethash.Config{
 		CacheDir:         "ethash",
@@ -96,16 +96,16 @@ func init() {
 		}
 	}
 	if runtime.GOOS == "darwin" {
-		DefaultConfig.Ethash.DatasetDir = filepath.Join(home, "Library", "Ethash")
+		Defaults.Ethash.DatasetDir = filepath.Join(home, "Library", "Ethash")
 	} else if runtime.GOOS == "windows" {
 		localappdata := os.Getenv("LOCALAPPDATA")
 		if localappdata != "" {
-			DefaultConfig.Ethash.DatasetDir = filepath.Join(localappdata, "Ethash")
+			Defaults.Ethash.DatasetDir = filepath.Join(localappdata, "Ethash")
 		} else {
-			DefaultConfig.Ethash.DatasetDir = filepath.Join(home, "AppData", "Local", "Ethash")
+			Defaults.Ethash.DatasetDir = filepath.Join(home, "AppData", "Local", "Ethash")
 		}
 	} else {
-		DefaultConfig.Ethash.DatasetDir = filepath.Join(home, ".ethash")
+		Defaults.Ethash.DatasetDir = filepath.Join(home, ".ethash")
 	}
 }
 
