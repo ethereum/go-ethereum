@@ -99,9 +99,9 @@ you need to start them up choosing an alternative pprof port. Make sure you are
 redirecting stderr to a logfile.
 
 ```
-geth -port=30300 -verbosity 5 --pprof --pprofport 6060 2>> /tmp/00.glog
-geth -port=30301 -verbosity 5 --pprof --pprofport 6061 2>> /tmp/01.glog
-geth -port=30302 -verbosity 5 --pprof --pprofport 6062 2>> /tmp/02.glog
+geth -port=30300 -verbosity 5 --pprof --pprof.port 6060 2>> /tmp/00.glog
+geth -port=30301 -verbosity 5 --pprof --pprof.port 6061 2>> /tmp/01.glog
+geth -port=30302 -verbosity 5 --pprof --pprof.port 6062 2>> /tmp/02.glog
 ```
 
 Alternatively if you want to kill the clients (in case they hang or stalled syncing, etc)

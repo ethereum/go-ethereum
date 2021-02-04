@@ -106,7 +106,7 @@ call.
 
 #### Simple example
 
-With a synced Rinkeby node with RPC exposed on localhost (`geth --rinkeby --rpc`) we can
+With a synced Rinkeby node with RPC exposed on localhost (`geth --rinkeby --http`) we can
 make a call against the [Checkpoint
 Oracle](https://rinkeby.etherscan.io/address/0xebe8efa441b9302a0d7eaecc277c09d20d684540)
 to retrieve the list of administrators:
@@ -163,7 +163,7 @@ contract CheckpointOracle {
 }
 ```
 
-With a synced Rinkeby node with RPC exposed on localhost (`geth --rinkeby --rpc`) we can
+With a synced Rinkeby node with RPC exposed on localhost (`geth --rinkeby --http`) we can
 make a call against the live [Checkpoint
 Oracle](https://rinkeby.etherscan.io/address/0xebe8efa441b9302a0d7eaecc277c09d20d684540),
 but override its byte code with our own version that has an accessor for the voting

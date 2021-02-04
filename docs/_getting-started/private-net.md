@@ -16,13 +16,13 @@ We assume you are able to build `geth` following the [build instructions][build]
 In order to run multiple ethereum nodes locally, you have to make sure:
 
 - each instance has a separate data directory (`--datadir`)
-- each instance runs on a different port (both eth and rpc) (`--port and --rpcport`)
+- each instance runs on a different port (both eth and rpc) (`--port and --http.port`)
 - in case of a cluster the instances must know about each other
 - the ipc endpoint is unique or the ipc interface is disabled (`--ipcpath or --ipcdisable`)
 
 You start the first node (let's make port explicit and disable ipc interface)
 
-    geth --datadir="/tmp/eth/60/01" -verbosity 6 --ipcdisable --port 30301 --rpcport 8101 console 2>> /tmp/eth/60/01.log
+    geth --datadir="/tmp/eth/60/01" -verbosity 6 --ipcdisable --port 30301 --http.port 8101 console 2>> /tmp/eth/60/01.log
 
 We started the node with the console, so that we can grab the enode url for instance:
 
@@ -41,7 +41,7 @@ a service) to construct the enode url.
 
 Now you can launch a second node with:
 
-    geth --datadir="/tmp/eth/60/02" --verbosity 6 --ipcdisable --port 30302 --rpcport 8102 console 2>> /tmp/eth/60/02.log 
+    geth --datadir="/tmp/eth/60/02" --verbosity 6 --ipcdisable --port 30302 --http.port 8102 console 2>> /tmp/eth/60/02.log 
 
 If you want to connect this instance to the previously started node you can add it as a
 peer from the console with `admin.addPeer(enodeUrlOfFirstInstance)`.
