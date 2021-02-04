@@ -47,8 +47,8 @@ var FullNodeGPO = gasprice.Config{
 	MaxPrice:   gasprice.DefaultMaxPrice,
 }
 
-// LightGPO contains default gasprice oracle settings for light client.
-var LightGPO = gasprice.Config{
+// LightClientGPO contains default gasprice oracle settings for light client.
+var LightClientGPO = gasprice.Config{
 	Blocks:     2,
 	Percentile: 60,
 	MaxPrice:   gasprice.DefaultMaxPrice,
@@ -84,7 +84,7 @@ var Defaults = Config{
 	},
 	TxPool:      core.DefaultTxPoolConfig,
 	RPCGasCap:   25000000,
-	GPO:         DefaultFullGPO,
+	GPO:         FullNodeGPO,
 	RPCTxFeeCap: 1, // 1 ether
 }
 
