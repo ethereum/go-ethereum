@@ -95,6 +95,10 @@ type handler struct {
 	snapSync  uint32 // Flag whether fast sync should operate on top of the snap protocol
 	acceptTxs uint32 // Flag whether we're considered synchronised (enables transaction processing)
 
+	// Flag whether we're running the snap protocol handler. This determines if we have to
+	// wait for snap extension or not
+	snapEnabled bool
+
 	checkpointNumber uint64      // Block number for the sync progress validator to cross reference
 	checkpointHash   common.Hash // Block hash for the sync progress validator to cross reference
 
@@ -234,10 +238,13 @@ func newHandler(config *handlerConfig) (*handler, error) {
 func (h *handler) runEthPeer(peer *eth.Peer, handler eth.Handler) error {
 	// If the peer has a `snap` extension, wait for it to connect so we can have
 	// a uniform initialization/teardown mechanism
-	snap, err := h.peers.waitSnapExtension(peer)
-	if err != nil {
-		peer.Log().Error("Snapshot extension barrier failed", "err", err)
-		return err
+	var snap *snap.Peer
+	if h.snapEnabled {
+		var err error
+		if snap, err = h.peers.waitSnapExtension(peer); err != nil {
+			peer.Log().Error("Snapshot extension barrier failed", "err", err)
+			return err
+		}
 	}
 	// TODO(karalabe): Not sure why this is needed
 	if !h.chainSync.handlePeerEvent(peer) {
