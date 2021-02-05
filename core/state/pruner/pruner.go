@@ -183,8 +183,8 @@ func prune(maindb ethdb.Database, stateBloom *stateBloom, middleStateRoots map[c
 	if count >= rangeCompactionThreshold {
 		cstart := time.Now()
 
-		for b := byte(0); b < byte(255); b++ {
-			log.Info("Compacting database", "range", fmt.Sprintf("%x-%x", b, b+1), "elapsed", common.PrettyDuration(time.Since(cstart)))
+		for b := byte(0); b < byte(16); b++ {
+			log.Info("Compacting database", "range", fmt.Sprintf("%#x-%#x", b, b+1), "elapsed", common.PrettyDuration(time.Since(cstart)))
 			if err := maindb.Compact([]byte{b}, []byte{b + 1}); err != nil {
 				log.Error("Database compaction failed", "error", err)
 				return err

@@ -142,7 +142,6 @@ func (stat *generateStats) finishAccounts(done uint64) {
 	defer stat.lock.Unlock()
 
 	stat.accounts += done
-	stat.head = common.HexToHash("0xffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff")
 }
 
 // progressContract updates the generator stats for a specific in-progress contract.
@@ -179,9 +178,9 @@ func (stat *generateStats) report() {
 	}
 	if stat.accounts > 0 {
 		// If there's progress on the account trie, estimate the time to finish crawling it
-		if done := binary.BigEndian.Uint64(stat.head[:8])/stat.accounts - uint64(len(stat.slotsHead)); done > 0 {
+		if done := binary.BigEndian.Uint64(stat.head[:8]) / stat.accounts; done > 0 {
 			var (
-				left  = (math.MaxUint64-binary.BigEndian.Uint64(stat.head[:8]))/stat.accounts + uint64(len(stat.slotsHead))
+				left  = (math.MaxUint64 - binary.BigEndian.Uint64(stat.head[:8])) / stat.accounts
 				speed = done/uint64(time.Since(stat.start)/time.Millisecond+1) + 1 // +1s to avoid division by zero
 				eta   = time.Duration(left/speed) * time.Millisecond
 			)
