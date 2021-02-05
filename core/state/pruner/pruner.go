@@ -290,6 +290,8 @@ func (p *Pruner) Prune(root common.Hash) error {
 		return err
 	}
 	filterName := bloomFilterName(p.datadir, root)
+
+	log.Info("Writing state bloom to disk", "name", filterName)
 	if err := p.stateBloom.Commit(filterName); err != nil {
 		return err
 	}

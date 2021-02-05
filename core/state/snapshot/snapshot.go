@@ -23,7 +23,6 @@ import (
 	"fmt"
 	"sync"
 	"sync/atomic"
-	"time"
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/rawdb"
@@ -739,7 +738,7 @@ func (t *Tree) Verify(root common.Hash) error {
 			return common.Hash{}, err
 		}
 		return hash, nil
-	}, &generateStats{start: time.Now()}, true)
+	}, newGenerateStats(), true)
 
 	if err != nil {
 		return err
