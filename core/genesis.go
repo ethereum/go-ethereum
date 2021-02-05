@@ -226,7 +226,7 @@ func SetupGenesisBlockWithOverride(db ethdb.Database, genesis *Genesis, override
 	// if we just continued here.
 	// The full node of two BSC testnets may run without genesis file after been inited.
 	if genesis == nil && stored != params.MainnetGenesisHash &&
-		stored != params.ChapelGenesisHash && stored != params.RialtoGenesisHash {
+		stored != params.ChapelGenesisHash && stored != params.RialtoGenesisHash && stored != params.BSCGenesisHash {
 		return storedcfg, stored, nil
 	}
 

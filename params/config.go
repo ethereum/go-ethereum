@@ -227,7 +227,7 @@ var (
 		MuirGlacierBlock:    big.NewInt(0),
 		RamanujanBlock:      big.NewInt(0),
 		NielsBlock:          big.NewInt(0),
-		MirrorSyncBlock:     big.NewInt(0),
+		MirrorSyncBlock:     big.NewInt(5184000),
 		Parlia: &ParliaConfig{
 			Period: 3,
 			Epoch:  200,
@@ -497,7 +497,6 @@ func (c *ChainConfig) IsMirrorSync(num *big.Int) bool {
 func (c *ChainConfig) IsOnMirrorSync(num *big.Int) bool {
 	return configNumEqual(c.MirrorSyncBlock, num)
 }
-
 
 // IsMuirGlacier returns whether num is either equal to the Muir Glacier (EIP-2384) fork block or greater.
 func (c *ChainConfig) IsMuirGlacier(num *big.Int) bool {

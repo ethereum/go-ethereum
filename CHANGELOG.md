@@ -1,4 +1,6 @@
 # Changelog
+## v1.0.6
+* [\#68](https://github.com/binance-chain/bsc/pull/68) apply mirror sync upgrade on mainnet
 
 ## v1.0.5
 
