@@ -95,10 +95,6 @@ type handler struct {
 	snapSync  uint32 // Flag whether fast sync should operate on top of the snap protocol
 	acceptTxs uint32 // Flag whether we're considered synchronised (enables transaction processing)
 
-	// Flag whether we're running the snap protocol handler. This determines if we have to
-	// wait for snap extension or not
-	snapEnabled bool
-
 	checkpointNumber uint64      // Block number for the sync progress validator to cross reference
 	checkpointHash   common.Hash // Block hash for the sync progress validator to cross reference
 
@@ -238,10 +234,10 @@ func newHandler(config *handlerConfig) (*handler, error) {
 func (h *handler) runEthPeer(peer *eth.Peer, handler eth.Handler) error {
 	// If the peer has a `snap` extension, wait for it to connect so we can have
 	// a uniform initialization/teardown mechanism
-	var snap *snap.Peer
-	if h.snapEnabled {
+	var snapPeer *snap.Peer
+	if peer.RunningCap(snap.ProtocolName, snap.ProtocolVersions) {
 		var err error
-		if snap, err = h.peers.waitSnapExtension(peer); err != nil {
+		if snapPeer, err = h.peers.waitSnapExtension(peer); err != nil {
 			peer.Log().Error("Snapshot extension barrier failed", "err", err)
 			return err
 		}
@@ -268,7 +264,7 @@ func (h *handler) runEthPeer(peer *eth.Peer, handler eth.Handler) error {
 	}
 	reject := false // reserved peer slots
 	if atomic.LoadUint32(&h.snapSync) == 1 {
-		if snap == nil {
+		if snapPeer == nil {
 			// If we are running snap-sync, we want to reserve roughly half the peer
 			// slots for peers supporting the snap protocol.
 			// The logic here is; we only allow up to 5 more non-snap peers than snap-peers.
@@ -286,7 +282,7 @@ func (h *handler) runEthPeer(peer *eth.Peer, handler eth.Handler) error {
 	peer.Log().Debug("Ethereum peer connected", "name", peer.Name())
 
 	// Register the peer locally
-	if err := h.peers.registerPeer(peer, snap); err != nil {
+	if err := h.peers.registerPeer(peer, snapPeer); err != nil {
 		peer.Log().Error("Ethereum peer registration failed", "err", err)
 		return err
 	}
@@ -301,8 +297,8 @@ func (h *handler) runEthPeer(peer *eth.Peer, handler eth.Handler) error {
 		peer.Log().Error("Failed to register peer in eth syncer", "err", err)
 		return err
 	}
-	if snap != nil {
-		if err := h.downloader.SnapSyncer.Register(snap); err != nil {
+	if snapPeer != nil {
+		if err := h.downloader.SnapSyncer.Register(snapPeer); err != nil {
 			peer.Log().Error("Failed to register peer in snap syncer", "err", err)
 			return err
 		}
