@@ -18,8 +18,10 @@ package pruner
 
 import (
 	"bytes"
+	"encoding/binary"
 	"errors"
 	"fmt"
+	"math"
 	"os"
 	"path/filepath"
 	"strings"
@@ -117,9 +119,6 @@ func prune(maindb ethdb.Database, stateBloom *stateBloom, middleStateRoots map[c
 		pstart = time.Now()
 		logged = time.Now()
 		batch  = maindb.NewBatch()
-
-		rstart = make([]byte, 0, common.HashLength+len(rawdb.CodePrefix))
-		rlimit = make([]byte, 0, common.HashLength+len(rawdb.CodePrefix))
 		iter   = maindb.NewIterator(nil, nil)
 	)
 	for iter.Next() {
@@ -148,17 +147,18 @@ func prune(maindb ethdb.Database, stateBloom *stateBloom, middleStateRoots map[c
 			size += common.StorageSize(len(key) + len(iter.Value()))
 			batch.Delete(key)
 
+			var eta time.Duration // Realistically will never remain uninited
+			if done := binary.BigEndian.Uint64(key[:8]); done > 0 {
+				var (
+					left  = math.MaxUint64 - binary.BigEndian.Uint64(key[:8])
+					speed = done/uint64(time.Since(start)/time.Millisecond+1) + 1 // +1s to avoid division by zero
+				)
+				eta = time.Duration(left/speed) * time.Millisecond
+			}
 			if time.Since(logged) > 8*time.Second {
-				log.Info("Pruning state data", "count", count, "size", size, "elapsed", common.PrettyDuration(time.Since(pstart)))
+				log.Info("Pruning state data", "nodes", count, "size", size,
+					"elapsed", common.PrettyDuration(time.Since(pstart)), "eta", common.PrettyDuration(eta))
 				logged = time.Now()
-			}
-			if len(rstart) == 0 || bytes.Compare(rstart, key) > 0 {
-				rstart = rstart[:len(key)]
-				copy(rstart, key)
-			}
-			if len(rlimit) == 0 || bytes.Compare(rlimit, key) < 0 {
-				rlimit = rlimit[:len(key)]
-				copy(rlimit, key)
 			}
 			// Recreate the iterator after every batch commit in order
 			// to allow the underlying compactor to delete the entries.
@@ -176,15 +176,19 @@ func prune(maindb ethdb.Database, stateBloom *stateBloom, middleStateRoots map[c
 		batch.Reset()
 	}
 	iter.Release()
-	log.Info("Pruned state data", "count", count, "size", size, "elapsed", common.PrettyDuration(time.Since(pstart)))
+	log.Info("Pruned state data", "nodes", count, "size", size, "elapsed", common.PrettyDuration(time.Since(pstart)))
 
 	// Start compactions, will remove the deleted data from the disk immediately.
 	// Note for small pruning, the compaction is skipped.
 	if count >= rangeCompactionThreshold {
 		cstart := time.Now()
-		log.Info("Database compaction started")
-		if err := maindb.Compact(rstart, rlimit); err != nil {
-			log.Error("Database compaction failed", "error", err)
+
+		for b := byte(0); b < byte(255); b++ {
+			log.Info("Compacting database", "range", fmt.Sprintf("%x-%x", b, b+1), "elapsed", common.PrettyDuration(time.Since(cstart)))
+			if err := maindb.Compact([]byte{b}, []byte{b + 1}); err != nil {
+				log.Error("Database compaction failed", "error", err)
+				return err
+			}
 		}
 		log.Info("Database compaction finished", "elapsed", common.PrettyDuration(time.Since(cstart)))
 	}
