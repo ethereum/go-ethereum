@@ -545,8 +545,8 @@ func (pool *TxPool) validateTx(tx *types.Transaction, local bool) error {
 	if err != nil {
 		return ErrInvalidSender
 	}
-	// Drop non-local transactions under our own minimal accepted gas price
-	if !local && tx.GasPriceIntCmp(pool.gasPrice) < 0 {
+	// Drop non-local transactions under our own minimal accepted gas price or tip
+	if !local && tx.TipIntCmp(pool.gasPrice) < 0 {
 		return ErrUnderpriced
 	}
 	// Ensure the transaction adheres to nonce ordering

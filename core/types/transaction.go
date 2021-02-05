@@ -315,6 +315,19 @@ func (tx *Transaction) GasPriceIntCmp(other *big.Int) int {
 	return tx.inner.gasPrice().Cmp(other)
 }
 
+func (tx *Transaction) FeeCapCmp(other *Transaction) int {
+	return tx.inner.feeCap().Cmp(other.inner.feeCap())
+}
+func (tx *Transaction) FeeCapIntCmp(other *big.Int) int {
+	return tx.inner.feeCap().Cmp(other)
+}
+func (tx *Transaction) TipCmp(other *Transaction) int {
+	return tx.inner.tip().Cmp(other.inner.tip())
+}
+func (tx *Transaction) TipIntCmp(other *big.Int) int {
+	return tx.inner.tip().Cmp(other)
+}
+
 // Hash returns the transaction hash.
 func (tx *Transaction) Hash() common.Hash {
 	if hash := tx.hash.Load(); hash != nil {
