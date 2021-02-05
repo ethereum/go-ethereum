@@ -287,7 +287,7 @@ func (l *txList) Add(tx *types.Transaction, priceBump uint64) (bool, *types.Tran
 		// Have to ensure that the new gas price is higher than the old gas
 		// price as well as checking the percentage threshold to ensure that
 		// this is accurate for low (Wei-level) gas price replacements
-		if old.GasPriceCmp(tx) >= 0 || tx.GasPriceIntCmp(threshold) < 0 {
+		if old.FeeCapCmp(tx) >= 0 || tx.FeeCapIntCmp(threshold) < 0 {
 			return false, nil
 		}
 	}
@@ -413,8 +413,8 @@ func (h priceHeap) Len() int      { return len(h) }
 func (h priceHeap) Swap(i, j int) { h[i], h[j] = h[j], h[i] }
 
 func (h priceHeap) Less(i, j int) bool {
-	// Sort primarily by price, returning the cheaper one
-	switch h[i].GasPriceCmp(h[j]) {
+	// Sort primarily by fee cap, returning the cheaper one
+	switch h[i].FeeCapCmp(h[j]) {
 	case -1:
 		return true
 	case 1:
@@ -491,7 +491,7 @@ func (l *txPricedList) Cap(threshold *big.Int) types.Transactions {
 			continue
 		}
 		// Stop the discards if we've reached the threshold
-		if cheapest.GasPriceIntCmp(threshold) >= 0 {
+		if cheapest.FeeCapIntCmp(threshold) >= 0 {
 			break
 		}
 		heap.Pop(l.remotes)
@@ -520,7 +520,7 @@ func (l *txPricedList) Underpriced(tx *types.Transaction) bool {
 	// If the remote transaction is even cheaper than the
 	// cheapest one tracked locally, reject it.
 	cheapest := []*types.Transaction(*l.remotes)[0]
-	return cheapest.GasPriceCmp(tx) >= 0
+	return cheapest.FeeCapCmp(tx) >= 0
 }
 
 // Discard finds a number of most underpriced transactions, removes them from the
