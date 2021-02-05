@@ -279,15 +279,21 @@ func (l *txList) Add(tx *types.Transaction, priceBump uint64) (bool, *types.Tran
 	// If there's an older better transaction, abort
 	old := l.txs.Get(tx.Nonce())
 	if old != nil {
-		// threshold = oldGP * (100 + priceBump) / 100
+		// thresholdFeeCap = oldFC  * (100 + priceBump) / 100
+		// thresholdTip    = oldTip * (100 + priceBump) / 100
 		a := big.NewInt(100 + int64(priceBump))
-		a = a.Mul(a, old.GasPrice())
+		aFeeCap := new(big.Int).Mul(a, old.FeeCap())
+		aTip := a.Mul(a, old.Tip())
 		b := big.NewInt(100)
-		threshold := a.Div(a, b)
-		// Have to ensure that the new gas price is higher than the old gas
-		// price as well as checking the percentage threshold to ensure that
+		thresholdFeeCap := aFeeCap.Div(aFeeCap, b)
+		thresholdTip := aTip.Div(aTip, b)
+		// Have to ensure that the new fee cap and tip are both higher than the old
+		// ones as well as checking the percentage threshold to ensure that
 		// this is accurate for low (Wei-level) gas price replacements
-		if old.FeeCapCmp(tx) >= 0 || tx.FeeCapIntCmp(threshold) < 0 {
+		if old.FeeCapCmp(tx) >= 0 || tx.FeeCapIntCmp(thresholdFeeCap) < 0 {
+			return false, nil
+		}
+		if old.TipCmp(tx) >= 0 || tx.TipIntCmp(thresholdTip) < 0 {
 			return false, nil
 		}
 	}
@@ -420,6 +426,13 @@ func (h priceHeap) Less(i, j int) bool {
 	case 1:
 		return false
 	}
+	// Sort secondarily by tip, returning the cheaper one
+	switch h[i].TipCmp(h[j]) {
+	case -1:
+		return true
+	case 1:
+		return false
+	}
 	// If the prices match, stabilize via nonces (high nonce is worse)
 	return h[i].Nonce() > h[j].Nonce()
 }
@@ -480,6 +493,7 @@ func (l *txPricedList) Removed(count int) {
 // from the priced list and returns them for further removal from the entire pool.
 //
 // Note: only remote transactions will be considered for eviction.
+// This function should only be used pre-EIP-1559 - it can only cap by fee cap, not tip
 func (l *txPricedList) Cap(threshold *big.Int) types.Transactions {
 	drop := make(types.Transactions, 0, 128) // Remote underpriced transactions to drop
 	for len(*l.remotes) > 0 {

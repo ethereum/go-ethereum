@@ -229,7 +229,8 @@ type TxPool struct {
 	mu          sync.RWMutex
 
 	istanbul bool // Fork indicator whether we are in the istanbul stage.
-	eip2718  bool // Fork indicator whether we are using EIP-2718 type transactions.
+	eip2718  bool // Fork indicator whether we are using EIp-2718 type transactions.
+	eip1559  bool // Fork indicator whether we are using EIP-1559 type transactions.
 
 	currentState  *state.StateDB // Current state in the blockchain head
 	pendingNonces *txNoncer      // Pending state tracking virtual nonces
@@ -426,11 +427,30 @@ func (pool *TxPool) SetGasPrice(price *big.Int) {
 	pool.mu.Lock()
 	defer pool.mu.Unlock()
 
+	old := pool.gasPrice
 	pool.gasPrice = price
-	for _, tx := range pool.priced.Cap(price) {
-		pool.removeTx(tx.Hash(), false)
+	// if the min miner fee increased, remove transactions below the new threshold
+	if price.Cmp(old) > 0 {
+		if !pool.eip1559 {
+			for _, tx := range pool.priced.Cap(price) {
+				pool.removeTx(tx.Hash(), false)
+			}
+		} else {
+			drop := make([]common.Hash, 0, 128) // Remote underpriced transaction hashes to drop
+			pool.all.Range(func(hash common.Hash, tx *types.Transaction, local bool) bool {
+				if tx.FeeCapIntCmp(price) < 0 {
+					drop = append(drop, hash)
+				}
+				return true
+			}, false, true) // Only iterate remotes
+			for _, hash := range drop {
+				pool.removeTx(hash, false)
+			}
+			pool.priced.Removed(len(drop))
+		}
 	}
-	log.Info("Transaction pool price threshold updated", "price", price)
+
+	log.Info("Transaction pool miner fee threshold updated", "fee", price)
 }
 
 // Nonce returns the next nonce of an account, with all transactions executable
@@ -541,6 +561,20 @@ func (pool *TxPool) validateTx(tx *types.Transaction, local bool) error {
 		return ErrGasLimit
 	}
 	// Make sure the transaction is signed properly.
+	switch tx.Type() {
+	case types.LegacyTxType:
+	case types.AccessListTxType:
+		if !pool.eip2718 {
+			return ErrTxTypeNotSupported
+		}
+	case types.DynamicFeeTxType:
+		if !pool.eip1559 {
+			return ErrTxTypeNotSupported
+		}
+	default:
+		return ErrTxTypeNotSupported
+	}
+	// Make sure the transaction is signed properly
 	from, err := types.Sender(pool.signer, tx)
 	if err != nil {
 		return ErrInvalidSender
@@ -598,7 +632,7 @@ func (pool *TxPool) add(tx *types.Transaction, local bool) (replaced bool, err e
 	if uint64(pool.all.Count()+numSlots(tx)) > pool.config.GlobalSlots+pool.config.GlobalQueue {
 		// If the new transaction is underpriced, don't accept it
 		if !isLocal && pool.priced.Underpriced(tx) {
-			log.Trace("Discarding underpriced transaction", "hash", hash, "price", tx.GasPrice())
+			log.Trace("Discarding underpriced transaction", "hash", hash, "price", tx.FeeCap())
 			underpricedTxMeter.Mark(1)
 			return false, ErrUnderpriced
 		}
@@ -615,7 +649,7 @@ func (pool *TxPool) add(tx *types.Transaction, local bool) (replaced bool, err e
 		}
 		// Kick out the underpriced remote transactions.
 		for _, tx := range drop {
-			log.Trace("Discarding freshly underpriced transaction", "hash", tx.Hash(), "price", tx.GasPrice())
+			log.Trace("Discarding freshly underpriced transaction", "hash", tx.Hash(), "price", tx.FeeCap())
 			underpricedTxMeter.Mark(1)
 			pool.removeTx(tx.Hash(), false)
 		}
@@ -1205,6 +1239,12 @@ func (pool *TxPool) reset(oldHead, newHead *types.Header) {
 	next := new(big.Int).Add(newHead.Number, big.NewInt(1))
 	pool.istanbul = pool.chainconfig.IsIstanbul(next)
 	pool.eip2718 = pool.chainconfig.IsBerlin(next)
+	pool.eip1559 = pool.chainconfig.IsAleut(next)
+
+	// For EIP-1559, adjust the gas limit by the elasticity multiplier
+	if pool.eip1559 {
+		pool.currentMaxGas *= params.ElasticityMultiplier
+	}
 }
 
 // promoteExecutables moves transactions that have become processable from the
