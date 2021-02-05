@@ -234,13 +234,10 @@ func newHandler(config *handlerConfig) (*handler, error) {
 func (h *handler) runEthPeer(peer *eth.Peer, handler eth.Handler) error {
 	// If the peer has a `snap` extension, wait for it to connect so we can have
 	// a uniform initialization/teardown mechanism
-	var snapPeer *snap.Peer
-	if peer.RunningCap(snap.ProtocolName, snap.ProtocolVersions) {
-		var err error
-		if snapPeer, err = h.peers.waitSnapExtension(peer); err != nil {
-			peer.Log().Error("Snapshot extension barrier failed", "err", err)
-			return err
-		}
+	snap, err := h.peers.waitSnapExtension(peer)
+	if err != nil {
+		peer.Log().Error("Snapshot extension barrier failed", "err", err)
+		return err
 	}
 	// TODO(karalabe): Not sure why this is needed
 	if !h.chainSync.handlePeerEvent(peer) {
@@ -264,7 +261,7 @@ func (h *handler) runEthPeer(peer *eth.Peer, handler eth.Handler) error {
 	}
 	reject := false // reserved peer slots
 	if atomic.LoadUint32(&h.snapSync) == 1 {
-		if snapPeer == nil {
+		if snap == nil {
 			// If we are running snap-sync, we want to reserve roughly half the peer
 			// slots for peers supporting the snap protocol.
 			// The logic here is; we only allow up to 5 more non-snap peers than snap-peers.
@@ -282,7 +279,7 @@ func (h *handler) runEthPeer(peer *eth.Peer, handler eth.Handler) error {
 	peer.Log().Debug("Ethereum peer connected", "name", peer.Name())
 
 	// Register the peer locally
-	if err := h.peers.registerPeer(peer, snapPeer); err != nil {
+	if err := h.peers.registerPeer(peer, snap); err != nil {
 		peer.Log().Error("Ethereum peer registration failed", "err", err)
 		return err
 	}
@@ -297,8 +294,8 @@ func (h *handler) runEthPeer(peer *eth.Peer, handler eth.Handler) error {
 		peer.Log().Error("Failed to register peer in eth syncer", "err", err)
 		return err
 	}
-	if snapPeer != nil {
-		if err := h.downloader.SnapSyncer.Register(snapPeer); err != nil {
+	if snap != nil {
+		if err := h.downloader.SnapSyncer.Register(snap); err != nil {
 			peer.Log().Error("Failed to register peer in snap syncer", "err", err)
 			return err
 		}
