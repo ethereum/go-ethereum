@@ -15,20 +15,42 @@ import (
 // See
 func EncodePacked(args []Type, values []interface{}) ([]byte, error) {
 	enc := make([]byte, 0)
-	for idx, arg := range args {
+	var index int
+	for _, arg := range args {
 		switch arg.T {
 		case TupleTy:
-			return []byte{}, errors.New("Not implemented")
+			return []byte{}, errors.New("Type not supported in abi.EncodePacked()")
 		case ArrayTy, SliceTy:
-		default:
-			packed, err := encodePackElement(arg, reflect.ValueOf(values[idx]))
+			packed, err := encodePackArray(arg, values[index:arg.Size])
 			if err != nil {
 				return []byte{}, err
 			}
 			enc = append(enc, packed...)
+			index += arg.Size
+		default:
+			packed, err := encodePackElement(arg, reflect.ValueOf(values[index]))
+			if err != nil {
+				return []byte{}, err
+			}
+			enc = append(enc, packed...)
+			index++
 		}
 	}
 	return enc, nil
+}
+
+func encodePackArray(t Type, values []interface{}) ([]byte, error) {
+	encoded := make([]byte, 0, t.Size*32)
+	for i := 0; i < t.Size; i++ {
+		packed, err := encodePackElement(*t.Elem, reflect.ValueOf(values[i]))
+		if err != nil {
+			return []byte{}, err
+		}
+		// Array elements are packed with padding
+		padded := common.LeftPadBytes(packed, 32)
+		encoded = append(encoded, padded...)
+	}
+	return encoded, nil
 }
 
 func encodePackElement(t Type, value reflect.Value) ([]byte, error) {
@@ -43,7 +65,6 @@ func encodePackElement(t Type, value reflect.Value) ([]byte, error) {
 		if value.Kind() == reflect.Array {
 			value = mustArrayToByteSlice(value)
 		}
-
 		return encodePackedByteSlice(t, value.Bytes()), nil
 	case BoolTy:
 		if value.Bool() {
@@ -74,7 +95,7 @@ func encodePackedNum(t Type, value reflect.Value) []byte {
 		big := new(big.Int).Set(value.Interface().(*big.Int))
 		bytes = big.Bytes()
 	default:
-		panic("abi: fatal error")
+		panic(fmt.Sprintf("abi: fatal error: %v", kind))
 	}
 	return encodePackedByteSlice(t, bytes)
 }
