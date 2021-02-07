@@ -22,7 +22,9 @@ import (
 	"time"
 
 	"github.com/ethereum/go-ethereum/common/mclock"
-	"github.com/ethereum/go-ethereum/eth"
+	"github.com/ethereum/go-ethereum/core"
+	"github.com/ethereum/go-ethereum/eth/ethconfig"
+	"github.com/ethereum/go-ethereum/ethdb"
 	"github.com/ethereum/go-ethereum/les/flowcontrol"
 	lps "github.com/ethereum/go-ethereum/les/lespay/server"
 	"github.com/ethereum/go-ethereum/light"
@@ -50,6 +52,15 @@ func init() {
 	priorityPoolSetup.Connect(balanceTrackerSetup.BalanceField, balanceTrackerSetup.UpdateFlag) // NodeBalance implements nodePriority
 }
 
+type ethBackend interface {
+	ArchiveMode() bool
+	BlockChain() *core.BlockChain
+	BloomIndexer() *core.ChainIndexer
+	ChainDb() ethdb.Database
+	Synced() bool
+	TxPool() *core.TxPool
+}
+
 type LesServer struct {
 	lesCommons
 
@@ -73,7 +84,7 @@ type LesServer struct {
 	p2pSrv *p2p.Server
 }
 
-func NewLesServer(node *node.Node, e *eth.Ethereum, config *eth.Config) (*LesServer, error) {
+func NewLesServer(node *node.Node, e ethBackend, config *ethconfig.Config) (*LesServer, error) {
 	ns := nodestate.NewNodeStateMachine(nil, nil, mclock.System{}, serverSetup)
 	// Calculate the number of threads used to service the light client
 	// requests based on the user-specified value.
