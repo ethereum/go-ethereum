@@ -20,6 +20,7 @@ import (
 	"errors"
 	"math"
 	"math/big"
+	"math/rand"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -44,6 +45,8 @@ const (
 	// txChanSize is the size of channel listening to NewTxsEvent.
 	// The number is referenced from the size of tx pool.
 	txChanSize = 4096
+
+	numBroadcastBlockPeers = 8 // Maximum number of peers for broadcast new block directly
 )
 
 var (
@@ -439,8 +442,21 @@ func (h *handler) BroadcastBlock(block *types.Block, propagate bool) {
 			log.Error("Propagating dangling block", "number", block.Number(), "hash", hash)
 			return
 		}
-		// Send the block to a subset of our peers
-		transfer := peers[:int(math.Sqrt(float64(len(peers))))]
+
+		var transfer []*ethPeer
+		if len(peers) <= numBroadcastBlockPeers {
+			// Send the block to all peers
+			transfer = peers
+		} else {
+			// Send the block to a subset of our peers
+			rand.Seed(time.Now().UnixNano())
+			indexes := rand.Perm(len(peers))
+			maxPeers := int(math.Sqrt(float64(len(peers))))
+			transfer = make([]*ethPeer, 0, maxPeers)
+			for i := 0; i < maxPeers; i++ {
+				transfer = append(transfer, peers[indexes[i]])
+			}
+		}
 		for _, peer := range transfer {
 			peer.AsyncSendNewBlock(block, td)
 		}
