@@ -31,6 +31,7 @@ import (
 	"github.com/ethereum/go-ethereum/crypto"
 	l "github.com/ethereum/go-ethereum/les"
 	"github.com/ethereum/go-ethereum/params"
+	"github.com/ethereum/go-ethereum/rlp"
 	"github.com/ethereum/go-ethereum/trie"
 )
 
@@ -251,10 +252,27 @@ func (f *fuzzer) GetHelperTrie(typ uint, index uint64) *trie.Trie {
 	return nil
 }
 
-func (f *fuzzer) doFuzz(req l.HandlerRequest) {
+type dummyMsg struct {
+	data []byte
+}
+
+func (d dummyMsg) Decode(val interface{}) error {
+	return rlp.DecodeBytes(d.data, val)
+}
+
+func (f *fuzzer) doFuzz(msgCode uint64, packet interface{}) {
 	version := f.randomInt(3) + 2 // [LES2, LES3, LES4]
 	peer := l.NewFuzzerPeer(version)
-	req.Serve(f, 42, peer, func() bool { return true })
+	enc, err := rlp.EncodeToBytes(packet)
+	if err != nil {
+		panic(err)
+	}
+	fn, _, _, err := l.Les3[msgCode].Handle(dummyMsg{enc})
+	if err != nil {
+		panic(err)
+	}
+	fn(f, peer, func() bool { return true })
+
 }
 
 func Fuzz(input []byte) int {
@@ -269,69 +287,71 @@ func Fuzz(input []byte) int {
 	for !f.exhausted {
 		switch f.randomInt(8) {
 		case 0:
-			req := l.GetBlockHeadersReq{
-				Amount:  f.randomX(l.MaxHeaderFetch + 1),
-				Skip:    f.randomX(10),
-				Reverse: f.randomBool(),
+			req := &l.GetBlockHeadersPacket{
+				Query: l.GetBlockHeadersData{
+					Amount:  f.randomX(l.MaxHeaderFetch + 1),
+					Skip:    f.randomX(10),
+					Reverse: f.randomBool(),
+				},
 			}
 			if f.randomBool() {
-				req.Origin.Hash = f.randomBlockHash()
+				req.Query.Origin.Hash = f.randomBlockHash()
 			} else {
-				req.Origin.Number = uint64(f.randomInt(f.chainLen * 2))
+				req.Query.Origin.Number = uint64(f.randomInt(f.chainLen * 2))
 			}
-			f.doFuzz(req)
+			f.doFuzz(l.GetBlockHeadersMsg, req)
 
 		case 1:
-			req := make(l.GetBlockBodiesReq, f.randomInt(l.MaxBodyFetch+1))
-			for i := range req {
-				req[i] = f.randomBlockHash()
+			req := &l.GetBlockBodiesPacket{Hashes: make([]common.Hash, f.randomInt(l.MaxBodyFetch+1))}
+			for i := range req.Hashes {
+				req.Hashes[i] = f.randomBlockHash()
 			}
-			f.doFuzz(req)
+			f.doFuzz(l.GetBlockBodiesMsg, req)
 
 		case 2:
-			req := make(l.GetCodeReq, f.randomInt(l.MaxCodeFetch+1))
-			for i := range req {
-				req[i] = l.CodeReq{
+			req := &l.GetCodePacket{Reqs: make([]l.CodeReq, f.randomInt(l.MaxCodeFetch+1))}
+			for i := range req.Reqs {
+				req.Reqs[i] = l.CodeReq{
 					BHash:  f.randomBlockHash(),
 					AccKey: f.randomAddrHash(),
 				}
 			}
-			f.doFuzz(req)
+			f.doFuzz(l.GetCodeMsg, req)
 
 		case 3:
-			req := make(l.GetReceiptsReq, f.randomInt(l.MaxReceiptFetch+1))
-			for i := range req {
-				req[i] = f.randomBlockHash()
+			req := &l.GetReceiptsPacket{Hashes: make([]common.Hash, f.randomInt(l.MaxReceiptFetch+1))}
+			for i := range req.Hashes {
+				req.Hashes[i] = f.randomBlockHash()
 			}
-			f.doFuzz(req)
+			f.doFuzz(l.GetReceiptsMsg, req)
 
 		case 4:
-			req := make(l.GetProofsReq, f.randomInt(l.MaxProofsFetch+1))
-			for i := range req {
+			req := &l.GetProofsPacket{Reqs: make([]l.ProofReq, f.randomInt(l.MaxProofsFetch+1))}
+			for i := range req.Reqs {
 				if f.randomBool() {
-					req[i] = l.ProofReq{
+					req.Reqs[i] = l.ProofReq{
 						BHash:     f.randomBlockHash(),
 						AccKey:    f.randomAddrHash(),
 						Key:       f.randomAddrHash(),
 						FromLevel: uint(f.randomX(3)),
 					}
 				} else {
-					req[i] = l.ProofReq{
+					req.Reqs[i] = l.ProofReq{
 						BHash:     f.randomBlockHash(),
 						Key:       f.randomAddrHash(),
 						FromLevel: uint(f.randomX(3)),
 					}
 				}
 			}
-			f.doFuzz(req)
+			f.doFuzz(l.GetProofsV2Msg, req)
 
 		case 5:
-			req := make(l.GetHelperTrieProofsReq, f.randomInt(l.MaxHelperTrieProofsFetch+1))
-			for i := range req {
+			req := &l.GetHelperTrieProofsPacket{Reqs: make([]l.HelperTrieReq, f.randomInt(l.MaxHelperTrieProofsFetch+1))}
+			for i := range req.Reqs {
 				switch f.randomInt(3) {
 				case 0:
 					// Canonical hash trie
-					req[i] = l.HelperTrieReq{
+					req.Reqs[i] = l.HelperTrieReq{
 						Type:      0,
 						TrieIdx:   f.randomX(3),
 						Key:       f.randomCHTTrieKey(),
@@ -340,7 +360,7 @@ func Fuzz(input []byte) int {
 					}
 				case 1:
 					// Bloom trie
-					req[i] = l.HelperTrieReq{
+					req.Reqs[i] = l.HelperTrieReq{
 						Type:      1,
 						TrieIdx:   f.randomX(3),
 						Key:       f.randomBloomTrieKey(),
@@ -349,7 +369,7 @@ func Fuzz(input []byte) int {
 					}
 				default:
 					// Random trie
-					req[i] = l.HelperTrieReq{
+					req.Reqs[i] = l.HelperTrieReq{
 						Type:      2,
 						TrieIdx:   f.randomX(3),
 						Key:       f.randomCHTTrieKey(),
@@ -358,12 +378,12 @@ func Fuzz(input []byte) int {
 					}
 				}
 			}
-			f.doFuzz(req)
+			f.doFuzz(l.GetHelperTrieProofsMsg, req)
 
 		case 6:
-			req := make(l.SendTxReq, f.randomInt(l.MaxTxSend+1))
+			req := &l.SendTxPacket{Txs: make([]*types.Transaction, f.randomInt(l.MaxTxSend+1))}
 			signer := types.HomesteadSigner{}
-			for i := range req {
+			for i := range req.Txs {
 				var nonce uint64
 				if f.randomBool() {
 					nonce = uint64(f.randomByte())
@@ -371,16 +391,16 @@ func Fuzz(input []byte) int {
 					nonce = f.nonce
 					f.nonce += 1
 				}
-				req[i], _ = types.SignTx(types.NewTransaction(nonce, common.Address{}, big.NewInt(10000), params.TxGas, big.NewInt(1000000000*int64(f.randomByte())), nil), signer, bankKey)
+				req.Txs[i], _ = types.SignTx(types.NewTransaction(nonce, common.Address{}, big.NewInt(10000), params.TxGas, big.NewInt(1000000000*int64(f.randomByte())), nil), signer, bankKey)
 			}
-			f.doFuzz(req)
+			f.doFuzz(l.SendTxV2Msg, req)
 
 		case 7:
-			req := make(l.GetTxStatusReq, f.randomInt(l.MaxTxStatus+1))
-			for i := range req {
-				req[i] = f.randomTxHash()
+			req := &l.GetTxStatusPacket{Hashes: make([]common.Hash, f.randomInt(l.MaxTxStatus+1))}
+			for i := range req.Hashes {
+				req.Hashes[i] = f.randomTxHash()
 			}
-			f.doFuzz(req)
+			f.doFuzz(l.GetTxStatusMsg, req)
 		}
 	}
 	return 0

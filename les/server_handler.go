@@ -224,92 +224,34 @@ func (h *serverHandler) handleMsg(p *clientPeer, wg *sync.WaitGroup) error {
 	p.responseCount++
 	responseCount := p.responseCount
 
-	var (
-		req struct {
-			ID   uint64
-			Data rlp.RawValue
-		}
-		hreq      HandlerRequest
-		decodeErr error
-	)
-	if err := msg.Decode(&req); err != nil {
-		clientErrorMeter.Mark(1)
-		return errResp(ErrDecode, "%v: %v", msg, err)
-	}
-
-	switch msg.Code {
-	case GetBlockHeadersMsg:
-		p.Log().Trace("Received block header request")
-		r := GetBlockHeadersReq{}
-		decodeErr = rlp.DecodeBytes(req.Data, &r)
-		hreq = r
-
-	case GetBlockBodiesMsg:
-		p.Log().Trace("Received block bodies request")
-		r := GetBlockBodiesReq{}
-		decodeErr = rlp.DecodeBytes(req.Data, &r)
-		hreq = r
-
-	case GetCodeMsg:
-		p.Log().Trace("Received code request")
-		r := GetCodeReq{}
-		decodeErr = rlp.DecodeBytes(req.Data, &r)
-		hreq = r
-
-	case GetReceiptsMsg:
-		p.Log().Trace("Received receipts request")
-		r := GetReceiptsReq{}
-		decodeErr = rlp.DecodeBytes(req.Data, &r)
-		hreq = r
-
-	case GetProofsV2Msg:
-		p.Log().Trace("Received les/2 proofs request")
-		r := GetProofsReq{}
-		decodeErr = rlp.DecodeBytes(req.Data, &r)
-		hreq = r
-
-	case GetHelperTrieProofsMsg:
-		p.Log().Trace("Received helper trie proof request")
-		r := GetHelperTrieProofsReq{}
-		decodeErr = rlp.DecodeBytes(req.Data, &r)
-		hreq = r
-
-	case SendTxV2Msg:
-		p.Log().Trace("Received new transactions")
-		r := SendTxReq{}
-		decodeErr = rlp.DecodeBytes(req.Data, &r)
-		hreq = r
-
-	case GetTxStatusMsg:
-		p.Log().Trace("Received transaction status query request")
-		r := GetTxStatusReq{}
-		decodeErr = rlp.DecodeBytes(req.Data, &r)
-		hreq = r
-
-	default:
+	req, ok := Les3[msg.Code]
+	if !ok {
 		p.Log().Trace("Received invalid message", "code", msg.Code)
 		clientErrorMeter.Mark(1)
 		return errResp(ErrInvalidMsgCode, "%v", msg.Code)
 	}
+	p.Log().Trace("Received " + req.Name)
+
+	serve, reqID, reqCnt, err := req.Handle(msg)
+	if err != nil {
+		clientErrorMeter.Mark(1)
+		return errResp(ErrDecode, "%v: %v", msg, err)
+	}
 
 	if metrics.EnabledExpensive {
-		hreq.InMetrics(int64(msg.Size))
+		req.InPacketsMeter.Mark(1)
+		req.InTrafficMeter.Mark(int64(msg.Size))
 	}
-	if decodeErr != nil {
-		clientErrorMeter.Mark(1)
-		return errResp(ErrDecode, "%v: %v", msg, decodeErr)
-	}
-	reqCnt, maxCnt := hreq.ReqAmount()
 
 	// Short circuit if the peer is already frozen or the request is invalid.
 	inSizeCost := h.server.costTracker.realCost(0, msg.Size, 0)
-	if p.isFrozen() || reqCnt == 0 || reqCnt > maxCnt {
+	if p.isFrozen() || reqCnt == 0 || reqCnt > req.MaxCount {
 		p.fcClient.OneTimeCost(inSizeCost)
 		return nil
 	}
 	// Prepaid max cost units before request been serving.
 	maxCost := p.fcCosts.getMaxCost(msg.Code, reqCnt)
-	accepted, bufShort, priority := p.fcClient.AcceptRequest(req.ID, responseCount, maxCost)
+	accepted, bufShort, priority := p.fcClient.AcceptRequest(reqID, responseCount, maxCost)
 	if !accepted {
 		p.freeze()
 		p.Log().Error("Request came too early", "remaining", common.PrettyDuration(time.Duration(bufShort*1000000/p.fcParams.MinRecharge)))
@@ -329,7 +271,7 @@ func (h *serverHandler) handleMsg(p *clientPeer, wg *sync.WaitGroup) error {
 		wg.Add(1)
 		go func() {
 			defer wg.Done()
-			reply := hreq.Serve(h, req.ID, p, task.waitOrStop)
+			reply := serve(h, p, task.waitOrStop)
 			if reply != nil {
 				task.done()
 			}
@@ -340,7 +282,7 @@ func (h *serverHandler) handleMsg(p *clientPeer, wg *sync.WaitGroup) error {
 			// Short circuit if the client is already frozen.
 			if p.isFrozen() {
 				realCost := h.server.costTracker.realCost(task.servingTime, msg.Size, 0)
-				p.fcClient.RequestProcessed(req.ID, responseCount, maxCost, realCost)
+				p.fcClient.RequestProcessed(reqID, responseCount, maxCost, realCost)
 				return
 			}
 			// Positive correction buffer value with real cost.
@@ -357,7 +299,7 @@ func (h *serverHandler) handleMsg(p *clientPeer, wg *sync.WaitGroup) error {
 					realCost = maxCost
 				}
 			}
-			bv := p.fcClient.RequestProcessed(req.ID, responseCount, maxCost, realCost)
+			bv := p.fcClient.RequestProcessed(reqID, responseCount, maxCost, realCost)
 			if reply != nil {
 				// Feed cost tracker request serving statistic.
 				h.server.costTracker.updateStats(msg.Code, reqCnt, task.servingTime, realCost)
@@ -372,12 +314,14 @@ func (h *serverHandler) handleMsg(p *clientPeer, wg *sync.WaitGroup) error {
 					}
 				})
 				if metrics.EnabledExpensive {
-					hreq.OutMetrics(int64(replySize), time.Duration(task.servingTime))
+					req.OutPacketsMeter.Mark(1)
+					req.OutTrafficMeter.Mark(int64(replySize))
+					req.ServingTimeMeter.Update(time.Duration(task.servingTime))
 				}
 			}
 		}()
 	} else {
-		p.fcClient.RequestProcessed(req.ID, responseCount, maxCost, inSizeCost)
+		p.fcClient.RequestProcessed(reqID, responseCount, maxCost, inSizeCost)
 	}
 
 	// If the client has made too much invalid request(e.g. request a non-existent data),
@@ -389,18 +333,22 @@ func (h *serverHandler) handleMsg(p *clientPeer, wg *sync.WaitGroup) error {
 	return nil
 }
 
+// BlockChain implements serverBackend
 func (h *serverHandler) BlockChain() *core.BlockChain {
 	return h.blockchain
 }
 
+// TxPool implements serverBackend
 func (h *serverHandler) TxPool() *core.TxPool {
 	return h.txpool
 }
 
+// ArchiveMode implements serverBackend
 func (h *serverHandler) ArchiveMode() bool {
 	return h.server.archiveMode
 }
 
+// AddTxsSync implements serverBackend
 func (h *serverHandler) AddTxsSync() bool {
 	return h.addTxsSync
 }
