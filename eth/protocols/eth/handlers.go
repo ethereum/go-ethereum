@@ -455,7 +455,7 @@ func handleTransactions(backend Backend, msg Decoder, peer *Peer) error {
 		return nil
 	}
 	// Transactions can be processed, parse all of them and deliver to the pool
-	var txs []*types.Transaction
+	var txs TransactionsPacket
 	if err := msg.Decode(&txs); err != nil {
 		return fmt.Errorf("%w: message %v: %v", errDecode, msg, err)
 	}
@@ -466,7 +466,7 @@ func handleTransactions(backend Backend, msg Decoder, peer *Peer) error {
 		}
 		peer.markTransaction(tx.Hash())
 	}
-	return backend.Handle(peer, (*TransactionsPacket)(&txs))
+	return backend.Handle(peer, &txs)
 }
 
 func handlePooledTransactions(backend Backend, msg Decoder, peer *Peer) error {

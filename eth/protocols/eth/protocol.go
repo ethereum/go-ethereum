@@ -211,6 +211,12 @@ type GetBlockBodiesPacket66 struct {
 // BlockBodiesPacket is the network packet for block content distribution.
 type BlockBodiesPacket []*BlockBody
 
+// BlockBodiesPacket is the network packet for block content distribution over eth/66.
+type BlockBodiesPacket66 struct {
+	RequestId uint64
+	BlockBodiesPacket
+}
+
 // BlockBodiesRLPPacket is used for replying to block body requests, in cases
 // where we already have them RLP-encoded, and thus can avoid the decode-encode
 // roundtrip.
@@ -220,12 +226,6 @@ type BlockBodiesRLPPacket []rlp.RawValue
 type BlockBodiesRLPPacket66 struct {
 	RequestId uint64
 	BlockBodiesRLPPacket
-}
-
-// BlockBodiesPacket is the network packet for block content distribution over eth/66.
-type BlockBodiesPacket66 struct {
-	RequestId uint64
-	BlockBodiesPacket
 }
 
 // BlockBody represents the data content of a single block.

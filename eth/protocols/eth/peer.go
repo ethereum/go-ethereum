@@ -276,7 +276,11 @@ func (p *Peer) ReplyPooledTransactionsRLP(id uint64, hashes []common.Hash, txs P
 	for _, hash := range hashes {
 		p.knownTxs.Add(hash)
 	}
-	return p2p.Send(p.rw, PooledTransactionsMsg, PooledTransactionsRLPPacket66{id, txs}) // Not packed into PooledTransactionsPacket to avoid RLP decoding
+	// Not packed into PooledTransactionsPacket to avoid RLP decoding
+	return p2p.Send(p.rw, PooledTransactionsMsg, PooledTransactionsRLPPacket66{
+		RequestId:                   id,
+		PooledTransactionsRLPPacket: txs,
+	})
 }
 
 // SendNewBlockHashes announces the availability of a number of blocks through
@@ -320,7 +324,10 @@ func (p *Peer) SendNewBlock(block *types.Block, td *big.Int) error {
 		p.knownBlocks.Pop()
 	}
 	p.knownBlocks.Add(block.Hash())
-	return p2p.Send(p.rw, NewBlockMsg, &NewBlockPacket{block, td})
+	return p2p.Send(p.rw, NewBlockMsg, &NewBlockPacket{
+		Block: block,
+		TD:    td,
+	})
 }
 
 // AsyncSendNewBlock queues an entire block for propagation to a remote peer. If
@@ -344,7 +351,10 @@ func (p *Peer) SendBlockHeaders(headers []*types.Header) error {
 }
 
 func (p *Peer) ReplyBlockHeaders(id uint64, headers BlockHeadersPacket) error {
-	return p2p.Send(p.rw, BlockHeadersMsg, BlockHeadersPacket66{id, headers})
+	return p2p.Send(p.rw, BlockHeadersMsg, BlockHeadersPacket66{
+		RequestId:          id,
+		BlockHeadersPacket: headers,
+	})
 }
 
 // SendBlockBodiesRLP sends a batch of block contents to the remote peer from
@@ -354,7 +364,11 @@ func (p *Peer) SendBlockBodiesRLP(bodies BlockBodiesRLPPacket) error {
 }
 
 func (p *Peer) ReplyBlockBodiesRLP(id uint64, bodies BlockBodiesRLPPacket) error {
-	return p2p.Send(p.rw, BlockBodiesMsg, BlockBodiesRLPPacket66{id, bodies}) // Not packed into BlockBodiesPacket to avoid RLP decoding
+	// Not packed into BlockBodiesPacket to avoid RLP decoding
+	return p2p.Send(p.rw, BlockBodiesMsg, BlockBodiesRLPPacket66{
+		RequestId:            id,
+		BlockBodiesRLPPacket: bodies,
+	})
 }
 
 // SendNodeDataRLP sends a batch of arbitrary internal data, corresponding to the
@@ -365,7 +379,10 @@ func (p *Peer) SendNodeData(data NodeDataPacket) error {
 
 // ReplyNodeData is the eth/66 response to GetNodeData
 func (p *Peer) ReplyNodeData(id uint64, data NodeDataPacket) error {
-	return p2p.Send(p.rw, NodeDataMsg, NodeDataPacket66{id, data})
+	return p2p.Send(p.rw, NodeDataMsg, NodeDataPacket66{
+		RequestId:      id,
+		NodeDataPacket: data,
+	})
 }
 
 // SendReceiptsRLP sends a batch of transaction receipts, corresponding to the
@@ -376,21 +393,27 @@ func (p *Peer) SendReceiptsRLP(receipts ReceiptsRLPPacket) error {
 
 // ReplyReceiptsRLP is the eth/66 response to GetReceipts
 func (p *Peer) ReplyReceiptsRLP(id uint64, receipts ReceiptsRLPPacket) error {
-	return p2p.Send(p.rw, ReceiptsMsg, ReceiptsRLPPacket66{id, receipts})
+	return p2p.Send(p.rw, ReceiptsMsg, ReceiptsRLPPacket66{
+		RequestId:         id,
+		ReceiptsRLPPacket: receipts,
+	})
 }
 
 // RequestOneHeader is a wrapper around the header query functions to fetch a
 // single header. It is used solely by the fetcher.
 func (p *Peer) RequestOneHeader(hash common.Hash) error {
 	p.Log().Debug("Fetching single header", "hash", hash)
-	query := &GetBlockHeadersPacket{
+	query := GetBlockHeadersPacket{
 		Origin:  HashOrNumber{Hash: hash},
 		Amount:  uint64(1),
 		Skip:    uint64(0),
 		Reverse: false,
 	}
 	if p.Version() >= ETH66 {
-		return p2p.Send(p.rw, GetBlockHeadersMsg, &GetBlockHeadersPacket66{rand.Uint64(), query})
+		return p2p.Send(p.rw, GetBlockHeadersMsg, &GetBlockHeadersPacket66{
+			RequestId:             rand.Uint64(),
+			GetBlockHeadersPacket: &query,
+		})
 	}
 	return p2p.Send(p.rw, GetBlockHeadersMsg, &query)
 }
@@ -406,7 +429,10 @@ func (p *Peer) RequestHeadersByHash(origin common.Hash, amount int, skip int, re
 		Reverse: reverse,
 	}
 	if p.Version() >= ETH66 {
-		return p2p.Send(p.rw, GetBlockHeadersMsg, &GetBlockHeadersPacket66{rand.Uint64(), &query})
+		return p2p.Send(p.rw, GetBlockHeadersMsg, &GetBlockHeadersPacket66{
+			RequestId:             rand.Uint64(),
+			GetBlockHeadersPacket: &query,
+		})
 	}
 	return p2p.Send(p.rw, GetBlockHeadersMsg, &query)
 }
@@ -422,7 +448,10 @@ func (p *Peer) RequestHeadersByNumber(origin uint64, amount int, skip int, rever
 		Reverse: reverse,
 	}
 	if p.Version() >= ETH66 {
-		return p2p.Send(p.rw, GetBlockHeadersMsg, &GetBlockHeadersPacket66{rand.Uint64(), &query})
+		return p2p.Send(p.rw, GetBlockHeadersMsg, &GetBlockHeadersPacket66{
+			RequestId:             rand.Uint64(),
+			GetBlockHeadersPacket: &query,
+		})
 	}
 	return p2p.Send(p.rw, GetBlockHeadersMsg, &query)
 }
@@ -444,7 +473,10 @@ func (p *Peer) ExpectRequestHeadersByNumber(origin uint64, amount int, skip int,
 func (p *Peer) RequestBodies(hashes []common.Hash) error {
 	p.Log().Debug("Fetching batch of block bodies", "count", len(hashes))
 	if p.Version() >= ETH66 {
-		return p2p.Send(p.rw, GetBlockBodiesMsg, &GetBlockBodiesPacket66{rand.Uint64(), hashes})
+		return p2p.Send(p.rw, GetBlockBodiesMsg, &GetBlockBodiesPacket66{
+			RequestId:            rand.Uint64(),
+			GetBlockBodiesPacket: hashes,
+		})
 	}
 	return p2p.Send(p.rw, GetBlockBodiesMsg, GetBlockBodiesPacket(hashes))
 }
@@ -454,7 +486,10 @@ func (p *Peer) RequestBodies(hashes []common.Hash) error {
 func (p *Peer) RequestNodeData(hashes []common.Hash) error {
 	p.Log().Debug("Fetching batch of state data", "count", len(hashes))
 	if p.Version() >= ETH66 {
-		return p2p.Send(p.rw, GetNodeDataMsg, &GetNodeDataPacket66{rand.Uint64(), hashes})
+		return p2p.Send(p.rw, GetNodeDataMsg, &GetNodeDataPacket66{
+			RequestId:         rand.Uint64(),
+			GetNodeDataPacket: hashes,
+		})
 	}
 	return p2p.Send(p.rw, GetNodeDataMsg, GetNodeDataPacket(hashes))
 }
@@ -463,7 +498,10 @@ func (p *Peer) RequestNodeData(hashes []common.Hash) error {
 func (p *Peer) RequestReceipts(hashes []common.Hash) error {
 	p.Log().Debug("Fetching batch of receipts", "count", len(hashes))
 	if p.Version() >= ETH66 {
-		return p2p.Send(p.rw, GetReceiptsMsg, &GetReceiptsPacket66{rand.Uint64(), hashes})
+		return p2p.Send(p.rw, GetReceiptsMsg, &GetReceiptsPacket66{
+			RequestId:         rand.Uint64(),
+			GetReceiptsPacket: hashes,
+		})
 	}
 	return p2p.Send(p.rw, GetReceiptsMsg, GetReceiptsPacket(hashes))
 }
@@ -472,7 +510,10 @@ func (p *Peer) RequestReceipts(hashes []common.Hash) error {
 func (p *Peer) RequestTxs(hashes []common.Hash) error {
 	p.Log().Debug("Fetching batch of transactions", "count", len(hashes))
 	if p.Version() >= ETH66 {
-		return p2p.Send(p.rw, GetPooledTransactionsMsg, &GetPooledTransactionsPacket66{rand.Uint64(), hashes})
+		return p2p.Send(p.rw, GetPooledTransactionsMsg, &GetPooledTransactionsPacket66{
+			RequestId:                   rand.Uint64(),
+			GetPooledTransactionsPacket: hashes,
+		})
 	}
 	return p2p.Send(p.rw, GetPooledTransactionsMsg, GetPooledTransactionsPacket(hashes))
 }
