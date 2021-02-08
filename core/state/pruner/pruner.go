@@ -188,8 +188,15 @@ func prune(maindb ethdb.Database, stateBloom *stateBloom, middleStateRoots map[c
 		cstart := time.Now()
 
 		for b := byte(0); b < byte(16); b++ {
-			log.Info("Compacting database", "range", fmt.Sprintf("%#x-%#x", b, b+1), "elapsed", common.PrettyDuration(time.Since(cstart)))
-			if err := maindb.Compact([]byte{b}, []byte{b + 1}); err != nil {
+			var (
+				start = []byte{b << 4}
+				end   = []byte{(b+1)<<4 - 1}
+			)
+			log.Info("Compacting database", "range", fmt.Sprintf("%#x-%#x", start, end), "elapsed", common.PrettyDuration(time.Since(cstart)))
+			if b == 15 {
+				end = nil
+			}
+			if err := maindb.Compact(start, end); err != nil {
 				log.Error("Database compaction failed", "error", err)
 				return err
 			}
@@ -229,7 +236,7 @@ func (p *Pruner) Prune(root common.Hash) error {
 			// Reject if the accumulated diff layers are less than 128. It
 			// means in most of normal cases, there is no associated state
 			// with bottom-most diff layer.
-			return errors.New("the snapshot difflayers are less than 128")
+			return fmt.Errorf("snapshot not old enough yet: need %d more blocks", 128-len(layers))
 		}
 		// Use the bottom-most diff layer as the target
 		root = layers[len(layers)-1].Root()
