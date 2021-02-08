@@ -19,6 +19,7 @@ package eth
 import (
 	"context"
 	"errors"
+	"fmt"
 	"math/big"
 
 	"github.com/ethereum/go-ethereum/accounts"
@@ -342,4 +343,26 @@ func (b *EthAPIBackend) StatesInRange(ctx context.Context, fromBlock *types.Bloc
 
 func (b *EthAPIBackend) StateAtTransaction(ctx context.Context, block *types.Block, txIndex int, reexec uint64) (core.Message, vm.BlockContext, *state.StateDB, func(), error) {
 	return b.eth.stateAtTransaction(block, txIndex, reexec)
+}
+
+func (b *EthAPIBackend) AccessList(ctx context.Context, block *types.Block, reexec uint64, tx *types.Transaction) (*types.AccessList, error) {
+	statedb, release, err := b.eth.stateAtBlock(block, reexec)
+	defer release()
+	if err != nil {
+		return nil, err
+	}
+	signer := types.MakeSigner(b.eth.blockchain.Config(), block.Number())
+	msg, err := tx.AsMessage(signer)
+	if err != nil {
+		return nil, err
+	}
+	txContext := core.NewEVMTxContext(msg)
+	context := core.NewEVMBlockContext(block.Header(), b.eth.blockchain, nil)
+	// Not yet the searched for transaction, execute on top of the current state
+	vmenv := vm.NewEVM(context, txContext, statedb, b.eth.blockchain.Config(), vm.Config{})
+	if _, err := core.ApplyMessage(vmenv, msg, new(core.GasPool).AddGas(tx.Gas())); err != nil {
+		return nil, fmt.Errorf("failed to apply transaction: %v", tx.Hash(), err)
+	}
+	statedb.UnprepareAccessList(msg.From(), msg.To(), vmenv.ActivePrecompiles())
+	return statedb.AccessList(), nil
 }
