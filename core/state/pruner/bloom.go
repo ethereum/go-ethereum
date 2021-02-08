@@ -83,20 +83,25 @@ func NewStateBloomFromDisk(filename string) (*stateBloom, error) {
 
 // Commit flushes the bloom filter content into the disk and marks the bloom
 // as complete.
-func (bloom *stateBloom) Commit(filename string) error {
-	_, err := bloom.bloom.WriteFile(filename)
+func (bloom *stateBloom) Commit(filename, tempname string) error {
+	// Write the bloom out into a temporary file
+	_, err := bloom.bloom.WriteFile(tempname)
 	if err != nil {
 		return err
 	}
-	f, err := os.Open(filename)
+	// Ensure the file is synced to disk
+	f, err := os.Open(tempname)
 	if err != nil {
 		return err
 	}
 	if err := f.Sync(); err != nil {
+		f.Close()
 		return err
 	}
 	f.Close()
-	return nil
+
+	// Move the teporary file into it's final location
+	return os.Rename(tempname, filename)
 }
 
 // Put implements the KeyValueWriter interface. But here only the key is needed.
