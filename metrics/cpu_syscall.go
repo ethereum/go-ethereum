@@ -31,5 +31,5 @@ func getProcessCPUTime() int64 {
 		log.Warn("Failed to retrieve CPU time", "err", err)
 		return 0
 	}
-	return (usage.Utime.Sec+usage.Stime.Sec)*100 + int64(usage.Utime.Usec+usage.Stime.Usec)/10000 //nolint:unconvert
+	return int64(usage.Utime.Sec+usage.Stime.Sec)*100 + int64(usage.Utime.Usec+usage.Stime.Usec)/10000 //nolint:unconvert
 }
