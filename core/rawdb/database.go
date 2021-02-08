@@ -270,8 +270,8 @@ func (s *stat) Count() string {
 
 // InspectDatabase traverses the entire database and checks the size
 // of all different categories of data.
-func InspectDatabase(db ethdb.Database) error {
-	it := db.NewIterator(nil, nil)
+func InspectDatabase(db ethdb.Database, keyPrefix, keyStart []byte) error {
+	it := db.NewIterator(keyPrefix, keyStart)
 	defer it.Release()
 
 	var (

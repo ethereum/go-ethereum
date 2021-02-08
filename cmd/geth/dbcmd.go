@@ -60,11 +60,13 @@ Remove blockchain and state databases`,
 			dbPutCmd,
 		},
 	}
-
 	dbInspectCmd = cli.Command{
-		Action: utils.MigrateFlags(inspect),
-		Name:   "inspect",
-		Usage:  "Inspect the storage size for each type of data in the database",
+		Action:    utils.MigrateFlags(inspect),
+		Name:      "inspect",
+		ArgsUsage: "<prefix> <start>",
+
+		Usage:       "Inspect the storage size for each type of data in the database",
+		Description: `This commands iterates the entire database. If the optional 'prefix' and 'start' arguments are provided, then the iteration is limited to the given subset of data.`,
 	}
 	dbStatCmd = cli.Command{
 		Action: leveldbStats,
@@ -165,13 +167,34 @@ func confirmAndRemoveDB(database string, kind string) {
 }
 
 func inspect(ctx *cli.Context) error {
+	var (
+		prefix []byte
+		start  []byte
+	)
+	if ctx.NArg() > 2 {
+		return fmt.Errorf("Max 2 arguments: %v", ctx.Command.ArgsUsage)
+	}
+	if ctx.NArg() >= 1 {
+		if d, err := hexutil.Decode(ctx.Args().Get(0)); err != nil {
+			return fmt.Errorf("failed to hex-decode 'prefix': %v")
+		} else {
+			prefix = d
+		}
+	}
+	if ctx.NArg() >= 2 {
+		if d, err := hexutil.Decode(ctx.Args().Get(1)); err != nil {
+			return fmt.Errorf("failed to hex-decode 'start': %v")
+		} else {
+			start = d
+		}
+	}
 	node, _ := makeConfigNode(ctx)
 	defer node.Close()
 
 	_, chainDb := utils.MakeChain(ctx, node, true)
 	defer chainDb.Close()
 
-	return rawdb.InspectDatabase(chainDb)
+	return rawdb.InspectDatabase(chainDb, prefix, start)
 }
 
 func showLeveldbStats(db ethdb.Stater) {
