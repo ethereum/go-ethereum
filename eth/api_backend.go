@@ -346,6 +346,9 @@ func (b *EthAPIBackend) StateAtTransaction(ctx context.Context, block *types.Blo
 }
 
 func (b *EthAPIBackend) AccessList(ctx context.Context, block *types.Block, reexec uint64, tx *types.Transaction) (*types.AccessList, error) {
+	if block == nil {
+		block = b.CurrentBlock()
+	}
 	statedb, release, err := b.eth.stateAtBlock(block, reexec)
 	defer release()
 	if err != nil {
@@ -363,6 +366,6 @@ func (b *EthAPIBackend) AccessList(ctx context.Context, block *types.Block, reex
 	if _, err := core.ApplyMessage(vmenv, msg, new(core.GasPool).AddGas(tx.Gas())); err != nil {
 		return nil, fmt.Errorf("failed to apply transaction: %v", tx.Hash(), err)
 	}
-	statedb.UnprepareAccessList(msg.From(), msg.To(), vmenv.ActivePrecompiles())
-	return statedb.AccessList(), nil
+
+	return vmenv.StateDB.AccessList(), nil
 }

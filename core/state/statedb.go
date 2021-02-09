@@ -1065,10 +1065,10 @@ func (s *StateDB) SlotInAccessList(addr common.Address, slot common.Hash) (addre
 	return s.accessList.Contains(addr, slot)
 }
 
-// AccessList returns the current access list for the StateDB.
+// CurrentAccessList returns the current access list for the StateDB.
 // If the precompiles, sender and receiver are to be removed from the access list,
 // a prior call to `UnprepareAccessList` is required.
-func (s *StateDB) AccessList() *types.AccessList {
+func (s *StateDB) CurrentAccessList() *types.AccessList {
 	list := s.accessList.Copy()
 	acl := make([]types.AccessTuple, 0, len(list.addresses))
 	for addr, idx := range list.addresses {
@@ -1076,7 +1076,25 @@ func (s *StateDB) AccessList() *types.AccessList {
 		tuple.Address = &addr
 		keys := make([]*common.Hash, 0, len(list.slots[idx]))
 		for key, _ := range list.slots[idx] {
-			tuple.StorageKeys = append(tuple.StorageKeys, &key)
+			keys = append(keys, &key)
+		}
+		tuple.StorageKeys = keys
+		acl = append(acl, tuple)
+	}
+	cast := types.AccessList(acl)
+	return &cast
+}
+
+// AccessList returns a list of dirty slots and addresses
+func (s *StateDB) AccessList() *types.AccessList {
+	acl := make([]types.AccessTuple, 0, len(s.journal.dirties))
+	for addr := range s.journal.dirties {
+		var tuple types.AccessTuple
+		tuple.Address = &addr
+		obj := s.stateObjects[addr]
+		keys := make([]*common.Hash, 0, len(obj.dirtyStorage))
+		for slots := range obj.dirtyStorage {
+			keys = append(keys, &slots)
 		}
 		tuple.StorageKeys = keys
 		acl = append(acl, tuple)
