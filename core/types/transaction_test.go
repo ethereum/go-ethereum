@@ -102,11 +102,35 @@ func TestTransactionEncode(t *testing.T) {
 
 func TestEIP2718TransactionSigHash(t *testing.T) {
 	s := NewEIP2718Signer(big.NewInt(1))
-	if s.Hash(emptyEip2718Tx) != common.HexToHash("c44faa8f50803df8edd97e72c4dbae32343b2986c91e382fc3e329e6c9a36f31") {
+	if s.Hash(emptyEip2718Tx) != common.HexToHash("49b486f0ec0a60dfbbca2d30cb07c9e8ffb2a2ff41f29a1ab6737475f6ff69f3") {
 		t.Errorf("empty EIP-2718 transaction hash mismatch, got %x", s.Hash(emptyEip2718Tx))
 	}
-	if s.Hash(signedEip2718Tx) != common.HexToHash("c44faa8f50803df8edd97e72c4dbae32343b2986c91e382fc3e329e6c9a36f31") {
+	if s.Hash(signedEip2718Tx) != common.HexToHash("49b486f0ec0a60dfbbca2d30cb07c9e8ffb2a2ff41f29a1ab6737475f6ff69f3") {
 		t.Errorf("signed EIP-2718 transaction hash mismatch, got %x", s.Hash(signedEip2718Tx))
+	}
+}
+
+func TestEIP2718SigHashes(t *testing.T) {
+	// the signer chainid doesn't matter for the sighash
+	signer := NewEIP2718Signer(big.NewInt(0))
+	for i, tc := range []struct {
+		rlpData  string
+		sigHash  common.Hash
+		fullHash common.Hash
+	}{
+		{
+			rlpData:  "0xb8a701f8a486796f6c6f763380843b9aca008262d4948a8eafb1cf62bfbeb1741769dae1a9dd479961928080f838f7940000000000000000000000000000000000001337e1a0000000000000000000000000000000000000000000000000000000000000000080a0775101f92dcca278a56bfe4d613428624a1ebfc3cd9e0bcc1de80c41455b9021a06c9deac205afe7b124907d4ba54a9f46161498bd3990b90d175aac12c9a40ee9",
+			sigHash:  common.HexToHash("0xf8eb2089f9add782b02e4c0ce41540817688bf579c14736576cb1d6d562c2f6b"),
+			fullHash: common.HexToHash("0x212a85be428a85d00fb5335b013bc8d3cf7511ffdd8938de768f4ca8bf1caf50"),
+		},
+	} {
+		var tx Transaction
+		rlp.DecodeBytes(common.FromHex(tc.rlpData), &tx)
+		hash := tx.Hash()
+		sigHash := signer.Hash(&tx)
+		if sigHash != tc.sigHash || hash != tc.fullHash {
+			t.Fatalf("test %d: got\nsighash %x want %x\nhash: %x want %x\n", i, sigHash, tc.sigHash, hash, tc.fullHash)
+		}
 	}
 }
 

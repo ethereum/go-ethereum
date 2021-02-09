@@ -164,17 +164,18 @@ func (s EIP2718Signer) Hash(tx *Transaction) common.Hash {
 			s.chainId, uint(0), uint(0),
 		})
 	case AccessListTxId:
-		return rlpHash([]interface{}{
-			tx.Type(),
-			tx.ChainId(),
-			tx.Nonce(),
-			tx.GasPrice(),
-			tx.Gas(),
-			tx.To(),
-			tx.Value(),
-			tx.Data(),
-			tx.AccessList(),
-		})
+		return prefixedRlpHash(
+			[]byte{tx.Type()},
+			[]interface{}{
+				tx.ChainId(),
+				tx.Nonce(),
+				tx.GasPrice(),
+				tx.Gas(),
+				tx.To(),
+				tx.Value(),
+				tx.Data(),
+				tx.AccessList(),
+			})
 	default:
 		// This _should_ not happen, but in case someone sends in a bad
 		// json struct via RPC, it's probably more prudent to return an

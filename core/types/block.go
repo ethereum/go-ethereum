@@ -147,6 +147,18 @@ func rlpHash(x interface{}) (h common.Hash) {
 	return h
 }
 
+// prefixedRlpHash writes the prefix into the hasher before rlp-encoding the
+// given interface. It's used for typed transactions.
+func prefixedRlpHash(prefix []byte, x interface{}) (h common.Hash) {
+	sha := hasherPool.Get().(crypto.KeccakState)
+	defer hasherPool.Put(sha)
+	sha.Reset()
+	sha.Write(prefix)
+	rlp.Encode(sha, x)
+	sha.Read(h[:])
+	return h
+}
+
 // EmptyBody returns true if there is no additional 'body' to complete the header
 // that is: no transactions and no uncles.
 func (h *Header) EmptyBody() bool {
