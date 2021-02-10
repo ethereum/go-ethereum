@@ -177,14 +177,14 @@ func inspect(ctx *cli.Context) error {
 	}
 	if ctx.NArg() >= 1 {
 		if d, err := hexutil.Decode(ctx.Args().Get(0)); err != nil {
-			return fmt.Errorf("failed to hex-decode 'prefix': %v")
+			return fmt.Errorf("failed to hex-decode 'prefix': %v", err)
 		} else {
 			prefix = d
 		}
 	}
 	if ctx.NArg() >= 2 {
 		if d, err := hexutil.Decode(ctx.Args().Get(1)); err != nil {
-			return fmt.Errorf("failed to hex-decode 'start': %v")
+			return fmt.Errorf("failed to hex-decode 'start': %v", err)
 		} else {
 			start = d
 		}
