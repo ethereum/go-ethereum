@@ -364,7 +364,7 @@ func (b *EthAPIBackend) AccessList(ctx context.Context, block *types.Block, reex
 	// Not yet the searched for transaction, execute on top of the current state
 	vmenv := vm.NewEVM(context, txContext, statedb, b.eth.blockchain.Config(), vm.Config{})
 	if _, err := core.ApplyMessage(vmenv, msg, new(core.GasPool).AddGas(tx.Gas())); err != nil {
-		return nil, fmt.Errorf("failed to apply transaction: %v", tx.Hash(), err)
+		return nil, fmt.Errorf("failed to apply transaction: %v err: %v", tx.Hash(), err)
 	}
 
 	return vmenv.StateDB.AccessList(), nil
