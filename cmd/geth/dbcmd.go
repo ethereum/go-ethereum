@@ -18,6 +18,7 @@ package main
 
 import (
 	"fmt"
+	"github.com/syndtr/goleveldb/leveldb/opt"
 	"os"
 	"path/filepath"
 	"time"
@@ -69,12 +70,12 @@ Remove blockchain and state databases`,
 		Description: `This commands iterates the entire database. If the optional 'prefix' and 'start' arguments are provided, then the iteration is limited to the given subset of data.`,
 	}
 	dbStatCmd = cli.Command{
-		Action: leveldbStats,
+		Action: dbStats,
 		Name:   "stats",
 		Usage:  "Print leveldb statistics",
 	}
 	dbCompactCmd = cli.Command{
-		Action: leveldbCompact,
+		Action: dbCompact,
 		Name:   "compact",
 		Usage:  "Compact leveldb database. WARNING: May take a very long time",
 		Description: `This command performs a database compaction. 
@@ -188,10 +189,10 @@ func inspect(ctx *cli.Context) error {
 			start = d
 		}
 	}
-	node, _ := makeConfigNode(ctx)
-	defer node.Close()
+	stack, _ := makeConfigNode(ctx)
+	defer stack.Close()
 
-	_, chainDb := utils.MakeChain(ctx, node, true)
+	_, chainDb := utils.MakeChain(ctx, stack, true)
 	defer chainDb.Close()
 
 	return rawdb.InspectDatabase(chainDb, prefix, start)
@@ -210,11 +211,13 @@ func showLeveldbStats(db ethdb.Stater) {
 	}
 }
 
-func leveldbStats(ctx *cli.Context) error {
+func dbStats(ctx *cli.Context) error {
 	stack, _ := makeConfigNode(ctx)
 	defer stack.Close()
 	path := stack.ResolvePath("chaindata")
-	db, err := leveldb.New(path, 1024, 1000, "")
+	db, err := leveldb.NewCustom(path, "", func(options *opt.Options) {
+		options.ReadOnly = true
+	})
 	if err != nil {
 		return err
 	}
@@ -226,11 +229,16 @@ func leveldbStats(ctx *cli.Context) error {
 	return nil
 }
 
-func leveldbCompact(ctx *cli.Context) error {
+func dbCompact(ctx *cli.Context) error {
 	stack, _ := makeConfigNode(ctx)
 	defer stack.Close()
 	path := stack.ResolvePath("chaindata")
-	db, err := leveldb.New(path, 1024, 1000, "")
+	cache := ctx.GlobalInt(utils.CacheFlag.Name) * ctx.GlobalInt(utils.CacheDatabaseFlag.Name) / 100
+	db, err := leveldb.NewCustom(path, "", func(options *opt.Options) {
+		options.OpenFilesCacheCapacity = utils.MakeDatabaseHandles()
+		options.BlockCacheCapacity = cache / 2 * opt.MiB
+		options.WriteBuffer = cache / 4 * opt.MiB // Two of these are used internally
+	})
 	if err != nil {
 		return err
 	}
@@ -257,7 +265,11 @@ func dbGet(ctx *cli.Context) error {
 	}
 	stack, _ := makeConfigNode(ctx)
 	defer stack.Close()
-	db := utils.MakeChainDatabase(ctx, stack)
+	path := stack.ResolvePath("chaindata")
+	db, err := leveldb.NewCustom(path, "", func(options *opt.Options) {
+		options.ReadOnly = true
+	})
+
 	defer db.Close()
 	key, err := hexutil.Decode(ctx.Args().Get(0))
 	if err != nil {
@@ -269,7 +281,7 @@ func dbGet(ctx *cli.Context) error {
 		log.Info("Get operation failed", "error", err)
 		return err
 	}
-	fmt.Printf("key %x:\n\t%x\n", key, data)
+	fmt.Printf("key %#x:\n\t%#x\n", key, data)
 	return nil
 }
 
@@ -321,7 +333,7 @@ func dbPut(ctx *cli.Context) error {
 	}
 	data, err = db.Get(key)
 	if err == nil {
-		fmt.Printf("Previous value:\n%x\n", data)
+		fmt.Printf("Previous value:\n%#x\n", data)
 	}
 	return db.Put(key, value)
 }
