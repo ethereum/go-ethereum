@@ -17,6 +17,7 @@
 package ethtest
 
 import (
+	"github.com/ethereum/go-ethereum/eth/protocols/eth"
 	"path/filepath"
 	"strconv"
 	"testing"
@@ -93,47 +94,59 @@ func TestChain_GetHeaders(t *testing.T) {
 	}{
 		{
 			req: GetBlockHeaders{
-				Origin: hashOrNumber{
-					Number: uint64(2),
+				&eth.GetBlockHeadersPacket{
+					Origin: eth.HashOrNumber{
+						Number: uint64(2),
+					},
+					Amount:  uint64(5),
+					Skip:    1,
+					Reverse: false,
 				},
-				Amount:  uint64(5),
-				Skip:    1,
-				Reverse: false,
 			},
 			expected: BlockHeaders{
-				chain.blocks[2].Header(),
-				chain.blocks[4].Header(),
-				chain.blocks[6].Header(),
-				chain.blocks[8].Header(),
-				chain.blocks[10].Header(),
+				&eth.BlockHeadersPacket{
+					chain.blocks[2].Header(),
+					chain.blocks[4].Header(),
+					chain.blocks[6].Header(),
+					chain.blocks[8].Header(),
+					chain.blocks[10].Header(),
+				},
 			},
 		},
 		{
 			req: GetBlockHeaders{
-				Origin: hashOrNumber{
-					Number: uint64(chain.Len() - 1),
+				&eth.GetBlockHeadersPacket{
+					Origin: eth.HashOrNumber{
+						Number: uint64(chain.Len() - 1),
+					},
+					Amount:  uint64(3),
+					Skip:    0,
+					Reverse: true,
 				},
-				Amount:  uint64(3),
-				Skip:    0,
-				Reverse: true,
 			},
 			expected: BlockHeaders{
-				chain.blocks[chain.Len()-1].Header(),
-				chain.blocks[chain.Len()-2].Header(),
-				chain.blocks[chain.Len()-3].Header(),
+				&eth.BlockHeadersPacket{
+					chain.blocks[chain.Len()-1].Header(),
+					chain.blocks[chain.Len()-2].Header(),
+					chain.blocks[chain.Len()-3].Header(),
+				},
 			},
 		},
 		{
 			req: GetBlockHeaders{
-				Origin: hashOrNumber{
-					Hash: chain.Head().Hash(),
+				&eth.GetBlockHeadersPacket{
+					Origin: eth.HashOrNumber{
+						Hash: chain.Head().Hash(),
+					},
+					Amount:  uint64(1),
+					Skip:    0,
+					Reverse: false,
 				},
-				Amount:  uint64(1),
-				Skip:    0,
-				Reverse: false,
 			},
 			expected: BlockHeaders{
-				chain.Head().Header(),
+				&eth.BlockHeadersPacket{
+					chain.Head().Header(),
+				},
 			},
 		},
 	}

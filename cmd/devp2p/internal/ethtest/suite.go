@@ -25,6 +25,7 @@ import (
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/internal/utesting"
+	"github.com/ethereum/go-ethereum/eth/protocols/eth"
 	"github.com/ethereum/go-ethereum/p2p"
 	"github.com/ethereum/go-ethereum/p2p/enode"
 	"github.com/ethereum/go-ethereum/p2p/rlpx"
@@ -106,12 +107,14 @@ func (s *Suite) TestMaliciousStatus(t *utesting.T) {
 	// get protoHandshake
 	conn.handshake(t)
 	status := &Status{
-		ProtocolVersion: uint32(conn.ethProtocolVersion),
-		NetworkID:       s.chain.chainConfig.ChainID.Uint64(),
-		TD:              largeNumber(2),
-		Head:            s.chain.blocks[s.chain.Len()-1].Hash(),
-		Genesis:         s.chain.blocks[0].Hash(),
-		ForkID:          s.chain.ForkID(),
+		&eth.StatusPacket{
+			ProtocolVersion: uint32(conn.ethProtocolVersion),
+			NetworkID:       s.chain.chainConfig.ChainID.Uint64(),
+			TD:              largeNumber(2),
+			Head:            s.chain.blocks[s.chain.Len()-1].Hash(),
+			Genesis:         s.chain.blocks[0].Hash(),
+			ForkID:          s.chain.ForkID(),
+		},
 	}
 	// get status
 	switch msg := conn.statusExchange(t, s.chain, status).(type) {
@@ -143,12 +146,14 @@ func (s *Suite) TestGetBlockHeaders(t *utesting.T) {
 
 	// get block headers
 	req := &GetBlockHeaders{
-		Origin: hashOrNumber{
-			Hash: s.chain.blocks[1].Hash(),
+		&eth.GetBlockHeadersPacket{
+			Origin: eth.HashOrNumber{
+				Hash: s.chain.blocks[1].Hash(),
+			},
+			Amount:  2,
+			Skip:    1,
+			Reverse: false,
 		},
-		Amount:  2,
-		Skip:    1,
-		Reverse: false,
 	}
 
 	if err := conn.Write(req); err != nil {
@@ -157,8 +162,8 @@ func (s *Suite) TestGetBlockHeaders(t *utesting.T) {
 
 	switch msg := conn.ReadAndServe(s.chain, timeout).(type) {
 	case *BlockHeaders:
-		headers := msg
-		for _, header := range *headers {
+		headers := *msg.BlockHeadersPacket
+		for _, header := range headers {
 			num := header.Number.Uint64()
 			t.Logf("received header (%d): %s", num, pretty.Sdump(header))
 			assert.Equal(t, s.chain.blocks[int(num)].Header(), header)
@@ -179,14 +184,19 @@ func (s *Suite) TestGetBlockBodies(t *utesting.T) {
 	conn.handshake(t)
 	conn.statusExchange(t, s.chain, nil)
 	// create block bodies request
-	req := &GetBlockBodies{s.chain.blocks[54].Hash(), s.chain.blocks[75].Hash()}
+	req := &GetBlockBodies{
+		&eth.GetBlockBodiesPacket{
+			s.chain.blocks[54].Hash(),
+			s.chain.blocks[75].Hash(),
+		},
+	}
 	if err := conn.Write(req); err != nil {
 		t.Fatalf("could not write to connection: %v", err)
 	}
 
 	switch msg := conn.ReadAndServe(s.chain, timeout).(type) {
 	case *BlockBodies:
-		t.Logf("received %d block bodies", len(*msg))
+		t.Logf("received %d block bodies", len(*msg.BlockBodiesPacket))
 	default:
 		t.Fatalf("unexpected: %s", pretty.Sdump(msg))
 	}
@@ -198,8 +208,10 @@ func (s *Suite) TestBroadcast(t *utesting.T) {
 	sendConn, receiveConn := s.setupConnection(t), s.setupConnection(t)
 	nextBlock := len(s.chain.blocks)
 	blockAnnouncement := &NewBlock{
-		Block: s.fullChain.blocks[nextBlock],
-		TD:    s.fullChain.TD(nextBlock + 1),
+		&eth.NewBlockPacket{
+			Block: s.fullChain.blocks[nextBlock],
+			TD:    s.fullChain.TD(nextBlock + 1),
+		},
 	}
 	s.testAnnounce(t, sendConn, receiveConn, blockAnnouncement)
 	// update test suite chain
@@ -291,20 +303,28 @@ func (s *Suite) TestLargeAnnounce(t *utesting.T) {
 	nextBlock := len(s.chain.blocks)
 	blocks := []*NewBlock{
 		{
-			Block: largeBlock(),
-			TD:    s.fullChain.TD(nextBlock + 1),
+			&eth.NewBlockPacket {
+				Block: largeBlock(),
+				TD:    s.fullChain.TD(nextBlock + 1),
+			},
 		},
 		{
-			Block: s.fullChain.blocks[nextBlock],
-			TD:    largeNumber(2),
+			&eth.NewBlockPacket{
+				Block: s.fullChain.blocks[nextBlock],
+				TD:    largeNumber(2),
+			},
 		},
 		{
-			Block: largeBlock(),
-			TD:    largeNumber(2),
+			&eth.NewBlockPacket{
+				Block: largeBlock(),
+				TD:    largeNumber(2),
+			},
 		},
 		{
-			Block: s.fullChain.blocks[nextBlock],
-			TD:    s.fullChain.TD(nextBlock + 1),
+			&eth.NewBlockPacket{
+				Block: s.fullChain.blocks[nextBlock],
+				TD:    s.fullChain.TD(nextBlock + 1),
+			},
 		},
 	}
 
@@ -357,10 +377,9 @@ func (s *Suite) waitAnnounce(t *utesting.T, conn *Conn, blockAnnouncement *NewBl
 			"wrong TD in announcement",
 		)
 	case *NewBlockHashes:
-		hashes := *msg
-		t.Logf("received NewBlockHashes message: %s", pretty.Sdump(hashes))
-		assert.Equal(t,
-			blockAnnouncement.Block.Hash(), hashes[0].Hash,
+		message := *msg.NewBlockHashesPacket
+		t.Logf("received NewBlockHashes message: %s", pretty.Sdump(message))
+		assert.Equal(t, blockAnnouncement.Block.Hash(), message[0].Hash,
 			"wrong block hash in announcement",
 		)
 	default:

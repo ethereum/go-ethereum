@@ -17,6 +17,7 @@
 package ethtest
 
 import (
+	"github.com/ethereum/go-ethereum/eth/protocols/eth"
 	"time"
 
 	"github.com/ethereum/go-ethereum/common"
@@ -32,7 +33,7 @@ func sendSuccessfulTx(t *utesting.T, s *Suite, tx *types.Transaction) {
 	sendConn := s.setupConnection(t)
 	t.Logf("sending tx: %v %v %v\n", tx.Hash().String(), tx.GasPrice(), tx.Gas())
 	// Send the transaction
-	if err := sendConn.Write(Transactions([]*types.Transaction{tx})); err != nil {
+	if err := sendConn.Write(&Transactions{&eth.TransactionsPacket{tx}}); err != nil {
 		t.Fatal(err)
 	}
 	time.Sleep(100 * time.Millisecond)
@@ -40,7 +41,7 @@ func sendSuccessfulTx(t *utesting.T, s *Suite, tx *types.Transaction) {
 	// Wait for the transaction announcement
 	switch msg := recvConn.ReadAndServe(s.chain, timeout).(type) {
 	case *Transactions:
-		recTxs := *msg
+		recTxs := *msg.TransactionsPacket
 		if len(recTxs) < 1 {
 			t.Fatalf("received transactions do not match send: %v", recTxs)
 		}
@@ -48,7 +49,7 @@ func sendSuccessfulTx(t *utesting.T, s *Suite, tx *types.Transaction) {
 			t.Fatalf("received transactions do not match send: got %v want %v", recTxs, tx)
 		}
 	case *NewPooledTransactionHashes:
-		txHashes := *msg
+		txHashes := *msg.NewPooledTransactionHashesPacket
 		if len(txHashes) < 1 {
 			t.Fatalf("received transactions do not match send: %v", txHashes)
 		}
@@ -70,7 +71,7 @@ func sendFailingTx(t *utesting.T, s *Suite, tx *types.Transaction) {
 		t.Logf("unexpected message, logging: %v", pretty.Sdump(msg))
 	}
 	// Send the transaction
-	if err := sendConn.Write(Transactions([]*types.Transaction{tx})); err != nil {
+	if err := sendConn.Write(&Transactions{&eth.TransactionsPacket{tx}}); err != nil {
 		t.Fatal(err)
 	}
 	// Wait for another transaction announcement

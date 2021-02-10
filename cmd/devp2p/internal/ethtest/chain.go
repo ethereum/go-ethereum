@@ -20,6 +20,7 @@ import (
 	"compress/gzip"
 	"encoding/json"
 	"fmt"
+	"github.com/ethereum/go-ethereum/eth/protocols/eth"
 	"io"
 	"io/ioutil"
 	"math/big"
@@ -86,27 +87,29 @@ func (c *Chain) Head() *types.Block {
 
 func (c *Chain) GetHeaders(req GetBlockHeaders) (BlockHeaders, error) {
 	if req.Amount < 1 {
-		return nil, fmt.Errorf("no block headers requested")
+		return BlockHeaders{}, fmt.Errorf("no block headers requested")
 	}
-
-	headers := make(BlockHeaders, req.Amount)
+	packet := make(eth.BlockHeadersPacket, req.Amount)
+	headers := BlockHeaders{&packet}
 	var blockNumber uint64
+
+	h := *headers.BlockHeadersPacket
 
 	// range over blocks to check if our chain has the requested header
 	for _, block := range c.blocks {
 		if block.Hash() == req.Origin.Hash || block.Number().Uint64() == req.Origin.Number {
-			headers[0] = block.Header()
+			h[0] = block.Header()
 			blockNumber = block.Number().Uint64()
 		}
 	}
-	if headers[0] == nil {
-		return nil, fmt.Errorf("no headers found for given origin number %v, hash %v", req.Origin.Number, req.Origin.Hash)
+	if h[0] == nil {
+		return BlockHeaders{}, fmt.Errorf("no headers found for given origin number %v, hash %v", req.Origin.Number, req.Origin.Hash)
 	}
 
 	if req.Reverse {
 		for i := 1; i < int(req.Amount); i++ {
 			blockNumber -= (1 - req.Skip)
-			headers[i] = c.blocks[blockNumber].Header()
+			h[i] = c.blocks[blockNumber].Header()
 
 		}
 
@@ -115,7 +118,7 @@ func (c *Chain) GetHeaders(req GetBlockHeaders) (BlockHeaders, error) {
 
 	for i := 1; i < int(req.Amount); i++ {
 		blockNumber += (1 + req.Skip)
-		headers[i] = c.blocks[blockNumber].Header()
+		h[i] = c.blocks[blockNumber].Header()
 	}
 
 	return headers, nil

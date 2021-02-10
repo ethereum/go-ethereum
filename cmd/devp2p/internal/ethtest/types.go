@@ -19,15 +19,12 @@ package ethtest
 import (
 	"crypto/ecdsa"
 	"fmt"
-	"io"
-	"math/big"
 	"reflect"
 	"time"
 
-	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/core/forkid"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/crypto"
+	"github.com/ethereum/go-ethereum/eth/protocols/eth"
 	"github.com/ethereum/go-ethereum/internal/utesting"
 	"github.com/ethereum/go-ethereum/p2p"
 	"github.com/ethereum/go-ethereum/p2p/rlpx"
@@ -80,101 +77,74 @@ type Pong struct{}
 
 func (p Pong) Code() int { return 0x03 }
 
+type EthMessage interface {
+	eth.Packet
+}
+
 // Status is the network packet for the status message for eth/64 and later.
 type Status struct {
-	ProtocolVersion uint32
-	NetworkID       uint64
-	TD              *big.Int
-	Head            common.Hash
-	Genesis         common.Hash
-	ForkID          forkid.ID
+	*eth.StatusPacket
 }
 
 func (s Status) Code() int { return 16 }
 
 // NewBlockHashes is the network packet for the block announcements.
-type NewBlockHashes []struct {
-	Hash   common.Hash // Hash of one particular block being announced
-	Number uint64      // Number of one particular block being announced
+type NewBlockHashes struct {
+	*eth.NewBlockHashesPacket
 }
 
 func (nbh NewBlockHashes) Code() int { return 17 }
 
-type Transactions []*types.Transaction
+type Transactions struct {
+	*eth.TransactionsPacket
+}
 
 func (t Transactions) Code() int { return 18 }
 
 // GetBlockHeaders represents a block header query.
 type GetBlockHeaders struct {
-	Origin  hashOrNumber // Block from which to retrieve headers
-	Amount  uint64       // Maximum number of headers to retrieve
-	Skip    uint64       // Blocks to skip between consecutive headers
-	Reverse bool         // Query direction (false = rising towards latest, true = falling towards genesis)
+	*eth.GetBlockHeadersPacket
 }
 
 func (g GetBlockHeaders) Code() int { return 19 }
 
-type BlockHeaders []*types.Header
+type BlockHeaders struct {
+	*eth.BlockHeadersPacket
+}
 
 func (bh BlockHeaders) Code() int { return 20 }
 
 // GetBlockBodies represents a GetBlockBodies request
-type GetBlockBodies []common.Hash
+type GetBlockBodies struct {
+	*eth.GetBlockBodiesPacket
+}
 
 func (gbb GetBlockBodies) Code() int { return 21 }
 
 // BlockBodies is the network packet for block content distribution.
-type BlockBodies []*types.Body
+type BlockBodies struct {
+	*eth.BlockBodiesPacket
+}
 
 func (bb BlockBodies) Code() int { return 22 }
 
 // NewBlock is the network packet for the block propagation message.
 type NewBlock struct {
-	Block *types.Block
-	TD    *big.Int
+	*eth.NewBlockPacket
 }
 
 func (nb NewBlock) Code() int { return 23 }
 
 // NewPooledTransactionHashes is the network packet for the tx hash propagation message.
-type NewPooledTransactionHashes [][32]byte
+type NewPooledTransactionHashes struct {
+	*eth.NewPooledTransactionHashesPacket
+}
 
 func (nb NewPooledTransactionHashes) Code() int { return 24 }
 
 // HashOrNumber is a combined field for specifying an origin block.
 type hashOrNumber struct {
-	Hash   common.Hash // Block hash from which to retrieve headers (excludes Number)
-	Number uint64      // Block hash from which to retrieve headers (excludes Hash)
-}
-
-// EncodeRLP is a specialized encoder for hashOrNumber to encode only one of the
-// two contained union fields.
-func (hn *hashOrNumber) EncodeRLP(w io.Writer) error {
-	if hn.Hash == (common.Hash{}) {
-		return rlp.Encode(w, hn.Number)
-	}
-	if hn.Number != 0 {
-		return fmt.Errorf("both origin hash (%x) and number (%d) provided", hn.Hash, hn.Number)
-	}
-	return rlp.Encode(w, hn.Hash)
-}
-
-// DecodeRLP is a specialized decoder for hashOrNumber to decode the contents
-// into either a block hash or a block number.
-func (hn *hashOrNumber) DecodeRLP(s *rlp.Stream) error {
-	_, size, _ := s.Kind()
-	origin, err := s.Raw()
-	if err == nil {
-		switch {
-		case size == 32:
-			err = rlp.DecodeBytes(origin, &hn.Hash)
-		case size <= 8:
-			err = rlp.DecodeBytes(origin, &hn.Number)
-		default:
-			err = fmt.Errorf("invalid input size %d for origin", size)
-		}
-	}
-	return err
+	*eth.HashOrNumber
 }
 
 // Conn represents an individual connection with a peer
@@ -201,31 +171,101 @@ func (c *Conn) Read() Message {
 	case (Disconnect{}).Code():
 		msg = new(Disconnect)
 	case (Status{}).Code():
-		msg = new(Status)
+		return decodeEthMessage(rawData, new(Status))
 	case (GetBlockHeaders{}).Code():
-		msg = new(GetBlockHeaders)
+		return decodeEthMessage(rawData, new(GetBlockHeaders))
 	case (BlockHeaders{}).Code():
-		msg = new(BlockHeaders)
+		return decodeEthMessage(rawData, new(BlockHeaders))
 	case (GetBlockBodies{}).Code():
-		msg = new(GetBlockBodies)
+		return decodeEthMessage(rawData, new(GetBlockBodies))
 	case (BlockBodies{}).Code():
-		msg = new(BlockBodies)
+		return decodeEthMessage(rawData, new(BlockBodies))
 	case (NewBlock{}).Code():
-		msg = new(NewBlock)
+		return decodeEthMessage(rawData, new(NewBlock))
 	case (NewBlockHashes{}).Code():
-		msg = new(NewBlockHashes)
+		return decodeEthMessage(rawData, new(NewBlockHashes))
 	case (Transactions{}).Code():
-		msg = new(Transactions)
+		return decodeEthMessage(rawData, new(Transactions))
 	case (NewPooledTransactionHashes{}).Code():
-		msg = new(NewPooledTransactionHashes)
+		return decodeEthMessage(rawData, new(NewPooledTransactionHashes))
 	default:
 		return errorf("invalid message code: %d", code)
 	}
-
+	// if message is devp2p, decode here
 	if err := rlp.DecodeBytes(rawData, msg); err != nil {
 		return errorf("could not rlp decode message: %v", err)
 	}
 	return msg
+}
+
+func decodeEthMessage(rawData []byte, msg EthMessage) Message {
+	switch msg.(type) {
+	case *Status:
+		decode := msg.(*Status)
+		decode.StatusPacket = new(eth.StatusPacket)
+		if err := rlp.DecodeBytes(rawData, decode.StatusPacket); err != nil {
+			return errorf("could not rlp decode message: %v", err)
+		}
+		return decode
+	case *NewBlockHashes:
+		decode := msg.(*NewBlockHashes)
+		decode.NewBlockHashesPacket = new(eth.NewBlockHashesPacket)
+		if err := rlp.DecodeBytes(rawData, decode.NewBlockHashesPacket); err != nil {
+			return errorf("could not rlp decode message: %v", err)
+		}
+		return decode
+	case *Transactions:
+		decode := msg.(*Transactions)
+		decode.TransactionsPacket = new(eth.TransactionsPacket)
+		if err := rlp.DecodeBytes(rawData, decode.TransactionsPacket); err != nil {
+			return errorf("could not rlp decode message: %v", err)
+		}
+		return decode
+	case *GetBlockHeaders:
+		decode := msg.(*GetBlockHeaders)
+		decode.GetBlockHeadersPacket = new(eth.GetBlockHeadersPacket)
+		if err := rlp.DecodeBytes(rawData, decode.GetBlockHeadersPacket); err != nil {
+			return errorf("could not rlp decode message: %v", err)
+		}
+		return decode
+	case *BlockHeaders:
+		decode := msg.(*BlockHeaders)
+		decode.BlockHeadersPacket = new(eth.BlockHeadersPacket)
+		if err := rlp.DecodeBytes(rawData, decode.BlockHeadersPacket); err != nil {
+			return errorf("could not rlp decode message: %v", err)
+		}
+		return decode
+	case *GetBlockBodies:
+		decode := msg.(*GetBlockBodies)
+		decode.GetBlockBodiesPacket = new(eth.GetBlockBodiesPacket)
+		if err := rlp.DecodeBytes(rawData, decode.GetBlockBodiesPacket); err != nil {
+			return errorf("could not rlp decode message: %v", err)
+		}
+		return decode
+	case *BlockBodies:
+		decode := msg.(*BlockBodies)
+		decode.BlockBodiesPacket = new(eth.BlockBodiesPacket)
+		if err := rlp.DecodeBytes(rawData, decode.BlockBodiesPacket); err != nil {
+			return errorf("could not rlp decode message: %v", err)
+		}
+		return decode
+	case *NewBlock:
+		decode := msg.(*NewBlock)
+		decode.NewBlockPacket = new(eth.NewBlockPacket)
+		if err := rlp.DecodeBytes(rawData, decode.NewBlockPacket); err != nil {
+			return errorf("could not rlp decode message: %v", err)
+		}
+		return decode
+	case *NewPooledTransactionHashes:
+		decode := msg.(*NewPooledTransactionHashes)
+		decode.NewPooledTransactionHashesPacket = new(eth.NewPooledTransactionHashesPacket)
+		if err := rlp.DecodeBytes(rawData, decode.NewPooledTransactionHashesPacket); err != nil {
+			return errorf("could not rlp decode message: %v", err)
+		}
+		return decode
+	default:
+		return errorf("invalid message: %v", pretty.Sdump(msg))
+	}
 }
 
 // ReadAndServe serves GetBlockHeaders requests while waiting
@@ -256,12 +296,58 @@ func (c *Conn) ReadAndServe(chain *Chain, timeout time.Duration) Message {
 }
 
 func (c *Conn) Write(msg Message) error {
-	payload, err := rlp.EncodeToBytes(msg)
-	if err != nil {
-		return err
+	// check if message is eth protocol message
+	var (
+		payload []byte
+		err error
+	)
+	if ethMessage, ok := msg.(EthMessage); ok {
+		payload, err = encodeEthMessage(ethMessage)
+		if err != nil {
+			return err
+		}
+	} else {
+		payload, err = rlp.EncodeToBytes(msg)
+		if err != nil {
+			return err
+		}
 	}
 	_, err = c.Conn.Write(uint64(msg.Code()), payload)
 	return err
+}
+
+func encodeEthMessage(msg EthMessage) ([]byte, error) {
+	switch msg.Name() {
+	case "Status":
+		packet := msg.(*Status).StatusPacket
+		return rlp.EncodeToBytes(*packet)
+	case "NewBlockHashes":
+		packet := msg.(*NewBlockHashes).NewBlockHashesPacket
+		return rlp.EncodeToBytes(packet)
+	case "Transactions":
+		packet := msg.(*Transactions).TransactionsPacket
+		return rlp.EncodeToBytes(*packet)
+	case "GetBlockHeaders":
+		packet := msg.(*GetBlockHeaders).GetBlockHeadersPacket
+		return rlp.EncodeToBytes(packet)
+	case "BlockHeaders":
+		packet := msg.(*BlockHeaders).BlockHeadersPacket
+		return rlp.EncodeToBytes(*packet)
+	case "GetBlockBodies":
+		packet := msg.(*GetBlockBodies).GetBlockBodiesPacket
+		return rlp.EncodeToBytes(*packet)
+	case "BlockBodies":
+		packet := msg.(*BlockBodies).BlockBodiesPacket
+		return rlp.EncodeToBytes(*packet)
+	case "NewBlock":
+		packet := msg.(*NewBlock).NewBlockPacket
+		return rlp.EncodeToBytes(*packet)
+	case "NewPooledTransactionHashes":
+		packet := msg.(*NewPooledTransactionHashes).NewPooledTransactionHashesPacket
+		return rlp.EncodeToBytes(*packet)
+	default:
+		return nil, errorf("invalid message: %v", pretty.Sdump(msg))
+	}
 }
 
 // handshake checks to make sure a `HELLO` is received.
@@ -354,16 +440,18 @@ loop:
 	if status == nil {
 		// write status message to client
 		status = &Status{
-			ProtocolVersion: uint32(c.ethProtocolVersion),
-			NetworkID:       chain.chainConfig.ChainID.Uint64(),
-			TD:              chain.TD(chain.Len()),
-			Head:            chain.blocks[chain.Len()-1].Hash(),
-			Genesis:         chain.blocks[0].Hash(),
-			ForkID:          chain.ForkID(),
+			&eth.StatusPacket{
+				ProtocolVersion: uint32(c.ethProtocolVersion),
+				NetworkID:       chain.chainConfig.ChainID.Uint64(),
+				TD:              chain.TD(chain.Len()),
+				Head:            chain.blocks[chain.Len()-1].Hash(),
+				Genesis:         chain.blocks[0].Hash(),
+				ForkID:          chain.ForkID(),
+			},
 		}
 	}
 
-	if err := c.Write(*status); err != nil {
+	if err := c.Write(status); err != nil {
 		t.Fatalf("could not write to connection: %v", err)
 	}
 
@@ -378,13 +466,13 @@ func (c *Conn) waitForBlock(block *types.Block) error {
 	timeout := time.Now().Add(20 * time.Second)
 	c.SetReadDeadline(timeout)
 	for {
-		req := &GetBlockHeaders{Origin: hashOrNumber{Hash: block.Hash()}, Amount: 1}
+		req := &GetBlockHeaders{&eth.GetBlockHeadersPacket{Origin: eth.HashOrNumber{Hash: block.Hash()}, Amount: 1}}
 		if err := c.Write(req); err != nil {
 			return err
 		}
 		switch msg := c.Read().(type) {
 		case *BlockHeaders:
-			if len(*msg) > 0 {
+			if len(*msg.BlockHeadersPacket) > 0 {
 				return nil
 			}
 			time.Sleep(100 * time.Millisecond)
