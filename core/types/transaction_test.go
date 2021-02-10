@@ -134,6 +134,46 @@ func TestEIP2718SigHashes(t *testing.T) {
 	}
 }
 
+type hashToHumanReadable struct {
+	data []byte
+}
+
+func (d *hashToHumanReadable) Reset() {
+	d.data = make([]byte, 0)
+}
+
+func (d *hashToHumanReadable) Update(i []byte, i2 []byte) {
+	l := fmt.Sprintf("%x %x\n", i, i2)
+	d.data = append(d.data, []byte(l)...)
+}
+
+func (d *hashToHumanReadable) Hash() common.Hash {
+	return common.Hash{}
+}
+
+// TestEIP2718DeriveSha tests that the input to the DeriveSha function is correct
+func TestEIP2718DeriveSha(t *testing.T) {
+	for _, tc := range []struct {
+		rlpData string
+		exp     string
+	}{
+		{
+			rlpData: "0xb8a701f8a486796f6c6f763380843b9aca008262d4948a8eafb1cf62bfbeb1741769dae1a9dd479961928080f838f7940000000000000000000000000000000000001337e1a0000000000000000000000000000000000000000000000000000000000000000080a0775101f92dcca278a56bfe4d613428624a1ebfc3cd9e0bcc1de80c41455b9021a06c9deac205afe7b124907d4ba54a9f46161498bd3990b90d175aac12c9a40ee9",
+			exp:     "01 01f8a486796f6c6f763380843b9aca008262d4948a8eafb1cf62bfbeb1741769dae1a9dd479961928080f838f7940000000000000000000000000000000000001337e1a0000000000000000000000000000000000000000000000000000000000000000080a0775101f92dcca278a56bfe4d613428624a1ebfc3cd9e0bcc1de80c41455b9021a06c9deac205afe7b124907d4ba54a9f46161498bd3990b90d175aac12c9a40ee9\n80 01f8a486796f6c6f763380843b9aca008262d4948a8eafb1cf62bfbeb1741769dae1a9dd479961928080f838f7940000000000000000000000000000000000001337e1a0000000000000000000000000000000000000000000000000000000000000000080a0775101f92dcca278a56bfe4d613428624a1ebfc3cd9e0bcc1de80c41455b9021a06c9deac205afe7b124907d4ba54a9f46161498bd3990b90d175aac12c9a40ee9\n",
+		},
+	} {
+		d := &hashToHumanReadable{}
+		var t1, t2 Transaction
+		rlp.DecodeBytes(common.FromHex(tc.rlpData), &t1)
+		rlp.DecodeBytes(common.FromHex(tc.rlpData), &t2)
+		var txs Transactions = Transactions{&t1, &t2}
+		DeriveSha(txs, d)
+		if tc.exp != string(d.data) {
+			t.Fatalf("Want\n%v\nhave:\n%v", tc.exp, string(d.data))
+		}
+	}
+}
+
 func TestEIP2718TransactionEncode(t *testing.T) {
 	txb, err := rlp.EncodeToBytes(signedEip2718Tx)
 	if err != nil {
