@@ -261,13 +261,16 @@ func TestIteratorEmptyTree(t *testing.T) {
 		node <- it.Node()
 	}()
 
-	// Wait for it to get stuck in slowdownRollover, then modify the root.
+	// Wait for the client to get stuck in waitForRootUpdates.
 	clock.WaitForTimers(1)
+
+	// Now update the root.
 	resolver.add(tree2.ToTXT("n"))
 
+	// Wait for it to pick up the root change.
 	timeout := time.After(5 * time.Second)
 	for {
-		clock.Run(1 * time.Second)
+		clock.Run(20 * time.Second)
 		select {
 		case n := <-node:
 			if n.ID() != nodes[0].ID() {
