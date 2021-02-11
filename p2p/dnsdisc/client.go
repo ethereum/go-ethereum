@@ -325,13 +325,13 @@ func (it *randomIterator) syncableTrees() (syncable, disabled []*clientTree) {
 
 // waitForRootUpdates waits for the closest scheduled root check time on the given trees.
 func (it *randomIterator) waitForRootUpdates(trees []*clientTree) bool {
+	var checkTree string
 	var nextCheck = mclock.AbsTime(-1)
-	var checkTree *clientTree
 	for _, ct := range trees {
 		check := ct.nextScheduledRootCheck()
 		if nextCheck == -1 || check < nextCheck {
 			nextCheck = check
-			checkTree = ct
+			checkTree = ct.loc.domain
 		}
 	}
 
