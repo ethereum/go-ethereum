@@ -94,11 +94,9 @@ func (tx *Transaction) EncodeRLP(w io.Writer) error {
 	if tx.typ == LegacyTxId {
 		return rlp.Encode(w, tx.inner)
 	}
-	buf := new(bytes.Buffer)
-	if _, err := buf.Write([]byte{tx.typ}); err != nil {
-		return err
-	}
-	if err := rlp.Encode(buf, tx.inner); err != nil {
+	var buf bytes.Buffer
+	buf.WriteByte(tx.typ)
+	if err := rlp.Encode(&buf, tx.inner); err != nil {
 		return err
 	}
 	return rlp.Encode(w, buf.Bytes())
