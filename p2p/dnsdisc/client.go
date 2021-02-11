@@ -238,10 +238,10 @@ func (it *randomIterator) Node() *enode.Node {
 
 // Close closes the iterator.
 func (it *randomIterator) Close() {
+	it.cancelFn()
+
 	it.mu.Lock()
 	defer it.mu.Unlock()
-
-	it.cancelFn()
 	it.trees = nil
 }
 
