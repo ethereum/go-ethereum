@@ -94,10 +94,12 @@ To run the eth protocol test suite against your implementation, the node needs t
 geth --datadir <datadir> --nodiscover --nat=none --networkid 19763 --verbosity 5
 ```
 
-Then, run the following command, replacing `<enode ID>` with the enode of the geth node: 
+Then, run the following command, replacing `<enode>` with the enode of the geth node: 
  ```
- devp2p rlpx eth-test <enode ID> cmd/devp2p/internal/ethtest/testdata/fullchain.rlp cmd/devp2p/internal/ethtest/testdata/genesis.json
+ devp2p rlpx eth-test <enode> cmd/devp2p/internal/ethtest/testdata/chain.rlp cmd/devp2p/internal/ethtest/testdata/genesis.json
 ```
+
+Repeat the above process (re-initialising the node) in order to run the Eth Protocol test suite again.
  
 [eth]: https://github.com/ethereum/devp2p/blob/master/caps/eth.md
 [dns-tutorial]: https://geth.ethereum.org/docs/developers/dns-discovery-setup
