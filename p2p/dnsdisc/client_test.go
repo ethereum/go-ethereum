@@ -246,7 +246,7 @@ func TestIteratorEmptyTree(t *testing.T) {
 	)
 	c.clock = clock
 	tree1, url := makeTestTree("n", nil, nil)
-	tree2, url := makeTestTree("n", nodes, nil)
+	tree2, _ := makeTestTree("n", nodes, nil)
 	resolver.add(tree1.ToTXT("n"))
 
 	// Start the iterator.
