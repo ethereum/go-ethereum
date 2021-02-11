@@ -88,12 +88,11 @@ func isProtectedV(V *big.Int) bool {
 }
 
 // EncodeRLP implements rlp.Encoder
-// For legacy transactions, it outputs rlp(tx.inner). For typed transactions
-// it outputs rlp(tx.type || tx.inner).
 func (tx *Transaction) EncodeRLP(w io.Writer) error {
 	if tx.typ == LegacyTxId {
 		return rlp.Encode(w, tx.inner)
 	}
+	// It's an EIP-2718 typed TX envelope.
 	var buf bytes.Buffer
 	buf.WriteByte(tx.typ)
 	if err := rlp.Encode(&buf, tx.inner); err != nil {
@@ -114,7 +113,6 @@ func (tx *Transaction) DecodeRLP(s *rlp.Stream) error {
 		var i *LegacyTransaction
 		err = s.Decode(&i)
 		tx.inner = i
-		size = rlp.ListSize(size)
 	case kind == rlp.String:
 		// It's an EIP-2718 typed TX envelope.
 		var b []byte
@@ -122,7 +120,6 @@ func (tx *Transaction) DecodeRLP(s *rlp.Stream) error {
 		if err != nil {
 			return err
 		}
-		size = uint64(len(b))
 		tx.typ = b[0]
 		if tx.typ == AccessListTxId {
 			var i *AccessListTransaction
@@ -136,6 +133,7 @@ func (tx *Transaction) DecodeRLP(s *rlp.Stream) error {
 	}
 
 	if err == nil {
+		size = rlp.ListSize(size)
 		tx.size.Store(common.StorageSize(size))
 		tx.time = time.Now()
 	}
@@ -172,24 +170,31 @@ func (tx *Transaction) Data() []byte            { return tx.inner.Data() }
 func (tx *Transaction) AccessList() *AccessList { return tx.inner.AccessList() }
 func (tx *Transaction) Gas() uint64             { return tx.inner.Gas() }
 func (tx *Transaction) GasPrice() *big.Int      { return new(big.Int).Set(tx.inner.GasPrice()) }
+func (tx *Transaction) Value() *big.Int         { return new(big.Int).Set(tx.inner.Value()) }
+func (tx *Transaction) Nonce() uint64           { return tx.inner.Nonce() }
+func (tx *Transaction) CheckNonce() bool        { return true }
+func (tx *Transaction) To() *common.Address     { return tx.inner.To() }
+
 func (tx *Transaction) GasPriceCmp(other *Transaction) int {
 	return tx.inner.GasPrice().Cmp(other.GasPrice())
 }
+
 func (tx *Transaction) GasPriceIntCmp(other *big.Int) int {
 	return tx.inner.GasPrice().Cmp(other)
 }
-func (tx *Transaction) Value() *big.Int     { return new(big.Int).Set(tx.inner.Value()) }
-func (tx *Transaction) Nonce() uint64       { return tx.inner.Nonce() }
-func (tx *Transaction) CheckNonce() bool    { return true }
-func (tx *Transaction) To() *common.Address { return tx.inner.To() }
+
 func (tx *Transaction) Hash() common.Hash {
 	if hash := tx.hash.Load(); hash != nil {
 		return hash.(common.Hash)
 	}
-	n := rawtx(*tx)
-	h := rlpHash(&n)
-	tx.hash.Store(h)
 
+	var h common.Hash
+	if tx.typ == LegacyTxId {
+		h = rlpHash(tx.inner)
+	} else {
+		h = prefixedRlpHash(tx.typ, tx.inner)
+	}
+	tx.hash.Store(h)
 	return h
 }
 
@@ -261,35 +266,24 @@ func (tx *Transaction) RawSignatureValues() (v, r, s *big.Int) {
 	return tx.inner.RawSignatureValues()
 }
 
-// Raw transactions are used for internal processes which need the raw
-// consensus representation of typed transactions, not the RLP string
-// wrapped version (e.g. type || payload vs. rlp(type || payload)).
-type rawtx Transaction
-
-func (tx *rawtx) EncodeRLP(w io.Writer) error {
-	if tx.typ != LegacyTxId {
-		if _, err := w.Write([]byte{tx.typ}); err != nil {
-			return err
-		}
-	}
-
-	return rlp.Encode(w, tx.inner)
-}
-
-// Transactions is a Transaction slice type for basic sorting.
+// Transactions implements DerivableList for transactions.
 type Transactions []*Transaction
 
 // Len returns the length of s.
 func (s Transactions) Len() int { return len(s) }
 
-// Swap swaps the i'th and the j'th element in s.
-func (s Transactions) Swap(i, j int) { s[i], s[j] = s[j], s[i] }
-
-// GetRlp implements Rlpable and returns the i'th element of s in rlp.
-func (s Transactions) GetRlp(i int) []byte {
-	raw := rawtx(*s[i])
-	enc, _ := rlp.EncodeToBytes(&raw)
-	return enc
+// encode encodes the i'th transaction to w. Note that this does not check for errors
+// because we assume that *Transaction will only ever contain valid txs that were either
+// constructed by decoding or via public API in this package.
+func (s Transactions) encode(i int, w *bytes.Buffer) {
+	tx := s[i]
+	if tx.typ == LegacyTxId {
+		rlp.Encode(w, tx.inner)
+	} else {
+		// It's an EIP-2718 typed TX envelope.
+		w.WriteByte(tx.typ)
+		rlp.Encode(w, tx.inner)
+	}
 }
 
 // TxDifference returns a new set which is the difference between a and b.

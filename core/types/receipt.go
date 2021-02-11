@@ -299,19 +299,15 @@ func decodeV3StoredReceiptRLP(r *ReceiptForStorage, blob []byte) error {
 	return nil
 }
 
-// Receipts is a wrapper around a Receipt array to implement DerivableList.
+// Receipts implements DerivableList for receipts.
 type Receipts []*Receipt
 
 // Len returns the number of receipts in this list.
 func (r Receipts) Len() int { return len(r) }
 
-// GetRlp returns the RLP encoding of one receipt from the list.
-func (r Receipts) GetRlp(i int) []byte {
-	bytes, err := rlp.EncodeToBytes(r[i])
-	if err != nil {
-		panic(err)
-	}
-	return bytes
+// encode encodes the i'th receipt to w.
+func (r Receipts) encode(i int, w *bytes.Buffer) {
+	rlp.Encode(w, r[i])
 }
 
 // DeriveFields fills the receipts with their computed fields based on consensus

@@ -165,7 +165,7 @@ func (s EIP2718Signer) Hash(tx *Transaction) common.Hash {
 		})
 	case AccessListTxId:
 		return prefixedRlpHash(
-			[]byte{tx.Type()},
+			tx.Type(),
 			[]interface{}{
 				tx.ChainId(),
 				tx.Nonce(),
