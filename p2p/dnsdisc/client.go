@@ -325,17 +325,18 @@ func (it *randomIterator) syncableTrees() (syncable, disabled []*clientTree) {
 
 // waitForRootUpdates waits for the closest scheduled root check time on the given trees.
 func (it *randomIterator) waitForRootUpdates(trees []*clientTree) bool {
-	var nextCheck mclock.AbsTime
-	now := it.c.clock.Now()
+	var nextCheck = mclock.AbsTime(-1)
+	var checkTree *clientTree
 	for _, ct := range trees {
 		check := ct.nextScheduledRootCheck()
-		if nextCheck == 0 || check < nextCheck {
+		if nextCheck == -1 || check < nextCheck {
 			nextCheck = check
+			checkTree = ct
 		}
 	}
 
-	sleep := nextCheck.Sub(now)
-	it.c.cfg.Logger.Debug("DNS iterator waiting for root updates", "sleep", sleep)
+	sleep := nextCheck.Sub(it.c.clock.Now())
+	it.c.cfg.Logger.Debug("DNS iterator waiting for root updates", "sleep", sleep, "tree", checkTree)
 	timeout := it.c.clock.NewTimer(sleep)
 	defer timeout.Stop()
 	select {
