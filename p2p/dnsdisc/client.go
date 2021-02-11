@@ -216,10 +216,9 @@ type randomIterator struct {
 	cancelFn context.CancelFunc
 	c        *Client
 
-	mu       sync.Mutex
-	trees    map[string]*clientTree // all trees
-	rootWait map[string]*clientTree // trees waiting for root change
-	lc       linkCache              // tracks tree dependencies
+	mu    sync.Mutex
+	trees map[string]*clientTree // all trees
+	lc    linkCache              // tracks tree dependencies
 }
 
 func (c *Client) newRandomIterator() *randomIterator {
