@@ -219,7 +219,7 @@ func ephemeralConsole(ctx *cli.Context) error {
 
 	go func() {
 		stack.Wait()
-		os.Exit(0)
+		console.Stop(false)
 	}()
 	console.Stop(true)
 
