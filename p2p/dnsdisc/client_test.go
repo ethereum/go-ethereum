@@ -22,7 +22,6 @@ import (
 	"errors"
 	"math/rand"
 	"reflect"
-	"runtime"
 	"testing"
 	"time"
 
@@ -268,20 +267,14 @@ func TestIteratorEmptyTree(t *testing.T) {
 	resolver.add(tree2.ToTXT("n"))
 
 	// Wait for it to pick up the root change.
-	timeout := time.After(5 * time.Second)
-	for {
-		clock.Run(20 * time.Second)
-		select {
-		case n := <-node:
-			if n.ID() != nodes[0].ID() {
-				t.Fatalf("wrong node returned")
-			}
-			return
-		case <-timeout:
-			t.Fatal("it.Next() did not unblock within 5s of real time")
-		default:
-			runtime.Gosched()
+	clock.Run(c.cfg.RecheckInterval)
+	select {
+	case n := <-node:
+		if n.ID() != nodes[0].ID() {
+			t.Fatalf("wrong node returned")
 		}
+	case <-time.After(5 * time.Second):
+		t.Fatal("it.Next() did not unblock within 5s of real time")
 	}
 }
 
