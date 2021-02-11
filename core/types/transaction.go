@@ -212,32 +212,25 @@ func (tx *Transaction) WithSignature(signer Signer, sig []byte) (*Transaction, e
 	if err != nil {
 		return nil, err
 	}
-
-	var ret *Transaction
-	if tx.typ == LegacyTxId {
+	// Copy inner transaction.
+	var cpy inner
+	switch tx.typ {
+	case LegacyTxId:
 		inner := tx.inner.(*LegacyTransaction)
-		cpy := &LegacyTransaction{
+		cpy = &LegacyTransaction{
 			AccountNonce: inner.AccountNonce,
 			Price:        inner.Price,
 			GasLimit:     inner.GasLimit,
 			Recipient:    inner.Recipient,
 			Amount:       inner.Amount,
 			Payload:      inner.Payload,
-
-			V: inner.V,
-			R: inner.R,
-			S: inner.S,
+			V:            v,
+			R:            r,
+			S:            s,
 		}
-		cpy.R, cpy.S, cpy.V = r, s, v
-
-		ret = &Transaction{
-			typ:   LegacyTxId,
-			inner: cpy,
-			time:  tx.time,
-		}
-	} else if tx.typ == AccessListTxId {
+	case AccessListTxId:
 		inner := tx.inner.(*AccessListTransaction)
-		cpy := &AccessListTransaction{
+		cpy = &AccessListTransaction{
 			Chain:        inner.Chain,
 			AccountNonce: inner.AccountNonce,
 			Price:        inner.Price,
@@ -246,31 +239,27 @@ func (tx *Transaction) WithSignature(signer Signer, sig []byte) (*Transaction, e
 			Amount:       inner.Amount,
 			Payload:      inner.Payload,
 			Accesses:     inner.Accesses,
-
-			V: inner.V,
-			R: inner.R,
-			S: inner.S,
+			V:            v,
+			R:            r,
+			S:            s,
 		}
-		cpy.R, cpy.S, cpy.V = r, s, v
-
-		ret = &Transaction{
-			typ:   AccessListTxId,
-			inner: cpy,
-			time:  tx.time,
-		}
-
-	} else {
+	default:
 		return nil, ErrInvalidTxType
 	}
-
+	// Copy outer transaction.
+	ret := &Transaction{typ: tx.typ, inner: cpy, time: tx.time}
 	return ret, nil
 }
+
 func (tx *Transaction) Cost() *big.Int {
 	total := new(big.Int).Mul(tx.GasPrice(), new(big.Int).SetUint64(tx.Gas()))
 	total.Add(total, tx.Value())
 	return total
 }
-func (tx *Transaction) RawSignatureValues() (v, r, s *big.Int) { return tx.inner.RawSignatureValues() }
+
+func (tx *Transaction) RawSignatureValues() (v, r, s *big.Int) {
+	return tx.inner.RawSignatureValues()
+}
 
 // Raw transactions are used for internal processes which need the raw
 // consensus representation of typed transactions, not the RLP string
