@@ -87,9 +87,11 @@ func (tx *Transaction) EncodeRLP(w io.Writer) error {
 		return rlp.Encode(w, tx.inner)
 	}
 	// It's an EIP-2718 typed TX envelope.
-	var buf bytes.Buffer
+	buf := encodeBufferPool.Get().(*bytes.Buffer)
+	defer encodeBufferPool.Put(buf)
+	buf.Reset()
 	buf.WriteByte(tx.typ)
-	if err := rlp.Encode(&buf, tx.inner); err != nil {
+	if err := rlp.Encode(buf, tx.inner); err != nil {
 		return err
 	}
 	return rlp.Encode(w, buf.Bytes())
