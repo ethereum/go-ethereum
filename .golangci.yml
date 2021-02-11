@@ -48,6 +48,3 @@ issues:
     - path: cmd/faucet/
       linters:
         - deadcode
-    - path: cmd/utils/diskusage.go
-      linters:
-        - unconvert
