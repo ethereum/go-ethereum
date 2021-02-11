@@ -106,26 +106,26 @@ func (tx *Transaction) EncodeRLP(w io.Writer) error {
 
 // DecodeRLP implements rlp.Decoder
 func (tx *Transaction) DecodeRLP(s *rlp.Stream) error {
-	var size uint64
-	// If the tx isn't an RLP list, it's likely typed so pop off the first byte.
 	kind, size, err := s.Kind()
-	if err != nil {
+	switch {
+	case err != nil:
 		return err
-	} else if kind == rlp.List {
+	case kind == rlp.List:
+		// It's a legacy transaction.
 		tx.typ = LegacyTxId
 		var i *LegacyTransaction
 		err = s.Decode(&i)
 		tx.inner = i
-	} else if kind == rlp.String {
+		size = rlp.ListSize(size)
+	case kind == rlp.String:
+		// It's an EIP-2718 typed TX envelope.
 		var b []byte
-		b, err = s.Bytes()
+		b, err := s.Bytes()
 		if err != nil {
 			return err
 		}
-
-		tx.typ = b[0]
 		size = uint64(len(b))
-
+		tx.typ = b[0]
 		if tx.typ == AccessListTxId {
 			var i *AccessListTransaction
 			err = rlp.DecodeBytes(b[1:], &i)
@@ -133,15 +133,14 @@ func (tx *Transaction) DecodeRLP(s *rlp.Stream) error {
 		} else {
 			return ErrTxTypeNotSupported
 		}
-	} else {
+	default:
 		return rlp.ErrExpectedList
 	}
 
 	if err == nil {
-		tx.size.Store(common.StorageSize(rlp.ListSize(size)))
+		tx.size.Store(common.StorageSize(size))
 		tx.time = time.Now()
 	}
-
 	return err
 }
 
