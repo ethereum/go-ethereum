@@ -302,6 +302,12 @@ func (p *Peer) readLoop(errc chan<- error) {
 			errc <- err
 			return
 		}
+		// shutdown read loop when node is shutdown
+		select {
+		case <-p.closed:
+			return
+		default:
+		}
 	}
 }
 
