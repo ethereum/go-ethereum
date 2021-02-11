@@ -291,9 +291,6 @@ func (it *randomIterator) pickTree() *clientTree {
 		it.rebuildTrees()
 		it.lc.changed = false
 	}
-	if len(it.trees) == 0 {
-		return nil
-	}
 
 	for {
 		// Find trees that might still have pending items to sync.
@@ -302,9 +299,11 @@ func (it *randomIterator) pickTree() *clientTree {
 		if len(syncable) > 0 {
 			return syncable[rand.Intn(len(syncable))]
 		}
-		// The client tried all trees, and no sync action can be performed on any of them.
-		// The only meaningful thing to do now is waiting for any root record to get
-		// updated.
+		if len(disabled) == 0 {
+			return nil // Iterator was closed.
+		}
+		// No sync action can be performed on any tree right now. The only meaningful
+		// thing to do is waiting for any root record to get updated.
 		if !it.waitForRootUpdates(disabled) {
 			return nil // Iterator was closed.
 		}
