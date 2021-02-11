@@ -22,6 +22,7 @@ import (
 	"errors"
 	"math/rand"
 	"reflect"
+	"runtime"
 	"testing"
 	"time"
 
@@ -229,6 +230,56 @@ func TestIteratorRootRecheckOnFail(t *testing.T) {
 	t.Log("tree updated")
 
 	checkIterator(t, it, nodes)
+}
+
+// This test checks that the iterator works correctly when the tree is initially empty.
+func TestIteratorEmptyTree(t *testing.T) {
+	var (
+		clock    = new(mclock.Simulated)
+		nodes    = testNodes(nodesSeed1, 1)
+		resolver = newMapResolver()
+		c        = NewClient(Config{
+			Resolver:        resolver,
+			Logger:          testlog.Logger(t, log.LvlTrace),
+			RecheckInterval: 20 * time.Minute,
+			RateLimit:       500,
+		})
+	)
+	c.clock = clock
+	tree1, url := makeTestTree("n", nil, nil)
+	tree2, url := makeTestTree("n", nodes, nil)
+	resolver.add(tree1.ToTXT("n"))
+
+	// Start the iterator.
+	node := make(chan *enode.Node)
+	it, err := c.NewIterator(url)
+	if err != nil {
+		t.Fatal(err)
+	}
+	go func() {
+		it.Next()
+		node <- it.Node()
+	}()
+
+	// Wait for it to get stuck in slowdownRollover, then modify the root.
+	clock.WaitForTimers(1)
+	resolver.add(tree2.ToTXT("n"))
+
+	timeout := time.After(5 * time.Second)
+	for {
+		clock.Run(1 * time.Second)
+		select {
+		case n := <-node:
+			if n.ID() != nodes[0].ID() {
+				t.Fatalf("wrong node returned")
+			}
+			return
+		case <-timeout:
+			t.Fatal("it.Next() did not unblock within 5s of real time")
+		default:
+			runtime.Gosched()
+		}
+	}
 }
 
 // updateSomeNodes applies ENR updates to some of the given nodes.
