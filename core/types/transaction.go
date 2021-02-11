@@ -44,7 +44,7 @@ const (
 
 type Transaction struct {
 	typ   uint8     // EIP-2718 transaction type identifier
-	inner inner     // Consensus contents of a transaction
+	inner innerTx   // Consensus contents of a transaction
 	time  time.Time // Time first seen locally (spam avoidance)
 
 	// caches
@@ -53,12 +53,10 @@ type Transaction struct {
 	from atomic.Value
 }
 
-type inner interface {
-	// ChainId returns which chain id this transaction was signed for (if at all)
+// innerTx is the underlying data of a transaction.
+type innerTx interface {
 	ChainId() *big.Int
-	// Protected returns whether the transaction is protected from replay protection.
 	Protected() bool
-	// AccessList returns the transactions optional EIP-2930 access list.
 	AccessList() *AccessList
 	Data() []byte
 	Gas() uint64
@@ -66,11 +64,7 @@ type inner interface {
 	Value() *big.Int
 	Nonce() uint64
 	CheckNonce() bool
-	// To returns the recipient address of the transaction.
-	// It returns nil if the transaction is a contract creation.
 	To() *common.Address
-	// RawSignatureValues returns the V, R, S signature values of the transaction.
-	// The return values should not be modified by the caller.
 	RawSignatureValues() (v, r, s *big.Int)
 }
 
@@ -218,7 +212,7 @@ func (tx *Transaction) WithSignature(signer Signer, sig []byte) (*Transaction, e
 		return nil, err
 	}
 	// Copy inner transaction.
-	var cpy inner
+	var cpy innerTx
 	switch tx.typ {
 	case LegacyTxId:
 		inner := tx.inner.(*LegacyTransaction)
