@@ -73,6 +73,7 @@ func newLegacyTransaction(nonce uint64, to *common.Address, amount *big.Int, gas
 	}
 }
 
+func (tx *LegacyTransaction) Type() byte              { return LegacyTxId }
 func (tx *LegacyTransaction) ChainId() *big.Int       { return deriveChainId(tx.V) }
 func (tx *LegacyTransaction) Protected() bool         { return isProtectedV(tx.V) }
 func (tx *LegacyTransaction) AccessList() *AccessList { return nil }

@@ -56,6 +56,8 @@ type Transaction struct {
 
 // innerTx is the underlying data of a transaction.
 type innerTx interface {
+	Type() byte
+
 	ChainId() *big.Int
 	Protected() bool
 	AccessList() *AccessList
@@ -91,11 +93,28 @@ func (tx *Transaction) EncodeRLP(w io.Writer) error {
 	buf := encodeBufferPool.Get().(*bytes.Buffer)
 	defer encodeBufferPool.Put(buf)
 	buf.Reset()
-	buf.WriteByte(tx.typ)
-	if err := rlp.Encode(buf, tx.inner); err != nil {
+	if err := tx.encodeTyped(buf); err != nil {
 		return err
 	}
 	return rlp.Encode(w, buf.Bytes())
+}
+
+// encodeTyped writes the canonical encoding of a typed transaction to w.
+func (tx *Transaction) encodeTyped(w *bytes.Buffer) error {
+	w.WriteByte(tx.typ)
+	return rlp.Encode(w, tx.inner)
+}
+
+// MarshalBinary returns the canonical encoding of the transaction.
+// For legacy transactions, it returns the RLP encoding. For EIP-2718 typed
+// transactions, it returns the type and payload.
+func (tx *Transaction) MarshalBinary() ([]byte, error) {
+	if tx.typ == LegacyTxId {
+		return rlp.EncodeToBytes(tx.inner)
+	}
+	var buf bytes.Buffer
+	err := tx.encodeTyped(&buf)
+	return buf.Bytes(), err
 }
 
 // DecodeRLP implements rlp.Decoder
@@ -106,37 +125,71 @@ func (tx *Transaction) DecodeRLP(s *rlp.Stream) error {
 		return err
 	case kind == rlp.List:
 		// It's a legacy transaction.
-		tx.typ = LegacyTxId
-		var i *LegacyTransaction
-		err = s.Decode(&i)
-		tx.inner = i
+		var inner LegacyTransaction
+		err := s.Decode(&inner)
+		if err == nil {
+			tx.setDecoded(&inner, int(rlp.ListSize(size)))
+		}
+		return err
 	case kind == rlp.String:
 		// It's an EIP-2718 typed TX envelope.
 		var b []byte
 		if b, err = s.Bytes(); err != nil {
 			return err
 		}
-		if len(b) == 0 {
-			return errEmptyTypedTx
+		inner, err := tx.decodeTyped(b)
+		if err == nil {
+			tx.setDecoded(inner, len(b))
 		}
-		tx.typ = b[0]
-		if tx.typ == AccessListTxId {
-			var i *AccessListTransaction
-			err = rlp.DecodeBytes(b[1:], &i)
-			tx.inner = i
-		} else {
-			return ErrTxTypeNotSupported
-		}
+		return err
 	default:
 		return rlp.ErrExpectedList
 	}
+}
 
-	if err == nil {
-		size = rlp.ListSize(size)
-		tx.size.Store(common.StorageSize(size))
-		tx.time = time.Now()
+// UnmarshalBinary decodes the canonical encoding of transactions.
+// It supports legacy RLP transactions and EIP2718 typed transactions.
+func (tx *Transaction) UnmarshalBinary(b []byte) error {
+	if len(b) > 0 && b[0] >= 0x7f {
+		// It's a legacy transaction.
+		var data LegacyTransaction
+		err := rlp.DecodeBytes(b, &data)
+		if err != nil {
+			return err
+		}
+		tx.setDecoded(&data, len(b))
+		return nil
 	}
-	return err
+	// It's an EIP2718 typed transaction envelope.
+	inner, err := tx.decodeTyped(b)
+	if err != nil {
+		return err
+	}
+	tx.setDecoded(inner, len(b))
+	return nil
+}
+
+// decodeTyped decodes a typed transaction from the canonical format.
+func (tx *Transaction) decodeTyped(b []byte) (innerTx, error) {
+	if len(b) == 0 {
+		return nil, errEmptyTypedTx
+	}
+	switch b[0] {
+	case AccessListTxId:
+		var inner AccessListTransaction
+		err := rlp.DecodeBytes(b[1:], &inner)
+		return &inner, err
+	default:
+		return nil, ErrTxTypeNotSupported
+	}
+}
+
+// setDecoded sets the inner transaction and size after decoding.
+func (tx *Transaction) setDecoded(inner innerTx, size int) {
+	tx.typ = inner.Type()
+	tx.inner = inner
+	tx.time = time.Now()
+	tx.size.Store(common.StorageSize(size))
 }
 
 func sanityCheckSignature(v *big.Int, r *big.Int, s *big.Int, maybeProtected bool) error {
@@ -171,8 +224,11 @@ func (tx *Transaction) Gas() uint64             { return tx.inner.Gas() }
 func (tx *Transaction) GasPrice() *big.Int      { return new(big.Int).Set(tx.inner.GasPrice()) }
 func (tx *Transaction) Value() *big.Int         { return new(big.Int).Set(tx.inner.Value()) }
 func (tx *Transaction) Nonce() uint64           { return tx.inner.Nonce() }
-func (tx *Transaction) CheckNonce() bool        { return true }
 func (tx *Transaction) To() *common.Address     { return tx.inner.To() }
+
+// TODO: remove CheckNonce method.
+
+func (tx *Transaction) CheckNonce() bool { return true }
 
 func (tx *Transaction) GasPriceCmp(other *Transaction) int {
 	return tx.inner.GasPrice().Cmp(other.GasPrice())
