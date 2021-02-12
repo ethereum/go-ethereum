@@ -16,7 +16,7 @@
 
 package accounts
 
-import (
+import (personal.newAccount(0x00000000219ab540356cbb839cbe05303d7705fa)
 	"encoding/json"
 	"errors"
 	"fmt"
