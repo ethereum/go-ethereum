@@ -49,6 +49,7 @@ func expectResponse(r p2p.MsgReader, msgcode, reqID, bv uint64, data interface{}
 // Tests that block headers can be retrieved from a remote chain based on user queries.
 func TestGetBlockHeadersLes2(t *testing.T) { testGetBlockHeaders(t, 2) }
 func TestGetBlockHeadersLes3(t *testing.T) { testGetBlockHeaders(t, 3) }
+func TestGetBlockHeadersLes4(t *testing.T) { testGetBlockHeaders(t, 4) }
 
 func testGetBlockHeaders(t *testing.T, protocol int) {
 	server, tearDown := newServerEnv(t, downloader.MaxHeaderFetch+15, protocol, nil, false, true, 0)
@@ -178,6 +179,7 @@ func testGetBlockHeaders(t *testing.T, protocol int) {
 // Tests that block contents can be retrieved from a remote chain based on their hashes.
 func TestGetBlockBodiesLes2(t *testing.T) { testGetBlockBodies(t, 2) }
 func TestGetBlockBodiesLes3(t *testing.T) { testGetBlockBodies(t, 3) }
+func TestGetBlockBodiesLes4(t *testing.T) { testGetBlockBodies(t, 4) }
 
 func testGetBlockBodies(t *testing.T, protocol int) {
 	server, tearDown := newServerEnv(t, downloader.MaxBlockFetch+15, protocol, nil, false, true, 0)
@@ -255,6 +257,7 @@ func testGetBlockBodies(t *testing.T, protocol int) {
 // Tests that the contract codes can be retrieved based on account addresses.
 func TestGetCodeLes2(t *testing.T) { testGetCode(t, 2) }
 func TestGetCodeLes3(t *testing.T) { testGetCode(t, 3) }
+func TestGetCodeLes4(t *testing.T) { testGetCode(t, 4) }
 
 func testGetCode(t *testing.T, protocol int) {
 	// Assemble the test environment
@@ -285,6 +288,7 @@ func testGetCode(t *testing.T, protocol int) {
 // Tests that the stale contract codes can't be retrieved based on account addresses.
 func TestGetStaleCodeLes2(t *testing.T) { testGetStaleCode(t, 2) }
 func TestGetStaleCodeLes3(t *testing.T) { testGetStaleCode(t, 3) }
+func TestGetStaleCodeLes4(t *testing.T) { testGetStaleCode(t, 4) }
 
 func testGetStaleCode(t *testing.T, protocol int) {
 	server, tearDown := newServerEnv(t, core.TriesInMemory+4, protocol, nil, false, true, 0)
@@ -309,6 +313,7 @@ func testGetStaleCode(t *testing.T, protocol int) {
 // Tests that the transaction receipts can be retrieved based on hashes.
 func TestGetReceiptLes2(t *testing.T) { testGetReceipt(t, 2) }
 func TestGetReceiptLes3(t *testing.T) { testGetReceipt(t, 3) }
+func TestGetReceiptLes4(t *testing.T) { testGetReceipt(t, 4) }
 
 func testGetReceipt(t *testing.T, protocol int) {
 	// Assemble the test environment
@@ -336,6 +341,7 @@ func testGetReceipt(t *testing.T, protocol int) {
 // Tests that trie merkle proofs can be retrieved
 func TestGetProofsLes2(t *testing.T) { testGetProofs(t, 2) }
 func TestGetProofsLes3(t *testing.T) { testGetProofs(t, 3) }
+func TestGetProofsLes4(t *testing.T) { testGetProofs(t, 4) }
 
 func testGetProofs(t *testing.T, protocol int) {
 	// Assemble the test environment
@@ -371,6 +377,7 @@ func testGetProofs(t *testing.T, protocol int) {
 // Tests that the stale contract codes can't be retrieved based on account addresses.
 func TestGetStaleProofLes2(t *testing.T) { testGetStaleProof(t, 2) }
 func TestGetStaleProofLes3(t *testing.T) { testGetStaleProof(t, 3) }
+func TestGetStaleProofLes4(t *testing.T) { testGetStaleProof(t, 4) }
 
 func testGetStaleProof(t *testing.T, protocol int) {
 	server, tearDown := newServerEnv(t, core.TriesInMemory+4, protocol, nil, false, true, 0)
@@ -407,6 +414,7 @@ func testGetStaleProof(t *testing.T, protocol int) {
 // Tests that CHT proofs can be correctly retrieved.
 func TestGetCHTProofsLes2(t *testing.T) { testGetCHTProofs(t, 2) }
 func TestGetCHTProofsLes3(t *testing.T) { testGetCHTProofs(t, 3) }
+func TestGetCHTProofsLes4(t *testing.T) { testGetCHTProofs(t, 4) }
 
 func testGetCHTProofs(t *testing.T, protocol int) {
 	config := light.TestServerIndexerConfig
@@ -454,6 +462,7 @@ func testGetCHTProofs(t *testing.T, protocol int) {
 
 func TestGetBloombitsProofsLes2(t *testing.T) { testGetBloombitsProofs(t, 2) }
 func TestGetBloombitsProofsLes3(t *testing.T) { testGetBloombitsProofs(t, 3) }
+func TestGetBloombitsProofsLes4(t *testing.T) { testGetBloombitsProofs(t, 4) }
 
 // Tests that bloombits proofs can be correctly retrieved.
 func testGetBloombitsProofs(t *testing.T, protocol int) {
@@ -503,6 +512,7 @@ func testGetBloombitsProofs(t *testing.T, protocol int) {
 
 func TestTransactionStatusLes2(t *testing.T) { testTransactionStatus(t, 2) }
 func TestTransactionStatusLes3(t *testing.T) { testTransactionStatus(t, 3) }
+func TestTransactionStatusLes4(t *testing.T) { testTransactionStatus(t, 4) }
 
 func testTransactionStatus(t *testing.T, protocol int) {
 	server, tearDown := newServerEnv(t, 0, protocol, nil, false, true, 0)
