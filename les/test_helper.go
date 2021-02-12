@@ -35,6 +35,7 @@ import (
 	"github.com/ethereum/go-ethereum/consensus/ethash"
 	"github.com/ethereum/go-ethereum/contracts/checkpointoracle/contract"
 	"github.com/ethereum/go-ethereum/core"
+	"github.com/ethereum/go-ethereum/core/forkid"
 	"github.com/ethereum/go-ethereum/core/rawdb"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/crypto"
@@ -344,7 +345,8 @@ func newTestPeer(t *testing.T, name string, version int, handler *serverHandler,
 			head    = handler.blockchain.CurrentHeader()
 			td      = handler.blockchain.GetTd(head.Hash(), head.Number.Uint64())
 		)
-		tp.handshake(t, td, head.Hash(), head.Number.Uint64(), genesis.Hash(), testCostList(testCost))
+		forkID := forkid.NewID(handler.blockchain.Config(), genesis.Hash(), head.Number.Uint64())
+		tp.handshake(t, td, head.Hash(), head.Number.Uint64(), genesis.Hash(), forkID, testCostList(testCost))
 	}
 	return tp, errCh
 }
@@ -402,7 +404,7 @@ func newTestPeerPair(name string, version int, server *serverHandler, client *cl
 
 // handshake simulates a trivial handshake that expects the same state from the
 // remote side as we are simulating locally.
-func (p *testPeer) handshake(t *testing.T, td *big.Int, head common.Hash, headNum uint64, genesis common.Hash, costList RequestCostList) {
+func (p *testPeer) handshake(t *testing.T, td *big.Int, head common.Hash, headNum uint64, genesis common.Hash, forkID forkid.ID, costList RequestCostList) {
 	var expList keyValueList
 	expList = expList.add("protocolVersion", uint64(p.cpeer.version))
 	expList = expList.add("networkId", uint64(NetworkId))
@@ -410,6 +412,9 @@ func (p *testPeer) handshake(t *testing.T, td *big.Int, head common.Hash, headNu
 	expList = expList.add("headHash", head)
 	expList = expList.add("headNum", headNum)
 	expList = expList.add("genesisHash", genesis)
+	if p.cpeer.version >= lpv4 {
+		expList = expList.add("forkID", &forkID)
+	}
 	sendList := make(keyValueList, len(expList))
 	copy(sendList, expList)
 	expList = expList.add("serveHeaders", nil)
@@ -417,6 +422,9 @@ func (p *testPeer) handshake(t *testing.T, td *big.Int, head common.Hash, headNu
 	expList = expList.add("serveStateSince", uint64(0))
 	expList = expList.add("serveRecentState", uint64(core.TriesInMemory-4))
 	expList = expList.add("txRelay", nil)
+	if p.cpeer.version >= lpv4 {
+		expList = expList.add("recentTxLookup", uint64(0))
+	}
 	expList = expList.add("flowControl/BL", testBufLimit)
 	expList = expList.add("flowControl/MRR", testBufRecharge)
 	expList = expList.add("flowControl/MRC", costList)
