@@ -118,7 +118,7 @@ type v3StoredReceiptRLP struct {
 
 // NewReceipt creates a barebone transaction receipt, copying the init fields.
 func NewReceipt(root []byte, failed bool, cumulativeGasUsed uint64) *Receipt {
-	return NewEIP2718Receipt(LegacyTxId, root, failed, cumulativeGasUsed)
+	return NewEIP2718Receipt(LegacyTxType, root, failed, cumulativeGasUsed)
 }
 
 // NewEIP2718Receipt creates a barebone transaction receipt for typed transactions, copying the init fields.
@@ -136,11 +136,11 @@ func NewEIP2718Receipt(typ uint8, root []byte, failed bool, cumulativeGasUsed ui
 // into an RLP stream. If no post state is present, byzantium fork is assumed.
 func (r *Receipt) EncodeRLP(w io.Writer) error {
 	data := &receiptRLP{r.statusEncoding(), r.CumulativeGasUsed, r.Bloom, r.Logs}
-	if r.Type == LegacyTxId {
+	if r.Type == LegacyTxType {
 		return rlp.Encode(w, data)
 	}
 	// It's an EIP-2718 typed TX receipt.
-	if r.Type != AccessListTxId {
+	if r.Type != AccessListTxType {
 		return ErrTxTypeNotSupported
 	}
 	buf := encodeBufferPool.Get().(*bytes.Buffer)
@@ -167,7 +167,7 @@ func (r *Receipt) DecodeRLP(s *rlp.Stream) error {
 			return err
 		}
 		var r Receipt
-		r.Type = LegacyTxId
+		r.Type = LegacyTxType
 		return r.setFromRLP(dec)
 	case kind == rlp.String:
 		// It's an EIP-2718 typed tx receipt.
@@ -180,7 +180,7 @@ func (r *Receipt) DecodeRLP(s *rlp.Stream) error {
 		}
 		var r Receipt
 		r.Type = b[0]
-		if r.Type == AccessListTxId {
+		if r.Type == AccessListTxType {
 			var dec receiptRLP
 			if err := rlp.DecodeBytes(b[1:], &dec); err != nil {
 				return err
@@ -341,10 +341,10 @@ func (rs Receipts) EncodeIndex(i int, w *bytes.Buffer) {
 	r := rs[i]
 	data := &receiptRLP{r.statusEncoding(), r.CumulativeGasUsed, r.Bloom, r.Logs}
 	switch r.Type {
-	case LegacyTxId:
+	case LegacyTxType:
 		rlp.Encode(w, data)
-	case AccessListTxId:
-		w.WriteByte(AccessListTxId)
+	case AccessListTxType:
+		w.WriteByte(AccessListTxType)
 		rlp.Encode(w, data)
 	default:
 		// For unsupported types, write nothing. Since this is for

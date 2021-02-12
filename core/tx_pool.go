@@ -537,11 +537,11 @@ func (pool *TxPool) validateTx(tx *types.Transaction, local bool) error {
 		return ErrGasLimit
 	}
 	// Accept only legacy transactions if before 2718/2930.
-	if tx.Type() != types.LegacyTxId && !pool.eip2718 {
+	if tx.Type() != types.LegacyTxType && !pool.eip2718 {
 		return ErrTxTypeNotSupported
 	}
 	// After 2718/2930, accept both legacy transactions and access list transactions.
-	if pool.eip2718 && (tx.Type() != types.LegacyTxId && tx.Type() != types.AccessListTxId) {
+	if pool.eip2718 && (tx.Type() != types.LegacyTxType && tx.Type() != types.AccessListTxType) {
 		return ErrTxTypeNotSupported
 	}
 	// Make sure the transaction is signed properly

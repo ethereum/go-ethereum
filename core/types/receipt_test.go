@@ -193,7 +193,7 @@ func TestDeriveFields(t *testing.T) {
 			GasUsed:         2,
 		},
 		&Receipt{
-			Type:              AccessListTxId,
+			Type:              AccessListTxType,
 			PostState:         common.Hash{3}.Bytes(),
 			CumulativeGasUsed: 6,
 			Logs: []*Log{

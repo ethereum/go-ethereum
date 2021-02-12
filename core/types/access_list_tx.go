@@ -93,13 +93,13 @@ func newAccessListTransaction(chainId *big.Int, nonce uint64, to *common.Address
 		i.Accesses = accesses
 	}
 	return &Transaction{
-		typ:   AccessListTxId,
+		typ:   AccessListTxType,
 		inner: &i,
 		time:  time.Now(),
 	}
 }
 
-func (tx *AccessListTransaction) Type() byte              { return AccessListTxId }
+func (tx *AccessListTransaction) Type() byte              { return AccessListTxType }
 func (tx *AccessListTransaction) ChainId() *big.Int       { return tx.Chain }
 func (tx *AccessListTransaction) Protected() bool         { return true }
 func (tx *AccessListTransaction) AccessList() *AccessList { return tx.Accesses }

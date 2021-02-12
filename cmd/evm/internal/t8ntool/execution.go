@@ -144,7 +144,7 @@ func (pre *Prestate) Apply(vmConfig vm.Config, chainConfig *params.ChainConfig,
 		statedb.Prepare(tx.Hash(), blockHash, txIndex)
 		txContext := core.NewEVMTxContext(msg)
 
-		if !chainConfig.IsYoloV3(vmContext.BlockNumber) && tx.Type() != types.LegacyTxId {
+		if !chainConfig.IsYoloV3(vmContext.BlockNumber) && tx.Type() != types.LegacyTxType {
 			log.Info("rejected tx", "index", i, "hash", tx.Hash(), "error", core.ErrTxTypeNotSupported)
 			rejectedTxs = append(rejectedTxs, i)
 			continue

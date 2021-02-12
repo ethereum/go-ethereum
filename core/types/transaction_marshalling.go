@@ -39,7 +39,7 @@ func (t *Transaction) MarshalJSON() ([]byte, error) {
 	enc.S = (*hexutil.Big)(s)
 	hash := t.Hash()
 	enc.Hash = &hash
-	if t.Type() == AccessListTxId {
+	if t.Type() == AccessListTxType {
 		enc.Type = hexutil.Uint64(t.Type())
 		enc.Chain = (*hexutil.Big)(t.ChainId())
 		enc.AccessList = t.AccessList()
@@ -73,7 +73,7 @@ func (t *Transaction) UnmarshalJSON(input []byte) error {
 		return errors.New("missing required field 'nonce' for txdata")
 	}
 
-	if dec.Type == nil || *dec.Type == hexutil.Uint64(LegacyTxId) {
+	if dec.Type == nil || *dec.Type == hexutil.Uint64(LegacyTxType) {
 		var i LegacyTransaction
 		if dec.AccountNonce == nil {
 			return errors.New("missing required field 'nonce' for txdata")
@@ -120,8 +120,8 @@ func (t *Transaction) UnmarshalJSON(input []byte) error {
 			}
 		}
 		t.inner = &i
-	} else if *dec.Type == hexutil.Uint64(AccessListTxId) {
-		t.typ = AccessListTxId
+	} else if *dec.Type == hexutil.Uint64(AccessListTxType) {
+		t.typ = AccessListTxType
 		var i AccessListTransaction
 		if dec.Chain == nil {
 			return errors.New("missing required field 'chainId' for txdata")

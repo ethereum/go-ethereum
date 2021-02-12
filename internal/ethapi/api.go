@@ -1228,7 +1228,7 @@ type RPCTransaction struct {
 // representation, with the given location metadata set (if available).
 func newRPCTransaction(tx *types.Transaction, blockHash common.Hash, blockNumber uint64, index uint64) *RPCTransaction {
 	var signer types.Signer = types.FrontierSigner{}
-	if tx.Type() == types.AccessListTxId {
+	if tx.Type() == types.AccessListTxType {
 		signer = types.NewEIP2718Signer(tx.ChainId())
 	} else if tx.Protected() {
 		signer = types.NewEIP155Signer(tx.ChainId())
@@ -1254,7 +1254,7 @@ func newRPCTransaction(tx *types.Transaction, blockHash common.Hash, blockNumber
 		result.BlockNumber = (*hexutil.Big)(new(big.Int).SetUint64(blockNumber))
 		result.TransactionIndex = (*hexutil.Uint64)(&index)
 	}
-	if tx.Type() == types.AccessListTxId {
+	if tx.Type() == types.AccessListTxType {
 		result.Type = hexutil.Uint64(tx.Type())
 		result.Accesses = tx.AccessList()
 		result.ChainID = (*hexutil.Big)(tx.ChainId())

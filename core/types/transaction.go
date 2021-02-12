@@ -38,9 +38,10 @@ var (
 	errEmptyTypedTx         = errors.New("empty typed transaction bytes")
 )
 
+// Transaction types.
 const (
-	LegacyTxId = iota
-	AccessListTxId
+	LegacyTxType = iota
+	AccessListTxType
 )
 
 type Transaction struct {
@@ -82,7 +83,7 @@ func isProtectedV(V *big.Int) bool {
 
 // EncodeRLP implements rlp.Encoder
 func (tx *Transaction) EncodeRLP(w io.Writer) error {
-	if tx.typ == LegacyTxId {
+	if tx.typ == LegacyTxType {
 		return rlp.Encode(w, tx.inner)
 	}
 	// It's an EIP-2718 typed TX envelope.
@@ -105,7 +106,7 @@ func (tx *Transaction) encodeTyped(w *bytes.Buffer) error {
 // For legacy transactions, it returns the RLP encoding. For EIP-2718 typed
 // transactions, it returns the type and payload.
 func (tx *Transaction) MarshalBinary() ([]byte, error) {
-	if tx.typ == LegacyTxId {
+	if tx.typ == LegacyTxType {
 		return rlp.EncodeToBytes(tx.inner)
 	}
 	var buf bytes.Buffer
@@ -171,7 +172,7 @@ func (tx *Transaction) decodeTyped(b []byte) (innerTx, error) {
 		return nil, errEmptyTypedTx
 	}
 	switch b[0] {
-	case AccessListTxId:
+	case AccessListTxType:
 		var inner AccessListTransaction
 		err := rlp.DecodeBytes(b[1:], &inner)
 		return &inner, err
@@ -253,7 +254,7 @@ func (tx *Transaction) Hash() common.Hash {
 	}
 
 	var h common.Hash
-	if tx.typ == LegacyTxId {
+	if tx.typ == LegacyTxType {
 		h = rlpHash(tx.inner)
 	} else {
 		h = prefixedRlpHash(tx.typ, tx.inner)
@@ -284,7 +285,7 @@ func (tx *Transaction) WithSignature(signer Signer, sig []byte) (*Transaction, e
 	// Copy inner transaction.
 	var cpy innerTx
 	switch tx.typ {
-	case LegacyTxId:
+	case LegacyTxType:
 		inner := tx.inner.(*LegacyTransaction)
 		cpy = &LegacyTransaction{
 			AccountNonce: inner.AccountNonce,
@@ -297,7 +298,7 @@ func (tx *Transaction) WithSignature(signer Signer, sig []byte) (*Transaction, e
 			R:            r,
 			S:            s,
 		}
-	case AccessListTxId:
+	case AccessListTxType:
 		inner := tx.inner.(*AccessListTransaction)
 		cpy = &AccessListTransaction{
 			Chain:        inner.Chain,
@@ -331,7 +332,7 @@ func (s Transactions) Len() int { return len(s) }
 // constructed by decoding or via public API in this package.
 func (s Transactions) EncodeIndex(i int, w *bytes.Buffer) {
 	tx := s[i]
-	if tx.typ == LegacyTxId {
+	if tx.typ == LegacyTxType {
 		rlp.Encode(w, tx.inner)
 	} else {
 		tx.encodeTyped(w)
