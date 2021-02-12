@@ -48,7 +48,7 @@ var (
 	two256 = new(big.Int).Exp(big.NewInt(2), big.NewInt(256), big.NewInt(0))
 
 	// sharedEthash is a full instance that can be shared between multiple users.
-	sharedEthash = New(Config{"", 3, 0, false, "", 1, 0, false, ModeNormal, nil}, nil, false)
+	sharedEthash = New(Config{"", 3, 0, false, "", 1, 0, false, ModeNormal, nil}, nil, false, false)
 
 	// algorithmRevision is the data structure version used for file naming.
 	algorithmRevision = 23
@@ -441,7 +441,7 @@ type Ethash struct {
 // New creates a full sized ethash PoW scheme and starts a background thread for
 // remote mining, also optionally notifying a batch of remote services of new work
 // packages.
-func New(config Config, notify []string, noverify bool) *Ethash {
+func New(config Config, notify []string, notifyFull bool, noverify bool) *Ethash {
 	if config.Log == nil {
 		config.Log = log.Root()
 	}
@@ -462,13 +462,13 @@ func New(config Config, notify []string, noverify bool) *Ethash {
 		update:   make(chan struct{}),
 		hashrate: metrics.NewMeterForced(),
 	}
-	ethash.remote = startRemoteSealer(ethash, notify, noverify)
+	ethash.remote = startRemoteSealer(ethash, notify, notifyFull, noverify)
 	return ethash
 }
 
 // NewTester creates a small sized ethash PoW scheme useful only for testing
 // purposes.
-func NewTester(notify []string, noverify bool) *Ethash {
+func NewTester(notify []string, notifyFull bool, noverify bool) *Ethash {
 	ethash := &Ethash{
 		config:   Config{PowMode: ModeTest, Log: log.Root()},
 		caches:   newlru("cache", 1, newCache),
@@ -476,7 +476,7 @@ func NewTester(notify []string, noverify bool) *Ethash {
 		update:   make(chan struct{}),
 		hashrate: metrics.NewMeterForced(),
 	}
-	ethash.remote = startRemoteSealer(ethash, notify, noverify)
+	ethash.remote = startRemoteSealer(ethash, notify, notifyFull, noverify)
 	return ethash
 }
 

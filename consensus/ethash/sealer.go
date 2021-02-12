@@ -34,6 +34,7 @@ import (
 	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/ethereum/go-ethereum/consensus"
 	"github.com/ethereum/go-ethereum/core/types"
+	"github.com/ethereum/go-ethereum/internal/serialization"
 )
 
 const (
@@ -201,6 +202,7 @@ type remoteSealer struct {
 	ethash       *Ethash
 	noverify     bool
 	notifyURLs   []string
+	notifyFull   bool
 	results      chan<- *types.Block
 	workCh       chan *sealTask   // Notification channel to push new work and relative result channel to remote sealer
 	fetchWorkCh  chan *sealWork   // Channel used for remote sealer to fetch mining work
@@ -241,12 +243,13 @@ type sealWork struct {
 	res  chan [4]string
 }
 
-func startRemoteSealer(ethash *Ethash, urls []string, noverify bool) *remoteSealer {
+func startRemoteSealer(ethash *Ethash, urls []string, notifyFull bool, noverify bool) *remoteSealer {
 	ctx, cancel := context.WithCancel(context.Background())
 	s := &remoteSealer{
 		ethash:       ethash,
 		noverify:     noverify,
 		notifyURLs:   urls,
+		notifyFull:   notifyFull,
 		notifyCtx:    ctx,
 		cancelNotify: cancel,
 		works:        make(map[common.Hash]*types.Block),
@@ -358,7 +361,17 @@ func (s *remoteSealer) makeWork(block *types.Block) {
 // new work to be processed.
 func (s *remoteSealer) notifyWork() {
 	work := s.currentWork
-	blob, _ := json.Marshal(work)
+	var blob []byte
+	if s.notifyFull {
+		blockSerialized, err := serialization.RPCMarshalBlock(s.currentBlock, false, false)
+		if err != nil {
+			s.ethash.config.Log.Error("Unable to marshal current block for the notification", "err", err)
+			return
+		}
+		blob, _ = json.Marshal(blockSerialized)
+	} else {
+		blob, _ = json.Marshal(s.currentWork)
+	}
 	s.reqWG.Add(len(s.notifyURLs))
 	for _, url := range s.notifyURLs {
 		go s.sendNotification(s.notifyCtx, url, blob, work)
