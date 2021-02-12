@@ -79,6 +79,15 @@ var (
 	)
 )
 
+func TestDecodeEmptyTypedTx(t *testing.T) {
+	input := []byte{0x80}
+	var tx Transaction
+	err := rlp.DecodeBytes(input, &tx)
+	if err != errEmptyTypedTx {
+		t.Fatal("wrong error:", err)
+	}
+}
+
 func TestTransactionSigHash(t *testing.T) {
 	var homestead HomesteadSigner
 	if homestead.Hash(emptyTx) != common.HexToHash("c775b99e7ad12f50d819fcd602390467e28141316969f4b57f0626f74fe3b386") {

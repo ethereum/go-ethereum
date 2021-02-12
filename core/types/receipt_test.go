@@ -29,6 +29,15 @@ import (
 	"github.com/ethereum/go-ethereum/rlp"
 )
 
+func TestDecodeEmptyTypedReceipt(t *testing.T) {
+	input := []byte{0x80}
+	var r Receipt
+	err := rlp.DecodeBytes(input, &r)
+	if err != errEmptyTypedReceipt {
+		t.Fatal("wrong error:", err)
+	}
+}
+
 func TestLegacyReceiptDecoding(t *testing.T) {
 	tests := []struct {
 		name   string

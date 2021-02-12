@@ -35,6 +35,7 @@ var (
 	ErrUnexpectedProtection = errors.New("transaction type does not supported EIP-155 protected signatures")
 	ErrInvalidTxType        = errors.New("transaction type not valid in this context")
 	ErrTxTypeNotSupported   = errors.New("transaction type not supported")
+	errEmptyTypedTx         = errors.New("empty typed transaction bytes")
 )
 
 const (
@@ -114,6 +115,9 @@ func (tx *Transaction) DecodeRLP(s *rlp.Stream) error {
 		var b []byte
 		if b, err = s.Bytes(); err != nil {
 			return err
+		}
+		if len(b) == 0 {
+			return errEmptyTypedTx
 		}
 		tx.typ = b[0]
 		if tx.typ == AccessListTxId {
