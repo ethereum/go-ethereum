@@ -103,6 +103,9 @@ func TestEth2ProduceBlock(t *testing.T) {
 	api := NewEth2API(ethservice)
 	signer := types.NewEIP155Signer(ethservice.BlockChain().Config().ChainID)
 	tx, err := types.SignTx(types.NewTransaction(0, blocks[8].Coinbase(), big.NewInt(1000), params.TxGas, nil, nil), signer, testKey)
+	if err != nil {
+		t.Fatalf("error signing transaction, err=%v", err)
+	}
 	ethservice.txPool.AddLocal(tx)
 	blockParams := ProduceBlockParams{
 		ParentHash: blocks[8].ParentHash(),

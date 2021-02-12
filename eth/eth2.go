@@ -56,7 +56,7 @@ func (api *Eth2API) commitTransaction(tx *types.Transaction, coinbase common.Add
 	//snap := eth2rpc.current.state.Snapshot()
 
 	chain := api.eth.BlockChain()
-	receipt, err := core.ApplyTransaction(chain.Config(), chain, &coinbase, api.env.gasPool, api.env.state, api.env.header, tx, &api.env.header.GasUsed, *chain.GetVMConfig(), &vm.BeaconChainContext{bcParentRoots, randao})
+	receipt, err := core.ApplyTransaction(chain.Config(), chain, &coinbase, api.env.gasPool, api.env.state, api.env.header, tx, &api.env.header.GasUsed, *chain.GetVMConfig(), &vm.BeaconChainContext{BeaconRoots: bcParentRoots, RandaoMix: randao})
 	if err != nil {
 		//w.current.state.RevertToSnapshot(snap)
 		return err
