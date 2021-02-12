@@ -71,10 +71,6 @@ type innerTx interface {
 	RawSignatureValues() (v, r, s *big.Int)
 }
 
-func (tx *Transaction) Type() uint8       { return tx.typ }
-func (tx *Transaction) ChainId() *big.Int { return tx.inner.ChainId() }
-func (tx *Transaction) Protected() bool   { return tx.inner.Protected() }
-
 func isProtectedV(V *big.Int) bool {
 	if V.BitLen() <= 8 {
 		v := V.Uint64()
@@ -218,6 +214,9 @@ func sanityCheckSignature(v *big.Int, r *big.Int, s *big.Int, maybeProtected boo
 	return nil
 }
 
+func (tx *Transaction) Type() uint8             { return tx.typ }
+func (tx *Transaction) ChainId() *big.Int       { return tx.inner.ChainId() }
+func (tx *Transaction) Protected() bool         { return tx.inner.Protected() }
 func (tx *Transaction) Data() []byte            { return tx.inner.Data() }
 func (tx *Transaction) AccessList() *AccessList { return tx.inner.AccessList() }
 func (tx *Transaction) Gas() uint64             { return tx.inner.Gas() }
@@ -225,6 +224,16 @@ func (tx *Transaction) GasPrice() *big.Int      { return new(big.Int).Set(tx.inn
 func (tx *Transaction) Value() *big.Int         { return new(big.Int).Set(tx.inner.Value()) }
 func (tx *Transaction) Nonce() uint64           { return tx.inner.Nonce() }
 func (tx *Transaction) To() *common.Address     { return tx.inner.To() }
+
+func (tx *Transaction) Cost() *big.Int {
+	total := new(big.Int).Mul(tx.GasPrice(), new(big.Int).SetUint64(tx.Gas()))
+	total.Add(total, tx.Value())
+	return total
+}
+
+func (tx *Transaction) RawSignatureValues() (v, r, s *big.Int) {
+	return tx.inner.RawSignatureValues()
+}
 
 // TODO: remove CheckNonce method.
 
@@ -309,16 +318,6 @@ func (tx *Transaction) WithSignature(signer Signer, sig []byte) (*Transaction, e
 	// Copy outer transaction.
 	ret := &Transaction{typ: tx.typ, inner: cpy, time: tx.time}
 	return ret, nil
-}
-
-func (tx *Transaction) Cost() *big.Int {
-	total := new(big.Int).Mul(tx.GasPrice(), new(big.Int).SetUint64(tx.Gas()))
-	total.Add(total, tx.Value())
-	return total
-}
-
-func (tx *Transaction) RawSignatureValues() (v, r, s *big.Int) {
-	return tx.inner.RawSignatureValues()
 }
 
 // Transactions implements DerivableList for transactions.
