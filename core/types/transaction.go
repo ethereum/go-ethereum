@@ -335,9 +335,7 @@ func (s Transactions) EncodeIndex(i int, w *bytes.Buffer) {
 	if tx.typ == LegacyTxId {
 		rlp.Encode(w, tx.inner)
 	} else {
-		// It's an EIP-2718 typed TX envelope.
-		w.WriteByte(tx.typ)
-		rlp.Encode(w, tx.inner)
+		tx.encodeTyped(w)
 	}
 }
 
