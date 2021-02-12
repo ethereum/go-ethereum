@@ -39,7 +39,7 @@ func (al *AccessList) StorageKeys() int {
 	return sum
 }
 
-type AccessListTransaction struct {
+type AccessListTx struct {
 	Chain        *big.Int        `json:"chainId"    gencodec:"required"`
 	AccountNonce uint64          `json:"nonce"      gencodec:"required"`
 	Price        *big.Int        `json:"gasPrice"   gencodec:"required"`
@@ -56,18 +56,18 @@ type AccessListTransaction struct {
 }
 
 func NewAccessListTransaction(chainId *big.Int, nonce uint64, to common.Address, amount *big.Int, gasLimit uint64, gasPrice *big.Int, data []byte, accesses *AccessList) *Transaction {
-	return newAccessListTransaction(chainId, nonce, &to, amount, gasLimit, gasPrice, data, accesses)
+	return newAccessListTx(chainId, nonce, &to, amount, gasLimit, gasPrice, data, accesses)
 }
 
 func NewAccessListContractCreation(chainId *big.Int, nonce uint64, amount *big.Int, gasLimit uint64, gasPrice *big.Int, data []byte, accesses *AccessList) *Transaction {
-	return newAccessListTransaction(chainId, nonce, nil, amount, gasLimit, gasPrice, data, accesses)
+	return newAccessListTx(chainId, nonce, nil, amount, gasLimit, gasPrice, data, accesses)
 }
 
-func newAccessListTransaction(chainId *big.Int, nonce uint64, to *common.Address, amount *big.Int, gasLimit uint64, gasPrice *big.Int, data []byte, accesses *AccessList) *Transaction {
+func newAccessListTx(chainId *big.Int, nonce uint64, to *common.Address, amount *big.Int, gasLimit uint64, gasPrice *big.Int, data []byte, accesses *AccessList) *Transaction {
 	if len(data) > 0 {
 		data = common.CopyBytes(data)
 	}
-	i := AccessListTransaction{
+	i := AccessListTx{
 		Chain:        new(big.Int),
 		AccountNonce: nonce,
 		Recipient:    to,
@@ -99,20 +99,20 @@ func newAccessListTransaction(chainId *big.Int, nonce uint64, to *common.Address
 	}
 }
 
-func (tx *AccessListTransaction) Type() byte              { return AccessListTxType }
-func (tx *AccessListTransaction) ChainId() *big.Int       { return tx.Chain }
-func (tx *AccessListTransaction) Protected() bool         { return true }
-func (tx *AccessListTransaction) AccessList() *AccessList { return tx.Accesses }
-func (tx *AccessListTransaction) Data() []byte            { return common.CopyBytes(tx.Payload) }
-func (tx *AccessListTransaction) Gas() uint64             { return tx.GasLimit }
-func (tx *AccessListTransaction) GasPrice() *big.Int      { return new(big.Int).Set(tx.Price) }
-func (tx *AccessListTransaction) Value() *big.Int         { return new(big.Int).Set(tx.Amount) }
-func (tx *AccessListTransaction) Nonce() uint64           { return tx.AccountNonce }
-func (tx *AccessListTransaction) CheckNonce() bool        { return true }
+func (tx *AccessListTx) Type() byte              { return AccessListTxType }
+func (tx *AccessListTx) ChainId() *big.Int       { return tx.Chain }
+func (tx *AccessListTx) Protected() bool         { return true }
+func (tx *AccessListTx) AccessList() *AccessList { return tx.Accesses }
+func (tx *AccessListTx) Data() []byte            { return common.CopyBytes(tx.Payload) }
+func (tx *AccessListTx) Gas() uint64             { return tx.GasLimit }
+func (tx *AccessListTx) GasPrice() *big.Int      { return new(big.Int).Set(tx.Price) }
+func (tx *AccessListTx) Value() *big.Int         { return new(big.Int).Set(tx.Amount) }
+func (tx *AccessListTx) Nonce() uint64           { return tx.AccountNonce }
+func (tx *AccessListTx) CheckNonce() bool        { return true }
 
 // To returns the recipient address of the transaction.
 // It returns nil if the transaction is a contract creation.
-func (tx *AccessListTransaction) To() *common.Address {
+func (tx *AccessListTx) To() *common.Address {
 	if tx.Recipient == nil {
 		return nil
 	}
@@ -122,6 +122,6 @@ func (tx *AccessListTransaction) To() *common.Address {
 
 // RawSignatureValues returns the V, R, S signature values of the transaction.
 // The return values should not be modified by the caller.
-func (tx *AccessListTransaction) RawSignatureValues() (v, r, s *big.Int) {
+func (tx *AccessListTx) RawSignatureValues() (v, r, s *big.Int) {
 	return tx.V, tx.R, tx.S
 }

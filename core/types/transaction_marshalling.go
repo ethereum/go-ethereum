@@ -74,7 +74,7 @@ func (t *Transaction) UnmarshalJSON(input []byte) error {
 	}
 
 	if dec.Type == nil || *dec.Type == hexutil.Uint64(LegacyTxType) {
-		var i LegacyTransaction
+		var i LegacyTx
 		if dec.AccountNonce == nil {
 			return errors.New("missing required field 'nonce' for txdata")
 		}
@@ -122,7 +122,7 @@ func (t *Transaction) UnmarshalJSON(input []byte) error {
 		t.inner = &i
 	} else if *dec.Type == hexutil.Uint64(AccessListTxType) {
 		t.typ = AccessListTxType
-		var i AccessListTransaction
+		var i AccessListTx
 		if dec.Chain == nil {
 			return errors.New("missing required field 'chainId' for txdata")
 		}

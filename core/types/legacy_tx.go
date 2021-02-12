@@ -23,7 +23,7 @@ import (
 	"github.com/ethereum/go-ethereum/common"
 )
 
-type LegacyTransaction struct {
+type LegacyTx struct {
 	AccountNonce uint64          `json:"nonce"    gencodec:"required"`
 	Price        *big.Int        `json:"gasPrice" gencodec:"required"`
 	GasLimit     uint64          `json:"gas"      gencodec:"required"`
@@ -38,18 +38,18 @@ type LegacyTransaction struct {
 }
 
 func NewTransaction(nonce uint64, to common.Address, amount *big.Int, gasLimit uint64, gasPrice *big.Int, data []byte) *Transaction {
-	return newLegacyTransaction(nonce, &to, amount, gasLimit, gasPrice, data)
+	return newLegacyTx(nonce, &to, amount, gasLimit, gasPrice, data)
 }
 
 func NewContractCreation(nonce uint64, amount *big.Int, gasLimit uint64, gasPrice *big.Int, data []byte) *Transaction {
-	return newLegacyTransaction(nonce, nil, amount, gasLimit, gasPrice, data)
+	return newLegacyTx(nonce, nil, amount, gasLimit, gasPrice, data)
 }
 
-func newLegacyTransaction(nonce uint64, to *common.Address, amount *big.Int, gasLimit uint64, gasPrice *big.Int, data []byte) *Transaction {
+func newLegacyTx(nonce uint64, to *common.Address, amount *big.Int, gasLimit uint64, gasPrice *big.Int, data []byte) *Transaction {
 	if len(data) > 0 {
 		data = common.CopyBytes(data)
 	}
-	i := LegacyTransaction{
+	i := LegacyTx{
 		AccountNonce: nonce,
 		Recipient:    to,
 		Payload:      data,
@@ -73,20 +73,20 @@ func newLegacyTransaction(nonce uint64, to *common.Address, amount *big.Int, gas
 	}
 }
 
-func (tx *LegacyTransaction) Type() byte              { return LegacyTxType }
-func (tx *LegacyTransaction) ChainId() *big.Int       { return deriveChainId(tx.V) }
-func (tx *LegacyTransaction) Protected() bool         { return isProtectedV(tx.V) }
-func (tx *LegacyTransaction) AccessList() *AccessList { return nil }
-func (tx *LegacyTransaction) Data() []byte            { return common.CopyBytes(tx.Payload) }
-func (tx *LegacyTransaction) Gas() uint64             { return tx.GasLimit }
-func (tx *LegacyTransaction) GasPrice() *big.Int      { return new(big.Int).Set(tx.Price) }
-func (tx *LegacyTransaction) Value() *big.Int         { return new(big.Int).Set(tx.Amount) }
-func (tx *LegacyTransaction) Nonce() uint64           { return tx.AccountNonce }
-func (tx *LegacyTransaction) CheckNonce() bool        { return true }
+func (tx *LegacyTx) Type() byte              { return LegacyTxType }
+func (tx *LegacyTx) ChainId() *big.Int       { return deriveChainId(tx.V) }
+func (tx *LegacyTx) Protected() bool         { return isProtectedV(tx.V) }
+func (tx *LegacyTx) AccessList() *AccessList { return nil }
+func (tx *LegacyTx) Data() []byte            { return common.CopyBytes(tx.Payload) }
+func (tx *LegacyTx) Gas() uint64             { return tx.GasLimit }
+func (tx *LegacyTx) GasPrice() *big.Int      { return new(big.Int).Set(tx.Price) }
+func (tx *LegacyTx) Value() *big.Int         { return new(big.Int).Set(tx.Amount) }
+func (tx *LegacyTx) Nonce() uint64           { return tx.AccountNonce }
+func (tx *LegacyTx) CheckNonce() bool        { return true }
 
 // To returns the recipient address of the transaction.
 // It returns nil if the transaction is a contract creation.
-func (tx *LegacyTransaction) To() *common.Address {
+func (tx *LegacyTx) To() *common.Address {
 	if tx.Recipient == nil {
 		return nil
 	}
@@ -96,6 +96,6 @@ func (tx *LegacyTransaction) To() *common.Address {
 
 // RawSignatureValues returns the V, R, S signature values of the transaction.
 // The return values should not be modified by the caller.
-func (tx *LegacyTransaction) RawSignatureValues() (v, r, s *big.Int) {
+func (tx *LegacyTx) RawSignatureValues() (v, r, s *big.Int) {
 	return tx.V, tx.R, tx.S
 }

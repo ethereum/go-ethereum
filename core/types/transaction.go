@@ -122,7 +122,7 @@ func (tx *Transaction) DecodeRLP(s *rlp.Stream) error {
 		return err
 	case kind == rlp.List:
 		// It's a legacy transaction.
-		var inner LegacyTransaction
+		var inner LegacyTx
 		err := s.Decode(&inner)
 		if err == nil {
 			tx.setDecoded(&inner, int(rlp.ListSize(size)))
@@ -149,7 +149,7 @@ func (tx *Transaction) DecodeRLP(s *rlp.Stream) error {
 func (tx *Transaction) UnmarshalBinary(b []byte) error {
 	if len(b) > 0 && b[0] >= 0x7f {
 		// It's a legacy transaction.
-		var data LegacyTransaction
+		var data LegacyTx
 		err := rlp.DecodeBytes(b, &data)
 		if err != nil {
 			return err
@@ -173,7 +173,7 @@ func (tx *Transaction) decodeTyped(b []byte) (innerTx, error) {
 	}
 	switch b[0] {
 	case AccessListTxType:
-		var inner AccessListTransaction
+		var inner AccessListTx
 		err := rlp.DecodeBytes(b[1:], &inner)
 		return &inner, err
 	default:
@@ -286,8 +286,8 @@ func (tx *Transaction) WithSignature(signer Signer, sig []byte) (*Transaction, e
 	var cpy innerTx
 	switch tx.typ {
 	case LegacyTxType:
-		inner := tx.inner.(*LegacyTransaction)
-		cpy = &LegacyTransaction{
+		inner := tx.inner.(*LegacyTx)
+		cpy = &LegacyTx{
 			AccountNonce: inner.AccountNonce,
 			Price:        inner.Price,
 			GasLimit:     inner.GasLimit,
@@ -299,8 +299,8 @@ func (tx *Transaction) WithSignature(signer Signer, sig []byte) (*Transaction, e
 			S:            s,
 		}
 	case AccessListTxType:
-		inner := tx.inner.(*AccessListTransaction)
-		cpy = &AccessListTransaction{
+		inner := tx.inner.(*AccessListTx)
+		cpy = &AccessListTx{
 			Chain:        inner.Chain,
 			AccountNonce: inner.AccountNonce,
 			Price:        inner.Price,
