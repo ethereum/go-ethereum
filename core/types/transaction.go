@@ -271,7 +271,7 @@ func (s Transactions) Len() int { return len(s) }
 // encode encodes the i'th transaction to w. Note that this does not check for errors
 // because we assume that *Transaction will only ever contain valid txs that were either
 // constructed by decoding or via public API in this package.
-func (s Transactions) encode(i int, w *bytes.Buffer) {
+func (s Transactions) EncodeIndex(i int, w *bytes.Buffer) {
 	tx := s[i]
 	if tx.typ == LegacyTxId {
 		rlp.Encode(w, tx.inner)

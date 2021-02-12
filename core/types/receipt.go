@@ -305,8 +305,8 @@ type Receipts []*Receipt
 // Len returns the number of receipts in this list.
 func (r Receipts) Len() int { return len(r) }
 
-// encode encodes the i'th receipt to w.
-func (r Receipts) encode(i int, w *bytes.Buffer) {
+// EncodeIndex encodes the i'th receipt to w.
+func (r Receipts) EncodeIndex(i int, w *bytes.Buffer) {
 	rlp.Encode(w, r[i])
 }
 

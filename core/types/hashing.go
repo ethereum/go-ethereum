@@ -67,14 +67,15 @@ type TrieHasher interface {
 
 // DerivableList is the input to DeriveSha.
 // It is implemented by the 'Transactions' and 'Receipts' types.
+// This is internal, do not use these methods.
 type DerivableList interface {
 	Len() int
-	encode(int, *bytes.Buffer)
+	EncodeIndex(int, *bytes.Buffer)
 }
 
 func encodeForDerive(list DerivableList, i int, buf *bytes.Buffer) []byte {
 	buf.Reset()
-	list.encode(i, buf)
+	list.EncodeIndex(i, buf)
 	// It's really unfortunate that we need to do perform this copy.
 	// StackTrie holds onto the values until Hash is called, so the values
 	// written to it must not alias.
@@ -109,4 +110,3 @@ func DeriveSha(list DerivableList, hasher TrieHasher) common.Hash {
 	}
 	return hasher.Hash()
 }
-
