@@ -236,10 +236,6 @@ func (tx *Transaction) RawSignatureValues() (v, r, s *big.Int) {
 	return tx.inner.RawSignatureValues()
 }
 
-// TODO: remove CheckNonce method.
-
-func (tx *Transaction) CheckNonce() bool { return true }
-
 func (tx *Transaction) GasPriceCmp(other *Transaction) int {
 	return tx.inner.GasPrice().Cmp(other.GasPrice())
 }
