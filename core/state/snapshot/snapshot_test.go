@@ -17,6 +17,7 @@
 package snapshot
 
 import (
+	"encoding/binary"
 	"fmt"
 	"math/big"
 	"math/rand"
@@ -367,5 +368,71 @@ func TestPostCapBasicDataAccess(t *testing.T) {
 	// is a disk layer
 	if err := snaps.Cap(common.HexToHash("0xa3"), 0); err == nil {
 		t.Error("expected error capping the disk layer, got none")
+	}
+}
+
+// TestSnaphots tests the functionality for retrieveing the snapshot
+// with given head root and the desired depth.
+func TestSnaphots(t *testing.T) {
+	// setAccount is a helper to construct a random account entry and assign it to
+	// an account slot in a snapshot
+	setAccount := func(accKey string) map[common.Hash][]byte {
+		return map[common.Hash][]byte{
+			common.HexToHash(accKey): randomAccount(),
+		}
+	}
+	makeRoot := func(height uint64) common.Hash {
+		var buffer [8]byte
+		binary.BigEndian.PutUint64(buffer[:], height)
+		return common.BytesToHash(buffer[:])
+	}
+	// Create a starting base layer and a snapshot tree out of it
+	base := &diskLayer{
+		diskdb: rawdb.NewMemoryDatabase(),
+		root:   common.HexToHash("0x01"),
+		cache:  fastcache.New(1024 * 500),
+	}
+	snaps := &Tree{
+		layers: map[common.Hash]snapshot{
+			base.root: base,
+		},
+	}
+	// Construct the snapshots with 128 layers
+	var (
+		last = common.HexToHash("0x01")
+		head common.Hash
+	)
+	// Flush another 128 layers, one diff will be flatten into the parent.
+	for i := 0; i < 128; i++ {
+		head = makeRoot(uint64(i + 2))
+		snaps.Update(head, last, nil, setAccount(fmt.Sprintf("%d", i+2)), nil)
+		last = head
+		snaps.Cap(head, 128) // 129 layers(128 diffs + 1 disk) are allowed, 129th is the persistent layer
+	}
+	var cases = []struct {
+		headRoot     common.Hash
+		limit        int
+		nodisk       bool
+		expected     int
+		expectBottom common.Hash
+	}{
+		{head, 0, false, 0, common.Hash{}},
+		{head, 64, false, 64, makeRoot(127 + 2 - 63)},
+		{head, 128, false, 128, makeRoot(2)},              // All diff layers
+		{head, 129, true, 128, makeRoot(2)},               // All diff layers
+		{head, 129, false, 129, common.HexToHash("0x01")}, // All diff layers + disk layer
+	}
+	for _, c := range cases {
+		layers := snaps.Snapshots(c.headRoot, c.limit, c.nodisk)
+		if len(layers) != c.expected {
+			t.Fatalf("Returned snapshot layers are mismatched, want %v, got %v", c.expected, len(layers))
+		}
+		if len(layers) == 0 {
+			continue
+		}
+		bottommost := layers[len(layers)-1]
+		if bottommost.Root() != c.expectBottom {
+			t.Fatalf("Snapshot mismatch, want %v, get %v", c.expectBottom, bottommost.Root())
+		}
 	}
 }

@@ -30,13 +30,15 @@ func (h *snapHandler) Chain() *core.BlockChain { return h.chain }
 
 // RunPeer is invoked when a peer joins on the `snap` protocol.
 func (h *snapHandler) RunPeer(peer *snap.Peer, hand snap.Handler) error {
-	return (*handler)(h).runSnapPeer(peer, hand)
+	return (*handler)(h).runSnapExtension(peer, hand)
 }
 
 // PeerInfo retrieves all known `snap` information about a peer.
 func (h *snapHandler) PeerInfo(id enode.ID) interface{} {
-	if p := h.peers.snapPeer(id.String()); p != nil {
-		return p.info()
+	if p := h.peers.peer(id.String()); p != nil {
+		if p.snapExt != nil {
+			return p.snapExt.info()
+		}
 	}
 	return nil
 }

@@ -178,7 +178,7 @@ type Tree struct {
 // store, on a background thread. If the memory layers from the journal is not
 // continuous with disk layer or the journal is missing, all diffs will be discarded
 // iff it's in "recovery" mode, otherwise rebuild is mandatory.
-func New(diskdb ethdb.KeyValueStore, triedb *trie.Database, cache int, root common.Hash, async bool, recovery bool) *Tree {
+func New(diskdb ethdb.KeyValueStore, triedb *trie.Database, cache int, root common.Hash, async bool, rebuild bool, recovery bool) (*Tree, error) {
 	// Create a new, empty snapshot tree
 	snap := &Tree{
 		diskdb: diskdb,
@@ -192,16 +192,19 @@ func New(diskdb ethdb.KeyValueStore, triedb *trie.Database, cache int, root comm
 	// Attempt to load a previously persisted snapshot and rebuild one if failed
 	head, err := loadSnapshot(diskdb, triedb, cache, root, recovery)
 	if err != nil {
-		log.Warn("Failed to load snapshot, regenerating", "err", err)
-		snap.Rebuild(root)
-		return snap
+		if rebuild {
+			log.Warn("Failed to load snapshot, regenerating", "err", err)
+			snap.Rebuild(root)
+			return snap, nil
+		}
+		return nil, err // Bail out the error, don't rebuild automatically.
 	}
 	// Existing snapshot loaded, seed all the layers
 	for head != nil {
 		snap.layers[head.Root()] = head
 		head = head.Parent()
 	}
-	return snap
+	return snap, nil
 }
 
 // waitBuild blocks until the snapshot finishes rebuilding. This method is meant
@@ -232,6 +235,39 @@ func (t *Tree) Snapshot(blockRoot common.Hash) Snapshot {
 	defer t.lock.RUnlock()
 
 	return t.layers[blockRoot]
+}
+
+// Snapshots returns all visited layers from the topmost layer with specific
+// root and traverses downward. The layer amount is limited by the given number.
+// If nodisk is set, then disk layer is excluded.
+func (t *Tree) Snapshots(root common.Hash, limits int, nodisk bool) []Snapshot {
+	t.lock.RLock()
+	defer t.lock.RUnlock()
+
+	if limits == 0 {
+		return nil
+	}
+	layer := t.layers[root]
+	if layer == nil {
+		return nil
+	}
+	var ret []Snapshot
+	for {
+		if _, isdisk := layer.(*diskLayer); isdisk && nodisk {
+			break
+		}
+		ret = append(ret, layer)
+		limits -= 1
+		if limits == 0 {
+			break
+		}
+		parent := layer.Parent()
+		if parent == nil {
+			break
+		}
+		layer = parent
+	}
+	return ret
 }
 
 // Update adds a new snapshot into the tree, if that can be linked to an existing
@@ -679,6 +715,38 @@ func (t *Tree) StorageIterator(root common.Hash, account common.Hash, seek commo
 		return nil, ErrNotConstructed
 	}
 	return newFastStorageIterator(t, root, account, seek)
+}
+
+// Verify iterates the whole state(all the accounts as well as the corresponding storages)
+// with the specific root and compares the re-computed hash with the original one.
+func (t *Tree) Verify(root common.Hash) error {
+	acctIt, err := t.AccountIterator(root, common.Hash{})
+	if err != nil {
+		return err
+	}
+	defer acctIt.Release()
+
+	got, err := generateTrieRoot(nil, acctIt, common.Hash{}, stackTrieGenerate, func(db ethdb.KeyValueWriter, accountHash, codeHash common.Hash, stat *generateStats) (common.Hash, error) {
+		storageIt, err := t.StorageIterator(root, accountHash, common.Hash{})
+		if err != nil {
+			return common.Hash{}, err
+		}
+		defer storageIt.Release()
+
+		hash, err := generateTrieRoot(nil, storageIt, accountHash, stackTrieGenerate, nil, stat, false)
+		if err != nil {
+			return common.Hash{}, err
+		}
+		return hash, nil
+	}, newGenerateStats(), true)
+
+	if err != nil {
+		return err
+	}
+	if got != root {
+		return fmt.Errorf("state root hash mismatch: got %x, want %x", got, root)
+	}
+	return nil
 }
 
 // disklayer is an internal helper function to return the disk layer.

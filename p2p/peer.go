@@ -158,11 +158,15 @@ func (p *Peer) Caps() []Cap {
 	return p.rw.caps
 }
 
-// SupportsCap returns true if the peer supports the given protocol/version
-func (p *Peer) SupportsCap(protocol string, version uint) bool {
-	for _, cap := range p.rw.caps {
-		if cap.Name == protocol {
-			return version <= cap.Version
+// RunningCap returns true if the peer is actively connected using any of the
+// enumerated versions of a specific protocol, meaning that at least one of the
+// versions is supported by both this node and the peer p.
+func (p *Peer) RunningCap(protocol string, versions []uint) bool {
+	if proto, ok := p.running[protocol]; ok {
+		for _, ver := range versions {
+			if proto.Version == ver {
+				return true
+			}
 		}
 	}
 	return false

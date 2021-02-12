@@ -1494,7 +1494,7 @@ func (s *Syncer) revertTrienodeHealRequest(req *trienodeHealRequest) {
 	// retrievals as not-pending, ready for resheduling
 	req.timeout.Stop()
 	for i, hash := range req.hashes {
-		req.task.trieTasks[hash] = [][]byte(req.paths[i])
+		req.task.trieTasks[hash] = req.paths[i]
 	}
 }
 

@@ -47,7 +47,7 @@ func (h *ethHandler) RunPeer(peer *eth.Peer, hand eth.Handler) error {
 
 // PeerInfo retrieves all known `eth` information about a peer.
 func (h *ethHandler) PeerInfo(id enode.ID) interface{} {
-	if p := h.peers.ethPeer(id.String()); p != nil {
+	if p := h.peers.peer(id.String()); p != nil {
 		return p.info()
 	}
 	return nil
@@ -107,7 +107,7 @@ func (h *ethHandler) Handle(peer *eth.Peer, packet eth.Packet) error {
 // handleHeaders is invoked from a peer's message handler when it transmits a batch
 // of headers for the local node to process.
 func (h *ethHandler) handleHeaders(peer *eth.Peer, headers []*types.Header) error {
-	p := h.peers.ethPeer(peer.ID())
+	p := h.peers.peer(peer.ID())
 	if p == nil {
 		return errors.New("unregistered during callback")
 	}

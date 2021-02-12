@@ -85,7 +85,7 @@ var (
 	bloomBitsPrefix       = []byte("B") // bloomBitsPrefix + bit (uint16 big endian) + section (uint64 big endian) + hash -> bloom bits
 	SnapshotAccountPrefix = []byte("a") // SnapshotAccountPrefix + account hash -> account trie value
 	SnapshotStoragePrefix = []byte("o") // SnapshotStoragePrefix + account hash + storage hash -> storage trie value
-	codePrefix            = []byte("c") // codePrefix + code hash -> account code
+	CodePrefix            = []byte("c") // CodePrefix + code hash -> account code
 
 	preimagePrefix = []byte("secure-key-")      // preimagePrefix + hash -> preimage
 	configPrefix   = []byte("ethereum-config-") // config prefix for the db
@@ -209,16 +209,16 @@ func preimageKey(hash common.Hash) []byte {
 	return append(preimagePrefix, hash.Bytes()...)
 }
 
-// codeKey = codePrefix + hash
+// codeKey = CodePrefix + hash
 func codeKey(hash common.Hash) []byte {
-	return append(codePrefix, hash.Bytes()...)
+	return append(CodePrefix, hash.Bytes()...)
 }
 
 // IsCodeKey reports whether the given byte slice is the key of contract code,
 // if so return the raw code hash as well.
 func IsCodeKey(key []byte) (bool, []byte) {
-	if bytes.HasPrefix(key, codePrefix) && len(key) == common.HashLength+len(codePrefix) {
-		return true, key[len(codePrefix):]
+	if bytes.HasPrefix(key, CodePrefix) && len(key) == common.HashLength+len(CodePrefix) {
+		return true, key[len(CodePrefix):]
 	}
 	return false, nil
 }

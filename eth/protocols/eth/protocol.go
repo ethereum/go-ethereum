@@ -34,13 +34,13 @@ const (
 	ETH65 = 65
 )
 
-// protocolName is the official short name of the `eth` protocol used during
+// ProtocolName is the official short name of the `eth` protocol used during
 // devp2p capability negotiation.
-const protocolName = "eth"
+const ProtocolName = "eth"
 
-// protocolVersions are the supported versions of the `eth` protocol (first
+// ProtocolVersions are the supported versions of the `eth` protocol (first
 // is primary).
-var protocolVersions = []uint{ETH65, ETH64}
+var ProtocolVersions = []uint{ETH65, ETH64}
 
 // protocolLengths are the number of implemented message corresponding to
 // different protocol versions.
