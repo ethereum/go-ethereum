@@ -112,8 +112,7 @@ func (tx *Transaction) DecodeRLP(s *rlp.Stream) error {
 	case kind == rlp.String:
 		// It's an EIP-2718 typed TX envelope.
 		var b []byte
-		b, err := s.Bytes()
-		if err != nil {
+		if b, err = s.Bytes(); err != nil {
 			return err
 		}
 		tx.typ = b[0]
