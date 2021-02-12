@@ -133,37 +133,64 @@ func NewEIP2718Receipt(typ uint8, root []byte, failed bool, cumulativeGasUsed ui
 // EncodeRLP implements rlp.Encoder, and flattens the consensus fields of a receipt
 // into an RLP stream. If no post state is present, byzantium fork is assumed.
 func (r *Receipt) EncodeRLP(w io.Writer) error {
-	if r.Type != LegacyTxId {
-		if _, err := w.Write([]byte{r.Type}); err != nil {
-			return err
-		}
+	data := &receiptRLP{r.statusEncoding(), r.CumulativeGasUsed, r.Bloom, r.Logs}
+	if r.Type == LegacyTxId {
+		return rlp.Encode(w, data)
 	}
-	return rlp.Encode(w, &receiptRLP{r.statusEncoding(), r.CumulativeGasUsed, r.Bloom, r.Logs})
+	// It's an EIP-2718 typed TX receipt.
+	if r.Type != AccessListTxId {
+		return ErrTxTypeNotSupported
+	}
+	buf := encodeBufferPool.Get().(*bytes.Buffer)
+	defer encodeBufferPool.Put(buf)
+	buf.Reset()
+	buf.WriteByte(r.Type)
+	if err := rlp.Encode(buf, data); err != nil {
+		return err
+	}
+	return rlp.Encode(w, buf.Bytes())
 }
 
 // DecodeRLP implements rlp.Decoder, and loads the consensus fields of a receipt
 // from an RLP stream.
 func (r *Receipt) DecodeRLP(s *rlp.Stream) error {
-	typ := uint64(LegacyTxId)
-	k, _, err := s.Kind()
-	if err != nil {
+	kind, _, err := s.Kind()
+	switch {
+	case err != nil:
 		return err
-	}
-	// If the receipt isn't a list, it's likely typed - so pop off the first byte.
-	if k != rlp.List {
-		if typ, err = s.Uint(); err != nil {
+	case kind == rlp.List:
+		// It's a legacy receipt.
+		var dec receiptRLP
+		if err := s.Decode(&dec); err != nil {
 			return err
 		}
+		var r Receipt
+		r.Type = LegacyTxId
+		return r.setFromRLP(dec)
+	case kind == rlp.String:
+		// It's an EIP-2718 typed tx receipt.
+		b, err := s.Bytes()
+		if err != nil {
+			return err
+		}
+		var r Receipt
+		r.Type = b[0]
+		if r.Type == AccessListTxId {
+			var dec receiptRLP
+			if err := rlp.DecodeBytes(b[1:], &dec); err != nil {
+				return err
+			}
+			return r.setFromRLP(dec)
+		}
+		return ErrTxTypeNotSupported
+	default:
+		return rlp.ErrExpectedList
 	}
-	var dec receiptRLP
-	if err := s.Decode(&dec); err != nil {
-		return err
-	}
-	if err := r.setStatus(dec.PostStateOrStatus); err != nil {
-		return err
-	}
-	r.Type, r.CumulativeGasUsed, r.Bloom, r.Logs = uint8(typ), dec.CumulativeGasUsed, dec.Bloom, dec.Logs
-	return nil
+}
+
+func (r *Receipt) setFromRLP(data receiptRLP) error {
+	r.CumulativeGasUsed, r.Bloom, r.Logs = data.CumulativeGasUsed, data.Bloom, data.Logs
+	return r.setStatus(data.PostStateOrStatus)
 }
 
 func (r *Receipt) setStatus(postStateOrStatus []byte) error {
@@ -194,7 +221,6 @@ func (r *Receipt) statusEncoding() []byte {
 // to approximate and limit the memory consumption of various caches.
 func (r *Receipt) Size() common.StorageSize {
 	size := common.StorageSize(unsafe.Sizeof(*r)) + common.StorageSize(len(r.PostState))
-
 	size += common.StorageSize(len(r.Logs)) * common.StorageSize(unsafe.Sizeof(Log{}))
 	for _, log := range r.Logs {
 		size += common.StorageSize(len(log.Topics)*common.HashLength + len(log.Data))
@@ -303,11 +329,23 @@ func decodeV3StoredReceiptRLP(r *ReceiptForStorage, blob []byte) error {
 type Receipts []*Receipt
 
 // Len returns the number of receipts in this list.
-func (r Receipts) Len() int { return len(r) }
+func (rs Receipts) Len() int { return len(rs) }
 
 // EncodeIndex encodes the i'th receipt to w.
-func (r Receipts) EncodeIndex(i int, w *bytes.Buffer) {
-	rlp.Encode(w, r[i])
+func (rs Receipts) EncodeIndex(i int, w *bytes.Buffer) {
+	r := rs[i]
+	data := &receiptRLP{r.statusEncoding(), r.CumulativeGasUsed, r.Bloom, r.Logs}
+	switch r.Type {
+	case LegacyTxId:
+		rlp.Encode(w, data)
+	case AccessListTxId:
+		w.WriteByte(AccessListTxId)
+		rlp.Encode(w, data)
+	default:
+		// For unsupported types, write nothing. Since this is for
+		// DeriveSha, the error will be caught matching the derived hash
+		// to the block.
+	}
 }
 
 // DeriveFields fills the receipts with their computed fields based on consensus
