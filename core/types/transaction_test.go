@@ -144,13 +144,27 @@ func TestEIP2718SigHashes(t *testing.T) {
 }
 
 func TestEIP2718TransactionEncode(t *testing.T) {
-	txb, err := rlp.EncodeToBytes(signedEip2718Tx)
-	if err != nil {
-		t.Fatalf("encode error: %v", err)
+	// RLP representation
+	{
+		have, err := rlp.EncodeToBytes(signedEip2718Tx)
+		if err != nil {
+			t.Fatalf("encode error: %v", err)
+		}
+		want := common.FromHex("b86601f8630103018261a894b94f5374fce5edbc8e2a8697c15331677e6ebf0b0a825544c001a0c9519f4f2b30335884581971573fadf60c6204f59a911df35ee8a540456b2660a032f1e8e2c5dd761f9e4f88f41c8310aeaba26a8bfcdacfedfa12ec3862d37521")
+		if !bytes.Equal(have, want) {
+			t.Errorf("encoded RLP mismatch, got %x", have)
+		}
 	}
-	should := common.FromHex("b86601f8630103018261a894b94f5374fce5edbc8e2a8697c15331677e6ebf0b0a825544c001a0c9519f4f2b30335884581971573fadf60c6204f59a911df35ee8a540456b2660a032f1e8e2c5dd761f9e4f88f41c8310aeaba26a8bfcdacfedfa12ec3862d37521")
-	if !bytes.Equal(txb, should) {
-		t.Errorf("encoded RLP mismatch, got %x", txb)
+	// Binary representation
+	{
+		have, err := signedEip2718Tx.MarshalBinary()
+		if err != nil {
+			t.Fatalf("encode error: %v", err)
+		}
+		want := common.FromHex("01f8630103018261a894b94f5374fce5edbc8e2a8697c15331677e6ebf0b0a825544c001a0c9519f4f2b30335884581971573fadf60c6204f59a911df35ee8a540456b2660a032f1e8e2c5dd761f9e4f88f41c8310aeaba26a8bfcdacfedfa12ec3862d37521")
+		if !bytes.Equal(have, want) {
+			t.Errorf("encoded RLP mismatch, got %x", have)
+		}
 	}
 }
 
@@ -312,13 +326,14 @@ func encodeDecodeJSON(tx *Transaction) (*Transaction, error) {
 	return parsedTx, nil
 }
 
-func encodeDecodeRLP(tx *Transaction) (*Transaction, error) {
-	data, err := rlp.EncodeToBytes(tx)
+func encodeDecodeBinary(tx *Transaction) (*Transaction, error) {
+	// TOOD @holiman
+	data, err := tx.MarshalBinary()
 	if err != nil {
 		return nil, fmt.Errorf("rlp encoding failed: %v", err)
 	}
 	var parsedTx = &Transaction{}
-	if err := rlp.DecodeBytes(data, parsedTx); err != nil {
+	if err := parsedTx.UnmarshalBinary(data); err != nil {
 		return nil, fmt.Errorf("rlp decoding failed: %v", err)
 	}
 	return parsedTx, nil
@@ -375,7 +390,7 @@ func TestTransactionCoding(t *testing.T) {
 			t.Fatalf("could not sign transaction: %v", err)
 		}
 		// RLP
-		parsedTx, err := encodeDecodeRLP(tx)
+		parsedTx, err := encodeDecodeBinary(tx)
 		if err != nil {
 			t.Fatal(err)
 		}

@@ -32,7 +32,6 @@ import (
 	"github.com/ethereum/go-ethereum/event"
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/params"
-	"github.com/ethereum/go-ethereum/rlp"
 )
 
 const (
@@ -432,8 +431,7 @@ func (pool *TxPool) add(ctx context.Context, tx *types.Transaction) error {
 func (pool *TxPool) Add(ctx context.Context, tx *types.Transaction) error {
 	pool.mu.Lock()
 	defer pool.mu.Unlock()
-
-	data, err := rlp.EncodeToBytes(tx)
+	data, err := tx.MarshalBinary()
 	if err != nil {
 		return err
 	}
