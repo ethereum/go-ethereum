@@ -82,7 +82,6 @@ func (tx *LegacyTx) Gas() uint64             { return tx.GasLimit }
 func (tx *LegacyTx) GasPrice() *big.Int      { return new(big.Int).Set(tx.Price) }
 func (tx *LegacyTx) Value() *big.Int         { return new(big.Int).Set(tx.Amount) }
 func (tx *LegacyTx) Nonce() uint64           { return tx.AccountNonce }
-func (tx *LegacyTx) CheckNonce() bool        { return true }
 
 // To returns the recipient address of the transaction.
 // It returns nil if the transaction is a contract creation.

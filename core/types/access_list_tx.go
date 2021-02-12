@@ -108,7 +108,6 @@ func (tx *AccessListTx) Gas() uint64             { return tx.GasLimit }
 func (tx *AccessListTx) GasPrice() *big.Int      { return new(big.Int).Set(tx.Price) }
 func (tx *AccessListTx) Value() *big.Int         { return new(big.Int).Set(tx.Amount) }
 func (tx *AccessListTx) Nonce() uint64           { return tx.AccountNonce }
-func (tx *AccessListTx) CheckNonce() bool        { return true }
 
 // To returns the recipient address of the transaction.
 // It returns nil if the transaction is a contract creation.

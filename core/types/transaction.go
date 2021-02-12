@@ -67,7 +67,6 @@ type innerTx interface {
 	GasPrice() *big.Int
 	Value() *big.Int
 	Nonce() uint64
-	CheckNonce() bool
 	To() *common.Address
 	RawSignatureValues() (v, r, s *big.Int)
 }
