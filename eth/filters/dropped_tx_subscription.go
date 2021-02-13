@@ -2,24 +2,25 @@ package filters
 
 import (
 	"context"
-	"github.com/ethereum/go-ethereum/core"
-	"github.com/ethereum/go-ethereum/core/types"
+
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/hexutil"
+	"github.com/ethereum/go-ethereum/core"
+	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/internal/ethapi"
 	"github.com/ethereum/go-ethereum/rpc"
-
 )
 
 type dropNotification struct {
-	TxHash common.Hash `json:"txhash"`
-	Reason string `json:"reason"`
-	Replacement string `json:"replacedby,omitempty"`
+	// TxHash common.Hash `json:"txhash"`
+	Tx          *ethapi.RPCTransaction `json:"tx"`
+	Reason      string                 `json:"reason"`
+	Replacement string                 `json:"replacedby,omitempty"`
 }
 
 type rejectNotification struct {
-	Tx *ethapi.RPCTransaction `json:"tx"`
-	Reason string `json:"reason"`
+	Tx     *ethapi.RPCTransaction `json:"tx"`
+	Reason string                 `json:"reason"`
 }
 
 // newRPCTransaction returns a transaction that will serialize to the RPC
@@ -72,7 +73,7 @@ func (api *PublicFilterAPI) DroppedTransactions(ctx context.Context) (*rpc.Subsc
 			select {
 			case d := <-dropped:
 				for _, tx := range d.Txs {
-					notifier.Notify(rpcSub.ID, &dropNotification{TxHash: tx.Hash(), Reason: d.Reason, Replacement: replacementHashString(d.Replacement) })
+					notifier.Notify(rpcSub.ID, &dropNotification{Tx: newRPCPendingTransaction(tx), Reason: d.Reason, Replacement: replacementHashString(d.Replacement)})
 				}
 			case <-rpcSub.Err():
 				droppedSub.Unsubscribe()
