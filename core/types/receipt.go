@@ -166,7 +166,6 @@ func (r *Receipt) DecodeRLP(s *rlp.Stream) error {
 		if err := s.Decode(&dec); err != nil {
 			return err
 		}
-		var r Receipt
 		r.Type = LegacyTxType
 		return r.setFromRLP(dec)
 	case kind == rlp.String:
@@ -178,7 +177,6 @@ func (r *Receipt) DecodeRLP(s *rlp.Stream) error {
 		if len(b) == 0 {
 			return errEmptyTypedReceipt
 		}
-		var r Receipt
 		r.Type = b[0]
 		if r.Type == AccessListTxType {
 			var dec receiptRLP

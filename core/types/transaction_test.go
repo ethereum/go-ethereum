@@ -327,7 +327,6 @@ func encodeDecodeJSON(tx *Transaction) (*Transaction, error) {
 }
 
 func encodeDecodeBinary(tx *Transaction) (*Transaction, error) {
-	// TOOD @holiman
 	data, err := tx.MarshalBinary()
 	if err != nil {
 		return nil, fmt.Errorf("rlp encoding failed: %v", err)
