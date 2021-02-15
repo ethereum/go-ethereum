@@ -2039,6 +2039,116 @@ func TestTransactionReplacement(t *testing.T) {
 	}
 }
 
+// Tests that the pool rejects replacement dynamic fee transactions that don't
+// meet the minimum price bump required.
+func TestTransactionReplacementDynamicFee(t *testing.T) {
+	t.Parallel()
+
+	// Create the pool to test the pricing enforcement with
+	statedb, _ := state.New(common.Hash{}, state.NewDatabase(rawdb.NewMemoryDatabase()), nil)
+	blockchain := &testBlockChain{statedb, 1000000, new(event.Feed)}
+
+	pool := NewTxPool(testTxPoolConfig, params.AleutChainConfig, blockchain)
+	defer pool.Stop()
+
+	// Keep track of transaction events to ensure all executables get announced
+	events := make(chan NewTxsEvent, 32)
+	sub := pool.txFeed.Subscribe(events)
+	defer sub.Unsubscribe()
+
+	// Create a test account to add transactions with
+	key, _ := crypto.GenerateKey()
+	pool.currentState.AddBalance(crypto.PubkeyToAddress(key.PublicKey), big.NewInt(1000000000))
+
+	// Add pending transactions, ensuring the minimum price bump is enforced for replacement (for ultra low prices too)
+	feeCap := int64(100)
+	feeCapThreshold := (feeCap * (100 + int64(testTxPoolConfig.PriceBump))) / 100
+	tip := int64(60)
+	tipThreshold := (tip * (100 + int64(testTxPoolConfig.PriceBump))) / 100
+
+	tx := dynamicFeeTransaction(0, 100000, big.NewInt(2), big.NewInt(1), key)
+	if err := pool.addRemoteSync(tx); err != nil {
+		t.Fatalf("failed to add original cheap pending transaction: %v", err)
+	}
+	tx = dynamicFeeTransaction(0, 100001, big.NewInt(2), big.NewInt(2), key)
+	if err := pool.AddRemote(tx); err != ErrReplaceUnderpriced {
+		t.Fatalf("original cheap pending transaction replacement error mismatch: have %v, want %v", err, ErrReplaceUnderpriced)
+	}
+	tx = dynamicFeeTransaction(0, 100001, big.NewInt(3), big.NewInt(1), key)
+	if err := pool.AddRemote(tx); err != ErrReplaceUnderpriced {
+		t.Fatalf("original cheap pending transaction replacement error mismatch: have %v, want %v", err, ErrReplaceUnderpriced)
+	}
+	tx = dynamicFeeTransaction(0, 100000, big.NewInt(3), big.NewInt(2), key)
+	if err := pool.AddRemote(tx); err != nil {
+		t.Fatalf("failed to replace original cheap pending transaction: %v", err)
+	}
+	if err := validateEvents(events, 2); err != nil {
+		t.Fatalf("cheap replacement event firing failed: %v", err)
+	}
+
+	tx = dynamicFeeTransaction(0, 100000, big.NewInt(feeCap), big.NewInt(tip), key)
+	if err := pool.addRemoteSync(tx); err != nil {
+		t.Fatalf("failed to add original proper pending transaction: %v", err)
+	}
+	tx = dynamicFeeTransaction(0, 100001, big.NewInt(feeCapThreshold-1), big.NewInt(tipThreshold), key)
+	if err := pool.AddRemote(tx); err != ErrReplaceUnderpriced {
+		t.Fatalf("original proper pending transaction replacement error mismatch: have %v, want %v", err, ErrReplaceUnderpriced)
+	}
+	tx = dynamicFeeTransaction(0, 100001, big.NewInt(feeCapThreshold), big.NewInt(tipThreshold-1), key)
+	if err := pool.AddRemote(tx); err != ErrReplaceUnderpriced {
+		t.Fatalf("original proper pending transaction replacement error mismatch: have %v, want %v", err, ErrReplaceUnderpriced)
+	}
+	tx = dynamicFeeTransaction(0, 100000, big.NewInt(feeCapThreshold), big.NewInt(tipThreshold), key)
+	if err := pool.AddRemote(tx); err != nil {
+		t.Fatalf("failed to replace original proper pending transaction: %v", err)
+	}
+	if err := validateEvents(events, 2); err != nil {
+		t.Fatalf("proper replacement event firing failed: %v", err)
+	}
+
+	// Add queued transactions, ensuring the minimum price bump is enforced for replacement (for ultra low prices too)
+	tx = dynamicFeeTransaction(2, 100000, big.NewInt(2), big.NewInt(1), key)
+	if err := pool.AddRemote(tx); err != nil {
+		t.Fatalf("failed to add original cheap queued transaction: %v", err)
+	}
+	tx = dynamicFeeTransaction(2, 100001, big.NewInt(2), big.NewInt(2), key)
+	if err := pool.AddRemote(tx); err != ErrReplaceUnderpriced {
+		t.Fatalf("original cheap queued transaction replacement error mismatch: have %v, want %v", err, ErrReplaceUnderpriced)
+	}
+	tx = dynamicFeeTransaction(2, 100001, big.NewInt(3), big.NewInt(1), key)
+	if err := pool.AddRemote(tx); err != ErrReplaceUnderpriced {
+		t.Fatalf("original cheap queued transaction replacement error mismatch: have %v, want %v", err, ErrReplaceUnderpriced)
+	}
+	tx = dynamicFeeTransaction(2, 100000, big.NewInt(3), big.NewInt(2), key)
+	if err := pool.AddRemote(tx); err != nil {
+		t.Fatalf("failed to replace original cheap queued transaction: %v", err)
+	}
+
+	tx = dynamicFeeTransaction(2, 100000, big.NewInt(feeCap), big.NewInt(tip), key)
+	if err := pool.AddRemote(tx); err != nil {
+		t.Fatalf("failed to add original proper queued transaction: %v", err)
+	}
+	tx = dynamicFeeTransaction(2, 100001, big.NewInt(feeCapThreshold-1), big.NewInt(tipThreshold), key)
+	if err := pool.AddRemote(tx); err != ErrReplaceUnderpriced {
+		t.Fatalf("original proper queued transaction replacement error mismatch: have %v, want %v", err, ErrReplaceUnderpriced)
+	}
+	tx = dynamicFeeTransaction(2, 100001, big.NewInt(feeCapThreshold), big.NewInt(tipThreshold-1), key)
+	if err := pool.AddRemote(tx); err != ErrReplaceUnderpriced {
+		t.Fatalf("original proper queued transaction replacement error mismatch: have %v, want %v", err, ErrReplaceUnderpriced)
+	}
+	tx = dynamicFeeTransaction(2, 100000, big.NewInt(feeCapThreshold), big.NewInt(tipThreshold), key)
+	if err := pool.AddRemote(tx); err != nil {
+		t.Fatalf("failed to replace original proper queued transaction: %v", err)
+	}
+
+	if err := validateEvents(events, 0); err != nil {
+		t.Fatalf("queued replacement event firing failed: %v", err)
+	}
+	if err := validateTxPoolInternals(pool); err != nil {
+		t.Fatalf("pool internal state corrupted: %v", err)
+	}
+}
+
 // Tests that local transactions are journaled to disk, but remote transactions
 // get discarded between restarts.
 func TestTransactionJournaling(t *testing.T)         { testTransactionJournaling(t, false) }
