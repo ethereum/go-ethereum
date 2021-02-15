@@ -534,7 +534,8 @@ func (l *txPricedList) Underpriced(tx *types.Transaction) bool {
 	// If the remote transaction is even cheaper than the
 	// cheapest one tracked locally, reject it.
 	cheapest := []*types.Transaction(*l.remotes)[0]
-	return cheapest.FeeCapCmp(tx) >= 0
+	cmp := cheapest.FeeCapCmp(tx)
+	return cmp > 0 || (cmp == 0 && cheapest.TipCmp(tx) >= 0)
 }
 
 // Discard finds a number of most underpriced transactions, removes them from the
