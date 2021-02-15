@@ -362,6 +362,25 @@ func TestTransactionTypeNotSupported(t *testing.T) {
 	}
 }
 
+func TestTransactionTipAboveFeeCap(t *testing.T) {
+	t.Parallel()
+
+	statedb, _ := state.New(common.Hash{}, state.NewDatabase(rawdb.NewMemoryDatabase()), nil)
+	blockchain := &testBlockChain{statedb, 10000000, new(event.Feed)}
+
+	key, _ := crypto.GenerateKey()
+	pool := NewTxPool(testTxPoolConfig, params.AleutChainConfig, blockchain)
+	defer pool.Stop()
+
+	tx := dynamicFeeTransaction(0, 100, big.NewInt(1), big.NewInt(2), key)
+	from, _ := types.Sender(types.NewEIP2718Signer(pool.chainconfig.ChainID), tx)
+	pool.currentState.AddBalance(from, big.NewInt(1))
+
+	if err := pool.AddRemote(tx); err != ErrTipAboveFeeCap {
+		t.Error("expected", ErrTipAboveFeeCap, "got", err)
+	}
+}
+
 func TestTransactionChainFork(t *testing.T) {
 	t.Parallel()
 
