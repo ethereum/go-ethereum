@@ -107,14 +107,12 @@ func (s *Suite) TestMaliciousStatus(t *utesting.T) {
 	// get protoHandshake
 	conn.handshake(t)
 	status := &Status{
-		&eth.StatusPacket{
-			ProtocolVersion: uint32(conn.ethProtocolVersion),
-			NetworkID:       s.chain.chainConfig.ChainID.Uint64(),
-			TD:              largeNumber(2),
-			Head:            s.chain.blocks[s.chain.Len()-1].Hash(),
-			Genesis:         s.chain.blocks[0].Hash(),
-			ForkID:          s.chain.ForkID(),
-		},
+		ProtocolVersion: uint32(conn.ethProtocolVersion),
+		NetworkID:       s.chain.chainConfig.ChainID.Uint64(),
+		TD:              largeNumber(2),
+		Head:            s.chain.blocks[s.chain.Len()-1].Hash(),
+		Genesis:         s.chain.blocks[0].Hash(),
+		ForkID:          s.chain.ForkID(),
 	}
 	// get status
 	switch msg := conn.statusExchange(t, s.chain, status).(type) {
@@ -146,14 +144,12 @@ func (s *Suite) TestGetBlockHeaders(t *utesting.T) {
 
 	// get block headers
 	req := &GetBlockHeaders{
-		&eth.GetBlockHeadersPacket{
-			Origin: eth.HashOrNumber{
-				Hash: s.chain.blocks[1].Hash(),
-			},
-			Amount:  2,
-			Skip:    1,
-			Reverse: false,
+		Origin: eth.HashOrNumber{
+			Hash: s.chain.blocks[1].Hash(),
 		},
+		Amount:  2,
+		Skip:    1,
+		Reverse: false,
 	}
 
 	if err := conn.Write(req); err != nil {
@@ -162,7 +158,7 @@ func (s *Suite) TestGetBlockHeaders(t *utesting.T) {
 
 	switch msg := conn.ReadAndServe(s.chain, timeout).(type) {
 	case *BlockHeaders:
-		headers := *msg.BlockHeadersPacket
+		headers := *msg
 		for _, header := range headers {
 			num := header.Number.Uint64()
 			t.Logf("received header (%d): %s", num, pretty.Sdump(header))
@@ -185,10 +181,8 @@ func (s *Suite) TestGetBlockBodies(t *utesting.T) {
 	conn.statusExchange(t, s.chain, nil)
 	// create block bodies request
 	req := &GetBlockBodies{
-		&eth.GetBlockBodiesPacket{
-			s.chain.blocks[54].Hash(),
-			s.chain.blocks[75].Hash(),
-		},
+		s.chain.blocks[54].Hash(),
+		s.chain.blocks[75].Hash(),
 	}
 	if err := conn.Write(req); err != nil {
 		t.Fatalf("could not write to connection: %v", err)
@@ -196,7 +190,7 @@ func (s *Suite) TestGetBlockBodies(t *utesting.T) {
 
 	switch msg := conn.ReadAndServe(s.chain, timeout).(type) {
 	case *BlockBodies:
-		t.Logf("received %d block bodies", len(*msg.BlockBodiesPacket))
+		t.Logf("received %d block bodies", len(*msg))
 	default:
 		t.Fatalf("unexpected: %s", pretty.Sdump(msg))
 	}
@@ -208,10 +202,8 @@ func (s *Suite) TestBroadcast(t *utesting.T) {
 	sendConn, receiveConn := s.setupConnection(t), s.setupConnection(t)
 	nextBlock := len(s.chain.blocks)
 	blockAnnouncement := &NewBlock{
-		&eth.NewBlockPacket{
-			Block: s.fullChain.blocks[nextBlock],
-			TD:    s.fullChain.TD(nextBlock + 1),
-		},
+		Block: s.fullChain.blocks[nextBlock],
+		TD:    s.fullChain.TD(nextBlock + 1),
 	}
 	s.testAnnounce(t, sendConn, receiveConn, blockAnnouncement)
 	// update test suite chain
@@ -303,28 +295,20 @@ func (s *Suite) TestLargeAnnounce(t *utesting.T) {
 	nextBlock := len(s.chain.blocks)
 	blocks := []*NewBlock{
 		{
-			&eth.NewBlockPacket {
-				Block: largeBlock(),
-				TD:    s.fullChain.TD(nextBlock + 1),
-			},
+			Block: largeBlock(),
+			TD:    s.fullChain.TD(nextBlock + 1),
 		},
 		{
-			&eth.NewBlockPacket{
-				Block: s.fullChain.blocks[nextBlock],
-				TD:    largeNumber(2),
-			},
+			Block: s.fullChain.blocks[nextBlock],
+			TD:    largeNumber(2),
 		},
 		{
-			&eth.NewBlockPacket{
-				Block: largeBlock(),
-				TD:    largeNumber(2),
-			},
+			Block: largeBlock(),
+			TD:    largeNumber(2),
 		},
 		{
-			&eth.NewBlockPacket{
-				Block: s.fullChain.blocks[nextBlock],
-				TD:    s.fullChain.TD(nextBlock + 1),
-			},
+			Block: s.fullChain.blocks[nextBlock],
+			TD:    s.fullChain.TD(nextBlock + 1),
 		},
 	}
 
@@ -377,7 +361,7 @@ func (s *Suite) waitAnnounce(t *utesting.T, conn *Conn, blockAnnouncement *NewBl
 			"wrong TD in announcement",
 		)
 	case *NewBlockHashes:
-		message := *msg.NewBlockHashesPacket
+		message := *msg
 		t.Logf("received NewBlockHashes message: %s", pretty.Sdump(message))
 		assert.Equal(t, blockAnnouncement.Block.Hash(), message[0].Hash,
 			"wrong block hash in announcement",
