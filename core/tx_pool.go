@@ -83,6 +83,10 @@ var (
 	// than some meaningful limit a user might use. This is not a consensus error
 	// making the transaction invalid, rather a DOS protection.
 	ErrOversizedData = errors.New("oversized data")
+
+	// ErrTipAboveFeeCap is a sanity error to ensure no one is able to specify a
+	// transaction with a tip higher than the total fee cap.
+	ErrTipAboveFeeCap = errors.New("tip higher than fee cap")
 )
 
 var (
@@ -560,21 +564,11 @@ func (pool *TxPool) validateTx(tx *types.Transaction, local bool) error {
 	if pool.currentMaxGas < tx.Gas() {
 		return ErrGasLimit
 	}
-	// Make sure the transaction is signed properly.
-	switch tx.Type() {
-	case types.LegacyTxType:
-	case types.AccessListTxType:
-		if !pool.eip2718 {
-			return ErrTxTypeNotSupported
-		}
-	case types.DynamicFeeTxType:
-		if !pool.eip1559 {
-			return ErrTxTypeNotSupported
-		}
-	default:
-		return ErrTxTypeNotSupported
+	// Ensure feeCap is less than or equal to tip.
+	if pool.eip1559 && tx.FeeCapIntCmp(tx.Tip()) < 0 {
+		return ErrTipAboveFeeCap
 	}
-	// Make sure the transaction is signed properly
+	// Make sure the transaction is signed properly.
 	from, err := types.Sender(pool.signer, tx)
 	if err != nil {
 		return ErrInvalidSender
