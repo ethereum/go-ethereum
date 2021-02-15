@@ -34,7 +34,7 @@ jobs:
           gem install --no-document fpm
           fpm --version
 
-          make all
+          make bor-all
 
           fpm -s dir -t deb --deb-user root --deb-group root -n matic-bor -v ${{ env.RELEASE_VERSION }} \
             build/bin/bor=/usr/bin/ \
