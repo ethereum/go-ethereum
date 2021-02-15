@@ -78,7 +78,7 @@ func TestEncodePacked(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			want := common.Hex2Bytes(tt.encoded)
-			encoded, err := EncodePacked(tt.types, tt.values)
+			encoded, err := SolidityEncodePacked(tt.types, tt.values)
 			if err != nil {
 				t.Fatal(err)
 			}

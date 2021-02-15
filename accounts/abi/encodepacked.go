@@ -10,10 +10,15 @@ import (
 	"github.com/ethereum/go-ethereum/common"
 )
 
-// EncodePacked implements the non-standard encoding available in solidity.
+// SolidityEncodePacked implements the non-standard encoding available in solidity.
 // Since encoding is ambigious there is no decoding function.
-// See
-func EncodePacked(args []Type, values []interface{}) ([]byte, error) {
+//
+// Using EncodePacked to pack data before hashing or signing is generally unsafe because
+// the following arguments produce the same output.
+// abi.SolidityEncodePacked([]Type{String,String}, []interface{}{"hello", "world01"})
+// abi.SolidityEncodePacked([]Type{String,String}, []interface{}{"helloworld", "01"})
+// '0x68656c6c6f776f726c643031'
+func SolidityEncodePacked(args []Type, values []interface{}) ([]byte, error) {
 	enc := make([]byte, 0)
 	var index int
 	for _, arg := range args {
