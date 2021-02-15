@@ -347,6 +347,21 @@ func TestTransactionNegativeValue(t *testing.T) {
 	}
 }
 
+func TestTransactionTypeNotSupported(t *testing.T) {
+	t.Parallel()
+
+	pool, key := setupTxPool()
+	defer pool.Stop()
+
+	// cannot use dynamicFeeTransaction() here for now as it uses the Aleut testnet ChainID
+	tx := types.NewDynamicFeeTransaction(pool.chainconfig.ChainID, 0, common.Address{}, big.NewInt(100), 100, big.NewInt(1), big.NewInt(1), nil, nil)
+	tx, _ = types.SignTx(tx, types.NewEIP2718Signer(pool.chainconfig.ChainID), key)
+
+	if err := pool.AddRemote(tx); err != ErrTxTypeNotSupported {
+		t.Error("expected", ErrTxTypeNotSupported, "got", err)
+	}
+}
+
 func TestTransactionChainFork(t *testing.T) {
 	t.Parallel()
 
