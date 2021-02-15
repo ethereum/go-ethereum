@@ -152,7 +152,7 @@ func (c *Conn) Read() Message {
 	case (BlockHeaders{}).Code():
 		msg = new(BlockHeaders)
 	case (GetBlockBodies{}).Code():
-	 	msg = new(GetBlockBodies)
+		msg = new(GetBlockBodies)
 	case (BlockBodies{}).Code():
 		msg = new(BlockBodies)
 	case (NewBlock{}).Code():
@@ -204,7 +204,7 @@ func (c *Conn) Write(msg Message) error {
 	// check if message is eth protocol message
 	var (
 		payload []byte
-		err error
+		err     error
 	)
 	payload, err = rlp.EncodeToBytes(msg)
 	if err != nil {
