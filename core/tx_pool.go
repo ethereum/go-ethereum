@@ -440,15 +440,10 @@ func (pool *TxPool) SetGasPrice(price *big.Int) {
 				pool.removeTx(tx.Hash(), false)
 			}
 		} else {
-			drop := make([]common.Hash, 0, 128) // Remote underpriced transaction hashes to drop
-			pool.all.Range(func(hash common.Hash, tx *types.Transaction, local bool) bool {
-				if tx.FeeCapIntCmp(price) < 0 {
-					drop = append(drop, hash)
-				}
-				return true
-			}, false, true) // Only iterate remotes
-			for _, hash := range drop {
-				pool.removeTx(hash, false)
+			// pool.priced is sorted by FeeCap, so we have to iterate through pool.all instead
+			drop := pool.all.RemotesBelowTip(price)
+			for _, tx := range drop {
+				pool.removeTx(tx.Hash(), false)
 			}
 			pool.priced.Removed(len(drop))
 		}
@@ -1741,6 +1736,18 @@ func (t *txLookup) RemoteToLocals(locals *accountSet) int {
 		}
 	}
 	return migrated
+}
+
+// RemotesBelowTip finds all remote transactions below the given tip threshold.
+func (t *txLookup) RemotesBelowTip(threshold *big.Int) types.Transactions {
+	found := make(types.Transactions, 0, 128)
+	t.Range(func(hash common.Hash, tx *types.Transaction, local bool) bool {
+		if tx.TipIntCmp(threshold) < 0 {
+			found = append(found, tx)
+		}
+		return true
+	}, false, true) // Only iterate remotes
+	return found
 }
 
 // numSlots calculates the number of slots needed for a single transaction.
