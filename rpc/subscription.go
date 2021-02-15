@@ -209,6 +209,9 @@ type ClientSubscription struct {
 	namespace string
 	subid     string
 	in        chan json.RawMessage
+	wg        sync.WaitGroup
+	closeMu   sync.RWMutex
+	closed    bool
 
 	quitOnce sync.Once     // ensures quit is closed once
 	quit     chan struct{} // quit is closed when the subscription exits
@@ -253,7 +256,11 @@ func (sub *ClientSubscription) quitWithError(unsubscribeServer bool, err error) 
 		// The dispatch loop won't be able to execute the unsubscribe call
 		// if it is blocked on deliver. Close sub.quit first because it
 		// unblocks deliver.
+		sub.closeMu.Lock()
+		sub.closed = true
+		sub.closeMu.Unlock()
 		close(sub.quit)
+		sub.wg.Wait()
 		if unsubscribeServer {
 			sub.requestUnsubscribe()
 		}
@@ -275,11 +282,24 @@ func (sub *ClientSubscription) deliver(result json.RawMessage) (ok bool) {
 	}
 }
 
+// startInBackground spins up a forwarding goroutine if the subscription has not been quit
+func (sub *ClientSubscription) startInBackground() error {
+	sub.closeMu.RLock()
+	defer sub.closeMu.RUnlock()
+	if sub.closed {
+		return errors.New("subscription was unsubscribed")
+	}
+	sub.wg.Add(1)
+	go sub.start()
+	return nil
+}
+
 func (sub *ClientSubscription) start() {
 	sub.quitWithError(sub.forward())
 }
 
 func (sub *ClientSubscription) forward() (unsubscribeServer bool, err error) {
+	defer sub.wg.Done()
 	cases := []reflect.SelectCase{
 		{Dir: reflect.SelectRecv, Chan: reflect.ValueOf(sub.quit)},
 		{Dir: reflect.SelectRecv, Chan: reflect.ValueOf(sub.in)},

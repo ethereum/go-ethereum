@@ -281,7 +281,10 @@ func (h *handler) handleResponse(msg *jsonrpcMessage) {
 		return
 	}
 	if op.err = json.Unmarshal(msg.Result, &op.sub.subid); op.err == nil {
-		go op.sub.start()
+		if err := op.sub.startInBackground(); err != nil {
+			op.err = err
+			return
+		}
 		h.clientSubs[op.sub.subid] = op.sub
 	}
 }
