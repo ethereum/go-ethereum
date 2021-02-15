@@ -87,6 +87,12 @@ func pricedDataTransaction(nonce uint64, gaslimit uint64, gasprice *big.Int, key
 	return tx
 }
 
+func dynamicFeeTransaction(nonce uint64, gaslimit uint64, gasFee *big.Int, tip *big.Int, key *ecdsa.PrivateKey) *types.Transaction {
+	tx := types.NewDynamicFeeTransaction(params.AleutChainConfig.ChainID, nonce, common.Address{}, big.NewInt(100), gaslimit, gasFee, tip, nil, nil)
+	tx, _ = types.SignTx(tx, types.NewEIP2718Signer(params.AleutChainConfig.ChainID), key)
+	return tx
+}
+
 func setupTxPool() (*TxPool, *ecdsa.PrivateKey) {
 	statedb, _ := state.New(common.Hash{}, state.NewDatabase(rawdb.NewMemoryDatabase()), nil)
 	blockchain := &testBlockChain{statedb, 10000000, new(event.Feed)}
