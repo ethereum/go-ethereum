@@ -1538,7 +1538,7 @@ func TestTransactionPoolRepricingDynamicFee(t *testing.T) {
 }
 
 // Tests that setting the transaction pool gas price to a higher value does not
-// remove local transactions.
+// remove local transactions (legacy & dynamic fee).
 func TestTransactionPoolRepricingKeepsLocals(t *testing.T) {
 	t.Parallel()
 
@@ -1546,7 +1546,7 @@ func TestTransactionPoolRepricingKeepsLocals(t *testing.T) {
 	statedb, _ := state.New(common.Hash{}, state.NewDatabase(rawdb.NewMemoryDatabase()), nil)
 	blockchain := &testBlockChain{statedb, 1000000, new(event.Feed)}
 
-	pool := NewTxPool(testTxPoolConfig, params.TestChainConfig, blockchain)
+	pool := NewTxPool(testTxPoolConfig, params.AleutChainConfig, blockchain)
 	defer pool.Stop()
 
 	// Create a number of test accounts and fund them
@@ -1556,14 +1556,25 @@ func TestTransactionPoolRepricingKeepsLocals(t *testing.T) {
 		pool.currentState.AddBalance(crypto.PubkeyToAddress(keys[i].PublicKey), big.NewInt(1000*1000000))
 	}
 	// Create transaction (both pending and queued) with a linearly growing gasprice
-	for i := uint64(0); i < 500; i++ {
+	for i := uint64(0); i < 250; i++ {
 		// Add pending transaction.
 		pendingTx := pricedTransaction(i, 100000, big.NewInt(int64(i)), keys[2])
 		if err := pool.AddLocal(pendingTx); err != nil {
 			t.Fatal(err)
 		}
 		// Add queued transaction.
-		queuedTx := pricedTransaction(i+501, 100000, big.NewInt(int64(i)), keys[2])
+		queuedTx := pricedTransaction(i+251, 100000, big.NewInt(int64(i)), keys[2])
+		if err := pool.AddLocal(queuedTx); err != nil {
+			t.Fatal(err)
+		}
+
+		// Add pending dynamic fee transaction.
+		pendingTx = dynamicFeeTransaction(i, 100000, big.NewInt(int64(i)+1), big.NewInt(int64(i)), keys[1])
+		if err := pool.AddLocal(pendingTx); err != nil {
+			t.Fatal(err)
+		}
+		// Add queued dynamic fee transaction.
+		queuedTx = dynamicFeeTransaction(i+251, 100000, big.NewInt(int64(i)+1), big.NewInt(int64(i)), keys[1])
 		if err := pool.AddLocal(queuedTx); err != nil {
 			t.Fatal(err)
 		}
