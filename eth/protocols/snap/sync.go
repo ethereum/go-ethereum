@@ -88,6 +88,10 @@ var (
 	requestTimeout = 10 * time.Second // TODO(karalabe): Make it dynamic ala fast-sync?
 )
 
+// ErrCancelled is returned from snap syncing if the operation was prematurely
+// terminated.
+var ErrCancelled = errors.New("sync cancelled")
+
 // accountRequest tracks a pending account range request to ensure responses are
 // to actual requests and to validate any security constraints.
 //
@@ -615,7 +619,7 @@ func (s *Syncer) Sync(root common.Hash, cancel chan struct{}) error {
 		case id := <-peerDrop:
 			s.revertRequests(id)
 		case <-cancel:
-			return errCancelled
+			return ErrCancelled
 
 		case req := <-s.accountReqFails:
 			s.revertAccountRequest(req)
