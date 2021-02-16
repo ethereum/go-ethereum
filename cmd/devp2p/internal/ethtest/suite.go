@@ -24,6 +24,7 @@ import (
 	"github.com/davecgh/go-spew/spew"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/crypto"
+	"github.com/ethereum/go-ethereum/eth/protocols/eth"
 	"github.com/ethereum/go-ethereum/internal/utesting"
 	"github.com/ethereum/go-ethereum/p2p"
 	"github.com/ethereum/go-ethereum/p2p/enode"
@@ -143,7 +144,7 @@ func (s *Suite) TestGetBlockHeaders(t *utesting.T) {
 
 	// get block headers
 	req := &GetBlockHeaders{
-		Origin: hashOrNumber{
+		Origin: eth.HashOrNumber{
 			Hash: s.chain.blocks[1].Hash(),
 		},
 		Amount:  2,
@@ -157,8 +158,8 @@ func (s *Suite) TestGetBlockHeaders(t *utesting.T) {
 
 	switch msg := conn.ReadAndServe(s.chain, timeout).(type) {
 	case *BlockHeaders:
-		headers := msg
-		for _, header := range *headers {
+		headers := *msg
+		for _, header := range headers {
 			num := header.Number.Uint64()
 			t.Logf("received header (%d): %s", num, pretty.Sdump(header))
 			assert.Equal(t, s.chain.blocks[int(num)].Header(), header)
@@ -179,7 +180,10 @@ func (s *Suite) TestGetBlockBodies(t *utesting.T) {
 	conn.handshake(t)
 	conn.statusExchange(t, s.chain, nil)
 	// create block bodies request
-	req := &GetBlockBodies{s.chain.blocks[54].Hash(), s.chain.blocks[75].Hash()}
+	req := &GetBlockBodies{
+		s.chain.blocks[54].Hash(),
+		s.chain.blocks[75].Hash(),
+	}
 	if err := conn.Write(req); err != nil {
 		t.Fatalf("could not write to connection: %v", err)
 	}
@@ -357,10 +361,9 @@ func (s *Suite) waitAnnounce(t *utesting.T, conn *Conn, blockAnnouncement *NewBl
 			"wrong TD in announcement",
 		)
 	case *NewBlockHashes:
-		hashes := *msg
-		t.Logf("received NewBlockHashes message: %s", pretty.Sdump(hashes))
-		assert.Equal(t,
-			blockAnnouncement.Block.Hash(), hashes[0].Hash,
+		message := *msg
+		t.Logf("received NewBlockHashes message: %s", pretty.Sdump(message))
+		assert.Equal(t, blockAnnouncement.Block.Hash(), message[0].Hash,
 			"wrong block hash in announcement",
 		)
 	default:

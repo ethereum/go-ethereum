@@ -19,15 +19,12 @@ package ethtest
 import (
 	"crypto/ecdsa"
 	"fmt"
-	"io"
-	"math/big"
 	"reflect"
 	"time"
 
-	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/core/forkid"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/crypto"
+	"github.com/ethereum/go-ethereum/eth/protocols/eth"
 	"github.com/ethereum/go-ethereum/internal/utesting"
 	"github.com/ethereum/go-ethereum/p2p"
 	"github.com/ethereum/go-ethereum/p2p/rlpx"
@@ -81,101 +78,47 @@ type Pong struct{}
 func (p Pong) Code() int { return 0x03 }
 
 // Status is the network packet for the status message for eth/64 and later.
-type Status struct {
-	ProtocolVersion uint32
-	NetworkID       uint64
-	TD              *big.Int
-	Head            common.Hash
-	Genesis         common.Hash
-	ForkID          forkid.ID
-}
+type Status eth.StatusPacket
 
 func (s Status) Code() int { return 16 }
 
 // NewBlockHashes is the network packet for the block announcements.
-type NewBlockHashes []struct {
-	Hash   common.Hash // Hash of one particular block being announced
-	Number uint64      // Number of one particular block being announced
-}
+type NewBlockHashes eth.NewBlockHashesPacket
 
 func (nbh NewBlockHashes) Code() int { return 17 }
 
-type Transactions []*types.Transaction
+type Transactions eth.TransactionsPacket
 
 func (t Transactions) Code() int { return 18 }
 
 // GetBlockHeaders represents a block header query.
-type GetBlockHeaders struct {
-	Origin  hashOrNumber // Block from which to retrieve headers
-	Amount  uint64       // Maximum number of headers to retrieve
-	Skip    uint64       // Blocks to skip between consecutive headers
-	Reverse bool         // Query direction (false = rising towards latest, true = falling towards genesis)
-}
+type GetBlockHeaders eth.GetBlockHeadersPacket
 
 func (g GetBlockHeaders) Code() int { return 19 }
 
-type BlockHeaders []*types.Header
+type BlockHeaders eth.BlockHeadersPacket
 
 func (bh BlockHeaders) Code() int { return 20 }
 
 // GetBlockBodies represents a GetBlockBodies request
-type GetBlockBodies []common.Hash
+type GetBlockBodies eth.GetBlockBodiesPacket
 
 func (gbb GetBlockBodies) Code() int { return 21 }
 
 // BlockBodies is the network packet for block content distribution.
-type BlockBodies []*types.Body
+type BlockBodies eth.BlockBodiesPacket
 
 func (bb BlockBodies) Code() int { return 22 }
 
 // NewBlock is the network packet for the block propagation message.
-type NewBlock struct {
-	Block *types.Block
-	TD    *big.Int
-}
+type NewBlock eth.NewBlockPacket
 
 func (nb NewBlock) Code() int { return 23 }
 
 // NewPooledTransactionHashes is the network packet for the tx hash propagation message.
-type NewPooledTransactionHashes [][32]byte
+type NewPooledTransactionHashes eth.NewPooledTransactionHashesPacket
 
 func (nb NewPooledTransactionHashes) Code() int { return 24 }
-
-// HashOrNumber is a combined field for specifying an origin block.
-type hashOrNumber struct {
-	Hash   common.Hash // Block hash from which to retrieve headers (excludes Number)
-	Number uint64      // Block hash from which to retrieve headers (excludes Hash)
-}
-
-// EncodeRLP is a specialized encoder for hashOrNumber to encode only one of the
-// two contained union fields.
-func (hn *hashOrNumber) EncodeRLP(w io.Writer) error {
-	if hn.Hash == (common.Hash{}) {
-		return rlp.Encode(w, hn.Number)
-	}
-	if hn.Number != 0 {
-		return fmt.Errorf("both origin hash (%x) and number (%d) provided", hn.Hash, hn.Number)
-	}
-	return rlp.Encode(w, hn.Hash)
-}
-
-// DecodeRLP is a specialized decoder for hashOrNumber to decode the contents
-// into either a block hash or a block number.
-func (hn *hashOrNumber) DecodeRLP(s *rlp.Stream) error {
-	_, size, _ := s.Kind()
-	origin, err := s.Raw()
-	if err == nil {
-		switch {
-		case size == 32:
-			err = rlp.DecodeBytes(origin, &hn.Hash)
-		case size <= 8:
-			err = rlp.DecodeBytes(origin, &hn.Number)
-		default:
-			err = fmt.Errorf("invalid input size %d for origin", size)
-		}
-	}
-	return err
-}
 
 // Conn represents an individual connection with a peer
 type Conn struct {
@@ -221,7 +164,7 @@ func (c *Conn) Read() Message {
 	default:
 		return errorf("invalid message code: %d", code)
 	}
-
+	// if message is devp2p, decode here
 	if err := rlp.DecodeBytes(rawData, msg); err != nil {
 		return errorf("could not rlp decode message: %v", err)
 	}
@@ -256,7 +199,12 @@ func (c *Conn) ReadAndServe(chain *Chain, timeout time.Duration) Message {
 }
 
 func (c *Conn) Write(msg Message) error {
-	payload, err := rlp.EncodeToBytes(msg)
+	// check if message is eth protocol message
+	var (
+		payload []byte
+		err     error
+	)
+	payload, err = rlp.EncodeToBytes(msg)
 	if err != nil {
 		return err
 	}
@@ -363,7 +311,7 @@ loop:
 		}
 	}
 
-	if err := c.Write(*status); err != nil {
+	if err := c.Write(status); err != nil {
 		t.Fatalf("could not write to connection: %v", err)
 	}
 
@@ -378,7 +326,7 @@ func (c *Conn) waitForBlock(block *types.Block) error {
 	timeout := time.Now().Add(20 * time.Second)
 	c.SetReadDeadline(timeout)
 	for {
-		req := &GetBlockHeaders{Origin: hashOrNumber{Hash: block.Hash()}, Amount: 1}
+		req := &GetBlockHeaders{Origin: eth.HashOrNumber{Hash: block.Hash()}, Amount: 1}
 		if err := c.Write(req); err != nil {
 			return err
 		}

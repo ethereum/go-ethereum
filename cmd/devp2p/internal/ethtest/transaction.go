@@ -32,7 +32,7 @@ func sendSuccessfulTx(t *utesting.T, s *Suite, tx *types.Transaction) {
 	sendConn := s.setupConnection(t)
 	t.Logf("sending tx: %v %v %v\n", tx.Hash().String(), tx.GasPrice(), tx.Gas())
 	// Send the transaction
-	if err := sendConn.Write(Transactions([]*types.Transaction{tx})); err != nil {
+	if err := sendConn.Write(&Transactions{tx}); err != nil {
 		t.Fatal(err)
 	}
 	time.Sleep(100 * time.Millisecond)
@@ -70,7 +70,7 @@ func sendFailingTx(t *utesting.T, s *Suite, tx *types.Transaction) {
 		t.Logf("unexpected message, logging: %v", pretty.Sdump(msg))
 	}
 	// Send the transaction
-	if err := sendConn.Write(Transactions([]*types.Transaction{tx})); err != nil {
+	if err := sendConn.Write(&Transactions{tx}); err != nil {
 		t.Fatal(err)
 	}
 	// Wait for another transaction announcement
