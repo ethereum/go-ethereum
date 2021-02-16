@@ -217,8 +217,11 @@ type randomIterator struct {
 	c        *Client
 
 	mu    sync.Mutex
-	trees map[string]*clientTree // all trees
 	lc    linkCache              // tracks tree dependencies
+	trees map[string]*clientTree // all trees
+	// buffers for syncableTrees
+	syncableList []*clientTree
+	disabledList []*clientTree
 }
 
 func (c *Client) newRandomIterator() *randomIterator {
@@ -287,39 +290,50 @@ func (it *randomIterator) pickTree() *clientTree {
 	it.mu.Lock()
 	defer it.mu.Unlock()
 
+	// Rebuild the trees map if any links have changed.
 	if it.lc.changed {
 		it.rebuildTrees()
 		it.lc.changed = false
 	}
 
 	for {
-		// Find trees that might still have pending items to sync.
-		// If there are any, pick a random syncable tree.
-		syncable, disabled := it.syncableTrees()
-		if len(syncable) > 0 {
-			return syncable[rand.Intn(len(syncable))]
-		}
-		if len(disabled) == 0 {
-			return nil // Iterator was closed.
-		}
-		// No sync action can be performed on any tree right now. The only meaningful
-		// thing to do is waiting for any root record to get updated.
-		if !it.waitForRootUpdates(disabled) {
-			return nil // Iterator was closed.
+		canSync, trees := it.syncableTrees()
+		switch {
+		case canSync:
+			// Pick a random tree.
+			return trees[rand.Intn(len(trees))]
+		case len(trees) > 0:
+			// No sync action can be performed on any tree right now. The only meaningful
+			// thing to do is waiting for any root record to get updated.
+			if !it.waitForRootUpdates(trees) {
+				// Iterator was closed while waiting.
+				return nil
+			}
+		default:
+			// There are no trees left, the iterator was closed.
+			return nil
 		}
 	}
 }
 
 // syncableTrees finds trees on which any meaningful sync action can be performed.
-func (it *randomIterator) syncableTrees() (syncable, disabled []*clientTree) {
+func (it *randomIterator) syncableTrees() (canSync bool, trees []*clientTree) {
+	// Resize tree lists.
+	it.syncableList = it.syncableList[:0]
+	it.disabledList = it.disabledList[:0]
+
+	// Partition them into the two lists.
 	for _, ct := range it.trees {
 		if ct.canSyncRandom() {
-			syncable = append(syncable, ct)
+			it.syncableList = append(it.syncableList, ct)
 		} else {
-			disabled = append(disabled, ct)
+			it.disabledList = append(it.disabledList, ct)
 		}
 	}
-	return syncable, disabled
+	if len(it.syncableList) > 0 {
+		return true, it.syncableList
+	}
+	return false, it.disabledList
 }
 
 // waitForRootUpdates waits for the closest scheduled root check time on the given trees.
