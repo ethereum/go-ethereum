@@ -300,6 +300,12 @@ func (t *Tree) Update(blockRoot common.Hash, parentRoot common.Hash, destructs m
 // Cap traverses downwards the snapshot tree from a head block hash until the
 // number of allowed layers are crossed. All layers beyond the permitted number
 // are flattened downwards.
+//
+// Note, the final diff layer count in general will be one more than the amount
+// requested. This happens because the bottom-most diff layer is the accumulator
+// which may or may not overflow and cascade to disk. Since this last layer's
+// survival is only known *after* capping, we need to omit it from the count if
+// we want to ensure that *at least* the requested number of diff layers remain.
 func (t *Tree) Cap(root common.Hash, layers int) error {
 	// Retrieve the head snapshot to cap from
 	snap := t.Snapshot(root)
@@ -324,10 +330,7 @@ func (t *Tree) Cap(root common.Hash, layers int) error {
 	// Flattening the bottom-most diff layer requires special casing since there's
 	// no child to rewire to the grandparent. In that case we can fake a temporary
 	// child for the capping and then remove it.
-	var persisted *diskLayer
-
-	switch layers {
-	case 0:
+	if layers == 0 {
 		// If full commit was requested, flatten the diffs and merge onto disk
 		diff.lock.RLock()
 		base := diffToDisk(diff.flatten().(*diffLayer))
@@ -336,33 +339,9 @@ func (t *Tree) Cap(root common.Hash, layers int) error {
 		// Replace the entire snapshot tree with the flat base
 		t.layers = map[common.Hash]snapshot{base.root: base}
 		return nil
-
-	case 1:
-		// If full flattening was requested, flatten the diffs but only merge if the
-		// memory limit was reached
-		var (
-			bottom *diffLayer
-			base   *diskLayer
-		)
-		diff.lock.RLock()
-		bottom = diff.flatten().(*diffLayer)
-		if bottom.memory >= aggregatorMemoryLimit {
-			base = diffToDisk(bottom)
-		}
-		diff.lock.RUnlock()
-
-		// If all diff layers were removed, replace the entire snapshot tree
-		if base != nil {
-			t.layers = map[common.Hash]snapshot{base.root: base}
-			return nil
-		}
-		// Merge the new aggregated layer into the snapshot tree, clean stales below
-		t.layers[bottom.root] = bottom
-
-	default:
-		// Many layers requested to be retained, cap normally
-		persisted = t.cap(diff, layers)
 	}
+	persisted := t.cap(diff, layers)
+
 	// Remove any layer that is stale or links into a stale layer
 	children := make(map[common.Hash][]common.Hash)
 	for root, snap := range t.layers {
@@ -405,9 +384,15 @@ func (t *Tree) Cap(root common.Hash, layers int) error {
 // layer limit is reached, memory cap is also enforced (but not before).
 //
 // The method returns the new disk layer if diffs were persisted into it.
+//
+// Note, the final diff layer count in general will be one more than the amount
+// requested. This happens because the bottom-most diff layer is the accumulator
+// which may or may not overflow and cascade to disk. Since this last layer's
+// survival is only known *after* capping, we need to omit it from the count if
+// we want to ensure that *at least* the requested number of diff layers remain.
 func (t *Tree) cap(diff *diffLayer, layers int) *diskLayer {
 	// Dive until we run out of layers or reach the persistent database
-	for ; layers > 2; layers-- {
+	for i := 0; i < layers-1; i++ {
 		// If we still have diff layers below, continue down
 		if parent, ok := diff.parent.(*diffLayer); ok {
 			diff = parent
