@@ -77,8 +77,6 @@ type Pong struct{}
 
 func (p Pong) Code() int { return 0x03 }
 
-type EthMessage eth.Packet
-
 // Status is the network packet for the status message for eth/64 and later.
 type Status eth.StatusPacket
 
