@@ -420,6 +420,36 @@ func (s TxByNonce) Len() int           { return len(s) }
 func (s TxByNonce) Less(i, j int) bool { return s[i].Nonce() < s[j].Nonce() }
 func (s TxByNonce) Swap(i, j int)      { s[i], s[j] = s[j], s[i] }
 
+// TxWithMinerFee wraps a transaction with its gas price or effective miner tip
+type TxWithMinerFee struct {
+	tx       *Transaction
+	minerFee *big.Int
+}
+
+// NewTxWithMinerFee creates a wrapped transaction, calculating the effective
+// miner tip if a base fee is provided.
+// Returns nil in the case of a negative effective miner tip.
+func NewTxWithMinerFee(tx *Transaction, baseFee *big.Int) *TxWithMinerFee {
+	if baseFee == nil {
+		return &TxWithMinerFee{
+			tx:       tx,
+			minerFee: tx.GasPrice(),
+		}
+	}
+	remainingFee := (&big.Int{}).Sub(tx.FeeCap(), baseFee)
+	if remainingFee.Sign() < 0 {
+		return nil
+	}
+	minerFee := tx.Tip()
+	if remainingFee.Cmp(minerFee) < 0 {
+		minerFee = remainingFee
+	}
+	return &TxWithMinerFee{
+		tx:       tx,
+		minerFee: minerFee,
+	}
+}
+
 // TxByPriceAndTime implements both the sort and the heap interface, making it useful
 // for all at once sorting as well as individually adding and removing elements.
 type TxByPriceAndTime Transactions
