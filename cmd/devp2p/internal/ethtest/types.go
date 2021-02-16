@@ -125,6 +125,7 @@ type Conn struct {
 	*rlpx.Conn
 	ourKey             *ecdsa.PrivateKey
 	ethProtocolVersion uint
+	caps               []p2p.Cap
 }
 
 func (c *Conn) Read() Message {
@@ -221,11 +222,8 @@ func (c *Conn) handshake(t *utesting.T) Message {
 	pub0 := crypto.FromECDSAPub(&c.ourKey.PublicKey)[1:]
 	ourHandshake := &Hello{
 		Version: 5,
-		Caps: []p2p.Cap{
-			{Name: "eth", Version: 64},
-			{Name: "eth", Version: 65},
-		},
-		ID: pub0,
+		Caps:    c.caps,
+		ID:      pub0,
 	}
 	if err := c.Write(ourHandshake); err != nil {
 		t.Fatalf("could not write to connection: %v", err)

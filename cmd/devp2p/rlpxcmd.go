@@ -35,6 +35,7 @@ var (
 		Subcommands: []cli.Command{
 			rlpxPingCommand,
 			rlpxEthTestCommand,
+			rlpxEth66TestCommand,
 		},
 	}
 	rlpxPingCommand = cli.Command{
@@ -47,6 +48,16 @@ var (
 		Usage:     "Runs tests against a node",
 		ArgsUsage: "<node> <chain.rlp> <genesis.json>",
 		Action:    rlpxEthTest,
+		Flags: []cli.Flag{
+			testPatternFlag,
+			testTAPFlag,
+		},
+	}
+	rlpxEth66TestCommand = cli.Command{
+		Name:      "eth66-test",
+		Usage:     "Runs eth66 protocol tests against a node",
+		ArgsUsage: "<node> <chain.rlp> <genesis.json>",
+		Action:    rlpxEth66Test,
 		Flags: []cli.Flag{
 			testPatternFlag,
 			testTAPFlag,
@@ -95,5 +106,14 @@ func rlpxEthTest(ctx *cli.Context) error {
 		exit("missing path to chain.rlp as command-line argument")
 	}
 	suite := ethtest.NewSuite(getNodeArg(ctx), ctx.Args()[1], ctx.Args()[2])
-	return runTests(ctx, suite.AllTests())
+	return runTests(ctx, suite.EthTests())
+}
+
+// rlpxEth66Test runs the eth 66 protocol test suite.
+func rlpxEth66Test(ctx *cli.Context) error {
+	if ctx.NArg() < 3 {
+		exit("missing path to chain.rlp as command-line argument")
+	}
+	suite := ethtest.NewSuite(getNodeArg(ctx), ctx.Args()[1], ctx.Args()[2])
+	return runTests(ctx, suite.Eth66Tests())
 }
