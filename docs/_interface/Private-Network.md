@@ -64,7 +64,7 @@ block, you need to decide on a few initial parameters for your blockchain:
 - Initial block gas limit (`gasLimit`). Your choice here impacts how much EVM computation
   can happen within a single block. We recommend using the main Ethereum network as a
   [guideline to find a good amount][gaslimit-chart]. The block gas limit can be adjusted
-  after launch using the `--targetgaslimit` command-line flag.
+  after launch using the `--miner.gastarget` command-line flag.
 - Initial allocation of ether (`alloc`). This determines how much ether is available to
   the addresses you list in the genesis block. Additional ether can be created through
   mining as the chain progresses.
@@ -282,7 +282,7 @@ geth <other-flags> --unlock 0x7df9a875a174b3bc565e6424a0050ebc1b2d1d82 --mine
 ```
 
 You can further configure mining by changing the default gas limit blocks converge to
-(with `--targetgaslimit`) and the price transactions are accepted at (with `--gasprice`).
+(with `--miner.gastarget`) and the price transactions are accepted at (with `--miner.gasprice`).
 
 ### Ethash: Running A Miner
 
@@ -291,7 +291,7 @@ create a stable stream of blocks at regular intervals. To start a Geth instance 
 mining, run it with all the usual flags and add the following to configure mining:
 
 ```shell
-geth <other-flags> --mine --minerthreads=1 --etherbase=0x0000000000000000000000000000000000000000
+geth <other-flags> --mine --miner.threads=1 --etherbase=0x0000000000000000000000000000000000000000
 ```
 
 This will start mining bocks and transactions on a single CPU thread, crediting all block

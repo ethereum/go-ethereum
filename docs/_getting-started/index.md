@@ -82,7 +82,7 @@ The command below also enables the [Geth RPC interface](clef/tutorial)
 (which we cover below), and sets Clef as the transaction signer.
 
 ```shell
-geth --goerli --syncmode "light" --rpc --signer=<CLEF_LOCATION>/clef.ipc
+geth --goerli --syncmode "light" --http --signer=<CLEF_LOCATION>/clef.ipc
 ```
 
 ## Get ETH

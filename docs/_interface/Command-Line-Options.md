@@ -140,8 +140,6 @@ API AND CONSOLE OPTIONS:
   
 NETWORKING OPTIONS:
   --bootnodes value                   Comma separated enode URLs for P2P discovery bootstrap
-  --bootnodesv4 value                 Comma separated enode URLs for P2P v4 discovery bootstrap (light server, full nodes) (deprecated, use --bootnodes)
-  --bootnodesv5 value                 Comma separated enode URLs for P2P v5 discovery bootstrap (light server, light nodes) (deprecated, use --bootnodes)
   --discovery.dns value               Sets DNS discovery entry points (use "" to disable DNS)
   --port value                        Network listening port (default: 30303)
   --maxpeers value                    Maximum number of network peers (network disabled if set to 0) (default: 50)
@@ -206,27 +204,6 @@ WHISPER (EXPERIMENTAL) OPTIONS:
   --shh.maxmessagesize value          Max message size accepted (default: 1048576)
   --shh.pow value                     Minimum POW accepted (default: 0.2)
   --shh.restrict-light                Restrict connection between two whisper light clients
-  
-ALIASED (deprecated) OPTIONS:
-  --rpc                               Enable the HTTP-RPC server (deprecated, use --http)
-  --rpcaddr value                     HTTP-RPC server listening interface (deprecated, use --http.addr) (default: "localhost")
-  --rpcport value                     HTTP-RPC server listening port (deprecated, use --http.port) (default: 8545)
-  --rpccorsdomain value               Comma separated list of domains from which to accept cross origin requests (browser enforced) (deprecated, use --http.corsdomain)
-  --rpcvhosts value                   Comma separated list of virtual hostnames from which to accept requests (server enforced). Accepts '*' wildcard. (deprecated, use --http.vhosts) (default: "localhost")
-  --rpcapi value                      API's offered over the HTTP-RPC interface (deprecated, use --http.api)
-  --wsaddr value                      WS-RPC server listening interface (deprecated, use --ws.addr) (default: "localhost")
-  --wsport value                      WS-RPC server listening port (deprecated, use --ws.port) (default: 8546)
-  --wsorigins value                   Origins from which to accept websockets requests (deprecated, use --ws.origins)
-  --wsapi value                       API's offered over the WS-RPC interface (deprecated, use --ws.api)
-  --gpoblocks value                   Number of recent blocks to check for gas prices (deprecated, use --gpo.blocks) (default: 20)
-  --gpopercentile value               Suggested gas price is the given percentile of a set of recent transaction gas prices (deprecated, use --gpo.percentile) (default: 60)
-  --graphql.addr value                GraphQL server listening interface (deprecated, graphql can only be enabled on the HTTP-RPC server endpoint, use --graphql)
-  --graphql.port value                GraphQL server listening port (deprecated, graphql can only be enabled on the HTTP-RPC server endpoint, use --graphql) (default: 8545)
-  --pprofport value                   pprof HTTP server listening port (deprecated, use --pprof.port) (default: 6060)
-  --pprofaddr value                   pprof HTTP server listening interface (deprecated, use --pprof.addr) (default: "127.0.0.1")
-  --memprofilerate value              Turn on memory profiling with the given rate (deprecated, use --pprof.memprofilerate) (default: 524288)
-  --blockprofilerate value            Turn on block profiling with the given rate (deprecated, use --pprof.blockprofilerate) (default: 0)
-  --cpuprofile value                  Write CPU profile to the given file (deprecated, use --pprof.cpuprofile)
   
 MISC OPTIONS:
   --snapshot                          Enables snapshot-database mode -- experimental work in progress feature

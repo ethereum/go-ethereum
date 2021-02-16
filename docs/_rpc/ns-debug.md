@@ -582,7 +582,7 @@ Writes a goroutine blocking profile to the given file.
 
 Writes an allocation profile to the given file.
 Note that the profiling rate cannot be set through the API,
-it must be set on the command line using the `--memprofilerate`
+it must be set on the command line using the `--pprof.memprofilerate`
 flag.
 
 | Client  | Method invocation                                           |

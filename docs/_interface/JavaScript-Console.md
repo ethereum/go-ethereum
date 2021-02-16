@@ -25,7 +25,7 @@ ipc endpoint or you would like to connect over the rpc interface.
 
 Note that by default the geth node doesn't start the HTTP and WebSocket servers and not
 all functionality is provided over these interfaces for security reasons. These defaults
-can be overridden with the `--rpcapi` and `--wsapi` arguments when the geth node is
+can be overridden with the `--http.api` and `--ws.api` arguments when the geth node is
 started, or with [admin.startRPC](../rpc/ns-admin#admin_startrpc) and
 [admin.startWS](../rpc/ns-admin#admin_startws).
 

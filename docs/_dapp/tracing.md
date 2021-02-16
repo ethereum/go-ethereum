@@ -117,8 +117,8 @@ debug.traceTransaction("0xfc9359e49278b7ba99f59edac0e3de49956e46e530a53c15aa7122
 ```
 
 The same call can of course be invoked from outside the node too via HTTP RPC. In this
-case, please make sure the HTTP endpoint is enabled via `--rpc` and the `debug` API
-namespace exposed via `--rpcapi=debug`.
+case, please make sure the HTTP endpoint is enabled via `--http` and the `debug` API
+namespace exposed via `--http.api=debug`.
 
 ```
 $ curl -H "Content-Type: application/json" -d '{"id": 1, "method": "debug_traceTransaction", "params": ["0xfc9359e49278b7ba99f59edac0e3de49956e46e530a53c15aa71226b7aa92c6f"]}' localhost:8545

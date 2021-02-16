@@ -45,15 +45,15 @@ as the example address.
 
 Now start geth and wait for it to sync the blockchain. This will take quite a while.
 
-    geth --rpc --etherbase 0xC95767AC46EA2A9162F0734651d6cF17e5BfcF10
+    geth --http --miner.etherbase 0xC95767AC46EA2A9162F0734651d6cF17e5BfcF10
 
 Now we're ready to start mining. In a new terminal session, run ethminer and connect it to geth:
 
     ethminer -G -P http://127.0.0.1:8545
 
 `ethminer` communicates with geth on port 8545 (the default RPC port in geth). You can
-change this by giving the [`--rpcport` option](../rpc/server) to `geth`. Ethminer will find
-get on any port. You also need to set the port on `ethminer` with `-P
+change this by giving the [`--http.port` option](../rpc/server) to `geth`. Ethminer will find
+geth on any port. You also need to set the port on `ethminer` with `-P
 http://127.0.0.1:3301`. Setting up custom ports is necessary if you want several instances
 mining on the same computer. If you are testing on a private cluster, we recommend you use
 CPU mining instead.
@@ -72,11 +72,11 @@ with `ethminer`, `miner.hashrate` will always report 0.
 ## CPU Mining with Geth
 
 When you start up your ethereum node with `geth` it is not mining by default. To start it
-in mining mode, you use the `--mine` command-line flag. The `--minerthreads` parameter can
+in mining mode, you use the `--mine` command-line flag. The `--miner.threads` parameter can
 be used to set the number parallel mining threads (defaulting to the total number of
 processor cores).
 
-    geth --mine --minerthreads=4
+    geth --mine --miner.threads=4
 
 You can also start and stop CPU mining at runtime using the
 [console](../interface/javascript-console). `miner.start` takes an optional parameter for
@@ -98,7 +98,7 @@ you don't have an etherbase address, then `geth --mine` will not start up.
 
 You can set your etherbase on the command line:
 
-    geth --etherbase '0xC95767AC46EA2A9162F0734651d6cF17e5BfcF10' --mine 2>> geth.log
+    geth --miner.etherbase '0xC95767AC46EA2A9162F0734651d6cF17e5BfcF10' --mine 2>> geth.log
 
 You can reset your etherbase on the console too:
 
