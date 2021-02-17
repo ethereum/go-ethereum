@@ -41,10 +41,10 @@ import (
 
 // EthAPIBackend implements ethapi.Backend for full nodes
 type EthAPIBackend struct {
-	extRPCEnabled  bool
-	eip155Required bool
-	eth            *Ethereum
-	gpo            *gasprice.Oracle
+	extRPCEnabled      bool
+	unprotectedAllowed bool
+	eth                *Ethereum
+	gpo                *gasprice.Oracle
 }
 
 // ChainConfig returns the active chain configuration.
@@ -293,8 +293,8 @@ func (b *EthAPIBackend) ExtRPCEnabled() bool {
 	return b.extRPCEnabled
 }
 
-func (b *EthAPIBackend) EIP155Required() bool {
-	return b.eip155Required
+func (b *EthAPIBackend) UnprotectedAllowed() bool {
+	return b.unprotectedAllowed
 }
 
 func (b *EthAPIBackend) RPCGasCap() uint64 {

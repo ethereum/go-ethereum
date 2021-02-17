@@ -972,9 +972,7 @@ func setHTTP(ctx *cli.Context, cfg *node.Config) {
 	}
 
 	if ctx.GlobalIsSet(AllowUnprotectedTxs.Name) {
-		cfg.EIP155Required = !ctx.GlobalBool(AllowUnprotectedTxs.Name)
-	} else {
-		cfg.EIP155Required = true
+		cfg.UnprotectedAllowed = ctx.GlobalBool(AllowUnprotectedTxs.Name)
 	}
 }
 

@@ -40,10 +40,10 @@ import (
 )
 
 type LesApiBackend struct {
-	extRPCEnabled  bool
-	eip155Required bool
-	eth            *LightEthereum
-	gpo            *gasprice.Oracle
+	extRPCEnabled      bool
+	unprotectedAllowed bool
+	eth                *LightEthereum
+	gpo                *gasprice.Oracle
 }
 
 func (b *LesApiBackend) ChainConfig() *params.ChainConfig {
@@ -264,8 +264,8 @@ func (b *LesApiBackend) ExtRPCEnabled() bool {
 	return b.extRPCEnabled
 }
 
-func (b *LesApiBackend) EIP155Required() bool {
-	return b.eip155Required
+func (b *LesApiBackend) UnprotectedAllowed() bool {
+	return b.unprotectedAllowed
 }
 
 func (b *LesApiBackend) RPCGasCap() uint64 {

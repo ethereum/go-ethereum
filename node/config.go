@@ -193,7 +193,7 @@ type Config struct {
 	oldGethResourceWarning bool
 
 	// Require all transactions to be protected with EIP-155 to prevent replaying on other chains.
-	EIP155Required bool `toml:",omitempty"`
+	UnprotectedAllowed bool `toml:",omitempty"`
 }
 
 // IPCEndpoint resolves an IPC endpoint based on a configured value, taking into
