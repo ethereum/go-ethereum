@@ -156,7 +156,7 @@ func New(stack *node.Node, config *ethconfig.Config) (*LightEthereum, error) {
 		rawdb.WriteChainConfig(chainDb, genesisHash, chainConfig)
 	}
 
-	leth.ApiBackend = &LesApiBackend{stack.Config().ExtRPCEnabled(), leth, nil}
+	leth.ApiBackend = &LesApiBackend{stack.Config().ExtRPCEnabled(), stack.Config().EIP155Required, leth, nil}
 	gpoParams := config.GPO
 	if gpoParams.Default == nil {
 		gpoParams.Default = config.Miner.GasPrice
