@@ -99,6 +99,7 @@ func New(stack *node.Node, config *ethconfig.Config) (*LightEthereum, error) {
 			chainConfig: chainConfig,
 			iConfig:     light.DefaultClientIndexerConfig,
 			chainDb:     chainDb,
+			lespayDb:    lespayDb,
 			closeCh:     make(chan struct{}),
 		},
 		peers:          peers,
@@ -331,6 +332,7 @@ func (s *LightEthereum) Stop() error {
 	s.eventMux.Stop()
 	rawdb.PopUncleanShutdownMarker(s.chainDb)
 	s.chainDb.Close()
+	s.lespayDb.Close()
 	s.wg.Wait()
 	log.Info("Light ethereum stopped")
 	return nil
