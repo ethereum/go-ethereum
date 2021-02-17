@@ -728,6 +728,31 @@ func (s *StateDB) Copy() *StateDB {
 	if s.prefetcher != nil {
 		state.prefetcher = s.prefetcher.copy()
 	}
+	if s.snaps != nil {
+		// In order for the miner to be able to use and make additions
+		// to the snapshot tree, we need to copy that aswell.
+		// Otherwise, any block mined by ourselves will cause gaps in the tree,
+		// and force the miner to operate trie-backed only
+		state.snaps = s.snaps
+		state.snap = s.snap
+		// TODO: Should we copy or make new (empty) ones here?
+		// If we copy, we need to ensure concurrency safety.
+		// If we don't copy, we run the risk of consensus breaking.
+		// In theory, as the state is copied, it's still 'fresh', and these
+		// should be empty.
+		//
+		// It might be good to check the size first, and if any are non-zero,
+		// simply avoid copying over the snap
+		state.snapDestructs = make(map[common.Hash]struct{})
+		state.snapAccounts = make(map[common.Hash][]byte)
+		state.snapStorage = make(map[common.Hash]map[common.Hash][]byte)
+		if len(s.snapAccounts)+len(s.snapDestructs)+len(s.snapStorage) != 0 {
+			panic("Oy vey!")
+		}
+
+	}
+
+	state.snaps = s.snaps
 	return state
 }
 
