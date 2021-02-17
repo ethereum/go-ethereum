@@ -185,7 +185,9 @@ func (tx *Transaction) setDecoded(inner innerTx, size int) {
 	tx.typ = inner.Type()
 	tx.inner = inner
 	tx.time = time.Now()
-	tx.size.Store(common.StorageSize(size))
+	if size > 0 {
+		tx.size.Store(common.StorageSize(size))
+	}
 }
 
 func sanityCheckSignature(v *big.Int, r *big.Int, s *big.Int, maybeProtected bool) error {
