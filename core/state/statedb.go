@@ -735,24 +735,24 @@ func (s *StateDB) Copy() *StateDB {
 		// and force the miner to operate trie-backed only
 		state.snaps = s.snaps
 		state.snap = s.snap
-		// TODO: Should we copy or make new (empty) ones here?
-		// If we copy, we need to ensure concurrency safety.
-		// If we don't copy, we run the risk of consensus breaking.
-		// In theory, as the state is copied, it's still 'fresh', and these
-		// should be empty.
-		//
-		// It might be good to check the size first, and if any are non-zero,
-		// simply avoid copying over the snap
+		// deep copy needed
 		state.snapDestructs = make(map[common.Hash]struct{})
-		state.snapAccounts = make(map[common.Hash][]byte)
-		state.snapStorage = make(map[common.Hash]map[common.Hash][]byte)
-		if len(s.snapAccounts)+len(s.snapDestructs)+len(s.snapStorage) != 0 {
-			panic("Oy vey!")
+		for k, v := range s.snapDestructs {
+			state.snapDestructs[k] = v
 		}
-
+		state.snapAccounts = make(map[common.Hash][]byte)
+		for k, v := range s.snapAccounts {
+			state.snapAccounts[k] = v
+		}
+		state.snapStorage = make(map[common.Hash]map[common.Hash][]byte)
+		for k, v := range s.snapStorage {
+			temp := make(map[common.Hash][]byte)
+			for kk, vv := range v {
+				temp[kk] = vv
+			}
+			state.snapStorage[k] = temp
+		}
 	}
-
-	state.snaps = s.snaps
 	return state
 }
 
