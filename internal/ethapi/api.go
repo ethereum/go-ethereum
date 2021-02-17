@@ -1555,6 +1555,10 @@ func SubmitTransaction(ctx context.Context, b Backend, tx *types.Transaction) (c
 	if err := checkTxFee(tx.GasPrice(), tx.Gas(), b.RPCTxFeeCap()); err != nil {
 		return common.Hash{}, err
 	}
+	// Ensure only eip155 signed transactions are submitted
+	if !tx.Protected() {
+		return common.Hash{}, errors.New("Non-eip155 signed transaction submitted")
+	}
 	if err := b.SendTx(ctx, tx); err != nil {
 		return common.Hash{}, err
 	}
