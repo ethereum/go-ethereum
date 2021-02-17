@@ -1427,10 +1427,18 @@ func (s *PublicTransactionPoolAPI) GetTransactionReceipt(ctx context.Context, ha
 	}
 	receipt := receipts[index]
 
+	txType := tx.Type()
 	var signer types.Signer = types.FrontierSigner{}
 	if tx.Protected() {
-		signer = types.NewEIP155Signer(tx.ChainId())
+		switch txType {
+		case types.LegacyTxType:
+			signer = types.NewEIP155Signer(tx.ChainId())
+		case types.AccessListTxType:
+			// EIP-2930
+			signer = types.NewEIP2718Signer(tx.ChainId())
+		}
 	}
+
 	from, _ := types.Sender(signer, tx)
 
 	fields := map[string]interface{}{
@@ -1459,6 +1467,10 @@ func (s *PublicTransactionPoolAPI) GetTransactionReceipt(ctx context.Context, ha
 	// If the ContractAddress is 20 0x0 bytes, assume it is not a contract creation
 	if receipt.ContractAddress != (common.Address{}) {
 		fields["contractAddress"] = receipt.ContractAddress
+	}
+
+	if txType != types.LegacyTxType {
+		fields["type"] = hexutil.Uint(txType)
 	}
 	return fields, nil
 }
