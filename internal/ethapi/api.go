@@ -1557,7 +1557,7 @@ func SubmitTransaction(ctx context.Context, b Backend, tx *types.Transaction) (c
 	}
 	// Ensure only eip155 signed transactions are submitted
 	if !tx.Protected() {
-		return common.Hash{}, errors.New("Non-eip155 signed transaction submitted")
+		return common.Hash{}, errors.New("non-eip155 signed transaction submitted")
 	}
 	if err := b.SendTx(ctx, tx); err != nil {
 		return common.Hash{}, err
