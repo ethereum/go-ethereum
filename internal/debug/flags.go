@@ -211,9 +211,24 @@ func Setup(ctx *cli.Context) error {
 	log.Root().SetHandler(glogger)
 
 	// profiling, tracing
-	runtime.MemProfileRate = ctx.GlobalInt(memprofilerateFlag.Name)
+	runtime.MemProfileRate = memprofilerateFlag.Value
+	if ctx.GlobalIsSet(legacyMemprofilerateFlag.Name) {
+		runtime.MemProfileRate = ctx.GlobalInt(legacyMemprofilerateFlag.Name)
+		log.Warn("The flag --memprofilerate is deprecated and will be removed in the future, please use --pprof.memprofilerate")
+	}
+	if ctx.GlobalIsSet(memprofilerateFlag.Name) {
+		runtime.MemProfileRate = ctx.GlobalInt(memprofilerateFlag.Name)
+	}
 
-	Handler.SetBlockProfileRate(ctx.GlobalInt(blockprofilerateFlag.Name))
+	blockProfileRate := blockprofilerateFlag.Value
+	if ctx.GlobalIsSet(legacyBlockprofilerateFlag.Name) {
+		blockProfileRate = ctx.GlobalInt(legacyBlockprofilerateFlag.Name)
+		log.Warn("The flag --blockprofilerate is deprecated and will be removed in the future, please use --pprof.blockprofilerate")
+	}
+	if ctx.GlobalIsSet(blockprofilerateFlag.Name) {
+		blockProfileRate = ctx.GlobalInt(blockprofilerateFlag.Name)
+	}
+	Handler.SetBlockProfileRate(blockProfileRate)
 
 	if traceFile := ctx.GlobalString(traceFlag.Name); traceFile != "" {
 		if err := Handler.StartGoTrace(traceFile); err != nil {
