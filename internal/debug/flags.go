@@ -175,38 +175,45 @@ func Setup(ctx *cli.Context) error {
 	glogger.SetHandler(ostream)
 
 	// logging
+	debug := ctx.GlobalBool(debugFlag.Name)
 	if ctx.GlobalIsSet(legacyDebugFlag.Name) {
-		log.PrintOrigins(ctx.GlobalBool(legacyDebugFlag.Name))
+		debug = ctx.GlobalBool(legacyDebugFlag.Name)
 		log.Warn("The flag --debug is deprecated and will be removed in the future, please use --log.debug")
 	}
 	if ctx.GlobalIsSet(debugFlag.Name) {
-		log.PrintOrigins(ctx.GlobalBool(debugFlag.Name))
+		debug = ctx.GlobalBool(debugFlag.Name)
 	}
+	log.PrintOrigins(debug)
 
-	// Default verbosity is set in init()
+	verbosity := ctx.GlobalInt(verbosityFlag.Name)
 	if ctx.GlobalIsSet(legacyVerbosityFlag.Name) {
-		glogger.Verbosity(log.Lvl(ctx.GlobalInt(legacyVerbosityFlag.Name)))
+		verbosity = ctx.GlobalInt(legacyVerbosityFlag.Name)
 		log.Warn("The flag --verbosity is deprecated and will be removed in the future, please use --log.verbosity")
 	}
 	if ctx.GlobalIsSet(verbosityFlag.Name) {
-		glogger.Verbosity(log.Lvl(ctx.GlobalInt(verbosityFlag.Name)))
+		verbosity = ctx.GlobalInt(verbosityFlag.Name)
 	}
+	glogger.Verbosity(log.Lvl(verbosity))
 
-	if vmodule := ctx.GlobalString(legacyVmoduleFlag.Name); vmodule != "" {
-		glogger.Vmodule(vmodule)
+	vmodule := ctx.GlobalString(vmoduleFlag.Name)
+	if v := ctx.GlobalString(legacyVmoduleFlag.Name); v != "" {
+		vmodule = v
 		log.Warn("The flag --vmodule is deprecated and will be removed in the future, please use --log.vmodule")
 	}
-	if vmodule := ctx.GlobalString(vmoduleFlag.Name); vmodule != "" {
-		glogger.Vmodule(vmodule)
+	if v := ctx.GlobalString(vmoduleFlag.Name); v != "" {
+		vmodule = v
 	}
+	glogger.Vmodule(vmodule)
 
-	if backtrace := ctx.GlobalString(legacyBacktraceAtFlag.Name); backtrace != "" {
-		glogger.BacktraceAt(backtrace)
+	backtrace := ctx.GlobalString(backtraceAtFlag.Name)
+	if b := ctx.GlobalString(legacyBacktraceAtFlag.Name); b != "" {
+		backtrace = b
 		log.Warn("The flag --backtrace is deprecated and will be removed in the future, please use --log.backtrace")
 	}
-	if backtrace := ctx.GlobalString(backtraceAtFlag.Name); backtrace != "" {
-		glogger.BacktraceAt(backtrace)
+	if b := ctx.GlobalString(backtraceAtFlag.Name); b != "" {
+		backtrace = b
 	}
+	glogger.BacktraceAt(backtrace)
 
 	log.Root().SetHandler(glogger)
 
