@@ -16,7 +16,11 @@
 
 package core
 
-import "errors"
+import (
+	"errors"
+
+	"github.com/ethereum/go-ethereum/core/types"
+)
 
 var (
 	// ErrKnownBlock is returned when a block to import is already known locally.
@@ -66,5 +70,5 @@ var (
 
 	// ErrTxTypeNotSupported is returned if a transaction is not supported in the
 	// current network configuration.
-	ErrTxTypeNotSupported = errors.New("tx type not supported")
+	ErrTxTypeNotSupported = types.ErrTxTypeNotSupported
 )
