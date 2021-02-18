@@ -267,7 +267,7 @@ func (p *Peer) SendPooledTransactionsRLP(hashes []common.Hash, txs PooledTransac
 	return p2p.Send(p.rw, PooledTransactionsMsg, txs) // Not packed into PooledTransactionsPacket to avoid RLP decoding
 }
 
-// ReplyPooledTransactionsRLP is the eth/66 version of SendPooledTransactionsRLP
+// ReplyPooledTransactionsRLP is the eth/66 version of SendPooledTransactionsRLP.
 func (p *Peer) ReplyPooledTransactionsRLP(id uint64, hashes []common.Hash, txs PooledTransactionsRLPPacket) error {
 	// Mark all the transactions as known, but ensure we don't overflow our limits
 	for p.knownTxs.Cardinality() > max(0, maxKnownTxs-len(hashes)) {
@@ -350,6 +350,7 @@ func (p *Peer) SendBlockHeaders(headers []*types.Header) error {
 	return p2p.Send(p.rw, BlockHeadersMsg, BlockHeadersPacket(headers))
 }
 
+// ReplyBlockHeaders is the eth/66 version of SendBlockHeaders.
 func (p *Peer) ReplyBlockHeaders(id uint64, headers BlockHeadersPacket) error {
 	return p2p.Send(p.rw, BlockHeadersMsg, BlockHeadersPacket66{
 		RequestId:          id,
@@ -363,6 +364,7 @@ func (p *Peer) SendBlockBodiesRLP(bodies BlockBodiesRLPPacket) error {
 	return p2p.Send(p.rw, BlockBodiesMsg, bodies) // Not packed into BlockBodiesPacket to avoid RLP decoding
 }
 
+// ReplyBlockBodiesRLP is the eth/66 version of SendBlockBodiesRLP.
 func (p *Peer) ReplyBlockBodiesRLP(id uint64, bodies BlockBodiesRLPPacket) error {
 	// Not packed into BlockBodiesPacket to avoid RLP decoding
 	return p2p.Send(p.rw, BlockBodiesMsg, BlockBodiesRLPPacket66{
@@ -377,7 +379,7 @@ func (p *Peer) SendNodeData(data NodeDataPacket) error {
 	return p2p.Send(p.rw, NodeDataMsg, data)
 }
 
-// ReplyNodeData is the eth/66 response to GetNodeData
+// ReplyNodeData is the eth/66 response to GetNodeData.
 func (p *Peer) ReplyNodeData(id uint64, data NodeDataPacket) error {
 	return p2p.Send(p.rw, NodeDataMsg, NodeDataPacket66{
 		RequestId:      id,
@@ -391,7 +393,7 @@ func (p *Peer) SendReceiptsRLP(receipts ReceiptsRLPPacket) error {
 	return p2p.Send(p.rw, ReceiptsMsg, receipts) // Not packed into ReceiptsPacket to avoid RLP decoding
 }
 
-// ReplyReceiptsRLP is the eth/66 response to GetReceipts
+// ReplyReceiptsRLP is the eth/66 response to GetReceipts.
 func (p *Peer) ReplyReceiptsRLP(id uint64, receipts ReceiptsRLPPacket) error {
 	return p2p.Send(p.rw, ReceiptsMsg, ReceiptsRLPPacket66{
 		RequestId:         id,
