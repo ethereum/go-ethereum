@@ -143,12 +143,6 @@ func (pre *Prestate) Apply(vmConfig vm.Config, chainConfig *params.ChainConfig,
 		vmConfig.Debug = (tracer != nil)
 		statedb.Prepare(tx.Hash(), blockHash, txIndex)
 		txContext := core.NewEVMTxContext(msg)
-
-		if !chainConfig.IsYoloV3(vmContext.BlockNumber) && tx.Type() != types.LegacyTxType {
-			log.Info("rejected tx", "index", i, "hash", tx.Hash(), "error", core.ErrTxTypeNotSupported)
-			rejectedTxs = append(rejectedTxs, i)
-			continue
-		}
 		snapshot := statedb.Snapshot()
 
 		evm := vm.NewEVM(vmContext, txContext, statedb, chainConfig, vmConfig)
