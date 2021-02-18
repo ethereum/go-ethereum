@@ -115,14 +115,14 @@ func NewEIP2718Signer(chainId *big.Int) EIP2718Signer {
 // Sender returns the recovered addressed from a transaction's signature.
 func (s EIP2718Signer) Sender(tx *Transaction) (common.Address, error) {
 	V, R, S := tx.RawSignatureValues()
-	if tx.Type() == LegacyTxType {
+	switch tx.Type() {
+	case LegacyTxType:
 		if !tx.Protected() {
 			return HomesteadSigner{}.Sender(tx)
 		}
 		V = new(big.Int).Sub(V, s.chainIdMul)
 		V.Sub(V, big8)
-	}
-	if tx.Type() == AccessListTxType {
+	case AccessListTxType:
 		// ACL txs are defined to use 0 and 1 as their recovery id, add
 		// 27 to become equivalent to unprotected Homestead signatures.
 		V = new(big.Int).Add(V, big.NewInt(27))
@@ -139,11 +139,13 @@ func (s EIP2718Signer) SignatureValues(tx *Transaction, sig []byte) (R, S, V *bi
 	if err != nil {
 		return nil, nil, nil, err
 	}
-	if tx.Type() == LegacyTxType && s.chainId.Sign() != 0 {
-		V = big.NewInt(int64(sig[64] + 35))
-		V.Add(V, s.chainIdMul)
-	}
-	if tx.Type() == AccessListTxType {
+	switch tx.Type() {
+	case LegacyTxType:
+		if s.chainId.Sign() != 0 {
+			V = big.NewInt(int64(sig[64] + 35))
+			V.Add(V, s.chainIdMul)
+		}
+	case AccessListTxType:
 		V = big.NewInt(int64(sig[64]))
 	}
 	return R, S, V, nil
@@ -152,7 +154,7 @@ func (s EIP2718Signer) SignatureValues(tx *Transaction, sig []byte) (R, S, V *bi
 // Hash returns the hash to be signed by the sender.
 // It does not uniquely identify the transaction.
 func (s EIP2718Signer) Hash(tx *Transaction) common.Hash {
-	switch tx.typ {
+	switch tx.Type() {
 	case LegacyTxType:
 		return rlpHash([]interface{}{
 			tx.Nonce(),
