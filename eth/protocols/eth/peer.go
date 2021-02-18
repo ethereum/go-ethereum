@@ -25,6 +25,7 @@ import (
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/p2p"
+	"github.com/ethereum/go-ethereum/rlp"
 )
 
 const (
@@ -256,7 +257,7 @@ func (p *Peer) AsyncSendPooledTransactionHashes(hashes []common.Hash) {
 //
 // Note, the method assumes the hashes are correct and correspond to the list of
 // transactions being sent.
-func (p *Peer) SendPooledTransactionsRLP(hashes []common.Hash, txs PooledTransactionsRLPPacket) error {
+func (p *Peer) SendPooledTransactionsRLP(hashes []common.Hash, txs []rlp.RawValue) error {
 	// Mark all the transactions as known, but ensure we don't overflow our limits
 	for p.knownTxs.Cardinality() > max(0, maxKnownTxs-len(hashes)) {
 		p.knownTxs.Pop()
@@ -268,7 +269,7 @@ func (p *Peer) SendPooledTransactionsRLP(hashes []common.Hash, txs PooledTransac
 }
 
 // ReplyPooledTransactionsRLP is the eth/66 version of SendPooledTransactionsRLP.
-func (p *Peer) ReplyPooledTransactionsRLP(id uint64, hashes []common.Hash, txs PooledTransactionsRLPPacket) error {
+func (p *Peer) ReplyPooledTransactionsRLP(id uint64, hashes []common.Hash, txs []rlp.RawValue) error {
 	// Mark all the transactions as known, but ensure we don't overflow our limits
 	for p.knownTxs.Cardinality() > max(0, maxKnownTxs-len(hashes)) {
 		p.knownTxs.Pop()
@@ -351,7 +352,7 @@ func (p *Peer) SendBlockHeaders(headers []*types.Header) error {
 }
 
 // ReplyBlockHeaders is the eth/66 version of SendBlockHeaders.
-func (p *Peer) ReplyBlockHeaders(id uint64, headers BlockHeadersPacket) error {
+func (p *Peer) ReplyBlockHeaders(id uint64, headers []*types.Header) error {
 	return p2p.Send(p.rw, BlockHeadersMsg, BlockHeadersPacket66{
 		RequestId:          id,
 		BlockHeadersPacket: headers,
@@ -360,12 +361,12 @@ func (p *Peer) ReplyBlockHeaders(id uint64, headers BlockHeadersPacket) error {
 
 // SendBlockBodiesRLP sends a batch of block contents to the remote peer from
 // an already RLP encoded format.
-func (p *Peer) SendBlockBodiesRLP(bodies BlockBodiesRLPPacket) error {
+func (p *Peer) SendBlockBodiesRLP(bodies []rlp.RawValue) error {
 	return p2p.Send(p.rw, BlockBodiesMsg, bodies) // Not packed into BlockBodiesPacket to avoid RLP decoding
 }
 
 // ReplyBlockBodiesRLP is the eth/66 version of SendBlockBodiesRLP.
-func (p *Peer) ReplyBlockBodiesRLP(id uint64, bodies BlockBodiesRLPPacket) error {
+func (p *Peer) ReplyBlockBodiesRLP(id uint64, bodies []rlp.RawValue) error {
 	// Not packed into BlockBodiesPacket to avoid RLP decoding
 	return p2p.Send(p.rw, BlockBodiesMsg, BlockBodiesRLPPacket66{
 		RequestId:            id,
@@ -375,12 +376,12 @@ func (p *Peer) ReplyBlockBodiesRLP(id uint64, bodies BlockBodiesRLPPacket) error
 
 // SendNodeDataRLP sends a batch of arbitrary internal data, corresponding to the
 // hashes requested.
-func (p *Peer) SendNodeData(data NodeDataPacket) error {
-	return p2p.Send(p.rw, NodeDataMsg, data)
+func (p *Peer) SendNodeData(data [][]byte) error {
+	return p2p.Send(p.rw, NodeDataMsg, NodeDataPacket(data))
 }
 
 // ReplyNodeData is the eth/66 response to GetNodeData.
-func (p *Peer) ReplyNodeData(id uint64, data NodeDataPacket) error {
+func (p *Peer) ReplyNodeData(id uint64, data [][]byte) error {
 	return p2p.Send(p.rw, NodeDataMsg, NodeDataPacket66{
 		RequestId:      id,
 		NodeDataPacket: data,
@@ -389,12 +390,12 @@ func (p *Peer) ReplyNodeData(id uint64, data NodeDataPacket) error {
 
 // SendReceiptsRLP sends a batch of transaction receipts, corresponding to the
 // ones requested from an already RLP encoded format.
-func (p *Peer) SendReceiptsRLP(receipts ReceiptsRLPPacket) error {
+func (p *Peer) SendReceiptsRLP(receipts []rlp.RawValue) error {
 	return p2p.Send(p.rw, ReceiptsMsg, receipts) // Not packed into ReceiptsPacket to avoid RLP decoding
 }
 
 // ReplyReceiptsRLP is the eth/66 response to GetReceipts.
-func (p *Peer) ReplyReceiptsRLP(id uint64, receipts ReceiptsRLPPacket) error {
+func (p *Peer) ReplyReceiptsRLP(id uint64, receipts []rlp.RawValue) error {
 	return p2p.Send(p.rw, ReceiptsMsg, ReceiptsRLPPacket66{
 		RequestId:         id,
 		ReceiptsRLPPacket: receipts,

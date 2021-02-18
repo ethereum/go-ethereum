@@ -49,7 +49,7 @@ func handleGetBlockHeaders66(backend Backend, msg Decoder, peer *Peer) error {
 	return peer.ReplyBlockHeaders(query.RequestId, response)
 }
 
-func answerGetBlockHeadersQuery(backend Backend, query *GetBlockHeadersPacket, peer *Peer) BlockHeadersPacket {
+func answerGetBlockHeadersQuery(backend Backend, query *GetBlockHeadersPacket, peer *Peer) []*types.Header {
 	hashMode := query.Origin.Hash != (common.Hash{})
 	first := true
 	maxNonCanonical := uint64(100)
@@ -155,7 +155,7 @@ func handleGetBlockBodies66(backend Backend, msg Decoder, peer *Peer) error {
 	return peer.ReplyBlockBodiesRLP(query.RequestId, response)
 }
 
-func answerGetBlockBodiesQuery(backend Backend, query GetBlockBodiesPacket, peer *Peer) BlockBodiesRLPPacket {
+func answerGetBlockBodiesQuery(backend Backend, query GetBlockBodiesPacket, peer *Peer) []rlp.RawValue {
 	// Gather blocks until the fetch or network limits is reached
 	var (
 		bytes  int
@@ -194,7 +194,7 @@ func handleGetNodeData66(backend Backend, msg Decoder, peer *Peer) error {
 	return peer.ReplyNodeData(query.RequestId, response)
 }
 
-func answerGetNodeDataQuery(backend Backend, query GetNodeDataPacket, peer *Peer) NodeDataPacket {
+func answerGetNodeDataQuery(backend Backend, query GetNodeDataPacket, peer *Peer) [][]byte {
 	// Gather state data until the fetch or network limits is reached
 	var (
 		bytes int
@@ -243,7 +243,7 @@ func handleGetReceipts66(backend Backend, msg Decoder, peer *Peer) error {
 	return peer.ReplyReceiptsRLP(query.RequestId, response)
 }
 
-func answerGetReceiptsQuery(backend Backend, query GetReceiptsPacket, peer *Peer) ReceiptsRLPPacket {
+func answerGetReceiptsQuery(backend Backend, query GetReceiptsPacket, peer *Peer) []rlp.RawValue {
 	// Gather state data until the fetch or network limits is reached
 	var (
 		bytes    int
@@ -421,7 +421,7 @@ func handleGetPooledTransactions66(backend Backend, msg Decoder, peer *Peer) err
 	return peer.ReplyPooledTransactionsRLP(query.RequestId, hashes, txs)
 }
 
-func answerGetPooledTransactions(backend Backend, query GetPooledTransactionsPacket, peer *Peer) ([]common.Hash, PooledTransactionsRLPPacket) {
+func answerGetPooledTransactions(backend Backend, query GetPooledTransactionsPacket, peer *Peer) ([]common.Hash, []rlp.RawValue) {
 	// Gather transactions until the fetch or network limits is reached
 	var (
 		bytes  int
