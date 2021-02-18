@@ -90,21 +90,16 @@ func (p *StateProcessor) Process(block *types.Block, statedb *state.StateDB, cfg
 }
 
 func applyTransaction(msg types.Message, config *params.ChainConfig, bc ChainContext, author *common.Address, gp *GasPool, statedb *state.StateDB, header *types.Header, tx *types.Transaction, usedGas *uint64, evm *vm.EVM) (*types.Receipt, error) {
-	// Create a new context to be used in the EVM environment
+	// Create a new context to be used in the EVM environment.
 	txContext := NewEVMTxContext(msg)
-	// Add addresses to access list if applicable
-	if config.IsYoloV3(header.Number) {
-		statedb.PrepareAccessList(msg.From(), msg.To(), evm.ActivePrecompiles(), msg.AccessList())
-	}
-
-	// Update the evm with the new transaction context.
 	evm.Reset(txContext, statedb)
-	// Apply the transaction to the current state (included in the env)
+
+	// Apply the transaction to the current state (included in the env).
 	result, err := ApplyMessage(evm, msg, gp)
 	if err != nil {
 		return nil, err
 	}
-	// Update the state with pending changes
+	// Update the state with pending changes.
 	var root []byte
 	if config.IsByzantium(header.Number) {
 		statedb.Finalise(true)

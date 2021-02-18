@@ -89,9 +89,6 @@ func precacheTransaction(msg types.Message, config *params.ChainConfig, gaspool 
 	// Update the evm with the new transaction context.
 	evm.Reset(NewEVMTxContext(msg), statedb)
 	// Add addresses to access list if applicable
-	if config.IsYoloV3(header.Number) {
-		statedb.PrepareAccessList(msg.From(), msg.To(), evm.ActivePrecompiles(), msg.AccessList())
-	}
 	_, err := ApplyMessage(evm, msg, gaspool)
 	return err
 }
