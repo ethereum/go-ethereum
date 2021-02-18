@@ -62,10 +62,6 @@ func (p *statePrefetcher) Prefetch(block *types.Block, statedb *state.StateDB, c
 		if interrupt != nil && atomic.LoadUint32(interrupt) == 1 {
 			return
 		}
-		// Block precaching permitted to continue, execute the transaction
-		if !p.config.IsYoloV3(header.Number) && tx.Type() != types.LegacyTxType {
-			return // Invalid block, bail out
-		}
 		// Convert the transaction into an executable message and pre-cache its sender
 		msg, err := tx.AsMessage(signer)
 		if err != nil {
