@@ -970,8 +970,9 @@ func setHTTP(ctx *cli.Context, cfg *node.Config) {
 	if ctx.GlobalIsSet(HTTPPathPrefixFlag.Name) {
 		cfg.HTTPPathPrefix = ctx.GlobalString(HTTPPathPrefixFlag.Name)
 	}
-
-	cfg.UnprotectedAllowed = ctx.GlobalBool(AllowUnprotectedTxs.Name)
+	if ctx.GlobalIsSet(HTTPPathPrefixFlag.Name) {
+		cfg.AllowUnprotectedTxs = ctx.GlobalBool(AllowUnprotectedTxs.Name)
+	}
 }
 
 // setGraphQL creates the GraphQL listener interface string from the set
