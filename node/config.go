@@ -192,7 +192,7 @@ type Config struct {
 	trustedNodesWarning    bool
 	oldGethResourceWarning bool
 
-	// Require all transactions to be protected with EIP-155 to prevent replaying on other chains.
+	// UnprotectedAllowed allows non EIP-155 protected transactions to be send over RPC.
 	UnprotectedAllowed bool `toml:",omitempty"`
 }
 
