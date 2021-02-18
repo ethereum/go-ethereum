@@ -104,15 +104,18 @@ type Signer interface {
 	Equal(Signer) bool
 }
 
+// EIP2718Signer implements Signer using the EIP2718 rules.
 type EIP2718Signer struct{ EIP155Signer }
 
 func NewEIP2718Signer(chainId *big.Int) EIP2718Signer {
-	return EIP2718Signer{
-		NewEIP155Signer(chainId),
-	}
+	return EIP2718Signer{NewEIP155Signer(chainId)}
 }
 
-// Sender returns the recovered addressed from a transaction's signature.
+func (s EIP2718Signer) Equal(s2 Signer) bool {
+	eip2718, ok := s2.(EIP2718Signer)
+	return ok && eip2718.chainId.Cmp(s.chainId) == 0
+}
+
 func (s EIP2718Signer) Sender(tx *Transaction) (common.Address, error) {
 	V, R, S := tx.RawSignatureValues()
 	switch tx.Type() {
@@ -126,6 +129,8 @@ func (s EIP2718Signer) Sender(tx *Transaction) (common.Address, error) {
 		// ACL txs are defined to use 0 and 1 as their recovery id, add
 		// 27 to become equivalent to unprotected Homestead signatures.
 		V = new(big.Int).Add(V, big.NewInt(27))
+	default:
+		return common.Address{}, ErrTxTypeNotSupported
 	}
 	if tx.ChainId().Cmp(s.chainId) != 0 {
 		return common.Address{}, ErrInvalidChainId
@@ -133,20 +138,19 @@ func (s EIP2718Signer) Sender(tx *Transaction) (common.Address, error) {
 	return recoverPlain(s.Hash(tx), R, S, V, true)
 }
 
-// SignatureValues returns signature values.
 func (s EIP2718Signer) SignatureValues(tx *Transaction, sig []byte) (R, S, V *big.Int, err error) {
-	R, S, V, err = HomesteadSigner{}.SignatureValues(tx, sig)
-	if err != nil {
-		return nil, nil, nil, err
-	}
 	switch tx.Type() {
 	case LegacyTxType:
+		R, S, V = decodeSignature(sig)
 		if s.chainId.Sign() != 0 {
 			V = big.NewInt(int64(sig[64] + 35))
 			V.Add(V, s.chainIdMul)
 		}
 	case AccessListTxType:
+		R, S, _ = decodeSignature(sig)
 		V = big.NewInt(int64(sig[64]))
+	default:
+		return nil, nil, nil, ErrTxTypeNotSupported
 	}
 	return R, S, V, nil
 }
@@ -187,7 +191,7 @@ func (s EIP2718Signer) Hash(tx *Transaction) common.Hash {
 	}
 }
 
-// EIP155Transaction implements Signer using the EIP155 rules.
+// EIP155Signer implements Signer using the EIP155 rules.
 type EIP155Signer struct {
 	chainId, chainIdMul *big.Int
 }
@@ -210,6 +214,9 @@ func (s EIP155Signer) Equal(s2 Signer) bool {
 var big8 = big.NewInt(8)
 
 func (s EIP155Signer) Sender(tx *Transaction) (common.Address, error) {
+	if tx.Type() != LegacyTxType {
+		return common.Address{}, ErrTxTypeNotSupported
+	}
 	if !tx.Protected() {
 		return HomesteadSigner{}.Sender(tx)
 	}
@@ -225,10 +232,10 @@ func (s EIP155Signer) Sender(tx *Transaction) (common.Address, error) {
 // SignatureValues returns signature values. This signature
 // needs to be in the [R || S || V] format where V is 0 or 1.
 func (s EIP155Signer) SignatureValues(tx *Transaction, sig []byte) (R, S, V *big.Int, err error) {
-	R, S, V, err = HomesteadSigner{}.SignatureValues(tx, sig)
-	if err != nil {
-		return nil, nil, nil, err
+	if tx.Type() != LegacyTxType {
+		return nil, nil, nil, ErrTxTypeNotSupported
 	}
+	R, S, V = decodeSignature(sig)
 	if s.chainId.Sign() != 0 {
 		V = big.NewInt(int64(sig[64] + 35))
 		V.Add(V, s.chainIdMul)
@@ -266,6 +273,9 @@ func (hs HomesteadSigner) SignatureValues(tx *Transaction, sig []byte) (r, s, v 
 }
 
 func (hs HomesteadSigner) Sender(tx *Transaction) (common.Address, error) {
+	if tx.Type() != LegacyTxType {
+		return common.Address{}, ErrTxTypeNotSupported
+	}
 	v, r, s := tx.RawSignatureValues()
 	return recoverPlain(hs.Hash(tx), r, s, v, true)
 }
@@ -277,15 +287,21 @@ func (s FrontierSigner) Equal(s2 Signer) bool {
 	return ok
 }
 
+func (fs FrontierSigner) Sender(tx *Transaction) (common.Address, error) {
+	if tx.Type() != LegacyTxType {
+		return common.Address{}, ErrTxTypeNotSupported
+	}
+	v, r, s := tx.RawSignatureValues()
+	return recoverPlain(fs.Hash(tx), r, s, v, false)
+}
+
 // SignatureValues returns signature values. This signature
 // needs to be in the [R || S || V] format where V is 0 or 1.
 func (fs FrontierSigner) SignatureValues(tx *Transaction, sig []byte) (r, s, v *big.Int, err error) {
-	if len(sig) != crypto.SignatureLength {
-		panic(fmt.Sprintf("wrong size for signature: got %d, want %d", len(sig), crypto.SignatureLength))
+	if tx.Type() != LegacyTxType {
+		return nil, nil, nil, ErrTxTypeNotSupported
 	}
-	r = new(big.Int).SetBytes(sig[:32])
-	s = new(big.Int).SetBytes(sig[32:64])
-	v = new(big.Int).SetBytes([]byte{sig[64] + 27})
+	r, s, v = decodeSignature(sig)
 	return r, s, v, nil
 }
 
@@ -302,9 +318,14 @@ func (fs FrontierSigner) Hash(tx *Transaction) common.Hash {
 	})
 }
 
-func (fs FrontierSigner) Sender(tx *Transaction) (common.Address, error) {
-	v, r, s := tx.RawSignatureValues()
-	return recoverPlain(fs.Hash(tx), r, s, v, false)
+func decodeSignature(sig []byte) (r, s, v *big.Int) {
+	if len(sig) != crypto.SignatureLength {
+		panic(fmt.Sprintf("wrong size for signature: got %d, want %d", len(sig), crypto.SignatureLength))
+	}
+	r = new(big.Int).SetBytes(sig[:32])
+	s = new(big.Int).SetBytes(sig[32:64])
+	v = new(big.Int).SetBytes([]byte{sig[64] + 27})
+	return r, s, v
 }
 
 func recoverPlain(sighash common.Hash, R, S, Vb *big.Int, homestead bool) (common.Address, error) {
