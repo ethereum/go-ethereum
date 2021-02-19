@@ -654,7 +654,7 @@ func (w *worker) makeCurrent(parent *types.Block, header *types.Header) error {
 	state.StartPrefetcher("miner")
 
 	env := &environment{
-		signer:    types.NewEIP155Signer(w.chainConfig.ChainID),
+		signer:    types.MakeSigner(w.chainConfig, header.Number),
 		state:     state,
 		ancestors: mapset.NewSet(),
 		family:    mapset.NewSet(),
