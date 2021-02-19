@@ -228,13 +228,30 @@ func (tx *Transaction) Type() uint8 {
 	return tx.inner.txType()
 }
 
-func (tx *Transaction) ChainId() *big.Int       { return tx.inner.chainID() }
-func (tx *Transaction) Data() []byte            { return tx.inner.data() }
+// ChainId returns the EIP155 chain ID of the transaction. The return value will always be
+// non-nil. For legacy transactions which are not replay-protected, the return value is
+// zero.
+func (tx *Transaction) ChainId() *big.Int {
+	return tx.inner.chainID()
+}
+
+// Data returns the input data of the transaction.
+func (tx *Transaction) Data() []byte { return tx.inner.data() }
+
+// AccessList returns the access list of the transaction.
 func (tx *Transaction) AccessList() *AccessList { return tx.inner.accessList() }
-func (tx *Transaction) Gas() uint64             { return tx.inner.gas() }
-func (tx *Transaction) GasPrice() *big.Int      { return new(big.Int).Set(tx.inner.gasPrice()) }
-func (tx *Transaction) Value() *big.Int         { return new(big.Int).Set(tx.inner.value()) }
-func (tx *Transaction) Nonce() uint64           { return tx.inner.nonce() }
+
+// Gas returns the gas limit of the transaction.
+func (tx *Transaction) Gas() uint64 { return tx.inner.gas() }
+
+// GasPrice returns the gas price of the transaction.
+func (tx *Transaction) GasPrice() *big.Int { return new(big.Int).Set(tx.inner.gasPrice()) }
+
+// Value returns the ether amount of the transaction.
+func (tx *Transaction) Value() *big.Int { return new(big.Int).Set(tx.inner.value()) }
+
+// Nonce returns the sender account nonce of the transaction.
+func (tx *Transaction) Nonce() uint64 { return tx.inner.nonce() }
 
 // To returns the recipient address of the transaction.
 // For contract-creation transactions, To returns nil.
@@ -349,7 +366,7 @@ type Transactions []*Transaction
 // Len returns the length of s.
 func (s Transactions) Len() int { return len(s) }
 
-// encode encodes the i'th transaction to w. Note that this does not check for errors
+// EncodeIndex encodes the i'th transaction to w. Note that this does not check for errors
 // because we assume that *Transaction will only ever contain valid txs that were either
 // constructed by decoding or via public API in this package.
 func (s Transactions) EncodeIndex(i int, w *bytes.Buffer) {
