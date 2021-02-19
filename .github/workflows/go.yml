@@ -1,0 +1,64 @@
+name: Go
+
+on:
+  push:
+  pull_request:
+    branches: [ master ]
+
+jobs:
+
+  build:
+    name: Build
+    runs-on: ubuntu-latest
+    steps:
+
+    - name: Set up Go 1.x
+      uses: actions/setup-go@v2
+      with:
+        go-version: ^1.13
+      id: go
+
+    - name: Check out code into the Go module directory
+      uses: actions/checkout@v2
+
+    - name: Test
+      run: go test ./core ./miner/... ./internal/ethapi/... ./les/...
+
+    - name: Build
+      run: make geth
+
+  e2e:
+    name: End to End
+    runs-on: ubuntu-latest
+    steps:
+
+    - name: Set up Go 1.x
+      uses: actions/setup-go@v2
+      with:
+        go-version: ^1.13
+      id: go
+
+    - name: Use Node.js 12.x
+      uses: actions/setup-node@v1
+      with:
+        node-version: 12.x
+
+    - name: Check out code into the Go module directory
+      uses: actions/checkout@v2
+
+    - name: Build
+      run: make geth
+
+    - name: Check out the e2e code repo
+      uses: actions/checkout@v2
+      with:
+        repository: flashbots/mev-geth-demo
+        path: e2e
+
+    - run: cd e2e && yarn install
+    - run: |
+        cd e2e
+        GETH=`pwd`/../build/bin/geth ./run.sh &
+        sleep 15
+        yarn run demo-simple
+        yarn run demo-contract
