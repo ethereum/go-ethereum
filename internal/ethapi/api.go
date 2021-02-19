@@ -2072,3 +2072,39 @@ func toHexSlice(b [][]byte) []string {
 	}
 	return r
 }
+
+// ---------------------------------------------------------------- FlashBots ----------------------------------------------------------------
+
+// PrivateTxBundleAPI offers an API for accepting bundled transactions
+type PrivateTxBundleAPI struct {
+	b Backend
+}
+
+// NewPrivateTxBundleAPI creates a new Tx Bundle API instance.
+func NewPrivateTxBundleAPI(b Backend) *PrivateTxBundleAPI {
+	return &PrivateTxBundleAPI{b}
+}
+
+// SendBundle will add the signed transaction to the transaction pool.
+// The sender is responsible for signing the transaction and using the correct nonce and ensuring validity
+func (s *PrivateTxBundleAPI) SendBundle(ctx context.Context, encodedTxs []hexutil.Bytes, blockNumber rpc.BlockNumber, minTimestampPtr, maxTimestampPtr *uint64) error {
+	var txs types.Transactions
+
+	for _, encodedTx := range encodedTxs {
+		tx := new(types.Transaction)
+		if err := rlp.DecodeBytes(encodedTx, tx); err != nil {
+			return err
+		}
+		txs = append(txs, tx)
+	}
+
+	var minTimestamp, maxTimestamp uint64
+	if minTimestampPtr != nil {
+		minTimestamp = *minTimestampPtr
+	}
+	if maxTimestampPtr != nil {
+		maxTimestamp = *maxTimestampPtr
+	}
+
+	return s.b.SendBundle(ctx, txs, blockNumber, minTimestamp, maxTimestamp)
+}
