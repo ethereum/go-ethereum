@@ -82,11 +82,23 @@ func init() {
 		Period: 10,
 		Epoch:  30000,
 	}
-	tx1, _ := types.SignTx(types.NewAccessListTransaction(chainId, 0, testUserAddress,
-		big.NewInt(1000), params.TxGas, nil, nil, nil), types.NewEIP2718Signer(chainId), testBankKey)
+
+	signer := types.NewEIP2718Signer(chainId)
+	tx1 := types.MustSignNewTx(testBankKey, signer, &types.AccessListTx{
+		Chain:        chainId,
+		AccountNonce: 0,
+		Recipient:    &testUserAddress,
+		Amount:       big.NewInt(1000),
+		GasLimit:     params.TxGas,
+	})
 	pendingTxs = append(pendingTxs, tx1)
 
-	tx2, _ := types.SignTx(types.NewTransaction(1, testUserAddress, big.NewInt(1000), params.TxGas, nil, nil), types.HomesteadSigner{}, testBankKey)
+	tx2 := types.MustSignNewTx(testBankKey, signer, &types.LegacyTx{
+		AccountNonce: 1,
+		Recipient:    &testUserAddress,
+		Amount:       big.NewInt(1000),
+		GasLimit:     params.TxGas,
+	})
 	newTxs = append(newTxs, tx2)
 
 	rand.Seed(time.Now().UnixNano())
