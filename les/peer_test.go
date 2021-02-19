@@ -58,6 +58,7 @@ func TestPeerSubscription(t *testing.T) {
 	sub := newTestServerPeerSub()
 	peers.subscribe(sub)
 	ns.Start()
+	peers.open()
 	defer ns.Stop()
 
 	checkIds := func(expect []string) {

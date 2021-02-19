@@ -51,7 +51,7 @@ import (
 var (
 	clientSetup       = &nodestate.Setup{Version: 1}
 	serverPeerField   = clientSetup.NewField("serverPeer", reflect.TypeOf(&serverPeer{}))
-	valueTrackerSetup = lpc.NewValueTrackerSetup(clientSetup)
+	valueTrackerSetup = vfc.NewValueTrackerSetup(clientSetup)
 )
 
 func init() {
@@ -104,7 +104,7 @@ func New(stack *node.Node, config *ethconfig.Config) (*LightEthereum, error) {
 	}
 	log.Info("Initialised chain configuration", "config", chainConfig)
 
-	ns := nodestate.NewNodeStateMachine(lespayDb, []byte("ns:"), &mclock.System{}, clientSetup)
+	ns := nodestate.NewNodeStateMachine(lesDb, []byte("ns:"), &mclock.System{}, clientSetup)
 	peers := newServerPeerSet(ns)
 	leth := &LightEthereum{
 		lesCommons: lesCommons{

@@ -166,7 +166,7 @@ func newServerPool(ns *nodestate.NodeStateMachine, db ethdb.KeyValueStore, vt *v
 
 	s.ns.SubscribeField(valueTrackerSetup.ValueTrackerField, func(node *enode.Node, state nodestate.Flags, oldValue, newValue interface{}) {
 		if newValue != nil {
-			nvt := newValue.(*lpc.NodeValueTracker)
+			nvt := newValue.(*vfc.NodeValueTracker)
 			s.ns.SetStateSub(node, sfConnected, sfDialing.Or(sfWaitDialTimeout), 0)
 			s.ns.SetFieldSub(node, sfiConnectedStats, nvt.RtStats())
 			p := s.ns.GetField(node, serverPeerField).(*serverPeer)

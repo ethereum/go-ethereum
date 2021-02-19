@@ -538,6 +538,7 @@ func newClientServerEnv(t *testing.T, blocks int, protocol int, callback indexer
 	client := newTestClientHandler(b, odr, cIndexers, cdb, speers, ulcServers, ulcFraction)
 
 	ns.Start()
+	speers.open()
 	scIndexer.Start(server.blockchain)
 	sbIndexer.Start(server.blockchain)
 	ccIndexer.Start(client.backend.blockchain)
