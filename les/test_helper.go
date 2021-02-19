@@ -523,7 +523,7 @@ func newClientServerEnv(t *testing.T, blocks int, protocol int, callback indexer
 	}
 	dist := newRequestDistributor(speers, clock)
 	rm := newRetrieveManager(speers, dist, func() time.Duration { return time.Millisecond * 500 })
-	odr := NewLesOdr(cdb, light.TestClientIndexerConfig, rm)
+	odr := NewLesOdr(cdb, light.TestClientIndexerConfig, speers, rm)
 
 	sindexers := testIndexers(sdb, nil, light.TestServerIndexerConfig, true)
 	cIndexers := testIndexers(cdb, odr, light.TestClientIndexerConfig, disablePruning)
