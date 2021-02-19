@@ -105,7 +105,7 @@ type clientInfo struct {
 }
 
 // newClientPool creates a new client pool
-func newClientPool(ns *nodestate.NodeStateMachine, lespayDb ethdb.Database, minCap uint64, connectedBias time.Duration, clock mclock.Clock, removePeer func(enode.ID)) *clientPool {
+func newClientPool(ns *nodestate.NodeStateMachine, lesDb ethdb.Database, minCap uint64, connectedBias time.Duration, clock mclock.Clock, removePeer func(enode.ID)) *clientPool {
 	pool := &clientPool{
 		ns:                  ns,
 		BalanceTrackerSetup: balanceTrackerSetup,
@@ -115,7 +115,7 @@ func newClientPool(ns *nodestate.NodeStateMachine, lespayDb ethdb.Database, minC
 		connectedBias:       connectedBias,
 		removePeer:          removePeer,
 	}
-	pool.bt = vfs.NewBalanceTracker(ns, balanceTrackerSetup, lespayDb, clock, &utils.Expirer{}, &utils.Expirer{})
+	pool.bt = vfs.NewBalanceTracker(ns, balanceTrackerSetup, lesDb, clock, &utils.Expirer{}, &utils.Expirer{})
 	pool.pp = vfs.NewPriorityPool(ns, priorityPoolSetup, clock, minCap, connectedBias, 4)
 
 	// set default expiration constants used by tests
