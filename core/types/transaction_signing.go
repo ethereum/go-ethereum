@@ -75,6 +75,16 @@ func SignNewTx(prv *ecdsa.PrivateKey, s Signer, txdata TxData) (*Transaction, er
 	return tx.WithSignature(s, sig)
 }
 
+// MustSignNewTx creates a transaction and signs it.
+// This panics if the transaction cannot be signed.
+func MustSignNewTx(prv *ecdsa.PrivateKey, s Signer, txdata TxData) *Transaction {
+	tx, err := SignNewTx(prv, s, txdata)
+	if err != nil {
+		panic(err)
+	}
+	return tx
+}
+
 // Sender returns the address derived from the signature (V, R, S) using secp256k1
 // elliptic curve and an error if it failed deriving or upon an incorrect
 // signature.
