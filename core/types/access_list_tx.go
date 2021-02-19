@@ -93,7 +93,6 @@ func newAccessListTx(chainId *big.Int, nonce uint64, to *common.Address, amount 
 		i.Accesses = accesses
 	}
 	return &Transaction{
-		typ:   AccessListTxType,
 		inner: &i,
 		time:  time.Now(),
 	}

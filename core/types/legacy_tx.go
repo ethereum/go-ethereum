@@ -67,7 +67,6 @@ func newLegacyTx(nonce uint64, to *common.Address, amount *big.Int, gasLimit uin
 		i.Price.Set(gasPrice)
 	}
 	return &Transaction{
-		typ:   LegacyTxType,
 		inner: &i,
 		time:  time.Now(),
 	}

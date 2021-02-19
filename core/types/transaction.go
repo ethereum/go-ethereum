@@ -45,7 +45,6 @@ const (
 )
 
 type Transaction struct {
-	typ   uint8     // EIP-2718 transaction type identifier
 	inner innerTx   // Consensus contents of a transaction
 	time  time.Time // Time first seen locally (spam avoidance)
 
@@ -72,7 +71,7 @@ type innerTx interface {
 
 // EncodeRLP implements rlp.Encoder
 func (tx *Transaction) EncodeRLP(w io.Writer) error {
-	if tx.typ == LegacyTxType {
+	if tx.Type() == LegacyTxType {
 		return rlp.Encode(w, tx.inner)
 	}
 	// It's an EIP-2718 typed TX envelope.
@@ -87,7 +86,7 @@ func (tx *Transaction) EncodeRLP(w io.Writer) error {
 
 // encodeTyped writes the canonical encoding of a typed transaction to w.
 func (tx *Transaction) encodeTyped(w *bytes.Buffer) error {
-	w.WriteByte(tx.typ)
+	w.WriteByte(tx.Type())
 	return rlp.Encode(w, tx.inner)
 }
 
@@ -95,7 +94,7 @@ func (tx *Transaction) encodeTyped(w *bytes.Buffer) error {
 // For legacy transactions, it returns the RLP encoding. For EIP-2718 typed
 // transactions, it returns the type and payload.
 func (tx *Transaction) MarshalBinary() ([]byte, error) {
-	if tx.typ == LegacyTxType {
+	if tx.Type() == LegacyTxType {
 		return rlp.EncodeToBytes(tx.inner)
 	}
 	var buf bytes.Buffer
@@ -172,7 +171,6 @@ func (tx *Transaction) decodeTyped(b []byte) (innerTx, error) {
 
 // setDecoded sets the inner transaction and size after decoding.
 func (tx *Transaction) setDecoded(inner innerTx, size int) {
-	tx.typ = inner.txType()
 	tx.inner = inner
 	tx.time = time.Now()
 	if size > 0 {
@@ -225,7 +223,11 @@ func (tx *Transaction) Protected() bool {
 	}
 }
 
-func (tx *Transaction) Type() uint8             { return tx.typ }
+// Type returns the transaction type.
+func (tx *Transaction) Type() uint8 {
+	return tx.inner.txType()
+}
+
 func (tx *Transaction) ChainId() *big.Int       { return tx.inner.chainID() }
 func (tx *Transaction) Data() []byte            { return tx.inner.data() }
 func (tx *Transaction) AccessList() *AccessList { return tx.inner.accessList() }
@@ -276,10 +278,10 @@ func (tx *Transaction) Hash() common.Hash {
 	}
 
 	var h common.Hash
-	if tx.typ == LegacyTxType {
+	if tx.Type() == LegacyTxType {
 		h = rlpHash(tx.inner)
 	} else {
-		h = prefixedRlpHash(tx.typ, tx.inner)
+		h = prefixedRlpHash(tx.Type(), tx.inner)
 	}
 	tx.hash.Store(h)
 	return h
@@ -306,9 +308,8 @@ func (tx *Transaction) WithSignature(signer Signer, sig []byte) (*Transaction, e
 	}
 	// Copy inner transaction.
 	var cpy innerTx
-	switch tx.typ {
-	case LegacyTxType:
-		inner := tx.inner.(*LegacyTx)
+	switch inner := tx.inner.(type) {
+	case *LegacyTx:
 		cpy = &LegacyTx{
 			AccountNonce: inner.AccountNonce,
 			Price:        inner.Price,
@@ -320,8 +321,7 @@ func (tx *Transaction) WithSignature(signer Signer, sig []byte) (*Transaction, e
 			R:            r,
 			S:            s,
 		}
-	case AccessListTxType:
-		inner := tx.inner.(*AccessListTx)
+	case *AccessListTx:
 		cpy = &AccessListTx{
 			Chain:        inner.Chain,
 			AccountNonce: inner.AccountNonce,
@@ -339,7 +339,7 @@ func (tx *Transaction) WithSignature(signer Signer, sig []byte) (*Transaction, e
 		return nil, ErrInvalidTxType
 	}
 	// Copy outer transaction.
-	ret := &Transaction{typ: tx.typ, inner: cpy, time: tx.time}
+	ret := &Transaction{inner: cpy, time: tx.time}
 	return ret, nil
 }
 
@@ -354,7 +354,7 @@ func (s Transactions) Len() int { return len(s) }
 // constructed by decoding or via public API in this package.
 func (s Transactions) EncodeIndex(i int, w *bytes.Buffer) {
 	tx := s[i]
-	if tx.typ == LegacyTxType {
+	if tx.Type() == LegacyTxType {
 		rlp.Encode(w, tx.inner)
 	} else {
 		tx.encodeTyped(w)
