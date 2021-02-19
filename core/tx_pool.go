@@ -238,11 +238,12 @@ type TxPool struct {
 	locals  *accountSet // Set of local transaction to exempt from eviction rules
 	journal *txJournal  // Journal of local transaction to back up to disk
 
-	pending map[common.Address]*txList   // All currently processable transactions
-	queue   map[common.Address]*txList   // Queued but non-processable transactions
-	beats   map[common.Address]time.Time // Last heartbeat from each known account
-	all     *txLookup                    // All transactions to allow lookups
-	priced  *txPricedList                // All transactions sorted by price
+	pending    map[common.Address]*txList   // All currently processable transactions
+	queue      map[common.Address]*txList   // Queued but non-processable transactions
+	beats      map[common.Address]time.Time // Last heartbeat from each known account
+	mevBundles []mevBundle
+	all        *txLookup     // All transactions to allow lookups
+	priced     *txPricedList // All transactions sorted by price
 
 	chainHeadCh     chan ChainHeadEvent
 	chainHeadSub    event.Subscription
@@ -494,6 +495,58 @@ func (pool *TxPool) Pending() (map[common.Address]types.Transactions, error) {
 		pending[addr] = list.Flatten()
 	}
 	return pending, nil
+}
+
+/// AllMevBundles returns all the MEV Bundles currently in the pool
+func (pool *TxPool) AllMevBundles() []mevBundle {
+	return pool.mevBundles
+}
+
+// MevBundles returns a list of bundles valid for the given blockNumber/blockTimestamp
+// also prunes bundles that are outdated
+func (pool *TxPool) MevBundles(blockNumber *big.Int, blockTimestamp uint64) ([]types.Transactions, error) {
+	pool.mu.Lock()
+	defer pool.mu.Unlock()
+
+	// returned values
+	var txBundles []types.Transactions
+	// rolled over values
+	var bundles []mevBundle
+
+	for _, bundle := range pool.mevBundles {
+		// Prune outdated bundles
+		if (bundle.maxTimestamp != 0 && blockTimestamp > bundle.maxTimestamp) || blockNumber.Cmp(bundle.blockNumber) > 0 {
+			continue
+		}
+
+		// Roll over future bundles
+		if (bundle.minTimestamp != 0 && blockTimestamp < bundle.minTimestamp) || blockNumber.Cmp(bundle.blockNumber) < 0 {
+			bundles = append(bundles, bundle)
+			continue
+		}
+
+		// return the ones which are in time
+		txBundles = append(txBundles, bundle.txs)
+		// keep the bundles around internally until they need to be pruned
+		bundles = append(bundles, bundle)
+	}
+
+	pool.mevBundles = bundles
+	return txBundles, nil
+}
+
+// AddMevBundle adds a mev bundle to the pool
+func (pool *TxPool) AddMevBundle(txs types.Transactions, blockNumber *big.Int, minTimestamp, maxTimestamp uint64) error {
+	pool.mu.Lock()
+	defer pool.mu.Unlock()
+
+	pool.mevBundles = append(pool.mevBundles, mevBundle{
+		txs:          txs,
+		blockNumber:  blockNumber,
+		minTimestamp: minTimestamp,
+		maxTimestamp: maxTimestamp,
+	})
+	return nil
 }
 
 // Locals retrieves the accounts currently considered local by the pool.
