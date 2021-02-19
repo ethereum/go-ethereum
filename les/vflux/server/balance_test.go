@@ -17,6 +17,7 @@
 package server
 
 import (
+	"math"
 	"math/rand"
 	"reflect"
 	"testing"
@@ -69,7 +70,9 @@ func (b *balanceTestSetup) newNode(capacity uint64) *NodeBalance {
 	node := enode.SignNull(&enr.Record{}, enode.ID{})
 	b.ns.SetState(node, testFlag, nodestate.Flags{}, 0)
 	b.ns.SetField(node, btTestSetup.connAddressField, "")
-	b.ns.SetField(node, ppTestSetup.CapacityField, capacity)
+	if capacity != 0 {
+		b.ns.SetField(node, ppTestSetup.CapacityField, capacity)
+	}
 	n, _ := b.ns.GetField(node, btTestSetup.BalanceField).(*NodeBalance)
 	return n
 }
@@ -397,4 +400,72 @@ func TestCallback(t *testing.T) {
 		t.Fatalf("Callback shouldn't be called")
 	case <-time.NewTimer(time.Millisecond * 100).C:
 	}
+}
+
+func TestBalancePersistence(t *testing.T) {
+	clock := &mclock.Simulated{}
+	ns := nodestate.NewNodeStateMachine(nil, nil, clock, testSetup)
+	db := memorydb.New()
+	posExp := &utils.Expirer{}
+	negExp := &utils.Expirer{}
+	posExp.SetRate(clock.Now(), math.Log(2)/float64(time.Hour*2)) // halves every two hours
+	negExp.SetRate(clock.Now(), math.Log(2)/float64(time.Hour))   // halves every hour
+	bt := NewBalanceTracker(ns, btTestSetup, db, clock, posExp, negExp)
+	ns.Start()
+	bts := &balanceTestSetup{
+		clock: clock,
+		ns:    ns,
+		bt:    bt,
+	}
+	var nb *NodeBalance
+	exp := func(expPos, expNeg uint64) {
+		pos, neg := nb.GetBalance()
+		if pos != expPos {
+			t.Fatalf("Positive balance incorrect, want %v, got %v", expPos, pos)
+		}
+		if neg != expNeg {
+			t.Fatalf("Positive balance incorrect, want %v, got %v", expPos, pos)
+		}
+	}
+	expTotal := func(expTotal uint64) {
+		total := bt.TotalTokenAmount()
+		if total != expTotal {
+			t.Fatalf("Total token amount incorrect, want %v, got %v", expTotal, total)
+		}
+	}
+
+	expTotal(0)
+	nb = bts.newNode(0)
+	expTotal(0)
+	nb.SetBalance(16000000000, 16000000000)
+	exp(16000000000, 16000000000)
+	expTotal(16000000000)
+	clock.Run(time.Hour * 2)
+	exp(8000000000, 4000000000)
+	expTotal(8000000000)
+	bt.Stop()
+	ns.Stop()
+
+	clock = &mclock.Simulated{}
+	ns = nodestate.NewNodeStateMachine(nil, nil, clock, testSetup)
+	posExp = &utils.Expirer{}
+	negExp = &utils.Expirer{}
+	posExp.SetRate(clock.Now(), math.Log(2)/float64(time.Hour*2)) // halves every two hours
+	negExp.SetRate(clock.Now(), math.Log(2)/float64(time.Hour))   // halves every hour
+	bt = NewBalanceTracker(ns, btTestSetup, db, clock, posExp, negExp)
+	ns.Start()
+	bts = &balanceTestSetup{
+		clock: clock,
+		ns:    ns,
+		bt:    bt,
+	}
+	expTotal(8000000000)
+	nb = bts.newNode(0)
+	exp(8000000000, 4000000000)
+	expTotal(8000000000)
+	clock.Run(time.Hour * 2)
+	exp(4000000000, 1000000000)
+	expTotal(4000000000)
+	bt.Stop()
+	ns.Stop()
 }
