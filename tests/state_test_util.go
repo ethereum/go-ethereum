@@ -96,18 +96,14 @@ type stEnvMarshaling struct {
 //go:generate gencodec -type stTransaction -field-override stTransactionMarshaling -out gen_sttransaction.go
 
 type stTransaction struct {
-	GasPrice   *big.Int `json:"gasPrice"`
-	Nonce      uint64   `json:"nonce"`
-	To         string   `json:"to"`
-	Data       []stData `json:"data"`
-	GasLimit   []uint64 `json:"gasLimit"`
-	Value      []string `json:"value"`
-	PrivateKey []byte   `json:"secretKey"`
-}
-
-type stData struct {
-	Data       string            `json:"data,omitempty"`
-	AccessList *types.AccessList `json:"accessList,omitempty"`
+	GasPrice    *big.Int            `json:"gasPrice"`
+	Nonce       uint64              `json:"nonce"`
+	To          string              `json:"to"`
+	Data        []string            `json:"data"`
+	AccessLists []*types.AccessList `json:"accessLists,omitempty"`
+	GasLimit    []uint64            `json:"gasLimit"`
+	Value       []string            `json:"value"`
+	PrivateKey  []byte              `json:"secretKey"`
 }
 
 type stTransactionMarshaling struct {
@@ -294,16 +290,11 @@ func (tx *stTransaction) toMessage(ps stPostState) (core.Message, error) {
 		}
 		value = v
 	}
-	var data []byte
-	if dataHex.Data != "" {
-		d, err := hex.DecodeString(strings.TrimPrefix(dataHex.Data, "0x"))
-		if err != nil {
-			return nil, fmt.Errorf("invalid tx data %q", dataHex)
-		}
-		data = d
+	data, err := hex.DecodeString(strings.TrimPrefix(dataHex, "0x"))
+	if err != nil {
+		return nil, fmt.Errorf("invalid tx data %q", dataHex)
 	}
-
-	msg := types.NewMessage(from, to, tx.Nonce, value, gasLimit, tx.GasPrice, data, dataHex.AccessList, true)
+	msg := types.NewMessage(from, to, tx.Nonce, value, gasLimit, tx.GasPrice, data, tx.AccessLists[ps.Indexes.Data], true)
 	return msg, nil
 }
 
