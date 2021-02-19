@@ -563,6 +563,11 @@ web3._extend({
 			params: 3,
 			inputFormatter: [web3._extend.formatters.inputAddressFormatter, null, web3._extend.formatters.inputBlockNumberFormatter]
 		}),
+		new web3._extend.Method({
+			name: 'sendBundle',
+			call: 'eth_sendBundle',
+			params: 4
+		}),
 	],
 	properties: [
 		new web3._extend.Property({
