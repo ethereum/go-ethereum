@@ -1422,18 +1422,9 @@ func (s *PublicTransactionPoolAPI) GetTransactionReceipt(ctx context.Context, ha
 	}
 	receipt := receipts[index]
 
-	txType := tx.Type()
-	var signer types.Signer = types.FrontierSigner{}
-	if tx.Protected() {
-		switch txType {
-		case types.LegacyTxType:
-			signer = types.NewEIP155Signer(tx.ChainId())
-		case types.AccessListTxType:
-			// EIP-2930
-			signer = types.NewEIP2718Signer(tx.ChainId())
-		}
-	}
-
+	// Derive the sender.
+	bigblock := new(big.Int).SetUint64(blockNumber)
+	signer := types.MakeSigner(s.b.ChainConfig(), bigblock)
 	from, _ := types.Sender(signer, tx)
 
 	fields := map[string]interface{}{
