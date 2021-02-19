@@ -300,7 +300,8 @@ func (s *LightEthereum) Start() error {
 	}
 	s.serverPool.addSource(discovery)
 	s.ns.Start()
-	s.serverPool.start()
+	s.peers.open()       // start accepting connections
+	s.serverPool.start() // start dialing peers
 	// Start bloom request workers.
 	s.wg.Add(bloomServiceThreads)
 	s.startBloomHandlers(params.BloomBitsBlocksClient)

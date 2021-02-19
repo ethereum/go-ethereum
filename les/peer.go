@@ -45,6 +45,7 @@ import (
 
 var (
 	errClosed            = errors.New("peer set is closed")
+	errNotOpened         = errors.New("peer set has not been opened yet")
 	errAlreadyRegistered = errors.New("peer is already registered")
 	errNotRegistered     = errors.New("peer is not registered")
 )
@@ -1081,6 +1082,7 @@ type serverPeerSubscriber interface {
 // participating in the Light Ethereum sub-protocol.
 type serverPeerSet struct {
 	ns     *nodestate.NodeStateMachine
+	opened uint32
 	closed bool
 }
 
@@ -1106,6 +1108,12 @@ func (ps *serverPeerSet) subscribe(sub serverPeerSubscriber) {
 	})
 }
 
+// open allows accepting peers. Should be called after all peer mechanics are initialized
+// and the underlying NodeStateMachine has been started.
+func (ps *serverPeerSet) open() {
+	atomic.StoreUint32(&ps.opened, 1)
+}
+
 // close disconnects all peers. No new peers can be registered
 // after close has returned.
 func (ps *serverPeerSet) close() {
@@ -1120,6 +1128,9 @@ func (ps *serverPeerSet) close() {
 // register adds a new server peer into the set, or returns an error if the
 // peer is already known.
 func (ps *serverPeerSet) register(peer *serverPeer) error {
+	if atomic.LoadUint32(&ps.opened) == 0 {
+		return errNotOpened
+	}
 	var err error
 	ps.ns.Operation(func() {
 		if ps.closed {
@@ -1139,6 +1150,9 @@ func (ps *serverPeerSet) register(peer *serverPeer) error {
 // actions to/from that particular entity. It also initiates disconnection at
 // the networking layer.
 func (ps *serverPeerSet) unregister(id enode.ID) error {
+	if atomic.LoadUint32(&ps.opened) == 0 {
+		return errNotOpened
+	}
 	if node := ps.ns.GetNode(id); node != nil {
 		return ps.ns.SetField(node, serverPeerField, nil)
 	}
@@ -1147,6 +1161,9 @@ func (ps *serverPeerSet) unregister(id enode.ID) error {
 
 // peer retrieves the registered peer with the given id.
 func (ps *serverPeerSet) peer(id enode.ID) *serverPeer {
+	if atomic.LoadUint32(&ps.opened) == 0 {
+		return nil
+	}
 	if node := ps.ns.GetNode(id); node != nil {
 		peer, _ := ps.ns.GetField(node, serverPeerField).(*serverPeer)
 		return peer
@@ -1156,11 +1173,17 @@ func (ps *serverPeerSet) peer(id enode.ID) *serverPeer {
 
 // len returns if the current number of peers in the set.
 func (ps *serverPeerSet) len() int {
+	if atomic.LoadUint32(&ps.opened) == 0 {
+		return 0
+	}
 	return ps.ns.FieldCount(serverPeerField)
 }
 
 // forEach calls the given callback for each registered peer
 func (ps *serverPeerSet) forEach(cb func(peer *serverPeer)) {
+	if atomic.LoadUint32(&ps.opened) == 0 {
+		return
+	}
 	ps.ns.ForEachWithField(serverPeerField, func(n *enode.Node, value interface{}) {
 		cb(value.(*serverPeer))
 	})
