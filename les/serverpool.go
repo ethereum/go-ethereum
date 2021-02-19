@@ -26,8 +26,8 @@ import (
 
 	"github.com/ethereum/go-ethereum/common/mclock"
 	"github.com/ethereum/go-ethereum/ethdb"
-	lpc "github.com/ethereum/go-ethereum/les/lespay/client"
 	"github.com/ethereum/go-ethereum/les/utils"
+	vfc "github.com/ethereum/go-ethereum/les/vflux/client"
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/p2p/enode"
 	"github.com/ethereum/go-ethereum/p2p/enr"
@@ -58,23 +58,23 @@ type serverPool struct {
 	db       ethdb.KeyValueStore
 
 	ns           *nodestate.NodeStateMachine
-	vt           *lpc.ValueTracker
+	vt           *vfc.ValueTracker
 	mixer        *enode.FairMix
 	mixSources   []enode.Iterator
 	dialIterator enode.Iterator
 	validSchemes enr.IdentityScheme
 	trustedURLs  []string
-	fillSet      *lpc.FillSet
+	fillSet      *vfc.FillSet
 	queryFails   uint32
 
 	timeoutLock      sync.RWMutex
 	timeout          time.Duration
-	timeWeights      lpc.ResponseTimeWeights
+	timeWeights      vfc.ResponseTimeWeights
 	timeoutRefreshed mclock.AbsTime
 }
 
 // nodeHistory keeps track of dial costs which determine node weight together with the
-// service value calculated by lpc.ValueTracker.
+// service value calculated by vfc.ValueTracker.
 type nodeHistory struct {
 	dialCost                       utils.ExpiredValue
 	redialWaitStart, redialWaitEnd int64 // unix time (seconds)
@@ -127,11 +127,11 @@ var (
 		},
 	)
 	sfiNodeWeight     = serverPoolSetup.NewField("nodeWeight", reflect.TypeOf(uint64(0)))
-	sfiConnectedStats = serverPoolSetup.NewField("connectedStats", reflect.TypeOf(lpc.ResponseTimeStats{}))
+	sfiConnectedStats = serverPoolSetup.NewField("connectedStats", reflect.TypeOf(vfc.ResponseTimeStats{}))
 )
 
 // newServerPool creates a new server pool
-func newServerPool(db ethdb.KeyValueStore, dbKey []byte, vt *lpc.ValueTracker, mixTimeout time.Duration, query queryFunc, clock mclock.Clock, trustedURLs []string) *serverPool {
+func newServerPool(db ethdb.KeyValueStore, dbKey []byte, vt *vfc.ValueTracker, mixTimeout time.Duration, query queryFunc, clock mclock.Clock, trustedURLs []string) *serverPool {
 	s := &serverPool{
 		db:           db,
 		clock:        clock,
@@ -143,8 +143,8 @@ func newServerPool(db ethdb.KeyValueStore, dbKey []byte, vt *lpc.ValueTracker, m
 	}
 	s.recalTimeout()
 	s.mixer = enode.NewFairMix(mixTimeout)
-	knownSelector := lpc.NewWrsIterator(s.ns, sfHasValue, sfDisableSelection, sfiNodeWeight)
-	alwaysConnect := lpc.NewQueueIterator(s.ns, sfAlwaysConnect, sfDisableSelection, true, nil)
+	knownSelector := vfc.NewWrsIterator(s.ns, sfHasValue, sfDisableSelection, sfiNodeWeight)
+	alwaysConnect := vfc.NewQueueIterator(s.ns, sfAlwaysConnect, sfDisableSelection, true, nil)
 	s.mixSources = append(s.mixSources, knownSelector)
 	s.mixSources = append(s.mixSources, alwaysConnect)
 
@@ -183,7 +183,7 @@ func (s *serverPool) addSource(source enode.Iterator) {
 // Nodes that are filtered out and does not appear on the output iterator are put back
 // into redialWait state.
 func (s *serverPool) addPreNegFilter(input enode.Iterator, query queryFunc) enode.Iterator {
-	s.fillSet = lpc.NewFillSet(s.ns, input, sfQueried)
+	s.fillSet = vfc.NewFillSet(s.ns, input, sfQueried)
 	s.ns.SubscribeState(sfQueried, func(n *enode.Node, oldState, newState nodestate.Flags) {
 		if newState.Equals(sfQueried) {
 			fails := atomic.LoadUint32(&s.queryFails)
@@ -221,7 +221,7 @@ func (s *serverPool) addPreNegFilter(input enode.Iterator, query queryFunc) enod
 			}()
 		}
 	})
-	return lpc.NewQueueIterator(s.ns, sfCanDial, nodestate.Flags{}, false, func(waiting bool) {
+	return vfc.NewQueueIterator(s.ns, sfCanDial, nodestate.Flags{}, false, func(waiting bool) {
 		if waiting {
 			s.fillSet.SetTarget(preNegLimit)
 		} else {
@@ -330,7 +330,7 @@ func (s *serverPool) recalTimeout() {
 	s.timeoutLock.Lock()
 	if s.timeout != timeout {
 		s.timeout = timeout
-		s.timeWeights = lpc.TimeoutWeights(s.timeout)
+		s.timeWeights = vfc.TimeoutWeights(s.timeout)
 
 		suggestedTimeoutGauge.Update(int64(s.timeout / time.Millisecond))
 		totalValueGauge.Update(int64(rts.Value(s.timeWeights, s.vt.StatsExpFactor())))
@@ -349,7 +349,7 @@ func (s *serverPool) getTimeout() time.Duration {
 
 // getTimeoutAndWeight returns the recommended request timeout as well as the
 // response time weight which is necessary to calculate service value.
-func (s *serverPool) getTimeoutAndWeight() (time.Duration, lpc.ResponseTimeWeights) {
+func (s *serverPool) getTimeoutAndWeight() (time.Duration, vfc.ResponseTimeWeights) {
 	s.recalTimeout()
 	s.timeoutLock.RLock()
 	defer s.timeoutLock.RUnlock()
@@ -381,7 +381,7 @@ func (s *serverPool) serviceValue(node *enode.Node) (sessionValue, totalValue fl
 	expFactor := s.vt.StatsExpFactor()
 
 	totalValue = currentStats.Value(timeWeights, expFactor)
-	if connStats, ok := s.ns.GetField(node, sfiConnectedStats).(lpc.ResponseTimeStats); ok {
+	if connStats, ok := s.ns.GetField(node, sfiConnectedStats).(vfc.ResponseTimeStats); ok {
 		diff := currentStats
 		diff.SubStats(&connStats)
 		sessionValue = diff.Value(timeWeights, expFactor)
