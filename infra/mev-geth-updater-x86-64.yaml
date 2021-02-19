@@ -1,0 +1,737 @@
+---
+AWSTemplateFormatVersion: 2010-09-09
+
+Description: >
+  This template creates an automated continuous deployment pipeline to Amazon Elastic Container Service (ECS)
+  Created by Luke Youngblood, luke@blockscale.net
+
+Parameters:
+  # GitHub Parameters
+
+  GitHubUser:
+    Type: String
+    Default: lyoungblood
+    Description: Your team or username on GitHub.
+
+  GitHubRepo:
+    Type: String
+    Default: mev-geth
+    Description: The repo name of the baker service.
+
+  GitHubBranch:
+    Type: String
+    Default: master
+    Description: The branch of the repo to continuously deploy.
+
+  GitHubToken:
+    Type: String
+    NoEcho: true
+    Description: >
+      Token for the team or user specified above. (https://github.com/settings/tokens)
+
+  # VPC Parameters
+
+  VPC:
+    Type: AWS::EC2::VPC::Id
+
+  Subnets:
+    Type: List<AWS::EC2::Subnet::Id>
+
+  VpcCIDR:
+    Type: String
+    Default: 172.31.0.0/16
+
+  # ECS Parameters
+
+  InstanceType:
+    Type: String
+    Default: i3en.large
+
+  KeyPair:
+    Type: AWS::EC2::KeyPair::KeyName
+
+  ClusterSize:
+    Type: Number
+    Default: 1
+
+  DesiredCount:
+    Type: Number
+    Default: 0
+
+  TaskName:
+    Type: String
+    Default: mev-geth-updater
+
+  ECSAMI:
+    Type: AWS::SSM::Parameter::Value<String>
+    Default: /aws/service/ecs/optimized-ami/amazon-linux-2/recommended/image_id
+
+  # Mev-Geth Parameters
+
+  Network:
+    Type: String
+    Default: mainnet
+    AllowedValues:
+      - mainnet
+      - goerli
+
+  SyncMode:
+    Type: String
+    Default: fast
+    AllowedValues:
+      - full
+      - fast
+      - light
+
+  Connections:
+    Type: Number
+    Default: 50
+
+  NetPort:
+    Type: Number
+    Default: 30303
+
+Metadata:
+  AWS::CloudFormation::Interface:
+    ParameterLabels:
+      GitHubUser:
+        default: "User"
+      GitHubRepo:
+        default: "Mev-Geth GitHub Repository"
+      GitHubBranch:
+        default: "Branch in GitHub repository"
+      GitHubToken:
+        default: "Personal Access Token"
+      VPC:
+        default: "Choose which VPC the autoscaling group should be deployed to"
+      Subnets:
+        default: "Choose which subnets the autoscaling group should be deployed to"
+      VpcCIDR:
+        default: "VPC CIDR Block"
+      InstanceType:
+        default: "Which instance type should we use to build the ECS cluster?"
+      KeyPair:
+        default: "Which keypair should be used for access to the ECS cluster?"
+      ClusterSize:
+        default: "How many ECS hosts do you want to initially deploy?"
+      DesiredCount:
+        default: "How many Updater tasks do you want to initially execute?"
+      TaskName:
+        default: "The name of the Updater ECS Task"
+      ECSAMI:
+        default: "The ECS AMI ID populated from SSM."
+      Network:
+        default: "The network the Mev-Geth node should join"
+      SyncMode:
+        default: "The synchronization mode that Mev-Geth should use (full, fast, or light)"
+      Connections:
+        default: "The number of connections the Mev-Geth node should be configured with"
+      NetPort:
+        default: "The TCP/UDP port used for Mev-Geth connectivity to other Ethereum peer nodes"
+    ParameterGroups:
+      - Label:
+          default: GitHub Configuration
+        Parameters:
+          - GitHubRepo
+          - GitHubBranch
+          - GitHubUser
+          - GitHubToken
+      - Label:
+          default: VPC Configuration
+        Parameters:
+          - VPC
+          - Subnets
+          - VpcCIDR
+      - Label:
+          default: ECS Configuration
+        Parameters:
+          - InstanceType
+          - KeyPair
+          - ClusterSize
+          - DesiredCount
+          - TaskName
+          - ECSAMI
+      - Label:
+          default: Mev-Geth Configuration
+        Parameters:
+          - Network
+          - SyncMode
+          - Connections
+          - NetPort
+
+Resources:
+  # ECS Resources
+
+  ChainBucket:
+    Type: AWS::S3::Bucket
+
+  ChainBucketPolicy:
+    Type: AWS::S3::BucketPolicy
+    Properties:
+      Bucket: !Ref ChainBucket
+      PolicyDocument:
+        Statement:
+          - Action:
+              - s3:GetObject
+              - s3:ListBucket
+            Effect: Allow
+            Resource:
+              - Fn::Join:
+                  - ""
+                  - - "arn:aws:s3:::"
+                    - Ref: "ChainBucket"
+                    - "/*"
+              - Fn::Join:
+                  - ""
+                  - - "arn:aws:s3:::"
+                    - Ref: "ChainBucket"
+            Principal:
+              AWS: "*"
+
+  Cluster:
+    Type: AWS::ECS::Cluster
+    Properties:
+      ClusterName: !Ref AWS::StackName
+
+  SecurityGroup:
+    Type: "AWS::EC2::SecurityGroup"
+    Properties:
+      GroupDescription: !Sub ${AWS::StackName}-sg
+      VpcId: !Ref VPC
+      Tags:
+        - Key: Name
+          Value: !Sub ${AWS::StackName}-sg
+      SecurityGroupIngress:
+        - IpProtocol: tcp
+          FromPort: 22
+          ToPort: 22
+          CidrIp: !Ref VpcCIDR
+        - IpProtocol: tcp
+          FromPort: !Ref NetPort
+          ToPort: !Ref NetPort
+          CidrIp: 0.0.0.0/0
+        - IpProtocol: tcp
+          FromPort: !Ref NetPort
+          ToPort: !Ref NetPort
+          CidrIpv6: ::/0
+        - IpProtocol: udp
+          FromPort: !Ref NetPort
+          ToPort: !Ref NetPort
+          CidrIp: 0.0.0.0/0
+        - IpProtocol: udp
+          FromPort: !Ref NetPort
+          ToPort: !Ref NetPort
+          CidrIpv6: ::/0
+
+  ECSAutoScalingGroup:
+    Type: AWS::AutoScaling::AutoScalingGroup
+    Properties:
+      VPCZoneIdentifier: !Ref Subnets
+      LaunchConfigurationName: !Ref ECSLaunchConfiguration
+      MinSize: !Ref ClusterSize
+      MaxSize: !Ref ClusterSize
+      DesiredCapacity: !Ref ClusterSize
+      Tags:
+        - Key: Name
+          Value: !Sub ${AWS::StackName} ECS host
+          PropagateAtLaunch: true
+    CreationPolicy:
+      ResourceSignal:
+        Timeout: PT15M
+    UpdatePolicy:
+      AutoScalingRollingUpdate:
+        MinInstancesInService: 0
+        MaxBatchSize: 1
+        PauseTime: PT15M
+        SuspendProcesses:
+          - HealthCheck
+          - ReplaceUnhealthy
+          - AZRebalance
+          - AlarmNotification
+          - ScheduledActions
+        WaitOnResourceSignals: true
+
+  ECSLaunchConfiguration:
+    Type: AWS::AutoScaling::LaunchConfiguration
+    Properties:
+      ImageId: !Ref ECSAMI
+      InstanceType: !Ref InstanceType
+      KeyName: !Ref KeyPair
+      SecurityGroups:
+        - !Ref SecurityGroup
+      IamInstanceProfile: !Ref ECSInstanceProfile
+      UserData:
+        "Fn::Base64": !Sub |
+          #!/bin/bash
+          yum install -y aws-cfn-bootstrap hibagent rsync awscli
+          yum update -y
+          service amazon-ssm-agent restart
+
+          # determine if we have an NVMe SSD attached
+          find /dev/nvme1
+          if [ $? -eq 0 ]
+          then
+            mount_point=/var/lib/docker
+
+            # copy existing files from mount point
+            service docker stop
+            echo 'DOCKER_STORAGE_OPTIONS="--storage-driver overlay2"' > /etc/sysconfig/docker-storage
+            mkdir -p /tmp$mount_point
+            rsync -val $mount_point/ /tmp/$mount_point/
+
+            # make a new filesystem and mount it
+            mkfs -t ext4 /dev/nvme1n1
+            mkdir -p $mount_point
+            mount -t ext4 -o noatime /dev/nvme1n1 $mount_point
+
+            # Copy files back to new mount point
+            rsync -val /tmp/$mount_point/ $mount_point/
+            rm -rf /tmp$mount_point
+            service docker start
+
+            # Make raid appear on reboot
+            echo >> /etc/fstab
+            echo "/dev/nvme1n1 $mount_point ext4 noatime 0 0" | tee -a /etc/fstab
+          fi
+
+          /opt/aws/bin/cfn-init -v --region ${AWS::Region} --stack ${AWS::StackName} --resource ECSLaunchConfiguration
+          /opt/aws/bin/cfn-signal -e $? --region ${AWS::Region} --stack ${AWS::StackName} --resource ECSAutoScalingGroup
+          /usr/bin/enable-ec2-spot-hibernation
+          echo "ECS_ENGINE_TASK_CLEANUP_WAIT_DURATION=5m" >> /etc/ecs/ecs.config
+
+          reboot
+
+    Metadata:
+      AWS::CloudFormation::Init:
+        config:
+          packages:
+            yum:
+              awslogs: []
+
+          commands:
+            01_add_instance_to_cluster:
+              command: !Sub echo ECS_CLUSTER=${Cluster} >> /etc/ecs/ecs.config
+          files:
+            "/etc/cfn/cfn-hup.conf":
+              mode: 000400
+              owner: root
+              group: root
+              content: !Sub |
+                [main]
+                stack=${AWS::StackId}
+                region=${AWS::Region}
+
+            "/etc/cfn/hooks.d/cfn-auto-reloader.conf":
+              content: !Sub |
+                [cfn-auto-reloader-hook]
+                triggers=post.update
+                path=Resources.ECSLaunchConfiguration.Metadata.AWS::CloudFormation::Init
+                action=/opt/aws/bin/cfn-init -v --region ${AWS::Region} --stack ${AWS::StackName} --resource ECSLaunchConfiguration
+
+            "/etc/awslogs/awscli.conf":
+              content: !Sub |
+                [plugins]
+                cwlogs = cwlogs
+                [default]
+                region = ${AWS::Region}
+
+          services:
+            sysvinit:
+              cfn-hup:
+                enabled: true
+                ensureRunning: true
+                files:
+                  - /etc/cfn/cfn-hup.conf
+                  - /etc/cfn/hooks.d/cfn-auto-reloader.conf
+
+  # This IAM Role is attached to all of the ECS hosts. It is based on the default role
+  # published here:
+  # http://docs.aws.amazon.com/AmazonECS/latest/developerguide/instance_IAM_role.html
+  #
+  # You can add other IAM policy statements here to allow access from your ECS hosts
+  # to other AWS services.
+
+  ECSRole:
+    Type: AWS::IAM::Role
+    Properties:
+      Path: /
+      RoleName: !Sub ${AWS::StackName}-ECSRole-${AWS::Region}
+      AssumeRolePolicyDocument: |
+        {
+          "Statement": [{
+            "Action": "sts:AssumeRole",
+            "Effect": "Allow",
+            "Principal": {
+              "Service": "ec2.amazonaws.com"
+            }
+          }]
+        }
+      Policies:
+        - PolicyName: ecs-service
+          PolicyDocument: |
+            {
+              "Statement": [{
+                "Effect": "Allow",
+                "Action": [
+                  "ecs:CreateCluster",
+                  "ecs:DeregisterContainerInstance",
+                  "ecs:DiscoverPollEndpoint",
+                  "ecs:Poll",
+                  "ecs:RegisterContainerInstance",
+                  "ecs:StartTelemetrySession",
+                  "ecs:Submit*",
+                  "logs:CreateLogStream",
+                  "logs:PutLogEvents",
+                  "ecr:BatchCheckLayerAvailability",
+                  "ecr:BatchGetImage",
+                  "ecr:GetDownloadUrlForLayer",
+                  "ecr:GetAuthorizationToken",
+                  "ssm:DescribeAssociation",
+                  "ssm:GetDeployablePatchSnapshotForInstance",
+                  "ssm:GetDocument",
+                  "ssm:GetManifest",
+                  "ssm:GetParameters",
+                  "ssm:ListAssociations",
+                  "ssm:ListInstanceAssociations",
+                  "ssm:PutInventory",
+                  "ssm:PutComplianceItems",
+                  "ssm:PutConfigurePackageResult",
+                  "ssm:PutParameter",
+                  "ssm:UpdateAssociationStatus",
+                  "ssm:UpdateInstanceAssociationStatus",
+                  "ssm:UpdateInstanceInformation",
+                  "ec2messages:AcknowledgeMessage",
+                  "ec2messages:DeleteMessage",
+                  "ec2messages:FailMessage",
+                  "ec2messages:GetEndpoint",
+                  "ec2messages:GetMessages",
+                  "ec2messages:SendReply",
+                  "cloudwatch:PutMetricData",
+                  "ec2:DescribeInstanceStatus",
+                  "ds:CreateComputer",
+                  "ds:DescribeDirectories",
+                  "logs:CreateLogGroup",
+                  "logs:CreateLogStream",
+                  "logs:DescribeLogGroups",
+                  "logs:DescribeLogStreams",
+                  "logs:PutLogEvents",
+                  "s3:*"
+                ],
+                "Resource": "*"
+              }]
+            }
+
+  ECSInstanceProfile:
+    Type: AWS::IAM::InstanceProfile
+    Properties:
+      Path: /
+      Roles:
+        - !Ref ECSRole
+
+  ECSServiceAutoScalingRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          Action:
+            - "sts:AssumeRole"
+          Effect: Allow
+          Principal:
+            Service:
+              - application-autoscaling.amazonaws.com
+      Path: /
+      Policies:
+        - PolicyName: ecs-service-autoscaling
+          PolicyDocument:
+            Statement:
+              Effect: Allow
+              Action:
+                - application-autoscaling:*
+                - cloudwatch:DescribeAlarms
+                - cloudwatch:PutMetricAlarm
+                - ecs:DescribeServices
+                - ecs:UpdateService
+              Resource: "*"
+
+  TaskExecutionRole:
+    Type: AWS::IAM::Role
+    Properties:
+      Path: /
+      AssumeRolePolicyDocument:
+        Version: 2012-10-17
+        Statement:
+          - Action: sts:AssumeRole
+            Effect: Allow
+            Principal:
+              Service: ecs-tasks.amazonaws.com
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/service-role/AmazonECSTaskExecutionRolePolicy
+      Policies:
+        - PolicyName: !Sub ecs-task-S3-${AWS::StackName}
+          PolicyDocument:
+            Version: 2012-10-17
+            Statement:
+              - Effect: Allow
+                Action:
+                  - "s3:Get*"
+                  - "s3:List*"
+                  - "s3:Put*"
+                Resource:
+                  - !GetAtt ChainBucket.Arn
+        - PolicyName: !Sub ecs-task-SSM-${AWS::StackName}
+          PolicyDocument:
+            Version: 2012-10-17
+            Statement:
+              - Effect: Allow
+                Action:
+                  - "ssm:DescribeParameters"
+                  - "ssm:PutParameter"
+                  - "ssm:GetParameters"
+                Resource:
+                  - !Sub "arn:aws:ssm:${AWS::Region}:${AWS::AccountId}:parameter/${AWS::StackName}/*"
+
+  LogGroup:
+    Type: AWS::Logs::LogGroup
+    Properties:
+      LogGroupName: !Sub /ecs/${AWS::StackName}
+      RetentionInDays: 14
+
+  ECSService:
+    Type: AWS::ECS::Service
+    Properties:
+      Cluster: !Ref Cluster
+      DesiredCount: !Ref DesiredCount
+      TaskDefinition: !Ref TaskDefinition
+      LaunchType: EC2
+      DeploymentConfiguration:
+        MaximumPercent: 100
+        MinimumHealthyPercent: 0
+
+  TaskDefinition:
+    Type: AWS::ECS::TaskDefinition
+    Properties:
+      Family: !Sub ${AWS::StackName}-${TaskName}
+      RequiresCompatibilities:
+        - EC2
+      NetworkMode: host
+      ExecutionRoleArn: !Ref TaskExecutionRole
+      ContainerDefinitions:
+        - Name: !Ref TaskName
+          Image: !Sub ${AWS::AccountId}.dkr.ecr.${AWS::Region}.amazonaws.com/${Repository}
+          Essential: true
+          MemoryReservation: 6144
+          Environment:
+            - Name: "network"
+              Value: !Ref Network
+            - Name: "syncmode"
+              Value: !Ref SyncMode
+            - Name: "connections"
+              Value: !Ref Connections
+            - Name: "netport"
+              Value: !Ref NetPort
+            - Name: "region"
+              Value: !Ref AWS::Region
+            - Name: "chainbucket"
+              Value: !Ref ChainBucket
+            - Name: "s3key"
+              Value: node
+          PortMappings:
+            - ContainerPort: !Ref NetPort
+          LogConfiguration:
+            LogDriver: awslogs
+            Options:
+              awslogs-region: !Ref AWS::Region
+              awslogs-group: !Ref LogGroup
+              awslogs-stream-prefix: !Ref AWS::StackName
+
+  # CodePipeline Resources
+
+  Repository:
+    Type: AWS::ECR::Repository
+
+  CodeBuildServiceRole:
+    Type: AWS::IAM::Role
+    Properties:
+      Path: /
+      AssumeRolePolicyDocument:
+        Version: 2012-10-17
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: codebuild.amazonaws.com
+            Action: sts:AssumeRole
+      Policies:
+        - PolicyName: root
+          PolicyDocument:
+            Version: 2012-10-17
+            Statement:
+              - Resource: "*"
+                Effect: Allow
+                Action:
+                  - logs:CreateLogGroup
+                  - logs:CreateLogStream
+                  - logs:PutLogEvents
+                  - ecr:GetAuthorizationToken
+              - Resource: !Sub arn:aws:s3:::${ArtifactBucket}/*
+                Effect: Allow
+                Action:
+                  - s3:GetObject
+                  - s3:PutObject
+                  - s3:GetObjectVersion
+              - Resource: !Sub arn:aws:ecr:${AWS::Region}:${AWS::AccountId}:repository/${Repository}
+                Effect: Allow
+                Action:
+                  - ecr:GetDownloadUrlForLayer
+                  - ecr:BatchGetImage
+                  - ecr:BatchCheckLayerAvailability
+                  - ecr:PutImage
+                  - ecr:InitiateLayerUpload
+                  - ecr:UploadLayerPart
+                  - ecr:CompleteLayerUpload
+
+  CodePipelineServiceRole:
+    Type: AWS::IAM::Role
+    Properties:
+      Path: /
+      AssumeRolePolicyDocument:
+        Version: 2012-10-17
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: codepipeline.amazonaws.com
+            Action: sts:AssumeRole
+      Policies:
+        - PolicyName: root
+          PolicyDocument:
+            Version: 2012-10-17
+            Statement:
+              - Resource:
+                  - !Sub arn:aws:s3:::${ArtifactBucket}/*
+                Effect: Allow
+                Action:
+                  - s3:PutObject
+                  - s3:GetObject
+                  - s3:GetObjectVersion
+                  - s3:GetBucketVersioning
+              - Resource: "*"
+                Effect: Allow
+                Action:
+                  - ecs:DescribeServices
+                  - ecs:DescribeTaskDefinition
+                  - ecs:DescribeTasks
+                  - ecs:ListTasks
+                  - ecs:RegisterTaskDefinition
+                  - ecs:UpdateService
+                  - codebuild:StartBuild
+                  - codebuild:BatchGetBuilds
+                  - iam:PassRole
+
+  ArtifactBucket:
+    Type: AWS::S3::Bucket
+
+  CodeBuildProject:
+    Type: AWS::CodeBuild::Project
+    Properties:
+      Artifacts:
+        Type: CODEPIPELINE
+      Source:
+        Type: CODEPIPELINE
+        BuildSpec: |
+          version: 0.2
+          phases:
+            install:
+              runtime-versions:
+                docker: 19
+            pre_build:
+              commands:
+                - $(aws ecr get-login --no-include-email)
+                - TAG="$(echo $CODEBUILD_RESOLVED_SOURCE_VERSION | head -c 8)"
+                - IMAGE_URI="${REPOSITORY_URI}:${TAG}"
+                - cp infra/Dockerfile.updater ./Dockerfile
+            build:
+              commands:
+                - docker build --tag "$IMAGE_URI" .
+                - docker build --tag "${REPOSITORY_URI}:latest" .
+            post_build:
+              commands:
+                - docker push "$IMAGE_URI"
+                - docker push "${REPOSITORY_URI}:latest"
+                - printf '[{"name":"mev-geth-updater","imageUri":"%s"}]' "$IMAGE_URI" > images.json
+          artifacts:
+            files: images.json
+      Environment:
+        ComputeType: BUILD_GENERAL1_SMALL
+        Image: aws/codebuild/docker:17.09.0
+        Type: LINUX_CONTAINER
+        PrivilegedMode: true
+        EnvironmentVariables:
+          - Name: AWS_DEFAULT_REGION
+            Value: !Ref AWS::Region
+          - Name: REPOSITORY_URI
+            Value: !Sub ${AWS::AccountId}.dkr.ecr.${AWS::Region}.amazonaws.com/${Repository}
+      Name: !Ref AWS::StackName
+      ServiceRole: !Ref CodeBuildServiceRole
+
+  Pipeline:
+    Type: AWS::CodePipeline::Pipeline
+    Properties:
+      RoleArn: !GetAtt CodePipelineServiceRole.Arn
+      ArtifactStore:
+        Type: S3
+        Location: !Ref ArtifactBucket
+      Stages:
+        - Name: Source
+          Actions:
+            - Name: App
+              ActionTypeId:
+                Category: Source
+                Owner: ThirdParty
+                Version: 1
+                Provider: GitHub
+              Configuration:
+                Owner: !Ref GitHubUser
+                Repo: !Ref GitHubRepo
+                Branch: !Ref GitHubBranch
+                OAuthToken: !Ref GitHubToken
+              OutputArtifacts:
+                - Name: App
+              RunOrder: 1
+        - Name: Build
+          Actions:
+            - Name: Build
+              ActionTypeId:
+                Category: Build
+                Owner: AWS
+                Version: 1
+                Provider: CodeBuild
+              Configuration:
+                ProjectName: !Ref CodeBuildProject
+              InputArtifacts:
+                - Name: App
+              OutputArtifacts:
+                - Name: BuildOutput
+              RunOrder: 1
+        - Name: Deploy
+          Actions:
+            - Name: Deploy
+              ActionTypeId:
+                Category: Deploy
+                Owner: AWS
+                Version: 1
+                Provider: ECS
+              Configuration:
+                ClusterName: !Ref Cluster
+                ServiceName: !Ref ECSService
+                FileName: images.json
+              InputArtifacts:
+                - Name: BuildOutput
+              RunOrder: 1
+
+Outputs:
+  ClusterName:
+    Value: !Ref Cluster
+  Service:
+    Value: !Ref ECSService
+  PipelineUrl:
+    Value: !Sub https://console.aws.amazon.com/codepipeline/home?region=${AWS::Region}#/view/${Pipeline}
