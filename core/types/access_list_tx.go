@@ -99,28 +99,17 @@ func newAccessListTx(chainId *big.Int, nonce uint64, to *common.Address, amount 
 	}
 }
 
-func (tx *AccessListTx) Type() byte              { return AccessListTxType }
-func (tx *AccessListTx) ChainId() *big.Int       { return tx.Chain }
-func (tx *AccessListTx) Protected() bool         { return true }
-func (tx *AccessListTx) AccessList() *AccessList { return tx.Accesses }
-func (tx *AccessListTx) Data() []byte            { return common.CopyBytes(tx.Payload) }
-func (tx *AccessListTx) Gas() uint64             { return tx.GasLimit }
-func (tx *AccessListTx) GasPrice() *big.Int      { return new(big.Int).Set(tx.Price) }
-func (tx *AccessListTx) Value() *big.Int         { return new(big.Int).Set(tx.Amount) }
-func (tx *AccessListTx) Nonce() uint64           { return tx.AccountNonce }
+// accessors for innerTx.
 
-// To returns the recipient address of the transaction.
-// It returns nil if the transaction is a contract creation.
-func (tx *AccessListTx) To() *common.Address {
-	if tx.Recipient == nil {
-		return nil
-	}
-	to := *tx.Recipient
-	return &to
-}
+func (tx *AccessListTx) txType() byte            { return AccessListTxType }
+func (tx *AccessListTx) chainID() *big.Int       { return tx.Chain }
+func (tx *AccessListTx) protected() bool         { return true }
+func (tx *AccessListTx) accessList() *AccessList { return tx.Accesses }
+func (tx *AccessListTx) data() []byte            { return tx.Payload }
+func (tx *AccessListTx) gas() uint64             { return tx.GasLimit }
+func (tx *AccessListTx) gasPrice() *big.Int      { return tx.Price }
+func (tx *AccessListTx) value() *big.Int         { return tx.Amount }
+func (tx *AccessListTx) nonce() uint64           { return tx.AccountNonce }
+func (tx *AccessListTx) to() *common.Address     { return tx.Recipient }
 
-// RawSignatureValues returns the V, R, S signature values of the transaction.
-// The return values should not be modified by the caller.
-func (tx *AccessListTx) RawSignatureValues() (v, r, s *big.Int) {
-	return tx.V, tx.R, tx.S
-}
+func (tx *AccessListTx) rawSignatureValues() (v, r, s *big.Int) { return tx.V, tx.R, tx.S }

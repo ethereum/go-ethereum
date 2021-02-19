@@ -57,27 +57,17 @@ type Transaction struct {
 
 // innerTx is the underlying data of a transaction.
 type innerTx interface {
-	Type() byte
+	txType() byte
 
-	ChainId() *big.Int
-	Protected() bool
-	AccessList() *AccessList
-	Data() []byte
-	Gas() uint64
-	GasPrice() *big.Int
-	Value() *big.Int
-	Nonce() uint64
-	To() *common.Address
-	RawSignatureValues() (v, r, s *big.Int)
-}
-
-func isProtectedV(V *big.Int) bool {
-	if V.BitLen() <= 8 {
-		v := V.Uint64()
-		return v != 27 && v != 28 && v != 1 && v != 0
-	}
-	// anything not 27 or 28 is considered protected
-	return true
+	chainID() *big.Int
+	accessList() *AccessList
+	data() []byte
+	gas() uint64
+	gasPrice() *big.Int
+	value() *big.Int
+	nonce() uint64
+	to() *common.Address
+	rawSignatureValues() (v, r, s *big.Int)
 }
 
 // EncodeRLP implements rlp.Encoder
@@ -182,7 +172,7 @@ func (tx *Transaction) decodeTyped(b []byte) (innerTx, error) {
 
 // setDecoded sets the inner transaction and size after decoding.
 func (tx *Transaction) setDecoded(inner innerTx, size int) {
-	tx.typ = inner.Type()
+	tx.typ = inner.txType()
 	tx.inner = inner
 	tx.time = time.Now()
 	if size > 0 {
@@ -216,35 +206,70 @@ func sanityCheckSignature(v *big.Int, r *big.Int, s *big.Int, maybeProtected boo
 	return nil
 }
 
-func (tx *Transaction) Type() uint8             { return tx.typ }
-func (tx *Transaction) ChainId() *big.Int       { return tx.inner.ChainId() }
-func (tx *Transaction) Protected() bool         { return tx.inner.Protected() }
-func (tx *Transaction) Data() []byte            { return tx.inner.Data() }
-func (tx *Transaction) AccessList() *AccessList { return tx.inner.AccessList() }
-func (tx *Transaction) Gas() uint64             { return tx.inner.Gas() }
-func (tx *Transaction) GasPrice() *big.Int      { return new(big.Int).Set(tx.inner.GasPrice()) }
-func (tx *Transaction) Value() *big.Int         { return new(big.Int).Set(tx.inner.Value()) }
-func (tx *Transaction) Nonce() uint64           { return tx.inner.Nonce() }
-func (tx *Transaction) To() *common.Address     { return tx.inner.To() }
+func isProtectedV(V *big.Int) bool {
+	if V.BitLen() <= 8 {
+		v := V.Uint64()
+		return v != 27 && v != 28 && v != 1 && v != 0
+	}
+	// anything not 27 or 28 is considered protected
+	return true
+}
 
+// Protected says whether the transaction is replay-protected.
+func (tx *Transaction) Protected() bool {
+	switch tx := tx.inner.(type) {
+	case *LegacyTx:
+		return tx.V != nil && isProtectedV(tx.V)
+	default:
+		return true
+	}
+}
+
+func (tx *Transaction) Type() uint8             { return tx.typ }
+func (tx *Transaction) ChainId() *big.Int       { return tx.inner.chainID() }
+func (tx *Transaction) Data() []byte            { return tx.inner.data() }
+func (tx *Transaction) AccessList() *AccessList { return tx.inner.accessList() }
+func (tx *Transaction) Gas() uint64             { return tx.inner.gas() }
+func (tx *Transaction) GasPrice() *big.Int      { return new(big.Int).Set(tx.inner.gasPrice()) }
+func (tx *Transaction) Value() *big.Int         { return new(big.Int).Set(tx.inner.value()) }
+func (tx *Transaction) Nonce() uint64           { return tx.inner.nonce() }
+
+// To returns the recipient address of the transaction.
+// For contract-creation transactions, To returns nil.
+func (tx *Transaction) To() *common.Address {
+	// Copy the pointed-to address.
+	ito := tx.inner.to()
+	if ito == nil {
+		return nil
+	}
+	cpy := *ito
+	return &cpy
+}
+
+// Cost returns gas * gasPrice + value.
 func (tx *Transaction) Cost() *big.Int {
 	total := new(big.Int).Mul(tx.GasPrice(), new(big.Int).SetUint64(tx.Gas()))
 	total.Add(total, tx.Value())
 	return total
 }
 
+// RawSignatureValues returns the V, R, S signature values of the transaction.
+// The return values should not be modified by the caller.
 func (tx *Transaction) RawSignatureValues() (v, r, s *big.Int) {
-	return tx.inner.RawSignatureValues()
+	return tx.inner.rawSignatureValues()
 }
 
+// GasPriceCmp compares the gas prices of two transactions.
 func (tx *Transaction) GasPriceCmp(other *Transaction) int {
-	return tx.inner.GasPrice().Cmp(other.GasPrice())
+	return tx.inner.gasPrice().Cmp(other.GasPrice())
 }
 
+// GasPriceIntCmp compares the gas price of the transaction against the given price.
 func (tx *Transaction) GasPriceIntCmp(other *big.Int) int {
-	return tx.inner.GasPrice().Cmp(other)
+	return tx.inner.gasPrice().Cmp(other)
 }
 
+// Hash returns the transaction hash.
 func (tx *Transaction) Hash() common.Hash {
 	if hash := tx.hash.Load(); hash != nil {
 		return hash.(common.Hash)

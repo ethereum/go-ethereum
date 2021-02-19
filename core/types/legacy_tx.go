@@ -73,28 +73,18 @@ func newLegacyTx(nonce uint64, to *common.Address, amount *big.Int, gasLimit uin
 	}
 }
 
-func (tx *LegacyTx) Type() byte              { return LegacyTxType }
-func (tx *LegacyTx) ChainId() *big.Int       { return deriveChainId(tx.V) }
-func (tx *LegacyTx) Protected() bool         { return isProtectedV(tx.V) }
-func (tx *LegacyTx) AccessList() *AccessList { return nil }
-func (tx *LegacyTx) Data() []byte            { return common.CopyBytes(tx.Payload) }
-func (tx *LegacyTx) Gas() uint64             { return tx.GasLimit }
-func (tx *LegacyTx) GasPrice() *big.Int      { return new(big.Int).Set(tx.Price) }
-func (tx *LegacyTx) Value() *big.Int         { return new(big.Int).Set(tx.Amount) }
-func (tx *LegacyTx) Nonce() uint64           { return tx.AccountNonce }
+// accessors for innerTx.
 
-// To returns the recipient address of the transaction.
-// It returns nil if the transaction is a contract creation.
-func (tx *LegacyTx) To() *common.Address {
-	if tx.Recipient == nil {
-		return nil
-	}
-	to := *tx.Recipient
-	return &to
-}
+func (tx *LegacyTx) txType() byte            { return LegacyTxType }
+func (tx *LegacyTx) chainID() *big.Int       { return deriveChainId(tx.V) }
+func (tx *LegacyTx) accessList() *AccessList { return nil }
+func (tx *LegacyTx) data() []byte            { return tx.Payload }
+func (tx *LegacyTx) gas() uint64             { return tx.GasLimit }
+func (tx *LegacyTx) gasPrice() *big.Int      { return tx.Price }
+func (tx *LegacyTx) value() *big.Int         { return tx.Amount }
+func (tx *LegacyTx) nonce() uint64           { return tx.AccountNonce }
+func (tx *LegacyTx) to() *common.Address     { return tx.Recipient }
 
-// RawSignatureValues returns the V, R, S signature values of the transaction.
-// The return values should not be modified by the caller.
-func (tx *LegacyTx) RawSignatureValues() (v, r, s *big.Int) {
+func (tx *LegacyTx) rawSignatureValues() (v, r, s *big.Int) {
 	return tx.V, tx.R, tx.S
 }
