@@ -101,7 +101,8 @@ type task struct {
 	block     *types.Block
 	createdAt time.Time
 
-	profit *big.Int
+	profit      *big.Int
+	isFlashbots bool
 }
 
 const (
@@ -184,6 +185,8 @@ type worker struct {
 	// External functions
 	isLocalBlock func(block *types.Block) bool // Function used to determine whether the specified block is mined by local miner.
 
+	flashbots *flashbotsData
+
 	// Test hooks
 	newTaskHook  func(*task)                        // Method to call upon receiving a new sealing task.
 	skipSealHook func(*task) bool                   // Method to decide whether skipping the sealing.
@@ -191,7 +194,30 @@ type worker struct {
 	resubmitHook func(time.Duration, time.Duration) // Method to call upon updating resubmitting interval.
 }
 
-func newWorker(config *Config, chainConfig *params.ChainConfig, engine consensus.Engine, eth Backend, mux *event.TypeMux, isLocalBlock func(*types.Block) bool, init bool) *worker {
+func newWorker(config *Config, chainConfig *params.ChainConfig, engine consensus.Engine, eth Backend, mux *event.TypeMux, isLocalBlock func(*types.Block) bool, init bool, flashbots *flashbotsData) *worker {
+	exitCh := make(chan struct{})
+	taskCh := make(chan *task)
+	if flashbots.isFlashbots {
+		// publish to the flashbots queue
+		taskCh = flashbots.queue
+	} else {
+		// read from the flashbots queue
+		go func() {
+			for {
+				select {
+				case flashbotsTask := <-flashbots.queue:
+					select {
+					case taskCh <- flashbotsTask:
+					case <-exitCh:
+						return
+					}
+				case <-exitCh:
+					return
+				}
+			}
+		}()
+	}
+
 	worker := &worker{
 		config:             config,
 		chainConfig:        chainConfig,
@@ -208,12 +234,13 @@ func newWorker(config *Config, chainConfig *params.ChainConfig, engine consensus
 		chainHeadCh:        make(chan core.ChainHeadEvent, chainHeadChanSize),
 		chainSideCh:        make(chan core.ChainSideEvent, chainSideChanSize),
 		newWorkCh:          make(chan *newWorkReq),
-		taskCh:             make(chan *task),
+		taskCh:             taskCh,
 		resultCh:           make(chan *types.Block, resultQueueSize),
-		exitCh:             make(chan struct{}),
+		exitCh:             exitCh,
 		startCh:            make(chan struct{}, 1),
 		resubmitIntervalCh: make(chan time.Duration),
 		resubmitAdjustCh:   make(chan *intervalAdjust, resubmitAdjustChanSize),
+		flashbots:          flashbots,
 	}
 	// Subscribe NewTxsEvent for tx pool
 	worker.txsSub = eth.TxPool().SubscribeNewTxsEvent(worker.txsCh)
@@ -230,8 +257,11 @@ func newWorker(config *Config, chainConfig *params.ChainConfig, engine consensus
 
 	go worker.mainLoop()
 	go worker.newWorkLoop(recommit)
-	go worker.resultLoop()
-	go worker.taskLoop()
+	if !flashbots.isFlashbots {
+		// only mine if not flashbots
+		go worker.resultLoop()
+		go worker.taskLoop()
+	}
 
 	// Submit first work to initialize pending state.
 	if init {
@@ -588,7 +618,7 @@ func (w *worker) taskLoop() {
 			// Interrupt previous sealing operation
 			interrupt()
 			stopCh, prev = make(chan struct{}), sealHash
-			log.Info("Proposed miner block", "blockNumber", prevNumber, "profit", prevProfit, "sealhash", sealHash)
+			log.Info("Proposed miner block", "blockNumber", prevNumber, "profit", prevProfit, "isFlashbots", task.isFlashbots, "sealhash", sealHash)
 			if w.skipSealHook != nil && w.skipSealHook(task) {
 				continue
 			}
@@ -673,13 +703,10 @@ func (w *worker) resultLoop() {
 }
 
 func (w *worker) generateEnv(parent *types.Block, header *types.Header) (*environment, error) {
-	// Retrieve the parent state to execute on top and start a prefetcher for
-	// the miner to speed block sealing up a bit
 	state, err := w.chain.StateAt(parent.Root())
 	if err != nil {
 		return nil, err
 	}
-	state.StartPrefetcher("miner")
 
 	env := &environment{
 		signer:    types.MakeSigner(w.chainConfig, header.Number),
@@ -707,6 +734,7 @@ func (w *worker) generateEnv(parent *types.Block, header *types.Header) (*enviro
 // makeCurrent creates a new environment for the current cycle.
 func (w *worker) makeCurrent(parent *types.Block, header *types.Header) error {
 	env, err := w.generateEnv(parent, header)
+	env.state.StartPrefetcher("miner")
 	if err != nil {
 		return err
 	}
@@ -1131,7 +1159,11 @@ func (w *worker) commitNewWork(interrupt *int32, noempty bool, timestamp int64) 
 	// Short circuit if there is no available pending transactions or bundles.
 	// But if we disable empty precommit already, ignore it. Since
 	// empty block is necessary to keep the liveness of the network.
-	if len(pending) == 0 && atomic.LoadUint32(&w.noempty) == 0 && len(w.eth.TxPool().AllMevBundles()) == 0 {
+	noBundles := true
+	if w.flashbots.isFlashbots && len(w.eth.TxPool().AllMevBundles()) > 0 {
+		noBundles = false
+	}
+	if len(pending) == 0 && atomic.LoadUint32(&w.noempty) == 0 && noBundles {
 		w.updateSnapshot()
 		return
 	}
@@ -1143,15 +1175,17 @@ func (w *worker) commitNewWork(interrupt *int32, noempty bool, timestamp int64) 
 			localTxs[account] = txs
 		}
 	}
-	bundles, err := w.eth.TxPool().MevBundles(header.Number, header.Time)
-	if err != nil {
-		log.Error("Failed to fetch pending transactions", "err", err)
-		return
-	}
-	maxBundle, bundlePrice, ethToCoinbase, gasUsed := w.findMostProfitableBundle(bundles, w.coinbase, parent, header)
-	log.Info("Flashbots bundle", "ethToCoinbase", ethToCoinbase, "gasUsed", gasUsed, "bundlePrice", bundlePrice, "bundleLength", len(maxBundle))
-	if w.commitBundle(maxBundle, w.coinbase, interrupt) {
-		return
+	if w.flashbots.isFlashbots {
+		bundles, err := w.eth.TxPool().MevBundles(header.Number, header.Time)
+		if err != nil {
+			log.Error("Failed to fetch pending transactions", "err", err)
+			return
+		}
+		maxBundle, bundlePrice, ethToCoinbase, gasUsed := w.findMostProfitableBundle(bundles, w.coinbase, parent, header)
+		log.Info("Flashbots bundle", "ethToCoinbase", ethToCoinbase, "gasUsed", gasUsed, "bundlePrice", bundlePrice, "bundleLength", len(maxBundle))
+		if w.commitBundle(maxBundle, w.coinbase, interrupt) {
+			return
+		}
 	}
 	if len(localTxs) > 0 {
 		txs := types.NewTransactionsByPriceAndNonce(w.current.signer, localTxs, header.BaseFee)
@@ -1183,12 +1217,13 @@ func (w *worker) commit(uncles []*types.Header, interval func(), update bool, st
 			interval()
 		}
 		select {
-		case w.taskCh <- &task{receipts: receipts, state: s, block: block, createdAt: time.Now(), profit: w.current.profit}:
+		case w.taskCh <- &task{receipts: receipts, state: s, block: block, createdAt: time.Now(), profit: w.current.profit, isFlashbots: w.flashbots.isFlashbots}:
 			w.unconfirmed.Shift(block.NumberU64() - 1)
 			log.Info("Commit new mining work", "number", block.Number(), "sealhash", w.engine.SealHash(block.Header()),
 				"uncles", len(uncles), "txs", w.current.tcount,
 				"gas", block.GasUsed(), "fees", totalFees(block, receipts),
-				"elapsed", common.PrettyDuration(time.Since(start)))
+				"elapsed", common.PrettyDuration(time.Since(start)),
+				"isFlashbots", w.flashbots.isFlashbots)
 
 		case <-w.exitCh:
 			log.Info("Worker has exited")
@@ -1232,7 +1267,6 @@ func (w *worker) findMostProfitableBundle(bundles []types.Transactions, coinbase
 // Done by calculating all gas spent, adding transfers to the coinbase, and then dividing by gas used
 func (w *worker) computeBundleGas(bundle types.Transactions, parent *types.Block, header *types.Header) (*big.Int, uint64, error) {
 	env, err := w.generateEnv(parent, header)
-	defer env.state.StopPrefetcher()
 	if err != nil {
 		return nil, 0, err
 	}
