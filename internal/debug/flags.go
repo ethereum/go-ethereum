@@ -100,7 +100,6 @@ var Flags = []cli.Flag{
 }
 
 var (
-	ostream log.Handler
 	glogger *log.GlogHandler
 )
 
