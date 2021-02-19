@@ -25,7 +25,7 @@ import (
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/crypto"
-	lpc "github.com/ethereum/go-ethereum/les/lespay/client"
+	vfc "github.com/ethereum/go-ethereum/les/vflux/client"
 	"github.com/ethereum/go-ethereum/p2p/enode"
 	"github.com/ethereum/go-ethereum/rlp"
 )
@@ -89,7 +89,7 @@ type requestInfo struct {
 	refBasketFirst, refBasketRest float64
 }
 
-// reqMapping maps an LES request to one or two lespay service vector entries.
+// reqMapping maps an LES request to one or two vflux service vector entries.
 // If rest != -1 and the request type is used with amounts larger than one then the
 // first one of the multi-request is mapped to first while the rest is mapped to rest.
 type reqMapping struct {
@@ -98,7 +98,7 @@ type reqMapping struct {
 
 var (
 	// requests describes the available LES request types and their initializing amounts
-	// in the lespay/client.ValueTracker reference basket. Initial values are estimates
+	// in the vfc.ValueTracker reference basket. Initial values are estimates
 	// based on the same values as the server's default cost estimates (reqAvgTimeCost).
 	requests = map[uint64]requestInfo{
 		GetBlockHeadersMsg:     {"GetBlockHeaders", MaxHeaderFetch, 10, 1000},
@@ -110,25 +110,25 @@ var (
 		SendTxV2Msg:            {"SendTxV2", MaxTxSend, 1, 0},
 		GetTxStatusMsg:         {"GetTxStatus", MaxTxStatus, 10, 0},
 	}
-	requestList    []lpc.RequestInfo
+	requestList    []vfc.RequestInfo
 	requestMapping map[uint32]reqMapping
 )
 
-// init creates a request list and mapping between protocol message codes and lespay
+// init creates a request list and mapping between protocol message codes and vflux
 // service vector indices.
 func init() {
 	requestMapping = make(map[uint32]reqMapping)
 	for code, req := range requests {
 		cost := reqAvgTimeCost[code]
 		rm := reqMapping{len(requestList), -1}
-		requestList = append(requestList, lpc.RequestInfo{
+		requestList = append(requestList, vfc.RequestInfo{
 			Name:       req.name + ".first",
 			InitAmount: req.refBasketFirst,
 			InitValue:  float64(cost.baseCost + cost.reqCost),
 		})
 		if req.refBasketRest != 0 {
 			rm.rest = len(requestList)
-			requestList = append(requestList, lpc.RequestInfo{
+			requestList = append(requestList, vfc.RequestInfo{
 				Name:       req.name + ".rest",
 				InitAmount: req.refBasketRest,
 				InitValue:  float64(cost.reqCost),

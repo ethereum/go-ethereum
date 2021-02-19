@@ -36,7 +36,7 @@ import (
 	"github.com/ethereum/go-ethereum/eth/gasprice"
 	"github.com/ethereum/go-ethereum/event"
 	"github.com/ethereum/go-ethereum/internal/ethapi"
-	lpc "github.com/ethereum/go-ethereum/les/lespay/client"
+	vfc "github.com/ethereum/go-ethereum/les/vflux/client"
 	"github.com/ethereum/go-ethereum/light"
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/node"
@@ -58,7 +58,7 @@ type LightEthereum struct {
 	txPool         *light.TxPool
 	blockchain     *light.LightChain
 	serverPool     *serverPool
-	valueTracker   *lpc.ValueTracker
+	valueTracker   *vfc.ValueTracker
 	dialCandidates enode.Iterator
 	pruner         *pruner
 
@@ -108,7 +108,7 @@ func New(stack *node.Node, config *ethconfig.Config) (*LightEthereum, error) {
 		engine:         ethconfig.CreateConsensusEngine(stack, chainConfig, &config.Ethash, nil, false, chainDb),
 		bloomRequests:  make(chan chan *bloombits.Retrieval),
 		bloomIndexer:   core.NewBloomIndexer(chainDb, params.BloomBitsBlocksClient, params.HelperTrieConfirmations),
-		valueTracker:   lpc.NewValueTracker(lespayDb, &mclock.System{}, requestList, time.Minute, 1/float64(time.Hour), 1/float64(time.Hour*100), 1/float64(time.Hour*1000)),
+		valueTracker:   vfc.NewValueTracker(lespayDb, &mclock.System{}, requestList, time.Minute, 1/float64(time.Hour), 1/float64(time.Hour*100), 1/float64(time.Hour*1000)),
 		p2pServer:      stack.Server(),
 		p2pConfig:      &stack.Config().P2P,
 	}
@@ -193,18 +193,18 @@ func New(stack *node.Node, config *ethconfig.Config) (*LightEthereum, error) {
 }
 
 // vtSubscription implements serverPeerSubscriber
-type vtSubscription lpc.ValueTracker
+type vtSubscription vfc.ValueTracker
 
 // registerPeer implements serverPeerSubscriber
 func (v *vtSubscription) registerPeer(p *serverPeer) {
-	vt := (*lpc.ValueTracker)(v)
+	vt := (*vfc.ValueTracker)(v)
 	p.setValueTracker(vt, vt.Register(p.ID()))
 	p.updateVtParams()
 }
 
 // unregisterPeer implements serverPeerSubscriber
 func (v *vtSubscription) unregisterPeer(p *serverPeer) {
-	vt := (*lpc.ValueTracker)(v)
+	vt := (*vfc.ValueTracker)(v)
 	vt.Unregister(p.ID())
 	p.setValueTracker(nil, nil)
 }
@@ -263,9 +263,9 @@ func (s *LightEthereum) APIs() []rpc.API {
 			Service:   NewPrivateLightAPI(&s.lesCommons),
 			Public:    false,
 		}, {
-			Namespace: "lespay",
+			Namespace: "vflux",
 			Version:   "1.0",
-			Service:   lpc.NewPrivateClientAPI(s.valueTracker),
+			Service:   vfc.NewPrivateClientAPI(s.valueTracker),
 			Public:    false,
 		},
 	}...)

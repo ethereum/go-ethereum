@@ -23,8 +23,8 @@ import (
 
 	"github.com/ethereum/go-ethereum/common/mclock"
 	"github.com/ethereum/go-ethereum/ethdb"
-	lps "github.com/ethereum/go-ethereum/les/lespay/server"
 	"github.com/ethereum/go-ethereum/les/utils"
+	vfs "github.com/ethereum/go-ethereum/les/vflux/server"
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/p2p/enode"
 	"github.com/ethereum/go-ethereum/p2p/enr"
@@ -64,17 +64,17 @@ const (
 // and negative banalce. Boeth positive balance and negative balance will decrease
 // exponentially. If the balance is low enough, then the record will be dropped.
 type clientPool struct {
-	lps.BalanceTrackerSetup
-	lps.PriorityPoolSetup
+	vfs.BalanceTrackerSetup
+	vfs.PriorityPoolSetup
 	lock       sync.Mutex
 	clock      mclock.Clock
 	closed     bool
 	removePeer func(enode.ID)
 	ns         *nodestate.NodeStateMachine
-	pp         *lps.PriorityPool
-	bt         *lps.BalanceTracker
+	pp         *vfs.PriorityPool
+	bt         *vfs.BalanceTracker
 
-	defaultPosFactors, defaultNegFactors lps.PriceFactors
+	defaultPosFactors, defaultNegFactors vfs.PriceFactors
 	posExpTC, negExpTC                   uint64
 	minCap                               uint64 // The minimal capacity value allowed for any client
 	connectedBias                        time.Duration
@@ -101,7 +101,7 @@ type clientInfo struct {
 	peer                clientPoolPeer
 	connected, priority bool
 	connectedAt         mclock.AbsTime
-	balance             *lps.NodeBalance
+	balance             *vfs.NodeBalance
 }
 
 // newClientPool creates a new client pool
@@ -115,8 +115,8 @@ func newClientPool(ns *nodestate.NodeStateMachine, lespayDb ethdb.Database, minC
 		connectedBias:       connectedBias,
 		removePeer:          removePeer,
 	}
-	pool.bt = lps.NewBalanceTracker(ns, balanceTrackerSetup, lespayDb, clock, &utils.Expirer{}, &utils.Expirer{})
-	pool.pp = lps.NewPriorityPool(ns, priorityPoolSetup, clock, minCap, connectedBias, 4)
+	pool.bt = vfs.NewBalanceTracker(ns, balanceTrackerSetup, lespayDb, clock, &utils.Expirer{}, &utils.Expirer{})
+	pool.pp = vfs.NewPriorityPool(ns, priorityPoolSetup, clock, minCap, connectedBias, 4)
 
 	// set default expiration constants used by tests
 	// Note: server overwrites this if token sale is active
@@ -221,7 +221,7 @@ func (f *clientPool) connect(peer clientPoolPeer) (uint64, error) {
 	}
 	f.ns.SetField(node, clientInfoField, c)
 	f.ns.SetField(node, connAddressField, freeID)
-	if c.balance, _ = f.ns.GetField(node, f.BalanceField).(*lps.NodeBalance); c.balance == nil {
+	if c.balance, _ = f.ns.GetField(node, f.BalanceField).(*vfs.NodeBalance); c.balance == nil {
 		f.disconnect(peer)
 		return 0, nil
 	}
@@ -266,7 +266,7 @@ func (f *clientPool) disconnectNode(node *enode.Node) {
 }
 
 // setDefaultFactors sets the default price factors applied to subsequently connected clients
-func (f *clientPool) setDefaultFactors(posFactors, negFactors lps.PriceFactors) {
+func (f *clientPool) setDefaultFactors(posFactors, negFactors vfs.PriceFactors) {
 	f.lock.Lock()
 	defer f.lock.Unlock()
 
@@ -305,7 +305,7 @@ func (f *clientPool) setCapacity(node *enode.Node, freeID string, capacity uint6
 		c = &clientInfo{node: node}
 		f.ns.SetField(node, clientInfoField, c)
 		f.ns.SetField(node, connAddressField, freeID)
-		if c.balance, _ = f.ns.GetField(node, f.BalanceField).(*lps.NodeBalance); c.balance == nil {
+		if c.balance, _ = f.ns.GetField(node, f.BalanceField).(*vfs.NodeBalance); c.balance == nil {
 			log.Error("BalanceField is missing", "node", node.ID())
 			return 0, fmt.Errorf("BalanceField of %064x is missing", node.ID())
 		}
@@ -371,7 +371,7 @@ func (f *clientPool) forClients(ids []enode.ID, cb func(client *clientInfo)) {
 				c = &clientInfo{node: node}
 				f.ns.SetField(node, clientInfoField, c)
 				f.ns.SetField(node, connAddressField, "")
-				if c.balance, _ = f.ns.GetField(node, f.BalanceField).(*lps.NodeBalance); c.balance != nil {
+				if c.balance, _ = f.ns.GetField(node, f.BalanceField).(*vfs.NodeBalance); c.balance != nil {
 					cb(c)
 				} else {
 					log.Error("BalanceField is missing")
