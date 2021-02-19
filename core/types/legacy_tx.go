@@ -18,58 +18,79 @@ package types
 
 import (
 	"math/big"
-	"time"
 
 	"github.com/ethereum/go-ethereum/common"
 )
 
 type LegacyTx struct {
-	AccountNonce uint64          `json:"nonce"    gencodec:"required"`
-	Price        *big.Int        `json:"gasPrice" gencodec:"required"`
-	GasLimit     uint64          `json:"gas"      gencodec:"required"`
-	Recipient    *common.Address `json:"to"       rlp:"nil"` // nil means contract creation
-	Amount       *big.Int        `json:"value"    gencodec:"required"`
-	Payload      []byte          `json:"input"    gencodec:"required"`
+	AccountNonce uint64
+	Price        *big.Int
+	GasLimit     uint64
+	Recipient    *common.Address `rlp:"nil"` // nil means contract creation
+	Amount       *big.Int
+	Payload      []byte
 
-	// Signature values
-	V *big.Int `json:"v" gencodec:"required"`
-	R *big.Int `json:"r" gencodec:"required"`
-	S *big.Int `json:"s" gencodec:"required"`
+	// Signature values.
+	V *big.Int
+	R *big.Int
+	S *big.Int
 }
 
+// NewTransaction creates an unsigned legacy transaction.
+// Deprecated: use NewTx instead.
 func NewTransaction(nonce uint64, to common.Address, amount *big.Int, gasLimit uint64, gasPrice *big.Int, data []byte) *Transaction {
-	return newLegacyTx(nonce, &to, amount, gasLimit, gasPrice, data)
-}
-
-func NewContractCreation(nonce uint64, amount *big.Int, gasLimit uint64, gasPrice *big.Int, data []byte) *Transaction {
-	return newLegacyTx(nonce, nil, amount, gasLimit, gasPrice, data)
-}
-
-func newLegacyTx(nonce uint64, to *common.Address, amount *big.Int, gasLimit uint64, gasPrice *big.Int, data []byte) *Transaction {
-	if len(data) > 0 {
-		data = common.CopyBytes(data)
-	}
-	i := LegacyTx{
+	return NewTx(&LegacyTx{
 		AccountNonce: nonce,
-		Recipient:    to,
-		Payload:      data,
-		Amount:       new(big.Int),
+		Recipient:    &to,
+		Amount:       amount,
 		GasLimit:     gasLimit,
-		Price:        new(big.Int),
-		V:            new(big.Int),
-		R:            new(big.Int),
-		S:            new(big.Int),
+		Price:        gasPrice,
+		Payload:      data,
+	})
+}
+
+// NewContractCreation creates an unsigned legacy transaction.
+// Deprecated: use NewTx instead.
+func NewContractCreation(nonce uint64, amount *big.Int, gasLimit uint64, gasPrice *big.Int, data []byte) *Transaction {
+	return NewTx(&LegacyTx{
+		AccountNonce: nonce,
+		Amount:       amount,
+		GasLimit:     gasLimit,
+		Price:        gasPrice,
+		Payload:      data,
+	})
+}
+
+// copy creates a deep copy of the transaction data and initializes all fields.
+func (tx *LegacyTx) copy() TxData {
+	cpy := &LegacyTx{
+		AccountNonce: tx.AccountNonce,
+		Recipient:    tx.Recipient, // TODO: copy pointed-to address
+		Payload:      common.CopyBytes(tx.Payload),
+		GasLimit:     tx.GasLimit,
+		// These are initialized below.
+		Amount: new(big.Int),
+		Price:  new(big.Int),
+		V:      new(big.Int),
+		R:      new(big.Int),
+		S:      new(big.Int),
 	}
-	if amount != nil {
-		i.Amount.Set(amount)
+	if tx.Amount != nil {
+		cpy.Amount.Set(tx.Amount)
 	}
-	if gasPrice != nil {
-		i.Price.Set(gasPrice)
+	if tx.Price != nil {
+		cpy.Price.Set(tx.Price)
 	}
-	return &Transaction{
-		inner: &i,
-		time:  time.Now(),
+	if tx.V != nil {
+		cpy.V.Set(tx.V)
 	}
+	if tx.R != nil {
+		cpy.R.Set(tx.R)
+	}
+	if tx.S != nil {
+		cpy.S.Set(tx.S)
+	}
+	return cpy
 }
 
 // accessors for innerTx.

@@ -1501,7 +1501,7 @@ type SendTxArgs struct {
 	ChainID    *hexutil.Big      `json:"chainId,omitempty"`
 }
 
-// setDefaults is a helper function that fills in default values for unspecified tx fields.
+// setDefaults fills in default values for unspecified tx fields.
 func (args *SendTxArgs) setDefaults(ctx context.Context, b Backend) error {
 	if args.GasPrice == nil {
 		price, err := b.SuggestPrice(ctx)
@@ -1535,6 +1535,7 @@ func (args *SendTxArgs) setDefaults(ctx context.Context, b Backend) error {
 			return errors.New(`contract creation without any data provided`)
 		}
 	}
+
 	// Estimate the gas usage if necessary.
 	if args.Gas == nil {
 		// For backwards-compatibility reason, we try both input and data
@@ -1566,6 +1567,8 @@ func (args *SendTxArgs) setDefaults(ctx context.Context, b Backend) error {
 	return nil
 }
 
+// toTransaction converts the arguments to a transaction.
+// This assumes that setDefaults has been called.
 func (args *SendTxArgs) toTransaction() *types.Transaction {
 	var input []byte
 	if args.Input != nil {
@@ -1573,19 +1576,30 @@ func (args *SendTxArgs) toTransaction() *types.Transaction {
 	} else if args.Data != nil {
 		input = *args.Data
 	}
-	if args.AccessList == nil {
-		// Legacy tx
-		if args.To == nil {
-			return types.NewContractCreation(uint64(*args.Nonce), (*big.Int)(args.Value), uint64(*args.Gas), (*big.Int)(args.GasPrice), input)
-		}
-		return types.NewTransaction(uint64(*args.Nonce), *args.To, (*big.Int)(args.Value), uint64(*args.Gas), (*big.Int)(args.GasPrice), input)
-	}
-	// Access list tx
-	if args.To == nil {
-		return types.NewAccessListContractCreation((*big.Int)(args.ChainID), uint64(*args.Nonce), (*big.Int)(args.Value), uint64(*args.Gas), (*big.Int)(args.GasPrice), input, args.AccessList)
-	}
-	return types.NewAccessListTransaction((*big.Int)(args.ChainID), uint64(*args.Nonce), *args.To, (*big.Int)(args.Value), uint64(*args.Gas), (*big.Int)(args.GasPrice), input, args.AccessList)
 
+	var data types.TxData
+	if args.AccessList == nil {
+		data = &types.LegacyTx{
+			Recipient:    args.To,
+			AccountNonce: uint64(*args.Nonce),
+			GasLimit:     uint64(*args.Gas),
+			Price:        (*big.Int)(args.GasPrice),
+			Amount:       (*big.Int)(args.Value),
+			Payload:      input,
+		}
+	} else {
+		data = &types.AccessListTx{
+			Recipient:    args.To,
+			Chain:        (*big.Int)(args.ChainID),
+			AccountNonce: uint64(*args.Nonce),
+			GasLimit:     uint64(*args.Gas),
+			Price:        (*big.Int)(args.GasPrice),
+			Amount:       (*big.Int)(args.Value),
+			Payload:      input,
+			Accesses:     args.AccessList,
+		}
+	}
+	return types.NewTx(data)
 }
 
 // SubmitTransaction is a helper function that submits tx to txPool and logs a message.

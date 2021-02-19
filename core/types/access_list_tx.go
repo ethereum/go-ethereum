@@ -18,7 +18,6 @@ package types
 
 import (
 	"math/big"
-	"time"
 
 	"github.com/ethereum/go-ethereum/common"
 )
@@ -40,62 +39,60 @@ func (al *AccessList) StorageKeys() int {
 }
 
 type AccessListTx struct {
-	Chain        *big.Int        `json:"chainId"    gencodec:"required"`
-	AccountNonce uint64          `json:"nonce"      gencodec:"required"`
-	Price        *big.Int        `json:"gasPrice"   gencodec:"required"`
-	GasLimit     uint64          `json:"gas"        gencodec:"required"`
-	Recipient    *common.Address `json:"to"         rlp:"nil"` // nil means contract creation
-	Amount       *big.Int        `json:"value"      gencodec:"required"`
-	Payload      []byte          `json:"input"      gencodec:"required"`
-	Accesses     *AccessList     `json:"accessList" gencodec:"required"`
+	Chain        *big.Int
+	AccountNonce uint64
+	Price        *big.Int
+	GasLimit     uint64
+	Recipient    *common.Address `rlp:"nil"` // nil means contract creation
+	Amount       *big.Int
+	Payload      []byte
+	Accesses     *AccessList
 
 	// Signature values
-	V *big.Int `json:"v" gencodec:"required"`
-	R *big.Int `json:"r" gencodec:"required"`
-	S *big.Int `json:"s" gencodec:"required"`
+	V *big.Int
+	R *big.Int
+	S *big.Int
 }
 
-func NewAccessListTransaction(chainId *big.Int, nonce uint64, to common.Address, amount *big.Int, gasLimit uint64, gasPrice *big.Int, data []byte, accesses *AccessList) *Transaction {
-	return newAccessListTx(chainId, nonce, &to, amount, gasLimit, gasPrice, data, accesses)
-}
-
-func NewAccessListContractCreation(chainId *big.Int, nonce uint64, amount *big.Int, gasLimit uint64, gasPrice *big.Int, data []byte, accesses *AccessList) *Transaction {
-	return newAccessListTx(chainId, nonce, nil, amount, gasLimit, gasPrice, data, accesses)
-}
-
-func newAccessListTx(chainId *big.Int, nonce uint64, to *common.Address, amount *big.Int, gasLimit uint64, gasPrice *big.Int, data []byte, accesses *AccessList) *Transaction {
-	if len(data) > 0 {
-		data = common.CopyBytes(data)
+// copy creates a deep copy of the transaction data and initializes all fields.
+func (tx *AccessListTx) copy() TxData {
+	cpy := &AccessListTx{
+		AccountNonce: tx.AccountNonce,
+		Recipient:    tx.Recipient, // TODO: copy pointed-to address
+		Payload:      common.CopyBytes(tx.Payload),
+		GasLimit:     tx.GasLimit,
+		// These are copied below.
+		Accesses: new(AccessList),
+		Amount:   new(big.Int),
+		Chain:    new(big.Int),
+		Price:    new(big.Int),
+		V:        new(big.Int),
+		R:        new(big.Int),
+		S:        new(big.Int),
 	}
-	i := AccessListTx{
-		Chain:        new(big.Int),
-		AccountNonce: nonce,
-		Recipient:    to,
-		Payload:      data,
-		Accesses:     &AccessList{},
-		Amount:       new(big.Int),
-		GasLimit:     gasLimit,
-		Price:        new(big.Int),
-		V:            new(big.Int),
-		R:            new(big.Int),
-		S:            new(big.Int),
+	if tx.Accesses != nil {
+		// TODO: deep copy
+		cpy.Accesses = tx.Accesses
 	}
-	if chainId != nil {
-		i.Chain.Set(chainId)
+	if tx.Amount != nil {
+		cpy.Amount.Set(tx.Amount)
 	}
-	if amount != nil {
-		i.Amount.Set(amount)
+	if tx.Chain != nil {
+		cpy.Chain.Set(tx.Chain)
 	}
-	if gasPrice != nil {
-		i.Price.Set(gasPrice)
+	if tx.Price != nil {
+		cpy.Price.Set(tx.Price)
 	}
-	if accesses != nil {
-		i.Accesses = accesses
+	if tx.V != nil {
+		cpy.V.Set(tx.V)
 	}
-	return &Transaction{
-		inner: &i,
-		time:  time.Now(),
+	if tx.R != nil {
+		cpy.R.Set(tx.R)
 	}
+	if tx.S != nil {
+		cpy.S.Set(tx.S)
+	}
+	return cpy
 }
 
 // accessors for innerTx.

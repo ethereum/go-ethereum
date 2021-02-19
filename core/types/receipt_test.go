@@ -163,10 +163,29 @@ func encodeAsV3StoredReceiptRLP(want *Receipt) ([]byte, error) {
 // Tests that receipt data can be correctly derived from the contextual infos
 func TestDeriveFields(t *testing.T) {
 	// Create a few transactions to have receipts for
+	to2 := common.HexToAddress("0x2")
+	to3 := common.HexToAddress("0x3")
 	txs := Transactions{
-		NewContractCreation(1, big.NewInt(1), 1, big.NewInt(1), nil),
-		NewTransaction(2, common.HexToAddress("0x2"), big.NewInt(2), 2, big.NewInt(2), nil),
-		NewAccessListTransaction(big.NewInt(3), 3, common.HexToAddress("0x3"), big.NewInt(3), 3, big.NewInt(3), nil, nil),
+		NewTx(&LegacyTx{
+			AccountNonce: 1,
+			Amount:       big.NewInt(1),
+			GasLimit:     1,
+			Price:        big.NewInt(1),
+		}),
+		NewTx(&LegacyTx{
+			Recipient:    &to2,
+			AccountNonce: 2,
+			Amount:       big.NewInt(2),
+			GasLimit:     2,
+			Price:        big.NewInt(2),
+		}),
+		NewTx(&AccessListTx{
+			Recipient:    &to3,
+			AccountNonce: 3,
+			Amount:       big.NewInt(3),
+			GasLimit:     3,
+			Price:        big.NewInt(3),
+		}),
 	}
 	// Create the corresponding receipts
 	receipts := Receipts{

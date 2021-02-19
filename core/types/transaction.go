@@ -44,8 +44,9 @@ const (
 	AccessListTxType
 )
 
+// Transaction is an Ethereum transaction.
 type Transaction struct {
-	inner innerTx   // Consensus contents of a transaction
+	inner TxData    // Consensus contents of a transaction
 	time  time.Time // Time first seen locally (spam avoidance)
 
 	// caches
@@ -54,9 +55,19 @@ type Transaction struct {
 	from atomic.Value
 }
 
-// innerTx is the underlying data of a transaction.
-type innerTx interface {
-	txType() byte
+// NewTx creates a new transaction.
+func NewTx(inner TxData) *Transaction {
+	tx := new(Transaction)
+	tx.setDecoded(inner.copy(), 0)
+	return tx
+}
+
+// TxData is the underlying data of a transaction.
+//
+// This is implemented by LegacyTx and AccessListTx.
+type TxData interface {
+	txType() byte // returns the type ID
+	copy() TxData // creates a deep copy and initializes all fields
 
 	chainID() *big.Int
 	accessList() *AccessList
@@ -155,7 +166,7 @@ func (tx *Transaction) UnmarshalBinary(b []byte) error {
 }
 
 // decodeTyped decodes a typed transaction from the canonical format.
-func (tx *Transaction) decodeTyped(b []byte) (innerTx, error) {
+func (tx *Transaction) decodeTyped(b []byte) (TxData, error) {
 	if len(b) == 0 {
 		return nil, errEmptyTypedTx
 	}
@@ -170,7 +181,7 @@ func (tx *Transaction) decodeTyped(b []byte) (innerTx, error) {
 }
 
 // setDecoded sets the inner transaction and size after decoding.
-func (tx *Transaction) setDecoded(inner innerTx, size int) {
+func (tx *Transaction) setDecoded(inner TxData, size int) {
 	tx.inner = inner
 	tx.time = time.Now()
 	if size > 0 {
@@ -324,7 +335,7 @@ func (tx *Transaction) WithSignature(signer Signer, sig []byte) (*Transaction, e
 		return nil, err
 	}
 	// Copy inner transaction.
-	var cpy innerTx
+	var cpy TxData
 	switch inner := tx.inner.(type) {
 	case *LegacyTx:
 		cpy = &LegacyTx{

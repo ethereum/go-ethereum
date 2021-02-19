@@ -34,6 +34,8 @@ import (
 // The values in those tests are from the Transaction Tests
 // at github.com/ethereum/tests.
 var (
+	testAddr = common.HexToAddress("b94f5374fce5edbc8e2a8697c15331677e6ebf0b")
+
 	emptyTx = NewTransaction(
 		0,
 		common.HexToAddress("095e7baea6a6c7c4c2dfeb977efac326af552d87"),
@@ -43,7 +45,7 @@ var (
 
 	rightvrsTx, _ = NewTransaction(
 		3,
-		common.HexToAddress("b94f5374fce5edbc8e2a8697c15331677e6ebf0b"),
+		testAddr,
 		big.NewInt(10),
 		2000,
 		big.NewInt(1),
@@ -53,27 +55,17 @@ var (
 		common.Hex2Bytes("98ff921201554726367d2be8c804a7ff89ccf285ebc57dff8ae4c44b9c19ac4a8887321be575c8095f789dd4c743dfe42c1820f9231f98a962b210e3ac2452a301"),
 	)
 
-	emptyEip2718Tx = NewAccessListTransaction(
-		big.NewInt(1),
-		3,
-		common.HexToAddress("b94f5374fce5edbc8e2a8697c15331677e6ebf0b"),
-		big.NewInt(10),
-		25000,
-		big.NewInt(1),
-		common.FromHex("5544"),
-		nil,
-	)
+	emptyEip2718Tx = NewTx(&AccessListTx{
+		Chain:        big.NewInt(1),
+		AccountNonce: 3,
+		Recipient:    &testAddr,
+		Amount:       big.NewInt(10),
+		GasLimit:     25000,
+		Price:        big.NewInt(1),
+		Payload:      common.FromHex("5544"),
+	})
 
-	signedEip2718Tx, _ = NewAccessListTransaction(
-		big.NewInt(1),
-		3,
-		common.HexToAddress("b94f5374fce5edbc8e2a8697c15331677e6ebf0b"),
-		big.NewInt(10),
-		25000,
-		big.NewInt(1),
-		common.FromHex("5544"),
-		nil,
-	).WithSignature(
+	signedEip2718Tx, _ = emptyEip2718Tx.WithSignature(
 		NewEIP2718Signer(big.NewInt(1)),
 		common.Hex2Bytes("c9519f4f2b30335884581971573fadf60c6204f59a911df35ee8a540456b266032f1e8e2c5dd761f9e4f88f41c8310aeaba26a8bfcdacfedfa12ec3862d3752101"),
 	)
@@ -314,6 +306,94 @@ func TestTransactionTimeSort(t *testing.T) {
 	}
 }
 
+// TestTransactionCoding tests serializing/de-serializing to/from rlp and JSON.
+func TestTransactionCoding(t *testing.T) {
+	key, err := crypto.GenerateKey()
+	if err != nil {
+		t.Fatalf("could not generate key: %v", err)
+	}
+	var (
+		signer    = NewEIP2718Signer(common.Big1)
+		addr      = common.HexToAddress("0x0000000000000000000000000000000000000001")
+		recipient = common.HexToAddress("095e7baea6a6c7c4c2dfeb977efac326af552d87")
+		accesses  = AccessList{
+			AccessTuple{
+				Address:     &addr,
+				StorageKeys: []*common.Hash{{0}},
+			},
+		}
+	)
+	for i := uint64(0); i < 500; i++ {
+		var txdata TxData
+		switch i % 5 {
+		case 0:
+			// Legacy tx.
+			txdata = &LegacyTx{
+				AccountNonce: i,
+				Recipient:    &recipient,
+				GasLimit:     1,
+				Price:        big.NewInt(2),
+				Payload:      []byte("abcdef"),
+			}
+		case 1:
+			// Legacy tx contract creation.
+			txdata = &LegacyTx{
+				AccountNonce: i,
+				GasLimit:     1,
+				Price:        big.NewInt(2),
+				Payload:      []byte("abcdef"),
+			}
+		case 2:
+			// Tx with non-zero access list.
+			txdata = &AccessListTx{
+				Chain:        big.NewInt(1),
+				AccountNonce: i,
+				Recipient:    &recipient,
+				GasLimit:     123457,
+				Price:        big.NewInt(10),
+				Accesses:     &accesses,
+				Payload:      []byte("abcdef"),
+			}
+		case 3:
+			// Tx with empty access list.
+			txdata = &AccessListTx{
+				Chain:        big.NewInt(1),
+				AccountNonce: i,
+				Recipient:    &recipient,
+				GasLimit:     123457,
+				Price:        big.NewInt(10),
+				Payload:      []byte("abcdef"),
+			}
+		case 4:
+			// Contract creation with access list.
+			txdata = &AccessListTx{
+				Chain:        big.NewInt(1),
+				AccountNonce: i,
+				GasLimit:     123457,
+				Price:        big.NewInt(10),
+				Accesses:     &accesses,
+			}
+		}
+		tx, err := SignNewTx(key, signer, txdata)
+		if err != nil {
+			t.Fatalf("could not sign transaction: %v", err)
+		}
+		// RLP
+		parsedTx, err := encodeDecodeBinary(tx)
+		if err != nil {
+			t.Fatal(err)
+		}
+		assertEqual(parsedTx, tx)
+
+		// JSON
+		parsedTx, err = encodeDecodeJSON(tx)
+		if err != nil {
+			t.Fatal(err)
+		}
+		assertEqual(parsedTx, tx)
+	}
+}
+
 func encodeDecodeJSON(tx *Transaction) (*Transaction, error) {
 	data, err := json.Marshal(tx)
 	if err != nil {
@@ -352,53 +432,4 @@ func assertEqual(orig *Transaction, cpy *Transaction) error {
 		}
 	}
 	return nil
-}
-
-// TestTransactionCoding tests serializing/de-serializing to/from rlp and JSON.
-func TestTransactionCoding(t *testing.T) {
-	key, err := crypto.GenerateKey()
-	if err != nil {
-		t.Fatalf("could not generate key: %v", err)
-	}
-	var (
-		signer   = NewEIP2718Signer(common.Big1)
-		rawTx    *Transaction
-		addr     = common.HexToAddress("0x0000000000000000000000000000000000000001")
-		accesses = AccessList{
-			AccessTuple{
-				Address:     &addr,
-				StorageKeys: []*common.Hash{{0}},
-			},
-		}
-	)
-	for i := uint64(0); i < 500; i++ {
-		switch i % 6 {
-		case 0:
-			rawTx = NewTransaction(i, common.Address{1}, common.Big0, 1, common.Big2, []byte("abcdef"))
-		case 1:
-			rawTx = NewContractCreation(i, common.Big0, 1, common.Big2, []byte("abcdef"))
-		case 2:
-			rawTx = NewAccessListTransaction(big.NewInt(1), 0, common.HexToAddress("095e7baea6a6c7c4c2dfeb977efac326af552d87"), big.NewInt(0), 123457, big.NewInt(10), nil, &accesses)
-		case 4:
-			rawTx = NewAccessListContractCreation(big.NewInt(1), 0, big.NewInt(0), 123457, big.NewInt(10), nil, &accesses)
-		case 5:
-			rawTx = NewAccessListTransaction(big.NewInt(1), 0, common.HexToAddress("095e7baea6a6c7c4c2dfeb977efac326af552d87"), big.NewInt(0), 123457, big.NewInt(10), nil, nil)
-		}
-		tx, err := SignTx(rawTx, signer, key)
-		if err != nil {
-			t.Fatalf("could not sign transaction: %v", err)
-		}
-		// RLP
-		parsedTx, err := encodeDecodeBinary(tx)
-		if err != nil {
-			t.Fatal(err)
-		}
-		assertEqual(parsedTx, tx)
-		// JSON
-		parsedTx, err = encodeDecodeJSON(tx)
-		if err != nil {
-			t.Fatal(err)
-		}
-		assertEqual(parsedTx, tx)
-	}
 }

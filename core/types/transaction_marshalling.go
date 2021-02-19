@@ -84,7 +84,7 @@ func (t *Transaction) UnmarshalJSON(input []byte) error {
 	}
 
 	// Decode / verify fields according to transaction type.
-	var inner innerTx
+	var inner TxData
 	switch typ {
 	case LegacyTxType:
 		var itx LegacyTx

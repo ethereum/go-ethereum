@@ -3072,18 +3072,23 @@ func TestEIP2718Transition(t *testing.T) {
 		b.SetCoinbase(common.Address{1})
 
 		// One transaction to 0xAAAA
-		accesses := types.AccessList{types.AccessTuple{
-			Address: &aa,
-			StorageKeys: []*common.Hash{
-				{0},
-			},
-		}}
-
-		tx := types.NewAccessListTransaction(gspec.Config.ChainID, 0, aa, big.NewInt(0), 30000, big.NewInt(1), nil, &accesses)
-		tx, _ = types.SignTx(tx, types.NewEIP2718Signer(gspec.Config.ChainID), key)
-
+		signer := types.NewEIP2718Signer(gspec.Config.ChainID)
+		tx, _ := types.SignNewTx(key, signer, &types.AccessListTx{
+			Chain:        gspec.Config.ChainID,
+			AccountNonce: 0,
+			Recipient:    &aa,
+			GasLimit:     30000,
+			Price:        big.NewInt(1),
+			Accesses: &types.AccessList{types.AccessTuple{
+				Address: &aa,
+				StorageKeys: []*common.Hash{
+					{0},
+				},
+			}},
+		})
 		b.AddTx(tx)
 	})
+
 	// Import the canonical chain
 	diskdb := rawdb.NewMemoryDatabase()
 	gspec.MustCommit(diskdb)
