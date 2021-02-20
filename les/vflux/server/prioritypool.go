@@ -268,6 +268,14 @@ func (pp *PriorityPool) Active() (uint64, uint64) {
 	return pp.activeCount, pp.activeCap
 }
 
+// Limits returns the maximum allowed number and total capacity of active nodes
+func (pp *PriorityPool) Limits() (uint64, uint64) {
+	pp.lock.Lock()
+	defer pp.lock.Unlock()
+
+	return pp.maxCount, pp.maxCap
+}
+
 // inactiveSetIndex callback updates ppNodeInfo item index in inactiveQueue
 func inactiveSetIndex(a interface{}, index int) {
 	a.(*ppNodeInfo).inactiveIndex = index

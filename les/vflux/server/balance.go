@@ -60,8 +60,7 @@ type NodeBalance struct {
 	lock                             sync.RWMutex
 	node                             *enode.Node
 	connAddress                      string
-	active                           bool
-	priority                         bool
+	active, priority, setFlags       bool
 	capacity                         uint64
 	balance                          balance
 	posFactor, negFactor             PriceFactors
@@ -114,48 +113,48 @@ func (n *NodeBalance) GetRawBalance() (utils.ExpiredValue, utils.ExpiredValue) {
 // before and after the operation. Exceeding maxBalance results in an error (balance is
 // unchanged) while adding a negative amount higher than the current balance results in
 // zero balance.
+// Note: this function should run inside a NodeStateMachine operation
 func (n *NodeBalance) AddBalance(amount int64) (uint64, uint64, error) {
 	var (
 		err      error
 		old, new uint64
 	)
-	n.bt.ns.Operation(func() {
-		var (
-			callbacks   []func()
-			setPriority bool
-		)
-		n.bt.updateTotalBalance(n, func() bool {
-			now := n.bt.clock.Now()
-			n.updateBalance(now)
+	var (
+		callbacks   []func()
+		setPriority bool
+	)
+	n.bt.updateTotalBalance(n, func() bool {
+		now := n.bt.clock.Now()
+		n.updateBalance(now)
 
-			// Ensure the given amount is valid to apply.
-			offset := n.bt.posExp.LogOffset(now)
-			old = n.balance.pos.Value(offset)
-			if amount > 0 && (amount > maxBalance || old > maxBalance-uint64(amount)) {
-				err = errBalanceOverflow
-				return false
-			}
-
-			// Update the total positive balance counter.
-			n.balance.pos.Add(amount, offset)
-			callbacks = n.checkCallbacks(now)
-			setPriority = n.checkPriorityStatus()
-			new = n.balance.pos.Value(offset)
-			n.storeBalance(true, false)
-			return true
-		})
-		for _, cb := range callbacks {
-			cb()
+		// Ensure the given amount is valid to apply.
+		offset := n.bt.posExp.LogOffset(now)
+		old = n.balance.pos.Value(offset)
+		if amount > 0 && (amount > maxBalance || old > maxBalance-uint64(amount)) {
+			err = errBalanceOverflow
+			return false
 		}
+
+		// Update the total positive balance counter.
+		n.balance.pos.Add(amount, offset)
+		callbacks = n.checkCallbacks(now)
+		setPriority = n.checkPriorityStatus()
+		new = n.balance.pos.Value(offset)
+		n.storeBalance(true, false)
+		return true
+	})
+	for _, cb := range callbacks {
+		cb()
+	}
+	if n.setFlags {
 		if setPriority {
 			n.bt.ns.SetStateSub(n.node, n.bt.PriorityFlag, nodestate.Flags{}, 0)
 		}
 		n.signalPriorityUpdate()
-	})
+	}
 	if err != nil {
 		return old, old, err
 	}
-
 	return old, new, nil
 }
 
@@ -186,10 +185,12 @@ func (n *NodeBalance) SetBalance(pos, neg uint64) error {
 		for _, cb := range callbacks {
 			cb()
 		}
-		if setPriority {
-			n.bt.ns.SetStateSub(n.node, n.bt.PriorityFlag, nodestate.Flags{}, 0)
+		if n.setFlags {
+			if setPriority {
+				n.bt.ns.SetStateSub(n.node, n.bt.PriorityFlag, nodestate.Flags{}, 0)
+			}
+			n.signalPriorityUpdate()
 		}
-		n.signalPriorityUpdate()
 	})
 	return nil
 }
@@ -517,7 +518,9 @@ func (n *NodeBalance) balanceExhausted() {
 	n.storeBalance(true, false)
 	n.priority = false
 	n.lock.Unlock()
-	n.bt.ns.SetStateSub(n.node, nodestate.Flags{}, n.bt.PriorityFlag, 0)
+	if n.setFlags {
+		n.bt.ns.SetStateSub(n.node, nodestate.Flags{}, n.bt.PriorityFlag, 0)
+	}
 }
 
 // checkPriorityStatus checks whether the node has gained priority status and sets the priority

@@ -32,13 +32,13 @@ import (
 )
 
 var (
-	testFlag     = testSetup.NewFlag("testFlag")
-	connAddrFlag = testSetup.NewField("connAddr", reflect.TypeOf(""))
-	btTestSetup  = NewBalanceTrackerSetup(testSetup)
+	testFlag      = testSetup.NewFlag("testFlag")
+	btClientField = testSetup.NewField("clientField", reflect.TypeOf(balanceTestClient{}))
+	btTestSetup   = NewBalanceTrackerSetup(testSetup)
 )
 
 func init() {
-	btTestSetup.Connect(connAddrFlag, ppTestSetup.CapacityField)
+	btTestSetup.Connect(btClientField, ppTestSetup.CapacityField)
 }
 
 type zeroExpirer struct{}
@@ -66,10 +66,16 @@ func newBalanceTestSetup() *balanceTestSetup {
 	}
 }
 
+type balanceTestClient struct{}
+
+func (btc balanceTestClient) FreeClientId() string {
+	return ""
+}
+
 func (b *balanceTestSetup) newNode(capacity uint64) *NodeBalance {
 	node := enode.SignNull(&enr.Record{}, enode.ID{})
 	b.ns.SetState(node, testFlag, nodestate.Flags{}, 0)
-	b.ns.SetField(node, btTestSetup.connAddressField, "")
+	b.ns.SetField(node, btTestSetup.clientField, balanceTestClient{})
 	if capacity != 0 {
 		b.ns.SetField(node, ppTestSetup.CapacityField, capacity)
 	}
@@ -100,7 +106,13 @@ func TestAddBalance(t *testing.T) {
 		{maxBalance, [2]uint64{0, 0}, 0, true},
 	}
 	for _, i := range inputs {
-		old, new, err := node.AddBalance(i.delta)
+		var (
+			old, new uint64
+			err      error
+		)
+		b.ns.Operation(func() {
+			old, new, err = node.AddBalance(i.delta)
+		})
 		if i.expectErr {
 			if err == nil {
 				t.Fatalf("Expect get error but nil")
@@ -323,7 +335,9 @@ func TestPostiveBalanceCounting(t *testing.T) {
 	var sum uint64
 	for i := 0; i < 100; i += 1 {
 		amount := int64(rand.Intn(100) + 100)
-		nodes[i].AddBalance(amount)
+		b.ns.Operation(func() {
+			nodes[i].AddBalance(amount)
+		})
 		sum += uint64(amount)
 	}
 	if b.bt.TotalTokenAmount() != sum {
