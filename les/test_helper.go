@@ -594,3 +594,7 @@ func newClientServerEnv(t *testing.T, blocks int, protocol int, callback indexer
 	}
 	return s, c, teardown
 }
+
+func NewFuzzerPeer(version int) *clientPeer {
+	return newClientPeer(version, 0, p2p.NewPeer(enode.ID{}, "", nil), nil)
+}

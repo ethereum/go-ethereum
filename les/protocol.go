@@ -24,6 +24,7 @@ import (
 	"math/big"
 
 	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/crypto"
 	vfc "github.com/ethereum/go-ethereum/les/vflux/client"
 	"github.com/ethereum/go-ethereum/p2p/enode"
@@ -82,6 +83,62 @@ const (
 	StopMsg   = 0x16
 	ResumeMsg = 0x17
 )
+
+// GetBlockHeadersData represents a block header query (the request ID is not included)
+type GetBlockHeadersData struct {
+	Origin  hashOrNumber // Block from which to retrieve headers
+	Amount  uint64       // Maximum number of headers to retrieve
+	Skip    uint64       // Blocks to skip between consecutive headers
+	Reverse bool         // Query direction (false = rising towards latest, true = falling towards genesis)
+}
+
+// GetBlockHeadersPacket represents a block header request
+type GetBlockHeadersPacket struct {
+	ReqID uint64
+	Query GetBlockHeadersData
+}
+
+// GetBlockBodiesPacket represents a block body request
+type GetBlockBodiesPacket struct {
+	ReqID  uint64
+	Hashes []common.Hash
+}
+
+// GetCodePacket represents a contract code request
+type GetCodePacket struct {
+	ReqID uint64
+	Reqs  []CodeReq
+}
+
+// GetReceiptsPacket represents a block receipts request
+type GetReceiptsPacket struct {
+	ReqID  uint64
+	Hashes []common.Hash
+}
+
+// GetProofsPacket represents a proof request
+type GetProofsPacket struct {
+	ReqID uint64
+	Reqs  []ProofReq
+}
+
+// GetHelperTrieProofsPacket represents a helper trie proof request
+type GetHelperTrieProofsPacket struct {
+	ReqID uint64
+	Reqs  []HelperTrieReq
+}
+
+// SendTxPacket represents a transaction propagation request
+type SendTxPacket struct {
+	ReqID uint64
+	Txs   []*types.Transaction
+}
+
+// GetTxStatusPacket represents a transaction status query
+type GetTxStatusPacket struct {
+	ReqID  uint64
+	Hashes []common.Hash
+}
 
 type requestInfo struct {
 	name                          string
@@ -227,14 +284,6 @@ type blockInfo struct {
 	Hash   common.Hash // Hash of one particular block being announced
 	Number uint64      // Number of one particular block being announced
 	Td     *big.Int    // Total difficulty of one particular block being announced
-}
-
-// getBlockHeadersData represents a block header query.
-type getBlockHeadersData struct {
-	Origin  hashOrNumber // Block from which to retrieve headers
-	Amount  uint64       // Maximum number of headers to retrieve
-	Skip    uint64       // Blocks to skip between consecutive headers
-	Reverse bool         // Query direction (false = rising towards latest, true = falling towards genesis)
 }
 
 // hashOrNumber is a combined field for specifying an origin block.

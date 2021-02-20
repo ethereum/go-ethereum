@@ -65,27 +65,27 @@ func testGetBlockHeaders(t *testing.T, protocol int) {
 	// Create a batch of tests for various scenarios
 	limit := uint64(MaxHeaderFetch)
 	tests := []struct {
-		query  *getBlockHeadersData // The query to execute for header retrieval
+		query  *GetBlockHeadersData // The query to execute for header retrieval
 		expect []common.Hash        // The hashes of the block whose headers are expected
 	}{
 		// A single random block should be retrievable by hash and number too
 		{
-			&getBlockHeadersData{Origin: hashOrNumber{Hash: bc.GetBlockByNumber(limit / 2).Hash()}, Amount: 1},
+			&GetBlockHeadersData{Origin: hashOrNumber{Hash: bc.GetBlockByNumber(limit / 2).Hash()}, Amount: 1},
 			[]common.Hash{bc.GetBlockByNumber(limit / 2).Hash()},
 		}, {
-			&getBlockHeadersData{Origin: hashOrNumber{Number: limit / 2}, Amount: 1},
+			&GetBlockHeadersData{Origin: hashOrNumber{Number: limit / 2}, Amount: 1},
 			[]common.Hash{bc.GetBlockByNumber(limit / 2).Hash()},
 		},
 		// Multiple headers should be retrievable in both directions
 		{
-			&getBlockHeadersData{Origin: hashOrNumber{Number: limit / 2}, Amount: 3},
+			&GetBlockHeadersData{Origin: hashOrNumber{Number: limit / 2}, Amount: 3},
 			[]common.Hash{
 				bc.GetBlockByNumber(limit / 2).Hash(),
 				bc.GetBlockByNumber(limit/2 + 1).Hash(),
 				bc.GetBlockByNumber(limit/2 + 2).Hash(),
 			},
 		}, {
-			&getBlockHeadersData{Origin: hashOrNumber{Number: limit / 2}, Amount: 3, Reverse: true},
+			&GetBlockHeadersData{Origin: hashOrNumber{Number: limit / 2}, Amount: 3, Reverse: true},
 			[]common.Hash{
 				bc.GetBlockByNumber(limit / 2).Hash(),
 				bc.GetBlockByNumber(limit/2 - 1).Hash(),
@@ -94,14 +94,14 @@ func testGetBlockHeaders(t *testing.T, protocol int) {
 		},
 		// Multiple headers with skip lists should be retrievable
 		{
-			&getBlockHeadersData{Origin: hashOrNumber{Number: limit / 2}, Skip: 3, Amount: 3},
+			&GetBlockHeadersData{Origin: hashOrNumber{Number: limit / 2}, Skip: 3, Amount: 3},
 			[]common.Hash{
 				bc.GetBlockByNumber(limit / 2).Hash(),
 				bc.GetBlockByNumber(limit/2 + 4).Hash(),
 				bc.GetBlockByNumber(limit/2 + 8).Hash(),
 			},
 		}, {
-			&getBlockHeadersData{Origin: hashOrNumber{Number: limit / 2}, Skip: 3, Amount: 3, Reverse: true},
+			&GetBlockHeadersData{Origin: hashOrNumber{Number: limit / 2}, Skip: 3, Amount: 3, Reverse: true},
 			[]common.Hash{
 				bc.GetBlockByNumber(limit / 2).Hash(),
 				bc.GetBlockByNumber(limit/2 - 4).Hash(),
@@ -110,26 +110,26 @@ func testGetBlockHeaders(t *testing.T, protocol int) {
 		},
 		// The chain endpoints should be retrievable
 		{
-			&getBlockHeadersData{Origin: hashOrNumber{Number: 0}, Amount: 1},
+			&GetBlockHeadersData{Origin: hashOrNumber{Number: 0}, Amount: 1},
 			[]common.Hash{bc.GetBlockByNumber(0).Hash()},
 		}, {
-			&getBlockHeadersData{Origin: hashOrNumber{Number: bc.CurrentBlock().NumberU64()}, Amount: 1},
+			&GetBlockHeadersData{Origin: hashOrNumber{Number: bc.CurrentBlock().NumberU64()}, Amount: 1},
 			[]common.Hash{bc.CurrentBlock().Hash()},
 		},
 		// Ensure protocol limits are honored
 		//{
-		//	&getBlockHeadersData{Origin: hashOrNumber{Number: bc.CurrentBlock().NumberU64() - 1}, Amount: limit + 10, Reverse: true},
+		//	&GetBlockHeadersData{Origin: hashOrNumber{Number: bc.CurrentBlock().NumberU64() - 1}, Amount: limit + 10, Reverse: true},
 		//	[]common.Hash{},
 		//},
 		// Check that requesting more than available is handled gracefully
 		{
-			&getBlockHeadersData{Origin: hashOrNumber{Number: bc.CurrentBlock().NumberU64() - 4}, Skip: 3, Amount: 3},
+			&GetBlockHeadersData{Origin: hashOrNumber{Number: bc.CurrentBlock().NumberU64() - 4}, Skip: 3, Amount: 3},
 			[]common.Hash{
 				bc.GetBlockByNumber(bc.CurrentBlock().NumberU64() - 4).Hash(),
 				bc.GetBlockByNumber(bc.CurrentBlock().NumberU64()).Hash(),
 			},
 		}, {
-			&getBlockHeadersData{Origin: hashOrNumber{Number: 4}, Skip: 3, Amount: 3, Reverse: true},
+			&GetBlockHeadersData{Origin: hashOrNumber{Number: 4}, Skip: 3, Amount: 3, Reverse: true},
 			[]common.Hash{
 				bc.GetBlockByNumber(4).Hash(),
 				bc.GetBlockByNumber(0).Hash(),
@@ -137,13 +137,13 @@ func testGetBlockHeaders(t *testing.T, protocol int) {
 		},
 		// Check that requesting more than available is handled gracefully, even if mid skip
 		{
-			&getBlockHeadersData{Origin: hashOrNumber{Number: bc.CurrentBlock().NumberU64() - 4}, Skip: 2, Amount: 3},
+			&GetBlockHeadersData{Origin: hashOrNumber{Number: bc.CurrentBlock().NumberU64() - 4}, Skip: 2, Amount: 3},
 			[]common.Hash{
 				bc.GetBlockByNumber(bc.CurrentBlock().NumberU64() - 4).Hash(),
 				bc.GetBlockByNumber(bc.CurrentBlock().NumberU64() - 1).Hash(),
 			},
 		}, {
-			&getBlockHeadersData{Origin: hashOrNumber{Number: 4}, Skip: 2, Amount: 3, Reverse: true},
+			&GetBlockHeadersData{Origin: hashOrNumber{Number: 4}, Skip: 2, Amount: 3, Reverse: true},
 			[]common.Hash{
 				bc.GetBlockByNumber(4).Hash(),
 				bc.GetBlockByNumber(1).Hash(),
@@ -151,10 +151,10 @@ func testGetBlockHeaders(t *testing.T, protocol int) {
 		},
 		// Check that non existing headers aren't returned
 		{
-			&getBlockHeadersData{Origin: hashOrNumber{Hash: unknown}, Amount: 1},
+			&GetBlockHeadersData{Origin: hashOrNumber{Hash: unknown}, Amount: 1},
 			[]common.Hash{},
 		}, {
-			&getBlockHeadersData{Origin: hashOrNumber{Number: bc.CurrentBlock().NumberU64() + 1}, Amount: 1},
+			&GetBlockHeadersData{Origin: hashOrNumber{Number: bc.CurrentBlock().NumberU64() + 1}, Amount: 1},
 			[]common.Hash{},
 		},
 	}
@@ -619,7 +619,7 @@ func TestStopResumeLes3(t *testing.T) {
 	header := server.handler.blockchain.CurrentHeader()
 	req := func() {
 		reqID++
-		sendRequest(server.peer.app, GetBlockHeadersMsg, reqID, &getBlockHeadersData{Origin: hashOrNumber{Hash: header.Hash()}, Amount: 1})
+		sendRequest(server.peer.app, GetBlockHeadersMsg, reqID, &GetBlockHeadersData{Origin: hashOrNumber{Hash: header.Hash()}, Amount: 1})
 	}
 	for i := 1; i <= 5; i++ {
 		// send requests while we still have enough buffer and expect a response
