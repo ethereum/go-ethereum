@@ -102,7 +102,7 @@ func (h *clientHandler) synchronise(peer *serverPeer) {
 	// Recap the checkpoint. The light client may be connected to several different
 	// versions of the server.
 	// (1) Old version server which can not provide stable checkpoint in the
-	//     handshake packet.
+	//     handshakeWithClient packet.
 	//     => Use local checkpoint or empty checkpoint
 	// (2) New version server but simple checkpoint syncing is not enabled
 	//     (e.g. mainnet, new testnet or private network)

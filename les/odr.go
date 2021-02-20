@@ -150,7 +150,7 @@ func (odr *LesOdr) RetrieveTxStatus(ctx context.Context, req *light.TxStatusRequ
 	}
 	// Send out the request and assemble the result.
 	for {
-		if retrys >= maxTxStatusRetry {
+		if retrys >= maxTxStatusRetry || len(canSend) == 0 {
 			break
 		}
 		var (

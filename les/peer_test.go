@@ -154,11 +154,11 @@ func TestHandshake(t *testing.T) {
 		select {
 		case err := <-errCh1:
 			if err != nil {
-				t.Fatalf("handshake failed, %v", err)
+				t.Fatalf("handshakeWithClient failed, %v", err)
 			}
 		case err := <-errCh2:
 			if err != nil {
-				t.Fatalf("handshake failed, %v", err)
+				t.Fatalf("handshakeWithClient failed, %v", err)
 			}
 		case <-time.After(time.Second):
 			t.Fatalf("timeout")

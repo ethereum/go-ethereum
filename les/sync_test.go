@@ -55,7 +55,13 @@ func testCheckpointSyncing(t *testing.T, protocol int, syncMode int) {
 		}
 	}
 	// Generate 128+1 blocks (totally 1 CHT section)
-	server, client, tearDown := newClientServerEnv(t, int(config.ChtSize+config.ChtConfirms), protocol, waitIndexers, nil, 0, false, false, true)
+	netconfig := testnetConfig{
+		blocks:    int(config.ChtSize + config.ChtConfirms),
+		protocol:  protocol,
+		indexFn:   waitIndexers,
+		nopruning: true,
+	}
+	server, client, tearDown := newClientServerEnv(t, netconfig)
 	defer tearDown()
 
 	expected := config.ChtSize + config.ChtConfirms
@@ -78,7 +84,7 @@ func testCheckpointSyncing(t *testing.T, protocol int, syncMode int) {
 			// Register the assembled checkpoint into oracle.
 			header := server.backend.Blockchain().CurrentHeader()
 
-			data := append([]byte{0x19, 0x00}, append(registrarAddr.Bytes(), append([]byte{0, 0, 0, 0, 0, 0, 0, 0}, cp.Hash().Bytes()...)...)...)
+			data := append([]byte{0x19, 0x00}, append(oracleAddr.Bytes(), append([]byte{0, 0, 0, 0, 0, 0, 0, 0}, cp.Hash().Bytes()...)...)...)
 			sig, _ := crypto.Sign(crypto.Keccak256(data), signerKey)
 			sig[64] += 27 // Transform V from 0/1 to 27/28 according to the yellow paper
 			auth, _ := bind.NewKeyedTransactorWithChainID(signerKey, big.NewInt(1337))
@@ -145,7 +151,13 @@ func testMissOracleBackend(t *testing.T, hasCheckpoint bool) {
 		}
 	}
 	// Generate 128+1 blocks (totally 1 CHT section)
-	server, client, tearDown := newClientServerEnv(t, int(config.ChtSize+config.ChtConfirms), 3, waitIndexers, nil, 0, false, false, true)
+	netconfig := testnetConfig{
+		blocks:    int(config.ChtSize + config.ChtConfirms),
+		protocol:  3,
+		indexFn:   waitIndexers,
+		nopruning: true,
+	}
+	server, client, tearDown := newClientServerEnv(t, netconfig)
 	defer tearDown()
 
 	expected := config.ChtSize + config.ChtConfirms
@@ -160,7 +172,7 @@ func testMissOracleBackend(t *testing.T, hasCheckpoint bool) {
 	// Register the assembled checkpoint into oracle.
 	header := server.backend.Blockchain().CurrentHeader()
 
-	data := append([]byte{0x19, 0x00}, append(registrarAddr.Bytes(), append([]byte{0, 0, 0, 0, 0, 0, 0, 0}, cp.Hash().Bytes()...)...)...)
+	data := append([]byte{0x19, 0x00}, append(oracleAddr.Bytes(), append([]byte{0, 0, 0, 0, 0, 0, 0, 0}, cp.Hash().Bytes()...)...)...)
 	sig, _ := crypto.Sign(crypto.Keccak256(data), signerKey)
 	sig[64] += 27 // Transform V from 0/1 to 27/28 according to the yellow paper
 	auth, _ := bind.NewKeyedTransactorWithChainID(signerKey, big.NewInt(1337))
@@ -234,7 +246,13 @@ func TestSyncFromConfiguredCheckpoint(t *testing.T) {
 		}
 	}
 	// Generate 256+1 blocks (totally 2 CHT sections)
-	server, client, tearDown := newClientServerEnv(t, int(2*config.ChtSize+config.ChtConfirms), 3, waitIndexers, nil, 0, false, false, true)
+	netconfig := testnetConfig{
+		blocks:    int(2*config.ChtSize + config.ChtConfirms),
+		protocol:  3,
+		indexFn:   waitIndexers,
+		nopruning: true,
+	}
+	server, client, tearDown := newClientServerEnv(t, netconfig)
 	defer tearDown()
 
 	// Configure the local checkpoint(the first section)
@@ -310,7 +328,13 @@ func TestSyncAll(t *testing.T) {
 		}
 	}
 	// Generate 256+1 blocks (totally 2 CHT sections)
-	server, client, tearDown := newClientServerEnv(t, int(2*config.ChtSize+config.ChtConfirms), 3, waitIndexers, nil, 0, false, false, true)
+	netconfig := testnetConfig{
+		blocks:    int(2*config.ChtSize + config.ChtConfirms),
+		protocol:  3,
+		indexFn:   waitIndexers,
+		nopruning: true,
+	}
+	server, client, tearDown := newClientServerEnv(t, netconfig)
 	defer tearDown()
 
 	client.handler.backend.config.SyncFromCheckpoint = true

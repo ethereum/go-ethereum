@@ -63,7 +63,7 @@ const (
 	// encoded size instead of the transaction count
 	txSizeCostLimit = 0x4000
 
-	// handshakeTimeout is the timeout LES handshake will be treated as failed.
+	// handshakeTimeout is the timeout LES handshakeWithClient will be treated as failed.
 	handshakeTimeout = 5 * time.Second
 )
 
@@ -202,14 +202,14 @@ func (p *peerCommons) HeadAndTd() (hash common.Hash, td *big.Int) {
 	return p.headInfo.Hash, new(big.Int).Set(p.headInfo.Td)
 }
 
-// sendReceiveHandshake exchanges handshake packet with remote peer and returns any error
+// sendReceiveHandshake exchanges handshakeWithClient packet with remote peer and returns any error
 // if failed to send or receive packet.
 func (p *peerCommons) sendReceiveHandshake(sendList keyValueList) (keyValueList, error) {
 	var (
 		errc     = make(chan error, 2)
 		recvList keyValueList
 	)
-	// Send out own handshake in a new thread
+	// Send out own handshakeWithClient in a new thread
 	go func() {
 		errc <- p2p.Send(p.rw, StatusMsg, sendList)
 	}()
@@ -228,7 +228,7 @@ func (p *peerCommons) sendReceiveHandshake(sendList keyValueList) (keyValueList,
 			errc <- errResp(ErrMsgTooLarge, "%v > %v", msg.Size, ProtocolMaxMsgSize)
 			return
 		}
-		// Decode the handshake
+		// Decode the handshakeWithClient
 		if err := msg.Decode(&recvList); err != nil {
 			errc <- errResp(ErrDecode, "msg %v: %v", msg, err)
 			return
@@ -250,8 +250,8 @@ func (p *peerCommons) sendReceiveHandshake(sendList keyValueList) (keyValueList,
 	return recvList, nil
 }
 
-// handshake executes the les protocol handshake, negotiating version number,
-// network IDs, difficulties, head and genesis blocks. Besides the basic handshake
+// handshakeWithClient executes the les protocol handshakeWithClient, negotiating version number,
+// network IDs, difficulties, head and genesis blocks. Besides the basic handshakeWithClient
 // fields, server and client can exchange and resolve some specified fields through
 // two callback functions.
 func (p *peerCommons) handshake(td *big.Int, head common.Hash, headNum uint64, genesis common.Hash, forkID forkid.ID, forkFilter forkid.Filter, sendCallback func(*keyValueList), recvCallback func(keyValueMap) error) error {
@@ -260,10 +260,10 @@ func (p *peerCommons) handshake(td *big.Int, head common.Hash, headNum uint64, g
 
 	var send keyValueList
 
-	// Add some basic handshake fields
+	// Add some basic handshakeWithClient fields
 	send = send.add("protocolVersion", uint64(p.version))
 	send = send.add("networkId", p.network)
-	// Note: the head info announced at handshake is only used in case of server peers
+	// Note: the head info announced at handshakeWithClient is only used in case of server peers
 	// but dummy values are still announced by clients for compatibility with older servers
 	send = send.add("headTd", td)
 	send = send.add("headHash", head)
@@ -280,7 +280,7 @@ func (p *peerCommons) handshake(td *big.Int, head common.Hash, headNum uint64, g
 	if sendCallback != nil {
 		sendCallback(&send)
 	}
-	// Exchange the handshake packet and resolve the received one.
+	// Exchange the handshakeWithClient packet and resolve the received one.
 	recvList, err := p.sendReceiveHandshake(send)
 	if err != nil {
 		return err
@@ -584,13 +584,13 @@ func (p *serverPeer) updateHead(hash common.Hash, number uint64, td *big.Int) {
 	p.headInfo = blockInfo{Hash: hash, Number: number, Td: td}
 }
 
-// Handshake executes the les protocol handshake, negotiating version number,
+// Handshake executes the les protocol handshakeWithClient, negotiating version number,
 // network IDs and genesis blocks.
 func (p *serverPeer) Handshake(genesis common.Hash, forkid forkid.ID, forkFilter forkid.Filter) error {
 	// Note: there is no need to share local head with a server but older servers still
 	// require these fields so we announce zero values.
 	return p.handshake(common.Big0, common.Hash{}, 0, genesis, forkid, forkFilter, func(lists *keyValueList) {
-		// Add some client-specific handshake fields
+		// Add some client-specific handshakeWithClient fields
 		//
 		// Enable signed announcement randomly even the server is not trusted.
 		p.announceType = announceTypeSimple
@@ -644,7 +644,7 @@ func (p *serverPeer) Handshake(genesis common.Hash, forkid forkid.ID, forkFilter
 		if p.onlyAnnounce && !p.trusted {
 			return errResp(ErrUselessPeer, "peer cannot serve requests")
 		}
-		// Parse flow control handshake packet.
+		// Parse flow control handshakeWithClient packet.
 		var sParams flowcontrol.ServerParams
 		if err := recv.get("flowControl/BL", &sParams.BufLimit); err != nil {
 			return err
@@ -979,7 +979,7 @@ func (p *clientPeer) freezeClient() {
 	}
 }
 
-// Handshake executes the les protocol handshake, negotiating version number,
+// Handshake executes the les protocol handshakeWithClient, negotiating version number,
 // network IDs, difficulties, head and genesis blocks.
 func (p *clientPeer) Handshake(td *big.Int, head common.Hash, headNum uint64, genesis common.Hash, forkID forkid.ID, forkFilter forkid.Filter, server *LesServer) error {
 	recentTx := server.handler.blockchain.TxLookupLimit()
@@ -997,7 +997,7 @@ func (p *clientPeer) Handshake(td *big.Int, head common.Hash, headNum uint64, ge
 		return errors.New("Cannot serve old clients without a complete tx index")
 	}
 	// Note: clientPeer.headInfo should contain the last head announced to the client by us.
-	// The values announced in the handshake are dummy values for compatibility reasons and should be ignored.
+	// The values announced in the handshakeWithClient are dummy values for compatibility reasons and should be ignored.
 	p.headInfo = blockInfo{Hash: head, Number: headNum, Td: td}
 	return p.handshake(td, head, headNum, genesis, forkID, forkFilter, func(lists *keyValueList) {
 		// Add some information which services server can offer.

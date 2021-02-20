@@ -195,7 +195,7 @@ func (f *clientPool) stop() {
 	f.bt.Stop()
 }
 
-// connect should be called after a successful handshake. If the connection was
+// connect should be called after a successful handshakeWithClient. If the connection was
 // rejected, there is no need to call disconnect.
 func (f *clientPool) connect(peer clientPoolPeer) (uint64, error) {
 	f.lock.Lock()
