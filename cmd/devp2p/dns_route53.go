@@ -128,10 +128,14 @@ func (c *route53Client) deploy(name string, t *dnsdisc.Tree) error {
 		var count int
 		for count < 60 && (wresp.ChangeInfo == nil || wresp.ChangeInfo.Status != types.ChangeStatusInsync) {
 			wresp, err = c.api.GetChange(context.TODO(), wreq)
+			if err != nil {
+				return err
+			}
+			count++
 			time.Sleep(30 * time.Second)
 		}
-
 	}
+
 	return nil
 }
 
@@ -279,6 +283,9 @@ func (c *route53Client) collectRecords(name string) (map[string]recordSet, error
 		if err != nil {
 			return existing, err
 		}
+
+		// sets the cursor to the next batch
+		req.StartRecordIdentifier = resp.NextRecordIdentifier
 
 		for _, set := range resp.ResourceRecordSets {
 			if !isSubdomain(*set.Name, name) || set.Type != types.RRTypeTxt {
