@@ -126,17 +126,18 @@ func (c *route53Client) deploy(name string, t *dnsdisc.Tree) error {
 		log.Info(fmt.Sprintf("Waiting for change request %s", *resp.ChangeInfo.Id))
 		wreq := &route53.GetChangeInput{Id: resp.ChangeInfo.Id}
 		var count int
-		for count < maxRetryLimit {
+		for {
 			wresp, err := c.api.GetChange(context.TODO(), wreq)
 			if err != nil {
 				return err
 			}
 
-			if wresp.ChangeInfo.Status == types.ChangeStatusInsync {
+			count++
+
+			if wresp.ChangeInfo.Status == types.ChangeStatusInsync || count >= maxRetryLimit {
 				break
 			}
 
-			count++
 			time.Sleep(30 * time.Second)
 		}
 	}
