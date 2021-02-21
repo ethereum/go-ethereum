@@ -41,6 +41,7 @@ const (
 	// https://docs.aws.amazon.com/Route53/latest/DeveloperGuide/DNSLimitations.html#limits-api-requests-changeresourcerecordsets
 	route53ChangeSizeLimit  = 32000
 	route53ChangeCountLimit = 1000
+	maxRetryLimit           = 60
 )
 
 var (
@@ -124,13 +125,17 @@ func (c *route53Client) deploy(name string, t *dnsdisc.Tree) error {
 
 		log.Info(fmt.Sprintf("Waiting for change request %s", *resp.ChangeInfo.Id))
 		wreq := &route53.GetChangeInput{Id: resp.ChangeInfo.Id}
-		wresp := &route53.GetChangeOutput{}
 		var count int
-		for count < 60 && (wresp.ChangeInfo == nil || wresp.ChangeInfo.Status != types.ChangeStatusInsync) {
-			wresp, err = c.api.GetChange(context.TODO(), wreq)
+		for count < maxRetryLimit {
+			wresp, err := c.api.GetChange(context.TODO(), wreq)
 			if err != nil {
 				return err
 			}
+
+			if wresp.ChangeInfo.Status == types.ChangeStatusInsync {
+				break
+			}
+
 			count++
 			time.Sleep(30 * time.Second)
 		}
