@@ -1455,7 +1455,7 @@ func (s *PublicTransactionPoolAPI) GetTransactionReceipt(ctx context.Context, ha
 		fields["contractAddress"] = receipt.ContractAddress
 	}
 
-	if txType != types.LegacyTxType {
+	if txType := tx.Type(); txType != types.LegacyTxType {
 		fields["type"] = hexutil.Uint(txType)
 	}
 	return fields, nil
