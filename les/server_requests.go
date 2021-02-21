@@ -65,7 +65,7 @@ type serveRequestFn func(backend serverBackend, peer *clientPeer, waitOrStop fun
 
 // Les3 contains the request types supported by les/2 and les/3
 var Les3 = map[uint64]RequestType{
-	GetBlockHeadersMsg: RequestType{
+	GetBlockHeadersMsg: {
 		Name:             "block header request",
 		MaxCount:         MaxHeaderFetch,
 		InPacketsMeter:   miscInHeaderPacketsMeter,
@@ -75,7 +75,7 @@ var Les3 = map[uint64]RequestType{
 		ServingTimeMeter: miscServingTimeHeaderTimer,
 		Handle:           handleGetBlockHeaders,
 	},
-	GetBlockBodiesMsg: RequestType{
+	GetBlockBodiesMsg: {
 		Name:             "block bodies request",
 		MaxCount:         MaxBodyFetch,
 		InPacketsMeter:   miscInBodyPacketsMeter,
@@ -85,7 +85,7 @@ var Les3 = map[uint64]RequestType{
 		ServingTimeMeter: miscServingTimeBodyTimer,
 		Handle:           handleGetBlockBodies,
 	},
-	GetCodeMsg: RequestType{
+	GetCodeMsg: {
 		Name:             "code request",
 		MaxCount:         MaxCodeFetch,
 		InPacketsMeter:   miscInCodePacketsMeter,
@@ -95,7 +95,7 @@ var Les3 = map[uint64]RequestType{
 		ServingTimeMeter: miscServingTimeCodeTimer,
 		Handle:           handleGetCode,
 	},
-	GetReceiptsMsg: RequestType{
+	GetReceiptsMsg: {
 		Name:             "receipts request",
 		MaxCount:         MaxReceiptFetch,
 		InPacketsMeter:   miscInReceiptPacketsMeter,
@@ -105,7 +105,7 @@ var Les3 = map[uint64]RequestType{
 		ServingTimeMeter: miscServingTimeReceiptTimer,
 		Handle:           handleGetReceipts,
 	},
-	GetProofsV2Msg: RequestType{
+	GetProofsV2Msg: {
 		Name:             "les/2 proofs request",
 		MaxCount:         MaxProofsFetch,
 		InPacketsMeter:   miscInTrieProofPacketsMeter,
@@ -115,7 +115,7 @@ var Les3 = map[uint64]RequestType{
 		ServingTimeMeter: miscServingTimeTrieProofTimer,
 		Handle:           handleGetProofs,
 	},
-	GetHelperTrieProofsMsg: RequestType{
+	GetHelperTrieProofsMsg: {
 		Name:             "helper trie proof request",
 		MaxCount:         MaxHelperTrieProofsFetch,
 		InPacketsMeter:   miscInHelperTriePacketsMeter,
@@ -125,7 +125,7 @@ var Les3 = map[uint64]RequestType{
 		ServingTimeMeter: miscServingTimeHelperTrieTimer,
 		Handle:           handleGetHelperTrieProofs,
 	},
-	SendTxV2Msg: RequestType{
+	SendTxV2Msg: {
 		Name:             "new transactions",
 		MaxCount:         MaxTxSend,
 		InPacketsMeter:   miscInTxsPacketsMeter,
@@ -135,7 +135,7 @@ var Les3 = map[uint64]RequestType{
 		ServingTimeMeter: miscServingTimeTxTimer,
 		Handle:           handleSendTx,
 	},
-	GetTxStatusMsg: RequestType{
+	GetTxStatusMsg: {
 		Name:             "transaction status query request",
 		MaxCount:         MaxTxStatus,
 		InPacketsMeter:   miscInTxStatusPacketsMeter,
