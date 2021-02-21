@@ -276,16 +276,11 @@ func (c *route53Client) collectRecords(name string) (map[string]recordSet, error
 	var req route53.ListResourceRecordSetsInput
 	req.HostedZoneId = &c.zoneID
 	existing := make(map[string]recordSet)
-	var resp *route53.ListResourceRecordSetsOutput
-	var err error
-	for resp == nil || resp.IsTruncated {
-		resp, err = c.api.ListResourceRecordSets(context.TODO(), &req)
+	for {
+		resp, err := c.api.ListResourceRecordSets(context.TODO(), &req)
 		if err != nil {
 			return existing, err
 		}
-
-		// sets the cursor to the next batch
-		req.StartRecordIdentifier = resp.NextRecordIdentifier
 
 		for _, set := range resp.ResourceRecordSets {
 			if !isSubdomain(*set.Name, name) || set.Type != types.RRTypeTxt {
@@ -299,9 +294,16 @@ func (c *route53Client) collectRecords(name string) (map[string]recordSet, error
 			name := strings.TrimSuffix(*set.Name, ".")
 			existing[name] = s
 		}
+
+		if !resp.IsTruncated {
+			break
+		}
+
+		// sets the cursor to the next batch
+		req.StartRecordIdentifier = resp.NextRecordIdentifier
 	}
 
-	return existing, err
+	return existing, nil
 }
 
 // newTXTChange creates a change to a TXT record.
