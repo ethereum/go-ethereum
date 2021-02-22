@@ -22,6 +22,7 @@ import (
 	"github.com/ethereum/go-ethereum/common"
 )
 
+// LegacyTx is the transaction data of regular Ethereum transactions.
 type LegacyTx struct {
 	AccountNonce uint64
 	Price        *big.Int
