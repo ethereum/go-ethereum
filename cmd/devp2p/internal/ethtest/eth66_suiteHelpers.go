@@ -23,11 +23,12 @@ import (
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/eth/protocols/eth"
 	"github.com/ethereum/go-ethereum/internal/utesting"
+	"github.com/ethereum/go-ethereum/p2p"
 	"github.com/ethereum/go-ethereum/rlp"
 	"github.com/stretchr/testify/assert"
 )
 
-func (c *Conn) statusExchange_66(t *utesting.T, chain *Chain) Message {
+func (c *Conn) statusExchange66(t *utesting.T, chain *Chain) Message {
 	status := &Status{
 		ProtocolVersion: uint32(66),
 		NetworkID:       chain.chainConfig.ChainID.Uint64(),
@@ -37,6 +38,15 @@ func (c *Conn) statusExchange_66(t *utesting.T, chain *Chain) Message {
 		ForkID:          chain.ForkID(),
 	}
 	return c.statusExchange(t, chain, status)
+}
+
+func (s *Suite) dial66(t *utesting.T) *Conn {
+	conn, err := s.dial()
+	if err != nil {
+		t.Fatalf("could not dial: %v", err)
+	}
+	conn.caps = append(conn.caps, p2p.Cap{Name: "eth", Version: 66})
+	return conn
 }
 
 func (c *Conn) write66(req eth.Packet, code int) error {
@@ -144,9 +154,9 @@ func (c *Conn) readAndServe66(chain *Chain, timeout time.Duration) (uint64, Mess
 
 func (s *Suite) setupConnection66(t *utesting.T) *Conn {
 	// create conn
-	sendConn := s.dial_66(t)
+	sendConn := s.dial66(t)
 	sendConn.handshake(t)
-	sendConn.statusExchange_66(t, s.chain)
+	sendConn.statusExchange66(t, s.chain)
 	return sendConn
 }
 
@@ -183,9 +193,9 @@ func (s *Suite) waitAnnounce66(t *utesting.T, conn *Conn, blockAnnouncement *New
 	}
 }
 
-// waitForBlock_66 waits for confirmation from the client that it has
+// waitForBlock66 waits for confirmation from the client that it has
 // imported the given block.
-func (c *Conn) waitForBlock_66(block *types.Block) error {
+func (c *Conn) waitForBlock66(block *types.Block) error {
 	defer c.SetReadDeadline(time.Time{})
 
 	timeout := time.Now().Add(20 * time.Second)

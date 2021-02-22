@@ -17,7 +17,6 @@
 package ethtest
 
 import (
-	"github.com/stretchr/testify/assert"
 	"time"
 
 	"github.com/ethereum/go-ethereum/core/types"
@@ -46,14 +45,14 @@ func (s *Suite) Eth66Tests() []utesting.Test {
 }
 
 // TestStatus_66 attempts to connect to the given node and exchange
-// a status message with it, and then check to make sure
-// the chain head is correct.
+// a status message with it on the eth66 protocol, and then check to
+// make sure the chain head is correct.
 func (s *Suite) TestStatus_66(t *utesting.T) {
-	conn := s.dial_66(t)
+	conn := s.dial66(t)
 	// get protoHandshake
 	conn.handshake(t)
 	// get status
-	switch msg := conn.statusExchange_66(t, s.chain).(type) {
+	switch msg := conn.statusExchange66(t, s.chain).(type) {
 	case *Status:
 		status := *msg
 		if status.ProtocolVersion != uint32(66) {
@@ -123,13 +122,12 @@ func (s *Suite) TestSimultaneousRequests_66(t *utesting.T) {
 	}(headerChan)
 	// check headers of second request
 	headersMatch(t, s.chain, s.getBlockHeaders66(t, conn2, req2, req2.RequestId))
-
 	// check headers of first request
 	headersMatch(t, s.chain, <-headerChan)
 }
 
 // TestBroadcast_66 tests whether a block announcement is correctly
-// propagated to the given node's peer(s).
+// propagated to the given node's peer(s) on the eth66 protocol.
 func (s *Suite) TestBroadcast_66(t *utesting.T) {
 	sendConn, receiveConn := s.setupConnection66(t), s.setupConnection66(t)
 	nextBlock := len(s.chain.blocks)
@@ -141,22 +139,14 @@ func (s *Suite) TestBroadcast_66(t *utesting.T) {
 	// update test suite chain
 	s.chain.blocks = append(s.chain.blocks, s.fullChain.blocks[nextBlock])
 	// wait for client to update its chain
-	if err := receiveConn.waitForBlock_66(s.chain.Head()); err != nil {
+	if err := receiveConn.waitForBlock66(s.chain.Head()); err != nil {
 		t.Fatal(err)
 	}
 }
 
-func (s *Suite) dial_66(t *utesting.T) *Conn {
-	conn, err := s.dial()
-	if err != nil {
-		t.Fatalf("could not dial: %v", err)
-	}
-	conn.caps = append(conn.caps, p2p.Cap{Name: "eth", Version: 66})
-	return conn
-}
-
 // TestGetBlockBodies_66 tests whether the given node can respond to
-// a `GetBlockBodies` request and that the response is accurate.
+// a `GetBlockBodies` request and that the response is accurate over
+// the eth66 protocol.
 func (s *Suite) TestGetBlockBodies_66(t *utesting.T) {
 	conn := s.setupConnection66(t)
 	// create block bodies request
@@ -228,14 +218,14 @@ func (s *Suite) TestLargeAnnounce_66(t *utesting.T) {
 	// update test suite chain
 	s.chain.blocks = append(s.chain.blocks, s.fullChain.blocks[nextBlock])
 	// wait for client to update its chain
-	if err := receiveConn.waitForBlock_66(s.fullChain.blocks[nextBlock]); err != nil {
+	if err := receiveConn.waitForBlock66(s.fullChain.blocks[nextBlock]); err != nil {
 		t.Fatal(err)
 	}
 }
 
 // TestMaliciousHandshake_66 tries to send malicious data during the handshake.
 func (s *Suite) TestMaliciousHandshake_66(t *utesting.T) {
-	conn := s.dial_66(t)
+	conn := s.dial66(t)
 	// write hello to client
 	pub0 := crypto.FromECDSAPub(&conn.ourKey.PublicKey)[1:]
 	handshakes := []*Hello{
@@ -295,24 +285,24 @@ func (s *Suite) TestMaliciousHandshake_66(t *utesting.T) {
 			case *Disconnect:
 			case *Error:
 			case *Hello:
-				// Hello's are send concurrently, so ignore them
+				// Hello's are sent concurrently, so ignore them
 				continue
 			default:
 				t.Fatalf("unexpected: %s", pretty.Sdump(msg))
 			}
 		}
 		// Dial for the next round
-		conn = s.dial_66(t)
+		conn = s.dial66(t)
 	}
 }
 
 // TestMaliciousStatus_66 sends a status package with a large total difficulty.
 func (s *Suite) TestMaliciousStatus_66(t *utesting.T) {
-	conn := s.dial_66(t)
+	conn := s.dial66(t)
 	// get protoHandshake
 	conn.handshake(t)
 	status := &Status{
-		ProtocolVersion: uint32(conn.ethProtocolVersion),
+		ProtocolVersion: uint32(66),
 		NetworkID:       s.chain.chainConfig.ChainID.Uint64(),
 		TD:              largeNumber(2),
 		Head:            s.chain.blocks[s.chain.Len()-1].Hash(),
@@ -374,19 +364,7 @@ func (s *Suite) TestZeroRequestID_66(t *utesting.T) {
 			Amount: 2,
 		},
 	}
-	if err := conn.write66(req, GetBlockHeaders{}.Code()); err != nil {
-		t.Fatalf("could not write to connection: %v", err)
-	}
-	reqID, msg := conn.readAndServe66(s.chain, timeout)
-	assert.Equal(t, uint64(0), reqID)
-	// check headers
-	headers, ok := msg.(BlockHeaders)
-	if !ok {
-		t.Fatalf("unexpected: %s", pretty.Sdump(msg))
-	}
-	for i, header := range headers {
-		assert.Equal(t, s.chain.blocks[i].Header(), header)
-	}
+	headersMatch(t, s.chain, s.getBlockHeaders66(t, conn, req, req.RequestId))
 }
 
 // TestSameRequestID_66 sends two requests with the same request ID
@@ -404,50 +382,22 @@ func (s *Suite) TestSameRequestID_66(t *utesting.T) {
 			Amount: 2,
 		},
 	}
-	req2 := &eth.GetBlockBodiesPacket66{
+	req2 := &eth.GetBlockHeadersPacket66{
 		RequestId: reqID,
-		GetBlockBodiesPacket: eth.GetBlockBodiesPacket{
-			s.chain.blocks[30].Hash(),
-			s.chain.blocks[31].Hash(),
-			s.chain.blocks[32].Hash(),
+		GetBlockHeadersPacket: &eth.GetBlockHeadersPacket{
+			Origin: eth.HashOrNumber{
+				Number: 0,
+			},
+			Amount: 2,
 		},
 	}
 	// send requests concurrently
-	go func() {
-		if err := conn.write66(req2, GetBlockBodies{}.Code()); err != nil {
-			t.Fatalf("could not write to connection: %v", err)
-		}
-	}()
-	if err := conn.write66(req1, GetBlockHeaders{}.Code()); err != nil {
-		t.Fatalf("could not write to connection: %v", err)
-	}
-	// check node response
-	// TODO does this have to be simultaneous?
-	reqIDChan := make(chan uint64, 1)
-	msgChan := make(chan Message, 1)
-	go func(reqIDChan chan uint64, msgChan chan Message) {
-		reqID, msg := conn.readAndServe66(s.chain, timeout)
-		reqIDChan <- reqID
-		msgChan <- msg
-	}(reqIDChan, msgChan)
-
-	reqID1, msg1 := conn.readAndServe66(s.chain, timeout)
-	assert.Equal(t, reqID, reqID1)
-
-	headers, ok := msg1.(BlockHeaders)
-	if !ok {
-		t.Fatalf("unexpected: %s", pretty.Sdump(msg1))
-	}
-	for i, header := range headers {
-		assert.Equal(t, s.chain.blocks[i].Header(), header)
-	}
-
-	msg2 := <- msgChan
-	assert.Equal(t, reqID, <- reqIDChan)
-
-	bodies, ok := msg2.(BlockBodies)
-	if !ok {
-		t.Fatalf("unexpected: %s", pretty.Sdump(msg1))
-	}
-	assert.Equal(t, 3, len(bodies))
+	headerChan := make(chan BlockHeaders, 1)
+	go func(headerChan chan BlockHeaders) {
+		headerChan <- s.getBlockHeaders66(t, conn, req2, reqID)
+	}(headerChan)
+	// check response from first request
+	headersMatch(t, s.chain, s.getBlockHeaders66(t, conn, req1, reqID))
+	// check response from second request
+	headersMatch(t, s.chain, <-headerChan)
 }
