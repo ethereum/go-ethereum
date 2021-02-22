@@ -77,7 +77,9 @@ type TxData interface {
 	value() *big.Int
 	nonce() uint64
 	to() *common.Address
+
 	rawSignatureValues() (v, r, s *big.Int)
+	setSignatureValues(v, r, s *big.Int)
 }
 
 // EncodeRLP implements rlp.Encoder
@@ -334,41 +336,9 @@ func (tx *Transaction) WithSignature(signer Signer, sig []byte) (*Transaction, e
 	if err != nil {
 		return nil, err
 	}
-	// Copy inner transaction.
-	var cpy TxData
-	switch inner := tx.inner.(type) {
-	case *LegacyTx:
-		cpy = &LegacyTx{
-			AccountNonce: inner.AccountNonce,
-			Price:        inner.Price,
-			GasLimit:     inner.GasLimit,
-			Recipient:    inner.Recipient,
-			Amount:       inner.Amount,
-			Payload:      inner.Payload,
-			V:            v,
-			R:            r,
-			S:            s,
-		}
-	case *AccessListTx:
-		cpy = &AccessListTx{
-			Chain:        inner.Chain,
-			AccountNonce: inner.AccountNonce,
-			Price:        inner.Price,
-			GasLimit:     inner.GasLimit,
-			Recipient:    inner.Recipient,
-			Amount:       inner.Amount,
-			Payload:      inner.Payload,
-			Accesses:     inner.Accesses,
-			V:            v,
-			R:            r,
-			S:            s,
-		}
-	default:
-		return nil, ErrInvalidTxType
-	}
-	// Copy outer transaction.
-	ret := &Transaction{inner: cpy, time: tx.time}
-	return ret, nil
+	cpy := tx.inner.copy()
+	cpy.setSignatureValues(v, r, s)
+	return &Transaction{inner: cpy, time: tx.time}, nil
 }
 
 // Transactions implements DerivableList for transactions.

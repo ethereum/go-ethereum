@@ -115,4 +115,10 @@ func (tx *AccessListTx) value() *big.Int        { return tx.Amount }
 func (tx *AccessListTx) nonce() uint64          { return tx.AccountNonce }
 func (tx *AccessListTx) to() *common.Address    { return tx.Recipient }
 
-func (tx *AccessListTx) rawSignatureValues() (v, r, s *big.Int) { return tx.V, tx.R, tx.S }
+func (tx *AccessListTx) rawSignatureValues() (v, r, s *big.Int) {
+	return tx.V, tx.R, tx.S
+}
+
+func (tx *AccessListTx) setSignatureValues(v, r, s *big.Int) {
+	tx.V, tx.R, tx.S = v, r, s
+}

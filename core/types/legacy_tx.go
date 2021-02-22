@@ -108,3 +108,7 @@ func (tx *LegacyTx) to() *common.Address    { return tx.Recipient }
 func (tx *LegacyTx) rawSignatureValues() (v, r, s *big.Int) {
 	return tx.V, tx.R, tx.S
 }
+
+func (tx *LegacyTx) setSignatureValues(v, r, s *big.Int) {
+	tx.V, tx.R, tx.S = v, r, s
+}
