@@ -18,7 +18,6 @@ package les
 
 import (
 	"context"
-	"fmt"
 	"math/big"
 	"sync"
 	"sync/atomic"
@@ -109,10 +108,10 @@ func (h *clientHandler) handle(p *serverPeer) error {
 	}
 	p.Log().Debug("Light Ethereum peer connected", "name", p.Name())
 
-	// Execute the LES handshakeWithClient
+	// Execute the LES handshake
 	forkid := forkid.NewID(h.backend.blockchain.Config(), h.backend.genesis, h.backend.blockchain.CurrentHeader().Number.Uint64())
 	if err := p.Handshake(h.backend.blockchain.Genesis().Hash(), forkid, h.forkFilter); err != nil {
-		p.Log().Debug("Light Ethereum handshakeWithClient failed", "err", err)
+		p.Log().Debug("Light Ethereum handshake failed", "err", err)
 		return err
 	}
 	// Register the peer locally
@@ -310,7 +309,6 @@ func (h *clientHandler) handleMsg(p *serverPeer) error {
 		}
 	case msg.Code == TxStatusMsg:
 		p.Log().Trace("Received tx status response")
-		fmt.Println("Received tx status response")
 		var resp struct {
 			ReqID, BV uint64
 			Status    []light.TxStatus

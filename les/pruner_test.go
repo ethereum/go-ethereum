@@ -20,10 +20,10 @@ import (
 	"bytes"
 	"context"
 	"encoding/binary"
-	"github.com/ethereum/go-ethereum/core"
 	"testing"
 	"time"
 
+	"github.com/ethereum/go-ethereum/core"
 	"github.com/ethereum/go-ethereum/light"
 )
 

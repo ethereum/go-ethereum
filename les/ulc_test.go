@@ -117,9 +117,9 @@ func connect(server *serverHandler, serverId enode.ID, client *clientHandler, pr
 	select {
 	case <-time.After(time.Millisecond * 100):
 	case err := <-errc1:
-		return nil, nil, fmt.Errorf("peerLight handshakeWithClient error: %v", err)
+		return nil, nil, fmt.Errorf("peerLight handshake error: %v", err)
 	case err := <-errc2:
-		return nil, nil, fmt.Errorf("peerFull handshakeWithClient error: %v", err)
+		return nil, nil, fmt.Errorf("peerFull handshake error: %v", err)
 	}
 	return peer1, peer2, nil
 }

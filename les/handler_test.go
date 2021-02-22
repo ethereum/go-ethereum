@@ -192,7 +192,6 @@ func testGetBlockBodies(t *testing.T, protocol int) {
 	netconfig := testnetConfig{
 		blocks:    downloader.MaxHeaderFetch + 15,
 		protocol:  protocol,
-		connect:   true,
 		nopruning: true,
 	}
 	server, _, tearDown := newClientServerEnv(t, netconfig)
@@ -280,7 +279,6 @@ func testGetCode(t *testing.T, protocol int) {
 	netconfig := testnetConfig{
 		blocks:    4,
 		protocol:  protocol,
-		connect:   true,
 		nopruning: true,
 	}
 	server, _, tearDown := newClientServerEnv(t, netconfig)
@@ -320,7 +318,6 @@ func testGetStaleCode(t *testing.T, protocol int) {
 	netconfig := testnetConfig{
 		blocks:    core.TriesInMemory + 4,
 		protocol:  protocol,
-		connect:   true,
 		nopruning: true,
 	}
 	server, _, tearDown := newClientServerEnv(t, netconfig)
@@ -356,7 +353,6 @@ func testGetReceipt(t *testing.T, protocol int) {
 	netconfig := testnetConfig{
 		blocks:    4,
 		protocol:  protocol,
-		connect:   true,
 		nopruning: true,
 	}
 	server, _, tearDown := newClientServerEnv(t, netconfig)
@@ -393,7 +389,6 @@ func testGetProofs(t *testing.T, protocol int) {
 	netconfig := testnetConfig{
 		blocks:    4,
 		protocol:  protocol,
-		connect:   true,
 		nopruning: true,
 	}
 	server, _, tearDown := newClientServerEnv(t, netconfig)
@@ -437,7 +432,6 @@ func testGetStaleProof(t *testing.T, protocol int) {
 	netconfig := testnetConfig{
 		blocks:    core.TriesInMemory + 4,
 		protocol:  protocol,
-		connect:   true,
 		nopruning: true,
 	}
 	server, _, tearDown := newClientServerEnv(t, netconfig)
@@ -496,7 +490,6 @@ func testGetCHTProofs(t *testing.T, protocol int) {
 			blocks:    int(config.ChtSize + config.ChtConfirms),
 			protocol:  protocol,
 			indexFn:   waitIndexers,
-			connect:   true,
 			nopruning: true,
 		}
 	)
@@ -556,7 +549,6 @@ func testGetBloombitsProofs(t *testing.T, protocol int) {
 			blocks:    int(config.BloomTrieSize + config.BloomTrieConfirms),
 			protocol:  protocol,
 			indexFn:   waitIndexers,
-			connect:   true,
 			nopruning: true,
 		}
 	)
