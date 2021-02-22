@@ -11,7 +11,7 @@ import (
 
 // txJSON is the JSON representation of transactions.
 type txJSON struct {
-	Type *hexutil.Uint64 `json:"type"`
+	Type hexutil.Uint64 `json:"type"`
 
 	// Common transaction fields:
 	AccountNonce *hexutil.Uint64 `json:"nonce"`
@@ -29,19 +29,15 @@ type txJSON struct {
 	AccessList *AccessList  `json:"accessList,omitempty"`
 
 	// Only used for encoding:
-	Hash *common.Hash `json:"hash"`
+	Hash common.Hash `json:"hash"`
 }
 
 // MarshalJSON marshals as JSON with a hash.
 func (t *Transaction) MarshalJSON() ([]byte, error) {
-	var (
-		enc  txJSON
-		typ  = hexutil.Uint64(t.Type())
-		hash = t.Hash()
-	)
+	var enc txJSON
 	// These are set for all tx types.
-	enc.Hash = &hash
-	enc.Type = &typ
+	enc.Hash = t.Hash()
+	enc.Type = hexutil.Uint64(t.Type())
 
 	// Other fields are set conditionally depending on tx type.
 	switch tx := t.inner.(type) {
@@ -77,15 +73,10 @@ func (t *Transaction) UnmarshalJSON(input []byte) error {
 	if err := json.Unmarshal(input, &dec); err != nil {
 		return err
 	}
-	// Find the transaction type.
-	typ := hexutil.Uint64(LegacyTxType)
-	if dec.Type != nil {
-		typ = *dec.Type
-	}
 
 	// Decode / verify fields according to transaction type.
 	var inner TxData
-	switch typ {
+	switch dec.Type {
 	case LegacyTxType:
 		var itx LegacyTx
 		inner = &itx
@@ -134,10 +125,10 @@ func (t *Transaction) UnmarshalJSON(input []byte) error {
 	case AccessListTxType:
 		var itx AccessListTx
 		inner = &itx
-		if dec.AccessList == nil {
-			return errors.New("missing required field 'accessList' in transaction")
+		// Access list is optional for now.
+		if dec.AccessList != nil {
+			itx.Accesses = dec.AccessList
 		}
-		itx.Accesses = dec.AccessList
 		if dec.ChainID == nil {
 			return errors.New("missing required field 'chainId' in transaction")
 		}
