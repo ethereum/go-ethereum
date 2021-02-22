@@ -37,10 +37,10 @@ func ExampleTypeMux() {
 	}()
 
 	// Post some events.
-	mux.Post(someEvent{5})
-	mux.Post(yetAnotherEvent{X: 3, Y: 4})
-	mux.Post(someEvent{6})
-	mux.Post(otherEvent{"whoa"})
+	_ = mux.Post(someEvent{5})
+	_ = mux.Post(yetAnotherEvent{X: 3, Y: 4})
+	_ = mux.Post(someEvent{6})
+	_ = mux.Post(otherEvent{"whoa"})
 
 	// Stop closes all subscription channels.
 	// The subscriber goroutine will print "done"
