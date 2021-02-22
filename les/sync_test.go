@@ -31,15 +31,15 @@ import (
 )
 
 // Test light syncing which will download all headers from genesis.
-func TestLightSyncingLes3(t *testing.T) { testCheckpointSyncing(t, 3, 0) }
+func TestLightSyncingLes3(t *testing.T) { testCheckpointSyncing(t, lpv3, 0) }
 
 // Test legacy checkpoint syncing which will download tail headers
 // based on a hardcoded checkpoint.
-func TestLegacyCheckpointSyncingLes3(t *testing.T) { testCheckpointSyncing(t, 3, 1) }
+func TestLegacyCheckpointSyncingLes3(t *testing.T) { testCheckpointSyncing(t, lpv3, 1) }
 
 // Test checkpoint syncing which will download tail headers based
 // on a verified checkpoint.
-func TestCheckpointSyncingLes3(t *testing.T) { testCheckpointSyncing(t, 3, 2) }
+func TestCheckpointSyncingLes3(t *testing.T) { testCheckpointSyncing(t, lpv3, 2) }
 
 func testCheckpointSyncing(t *testing.T, protocol int, syncMode int) {
 	config := light.TestServerIndexerConfig
@@ -134,10 +134,10 @@ func testCheckpointSyncing(t *testing.T, protocol int, syncMode int) {
 	}
 }
 
-func TestMissOracleBackend(t *testing.T)             { testMissOracleBackend(t, true) }
-func TestMissOracleBackendNoCheckpoint(t *testing.T) { testMissOracleBackend(t, false) }
+func TestMissOracleBackendLES3(t *testing.T)             { testMissOracleBackend(t, true, lpv3) }
+func TestMissOracleBackendNoCheckpointLES3(t *testing.T) { testMissOracleBackend(t, false, lpv3) }
 
-func testMissOracleBackend(t *testing.T, hasCheckpoint bool) {
+func testMissOracleBackend(t *testing.T, hasCheckpoint bool, protocol int) {
 	config := light.TestServerIndexerConfig
 
 	waitIndexers := func(cIndexer, bIndexer, btIndexer *core.ChainIndexer) {
@@ -153,7 +153,7 @@ func testMissOracleBackend(t *testing.T, hasCheckpoint bool) {
 	// Generate 128+1 blocks (totally 1 CHT section)
 	netconfig := testnetConfig{
 		blocks:    int(config.ChtSize + config.ChtConfirms),
-		protocol:  3,
+		protocol:  protocol,
 		indexFn:   waitIndexers,
 		nopruning: true,
 	}
@@ -232,7 +232,9 @@ func testMissOracleBackend(t *testing.T, hasCheckpoint bool) {
 	}
 }
 
-func TestSyncFromConfiguredCheckpoint(t *testing.T) {
+func TestSyncFromConfiguredCheckpointLES3(t *testing.T) { testSyncFromConfiguredCheckpoint(t, lpv3) }
+
+func testSyncFromConfiguredCheckpoint(t *testing.T, protocol int) {
 	config := light.TestServerIndexerConfig
 
 	waitIndexers := func(cIndexer, bIndexer, btIndexer *core.ChainIndexer) {
@@ -248,7 +250,7 @@ func TestSyncFromConfiguredCheckpoint(t *testing.T) {
 	// Generate 256+1 blocks (totally 2 CHT sections)
 	netconfig := testnetConfig{
 		blocks:    int(2*config.ChtSize + config.ChtConfirms),
-		protocol:  3,
+		protocol:  protocol,
 		indexFn:   waitIndexers,
 		nopruning: true,
 	}
@@ -314,7 +316,9 @@ func TestSyncFromConfiguredCheckpoint(t *testing.T) {
 	}
 }
 
-func TestSyncAll(t *testing.T) {
+func TestSyncAll(t *testing.T) { testSyncAll(t, lpv3) }
+
+func testSyncAll(t *testing.T, protocol int) {
 	config := light.TestServerIndexerConfig
 
 	waitIndexers := func(cIndexer, bIndexer, btIndexer *core.ChainIndexer) {
@@ -330,7 +334,7 @@ func TestSyncAll(t *testing.T) {
 	// Generate 256+1 blocks (totally 2 CHT sections)
 	netconfig := testnetConfig{
 		blocks:    int(2*config.ChtSize + config.ChtConfirms),
-		protocol:  3,
+		protocol:  protocol,
 		indexFn:   waitIndexers,
 		nopruning: true,
 	}
