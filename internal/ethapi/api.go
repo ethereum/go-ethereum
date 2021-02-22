@@ -1222,15 +1222,19 @@ type RPCTransaction struct {
 // newRPCTransaction returns a transaction that will serialize to the RPC
 // representation, with the given location metadata set (if available).
 func newRPCTransaction(tx *types.Transaction, blockHash common.Hash, blockNumber uint64, index uint64) *RPCTransaction {
-	var signer types.Signer = types.FrontierSigner{}
-	if tx.Type() == types.AccessListTxType {
+	// Determine the signer. For replay-protected transactions, use the 'newest' signer,
+	// because we assume that signers are backwards-compatible with old transactions. For
+	// non-protected transactions, the homestead signer signer is used because the return
+	// value of ChainId is zero for those transactions.
+	var signer types.Signer
+	if tx.Protected() {
 		signer = types.NewEIP2718Signer(tx.ChainId())
-	} else if tx.Protected() {
-		signer = types.NewEIP155Signer(tx.ChainId())
+	} else {
+		signer = types.HomesteadSigner{}
 	}
+
 	from, _ := types.Sender(signer, tx)
 	v, r, s := tx.RawSignatureValues()
-
 	result := &RPCTransaction{
 		From:     from,
 		Gas:      hexutil.Uint64(tx.Gas()),
@@ -1295,11 +1299,15 @@ func newRPCTransactionFromBlockHash(b *types.Block, hash common.Hash) *RPCTransa
 type PublicTransactionPoolAPI struct {
 	b         Backend
 	nonceLock *AddrLocker
+	signer    types.Signer
 }
 
 // NewPublicTransactionPoolAPI creates a new RPC service with methods specific for the transaction pool.
 func NewPublicTransactionPoolAPI(b Backend, nonceLock *AddrLocker) *PublicTransactionPoolAPI {
-	return &PublicTransactionPoolAPI{b, nonceLock}
+	// The signer used by the API should always be the 'latest' known one because we expect
+	// signers to be backwards-compatible with old transactions.
+	signer := types.NewEIP2718Signer(b.ChainConfig().ChainID)
+	return &PublicTransactionPoolAPI{b, nonceLock, signer}
 }
 
 // GetBlockTransactionCountByNumber returns the number of transactions in the block with the given block number.
@@ -1454,9 +1462,8 @@ func (s *PublicTransactionPoolAPI) GetTransactionReceipt(ctx context.Context, ha
 	if receipt.ContractAddress != (common.Address{}) {
 		fields["contractAddress"] = receipt.ContractAddress
 	}
-
-	if txType := tx.Type(); txType != types.LegacyTxType {
-		fields["type"] = hexutil.Uint(txType)
+	if tx.Type() != types.LegacyTxType {
+		fields["type"] = hexutil.Uint(tx.Type())
 	}
 	return fields, nil
 }
@@ -1758,11 +1765,7 @@ func (s *PublicTransactionPoolAPI) PendingTransactions() ([]*RPCTransaction, err
 	}
 	transactions := make([]*RPCTransaction, 0, len(pending))
 	for _, tx := range pending {
-		var signer types.Signer = types.HomesteadSigner{}
-		if tx.Protected() {
-			signer = types.NewEIP155Signer(tx.ChainId())
-		}
-		from, _ := types.Sender(signer, tx)
+		from, _ := types.Sender(s.signer, tx)
 		if _, exists := accounts[from]; exists {
 			transactions = append(transactions, newRPCPendingTransaction(tx))
 		}
@@ -1799,13 +1802,9 @@ func (s *PublicTransactionPoolAPI) Resend(ctx context.Context, sendArgs SendTxAr
 		return common.Hash{}, err
 	}
 	for _, p := range pending {
-		var signer types.Signer = types.HomesteadSigner{}
-		if p.Protected() {
-			signer = types.NewEIP155Signer(p.ChainId())
-		}
-		wantSigHash := signer.Hash(matchTx)
-
-		if pFrom, err := types.Sender(signer, p); err == nil && pFrom == sendArgs.From && signer.Hash(p) == wantSigHash {
+		wantSigHash := s.signer.Hash(matchTx)
+		pFrom, err := types.Sender(s.signer, p)
+		if err == nil && pFrom == sendArgs.From && s.signer.Hash(p) == wantSigHash {
 			// Match. Re-sign and send the transaction.
 			if gasPrice != nil && (*big.Int)(gasPrice).Sign() != 0 {
 				sendArgs.GasPrice = gasPrice
@@ -1823,7 +1822,6 @@ func (s *PublicTransactionPoolAPI) Resend(ctx context.Context, sendArgs SendTxAr
 			return signedTx.Hash(), nil
 		}
 	}
-
 	return common.Hash{}, fmt.Errorf("transaction %#x not found", matchTx.Hash())
 }
 
