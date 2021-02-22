@@ -17,6 +17,7 @@
 package ethtest
 
 import (
+	"github.com/stretchr/testify/assert"
 	"time"
 
 	"github.com/ethereum/go-ethereum/core/types"
@@ -32,6 +33,8 @@ func (s *Suite) Eth66Tests() []utesting.Test {
 		{Name: "Status_66", Fn: s.TestStatus_66},
 		{Name: "GetBlockHeaders_66", Fn: s.TestGetBlockHeaders_66},
 		{Name: "TestSimultaneousRequests_66", Fn: s.TestSimultaneousRequests_66},
+		{Name: "TestSameRequestID_66", Fn: s.TestSameRequestID_66},
+		{Name: "TestZeroRequestID_66", Fn: s.TestZeroRequestID_66},
 		{Name: "Broadcast_66", Fn: s.TestBroadcast_66},
 		{Name: "GetBlockBodies_66", Fn: s.TestGetBlockBodies_66},
 		{Name: "TestLargeAnnounce_66", Fn: s.TestLargeAnnounce_66},
@@ -169,8 +172,12 @@ func (s *Suite) TestGetBlockBodies_66(t *utesting.T) {
 		t.Fatalf("could not write to connection: %v", err)
 	}
 
-	switch msg := conn.readAndServe66(id, s.chain, timeout).(type) {
+	reqID, msg := conn.readAndServe66(s.chain, timeout)
+	switch msg := msg.(type) {
 	case BlockBodies:
+		if reqID != req.RequestId {
+			t.Fatalf("request ID mismatch: wanted %d, got %d", req.RequestId, reqID)
+		}
 		t.Logf("received %d block bodies", len(msg))
 	default:
 		t.Fatalf("unexpected: %s", pretty.Sdump(msg))
@@ -352,4 +359,95 @@ func (s *Suite) TestMaliciousTx_66(t *utesting.T) {
 		t.Logf("Testing malicious tx propagation: %v\n", i)
 		sendFailingTx66(t, s, tx)
 	}
+}
+
+// TestZeroRequestID_66 checks that a request ID of zero is still handled
+// by the node.
+func (s *Suite) TestZeroRequestID_66(t *utesting.T) {
+	conn := s.setupConnection66(t)
+	req := &eth.GetBlockHeadersPacket66{
+		RequestId: 0,
+		GetBlockHeadersPacket: &eth.GetBlockHeadersPacket{
+			Origin: eth.HashOrNumber{
+				Number: 0,
+			},
+			Amount: 2,
+		},
+	}
+	if err := conn.write66(req, GetBlockHeaders{}.Code()); err != nil {
+		t.Fatalf("could not write to connection: %v", err)
+	}
+	reqID, msg := conn.readAndServe66(s.chain, timeout)
+	assert.Equal(t, uint64(0), reqID)
+	// check headers
+	headers, ok := msg.(BlockHeaders)
+	if !ok {
+		t.Fatalf("unexpected: %s", pretty.Sdump(msg))
+	}
+	for i, header := range headers {
+		assert.Equal(t, s.chain.blocks[i].Header(), header)
+	}
+}
+
+// TestSameRequestID_66 sends two requests with the same request ID
+// concurrently to a single node.
+func (s *Suite) TestSameRequestID_66(t *utesting.T) {
+	conn := s.setupConnection66(t)
+	// create two separate requests with same ID
+	reqID := uint64(1234)
+	req1 := &eth.GetBlockHeadersPacket66{
+		RequestId: reqID,
+		GetBlockHeadersPacket: &eth.GetBlockHeadersPacket{
+			Origin: eth.HashOrNumber{
+				Number: 0,
+			},
+			Amount: 2,
+		},
+	}
+	req2 := &eth.GetBlockBodiesPacket66{
+		RequestId: reqID,
+		GetBlockBodiesPacket: eth.GetBlockBodiesPacket{
+			s.chain.blocks[30].Hash(),
+			s.chain.blocks[31].Hash(),
+			s.chain.blocks[32].Hash(),
+		},
+	}
+	// send requests concurrently
+	go func() {
+		if err := conn.write66(req2, GetBlockBodies{}.Code()); err != nil {
+			t.Fatalf("could not write to connection: %v", err)
+		}
+	}()
+	if err := conn.write66(req1, GetBlockHeaders{}.Code()); err != nil {
+		t.Fatalf("could not write to connection: %v", err)
+	}
+	// check node response
+	// TODO does this have to be simultaneous?
+	reqIDChan := make(chan uint64, 1)
+	msgChan := make(chan Message, 1)
+	go func(reqIDChan chan uint64, msgChan chan Message) {
+		reqID, msg := conn.readAndServe66(s.chain, timeout)
+		reqIDChan <- reqID
+		msgChan <- msg
+	}(reqIDChan, msgChan)
+
+	reqID1, msg1 := conn.readAndServe66(s.chain, timeout)
+	assert.Equal(t, reqID, reqID1)
+
+	headers, ok := msg1.(BlockHeaders)
+	if !ok {
+		t.Fatalf("unexpected: %s", pretty.Sdump(msg1))
+	}
+	for i, header := range headers {
+		assert.Equal(t, s.chain.blocks[i].Header(), header)
+	}
+
+	msg2 := <- msgChan
+	assert.Equal(t, reqID, <- reqIDChan)
+
+	bodies, ok := msg2.(BlockBodies)
+	if !ok {
+		t.Fatalf("unexpected: %s", pretty.Sdump(msg1))
+	}
+	assert.Equal(t, 3, len(bodies))
 }
