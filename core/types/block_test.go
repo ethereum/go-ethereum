@@ -110,12 +110,7 @@ func TestEIP2718BlockEncoding(t *testing.T) {
 		Recipient:    &to,
 		GasLimit:     123457,
 		Price:        big.NewInt(10),
-		Accesses: &AccessList{AccessTuple{
-			Address: &addr,
-			StorageKeys: []*common.Hash{
-				{0},
-			},
-		}},
+		Accesses:     AccessList{{Address: addr, StorageKeys: []common.Hash{{0}}}},
 	})
 	sig2 := common.Hex2Bytes("3dbacc8d0259f2508625e97fdfc57cd85fdd16e5821bc2c10bdd1a52649e8335476e10695b183a87b0aa292a7f4b78ef0c3fbe62aa2c42c84e1d9c3da159ef1401")
 	tx2, _ = tx2.WithSignature(NewEIP2718Signer(big.NewInt(1)), sig2)

@@ -95,15 +95,15 @@ func (tx *LegacyTx) copy() TxData {
 
 // accessors for innerTx.
 
-func (tx *LegacyTx) txType() byte            { return LegacyTxType }
-func (tx *LegacyTx) chainID() *big.Int       { return deriveChainId(tx.V) }
-func (tx *LegacyTx) accessList() *AccessList { return nil }
-func (tx *LegacyTx) data() []byte            { return tx.Payload }
-func (tx *LegacyTx) gas() uint64             { return tx.GasLimit }
-func (tx *LegacyTx) gasPrice() *big.Int      { return tx.Price }
-func (tx *LegacyTx) value() *big.Int         { return tx.Amount }
-func (tx *LegacyTx) nonce() uint64           { return tx.AccountNonce }
-func (tx *LegacyTx) to() *common.Address     { return tx.Recipient }
+func (tx *LegacyTx) txType() byte           { return LegacyTxType }
+func (tx *LegacyTx) chainID() *big.Int      { return deriveChainId(tx.V) }
+func (tx *LegacyTx) accessList() AccessList { return nil }
+func (tx *LegacyTx) data() []byte           { return tx.Payload }
+func (tx *LegacyTx) gas() uint64            { return tx.GasLimit }
+func (tx *LegacyTx) gasPrice() *big.Int     { return tx.Price }
+func (tx *LegacyTx) value() *big.Int        { return tx.Amount }
+func (tx *LegacyTx) nonce() uint64          { return tx.AccountNonce }
+func (tx *LegacyTx) to() *common.Address    { return tx.Recipient }
 
 func (tx *LegacyTx) rawSignatureValues() (v, r, s *big.Int) {
 	return tx.V, tx.R, tx.S

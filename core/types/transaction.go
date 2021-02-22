@@ -70,7 +70,7 @@ type TxData interface {
 	copy() TxData // creates a deep copy and initializes all fields
 
 	chainID() *big.Int
-	accessList() *AccessList
+	accessList() AccessList
 	data() []byte
 	gas() uint64
 	gasPrice() *big.Int
@@ -250,7 +250,7 @@ func (tx *Transaction) ChainId() *big.Int {
 func (tx *Transaction) Data() []byte { return tx.inner.data() }
 
 // AccessList returns the access list of the transaction.
-func (tx *Transaction) AccessList() *AccessList { return tx.inner.accessList() }
+func (tx *Transaction) AccessList() AccessList { return tx.inner.accessList() }
 
 // Gas returns the gas limit of the transaction.
 func (tx *Transaction) Gas() uint64 { return tx.inner.gas() }
@@ -517,11 +517,11 @@ type Message struct {
 	gasLimit   uint64
 	gasPrice   *big.Int
 	data       []byte
-	accessList *AccessList
+	accessList AccessList
 	checkNonce bool
 }
 
-func NewMessage(from common.Address, to *common.Address, nonce uint64, amount *big.Int, gasLimit uint64, gasPrice *big.Int, data []byte, accessList *AccessList, checkNonce bool) Message {
+func NewMessage(from common.Address, to *common.Address, nonce uint64, amount *big.Int, gasLimit uint64, gasPrice *big.Int, data []byte, accessList AccessList, checkNonce bool) Message {
 	return Message{
 		from:       from,
 		to:         to,
@@ -553,12 +553,12 @@ func (tx *Transaction) AsMessage(s Signer) (Message, error) {
 	return msg, err
 }
 
-func (m Message) From() common.Address    { return m.from }
-func (m Message) To() *common.Address     { return m.to }
-func (m Message) GasPrice() *big.Int      { return m.gasPrice }
-func (m Message) Value() *big.Int         { return m.amount }
-func (m Message) Gas() uint64             { return m.gasLimit }
-func (m Message) Nonce() uint64           { return m.nonce }
-func (m Message) Data() []byte            { return m.data }
-func (m Message) AccessList() *AccessList { return m.accessList }
-func (m Message) CheckNonce() bool        { return m.checkNonce }
+func (m Message) From() common.Address   { return m.from }
+func (m Message) To() *common.Address    { return m.to }
+func (m Message) GasPrice() *big.Int     { return m.gasPrice }
+func (m Message) Value() *big.Int        { return m.amount }
+func (m Message) Gas() uint64            { return m.gasLimit }
+func (m Message) Nonce() uint64          { return m.nonce }
+func (m Message) Data() []byte           { return m.data }
+func (m Message) AccessList() AccessList { return m.accessList }
+func (m Message) CheckNonce() bool       { return m.checkNonce }

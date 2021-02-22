@@ -781,17 +781,20 @@ func (args *CallArgs) ToMessage(globalGasCap uint64) types.Message {
 	if args.GasPrice != nil {
 		gasPrice = args.GasPrice.ToInt()
 	}
-
 	value := new(big.Int)
 	if args.Value != nil {
 		value = args.Value.ToInt()
 	}
-
 	var data []byte
 	if args.Data != nil {
 		data = *args.Data
 	}
-	msg := types.NewMessage(addr, args.To, 0, value, gas, gasPrice, data, args.AccessList, false)
+	var accessList types.AccessList
+	if args.AccessList != nil {
+		accessList = *args.AccessList
+	}
+
+	msg := types.NewMessage(addr, args.To, 0, value, gas, gasPrice, data, accessList, false)
 	return msg
 }
 
@@ -1255,7 +1258,8 @@ func newRPCTransaction(tx *types.Transaction, blockHash common.Hash, blockNumber
 		result.TransactionIndex = (*hexutil.Uint64)(&index)
 	}
 	if tx.Type() == types.AccessListTxType {
-		result.Accesses = tx.AccessList()
+		al := tx.AccessList()
+		result.Accesses = &al
 		result.ChainID = (*hexutil.Big)(tx.ChainId())
 	}
 	return result
@@ -1592,7 +1596,7 @@ func (args *SendTxArgs) toTransaction() *types.Transaction {
 			Price:        (*big.Int)(args.GasPrice),
 			Amount:       (*big.Int)(args.Value),
 			Payload:      input,
-			Accesses:     args.AccessList,
+			Accesses:     *args.AccessList,
 		}
 	}
 	return types.NewTx(data)

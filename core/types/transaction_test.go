@@ -316,12 +316,7 @@ func TestTransactionCoding(t *testing.T) {
 		signer    = NewEIP2718Signer(common.Big1)
 		addr      = common.HexToAddress("0x0000000000000000000000000000000000000001")
 		recipient = common.HexToAddress("095e7baea6a6c7c4c2dfeb977efac326af552d87")
-		accesses  = AccessList{
-			AccessTuple{
-				Address:     &addr,
-				StorageKeys: []*common.Hash{{0}},
-			},
-		}
+		accesses  = AccessList{{Address: addr, StorageKeys: []common.Hash{{0}}}}
 	)
 	for i := uint64(0); i < 500; i++ {
 		var txdata TxData
@@ -351,7 +346,7 @@ func TestTransactionCoding(t *testing.T) {
 				Recipient:    &recipient,
 				GasLimit:     123457,
 				Price:        big.NewInt(10),
-				Accesses:     &accesses,
+				Accesses:     accesses,
 				Payload:      []byte("abcdef"),
 			}
 		case 3:
@@ -371,7 +366,7 @@ func TestTransactionCoding(t *testing.T) {
 				AccountNonce: i,
 				GasLimit:     123457,
 				Price:        big.NewInt(10),
-				Accesses:     &accesses,
+				Accesses:     accesses,
 			}
 		}
 		tx, err := SignNewTx(key, signer, txdata)

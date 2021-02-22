@@ -3079,11 +3079,9 @@ func TestEIP2718Transition(t *testing.T) {
 			Recipient:    &aa,
 			GasLimit:     30000,
 			Price:        big.NewInt(1),
-			Accesses: &types.AccessList{types.AccessTuple{
-				Address: &aa,
-				StorageKeys: []*common.Hash{
-					{0},
-				},
+			Accesses: types.AccessList{{
+				Address:     aa,
+				StorageKeys: []common.Hash{{0}},
 			}},
 		})
 		b.AddTx(tx)

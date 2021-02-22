@@ -992,7 +992,7 @@ func (s *StateDB) Commit(deleteEmptyObjects bool) (common.Hash, error) {
 // - Add the contents of the optional tx access list (2930)
 //
 // This method should only be called if Yolov3/Berlin/2929+2930 is applicable at the current number.
-func (s *StateDB) PrepareAccessList(sender common.Address, dst *common.Address, precompiles []common.Address, accessList *types.AccessList) {
+func (s *StateDB) PrepareAccessList(sender common.Address, dst *common.Address, precompiles []common.Address, list types.AccessList) {
 	s.AddAddressToAccessList(sender)
 	if dst != nil {
 		s.AddAddressToAccessList(*dst)
@@ -1001,12 +1001,10 @@ func (s *StateDB) PrepareAccessList(sender common.Address, dst *common.Address, 
 	for _, addr := range precompiles {
 		s.AddAddressToAccessList(addr)
 	}
-	if accessList != nil {
-		for _, el := range *accessList {
-			s.AddAddressToAccessList(*el.Address)
-			for _, key := range el.StorageKeys {
-				s.AddSlotToAccessList(*el.Address, *key)
-			}
+	for _, el := range list {
+		s.AddAddressToAccessList(el.Address)
+		for _, key := range el.StorageKeys {
+			s.AddSlotToAccessList(el.Address, key)
 		}
 	}
 }

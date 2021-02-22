@@ -22,9 +22,11 @@ import (
 	"github.com/ethereum/go-ethereum/common"
 )
 
+//go:generate gencodec -type AccessTuple -out gen_access_tuple.go
+
 type AccessTuple struct {
-	Address     *common.Address `json:"address"        gencodec:"required"`
-	StorageKeys []*common.Hash  `json:"storageKeys"    gencodec:"required"`
+	Address     common.Address `json:"address"        gencodec:"required"`
+	StorageKeys []common.Hash  `json:"storageKeys"    gencodec:"required"`
 }
 
 type AccessList []AccessTuple
@@ -46,7 +48,7 @@ type AccessListTx struct {
 	Recipient    *common.Address `rlp:"nil"` // nil means contract creation
 	Amount       *big.Int
 	Payload      []byte
-	Accesses     *AccessList
+	Accesses     AccessList
 
 	// Signature values
 	V *big.Int
@@ -62,7 +64,7 @@ func (tx *AccessListTx) copy() TxData {
 		Payload:      common.CopyBytes(tx.Payload),
 		GasLimit:     tx.GasLimit,
 		// These are copied below.
-		Accesses: new(AccessList),
+		Accesses: make(AccessList, len(tx.Accesses)),
 		Amount:   new(big.Int),
 		Chain:    new(big.Int),
 		Price:    new(big.Int),
@@ -70,10 +72,7 @@ func (tx *AccessListTx) copy() TxData {
 		R:        new(big.Int),
 		S:        new(big.Int),
 	}
-	if tx.Accesses != nil {
-		// TODO: deep copy
-		cpy.Accesses = tx.Accesses
-	}
+	copy(cpy.Accesses, tx.Accesses)
 	if tx.Amount != nil {
 		cpy.Amount.Set(tx.Amount)
 	}
@@ -97,15 +96,15 @@ func (tx *AccessListTx) copy() TxData {
 
 // accessors for innerTx.
 
-func (tx *AccessListTx) txType() byte            { return AccessListTxType }
-func (tx *AccessListTx) chainID() *big.Int       { return tx.Chain }
-func (tx *AccessListTx) protected() bool         { return true }
-func (tx *AccessListTx) accessList() *AccessList { return tx.Accesses }
-func (tx *AccessListTx) data() []byte            { return tx.Payload }
-func (tx *AccessListTx) gas() uint64             { return tx.GasLimit }
-func (tx *AccessListTx) gasPrice() *big.Int      { return tx.Price }
-func (tx *AccessListTx) value() *big.Int         { return tx.Amount }
-func (tx *AccessListTx) nonce() uint64           { return tx.AccountNonce }
-func (tx *AccessListTx) to() *common.Address     { return tx.Recipient }
+func (tx *AccessListTx) txType() byte           { return AccessListTxType }
+func (tx *AccessListTx) chainID() *big.Int      { return tx.Chain }
+func (tx *AccessListTx) protected() bool        { return true }
+func (tx *AccessListTx) accessList() AccessList { return tx.Accesses }
+func (tx *AccessListTx) data() []byte           { return tx.Payload }
+func (tx *AccessListTx) gas() uint64            { return tx.GasLimit }
+func (tx *AccessListTx) gasPrice() *big.Int     { return tx.Price }
+func (tx *AccessListTx) value() *big.Int        { return tx.Amount }
+func (tx *AccessListTx) nonce() uint64          { return tx.AccountNonce }
+func (tx *AccessListTx) to() *common.Address    { return tx.Recipient }
 
 func (tx *AccessListTx) rawSignatureValues() (v, r, s *big.Int) { return tx.V, tx.R, tx.S }

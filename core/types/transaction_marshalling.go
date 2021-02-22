@@ -53,7 +53,7 @@ func (t *Transaction) MarshalJSON() ([]byte, error) {
 		enc.S = (*hexutil.Big)(tx.S)
 	case *AccessListTx:
 		enc.ChainID = (*hexutil.Big)(tx.Chain)
-		enc.AccessList = tx.Accesses
+		enc.AccessList = &tx.Accesses
 		enc.AccountNonce = (*hexutil.Uint64)(&tx.AccountNonce)
 		enc.GasLimit = (*hexutil.Uint64)(&tx.GasLimit)
 		enc.Price = (*hexutil.Big)(tx.Price)
@@ -127,7 +127,7 @@ func (t *Transaction) UnmarshalJSON(input []byte) error {
 		inner = &itx
 		// Access list is optional for now.
 		if dec.AccessList != nil {
-			itx.Accesses = dec.AccessList
+			itx.Accesses = *dec.AccessList
 		}
 		if dec.ChainID == nil {
 			return errors.New("missing required field 'chainId' in transaction")
