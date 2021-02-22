@@ -33,15 +33,10 @@ type AccessTuple struct {
 	StorageKeys []common.Hash  `json:"storageKeys"    gencodec:"required"`
 }
 
-// Addresses returns the number of accounts covered by the access list.
-func (al *AccessList) Addresses() int {
-	return len(*al)
-}
-
 // StorageKeys returns the total number of storage keys in the access list.
-func (al *AccessList) StorageKeys() int {
+func (al AccessList) StorageKeys() int {
 	sum := 0
-	for _, tuple := range *al {
+	for _, tuple := range al {
 		sum += len(tuple.StorageKeys)
 	}
 	return sum
