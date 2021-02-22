@@ -753,8 +753,12 @@ func (w *worker) commitTransactions(txs *types.TransactionsByMinerFeeAndNonce, c
 		return true
 	}
 
+	gasLimit := w.current.header.GasLimit
+	if w.chain.Config().IsAleut(w.current.header.Number) {
+		gasLimit *= params.ElasticityMultiplier
+	}
 	if w.current.gasPool == nil {
-		w.current.gasPool = new(core.GasPool).AddGas(w.current.header.GasLimit)
+		w.current.gasPool = new(core.GasPool).AddGas(gasLimit)
 	}
 
 	var coalescedLogs []*types.Log
@@ -769,7 +773,7 @@ func (w *worker) commitTransactions(txs *types.TransactionsByMinerFeeAndNonce, c
 		if interrupt != nil && atomic.LoadInt32(interrupt) != commitInterruptNone {
 			// Notify resubmit loop to increase resubmitting interval due to too frequent commits.
 			if atomic.LoadInt32(interrupt) == commitInterruptResubmit {
-				ratio := float64(w.current.header.GasLimit-w.current.gasPool.Gas()) / float64(w.current.header.GasLimit)
+				ratio := float64(gasLimit-w.current.gasPool.Gas()) / float64(gasLimit)
 				if ratio < 0.1 {
 					ratio = 0.1
 				}
