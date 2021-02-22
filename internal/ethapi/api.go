@@ -1211,8 +1211,8 @@ type RPCTransaction struct {
 	To               *common.Address   `json:"to"`
 	TransactionIndex *hexutil.Uint64   `json:"transactionIndex"`
 	Value            *hexutil.Big      `json:"value"`
+	Type             hexutil.Uint64    `json:"type"`
 	Accesses         *types.AccessList `json:"accessList,omitempty"`
-	Type             hexutil.Uint64    `json:"type,omitempty"`
 	ChainID          *hexutil.Big      `json:"chainId,omitempty"`
 	V                *hexutil.Big      `json:"v"`
 	R                *hexutil.Big      `json:"r"`
@@ -1236,6 +1236,7 @@ func newRPCTransaction(tx *types.Transaction, blockHash common.Hash, blockNumber
 	from, _ := types.Sender(signer, tx)
 	v, r, s := tx.RawSignatureValues()
 	result := &RPCTransaction{
+		Type:     hexutil.Uint64(tx.Type()),
 		From:     from,
 		Gas:      hexutil.Uint64(tx.Gas()),
 		GasPrice: (*hexutil.Big)(tx.GasPrice()),
@@ -1254,7 +1255,6 @@ func newRPCTransaction(tx *types.Transaction, blockHash common.Hash, blockNumber
 		result.TransactionIndex = (*hexutil.Uint64)(&index)
 	}
 	if tx.Type() == types.AccessListTxType {
-		result.Type = hexutil.Uint64(tx.Type())
 		result.Accesses = tx.AccessList()
 		result.ChainID = (*hexutil.Big)(tx.ChainId())
 	}
