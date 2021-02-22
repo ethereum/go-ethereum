@@ -109,8 +109,9 @@ func (c *route53Client) deploy(name string, t *dnsdisc.Tree) error {
 		return nil
 	}
 
-	// Submit change batches.
+	// Submit all change batches.
 	batches := splitChanges(changes, route53ChangeSizeLimit, route53ChangeCountLimit)
+	changesToCheck := make([]*route53.ChangeResourceRecordSetsOutput, len(batches))
 	for i, changes := range batches {
 		log.Info(fmt.Sprintf("Submitting %d changes to Route53", len(changes)))
 		batch := &types.ChangeBatch{
@@ -118,13 +119,16 @@ func (c *route53Client) deploy(name string, t *dnsdisc.Tree) error {
 			Comment: aws.String(fmt.Sprintf("enrtree update %d/%d of %s at seq %d", i+1, len(batches), name, t.Seq())),
 		}
 		req := &route53.ChangeResourceRecordSetsInput{HostedZoneId: &c.zoneID, ChangeBatch: batch}
-		resp, err := c.api.ChangeResourceRecordSets(context.TODO(), req)
+		changesToCheck[i], err = c.api.ChangeResourceRecordSets(context.TODO(), req)
 		if err != nil {
 			return err
 		}
+	}
 
-		log.Info(fmt.Sprintf("Waiting for change request %s", *resp.ChangeInfo.Id))
-		wreq := &route53.GetChangeInput{Id: resp.ChangeInfo.Id}
+	// wait for all change batches to propagate
+	for _, change := range changesToCheck {
+		log.Info(fmt.Sprintf("Waiting for change request %s", *change.ChangeInfo.Id))
+		wreq := &route53.GetChangeInput{Id: change.ChangeInfo.Id}
 		var count int
 		for {
 			wresp, err := c.api.GetChange(context.TODO(), wreq)
