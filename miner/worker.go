@@ -1047,11 +1047,18 @@ func (w *worker) postSideBlock(event core.ChainSideEvent) {
 	}
 }
 
-// totalFees computes total consumed fees in ETH. Block transactions and receipts have to have the same order.
+// totalFees computes total consumed miner fees in ETH. Block transactions and receipts have to have the same order.
 func totalFees(block *types.Block, receipts []*types.Receipt) *big.Float {
 	feesWei := new(big.Int)
 	for i, tx := range block.Transactions() {
-		feesWei.Add(feesWei, new(big.Int).Mul(new(big.Int).SetUint64(receipts[i].GasUsed), tx.GasPrice()))
+		minerFee := tx.Tip()
+		if block.BaseFee() != nil {
+			maxMinerFee := (&big.Int{}).Sub(tx.FeeCap(), block.BaseFee())
+			if maxMinerFee.Cmp(minerFee) < 0 {
+				minerFee = maxMinerFee
+			}
+		}
+		feesWei.Add(feesWei, new(big.Int).Mul(new(big.Int).SetUint64(receipts[i].GasUsed), minerFee))
 	}
 	return new(big.Float).Quo(new(big.Float).SetInt(feesWei), new(big.Float).SetInt(big.NewInt(params.Ether)))
 }
