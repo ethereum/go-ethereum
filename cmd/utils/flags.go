@@ -1073,9 +1073,9 @@ func setLes(ctx *cli.Context, cfg *ethconfig.Config) {
 	}
 }
 
-// makeDatabaseHandles raises out the number of allowed file handles per process
+// MakeDatabaseHandles raises out the number of allowed file handles per process
 // for Geth and returns half of the allowance to assign to the database.
-func makeDatabaseHandles() int {
+func MakeDatabaseHandles() int {
 	limit, err := fdlimit.Maximum()
 	if err != nil {
 		Fatalf("Failed to retrieve file descriptor allowance: %v", err)
@@ -1546,7 +1546,7 @@ func SetEthConfig(ctx *cli.Context, stack *node.Node, cfg *ethconfig.Config) {
 	if ctx.GlobalIsSet(CacheFlag.Name) || ctx.GlobalIsSet(CacheDatabaseFlag.Name) {
 		cfg.DatabaseCache = ctx.GlobalInt(CacheFlag.Name) * ctx.GlobalInt(CacheDatabaseFlag.Name) / 100
 	}
-	cfg.DatabaseHandles = makeDatabaseHandles()
+	cfg.DatabaseHandles = MakeDatabaseHandles()
 	if ctx.GlobalIsSet(AncientFlag.Name) {
 		cfg.DatabaseFreezer = ctx.GlobalString(AncientFlag.Name)
 	}
@@ -1821,7 +1821,7 @@ func SplitTagsFlag(tagsFlag string) map[string]string {
 func MakeChainDatabase(ctx *cli.Context, stack *node.Node) ethdb.Database {
 	var (
 		cache   = ctx.GlobalInt(CacheFlag.Name) * ctx.GlobalInt(CacheDatabaseFlag.Name) / 100
-		handles = makeDatabaseHandles()
+		handles = MakeDatabaseHandles()
 
 		err     error
 		chainDb ethdb.Database
