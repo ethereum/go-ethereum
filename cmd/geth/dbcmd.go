@@ -18,7 +18,6 @@ package main
 
 import (
 	"fmt"
-	"github.com/syndtr/goleveldb/leveldb/opt"
 	"os"
 	"path/filepath"
 	"time"
@@ -31,6 +30,7 @@ import (
 	"github.com/ethereum/go-ethereum/ethdb"
 	"github.com/ethereum/go-ethereum/ethdb/leveldb"
 	"github.com/ethereum/go-ethereum/log"
+	"github.com/syndtr/goleveldb/leveldb/opt"
 	"gopkg.in/urfave/cli.v1"
 )
 
@@ -269,7 +269,9 @@ func dbGet(ctx *cli.Context) error {
 	db, err := leveldb.NewCustom(path, "", func(options *opt.Options) {
 		options.ReadOnly = true
 	})
-
+	if err != nil {
+		return err
+	}
 	defer db.Close()
 	key, err := hexutil.Decode(ctx.Args().Get(0))
 	if err != nil {
