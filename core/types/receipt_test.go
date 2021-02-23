@@ -167,24 +167,24 @@ func TestDeriveFields(t *testing.T) {
 	to3 := common.HexToAddress("0x3")
 	txs := Transactions{
 		NewTx(&LegacyTx{
-			AccountNonce: 1,
-			Amount:       big.NewInt(1),
-			GasLimit:     1,
-			Price:        big.NewInt(1),
+			Nonce:    1,
+			Value:    big.NewInt(1),
+			Gas:      1,
+			GasPrice: big.NewInt(1),
 		}),
 		NewTx(&LegacyTx{
-			Recipient:    &to2,
-			AccountNonce: 2,
-			Amount:       big.NewInt(2),
-			GasLimit:     2,
-			Price:        big.NewInt(2),
+			To:       &to2,
+			Nonce:    2,
+			Value:    big.NewInt(2),
+			Gas:      2,
+			GasPrice: big.NewInt(2),
 		}),
 		NewTx(&AccessListTx{
-			Recipient:    &to3,
-			AccountNonce: 3,
-			Amount:       big.NewInt(3),
-			GasLimit:     3,
-			Price:        big.NewInt(3),
+			To:       &to3,
+			Nonce:    3,
+			Value:    big.NewInt(3),
+			Gas:      3,
+			GasPrice: big.NewInt(3),
 		}),
 	}
 	// Create the corresponding receipts

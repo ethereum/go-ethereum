@@ -93,11 +93,11 @@ func TestEIP2718BlockEncoding(t *testing.T) {
 	// Create legacy tx.
 	to := common.HexToAddress("095e7baea6a6c7c4c2dfeb977efac326af552d87")
 	tx1 := NewTx(&LegacyTx{
-		AccountNonce: 0,
-		Recipient:    &to,
-		Amount:       big.NewInt(10),
-		GasLimit:     50000,
-		Price:        big.NewInt(10),
+		Nonce:    0,
+		To:       &to,
+		Value:    big.NewInt(10),
+		Gas:      50000,
+		GasPrice: big.NewInt(10),
 	})
 	sig := common.Hex2Bytes("9bea4c4daac7c7c52e093e6a4c35dbbcf8856f1af7b059ba20253e70848d094f8a8fae537ce25ed8cb5af9adac3f141af69bd515bd2ba031522df09b97dd72b100")
 	tx1, _ = tx1.WithSignature(HomesteadSigner{}, sig)
@@ -105,12 +105,12 @@ func TestEIP2718BlockEncoding(t *testing.T) {
 	// Create ACL tx.
 	addr := common.HexToAddress("0x0000000000000000000000000000000000000001")
 	tx2 := NewTx(&AccessListTx{
-		Chain:        big.NewInt(1),
-		AccountNonce: 0,
-		Recipient:    &to,
-		GasLimit:     123457,
-		Price:        big.NewInt(10),
-		Accesses:     AccessList{{Address: addr, StorageKeys: []common.Hash{{0}}}},
+		ChainID:    big.NewInt(1),
+		Nonce:      0,
+		To:         &to,
+		Gas:        123457,
+		GasPrice:   big.NewInt(10),
+		AccessList: AccessList{{Address: addr, StorageKeys: []common.Hash{{0}}}},
 	})
 	sig2 := common.Hex2Bytes("3dbacc8d0259f2508625e97fdfc57cd85fdd16e5821bc2c10bdd1a52649e8335476e10695b183a87b0aa292a7f4b78ef0c3fbe62aa2c42c84e1d9c3da159ef1401")
 	tx2, _ = tx2.WithSignature(NewEIP2718Signer(big.NewInt(1)), sig2)

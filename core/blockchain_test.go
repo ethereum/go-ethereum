@@ -3074,12 +3074,12 @@ func TestEIP2718Transition(t *testing.T) {
 		// One transaction to 0xAAAA
 		signer := types.NewEIP2718Signer(gspec.Config.ChainID)
 		tx, _ := types.SignNewTx(key, signer, &types.AccessListTx{
-			Chain:        gspec.Config.ChainID,
-			AccountNonce: 0,
-			Recipient:    &aa,
-			GasLimit:     30000,
-			Price:        big.NewInt(1),
-			Accesses: types.AccessList{{
+			ChainID:  gspec.Config.ChainID,
+			Nonce:    0,
+			To:       &aa,
+			Gas:      30000,
+			GasPrice: big.NewInt(1),
+			AccessList: types.AccessList{{
 				Address:     aa,
 				StorageKeys: []common.Hash{{0}},
 			}},

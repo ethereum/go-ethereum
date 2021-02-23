@@ -56,13 +56,13 @@ var (
 	)
 
 	emptyEip2718Tx = NewTx(&AccessListTx{
-		Chain:        big.NewInt(1),
-		AccountNonce: 3,
-		Recipient:    &testAddr,
-		Amount:       big.NewInt(10),
-		GasLimit:     25000,
-		Price:        big.NewInt(1),
-		Payload:      common.FromHex("5544"),
+		ChainID:  big.NewInt(1),
+		Nonce:    3,
+		To:       &testAddr,
+		Value:    big.NewInt(10),
+		Gas:      25000,
+		GasPrice: big.NewInt(1),
+		Data:     common.FromHex("5544"),
 	})
 
 	signedEip2718Tx, _ = emptyEip2718Tx.WithSignature(
@@ -324,49 +324,49 @@ func TestTransactionCoding(t *testing.T) {
 		case 0:
 			// Legacy tx.
 			txdata = &LegacyTx{
-				AccountNonce: i,
-				Recipient:    &recipient,
-				GasLimit:     1,
-				Price:        big.NewInt(2),
-				Payload:      []byte("abcdef"),
+				Nonce:    i,
+				To:       &recipient,
+				Gas:      1,
+				GasPrice: big.NewInt(2),
+				Data:     []byte("abcdef"),
 			}
 		case 1:
 			// Legacy tx contract creation.
 			txdata = &LegacyTx{
-				AccountNonce: i,
-				GasLimit:     1,
-				Price:        big.NewInt(2),
-				Payload:      []byte("abcdef"),
+				Nonce:    i,
+				Gas:      1,
+				GasPrice: big.NewInt(2),
+				Data:     []byte("abcdef"),
 			}
 		case 2:
 			// Tx with non-zero access list.
 			txdata = &AccessListTx{
-				Chain:        big.NewInt(1),
-				AccountNonce: i,
-				Recipient:    &recipient,
-				GasLimit:     123457,
-				Price:        big.NewInt(10),
-				Accesses:     accesses,
-				Payload:      []byte("abcdef"),
+				ChainID:    big.NewInt(1),
+				Nonce:      i,
+				To:         &recipient,
+				Gas:        123457,
+				GasPrice:   big.NewInt(10),
+				AccessList: accesses,
+				Data:       []byte("abcdef"),
 			}
 		case 3:
 			// Tx with empty access list.
 			txdata = &AccessListTx{
-				Chain:        big.NewInt(1),
-				AccountNonce: i,
-				Recipient:    &recipient,
-				GasLimit:     123457,
-				Price:        big.NewInt(10),
-				Payload:      []byte("abcdef"),
+				ChainID:  big.NewInt(1),
+				Nonce:    i,
+				To:       &recipient,
+				Gas:      123457,
+				GasPrice: big.NewInt(10),
+				Data:     []byte("abcdef"),
 			}
 		case 4:
 			// Contract creation with access list.
 			txdata = &AccessListTx{
-				Chain:        big.NewInt(1),
-				AccountNonce: i,
-				GasLimit:     123457,
-				Price:        big.NewInt(10),
-				Accesses:     accesses,
+				ChainID:    big.NewInt(1),
+				Nonce:      i,
+				Gas:        123457,
+				GasPrice:   big.NewInt(10),
+				AccessList: accesses,
 			}
 		}
 		tx, err := SignNewTx(key, signer, txdata)

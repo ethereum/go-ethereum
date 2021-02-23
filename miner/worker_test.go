@@ -85,19 +85,19 @@ func init() {
 
 	signer := types.NewEIP2718Signer(chainId)
 	tx1 := types.MustSignNewTx(testBankKey, signer, &types.AccessListTx{
-		Chain:        chainId,
-		AccountNonce: 0,
-		Recipient:    &testUserAddress,
-		Amount:       big.NewInt(1000),
-		GasLimit:     params.TxGas,
+		ChainID: chainId,
+		Nonce:   0,
+		To:      &testUserAddress,
+		Value:   big.NewInt(1000),
+		Gas:     params.TxGas,
 	})
 	pendingTxs = append(pendingTxs, tx1)
 
 	tx2 := types.MustSignNewTx(testBankKey, signer, &types.LegacyTx{
-		AccountNonce: 1,
-		Recipient:    &testUserAddress,
-		Amount:       big.NewInt(1000),
-		GasLimit:     params.TxGas,
+		Nonce: 1,
+		To:    &testUserAddress,
+		Value: big.NewInt(1000),
+		Gas:   params.TxGas,
 	})
 	newTxs = append(newTxs, tx2)
 

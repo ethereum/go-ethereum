@@ -1580,23 +1580,23 @@ func (args *SendTxArgs) toTransaction() *types.Transaction {
 	var data types.TxData
 	if args.AccessList == nil {
 		data = &types.LegacyTx{
-			Recipient:    args.To,
-			AccountNonce: uint64(*args.Nonce),
-			GasLimit:     uint64(*args.Gas),
-			Price:        (*big.Int)(args.GasPrice),
-			Amount:       (*big.Int)(args.Value),
-			Payload:      input,
+			To:       args.To,
+			Nonce:    uint64(*args.Nonce),
+			Gas:      uint64(*args.Gas),
+			GasPrice: (*big.Int)(args.GasPrice),
+			Value:    (*big.Int)(args.Value),
+			Data:     input,
 		}
 	} else {
 		data = &types.AccessListTx{
-			Recipient:    args.To,
-			Chain:        (*big.Int)(args.ChainID),
-			AccountNonce: uint64(*args.Nonce),
-			GasLimit:     uint64(*args.Gas),
-			Price:        (*big.Int)(args.GasPrice),
-			Amount:       (*big.Int)(args.Value),
-			Payload:      input,
-			Accesses:     *args.AccessList,
+			To:         args.To,
+			ChainID:    (*big.Int)(args.ChainID),
+			Nonce:      uint64(*args.Nonce),
+			Gas:        uint64(*args.Gas),
+			GasPrice:   (*big.Int)(args.GasPrice),
+			Value:      (*big.Int)(args.Value),
+			Data:       input,
+			AccessList: *args.AccessList,
 		}
 	}
 	return types.NewTx(data)
