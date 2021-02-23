@@ -18,9 +18,9 @@ package utils
 
 import (
 	"fmt"
-	"github.com/ethereum/go-ethereum/node"
 	"strings"
 
+	"github.com/ethereum/go-ethereum/node"
 	"gopkg.in/urfave/cli.v1"
 )
 
