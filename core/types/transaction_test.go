@@ -66,7 +66,7 @@ var (
 	})
 
 	signedEip2718Tx, _ = emptyEip2718Tx.WithSignature(
-		NewEIP2718Signer(big.NewInt(1)),
+		NewEIP2930Signer(big.NewInt(1)),
 		common.Hex2Bytes("c9519f4f2b30335884581971573fadf60c6204f59a911df35ee8a540456b266032f1e8e2c5dd761f9e4f88f41c8310aeaba26a8bfcdacfedfa12ec3862d3752101"),
 	)
 )
@@ -102,7 +102,7 @@ func TestTransactionEncode(t *testing.T) {
 }
 
 func TestEIP2718TransactionSigHash(t *testing.T) {
-	s := NewEIP2718Signer(big.NewInt(1))
+	s := NewEIP2930Signer(big.NewInt(1))
 	if s.Hash(emptyEip2718Tx) != common.HexToHash("49b486f0ec0a60dfbbca2d30cb07c9e8ffb2a2ff41f29a1ab6737475f6ff69f3") {
 		t.Errorf("empty EIP-2718 transaction hash mismatch, got %x", s.Hash(emptyEip2718Tx))
 	}
@@ -113,7 +113,7 @@ func TestEIP2718TransactionSigHash(t *testing.T) {
 
 func TestEIP2718SigHashes(t *testing.T) {
 	// the signer chainid doesn't matter for the sighash
-	signer := NewEIP2718Signer(big.NewInt(0))
+	signer := NewEIP2930Signer(big.NewInt(0))
 	for i, tc := range []struct {
 		rlpData  string
 		sigHash  common.Hash
@@ -313,7 +313,7 @@ func TestTransactionCoding(t *testing.T) {
 		t.Fatalf("could not generate key: %v", err)
 	}
 	var (
-		signer    = NewEIP2718Signer(common.Big1)
+		signer    = NewEIP2930Signer(common.Big1)
 		addr      = common.HexToAddress("0x0000000000000000000000000000000000000001")
 		recipient = common.HexToAddress("095e7baea6a6c7c4c2dfeb977efac326af552d87")
 		accesses  = AccessList{{Address: addr, StorageKeys: []common.Hash{{0}}}}

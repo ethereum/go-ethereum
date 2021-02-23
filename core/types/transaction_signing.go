@@ -43,7 +43,7 @@ func MakeSigner(config *params.ChainConfig, blockNumber *big.Int) Signer {
 	var signer Signer
 	switch {
 	case config.IsYoloV3(blockNumber):
-		signer = NewEIP2718Signer(config.ChainID)
+		signer = NewEIP2930Signer(config.ChainID)
 	case config.IsEIP155(blockNumber):
 		signer = NewEIP155Signer(config.ChainID)
 	case config.IsHomestead(blockNumber):
@@ -64,7 +64,7 @@ func MakeSigner(config *params.ChainConfig, blockNumber *big.Int) Signer {
 func LatestSigner(config *params.ChainConfig) Signer {
 	if config.ChainID != nil {
 		if config.YoloV3Block != nil {
-			return NewEIP2718Signer(config.ChainID)
+			return NewEIP2930Signer(config.ChainID)
 		}
 		if config.EIP155Block != nil {
 			return NewEIP155Signer(config.ChainID)
@@ -84,7 +84,7 @@ func LatestSignerForChainID(chainID *big.Int) Signer {
 	if chainID == nil {
 		return HomesteadSigner{}
 	}
-	return NewEIP2718Signer(chainID)
+	return NewEIP2930Signer(chainID)
 }
 
 // SignTx signs the transaction using the given signer and private key.
@@ -158,19 +158,20 @@ type Signer interface {
 	Equal(Signer) bool
 }
 
-// EIP2718Signer implements Signer using the EIP2718 rules.
-type EIP2718Signer struct{ EIP155Signer }
+type eip2930Signer struct{ EIP155Signer }
 
-func NewEIP2718Signer(chainId *big.Int) EIP2718Signer {
-	return EIP2718Signer{NewEIP155Signer(chainId)}
+// NewEIP2930Signer returns a signer that accepts EIP-2930 access list transactions,
+// EIP-155 replay protected transactions, and legacy Homestead transactions.
+func NewEIP2930Signer(chainId *big.Int) Signer {
+	return eip2930Signer{NewEIP155Signer(chainId)}
 }
 
-func (s EIP2718Signer) Equal(s2 Signer) bool {
-	eip2718, ok := s2.(EIP2718Signer)
-	return ok && eip2718.chainId.Cmp(s.chainId) == 0
+func (s eip2930Signer) Equal(s2 Signer) bool {
+	x, ok := s2.(eip2930Signer)
+	return ok && x.chainId.Cmp(s.chainId) == 0
 }
 
-func (s EIP2718Signer) Sender(tx *Transaction) (common.Address, error) {
+func (s eip2930Signer) Sender(tx *Transaction) (common.Address, error) {
 	V, R, S := tx.RawSignatureValues()
 	switch tx.Type() {
 	case LegacyTxType:
@@ -192,7 +193,7 @@ func (s EIP2718Signer) Sender(tx *Transaction) (common.Address, error) {
 	return recoverPlain(s.Hash(tx), R, S, V, true)
 }
 
-func (s EIP2718Signer) SignatureValues(tx *Transaction, sig []byte) (R, S, V *big.Int, err error) {
+func (s eip2930Signer) SignatureValues(tx *Transaction, sig []byte) (R, S, V *big.Int, err error) {
 	switch tx.Type() {
 	case LegacyTxType:
 		R, S, V = decodeSignature(sig)
@@ -211,7 +212,7 @@ func (s EIP2718Signer) SignatureValues(tx *Transaction, sig []byte) (R, S, V *bi
 
 // Hash returns the hash to be signed by the sender.
 // It does not uniquely identify the transaction.
-func (s EIP2718Signer) Hash(tx *Transaction) common.Hash {
+func (s eip2930Signer) Hash(tx *Transaction) common.Hash {
 	switch tx.Type() {
 	case LegacyTxType:
 		return rlpHash([]interface{}{
@@ -245,7 +246,8 @@ func (s EIP2718Signer) Hash(tx *Transaction) common.Hash {
 	}
 }
 
-// EIP155Signer implements Signer using the EIP155 rules.
+// EIP155Signer implements Signer using the EIP-155 rules. This accepts transactions which
+// are replay-protected as well as unprotected homestead transactions.
 type EIP155Signer struct {
 	chainId, chainIdMul *big.Int
 }
