@@ -84,7 +84,7 @@ func init() {
 
 	signer := types.LatestSigner(params.TestChainConfig)
 	tx1 := types.MustSignNewTx(testBankKey, signer, &types.AccessListTx{
-		ChainID: chainId,
+		ChainID: params.TestChainConfig.ChainID,
 		Nonce:   0,
 		To:      &testUserAddress,
 		Value:   big.NewInt(1000),
