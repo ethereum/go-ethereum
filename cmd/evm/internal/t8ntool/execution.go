@@ -168,7 +168,7 @@ func (pre *Prestate) Apply(vmConfig vm.Config, chainConfig *params.ChainConfig,
 				root = statedb.IntermediateRoot(chainConfig.IsEIP158(vmContext.BlockNumber)).Bytes()
 			}
 
-			receipt := types.NewReceipt(root, msgResult.Failed(), gasUsed)
+			receipt = types.NewEIP2718Receipt(tx.Type(), root, msgResult.Failed(), gasUsed)
 			receipt.TxHash = tx.Hash()
 			receipt.GasUsed = msgResult.UsedGas
 			// if the transaction created a contract, store the creation address in the receipt.
@@ -180,7 +180,7 @@ func (pre *Prestate) Apply(vmConfig vm.Config, chainConfig *params.ChainConfig,
 			receipt.Bloom = types.CreateBloom(types.Receipts{receipt})
 			// These three are non-consensus fields
 			//receipt.BlockHash
-			//receipt.BlockNumber =
+			//receipt.BlockNumber
 			receipt.TransactionIndex = uint(txIndex)
 			receipts = append(receipts, receipt)
 		}
