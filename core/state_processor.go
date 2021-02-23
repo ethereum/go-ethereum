@@ -99,6 +99,7 @@ func applyTransaction(msg types.Message, config *params.ChainConfig, bc ChainCon
 	if err != nil {
 		return nil, err
 	}
+
 	// Update the state with pending changes.
 	var root []byte
 	if config.IsByzantium(header.Number) {
@@ -108,22 +109,28 @@ func applyTransaction(msg types.Message, config *params.ChainConfig, bc ChainCon
 	}
 	*usedGas += result.UsedGas
 
-	// Create a new receipt for the transaction, storing the intermediate root and gas used by the tx
-	// based on the eip phase, we're passing whether the root touch-delete accounts.
-	receipt := types.NewEIP2718Receipt(tx.Type(), root, result.Failed(), *usedGas)
+	// Create a new receipt for the transaction, storing the intermediate root and gas used
+	// by the tx.
+	receipt := &types.Receipt{Type: tx.Type(), PostState: root, CumulativeGasUsed: *usedGas}
+	if result.Failed() {
+		receipt.Status = types.ReceiptStatusFailed
+	} else {
+		receipt.Status = types.ReceiptStatusSuccessful
+	}
 	receipt.TxHash = tx.Hash()
 	receipt.GasUsed = result.UsedGas
-	// if the transaction created a contract, store the creation address in the receipt.
+
+	// If the transaction created a contract, store the creation address in the receipt.
 	if msg.To() == nil {
 		receipt.ContractAddress = crypto.CreateAddress(evm.TxContext.Origin, tx.Nonce())
 	}
-	// Set the receipt logs and create a bloom for filtering
+
+	// Set the receipt logs and create the bloom filter.
 	receipt.Logs = statedb.GetLogs(tx.Hash())
 	receipt.Bloom = types.CreateBloom(types.Receipts{receipt})
 	receipt.BlockHash = statedb.BlockHash()
 	receipt.BlockNumber = header.Number
 	receipt.TransactionIndex = uint(statedb.TxIndex())
-
 	return receipt, err
 }
 

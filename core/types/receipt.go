@@ -117,13 +117,13 @@ type v3StoredReceiptRLP struct {
 }
 
 // NewReceipt creates a barebone transaction receipt, copying the init fields.
+// Deprecated: create receipts using a struct literal instead.
 func NewReceipt(root []byte, failed bool, cumulativeGasUsed uint64) *Receipt {
-	return NewEIP2718Receipt(LegacyTxType, root, failed, cumulativeGasUsed)
-}
-
-// NewEIP2718Receipt creates a barebone transaction receipt for typed transactions, copying the init fields.
-func NewEIP2718Receipt(typ uint8, root []byte, failed bool, cumulativeGasUsed uint64) *Receipt {
-	r := &Receipt{Type: typ, PostState: common.CopyBytes(root), CumulativeGasUsed: cumulativeGasUsed}
+	r := &Receipt{
+		Type:              LegacyTxType,
+		PostState:         common.CopyBytes(root),
+		CumulativeGasUsed: cumulativeGasUsed,
+	}
 	if failed {
 		r.Status = ReceiptStatusFailed
 	} else {
