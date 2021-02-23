@@ -181,7 +181,7 @@ func makeBenchBlock() *Block {
 		key, _   = crypto.GenerateKey()
 		txs      = make([]*Transaction, 70)
 		receipts = make([]*Receipt, len(txs))
-		signer   = NewEIP155Signer(params.TestChainConfig.ChainID)
+		signer   = LatestSigner(params.TestChainConfig)
 		uncles   = make([]*Header, 3)
 	)
 	header := &Header{

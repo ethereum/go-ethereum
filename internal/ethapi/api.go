@@ -1225,13 +1225,13 @@ type RPCTransaction struct {
 // newRPCTransaction returns a transaction that will serialize to the RPC
 // representation, with the given location metadata set (if available).
 func newRPCTransaction(tx *types.Transaction, blockHash common.Hash, blockNumber uint64, index uint64) *RPCTransaction {
-	// Determine the signer. For replay-protected transactions, use the 'newest' signer,
-	// because we assume that signers are backwards-compatible with old transactions. For
-	// non-protected transactions, the homestead signer signer is used because the return
-	// value of ChainId is zero for those transactions.
+	// Determine the signer. For replay-protected transactions, use the most permissive
+	// signer, because we assume that signers are backwards-compatible with old
+	// transactions. For non-protected transactions, the homestead signer signer is used
+	// because the return value of ChainId is zero for those transactions.
 	var signer types.Signer
 	if tx.Protected() {
-		signer = types.NewEIP2718Signer(tx.ChainId())
+		signer = types.LatestSignerForChainID(tx.ChainId())
 	} else {
 		signer = types.HomesteadSigner{}
 	}
@@ -1310,7 +1310,7 @@ type PublicTransactionPoolAPI struct {
 func NewPublicTransactionPoolAPI(b Backend, nonceLock *AddrLocker) *PublicTransactionPoolAPI {
 	// The signer used by the API should always be the 'latest' known one because we expect
 	// signers to be backwards-compatible with old transactions.
-	signer := types.NewEIP2718Signer(b.ChainConfig().ChainID)
+	signer := types.LatestSigner(b.ChainConfig())
 	return &PublicTransactionPoolAPI{b, nonceLock, signer}
 }
 

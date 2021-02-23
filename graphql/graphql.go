@@ -245,12 +245,8 @@ func (t *Transaction) From(ctx context.Context, args BlockNumberArgs) (*Account,
 	if err != nil || tx == nil {
 		return nil, err
 	}
-	var signer types.Signer = types.HomesteadSigner{}
-	if tx.Protected() {
-		signer = types.NewEIP155Signer(tx.ChainId())
-	}
+	signer := types.LatestSigner(t.backend.ChainConfig())
 	from, _ := types.Sender(signer, tx)
-
 	return &Account{
 		backend:       t.backend,
 		address:       from,
