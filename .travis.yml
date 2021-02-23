@@ -15,7 +15,7 @@ jobs:
     # This builder only tests code linters on latest version of Go
     - stage: lint
       os: linux
-      dist: xenial
+      dist: bionic
       go: 1.16.x
       env:
         - lint
@@ -28,7 +28,7 @@ jobs:
     - stage: build
       if: type = push
       os: linux
-      dist: xenial
+      dist: bionic
       go: 1.16.x
       env:
         - ubuntu-ppa
@@ -52,7 +52,7 @@ jobs:
     - stage: build
       if: type = push
       os: linux
-      dist: xenial
+      dist: bionic
       sudo: required
       go: 1.16.x
       env:
@@ -88,7 +88,7 @@ jobs:
     - stage: build
       if: type = push
       os: linux
-      dist: xenial
+      dist: bionic
       services:
         - docker
       go: 1.16.x
@@ -118,7 +118,7 @@ jobs:
     - stage: build
       if: type = push
       os: linux
-      dist: xenial
+      dist: bionic
       addons:
         apt:
           packages:
@@ -188,7 +188,7 @@ jobs:
     - stage: build
       os: linux
       arch: amd64
-      dist: xenial
+      dist: bionic
       go: 1.16.x
       env:
         - GO111MODULE=on
@@ -199,7 +199,7 @@ jobs:
       if: type = pull_request
       os: linux
       arch: arm64
-      dist: xenial
+      dist: bionic
       go: 1.16.x
       env:
         - GO111MODULE=on
@@ -208,7 +208,7 @@ jobs:
 
     - stage: build
       os: linux
-      dist: xenial
+      dist: bionic
       go: 1.15.x
       env:
         - GO111MODULE=on
@@ -219,7 +219,7 @@ jobs:
     - stage: build
       if: type = cron
       os: linux
-      dist: xenial
+      dist: bionic
       go: 1.16.x
       env:
         - azure-purge
