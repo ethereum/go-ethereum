@@ -145,9 +145,9 @@ jobs:
         - export GOPATH=$HOME/go
       script:
         # Build the Android archive and upload it to Maven Central and Azure
-        - curl https://dl.google.com/android/repository/android-ndk-r19b-linux-x86_64.zip -o android-ndk-r19b.zip
-        - unzip -q android-ndk-r19b.zip && rm android-ndk-r19b.zip
-        - mv android-ndk-r19b $ANDROID_HOME/ndk-bundle
+        - curl https://dl.google.com/android/repository/android-ndk-r21e-linux-x86_64.zip -o android-ndk-r21e.zip
+        - unzip -q android-ndk-r21e.zip && rm android-ndk-r21e.zip
+        - mv android-ndk-r21e $ANDROID_HOME/ndk-bundle
 
         - mkdir -p $GOPATH/src/github.com/ethereum
         - ln -s `pwd` $GOPATH/src/github.com/ethereum/go-ethereum
