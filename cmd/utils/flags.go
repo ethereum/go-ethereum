@@ -401,9 +401,9 @@ var (
 		Name:  "cache.noprefetch",
 		Usage: "Disable heuristic state prefetch during block import (less CPU and disk IO, more time waiting for data)",
 	}
-	CachePreimagesFlag = cli.BoolTFlag{
+	CachePreimagesFlag = cli.BoolFlag{
 		Name:  "cache.preimages",
-		Usage: "Enable recording the SHA3/keccak preimages of trie keys (default: true)",
+		Usage: "Enable recording the SHA3/keccak preimages of trie keys",
 	}
 	// Miner settings
 	MiningEnabledFlag = cli.BoolFlag{
