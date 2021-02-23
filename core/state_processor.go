@@ -110,12 +110,7 @@ func applyTransaction(msg types.Message, config *params.ChainConfig, bc ChainCon
 
 	// Create a new receipt for the transaction, storing the intermediate root and gas used by the tx
 	// based on the eip phase, we're passing whether the root touch-delete accounts.
-	var receipt *types.Receipt
-	if config.IsYoloV3(header.Number) {
-		receipt = types.NewEIP2718Receipt(tx.Type(), root, result.Failed(), *usedGas)
-	} else {
-		receipt = types.NewReceipt(root, result.Failed(), *usedGas)
-	}
+	receipt := types.NewEIP2718Receipt(tx.Type(), root, result.Failed(), *usedGas)
 	receipt.TxHash = tx.Hash()
 	receipt.GasUsed = result.UsedGas
 	// if the transaction created a contract, store the creation address in the receipt.
