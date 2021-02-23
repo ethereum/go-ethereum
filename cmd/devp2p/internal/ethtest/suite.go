@@ -53,16 +53,16 @@ type Suite struct {
 // NewSuite creates and returns a new eth-test suite that can
 // be used to test the given node against the given blockchain
 // data.
-func NewSuite(dest *enode.Node, chainfile string, genesisfile string) *Suite {
+func NewSuite(dest *enode.Node, chainfile string, genesisfile string) (*Suite, error) {
 	chain, err := loadChain(chainfile, genesisfile)
 	if err != nil {
-		panic(err)
+		return nil, err
 	}
 	return &Suite{
 		Dest:      dest,
 		chain:     chain.Shorten(1000),
 		fullChain: chain,
-	}
+	}, nil
 }
 
 func (s *Suite) EthTests() []utesting.Test {
