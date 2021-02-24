@@ -195,7 +195,7 @@ func (odr *LesOdr) RetrieveTxStatus(ctx context.Context, req *light.TxStatusRequ
 
 // Retrieve tries to fetch an object from the LES network. It's a common API
 // for most of the LES requests except for the TxStatusRequest which needs
-// the addtional retry mechanism.
+// the additional retry mechanism.
 // If the network retrieval was successful, it stores the object in local db.
 func (odr *LesOdr) Retrieve(ctx context.Context, req light.OdrRequest) (err error) {
 	lreq := LesRequest(req)
