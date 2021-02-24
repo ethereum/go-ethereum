@@ -127,12 +127,12 @@ const (
 // be retrieved back for sure because of different reasons(the transaction
 // is unindexed, the malicous server doesn't reply it deliberately, etc).
 // Therefore, unretrieved transactions(UNKNOWN) will receive a certain number
-// of retrys, thus giving a weak guarantee.
+// of retries, thus giving a weak guarantee.
 func (odr *LesOdr) RetrieveTxStatus(ctx context.Context, req *light.TxStatusRequest) error {
 	// Sort according to the transaction history supported by the peer and
 	// select the peers with longest history.
 	var (
-		retrys  int
+		retries int
 		peers   []*serverPeer
 		missing = len(req.Hashes)
 		result  = make([]light.TxStatus, len(req.Hashes))
@@ -150,7 +150,7 @@ func (odr *LesOdr) RetrieveTxStatus(ctx context.Context, req *light.TxStatusRequ
 	}
 	// Send out the request and assemble the result.
 	for {
-		if retrys >= maxTxStatusRetry || len(canSend) == 0 {
+		if retries >= maxTxStatusRetry || len(canSend) == 0 {
 			break
 		}
 		var (
@@ -187,7 +187,7 @@ func (odr *LesOdr) RetrieveTxStatus(ctx context.Context, req *light.TxStatusRequ
 		if missing == 0 {
 			break
 		}
-		retrys += 1
+		retries += 1
 	}
 	req.Status = result
 	return nil

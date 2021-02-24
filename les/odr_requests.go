@@ -487,7 +487,7 @@ func (r *TxStatusRequest) GetCost(peer *serverPeer) uint64 {
 
 // CanSend tells if a certain peer is suitable for serving the given request
 func (r *TxStatusRequest) CanSend(peer *serverPeer) bool {
-	return true
+	return peer.txHistory != txIndexDisabled
 }
 
 // Request sends an ODR request to the LES network (implementation of LesOdrRequest)
