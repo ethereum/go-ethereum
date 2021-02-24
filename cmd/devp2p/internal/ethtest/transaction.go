@@ -67,6 +67,10 @@ func sendSuccessfulTxWithConn(t *utesting.T, s *Suite, tx *types.Transaction, se
 
 func sendFailingTx(t *utesting.T, s *Suite, tx *types.Transaction) {
 	sendConn, recvConn := s.setupConnection(t), s.setupConnection(t)
+	sendFailingTxWithConns(t, s, tx, sendConn, recvConn)
+}
+
+func sendFailingTxWithConns(t *utesting.T, s *Suite, tx *types.Transaction, sendConn, recvConn *Conn) {
 	// Wait for a transaction announcement
 	switch msg := recvConn.ReadAndServe(s.chain, timeout).(type) {
 	case *NewPooledTransactionHashes:

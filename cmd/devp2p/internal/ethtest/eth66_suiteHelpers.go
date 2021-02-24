@@ -239,29 +239,7 @@ func sendSuccessfulTx66(t *utesting.T, s *Suite, tx *types.Transaction) {
 
 func sendFailingTx66(t *utesting.T, s *Suite, tx *types.Transaction) {
 	sendConn, recvConn := s.setupConnection66(t), s.setupConnection66(t)
-	// Wait for a transaction announcement
-	switch msg := recvConn.ReadAndServe(s.chain, timeout).(type) {
-	case *NewPooledTransactionHashes:
-		break
-	default:
-		t.Logf("unexpected message, logging: %v", pretty.Sdump(msg))
-	}
-	// Send the transaction
-	if err := sendConn.Write(&Transactions{tx}); err != nil {
-		t.Fatal(err)
-	}
-	// Wait for another transaction announcement
-	switch msg := recvConn.ReadAndServe(s.chain, timeout).(type) {
-	case *Transactions:
-		t.Fatalf("Received unexpected transaction announcement: %v", msg)
-	case *NewPooledTransactionHashes:
-		t.Fatalf("Received unexpected pooledTx announcement: %v", msg)
-	case *Error:
-		// Transaction should not be announced -> wait for timeout
-		return
-	default:
-		t.Fatalf("unexpected message in sendFailingTx: %s", pretty.Sdump(msg))
-	}
+	sendFailingTxWithConns(t, s, tx, sendConn, recvConn)
 }
 
 func (s *Suite) getBlockHeaders66(t *utesting.T, conn *Conn, req eth.Packet, expectedID uint64) BlockHeaders {
