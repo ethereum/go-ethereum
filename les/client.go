@@ -58,7 +58,6 @@ type LightEthereum struct {
 	txPool         *light.TxPool
 	blockchain     *light.LightChain
 	serverPool     *vfc.ServerPool
-	valueTracker   *vfc.ValueTracker
 	dialCandidates enode.Iterator
 	pruner         *pruner
 
@@ -109,12 +108,11 @@ func New(stack *node.Node, config *ethconfig.Config) (*LightEthereum, error) {
 		engine:         ethconfig.CreateConsensusEngine(stack, chainConfig, &config.Ethash, nil, false, chainDb),
 		bloomRequests:  make(chan chan *bloombits.Retrieval),
 		bloomIndexer:   core.NewBloomIndexer(chainDb, params.BloomBitsBlocksClient, params.HelperTrieConfirmations),
-		valueTracker:   vfc.NewValueTracker(lesDb, &mclock.System{}, requestList, time.Minute, 1/float64(time.Hour), 1/float64(time.Hour*100), 1/float64(time.Hour*1000)),
 		p2pServer:      stack.Server(),
 		p2pConfig:      &stack.Config().P2P,
 	}
 
-	leth.serverPool, leth.dialCandidates = vfc.NewServerPool(lesDb, []byte("serverpool:"), leth.valueTracker, time.Second, nil, &mclock.System{}, config.UltraLightServers)
+	leth.serverPool, leth.dialCandidates = vfc.NewServerPool(lesDb, []byte("serverpool:"), time.Second, nil, &mclock.System{}, config.UltraLightServers, requestList)
 	leth.serverPool.AddMetrics(suggestedTimeoutGauge, totalValueGauge, serverSelectableGauge, serverConnectedGauge, sessionValueMeter, serverDialedMeter)
 
 	leth.retriever = newRetrieveManager(peers, leth.reqDist, leth.serverPool.GetTimeout)
@@ -247,7 +245,7 @@ func (s *LightEthereum) APIs() []rpc.API {
 		}, {
 			Namespace: "vflux",
 			Version:   "1.0",
-			Service:   vfc.NewPrivateClientAPI(s.valueTracker),
+			Service:   s.serverPool.API(),
 			Public:    false,
 		},
 	}...)
@@ -298,7 +296,6 @@ func (s *LightEthereum) Start() error {
 func (s *LightEthereum) Stop() error {
 	close(s.closeCh)
 	s.serverPool.Stop()
-	s.valueTracker.Stop()
 	s.peers.close()
 	s.reqDist.close()
 	s.odr.Stop()

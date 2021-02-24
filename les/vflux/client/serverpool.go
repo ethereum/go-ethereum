@@ -134,14 +134,14 @@ var (
 )
 
 // newServerPool creates a new server pool
-func NewServerPool(db ethdb.KeyValueStore, dbKey []byte, vt *ValueTracker, mixTimeout time.Duration, query queryFunc, clock mclock.Clock, trustedURLs []string) (*ServerPool, enode.Iterator) {
+func NewServerPool(db ethdb.KeyValueStore, dbKey []byte, mixTimeout time.Duration, query queryFunc, clock mclock.Clock, trustedURLs []string, requestList []RequestInfo) (*ServerPool, enode.Iterator) {
 	s := &ServerPool{
 		db:           db,
 		clock:        clock,
 		unixTime:     func() int64 { return time.Now().Unix() },
 		validSchemes: enode.ValidSchemes,
 		trustedURLs:  trustedURLs,
-		vt:           vt,
+		vt:           NewValueTracker(db, &mclock.System{}, requestList, time.Minute, 1/float64(time.Hour), 1/float64(time.Hour*100), 1/float64(time.Hour*1000)),
 		ns:           nodestate.NewNodeStateMachine(db, []byte(string(dbKey)+"ns:"), clock, clientSetup),
 	}
 	s.recalTimeout()
@@ -295,6 +295,7 @@ func (s *ServerPool) Stop() {
 		})
 	})
 	s.ns.Stop()
+	s.vt.Stop()
 }
 
 // registerPeer implements serverPeerSubscriber
@@ -509,4 +510,9 @@ func (s *ServerPool) calculateWeight(node *enode.Node) {
 	_, totalValue := s.serviceValue(node)
 	totalDialCost := s.addDialCost(&n, 0)
 	s.updateWeight(node, totalValue, totalDialCost)
+}
+
+// API returns the vflux client API
+func (s *ServerPool) API() *PrivateClientAPI {
+	return NewPrivateClientAPI(s.vt)
 }

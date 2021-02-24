@@ -120,7 +120,7 @@ func (h *clientHandler) handle(p *serverPeer) error {
 		return err
 	}
 	if h.backend.serverPool != nil {
-		p.setValueTracker(h.backend.valueTracker, h.backend.serverPool.RegisterNode(p.Node()))
+		p.setValueTracker(h.backend.serverPool.RegisterNode(p.Node()))
 		p.updateVtParams()
 	}
 
@@ -129,7 +129,7 @@ func (h *clientHandler) handle(p *serverPeer) error {
 	connectedAt := mclock.Now()
 	defer func() {
 		if h.backend.serverPool != nil {
-			p.setValueTracker(nil, nil)
+			p.setValueTracker(nil)
 			h.backend.serverPool.UnregisterNode(p.Node())
 		}
 		h.backend.peers.unregister(p.id)
