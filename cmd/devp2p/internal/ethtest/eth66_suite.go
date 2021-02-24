@@ -26,24 +26,6 @@ import (
 	"github.com/ethereum/go-ethereum/p2p"
 )
 
-// Eth66Tests returns all eth 66 protocol version tests
-func (s *Suite) Eth66Tests() []utesting.Test {
-	return []utesting.Test{
-		{Name: "Status_66", Fn: s.TestStatus_66},
-		{Name: "GetBlockHeaders_66", Fn: s.TestGetBlockHeaders_66},
-		{Name: "TestSimultaneousRequests_66", Fn: s.TestSimultaneousRequests_66},
-		{Name: "TestSameRequestID_66", Fn: s.TestSameRequestID_66},
-		{Name: "TestZeroRequestID_66", Fn: s.TestZeroRequestID_66},
-		{Name: "Broadcast_66", Fn: s.TestBroadcast_66},
-		{Name: "GetBlockBodies_66", Fn: s.TestGetBlockBodies_66},
-		{Name: "TestLargeAnnounce_66", Fn: s.TestLargeAnnounce_66},
-		{Name: "TestMaliciousHandshake_66", Fn: s.TestMaliciousHandshake_66},
-		{Name: "TestMaliciousStatus_66", Fn: s.TestMaliciousStatus},
-		{Name: "TestTransactions_66", Fn: s.TestTransaction_66},
-		{Name: "TestMaliciousTransactions_66", Fn: s.TestMaliciousTx_66},
-	}
-}
-
 // TestStatus_66 attempts to connect to the given node and exchange
 // a status message with it on the eth66 protocol, and then check to
 // make sure the chain head is correct.

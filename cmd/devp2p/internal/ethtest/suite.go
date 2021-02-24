@@ -67,15 +67,33 @@ func NewSuite(dest *enode.Node, chainfile string, genesisfile string) (*Suite, e
 
 func (s *Suite) EthTests() []utesting.Test {
 	return []utesting.Test{
+		// status
 		{Name: "Status", Fn: s.TestStatus},
+		{Name: "Status_66", Fn: s.TestStatus_66},
+		// get block headers
 		{Name: "GetBlockHeaders", Fn: s.TestGetBlockHeaders},
-		{Name: "Broadcast", Fn: s.TestBroadcast},
+		{Name: "GetBlockHeaders_66", Fn: s.TestGetBlockHeaders_66},
+		{Name: "TestSimultaneousRequests_66", Fn: s.TestSimultaneousRequests_66},
+		{Name: "TestSameRequestID_66", Fn: s.TestSameRequestID_66},
+		{Name: "TestZeroRequestID_66", Fn: s.TestZeroRequestID_66},
+		// get block bodies
 		{Name: "GetBlockBodies", Fn: s.TestGetBlockBodies},
+		{Name: "GetBlockBodies_66", Fn: s.TestGetBlockBodies_66},
+		// broadcast
+		{Name: "Broadcast", Fn: s.TestBroadcast},
+		{Name: "Broadcast_66", Fn: s.TestBroadcast_66},
 		{Name: "TestLargeAnnounce", Fn: s.TestLargeAnnounce},
+		{Name: "TestLargeAnnounce_66", Fn: s.TestLargeAnnounce_66},
+		// malicious handshakes + status
 		{Name: "TestMaliciousHandshake", Fn: s.TestMaliciousHandshake},
 		{Name: "TestMaliciousStatus", Fn: s.TestMaliciousStatus},
+		{Name: "TestMaliciousHandshake_66", Fn: s.TestMaliciousHandshake_66},
+		{Name: "TestMaliciousStatus_66", Fn: s.TestMaliciousStatus},
+		// test transactions
 		{Name: "TestTransactions", Fn: s.TestTransaction},
+		{Name: "TestTransactions_66", Fn: s.TestTransaction_66},
 		{Name: "TestMaliciousTransactions", Fn: s.TestMaliciousTx},
+		{Name: "TestMaliciousTransactions_66", Fn: s.TestMaliciousTx_66},
 	}
 }
 
