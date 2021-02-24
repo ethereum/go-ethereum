@@ -161,8 +161,6 @@ var AppHelpFlagGroups = []flags.FlagGroup{
 		Name: "NETWORKING",
 		Flags: []cli.Flag{
 			utils.BootnodesFlag,
-			utils.LegacyBootnodesV4Flag,
-			utils.LegacyBootnodesV5Flag,
 			utils.DNSDiscoveryFlag,
 			utils.ListenPortFlag,
 			utils.MaxPeersFlag,
@@ -223,7 +221,7 @@ var AppHelpFlagGroups = []flags.FlagGroup{
 	},
 	{
 		Name: "ALIASED (deprecated)",
-		Flags: append([]cli.Flag{
+		Flags: []cli.Flag{
 			utils.NoUSBFlag,
 			utils.LegacyRPCEnabledFlag,
 			utils.LegacyRPCListenAddrFlag,
@@ -231,15 +229,7 @@ var AppHelpFlagGroups = []flags.FlagGroup{
 			utils.LegacyRPCCORSDomainFlag,
 			utils.LegacyRPCVirtualHostsFlag,
 			utils.LegacyRPCApiFlag,
-			utils.LegacyWSListenAddrFlag,
-			utils.LegacyWSPortFlag,
-			utils.LegacyWSAllowedOriginsFlag,
-			utils.LegacyWSApiFlag,
-			utils.LegacyGpoBlocksFlag,
-			utils.LegacyGpoPercentileFlag,
-			utils.LegacyGraphQLListenAddrFlag,
-			utils.LegacyGraphQLPortFlag,
-		}, debug.DeprecatedFlags...),
+		},
 	},
 	{
 		Name: "MISC",

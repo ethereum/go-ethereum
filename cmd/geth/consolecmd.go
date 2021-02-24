@@ -121,7 +121,7 @@ func remoteConsole(ctx *cli.Context) error {
 			path = ctx.GlobalString(utils.DataDirFlag.Name)
 		}
 		if path != "" {
-			if ctx.GlobalBool(utils.LegacyTestnetFlag.Name) || ctx.GlobalBool(utils.RopstenFlag.Name) {
+			if ctx.GlobalBool(utils.RopstenFlag.Name) {
 				// Maintain compatibility with older Geth configurations storing the
 				// Ropsten database in `testnet` instead of `ropsten`.
 				legacyPath := filepath.Join(path, "testnet")
