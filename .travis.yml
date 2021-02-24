@@ -122,16 +122,7 @@ jobs:
       addons:
         apt:
           packages:
-            - oracle-java8-installer
-            - oracle-java8-set-default
-      language: android
-      android:
-        components:
-          - platform-tools
-          - tools
-          - android-15
-          - android-19
-          - android-24
+            - openjdk-8-jdk
       env:
         - azure-android
         - maven-android
@@ -139,16 +130,24 @@ jobs:
       git:
         submodules: false # avoid cloning ethereum/tests
       before_install:
+        # Install Android and it's dependencies manually, Travis is stale
+        - export JAVA_HOME=/usr/lib/jvm/java-8-openjdk-amd64
+        - curl https://dl.google.com/android/repository/commandlinetools-linux-6858069_latest.zip -o android.zip
+        - unzip -q android.zip -d $HOME/sdk && rm android.zip
+        - mv $HOME/sdk/cmdline-tools $HOME/sdk/latest && mkdir $HOME/sdk/cmdline-tools && mv $HOME/sdk/latest $HOME/sdk/cmdline-tools
+        - export PATH=$PATH:$HOME/sdk/cmdline-tools/latest/bin
+        - export ANDROID_HOME=$HOME/sdk
+
+        - yes | sdkmanager --licenses >/dev/null
+        - sdkmanager "platform-tools" "platforms;android-15" "platforms;android-19" "platforms;android-24" "ndk-bundle"
+
+        # Install Go to allow building with
         - curl https://dl.google.com/go/go1.16.linux-amd64.tar.gz | tar -xz
         - export PATH=`pwd`/go/bin:$PATH
         - export GOROOT=`pwd`/go
         - export GOPATH=$HOME/go
       script:
         # Build the Android archive and upload it to Maven Central and Azure
-        - curl https://dl.google.com/android/repository/android-ndk-r21e-linux-x86_64.zip -o android-ndk-r21e.zip
-        - unzip -q android-ndk-r21e.zip && rm android-ndk-r21e.zip
-        - mv android-ndk-r21e $ANDROID_HOME/ndk-bundle
-
         - mkdir -p $GOPATH/src/github.com/ethereum
         - ln -s `pwd` $GOPATH/src/github.com/ethereum/go-ethereum
         - go run build/ci.go aar -signer ANDROID_SIGNING_KEY -signify SIGNIFY_KEY  -deploy https://oss.sonatype.org -upload gethstore/builds
