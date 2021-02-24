@@ -57,7 +57,7 @@ type LightEthereum struct {
 	handler        *clientHandler
 	txPool         *light.TxPool
 	blockchain     *light.LightChain
-	serverPool     *serverPool
+	serverPool     *vfc.ServerPool
 	valueTracker   *vfc.ValueTracker
 	dialCandidates enode.Iterator
 	pruner         *pruner
@@ -113,13 +113,10 @@ func New(stack *node.Node, config *ethconfig.Config) (*LightEthereum, error) {
 		p2pServer:      stack.Server(),
 		p2pConfig:      &stack.Config().P2P,
 	}
-	peers.subscribe((*vtSubscription)(leth.valueTracker))
 
-	leth.serverPool = newServerPool(lesDb, []byte("serverpool:"), leth.valueTracker, time.Second, nil, &mclock.System{}, config.UltraLightServers)
-	peers.subscribe(leth.serverPool)
-	leth.dialCandidates = leth.serverPool.dialIterator
+	leth.serverPool, leth.dialCandidates = vfc.NewServerPool(lesDb, []byte("serverpool:"), leth.valueTracker, time.Second, nil, &mclock.System{}, config.UltraLightServers)
 
-	leth.retriever = newRetrieveManager(peers, leth.reqDist, leth.serverPool.getTimeout)
+	leth.retriever = newRetrieveManager(peers, leth.reqDist, leth.serverPool.GetTimeout)
 	leth.relay = newLesTxRelay(peers, leth.retriever)
 
 	leth.odr = NewLesOdr(chainDb, light.DefaultClientIndexerConfig, leth.retriever)
@@ -191,23 +188,6 @@ func New(stack *node.Node, config *ethconfig.Config) (*LightEthereum, error) {
 		}
 	}
 	return leth, nil
-}
-
-// vtSubscription implements serverPeerSubscriber
-type vtSubscription vfc.ValueTracker
-
-// registerPeer implements serverPeerSubscriber
-func (v *vtSubscription) registerPeer(p *serverPeer) {
-	vt := (*vfc.ValueTracker)(v)
-	p.setValueTracker(vt, vt.Register(p.ID()))
-	p.updateVtParams()
-}
-
-// unregisterPeer implements serverPeerSubscriber
-func (v *vtSubscription) unregisterPeer(p *serverPeer) {
-	vt := (*vfc.ValueTracker)(v)
-	vt.Unregister(p.ID())
-	p.setValueTracker(nil, nil)
 }
 
 type LightDummyAPI struct{}
@@ -302,8 +282,8 @@ func (s *LightEthereum) Start() error {
 	if err != nil {
 		return err
 	}
-	s.serverPool.addSource(discovery)
-	s.serverPool.start()
+	s.serverPool.AddSource(discovery)
+	s.serverPool.Start()
 	// Start bloom request workers.
 	s.wg.Add(bloomServiceThreads)
 	s.startBloomHandlers(params.BloomBitsBlocksClient)
@@ -316,7 +296,7 @@ func (s *LightEthereum) Start() error {
 // Ethereum protocol.
 func (s *LightEthereum) Stop() error {
 	close(s.closeCh)
-	s.serverPool.stop()
+	s.serverPool.Stop()
 	s.valueTracker.Stop()
 	s.peers.close()
 	s.reqDist.close()

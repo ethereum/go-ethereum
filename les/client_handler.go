@@ -119,10 +119,19 @@ func (h *clientHandler) handle(p *serverPeer) error {
 		p.Log().Error("Light Ethereum peer registration failed", "err", err)
 		return err
 	}
+	if h.backend.serverPool != nil {
+		p.setValueTracker(h.backend.valueTracker, h.backend.serverPool.RegisterNode(p.Node()))
+		p.updateVtParams()
+	}
+
 	serverConnectionGauge.Update(int64(h.backend.peers.len()))
 
 	connectedAt := mclock.Now()
 	defer func() {
+		if h.backend.serverPool != nil {
+			p.setValueTracker(nil, nil)
+			h.backend.serverPool.UnregisterNode(p.Node())
+		}
 		h.backend.peers.unregister(p.id)
 		connectionTimer.Update(time.Duration(mclock.Now() - connectedAt))
 		serverConnectionGauge.Update(int64(h.backend.peers.len()))
