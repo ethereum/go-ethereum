@@ -234,46 +234,7 @@ func (c *Conn) waitForBlock66(block *types.Block) error {
 
 func sendSuccessfulTx66(t *utesting.T, s *Suite, tx *types.Transaction) {
 	sendConn := s.setupConnection66(t)
-	t.Logf("sending tx: %v %v %v\n", tx.Hash().String(), tx.GasPrice(), tx.Gas())
-	// Send the transaction
-	if err := sendConn.Write(&Transactions{tx}); err != nil {
-		t.Fatal(err)
-	}
-	time.Sleep(100 * time.Millisecond)
-	recvConn := s.setupConnection66(t)
-	// Wait for the transaction announcement
-	for {
-		switch msg := recvConn.ReadAndServe(s.chain, timeout).(type) {
-		case *Transactions:
-			recTxs := *msg
-			if len(recTxs) < 1 {
-				t.Fatalf("received transactions do not match send: %v", recTxs)
-			}
-			if tx.Hash() == recTxs[len(recTxs)-2].Hash() {
-				fmt.Println("TX HASH RECTXS OLD TX PROP")
-				continue
-			}
-			if tx.Hash() != recTxs[len(recTxs)-1].Hash() {
-				t.Fatalf("received transactions do not match send: got %v want %v", recTxs, tx)
-			}
-		case *NewPooledTransactionHashes:
-			txHashes := *msg
-			if len(txHashes) < 1 {
-				t.Fatalf("received transactions do not match send: %v", txHashes)
-			}
-			// if received successful tx from last, continue
-			if tx.Hash() == txHashes[len(txHashes)-2] {
-				fmt.Println("TX HASH tx hashes..... OLD TX PROP")
-				continue
-			}
-			if tx.Hash() != txHashes[len(txHashes)-1] {
-				t.Fatalf("wrong announcement received, wanted %v got %v", tx, txHashes)
-			}
-		default:
-			t.Fatalf("unexpected message in sendSuccessfulTx: %s", pretty.Sdump(msg))
-		}
-		time.Sleep(100 * time.Millisecond)
-	}
+	sendSuccessfulTxWithConn(t, s, tx, sendConn)
 }
 
 func sendFailingTx66(t *utesting.T, s *Suite, tx *types.Transaction) {
