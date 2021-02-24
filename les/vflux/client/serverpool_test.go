@@ -148,13 +148,12 @@ func (s *ServerPoolTest) start() {
 		requestList[i] = RequestInfo{Name: "testreq" + strconv.Itoa(i), InitAmount: 1, InitValue: 1}
 	}
 
-	s.vt = NewValueTracker(s.db, s.clock, requestList, time.Minute, 1/float64(time.Hour), 1/float64(time.Hour*100), 1/float64(time.Hour*1000))
-	s.sp = newServerPool(s.db, []byte("ServerPool:"), s.vt, 0, testQuery, s.clock, s.trusted)
-	s.sp.addSource(s.input)
+	s.sp, _ = NewServerPool(s.db, []byte("sp:"), 0, testQuery, s.clock, s.trusted, requestList)
+	s.sp.AddSource(s.input)
 	s.sp.validSchemes = enode.ValidSchemesForTesting
 	s.sp.unixTime = func() int64 { return int64(s.clock.Now()) / int64(time.Second) }
 	s.disconnect = make(map[int][]int)
-	s.sp.start()
+	s.sp.Start()
 	s.quit = make(chan struct{})
 	go func() {
 		last := int32(-1)
@@ -176,8 +175,7 @@ func (s *ServerPoolTest) start() {
 
 func (s *ServerPoolTest) stop() {
 	close(s.quit)
-	s.sp.stop()
-	s.vt.Stop()
+	s.sp.Stop()
 	for i := range s.testNodes {
 		n := &s.testNodes[i]
 		if n.connected {
@@ -226,9 +224,9 @@ func (s *ServerPoolTest) run() {
 				dc := s.cycle + n.connectCycles
 				s.disconnect[dc] = append(s.disconnect[dc], idx)
 				n.node = dial
-				s.sp.RegisterNode(n.node)
+				nv, _ := s.sp.RegisterNode(n.node)
 				if n.service {
-					s.vt.Served(s.vt.GetNode(id), []ServedRequest{{ReqType: 0, Amount: 100}}, 0)
+					nv.Served([]ServedRequest{{ReqType: 0, Amount: 100}}, 0)
 				}
 			}
 		}
