@@ -107,6 +107,7 @@ func (c *route53Client) deploy(name string, t *dnsdisc.Tree) error {
 
 	// Submit change batches.
 	batches := splitChanges(changes, route53ChangeSizeLimit, route53ChangeCountLimit)
+	changeIDs := make([]*string, len(batches))
 	for i, changes := range batches {
 		log.Info(fmt.Sprintf("Submitting %d changes to Route53", len(changes)))
 		batch := new(route53.ChangeBatch)
@@ -117,9 +118,13 @@ func (c *route53Client) deploy(name string, t *dnsdisc.Tree) error {
 		if err != nil {
 			return err
 		}
+		changeIDs[i] = resp.ChangeInfo.Id
+	}
 
-		log.Info(fmt.Sprintf("Waiting for change request %s", *resp.ChangeInfo.Id))
-		wreq := &route53.GetChangeInput{Id: resp.ChangeInfo.Id}
+	// wait for changes to propagate
+	for _, changeID := range changeIDs {
+		log.Info(fmt.Sprintf("Waiting for change request %s", *changeID))
+		wreq := &route53.GetChangeInput{Id: changeID}
 		if err := c.api.WaitUntilResourceRecordSetsChanged(wreq); err != nil {
 			return err
 		}
