@@ -114,25 +114,30 @@ func (h *clientHandler) handle(p *serverPeer) error {
 		p.Log().Debug("Light Ethereum handshake failed", "err", err)
 		return err
 	}
+	// Register peer with the server pool
+	if h.backend.serverPool != nil {
+		if nvt, err := h.backend.serverPool.RegisterNode(p.Node()); err == nil {
+			p.setValueTracker(nvt)
+			p.updateVtParams()
+		} else {
+			return err
+		}
+	}
 	// Register the peer locally
 	if err := h.backend.peers.register(p); err != nil {
 		p.Log().Error("Light Ethereum peer registration failed", "err", err)
 		return err
-	}
-	if h.backend.serverPool != nil {
-		p.setValueTracker(h.backend.serverPool.RegisterNode(p.Node()))
-		p.updateVtParams()
 	}
 
 	serverConnectionGauge.Update(int64(h.backend.peers.len()))
 
 	connectedAt := mclock.Now()
 	defer func() {
+		h.backend.peers.unregister(p.id)
 		if h.backend.serverPool != nil {
 			p.setValueTracker(nil)
 			h.backend.serverPool.UnregisterNode(p.Node())
 		}
-		h.backend.peers.unregister(p.id)
 		connectionTimer.Update(time.Duration(mclock.Now() - connectedAt))
 		serverConnectionGauge.Update(int64(h.backend.peers.len()))
 	}()

@@ -57,15 +57,15 @@ type ServerPool struct {
 	unixTime func() int64
 	db       ethdb.KeyValueStore
 
-	ns           *nodestate.NodeStateMachine
-	vt           *ValueTracker
-	mixer        *enode.FairMix
-	mixSources   []enode.Iterator
-	dialIterator enode.Iterator
-	validSchemes enr.IdentityScheme
-	trustedURLs  []string
-	fillSet      *FillSet
-	queryFails   uint32
+	ns                  *nodestate.NodeStateMachine
+	vt                  *ValueTracker
+	mixer               *enode.FairMix
+	mixSources          []enode.Iterator
+	dialIterator        enode.Iterator
+	validSchemes        enr.IdentityScheme
+	trustedURLs         []string
+	fillSet             *FillSet
+	started, queryFails uint32
 
 	timeoutLock      sync.RWMutex
 	timeout          time.Duration
@@ -280,6 +280,7 @@ func (s *ServerPool) Start() {
 			}
 		})
 	})
+	atomic.StoreUint32(&s.started, 1)
 }
 
 // stop stops the server pool
@@ -299,11 +300,14 @@ func (s *ServerPool) Stop() {
 }
 
 // registerPeer implements serverPeerSubscriber
-func (s *ServerPool) RegisterNode(node *enode.Node) *NodeValueTracker {
+func (s *ServerPool) RegisterNode(node *enode.Node) (*NodeValueTracker, error) {
+	if atomic.LoadUint32(&s.started) == 0 {
+		return nil, errors.New("server pool not started yet")
+	}
 	s.ns.SetState(node, sfConnected, sfDialing.Or(sfWaitDialTimeout), 0)
 	nvt := s.vt.Register(node.ID())
 	s.ns.SetField(node, sfiConnectedStats, nvt.RtStats())
-	return nvt
+	return nvt, nil
 }
 
 // unregisterPeer implements serverPeerSubscriber
