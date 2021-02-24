@@ -110,6 +110,6 @@ func (tx *AccessListTx) rawSignatureValues() (v, r, s *big.Int) {
 	return tx.V, tx.R, tx.S
 }
 
-func (tx *AccessListTx) setSignatureValues(v, r, s *big.Int) {
-	tx.V, tx.R, tx.S = v, r, s
+func (tx *AccessListTx) setSignatureValues(chainID, v, r, s *big.Int) {
+	tx.ChainID, tx.V, tx.R, tx.S = chainID, v, r, s
 }

@@ -111,26 +111,79 @@ func TestEIP2718TransactionSigHash(t *testing.T) {
 	}
 }
 
-func TestEIP2718SigHashes(t *testing.T) {
-	// the signer chainid doesn't matter for the sighash
-	signer := NewEIP2930Signer(big.NewInt(0))
-	for i, tc := range []struct {
-		rlpData  string
-		sigHash  common.Hash
-		fullHash common.Hash
+// This test checks signature operations on access list transactions.
+func TestEIP2930Signer(t *testing.T) {
+
+	var (
+		key, _  = crypto.HexToECDSA("b71c71a67e1177ad4e901695e1b4b9ee17ae16c6668d313eac2f96dbcda3f291")
+		keyAddr = crypto.PubkeyToAddress(key.PublicKey)
+		signer1 = NewEIP2930Signer(big.NewInt(1))
+		signer2 = NewEIP2930Signer(big.NewInt(2))
+		tx0     = NewTx(&AccessListTx{Nonce: 1})
+		tx1     = NewTx(&AccessListTx{ChainID: big.NewInt(1), Nonce: 1})
+		tx2, _  = SignNewTx(key, signer2, &AccessListTx{ChainID: big.NewInt(2), Nonce: 1})
+	)
+
+	tests := []struct {
+		tx             *Transaction
+		signer         Signer
+		wantSignerHash common.Hash
+		wantSenderErr  error
+		wantSignErr    error
+		wantHash       common.Hash // after signing
 	}{
 		{
-			rlpData:  "0xb8a701f8a486796f6c6f763380843b9aca008262d4948a8eafb1cf62bfbeb1741769dae1a9dd479961928080f838f7940000000000000000000000000000000000001337e1a0000000000000000000000000000000000000000000000000000000000000000080a0775101f92dcca278a56bfe4d613428624a1ebfc3cd9e0bcc1de80c41455b9021a06c9deac205afe7b124907d4ba54a9f46161498bd3990b90d175aac12c9a40ee9",
-			sigHash:  common.HexToHash("0xf8eb2089f9add782b02e4c0ce41540817688bf579c14736576cb1d6d562c2f6b"),
-			fullHash: common.HexToHash("0x212a85be428a85d00fb5335b013bc8d3cf7511ffdd8938de768f4ca8bf1caf50"),
+			tx:             tx0,
+			signer:         signer1,
+			wantSignerHash: common.HexToHash("846ad7672f2a3a40c1f959cd4a8ad21786d620077084d84c8d7c077714caa139"),
+			wantSenderErr:  ErrInvalidChainId,
+			wantHash:       common.HexToHash("1ccd12d8bbdb96ea391af49a35ab641e219b2dd638dea375f2bc94dd290f2549"),
 		},
-	} {
-		var tx Transaction
-		rlp.DecodeBytes(common.FromHex(tc.rlpData), &tx)
-		hash := tx.Hash()
-		sigHash := signer.Hash(&tx)
-		if sigHash != tc.sigHash || hash != tc.fullHash {
-			t.Fatalf("test %d: got\nsighash %x want %x\nhash: %x want %x\n", i, sigHash, tc.sigHash, hash, tc.fullHash)
+		{
+			tx:             tx1,
+			signer:         signer1,
+			wantSenderErr:  ErrInvalidSig,
+			wantSignerHash: common.HexToHash("846ad7672f2a3a40c1f959cd4a8ad21786d620077084d84c8d7c077714caa139"),
+			wantHash:       common.HexToHash("1ccd12d8bbdb96ea391af49a35ab641e219b2dd638dea375f2bc94dd290f2549"),
+		},
+		{
+			// This checks what happens when trying to sign an unsigned tx for the wrong chain.
+			tx:             tx1,
+			signer:         signer2,
+			wantSenderErr:  ErrInvalidChainId,
+			wantSignerHash: common.HexToHash("367967247499343401261d718ed5aa4c9486583e4d89251afce47f4a33c33362"),
+			wantSignErr:    ErrInvalidChainId,
+		},
+		{
+			// This checks what happens when trying to re-sign a signed tx for the wrong chain.
+			tx:             tx2,
+			signer:         signer1,
+			wantSenderErr:  ErrInvalidChainId,
+			wantSignerHash: common.HexToHash("846ad7672f2a3a40c1f959cd4a8ad21786d620077084d84c8d7c077714caa139"),
+			wantSignErr:    ErrInvalidChainId,
+		},
+	}
+
+	for i, test := range tests {
+		sigHash := test.signer.Hash(test.tx)
+		if sigHash != test.wantSignerHash {
+			t.Errorf("test %d: wrong sig hash: got %x, want %x", i, sigHash, test.wantSignerHash)
+		}
+		sender, err := Sender(test.signer, test.tx)
+		if err != test.wantSenderErr {
+			t.Errorf("test %d: wrong Sender error %q", i, err)
+		}
+		if err == nil && sender != keyAddr {
+			t.Errorf("test %d: wrong sender address %x", i, sender)
+		}
+		signedTx, err := SignTx(test.tx, test.signer, key)
+		if err != test.wantSignErr {
+			t.Fatalf("test %d: wrong SignTx error %q", i, err)
+		}
+		if signedTx != nil {
+			if signedTx.Hash() != test.wantHash {
+				t.Errorf("test %d: wrong tx hash after signing: got %x, want %x", i, signedTx.Hash(), test.wantHash)
+			}
 		}
 	}
 }
@@ -163,7 +216,6 @@ func TestEIP2718TransactionEncode(t *testing.T) {
 func decodeTx(data []byte) (*Transaction, error) {
 	var tx Transaction
 	t, err := &tx, rlp.Decode(bytes.NewReader(data), &tx)
-
 	return t, err
 }
 

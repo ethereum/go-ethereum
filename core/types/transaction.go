@@ -79,7 +79,7 @@ type TxData interface {
 	to() *common.Address
 
 	rawSignatureValues() (v, r, s *big.Int)
-	setSignatureValues(v, r, s *big.Int)
+	setSignatureValues(chainID, v, r, s *big.Int)
 }
 
 // EncodeRLP implements rlp.Encoder
@@ -337,7 +337,7 @@ func (tx *Transaction) WithSignature(signer Signer, sig []byte) (*Transaction, e
 		return nil, err
 	}
 	cpy := tx.inner.copy()
-	cpy.setSignatureValues(v, r, s)
+	cpy.setSignatureValues(signer.ChainID(), v, r, s)
 	return &Transaction{inner: cpy, time: tx.time}, nil
 }
 
