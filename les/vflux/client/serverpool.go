@@ -28,6 +28,7 @@ import (
 	"github.com/ethereum/go-ethereum/ethdb"
 	"github.com/ethereum/go-ethereum/les/utils"
 	"github.com/ethereum/go-ethereum/log"
+	"github.com/ethereum/go-ethereum/metrics"
 	"github.com/ethereum/go-ethereum/p2p/enode"
 	"github.com/ethereum/go-ethereum/p2p/enr"
 	"github.com/ethereum/go-ethereum/p2p/nodestate"
@@ -70,6 +71,9 @@ type ServerPool struct {
 	timeout          time.Duration
 	timeWeights      ResponseTimeWeights
 	timeoutRefreshed mclock.AbsTime
+
+	suggestedTimeoutGauge, totalValueGauge metrics.Gauge
+	sessionValueMeter                      metrics.Meter
 }
 
 // nodeHistory keeps track of dial costs which determine node weight together with the
@@ -165,11 +169,26 @@ func NewServerPool(db ethdb.KeyValueStore, dbKey []byte, vt *ValueTracker, mixTi
 		}
 	})
 
-	//TODO
-	/*s.ns.AddLogMetrics(sfHasValue, sfDisableSelection, "selectable", nil, nil, serverSelectableGauge)
-	s.ns.AddLogMetrics(sfDialing, nodestate.Flags{}, "dialed", serverDialedMeter, nil, nil)
-	s.ns.AddLogMetrics(sfConnected, nodestate.Flags{}, "connected", nil, nil, serverConnectedGauge)*/
 	return s, s.dialIterator
+}
+
+// AddMetrics adds metrics to the server pool. Should be called before Start().
+func (s *ServerPool) AddMetrics(
+	suggestedTimeoutGauge, totalValueGauge, serverSelectableGauge, serverConnectedGauge metrics.Gauge,
+	sessionValueMeter, serverDialedMeter metrics.Meter) {
+
+	s.suggestedTimeoutGauge = suggestedTimeoutGauge
+	s.totalValueGauge = totalValueGauge
+	s.sessionValueMeter = sessionValueMeter
+	if serverSelectableGauge != nil {
+		s.ns.AddLogMetrics(sfHasValue, sfDisableSelection, "selectable", nil, nil, serverSelectableGauge)
+	}
+	if serverDialedMeter != nil {
+		s.ns.AddLogMetrics(sfDialing, nodestate.Flags{}, "dialed", serverDialedMeter, nil, nil)
+	}
+	if serverConnectedGauge != nil {
+		s.ns.AddLogMetrics(sfConnected, nodestate.Flags{}, "connected", nil, nil, serverConnectedGauge)
+	}
 }
 
 // AddSource adds a node discovery source to the server pool (should be called before start)
@@ -330,9 +349,12 @@ func (s *ServerPool) recalTimeout() {
 		s.timeout = timeout
 		s.timeWeights = TimeoutWeights(s.timeout)
 
-		//TODO
-		/*suggestedTimeoutGauge.Update(int64(s.timeout / time.Millisecond))
-		totalValueGauge.Update(int64(rts.Value(s.timeWeights, s.vt.StatsExpFactor())))*/
+		if s.suggestedTimeoutGauge != nil {
+			s.suggestedTimeoutGauge.Update(int64(s.timeout / time.Millisecond))
+		}
+		if s.totalValueGauge != nil {
+			s.totalValueGauge.Update(int64(rts.Value(s.timeWeights, s.vt.StatsExpFactor())))
+		}
 	}
 	s.timeoutRefreshed = now
 	s.timeoutLock.Unlock()
@@ -384,8 +406,9 @@ func (s *ServerPool) serviceValue(node *enode.Node) (sessionValue, totalValue fl
 		diff := currentStats
 		diff.SubStats(&connStats)
 		sessionValue = diff.Value(timeWeights, expFactor)
-		//TODO
-		//sessionValueMeter.Mark(int64(sessionValue))
+		if s.sessionValueMeter != nil {
+			s.sessionValueMeter.Mark(int64(sessionValue))
+		}
 	}
 	return
 }

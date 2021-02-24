@@ -115,6 +115,7 @@ func New(stack *node.Node, config *ethconfig.Config) (*LightEthereum, error) {
 	}
 
 	leth.serverPool, leth.dialCandidates = vfc.NewServerPool(lesDb, []byte("serverpool:"), leth.valueTracker, time.Second, nil, &mclock.System{}, config.UltraLightServers)
+	leth.serverPool.AddMetrics(suggestedTimeoutGauge, totalValueGauge, serverSelectableGauge, serverConnectedGauge, sessionValueMeter, serverDialedMeter)
 
 	leth.retriever = newRetrieveManager(peers, leth.reqDist, leth.serverPool.GetTimeout)
 	leth.relay = newLesTxRelay(peers, leth.retriever)
