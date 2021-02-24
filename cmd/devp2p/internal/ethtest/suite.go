@@ -179,7 +179,7 @@ func (s *Suite) TestGetBlockHeaders(t *utesting.T) {
 		headers := *msg
 		for _, header := range headers {
 			num := header.Number.Uint64()
-			t.Logf("received header (%d): %s", num, pretty.Sdump(header))
+			t.Logf("received header (%d): %s", num, pretty.Sdump(header.Hash()))
 			assert.Equal(t, s.chain.blocks[int(num)].Header(), header)
 		}
 	default:

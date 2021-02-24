@@ -368,18 +368,15 @@ func (s *Suite) TestSameRequestID_66(t *utesting.T) {
 		RequestId: reqID,
 		GetBlockHeadersPacket: &eth.GetBlockHeadersPacket{
 			Origin: eth.HashOrNumber{
-				Number: 0,
+				Number: 33,
 			},
 			Amount: 2,
 		},
 	}
 	// send requests concurrently
-	headerChan := make(chan BlockHeaders, 1)
-	go func(headerChan chan BlockHeaders) {
-		headerChan <- s.getBlockHeaders66(t, conn, req2, reqID)
-	}(headerChan)
+	go func() {
+		headersMatch(t, s.chain, s.getBlockHeaders66(t, conn, req2, reqID))
+	}()
 	// check response from first request
 	headersMatch(t, s.chain, s.getBlockHeaders66(t, conn, req1, reqID))
-	// check response from second request
-	headersMatch(t, s.chain, <-headerChan)
 }

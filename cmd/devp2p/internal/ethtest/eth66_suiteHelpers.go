@@ -264,7 +264,7 @@ func (s *Suite) getBlockHeaders66(t *utesting.T, conn *Conn, req eth.Packet, exp
 func headersMatch(t *utesting.T, chain *Chain, headers BlockHeaders) {
 	for _, header := range headers {
 		num := header.Number.Uint64()
-		t.Logf("received header (%d): %s", num, pretty.Sdump(header))
+		t.Logf("received header (%d): %s", num, pretty.Sdump(header.Hash()))
 		assert.Equal(t, chain.blocks[int(num)].Header(), header)
 	}
 }
