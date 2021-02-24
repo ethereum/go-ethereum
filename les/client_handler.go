@@ -119,6 +119,10 @@ func (h *clientHandler) handle(p *serverPeer) error {
 		if nvt, err := h.backend.serverPool.RegisterNode(p.Node()); err == nil {
 			p.setValueTracker(nvt)
 			p.updateVtParams()
+			defer func() {
+				p.setValueTracker(nil)
+				h.backend.serverPool.UnregisterNode(p.Node())
+			}()
 		} else {
 			return err
 		}
@@ -134,10 +138,6 @@ func (h *clientHandler) handle(p *serverPeer) error {
 	connectedAt := mclock.Now()
 	defer func() {
 		h.backend.peers.unregister(p.id)
-		if h.backend.serverPool != nil {
-			p.setValueTracker(nil)
-			h.backend.serverPool.UnregisterNode(p.Node())
-		}
 		connectionTimer.Update(time.Duration(mclock.Now() - connectedAt))
 		serverConnectionGauge.Update(int64(h.backend.peers.len()))
 	}()
