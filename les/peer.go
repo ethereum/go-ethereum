@@ -341,7 +341,7 @@ type serverPeer struct {
 	onlyAnnounce            bool   // The flag whether the server sends announcement only.
 	chainSince, chainRecent uint64 // The range of chain server peer can serve.
 	stateSince, stateRecent uint64 // The range of state server peer can serve.
-	serveTxLookup           bool   // The server peer can serve tx lookups.
+	txHistory               uint64 // The length of available tx history, 0 means all, 1 means disabled
 
 	// Advertised checkpoint fields
 	checkpointNumber uint64                   // The block height which the checkpoint is registered.
@@ -634,13 +634,13 @@ func (p *serverPeer) Handshake(genesis common.Hash, forkid forkid.ID, forkFilter
 			if err := recv.get("recentTxLookup", &recentTx); err != nil {
 				return err
 			}
-			// Note: in the current version we only consider the tx index service useful
-			// if it is unlimited. This can be made configurable in the future.
-			p.serveTxLookup = recentTx == txIndexUnlimited
+			p.txHistory = uint64(recentTx)
 		} else {
-			p.serveTxLookup = true
+			// The weak assumption is held here that legacy les server(les2,3)
+			// has unlimited transaction history. The les serving in these legacy
+			// versions is disabled if the transaction is unindexed.
+			p.txHistory = txIndexUnlimited
 		}
-
 		if p.onlyAnnounce && !p.trusted {
 			return errResp(ErrUselessPeer, "peer cannot serve requests")
 		}
