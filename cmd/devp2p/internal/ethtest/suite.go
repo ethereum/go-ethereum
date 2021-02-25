@@ -53,29 +53,47 @@ type Suite struct {
 // NewSuite creates and returns a new eth-test suite that can
 // be used to test the given node against the given blockchain
 // data.
-func NewSuite(dest *enode.Node, chainfile string, genesisfile string) *Suite {
+func NewSuite(dest *enode.Node, chainfile string, genesisfile string) (*Suite, error) {
 	chain, err := loadChain(chainfile, genesisfile)
 	if err != nil {
-		panic(err)
+		return nil, err
 	}
 	return &Suite{
 		Dest:      dest,
 		chain:     chain.Shorten(1000),
 		fullChain: chain,
-	}
+	}, nil
 }
 
-func (s *Suite) AllTests() []utesting.Test {
+func (s *Suite) EthTests() []utesting.Test {
 	return []utesting.Test{
+		// status
 		{Name: "Status", Fn: s.TestStatus},
+		{Name: "Status_66", Fn: s.TestStatus_66},
+		// get block headers
 		{Name: "GetBlockHeaders", Fn: s.TestGetBlockHeaders},
-		{Name: "Broadcast", Fn: s.TestBroadcast},
+		{Name: "GetBlockHeaders_66", Fn: s.TestGetBlockHeaders_66},
+		{Name: "TestSimultaneousRequests_66", Fn: s.TestSimultaneousRequests_66},
+		{Name: "TestSameRequestID_66", Fn: s.TestSameRequestID_66},
+		{Name: "TestZeroRequestID_66", Fn: s.TestZeroRequestID_66},
+		// get block bodies
 		{Name: "GetBlockBodies", Fn: s.TestGetBlockBodies},
+		{Name: "GetBlockBodies_66", Fn: s.TestGetBlockBodies_66},
+		// broadcast
+		{Name: "Broadcast", Fn: s.TestBroadcast},
+		{Name: "Broadcast_66", Fn: s.TestBroadcast_66},
 		{Name: "TestLargeAnnounce", Fn: s.TestLargeAnnounce},
+		{Name: "TestLargeAnnounce_66", Fn: s.TestLargeAnnounce_66},
+		// malicious handshakes + status
 		{Name: "TestMaliciousHandshake", Fn: s.TestMaliciousHandshake},
 		{Name: "TestMaliciousStatus", Fn: s.TestMaliciousStatus},
+		{Name: "TestMaliciousHandshake_66", Fn: s.TestMaliciousHandshake_66},
+		{Name: "TestMaliciousStatus_66", Fn: s.TestMaliciousStatus},
+		// test transactions
 		{Name: "TestTransactions", Fn: s.TestTransaction},
+		{Name: "TestTransactions_66", Fn: s.TestTransaction_66},
 		{Name: "TestMaliciousTransactions", Fn: s.TestMaliciousTx},
+		{Name: "TestMaliciousTransactions_66", Fn: s.TestMaliciousTx_66},
 	}
 }
 
@@ -161,7 +179,7 @@ func (s *Suite) TestGetBlockHeaders(t *utesting.T) {
 		headers := *msg
 		for _, header := range headers {
 			num := header.Number.Uint64()
-			t.Logf("received header (%d): %s", num, pretty.Sdump(header))
+			t.Logf("received header (%d): %s", num, pretty.Sdump(header.Hash()))
 			assert.Equal(t, s.chain.blocks[int(num)].Header(), header)
 		}
 	default:
@@ -386,20 +404,23 @@ func (s *Suite) setupConnection(t *utesting.T) *Conn {
 // returning the created Conn if successful.
 func (s *Suite) dial() (*Conn, error) {
 	var conn Conn
-
+	// dial
 	fd, err := net.Dial("tcp", fmt.Sprintf("%v:%d", s.Dest.IP(), s.Dest.TCP()))
 	if err != nil {
 		return nil, err
 	}
 	conn.Conn = rlpx.NewConn(fd, s.Dest.Pubkey())
-
 	// do encHandshake
 	conn.ourKey, _ = crypto.GenerateKey()
 	_, err = conn.Handshake(conn.ourKey)
 	if err != nil {
 		return nil, err
 	}
-
+	// set default p2p capabilities
+	conn.caps = []p2p.Cap{
+		{Name: "eth", Version: 64},
+		{Name: "eth", Version: 65},
+	}
 	return &conn, nil
 }
 
