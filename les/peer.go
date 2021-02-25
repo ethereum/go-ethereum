@@ -349,7 +349,6 @@ type serverPeer struct {
 
 	fcServer         *flowcontrol.ServerNode // Client side mirror token bucket.
 	vtLock           sync.Mutex
-	valueTracker     *vfc.ValueTracker
 	nodeValueTracker *vfc.NodeValueTracker
 	sentReqs         map[uint64]sentReqEntry
 
@@ -676,9 +675,8 @@ func (p *serverPeer) Handshake(genesis common.Hash, forkid forkid.ID, forkFilter
 
 // setValueTracker sets the value tracker references for connected servers. Note that the
 // references should be removed upon disconnection by setValueTracker(nil, nil).
-func (p *serverPeer) setValueTracker(vt *vfc.ValueTracker, nvt *vfc.NodeValueTracker) {
+func (p *serverPeer) setValueTracker(nvt *vfc.NodeValueTracker) {
 	p.vtLock.Lock()
-	p.valueTracker = vt
 	p.nodeValueTracker = nvt
 	if nvt != nil {
 		p.sentReqs = make(map[uint64]sentReqEntry)
@@ -705,7 +703,7 @@ func (p *serverPeer) updateVtParams() {
 			}
 		}
 	}
-	p.valueTracker.UpdateCosts(p.nodeValueTracker, reqCosts)
+	p.nodeValueTracker.UpdateCosts(reqCosts)
 }
 
 // sentReqEntry remembers sent requests and their sending times
@@ -732,7 +730,6 @@ func (p *serverPeer) answeredRequest(id uint64) {
 	}
 	e, ok := p.sentReqs[id]
 	delete(p.sentReqs, id)
-	vt := p.valueTracker
 	nvt := p.nodeValueTracker
 	p.vtLock.Unlock()
 	if !ok {
@@ -752,7 +749,7 @@ func (p *serverPeer) answeredRequest(id uint64) {
 		vtReqs[1] = vfc.ServedRequest{ReqType: uint32(m.rest), Amount: e.amount - 1}
 	}
 	dt := time.Duration(mclock.Now() - e.at)
-	vt.Served(nvt, vtReqs[:reqCount], dt)
+	nvt.Served(vtReqs[:reqCount], dt)
 }
 
 // clientPeer represents each node to which the les server is connected.
