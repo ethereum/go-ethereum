@@ -31,6 +31,7 @@ func (c Config) MarshalTOML() (interface{}, error) {
 		LightEgress             int                    `toml:",omitempty"`
 		LightPeers              int                    `toml:",omitempty"`
 		LightNoPrune            bool                   `toml:",omitempty"`
+		LightNoSyncServe        bool                   `toml:",omitempty"`
 		SyncFromCheckpoint      bool                   `toml:",omitempty"`
 		UltraLightServers       []string               `toml:",omitempty"`
 		UltraLightFraction      int                    `toml:",omitempty"`
@@ -74,6 +75,7 @@ func (c Config) MarshalTOML() (interface{}, error) {
 	enc.LightEgress = c.LightEgress
 	enc.LightPeers = c.LightPeers
 	enc.LightNoPrune = c.LightNoPrune
+	enc.LightNoSyncServe = c.LightNoSyncServe
 	enc.SyncFromCheckpoint = c.SyncFromCheckpoint
 	enc.UltraLightServers = c.UltraLightServers
 	enc.UltraLightFraction = c.UltraLightFraction
@@ -121,6 +123,7 @@ func (c *Config) UnmarshalTOML(unmarshal func(interface{}) error) error {
 		LightEgress             *int                   `toml:",omitempty"`
 		LightPeers              *int                   `toml:",omitempty"`
 		LightNoPrune            *bool                  `toml:",omitempty"`
+		LightNoSyncServe        *bool                  `toml:",omitempty"`
 		SyncFromCheckpoint      *bool                  `toml:",omitempty"`
 		UltraLightServers       []string               `toml:",omitempty"`
 		UltraLightFraction      *int                   `toml:",omitempty"`
@@ -194,6 +197,9 @@ func (c *Config) UnmarshalTOML(unmarshal func(interface{}) error) error {
 	}
 	if dec.LightNoPrune != nil {
 		c.LightNoPrune = *dec.LightNoPrune
+	}
+	if dec.LightNoSyncServe != nil {
+		c.LightNoSyncServe = *dec.LightNoSyncServe
 	}
 	if dec.SyncFromCheckpoint != nil {
 		c.SyncFromCheckpoint = *dec.SyncFromCheckpoint
