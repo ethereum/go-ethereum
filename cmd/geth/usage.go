@@ -44,8 +44,7 @@ var AppHelpFlagGroups = []flags.FlagGroup{
 			utils.MainnetFlag,
 			utils.GoerliFlag,
 			utils.RinkebyFlag,
-			// TODO: Re-enable this when 2718/2930 is added
-			//utils.YoloV3Flag,
+			utils.YoloV3Flag,
 			utils.RopstenFlag,
 			utils.SyncModeFlag,
 			utils.ExitWhenSyncedFlag,
