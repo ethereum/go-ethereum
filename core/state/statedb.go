@@ -728,6 +728,31 @@ func (s *StateDB) Copy() *StateDB {
 	if s.prefetcher != nil {
 		state.prefetcher = s.prefetcher.copy()
 	}
+	if s.snaps != nil {
+		// In order for the miner to be able to use and make additions
+		// to the snapshot tree, we need to copy that aswell.
+		// Otherwise, any block mined by ourselves will cause gaps in the tree,
+		// and force the miner to operate trie-backed only
+		state.snaps = s.snaps
+		state.snap = s.snap
+		// deep copy needed
+		state.snapDestructs = make(map[common.Hash]struct{})
+		for k, v := range s.snapDestructs {
+			state.snapDestructs[k] = v
+		}
+		state.snapAccounts = make(map[common.Hash][]byte)
+		for k, v := range s.snapAccounts {
+			state.snapAccounts[k] = v
+		}
+		state.snapStorage = make(map[common.Hash]map[common.Hash][]byte)
+		for k, v := range s.snapStorage {
+			temp := make(map[common.Hash][]byte)
+			for kk, vv := range v {
+				temp[kk] = vv
+			}
+			state.snapStorage[k] = temp
+		}
+	}
 	return state
 }
 
@@ -956,6 +981,32 @@ func (s *StateDB) Commit(deleteEmptyObjects bool) (common.Hash, error) {
 		s.snap, s.snapDestructs, s.snapAccounts, s.snapStorage = nil, nil, nil, nil
 	}
 	return root, err
+}
+
+// PrepareAccessList handles the preparatory steps for executing a state transition with
+// regards to both EIP-2929 and EIP-2930:
+//
+// - Add sender to access list (2929)
+// - Add destination to access list (2929)
+// - Add precompiles to access list (2929)
+// - Add the contents of the optional tx access list (2930)
+//
+// This method should only be called if Yolov3/Berlin/2929+2930 is applicable at the current number.
+func (s *StateDB) PrepareAccessList(sender common.Address, dst *common.Address, precompiles []common.Address, list types.AccessList) {
+	s.AddAddressToAccessList(sender)
+	if dst != nil {
+		s.AddAddressToAccessList(*dst)
+		// If it's a create-tx, the destination will be added inside evm.create
+	}
+	for _, addr := range precompiles {
+		s.AddAddressToAccessList(addr)
+	}
+	for _, el := range list {
+		s.AddAddressToAccessList(el.Address)
+		for _, key := range el.StorageKeys {
+			s.AddSlotToAccessList(el.Address, key)
+		}
+	}
 }
 
 // AddAddressToAccessList adds the given address to the access list

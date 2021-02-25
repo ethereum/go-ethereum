@@ -24,7 +24,7 @@ import (
 	"github.com/ethereum/go-ethereum/p2p/enode"
 )
 
-// PrivateClientAPI implements the lespay client side API
+// PrivateClientAPI implements the vflux client side API
 type PrivateClientAPI struct {
 	vt *ValueTracker
 }

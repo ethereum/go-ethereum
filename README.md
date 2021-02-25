@@ -314,13 +314,13 @@ ones either). To start a `geth` instance for mining, run it with all your usual 
 by:
 
 ```shell
-$ geth <usual-flags> --mine --miner.threads=1 --etherbase=0x0000000000000000000000000000000000000000
+$ geth <usual-flags> --mine --miner.threads=1 --miner.etherbase=0x0000000000000000000000000000000000000000
 ```
 
 Which will start mining blocks and transactions on a single CPU thread, crediting all
-proceedings to the account specified by `--etherbase`. You can further tune the mining
-by changing the default gas limit blocks converge to (`--targetgaslimit`) and the price
-transactions are accepted at (`--gasprice`).
+proceedings to the account specified by `--miner.etherbase`. You can further tune the mining
+by changing the default gas limit blocks converge to (`--miner.targetgaslimit`) and the price
+transactions are accepted at (`--miner.gasprice`).
 
 ## Contribution
 

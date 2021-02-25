@@ -143,19 +143,9 @@ func (pre *Prestate) Apply(vmConfig vm.Config, chainConfig *params.ChainConfig,
 		vmConfig.Debug = (tracer != nil)
 		statedb.Prepare(tx.Hash(), blockHash, txIndex)
 		txContext := core.NewEVMTxContext(msg)
-
-		evm := vm.NewEVM(vmContext, txContext, statedb, chainConfig, vmConfig)
-		if chainConfig.IsYoloV3(vmContext.BlockNumber) {
-			statedb.AddAddressToAccessList(msg.From())
-			if dst := msg.To(); dst != nil {
-				statedb.AddAddressToAccessList(*dst)
-				// If it's a create-tx, the destination will be added inside evm.create
-			}
-			for _, addr := range evm.ActivePrecompiles() {
-				statedb.AddAddressToAccessList(addr)
-			}
-		}
 		snapshot := statedb.Snapshot()
+		evm := vm.NewEVM(vmContext, txContext, statedb, chainConfig, vmConfig)
+
 		// (ret []byte, usedGas uint64, failed bool, err error)
 		msgResult, err := core.ApplyMessage(evm, msg, gaspool)
 		if err != nil {
@@ -169,7 +159,8 @@ func (pre *Prestate) Apply(vmConfig vm.Config, chainConfig *params.ChainConfig,
 			return nil, nil, NewError(ErrorMissingBlockhash, hashError)
 		}
 		gasUsed += msgResult.UsedGas
-		// Create a new receipt for the transaction, storing the intermediate root and gas used by the tx
+
+		// Receipt:
 		{
 			var root []byte
 			if chainConfig.IsByzantium(vmContext.BlockNumber) {
@@ -178,22 +169,32 @@ func (pre *Prestate) Apply(vmConfig vm.Config, chainConfig *params.ChainConfig,
 				root = statedb.IntermediateRoot(chainConfig.IsEIP158(vmContext.BlockNumber)).Bytes()
 			}
 
-			receipt := types.NewReceipt(root, msgResult.Failed(), gasUsed)
+			// Create a new receipt for the transaction, storing the intermediate root and
+			// gas used by the tx.
+			receipt := &types.Receipt{Type: tx.Type(), PostState: root, CumulativeGasUsed: gasUsed}
+			if msgResult.Failed() {
+				receipt.Status = types.ReceiptStatusFailed
+			} else {
+				receipt.Status = types.ReceiptStatusSuccessful
+			}
 			receipt.TxHash = tx.Hash()
 			receipt.GasUsed = msgResult.UsedGas
-			// if the transaction created a contract, store the creation address in the receipt.
+
+			// If the transaction created a contract, store the creation address in the receipt.
 			if msg.To() == nil {
 				receipt.ContractAddress = crypto.CreateAddress(evm.TxContext.Origin, tx.Nonce())
 			}
-			// Set the receipt logs and create a bloom for filtering
+
+			// Set the receipt logs and create the bloom filter.
 			receipt.Logs = statedb.GetLogs(tx.Hash())
 			receipt.Bloom = types.CreateBloom(types.Receipts{receipt})
-			// These three are non-consensus fields
+			// These three are non-consensus fields:
 			//receipt.BlockHash
-			//receipt.BlockNumber =
+			//receipt.BlockNumber
 			receipt.TransactionIndex = uint(txIndex)
 			receipts = append(receipts, receipt)
 		}
+
 		txIndex++
 	}
 	statedb.IntermediateRoot(chainConfig.IsEIP158(vmContext.BlockNumber))

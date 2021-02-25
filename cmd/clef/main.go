@@ -107,11 +107,6 @@ var (
 		Usage: "HTTP-RPC server listening port",
 		Value: node.DefaultHTTPPort + 5,
 	}
-	legacyRPCPortFlag = cli.IntFlag{
-		Name:  "rpcport",
-		Usage: "HTTP-RPC server listening port (Deprecated, please use --http.port).",
-		Value: node.DefaultHTTPPort + 5,
-	}
 	signerSecretFlag = cli.StringFlag{
 		Name:  "signersecret",
 		Usage: "A file containing the (encrypted) master seed to encrypt Clef data, e.g. keystore credentials and ruleset hash",
@@ -250,12 +245,6 @@ var AppHelpFlagGroups = []flags.FlagGroup{
 			acceptFlag,
 		},
 	},
-	{
-		Name: "ALIASED (deprecated)",
-		Flags: []cli.Flag{
-			legacyRPCPortFlag,
-		},
-	},
 }
 
 func init() {
@@ -283,7 +272,6 @@ func init() {
 		testFlag,
 		advancedMode,
 		acceptFlag,
-		legacyRPCPortFlag,
 	}
 	app.Action = signer
 	app.Commands = []cli.Command{initCommand,
@@ -677,12 +665,6 @@ func signer(c *cli.Context) error {
 
 		// set port
 		port := c.Int(rpcPortFlag.Name)
-		if c.GlobalIsSet(legacyRPCPortFlag.Name) {
-			if !c.GlobalIsSet(rpcPortFlag.Name) {
-				port = c.Int(legacyRPCPortFlag.Name)
-			}
-			log.Warn("The flag --rpcport is deprecated and will be removed in the future, please use --http.port")
-		}
 
 		// start http server
 		httpEndpoint := fmt.Sprintf("%s:%d", c.GlobalString(utils.HTTPListenAddrFlag.Name), port)
@@ -1124,7 +1106,7 @@ func GenDoc(ctx *cli.Context) {
 
 		rlpdata := common.FromHex("0xf85d640101948a8eafb1cf62bfbeb1741769dae1a9dd47996192018026a0716bd90515acb1e68e5ac5867aa11a1e65399c3349d479f5fb698554ebc6f293a04e8a4ebfff434e971e0ef12c5bf3a881b06fd04fc3f8b8a7291fb67a26a1d4ed")
 		var tx types.Transaction
-		rlp.DecodeBytes(rlpdata, &tx)
+		tx.UnmarshalBinary(rlpdata)
 		add("OnApproved - SignTransactionResult", desc, &ethapi.SignTransactionResult{Raw: rlpdata, Tx: &tx})
 
 	}

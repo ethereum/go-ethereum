@@ -26,17 +26,6 @@ import (
 	"github.com/ethereum/go-ethereum/p2p/nodestate"
 )
 
-func testNodeID(i int) enode.ID {
-	return enode.ID{42, byte(i % 256), byte(i / 256)}
-}
-
-func testNodeIndex(id enode.ID) int {
-	if id[0] != 42 {
-		return -1
-	}
-	return int(id[1]) + int(id[2])*256
-}
-
 func testNode(i int) *enode.Node {
 	return enode.SignNull(new(enr.Record), testNodeID(i))
 }

@@ -88,6 +88,10 @@ var (
 	requestTimeout = 10 * time.Second // TODO(karalabe): Make it dynamic ala fast-sync?
 )
 
+// ErrCancelled is returned from snap syncing if the operation was prematurely
+// terminated.
+var ErrCancelled = errors.New("sync cancelled")
+
 // accountRequest tracks a pending account range request to ensure responses are
 // to actual requests and to validate any security constraints.
 //
@@ -615,7 +619,7 @@ func (s *Syncer) Sync(root common.Hash, cancel chan struct{}) error {
 		case id := <-peerDrop:
 			s.revertRequests(id)
 		case <-cancel:
-			return errCancelled
+			return ErrCancelled
 
 		case req := <-s.accountReqFails:
 			s.revertAccountRequest(req)
@@ -1591,7 +1595,7 @@ func (s *Syncer) processAccountResponse(res *accountResponse) {
 				// is interrupted and resumed later. However, *do* update the
 				// previous root hash.
 				if subtasks, ok := res.task.SubTasks[res.hashes[i]]; ok {
-					log.Error("Resuming large storage retrieval", "account", res.hashes[i], "root", account.Root)
+					log.Debug("Resuming large storage retrieval", "account", res.hashes[i], "root", account.Root)
 					for _, subtask := range subtasks {
 						subtask.root = account.Root
 					}
@@ -1610,7 +1614,7 @@ func (s *Syncer) processAccountResponse(res *accountResponse) {
 	// now we have to live with that.
 	for hash := range res.task.SubTasks {
 		if _, ok := resumed[hash]; !ok {
-			log.Error("Aborting suspended storage retrieval", "account", hash)
+			log.Debug("Aborting suspended storage retrieval", "account", hash)
 			delete(res.task.SubTasks, hash)
 		}
 	}

@@ -64,7 +64,7 @@ func TestValueTracker(t *testing.T) {
 			for j := range costList {
 				costList[j] = uint64(baseCost * relPrices[j])
 			}
-			vt.UpdateCosts(nodes[i], costList)
+			nodes[i].UpdateCosts(costList)
 		}
 		for i := range nodes {
 			nodes[i] = vt.Register(enode.ID{byte(i)})
@@ -77,7 +77,7 @@ func TestValueTracker(t *testing.T) {
 				node := rand.Intn(testNodeCount)
 				respTime := time.Duration((rand.Float64() + 1) * float64(time.Second) * float64(node+1) / testNodeCount)
 				totalAmount[reqType] += uint64(reqAmount)
-				vt.Served(nodes[node], []ServedRequest{{uint32(reqType), uint32(reqAmount)}}, respTime)
+				nodes[node].Served([]ServedRequest{{uint32(reqType), uint32(reqAmount)}}, respTime)
 				clock.Run(time.Second)
 			}
 		} else {

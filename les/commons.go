@@ -51,7 +51,7 @@ type lesCommons struct {
 	config                       *ethconfig.Config
 	chainConfig                  *params.ChainConfig
 	iConfig                      *light.IndexerConfig
-	chainDb                      ethdb.Database
+	chainDb, lesDb               ethdb.Database
 	chainReader                  chainReader
 	chtIndexer, bloomTrieIndexer *core.ChainIndexer
 	oracle                       *checkpointoracle.CheckpointOracle

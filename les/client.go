@@ -36,7 +36,7 @@ import (
 	"github.com/ethereum/go-ethereum/eth/gasprice"
 	"github.com/ethereum/go-ethereum/event"
 	"github.com/ethereum/go-ethereum/internal/ethapi"
-	lpc "github.com/ethereum/go-ethereum/les/lespay/client"
+	vfc "github.com/ethereum/go-ethereum/les/vflux/client"
 	"github.com/ethereum/go-ethereum/light"
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/node"
@@ -57,8 +57,7 @@ type LightEthereum struct {
 	handler        *clientHandler
 	txPool         *light.TxPool
 	blockchain     *light.LightChain
-	serverPool     *serverPool
-	valueTracker   *lpc.ValueTracker
+	serverPool     *vfc.ServerPool
 	dialCandidates enode.Iterator
 	pruner         *pruner
 
@@ -81,7 +80,7 @@ func New(stack *node.Node, config *ethconfig.Config) (*LightEthereum, error) {
 	if err != nil {
 		return nil, err
 	}
-	lespayDb, err := stack.OpenDatabase("lespay", 0, 0, "eth/db/lespay")
+	lesDb, err := stack.OpenDatabase("les.client", 0, 0, "eth/db/les.client")
 	if err != nil {
 		return nil, err
 	}
@@ -99,6 +98,7 @@ func New(stack *node.Node, config *ethconfig.Config) (*LightEthereum, error) {
 			chainConfig: chainConfig,
 			iConfig:     light.DefaultClientIndexerConfig,
 			chainDb:     chainDb,
+			lesDb:       lesDb,
 			closeCh:     make(chan struct{}),
 		},
 		peers:          peers,
@@ -108,20 +108,17 @@ func New(stack *node.Node, config *ethconfig.Config) (*LightEthereum, error) {
 		engine:         ethconfig.CreateConsensusEngine(stack, chainConfig, &config.Ethash, nil, false, false, chainDb),
 		bloomRequests:  make(chan chan *bloombits.Retrieval),
 		bloomIndexer:   core.NewBloomIndexer(chainDb, params.BloomBitsBlocksClient, params.HelperTrieConfirmations),
-		valueTracker:   lpc.NewValueTracker(lespayDb, &mclock.System{}, requestList, time.Minute, 1/float64(time.Hour), 1/float64(time.Hour*100), 1/float64(time.Hour*1000)),
 		p2pServer:      stack.Server(),
 		p2pConfig:      &stack.Config().P2P,
 	}
-	peers.subscribe((*vtSubscription)(leth.valueTracker))
 
-	leth.serverPool = newServerPool(lespayDb, []byte("serverpool:"), leth.valueTracker, time.Second, nil, &mclock.System{}, config.UltraLightServers)
-	peers.subscribe(leth.serverPool)
-	leth.dialCandidates = leth.serverPool.dialIterator
+	leth.serverPool, leth.dialCandidates = vfc.NewServerPool(lesDb, []byte("serverpool:"), time.Second, nil, &mclock.System{}, config.UltraLightServers, requestList)
+	leth.serverPool.AddMetrics(suggestedTimeoutGauge, totalValueGauge, serverSelectableGauge, serverConnectedGauge, sessionValueMeter, serverDialedMeter)
 
-	leth.retriever = newRetrieveManager(peers, leth.reqDist, leth.serverPool.getTimeout)
+	leth.retriever = newRetrieveManager(peers, leth.reqDist, leth.serverPool.GetTimeout)
 	leth.relay = newLesTxRelay(peers, leth.retriever)
 
-	leth.odr = NewLesOdr(chainDb, light.DefaultClientIndexerConfig, leth.retriever)
+	leth.odr = NewLesOdr(chainDb, light.DefaultClientIndexerConfig, leth.peers, leth.retriever)
 	leth.chtIndexer = light.NewChtIndexer(chainDb, leth.odr, params.CHTFrequency, params.HelperTrieConfirmations, config.LightNoPrune)
 	leth.bloomTrieIndexer = light.NewBloomTrieIndexer(chainDb, leth.odr, params.BloomBitsBlocksClient, params.BloomTrieFrequency, config.LightNoPrune)
 	leth.odr.SetIndexers(leth.chtIndexer, leth.bloomTrieIndexer, leth.bloomIndexer)
@@ -156,7 +153,7 @@ func New(stack *node.Node, config *ethconfig.Config) (*LightEthereum, error) {
 		rawdb.WriteChainConfig(chainDb, genesisHash, chainConfig)
 	}
 
-	leth.ApiBackend = &LesApiBackend{stack.Config().ExtRPCEnabled(), leth, nil}
+	leth.ApiBackend = &LesApiBackend{stack.Config().ExtRPCEnabled(), stack.Config().AllowUnprotectedTxs, leth, nil}
 	gpoParams := config.GPO
 	if gpoParams.Default == nil {
 		gpoParams.Default = config.Miner.GasPrice
@@ -190,23 +187,6 @@ func New(stack *node.Node, config *ethconfig.Config) (*LightEthereum, error) {
 		}
 	}
 	return leth, nil
-}
-
-// vtSubscription implements serverPeerSubscriber
-type vtSubscription lpc.ValueTracker
-
-// registerPeer implements serverPeerSubscriber
-func (v *vtSubscription) registerPeer(p *serverPeer) {
-	vt := (*lpc.ValueTracker)(v)
-	p.setValueTracker(vt, vt.Register(p.ID()))
-	p.updateVtParams()
-}
-
-// unregisterPeer implements serverPeerSubscriber
-func (v *vtSubscription) unregisterPeer(p *serverPeer) {
-	vt := (*lpc.ValueTracker)(v)
-	vt.Unregister(p.ID())
-	p.setValueTracker(nil, nil)
 }
 
 type LightDummyAPI struct{}
@@ -263,9 +243,9 @@ func (s *LightEthereum) APIs() []rpc.API {
 			Service:   NewPrivateLightAPI(&s.lesCommons),
 			Public:    false,
 		}, {
-			Namespace: "lespay",
+			Namespace: "vflux",
 			Version:   "1.0",
-			Service:   lpc.NewPrivateClientAPI(s.valueTracker),
+			Service:   s.serverPool.API(),
 			Public:    false,
 		},
 	}...)
@@ -301,8 +281,8 @@ func (s *LightEthereum) Start() error {
 	if err != nil {
 		return err
 	}
-	s.serverPool.addSource(discovery)
-	s.serverPool.start()
+	s.serverPool.AddSource(discovery)
+	s.serverPool.Start()
 	// Start bloom request workers.
 	s.wg.Add(bloomServiceThreads)
 	s.startBloomHandlers(params.BloomBitsBlocksClient)
@@ -315,8 +295,7 @@ func (s *LightEthereum) Start() error {
 // Ethereum protocol.
 func (s *LightEthereum) Stop() error {
 	close(s.closeCh)
-	s.serverPool.stop()
-	s.valueTracker.Stop()
+	s.serverPool.Stop()
 	s.peers.close()
 	s.reqDist.close()
 	s.odr.Stop()
@@ -331,6 +310,7 @@ func (s *LightEthereum) Stop() error {
 	s.eventMux.Stop()
 	rawdb.PopUncleanShutdownMarker(s.chainDb)
 	s.chainDb.Close()
+	s.lesDb.Close()
 	s.wg.Wait()
 	log.Info("Light ethereum stopped")
 	return nil
