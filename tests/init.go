@@ -165,7 +165,7 @@ var Forks = map[string]*params.ChainConfig{
 		ConstantinopleBlock: big.NewInt(0),
 		PetersburgBlock:     big.NewInt(0),
 		IstanbulBlock:       big.NewInt(0),
-		YoloV3Block:         big.NewInt(0),
+		BerlinBlock:         big.NewInt(0),
 	},
 }
 

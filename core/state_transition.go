@@ -259,7 +259,7 @@ func (st *StateTransition) TransitionDb() (*ExecutionResult, error) {
 	}
 
 	// Set up the initial access list.
-	if st.evm.ChainConfig().IsYoloV3(st.evm.Context.BlockNumber) {
+	if st.evm.ChainConfig().IsBerlin(st.evm.Context.BlockNumber) {
 		st.state.PrepareAccessList(msg.From(), msg.To(), st.evm.ActivePrecompiles(), msg.AccessList())
 	}
 
