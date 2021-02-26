@@ -425,7 +425,7 @@ var (
 	}
 	MinerNotifyFullFlag = cli.BoolFlag{
 		Name:  "miner.notify.full",
-		Usage: "Notify with pending block bodies instead of work packages",
+		Usage: "Notify with pending block headers instead of work packages",
 	}
 	MinerGasTargetFlag = cli.Uint64Flag{
 		Name:  "miner.gastarget",
