@@ -530,8 +530,8 @@ type CapacityCurve struct {
 }
 
 type curvePoint struct {
-	freeCap, freeCount uint64 // available capacity and node count at the current priority level
-	nextPri            int64  // next priority level where more capacity will be available
+	freeCap uint64 // available capacity and node count at the current priority level
+	nextPri int64  // next priority level where more capacity will be available
 }
 
 // GetCapacityCurve returns a new or recently cached CapacityCurve based on the contents of the pool
@@ -554,24 +554,38 @@ func (pp *PriorityPool) GetCapacityCurve() *CapacityCurve {
 
 	var excludeID enode.ID
 	excludeFirst := pp.maxCount == pp.activeCount
+	// reduce node capacities or remove nodes until nothing is left in the queue;
+	// record the available capacity and the necessary priority after each step
 	for pp.activeCap > 0 {
 		cp := curvePoint{
 			freeCap: pp.maxCap - pp.activeCap,
 		}
+		// temporarily increase activeCap to enforce reducing or removing a node capacity
 		tempCap := cp.freeCap + 1
 		pp.activeCap += tempCap
 		var next *ppNodeInfo
+		// enforceLimits removes the lowest priority node if it has minimal capacity,
+		// otherwise reduces its capacity
 		next, cp.nextPri = pp.enforceLimits()
+		pp.activeCap -= tempCap
+		if next == nil {
+			log.Error("GetCapacityCurve: cannot remove next element from the priority queue")
+			break
+		}
 		id := next.node.ID()
 		if excludeFirst {
+			// if the node count limit is already reached then mark the node with the
+			// lowest priority for exclusion
 			curve.excludeFirst = true
 			excludeID = id
 			excludeFirst = false
 		}
+		// multiple curve points and therefore multiple indexes may belong to a node
+		// if it was removed in multiple steps (if its capacity was more than the minimum)
 		curve.index[id] = append(curve.index[id], len(curve.points))
 		curve.points = append(curve.points, cp)
-		pp.activeCap -= tempCap
 	}
+	// restore original state of the queue
 	pp.finalizeChanges(false)
 	curve.points = append(curve.points, curvePoint{
 		freeCap: pp.maxCap,
@@ -586,6 +600,9 @@ func (pp *PriorityPool) GetCapacityCurve() *CapacityCurve {
 // Exclude returns a CapacityCurve with the given node excluded from the original curve
 func (cc *CapacityCurve) Exclude(id enode.ID) *CapacityCurve {
 	if exclude, ok := cc.index[id]; ok {
+		// return a new version of the curve (only one excluded node can be selected)
+		// Note: if the first node was excluded by default (excludeFirst == true) then
+		// we can forget about that and exclude the node with the given id instead.
 		return &CapacityCurve{
 			points:  cc.points,
 			index:   cc.index,
