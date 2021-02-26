@@ -341,6 +341,10 @@ func exportChain(ctx *cli.Context) error {
 		if first < 0 || last < 0 {
 			utils.Fatalf("Export error: block number must be greater than 0\n")
 		}
+		head := chain.CurrentBlock()
+		if uint64(last) > head.NumberU64() {
+			utils.Fatalf("Export error: block number %d larger than head block %d\n", uint64(last), head.NumberU64())
+		}
 		err = utils.ExportAppendChain(chain, fp, uint64(first), uint64(last))
 	}
 
