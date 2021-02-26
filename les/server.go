@@ -206,8 +206,8 @@ func (s *LesServer) Protocols() []p2p.Protocol {
 	// Add "les" ENR entries.
 	for i := range ps {
 		ps[i].Attributes = []enr.Entry{&lesEntry{
-			LESversion: ServerProtocolVersions[len(ServerProtocolVersions)-1],
-			VFXversion: 1,
+			LesVersion: ServerProtocolVersions[len(ServerProtocolVersions)-1],
+			VfxVersion: 1,
 		}}
 	}
 	return ps
@@ -220,7 +220,9 @@ func (s *LesServer) Start() error {
 	s.handler.start()
 	s.wg.Add(1)
 	go s.capacityManagement()
-	s.p2pSrv.DiscV5.RegisterTalkHandler("vfx", s.vfluxServer.ServeEncoded)
+	if s.p2pSrv.DiscV5 != nil {
+		s.p2pSrv.DiscV5.RegisterTalkHandler("vfx", s.vfluxServer.ServeEncoded)
+	}
 	return nil
 }
 

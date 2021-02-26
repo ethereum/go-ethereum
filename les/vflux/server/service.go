@@ -23,6 +23,7 @@ import (
 
 	"github.com/ethereum/go-ethereum/les/utils"
 	"github.com/ethereum/go-ethereum/les/vflux"
+	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/p2p/enode"
 	"github.com/ethereum/go-ethereum/rlp"
 )
@@ -62,7 +63,8 @@ func (s *Server) Register(b Service) {
 	srv.id, srv.desc = b.ServiceInfo()
 	if strings.Contains(srv.id, ":") {
 		// srv.id + ":" will be used as a service database prefix
-		panic("Service ID contains ':'")
+		log.Error("Service ID contains ':'", "id", srv.id)
+		return
 	}
 	s.services[srv.id] = srv
 }
@@ -72,11 +74,8 @@ func (s *Server) Register(b Service) {
 // may be called concurrently but the Handle functions are called sequentially and
 // therefore thread safety is guaranteed.
 func (s *Server) Serve(id enode.ID, address string, requests vflux.Requests) vflux.Replies {
-	if len(requests) == 0 || len(requests) > vflux.MaxRequestLength {
-		return nil
-	}
 	reqLen := uint(len(requests))
-	if reqLen == 0 {
+	if reqLen == 0 || reqLen > vflux.MaxRequestLength {
 		return nil
 	}
 	// Note: the value parameter will be supplied by the token sale module (total amount paid)

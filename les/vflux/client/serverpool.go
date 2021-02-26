@@ -330,21 +330,23 @@ func (s *ServerPool) Stop() {
 	s.vt.Stop()
 }
 
-// registerPeer implements serverPeerSubscriber
+// RegisterNode implements serverPeerSubscriber
 func (s *ServerPool) RegisterNode(node *enode.Node) (*NodeValueTracker, error) {
 	if atomic.LoadUint32(&s.started) == 0 {
 		return nil, errors.New("server pool not started yet")
 	}
-	s.ns.SetState(node, sfConnected, sfDialing.Or(sfWaitDialTimeout), 0)
 	nvt := s.vt.Register(node.ID())
-	s.ns.SetField(node, sfiConnectedStats, nvt.RtStats())
-	if node.IP().IsLoopback() {
-		s.ns.SetField(node, sfiLocalAddress, node.Record())
-	}
+	s.ns.Operation(func() {
+		s.ns.SetStateSub(node, sfConnected, sfDialing.Or(sfWaitDialTimeout), 0)
+		s.ns.SetFieldSub(node, sfiConnectedStats, nvt.RtStats())
+		if node.IP().IsLoopback() {
+			s.ns.SetFieldSub(node, sfiLocalAddress, node.Record())
+		}
+	})
 	return nvt, nil
 }
 
-// unregisterPeer implements serverPeerSubscriber
+// UnregisterNode implements serverPeerSubscriber
 func (s *ServerPool) UnregisterNode(node *enode.Node) {
 	s.ns.Operation(func() {
 		s.setRedialWait(node, dialCost, dialWaitStep)
