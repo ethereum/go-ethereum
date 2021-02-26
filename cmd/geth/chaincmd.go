@@ -110,6 +110,7 @@ processing will proceed even if an individual RLP-file import failure occurs.`,
 			utils.DataDirFlag,
 			utils.CacheFlag,
 			utils.SyncModeFlag,
+			utils.SnapshotFlag,
 		},
 		Category: "BLOCKCHAIN COMMANDS",
 		Description: `
