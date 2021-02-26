@@ -266,7 +266,7 @@ func (n *NodeBalance) EstimatePriority(capacity uint64, addBalance int64, future
 	if addBalance != 0 {
 		offset := n.bt.posExp.LogOffset(now)
 		old := n.balance.pos.Value(offset)
-		if addBalance > 0 && (old > maxBalance-uint64(addBalance)) {
+		if addBalance > 0 && (addBalance > maxBalance || old > maxBalance-uint64(addBalance)) {
 			b.pos = utils.ExpiredValue{}
 			b.pos.Add(maxBalance, offset)
 		} else {
@@ -567,6 +567,8 @@ func (n *NodeBalance) balanceToPriority(b balance, capacity uint64) int64 {
 // reducedBalance estimates the reduced balance at a given time in the fututre based
 // on the given balance, the time factor and an estimated average request cost per time ratio
 func (n *NodeBalance) reducedBalance(b balance, start mclock.AbsTime, dt time.Duration, capacity uint64, avgReqCost float64) balance {
+	// since the costs are applied continuously during the dt time period we calculate
+	// the expiration offset at the middle of the period
 	at := start + mclock.AbsTime(dt/2)
 	dtf := float64(dt)
 	if !b.pos.IsZero() {
