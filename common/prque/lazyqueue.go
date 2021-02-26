@@ -48,8 +48,8 @@ type LazyQueue struct {
 }
 
 type (
-	PriorityCallback    func(data interface{}, now mclock.AbsTime) int64        // actual priority callback
-	MaxPriorityCallback func(data interface{}, now, until mclock.AbsTime) int64 // estimated maximum priority callback
+	PriorityCallback    func(data interface{}) int64                       // actual priority callback
+	MaxPriorityCallback func(data interface{}, until mclock.AbsTime) int64 // estimated maximum priority callback
 )
 
 // NewLazyQueue creates a new lazy queue
@@ -98,7 +98,7 @@ func (q *LazyQueue) refresh(now mclock.AbsTime) {
 
 // Push adds an item to the queue
 func (q *LazyQueue) Push(data interface{}) {
-	heap.Push(q.queue[1], &item{data, q.maxPriority(data, q.clock.Now(), q.maxUntil)})
+	heap.Push(q.queue[1], &item{data, q.maxPriority(data, q.maxUntil)})
 }
 
 // Update updates the upper priority estimate for the item with the given queue index
@@ -139,11 +139,10 @@ func (q *LazyQueue) peekIndex() int {
 // Pop multiple times. Popped items are passed to the callback. MultiPop returns
 // when the callback returns false or there are no more items to pop.
 func (q *LazyQueue) MultiPop(callback func(data interface{}, priority int64) bool) {
-	now := q.clock.Now()
 	nextIndex := q.peekIndex()
 	for nextIndex != -1 {
 		data := heap.Pop(q.queue[nextIndex]).(*item).value
-		heap.Push(q.popQueue, &item{data, q.priority(data, now)})
+		heap.Push(q.popQueue, &item{data, q.priority(data)})
 		nextIndex = q.peekIndex()
 		for q.popQueue.Len() != 0 && (nextIndex == -1 || q.queue[nextIndex].blocks[0][0].priority < q.popQueue.blocks[0][0].priority) {
 			i := heap.Pop(q.popQueue).(*item)

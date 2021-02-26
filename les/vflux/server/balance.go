@@ -243,11 +243,11 @@ func (n *NodeBalance) RequestServed(cost uint64) uint64 {
 }
 
 // Priority returns the actual priority based on the current balance
-func (n *NodeBalance) Priority(now mclock.AbsTime, capacity uint64) int64 {
+func (n *NodeBalance) Priority(capacity uint64) int64 {
 	n.lock.Lock()
 	defer n.lock.Unlock()
 
-	n.updateBalance(now)
+	n.updateBalance(n.bt.clock.Now())
 	return n.balanceToPriority(n.balance, capacity)
 }
 
@@ -256,10 +256,11 @@ func (n *NodeBalance) Priority(now mclock.AbsTime, capacity uint64) int64 {
 // in the current session.
 // If update is true then a priority callback is added that turns UpdateFlag on and off
 // in case the priority goes below the estimated minimum.
-func (n *NodeBalance) EstimatePriority(now mclock.AbsTime, capacity uint64, addBalance int64, future, bias time.Duration, update bool) int64 {
+func (n *NodeBalance) EstimatePriority(capacity uint64, addBalance int64, future, bias time.Duration, update bool) int64 {
 	n.lock.Lock()
 	defer n.lock.Unlock()
 
+	now := n.bt.clock.Now()
 	n.updateBalance(now)
 	b := n.balance
 	if addBalance != 0 {

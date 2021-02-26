@@ -417,7 +417,6 @@ func (f *clientPool) serveCapQuery(id enode.ID, freeID string, data []byte) []by
 	// use vfs.CapacityCurve to answer request for multiple newly bought token amounts
 	curve := f.pp.GetCapacityCurve().Exclude(id)
 	result := make(vflux.CapacityQueryReply, len(req.AddTokens))
-	now := f.clock.Now()
 	bias := time.Second * time.Duration(req.Bias)
 	if f.connectedBias > bias {
 		bias = f.connectedBias
@@ -426,7 +425,7 @@ func (f *clientPool) serveCapQuery(id enode.ID, freeID string, data []byte) []by
 	for i, addTokens := range req.AddTokens {
 		add := addTokens.Int64()
 		result[i] = curve.MaxCapacity(func(capacity uint64) int64 {
-			return c.balance.EstimatePriority(now, capacity, add, 0, bias, false) / int64(capacity)
+			return c.balance.EstimatePriority(capacity, add, 0, bias, false) / int64(capacity)
 		})
 		if add <= 0 && uint64(-add) >= pb && result[i] > f.minCap {
 			result[i] = f.minCap

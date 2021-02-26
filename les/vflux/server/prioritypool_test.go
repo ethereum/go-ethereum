@@ -51,11 +51,11 @@ type ppTestClient struct {
 	balance, cap uint64
 }
 
-func (c *ppTestClient) Priority(now mclock.AbsTime, cap uint64) int64 {
+func (c *ppTestClient) Priority(cap uint64) int64 {
 	return int64(c.balance / cap)
 }
 
-func (c *ppTestClient) EstimatePriority(now mclock.AbsTime, cap uint64, addBalance int64, future, bias time.Duration, update bool) int64 {
+func (c *ppTestClient) EstimatePriority(cap uint64, addBalance int64, future, bias time.Duration, update bool) int64 {
 	return int64(c.balance / cap)
 }
 

@@ -110,12 +110,12 @@ type PriorityPool struct {
 // nodePriority interface provides current and estimated future priorities on demand
 type nodePriority interface {
 	// Priority should return the current priority of the node (higher is better)
-	Priority(now mclock.AbsTime, cap uint64) int64
+	Priority(cap uint64) int64
 	// EstMinPriority should return a lower estimate for the minimum of the node priority
 	// value starting from the current moment until the given time. If the priority goes
 	// under the returned estimate before the specified moment then it is the caller's
 	// responsibility to signal with updateFlag.
-	EstimatePriority(now mclock.AbsTime, cap uint64, addBalance int64, future, bias time.Duration, update bool) int64
+	EstimatePriority(cap uint64, addBalance int64, future, bias time.Duration, update bool) int64
 }
 
 // ppNodeInfo is the internal node descriptor of PriorityPool
@@ -135,12 +135,12 @@ func NewPriorityPool(ns *nodestate.NodeStateMachine, setup PriorityPoolSetup, cl
 		ns:                ns,
 		PriorityPoolSetup: setup,
 		clock:             clock,
-		activeQueue:       prque.NewLazyQueue(activeSetIndex, activePriority, activeMaxPriority, clock, lazyQueueRefresh),
 		inactiveQueue:     prque.New(inactiveSetIndex),
 		minCap:            minCap,
 		activeBias:        activeBias,
 		capacityStepDiv:   capacityStepDiv,
 	}
+	pp.activeQueue = prque.NewLazyQueue(activeSetIndex, activePriority, pp.activeMaxPriority, clock, lazyQueueRefresh)
 
 	ns.SubscribeField(pp.priorityField, func(node *enode.Node, state nodestate.Flags, oldValue, newValue interface{}) {
 		if newValue != nil {
@@ -211,9 +211,9 @@ func (pp *PriorityPool) RequestCapacity(node *enode.Node, targetCap uint64, bias
 	}
 	var priority int64
 	if targetCap > c.capacity {
-		priority = c.nodePriority.EstimatePriority(pp.clock.Now(), targetCap, 0, 0, bias, false)
+		priority = c.nodePriority.EstimatePriority(targetCap, 0, 0, bias, false)
 	} else {
-		priority = c.nodePriority.Priority(pp.clock.Now(), targetCap)
+		priority = c.nodePriority.Priority(targetCap)
 	}
 	pp.markForChange(c)
 	pp.setCapacity(c, targetCap)
@@ -288,30 +288,34 @@ func invertPriority(p int64) int64 {
 }
 
 // activePriority callback returns actual priority of ppNodeInfo item in activeQueue
-func activePriority(a interface{}, now mclock.AbsTime) int64 {
+func activePriority(a interface{}) int64 {
 	c := a.(*ppNodeInfo)
 	if c.forced {
 		return math.MinInt64
 	}
 	if c.bias == 0 {
-		return invertPriority(c.nodePriority.Priority(now, c.capacity))
+		return invertPriority(c.nodePriority.Priority(c.capacity))
 	} else {
-		return invertPriority(c.nodePriority.EstimatePriority(now, c.capacity, 0, 0, c.bias, true))
+		return invertPriority(c.nodePriority.EstimatePriority(c.capacity, 0, 0, c.bias, true))
 	}
 }
 
 // activeMaxPriority callback returns estimated maximum priority of ppNodeInfo item in activeQueue
-func activeMaxPriority(a interface{}, now, until mclock.AbsTime) int64 {
+func (pp *PriorityPool) activeMaxPriority(a interface{}, until mclock.AbsTime) int64 {
 	c := a.(*ppNodeInfo)
 	if c.forced {
 		return math.MinInt64
 	}
-	return invertPriority(c.nodePriority.EstimatePriority(now, c.capacity, 0, time.Duration(until-now), c.bias, false))
+	future := time.Duration(until - pp.clock.Now())
+	if future < 0 {
+		future = 0
+	}
+	return invertPriority(c.nodePriority.EstimatePriority(c.capacity, 0, future, c.bias, false))
 }
 
 // inactivePriority callback returns actual priority of ppNodeInfo item in inactiveQueue
 func (pp *PriorityPool) inactivePriority(p *ppNodeInfo) int64 {
-	return p.nodePriority.Priority(pp.clock.Now(), pp.minCap)
+	return p.nodePriority.Priority(pp.minCap)
 }
 
 // connectedNode is called when a new node has been added to the pool (InactiveFlag set)
