@@ -17,678 +17,154 @@
 package eth
 
 import (
-	"fmt"
-	"math"
 	"math/big"
-	"math/rand"
-	"testing"
-	"time"
+	"sort"
+	"sync"
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/consensus/ethash"
 	"github.com/ethereum/go-ethereum/core"
 	"github.com/ethereum/go-ethereum/core/rawdb"
-	"github.com/ethereum/go-ethereum/core/state"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/core/vm"
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/eth/downloader"
+	"github.com/ethereum/go-ethereum/ethdb"
 	"github.com/ethereum/go-ethereum/event"
-	"github.com/ethereum/go-ethereum/p2p"
 	"github.com/ethereum/go-ethereum/params"
 )
 
-// Tests that block headers can be retrieved from a remote chain based on user queries.
-func TestGetBlockHeaders63(t *testing.T) { testGetBlockHeaders(t, 63) }
-func TestGetBlockHeaders64(t *testing.T) { testGetBlockHeaders(t, 64) }
+var (
+	// testKey is a private key to use for funding a tester account.
+	testKey, _ = crypto.HexToECDSA("b71c71a67e1177ad4e901695e1b4b9ee17ae16c6668d313eac2f96dbcda3f291")
 
-func testGetBlockHeaders(t *testing.T, protocol int) {
-	pm, _ := newTestProtocolManagerMust(t, downloader.FullSync, downloader.MaxHashFetch+15, nil, nil)
-	peer, _ := newTestPeer("peer", protocol, pm, true)
-	defer peer.close()
+	// testAddr is the Ethereum address of the tester account.
+	testAddr = crypto.PubkeyToAddress(testKey.PublicKey)
+)
 
-	// Create a "random" unknown hash for testing
-	var unknown common.Hash
-	for i := range unknown {
-		unknown[i] = byte(i)
-	}
-	// Create a batch of tests for various scenarios
-	limit := uint64(downloader.MaxHeaderFetch)
-	tests := []struct {
-		query  *getBlockHeadersData // The query to execute for header retrieval
-		expect []common.Hash        // The hashes of the block whose headers are expected
-	}{
-		// A single random block should be retrievable by hash and number too
-		{
-			&getBlockHeadersData{Origin: hashOrNumber{Hash: pm.blockchain.GetBlockByNumber(limit / 2).Hash()}, Amount: 1},
-			[]common.Hash{pm.blockchain.GetBlockByNumber(limit / 2).Hash()},
-		}, {
-			&getBlockHeadersData{Origin: hashOrNumber{Number: limit / 2}, Amount: 1},
-			[]common.Hash{pm.blockchain.GetBlockByNumber(limit / 2).Hash()},
-		},
-		// Multiple headers should be retrievable in both directions
-		{
-			&getBlockHeadersData{Origin: hashOrNumber{Number: limit / 2}, Amount: 3},
-			[]common.Hash{
-				pm.blockchain.GetBlockByNumber(limit / 2).Hash(),
-				pm.blockchain.GetBlockByNumber(limit/2 + 1).Hash(),
-				pm.blockchain.GetBlockByNumber(limit/2 + 2).Hash(),
-			},
-		}, {
-			&getBlockHeadersData{Origin: hashOrNumber{Number: limit / 2}, Amount: 3, Reverse: true},
-			[]common.Hash{
-				pm.blockchain.GetBlockByNumber(limit / 2).Hash(),
-				pm.blockchain.GetBlockByNumber(limit/2 - 1).Hash(),
-				pm.blockchain.GetBlockByNumber(limit/2 - 2).Hash(),
-			},
-		},
-		// Multiple headers with skip lists should be retrievable
-		{
-			&getBlockHeadersData{Origin: hashOrNumber{Number: limit / 2}, Skip: 3, Amount: 3},
-			[]common.Hash{
-				pm.blockchain.GetBlockByNumber(limit / 2).Hash(),
-				pm.blockchain.GetBlockByNumber(limit/2 + 4).Hash(),
-				pm.blockchain.GetBlockByNumber(limit/2 + 8).Hash(),
-			},
-		}, {
-			&getBlockHeadersData{Origin: hashOrNumber{Number: limit / 2}, Skip: 3, Amount: 3, Reverse: true},
-			[]common.Hash{
-				pm.blockchain.GetBlockByNumber(limit / 2).Hash(),
-				pm.blockchain.GetBlockByNumber(limit/2 - 4).Hash(),
-				pm.blockchain.GetBlockByNumber(limit/2 - 8).Hash(),
-			},
-		},
-		// The chain endpoints should be retrievable
-		{
-			&getBlockHeadersData{Origin: hashOrNumber{Number: 0}, Amount: 1},
-			[]common.Hash{pm.blockchain.GetBlockByNumber(0).Hash()},
-		}, {
-			&getBlockHeadersData{Origin: hashOrNumber{Number: pm.blockchain.CurrentBlock().NumberU64()}, Amount: 1},
-			[]common.Hash{pm.blockchain.CurrentBlock().Hash()},
-		},
-		// Ensure protocol limits are honored
-		{
-			&getBlockHeadersData{Origin: hashOrNumber{Number: pm.blockchain.CurrentBlock().NumberU64() - 1}, Amount: limit + 10, Reverse: true},
-			pm.blockchain.GetBlockHashesFromHash(pm.blockchain.CurrentBlock().Hash(), limit),
-		},
-		// Check that requesting more than available is handled gracefully
-		{
-			&getBlockHeadersData{Origin: hashOrNumber{Number: pm.blockchain.CurrentBlock().NumberU64() - 4}, Skip: 3, Amount: 3},
-			[]common.Hash{
-				pm.blockchain.GetBlockByNumber(pm.blockchain.CurrentBlock().NumberU64() - 4).Hash(),
-				pm.blockchain.GetBlockByNumber(pm.blockchain.CurrentBlock().NumberU64()).Hash(),
-			},
-		}, {
-			&getBlockHeadersData{Origin: hashOrNumber{Number: 4}, Skip: 3, Amount: 3, Reverse: true},
-			[]common.Hash{
-				pm.blockchain.GetBlockByNumber(4).Hash(),
-				pm.blockchain.GetBlockByNumber(0).Hash(),
-			},
-		},
-		// Check that requesting more than available is handled gracefully, even if mid skip
-		{
-			&getBlockHeadersData{Origin: hashOrNumber{Number: pm.blockchain.CurrentBlock().NumberU64() - 4}, Skip: 2, Amount: 3},
-			[]common.Hash{
-				pm.blockchain.GetBlockByNumber(pm.blockchain.CurrentBlock().NumberU64() - 4).Hash(),
-				pm.blockchain.GetBlockByNumber(pm.blockchain.CurrentBlock().NumberU64() - 1).Hash(),
-			},
-		}, {
-			&getBlockHeadersData{Origin: hashOrNumber{Number: 4}, Skip: 2, Amount: 3, Reverse: true},
-			[]common.Hash{
-				pm.blockchain.GetBlockByNumber(4).Hash(),
-				pm.blockchain.GetBlockByNumber(1).Hash(),
-			},
-		},
-		// Check a corner case where requesting more can iterate past the endpoints
-		{
-			&getBlockHeadersData{Origin: hashOrNumber{Number: 2}, Amount: 5, Reverse: true},
-			[]common.Hash{
-				pm.blockchain.GetBlockByNumber(2).Hash(),
-				pm.blockchain.GetBlockByNumber(1).Hash(),
-				pm.blockchain.GetBlockByNumber(0).Hash(),
-			},
-		},
-		// Check a corner case where skipping overflow loops back into the chain start
-		{
-			&getBlockHeadersData{Origin: hashOrNumber{Hash: pm.blockchain.GetBlockByNumber(3).Hash()}, Amount: 2, Reverse: false, Skip: math.MaxUint64 - 1},
-			[]common.Hash{
-				pm.blockchain.GetBlockByNumber(3).Hash(),
-			},
-		},
-		// Check a corner case where skipping overflow loops back to the same header
-		{
-			&getBlockHeadersData{Origin: hashOrNumber{Hash: pm.blockchain.GetBlockByNumber(1).Hash()}, Amount: 2, Reverse: false, Skip: math.MaxUint64},
-			[]common.Hash{
-				pm.blockchain.GetBlockByNumber(1).Hash(),
-			},
-		},
-		// Check that non existing headers aren't returned
-		{
-			&getBlockHeadersData{Origin: hashOrNumber{Hash: unknown}, Amount: 1},
-			[]common.Hash{},
-		}, {
-			&getBlockHeadersData{Origin: hashOrNumber{Number: pm.blockchain.CurrentBlock().NumberU64() + 1}, Amount: 1},
-			[]common.Hash{},
-		},
-	}
-	// Run each of the tests and verify the results against the chain
-	for i, tt := range tests {
-		// Collect the headers to expect in the response
-		headers := []*types.Header{}
-		for _, hash := range tt.expect {
-			headers = append(headers, pm.blockchain.GetBlockByHash(hash).Header())
-		}
-		// Send the hash request and verify the response
-		p2p.Send(peer.app, 0x03, tt.query)
-		if err := p2p.ExpectMsg(peer.app, 0x04, headers); err != nil {
-			t.Errorf("test %d: headers mismatch: %v", i, err)
-		}
-		// If the test used number origins, repeat with hashes as the too
-		if tt.query.Origin.Hash == (common.Hash{}) {
-			if origin := pm.blockchain.GetBlockByNumber(tt.query.Origin.Number); origin != nil {
-				tt.query.Origin.Hash, tt.query.Origin.Number = origin.Hash(), 0
+// testTxPool is a mock transaction pool that blindly accepts all transactions.
+// Its goal is to get around setting up a valid statedb for the balance and nonce
+// checks.
+type testTxPool struct {
+	pool map[common.Hash]*types.Transaction // Hash map of collected transactions
 
-				p2p.Send(peer.app, 0x03, tt.query)
-				if err := p2p.ExpectMsg(peer.app, 0x04, headers); err != nil {
-					t.Errorf("test %d: headers mismatch: %v", i, err)
-				}
-			}
-		}
+	txFeed event.Feed   // Notification feed to allow waiting for inclusion
+	lock   sync.RWMutex // Protects the transaction pool
+}
+
+// newTestTxPool creates a mock transaction pool.
+func newTestTxPool() *testTxPool {
+	return &testTxPool{
+		pool: make(map[common.Hash]*types.Transaction),
 	}
 }
 
-// Tests that block contents can be retrieved from a remote chain based on their hashes.
-func TestGetBlockBodies63(t *testing.T) { testGetBlockBodies(t, 63) }
-func TestGetBlockBodies64(t *testing.T) { testGetBlockBodies(t, 64) }
+// Has returns an indicator whether txpool has a transaction
+// cached with the given hash.
+func (p *testTxPool) Has(hash common.Hash) bool {
+	p.lock.Lock()
+	defer p.lock.Unlock()
 
-func testGetBlockBodies(t *testing.T, protocol int) {
-	pm, _ := newTestProtocolManagerMust(t, downloader.FullSync, downloader.MaxBlockFetch+15, nil, nil)
-	peer, _ := newTestPeer("peer", protocol, pm, true)
-	defer peer.close()
+	return p.pool[hash] != nil
+}
 
-	// Create a batch of tests for various scenarios
-	limit := downloader.MaxBlockFetch
-	tests := []struct {
-		random    int           // Number of blocks to fetch randomly from the chain
-		explicit  []common.Hash // Explicitly requested blocks
-		available []bool        // Availability of explicitly requested blocks
-		expected  int           // Total number of existing blocks to expect
-	}{
-		{1, nil, nil, 1},             // A single random block should be retrievable
-		{10, nil, nil, 10},           // Multiple random blocks should be retrievable
-		{limit, nil, nil, limit},     // The maximum possible blocks should be retrievable
-		{limit + 1, nil, nil, limit}, // No more than the possible block count should be returned
-		{0, []common.Hash{pm.blockchain.Genesis().Hash()}, []bool{true}, 1},      // The genesis block should be retrievable
-		{0, []common.Hash{pm.blockchain.CurrentBlock().Hash()}, []bool{true}, 1}, // The chains head block should be retrievable
-		{0, []common.Hash{{}}, []bool{false}, 0},                                 // A non existent block should not be returned
+// Get retrieves the transaction from local txpool with given
+// tx hash.
+func (p *testTxPool) Get(hash common.Hash) *types.Transaction {
+	p.lock.Lock()
+	defer p.lock.Unlock()
 
-		// Existing and non-existing blocks interleaved should not cause problems
-		{0, []common.Hash{
-			{},
-			pm.blockchain.GetBlockByNumber(1).Hash(),
-			{},
-			pm.blockchain.GetBlockByNumber(10).Hash(),
-			{},
-			pm.blockchain.GetBlockByNumber(100).Hash(),
-			{},
-		}, []bool{false, true, false, true, false, true, false}, 3},
+	return p.pool[hash]
+}
+
+// AddRemotes appends a batch of transactions to the pool, and notifies any
+// listeners if the addition channel is non nil
+func (p *testTxPool) AddRemotes(txs []*types.Transaction) []error {
+	p.lock.Lock()
+	defer p.lock.Unlock()
+
+	for _, tx := range txs {
+		p.pool[tx.Hash()] = tx
 	}
-	// Run each of the tests and verify the results against the chain
-	for i, tt := range tests {
-		// Collect the hashes to request, and the response to expect
-		hashes, seen := []common.Hash{}, make(map[int64]bool)
-		bodies := []*blockBody{}
+	p.txFeed.Send(core.NewTxsEvent{Txs: txs})
+	return make([]error, len(txs))
+}
 
-		for j := 0; j < tt.random; j++ {
-			for {
-				num := rand.Int63n(int64(pm.blockchain.CurrentBlock().NumberU64()))
-				if !seen[num] {
-					seen[num] = true
+// Pending returns all the transactions known to the pool
+func (p *testTxPool) Pending() (map[common.Address]types.Transactions, error) {
+	p.lock.RLock()
+	defer p.lock.RUnlock()
 
-					block := pm.blockchain.GetBlockByNumber(uint64(num))
-					hashes = append(hashes, block.Hash())
-					if len(bodies) < tt.expected {
-						bodies = append(bodies, &blockBody{Transactions: block.Transactions(), Uncles: block.Uncles()})
-					}
-					break
-				}
-			}
-		}
-		for j, hash := range tt.explicit {
-			hashes = append(hashes, hash)
-			if tt.available[j] && len(bodies) < tt.expected {
-				block := pm.blockchain.GetBlockByHash(hash)
-				bodies = append(bodies, &blockBody{Transactions: block.Transactions(), Uncles: block.Uncles()})
-			}
-		}
-		// Send the hash request and verify the response
-		p2p.Send(peer.app, 0x05, hashes)
-		if err := p2p.ExpectMsg(peer.app, 0x06, bodies); err != nil {
-			t.Errorf("test %d: bodies mismatch: %v", i, err)
-		}
+	batches := make(map[common.Address]types.Transactions)
+	for _, tx := range p.pool {
+		from, _ := types.Sender(types.HomesteadSigner{}, tx)
+		batches[from] = append(batches[from], tx)
+	}
+	for _, batch := range batches {
+		sort.Sort(types.TxByNonce(batch))
+	}
+	return batches, nil
+}
+
+// SubscribeNewTxsEvent should return an event subscription of NewTxsEvent and
+// send events to the given channel.
+func (p *testTxPool) SubscribeNewTxsEvent(ch chan<- core.NewTxsEvent) event.Subscription {
+	return p.txFeed.Subscribe(ch)
+}
+
+// testHandler is a live implementation of the Ethereum protocol handler, just
+// preinitialized with some sane testing defaults and the transaction pool mocked
+// out.
+type testHandler struct {
+	db      ethdb.Database
+	chain   *core.BlockChain
+	txpool  *testTxPool
+	handler *handler
+}
+
+// newTestHandler creates a new handler for testing purposes with no blocks.
+func newTestHandler() *testHandler {
+	return newTestHandlerWithBlocks(0)
+}
+
+// newTestHandlerWithBlocks creates a new handler for testing purposes, with a
+// given number of initial blocks.
+func newTestHandlerWithBlocks(blocks int) *testHandler {
+	// Create a database pre-initialize with a genesis block
+	db := rawdb.NewMemoryDatabase()
+	(&core.Genesis{
+		Config: params.TestChainConfig,
+		Alloc:  core.GenesisAlloc{testAddr: {Balance: big.NewInt(1000000)}},
+	}).MustCommit(db)
+
+	chain, _ := core.NewBlockChain(db, nil, params.TestChainConfig, ethash.NewFaker(), vm.Config{}, nil, nil)
+
+	bs, _ := core.GenerateChain(params.TestChainConfig, chain.Genesis(), ethash.NewFaker(), db, blocks, nil)
+	if _, err := chain.InsertChain(bs); err != nil {
+		panic(err)
+	}
+	txpool := newTestTxPool()
+
+	handler, _ := newHandler(&handlerConfig{
+		Database:   db,
+		Chain:      chain,
+		TxPool:     txpool,
+		Network:    1,
+		Sync:       downloader.FastSync,
+		BloomCache: 1,
+	})
+	handler.Start(1000)
+
+	return &testHandler{
+		db:      db,
+		chain:   chain,
+		txpool:  txpool,
+		handler: handler,
 	}
 }
 
-// Tests that the node state database can be retrieved based on hashes.
-func TestGetNodeData63(t *testing.T) { testGetNodeData(t, 63) }
-func TestGetNodeData64(t *testing.T) { testGetNodeData(t, 64) }
-
-func testGetNodeData(t *testing.T, protocol int) {
-	// Define three accounts to simulate transactions with
-	acc1Key, _ := crypto.HexToECDSA("8a1f9a8f95be41cd7ccb6168179afb4504aefe388d1e14474d32c45c72ce7b7a")
-	acc2Key, _ := crypto.HexToECDSA("49a7b37aa6f6645917e7b807e9d1c00d4fa71f18343b0d4122a4d2df64dd6fee")
-	acc1Addr := crypto.PubkeyToAddress(acc1Key.PublicKey)
-	acc2Addr := crypto.PubkeyToAddress(acc2Key.PublicKey)
-
-	signer := types.HomesteadSigner{}
-	// Create a chain generator with some simple transactions (blatantly stolen from @fjl/chain_markets_test)
-	generator := func(i int, block *core.BlockGen) {
-		switch i {
-		case 0:
-			// In block 1, the test bank sends account #1 some ether.
-			tx, _ := types.SignTx(types.NewTransaction(block.TxNonce(testBank), acc1Addr, big.NewInt(10000), params.TxGas, nil, nil), signer, testBankKey)
-			block.AddTx(tx)
-		case 1:
-			// In block 2, the test bank sends some more ether to account #1.
-			// acc1Addr passes it on to account #2.
-			tx1, _ := types.SignTx(types.NewTransaction(block.TxNonce(testBank), acc1Addr, big.NewInt(1000), params.TxGas, nil, nil), signer, testBankKey)
-			tx2, _ := types.SignTx(types.NewTransaction(block.TxNonce(acc1Addr), acc2Addr, big.NewInt(1000), params.TxGas, nil, nil), signer, acc1Key)
-			block.AddTx(tx1)
-			block.AddTx(tx2)
-		case 2:
-			// Block 3 is empty but was mined by account #2.
-			block.SetCoinbase(acc2Addr)
-			block.SetExtra([]byte("yeehaw"))
-		case 3:
-			// Block 4 includes blocks 2 and 3 as uncle headers (with modified extra data).
-			b2 := block.PrevBlock(1).Header()
-			b2.Extra = []byte("foo")
-			block.AddUncle(b2)
-			b3 := block.PrevBlock(2).Header()
-			b3.Extra = []byte("foo")
-			block.AddUncle(b3)
-		}
-	}
-	// Assemble the test environment
-	pm, db := newTestProtocolManagerMust(t, downloader.FullSync, 4, generator, nil)
-	peer, _ := newTestPeer("peer", protocol, pm, true)
-	defer peer.close()
-
-	// Fetch for now the entire chain db
-	hashes := []common.Hash{}
-
-	it := db.NewIterator(nil, nil)
-	for it.Next() {
-		if key := it.Key(); len(key) == common.HashLength {
-			hashes = append(hashes, common.BytesToHash(key))
-		}
-	}
-	it.Release()
-
-	p2p.Send(peer.app, 0x0d, hashes)
-	msg, err := peer.app.ReadMsg()
-	if err != nil {
-		t.Fatalf("failed to read node data response: %v", err)
-	}
-	if msg.Code != 0x0e {
-		t.Fatalf("response packet code mismatch: have %x, want %x", msg.Code, 0x0c)
-	}
-	var data [][]byte
-	if err := msg.Decode(&data); err != nil {
-		t.Fatalf("failed to decode response node data: %v", err)
-	}
-	// Verify that all hashes correspond to the requested data, and reconstruct a state tree
-	for i, want := range hashes {
-		if hash := crypto.Keccak256Hash(data[i]); hash != want {
-			t.Errorf("data hash mismatch: have %x, want %x", hash, want)
-		}
-	}
-	statedb := rawdb.NewMemoryDatabase()
-	for i := 0; i < len(data); i++ {
-		statedb.Put(hashes[i].Bytes(), data[i])
-	}
-	accounts := []common.Address{testBank, acc1Addr, acc2Addr}
-	for i := uint64(0); i <= pm.blockchain.CurrentBlock().NumberU64(); i++ {
-		trie, _ := state.New(pm.blockchain.GetBlockByNumber(i).Root(), state.NewDatabase(statedb), nil)
-
-		for j, acc := range accounts {
-			state, _ := pm.blockchain.State()
-			bw := state.GetBalance(acc)
-			bh := trie.GetBalance(acc)
-
-			if (bw != nil && bh == nil) || (bw == nil && bh != nil) {
-				t.Errorf("test %d, account %d: balance mismatch: have %v, want %v", i, j, bh, bw)
-			}
-			if bw != nil && bh != nil && bw.Cmp(bw) != 0 {
-				t.Errorf("test %d, account %d: balance mismatch: have %v, want %v", i, j, bh, bw)
-			}
-		}
-	}
-}
-
-// Tests that the transaction receipts can be retrieved based on hashes.
-func TestGetReceipt63(t *testing.T) { testGetReceipt(t, 63) }
-func TestGetReceipt64(t *testing.T) { testGetReceipt(t, 64) }
-
-func testGetReceipt(t *testing.T, protocol int) {
-	// Define three accounts to simulate transactions with
-	acc1Key, _ := crypto.HexToECDSA("8a1f9a8f95be41cd7ccb6168179afb4504aefe388d1e14474d32c45c72ce7b7a")
-	acc2Key, _ := crypto.HexToECDSA("49a7b37aa6f6645917e7b807e9d1c00d4fa71f18343b0d4122a4d2df64dd6fee")
-	acc1Addr := crypto.PubkeyToAddress(acc1Key.PublicKey)
-	acc2Addr := crypto.PubkeyToAddress(acc2Key.PublicKey)
-
-	signer := types.HomesteadSigner{}
-	// Create a chain generator with some simple transactions (blatantly stolen from @fjl/chain_markets_test)
-	generator := func(i int, block *core.BlockGen) {
-		switch i {
-		case 0:
-			// In block 1, the test bank sends account #1 some ether.
-			tx, _ := types.SignTx(types.NewTransaction(block.TxNonce(testBank), acc1Addr, big.NewInt(10000), params.TxGas, nil, nil), signer, testBankKey)
-			block.AddTx(tx)
-		case 1:
-			// In block 2, the test bank sends some more ether to account #1.
-			// acc1Addr passes it on to account #2.
-			tx1, _ := types.SignTx(types.NewTransaction(block.TxNonce(testBank), acc1Addr, big.NewInt(1000), params.TxGas, nil, nil), signer, testBankKey)
-			tx2, _ := types.SignTx(types.NewTransaction(block.TxNonce(acc1Addr), acc2Addr, big.NewInt(1000), params.TxGas, nil, nil), signer, acc1Key)
-			block.AddTx(tx1)
-			block.AddTx(tx2)
-		case 2:
-			// Block 3 is empty but was mined by account #2.
-			block.SetCoinbase(acc2Addr)
-			block.SetExtra([]byte("yeehaw"))
-		case 3:
-			// Block 4 includes blocks 2 and 3 as uncle headers (with modified extra data).
-			b2 := block.PrevBlock(1).Header()
-			b2.Extra = []byte("foo")
-			block.AddUncle(b2)
-			b3 := block.PrevBlock(2).Header()
-			b3.Extra = []byte("foo")
-			block.AddUncle(b3)
-		}
-	}
-	// Assemble the test environment
-	pm, _ := newTestProtocolManagerMust(t, downloader.FullSync, 4, generator, nil)
-	peer, _ := newTestPeer("peer", protocol, pm, true)
-	defer peer.close()
-
-	// Collect the hashes to request, and the response to expect
-	hashes, receipts := []common.Hash{}, []types.Receipts{}
-	for i := uint64(0); i <= pm.blockchain.CurrentBlock().NumberU64(); i++ {
-		block := pm.blockchain.GetBlockByNumber(i)
-
-		hashes = append(hashes, block.Hash())
-		receipts = append(receipts, pm.blockchain.GetReceiptsByHash(block.Hash()))
-	}
-	// Send the hash request and verify the response
-	p2p.Send(peer.app, 0x0f, hashes)
-	if err := p2p.ExpectMsg(peer.app, 0x10, receipts); err != nil {
-		t.Errorf("receipts mismatch: %v", err)
-	}
-}
-
-// Tests that post eth protocol handshake, clients perform a mutual checkpoint
-// challenge to validate each other's chains. Hash mismatches, or missing ones
-// during a fast sync should lead to the peer getting dropped.
-func TestCheckpointChallenge(t *testing.T) {
-	tests := []struct {
-		syncmode   downloader.SyncMode
-		checkpoint bool
-		timeout    bool
-		empty      bool
-		match      bool
-		drop       bool
-	}{
-		// If checkpointing is not enabled locally, don't challenge and don't drop
-		{downloader.FullSync, false, false, false, false, false},
-		{downloader.FastSync, false, false, false, false, false},
-
-		// If checkpointing is enabled locally and remote response is empty, only drop during fast sync
-		{downloader.FullSync, true, false, true, false, false},
-		{downloader.FastSync, true, false, true, false, true}, // Special case, fast sync, unsynced peer
-
-		// If checkpointing is enabled locally and remote response mismatches, always drop
-		{downloader.FullSync, true, false, false, false, true},
-		{downloader.FastSync, true, false, false, false, true},
-
-		// If checkpointing is enabled locally and remote response matches, never drop
-		{downloader.FullSync, true, false, false, true, false},
-		{downloader.FastSync, true, false, false, true, false},
-
-		// If checkpointing is enabled locally and remote times out, always drop
-		{downloader.FullSync, true, true, false, true, true},
-		{downloader.FastSync, true, true, false, true, true},
-	}
-	for _, tt := range tests {
-		t.Run(fmt.Sprintf("sync %v checkpoint %v timeout %v empty %v match %v", tt.syncmode, tt.checkpoint, tt.timeout, tt.empty, tt.match), func(t *testing.T) {
-			testCheckpointChallenge(t, tt.syncmode, tt.checkpoint, tt.timeout, tt.empty, tt.match, tt.drop)
-		})
-	}
-}
-
-func testCheckpointChallenge(t *testing.T, syncmode downloader.SyncMode, checkpoint bool, timeout bool, empty bool, match bool, drop bool) {
-	// Reduce the checkpoint handshake challenge timeout
-	defer func(old time.Duration) { syncChallengeTimeout = old }(syncChallengeTimeout)
-	syncChallengeTimeout = 250 * time.Millisecond
-
-	// Initialize a chain and generate a fake CHT if checkpointing is enabled
-	var (
-		db     = rawdb.NewMemoryDatabase()
-		config = new(params.ChainConfig)
-	)
-	(&core.Genesis{Config: config}).MustCommit(db) // Commit genesis block
-	// If checkpointing is enabled, create and inject a fake CHT and the corresponding
-	// chllenge response.
-	var response *types.Header
-	var cht *params.TrustedCheckpoint
-	if checkpoint {
-		index := uint64(rand.Intn(500))
-		number := (index+1)*params.CHTFrequency - 1
-		response = &types.Header{Number: big.NewInt(int64(number)), Extra: []byte("valid")}
-
-		cht = &params.TrustedCheckpoint{
-			SectionIndex: index,
-			SectionHead:  response.Hash(),
-		}
-	}
-	// Create a checkpoint aware protocol manager
-	blockchain, err := core.NewBlockChain(db, nil, config, ethash.NewFaker(), vm.Config{}, nil, nil)
-	if err != nil {
-		t.Fatalf("failed to create new blockchain: %v", err)
-	}
-	pm, err := NewProtocolManager(config, cht, syncmode, DefaultConfig.NetworkId, new(event.TypeMux), &testTxPool{pool: make(map[common.Hash]*types.Transaction)}, ethash.NewFaker(), blockchain, db, 1, nil)
-	if err != nil {
-		t.Fatalf("failed to start test protocol manager: %v", err)
-	}
-	pm.Start(1000)
-	defer pm.Stop()
-
-	// Connect a new peer and check that we receive the checkpoint challenge
-	peer, _ := newTestPeer("peer", eth63, pm, true)
-	defer peer.close()
-
-	if checkpoint {
-		challenge := &getBlockHeadersData{
-			Origin:  hashOrNumber{Number: response.Number.Uint64()},
-			Amount:  1,
-			Skip:    0,
-			Reverse: false,
-		}
-		if err := p2p.ExpectMsg(peer.app, GetBlockHeadersMsg, challenge); err != nil {
-			t.Fatalf("challenge mismatch: %v", err)
-		}
-		// Create a block to reply to the challenge if no timeout is simulated
-		if !timeout {
-			if empty {
-				if err := p2p.Send(peer.app, BlockHeadersMsg, []*types.Header{}); err != nil {
-					t.Fatalf("failed to answer challenge: %v", err)
-				}
-			} else if match {
-				if err := p2p.Send(peer.app, BlockHeadersMsg, []*types.Header{response}); err != nil {
-					t.Fatalf("failed to answer challenge: %v", err)
-				}
-			} else {
-				if err := p2p.Send(peer.app, BlockHeadersMsg, []*types.Header{{Number: response.Number}}); err != nil {
-					t.Fatalf("failed to answer challenge: %v", err)
-				}
-			}
-		}
-	}
-	// Wait until the test timeout passes to ensure proper cleanup
-	time.Sleep(syncChallengeTimeout + 300*time.Millisecond)
-
-	// Verify that the remote peer is maintained or dropped
-	if drop {
-		if peers := pm.peers.Len(); peers != 0 {
-			t.Fatalf("peer count mismatch: have %d, want %d", peers, 0)
-		}
-	} else {
-		if peers := pm.peers.Len(); peers != 1 {
-			t.Fatalf("peer count mismatch: have %d, want %d", peers, 1)
-		}
-	}
-}
-
-func TestBroadcastBlock(t *testing.T) {
-	var tests = []struct {
-		totalPeers        int
-		broadcastExpected int
-	}{
-		{1, 1},
-		{2, 1},
-		{3, 1},
-		{4, 2},
-		{5, 2},
-		{9, 3},
-		{12, 3},
-		{16, 4},
-		{26, 5},
-		{100, 10},
-	}
-	for _, test := range tests {
-		testBroadcastBlock(t, test.totalPeers, test.broadcastExpected)
-	}
-}
-
-func testBroadcastBlock(t *testing.T, totalPeers, broadcastExpected int) {
-	var (
-		evmux   = new(event.TypeMux)
-		pow     = ethash.NewFaker()
-		db      = rawdb.NewMemoryDatabase()
-		config  = &params.ChainConfig{}
-		gspec   = &core.Genesis{Config: config}
-		genesis = gspec.MustCommit(db)
-	)
-	blockchain, err := core.NewBlockChain(db, nil, config, pow, vm.Config{}, nil, nil)
-	if err != nil {
-		t.Fatalf("failed to create new blockchain: %v", err)
-	}
-	pm, err := NewProtocolManager(config, nil, downloader.FullSync, DefaultConfig.NetworkId, evmux, &testTxPool{pool: make(map[common.Hash]*types.Transaction)}, pow, blockchain, db, 1, nil)
-	if err != nil {
-		t.Fatalf("failed to start test protocol manager: %v", err)
-	}
-	pm.Start(1000)
-	defer pm.Stop()
-	var peers []*testPeer
-	for i := 0; i < totalPeers; i++ {
-		peer, _ := newTestPeer(fmt.Sprintf("peer %d", i), eth63, pm, true)
-		defer peer.close()
-
-		peers = append(peers, peer)
-	}
-	chain, _ := core.GenerateChain(gspec.Config, genesis, ethash.NewFaker(), db, 1, func(i int, gen *core.BlockGen) {})
-	pm.BroadcastBlock(chain[0], true /*propagate*/)
-
-	errCh := make(chan error, totalPeers)
-	doneCh := make(chan struct{}, totalPeers)
-	for _, peer := range peers {
-		go func(p *testPeer) {
-			if err := p2p.ExpectMsg(p.app, NewBlockMsg, &newBlockData{Block: chain[0], TD: big.NewInt(131136)}); err != nil {
-				errCh <- err
-			} else {
-				doneCh <- struct{}{}
-			}
-		}(peer)
-	}
-	var received int
-	for {
-		select {
-		case <-doneCh:
-			received++
-			if received > broadcastExpected {
-				// We can bail early here
-				t.Errorf("broadcast count mismatch: have %d > want %d", received, broadcastExpected)
-				return
-			}
-		case <-time.After(2 * time.Second):
-			if received != broadcastExpected {
-				t.Errorf("broadcast count mismatch: have %d, want %d", received, broadcastExpected)
-			}
-			return
-		case err = <-errCh:
-			t.Fatalf("broadcast failed: %v", err)
-		}
-	}
-
-}
-
-// Tests that a propagated malformed block (uncles or transactions don't match
-// with the hashes in the header) gets discarded and not broadcast forward.
-func TestBroadcastMalformedBlock(t *testing.T) {
-	// Create a live node to test propagation with
-	var (
-		engine  = ethash.NewFaker()
-		db      = rawdb.NewMemoryDatabase()
-		config  = &params.ChainConfig{}
-		gspec   = &core.Genesis{Config: config}
-		genesis = gspec.MustCommit(db)
-	)
-	blockchain, err := core.NewBlockChain(db, nil, config, engine, vm.Config{}, nil, nil)
-	if err != nil {
-		t.Fatalf("failed to create new blockchain: %v", err)
-	}
-	pm, err := NewProtocolManager(config, nil, downloader.FullSync, DefaultConfig.NetworkId, new(event.TypeMux), new(testTxPool), engine, blockchain, db, 1, nil)
-	if err != nil {
-		t.Fatalf("failed to start test protocol manager: %v", err)
-	}
-	pm.Start(2)
-	defer pm.Stop()
-
-	// Create two peers, one to send the malformed block with and one to check
-	// propagation
-	source, _ := newTestPeer("source", eth63, pm, true)
-	defer source.close()
-
-	sink, _ := newTestPeer("sink", eth63, pm, true)
-	defer sink.close()
-
-	// Create various combinations of malformed blocks
-	chain, _ := core.GenerateChain(gspec.Config, genesis, ethash.NewFaker(), db, 1, func(i int, gen *core.BlockGen) {})
-
-	malformedUncles := chain[0].Header()
-	malformedUncles.UncleHash[0]++
-	malformedTransactions := chain[0].Header()
-	malformedTransactions.TxHash[0]++
-	malformedEverything := chain[0].Header()
-	malformedEverything.UncleHash[0]++
-	malformedEverything.TxHash[0]++
-
-	// Keep listening to broadcasts and notify if any arrives
-	notify := make(chan struct{}, 1)
-	go func() {
-		if _, err := sink.app.ReadMsg(); err == nil {
-			notify <- struct{}{}
-		}
-	}()
-	// Try to broadcast all malformations and ensure they all get discarded
-	for _, header := range []*types.Header{malformedUncles, malformedTransactions, malformedEverything} {
-		block := types.NewBlockWithHeader(header).WithBody(chain[0].Transactions(), chain[0].Uncles())
-		if err := p2p.Send(source.app, NewBlockMsg, []interface{}{block, big.NewInt(131136)}); err != nil {
-			t.Fatalf("failed to broadcast block: %v", err)
-		}
-		select {
-		case <-notify:
-			t.Fatalf("malformed block forwarded")
-		case <-time.After(100 * time.Millisecond):
-		}
-	}
+// close tears down the handler and all its internal constructs.
+func (b *testHandler) close() {
+	b.handler.Stop()
+	b.chain.Stop()
 }

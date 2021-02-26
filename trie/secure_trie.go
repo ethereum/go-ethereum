@@ -79,6 +79,12 @@ func (t *SecureTrie) TryGet(key []byte) ([]byte, error) {
 	return t.trie.TryGet(t.hashKey(key))
 }
 
+// TryGetNode attempts to retrieve a trie node by compact-encoded path. It is not
+// possible to use keybyte-encoding as the path might contain odd nibbles.
+func (t *SecureTrie) TryGetNode(path []byte) ([]byte, int, error) {
+	return t.trie.TryGetNode(path)
+}
+
 // Update associates key with value in the trie. Subsequent calls to
 // Get will return value. If value has length zero, any existing value
 // is deleted from the trie and calls to Get will return nil.
@@ -130,8 +136,7 @@ func (t *SecureTrie) GetKey(shaKey []byte) []byte {
 	if key, ok := t.getSecKeyCache()[string(shaKey)]; ok {
 		return key
 	}
-	key, _ := t.trie.db.preimage(common.BytesToHash(shaKey))
-	return key
+	return t.trie.db.preimage(common.BytesToHash(shaKey))
 }
 
 // Commit writes all nodes and the secure hash pre-images to the trie's database.
@@ -142,12 +147,13 @@ func (t *SecureTrie) GetKey(shaKey []byte) []byte {
 func (t *SecureTrie) Commit(onleaf LeafCallback) (root common.Hash, err error) {
 	// Write all the pre-images to the actual disk database
 	if len(t.getSecKeyCache()) > 0 {
-		t.trie.db.lock.Lock()
-		for hk, key := range t.secKeyCache {
-			t.trie.db.insertPreimage(common.BytesToHash([]byte(hk)), key)
+		if t.trie.db.preimages != nil { // Ugly direct check but avoids the below write lock
+			t.trie.db.lock.Lock()
+			for hk, key := range t.secKeyCache {
+				t.trie.db.insertPreimage(common.BytesToHash([]byte(hk)), key)
+			}
+			t.trie.db.lock.Unlock()
 		}
-		t.trie.db.lock.Unlock()
-
 		t.secKeyCache = make(map[string][]byte)
 	}
 	// Commit the trie to its intermediate node database

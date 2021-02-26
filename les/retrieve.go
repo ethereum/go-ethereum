@@ -155,6 +155,15 @@ func (rm *retrieveManager) sendReq(reqID uint64, req *distReq, val validatorFunc
 	return r
 }
 
+// requested reports whether the request with given reqid is sent by the retriever.
+func (rm *retrieveManager) requested(reqId uint64) bool {
+	rm.lock.RLock()
+	defer rm.lock.RUnlock()
+
+	_, ok := rm.sentReqs[reqId]
+	return ok
+}
+
 // deliver is called by the LES protocol manager to deliver reply messages to waiting requests
 func (rm *retrieveManager) deliver(peer distPeer, msg *Msg) error {
 	rm.lock.RLock()
@@ -328,7 +337,6 @@ func (r *sentReq) tryRequest() {
 	}
 
 	defer func() {
-		// send feedback to server pool and remove peer if hard timeout happened
 		pp, ok := p.(*serverPeer)
 		if hrto && ok {
 			pp.Log().Debug("Request timed out hard")
@@ -336,10 +344,6 @@ func (r *sentReq) tryRequest() {
 				r.rm.peers.unregister(pp.id)
 			}
 		}
-
-		r.lock.Lock()
-		delete(r.sentTo, p)
-		r.lock.Unlock()
 	}()
 
 	select {

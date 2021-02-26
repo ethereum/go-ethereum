@@ -96,16 +96,19 @@ type NodeConfig struct {
 	// Use an existing database instead of a temporary one if non-empty
 	DataDir string
 
-	// Services are the names of the services which should be run when
-	// starting the node (for SimNodes it should be the names of services
-	// contained in SimAdapter.services, for other nodes it should be
-	// services registered by calling the RegisterService function)
-	Services []string
+	// Lifecycles are the names of the service lifecycles which should be run when
+	// starting the node (for SimNodes it should be the names of service lifecycles
+	// contained in SimAdapter.lifecycles, for other nodes it should be
+	// service lifecycles registered by calling the RegisterLifecycle function)
+	Lifecycles []string
 
 	// Properties are the names of the properties this node should hold
 	// within running services (e.g. "bootnode", "lightnode" or any custom values)
 	// These values need to be checked and acted upon by node Services
 	Properties []string
+
+	// ExternalSigner specifies an external URI for a clef-type signer
+	ExternalSigner string
 
 	// Enode
 	node *enode.Node
@@ -117,6 +120,17 @@ type NodeConfig struct {
 	Reachable func(id enode.ID) bool
 
 	Port uint16
+
+	// LogFile is the log file name of the p2p node at runtime.
+	//
+	// The default value is empty so that the default log writer
+	// is the system standard output.
+	LogFile string
+
+	// LogVerbosity is the log verbosity of the p2p node at runtime.
+	//
+	// The default verbosity is INFO.
+	LogVerbosity log.Lvl
 }
 
 // nodeConfigJSON is used to encode and decode NodeConfig as JSON by encoding
@@ -125,10 +139,12 @@ type nodeConfigJSON struct {
 	ID              string   `json:"id"`
 	PrivateKey      string   `json:"private_key"`
 	Name            string   `json:"name"`
-	Services        []string `json:"services"`
+	Lifecycles      []string `json:"lifecycles"`
 	Properties      []string `json:"properties"`
 	EnableMsgEvents bool     `json:"enable_msg_events"`
 	Port            uint16   `json:"port"`
+	LogFile         string   `json:"logfile"`
+	LogVerbosity    int      `json:"log_verbosity"`
 }
 
 // MarshalJSON implements the json.Marshaler interface by encoding the config
@@ -137,10 +153,12 @@ func (n *NodeConfig) MarshalJSON() ([]byte, error) {
 	confJSON := nodeConfigJSON{
 		ID:              n.ID.String(),
 		Name:            n.Name,
-		Services:        n.Services,
+		Lifecycles:      n.Lifecycles,
 		Properties:      n.Properties,
 		Port:            n.Port,
 		EnableMsgEvents: n.EnableMsgEvents,
+		LogFile:         n.LogFile,
+		LogVerbosity:    int(n.LogVerbosity),
 	}
 	if n.PrivateKey != nil {
 		confJSON.PrivateKey = hex.EncodeToString(crypto.FromECDSA(n.PrivateKey))
@@ -175,10 +193,12 @@ func (n *NodeConfig) UnmarshalJSON(data []byte) error {
 	}
 
 	n.Name = confJSON.Name
-	n.Services = confJSON.Services
+	n.Lifecycles = confJSON.Lifecycles
 	n.Properties = confJSON.Properties
 	n.Port = confJSON.Port
 	n.EnableMsgEvents = confJSON.EnableMsgEvents
+	n.LogFile = confJSON.LogFile
+	n.LogVerbosity = log.Lvl(confJSON.LogVerbosity)
 
 	return nil
 }
@@ -208,6 +228,7 @@ func RandomNodeConfig() *NodeConfig {
 		Name:            fmt.Sprintf("node_%s", enodId.String()),
 		Port:            port,
 		EnableMsgEvents: true,
+		LogVerbosity:    log.LvlInfo,
 	}
 }
 
@@ -233,9 +254,8 @@ func assignTCPPort() (uint16, error) {
 type ServiceContext struct {
 	RPCDialer
 
-	NodeContext *node.ServiceContext
-	Config      *NodeConfig
-	Snapshot    []byte
+	Config   *NodeConfig
+	Snapshot []byte
 }
 
 // RPCDialer is used when initialising services which need to connect to
@@ -245,27 +265,29 @@ type RPCDialer interface {
 	DialRPC(id enode.ID) (*rpc.Client, error)
 }
 
-// Services is a collection of services which can be run in a simulation
-type Services map[string]ServiceFunc
+// LifecycleConstructor allows a Lifecycle to be constructed during node start-up.
+// While the service-specific package usually takes care of Lifecycle creation and registration,
+// for testing purposes, it is useful to be able to construct a Lifecycle on spot.
+type LifecycleConstructor func(ctx *ServiceContext, stack *node.Node) (node.Lifecycle, error)
 
-// ServiceFunc returns a node.Service which can be used to boot a devp2p node
-type ServiceFunc func(ctx *ServiceContext) (node.Service, error)
+// LifecycleConstructors stores LifecycleConstructor functions to call during node start-up.
+type LifecycleConstructors map[string]LifecycleConstructor
 
-// serviceFuncs is a map of registered services which are used to boot devp2p
+// lifecycleConstructorFuncs is a map of registered services which are used to boot devp2p
 // nodes
-var serviceFuncs = make(Services)
+var lifecycleConstructorFuncs = make(LifecycleConstructors)
 
-// RegisterServices registers the given Services which can then be used to
+// RegisterLifecycles registers the given Services which can then be used to
 // start devp2p nodes using either the Exec or Docker adapters.
 //
 // It should be called in an init function so that it has the opportunity to
 // execute the services before main() is called.
-func RegisterServices(services Services) {
-	for name, f := range services {
-		if _, exists := serviceFuncs[name]; exists {
+func RegisterLifecycles(lifecycles LifecycleConstructors) {
+	for name, f := range lifecycles {
+		if _, exists := lifecycleConstructorFuncs[name]; exists {
 			panic(fmt.Sprintf("node service already exists: %q", name))
 		}
-		serviceFuncs[name] = f
+		lifecycleConstructorFuncs[name] = f
 	}
 
 	// now we have registered the services, run reexec.Init() which will

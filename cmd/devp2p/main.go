@@ -63,6 +63,7 @@ func init() {
 		discv5Command,
 		dnsCommand,
 		nodesetCommand,
+		rlpxCommand,
 	}
 }
 
@@ -80,7 +81,7 @@ func commandHasFlag(ctx *cli.Context, flag cli.Flag) bool {
 
 // getNodeArg handles the common case of a single node descriptor argument.
 func getNodeArg(ctx *cli.Context) *enode.Node {
-	if ctx.NArg() != 1 {
+	if ctx.NArg() < 1 {
 		exit("missing node as command-line argument")
 	}
 	n, err := parseNode(ctx.Args()[0])

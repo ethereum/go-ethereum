@@ -39,7 +39,7 @@ var (
 )
 
 // The common prefix of all test chains:
-var testChainBase = newTestChain(blockCacheItems+200, testGenesis)
+var testChainBase = newTestChain(blockCacheMaxItems+200, testGenesis)
 
 // Different forks on top of the base chain:
 var testChainForkLightA, testChainForkLightB, testChainForkHeavy *testChain
@@ -170,18 +170,27 @@ func (tc *testChain) td(hash common.Hash) *big.Int {
 	return tc.tdm[hash]
 }
 
-// headersByHash returns headers in ascending order from the given hash.
-func (tc *testChain) headersByHash(origin common.Hash, amount int, skip int) []*types.Header {
+// headersByHash returns headers in order from the given hash.
+func (tc *testChain) headersByHash(origin common.Hash, amount int, skip int, reverse bool) []*types.Header {
 	num, _ := tc.hashToNumber(origin)
-	return tc.headersByNumber(num, amount, skip)
+	return tc.headersByNumber(num, amount, skip, reverse)
 }
 
-// headersByNumber returns headers in ascending order from the given number.
-func (tc *testChain) headersByNumber(origin uint64, amount int, skip int) []*types.Header {
+// headersByNumber returns headers from the given number.
+func (tc *testChain) headersByNumber(origin uint64, amount int, skip int, reverse bool) []*types.Header {
 	result := make([]*types.Header, 0, amount)
-	for num := origin; num < uint64(len(tc.chain)) && len(result) < amount; num += uint64(skip) + 1 {
-		if header, ok := tc.headerm[tc.chain[int(num)]]; ok {
-			result = append(result, header)
+
+	if !reverse {
+		for num := origin; num < uint64(len(tc.chain)) && len(result) < amount; num += uint64(skip) + 1 {
+			if header, ok := tc.headerm[tc.chain[int(num)]]; ok {
+				result = append(result, header)
+			}
+		}
+	} else {
+		for num := int64(origin); num >= 0 && len(result) < amount; num -= int64(skip) + 1 {
+			if header, ok := tc.headerm[tc.chain[int(num)]]; ok {
+				result = append(result, header)
+			}
 		}
 	}
 	return result

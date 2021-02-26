@@ -22,6 +22,7 @@ import (
 	"fmt"
 	"io/ioutil"
 	"math/big"
+	"math/rand"
 	"os"
 	"reflect"
 	"testing"
@@ -84,7 +85,7 @@ func TestBodyStorage(t *testing.T) {
 	WriteBody(db, hash, 0, body)
 	if entry := ReadBody(db, hash, 0); entry == nil {
 		t.Fatalf("Stored body not found")
-	} else if types.DeriveSha(types.Transactions(entry.Transactions)) != types.DeriveSha(types.Transactions(body.Transactions)) || types.CalcUncleHash(entry.Uncles) != types.CalcUncleHash(body.Uncles) {
+	} else if types.DeriveSha(types.Transactions(entry.Transactions), newHasher()) != types.DeriveSha(types.Transactions(body.Transactions), newHasher()) || types.CalcUncleHash(entry.Uncles) != types.CalcUncleHash(body.Uncles) {
 		t.Fatalf("Retrieved body mismatch: have %v, want %v", entry, body)
 	}
 	if entry := ReadBodyRLP(db, hash, 0); entry == nil {
@@ -138,7 +139,7 @@ func TestBlockStorage(t *testing.T) {
 	}
 	if entry := ReadBody(db, block.Hash(), block.NumberU64()); entry == nil {
 		t.Fatalf("Stored body not found")
-	} else if types.DeriveSha(types.Transactions(entry.Transactions)) != types.DeriveSha(block.Transactions()) || types.CalcUncleHash(entry.Uncles) != types.CalcUncleHash(block.Uncles()) {
+	} else if types.DeriveSha(types.Transactions(entry.Transactions), newHasher()) != types.DeriveSha(block.Transactions(), newHasher()) || types.CalcUncleHash(entry.Uncles) != types.CalcUncleHash(block.Uncles()) {
 		t.Fatalf("Retrieved body mismatch: have %v, want %v", entry, block.Body())
 	}
 	// Delete the block and verify the execution
@@ -185,6 +186,75 @@ func TestPartialBlockStorage(t *testing.T) {
 		t.Fatalf("Stored block not found")
 	} else if entry.Hash() != block.Hash() {
 		t.Fatalf("Retrieved block mismatch: have %v, want %v", entry, block)
+	}
+}
+
+// Tests block storage and retrieval operations.
+func TestBadBlockStorage(t *testing.T) {
+	db := NewMemoryDatabase()
+
+	// Create a test block to move around the database and make sure it's really new
+	block := types.NewBlockWithHeader(&types.Header{
+		Number:      big.NewInt(1),
+		Extra:       []byte("bad block"),
+		UncleHash:   types.EmptyUncleHash,
+		TxHash:      types.EmptyRootHash,
+		ReceiptHash: types.EmptyRootHash,
+	})
+	if entry := ReadBadBlock(db, block.Hash()); entry != nil {
+		t.Fatalf("Non existent block returned: %v", entry)
+	}
+	// Write and verify the block in the database
+	WriteBadBlock(db, block)
+	if entry := ReadBadBlock(db, block.Hash()); entry == nil {
+		t.Fatalf("Stored block not found")
+	} else if entry.Hash() != block.Hash() {
+		t.Fatalf("Retrieved block mismatch: have %v, want %v", entry, block)
+	}
+	// Write one more bad block
+	blockTwo := types.NewBlockWithHeader(&types.Header{
+		Number:      big.NewInt(2),
+		Extra:       []byte("bad block two"),
+		UncleHash:   types.EmptyUncleHash,
+		TxHash:      types.EmptyRootHash,
+		ReceiptHash: types.EmptyRootHash,
+	})
+	WriteBadBlock(db, blockTwo)
+
+	// Write the block one again, should be filtered out.
+	WriteBadBlock(db, block)
+	badBlocks := ReadAllBadBlocks(db)
+	if len(badBlocks) != 2 {
+		t.Fatalf("Failed to load all bad blocks")
+	}
+
+	// Write a bunch of bad blocks, all the blocks are should sorted
+	// in reverse order. The extra blocks should be truncated.
+	for _, n := range rand.Perm(100) {
+		block := types.NewBlockWithHeader(&types.Header{
+			Number:      big.NewInt(int64(n)),
+			Extra:       []byte("bad block"),
+			UncleHash:   types.EmptyUncleHash,
+			TxHash:      types.EmptyRootHash,
+			ReceiptHash: types.EmptyRootHash,
+		})
+		WriteBadBlock(db, block)
+	}
+	badBlocks = ReadAllBadBlocks(db)
+	if len(badBlocks) != badBlockToKeep {
+		t.Fatalf("The number of persised bad blocks in incorrect %d", len(badBlocks))
+	}
+	for i := 0; i < len(badBlocks)-1; i++ {
+		if badBlocks[i].NumberU64() < badBlocks[i+1].NumberU64() {
+			t.Fatalf("The bad blocks are not sorted #[%d](%d) < #[%d](%d)", i, i+1, badBlocks[i].NumberU64(), badBlocks[i+1].NumberU64())
+		}
+	}
+
+	// Delete all bad blocks
+	DeleteBadBlocks(db)
+	badBlocks = ReadAllBadBlocks(db)
+	if len(badBlocks) != 0 {
+		t.Fatalf("Failed to delete bad blocks")
 	}
 }
 

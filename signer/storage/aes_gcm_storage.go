@@ -151,11 +151,11 @@ func encrypt(key []byte, plaintext []byte, additionalData []byte) ([]byte, []byt
 		return nil, nil, err
 	}
 	aesgcm, err := cipher.NewGCM(block)
-	nonce := make([]byte, aesgcm.NonceSize())
-	if _, err := io.ReadFull(rand.Reader, nonce); err != nil {
+	if err != nil {
 		return nil, nil, err
 	}
-	if err != nil {
+	nonce := make([]byte, aesgcm.NonceSize())
+	if _, err := io.ReadFull(rand.Reader, nonce); err != nil {
 		return nil, nil, err
 	}
 	ciphertext := aesgcm.Seal(nil, nonce, plaintext, additionalData)

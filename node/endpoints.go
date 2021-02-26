@@ -48,21 +48,6 @@ func StartHTTPEndpoint(endpoint string, timeouts rpc.HTTPTimeouts, handler http.
 	return httpSrv, listener.Addr(), err
 }
 
-// startWSEndpoint starts a websocket endpoint.
-func startWSEndpoint(endpoint string, handler http.Handler) (*http.Server, net.Addr, error) {
-	// start the HTTP listener
-	var (
-		listener net.Listener
-		err      error
-	)
-	if listener, err = net.Listen("tcp", endpoint); err != nil {
-		return nil, nil, err
-	}
-	wsSrv := &http.Server{Handler: handler}
-	go wsSrv.Serve(listener)
-	return wsSrv, listener.Addr(), err
-}
-
 // checkModuleAvailability checks that all names given in modules are actually
 // available API services. It assumes that the MetadataApi module ("rpc") is always available;
 // the registration of this "rpc" module happens in NewServer() and is thus common to all endpoints.

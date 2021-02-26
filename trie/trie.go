@@ -19,6 +19,7 @@ package trie
 
 import (
 	"bytes"
+	"errors"
 	"fmt"
 	"sync"
 
@@ -38,7 +39,7 @@ var (
 // LeafCallback is a callback type invoked when a trie operation reaches a leaf
 // node. It's used by state sync and commit to allow handling external references
 // between account and storage tries.
-type LeafCallback func(leaf []byte, parent common.Hash) error
+type LeafCallback func(path []byte, leaf []byte, parent common.Hash) error
 
 // Trie is a Merkle Patricia Trie.
 // The zero value is an empty trie with no database.
@@ -102,8 +103,7 @@ func (t *Trie) Get(key []byte) []byte {
 // The value bytes must not be modified by the caller.
 // If a node was not found in the database, a MissingNodeError is returned.
 func (t *Trie) TryGet(key []byte) ([]byte, error) {
-	key = keybytesToHex(key)
-	value, newroot, didResolve, err := t.tryGet(t.root, key, 0)
+	value, newroot, didResolve, err := t.tryGet(t.root, keybytesToHex(key), 0)
 	if err == nil && didResolve {
 		t.root = newroot
 	}
@@ -141,6 +141,83 @@ func (t *Trie) tryGet(origNode node, key []byte, pos int) (value []byte, newnode
 		}
 		value, newnode, _, err := t.tryGet(child, key, pos)
 		return value, newnode, true, err
+	default:
+		panic(fmt.Sprintf("%T: invalid node: %v", origNode, origNode))
+	}
+}
+
+// TryGetNode attempts to retrieve a trie node by compact-encoded path. It is not
+// possible to use keybyte-encoding as the path might contain odd nibbles.
+func (t *Trie) TryGetNode(path []byte) ([]byte, int, error) {
+	item, newroot, resolved, err := t.tryGetNode(t.root, compactToHex(path), 0)
+	if err != nil {
+		return nil, resolved, err
+	}
+	if resolved > 0 {
+		t.root = newroot
+	}
+	if item == nil {
+		return nil, resolved, nil
+	}
+	return item, resolved, err
+}
+
+func (t *Trie) tryGetNode(origNode node, path []byte, pos int) (item []byte, newnode node, resolved int, err error) {
+	// If we reached the requested path, return the current node
+	if pos >= len(path) {
+		// Although we most probably have the original node expanded, encoding
+		// that into consensus form can be nasty (needs to cascade down) and
+		// time consuming. Instead, just pull the hash up from disk directly.
+		var hash hashNode
+		if node, ok := origNode.(hashNode); ok {
+			hash = node
+		} else {
+			hash, _ = origNode.cache()
+		}
+		if hash == nil {
+			return nil, origNode, 0, errors.New("non-consensus node")
+		}
+		blob, err := t.db.Node(common.BytesToHash(hash))
+		return blob, origNode, 1, err
+	}
+	// Path still needs to be traversed, descend into children
+	switch n := (origNode).(type) {
+	case nil:
+		// Non-existent path requested, abort
+		return nil, nil, 0, nil
+
+	case valueNode:
+		// Path prematurely ended, abort
+		return nil, nil, 0, nil
+
+	case *shortNode:
+		if len(path)-pos < len(n.Key) || !bytes.Equal(n.Key, path[pos:pos+len(n.Key)]) {
+			// Path branches off from short node
+			return nil, n, 0, nil
+		}
+		item, newnode, resolved, err = t.tryGetNode(n.Val, path, pos+len(n.Key))
+		if err == nil && resolved > 0 {
+			n = n.copy()
+			n.Val = newnode
+		}
+		return item, n, resolved, err
+
+	case *fullNode:
+		item, newnode, resolved, err = t.tryGetNode(n.Children[path[pos]], path, pos+1)
+		if err == nil && resolved > 0 {
+			n = n.copy()
+			n.Children[path[pos]] = newnode
+		}
+		return item, n, resolved, err
+
+	case hashNode:
+		child, err := t.resolveHash(n, path[:pos])
+		if err != nil {
+			return nil, n, 1, err
+		}
+		item, newnode, resolved, err := t.tryGetNode(child, path, pos)
+		return item, newnode, resolved + 1, err
+
 	default:
 		panic(fmt.Sprintf("%T: invalid node: %v", origNode, origNode))
 	}
@@ -411,7 +488,7 @@ func (t *Trie) resolveHash(n hashNode, prefix []byte) (node, error) {
 // Hash returns the root hash of the trie. It does not write to the
 // database and can be used even if the trie doesn't have one.
 func (t *Trie) Hash() common.Hash {
-	hash, cached, _ := t.hashRoot(nil)
+	hash, cached, _ := t.hashRoot()
 	t.root = cached
 	return common.BytesToHash(hash.(hashNode))
 }
@@ -425,13 +502,16 @@ func (t *Trie) Commit(onleaf LeafCallback) (root common.Hash, err error) {
 	if t.root == nil {
 		return emptyRoot, nil
 	}
+	// Derive the hash for all dirty nodes first. We hold the assumption
+	// in the following procedure that all nodes are hashed.
 	rootHash := t.Hash()
 	h := newCommitter()
 	defer returnCommitterToPool(h)
+
 	// Do a quick check if we really need to commit, before we spin
 	// up goroutines. This can happen e.g. if we load a trie for reading storage
 	// values, but don't write to it.
-	if !h.commitNeeded(t.root) {
+	if _, dirty := t.root.cache(); !dirty {
 		return rootHash, nil
 	}
 	var wg sync.WaitGroup
@@ -462,7 +542,7 @@ func (t *Trie) Commit(onleaf LeafCallback) (root common.Hash, err error) {
 }
 
 // hashRoot calculates the root hash of the given trie
-func (t *Trie) hashRoot(db *Database) (node, node, error) {
+func (t *Trie) hashRoot() (node, node, error) {
 	if t.root == nil {
 		return hashNode(emptyRoot.Bytes()), nil, nil
 	}
@@ -472,4 +552,10 @@ func (t *Trie) hashRoot(db *Database) (node, node, error) {
 	hashed, cached := h.hash(t.root, true)
 	t.unhashed = 0
 	return hashed, cached, nil
+}
+
+// Reset drops the referenced root node and cleans all internal state.
+func (t *Trie) Reset() {
+	t.root = nil
+	t.unhashed = 0
 }

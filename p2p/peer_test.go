@@ -86,9 +86,15 @@ func newNode(id enode.ID, addr string) *enode.Node {
 }
 
 func testPeer(protos []Protocol) (func(), *conn, *Peer, <-chan error) {
-	fd1, fd2 := net.Pipe()
-	c1 := &conn{fd: fd1, node: newNode(randomID(), ""), transport: newTestTransport(&newkey().PublicKey, fd1)}
-	c2 := &conn{fd: fd2, node: newNode(randomID(), ""), transport: newTestTransport(&newkey().PublicKey, fd2)}
+	var (
+		fd1, fd2   = net.Pipe()
+		key1, key2 = newkey(), newkey()
+		t1         = newTestTransport(&key2.PublicKey, fd1, nil)
+		t2         = newTestTransport(&key1.PublicKey, fd2, &key1.PublicKey)
+	)
+
+	c1 := &conn{fd: fd1, node: newNode(uintID(1), ""), transport: t1}
+	c2 := &conn{fd: fd2, node: newNode(uintID(2), ""), transport: t2}
 	for _, p := range protos {
 		c1.caps = append(c1.caps, p.cap())
 		c2.caps = append(c2.caps, p.cap())
@@ -173,9 +179,12 @@ func TestPeerPing(t *testing.T) {
 	}
 }
 
+// This test checks that a disconnect message sent by a peer is returned
+// as the error from Peer.run.
 func TestPeerDisconnect(t *testing.T) {
 	closer, rw, _, disc := testPeer(nil)
 	defer closer()
+
 	if err := SendItems(rw, discMsg, DiscQuitting); err != nil {
 		t.Fatal(err)
 	}

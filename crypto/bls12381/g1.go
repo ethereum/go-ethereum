@@ -266,9 +266,8 @@ func (g *G1) Add(r, p1, p2 *PointG1) *PointG1 {
 	if t[1].equal(t[3]) {
 		if t[0].equal(t[2]) {
 			return g.Double(r, p1)
-		} else {
-			return r.Zero()
 		}
+		return r.Zero()
 	}
 	sub(t[1], t[1], t[3])
 	double(t[4], t[1])

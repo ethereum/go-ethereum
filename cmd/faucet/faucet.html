@@ -49,7 +49,7 @@
 				<div class="row">
 					<div class="col-lg-8 col-lg-offset-2">
 						<div class="input-group">
-							<input id="url" name="url" type="text" class="form-control" placeholder="Social network URL containing your Ethereum address...">
+							<input id="url" name="url" type="text" class="form-control" placeholder="Social network URL containing your Ethereum address..."/>
 							<span class="input-group-btn">
 								<button class="btn btn-default dropdown-toggle" type="button" data-toggle="dropdown" aria-haspopup="true" aria-expanded="false">Give me Ether	<i class="fa fa-caret-down" aria-hidden="true"></i></button>
 				        <ul class="dropdown-menu dropdown-menu-right">{{range $idx, $amount := .Amounts}}
@@ -177,7 +177,7 @@
 						}
 						// Iterate over our entire local collection and re-render the funding table
 						var content = "";
-						for (var i=0; i<requests.length; i++) {
+						for (var i=requests.length-1; i >= 0; i--) {
 							var done    = requests[i].time == "";
 							var elapsed = moment().unix()-moment(requests[i].time).unix();
 

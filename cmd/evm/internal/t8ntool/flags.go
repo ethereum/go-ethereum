@@ -42,6 +42,16 @@ var (
 		Name:  "trace.noreturndata",
 		Usage: "Disable return data output in traces",
 	}
+	OutputBasedir = cli.StringFlag{
+		Name:  "output.basedir",
+		Usage: "Specifies where output files are placed. Will be created if it does not exist.",
+		Value: "",
+	}
+	OutputBodyFlag = cli.StringFlag{
+		Name:  "output.body",
+		Usage: "If set, the RLP of the transactions (block body) will be written to this file.",
+		Value: "",
+	}
 	OutputAllocFlag = cli.StringFlag{
 		Name: "output.alloc",
 		Usage: "Determines where to put the `alloc` of the post-state.\n" +

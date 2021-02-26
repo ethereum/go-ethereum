@@ -103,6 +103,11 @@ type freezerTable struct {
 	lock   sync.RWMutex // Mutex protecting the data file descriptors
 }
 
+// NewFreezerTable opens the given path as a freezer table.
+func NewFreezerTable(path, name string, disableSnappy bool) (*freezerTable, error) {
+	return newTable(path, name, metrics.NilMeter{}, metrics.NilMeter{}, metrics.NilGauge{}, disableSnappy)
+}
+
 // newTable opens a freezer table with default settings - 2G files
 func newTable(path string, name string, readMeter metrics.Meter, writeMeter metrics.Meter, sizeGauge metrics.Gauge, disableSnappy bool) (*freezerTable, error) {
 	return newCustomTable(path, name, readMeter, writeMeter, sizeGauge, 2*1000*1000*1000, disableSnappy)
@@ -330,7 +335,8 @@ func (t *freezerTable) truncate(items uint64) error {
 	defer t.lock.Unlock()
 
 	// If our item count is correct, don't do anything
-	if atomic.LoadUint64(&t.items) <= items {
+	existing := atomic.LoadUint64(&t.items)
+	if existing <= items {
 		return nil
 	}
 	// We need to truncate, save the old size for metrics tracking
@@ -339,7 +345,11 @@ func (t *freezerTable) truncate(items uint64) error {
 		return err
 	}
 	// Something's out of sync, truncate the table's offset index
-	t.logger.Warn("Truncating freezer table", "items", t.items, "limit", items)
+	log := t.logger.Debug
+	if existing > items+1 {
+		log = t.logger.Warn // Only loud warn if we delete multiple items
+	}
+	log("Truncating freezer table", "items", existing, "limit", items)
 	if err := truncateFreezerFile(t.index, int64(items+1)*indexEntrySize); err != nil {
 		return err
 	}

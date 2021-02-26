@@ -17,28 +17,9 @@
 // Package common contains various helper functions.
 package common
 
-import "encoding/hex"
-
-// ToHex returns the hex representation of b, prefixed with '0x'.
-// For empty slices, the return value is "0x0".
-//
-// Deprecated: use hexutil.Encode instead.
-func ToHex(b []byte) string {
-	hex := Bytes2Hex(b)
-	if len(hex) == 0 {
-		hex = "0"
-	}
-	return "0x" + hex
-}
-
-// ToHexArray creates a array of hex-string based on []byte
-func ToHexArray(b [][]byte) []string {
-	r := make([]string, len(b))
-	for i := range b {
-		r[i] = ToHex(b[i])
-	}
-	return r
-}
+import (
+	"encoding/hex"
+)
 
 // FromHex returns the bytes represented by the hexadecimal string s.
 // s may be prefixed with "0x".

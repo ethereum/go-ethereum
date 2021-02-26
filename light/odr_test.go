@@ -87,7 +87,7 @@ func (odr *testOdr) Retrieve(ctx context.Context, req OdrRequest) error {
 		t.Prove(req.Key, 0, nodes)
 		req.Proof = nodes
 	case *CodeRequest:
-		req.Data, _ = odr.sdb.Get(req.Hash[:])
+		req.Data = rawdb.ReadCode(odr.sdb, req.Hash)
 	}
 	req.StoreResult(odr.ldb)
 	return nil
@@ -194,9 +194,10 @@ func odrContractCall(ctx context.Context, db ethdb.Database, bc *core.BlockChain
 
 		// Perform read-only call.
 		st.SetBalance(testBankAddress, math.MaxBig256)
-		msg := callmsg{types.NewMessage(testBankAddress, &testContractAddr, 0, new(big.Int), 1000000, new(big.Int), data, false)}
-		context := core.NewEVMContext(msg, header, chain, nil)
-		vmenv := vm.NewEVM(context, st, config, vm.Config{})
+		msg := callmsg{types.NewMessage(testBankAddress, &testContractAddr, 0, new(big.Int), 1000000, new(big.Int), data, nil, false)}
+		txContext := core.NewEVMTxContext(msg)
+		context := core.NewEVMBlockContext(header, chain, nil)
+		vmenv := vm.NewEVM(context, txContext, st, config, vm.Config{})
 		gp := new(core.GasPool).AddGas(math.MaxUint64)
 		result, _ := core.ApplyMessage(vmenv, msg, gp)
 		res = append(res, result.Return()...)

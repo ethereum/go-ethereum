@@ -28,6 +28,7 @@ import (
 func TestNodeIteratorCoverage(t *testing.T) {
 	// Create some arbitrary test state to iterate
 	db, root, _ := makeTestState()
+	db.TrieDB().Commit(root, false, nil)
 
 	state, err := New(root, db, nil)
 	if err != nil {
@@ -42,7 +43,10 @@ func TestNodeIteratorCoverage(t *testing.T) {
 	}
 	// Cross check the iterated hashes and the database/nodepool content
 	for hash := range hashes {
-		if _, err := db.TrieDB().Node(hash); err != nil {
+		if _, err = db.TrieDB().Node(hash); err != nil {
+			_, err = db.ContractCode(common.Hash{}, hash)
+		}
+		if err != nil {
 			t.Errorf("failed to retrieve reported node %x", hash)
 		}
 	}
