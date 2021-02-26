@@ -110,7 +110,6 @@ processing will proceed even if an individual RLP-file import failure occurs.`,
 			utils.DataDirFlag,
 			utils.CacheFlag,
 			utils.SyncModeFlag,
-			utils.SnapshotFlag,
 		},
 		Category: "BLOCKCHAIN COMMANDS",
 		Description: `
@@ -324,6 +323,9 @@ func exportChain(ctx *cli.Context) error {
 
 	stack, _ := makeConfigNode(ctx)
 	defer stack.Close()
+
+	// Disable snapshotter by default
+	ctx.GlobalSet(utils.SnapshotFlag.Name, "false")
 
 	chain, _ := utils.MakeChain(ctx, stack, true)
 	start := time.Now()
