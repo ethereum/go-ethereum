@@ -361,7 +361,6 @@ type StdTraceConfig struct {
 
 This method is similar to `debug_standardTraceBlockToFile`, but can be used to obtain info about a block which has been _rejected_ as invalid (for some reason).
 
-
 ### debug_traceTransaction
 
 **OBS** In most scenarios, `debug.standardTraceBlockToFile` is better suited for tracing!
@@ -514,6 +513,54 @@ Note that several values are Golang big.Int objects, not JavaScript numbers or J
 Usage example, returns the top element of the stack at each CALL opcode only:
 
     debug.traceTransaction(txhash, {tracer: '{data: [], fault: function(log) {}, step: function(log) { if(log.op.toString() == "CALL") this.data.push(log.stack.peek(0)); }, result: function() { return this.data; }}'});
+
+### debug_traceCall
+
+The `debug_traceCall` method lets you run an `eth_call` on top of a given block. The block can be specified either by hash or by number. It takes the same input object as a `eth_call`.
+It returns the same output as `debug_traceTransaction`. A tracer can be specified as a third argument, similar to `debug_traceTransaction`.
+
+`Object` - The transaction call object
+- `from`: `DATA`, 20 Bytes - (optional) The address the transaction is sent from.
+- `to`: `DATA`, 20 Bytes - The address the transaction is directed to.
+- `gas`: `QUANTITY` - (optional) Integer of the gas provided for the transaction execution. eth_call consumes zero gas, but this parameter may be needed by some executions.
+- `gasPrice`: `QUANTITY` - (optional) Integer of the gasPrice used for each paid gas
+- `value`: `QUANTITY` - (optional) Integer of the value sent with this transaction
+- `data`: `DATA` - (optional) Hash of the method signature and encoded parameters. For details see Ethereum Contract ABI in the Solidity documentation
+
+| Client  | Method invocation                 |
+|:-------:|-----------------------------------|
+| Go      | `debug.TraceCall(args ethapi.CallArgs, blockNrOrHash rpc.BlockNumberOrHash, config *TraceConfig) (*ExecutionResult, error)` |
+| Console | `debug.traceCall(object, blockNrOrHash, [options])`                   |
+| RPC     | `{"method": "debug_traceCall", "params": [object, blockNrOrHash, {}]}`     |
+
+#### Example
+
+No specific call options:
+```
+> debug.traceCall(null, "0x0")
+{
+  failed: false,
+  gas: 53000,
+  returnValue: "",
+  structLogs: []
+}
+```
+Tracing a call with a destination and specific sender, disabling the storage and memory output (less data returned over RPC)
+```
+debug.traceCall({
+	from: "0xdeadbeef292929291929394949595949339292929, 
+	to:"0xde929f939d939d393f939393f93939f393929023", 
+	gas: "0x7a120", 
+	data: "0xf00d4b5d00000000000000000000000001291230982139282304923482304912923823920000000000000000000000001293123098123928310239129839291010293810"
+	}, 
+	"latest", {disableStorage:true, disableMemory: true})
+```
+Curl example: 
+```
+> curl -H "Content-Type: application/json" -X POST  localhost:8545 --data '{"jsonrpc":"2.0","method":"debug_traceCall","params":[null, "pending"],"id":1}'
+{"jsonrpc":"2.0","id":1,"result":{"gas":53000,"failed":false,"returnValue":"","structLogs":[]}}
+```
+
 
 ### debug_verbosity
 
