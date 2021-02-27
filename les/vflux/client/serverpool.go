@@ -150,7 +150,7 @@ var (
 )
 
 // NewServerPool creates a new server pool
-func NewServerPool(db ethdb.KeyValueStore, dbKey []byte, mixTimeout time.Duration, query queryFunc, clock mclock.Clock, trustedURLs []string, requestList []RequestInfo) *ServerPool {
+func NewServerPool(db ethdb.KeyValueStore, dbKey []byte, mixTimeout time.Duration, query queryFunc, clock mclock.Clock, trustedURLs []string, requestList []RequestInfo) (*ServerPool, enode.Iterator) {
 	s := &ServerPool{
 		db:           db,
 		clock:        clock,
@@ -180,7 +180,41 @@ func NewServerPool(db ethdb.KeyValueStore, dbKey []byte, mixTimeout time.Duratio
 		}
 	})
 
-	return s
+	return s, &serverPoolIterator{
+		dialIterator: s.dialIterator,
+		nextFn: func(node *enode.Node) {
+			s.ns.Operation(func() {
+				s.ns.SetStateSub(node, sfDialing, sfCanDial, 0)
+				s.ns.SetStateSub(node, sfWaitDialTimeout, nodestate.Flags{}, time.Second*10)
+			})
+		},
+		nodeFn: s.DialNode,
+	}
+}
+
+type serverPoolIterator struct {
+	dialIterator enode.Iterator
+	nextFn       func(*enode.Node)
+	nodeFn       func(*enode.Node) *enode.Node
+}
+
+// Next implements enode.Iterator
+func (s *serverPoolIterator) Next() bool {
+	if s.dialIterator.Next() {
+		s.nextFn(s.dialIterator.Node())
+		return true
+	}
+	return false
+}
+
+// Node implements enode.Iterator
+func (s *serverPoolIterator) Node() *enode.Node {
+	return s.nodeFn(s.dialIterator.Node())
+}
+
+// Close implements enode.Iterator
+func (s *serverPoolIterator) Close() {
+	s.dialIterator.Close()
 }
 
 // AddMetrics adds metrics to the server pool. Should be called before Start().
@@ -200,27 +234,6 @@ func (s *ServerPool) AddMetrics(
 	if serverConnectedGauge != nil {
 		s.ns.AddLogMetrics(sfConnected, nodestate.Flags{}, "connected", nil, nil, serverConnectedGauge)
 	}
-}
-
-// Next implements enode.Iterator
-func (s *ServerPool) Next() bool {
-	if s.dialIterator.Next() {
-		node := s.dialIterator.Node()
-		s.ns.SetState(node, sfDialing, sfCanDial, 0)
-		s.ns.SetState(node, sfWaitDialTimeout, nodestate.Flags{}, time.Second*10)
-		return true
-	}
-	return false
-}
-
-// Node implements enode.Iterator
-func (s *ServerPool) Node() *enode.Node {
-	return s.DialNode(s.dialIterator.Node())
-}
-
-// Close implements enode.Iterator
-func (s *ServerPool) Close() {
-	s.dialIterator.Close()
 }
 
 // AddSource adds a node discovery source to the server pool (should be called before start)

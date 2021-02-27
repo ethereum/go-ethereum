@@ -52,16 +52,17 @@ import (
 type LightEthereum struct {
 	lesCommons
 
-	peers      *serverPeerSet
-	reqDist    *requestDistributor
-	retriever  *retrieveManager
-	odr        *LesOdr
-	relay      *lesTxRelay
-	handler    *clientHandler
-	txPool     *light.TxPool
-	blockchain *light.LightChain
-	serverPool *vfc.ServerPool
-	pruner     *pruner
+	peers              *serverPeerSet
+	reqDist            *requestDistributor
+	retriever          *retrieveManager
+	odr                *LesOdr
+	relay              *lesTxRelay
+	handler            *clientHandler
+	txPool             *light.TxPool
+	blockchain         *light.LightChain
+	serverPool         *vfc.ServerPool
+	serverPoolIterator enode.Iterator
+	pruner             *pruner
 
 	bloomRequests chan chan *bloombits.Retrieval // Channel receiving bloom data retrieval requests
 	bloomIndexer  *core.ChainIndexer             // Bloom indexer operating during block imports
@@ -114,7 +115,7 @@ func New(stack *node.Node, config *ethconfig.Config) (*LightEthereum, error) {
 		p2pConfig:      &stack.Config().P2P,
 	}
 
-	leth.serverPool = vfc.NewServerPool(lesDb, []byte("serverpool:"), time.Second, leth.prenegQuery, &mclock.System{}, config.UltraLightServers, requestList)
+	leth.serverPool, leth.serverPoolIterator = vfc.NewServerPool(lesDb, []byte("serverpool:"), time.Second, leth.prenegQuery, &mclock.System{}, config.UltraLightServers, requestList)
 	leth.serverPool.AddMetrics(suggestedTimeoutGauge, totalValueGauge, serverSelectableGauge, serverConnectedGauge, sessionValueMeter, serverDialedMeter)
 
 	leth.retriever = newRetrieveManager(peers, leth.reqDist, leth.serverPool.GetTimeout)
@@ -326,7 +327,7 @@ func (s *LightEthereum) Protocols() []p2p.Protocol {
 			return p.Info()
 		}
 		return nil
-	}, s.serverPool)
+	}, s.serverPoolIterator)
 }
 
 // Start implements node.Lifecycle, starting all internal goroutines needed by the
