@@ -206,7 +206,6 @@ func (s *LesServer) Protocols() []p2p.Protocol {
 	// Add "les" ENR entries.
 	for i := range ps {
 		ps[i].Attributes = []enr.Entry{&lesEntry{
-			LesVersion: ServerProtocolVersions[len(ServerProtocolVersions)-1],
 			VfxVersion: 1,
 		}}
 	}

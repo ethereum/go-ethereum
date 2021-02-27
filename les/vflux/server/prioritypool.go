@@ -557,8 +557,11 @@ func (pp *PriorityPool) GetCapacityCurve() *CapacityCurve {
 	// reduce node capacities or remove nodes until nothing is left in the queue;
 	// record the available capacity and the necessary priority after each step
 	for pp.activeCap > 0 {
-		cp := curvePoint{
-			freeCap: pp.maxCap - pp.activeCap,
+		cp := curvePoint{}
+		if pp.activeCap > pp.maxCap {
+			log.Error("Active capacity is greater than allowed maximum", "active", pp.activeCap, "maximum", pp.maxCap)
+		} else {
+			cp.freeCap = pp.maxCap - pp.activeCap
 		}
 		// temporarily increase activeCap to enforce reducing or removing a node capacity
 		tempCap := cp.freeCap + 1

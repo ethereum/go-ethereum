@@ -203,30 +203,31 @@ func (s *LightEthereum) VfluxRequest(n *enode.Node, reqs vflux.Requests) vflux.R
 	return replies
 }
 
-// enrVersion returns the les and vflux UDP versions advertised in the ENR record
-func (s *LightEthereum) enrVersion(n *enode.Node) (lesVersion, vfxVersion uint) {
+// vfxVersion returns the version number of the "les" service subdomain of the vflux UDP
+// service, as advertised in the ENR record
+func (s *LightEthereum) vfxVersion(n *enode.Node) uint {
 	if n.Seq() == 0 {
 		var err error
 		if n, err = s.p2pServer.DiscV5.RequestENR(n); n != nil && err == nil && n.Seq() != 0 {
 			s.serverPool.Persist(n)
 		} else {
-			return 0, 0
+			return 0
 		}
 	}
 
 	var les []rlp.RawValue
-	if err := n.Load(enr.WithEntry("les", &les)); err != nil || len(les) < 2 {
-		return 0, 0
+	if err := n.Load(enr.WithEntry("les", &les)); err != nil || len(les) < 1 {
+		return 0
 	}
-	rlp.DecodeBytes(les[0], &lesVersion)
-	rlp.DecodeBytes(les[1], &vfxVersion)
-	return
+	var version uint
+	rlp.DecodeBytes(les[0], &version) // Ignore additional fields (for forward compatibility).
+	return version
 }
 
 // prenegQuery sends a capacity query to the given server node to determine whether
 // a connection slot is immediately available
 func (s *LightEthereum) prenegQuery(n *enode.Node) int {
-	if _, ver := s.enrVersion(n); ver < 1 {
+	if s.vfxVersion(n) < 1 {
 		// UDP query not supported, always try TCP connection
 		return 1
 	}
@@ -238,7 +239,7 @@ func (s *LightEthereum) prenegQuery(n *enode.Node) int {
 	})
 	replies := s.VfluxRequest(n, requests)
 	var cqr vflux.CapacityQueryReply
-	if replies.Get(0, &cqr) != nil || len(cqr) != 1 {
+	if replies.Get(0, &cqr) != nil || len(cqr) != 1 { // Note: Get returns an error if replies is nil
 		return -1
 	}
 	if cqr[0] > 0 {

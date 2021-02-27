@@ -19,6 +19,7 @@ package server
 import (
 	"net"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/ethereum/go-ethereum/les/utils"
@@ -32,6 +33,7 @@ type (
 	// Server serves vflux requests
 	Server struct {
 		limiter         *utils.Limiter
+		lock            sync.Mutex
 		services        map[string]*serviceEntry
 		delayPerRequest time.Duration
 	}
@@ -66,7 +68,9 @@ func (s *Server) Register(b Service) {
 		log.Error("Service ID contains ':'", "id", srv.id)
 		return
 	}
+	s.lock.Lock()
 	s.services[srv.id] = srv
+	s.lock.Unlock()
 }
 
 // Serve serves a vflux request batch
@@ -83,15 +87,17 @@ func (s *Server) Serve(id enode.ID, address string, requests vflux.Requests) vfl
 	if ch == nil {
 		return nil
 	}
-	// Note: the following section is protected from concurrency by the limiter
+	// Note: the limiter ensures that the following section is not running concurrently,
+	// the lock only protects against contention caused by new service registration
+	s.lock.Lock()
 	results := make(vflux.Replies, len(requests))
 	for i, req := range requests {
 		if service := s.services[req.Service]; service != nil {
 			results[i] = service.backend.Handle(id, address, req.Name, req.Params)
 		}
 	}
+	s.lock.Unlock()
 	time.Sleep(s.delayPerRequest * time.Duration(reqLen))
-	// The protected section ends by closing the channel and thereby allowing the limiter to start the next request
 	close(ch)
 	return results
 }
