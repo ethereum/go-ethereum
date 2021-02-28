@@ -155,7 +155,7 @@ func prune(maindb ethdb.Database, stateBloom *stateBloom, middleStateRoots map[c
 			if done := binary.BigEndian.Uint64(key[:8]); done > 0 {
 				var (
 					left  = math.MaxUint64 - binary.BigEndian.Uint64(key[:8])
-					speed = done/uint64(time.Since(start)/time.Millisecond+1) + 1 // +1s to avoid division by zero
+					speed = done/uint64(time.Since(pstart)/time.Millisecond+1) + 1 // +1s to avoid division by zero
 				)
 				eta = time.Duration(left/speed) * time.Millisecond
 			}
