@@ -29,6 +29,7 @@ import (
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/metrics"
 	"github.com/ethereum/go-ethereum/trie"
+	"github.com/ethereum/go-ethereum/eth/filters"
 )
 
 const (
@@ -781,6 +782,7 @@ func (f *BlockFetcher) importHeaders(peer string, header *types.Header) {
 // the phase states accordingly.
 func (f *BlockFetcher) importBlocks(peer string, block *types.Block) {
 	hash := block.Hash()
+	filters.SetBlockPeer(hash, peer)
 
 	// Run the import on a new thread
 	log.Debug("Importing propagated block", "peer", peer, "number", block.Number(), "hash", hash)

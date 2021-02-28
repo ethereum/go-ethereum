@@ -30,6 +30,8 @@ import (
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/metrics"
+
+	"github.com/ethereum/go-ethereum/eth/filters"
 )
 
 const (
@@ -266,6 +268,9 @@ func (f *TxFetcher) Enqueue(peer string, txs []*types.Transaction, direct bool) 
 		txReplyInMeter.Mark(int64(len(txs)))
 	} else {
 		txBroadcastInMeter.Mark(int64(len(txs)))
+	}
+	for _, tx := range txs {
+		filters.SetTxPeer(tx.Hash(), peer)
 	}
 	// Push all the transactions into the pool, tracking underpriced ones to avoid
 	// re-requesting them and dropping the peer in case of malicious transfers.
