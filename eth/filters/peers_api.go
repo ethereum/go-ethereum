@@ -19,13 +19,13 @@ import (
 	"github.com/ethereum/go-ethereum/rpc"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/p2p"
-	"sync"
+	lru "github.com/hashicorp/golang-lru"
 )
 
 var (
-	blockPeerMap *sync.Map
-	txPeerMap *sync.Map
-	peerIDMap *sync.Map
+	blockPeerMap *lru.Cache
+	txPeerMap *lru.Cache
+	peerIDMap *lru.Cache
 )
 
 type peerInfo struct {
@@ -37,9 +37,9 @@ type peerInfo struct {
 // SetBlockPeer is called when a block is received from a peer to track which
 // peer was the first to provide a given block
 func SetBlockPeer(hash common.Hash, peer string) {
-	if blockPeerMap == nil { blockPeerMap = &sync.Map{} }
-	if _, ok := blockPeerMap.Load(hash); !ok {
-		blockPeerMap.Store(hash, peer)
+	if blockPeerMap == nil { blockPeerMap, _ = lru.New(250) }
+	if _, ok := blockPeerMap.Get(hash); !ok {
+		blockPeerMap.Add(hash, peer)
 	}
 }
 
@@ -47,9 +47,9 @@ func SetBlockPeer(hash common.Hash, peer string) {
 // SetTxPeer is called when a transaction is received from a peer to track
 // which peer was the first to provide a given transaction
 func SetTxPeer(hash common.Hash, peer string) {
-	if txPeerMap == nil { txPeerMap = &sync.Map{} }
-	if _, ok := txPeerMap.Load(hash); !ok {
-		txPeerMap.Store(hash, peer)
+	if txPeerMap == nil { txPeerMap, _ = lru.New(100000) }
+	if _, ok := txPeerMap.Get(hash); !ok {
+		txPeerMap.Add(hash, peer)
 	}
 }
 
@@ -80,16 +80,16 @@ func SubscribePeerIDs(srv *p2p.Server) {
 // messages we will get later will only include the truncated peer id, so the
 // full id and enode must be tracked based on connect / drop messages.
 func setPeerID(peerid, enode string) {
-	if peerIDMap == nil { peerIDMap = &sync.Map{} }
-	if _, ok := peerIDMap.Load(peerid[:16]); !ok {
-		peerIDMap.Store(peerid[:16], peerInfo{ID: peerid, Enode: enode})
+	if peerIDMap == nil { peerIDMap, _ = lru.New(1000) }
+	if _, ok := peerIDMap.Get(peerid[:16]); !ok {
+		peerIDMap.Add(peerid[:16], peerInfo{ID: peerid, Enode: enode})
 	}
 }
 
 // dropPeerID cleans up records when a peer drops
 func dropPeerID(peerid string) {
 	if peerIDMap == nil { return }
-	peerIDMap.Delete(peerid[:16])
+	peerIDMap.Remove(peerid[:16])
 }
 
 
@@ -103,8 +103,8 @@ type withPeer struct {
 // NewHeadsWithPeers send a notification each time a new (header) block is
 // appended to the chain, and includes the peer that first provided the block
 func (api *PublicFilterAPI) NewHeadsWithPeers(ctx context.Context) (*rpc.Subscription, error) {
-	if blockPeerMap == nil { blockPeerMap = &sync.Map{} }
-	if peerIDMap == nil { peerIDMap = &sync.Map{} }
+	if blockPeerMap == nil { blockPeerMap, _ = lru.New(250) }
+	if peerIDMap == nil { peerIDMap, _ = lru.New(1000) }
 	notifier, supported := rpc.NotifierFromContext(ctx)
 	if !supported {
 		return &rpc.Subscription{}, rpc.ErrNotificationsUnsupported
@@ -119,8 +119,8 @@ func (api *PublicFilterAPI) NewHeadsWithPeers(ctx context.Context) (*rpc.Subscri
 		for {
 			select {
 			case h := <-headers:
-				peerid, _ := blockPeerMap.Load(h.Hash())
-				peer, _ := peerIDMap.Load(peerid)
+				peerid, _ := blockPeerMap.Get(h.Hash())
+				peer, _ := peerIDMap.Get(peerid)
 				notifier.Notify(rpcSub.ID, withPeer{Value: h, Peer: peer} )
 			case <-rpcSub.Err():
 				headersSub.Unsubscribe()
@@ -139,8 +139,8 @@ func (api *PublicFilterAPI) NewHeadsWithPeers(ctx context.Context) (*rpc.Subscri
 // each time a transaction enters the transaction pool, and includes the peer
 // that first provided the transaction
 func (api *PublicFilterAPI) NewPendingTransactionsWithPeers(ctx context.Context) (*rpc.Subscription, error) {
-	if txPeerMap == nil { txPeerMap = &sync.Map{} }
-	if peerIDMap == nil { peerIDMap = &sync.Map{} }
+	if txPeerMap == nil { txPeerMap, _ = lru.New(100000) }
+	if peerIDMap == nil { peerIDMap, _ = lru.New(1000) }
 	notifier, supported := rpc.NotifierFromContext(ctx)
 	if !supported {
 		return &rpc.Subscription{}, rpc.ErrNotificationsUnsupported
@@ -158,8 +158,8 @@ func (api *PublicFilterAPI) NewPendingTransactionsWithPeers(ctx context.Context)
 				// To keep the original behaviour, send a single tx hash in one notification.
 				// TODO(rjl493456442) Send a batch of tx hashes in one notification
 				for _, h := range hashes {
-					peerid, _ := txPeerMap.Load(h)
-					peer, _ := peerIDMap.Load(peerid)
+					peerid, _ := txPeerMap.Get(h)
+					peer, _ := peerIDMap.Get(peerid)
 					notifier.Notify(rpcSub.ID, withPeer{Value: h, Peer: peer})
 				}
 			case <-rpcSub.Err():
@@ -179,8 +179,8 @@ func (api *PublicFilterAPI) NewPendingTransactionsWithPeers(ctx context.Context)
 // NewTransactionReceipts creates a subscription that is triggered for each
 // receipt in a newly confirmed block.
 func (api *PublicFilterAPI) NewTransactionReceipts(ctx context.Context) (*rpc.Subscription, error) {
-	if blockPeerMap == nil { blockPeerMap = &sync.Map{} }
-	if peerIDMap == nil { peerIDMap = &sync.Map{} }
+	if blockPeerMap == nil { blockPeerMap, _ = lru.New(250) }
+	if peerIDMap == nil { peerIDMap, _ = lru.New(1000) }
 	notifier, supported := rpc.NotifierFromContext(ctx)
 	if !supported {
 		return &rpc.Subscription{}, rpc.ErrNotificationsUnsupported
