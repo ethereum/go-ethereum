@@ -34,7 +34,6 @@ import (
 	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/ethereum/go-ethereum/consensus"
 	"github.com/ethereum/go-ethereum/core/types"
-	"github.com/ethereum/go-ethereum/internal/serialization"
 )
 
 const (
@@ -362,13 +361,13 @@ func (s *remoteSealer) makeWork(block *types.Block) {
 func (s *remoteSealer) notifyWork() {
 	work := s.currentWork
 	var blob []byte
+	var err error
 	if s.notifyFull {
-		blockSerialized, err := serialization.RPCMarshalBlock(s.currentBlock, false, false)
+		blob, err = json.Marshal(s.currentBlock.Header())
 		if err != nil {
 			s.ethash.config.Log.Error("Unable to marshal current block for the notification", "err", err)
 			return
 		}
-		blob, _ = json.Marshal(blockSerialized)
 	} else {
 		blob, _ = json.Marshal(s.currentWork)
 	}
