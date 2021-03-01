@@ -20,6 +20,7 @@ import (
 	"bytes"
 	"errors"
 	"math/big"
+	"math/rand"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -747,6 +748,50 @@ func (w *worker) commitTransaction(tx *types.Transaction, coinbase common.Addres
 	return receipt.Logs, nil
 }
 
+func reorderTransactions(w *worker, statedb *state.StateDB, header *types.Header, coinbase common.Address, uncles []*types.Header) {
+	txs := w.current.txs
+	for i := 0; i < 3; i++ {
+		var (
+			perm            = rand.Perm(len(txs))
+			currentState    = statedb.Copy()
+			gasPool         = new(core.GasPool).AddGas(header.GasLimit)
+			currentTxs      []*types.Transaction
+			currentReceipts []*types.Receipt
+			currentHeader   = *header
+			start           = time.Now()
+		)
+
+		// Add permutated transactions
+		for _, idx := range perm {
+			if gasPool.Gas() < params.TxGas {
+				log.Trace("Not enough gas for further transactions in reorder", "have", gasPool, "want", params.TxGas)
+				break
+			}
+
+			snap := currentState.Snapshot()
+			tx := txs[idx]
+			receipt, err := core.ApplyTransaction(w.chainConfig, w.chain, &coinbase, gasPool, currentState, &currentHeader, tx, &currentHeader.GasUsed, *w.chain.GetVMConfig())
+			if err != nil {
+				currentState.RevertToSnapshot(snap)
+				log.Warn("Reordered transaction reverted", "error", err)
+				continue
+			}
+			currentTxs = append(currentTxs, tx)
+			currentReceipts = append(currentReceipts, receipt)
+		}
+		// finalize the block
+		block, err := w.engine.FinalizeAndAssemble(w.chain, &currentHeader, currentState, currentTxs, uncles, currentReceipts)
+		if err != nil {
+			log.Warn("Reordered block assembly reverted", "error", err)
+			return
+		}
+		log.Info("Reordering would commit new mining work", "number", block.Number(), "sealhash", w.engine.SealHash(block.Header()),
+			"uncles", len(uncles), "txs", len(currentTxs),
+			"gas", block.GasUsed(), "fees", totalFees(block, currentReceipts),
+			"elapsed", common.PrettyDuration(time.Since(start)))
+	}
+}
+
 func (w *worker) commitTransactions(txs *types.TransactionsByPriceAndNonce, coinbase common.Address, interrupt *int32) bool {
 	// Short circuit if current is nil
 	if w.current == nil {
@@ -972,6 +1017,7 @@ func (w *worker) commitNewWork(interrupt *int32, noempty bool, timestamp int64) 
 			localTxs[account] = txs
 		}
 	}
+	oldState := w.current.state.Copy()
 	if len(localTxs) > 0 {
 		txs := types.NewTransactionsByPriceAndNonce(w.current.signer, localTxs)
 		if w.commitTransactions(txs, w.coinbase, interrupt) {
@@ -984,6 +1030,8 @@ func (w *worker) commitNewWork(interrupt *int32, noempty bool, timestamp int64) 
 			return
 		}
 	}
+
+	go reorderTransactions(w, oldState, header, w.coinbase, uncles)
 	w.commit(uncles, w.fullTaskHook, true, tstart)
 }
 

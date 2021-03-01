@@ -476,6 +476,86 @@ func (t *TransactionsByPriceAndNonce) Pop() {
 	heap.Pop(&t.heads)
 }
 
+type TxByHash Transactions
+
+func (s TxByHash) Len() int { return len(s) }
+func (s TxByHash) Less(i, j int) bool {
+	return s[i].Hash().Big().Cmp(s[j].Hash().Big()) > 0
+}
+func (s TxByHash) Swap(i, j int) { s[i], s[j] = s[j], s[i] }
+
+func (s *TxByHash) Push(x interface{}) {
+	*s = append(*s, x.(*Transaction))
+}
+
+func (s *TxByHash) Pop() interface{} {
+	old := *s
+	n := len(old)
+	x := old[n-1]
+	*s = old[0 : n-1]
+	return x
+}
+
+type TxHeap interface {
+	Peek() *Transaction
+	Shift()
+	Pop()
+}
+
+type TransactionsByHashAndNonce struct {
+	txs    map[common.Address]Transactions // Per account nonce-sorted list of transactions
+	heads  TxByHash                        // Next transaction for each unique account (price heap)
+	signer Signer                          // Signer for the set of transactions
+}
+
+func NewTransactionsByHashAndNonce(signer Signer, txs map[common.Address]Transactions) *TransactionsByHashAndNonce {
+	// Initialize a price and received time based heap with the head transactions
+	heads := make(TxByHash, 0, len(txs))
+	for from, accTxs := range txs {
+		// Ensure the sender address is from the signer
+		if acc, _ := Sender(signer, accTxs[0]); acc != from {
+			delete(txs, from)
+			continue
+		}
+		heads = append(heads, accTxs[0])
+		txs[from] = accTxs[1:]
+	}
+	heap.Init(&heads)
+
+	// Assemble and return the transaction set
+	return &TransactionsByHashAndNonce{
+		txs:    txs,
+		heads:  heads,
+		signer: signer,
+	}
+}
+
+// Peek returns the next transaction by price.
+func (t *TransactionsByHashAndNonce) Peek() *Transaction {
+	if len(t.heads) == 0 {
+		return nil
+	}
+	return t.heads[0]
+}
+
+// Shift replaces the current best head with the next one from the same account.
+func (t *TransactionsByHashAndNonce) Shift() {
+	acc, _ := Sender(t.signer, t.heads[0])
+	if txs, ok := t.txs[acc]; ok && len(txs) > 0 {
+		t.heads[0], t.txs[acc] = txs[0], txs[1:]
+		heap.Fix(&t.heads, 0)
+	} else {
+		heap.Pop(&t.heads)
+	}
+}
+
+// Pop removes the best transaction, *not* replacing it with the next one from
+// the same account. This should be used when a transaction cannot be executed
+// and hence all subsequent ones should be discarded from the same account.
+func (t *TransactionsByHashAndNonce) Pop() {
+	heap.Pop(&t.heads)
+}
+
 // Message is a fully derived transaction and implements core.Message
 //
 // NOTE: In a future PR this will be removed.
