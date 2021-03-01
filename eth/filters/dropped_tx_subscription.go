@@ -15,11 +15,13 @@ type dropNotification struct {
 	TxHash common.Hash `json:"txhash"`
 	Reason string `json:"reason"`
 	Replacement string `json:"replacedby,omitempty"`
+	Peer interface{} `json:"peer,omitempty"`
 }
 
 type rejectNotification struct {
 	Tx *ethapi.RPCTransaction `json:"tx"`
 	Reason string `json:"reason"`
+	Peer interface{} `json:"peer,omitempty"`
 }
 
 // newRPCTransaction returns a transaction that will serialize to the RPC
@@ -72,7 +74,16 @@ func (api *PublicFilterAPI) DroppedTransactions(ctx context.Context) (*rpc.Subsc
 			select {
 			case d := <-dropped:
 				for _, tx := range d.Txs {
-					notifier.Notify(rpcSub.ID, &dropNotification{TxHash: tx.Hash(), Reason: d.Reason, Replacement: replacementHashString(d.Replacement) })
+					notification := &dropNotification{
+						TxHash: tx.Hash(),
+						Reason: d.Reason,
+						Replacement: replacementHashString(d.Replacement),
+					}
+					if d.Replacement != (common.Hash{}) {
+						peerid, _ := txPeerMap.Get(tx.Hash())
+						notification.Peer, _ = peerIDMap.Get(peerid)
+					}
+					notifier.Notify(rpcSub.ID, notification)
 				}
 			case <-rpcSub.Err():
 				droppedSub.Unsubscribe()
@@ -107,7 +118,13 @@ func (api *PublicFilterAPI) RejectedTransactions(ctx context.Context) (*rpc.Subs
 				if d.Reason != nil {
 					reason = d.Reason.Error()
 				}
-				notifier.Notify(rpcSub.ID, &rejectNotification{Tx: newRPCPendingTransaction(d.Tx), Reason: reason})
+				peerid, _ := txPeerMap.Get(d.Tx.Hash())
+				peer, _ := peerIDMap.Get(peerid)
+				notifier.Notify(rpcSub.ID, &rejectNotification{
+					Tx: newRPCPendingTransaction(d.Tx),
+					Reason: reason,
+					Peer: peer,
+				})
 			case <-rpcSub.Err():
 				rejectedSub.Unsubscribe()
 				return
