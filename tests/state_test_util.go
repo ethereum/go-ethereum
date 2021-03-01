@@ -267,7 +267,13 @@ func MakePreState(db ethdb.Database, accounts core.GenesisAlloc, snapshotter boo
 
 	var snaps *snapshot.Tree
 	if snapshotter {
-		snaps, _ = snapshot.New(db, sdb.TrieDB(), 1, root, false, true, false)
+		snapconfig := snapshot.Config{
+			CacheSize:  1,
+			Recovery:   false,
+			NoBuild:    false,
+			AsyncBuild: false,
+		}
+		snaps, _ = snapshot.New(snapconfig, db, sdb.TrieDB(), root)
 	}
 	statedb, _ = state.New(root, sdb, snaps)
 	return snaps, statedb

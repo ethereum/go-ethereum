@@ -135,7 +135,8 @@ type CacheConfig struct {
 	SnapshotLimit       int           // Memory allowance (MB) to use for caching snapshot entries in memory
 	Preimages           bool          // Whether to store preimage of trie key to the disk
 
-	SnapshotWait bool // Wait for snapshot construction on startup. TODO(karalabe): This is a dirty hack for testing, nuke it
+	SnapshotNoBuild bool // Whether the background generation is allowed
+	SnapshotWait    bool // Wait for snapshot construction on startup. TODO(karalabe): This is a dirty hack for testing, nuke it
 }
 
 // defaultCacheConfig are the default caching values if none are specified by the
@@ -399,7 +400,13 @@ func NewBlockChain(db ethdb.Database, cacheConfig *CacheConfig, genesis *Genesis
 			log.Warn("Enabling snapshot recovery", "chainhead", head.NumberU64(), "diskbase", *layer)
 			recover = true
 		}
-		bc.snaps, _ = snapshot.New(bc.db, bc.stateCache.TrieDB(), bc.cacheConfig.SnapshotLimit, head.Root(), !bc.cacheConfig.SnapshotWait, true, recover)
+		snapconfig := snapshot.Config{
+			CacheSize:  bc.cacheConfig.SnapshotLimit,
+			Recovery:   recover,
+			NoBuild:    bc.cacheConfig.SnapshotNoBuild,
+			AsyncBuild: !bc.cacheConfig.SnapshotWait,
+		}
+		bc.snaps, _ = snapshot.New(snapconfig, bc.db, bc.stateCache.TrieDB(), head.Root())
 	}
 
 	// Start future block processor.
