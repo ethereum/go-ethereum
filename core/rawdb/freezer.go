@@ -75,6 +75,7 @@ type freezer struct {
 
 	tables       map[string]*freezerTable // Data tables for storing everything
 	instanceLock fileutil.Releaser        // File-system lock to prevent double opens
+	ancientLock  sync.Mutex               // ancient lookup lock
 
 	trigger chan chan struct{} // Manual blocking freeze trigger, test determinism
 
@@ -165,6 +166,9 @@ func (f *freezer) HasAncient(kind string, number uint64) (bool, error) {
 
 // Ancient retrieves an ancient binary blob from the append-only immutable files.
 func (f *freezer) Ancient(kind string, number uint64) ([]byte, error) {
+	f.ancientLock.Lock()
+	defer f.ancientLock.Unlock()
+
 	if table := f.tables[kind]; table != nil {
 		return table.Retrieve(number)
 	}
