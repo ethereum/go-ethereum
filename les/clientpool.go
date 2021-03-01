@@ -24,11 +24,13 @@ import (
 	"github.com/ethereum/go-ethereum/common/mclock"
 	"github.com/ethereum/go-ethereum/ethdb"
 	"github.com/ethereum/go-ethereum/les/utils"
+	"github.com/ethereum/go-ethereum/les/vflux"
 	vfs "github.com/ethereum/go-ethereum/les/vflux/server"
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/p2p/enode"
 	"github.com/ethereum/go-ethereum/p2p/enr"
 	"github.com/ethereum/go-ethereum/p2p/nodestate"
+	"github.com/ethereum/go-ethereum/rlp"
 )
 
 const (
@@ -381,4 +383,57 @@ func (f *clientPool) forClients(ids []enode.ID, cb func(client *clientInfo)) {
 			}
 		}
 	}
+}
+
+// serveCapQuery serves a vflux capacity query. It receives multiple token amount values
+// and a bias time value. For each given token amount it calculates the maximum achievable
+// capacity in case the amount is added to the balance.
+func (f *clientPool) serveCapQuery(id enode.ID, freeID string, data []byte) []byte {
+	var req vflux.CapacityQueryReq
+	if rlp.DecodeBytes(data, &req) != nil {
+		return nil
+	}
+	if l := len(req.AddTokens); l == 0 || l > vflux.CapacityQueryMaxLen {
+		return nil
+	}
+	node := f.ns.GetNode(id)
+	if node == nil {
+		node = enode.SignNull(&enr.Record{}, id)
+	}
+	c, _ := f.ns.GetField(node, clientInfoField).(*clientInfo)
+	if c == nil {
+		c = &clientInfo{node: node}
+		f.ns.SetField(node, clientInfoField, c)
+		f.ns.SetField(node, connAddressField, freeID)
+		defer func() {
+			f.ns.SetField(node, connAddressField, nil)
+			f.ns.SetField(node, clientInfoField, nil)
+		}()
+		if c.balance, _ = f.ns.GetField(node, f.BalanceField).(*vfs.NodeBalance); c.balance == nil {
+			log.Error("BalanceField is missing", "node", node.ID())
+			return nil
+		}
+	}
+	// use vfs.CapacityCurve to answer request for multiple newly bought token amounts
+	curve := f.pp.GetCapacityCurve().Exclude(id)
+	result := make(vflux.CapacityQueryReply, len(req.AddTokens))
+	bias := time.Second * time.Duration(req.Bias)
+	if f.connectedBias > bias {
+		bias = f.connectedBias
+	}
+	pb, _ := c.balance.GetBalance()
+	for i, addTokens := range req.AddTokens {
+		add := addTokens.Int64()
+		result[i] = curve.MaxCapacity(func(capacity uint64) int64 {
+			return c.balance.EstimatePriority(capacity, add, 0, bias, false) / int64(capacity)
+		})
+		if add <= 0 && uint64(-add) >= pb && result[i] > f.minCap {
+			result[i] = f.minCap
+		}
+		if result[i] < f.minCap {
+			result[i] = 0
+		}
+	}
+	reply, _ := rlp.EncodeToBytes(&result)
+	return reply
 }

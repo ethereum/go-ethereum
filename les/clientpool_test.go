@@ -508,8 +508,10 @@ func TestNegativeBalanceCalculation(t *testing.T) {
 	for i := 0; i < 10; i++ {
 		pool.disconnect(newPoolTestPeer(i, nil))
 		_, nb := getBalance(pool, newPoolTestPeer(i, nil))
-		if checkDiff(nb, uint64(time.Minute)/1000) {
-			t.Fatalf("Negative balance mismatch, want %v, got %v", uint64(time.Minute)/1000, nb)
+		exp := uint64(time.Minute) / 1000
+		exp -= exp / 120 // correct for negative balance expiration
+		if checkDiff(nb, exp) {
+			t.Fatalf("Negative balance mismatch, want %v, got %v", exp, nb)
 		}
 	}
 }

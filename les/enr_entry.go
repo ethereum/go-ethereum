@@ -27,7 +27,8 @@ import (
 // lesEntry is the "les" ENR entry. This is set for LES servers only.
 type lesEntry struct {
 	// Ignore additional fields (for forward compatibility).
-	_ []rlp.RawValue `rlp:"tail"`
+	VfxVersion uint
+	Rest       []rlp.RawValue `rlp:"tail"`
 }
 
 func (lesEntry) ENRKey() string { return "les" }

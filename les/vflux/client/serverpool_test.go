@@ -56,6 +56,7 @@ type ServerPoolTest struct {
 	preNeg, preNegFail   bool
 	vt                   *ValueTracker
 	sp                   *ServerPool
+	spi                  enode.Iterator
 	input                enode.Iterator
 	testNodes            []spTestNode
 	trusted              []string
@@ -148,7 +149,7 @@ func (s *ServerPoolTest) start() {
 		requestList[i] = RequestInfo{Name: "testreq" + strconv.Itoa(i), InitAmount: 1, InitValue: 1}
 	}
 
-	s.sp, _ = NewServerPool(s.db, []byte("sp:"), 0, testQuery, s.clock, s.trusted, requestList)
+	s.sp, s.spi = NewServerPool(s.db, []byte("sp:"), 0, testQuery, s.clock, s.trusted, requestList)
 	s.sp.AddSource(s.input)
 	s.sp.validSchemes = enode.ValidSchemesForTesting
 	s.sp.unixTime = func() int64 { return int64(s.clock.Now()) / int64(time.Second) }
@@ -176,6 +177,7 @@ func (s *ServerPoolTest) start() {
 func (s *ServerPoolTest) stop() {
 	close(s.quit)
 	s.sp.Stop()
+	s.spi.Close()
 	for i := range s.testNodes {
 		n := &s.testNodes[i]
 		if n.connected {
@@ -208,9 +210,9 @@ func (s *ServerPoolTest) run() {
 		if s.conn < spTestTarget {
 			s.dialCount++
 			s.beginWait()
-			s.sp.dialIterator.Next()
+			s.spi.Next()
 			s.endWait()
-			dial := s.sp.dialIterator.Node()
+			dial := s.spi.Node()
 			id := dial.ID()
 			idx := testNodeIndex(id)
 			n := &s.testNodes[idx]

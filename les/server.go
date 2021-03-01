@@ -26,6 +26,7 @@ import (
 	"github.com/ethereum/go-ethereum/eth/ethconfig"
 	"github.com/ethereum/go-ethereum/ethdb"
 	"github.com/ethereum/go-ethereum/les/flowcontrol"
+	"github.com/ethereum/go-ethereum/les/vflux"
 	vfs "github.com/ethereum/go-ethereum/les/vflux/server"
 	"github.com/ethereum/go-ethereum/light"
 	"github.com/ethereum/go-ethereum/log"
@@ -68,6 +69,7 @@ type LesServer struct {
 	archiveMode bool // Flag whether the ethereum node runs in archive mode.
 	handler     *serverHandler
 	broadcaster *broadcaster
+	vfluxServer *vfs.Server
 	privateKey  *ecdsa.PrivateKey
 
 	// Flow control and capacity management
@@ -112,12 +114,14 @@ func NewLesServer(node *node.Node, e ethBackend, config *ethconfig.Config) (*Les
 		ns:           ns,
 		archiveMode:  e.ArchiveMode(),
 		broadcaster:  newBroadcaster(ns),
+		vfluxServer:  vfs.NewServer(time.Millisecond * 10),
 		fcManager:    flowcontrol.NewClientManager(nil, &mclock.System{}),
 		servingQueue: newServingQueue(int64(time.Millisecond*10), float64(config.LightServ)/100),
 		threadsBusy:  config.LightServ/100 + 1,
 		threadsIdle:  threads,
 		p2pSrv:       node.Server(),
 	}
+	srv.vfluxServer.Register(srv)
 	issync := e.Synced
 	if config.LightNoSyncServe {
 		issync = func() bool { return true }
@@ -201,7 +205,9 @@ func (s *LesServer) Protocols() []p2p.Protocol {
 	}, nil)
 	// Add "les" ENR entries.
 	for i := range ps {
-		ps[i].Attributes = []enr.Entry{&lesEntry{}}
+		ps[i].Attributes = []enr.Entry{&lesEntry{
+			VfxVersion: 1,
+		}}
 	}
 	return ps
 }
@@ -211,10 +217,11 @@ func (s *LesServer) Start() error {
 	s.privateKey = s.p2pSrv.PrivateKey
 	s.broadcaster.setSignerKey(s.privateKey)
 	s.handler.start()
-
 	s.wg.Add(1)
 	go s.capacityManagement()
-
+	if s.p2pSrv.DiscV5 != nil {
+		s.p2pSrv.DiscV5.RegisterTalkHandler("vfx", s.vfluxServer.ServeEncoded)
+	}
 	return nil
 }
 
@@ -228,6 +235,7 @@ func (s *LesServer) Stop() error {
 	s.costTracker.stop()
 	s.handler.stop()
 	s.servingQueue.stop()
+	s.vfluxServer.Stop()
 
 	// Note, bloom trie indexer is closed by parent bloombits indexer.
 	s.chtIndexer.Close()
@@ -309,5 +317,20 @@ func (s *LesServer) getClient(id enode.ID) *clientPeer {
 func (s *LesServer) dropClient(id enode.ID) {
 	if p := s.getClient(id); p != nil {
 		p.Peer.Disconnect(p2p.DiscRequested)
+	}
+}
+
+// ServiceInfo implements vfs.Service
+func (s *LesServer) ServiceInfo() (string, string) {
+	return "les", "Ethereum light client service"
+}
+
+// Handle implements vfs.Service
+func (s *LesServer) Handle(id enode.ID, address string, name string, data []byte) []byte {
+	switch name {
+	case vflux.CapacityQueryName:
+		return s.clientPool.serveCapQuery(id, address, data)
+	default:
+		return nil
 	}
 }
