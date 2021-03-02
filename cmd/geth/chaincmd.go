@@ -191,7 +191,7 @@ func initGenesis(ctx *cli.Context) error {
 	defer stack.Close()
 
 	for _, name := range []string{"chaindata", "lightchaindata"} {
-		chaindb, err := stack.OpenDatabase(name, 0, 0, "")
+		chaindb, err := stack.OpenDatabase(name, 0, 0, "", false)
 		if err != nil {
 			utils.Fatalf("Failed to open database: %v", err)
 		}
@@ -340,7 +340,7 @@ func importPreimages(ctx *cli.Context) error {
 	stack, _ := makeConfigNode(ctx)
 	defer stack.Close()
 
-	db := utils.MakeChainDatabase(ctx, stack)
+	db := utils.MakeChainDatabase(ctx, stack, false)
 	start := time.Now()
 
 	if err := utils.ImportPreimages(db, ctx.Args().First()); err != nil {
@@ -359,7 +359,7 @@ func exportPreimages(ctx *cli.Context) error {
 	stack, _ := makeConfigNode(ctx)
 	defer stack.Close()
 
-	db := utils.MakeChainDatabase(ctx, stack)
+	db := utils.MakeChainDatabase(ctx, stack, true)
 	start := time.Now()
 
 	if err := utils.ExportPreimages(db, ctx.Args().First()); err != nil {
