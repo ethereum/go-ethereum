@@ -76,7 +76,7 @@ Remove blockchain and state databases`,
 		Description: `This commands iterates the entire database. If the optional 'prefix' and 'start' arguments are provided, then the iteration is limited to the given subset of data.`,
 	}
 	dbStatCmd = cli.Command{
-		Action: dbStats,
+		Action: utils.MigrateFlags(dbStats),
 		Name:   "stats",
 		Usage:  "Print leveldb statistics",
 		Flags: []cli.Flag{
@@ -90,7 +90,7 @@ Remove blockchain and state databases`,
 		},
 	}
 	dbCompactCmd = cli.Command{
-		Action: dbCompact,
+		Action: utils.MigrateFlags(dbCompact),
 		Name:   "compact",
 		Usage:  "Compact leveldb database. WARNING: May take a very long time",
 		Flags: []cli.Flag{
@@ -109,7 +109,7 @@ WARNING: This operation may take a very long time to finish, and may cause datab
 corruption if it is aborted during execution'!`,
 	}
 	dbGetCmd = cli.Command{
-		Action:    dbGet,
+		Action:    utils.MigrateFlags(dbGet),
 		Name:      "get",
 		Usage:     "Show the value of a database key",
 		ArgsUsage: "<hex-encoded key>",
@@ -125,7 +125,7 @@ corruption if it is aborted during execution'!`,
 		Description: "This command looks up the specified database key from the database.",
 	}
 	dbDeleteCmd = cli.Command{
-		Action:    dbDelete,
+		Action:    utils.MigrateFlags(dbDelete),
 		Name:      "delete",
 		Usage:     "Delete a database key (WARNING: may corrupt your database)",
 		ArgsUsage: "<hex-encoded key>",
@@ -142,7 +142,7 @@ corruption if it is aborted during execution'!`,
 WARNING: This is a low-level operation which may cause database corruption!`,
 	}
 	dbPutCmd = cli.Command{
-		Action:    dbPut,
+		Action:    utils.MigrateFlags(dbPut),
 		Name:      "put",
 		Usage:     "Set the value of a database key (WARNING: may corrupt your database)",
 		ArgsUsage: "<hex-encoded key> <hex-encoded value>",
