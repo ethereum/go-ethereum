@@ -8,7 +8,7 @@ import (
 	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/ethereum/go-ethereum/internal/ethapi"
 	"github.com/ethereum/go-ethereum/rpc"
-
+	lru "github.com/hashicorp/golang-lru"
 )
 
 type dropNotification struct {
@@ -59,6 +59,8 @@ func replacementHashString(h common.Hash) string {
 
 // DroppedTransactions send a notification each time a transaction is dropped from the mempool
 func (api *PublicFilterAPI) DroppedTransactions(ctx context.Context) (*rpc.Subscription, error) {
+	if txPeerMap == nil { txPeerMap, _ = lru.New(100000) }
+	if peerIDMap == nil { peerIDMap, _ = lru.New(1000) }
 	notifier, supported := rpc.NotifierFromContext(ctx)
 	if !supported {
 		return &rpc.Subscription{}, rpc.ErrNotificationsUnsupported
@@ -100,6 +102,8 @@ func (api *PublicFilterAPI) DroppedTransactions(ctx context.Context) (*rpc.Subsc
 
 // RejectedTransactions send a notification each time a transaction is rejected from entering the mempool
 func (api *PublicFilterAPI) RejectedTransactions(ctx context.Context) (*rpc.Subscription, error) {
+	if txPeerMap == nil { txPeerMap, _ = lru.New(100000) }
+	if peerIDMap == nil { peerIDMap, _ = lru.New(1000) }
 	notifier, supported := rpc.NotifierFromContext(ctx)
 	if !supported {
 		return &rpc.Subscription{}, rpc.ErrNotificationsUnsupported

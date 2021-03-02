@@ -155,8 +155,6 @@ func (api *PublicFilterAPI) NewPendingTransactionsWithPeers(ctx context.Context)
 		for {
 			select {
 			case hashes := <-txHashes:
-				// To keep the original behaviour, send a single tx hash in one notification.
-				// TODO(rjl493456442) Send a batch of tx hashes in one notification
 				for _, h := range hashes {
 					peerid, _ := txPeerMap.Get(h)
 					peer, _ := peerIDMap.Get(peerid)
