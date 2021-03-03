@@ -186,13 +186,6 @@ var (
 		utils.AllowUnprotectedTxs,
 	}
 
-	whisperFlags = []cli.Flag{
-		utils.WhisperEnabledFlag,
-		utils.WhisperMaxMessageSizeFlag,
-		utils.WhisperMinPOWFlag,
-		utils.WhisperRestrictConnectionBetweenLightClientsFlag,
-	}
-
 	metricsFlags = []cli.Flag{
 		utils.MetricsEnabledFlag,
 		utils.MetricsEnabledExpensiveFlag,
@@ -251,7 +244,6 @@ func init() {
 	app.Flags = append(app.Flags, rpcFlags...)
 	app.Flags = append(app.Flags, consoleFlags...)
 	app.Flags = append(app.Flags, debug.Flags...)
-	app.Flags = append(app.Flags, whisperFlags...)
 	app.Flags = append(app.Flags, metricsFlags...)
 
 	app.Before = func(ctx *cli.Context) error {

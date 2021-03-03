@@ -217,10 +217,6 @@ var AppHelpFlagGroups = []flags.FlagGroup{
 		Flags: metricsFlags,
 	},
 	{
-		Name:  "WHISPER (deprecated)",
-		Flags: whisperFlags,
-	},
-	{
 		Name: "ALIASED (deprecated)",
 		Flags: []cli.Flag{
 			utils.NoUSBFlag,
