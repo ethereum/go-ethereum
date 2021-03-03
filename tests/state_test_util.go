@@ -95,13 +95,14 @@ type stEnvMarshaling struct {
 //go:generate gencodec -type stTransaction -field-override stTransactionMarshaling -out gen_sttransaction.go
 
 type stTransaction struct {
-	GasPrice   *big.Int `json:"gasPrice"`
-	Nonce      uint64   `json:"nonce"`
-	To         string   `json:"to"`
-	Data       []string `json:"data"`
-	GasLimit   []uint64 `json:"gasLimit"`
-	Value      []string `json:"value"`
-	PrivateKey []byte   `json:"secretKey"`
+	GasPrice    *big.Int            `json:"gasPrice"`
+	Nonce       uint64              `json:"nonce"`
+	To          string              `json:"to"`
+	Data        []string            `json:"data"`
+	AccessLists []*types.AccessList `json:"accessLists,omitempty"`
+	GasLimit    []uint64            `json:"gasLimit"`
+	Value       []string            `json:"value"`
+	PrivateKey  []byte              `json:"secretKey"`
 }
 
 type stTransactionMarshaling struct {
@@ -292,8 +293,11 @@ func (tx *stTransaction) toMessage(ps stPostState) (core.Message, error) {
 	if err != nil {
 		return nil, fmt.Errorf("invalid tx data %q", dataHex)
 	}
-
-	msg := types.NewMessage(from, to, tx.Nonce, value, gasLimit, tx.GasPrice, data, nil, true)
+	var accessList types.AccessList
+	if tx.AccessLists != nil && tx.AccessLists[ps.Indexes.Data] != nil {
+		accessList = *tx.AccessLists[ps.Indexes.Data]
+	}
+	msg := types.NewMessage(from, to, tx.Nonce, value, gasLimit, tx.GasPrice, data, accessList, true)
 	return msg, nil
 }
 
