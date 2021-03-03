@@ -107,7 +107,7 @@ func (s *ServerPoolTest) addTrusted(i int) {
 }
 
 func (s *ServerPoolTest) start() {
-	var testQuery queryFunc
+	var testQuery QueryFunc
 	if s.preNeg {
 		testQuery = func(node *enode.Node) int {
 			idx := testNodeIndex(node.ID())
