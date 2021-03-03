@@ -91,7 +91,7 @@ type nodeHistoryEnc struct {
 // queryFunc sends a pre-negotiation query and blocks until a response arrives or timeout occurs.
 // It returns 1 if the remote node has confirmed that connection is possible, 0 if not
 // possible and -1 if no response arrived (timeout).
-type queryFunc func(*enode.Node) int
+type QueryFunc func(*enode.Node) int
 
 var (
 	clientSetup        = &nodestate.Setup{Version: 2}
@@ -150,7 +150,7 @@ var (
 )
 
 // NewServerPool creates a new server pool
-func NewServerPool(db ethdb.KeyValueStore, dbKey []byte, mixTimeout time.Duration, query queryFunc, clock mclock.Clock, trustedURLs []string, requestList []RequestInfo) (*ServerPool, enode.Iterator) {
+func NewServerPool(db ethdb.KeyValueStore, dbKey []byte, mixTimeout time.Duration, query QueryFunc, clock mclock.Clock, trustedURLs []string, requestList []RequestInfo) (*ServerPool, enode.Iterator) {
 	s := &ServerPool{
 		db:           db,
 		clock:        clock,
@@ -246,7 +246,7 @@ func (s *ServerPool) AddSource(source enode.Iterator) {
 // addPreNegFilter installs a node filter mechanism that performs a pre-negotiation query.
 // Nodes that are filtered out and does not appear on the output iterator are put back
 // into redialWait state.
-func (s *ServerPool) addPreNegFilter(input enode.Iterator, query queryFunc) enode.Iterator {
+func (s *ServerPool) addPreNegFilter(input enode.Iterator, query QueryFunc) enode.Iterator {
 	s.fillSet = NewFillSet(s.ns, input, sfQueried)
 	s.ns.SubscribeState(sfQueried, func(n *enode.Node, oldState, newState nodestate.Flags) {
 		if newState.Equals(sfQueried) {

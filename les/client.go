@@ -115,7 +115,11 @@ func New(stack *node.Node, config *ethconfig.Config) (*LightEthereum, error) {
 		p2pConfig:      &stack.Config().P2P,
 	}
 
-	leth.serverPool, leth.serverPoolIterator = vfc.NewServerPool(lesDb, []byte("serverpool:"), time.Second, leth.prenegQuery, &mclock.System{}, config.UltraLightServers, requestList)
+	var prenegQuery vfc.QueryFunc
+	if leth.p2pServer.DiscV5 != nil {
+		prenegQuery = leth.prenegQuery
+	}
+	leth.serverPool, leth.serverPoolIterator = vfc.NewServerPool(lesDb, []byte("serverpool:"), time.Second, prenegQuery, &mclock.System{}, config.UltraLightServers, requestList)
 	leth.serverPool.AddMetrics(suggestedTimeoutGauge, totalValueGauge, serverSelectableGauge, serverConnectedGauge, sessionValueMeter, serverDialedMeter)
 
 	leth.retriever = newRetrieveManager(peers, leth.reqDist, leth.serverPool.GetTimeout)
@@ -194,6 +198,9 @@ func New(stack *node.Node, config *ethconfig.Config) (*LightEthereum, error) {
 
 // VfluxRequest sends a batch of requests to the given node through discv5 UDP TalkRequest and returns the responses
 func (s *LightEthereum) VfluxRequest(n *enode.Node, reqs vflux.Requests) vflux.Replies {
+	if s.p2pServer.DiscV5 == nil {
+		return nil
+	}
 	reqsEnc, _ := rlp.EncodeToBytes(&reqs)
 	repliesEnc, _ := s.p2pServer.DiscV5.TalkRequest(s.serverPool.DialNode(n), "vfx", reqsEnc)
 	var replies vflux.Replies
@@ -208,6 +215,9 @@ func (s *LightEthereum) VfluxRequest(n *enode.Node, reqs vflux.Requests) vflux.R
 func (s *LightEthereum) vfxVersion(n *enode.Node) uint {
 	if n.Seq() == 0 {
 		var err error
+		if s.p2pServer.DiscV5 == nil {
+			return 0
+		}
 		if n, err = s.p2pServer.DiscV5.RequestENR(n); n != nil && err == nil && n.Seq() != 0 {
 			s.serverPool.Persist(n)
 		} else {
