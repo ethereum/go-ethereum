@@ -115,7 +115,6 @@ var (
 	}
 
 	// A debian package is created for all executables listed here.
-
 	debEthereum = debPackage{
 		Name:        "ethereum",
 		Version:     params.Version,
@@ -137,11 +136,12 @@ var (
 	// Note: disco is unsupported because it was officially deprecated on Launchpad.
 	// Note: eoan is unsupported because it was officially deprecated on Launchpad.
 	debDistroGoBoots = map[string]string{
-		"trusty": "golang-1.11",
-		"xenial": "golang-go",
-		"bionic": "golang-go",
-		"focal":  "golang-go",
-		"groovy": "golang-go",
+		"trusty":  "golang-1.11",
+		"xenial":  "golang-go",
+		"bionic":  "golang-go",
+		"focal":   "golang-go",
+		"groovy":  "golang-go",
+		"hirsute": "golang-go",
 	}
 
 	debGoBootPaths = map[string]string{
