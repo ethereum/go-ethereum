@@ -1073,10 +1073,10 @@ func (s *StateDB) CurrentAccessList() *types.AccessList {
 	acl := make([]types.AccessTuple, 0, len(list.addresses))
 	for addr, idx := range list.addresses {
 		var tuple types.AccessTuple
-		tuple.Address = &addr
-		keys := make([]*common.Hash, 0, len(list.slots[idx]))
-		for key, _ := range list.slots[idx] {
-			keys = append(keys, &key)
+		tuple.Address = addr
+		keys := make([]common.Hash, 0, len(list.slots[idx]))
+		for key := range list.slots[idx] {
+			keys = append(keys, key)
 		}
 		tuple.StorageKeys = keys
 		acl = append(acl, tuple)
@@ -1090,11 +1090,11 @@ func (s *StateDB) AccessList() *types.AccessList {
 	acl := make([]types.AccessTuple, 0, len(s.journal.dirties))
 	for addr := range s.journal.dirties {
 		var tuple types.AccessTuple
-		tuple.Address = &addr
+		tuple.Address = addr
 		obj := s.stateObjects[addr]
-		keys := make([]*common.Hash, 0, len(obj.dirtyStorage))
+		keys := make([]common.Hash, 0, len(obj.dirtyStorage))
 		for slots := range obj.dirtyStorage {
-			keys = append(keys, &slots)
+			keys = append(keys, slots)
 		}
 		tuple.StorageKeys = keys
 		acl = append(acl, tuple)
