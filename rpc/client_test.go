@@ -427,7 +427,7 @@ func TestClientNotificationStorm(t *testing.T) {
 	}
 
 	doTest(8000, false)
-	doTest(23000, true)
+	doTest(24000, true)
 }
 
 func TestClientSetHeader(t *testing.T) {

@@ -244,11 +244,13 @@ func TestStartRPC(t *testing.T) {
 	}
 
 	for _, test := range tests {
+		test := test
 		t.Run(test.name, func(t *testing.T) {
+			t.Parallel()
+
 			// Apply some sane defaults.
 			config := test.cfg
 			// config.Logger = testlog.Logger(t, log.LvlDebug)
-			config.NoUSB = true
 			config.P2P.NoDiscovery = true
 
 			// Create Node.

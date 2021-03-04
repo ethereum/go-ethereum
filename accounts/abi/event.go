@@ -32,7 +32,7 @@ type Event struct {
 	// the raw name and a suffix will be added in the case of a event overload.
 	//
 	// e.g.
-	// There are two events have same name:
+	// These are two events that have the same name:
 	// * foo(int,int)
 	// * foo(uint,uint)
 	// The event name of the first one wll be resolved as foo while the second one

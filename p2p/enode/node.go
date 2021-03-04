@@ -23,7 +23,6 @@ import (
 	"errors"
 	"fmt"
 	"math/bits"
-	"math/rand"
 	"net"
 	"strings"
 
@@ -277,24 +276,4 @@ func LogDist(a, b ID) int {
 		}
 	}
 	return len(a)*8 - lz
-}
-
-// RandomID returns a random ID b such that logdist(a, b) == n.
-func RandomID(a ID, n int) (b ID) {
-	if n == 0 {
-		return a
-	}
-	// flip bit at position n, fill the rest with random bits
-	b = a
-	pos := len(a) - n/8 - 1
-	bit := byte(0x01) << (byte(n%8) - 1)
-	if bit == 0 {
-		pos++
-		bit = 0x80
-	}
-	b[pos] = a[pos]&^bit | ^a[pos]&bit // TODO: randomize end bits
-	for i := pos + 1; i < len(a); i++ {
-		b[i] = byte(rand.Intn(255))
-	}
-	return b
 }

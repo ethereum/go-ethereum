@@ -952,7 +952,13 @@ func (s *Stream) readFull(buf []byte) (err error) {
 		n += nn
 	}
 	if err == io.EOF {
-		err = io.ErrUnexpectedEOF
+		if n < len(buf) {
+			err = io.ErrUnexpectedEOF
+		} else {
+			// Readers are allowed to give EOF even though the read succeeded.
+			// In such cases, we discard the EOF, like io.ReadFull() does.
+			err = nil
+		}
 	}
 	return err
 }

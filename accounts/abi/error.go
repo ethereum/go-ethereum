@@ -52,7 +52,7 @@ func sliceTypeCheck(t Type, val reflect.Value) error {
 		}
 	}
 
-	if elemKind := val.Type().Elem().Kind(); elemKind != t.Elem.GetType().Kind() {
+	if val.Type().Elem().Kind() != t.Elem.GetType().Kind() {
 		return typeErr(formatSliceString(t.Elem.GetType().Kind(), t.Size), val.Type())
 	}
 	return nil
