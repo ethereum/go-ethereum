@@ -564,16 +564,17 @@ func doDebianSource(cmdline []string) {
 			build.MustRun(debuild)
 
 			var (
-				basename = fmt.Sprintf("%s_%s", meta.Name(), meta.VersionString())
-				source   = filepath.Join(*workdir, basename+".tar.xz")
-				dsc      = filepath.Join(*workdir, basename+".dsc")
-				changes  = filepath.Join(*workdir, basename+"_source.changes")
+				basename  = fmt.Sprintf("%s_%s", meta.Name(), meta.VersionString())
+				source    = filepath.Join(*workdir, basename+".tar.xz")
+				dsc       = filepath.Join(*workdir, basename+".dsc")
+				changes   = filepath.Join(*workdir, basename+"_source.changes")
+				buildinfo = filepath.Join(*workdir, basename+"_source.buildinfo")
 			)
 			if *signer != "" {
 				build.MustRunCommand("debsign", changes)
 			}
 			if *upload != "" {
-				ppaUpload(*workdir, *upload, *sshUser, []string{source, dsc, changes})
+				ppaUpload(*workdir, *upload, *sshUser, []string{source, dsc, changes, buildinfo})
 			}
 		}
 	}
