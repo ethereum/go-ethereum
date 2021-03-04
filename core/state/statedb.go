@@ -1034,27 +1034,6 @@ func (s *StateDB) AddSlotToAccessList(addr common.Address, slot common.Hash) {
 	}
 }
 
-// UnprepareAccessList unprepares the access list of the statedb.
-// It reverts the preparation steps from EIP-2929
-// - Delete sender from access list (2929)
-// - Delete receiver from access list (2929)
-// - Delete precompiles from access list (2929)
-func (s *StateDB) UnprepareAccessList(sender common.Address, dst *common.Address, precompiles []common.Address) {
-	s.DeleteAddressFromAccessList(sender)
-	if dst != nil {
-		s.DeleteAddressFromAccessList(*dst)
-	}
-	for _, addr := range precompiles {
-		s.DeleteAddressFromAccessList(addr)
-	}
-}
-
-// DeleteAddressFromAccessList deletes the given address from the access list
-func (s *StateDB) DeleteAddressFromAccessList(addr common.Address) {
-	s.accessList.DeleteAddress(addr)
-	s.journal.append(accessListDeleteAccountChange{&addr})
-}
-
 // AddressInAccessList returns true if the given address is in the access list.
 func (s *StateDB) AddressInAccessList(addr common.Address) bool {
 	return s.accessList.ContainsAddress(addr)
@@ -1063,26 +1042,6 @@ func (s *StateDB) AddressInAccessList(addr common.Address) bool {
 // SlotInAccessList returns true if the given (address, slot)-tuple is in the access list.
 func (s *StateDB) SlotInAccessList(addr common.Address, slot common.Hash) (addressPresent bool, slotPresent bool) {
 	return s.accessList.Contains(addr, slot)
-}
-
-// CurrentAccessList returns the current access list for the StateDB.
-// If the precompiles, sender and receiver are to be removed from the access list,
-// a prior call to `UnprepareAccessList` is required.
-func (s *StateDB) CurrentAccessList() *types.AccessList {
-	list := s.accessList.Copy()
-	acl := make([]types.AccessTuple, 0, len(list.addresses))
-	for addr, idx := range list.addresses {
-		var tuple types.AccessTuple
-		tuple.Address = addr
-		keys := make([]common.Hash, 0, len(list.slots[idx]))
-		for key := range list.slots[idx] {
-			keys = append(keys, key)
-		}
-		tuple.StorageKeys = keys
-		acl = append(acl, tuple)
-	}
-	cast := types.AccessList(acl)
-	return &cast
 }
 
 // AccessList returns a list of dirty slots and addresses
