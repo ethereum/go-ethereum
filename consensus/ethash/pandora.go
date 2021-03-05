@@ -6,6 +6,7 @@ import (
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/ethereum/go-ethereum/core/types"
+	"github.com/ethereum/go-ethereum/rlp"
 	"math/big"
 	"time"
 )
@@ -31,7 +32,7 @@ type MinimalEpochConsensusInfo struct {
 // This is done only to have vanguard spec done in minimal codebase to exchange informations with pandora.
 // In this approach you could have multiple execution engines connected via urls []string
 // In this approach you are also compatible with any current toolsets for mining because you use already defined api
-func StartRemoteVanguard(executionEngine *Ethash, urls []string, noverify bool) *remoteSealer {
+func StartRemotePandora(executionEngine *Ethash, urls []string, noverify bool) *remoteSealer {
 	ctx, cancel := context.WithCancel(context.Background())
 	s := &remoteSealer{
 		ethash:       executionEngine,
@@ -133,21 +134,22 @@ func (pandora *Pandora) Loop() {
 //
 // The work package consists of 3 strings:
 //   result[0], 32 bytes hex encoded current block header pos-hash
-//   result[1], 32 bytes hex encoded receipt hash for transaction sealing
-//   result[2], 32 bytes hex encoded boundary condition ("target"), 2^256/difficulty
+//   result[1], 32 bytes hex encoded receipt hash for transaction proof
+//   result[2], hex encoded rlp block header
 //   result[3], hex encoded block number
 func (pandora *Pandora) makeWork(block *types.Block) {
-	s := pandora.sealer
+	sealer := pandora.sealer
+	rlpHeader, _ := rlp.EncodeToBytes(block.Header())
 
-	hash := s.ethash.SealHash(block.Header())
-	s.currentWork[0] = hash.Hex()
-	s.currentWork[1] = block.Header().ReceiptHash.Hex()
-	s.currentWork[2] = common.BytesToHash(new(big.Int).Div(two256, block.Difficulty()).Bytes()).Hex()
-	s.currentWork[3] = hexutil.EncodeBig(block.Number())
+	hash := sealer.ethash.SealHash(block.Header())
+	sealer.currentWork[0] = hash.Hex()
+	sealer.currentWork[1] = block.Header().ReceiptHash.Hex()
+	sealer.currentWork[2] = hexutil.Encode(rlpHeader)
+	sealer.currentWork[3] = hexutil.EncodeBig(block.Number())
 
 	// Trace the seal work fetched by remote sealer.
-	s.currentBlock = block
-	s.works[hash] = block
+	sealer.currentBlock = block
+	sealer.works[hash] = block
 
 	return
 }

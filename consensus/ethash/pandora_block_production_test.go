@@ -2,9 +2,11 @@ package ethash
 
 import (
 	"encoding/json"
+	"fmt"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/log"
+	"github.com/hashicorp/golang-lru/simplelru"
 	"github.com/stretchr/testify/assert"
 	"io/ioutil"
 	"math/big"
@@ -19,6 +21,11 @@ import (
 
 // Test RemoteSigner approach connected to each other
 func TestProducePandoraBlockViaRemoteSealer(t *testing.T) {
+	//TODO: debug, something wrong with LRU!
+	lruCache, err := simplelru.NewLRU(12, nil)
+	assert.Nil(t, err)
+
+	fmt.Printf("%d", lruCache.Len())
 	// Start a simple web server to capture notifications.
 	sink := make(chan [3]string)
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, req *http.Request) {
@@ -36,7 +43,7 @@ func TestProducePandoraBlockViaRemoteSealer(t *testing.T) {
 
 	ethash := Ethash{
 		config: Config{
-			PowMode: 0,
+			PowMode: 2,
 			Log:     log.Root(),
 		},
 		lock:      sync.Mutex{},
@@ -47,7 +54,7 @@ func TestProducePandoraBlockViaRemoteSealer(t *testing.T) {
 	}()
 	urls := make([]string, 0)
 	urls = append(urls, server.URL)
-	remoteSealer := startRemoteSealer(&ethash, urls, true)
+	remoteSealer := StartRemotePandora(&ethash, urls, true)
 	ethash.remote = remoteSealer
 
 	t.Run("Should discard invalid block", func(t *testing.T) {
@@ -58,14 +65,12 @@ func TestProducePandoraBlockViaRemoteSealer(t *testing.T) {
 			Root:        common.Hash{},
 			TxHash:      common.Hash{},
 			ReceiptHash: common.Hash{},
-			Bloom:       types.Bloom{},
-			Difficulty:  nil,
-			Number:      nil,
+			Difficulty:  big.NewInt(1),
+			Number:      big.NewInt(1),
 			GasLimit:    0,
 			GasUsed:     0,
-			Time:        0,
+			Time:        uint64(time.Now().UnixNano()),
 			Extra:       nil,
-			MixDigest:   common.Hash{},
 			Nonce:       types.BlockNonce{},
 		}
 		block := types.NewBlockWithHeader(header)
@@ -74,6 +79,7 @@ func TestProducePandoraBlockViaRemoteSealer(t *testing.T) {
 
 		select {
 		case work := <-sink:
+			fmt.Printf("%d", len(work[0]))
 			if want := ethash.SealHash(header).Hex(); work[0] != want {
 				t.Errorf("work packet hash mismatch: have %s, want %s", work[0], want)
 			}
