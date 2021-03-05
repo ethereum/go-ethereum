@@ -6,7 +6,6 @@ import (
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/log"
-	"github.com/hashicorp/golang-lru/simplelru"
 	"github.com/stretchr/testify/assert"
 	"io/ioutil"
 	"math/big"
@@ -21,11 +20,12 @@ import (
 
 // Test RemoteSigner approach connected to each other
 func TestProducePandoraBlockViaRemoteSealer(t *testing.T) {
-	//TODO: debug, something wrong with LRU!
-	lruCache, err := simplelru.NewLRU(12, nil)
-	assert.Nil(t, err)
+	// TODO: we must check if we are configuring it properly now, for now maxItems and func below are hardcoded
+	lruCache := newlru("cache", 12, newCache)
+	lruDataset := newlru("dataset", 12, newDataset)
+	fmt.Printf("lruCache len: %d", lruCache.cache.Len())
+	fmt.Printf("lruDataset len: %d", lruCache.cache.Len())
 
-	fmt.Printf("%d", lruCache.Len())
 	// Start a simple web server to capture notifications.
 	sink := make(chan [3]string)
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, req *http.Request) {
@@ -42,6 +42,8 @@ func TestProducePandoraBlockViaRemoteSealer(t *testing.T) {
 	defer server.Close()
 
 	ethash := Ethash{
+		caches:   lruCache,
+		datasets: lruDataset,
 		config: Config{
 			PowMode: 2,
 			Log:     log.Root(),
