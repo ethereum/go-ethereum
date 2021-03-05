@@ -21,6 +21,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"github.com/ethereum/go-ethereum/core/state/snapshot"
 	"math/big"
 	"math/rand"
 	"sync"
@@ -435,9 +436,8 @@ type Syncer struct {
 	bytecodeHealDups   uint64             // Number of bytecodes already processed
 	bytecodeHealNops   uint64             // Number of bytecodes not requested
 
-	startTime time.Time   // Time instance when snapshot sync started
-	startAcc  common.Hash // Account hash where sync started from
-	logTime   time.Time   // Time instance when status was last reported
+	startTime time.Time // Time instance when snapshot sync started
+	logTime   time.Time // Time instance when status was last reported
 
 	pend sync.WaitGroup // Tracks network request goroutines for graceful shutdown
 	lock sync.RWMutex   // Protects fields that can change outside of sync (peers, reqs, root)
@@ -1694,7 +1694,7 @@ func (s *Syncer) processBytecodeResponse(res *bytecodeResponse) {
 // processStorageResponse integrates an already validated storage response
 // into the account tasks.
 func (s *Syncer) processStorageResponse(res *storageResponse) {
-	// Switch the suntask from pending to idle
+	// Switch the subtask from pending to idle
 	if res.subTask != nil {
 		res.subTask.req = nil
 	}
@@ -1826,6 +1826,13 @@ func (s *Syncer) processStorageResponse(res *storageResponse) {
 			nodes++
 		}
 		it.Release()
+
+		// Persist the received storage segements. These flat state maybe
+		// outdated during the sync, but it can be fixed later during the
+		// snapshot generation.
+		for j := 0; j < len(res.hashes[i]); j++ {
+			rawdb.WriteStorageSnapshot(batch, account, res.hashes[i][j], res.slots[i][j])
+		}
 	}
 	if err := batch.Write(); err != nil {
 		log.Crit("Failed to persist storage slots", "err", err)
@@ -1983,6 +1990,16 @@ func (s *Syncer) forwardAccountTask(task *accountTask) {
 	}
 	it.Release()
 
+	// Persist the received account segements. These flat state maybe
+	// outdated during the sync, but it can be fixed later during the
+	// snapshot generation.
+	for i, hash := range res.hashes {
+		if task.needCode[i] || task.needState[i] {
+			break
+		}
+		blob := snapshot.SlimAccountRLP(res.accounts[i].Nonce, res.accounts[i].Balance, res.accounts[i].Root, res.accounts[i].CodeHash)
+		rawdb.WriteAccountSnapshot(batch, hash, blob)
+	}
 	if err := batch.Write(); err != nil {
 		log.Crit("Failed to persist accounts", "err", err)
 	}
