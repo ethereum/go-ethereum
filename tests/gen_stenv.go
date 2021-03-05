@@ -13,6 +13,7 @@ import (
 
 var _ = (*stEnvMarshaling)(nil)
 
+// MarshalJSON marshals as JSON.
 func (s stEnv) MarshalJSON() ([]byte, error) {
 	type stEnv struct {
 		Coinbase   common.UnprefixedAddress `json:"currentCoinbase"   gencodec:"required"`
@@ -30,6 +31,7 @@ func (s stEnv) MarshalJSON() ([]byte, error) {
 	return json.Marshal(&enc)
 }
 
+// UnmarshalJSON unmarshals from JSON.
 func (s *stEnv) UnmarshalJSON(input []byte) error {
 	type stEnv struct {
 		Coinbase   *common.UnprefixedAddress `json:"currentCoinbase"   gencodec:"required"`

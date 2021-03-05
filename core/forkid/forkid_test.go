@@ -60,7 +60,7 @@ func TestCreation(t *testing.T) {
 				{9069000, ID{Hash: checksumToBytes(0x879d6e30), Next: 9200000}}, // First Istanbul and first Muir Glacier block
 				{9199999, ID{Hash: checksumToBytes(0x879d6e30), Next: 9200000}}, // Last Istanbul and first Muir Glacier block
 				{9200000, ID{Hash: checksumToBytes(0xe029e991), Next: 0}},       // First Muir Glacier block
-				{10000000, ID{Hash: checksumToBytes(0xe029e991), Next: 0}},      // Future Muir Glacier block
+				{12243999, ID{Hash: checksumToBytes(0xe029e991), Next: 0}},      // Future Muir Glacier block
 			},
 		},
 		// Ropsten test cases
@@ -81,7 +81,7 @@ func TestCreation(t *testing.T) {
 				{6485846, ID{Hash: checksumToBytes(0x4bc66396), Next: 7117117}}, // First Istanbul block
 				{7117116, ID{Hash: checksumToBytes(0x4bc66396), Next: 7117117}}, // Last Istanbul block
 				{7117117, ID{Hash: checksumToBytes(0x6727ef90), Next: 0}},       // First Muir Glacier block
-				{7500000, ID{Hash: checksumToBytes(0x6727ef90), Next: 0}},       // Future
+				{9812188, ID{Hash: checksumToBytes(0x6727ef90), Next: 0}},       // Future Muir Glacier block
 			},
 		},
 		// Rinkeby test cases
@@ -101,7 +101,7 @@ func TestCreation(t *testing.T) {
 				{4321234, ID{Hash: checksumToBytes(0xafec6b27), Next: 5435345}}, // First Petersburg block
 				{5435344, ID{Hash: checksumToBytes(0xafec6b27), Next: 5435345}}, // Last Petersburg block
 				{5435345, ID{Hash: checksumToBytes(0xcbdb8838), Next: 0}},       // First Istanbul block
-				{6000000, ID{Hash: checksumToBytes(0xcbdb8838), Next: 0}},       // Future Istanbul block
+				{8290927, ID{Hash: checksumToBytes(0xcbdb8838), Next: 0}},       // Future Istanbul block
 			},
 		},
 		// Goerli test cases
@@ -112,7 +112,7 @@ func TestCreation(t *testing.T) {
 				{0, ID{Hash: checksumToBytes(0xa3f5ab08), Next: 1561651}},       // Unsynced, last Frontier, Homestead, Tangerine, Spurious, Byzantium, Constantinople and first Petersburg block
 				{1561650, ID{Hash: checksumToBytes(0xa3f5ab08), Next: 1561651}}, // Last Petersburg block
 				{1561651, ID{Hash: checksumToBytes(0xc25efa5c), Next: 0}},       // First Istanbul block
-				{2000000, ID{Hash: checksumToBytes(0xc25efa5c), Next: 0}},       // Future Istanbul block
+				{4460643, ID{Hash: checksumToBytes(0xc25efa5c), Next: 0}},       // Future Istanbul block
 			},
 		},
 	}
@@ -185,11 +185,11 @@ func TestValidation(t *testing.T) {
 		// Local is mainnet Petersburg, remote is Rinkeby Petersburg.
 		{7987396, ID{Hash: checksumToBytes(0xafec6b27), Next: 0}, ErrLocalIncompatibleOrStale},
 
-		// Local is mainnet Muir Glacier, far in the future. Remote announces Gopherium (non existing fork)
+		// Local is mainnet Istanbul, far in the future. Remote announces Gopherium (non existing fork)
 		// at some future block 88888888, for itself, but past block for local. Local is incompatible.
 		//
 		// This case detects non-upgraded nodes with majority hash power (typical Ropsten mess).
-		{88888888, ID{Hash: checksumToBytes(0xe029e991), Next: 88888888}, ErrLocalIncompatibleOrStale},
+		{88888888, ID{Hash: checksumToBytes(0x0eb440f6), Next: 88888888}, ErrLocalIncompatibleOrStale},
 
 		// Local is mainnet Byzantium. Remote is also in Byzantium, but announces Gopherium (non existing
 		// fork) at block 7279999, before Petersburg. Local is incompatible.

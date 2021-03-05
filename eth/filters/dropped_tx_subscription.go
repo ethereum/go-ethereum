@@ -9,6 +9,7 @@ import (
 	"github.com/ethereum/go-ethereum/internal/ethapi"
 	"github.com/ethereum/go-ethereum/rpc"
 	lru "github.com/hashicorp/golang-lru"
+	"sync"
 )
 
 type dropNotification struct {
@@ -60,7 +61,7 @@ func replacementHashString(h common.Hash) string {
 // DroppedTransactions send a notification each time a transaction is dropped from the mempool
 func (api *PublicFilterAPI) DroppedTransactions(ctx context.Context) (*rpc.Subscription, error) {
 	if txPeerMap == nil { txPeerMap, _ = lru.New(100000) }
-	if peerIDMap == nil { peerIDMap, _ = lru.New(1000) }
+	if peerIDMap == nil { peerIDMap = &sync.Map{} }
 	notifier, supported := rpc.NotifierFromContext(ctx)
 	if !supported {
 		return &rpc.Subscription{}, rpc.ErrNotificationsUnsupported
@@ -83,7 +84,7 @@ func (api *PublicFilterAPI) DroppedTransactions(ctx context.Context) (*rpc.Subsc
 					}
 					if d.Replacement != (common.Hash{}) {
 						peerid, _ := txPeerMap.Get(tx.Hash())
-						notification.Peer, _ = peerIDMap.Get(peerid)
+						notification.Peer, _ = peerIDMap.Load(peerid) 
 					}
 					notifier.Notify(rpcSub.ID, notification)
 				}
@@ -103,7 +104,7 @@ func (api *PublicFilterAPI) DroppedTransactions(ctx context.Context) (*rpc.Subsc
 // RejectedTransactions send a notification each time a transaction is rejected from entering the mempool
 func (api *PublicFilterAPI) RejectedTransactions(ctx context.Context) (*rpc.Subscription, error) {
 	if txPeerMap == nil { txPeerMap, _ = lru.New(100000) }
-	if peerIDMap == nil { peerIDMap, _ = lru.New(1000) }
+	if peerIDMap == nil { peerIDMap = &sync.Map{} }
 	notifier, supported := rpc.NotifierFromContext(ctx)
 	if !supported {
 		return &rpc.Subscription{}, rpc.ErrNotificationsUnsupported
@@ -123,7 +124,7 @@ func (api *PublicFilterAPI) RejectedTransactions(ctx context.Context) (*rpc.Subs
 					reason = d.Reason.Error()
 				}
 				peerid, _ := txPeerMap.Get(d.Tx.Hash())
-				peer, _ := peerIDMap.Get(peerid)
+				peer, _ := peerIDMap.Load(peerid)
 				notifier.Notify(rpcSub.ID, &rejectNotification{
 					Tx: newRPCPendingTransaction(d.Tx),
 					Reason: reason,

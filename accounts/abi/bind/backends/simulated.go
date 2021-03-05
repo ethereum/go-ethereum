@@ -125,10 +125,9 @@ func (b *SimulatedBackend) Rollback() {
 
 func (b *SimulatedBackend) rollback() {
 	blocks, _ := core.GenerateChain(b.config, b.blockchain.CurrentBlock(), ethash.NewFaker(), b.database, 1, func(int, *core.BlockGen) {})
-	stateDB, _ := b.blockchain.State()
 
 	b.pendingBlock = blocks[0]
-	b.pendingState, _ = state.New(b.pendingBlock.Root(), stateDB.Database(), nil)
+	b.pendingState, _ = state.New(b.pendingBlock.Root(), b.blockchain.StateCache(), nil)
 }
 
 // stateByBlockNumber retrieves a state by a given blocknumber.
@@ -560,7 +559,10 @@ func (b *SimulatedBackend) SendTransaction(ctx context.Context, tx *types.Transa
 	b.mu.Lock()
 	defer b.mu.Unlock()
 
-	sender, err := types.Sender(types.NewEIP155Signer(b.config.ChainID), tx)
+	// Check transaction validity.
+	block := b.blockchain.CurrentBlock()
+	signer := types.MakeSigner(b.blockchain.Config(), block.Number())
+	sender, err := types.Sender(signer, tx)
 	if err != nil {
 		panic(fmt.Errorf("invalid transaction: %v", err))
 	}
@@ -569,7 +571,8 @@ func (b *SimulatedBackend) SendTransaction(ctx context.Context, tx *types.Transa
 		panic(fmt.Errorf("invalid transaction nonce: got %d, want %d", tx.Nonce(), nonce))
 	}
 
-	blocks, _ := core.GenerateChain(b.config, b.blockchain.CurrentBlock(), ethash.NewFaker(), b.database, 1, func(number int, block *core.BlockGen) {
+	// Include tx in chain.
+	blocks, _ := core.GenerateChain(b.config, block, ethash.NewFaker(), b.database, 1, func(number int, block *core.BlockGen) {
 		for _, tx := range b.pendingBlock.Transactions() {
 			block.AddTxWithChain(b.blockchain, tx)
 		}
@@ -708,14 +711,15 @@ type callMsg struct {
 	ethereum.CallMsg
 }
 
-func (m callMsg) From() common.Address { return m.CallMsg.From }
-func (m callMsg) Nonce() uint64        { return 0 }
-func (m callMsg) CheckNonce() bool     { return false }
-func (m callMsg) To() *common.Address  { return m.CallMsg.To }
-func (m callMsg) GasPrice() *big.Int   { return m.CallMsg.GasPrice }
-func (m callMsg) Gas() uint64          { return m.CallMsg.Gas }
-func (m callMsg) Value() *big.Int      { return m.CallMsg.Value }
-func (m callMsg) Data() []byte         { return m.CallMsg.Data }
+func (m callMsg) From() common.Address         { return m.CallMsg.From }
+func (m callMsg) Nonce() uint64                { return 0 }
+func (m callMsg) CheckNonce() bool             { return false }
+func (m callMsg) To() *common.Address          { return m.CallMsg.To }
+func (m callMsg) GasPrice() *big.Int           { return m.CallMsg.GasPrice }
+func (m callMsg) Gas() uint64                  { return m.CallMsg.Gas }
+func (m callMsg) Value() *big.Int              { return m.CallMsg.Value }
+func (m callMsg) Data() []byte                 { return m.CallMsg.Data }
+func (m callMsg) AccessList() types.AccessList { return m.CallMsg.AccessList }
 
 // filterBackend implements filters.Backend to support filtering for logs without
 // taking bloom-bits acceleration structures into account.

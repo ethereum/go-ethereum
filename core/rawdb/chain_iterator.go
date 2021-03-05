@@ -243,13 +243,13 @@ func indexTransactions(db ethdb.Database, from uint64, to uint64, interrupt chan
 			}
 		}
 	}
-	// If there exists uncommitted data, flush them.
-	if batch.ValueSize() > 0 {
-		WriteTxIndexTail(batch, lastNum) // Also write the tail there
-		if err := batch.Write(); err != nil {
-			log.Crit("Failed writing batch to db", "error", err)
-			return
-		}
+	// Flush the new indexing tail and the last committed data. It can also happen
+	// that the last batch is empty because nothing to index, but the tail has to
+	// be flushed anyway.
+	WriteTxIndexTail(batch, lastNum)
+	if err := batch.Write(); err != nil {
+		log.Crit("Failed writing batch to db", "error", err)
+		return
 	}
 	select {
 	case <-interrupt:
@@ -334,13 +334,13 @@ func unindexTransactions(db ethdb.Database, from uint64, to uint64, interrupt ch
 			}
 		}
 	}
-	// Commit the last batch if there exists uncommitted data
-	if batch.ValueSize() > 0 {
-		WriteTxIndexTail(batch, nextNum)
-		if err := batch.Write(); err != nil {
-			log.Crit("Failed writing batch to db", "error", err)
-			return
-		}
+	// Flush the new indexing tail and the last committed data. It can also happen
+	// that the last batch is empty because nothing to unindex, but the tail has to
+	// be flushed anyway.
+	WriteTxIndexTail(batch, nextNum)
+	if err := batch.Write(); err != nil {
+		log.Crit("Failed writing batch to db", "error", err)
+		return
 	}
 	select {
 	case <-interrupt:
