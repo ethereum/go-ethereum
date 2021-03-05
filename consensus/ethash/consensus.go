@@ -257,6 +257,7 @@ func (ethash *Ethash) verifyHeader(chain consensus.ChainHeaderReader, header, pa
 		return errOlderBlockTime
 	}
 	// Verify the block's difficulty based on its timestamp and parent's difficulty
+	// TODO: here you need to change CalcDifficulty into checkRandao for block
 	expected := ethash.CalcDifficulty(chain, header.Time, parent)
 
 	if expected.Cmp(header.Difficulty) != 0 {
@@ -313,6 +314,7 @@ func (ethash *Ethash) CalcDifficulty(chain consensus.ChainHeaderReader, time uin
 // the difficulty that a new block should have when created at time
 // given the parent block's time and difficulty.
 func CalcDifficulty(config *params.ChainConfig, time uint64, parent *types.Header) *big.Int {
+	//TODO: here we provide additional fork information about calc of the difficulty
 	next := new(big.Int).Add(parent.Number, big1)
 	switch {
 	case config.IsMuirGlacier(next):
@@ -516,6 +518,7 @@ func (ethash *Ethash) verifySeal(chain consensus.ChainHeaderReader, header *type
 		result []byte
 	)
 	// If fast-but-heavy PoW verification was requested, use an ethash dataset
+	// TODO: here we change verification of the seal based on BLS signature
 	if fulldag {
 		dataset := ethash.dataset(number, true)
 		if dataset.generated() {
@@ -529,6 +532,7 @@ func (ethash *Ethash) verifySeal(chain consensus.ChainHeaderReader, header *type
 			fulldag = false
 		}
 	}
+	// TODO: here we change verification of the seal based on BLS signature
 	// If slow-but-light PoW verification was requested (or DAG not yet ready), use an ethash cache
 	if !fulldag {
 		cache := ethash.cache(number)
