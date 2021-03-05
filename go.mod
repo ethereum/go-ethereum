@@ -4,7 +4,7 @@ go 1.13
 
 require (
 	github.com/Azure/azure-storage-blob-go v0.7.0
-	github.com/VictoriaMetrics/fastcache v1.5.7
+	github.com/VictoriaMetrics/fastcache v1.5.8
 	github.com/aws/aws-sdk-go v1.25.48
 	github.com/btcsuite/btcd v0.20.1-beta
 	github.com/cespare/cp v0.1.0
@@ -20,7 +20,7 @@ require (
 	github.com/gballet/go-libpcsclite v0.0.0-20190607065134-2772fd86a8ff
 	github.com/go-stack/stack v1.8.0
 	github.com/golang/protobuf v1.4.3
-	github.com/golang/snappy v0.0.3-0.20201103224600-674baa8c7fc3
+	github.com/golang/snappy v0.0.3
 	github.com/google/gofuzz v1.1.1-0.20200604201612-c04b05f3adfa
 	github.com/google/uuid v1.1.5
 	github.com/gorilla/websocket v1.4.2
