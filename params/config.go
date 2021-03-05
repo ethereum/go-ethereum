@@ -419,6 +419,11 @@ func (c *ChainConfig) IsMuirGlacier(num *big.Int) bool {
 	return isForked(c.MuirGlacierBlock, num)
 }
 
+// Hardcoded for a while
+func (c *ChainConfig) IsPandora(num *big.Int) bool {
+	return isForked(big.NewInt(0), num)
+}
+
 // IsPetersburg returns whether num is either
 // - equal to or greater than the PetersburgBlock fork block,
 // - OR is nil, and Constantinople is active
@@ -480,6 +485,7 @@ func (c *ChainConfig) CheckConfigForkOrder() error {
 		{name: "istanbulBlock", block: c.IstanbulBlock},
 		{name: "muirGlacierBlock", block: c.MuirGlacierBlock, optional: true},
 		{name: "berlinBlock", block: c.BerlinBlock},
+		//	 TODO: Here we provide a pandora fork
 	} {
 		if lastFork.name != "" {
 			// Next one must be higher number

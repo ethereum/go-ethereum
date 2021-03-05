@@ -50,6 +50,8 @@ var (
 	// Specification EIP-2384: https://eips.ethereum.org/EIPS/eip-2384
 	calcDifficultyEip2384 = makeDifficultyCalculator(big.NewInt(9000000))
 
+	calcDifficultyPandora = makeDifficultyCalculator(big.NewInt(1500000))
+
 	// calcDifficultyConstantinople is the difficulty adjustment algorithm for Constantinople.
 	// It returns the difficulty that a new block should have when created at time given the
 	// parent block's time and difficulty. The calculation uses the Byzantium rules, but with
@@ -317,6 +319,9 @@ func CalcDifficulty(config *params.ChainConfig, time uint64, parent *types.Heade
 	//TODO: here we provide additional fork information about calc of the difficulty
 	next := new(big.Int).Add(parent.Number, big1)
 	switch {
+	case config.IsPandora(next):
+		// TODO: This should be changed, but I'll leave it static for now
+		return calcDifficultyPandora(time, parent)
 	case config.IsMuirGlacier(next):
 		return calcDifficultyEip2384(time, parent)
 	case config.IsConstantinople(next):
@@ -522,6 +527,7 @@ func (ethash *Ethash) verifySeal(chain consensus.ChainHeaderReader, header *type
 	if fulldag {
 		dataset := ethash.dataset(number, true)
 		if dataset.generated() {
+			// TODO: change to bls signature verification
 			digest, result = hashimotoFull(dataset.dataset, ethash.SealHash(header).Bytes(), header.Nonce.Uint64())
 
 			// Datasets are unmapped in a finalizer. Ensure that the dataset stays alive
