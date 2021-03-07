@@ -72,6 +72,7 @@ type clientPool struct {
 	clock      mclock.Clock
 	closed     bool
 	removePeer func(enode.ID)
+	synced     func() bool
 	ns         *nodestate.NodeStateMachine
 	pp         *vfs.PriorityPool
 	bt         *vfs.BalanceTracker
@@ -107,7 +108,7 @@ type clientInfo struct {
 }
 
 // newClientPool creates a new client pool
-func newClientPool(ns *nodestate.NodeStateMachine, lesDb ethdb.Database, minCap uint64, connectedBias time.Duration, clock mclock.Clock, removePeer func(enode.ID)) *clientPool {
+func newClientPool(ns *nodestate.NodeStateMachine, lesDb ethdb.Database, minCap uint64, connectedBias time.Duration, clock mclock.Clock, removePeer func(enode.ID), synced func() bool) *clientPool {
 	pool := &clientPool{
 		ns:                  ns,
 		BalanceTrackerSetup: balanceTrackerSetup,
@@ -116,6 +117,7 @@ func newClientPool(ns *nodestate.NodeStateMachine, lesDb ethdb.Database, minCap 
 		minCap:              minCap,
 		connectedBias:       connectedBias,
 		removePeer:          removePeer,
+		synced:              synced,
 	}
 	pool.bt = vfs.NewBalanceTracker(ns, balanceTrackerSetup, lesDb, clock, &utils.Expirer{}, &utils.Expirer{})
 	pool.pp = vfs.NewPriorityPool(ns, priorityPoolSetup, clock, minCap, connectedBias, 4)
@@ -396,6 +398,12 @@ func (f *clientPool) serveCapQuery(id enode.ID, freeID string, data []byte) []by
 	if l := len(req.AddTokens); l == 0 || l > vflux.CapacityQueryMaxLen {
 		return nil
 	}
+	result := make(vflux.CapacityQueryReply, len(req.AddTokens))
+	if !f.synced() {
+		reply, _ := rlp.EncodeToBytes(&result)
+		return reply
+	}
+
 	node := f.ns.GetNode(id)
 	if node == nil {
 		node = enode.SignNull(&enr.Record{}, id)
@@ -416,7 +424,6 @@ func (f *clientPool) serveCapQuery(id enode.ID, freeID string, data []byte) []by
 	}
 	// use vfs.CapacityCurve to answer request for multiple newly bought token amounts
 	curve := f.pp.GetCapacityCurve().Exclude(id)
-	result := make(vflux.CapacityQueryReply, len(req.AddTokens))
 	bias := time.Second * time.Duration(req.Bias)
 	if f.connectedBias > bias {
 		bias = f.connectedBias
