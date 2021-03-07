@@ -116,7 +116,7 @@ func New(stack *node.Node, config *ethconfig.Config) (*LightEthereum, error) {
 	}
 
 	var prenegQuery vfc.QueryFunc
-	if leth.p2pServer.DiscV5 != nil {
+	if stack.Config().P2P.DiscoveryV5 {
 		prenegQuery = leth.prenegQuery
 	}
 	leth.serverPool, leth.serverPoolIterator = vfc.NewServerPool(lesDb, []byte("serverpool:"), time.Second, prenegQuery, &mclock.System{}, config.UltraLightServers, requestList)
