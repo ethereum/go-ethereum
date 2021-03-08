@@ -2,10 +2,11 @@ package ethash
 
 import (
 	"encoding/json"
-	"fmt"
 	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/log"
+	"github.com/ethereum/go-ethereum/rlp"
 	"github.com/stretchr/testify/assert"
 	"io/ioutil"
 	"math/big"
@@ -23,8 +24,6 @@ func TestProducePandoraBlockViaRemoteSealer(t *testing.T) {
 	// TODO: we must check if we are configuring it properly now, for now maxItems and func below are hardcoded
 	lruCache := newlru("cache", 12, newCache)
 	lruDataset := newlru("dataset", 12, newDataset)
-	fmt.Printf("lruCache len: %d", lruCache.cache.Len())
-	fmt.Printf("lruDataset len: %d", lruCache.cache.Len())
 
 	// Start a simple web vanguardServer to capture notifications.
 	sink := make(chan [3]string)
@@ -33,14 +32,41 @@ func TestProducePandoraBlockViaRemoteSealer(t *testing.T) {
 		if err != nil {
 			t.Errorf("failed to read miner notification: %v", err)
 		}
+
 		var work [3]string
+
 		if err := json.Unmarshal(blob, &work); err != nil {
 			t.Errorf("failed to unmarshal miner notification: %v", err)
 		}
 
-		// TODO: seal header hash by bls validator private key
-
 		sink <- work
+
+		//// TODO: seal header hash by bls validator private key
+		//rlpHexHeader := work[2]
+		//rlpHeader, err := hexutil.Decode(rlpHexHeader)
+		//
+		//if nil != err {
+		//	t.Errorf("failed to encode hex header")
+		//}
+
+		// TODO: Extract this anonymous function without running to vanguard signing process
+		//_ = func() {
+		//	header := types.Header{}
+		//	err = rlp.DecodeBytes(rlpHeader, &header)
+		//
+		//	if nil != err {
+		//		t.Errorf("failed to cast header as rlp")
+		//	}
+		//
+		//	// TODO: This is how it will be signed in vanguard side
+		//	// Motivation: you should always be sure that what you sign is valid.
+		//	signature := signer.Sign(rlpHeader)
+		//	isValidSignature := signature.Verify(signer.PublicKey(), rlpHeader)
+		//
+		//	if !isValidSignature {
+		//		t.Errorf("Invalid signature received")
+		//	}
+		//}
 	}))
 	defer vanguardServer.Close()
 
@@ -78,26 +104,42 @@ func TestProducePandoraBlockViaRemoteSealer(t *testing.T) {
 		Nonce:       types.BlockNonce{},
 	}
 
-	t.Run("Should discard invalid block", func(t *testing.T) {
+	t.Run("Should make work and notify vanguard", func(t *testing.T) {
 		block := types.NewBlockWithHeader(header)
 		results := make(chan *types.Block)
 		err := ethash.Seal(nil, block, results, nil)
 		assert.Nil(t, err)
 
 		select {
-		// TODO: Sink does not have payload! Debug why
 		case work := <-sink:
-			if want := ethash.SealHash(header).Hex(); work[0] != want {
-				t.Errorf("work packet hash mismatch: have %s, want %s", work[0], want)
-			}
-			if want := common.BytesToHash(SeedHash(header.Number.Uint64())).Hex(); work[1] != want {
-				t.Errorf("work packet seed mismatch: have %s, want %s", work[1], want)
-			}
-			target := new(big.Int).Div(new(big.Int).Lsh(big.NewInt(1), 256), header.Difficulty)
-			if want := common.BytesToHash(target.Bytes()).Hex(); work[2] != want {
-				t.Errorf("work packet target mismatch: have %s, want %s", work[2], want)
-			}
-		case <-time.After(23 * time.Second):
+			t.Run("Should have encodable sealHash", func(t *testing.T) {
+				sealHash := ethash.SealHash(header).Hex()
+				assert.Equal(t, sealHash, work[0])
+			})
+
+			t.Run("Should have encodable receiptHash", func(t *testing.T) {
+				receiptHash := header.ReceiptHash
+				assert.Equal(t, receiptHash.Hex(), work[1])
+			})
+
+			t.Run("Should have encodable rlp header in third channel", func(t *testing.T) {
+				rlpHexHeader := work[2]
+				rlpHeader, err := hexutil.Decode(rlpHexHeader)
+
+				if nil != err {
+					t.Errorf("failed to encode hex header")
+				}
+
+				header := types.Header{}
+				err = rlp.DecodeBytes(rlpHeader, &header)
+
+				if nil != err {
+					t.Errorf("failed to cast header as rlp")
+				}
+			})
+
+			return
+		case <-time.After(5 * time.Second):
 			t.Fatalf("notification timed out")
 		}
 	})
