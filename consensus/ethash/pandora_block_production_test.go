@@ -58,25 +58,26 @@ func TestProducePandoraBlockViaRemoteSealer(t *testing.T) {
 	urls = append(urls, server.URL)
 	remoteSealer := StartRemotePandora(&ethash, urls, true)
 	ethash.remote = remoteSealer
+	header := &types.Header{
+		ParentHash:  common.Hash{},
+		UncleHash:   common.Hash{},
+		Coinbase:    common.Address{},
+		Root:        common.Hash{},
+		TxHash:      common.Hash{},
+		ReceiptHash: common.Hash{},
+		Difficulty:  big.NewInt(1),
+		Number:      big.NewInt(1),
+		GasLimit:    0,
+		GasUsed:     0,
+		Time:        uint64(time.Now().UnixNano()),
+		Extra:       nil,
+		Nonce:       types.BlockNonce{},
+	}
 
 	t.Run("Should discard invalid block", func(t *testing.T) {
-		header := &types.Header{
-			ParentHash:  common.Hash{},
-			UncleHash:   common.Hash{},
-			Coinbase:    common.Address{},
-			Root:        common.Hash{},
-			TxHash:      common.Hash{},
-			ReceiptHash: common.Hash{},
-			Difficulty:  big.NewInt(1),
-			Number:      big.NewInt(1),
-			GasLimit:    0,
-			GasUsed:     0,
-			Time:        uint64(time.Now().UnixNano()),
-			Extra:       nil,
-			Nonce:       types.BlockNonce{},
-		}
 		block := types.NewBlockWithHeader(header)
-		err := ethash.Seal(nil, block, nil, nil)
+		results := make(chan *types.Block)
+		err := ethash.Seal(nil, block, results, nil)
 		assert.Nil(t, err)
 
 		select {
@@ -98,6 +99,57 @@ func TestProducePandoraBlockViaRemoteSealer(t *testing.T) {
 	})
 
 	t.Run("Should push valid header with signed data", func(t *testing.T) {
+		api := &API{&ethash}
 
+		nonce, digest := header.Nonce, ethash.SealHash(header)
+
+		testcases := []struct {
+			headers     []*types.Header
+			submitIndex int
+			submitRes   bool
+		}{
+			// Case1: submit solution for the latest mining package
+			{
+				[]*types.Header{
+					header,
+				},
+				0,
+				true,
+			},
+		}
+		results := make(chan *types.Block, 1)
+
+		for id, c := range testcases {
+			for _, h := range c.headers {
+				ethash.Seal(nil, types.NewBlockWithHeader(h), results, nil)
+			}
+			res := api.SubmitWork(nonce, ethash.SealHash(c.headers[c.submitIndex]), digest)
+			if res != c.submitRes {
+				t.Errorf("case %d submit result mismatch, want %t, get %t", id+1, c.submitRes, res)
+			}
+			if !c.submitRes {
+				continue
+			}
+			select {
+			case res := <-results:
+				if res.Header().Nonce != nonce {
+					t.Errorf("case %d block nonce mismatch, want %x, get %x", id+1, nonce, res.Header().Nonce)
+				}
+				if res.Header().MixDigest != digest {
+					t.Errorf("case %d block digest mismatch, want %x, get %x", id+1, digest, res.Header().MixDigest)
+				}
+				if res.Header().Difficulty.Uint64() != c.headers[c.submitIndex].Difficulty.Uint64() {
+					t.Errorf("case %d block difficulty mismatch, want %d, get %d", id+1, c.headers[c.submitIndex].Difficulty, res.Header().Difficulty)
+				}
+				if res.Header().Number.Uint64() != c.headers[c.submitIndex].Number.Uint64() {
+					t.Errorf("case %d block number mismatch, want %d, get %d", id+1, c.headers[c.submitIndex].Number.Uint64(), res.Header().Number.Uint64())
+				}
+				if res.Header().ParentHash != c.headers[c.submitIndex].ParentHash {
+					t.Errorf("case %d block parent hash mismatch, want %s, get %s", id+1, c.headers[c.submitIndex].ParentHash.Hex(), res.Header().ParentHash.Hex())
+				}
+			case <-time.NewTimer(time.Second).C:
+				t.Errorf("case %d fetch ethash result timeout", id+1)
+			}
+		}
 	})
 }
