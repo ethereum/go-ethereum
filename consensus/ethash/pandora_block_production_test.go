@@ -21,10 +21,6 @@ import (
 
 // Test RemoteSigner approach connected to each other
 func TestProducePandoraBlockViaRemoteSealer(t *testing.T) {
-	// TODO: we must check if we are configuring it properly now, for now maxItems and func below are hardcoded
-	lruCache := newlru("cache", 12, newCache)
-	lruDataset := newlru("dataset", 12, newDataset)
-
 	// Start a simple web vanguardServer to capture notifications.
 	sink := make(chan [3]string)
 	vanguardServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, req *http.Request) {
@@ -70,9 +66,8 @@ func TestProducePandoraBlockViaRemoteSealer(t *testing.T) {
 	}))
 	defer vanguardServer.Close()
 
+	// This is how ethash would be designed to serve vanguard
 	ethash := Ethash{
-		caches:   lruCache,
-		datasets: lruDataset,
 		config: Config{
 			// In pandora-vanguard implementation we do not need to increase nonce and mixHash is sealed/calculated on the Vanguard side
 			PowMode: ModePandora,
