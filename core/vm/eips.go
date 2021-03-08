@@ -18,6 +18,9 @@ package vm
 
 import (
 	"fmt"
+	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/common/math"
+	"github.com/ethereum/go-ethereum/crypto"
 	"sort"
 
 	"github.com/ethereum/go-ethereum/params"
@@ -143,4 +146,151 @@ func enable2929(jt *JumpTable) {
 	// factor here
 	jt[SELFDESTRUCT].constantGas = params.SelfdestructGasEIP150
 	jt[SELFDESTRUCT].dynamicGas = gasSelfdestructEIP2929
+}
+
+func enable3074(jt *JumpTable) {
+	jt[CALLFROM] = &operation{
+		execute:     opCallFrom,
+		constantGas: WarmStorageReadCostEIP2929,
+		dynamicGas:  gasCallFromEIP2929,
+		minStack:    minStack(12, 2),
+		maxStack:    maxStack(12, 2),
+		memorySize:  memoryCallFrom,
+		returns:     true,
+	}
+}
+
+func opCallFrom(pc *uint64, interpreter *EVMInterpreter, callContext *callCtx) ([]byte, error) {
+	stack := callContext.stack
+	// Pop gas. The actual gas in interpreter.evm.callGasTemp.
+	// We can use this as a temporary value
+	temp := stack.pop()
+	gas := interpreter.evm.callGasTemp
+	// Pop other call parameters.
+	addr, value, inOffset, inSize, retOffset, retSize := stack.pop(), stack.pop(), stack.pop(), stack.pop(), stack.pop(), stack.pop()
+	commit, sponsee, sigV, sigR, sigS := stack.pop(), stack.pop(), stack.pop(), stack.pop(), stack.pop()
+
+	valid, success := false, false
+	var ret []byte = nil
+
+	r := sigR.ToBig()
+	s := sigS.ToBig()
+	v := uint8(sigV[0]) - 27
+
+	// tighter sig s values input homestead only apply to tx sigs
+	if val, of := sigV.Uint64WithOverflow(); !of && val <= 0xff && crypto.ValidateSignatureValues(v, r, s, false) {
+		input := make([]byte, 65)
+		input[0] = 0x03
+		copy(input[13:33], callContext.contract.Address().Bytes())
+		commit.WriteToSlice(input[33:65])
+		hash := crypto.Keccak256(input)
+
+		sig := make([]byte, 65)
+		sigR.WriteToSlice(sig[0:32])
+		sigS.WriteToSlice(sig[32:64])
+		sig[64] = v
+		// v needs to be at the end for libsecp256k1
+		pubKey, err := crypto.Ecrecover(hash[:], sig)
+		// make sure the public key is a valid one
+		// the first byte of pubkey is bitcoin heritage
+		if err == nil {
+			from := common.BytesToAddress(crypto.Keccak256(pubKey[1:])[12:])
+			fmt.Printf("from: %s\n", from.Hex())
+			if sponsee.IsZero() || sponsee.Bytes20() == from {
+				valid = true
+
+				toAddr := common.Address(addr.Bytes20())
+				// Get the arguments from the memory.
+				args := callContext.memory.GetPtr(int64(inOffset.Uint64()), int64(inSize.Uint64()))
+
+				var bigVal = big0
+				//TODO: use uint256.Int instead of converting with toBig()
+				// By using big0 here, we save an alloc for the most common case (non-ether-transferring contract calls),
+				// but it would make more sense to extend the usage of uint256.Int
+				if !value.IsZero() {
+					gas += params.CallStipend
+					bigVal = value.ToBig()
+				}
+
+				ret, returnGas, err := interpreter.evm.Call(AccountRef(from), toAddr, args, gas, bigVal)
+
+				success = err == nil
+				if success || err == ErrExecutionReverted {
+					callContext.memory.Set(retOffset.Uint64(), retSize.Uint64(), ret)
+				}
+				if !success {
+					fmt.Printf("error: %s, gas: %d\n", err.Error(), gas)
+				}
+				callContext.contract.Gas += returnGas
+			}
+		}
+	}
+
+	if valid {
+		addr.SetOne()
+	} else {
+		addr.Clear()
+	}
+	stack.push(&addr)
+
+	if success {
+		temp.SetOne()
+	} else {
+		temp.Clear()
+	}
+	stack.push(&temp)
+
+	return ret, nil
+}
+
+func gasCallFrom(evm *EVM, contract *Contract, stack *Stack, mem *Memory, memorySize uint64) (uint64, error) {
+	var (
+		gas            uint64
+		transfersValue = !stack.Back(2).IsZero()
+		address        = common.Address(stack.Back(1).Bytes20())
+	)
+	if evm.chainRules.IsEIP158 {
+		if transfersValue && evm.StateDB.Empty(address) {
+			gas += params.CallNewAccountGas
+		}
+	} else if !evm.StateDB.Exist(address) {
+		gas += params.CallNewAccountGas
+	}
+	if transfersValue {
+		gas += params.CallValueTransferGas
+	}
+	memoryGas, err := memoryGasCost(mem, memorySize)
+	if err != nil {
+		return 0, err
+	}
+	var overflow bool
+	if gas, overflow = math.SafeAdd(gas, memoryGas); overflow {
+		return 0, ErrGasUintOverflow
+	}
+
+	evm.callGasTemp, err = callGas(evm.chainRules.IsEIP150, contract.Gas, gas, stack.Back(0))
+	if err != nil {
+		return 0, err
+	}
+	if gas, overflow = math.SafeAdd(gas, evm.callGasTemp); overflow {
+		return 0, ErrGasUintOverflow
+	}
+	return gas, nil
+}
+
+var gasCallFromEIP2929 = makeCallVariantGasCallEIP2929(gasCallFrom)
+
+func memoryCallFrom(stack *Stack) (uint64, bool) {
+	x, overflow := calcMemSize64(stack.Back(5), stack.Back(6))
+	if overflow {
+		return 0, true
+	}
+	y, overflow := calcMemSize64(stack.Back(3), stack.Back(4))
+	if overflow {
+		return 0, true
+	}
+	if x > y {
+		return x, false
+	}
+	return y, false
 }

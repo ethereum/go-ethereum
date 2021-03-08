@@ -17,6 +17,7 @@
 package vm
 
 import (
+	"fmt"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/params"
@@ -269,6 +270,8 @@ func opOrigin(pc *uint64, interpreter *EVMInterpreter, callContext *callCtx) ([]
 }
 func opCaller(pc *uint64, interpreter *EVMInterpreter, callContext *callCtx) ([]byte, error) {
 	callContext.stack.push(new(uint256.Int).SetBytes(callContext.contract.Caller().Bytes()))
+	fmt.Printf("code: %x\n", callContext.contract.Code)
+	fmt.Printf("caller: %s\n", callContext.stack.peek().Hex())
 	return nil, nil
 }
 
