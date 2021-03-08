@@ -151,7 +151,7 @@ func enable2929(jt *JumpTable) {
 func enable3074(jt *JumpTable) {
 	jt[CALLFROM] = &operation{
 		execute:     opCallFrom,
-		constantGas: WarmStorageReadCostEIP2929,
+		constantGas: 2*WarmStorageReadCostEIP2929 + params.EcrecoverGas,
 		dynamicGas:  gasCallFromEIP2929,
 		minStack:    minStack(12, 2),
 		maxStack:    maxStack(12, 2),
@@ -212,6 +212,10 @@ func opCallFrom(pc *uint64, interpreter *EVMInterpreter, callContext *callCtx) (
 				}
 
 				ret, returnGas, err := interpreter.evm.Call(callContext.contract, from, toAddr, args, gas, bigVal)
+
+				if err == ErrDepth || err == ErrInsufficientBalance {
+					valid = false
+				}
 
 				success = err == nil
 				if success || err == ErrExecutionReverted {
