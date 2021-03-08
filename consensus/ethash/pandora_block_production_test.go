@@ -112,7 +112,7 @@ func TestCreateBlockByPandoraAndVanguard(t *testing.T) {
 	}()
 	urls := make([]string, 0)
 	urls = append(urls, vanguardServer.URL)
-	remoteSealerServer := StartRemotePandora(&ethash, urls, false)
+	remoteSealerServer := StartRemotePandora(&ethash, urls, true)
 	ethash.remote = remoteSealerServer
 	ethashAPI := API{ethash: &ethash}
 
@@ -188,14 +188,12 @@ func TestCreateBlockByPandoraAndVanguard(t *testing.T) {
 				submittedWork.mixDigest,
 			)
 			// This will return false, if anything goes wrong
+			// TODO: debug why non-blocking result channel returns false
+			// see: `https://gobyexample.com/non-blocking-channel-operations`
+			//  Catch it at: consensus/ethash/sealer.go:447
 			assert.True(t, submitted)
-
 		case <-time.After(2 * time.Second):
 			t.Fatalf("notification timed out")
 		}
-	})
-
-	t.Run("Should handle work received from vanguard", func(t *testing.T) {
-
 	})
 }

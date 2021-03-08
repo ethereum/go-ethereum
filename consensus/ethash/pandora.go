@@ -2,7 +2,6 @@ package ethash
 
 import (
 	"context"
-	"fmt"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/ethereum/go-ethereum/core/types"
@@ -151,63 +150,6 @@ func (pandora *Pandora) makeWork(block *types.Block) {
 	// Trace the seal work fetched by remote sealer.
 	sealer.currentBlock = block
 	sealer.works[hash] = block
-
-	return
-}
-
-// This is inserted here temporarily to show what should be implemented in vanguard to make this symbiosis work.
-func vanguardFunction(block *types.Block) (err error) {
-	// HEADER CREATION HERE ON REMOTE SEALER, empty comments have TODO()
-	header := block.Header()
-	// - get parentHash from previous slot and check with given parentHash
-	parentHash := header.ParentHash
-	// TODO: Fetch from beacon block hash of the parent, if it does not match. Make it dynamic check
-	expectedHash := common.HexToHash("0x0000000000000000000000000000001")
-
-	if parentHash.String() != expectedHash.String() {
-		err = fmt.Errorf("parentHash delivered: %s does not match the latest block hash: %s",
-			parentHash.String(),
-			expectedHash.String(),
-		)
-
-		return
-	}
-
-	// - generate timestamp
-	header.Time = uint64(time.Now().UnixNano())
-	// - generate coinbase // -> IMHO coinbase should be generated on PANDORA side as it is in mining package
-	zeroAddress := common.Address{}
-
-	if zeroAddress == header.Coinbase {
-		// As a fallback we could use BLS pubkey converted to common.Address
-		err = fmt.Errorf("coinbase for sigining cannot be empty, refusing to sign")
-
-		return
-	}
-
-	// - generate blockNumber // -> this should be forwarded first and received from PANDORA in this approach
-	if header.Number.Cmp(big.NewInt(0)) == -1 {
-		err = fmt.Errorf("negative block number")
-
-		return
-	}
-
-	// - insert randao into difficulty, not to the nonce -> To debate about it
-	// could be epochs randao reveal
-
-	// Get from extraData field:
-	// Very dummy check for now, extend it
-	minExtradataLen := 1
-
-	if len(header.Extra) < minExtradataLen {
-		err = fmt.Errorf(
-			"invalid extradataField len, got: %d, expected at least: %d",
-			len(header.Extra),
-			minExtradataLen,
-		)
-
-		return
-	}
 
 	return
 }
