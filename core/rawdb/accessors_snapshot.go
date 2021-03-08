@@ -72,6 +72,12 @@ func DeleteAccountSnapshot(db ethdb.KeyValueWriter, hash common.Hash) {
 	}
 }
 
+// IterateAccountSnapshots returns an iterator for walking the account snapshots
+// with the specified start position.
+func IterateAccountSnapshots(db ethdb.Iteratee, start common.Hash) ethdb.Iterator {
+	return db.NewIterator(SnapshotAccountPrefix, start.Bytes())
+}
+
 // ReadStorageSnapshot retrieves the snapshot entry of an storage trie leaf.
 func ReadStorageSnapshot(db ethdb.KeyValueReader, accountHash, storageHash common.Hash) []byte {
 	data, _ := db.Get(storageSnapshotKey(accountHash, storageHash))
@@ -92,10 +98,10 @@ func DeleteStorageSnapshot(db ethdb.KeyValueWriter, accountHash, storageHash com
 	}
 }
 
-// IterateStorageSnapshots returns an iterator for walking the entire storage
-// space of a specific account.
-func IterateStorageSnapshots(db ethdb.Iteratee, accountHash common.Hash) ethdb.Iterator {
-	return db.NewIterator(storageSnapshotsKey(accountHash), nil)
+// IterateStorageSnapshots returns an iterator for walking the storage space of
+// a specific account with specified start position.
+func IterateStorageSnapshots(db ethdb.Iteratee, accountHash common.Hash, start common.Hash) ethdb.Iterator {
+	return db.NewIterator(storageSnapshotsKey(accountHash), start.Bytes())
 }
 
 // ReadSnapshotJournal retrieves the serialized in-memory diff layers saved at
