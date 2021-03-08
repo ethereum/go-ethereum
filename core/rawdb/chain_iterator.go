@@ -23,7 +23,7 @@ import (
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/prque"
-	"github.com/ethereum/go-ethereum/crypto"
+	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/ethdb"
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/rlp"
@@ -135,32 +135,14 @@ func iterateTransactions(db ethdb.Database, from uint64, to uint64, reverse bool
 				close(hashesCh)
 			}
 		}()
-
-		var hasher = crypto.NewKeccakState()
 		for data := range rlpCh {
-			it, err := rlp.NewListIterator(data.rlp)
-			if err != nil {
+			var body types.Body
+			if err := rlp.DecodeBytes(data.rlp, &body); err != nil {
 				log.Warn("tx iteration error [1]", "block", data.number, "error", err)
-				return
 			}
-			it.Next()
-			txs := it.Value()
-			txIt, err := rlp.NewListIterator(txs)
-			if err != nil {
-				log.Warn("tx iteration error [2]", "block", data.number, "error", err)
-				return
-			}
-			var (
-				hashes []common.Hash
-				index  int
-			)
-			for txIt.Next() {
-				if err := txIt.Err(); err != nil {
-					log.Warn("tx iteration error", "block", data.number, "tx", index, "error", err)
-					return
-				}
-				hashes = append(hashes, crypto.HashData(hasher, txIt.Value()))
-				index++
+			var hashes []common.Hash
+			for _, tx := range body.Transactions {
+				hashes = append(hashes, tx.Hash())
 			}
 			result := &blockTxHashes{
 				hashes: hashes,
