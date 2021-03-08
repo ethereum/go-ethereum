@@ -26,9 +26,9 @@ func TestProducePandoraBlockViaRemoteSealer(t *testing.T) {
 	fmt.Printf("lruCache len: %d", lruCache.cache.Len())
 	fmt.Printf("lruDataset len: %d", lruCache.cache.Len())
 
-	// Start a simple web server to capture notifications.
+	// Start a simple web vanguardServer to capture notifications.
 	sink := make(chan [3]string)
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, req *http.Request) {
+	vanguardServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, req *http.Request) {
 		blob, err := ioutil.ReadAll(req.Body)
 		if err != nil {
 			t.Errorf("failed to read miner notification: %v", err)
@@ -37,15 +37,19 @@ func TestProducePandoraBlockViaRemoteSealer(t *testing.T) {
 		if err := json.Unmarshal(blob, &work); err != nil {
 			t.Errorf("failed to unmarshal miner notification: %v", err)
 		}
+
+		// TODO: seal header hash by bls validator private key
+
 		sink <- work
 	}))
-	defer server.Close()
+	defer vanguardServer.Close()
 
 	ethash := Ethash{
 		caches:   lruCache,
 		datasets: lruDataset,
 		config: Config{
-			PowMode: 2,
+			// In pandora-vanguard implementation we do not need to increase nonce and mixHash is sealed/calculated on the Vanguard side
+			PowMode: ModePandora,
 			Log:     log.Root(),
 		},
 		lock:      sync.Mutex{},
@@ -55,9 +59,9 @@ func TestProducePandoraBlockViaRemoteSealer(t *testing.T) {
 		_ = ethash.Close()
 	}()
 	urls := make([]string, 0)
-	urls = append(urls, server.URL)
-	remoteSealer := StartRemotePandora(&ethash, urls, true)
-	ethash.remote = remoteSealer
+	urls = append(urls, vanguardServer.URL)
+	remoteSealerServer := StartRemotePandora(&ethash, urls, true)
+	ethash.remote = remoteSealerServer
 	header := &types.Header{
 		ParentHash:  common.Hash{},
 		UncleHash:   common.Hash{},
@@ -81,8 +85,8 @@ func TestProducePandoraBlockViaRemoteSealer(t *testing.T) {
 		assert.Nil(t, err)
 
 		select {
+		// TODO: Sink does not have payload! Debug why
 		case work := <-sink:
-			fmt.Printf("%d", len(work[0]))
 			if want := ethash.SealHash(header).Hex(); work[0] != want {
 				t.Errorf("work packet hash mismatch: have %s, want %s", work[0], want)
 			}
@@ -93,7 +97,7 @@ func TestProducePandoraBlockViaRemoteSealer(t *testing.T) {
 			if want := common.BytesToHash(target.Bytes()).Hex(); work[2] != want {
 				t.Errorf("work packet target mismatch: have %s, want %s", work[2], want)
 			}
-		case <-time.After(3 * time.Second):
+		case <-time.After(23 * time.Second):
 			t.Fatalf("notification timed out")
 		}
 	})
@@ -114,7 +118,7 @@ func TestProducePandoraBlockViaRemoteSealer(t *testing.T) {
 					header,
 				},
 				0,
-				true,
+				false,
 			},
 		}
 		results := make(chan *types.Block, 1)

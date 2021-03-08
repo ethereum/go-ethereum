@@ -32,9 +32,9 @@ type MinimalEpochConsensusInfo struct {
 // This is done only to have vanguard spec done in minimal codebase to exchange informations with pandora.
 // In this approach you could have multiple execution engines connected via urls []string
 // In this approach you are also compatible with any current toolsets for mining because you use already defined api
-func StartRemotePandora(executionEngine *Ethash, urls []string, noverify bool) *remoteSealer {
+func StartRemotePandora(executionEngine *Ethash, urls []string, noverify bool) (sealer *remoteSealer) {
 	ctx, cancel := context.WithCancel(context.Background())
-	s := &remoteSealer{
+	sealer = &remoteSealer{
 		ethash:       executionEngine,
 		noverify:     noverify,
 		notifyURLs:   urls,
@@ -51,8 +51,10 @@ func StartRemotePandora(executionEngine *Ethash, urls []string, noverify bool) *
 		exitCh:       make(chan struct{}),
 	}
 
-	go s.loop()
-	return s
+	pandora := Pandora{sealer: sealer}
+	go pandora.Loop()
+
+	return
 }
 
 func (pandora *Pandora) Loop() {

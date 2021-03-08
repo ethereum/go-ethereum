@@ -397,6 +397,7 @@ const (
 	ModeTest
 	ModeFake
 	ModeFullFake
+	ModePandora
 )
 
 // Config are the configuration parameters of the ethash.

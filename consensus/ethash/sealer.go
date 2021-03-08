@@ -49,8 +49,10 @@ var (
 // Seal implements consensus.Engine, attempting to find a nonce that satisfies
 // the block's difficulty requirements.
 func (ethash *Ethash) Seal(chain consensus.ChainHeaderReader, block *types.Block, results chan<- *types.Block, stop <-chan struct{}) error {
-	// If we're running a fake PoW, simply return a 0 nonce immediately
-	if ethash.config.PowMode == ModeFake || ethash.config.PowMode == ModeFullFake {
+	powMode := ethash.config.PowMode
+	minimalPowModeCheck := ModeFake == powMode || ModeFullFake == powMode || ModePandora == powMode
+
+	if minimalPowModeCheck {
 		header := block.Header()
 		header.Nonce, header.MixDigest = types.BlockNonce{}, common.Hash{}
 		select {
@@ -58,8 +60,18 @@ func (ethash *Ethash) Seal(chain consensus.ChainHeaderReader, block *types.Block
 		default:
 			ethash.config.Log.Warn("Sealing result is not read by miner", "mode", "fake", "sealhash", ethash.SealHash(block.Header()))
 		}
+	}
+
+	// If we're running pandora mode we only want to notify remote sealer about new block
+	if ModePandora == powMode && nil != ethash.remote {
+		ethash.remote.workCh <- &sealTask{block: block, results: results}
+	}
+
+	// If we're running a fake PoW, simply return a 0 nonce immediately
+	if minimalPowModeCheck {
 		return nil
 	}
+
 	// If we're running a shared PoW, delegate sealing to it
 	if ethash.shared != nil {
 		return ethash.shared.Seal(chain, block, results, stop)
