@@ -220,6 +220,7 @@ func CreateConsensusEngine(stack *node.Node, chainConfig *params.ChainConfig, co
 	case ethash.ModeShared:
 		log.Warn("Ethash used in shared mode")
 		return ethash.NewShared()
+	//	TODO: Provide proper config via ethashMode
 	default:
 		engine := ethash.New(ethash.Config{
 			CacheDir:         stack.ResolvePath(config.CacheDir),

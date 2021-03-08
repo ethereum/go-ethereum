@@ -21,13 +21,21 @@ import (
 // This file is used for exploration of possible ways to achieve pandora-vanguard block production
 // Test RemoteSigner approach connected to each other
 func TestCreateBlockByPandoraAndVanguard(t *testing.T) {
+	// TODO: we must check if we are configuring it properly now, for now maxItems and func below are hardcoded
+	lruCache := newlru("cache", 12, newCache)
+	lruDataset := newlru("dataset", 12, newDataset)
+
 	signer, err := herumi.RandKey()
 	assert.Nil(t, err)
 
+	workSubmittedLock := sync.WaitGroup{}
+	workSubmittedLock.Add(1)
+
 	// Start a simple web vanguardServer to capture notifications.
 	workChannel := make(chan [4]string)
-	//submitWorkChannel := make(chan *mineResult)
+	submitWorkChannel := make(chan *mineResult)
 
+	// This is used to mimic server on vanguard which will consume pandora
 	vanguardServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, req *http.Request) {
 		blob, err := ioutil.ReadAll(req.Body)
 		if err != nil {
@@ -51,7 +59,7 @@ func TestCreateBlockByPandoraAndVanguard(t *testing.T) {
 		}
 
 		//TODO: Extract this anonymous function without running to vanguard signing process
-		_ = func() {
+		signerFunc := func() {
 			header := types.Header{}
 			err = rlp.DecodeBytes(rlpHeader, &header)
 
@@ -59,20 +67,38 @@ func TestCreateBlockByPandoraAndVanguard(t *testing.T) {
 				t.Errorf("failed to cast header as rlp")
 			}
 
-			// TODO: This is how it will be signed in vanguard side
+			// TODO: This is how it will be signed on the vanguard side
 			// Motivation: you should always be sure that what you sign is valid.
-			signature := signer.Sign(rlpHeader)
-			isValidSignature := signature.Verify(signer.PublicKey(), rlpHeader)
+			signatureBytes, err := hexutil.Decode(work[0])
+			assert.Nil(t, err)
+			signature := signer.Sign(signatureBytes)
+			isValidSignature := signature.Verify(signer.PublicKey(), signatureBytes)
 
 			if !isValidSignature {
 				t.Errorf("Invalid signature received")
 			}
+
+			header.MixDigest = common.BytesToHash(signatureBytes)
+			workSubmittedLock.Done()
+
+			// TODO: With networking: return header via channel `submitWork`
+			// This in test is using work channel to push sealed block to pandora back
+			submitWorkChannel <- &mineResult{
+				nonce:     types.BlockNonce{},
+				mixDigest: header.MixDigest,
+				hash:      common.HexToHash(work[0]),
+				errc:      nil,
+			}
 		}
+
+		signerFunc()
 	}))
 	defer vanguardServer.Close()
 
 	// This is how ethash would be designed to serve vanguard
 	ethash := Ethash{
+		caches:   lruCache,
+		datasets: lruDataset,
 		config: Config{
 			// In pandora-vanguard implementation we do not need to increase nonce and mixHash is sealed/calculated on the Vanguard side
 			PowMode: ModePandora,
@@ -88,6 +114,8 @@ func TestCreateBlockByPandoraAndVanguard(t *testing.T) {
 	urls = append(urls, vanguardServer.URL)
 	remoteSealerServer := StartRemotePandora(&ethash, urls, false)
 	ethash.remote = remoteSealerServer
+	ethashAPI := API{ethash: &ethash}
+
 	header := &types.Header{
 		ParentHash:  common.Hash{},
 		UncleHash:   common.Hash{},
@@ -142,8 +170,27 @@ func TestCreateBlockByPandoraAndVanguard(t *testing.T) {
 				assert.Equal(t, hexutil.Encode(header.Number.Bytes()), work[3])
 			})
 
-			return
-		case <-time.After(5 * time.Second):
+		//	Whole procedure should take no more than 1/2 of a slot. Lets test that for 6s / 4 ~ 2s
+		case <-time.After(2 * time.Second):
+			t.Fatalf("notification timed out")
+		}
+
+		// Wait until work is submitted back
+		workSubmittedLock.Wait()
+
+		select {
+		// This is created by channel to remove network complexity for test scenario.
+		// Full E2E layer should be somwhere else, or we should consider stress test
+		case submittedWork := <-submitWorkChannel:
+			submitted := ethashAPI.SubmitWork(
+				submittedWork.nonce,
+				submittedWork.hash,
+				submittedWork.mixDigest,
+			)
+			// This will return false, if anything goes wrong
+			assert.True(t, submitted)
+
+		case <-time.After(2 * time.Second):
 			t.Fatalf("notification timed out")
 		}
 	})
