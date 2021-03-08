@@ -243,3 +243,19 @@ func (c Ctx) toArray() []interface{} {
 
 	return arr
 }
+
+func NewFileLvlHandler(logPath string, maxBytesSize uint64, level string) (Handler, error) {
+	rfh, err := RotatingFileHandler(
+		logPath,
+		maxBytesSize,
+		LogfmtFormat(),
+	)
+	if err != nil {
+		return nil, err
+	}
+	logLevel, err := LvlFromString(level)
+	if err != nil {
+		return nil, err
+	}
+	return LvlFilterHandler(logLevel, rfh), nil
+}
