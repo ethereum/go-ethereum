@@ -146,6 +146,7 @@ func (pandora *Pandora) makeWork(block *types.Block) {
 	sealer.currentWork[0] = hash.Hex()
 	sealer.currentWork[1] = block.Header().ReceiptHash.Hex()
 	sealer.currentWork[2] = hexutil.Encode(rlpHeader)
+	sealer.currentWork[3] = hexutil.Encode(block.Header().Number.Bytes())
 
 	// Trace the seal work fetched by remote sealer.
 	sealer.currentBlock = block
