@@ -27,7 +27,7 @@ import (
 )
 
 // wipeSnapshot starts a goroutine to iterate over the entire key-value database
-// and delete all the  data associated with the snapshot (accounts, storage,
+// and delete all the data associated with the snapshot (accounts, storage,
 // metadata). After all is done, the snapshot range of the database is compacted
 // to free up unused data blocks.
 func wipeSnapshot(db ethdb.KeyValueStore, full bool) chan struct{} {
@@ -53,10 +53,10 @@ func wipeSnapshot(db ethdb.KeyValueStore, full bool) chan struct{} {
 // removed in sync to avoid data races. After all is done, the snapshot range of
 // the database is compacted to free up unused data blocks.
 func wipeContent(db ethdb.KeyValueStore) error {
-	if err := wipeKeyRange(db, "accounts", rawdb.SnapshotAccountPrefix, len(rawdb.SnapshotAccountPrefix)+common.HashLength); err != nil {
+	if err := wipeKeyRange(db, "accounts", rawdb.SnapshotAccountPrefix, nil, nil, len(rawdb.SnapshotAccountPrefix)+common.HashLength); err != nil {
 		return err
 	}
-	if err := wipeKeyRange(db, "storage", rawdb.SnapshotStoragePrefix, len(rawdb.SnapshotStoragePrefix)+2*common.HashLength); err != nil {
+	if err := wipeKeyRange(db, "storage", rawdb.SnapshotStoragePrefix, nil, nil, len(rawdb.SnapshotStoragePrefix)+2*common.HashLength); err != nil {
 		return err
 	}
 	// Compact the snapshot section of the database to get rid of unused space
@@ -82,8 +82,9 @@ func wipeContent(db ethdb.KeyValueStore) error {
 }
 
 // wipeKeyRange deletes a range of keys from the database starting with prefix
-// and having a specific total key length.
-func wipeKeyRange(db ethdb.KeyValueStore, kind string, prefix []byte, keylen int) error {
+// and having a specific total key length. The start and limit is optional for
+// specifying a particular key range for deletion.
+func wipeKeyRange(db ethdb.KeyValueStore, kind string, prefix []byte, origin []byte, limit []byte, keylen int) error {
 	// Batch deletions together to avoid holding an iterator for too long
 	var (
 		batch = db.NewBatch()
@@ -92,7 +93,11 @@ func wipeKeyRange(db ethdb.KeyValueStore, kind string, prefix []byte, keylen int
 	// Iterate over the key-range and delete all of them
 	start, logged := time.Now(), time.Now()
 
-	it := db.NewIterator(prefix, nil)
+	it := db.NewIterator(prefix, origin)
+	var stop []byte
+	if limit != nil {
+		stop = append(prefix, limit...)
+	}
 	for it.Next() {
 		// Skip any keys with the correct prefix but wrong length (trie nodes)
 		key := it.Key()
@@ -101,6 +106,9 @@ func wipeKeyRange(db ethdb.KeyValueStore, kind string, prefix []byte, keylen int
 		}
 		if len(key) != keylen {
 			continue
+		}
+		if stop != nil && bytes.Compare(key, stop) >= 0 {
+			break
 		}
 		// Delete the key and periodically recreate the batch and iterator
 		batch.Delete(key)
