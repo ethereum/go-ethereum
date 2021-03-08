@@ -21,6 +21,7 @@ import (
 	"fmt"
 	"net/http"
 	"os"
+	"path"
 	"path/filepath"
 	"reflect"
 	"strings"
@@ -79,6 +80,19 @@ func New(conf *Config) (*Node, error) {
 		}
 		conf.DataDir = absdatadir
 	}
+
+	if conf.LogConfig != nil {
+		logFilePath := conf.LogConfig.FilePath
+		if logFilePath == "" {
+			logFilePath = path.Join(conf.DataDir, "node.log")
+		}
+		h, err := log.NewFileLvlHandler(logFilePath, conf.LogConfig.MaxBytesSize, conf.LogConfig.Level)
+		if err != nil {
+			return nil, err
+		}
+		log.Root().SetHandler(h)
+	}
+
 	if conf.Logger == nil {
 		conf.Logger = log.New()
 	}
