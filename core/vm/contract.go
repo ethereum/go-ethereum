@@ -44,8 +44,12 @@ func (ar AccountRef) Address() common.Address { return (common.Address)(ar) }
 // the contract code, calling arguments. Contract implements ContractRef
 type Contract struct {
 	// CallerAddress is the result of the caller which initialised this
-	// contract. However when the "call method" is delegated this value
-	// needs to be initialised to that of the caller's caller.
+	// contract. There are two cases where the caller may be overridden:
+	//
+	//     1. A DELEGATECALL will initialise the value to the caller's
+	//	  caller.
+	//     2. An AUTHCALL will initialise the value to last address
+	//        authorized by AUTH.
 	CallerAddress common.Address
 	caller        ContractRef
 	self          ContractRef

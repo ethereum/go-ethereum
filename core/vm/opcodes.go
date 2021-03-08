@@ -214,6 +214,8 @@ const (
 	RETURN
 	DELEGATECALL
 	CREATE2
+	AUTH
+	AUTHCALL
 	STATICCALL   OpCode = 0xfa
 	REVERT       OpCode = 0xfd
 	SELFDESTRUCT OpCode = 0xff
@@ -375,6 +377,8 @@ var opCodeToString = map[OpCode]string{
 	// 0xf0 range.
 	CREATE:       "CREATE",
 	CALL:         "CALL",
+	AUTH:         "AUTH",
+	AUTHCALL:     "AUTHCALL",
 	RETURN:       "RETURN",
 	CALLCODE:     "CALLCODE",
 	DELEGATECALL: "DELEGATECALL",
@@ -536,6 +540,8 @@ var stringToOp = map[string]OpCode{
 	"CREATE":         CREATE,
 	"CREATE2":        CREATE2,
 	"CALL":           CALL,
+	"AUTH":           AUTH,
+	"AUTHCALL":       AUTHCALL,
 	"RETURN":         RETURN,
 	"CALLCODE":       CALLCODE,
 	"REVERT":         REVERT,

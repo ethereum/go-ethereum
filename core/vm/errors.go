@@ -35,6 +35,11 @@ var (
 	ErrReturnDataOutOfBounds    = errors.New("return data out of bounds")
 	ErrGasUintOverflow          = errors.New("gas uint64 overflow")
 	ErrInvalidCode              = errors.New("invalid code: must not begin with 0xef")
+	ErrInvalidRetsub            = errors.New("invalid retsub")
+	ErrReturnStackExceeded      = errors.New("return stack limit reached")
+	ErrNoAuthorizedAccount      = errors.New("authorized account not set")
+	ErrInsufficientAuthCallGas  = errors.New("insufficient remaining gas for authcall")
+	ErrNonZeroExtValue          = errors.New("non-zero external value")
 )
 
 // ErrStackUnderflow wraps an evm error when the items on the stack less

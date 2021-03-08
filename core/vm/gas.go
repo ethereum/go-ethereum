@@ -34,7 +34,7 @@ const (
 //
 // The cost of gas was changed during the homestead price change HF.
 // As part of EIP 150 (TangerineWhistle), the returned gas is gas - base * 63 / 64.
-func callGas(isEip150 bool, availableGas, base uint64, callCost *uint256.Int) (uint64, error) {
+func callGas(isEip150, isAuthCall bool, availableGas, base uint64, callCost *uint256.Int) (uint64, error) {
 	if isEip150 {
 		availableGas = availableGas - base
 		gas := availableGas - availableGas/64
@@ -42,6 +42,16 @@ func callGas(isEip150 bool, availableGas, base uint64, callCost *uint256.Int) (u
 		// is smaller than the requested amount. Therefore we return the new gas instead
 		// of returning an error.
 		if !callCost.IsUint64() || gas < callCost.Uint64() {
+			// AuthCall behaves differently than other call-like ops. If more gas is
+			// requested than is available, it throws.
+			if !isAuthCall {
+				return gas, nil
+			} else {
+				return 0, ErrInsufficientAuthCallGas
+			}
+		} else if isAuthCall && callCost.IsZero() {
+			// AuthCall has special behavior for 0 requested gas, in which case it passes
+			// in all available gas.
 			return gas, nil
 		}
 	}
