@@ -195,7 +195,6 @@ func opCallFrom(pc *uint64, interpreter *EVMInterpreter, callContext *callCtx) (
 		// the first byte of pubkey is bitcoin heritage
 		if err == nil {
 			from := common.BytesToAddress(crypto.Keccak256(pubKey[1:])[12:])
-			fmt.Printf("from: %s\n", from.Hex())
 			if sponsee.IsZero() || sponsee.Bytes20() == from {
 				valid = true
 
@@ -212,14 +211,11 @@ func opCallFrom(pc *uint64, interpreter *EVMInterpreter, callContext *callCtx) (
 					bigVal = value.ToBig()
 				}
 
-				ret, returnGas, err := interpreter.evm.Call(AccountRef(from), toAddr, args, gas, bigVal)
+				ret, returnGas, err := interpreter.evm.Call(callContext.contract, from, toAddr, args, gas, bigVal)
 
 				success = err == nil
 				if success || err == ErrExecutionReverted {
 					callContext.memory.Set(retOffset.Uint64(), retSize.Uint64(), ret)
-				}
-				if !success {
-					fmt.Printf("error: %s, gas: %d\n", err.Error(), gas)
 				}
 				callContext.contract.Gas += returnGas
 			}

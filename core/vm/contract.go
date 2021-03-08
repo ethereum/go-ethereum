@@ -43,10 +43,10 @@ func (ar AccountRef) Address() common.Address { return (common.Address)(ar) }
 // Contract represents an ethereum contract in the state database. It contains
 // the contract code, calling arguments. Contract implements ContractRef
 type Contract struct {
-	// CallerAddress is the result of the caller which initialised this
+	// SenderAddress is the result of the sender which initialised this
 	// contract. However when the "call method" is delegated this value
-	// needs to be initialised to that of the caller's caller.
-	CallerAddress common.Address
+	// needs to be initialised to that of the caller's sender.
+	SenderAddress common.Address
 	caller        ContractRef
 	self          ContractRef
 
@@ -63,8 +63,8 @@ type Contract struct {
 }
 
 // NewContract returns a new contract environment for the execution of EVM.
-func NewContract(caller ContractRef, object ContractRef, value *big.Int, gas uint64) *Contract {
-	c := &Contract{CallerAddress: caller.Address(), caller: caller, self: object}
+func NewContract(caller ContractRef, sender common.Address, object ContractRef, value *big.Int, gas uint64) *Contract {
+	c := &Contract{SenderAddress: sender, caller: caller, self: object}
 
 	if parent, ok := caller.(*Contract); ok {
 		// Reuse JUMPDEST analysis from parent context if available.
@@ -135,7 +135,7 @@ func (c *Contract) AsDelegate() *Contract {
 	// NOTE: caller must, at all times be a contract. It should never happen
 	// that caller is something other than a Contract.
 	parent := c.caller.(*Contract)
-	c.CallerAddress = parent.CallerAddress
+	c.SenderAddress = parent.SenderAddress
 	c.value = parent.value
 
 	return c
@@ -155,12 +155,12 @@ func (c *Contract) GetByte(n uint64) byte {
 	return 0
 }
 
-// Caller returns the caller of the contract.
+// Caller returns the sender of the contract.
 //
 // Caller will recursively call caller when the contract is a delegate
-// call, including that of caller's caller.
+// call, including that of caller's sender.
 func (c *Contract) Caller() common.Address {
-	return c.CallerAddress
+	return c.SenderAddress
 }
 
 // UseGas attempts the use gas and subtracts it and returns true on success
