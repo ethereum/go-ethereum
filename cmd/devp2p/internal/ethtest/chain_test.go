@@ -66,7 +66,7 @@ func TestEthProtocolNegotiation(t *testing.T) {
 	for i, tt := range tests {
 		t.Run(strconv.Itoa(i), func(t *testing.T) {
 			tt.conn.negotiateEthProtocol(tt.caps)
-			assert.Equal(t, tt.expected, uint32(tt.conn.ethProtocolVersion))
+			assert.Equal(t, tt.expected, uint32(tt.conn.negotiatedProtoVersion))
 		})
 	}
 }
