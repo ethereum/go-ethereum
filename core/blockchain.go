@@ -52,6 +52,9 @@ var (
 	headHeaderGauge    = metrics.NewRegisteredGauge("chain/head/header", nil)
 	headFastBlockGauge = metrics.NewRegisteredGauge("chain/head/receipt", nil)
 
+	headLastGCBlockGauge = metrics.NewRegisteredGauge("chain/head/lastgc", nil)
+	headLastPersistGauge = metrics.NewRegisteredGauge("chain/head/lastpersist", nil)
+
 	accountReadTimer   = metrics.NewRegisteredTimer("chain/account/reads", nil)
 	accountHashTimer   = metrics.NewRegisteredTimer("chain/account/hashes", nil)
 	accountUpdateTimer = metrics.NewRegisteredTimer("chain/account/updates", nil)
@@ -89,7 +92,9 @@ const (
 	txLookupCacheLimit  = 1024
 	maxFutureBlocks     = 256
 	maxTimeFutureBlocks = 30
-	TriesInMemory       = 128
+	// TriesInMemory  Keeps the latest 128 * 64 blocks when pruning.
+	// Which is about 1.25 days of block data based on the average block out time of bsc (13s/block).
+	TriesInMemory = 128 * 64
 
 	// BlockChainVersion ensures that an incompatible database forces a resync from scratch.
 	//
@@ -1036,11 +1041,14 @@ func (bc *BlockChain) Stop() {
 				log.Error("Failed to commit recent state trie", "err", err)
 			}
 		}
+		if !bc.triegc.Empty() {
+			log.Info("Dereference all trie nodes remaining in prqueue", "nodes", bc.triegc.Size())
+		}
 		for !bc.triegc.Empty() {
 			triedb.Dereference(bc.triegc.PopItem().(common.Hash))
 		}
 		if size, _ := triedb.Size(); size != 0 {
-			log.Error("Dangling trie nodes after full cleanup")
+			log.Error("Dangling trie nodes after full cleanup", "size", size)
 		}
 	}
 	// Ensure all live cached entries be saved into disk, so that we can skip
@@ -1571,6 +1579,7 @@ func (bc *BlockChain) writeBlockWithState(block *types.Block, receipts []*types.
 					// Flush an entire trie and restart the counters
 					triedb.Commit(header.Root, true, nil)
 					lastWrite = chosen
+					headLastPersistGauge.Update(int64(chosen))
 					bc.gcproc = 0
 				}
 			}
@@ -1581,6 +1590,7 @@ func (bc *BlockChain) writeBlockWithState(block *types.Block, receipts []*types.
 					bc.triegc.Push(root, number)
 					break
 				}
+				headLastGCBlockGauge.Update(-number)
 				triedb.Dereference(root.(common.Hash))
 			}
 		}
