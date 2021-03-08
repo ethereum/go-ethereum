@@ -19,7 +19,6 @@ package vm
 import (
 	"fmt"
 	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/common/math"
 	"github.com/ethereum/go-ethereum/crypto"
 	"sort"
 
@@ -28,6 +27,7 @@ import (
 )
 
 var activators = map[int]func(*JumpTable){
+	3074: enable3074,
 	2929: enable2929,
 	2200: enable2200,
 	1884: enable1884,
@@ -151,11 +151,11 @@ func enable2929(jt *JumpTable) {
 func enable3074(jt *JumpTable) {
 	jt[CALLFROM] = &operation{
 		execute:     opCallFrom,
-		constantGas: 2*WarmStorageReadCostEIP2929 + params.EcrecoverGas,
-		dynamicGas:  gasCallFromEIP2929,
+		constantGas: WarmStorageReadCostEIP2929 + params.EcrecoverGas,
+		dynamicGas:  gasCallEIP2929,
 		minStack:    minStack(12, 2),
 		maxStack:    maxStack(12, 2),
-		memorySize:  memoryCallFrom,
+		memorySize:  memoryCall,
 		returns:     true,
 	}
 }
@@ -213,10 +213,6 @@ func opCallFrom(pc *uint64, interpreter *EVMInterpreter, callContext *callCtx) (
 
 				ret, returnGas, err := interpreter.evm.Call(callContext.contract, from, toAddr, args, gas, bigVal)
 
-				if err == ErrDepth || err == ErrInsufficientBalance {
-					valid = false
-				}
-
 				success = err == nil
 				if success || err == ErrExecutionReverted {
 					callContext.memory.Set(retOffset.Uint64(), retSize.Uint64(), ret)
@@ -230,6 +226,7 @@ func opCallFrom(pc *uint64, interpreter *EVMInterpreter, callContext *callCtx) (
 		addr.SetOne()
 	} else {
 		addr.Clear()
+		callContext.contract.Gas += gas
 	}
 	stack.push(&addr)
 
@@ -241,56 +238,4 @@ func opCallFrom(pc *uint64, interpreter *EVMInterpreter, callContext *callCtx) (
 	stack.push(&temp)
 
 	return ret, nil
-}
-
-func gasCallFrom(evm *EVM, contract *Contract, stack *Stack, mem *Memory, memorySize uint64) (uint64, error) {
-	var (
-		gas            uint64
-		transfersValue = !stack.Back(2).IsZero()
-		address        = common.Address(stack.Back(1).Bytes20())
-	)
-	if evm.chainRules.IsEIP158 {
-		if transfersValue && evm.StateDB.Empty(address) {
-			gas += params.CallNewAccountGas
-		}
-	} else if !evm.StateDB.Exist(address) {
-		gas += params.CallNewAccountGas
-	}
-	if transfersValue {
-		gas += params.CallValueTransferGas
-	}
-	memoryGas, err := memoryGasCost(mem, memorySize)
-	if err != nil {
-		return 0, err
-	}
-	var overflow bool
-	if gas, overflow = math.SafeAdd(gas, memoryGas); overflow {
-		return 0, ErrGasUintOverflow
-	}
-
-	evm.callGasTemp, err = callGas(evm.chainRules.IsEIP150, contract.Gas, gas, stack.Back(0))
-	if err != nil {
-		return 0, err
-	}
-	if gas, overflow = math.SafeAdd(gas, evm.callGasTemp); overflow {
-		return 0, ErrGasUintOverflow
-	}
-	return gas, nil
-}
-
-var gasCallFromEIP2929 = makeCallVariantGasCallEIP2929(gasCallFrom)
-
-func memoryCallFrom(stack *Stack) (uint64, bool) {
-	x, overflow := calcMemSize64(stack.Back(5), stack.Back(6))
-	if overflow {
-		return 0, true
-	}
-	y, overflow := calcMemSize64(stack.Back(3), stack.Back(4))
-	if overflow {
-		return 0, true
-	}
-	if x > y {
-		return x, false
-	}
-	return y, false
 }
