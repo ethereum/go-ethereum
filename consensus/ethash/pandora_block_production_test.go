@@ -58,7 +58,7 @@ func TestCreateBlockByPandoraAndVanguard(t *testing.T) {
 			t.Errorf("failed to encode hex header")
 		}
 
-		//TODO: Extract this anonymous function without running to vanguard signing process
+		//TODO: Extract this function without running to vanguard signing process
 		signerFunc := func() {
 			header := types.Header{}
 			err = rlp.DecodeBytes(rlpHeader, &header)

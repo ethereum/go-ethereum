@@ -137,6 +137,7 @@ func (pandora *Pandora) Loop() {
 //   result[0], 32 bytes hex encoded current block header pos-hash
 //   result[1], 32 bytes hex encoded receipt hash for transaction proof
 //   result[2], hex encoded rlp block header
+//   result[3], hex encoded block number
 func (pandora *Pandora) makeWork(block *types.Block) {
 	sealer := pandora.sealer
 	rlpHeader, _ := rlp.EncodeToBytes(block.Header())
