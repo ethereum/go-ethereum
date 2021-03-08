@@ -661,6 +661,10 @@ func newClientServerEnv(t *testing.T, config testnetConfig) (*testServer, *testC
 	return s, c, teardown
 }
 
-func NewFuzzerPeer(version int) *clientPeer {
-	return newClientPeer(version, 0, p2p.NewPeer(enode.ID{}, "", nil), nil)
+// NewFuzzerPeer creates a client peer for test purposes, and also returns
+// a function to close the peer: this is needed to avoid goroutine leaks in the
+// exec queue.
+func NewFuzzerPeer(version int) (p *clientPeer, closer func()) {
+	p = newClientPeer(version, 0, p2p.NewPeer(enode.ID{}, "", nil), nil)
+	return p, func() { p.peerCommons.close() }
 }
