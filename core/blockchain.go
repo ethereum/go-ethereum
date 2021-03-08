@@ -52,6 +52,9 @@ var (
 	headHeaderGauge    = metrics.NewRegisteredGauge("chain/head/header", nil)
 	headFastBlockGauge = metrics.NewRegisteredGauge("chain/head/receipt", nil)
 
+	headLastGCBlockGauge = metrics.NewRegisteredGauge("chain/head/lastgc", nil)
+	headLastPersistGauge = metrics.NewRegisteredGauge("chain/head/lastpersist", nil)
+
 	accountReadTimer   = metrics.NewRegisteredTimer("chain/account/reads", nil)
 	accountHashTimer   = metrics.NewRegisteredTimer("chain/account/hashes", nil)
 	accountUpdateTimer = metrics.NewRegisteredTimer("chain/account/updates", nil)
@@ -82,6 +85,11 @@ var (
 	errInsertionInterrupted = errors.New("insertion is interrupted")
 )
 
+var (
+	// TriesInMemory  Keeps the latest 128 blocks when pruning.
+	TriesInMemory uint64 = 128
+)
+
 const (
 	bodyCacheLimit      = 256
 	blockCacheLimit     = 256
@@ -89,7 +97,6 @@ const (
 	txLookupCacheLimit  = 1024
 	maxFutureBlocks     = 256
 	maxTimeFutureBlocks = 30
-	TriesInMemory       = 128
 
 	// BlockChainVersion ensures that an incompatible database forces a resync from scratch.
 	//
@@ -120,6 +127,7 @@ const (
 // CacheConfig contains the configuration values for the trie caching/pruning
 // that's resident in a blockchain.
 type CacheConfig struct {
+	TriesInMemory       int           // Keeps the latest n blocks when pruning.
 	TrieCleanLimit      int           // Memory allowance (MB) to use for caching trie nodes in memory
 	TrieCleanJournal    string        // Disk journal for saving clean cache entries.
 	TrieCleanRejournal  time.Duration // Time interval to dump clean cache to disk periodically
@@ -136,6 +144,7 @@ type CacheConfig struct {
 // defaultCacheConfig are the default caching values if none are specified by the
 // user (also used during testing).
 var defaultCacheConfig = &CacheConfig{
+	TriesInMemory:  128,
 	TrieCleanLimit: 256,
 	TrieDirtyLimit: 256,
 	TrieTimeLimit:  5 * time.Minute,
@@ -217,6 +226,12 @@ type BlockChain struct {
 func NewBlockChain(db ethdb.Database, cacheConfig *CacheConfig, chainConfig *params.ChainConfig, engine consensus.Engine, vmConfig vm.Config, shouldPreserve func(block *types.Block) bool, txLookupLimit *uint64) (*BlockChain, error) {
 	if cacheConfig == nil {
 		cacheConfig = defaultCacheConfig
+	}
+	if cacheConfig.TriesInMemory != 0 {
+		TriesInMemory = uint64(cacheConfig.TriesInMemory)
+	}
+	if TriesInMemory != 128 {
+		log.Warn("TriesInMemory isn't the default value(128), non-default values may cause system instability", "triesInMemory", TriesInMemory)
 	}
 	bodyCache, _ := lru.New(bodyCacheLimit)
 	bodyRLPCache, _ := lru.New(bodyCacheLimit)
@@ -1030,11 +1045,14 @@ func (bc *BlockChain) Stop() {
 				log.Error("Failed to commit recent state trie", "err", err)
 			}
 		}
+		if !bc.triegc.Empty() {
+			log.Info("Dereference all trie nodes remaining in prqueue", "nodes", bc.triegc.Size())
+		}
 		for !bc.triegc.Empty() {
 			triedb.Dereference(bc.triegc.PopItem().(common.Hash))
 		}
 		if size, _ := triedb.Size(); size != 0 {
-			log.Error("Dangling trie nodes after full cleanup")
+			log.Error("Dangling trie nodes after full cleanup", "size", size)
 		}
 	}
 	// Ensure all live cached entries be saved into disk, so that we can skip
@@ -1511,11 +1529,12 @@ func (bc *BlockChain) writeBlockWithState(block *types.Block, receipts []*types.
 					// If we're exceeding limits but haven't reached a large enough memory gap,
 					// warn the user that the system is becoming unstable.
 					if chosen < lastWrite+TriesInMemory && bc.gcproc >= 2*bc.cacheConfig.TrieTimeLimit {
-						log.Info("State in memory for too long, committing", "time", bc.gcproc, "allowance", bc.cacheConfig.TrieTimeLimit, "optimum", float64(chosen-lastWrite)/TriesInMemory)
+						log.Info("State in memory for too long, committing", "time", bc.gcproc, "allowance", bc.cacheConfig.TrieTimeLimit, "optimum", float64(chosen-lastWrite)/float64(TriesInMemory))
 					}
 					// Flush an entire trie and restart the counters
 					triedb.Commit(header.Root, true, nil)
 					lastWrite = chosen
+					headLastPersistGauge.Update(int64(chosen))
 					bc.gcproc = 0
 				}
 			}
@@ -1526,6 +1545,7 @@ func (bc *BlockChain) writeBlockWithState(block *types.Block, receipts []*types.
 					bc.triegc.Push(root, number)
 					break
 				}
+				headLastGCBlockGauge.Update(-number)
 				triedb.Dereference(root.(common.Hash))
 			}
 		}
