@@ -363,11 +363,7 @@ func (s *remoteSealer) notifyWork() {
 	var blob []byte
 	var err error
 	if s.notifyFull {
-		blob, err = json.Marshal(s.currentBlock.Header())
-		if err != nil {
-			s.ethash.config.Log.Error("Unable to marshal current block for the notification", "err", err)
-			return
-		}
+		blob, _ = json.Marshal(s.currentBlock.Header())
 	} else {
 		blob, _ = json.Marshal(s.currentWork)
 	}
