@@ -49,7 +49,7 @@ Now start geth and wait for it to sync the blockchain. This will take quite a wh
 
 Now we're ready to start mining. In a new terminal session, run ethminer and connect it to geth:
 
-    ethminer -G -P http://127.0.0.1:8545
+    ethminer -G -p http://127.0.0.1:8545
 
 `ethminer` communicates with geth on port 8545 (the default RPC port in geth). You can
 change this by giving the [`--http.port` option](../rpc/server) to `geth`. Ethminer will find
