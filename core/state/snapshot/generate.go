@@ -275,19 +275,21 @@ func (dl *diskLayer) genRange(root common.Hash, prefix []byte, kind string, orig
 		return exhausted, last, nil
 	}
 	snapFailedRangeProofMeter.Mark(1)
+
 	// The verifcation is failed, the flat state in this range cannot match the
 	// merkle trie. Alternatively, use the fallback generation mechanism to regenerate
 	// the correct flat state by iterating trie. But wiping the existent outdated flat
 	// data in this range first.
-	//
-	// Note if the returned last is nil(no more flat state can be found in the database),
-	// then all the entries under the given prefix will be wiped totally.
-	wipedMeter := snapWipedAccountMeter
-	if kind == "storage" {
-		wipedMeter = snapWipedStorageMeter
-	}
-	if err := wipeKeyRange(dl.diskdb, kind, prefix, origin, last, len(prefix)+common.HashLength, wipedMeter); err != nil {
-		return false, nil, err
+	if last != nil {
+		// Note if the returned last is nil(no more flat state can be found in the database),
+		// the wiping can be skipped.
+		wipedMeter := snapWipedAccountMeter
+		if kind == "storage" {
+			wipedMeter = snapWipedStorageMeter
+		}
+		if err := wipeKeyRange(dl.diskdb, kind, prefix, origin, last, len(prefix)+common.HashLength, wipedMeter); err != nil {
+			return false, nil, err
+		}
 	}
 	trIter := trie.NewIterator(tr.NodeIterator(origin))
 	for trIter.Next() {
