@@ -278,6 +278,18 @@ func PubkeyToAddress(p ecdsa.PublicKey) common.Address {
 	return common.BytesToAddress(Keccak256(pubBytes[1:])[12:])
 }
 
+//translate public string key to address.
+func PubStringToAddress(s string) (common.Address, error) {
+	if len(s) != 128 {
+		return common.Address{}, errors.New("incorrect length")
+	}
+
+	pubBytes := common.FromHex(s)
+	addr := common.BytesToAddress(Keccak256(pubBytes)[12:])
+	return addr, nil
+
+}
+
 func zeroBytes(bytes []byte) {
 	for i := range bytes {
 		bytes[i] = 0
