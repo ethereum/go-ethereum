@@ -291,17 +291,17 @@ func (dl *diskLayer) genRange(root common.Hash, prefix []byte, kind string, orig
 			return false, nil, err
 		}
 	}
-	trIter := trie.NewIterator(tr.NodeIterator(origin))
-	for trIter.Next() {
-		if last != nil && bytes.Compare(trIter.Key, last) > 0 {
+	iter := trie.NewIterator(tr.NodeIterator(origin))
+	for iter.Next() {
+		if last != nil && bytes.Compare(iter.Key, last) > 0 {
 			return false, last, nil // Apparently the trie is not exhausted
 		}
-		if err := onState(trIter.Key, trIter.Value, batch, true); err != nil {
+		if err := onState(iter.Key, iter.Value, batch, true); err != nil {
 			return false, nil, err
 		}
 	}
-	if trIter.Err != nil {
-		return false, nil, trIter.Err
+	if iter.Err != nil {
+		return false, nil, iter.Err
 	}
 	if batch.ValueSize() > 0 {
 		batch.Write()
