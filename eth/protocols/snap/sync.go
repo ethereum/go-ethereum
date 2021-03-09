@@ -1812,6 +1812,7 @@ func (s *Syncer) processStorageResponse(res *storageResponse) {
 		// snapshot generation.
 		for j := 0; j < len(res.hashes[i]); j++ {
 			rawdb.WriteStorageSnapshot(batch, account, res.hashes[i][j], res.slots[i][j])
+			bytes += common.StorageSize(1 + 2*common.HashLength + len(res.slots[i][j]))
 		}
 	}
 	if err := batch.Write(); err != nil {
@@ -1980,6 +1981,7 @@ func (s *Syncer) forwardAccountTask(task *accountTask) {
 		}
 		blob := snapshot.SlimAccountRLP(res.accounts[i].Nonce, res.accounts[i].Balance, res.accounts[i].Root, res.accounts[i].CodeHash)
 		rawdb.WriteAccountSnapshot(batch, hash, blob)
+		bytes += common.StorageSize(1 + common.HashLength + len(blob))
 	}
 	if err := batch.Write(); err != nil {
 		log.Crit("Failed to persist accounts", "err", err)
