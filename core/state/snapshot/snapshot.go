@@ -479,7 +479,7 @@ func diffToDisk(bottom *diffLayer) *diskLayer {
 		rawdb.DeleteAccountSnapshot(batch, hash)
 		base.cache.Set(hash[:], nil)
 
-		it := rawdb.IterateStorageSnapshots(base.diskdb, hash, common.Hash{})
+		it := rawdb.IterateStorageSnapshots(base.diskdb, hash)
 		for it.Next() {
 			if key := it.Key(); len(key) == 65 { // TODO(karalabe): Yuck, we should move this into the iterator
 				batch.Delete(key)
