@@ -52,7 +52,7 @@ const (
 	// maxRequestSize is the maximum number of bytes to request from a remote peer.
 	maxRequestSize = 512 * 1024
 
-	// maxStorageSetRequestCountis th maximum number of contracts to request the
+	// maxStorageSetRequestCount is the maximum number of contracts to request the
 	// storage of in a single query. If this number is too low, we're not filling
 	// responses fully and waste round trip times. If it's too high, we're capping
 	// responses and waste bandwidth.

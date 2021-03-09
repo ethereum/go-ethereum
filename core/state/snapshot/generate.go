@@ -52,7 +52,7 @@ var (
 	// in each range check. This is a value estimated based on experience. If this
 	// value is too large, the failure rate of range prove will increase. Otherwise
 	// the the value is too small, the efficiency of the state recovery will decrease.
-	storageCheckRange = 100
+	storageCheckRange = 1024
 )
 
 // generatorStats is a collection of statistics gathered by the snapshot generator
@@ -360,7 +360,7 @@ func (dl *diskLayer) generate(stats *generatorStats) {
 				}
 				var storeOrigin = common.CopyBytes(storeMarker)
 				for {
-					exhausted, last, err := dl.genRange(acc.Root, rawdb.SnapshotStoragePrefix, "storage", storeOrigin, storageCheckRange, stats, func(key []byte, val []byte, db ethdb.Batch, regen bool) error {
+					exhausted, last, err := dl.genRange(acc.Root, append(rawdb.SnapshotStoragePrefix, accountHash.Bytes()...), "storage", storeOrigin, storageCheckRange, stats, func(key []byte, val []byte, db ethdb.Batch, regen bool) error {
 						if regen {
 							rawdb.WriteStorageSnapshot(batch, accountHash, common.BytesToHash(key), val)
 						}
