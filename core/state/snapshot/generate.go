@@ -31,6 +31,7 @@ import (
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/ethdb"
 	"github.com/ethereum/go-ethereum/log"
+	"github.com/ethereum/go-ethereum/metrics"
 	"github.com/ethereum/go-ethereum/rlp"
 	"github.com/ethereum/go-ethereum/trie"
 )
@@ -53,6 +54,18 @@ var (
 	// value is too large, the failure rate of range prove will increase. Otherwise
 	// the the value is too small, the efficiency of the state recovery will decrease.
 	storageCheckRange = 1024
+)
+
+// Metrics in generation
+var (
+	snapGeneratedAccountMeter     = metrics.NewRegisteredMeter("state/snapshot/generation/account/generated", nil)
+	snapRecoveredAccountMeter     = metrics.NewRegisteredMeter("state/snapshot/generation/account/recovered", nil)
+	snapWipedAccountMeter         = metrics.NewRegisteredMeter("state/snapshot/generation/account/wiped", nil)
+	snapGeneratedStorageMeter     = metrics.NewRegisteredMeter("state/snapshot/generation/storage/generated", nil)
+	snapRecoveredStorageMeter     = metrics.NewRegisteredMeter("state/snapshot/generation/storage/recovered", nil)
+	snapWipedStorageMeter         = metrics.NewRegisteredMeter("state/snapshot/generation/storage/wiped", nil)
+	snapSuccessfulRangeProofMeter = metrics.NewRegisteredMeter("state/snapshot/generation/proof/success", nil)
+	snapFailedRangeProofMeter     = metrics.NewRegisteredMeter("state/snapshot/generation/proof/failure", nil)
 )
 
 // generatorStats is a collection of statistics gathered by the snapshot generator
@@ -246,6 +259,7 @@ func (dl *diskLayer) genRange(root common.Hash, prefix []byte, kind string, orig
 	batch := dl.diskdb.NewBatch()
 	keys, vals, last, exhausted, err := dl.proveRange(root, tr, prefix, kind, origin, max, onValue)
 	if err == nil {
+		snapSuccessfulRangeProofMeter.Mark(1)
 		// The verification is passed, process each state with the given
 		// callback function. If this state represents a contract, the
 		// corresponding storage check will be performed in the callback
@@ -260,6 +274,7 @@ func (dl *diskLayer) genRange(root common.Hash, prefix []byte, kind string, orig
 		}
 		return exhausted, last, nil
 	}
+	snapFailedRangeProofMeter.Mark(1)
 	// The verifcation is failed, the flat state in this range cannot match the
 	// merkle trie. Alternatively, use the fallback generation mechanism to regenerate
 	// the correct flat state by iterating trie. But wiping the existent outdated flat
@@ -267,7 +282,11 @@ func (dl *diskLayer) genRange(root common.Hash, prefix []byte, kind string, orig
 	//
 	// Note if the returned last is nil(no more flat state can be found in the database),
 	// then all the entries under the given prefix will be wiped totally.
-	if err := wipeKeyRange(dl.diskdb, kind, prefix, origin, last, len(prefix)+common.HashLength); err != nil {
+	wipedMeter := snapWipedAccountMeter
+	if kind == "storage" {
+		wipedMeter = snapWipedStorageMeter
+	}
+	if err := wipeKeyRange(dl.diskdb, kind, prefix, origin, last, len(prefix)+common.HashLength, wipedMeter); err != nil {
 		return false, nil, err
 	}
 	trIter := trie.NewIterator(tr.NodeIterator(origin))
@@ -321,6 +340,9 @@ func (dl *diskLayer) generate(stats *generatorStats) {
 			if accMarker == nil || !bytes.Equal(accountHash[:], accMarker) {
 				if regen {
 					rawdb.WriteAccountSnapshot(batch, accountHash, data)
+					snapGeneratedAccountMeter.Mark(1)
+				} else {
+					snapRecoveredAccountMeter.Mark(1)
 				}
 				stats.storage += common.StorageSize(1 + common.HashLength + len(data))
 				stats.accounts++
@@ -363,6 +385,9 @@ func (dl *diskLayer) generate(stats *generatorStats) {
 					exhausted, last, err := dl.genRange(acc.Root, append(rawdb.SnapshotStoragePrefix, accountHash.Bytes()...), "storage", storeOrigin, storageCheckRange, stats, func(key []byte, val []byte, db ethdb.Batch, regen bool) error {
 						if regen {
 							rawdb.WriteStorageSnapshot(batch, accountHash, common.BytesToHash(key), val)
+							snapGeneratedStorageMeter.Mark(1)
+						} else {
+							snapRecoveredStorageMeter.Mark(1)
 						}
 						stats.storage += common.StorageSize(1 + 2*common.HashLength + len(val))
 						stats.slots++

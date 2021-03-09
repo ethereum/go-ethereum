@@ -24,6 +24,7 @@ import (
 	"github.com/ethereum/go-ethereum/core/rawdb"
 	"github.com/ethereum/go-ethereum/ethdb"
 	"github.com/ethereum/go-ethereum/log"
+	"github.com/ethereum/go-ethereum/metrics"
 )
 
 // wipeSnapshot starts a goroutine to iterate over the entire key-value database
@@ -53,10 +54,10 @@ func wipeSnapshot(db ethdb.KeyValueStore, full bool) chan struct{} {
 // removed in sync to avoid data races. After all is done, the snapshot range of
 // the database is compacted to free up unused data blocks.
 func wipeContent(db ethdb.KeyValueStore) error {
-	if err := wipeKeyRange(db, "accounts", rawdb.SnapshotAccountPrefix, nil, nil, len(rawdb.SnapshotAccountPrefix)+common.HashLength); err != nil {
+	if err := wipeKeyRange(db, "accounts", rawdb.SnapshotAccountPrefix, nil, nil, len(rawdb.SnapshotAccountPrefix)+common.HashLength, snapWipedAccountMeter); err != nil {
 		return err
 	}
-	if err := wipeKeyRange(db, "storage", rawdb.SnapshotStoragePrefix, nil, nil, len(rawdb.SnapshotStoragePrefix)+2*common.HashLength); err != nil {
+	if err := wipeKeyRange(db, "storage", rawdb.SnapshotStoragePrefix, nil, nil, len(rawdb.SnapshotStoragePrefix)+2*common.HashLength, snapWipedStorageMeter); err != nil {
 		return err
 	}
 	// Compact the snapshot section of the database to get rid of unused space
@@ -84,7 +85,7 @@ func wipeContent(db ethdb.KeyValueStore) error {
 // wipeKeyRange deletes a range of keys from the database starting with prefix
 // and having a specific total key length. The start and limit is optional for
 // specifying a particular key range for deletion.
-func wipeKeyRange(db ethdb.KeyValueStore, kind string, prefix []byte, origin []byte, limit []byte, keylen int) error {
+func wipeKeyRange(db ethdb.KeyValueStore, kind string, prefix []byte, origin []byte, limit []byte, keylen int, meter metrics.Meter) error {
 	// Batch deletions together to avoid holding an iterator for too long
 	var (
 		batch = db.NewBatch()
@@ -133,6 +134,9 @@ func wipeKeyRange(db ethdb.KeyValueStore, kind string, prefix []byte, origin []b
 	it.Release()
 	if err := batch.Write(); err != nil {
 		return err
+	}
+	if meter != nil {
+		meter.Mark(int64(items))
 	}
 	log.Info("Deleted state snapshot leftovers", "kind", kind, "wiped", items, "elapsed", common.PrettyDuration(time.Since(start)))
 	return nil
