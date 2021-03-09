@@ -282,7 +282,7 @@ func dbCompact(ctx *cli.Context) error {
 	db := utils.MakeChainDatabase(ctx, stack, false)
 	defer db.Close()
 
-	log.Info("Before the compaction")
+	log.Info("Stats before compaction")
 	showLeveldbStats(db)
 
 	log.Info("Triggering compaction")
@@ -290,7 +290,7 @@ func dbCompact(ctx *cli.Context) error {
 		log.Info("Compact err", "error", err)
 		return err
 	}
-	log.Info("After the compaction")
+	log.Info("Stats after compaction")
 	showLeveldbStats(db)
 	return nil
 }
