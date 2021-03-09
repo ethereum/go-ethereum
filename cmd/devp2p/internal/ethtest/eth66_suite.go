@@ -34,7 +34,6 @@ func (s *Suite) Is_66(t *utesting.T) {
 	if conn.negotiatedProtoVersion < 66 {
 		t.Fail()
 	}
-	return
 }
 
 // TestStatus_66 attempts to connect to the given node and exchange
