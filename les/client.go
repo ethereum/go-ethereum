@@ -83,7 +83,7 @@ func New(stack *node.Node, config *ethconfig.Config) (*LightEthereum, error) {
 	if err != nil {
 		return nil, err
 	}
-	lesDb, err := stack.OpenDatabase("les.client", 0, 0, "eth/db/les.client")
+	lesDb, err := stack.OpenDatabase("les.client", 0, 0, "eth/db/lesclient/")
 	if err != nil {
 		return nil, err
 	}

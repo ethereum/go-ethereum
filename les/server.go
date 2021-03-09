@@ -87,7 +87,7 @@ type LesServer struct {
 }
 
 func NewLesServer(node *node.Node, e ethBackend, config *ethconfig.Config) (*LesServer, error) {
-	lesDb, err := node.OpenDatabase("les.server", 0, 0, "eth/db/les.server")
+	lesDb, err := node.OpenDatabase("les.server", 0, 0, "eth/db/lesserver/")
 	if err != nil {
 		return nil, err
 	}
