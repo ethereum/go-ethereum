@@ -82,11 +82,11 @@ func (f *FullService) Stop() error { return nil }
 
 func (f *FullService) Protocols() []p2p.Protocol {
 	return []p2p.Protocol{
-		p2p.Protocol{
+		{
 			Name:    "test1",
 			Version: uint(1),
 		},
-		p2p.Protocol{
+		{
 			Name:    "test2",
 			Version: uint(2),
 		},

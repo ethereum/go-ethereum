@@ -19,20 +19,23 @@ package light
 import (
 	"bytes"
 	"context"
+	"errors"
 	"math/big"
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core"
 	"github.com/ethereum/go-ethereum/core/rawdb"
 	"github.com/ethereum/go-ethereum/core/types"
-	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/rlp"
 )
 
-var sha3Nil = crypto.Keccak256Hash(nil)
+// errNonCanonicalHash is returned if the requested chain data doesn't belong
+// to the canonical chain. ODR can only retrieve the canonical chain data covered
+// by the CHT or Bloom trie for verification.
+var errNonCanonicalHash = errors.New("hash is not currently canonical")
 
 // GetHeaderByNumber retrieves the canonical block header corresponding to the
-// given number.
+// given number. The returned header is proven by local CHT.
 func GetHeaderByNumber(ctx context.Context, odr OdrBackend, number uint64) (*types.Header, error) {
 	// Try to find it in the local database first.
 	db := odr.Database()
@@ -63,25 +66,6 @@ func GetHeaderByNumber(ctx context.Context, odr OdrBackend, number uint64) (*typ
 	return r.Header, nil
 }
 
-// GetUntrustedHeaderByNumber retrieves specified block header without
-// correctness checking. Note this function should only be used in light
-// client checkpoint syncing.
-func GetUntrustedHeaderByNumber(ctx context.Context, odr OdrBackend, number uint64, peerId string) (*types.Header, error) {
-	// todo(rjl493456442) it's a hack to retrieve headers which is not covered
-	// by CHT. Fix it in LES4
-	r := &ChtRequest{
-		BlockNum:  number,
-		ChtNum:    number / odr.IndexerConfig().ChtSize,
-		Untrusted: true,
-		PeerId:    peerId,
-		Config:    odr.IndexerConfig(),
-	}
-	if err := odr.Retrieve(ctx, r); err != nil {
-		return nil, err
-	}
-	return r.Header, nil
-}
-
 // GetCanonicalHash retrieves the canonical block hash corresponding to the number.
 func GetCanonicalHash(ctx context.Context, odr OdrBackend, number uint64) (common.Hash, error) {
 	hash := rawdb.ReadCanonicalHash(odr.Database(), number)
@@ -102,9 +86,12 @@ func GetTd(ctx context.Context, odr OdrBackend, hash common.Hash, number uint64)
 	if td != nil {
 		return td, nil
 	}
-	_, err := GetHeaderByNumber(ctx, odr, number)
+	header, err := GetHeaderByNumber(ctx, odr, number)
 	if err != nil {
 		return nil, err
+	}
+	if header.Hash() != hash {
+		return nil, errNonCanonicalHash
 	}
 	// <hash, number> -> td mapping already be stored in db, get it.
 	return rawdb.ReadTd(odr.Database(), hash, number), nil
@@ -119,6 +106,9 @@ func GetBodyRLP(ctx context.Context, odr OdrBackend, hash common.Hash, number ui
 	header, err := GetHeaderByNumber(ctx, odr, number)
 	if err != nil {
 		return nil, errNoHeader
+	}
+	if header.Hash() != hash {
+		return nil, errNonCanonicalHash
 	}
 	r := &BlockRequest{Hash: hash, Number: number, Header: header}
 	if err := odr.Retrieve(ctx, r); err != nil {
@@ -166,6 +156,9 @@ func GetBlockReceipts(ctx context.Context, odr OdrBackend, hash common.Hash, num
 		header, err := GetHeaderByNumber(ctx, odr, number)
 		if err != nil {
 			return nil, errNoHeader
+		}
+		if header.Hash() != hash {
+			return nil, errNonCanonicalHash
 		}
 		r := &ReceiptsRequest{Hash: hash, Number: number, Header: header}
 		if err := odr.Retrieve(ctx, r); err != nil {
@@ -276,10 +269,15 @@ func GetBloomBits(ctx context.Context, odr OdrBackend, bit uint, sections []uint
 	return result, nil
 }
 
-// GetTransaction retrieves a canonical transaction by hash and also returns its position in the chain
+// GetTransaction retrieves a canonical transaction by hash and also returns
+// its position in the chain. There is no guarantee in the LES protocol that
+// the mined transaction will be retrieved back for sure because of different
+// reasons(the transaction is unindexed, the malicous server doesn't reply it
+// deliberately, etc). Therefore, unretrieved transactions will receive a certain
+// number of retrys, thus giving a weak guarantee.
 func GetTransaction(ctx context.Context, odr OdrBackend, txHash common.Hash) (*types.Transaction, common.Hash, uint64, uint64, error) {
 	r := &TxStatusRequest{Hashes: []common.Hash{txHash}}
-	if err := odr.Retrieve(ctx, r); err != nil || r.Status[0].Status != core.TxStatusIncluded {
+	if err := odr.RetrieveTxStatus(ctx, r); err != nil || r.Status[0].Status != core.TxStatusIncluded {
 		return nil, common.Hash{}, 0, 0, err
 	}
 	pos := r.Status[0].Lookup

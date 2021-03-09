@@ -23,7 +23,7 @@ import (
 
 	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/ethereum/go-ethereum/common/mclock"
-	lps "github.com/ethereum/go-ethereum/les/lespay/server"
+	vfs "github.com/ethereum/go-ethereum/les/vflux/server"
 	"github.com/ethereum/go-ethereum/p2p/enode"
 )
 
@@ -37,7 +37,7 @@ var (
 // PrivateLightServerAPI provides an API to access the LES light server.
 type PrivateLightServerAPI struct {
 	server                               *LesServer
-	defaultPosFactors, defaultNegFactors lps.PriceFactors
+	defaultPosFactors, defaultNegFactors vfs.PriceFactors
 }
 
 // NewPrivateLightServerAPI creates a new LES light server API.
@@ -107,7 +107,7 @@ func (api *PrivateLightServerAPI) clientInfo(c *clientInfo) map[string]interface
 
 // setParams either sets the given parameters for a single connected client (if specified)
 // or the default parameters applicable to clients connected in the future
-func (api *PrivateLightServerAPI) setParams(params map[string]interface{}, client *clientInfo, posFactors, negFactors *lps.PriceFactors) (updateFactors bool, err error) {
+func (api *PrivateLightServerAPI) setParams(params map[string]interface{}, client *clientInfo, posFactors, negFactors *vfs.PriceFactors) (updateFactors bool, err error) {
 	defParams := client == nil
 	for name, value := range params {
 		errValue := func() error {

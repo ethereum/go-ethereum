@@ -21,6 +21,7 @@ import (
 	"strconv"
 	"testing"
 
+	"github.com/ethereum/go-ethereum/eth/protocols/eth"
 	"github.com/ethereum/go-ethereum/p2p"
 	"github.com/stretchr/testify/assert"
 )
@@ -73,7 +74,7 @@ func TestEthProtocolNegotiation(t *testing.T) {
 // TestChain_GetHeaders tests whether the test suite can correctly
 // respond to a GetBlockHeaders request from a node.
 func TestChain_GetHeaders(t *testing.T) {
-	chainFile, err := filepath.Abs("./testdata/fullchain.rlp.gz")
+	chainFile, err := filepath.Abs("./testdata/chain.rlp")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -93,7 +94,7 @@ func TestChain_GetHeaders(t *testing.T) {
 	}{
 		{
 			req: GetBlockHeaders{
-				Origin: hashOrNumber{
+				Origin: eth.HashOrNumber{
 					Number: uint64(2),
 				},
 				Amount:  uint64(5),
@@ -110,7 +111,7 @@ func TestChain_GetHeaders(t *testing.T) {
 		},
 		{
 			req: GetBlockHeaders{
-				Origin: hashOrNumber{
+				Origin: eth.HashOrNumber{
 					Number: uint64(chain.Len() - 1),
 				},
 				Amount:  uint64(3),
@@ -125,7 +126,7 @@ func TestChain_GetHeaders(t *testing.T) {
 		},
 		{
 			req: GetBlockHeaders{
-				Origin: hashOrNumber{
+				Origin: eth.HashOrNumber{
 					Hash: chain.Head().Hash(),
 				},
 				Amount:  uint64(1),

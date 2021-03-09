@@ -101,18 +101,26 @@ func generateSnapshot(diskdb ethdb.KeyValueStore, triedb *trie.Database, cache i
 		wiper = wipeSnapshot(diskdb, true)
 	}
 	// Create a new disk layer with an initialized state marker at zero
-	rawdb.WriteSnapshotRoot(diskdb, root)
-
+	var (
+		stats     = &generatorStats{wiping: wiper, start: time.Now()}
+		batch     = diskdb.NewBatch()
+		genMarker = []byte{} // Initialized but empty!
+	)
+	rawdb.WriteSnapshotRoot(batch, root)
+	journalProgress(batch, genMarker, stats)
+	if err := batch.Write(); err != nil {
+		log.Crit("Failed to write initialized state marker", "error", err)
+	}
 	base := &diskLayer{
 		diskdb:     diskdb,
 		triedb:     triedb,
 		root:       root,
 		cache:      fastcache.New(cache * 1024 * 1024),
-		genMarker:  []byte{}, // Initialized but empty!
+		genMarker:  genMarker,
 		genPending: make(chan struct{}),
 		genAbort:   make(chan chan *generatorStats),
 	}
-	go base.generate(&generatorStats{wiping: wiper, start: time.Now()})
+	go base.generate(stats)
 	log.Debug("Start snapshot generation", "root", root)
 	return base
 }
@@ -137,10 +145,12 @@ func journalProgress(db ethdb.KeyValueWriter, marker []byte, stats *generatorSta
 		panic(err) // Cannot happen, here to catch dev errors
 	}
 	var logstr string
-	switch len(marker) {
-	case 0:
+	switch {
+	case marker == nil:
 		logstr = "done"
-	case common.HashLength:
+	case bytes.Equal(marker, []byte{}):
+		logstr = "empty"
+	case len(marker) == common.HashLength:
 		logstr = fmt.Sprintf("%#x", marker)
 	default:
 		logstr = fmt.Sprintf("%#x:%#x", marker[:common.HashLength], marker[common.HashLength:])
@@ -151,7 +161,7 @@ func journalProgress(db ethdb.KeyValueWriter, marker []byte, stats *generatorSta
 
 // generate is a background thread that iterates over the state and storage tries,
 // constructing the state snapshot. All the arguments are purely for statistics
-// gethering and logging, since the method surfs the blocks as they arrive, often
+// gathering and logging, since the method surfs the blocks as they arrive, often
 // being restarted.
 func (dl *diskLayer) generate(stats *generatorStats) {
 	// If a database wipe is in operation, wait until it's done
@@ -241,7 +251,7 @@ func (dl *diskLayer) generate(stats *generatorStats) {
 		if acc.Root != emptyRoot {
 			storeTrie, err := trie.NewSecure(acc.Root, dl.triedb)
 			if err != nil {
-				log.Error("Generator failed to access storage trie", "accroot", dl.root, "acchash", common.BytesToHash(accIt.Key), "stroot", acc.Root, "err", err)
+				log.Error("Generator failed to access storage trie", "root", dl.root, "account", accountHash, "stroot", acc.Root, "err", err)
 				abort := <-dl.genAbort
 				abort <- stats
 				return
@@ -281,6 +291,10 @@ func (dl *diskLayer) generate(stats *generatorStats) {
 						abort <- stats
 						return
 					}
+					if time.Since(logged) > 8*time.Second {
+						stats.Log("Generating state snapshot", dl.root, append(accountHash[:], storeIt.Key...))
+						logged = time.Now()
+					}
 				}
 			}
 			if err := storeIt.Err; err != nil {
@@ -303,13 +317,12 @@ func (dl *diskLayer) generate(stats *generatorStats) {
 		abort <- stats
 		return
 	}
-	// Snapshot fully generated, set the marker to nil
-	if batch.ValueSize() > 0 {
-		// Ensure the generator entry is in sync with the data
-		journalProgress(batch, nil, stats)
+	// Snapshot fully generated, set the marker to nil.
+	// Note even there is nothing to commit, persist the
+	// generator anyway to mark the snapshot is complete.
+	journalProgress(batch, nil, stats)
+	batch.Write()
 
-		batch.Write()
-	}
 	log.Info("Generated state snapshot", "accounts", stats.accounts, "slots", stats.slots,
 		"storage", stats.storage, "elapsed", common.PrettyDuration(time.Since(stats.start)))
 
