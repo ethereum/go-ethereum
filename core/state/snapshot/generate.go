@@ -245,7 +245,7 @@ func (dl *diskLayer) proveRange(root common.Hash, tr *trie.SecureTrie, prefix []
 // genRange generates the state segment with particular prefix. Generation can
 // either verify the correctness of existing state through rangeproof and skip
 // generation, or iterate trie to regenerate state on demand.
-func (dl *diskLayer) genRange(root common.Hash, prefix []byte, kind string, origin []byte, max int, stats *generatorStats, onState func(key []byte, val []byte, batch ethdb.Batch, regen bool) error, onValue func([]byte) ([]byte, error)) (bool, []byte, error) {
+func (dl *diskLayer) genRange(root common.Hash, prefix []byte, kind string, origin []byte, max int, stats *generatorStats, onState func(key []byte, val []byte, regen bool) error, onValue func([]byte) ([]byte, error)) (bool, []byte, error) {
 	tr, err := trie.NewSecure(root, dl.triedb)
 	if err != nil {
 		// The account trie is missing (GC), surf the chain until one becomes available
@@ -256,7 +256,6 @@ func (dl *diskLayer) genRange(root common.Hash, prefix []byte, kind string, orig
 		return false, nil, errors.New("trie is missing")
 	}
 	// Use range prover to check the validity of the flat state in the range
-	batch := dl.diskdb.NewBatch()
 	keys, vals, last, exhausted, err := dl.proveRange(root, tr, prefix, kind, origin, max, onValue)
 	if err == nil {
 		snapSuccessfulRangeProofMeter.Mark(1)
@@ -264,13 +263,9 @@ func (dl *diskLayer) genRange(root common.Hash, prefix []byte, kind string, orig
 		// callback function. If this state represents a contract, the
 		// corresponding storage check will be performed in the callback
 		for i := 0; i < len(keys); i++ {
-			if err := onState(keys[i], vals[i], batch, false); err != nil {
+			if err := onState(keys[i], vals[i], false); err != nil {
 				return false, nil, err
 			}
-		}
-		if batch.ValueSize() > 0 {
-			batch.Write()
-			batch.Reset()
 		}
 		return exhausted, last, nil
 	}
@@ -296,16 +291,12 @@ func (dl *diskLayer) genRange(root common.Hash, prefix []byte, kind string, orig
 		if last != nil && bytes.Compare(iter.Key, last) > 0 {
 			return false, last, nil // Apparently the trie is not exhausted
 		}
-		if err := onState(iter.Key, iter.Value, batch, true); err != nil {
+		if err := onState(iter.Key, iter.Value, true); err != nil {
 			return false, nil, err
 		}
 	}
 	if iter.Err != nil {
 		return false, nil, iter.Err
-	}
-	if batch.ValueSize() > 0 {
-		batch.Write()
-		batch.Reset()
 	}
 	return true, nil, nil // The entire trie is exhausted
 }
@@ -319,11 +310,13 @@ func (dl *diskLayer) generate(stats *generatorStats) {
 	if len(dl.genMarker) > 0 { // []byte{} is the start, use nil for that
 		accMarker = dl.genMarker[:common.HashLength]
 	}
-	logged := time.Now()
-
-	accOrigin := common.CopyBytes(accMarker)
+	var (
+		batch     = dl.diskdb.NewBatch()
+		logged    = time.Now()
+		accOrigin = common.CopyBytes(accMarker)
+	)
 	for {
-		exhausted, last, err := dl.genRange(dl.root, rawdb.SnapshotAccountPrefix, "account", accOrigin, accountCheckRange, stats, func(key []byte, val []byte, batch ethdb.Batch, regen bool) error {
+		exhausted, last, err := dl.genRange(dl.root, rawdb.SnapshotAccountPrefix, "account", accOrigin, accountCheckRange, stats, func(key []byte, val []byte, regen bool) error {
 			// Retrieve the current account and flatten it into the internal format
 			accountHash := common.BytesToHash(key)
 
@@ -384,7 +377,7 @@ func (dl *diskLayer) generate(stats *generatorStats) {
 				}
 				var storeOrigin = common.CopyBytes(storeMarker)
 				for {
-					exhausted, last, err := dl.genRange(acc.Root, append(rawdb.SnapshotStoragePrefix, accountHash.Bytes()...), "storage", storeOrigin, storageCheckRange, stats, func(key []byte, val []byte, db ethdb.Batch, regen bool) error {
+					exhausted, last, err := dl.genRange(acc.Root, append(rawdb.SnapshotStoragePrefix, accountHash.Bytes()...), "storage", storeOrigin, storageCheckRange, stats, func(key []byte, val []byte, regen bool) error {
 						if regen {
 							rawdb.WriteStorageSnapshot(batch, accountHash, common.BytesToHash(key), val)
 							snapGeneratedStorageMeter.Mark(1)
@@ -462,7 +455,9 @@ func (dl *diskLayer) generate(stats *generatorStats) {
 	// Snapshot fully generated, set the marker to nil.
 	// Note even there is nothing to commit, persist the
 	// generator anyway to mark the snapshot is complete.
-	journalProgress(dl.diskdb, nil, stats)
+	journalProgress(batch, nil, stats)
+	batch.Write()
+	batch.Reset()
 
 	log.Info("Generated state snapshot", "accounts", stats.accounts, "slots", stats.slots,
 		"storage", stats.storage, "elapsed", common.PrettyDuration(time.Since(stats.start)))
