@@ -66,7 +66,6 @@ type JumpTable [256]*operation
 // contantinople, istanbul, petersburg and berlin instructions.
 func newBerlinInstructionSet() JumpTable {
 	instructionSet := newIstanbulInstructionSet()
-	enable2315(&instructionSet) // Subroutines - https://eips.ethereum.org/EIPS/eip-2315
 	enable2929(&instructionSet) // Access lists for trie accesses https://eips.ethereum.org/EIPS/eip-2929
 	return instructionSet
 }
