@@ -13,16 +13,17 @@ import (
 )
 
 type dropNotification struct {
-	TxHash common.Hash `json:"txhash"`
-	Reason string `json:"reason"`
-	Replacement string `json:"replacedby,omitempty"`
-	Peer interface{} `json:"peer,omitempty"`
+	// TxHash common.Hash `json:"txhash"`
+	Tx          *ethapi.RPCTransaction `json:"tx"`
+	Reason      string                 `json:"reason"`
+	Replacement string                 `json:"replacedby,omitempty"`
+	Peer interface{}                   `json:"peer,omitempty"`
 }
 
 type rejectNotification struct {
-	Tx *ethapi.RPCTransaction `json:"tx"`
-	Reason string `json:"reason"`
-	Peer interface{} `json:"peer,omitempty"`
+	Tx     *ethapi.RPCTransaction `json:"tx"`
+	Reason string                 `json:"reason"`
+	Peer   interface{} `json:"peer,omitempty"`
 }
 
 // newRPCTransaction returns a transaction that will serialize to the RPC
@@ -78,7 +79,7 @@ func (api *PublicFilterAPI) DroppedTransactions(ctx context.Context) (*rpc.Subsc
 			case d := <-dropped:
 				for _, tx := range d.Txs {
 					notification := &dropNotification{
-						TxHash: tx.Hash(),
+						Tx: newRPCPendingTransaction(tx),
 						Reason: d.Reason,
 						Replacement: replacementHashString(d.Replacement),
 					}

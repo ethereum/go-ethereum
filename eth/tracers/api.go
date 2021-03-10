@@ -735,17 +735,21 @@ func (api *API) traceTx(ctx context.Context, message core.Message, vmctx vm.Bloc
 				return nil, err
 			}
 		}
-		// Constuct the JavaScript tracer to execute with
-		if tracer, err = New(*config.Tracer, txContext); err != nil {
-			return nil, err
+		if *config.Tracer == "goCallTracer" {
+			tracer = NewCallTracer(statedb)
+		} else {
+			// Constuct the JavaScript tracer to execute with
+			if tracer, err = New(*config.Tracer, txContext); err != nil {
+				return nil, err
+			}
+			// Handle timeouts and RPC cancellations
+			deadlineCtx, cancel := context.WithTimeout(ctx, timeout)
+			go func() {
+				<-deadlineCtx.Done()
+				tracer.(*Tracer).Stop(errors.New("execution timeout"))
+			}()
+			defer cancel()
 		}
-		// Handle timeouts and RPC cancellations
-		deadlineCtx, cancel := context.WithTimeout(ctx, timeout)
-		go func() {
-			<-deadlineCtx.Done()
-			tracer.(*Tracer).Stop(errors.New("execution timeout"))
-		}()
-		defer cancel()
 
 	case config == nil:
 		tracer = vm.NewStructLogger(nil)
@@ -775,6 +779,9 @@ func (api *API) traceTx(ctx context.Context, message core.Message, vmctx vm.Bloc
 			ReturnValue: returnVal,
 			StructLogs:  ethapi.FormatLogs(tracer.StructLogs()),
 		}, nil
+
+	case TracerResult:
+		return tracer.GetResult()
 
 	case *Tracer:
 		return tracer.GetResult()
