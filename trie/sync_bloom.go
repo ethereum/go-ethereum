@@ -19,7 +19,6 @@ package trie
 import (
 	"encoding/binary"
 	"fmt"
-	"math"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -29,7 +28,7 @@ import (
 	"github.com/ethereum/go-ethereum/ethdb"
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/metrics"
-	"github.com/steakknife/bloomfilter"
+	bloomfilter "github.com/holiman/bloomfilter/v2"
 )
 
 var (
@@ -40,18 +39,6 @@ var (
 	bloomFaultMeter = metrics.NewRegisteredMeter("trie/bloom/fault", nil)
 	bloomErrorGauge = metrics.NewRegisteredGauge("trie/bloom/error", nil)
 )
-
-// syncBloomHasher is a wrapper around a byte blob to satisfy the interface API
-// requirements of the bloom library used. It's used to convert a trie hash or
-// contract code hash into a 64 bit mini hash.
-type syncBloomHasher []byte
-
-func (f syncBloomHasher) Write(p []byte) (n int, err error) { panic("not implemented") }
-func (f syncBloomHasher) Sum(b []byte) []byte               { panic("not implemented") }
-func (f syncBloomHasher) Reset()                            { panic("not implemented") }
-func (f syncBloomHasher) BlockSize() int                    { panic("not implemented") }
-func (f syncBloomHasher) Size() int                         { return 8 }
-func (f syncBloomHasher) Sum64() uint64                     { return binary.BigEndian.Uint64(f) }
 
 // SyncBloom is a bloom filter used during fast sync to quickly decide if a trie
 // node or contract code already exists on disk or not. It self populates from the
@@ -69,7 +56,7 @@ type SyncBloom struct {
 // initializes it from the database. The bloom is hard coded to use 3 filters.
 func NewSyncBloom(memory uint64, database ethdb.Iteratee) *SyncBloom {
 	// Create the bloom filter to track known trie nodes
-	bloom, err := bloomfilter.New(memory*1024*1024*8, 3)
+	bloom, err := bloomfilter.New(memory*1024*1024*8, 4)
 	if err != nil {
 		panic(fmt.Sprintf("failed to create bloom: %v", err))
 	}
@@ -110,12 +97,11 @@ func (b *SyncBloom) init(database ethdb.Iteratee) {
 		// If the database entry is a trie node, add it to the bloom
 		key := it.Key()
 		if len(key) == common.HashLength {
-			b.bloom.Add(syncBloomHasher(key))
+			b.bloom.AddHash(binary.BigEndian.Uint64(key))
 			bloomLoadMeter.Mark(1)
-		}
-		// If the database entry is a contract code, add it to the bloom
-		if ok, hash := rawdb.IsCodeKey(key); ok {
-			b.bloom.Add(syncBloomHasher(hash))
+		} else if ok, hash := rawdb.IsCodeKey(key); ok {
+			// If the database entry is a contract code, add it to the bloom
+			b.bloom.AddHash(binary.BigEndian.Uint64(hash))
 			bloomLoadMeter.Mark(1)
 		}
 		// If enough time elapsed since the last iterator swap, restart
@@ -125,14 +111,14 @@ func (b *SyncBloom) init(database ethdb.Iteratee) {
 			it.Release()
 			it = database.NewIterator(nil, key)
 
-			log.Info("Initializing fast sync bloom", "items", b.bloom.N(), "errorrate", b.errorRate(), "elapsed", common.PrettyDuration(time.Since(start)))
+			log.Info("Initializing state bloom", "items", b.bloom.N(), "errorrate", b.bloom.FalsePosititveProbability(), "elapsed", common.PrettyDuration(time.Since(start)))
 			swap = time.Now()
 		}
 	}
 	it.Release()
 
 	// Mark the bloom filter inited and return
-	log.Info("Initialized fast sync bloom", "items", b.bloom.N(), "errorrate", b.errorRate(), "elapsed", common.PrettyDuration(time.Since(start)))
+	log.Info("Initialized state bloom", "items", b.bloom.N(), "errorrate", b.bloom.FalsePosititveProbability(), "elapsed", common.PrettyDuration(time.Since(start)))
 	atomic.StoreUint32(&b.inited, 1)
 }
 
@@ -141,7 +127,7 @@ func (b *SyncBloom) init(database ethdb.Iteratee) {
 func (b *SyncBloom) meter() {
 	for {
 		// Report the current error ration. No floats, lame, scale it up.
-		bloomErrorGauge.Update(int64(b.errorRate() * 100000))
+		bloomErrorGauge.Update(int64(b.bloom.FalsePosititveProbability() * 100000))
 
 		// Wait one second, but check termination more frequently
 		for i := 0; i < 10; i++ {
@@ -162,7 +148,7 @@ func (b *SyncBloom) Close() error {
 		b.pend.Wait()
 
 		// Wipe the bloom, but mark it "uninited" just in case someone attempts an access
-		log.Info("Deallocated fast sync bloom", "items", b.bloom.N(), "errorrate", b.errorRate())
+		log.Info("Deallocated state bloom", "items", b.bloom.N(), "errorrate", b.bloom.FalsePosititveProbability())
 
 		atomic.StoreUint32(&b.inited, 0)
 		b.bloom = nil
@@ -175,7 +161,7 @@ func (b *SyncBloom) Add(hash []byte) {
 	if atomic.LoadUint32(&b.closed) == 1 {
 		return
 	}
-	b.bloom.Add(syncBloomHasher(hash))
+	b.bloom.AddHash(binary.BigEndian.Uint64(hash))
 	bloomAddMeter.Mark(1)
 }
 
@@ -193,22 +179,9 @@ func (b *SyncBloom) Contains(hash []byte) bool {
 		return true
 	}
 	// Bloom initialized, check the real one and report any successful misses
-	maybe := b.bloom.Contains(syncBloomHasher(hash))
+	maybe := b.bloom.ContainsHash(binary.BigEndian.Uint64(hash))
 	if !maybe {
 		bloomMissMeter.Mark(1)
 	}
 	return maybe
-}
-
-// errorRate calculates the probability of a random containment test returning a
-// false positive.
-//
-// We're calculating it ourselves because the bloom library we used missed a
-// parentheses in the formula and calculates it wrong. And it's discontinued...
-func (b *SyncBloom) errorRate() float64 {
-	k := float64(b.bloom.K())
-	n := float64(b.bloom.N())
-	m := float64(b.bloom.M())
-
-	return math.Pow(1.0-math.Exp((-k)*(n+0.5)/(m-1)), k)
 }

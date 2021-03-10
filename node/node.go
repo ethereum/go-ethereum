@@ -30,6 +30,7 @@ import (
 	"github.com/ethereum/go-ethereum/core/rawdb"
 	"github.com/ethereum/go-ethereum/ethdb"
 	"github.com/ethereum/go-ethereum/event"
+	"github.com/ethereum/go-ethereum/eth/filters"
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/p2p"
 	"github.com/ethereum/go-ethereum/rpc"
@@ -104,6 +105,7 @@ func New(conf *Config) (*Node, error) {
 		server:        &p2p.Server{Config: conf.P2P},
 		databases:     make(map[*closeTrackingDB]struct{}),
 	}
+	filters.SubscribePeerIDs(node.server)
 
 	// Register built-in APIs.
 	node.rpcAPIs = append(node.rpcAPIs, node.apis()...)
@@ -135,6 +137,14 @@ func New(conf *Config) (*Node, error) {
 		node.server.Config.NodeDatabase = node.config.NodeDB()
 	}
 
+	// Check HTTP/WS prefixes are valid.
+	if err := validatePrefix("HTTP", conf.HTTPPathPrefix); err != nil {
+		return nil, err
+	}
+	if err := validatePrefix("WebSocket", conf.WSPathPrefix); err != nil {
+		return nil, err
+	}
+
 	// Configure RPC servers.
 	node.http = newHTTPServer(node.log, conf.HTTPTimeouts)
 	node.ws = newHTTPServer(node.log, rpc.DefaultHTTPTimeouts)
@@ -159,12 +169,13 @@ func (n *Node) Start() error {
 		return ErrNodeStopped
 	}
 	n.state = runningState
-	err := n.startNetworking()
+	// open networking and RPC endpoints
+	err := n.openEndpoints()
 	lifecycles := make([]Lifecycle, len(n.lifecycles))
 	copy(lifecycles, n.lifecycles)
 	n.lock.Unlock()
 
-	// Check if networking startup failed.
+	// Check if endpoint startup failed.
 	if err != nil {
 		n.doClose(nil)
 		return err
@@ -247,12 +258,14 @@ func (n *Node) doClose(errs []error) error {
 	}
 }
 
-// startNetworking starts all network endpoints.
-func (n *Node) startNetworking() error {
+// openEndpoints starts all network and RPC endpoints.
+func (n *Node) openEndpoints() error {
+	// start networking endpoints
 	n.log.Info("Starting peer-to-peer node", "instance", n.server.Name)
 	if err := n.server.Start(); err != nil {
 		return convertFileLockError(err)
 	}
+	// start RPC endpoints
 	err := n.startRPC()
 	if err != nil {
 		n.stopRPC()
@@ -343,6 +356,7 @@ func (n *Node) startRPC() error {
 			CorsAllowedOrigins: n.config.HTTPCors,
 			Vhosts:             n.config.HTTPVirtualHosts,
 			Modules:            n.config.HTTPModules,
+			prefix:             n.config.HTTPPathPrefix,
 		}
 		if err := n.http.setListenAddr(n.config.HTTPHost, n.config.HTTPPort); err != nil {
 			return err
@@ -358,6 +372,7 @@ func (n *Node) startRPC() error {
 		config := wsConfig{
 			Modules: n.config.WSModules,
 			Origins: n.config.WSOrigins,
+			prefix:  n.config.WSPathPrefix,
 		}
 		if err := server.setListenAddr(n.config.WSHost, n.config.WSPort); err != nil {
 			return err
@@ -454,6 +469,7 @@ func (n *Node) RegisterHandler(name, path string, handler http.Handler) {
 	if n.state != initializingState {
 		panic("can't register HTTP handler on running/stopped node")
 	}
+
 	n.http.mux.Handle(path, handler)
 	n.http.handlerNames[path] = name
 }
@@ -510,17 +526,18 @@ func (n *Node) IPCEndpoint() string {
 	return n.ipc.endpoint
 }
 
-// HTTPEndpoint returns the URL of the HTTP server.
+// HTTPEndpoint returns the URL of the HTTP server. Note that this URL does not
+// contain the JSON-RPC path prefix set by HTTPPathPrefix.
 func (n *Node) HTTPEndpoint() string {
 	return "http://" + n.http.listenAddr()
 }
 
-// WSEndpoint retrieves the current WS endpoint used by the protocol stack.
+// WSEndpoint returns the current JSON-RPC over WebSocket endpoint.
 func (n *Node) WSEndpoint() string {
 	if n.http.wsAllowed() {
-		return "ws://" + n.http.listenAddr()
+		return "ws://" + n.http.listenAddr() + n.http.wsConfig.prefix
 	}
-	return "ws://" + n.ws.listenAddr()
+	return "ws://" + n.ws.listenAddr() + n.ws.wsConfig.prefix
 }
 
 // EventMux retrieves the event multiplexer used by all the network services in

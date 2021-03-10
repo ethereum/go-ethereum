@@ -90,7 +90,7 @@ func toAddress(value *uint256.Int) common.Address {
 	return common.BytesToAddress(value.Bytes())
 }
 
-func (tracer *CallTracer) CaptureState(env *vm.EVM, pc uint64, op vm.OpCode, gas, cost uint64, memory *vm.Memory, stack *vm.Stack, rStack *vm.ReturnStack, rData []byte, contract *vm.Contract, depth int, err error) error {
+func (tracer *CallTracer) CaptureState(env *vm.EVM, pc uint64, op vm.OpCode, gas, cost uint64, memory *vm.Memory, stack *vm.Stack, rData []byte, contract *vm.Contract, depth int, err error) error {
 	// for depth < len(tracer.callStack) {
 	//   c := tracer.callStack[tracer.i()]
 	//   c.GasUsed = c.Gas - gas
@@ -190,7 +190,7 @@ func (tracer *CallTracer) CaptureState(env *vm.EVM, pc uint64, op vm.OpCode, gas
 	}
 	return nil
 }
-func (tracer *CallTracer) CaptureFault(env *vm.EVM, pc uint64, op vm.OpCode, gas, cost uint64, memory *vm.Memory, stack *vm.Stack, rStack *vm.ReturnStack, contract *vm.Contract, depth int, err error) error {
+func (tracer *CallTracer) CaptureFault(env *vm.EVM, pc uint64, op vm.OpCode, gas, cost uint64, memory *vm.Memory, stack *vm.Stack, contract *vm.Contract, depth int, err error) error {
 	return fmt.Errorf("Not implemented")
 }
 

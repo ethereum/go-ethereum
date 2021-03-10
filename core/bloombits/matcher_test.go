@@ -30,6 +30,7 @@ const testSectionSize = 4096
 
 // Tests that wildcard filter rules (nil) can be specified and are handled well.
 func TestMatcherWildcards(t *testing.T) {
+	t.Parallel()
 	matcher := NewMatcher(testSectionSize, [][][]byte{
 		{common.Address{}.Bytes(), common.Address{0x01}.Bytes()}, // Default address is not a wildcard
 		{common.Hash{}.Bytes(), common.Hash{0x01}.Bytes()},       // Default hash is not a wildcard
@@ -56,6 +57,7 @@ func TestMatcherWildcards(t *testing.T) {
 
 // Tests the matcher pipeline on a single continuous workflow without interrupts.
 func TestMatcherContinuous(t *testing.T) {
+	t.Parallel()
 	testMatcherDiffBatches(t, [][]bloomIndexes{{{10, 20, 30}}}, 0, 100000, false, 75)
 	testMatcherDiffBatches(t, [][]bloomIndexes{{{32, 3125, 100}}, {{40, 50, 10}}}, 0, 100000, false, 81)
 	testMatcherDiffBatches(t, [][]bloomIndexes{{{4, 8, 11}, {7, 8, 17}}, {{9, 9, 12}, {15, 20, 13}}, {{18, 15, 15}, {12, 10, 4}}}, 0, 10000, false, 36)
@@ -64,6 +66,7 @@ func TestMatcherContinuous(t *testing.T) {
 // Tests the matcher pipeline on a constantly interrupted and resumed work pattern
 // with the aim of ensuring data items are requested only once.
 func TestMatcherIntermittent(t *testing.T) {
+	t.Parallel()
 	testMatcherDiffBatches(t, [][]bloomIndexes{{{10, 20, 30}}}, 0, 100000, true, 75)
 	testMatcherDiffBatches(t, [][]bloomIndexes{{{32, 3125, 100}}, {{40, 50, 10}}}, 0, 100000, true, 81)
 	testMatcherDiffBatches(t, [][]bloomIndexes{{{4, 8, 11}, {7, 8, 17}}, {{9, 9, 12}, {15, 20, 13}}, {{18, 15, 15}, {12, 10, 4}}}, 0, 10000, true, 36)
@@ -71,6 +74,7 @@ func TestMatcherIntermittent(t *testing.T) {
 
 // Tests the matcher pipeline on random input to hopefully catch anomalies.
 func TestMatcherRandom(t *testing.T) {
+	t.Parallel()
 	for i := 0; i < 10; i++ {
 		testMatcherBothModes(t, makeRandomIndexes([]int{1}, 50), 0, 10000, 0)
 		testMatcherBothModes(t, makeRandomIndexes([]int{3}, 50), 0, 10000, 0)
@@ -84,6 +88,7 @@ func TestMatcherRandom(t *testing.T) {
 // shifter from a multiple of 8. This is needed to cover an optimisation with
 // bitset matching https://github.com/ethereum/go-ethereum/issues/15309.
 func TestMatcherShifted(t *testing.T) {
+	t.Parallel()
 	// Block 0 always matches in the tests, skip ahead of first 8 blocks with the
 	// start to get a potential zero byte in the matcher bitset.
 
@@ -97,6 +102,7 @@ func TestMatcherShifted(t *testing.T) {
 
 // Tests that matching on everything doesn't crash (special case internally).
 func TestWildcardMatcher(t *testing.T) {
+	t.Parallel()
 	testMatcherBothModes(t, nil, 0, 10000, 0)
 }
 
