@@ -434,7 +434,7 @@ func (dl *diskLayer) generate(stats *generatorStats) {
 						return nil
 					}
 					storeOrigin = increseKey(last)
-					if bytes.Equal(storeOrigin, common.Hash{}.Bytes()) {
+					if storeOrigin == nil {
 						return nil // special case, the last is 0xffffffff...fff
 					}
 				}
@@ -456,7 +456,7 @@ func (dl *diskLayer) generate(stats *generatorStats) {
 			break
 		}
 		accOrigin = increseKey(last)
-		if bytes.Equal(accOrigin, common.Hash{}.Bytes()) {
+		if accOrigin == nil {
 			break // special case, the last is 0xffffffff...fff
 		}
 	}
@@ -480,12 +480,14 @@ func (dl *diskLayer) generate(stats *generatorStats) {
 	abort <- nil
 }
 
+// increseKey increase the input key by one bit. Return nil if the entire
+// addition operation overflows,
 func increseKey(key []byte) []byte {
 	for i := len(key) - 1; i >= 0; i-- {
 		key[i]++
 		if key[i] != 0x0 {
-			break
+			return key
 		}
 	}
-	return key
+	return nil
 }
