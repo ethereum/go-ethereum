@@ -43,7 +43,7 @@ require (
 	github.com/rjeczalik/notify v0.9.1
 	github.com/rs/cors v1.7.0
 	github.com/shirou/gopsutil v2.20.5+incompatible
-	github.com/silesiacoin/bls v0.0.0-20210308125319-fc6f239e7d3e
+	github.com/silesiacoin/bls v0.0.0-20210310202623-eb514747fd9f
 	github.com/status-im/keycard-go v0.0.0-20190316090335-8537d3370df4
 	github.com/stretchr/testify v1.7.0
 	github.com/syndtr/goleveldb v1.0.1-0.20200815110645-5c35d600f0ca
@@ -55,4 +55,5 @@ require (
 	gopkg.in/natefinch/npipe.v2 v2.0.0-20160621034901-c1b8fa8bdcce
 	gopkg.in/olebedev/go-duktape.v3 v3.0.0-20200619000410-60c24ae608a6
 	gopkg.in/urfave/cli.v1 v1.20.0
+	vuvuzela.io/crypto v0.0.0-20190327123840-80a93a3ed1d6
 )

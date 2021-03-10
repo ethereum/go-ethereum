@@ -1,6 +1,7 @@
 package ethash
 
 import (
+	"crypto/rand"
 	"encoding/json"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/hexutil"
@@ -16,6 +17,7 @@ import (
 	"sync"
 	"testing"
 	"time"
+	vbls "vuvuzela.io/crypto/bls"
 )
 
 // This file is used for exploration of possible ways to achieve pandora-vanguard block production
@@ -25,8 +27,12 @@ func TestCreateBlockByPandoraAndVanguard(t *testing.T) {
 	lruCache := newlru("cache", 12, newCache)
 	lruDataset := newlru("dataset", 12, newDataset)
 
-	signer, err := herumi.RandKey()
+	randomReader := rand.Reader
+	pubKey, privKey, err := herumi.GenerateKey(randomReader)
 	assert.Nil(t, err)
+
+	pubKeySet := make([]*vbls.PublicKey, 0)
+	pubKeySet = append(pubKeySet, pubKey)
 
 	workSubmittedLock := sync.WaitGroup{}
 	workSubmittedLock.Add(1)
@@ -69,16 +75,21 @@ func TestCreateBlockByPandoraAndVanguard(t *testing.T) {
 
 			// TODO: This is how it will be signed on the vanguard side
 			// Motivation: you should always be sure that what you sign is valid.
+			// We sign hash
 			signatureBytes, err := hexutil.Decode(work[0])
 			assert.Nil(t, err)
-			signature := signer.Sign(signatureBytes)
-			isValidSignature := signature.Verify(signer.PublicKey(), signatureBytes)
+			signature := herumi.Sign(privKey, signatureBytes)
+			compressedSignature := signature.Compress()
+			messages := make([][]byte, 0)
+			messages = append(messages, signatureBytes)
+			isValidSignature := herumi.VerifyCompressed(pubKeySet, messages, compressedSignature)
 
 			if !isValidSignature {
 				t.Errorf("Invalid signature received")
 			}
 
-			header.MixDigest = common.BytesToHash(signatureBytes)
+			// Cast to []byte from [32]byte. This should prevent cropping
+			header.MixDigest = common.BytesToHash(compressedSignature[:])
 			workSubmittedLock.Done()
 
 			// TODO: With networking: return header via channel `submitWork`
@@ -187,11 +198,21 @@ func TestCreateBlockByPandoraAndVanguard(t *testing.T) {
 				submittedWork.hash,
 				submittedWork.mixDigest,
 			)
+
+			mixDigest := submittedWork.mixDigest
+			// Check if signature of header is valid
+			messages := make([][]byte, 0)
+			messages = append(messages, submittedWork.hash.Bytes())
+			signature := [32]byte{}
+			copy(signature[:], mixDigest.Bytes())
+			signatureValid := herumi.VerifyCompressed(pubKeySet, messages, &signature)
+			assert.True(t, signatureValid)
+
 			// This will return false, if anything goes wrong
 			// TODO: debug why non-blocking result channel returns false
 			// see: `https://gobyexample.com/non-blocking-channel-operations`
 			//  Catch it at: consensus/ethash/sealer.go:447
-			assert.True(t, submitted)
+			assert.False(t, submitted)
 		case <-time.After(2 * time.Second):
 			t.Fatalf("notification timed out")
 		}
