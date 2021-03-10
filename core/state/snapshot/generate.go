@@ -259,6 +259,8 @@ func (dl *diskLayer) genRange(root common.Hash, prefix []byte, kind string, orig
 	keys, vals, last, exhausted, err := dl.proveRange(root, tr, prefix, kind, origin, max, onValue)
 	if err == nil {
 		snapSuccessfulRangeProofMeter.Mark(1)
+		log.Debug("Proved state range", "kind", kind, "prefix", prefix, "origin", origin, "last", last)
+
 		// The verification is passed, process each state with the given
 		// callback function. If this state represents a contract, the
 		// corresponding storage check will be performed in the callback
@@ -267,9 +269,11 @@ func (dl *diskLayer) genRange(root common.Hash, prefix []byte, kind string, orig
 				return false, nil, err
 			}
 		}
+		log.Debug("Recovered state range", "kind", kind, "prefix", prefix, "origin", origin, "last", last)
 		return exhausted, last, nil
 	}
 	snapFailedRangeProofMeter.Mark(1)
+	log.Debug("Detected outdated state range", "kind", kind, "prefix", prefix, "origin", origin, "last", last)
 
 	// The verifcation is failed, the flat state in this range cannot match the
 	// merkle trie. Alternatively, use the fallback generation mechanism to regenerate
@@ -282,13 +286,16 @@ func (dl *diskLayer) genRange(root common.Hash, prefix []byte, kind string, orig
 		if kind == "storage" {
 			wipedMeter = snapWipedStorageMeter
 		}
-		if err := wipeKeyRange(dl.diskdb, kind, prefix, origin, last, len(prefix)+common.HashLength, wipedMeter); err != nil {
+		limit := increseKey(common.CopyBytes(last))
+		if err := wipeKeyRange(dl.diskdb, kind, prefix, origin, limit, len(prefix)+common.HashLength, wipedMeter, false); err != nil {
 			return false, nil, err
 		}
+		log.Debug("Wiped currupted state range", "kind", kind, "prefix", prefix, "origin", origin, "limit", limit)
 	}
 	iter := trie.NewIterator(tr.NodeIterator(origin))
 	for iter.Next() {
 		if last != nil && bytes.Compare(iter.Key, last) > 0 {
+			log.Debug("Regenerated state range", "kind", kind, "prefix", prefix, "origin", origin, "last", last)
 			return false, last, nil // Apparently the trie is not exhausted
 		}
 		if err := onState(iter.Key, iter.Value, true); err != nil {
@@ -298,6 +305,7 @@ func (dl *diskLayer) genRange(root common.Hash, prefix []byte, kind string, orig
 	if iter.Err != nil {
 		return false, nil, iter.Err
 	}
+	log.Debug("Regenerated state range", "kind", kind, "prefix", prefix, "origin", origin, "last", last)
 	return true, nil, nil // The entire trie is exhausted
 }
 
