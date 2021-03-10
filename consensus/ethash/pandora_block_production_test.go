@@ -191,7 +191,7 @@ func TestCreateBlockByPandoraAndVanguard(t *testing.T) {
 
 		select {
 		// This is created by channel to remove network complexity for test scenario.
-		// Full E2E layer should be somwhere else, or we should consider stress test
+		// Full E2E layer should be somewhere else, or we should consider stress test
 		case submittedWork := <-submitWorkChannel:
 			submitted := ethashAPI.SubmitWork(
 				submittedWork.nonce,
