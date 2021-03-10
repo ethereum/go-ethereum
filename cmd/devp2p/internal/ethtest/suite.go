@@ -365,8 +365,8 @@ func (s *Suite) TestOldAnnounce(t *utesting.T) {
 	receiveConn := s.setupConnection(t)
 
 	oldBlockAnnounce := &NewBlock{
-		Block:  s.chain.blocks[len(s.chain.blocks)/2],
-		TD: s.chain.blocks[len(s.chain.blocks)/2].Difficulty(),
+		Block: s.chain.blocks[len(s.chain.blocks)/2],
+		TD:    s.chain.blocks[len(s.chain.blocks)/2].Difficulty(),
 	}
 
 	if err := sendConn.Write(oldBlockAnnounce); err != nil {
