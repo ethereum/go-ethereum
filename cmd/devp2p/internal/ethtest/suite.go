@@ -19,6 +19,7 @@ package ethtest
 import (
 	"fmt"
 	"net"
+	"strings"
 	"time"
 
 	"github.com/davecgh/go-spew/spew"
@@ -84,6 +85,8 @@ func (s *Suite) EthTests() []utesting.Test {
 		{Name: "Broadcast_66", Fn: s.TestBroadcast_66},
 		{Name: "TestLargeAnnounce", Fn: s.TestLargeAnnounce},
 		{Name: "TestLargeAnnounce_66", Fn: s.TestLargeAnnounce_66},
+		{Name: "TestOldAnnounce", Fn: s.TestOldAnnounce},
+		{Name: "TestOldAnnounce_66", Fn: s.TestOldAnnounce_66},
 		// malicious handshakes + status
 		{Name: "TestMaliciousHandshake", Fn: s.TestMaliciousHandshake},
 		{Name: "TestMaliciousStatus", Fn: s.TestMaliciousStatus},
@@ -354,6 +357,35 @@ func (s *Suite) TestLargeAnnounce(t *utesting.T) {
 	// wait for client to update its chain
 	if err := receiveConn.waitForBlock(s.fullChain.blocks[nextBlock]); err != nil {
 		t.Fatal(err)
+	}
+}
+
+func (s *Suite) TestOldAnnounce(t *utesting.T) {
+	sendConn := s.setupConnection(t)
+	receiveConn := s.setupConnection(t)
+
+	oldBlockAnnounce := &NewBlock{
+		Block:  s.chain.blocks[len(s.chain.blocks)/2],
+		TD: s.chain.blocks[len(s.chain.blocks)/2].Difficulty(),
+	}
+
+	if err := sendConn.Write(oldBlockAnnounce); err != nil {
+		t.Fatalf("could not write to connection: %v", err)
+	}
+
+	switch msg := receiveConn.ReadAndServe(s.chain, timeout*2).(type) {
+	case *NewBlock:
+		t.Fatalf("unexpected: block announcement propagated: %s", pretty.Sdump(msg))
+	case *NewBlockHashes:
+		t.Fatalf("unexpected: block announcement propagated: %s", pretty.Sdump(msg))
+	case *Error:
+		errMsg := *msg
+		// check to make sure error is timeout (propagation didn't come through == test successful)
+		if !strings.Contains(errMsg.String(), "timeout") {
+			t.Fatalf("unexpected error: %v", pretty.Sdump(msg))
+		}
+	default:
+		t.Fatalf("unexpected: %s", pretty.Sdump(msg))
 	}
 }
 

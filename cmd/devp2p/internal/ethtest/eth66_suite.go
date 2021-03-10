@@ -17,6 +17,7 @@
 package ethtest
 
 import (
+	"strings"
 	"time"
 
 	"github.com/ethereum/go-ethereum/core/types"
@@ -202,6 +203,35 @@ func (s *Suite) TestLargeAnnounce_66(t *utesting.T) {
 	// wait for client to update its chain
 	if err := receiveConn.waitForBlock66(s.fullChain.blocks[nextBlock]); err != nil {
 		t.Fatal(err)
+	}
+}
+
+func (s *Suite) TestOldAnnounce_66(t *utesting.T) {
+	sendConn := s.setupConnection66(t)
+	receiveConn := s.setupConnection66(t)
+
+	oldBlockAnnounce := &NewBlock{
+		Block:  s.chain.blocks[len(s.chain.blocks)/2],
+		TD: s.chain.blocks[len(s.chain.blocks)/2].Difficulty(),
+	}
+
+	if err := sendConn.Write(oldBlockAnnounce); err != nil {
+		t.Fatalf("could not write to connection: %v", err)
+	}
+
+	switch msg := receiveConn.ReadAndServe(s.chain, timeout*2).(type) {
+	case *NewBlock:
+		t.Fatalf("unexpected: block announcement propagated: %s", pretty.Sdump(msg))
+	case *NewBlockHashes:
+		t.Fatalf("unexpected: block announcement propagated: %s", pretty.Sdump(msg))
+	case *Error:
+		errMsg := *msg
+		// check to make sure error is timeout (propagation didn't come through == test successful)
+		if !strings.Contains(errMsg.String(), "timeout") {
+			t.Fatalf("unexpected error: %v", pretty.Sdump(msg))
+		}
+	default:
+		t.Fatalf("unexpected: %s", pretty.Sdump(msg))
 	}
 }
 
