@@ -323,6 +323,8 @@ func (dl *diskLayer) generate(stats *generatorStats) {
 		logged    = time.Now()
 		accOrigin = common.CopyBytes(accMarker)
 	)
+	stats.Log("Resuming state snapshot generation", dl.root, dl.genMarker)
+
 	for {
 		exhausted, last, err := dl.genRange(dl.root, rawdb.SnapshotAccountPrefix, "account", accOrigin, accountCheckRange, stats, func(key []byte, val []byte, regen bool) error {
 			// Retrieve the current account and flatten it into the internal format
@@ -357,19 +359,19 @@ func (dl *diskLayer) generate(stats *generatorStats) {
 			default:
 			}
 			if batch.ValueSize() > ethdb.IdealBatchSize || abort != nil {
-				// Only write and set the marker if we actually did something useful
-				if batch.ValueSize() > 0 {
-					// Ensure the generator entry is in sync with the data
-					marker := accountHash[:]
-					journalProgress(batch, marker, stats)
+				// Flush out the batch anyway no matter it's empty or not.
+				// It's possible that all the states are recovered and the
+				// generation indeed makes progress.
+				marker := accountHash[:]
+				journalProgress(batch, marker, stats)
 
-					batch.Write()
-					batch.Reset()
+				batch.Write()
+				batch.Reset()
 
-					dl.lock.Lock()
-					dl.genMarker = marker
-					dl.lock.Unlock()
-				}
+				dl.lock.Lock()
+				dl.genMarker = marker
+				dl.lock.Unlock()
+
 				if abort != nil {
 					stats.Log("Aborting state snapshot generation", dl.root, accountHash[:])
 					abort <- stats
@@ -402,19 +404,19 @@ func (dl *diskLayer) generate(stats *generatorStats) {
 						default:
 						}
 						if batch.ValueSize() > ethdb.IdealBatchSize || abort != nil {
-							// Only write and set the marker if we actually did something useful
-							if batch.ValueSize() > 0 {
-								// Ensure the generator entry is in sync with the data
-								marker := append(accountHash[:], key...)
-								journalProgress(batch, marker, stats)
+							// Flush out the batch anyway no matter it's empty or not.
+							// It's possible that all the states are recovered and the
+							// generation indeed makes progress.
+							marker := append(accountHash[:], key...)
+							journalProgress(batch, marker, stats)
 
-								batch.Write()
-								batch.Reset()
+							batch.Write()
+							batch.Reset()
 
-								dl.lock.Lock()
-								dl.genMarker = marker
-								dl.lock.Unlock()
-							}
+							dl.lock.Lock()
+							dl.genMarker = marker
+							dl.lock.Unlock()
+
 							if abort != nil {
 								stats.Log("Aborting state snapshot generation", dl.root, append(accountHash[:], key...))
 								abort <- stats
