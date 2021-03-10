@@ -39,6 +39,7 @@ var (
 	ErrGasUintOverflow          = errors.New("gas uint64 overflow")
 	ErrInvalidRetsub            = errors.New("invalid retsub")
 	ErrReturnStackExceeded      = errors.New("return stack limit reached")
+	ErrNoAuthorizedSponsee      = errors.New("authorized sponsee not set")
 )
 
 // ErrStackUnderflow wraps an evm error when the items on the stack less

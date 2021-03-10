@@ -68,6 +68,7 @@ type callCtx struct {
 	memory   *Memory
 	stack    *Stack
 	contract *Contract
+	sponsee  *common.Address
 }
 
 // keccakState wraps sha3.state. In addition to the usual hash methods, it also supports
