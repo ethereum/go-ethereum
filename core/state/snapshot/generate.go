@@ -310,9 +310,15 @@ func (dl *diskLayer) genRange(root common.Hash, prefix []byte, kind string, orig
 // gathering and logging, since the method surfs the blocks as they arrive, often
 // being restarted.
 func (dl *diskLayer) generate(stats *generatorStats) {
-	var accMarker []byte
+	var (
+		accMarker    []byte
+		accountRange = accountCheckRange
+	)
 	if len(dl.genMarker) > 0 { // []byte{} is the start, use nil for that
 		accMarker = dl.genMarker[:common.HashLength]
+	}
+	if len(dl.genMarker) == 2*common.HashLength {
+		accountRange = 1 // We already fall into the storage generation last time, only pick one account
 	}
 	var (
 		batch     = dl.diskdb.NewBatch()
@@ -323,7 +329,7 @@ func (dl *diskLayer) generate(stats *generatorStats) {
 	stats.Log("Resuming state snapshot generation", dl.root, dl.genMarker)
 
 	for {
-		exhausted, last, err := dl.genRange(dl.root, rawdb.SnapshotAccountPrefix, "account", accOrigin, accountCheckRange, stats, func(key []byte, val []byte, regen bool) error {
+		exhausted, last, err := dl.genRange(dl.root, rawdb.SnapshotAccountPrefix, "account", accOrigin, accountRange, stats, func(key []byte, val []byte, regen bool) error {
 			// Retrieve the current account and flatten it into the internal format
 			accountHash := common.BytesToHash(key)
 
@@ -464,6 +470,7 @@ func (dl *diskLayer) generate(stats *generatorStats) {
 		if accOrigin == nil {
 			break // special case, the last is 0xffffffff...fff
 		}
+		accountRange = accountCheckRange
 	}
 	// Snapshot fully generated, set the marker to nil.
 	// Note even there is nothing to commit, persist the
