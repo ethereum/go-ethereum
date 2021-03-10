@@ -295,7 +295,7 @@ func prepare(ctx *cli.Context) {
 		}
 	}
 
-	// Ue Cache value provided by config file (if present)
+	// Use Cache value provided by config file (if present)
 	if cfg.Node.Cache != 0 {
 		ctx.GlobalSet(utils.CacheFlag.Name, strconv.Itoa(cfg.Node.Cache))
 	}
