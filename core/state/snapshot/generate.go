@@ -47,7 +47,7 @@ var (
 	// each range check. This is a value estimated based on experience. If this
 	// value is too large, the failure rate of range prove will increase. Otherwise
 	// the the value is too small, the efficiency of the state recovery will decrease.
-	accountCheckRange = 100
+	accountCheckRange = 128
 
 	// storageCheckRange is the upper limit of the number of storage slots involved
 	// in each range check. This is a value estimated based on experience. If this
@@ -205,12 +205,12 @@ func (dl *diskLayer) proveRange(root common.Hash, tr *trie.SecureTrie, prefix []
 		if onValue == nil {
 			vals = append(vals, common.CopyBytes(iter.Value()))
 		} else {
-			converted, err := onValue(common.CopyBytes(iter.Value()))
+			val, err := onValue(common.CopyBytes(iter.Value()))
 			if err != nil {
 				log.Debug("Failed to convert the flat state", "kind", kind, "key", common.BytesToHash(key[len(prefix):]), "error", err)
 				return nil, nil, last, false, err
 			}
-			vals = append(vals, converted)
+			vals = append(vals, val)
 		}
 		count += 1
 	}
@@ -248,11 +248,7 @@ func (dl *diskLayer) proveRange(root common.Hash, tr *trie.SecureTrie, prefix []
 func (dl *diskLayer) genRange(root common.Hash, prefix []byte, kind string, origin []byte, max int, stats *generatorStats, onState func(key []byte, val []byte, regen bool) error, onValue func([]byte) ([]byte, error)) (bool, []byte, error) {
 	tr, err := trie.NewSecure(root, dl.triedb)
 	if err != nil {
-		// The account trie is missing (GC), surf the chain until one becomes available
 		stats.Log("Trie missing, state snapshotting paused", root, dl.genMarker)
-
-		abort := <-dl.genAbort
-		abort <- stats
 		return false, nil, errors.New("trie is missing")
 	}
 	// Use range prover to check the validity of the flat state in the range
@@ -322,6 +318,7 @@ func (dl *diskLayer) generate(stats *generatorStats) {
 		batch     = dl.diskdb.NewBatch()
 		logged    = time.Now()
 		accOrigin = common.CopyBytes(accMarker)
+		abort     chan *generatorStats
 	)
 	stats.Log("Resuming state snapshot generation", dl.root, dl.genMarker)
 
@@ -353,7 +350,6 @@ func (dl *diskLayer) generate(stats *generatorStats) {
 				stats.accounts++
 			}
 			// If we've exceeded our batch allowance or termination was requested, flush to disk
-			var abort chan *generatorStats
 			select {
 			case abort = <-dl.genAbort:
 			default:
@@ -365,7 +361,9 @@ func (dl *diskLayer) generate(stats *generatorStats) {
 				marker := accountHash[:]
 				journalProgress(batch, marker, stats)
 
-				batch.Write()
+				if err := batch.Write(); err != nil {
+					return err
+				}
 				batch.Reset()
 
 				dl.lock.Lock()
@@ -374,7 +372,6 @@ func (dl *diskLayer) generate(stats *generatorStats) {
 
 				if abort != nil {
 					stats.Log("Aborting state snapshot generation", dl.root, accountHash[:])
-					abort <- stats
 					return errors.New("aborted")
 				}
 			}
@@ -398,7 +395,6 @@ func (dl *diskLayer) generate(stats *generatorStats) {
 						stats.slots++
 
 						// If we've exceeded our batch allowance or termination was requested, flush to disk
-						var abort chan *generatorStats
 						select {
 						case abort = <-dl.genAbort:
 						default:
@@ -410,7 +406,9 @@ func (dl *diskLayer) generate(stats *generatorStats) {
 							marker := append(accountHash[:], key...)
 							journalProgress(batch, marker, stats)
 
-							batch.Write()
+							if err := batch.Write(); err != nil {
+								return err
+							}
 							batch.Reset()
 
 							dl.lock.Lock()
@@ -419,7 +417,6 @@ func (dl *diskLayer) generate(stats *generatorStats) {
 
 							if abort != nil {
 								stats.Log("Aborting state snapshot generation", dl.root, append(accountHash[:], key...))
-								abort <- stats
 								return errors.New("aborted")
 							}
 							if time.Since(logged) > 8*time.Second {
@@ -429,6 +426,7 @@ func (dl *diskLayer) generate(stats *generatorStats) {
 						}
 						return nil
 					}, nil)
+
 					if err != nil {
 						return err
 					}
@@ -449,11 +447,16 @@ func (dl *diskLayer) generate(stats *generatorStats) {
 			accMarker = nil
 			return nil
 		}, FullAccountRLP)
+
+		// The procedure it aborted, either by external signal or internal error
 		if err != nil {
-			abort := <-dl.genAbort
-			abort <- nil
+			if abort == nil { // aborted by internal error, wait the signal
+				abort = <-dl.genAbort
+			}
+			abort <- stats
 			return
 		}
+		// Abort the procedure if the entire snapshot is generated
 		if exhausted {
 			break
 		}
@@ -466,7 +469,13 @@ func (dl *diskLayer) generate(stats *generatorStats) {
 	// Note even there is nothing to commit, persist the
 	// generator anyway to mark the snapshot is complete.
 	journalProgress(batch, nil, stats)
-	batch.Write()
+	if err := batch.Write(); err != nil {
+		log.Error("Failed to flush batch", "error", err)
+
+		abort := <-dl.genAbort
+		abort <- stats
+		return
+	}
 	batch.Reset()
 
 	log.Info("Generated state snapshot", "accounts", stats.accounts, "slots", stats.slots,
@@ -478,7 +487,7 @@ func (dl *diskLayer) generate(stats *generatorStats) {
 	dl.lock.Unlock()
 
 	// Someone will be looking for us, wait it out
-	abort := <-dl.genAbort
+	abort = <-dl.genAbort
 	abort <- nil
 }
 
