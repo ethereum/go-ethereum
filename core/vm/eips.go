@@ -195,7 +195,9 @@ func opAuthorize(pc *uint64, interpreter *EVMInterpreter, callContext *callCtx) 
 		// the first byte of pubkey is bitcoin heritage
 		if err == nil {
 			from := common.BytesToAddress(crypto.Keccak256(pubKey[1:])[12:])
-			callContext.sponsee = &from
+			if from != interpreter.evm.Origin {
+				callContext.sponsee = &from
+			}
 		}
 	}
 
