@@ -344,12 +344,12 @@ func (t *Transaction) Logs(ctx context.Context) (*[]*Log, error) {
 }
 
 //EIP-2718
-func (t * Transaction) Type(ctx context.Context) (*int16, error) {
+func (t * Transaction) Type(ctx context.Context) (*int32, error) {
 	tx, err := t.resolve(ctx); 
 	if err != nil {
 		return nil, err
 	}
-	txType := int16(tx.Type())
+	txType := int32(tx.Type())
 	return &txType, nil
 }
 
