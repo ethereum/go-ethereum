@@ -1853,6 +1853,55 @@ func (s *Syncer) processStorageResponse(res *storageResponse) {
 	// task assigners to pick up and fill.
 }
 
+// stateWriter is a database batch replayer that takes a batch of write operations
+// and extract the flat states from them. The target flat states will be persisted
+// blindly and can be fixed by the generator later.
+type stateWriter struct {
+	res           *trienodeHealResponse
+	syncer        *Syncer
+	accountMarker map[common.Hash]int
+	storageMarker map[common.Hash]int
+}
+
+func newStateWriter(res *trienodeHealResponse, syncer *Syncer) *stateWriter {
+	var (
+		accountMarker = make(map[common.Hash]int)
+		storageMarker = make(map[common.Hash]int)
+	)
+	for i, path := range res.paths {
+		if len(path) == 1 && len(path[0]) == common.HashLength {
+			accountMarker[res.hashes[i]] = i
+		}
+		if len(path) == 2 && len(path[1]) == common.HashLength {
+			storageMarker[res.hashes[i]] = i
+		}
+	}
+	return &stateWriter{
+		res:           res,
+		syncer:        syncer,
+		accountMarker: accountMarker,
+		storageMarker: storageMarker,
+	}
+}
+
+// Put reacts to database writes and implements flat state persistence.
+func (w *stateWriter) Put(key []byte, val []byte) error {
+	hash := common.BytesToHash(key)
+	if index, ok := w.accountMarker[hash]; ok {
+		rawdb.WriteAccountSnapshot(w.syncer.db, common.BytesToHash(w.res.paths[index][0]), w.res.nodes[index])
+		w.syncer.bytecodeHealBytes += common.StorageSize(1 + common.HashLength + len(w.res.nodes[index]))
+	}
+	if index, ok := w.storageMarker[hash]; ok {
+		rawdb.WriteStorageSnapshot(w.syncer.db, common.BytesToHash(w.res.paths[index][0]), common.BytesToHash(w.res.paths[index][1]), w.res.nodes[index])
+		w.syncer.bytecodeHealBytes += common.StorageSize(1 + 2*common.HashLength + len(w.res.nodes[index]))
+	}
+	return nil
+}
+
+func (w *stateWriter) Delete(key []byte) error {
+	panic("not implemented")
+}
+
 // processTrienodeHealResponse integrates an already validated trienode response
 // into the healer tasks.
 func (s *Syncer) processTrienodeHealResponse(res *trienodeHealResponse) {
@@ -1885,6 +1934,9 @@ func (s *Syncer) processTrienodeHealResponse(res *trienodeHealResponse) {
 	}
 	if err := batch.Write(); err != nil {
 		log.Crit("Failed to persist healing data", "err", err)
+	}
+	if err := batch.Replay(newStateWriter(res, s)); err != nil {
+		log.Crit("Failed to replay the committed batch", "err", err)
 	}
 	log.Debug("Persisted set of healing data", "type", "trienodes", "bytes", common.StorageSize(batch.ValueSize()))
 }
