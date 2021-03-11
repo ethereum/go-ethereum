@@ -266,7 +266,6 @@ func (api *API) traceChain(ctx context.Context, start, end *types.Block, config 
 				// Trace all the transactions contained within
 				for i, tx := range task.block.Transactions() {
 					msg, _ := tx.AsMessage(signer)
-					task.statedb.Prepare(tx.Hash(), task.block.Hash(), i)
 					res, err := api.traceTx(ctx, msg, blockCtx, task.statedb, config)
 					if err != nil {
 						task.results[i] = &txTraceResult{Error: err.Error()}
@@ -622,6 +621,7 @@ func (api *API) standardTraceBlockToFile(ctx context.Context, block *types.Block
 		}
 		// Execute the transaction and flush any traces to disk
 		vmenv := vm.NewEVM(vmctx, txContext, statedb, chainConfig, vmConf)
+		statedb.Prepare(txhash, block.Hash(), i)
 		_, err = core.ApplyMessage(vmenv, msg, new(core.GasPool).AddGas(msg.Gas()))
 		if writer != nil {
 			writer.Flush()
@@ -760,9 +760,10 @@ func (api *API) traceTx(ctx context.Context, message core.Message, vmctx vm.Bloc
 	default:
 		tracer = vm.NewStructLogger(config.LogConfig)
 	}
-
 	// Run the transaction with tracing enabled.
 	vmenv := vm.NewEVM(vmctx, txContext, statedb, api.backend.ChainConfig(), vm.Config{Debug: true, Tracer: tracer})
+	// Call Prepare to clear out the statedb access list
+	statedb.Prepare(common.Hash{}, common.Hash{}, 0)
 	result, err := core.ApplyMessage(vmenv, message, new(core.GasPool).AddGas(message.Gas()))
 	if err != nil {
 		return nil, fmt.Errorf("tracing failed: %v", err)
