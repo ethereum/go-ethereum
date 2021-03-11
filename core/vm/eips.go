@@ -153,7 +153,7 @@ func enable3074(jt *JumpTable) {
 		execute:     opAuthorize,
 		constantGas: params.EcrecoverGas,
 		minStack:    minStack(4, 1),
-		maxStack:    minStack(4, 1),
+		maxStack:    maxStack(4, 1),
 	}
 
 	jt[AUTHORIZEDCALL] = &operation{
@@ -161,7 +161,7 @@ func enable3074(jt *JumpTable) {
 		constantGas: jt[CALL].constantGas,
 		dynamicGas:  jt[CALL].dynamicGas,
 		minStack:    minStack(7, 1),
-		maxStack:    minStack(7, 1),
+		maxStack:    maxStack(7, 1),
 		memorySize:  jt[CALL].memorySize,
 		returns:     true,
 	}
