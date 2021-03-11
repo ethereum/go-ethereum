@@ -212,6 +212,7 @@ func (eth *Ethereum) stateAtTransaction(block *types.Block, txIndex int, reexec 
 		msg, _ := tx.AsMessage(signer)
 		txContext := core.NewEVMTxContext(msg)
 		context := core.NewEVMBlockContext(block.Header(), eth.blockchain, nil)
+		statedb.Prepare(tx.Hash(), block.Hash(), idx)
 		if idx == txIndex {
 			return msg, context, statedb, release, nil
 		}
