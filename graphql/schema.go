@@ -69,6 +69,7 @@ const schema string = `
         transaction: Transaction!
     }
 
+    #EIP-2718 
     type AccessTuple{
         address: Address!
         storageKeys : [Bytes32!]
@@ -83,7 +84,6 @@ const schema string = `
         # Index is the index of this transaction in the parent block. This will
         # be null if the transaction has not yet been mined.
         index: Int
-        type: Int
         # From is the account that sent this transaction - this will always be
         # an externally owned account.
         from(block: Long): Account!
@@ -124,6 +124,8 @@ const schema string = `
         r: BigInt!
         s: BigInt!
         v: BigInt!
+        #Envelope transaction support
+        type: Int
         accessList: [AccessTuple!]
     }
 

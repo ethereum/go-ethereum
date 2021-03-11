@@ -343,20 +343,19 @@ func (t *Transaction) Logs(ctx context.Context) (*[]*Log, error) {
 	return &ret, nil
 }
 
-
-func (t * Transaction) Type(ctx context.Context) (*int32, error) {
+//EIP-2718
+func (t * Transaction) Type(ctx context.Context) (*int16, error) {
 	tx, err := t.resolve(ctx); 
-
 	if err != nil {
 		return nil, err
 	}
-	txType := int32(tx.Type())
+	txType := int16(tx.Type())
 	return &txType, nil
 }
 
 type AccessTuple struct{
 	address common.Address
-	storageKeys []common.Hash
+	storageKeys *[]common.Hash
 }
 
 func( at * AccessTuple) Address(ctx context.Context)(common.Address){
@@ -364,52 +363,20 @@ func( at * AccessTuple) Address(ctx context.Context)(common.Address){
 }
 
 func(at* AccessTuple) StorageKeys(ctx context.Context)(*[]common.Hash){
-	storageKeys:= at.storageKeys
-	ret := make([]common.Hash, 0, len(storageKeys))
-	for _, sk := range storageKeys {
-		ret = append(ret,sk)
-	}
-	return &ret
-}
-
-func (t *Transaction) AccessList2(ctx context.Context) (*[]common.Address, error) {
-	tx, _ := t.resolve(ctx)
-	// if err != nil || tx == nil {
-	// 	return nil, err
-	// }
-
-	// type AccessTuple struct {
-	// 	Address     common.Address
-	// 	StorageKeys []common.Hash
-	// }
-	accessList:= tx.AccessList()
-	
-	ret := make([]common.Address, 0, len(accessList))
-	for _, al := range accessList {
-		ret = append(ret,al.Address)
-	}
-	return &ret, nil
+	return at.storageKeys
 }
 
 func (t *Transaction) AccessList(ctx context.Context) (*[]*AccessTuple, error) {
-	tx, _ := t.resolve(ctx)
-	// if err != nil || tx == nil {
-	// 	return nil, err
-	// }
-	// type accessList struct {
-	// 	addresses map[common.Address]int
-	// 	slots     []map[common.Hash]struct{}
-	// }
+	tx, err := t.resolve(ctx)
+	if err != nil || tx == nil {
+		return nil, err
+	}
 	accessList:= tx.AccessList()
-	// type AccessTuple struct {
-	// 	Address     common.Address
-	// 	StorageKeys []common.Hash
-	// }
 	ret:= make([]*AccessTuple, 0, len(accessList))
 	for _, al := range accessList {
 		ret = append(ret,&AccessTuple{
 			address:al.Address,
-			storageKeys: al.StorageKeys,
+			storageKeys: &al.StorageKeys,
 		})
 	}
 	return &ret, nil
