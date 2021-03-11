@@ -161,6 +161,7 @@ type Transaction struct {
 	index   uint64
 }
 
+
 // resolve returns the internal transaction object, fetching it if needed.
 func (t *Transaction) resolve(ctx context.Context) (*types.Transaction, error) {
 	if t.tx == nil {
@@ -341,6 +342,79 @@ func (t *Transaction) Logs(ctx context.Context) (*[]*Log, error) {
 	}
 	return &ret, nil
 }
+
+
+func (t * Transaction) Type(ctx context.Context) (*int32, error) {
+	tx, err := t.resolve(ctx); 
+
+	if err != nil {
+		return nil, err
+	}
+	txType := int32(tx.Type())
+	return &txType, nil
+}
+
+type AccessTuple struct{
+	address common.Address
+	storageKeys []common.Hash
+}
+
+func( at * AccessTuple) Address(ctx context.Context)(common.Address){
+	return at.address
+}
+
+func(at* AccessTuple) StorageKeys(ctx context.Context)(*[]common.Hash){
+	storageKeys:= at.storageKeys
+	ret := make([]common.Hash, 0, len(storageKeys))
+	for _, sk := range storageKeys {
+		ret = append(ret,sk)
+	}
+	return &ret
+}
+
+func (t *Transaction) AccessList2(ctx context.Context) (*[]common.Address, error) {
+	tx, _ := t.resolve(ctx)
+	// if err != nil || tx == nil {
+	// 	return nil, err
+	// }
+
+	// type AccessTuple struct {
+	// 	Address     common.Address
+	// 	StorageKeys []common.Hash
+	// }
+	accessList:= tx.AccessList()
+	
+	ret := make([]common.Address, 0, len(accessList))
+	for _, al := range accessList {
+		ret = append(ret,al.Address)
+	}
+	return &ret, nil
+}
+
+func (t *Transaction) AccessList(ctx context.Context) (*[]*AccessTuple, error) {
+	tx, _ := t.resolve(ctx)
+	// if err != nil || tx == nil {
+	// 	return nil, err
+	// }
+	// type accessList struct {
+	// 	addresses map[common.Address]int
+	// 	slots     []map[common.Hash]struct{}
+	// }
+	accessList:= tx.AccessList()
+	// type AccessTuple struct {
+	// 	Address     common.Address
+	// 	StorageKeys []common.Hash
+	// }
+	ret:= make([]*AccessTuple, 0, len(accessList))
+	for _, al := range accessList {
+		ret = append(ret,&AccessTuple{
+			address:al.Address,
+			storageKeys: al.StorageKeys,
+		})
+	}
+	return &ret, nil
+}
+
 
 func (t *Transaction) R(ctx context.Context) (hexutil.Big, error) {
 	tx, err := t.resolve(ctx)

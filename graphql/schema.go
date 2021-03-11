@@ -69,6 +69,11 @@ const schema string = `
         transaction: Transaction!
     }
 
+    type AccessTuple{
+        address: Address!
+        storageKeys : [Bytes32!]
+    }
+
     # Transaction is an Ethereum transaction.
     type Transaction {
         # Hash is the hash of this transaction.
@@ -78,6 +83,7 @@ const schema string = `
         # Index is the index of this transaction in the parent block. This will
         # be null if the transaction has not yet been mined.
         index: Int
+        type: Int
         # From is the account that sent this transaction - this will always be
         # an externally owned account.
         from(block: Long): Account!
@@ -118,6 +124,7 @@ const schema string = `
         r: BigInt!
         s: BigInt!
         v: BigInt!
+        accessList: [AccessTuple!]
     }
 
     # BlockFilterCriteria encapsulates log filter criteria for a filter applied
