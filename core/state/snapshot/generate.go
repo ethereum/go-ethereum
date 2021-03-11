@@ -316,9 +316,10 @@ func (dl *diskLayer) generate(stats *generatorStats) {
 	)
 	if len(dl.genMarker) > 0 { // []byte{} is the start, use nil for that
 		accMarker = dl.genMarker[:common.HashLength]
-	}
-	if len(dl.genMarker) == 2*common.HashLength {
-		accountRange = 1 // We already fall into the storage generation last time, only pick one account
+
+		// Always reset the initial account range as 1 whenever recover
+		// from the interruption.
+		accountRange = 1
 	}
 	var (
 		batch     = dl.diskdb.NewBatch()
