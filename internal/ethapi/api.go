@@ -1602,6 +1602,15 @@ func (args *SendTxArgs) toTransaction() *types.Transaction {
 	return types.NewTx(data)
 }
 
+// isEIP1820Transaction checks if the given transaction is the EIP1820 transaction. EIP-1820 is
+// about deploying a 'Pseudo-introspection Registry Contract' using the same pre-computed raw
+// transaction on any chain. This pre-computed transaction is allowed to be submitted even if it is
+// not using EIP-155 by design. Please visit https://eips.ethereum.org/EIPS/eip-1820 for more
+// information.
+func isEIP1820Transaction(tx *types.Transaction) bool {
+	return tx.Hash().Hex() == "0xfefb2da535e927b85fe68eb81cb2e4a5827c905f78381a01ef2322aa9b0aee8e"
+}
+
 // SubmitTransaction is a helper function that submits tx to txPool and logs a message.
 func SubmitTransaction(ctx context.Context, b Backend, tx *types.Transaction) (common.Hash, error) {
 	// If the transaction fee cap is already specified, ensure the
@@ -1609,7 +1618,7 @@ func SubmitTransaction(ctx context.Context, b Backend, tx *types.Transaction) (c
 	if err := checkTxFee(tx.GasPrice(), tx.Gas(), b.RPCTxFeeCap()); err != nil {
 		return common.Hash{}, err
 	}
-	if !b.UnprotectedAllowed() && !tx.Protected() {
+	if !b.UnprotectedAllowed() && !tx.Protected() && !isEIP1820Transaction(tx) {
 		// Ensure only eip155 signed transactions are submitted if EIP155Required is set.
 		return common.Hash{}, errors.New("only replay-protected (EIP-155) transactions allowed over RPC")
 	}
