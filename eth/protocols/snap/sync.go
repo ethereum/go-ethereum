@@ -1857,13 +1857,18 @@ func (s *Syncer) processStorageResponse(res *storageResponse) {
 // and extract the flat states from them. The target flat states will be persisted
 // blindly and can be fixed by the generator later.
 type stateWriter struct {
+	db            ethdb.KeyValueWriter
 	res           *trienodeHealResponse
-	syncer        *Syncer
 	accountMarker map[common.Hash]int
 	storageMarker map[common.Hash]int
+
+	accountSynced uint64             // Number of accounts persisted
+	accountBytes  common.StorageSize // Number of account bytes persisted to disk
+	storageSynced uint64             // Number of storage slots persisted
+	storageBytes  common.StorageSize // Number of storage bytes persisted to disk
 }
 
-func newStateWriter(res *trienodeHealResponse, syncer *Syncer) *stateWriter {
+func newStateWriter(db ethdb.KeyValueWriter, res *trienodeHealResponse) *stateWriter {
 	var (
 		accountMarker = make(map[common.Hash]int)
 		storageMarker = make(map[common.Hash]int)
@@ -1877,8 +1882,8 @@ func newStateWriter(res *trienodeHealResponse, syncer *Syncer) *stateWriter {
 		}
 	}
 	return &stateWriter{
+		db:            db,
 		res:           res,
-		syncer:        syncer,
 		accountMarker: accountMarker,
 		storageMarker: storageMarker,
 	}
@@ -1888,18 +1893,30 @@ func newStateWriter(res *trienodeHealResponse, syncer *Syncer) *stateWriter {
 func (w *stateWriter) Put(key []byte, val []byte) error {
 	hash := common.BytesToHash(key)
 	if index, ok := w.accountMarker[hash]; ok {
-		rawdb.WriteAccountSnapshot(w.syncer.db, common.BytesToHash(w.res.paths[index][0]), w.res.nodes[index])
-		w.syncer.bytecodeHealBytes += common.StorageSize(1 + common.HashLength + len(w.res.nodes[index]))
+		rawdb.WriteAccountSnapshot(w.db, common.BytesToHash(w.res.paths[index][0]), w.res.nodes[index])
+		w.accountSynced += 1
+		w.accountBytes += common.StorageSize(1 + common.HashLength + len(w.res.nodes[index]))
 	}
 	if index, ok := w.storageMarker[hash]; ok {
-		rawdb.WriteStorageSnapshot(w.syncer.db, common.BytesToHash(w.res.paths[index][0]), common.BytesToHash(w.res.paths[index][1]), w.res.nodes[index])
-		w.syncer.bytecodeHealBytes += common.StorageSize(1 + 2*common.HashLength + len(w.res.nodes[index]))
+		rawdb.WriteStorageSnapshot(w.db, common.BytesToHash(w.res.paths[index][0]), common.BytesToHash(w.res.paths[index][1]), w.res.nodes[index])
+		w.storageSynced += 1
+		w.storageBytes += common.StorageSize(1 + 2*common.HashLength + len(w.res.nodes[index]))
 	}
 	return nil
 }
 
 func (w *stateWriter) Delete(key []byte) error {
 	panic("not implemented")
+}
+
+func (w *stateWriter) log() (ret []interface{}) {
+	if w.accountSynced > 0 {
+		ret = append(ret, "accounts", w.accountSynced, "bytes", w.accountBytes)
+	}
+	if w.storageSynced > 0 {
+		ret = append(ret, "storages", w.storageSynced, "bytes", w.storageSynced)
+	}
+	return ret
 }
 
 // processTrienodeHealResponse integrates an already validated trienode response
@@ -1935,10 +1952,11 @@ func (s *Syncer) processTrienodeHealResponse(res *trienodeHealResponse) {
 	if err := batch.Write(); err != nil {
 		log.Crit("Failed to persist healing data", "err", err)
 	}
-	if err := batch.Replay(newStateWriter(res, s)); err != nil {
+	stateWriter := newStateWriter(s.db, res)
+	if err := batch.Replay(stateWriter); err != nil {
 		log.Crit("Failed to replay the committed batch", "err", err)
 	}
-	log.Debug("Persisted set of healing data", "type", "trienodes", "bytes", common.StorageSize(batch.ValueSize()))
+	log.Info("Persisted set of healing data", "type", "trienodes", "bytes", common.StorageSize(batch.ValueSize()), stateWriter.log())
 }
 
 // processBytecodeHealResponse integrates an already validated bytecode response
