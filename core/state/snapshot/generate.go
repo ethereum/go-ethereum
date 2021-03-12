@@ -336,8 +336,7 @@ func (dl *diskLayer) generate(stats *generatorStats) {
 			// Flush out the batch anyway no matter it's empty or not.
 			// It's possible that all the states are recovered and the
 			// generation indeed makes progress.
-			marker := currentLocation
-			journalProgress(batch, marker, stats)
+			journalProgress(batch, currentLocation, stats)
 
 			if err := batch.Write(); err != nil {
 				return err
@@ -345,16 +344,16 @@ func (dl *diskLayer) generate(stats *generatorStats) {
 			batch.Reset()
 
 			dl.lock.Lock()
-			dl.genMarker = marker
+			dl.genMarker = currentLocation
 			dl.lock.Unlock()
 
 			if abort != nil {
-				stats.Log("Aborting state snapshot generation", dl.root, marker)
+				stats.Log("Aborting state snapshot generation", dl.root, currentLocation)
 				return errors.New("aborted")
 			}
 		}
 		if time.Since(logged) > 8*time.Second {
-			stats.Log("Generating state snapshot", dl.root, marker)
+			stats.Log("Generating state snapshot", dl.root, currentLocation)
 			logged = time.Now()
 		}
 		return nil
