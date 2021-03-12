@@ -57,6 +57,7 @@ var (
 				Category:  "MISCELLANEOUS COMMANDS",
 				Flags: []cli.Flag{
 					utils.DataDirFlag,
+					utils.AncientFlag,
 					utils.RopstenFlag,
 					utils.RinkebyFlag,
 					utils.GoerliFlag,
@@ -86,6 +87,7 @@ the trie clean cache with default directory will be deleted.
 				Category:  "MISCELLANEOUS COMMANDS",
 				Flags: []cli.Flag{
 					utils.DataDirFlag,
+					utils.AncientFlag,
 					utils.RopstenFlag,
 					utils.RinkebyFlag,
 					utils.GoerliFlag,
@@ -105,6 +107,7 @@ In other words, this command does the snapshot to trie conversion.
 				Category:  "MISCELLANEOUS COMMANDS",
 				Flags: []cli.Flag{
 					utils.DataDirFlag,
+					utils.AncientFlag,
 					utils.RopstenFlag,
 					utils.RinkebyFlag,
 					utils.GoerliFlag,
@@ -126,6 +129,7 @@ It's also usable without snapshot enabled.
 				Category:  "MISCELLANEOUS COMMANDS",
 				Flags: []cli.Flag{
 					utils.DataDirFlag,
+					utils.AncientFlag,
 					utils.RopstenFlag,
 					utils.RinkebyFlag,
 					utils.GoerliFlag,
