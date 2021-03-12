@@ -2590,9 +2590,14 @@ func (s *Syncer) onHealByteCodes(peer SyncPeer, id uint64, bytecodes [][]byte) e
 // Note it's not concurrent safe, please handle the concurrent issue outside.
 func (s *Syncer) onHealState(paths [][]byte, value []byte) error {
 	if len(paths) == 1 {
-		rawdb.WriteAccountSnapshot(s.stateWriter, common.BytesToHash(paths[0]), value)
+		var account state.Account
+		if err := rlp.DecodeBytes(value, &account); err != nil {
+			return nil
+		}
+		blob := snapshot.SlimAccountRLP(account.Nonce, account.Balance, account.Root, account.CodeHash)
+		rawdb.WriteAccountSnapshot(s.stateWriter, common.BytesToHash(paths[0]), blob)
 		s.accountHealed += 1
-		s.accountHealedBytes += common.StorageSize(1 + common.HashLength + len(value))
+		s.accountHealedBytes += common.StorageSize(1 + common.HashLength + len(blob))
 	}
 	if len(paths) == 2 {
 		rawdb.WriteStorageSnapshot(s.stateWriter, common.BytesToHash(paths[0]), common.BytesToHash(paths[1]), value)
