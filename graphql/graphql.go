@@ -151,6 +151,20 @@ func (l *Log) Data(ctx context.Context) hexutil.Bytes {
 	return l.log.Data
 }
 
+// Access Tuple represents EIP-2930
+type AccessTuple struct {
+	address     common.Address
+	storageKeys *[]common.Hash
+}
+
+func (at *AccessTuple) Address(ctx context.Context) common.Address {
+	return at.address
+}
+
+func (at *AccessTuple) StorageKeys(ctx context.Context) *[]common.Hash {
+	return at.storageKeys
+}
+
 // Transaction represents an Ethereum transaction.
 // backend and hash are mandatory; all others will be fetched when required.
 type Transaction struct {
@@ -160,7 +174,6 @@ type Transaction struct {
 	block   *Block
 	index   uint64
 }
-
 
 // resolve returns the internal transaction object, fetching it if needed.
 func (t *Transaction) resolve(ctx context.Context) (*types.Transaction, error) {
@@ -343,9 +356,8 @@ func (t *Transaction) Logs(ctx context.Context) (*[]*Log, error) {
 	return &ret, nil
 }
 
-//EIP-2718
-func (t * Transaction) Type(ctx context.Context) (*int32, error) {
-	tx, err := t.resolve(ctx); 
+func (t *Transaction) Type(ctx context.Context) (*int32, error) {
+	tx, err := t.resolve(ctx)
 	if err != nil {
 		return nil, err
 	}
@@ -353,35 +365,21 @@ func (t * Transaction) Type(ctx context.Context) (*int32, error) {
 	return &txType, nil
 }
 
-type AccessTuple struct{
-	address common.Address
-	storageKeys *[]common.Hash
-}
-
-func( at * AccessTuple) Address(ctx context.Context)(common.Address){
-	return at.address
-}
-
-func(at* AccessTuple) StorageKeys(ctx context.Context)(*[]common.Hash){
-	return at.storageKeys
-}
-
 func (t *Transaction) AccessList(ctx context.Context) (*[]*AccessTuple, error) {
 	tx, err := t.resolve(ctx)
 	if err != nil || tx == nil {
 		return nil, err
 	}
-	accessList:= tx.AccessList()
-	ret:= make([]*AccessTuple, 0, len(accessList))
+	accessList := tx.AccessList()
+	ret := make([]*AccessTuple, 0, len(accessList))
 	for _, al := range accessList {
-		ret = append(ret,&AccessTuple{
-			address:al.Address,
+		ret = append(ret, &AccessTuple{
+			address:     al.Address,
 			storageKeys: &al.StorageKeys,
 		})
 	}
 	return &ret, nil
 }
-
 
 func (t *Transaction) R(ctx context.Context) (hexutil.Big, error) {
 	tx, err := t.resolve(ctx)
