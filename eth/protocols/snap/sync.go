@@ -2607,14 +2607,14 @@ func (s *Syncer) onHealByteCodes(peer SyncPeer, id uint64, bytecodes [][]byte) e
 // or storage slot) is downloded during the healing stage. The flat states
 // can be persisted blindly and can be fixed later in the generation stage.
 // Note it's not concurrent safe, please handle the concurrent issue outside.
-func (s *Syncer) onHealState(path []byte, value []byte) error {
-	if len(path) == common.HashLength {
-		rawdb.WriteAccountSnapshot(s.stateWriter, common.BytesToHash(path), value)
+func (s *Syncer) onHealState(paths [][]byte, value []byte) error {
+	if len(paths) == 1 {
+		rawdb.WriteAccountSnapshot(s.stateWriter, common.BytesToHash(paths[0]), value)
 		s.accountHealed += 1
 		s.accountHealedBytes += common.StorageSize(1 + common.HashLength + len(value))
 	}
-	if len(path) == 2*common.HashLength {
-		rawdb.WriteStorageSnapshot(s.stateWriter, common.BytesToHash(path[:common.HashLength]), common.BytesToHash(path[common.HashLength:]), value)
+	if len(paths) == 2 {
+		rawdb.WriteStorageSnapshot(s.stateWriter, common.BytesToHash(paths[0]), common.BytesToHash(paths[1]), value)
 		s.storageHealed += 1
 		s.storageHealedBytes += common.StorageSize(1 + 2*common.HashLength + len(value))
 	}
