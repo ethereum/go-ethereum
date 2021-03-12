@@ -195,12 +195,13 @@ func (dl *diskLayer) proveRange(root common.Hash, tr *trie.SecureTrie, prefix []
 		if len(key) != len(prefix)+common.HashLength {
 			continue
 		}
-		last = common.CopyBytes(key[len(prefix):])
 		keys = append(keys, common.CopyBytes(key[len(prefix):]))
 		vals = append(vals, common.CopyBytes(iter.Value()))
 	}
 	iter.Release()
-
+	if len(keys) > 0 {
+		last = keys[len(keys)-1]
+	}
 	if onValue != nil {
 		// If an onValue callback is specified, use it to convert the values
 		for i, key := range keys {
