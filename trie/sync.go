@@ -398,7 +398,14 @@ func (s *Sync) children(req *request, object node) ([]*request, error) {
 		// Notify any external watcher of a new key/value node
 		if req.callback != nil {
 			if node, ok := (child.node).(valueNode); ok {
-				if err := req.callback(child.path, node, req.hash); err != nil {
+				var paths [][]byte
+				if len(child.path) == 2*common.HashLength {
+					paths = append(paths, hexToKeybytes(child.path))
+				} else if len(child.path) == 4*common.HashLength {
+					paths = append(paths, hexToKeybytes(child.path[:2*common.HashLength]))
+					paths = append(paths, hexToKeybytes(child.path[2*common.HashLength:]))
+				}
+				if err := req.callback(paths, child.path, node, req.hash); err != nil {
 					return nil, err
 				}
 			}
