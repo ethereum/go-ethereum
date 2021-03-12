@@ -182,7 +182,7 @@ func journalProgress(db ethdb.KeyValueWriter, marker []byte, stats *generatorSta
 // The iteration start point will be assigned if the iterator is restored from
 // the last interruption. Max will be assigned in order to limit the maximum
 // amount of data involved in each iteration.
-func (dl *diskLayer) proveRange(root common.Hash, tr *trie.SecureTrie, prefix []byte, kind string, origin []byte, max int, onValue func([]byte) ([]byte, error)) ([][]byte, [][]byte, []byte, bool, error) {
+func (dl *diskLayer) proveRange(root common.Hash, tr *trie.SecureTrie, prefix []byte, kind string, origin []byte, max int, valueConvertFn func([]byte) ([]byte, error)) ([][]byte, [][]byte, []byte, bool, error) {
 	var (
 		keys  [][]byte
 		vals  [][]byte
@@ -196,22 +196,21 @@ func (dl *diskLayer) proveRange(root common.Hash, tr *trie.SecureTrie, prefix []
 			continue
 		}
 		keys = append(keys, common.CopyBytes(key[len(prefix):]))
-		vals = append(vals, common.CopyBytes(iter.Value()))
+		if valueConvertFn == nil {
+			vals = append(vals, common.CopyBytes(iter.Value()))
+			continue
+		}
+		if v, err := valueConvertFn(iter.Value()); err != nil {
+			log.Debug("Failed to convert the flat state", "kind", kind, "key", common.BytesToHash(key[len(prefix):]), "error", err)
+			iter.Release()
+			return nil, nil, last, false, err
+		} else {
+			vals = append(vals, v)
+		}
 	}
 	iter.Release()
 	if len(keys) > 0 {
 		last = keys[len(keys)-1]
-	}
-	if onValue != nil {
-		// If an onValue callback is specified, use it to convert the values
-		for i, key := range keys {
-			val, err := onValue(vals[i])
-			if err != nil {
-				log.Debug("Failed to convert the flat state", "kind", kind, "key", common.BytesToHash(key[len(prefix):]), "error", err)
-				return nil, nil, last, false, err
-			}
-			vals[i] = val
-		}
 	}
 	// Generate the Merkle proofs for the first and last element
 	if origin == nil {
@@ -244,14 +243,14 @@ func (dl *diskLayer) proveRange(root common.Hash, tr *trie.SecureTrie, prefix []
 // genRange generates the state segment with particular prefix. Generation can
 // either verify the correctness of existing state through rangeproof and skip
 // generation, or iterate trie to regenerate state on demand.
-func (dl *diskLayer) genRange(root common.Hash, prefix []byte, kind string, origin []byte, max int, stats *generatorStats, onState func(key []byte, val []byte, regen bool) error, onValue func([]byte) ([]byte, error)) (bool, []byte, error) {
+func (dl *diskLayer) genRange(root common.Hash, prefix []byte, kind string, origin []byte, max int, stats *generatorStats, onState func(key []byte, val []byte, regen bool) error, valueConvertFn func([]byte) ([]byte, error)) (bool, []byte, error) {
 	tr, err := trie.NewSecure(root, dl.triedb)
 	if err != nil {
 		stats.Log("Trie missing, state snapshotting paused", root, dl.genMarker)
 		return false, nil, errors.New("trie is missing")
 	}
 	// Use range prover to check the validity of the flat state in the range
-	keys, vals, last, exhausted, err := dl.proveRange(root, tr, prefix, kind, origin, max, onValue)
+	keys, vals, last, exhausted, err := dl.proveRange(root, tr, prefix, kind, origin, max, valueConvertFn)
 	if err == nil {
 		snapSuccessfulRangeProofMeter.Mark(1)
 		log.Debug("Proved state range", "kind", kind, "prefix", prefix, "origin", origin, "last", last)
