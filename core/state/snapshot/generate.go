@@ -186,33 +186,31 @@ func (dl *diskLayer) proveRange(root common.Hash, tr *trie.SecureTrie, prefix []
 	var (
 		keys  [][]byte
 		vals  [][]byte
-		count int
 		last  []byte
 		proof = rawdb.NewMemoryDatabase()
 		iter  = dl.diskdb.NewIterator(prefix, origin)
 	)
-	for iter.Next() && count < max {
+	for iter.Next() && len(keys) < max {
 		key := iter.Key()
 		if len(key) != len(prefix)+common.HashLength {
 			continue
 		}
-		if !bytes.HasPrefix(key, prefix) {
-			continue
-		}
 		last = common.CopyBytes(key[len(prefix):])
 		keys = append(keys, common.CopyBytes(key[len(prefix):]))
+		vals = append(vals, common.CopyBytes(iter.Value()))
+	}
+	iter.Release()
 
-		if onValue == nil {
-			vals = append(vals, common.CopyBytes(iter.Value()))
-		} else {
-			val, err := onValue(common.CopyBytes(iter.Value()))
+	if onValue != nil {
+		// If an onValue callback is specified, use it to convert the values
+		for i, key := range keys {
+			val, err := onValue(vals[i])
 			if err != nil {
 				log.Debug("Failed to convert the flat state", "kind", kind, "key", common.BytesToHash(key[len(prefix):]), "error", err)
 				return nil, nil, last, false, err
 			}
-			vals = append(vals, val)
+			vals[i] = val
 		}
-		count += 1
 	}
 	// Generate the Merkle proofs for the first and last element
 	if origin == nil {
@@ -236,7 +234,7 @@ func (dl *diskLayer) proveRange(root common.Hash, tr *trie.SecureTrie, prefix []
 	}
 	// Range prover says the trie still has some elements on the right side but
 	// the database is exhausted, then data loss is detected.
-	if cont && count < max {
+	if cont && len(keys) < max {
 		return nil, nil, last, false, errors.New("data loss in the state range")
 	}
 	return keys, vals, last, !cont, nil
