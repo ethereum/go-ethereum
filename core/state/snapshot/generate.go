@@ -422,6 +422,17 @@ func (dl *diskLayer) generate(stats *generatorStats) {
 					return nil // special case, the last is 0xffffffff...fff
 				}
 			}
+		} else {
+			// If the root is empty, we still need to ensure that any previous snapshot
+			// storage values are cleared
+			// TODO: investigate if this can be avoided, this will be very costly since it
+			// affects every single EOA account
+			//  - Perhaps we can avoid if where codeHash is emptyCode
+			prefix := append(rawdb.SnapshotStoragePrefix, accountHash.Bytes()...)
+			keyLen := len(rawdb.SnapshotStoragePrefix) + 2*common.HashLength
+			if err := wipeKeyRange(dl.diskdb, "storage", prefix, nil, nil, keyLen, snapWipedStorageMeter, true); err != nil {
+				return err
+			}
 		}
 		// Some account processed, unmark the marker
 		accMarker = nil
