@@ -1871,6 +1871,9 @@ func newStateWriter(db ethdb.KeyValueWriter, res *trienodeHealResponse) *stateWr
 
 // Put reacts to database writes and implements flat state persistence.
 func (w *stateWriter) Put(key []byte, val []byte) error {
+	if len(key) != common.HashLength {
+		return nil
+	}
 	hash := common.BytesToHash(key)
 	if index, ok := w.accountMarker[hash]; ok {
 		rawdb.WriteAccountSnapshot(w.db, common.BytesToHash(w.res.paths[index][0]), w.res.nodes[index])
@@ -1894,7 +1897,7 @@ func (w *stateWriter) log() (ret []interface{}) {
 		ret = append(ret, "accounts", w.accountSynced, "bytes", w.accountBytes)
 	}
 	if w.storageSynced > 0 {
-		ret = append(ret, "storages", w.storageSynced, "bytes", w.storageSynced)
+		ret = append(ret, "storages", w.storageSynced, "bytes", w.storageBytes)
 	}
 	return ret
 }
@@ -1936,7 +1939,14 @@ func (s *Syncer) processTrienodeHealResponse(res *trienodeHealResponse) {
 	if err := batch.Replay(stateWriter); err != nil {
 		log.Crit("Failed to replay the committed batch", "err", err)
 	}
-	log.Info("Persisted set of healing data", "type", "trienodes", "bytes", common.StorageSize(batch.ValueSize()), stateWriter.log())
+	ctx := []interface{}{
+		"type", "trienodes",
+		"bytes", common.StorageSize(batch.ValueSize()),
+	}
+	if logs := stateWriter.log(); logs != nil {
+		ctx = append(ctx, logs...)
+	}
+	log.Info("Persisted set of healing data", ctx...)
 }
 
 // processBytecodeHealResponse integrates an already validated bytecode response
