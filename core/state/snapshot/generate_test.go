@@ -208,9 +208,12 @@ func TestGenerateExistentStateWithExtraStorage(t *testing.T) {
 	}
 
 	{ // Account three
+		// This account changed codehash
 		acc := &Account{Balance: big.NewInt(3), Root: stTrie.Hash().Bytes(), CodeHash: emptyCode.Bytes()}
 		val, _ := rlp.EncodeToBytes(acc)
 		accTrie.Update([]byte("acc-3"), val) // 0x50815097425d000edfc8b3a4a13e175fc2bdcfee8bdfbf2d1ff61041d3c235b2
+		acc.CodeHash = hashData([]byte("codez")).Bytes()
+		val, _ = rlp.EncodeToBytes(acc)
 		rawdb.WriteAccountSnapshot(diskdb, hashData([]byte("acc-3")), val)
 		rawdb.WriteStorageSnapshot(diskdb, hashData([]byte("acc-3")), hashData([]byte("key-1")), []byte("val-1"))
 		rawdb.WriteStorageSnapshot(diskdb, hashData([]byte("acc-3")), hashData([]byte("key-2")), []byte("val-2"))
