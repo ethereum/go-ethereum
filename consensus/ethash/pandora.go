@@ -6,8 +6,13 @@ import (
 	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/rlp"
-	"math/big"
 	"time"
+	vbls "vuvuzela.io/crypto/bls"
+)
+
+const (
+	// Time expressed in seconds
+	slotTimeDuration = 6
 )
 
 // Use decorator pattern to get there as fast as possible
@@ -19,13 +24,13 @@ type Pandora struct {
 // This should be cached or retrieved in a handshake with vanguard
 type MinimalEpochConsensusInfo struct {
 	// Epoch number
-	EpochNumber *big.Int
-	// Change it to BLS signature keys
-	ValidatorList []string
+	epoch uint64
+	// Validators list 32 public bls keys. slot(n) in epoch is represented by index(n) in MinimalConsensusInfo
+	validatorsList [32]vbls.PublicKey
 	// Unix timestamp of consensus start. This will be used to extract time slot
-	GenesisStart time.Time
+	epochTimeStart time.Time
 	// Slot time duration
-	SlotTimeDuration time.Duration
+	slotTimeDuration time.Duration
 }
 
 // This is done only to have vanguard spec done in minimal codebase to exchange informations with pandora.
@@ -151,6 +156,44 @@ func (pandora *Pandora) makeWork(block *types.Block) {
 	// Trace the seal work fetched by remote sealer.
 	sealer.currentBlock = block
 	sealer.works[hash] = block
+
+	return
+}
+
+func (pandora *Pandora) VerifySeal(header *types.Header) {
+
+}
+
+// NewMnimalConsensusInfo should be used to represent validator set for epoch
+func NewMinimalConsensusInfo(epoch uint64) (consensusInfo interface{}) {
+	consensusInfo = &MinimalEpochConsensusInfo{
+		epoch:            epoch,
+		slotTimeDuration: slotTimeDuration,
+	}
+	return
+}
+
+func (pandoraMode *MinimalEpochConsensusInfo) AssignValidators(validatorsList [32]vbls.PublicKey) {
+	pandoraMode.validatorsList = validatorsList
+	return
+}
+
+// This function should be used to extract epoch start from genesis
+func (pandoraMode *MinimalEpochConsensusInfo) AssignEpochStartFromGenesis(genesisTime uint64) {
+	epochNumber := pandoraMode.epoch
+	// validator should be unique per epoch
+	slotsPerEpoch := uint64(len(pandoraMode.validatorsList))
+	slotDuration := pandoraMode.slotTimeDuration * time.Second
+	timePassed := epochNumber*slotsPerEpoch*uint64(slotDuration.Nanoseconds()) + genesisTime
+	pandoraMode.epochTimeStart = time.Time{}.Add(time.Duration(timePassed))
+}
+
+// EpochSet will retrieve minimalConsensusInfo for epoch derived from block height and its future
+func (ethash *Ethash) epochSet(block uint64) (current *MinimalEpochConsensusInfo, future *MinimalEpochConsensusInfo) {
+	epoch := block / pandoraEpochLength
+	currentSet, futureSet := ethash.mci.get(epoch)
+	current = currentSet.(*MinimalEpochConsensusInfo)
+	future = futureSet.(*MinimalEpochConsensusInfo)
 
 	return
 }

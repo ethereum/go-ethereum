@@ -212,3 +212,31 @@ func TestCreateBlockByPandoraAndVanguard(t *testing.T) {
 		}
 	})
 }
+
+func TestReceiveValidatorsForEpoch(t *testing.T) {
+
+}
+
+func TestVerifySeal(t *testing.T) {
+	lruCache := newlru("cache", 12, newCache)
+	lruDataset := newlru("dataset", 12, newDataset)
+	lruEpochSet := newlru("epochSet", 12, NewMinimalConsensusInfo)
+
+	header := types.Header{
+		ParentHash:  common.Hash{},
+		UncleHash:   common.Hash{},
+		Coinbase:    common.Address{},
+		Root:        common.Hash{},
+		TxHash:      common.Hash{},
+		ReceiptHash: common.Hash{},
+		Bloom:       types.Bloom{},
+		Difficulty:  nil,
+		Number:      nil,
+		GasLimit:    0,
+		GasUsed:     0,
+		Time:        0,
+		Extra:       nil,
+		MixDigest:   common.Hash{},
+		Nonce:       types.BlockNonce{},
+	}
+}

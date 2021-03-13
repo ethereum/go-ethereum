@@ -206,7 +206,7 @@ func (lru *lru) get(epoch uint64) (item, future interface{}) {
 
 // cache wraps an ethash cache with some metadata to allow easier concurrent use.
 type cache struct {
-	epoch uint64    // Epoch for which this cache is relevant
+	epoch uint64    // epoch for which this cache is relevant
 	dump  *os.File  // File descriptor of the memory mapped cache
 	mmap  mmap.MMap // Memory map itself to unmap before releasing
 	cache []uint32  // The actual cache data content (may be memory mapped)
@@ -282,7 +282,7 @@ func (c *cache) finalizer() {
 
 // dataset wraps an ethash dataset with some metadata to allow easier concurrent use.
 type dataset struct {
-	epoch   uint64    // Epoch for which this cache is relevant
+	epoch   uint64    // epoch for which this cache is relevant
 	dump    *os.File  // File descriptor of the memory mapped cache
 	mmap    mmap.MMap // Memory map itself to unmap before releasing
 	dataset []uint32  // The actual cache data content
@@ -422,6 +422,7 @@ type Ethash struct {
 
 	caches   *lru // In memory caches to avoid regenerating too often
 	datasets *lru // In memory datasets to avoid regenerating too often
+	mci      *lru // In memory minimal consensus info (TODO: try to copy it from aura implementation)
 
 	// Mining related fields
 	rand     *rand.Rand    // Properly seeded random source for nonces
