@@ -21,6 +21,7 @@ import (
 	"encoding/binary"
 	"errors"
 	"fmt"
+	"github.com/ethereum/go-ethereum/common/hexutil"
 	"math/big"
 	"time"
 
@@ -182,25 +183,31 @@ func journalProgress(db ethdb.KeyValueWriter, marker []byte, stats *generatorSta
 // The iteration start point will be assigned if the iterator is restored from
 // the last interruption. Max will be assigned in order to limit the maximum
 // amount of data involved in each iteration.
-func (dl *diskLayer) proveRange(root common.Hash, tr *trie.SecureTrie, prefix []byte, kind string, origin []byte, max int, valueConvertFn func([]byte) ([]byte, error)) ([][]byte, [][]byte, []byte, bool, error) {
+func (dl *diskLayer) proveRange(root common.Hash, tr *trie.SecureTrie, prefix []byte, kind string, origin []byte, max int, conversionNeeded bool) ([][]byte, [][]byte, []byte, bool, error) {
 	var (
-		keys  [][]byte
-		vals  [][]byte
-		last  []byte
-		proof = rawdb.NewMemoryDatabase()
-		iter  = dl.diskdb.NewIterator(prefix, origin)
+		keys    [][]byte
+		vals    [][]byte
+		last    []byte
+		iter    = dl.diskdb.NewIterator(prefix, origin)
+		aborted bool
 	)
-	for iter.Next() && len(keys) < max {
+	for iter.Next() {
+		if len(keys) == max {
+			// There exists more data in the snapshot, but we've reached the
+			// max elems per iteration
+			aborted = true
+			break
+		}
 		key := iter.Key()
 		if len(key) != len(prefix)+common.HashLength {
 			continue
 		}
 		keys = append(keys, common.CopyBytes(key[len(prefix):]))
-		if valueConvertFn == nil {
+		if !conversionNeeded {
 			vals = append(vals, common.CopyBytes(iter.Value()))
 			continue
 		}
-		if v, err := valueConvertFn(iter.Value()); err != nil {
+		if v, err := FullAccountRLP(iter.Value()); err != nil {
 			log.Debug("Failed to convert the flat state", "kind", kind, "key", common.BytesToHash(key[len(prefix):]), "error", err)
 			iter.Release()
 			return nil, nil, last, false, err
@@ -209,6 +216,9 @@ func (dl *diskLayer) proveRange(root common.Hash, tr *trie.SecureTrie, prefix []
 		}
 	}
 	iter.Release()
+	if err := iter.Error(); err != nil {
+		return nil, nil, last, false, err
+	}
 	if len(keys) > 0 {
 		last = keys[len(keys)-1]
 	}
@@ -216,6 +226,8 @@ func (dl *diskLayer) proveRange(root common.Hash, tr *trie.SecureTrie, prefix []
 	if origin == nil {
 		origin = common.Hash{}.Bytes()
 	}
+	proof := rawdb.NewMemoryDatabase()
+
 	if err := tr.Prove(origin, 0, proof); err != nil {
 		log.Debug("Failed to prove range", "kind", kind, "origin", origin, "err", err)
 		return nil, nil, last, false, err
@@ -234,7 +246,7 @@ func (dl *diskLayer) proveRange(root common.Hash, tr *trie.SecureTrie, prefix []
 	}
 	// Range prover says the trie still has some elements on the right side but
 	// the database is exhausted, then data loss is detected.
-	if cont && len(keys) < max {
+	if cont && !aborted {
 		return nil, nil, last, false, errors.New("data loss in the state range")
 	}
 	return keys, vals, last, !cont, nil
@@ -243,17 +255,30 @@ func (dl *diskLayer) proveRange(root common.Hash, tr *trie.SecureTrie, prefix []
 // genRange generates the state segment with particular prefix. Generation can
 // either verify the correctness of existing state through rangeproof and skip
 // generation, or iterate trie to regenerate state on demand.
-func (dl *diskLayer) genRange(root common.Hash, prefix []byte, kind string, origin []byte, max int, stats *generatorStats, onState func(key []byte, val []byte, regen bool) error, valueConvertFn func([]byte) ([]byte, error)) (bool, []byte, error) {
+func (dl *diskLayer) genRange(root common.Hash, prefix []byte, accounts bool, origin []byte, max int, stats *generatorStats, onState func(key []byte, val []byte, regen bool) error) (bool, []byte, error) {
+	// Configure logger
+	var kind string
+	if accounts {
+		kind = "account"
+	} else {
+		kind = "storage"
+	}
+	var logCtx = []interface{}{"kind", kind, "prefix", hexutil.Encode(prefix)}
+	if len(origin) > 0 {
+		logCtx = append(logCtx, "origin", hexutil.Encode(origin))
+	}
+	logger := log.New(logCtx...)
+
 	tr, err := trie.NewSecure(root, dl.triedb)
 	if err != nil {
 		stats.Log("Trie missing, state snapshotting paused", root, dl.genMarker)
 		return false, nil, errors.New("trie is missing")
 	}
 	// Use range prover to check the validity of the flat state in the range
-	keys, vals, last, exhausted, err := dl.proveRange(root, tr, prefix, kind, origin, max, valueConvertFn)
+	keys, vals, last, exhausted, err := dl.proveRange(root, tr, prefix, kind, origin, max, accounts)
 	if err == nil {
 		snapSuccessfulRangeProofMeter.Mark(1)
-		log.Debug("Proved state range", "kind", kind, "prefix", prefix, "origin", origin, "last", last)
+		logger.Trace("Proved state range", "last", hexutil.Encode(last))
 
 		// The verification is passed, process each state with the given
 		// callback function. If this state represents a contract, the
@@ -263,11 +288,11 @@ func (dl *diskLayer) genRange(root common.Hash, prefix []byte, kind string, orig
 				return false, nil, err
 			}
 		}
-		log.Debug("Recovered state range", "kind", kind, "prefix", prefix, "origin", origin, "last", last)
+		logger.Trace("Recovered state range", "last", hexutil.Encode(last))
 		return exhausted, last, nil
 	}
 	snapFailedRangeProofMeter.Mark(1)
-	log.Debug("Detected outdated state range", "kind", kind, "prefix", prefix, "origin", origin, "last", last)
+	logger.Debug("Detected outdated state range", "last", hexutil.Encode(last), "error", err)
 
 	// The verifcation is failed, the flat state in this range cannot match the
 	// merkle trie. Alternatively, use the fallback generation mechanism to regenerate
@@ -277,19 +302,19 @@ func (dl *diskLayer) genRange(root common.Hash, prefix []byte, kind string, orig
 		// Note if the returned last is nil(no more flat state can be found in the database),
 		// the wiping can be skipped.
 		wipedMeter := snapWipedAccountMeter
-		if kind == "storage" {
+		if !accounts {
 			wipedMeter = snapWipedStorageMeter
 		}
 		limit := increseKey(common.CopyBytes(last))
 		if err := wipeKeyRange(dl.diskdb, kind, prefix, origin, limit, len(prefix)+common.HashLength, wipedMeter, false); err != nil {
 			return false, nil, err
 		}
-		log.Debug("Wiped currupted state range", "kind", kind, "prefix", prefix, "origin", origin, "limit", limit)
+		logger.Debug("Wiped corrupted state range", "limit", hexutil.Encode(limit))
 	}
 	iter := trie.NewIterator(tr.NodeIterator(origin))
 	for iter.Next() {
 		if last != nil && bytes.Compare(iter.Key, last) > 0 {
-			log.Debug("Regenerated state range", "kind", kind, "prefix", prefix, "origin", origin, "last", last)
+			logger.Debug("Regenerated state range", "last", hexutil.Encode(last))
 			return false, last, nil // Apparently the trie is not exhausted
 		}
 		if err := onState(iter.Key, iter.Value, true); err != nil {
@@ -299,8 +324,15 @@ func (dl *diskLayer) genRange(root common.Hash, prefix []byte, kind string, orig
 	if iter.Err != nil {
 		return false, nil, iter.Err
 	}
-	log.Debug("Regenerated state range", "kind", kind, "prefix", prefix, "origin", origin, "last", last)
+	logger.Debug("Regenerated state range", "last", hexutil.Encode(last))
 	return true, nil, nil // The entire trie is exhausted
+}
+
+type fullAccount struct {
+	Nonce    uint64
+	Balance  *big.Int
+	Root     common.Hash
+	CodeHash []byte
 }
 
 // generate is a background thread that iterates over the state and storage tries,
@@ -360,32 +392,31 @@ func (dl *diskLayer) generate(stats *generatorStats) {
 	onAccount := func(key []byte, val []byte, regen bool) error {
 		// Retrieve the current account and flatten it into the internal format
 		accountHash := common.BytesToHash(key)
-		var acc struct {
-			Nonce    uint64
-			Balance  *big.Int
-			Root     common.Hash
-			CodeHash []byte
-		}
+		var acc fullAccount
 		if err := rlp.DecodeBytes(val, &acc); err != nil {
 			log.Crit("Invalid account encountered during snapshot creation", "err", err)
 		}
-		data := SlimAccountRLP(acc.Nonce, acc.Balance, acc.Root, acc.CodeHash)
-
 		// If the account is not yet in-progress, write it out
 		if accMarker == nil || !bytes.Equal(accountHash[:], accMarker) {
-			if regen {
-				rawdb.WriteAccountSnapshot(batch, accountHash, data)
-				snapGeneratedAccountMeter.Mark(1)
-			} else {
-				snapRecoveredAccountMeter.Mark(1)
-			}
-			stats.storage += common.StorageSize(1 + common.HashLength + len(data))
 			stats.accounts++
+			if !regen {
+				// Technically not always correct to use len(val) here, but approximately.
+				// It saves us some RLP decoding + encoding just to figure out the size.
+				stats.storage += common.StorageSize(1 + common.HashLength + len(val))
+				snapRecoveredAccountMeter.Mark(1)
+			} else {
+				data := SlimAccountRLP(acc.Nonce, acc.Balance, acc.Root, acc.CodeHash)
+				rawdb.WriteAccountSnapshot(batch, accountHash, data)
+				// Update meters
+				stats.storage += common.StorageSize(1 + common.HashLength + len(data))
+				snapGeneratedAccountMeter.Mark(1)
+			}
 		}
 		// If we've exceeded our batch allowance or termination was requested, flush to disk
 		if err := checkAndFlush(accountHash[:]); err != nil {
 			return err
 		}
+		// The account is in progress
 		// If the iterated account is the contract, create a further loop to
 		// verify or regenerate the contract storage.
 		if acc.Root != emptyRoot {
@@ -410,15 +441,15 @@ func (dl *diskLayer) generate(stats *generatorStats) {
 			}
 			var storeOrigin = common.CopyBytes(storeMarker)
 			for {
-				exhausted, last, err := dl.genRange(acc.Root, append(rawdb.SnapshotStoragePrefix, accountHash.Bytes()...), "storage", storeOrigin, storageCheckRange, stats, onStorage, nil)
+				exhausted, last, err := dl.genRange(acc.Root, append(rawdb.SnapshotStoragePrefix, accountHash.Bytes()...), false, storeOrigin, storageCheckRange, stats, onStorage)
 				if err != nil {
 					return err
 				}
 				if exhausted {
 					return nil
 				}
-				storeOrigin = increseKey(last)
-				if storeOrigin == nil {
+
+				if storeOrigin = increseKey(last); storeOrigin == nil {
 					return nil // special case, the last is 0xffffffff...fff
 				}
 			}
@@ -439,7 +470,7 @@ func (dl *diskLayer) generate(stats *generatorStats) {
 		return nil
 	}
 	for {
-		exhausted, last, err := dl.genRange(dl.root, rawdb.SnapshotAccountPrefix, "account", accOrigin, accountRange, stats, onAccount, FullAccountRLP)
+		exhausted, last, err := dl.genRange(dl.root, rawdb.SnapshotAccountPrefix, true, accOrigin, accountRange, stats, onAccount)
 		// The procedure it aborted, either by external signal or internal error
 		if err != nil {
 			if abort == nil { // aborted by internal error, wait the signal
@@ -452,8 +483,7 @@ func (dl *diskLayer) generate(stats *generatorStats) {
 		if exhausted {
 			break
 		}
-		accOrigin = increseKey(last)
-		if accOrigin == nil {
+		if accOrigin = increseKey(last); accOrigin == nil {
 			break // special case, the last is 0xffffffff...fff
 		}
 		accountRange = accountCheckRange

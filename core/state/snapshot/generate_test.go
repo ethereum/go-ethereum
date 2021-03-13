@@ -17,6 +17,7 @@
 package snapshot
 
 import (
+	"fmt"
 	"math/big"
 	"testing"
 	"time"
@@ -221,6 +222,47 @@ func TestGenerateExistentStateWithExtraStorage(t *testing.T) {
 	}
 
 	root, _ := accTrie.Commit(nil) // Root: 0xe3712f1a226f3782caca78ca770ccc19ee000552813a9f59d479f8611db9b1fd
+	t.Logf("Root: %#x\n", root)
+	triedb.Commit(root, false, nil)
+
+	snap := generateSnapshot(diskdb, triedb, 16, root)
+	select {
+	case <-snap.genPending:
+		// Snapshot generation succeeded
+
+	case <-time.After(250 * time.Millisecond):
+		t.Errorf("Snapshot generation failed")
+	}
+	checkSnapRoot(t, snap, root)
+	// Signal abortion to the generator and wait for it to tear down
+	stop := make(chan *generatorStats)
+	snap.genAbort <- stop
+	<-stop
+}
+
+// Tests that snapshot generation where no snap data exists
+func TestGenerateExistentStateWithNoSnap(t *testing.T) {
+	//log.Root().SetHandler(log.LvlFilterHandler(log.LvlInfo, log.StreamHandler(os.Stderr, log.TerminalFormat(true))))
+	var (
+		diskdb = memorydb.New()
+		triedb = trie.NewDatabase(diskdb)
+	)
+	stTrie, _ := trie.NewSecure(common.Hash{}, triedb)
+	stTrie.Update([]byte("key-1"), []byte("val-1"))
+	stTrie.Update([]byte("key-2"), []byte("val-2"))
+	stTrie.Update([]byte("key-3"), []byte("val-3"))
+	stTrie.Commit(nil)
+
+	accTrie, _ := trie.NewSecure(common.Hash{}, triedb)
+
+	// Generate a few hundred accounts (larger than accountCheckRange)
+	for i := 0; i < 2 * accountCheckRange + 5; i++{
+		acc := &Account{Balance: big.NewInt(int64(i)), Root: stTrie.Hash().Bytes(), CodeHash: emptyCode.Bytes()}
+		val, _ := rlp.EncodeToBytes(acc)
+		key := fmt.Sprintf("acc-%d", i)
+		accTrie.Update([]byte(key), val)
+	}
+	root, _ := accTrie.Commit(nil) // Root: 0xee81a618541f8dce545bc370d5cb8a688c3831d4a21ddccf4b7590112f33c982
 	t.Logf("Root: %#x\n", root)
 	triedb.Commit(root, false, nil)
 

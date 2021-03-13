@@ -103,7 +103,7 @@ func wipeKeyRange(db ethdb.KeyValueStore, kind string, prefix []byte, origin []b
 		// Skip any keys with the correct prefix but wrong length (trie nodes)
 		key := it.Key()
 		if !bytes.HasPrefix(key, prefix) {
-			break
+			panic("misbehaving iterator")// TODO remove this later on
 		}
 		if len(key) != keylen {
 			continue
@@ -138,7 +138,7 @@ func wipeKeyRange(db ethdb.KeyValueStore, kind string, prefix []byte, origin []b
 	if meter != nil {
 		meter.Mark(int64(items))
 	}
-	if report {
+	if report && items > 0 {
 		log.Info("Deleted state snapshot leftovers", "kind", kind, "wiped", items, "elapsed", common.PrettyDuration(time.Since(start)))
 	}
 	return nil
