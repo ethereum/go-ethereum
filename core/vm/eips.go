@@ -149,36 +149,35 @@ func enable2929(jt *JumpTable) {
 }
 
 func enable3074(jt *JumpTable) {
-	jt[CALLFROM] = &operation{
-		execute:     opCallFrom,
-		constantGas: WarmStorageReadCostEIP2929 + params.EcrecoverGas,
-		dynamicGas:  gasCallEIP2929,
-		minStack:    minStack(12, 2),
-		maxStack:    maxStack(12, 2),
-		memorySize:  memoryCall,
+	jt[AUTH] = &operation{
+		execute:     opAuth,
+		constantGas: params.EcrecoverGas,
+		minStack:    minStack(4, 1),
+		maxStack:    maxStack(4, 1),
+	}
+
+	jt[AUTHCALL] = &operation{
+		execute:     opAuthCall,
+		constantGas: jt[CALL].constantGas,
+		dynamicGas:  jt[CALL].dynamicGas,
+		minStack:    minStack(7, 1),
+		maxStack:    maxStack(7, 1),
+		memorySize:  jt[CALL].memorySize,
 		returns:     true,
 	}
 }
 
-func opCallFrom(pc *uint64, interpreter *EVMInterpreter, callContext *callCtx) ([]byte, error) {
+func opAuth(pc *uint64, interpreter *EVMInterpreter, callContext *callCtx) ([]byte, error) {
 	stack := callContext.stack
-	// Pop gas. The actual gas in interpreter.evm.callGasTemp.
-	// We can use this as a temporary value
-	temp := stack.pop()
-	gas := interpreter.evm.callGasTemp
-	// Pop other call parameters.
-	addr, value, inOffset, inSize, retOffset, retSize := stack.pop(), stack.pop(), stack.pop(), stack.pop(), stack.pop(), stack.pop()
-	commit, sponsee, sigV, sigR, sigS := stack.pop(), stack.pop(), stack.pop(), stack.pop(), stack.pop()
-
-	valid, success := false, false
-	var ret []byte = nil
+	commit, sigYParity, sigR, sigS := stack.pop(), stack.pop(), stack.pop(), stack.pop()
 
 	r := sigR.ToBig()
 	s := sigS.ToBig()
-	v := uint8(sigV[0]) - 27
+	yParity := uint8(sigYParity[0])
 
-	// tighter sig s values input homestead only apply to tx sigs
-	if val, of := sigV.Uint64WithOverflow(); !of && val <= 0xff && crypto.ValidateSignatureValues(v, r, s, false) {
+	callContext.authorizedAccount = nil
+
+	if val, of := sigYParity.Uint64WithOverflow(); !of && val <= 0xff && crypto.ValidateSignatureValues(yParity, r, s, true) {
 		input := make([]byte, 65)
 		input[0] = 0x03
 		copy(input[13:33], callContext.contract.Address().Bytes())
@@ -188,54 +187,65 @@ func opCallFrom(pc *uint64, interpreter *EVMInterpreter, callContext *callCtx) (
 		sig := make([]byte, 65)
 		sigR.WriteToSlice(sig[0:32])
 		sigS.WriteToSlice(sig[32:64])
-		sig[64] = v
+		sig[64] = yParity
 		// v needs to be at the end for libsecp256k1
 		pubKey, err := crypto.Ecrecover(hash[:], sig)
 		// make sure the public key is a valid one
 		// the first byte of pubkey is bitcoin heritage
 		if err == nil {
 			from := common.BytesToAddress(crypto.Keccak256(pubKey[1:])[12:])
-			if sponsee.IsZero() || sponsee.Bytes20() == from {
-				valid = true
-
-				toAddr := common.Address(addr.Bytes20())
-				// Get the arguments from the memory.
-				args := callContext.memory.GetPtr(int64(inOffset.Uint64()), int64(inSize.Uint64()))
-
-				var bigVal = big0
-				//TODO: use uint256.Int instead of converting with toBig()
-				// By using big0 here, we save an alloc for the most common case (non-ether-transferring contract calls),
-				// but it would make more sense to extend the usage of uint256.Int
-				if !value.IsZero() {
-					gas += params.CallStipend
-					bigVal = value.ToBig()
-				}
-
-				ret, returnGas, err := interpreter.evm.Call(callContext.contract, from, toAddr, args, gas, bigVal)
-
-				success = err == nil
-				if success || err == ErrExecutionReverted {
-					callContext.memory.Set(retOffset.Uint64(), retSize.Uint64(), ret)
-				}
-				callContext.contract.Gas += returnGas
+			if from != interpreter.evm.Origin {
+				callContext.authorizedAccount = &from
 			}
 		}
 	}
 
-	if valid {
-		addr.SetOne()
+	if callContext.authorizedAccount != nil {
+		commit.SetBytes20(callContext.authorizedAccount.Bytes())
 	} else {
-		addr.Clear()
-		callContext.contract.Gas += gas
+		commit.Clear()
 	}
-	stack.push(&addr)
+	stack.push(&commit)
+	return nil, nil
+}
 
-	if success {
-		temp.SetOne()
-	} else {
+func opAuthCall(pc *uint64, interpreter *EVMInterpreter, callContext *callCtx) ([]byte, error) {
+	if callContext.authorizedAccount == nil {
+		return nil, ErrNoAuthorizedAccount
+	}
+
+	stack := callContext.stack
+	// Pop gas. The actual gas in interpreter.evm.callGasTemp.
+	// We can use this as a temporary value
+	temp := stack.pop()
+	gas := interpreter.evm.callGasTemp
+	// Pop other call parameters.
+	addr, value, inOffset, inSize, retOffset, retSize := stack.pop(), stack.pop(), stack.pop(), stack.pop(), stack.pop(), stack.pop()
+	toAddr := common.Address(addr.Bytes20())
+	// Get the arguments from the memory.
+	args := callContext.memory.GetPtr(int64(inOffset.Uint64()), int64(inSize.Uint64()))
+
+	var bigVal = big0
+	//TODO: use uint256.Int instead of converting with toBig()
+	// By using big0 here, we save an alloc for the most common case (non-ether-transferring contract calls),
+	// but it would make more sense to extend the usage of uint256.Int
+	if !value.IsZero() {
+		gas += params.CallStipend
+		bigVal = value.ToBig()
+	}
+
+	ret, returnGas, err := interpreter.evm.Call(callContext.contract, *callContext.authorizedAccount, toAddr, args, gas, bigVal)
+
+	if err != nil {
 		temp.Clear()
+	} else {
+		temp.SetOne()
 	}
 	stack.push(&temp)
+	if err == nil || err == ErrExecutionReverted {
+		callContext.memory.Set(retOffset.Uint64(), retSize.Uint64(), ret)
+	}
+	callContext.contract.Gas += returnGas
 
 	return ret, nil
 }
