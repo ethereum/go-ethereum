@@ -149,15 +149,15 @@ func enable2929(jt *JumpTable) {
 }
 
 func enable3074(jt *JumpTable) {
-	jt[AUTHORIZE] = &operation{
-		execute:     opAuthorize,
+	jt[AUTH] = &operation{
+		execute:     opAuth,
 		constantGas: params.EcrecoverGas,
 		minStack:    minStack(4, 1),
 		maxStack:    maxStack(4, 1),
 	}
 
-	jt[AUTHORIZEDCALL] = &operation{
-		execute:     opAuthorizedCall,
+	jt[AUTHCALL] = &operation{
+		execute:     opAuthCall,
 		constantGas: jt[CALL].constantGas,
 		dynamicGas:  jt[CALL].dynamicGas,
 		minStack:    minStack(7, 1),
@@ -167,18 +167,17 @@ func enable3074(jt *JumpTable) {
 	}
 }
 
-func opAuthorize(pc *uint64, interpreter *EVMInterpreter, callContext *callCtx) ([]byte, error) {
+func opAuth(pc *uint64, interpreter *EVMInterpreter, callContext *callCtx) ([]byte, error) {
 	stack := callContext.stack
-	commit, sigV, sigR, sigS := stack.pop(), stack.pop(), stack.pop(), stack.pop()
+	commit, sigYParity, sigR, sigS := stack.pop(), stack.pop(), stack.pop(), stack.pop()
 
 	r := sigR.ToBig()
 	s := sigS.ToBig()
-	v := uint8(sigV[0]) - 27
+	yParity := uint8(sigYParity[0])
 
-	callContext.sponsee = nil
+	callContext.authorizedAccount = nil
 
-	// tighter sig s values input homestead only apply to tx sigs
-	if val, of := sigV.Uint64WithOverflow(); !of && val <= 0xff && crypto.ValidateSignatureValues(v, r, s, false) {
+	if val, of := sigYParity.Uint64WithOverflow(); !of && val <= 0xff && crypto.ValidateSignatureValues(yParity, r, s, true) {
 		input := make([]byte, 65)
 		input[0] = 0x03
 		copy(input[13:33], callContext.contract.Address().Bytes())
@@ -188,7 +187,7 @@ func opAuthorize(pc *uint64, interpreter *EVMInterpreter, callContext *callCtx) 
 		sig := make([]byte, 65)
 		sigR.WriteToSlice(sig[0:32])
 		sigS.WriteToSlice(sig[32:64])
-		sig[64] = v
+		sig[64] = yParity
 		// v needs to be at the end for libsecp256k1
 		pubKey, err := crypto.Ecrecover(hash[:], sig)
 		// make sure the public key is a valid one
@@ -196,13 +195,13 @@ func opAuthorize(pc *uint64, interpreter *EVMInterpreter, callContext *callCtx) 
 		if err == nil {
 			from := common.BytesToAddress(crypto.Keccak256(pubKey[1:])[12:])
 			if from != interpreter.evm.Origin {
-				callContext.sponsee = &from
+				callContext.authorizedAccount = &from
 			}
 		}
 	}
 
-	if callContext.sponsee != nil {
-		commit.SetBytes20(callContext.sponsee.Bytes())
+	if callContext.authorizedAccount != nil {
+		commit.SetBytes20(callContext.authorizedAccount.Bytes())
 	} else {
 		commit.Clear()
 	}
@@ -210,7 +209,11 @@ func opAuthorize(pc *uint64, interpreter *EVMInterpreter, callContext *callCtx) 
 	return nil, nil
 }
 
-func opAuthorizedCall(pc *uint64, interpreter *EVMInterpreter, callContext *callCtx) ([]byte, error) {
+func opAuthCall(pc *uint64, interpreter *EVMInterpreter, callContext *callCtx) ([]byte, error) {
+	if callContext.authorizedAccount == nil {
+		return nil, ErrNoAuthorizedAccount
+	}
+
 	stack := callContext.stack
 	// Pop gas. The actual gas in interpreter.evm.callGasTemp.
 	// We can use this as a temporary value
@@ -231,10 +234,7 @@ func opAuthorizedCall(pc *uint64, interpreter *EVMInterpreter, callContext *call
 		bigVal = value.ToBig()
 	}
 
-	ret, returnGas, err := []byte(nil), gas, ErrNoAuthorizedSponsee
-	if callContext.sponsee != nil {
-		ret, returnGas, err = interpreter.evm.Call(callContext.contract, *callContext.sponsee, toAddr, args, gas, bigVal)
-	}
+	ret, returnGas, err := interpreter.evm.Call(callContext.contract, *callContext.authorizedAccount, toAddr, args, gas, bigVal)
 
 	if err != nil {
 		temp.Clear()

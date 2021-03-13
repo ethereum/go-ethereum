@@ -213,11 +213,11 @@ const (
 	RETURN
 	DELEGATECALL
 	CREATE2
-	AUTHORIZE      OpCode = 0xf8
-	AUTHORIZEDCALL OpCode = 0xf9
-	STATICCALL     OpCode = 0xfa
-	REVERT         OpCode = 0xfd
-	SELFDESTRUCT   OpCode = 0xff
+	AUTH
+	AUTHCALL
+	STATICCALL   OpCode = 0xfa
+	REVERT       OpCode = 0xfd
+	SELFDESTRUCT OpCode = 0xff
 )
 
 // Since the opcodes aren't all in order we can't use a regular slice.
@@ -373,17 +373,17 @@ var opCodeToString = map[OpCode]string{
 	LOG4:   "LOG4",
 
 	// 0xf0 range.
-	CREATE:         "CREATE",
-	CALL:           "CALL",
-	AUTHORIZE:      "AUTHORIZE",
-	AUTHORIZEDCALL: "AUTHORIZEDCALL",
-	RETURN:         "RETURN",
-	CALLCODE:       "CALLCODE",
-	DELEGATECALL:   "DELEGATECALL",
-	CREATE2:        "CREATE2",
-	STATICCALL:     "STATICCALL",
-	REVERT:         "REVERT",
-	SELFDESTRUCT:   "SELFDESTRUCT",
+	CREATE:       "CREATE",
+	CALL:         "CALL",
+	AUTH:         "AUTH",
+	AUTHCALL:     "AUTHCALL",
+	RETURN:       "RETURN",
+	CALLCODE:     "CALLCODE",
+	DELEGATECALL: "DELEGATECALL",
+	CREATE2:      "CREATE2",
+	STATICCALL:   "STATICCALL",
+	REVERT:       "REVERT",
+	SELFDESTRUCT: "SELFDESTRUCT",
 
 	PUSH: "PUSH",
 	DUP:  "DUP",
@@ -537,8 +537,8 @@ var stringToOp = map[string]OpCode{
 	"CREATE":         CREATE,
 	"CREATE2":        CREATE2,
 	"CALL":           CALL,
-	"AUTHORIZE":      AUTHORIZE,
-	"AUTHORIZEDCALL": AUTHORIZEDCALL,
+	"AUTH":           AUTH,
+	"AUTHCALL":       AUTHCALL,
 	"RETURN":         RETURN,
 	"CALLCODE":       CALLCODE,
 	"REVERT":         REVERT,

@@ -65,10 +65,10 @@ type Interpreter interface {
 // callCtx contains the things that are per-call, such as stack and memory,
 // but not transients like pc and gas
 type callCtx struct {
-	memory   *Memory
-	stack    *Stack
-	contract *Contract
-	sponsee  *common.Address
+	memory            *Memory
+	stack             *Stack
+	contract          *Contract
+	authorizedAccount *common.Address
 }
 
 // keccakState wraps sha3.state. In addition to the usual hash methods, it also supports
