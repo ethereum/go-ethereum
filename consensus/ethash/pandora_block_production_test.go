@@ -23,7 +23,6 @@ import (
 // This file is used for exploration of possible ways to achieve pandora-vanguard block production
 // Test RemoteSigner approach connected to each other
 func TestCreateBlockByPandoraAndVanguard(t *testing.T) {
-	// TODO: we must check if we are configuring it properly now, for now maxItems and func below are hardcoded
 	lruCache := newlru("cache", 12, newCache)
 	lruDataset := newlru("dataset", 12, newDataset)
 
@@ -55,8 +54,6 @@ func TestCreateBlockByPandoraAndVanguard(t *testing.T) {
 		}
 
 		workChannel <- work
-
-		// TODO: seal header hash by bls validator private key
 		rlpHexHeader := work[2]
 		rlpHeader, err := hexutil.Decode(rlpHexHeader)
 
@@ -64,7 +61,6 @@ func TestCreateBlockByPandoraAndVanguard(t *testing.T) {
 			t.Errorf("failed to encode hex header")
 		}
 
-		//TODO: Extract this function without running to vanguard signing process
 		signerFunc := func() {
 			header := types.Header{}
 			err = rlp.DecodeBytes(rlpHeader, &header)
@@ -73,7 +69,6 @@ func TestCreateBlockByPandoraAndVanguard(t *testing.T) {
 				t.Errorf("failed to cast header as rlp")
 			}
 
-			// TODO: This is how it will be signed on the vanguard side
 			// Motivation: you should always be sure that what you sign is valid.
 			// We sign hash
 			signatureBytes, err := hexutil.Decode(work[0])
@@ -92,7 +87,6 @@ func TestCreateBlockByPandoraAndVanguard(t *testing.T) {
 			header.MixDigest = common.BytesToHash(compressedSignature[:])
 			workSubmittedLock.Done()
 
-			// TODO: With networking: return header via channel `submitWork`
 			// This in test is using work channel to push sealed block to pandora back
 			submitWorkChannel <- &mineResult{
 				nonce:     types.BlockNonce{},
