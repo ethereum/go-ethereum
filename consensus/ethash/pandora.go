@@ -2,10 +2,12 @@ package ethash
 
 import (
 	"context"
+	"fmt"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/rlp"
+	"github.com/silesiacoin/bls/herumi"
 	"time"
 	vbls "vuvuzela.io/crypto/bls"
 )
@@ -26,7 +28,7 @@ type MinimalEpochConsensusInfo struct {
 	// Epoch number
 	epoch uint64
 	// Validators list 32 public bls keys. slot(n) in epoch is represented by index(n) in MinimalConsensusInfo
-	validatorsList [32]vbls.PublicKey
+	validatorsList [32]*vbls.PublicKey
 	// Unix timestamp of consensus start. This will be used to extract time slot
 	epochTimeStart time.Time
 	// Slot time duration
@@ -160,10 +162,6 @@ func (pandora *Pandora) makeWork(block *types.Block) {
 	return
 }
 
-func (pandora *Pandora) VerifySeal(header *types.Header) {
-
-}
-
 // NewMnimalConsensusInfo should be used to represent validator set for epoch
 func NewMinimalConsensusInfo(epoch uint64) (consensusInfo interface{}) {
 	consensusInfo = &MinimalEpochConsensusInfo{
@@ -173,7 +171,7 @@ func NewMinimalConsensusInfo(epoch uint64) (consensusInfo interface{}) {
 	return
 }
 
-func (pandoraMode *MinimalEpochConsensusInfo) AssignValidators(validatorsList [32]vbls.PublicKey) {
+func (pandoraMode *MinimalEpochConsensusInfo) AssignValidators(validatorsList [32]*vbls.PublicKey) {
 	pandoraMode.validatorsList = validatorsList
 	return
 }
@@ -189,11 +187,89 @@ func (pandoraMode *MinimalEpochConsensusInfo) AssignEpochStartFromGenesis(genesi
 }
 
 // EpochSet will retrieve minimalConsensusInfo for epoch derived from block height and its future
-func (ethash *Ethash) epochSet(block uint64) (current *MinimalEpochConsensusInfo, future *MinimalEpochConsensusInfo) {
+func (ethash *Ethash) epochSet(block uint64) (current *MinimalEpochConsensusInfo, ok bool) {
 	epoch := block / pandoraEpochLength
-	currentSet, futureSet := ethash.mci.get(epoch)
+	currentSet, ok := ethash.mci.cache.Get(epoch)
 	current = currentSet.(*MinimalEpochConsensusInfo)
-	future = futureSet.(*MinimalEpochConsensusInfo)
+
+	return
+}
+
+func (ethash *Ethash) verifyPandoraHeader(header *types.Header) (err error) {
+	mciCache := ethash.mci
+
+	if nil == mciCache {
+		err = fmt.Errorf("mci lru cache cannot be empty to run pandora mode")
+
+		return
+	}
+
+	// Retrieve genesis info for derivation
+	cache := mciCache.cache
+	genesisInfo, ok := cache.Get(0)
+
+	if !ok {
+		err = fmt.Errorf("cannot get minimal consensus info for genesis")
+
+		return
+	}
+
+	minimalGenesisConsensusInfo := genesisInfo.(*MinimalEpochConsensusInfo)
+	genesisStart := minimalGenesisConsensusInfo.epochTimeStart
+
+	// Extract epoch
+	headerTime := header.Time
+	relativeTime := headerTime - uint64(genesisStart.Unix())
+	derivedEpoch := relativeTime / pandoraEpochLength
+
+	// Get minimal consensus info for counted epoch
+	minimalConsensusCache, ok := cache.Get(derivedEpoch)
+
+	if !ok {
+		err = fmt.Errorf("missing minimal consensus info for epoch %d", derivedEpoch)
+
+		return
+	}
+
+	minimalConsensus := minimalConsensusCache.(*MinimalEpochConsensusInfo)
+
+	// Check if time slot is within desired boundaries. To consider if needed.
+	// We could maybe have an assuption that cache should be invalidated before use.
+	epochTimeStart := minimalConsensus.epochTimeStart
+	epochDuration := pandoraEpochLength * time.Duration(slotTimeDuration) * time.Second
+	epochTimeEnd := epochTimeStart.Add(epochDuration)
+
+	if headerTime < uint64(epochTimeStart.Unix()) || headerTime >= uint64(epochTimeEnd.Unix()) {
+		err = fmt.Errorf(
+			"header time not within expected boundary. Got: %d, and should be from: %d to: %d",
+			headerTime,
+			epochTimeStart.Unix(),
+			epochTimeEnd.Unix(),
+		)
+
+		return
+	}
+
+	extractedValidatorIndex := (uint64(epochTimeEnd.Unix()) - headerTime) / slotTimeDuration
+	publicKey := minimalConsensus.validatorsList[extractedValidatorIndex]
+	mixDigest := header.MixDigest
+	// Check if signature of header is valid
+	messages := make([][]byte, 0)
+	sealHash := ethash.SealHash(header)
+	messages = append(messages, sealHash.Bytes())
+	signature := [32]byte{}
+	copy(signature[:], mixDigest.Bytes())
+	pubKeySet := make([]*vbls.PublicKey, 0)
+	pubKeySet = append(pubKeySet, publicKey)
+	signatureValid := herumi.VerifyCompressed(pubKeySet, messages, &signature)
+
+	if !signatureValid {
+		err = fmt.Errorf(
+			"invalid mixDigest: %s in header hash: %s",
+			header.MixDigest.String(),
+			header.Hash().String(),
+		)
+	}
 
 	return
 }

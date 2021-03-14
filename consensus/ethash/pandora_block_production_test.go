@@ -221,8 +221,72 @@ func TestVerifySeal(t *testing.T) {
 	lruCache := newlru("cache", 12, newCache)
 	lruDataset := newlru("dataset", 12, newDataset)
 	lruEpochSet := newlru("epochSet", 12, NewMinimalConsensusInfo)
+	validatorPublicList := [32]*vbls.PublicKey{}
+	validatorPrivateList := [32]*vbls.PrivateKey{}
 
-	header := types.Header{
+	for index, _ := range validatorPublicList {
+		randomReader := rand.Reader
+		pubKey, privKey, err := herumi.GenerateKey(randomReader)
+		assert.Nil(t, err)
+		validatorPublicList[index] = pubKey
+		validatorPrivateList[index] = privKey
+	}
+
+	firstEpoch := NewMinimalConsensusInfo(1).(*MinimalEpochConsensusInfo)
+	timeNow := time.Now()
+	firstEpoch.AssignEpochStartFromGenesis(uint64(timeNow.Unix()))
+	firstEpoch.AssignValidators(validatorPublicList)
+	// Should not be evicted
+	assert.False(t, lruEpochSet.cache.Add(1, firstEpoch))
+	assert.True(t, lruEpochSet.cache.Contains(1))
+	assert.False(t, lruEpochSet.cache.Add(2, firstEpoch))
+	assert.True(t, lruEpochSet.cache.Contains(2))
+	// Check epochs from cache
+	firstEpochFromCache, ok := lruEpochSet.cache.Get(1)
+	assert.Equal(t, firstEpochFromCache, firstEpoch)
+	assert.True(t, ok)
+	secondEpochFromCache, ok := lruEpochSet.cache.Get(1)
+	assert.Equal(t, secondEpochFromCache, firstEpoch)
+	assert.True(t, ok)
+
+	// This is how ethash would be designed to serve vanguard
+	ethash := Ethash{
+		caches:   lruCache,
+		datasets: lruDataset,
+		config: Config{
+			// In pandora-vanguard implementation we do not need to increase nonce and mixHash is sealed/calculated on the Vanguard side
+			PowMode: ModePandora,
+			Log:     log.Root(),
+		},
+		lock:      sync.Mutex{},
+		closeOnce: sync.Once{},
+	}
+	defer func() {
+		_ = ethash.Close()
+	}()
+
+	t.Run("Should increment over slots in first epoch", func(t *testing.T) {
+		headers := make([]*types.Header, 0)
+
+		for index, privateKey := range validatorPrivateList {
+			header, _, _ := generatePandoraSealedHeaderByKey(privateKey)
+			headers = append(headers, header)
+			assert.Nil(t, ethash.verifySeal(nil, header, false))
+		}
+	})
+
+	t.Run("Should discard invalid slots in second epoch", func(t *testing.T) {
+
+	})
+}
+
+func generatePandoraSealedHeaderByKey(privKey *vbls.PrivateKey) (
+	header *types.Header,
+	headerHash common.Hash,
+	mixDigest common.Hash,
+) {
+	ethash := NewTester(nil, true)
+	header = &types.Header{
 		ParentHash:  common.Hash{},
 		UncleHash:   common.Hash{},
 		Coinbase:    common.Address{},
@@ -234,9 +298,19 @@ func TestVerifySeal(t *testing.T) {
 		Number:      nil,
 		GasLimit:    0,
 		GasUsed:     0,
-		Time:        0,
-		Extra:       nil,
-		MixDigest:   common.Hash{},
-		Nonce:       types.BlockNonce{},
+		Time:        uint64(time.Now().Unix()),
+		// TODO: insert pandora extradata
+		Extra:     nil,
+		MixDigest: common.Hash{},
+		Nonce:     types.BlockNonce{},
 	}
+
+	headerHash = ethash.SealHash(header)
+
+	signature := herumi.Sign(privKey, headerHash.Bytes())
+	compressedSignature := signature.Compress()
+	header.MixDigest = common.BytesToHash(compressedSignature[:])
+	mixDigest = header.MixDigest
+
+	return
 }

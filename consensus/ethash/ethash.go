@@ -422,7 +422,7 @@ type Ethash struct {
 
 	caches   *lru // In memory caches to avoid regenerating too often
 	datasets *lru // In memory datasets to avoid regenerating too often
-	mci      *lru // In memory minimal consensus info (TODO: try to copy it from aura implementation)
+	mci      *lru // In memory minimal consensus info. 0 index should contain all info needed for derivation
 
 	// Mining related fields
 	rand     *rand.Rand    // Properly seeded random source for nonces

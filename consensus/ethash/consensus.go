@@ -520,8 +520,13 @@ func (ethash *Ethash) verifySeal(chain consensus.ChainHeaderReader, header *type
 		digest []byte
 		result []byte
 	)
+	if ModePandora == ethash.config.PowMode {
+		// Here we should check if header hash was sealed by desired validator for a slot
+		return ethash.verifyPandoraHeader(header)
+	}
+
 	// If fast-but-heavy PoW verification was requested, use an ethash dataset
-	if fulldag && ModePandora != ethash.config.PowMode {
+	if fulldag {
 		dataset := ethash.dataset(number, true)
 		if dataset.generated() {
 			digest, result = hashimotoFull(dataset.dataset, ethash.SealHash(header).Bytes(), header.Nonce.Uint64())
@@ -535,7 +540,7 @@ func (ethash *Ethash) verifySeal(chain consensus.ChainHeaderReader, header *type
 		}
 	}
 	// If slow-but-light PoW verification was requested (or DAG not yet ready), use an ethash cache
-	if !fulldag && ModePandora != ethash.config.PowMode {
+	if !fulldag {
 		cache := ethash.cache(number)
 
 		size := datasetSize(number)
@@ -547,10 +552,6 @@ func (ethash *Ethash) verifySeal(chain consensus.ChainHeaderReader, header *type
 		// Caches are unmapped in a finalizer. Ensure that the cache stays alive
 		// until after the call to hashimotoLight so it's not unmapped while being used.
 		runtime.KeepAlive(cache)
-	}
-
-	if ModePandora == ethash.config.PowMode {
-		// Here we should check if header hash was sealed by desired validator for a slot
 	}
 
 	// Verify the calculated values against the ones provided in the header
