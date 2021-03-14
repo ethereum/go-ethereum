@@ -543,3 +543,8 @@ func (api *PrivateDebugAPI) getModifiedAccounts(startBlock, endBlock *types.Bloc
 	}
 	return dirty, nil
 }
+
+func (api *PublicDebugAPI) CreateAccessList(block *types.Block, reexec uint64, tx *types.Transaction) (*types.AccessList, error) {
+	ctx := context.Background()
+	return api.eth.APIBackend.AccessList(ctx, block, reexec, tx)
+}
