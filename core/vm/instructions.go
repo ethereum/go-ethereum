@@ -767,43 +767,51 @@ func opStaticCall(pc *uint64, interpreter *EVMInterpreter, callContext *callCtx)
 
 func opAuth(pc *uint64, interpreter *EVMInterpreter, callContext *callCtx) ([]byte, error) {
 	stack := callContext.stack
-	commit, sigYParity, sigR, sigS := stack.pop(), stack.pop(), stack.pop(), stack.pop()
+	commit, v, r, s := stack.pop(), stack.pop(), stack.pop(), stack.pop()
 
-	r := sigR.ToBig()
-	s := sigS.ToBig()
-	yParity := uint8(sigYParity[0])
-
+	// Zero out the current authorized account. Only update it if an address
+	// is successfully recovered from the signature.
 	callContext.authorizedAccount = nil
 
-	if val, of := sigYParity.Uint64WithOverflow(); !of && val <= 0xff && crypto.ValidateSignatureValues(yParity, r, s, true) {
-		input := make([]byte, 65)
-		input[0] = 0x03
-		copy(input[13:33], callContext.contract.Address().Bytes())
-		commit.WriteToSlice(input[33:65])
-		hash := crypto.Keccak256(input)
+	if v.BitLen() < 8 && crypto.ValidateSignatureValues(byte(v.Uint64()), r.ToBig(), s.ToBig(), true) {
+		msg := make([]byte, 65)
+
+		// EIP-3074 messages are of the form
+		// keccak256(type ++ invoker ++ commit)
+		msg[0] = 0x03
+		copy(msg[13:33], callContext.contract.Address().Bytes())
+		commit.WriteToSlice(msg[33:65])
+		hash := crypto.Keccak256(msg)
 
 		sig := make([]byte, 65)
-		sigR.WriteToSlice(sig[0:32])
-		sigS.WriteToSlice(sig[32:64])
-		sig[64] = yParity
-		// v needs to be at the end for libsecp256k1
-		pubKey, err := crypto.Ecrecover(hash[:], sig)
-		// make sure the public key is a valid one
-		// the first byte of pubkey is bitcoin heritage
+		r.WriteToSlice(sig[0:32])
+		s.WriteToSlice(sig[32:64])
+		sig[64] = byte(v.Uint64())
+
+		pub, err := crypto.Ecrecover(hash[:], sig)
+
 		if err == nil {
-			from := common.BytesToAddress(crypto.Keccak256(pubKey[1:])[12:])
-			if from != interpreter.evm.Origin {
-				callContext.authorizedAccount = &from
+			var addr common.Address
+			copy(addr[:], crypto.Keccak256(pub[1:])[12:])
+
+			// Transaction origin is not allowed to authorize itself.
+			// This is to prevent reentering contracts that expect
+			// caller == origin only in the first frame of a transaction.
+			if addr != interpreter.evm.Origin {
+				callContext.authorizedAccount = &addr
 			}
 		}
 	}
 
+	// reuse commit to push the result
+	temp := commit
 	if callContext.authorizedAccount != nil {
-		commit.SetBytes20(callContext.authorizedAccount.Bytes())
+		temp.SetBytes20(callContext.authorizedAccount.Bytes())
 	} else {
-		commit.Clear()
+		temp.Clear()
 	}
-	stack.push(&commit)
+
+	stack.push(&temp)
 	return nil, nil
 }
 
