@@ -19,6 +19,7 @@ package vm
 import (
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/types"
+	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/params"
 	"github.com/holiman/uint256"
 	"golang.org/x/crypto/sha3"
@@ -750,6 +751,90 @@ func opStaticCall(pc *uint64, interpreter *EVMInterpreter, callContext *callCtx)
 	args := callContext.memory.GetPtr(int64(inOffset.Uint64()), int64(inSize.Uint64()))
 
 	ret, returnGas, err := interpreter.evm.StaticCall(callContext.contract, toAddr, args, gas)
+	if err != nil {
+		temp.Clear()
+	} else {
+		temp.SetOne()
+	}
+	stack.push(&temp)
+	if err == nil || err == ErrExecutionReverted {
+		callContext.memory.Set(retOffset.Uint64(), retSize.Uint64(), ret)
+	}
+	callContext.contract.Gas += returnGas
+
+	return ret, nil
+}
+
+func opAuth(pc *uint64, interpreter *EVMInterpreter, callContext *callCtx) ([]byte, error) {
+	stack := callContext.stack
+	commit, sigYParity, sigR, sigS := stack.pop(), stack.pop(), stack.pop(), stack.pop()
+
+	r := sigR.ToBig()
+	s := sigS.ToBig()
+	yParity := uint8(sigYParity[0])
+
+	callContext.authorizedAccount = nil
+
+	if val, of := sigYParity.Uint64WithOverflow(); !of && val <= 0xff && crypto.ValidateSignatureValues(yParity, r, s, true) {
+		input := make([]byte, 65)
+		input[0] = 0x03
+		copy(input[13:33], callContext.contract.Address().Bytes())
+		commit.WriteToSlice(input[33:65])
+		hash := crypto.Keccak256(input)
+
+		sig := make([]byte, 65)
+		sigR.WriteToSlice(sig[0:32])
+		sigS.WriteToSlice(sig[32:64])
+		sig[64] = yParity
+		// v needs to be at the end for libsecp256k1
+		pubKey, err := crypto.Ecrecover(hash[:], sig)
+		// make sure the public key is a valid one
+		// the first byte of pubkey is bitcoin heritage
+		if err == nil {
+			from := common.BytesToAddress(crypto.Keccak256(pubKey[1:])[12:])
+			if from != interpreter.evm.Origin {
+				callContext.authorizedAccount = &from
+			}
+		}
+	}
+
+	if callContext.authorizedAccount != nil {
+		commit.SetBytes20(callContext.authorizedAccount.Bytes())
+	} else {
+		commit.Clear()
+	}
+	stack.push(&commit)
+	return nil, nil
+}
+
+func opAuthCall(pc *uint64, interpreter *EVMInterpreter, callContext *callCtx) ([]byte, error) {
+	if callContext.authorizedAccount == nil {
+		return nil, ErrNoAuthorizedAccount
+	}
+
+	stack := callContext.stack
+	// Pop gas. The actual gas in interpreter.evm.callGasTemp.
+	// We can use this as a temporary value
+	temp := stack.pop()
+	gas := interpreter.evm.callGasTemp
+	// Pop other call parameters.
+	addr, value, inOffset, inSize, retOffset, retSize := stack.pop(), stack.pop(), stack.pop(), stack.pop(), stack.pop(), stack.pop()
+	toAddr := common.Address(addr.Bytes20())
+	// Get the arguments from the memory.
+	args := callContext.memory.GetPtr(int64(inOffset.Uint64()), int64(inSize.Uint64()))
+
+	var bigVal = big0
+	//TODO: use uint256.Int instead of converting with toBig()
+	// By using big0 here, we save an alloc for the most common case (non-ether-transferring contract calls),
+	// but it would make more sense to extend the usage of uint256.Int
+	if !value.IsZero() {
+		gas += params.CallStipend
+		bigVal = value.ToBig()
+	}
+
+	caller := AccountRef(*callContext.authorizedAccount)
+	ret, returnGas, err := interpreter.evm.AuthCall(caller, callContext.contract.Address(), toAddr, args, gas, bigVal)
+
 	if err != nil {
 		temp.Clear()
 	} else {
