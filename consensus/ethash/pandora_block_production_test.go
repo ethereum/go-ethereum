@@ -3,6 +3,7 @@ package ethash
 import (
 	"crypto/rand"
 	"encoding/json"
+	"fmt"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/ethereum/go-ethereum/core/types"
@@ -267,11 +268,19 @@ func TestVerifySeal(t *testing.T) {
 
 	t.Run("Should increment over slots in first epoch", func(t *testing.T) {
 		headers := make([]*types.Header, 0)
+		// TODO: Assign validators for 0 epoch, and count time for it to inject it into a test
+		genesisEpoch := NewMinimalConsensusInfo(0)
 
 		for index, privateKey := range validatorPrivateList {
-			header, _, _ := generatePandoraSealedHeaderByKey(privateKey)
+			header, _, _ := generatePandoraSealedHeaderByKey(privateKey, index)
+			// This will take long time to run for whole suite. Consider running it in other manner
+			time.Sleep(time.Second * slotTimeDuration)
 			headers = append(headers, header)
-			assert.Nil(t, ethash.verifySeal(nil, header, false))
+			assert.Nil(
+				t,
+				ethash.verifySeal(nil, header, false),
+				fmt.Sprintf("failed on index: %d, with header: %v", index, header),
+			)
 		}
 	})
 
@@ -280,7 +289,7 @@ func TestVerifySeal(t *testing.T) {
 	})
 }
 
-func generatePandoraSealedHeaderByKey(privKey *vbls.PrivateKey) (
+func generatePandoraSealedHeaderByKey(privKey *vbls.PrivateKey, headerNumber int) (
 	header *types.Header,
 	headerHash common.Hash,
 	mixDigest common.Hash,
@@ -294,8 +303,8 @@ func generatePandoraSealedHeaderByKey(privKey *vbls.PrivateKey) (
 		TxHash:      common.Hash{},
 		ReceiptHash: common.Hash{},
 		Bloom:       types.Bloom{},
-		Difficulty:  nil,
-		Number:      nil,
+		Difficulty:  big.NewInt(1),
+		Number:      big.NewInt(headerNumber),
 		GasLimit:    0,
 		GasUsed:     0,
 		Time:        uint64(time.Now().Unix()),
