@@ -256,7 +256,7 @@ func TestGenerateExistentStateWithNoSnap(t *testing.T) {
 	accTrie, _ := trie.NewSecure(common.Hash{}, triedb)
 
 	// Generate a few hundred accounts (larger than accountCheckRange)
-	for i := 0; i < 2 * accountCheckRange + 5; i++{
+	for i := 0; i < 2*accountCheckRange+5; i++ {
 		acc := &Account{Balance: big.NewInt(int64(i)), Root: stTrie.Hash().Bytes(), CodeHash: emptyCode.Bytes()}
 		val, _ := rlp.EncodeToBytes(acc)
 		key := fmt.Sprintf("acc-%d", i)
@@ -387,6 +387,7 @@ func TestGenerateMissingStorageTrie(t *testing.T) {
 // Tests that snapshot generation errors out correctly in case of a missing trie
 // node in a storage trie.
 func TestGenerateCorruptStorageTrie(t *testing.T) {
+	//log.Root().SetHandler(log.LvlFilterHandler(log.LvlInfo, log.StreamHandler(os.Stderr, log.TerminalFormat(true))))
 	// We can't use statedb to make a test trie (circular dependency), so make
 	// a fake one manually. We're going with a small account trie of 3 accounts,
 	// two of which also has the same 3-slot storage trie attached.

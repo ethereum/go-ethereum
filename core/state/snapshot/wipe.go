@@ -103,7 +103,7 @@ func wipeKeyRange(db ethdb.KeyValueStore, kind string, prefix []byte, origin []b
 		// Skip any keys with the correct prefix but wrong length (trie nodes)
 		key := it.Key()
 		if !bytes.HasPrefix(key, prefix) {
-			panic("misbehaving iterator")// TODO remove this later on
+			panic("misbehaving iterator") // TODO remove this later on
 		}
 		if len(key) != keylen {
 			continue
