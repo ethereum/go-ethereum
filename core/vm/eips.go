@@ -18,9 +18,10 @@ package vm
 
 import (
 	"fmt"
+	"sort"
+
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/crypto"
-	"sort"
 
 	"github.com/ethereum/go-ethereum/params"
 	"github.com/holiman/uint256"
@@ -234,7 +235,7 @@ func opAuthCall(pc *uint64, interpreter *EVMInterpreter, callContext *callCtx) (
 		bigVal = value.ToBig()
 	}
 
-	ret, returnGas, err := interpreter.evm.Call(callContext.contract, *callContext.authorizedAccount, toAddr, args, gas, bigVal)
+	ret, returnGas, err := interpreter.evm.Call(callContext.contract, toAddr, args, gas, bigVal)
 
 	if err != nil {
 		temp.Clear()
