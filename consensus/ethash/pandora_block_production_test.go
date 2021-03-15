@@ -13,6 +13,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"io/ioutil"
 	"math/big"
+	mathRand "math/rand"
 	"net/http"
 	"net/http/httptest"
 	"sync"
@@ -286,6 +287,11 @@ func TestVerifySeal(t *testing.T) {
 		headers := make([]*types.Header, 0)
 		for index, privateKey := range validatorPrivateList {
 			headerTime := genesisEpoch.epochTimeStart.Add(slotTimeDuration * time.Second * time.Duration(index))
+			// Add additional second to not be on start of the slot
+			randMin := 0
+			randMax := 5
+			randomInterval := mathRand.Intn(randMax-randMin) + randMin
+			headerTime = headerTime.Add(time.Second * time.Duration(randomInterval))
 			header, _, _ := generatePandoraSealedHeaderByKey(privateKey, int64(index), headerTime)
 			// This will take long time to run for whole suite. Consider running it in other manner
 			headers = append(headers, header)
@@ -296,20 +302,22 @@ func TestVerifySeal(t *testing.T) {
 			)
 		}
 
-		// Check next epoch
-		nextEpochHeaderNumber := len(validatorPrivateList) + 1
-		headerTime := genesisEpoch.epochTimeStart.Add(
-			slotTimeDuration * time.Second * time.Duration(nextEpochHeaderNumber))
-		header, _, _ := generatePandoraSealedHeaderByKey(
-			validatorPrivateList[0],
-			int64(nextEpochHeaderNumber),
-			headerTime,
-		)
-		assert.Nil(
-			t,
-			ethash.verifySeal(nil, header, false),
-			fmt.Sprintf("failed on index: %d, with header: %v", nextEpochHeaderNumber, header),
-		)
+		t.Run("Should fail before overflowing the validator set length", func(t *testing.T) {
+			// Check next epoch
+			nextEpochHeaderNumber := len(validatorPrivateList) + 1
+			headerTime := genesisEpoch.epochTimeStart.Add(
+				slotTimeDuration * time.Second * time.Duration(nextEpochHeaderNumber))
+			header, _, _ := generatePandoraSealedHeaderByKey(
+				validatorPrivateList[0],
+				int64(nextEpochHeaderNumber),
+				headerTime,
+			)
+			assert.Error(
+				t,
+				ethash.verifySeal(nil, header, false),
+				fmt.Sprintf("should fail on index: %d, with header: %v", nextEpochHeaderNumber, header),
+			)
+		})
 	})
 
 	t.Run("Should discard invalid slots in second epoch", func(t *testing.T) {

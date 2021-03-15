@@ -249,7 +249,15 @@ func (ethash *Ethash) verifyPandoraHeader(header *types.Header) (err error) {
 		return
 	}
 
-	extractedValidatorIndex := (headerTime-uint64(epochTimeStart.Unix()))/slotTimeDuration - 1
+	extractedValidatorIndex := (headerTime - uint64(epochTimeStart.Unix())) / slotTimeDuration
+
+	// Check to not overflow the index
+	if extractedValidatorIndex > uint64(len(minimalConsensus.validatorsList)-1) {
+		err = fmt.Errorf("extracted validator index overflows validator length")
+
+		return
+	}
+
 	publicKey := minimalConsensus.validatorsList[extractedValidatorIndex]
 	mixDigest := header.MixDigest
 	// Check if signature of header is valid
