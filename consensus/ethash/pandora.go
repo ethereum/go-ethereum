@@ -194,7 +194,10 @@ func (pandoraMode *MinimalEpochConsensusInfo) AssignEpochStartFromGenesis(genesi
 	pandoraMode.EpochTimeStart = time.Unix(int64(timePassed), 0)
 }
 
-func (ethash *Ethash) verifyPandoraHeader(header *types.Header) (err error) {
+func (ethash *Ethash) getMinimalConsensus(header *types.Header) (
+	minimalConsensus *MinimalEpochConsensusInfo,
+	err error,
+) {
 	mciCache := ethash.mci
 
 	if nil == mciCache {
@@ -230,7 +233,42 @@ func (ethash *Ethash) verifyPandoraHeader(header *types.Header) (err error) {
 		return
 	}
 
-	minimalConsensus := minimalConsensusCache.(*MinimalEpochConsensusInfo)
+	minimalConsensus = minimalConsensusCache.(*MinimalEpochConsensusInfo)
+
+	return
+}
+
+func (ethash *Ethash) preparePandoraHeader(header *types.Header) (err error) {
+	minimalConsensus, err := ethash.getMinimalConsensus(header)
+
+	if nil != err {
+		return
+	}
+
+	extraData, err := NewPandoraExtraData(header, minimalConsensus)
+
+	if nil != err {
+		return
+	}
+
+	encodedExtraData, err := rlp.EncodeToBytes(extraData)
+
+	if nil != err {
+		return
+	}
+
+	header.Extra = encodedExtraData
+
+	return
+}
+
+func (ethash *Ethash) verifyPandoraHeader(header *types.Header) (err error) {
+	headerTime := header.Time
+	minimalConsensus, err := ethash.getMinimalConsensus(header)
+
+	if nil != err {
+		return
+	}
 
 	// Check if time slot is within desired boundaries. To consider if needed.
 	// We could maybe have an assumption that cache should be invalidated before use.
@@ -295,10 +333,10 @@ func (ethash *Ethash) verifyPandoraHeader(header *types.Header) (err error) {
 		return
 	}
 
-	expectedExtra := &PandoraExtraData{
-		Slot:          uint64(len(minimalConsensus.ValidatorsList)*derivedEpoch) + extractedProposerIndex,
-		Epoch:         uint64(derivedEpoch),
-		ProposerIndex: extractedProposerIndex,
+	expectedExtra, err := NewPandoraExtraData(header, minimalConsensus)
+
+	if nil != err {
+		return
 	}
 
 	expectedRlp, err := rlp.EncodeToBytes(expectedExtra)
@@ -309,6 +347,32 @@ func (ethash *Ethash) verifyPandoraHeader(header *types.Header) (err error) {
 
 	if !bytes.Equal(expectedRlp, header.Extra) {
 		err = fmt.Errorf("invalid extraData field, expected: %v, got %v", expectedExtra, extraData)
+	}
+
+	return
+}
+
+func NewPandoraExtraData(header *types.Header, minimalConsensus *MinimalEpochConsensusInfo) (
+	extraData *PandoraExtraData,
+	err error,
+) {
+	derivedEpoch := minimalConsensus.Epoch
+	epochTimeStart := minimalConsensus.EpochTimeStart
+	headerTime := header.Time
+
+	extractedProposerIndex := (headerTime - uint64(epochTimeStart.Unix())) / slotTimeDuration
+
+	// Check to not overflow the index
+	if extractedProposerIndex > uint64(len(minimalConsensus.ValidatorsList)-1) {
+		err = fmt.Errorf("extracted validator index overflows validator length")
+
+		return
+	}
+
+	extraData = &PandoraExtraData{
+		Slot:          uint64(len(minimalConsensus.ValidatorsList))*derivedEpoch + extractedProposerIndex,
+		Epoch:         derivedEpoch,
+		ProposerIndex: extractedProposerIndex,
 	}
 
 	return

@@ -24,10 +24,12 @@ import (
 	vbls "vuvuzela.io/crypto/bls"
 )
 
-type fakeReader struct{}
+type fakeReader struct {
+	chainConfig *params.ChainConfig
+}
 
 func (f fakeReader) Config() *params.ChainConfig {
-	panic("implement me")
+	return f.chainConfig
 }
 
 func (f fakeReader) CurrentHeader() *types.Header {
@@ -35,7 +37,7 @@ func (f fakeReader) CurrentHeader() *types.Header {
 }
 
 func (f fakeReader) GetHeader(hash common.Hash, number uint64) *types.Header {
-	return &types.Header{}
+	return &types.Header{Number: big.NewInt(1)}
 }
 
 func (f fakeReader) GetHeaderByNumber(number uint64) *types.Header {
@@ -46,7 +48,22 @@ func (f fakeReader) GetHeaderByHash(hash common.Hash) *types.Header {
 	panic("implement me")
 }
 
-var chainHeaderReader consensus.ChainHeaderReader = fakeReader{}
+var chainHeaderReader consensus.ChainHeaderReader = fakeReader{
+	chainConfig: &params.ChainConfig{
+		ChainID:             big.NewInt(256),
+		HomesteadBlock:      big.NewInt(0),
+		EIP150Block:         big.NewInt(0),
+		EIP150Hash:          common.Hash{},
+		EIP155Block:         big.NewInt(0),
+		EIP158Block:         big.NewInt(0),
+		ByzantiumBlock:      big.NewInt(0),
+		ConstantinopleBlock: big.NewInt(0),
+		PetersburgBlock:     big.NewInt(0),
+		IstanbulBlock:       big.NewInt(0),
+		MuirGlacierBlock:    big.NewInt(0),
+		BerlinBlock:         big.NewInt(0),
+		SilesiaBlock:        big.NewInt(0),
+	}}
 
 // This file is used for exploration of possible ways to achieve pandora-vanguard block production
 // Test RemoteSigner approach connected to each other
@@ -278,6 +295,7 @@ func TestEthash_Prepare_Pandora(t *testing.T) {
 
 	genesisEpoch.AssignEpochStartFromGenesis(genesisStart)
 	genesisEpoch.AssignValidators(validatorPublicList)
+	lruEpochSet.cache.Add(0, genesisEpoch)
 
 	header := &types.Header{
 		ParentHash:  common.Hash{},
@@ -288,10 +306,10 @@ func TestEthash_Prepare_Pandora(t *testing.T) {
 		ReceiptHash: common.Hash{},
 		Bloom:       types.Bloom{},
 		Difficulty:  nil,
-		Number:      nil,
+		Number:      big.NewInt(0),
 		GasLimit:    0,
 		GasUsed:     0,
-		Time:        0,
+		Time:        uint64(time.Now().Unix()),
 		Extra:       nil,
 		MixDigest:   common.Hash{},
 		Nonce:       types.BlockNonce{},
@@ -299,6 +317,14 @@ func TestEthash_Prepare_Pandora(t *testing.T) {
 
 	err := ethash.Prepare(chainHeaderReader, header)
 	assert.Nil(t, err)
+
+	expectedData, err := NewPandoraExtraData(header, genesisEpoch)
+	assert.Nil(t, err)
+
+	expectedDataBytes, err := rlp.EncodeToBytes(expectedData)
+	assert.Nil(t, err)
+
+	assert.Equal(t, expectedDataBytes, header.Extra)
 }
 
 func TestMinimalEpochConsensusInfo_AssignEpochStartFromGenesis(t *testing.T) {
