@@ -220,7 +220,12 @@ func TestReceiveValidatorsForEpoch(t *testing.T) {
 
 // TODO: fill this up
 func TestMinimalEpochConsensusInfo_AssignEpochStartFromGenesis(t *testing.T) {
-
+	minimalEpochConsensusInfo := NewMinimalConsensusInfo(0)
+	timeNow := time.Now()
+	consensusInfo := minimalEpochConsensusInfo.(*MinimalEpochConsensusInfo)
+	consensusInfo.AssignEpochStartFromGenesis(timeNow)
+	epochTimeStart := consensusInfo.epochTimeStart
+	assert.Equal(t, timeNow.Unix(), epochTimeStart.Unix())
 }
 
 func TestVerifySeal(t *testing.T) {
@@ -240,7 +245,7 @@ func TestVerifySeal(t *testing.T) {
 
 	firstEpoch := NewMinimalConsensusInfo(1).(*MinimalEpochConsensusInfo)
 	timeNow := time.Now()
-	firstEpoch.AssignEpochStartFromGenesis(uint64(timeNow.Unix()))
+	firstEpoch.AssignEpochStartFromGenesis(timeNow)
 	firstEpoch.AssignValidators(validatorPublicList)
 	// Should not be evicted
 	assert.False(t, lruEpochSet.cache.Add(1, firstEpoch))
