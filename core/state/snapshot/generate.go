@@ -189,8 +189,11 @@ func (dl *diskLayer) proveRange(root common.Hash, tr *trie.SecureTrie, prefix []
 		count int
 		last  []byte
 		proof = rawdb.NewMemoryDatabase()
-		iter  = dl.diskdb.NewIterator(prefix, origin)
 	)
+
+	iter := dl.diskdb.NewIterator(prefix, origin)
+	defer iter.Release()
+
 	for iter.Next() && count < max {
 		key := iter.Key()
 		if len(key) != len(prefix)+common.HashLength {
@@ -269,7 +272,7 @@ func (dl *diskLayer) genRange(root common.Hash, prefix []byte, kind string, orig
 		return exhausted, last, nil
 	}
 	snapFailedRangeProofMeter.Mark(1)
-	log.Debug("Detected outdated state range", "kind", kind, "prefix", prefix, "origin", origin, "last", last)
+	log.Debug("Detected outdated state range", "kind", kind, "prefix", prefix, "origin", origin, "last", last, "error", err)
 
 	// The verifcation is failed, the flat state in this range cannot match the
 	// merkle trie. Alternatively, use the fallback generation mechanism to regenerate

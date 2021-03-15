@@ -2592,21 +2592,25 @@ func (s *Syncer) onHealState(paths [][]byte, value []byte) error {
 	if len(paths) == 1 {
 		var account state.Account
 		if err := rlp.DecodeBytes(value, &account); err != nil {
+			log.Info("Failed to decode account", "error", err) // DEBUG LOG, REMOVE IT
 			return nil
 		}
 		blob := snapshot.SlimAccountRLP(account.Nonce, account.Balance, account.Root, account.CodeHash)
 		rawdb.WriteAccountSnapshot(s.stateWriter, common.BytesToHash(paths[0]), blob)
 		s.accountHealed += 1
 		s.accountHealedBytes += common.StorageSize(1 + common.HashLength + len(blob))
+		log.Info("Heal state account", "hash", paths[0]) // DEBUG LOG, REMOVE IT
 	}
 	if len(paths) == 2 {
 		rawdb.WriteStorageSnapshot(s.stateWriter, common.BytesToHash(paths[0]), common.BytesToHash(paths[1]), value)
 		s.storageHealed += 1
 		s.storageHealedBytes += common.StorageSize(1 + 2*common.HashLength + len(value))
+		log.Info("Heal state storage", "account", paths[0], "hash", paths[1]) // DEBUG LOG, REMOVE IT
 	}
 	if s.stateWriter.ValueSize() > ethdb.IdealBatchSize {
 		s.stateWriter.Write() // It's fine to ignore the error here
 		s.stateWriter.Reset()
+		log.Info("Flush state heal writer") // DEBUG LOG, REMOVE IT
 	}
 	return nil
 }
