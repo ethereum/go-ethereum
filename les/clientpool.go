@@ -399,43 +399,47 @@ func (f *clientPool) serveCapQuery(id enode.ID, freeID string, data []byte) []by
 		return nil
 	}
 	result := make(vflux.CapacityQueryReply, len(req.AddTokens))
-	if f.synced() {
-		node := f.ns.GetNode(id)
-		if node == nil {
-			node = enode.SignNull(&enr.Record{}, id)
+	if !f.synced() {
+		capacityQueryZeroMeter.Mark(1)
+		reply, _ := rlp.EncodeToBytes(&result)
+		return reply
+	}
+
+	node := f.ns.GetNode(id)
+	if node == nil {
+		node = enode.SignNull(&enr.Record{}, id)
+	}
+	c, _ := f.ns.GetField(node, clientInfoField).(*clientInfo)
+	if c == nil {
+		c = &clientInfo{node: node}
+		f.ns.SetField(node, clientInfoField, c)
+		f.ns.SetField(node, connAddressField, freeID)
+		defer func() {
+			f.ns.SetField(node, connAddressField, nil)
+			f.ns.SetField(node, clientInfoField, nil)
+		}()
+		if c.balance, _ = f.ns.GetField(node, f.BalanceField).(*vfs.NodeBalance); c.balance == nil {
+			log.Error("BalanceField is missing", "node", node.ID())
+			return nil
 		}
-		c, _ := f.ns.GetField(node, clientInfoField).(*clientInfo)
-		if c == nil {
-			c = &clientInfo{node: node}
-			f.ns.SetField(node, clientInfoField, c)
-			f.ns.SetField(node, connAddressField, freeID)
-			defer func() {
-				f.ns.SetField(node, connAddressField, nil)
-				f.ns.SetField(node, clientInfoField, nil)
-			}()
-			if c.balance, _ = f.ns.GetField(node, f.BalanceField).(*vfs.NodeBalance); c.balance == nil {
-				log.Error("BalanceField is missing", "node", node.ID())
-				return nil
-			}
+	}
+	// use vfs.CapacityCurve to answer request for multiple newly bought token amounts
+	curve := f.pp.GetCapacityCurve().Exclude(id)
+	bias := time.Second * time.Duration(req.Bias)
+	if f.connectedBias > bias {
+		bias = f.connectedBias
+	}
+	pb, _ := c.balance.GetBalance()
+	for i, addTokens := range req.AddTokens {
+		add := addTokens.Int64()
+		result[i] = curve.MaxCapacity(func(capacity uint64) int64 {
+			return c.balance.EstimatePriority(capacity, add, 0, bias, false) / int64(capacity)
+		})
+		if add <= 0 && uint64(-add) >= pb && result[i] > f.minCap {
+			result[i] = f.minCap
 		}
-		// use vfs.CapacityCurve to answer request for multiple newly bought token amounts
-		curve := f.pp.GetCapacityCurve().Exclude(id)
-		bias := time.Second * time.Duration(req.Bias)
-		if f.connectedBias > bias {
-			bias = f.connectedBias
-		}
-		pb, _ := c.balance.GetBalance()
-		for i, addTokens := range req.AddTokens {
-			add := addTokens.Int64()
-			result[i] = curve.MaxCapacity(func(capacity uint64) int64 {
-				return c.balance.EstimatePriority(capacity, add, 0, bias, false) / int64(capacity)
-			})
-			if add <= 0 && uint64(-add) >= pb && result[i] > f.minCap {
-				result[i] = f.minCap
-			}
-			if result[i] < f.minCap {
-				result[i] = 0
-			}
+		if result[i] < f.minCap {
+			result[i] = 0
 		}
 	}
 	// add first result to metrics (don't care about priority client multi-queries yet)
