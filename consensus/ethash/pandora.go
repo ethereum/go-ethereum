@@ -234,7 +234,7 @@ func (ethash *Ethash) verifyPandoraHeader(header *types.Header) (err error) {
 	minimalConsensus := minimalConsensusCache.(*MinimalEpochConsensusInfo)
 
 	// Check if time slot is within desired boundaries. To consider if needed.
-	// We could maybe have an assuption that cache should be invalidated before use.
+	// We could maybe have an assumption that cache should be invalidated before use.
 	epochTimeStart := minimalConsensus.epochTimeStart
 	epochDuration := pandoraEpochLength * time.Duration(slotTimeDuration) * time.Second
 	epochTimeEnd := epochTimeStart.Add(epochDuration)
@@ -250,7 +250,7 @@ func (ethash *Ethash) verifyPandoraHeader(header *types.Header) (err error) {
 		return
 	}
 
-	extractedValidatorIndex := (uint64(epochTimeEnd.Unix()) - headerTime) / slotTimeDuration
+	extractedValidatorIndex := (headerTime-uint64(epochTimeStart.Unix()))/slotTimeDuration - 1
 	publicKey := minimalConsensus.validatorsList[extractedValidatorIndex]
 	mixDigest := header.MixDigest
 	// Check if signature of header is valid

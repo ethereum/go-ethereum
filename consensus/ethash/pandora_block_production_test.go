@@ -218,6 +218,11 @@ func TestReceiveValidatorsForEpoch(t *testing.T) {
 
 }
 
+// TODO: fill this up
+func TestMinimalEpochConsensusInfo_AssignEpochStartFromGenesis(t *testing.T) {
+
+}
+
 func TestVerifySeal(t *testing.T) {
 	lruCache := newlru("cache", 12, newCache)
 	lruDataset := newlru("dataset", 12, newDataset)
@@ -254,6 +259,7 @@ func TestVerifySeal(t *testing.T) {
 	ethash := Ethash{
 		caches:   lruCache,
 		datasets: lruDataset,
+		mci:      lruEpochSet,
 		config: Config{
 			// In pandora-vanguard implementation we do not need to increase nonce and mixHash is sealed/calculated on the Vanguard side
 			PowMode: ModePandora,
@@ -270,9 +276,13 @@ func TestVerifySeal(t *testing.T) {
 		headers := make([]*types.Header, 0)
 		// TODO: Assign validators for 0 epoch, and count time for it to inject it into a test
 		genesisEpoch := NewMinimalConsensusInfo(0)
+		genesisMinimalConsensusInfo := genesisEpoch.(*MinimalEpochConsensusInfo)
+		genesisMinimalConsensusInfo.AssignValidators(validatorPublicList)
+		genesisMinimalConsensusInfo.epochTimeStart = time.Now()
+		ethash.mci.cache.Add(0, genesisMinimalConsensusInfo)
 
 		for index, privateKey := range validatorPrivateList {
-			header, _, _ := generatePandoraSealedHeaderByKey(privateKey, index)
+			header, _, _ := generatePandoraSealedHeaderByKey(privateKey, int64(index))
 			// This will take long time to run for whole suite. Consider running it in other manner
 			time.Sleep(time.Second * slotTimeDuration)
 			headers = append(headers, header)
@@ -289,7 +299,7 @@ func TestVerifySeal(t *testing.T) {
 	})
 }
 
-func generatePandoraSealedHeaderByKey(privKey *vbls.PrivateKey, headerNumber int) (
+func generatePandoraSealedHeaderByKey(privKey *vbls.PrivateKey, headerNumber int64) (
 	header *types.Header,
 	headerHash common.Hash,
 	mixDigest common.Hash,
