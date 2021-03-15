@@ -182,40 +182,37 @@ func journalProgress(db ethdb.KeyValueWriter, marker []byte, stats *generatorSta
 // The iteration start point will be assigned if the iterator is restored from
 // the last interruption. Max will be assigned in order to limit the maximum
 // amount of data involved in each iteration.
-func (dl *diskLayer) proveRange(root common.Hash, tr *trie.SecureTrie, prefix []byte, kind string, origin []byte, max int, onValue func([]byte) ([]byte, error)) ([][]byte, [][]byte, []byte, bool, error) {
+func (dl *diskLayer) proveRange(root common.Hash, tr *trie.SecureTrie, prefix []byte, kind string, origin []byte, max int, valueConvertFn func([]byte) ([]byte, error)) ([][]byte, [][]byte, []byte, bool, error) {
 	var (
 		keys  [][]byte
 		vals  [][]byte
-		count int
-		last  []byte
 		proof = rawdb.NewMemoryDatabase()
 	)
-
 	iter := dl.diskdb.NewIterator(prefix, origin)
 	defer iter.Release()
 
-	for iter.Next() && count < max {
+	for iter.Next() && len(keys) < max {
 		key := iter.Key()
 		if len(key) != len(prefix)+common.HashLength {
 			continue
 		}
-		if !bytes.HasPrefix(key, prefix) {
-			continue
-		}
-		last = common.CopyBytes(key[len(prefix):])
 		keys = append(keys, common.CopyBytes(key[len(prefix):]))
 
-		if onValue == nil {
+		if valueConvertFn == nil {
 			vals = append(vals, common.CopyBytes(iter.Value()))
-		} else {
-			val, err := onValue(common.CopyBytes(iter.Value()))
-			if err != nil {
-				log.Debug("Failed to convert the flat state", "kind", kind, "key", common.BytesToHash(key[len(prefix):]), "error", err)
-				return nil, nil, last, false, err
-			}
-			vals = append(vals, val)
+			continue
 		}
-		count += 1
+		val, err := valueConvertFn(iter.Value())
+		if err != nil {
+			log.Debug("Failed to convert the flat state", "kind", kind, "key", common.BytesToHash(key[len(prefix):]), "error", err)
+			return nil, nil, keys[len(keys)-1], false, err
+		}
+		vals = append(vals, val)
+	}
+	// Find out the key of last iterated element.
+	var last []byte
+	if len(keys) > 0 {
+		last = keys[len(keys)-1]
 	}
 	// Generate the Merkle proofs for the first and last element
 	if origin == nil {
@@ -239,7 +236,7 @@ func (dl *diskLayer) proveRange(root common.Hash, tr *trie.SecureTrie, prefix []
 	}
 	// Range prover says the trie still has some elements on the right side but
 	// the database is exhausted, then data loss is detected.
-	if cont && count < max {
+	if cont && len(keys) < max {
 		return nil, nil, last, false, errors.New("data loss in the state range")
 	}
 	return keys, vals, last, !cont, nil
@@ -248,14 +245,14 @@ func (dl *diskLayer) proveRange(root common.Hash, tr *trie.SecureTrie, prefix []
 // genRange generates the state segment with particular prefix. Generation can
 // either verify the correctness of existing state through rangeproof and skip
 // generation, or iterate trie to regenerate state on demand.
-func (dl *diskLayer) genRange(root common.Hash, prefix []byte, kind string, origin []byte, max int, stats *generatorStats, onState func(key []byte, val []byte, regen bool) error, onValue func([]byte) ([]byte, error)) (bool, []byte, error) {
+func (dl *diskLayer) genRange(root common.Hash, prefix []byte, kind string, origin []byte, max int, stats *generatorStats, onState func(key []byte, val []byte, regen bool) error, valueConvertFn func([]byte) ([]byte, error)) (bool, []byte, error) {
 	tr, err := trie.NewSecure(root, dl.triedb)
 	if err != nil {
 		stats.Log("Trie missing, state snapshotting paused", root, dl.genMarker)
 		return false, nil, errors.New("trie is missing")
 	}
 	// Use range prover to check the validity of the flat state in the range
-	keys, vals, last, exhausted, err := dl.proveRange(root, tr, prefix, kind, origin, max, onValue)
+	keys, vals, last, exhausted, err := dl.proveRange(root, tr, prefix, kind, origin, max, valueConvertFn)
 	if err == nil {
 		snapSuccessfulRangeProofMeter.Mark(1)
 		log.Debug("Proved state range", "kind", kind, "prefix", prefix, "origin", origin, "last", last)
@@ -426,6 +423,17 @@ func (dl *diskLayer) generate(stats *generatorStats) {
 				if storeOrigin == nil {
 					return nil // special case, the last is 0xffffffff...fff
 				}
+			}
+		} else {
+			// If the root is empty, we still need to ensure that any previous snapshot
+			// storage values are cleared
+			// TODO: investigate if this can be avoided, this will be very costly since it
+			// affects every single EOA account
+			//  - Perhaps we can avoid if where codeHash is emptyCode
+			prefix := append(rawdb.SnapshotStoragePrefix, accountHash.Bytes()...)
+			keyLen := len(rawdb.SnapshotStoragePrefix) + 2*common.HashLength
+			if err := wipeKeyRange(dl.diskdb, "storage", prefix, nil, nil, keyLen, snapWipedStorageMeter, false); err != nil {
+				return err
 			}
 		}
 		// Some account processed, unmark the marker
