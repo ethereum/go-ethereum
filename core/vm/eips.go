@@ -18,10 +18,10 @@ package vm
 
 import (
 	"fmt"
-	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/crypto"
 	"sort"
 
+	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/params"
 	"github.com/holiman/uint256"
 )
@@ -169,48 +169,57 @@ func enable3074(jt *JumpTable) {
 
 func opAuth(pc *uint64, interpreter *EVMInterpreter, callContext *callCtx) ([]byte, error) {
 	stack := callContext.stack
-	commit, sigYParity, sigR, sigS := stack.pop(), stack.pop(), stack.pop(), stack.pop()
+	commit, v, r, s := stack.pop(), stack.pop(), stack.pop(), stack.pop()
 
-	r := sigR.ToBig()
-	s := sigS.ToBig()
-	yParity := uint8(sigYParity[0])
+	// Zero out the current authorized account. Only update it if an address
+	// is successfully recovered from the signature.
+	callContext.authorized = nil
 
-	callContext.authorizedAccount = nil
+	if v.BitLen() < 8 && crypto.ValidateSignatureValues(byte(v.Uint64()), r.ToBig(), s.ToBig(), true) {
+		msg := make([]byte, 65)
 
-	if val, of := sigYParity.Uint64WithOverflow(); !of && val <= 0xff && crypto.ValidateSignatureValues(yParity, r, s, true) {
-		input := make([]byte, 65)
-		input[0] = 0x03
-		copy(input[13:33], callContext.contract.Address().Bytes())
-		commit.WriteToSlice(input[33:65])
-		hash := crypto.Keccak256(input)
+		// EIP-3074 messages are of the form
+		// keccak256(type ++ invoker ++ commit)
+		msg[0] = 0x03
+		copy(msg[13:33], callContext.contract.Address().Bytes())
+		commit.WriteToSlice(msg[33:65])
+		hash := crypto.Keccak256(msg)
 
 		sig := make([]byte, 65)
-		sigR.WriteToSlice(sig[0:32])
-		sigS.WriteToSlice(sig[32:64])
-		sig[64] = yParity
-		// v needs to be at the end for libsecp256k1
-		pubKey, err := crypto.Ecrecover(hash[:], sig)
-		// make sure the public key is a valid one
-		// the first byte of pubkey is bitcoin heritage
+		r.WriteToSlice(sig[0:32])
+		s.WriteToSlice(sig[32:64])
+		sig[64] = byte(v.Uint64())
+
+		pub, err := crypto.Ecrecover(hash[:], sig)
+
 		if err == nil {
-			from := common.BytesToAddress(crypto.Keccak256(pubKey[1:])[12:])
-			if from != interpreter.evm.Origin {
-				callContext.authorizedAccount = &from
+			var addr common.Address
+			copy(addr[:], crypto.Keccak256(pub[1:])[12:])
+
+			// Transaction origin is not allowed to authorize itself.
+			// This is to prevent reentering contracts that expect
+			// caller == origin only in the first frame of a transaction.
+			if addr != interpreter.evm.Origin {
+				callContext.authorized = &addr
 			}
 		}
 	}
 
-	if callContext.authorizedAccount != nil {
-		commit.SetBytes20(callContext.authorizedAccount.Bytes())
+	// reuse commit to push the result
+	temp := commit
+	if callContext.authorized != nil {
+		temp.SetBytes20(callContext.authorized.Bytes())
 	} else {
-		commit.Clear()
+		temp.Clear()
 	}
-	stack.push(&commit)
+
+	stack.push(&temp)
 	return nil, nil
 }
 
 func opAuthCall(pc *uint64, interpreter *EVMInterpreter, callContext *callCtx) ([]byte, error) {
-	if callContext.authorizedAccount == nil {
+	// If no authorized account is set, revert.
+	if callContext.authorized == nil {
 		return nil, ErrNoAuthorizedAccount
 	}
 
@@ -226,15 +235,12 @@ func opAuthCall(pc *uint64, interpreter *EVMInterpreter, callContext *callCtx) (
 	args := callContext.memory.GetPtr(int64(inOffset.Uint64()), int64(inSize.Uint64()))
 
 	var bigVal = big0
-	//TODO: use uint256.Int instead of converting with toBig()
-	// By using big0 here, we save an alloc for the most common case (non-ether-transferring contract calls),
-	// but it would make more sense to extend the usage of uint256.Int
 	if !value.IsZero() {
 		gas += params.CallStipend
 		bigVal = value.ToBig()
 	}
 
-	ret, returnGas, err := interpreter.evm.Call(callContext.contract, *callContext.authorizedAccount, toAddr, args, gas, bigVal)
+	ret, returnGas, err := interpreter.evm.AuthCall(callContext.contract, *callContext.authorized, toAddr, args, gas, bigVal)
 
 	if err != nil {
 		temp.Clear()

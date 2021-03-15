@@ -123,7 +123,6 @@ func Execute(code, input []byte, cfg *Config) ([]byte, *state.StateDB, error) {
 	// Call the code with the given configuration.
 	ret, _, err := vmenv.Call(
 		sender,
-		cfg.Origin,
 		common.BytesToAddress([]byte("contract")),
 		input,
 		cfg.GasLimit,
@@ -180,7 +179,6 @@ func Call(address common.Address, input []byte, cfg *Config) ([]byte, uint64, er
 	// Call the code with the given configuration.
 	ret, leftOverGas, err := vmenv.Call(
 		sender,
-		cfg.Origin,
 		address,
 		input,
 		cfg.GasLimit,
