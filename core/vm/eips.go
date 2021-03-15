@@ -240,8 +240,7 @@ func opAuthCall(pc *uint64, interpreter *EVMInterpreter, callContext *callCtx) (
 		bigVal = value.ToBig()
 	}
 
-	caller := AccountRef(*callContext.authorized)
-	ret, returnGas, err := interpreter.evm.AuthCall(caller, callContext.contract.Address(), toAddr, args, gas, bigVal)
+	ret, returnGas, err := interpreter.evm.AuthCall(callContext.contract, *callContext.authorized, toAddr, args, gas, bigVal)
 
 	if err != nil {
 		temp.Clear()
