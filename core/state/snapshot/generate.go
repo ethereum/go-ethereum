@@ -265,7 +265,7 @@ func (dl *diskLayer) genRange(root common.Hash, prefix []byte, kind string, orig
 				return false, nil, err
 			}
 		}
-		log.Debug("Recovered state range", "kind", kind, "prefix", prefix, "origin", origin, "last", last)
+		log.Debug("Recovered state range", "kind", kind, "prefix", prefix, "origin", origin, "last", last, "count", len(keys))
 		return exhausted, last, nil
 	}
 	snapFailedRangeProofMeter.Mark(1)
@@ -288,20 +288,24 @@ func (dl *diskLayer) genRange(root common.Hash, prefix []byte, kind string, orig
 		}
 		log.Debug("Wiped currupted state range", "kind", kind, "prefix", prefix, "origin", origin, "limit", limit)
 	}
-	iter := trie.NewIterator(tr.NodeIterator(origin))
+	var (
+		count int
+		iter  = trie.NewIterator(tr.NodeIterator(origin))
+	)
 	for iter.Next() {
 		if last != nil && bytes.Compare(iter.Key, last) > 0 {
-			log.Debug("Regenerated state range", "kind", kind, "prefix", prefix, "origin", origin, "last", last)
+			log.Debug("Regenerated state range", "kind", kind, "prefix", prefix, "root", root, "origin", origin, "last", last, "count", count)
 			return false, last, nil // Apparently the trie is not exhausted
 		}
 		if err := onState(iter.Key, iter.Value, true); err != nil {
 			return false, nil, err
 		}
+		count += 1
 	}
 	if iter.Err != nil {
 		return false, nil, iter.Err
 	}
-	log.Debug("Regenerated state range", "kind", kind, "prefix", prefix, "origin", origin, "last", last)
+	log.Debug("Regenerated state range", "kind", kind, "prefix", prefix, "root", root, "origin", origin, "last", last, "count", count)
 	return true, nil, nil // The entire trie is exhausted
 }
 
@@ -417,11 +421,11 @@ func (dl *diskLayer) generate(stats *generatorStats) {
 					return err
 				}
 				if exhausted {
-					return nil
+					break
 				}
 				storeOrigin = increseKey(last)
 				if storeOrigin == nil {
-					return nil // special case, the last is 0xffffffff...fff
+					break // special case, the last is 0xffffffff...fff
 				}
 			}
 		} else {
@@ -440,6 +444,8 @@ func (dl *diskLayer) generate(stats *generatorStats) {
 		accMarker = nil
 		return nil
 	}
+
+	// Global loop for regerating the entire state trie + all layered storage tries.
 	for {
 		exhausted, last, err := dl.genRange(dl.root, rawdb.SnapshotAccountPrefix, "account", accOrigin, accountRange, stats, onAccount, FullAccountRLP)
 		// The procedure it aborted, either by external signal or internal error
