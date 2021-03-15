@@ -85,6 +85,8 @@ func wipeContent(db ethdb.KeyValueStore) error {
 // wipeKeyRange deletes a range of keys from the database starting with prefix
 // and having a specific total key length. The start and limit is optional for
 // specifying a particular key range for deletion.
+//
+// Origin is included for wiping and limit is excluded if they are specified.
 func wipeKeyRange(db ethdb.KeyValueStore, kind string, prefix []byte, origin []byte, limit []byte, keylen int, meter metrics.Meter, report bool) error {
 	// Batch deletions together to avoid holding an iterator for too long
 	var (
