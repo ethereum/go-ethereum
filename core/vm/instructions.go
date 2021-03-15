@@ -19,7 +19,6 @@ package vm
 import (
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/types"
-	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/params"
 	"github.com/holiman/uint256"
 	"golang.org/x/crypto/sha3"
@@ -751,96 +750,6 @@ func opStaticCall(pc *uint64, interpreter *EVMInterpreter, callContext *callCtx)
 	args := callContext.memory.GetPtr(int64(inOffset.Uint64()), int64(inSize.Uint64()))
 
 	ret, returnGas, err := interpreter.evm.StaticCall(callContext.contract, toAddr, args, gas)
-	if err != nil {
-		temp.Clear()
-	} else {
-		temp.SetOne()
-	}
-	stack.push(&temp)
-	if err == nil || err == ErrExecutionReverted {
-		callContext.memory.Set(retOffset.Uint64(), retSize.Uint64(), ret)
-	}
-	callContext.contract.Gas += returnGas
-
-	return ret, nil
-}
-
-func opAuth(pc *uint64, interpreter *EVMInterpreter, callContext *callCtx) ([]byte, error) {
-	stack := callContext.stack
-	commit, v, r, s := stack.pop(), stack.pop(), stack.pop(), stack.pop()
-
-	// Zero out the current authorized account. Only update it if an address
-	// is successfully recovered from the signature.
-	callContext.authorized = nil
-
-	if v.BitLen() < 8 && crypto.ValidateSignatureValues(byte(v.Uint64()), r.ToBig(), s.ToBig(), true) {
-		msg := make([]byte, 65)
-
-		// EIP-3074 messages are of the form
-		// keccak256(type ++ invoker ++ commit)
-		msg[0] = 0x03
-		copy(msg[13:33], callContext.contract.Address().Bytes())
-		commit.WriteToSlice(msg[33:65])
-		hash := crypto.Keccak256(msg)
-
-		sig := make([]byte, 65)
-		r.WriteToSlice(sig[0:32])
-		s.WriteToSlice(sig[32:64])
-		sig[64] = byte(v.Uint64())
-
-		pub, err := crypto.Ecrecover(hash[:], sig)
-
-		if err == nil {
-			var addr common.Address
-			copy(addr[:], crypto.Keccak256(pub[1:])[12:])
-
-			// Transaction origin is not allowed to authorize itself.
-			// This is to prevent reentering contracts that expect
-			// caller == origin only in the first frame of a transaction.
-			if addr != interpreter.evm.Origin {
-				callContext.authorized = &addr
-			}
-		}
-	}
-
-	// reuse commit to push the result
-	temp := commit
-	if callContext.authorized != nil {
-		temp.SetBytes20(callContext.authorized.Bytes())
-	} else {
-		temp.Clear()
-	}
-
-	stack.push(&temp)
-	return nil, nil
-}
-
-func opAuthCall(pc *uint64, interpreter *EVMInterpreter, callContext *callCtx) ([]byte, error) {
-	// If no authorized account is set, revert.
-	if callContext.authorized == nil {
-		return nil, ErrNoAuthorizedAccount
-	}
-
-	stack := callContext.stack
-	// Pop gas. The actual gas in interpreter.evm.callGasTemp.
-	// We can use this as a temporary value
-	temp := stack.pop()
-	gas := interpreter.evm.callGasTemp
-	// Pop other call parameters.
-	addr, value, inOffset, inSize, retOffset, retSize := stack.pop(), stack.pop(), stack.pop(), stack.pop(), stack.pop(), stack.pop()
-	toAddr := common.Address(addr.Bytes20())
-	// Get the arguments from the memory.
-	args := callContext.memory.GetPtr(int64(inOffset.Uint64()), int64(inSize.Uint64()))
-
-	var bigVal = big0
-	if !value.IsZero() {
-		gas += params.CallStipend
-		bigVal = value.ToBig()
-	}
-
-	caller := AccountRef(*callContext.authorized)
-	ret, returnGas, err := interpreter.evm.AuthCall(caller, callContext.contract.Address(), toAddr, args, gas, bigVal)
-
 	if err != nil {
 		temp.Clear()
 	} else {
