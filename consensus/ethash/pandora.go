@@ -205,9 +205,9 @@ func (ethash *Ethash) verifyPandoraHeader(header *types.Header) (err error) {
 
 	// Retrieve genesis info for derivation
 	cache := mciCache.cache
-	genesisInfo, ok := cache.Get(0)
+	genesisInfo, okGenesis := cache.Get(0)
 
-	if !ok {
+	if !okGenesis {
 		err = fmt.Errorf("cannot get minimal consensus info for genesis")
 
 		return
@@ -219,12 +219,12 @@ func (ethash *Ethash) verifyPandoraHeader(header *types.Header) (err error) {
 	// Extract epoch
 	headerTime := header.Time
 	relativeTime := headerTime - uint64(genesisStart.Unix())
-	derivedEpoch := relativeTime / pandoraEpochLength
+	derivedEpoch := relativeTime / (pandoraEpochLength * slotTimeDuration)
 
 	// Get minimal consensus info for counted epoch
-	minimalConsensusCache, ok := cache.Get(derivedEpoch)
+	minimalConsensusCache, okDerived := cache.Get(derivedEpoch)
 
-	if !ok {
+	if !okDerived {
 		err = fmt.Errorf("missing minimal consensus info for epoch %d", derivedEpoch)
 
 		return

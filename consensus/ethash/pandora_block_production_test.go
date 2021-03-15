@@ -248,21 +248,21 @@ func TestVerifySeal(t *testing.T) {
 		validatorPrivateList[index] = privKey
 	}
 
-	firstEpoch := NewMinimalConsensusInfo(1).(*MinimalEpochConsensusInfo)
-	timeNow := time.Now()
-	firstEpoch.AssignEpochStartFromGenesis(timeNow)
-	firstEpoch.AssignValidators(validatorPublicList)
+	genesisEpoch := NewMinimalConsensusInfo(0).(*MinimalEpochConsensusInfo)
+	genesisStart := time.Now()
+	genesisEpoch.AssignEpochStartFromGenesis(genesisStart)
+	genesisEpoch.AssignValidators(validatorPublicList)
 	// Should not be evicted
-	assert.False(t, lruEpochSet.cache.Add(1, firstEpoch))
+	assert.False(t, lruEpochSet.cache.Add(0, genesisEpoch))
+	assert.True(t, lruEpochSet.cache.Contains(0))
+	assert.False(t, lruEpochSet.cache.Add(1, genesisEpoch))
 	assert.True(t, lruEpochSet.cache.Contains(1))
-	assert.False(t, lruEpochSet.cache.Add(2, firstEpoch))
-	assert.True(t, lruEpochSet.cache.Contains(2))
 	// Check epochs from cache
-	firstEpochFromCache, ok := lruEpochSet.cache.Get(1)
-	assert.Equal(t, firstEpochFromCache, firstEpoch)
+	genesisEpochFromCache, ok := lruEpochSet.cache.Get(0)
+	assert.Equal(t, genesisEpochFromCache, genesisEpoch)
 	assert.True(t, ok)
-	secondEpochFromCache, ok := lruEpochSet.cache.Get(1)
-	assert.Equal(t, secondEpochFromCache, firstEpoch)
+	nextEpochSet, ok := lruEpochSet.cache.Get(1)
+	assert.Equal(t, nextEpochSet, genesisEpoch)
 	assert.True(t, ok)
 
 	// This is how ethash would be designed to serve vanguard
@@ -284,17 +284,10 @@ func TestVerifySeal(t *testing.T) {
 
 	t.Run("Should increment over slots in first epoch", func(t *testing.T) {
 		headers := make([]*types.Header, 0)
-		// TODO: Assign validators for 0 epoch, and count time for it to inject it into a test
-		genesisEpoch := NewMinimalConsensusInfo(0)
-		genesisMinimalConsensusInfo := genesisEpoch.(*MinimalEpochConsensusInfo)
-		genesisMinimalConsensusInfo.AssignValidators(validatorPublicList)
-		genesisMinimalConsensusInfo.epochTimeStart = time.Now()
-		ethash.mci.cache.Add(0, genesisMinimalConsensusInfo)
-
 		for index, privateKey := range validatorPrivateList {
-			header, _, _ := generatePandoraSealedHeaderByKey(privateKey, int64(index))
+			headerTime := genesisEpoch.epochTimeStart.Add(slotTimeDuration * time.Second * time.Duration(index))
+			header, _, _ := generatePandoraSealedHeaderByKey(privateKey, int64(index), headerTime)
 			// This will take long time to run for whole suite. Consider running it in other manner
-			time.Sleep(time.Second * slotTimeDuration)
 			headers = append(headers, header)
 			assert.Nil(
 				t,
@@ -302,6 +295,21 @@ func TestVerifySeal(t *testing.T) {
 				fmt.Sprintf("failed on index: %d, with header: %v", index, header),
 			)
 		}
+
+		// Check next epoch
+		nextEpochHeaderNumber := len(validatorPrivateList) + 1
+		headerTime := genesisEpoch.epochTimeStart.Add(
+			slotTimeDuration * time.Second * time.Duration(nextEpochHeaderNumber))
+		header, _, _ := generatePandoraSealedHeaderByKey(
+			validatorPrivateList[0],
+			int64(nextEpochHeaderNumber),
+			headerTime,
+		)
+		assert.Nil(
+			t,
+			ethash.verifySeal(nil, header, false),
+			fmt.Sprintf("failed on index: %d, with header: %v", nextEpochHeaderNumber, header),
+		)
 	})
 
 	t.Run("Should discard invalid slots in second epoch", func(t *testing.T) {
@@ -309,7 +317,7 @@ func TestVerifySeal(t *testing.T) {
 	})
 }
 
-func generatePandoraSealedHeaderByKey(privKey *vbls.PrivateKey, headerNumber int64) (
+func generatePandoraSealedHeaderByKey(privKey *vbls.PrivateKey, headerNumber int64, headerTime time.Time) (
 	header *types.Header,
 	headerHash common.Hash,
 	mixDigest common.Hash,
@@ -327,7 +335,7 @@ func generatePandoraSealedHeaderByKey(privKey *vbls.PrivateKey, headerNumber int
 		Number:      big.NewInt(headerNumber),
 		GasLimit:    0,
 		GasUsed:     0,
-		Time:        uint64(time.Now().Unix()),
+		Time:        uint64(headerTime.Unix()),
 		// TODO: insert pandora extradata
 		Extra:     nil,
 		MixDigest: common.Hash{},
@@ -335,7 +343,6 @@ func generatePandoraSealedHeaderByKey(privKey *vbls.PrivateKey, headerNumber int
 	}
 
 	headerHash = ethash.SealHash(header)
-
 	signature := herumi.Sign(privKey, headerHash.Bytes())
 	compressedSignature := signature.Compress()
 	header.MixDigest = common.BytesToHash(compressedSignature[:])
