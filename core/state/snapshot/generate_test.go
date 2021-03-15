@@ -23,6 +23,7 @@ import (
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/rawdb"
+	"github.com/ethereum/go-ethereum/ethdb"
 	"github.com/ethereum/go-ethereum/ethdb/memorydb"
 	"github.com/ethereum/go-ethereum/rlp"
 	"github.com/ethereum/go-ethereum/trie"
@@ -56,10 +57,13 @@ func TestGeneration(t *testing.T) {
 	acc = &Account{Balance: big.NewInt(3), Root: stTrie.Hash().Bytes(), CodeHash: emptyCode.Bytes()}
 	val, _ = rlp.EncodeToBytes(acc)
 	accTrie.Update([]byte("acc-3"), val) // 0x50815097425d000edfc8b3a4a13e175fc2bdcfee8bdfbf2d1ff61041d3c235b2
-	accTrie.Commit(nil)                  // Root: 0xe3712f1a226f3782caca78ca770ccc19ee000552813a9f59d479f8611db9b1fd
-	triedb.Commit(common.HexToHash("0xe3712f1a226f3782caca78ca770ccc19ee000552813a9f59d479f8611db9b1fd"), false, nil)
+	root, _ := accTrie.Commit(nil)       // Root: 0xe3712f1a226f3782caca78ca770ccc19ee000552813a9f59d479f8611db9b1fd
+	triedb.Commit(root, false, nil)
 
-	snap := generateSnapshot(diskdb, triedb, 16, common.HexToHash("0xe3712f1a226f3782caca78ca770ccc19ee000552813a9f59d479f8611db9b1fd"))
+	if have, want := root, common.HexToHash("0xe3712f1a226f3782caca78ca770ccc19ee000552813a9f59d479f8611db9b1fd"); have != want {
+		t.Fatalf("have %#x want %#x", have, want)
+	}
+	snap := generateSnapshot(diskdb, triedb, 16, root)
 	select {
 	case <-snap.genPending:
 		// Snapshot generation succeeded
@@ -67,6 +71,7 @@ func TestGeneration(t *testing.T) {
 	case <-time.After(250 * time.Millisecond):
 		t.Errorf("Snapshot generation failed")
 	}
+	checkSnapRoot(t, snap, root)
 	// Signal abortion to the generator and wait for it to tear down
 	stop := make(chan *generatorStats)
 	snap.genAbort <- stop
@@ -120,10 +125,10 @@ func TestGenerateExistentState(t *testing.T) {
 	rawdb.WriteStorageSnapshot(diskdb, hashData([]byte("acc-3")), hashData([]byte("key-2")), []byte("val-2"))
 	rawdb.WriteStorageSnapshot(diskdb, hashData([]byte("acc-3")), hashData([]byte("key-3")), []byte("val-3"))
 
-	accTrie.Commit(nil) // Root: 0xe3712f1a226f3782caca78ca770ccc19ee000552813a9f59d479f8611db9b1fd
-	triedb.Commit(common.HexToHash("0xe3712f1a226f3782caca78ca770ccc19ee000552813a9f59d479f8611db9b1fd"), false, nil)
+	root, _ := accTrie.Commit(nil) // Root: 0xe3712f1a226f3782caca78ca770ccc19ee000552813a9f59d479f8611db9b1fd
+	triedb.Commit(root, false, nil)
 
-	snap := generateSnapshot(diskdb, triedb, 16, common.HexToHash("0xe3712f1a226f3782caca78ca770ccc19ee000552813a9f59d479f8611db9b1fd"))
+	snap := generateSnapshot(diskdb, triedb, 16, root)
 	select {
 	case <-snap.genPending:
 		// Snapshot generation succeeded
@@ -131,6 +136,103 @@ func TestGenerateExistentState(t *testing.T) {
 	case <-time.After(250 * time.Millisecond):
 		t.Errorf("Snapshot generation failed")
 	}
+	checkSnapRoot(t, snap, root)
+	// Signal abortion to the generator and wait for it to tear down
+	stop := make(chan *generatorStats)
+	snap.genAbort <- stop
+	<-stop
+}
+
+func checkSnapRoot(t *testing.T, snap *diskLayer, trieRoot common.Hash) {
+	t.Helper()
+	accIt := snap.AccountIterator(common.Hash{})
+	defer accIt.Release()
+	snapRoot, err := generateTrieRoot(nil, accIt, common.Hash{}, stackTrieGenerate,
+		func(db ethdb.KeyValueWriter, accountHash, codeHash common.Hash, stat *generateStats) (common.Hash, error) {
+			storageIt, _ := snap.StorageIterator(accountHash, common.Hash{})
+			defer storageIt.Release()
+
+			hash, err := generateTrieRoot(nil, storageIt, accountHash, stackTrieGenerate, nil, stat, false)
+			if err != nil {
+				return common.Hash{}, err
+			}
+			return hash, nil
+		}, newGenerateStats(), true)
+
+	if err != nil {
+		t.Fatal(err)
+	}
+	if snapRoot != trieRoot {
+		t.Fatalf("snaproot: %#x != trieroot #%x", snapRoot, trieRoot)
+	}
+}
+
+// Tests that snapshot generation with existent flat state, where the flat state contains
+// some errors
+func TestGenerateExistentStateWithExtraStorage(t *testing.T) {
+	//log.Root().SetHandler(log.LvlFilterHandler(log.LvlInfo, log.StreamHandler(os.Stderr, log.TerminalFormat(true))))
+
+	// We can't use statedb to make a test trie (circular dependency), so make
+	// a fake one manually. We're going with a small account trie of 3 accounts,
+	// two of which also has the same 3-slot storage trie attached.
+	var (
+		diskdb = memorydb.New()
+		triedb = trie.NewDatabase(diskdb)
+	)
+	stTrie, _ := trie.NewSecure(common.Hash{}, triedb)
+	stTrie.Update([]byte("key-1"), []byte("val-1"))
+	stTrie.Update([]byte("key-2"), []byte("val-2"))
+	stTrie.Update([]byte("key-3"), []byte("val-3"))
+	stTrie.Commit(nil)
+
+	accTrie, _ := trie.NewSecure(common.Hash{}, triedb)
+
+	{ // Account one
+		acc := &Account{Balance: big.NewInt(1), Root: stTrie.Hash().Bytes(), CodeHash: emptyCode.Bytes()}
+		val, _ := rlp.EncodeToBytes(acc)
+		accTrie.Update([]byte("acc-1"), val) // 0x9250573b9c18c664139f3b6a7a8081b7d8f8916a8fcc5d94feec6c29f5fd4e9e
+		rawdb.WriteAccountSnapshot(diskdb, hashData([]byte("acc-1")), val)
+		rawdb.WriteStorageSnapshot(diskdb, hashData([]byte("acc-1")), hashData([]byte("key-1")), []byte("val-1"))
+		rawdb.WriteStorageSnapshot(diskdb, hashData([]byte("acc-1")), hashData([]byte("key-2")), []byte("val-2"))
+		rawdb.WriteStorageSnapshot(diskdb, hashData([]byte("acc-1")), hashData([]byte("key-3")), []byte("val-3"))
+	}
+	{ // Account two
+		// The storage root is emptyHash, but the flat db has some storage values. This can happen
+		// if the storage was unset during sync
+		acc := &Account{Balance: big.NewInt(2), Root: emptyRoot.Bytes(), CodeHash: emptyCode.Bytes()}
+		val, _ := rlp.EncodeToBytes(acc)
+		accTrie.Update([]byte("acc-2"), val) // 0x65145f923027566669a1ae5ccac66f945b55ff6eaeb17d2ea8e048b7d381f2d7
+		diskdb.Put(hashData([]byte("acc-2")).Bytes(), val)
+		rawdb.WriteAccountSnapshot(diskdb, hashData([]byte("acc-2")), val)
+		rawdb.WriteStorageSnapshot(diskdb, hashData([]byte("acc-2")), hashData([]byte("key-1")), []byte("val-1"))
+	}
+
+	{ // Account three
+		// This account changed codehash
+		acc := &Account{Balance: big.NewInt(3), Root: stTrie.Hash().Bytes(), CodeHash: emptyCode.Bytes()}
+		val, _ := rlp.EncodeToBytes(acc)
+		accTrie.Update([]byte("acc-3"), val) // 0x50815097425d000edfc8b3a4a13e175fc2bdcfee8bdfbf2d1ff61041d3c235b2
+		acc.CodeHash = hashData([]byte("codez")).Bytes()
+		val, _ = rlp.EncodeToBytes(acc)
+		rawdb.WriteAccountSnapshot(diskdb, hashData([]byte("acc-3")), val)
+		rawdb.WriteStorageSnapshot(diskdb, hashData([]byte("acc-3")), hashData([]byte("key-1")), []byte("val-1"))
+		rawdb.WriteStorageSnapshot(diskdb, hashData([]byte("acc-3")), hashData([]byte("key-2")), []byte("val-2"))
+		rawdb.WriteStorageSnapshot(diskdb, hashData([]byte("acc-3")), hashData([]byte("key-3")), []byte("val-3"))
+	}
+
+	root, _ := accTrie.Commit(nil) // Root: 0xe3712f1a226f3782caca78ca770ccc19ee000552813a9f59d479f8611db9b1fd
+	t.Logf("Root: %#x\n", root)
+	triedb.Commit(root, false, nil)
+
+	snap := generateSnapshot(diskdb, triedb, 16, root)
+	select {
+	case <-snap.genPending:
+		// Snapshot generation succeeded
+
+	case <-time.After(250 * time.Millisecond):
+		t.Errorf("Snapshot generation failed")
+	}
+	checkSnapRoot(t, snap, root)
 	// Signal abortion to the generator and wait for it to tear down
 	stop := make(chan *generatorStats)
 	snap.genAbort <- stop
