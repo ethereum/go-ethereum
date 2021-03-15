@@ -228,7 +228,7 @@ func (ethash *Ethash) getMinimalConsensus(header *types.Header) (
 	minimalConsensusCache, okDerived := cache.Get(derivedEpoch)
 
 	if !okDerived {
-		err = fmt.Errorf("missing minimal consensus info for epoch %d", derivedEpoch)
+		err = fmt.Errorf("missing minimal consensus info for epoch %d, relative: %d, start: %d", derivedEpoch, relativeTime, genesisStart.Unix())
 
 		return
 	}

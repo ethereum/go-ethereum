@@ -477,15 +477,20 @@ func NewPandora(
 ) *Ethash {
 	config.PowMode = ModePandora
 	ethash := New(config, notify, noverify)
-	// Keep max items 12 for now, its enough
-	ethash.mci = newlru("epochSet", 12, NewMinimalConsensusInfo)
+	ethash.mci = newlru("epochSet", 2^7, NewMinimalConsensusInfo)
 
 	consensusInfo := minimalConsensusInfo.([]*params.MinimalEpochConsensusInfo)
+	genesisConsensusTimeStart := consensusInfo[0]
 
 	// Fill cache with minimal consensus info
 	for index, consensusInfo := range consensusInfo {
 		convertedInfo := NewMinimalConsensusInfo(consensusInfo.Epoch)
 		pandoraConsensusInfo := convertedInfo.(*MinimalEpochConsensusInfo)
+		pandoraConsensusInfo.AssignEpochStartFromGenesis(time.Unix(
+			int64(genesisConsensusTimeStart.EpochTimeStart),
+			0,
+		))
+		pandoraConsensusInfo.AssignValidators(consensusInfo.ValidatorsList)
 		ethash.mci.cache.Add(index, pandoraConsensusInfo)
 	}
 
