@@ -219,7 +219,7 @@ func (ethash *Ethash) verifyPandoraHeader(header *types.Header) (err error) {
 	// Extract epoch
 	headerTime := header.Time
 	relativeTime := headerTime - uint64(genesisStart.Unix())
-	derivedEpoch := relativeTime / (pandoraEpochLength * slotTimeDuration)
+	derivedEpoch := int(relativeTime / (pandoraEpochLength * slotTimeDuration))
 
 	// Get minimal consensus info for counted epoch
 	minimalConsensusCache, okDerived := cache.Get(derivedEpoch)
