@@ -227,7 +227,7 @@ func TestMinimalEpochConsensusInfo_AssignEpochStartFromGenesis(t *testing.T) {
 		minimalEpochConsensusInfo := NewMinimalConsensusInfo(uint64(i))
 		consensusInfo := minimalEpochConsensusInfo.(*MinimalEpochConsensusInfo)
 		consensusInfo.AssignEpochStartFromGenesis(genesisTime)
-		epochTimeStart := consensusInfo.epochTimeStart
+		epochTimeStart := consensusInfo.EpochTimeStart
 		seconds := time.Duration(slotTimeDuration) * time.Second * time.Duration(i)
 		expectedEpochTime := genesisTime.Add(seconds)
 		assert.Equal(t, expectedEpochTime.Unix(), epochTimeStart.Unix())
@@ -286,7 +286,7 @@ func TestVerifySeal(t *testing.T) {
 	t.Run("Should increment over slots in first epoch", func(t *testing.T) {
 		headers := make([]*types.Header, 0)
 		for index, privateKey := range validatorPrivateList {
-			headerTime := genesisEpoch.epochTimeStart.Add(slotTimeDuration * time.Second * time.Duration(index))
+			headerTime := genesisEpoch.EpochTimeStart.Add(slotTimeDuration * time.Second * time.Duration(index))
 			// Add additional second to not be on start of the slot
 			randMin := 0
 			randMax := 5
@@ -309,7 +309,7 @@ func TestVerifySeal(t *testing.T) {
 		t.Run("Should fail before overflowing the validator set length", func(t *testing.T) {
 			// Check next epoch
 			nextEpochHeaderNumber := len(validatorPrivateList) + 1
-			headerTime := genesisEpoch.epochTimeStart.Add(
+			headerTime := genesisEpoch.EpochTimeStart.Add(
 				slotTimeDuration * time.Second * time.Duration(nextEpochHeaderNumber))
 			header, _, _ := generatePandoraSealedHeaderByKey(
 				validatorPrivateList[0],
@@ -333,7 +333,7 @@ func TestVerifySeal(t *testing.T) {
 		assert.Nil(t, err)
 
 		for index, _ := range validatorPrivateList {
-			headerTime := genesisEpoch.epochTimeStart.Add(slotTimeDuration * time.Second * time.Duration(index))
+			headerTime := genesisEpoch.EpochTimeStart.Add(slotTimeDuration * time.Second * time.Duration(index))
 			// Add additional second to not be on start of the slot
 			randMin := 0
 			randMax := 5

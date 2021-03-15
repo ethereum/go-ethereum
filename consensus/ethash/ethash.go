@@ -468,6 +468,27 @@ func New(config Config, notify []string, noverify bool) *Ethash {
 	return ethash
 }
 
+func NewPandora(
+	config Config,
+	notify []string,
+	noverify bool,
+	minimalConsensusInfo interface{},
+) *Ethash {
+	config.PowMode = ModePandora
+	ethash := New(config, notify, noverify)
+	// Keep max items 12 for now, its enough
+	ethash.mci = newlru("epochSet", 12, NewMinimalConsensusInfo)
+
+	consensusInfo := minimalConsensusInfo.([]*MinimalEpochConsensusInfo)
+
+	// Fill cache with minimal consensus info
+	for index, consensusInfo := range consensusInfo {
+		ethash.mci.cache.Add(index, consensusInfo)
+	}
+
+	return ethash
+}
+
 // NewTester creates a small sized ethash PoW scheme useful only for testing
 // purposes.
 func NewTester(notify []string, noverify bool) *Ethash {

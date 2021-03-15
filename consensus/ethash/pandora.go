@@ -33,13 +33,13 @@ type PandoraExtraData struct {
 // This should be cached or retrieved in a handshake with vanguard
 type MinimalEpochConsensusInfo struct {
 	// Epoch number
-	epoch uint64
-	// Validators list 32 public bls keys. slot(n) in epoch is represented by index(n) in MinimalConsensusInfo
-	validatorsList [32]*vbls.PublicKey
+	Epoch uint64 `json:"epoch"`
+	// Validators list 32 public bls keys. slot(n) in Epoch is represented by index(n) in MinimalConsensusInfo
+	ValidatorsList [32]*vbls.PublicKey `json:"validatorList"`
 	// Unix timestamp of consensus start. This will be used to extract time slot
-	epochTimeStart time.Time
+	EpochTimeStart time.Time `json:"epochTimeStart"`
 	// Slot time duration
-	slotTimeDuration time.Duration
+	SlotTimeDuration time.Duration `json:"slotTimeDuration"`
 }
 
 // This is done only to have vanguard spec done in minimal codebase to exchange informations with pandora.
@@ -172,24 +172,24 @@ func (pandora *Pandora) makeWork(block *types.Block) {
 // NewMnimalConsensusInfo should be used to represent validator set for epoch
 func NewMinimalConsensusInfo(epoch uint64) (consensusInfo interface{}) {
 	consensusInfo = &MinimalEpochConsensusInfo{
-		epoch:            epoch,
-		slotTimeDuration: slotTimeDuration,
+		Epoch:            epoch,
+		SlotTimeDuration: slotTimeDuration,
 	}
 	return
 }
 
 func (pandoraMode *MinimalEpochConsensusInfo) AssignValidators(validatorsList [32]*vbls.PublicKey) {
-	pandoraMode.validatorsList = validatorsList
+	pandoraMode.ValidatorsList = validatorsList
 	return
 }
 
 // This function should be used to extract epoch start from genesis
 func (pandoraMode *MinimalEpochConsensusInfo) AssignEpochStartFromGenesis(genesisTime time.Time) {
-	epochNumber := pandoraMode.epoch
+	epochNumber := pandoraMode.Epoch
 	genesisTimeUnix := uint64(genesisTime.Unix())
-	slotDuration := pandoraMode.slotTimeDuration * time.Second
+	slotDuration := pandoraMode.SlotTimeDuration * time.Second
 	timePassed := epochNumber*uint64(slotDuration.Seconds()) + genesisTimeUnix
-	pandoraMode.epochTimeStart = time.Unix(int64(timePassed), 0)
+	pandoraMode.EpochTimeStart = time.Unix(int64(timePassed), 0)
 }
 
 func (ethash *Ethash) verifyPandoraHeader(header *types.Header) (err error) {
@@ -212,7 +212,7 @@ func (ethash *Ethash) verifyPandoraHeader(header *types.Header) (err error) {
 	}
 
 	minimalGenesisConsensusInfo := genesisInfo.(*MinimalEpochConsensusInfo)
-	genesisStart := minimalGenesisConsensusInfo.epochTimeStart
+	genesisStart := minimalGenesisConsensusInfo.EpochTimeStart
 
 	// Extract epoch
 	headerTime := header.Time
@@ -232,7 +232,7 @@ func (ethash *Ethash) verifyPandoraHeader(header *types.Header) (err error) {
 
 	// Check if time slot is within desired boundaries. To consider if needed.
 	// We could maybe have an assumption that cache should be invalidated before use.
-	epochTimeStart := minimalConsensus.epochTimeStart
+	epochTimeStart := minimalConsensus.EpochTimeStart
 	epochDuration := pandoraEpochLength * time.Duration(slotTimeDuration) * time.Second
 	epochTimeEnd := epochTimeStart.Add(epochDuration)
 
@@ -250,13 +250,13 @@ func (ethash *Ethash) verifyPandoraHeader(header *types.Header) (err error) {
 	extractedProposerIndex := (headerTime - uint64(epochTimeStart.Unix())) / slotTimeDuration
 
 	// Check to not overflow the index
-	if extractedProposerIndex > uint64(len(minimalConsensus.validatorsList)-1) {
+	if extractedProposerIndex > uint64(len(minimalConsensus.ValidatorsList)-1) {
 		err = fmt.Errorf("extracted validator index overflows validator length")
 
 		return
 	}
 
-	publicKey := minimalConsensus.validatorsList[extractedProposerIndex]
+	publicKey := minimalConsensus.ValidatorsList[extractedProposerIndex]
 	mixDigest := header.MixDigest
 	// Check if signature of header is valid
 	messages := make([][]byte, 0)
@@ -294,7 +294,7 @@ func (ethash *Ethash) verifyPandoraHeader(header *types.Header) (err error) {
 	}
 
 	expectedExtra := &PandoraExtraData{
-		Slot:          uint64(len(minimalConsensus.validatorsList)*derivedEpoch) + extractedProposerIndex,
+		Slot:          uint64(len(minimalConsensus.ValidatorsList)*derivedEpoch) + extractedProposerIndex,
 		Epoch:         uint64(derivedEpoch),
 		ProposerIndex: extractedProposerIndex,
 	}
