@@ -470,7 +470,9 @@ func (dl *diskLayer) generateStorageRange(root, accountHash common.Hash, origin 
 	}
 	// Add the deletions to the batch aswell
 	for k, _ := range staleKeyValues {
-		batch.Delete([]byte(k))
+		storageKey := []byte(k)
+		dbKey := append(append(rawdb.SnapshotStoragePrefix, accountHash.Bytes()...), storageKey...)
+		batch.Delete(dbKey)
 		deleted++
 	}
 	if err := ctrl.flushIfNeeded(append(accountHash[:], lastWritten...)); err != nil {
@@ -550,7 +552,7 @@ func (dl *diskLayer) genAccountRange(root common.Hash, origin []byte, max int, s
 		for len(keys) > 0 {
 			if diff := bytes.Compare(keys[0], trieKey); diff < 0 {
 				// We've went past the first snapshot key, need to delete it
-				ctrl.batch.Delete(keys[0])
+				ctrl.batch.Delete(append(rawdb.SnapshotAccountPrefix, keys[0]...))
 				keys = keys[1:]
 				vals = vals[1:]
 				deleted++
@@ -578,7 +580,7 @@ func (dl *diskLayer) genAccountRange(root common.Hash, origin []byte, max int, s
 	// Now delete any remaining keys
 	if len(keys) > 0 {
 		for _, k := range keys {
-			ctrl.batch.Delete(k)
+			ctrl.batch.Delete(append(rawdb.SnapshotAccountPrefix, k...))
 		}
 		deleted += len(keys)
 	}
