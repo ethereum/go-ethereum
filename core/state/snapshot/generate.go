@@ -228,7 +228,7 @@ func (dl *diskLayer) proveStorageRange(root common.Hash, accountHash common.Hash
 	if len(origin) == 0 && !aborted {
 		stackTr := trie.NewStackTrie(nil)
 		for i, key := range keys {
-			stackTr.TryUpdate(key, vals[i])
+			stackTr.TryUpdate(key, common.CopyBytes(vals[i]))
 		}
 		if gotRoot := stackTr.Hash(); gotRoot != root {
 			// This trie needs to be regenerated
