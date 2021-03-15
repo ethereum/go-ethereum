@@ -18,7 +18,9 @@ package snapshot
 
 import (
 	"fmt"
+	"github.com/ethereum/go-ethereum/log"
 	"math/big"
+	"os"
 	"testing"
 	"time"
 
@@ -171,7 +173,9 @@ func checkSnapRoot(t *testing.T, snap *diskLayer, trieRoot common.Hash) {
 // Tests that snapshot generation with existent flat state, where the flat state contains
 // some errors
 func TestGenerateExistentStateWithExtraStorage(t *testing.T) {
-	//log.Root().SetHandler(log.LvlFilterHandler(log.LvlInfo, log.StreamHandler(os.Stderr, log.TerminalFormat(true))))
+	if false{
+		log.Root().SetHandler(log.LvlFilterHandler(log.LvlTrace, log.StreamHandler(os.Stderr, log.TerminalFormat(true))))
+	}
 
 	// We can't use statedb to make a test trie (circular dependency), so make
 	// a fake one manually. We're going with a small account trie of 3 accounts,
@@ -205,6 +209,7 @@ func TestGenerateExistentStateWithExtraStorage(t *testing.T) {
 		accTrie.Update([]byte("acc-2"), val) // 0x65145f923027566669a1ae5ccac66f945b55ff6eaeb17d2ea8e048b7d381f2d7
 		diskdb.Put(hashData([]byte("acc-2")).Bytes(), val)
 		rawdb.WriteAccountSnapshot(diskdb, hashData([]byte("acc-2")), val)
+		// Adding an extra slot here
 		rawdb.WriteStorageSnapshot(diskdb, hashData([]byte("acc-2")), hashData([]byte("key-1")), []byte("val-1"))
 	}
 

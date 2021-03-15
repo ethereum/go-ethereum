@@ -542,9 +542,9 @@ func (dl *diskLayer) genAccountRange(root common.Hash, origin []byte, max int, s
 			break
 		}
 		var (
-			trieKey     = iter.Key
-			oldValue    []byte
-			writeNeeded = true
+			trieKey   = iter.Key
+			oldValue  []byte
+			skipWrite = false
 		)
 		// Merge the deletes and the writes
 		for len(keys) > 0 {
@@ -560,7 +560,7 @@ func (dl *diskLayer) genAccountRange(root common.Hash, origin []byte, max int, s
 				oldValue = vals[0]
 				keys = keys[1:]
 				vals = vals[1:]
-				if writeNeeded = bytes.Equal(oldValue, iter.Value); writeNeeded {
+				if skipWrite = bytes.Equal(oldValue, iter.Value); skipWrite {
 					untouched++
 				} else {
 					updated++
@@ -569,7 +569,7 @@ func (dl *diskLayer) genAccountRange(root common.Hash, origin []byte, max int, s
 			// else: not there yet, leave it for now
 			break
 		}
-		if err := onAccount(trieKey, iter.Value, writeNeeded); err != nil {
+		if err := onAccount(trieKey, iter.Value, !skipWrite); err != nil {
 			return false, nil, err
 		}
 		lastWritten = common.CopyBytes(trieKey)
