@@ -325,7 +325,7 @@ func TestClique(t *testing.T) {
 			},
 			results: []string{"B", "C", "D", "E", "F"},
 		}, {
-			// epoch transitions reset all votes to allow chain checkpointing
+			// Epoch transitions reset all votes to allow chain checkpointing
 			epoch:   3,
 			signers: []string{"A", "B"},
 			votes: []testerVote{

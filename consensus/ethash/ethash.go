@@ -206,7 +206,7 @@ func (lru *lru) get(epoch uint64) (item, future interface{}) {
 
 // cache wraps an ethash cache with some metadata to allow easier concurrent use.
 type cache struct {
-	epoch uint64    // epoch for which this cache is relevant
+	epoch uint64    // Epoch for which this cache is relevant
 	dump  *os.File  // File descriptor of the memory mapped cache
 	mmap  mmap.MMap // Memory map itself to unmap before releasing
 	cache []uint32  // The actual cache data content (may be memory mapped)

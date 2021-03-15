@@ -40,7 +40,7 @@ const (
 	cacheInitBytes     = 1 << 24 // Bytes in cache at genesis
 	cacheGrowthBytes   = 1 << 17 // Cache growth per epoch
 	epochLength        = 30000   // Blocks per epoch
-	pandoraEpochLength = 32      // blocks per pandora epoch
+	pandoraEpochLength = 32      // Blocks per pandora epoch
 	mixBytes           = 128     // Width of mix
 	hashBytes          = 64      // Hash length in bytes
 	hashWords          = 16      // Number of 32 bit ints in a hash

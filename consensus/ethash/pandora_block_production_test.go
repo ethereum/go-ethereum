@@ -220,10 +220,10 @@ func TestReceiveValidatorsForEpoch(t *testing.T) {
 }
 
 func TestMinimalEpochConsensusInfo_AssignEpochStartFromGenesis(t *testing.T) {
-	random := 2 ^ 7
+	maxIterations := 2 ^ 7
 	genesisTime := time.Now()
 
-	for i := 0; i < random; i++ {
+	for i := 0; i < maxIterations; i++ {
 		minimalEpochConsensusInfo := NewMinimalConsensusInfo(uint64(i))
 		consensusInfo := minimalEpochConsensusInfo.(*MinimalEpochConsensusInfo)
 		consensusInfo.AssignEpochStartFromGenesis(genesisTime)
@@ -298,7 +298,6 @@ func TestVerifySeal(t *testing.T) {
 				ProposerIndex: uint64(index),
 			}
 			header, _, _ := generatePandoraSealedHeaderByKey(privateKey, int64(index), headerTime, extraData)
-			// This will take long time to run for whole suite. Consider running it in other manner
 			headers = append(headers, header)
 			assert.Nil(
 				t,
