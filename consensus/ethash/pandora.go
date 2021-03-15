@@ -180,10 +180,8 @@ func (pandoraMode *MinimalEpochConsensusInfo) AssignValidators(validatorsList [3
 func (pandoraMode *MinimalEpochConsensusInfo) AssignEpochStartFromGenesis(genesisTime time.Time) {
 	epochNumber := pandoraMode.epoch
 	genesisTimeUnix := uint64(genesisTime.Unix())
-	// validator should be unique per epoch
-	slotsPerEpoch := uint64(len(pandoraMode.validatorsList))
 	slotDuration := pandoraMode.slotTimeDuration * time.Second
-	timePassed := epochNumber*slotsPerEpoch*uint64(slotDuration.Seconds()) + genesisTimeUnix
+	timePassed := epochNumber*uint64(slotDuration.Seconds()) + genesisTimeUnix
 	pandoraMode.epochTimeStart = time.Unix(int64(timePassed), 0)
 }
 
