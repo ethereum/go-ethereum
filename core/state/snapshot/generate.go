@@ -61,9 +61,11 @@ var (
 	snapGeneratedAccountMeter     = metrics.NewRegisteredMeter("state/snapshot/generation/account/generated", nil)
 	snapRecoveredAccountMeter     = metrics.NewRegisteredMeter("state/snapshot/generation/account/recovered", nil)
 	snapWipedAccountMeter         = metrics.NewRegisteredMeter("state/snapshot/generation/account/wiped", nil)
+	snapMissallAccountMeter       = metrics.NewRegisteredMeter("state/snapshot/generation/account/missall", nil)
 	snapGeneratedStorageMeter     = metrics.NewRegisteredMeter("state/snapshot/generation/storage/generated", nil)
 	snapRecoveredStorageMeter     = metrics.NewRegisteredMeter("state/snapshot/generation/storage/recovered", nil)
 	snapWipedStorageMeter         = metrics.NewRegisteredMeter("state/snapshot/generation/storage/wiped", nil)
+	snapMissallStorageMeter       = metrics.NewRegisteredMeter("state/snapshot/generation/storage/missall", nil)
 	snapSuccessfulRangeProofMeter = metrics.NewRegisteredMeter("state/snapshot/generation/proof/success", nil)
 	snapFailedRangeProofMeter     = metrics.NewRegisteredMeter("state/snapshot/generation/proof/failure", nil)
 )
@@ -271,6 +273,18 @@ func (dl *diskLayer) genRange(root common.Hash, prefix []byte, kind string, orig
 	snapFailedRangeProofMeter.Mark(1)
 	log.Debug("Detected outdated state range", "kind", kind, "prefix", prefix, "origin", origin, "last", last, "error", err)
 
+	// Special case, the entire trie is missing. In the original trie scheme,
+	// all the duplicated subtries will be filter out(only one copy of data
+	// will be stored). While in the snapshot model, all the storage tries
+	// belong to different contracts will be kept even they are duplicated.
+	// Track it to a certain extent remove the noise data used for statistics.
+	if origin == nil && last == nil {
+		meter := snapMissallAccountMeter
+		if kind == "storage" {
+			meter = snapMissallStorageMeter
+		}
+		meter.Mark(1)
+	}
 	// The verifcation is failed, the flat state in this range cannot match the
 	// merkle trie. Alternatively, use the fallback generation mechanism to regenerate
 	// the correct flat state by iterating trie. But wiping the existent outdated flat
