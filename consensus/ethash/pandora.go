@@ -1,6 +1,7 @@
 package ethash
 
 import (
+	"bytes"
 	"context"
 	"fmt"
 	"github.com/ethereum/go-ethereum/common"
@@ -21,6 +22,12 @@ const (
 // This is a prototype, it can be designed way better
 type Pandora struct {
 	sealer *remoteSealer
+}
+
+type PandoraExtraData struct {
+	Slot          uint64
+	Epoch         uint64
+	ProposerIndex uint64
 }
 
 // This should be cached or retrieved in a handshake with vanguard
@@ -185,15 +192,6 @@ func (pandoraMode *MinimalEpochConsensusInfo) AssignEpochStartFromGenesis(genesi
 	pandoraMode.epochTimeStart = time.Unix(int64(timePassed), 0)
 }
 
-// EpochSet will retrieve minimalConsensusInfo for epoch derived from block height and its future
-func (ethash *Ethash) epochSet(block uint64) (current *MinimalEpochConsensusInfo, ok bool) {
-	epoch := block / pandoraEpochLength
-	currentSet, ok := ethash.mci.cache.Get(epoch)
-	current = currentSet.(*MinimalEpochConsensusInfo)
-
-	return
-}
-
 func (ethash *Ethash) verifyPandoraHeader(header *types.Header) (err error) {
 	mciCache := ethash.mci
 
@@ -249,16 +247,16 @@ func (ethash *Ethash) verifyPandoraHeader(header *types.Header) (err error) {
 		return
 	}
 
-	extractedValidatorIndex := (headerTime - uint64(epochTimeStart.Unix())) / slotTimeDuration
+	extractedProposerIndex := (headerTime - uint64(epochTimeStart.Unix())) / slotTimeDuration
 
 	// Check to not overflow the index
-	if extractedValidatorIndex > uint64(len(minimalConsensus.validatorsList)-1) {
+	if extractedProposerIndex > uint64(len(minimalConsensus.validatorsList)-1) {
 		err = fmt.Errorf("extracted validator index overflows validator length")
 
 		return
 	}
 
-	publicKey := minimalConsensus.validatorsList[extractedValidatorIndex]
+	publicKey := minimalConsensus.validatorsList[extractedProposerIndex]
 	mixDigest := header.MixDigest
 	// Check if signature of header is valid
 	messages := make([][]byte, 0)
@@ -270,6 +268,11 @@ func (ethash *Ethash) verifyPandoraHeader(header *types.Header) (err error) {
 	pubKeySet = append(pubKeySet, publicKey)
 	signatureValid := herumi.VerifyCompressed(pubKeySet, messages, &signature)
 
+	// Seal signature verification has higher priority than integrity of the header itself
+	// TODO: this should be somehow distributed to slashing.
+	// If you sign dumb stuff and you are already a validator you should get slashed.
+	// Problematic if key got leaked, validator then could loose all the stake
+	// In my opinion if somebody looses the staked key he already lost his usefulness to the network
 	if !signatureValid {
 		err = fmt.Errorf(
 			"invalid mixDigest: %s in header hash: %s with sealHash: %s",
@@ -277,6 +280,33 @@ func (ethash *Ethash) verifyPandoraHeader(header *types.Header) (err error) {
 			header.Hash().String(),
 			sealHash.String(),
 		)
+
+		return
+	}
+
+	// Verify extraData field (does they match derived one)
+	// to consider if we really want to do this here
+	extraData := &PandoraExtraData{}
+	err = rlp.DecodeBytes(header.Extra, extraData)
+
+	if nil != err {
+		return
+	}
+
+	expectedExtra := &PandoraExtraData{
+		Slot:          uint64(len(minimalConsensus.validatorsList)*derivedEpoch) + extractedProposerIndex,
+		Epoch:         uint64(derivedEpoch),
+		ProposerIndex: extractedProposerIndex,
+	}
+
+	expectedRlp, err := rlp.EncodeToBytes(expectedExtra)
+
+	if nil != err {
+		return
+	}
+
+	if !bytes.Equal(expectedRlp, header.Extra) {
+		err = fmt.Errorf("invalid extraData field, expected: %v, got %v", expectedExtra, extraData)
 	}
 
 	return

@@ -292,7 +292,12 @@ func TestVerifySeal(t *testing.T) {
 			randMax := 5
 			randomInterval := mathRand.Intn(randMax-randMin) + randMin
 			headerTime = headerTime.Add(time.Second * time.Duration(randomInterval))
-			header, _, _ := generatePandoraSealedHeaderByKey(privateKey, int64(index), headerTime)
+			extraData := &PandoraExtraData{
+				Slot:          uint64(index),
+				Epoch:         uint64(0),
+				ProposerIndex: uint64(index),
+			}
+			header, _, _ := generatePandoraSealedHeaderByKey(privateKey, int64(index), headerTime, extraData)
 			// This will take long time to run for whole suite. Consider running it in other manner
 			headers = append(headers, header)
 			assert.Nil(
@@ -311,6 +316,8 @@ func TestVerifySeal(t *testing.T) {
 				validatorPrivateList[0],
 				int64(nextEpochHeaderNumber),
 				headerTime,
+				// This is checked at last so can be empty
+				&PandoraExtraData{},
 			)
 			assert.Error(
 				t,
@@ -333,7 +340,12 @@ func TestVerifySeal(t *testing.T) {
 			randMax := 5
 			randomInterval := mathRand.Intn(randMax-randMin) + randMin
 			headerTime = headerTime.Add(time.Second * time.Duration(randomInterval))
-			header, sealHash, mixDigest := generatePandoraSealedHeaderByKey(privateKey, int64(index), headerTime)
+			header, sealHash, mixDigest := generatePandoraSealedHeaderByKey(
+				privateKey,
+				int64(index),
+				headerTime,
+				&PandoraExtraData{},
+			)
 			headers = append(headers, header)
 			expectedErr := fmt.Errorf(
 				"invalid mixDigest: %s in header hash: %s with sealHash: %s",
@@ -343,19 +355,26 @@ func TestVerifySeal(t *testing.T) {
 			)
 			assert.Equal(
 				t,
-				ethash.verifySeal(nil, header, false),
 				expectedErr,
+				ethash.verifySeal(nil, header, false),
 			)
 		}
 	})
 }
 
-func generatePandoraSealedHeaderByKey(privKey *vbls.PrivateKey, headerNumber int64, headerTime time.Time) (
+func generatePandoraSealedHeaderByKey(
+	privKey *vbls.PrivateKey,
+	headerNumber int64,
+	headerTime time.Time,
+	extraData *PandoraExtraData,
+) (
 	header *types.Header,
 	headerHash common.Hash,
 	mixDigest common.Hash,
 ) {
 	ethash := NewTester(nil, true)
+	extraDataBytes, _ := rlp.EncodeToBytes(extraData)
+
 	header = &types.Header{
 		ParentHash:  common.Hash{},
 		UncleHash:   common.Hash{},
@@ -369,10 +388,9 @@ func generatePandoraSealedHeaderByKey(privKey *vbls.PrivateKey, headerNumber int
 		GasLimit:    0,
 		GasUsed:     0,
 		Time:        uint64(headerTime.Unix()),
-		// TODO: insert pandora extradata
-		Extra:     nil,
-		MixDigest: common.Hash{},
-		Nonce:     types.BlockNonce{},
+		Extra:       extraDataBytes,
+		MixDigest:   common.Hash{},
+		Nonce:       types.BlockNonce{},
 	}
 
 	headerHash = ethash.SealHash(header)
