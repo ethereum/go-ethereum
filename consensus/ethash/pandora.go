@@ -272,9 +272,10 @@ func (ethash *Ethash) verifyPandoraHeader(header *types.Header) (err error) {
 
 	if !signatureValid {
 		err = fmt.Errorf(
-			"invalid mixDigest: %s in header hash: %s",
+			"invalid mixDigest: %s in header hash: %s with sealHash: %s",
 			header.MixDigest.String(),
 			header.Hash().String(),
+			sealHash.String(),
 		)
 	}
 

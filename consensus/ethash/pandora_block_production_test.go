@@ -320,8 +320,33 @@ func TestVerifySeal(t *testing.T) {
 		})
 	})
 
-	t.Run("Should discard invalid slots in second epoch", func(t *testing.T) {
+	t.Run("Should discard invalid slot sealer in second epoch", func(t *testing.T) {
+		headers := make([]*types.Header, 0)
+		randomReader := rand.Reader
+		_, privateKey, err := herumi.GenerateKey(randomReader)
+		assert.Nil(t, err)
 
+		for index, _ := range validatorPrivateList {
+			headerTime := genesisEpoch.epochTimeStart.Add(slotTimeDuration * time.Second * time.Duration(index))
+			// Add additional second to not be on start of the slot
+			randMin := 0
+			randMax := 5
+			randomInterval := mathRand.Intn(randMax-randMin) + randMin
+			headerTime = headerTime.Add(time.Second * time.Duration(randomInterval))
+			header, sealHash, mixDigest := generatePandoraSealedHeaderByKey(privateKey, int64(index), headerTime)
+			headers = append(headers, header)
+			expectedErr := fmt.Errorf(
+				"invalid mixDigest: %s in header hash: %s with sealHash: %s",
+				mixDigest.String(),
+				header.Hash().String(),
+				sealHash.String(),
+			)
+			assert.Equal(
+				t,
+				ethash.verifySeal(nil, header, false),
+				expectedErr,
+			)
+		}
 	})
 }
 
