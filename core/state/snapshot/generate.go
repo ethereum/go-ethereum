@@ -357,31 +357,31 @@ func (dl *diskLayer) proveAccountRange(root common.Hash, tr *trie.Trie, origin [
 
 	if err := tr.Prove(origin, 0, proof); err != nil {
 		log.Debug("Failed to prove account range", "origin", hexutil.Encode(origin), "err", err)
-		return nil, nil, last, false, err
+		return keys, vals, last, false, err
 	}
 	if last != nil {
 		if err := tr.Prove(last, 0, proof); err != nil {
 			log.Debug("Failed to prove account range", "last", hexutil.Encode(last), "err", err)
-			return nil, nil, last, false, err
+			return keys, vals, last, false, err
 		}
 	}
 	// Verify the state segment with range prover, ensure that all flat states
 	// in this range correspond to merkle trie.
 	_, _, _, cont, err := trie.VerifyRangeProof(root, origin, last, keys, vals, proof)
 	if err != nil {
-		return nil, nil, last, false, err
+		return keys, vals, last, false, err
 	}
 	// Range prover says the trie still has some elements on the right side but
 	// the database is exhausted, then data loss is detected.
 	if cont && !aborted {
-		return nil, nil, last, false, errors.New("data loss in the state range")
+		return keys, vals, last, false, errors.New("data loss in the state range")
 	}
 	return keys, vals, last, !cont, nil
 }
 
 func (dl *diskLayer) generateStorageRange(root, accountHash common.Hash, origin []byte, max int, stats *generatorStats, ctrl *genController) (bool, []byte, error) {
 	// Configure logger
-	var logCtx = []interface{}{"kind", "storage"}
+	var logCtx = []interface{}{"kind", "storage", "account", accountHash}
 	if len(origin) > 0 {
 		logCtx = append(logCtx, "origin", hexutil.Encode(origin))
 	}
@@ -491,7 +491,7 @@ func (dl *diskLayer) generateStorageRange(root, accountHash common.Hash, origin 
 // genAccountRange generates the state segment with particular prefix. Generation can
 // either verify the correctness of existing state through rangeproof and skip
 // generation, or iterate trie to regenerate state on demand.
-func (dl *diskLayer) genAccountRange(root common.Hash, origin []byte, max int, stats *generatorStats, ctrl *genController, onAccount func(key, val, old []byte, regen bool) error) (bool, []byte, error) {
+func (dl *diskLayer) genAccountRange(root common.Hash, origin []byte, max int, stats *generatorStats, ctrl *genController, onAccount func(key, val []byte, regen bool) error) (bool, []byte, error) {
 	var kind = "account"
 	var logCtx = []interface{}{"kind", kind}
 	if len(origin) > 0 {
@@ -514,7 +514,7 @@ func (dl *diskLayer) genAccountRange(root common.Hash, origin []byte, max int, s
 		// callback function. If this state represents a contract, the
 		// corresponding storage check will be performed in the callback
 		for i := 0; i < len(keys); i++ {
-			if err := onAccount(keys[i], vals[i], nil, false); err != nil {
+			if err := onAccount(keys[i], vals[i], false); err != nil {
 				return false, nil, err
 			}
 		}
@@ -523,23 +523,33 @@ func (dl *diskLayer) genAccountRange(root common.Hash, origin []byte, max int, s
 	}
 	// Verifcation failed, the snapshot account data in this range does not match the trie.
 	snapFailedRangeProofMeter.Mark(1)
-	logger.Debug("Detected outdated state range", "last", hexutil.Encode(last), "error", err)
+	logger.Debug("Detected outdated state range", "keys", len(keys), "last", hexutil.Encode(last))
 	// Now we use the trie to generate the snapshot account data.
 	var (
 		iter          = trie.NewIterator(tr.NodeIterator(origin))
 		lastWritten   []byte
 		trieExhausted = true
 
-		updated = 0
-		count   = 0
-		deleted = 0
+		updated   = 0
+		untouched = 0
+		count     = 0
+		deleted   = 0
 	)
 	for iter.Next() {
-		key := iter.Key
-		var oldValue []byte
+		if count == max {
+			// Don't keep iterating indefinitely
+			trieExhausted = false
+			break
+		}
+		var (
+			trieKey     = iter.Key
+			oldValue    []byte
+			writeNeeded = true
+		)
+		// Merge the deletes and the writes
 		for len(keys) > 0 {
-			if diff := bytes.Compare(keys[0], key); diff < 0 {
-				// the snapshot key must be deleted
+			if diff := bytes.Compare(keys[0], trieKey); diff < 0 {
+				// We've went past the first snapshot key, need to delete it
 				ctrl.batch.Delete(keys[0])
 				keys = keys[1:]
 				vals = vals[1:]
@@ -550,15 +560,19 @@ func (dl *diskLayer) genAccountRange(root common.Hash, origin []byte, max int, s
 				oldValue = vals[0]
 				keys = keys[1:]
 				vals = vals[1:]
-				updated++
+				if writeNeeded = bytes.Equal(oldValue, iter.Value); writeNeeded {
+					untouched++
+				} else {
+					updated++
+				}
 			}
 			// else: not there yet, leave it for now
 			break
 		}
-		if err := onAccount(iter.Key, iter.Value, oldValue, true); err != nil {
+		if err := onAccount(trieKey, iter.Value, writeNeeded); err != nil {
 			return false, nil, err
 		}
-		lastWritten = common.CopyBytes(iter.Key)
+		lastWritten = common.CopyBytes(trieKey)
 		count++
 	}
 	// Now delete any remaining keys
@@ -568,11 +582,12 @@ func (dl *diskLayer) genAccountRange(root common.Hash, origin []byte, max int, s
 		}
 		deleted += len(keys)
 	}
+
 	if iter.Err != nil {
 		return false, nil, iter.Err
 	}
-	logger.Debug("Regenerated snapshot account range", "written", count,
-		"updated", updated, "deleted", deleted, "last", hexutil.Encode(lastWritten))
+	logger.Debug("Regenerated snapshot account range", "progressed", count,
+		"updated", updated, "untouched", untouched, "deleted", deleted, "last", hexutil.Encode(lastWritten))
 	return trieExhausted, lastWritten, nil
 }
 
@@ -683,7 +698,7 @@ func (dl *diskLayer) generate(stats *generatorStats) {
 	)
 	stats.Log("Resuming state snapshot generation", dl.root, dl.genMarker)
 
-	onAccount := func(key, val, oldSnapData []byte, regen bool) error {
+	onAccount := func(key, val []byte, writeNeeded bool) error {
 		// Retrieve the current account and flatten it into the internal format
 		accountHash := common.BytesToHash(key)
 		var acc fullAccount
@@ -693,17 +708,14 @@ func (dl *diskLayer) generate(stats *generatorStats) {
 		// If the account is not yet in-progress, write it out
 		if accMarker == nil || !bytes.Equal(accountHash[:], accMarker) {
 			stats.accounts++
-			if !regen {
+			if !writeNeeded {
 				// Technically not always correct to use len(val) here, but approximately.
 				// It saves us some RLP decoding + encoding just to figure out the size.
 				stats.storage += common.StorageSize(1 + common.HashLength + len(val))
 				snapRecoveredAccountMeter.Mark(1)
 			} else {
 				data := SlimAccountRLP(acc.Nonce, acc.Balance, acc.Root, acc.CodeHash)
-				if !bytes.Equal(data, oldSnapData) {
-					rawdb.WriteAccountSnapshot(ctrl.batch, accountHash, data)
-				}
-				//else: No need to write - the existing snap data is correct
+				rawdb.WriteAccountSnapshot(ctrl.batch, accountHash, data)
 
 				// Update meters
 				stats.storage += common.StorageSize(1 + common.HashLength + len(data))
@@ -732,10 +744,10 @@ func (dl *diskLayer) generate(stats *generatorStats) {
 					return err
 				}
 				if exhausted {
-					return nil
+					break
 				}
 				if storeOrigin = increaseKey(last); storeOrigin == nil {
-					return nil // special case, the last is 0xffffffff...fff
+					break // special case, the last is 0xffffffff...fff
 				}
 			}
 		} else {
