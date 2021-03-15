@@ -138,6 +138,9 @@ type (
 		address *common.Address
 		slot    *common.Hash
 	}
+	accessListDeleteAccountChange struct {
+		address *common.Address
+	}
 )
 
 func (ch createObjectChange) revert(s *StateDB) {
@@ -265,5 +268,13 @@ func (ch accessListAddSlotChange) revert(s *StateDB) {
 }
 
 func (ch accessListAddSlotChange) dirtied() *common.Address {
+	return nil
+}
+
+func (ch accessListDeleteAccountChange) revert(s *StateDB) {
+	s.accessList.AddAddress(*ch.address)
+}
+
+func (ch accessListDeleteAccountChange) dirtied() *common.Address {
 	return nil
 }

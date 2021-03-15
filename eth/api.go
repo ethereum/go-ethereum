@@ -544,7 +544,23 @@ func (api *PrivateDebugAPI) getModifiedAccounts(startBlock, endBlock *types.Bloc
 	return dirty, nil
 }
 
-func (api *PublicDebugAPI) CreateAccessList(block *types.Block, reexec uint64, tx *types.Transaction) (*types.AccessList, error) {
+func (api *PublicDebugAPI) CreateAccessList(blockNrOrHash rpc.BlockNumberOrHash, reexec uint64, args *ethapi.SendTxArgs) (*types.AccessList, error) {
 	ctx := context.Background()
-	return api.eth.APIBackend.AccessList(ctx, block, reexec, tx)
+	var block *types.Block
+	if number, ok := blockNrOrHash.Number(); ok {
+		if number == rpc.PendingBlockNumber {
+			block, _ = api.eth.miner.Pending()
+		} else {
+			if number == rpc.LatestBlockNumber {
+				block = api.eth.blockchain.CurrentBlock()
+			} else {
+				block = api.eth.blockchain.GetBlockByNumber(uint64(number))
+			}
+		}
+	} else if hash, ok := blockNrOrHash.Hash(); ok {
+		block = api.eth.blockchain.GetBlockByHash(hash)
+	} else {
+		return nil, errors.New("either block number or block hash must be specified")
+	}
+	return api.eth.APIBackend.AccessList(ctx, block, reexec, args)
 }

@@ -35,6 +35,7 @@ import (
 	"github.com/ethereum/go-ethereum/eth/gasprice"
 	"github.com/ethereum/go-ethereum/ethdb"
 	"github.com/ethereum/go-ethereum/event"
+	"github.com/ethereum/go-ethereum/internal/ethapi"
 	"github.com/ethereum/go-ethereum/miner"
 	"github.com/ethereum/go-ethereum/params"
 	"github.com/ethereum/go-ethereum/rpc"
@@ -345,27 +346,43 @@ func (b *EthAPIBackend) StateAtTransaction(ctx context.Context, block *types.Blo
 	return b.eth.stateAtTransaction(block, txIndex, reexec)
 }
 
-func (b *EthAPIBackend) AccessList(ctx context.Context, block *types.Block, reexec uint64, tx *types.Transaction) (*types.AccessList, error) {
+func (b *EthAPIBackend) AccessList(ctx context.Context, block *types.Block, reexec uint64, args *ethapi.SendTxArgs) (*types.AccessList, error) {
 	if block == nil {
 		block = b.CurrentBlock()
 	}
-	statedb, release, err := b.eth.stateAtBlock(block, reexec)
+	db, release, err := b.eth.stateAtBlock(block, reexec)
 	defer release()
 	if err != nil {
 		return nil, err
 	}
-	signer := types.MakeSigner(b.eth.blockchain.Config(), block.Number())
-	msg, err := tx.AsMessage(signer)
-	if err != nil {
-		return nil, err
-	}
-	txContext := core.NewEVMTxContext(msg)
-	context := core.NewEVMBlockContext(block.Header(), b.eth.blockchain, nil)
-	// Not yet the searched for transaction, execute on top of the current state
-	vmenv := vm.NewEVM(context, txContext, statedb, b.eth.blockchain.Config(), vm.Config{})
-	if _, err := core.ApplyMessage(vmenv, msg, new(core.GasPool).AddGas(tx.Gas())); err != nil {
-		return nil, fmt.Errorf("failed to apply transaction: %v err: %v", tx.Hash(), err)
+	args.SetDefaults(ctx, b)
+	var (
+		gas        uint64
+		accessList = args.AccessList
+		msg        types.Message
+	)
+	for i := 0; i < 10; i++ {
+		// Copy the original db so we don't modify it
+		statedb := db.Copy()
+		// If we have an accesslist, use it
+		if accessList != nil {
+			msg = types.NewMessage(args.From, args.To, uint64(*args.Nonce), args.Value.ToInt(), uint64(*args.Gas), args.GasPrice.ToInt(), *args.Data, *accessList, false)
+		} else {
+			msg = types.NewMessage(args.From, args.To, uint64(*args.Nonce), args.Value.ToInt(), uint64(*args.Gas), args.GasPrice.ToInt(), *args.Data, nil, false)
+		}
+		// Apply the transaction
+		context := core.NewEVMBlockContext(block.Header(), b.eth.blockchain, nil)
+		vmenv := vm.NewEVM(context, core.NewEVMTxContext(msg), statedb, b.eth.blockchain.Config(), vm.Config{})
+		res, err := core.ApplyMessage(vmenv, msg, new(core.GasPool).AddGas(msg.Gas()))
+		if err != nil {
+			return nil, fmt.Errorf("failed to apply transaction: %v err: %v", args.ToTransaction().Hash(), err)
+		}
+		if res.UsedGas == gas {
+			return vmenv.StateDB.AccessList(), nil
+		}
+		accessList = vmenv.StateDB.AccessList()
+		gas = res.UsedGas
 	}
 
-	return vmenv.StateDB.AccessList(), nil
+	return accessList, errors.New("failed to create accesslist")
 }

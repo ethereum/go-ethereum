@@ -474,7 +474,7 @@ web3._extend({
 			name: 'createAccessList',
 			call: 'debug_createAccessList',
 			params: 3,
-			inputFormatter: [web3._extend.formatters.inputBlockNumberFormatter, null, web3._extend.formatters.inputTransactionFormatter],
+			inputFormatter: [web3._extend.formatters.inputBlockNumberFormatter, null, null],
 		}),
 	],
 	properties: []
