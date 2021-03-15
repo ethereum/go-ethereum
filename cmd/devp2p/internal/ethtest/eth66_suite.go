@@ -221,9 +221,9 @@ func (s *Suite) TestOldAnnounce_66(t *utesting.T) {
 
 	switch msg := receiveConn.ReadAndServe(s.chain, timeout*2).(type) {
 	case *NewBlock:
-		t.Fatalf("unexpected: block announcement propagated: %s", pretty.Sdump(msg))
+		t.Fatalf("unexpected: block propagated: %s", pretty.Sdump(msg))
 	case *NewBlockHashes:
-		t.Fatalf("unexpected: block announcement propagated: %s", pretty.Sdump(msg))
+		t.Fatalf("unexpected: block announced: %s", pretty.Sdump(msg))
 	case *Error:
 		errMsg := *msg
 		// check to make sure error is timeout (propagation didn't come through == test successful)
