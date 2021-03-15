@@ -771,7 +771,7 @@ func opAuth(pc *uint64, interpreter *EVMInterpreter, callContext *callCtx) ([]by
 
 	// Zero out the current authorized account. Only update it if an address
 	// is successfully recovered from the signature.
-	callContext.authorizedAccount = nil
+	callContext.authorized = nil
 
 	if v.BitLen() < 8 && crypto.ValidateSignatureValues(byte(v.Uint64()), r.ToBig(), s.ToBig(), true) {
 		msg := make([]byte, 65)
@@ -798,15 +798,15 @@ func opAuth(pc *uint64, interpreter *EVMInterpreter, callContext *callCtx) ([]by
 			// This is to prevent reentering contracts that expect
 			// caller == origin only in the first frame of a transaction.
 			if addr != interpreter.evm.Origin {
-				callContext.authorizedAccount = &addr
+				callContext.authorized = &addr
 			}
 		}
 	}
 
 	// reuse commit to push the result
 	temp := commit
-	if callContext.authorizedAccount != nil {
-		temp.SetBytes20(callContext.authorizedAccount.Bytes())
+	if callContext.authorized != nil {
+		temp.SetBytes20(callContext.authorized.Bytes())
 	} else {
 		temp.Clear()
 	}
@@ -817,7 +817,7 @@ func opAuth(pc *uint64, interpreter *EVMInterpreter, callContext *callCtx) ([]by
 
 func opAuthCall(pc *uint64, interpreter *EVMInterpreter, callContext *callCtx) ([]byte, error) {
 	// If no authorized account is set, revert.
-	if callContext.authorizedAccount == nil {
+	if callContext.authorized == nil {
 		return nil, ErrNoAuthorizedAccount
 	}
 
@@ -838,7 +838,7 @@ func opAuthCall(pc *uint64, interpreter *EVMInterpreter, callContext *callCtx) (
 		bigVal = value.ToBig()
 	}
 
-	caller := AccountRef(*callContext.authorizedAccount)
+	caller := AccountRef(*callContext.authorized)
 	ret, returnGas, err := interpreter.evm.AuthCall(caller, callContext.contract.Address(), toAddr, args, gas, bigVal)
 
 	if err != nil {
