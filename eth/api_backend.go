@@ -378,6 +378,7 @@ func (b *EthAPIBackend) AccessList(ctx context.Context, block *types.Block, reex
 			return nil, fmt.Errorf("failed to apply transaction: %v err: %v", args.ToTransaction().Hash(), err)
 		}
 		if res.UsedGas == gas {
+			vmenv.StateDB.UnprepareAccessList(args.From, args.To, vmenv.ActivePrecompiles())
 			return vmenv.StateDB.AccessList(), nil
 		}
 		accessList = vmenv.StateDB.AccessList()

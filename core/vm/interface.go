@@ -58,6 +58,7 @@ type StateDB interface {
 	Empty(common.Address) bool
 
 	PrepareAccessList(sender common.Address, dest *common.Address, precompiles []common.Address, txAccesses types.AccessList)
+	UnprepareAccessList(sender common.Address, dest *common.Address, precompiles []common.Address)
 	AddressInAccessList(addr common.Address) bool
 	SlotInAccessList(addr common.Address, slot common.Hash) (addressOk bool, slotOk bool)
 	// AddAddressToAccessList adds the given address to the access list. This operation is safe to perform
