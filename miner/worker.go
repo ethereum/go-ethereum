@@ -219,6 +219,38 @@ func newWorker(config *Config, chainConfig *params.ChainConfig, engine consensus
 
 	// Sanitize recommit interval if the user-specified one is too short.
 	recommit := worker.config.Recommit
+
+	if nil != chainConfig.PandoraConfig && len(chainConfig.PandoraConfig.ConsensusInfo) > 0 {
+		recommit = time.Duration(int(chainConfig.PandoraConfig.ConsensusInfo[0].SlotTimeDuration)) * time.Second
+		worker.disablePreseal()
+		//worker.skipSealHook = func(t *task) (shouldSkip bool) {
+		//	pendingBlock := t.block
+		//	blockchain := eth.BlockChain()
+		//	currentHeader := blockchain.CurrentHeader()
+		//	interval := time.Duration(pendingBlock.Time()-currentHeader.Time) * time.Second
+		//	expectedInterval := chainConfig.PandoraConfig.ConsensusInfo[0].SlotTimeDuration * time.Second
+		//	shouldSkip = expectedInterval > interval
+		//
+		//	if shouldSkip && expectedInterval > 0 {
+		//		log.Info(
+		//			"skipping sealing, interval lower than expected",
+		//			"expected",
+		//			expectedInterval,
+		//			"current",
+		//			interval,
+		//		)
+		//
+		//		return
+		//	}
+		//
+		//	currentHeader.Time = uint64(time.Now().Unix())
+		//	// Difficulty is static for now
+		//	currentHeader.Difficulty = big.NewInt(1)
+		//
+		//	return
+		//}
+	}
+
 	if recommit < minRecommitInterval {
 		log.Warn("Sanitizing miner recommit interval", "provided", recommit, "updated", minRecommitInterval)
 		recommit = minRecommitInterval

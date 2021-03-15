@@ -6,8 +6,10 @@ import (
 	"fmt"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/hexutil"
+	"github.com/ethereum/go-ethereum/consensus"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/log"
+	"github.com/ethereum/go-ethereum/params"
 	"github.com/ethereum/go-ethereum/rlp"
 	"github.com/silesiacoin/bls/herumi"
 	"github.com/stretchr/testify/assert"
@@ -21,6 +23,30 @@ import (
 	"time"
 	vbls "vuvuzela.io/crypto/bls"
 )
+
+type fakeReader struct{}
+
+func (f fakeReader) Config() *params.ChainConfig {
+	panic("implement me")
+}
+
+func (f fakeReader) CurrentHeader() *types.Header {
+	panic("implement me")
+}
+
+func (f fakeReader) GetHeader(hash common.Hash, number uint64) *types.Header {
+	return &types.Header{}
+}
+
+func (f fakeReader) GetHeaderByNumber(number uint64) *types.Header {
+	panic("implement me")
+}
+
+func (f fakeReader) GetHeaderByHash(hash common.Hash) *types.Header {
+	panic("implement me")
+}
+
+var chainHeaderReader consensus.ChainHeaderReader = fakeReader{}
 
 // This file is used for exploration of possible ways to achieve pandora-vanguard block production
 // Test RemoteSigner approach connected to each other
@@ -215,8 +241,64 @@ func TestCreateBlockByPandoraAndVanguard(t *testing.T) {
 	})
 }
 
-func TestReceiveValidatorsForEpoch(t *testing.T) {
+func TestEthash_Prepare_Pandora(t *testing.T) {
+	lruCache := newlru("cache", 12, newCache)
+	lruDataset := newlru("dataset", 12, newDataset)
+	lruEpochSet := newlru("epochSet", 12, NewMinimalConsensusInfo)
 
+	ethash := Ethash{
+		caches:   lruCache,
+		datasets: lruDataset,
+		mci:      lruEpochSet,
+		config: Config{
+			// In pandora-vanguard implementation we do not need to increase nonce and mixHash is sealed/calculated on the Vanguard side
+			PowMode: ModePandora,
+			Log:     log.Root(),
+		},
+		lock:      sync.Mutex{},
+		closeOnce: sync.Once{},
+	}
+	defer func() {
+		_ = ethash.Close()
+	}()
+
+	genesisEpoch := NewMinimalConsensusInfo(0).(*MinimalEpochConsensusInfo)
+	genesisStart := time.Now()
+
+	validatorPublicList := [32]*vbls.PublicKey{}
+	validatorPrivateList := [32]*vbls.PrivateKey{}
+
+	for index, _ := range validatorPrivateList {
+		randomReader := rand.Reader
+		pubKey, privKey, err := herumi.GenerateKey(randomReader)
+		assert.Nil(t, err)
+		validatorPublicList[index] = pubKey
+		validatorPrivateList[index] = privKey
+	}
+
+	genesisEpoch.AssignEpochStartFromGenesis(genesisStart)
+	genesisEpoch.AssignValidators(validatorPublicList)
+
+	header := &types.Header{
+		ParentHash:  common.Hash{},
+		UncleHash:   common.Hash{},
+		Coinbase:    common.Address{},
+		Root:        common.Hash{},
+		TxHash:      common.Hash{},
+		ReceiptHash: common.Hash{},
+		Bloom:       types.Bloom{},
+		Difficulty:  nil,
+		Number:      nil,
+		GasLimit:    0,
+		GasUsed:     0,
+		Time:        0,
+		Extra:       nil,
+		MixDigest:   common.Hash{},
+		Nonce:       types.BlockNonce{},
+	}
+
+	err := ethash.Prepare(chainHeaderReader, header)
+	assert.Nil(t, err)
 }
 
 func TestMinimalEpochConsensusInfo_AssignEpochStartFromGenesis(t *testing.T) {
@@ -241,7 +323,7 @@ func TestVerifySeal(t *testing.T) {
 	validatorPublicList := [32]*vbls.PublicKey{}
 	validatorPrivateList := [32]*vbls.PrivateKey{}
 
-	for index, _ := range validatorPublicList {
+	for index, _ := range validatorPrivateList {
 		randomReader := rand.Reader
 		pubKey, privKey, err := herumi.GenerateKey(randomReader)
 		assert.Nil(t, err)

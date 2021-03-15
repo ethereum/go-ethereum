@@ -37,7 +37,10 @@ type MinimalEpochConsensusInfo struct {
 	// Validators list 32 public bls keys. slot(n) in Epoch is represented by index(n) in MinimalConsensusInfo
 	ValidatorsList [32]*vbls.PublicKey `json:"validatorList"`
 	// Unix timestamp of consensus start. This will be used to extract time slot
-	EpochTimeStart time.Time `json:"epochTimeStart"`
+	EpochTimeStart time.Time
+
+	EpochTimeStartUnix uint64 `json:"epochTimeStart"`
+
 	// Slot time duration
 	SlotTimeDuration time.Duration `json:"slotTimeDuration"`
 }
@@ -101,8 +104,7 @@ func (pandora *Pandora) Loop() {
 			}
 
 		case result := <-s.submitWorkCh:
-			// Verify submitted PoW solution based on maintained mining blocks.
-			// TODO: change verification of submitted block
+			// Verify submitted PoS solution based on maintained mining blocks.
 			if s.submitWork(result.nonce, result.mixDigest, result.hash) {
 				result.errc <- nil
 			} else {

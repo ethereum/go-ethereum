@@ -20,6 +20,7 @@ package ethash
 import (
 	"errors"
 	"fmt"
+	"github.com/ethereum/go-ethereum/params"
 	"math"
 	"math/big"
 	"math/rand"
@@ -479,11 +480,13 @@ func NewPandora(
 	// Keep max items 12 for now, its enough
 	ethash.mci = newlru("epochSet", 12, NewMinimalConsensusInfo)
 
-	consensusInfo := minimalConsensusInfo.([]*MinimalEpochConsensusInfo)
+	consensusInfo := minimalConsensusInfo.([]*params.MinimalEpochConsensusInfo)
 
 	// Fill cache with minimal consensus info
 	for index, consensusInfo := range consensusInfo {
-		ethash.mci.cache.Add(index, consensusInfo)
+		convertedInfo := NewMinimalConsensusInfo(consensusInfo.Epoch)
+		pandoraConsensusInfo := convertedInfo.(*MinimalEpochConsensusInfo)
+		ethash.mci.cache.Add(index, pandoraConsensusInfo)
 	}
 
 	return ethash

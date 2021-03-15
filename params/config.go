@@ -348,7 +348,7 @@ type MinimalEpochConsensusInfo struct {
 	// Validators list 32 public bls keys. slot(n) in Epoch is represented by index(n) in MinimalConsensusInfo
 	ValidatorsList [32]*vbls.PublicKey `json:"validatorList"`
 	// Unix timestamp of consensus start. This will be used to extract time slot
-	EpochTimeStart time.Time `json:"epochTimeStart"`
+	EpochTimeStart uint64 `json:"epochTimeStart"`
 	// Slot time duration
 	SlotTimeDuration time.Duration `json:"slotTimeDuration"`
 }

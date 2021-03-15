@@ -209,6 +209,12 @@ func CreateConsensusEngine(stack *node.Node, chainConfig *params.ChainConfig, co
 	if chainConfig.Clique != nil {
 		return clique.New(chainConfig.Clique, db)
 	}
+
+	// In proof of stake use pandora minimal approach
+	if nil != chainConfig.PandoraConfig {
+		config.PowMode = ethash.ModePandora
+	}
+
 	// Otherwise assume proof-of-work
 	switch config.PowMode {
 	case ethash.ModeFake:

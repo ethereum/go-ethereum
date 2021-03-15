@@ -573,6 +573,15 @@ func (ethash *Ethash) Prepare(chain consensus.ChainHeaderReader, header *types.H
 		return consensus.ErrUnknownAncestor
 	}
 	header.Difficulty = ethash.CalcDifficulty(chain, header.Time, parent)
+
+	if ModePandora != ethash.config.PowMode {
+		return nil
+	}
+
+	if nil == ethash.mci {
+		return fmt.Errorf("refusing to run pandora without mci cache")
+	}
+
 	return nil
 }
 
