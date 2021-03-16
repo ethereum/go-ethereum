@@ -388,6 +388,9 @@ func (dl *diskLayer) genRange(root common.Hash, prefix []byte, kind string, orig
 		} else {
 			// The "stale state" is actually not stale, skip it
 			untouched += 1
+			if err := onState(iter.Key, iter.Value, false, false); err != nil {
+				return false, nil, err
+			}
 		}
 		kvkeys = kvkeys[1:]
 		kvvals = kvvals[1:]
