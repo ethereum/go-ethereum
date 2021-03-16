@@ -26,6 +26,7 @@ import (
 
 	"github.com/VictoriaMetrics/fastcache"
 	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/ethereum/go-ethereum/common/math"
 	"github.com/ethereum/go-ethereum/core/rawdb"
 	"github.com/ethereum/go-ethereum/crypto"
@@ -306,10 +307,12 @@ func (dl *diskLayer) genRange(root common.Hash, prefix []byte, kind string, orig
 	if err != nil {
 		return false, nil, err
 	}
+	last := result.last()
+
+	// The range prover says the range is correct, skip trie iteration
 	if result.valid() {
-		last := result.last()
 		snapSuccessfulRangeProofMeter.Mark(1)
-		log.Debug("Proved state range", "kind", kind, "prefix", prefix, "origin", origin, "last", last)
+		log.Debug("Proved state range", "kind", kind, "prefix", hexutil.Encode(prefix), "origin", hexutil.Encode(origin), "last", hexutil.Encode(last))
 
 		// The verification is passed, process each state with the given
 		// callback function. If this state represents a contract, the
@@ -317,13 +320,11 @@ func (dl *diskLayer) genRange(root common.Hash, prefix []byte, kind string, orig
 		if err := result.forEach(func(key []byte, val []byte) error { return onState(key, val, false, false) }); err != nil {
 			return false, nil, err
 		}
-		log.Debug("Recovered state range", "kind", kind, "prefix", prefix, "origin", origin, "last", last, "count", len(result.keys))
-		return !result.cont, result.last(), nil
+		log.Debug("Recovered state range", "kind", kind, "prefix", hexutil.Encode(prefix), "origin", hexutil.Encode(origin), "last", hexutil.Encode(last), "count", len(result.keys))
+		return !result.cont, last, nil
 	}
 	snapFailedRangeProofMeter.Mark(1)
-
-	last := result.last()
-	log.Debug("Detected outdated state range", "kind", kind, "prefix", prefix, "origin", origin, "last", last, "error", err)
+	log.Debug("Detected outdated state range", "kind", kind, "prefix", hexutil.Encode(prefix), "origin", hexutil.Encode(origin), "last", hexutil.Encode(last), "error", err)
 
 	// Special case, the entire trie is missing. In the original trie scheme,
 	// all the duplicated subtries will be filter out(only one copy of data
@@ -359,7 +360,7 @@ func (dl *diskLayer) genRange(root common.Hash, prefix []byte, kind string, orig
 		// Delete all stale snapshot states in the front
 		var cmp int
 		for len(kvkeys) > 0 {
-			cmp := bytes.Compare(kvkeys[0], iter.Key)
+			cmp = bytes.Compare(kvkeys[0], iter.Key)
 			if cmp >= 0 {
 				break
 			}
@@ -401,8 +402,8 @@ func (dl *diskLayer) genRange(root common.Hash, prefix []byte, kind string, orig
 		}
 		deleted += 1
 	}
-	log.Debug("Regenerated state range", "kind", kind, "prefix", prefix, "root", root, "origin", origin, "last", last, "count", count)
-	return !aborted, nil, nil // The entire trie is exhausted
+	log.Debug("Regenerated state range", "kind", kind, "prefix", hexutil.Encode(prefix), "root", root, "origin", hexutil.Encode(origin), "last", hexutil.Encode(last), "count", count)
+	return !aborted, last, nil
 }
 
 // generate is a background thread that iterates over the state and storage tries,

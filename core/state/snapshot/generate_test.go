@@ -235,7 +235,6 @@ func TestGenerateExistentStateWithWrongStorage(t *testing.T) {
 		acc := &Account{Balance: big.NewInt(3), Root: stTrie.Hash().Bytes(), CodeHash: emptyCode.Bytes()}
 		val, _ := rlp.EncodeToBytes(acc)
 		accTrie.Update([]byte("acc-5"), val)
-		val, _ = rlp.EncodeToBytes(acc)
 		rawdb.WriteAccountSnapshot(diskdb, hashData([]byte("acc-5")), val)
 		rawdb.WriteStorageSnapshot(diskdb, hashData([]byte("acc-5")), hashData([]byte("key-1")), []byte("badval-1"))
 		rawdb.WriteStorageSnapshot(diskdb, hashData([]byte("acc-5")), hashData([]byte("key-2")), []byte("badval-2"))
