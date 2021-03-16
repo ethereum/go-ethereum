@@ -17,7 +17,9 @@
 package snapshot
 
 import (
+	"github.com/ethereum/go-ethereum/log"
 	"math/big"
+	"os"
 	"testing"
 	"time"
 
@@ -173,7 +175,7 @@ func checkSnapRoot(t *testing.T, snap *diskLayer, trieRoot common.Hash) {
 // - the contract(non-empty storage) misses some storage slots
 // - the contract(non-empty storage) has wrong storage slots
 func TestGenerateExistentStateWithWrongStorage(t *testing.T) {
-	//log.Root().SetHandler(log.LvlFilterHandler(log.LvlInfo, log.StreamHandler(os.Stderr, log.TerminalFormat(true))))
+	log.Root().SetHandler(log.LvlFilterHandler(log.LvlTrace, log.StreamHandler(os.Stderr, log.TerminalFormat(true))))
 
 	// We can't use statedb to make a test trie (circular dependency), so make
 	// a fake one manually. We're going with a small account trie of 3 accounts,
@@ -231,14 +233,15 @@ func TestGenerateExistentStateWithWrongStorage(t *testing.T) {
 	}
 
 	{ // Account five
-		// This account has the wrong storage slot
+		// This account has the wrong storage slot - they've been rotated.
+		// This test that the update-or-replace check works
 		acc := &Account{Balance: big.NewInt(3), Root: stTrie.Hash().Bytes(), CodeHash: emptyCode.Bytes()}
 		val, _ := rlp.EncodeToBytes(acc)
 		accTrie.Update([]byte("acc-5"), val)
 		rawdb.WriteAccountSnapshot(diskdb, hashData([]byte("acc-5")), val)
-		rawdb.WriteStorageSnapshot(diskdb, hashData([]byte("acc-5")), hashData([]byte("key-1")), []byte("badval-1"))
-		rawdb.WriteStorageSnapshot(diskdb, hashData([]byte("acc-5")), hashData([]byte("key-2")), []byte("badval-2"))
-		rawdb.WriteStorageSnapshot(diskdb, hashData([]byte("acc-5")), hashData([]byte("key-3")), []byte("badval-3"))
+		rawdb.WriteStorageSnapshot(diskdb, hashData([]byte("acc-5")), hashData([]byte("key-1")), []byte("val-2"))
+		rawdb.WriteStorageSnapshot(diskdb, hashData([]byte("acc-5")), hashData([]byte("key-2")), []byte("val-3"))
+		rawdb.WriteStorageSnapshot(diskdb, hashData([]byte("acc-5")), hashData([]byte("key-3")), []byte("val-1"))
 	}
 
 	root, _ := accTrie.Commit(nil) // Root: 0xe3712f1a226f3782caca78ca770ccc19ee000552813a9f59d479f8611db9b1fd

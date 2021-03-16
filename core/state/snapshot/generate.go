@@ -310,9 +310,14 @@ func (dl *diskLayer) genRange(root common.Hash, prefix []byte, kind string, orig
 	last := result.last()
 
 	// The range prover says the range is correct, skip trie iteration
+	logCtx := []interface{}{"kind", kind, "prefix", hexutil.Encode(prefix)}
+	if len(origin) > 0 {
+		logCtx = append(logCtx, "origin", hexutil.Encode(origin))
+	}
+	logger := log.New(logCtx...)
 	if result.valid() {
 		snapSuccessfulRangeProofMeter.Mark(1)
-		log.Debug("Proved state range", "kind", kind, "prefix", hexutil.Encode(prefix), "origin", hexutil.Encode(origin), "last", hexutil.Encode(last))
+		logger.Debug("Proved state range", "last", hexutil.Encode(last))
 
 		// The verification is passed, process each state with the given
 		// callback function. If this state represents a contract, the
@@ -320,11 +325,10 @@ func (dl *diskLayer) genRange(root common.Hash, prefix []byte, kind string, orig
 		if err := result.forEach(func(key []byte, val []byte) error { return onState(key, val, false, false) }); err != nil {
 			return false, nil, err
 		}
-		log.Debug("Recovered state range", "kind", kind, "prefix", hexutil.Encode(prefix), "origin", hexutil.Encode(origin), "last", hexutil.Encode(last), "count", len(result.keys))
 		return !result.cont, last, nil
 	}
+	logger.Debug("Detected outdated state range", "last", hexutil.Encode(last), "error", err)
 	snapFailedRangeProofMeter.Mark(1)
-	log.Debug("Detected outdated state range", "kind", kind, "prefix", hexutil.Encode(prefix), "origin", hexutil.Encode(origin), "last", hexutil.Encode(last), "error", err)
 
 	// Special case, the entire trie is missing. In the original trie scheme,
 	// all the duplicated subtries will be filter out(only one copy of data
@@ -351,62 +355,53 @@ func (dl *diskLayer) genRange(root common.Hash, prefix []byte, kind string, orig
 		untouched = 0 // states already correct
 	)
 	for iter.Next() {
-		if last != nil && bytes.Compare(iter.Key, last) > 0 {
+		if count == max {
+			// Don't keep iterating indefinitely
 			aborted = true
 			break
 		}
 		count += 1
-
+		write := true
 		// Delete all stale snapshot states in the front
-		var cmp int
 		for len(kvkeys) > 0 {
-			cmp = bytes.Compare(kvkeys[0], iter.Key)
-			if cmp >= 0 {
-				break
+			if cmp := bytes.Compare(kvkeys[0], iter.Key); cmp < 0 {
+				// delete the key
+				if err := onState(kvkeys[0], kvvals[0], false, true); err != nil {
+					return false, nil, err
+				}
+				kvkeys = kvkeys[1:]
+				kvvals = kvvals[1:]
+				deleted += 1
+			} else if cmp == 0 {
+				// the snapshot key can be overwritten
+				if write = !bytes.Equal(kvvals[0], iter.Value); write {
+					updated++
+				} else {
+					untouched++
+				}
+				kvkeys = kvkeys[1:]
+				kvvals = kvvals[1:]
 			}
-			if err := onState(kvkeys[0], kvvals[0], false, true); err != nil {
-				return false, nil, err
-			}
-			kvkeys = kvkeys[1:]
-			kvvals = kvvals[1:]
-			deleted += 1
+			break
 		}
-		// Create the missing snapshot states by trie
-		if len(kvkeys) == 0 || cmp > 0 {
-			created += 1
-			if err := onState(iter.Key, iter.Value, true, false); err != nil {
-				return false, nil, err
-			}
-			continue
+		if err := onState(iter.Key, iter.Value, write, false); err != nil {
+			return false, nil, err
 		}
-		// Update the stale states by trie
-		if !bytes.Equal(kvvals[0], iter.Value) {
-			updated += 1
-			if err := onState(iter.Key, iter.Value, true, false); err != nil {
-				return false, nil, err
-			}
-		} else {
-			// The "stale state" is actually not stale, skip it
-			untouched += 1
-			if err := onState(iter.Key, iter.Value, false, false); err != nil {
-				return false, nil, err
-			}
-		}
-		kvkeys = kvkeys[1:]
-		kvvals = kvvals[1:]
+		last = common.CopyBytes(iter.Key)
 	}
 	if iter.Err != nil {
 		return false, nil, iter.Err
 	}
-	// Delete all stale snapshot states behind
+	// Delete all stale snapshot states remaining
 	for i := 0; i < len(kvkeys); i++ {
 		if err := onState(kvkeys[i], kvvals[i], false, true); err != nil {
 			return false, nil, err
 		}
 		deleted += 1
 	}
-	log.Debug("Regenerated state range", "kind", kind, "prefix", hexutil.Encode(prefix), "root", root, "origin", hexutil.Encode(origin), "last", hexutil.Encode(last), "count", count)
-	return !aborted, last, nil
+	logger.Debug("Regenerated state range", "root", root, "last", hexutil.Encode(last),
+		"count", count, "created", created, "updated", updated, "deleted", deleted, "untouched", untouched)
+	return !aborted, last, nil // The entire trie is exhausted
 }
 
 // generate is a background thread that iterates over the state and storage tries,
