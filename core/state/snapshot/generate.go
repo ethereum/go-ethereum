@@ -260,8 +260,14 @@ func (dl *diskLayer) proveRange(root common.Hash, tr *trie.Trie, prefix []byte, 
 	}
 	// The snap state is exhausted, pass the entire key/val set for verification
 	if origin == nil && !aborted {
-		_, _, _, _, err := trie.VerifyRangeProof(root, nil, nil, keys, vals, nil)
-		return &proofResult{keys: keys, vals: vals, cont: false, proofErr: err}, nil
+		stackTr := trie.NewStackTrie(nil)
+		for i, key := range keys {
+			stackTr.TryUpdate(key, common.CopyBytes(vals[i]))
+		}
+		if gotRoot := stackTr.Hash(); gotRoot != root {
+			return &proofResult{keys: keys, vals: vals, cont: false, proofErr: errors.New("wrong root")}, nil
+		}
+		return &proofResult{keys: keys, vals: vals, cont: false, proofErr: nil}, nil
 	}
 	// Snap state is chunked, generate edge proofs for verification.
 	// Firstly find out the key of last iterated element.
