@@ -184,7 +184,7 @@ func journalProgress(db ethdb.KeyValueWriter, marker []byte, stats *generatorSta
 // The iteration start point will be assigned if the iterator is restored from
 // the last interruption. Max will be assigned in order to limit the maximum
 // amount of data involved in each iteration.
-func (dl *diskLayer) proveRange(root common.Hash, tr *trie.SecureTrie, prefix []byte, kind string, origin []byte, max int, valueConvertFn func([]byte) ([]byte, error)) ([][]byte, [][]byte, []byte, bool, error) {
+func (dl *diskLayer) proveRange(root common.Hash, tr *trie.Trie, prefix []byte, kind string, origin []byte, max int, valueConvertFn func([]byte) ([]byte, error)) ([][]byte, [][]byte, []byte, bool, error) {
 	var (
 		keys  [][]byte
 		vals  [][]byte
@@ -248,7 +248,7 @@ func (dl *diskLayer) proveRange(root common.Hash, tr *trie.SecureTrie, prefix []
 // either verify the correctness of existing state through rangeproof and skip
 // generation, or iterate trie to regenerate state on demand.
 func (dl *diskLayer) genRange(root common.Hash, prefix []byte, kind string, origin []byte, max int, stats *generatorStats, onState func(key []byte, val []byte, regen bool) error, valueConvertFn func([]byte) ([]byte, error)) (bool, []byte, error) {
-	tr, err := trie.NewSecure(root, dl.triedb)
+	tr, err := trie.New(root, dl.triedb)
 	if err != nil {
 		stats.Log("Trie missing, state snapshotting paused", root, dl.genMarker)
 		return false, nil, errors.New("trie is missing")
