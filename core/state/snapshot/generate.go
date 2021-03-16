@@ -184,10 +184,11 @@ func journalProgress(db ethdb.KeyValueWriter, marker []byte, stats *generatorSta
 // proofResult contains the output of range proving which can be used
 // for further processing no matter it's successful or not.
 type proofResult struct {
-	keys     [][]byte // The key set of all elements being iterated, even proving is failed
-	vals     [][]byte // The val set of all elements being iterated, even proving is failed
-	cont     bool     // Indicator if there exists more elements in the range, only meaningful when proving is successful
-	proofErr error    // Indicator whether the given state range is valid or not
+	keys     [][]byte   // The key set of all elements being iterated, even proving is failed
+	vals     [][]byte   // The val set of all elements being iterated, even proving is failed
+	cont     bool       // Indicator if there exists more elements in the range, only meaningful when proving is successful
+	proofErr error      // Indicator whether the given state range is valid or not
+	tr       *trie.Trie // The trie, in case the trie was resolved by the prover (may be nil)
 }
 
 // valid returns the indicator that range proof is successful or not.
@@ -227,7 +228,7 @@ func (result *proofResult) forEach(callback func(key []byte, val []byte) error) 
 //
 // The proof result will be returned if the range proving is finished, otherwise
 // the error will be returned to abort the entire procedure.
-func (dl *diskLayer) proveRange(root common.Hash, tr *trie.Trie, prefix []byte, kind string, origin []byte, max int, valueConvertFn func([]byte) ([]byte, error)) (*proofResult, error) {
+func (dl *diskLayer) proveRange(root common.Hash, prefix []byte, kind string, origin []byte, max int, valueConvertFn func([]byte) ([]byte, error)) (*proofResult, error) {
 	var (
 		keys    [][]byte
 		vals    [][]byte
@@ -236,7 +237,6 @@ func (dl *diskLayer) proveRange(root common.Hash, tr *trie.Trie, prefix []byte, 
 	)
 	iter := dl.diskdb.NewIterator(prefix, origin)
 	defer iter.Release()
-
 	for iter.Next() {
 		key := iter.Key()
 		if len(key) != len(prefix)+common.HashLength {
@@ -269,6 +269,11 @@ func (dl *diskLayer) proveRange(root common.Hash, tr *trie.Trie, prefix []byte, 
 		}
 		return &proofResult{keys: keys, vals: vals, cont: false, proofErr: nil}, nil
 	}
+	tr, err := trie.New(root, dl.triedb)
+	if err != nil {
+		log.Error("Missing trie", "root", root, "err", err)
+		return nil, err
+	}
 	// Snap state is chunked, generate edge proofs for verification.
 	// Firstly find out the key of last iterated element.
 	var last []byte
@@ -281,19 +286,19 @@ func (dl *diskLayer) proveRange(root common.Hash, tr *trie.Trie, prefix []byte, 
 	}
 	if err := tr.Prove(origin, 0, proof); err != nil {
 		log.Debug("Failed to prove range", "kind", kind, "origin", origin, "err", err)
-		return &proofResult{keys: keys, vals: vals, cont: false, proofErr: err}, nil
+		return &proofResult{keys: keys, vals: vals, cont: false, proofErr: err, tr: tr}, nil
 	}
 	if last != nil {
 		if err := tr.Prove(last, 0, proof); err != nil {
 			log.Debug("Failed to prove range", "kind", kind, "last", last, "err", err)
-			return &proofResult{keys: keys, vals: vals, cont: false, proofErr: err}, nil
+			return &proofResult{keys: keys, vals: vals, cont: false, proofErr: err, tr: tr}, nil
 		}
 	}
 	// Verify the state segment with range prover, ensure that all flat states
 	// in this range correspond to merkle trie.
 	_, _, _, cont, err := trie.VerifyRangeProof(root, origin, last, keys, vals, proof)
 	if err != nil {
-		return &proofResult{keys: keys, vals: vals, cont: false, proofErr: err}, nil
+		return &proofResult{keys: keys, vals: vals, cont: false, proofErr: err, tr: tr}, nil
 	}
 	// Range prover says the trie still has some elements on the right side but
 	// the database is exhausted, then data loss is detected.
@@ -301,20 +306,15 @@ func (dl *diskLayer) proveRange(root common.Hash, tr *trie.Trie, prefix []byte, 
 	//if cont && len(keys) < max {
 	//return &proofResult{keys: keys, vals: vals, cont: true, proofErr: nil}, nil
 	//}
-	return &proofResult{keys: keys, vals: vals, cont: cont, proofErr: nil}, nil
+	return &proofResult{keys: keys, vals: vals, cont: cont, proofErr: nil, tr: tr}, nil
 }
 
 // genRange generates the state segment with particular prefix. Generation can
 // either verify the correctness of existing state through rangeproof and skip
 // generation, or iterate trie to regenerate state on demand.
 func (dl *diskLayer) genRange(root common.Hash, prefix []byte, kind string, origin []byte, max int, stats *generatorStats, onState func(key []byte, val []byte, write bool, delete bool) error, valueConvertFn func([]byte) ([]byte, error)) (bool, []byte, error) {
-	tr, err := trie.New(root, dl.triedb)
-	if err != nil {
-		stats.Log("Trie missing, state snapshotting paused", root, dl.genMarker)
-		return false, nil, err
-	}
 	// Use range prover to check the validity of the flat state in the range
-	result, err := dl.proveRange(root, tr, prefix, kind, origin, max, valueConvertFn)
+	result, err := dl.proveRange(root, prefix, kind, origin, max, valueConvertFn)
 	if err != nil {
 		return false, nil, err
 	}
@@ -352,6 +352,13 @@ func (dl *diskLayer) genRange(root common.Hash, prefix []byte, kind string, orig
 			meter = snapMissallStorageMeter
 		}
 		meter.Mark(1)
+	}
+	tr := result.tr
+	if tr == nil {
+		tr, err = trie.New(root, dl.triedb)
+		if err != nil {
+			return false, nil, err
+		}
 	}
 	var (
 		aborted        bool

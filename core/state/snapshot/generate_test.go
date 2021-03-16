@@ -175,7 +175,9 @@ func checkSnapRoot(t *testing.T, snap *diskLayer, trieRoot common.Hash) {
 // - the contract(non-empty storage) misses some storage slots
 // - the contract(non-empty storage) has wrong storage slots
 func TestGenerateExistentStateWithWrongStorage(t *testing.T) {
-	log.Root().SetHandler(log.LvlFilterHandler(log.LvlTrace, log.StreamHandler(os.Stderr, log.TerminalFormat(true))))
+	if false {
+		log.Root().SetHandler(log.LvlFilterHandler(log.LvlTrace, log.StreamHandler(os.Stderr, log.TerminalFormat(true))))
+	}
 
 	// We can't use statedb to make a test trie (circular dependency), so make
 	// a fake one manually. We're going with a small account trie of 3 accounts,
