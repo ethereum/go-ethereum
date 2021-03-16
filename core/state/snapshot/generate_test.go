@@ -453,18 +453,22 @@ func TestGenerateWithExtraAccounts(t *testing.T) {
 		val, _ := rlp.EncodeToBytes(acc)
 		accTrie.Update([]byte("acc-1"), val) // 0x9250573b9c18c664139f3b6a7a8081b7d8f8916a8fcc5d94feec6c29f5fd4e9e
 		// Identical in the snap
-		rawdb.WriteAccountSnapshot(diskdb, hashData([]byte("acc-1")), val)
-		rawdb.WriteStorageSnapshot(diskdb, hashData([]byte("acc-1")), hashData([]byte("key-1")), []byte("val-1"))
-		rawdb.WriteStorageSnapshot(diskdb, hashData([]byte("acc-1")), hashData([]byte("key-2")), []byte("val-2"))
-		rawdb.WriteStorageSnapshot(diskdb, hashData([]byte("acc-1")), hashData([]byte("key-3")), []byte("val-3"))
+		key := hashData([]byte("acc-1"))
+		rawdb.WriteAccountSnapshot(diskdb, key, val)
+		rawdb.WriteStorageSnapshot(diskdb, key, hashData([]byte("key-1")), []byte("val-1"))
+		rawdb.WriteStorageSnapshot(diskdb, key, hashData([]byte("key-2")), []byte("val-2"))
+		rawdb.WriteStorageSnapshot(diskdb, key, hashData([]byte("key-3")), []byte("val-3"))
+		rawdb.WriteStorageSnapshot(diskdb, key, hashData([]byte("key-4")), []byte("val-4"))
+		rawdb.WriteStorageSnapshot(diskdb, key, hashData([]byte("key-5")), []byte("val-5"))
 	}
 	{ // Account two exists only in the snapshot
 		acc := &Account{Balance: big.NewInt(1), Root: stTrie.Hash().Bytes(), CodeHash: emptyCode.Bytes()}
 		val, _ := rlp.EncodeToBytes(acc)
-		rawdb.WriteAccountSnapshot(diskdb, hashData([]byte("acc-2")), val)
-		rawdb.WriteStorageSnapshot(diskdb, hashData([]byte("acc-2")), hashData([]byte("b-key-1")), []byte("b-val-1"))
-		rawdb.WriteStorageSnapshot(diskdb, hashData([]byte("acc-2")), hashData([]byte("b-key-2")), []byte("b-val-2"))
-		rawdb.WriteStorageSnapshot(diskdb, hashData([]byte("acc-2")), hashData([]byte("b-key-3")), []byte("b-val-3"))
+		key := hashData([]byte("acc-2"))
+		rawdb.WriteAccountSnapshot(diskdb, key, val)
+		rawdb.WriteStorageSnapshot(diskdb, key, hashData([]byte("b-key-1")), []byte("b-val-1"))
+		rawdb.WriteStorageSnapshot(diskdb, key, hashData([]byte("b-key-2")), []byte("b-val-2"))
+		rawdb.WriteStorageSnapshot(diskdb, key, hashData([]byte("b-key-3")), []byte("b-val-3"))
 	}
 	root, _ := accTrie.Commit(nil)
 	t.Logf("root: %x", root)
@@ -495,7 +499,7 @@ func TestGenerateWithManyExtraAccounts(t *testing.T) {
 	var (
 		diskdb = memorydb.New()
 		triedb = trie.NewDatabase(diskdb)
-		stTrie = getStorageTrie(5, triedb)
+		stTrie = getStorageTrie(3, triedb)
 	)
 	accTrie, _ := trie.NewSecure(common.Hash{}, triedb)
 	{ // Account one in the trie
@@ -503,10 +507,11 @@ func TestGenerateWithManyExtraAccounts(t *testing.T) {
 		val, _ := rlp.EncodeToBytes(acc)
 		accTrie.Update([]byte("acc-1"), val) // 0x9250573b9c18c664139f3b6a7a8081b7d8f8916a8fcc5d94feec6c29f5fd4e9e
 		// Identical in the snap
-		rawdb.WriteAccountSnapshot(diskdb, hashData([]byte("acc-1")), val)
-		rawdb.WriteStorageSnapshot(diskdb, hashData([]byte("acc-1")), hashData([]byte("key-1")), []byte("val-1"))
-		rawdb.WriteStorageSnapshot(diskdb, hashData([]byte("acc-1")), hashData([]byte("key-2")), []byte("val-2"))
-		rawdb.WriteStorageSnapshot(diskdb, hashData([]byte("acc-1")), hashData([]byte("key-3")), []byte("val-3"))
+		key := hashData([]byte("acc-1"))
+		rawdb.WriteAccountSnapshot(diskdb, key, val)
+		rawdb.WriteStorageSnapshot(diskdb, key, hashData([]byte("key-1")), []byte("val-1"))
+		rawdb.WriteStorageSnapshot(diskdb, key, hashData([]byte("key-2")), []byte("val-2"))
+		rawdb.WriteStorageSnapshot(diskdb, key, hashData([]byte("key-3")), []byte("val-3"))
 	}
 	{ // 100 accounts exist only in snapshot
 		for i := 0; i < 100; i++ {
