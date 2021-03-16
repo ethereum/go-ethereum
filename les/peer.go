@@ -764,7 +764,7 @@ type clientPeer struct {
 	responseLock  sync.Mutex
 	responseCount uint64 // Counter to generate an unique id for request processing.
 
-	balance *vfs.NodeBalance
+	balance vfs.ConnectedBalance
 
 	// invalidLock is used for protecting invalidCount.
 	invalidLock  sync.RWMutex

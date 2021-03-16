@@ -107,17 +107,6 @@ type PriorityPool struct {
 	ccUpdateForced bool
 }
 
-// nodePriority interface provides current and estimated future priorities on demand
-type nodePriority interface {
-	// Priority should return the current priority of the node (higher is better)
-	Priority(cap uint64) int64
-	// EstMinPriority should return a lower estimate for the minimum of the node priority
-	// value starting from the current moment until the given time. If the priority goes
-	// under the returned estimate before the specified moment then it is the caller's
-	// responsibility to signal with updateFlag.
-	EstimatePriority(cap uint64, addBalance int64, future, bias time.Duration, update bool) int64
-}
-
 // ppNodeInfo is the internal node descriptor of PriorityPool
 type ppNodeInfo struct {
 	nodePriority               nodePriority
@@ -247,7 +236,7 @@ func (pp *PriorityPool) SetLimits(maxCount, maxCap uint64) {
 		updates = pp.finalizeChanges(true)
 	}
 	if inc {
-		updates = pp.tryActivate()
+		updates = append(updates, pp.tryActivate()...)
 	}
 }
 

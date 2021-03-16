@@ -52,10 +52,46 @@ func (p PriceFactors) timePrice(cap uint64) float64 {
 	return p.TimeFactor + float64(cap)*p.CapacityFactor/1000000
 }
 
-// NodeBalance keeps track of the positive and negative balances of a connected
+type (
+	// nodePriority interface provides current and estimated future priorities on demand
+	nodePriority interface {
+		// Priority should return the current priority of the node (higher is better)
+		Priority(cap uint64) int64
+		// EstMinPriority should return a lower estimate for the minimum of the node priority
+		// value starting from the current moment until the given time. If the priority goes
+		// under the returned estimate before the specified moment then it is the caller's
+		// responsibility to signal with updateFlag.
+		EstimatePriority(cap uint64, addBalance int64, future, bias time.Duration, update bool) int64
+	}
+
+	// ReadOnlyBalance provides read-only operations on the node balance
+	ReadOnlyBalance interface {
+		nodePriority
+		GetBalance() (uint64, uint64)
+		GetRawBalance() (utils.ExpiredValue, utils.ExpiredValue)
+		GetPriceFactors() (posFactor, negFactor PriceFactors)
+	}
+
+	// ConnectedBalance provides operations permitted on connected nodes (non-read-only
+	// operations are not permitted inside a BalanceOperation)
+	ConnectedBalance interface {
+		ReadOnlyBalance
+		SetPriceFactors(posFactor, negFactor PriceFactors)
+		RequestServed(cost uint64) uint64
+	}
+
+	// AtomicBalanceOperator provides operations permitted in an atomic BalanceOperation
+	AtomicBalanceOperator interface {
+		ReadOnlyBalance
+		AddBalance(amount int64) (uint64, uint64, error)
+		SetBalance(pos, neg uint64) error
+	}
+)
+
+// nodeBalance keeps track of the positive and negative balances of a connected
 // client and calculates actual and projected future priority values.
 // Implements nodePriority interface.
-type NodeBalance struct {
+type nodeBalance struct {
 	bt                               *BalanceTracker
 	lock                             sync.RWMutex
 	node                             *enode.Node
@@ -89,7 +125,7 @@ type balanceCallback struct {
 }
 
 // GetBalance returns the current positive and negative balance.
-func (n *NodeBalance) GetBalance() (uint64, uint64) {
+func (n *nodeBalance) GetBalance() (uint64, uint64) {
 	n.lock.Lock()
 	defer n.lock.Unlock()
 
@@ -100,7 +136,7 @@ func (n *NodeBalance) GetBalance() (uint64, uint64) {
 
 // GetRawBalance returns the current positive and negative balance
 // but in the raw(expired value) format.
-func (n *NodeBalance) GetRawBalance() (utils.ExpiredValue, utils.ExpiredValue) {
+func (n *nodeBalance) GetRawBalance() (utils.ExpiredValue, utils.ExpiredValue) {
 	n.lock.Lock()
 	defer n.lock.Unlock()
 
@@ -114,7 +150,7 @@ func (n *NodeBalance) GetRawBalance() (utils.ExpiredValue, utils.ExpiredValue) {
 // unchanged) while adding a negative amount higher than the current balance results in
 // zero balance.
 // Note: this function should run inside a NodeStateMachine operation
-func (n *NodeBalance) AddBalance(amount int64) (uint64, uint64, error) {
+func (n *nodeBalance) AddBalance(amount int64) (uint64, uint64, error) {
 	var (
 		err      error
 		old, new uint64
@@ -159,44 +195,43 @@ func (n *NodeBalance) AddBalance(amount int64) (uint64, uint64, error) {
 }
 
 // SetBalance sets the positive and negative balance to the given values
-func (n *NodeBalance) SetBalance(pos, neg uint64) error {
+// Note: this function should run inside a NodeStateMachine operation
+func (n *nodeBalance) SetBalance(pos, neg uint64) error {
 	if pos > maxBalance || neg > maxBalance {
 		return errBalanceOverflow
 	}
-	n.bt.ns.Operation(func() {
-		var (
-			callbacks   []func()
-			setPriority bool
-		)
-		n.bt.updateTotalBalance(n, func() bool {
-			now := n.bt.clock.Now()
-			n.updateBalance(now)
+	var (
+		callbacks   []func()
+		setPriority bool
+	)
+	n.bt.updateTotalBalance(n, func() bool {
+		now := n.bt.clock.Now()
+		n.updateBalance(now)
 
-			var pb, nb utils.ExpiredValue
-			pb.Add(int64(pos), n.bt.posExp.LogOffset(now))
-			nb.Add(int64(neg), n.bt.negExp.LogOffset(now))
-			n.balance.pos = pb
-			n.balance.neg = nb
-			callbacks = n.checkCallbacks(now)
-			setPriority = n.checkPriorityStatus()
-			n.storeBalance(true, true)
-			return true
-		})
-		for _, cb := range callbacks {
-			cb()
-		}
-		if n.setFlags {
-			if setPriority {
-				n.bt.ns.SetStateSub(n.node, n.bt.PriorityFlag, nodestate.Flags{}, 0)
-			}
-			n.signalPriorityUpdate()
-		}
+		var pb, nb utils.ExpiredValue
+		pb.Add(int64(pos), n.bt.posExp.LogOffset(now))
+		nb.Add(int64(neg), n.bt.negExp.LogOffset(now))
+		n.balance.pos = pb
+		n.balance.neg = nb
+		callbacks = n.checkCallbacks(now)
+		setPriority = n.checkPriorityStatus()
+		n.storeBalance(true, true)
+		return true
 	})
+	for _, cb := range callbacks {
+		cb()
+	}
+	if n.setFlags {
+		if setPriority {
+			n.bt.ns.SetStateSub(n.node, n.bt.PriorityFlag, nodestate.Flags{}, 0)
+		}
+		n.signalPriorityUpdate()
+	}
 	return nil
 }
 
 // RequestServed should be called after serving a request for the given peer
-func (n *NodeBalance) RequestServed(cost uint64) uint64 {
+func (n *nodeBalance) RequestServed(cost uint64) uint64 {
 	n.lock.Lock()
 	var callbacks []func()
 	defer func() {
@@ -244,7 +279,7 @@ func (n *NodeBalance) RequestServed(cost uint64) uint64 {
 }
 
 // Priority returns the actual priority based on the current balance
-func (n *NodeBalance) Priority(capacity uint64) int64 {
+func (n *nodeBalance) Priority(capacity uint64) int64 {
 	n.lock.Lock()
 	defer n.lock.Unlock()
 
@@ -257,7 +292,7 @@ func (n *NodeBalance) Priority(capacity uint64) int64 {
 // in the current session.
 // If update is true then a priority callback is added that turns UpdateFlag on and off
 // in case the priority goes below the estimated minimum.
-func (n *NodeBalance) EstimatePriority(capacity uint64, addBalance int64, future, bias time.Duration, update bool) int64 {
+func (n *nodeBalance) EstimatePriority(capacity uint64, addBalance int64, future, bias time.Duration, update bool) int64 {
 	n.lock.Lock()
 	defer n.lock.Unlock()
 
@@ -287,50 +322,17 @@ func (n *NodeBalance) EstimatePriority(capacity uint64, addBalance int64, future
 	}
 	pri := n.balanceToPriority(b, capacity)
 	if update {
-		n.addCallback(balanceCallbackUpdate, pri, n.signalPriorityUpdate)
+		// Note: always set the threshold to lower than the estimate in order to ensure
+		// that two nodes will not ping-pong update signals forever if both of them have
+		// zero estimated priority drop in the projected future
+		n.addCallback(balanceCallbackUpdate, pri-1, n.signalPriorityUpdate)
 	}
 	return pri
 }
 
-// PosBalanceMissing calculates the missing amount of positive balance in order to
-// connect at targetCapacity, stay connected for the given amount of time and then
-// still have a priority of targetPriority
-func (n *NodeBalance) PosBalanceMissing(targetPriority int64, targetCapacity uint64, after time.Duration) uint64 {
-	n.lock.Lock()
-	defer n.lock.Unlock()
-
-	now := n.bt.clock.Now()
-	if targetPriority < 0 {
-		timePrice := n.negFactor.timePrice(targetCapacity)
-		timeCost := uint64(float64(after) * timePrice)
-		negBalance := n.balance.neg.Value(n.bt.negExp.LogOffset(now))
-		if timeCost+negBalance < uint64(-targetPriority) {
-			return 0
-		}
-		if uint64(-targetPriority) > negBalance && timePrice > 1e-100 {
-			if negTime := time.Duration(float64(uint64(-targetPriority)-negBalance) / timePrice); negTime < after {
-				after -= negTime
-			} else {
-				after = 0
-			}
-		}
-		targetPriority = 0
-	}
-	timePrice := n.posFactor.timePrice(targetCapacity)
-	posRequired := uint64(float64(targetPriority)*float64(targetCapacity)+float64(after)*timePrice) + 1
-	if posRequired >= maxBalance {
-		return math.MaxUint64 // target not reachable
-	}
-	posBalance := n.balance.pos.Value(n.bt.posExp.LogOffset(now))
-	if posRequired > posBalance {
-		return posRequired - posBalance
-	}
-	return 0
-}
-
 // SetPriceFactors sets the price factors. TimeFactor is the price of a nanosecond of
 // connection while RequestFactor is the price of a request cost unit.
-func (n *NodeBalance) SetPriceFactors(posFactor, negFactor PriceFactors) {
+func (n *nodeBalance) SetPriceFactors(posFactor, negFactor PriceFactors) {
 	n.lock.Lock()
 	now := n.bt.clock.Now()
 	n.updateBalance(now)
@@ -347,7 +349,7 @@ func (n *NodeBalance) SetPriceFactors(posFactor, negFactor PriceFactors) {
 }
 
 // GetPriceFactors returns the price factors
-func (n *NodeBalance) GetPriceFactors() (posFactor, negFactor PriceFactors) {
+func (n *nodeBalance) GetPriceFactors() (posFactor, negFactor PriceFactors) {
 	n.lock.Lock()
 	defer n.lock.Unlock()
 
@@ -355,7 +357,7 @@ func (n *NodeBalance) GetPriceFactors() (posFactor, negFactor PriceFactors) {
 }
 
 // activate starts time/capacity cost deduction.
-func (n *NodeBalance) activate() {
+func (n *nodeBalance) activate() {
 	n.bt.updateTotalBalance(n, func() bool {
 		if n.active {
 			return false
@@ -367,7 +369,7 @@ func (n *NodeBalance) activate() {
 }
 
 // deactivate stops time/capacity cost deduction and saves the balances in the database
-func (n *NodeBalance) deactivate() {
+func (n *nodeBalance) deactivate() {
 	n.bt.updateTotalBalance(n, func() bool {
 		if !n.active {
 			return false
@@ -384,7 +386,7 @@ func (n *NodeBalance) deactivate() {
 }
 
 // updateBalance updates balance based on the time factor
-func (n *NodeBalance) updateBalance(now mclock.AbsTime) {
+func (n *nodeBalance) updateBalance(now mclock.AbsTime) {
 	if n.active && now > n.lastUpdate {
 		n.balance = n.reducedBalance(n.balance, n.lastUpdate, time.Duration(now-n.lastUpdate), n.capacity, 0)
 		n.lastUpdate = now
@@ -392,7 +394,7 @@ func (n *NodeBalance) updateBalance(now mclock.AbsTime) {
 }
 
 // storeBalance stores the positive and/or negative balance of the node in the database
-func (n *NodeBalance) storeBalance(pos, neg bool) {
+func (n *nodeBalance) storeBalance(pos, neg bool) {
 	if pos {
 		n.bt.storeBalance(n.node.ID().Bytes(), false, n.balance.pos)
 	}
@@ -406,7 +408,7 @@ func (n *NodeBalance) storeBalance(pos, neg bool) {
 // immediately.
 // Note: should be called while n.lock is held
 // Note 2: the callback function runs inside a NodeStateMachine operation
-func (n *NodeBalance) addCallback(id int, threshold int64, callback func()) {
+func (n *nodeBalance) addCallback(id int, threshold int64, callback func()) {
 	n.removeCallback(id)
 	idx := 0
 	for idx < n.callbackCount && threshold > n.callbacks[idx].threshold {
@@ -426,7 +428,7 @@ func (n *NodeBalance) addCallback(id int, threshold int64, callback func()) {
 
 // removeCallback removes the given callback and returns true if it was active
 // Note: should be called while n.lock is held
-func (n *NodeBalance) removeCallback(id int) bool {
+func (n *nodeBalance) removeCallback(id int) bool {
 	idx := n.callbackIndex[id]
 	if idx == -1 {
 		return false
@@ -443,7 +445,7 @@ func (n *NodeBalance) removeCallback(id int) bool {
 // checkCallbacks checks whether the threshold of any of the active callbacks
 // have been reached and returns triggered callbacks.
 // Note: checkCallbacks assumes that the balance has been recently updated.
-func (n *NodeBalance) checkCallbacks(now mclock.AbsTime) (callbacks []func()) {
+func (n *nodeBalance) checkCallbacks(now mclock.AbsTime) (callbacks []func()) {
 	if n.callbackCount == 0 || n.capacity == 0 {
 		return
 	}
@@ -459,7 +461,7 @@ func (n *NodeBalance) checkCallbacks(now mclock.AbsTime) (callbacks []func()) {
 
 // scheduleCheck sets up or updates a scheduled event to ensure that it will be called
 // again just after the next threshold has been reached.
-func (n *NodeBalance) scheduleCheck(now mclock.AbsTime) {
+func (n *nodeBalance) scheduleCheck(now mclock.AbsTime) {
 	if n.callbackCount != 0 {
 		d, ok := n.timeUntil(n.callbacks[n.callbackCount-1].threshold)
 		if !ok {
@@ -485,7 +487,7 @@ func (n *NodeBalance) scheduleCheck(now mclock.AbsTime) {
 }
 
 // updateAfter schedules a balance update and callback check in the future
-func (n *NodeBalance) updateAfter(dt time.Duration) {
+func (n *nodeBalance) updateAfter(dt time.Duration) {
 	if n.updateEvent == nil || n.updateEvent.Stop() {
 		if dt == 0 {
 			n.updateEvent = nil
@@ -513,7 +515,7 @@ func (n *NodeBalance) updateAfter(dt time.Duration) {
 
 // balanceExhausted should be called when the positive balance is exhausted (priority goes to zero/negative)
 // Note: this function should run inside a NodeStateMachine operation
-func (n *NodeBalance) balanceExhausted() {
+func (n *nodeBalance) balanceExhausted() {
 	n.lock.Lock()
 	n.storeBalance(true, false)
 	n.priority = false
@@ -526,7 +528,7 @@ func (n *NodeBalance) balanceExhausted() {
 // checkPriorityStatus checks whether the node has gained priority status and sets the priority
 // callback and flag if necessary. It assumes that the balance has been recently updated.
 // Note that the priority flag has to be set by the caller after the mutex has been released.
-func (n *NodeBalance) checkPriorityStatus() bool {
+func (n *nodeBalance) checkPriorityStatus() bool {
 	if !n.priority && !n.balance.pos.IsZero() {
 		n.priority = true
 		n.addCallback(balanceCallbackZero, 0, func() { n.balanceExhausted() })
@@ -537,7 +539,7 @@ func (n *NodeBalance) checkPriorityStatus() bool {
 
 // signalPriorityUpdate signals that the priority fell below the previous minimum estimate
 // Note: this function should run inside a NodeStateMachine operation
-func (n *NodeBalance) signalPriorityUpdate() {
+func (n *nodeBalance) signalPriorityUpdate() {
 	n.bt.ns.SetStateSub(n.node, n.bt.UpdateFlag, nodestate.Flags{}, 0)
 	n.bt.ns.SetStateSub(n.node, nodestate.Flags{}, n.bt.UpdateFlag, 0)
 }
@@ -545,7 +547,7 @@ func (n *NodeBalance) signalPriorityUpdate() {
 // setCapacity updates the capacity value used for priority calculation
 // Note: capacity should never be zero
 // Note 2: this function should run inside a NodeStateMachine operation
-func (n *NodeBalance) setCapacity(capacity uint64) {
+func (n *nodeBalance) setCapacity(capacity uint64) {
 	n.lock.Lock()
 	now := n.bt.clock.Now()
 	n.updateBalance(now)
@@ -560,7 +562,7 @@ func (n *NodeBalance) setCapacity(capacity uint64) {
 // balanceToPriority converts a balance to a priority value. Lower priority means
 // first to disconnect. Positive balance translates to positive priority. If positive
 // balance is zero then negative balance translates to a negative priority.
-func (n *NodeBalance) balanceToPriority(b balance, capacity uint64) int64 {
+func (n *nodeBalance) balanceToPriority(b balance, capacity uint64) int64 {
 	if !b.pos.IsZero() {
 		return int64(b.pos.Value(n.bt.posExp.LogOffset(n.bt.clock.Now())) / capacity)
 	}
@@ -569,7 +571,7 @@ func (n *NodeBalance) balanceToPriority(b balance, capacity uint64) int64 {
 
 // reducedBalance estimates the reduced balance at a given time in the fututre based
 // on the given balance, the time factor and an estimated average request cost per time ratio
-func (n *NodeBalance) reducedBalance(b balance, start mclock.AbsTime, dt time.Duration, capacity uint64, avgReqCost float64) balance {
+func (n *nodeBalance) reducedBalance(b balance, start mclock.AbsTime, dt time.Duration, capacity uint64, avgReqCost float64) balance {
 	// since the costs are applied continuously during the dt time period we calculate
 	// the expiration offset at the middle of the period
 	at := start + mclock.AbsTime(dt/2)
@@ -596,7 +598,7 @@ func (n *NodeBalance) reducedBalance(b balance, start mclock.AbsTime, dt time.Du
 // reached then (0, false) is returned.
 // Note: the function assumes that the balance has been recently updated and
 // calculates the time starting from the last update.
-func (n *NodeBalance) timeUntil(priority int64) (time.Duration, bool) {
+func (n *nodeBalance) timeUntil(priority int64) (time.Duration, bool) {
 	now := n.bt.clock.Now()
 	var dt float64
 	if !n.balance.pos.IsZero() {

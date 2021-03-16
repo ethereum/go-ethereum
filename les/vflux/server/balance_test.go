@@ -72,14 +72,14 @@ func (btc balanceTestClient) FreeClientId() string {
 	return ""
 }
 
-func (b *balanceTestSetup) newNode(capacity uint64) *NodeBalance {
+func (b *balanceTestSetup) newNode(capacity uint64) *nodeBalance {
 	node := enode.SignNull(&enr.Record{}, enode.ID{})
 	b.ns.SetState(node, testFlag, nodestate.Flags{}, 0)
 	b.ns.SetField(node, btTestSetup.clientField, balanceTestClient{})
 	if capacity != 0 {
 		b.ns.SetField(node, ppTestSetup.CapacityField, capacity)
 	}
-	n, _ := b.ns.GetField(node, btTestSetup.BalanceField).(*NodeBalance)
+	n, _ := b.ns.GetField(node, btTestSetup.BalanceField).(*nodeBalance)
 	return n
 }
 
@@ -291,40 +291,11 @@ func TestEstimatedPriority(t *testing.T) {
 	}
 }
 
-func TestPosBalanceMissing(t *testing.T) {
-	b := newBalanceTestSetup()
-	defer b.stop()
-	node := b.newNode(1000)
-	node.SetPriceFactors(PriceFactors{1, 0, 1}, PriceFactors{1, 0, 1})
-
-	b.ns.SetField(node.node, ppTestSetup.CapacityField, uint64(1))
-	var inputs = []struct {
-		pos, neg uint64
-		priority int64
-		cap      uint64
-		after    time.Duration
-		expect   uint64
-	}{
-		{uint64(time.Second * 2), 0, 0, 1, time.Second, 0},
-		{uint64(time.Second * 2), 0, 0, 1, 2 * time.Second, 1},
-		{uint64(time.Second * 2), 0, int64(time.Second), 1, 2 * time.Second, uint64(time.Second) + 1},
-		{0, 0, int64(time.Second), 1, time.Second, uint64(2*time.Second) + 1},
-		{0, 0, -int64(time.Second), 1, time.Second, 1},
-	}
-	for _, i := range inputs {
-		node.SetBalance(i.pos, i.neg)
-		got := node.PosBalanceMissing(i.priority, i.cap, i.after)
-		if got != i.expect {
-			t.Fatalf("Missing budget mismatch, want %v, got %v", i.expect, got)
-		}
-	}
-}
-
 func TestPostiveBalanceCounting(t *testing.T) {
 	b := newBalanceTestSetup()
 	defer b.stop()
 
-	var nodes []*NodeBalance
+	var nodes []*nodeBalance
 	for i := 0; i < 100; i += 1 {
 		node := b.newNode(1000000)
 		node.SetPriceFactors(PriceFactors{1, 0, 1}, PriceFactors{1, 0, 1})
@@ -431,7 +402,7 @@ func TestBalancePersistence(t *testing.T) {
 		ns:    ns,
 		bt:    bt,
 	}
-	var nb *NodeBalance
+	var nb *nodeBalance
 	exp := func(expPos, expNeg uint64) {
 		pos, neg := nb.GetBalance()
 		if pos != expPos {

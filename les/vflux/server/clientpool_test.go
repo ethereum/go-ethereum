@@ -101,14 +101,14 @@ func (i *poolTestPeer) Disconnect() {
 }
 
 func getBalance(pool *ClientPool, p *poolTestPeer) (pos, neg uint64) {
-	pool.BalanceOperation(p.node.ID(), p.FreeClientId(), func(nb *NodeBalance) {
+	pool.BalanceOperation(p.node.ID(), p.FreeClientId(), func(nb AtomicBalanceOperator) {
 		pos, neg = nb.GetBalance()
 	})
 	return
 }
 
 func addBalance(pool *ClientPool, id enode.ID, amount int64) {
-	pool.BalanceOperation(id, "", func(nb *NodeBalance) {
+	pool.BalanceOperation(id, "", func(nb AtomicBalanceOperator) {
 		nb.AddBalance(amount)
 	})
 }

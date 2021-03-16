@@ -41,14 +41,14 @@ var (
 )
 
 var (
-	errNotConnected    = errors.New("client not connected")
-	errNoPriority      = errors.New("priority too low to raise capacity")
-	errCantFindMaximum = errors.New("Unable to find maximum allowed capacity")
+	ErrNotConnected    = errors.New("client not connected")
+	ErrNoPriority      = errors.New("priority too low to raise capacity")
+	ErrCantFindMaximum = errors.New("Unable to find maximum allowed capacity")
 )
 
 func init() {
 	btSetup.Connect(clientField, ppSetup.CapacityField)
-	ppSetup.Connect(btSetup.BalanceField, btSetup.UpdateFlag) // NodeBalance implements nodePriority
+	ppSetup.Connect(btSetup.BalanceField, btSetup.UpdateFlag) // nodeBalance implements nodePriority
 }
 
 // ClientPool implements a client database that assigns a priority to each client
@@ -144,7 +144,7 @@ func NewClientPool(balanceDb ethdb.KeyValueStore, minCap uint64, connectedBias t
 		if newValue != nil {
 			ns.SetStateSub(node, ppSetup.InactiveFlag, nodestate.Flags{}, 0)
 			cp.lock.RLock()
-			newValue.(*NodeBalance).SetPriceFactors(cp.defaultPosFactors, cp.defaultNegFactors)
+			newValue.(*nodeBalance).SetPriceFactors(cp.defaultPosFactors, cp.defaultNegFactors)
 			cp.lock.RUnlock()
 		}
 	})
@@ -194,9 +194,9 @@ func (cp *ClientPool) Stop() {
 // Register registers the peer into the client pool. If the peer has insufficient
 // priority and remains inactive for longer than the allowed timeout then it will be
 // disconnected by calling the Disconnect function of the clientPeer interface.
-func (cp *ClientPool) Register(peer clientPeer) *NodeBalance {
+func (cp *ClientPool) Register(peer clientPeer) ConnectedBalance {
 	cp.ns.SetField(peer.Node(), clientField, clientPeerInstance{peer})
-	balance, _ := cp.ns.GetField(peer.Node(), btSetup.BalanceField).(*NodeBalance)
+	balance, _ := cp.ns.GetField(peer.Node(), btSetup.BalanceField).(*nodeBalance)
 	return balance
 }
 
@@ -232,9 +232,9 @@ func (cp *ClientPool) SetCapacity(node *enode.Node, reqCap uint64, bias time.Dur
 	cp.lock.RUnlock()
 
 	cp.ns.Operation(func() {
-		balance, _ := cp.ns.GetField(node, btSetup.BalanceField).(*NodeBalance)
+		balance, _ := cp.ns.GetField(node, btSetup.BalanceField).(*nodeBalance)
 		if balance == nil {
-			err = errNotConnected
+			err = ErrNotConnected
 			return
 		}
 		capacity, _ = cp.ns.GetField(node, ppSetup.CapacityField).(uint64)
@@ -250,7 +250,7 @@ func (cp *ClientPool) SetCapacity(node *enode.Node, reqCap uint64, bias time.Dur
 		}
 		if reqCap > cp.minCap {
 			if cp.ns.GetState(node).HasNone(btSetup.PriorityFlag) && reqCap > cp.minCap {
-				err = errNoPriority
+				err = ErrNoPriority
 				return
 			}
 		}
@@ -292,8 +292,8 @@ func (cp *ClientPool) SetCapacity(node *enode.Node, reqCap uint64, bias time.Dur
 			}
 		}
 		// we should be able to find the maximum allowed capacity in a few iterations
-		log.Error("Unable to find maximum allowed capacity")
-		err = errCantFindMaximum
+		log.Crit("Unable to find maximum allowed capacity")
+		err = ErrCantFindMaximum
 	})
 	return
 }
@@ -319,7 +319,7 @@ func (cp *ClientPool) serveCapQuery(id enode.ID, freeID string, data []byte) []b
 	// use CapacityCurve to answer request for multiple newly bought token amounts
 	curve := cp.GetCapacityCurve().Exclude(id)
 	result := make(vflux.CapacityQueryReply, len(req.AddTokens))
-	cp.BalanceOperation(id, freeID, func(balance *NodeBalance) {
+	cp.BalanceOperation(id, freeID, func(balance AtomicBalanceOperator) {
 		pb, _ := balance.GetBalance()
 		for i, addTokens := range req.AddTokens {
 			add := addTokens.Int64()
