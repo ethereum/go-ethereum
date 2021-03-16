@@ -287,9 +287,10 @@ func (dl *diskLayer) proveRange(root common.Hash, tr *trie.Trie, prefix []byte, 
 	}
 	// Range prover says the trie still has some elements on the right side but
 	// the database is exhausted, then data loss is detected.
-	if cont && len(keys) < max {
-		return &proofResult{keys: keys, vals: vals, cont: false, proofErr: errors.New("data loss in the state range")}, nil
-	}
+	// TODO: Investigate if this is needed (the assumption is that it's not needed)
+	//if cont && len(keys) < max {
+	//return &proofResult{keys: keys, vals: vals, cont: true, proofErr: nil}, nil
+	//}
 	return &proofResult{keys: keys, vals: vals, cont: cont, proofErr: nil}, nil
 }
 
