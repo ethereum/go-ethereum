@@ -240,6 +240,7 @@ func (dl *diskLayer) proveRange(root common.Hash, prefix []byte, kind string, or
 	for iter.Next() {
 		key := iter.Key()
 		if len(key) != len(prefix)+common.HashLength {
+			// TODO! Why is this check neeed?
 			panic("remove this panic later on")
 		}
 		if len(keys) == max {
@@ -384,7 +385,7 @@ func (dl *diskLayer) genRange(root common.Hash, prefix []byte, kind string, orig
 		for len(kvkeys) > 0 {
 			if cmp := bytes.Compare(kvkeys[0], iter.Key); cmp < 0 {
 				// delete the key
-				if err := onState(kvkeys[0], kvvals[0], false, true); err != nil {
+				if err := onState(kvkeys[0], nil, false, true); err != nil {
 					return false, nil, err
 				}
 				kvkeys = kvkeys[1:]
@@ -411,8 +412,8 @@ func (dl *diskLayer) genRange(root common.Hash, prefix []byte, kind string, orig
 		return false, nil, iter.Err
 	}
 	// Delete all stale snapshot states remaining
-	for i := 0; i < len(kvkeys); i++ {
-		if err := onState(kvkeys[i], kvvals[i], false, true); err != nil {
+	for _, key := range kvkeys {
+		if err := onState(key, nil, false, true); err != nil {
 			return false, nil, err
 		}
 		deleted += 1
@@ -480,6 +481,12 @@ func (dl *diskLayer) generate(stats *generatorStats) {
 		accountHash := common.BytesToHash(key)
 		if delete {
 			rawdb.DeleteAccountSnapshot(batch, accountHash)
+			// We also  need to ensure that any previous snapshot
+			prefix := append(rawdb.SnapshotStoragePrefix, accountHash.Bytes()...)
+			keyLen := len(rawdb.SnapshotStoragePrefix) + 2*common.HashLength
+			if err := wipeKeyRange(dl.diskdb, "storage", prefix, nil, nil, keyLen, snapWipedStorageMeter, false); err != nil {
+				return err
+			}
 			return nil
 		}
 		// Retrieve the current account and flatten it into the internal format

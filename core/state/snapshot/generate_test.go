@@ -17,6 +17,7 @@
 package snapshot
 
 import (
+	"fmt"
 	"github.com/ethereum/go-ethereum/log"
 	"math/big"
 	"os"
@@ -425,4 +426,65 @@ func TestGenerateCorruptStorageTrie(t *testing.T) {
 	stop := make(chan *generatorStats)
 	snap.genAbort <- stop
 	<-stop
+}
+
+func getStorageTrie(n int, triedb *trie.Database) *trie.SecureTrie {
+	stTrie, _ := trie.NewSecure(common.Hash{}, triedb)
+	for i := 0; i < n; i++ {
+		k := fmt.Sprintf("key-%d", i)
+		v := fmt.Sprintf("val-%d", i)
+		stTrie.Update([]byte(k), []byte(v))
+	}
+	stTrie.Commit(nil)
+	return stTrie
+}
+
+// Tests that snapshot generation when an extra account with storage exists in the snap state.
+func TestGenerateWithExtraAccounts(t *testing.T) {
+
+	var (
+		diskdb = memorydb.New()
+		triedb = trie.NewDatabase(diskdb)
+		stTrie = getStorageTrie(5, triedb)
+	)
+	accTrie, _ := trie.NewSecure(common.Hash{}, triedb)
+	{ // Account one in the trie
+		acc := &Account{Balance: big.NewInt(1), Root: stTrie.Hash().Bytes(), CodeHash: emptyCode.Bytes()}
+		val, _ := rlp.EncodeToBytes(acc)
+		accTrie.Update([]byte("acc-1"), val) // 0x9250573b9c18c664139f3b6a7a8081b7d8f8916a8fcc5d94feec6c29f5fd4e9e
+		// Identical in the snap
+		rawdb.WriteAccountSnapshot(diskdb, hashData([]byte("acc-1")), val)
+		rawdb.WriteStorageSnapshot(diskdb, hashData([]byte("acc-1")), hashData([]byte("key-1")), []byte("val-1"))
+		rawdb.WriteStorageSnapshot(diskdb, hashData([]byte("acc-1")), hashData([]byte("key-2")), []byte("val-2"))
+		rawdb.WriteStorageSnapshot(diskdb, hashData([]byte("acc-1")), hashData([]byte("key-3")), []byte("val-3"))
+	}
+	{ // Account two exists only in the snapshot
+		acc := &Account{Balance: big.NewInt(1), Root: stTrie.Hash().Bytes(), CodeHash: emptyCode.Bytes()}
+		val, _ := rlp.EncodeToBytes(acc)
+		rawdb.WriteAccountSnapshot(diskdb, hashData([]byte("acc-2")), val)
+		rawdb.WriteStorageSnapshot(diskdb, hashData([]byte("acc-2")), hashData([]byte("b-key-1")), []byte("b-val-1"))
+		rawdb.WriteStorageSnapshot(diskdb, hashData([]byte("acc-2")), hashData([]byte("b-key-2")), []byte("b-val-2"))
+		rawdb.WriteStorageSnapshot(diskdb, hashData([]byte("acc-2")), hashData([]byte("b-key-3")), []byte("b-val-3"))
+	}
+	root, _ := accTrie.Commit(nil)
+	t.Logf("root: %x", root)
+	triedb.Commit(root, false, nil)
+
+	snap := generateSnapshot(diskdb, triedb, 16, root)
+	select {
+	case <-snap.genPending:
+		// Snapshot generation succeeded
+
+	case <-time.After(250 * time.Millisecond):
+		t.Errorf("Snapshot generation failed")
+	}
+	checkSnapRoot(t, snap, root)
+	// Signal abortion to the generator and wait for it to tear down
+	stop := make(chan *generatorStats)
+	snap.genAbort <- stop
+	<-stop
+	// If we now inspect the snap db, there should exist no extraneous storage items
+	if data := rawdb.ReadStorageSnapshot(diskdb, hashData([]byte("acc-2")), hashData([]byte("b-key-1"))); data != nil {
+		t.Fatalf("expected slot to be removed, got %v", string(data))
+	}
 }
