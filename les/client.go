@@ -73,8 +73,9 @@ type LightEthereum struct {
 	accountManager *accounts.Manager
 	netRPCService  *ethapi.PublicNetAPI
 
-	p2pServer *p2p.Server
-	p2pConfig *p2p.Config
+	p2pServer  *p2p.Server
+	p2pConfig  *p2p.Config
+	udpEnabled bool
 }
 
 // New creates an instance of the light client.
@@ -113,10 +114,11 @@ func New(stack *node.Node, config *ethconfig.Config) (*LightEthereum, error) {
 		bloomIndexer:   core.NewBloomIndexer(chainDb, params.BloomBitsBlocksClient, params.HelperTrieConfirmations),
 		p2pServer:      stack.Server(),
 		p2pConfig:      &stack.Config().P2P,
+		udpEnabled:     stack.Config().P2P.DiscoveryV5,
 	}
 
 	var prenegQuery vfc.QueryFunc
-	if leth.p2pServer.DiscV5 != nil {
+	if leth.udpEnabled {
 		prenegQuery = leth.prenegQuery
 	}
 	leth.serverPool, leth.serverPoolIterator = vfc.NewServerPool(lesDb, []byte("serverpool:"), time.Second, prenegQuery, &mclock.System{}, config.UltraLightServers, requestList)
@@ -198,7 +200,7 @@ func New(stack *node.Node, config *ethconfig.Config) (*LightEthereum, error) {
 
 // VfluxRequest sends a batch of requests to the given node through discv5 UDP TalkRequest and returns the responses
 func (s *LightEthereum) VfluxRequest(n *enode.Node, reqs vflux.Requests) vflux.Replies {
-	if s.p2pServer.DiscV5 == nil {
+	if !s.udpEnabled {
 		return nil
 	}
 	reqsEnc, _ := rlp.EncodeToBytes(&reqs)
@@ -215,7 +217,7 @@ func (s *LightEthereum) VfluxRequest(n *enode.Node, reqs vflux.Requests) vflux.R
 func (s *LightEthereum) vfxVersion(n *enode.Node) uint {
 	if n.Seq() == 0 {
 		var err error
-		if s.p2pServer.DiscV5 == nil {
+		if !s.udpEnabled {
 			return 0
 		}
 		if n, err = s.p2pServer.DiscV5.RequestENR(n); n != nil && err == nil && n.Seq() != 0 {
@@ -346,7 +348,11 @@ func (s *LightEthereum) Protocols() []p2p.Protocol {
 func (s *LightEthereum) Start() error {
 	log.Warn("Light client mode is an experimental feature")
 
-	discovery, err := s.setupDiscovery(s.p2pConfig)
+	if s.udpEnabled && s.p2pServer.DiscV5 == nil {
+		s.udpEnabled = false
+		log.Error("Discovery v5 is not initialized")
+	}
+	discovery, err := s.setupDiscovery()
 	if err != nil {
 		return err
 	}
