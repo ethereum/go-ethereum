@@ -499,17 +499,18 @@ func (dl *diskLayer) generate(stats *generatorStats) {
 		if err := rlp.DecodeBytes(val, &acc); err != nil {
 			log.Crit("Invalid account encountered during snapshot creation", "err", err)
 		}
-		data := SlimAccountRLP(acc.Nonce, acc.Balance, acc.Root, acc.CodeHash)
-
 		// If the account is not yet in-progress, write it out
 		if accMarker == nil || !bytes.Equal(accountHash[:], accMarker) {
-			if write {
+			dataLen := len(val) // Approximate size, saves us a round of RLP-encoding
+			if !write {
+				snapRecoveredAccountMeter.Mark(1)
+			} else {
+				data := SlimAccountRLP(acc.Nonce, acc.Balance, acc.Root, acc.CodeHash)
+				dataLen = len(data)
 				rawdb.WriteAccountSnapshot(batch, accountHash, data)
 				snapGeneratedAccountMeter.Mark(1)
-			} else {
-				snapRecoveredAccountMeter.Mark(1)
 			}
-			stats.storage += common.StorageSize(1 + common.HashLength + len(data))
+			stats.storage += common.StorageSize(1 + common.HashLength + dataLen)
 			stats.accounts++
 		}
 		// If we've exceeded our batch allowance or termination was requested, flush to disk
@@ -553,8 +554,7 @@ func (dl *diskLayer) generate(stats *generatorStats) {
 				if exhausted {
 					break
 				}
-				storeOrigin = increseKey(last)
-				if storeOrigin == nil {
+				if storeOrigin = increaseKey(last); storeOrigin == nil {
 					break // special case, the last is 0xffffffff...fff
 				}
 			}
@@ -590,8 +590,7 @@ func (dl *diskLayer) generate(stats *generatorStats) {
 		if exhausted {
 			break
 		}
-		accOrigin = increseKey(last)
-		if accOrigin == nil {
+		if accOrigin = increaseKey(last); accOrigin == nil {
 			break // special case, the last is 0xffffffff...fff
 		}
 		accountRange = accountCheckRange
@@ -622,9 +621,9 @@ func (dl *diskLayer) generate(stats *generatorStats) {
 	abort <- nil
 }
 
-// increseKey increase the input key by one bit. Return nil if the entire
+// increaseKey increase the input key by one bit. Return nil if the entire
 // addition operation overflows,
-func increseKey(key []byte) []byte {
+func increaseKey(key []byte) []byte {
 	for i := len(key) - 1; i >= 0; i-- {
 		key[i]++
 		if key[i] != 0x0 {
