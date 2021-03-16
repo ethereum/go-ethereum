@@ -18,9 +18,7 @@ package snapshot
 
 import (
 	"fmt"
-	"github.com/ethereum/go-ethereum/log"
 	"math/big"
-	"os"
 	"testing"
 	"time"
 
@@ -170,88 +168,108 @@ func checkSnapRoot(t *testing.T, snap *diskLayer, trieRoot common.Hash) {
 	}
 }
 
+type testHelper struct {
+	diskdb  *memorydb.Database
+	triedb  *trie.Database
+	accTrie *trie.SecureTrie
+}
+
+func newHelper() *testHelper {
+	diskdb := memorydb.New()
+	triedb := trie.NewDatabase(diskdb)
+	accTrie, _ := trie.NewSecure(common.Hash{}, triedb)
+	return &testHelper{
+		diskdb:  diskdb,
+		triedb:  triedb,
+		accTrie: accTrie,
+	}
+}
+
+// addAccount adds an account to the trie and snapshot, and return t
+func (t *testHelper) addAccount(accPreKey string, acc *Account) {
+	val, _ := rlp.EncodeToBytes(acc)
+	// Add to trie
+	t.accTrie.Update([]byte(accPreKey), val)
+	key := hashData([]byte(accPreKey))
+	// Add account to snapshot
+	rawdb.WriteAccountSnapshot(t.diskdb, key, val)
+}
+
+func (t *testHelper) addSnapStorage(accPreKey string, slotKeys []string, slotVals []string) {
+	key := hashData([]byte(accPreKey))
+	// Add any storage slots
+	for i, sKey := range slotKeys {
+		sVal := []byte(slotVals[i])
+		rawdb.WriteStorageSnapshot(t.diskdb, key, hashData([]byte(sKey)), sVal)
+	}
+}
+
+func (t *testHelper) writeSnapAccount(accPreKey string, acc *Account) {
+	val, _ := rlp.EncodeToBytes(acc)
+	key := hashData([]byte(accPreKey))
+	rawdb.WriteAccountSnapshot(t.diskdb, key, val)
+}
+
+func (t *testHelper) makeStorageTrie(keys []string, values []string) []byte {
+	stTrie, _ := trie.NewSecure(common.Hash{}, t.triedb)
+	for i, k := range keys {
+		stTrie.Update([]byte(k), []byte(values[i]))
+
+	}
+	root, _ := stTrie.Commit(nil)
+	return root.Bytes()
+}
+
+func (t *testHelper) Generate() (common.Hash, *diskLayer) {
+	root, _ := t.accTrie.Commit(nil)
+	t.triedb.Commit(root, false, nil)
+	snap := generateSnapshot(t.diskdb, t.triedb, 16, root)
+	return root, snap
+}
+
 // Tests that snapshot generation with existent flat state, where the flat state contains
 // some errors:
 // - the contract with empty storage root but has storage entries in the disk
 // - the contract(non-empty storage) misses some storage slots
 // - the contract(non-empty storage) has wrong storage slots
 func TestGenerateExistentStateWithWrongStorage(t *testing.T) {
-	if false {
-		log.Root().SetHandler(log.LvlFilterHandler(log.LvlTrace, log.StreamHandler(os.Stderr, log.TerminalFormat(true))))
-	}
+	//log.Root().SetHandler(log.LvlFilterHandler(log.LvlTrace, log.StreamHandler(os.Stderr, log.TerminalFormat(true))))
 
-	// We can't use statedb to make a test trie (circular dependency), so make
-	// a fake one manually. We're going with a small account trie of 3 accounts,
-	// two of which also has the same 3-slot storage trie attached.
-	var (
-		diskdb = memorydb.New()
-		triedb = trie.NewDatabase(diskdb)
-	)
-	stTrie, _ := trie.NewSecure(common.Hash{}, triedb)
-	stTrie.Update([]byte("key-1"), []byte("val-1"))
-	stTrie.Update([]byte("key-2"), []byte("val-2"))
-	stTrie.Update([]byte("key-3"), []byte("val-3"))
-	stTrie.Commit(nil)
+	helper := newHelper()
+	stRoot := helper.makeStorageTrie([]string{"key-1", "key-2", "key-3"}, []string{"val-1", "val-2", "val-3"})
 
-	accTrie, _ := trie.NewSecure(common.Hash{}, triedb)
+	// Account one, miss storage slots in the end(key-3)
+	helper.addAccount("acc-1", &Account{Balance: big.NewInt(1), Root: stRoot, CodeHash: emptyCode.Bytes()})
+	helper.addSnapStorage("acc-1", []string{"key-1", "key-2"}, []string{"val-1", "val-2"})
 
-	{ // Account one, miss storage slots in the end(key-3)
-		acc := &Account{Balance: big.NewInt(1), Root: stTrie.Hash().Bytes(), CodeHash: emptyCode.Bytes()}
-		val, _ := rlp.EncodeToBytes(acc)
-		accTrie.Update([]byte("acc-1"), val)
-		rawdb.WriteAccountSnapshot(diskdb, hashData([]byte("acc-1")), val)
-		rawdb.WriteStorageSnapshot(diskdb, hashData([]byte("acc-1")), hashData([]byte("key-1")), []byte("val-1"))
-		rawdb.WriteStorageSnapshot(diskdb, hashData([]byte("acc-1")), hashData([]byte("key-2")), []byte("val-2"))
-	}
-	{ // Account two, miss storage slots in the beginning(key-1)
-		acc := &Account{Balance: big.NewInt(1), Root: stTrie.Hash().Bytes(), CodeHash: emptyCode.Bytes()}
-		val, _ := rlp.EncodeToBytes(acc)
-		accTrie.Update([]byte("acc-2"), val)
-		rawdb.WriteAccountSnapshot(diskdb, hashData([]byte("acc-2")), val)
-		rawdb.WriteStorageSnapshot(diskdb, hashData([]byte("acc-2")), hashData([]byte("key-2")), []byte("val-2"))
-		rawdb.WriteStorageSnapshot(diskdb, hashData([]byte("acc-2")), hashData([]byte("key-3")), []byte("val-3"))
-	}
-	{ // Account three
-		// The storage root is emptyHash, but the flat db has some storage values. This can happen
-		// if the storage was unset during sync
-		acc := &Account{Balance: big.NewInt(2), Root: emptyRoot.Bytes(), CodeHash: emptyCode.Bytes()}
-		val, _ := rlp.EncodeToBytes(acc)
-		accTrie.Update([]byte("acc-3"), val)
-		diskdb.Put(hashData([]byte("acc-3")).Bytes(), val)
-		rawdb.WriteAccountSnapshot(diskdb, hashData([]byte("acc-3")), val)
-		rawdb.WriteStorageSnapshot(diskdb, hashData([]byte("acc-3")), hashData([]byte("key-1")), []byte("val-1"))
-	}
+	// Account two, miss storage slots in the beginning(key-1)
+	helper.addAccount("acc-2", &Account{Balance: big.NewInt(2), Root: stRoot, CodeHash: emptyCode.Bytes()})
+	helper.addSnapStorage("acc-2", []string{"key-2", "key-3"}, []string{"val-2", "val-3"})
 
-	{ // Account four
-		// This account changed codehash
-		acc := &Account{Balance: big.NewInt(3), Root: stTrie.Hash().Bytes(), CodeHash: emptyCode.Bytes()}
-		val, _ := rlp.EncodeToBytes(acc)
-		accTrie.Update([]byte("acc-4"), val)
+	// Account three
+	// The storage root is emptyHash, but the flat db has some storage values. This can happen
+	// if the storage was unset during sync
+	helper.addAccount("acc-3", &Account{Balance: big.NewInt(2), Root: emptyRoot.Bytes(), CodeHash: emptyCode.Bytes()})
+	helper.addSnapStorage("acc-3", []string{"key-1"}, []string{"val-1"})
+
+	// Account four has a modified codehash
+	{
+		acc := &Account{Balance: big.NewInt(3), Root: stRoot, CodeHash: emptyCode.Bytes()}
+		helper.addAccount("acc-4", acc)
+		helper.addSnapStorage("acc-4", []string{"key-1", "key-2", "key-3"}, []string{"val-1", "val-2", "val-3"})
+		// Overwrite the codehash in the snapdata
 		acc.CodeHash = hashData([]byte("codez")).Bytes()
-		val, _ = rlp.EncodeToBytes(acc)
-		rawdb.WriteAccountSnapshot(diskdb, hashData([]byte("acc-4")), val)
-		rawdb.WriteStorageSnapshot(diskdb, hashData([]byte("acc-4")), hashData([]byte("key-1")), []byte("val-1"))
-		rawdb.WriteStorageSnapshot(diskdb, hashData([]byte("acc-4")), hashData([]byte("key-2")), []byte("val-2"))
-		rawdb.WriteStorageSnapshot(diskdb, hashData([]byte("acc-4")), hashData([]byte("key-3")), []byte("val-3"))
+		helper.writeSnapAccount("acc-4", acc)
 	}
 
-	{ // Account five
-		// This account has the wrong storage slot - they've been rotated.
-		// This test that the update-or-replace check works
-		acc := &Account{Balance: big.NewInt(3), Root: stTrie.Hash().Bytes(), CodeHash: emptyCode.Bytes()}
-		val, _ := rlp.EncodeToBytes(acc)
-		accTrie.Update([]byte("acc-5"), val)
-		rawdb.WriteAccountSnapshot(diskdb, hashData([]byte("acc-5")), val)
-		rawdb.WriteStorageSnapshot(diskdb, hashData([]byte("acc-5")), hashData([]byte("key-1")), []byte("val-2"))
-		rawdb.WriteStorageSnapshot(diskdb, hashData([]byte("acc-5")), hashData([]byte("key-2")), []byte("val-3"))
-		rawdb.WriteStorageSnapshot(diskdb, hashData([]byte("acc-5")), hashData([]byte("key-3")), []byte("val-1"))
-	}
+	// Account 5 has wrong storage slot values - they've been rotated.
+	// This test that the update-or-replace check works
+	helper.addAccount("acc-5", &Account{Balance: big.NewInt(3), Root: stRoot, CodeHash: emptyCode.Bytes()})
+	helper.addSnapStorage("acc-5", []string{"key-1", "key-2", "key-3"}, []string{"val-2", "val-3", "val-1"})
 
-	root, _ := accTrie.Commit(nil) // Root: 0xe3712f1a226f3782caca78ca770ccc19ee000552813a9f59d479f8611db9b1fd
-	t.Logf("Root: %#x\n", root)
-	triedb.Commit(root, false, nil)
+	root, snap := helper.Generate()
+	t.Logf("Root: %#x\n", root) // Root: 0x3a97ece15e2539ab3524783c37ca153a62e28faba76a752e826da24a9020d44f
 
-	snap := generateSnapshot(diskdb, triedb, 16, root)
 	select {
 	case <-snap.genPending:
 		// Snapshot generation succeeded
