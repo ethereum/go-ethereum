@@ -229,17 +229,21 @@ func (result *proofResult) forEach(callback func(key []byte, val []byte) error) 
 // the error will be returned to abort the entire procedure.
 func (dl *diskLayer) proveRange(root common.Hash, tr *trie.Trie, prefix []byte, kind string, origin []byte, max int, valueConvertFn func([]byte) ([]byte, error)) (*proofResult, error) {
 	var (
-		keys  [][]byte
-		vals  [][]byte
-		proof = rawdb.NewMemoryDatabase()
+		keys    [][]byte
+		vals    [][]byte
+		proof   = rawdb.NewMemoryDatabase()
+		aborted = false
 	)
 	iter := dl.diskdb.NewIterator(prefix, origin)
 	defer iter.Release()
 
-	for iter.Next() && len(keys) < max {
+	for iter.Next() {
 		key := iter.Key()
 		if len(key) != len(prefix)+common.HashLength {
-			continue
+			panic("remove this panic later on")
+		}
+		if len(keys) == max {
+			aborted = true
 		}
 		keys = append(keys, common.CopyBytes(key[len(prefix):]))
 
@@ -255,7 +259,7 @@ func (dl *diskLayer) proveRange(root common.Hash, tr *trie.Trie, prefix []byte, 
 		vals = append(vals, val)
 	}
 	// The snap state is exhausted, pass the entire key/val set for verification
-	if origin == nil && len(keys) == max {
+	if origin == nil && !aborted {
 		_, _, _, _, err := trie.VerifyRangeProof(root, nil, nil, keys, vals, nil)
 		return &proofResult{keys: keys, vals: vals, cont: false, proofErr: err}, nil
 	}
