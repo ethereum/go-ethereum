@@ -361,9 +361,10 @@ func (s *Suite) TestLargeAnnounce(t *utesting.T) {
 }
 
 func (s *Suite) TestOldAnnounce(t *utesting.T) {
-	sendConn := s.setupConnection(t)
-	receiveConn := s.setupConnection(t)
+	s.oldAnnounce(t, s.setupConnection(t), s.setupConnection(t))
+}
 
+func (s *Suite) oldAnnounce(t *utesting.T, sendConn, receiveConn *Conn) {
 	oldBlockAnnounce := &NewBlock{
 		Block: s.chain.blocks[len(s.chain.blocks)/2],
 		TD:    s.chain.blocks[len(s.chain.blocks)/2].Difficulty(),
