@@ -649,3 +649,84 @@ func TestCreate2Addreses(t *testing.T) {
 		}
 	}
 }
+
+func TestAuth(t *testing.T) {
+	var (
+		env            = NewEVM(BlockContext{}, TxContext{Origin: common.HexToAddress("970e8128ab834e8eac17ab8e3812f010678cf791")}, nil, params.TestChainConfig, Config{})
+		stack          = newstack()
+		evmInterpreter = NewEVMInterpreter(env, env.vmConfig)
+		pc             = uint64(0)
+	)
+
+	type testcase struct {
+		v        string
+		r        string
+		s        string
+		invoker  string
+		commit   string
+		expected string
+	}
+
+	for i, tt := range []testcase{
+		{
+			v:        "00",
+			r:        "7aa455a9f8b84965a8c2f32e29dbb8147a913fffa1b02375c6ab28161e6ebf25",
+			s:        "794dd7b68f540151c21953cc5322e6df1b809eec12e561353832a5d68e14809a",
+			invoker:  "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+			commit:   "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+			expected: "a94f5374Fce5edBC8E2a8697C15331677e6EbF0B",
+		},
+		{
+			v:        "01",
+			r:        "9a50f2fa6aa26558eb2d469e494e32676e563c9ea0a149286caccdba26758abf",
+			s:        "4de8a7bebbbf64ef197a11d23c3e2cc144481d8c1d9f80822b4844e98bccbc6d",
+			invoker:  "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+			commit:   "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+			expected: "a94f5374Fce5edBC8E2a8697C15331677e6EbF0B",
+		},
+		// invalid signature
+		{
+			v:        "02",
+			r:        "7aa455a9f8b84965a8c2f32e29dbb8147a913fffa1b02375c6ab28161e6ebf25",
+			s:        "794dd7b68f540151c21953cc5322e6df1b809eec12e561353832a5d68e14809a",
+			invoker:  "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+			commit:   "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+			expected: "0000000000000000000000000000000000000000",
+		},
+		// invalid address (authorized == tx.origin)
+		{
+			v:        "01",
+			r:        "3c925a967a9a647f6d028268bd75cca620d6c46f19d06e901380e9ab42c59bca",
+			s:        "2370697a8f2b35df996b44252ec9a675fc4f63d17a07011f740e7c95e43fe9bd",
+			invoker:  "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+			commit:   "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+			expected: "0000000000000000000000000000000000000000",
+		},
+	} {
+		stack.push(new(uint256.Int).SetBytes(common.Hex2Bytes(tt.s)))
+		stack.push(new(uint256.Int).SetBytes(common.Hex2Bytes(tt.r)))
+		stack.push(new(uint256.Int).SetBytes(common.Hex2Bytes(tt.v)))
+		stack.push(new(uint256.Int).SetBytes(common.Hex2Bytes(tt.commit)))
+
+		self := AccountRef(common.HexToAddress(tt.invoker))
+		contract := Contract{CallerAddress: common.Address{}, caller: nil, self: self}
+		ctx := callCtx{nil, stack, &contract, nil}
+		opAuth(&pc, evmInterpreter, &ctx)
+
+		result := stack.pop()
+		addr := common.BigToAddress(result.ToBig())
+
+		if addr.Hex()[2:] != tt.expected {
+			t.Fatalf("Auth failed to authenticate signature: test #%d got %s, expected 0x%s", i, addr.Hex(), tt.expected)
+		}
+
+		if ctx.authorized != nil {
+			if addr.Hex() == (common.Address{}).Hex() {
+				t.Fatalf("Authorized ctx variable set after invalid auth invocation.")
+			}
+			if ctx.authorized.Hex()[2:] != tt.expected {
+				t.Fatalf("Authorized ctx variable not equal to expected: test #%d got %s, expected 0x%s", i, ctx.authorized.Hex(), tt.expected)
+			}
+		}
+	}
+}

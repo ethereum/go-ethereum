@@ -3108,3 +3108,67 @@ func TestEIP2718Transition(t *testing.T) {
 
 	}
 }
+
+func TestEIP3074AuthCall(t *testing.T) {
+	var (
+		aa = common.HexToAddress("0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa")
+		bb = common.HexToAddress("0x000000000000000000000000000000000000bbbb")
+
+		engine = ethash.NewFaker()
+		db     = rawdb.NewMemoryDatabase()
+		diskdb = rawdb.NewMemoryDatabase()
+		key, _ = crypto.HexToECDSA("b71c71a67e1177ad4e901695e1b4b9ee17ae16c6668d313eac2f96dbcda3f291")
+		gspec  = &Genesis{
+			Config: params.TestChainConfig,
+			Alloc: GenesisAlloc{
+				// authcall into bb
+				aa: {
+					Code:    common.FromHex("7f794dd7b68f540151c21953cc5322e6df1b809eec12e561353832a5d68e14809a7f7aa455a9f8b84965a8c2f32e29dbb8147a913fffa1b02375c6ab28161e6ebf2560007fbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbf65060008080808073000000000000000000000000000000000000bbbb5af700"),
+					Nonce:   0,
+					Balance: big.NewInt(0),
+				},
+				// store the caller in 0x00
+				bb: {
+					Code: []byte{
+						byte(vm.CALLER),
+						byte(vm.PUSH1),
+						byte(0x00),
+						byte(vm.SSTORE),
+					},
+					Nonce:   0,
+					Balance: big.NewInt(0),
+				},
+			},
+		}
+		genesis = gspec.MustCommit(db)
+	)
+
+	blocks, _ := GenerateChain(gspec.Config, genesis, engine, db, 1, func(i int, b *BlockGen) {
+		signer := types.LatestSigner(gspec.Config)
+		tx, _ := types.SignNewTx(key, signer, &types.LegacyTx{
+			Nonce:    0,
+			To:       &aa,
+			Gas:      50000,
+			GasPrice: big.NewInt(0),
+		})
+		b.AddTx(tx)
+	})
+
+	gspec.MustCommit(diskdb)
+
+	chain, err := NewBlockChain(diskdb, nil, gspec.Config, engine, vm.Config{}, nil, nil)
+	if err != nil {
+		t.Fatalf("failed to create tester chain: %v", err)
+	}
+	if n, err := chain.InsertChain(blocks); err != nil {
+		t.Fatalf("block %d: failed to insert into chain: %v", n, err)
+	}
+
+	state, _ := chain.State()
+	caller := common.BytesToAddress(state.GetState(bb, common.Hash{}).Bytes())
+	expected := "0xa94f5374Fce5edBC8E2a8697C15331677e6EbF0B"
+
+	if caller.Hex() != expected {
+		t.Fatalf("wrong caller, got: %s, expected: %s", caller.Hex(), expected)
+	}
+}
