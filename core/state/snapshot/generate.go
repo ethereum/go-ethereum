@@ -391,6 +391,7 @@ func (dl *diskLayer) genRange(root common.Hash, prefix []byte, kind string, orig
 				kvkeys = kvkeys[1:]
 				kvvals = kvvals[1:]
 				deleted += 1
+				continue
 			} else if cmp == 0 {
 				// the snapshot key can be overwritten
 				if write = !bytes.Equal(kvvals[0], iter.Value); write {
