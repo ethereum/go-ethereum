@@ -135,7 +135,7 @@ func TestPriorityPool(t *testing.T) {
 				return int64(c.balance / cap)
 			})
 			var ok bool
-			expFail := expCap + 1
+			expFail := expCap + 10
 			if expFail < testMinCap {
 				expFail = testMinCap
 			}
