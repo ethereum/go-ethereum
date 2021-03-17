@@ -320,12 +320,13 @@ func (n *nodeBalance) EstimatePriority(capacity uint64, addBalance int64, future
 	if bias > 0 {
 		b = n.reducedBalance(b, now+mclock.AbsTime(future), bias, capacity, 0)
 	}
-	pri := n.balanceToPriority(b, capacity)
+	// Note: we subtract one from the estimated priority in order to ensure that biased
+	// estimates are always lower than actual priorities, even if the bias is very small.
+	// This ensures that two nodes will not ping-pong update signals forever if both of
+	// them have zero estimated priority drop in the projected future.
+	pri := n.balanceToPriority(b, capacity) - 1
 	if update {
-		// Note: always set the threshold to lower than the estimate in order to ensure
-		// that two nodes will not ping-pong update signals forever if both of them have
-		// zero estimated priority drop in the projected future
-		n.addCallback(balanceCallbackUpdate, pri-1, n.signalPriorityUpdate)
+		n.addCallback(balanceCallbackUpdate, pri, n.signalPriorityUpdate)
 	}
 	return pri
 }

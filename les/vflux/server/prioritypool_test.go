@@ -30,14 +30,12 @@ import (
 
 var (
 	testSetup         = &nodestate.Setup{}
-	ppTestClientFlag  = testSetup.NewFlag("ppTestClientFlag")
 	ppTestClientField = testSetup.NewField("ppTestClient", reflect.TypeOf(&ppTestClient{}))
-	ppUpdateFlag      = testSetup.NewFlag("ppUpdateFlag")
 	ppTestSetup       = NewPriorityPoolSetup(testSetup)
 )
 
 func init() {
-	ppTestSetup.Connect(ppTestClientField, ppUpdateFlag)
+	ppTestSetup.Connect(ppTestClientField, btTestSetup.UpdateFlag)
 }
 
 const (
@@ -101,7 +99,6 @@ func TestPriorityPool(t *testing.T) {
 		}
 		sumBalance += c.balance
 		clients[i] = c
-		ns.SetState(c.node, ppTestClientFlag, nodestate.Flags{}, 0)
 		ns.SetField(c.node, ppTestSetup.priorityField, c)
 		ns.SetState(c.node, ppTestSetup.InactiveFlag, nodestate.Flags{}, 0)
 		raise(c)
@@ -113,8 +110,8 @@ func TestPriorityPool(t *testing.T) {
 		oldBalance := c.balance
 		c.balance = uint64(rand.Int63n(100000000000) + 100000000000)
 		sumBalance += c.balance - oldBalance
-		pp.ns.SetState(c.node, ppUpdateFlag, nodestate.Flags{}, 0)
-		pp.ns.SetState(c.node, nodestate.Flags{}, ppUpdateFlag, 0)
+		pp.ns.SetState(c.node, btTestSetup.UpdateFlag, nodestate.Flags{}, 0)
+		pp.ns.SetState(c.node, nodestate.Flags{}, btTestSetup.UpdateFlag, 0)
 		if c.balance > oldBalance {
 			raise(c)
 		} else {
@@ -162,8 +159,8 @@ func TestPriorityPool(t *testing.T) {
 			}
 			c.balance -= add
 			sumBalance -= add
-			pp.ns.SetState(c.node, ppUpdateFlag, nodestate.Flags{}, 0)
-			pp.ns.SetState(c.node, nodestate.Flags{}, ppUpdateFlag, 0)
+			pp.ns.SetState(c.node, btTestSetup.UpdateFlag, nodestate.Flags{}, 0)
+			pp.ns.SetState(c.node, nodestate.Flags{}, btTestSetup.UpdateFlag, 0)
 			for _, c := range clients {
 				raise(c)
 			}
@@ -188,7 +185,6 @@ func TestCapacityCurve(t *testing.T) {
 			cap:     1000000,
 		}
 		clients[i] = c
-		ns.SetState(c.node, ppTestClientFlag, nodestate.Flags{}, 0)
 		ns.SetField(c.node, ppTestSetup.priorityField, c)
 		ns.SetState(c.node, ppTestSetup.InactiveFlag, nodestate.Flags{}, 0)
 		ns.Operation(func() {

@@ -278,7 +278,7 @@ func (cp *ClientPool) SetCapacity(node *enode.Node, reqCap uint64, bias time.Dur
 		// estimate maximum available capacity at the current priority level and request
 		// the estimated amount; allow a limited number of retries because individual
 		// balances can change between the estimation and the request
-		for count := 0; count < 100; count++ {
+		for count := 0; count < 20; count++ {
 			// apply a small extra bias to ensure that the request won't fail because of rounding errors
 			curveBias += time.Second * 10
 			tryCap := reqCap
@@ -300,7 +300,7 @@ func (cp *ClientPool) SetCapacity(node *enode.Node, reqCap uint64, bias time.Dur
 			}
 		}
 		// we should be able to find the maximum allowed capacity in a few iterations
-		log.Crit("Unable to find maximum allowed capacity")
+		log.Error("Unable to find maximum allowed capacity")
 		err = ErrCantFindMaximum
 	})
 	return

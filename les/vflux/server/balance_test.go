@@ -32,7 +32,6 @@ import (
 )
 
 var (
-	testFlag      = testSetup.NewFlag("testFlag")
 	btClientField = testSetup.NewField("clientField", reflect.TypeOf(balanceTestClient{}))
 	btTestSetup   = NewBalanceTrackerSetup(testSetup)
 )
@@ -74,7 +73,6 @@ func (btc balanceTestClient) FreeClientId() string {
 
 func (b *balanceTestSetup) newNode(capacity uint64) *nodeBalance {
 	node := enode.SignNull(&enr.Record{}, enode.ID{})
-	b.ns.SetState(node, testFlag, nodestate.Flags{}, 0)
 	b.ns.SetField(node, btTestSetup.clientField, balanceTestClient{})
 	if capacity != 0 {
 		b.ns.SetField(node, ppTestSetup.CapacityField, capacity)
@@ -293,8 +291,8 @@ func TestEstimatedPriority(t *testing.T) {
 		b.clock.Run(i.runTime)
 		node.RequestServed(i.reqCost)
 		priority := node.EstimatePriority(1000000000, 0, i.futureTime, 0, false)
-		if priority != i.priority {
-			t.Fatalf("Estimated priority mismatch, want %v, got %v", i.priority, priority)
+		if priority != i.priority-1 {
+			t.Fatalf("Estimated priority mismatch, want %v, got %v", i.priority-1, priority)
 		}
 	}
 }

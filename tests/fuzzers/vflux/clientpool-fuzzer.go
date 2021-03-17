@@ -278,6 +278,9 @@ func FuzzClientPool(input []byte) int {
 			clock.Run(d)
 		}
 		//fmt.Println(f.activeCount, f.maxCount, f.activeCap, f.maxCap)
+		if activeCount, activeCap := pool.Active(); activeCount != f.activeCount || activeCap != f.activeCap {
+			panic(nil)
+		}
 		if f.activeCount > f.maxCount || f.activeCap > f.maxCap {
 			panic(nil)
 		}

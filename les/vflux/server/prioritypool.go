@@ -129,6 +129,9 @@ func NewPriorityPool(ns *nodestate.NodeStateMachine, setup PriorityPoolSetup, cl
 		activeBias:        activeBias,
 		capacityStepDiv:   capacityStepDiv,
 	}
+	if pp.activeBias < time.Duration(1) {
+		pp.activeBias = time.Duration(1)
+	}
 	pp.activeQueue = prque.NewLazyQueue(activeSetIndex, activePriority, pp.activeMaxPriority, clock, lazyQueueRefresh)
 
 	ns.SubscribeField(pp.priorityField, func(node *enode.Node, state nodestate.Flags, oldValue, newValue interface{}) {
@@ -213,7 +216,7 @@ func (pp *PriorityPool) RequestCapacity(node *enode.Node, targetCap uint64, bias
 	_, minPriority = pp.enforceLimits()
 	// if capacity update is possible now then minPriority == math.MinInt64
 	// if it is not possible at all then minPriority == math.MaxInt64
-	allowed = priority > minPriority
+	allowed = priority >= minPriority
 	updates = pp.finalizeChanges(setCap && allowed)
 	return
 }
@@ -243,10 +246,17 @@ func (pp *PriorityPool) SetLimits(maxCount, maxCap uint64) {
 // SetActiveBias sets the bias applied when trying to activate inactive nodes
 func (pp *PriorityPool) SetActiveBias(bias time.Duration) {
 	pp.lock.Lock()
-	defer pp.lock.Unlock()
+	var updates []capUpdate
+	defer func() {
+		pp.lock.Unlock()
+		pp.ns.Operation(func() { pp.updateFlags(updates) })
+	}()
 
 	pp.activeBias = bias
-	pp.tryActivate()
+	if pp.activeBias < time.Duration(1) {
+		pp.activeBias = time.Duration(1)
+	}
+	updates = pp.tryActivate()
 }
 
 // Active returns the number and total capacity of currently active nodes
