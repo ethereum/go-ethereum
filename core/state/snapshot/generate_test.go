@@ -19,6 +19,7 @@ package snapshot
 import (
 	"fmt"
 	"math/big"
+	"os"
 	"testing"
 	"time"
 
@@ -26,6 +27,7 @@ import (
 	"github.com/ethereum/go-ethereum/core/rawdb"
 	"github.com/ethereum/go-ethereum/ethdb"
 	"github.com/ethereum/go-ethereum/ethdb/memorydb"
+	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/rlp"
 	"github.com/ethereum/go-ethereum/trie"
 	"golang.org/x/crypto/sha3"
@@ -233,7 +235,6 @@ func (t *testHelper) Generate() (common.Hash, *diskLayer) {
 // - the contract(non-empty storage) misses some storage slots
 // - the contract(non-empty storage) has wrong storage slots
 func TestGenerateExistentStateWithWrongStorage(t *testing.T) {
-	//log.Root().SetHandler(log.LvlFilterHandler(log.LvlTrace, log.StreamHandler(os.Stderr, log.TerminalFormat(true))))
 
 	helper := newHelper()
 	stRoot := helper.makeStorageTrie([]string{"key-1", "key-2", "key-3"}, []string{"val-1", "val-2", "val-3"})
@@ -511,9 +512,15 @@ func TestGenerateWithExtraAccounts(t *testing.T) {
 	}
 }
 
+func enableLogging() {
+	log.Root().SetHandler(log.LvlFilterHandler(log.LvlTrace, log.StreamHandler(os.Stderr, log.TerminalFormat(true))))
+}
+
 // Tests that snapshot generation when an extra account with storage exists in the snap state.
 func TestGenerateWithManyExtraAccounts(t *testing.T) {
-
+	if true {
+		enableLogging()
+	}
 	var (
 		diskdb = memorydb.New()
 		triedb = trie.NewDatabase(diskdb)
@@ -532,13 +539,69 @@ func TestGenerateWithManyExtraAccounts(t *testing.T) {
 		rawdb.WriteStorageSnapshot(diskdb, key, hashData([]byte("key-3")), []byte("val-3"))
 	}
 	{ // 100 accounts exist only in snapshot
-		for i := 0; i < 100; i++ {
-			acc := &Account{Balance: big.NewInt(int64(i)), Root: stTrie.Hash().Bytes(), CodeHash: emptyCode.Bytes()}
+		for i := 0; i < 1000; i++ {
+			//acc := &Account{Balance: big.NewInt(int64(i)), Root: stTrie.Hash().Bytes(), CodeHash: emptyCode.Bytes()}
+			acc := &Account{Balance: big.NewInt(int64(i)), Root: emptyRoot.Bytes(), CodeHash: emptyCode.Bytes()}
 			val, _ := rlp.EncodeToBytes(acc)
 			key := hashData([]byte(fmt.Sprintf("acc-%d", i)))
 			rawdb.WriteAccountSnapshot(diskdb, key, val)
 		}
 	}
+	root, _ := accTrie.Commit(nil)
+	t.Logf("root: %x", root)
+	triedb.Commit(root, false, nil)
+
+	snap := generateSnapshot(diskdb, triedb, 16, root)
+	select {
+	case <-snap.genPending:
+		// Snapshot generation succeeded
+
+	case <-time.After(250 * time.Millisecond):
+		t.Errorf("Snapshot generation failed")
+	}
+	checkSnapRoot(t, snap, root)
+	// Signal abortion to the generator and wait for it to tear down
+	stop := make(chan *generatorStats)
+	snap.genAbort <- stop
+	<-stop
+	// If we now inspect the snap db, there should exist no extraneous storage items
+	if data := rawdb.ReadStorageSnapshot(diskdb, hashData([]byte("acc-2")), hashData([]byte("b-key-1"))); data != nil {
+		t.Fatalf("expected slot to be removed, got %v", string(data))
+	}
+}
+
+// Tests this case
+// maxAccountRange 3
+// snapshot-accounts: 01, 02, 03, 04, 05, 06, 07
+// trie-accounts:             03,             07
+//
+// We iterate three snapshot storage slots (max = 3) from the database. They are 0x01, 0x02, 0x03.
+// The trie has a lot of deletions.
+// So in trie, we iterate 2 entries 0x03, 0x07. We create the 0x07 in the database and abort the procedure, because the trie is exhausted.
+// But in the database, we still have the stale storage slots 0x04, 0x05. They are not iterated yet, but the procedure is finished.
+func TestGenerateWithExtraBeforeAndAfter(t *testing.T) {
+	accountCheckRange = 3
+	log.Root().SetHandler(log.LvlFilterHandler(log.LvlTrace, log.StreamHandler(os.Stderr, log.TerminalFormat(true))))
+	var (
+		diskdb = memorydb.New()
+		triedb = trie.NewDatabase(diskdb)
+	)
+	accTrie, _ := trie.New(common.Hash{}, triedb)
+	{
+		acc := &Account{Balance: big.NewInt(1), Root: emptyRoot.Bytes(), CodeHash: emptyCode.Bytes()}
+		val, _ := rlp.EncodeToBytes(acc)
+		accTrie.Update(common.HexToHash("0x03").Bytes(), val)
+		accTrie.Update(common.HexToHash("0x07").Bytes(), val)
+
+		rawdb.WriteAccountSnapshot(diskdb, common.HexToHash("0x01"), val)
+		rawdb.WriteAccountSnapshot(diskdb, common.HexToHash("0x02"), val)
+		rawdb.WriteAccountSnapshot(diskdb, common.HexToHash("0x03"), val)
+		rawdb.WriteAccountSnapshot(diskdb, common.HexToHash("0x04"), val)
+		rawdb.WriteAccountSnapshot(diskdb, common.HexToHash("0x05"), val)
+		rawdb.WriteAccountSnapshot(diskdb, common.HexToHash("0x06"), val)
+		rawdb.WriteAccountSnapshot(diskdb, common.HexToHash("0x07"), val)
+	}
+
 	root, _ := accTrie.Commit(nil)
 	t.Logf("root: %x", root)
 	triedb.Commit(root, false, nil)
