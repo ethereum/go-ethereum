@@ -133,7 +133,7 @@ func testClientPool(t *testing.T, activeLimit, clientCount, paidCount int, rando
 		disconnFn = func(id enode.ID) {
 			disconnCh <- int(id[0]) + int(id[1])<<8
 		}
-		pool = newClientPool(testStateMachine(), db, 1, 0, &clock, disconnFn)
+		pool = newClientPool(testStateMachine(), db, 1, 0, &clock, disconnFn, alwaysTrueFn)
 	)
 	pool.ns.Start()
 
@@ -239,7 +239,7 @@ func TestConnectPaidClient(t *testing.T) {
 		clock mclock.Simulated
 		db    = rawdb.NewMemoryDatabase()
 	)
-	pool := newClientPool(testStateMachine(), db, 1, defaultConnectedBias, &clock, func(id enode.ID) {})
+	pool := newClientPool(testStateMachine(), db, 1, defaultConnectedBias, &clock, func(id enode.ID) {}, alwaysTrueFn)
 	pool.ns.Start()
 	defer pool.stop()
 	pool.setLimits(10, uint64(10))
@@ -255,7 +255,7 @@ func TestConnectPaidClientToSmallPool(t *testing.T) {
 		clock mclock.Simulated
 		db    = rawdb.NewMemoryDatabase()
 	)
-	pool := newClientPool(testStateMachine(), db, 1, defaultConnectedBias, &clock, func(id enode.ID) {})
+	pool := newClientPool(testStateMachine(), db, 1, defaultConnectedBias, &clock, func(id enode.ID) {}, alwaysTrueFn)
 	pool.ns.Start()
 	defer pool.stop()
 	pool.setLimits(10, uint64(10)) // Total capacity limit is 10
@@ -274,7 +274,7 @@ func TestConnectPaidClientToFullPool(t *testing.T) {
 		db    = rawdb.NewMemoryDatabase()
 	)
 	removeFn := func(enode.ID) {} // Noop
-	pool := newClientPool(testStateMachine(), db, 1, defaultConnectedBias, &clock, removeFn)
+	pool := newClientPool(testStateMachine(), db, 1, defaultConnectedBias, &clock, removeFn, alwaysTrueFn)
 	pool.ns.Start()
 	defer pool.stop()
 	pool.setLimits(10, uint64(10)) // Total capacity limit is 10
@@ -304,7 +304,7 @@ func TestPaidClientKickedOut(t *testing.T) {
 	removeFn := func(id enode.ID) {
 		kickedCh <- int(id[0])
 	}
-	pool := newClientPool(testStateMachine(), db, 1, defaultConnectedBias, &clock, removeFn)
+	pool := newClientPool(testStateMachine(), db, 1, defaultConnectedBias, &clock, removeFn, alwaysTrueFn)
 	pool.ns.Start()
 	pool.bt.SetExpirationTCs(0, 0)
 	defer pool.stop()
@@ -335,7 +335,7 @@ func TestConnectFreeClient(t *testing.T) {
 		clock mclock.Simulated
 		db    = rawdb.NewMemoryDatabase()
 	)
-	pool := newClientPool(testStateMachine(), db, 1, defaultConnectedBias, &clock, func(id enode.ID) {})
+	pool := newClientPool(testStateMachine(), db, 1, defaultConnectedBias, &clock, func(id enode.ID) {}, alwaysTrueFn)
 	pool.ns.Start()
 	defer pool.stop()
 	pool.setLimits(10, uint64(10))
@@ -352,7 +352,7 @@ func TestConnectFreeClientToFullPool(t *testing.T) {
 		db    = rawdb.NewMemoryDatabase()
 	)
 	removeFn := func(enode.ID) {} // Noop
-	pool := newClientPool(testStateMachine(), db, 1, defaultConnectedBias, &clock, removeFn)
+	pool := newClientPool(testStateMachine(), db, 1, defaultConnectedBias, &clock, removeFn, alwaysTrueFn)
 	pool.ns.Start()
 	defer pool.stop()
 	pool.setLimits(10, uint64(10)) // Total capacity limit is 10
@@ -382,7 +382,7 @@ func TestFreeClientKickedOut(t *testing.T) {
 		kicked = make(chan int, 100)
 	)
 	removeFn := func(id enode.ID) { kicked <- int(id[0]) }
-	pool := newClientPool(testStateMachine(), db, 1, defaultConnectedBias, &clock, removeFn)
+	pool := newClientPool(testStateMachine(), db, 1, defaultConnectedBias, &clock, removeFn, alwaysTrueFn)
 	pool.ns.Start()
 	defer pool.stop()
 	pool.setLimits(10, uint64(10)) // Total capacity limit is 10
@@ -424,7 +424,7 @@ func TestPositiveBalanceCalculation(t *testing.T) {
 		kicked = make(chan int, 10)
 	)
 	removeFn := func(id enode.ID) { kicked <- int(id[0]) } // Noop
-	pool := newClientPool(testStateMachine(), db, 1, defaultConnectedBias, &clock, removeFn)
+	pool := newClientPool(testStateMachine(), db, 1, defaultConnectedBias, &clock, removeFn, alwaysTrueFn)
 	pool.ns.Start()
 	defer pool.stop()
 	pool.setLimits(10, uint64(10)) // Total capacity limit is 10
@@ -448,7 +448,7 @@ func TestDowngradePriorityClient(t *testing.T) {
 		kicked = make(chan int, 10)
 	)
 	removeFn := func(id enode.ID) { kicked <- int(id[0]) } // Noop
-	pool := newClientPool(testStateMachine(), db, 1, defaultConnectedBias, &clock, removeFn)
+	pool := newClientPool(testStateMachine(), db, 1, defaultConnectedBias, &clock, removeFn, alwaysTrueFn)
 	pool.ns.Start()
 	defer pool.stop()
 	pool.setLimits(10, uint64(10)) // Total capacity limit is 10
@@ -483,7 +483,7 @@ func TestNegativeBalanceCalculation(t *testing.T) {
 		clock mclock.Simulated
 		db    = rawdb.NewMemoryDatabase()
 	)
-	pool := newClientPool(testStateMachine(), db, 1, defaultConnectedBias, &clock, func(id enode.ID) {})
+	pool := newClientPool(testStateMachine(), db, 1, defaultConnectedBias, &clock, func(id enode.ID) {}, alwaysTrueFn)
 	pool.ns.Start()
 	defer pool.stop()
 	pool.setLimits(10, uint64(10)) // Total capacity limit is 10
@@ -521,7 +521,7 @@ func TestInactiveClient(t *testing.T) {
 		clock mclock.Simulated
 		db    = rawdb.NewMemoryDatabase()
 	)
-	pool := newClientPool(testStateMachine(), db, 1, defaultConnectedBias, &clock, func(id enode.ID) {})
+	pool := newClientPool(testStateMachine(), db, 1, defaultConnectedBias, &clock, func(id enode.ID) {}, alwaysTrueFn)
 	pool.ns.Start()
 	defer pool.stop()
 	pool.setLimits(2, uint64(2))

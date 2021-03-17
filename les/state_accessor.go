@@ -72,6 +72,7 @@ func (leth *LightEthereum) stateAtTransaction(ctx context.Context, block *types.
 		msg, _ := tx.AsMessage(signer)
 		txContext := core.NewEVMTxContext(msg)
 		context := core.NewEVMBlockContext(block.Header(), leth.blockchain, nil)
+		statedb.Prepare(tx.Hash(), block.Hash(), idx)
 		if idx == txIndex {
 			return msg, context, statedb, func() {}, nil
 		}

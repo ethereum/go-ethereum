@@ -273,14 +273,15 @@ loop:
 	for {
 		switch msg := c.Read().(type) {
 		case *Status:
-			if msg.Head != chain.blocks[chain.Len()-1].Hash() {
-				t.Fatalf("wrong head block in status: %s", msg.Head.String())
+			if have, want := msg.Head, chain.blocks[chain.Len()-1].Hash(); have != want {
+				t.Fatalf("wrong head block in status, want:  %#x (block %d) have %#x",
+					want, chain.blocks[chain.Len()-1].NumberU64(), have)
 			}
-			if msg.TD.Cmp(chain.TD(chain.Len())) != 0 {
-				t.Fatalf("wrong TD in status: %v", msg.TD)
+			if have, want := msg.TD.Cmp(chain.TD(chain.Len())), 0; have != want {
+				t.Fatalf("wrong TD in status: have %v want %v", have, want)
 			}
-			if !reflect.DeepEqual(msg.ForkID, chain.ForkID()) {
-				t.Fatalf("wrong fork ID in status: %v", msg.ForkID)
+			if have, want := msg.ForkID, chain.ForkID(); !reflect.DeepEqual(have, want) {
+				t.Fatalf("wrong fork ID in status: have %v, want %v", have, want)
 			}
 			message = msg
 			break loop
