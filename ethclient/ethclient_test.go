@@ -288,8 +288,22 @@ func testHeader(t *testing.T, chain []*types.Block, client *rpc.Client) {
 			want:  chain[1].Header(),
 		},
 		"future_block": {
-			block: big.NewInt(1000000000),
-			want:  nil,
+			block:   big.NewInt(1000000000),
+			want:    nil,
+			wantErr: ethereum.NotFound,
+		},
+		// Test numerical aliases for named blocks.
+		// earliest: 0 (tested above)
+		// latest: nil
+		// pending: -1
+		"latest": {
+			block: nil,
+			want:  chain[1].Header(),
+		},
+		"pending": {
+			block:   big.NewInt(-1),
+			want:    nil, // FIXME
+			wantErr: nil, // HeaderByNumber(-1) error = "missing required field 'miner' for Header", want %!q(<nil>)
 		},
 	}
 	for name, tt := range tests {
@@ -299,10 +313,10 @@ func testHeader(t *testing.T, chain []*types.Block, client *rpc.Client) {
 			defer cancel()
 
 			got, err := ec.HeaderByNumber(ctx, tt.block)
-			if tt.wantErr != nil && (err == nil || err.Error() != tt.wantErr.Error()) {
+			if !errors.Is(tt.wantErr, err) {
 				t.Fatalf("HeaderByNumber(%v) error = %q, want %q", tt.block, err, tt.wantErr)
 			}
-			if got != nil && got.Number.Sign() == 0 {
+			if got != nil && got.Number != nil && got.Number.Sign() == 0 {
 				got.Number = big.NewInt(0) // hack to make DeepEqual work
 			}
 			if !reflect.DeepEqual(got, tt.want) {
