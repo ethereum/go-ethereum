@@ -332,7 +332,7 @@ func (dl *diskLayer) genRange(root common.Hash, prefix []byte, kind string, orig
 	// The range prover says the range is correct, skip trie iteration
 	if result.valid() {
 		snapSuccessfulRangeProofMeter.Mark(1)
-		logger.Debug("Proved state range", "last", hexutil.Encode(last))
+		logger.Trace("Proved state range", "last", hexutil.Encode(last))
 
 		// The verification is passed, process each state with the given
 		// callback function. If this state represents a contract, the
@@ -342,7 +342,7 @@ func (dl *diskLayer) genRange(root common.Hash, prefix []byte, kind string, orig
 		}
 		return !result.hasMoreElems, last, nil
 	}
-	logger.Debug("Detected outdated state range", "last", hexutil.Encode(last), "error", result.proofErr)
+	logger.Trace("Detected outdated state range", "last", hexutil.Encode(last), "error", result.proofErr)
 	snapFailedRangeProofMeter.Mark(1)
 
 	// Special case, the entire trie is missing. In the original trie scheme,
@@ -384,6 +384,7 @@ func (dl *diskLayer) genRange(root common.Hash, prefix []byte, kind string, orig
 		count += 1
 
 		write := true
+		created++
 		for len(kvkeys) > 0 {
 			if cmp := bytes.Compare(kvkeys[0], iter.Key); cmp < 0 {
 				// delete the key
@@ -396,6 +397,7 @@ func (dl *diskLayer) genRange(root common.Hash, prefix []byte, kind string, orig
 				continue
 			} else if cmp == 0 {
 				// the snapshot key can be overwritten
+				created--
 				if write = !bytes.Equal(kvvals[0], iter.Value); write {
 					updated++
 				} else {

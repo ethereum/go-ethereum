@@ -188,6 +188,13 @@ func newHelper() *testHelper {
 }
 
 // addAccount adds an account to the trie and snapshot, and return t
+func (t *testHelper) addTrieAccount(accPreKey string, acc *Account) {
+	val, _ := rlp.EncodeToBytes(acc)
+	// Add to trie
+	t.accTrie.Update([]byte(accPreKey), val)
+}
+
+// addAccount adds an account to the trie and snapshot, and return t
 func (t *testHelper) addAccount(accPreKey string, acc *Account) {
 	val, _ := rlp.EncodeToBytes(acc)
 	// Add to trie
@@ -665,4 +672,32 @@ func TestGenerateWithMalformedSnapdata(t *testing.T) {
 	if data := rawdb.ReadStorageSnapshot(diskdb, hashData([]byte("acc-2")), hashData([]byte("b-key-1"))); data != nil {
 		t.Fatalf("expected slot to be removed, got %v", string(data))
 	}
+}
+
+func TestGenerateFromEmptySnap(t *testing.T) {
+	//enableLogging()
+	accountCheckRange = 10
+	storageCheckRange = 20
+	helper := newHelper()
+	stRoot := helper.makeStorageTrie([]string{"key-1", "key-2", "key-3"}, []string{"val-1", "val-2", "val-3"})
+	// Add 1K accounts to the trie
+	for i := 0; i < 400; i++ {
+		helper.addTrieAccount(fmt.Sprintf("acc-%d", i),
+			&Account{Balance: big.NewInt(1), Root: stRoot, CodeHash: emptyCode.Bytes()})
+	}
+	root, snap := helper.Generate()
+	t.Logf("Root: %#x\n", root) // Root: 0x3a97ece15e2539ab3524783c37ca153a62e28faba76a752e826da24a9020d44f
+
+	select {
+	case <-snap.genPending:
+		// Snapshot generation succeeded
+
+	case <-time.After(1 * time.Second):
+		t.Errorf("Snapshot generation failed")
+	}
+	checkSnapRoot(t, snap, root)
+	// Signal abortion to the generator and wait for it to tear down
+	stop := make(chan *generatorStats)
+	snap.genAbort <- stop
+	<-stop
 }
