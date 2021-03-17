@@ -371,8 +371,7 @@ func (dl *diskLayer) genRange(root common.Hash, prefix []byte, kind string, orig
 		untouched = 0 // states already correct
 	)
 	for iter.Next() {
-		if count == max {
-			// Don't keep iterating indefinitely
+		if last != nil && bytes.Compare(iter.Key, last) > 0 {
 			aborted = true
 			break
 		}
@@ -404,7 +403,6 @@ func (dl *diskLayer) genRange(root common.Hash, prefix []byte, kind string, orig
 		if err := onState(iter.Key, iter.Value, write, false); err != nil {
 			return false, nil, err
 		}
-		last = common.CopyBytes(iter.Key)
 	}
 	if iter.Err != nil {
 		return false, nil, iter.Err
