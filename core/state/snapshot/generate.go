@@ -241,8 +241,7 @@ func (dl *diskLayer) proveRange(root common.Hash, prefix []byte, kind string, or
 	for iter.Next() {
 		key := iter.Key()
 		if len(key) != len(prefix)+common.HashLength {
-			// TODO! Why is this check neeed?
-			panic("remove this panic later on")
+			continue
 		}
 		if len(keys) == max {
 			aborted = true
@@ -422,7 +421,7 @@ func (dl *diskLayer) genRange(root common.Hash, prefix []byte, kind string, orig
 	}
 	logger.Debug("Regenerated state range", "root", root, "last", hexutil.Encode(last),
 		"count", count, "created", created, "updated", updated, "deleted", deleted, "untouched", untouched)
-	return !aborted, last, nil // The entire trie is exhausted
+	return !aborted, last, nil
 }
 
 // generate is a background thread that iterates over the state and storage tries,
