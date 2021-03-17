@@ -220,3 +220,69 @@ func gasSelfdestructEIP2929(evm *EVM, contract *Contract, stack *Stack, mem *Mem
 	return gas, nil
 
 }
+
+func gasSStoreEIP3403(evm *EVM, contract *Contract, stack *Stack, mem *Memory, memorySize uint64) (uint64, error) {
+	// If we fail the minimum gas availability invariant, fail (0)
+	if contract.Gas <= params.SstoreSentryGasEIP2200 {
+		return 0, errors.New("not enough gas for reentrancy sentry")
+	}
+	// Gas sentry honoured, do the actual gas calculation based on the stored value
+	var (
+		y, x    = stack.Back(1), stack.peek()
+		slot    = common.Hash(x.Bytes32())
+		current = evm.StateDB.GetState(contract.Address(), slot)
+		cost    = uint64(0)
+	)
+	// Check slot presence in the access list
+	if addrPresent, slotPresent := evm.StateDB.SlotInAccessList(contract.Address(), slot); !slotPresent {
+		cost = ColdSloadCostEIP2929
+		// If the caller cannot afford the cost, this change will be rolled back
+		evm.StateDB.AddSlotToAccessList(contract.Address(), slot)
+		if !addrPresent {
+			// Once we're done with YOLOv2 and schedule this for mainnet, might
+			// be good to remove this panic here, which is just really a
+			// canary to have during testing
+			panic("impossible case: address was not present in access list during sstore op")
+		}
+	}
+	value := common.Hash(y.Bytes32())
+
+	if current == value { // noop (1)
+		// EIP 2200 original clause:
+		//		return params.SloadGasEIP2200, nil
+		return cost + WarmStorageReadCostEIP2929, nil // SLOAD_GAS
+	}
+	original := evm.StateDB.GetCommittedState(contract.Address(), x.Bytes32())
+	if original == current {
+		if original == (common.Hash{}) { // create slot (2.1.1)
+			return cost + params.SstoreSetGasEIP2200, nil
+		}
+		// EIP-2200 original clause:
+		//		return params.SstoreResetGasEIP2200, nil // write existing slot (2.1.2)
+		return cost + (params.SstoreResetGasEIP2200 - ColdSloadCostEIP2929), nil // write existing slot (2.1.2)
+	}
+	if original == value && value == (common.Hash{}) {
+		// Invariant: current != value, checked above already
+		evm.StateDB.AddRefund(15000)
+	}
+	// EIP-2200 original clause:
+	//return params.SloadGasEIP2200, nil // dirty update (2.2)
+	return cost + WarmStorageReadCostEIP2929, nil // dirty update (2.2)
+}
+
+func gasSelfdestructEIP3403(evm *EVM, contract *Contract, stack *Stack, mem *Memory, memorySize uint64) (uint64, error) {
+	var (
+		gas     uint64
+		address = common.Address(stack.peek().Bytes20())
+	)
+	if !evm.StateDB.AddressInAccessList(address) {
+		// If the caller cannot afford the cost, this change will be rolled back
+		evm.StateDB.AddAddressToAccessList(address)
+		gas = ColdAccountAccessCostEIP2929
+	}
+	// if empty and transfers value
+	if evm.StateDB.Empty(address) && evm.StateDB.GetBalance(contract.Address()).Sign() != 0 {
+		gas += params.CreateBySelfdestructGas
+	}
+	return gas, nil
+}

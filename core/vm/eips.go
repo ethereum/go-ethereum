@@ -25,6 +25,7 @@ import (
 )
 
 var activators = map[int]func(*JumpTable){
+	3403: enable3403,
 	2929: enable2929,
 	2200: enable2200,
 	1884: enable1884,
@@ -143,4 +144,9 @@ func enable2929(jt *JumpTable) {
 	// factor here
 	jt[SELFDESTRUCT].constantGas = params.SelfdestructGasEIP150
 	jt[SELFDESTRUCT].dynamicGas = gasSelfdestructEIP2929
+}
+
+func enable3403(jt *JumpTable) {
+	jt[SSTORE].dynamicGas = gasSStoreEIP3403
+	jt[SELFDESTRUCT].dynamicGas = gasSelfdestructEIP3403
 }
