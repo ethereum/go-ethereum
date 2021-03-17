@@ -201,7 +201,7 @@ func FuzzClientPool(input []byte) int {
 	}
 	clock := &mclock.Simulated{}
 	db := memorydb.New()
-	pool := vfs.NewClientPool(db, 10, f.randomDelay(), clock)
+	pool := vfs.NewClientPool(db, 10, f.randomDelay(), clock, func() bool { return true })
 	pool.Start()
 	defer pool.Stop()
 

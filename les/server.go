@@ -138,7 +138,8 @@ func NewLesServer(node *node.Node, e ethBackend, config *ethconfig.Config) (*Les
 	}
 	srv.fcManager.SetCapacityLimits(srv.minCapacity, srv.maxCapacity, srv.minCapacity*2)
 	srv.clientPool = vfs.NewClientPool(lesDb, srv.minCapacity, defaultConnectedBias, mclock.System{}, issync)
-	srv.clientPool.AddMetrics(totalConnectedGauge, clientConnectedMeter, clientDisconnectedMeter, clientActivatedMeter, clientDeactivatedMeter)
+	srv.clientPool.AddMetrics(totalConnectedGauge, clientConnectedMeter, clientDisconnectedMeter,
+		clientActivatedMeter, clientDeactivatedMeter, capacityQueryZeroMeter, capacityQueryNonZeroMeter)
 	srv.clientPool.Start()
 	srv.clientPool.SetDefaultFactors(defaultPosFactors, defaultNegFactors)
 	srv.vfluxServer.Register(srv.clientPool, "les", "Ethereum light client service")

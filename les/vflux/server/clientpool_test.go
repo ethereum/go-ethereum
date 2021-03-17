@@ -130,6 +130,10 @@ func disconnect(pool *ClientPool, peer *poolTestPeer) {
 	pool.Unregister(peer)
 }
 
+func alwaysTrueFn() bool {
+	return true
+}
+
 func testClientPool(t *testing.T, activeLimit, clientCount, paidCount int, randomDisconnect bool) {
 	rand.Seed(time.Now().UnixNano())
 	var (

@@ -75,6 +75,7 @@ type ClientPool struct {
 	clock  mclock.Clock
 	closed bool
 	ns     *nodestate.NodeStateMachine
+	synced func() bool
 
 	lock                                 sync.RWMutex
 	defaultPosFactors, defaultNegFactors PriceFactors
@@ -82,6 +83,8 @@ type ClientPool struct {
 
 	minCap     uint64      // the minimal capacity value allowed for any client
 	capReqNode *enode.Node // node that is requesting capacity change; only used inside NSM operation
+
+	capacityQueryZeroMeter, capacityQueryNonZeroMeter metrics.Meter
 }
 
 // clientPeer represents a peer in the client pool. None of the callbacks should block.
@@ -96,7 +99,7 @@ type clientPeer interface {
 type clientPeerInstance struct{ clientPeer } // the NodeStateMachine type system needs this wrapper
 
 // NewClientPool creates a new client pool
-func NewClientPool(balanceDb ethdb.KeyValueStore, minCap uint64, connectedBias time.Duration, clock mclock.Clock) *ClientPool {
+func NewClientPool(balanceDb ethdb.KeyValueStore, minCap uint64, connectedBias time.Duration, clock mclock.Clock, synced func() bool) *ClientPool {
 	ns := nodestate.NewNodeStateMachine(nil, nil, clock, serverSetup)
 	cp := &ClientPool{
 		ns:             ns,
@@ -105,6 +108,7 @@ func NewClientPool(balanceDb ethdb.KeyValueStore, minCap uint64, connectedBias t
 		clock:          clock,
 		minCap:         minCap,
 		connectedBias:  connectedBias,
+		synced:         synced,
 	}
 
 	ns.SubscribeState(nodestate.MergeFlags(ppSetup.ActiveFlag, ppSetup.InactiveFlag, btSetup.PriorityFlag), func(node *enode.Node, oldState, newState nodestate.Flags) {
@@ -160,7 +164,9 @@ func NewClientPool(balanceDb ethdb.KeyValueStore, minCap uint64, connectedBias t
 
 // AddMetrics adds metrics to the client pool. Should be called before Start().
 func (cp *ClientPool) AddMetrics(totalConnectedGauge metrics.Gauge,
-	clientConnectedMeter, clientDisconnectedMeter, clientActivatedMeter, clientDeactivatedMeter metrics.Meter) {
+	clientConnectedMeter, clientDisconnectedMeter, clientActivatedMeter, clientDeactivatedMeter,
+	capacityQueryZeroMeter, capacityQueryNonZeroMeter metrics.Meter) {
+
 	cp.ns.SubscribeState(nodestate.MergeFlags(ppSetup.ActiveFlag, ppSetup.InactiveFlag), func(node *enode.Node, oldState, newState nodestate.Flags) {
 		if oldState.IsEmpty() && !newState.IsEmpty() {
 			clientConnectedMeter.Mark(1)
@@ -177,6 +183,8 @@ func (cp *ClientPool) AddMetrics(totalConnectedGauge metrics.Gauge,
 		_, connected := cp.Active()
 		totalConnectedGauge.Update(int64(connected))
 	})
+	cp.capacityQueryZeroMeter = capacityQueryZeroMeter
+	cp.capacityQueryNonZeroMeter = capacityQueryNonZeroMeter
 }
 
 // Start starts the client pool. Should be called before Register/Unregister.
@@ -309,6 +317,15 @@ func (cp *ClientPool) serveCapQuery(id enode.ID, freeID string, data []byte) []b
 	if l := len(req.AddTokens); l == 0 || l > vflux.CapacityQueryMaxLen {
 		return nil
 	}
+	result := make(vflux.CapacityQueryReply, len(req.AddTokens))
+	if !cp.synced() {
+		if cp.capacityQueryZeroMeter != nil {
+			cp.capacityQueryZeroMeter.Mark(1)
+		}
+		reply, _ := rlp.EncodeToBytes(&result)
+		return reply
+	}
+
 	bias := time.Second * time.Duration(req.Bias)
 	cp.lock.RLock()
 	if cp.connectedBias > bias {
@@ -318,7 +335,6 @@ func (cp *ClientPool) serveCapQuery(id enode.ID, freeID string, data []byte) []b
 
 	// use CapacityCurve to answer request for multiple newly bought token amounts
 	curve := cp.GetCapacityCurve().Exclude(id)
-	result := make(vflux.CapacityQueryReply, len(req.AddTokens))
 	cp.BalanceOperation(id, freeID, func(balance AtomicBalanceOperator) {
 		pb, _ := balance.GetBalance()
 		for i, addTokens := range req.AddTokens {
@@ -334,6 +350,16 @@ func (cp *ClientPool) serveCapQuery(id enode.ID, freeID string, data []byte) []b
 			}
 		}
 	})
+	// add first result to metrics (don't care about priority client multi-queries yet)
+	if result[0] == 0 {
+		if cp.capacityQueryZeroMeter != nil {
+			cp.capacityQueryZeroMeter.Mark(1)
+		}
+	} else {
+		if cp.capacityQueryNonZeroMeter != nil {
+			cp.capacityQueryNonZeroMeter.Mark(1)
+		}
+	}
 	reply, _ := rlp.EncodeToBytes(&result)
 	return reply
 }
