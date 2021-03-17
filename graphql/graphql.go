@@ -151,7 +151,7 @@ func (l *Log) Data(ctx context.Context) hexutil.Bytes {
 	return l.log.Data
 }
 
-// Access Tuple represents EIP-2930
+// AccessTuple represents EIP-2930
 type AccessTuple struct {
 	address     common.Address
 	storageKeys *[]common.Hash
