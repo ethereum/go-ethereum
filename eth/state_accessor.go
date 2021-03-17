@@ -92,7 +92,7 @@ func (eth *Ethereum) stateAtBlock(block *types.Block, reexec uint64) (statedb *s
 			return nil, nil, fmt.Errorf("processing block %d failed: %v", block.NumberU64(), err)
 		}
 		// Finalize the state so any modifications are written to the trie
-		root, err := statedb.Commit(eth.blockchain.Config().IsEIP158(block.Number()))
+		root, _, err := statedb.Commit(eth.blockchain.Config().IsEIP158(block.Number()))
 		if err != nil {
 			return nil, nil, err
 		}
@@ -156,7 +156,7 @@ func (eth *Ethereum) statesInRange(fromBlock, toBlock *types.Block, reexec uint6
 			return nil, nil, fmt.Errorf("processing block %d failed: %v", block.NumberU64(), err)
 		}
 		// Finalize the state so any modifications are written to the trie
-		root, err := statedb.Commit(eth.blockchain.Config().IsEIP158(block.Number()))
+		root, _, err := statedb.Commit(eth.blockchain.Config().IsEIP158(block.Number()))
 		if err != nil {
 			return nil, nil, err
 		}
