@@ -31,11 +31,11 @@ import (
 var (
 	testSetup         = &nodestate.Setup{}
 	ppTestClientField = testSetup.NewField("ppTestClient", reflect.TypeOf(&ppTestClient{}))
-	ppTestSetup       = NewPriorityPoolSetup(testSetup)
+	ppTestSetup       = newPriorityPoolSetup(testSetup)
 )
 
 func init() {
-	ppTestSetup.Connect(ppTestClientField, btTestSetup.UpdateFlag)
+	ppTestSetup.connect(ppTestClientField, btTestSetup.updateFlag)
 }
 
 const (
@@ -61,7 +61,7 @@ func TestPriorityPool(t *testing.T) {
 	clock := &mclock.Simulated{}
 	ns := nodestate.NewNodeStateMachine(nil, nil, clock, testSetup)
 
-	ns.SubscribeField(ppTestSetup.CapacityField, func(node *enode.Node, state nodestate.Flags, oldValue, newValue interface{}) {
+	ns.SubscribeField(ppTestSetup.capacityField, func(node *enode.Node, state nodestate.Flags, oldValue, newValue interface{}) {
 		if n := ns.GetField(node, ppTestSetup.priorityField); n != nil {
 			c := n.(*ppTestClient)
 			c.cap = newValue.(uint64)
@@ -100,7 +100,7 @@ func TestPriorityPool(t *testing.T) {
 		sumBalance += c.balance
 		clients[i] = c
 		ns.SetField(c.node, ppTestSetup.priorityField, c)
-		ns.SetState(c.node, ppTestSetup.InactiveFlag, nodestate.Flags{}, 0)
+		ns.SetState(c.node, ppTestSetup.inactiveFlag, nodestate.Flags{}, 0)
 		raise(c)
 		check(c)
 	}
@@ -110,8 +110,8 @@ func TestPriorityPool(t *testing.T) {
 		oldBalance := c.balance
 		c.balance = uint64(rand.Int63n(100000000000) + 100000000000)
 		sumBalance += c.balance - oldBalance
-		pp.ns.SetState(c.node, btTestSetup.UpdateFlag, nodestate.Flags{}, 0)
-		pp.ns.SetState(c.node, nodestate.Flags{}, btTestSetup.UpdateFlag, 0)
+		pp.ns.SetState(c.node, btTestSetup.updateFlag, nodestate.Flags{}, 0)
+		pp.ns.SetState(c.node, nodestate.Flags{}, btTestSetup.updateFlag, 0)
 		if c.balance > oldBalance {
 			raise(c)
 		} else {
@@ -159,8 +159,8 @@ func TestPriorityPool(t *testing.T) {
 			}
 			c.balance -= add
 			sumBalance -= add
-			pp.ns.SetState(c.node, btTestSetup.UpdateFlag, nodestate.Flags{}, 0)
-			pp.ns.SetState(c.node, nodestate.Flags{}, btTestSetup.UpdateFlag, 0)
+			pp.ns.SetState(c.node, btTestSetup.updateFlag, nodestate.Flags{}, 0)
+			pp.ns.SetState(c.node, nodestate.Flags{}, btTestSetup.updateFlag, 0)
 			for _, c := range clients {
 				raise(c)
 			}
@@ -186,7 +186,7 @@ func TestCapacityCurve(t *testing.T) {
 		}
 		clients[i] = c
 		ns.SetField(c.node, ppTestSetup.priorityField, c)
-		ns.SetState(c.node, ppTestSetup.InactiveFlag, nodestate.Flags{}, 0)
+		ns.SetState(c.node, ppTestSetup.inactiveFlag, nodestate.Flags{}, 0)
 		ns.Operation(func() {
 			pp.RequestCapacity(c.node, c.cap, 0, true)
 		})

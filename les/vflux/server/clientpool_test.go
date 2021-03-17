@@ -274,7 +274,7 @@ func TestConnectPaidClientToSmallPool(t *testing.T) {
 	// Add balance for an external client and mark it as paid client
 	addBalance(pool, newPoolTestPeer(0, nil).node.ID(), int64(time.Minute))
 
-	// Connect a fat paid client to pool, should reject it.
+	// connect a fat paid client to pool, should reject it.
 	testPriorityConnect(t, pool, newPoolTestPeer(0, nil), 100, false)
 }
 
@@ -582,8 +582,8 @@ func TestInactiveClient(t *testing.T) {
 	}
 	clock.Run(time.Second * 600)
 	// manually trigger a check to avoid a long real-time wait
-	pool.ns.SetState(p1.node, btSetup.UpdateFlag, nodestate.Flags{}, 0)
-	pool.ns.SetState(p1.node, nodestate.Flags{}, btSetup.UpdateFlag, 0)
+	pool.ns.SetState(p1.node, btSetup.updateFlag, nodestate.Flags{}, 0)
+	pool.ns.SetState(p1.node, nodestate.Flags{}, btSetup.updateFlag, 0)
 	// p1: 1000  p2: 500  p3: 2000  p4: 900
 	if p1.cap != 1 {
 		t.Fatalf("Failed to activate peer #1")

@@ -184,7 +184,7 @@ func (n *nodeBalance) AddBalance(amount int64) (uint64, uint64, error) {
 	}
 	if n.setFlags {
 		if setPriority {
-			n.bt.ns.SetStateSub(n.node, n.bt.PriorityFlag, nodestate.Flags{}, 0)
+			n.bt.ns.SetStateSub(n.node, n.bt.priorityFlag, nodestate.Flags{}, 0)
 		}
 		n.signalPriorityUpdate()
 	}
@@ -223,7 +223,7 @@ func (n *nodeBalance) SetBalance(pos, neg uint64) error {
 	}
 	if n.setFlags {
 		if setPriority {
-			n.bt.ns.SetStateSub(n.node, n.bt.PriorityFlag, nodestate.Flags{}, 0)
+			n.bt.ns.SetStateSub(n.node, n.bt.priorityFlag, nodestate.Flags{}, 0)
 		}
 		n.signalPriorityUpdate()
 	}
@@ -290,7 +290,7 @@ func (n *nodeBalance) Priority(capacity uint64) int64 {
 // EstMinPriority gives a lower estimate for the priority at a given time in the future.
 // An average request cost per time is assumed that is twice the average cost per time
 // in the current session.
-// If update is true then a priority callback is added that turns UpdateFlag on and off
+// If update is true then a priority callback is added that turns updateFlag on and off
 // in case the priority goes below the estimated minimum.
 func (n *nodeBalance) EstimatePriority(capacity uint64, addBalance int64, future, bias time.Duration, update bool) int64 {
 	n.lock.Lock()
@@ -522,7 +522,7 @@ func (n *nodeBalance) balanceExhausted() {
 	n.priority = false
 	n.lock.Unlock()
 	if n.setFlags {
-		n.bt.ns.SetStateSub(n.node, nodestate.Flags{}, n.bt.PriorityFlag, 0)
+		n.bt.ns.SetStateSub(n.node, nodestate.Flags{}, n.bt.priorityFlag, 0)
 	}
 }
 
@@ -541,8 +541,8 @@ func (n *nodeBalance) checkPriorityStatus() bool {
 // signalPriorityUpdate signals that the priority fell below the previous minimum estimate
 // Note: this function should run inside a NodeStateMachine operation
 func (n *nodeBalance) signalPriorityUpdate() {
-	n.bt.ns.SetStateSub(n.node, n.bt.UpdateFlag, nodestate.Flags{}, 0)
-	n.bt.ns.SetStateSub(n.node, nodestate.Flags{}, n.bt.UpdateFlag, 0)
+	n.bt.ns.SetStateSub(n.node, n.bt.updateFlag, nodestate.Flags{}, 0)
+	n.bt.ns.SetStateSub(n.node, nodestate.Flags{}, n.bt.updateFlag, 0)
 }
 
 // setCapacity updates the capacity value used for priority calculation

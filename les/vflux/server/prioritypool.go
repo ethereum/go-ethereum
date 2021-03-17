@@ -33,31 +33,31 @@ const (
 	lazyQueueRefresh = time.Second * 10 // refresh period of the active queue
 )
 
-// PriorityPoolSetup contains node state flags and fields used by PriorityPool
-// Note: ActiveFlag and InactiveFlag can be controlled both externally and by the pool,
+// priorityPoolSetup contains node state flags and fields used by PriorityPool
+// Note: activeFlag and inactiveFlag can be controlled both externally and by the pool,
 // see PriorityPool description for details.
-type PriorityPoolSetup struct {
+type priorityPoolSetup struct {
 	// controlled by PriorityPool
-	ActiveFlag, InactiveFlag       nodestate.Flags
-	CapacityField, ppNodeInfoField nodestate.Field
+	activeFlag, inactiveFlag       nodestate.Flags
+	capacityField, ppNodeInfoField nodestate.Field
 	// external connections
 	updateFlag    nodestate.Flags
 	priorityField nodestate.Field
 }
 
-// NewPriorityPoolSetup creates a new PriorityPoolSetup and initializes the fields
+// newPriorityPoolSetup creates a new priorityPoolSetup and initializes the fields
 // and flags controlled by PriorityPool
-func NewPriorityPoolSetup(setup *nodestate.Setup) PriorityPoolSetup {
-	return PriorityPoolSetup{
-		ActiveFlag:      setup.NewFlag("active"),
-		InactiveFlag:    setup.NewFlag("inactive"),
-		CapacityField:   setup.NewField("capacity", reflect.TypeOf(uint64(0))),
+func newPriorityPoolSetup(setup *nodestate.Setup) priorityPoolSetup {
+	return priorityPoolSetup{
+		activeFlag:      setup.NewFlag("active"),
+		inactiveFlag:    setup.NewFlag("inactive"),
+		capacityField:   setup.NewField("capacity", reflect.TypeOf(uint64(0))),
 		ppNodeInfoField: setup.NewField("ppNodeInfo", reflect.TypeOf(&ppNodeInfo{})),
 	}
 }
 
-// Connect sets the fields and flags used by PriorityPool as an input
-func (pps *PriorityPoolSetup) Connect(priorityField nodestate.Field, updateFlag nodestate.Flags) {
+// connect sets the fields and flags used by PriorityPool as an input
+func (pps *priorityPoolSetup) connect(priorityField nodestate.Field, updateFlag nodestate.Flags) {
 	pps.priorityField = priorityField // should implement nodePriority
 	pps.updateFlag = updateFlag       // triggers an immediate priority update
 }
@@ -79,17 +79,17 @@ func (pps *PriorityPoolSetup) Connect(priorityField nodestate.Field, updateFlag 
 // This time bias can be interpreted as minimum expected active time at the given
 // capacity (if the threshold priority stays the same).
 //
-// Nodes in the pool always have either InactiveFlag or ActiveFlag set. A new node is
-// added to the pool by externally setting InactiveFlag. PriorityPool can switch a node
-// between InactiveFlag and ActiveFlag at any time. Nodes can be removed from the pool
-// by externally resetting both flags. ActiveFlag should not be set externally.
+// Nodes in the pool always have either inactiveFlag or activeFlag set. A new node is
+// added to the pool by externally setting inactiveFlag. PriorityPool can switch a node
+// between inactiveFlag and activeFlag at any time. Nodes can be removed from the pool
+// by externally resetting both flags. activeFlag should not be set externally.
 //
 // The highest priority nodes in "inactive" state are moved to "active" state as soon as
 // the minimum capacity can be granted for them. The capacity of lower priority active
 // nodes is reduced or they are demoted to "inactive" state if their priority is
 // insufficient even at minimal capacity.
 type PriorityPool struct {
-	PriorityPoolSetup
+	priorityPoolSetup
 	ns                     *nodestate.NodeStateMachine
 	clock                  mclock.Clock
 	lock                   sync.Mutex
@@ -119,10 +119,10 @@ type ppNodeInfo struct {
 }
 
 // NewPriorityPool creates a new PriorityPool
-func NewPriorityPool(ns *nodestate.NodeStateMachine, setup PriorityPoolSetup, clock mclock.Clock, minCap uint64, activeBias time.Duration, capacityStepDiv uint64) *PriorityPool {
+func NewPriorityPool(ns *nodestate.NodeStateMachine, setup priorityPoolSetup, clock mclock.Clock, minCap uint64, activeBias time.Duration, capacityStepDiv uint64) *PriorityPool {
 	pp := &PriorityPool{
 		ns:                ns,
-		PriorityPoolSetup: setup,
+		priorityPoolSetup: setup,
 		clock:             clock,
 		inactiveQueue:     prque.New(inactiveSetIndex),
 		minCap:            minCap,
@@ -144,15 +144,15 @@ func NewPriorityPool(ns *nodestate.NodeStateMachine, setup PriorityPoolSetup, cl
 			}
 			ns.SetFieldSub(node, pp.ppNodeInfoField, c)
 		} else {
-			ns.SetStateSub(node, nodestate.Flags{}, pp.ActiveFlag.Or(pp.InactiveFlag), 0)
+			ns.SetStateSub(node, nodestate.Flags{}, pp.activeFlag.Or(pp.inactiveFlag), 0)
 			if n, _ := pp.ns.GetField(node, pp.ppNodeInfoField).(*ppNodeInfo); n != nil {
 				pp.disconnectedNode(n)
 			}
-			ns.SetFieldSub(node, pp.CapacityField, nil)
+			ns.SetFieldSub(node, pp.capacityField, nil)
 			ns.SetFieldSub(node, pp.ppNodeInfoField, nil)
 		}
 	})
-	ns.SubscribeState(pp.ActiveFlag.Or(pp.InactiveFlag), func(node *enode.Node, oldState, newState nodestate.Flags) {
+	ns.SubscribeState(pp.activeFlag.Or(pp.inactiveFlag), func(node *enode.Node, oldState, newState nodestate.Flags) {
 		if c, _ := pp.ns.GetField(node, pp.ppNodeInfoField).(*ppNodeInfo); c != nil {
 			if oldState.IsEmpty() {
 				pp.connectedNode(c)
@@ -178,7 +178,7 @@ func NewPriorityPool(ns *nodestate.NodeStateMachine, setup PriorityPoolSetup, cl
 // If setCap and allowed are both true then the caller can assume that the change was
 // successful.
 // Note: priorityField should always be set before calling RequestCapacity. If setCap
-// is false then both InactiveFlag and ActiveFlag can be unset and they are not changed
+// is false then both inactiveFlag and activeFlag can be unset and they are not changed
 // by this function call either.
 // Note 2: this function should run inside a NodeStateMachine operation
 func (pp *PriorityPool) RequestCapacity(node *enode.Node, targetCap uint64, bias time.Duration, setCap bool) (minPriority int64, allowed bool) {
@@ -325,7 +325,7 @@ func (pp *PriorityPool) inactivePriority(p *ppNodeInfo) int64 {
 	return p.nodePriority.Priority(pp.minCap)
 }
 
-// connectedNode is called when a new node has been added to the pool (InactiveFlag set)
+// connectedNode is called when a new node has been added to the pool (inactiveFlag set)
 // Note: this function should run inside a NodeStateMachine operation
 func (pp *PriorityPool) connectedNode(c *ppNodeInfo) {
 	pp.lock.Lock()
@@ -344,8 +344,8 @@ func (pp *PriorityPool) connectedNode(c *ppNodeInfo) {
 	updates = pp.tryActivate()
 }
 
-// disconnectedNode is called when a node has been removed from the pool (both InactiveFlag
-// and ActiveFlag reset)
+// disconnectedNode is called when a node has been removed from the pool (both inactiveFlag
+// and activeFlag reset)
 // Note: this function should run inside a NodeStateMachine operation
 func (pp *PriorityPool) disconnectedNode(c *ppNodeInfo) {
 	pp.lock.Lock()
@@ -370,8 +370,8 @@ func (pp *PriorityPool) disconnectedNode(c *ppNodeInfo) {
 
 // markForChange internally puts a node in a temporary state that can either be reverted
 // or confirmed later. This temporary state allows changing the capacity of a node and
-// moving it between the active and inactive queue. ActiveFlag/InactiveFlag and
-// CapacityField are not changed while the changes are still temporary.
+// moving it between the active and inactive queue. activeFlag/inactiveFlag and
+// capacityField are not changed while the changes are still temporary.
 func (pp *PriorityPool) markForChange(c *ppNodeInfo) {
 	if c.changed {
 		return
@@ -458,25 +458,25 @@ func (pp *PriorityPool) finalizeChanges(commit bool) (updates []capUpdate) {
 	return
 }
 
-// capUpdate describes a CapacityField and ActiveFlag/InactiveFlag update
+// capUpdate describes a capacityField and activeFlag/inactiveFlag update
 type capUpdate struct {
 	node           *enode.Node
 	oldCap, newCap uint64
 }
 
-// updateFlags performs CapacityField and ActiveFlag/InactiveFlag updates while the
+// updateFlags performs capacityField and activeFlag/inactiveFlag updates while the
 // pool mutex is not held
 // Note: this function should run inside a NodeStateMachine operation
 func (pp *PriorityPool) updateFlags(updates []capUpdate) {
 	for _, f := range updates {
 		if f.oldCap == 0 {
-			pp.ns.SetStateSub(f.node, pp.ActiveFlag, pp.InactiveFlag, 0)
+			pp.ns.SetStateSub(f.node, pp.activeFlag, pp.inactiveFlag, 0)
 		}
 		if f.newCap == 0 {
-			pp.ns.SetStateSub(f.node, pp.InactiveFlag, pp.ActiveFlag, 0)
-			pp.ns.SetFieldSub(f.node, pp.CapacityField, nil)
+			pp.ns.SetStateSub(f.node, pp.inactiveFlag, pp.activeFlag, 0)
+			pp.ns.SetFieldSub(f.node, pp.capacityField, nil)
 		} else {
-			pp.ns.SetFieldSub(f.node, pp.CapacityField, f.newCap)
+			pp.ns.SetFieldSub(f.node, pp.capacityField, f.newCap)
 		}
 	}
 }
