@@ -245,6 +245,7 @@ func (dl *diskLayer) proveRange(root common.Hash, prefix []byte, kind string, or
 		}
 		if len(keys) == max {
 			aborted = true
+			break
 		}
 		keys = append(keys, common.CopyBytes(key[len(prefix):]))
 
@@ -341,7 +342,7 @@ func (dl *diskLayer) genRange(root common.Hash, prefix []byte, kind string, orig
 		}
 		return !result.cont, last, nil
 	}
-	logger.Debug("Detected outdated state range", "last", hexutil.Encode(last), "error", err)
+	logger.Debug("Detected outdated state range", "last", hexutil.Encode(last), "error", result.proofErr)
 	snapFailedRangeProofMeter.Mark(1)
 
 	// Special case, the entire trie is missing. In the original trie scheme,
@@ -420,7 +421,7 @@ func (dl *diskLayer) genRange(root common.Hash, prefix []byte, kind string, orig
 		deleted += 1
 	}
 	logger.Debug("Regenerated state range", "root", root, "last", hexutil.Encode(last),
-		"count", count, "created", created, "updated", updated, "deleted", deleted, "untouched", untouched)
+		"count", count, "created", created, "updated", updated, "untouched", untouched, "deleted", deleted)
 	return !aborted, last, nil
 }
 
