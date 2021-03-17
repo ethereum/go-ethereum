@@ -254,13 +254,14 @@ func (dl *diskLayer) proveRange(root common.Hash, prefix []byte, kind string, or
 		}
 		val, err := valueConvertFn(iter.Value())
 		if err != nil {
+			// TODO! The corrupted slim state should somehow be recovered
 			log.Debug("Failed to convert the flat state", "kind", kind, "key", common.BytesToHash(key[len(prefix):]), "error", err)
 			return nil, err
 		}
 		vals = append(vals, val)
 	}
 	// The snap state is exhausted, pass the entire key/val set for verification
-	if origin == nil && !aborted {
+	if origin == nil && aborted {
 		stackTr := trie.NewStackTrie(nil)
 		for i, key := range keys {
 			stackTr.TryUpdate(key, common.CopyBytes(vals[i]))
@@ -301,12 +302,6 @@ func (dl *diskLayer) proveRange(root common.Hash, prefix []byte, kind string, or
 	if err != nil {
 		return &proofResult{keys: keys, vals: vals, cont: false, proofErr: err, tr: tr}, nil
 	}
-	// Range prover says the trie still has some elements on the right side but
-	// the database is exhausted, then data loss is detected.
-	// TODO: Investigate if this is needed (the assumption is that it's not needed)
-	//if cont && len(keys) < max {
-	//return &proofResult{keys: keys, vals: vals, cont: true, proofErr: nil}, nil
-	//}
 	return &proofResult{keys: keys, vals: vals, cont: cont, proofErr: nil, tr: tr}, nil
 }
 
@@ -321,12 +316,14 @@ func (dl *diskLayer) genRange(root common.Hash, prefix []byte, kind string, orig
 	}
 	last := result.last()
 
-	// The range prover says the range is correct, skip trie iteration
+	// Construct contextual logger
 	logCtx := []interface{}{"kind", kind, "prefix", hexutil.Encode(prefix)}
 	if len(origin) > 0 {
 		logCtx = append(logCtx, "origin", hexutil.Encode(origin))
 	}
 	logger := log.New(logCtx...)
+
+	// The range prover says the range is correct, skip trie iteration
 	if result.valid() {
 		snapSuccessfulRangeProofMeter.Mark(1)
 		logger.Debug("Proved state range", "last", hexutil.Encode(last))
@@ -380,8 +377,8 @@ func (dl *diskLayer) genRange(root common.Hash, prefix []byte, kind string, orig
 			break
 		}
 		count += 1
+
 		write := true
-		// Delete all stale snapshot states in the front
 		for len(kvkeys) > 0 {
 			if cmp := bytes.Compare(kvkeys[0], iter.Key); cmp < 0 {
 				// delete the key
@@ -482,7 +479,9 @@ func (dl *diskLayer) generate(stats *generatorStats) {
 		accountHash := common.BytesToHash(key)
 		if delete {
 			rawdb.DeleteAccountSnapshot(batch, accountHash)
-			// We also  need to ensure that any previous snapshot
+			snapWipedAccountMeter.Mark(1)
+
+			// Ensure that any previous snapshot storage values are cleared
 			prefix := append(rawdb.SnapshotStoragePrefix, accountHash.Bytes()...)
 			keyLen := len(rawdb.SnapshotStoragePrefix) + 2*common.HashLength
 			if err := wipeKeyRange(dl.diskdb, "storage", prefix, nil, nil, keyLen, snapWipedStorageMeter, false); err != nil {
