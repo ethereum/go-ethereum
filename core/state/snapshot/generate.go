@@ -237,6 +237,7 @@ func (dl *diskLayer) proveRange(root common.Hash, prefix []byte, kind string, or
 	)
 	iter := dl.diskdb.NewIterator(prefix, origin)
 	defer iter.Release()
+
 	for iter.Next() {
 		key := iter.Key()
 		if len(key) != len(prefix)+common.HashLength {
@@ -254,14 +255,19 @@ func (dl *diskLayer) proveRange(root common.Hash, prefix []byte, kind string, or
 		}
 		val, err := valueConvertFn(iter.Value())
 		if err != nil {
-			// TODO! The corrupted slim state should somehow be recovered
-			log.Debug("Failed to convert the flat state", "kind", kind, "key", common.BytesToHash(key[len(prefix):]), "error", err)
-			return nil, err
+			// Sepcial case, the state data is corrupted(invalid slim-format account),
+			// don't abort the entire procedure directly. Instead, let the fallback
+			// generation to heal the invalid data.
+			//
+			// Here append the original value to ensure that the number of key and
+			// value are the same.
+			vals = append(vals, common.CopyBytes(iter.Value()))
+			continue
 		}
 		vals = append(vals, val)
 	}
 	// The snap state is exhausted, pass the entire key/val set for verification
-	if origin == nil && aborted {
+	if origin == nil && !aborted {
 		stackTr := trie.NewStackTrie(nil)
 		for i, key := range keys {
 			stackTr.TryUpdate(key, common.CopyBytes(vals[i]))
@@ -271,12 +277,12 @@ func (dl *diskLayer) proveRange(root common.Hash, prefix []byte, kind string, or
 		}
 		return &proofResult{keys: keys, vals: vals, cont: false, proofErr: nil}, nil
 	}
+	// Snap state is chunked, generate edge proofs for verification.
 	tr, err := trie.New(root, dl.triedb)
 	if err != nil {
 		log.Error("Missing trie", "root", root, "err", err)
 		return nil, err
 	}
-	// Snap state is chunked, generate edge proofs for verification.
 	// Firstly find out the key of last iterated element.
 	var last []byte
 	if len(keys) > 0 {
