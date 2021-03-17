@@ -624,3 +624,49 @@ func TestGenerateWithExtraBeforeAndAfter(t *testing.T) {
 		t.Fatalf("expected slot to be removed, got %v", string(data))
 	}
 }
+
+// TestGenerateWithMalformedSnapdata tests what happes if we have some junk
+// in the snapshot database, which cannot be parsed back to an account
+func TestGenerateWithMalformedSnapdata(t *testing.T) {
+	accountCheckRange = 3
+	log.Root().SetHandler(log.LvlFilterHandler(log.LvlTrace, log.StreamHandler(os.Stderr, log.TerminalFormat(true))))
+	var (
+		diskdb = memorydb.New()
+		triedb = trie.NewDatabase(diskdb)
+	)
+	accTrie, _ := trie.New(common.Hash{}, triedb)
+	{
+		acc := &Account{Balance: big.NewInt(1), Root: emptyRoot.Bytes(), CodeHash: emptyCode.Bytes()}
+		val, _ := rlp.EncodeToBytes(acc)
+		accTrie.Update(common.HexToHash("0x03").Bytes(), val)
+
+		junk := make([]byte, 100)
+		copy(junk, []byte{0xde, 0xad})
+		rawdb.WriteAccountSnapshot(diskdb, common.HexToHash("0x02"), junk)
+		rawdb.WriteAccountSnapshot(diskdb, common.HexToHash("0x03"), junk)
+		rawdb.WriteAccountSnapshot(diskdb, common.HexToHash("0x04"), junk)
+		rawdb.WriteAccountSnapshot(diskdb, common.HexToHash("0x05"), junk)
+	}
+
+	root, _ := accTrie.Commit(nil)
+	t.Logf("root: %x", root)
+	triedb.Commit(root, false, nil)
+
+	snap := generateSnapshot(diskdb, triedb, 16, root)
+	select {
+	case <-snap.genPending:
+		// Snapshot generation succeeded
+
+	case <-time.After(250 * time.Millisecond):
+		t.Errorf("Snapshot generation failed")
+	}
+	checkSnapRoot(t, snap, root)
+	// Signal abortion to the generator and wait for it to tear down
+	stop := make(chan *generatorStats)
+	snap.genAbort <- stop
+	<-stop
+	// If we now inspect the snap db, there should exist no extraneous storage items
+	if data := rawdb.ReadStorageSnapshot(diskdb, hashData([]byte("acc-2")), hashData([]byte("b-key-1"))); data != nil {
+		t.Fatalf("expected slot to be removed, got %v", string(data))
+	}
+}

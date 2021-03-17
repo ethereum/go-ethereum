@@ -209,9 +209,6 @@ func (result *proofResult) last() []byte {
 // forEach iterates all the visited elements and applies the given callback on them.
 // The iteration is aborted if the callback returns non-nil error.
 func (result *proofResult) forEach(callback func(key []byte, val []byte) error) error {
-	if callback == nil {
-		return nil
-	}
 	for i := 0; i < len(result.keys); i++ {
 		key, val := result.keys[i], result.vals[i]
 		if err := callback(key, val); err != nil {
@@ -255,7 +252,7 @@ func (dl *diskLayer) proveRange(root common.Hash, prefix []byte, kind string, or
 		}
 		val, err := valueConvertFn(iter.Value())
 		if err != nil {
-			// Sepcial case, the state data is corrupted(invalid slim-format account),
+			// Special case, the state data is corrupted (invalid slim-format account),
 			// don't abort the entire procedure directly. Instead, let the fallback
 			// generation to heal the invalid data.
 			//
