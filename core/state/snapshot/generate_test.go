@@ -492,6 +492,10 @@ func TestGenerateWithExtraAccounts(t *testing.T) {
 	root, _ := accTrie.Commit(nil)
 	t.Logf("root: %x", root)
 	triedb.Commit(root, false, nil)
+	// To verify the test: If we now inspect the snap db, there should exist extraneous storage items
+	if data := rawdb.ReadStorageSnapshot(diskdb, hashData([]byte("acc-2")), hashData([]byte("b-key-1"))); data == nil {
+		t.Fatalf("expected snap storage to exist")
+	}
 
 	snap := generateSnapshot(diskdb, triedb, 16, root)
 	select {
@@ -564,10 +568,6 @@ func TestGenerateWithManyExtraAccounts(t *testing.T) {
 	stop := make(chan *generatorStats)
 	snap.genAbort <- stop
 	<-stop
-	// If we now inspect the snap db, there should exist no extraneous storage items
-	if data := rawdb.ReadStorageSnapshot(diskdb, hashData([]byte("acc-2")), hashData([]byte("b-key-1"))); data != nil {
-		t.Fatalf("expected slot to be removed, got %v", string(data))
-	}
 }
 
 // Tests this case
@@ -619,10 +619,6 @@ func TestGenerateWithExtraBeforeAndAfter(t *testing.T) {
 	stop := make(chan *generatorStats)
 	snap.genAbort <- stop
 	<-stop
-	// If we now inspect the snap db, there should exist no extraneous storage items
-	if data := rawdb.ReadStorageSnapshot(diskdb, hashData([]byte("acc-2")), hashData([]byte("b-key-1"))); data != nil {
-		t.Fatalf("expected slot to be removed, got %v", string(data))
-	}
 }
 
 // TestGenerateWithMalformedSnapdata tests what happes if we have some junk
