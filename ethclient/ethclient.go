@@ -178,12 +178,116 @@ func (ec *Client) HeaderByHash(ctx context.Context, hash common.Hash) (*types.He
 // HeaderByNumber returns a block header from the current canonical chain. If number is
 // nil, the latest known header is returned.
 func (ec *Client) HeaderByNumber(ctx context.Context, number *big.Int) (*types.Header, error) {
-	var head *types.Header
-	err := ec.c.CallContext(ctx, &head, "eth_getBlockByNumber", toBlockNumArg(number), false)
-	if err == nil && head == nil {
-		err = ethereum.NotFound
+
+	// If handling the 'pending' block, the header result will be a partial header --
+	// missing consensus-required fields and thus being considered invalid, and which as such
+	// cannot be decoded by Header's generated JSON unmarshal method.
+	// In order to return a header, then, we need to assemble the header field by field
+	// from a string:interface{} map.
+	n := toBlockNumArg(number)
+	if n != "pending" {
+		// Not pending, handle normally; expecting either valid or missing block.
+		var head *types.Header
+		err := ec.c.CallContext(ctx, &head, "eth_getBlockByNumber", n, false)
+		if err == nil && head == nil {
+			err = ethereum.NotFound
+			return nil, err
+		}
+		return head, err
 	}
-	return head, err
+
+	// Handle pending block. The error is not checked and is returned directly.
+	h := &types.Header{}
+	target := make(map[string]interface{})
+	err := ec.c.CallContext(ctx, &target, "eth_getBlockByNumber", n, false)
+
+	if v, ok := target["parentHash"]; ok {
+		if s, ok := v.(string); ok {
+			h.ParentHash = common.HexToHash(s)
+		}
+	}
+	if v, ok := target["sha3Uncles"]; ok {
+		if s, ok := v.(string); ok {
+			h.UncleHash = common.HexToHash(s)
+		}
+	}
+	if v, ok := target["miner"]; ok {
+		if s, ok := v.(string); ok {
+			h.Coinbase = common.HexToAddress(s)
+		}
+	}
+	if v, ok := target["stateRoot"]; ok {
+		if s, ok := v.(string); ok {
+			h.Root = common.HexToHash(s)
+		}
+	}
+	if v, ok := target["receiptsRoot"]; ok {
+		if s, ok := v.(string); ok {
+			h.ReceiptHash = common.HexToHash(s)
+		}
+	}
+	if v, ok := target["transactionsRoot"]; ok {
+		if s, ok := v.(string); ok {
+			h.TxHash = common.HexToHash(s)
+		}
+	}
+	if v, ok := target["logsBloom"]; ok {
+		if s, ok := v.(string); ok {
+			h.Bloom = types.BytesToBloom(common.Hex2Bytes(s))
+		}
+	}
+	if v, ok := target["difficulty"]; ok {
+		if s, ok := v.(string); ok {
+			h.Difficulty, err = hexutil.DecodeBig(s)
+			if err != nil {
+				return h, err
+			}
+		}
+	}
+	if v, ok := target["number"]; ok {
+		if s, ok := v.(string); ok {
+			h.Number, err = hexutil.DecodeBig(s)
+			if err != nil {
+				return h, err
+			}
+		}
+	}
+	if v, ok := target["gasLimit"]; ok {
+		if s, ok := v.(string); ok {
+			h.GasLimit, err = hexutil.DecodeUint64(s)
+			if err != nil {
+				return h, err
+			}
+		}
+	}
+	if v, ok := target["gasUsed"]; ok {
+		if s, ok := v.(string); ok {
+			h.GasUsed, err = hexutil.DecodeUint64(s)
+			if err != nil {
+				return h, err
+			}
+		}
+	}
+	if v, ok := target["timestamp"]; ok {
+		if s, ok := v.(string); ok {
+			h.Time, err = hexutil.DecodeUint64(s)
+			if err != nil {
+				return h, err
+			}
+		}
+	}
+	if v, ok := target["extraData"]; ok {
+		if s, ok := v.(string); ok {
+			h.Extra = common.Hex2Bytes(s)
+			if err != nil {
+				return h, err
+			}
+		}
+	}
+	// omit: mixHash
+	// omit: nonce
+
+	return h, err
 }
 
 type rpcTransaction struct {

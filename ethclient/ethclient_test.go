@@ -274,36 +274,105 @@ func TestEthClient(t *testing.T) {
 }
 
 func testHeader(t *testing.T, chain []*types.Block, client *rpc.Client) {
+	headerEqFn := func(want *types.Header) func(header *types.Header, err error) error {
+		return func(got *types.Header, err error) error {
+			if err != nil {
+				return err
+			}
+			if got != nil && got.Number != nil && got.Number.Sign() == 0 {
+				got.Number = big.NewInt(0) // hack to make DeepEqual work
+			}
+			if !reflect.DeepEqual(got, want) {
+				return fmt.Errorf("want: %v, got: %v", want, got)
+			}
+			return nil
+		}
+	}
+	latestBlock := chain[len(chain)-1]
 	tests := map[string]struct {
-		block   *big.Int
-		want    *types.Header
-		wantErr error
+		block  *big.Int
+		testFn func(header *types.Header, err error) error
 	}{
 		"genesis": {
-			block: big.NewInt(0),
-			want:  chain[0].Header(),
+			block:  big.NewInt(0),
+			testFn: headerEqFn(chain[0].Header()),
 		},
-		"first_block": {
-			block: big.NewInt(1),
-			want:  chain[1].Header(),
+		"latest_block_by_number": {
+			block:  latestBlock.Number(),
+			testFn: headerEqFn(latestBlock.Header()),
+		},
+		// latest_block_by_name queries the block by the keyword "latest".
+		"latest_block_by_name": {
+			block:  nil,
+			testFn: headerEqFn(latestBlock.Header()),
 		},
 		"future_block": {
-			block:   big.NewInt(1000000000),
-			want:    nil,
-			wantErr: ethereum.NotFound,
-		},
-		// Test numerical aliases for named blocks.
-		// earliest: 0 (tested above)
-		// latest: nil
-		// pending: -1
-		"latest": {
-			block: nil,
-			want:  chain[1].Header(),
+			block: big.NewInt(1000000000),
+			testFn: func(header *types.Header, err error) error {
+				if !errors.Is(err, ethereum.NotFound) {
+					return fmt.Errorf("want: %v, got: %v", ethereum.NotFound, err)
+				}
+				if header != nil {
+					return fmt.Errorf("want: nil, got: %v", header)
+				}
+				return nil
+			},
 		},
 		"pending": {
-			block:   big.NewInt(-1),
-			want:    nil, // FIXME
-			wantErr: nil, // HeaderByNumber(-1) error = "missing required field 'miner' for Header", want %!q(<nil>)
+			block: big.NewInt(-1),
+			testFn: func(header *types.Header, err error) error {
+				if err != nil {
+					return err
+				}
+				// Fields that should be null (-> zero-value).
+				if header.MixDigest != (common.Hash{}) {
+					return fmt.Errorf("mix: want: zero-value; got: %x", header.MixDigest)
+				}
+				if header.Nonce != (types.BlockNonce{}) {
+					return fmt.Errorf("nonce: want: zero-value; got: %v", header.Nonce)
+				}
+				if header.Coinbase != (common.Address{}) {
+					return fmt.Errorf("miner: want: zero-value; got: %x", header.Coinbase)
+				}
+
+				// Fields that should be determined.
+				if header.ParentHash != latestBlock.Hash() {
+					return fmt.Errorf("parentHash: want: %s, got: %s", latestBlock.Hash().Hex(), header.ParentHash.Hex())
+				}
+				if header.Number == nil || header.Number.Cmp(new(big.Int).Add(latestBlock.Number(), big.NewInt(1))) != 0 {
+					return fmt.Errorf("number: want: %v, got: %v", new(big.Int).Add(latestBlock.Number(), big.NewInt(1)), header.Number)
+				}
+				if header.Difficulty == nil || header.Difficulty.Cmp(latestBlock.Difficulty()) != 0 {
+					return fmt.Errorf("difficulty: want: %v, got: %v", latestBlock.Difficulty(), header.Difficulty)
+				}
+				if header.UncleHash != types.EmptyUncleHash {
+					return fmt.Errorf("uncleHash: want: %s, got: %s", types.EmptyUncleHash.Hex(), header.UncleHash.Hex())
+				}
+				if !bytes.Equal(header.Extra, common.Hex2Bytes("0x")) {
+					return fmt.Errorf("extra: want: 0x, got: %x", header.Extra)
+				}
+
+				// Fields that should be filled, but don't hardcode expectations.
+				// Skip gasUsed and bloom to avoid making assumptions about the backend and whether or not the blocks
+				// have transactions.
+				if header.GasLimit < params.MinGasLimit {
+					return fmt.Errorf("gasLimit: want: %d, got: %d", 0, header.GasLimit)
+				}
+				if header.Time == 0 || header.Time >= uint64(time.Now().Unix()+1) {
+					return fmt.Errorf("time: want: %s, got: %d", "not zero, not future", header.Time)
+				}
+				if header.TxHash == (common.Hash{}) {
+					return fmt.Errorf("transactionsRoot: want: non-zero-value, got: %x", header.TxHash)
+				}
+				if header.Root == (common.Hash{}) {
+					return fmt.Errorf("stateRoot: want: non-zero-value, got: %x", header.Root)
+				}
+				if header.ReceiptHash == (common.Hash{}) {
+					return fmt.Errorf("receiptsRoot: want: non-zero-value, got: %x", header.ReceiptHash)
+				}
+
+				return nil
+			},
 		},
 	}
 	for name, tt := range tests {
@@ -313,14 +382,8 @@ func testHeader(t *testing.T, chain []*types.Block, client *rpc.Client) {
 			defer cancel()
 
 			got, err := ec.HeaderByNumber(ctx, tt.block)
-			if !errors.Is(tt.wantErr, err) {
-				t.Fatalf("HeaderByNumber(%v) error = %q, want %q", tt.block, err, tt.wantErr)
-			}
-			if got != nil && got.Number != nil && got.Number.Sign() == 0 {
-				got.Number = big.NewInt(0) // hack to make DeepEqual work
-			}
-			if !reflect.DeepEqual(got, tt.want) {
-				t.Fatalf("HeaderByNumber(%v)\n   = %v\nwant %v", tt.block, got, tt.want)
+			if err := tt.testFn(got, err); err != nil {
+				t.Fatalf("HeaderByNumber(%v) error = %q", tt.block, err)
 			}
 		})
 	}
