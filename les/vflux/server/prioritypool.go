@@ -33,11 +33,11 @@ const (
 	lazyQueueRefresh = time.Second * 10 // refresh period of the active queue
 )
 
-// priorityPoolSetup contains node state flags and fields used by PriorityPool
+// priorityPoolSetup contains node state flags and fields used by priorityPool
 // Note: activeFlag and inactiveFlag can be controlled both externally and by the pool,
-// see PriorityPool description for details.
+// see priorityPool description for details.
 type priorityPoolSetup struct {
-	// controlled by PriorityPool
+	// controlled by priorityPool
 	activeFlag, inactiveFlag       nodestate.Flags
 	capacityField, ppNodeInfoField nodestate.Field
 	// external connections
@@ -46,7 +46,7 @@ type priorityPoolSetup struct {
 }
 
 // newPriorityPoolSetup creates a new priorityPoolSetup and initializes the fields
-// and flags controlled by PriorityPool
+// and flags controlled by priorityPool
 func newPriorityPoolSetup(setup *nodestate.Setup) priorityPoolSetup {
 	return priorityPoolSetup{
 		activeFlag:      setup.NewFlag("active"),
@@ -56,13 +56,13 @@ func newPriorityPoolSetup(setup *nodestate.Setup) priorityPoolSetup {
 	}
 }
 
-// connect sets the fields and flags used by PriorityPool as an input
+// connect sets the fields and flags used by priorityPool as an input
 func (pps *priorityPoolSetup) connect(priorityField nodestate.Field, updateFlag nodestate.Flags) {
 	pps.priorityField = priorityField // should implement nodePriority
 	pps.updateFlag = updateFlag       // triggers an immediate priority update
 }
 
-// PriorityPool handles a set of nodes where each node has a capacity (a scalar value)
+// priorityPool handles a set of nodes where each node has a capacity (a scalar value)
 // and a priority (which can change over time and can also depend on the capacity).
 // A node is active if it has at least the necessary minimal amount of capacity while
 // inactive nodes have 0 capacity (values between 0 and the minimum are not allowed).
@@ -80,7 +80,7 @@ func (pps *priorityPoolSetup) connect(priorityField nodestate.Field, updateFlag 
 // capacity (if the threshold priority stays the same).
 //
 // Nodes in the pool always have either inactiveFlag or activeFlag set. A new node is
-// added to the pool by externally setting inactiveFlag. PriorityPool can switch a node
+// added to the pool by externally setting inactiveFlag. priorityPool can switch a node
 // between inactiveFlag and activeFlag at any time. Nodes can be removed from the pool
 // by externally resetting both flags. activeFlag should not be set externally.
 //
@@ -88,7 +88,7 @@ func (pps *priorityPoolSetup) connect(priorityField nodestate.Field, updateFlag 
 // the minimum capacity can be granted for them. The capacity of lower priority active
 // nodes is reduced or they are demoted to "inactive" state if their priority is
 // insufficient even at minimal capacity.
-type PriorityPool struct {
+type priorityPool struct {
 	priorityPoolSetup
 	ns                     *nodestate.NodeStateMachine
 	clock                  mclock.Clock
@@ -102,12 +102,12 @@ type PriorityPool struct {
 	activeBias             time.Duration
 	capacityStepDiv        uint64
 
-	cachedCurve    *CapacityCurve
+	cachedCurve    *capacityCurve
 	ccUpdatedAt    mclock.AbsTime
 	ccUpdateForced bool
 }
 
-// ppNodeInfo is the internal node descriptor of PriorityPool
+// ppNodeInfo is the internal node descriptor of priorityPool
 type ppNodeInfo struct {
 	nodePriority               nodePriority
 	node                       *enode.Node
@@ -118,9 +118,9 @@ type ppNodeInfo struct {
 	activeIndex, inactiveIndex int
 }
 
-// NewPriorityPool creates a new PriorityPool
-func NewPriorityPool(ns *nodestate.NodeStateMachine, setup priorityPoolSetup, clock mclock.Clock, minCap uint64, activeBias time.Duration, capacityStepDiv uint64) *PriorityPool {
-	pp := &PriorityPool{
+// newPriorityPool creates a new priorityPool
+func newPriorityPool(ns *nodestate.NodeStateMachine, setup priorityPoolSetup, clock mclock.Clock, minCap uint64, activeBias time.Duration, capacityStepDiv uint64) *priorityPool {
+	pp := &priorityPool{
 		ns:                ns,
 		priorityPoolSetup: setup,
 		clock:             clock,
@@ -170,18 +170,18 @@ func NewPriorityPool(ns *nodestate.NodeStateMachine, setup priorityPoolSetup, cl
 	return pp
 }
 
-// RequestCapacity checks whether changing the capacity of a node to the given target
+// requestCapacity checks whether changing the capacity of a node to the given target
 // is possible (bias is applied in favor of other active nodes if the target is higher
 // than the current capacity).
 // If setCap is true then it also performs the change if possible. The function returns
 // the minimum priority needed to do the change and whether it is currently allowed.
 // If setCap and allowed are both true then the caller can assume that the change was
 // successful.
-// Note: priorityField should always be set before calling RequestCapacity. If setCap
+// Note: priorityField should always be set before calling requestCapacity. If setCap
 // is false then both inactiveFlag and activeFlag can be unset and they are not changed
 // by this function call either.
 // Note 2: this function should run inside a NodeStateMachine operation
-func (pp *PriorityPool) RequestCapacity(node *enode.Node, targetCap uint64, bias time.Duration, setCap bool) (minPriority int64, allowed bool) {
+func (pp *priorityPool) requestCapacity(node *enode.Node, targetCap uint64, bias time.Duration, setCap bool) (minPriority int64, allowed bool) {
 	pp.lock.Lock()
 	pp.activeQueue.Refresh()
 	var updates []capUpdate
@@ -198,14 +198,14 @@ func (pp *PriorityPool) RequestCapacity(node *enode.Node, targetCap uint64, bias
 	}
 	c, _ := pp.ns.GetField(node, pp.ppNodeInfoField).(*ppNodeInfo)
 	if c == nil {
-		log.Error("RequestCapacity called for unknown node", "id", node.ID())
+		log.Error("requestCapacity called for unknown node", "id", node.ID())
 		return math.MaxInt64, false
 	}
 	var priority int64
 	if targetCap > c.capacity {
-		priority = c.nodePriority.EstimatePriority(targetCap, 0, 0, bias, false)
+		priority = c.nodePriority.estimatePriority(targetCap, 0, 0, bias, false)
 	} else {
-		priority = c.nodePriority.Priority(targetCap)
+		priority = c.nodePriority.priority(targetCap)
 	}
 	pp.markForChange(c)
 	pp.setCapacity(c, targetCap)
@@ -222,7 +222,7 @@ func (pp *PriorityPool) RequestCapacity(node *enode.Node, targetCap uint64, bias
 }
 
 // SetLimits sets the maximum number and total capacity of simultaneously active nodes
-func (pp *PriorityPool) SetLimits(maxCount, maxCap uint64) {
+func (pp *priorityPool) SetLimits(maxCount, maxCap uint64) {
 	pp.lock.Lock()
 	pp.activeQueue.Refresh()
 	var updates []capUpdate
@@ -243,8 +243,8 @@ func (pp *PriorityPool) SetLimits(maxCount, maxCap uint64) {
 	}
 }
 
-// SetActiveBias sets the bias applied when trying to activate inactive nodes
-func (pp *PriorityPool) SetActiveBias(bias time.Duration) {
+// setActiveBias sets the bias applied when trying to activate inactive nodes
+func (pp *priorityPool) setActiveBias(bias time.Duration) {
 	pp.lock.Lock()
 	var updates []capUpdate
 	defer func() {
@@ -260,7 +260,7 @@ func (pp *PriorityPool) SetActiveBias(bias time.Duration) {
 }
 
 // Active returns the number and total capacity of currently active nodes
-func (pp *PriorityPool) Active() (uint64, uint64) {
+func (pp *priorityPool) Active() (uint64, uint64) {
 	pp.lock.Lock()
 	defer pp.lock.Unlock()
 
@@ -268,7 +268,7 @@ func (pp *PriorityPool) Active() (uint64, uint64) {
 }
 
 // Limits returns the maximum allowed number and total capacity of active nodes
-func (pp *PriorityPool) Limits() (uint64, uint64) {
+func (pp *priorityPool) Limits() (uint64, uint64) {
 	pp.lock.Lock()
 	defer pp.lock.Unlock()
 
@@ -301,14 +301,14 @@ func activePriority(a interface{}) int64 {
 		return math.MinInt64
 	}
 	if c.bias == 0 {
-		return invertPriority(c.nodePriority.Priority(c.capacity))
+		return invertPriority(c.nodePriority.priority(c.capacity))
 	} else {
-		return invertPriority(c.nodePriority.EstimatePriority(c.capacity, 0, 0, c.bias, true))
+		return invertPriority(c.nodePriority.estimatePriority(c.capacity, 0, 0, c.bias, true))
 	}
 }
 
 // activeMaxPriority callback returns estimated maximum priority of ppNodeInfo item in activeQueue
-func (pp *PriorityPool) activeMaxPriority(a interface{}, until mclock.AbsTime) int64 {
+func (pp *priorityPool) activeMaxPriority(a interface{}, until mclock.AbsTime) int64 {
 	c := a.(*ppNodeInfo)
 	if c.forced {
 		return math.MinInt64
@@ -317,17 +317,17 @@ func (pp *PriorityPool) activeMaxPriority(a interface{}, until mclock.AbsTime) i
 	if future < 0 {
 		future = 0
 	}
-	return invertPriority(c.nodePriority.EstimatePriority(c.capacity, 0, future, c.bias, false))
+	return invertPriority(c.nodePriority.estimatePriority(c.capacity, 0, future, c.bias, false))
 }
 
 // inactivePriority callback returns actual priority of ppNodeInfo item in inactiveQueue
-func (pp *PriorityPool) inactivePriority(p *ppNodeInfo) int64 {
-	return p.nodePriority.Priority(pp.minCap)
+func (pp *priorityPool) inactivePriority(p *ppNodeInfo) int64 {
+	return p.nodePriority.priority(pp.minCap)
 }
 
 // connectedNode is called when a new node has been added to the pool (inactiveFlag set)
 // Note: this function should run inside a NodeStateMachine operation
-func (pp *PriorityPool) connectedNode(c *ppNodeInfo) {
+func (pp *priorityPool) connectedNode(c *ppNodeInfo) {
 	pp.lock.Lock()
 	pp.activeQueue.Refresh()
 	var updates []capUpdate
@@ -347,7 +347,7 @@ func (pp *PriorityPool) connectedNode(c *ppNodeInfo) {
 // disconnectedNode is called when a node has been removed from the pool (both inactiveFlag
 // and activeFlag reset)
 // Note: this function should run inside a NodeStateMachine operation
-func (pp *PriorityPool) disconnectedNode(c *ppNodeInfo) {
+func (pp *priorityPool) disconnectedNode(c *ppNodeInfo) {
 	pp.lock.Lock()
 	pp.activeQueue.Refresh()
 	var updates []capUpdate
@@ -372,7 +372,7 @@ func (pp *PriorityPool) disconnectedNode(c *ppNodeInfo) {
 // or confirmed later. This temporary state allows changing the capacity of a node and
 // moving it between the active and inactive queue. activeFlag/inactiveFlag and
 // capacityField are not changed while the changes are still temporary.
-func (pp *PriorityPool) markForChange(c *ppNodeInfo) {
+func (pp *priorityPool) markForChange(c *ppNodeInfo) {
 	if c.changed {
 		return
 	}
@@ -384,7 +384,7 @@ func (pp *PriorityPool) markForChange(c *ppNodeInfo) {
 // setCapacity changes the capacity of a node and adjusts activeCap and activeCount
 // accordingly. Note that this change is performed in the temporary state so it should
 // be called after markForChange and before finalizeChanges.
-func (pp *PriorityPool) setCapacity(n *ppNodeInfo, cap uint64) {
+func (pp *priorityPool) setCapacity(n *ppNodeInfo, cap uint64) {
 	pp.activeCap += cap - n.capacity
 	if n.capacity == 0 {
 		pp.activeCount++
@@ -398,7 +398,7 @@ func (pp *PriorityPool) setCapacity(n *ppNodeInfo, cap uint64) {
 // enforceLimits enforces active node count and total capacity limits. It returns the
 // lowest active node priority. Note that this function is performed on the temporary
 // internal state.
-func (pp *PriorityPool) enforceLimits() (*ppNodeInfo, int64) {
+func (pp *priorityPool) enforceLimits() (*ppNodeInfo, int64) {
 	if pp.activeCap <= pp.maxCap && pp.activeCount <= pp.maxCount {
 		return nil, math.MinInt64
 	}
@@ -428,7 +428,7 @@ func (pp *PriorityPool) enforceLimits() (*ppNodeInfo, int64) {
 // finalizeChanges either commits or reverts temporary changes. The necessary capacity
 // field and according flag updates are not performed here but returned in a list because
 // they should be performed while the mutex is not held.
-func (pp *PriorityPool) finalizeChanges(commit bool) (updates []capUpdate) {
+func (pp *priorityPool) finalizeChanges(commit bool) (updates []capUpdate) {
 	for _, c := range pp.changed {
 		// always remove and push back in order to update biased/forced priority
 		pp.activeQueue.Remove(c.activeIndex)
@@ -467,7 +467,7 @@ type capUpdate struct {
 // updateFlags performs capacityField and activeFlag/inactiveFlag updates while the
 // pool mutex is not held
 // Note: this function should run inside a NodeStateMachine operation
-func (pp *PriorityPool) updateFlags(updates []capUpdate) {
+func (pp *priorityPool) updateFlags(updates []capUpdate) {
 	for _, f := range updates {
 		if f.oldCap == 0 {
 			pp.ns.SetStateSub(f.node, pp.activeFlag, pp.inactiveFlag, 0)
@@ -482,7 +482,7 @@ func (pp *PriorityPool) updateFlags(updates []capUpdate) {
 }
 
 // tryActivate tries to activate inactive nodes if possible
-func (pp *PriorityPool) tryActivate() []capUpdate {
+func (pp *priorityPool) tryActivate() []capUpdate {
 	var commit bool
 	for pp.inactiveQueue.Size() > 0 {
 		c := pp.inactiveQueue.PopItem().(*ppNodeInfo)
@@ -504,7 +504,7 @@ func (pp *PriorityPool) tryActivate() []capUpdate {
 // updatePriority gets the current priority value of the given node from the nodePriority
 // interface and performs the necessary changes. It is triggered by updateFlag.
 // Note: this function should run inside a NodeStateMachine operation
-func (pp *PriorityPool) updatePriority(node *enode.Node) {
+func (pp *priorityPool) updatePriority(node *enode.Node) {
 	pp.lock.Lock()
 	pp.activeQueue.Refresh()
 	var updates []capUpdate
@@ -527,12 +527,12 @@ func (pp *PriorityPool) updatePriority(node *enode.Node) {
 	updates = pp.tryActivate()
 }
 
-// CapacityCurve is a snapshot of the priority pool contents in a format that can efficiently
+// capacityCurve is a snapshot of the priority pool contents in a format that can efficiently
 // estimate how much capacity could be granted to a given node at a given priority level.
-type CapacityCurve struct {
+type capacityCurve struct {
 	points       []curvePoint       // curve points sorted in descending order of priority
 	index        map[enode.ID][]int // curve point indexes belonging to each node
-	exclude      []int              // curve point indexes of excluded node
+	excludeList  []int              // curve point indexes of excluded node
 	excludeFirst bool               // true if activeCount == maxCount
 }
 
@@ -541,8 +541,8 @@ type curvePoint struct {
 	nextPri int64  // next priority level where more capacity will be available
 }
 
-// GetCapacityCurve returns a new or recently cached CapacityCurve based on the contents of the pool
-func (pp *PriorityPool) GetCapacityCurve() *CapacityCurve {
+// getCapacityCurve returns a new or recently cached capacityCurve based on the contents of the pool
+func (pp *priorityPool) getCapacityCurve() *capacityCurve {
 	pp.lock.Lock()
 	defer pp.lock.Unlock()
 
@@ -554,7 +554,7 @@ func (pp *PriorityPool) GetCapacityCurve() *CapacityCurve {
 
 	pp.ccUpdateForced = false
 	pp.ccUpdatedAt = now
-	curve := &CapacityCurve{
+	curve := &capacityCurve{
 		index: make(map[enode.ID][]int),
 	}
 	pp.cachedCurve = curve
@@ -579,7 +579,7 @@ func (pp *PriorityPool) GetCapacityCurve() *CapacityCurve {
 		next, cp.nextPri = pp.enforceLimits()
 		pp.activeCap -= tempCap
 		if next == nil {
-			log.Error("GetCapacityCurve: cannot remove next element from the priority queue")
+			log.Error("getCapacityCurve: cannot remove next element from the priority queue")
 			break
 		}
 		id := next.node.ID()
@@ -602,34 +602,34 @@ func (pp *PriorityPool) GetCapacityCurve() *CapacityCurve {
 		nextPri: math.MaxInt64,
 	})
 	if curve.excludeFirst {
-		curve.exclude = curve.index[excludeID]
+		curve.excludeList = curve.index[excludeID]
 	}
 	return curve
 }
 
-// Exclude returns a CapacityCurve with the given node excluded from the original curve
-func (cc *CapacityCurve) Exclude(id enode.ID) *CapacityCurve {
-	if exclude, ok := cc.index[id]; ok {
+// exclude returns a capacityCurve with the given node excluded from the original curve
+func (cc *capacityCurve) exclude(id enode.ID) *capacityCurve {
+	if excludeList, ok := cc.index[id]; ok {
 		// return a new version of the curve (only one excluded node can be selected)
 		// Note: if the first node was excluded by default (excludeFirst == true) then
 		// we can forget about that and exclude the node with the given id instead.
-		return &CapacityCurve{
-			points:  cc.points,
-			index:   cc.index,
-			exclude: exclude,
+		return &capacityCurve{
+			points:      cc.points,
+			index:       cc.index,
+			excludeList: excludeList,
 		}
 	}
 	return cc
 }
 
-func (cc *CapacityCurve) getPoint(i int) curvePoint {
+func (cc *capacityCurve) getPoint(i int) curvePoint {
 	cp := cc.points[i]
 	if i == 0 && cc.excludeFirst {
 		cp.freeCap = 0
 		return cp
 	}
-	for ii := len(cc.exclude) - 1; ii >= 0; ii-- {
-		ei := cc.exclude[ii]
+	for ii := len(cc.excludeList) - 1; ii >= 0; ii-- {
+		ei := cc.excludeList[ii]
 		if ei < i {
 			break
 		}
@@ -639,11 +639,11 @@ func (cc *CapacityCurve) getPoint(i int) curvePoint {
 	return cp
 }
 
-// MaxCapacity calculates the maximum capacity available for a node with a given
+// maxCapacity calculates the maximum capacity available for a node with a given
 // (monotonically decreasing) priority vs. capacity function. Note that if the requesting
 // node is already in the pool then it should be excluded from the curve in order to get
 // the correct result.
-func (cc *CapacityCurve) MaxCapacity(priority func(cap uint64) int64) uint64 {
+func (cc *capacityCurve) maxCapacity(priority func(cap uint64) int64) uint64 {
 	min, max := 0, len(cc.points)-1 // the curve always has at least one point
 	for min < max {
 		mid := (min + max) / 2

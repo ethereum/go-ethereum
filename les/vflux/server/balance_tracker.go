@@ -35,9 +35,9 @@ const (
 	persistExpirationRefresh = time.Minute * 5 // refresh period of the token expiration persistence
 )
 
-// balanceTrackerSetup contains node state flags and fields used by BalanceTracker
+// balanceTrackerSetup contains node state flags and fields used by balanceTracker
 type balanceTrackerSetup struct {
-	// controlled by PriorityPool
+	// controlled by priorityPool
 	priorityFlag, updateFlag nodestate.Flags
 	balanceField             nodestate.Field
 	// external connections
@@ -45,7 +45,7 @@ type balanceTrackerSetup struct {
 }
 
 // newBalanceTrackerSetup creates a new balanceTrackerSetup and initializes the fields
-// and flags controlled by BalanceTracker
+// and flags controlled by balanceTracker
 func newBalanceTrackerSetup(setup *nodestate.Setup) balanceTrackerSetup {
 	return balanceTrackerSetup{
 		// priorityFlag is set if the node has a positive balance
@@ -59,13 +59,13 @@ func newBalanceTrackerSetup(setup *nodestate.Setup) balanceTrackerSetup {
 	}
 }
 
-// connect sets the fields used by BalanceTracker as an input
+// connect sets the fields used by balanceTracker as an input
 func (bts *balanceTrackerSetup) connect(clientField, capacityField nodestate.Field) {
 	bts.clientField = clientField
 	bts.capacityField = capacityField
 }
 
-// BalanceTracker tracks positive and negative balances for connected nodes.
+// balanceTracker tracks positive and negative balances for connected nodes.
 // After clientField is set externally, a nodeBalance is created and previous
 // balance values are loaded from the database. Both balances are exponentially expired
 // values. Costs are deducted from the positive balance if present, otherwise added to
@@ -73,7 +73,7 @@ func (bts *balanceTrackerSetup) connect(clientField, capacityField nodestate.Fie
 // continuously while individual request costs are applied immediately.
 // The two balances are translated into a single priority value that also depends
 // on the actual capacity.
-type BalanceTracker struct {
+type balanceTracker struct {
 	balanceTrackerSetup
 	clock              mclock.Clock
 	lock               sync.Mutex
@@ -91,10 +91,10 @@ type balancePeer interface {
 	FreeClientId() string
 }
 
-// NewBalanceTracker creates a new BalanceTracker
-func NewBalanceTracker(ns *nodestate.NodeStateMachine, setup balanceTrackerSetup, db ethdb.KeyValueStore, clock mclock.Clock, posExp, negExp utils.ValueExpirer) *BalanceTracker {
+// newBalanceTracker creates a new balanceTracker
+func newBalanceTracker(ns *nodestate.NodeStateMachine, setup balanceTrackerSetup, db ethdb.KeyValueStore, clock mclock.Clock, posExp, negExp utils.ValueExpirer) *balanceTracker {
 	ndb := newNodeDB(db, clock)
-	bt := &BalanceTracker{
+	bt := &balanceTracker{
 		ns:                  ns,
 		balanceTrackerSetup: setup,
 		ndb:                 ndb,
@@ -162,8 +162,8 @@ func NewBalanceTracker(ns *nodestate.NodeStateMachine, setup balanceTrackerSetup
 	return bt
 }
 
-// Stop saves expiration offset and unsaved node balances and shuts BalanceTracker down
-func (bt *BalanceTracker) Stop() {
+// Stop saves expiration offset and unsaved node balances and shuts balanceTracker down
+func (bt *balanceTracker) stop() {
 	now := bt.clock.Now()
 	bt.ndb.setExpiration(bt.posExp.LogOffset(now), bt.negExp.LogOffset(now))
 	close(bt.quit)
@@ -179,7 +179,7 @@ func (bt *BalanceTracker) Stop() {
 }
 
 // TotalTokenAmount returns the current total amount of service tokens in existence
-func (bt *BalanceTracker) TotalTokenAmount() uint64 {
+func (bt *balanceTracker) TotalTokenAmount() uint64 {
 	bt.lock.Lock()
 	defer bt.lock.Unlock()
 
@@ -199,13 +199,13 @@ func (bt *BalanceTracker) TotalTokenAmount() uint64 {
 }
 
 // GetPosBalanceIDs lists node IDs with an associated positive balance
-func (bt *BalanceTracker) GetPosBalanceIDs(start, stop enode.ID, maxCount int) (result []enode.ID) {
+func (bt *balanceTracker) GetPosBalanceIDs(start, stop enode.ID, maxCount int) (result []enode.ID) {
 	return bt.ndb.getPosBalanceIDs(start, stop, maxCount)
 }
 
 // SetExpirationTCs sets positive and negative token expiration time constants.
 // Specified in seconds, 0 means infinite (no expiration).
-func (bt *BalanceTracker) SetExpirationTCs(pos, neg uint64) {
+func (bt *balanceTracker) SetExpirationTCs(pos, neg uint64) {
 	bt.lock.Lock()
 	defer bt.lock.Unlock()
 
@@ -225,7 +225,7 @@ func (bt *BalanceTracker) SetExpirationTCs(pos, neg uint64) {
 
 // GetExpirationTCs returns the current positive and negative token expiration
 // time constants
-func (bt *BalanceTracker) GetExpirationTCs() (pos, neg uint64) {
+func (bt *balanceTracker) GetExpirationTCs() (pos, neg uint64) {
 	bt.lock.Lock()
 	defer bt.lock.Unlock()
 
@@ -234,7 +234,7 @@ func (bt *BalanceTracker) GetExpirationTCs() (pos, neg uint64) {
 
 // BalanceOperation allows atomic operations on the balance of a node regardless of whether
 // it is currently connected or not
-func (bt *BalanceTracker) BalanceOperation(id enode.ID, negBalanceKey string, cb func(AtomicBalanceOperator)) {
+func (bt *balanceTracker) BalanceOperation(id enode.ID, negBalanceKey string, cb func(AtomicBalanceOperator)) {
 	bt.ns.Operation(func() {
 		node := bt.ns.GetNode(id)
 		var nb *nodeBalance
@@ -254,7 +254,7 @@ func (bt *BalanceTracker) BalanceOperation(id enode.ID, negBalanceKey string, cb
 // for the given node. It also sets the priorityFlag and adds balanceCallbackZero if
 // the node has a positive balance.
 // Note: this function should run inside a NodeStateMachine operation
-func (bt *BalanceTracker) newNodeBalance(node *enode.Node, negBalanceKey string, setFlags bool) *nodeBalance {
+func (bt *balanceTracker) newNodeBalance(node *enode.Node, negBalanceKey string, setFlags bool) *nodeBalance {
 	pb := bt.ndb.getOrNewBalance(node.ID().Bytes(), false)
 	nb := bt.ndb.getOrNewBalance([]byte(negBalanceKey), true)
 	n := &nodeBalance{
@@ -276,7 +276,7 @@ func (bt *BalanceTracker) newNodeBalance(node *enode.Node, negBalanceKey string,
 }
 
 // storeBalance stores either a positive or a negative balance in the database
-func (bt *BalanceTracker) storeBalance(id []byte, neg bool, value utils.ExpiredValue) {
+func (bt *balanceTracker) storeBalance(id []byte, neg bool, value utils.ExpiredValue) {
 	if bt.canDropBalance(bt.clock.Now(), neg, value) {
 		bt.ndb.delBalance(id, neg) // balance is small enough, drop it directly.
 	} else {
@@ -286,7 +286,7 @@ func (bt *BalanceTracker) storeBalance(id []byte, neg bool, value utils.ExpiredV
 
 // canDropBalance tells whether a positive or negative balance is below the threshold
 // and therefore can be dropped from the database
-func (bt *BalanceTracker) canDropBalance(now mclock.AbsTime, neg bool, b utils.ExpiredValue) bool {
+func (bt *balanceTracker) canDropBalance(now mclock.AbsTime, neg bool, b utils.ExpiredValue) bool {
 	if neg {
 		return b.Value(bt.negExp.LogOffset(now)) <= negThreshold
 	}
@@ -294,7 +294,7 @@ func (bt *BalanceTracker) canDropBalance(now mclock.AbsTime, neg bool, b utils.E
 }
 
 // updateTotalBalance adjusts the total balance after executing given callback.
-func (bt *BalanceTracker) updateTotalBalance(n *nodeBalance, callback func() bool) {
+func (bt *balanceTracker) updateTotalBalance(n *nodeBalance, callback func() bool) {
 	bt.lock.Lock()
 	defer bt.lock.Unlock()
 

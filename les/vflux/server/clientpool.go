@@ -58,7 +58,7 @@ func init() {
 // then negative balance is accumulated.
 //
 // Balance tracking and priority calculation for connected clients is done by
-// BalanceTracker. activeQueue ensures that clients with the lowest positive or
+// balanceTracker. activeQueue ensures that clients with the lowest positive or
 // highest negative balance get evicted when the total capacity allowance is full
 // and new clients with a better balance want to connect.
 //
@@ -70,8 +70,8 @@ func init() {
 // and negative banalce. Boeth positive balance and negative balance will decrease
 // exponentially. If the balance is low enough, then the record will be dropped.
 type ClientPool struct {
-	*PriorityPool
-	*BalanceTracker
+	*priorityPool
+	*balanceTracker
 	clock  mclock.Clock
 	closed bool
 	ns     *nodestate.NodeStateMachine
@@ -103,8 +103,8 @@ func NewClientPool(balanceDb ethdb.KeyValueStore, minCap uint64, connectedBias t
 	ns := nodestate.NewNodeStateMachine(nil, nil, clock, serverSetup)
 	cp := &ClientPool{
 		ns:             ns,
-		BalanceTracker: NewBalanceTracker(ns, btSetup, balanceDb, clock, &utils.Expirer{}, &utils.Expirer{}),
-		PriorityPool:   NewPriorityPool(ns, ppSetup, clock, minCap, connectedBias, 4),
+		balanceTracker: newBalanceTracker(ns, btSetup, balanceDb, clock, &utils.Expirer{}, &utils.Expirer{}),
+		priorityPool:   newPriorityPool(ns, ppSetup, clock, minCap, connectedBias, 4),
 		clock:          clock,
 		minCap:         minCap,
 		connectedBias:  connectedBias,
@@ -121,7 +121,7 @@ func NewClientPool(balanceDb ethdb.KeyValueStore, minCap uint64, connectedBias t
 			if timeout > 0 {
 				ns.AddTimeout(node, ppSetup.inactiveFlag, timeout)
 			} else {
-				// Note: if capacity is immediately available then PriorityPool will set the active
+				// Note: if capacity is immediately available then priorityPool will set the active
 				// flag simultaneously with removing the inactive flag and therefore this will not
 				// initiate disconnection
 				ns.SetStateSub(node, nodestate.Flags{}, ppSetup.inactiveFlag, 0)
@@ -134,7 +134,7 @@ func NewClientPool(balanceDb ethdb.KeyValueStore, minCap uint64, connectedBias t
 			// active with no priority; limit capacity to minCap
 			cap, _ := ns.GetField(node, ppSetup.capacityField).(uint64)
 			if cap > minCap {
-				cp.RequestCapacity(node, minCap, 0, true)
+				cp.requestCapacity(node, minCap, 0, true)
 			}
 		}
 		if newState.Equals(nodestate.Flags{}) {
@@ -195,7 +195,7 @@ func (cp *ClientPool) Start() {
 // Stop shuts the client pool down. The clientPeer interface callbacks will not be called
 // after Stop. Register calls will return nil.
 func (cp *ClientPool) Stop() {
-	cp.BalanceTracker.Stop()
+	cp.balanceTracker.stop()
 	cp.ns.Stop()
 }
 
@@ -227,7 +227,7 @@ func (cp *ClientPool) SetDefaultFactors(posFactors, negFactors PriceFactors) {
 func (cp *ClientPool) SetConnectedBias(bias time.Duration) {
 	cp.lock.Lock()
 	cp.connectedBias = bias
-	cp.SetActiveBias(bias)
+	cp.setActiveBias(bias)
 	cp.lock.Unlock()
 }
 
@@ -283,9 +283,9 @@ func (cp *ClientPool) SetCapacity(node *enode.Node, reqCap uint64, bias time.Dur
 			curveBias += time.Second * 10
 			tryCap := reqCap
 			if reqCap > capacity {
-				curve := cp.GetCapacityCurve().Exclude(node.ID())
-				tryCap = curve.MaxCapacity(func(capacity uint64) int64 {
-					return balance.EstimatePriority(capacity, 0, 0, curveBias, false)
+				curve := cp.getCapacityCurve().exclude(node.ID())
+				tryCap = curve.maxCapacity(func(capacity uint64) int64 {
+					return balance.estimatePriority(capacity, 0, 0, curveBias, false)
 				})
 				if tryCap <= capacity {
 					return
@@ -294,7 +294,7 @@ func (cp *ClientPool) SetCapacity(node *enode.Node, reqCap uint64, bias time.Dur
 					tryCap = reqCap
 				}
 			}
-			if _, allowed := cp.RequestCapacity(node, tryCap, bias, true); allowed {
+			if _, allowed := cp.requestCapacity(node, tryCap, bias, true); allowed {
 				capacity = tryCap
 				return
 			}
@@ -333,14 +333,14 @@ func (cp *ClientPool) serveCapQuery(id enode.ID, freeID string, data []byte) []b
 	}
 	cp.lock.RUnlock()
 
-	// use CapacityCurve to answer request for multiple newly bought token amounts
-	curve := cp.GetCapacityCurve().Exclude(id)
+	// use capacityCurve to answer request for multiple newly bought token amounts
+	curve := cp.getCapacityCurve().exclude(id)
 	cp.BalanceOperation(id, freeID, func(balance AtomicBalanceOperator) {
 		pb, _ := balance.GetBalance()
 		for i, addTokens := range req.AddTokens {
 			add := addTokens.Int64()
-			result[i] = curve.MaxCapacity(func(capacity uint64) int64 {
-				return balance.EstimatePriority(capacity, add, 0, bias, false) / int64(capacity)
+			result[i] = curve.maxCapacity(func(capacity uint64) int64 {
+				return balance.estimatePriority(capacity, add, 0, bias, false) / int64(capacity)
 			})
 			if add <= 0 && uint64(-add) >= pb && result[i] > cp.minCap {
 				result[i] = cp.minCap

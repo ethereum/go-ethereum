@@ -49,14 +49,14 @@ func (z zeroExpirer) LogOffset(now mclock.AbsTime) utils.Fixed64               {
 type balanceTestSetup struct {
 	clock *mclock.Simulated
 	ns    *nodestate.NodeStateMachine
-	bt    *BalanceTracker
+	bt    *balanceTracker
 }
 
 func newBalanceTestSetup() *balanceTestSetup {
 	clock := &mclock.Simulated{}
 	ns := nodestate.NewNodeStateMachine(nil, nil, clock, testSetup)
 	db := memorydb.New()
-	bt := NewBalanceTracker(ns, btTestSetup, db, clock, zeroExpirer{}, zeroExpirer{})
+	bt := newBalanceTracker(ns, btTestSetup, db, clock, zeroExpirer{}, zeroExpirer{})
 	ns.Start()
 	return &balanceTestSetup{
 		clock: clock,
@@ -96,7 +96,7 @@ func (b *balanceTestSetup) addBalance(node *nodeBalance, add int64) (old, new ui
 }
 
 func (b *balanceTestSetup) stop() {
-	b.bt.Stop()
+	b.bt.stop()
 	b.ns.Stop()
 }
 
@@ -249,9 +249,9 @@ func TestBalanceToPriority(t *testing.T) {
 	}
 	for _, i := range inputs {
 		b.setBalance(node, i.pos, i.neg)
-		priority := node.Priority(1000)
+		priority := node.priority(1000)
 		if priority != i.priority {
-			t.Fatalf("Priority mismatch, want %v, got %v", i.priority, priority)
+			t.Fatalf("priority mismatch, want %v, got %v", i.priority, priority)
 		}
 	}
 }
@@ -290,7 +290,7 @@ func TestEstimatedPriority(t *testing.T) {
 	for _, i := range inputs {
 		b.clock.Run(i.runTime)
 		node.RequestServed(i.reqCost)
-		priority := node.EstimatePriority(1000000000, 0, i.futureTime, 0, false)
+		priority := node.estimatePriority(1000000000, 0, i.futureTime, 0, false)
 		if priority != i.priority-1 {
 			t.Fatalf("Estimated priority mismatch, want %v, got %v", i.priority-1, priority)
 		}
@@ -399,7 +399,7 @@ func TestBalancePersistence(t *testing.T) {
 	negExp := &utils.Expirer{}
 	posExp.SetRate(clock.Now(), math.Log(2)/float64(time.Hour*2)) // halves every two hours
 	negExp.SetRate(clock.Now(), math.Log(2)/float64(time.Hour))   // halves every hour
-	bt := NewBalanceTracker(ns, btTestSetup, db, clock, posExp, negExp)
+	bt := newBalanceTracker(ns, btTestSetup, db, clock, posExp, negExp)
 	ns.Start()
 	bts := &balanceTestSetup{
 		clock: clock,
@@ -432,7 +432,7 @@ func TestBalancePersistence(t *testing.T) {
 	clock.Run(time.Hour * 2)
 	exp(8000000000, 4000000000)
 	expTotal(8000000000)
-	bt.Stop()
+	bt.stop()
 	ns.Stop()
 
 	clock = &mclock.Simulated{}
@@ -441,7 +441,7 @@ func TestBalancePersistence(t *testing.T) {
 	negExp = &utils.Expirer{}
 	posExp.SetRate(clock.Now(), math.Log(2)/float64(time.Hour*2)) // halves every two hours
 	negExp.SetRate(clock.Now(), math.Log(2)/float64(time.Hour))   // halves every hour
-	bt = NewBalanceTracker(ns, btTestSetup, db, clock, posExp, negExp)
+	bt = newBalanceTracker(ns, btTestSetup, db, clock, posExp, negExp)
 	ns.Start()
 	bts = &balanceTestSetup{
 		clock: clock,
@@ -455,6 +455,6 @@ func TestBalancePersistence(t *testing.T) {
 	clock.Run(time.Hour * 2)
 	exp(4000000000, 1000000000)
 	expTotal(4000000000)
-	bt.Stop()
+	bt.stop()
 	ns.Stop()
 }

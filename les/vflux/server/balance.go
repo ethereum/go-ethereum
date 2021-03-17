@@ -55,13 +55,13 @@ func (p PriceFactors) timePrice(cap uint64) float64 {
 type (
 	// nodePriority interface provides current and estimated future priorities on demand
 	nodePriority interface {
-		// Priority should return the current priority of the node (higher is better)
-		Priority(cap uint64) int64
-		// EstMinPriority should return a lower estimate for the minimum of the node priority
+		// priority should return the current priority of the node (higher is better)
+		priority(cap uint64) int64
+		// estimatePriority should return a lower estimate for the minimum of the node priority
 		// value starting from the current moment until the given time. If the priority goes
 		// under the returned estimate before the specified moment then it is the caller's
 		// responsibility to signal with updateFlag.
-		EstimatePriority(cap uint64, addBalance int64, future, bias time.Duration, update bool) int64
+		estimatePriority(cap uint64, addBalance int64, future, bias time.Duration, update bool) int64
 	}
 
 	// ReadOnlyBalance provides read-only operations on the node balance
@@ -92,11 +92,11 @@ type (
 // client and calculates actual and projected future priority values.
 // Implements nodePriority interface.
 type nodeBalance struct {
-	bt                               *BalanceTracker
+	bt                               *balanceTracker
 	lock                             sync.RWMutex
 	node                             *enode.Node
 	connAddress                      string
-	active, priority, setFlags       bool
+	active, hasPriority, setFlags    bool
 	capacity                         uint64
 	balance                          balance
 	posFactor, negFactor             PriceFactors
@@ -278,8 +278,8 @@ func (n *nodeBalance) RequestServed(cost uint64) uint64 {
 	return n.balance.pos.Value(posExp)
 }
 
-// Priority returns the actual priority based on the current balance
-func (n *nodeBalance) Priority(capacity uint64) int64 {
+// priority returns the actual priority based on the current balance
+func (n *nodeBalance) priority(capacity uint64) int64 {
 	n.lock.Lock()
 	defer n.lock.Unlock()
 
@@ -292,7 +292,7 @@ func (n *nodeBalance) Priority(capacity uint64) int64 {
 // in the current session.
 // If update is true then a priority callback is added that turns updateFlag on and off
 // in case the priority goes below the estimated minimum.
-func (n *nodeBalance) EstimatePriority(capacity uint64, addBalance int64, future, bias time.Duration, update bool) int64 {
+func (n *nodeBalance) estimatePriority(capacity uint64, addBalance int64, future, bias time.Duration, update bool) int64 {
 	n.lock.Lock()
 	defer n.lock.Unlock()
 
@@ -519,7 +519,7 @@ func (n *nodeBalance) updateAfter(dt time.Duration) {
 func (n *nodeBalance) balanceExhausted() {
 	n.lock.Lock()
 	n.storeBalance(true, false)
-	n.priority = false
+	n.hasPriority = false
 	n.lock.Unlock()
 	if n.setFlags {
 		n.bt.ns.SetStateSub(n.node, nodestate.Flags{}, n.bt.priorityFlag, 0)
@@ -530,8 +530,8 @@ func (n *nodeBalance) balanceExhausted() {
 // callback and flag if necessary. It assumes that the balance has been recently updated.
 // Note that the priority flag has to be set by the caller after the mutex has been released.
 func (n *nodeBalance) checkPriorityStatus() bool {
-	if !n.priority && !n.balance.pos.IsZero() {
-		n.priority = true
+	if !n.hasPriority && !n.balance.pos.IsZero() {
+		n.hasPriority = true
 		n.addCallback(balanceCallbackZero, 0, func() { n.balanceExhausted() })
 		return true
 	}
