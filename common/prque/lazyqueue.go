@@ -48,7 +48,7 @@ type LazyQueue struct {
 }
 
 type (
-	PriorityCallback    func(data interface{}, now mclock.AbsTime) int64   // actual priority callback
+	PriorityCallback    func(data interface{}) int64                       // actual priority callback
 	MaxPriorityCallback func(data interface{}, until mclock.AbsTime) int64 // estimated maximum priority callback
 )
 
@@ -139,11 +139,10 @@ func (q *LazyQueue) peekIndex() int {
 // Pop multiple times. Popped items are passed to the callback. MultiPop returns
 // when the callback returns false or there are no more items to pop.
 func (q *LazyQueue) MultiPop(callback func(data interface{}, priority int64) bool) {
-	now := q.clock.Now()
 	nextIndex := q.peekIndex()
 	for nextIndex != -1 {
 		data := heap.Pop(q.queue[nextIndex]).(*item).value
-		heap.Push(q.popQueue, &item{data, q.priority(data, now)})
+		heap.Push(q.popQueue, &item{data, q.priority(data)})
 		nextIndex = q.peekIndex()
 		for q.popQueue.Len() != 0 && (nextIndex == -1 || q.queue[nextIndex].blocks[0][0].priority < q.popQueue.blocks[0][0].priority) {
 			i := heap.Pop(q.popQueue).(*item)

@@ -46,10 +46,10 @@ func TestTestMode(t *testing.T) {
 	case block := <-results:
 		header.Nonce = types.EncodeNonce(block.Nonce())
 		header.MixDigest = block.MixDigest()
-		if err := ethash.VerifySeal(nil, header); err != nil {
+		if err := ethash.verifySeal(nil, header, false); err != nil {
 			t.Fatalf("unexpected verification error: %v", err)
 		}
-	case <-time.NewTimer(2 * time.Second).C:
+	case <-time.NewTimer(4 * time.Second).C:
 		t.Error("sealing result timeout")
 	}
 }
@@ -86,7 +86,7 @@ func verifyTest(wg *sync.WaitGroup, e *Ethash, workerIndex, epochs int) {
 			block = 0
 		}
 		header := &types.Header{Number: big.NewInt(block), Difficulty: big.NewInt(100)}
-		e.VerifySeal(nil, header)
+		e.verifySeal(nil, header, false)
 	}
 }
 

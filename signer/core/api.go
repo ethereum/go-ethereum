@@ -33,7 +33,6 @@ import (
 	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/ethereum/go-ethereum/internal/ethapi"
 	"github.com/ethereum/go-ethereum/log"
-	"github.com/ethereum/go-ethereum/rlp"
 	"github.com/ethereum/go-ethereum/signer/storage"
 )
 
@@ -439,7 +438,7 @@ func (api *SignerAPI) newAccount() (common.Address, error) {
 			continue
 		}
 		if pwErr := ValidatePasswordFormat(resp.Text); pwErr != nil {
-			api.UI.ShowError(fmt.Sprintf("Account creation attempt #%d failed due to password requirements: %v", (i + 1), pwErr))
+			api.UI.ShowError(fmt.Sprintf("Account creation attempt #%d failed due to password requirements: %v", i+1, pwErr))
 		} else {
 			// No error
 			acc, err := be[0].(*keystore.KeyStore).NewAccount(resp.Text)
@@ -574,11 +573,11 @@ func (api *SignerAPI) SignTransaction(ctx context.Context, args SendTxArgs, meth
 		return nil, err
 	}
 
-	rlpdata, err := rlp.EncodeToBytes(signedTx)
+	data, err := signedTx.MarshalBinary()
 	if err != nil {
 		return nil, err
 	}
-	response := ethapi.SignTransactionResult{Raw: rlpdata, Tx: signedTx}
+	response := ethapi.SignTransactionResult{Raw: data, Tx: signedTx}
 
 	// Finally, send the signed tx to the UI
 	api.UI.OnApprovedTx(response)

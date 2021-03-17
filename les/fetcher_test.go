@@ -66,7 +66,12 @@ func TestSequentialAnnouncementsLes2(t *testing.T) { testSequentialAnnouncements
 func TestSequentialAnnouncementsLes3(t *testing.T) { testSequentialAnnouncements(t, 3) }
 
 func testSequentialAnnouncements(t *testing.T, protocol int) {
-	s, c, teardown := newClientServerEnv(t, 4, protocol, nil, nil, 0, false, false, true)
+	netconfig := testnetConfig{
+		blocks:    4,
+		protocol:  protocol,
+		nopruning: true,
+	}
+	s, c, teardown := newClientServerEnv(t, netconfig)
 	defer teardown()
 
 	// Create connected peer pair.
@@ -101,7 +106,12 @@ func TestGappedAnnouncementsLes2(t *testing.T) { testGappedAnnouncements(t, 2) }
 func TestGappedAnnouncementsLes3(t *testing.T) { testGappedAnnouncements(t, 3) }
 
 func testGappedAnnouncements(t *testing.T, protocol int) {
-	s, c, teardown := newClientServerEnv(t, 4, protocol, nil, nil, 0, false, false, true)
+	netconfig := testnetConfig{
+		blocks:    4,
+		protocol:  protocol,
+		nopruning: true,
+	}
+	s, c, teardown := newClientServerEnv(t, netconfig)
 	defer teardown()
 
 	// Create connected peer pair.
@@ -183,7 +193,13 @@ func testTrustedAnnouncement(t *testing.T, protocol int) {
 			ids = append(ids, n.String())
 		}
 	}
-	_, c, teardown := newClientServerEnv(t, 0, protocol, nil, ids, 60, false, false, true)
+	netconfig := testnetConfig{
+		protocol:    protocol,
+		nopruning:   true,
+		ulcServers:  ids,
+		ulcFraction: 60,
+	}
+	_, c, teardown := newClientServerEnv(t, netconfig)
 	defer teardown()
 	defer func() {
 		for i := 0; i < len(teardowns); i++ {
@@ -233,8 +249,17 @@ func testTrustedAnnouncement(t *testing.T, protocol int) {
 	check([]uint64{10}, 10, func() { <-newHead }) // Sync the whole chain.
 }
 
-func TestInvalidAnnounces(t *testing.T) {
-	s, c, teardown := newClientServerEnv(t, 4, lpv3, nil, nil, 0, false, false, true)
+func TestInvalidAnnouncesLES2(t *testing.T) { testInvalidAnnounces(t, lpv2) }
+func TestInvalidAnnouncesLES3(t *testing.T) { testInvalidAnnounces(t, lpv3) }
+func TestInvalidAnnouncesLES4(t *testing.T) { testInvalidAnnounces(t, lpv4) }
+
+func testInvalidAnnounces(t *testing.T, protocol int) {
+	netconfig := testnetConfig{
+		blocks:    4,
+		protocol:  protocol,
+		nopruning: true,
+	}
+	s, c, teardown := newClientServerEnv(t, netconfig)
 	defer teardown()
 
 	// Create connected peer pair.

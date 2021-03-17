@@ -158,6 +158,20 @@ func (p *Peer) Caps() []Cap {
 	return p.rw.caps
 }
 
+// RunningCap returns true if the peer is actively connected using any of the
+// enumerated versions of a specific protocol, meaning that at least one of the
+// versions is supported by both this node and the peer p.
+func (p *Peer) RunningCap(protocol string, versions []uint) bool {
+	if proto, ok := p.running[protocol]; ok {
+		for _, ver := range versions {
+			if proto.Version == ver {
+				return true
+			}
+		}
+	}
+	return false
+}
+
 // RemoteAddr returns the remote address of the network connection.
 func (p *Peer) RemoteAddr() net.Addr {
 	return p.rw.fd.RemoteAddr()

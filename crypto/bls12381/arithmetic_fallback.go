@@ -207,7 +207,7 @@ func lsubAssign(z, x *fe) {
 	z[2], b = bits.Sub64(z[2], x[2], b)
 	z[3], b = bits.Sub64(z[3], x[3], b)
 	z[4], b = bits.Sub64(z[4], x[4], b)
-	z[5], b = bits.Sub64(z[5], x[5], b)
+	z[5], _ = bits.Sub64(z[5], x[5], b)
 }
 
 func neg(z *fe, x *fe) {

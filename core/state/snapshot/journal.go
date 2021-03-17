@@ -441,6 +441,6 @@ func (dl *diffLayer) LegacyJournal(buffer *bytes.Buffer) (common.Hash, error) {
 	if err := rlp.Encode(buffer, storage); err != nil {
 		return common.Hash{}, err
 	}
-	log.Debug("Legacy journalled disk layer", "root", dl.root, "parent", dl.parent.Root())
+	log.Debug("Legacy journalled diff layer", "root", dl.root, "parent", dl.parent.Root())
 	return base, nil
 }

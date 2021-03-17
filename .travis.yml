@@ -7,8 +7,8 @@ jobs:
     # This builder only tests code linters on latest version of Go
     - stage: lint
       os: linux
-      dist: xenial
-      go: 1.15.x
+      dist: bionic
+      go: 1.16.x
       env:
         - lint
       git:
@@ -21,8 +21,8 @@ jobs:
     - stage: build
       os: linux
       arch: amd64
-      dist: xenial
-      go: 1.15.x
+      dist: bionic
+      go: 1.16.x
       env:
         - GO111MODULE=on
       script:
@@ -33,8 +33,8 @@ jobs:
       if: type = pull_request
       os: linux
       arch: arm64
-      dist: xenial
-      go: 1.15.x
+      dist: bionic
+      go: 1.16.x
       env:
         - GO111MODULE=on
       script:
@@ -43,8 +43,8 @@ jobs:
 
     - stage: build
       os: linux
-      dist: xenial
-      go: 1.14.x
+      dist: bionic
+      go: 1.15.x
       env:
         - GO111MODULE=on
       script:

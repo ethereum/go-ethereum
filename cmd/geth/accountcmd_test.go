@@ -43,13 +43,13 @@ func tmpDatadirWithKeystore(t *testing.T) string {
 }
 
 func TestAccountListEmpty(t *testing.T) {
-	geth := runGeth(t, "--nousb", "account", "list")
+	geth := runGeth(t, "account", "list")
 	geth.ExpectExit()
 }
 
 func TestAccountList(t *testing.T) {
 	datadir := tmpDatadirWithKeystore(t)
-	geth := runGeth(t, "--nousb", "account", "list", "--datadir", datadir)
+	geth := runGeth(t, "account", "list", "--datadir", datadir)
 	defer geth.ExpectExit()
 	if runtime.GOOS == "windows" {
 		geth.Expect(`
@@ -102,6 +102,7 @@ func TestAccountImport(t *testing.T) {
 		},
 	}
 	for _, test := range tests {
+		test := test
 		t.Run(test.name, func(t *testing.T) {
 			t.Parallel()
 			importAccountWithExpect(t, test.key, test.output)
@@ -138,7 +139,7 @@ Fatal: Passwords do not match
 
 func TestAccountUpdate(t *testing.T) {
 	datadir := tmpDatadirWithKeystore(t)
-	geth := runGeth(t, "--nousb", "account", "update",
+	geth := runGeth(t, "account", "update",
 		"--datadir", datadir, "--lightkdf",
 		"f466859ead1932d743d622cb74fc058882e8648a")
 	defer geth.ExpectExit()
@@ -153,7 +154,7 @@ Repeat password: {{.InputLine "foobar2"}}
 }
 
 func TestWalletImport(t *testing.T) {
-	geth := runGeth(t, "--nousb", "wallet", "import", "--lightkdf", "testdata/guswallet.json")
+	geth := runGeth(t, "wallet", "import", "--lightkdf", "testdata/guswallet.json")
 	defer geth.ExpectExit()
 	geth.Expect(`
 !! Unsupported terminal, password will be echoed.
@@ -168,7 +169,7 @@ Address: {d4584b5f6229b7be90727b0fc8c6b91bb427821f}
 }
 
 func TestWalletImportBadPassword(t *testing.T) {
-	geth := runGeth(t, "--nousb", "wallet", "import", "--lightkdf", "testdata/guswallet.json")
+	geth := runGeth(t, "wallet", "import", "--lightkdf", "testdata/guswallet.json")
 	defer geth.ExpectExit()
 	geth.Expect(`
 !! Unsupported terminal, password will be echoed.

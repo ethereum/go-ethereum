@@ -25,8 +25,8 @@ import (
 	"path/filepath"
 
 	"github.com/ethereum/go-ethereum/core"
-	"github.com/ethereum/go-ethereum/eth"
 	"github.com/ethereum/go-ethereum/eth/downloader"
+	"github.com/ethereum/go-ethereum/eth/ethconfig"
 	"github.com/ethereum/go-ethereum/ethclient"
 	"github.com/ethereum/go-ethereum/ethstats"
 	"github.com/ethereum/go-ethereum/internal/debug"
@@ -182,7 +182,7 @@ func NewNode(datadir string, config *NodeConfig) (stack *Node, _ error) {
 	}
 	// Register the Ethereum protocol if requested
 	if config.EthereumEnabled {
-		ethConf := eth.DefaultConfig
+		ethConf := ethconfig.Defaults
 		ethConf.Genesis = genesis
 		ethConf.SyncMode = downloader.LightSync
 		ethConf.NetworkId = uint64(config.EthereumNetworkID)

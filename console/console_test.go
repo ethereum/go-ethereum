@@ -31,6 +31,7 @@ import (
 	"github.com/ethereum/go-ethereum/console/prompt"
 	"github.com/ethereum/go-ethereum/core"
 	"github.com/ethereum/go-ethereum/eth"
+	"github.com/ethereum/go-ethereum/eth/ethconfig"
 	"github.com/ethereum/go-ethereum/internal/jsre"
 	"github.com/ethereum/go-ethereum/miner"
 	"github.com/ethereum/go-ethereum/node"
@@ -85,7 +86,7 @@ type tester struct {
 
 // newTester creates a test environment based on which the console can operate.
 // Please ensure you call Close() on the returned tester to avoid leaks.
-func newTester(t *testing.T, confOverride func(*eth.Config)) *tester {
+func newTester(t *testing.T, confOverride func(*ethconfig.Config)) *tester {
 	// Create a temporary storage for the node keys and initialize it
 	workspace, err := ioutil.TempDir("", "console-tester-")
 	if err != nil {
@@ -97,7 +98,7 @@ func newTester(t *testing.T, confOverride func(*eth.Config)) *tester {
 	if err != nil {
 		t.Fatalf("failed to create node: %v", err)
 	}
-	ethConf := &eth.Config{
+	ethConf := &ethconfig.Config{
 		Genesis: core.DeveloperGenesisBlock(15, common.Address{}),
 		Miner: miner.Config{
 			Etherbase: common.HexToAddress(testAddress),
