@@ -518,7 +518,7 @@ func enableLogging() {
 
 // Tests that snapshot generation when an extra account with storage exists in the snap state.
 func TestGenerateWithManyExtraAccounts(t *testing.T) {
-	if true {
+	if false {
 		enableLogging()
 	}
 	var (

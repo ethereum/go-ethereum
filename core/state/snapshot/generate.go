@@ -184,11 +184,11 @@ func journalProgress(db ethdb.KeyValueWriter, marker []byte, stats *generatorSta
 // proofResult contains the output of range proving which can be used
 // for further processing no matter it's successful or not.
 type proofResult struct {
-	keys     [][]byte   // The key set of all elements being iterated, even proving is failed
-	vals     [][]byte   // The val set of all elements being iterated, even proving is failed
-	cont     bool       // Indicator if there exists more elements in the range, only meaningful when proving is successful
-	proofErr error      // Indicator whether the given state range is valid or not
-	tr       *trie.Trie // The trie, in case the trie was resolved by the prover (may be nil)
+	keys         [][]byte   // The key set of all elements being iterated, even proving is failed
+	vals         [][]byte   // The val set of all elements being iterated, even proving is failed
+	hasMoreElems bool       // Set if the db iteration was aborted on max elements.
+	proofErr     error      // Indicator whether the given state range is valid or not
+	tr           *trie.Trie // The trie, in case the trie was resolved by the prover (may be nil)
 }
 
 // valid returns the indicator that range proof is successful or not.
@@ -273,9 +273,9 @@ func (dl *diskLayer) proveRange(root common.Hash, prefix []byte, kind string, or
 			stackTr.TryUpdate(key, common.CopyBytes(vals[i]))
 		}
 		if gotRoot := stackTr.Hash(); gotRoot != root {
-			return &proofResult{keys: keys, vals: vals, cont: false, proofErr: errors.New("wrong root")}, nil
+			return &proofResult{keys: keys, vals: vals, hasMoreElems: aborted, proofErr: errors.New("wrong root")}, nil
 		}
-		return &proofResult{keys: keys, vals: vals, cont: false, proofErr: nil}, nil
+		return &proofResult{keys: keys, vals: vals, hasMoreElems: aborted, proofErr: nil}, nil
 	}
 	// Snap state is chunked, generate edge proofs for verification.
 	tr, err := trie.New(root, dl.triedb)
@@ -294,21 +294,24 @@ func (dl *diskLayer) proveRange(root common.Hash, prefix []byte, kind string, or
 	}
 	if err := tr.Prove(origin, 0, proof); err != nil {
 		log.Debug("Failed to prove range", "kind", kind, "origin", origin, "err", err)
-		return &proofResult{keys: keys, vals: vals, cont: false, proofErr: err, tr: tr}, nil
+		return &proofResult{keys: keys, vals: vals, hasMoreElems: aborted, proofErr: err, tr: tr}, nil
 	}
 	if last != nil {
 		if err := tr.Prove(last, 0, proof); err != nil {
 			log.Debug("Failed to prove range", "kind", kind, "last", last, "err", err)
-			return &proofResult{keys: keys, vals: vals, cont: false, proofErr: err, tr: tr}, nil
+			return &proofResult{keys: keys, vals: vals, hasMoreElems: aborted, proofErr: err, tr: tr}, nil
 		}
 	}
 	// Verify the state segment with range prover, ensure that all flat states
 	// in this range correspond to merkle trie.
-	_, _, _, cont, err := trie.VerifyRangeProof(root, origin, last, keys, vals, proof)
-	if err != nil {
-		return &proofResult{keys: keys, vals: vals, cont: false, proofErr: err, tr: tr}, nil
-	}
-	return &proofResult{keys: keys, vals: vals, cont: cont, proofErr: nil, tr: tr}, nil
+	_, _, _, _, err = trie.VerifyRangeProof(root, origin, last, keys, vals, proof)
+	// Previously, we took the 'cont' from trie.VerifyRangeProof and used below.
+	// Is that needed? If so, make a testcase to show it
+	// TODO
+	//if err != nil {
+	//	return &proofResult{keys: keys, vals: vals, hasMoreElems: cont || aborted, proofErr: err, tr: tr}, nil
+	//}
+	return &proofResult{keys: keys, vals: vals, hasMoreElems: aborted, proofErr: err, tr: tr}, nil
 }
 
 // genRange generates the state segment with particular prefix. Generation can
@@ -340,7 +343,7 @@ func (dl *diskLayer) genRange(root common.Hash, prefix []byte, kind string, orig
 		if err := result.forEach(func(key []byte, val []byte) error { return onState(key, val, false, false) }); err != nil {
 			return false, nil, err
 		}
-		return !result.cont, last, nil
+		return !result.hasMoreElems, last, nil
 	}
 	logger.Debug("Detected outdated state range", "last", hexutil.Encode(last), "error", result.proofErr)
 	snapFailedRangeProofMeter.Mark(1)
@@ -420,6 +423,9 @@ func (dl *diskLayer) genRange(root common.Hash, prefix []byte, kind string, orig
 		}
 		deleted += 1
 	}
+	// If there are either more trie items, or there are more snap items
+	// (in the next segment), then we need to keep working
+	aborted = aborted || result.hasMoreElems
 	logger.Debug("Regenerated state range", "root", root, "last", hexutil.Encode(last),
 		"count", count, "created", created, "updated", updated, "untouched", untouched, "deleted", deleted)
 	return !aborted, last, nil
