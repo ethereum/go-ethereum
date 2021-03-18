@@ -223,7 +223,6 @@ func (t *testHelper) makeStorageTrie(keys []string, values []string) []byte {
 	stTrie, _ := trie.NewSecure(common.Hash{}, t.triedb)
 	for i, k := range keys {
 		stTrie.Update([]byte(k), []byte(values[i]))
-
 	}
 	root, _ := stTrie.Commit(nil)
 	return root.Bytes()
@@ -693,6 +692,53 @@ func TestGenerateFromEmptySnap(t *testing.T) {
 		// Snapshot generation succeeded
 
 	case <-time.After(1 * time.Second):
+		t.Errorf("Snapshot generation failed")
+	}
+	checkSnapRoot(t, snap, root)
+	// Signal abortion to the generator and wait for it to tear down
+	stop := make(chan *generatorStats)
+	snap.genAbort <- stop
+	<-stop
+}
+
+// Tests that snapshot generation with existent flat state, where the flat state
+// storage is correct, but incomplete.
+// The incomplete part is on the second range
+// snap: [ 0x01, 0x02, 0x03, 0x04] , [ 0x05, 0x06, 0x07, {missing}] (with storageCheck = 4)
+// trie:  0x01, 0x02, 0x03, 0x04,  0x05, 0x06, 0x07, 0x08
+// This hits a case where the snap verification passes, but there are more elements in the trie
+// which we must also add.
+func TestGenerateWithIncompleteStorage(t *testing.T) {
+	storageCheckRange = 4
+	helper := newHelper()
+	stKeys := []string{"1", "2", "3", "4", "5", "6", "7", "8"}
+	stVals := []string{"v1", "v2", "v3", "v4", "v5", "v6", "v7", "v8"}
+	stRoot := helper.makeStorageTrie(stKeys, stVals)
+	// We add 8 accounts, each one is missing exactly one of the storage slots. This means
+	// we don't have to order the keys and figure out exactly which hash-key winds up
+	// on the sensitive spots at the boundaries
+	for i := 0; i < 8; i++ {
+		accKey := fmt.Sprintf("acc-%d", i)
+		helper.addAccount(accKey, &Account{Balance: big.NewInt(int64(i)), Root: stRoot, CodeHash: emptyCode.Bytes()})
+		var moddedKeys []string
+		var moddedVals []string
+		for ii := 0; ii < 8; ii++ {
+			if ii != i {
+				moddedKeys = append(moddedKeys, stKeys[ii])
+				moddedVals = append(moddedVals, stVals[ii])
+			}
+		}
+		helper.addSnapStorage(accKey, moddedKeys, moddedVals)
+	}
+
+	root, snap := helper.Generate()
+	t.Logf("Root: %#x\n", root) // Root: 0x3a97ece15e2539ab3524783c37ca153a62e28faba76a752e826da24a9020d44f
+
+	select {
+	case <-snap.genPending:
+		// Snapshot generation succeeded
+
+	case <-time.After(250 * time.Millisecond):
 		t.Errorf("Snapshot generation failed")
 	}
 	checkSnapRoot(t, snap, root)
