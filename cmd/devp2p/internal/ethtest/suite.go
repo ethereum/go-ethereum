@@ -65,7 +65,7 @@ func NewSuite(dest *enode.Node, chainfile string, genesisfile string) (*Suite, e
 	}, nil
 }
 
-func (s *Suite) EthTests() []utesting.Test {
+func (s *Suite) AllEthTests() []utesting.Test {
 	return []utesting.Test{
 		// status
 		{Name: "Status", Fn: s.TestStatus},
@@ -93,6 +93,38 @@ func (s *Suite) EthTests() []utesting.Test {
 		{Name: "TestTransactions", Fn: s.TestTransaction},
 		{Name: "TestTransactions_66", Fn: s.TestTransaction_66},
 		{Name: "TestMaliciousTransactions", Fn: s.TestMaliciousTx},
+		{Name: "TestMaliciousTransactions_66", Fn: s.TestMaliciousTx_66},
+	}
+}
+
+func (s *Suite) EthTests() []utesting.Test {
+	return []utesting.Test{
+		{Name: "Status", Fn: s.TestStatus},
+		{Name: "GetBlockHeaders", Fn: s.TestGetBlockHeaders},
+		{Name: "GetBlockBodies", Fn: s.TestGetBlockBodies},
+		{Name: "Broadcast", Fn: s.TestBroadcast},
+		{Name: "TestLargeAnnounce", Fn: s.TestLargeAnnounce},
+		{Name: "TestMaliciousHandshake", Fn: s.TestMaliciousHandshake},
+		{Name: "TestMaliciousStatus", Fn: s.TestMaliciousStatus},
+		{Name: "TestMaliciousStatus_66", Fn: s.TestMaliciousStatus},
+		{Name: "TestTransactions", Fn: s.TestTransaction},
+		{Name: "TestMaliciousTransactions", Fn: s.TestMaliciousTx},
+	}
+}
+
+func (s *Suite) Eth66Tests() []utesting.Test {
+	return []utesting.Test{
+		// only proceed with eth66 test suite if node supports eth 66 protocol
+		{Name: "Status_66", Fn: s.TestStatus_66},
+		{Name: "GetBlockHeaders_66", Fn: s.TestGetBlockHeaders_66},
+		{Name: "TestSimultaneousRequests_66", Fn: s.TestSimultaneousRequests_66},
+		{Name: "TestSameRequestID_66", Fn: s.TestSameRequestID_66},
+		{Name: "TestZeroRequestID_66", Fn: s.TestZeroRequestID_66},
+		{Name: "GetBlockBodies_66", Fn: s.TestGetBlockBodies_66},
+		{Name: "Broadcast_66", Fn: s.TestBroadcast_66},
+		{Name: "TestLargeAnnounce_66", Fn: s.TestLargeAnnounce_66},
+		{Name: "TestMaliciousHandshake_66", Fn: s.TestMaliciousHandshake_66},
+		{Name: "TestTransactions_66", Fn: s.TestTransaction_66},
 		{Name: "TestMaliciousTransactions_66", Fn: s.TestMaliciousTx_66},
 	}
 }
@@ -125,7 +157,7 @@ func (s *Suite) TestMaliciousStatus(t *utesting.T) {
 	// get protoHandshake
 	conn.handshake(t)
 	status := &Status{
-		ProtocolVersion: uint32(conn.ethProtocolVersion),
+		ProtocolVersion: uint32(conn.negotiatedProtoVersion),
 		NetworkID:       s.chain.chainConfig.ChainID.Uint64(),
 		TD:              largeNumber(2),
 		Head:            s.chain.blocks[s.chain.Len()-1].Hash(),
@@ -421,6 +453,7 @@ func (s *Suite) dial() (*Conn, error) {
 		{Name: "eth", Version: 64},
 		{Name: "eth", Version: 65},
 	}
+	conn.ourHighestProtoVersion = 65
 	return &conn, nil
 }
 

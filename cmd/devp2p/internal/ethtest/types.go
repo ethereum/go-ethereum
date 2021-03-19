@@ -123,9 +123,10 @@ func (nb NewPooledTransactionHashes) Code() int { return 24 }
 // Conn represents an individual connection with a peer
 type Conn struct {
 	*rlpx.Conn
-	ourKey             *ecdsa.PrivateKey
-	ethProtocolVersion uint
-	caps               []p2p.Cap
+	ourKey                 *ecdsa.PrivateKey
+	negotiatedProtoVersion uint
+	ourHighestProtoVersion uint
+	caps                   []p2p.Cap
 }
 
 func (c *Conn) Read() Message {
@@ -236,7 +237,7 @@ func (c *Conn) handshake(t *utesting.T) Message {
 			c.SetSnappy(true)
 		}
 		c.negotiateEthProtocol(msg.Caps)
-		if c.ethProtocolVersion == 0 {
+		if c.negotiatedProtoVersion == 0 {
 			t.Fatalf("unexpected eth protocol version")
 		}
 		return msg
@@ -254,11 +255,11 @@ func (c *Conn) negotiateEthProtocol(caps []p2p.Cap) {
 		if capability.Name != "eth" {
 			continue
 		}
-		if capability.Version > highestEthVersion && capability.Version <= 65 {
+		if capability.Version > highestEthVersion && capability.Version <= c.ourHighestProtoVersion {
 			highestEthVersion = capability.Version
 		}
 	}
-	c.ethProtocolVersion = highestEthVersion
+	c.negotiatedProtoVersion = highestEthVersion
 }
 
 // statusExchange performs a `Status` message exchange with the given
@@ -295,13 +296,13 @@ loop:
 		}
 	}
 	// make sure eth protocol version is set for negotiation
-	if c.ethProtocolVersion == 0 {
+	if c.negotiatedProtoVersion == 0 {
 		t.Fatalf("eth protocol version must be set in Conn")
 	}
 	if status == nil {
 		// write status message to client
 		status = &Status{
-			ProtocolVersion: uint32(c.ethProtocolVersion),
+			ProtocolVersion: uint32(c.negotiatedProtoVersion),
 			NetworkID:       chain.chainConfig.ChainID.Uint64(),
 			TD:              chain.TD(chain.Len()),
 			Head:            chain.blocks[chain.Len()-1].Hash(),
