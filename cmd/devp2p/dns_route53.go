@@ -17,16 +17,19 @@
 package main
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"sort"
 	"strconv"
 	"strings"
+	"time"
 
-	"github.com/aws/aws-sdk-go/aws"
-	"github.com/aws/aws-sdk-go/aws/credentials"
-	"github.com/aws/aws-sdk-go/aws/session"
-	"github.com/aws/aws-sdk-go/service/route53"
+	"github.com/aws/aws-sdk-go-v2/aws"
+	"github.com/aws/aws-sdk-go-v2/config"
+	"github.com/aws/aws-sdk-go-v2/credentials"
+	"github.com/aws/aws-sdk-go-v2/service/route53"
+	"github.com/aws/aws-sdk-go-v2/service/route53/types"
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/p2p/dnsdisc"
 	"gopkg.in/urfave/cli.v1"
@@ -38,6 +41,7 @@ const (
 	// https://docs.aws.amazon.com/Route53/latest/DeveloperGuide/DNSLimitations.html#limits-api-requests-changeresourcerecordsets
 	route53ChangeSizeLimit  = 32000
 	route53ChangeCountLimit = 1000
+	maxRetryLimit           = 60
 )
 
 var (
@@ -58,7 +62,7 @@ var (
 )
 
 type route53Client struct {
-	api    *route53.Route53
+	api    *route53.Client
 	zoneID string
 }
 
@@ -74,13 +78,13 @@ func newRoute53Client(ctx *cli.Context) *route53Client {
 	if akey == "" || asec == "" {
 		exit(fmt.Errorf("need Route53 Access Key ID and secret proceed"))
 	}
-	config := &aws.Config{Credentials: credentials.NewStaticCredentials(akey, asec, "")}
-	session, err := session.NewSession(config)
+	creds := aws.NewCredentialsCache(credentials.NewStaticCredentialsProvider(akey, asec, ""))
+	cfg, err := config.LoadDefaultConfig(context.Background(), config.WithCredentialsProvider(creds))
 	if err != nil {
-		exit(fmt.Errorf("can't create AWS session: %v", err))
+		exit(fmt.Errorf("can't initialize AWS configuration: %v", err))
 	}
 	return &route53Client{
-		api:    route53.New(session),
+		api:    route53.NewFromConfig(cfg),
 		zoneID: ctx.String(route53ZoneIDFlag.Name),
 	}
 }
@@ -105,25 +109,43 @@ func (c *route53Client) deploy(name string, t *dnsdisc.Tree) error {
 		return nil
 	}
 
-	// Submit change batches.
+	// Submit all change batches.
 	batches := splitChanges(changes, route53ChangeSizeLimit, route53ChangeCountLimit)
+	changesToCheck := make([]*route53.ChangeResourceRecordSetsOutput, len(batches))
 	for i, changes := range batches {
 		log.Info(fmt.Sprintf("Submitting %d changes to Route53", len(changes)))
-		batch := new(route53.ChangeBatch)
-		batch.SetChanges(changes)
-		batch.SetComment(fmt.Sprintf("enrtree update %d/%d of %s at seq %d", i+1, len(batches), name, t.Seq()))
+		batch := &types.ChangeBatch{
+			Changes: changes,
+			Comment: aws.String(fmt.Sprintf("enrtree update %d/%d of %s at seq %d", i+1, len(batches), name, t.Seq())),
+		}
 		req := &route53.ChangeResourceRecordSetsInput{HostedZoneId: &c.zoneID, ChangeBatch: batch}
-		resp, err := c.api.ChangeResourceRecordSets(req)
+		changesToCheck[i], err = c.api.ChangeResourceRecordSets(context.TODO(), req)
 		if err != nil {
 			return err
 		}
+	}
 
-		log.Info(fmt.Sprintf("Waiting for change request %s", *resp.ChangeInfo.Id))
-		wreq := &route53.GetChangeInput{Id: resp.ChangeInfo.Id}
-		if err := c.api.WaitUntilResourceRecordSetsChanged(wreq); err != nil {
-			return err
+	// wait for all change batches to propagate
+	for _, change := range changesToCheck {
+		log.Info(fmt.Sprintf("Waiting for change request %s", *change.ChangeInfo.Id))
+		wreq := &route53.GetChangeInput{Id: change.ChangeInfo.Id}
+		var count int
+		for {
+			wresp, err := c.api.GetChange(context.TODO(), wreq)
+			if err != nil {
+				return err
+			}
+
+			count++
+
+			if wresp.ChangeInfo.Status == types.ChangeStatusInsync || count >= maxRetryLimit {
+				break
+			}
+
+			time.Sleep(30 * time.Second)
 		}
 	}
+
 	return nil
 }
 
@@ -140,7 +162,7 @@ func (c *route53Client) findZoneID(name string) (string, error) {
 	log.Info(fmt.Sprintf("Finding Route53 Zone ID for %s", name))
 	var req route53.ListHostedZonesByNameInput
 	for {
-		resp, err := c.api.ListHostedZonesByName(&req)
+		resp, err := c.api.ListHostedZonesByName(context.TODO(), &req)
 		if err != nil {
 			return "", err
 		}
@@ -149,7 +171,7 @@ func (c *route53Client) findZoneID(name string) (string, error) {
 				return *zone.Id, nil
 			}
 		}
-		if !*resp.IsTruncated {
+		if !resp.IsTruncated {
 			break
 		}
 		req.DNSName = resp.NextDNSName
@@ -159,7 +181,7 @@ func (c *route53Client) findZoneID(name string) (string, error) {
 }
 
 // computeChanges creates DNS changes for the given record.
-func (c *route53Client) computeChanges(name string, records map[string]string, existing map[string]recordSet) []*route53.Change {
+func (c *route53Client) computeChanges(name string, records map[string]string, existing map[string]recordSet) []types.Change {
 	// Convert all names to lowercase.
 	lrecords := make(map[string]string, len(records))
 	for name, r := range records {
@@ -167,7 +189,7 @@ func (c *route53Client) computeChanges(name string, records map[string]string, e
 	}
 	records = lrecords
 
-	var changes []*route53.Change
+	var changes []types.Change
 	for path, val := range records {
 		ttl := int64(rootTTL)
 		if path != name {
@@ -204,21 +226,21 @@ func (c *route53Client) computeChanges(name string, records map[string]string, e
 }
 
 // sortChanges ensures DNS changes are in leaf-added -> root-changed -> leaf-deleted order.
-func sortChanges(changes []*route53.Change) {
+func sortChanges(changes []types.Change) {
 	score := map[string]int{"CREATE": 1, "UPSERT": 2, "DELETE": 3}
 	sort.Slice(changes, func(i, j int) bool {
-		if *changes[i].Action == *changes[j].Action {
+		if changes[i].Action == changes[j].Action {
 			return *changes[i].ResourceRecordSet.Name < *changes[j].ResourceRecordSet.Name
 		}
-		return score[*changes[i].Action] < score[*changes[j].Action]
+		return score[string(changes[i].Action)] < score[string(changes[j].Action)]
 	})
 }
 
 // splitChanges splits up DNS changes such that each change batch
 // is smaller than the given RDATA limit.
-func splitChanges(changes []*route53.Change, sizeLimit, countLimit int) [][]*route53.Change {
+func splitChanges(changes []types.Change, sizeLimit, countLimit int) [][]types.Change {
 	var (
-		batches    [][]*route53.Change
+		batches    [][]types.Change
 		batchSize  int
 		batchCount int
 	)
@@ -241,7 +263,7 @@ func splitChanges(changes []*route53.Change, sizeLimit, countLimit int) [][]*rou
 }
 
 // changeSize returns the RDATA size of a DNS change.
-func changeSize(ch *route53.Change) int {
+func changeSize(ch types.Change) int {
 	size := 0
 	for _, rr := range ch.ResourceRecordSet.ResourceRecords {
 		if rr.Value != nil {
@@ -251,8 +273,8 @@ func changeSize(ch *route53.Change) int {
 	return size
 }
 
-func changeCount(ch *route53.Change) int {
-	if *ch.Action == "UPSERT" {
+func changeCount(ch types.Change) int {
+	if ch.Action == types.ChangeActionUpsert {
 		return 2
 	}
 	return 1
@@ -262,13 +284,19 @@ func changeCount(ch *route53.Change) int {
 func (c *route53Client) collectRecords(name string) (map[string]recordSet, error) {
 	log.Info(fmt.Sprintf("Retrieving existing TXT records on %s (%s)", name, c.zoneID))
 	var req route53.ListResourceRecordSetsInput
-	req.SetHostedZoneId(c.zoneID)
+	req.HostedZoneId = &c.zoneID
 	existing := make(map[string]recordSet)
-	err := c.api.ListResourceRecordSetsPages(&req, func(resp *route53.ListResourceRecordSetsOutput, last bool) bool {
+	for {
+		resp, err := c.api.ListResourceRecordSets(context.TODO(), &req)
+		if err != nil {
+			return existing, err
+		}
+
 		for _, set := range resp.ResourceRecordSets {
-			if !isSubdomain(*set.Name, name) || *set.Type != "TXT" {
+			if !isSubdomain(*set.Name, name) || set.Type != types.RRTypeTxt {
 				continue
 			}
+
 			s := recordSet{ttl: *set.TTL}
 			for _, rec := range set.ResourceRecords {
 				s.values = append(s.values, *rec.Value)
@@ -276,28 +304,38 @@ func (c *route53Client) collectRecords(name string) (map[string]recordSet, error
 			name := strings.TrimSuffix(*set.Name, ".")
 			existing[name] = s
 		}
-		return true
-	})
-	return existing, err
+
+		if !resp.IsTruncated {
+			break
+		}
+
+		// sets the cursor to the next batch
+		req.StartRecordIdentifier = resp.NextRecordIdentifier
+	}
+
+	return existing, nil
 }
 
 // newTXTChange creates a change to a TXT record.
-func newTXTChange(action, name string, ttl int64, values ...string) *route53.Change {
-	var c route53.Change
-	var r route53.ResourceRecordSet
-	var rrs []*route53.ResourceRecord
+func newTXTChange(action, name string, ttl int64, values ...string) types.Change {
+	r := types.ResourceRecordSet{
+		Type: types.RRTypeTxt,
+		Name: &name,
+		TTL:  &ttl,
+	}
+	var rrs []types.ResourceRecord
 	for _, val := range values {
-		rr := new(route53.ResourceRecord)
-		rr.SetValue(val)
+		var rr types.ResourceRecord
+		rr.Value = aws.String(val)
 		rrs = append(rrs, rr)
 	}
-	r.SetType("TXT")
-	r.SetName(name)
-	r.SetTTL(ttl)
-	r.SetResourceRecords(rrs)
-	c.SetAction(action)
-	c.SetResourceRecordSet(&r)
-	return &c
+
+	r.ResourceRecords = rrs
+
+	return types.Change{
+		Action:            types.ChangeAction(action),
+		ResourceRecordSet: &r,
+	}
 }
 
 // isSubdomain returns true if name is a subdomain of domain.
