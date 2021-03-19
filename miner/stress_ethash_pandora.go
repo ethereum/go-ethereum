@@ -333,6 +333,8 @@ func makeRemoteSealer(
 		}
 
 		// Derive privKey..
+		//headerTime := header.Time
+		//extractedProposerIndex := (headerTime - uint64(epochTimeStart.Unix())) / slotTimeDuration
 
 		// THIS IS DUMB, REMOVE IT
 		signature := herumi.Sign(privateKeys[0], signatureBytes)
