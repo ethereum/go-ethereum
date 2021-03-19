@@ -33,6 +33,7 @@ start_node() {
           --ws.api eth,net,web3 \
           --ws.origins '*' \
           --syncmode $syncmode \
+          --gcmode archive \
           --cache 4096 \
           --maxpeers $connections \
           --goerli
@@ -41,7 +42,7 @@ start_node() {
             echo "Node failed to start; exiting."
             exit 1
         fi
-    else 
+    else
         geth \
           --port $netport \
           --http \
@@ -59,6 +60,7 @@ start_node() {
           --ws.api eth,net,web3 \
           --ws.origins '*' \
           --syncmode $syncmode \
+          --gcmode archive \
           --cache 4096 \
           --maxpeers $connections
         if [ $? -ne 0 ]
