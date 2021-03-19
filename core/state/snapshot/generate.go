@@ -475,10 +475,10 @@ func (dl *diskLayer) genRange(root common.Hash, prefix []byte, kind string, orig
 	// Update metrics for counting trie iteration
 	if kind == "storage" {
 		storageTrieRead += time.Since(start) - internal
-		snapStorageSnapReadTimer.Update(int64(storageTrieRead))
+		snapStorageTrieReadTimer.Update(int64(storageTrieRead))
 	} else {
 		accountTrieRead += time.Since(start) - internal
-		snapAccountSnapReadTimer.Update(int64(accountTrieRead))
+		snapAccountTrieReadTimer.Update(int64(accountTrieRead))
 	}
 	logger.Debug("Regenerated state range", "root", root, "last", hexutil.Encode(last),
 		"count", count, "created", created, "updated", updated, "untouched", untouched, "deleted", deleted)
