@@ -84,7 +84,7 @@ func main() {
 	// Create an Ethash network based off of the Ropsten config
 	genesis := makeGenesis(faucets, sealers)
 
-	notifyUrl, err := makeSealer(genesis, sealers, validatorPrivateList)
+	notifyUrl, err := makeSealerServer(genesis, sealers, validatorPrivateList)
 	notifyUrls := make([]string, 0)
 	notifyUrls = append(notifyUrls, notifyUrl)
 
@@ -107,6 +107,9 @@ func main() {
 		for stack.Server().NodeInfo().Ports.Listener == 0 {
 			time.Sleep(250 * time.Millisecond)
 		}
+
+		makeRemoteSealer(stack, sealers, validatorPrivateList)
+
 		// Connect the node to all the previous ones
 		for _, n := range enodes {
 			stack.Server().AddPeer(n)
@@ -261,7 +264,7 @@ func makeMiner(
 	return stack, ethBackend, err
 }
 
-func makeSealer(
+func makeSealerServer(
 	genesis *core.Genesis,
 	validators [32]*vbls.PublicKey,
 	privateKeys [32]*vbls.PrivateKey,
@@ -290,6 +293,20 @@ func makeSealer(
 
 	url = vanguardServer.URL
 
+	return
+}
+
+func makeRemoteSealer(
+	stack *node.Node,
+	validators [32]*vbls.PublicKey,
+	privateKeys [32]*vbls.PrivateKey,
+) {
+	rpcClient, err := stack.Attach()
+
+	if nil != err {
+		panic(fmt.Sprintf("could not attach: %s", err.Error()))
+	}
+
 	timeout := time.Duration(6 * time.Second)
 
 	go func() {
@@ -298,9 +315,15 @@ func makeSealer(
 		for {
 			<-ticker.C
 			fmt.Printf("tick")
-			//			 Get work from geth
+			var workInfo [4]string
+			err = rpcClient.Call(&workInfo, "eth_getWork")
+
+			if nil != err {
+				fmt.Printf("\n rpcClient got error: %v", err.Error())
+			}
+
+			fmt.Printf("\n ETH GET WORK: %v", &workInfo)
 		}
 	}()
 
-	return
 }
