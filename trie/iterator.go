@@ -255,16 +255,21 @@ func (it *nodeIterator) seek(prefix []byte) error {
 	}
 }
 
+// init initializes the the iterator.
+func (it *nodeIterator) init() (*nodeIteratorState, error) {
+	root := it.trie.Hash()
+	state := &nodeIteratorState{node: it.trie.root, index: -1}
+	if root != emptyRoot {
+		state.hash = root
+	}
+	return state, state.resolve(it.trie, nil)
+}
+
 // peek creates the next state of the iterator.
 func (it *nodeIterator) peek(descend bool) (*nodeIteratorState, *int, []byte, error) {
+	// Initialize the iterator if we've just started.
 	if len(it.stack) == 0 {
-		// Initialize the iterator if we've just started.
-		root := it.trie.Hash()
-		state := &nodeIteratorState{node: it.trie.root, index: -1}
-		if root != emptyRoot {
-			state.hash = root
-		}
-		err := state.resolve(it.trie, nil)
+		state, err := it.init()
 		return state, nil, nil, err
 	}
 	if !descend {
@@ -295,14 +300,9 @@ func (it *nodeIterator) peek(descend bool) (*nodeIteratorState, *int, []byte, er
 // peekSeek is like peek, but it also tries to skip resolving hashes by skipping
 // over the siblings that do not lead towards the desired seek position.
 func (it *nodeIterator) peekSeek(seekKey []byte) (*nodeIteratorState, *int, []byte, error) {
+	// Initialize the iterator if we've just started.
 	if len(it.stack) == 0 {
-		// Initialize the iterator if we've just started.
-		root := it.trie.Hash()
-		state := &nodeIteratorState{node: it.trie.root, index: -1}
-		if root != emptyRoot {
-			state.hash = root
-		}
-		err := state.resolve(it.trie, nil)
+		state, err := it.init()
 		return state, nil, nil, err
 	}
 	if !bytes.HasPrefix(seekKey, it.path) {
