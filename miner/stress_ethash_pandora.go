@@ -50,6 +50,7 @@ import (
 	"github.com/ethereum/go-ethereum/p2p"
 	"github.com/ethereum/go-ethereum/p2p/enode"
 	"github.com/ethereum/go-ethereum/params"
+	"github.com/ethereum/go-ethereum/rlp"
 	"github.com/silesiacoin/bls/herumi"
 	"net/http/httptest"
 )
@@ -108,7 +109,7 @@ func main() {
 			time.Sleep(250 * time.Millisecond)
 		}
 
-		makeRemoteSealer(stack, sealers, validatorPrivateList)
+		makeRemoteSealer(stack, sealers, validatorPrivateList, genesis)
 
 		// Connect the node to all the previous ones
 		for _, n := range enodes {
@@ -300,11 +301,61 @@ func makeRemoteSealer(
 	stack *node.Node,
 	validators [32]*vbls.PublicKey,
 	privateKeys [32]*vbls.PrivateKey,
+	genesisInfo *core.Genesis,
 ) {
 	rpcClient, err := stack.Attach()
 
 	if nil != err {
 		panic(fmt.Sprintf("could not attach: %s", err.Error()))
+	}
+
+	signerFunc := func(workInfo [4]string) {
+		rlpHexHeader := workInfo[2]
+		rlpHeader, err := hexutil.Decode(rlpHexHeader)
+
+		if nil != err {
+			panic(fmt.Sprintf("could not decode rlpHexHeader, %s", err.Error()))
+		}
+
+		header := types.Header{}
+		err = rlp.DecodeBytes(rlpHeader, &header)
+
+		if nil != err {
+			panic(fmt.Sprintf("could not read heder: %s", err.Error()))
+		}
+
+		// Motivation: you should always be sure that what you sign is valid.
+		// We sign hash
+		signatureBytes, err := hexutil.Decode(workInfo[0])
+
+		if nil != err {
+			panic(fmt.Sprintf("could not cast into signature bytes %s", err.Error()))
+		}
+
+		// Derive privKey..
+
+		// THIS IS DUMB, REMOVE IT
+		signature := herumi.Sign(privateKeys[0], signatureBytes)
+		compressedSignature := signature.Compress()
+		messages := make([][]byte, 0)
+		messages = append(messages, signatureBytes)
+
+		// Cast to []byte from [32]byte. This should prevent cropping
+		header.MixDigest = common.BytesToHash(compressedSignature[:])
+
+		var response bool
+
+		err = rpcClient.Call(
+			&response,
+			"eth_submitWork",
+			header.Nonce,
+			common.HexToHash(workInfo[0]),
+			header.MixDigest.Hex(),
+		)
+
+		if nil != err {
+			panic(fmt.Sprintf("could not submit work, %v", err.Error()))
+		}
 	}
 
 	timeout := time.Duration(6 * time.Second)
@@ -314,7 +365,7 @@ func makeRemoteSealer(
 		defer ticker.Stop()
 		for {
 			<-ticker.C
-			fmt.Printf("tick")
+			fmt.Printf("tick \n")
 			var workInfo [4]string
 			err = rpcClient.Call(&workInfo, "eth_getWork")
 
@@ -322,8 +373,7 @@ func makeRemoteSealer(
 				fmt.Printf("\n rpcClient got error: %v", err.Error())
 			}
 
-			fmt.Printf("\n ETH GET WORK: %v", &workInfo)
+			signerFunc(workInfo)
 		}
 	}()
-
 }
