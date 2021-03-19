@@ -176,16 +176,18 @@ func (c *route53Client) computeChanges(name string, records map[string]string, e
 
 		prevRecords, exists := existing[path]
 		prevValue := strings.Join(prevRecords.values, "")
+		newValue := splitTXT(val)
 		if !exists {
 			// Entry is unknown, push a new one
-			log.Info(fmt.Sprintf("Creating %s = %q", path, val))
-			changes = append(changes, newTXTChange("CREATE", path, ttl, splitTXT(val)))
-		} else if prevValue != val || prevRecords.ttl != ttl {
+			log.Info(fmt.Sprintf("Creating %s = %q (ttl %v)", path, val, ttl))
+			changes = append(changes, newTXTChange("CREATE", path, ttl, newValue))
+		} else if (prevValue != val && prevValue != newValue) || prevRecords.ttl != ttl {
 			// Entry already exists, only change its content.
-			log.Info(fmt.Sprintf("Updating %s from %q to %q", path, prevValue, val))
-			changes = append(changes, newTXTChange("UPSERT", path, ttl, splitTXT(val)))
+			log.Info(fmt.Sprintf("Updating %s from \n%q (ttl %v) \nto \n%q (ttl %v)",
+				path, prevValue, prevRecords.ttl, newValue, ttl))
+			changes = append(changes, newTXTChange("UPSERT", path, ttl, newValue))
 		} else {
-			log.Info(fmt.Sprintf("Skipping %s = %q", path, val))
+			log.Info(fmt.Sprintf("Skipping %s = %q (ttl %v)", path, val, ttl))
 		}
 	}
 

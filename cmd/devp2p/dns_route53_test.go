@@ -164,3 +164,39 @@ func TestRoute53ChangeSort(t *testing.T) {
 
 func sp(s string) *string { return &s }
 func ip(i int64) *int64   { return &i }
+
+// This test checks that computeChanges/splitChanges create DNS changes in
+// leaf-added -> root-changed -> leaf-deleted order.
+func TestRoute53NoChange(t *testing.T) {
+	// Existing recordset
+	testTree0 := map[string]recordSet{
+		"2xs2367yhaxjfglzhvawlqd4zy.n": {ttl: treeNodeTTL, values: []string{
+			`"enr:-HW4QOFzoVLaFJnNhbgMoDXPnOvcdVuj7pDpqRvh6BRDO68aVi5ZcjB3vzQRZH2IcLBGHzo8uUN3snqmgTiE56CH3AMBgmlkgnY0iXNlY3AyNTZrMaECC2_24YYkYHEgdzxlSNKQEnHhuNAbNlMlWJxrJxbAFvA"`,
+		}},
+	}
+
+	testTree1 := map[string]string{
+		"n":                            "enrtree-root:v1 e=JWXYDBPXYWG6FX3GMDIBFA6CJ4 l=C7HRFPF3BLGF3YR4DY5KX3SMBE seq=1 sig=o908WmNp7LibOfPsr4btQwatZJ5URBr2ZAuxvK4UWHlsB9sUOTJQaGAlLPVAhM__XJesCHxLISo94z5Z2a463gA",
+		"2XS2367YHAXJFGLZHVAWLQD4ZY.n": "enr:-HW4QOFzoVLaFJnNhbgMoDXPnOvcdVuj7pDpqRvh6BRDO68aVi5ZcjB3vzQRZH2IcLBGHzo8uUN3snqmgTiE56CH3AMBgmlkgnY0iXNlY3AyNTZrMaECC2_24YYkYHEgdzxlSNKQEnHhuNAbNlMlWJxrJxbAFvA",
+	}
+
+	wantChanges := []*route53.Change{
+		{
+			Action: sp("CREATE"),
+			ResourceRecordSet: &route53.ResourceRecordSet{
+				Name: sp("n"),
+				ResourceRecords: []*route53.ResourceRecord{{
+					Value: sp(`"enrtree-root:v1 e=JWXYDBPXYWG6FX3GMDIBFA6CJ4 l=C7HRFPF3BLGF3YR4DY5KX3SMBE seq=1 sig=o908WmNp7LibOfPsr4btQwatZJ5URBr2ZAuxvK4UWHlsB9sUOTJQaGAlLPVAhM__XJesCHxLISo94z5Z2a463gA"`),
+				}},
+				TTL:  ip(rootTTL),
+				Type: sp("TXT"),
+			},
+		},
+	}
+
+	var client route53Client
+	changes := client.computeChanges("n", testTree1, testTree0)
+	if !reflect.DeepEqual(changes, wantChanges) {
+		t.Fatalf("wrong changes (got %d, want %d)", len(changes), len(wantChanges))
+	}
+}
