@@ -59,6 +59,11 @@ var (
 		Name:  "zone-id",
 		Usage: "Route53 Zone ID",
 	}
+	route53RegionFlag = cli.StringFlag{
+		Name:  "aws-region",
+		Usage: "AWS Region",
+		Value: "eu-central-1",
+	}
 )
 
 type route53Client struct {
@@ -76,13 +81,14 @@ func newRoute53Client(ctx *cli.Context) *route53Client {
 	akey := ctx.String(route53AccessKeyFlag.Name)
 	asec := ctx.String(route53AccessSecretFlag.Name)
 	if akey == "" || asec == "" {
-		exit(fmt.Errorf("need Route53 Access Key ID and secret proceed"))
+		exit(fmt.Errorf("need Route53 Access Key ID and secret to proceed"))
 	}
 	creds := aws.NewCredentialsCache(credentials.NewStaticCredentialsProvider(akey, asec, ""))
 	cfg, err := config.LoadDefaultConfig(context.Background(), config.WithCredentialsProvider(creds))
 	if err != nil {
 		exit(fmt.Errorf("can't initialize AWS configuration: %v", err))
 	}
+	cfg.Region = ctx.String(route53RegionFlag.Name)
 	return &route53Client{
 		api:    route53.NewFromConfig(cfg),
 		zoneID: ctx.String(route53ZoneIDFlag.Name),
