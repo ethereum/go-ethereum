@@ -152,7 +152,7 @@ func pruneState(ctx *cli.Context) error {
 	stack, config := makeConfigNode(ctx)
 	defer stack.Close()
 
-	chain, chaindb := utils.MakeChain(ctx, stack, true)
+	chain, chaindb := utils.MakeChain(ctx, stack, true, false)
 	defer chaindb.Close()
 
 	pruner, err := pruner.NewPruner(chaindb, chain.CurrentBlock().Header(), stack.ResolvePath(""), stack.ResolvePath(config.Eth.TrieCleanCacheJournal), ctx.GlobalUint64(utils.BloomFilterSizeFlag.Name))
@@ -183,7 +183,7 @@ func verifyState(ctx *cli.Context) error {
 	stack, _ := makeConfigNode(ctx)
 	defer stack.Close()
 
-	chain, chaindb := utils.MakeChain(ctx, stack, true)
+	chain, chaindb := utils.MakeChain(ctx, stack, true, true)
 	defer chaindb.Close()
 
 	snaptree, err := snapshot.New(chaindb, trie.NewDatabase(chaindb), 256, chain.CurrentBlock().Root(), false, false, false)
@@ -218,7 +218,7 @@ func traverseState(ctx *cli.Context) error {
 	stack, _ := makeConfigNode(ctx)
 	defer stack.Close()
 
-	chain, chaindb := utils.MakeChain(ctx, stack, true)
+	chain, chaindb := utils.MakeChain(ctx, stack, true, true)
 	defer chaindb.Close()
 
 	if ctx.NArg() > 1 {
@@ -311,7 +311,7 @@ func traverseRawState(ctx *cli.Context) error {
 	stack, _ := makeConfigNode(ctx)
 	defer stack.Close()
 
-	chain, chaindb := utils.MakeChain(ctx, stack, true)
+	chain, chaindb := utils.MakeChain(ctx, stack, true, true)
 	defer chaindb.Close()
 
 	if ctx.NArg() > 1 {
