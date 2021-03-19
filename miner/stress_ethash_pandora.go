@@ -22,10 +22,12 @@ package main
 import (
 	"crypto/ecdsa"
 	crand "crypto/rand"
+	"encoding/json"
 	"fmt"
 	"io/ioutil"
 	"math/big"
 	"math/rand"
+	"net/http"
 	"os"
 	"path/filepath"
 	"time"
@@ -34,6 +36,7 @@ import (
 	"github.com/ethereum/go-ethereum/accounts/keystore"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/fdlimit"
+	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/ethereum/go-ethereum/consensus/ethash"
 	"github.com/ethereum/go-ethereum/core"
 	"github.com/ethereum/go-ethereum/core/types"
@@ -48,6 +51,7 @@ import (
 	"github.com/ethereum/go-ethereum/p2p/enode"
 	"github.com/ethereum/go-ethereum/params"
 	"github.com/silesiacoin/bls/herumi"
+	"net/http/httptest"
 )
 
 func main() {
@@ -65,8 +69,6 @@ func main() {
 	sealers := [32]*vbls.PublicKey{}
 	validatorPrivateList := [32]*vbls.PrivateKey{}
 
-	notifyUrls := make([]string, 0)
-
 	for i := 0; i < len(sealers); i++ {
 		randomReader := crand.Reader
 		pubKey, privKey, err := herumi.GenerateKey(randomReader)
@@ -81,6 +83,14 @@ func main() {
 
 	// Create an Ethash network based off of the Ropsten config
 	genesis := makeGenesis(faucets, sealers)
+
+	notifyUrl, err := makeSealer(genesis, sealers, validatorPrivateList)
+	notifyUrls := make([]string, 0)
+	notifyUrls = append(notifyUrls, notifyUrl)
+
+	if nil != err {
+		panic(fmt.Sprintf("Died when starting the sealer, err: %v", err.Error()))
+	}
 
 	var (
 		nodes  []*eth.Ethereum
@@ -249,4 +259,48 @@ func makeMiner(
 
 	err = stack.Start()
 	return stack, ethBackend, err
+}
+
+func makeSealer(
+	genesis *core.Genesis,
+	validators [32]*vbls.PublicKey,
+	privateKeys [32]*vbls.PrivateKey,
+) (url string, err error) {
+	vanguardServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, req *http.Request) {
+		blob, err := ioutil.ReadAll(req.Body)
+		if err != nil {
+			panic(fmt.Sprintf("failed to read miner notification: %v", err))
+		}
+
+		var work [4]string
+
+		if err := json.Unmarshal(blob, &work); err != nil {
+			panic(fmt.Sprintf("failed to unmarshal miner notification: %v", err))
+		}
+
+		rlpHexHeader := work[2]
+		rlpHeader, err := hexutil.Decode(rlpHexHeader)
+
+		if nil != err {
+			panic(fmt.Sprintf("failed to encode hex header %v", rlpHexHeader))
+		}
+
+		fmt.Printf("\n\n\n\n Elooooo Hex header \n, %s", rlpHeader)
+	}))
+
+	url = vanguardServer.URL
+
+	timeout := time.Duration(6 * time.Second)
+
+	go func() {
+		ticker := time.NewTicker(timeout)
+		defer ticker.Stop()
+		for {
+			<-ticker.C
+			fmt.Printf("tick")
+			//			 Get work from geth
+		}
+	}()
+
+	return
 }
