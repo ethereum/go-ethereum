@@ -115,7 +115,7 @@ func handle(backend Backend, peer *Peer) error {
 }
 
 // handleMessage is invoked whenever an inbound message is received from a
-// remote peer on the `spap` protocol. The remote connection is torn down upon
+// remote peer on the `snap` protocol. The remote connection is torn down upon
 // returning any error.
 func handleMessage(backend Backend, peer *Peer) error {
 	// Read the next message from the remote peer, and ensure it's fully consumed
