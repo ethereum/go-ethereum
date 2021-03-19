@@ -144,7 +144,7 @@ func newFreezer(datadir string, namespace string, readonly bool) (*freezer, erro
 func (f *freezer) Close() error {
 	var errs []error
 	f.closeOnce.Do(func() {
-		f.quit <- struct{}{}
+		close(f.quit)
 		for _, table := range f.tables {
 			if err := table.Close(); err != nil {
 				errs = append(errs, err)
