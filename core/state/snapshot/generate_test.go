@@ -187,42 +187,33 @@ func newHelper() *testHelper {
 	}
 }
 
-// addAccount adds an account to the trie and snapshot, and return t
-func (t *testHelper) addTrieAccount(accPreKey string, acc *Account) {
+func (t *testHelper) addTrieAccount(acckey string, acc *Account) {
 	val, _ := rlp.EncodeToBytes(acc)
-	// Add to trie
-	t.accTrie.Update([]byte(accPreKey), val)
+	t.accTrie.Update([]byte(acckey), val)
 }
 
-// addAccount adds an account to the trie and snapshot, and return t
-func (t *testHelper) addAccount(accPreKey string, acc *Account) {
+func (t *testHelper) addSnapAccount(acckey string, acc *Account) {
 	val, _ := rlp.EncodeToBytes(acc)
-	// Add to trie
-	t.accTrie.Update([]byte(accPreKey), val)
-	key := hashData([]byte(accPreKey))
-	// Add account to snapshot
+	key := hashData([]byte(acckey))
 	rawdb.WriteAccountSnapshot(t.diskdb, key, val)
 }
 
-func (t *testHelper) addSnapStorage(accPreKey string, slotKeys []string, slotVals []string) {
-	key := hashData([]byte(accPreKey))
-	// Add any storage slots
-	for i, sKey := range slotKeys {
-		sVal := []byte(slotVals[i])
-		rawdb.WriteStorageSnapshot(t.diskdb, key, hashData([]byte(sKey)), sVal)
+func (t *testHelper) addAccount(acckey string, acc *Account) {
+	t.addTrieAccount(acckey, acc)
+	t.addSnapAccount(acckey, acc)
+}
+
+func (t *testHelper) addSnapStorage(accKey string, keys []string, vals []string) {
+	accHash := hashData([]byte(accKey))
+	for i, key := range keys {
+		rawdb.WriteStorageSnapshot(t.diskdb, accHash, hashData([]byte(key)), []byte(vals[i]))
 	}
 }
 
-func (t *testHelper) writeSnapAccount(accPreKey string, acc *Account) {
-	val, _ := rlp.EncodeToBytes(acc)
-	key := hashData([]byte(accPreKey))
-	rawdb.WriteAccountSnapshot(t.diskdb, key, val)
-}
-
-func (t *testHelper) makeStorageTrie(keys []string, values []string) []byte {
+func (t *testHelper) makeStorageTrie(keys []string, vals []string) []byte {
 	stTrie, _ := trie.NewSecure(common.Hash{}, t.triedb)
 	for i, k := range keys {
-		stTrie.Update([]byte(k), []byte(values[i]))
+		stTrie.Update([]byte(k), []byte(vals[i]))
 	}
 	root, _ := stTrie.Commit(nil)
 	return root.Bytes()
@@ -235,47 +226,84 @@ func (t *testHelper) Generate() (common.Hash, *diskLayer) {
 	return root, snap
 }
 
-// Tests that snapshot generation with existent flat state, where the flat state contains
-// some errors:
+// Tests that snapshot generation with existent flat state, where the flat state
+// contains some errors:
 // - the contract with empty storage root but has storage entries in the disk
+// - the contract with non empty storage root but empty storage slots
 // - the contract(non-empty storage) misses some storage slots
+//   - miss in the beginning
+//   - miss in the middle
+//   - miss in the end
 // - the contract(non-empty storage) has wrong storage slots
+//   - wrong slots in the beginning
+//   - wrong slots in the middle
+//   - wrong slots in the end
+// - the contract(non-empty storage) has extra storage slots
+//   - extra slots in the beginning
+//   - extra slots in the middle
+//   - extra slots in the end
 func TestGenerateExistentStateWithWrongStorage(t *testing.T) {
-
 	helper := newHelper()
 	stRoot := helper.makeStorageTrie([]string{"key-1", "key-2", "key-3"}, []string{"val-1", "val-2", "val-3"})
 
-	// Account one, miss storage slots in the end(key-3)
-	helper.addAccount("acc-1", &Account{Balance: big.NewInt(1), Root: stRoot, CodeHash: emptyCode.Bytes()})
-	helper.addSnapStorage("acc-1", []string{"key-1", "key-2"}, []string{"val-1", "val-2"})
+	// Account one, empty root but non-empty database
+	helper.addAccount("acc-1", &Account{Balance: big.NewInt(1), Root: emptyRoot.Bytes(), CodeHash: emptyCode.Bytes()})
+	helper.addSnapStorage("acc-1", []string{"key-1", "key-2", "key-3"}, []string{"val-1", "val-2", "val-3"})
 
-	// Account two, miss storage slots in the beginning(key-1)
-	helper.addAccount("acc-2", &Account{Balance: big.NewInt(2), Root: stRoot, CodeHash: emptyCode.Bytes()})
-	helper.addSnapStorage("acc-2", []string{"key-2", "key-3"}, []string{"val-2", "val-3"})
+	// Account two, non empty root but empty database
+	helper.addAccount("acc-2", &Account{Balance: big.NewInt(1), Root: stRoot, CodeHash: emptyCode.Bytes()})
 
-	// Account three
-	// The storage root is emptyHash, but the flat db has some storage values. This can happen
-	// if the storage was unset during sync
-	helper.addAccount("acc-3", &Account{Balance: big.NewInt(2), Root: emptyRoot.Bytes(), CodeHash: emptyCode.Bytes()})
-	helper.addSnapStorage("acc-3", []string{"key-1"}, []string{"val-1"})
-
-	// Account four has a modified codehash
+	// Miss slots
 	{
-		acc := &Account{Balance: big.NewInt(3), Root: stRoot, CodeHash: emptyCode.Bytes()}
-		helper.addAccount("acc-4", acc)
-		helper.addSnapStorage("acc-4", []string{"key-1", "key-2", "key-3"}, []string{"val-1", "val-2", "val-3"})
-		// Overwrite the codehash in the snapdata
-		acc.CodeHash = hashData([]byte("codez")).Bytes()
-		helper.writeSnapAccount("acc-4", acc)
+		// Account three, non empty root but misses slots in the beginning
+		helper.addAccount("acc-3", &Account{Balance: big.NewInt(1), Root: stRoot, CodeHash: emptyCode.Bytes()})
+		helper.addSnapStorage("acc-3", []string{"key-2", "key-3"}, []string{"val-2", "val-3"})
+
+		// Account four, non empty root but misses slots in the middle
+		helper.addAccount("acc-4", &Account{Balance: big.NewInt(1), Root: stRoot, CodeHash: emptyCode.Bytes()})
+		helper.addSnapStorage("acc-4", []string{"key-1", "key-3"}, []string{"val-1", "val-3"})
+
+		// Account five, non empty root but misses slots in the end
+		helper.addAccount("acc-5", &Account{Balance: big.NewInt(1), Root: stRoot, CodeHash: emptyCode.Bytes()})
+		helper.addSnapStorage("acc-5", []string{"key-1", "key-2"}, []string{"val-1", "val-2"})
 	}
 
-	// Account 5 has wrong storage slot values - they've been rotated.
-	// This test that the update-or-replace check works
-	helper.addAccount("acc-5", &Account{Balance: big.NewInt(3), Root: stRoot, CodeHash: emptyCode.Bytes()})
-	helper.addSnapStorage("acc-5", []string{"key-1", "key-2", "key-3"}, []string{"val-2", "val-3", "val-1"})
+	// Wrong storage slots
+	{
+		// Account six, non empty root but wrong slots in the beginning
+		helper.addAccount("acc-6", &Account{Balance: big.NewInt(1), Root: stRoot, CodeHash: emptyCode.Bytes()})
+		helper.addSnapStorage("acc-6", []string{"key-1", "key-2", "key-3"}, []string{"badval-1", "val-2", "val-3"})
+
+		// Account seven, non empty root but wrong slots in the middle
+		helper.addAccount("acc-7", &Account{Balance: big.NewInt(1), Root: stRoot, CodeHash: emptyCode.Bytes()})
+		helper.addSnapStorage("acc-7", []string{"key-1", "key-2", "key-3"}, []string{"val-1", "badval-2", "val-3"})
+
+		// Account eight, non empty root but wrong slots in the end
+		helper.addAccount("acc-8", &Account{Balance: big.NewInt(1), Root: stRoot, CodeHash: emptyCode.Bytes()})
+		helper.addSnapStorage("acc-8", []string{"key-1", "key-2", "key-3"}, []string{"val-1", "val-2", "badval-3"})
+
+		// Account 9, non empty root but rotated slots
+		helper.addAccount("acc-9", &Account{Balance: big.NewInt(1), Root: stRoot, CodeHash: emptyCode.Bytes()})
+		helper.addSnapStorage("acc-9", []string{"key-1", "key-2", "key-3"}, []string{"val-1", "val-3", "val-2"})
+	}
+
+	// Extra storage slots
+	{
+		// Account 10, non empty root but extra slots in the beginning
+		helper.addAccount("acc-10", &Account{Balance: big.NewInt(1), Root: stRoot, CodeHash: emptyCode.Bytes()})
+		helper.addSnapStorage("acc-10", []string{"key-0", "key-1", "key-2", "key-3"}, []string{"val-0", "val-1", "val-2", "val-3"})
+
+		// Account 11, non empty root but extra slots in the middle
+		helper.addAccount("acc-11", &Account{Balance: big.NewInt(1), Root: stRoot, CodeHash: emptyCode.Bytes()})
+		helper.addSnapStorage("acc-11", []string{"key-1", "key-2", "key-2-1", "key-3"}, []string{"val-1", "val-2", "val-2-1", "val-3"})
+
+		// Account 12, non empty root but extra slots in the end
+		helper.addAccount("acc-12", &Account{Balance: big.NewInt(1), Root: stRoot, CodeHash: emptyCode.Bytes()})
+		helper.addSnapStorage("acc-12", []string{"key-1", "key-2", "key-3", "key-4"}, []string{"val-1", "val-2", "val-3", "val-4"})
+	}
 
 	root, snap := helper.Generate()
-	t.Logf("Root: %#x\n", root) // Root: 0x3a97ece15e2539ab3524783c37ca153a62e28faba76a752e826da24a9020d44f
+	t.Logf("Root: %#x\n", root) // Root = 0x8746cce9fd9c658b2cfd639878ed6584b7a2b3e73bb40f607fcfa156002429a0
 
 	select {
 	case <-snap.genPending:
@@ -285,6 +313,59 @@ func TestGenerateExistentStateWithWrongStorage(t *testing.T) {
 		t.Errorf("Snapshot generation failed")
 	}
 	checkSnapRoot(t, snap, root)
+	// Signal abortion to the generator and wait for it to tear down
+	stop := make(chan *generatorStats)
+	snap.genAbort <- stop
+	<-stop
+}
+
+// Tests that snapshot generation with existent flat state, where the flat state
+// contains some errors:
+// - miss accounts
+// - wrong accounts
+// - extra accounts
+func TestGenerateExistentStateWithWrongAccounts(t *testing.T) {
+	helper := newHelper()
+	stRoot := helper.makeStorageTrie([]string{"key-1", "key-2", "key-3"}, []string{"val-1", "val-2", "val-3"})
+
+	// Trie accounts [acc-1, acc-2, acc-3, acc-4, acc-6]
+	// Extra accounts [acc-0, acc-5, acc-7]
+
+	// Missing accounts, only in the trie
+	{
+		helper.addTrieAccount("acc-1", &Account{Balance: big.NewInt(1), Root: stRoot, CodeHash: emptyCode.Bytes()}) // Beginning
+		helper.addTrieAccount("acc-4", &Account{Balance: big.NewInt(1), Root: stRoot, CodeHash: emptyCode.Bytes()}) // Middle
+		helper.addTrieAccount("acc-6", &Account{Balance: big.NewInt(1), Root: stRoot, CodeHash: emptyCode.Bytes()}) // End
+	}
+
+	// Wrong accounts
+	{
+		helper.addTrieAccount("acc-2", &Account{Balance: big.NewInt(1), Root: stRoot, CodeHash: emptyCode.Bytes()})
+		helper.addSnapAccount("acc-2", &Account{Balance: big.NewInt(1), Root: stRoot, CodeHash: common.Hex2Bytes("0x1234")})
+
+		helper.addTrieAccount("acc-3", &Account{Balance: big.NewInt(1), Root: stRoot, CodeHash: emptyCode.Bytes()})
+		helper.addSnapAccount("acc-3", &Account{Balance: big.NewInt(1), Root: emptyRoot.Bytes(), CodeHash: emptyCode.Bytes()})
+	}
+
+	// Extra accounts, only in the snap
+	{
+		helper.addSnapAccount("acc-0", &Account{Balance: big.NewInt(1), Root: stRoot, CodeHash: emptyRoot.Bytes()})                     // before the beginning
+		helper.addSnapAccount("acc-5", &Account{Balance: big.NewInt(1), Root: emptyRoot.Bytes(), CodeHash: common.Hex2Bytes("0x1234")}) // Middle
+		helper.addSnapAccount("acc-7", &Account{Balance: big.NewInt(1), Root: emptyRoot.Bytes(), CodeHash: emptyRoot.Bytes()})          // after the end
+	}
+
+	root, snap := helper.Generate()
+	t.Logf("Root: %#x\n", root) // Root = 0x825891472281463511e7ebcc7f109e4f9200c20fa384754e11fd605cd98464e8
+
+	select {
+	case <-snap.genPending:
+		// Snapshot generation succeeded
+
+	case <-time.After(250 * time.Millisecond):
+		t.Errorf("Snapshot generation failed")
+	}
+	checkSnapRoot(t, snap, root)
+
 	// Signal abortion to the generator and wait for it to tear down
 	stop := make(chan *generatorStats)
 	snap.genAbort <- stop
@@ -466,7 +547,6 @@ func getStorageTrie(n int, triedb *trie.Database) *trie.SecureTrie {
 
 // Tests that snapshot generation when an extra account with storage exists in the snap state.
 func TestGenerateWithExtraAccounts(t *testing.T) {
-
 	var (
 		diskdb = memorydb.New()
 		triedb = trie.NewDatabase(diskdb)
@@ -685,7 +765,7 @@ func TestGenerateFromEmptySnap(t *testing.T) {
 			&Account{Balance: big.NewInt(1), Root: stRoot, CodeHash: emptyCode.Bytes()})
 	}
 	root, snap := helper.Generate()
-	t.Logf("Root: %#x\n", root) // Root: 0x3a97ece15e2539ab3524783c37ca153a62e28faba76a752e826da24a9020d44f
+	t.Logf("Root: %#x\n", root) // Root: 0x6f7af6d2e1a1bf2b84a3beb3f8b64388465fbc1e274ca5d5d3fc787ca78f59e4
 
 	select {
 	case <-snap.genPending:
@@ -732,7 +812,7 @@ func TestGenerateWithIncompleteStorage(t *testing.T) {
 	}
 
 	root, snap := helper.Generate()
-	t.Logf("Root: %#x\n", root) // Root: 0x3a97ece15e2539ab3524783c37ca153a62e28faba76a752e826da24a9020d44f
+	t.Logf("Root: %#x\n", root) // Root: 0xca73f6f05ba4ca3024ef340ef3dfca8fdabc1b677ff13f5a9571fd49c16e67ff
 
 	select {
 	case <-snap.genPending:
