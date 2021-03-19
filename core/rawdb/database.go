@@ -57,7 +57,10 @@ func (frdb *freezerdb) Close() error {
 // Freeze is a helper method used for external testing to trigger and block until
 // a freeze cycle completes, without having to sleep for a minute to trigger the
 // automatic background run.
-func (frdb *freezerdb) Freeze(threshold uint64) {
+func (frdb *freezerdb) Freeze(threshold uint64) error {
+	if frdb.AncientStore.(*freezer).readonly {
+		return errReadOnly
+	}
 	// Set the freezer threshold to a temporary value
 	defer func(old uint64) {
 		atomic.StoreUint64(&frdb.AncientStore.(*freezer).threshold, old)
@@ -68,6 +71,7 @@ func (frdb *freezerdb) Freeze(threshold uint64) {
 	trigger := make(chan struct{}, 1)
 	frdb.AncientStore.(*freezer).trigger <- trigger
 	<-trigger
+	return nil
 }
 
 // nofreezedb is a database wrapper that disables freezer data retrievals.
@@ -121,9 +125,9 @@ func NewDatabase(db ethdb.KeyValueStore) ethdb.Database {
 // NewDatabaseWithFreezer creates a high level database on top of a given key-
 // value data store with a freezer moving immutable chain segments into cold
 // storage.
-func NewDatabaseWithFreezer(db ethdb.KeyValueStore, freezer string, namespace string) (ethdb.Database, error) {
+func NewDatabaseWithFreezer(db ethdb.KeyValueStore, freezer string, namespace string, readonly bool) (ethdb.Database, error) {
 	// Create the idle freezer instance
-	frdb, err := newFreezer(freezer, namespace)
+	frdb, err := newFreezer(freezer, namespace, readonly)
 	if err != nil {
 		return nil, err
 	}
@@ -192,8 +196,9 @@ func NewDatabaseWithFreezer(db ethdb.KeyValueStore, freezer string, namespace st
 		}
 	}
 	// Freezer is consistent with the key-value database, permit combining the two
-	go frdb.freeze(db)
-
+	if !frdb.readonly {
+		go frdb.freeze(db)
+	}
 	return &freezerdb{
 		KeyValueStore: db,
 		AncientStore:  frdb,
@@ -230,7 +235,7 @@ func NewLevelDBDatabaseWithFreezer(file string, cache int, handles int, freezer 
 	if err != nil {
 		return nil, err
 	}
-	frdb, err := NewDatabaseWithFreezer(kvdb, freezer, namespace)
+	frdb, err := NewDatabaseWithFreezer(kvdb, freezer, namespace, readonly)
 	if err != nil {
 		kvdb.Close()
 		return nil, err
