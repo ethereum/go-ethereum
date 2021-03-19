@@ -136,7 +136,7 @@ func newFreezer(datadir string, namespace string, readonly bool) (*freezer, erro
 		lock.Release()
 		return nil, err
 	}
-	log.Info("Opened ancient database", "database", datadir)
+	log.Info("Opened ancient database", "database", datadir, "readonly", readonly)
 	return freezer, nil
 }
 
