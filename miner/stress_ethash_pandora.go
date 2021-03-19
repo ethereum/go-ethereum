@@ -65,6 +65,8 @@ func main() {
 	sealers := [32]*vbls.PublicKey{}
 	validatorPrivateList := [32]*vbls.PrivateKey{}
 
+	notifyUrls := make([]string, 0)
+
 	for i := 0; i < len(sealers); i++ {
 		randomReader := crand.Reader
 		pubKey, privKey, err := herumi.GenerateKey(randomReader)
@@ -86,7 +88,7 @@ func main() {
 	)
 	for i := 0; i < 4; i++ {
 		// Start the node and wait until it's up
-		stack, ethBackend, err := makeMiner(genesis)
+		stack, ethBackend, err := makeMiner(genesis, notifyUrls, sealers)
 		if err != nil {
 			panic(err)
 		}
@@ -192,7 +194,11 @@ func makeGenesis(faucets []*ecdsa.PrivateKey, sealers [32]*vbls.PublicKey) *core
 	return genesis
 }
 
-func makeMiner(genesis *core.Genesis) (*node.Node, *eth.Ethereum, error) {
+func makeMiner(
+	genesis *core.Genesis,
+	notify []string,
+	validators [32]*vbls.PublicKey,
+) (*node.Node, *eth.Ethereum, error) {
 	// Define the basic configurations for the Ethereum node
 	datadir, _ := ioutil.TempDir("", "")
 
@@ -213,20 +219,30 @@ func makeMiner(genesis *core.Genesis) (*node.Node, *eth.Ethereum, error) {
 		return nil, nil, err
 	}
 
-	ethBackend, err := eth.New(stack, &ethconfig.Config{
+	minimalConsensusInfo := ethash.NewMinimalConsensusInfo(0).(*ethash.MinimalEpochConsensusInfo)
+	minimalConsensusInfo.AssignEpochStartFromGenesis(time.Unix(
+		int64(genesis.Config.PandoraConfig.ConsensusInfo[0].EpochTimeStart),
+		0,
+	))
+	minimalConsensusInfo.AssignValidators(validators)
+	ethConfig := &ethconfig.Config{
 		Genesis:         genesis,
 		NetworkId:       genesis.Config.ChainID.Uint64(),
 		SyncMode:        downloader.FullSync,
 		DatabaseCache:   256,
 		DatabaseHandles: 256,
 		TxPool:          core.DefaultTxPoolConfig,
+		Ethash:          ethash.Config{PowMode: ethash.ModePandora, Log: log.Root()},
 		Miner: miner.Config{
 			GasFloor: genesis.GasLimit * 9 / 10,
 			GasCeil:  genesis.GasLimit * 11 / 10,
 			GasPrice: big.NewInt(1),
 			Recommit: time.Second,
 		},
-	})
+	}
+
+	ethBackend, err := eth.New(stack, ethConfig)
+
 	if err != nil {
 		return nil, nil, err
 	}
