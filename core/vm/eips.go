@@ -229,7 +229,11 @@ func opAuthCall(pc *uint64, interpreter *EVMInterpreter, callContext *callCtx) (
 	temp := stack.pop()
 	gas := interpreter.evm.callGasTemp
 	// Pop other call parameters.
-	addr, value, inOffset, inSize, retOffset, retSize := stack.pop(), stack.pop(), stack.pop(), stack.pop(), stack.pop(), stack.pop()
+	addr, value, extValue, inOffset, inSize, retOffset, retSize := stack.pop(), stack.pop(), stack.pop(), stack.pop(), stack.pop(), stack.pop(), stack.pop()
+	// Nonzero extValue not allowed in London
+	if extValue.Cmp(uint256.NewInt()) != 0 {
+		return nil, ErrExtValueNonZero
+	}
 	toAddr := common.Address(addr.Bytes20())
 	// Get the arguments from the memory.
 	args := callContext.memory.GetPtr(int64(inOffset.Uint64()), int64(inSize.Uint64()))

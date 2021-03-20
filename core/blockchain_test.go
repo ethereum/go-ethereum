@@ -3123,7 +3123,7 @@ func TestEIP3074AuthCall(t *testing.T) {
 			Alloc: GenesisAlloc{
 				// authcall into bb
 				aa: {
-					Code:    common.FromHex("7f794dd7b68f540151c21953cc5322e6df1b809eec12e561353832a5d68e14809a7f7aa455a9f8b84965a8c2f32e29dbb8147a913fffa1b02375c6ab28161e6ebf2560007fbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbf65060008080808073000000000000000000000000000000000000bbbb5af700"),
+					Code:    common.FromHex("7f794dd7b68f540151c21953cc5322e6df1b809eec12e561353832a5d68e14809a7f7aa455a9f8b84965a8c2f32e29dbb8147a913fffa1b02375c6ab28161e6ebf2560007fbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbf6506000808080808073000000000000000000000000000000000000bbbb5af700"),
 					Nonce:   0,
 					Balance: big.NewInt(0),
 				},
