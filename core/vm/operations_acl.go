@@ -263,7 +263,7 @@ func gasSStoreEIP3403(evm *EVM, contract *Contract, stack *Stack, mem *Memory, m
 	}
 	if original == value && value == (common.Hash{}) {
 		// Invariant: current != value, checked above already
-		evm.StateDB.AddRefund(15000)
+		evm.StateDB.AddRefund(19000)
 	}
 	// EIP-2200 original clause:
 	//return params.SloadGasEIP2200, nil // dirty update (2.2)
