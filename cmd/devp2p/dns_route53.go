@@ -315,8 +315,16 @@ func (c *route53Client) collectRecords(name string) (map[string]recordSet, error
 			break
 		}
 
-		// sets the cursor to the next batch
+		// Set the cursor to the next batc. From the AWS docs:
+		//
+		// To display the next page of results, get the values of NextRecordName,
+		// NextRecordType, and NextRecordIdentifier (if any) from the response. Then submit
+		// another ListResourceRecordSets request, and specify those values for
+		// StartRecordName, StartRecordType, and StartRecordIdentifier.
+
 		req.StartRecordIdentifier = resp.NextRecordIdentifier
+		req.StartRecordName = resp.NextRecordName
+		req.StartRecordType = resp.NextRecordType
 	}
 
 	return existing, nil
