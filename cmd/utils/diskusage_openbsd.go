@@ -14,7 +14,7 @@
 // You should have received a copy of the GNU Lesser General Public License
 // along with the go-ethereum library. If not, see <http://www.gnu.org/licenses/>.
 
-// +build !windows,!openbsd
+// +build openbsd
 
 package utils
 
@@ -31,12 +31,13 @@ func getFreeDiskSpace(path string) (uint64, error) {
 	}
 
 	// Available blocks * size per block = available space in bytes
-	var bavail = stat.Bavail
-	if stat.Bavail < 0 {
+	var bavail = stat.F_bavail
+	// Not sure if the following check is necessary for OpenBSD
+	if stat.F_bavail < 0 {
 		// FreeBSD can have a negative number of blocks available
 		// because of the grace limit.
 		bavail = 0
 	}
 	//nolint:unconvert
-	return uint64(bavail) * uint64(stat.Bsize), nil
+	return uint64(bavail) * uint64(stat.F_bsize), nil
 }
