@@ -215,6 +215,10 @@ func (s *Suite) TestLargeAnnounce_66(t *utesting.T) {
 	}
 }
 
+func (s *Suite) TestOldAnnounce_66(t *utesting.T) {
+	s.oldAnnounce(t, s.setupConnection66(t), s.setupConnection66(t))
+}
+
 // TestMaliciousHandshake_66 tries to send malicious data during the handshake.
 func (s *Suite) TestMaliciousHandshake_66(t *utesting.T) {
 	conn := s.dial66(t)
