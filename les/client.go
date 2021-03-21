@@ -245,7 +245,7 @@ func (s *LightEthereum) prenegQuery(n *enode.Node) int {
 	}
 
 	var requests vflux.Requests
-	requests.Add("les", vflux.CapacityQueryName, vflux.CapacityQueryReq{
+	requests.Add("les", vflux.CapacityQueryName, vflux.CapacityQueryRequest{
 		Bias:      180,
 		AddTokens: []vflux.IntOrInf{{}},
 	})

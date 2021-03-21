@@ -75,7 +75,8 @@ func flatWeight(item interface{}) uint64 { return item.(*nodeQueue).flatWeight }
 // there before.
 func (ag *addressGroup) add(nq *nodeQueue) {
 	if nq.groupIndex != -1 {
-		panic("added node queue is already in an address group")
+		Error("added node queue is already in an address group")
+		return
 	}
 	l := len(ag.nodes)
 	nq.groupIndex = l
@@ -90,7 +91,8 @@ func (ag *addressGroup) add(nq *nodeQueue) {
 // address selector.
 func (ag *addressGroup) update(nq *nodeQueue, weight uint64) {
 	if nq.groupIndex == -1 || nq.groupIndex >= len(ag.nodes) || ag.nodes[nq.groupIndex] != nq {
-		panic("updated node queue is not in this address group")
+		Error("updated node queue is not in this address group")
+		return
 	}
 	ag.sumFlatWeight += weight - nq.flatWeight
 	nq.flatWeight = weight
@@ -102,7 +104,8 @@ func (ag *addressGroup) update(nq *nodeQueue, weight uint64) {
 // to remove the address group from the address map if it is empty.
 func (ag *addressGroup) remove(nq *nodeQueue) {
 	if nq.groupIndex == -1 || nq.groupIndex >= len(ag.nodes) || ag.nodes[nq.groupIndex] != nq {
-		panic("removed node queue is not in this address group")
+		Error("removed node queue is not in this address group")
+		return
 	}
 
 	l := len(ag.nodes) - 1

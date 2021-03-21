@@ -88,7 +88,7 @@ func (api *PrivateLightServerAPI) ClientInfo(nodes []string) map[enode.ID]map[st
 		if peer := api.server.peers.peer(id); peer != nil {
 			res[id] = api.clientInfo(peer, peer.balance)
 		} else {
-			api.server.clientPool.BalanceOperation(id, "", func(balance vfs.AtomicBalanceOperator) {
+			api.server.clientPool.BalanceOperation(id, "", nil, func(balance vfs.AtomicBalanceOperator) {
 				res[id] = api.clientInfo(nil, balance)
 			})
 		}
@@ -113,7 +113,7 @@ func (api *PrivateLightServerAPI) PriorityClientInfo(start, stop enode.ID, maxCo
 		if peer := api.server.peers.peer(id); peer != nil {
 			res[id] = api.clientInfo(peer, peer.balance)
 		} else {
-			api.server.clientPool.BalanceOperation(id, "", func(balance vfs.AtomicBalanceOperator) {
+			api.server.clientPool.BalanceOperation(id, "", nil, func(balance vfs.AtomicBalanceOperator) {
 				res[id] = api.clientInfo(nil, balance)
 			})
 		}
@@ -242,7 +242,7 @@ func (api *PrivateLightServerAPI) AddBalance(node string, amount int64) (balance
 	if id, err = parseNode(node); err != nil {
 		return
 	}
-	api.server.clientPool.BalanceOperation(id, "", func(nb vfs.AtomicBalanceOperator) {
+	api.server.clientPool.BalanceOperation(id, "", nil, func(nb vfs.AtomicBalanceOperator) {
 		balance[0], balance[1], err = nb.AddBalance(amount)
 	})
 	return

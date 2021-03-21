@@ -61,7 +61,7 @@ func TestPriorityPool(t *testing.T) {
 	})
 	pp := newPriorityPool(ns, setup, clock, testMinCap, 0, testCapacityStepDiv, testCapacityStepDiv)
 	ns.Start()
-	pp.SetLimits(100, 1000000)
+	pp.setLimits(100, 1000000)
 	clients := make([]*ppTestClient, 100)
 	raise := func(c *ppTestClient) {
 		for {
@@ -167,7 +167,7 @@ func TestCapacityCurve(t *testing.T) {
 
 	pp := newPriorityPool(ns, setup, clock, 400000, 0, 2, 2)
 	ns.Start()
-	pp.SetLimits(10, 10000000)
+	pp.setLimits(10, 10000000)
 	clients := make([]*ppTestClient, 10)
 
 	for i := range clients {
@@ -213,7 +213,7 @@ func TestCapacityCurve(t *testing.T) {
 	check(800000000000, 2000000)
 	check(1000000000000, 2500000)
 
-	pp.SetLimits(11, 10000000)
+	pp.setLimits(11, 10000000)
 	curve = pp.getCapacityCurve()
 
 	check(0, 0)

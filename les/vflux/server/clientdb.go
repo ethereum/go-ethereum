@@ -19,6 +19,7 @@ package server
 import (
 	"bytes"
 	"encoding/binary"
+	"math/big"
 	"time"
 
 	"github.com/ethereum/go-ethereum/common"
@@ -43,15 +44,20 @@ const (
 	// Version 1 => 2
 	// * Positive Balance and negative balance is changed:
 	// * Cumulative time is replaced with expiration
-	nodeDBVersion = 2
+	//
+	// Version 2 => 3
+	// * Positive balance is stored together with a serial number
+	// * Currency balance is added
+	nodeDBVersion = 3
 
 	// dbCleanupCycle is the cycle of db for useless data cleanup
 	dbCleanupCycle = time.Hour
 )
 
 var (
-	positiveBalancePrefix = []byte("pb:")         // dbVersion(uint16 big endian) + positiveBalancePrefix + id -> balance
+	positiveBalancePrefix = []byte("pb:")         // dbVersion(uint16 big endian) + positiveBalancePrefix + id -> balance + serialNumber
 	negativeBalancePrefix = []byte("nb:")         // dbVersion(uint16 big endian) + negativeBalancePrefix + ip -> balance
+	currencyBalancePrefix = []byte("cb:")         // dbVersion(uint16 big endian) + curBalancePrefix + currencyId + ":" + address -> currency balance
 	expirationKey         = []byte("expiration:") // dbVersion(uint16 big endian) + expirationKey -> posExp, negExp
 )
 
@@ -121,8 +127,32 @@ func (db *nodeDB) setExpiration(pos, neg utils.Fixed64) {
 	db.db.Put(append(db.verbuf[:], expirationKey...), buff[:16])
 }
 
-func (db *nodeDB) getOrNewBalance(id []byte, neg bool) utils.ExpiredValue {
-	key := db.key(id, neg)
+type storedPosBalance struct {
+	Balance      utils.ExpiredValue
+	SerialNumber uint64
+}
+
+func (db *nodeDB) getOrNewPosBalance(id []byte) (utils.ExpiredValue, uint64) {
+	key := db.key(id, false)
+	item, exist := db.cache.Get(string(key))
+	if exist {
+		b := item.(storedPosBalance)
+		return b.Balance, b.SerialNumber
+	}
+	enc, err := db.db.Get(key)
+	if err != nil || len(enc) == 0 {
+		return utils.ExpiredValue{}, 0
+	}
+	var b storedPosBalance
+	if err := rlp.DecodeBytes(enc, &b); err != nil {
+		log.Crit("Failed to decode positive balance", "err", err)
+	}
+	db.cache.Add(string(key), b)
+	return b.Balance, b.SerialNumber
+}
+
+func (db *nodeDB) getOrNewNegBalance(id []byte) utils.ExpiredValue {
+	key := db.key(id, true)
 	item, exist := db.cache.Get(string(key))
 	if exist {
 		return item.(utils.ExpiredValue)
@@ -133,26 +163,59 @@ func (db *nodeDB) getOrNewBalance(id []byte, neg bool) utils.ExpiredValue {
 		return b
 	}
 	if err := rlp.DecodeBytes(enc, &b); err != nil {
-		log.Crit("Failed to decode positive balance", "err", err)
+		log.Crit("Failed to decode negative balance", "err", err)
 	}
 	db.cache.Add(string(key), b)
 	return b
 }
 
-func (db *nodeDB) setBalance(id []byte, neg bool, b utils.ExpiredValue) {
-	key := db.key(id, neg)
+func (db *nodeDB) setPosBalance(batch ethdb.KeyValueWriter, id []byte, balance utils.ExpiredValue, serialNumber uint64) {
+	b := storedPosBalance{balance, serialNumber}
+	key := db.key(id, false)
 	enc, err := rlp.EncodeToBytes(&(b))
 	if err != nil {
 		log.Crit("Failed to encode positive balance", "err", err)
 	}
-	db.db.Put(key, enc)
+	if batch != nil {
+		batch.Put(key, enc)
+	} else {
+		db.db.Put(key, enc)
+	}
 	db.cache.Add(string(key), b)
 }
 
-func (db *nodeDB) delBalance(id []byte, neg bool) {
-	key := db.key(id, neg)
-	db.db.Delete(key)
-	db.cache.Remove(string(key))
+func (db *nodeDB) setNegBalance(batch ethdb.KeyValueWriter, id []byte, b utils.ExpiredValue) {
+	key := db.key(id, true)
+	enc, err := rlp.EncodeToBytes(&(b))
+	if err != nil {
+		log.Crit("Failed to encode negative balance", "err", err)
+	}
+	if batch != nil {
+		batch.Put(key, enc)
+	} else {
+		db.db.Put(key, enc)
+	}
+	db.cache.Add(string(key), b)
+}
+
+func (db *nodeDB) delPosBalance(batch ethdb.KeyValueWriter, id []byte) {
+	key := db.key(id, false)
+	if batch != nil {
+		batch.Delete(key)
+	} else {
+		db.db.Delete(key)
+	}
+	db.cache.Add(string(key), storedPosBalance{})
+}
+
+func (db *nodeDB) delNegBalance(batch ethdb.KeyValueWriter, id []byte) {
+	key := db.key(id, true)
+	if batch != nil {
+		batch.Delete(key)
+	} else {
+		db.db.Delete(key)
+	}
+	db.cache.Add(string(key), utils.ExpiredValue{})
 }
 
 // getPosBalanceIDs returns a lexicographically ordered list of IDs of accounts
@@ -199,11 +262,11 @@ func (db *nodeDB) forEachBalance(neg bool, callback func(id enode.ID, balance ut
 		}
 		copy(id[:], it.Key()[keylen-len(id):])
 
-		var b utils.ExpiredValue
+		var b storedPosBalance
 		if err := rlp.DecodeBytes(it.Value(), &b); err != nil {
 			continue
 		}
-		if !callback(id, b) {
+		if !callback(id, b.Balance) {
 			return
 		}
 	}
@@ -233,8 +296,16 @@ func (db *nodeDB) expireNodes() {
 		for iter.Next() {
 			visited++
 			var balance utils.ExpiredValue
-			if err := rlp.DecodeBytes(iter.Value(), &balance); err != nil {
-				log.Crit("Failed to decode negative balance", "err", err)
+			if neg {
+				if err := rlp.DecodeBytes(iter.Value(), &balance); err != nil {
+					log.Crit("Failed to decode negative balance", "err", err)
+				}
+			} else {
+				var b storedPosBalance
+				if err := rlp.DecodeBytes(iter.Value(), &b); err != nil {
+					log.Crit("Failed to decode negative balance", "err", err)
+				}
+				balance = b.Balance
 			}
 			if db.evictCallBack != nil && db.evictCallBack(db.clock.Now(), neg, balance) {
 				deleted++
@@ -247,4 +318,57 @@ func (db *nodeDB) expireNodes() {
 		db.cleanupHook()
 	}
 	log.Debug("Expire nodes", "visited", visited, "deleted", deleted, "elapsed", common.PrettyDuration(time.Since(start)))
+}
+
+func (db *nodeDB) currencyKey(currencyID string, address []byte) []byte {
+	currencyID = currencyID + ":"
+	if len(db.verbuf)+len(currencyBalancePrefix)+len(currencyID)+len(address) > len(db.auxbuf) {
+		db.auxbuf = append(db.auxbuf, make([]byte, len(db.verbuf)+len(currencyBalancePrefix)+len(currencyID)+len(address)-len(db.auxbuf))...)
+	}
+	copy(db.auxbuf[:len(db.verbuf)], db.verbuf[:])
+	copy(db.auxbuf[len(db.verbuf):len(db.verbuf)+len(currencyBalancePrefix)], currencyBalancePrefix)
+	copy(db.auxbuf[len(db.verbuf)+len(currencyBalancePrefix):len(db.verbuf)+len(currencyBalancePrefix)+len(currencyID)], currencyID)
+	copy(db.auxbuf[len(db.verbuf)+len(currencyBalancePrefix)+len(currencyID):len(db.verbuf)+len(currencyBalancePrefix)+len(currencyID)+len(address)], address)
+	return db.auxbuf[:len(db.verbuf)+len(currencyBalancePrefix)+len(currencyID)+len(address)]
+}
+
+func (db *nodeDB) getCurrencyBalance(currencyID string, address []byte) *big.Int {
+	key := db.currencyKey(currencyID, address)
+	item, exist := db.cache.Get(string(key))
+	if exist {
+		return item.(*big.Int)
+	}
+	v := big.NewInt(0)
+	b, _ := db.db.Get(key)
+	if len(b) > 0 {
+		v.SetBytes(b)
+	}
+	db.cache.Add(string(key), v)
+	return v
+}
+
+func (db *nodeDB) setOrDelCurrencyBalance(batch ethdb.KeyValueWriter, currencyID string, address []byte, balance *big.Int) {
+	key := db.currencyKey(currencyID, address)
+	var b []byte
+	switch balance.Sign() {
+	case -1:
+		log.Error("Negative currency balance", "currency", currencyID, "address", address, "balance", balance)
+		balance = big.NewInt(0)
+	case 1:
+		b = balance.Bytes()
+	}
+	if batch != nil {
+		if b != nil {
+			batch.Put(key, b)
+		} else {
+			batch.Delete(key)
+		}
+	} else {
+		if b != nil {
+			db.db.Put(key, b)
+		} else {
+			db.db.Delete(key)
+		}
+	}
+	db.cache.Add(string(key), balance)
 }
