@@ -85,8 +85,12 @@ type Pruner struct {
 }
 
 // NewPruner creates the pruner instance.
-func NewPruner(db ethdb.Database, headHeader *types.Header, datadir, trieCachePath string, bloomSize uint64) (*Pruner, error) {
-	snaptree, err := snapshot.New(db, trie.NewDatabase(db), 256, headHeader.Root, false, false, false)
+func NewPruner(db ethdb.Database, datadir, trieCachePath string, bloomSize uint64) (*Pruner, error) {
+	headBlock := rawdb.ReadHeadBlock(db)
+	if headBlock == nil {
+		return nil, errors.New("Failed to load head block")
+	}
+	snaptree, err := snapshot.New(db, trie.NewDatabase(db), 256, headBlock.Root(), false, false, false)
 	if err != nil {
 		return nil, err // The relevant snapshot(s) might not exist
 	}
@@ -104,7 +108,7 @@ func NewPruner(db ethdb.Database, headHeader *types.Header, datadir, trieCachePa
 		stateBloom:    stateBloom,
 		datadir:       datadir,
 		trieCachePath: trieCachePath,
-		headHeader:    headHeader,
+		headHeader:    headBlock.Header(),
 		snaptree:      snaptree,
 	}, nil
 }
@@ -350,9 +354,9 @@ func RecoverPruning(datadir string, db ethdb.Database, trieCachePath string) err
 	if stateBloomPath == "" {
 		return nil // nothing to recover
 	}
-	headHeader, err := getHeadHeader(db)
-	if err != nil {
-		return err
+	headBlock := rawdb.ReadHeadBlock(db)
+	if headBlock == nil {
+		return errors.New("Failed to load head block")
 	}
 	// Initialize the snapshot tree in recovery mode to handle this special case:
 	// - Users run the `prune-state` command multiple times
@@ -362,7 +366,7 @@ func RecoverPruning(datadir string, db ethdb.Database, trieCachePath string) err
 	// - The state HEAD is rewound already because of multiple incomplete `prune-state`
 	// In this case, even the state HEAD is not exactly matched with snapshot, it
 	// still feasible to recover the pruning correctly.
-	snaptree, err := snapshot.New(db, trie.NewDatabase(db), 256, headHeader.Root, false, false, true)
+	snaptree, err := snapshot.New(db, trie.NewDatabase(db), 256, headBlock.Root(), false, false, true)
 	if err != nil {
 		return err // The relevant snapshot(s) might not exist
 	}
@@ -382,7 +386,7 @@ func RecoverPruning(datadir string, db ethdb.Database, trieCachePath string) err
 	// otherwise the dangling state will be left.
 	var (
 		found       bool
-		layers      = snaptree.Snapshots(headHeader.Root, 128, true)
+		layers      = snaptree.Snapshots(headBlock.Root(), 128, true)
 		middleRoots = make(map[common.Hash]struct{})
 	)
 	for _, layer := range layers {
@@ -504,22 +508,6 @@ func findBloomFilter(datadir string) (string, common.Hash, error) {
 		return "", common.Hash{}, err
 	}
 	return stateBloomPath, stateBloomRoot, nil
-}
-
-func getHeadHeader(db ethdb.Database) (*types.Header, error) {
-	headHeaderHash := rawdb.ReadHeadBlockHash(db)
-	if headHeaderHash == (common.Hash{}) {
-		return nil, errors.New("empty head block hash")
-	}
-	headHeaderNumber := rawdb.ReadHeaderNumber(db, headHeaderHash)
-	if headHeaderNumber == nil {
-		return nil, errors.New("empty head block number")
-	}
-	headHeader := rawdb.ReadHeader(db, headHeaderHash, *headHeaderNumber)
-	if headHeader == nil {
-		return nil, errors.New("empty head header")
-	}
-	return headHeader, nil
 }
 
 const warningLog = `
