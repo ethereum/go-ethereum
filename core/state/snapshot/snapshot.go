@@ -283,11 +283,11 @@ func (t *Tree) Update(blockRoot common.Hash, parentRoot common.Hash, destructs m
 		return errSnapshotCycle
 	}
 	// Generate a new snapshot on top of the parent
-	parent := t.Snapshot(parentRoot).(snapshot)
+	parent := t.Snapshot(parentRoot)
 	if parent == nil {
 		return fmt.Errorf("parent [%#x] snapshot missing", parentRoot)
 	}
-	snap := parent.Update(blockRoot, destructs, accounts, storage)
+	snap := parent.(snapshot).Update(blockRoot, destructs, accounts, storage)
 
 	// Save the new snapshot for later
 	t.lock.Lock()
