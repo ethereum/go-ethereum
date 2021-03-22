@@ -244,10 +244,6 @@ func newWorker(config *Config, chainConfig *params.ChainConfig, engine consensus
 				return
 			}
 
-			currentHeader.Time = uint64(time.Now().Unix())
-			// Difficulty is static for now
-			currentHeader.Difficulty = big.NewInt(1)
-
 			return
 		}
 
@@ -272,10 +268,12 @@ func newWorker(config *Config, chainConfig *params.ChainConfig, engine consensus
 			currentHeader.Time = uint64(timeNow.Unix())
 			newHeaderHash := pandoraEngine.SealHash(currentHeader)
 			currentBlock := types.NewBlockWithHeader(currentHeader)
-			worker.pendingTasks[newHeaderHash] = &task {
-				receipts: copyReceipts(worker.current.receipts),
-				state: worker.current.state,
-				block: currentBlock,
+			currentHeader.Difficulty = big.NewInt(1)
+
+			worker.pendingTasks[newHeaderHash] = &task{
+				receipts:  copyReceipts(worker.current.receipts),
+				state:     worker.current.state,
+				block:     currentBlock,
 				createdAt: timeNow,
 			}
 		}

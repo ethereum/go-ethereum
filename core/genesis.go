@@ -382,7 +382,7 @@ func DefaultGoerliGenesisBlock() *Genesis {
 	}
 }
 
-// TODO: make it static when
+// DefaultPandoraGenesisBlock return the Pandora network genesis block
 func DefaultPandoraGenesisBlock() *Genesis {
 	genesis := DefaultGoerliGenesisBlock()
 	genesis.Config = params.PandoraChainConfig

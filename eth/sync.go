@@ -297,12 +297,6 @@ func (cs *chainSyncer) modeAndLocalHead() (downloader.SyncMode, *big.Int) {
 	head := cs.handler.chain.CurrentHeader()
 	td := cs.handler.chain.GetTd(head.Hash(), head.Number.Uint64())
 
-	//if nil == td {
-	//	sealHash := cs.handler.chain.Engine().SealHash(head)
-	//	fmt.Printf("Defaulting td for hash: %s, sealhash: %s", head.Hash().Hex(), sealHash.Hex())
-	//	td = cs.handler.chain.GetTd(sealHash, 0)
-	//}
-
 	return downloader.FullSync, td
 }
 
