@@ -46,12 +46,12 @@ as even a tiny change in Solidity can be painful to port over to Go.
 
 To avoid all this mess, the go-ethereum implementation introduces a source code generator
 that can convert Ethereum ABI definitions into easy to use, type-safe Go packages. Assuming
-you have a valid Go development environment set up, `godep` installed and the go-ethereum
+you have a valid Go development environment set up and the go-ethereum
 repository checked out correctly, you can build the generator with:
 
 ```
 $ cd $GOPATH/src/github.com/ethereum/go-ethereum
-$ godep go install ./cmd/abigen
+$ make abigen
 ```
 
 ### Generating the bindings
