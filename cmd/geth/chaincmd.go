@@ -28,6 +28,7 @@ import (
 	"github.com/ethereum/go-ethereum/cmd/utils"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core"
+	"github.com/ethereum/go-ethereum/core/rawdb"
 	"github.com/ethereum/go-ethereum/core/state"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/log"
@@ -373,21 +374,27 @@ func dump(ctx *cli.Context) error {
 	stack, _ := makeConfigNode(ctx)
 	defer stack.Close()
 
-	chain, chainDb := utils.MakeChain(ctx, stack)
-	defer chainDb.Close()
+	db := utils.MakeChainDatabase(ctx, stack, true)
 	for _, arg := range ctx.Args() {
-		var block *types.Block
+		var header *types.Header
 		if hashish(arg) {
-			block = chain.GetBlockByHash(common.HexToHash(arg))
+			hash := common.HexToHash(arg)
+			number := rawdb.ReadHeaderNumber(db, hash)
+			if number != nil {
+				header = rawdb.ReadHeader(db, hash, *number)
+			}
 		} else {
-			num, _ := strconv.Atoi(arg)
-			block = chain.GetBlockByNumber(uint64(num))
+			number, _ := strconv.Atoi(arg)
+			hash := rawdb.ReadCanonicalHash(db, uint64(number))
+			if hash != (common.Hash{}) {
+				header = rawdb.ReadHeader(db, hash, uint64(number))
+			}
 		}
-		if block == nil {
+		if header == nil {
 			fmt.Println("{}")
 			utils.Fatalf("block not found")
 		} else {
-			state, err := state.New(block.Root(), state.NewDatabase(chainDb), nil)
+			state, err := state.New(header.Root, state.NewDatabase(db), nil)
 			if err != nil {
 				utils.Fatalf("could not create new state: %v", err)
 			}
