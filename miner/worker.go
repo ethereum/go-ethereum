@@ -19,6 +19,7 @@ package miner
 import (
 	"bytes"
 	"errors"
+	"github.com/ethereum/go-ethereum/consensus/ethash"
 	"math/big"
 	"sync"
 	"sync/atomic"
@@ -248,6 +249,31 @@ func newWorker(config *Config, chainConfig *params.ChainConfig, engine consensus
 			currentHeader.Difficulty = big.NewInt(1)
 
 			return
+		}
+
+		// We need to update time if it got stuck, because sealer needs to take proper work load
+		worker.resubmitHook = func(duration time.Duration, duration2 time.Duration) {
+			pandoraEngine := engine.(*ethash.Ethash)
+			currentHeader := worker.current.header
+			previousHeaderHash := pandoraEngine.SealHash(currentHeader)
+			timeNow := time.Now()
+			currentHeader.Time = uint64(timeNow.Unix())
+			newHeaderHash := pandoraEngine.SealHash(currentHeader)
+
+			_, previousTaskPresent := worker.pendingTasks[previousHeaderHash]
+
+			// Delete previous task from the list if present. Its no longer needed
+			if previousTaskPresent {
+				delete(worker.pendingTasks, previousHeaderHash)
+			}
+
+			currentBlock := types.NewBlockWithHeader(currentHeader)
+			worker.pendingTasks[newHeaderHash] = &task {
+				receipts: copyReceipts(worker.current.receipts),
+				state: worker.current.state,
+				block: currentBlock,
+				createdAt: timeNow,
+			}
 		}
 	}
 

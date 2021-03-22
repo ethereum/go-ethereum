@@ -348,7 +348,7 @@ func makeRemoteSealer(
 		// Derive privateKey..
 		headerTime := header.Time
 		extractedProposerIndex := (headerTime - epochTimeStart) / slotTimeDuration
-
+		fmt.Printf("\n Header time minus epoch time start: %d \n", headerTime - epochTimeStart)
 		extractedTurn := extractedProposerIndex % numOfNodes
 		shouldISign := extractedTurn == uint64(nodeNumber)
 
