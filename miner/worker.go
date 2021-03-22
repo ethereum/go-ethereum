@@ -255,17 +255,19 @@ func newWorker(config *Config, chainConfig *params.ChainConfig, engine consensus
 		worker.resubmitHook = func(duration time.Duration, duration2 time.Duration) {
 			pandoraEngine := engine.(*ethash.Ethash)
 			currentHeader := worker.current.header
-			previousHeaderHash := pandoraEngine.SealHash(currentHeader)
+
 			timeNow := time.Now()
 			currentHeader.Time = uint64(timeNow.Unix())
 			newHeaderHash := pandoraEngine.SealHash(currentHeader)
 
-			_, previousTaskPresent := worker.pendingTasks[previousHeaderHash]
+			//previousHeaderHash := pandoraEngine.SealHash(currentHeader)
+			//_, previousTaskPresent := worker.pendingTasks[previousHeaderHash]
 
 			// Delete previous task from the list if present. Its no longer needed
-			if previousTaskPresent {
-				delete(worker.pendingTasks, previousHeaderHash)
-			}
+			// TODO: check if needed
+			//if previousTaskPresent {
+			//	delete(worker.pendingTasks, previousHeaderHash)
+			//}
 
 			currentBlock := types.NewBlockWithHeader(currentHeader)
 			worker.pendingTasks[newHeaderHash] = &task {

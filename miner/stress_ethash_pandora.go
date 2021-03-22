@@ -343,27 +343,26 @@ func makeRemoteSealer(
 		// Try counted epoch..
 
 		epochTimeStart := consensusInfos[0].EpochTimeStart
-		slotTimeDuration := uint64(consensusInfos[0].SlotTimeDuration * time.Second)
+		slotTimeDuration := uint64(consensusInfos[0].SlotTimeDuration)
 
 		// Derive privateKey..
 		headerTime := header.Time
 		extractedProposerIndex := (headerTime - epochTimeStart) / slotTimeDuration
-		fmt.Printf("\n Header time minus epoch time start: %d \n", headerTime - epochTimeStart)
 		extractedTurn := extractedProposerIndex % numOfNodes
 		shouldISign := extractedTurn == uint64(nodeNumber)
 
 		if !shouldISign {
 			fmt.Printf(
-				"\n I am omiting the proposer index: %d for node: %d \n",
+				"\n I am omiting the proposer index: %d for node: %d. ExtractedTurn: %d \n",
 				extractedProposerIndex,
 				nodeNumber,
+				extractedTurn,
 			)
 
 			return
 		}
 
-		// THIS IS DUMB, REMOVE IT
-		signature := herumi.Sign(privateKeys[0], signatureBytes)
+		signature := herumi.Sign(privateKeys[extractedProposerIndex], signatureBytes)
 		compressedSignature := signature.Compress()
 		messages := make([][]byte, 0)
 		messages = append(messages, signatureBytes)
@@ -393,7 +392,6 @@ func makeRemoteSealer(
 		defer ticker.Stop()
 		for {
 			<-ticker.C
-			fmt.Printf("tick \n")
 			var workInfo [4]string
 			err = rpcClient.Call(&workInfo, "eth_getWork")
 
