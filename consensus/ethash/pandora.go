@@ -1,6 +1,7 @@
 package ethash
 
 import (
+	"bytes"
 	"context"
 	"fmt"
 	"github.com/ethereum/go-ethereum/common"
@@ -237,7 +238,7 @@ func (ethash *Ethash) getMinimalConsensus(header *types.Header) (
 	return
 }
 
-func (ethash *Ethash) preparePandoraHeader(header *types.Header) (err error) {
+func (ethash *Ethash) PreparePandoraHeader(header *types.Header) (err error) {
 	minimalConsensus, err := ethash.getMinimalConsensus(header)
 
 	if nil != err {
@@ -344,11 +345,9 @@ func (ethash *Ethash) verifyPandoraHeader(header *types.Header) (err error) {
 		return
 	}
 
-	// TODO: restore this verification. Check why it does not work in normal mode.
-	fmt.Printf("expected rlp: %v", expectedRlp)
-	//if !bytes.Equal(expectedRlp, header.Extra) {
-	//	err = fmt.Errorf("invalid extraData field, expected: %v, got %v", expectedExtra, extraData)
-	//}
+	if !bytes.Equal(expectedRlp, header.Extra) {
+		err = fmt.Errorf("invalid extraData field, expected: %v, got %v", expectedExtra, extraData)
+	}
 
 	return
 }

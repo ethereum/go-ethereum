@@ -267,8 +267,21 @@ func newWorker(config *Config, chainConfig *params.ChainConfig, engine consensus
 			timeNow := time.Now()
 			currentHeader.Time = uint64(timeNow.Unix())
 			newHeaderHash := pandoraEngine.SealHash(currentHeader)
-			currentBlock := types.NewBlockWithHeader(currentHeader)
 			currentHeader.Difficulty = big.NewInt(1)
+			err = pandoraEngine.PreparePandoraHeader(currentHeader)
+
+			if nil != err {
+				log.Error(
+					"could not prepare pandora header",
+					"sealHash",
+					engine.SealHash(currentHeader).Hex(),
+					"error",
+					err.Error(),
+				)
+				return
+			}
+
+			currentBlock := types.NewBlockWithHeader(currentHeader)
 
 			worker.pendingTasks[newHeaderHash] = &task{
 				receipts:  copyReceipts(worker.current.receipts),

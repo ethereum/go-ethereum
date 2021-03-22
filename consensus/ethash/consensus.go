@@ -575,7 +575,7 @@ func (ethash *Ethash) Prepare(chain consensus.ChainHeaderReader, header *types.H
 	header.Difficulty = ethash.CalcDifficulty(chain, header.Time, parent)
 
 	if ModePandora == ethash.config.PowMode {
-		return ethash.preparePandoraHeader(header)
+		return ethash.PreparePandoraHeader(header)
 	}
 
 	return nil
