@@ -1817,7 +1817,7 @@ func testRepair(t *testing.T, tt *rewindTest, snapshots bool) {
 	}
 	// Force run a freeze cycle
 	type freezer interface {
-		Freeze(threshold uint64)
+		Freeze(threshold uint64) error
 		Ancients() (uint64, error)
 	}
 	db.(freezer).Freeze(tt.freezeThreshold)
