@@ -85,6 +85,9 @@ var (
 
 	twitterTokenFlag   = flag.String("twitter.token", "", "Bearer token to authenticate with the v2 Twitter API")
 	twitterTokenV1Flag = flag.String("twitter.token.v1", "", "Bearer token to authenticate with the v1.1 Twitter API")
+
+	goerliFlag  = flag.Bool("goerli", false, "Initializes the faucet with Görli network config")
+	rinkebyFlag = flag.Bool("rinkeby", false, "Initializes the faucet with Rinkeby network config")
 )
 
 var (
@@ -144,13 +147,9 @@ func main() {
 		log.Crit("Failed to render the faucet template", "err", err)
 	}
 	// Load and parse the genesis block requested by the user
-	blob, err := ioutil.ReadFile(*genesisFlag)
+	genesis, err := getGenesis(genesisFlag, *goerliFlag, *rinkebyFlag)
 	if err != nil {
-		log.Crit("Failed to read genesis block contents", "genesis", *genesisFlag, "err", err)
-	}
-	genesis := new(core.Genesis)
-	if err = json.Unmarshal(blob, genesis); err != nil {
-		log.Crit("Failed to parse genesis block json", "err", err)
+		log.Crit("Failed to parse genesis config", "err", err)
 	}
 	// Convert the bootnodes to internal enode representations
 	var enodes []*enode.Node
@@ -162,7 +161,8 @@ func main() {
 		}
 	}
 	// Load up the account key and decrypt its password
-	if blob, err = ioutil.ReadFile(*accPassFlag); err != nil {
+	blob, err := ioutil.ReadFile(*accPassFlag)
+	if err != nil {
 		log.Crit("Failed to read account password contents", "file", *accPassFlag, "err", err)
 	}
 	pass := strings.TrimSuffix(string(blob), "\n")
@@ -883,4 +883,30 @@ func authNoAuth(url string) (string, string, common.Address, error) {
 		return "", "", common.Address{}, errors.New("No Ethereum address found to fund")
 	}
 	return address.Hex() + "@noauth", "", address, nil
+}
+
+// Ensures that only one genesis flag is provided and returns the relevent genesis
+func getGenesis(genesisFlag *string, goerliFlag bool, rinkebyFlag bool) (*core.Genesis, error) {
+	if *genesisFlag != "" {
+		if goerliFlag || rinkebyFlag {
+			return new(core.Genesis), fmt.Errorf("Invalid argument, can not use `--genesis` with `--goerli` or `--rinkeby`")
+		}
+		blob, err := ioutil.ReadFile(*genesisFlag)
+		if err != nil {
+			return new(core.Genesis), err
+		}
+		genesis := new(core.Genesis)
+		if err = json.Unmarshal(blob, genesis); err != nil {
+			return new(core.Genesis), err
+		}
+		return genesis, nil
+	} else if goerliFlag {
+		if rinkebyFlag {
+			return new(core.Genesis), fmt.Errorf("Invalid argument, can not use `--goerli` with `--rinkeby`")
+		}
+		return core.DefaultGoerliGenesisBlock(), nil
+	} else if rinkebyFlag {
+		return core.DefaultRinkebyGenesisBlock(), nil
+	}
+	return new(core.Genesis), fmt.Errorf("No genesis flag provided")
 }
