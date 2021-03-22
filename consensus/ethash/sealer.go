@@ -50,9 +50,10 @@ var (
 // the block's difficulty requirements.
 func (ethash *Ethash) Seal(chain consensus.ChainHeaderReader, block *types.Block, results chan<- *types.Block, stop <-chan struct{}) error {
 	powMode := ethash.config.PowMode
-	minimalPowModeCheck := ModeFake == powMode || ModeFullFake == powMode || ModePandora == powMode
+	mockedHeaderMode := ModeFake == powMode || ModeFullFake == powMode
+	minimalPowModeCheck := mockedHeaderMode || ModePandora == powMode
 
-	if minimalPowModeCheck {
+	if mockedHeaderMode {
 		header := block.Header()
 		header.Nonce, header.MixDigest = types.BlockNonce{}, common.Hash{}
 		select {
@@ -255,8 +256,7 @@ type sealWork struct {
 
 func startRemoteSealer(ethash *Ethash, urls []string, noverify bool) *remoteSealer {
 	if ModePandora == ethash.config.PowMode {
-		// TODO: change noverify to
-		return StartRemotePandora(ethash, urls, true)
+		return StartRemotePandora(ethash, urls, noverify)
 	}
 
 	ctx, cancel := context.WithCancel(context.Background())

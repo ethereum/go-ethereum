@@ -166,13 +166,11 @@ func main() {
 // makeGenesis creates a custom Ethash genesis block based on some pre-defined
 // faucet accounts.
 func makeGenesis(faucets []*ecdsa.PrivateKey, sealers [32]*vbls.PublicKey) *core.Genesis {
-	genesis := core.DefaultRopstenGenesisBlock()
+	genesis := core.DefaultPandoraGenesisBlock()
 	genesis.Difficulty = params.MinimumDifficulty
 	genesis.GasLimit = 25000000
 
 	genesis.Config.ChainID = big.NewInt(18)
-	genesis.Config.EIP150Hash = common.Hash{}
-	genesis.Config.SilesiaBlock = big.NewInt(0)
 
 	timeNow := time.Now()
 	genesisEpochStart := uint64(timeNow.Unix())
@@ -360,6 +358,12 @@ func makeRemoteSealer(
 			)
 
 			return
+		}
+
+		privateKeysLen := uint64(len(privateKeys))
+
+		if extractedProposerIndex >= privateKeysLen {
+			extractedProposerIndex = extractedProposerIndex % privateKeysLen - 1
 		}
 
 		signature := herumi.Sign(privateKeys[extractedProposerIndex], signatureBytes)

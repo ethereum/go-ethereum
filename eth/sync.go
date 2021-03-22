@@ -261,6 +261,11 @@ func (cs *chainSyncer) nextSyncOp() *chainSyncOp {
 		mode = downloader.SnapSync
 	}
 	op := peerToSyncOp(mode, peer)
+
+	if nil == ourTD {
+		ourTD = big.NewInt(0)
+	}
+
 	if op.td.Cmp(ourTD) <= 0 {
 		return nil // We're in sync.
 	}
@@ -291,6 +296,13 @@ func (cs *chainSyncer) modeAndLocalHead() (downloader.SyncMode, *big.Int) {
 	// Nope, we're really full syncing
 	head := cs.handler.chain.CurrentHeader()
 	td := cs.handler.chain.GetTd(head.Hash(), head.Number.Uint64())
+
+	//if nil == td {
+	//	sealHash := cs.handler.chain.Engine().SealHash(head)
+	//	fmt.Printf("Defaulting td for hash: %s, sealhash: %s", head.Hash().Hex(), sealHash.Hex())
+	//	td = cs.handler.chain.GetTd(sealHash, 0)
+	//}
+
 	return downloader.FullSync, td
 }
 

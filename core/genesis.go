@@ -22,9 +22,6 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"math/big"
-	"strings"
-
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/ethereum/go-ethereum/common/math"
@@ -37,6 +34,8 @@ import (
 	"github.com/ethereum/go-ethereum/params"
 	"github.com/ethereum/go-ethereum/rlp"
 	"github.com/ethereum/go-ethereum/trie"
+	"math/big"
+	"strings"
 )
 
 //go:generate gencodec -type Genesis -field-override genesisSpecMarshaling -out gen_genesis.go
@@ -381,6 +380,15 @@ func DefaultGoerliGenesisBlock() *Genesis {
 		Difficulty: big.NewInt(1),
 		Alloc:      decodePrealloc(goerliAllocData),
 	}
+}
+
+// TODO: make it static when
+func DefaultPandoraGenesisBlock() *Genesis {
+	genesis := DefaultGoerliGenesisBlock()
+	genesis.Config = params.PandoraChainConfig
+	genesis.Config.SilesiaBlock = big.NewInt(0)
+
+	return genesis
 }
 
 func DefaultYoloV3GenesisBlock() *Genesis {

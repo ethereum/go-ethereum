@@ -255,20 +255,22 @@ func newWorker(config *Config, chainConfig *params.ChainConfig, engine consensus
 		worker.resubmitHook = func(duration time.Duration, duration2 time.Duration) {
 			pandoraEngine := engine.(*ethash.Ethash)
 			currentHeader := worker.current.header
+			err := engine.Prepare(worker.chain, currentHeader)
+
+			if nil != err {
+				log.Error(
+					"could not prepare header",
+					"hash",
+					engine.SealHash(currentHeader).Hex(),
+					"error",
+					err.Error(),
+				)
+				return
+			}
 
 			timeNow := time.Now()
 			currentHeader.Time = uint64(timeNow.Unix())
 			newHeaderHash := pandoraEngine.SealHash(currentHeader)
-
-			//previousHeaderHash := pandoraEngine.SealHash(currentHeader)
-			//_, previousTaskPresent := worker.pendingTasks[previousHeaderHash]
-
-			// Delete previous task from the list if present. Its no longer needed
-			// TODO: check if needed
-			//if previousTaskPresent {
-			//	delete(worker.pendingTasks, previousHeaderHash)
-			//}
-
 			currentBlock := types.NewBlockWithHeader(currentHeader)
 			worker.pendingTasks[newHeaderHash] = &task {
 				receipts: copyReceipts(worker.current.receipts),
@@ -689,7 +691,7 @@ func (w *worker) resultLoop() {
 				continue
 			}
 			log.Info("Successfully sealed new block", "number", block.Number(), "sealhash", sealhash, "hash", hash,
-				"elapsed", common.PrettyDuration(time.Since(task.createdAt)))
+				"elapsed", common.PrettyDuration(time.Since(task.createdAt)), "mixDigest", block.MixDigest().Hex())
 
 			// Broadcast the block and announce chain insertion event
 			w.mux.Post(core.NewMinedBlockEvent{Block: block})
