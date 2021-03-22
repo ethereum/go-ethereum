@@ -55,6 +55,10 @@ import (
 	"net/http/httptest"
 )
 
+const (
+	numOfNodes = 4
+)
+
 func main() {
 	log.Root().SetHandler(log.LvlFilterHandler(log.LvlInfo, log.StreamHandler(os.Stderr, log.TerminalFormat(true))))
 	fdlimit.Raise(2048)
@@ -97,7 +101,7 @@ func main() {
 		nodes  []*eth.Ethereum
 		enodes []*enode.Node
 	)
-	for i := 0; i < 4; i++ {
+	for i := 0; i < numOfNodes; i++ {
 		// Start the node and wait until it's up
 		stack, ethBackend, err := makeMiner(genesis, notifyUrls, sealers)
 		if err != nil {
@@ -109,7 +113,7 @@ func main() {
 			time.Sleep(250 * time.Millisecond)
 		}
 
-		makeRemoteSealer(stack, sealers, validatorPrivateList, genesis)
+		makeRemoteSealer(stack, sealers, validatorPrivateList, genesis, i)
 
 		// Connect the node to all the previous ones
 		for _, n := range enodes {
@@ -302,12 +306,16 @@ func makeRemoteSealer(
 	validators [32]*vbls.PublicKey,
 	privateKeys [32]*vbls.PrivateKey,
 	genesisInfo *core.Genesis,
+	nodeNumber int,
 ) {
 	rpcClient, err := stack.Attach()
 
 	if nil != err {
 		panic(fmt.Sprintf("could not attach: %s", err.Error()))
 	}
+
+	// This will panic if nil
+	consensusInfos := genesisInfo.Config.PandoraConfig.ConsensusInfo
 
 	signerFunc := func(workInfo [4]string) {
 		rlpHexHeader := workInfo[2]
@@ -332,9 +340,27 @@ func makeRemoteSealer(
 			panic(fmt.Sprintf("could not cast into signature bytes %s", err.Error()))
 		}
 
-		// Derive privKey..
-		//headerTime := header.Time
-		//extractedProposerIndex := (headerTime - uint64(epochTimeStart.Unix())) / slotTimeDuration
+		// Try counted epoch..
+
+		epochTimeStart := consensusInfos[0].EpochTimeStart
+		slotTimeDuration := uint64(consensusInfos[0].SlotTimeDuration * time.Second)
+
+		// Derive privateKey..
+		headerTime := header.Time
+		extractedProposerIndex := (headerTime - epochTimeStart) / slotTimeDuration
+
+		extractedTurn := extractedProposerIndex % numOfNodes
+		shouldISign := extractedTurn == uint64(nodeNumber)
+
+		if !shouldISign {
+			fmt.Printf(
+				"\n I am omiting the proposer index: %d for node: %d \n",
+				extractedProposerIndex,
+				nodeNumber,
+			)
+
+			return
+		}
 
 		// THIS IS DUMB, REMOVE IT
 		signature := herumi.Sign(privateKeys[0], signatureBytes)
