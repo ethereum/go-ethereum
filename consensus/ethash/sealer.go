@@ -361,12 +361,12 @@ func (s *remoteSealer) makeWork(block *types.Block) {
 func (s *remoteSealer) notifyWork() {
 	work := s.currentWork
 	var blob []byte
-	var err error
 	if s.notifyFull {
 		blob, _ = json.Marshal(s.currentBlock.Header())
 	} else {
-		blob, _ = json.Marshal(s.currentWork)
+		blob, _ = json.Marshal(work)
 	}
+
 	s.reqWG.Add(len(s.notifyURLs))
 	for _, url := range s.notifyURLs {
 		go s.sendNotification(s.notifyCtx, url, blob, work)

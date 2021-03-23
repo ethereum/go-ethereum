@@ -34,7 +34,7 @@ import (
 func TestTestMode(t *testing.T) {
 	header := &types.Header{Number: big.NewInt(1), Difficulty: big.NewInt(100)}
 
-	ethash := NewTester(nil, false, false)
+	ethash := NewTester(nil, false)
 	defer ethash.Close()
 
 	results := make(chan *types.Block)
@@ -62,7 +62,14 @@ func TestCacheFileEvict(t *testing.T) {
 		t.Fatal(err)
 	}
 	defer os.RemoveAll(tmpdir)
-	e := New(Config{CachesInMem: 3, CachesOnDisk: 10, CacheDir: tmpdir, PowMode: ModeTest}, nil, false, false)
+
+	config := Config{
+		CachesInMem:  3,
+		CachesOnDisk: 10,
+		CacheDir:     tmpdir,
+		PowMode:      ModeTest,
+	}
+	e := New(config, nil, false)
 	defer e.Close()
 
 	workers := 8
@@ -91,7 +98,7 @@ func verifyTest(wg *sync.WaitGroup, e *Ethash, workerIndex, epochs int) {
 }
 
 func TestRemoteSealer(t *testing.T) {
-	ethash := NewTester(nil, false, false)
+	ethash := NewTester(nil, false)
 	defer ethash.Close()
 
 	api := &API{ethash}
@@ -134,7 +141,7 @@ func TestHashRate(t *testing.T) {
 		expect   uint64
 		ids      = []common.Hash{common.HexToHash("a"), common.HexToHash("b"), common.HexToHash("c")}
 	)
-	ethash := NewTester(nil, false, false)
+	ethash := NewTester(nil, false)
 	defer ethash.Close()
 
 	if tot := ethash.Hashrate(); tot != 0 {
@@ -154,7 +161,7 @@ func TestHashRate(t *testing.T) {
 }
 
 func TestClosedRemoteSealer(t *testing.T) {
-	ethash := NewTester(nil, false, false)
+	ethash := NewTester(nil, false)
 	time.Sleep(1 * time.Second) // ensure exit channel is listening
 	ethash.Close()
 
