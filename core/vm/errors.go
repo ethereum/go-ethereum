@@ -40,7 +40,6 @@ var (
 	ErrInvalidRetsub            = errors.New("invalid retsub")
 	ErrReturnStackExceeded      = errors.New("return stack limit reached")
 	ErrNoAuthorizedAccount      = errors.New("authorized account not set")
-	ErrExtValueNonZero          = errors.New("authcall extvalue nonzero")
 )
 
 // ErrStackUnderflow wraps an evm error when the items on the stack less
