@@ -19,6 +19,7 @@ package eth
 import (
 	"context"
 	"errors"
+	"fmt"
 	"math/big"
 
 	"github.com/ethereum/go-ethereum/accounts"
@@ -34,6 +35,7 @@ import (
 	"github.com/ethereum/go-ethereum/eth/gasprice"
 	"github.com/ethereum/go-ethereum/ethdb"
 	"github.com/ethereum/go-ethereum/event"
+	"github.com/ethereum/go-ethereum/internal/ethapi"
 	"github.com/ethereum/go-ethereum/miner"
 	"github.com/ethereum/go-ethereum/params"
 	"github.com/ethereum/go-ethereum/rpc"
@@ -342,4 +344,48 @@ func (b *EthAPIBackend) StatesInRange(ctx context.Context, fromBlock *types.Bloc
 
 func (b *EthAPIBackend) StateAtTransaction(ctx context.Context, block *types.Block, txIndex int, reexec uint64) (core.Message, vm.BlockContext, *state.StateDB, func(), error) {
 	return b.eth.stateAtTransaction(block, txIndex, reexec)
+}
+
+func (b *EthAPIBackend) AccessList(ctx context.Context, block *types.Block, reexec uint64, args *ethapi.SendTxArgs) (*types.AccessList, error) {
+	if block == nil {
+		block = b.CurrentBlock()
+	}
+	db, release, err := b.eth.stateAtBlock(block, reexec)
+	defer release()
+	if err != nil {
+		return nil, err
+	}
+	args.SetDefaults(ctx, b)
+	var (
+		gas        uint64
+		accessList = args.AccessList
+		msg        types.Message
+	)
+	for i := 0; i < 10; i++ {
+		// Copy the original db so we don't modify it
+		statedb := db.Copy()
+		// If we have an accesslist, use it
+		if accessList != nil {
+			msg = types.NewMessage(args.From, args.To, uint64(*args.Nonce), args.Value.ToInt(), uint64(*args.Gas), args.GasPrice.ToInt(), *args.Data, *accessList, false)
+		} else {
+			msg = types.NewMessage(args.From, args.To, uint64(*args.Nonce), args.Value.ToInt(), uint64(*args.Gas), args.GasPrice.ToInt(), *args.Data, nil, false)
+		}
+		// Apply the transaction
+		context := core.NewEVMBlockContext(block.Header(), b.eth.blockchain, nil)
+		tracer := new(vm.AccessListTracer)
+		config := vm.Config{Tracer: tracer}
+		vmenv := vm.NewEVM(context, core.NewEVMTxContext(msg), statedb, b.eth.blockchain.Config(), config)
+		res, err := core.ApplyMessage(vmenv, msg, new(core.GasPool).AddGas(msg.Gas()))
+		if err != nil {
+			return nil, fmt.Errorf("failed to apply transaction: %v err: %v", args.ToTransaction().Hash(), err)
+		}
+		if res.UsedGas == gas {
+			acl := tracer.GetUnpreparedAccessList(args.From, args.To, vmenv.ActivePrecompiles())
+			return acl, nil
+		}
+		accessList = tracer.GetAccessList()
+		gas = res.UsedGas
+	}
+
+	return accessList, errors.New("failed to create accesslist")
 }

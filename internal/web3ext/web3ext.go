@@ -482,6 +482,12 @@ web3._extend({
 			call: 'debug_freezeClient',
 			params: 1,
 		}),
+		new web3._extend.Method({
+			name: 'createAccessList',
+			call: 'debug_createAccessList',
+			params: 3,
+			inputFormatter: [web3._extend.formatters.inputBlockNumberFormatter, null, null],
+		}),
 	],
 	properties: []
 });
