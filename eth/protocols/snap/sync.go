@@ -376,8 +376,7 @@ type SyncPeer interface {
 //   - The peer delivers a stale response after a previous timeout
 //   - The peer delivers a refusal to serve the requested state
 type Syncer struct {
-	db    ethdb.KeyValueStore // Database to store the trie nodes into (and dedup)
-	bloom *trie.SyncBloom     // Bloom filter to deduplicate nodes for state fixup
+	db ethdb.KeyValueStore // Database to store the trie nodes into (and dedup)
 
 	root    common.Hash    // Current state trie root being synced
 	tasks   []*accountTask // Current account task set being synced
@@ -446,10 +445,9 @@ type Syncer struct {
 
 // NewSyncer creates a new snapshot syncer to download the Ethereum state over the
 // snap protocol.
-func NewSyncer(db ethdb.KeyValueStore, bloom *trie.SyncBloom) *Syncer {
+func NewSyncer(db ethdb.KeyValueStore) *Syncer {
 	return &Syncer{
-		db:    db,
-		bloom: bloom,
+		db: db,
 
 		peers:    make(map[string]SyncPeer),
 		peerJoin: new(event.Feed),
@@ -546,7 +544,7 @@ func (s *Syncer) Sync(root common.Hash, cancel chan struct{}) error {
 	s.lock.Lock()
 	s.root = root
 	s.healer = &healTask{
-		scheduler: state.NewStateSync(root, s.db, s.bloom),
+		scheduler: state.NewStateSync(root, s.db, nil),
 		trieTasks: make(map[common.Hash]trie.SyncPath),
 		codeTasks: make(map[common.Hash]struct{}),
 	}
@@ -1660,7 +1658,6 @@ func (s *Syncer) processBytecodeResponse(res *bytecodeResponse) {
 		bytes += common.StorageSize(len(code))
 
 		rawdb.WriteCode(batch, hash, code)
-		s.bloom.Add(hash[:])
 	}
 	if err := batch.Write(); err != nil {
 		log.Crit("Failed to persist bytecodes", "err", err)
@@ -1796,7 +1793,6 @@ func (s *Syncer) processStorageResponse(res *storageResponse) {
 			}
 			// Node is not a boundary, persist to disk
 			batch.Put(it.Key(), it.Value())
-			s.bloom.Add(it.Key())
 
 			bytes += common.StorageSize(common.HashLength + len(it.Value()))
 			nodes++
@@ -1953,7 +1949,6 @@ func (s *Syncer) forwardAccountTask(task *accountTask) {
 		}
 		// Node is neither a boundary, not an incomplete account, persist to disk
 		batch.Put(it.Key(), it.Value())
-		s.bloom.Add(it.Key())
 
 		bytes += common.StorageSize(common.HashLength + len(it.Value()))
 		nodes++
