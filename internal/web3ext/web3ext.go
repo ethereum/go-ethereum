@@ -187,11 +187,23 @@ web3._extend({
 			params: 2
 		}),
 		new web3._extend.Method({
+			name: 'startHTTP',
+			call: 'admin_startHTTP',
+			params: 5,
+			inputFormatter: [null, null, null, null, null]
+		}),
+		new web3._extend.Method({
+			name: 'stopHTTP',
+			call: 'admin_stopHTTP'
+		}),
+		// This method is deprecated.
+		new web3._extend.Method({
 			name: 'startRPC',
 			call: 'admin_startRPC',
-			params: 4,
-			inputFormatter: [null, null, null, null]
+			params: 5,
+			inputFormatter: [null, null, null, null, null]
 		}),
+		// This method is deprecated.
 		new web3._extend.Method({
 			name: 'stopRPC',
 			call: 'admin_stopRPC'
