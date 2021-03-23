@@ -885,7 +885,7 @@ func authNoAuth(url string) (string, string, common.Address, error) {
 	return address.Hex() + "@noauth", "", address, nil
 }
 
-// Ensures that only one genesis flag is provided and returns the relevent genesis
+// Ensures that only one genesis flag is provided and returns the relevant genesis
 func getGenesis(genesisFlag *string, goerliFlag bool, rinkebyFlag bool) (*core.Genesis, error) {
 	if *genesisFlag != "" {
 		if goerliFlag || rinkebyFlag {
