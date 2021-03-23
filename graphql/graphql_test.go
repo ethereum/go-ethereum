@@ -316,14 +316,13 @@ func createGQLServiceWithTransactions(t *testing.T, stack *node.Node) {
 	}
 	signer := types.LatestSigner(ethConf.Genesis.Config)
 
-	legacyTx, _ := types.SignTx(types.NewTx(&types.LegacyTx{
+	legacyTx, _ := types.SignNewTx(key, signer, &types.LegacyTx{
 		Nonce:    uint64(0),
 		To:       &dad,
 		Value:    big.NewInt(100),
 		Gas:      50000,
 		GasPrice: big.NewInt(1),
-	}), signer, key)
-
+	})
 	envelopTx, _ := types.SignNewTx(key, signer, &types.AccessListTx{
 		ChainID:  ethConf.Genesis.Config.ChainID,
 		Nonce:    uint64(1),
