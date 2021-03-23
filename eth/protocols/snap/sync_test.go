@@ -23,6 +23,7 @@ import (
 	"fmt"
 	"math/big"
 	"sort"
+	"sync"
 	"testing"
 	"time"
 
@@ -133,10 +134,10 @@ type testPeer struct {
 	storageRequestHandler storageHandlerFunc
 	trieRequestHandler    trieHandlerFunc
 	codeRequestHandler    codeHandlerFunc
-	cancelCh              chan struct{}
+	term                  func()
 }
 
-func newTestPeer(id string, t *testing.T, cancelCh chan struct{}) *testPeer {
+func newTestPeer(id string, t *testing.T, term func()) *testPeer {
 	peer := &testPeer{
 		id:                    id,
 		test:                  t,
@@ -145,7 +146,7 @@ func newTestPeer(id string, t *testing.T, cancelCh chan struct{}) *testPeer {
 		trieRequestHandler:    defaultTrieRequestHandler,
 		storageRequestHandler: defaultStorageRequestHandler,
 		codeRequestHandler:    defaultCodeRequestHandler,
-		cancelCh:              cancelCh,
+		term:                  term,
 	}
 	//stderrHandler := log.StreamHandler(os.Stderr, log.TerminalFormat(true))
 	//peer.logger.SetHandler(stderrHandler)
@@ -216,10 +217,8 @@ func defaultTrieRequestHandler(t *testPeer, requestId uint64, root common.Hash, 
 func defaultAccountRequestHandler(t *testPeer, id uint64, root common.Hash, origin common.Hash, limit common.Hash, cap uint64) error {
 	keys, vals, proofs := createAccountRequestResponse(t, root, origin, limit, cap)
 	if err := t.remote.OnAccounts(t, id, keys, vals, proofs); err != nil {
-		t.logger.Error("remote error on delivery", "error", err)
 		t.test.Errorf("Remote side rejected our delivery: %v", err)
-		t.remote.Unregister(t.id)
-		close(t.cancelCh)
+		t.term()
 		return err
 	}
 	return nil
@@ -267,9 +266,8 @@ func createAccountRequestResponse(t *testPeer, root common.Hash, origin common.H
 func defaultStorageRequestHandler(t *testPeer, requestId uint64, root common.Hash, accounts []common.Hash, bOrigin, bLimit []byte, max uint64) error {
 	hashes, slots, proofs := createStorageRequestResponse(t, root, accounts, bOrigin, bLimit, max)
 	if err := t.remote.OnStorage(t, requestId, hashes, slots, proofs); err != nil {
-		t.logger.Error("remote error on delivery", "error", err)
 		t.test.Errorf("Remote side rejected our delivery: %v", err)
-		close(t.cancelCh)
+		t.term()
 	}
 	return nil
 }
@@ -277,12 +275,11 @@ func defaultStorageRequestHandler(t *testPeer, requestId uint64, root common.Has
 func defaultCodeRequestHandler(t *testPeer, id uint64, hashes []common.Hash, max uint64) error {
 	var bytecodes [][]byte
 	for _, h := range hashes {
-		bytecodes = append(bytecodes, getCode(h))
+		bytecodes = append(bytecodes, getCodeByHash(h))
 	}
 	if err := t.remote.OnByteCodes(t, id, bytecodes); err != nil {
-		t.logger.Error("remote error on delivery", "error", err)
 		t.test.Errorf("Remote side rejected our delivery: %v", err)
-		close(t.cancelCh)
+		t.term()
 	}
 	return nil
 }
@@ -388,7 +385,7 @@ func corruptCodeRequestHandler(t *testPeer, id uint64, hashes []common.Hash, max
 		bytecodes = append(bytecodes, h[:])
 	}
 	if err := t.remote.OnByteCodes(t, id, bytecodes); err != nil {
-		t.logger.Error("remote error on delivery", "error", err)
+		t.logger.Info("remote error on delivery (as expected)", "error", err)
 		// Mimic the real-life handler, which drops a peer on errors
 		t.remote.Unregister(t.id)
 	}
@@ -398,12 +395,12 @@ func corruptCodeRequestHandler(t *testPeer, id uint64, hashes []common.Hash, max
 func cappedCodeRequestHandler(t *testPeer, id uint64, hashes []common.Hash, max uint64) error {
 	var bytecodes [][]byte
 	for _, h := range hashes[:1] {
-		bytecodes = append(bytecodes, getCode(h))
+		bytecodes = append(bytecodes, getCodeByHash(h))
 	}
 	// Missing bytecode can be retrieved again, no error expected
 	if err := t.remote.OnByteCodes(t, id, bytecodes); err != nil {
 		t.test.Errorf("Remote side rejected our delivery: %v", err)
-		close(t.cancelCh)
+		t.term()
 	}
 	return nil
 }
@@ -464,23 +461,36 @@ func noProofStorageRequestHandler(t *testPeer, requestId uint64, root common.Has
 func TestSyncBloatedProof(t *testing.T) {
 	t.Parallel()
 
+	var (
+		once   sync.Once
+		cancel = make(chan struct{})
+		term   = func() {
+			once.Do(func() {
+				close(cancel)
+			})
+		}
+	)
 	sourceAccountTrie, elems := makeAccountTrieNoStorage(100)
-	cancel := make(chan struct{})
-	source := newTestPeer("source", t, cancel)
+	source := newTestPeer("source", t, term)
 	source.accountTrie = sourceAccountTrie
 	source.accountValues = elems
 
 	source.accountRequestHandler = func(t *testPeer, requestId uint64, root common.Hash, origin common.Hash, limit common.Hash, cap uint64) error {
-		var proofs [][]byte
-		var keys []common.Hash
-		var vals [][]byte
-
+		var (
+			proofs [][]byte
+			keys   []common.Hash
+			vals   [][]byte
+		)
 		// The values
 		for _, entry := range t.accountValues {
-			if bytes.Compare(origin[:], entry.k) <= 0 {
-				keys = append(keys, common.BytesToHash(entry.k))
-				vals = append(vals, entry.v)
+			if bytes.Compare(entry.k, origin[:]) < 0 {
+				continue
 			}
+			if bytes.Compare(entry.k, limit[:]) > 0 {
+				continue
+			}
+			keys = append(keys, common.BytesToHash(entry.k))
+			vals = append(vals, entry.v)
 		}
 		// The proofs
 		proof := light.NewNodeSet()
@@ -502,9 +512,9 @@ func TestSyncBloatedProof(t *testing.T) {
 			proofs = append(proofs, blob)
 		}
 		if err := t.remote.OnAccounts(t, requestId, keys, vals, proofs); err != nil {
-			t.logger.Info("remote error on delivery", "error", err)
+			t.logger.Info("remote error on delivery (as expected)", "error", err)
+			t.term()
 			// This is actually correct, signal to exit the test successfully
-			close(t.cancelCh)
 		}
 		return nil
 	}
@@ -528,20 +538,28 @@ func setupSyncer(peers ...*testPeer) *Syncer {
 func TestSync(t *testing.T) {
 	t.Parallel()
 
-	cancel := make(chan struct{})
+	var (
+		once   sync.Once
+		cancel = make(chan struct{})
+		term   = func() {
+			once.Do(func() {
+				close(cancel)
+			})
+		}
+	)
 	sourceAccountTrie, elems := makeAccountTrieNoStorage(100)
 
 	mkSource := func(name string) *testPeer {
-		source := newTestPeer(name, t, cancel)
+		source := newTestPeer(name, t, term)
 		source.accountTrie = sourceAccountTrie
 		source.accountValues = elems
 		return source
 	}
-
-	syncer := setupSyncer(mkSource("sourceA"))
+	syncer := setupSyncer(mkSource("source"))
 	if err := syncer.Sync(sourceAccountTrie.Hash(), cancel); err != nil {
 		t.Fatalf("sync failed: %v", err)
 	}
+	verifyTrie(syncer.db, sourceAccountTrie.Hash(), t)
 }
 
 // TestSyncTinyTriePanic tests a basic sync with one peer, and a tiny trie. This caused a
@@ -549,56 +567,79 @@ func TestSync(t *testing.T) {
 func TestSyncTinyTriePanic(t *testing.T) {
 	t.Parallel()
 
-	cancel := make(chan struct{})
-
+	var (
+		once   sync.Once
+		cancel = make(chan struct{})
+		term   = func() {
+			once.Do(func() {
+				close(cancel)
+			})
+		}
+	)
 	sourceAccountTrie, elems := makeAccountTrieNoStorage(1)
 
 	mkSource := func(name string) *testPeer {
-		source := newTestPeer(name, t, cancel)
+		source := newTestPeer(name, t, term)
 		source.accountTrie = sourceAccountTrie
 		source.accountValues = elems
 		return source
 	}
-
-	syncer := setupSyncer(
-		mkSource("nice-a"),
-	)
-	done := checkStall(t, cancel)
+	syncer := setupSyncer(mkSource("source"))
+	done := checkStall(t, term)
 	if err := syncer.Sync(sourceAccountTrie.Hash(), cancel); err != nil {
 		t.Fatalf("sync failed: %v", err)
 	}
 	close(done)
+	verifyTrie(syncer.db, sourceAccountTrie.Hash(), t)
 }
 
 // TestMultiSync tests a basic sync with multiple peers
 func TestMultiSync(t *testing.T) {
 	t.Parallel()
 
-	cancel := make(chan struct{})
+	var (
+		once   sync.Once
+		cancel = make(chan struct{})
+		term   = func() {
+			once.Do(func() {
+				close(cancel)
+			})
+		}
+	)
 	sourceAccountTrie, elems := makeAccountTrieNoStorage(100)
 
 	mkSource := func(name string) *testPeer {
-		source := newTestPeer(name, t, cancel)
+		source := newTestPeer(name, t, term)
 		source.accountTrie = sourceAccountTrie
 		source.accountValues = elems
 		return source
 	}
-
 	syncer := setupSyncer(mkSource("sourceA"), mkSource("sourceB"))
+	done := checkStall(t, term)
 	if err := syncer.Sync(sourceAccountTrie.Hash(), cancel); err != nil {
 		t.Fatalf("sync failed: %v", err)
 	}
+	close(done)
+	verifyTrie(syncer.db, sourceAccountTrie.Hash(), t)
 }
 
 // TestSyncWithStorage tests  basic sync using accounts + storage + code
 func TestSyncWithStorage(t *testing.T) {
 	t.Parallel()
 
-	cancel := make(chan struct{})
+	var (
+		once   sync.Once
+		cancel = make(chan struct{})
+		term   = func() {
+			once.Do(func() {
+				close(cancel)
+			})
+		}
+	)
 	sourceAccountTrie, elems, storageTries, storageElems := makeAccountTrieWithStorage(3, 3000, true, false)
 
 	mkSource := func(name string) *testPeer {
-		source := newTestPeer(name, t, cancel)
+		source := newTestPeer(name, t, term)
 		source.accountTrie = sourceAccountTrie
 		source.accountValues = elems
 		source.storageTries = storageTries
@@ -606,33 +647,43 @@ func TestSyncWithStorage(t *testing.T) {
 		return source
 	}
 	syncer := setupSyncer(mkSource("sourceA"))
+	done := checkStall(t, term)
 	if err := syncer.Sync(sourceAccountTrie.Hash(), cancel); err != nil {
 		t.Fatalf("sync failed: %v", err)
 	}
+	close(done)
+	verifyTrie(syncer.db, sourceAccountTrie.Hash(), t)
 }
 
 // TestMultiSyncManyUseless contains one good peer, and many which doesn't return anything valuable at all
 func TestMultiSyncManyUseless(t *testing.T) {
 	t.Parallel()
 
-	cancel := make(chan struct{})
-
+	var (
+		once   sync.Once
+		cancel = make(chan struct{})
+		term   = func() {
+			once.Do(func() {
+				close(cancel)
+			})
+		}
+	)
 	sourceAccountTrie, elems, storageTries, storageElems := makeAccountTrieWithStorage(100, 3000, true, false)
 
-	mkSource := func(name string, a, b, c bool) *testPeer {
-		source := newTestPeer(name, t, cancel)
+	mkSource := func(name string, noAccount, noStorage, noTrieNode bool) *testPeer {
+		source := newTestPeer(name, t, term)
 		source.accountTrie = sourceAccountTrie
 		source.accountValues = elems
 		source.storageTries = storageTries
 		source.storageValues = storageElems
 
-		if !a {
+		if !noAccount {
 			source.accountRequestHandler = emptyRequestAccountRangeFn
 		}
-		if !b {
+		if !noStorage {
 			source.storageRequestHandler = emptyStorageRequestHandler
 		}
-		if !c {
+		if !noTrieNode {
 			source.trieRequestHandler = emptyTrieRequestHandler
 		}
 		return source
@@ -644,9 +695,12 @@ func TestMultiSyncManyUseless(t *testing.T) {
 		mkSource("noStorage", true, false, true),
 		mkSource("noTrie", true, true, false),
 	)
+	done := checkStall(t, term)
 	if err := syncer.Sync(sourceAccountTrie.Hash(), cancel); err != nil {
 		t.Fatalf("sync failed: %v", err)
 	}
+	close(done)
+	verifyTrie(syncer.db, sourceAccountTrie.Hash(), t)
 }
 
 // TestMultiSyncManyUseless contains one good peer, and many which doesn't return anything valuable at all
@@ -657,24 +711,31 @@ func TestMultiSyncManyUselessWithLowTimeout(t *testing.T) {
 	defer func(old time.Duration) { requestTimeout = old }(requestTimeout)
 	requestTimeout = time.Millisecond
 
-	cancel := make(chan struct{})
-
+	var (
+		once   sync.Once
+		cancel = make(chan struct{})
+		term   = func() {
+			once.Do(func() {
+				close(cancel)
+			})
+		}
+	)
 	sourceAccountTrie, elems, storageTries, storageElems := makeAccountTrieWithStorage(100, 3000, true, false)
 
-	mkSource := func(name string, a, b, c bool) *testPeer {
-		source := newTestPeer(name, t, cancel)
+	mkSource := func(name string, noAccount, noStorage, noTrieNode bool) *testPeer {
+		source := newTestPeer(name, t, term)
 		source.accountTrie = sourceAccountTrie
 		source.accountValues = elems
 		source.storageTries = storageTries
 		source.storageValues = storageElems
 
-		if !a {
+		if !noAccount {
 			source.accountRequestHandler = emptyRequestAccountRangeFn
 		}
-		if !b {
+		if !noStorage {
 			source.storageRequestHandler = emptyStorageRequestHandler
 		}
-		if !c {
+		if !noTrieNode {
 			source.trieRequestHandler = emptyTrieRequestHandler
 		}
 		return source
@@ -686,9 +747,12 @@ func TestMultiSyncManyUselessWithLowTimeout(t *testing.T) {
 		mkSource("noStorage", true, false, true),
 		mkSource("noTrie", true, true, false),
 	)
+	done := checkStall(t, term)
 	if err := syncer.Sync(sourceAccountTrie.Hash(), cancel); err != nil {
 		t.Fatalf("sync failed: %v", err)
 	}
+	close(done)
+	verifyTrie(syncer.db, sourceAccountTrie.Hash(), t)
 }
 
 // TestMultiSyncManyUnresponsive contains one good peer, and many which doesn't respond at all
@@ -697,24 +761,31 @@ func TestMultiSyncManyUnresponsive(t *testing.T) {
 	defer func(old time.Duration) { requestTimeout = old }(requestTimeout)
 	requestTimeout = time.Millisecond
 
-	cancel := make(chan struct{})
-
+	var (
+		once   sync.Once
+		cancel = make(chan struct{})
+		term   = func() {
+			once.Do(func() {
+				close(cancel)
+			})
+		}
+	)
 	sourceAccountTrie, elems, storageTries, storageElems := makeAccountTrieWithStorage(100, 3000, true, false)
 
-	mkSource := func(name string, a, b, c bool) *testPeer {
-		source := newTestPeer(name, t, cancel)
+	mkSource := func(name string, noAccount, noStorage, noTrieNode bool) *testPeer {
+		source := newTestPeer(name, t, term)
 		source.accountTrie = sourceAccountTrie
 		source.accountValues = elems
 		source.storageTries = storageTries
 		source.storageValues = storageElems
 
-		if !a {
+		if !noAccount {
 			source.accountRequestHandler = nonResponsiveRequestAccountRangeFn
 		}
-		if !b {
+		if !noStorage {
 			source.storageRequestHandler = nonResponsiveStorageRequestHandler
 		}
-		if !c {
+		if !noTrieNode {
 			source.trieRequestHandler = nonResponsiveTrieRequestHandler
 		}
 		return source
@@ -726,18 +797,21 @@ func TestMultiSyncManyUnresponsive(t *testing.T) {
 		mkSource("noStorage", true, false, true),
 		mkSource("noTrie", true, true, false),
 	)
+	done := checkStall(t, term)
 	if err := syncer.Sync(sourceAccountTrie.Hash(), cancel); err != nil {
 		t.Fatalf("sync failed: %v", err)
 	}
+	close(done)
+	verifyTrie(syncer.db, sourceAccountTrie.Hash(), t)
 }
 
-func checkStall(t *testing.T, cancel chan struct{}) chan struct{} {
+func checkStall(t *testing.T, term func()) chan struct{} {
 	testDone := make(chan struct{})
 	go func() {
 		select {
 		case <-time.After(time.Minute): // TODO(karalabe): Make tests smaller, this is too much
 			t.Log("Sync stalled")
-			close(cancel)
+			term()
 		case <-testDone:
 			return
 		}
@@ -750,11 +824,19 @@ func checkStall(t *testing.T, cancel chan struct{}) chan struct{} {
 func TestSyncBoundaryAccountTrie(t *testing.T) {
 	t.Parallel()
 
-	cancel := make(chan struct{})
+	var (
+		once   sync.Once
+		cancel = make(chan struct{})
+		term   = func() {
+			once.Do(func() {
+				close(cancel)
+			})
+		}
+	)
 	sourceAccountTrie, elems := makeBoundaryAccountTrie(3000)
 
 	mkSource := func(name string) *testPeer {
-		source := newTestPeer(name, t, cancel)
+		source := newTestPeer(name, t, term)
 		source.accountTrie = sourceAccountTrie
 		source.accountValues = elems
 		return source
@@ -763,11 +845,12 @@ func TestSyncBoundaryAccountTrie(t *testing.T) {
 		mkSource("peer-a"),
 		mkSource("peer-b"),
 	)
-	done := checkStall(t, cancel)
+	done := checkStall(t, term)
 	if err := syncer.Sync(sourceAccountTrie.Hash(), cancel); err != nil {
 		t.Fatalf("sync failed: %v", err)
 	}
 	close(done)
+	verifyTrie(syncer.db, sourceAccountTrie.Hash(), t)
 }
 
 // TestSyncNoStorageAndOneCappedPeer tests sync using accounts and no storage, where one peer is
@@ -775,12 +858,19 @@ func TestSyncBoundaryAccountTrie(t *testing.T) {
 func TestSyncNoStorageAndOneCappedPeer(t *testing.T) {
 	t.Parallel()
 
-	cancel := make(chan struct{})
-
+	var (
+		once   sync.Once
+		cancel = make(chan struct{})
+		term   = func() {
+			once.Do(func() {
+				close(cancel)
+			})
+		}
+	)
 	sourceAccountTrie, elems := makeAccountTrieNoStorage(3000)
 
 	mkSource := func(name string, slow bool) *testPeer {
-		source := newTestPeer(name, t, cancel)
+		source := newTestPeer(name, t, term)
 		source.accountTrie = sourceAccountTrie
 		source.accountValues = elems
 
@@ -796,11 +886,12 @@ func TestSyncNoStorageAndOneCappedPeer(t *testing.T) {
 		mkSource("nice-c", false),
 		mkSource("capped", true),
 	)
-	done := checkStall(t, cancel)
+	done := checkStall(t, term)
 	if err := syncer.Sync(sourceAccountTrie.Hash(), cancel); err != nil {
 		t.Fatalf("sync failed: %v", err)
 	}
 	close(done)
+	verifyTrie(syncer.db, sourceAccountTrie.Hash(), t)
 }
 
 // TestSyncNoStorageAndOneCodeCorruptPeer has one peer which doesn't deliver
@@ -808,12 +899,19 @@ func TestSyncNoStorageAndOneCappedPeer(t *testing.T) {
 func TestSyncNoStorageAndOneCodeCorruptPeer(t *testing.T) {
 	t.Parallel()
 
-	cancel := make(chan struct{})
-
+	var (
+		once   sync.Once
+		cancel = make(chan struct{})
+		term   = func() {
+			once.Do(func() {
+				close(cancel)
+			})
+		}
+	)
 	sourceAccountTrie, elems := makeAccountTrieNoStorage(3000)
 
 	mkSource := func(name string, codeFn codeHandlerFunc) *testPeer {
-		source := newTestPeer(name, t, cancel)
+		source := newTestPeer(name, t, term)
 		source.accountTrie = sourceAccountTrie
 		source.accountValues = elems
 		source.codeRequestHandler = codeFn
@@ -827,22 +925,30 @@ func TestSyncNoStorageAndOneCodeCorruptPeer(t *testing.T) {
 		mkSource("capped", cappedCodeRequestHandler),
 		mkSource("corrupt", corruptCodeRequestHandler),
 	)
-	done := checkStall(t, cancel)
+	done := checkStall(t, term)
 	if err := syncer.Sync(sourceAccountTrie.Hash(), cancel); err != nil {
 		t.Fatalf("sync failed: %v", err)
 	}
 	close(done)
+	verifyTrie(syncer.db, sourceAccountTrie.Hash(), t)
 }
 
 func TestSyncNoStorageAndOneAccountCorruptPeer(t *testing.T) {
 	t.Parallel()
 
-	cancel := make(chan struct{})
-
+	var (
+		once   sync.Once
+		cancel = make(chan struct{})
+		term   = func() {
+			once.Do(func() {
+				close(cancel)
+			})
+		}
+	)
 	sourceAccountTrie, elems := makeAccountTrieNoStorage(3000)
 
 	mkSource := func(name string, accFn accountHandlerFunc) *testPeer {
-		source := newTestPeer(name, t, cancel)
+		source := newTestPeer(name, t, term)
 		source.accountTrie = sourceAccountTrie
 		source.accountValues = elems
 		source.accountRequestHandler = accFn
@@ -856,11 +962,12 @@ func TestSyncNoStorageAndOneAccountCorruptPeer(t *testing.T) {
 		mkSource("capped", defaultAccountRequestHandler),
 		mkSource("corrupt", corruptAccountRequestHandler),
 	)
-	done := checkStall(t, cancel)
+	done := checkStall(t, term)
 	if err := syncer.Sync(sourceAccountTrie.Hash(), cancel); err != nil {
 		t.Fatalf("sync failed: %v", err)
 	}
 	close(done)
+	verifyTrie(syncer.db, sourceAccountTrie.Hash(), t)
 }
 
 // TestSyncNoStorageAndOneCodeCappedPeer has one peer which delivers code hashes
@@ -868,12 +975,19 @@ func TestSyncNoStorageAndOneAccountCorruptPeer(t *testing.T) {
 func TestSyncNoStorageAndOneCodeCappedPeer(t *testing.T) {
 	t.Parallel()
 
-	cancel := make(chan struct{})
-
+	var (
+		once   sync.Once
+		cancel = make(chan struct{})
+		term   = func() {
+			once.Do(func() {
+				close(cancel)
+			})
+		}
+	)
 	sourceAccountTrie, elems := makeAccountTrieNoStorage(3000)
 
 	mkSource := func(name string, codeFn codeHandlerFunc) *testPeer {
-		source := newTestPeer(name, t, cancel)
+		source := newTestPeer(name, t, term)
 		source.accountTrie = sourceAccountTrie
 		source.accountValues = elems
 		source.codeRequestHandler = codeFn
@@ -888,7 +1002,7 @@ func TestSyncNoStorageAndOneCodeCappedPeer(t *testing.T) {
 			return cappedCodeRequestHandler(t, id, hashes, max)
 		}),
 	)
-	done := checkStall(t, cancel)
+	done := checkStall(t, term)
 	if err := syncer.Sync(sourceAccountTrie.Hash(), cancel); err != nil {
 		t.Fatalf("sync failed: %v", err)
 	}
@@ -901,6 +1015,7 @@ func TestSyncNoStorageAndOneCodeCappedPeer(t *testing.T) {
 	if threshold := 100; counter > threshold {
 		t.Fatalf("Error, expected < %d invocations, got %d", threshold, counter)
 	}
+	verifyTrie(syncer.db, sourceAccountTrie.Hash(), t)
 }
 
 // TestSyncBoundaryStorageTrie tests sync against a few normal peers, but the
@@ -908,11 +1023,19 @@ func TestSyncNoStorageAndOneCodeCappedPeer(t *testing.T) {
 func TestSyncBoundaryStorageTrie(t *testing.T) {
 	t.Parallel()
 
-	cancel := make(chan struct{})
+	var (
+		once   sync.Once
+		cancel = make(chan struct{})
+		term   = func() {
+			once.Do(func() {
+				close(cancel)
+			})
+		}
+	)
 	sourceAccountTrie, elems, storageTries, storageElems := makeAccountTrieWithStorage(10, 1000, false, true)
 
 	mkSource := func(name string) *testPeer {
-		source := newTestPeer(name, t, cancel)
+		source := newTestPeer(name, t, term)
 		source.accountTrie = sourceAccountTrie
 		source.accountValues = elems
 		source.storageTries = storageTries
@@ -923,11 +1046,12 @@ func TestSyncBoundaryStorageTrie(t *testing.T) {
 		mkSource("peer-a"),
 		mkSource("peer-b"),
 	)
-	done := checkStall(t, cancel)
+	done := checkStall(t, term)
 	if err := syncer.Sync(sourceAccountTrie.Hash(), cancel); err != nil {
 		t.Fatalf("sync failed: %v", err)
 	}
 	close(done)
+	verifyTrie(syncer.db, sourceAccountTrie.Hash(), t)
 }
 
 // TestSyncWithStorageAndOneCappedPeer tests sync using accounts + storage, where one peer is
@@ -935,12 +1059,19 @@ func TestSyncBoundaryStorageTrie(t *testing.T) {
 func TestSyncWithStorageAndOneCappedPeer(t *testing.T) {
 	t.Parallel()
 
-	cancel := make(chan struct{})
-
+	var (
+		once   sync.Once
+		cancel = make(chan struct{})
+		term   = func() {
+			once.Do(func() {
+				close(cancel)
+			})
+		}
+	)
 	sourceAccountTrie, elems, storageTries, storageElems := makeAccountTrieWithStorage(300, 1000, false, false)
 
 	mkSource := func(name string, slow bool) *testPeer {
-		source := newTestPeer(name, t, cancel)
+		source := newTestPeer(name, t, term)
 		source.accountTrie = sourceAccountTrie
 		source.accountValues = elems
 		source.storageTries = storageTries
@@ -956,11 +1087,12 @@ func TestSyncWithStorageAndOneCappedPeer(t *testing.T) {
 		mkSource("nice-a", false),
 		mkSource("slow", true),
 	)
-	done := checkStall(t, cancel)
+	done := checkStall(t, term)
 	if err := syncer.Sync(sourceAccountTrie.Hash(), cancel); err != nil {
 		t.Fatalf("sync failed: %v", err)
 	}
 	close(done)
+	verifyTrie(syncer.db, sourceAccountTrie.Hash(), t)
 }
 
 // TestSyncWithStorageAndCorruptPeer tests sync using accounts + storage, where one peer is
@@ -968,12 +1100,19 @@ func TestSyncWithStorageAndOneCappedPeer(t *testing.T) {
 func TestSyncWithStorageAndCorruptPeer(t *testing.T) {
 	t.Parallel()
 
-	cancel := make(chan struct{})
-
+	var (
+		once   sync.Once
+		cancel = make(chan struct{})
+		term   = func() {
+			once.Do(func() {
+				close(cancel)
+			})
+		}
+	)
 	sourceAccountTrie, elems, storageTries, storageElems := makeAccountTrieWithStorage(100, 3000, true, false)
 
 	mkSource := func(name string, handler storageHandlerFunc) *testPeer {
-		source := newTestPeer(name, t, cancel)
+		source := newTestPeer(name, t, term)
 		source.accountTrie = sourceAccountTrie
 		source.accountValues = elems
 		source.storageTries = storageTries
@@ -988,22 +1127,30 @@ func TestSyncWithStorageAndCorruptPeer(t *testing.T) {
 		mkSource("nice-c", defaultStorageRequestHandler),
 		mkSource("corrupt", corruptStorageRequestHandler),
 	)
-	done := checkStall(t, cancel)
+	done := checkStall(t, term)
 	if err := syncer.Sync(sourceAccountTrie.Hash(), cancel); err != nil {
 		t.Fatalf("sync failed: %v", err)
 	}
 	close(done)
+	verifyTrie(syncer.db, sourceAccountTrie.Hash(), t)
 }
 
 func TestSyncWithStorageAndNonProvingPeer(t *testing.T) {
 	t.Parallel()
 
-	cancel := make(chan struct{})
-
+	var (
+		once   sync.Once
+		cancel = make(chan struct{})
+		term   = func() {
+			once.Do(func() {
+				close(cancel)
+			})
+		}
+	)
 	sourceAccountTrie, elems, storageTries, storageElems := makeAccountTrieWithStorage(100, 3000, true, false)
 
 	mkSource := func(name string, handler storageHandlerFunc) *testPeer {
-		source := newTestPeer(name, t, cancel)
+		source := newTestPeer(name, t, term)
 		source.accountTrie = sourceAccountTrie
 		source.accountValues = elems
 		source.storageTries = storageTries
@@ -1011,23 +1158,22 @@ func TestSyncWithStorageAndNonProvingPeer(t *testing.T) {
 		source.storageRequestHandler = handler
 		return source
 	}
-
 	syncer := setupSyncer(
 		mkSource("nice-a", defaultStorageRequestHandler),
 		mkSource("nice-b", defaultStorageRequestHandler),
 		mkSource("nice-c", defaultStorageRequestHandler),
 		mkSource("corrupt", noProofStorageRequestHandler),
 	)
-	done := checkStall(t, cancel)
+	done := checkStall(t, term)
 	if err := syncer.Sync(sourceAccountTrie.Hash(), cancel); err != nil {
 		t.Fatalf("sync failed: %v", err)
 	}
 	close(done)
+	verifyTrie(syncer.db, sourceAccountTrie.Hash(), t)
 }
 
 type kv struct {
 	k, v []byte
-	t    bool
 }
 
 // Some helpers for sorting
@@ -1056,14 +1202,14 @@ var (
 	}
 )
 
-// getACodeHash returns a pseudo-random code hash
-func getACodeHash(i uint64) []byte {
+// getCodeHash returns a pseudo-random code hash
+func getCodeHash(i uint64) []byte {
 	h := codehashes[int(i)%len(codehashes)]
 	return common.CopyBytes(h[:])
 }
 
-// convenience function to lookup the code from the code hash
-func getCode(hash common.Hash) []byte {
+// getCodeByHash convenience function to lookup the code from the code hash
+func getCodeByHash(hash common.Hash) []byte {
 	if hash == emptyCode {
 		return nil
 	}
@@ -1085,10 +1231,10 @@ func makeAccountTrieNoStorage(n int) (*trie.Trie, entrySlice) {
 			Nonce:    i,
 			Balance:  big.NewInt(int64(i)),
 			Root:     emptyRoot,
-			CodeHash: getACodeHash(i),
+			CodeHash: getCodeHash(i),
 		})
 		key := key32(i)
-		elem := &kv{key, value, false}
+		elem := &kv{key, value}
 		accTrie.Update(elem.k, elem.v)
 		entries = append(entries, elem)
 	}
@@ -1130,9 +1276,9 @@ func makeBoundaryAccountTrie(n int) (*trie.Trie, entrySlice) {
 			Nonce:    uint64(0),
 			Balance:  big.NewInt(int64(i)),
 			Root:     emptyRoot,
-			CodeHash: getACodeHash(uint64(i)),
+			CodeHash: getCodeHash(uint64(i)),
 		})
-		elem := &kv{boundaries[i].Bytes(), value, false}
+		elem := &kv{boundaries[i].Bytes(), value}
 		trie.Update(elem.k, elem.v)
 		entries = append(entries, elem)
 	}
@@ -1142,9 +1288,9 @@ func makeBoundaryAccountTrie(n int) (*trie.Trie, entrySlice) {
 			Nonce:    i,
 			Balance:  big.NewInt(int64(i)),
 			Root:     emptyRoot,
-			CodeHash: getACodeHash(i),
+			CodeHash: getCodeHash(i),
 		})
-		elem := &kv{key32(i), value, false}
+		elem := &kv{key32(i), value}
 		trie.Update(elem.k, elem.v)
 		entries = append(entries, elem)
 	}
@@ -1179,7 +1325,7 @@ func makeAccountTrieWithStorage(accounts, slots int, code bool, boundary bool) (
 		key := key32(i)
 		codehash := emptyCode[:]
 		if code {
-			codehash = getACodeHash(i)
+			codehash = getCodeHash(i)
 		}
 		value, _ := rlp.EncodeToBytes(state.Account{
 			Nonce:    i,
@@ -1187,7 +1333,7 @@ func makeAccountTrieWithStorage(accounts, slots int, code bool, boundary bool) (
 			Root:     stRoot,
 			CodeHash: codehash,
 		})
-		elem := &kv{key, value, false}
+		elem := &kv{key, value}
 		accTrie.Update(elem.k, elem.v)
 		entries = append(entries, elem)
 		// we reuse the same one for all accounts
@@ -1213,7 +1359,7 @@ func makeStorageTrie(n int, db *trie.Database) (*trie.Trie, entrySlice) {
 		slotKey := key32(i)
 		key := crypto.Keccak256Hash(slotKey[:])
 
-		elem := &kv{key[:], rlpSlotValue, false}
+		elem := &kv{key[:], rlpSlotValue}
 		trie.Update(elem.k, elem.v)
 		entries = append(entries, elem)
 	}
@@ -1252,7 +1398,7 @@ func makeBoundaryStorageTrie(n int, db *trie.Database) (*trie.Trie, entrySlice) 
 		key := boundaries[i]
 		val := []byte{0xde, 0xad, 0xbe, 0xef}
 
-		elem := &kv{key[:], val, false}
+		elem := &kv{key[:], val}
 		trie.Update(elem.k, elem.v)
 		entries = append(entries, elem)
 	}
@@ -1264,7 +1410,7 @@ func makeBoundaryStorageTrie(n int, db *trie.Database) (*trie.Trie, entrySlice) 
 		slotValue := key32(i)
 		rlpSlotValue, _ := rlp.EncodeToBytes(common.TrimLeftZeroes(slotValue[:]))
 
-		elem := &kv{key[:], rlpSlotValue, false}
+		elem := &kv{key[:], rlpSlotValue}
 		trie.Update(elem.k, elem.v)
 		entries = append(entries, elem)
 	}
