@@ -470,7 +470,7 @@ func New(config Config, notify []string, noverify bool) *Ethash {
 		update:   make(chan struct{}),
 		hashrate: metrics.NewMeterForced(),
 	}
-	ethash.remote = startRemoteSealer(ethash, notify, config.NotifyFull, noverify)
+	ethash.remote = startRemoteSealer(ethash, notify, noverify)
 	return ethash
 }
 
@@ -484,7 +484,7 @@ func NewTester(notify []string, noverify bool) *Ethash {
 		update:   make(chan struct{}),
 		hashrate: metrics.NewMeterForced(),
 	}
-	ethash.remote = startRemoteSealer(ethash, notify, false, noverify)
+	ethash.remote = startRemoteSealer(ethash, notify, noverify)
 	return ethash
 }
 

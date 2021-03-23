@@ -201,7 +201,6 @@ type remoteSealer struct {
 	ethash       *Ethash
 	noverify     bool
 	notifyURLs   []string
-	notifyFull   bool
 	results      chan<- *types.Block
 	workCh       chan *sealTask   // Notification channel to push new work and relative result channel to remote sealer
 	fetchWorkCh  chan *sealWork   // Channel used for remote sealer to fetch mining work
@@ -242,13 +241,12 @@ type sealWork struct {
 	res  chan [4]string
 }
 
-func startRemoteSealer(ethash *Ethash, urls []string, notifyFull bool, noverify bool) *remoteSealer {
+func startRemoteSealer(ethash *Ethash, urls []string, noverify bool) *remoteSealer {
 	ctx, cancel := context.WithCancel(context.Background())
 	s := &remoteSealer{
 		ethash:       ethash,
 		noverify:     noverify,
 		notifyURLs:   urls,
-		notifyFull:   notifyFull,
 		notifyCtx:    ctx,
 		cancelNotify: cancel,
 		works:        make(map[common.Hash]*types.Block),
@@ -360,8 +358,11 @@ func (s *remoteSealer) makeWork(block *types.Block) {
 // new work to be processed.
 func (s *remoteSealer) notifyWork() {
 	work := s.currentWork
+
+	// Encode the JSON payload of the notification. When NotifyFull is set,
+	// this is the complete block header, otherwise it is a JSON array.
 	var blob []byte
-	if s.notifyFull {
+	if s.ethash.config.NotifyFull {
 		blob, _ = json.Marshal(s.currentBlock.Header())
 	} else {
 		blob, _ = json.Marshal(work)
