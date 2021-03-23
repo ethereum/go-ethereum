@@ -29,6 +29,7 @@ import (
 	"github.com/ethereum/go-ethereum/core/rawdb"
 	"github.com/ethereum/go-ethereum/ethdb"
 	"github.com/ethereum/go-ethereum/log"
+	"github.com/ethereum/go-ethereum/trie"
 	"gopkg.in/urfave/cli.v1"
 )
 
@@ -57,6 +58,7 @@ Remove blockchain and state databases`,
 			dbGetCmd,
 			dbDeleteCmd,
 			dbPutCmd,
+			dbGetSlotsCmd,
 		},
 	}
 	dbInspectCmd = cli.Command{
@@ -157,6 +159,22 @@ WARNING: This is a low-level operation which may cause database corruption!`,
 		},
 		Description: `This command sets a given database key to the given value. 
 WARNING: This is a low-level operation which may cause database corruption!`,
+	}
+	dbGetSlotsCmd = cli.Command{
+		Action:    utils.MigrateFlags(dbGetSlots),
+		Name:      "getslots",
+		Usage:     "Show the storage key/values of a given storage trie",
+		ArgsUsage: "<hex-encoded storage trie root>",
+		Flags: []cli.Flag{
+			utils.DataDirFlag,
+			utils.SyncModeFlag,
+			utils.MainnetFlag,
+			utils.RopstenFlag,
+			utils.RinkebyFlag,
+			utils.GoerliFlag,
+			utils.YoloV3Flag,
+		},
+		Description: "This command looks up the specified database key from the database.",
 	}
 )
 
@@ -379,4 +397,35 @@ func dbPut(ctx *cli.Context) error {
 		fmt.Printf("Previous value: %#x\n", data)
 	}
 	return db.Put(key, value)
+}
+
+// dbGetSlots shows the key-value slots of a given storage trie
+func dbGetSlots(ctx *cli.Context) error {
+	if ctx.NArg() != 1 {
+		return fmt.Errorf("required arguments: %v", ctx.Command.ArgsUsage)
+	}
+	stack, _ := makeConfigNode(ctx)
+	defer stack.Close()
+
+	db := utils.MakeChainDatabase(ctx, stack, true)
+	defer db.Close()
+
+	key, err := hexutil.Decode(ctx.Args().Get(0))
+	if err != nil {
+		log.Info("Could not decode the key", "error", err)
+		return err
+	}
+	stRoot := common.BytesToHash(key)
+	stTrie, err := trie.New(stRoot, trie.NewDatabase(db))
+	if err != nil {
+		return err
+	}
+	var count int
+	it := trie.NewIterator(stTrie.NodeIterator(nil))
+	for it.Next() {
+		fmt.Printf("  %d. key %#x: %#x\n", count, it.Key, it.Value)
+		count++
+	}
+	fmt.Printf("\n%d slots found.\n", count)
+	return it.Err
 }
