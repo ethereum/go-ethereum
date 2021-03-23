@@ -30,6 +30,7 @@ import (
 	"github.com/ethereum/go-ethereum/core/rawdb"
 	"github.com/ethereum/go-ethereum/core/state"
 	"github.com/ethereum/go-ethereum/crypto"
+	"github.com/ethereum/go-ethereum/ethdb"
 	"github.com/ethereum/go-ethereum/light"
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/rlp"
@@ -309,7 +310,7 @@ func createStorageRequestResponse(t *testPeer, root common.Hash, accounts []comm
 			keys = append(keys, common.BytesToHash(entry.k))
 			vals = append(vals, entry.v)
 			size += uint64(32 + len(entry.v))
-			if bytes.Compare(entry.k, limitHash[:]) >= 0 || size > max {
+			if bytes.Compare(entry.k, limitHash[:]) >= 0 || size >= max {
 				break
 			}
 		}
@@ -399,10 +400,10 @@ func cappedCodeRequestHandler(t *testPeer, id uint64, hashes []common.Hash, max 
 	for _, h := range hashes[:1] {
 		bytecodes = append(bytecodes, getCode(h))
 	}
+	// Missing bytecode can be retrieved again, no error expected
 	if err := t.remote.OnByteCodes(t, id, bytecodes); err != nil {
-		t.logger.Error("remote error on delivery", "error", err)
-		// Mimic the real-life handler, which drops a peer on errors
-		t.remote.Unregister(t.id)
+		t.test.Errorf("Remote side rejected our delivery: %v", err)
+		close(t.cancelCh)
 	}
 	return nil
 }
@@ -1270,4 +1271,43 @@ func makeBoundaryStorageTrie(n int, db *trie.Database) (*trie.Trie, entrySlice) 
 	sort.Sort(entries)
 	trie.Commit(nil)
 	return trie, entries
+}
+
+func verifyTrie(db ethdb.KeyValueStore, root common.Hash, t *testing.T) {
+	triedb := trie.NewDatabase(db)
+	accTrie, err := trie.New(root, triedb)
+	if err != nil {
+		t.Fatal(err)
+	}
+	accounts, slots := 0, 0
+	accIt := trie.NewIterator(accTrie.NodeIterator(nil))
+	for accIt.Next() {
+		var acc struct {
+			Nonce    uint64
+			Balance  *big.Int
+			Root     common.Hash
+			CodeHash []byte
+		}
+		if err := rlp.DecodeBytes(accIt.Value, &acc); err != nil {
+			log.Crit("Invalid account encountered during snapshot creation", "err", err)
+		}
+		accounts++
+		if acc.Root != emptyRoot {
+			storeTrie, err := trie.NewSecure(acc.Root, triedb)
+			if err != nil {
+				t.Fatal(err)
+			}
+			storeIt := trie.NewIterator(storeTrie.NodeIterator(nil))
+			for storeIt.Next() {
+				slots++
+			}
+			if err := storeIt.Err; err != nil {
+				t.Fatal(err)
+			}
+		}
+	}
+	if err := accIt.Err; err != nil {
+		t.Fatal(err)
+	}
+	t.Logf("accounts: %d, slots: %d", accounts, slots)
 }
