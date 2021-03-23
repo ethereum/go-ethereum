@@ -239,7 +239,7 @@ func createAccountRequestResponse(t *testPeer, root common.Hash, origin common.H
 			size += uint64(32 + len(entry.v))
 		}
 		// If we've exceeded the request threshold, abort
-		if limit != (common.Hash{}) && bytes.Compare(entry.k, limit[:]) >= 0 {
+		if bytes.Compare(entry.k, limit[:]) >= 0 {
 			break
 		}
 	}
