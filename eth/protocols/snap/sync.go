@@ -1555,11 +1555,12 @@ func (s *Syncer) processAccountResponse(res *accountResponse) {
 	for i, hash := range res.hashes {
 		// Mark the range complete if the last is already included.
 		// Keep iteration to delete the extra states if exists.
-		if hash.Big().Cmp(last) == 0 {
+		cmp := hash.Big().Cmp(last)
+		if cmp == 0 {
 			res.cont = false
 			continue
 		}
-		if hash.Big().Cmp(last) > 0 {
+		if cmp > 0 {
 			// Chunk overflown, cut off excess, but also update the boundary nodes
 			for j := i; j < len(res.hashes); j++ {
 				if err := res.trie.Prove(res.hashes[j][:], 0, res.overflow); err != nil {
@@ -1769,11 +1770,12 @@ func (s *Syncer) processStorageResponse(res *storageResponse) {
 				for k, hash := range res.hashes[i] {
 					// Mark the range complete if the last is already included.
 					// Keep iteration to delete the extra states if exists.
-					if hash.Big().Cmp(last) == 0 {
+					cmp := hash.Big().Cmp(last)
+					if cmp == 0 {
 						res.cont = false
 						continue
 					}
-					if hash.Big().Cmp(last) > 0 {
+					if cmp > 0 {
 						// Chunk overflown, cut off excess, but also update the boundary
 						for l := k; l < len(res.hashes[i]); l++ {
 							if err := res.tries[i].Prove(res.hashes[i][l][:], 0, res.overflow); err != nil {
