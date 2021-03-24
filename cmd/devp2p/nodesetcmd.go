@@ -196,7 +196,7 @@ func lesFilter(args []string) (nodeFilter, error) {
 func snapFilter(args []string) (nodeFilter, error) {
 	f := func(n nodeJSON) bool {
 		var snap struct {
-			_ []rlp.RawValue `rlp:"tail"`
+			Tail []rlp.RawValue `rlp:"tail"`
 		}
 		return n.N.Load(enr.WithEntry("snap", &snap)) == nil
 	}
