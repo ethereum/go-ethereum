@@ -28,9 +28,7 @@ import (
 	"github.com/ethereum/go-ethereum/console/prompt"
 	"github.com/ethereum/go-ethereum/core/rawdb"
 	"github.com/ethereum/go-ethereum/ethdb"
-	"github.com/ethereum/go-ethereum/ethdb/leveldb"
 	"github.com/ethereum/go-ethereum/log"
-	"github.com/syndtr/goleveldb/leveldb/opt"
 	"gopkg.in/urfave/cli.v1"
 )
 
@@ -65,43 +63,98 @@ Remove blockchain and state databases`,
 		Action:    utils.MigrateFlags(inspect),
 		Name:      "inspect",
 		ArgsUsage: "<prefix> <start>",
-
+		Flags: []cli.Flag{
+			utils.DataDirFlag,
+			utils.SyncModeFlag,
+			utils.MainnetFlag,
+			utils.RopstenFlag,
+			utils.RinkebyFlag,
+			utils.GoerliFlag,
+			utils.YoloV3Flag,
+		},
 		Usage:       "Inspect the storage size for each type of data in the database",
 		Description: `This commands iterates the entire database. If the optional 'prefix' and 'start' arguments are provided, then the iteration is limited to the given subset of data.`,
 	}
 	dbStatCmd = cli.Command{
-		Action: dbStats,
+		Action: utils.MigrateFlags(dbStats),
 		Name:   "stats",
 		Usage:  "Print leveldb statistics",
+		Flags: []cli.Flag{
+			utils.DataDirFlag,
+			utils.SyncModeFlag,
+			utils.MainnetFlag,
+			utils.RopstenFlag,
+			utils.RinkebyFlag,
+			utils.GoerliFlag,
+			utils.YoloV3Flag,
+		},
 	}
 	dbCompactCmd = cli.Command{
-		Action: dbCompact,
+		Action: utils.MigrateFlags(dbCompact),
 		Name:   "compact",
 		Usage:  "Compact leveldb database. WARNING: May take a very long time",
+		Flags: []cli.Flag{
+			utils.DataDirFlag,
+			utils.SyncModeFlag,
+			utils.MainnetFlag,
+			utils.RopstenFlag,
+			utils.RinkebyFlag,
+			utils.GoerliFlag,
+			utils.YoloV3Flag,
+			utils.CacheFlag,
+			utils.CacheDatabaseFlag,
+		},
 		Description: `This command performs a database compaction. 
 WARNING: This operation may take a very long time to finish, and may cause database
 corruption if it is aborted during execution'!`,
 	}
 	dbGetCmd = cli.Command{
-		Action:      dbGet,
-		Name:        "get",
-		Usage:       "Show the value of a database key",
-		ArgsUsage:   "<hex-encoded key>",
+		Action:    utils.MigrateFlags(dbGet),
+		Name:      "get",
+		Usage:     "Show the value of a database key",
+		ArgsUsage: "<hex-encoded key>",
+		Flags: []cli.Flag{
+			utils.DataDirFlag,
+			utils.SyncModeFlag,
+			utils.MainnetFlag,
+			utils.RopstenFlag,
+			utils.RinkebyFlag,
+			utils.GoerliFlag,
+			utils.YoloV3Flag,
+		},
 		Description: "This command looks up the specified database key from the database.",
 	}
 	dbDeleteCmd = cli.Command{
-		Action:    dbDelete,
+		Action:    utils.MigrateFlags(dbDelete),
 		Name:      "delete",
 		Usage:     "Delete a database key (WARNING: may corrupt your database)",
 		ArgsUsage: "<hex-encoded key>",
+		Flags: []cli.Flag{
+			utils.DataDirFlag,
+			utils.SyncModeFlag,
+			utils.MainnetFlag,
+			utils.RopstenFlag,
+			utils.RinkebyFlag,
+			utils.GoerliFlag,
+			utils.YoloV3Flag,
+		},
 		Description: `This command deletes the specified database key from the database. 
 WARNING: This is a low-level operation which may cause database corruption!`,
 	}
 	dbPutCmd = cli.Command{
-		Action:    dbPut,
+		Action:    utils.MigrateFlags(dbPut),
 		Name:      "put",
 		Usage:     "Set the value of a database key (WARNING: may corrupt your database)",
 		ArgsUsage: "<hex-encoded key> <hex-encoded value>",
+		Flags: []cli.Flag{
+			utils.DataDirFlag,
+			utils.SyncModeFlag,
+			utils.MainnetFlag,
+			utils.RopstenFlag,
+			utils.RinkebyFlag,
+			utils.GoerliFlag,
+			utils.YoloV3Flag,
+		},
 		Description: `This command sets a given database key to the given value. 
 WARNING: This is a low-level operation which may cause database corruption!`,
 	}
@@ -192,10 +245,10 @@ func inspect(ctx *cli.Context) error {
 	stack, _ := makeConfigNode(ctx)
 	defer stack.Close()
 
-	_, chainDb := utils.MakeChain(ctx, stack, true)
-	defer chainDb.Close()
+	db := utils.MakeChainDatabase(ctx, stack, true)
+	defer db.Close()
 
-	return rawdb.InspectDatabase(chainDb, prefix, start)
+	return rawdb.InspectDatabase(db, prefix, start)
 }
 
 func showLeveldbStats(db ethdb.Stater) {
@@ -214,48 +267,32 @@ func showLeveldbStats(db ethdb.Stater) {
 func dbStats(ctx *cli.Context) error {
 	stack, _ := makeConfigNode(ctx)
 	defer stack.Close()
-	path := stack.ResolvePath("chaindata")
-	db, err := leveldb.NewCustom(path, "", func(options *opt.Options) {
-		options.ReadOnly = true
-	})
-	if err != nil {
-		return err
-	}
+
+	db := utils.MakeChainDatabase(ctx, stack, true)
+	defer db.Close()
+
 	showLeveldbStats(db)
-	err = db.Close()
-	if err != nil {
-		log.Info("Close err", "error", err)
-	}
 	return nil
 }
 
 func dbCompact(ctx *cli.Context) error {
 	stack, _ := makeConfigNode(ctx)
 	defer stack.Close()
-	path := stack.ResolvePath("chaindata")
-	cache := ctx.GlobalInt(utils.CacheFlag.Name) * ctx.GlobalInt(utils.CacheDatabaseFlag.Name) / 100
-	db, err := leveldb.NewCustom(path, "", func(options *opt.Options) {
-		options.OpenFilesCacheCapacity = utils.MakeDatabaseHandles()
-		options.BlockCacheCapacity = cache / 2 * opt.MiB
-		options.WriteBuffer = cache / 4 * opt.MiB // Two of these are used internally
-	})
-	if err != nil {
+
+	db := utils.MakeChainDatabase(ctx, stack, false)
+	defer db.Close()
+
+	log.Info("Stats before compaction")
+	showLeveldbStats(db)
+
+	log.Info("Triggering compaction")
+	if err := db.Compact(nil, nil); err != nil {
+		log.Info("Compact err", "error", err)
 		return err
 	}
+	log.Info("Stats after compaction")
 	showLeveldbStats(db)
-	log.Info("Triggering compaction")
-	err = db.Compact(nil, nil)
-	if err != nil {
-		log.Info("Compact err", "error", err)
-	}
-	showLeveldbStats(db)
-	log.Info("Closing db")
-	err = db.Close()
-	if err != nil {
-		log.Info("Close err", "error", err)
-	}
-	log.Info("Exiting")
-	return err
+	return nil
 }
 
 // dbGet shows the value of a given database key
@@ -265,14 +302,10 @@ func dbGet(ctx *cli.Context) error {
 	}
 	stack, _ := makeConfigNode(ctx)
 	defer stack.Close()
-	path := stack.ResolvePath("chaindata")
-	db, err := leveldb.NewCustom(path, "", func(options *opt.Options) {
-		options.ReadOnly = true
-	})
-	if err != nil {
-		return err
-	}
+
+	db := utils.MakeChainDatabase(ctx, stack, true)
 	defer db.Close()
+
 	key, err := hexutil.Decode(ctx.Args().Get(0))
 	if err != nil {
 		log.Info("Could not decode the key", "error", err)
@@ -283,7 +316,7 @@ func dbGet(ctx *cli.Context) error {
 		log.Info("Get operation failed", "error", err)
 		return err
 	}
-	fmt.Printf("key %#x:\n\t%#x\n", key, data)
+	fmt.Printf("key %#x: %#x\n", key, data)
 	return nil
 }
 
@@ -294,12 +327,18 @@ func dbDelete(ctx *cli.Context) error {
 	}
 	stack, _ := makeConfigNode(ctx)
 	defer stack.Close()
-	db := utils.MakeChainDatabase(ctx, stack)
+
+	db := utils.MakeChainDatabase(ctx, stack, false)
 	defer db.Close()
+
 	key, err := hexutil.Decode(ctx.Args().Get(0))
 	if err != nil {
 		log.Info("Could not decode the key", "error", err)
 		return err
+	}
+	data, err := db.Get(key)
+	if err == nil {
+		fmt.Printf("Previous value: %#x\n", data)
 	}
 	if err = db.Delete(key); err != nil {
 		log.Info("Delete operation returned an error", "error", err)
@@ -315,8 +354,10 @@ func dbPut(ctx *cli.Context) error {
 	}
 	stack, _ := makeConfigNode(ctx)
 	defer stack.Close()
-	db := utils.MakeChainDatabase(ctx, stack)
+
+	db := utils.MakeChainDatabase(ctx, stack, false)
 	defer db.Close()
+
 	var (
 		key   []byte
 		value []byte
@@ -335,7 +376,7 @@ func dbPut(ctx *cli.Context) error {
 	}
 	data, err = db.Get(key)
 	if err == nil {
-		fmt.Printf("Previous value:\n%#x\n", data)
+		fmt.Printf("Previous value: %#x\n", data)
 	}
 	return db.Put(key, value)
 }

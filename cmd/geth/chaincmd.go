@@ -28,6 +28,7 @@ import (
 	"github.com/ethereum/go-ethereum/cmd/utils"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core"
+	"github.com/ethereum/go-ethereum/core/rawdb"
 	"github.com/ethereum/go-ethereum/core/state"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/log"
@@ -196,7 +197,7 @@ func initGenesis(ctx *cli.Context) error {
 	defer stack.Close()
 
 	for _, name := range []string{"chaindata", "lightchaindata"} {
-		chaindb, err := stack.OpenDatabase(name, 0, 0, "")
+		chaindb, err := stack.OpenDatabase(name, 0, 0, "", false)
 		if err != nil {
 			utils.Fatalf("Failed to open database: %v", err)
 		}
@@ -234,7 +235,7 @@ func importChain(ctx *cli.Context) error {
 	stack, _ := makeConfigNode(ctx)
 	defer stack.Close()
 
-	chain, db := utils.MakeChain(ctx, stack, false)
+	chain, db := utils.MakeChain(ctx, stack)
 	defer db.Close()
 
 	// Start periodically gathering memory profiles
@@ -309,7 +310,7 @@ func exportChain(ctx *cli.Context) error {
 	stack, _ := makeConfigNode(ctx)
 	defer stack.Close()
 
-	chain, _ := utils.MakeChain(ctx, stack, true)
+	chain, _ := utils.MakeChain(ctx, stack)
 	start := time.Now()
 
 	var err error
@@ -325,6 +326,9 @@ func exportChain(ctx *cli.Context) error {
 		}
 		if first < 0 || last < 0 {
 			utils.Fatalf("Export error: block number must be greater than 0\n")
+		}
+		if head := chain.CurrentFastBlock(); uint64(last) > head.NumberU64() {
+			utils.Fatalf("Export error: block number %d larger than head block %d\n", uint64(last), head.NumberU64())
 		}
 		err = utils.ExportAppendChain(chain, fp, uint64(first), uint64(last))
 	}
@@ -345,7 +349,7 @@ func importPreimages(ctx *cli.Context) error {
 	stack, _ := makeConfigNode(ctx)
 	defer stack.Close()
 
-	db := utils.MakeChainDatabase(ctx, stack)
+	db := utils.MakeChainDatabase(ctx, stack, false)
 	start := time.Now()
 
 	if err := utils.ImportPreimages(db, ctx.Args().First()); err != nil {
@@ -364,7 +368,7 @@ func exportPreimages(ctx *cli.Context) error {
 	stack, _ := makeConfigNode(ctx)
 	defer stack.Close()
 
-	db := utils.MakeChainDatabase(ctx, stack)
+	db := utils.MakeChainDatabase(ctx, stack, true)
 	start := time.Now()
 
 	if err := utils.ExportPreimages(db, ctx.Args().First()); err != nil {
@@ -378,21 +382,27 @@ func dump(ctx *cli.Context) error {
 	stack, _ := makeConfigNode(ctx)
 	defer stack.Close()
 
-	chain, chainDb := utils.MakeChain(ctx, stack, true)
-	defer chainDb.Close()
+	db := utils.MakeChainDatabase(ctx, stack, true)
 	for _, arg := range ctx.Args() {
-		var block *types.Block
+		var header *types.Header
 		if hashish(arg) {
-			block = chain.GetBlockByHash(common.HexToHash(arg))
+			hash := common.HexToHash(arg)
+			number := rawdb.ReadHeaderNumber(db, hash)
+			if number != nil {
+				header = rawdb.ReadHeader(db, hash, *number)
+			}
 		} else {
-			num, _ := strconv.Atoi(arg)
-			block = chain.GetBlockByNumber(uint64(num))
+			number, _ := strconv.Atoi(arg)
+			hash := rawdb.ReadCanonicalHash(db, uint64(number))
+			if hash != (common.Hash{}) {
+				header = rawdb.ReadHeader(db, hash, uint64(number))
+			}
 		}
-		if block == nil {
+		if header == nil {
 			fmt.Println("{}")
 			utils.Fatalf("block not found")
 		} else {
-			state, err := state.New(block.Root(), state.NewDatabase(chainDb), nil)
+			state, err := state.New(header.Root, state.NewDatabase(db), nil)
 			if err != nil {
 				utils.Fatalf("could not create new state: %v", err)
 			}
