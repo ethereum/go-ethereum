@@ -1800,7 +1800,7 @@ func (s *Syncer) processStorageResponse(res *storageResponse) {
 		it := res.nodes[i].NewIterator(nil, nil)
 		for it.Next() {
 			// Boundary nodes are not written for the last result, since they are incomplete
-			if i == len(res.hashes)-1 {
+			if i == len(res.hashes)-1 && res.subTask != nil {
 				if _, ok := res.bounds[common.BytesToHash(it.Key())]; ok {
 					skipped++
 					continue
