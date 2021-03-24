@@ -28,6 +28,7 @@ import (
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/ethereum/go-ethereum/common/math"
+	"github.com/ethereum/go-ethereum/consensus/clique"
 	"github.com/ethereum/go-ethereum/core/rawdb"
 	"github.com/ethereum/go-ethereum/core/state"
 	"github.com/ethereum/go-ethereum/core/types"
@@ -327,6 +328,14 @@ func (g *Genesis) MustCommit(db ethdb.Database) *types.Block {
 		panic(err)
 	}
 	return block
+}
+
+// IsValid checks the validity of the genesis configuration
+func (g *Genesis) IsValid() bool {
+	if g != nil && g.ExtraData != nil && len(g.ExtraData) <= clique.ExtraSeal+clique.ExtraVanity {
+		return false
+	}
+	return true
 }
 
 // GenesisBlockForTesting creates and writes a block in which addr has the given wei balance.

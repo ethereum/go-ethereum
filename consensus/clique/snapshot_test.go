@@ -53,7 +53,7 @@ func (ap *testerAccountPool) checkpoint(header *types.Header, signers []string) 
 	}
 	sort.Sort(signersAscending(auths))
 	for i, auth := range auths {
-		copy(header.Extra[extraVanity+i*common.AddressLength:], auth.Bytes())
+		copy(header.Extra[ExtraVanity+i*common.AddressLength:], auth.Bytes())
 	}
 }
 
@@ -81,7 +81,7 @@ func (ap *testerAccountPool) sign(header *types.Header, signer string) {
 	}
 	// Sign the header and embed the signature in extra data
 	sig, _ := crypto.Sign(SealHash(header).Bytes(), ap.accounts[signer])
-	copy(header.Extra[len(header.Extra)-extraSeal:], sig)
+	copy(header.Extra[len(header.Extra)-ExtraSeal:], sig)
 }
 
 // testerVote represents a single block signed by a parcitular account, where
@@ -394,10 +394,10 @@ func TestClique(t *testing.T) {
 		}
 		// Create the genesis block with the initial set of signers
 		genesis := &core.Genesis{
-			ExtraData: make([]byte, extraVanity+common.AddressLength*len(signers)+extraSeal),
+			ExtraData: make([]byte, ExtraVanity+common.AddressLength*len(signers)+ExtraSeal),
 		}
 		for j, signer := range signers {
-			copy(genesis.ExtraData[extraVanity+j*common.AddressLength:], signer[:])
+			copy(genesis.ExtraData[ExtraVanity+j*common.AddressLength:], signer[:])
 		}
 		// Create a pristine blockchain with the genesis injected
 		db := rawdb.NewMemoryDatabase()
@@ -428,9 +428,9 @@ func TestClique(t *testing.T) {
 			if j > 0 {
 				header.ParentHash = blocks[j-1].Hash()
 			}
-			header.Extra = make([]byte, extraVanity+extraSeal)
+			header.Extra = make([]byte, ExtraVanity+ExtraSeal)
 			if auths := tt.votes[j].checkpoint; auths != nil {
-				header.Extra = make([]byte, extraVanity+len(auths)*common.AddressLength+extraSeal)
+				header.Extra = make([]byte, ExtraVanity+len(auths)*common.AddressLength+ExtraSeal)
 				accounts.checkpoint(header, auths)
 			}
 			header.Difficulty = diffInTurn // Ignored, we just need a valid number
