@@ -231,7 +231,7 @@ func TestBalanceToPriority(t *testing.T) {
 	}
 	for _, i := range inputs {
 		node.SetBalance(i.pos, i.neg)
-		priority := node.Priority(b.clock.Now(), 1000)
+		priority := node.Priority(1000)
 		if priority != i.priority {
 			t.Fatalf("Priority mismatch, want %v, got %v", i.priority, priority)
 		}
@@ -272,7 +272,7 @@ func TestEstimatedPriority(t *testing.T) {
 	for _, i := range inputs {
 		b.clock.Run(i.runTime)
 		node.RequestServed(i.reqCost)
-		priority := node.EstMinPriority(b.clock.Now()+mclock.AbsTime(i.futureTime), 1000000000, false)
+		priority := node.EstimatePriority(1000000000, 0, i.futureTime, 0, false)
 		if priority != i.priority {
 			t.Fatalf("Estimated priority mismatch, want %v, got %v", i.priority, priority)
 		}

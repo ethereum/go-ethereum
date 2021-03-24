@@ -46,6 +46,7 @@ func (s *Suite) dial66(t *utesting.T) *Conn {
 		t.Fatalf("could not dial: %v", err)
 	}
 	conn.caps = append(conn.caps, p2p.Cap{Name: "eth", Version: 66})
+	conn.ourHighestProtoVersion = 66
 	return conn
 }
 
@@ -141,8 +142,11 @@ func (c *Conn) readAndServe66(chain *Chain, timeout time.Duration) (uint64, Mess
 			if err != nil {
 				return 0, errorf("could not get headers for inbound header request: %v", err)
 			}
-
-			if err := c.Write(headers); err != nil {
+			resp := &eth.BlockHeadersPacket66{
+				RequestId:          reqID,
+				BlockHeadersPacket: eth.BlockHeadersPacket(headers),
+			}
+			if err := c.write66(resp, BlockHeaders{}.Code()); err != nil {
 				return 0, errorf("could not write to connection: %v", err)
 			}
 		default:

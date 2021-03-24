@@ -77,7 +77,12 @@ var (
 		Usage:     "Deploy DNS TXT records to Amazon Route53",
 		ArgsUsage: "<tree-directory>",
 		Action:    dnsToRoute53,
-		Flags:     []cli.Flag{route53AccessKeyFlag, route53AccessSecretFlag, route53ZoneIDFlag},
+		Flags: []cli.Flag{
+			route53AccessKeyFlag,
+			route53AccessSecretFlag,
+			route53ZoneIDFlag,
+			route53RegionFlag,
+		},
 	}
 )
 

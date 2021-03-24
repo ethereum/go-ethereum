@@ -207,11 +207,7 @@ func (s eip2930Signer) Sender(tx *Transaction) (common.Address, error) {
 func (s eip2930Signer) SignatureValues(tx *Transaction, sig []byte) (R, S, V *big.Int, err error) {
 	switch txdata := tx.inner.(type) {
 	case *LegacyTx:
-		R, S, V = decodeSignature(sig)
-		if s.chainId.Sign() != 0 {
-			V = big.NewInt(int64(sig[64] + 35))
-			V.Add(V, s.chainIdMul)
-		}
+		return s.EIP155Signer.SignatureValues(tx, sig)
 	case *AccessListTx:
 		// Check that chain ID of tx matches the signer. We also accept ID zero here,
 		// because it indicates that the chain ID was not specified in the tx.

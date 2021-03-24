@@ -38,6 +38,7 @@ var (
 	receiptStatusSuccessfulRLP = []byte{0x01}
 )
 
+// This error is returned when a typed receipt is decoded, but the string is empty.
 var errEmptyTypedReceipt = errors.New("empty typed receipt bytes")
 
 const (

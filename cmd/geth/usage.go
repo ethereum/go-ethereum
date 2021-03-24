@@ -152,6 +152,7 @@ var AppHelpFlagGroups = []flags.FlagGroup{
 			utils.GraphQLVirtualHostsFlag,
 			utils.RPCGlobalGasCapFlag,
 			utils.RPCGlobalTxFeeCapFlag,
+			utils.AllowUnprotectedTxs,
 			utils.JSpathFlag,
 			utils.ExecFlag,
 			utils.PreloadJSFlag,
@@ -214,10 +215,6 @@ var AppHelpFlagGroups = []flags.FlagGroup{
 	{
 		Name:  "METRICS AND STATS",
 		Flags: metricsFlags,
-	},
-	{
-		Name:  "WHISPER (deprecated)",
-		Flags: whisperFlags,
 	},
 	{
 		Name: "ALIASED (deprecated)",
