@@ -148,7 +148,6 @@ func TestSetBalance(t *testing.T) {
 		{0, 1000},
 		{1000, 1000},
 	}
-
 	for _, i := range inputs {
 		b.setBalance(node, i.pos, i.neg)
 		pos, neg := node.GetBalance()
@@ -261,8 +260,6 @@ func TestEstimatedPriority(t *testing.T) {
 	defer b.stop()
 	node := b.newNode(1000000000)
 	node.SetPriceFactors(PriceFactors{1, 0, 1}, PriceFactors{1, 0, 1})
-
-	b.ns.SetField(node.node, ppTestSetup.capacityField, uint64(1))
 	b.setBalance(node, uint64(time.Minute), 0)
 	var inputs = []struct {
 		runTime    time.Duration // time cost

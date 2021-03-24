@@ -47,9 +47,10 @@ type PriceFactors struct {
 	TimeFactor, CapacityFactor, RequestFactor float64
 }
 
-// timePrice returns the price of connection per nanosecond at the given capacity
-func (p PriceFactors) timePrice(cap uint64) float64 {
-	return p.TimeFactor + float64(cap)*p.CapacityFactor/1000000
+// costPrice returns the price of connection per nanosecond at the given capacity
+// and the estimated average request cost.
+func (p PriceFactors) costPrice(cap uint64, avgReqCost float64) float64 {
+	return p.TimeFactor + float64(cap)*p.CapacityFactor/1000000 + p.RequestFactor*avgReqCost
 }
 
 type (
@@ -113,7 +114,57 @@ type nodeBalance struct {
 
 // balance represents a pair of positive and negative balances
 type balance struct {
-	pos, neg utils.ExpiredValue
+	pos, neg       utils.ExpiredValue
+	posExp, negExp utils.ValueExpirer
+}
+
+// value returns the value of balance at a given timestamp.
+func (b balance) value(now mclock.AbsTime) (uint64, uint64) {
+	return b.pos.Value(b.posExp.LogOffset(now)), b.neg.Value(b.negExp.LogOffset(now))
+}
+
+// add adds the value of a given amount to the balance. The original value and
+// updated value will also be returned if the addtion is successful.
+// Returns the error if the given value is too large and the value overflows.
+func (b *balance) add(now mclock.AbsTime, amount int64, pos bool, force bool) (uint64, uint64, int64, error) {
+	var (
+		val    utils.ExpiredValue
+		offset utils.Fixed64
+	)
+	if pos {
+		offset, val = b.posExp.LogOffset(now), b.pos
+	} else {
+		offset, val = b.negExp.LogOffset(now), b.neg
+	}
+	old := val.Value(offset)
+	if amount > 0 && (amount > maxBalance || old > maxBalance-uint64(amount)) {
+		if !force {
+			return old, 0, 0, errBalanceOverflow
+		}
+		val = utils.ExpiredValue{}
+		amount = maxBalance
+	}
+	net := val.Add(amount, offset)
+	if pos {
+		b.pos = val
+	} else {
+		b.neg = val
+	}
+	return old, val.Value(offset), net, nil
+}
+
+// setValue sets the internal balance amount to the given values. Returns the
+// error if the given value is too large.
+func (b *balance) setValue(now mclock.AbsTime, pos uint64, neg uint64) error {
+	if pos > maxBalance || neg > maxBalance {
+		return errBalanceOverflow
+	}
+	var pb, nb utils.ExpiredValue
+	pb.Add(int64(pos), b.posExp.LogOffset(now))
+	nb.Add(int64(neg), b.negExp.LogOffset(now))
+	b.pos = pb
+	b.neg = nb
+	return nil
 }
 
 // balanceCallback represents a single callback that is activated when client priority
@@ -131,7 +182,7 @@ func (n *nodeBalance) GetBalance() (uint64, uint64) {
 
 	now := n.bt.clock.Now()
 	n.updateBalance(now)
-	return n.balance.pos.Value(n.bt.posExp.LogOffset(now)), n.balance.neg.Value(n.bt.negExp.LogOffset(now))
+	return n.balance.value(now)
 }
 
 // GetRawBalance returns the current positive and negative balance
@@ -152,33 +203,26 @@ func (n *nodeBalance) GetRawBalance() (utils.ExpiredValue, utils.ExpiredValue) {
 // Note: this function should run inside a NodeStateMachine operation
 func (n *nodeBalance) AddBalance(amount int64) (uint64, uint64, error) {
 	var (
-		err      error
-		old, new uint64
-	)
-	var (
+		err         error
+		old, new    uint64
+		now         = n.bt.clock.Now()
 		callbacks   []func()
 		setPriority bool
 	)
+	// Operation with holding the lock
 	n.bt.updateTotalBalance(n, func() bool {
-		now := n.bt.clock.Now()
 		n.updateBalance(now)
-
-		// Ensure the given amount is valid to apply.
-		offset := n.bt.posExp.LogOffset(now)
-		old = n.balance.pos.Value(offset)
-		if amount > 0 && (amount > maxBalance || old > maxBalance-uint64(amount)) {
-			err = errBalanceOverflow
+		if old, new, _, err = n.balance.add(now, amount, true, false); err != nil {
 			return false
 		}
-
-		// Update the total positive balance counter.
-		n.balance.pos.Add(amount, offset)
-		callbacks = n.checkCallbacks(now)
-		setPriority = n.checkPriorityStatus()
-		new = n.balance.pos.Value(offset)
+		callbacks, setPriority = n.checkCallbacks(now), n.checkPriorityStatus()
 		n.storeBalance(true, false)
 		return true
 	})
+	if err != nil {
+		return old, old, err
+	}
+	// Operation without holding the lock
 	for _, cb := range callbacks {
 		cb()
 	}
@@ -188,36 +232,28 @@ func (n *nodeBalance) AddBalance(amount int64) (uint64, uint64, error) {
 		}
 		n.signalPriorityUpdate()
 	}
-	if err != nil {
-		return old, old, err
-	}
 	return old, new, nil
 }
 
 // SetBalance sets the positive and negative balance to the given values
 // Note: this function should run inside a NodeStateMachine operation
 func (n *nodeBalance) SetBalance(pos, neg uint64) error {
-	if pos > maxBalance || neg > maxBalance {
-		return errBalanceOverflow
-	}
 	var (
+		now         = n.bt.clock.Now()
 		callbacks   []func()
 		setPriority bool
 	)
+	// Operation with holding the lock
 	n.bt.updateTotalBalance(n, func() bool {
-		now := n.bt.clock.Now()
 		n.updateBalance(now)
-
-		var pb, nb utils.ExpiredValue
-		pb.Add(int64(pos), n.bt.posExp.LogOffset(now))
-		nb.Add(int64(neg), n.bt.negExp.LogOffset(now))
-		n.balance.pos = pb
-		n.balance.neg = nb
-		callbacks = n.checkCallbacks(now)
-		setPriority = n.checkPriorityStatus()
+		if err := n.balance.setValue(now, pos, neg); err != nil {
+			return false
+		}
+		callbacks, setPriority = n.checkCallbacks(now), n.checkPriorityStatus()
 		n.storeBalance(true, true)
 		return true
 	})
+	// Operation without holding the lock
 	for _, cb := range callbacks {
 		cb()
 	}
@@ -233,9 +269,37 @@ func (n *nodeBalance) SetBalance(pos, neg uint64) error {
 // RequestServed should be called after serving a request for the given peer
 func (n *nodeBalance) RequestServed(cost uint64) uint64 {
 	n.lock.Lock()
-	var callbacks []func()
-	defer func() {
-		n.lock.Unlock()
+
+	var (
+		check bool
+		fcost = float64(cost)
+		now   = n.bt.clock.Now()
+	)
+	n.updateBalance(now)
+	if !n.balance.pos.IsZero() {
+		posCost := -int64(fcost * n.posFactor.RequestFactor)
+		if posCost == 0 {
+			fcost = 0
+		} else {
+			_, _, net, _ := n.balance.add(now, posCost, true, false)
+			if posCost == net {
+				fcost = 0
+			} else {
+				fcost *= 1 - float64(net)/float64(posCost)
+			}
+			check = true
+		}
+	}
+	if fcost > 0 && n.negFactor.RequestFactor != 0 {
+		n.balance.add(now, int64(fcost*n.negFactor.RequestFactor), false, false)
+		check = true
+	}
+	n.sumReqCost += cost
+	pos, _ := n.balance.value(now)
+	n.lock.Unlock()
+
+	if check {
+		callbacks := n.checkCallbacks(now)
 		if callbacks != nil {
 			n.bt.ns.Operation(func() {
 				for _, cb := range callbacks {
@@ -243,39 +307,8 @@ func (n *nodeBalance) RequestServed(cost uint64) uint64 {
 				}
 			})
 		}
-	}()
-
-	now := n.bt.clock.Now()
-	n.updateBalance(now)
-	fcost := float64(cost)
-
-	posExp := n.bt.posExp.LogOffset(now)
-	var check bool
-	if !n.balance.pos.IsZero() {
-		if n.posFactor.RequestFactor != 0 {
-			c := -int64(fcost * n.posFactor.RequestFactor)
-			cc := n.balance.pos.Add(c, posExp)
-			if c == cc {
-				fcost = 0
-			} else {
-				fcost *= 1 - float64(cc)/float64(c)
-			}
-			check = true
-		} else {
-			fcost = 0
-		}
 	}
-	if fcost > 0 {
-		if n.negFactor.RequestFactor != 0 {
-			n.balance.neg.Add(int64(fcost*n.negFactor.RequestFactor), n.bt.negExp.LogOffset(now))
-			check = true
-		}
-	}
-	if check {
-		callbacks = n.checkCallbacks(now)
-	}
-	n.sumReqCost += cost
-	return n.balance.pos.Value(posExp)
+	return pos
 }
 
 // priority returns the actual priority based on the current balance
@@ -283,8 +316,9 @@ func (n *nodeBalance) priority(capacity uint64) int64 {
 	n.lock.Lock()
 	defer n.lock.Unlock()
 
-	n.updateBalance(n.bt.clock.Now())
-	return n.balanceToPriority(n.balance, capacity)
+	now := n.bt.clock.Now()
+	n.updateBalance(now)
+	return n.balanceToPriority(now, n.balance, capacity)
 }
 
 // EstMinPriority gives a lower estimate for the priority at a given time in the future.
@@ -298,16 +332,10 @@ func (n *nodeBalance) estimatePriority(capacity uint64, addBalance int64, future
 
 	now := n.bt.clock.Now()
 	n.updateBalance(now)
-	b := n.balance
+
+	b := n.balance // copy the balance
 	if addBalance != 0 {
-		offset := n.bt.posExp.LogOffset(now)
-		old := n.balance.pos.Value(offset)
-		if addBalance > 0 && (addBalance > maxBalance || old > maxBalance-uint64(addBalance)) {
-			b.pos = utils.ExpiredValue{}
-			b.pos.Add(maxBalance, offset)
-		} else {
-			b.pos.Add(addBalance, offset)
-		}
+		b.add(now, addBalance, true, true)
 	}
 	if future > 0 {
 		var avgReqCost float64
@@ -324,7 +352,7 @@ func (n *nodeBalance) estimatePriority(capacity uint64, addBalance int64, future
 	// estimates are always lower than actual priorities, even if the bias is very small.
 	// This ensures that two nodes will not ping-pong update signals forever if both of
 	// them have zero estimated priority drop in the projected future.
-	pri := n.balanceToPriority(b, capacity) - 1
+	pri := n.balanceToPriority(now, b, capacity) - 1
 	if update {
 		n.addCallback(balanceCallbackUpdate, pri, n.signalPriorityUpdate)
 	}
@@ -450,7 +478,7 @@ func (n *nodeBalance) checkCallbacks(now mclock.AbsTime) (callbacks []func()) {
 	if n.callbackCount == 0 || n.capacity == 0 {
 		return
 	}
-	pri := n.balanceToPriority(n.balance, n.capacity)
+	pri := n.balanceToPriority(now, n.balance, n.capacity)
 	for n.callbackCount != 0 && n.callbacks[n.callbackCount-1].threshold >= pri {
 		n.callbackCount--
 		n.callbackIndex[n.callbacks[n.callbackCount].id] = -1
@@ -563,11 +591,22 @@ func (n *nodeBalance) setCapacity(capacity uint64) {
 // balanceToPriority converts a balance to a priority value. Lower priority means
 // first to disconnect. Positive balance translates to positive priority. If positive
 // balance is zero then negative balance translates to a negative priority.
-func (n *nodeBalance) balanceToPriority(b balance, capacity uint64) int64 {
-	if !b.pos.IsZero() {
-		return int64(b.pos.Value(n.bt.posExp.LogOffset(n.bt.clock.Now())) / capacity)
+func (n *nodeBalance) balanceToPriority(now mclock.AbsTime, b balance, capacity uint64) int64 {
+	pos, neg := b.value(now)
+	if pos > 0 {
+		return int64(pos / capacity)
 	}
-	return -int64(b.neg.Value(n.bt.negExp.LogOffset(n.bt.clock.Now())))
+	return -int64(neg)
+}
+
+// priorityToBalance converts a target priority to a requested balance value.
+// If the priority is negative, then minimal negative balance is returned;
+// otherwise the minimal positive balance is returned.
+func (n *nodeBalance) priorityToBalance(priority int64, capacity uint64) (uint64, uint64) {
+	if priority > 0 {
+		return uint64(priority) * n.capacity, 0
+	}
+	return 0, uint64(-priority)
 }
 
 // reducedBalance estimates the reduced balance at a given time in the fututre based
@@ -575,21 +614,23 @@ func (n *nodeBalance) balanceToPriority(b balance, capacity uint64) int64 {
 func (n *nodeBalance) reducedBalance(b balance, start mclock.AbsTime, dt time.Duration, capacity uint64, avgReqCost float64) balance {
 	// since the costs are applied continuously during the dt time period we calculate
 	// the expiration offset at the middle of the period
-	at := start + mclock.AbsTime(dt/2)
-	dtf := float64(dt)
+	var (
+		at  = start + mclock.AbsTime(dt/2)
+		dtf = float64(dt)
+	)
 	if !b.pos.IsZero() {
-		factor := n.posFactor.timePrice(capacity) + n.posFactor.RequestFactor*avgReqCost
+		factor := n.posFactor.costPrice(capacity, avgReqCost)
 		diff := -int64(dtf * factor)
-		dd := b.pos.Add(diff, n.bt.posExp.LogOffset(at))
-		if dd == diff {
+		_, _, net, _ := b.add(at, diff, true, false)
+		if net == diff {
 			dtf = 0
 		} else {
-			dtf += float64(dd) / factor
+			dtf += float64(net) / factor
 		}
 	}
-	if dt > 0 {
-		factor := n.negFactor.timePrice(capacity) + n.negFactor.RequestFactor*avgReqCost
-		b.neg.Add(int64(dtf*factor), n.bt.negExp.LogOffset(at))
+	if dtf > 0 {
+		factor := n.negFactor.costPrice(capacity, avgReqCost)
+		b.add(at, int64(dtf*factor), false, false)
 	}
 	return b
 }
@@ -600,37 +641,37 @@ func (n *nodeBalance) reducedBalance(b balance, start mclock.AbsTime, dt time.Du
 // Note: the function assumes that the balance has been recently updated and
 // calculates the time starting from the last update.
 func (n *nodeBalance) timeUntil(priority int64) (time.Duration, bool) {
-	now := n.bt.clock.Now()
-	var dt float64
-	if !n.balance.pos.IsZero() {
-		posBalance := n.balance.pos.Value(n.bt.posExp.LogOffset(now))
-		timePrice := n.posFactor.timePrice(n.capacity)
+	var (
+		now                  = n.bt.clock.Now()
+		pos, neg             = n.balance.value(now)
+		targetPos, targetNeg = n.priorityToBalance(priority, n.capacity)
+		diffTime             float64
+	)
+	if pos > 0 {
+		timePrice := n.posFactor.costPrice(n.capacity, 0)
 		if timePrice < 1e-100 {
 			return 0, false
 		}
-		if priority > 0 {
-			newBalance := uint64(priority) * n.capacity
-			if newBalance > posBalance {
+		if targetPos > 0 {
+			if targetPos > pos {
 				return 0, false
 			}
-			dt = float64(posBalance-newBalance) / timePrice
-			return time.Duration(dt), true
+			diffTime = float64(pos-targetPos) / timePrice
+			return time.Duration(diffTime), true
 		} else {
-			dt = float64(posBalance) / timePrice
+			diffTime = float64(pos) / timePrice
 		}
 	} else {
-		if priority > 0 {
+		if targetPos > 0 {
 			return 0, false
 		}
 	}
-	// if we have a positive balance then dt equals the time needed to get it to zero
-	negBalance := n.balance.neg.Value(n.bt.negExp.LogOffset(now))
-	timePrice := n.negFactor.timePrice(n.capacity)
-	if uint64(-priority) > negBalance {
+	if targetNeg > neg {
+		timePrice := n.negFactor.costPrice(n.capacity, 0)
 		if timePrice < 1e-100 {
 			return 0, false
 		}
-		dt += float64(uint64(-priority)-negBalance) / timePrice
+		diffTime += float64(targetNeg-neg) / timePrice
 	}
-	return time.Duration(dt), true
+	return time.Duration(diffTime), true
 }

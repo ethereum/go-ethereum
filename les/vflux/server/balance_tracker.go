@@ -262,7 +262,7 @@ func (bt *balanceTracker) newNodeBalance(node *enode.Node, negBalanceKey string,
 		node:        node,
 		setFlags:    setFlags,
 		connAddress: negBalanceKey,
-		balance:     balance{pos: pb, neg: nb},
+		balance:     balance{pos: pb, neg: nb, posExp: bt.posExp, negExp: bt.negExp},
 		initTime:    bt.clock.Now(),
 		lastUpdate:  bt.clock.Now(),
 	}
