@@ -297,17 +297,22 @@ func createStorageRequestResponse(t *testPeer, root common.Hash, accounts []comm
 			limitHash = common.BytesToHash(limit)
 		}
 		var (
-			keys []common.Hash
-			vals [][]byte
+			keys  []common.Hash
+			vals  [][]byte
+			abort bool
 		)
 		for _, entry := range t.storageValues[account] {
+			if size >= max {
+				abort = true
+				break
+			}
 			if bytes.Compare(entry.k, originHash[:]) < 0 {
 				continue
 			}
 			keys = append(keys, common.BytesToHash(entry.k))
 			vals = append(vals, entry.v)
 			size += uint64(32 + len(entry.v))
-			if bytes.Compare(entry.k, limitHash[:]) >= 0 || size >= max {
+			if bytes.Compare(entry.k, limitHash[:]) >= 0 {
 				break
 			}
 		}
@@ -317,7 +322,7 @@ func createStorageRequestResponse(t *testPeer, root common.Hash, accounts []comm
 		// Generate the Merkle proofs for the first and last storage slot, but
 		// only if the response was capped. If the entire storage trie included
 		// in the response, no need for any proofs.
-		if originHash != (common.Hash{}) || size >= max {
+		if originHash != (common.Hash{}) || abort {
 			// If we're aborting, we need to prove the first and last item
 			// This terminates the response (and thus the loop)
 			proof := light.NewNodeSet()
