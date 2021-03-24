@@ -344,6 +344,65 @@ func createStorageRequestResponse(t *testPeer, root common.Hash, accounts []comm
 	return hashes, slots, proofs
 }
 
+//  the createStorageRequestResponseAlwaysProve tests a cornercase, where it always
+// supplies the proof for the last account, even if it is 'complete'.h
+func createStorageRequestResponseAlwaysProve(t *testPeer, root common.Hash, accounts []common.Hash, bOrigin, bLimit []byte, max uint64) (hashes [][]common.Hash, slots [][][]byte, proofs [][]byte) {
+	var size uint64
+	max = max * 3 / 4
+
+	var origin common.Hash
+	if len(bOrigin) > 0 {
+		origin = common.BytesToHash(bOrigin)
+	}
+	var exit bool
+	for i, account := range accounts {
+		var keys []common.Hash
+		var vals [][]byte
+		for _, entry := range t.storageValues[account] {
+			if bytes.Compare(entry.k, origin[:]) < 0 {
+				exit = true
+			}
+			keys = append(keys, common.BytesToHash(entry.k))
+			vals = append(vals, entry.v)
+			size += uint64(32 + len(entry.v))
+			if size > max {
+				exit = true
+			}
+		}
+		if i == len(accounts)-1 {
+			exit = true
+		}
+		hashes = append(hashes, keys)
+		slots = append(slots, vals)
+
+		if exit {
+			// If we're aborting, we need to prove the first and last item
+			// This terminates the response (and thus the loop)
+			proof := light.NewNodeSet()
+			stTrie := t.storageTries[account]
+
+			// Here's a potential gotcha: when constructing the proof, we cannot
+			// use the 'origin' slice directly, but must use the full 32-byte
+			// hash form.
+			if err := stTrie.Prove(origin[:], 0, proof); err != nil {
+				t.logger.Error("Could not prove inexistence of origin", "origin", origin,
+					"error", err)
+			}
+			if len(keys) > 0 {
+				lastK := (keys[len(keys)-1])[:]
+				if err := stTrie.Prove(lastK, 0, proof); err != nil {
+					t.logger.Error("Could not prove last item", "error", err)
+				}
+			}
+			for _, blob := range proof.NodeList() {
+				proofs = append(proofs, blob)
+			}
+			break
+		}
+	}
+	return hashes, slots, proofs
+}
+
 // emptyRequestAccountRangeFn is a rejects AccountRangeRequests
 func emptyRequestAccountRangeFn(t *testPeer, requestId uint64, root common.Hash, origin common.Hash, limit common.Hash, cap uint64) error {
 	t.remote.OnAccounts(t, requestId, nil, nil, nil)
@@ -369,6 +428,15 @@ func emptyStorageRequestHandler(t *testPeer, requestId uint64, root common.Hash,
 }
 
 func nonResponsiveStorageRequestHandler(t *testPeer, requestId uint64, root common.Hash, accounts []common.Hash, origin, limit []byte, max uint64) error {
+	return nil
+}
+
+func proofHappyStorageRequestHandler(t *testPeer, requestId uint64, root common.Hash, accounts []common.Hash, origin, limit []byte, max uint64) error {
+	hashes, slots, proofs := createStorageRequestResponseAlwaysProve(t, root, accounts, origin, limit, max)
+	if err := t.remote.OnStorage(t, requestId, hashes, slots, proofs); err != nil {
+		t.test.Errorf("Remote side rejected our delivery: %v", err)
+		t.term()
+	}
 	return nil
 }
 
@@ -1172,6 +1240,39 @@ func TestSyncWithStorageAndNonProvingPeer(t *testing.T) {
 	verifyTrie(syncer.db, sourceAccountTrie.Hash(), t)
 }
 
+// TestSyncWithStorage tests  basic sync using accounts + storage + code, against
+// a peer who insists on delivering full storage sets _and_ proofs. This triggered
+// an error, where the recipient erroneously clipped the boundary nodes, but
+// did not mark the account for healing.
+func TestSyncWithStorageMisbehavingProve(t *testing.T) {
+	t.Parallel()
+	var (
+		once   sync.Once
+		cancel = make(chan struct{})
+		term   = func() {
+			once.Do(func() {
+				close(cancel)
+			})
+		}
+	)
+	sourceAccountTrie, elems, storageTries, storageElems := makeAccountTrieWithStorageWithUniqueStorage(10, 30, false)
+
+	mkSource := func(name string) *testPeer {
+		source := newTestPeer(name, t, term)
+		source.accountTrie = sourceAccountTrie
+		source.accountValues = elems
+		source.storageTries = storageTries
+		source.storageValues = storageElems
+		source.storageRequestHandler = proofHappyStorageRequestHandler
+		return source
+	}
+	syncer := setupSyncer(mkSource("sourceA"))
+	if err := syncer.Sync(sourceAccountTrie.Hash(), cancel); err != nil {
+		t.Fatalf("sync failed: %v", err)
+	}
+	verifyTrie(syncer.db, sourceAccountTrie.Hash(), t)
+}
+
 type kv struct {
 	k, v []byte
 }
@@ -1299,8 +1400,48 @@ func makeBoundaryAccountTrie(n int) (*trie.Trie, entrySlice) {
 	return trie, entries
 }
 
+// makeAccountTrieWithStorageWithUniqueStorage creates an account trie where each accounts
+// has a unique storage set.
+func makeAccountTrieWithStorageWithUniqueStorage(accounts, slots int, code bool) (*trie.Trie, entrySlice, map[common.Hash]*trie.Trie, map[common.Hash]entrySlice) {
+	var (
+		db             = trie.NewDatabase(rawdb.NewMemoryDatabase())
+		accTrie, _     = trie.New(common.Hash{}, db)
+		entries        entrySlice
+		storageTries   = make(map[common.Hash]*trie.Trie)
+		storageEntries = make(map[common.Hash]entrySlice)
+	)
+	// Create n accounts in the trie
+	for i := uint64(1); i <= uint64(accounts); i++ {
+		key := key32(i)
+		codehash := emptyCode[:]
+		if code {
+			codehash = getCodeHash(i)
+		}
+		// Create a storage trie
+		stTrie, stEntries := makeStorageTrieWithSeed(uint64(slots), i, db)
+		stRoot := stTrie.Hash()
+		stTrie.Commit(nil)
+		value, _ := rlp.EncodeToBytes(state.Account{
+			Nonce:    i,
+			Balance:  big.NewInt(int64(i)),
+			Root:     stRoot,
+			CodeHash: codehash,
+		})
+		elem := &kv{key, value}
+		accTrie.Update(elem.k, elem.v)
+		entries = append(entries, elem)
+
+		storageTries[common.BytesToHash(key)] = stTrie
+		storageEntries[common.BytesToHash(key)] = stEntries
+	}
+	sort.Sort(entries)
+
+	accTrie.Commit(nil)
+	return accTrie, entries, storageTries, storageEntries
+}
+
 // makeAccountTrieWithStorage spits out a trie, along with the leafs
-func makeAccountTrieWithStorage(accounts, slots int, code bool, boundary bool) (*trie.Trie, entrySlice, map[common.Hash]*trie.Trie, map[common.Hash]entrySlice) {
+func makeAccountTrieWithStorage(accounts, slots int, code, boundary bool) (*trie.Trie, entrySlice, map[common.Hash]*trie.Trie, map[common.Hash]entrySlice) {
 	var (
 		db             = trie.NewDatabase(rawdb.NewMemoryDatabase())
 		accTrie, _     = trie.New(common.Hash{}, db)
@@ -1316,7 +1457,7 @@ func makeAccountTrieWithStorage(accounts, slots int, code bool, boundary bool) (
 	if boundary {
 		stTrie, stEntries = makeBoundaryStorageTrie(slots, db)
 	} else {
-		stTrie, stEntries = makeStorageTrie(slots, db)
+		stTrie, stEntries = makeStorageTrieWithSeed(uint64(slots), 0, db)
 	}
 	stRoot := stTrie.Hash()
 
@@ -1346,14 +1487,15 @@ func makeAccountTrieWithStorage(accounts, slots int, code bool, boundary bool) (
 	return accTrie, entries, storageTries, storageEntries
 }
 
-// makeStorageTrie fills a storage trie with n items, returning the
-// not-yet-committed trie and the sorted entries
-func makeStorageTrie(n int, db *trie.Database) (*trie.Trie, entrySlice) {
+// makeStorageTrieWithSeed fills a storage trie with n items, returning the
+// not-yet-committed trie and the sorted entries. The seeds can be used to ensure
+// that tries are unique.
+func makeStorageTrieWithSeed(n, seed uint64, db *trie.Database) (*trie.Trie, entrySlice) {
 	trie, _ := trie.New(common.Hash{}, db)
 	var entries entrySlice
 	for i := uint64(1); i <= uint64(n); i++ {
-		// store 'i' at slot 'i'
-		slotValue := key32(i)
+		// store 'x' at slot 'x'
+		slotValue := key32(i + seed)
 		rlpSlotValue, _ := rlp.EncodeToBytes(common.TrimLeftZeroes(slotValue[:]))
 
 		slotKey := key32(i)
@@ -1420,6 +1562,7 @@ func makeBoundaryStorageTrie(n int, db *trie.Database) (*trie.Trie, entrySlice) 
 }
 
 func verifyTrie(db ethdb.KeyValueStore, root common.Hash, t *testing.T) {
+	t.Helper()
 	triedb := trie.NewDatabase(db)
 	accTrie, err := trie.New(root, triedb)
 	if err != nil {
