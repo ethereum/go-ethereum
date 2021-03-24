@@ -256,8 +256,13 @@ func handleMessage(backend Backend, peer *Peer) error {
 			var (
 				storage []*StorageData
 				last    common.Hash
+				abort   bool
 			)
-			for it.Next() && size < hardLimit {
+			for it.Next() {
+				if size >= hardLimit {
+					abort = true
+					break
+				}
 				hash, slot := it.Hash(), common.CopyBytes(it.Slot())
 
 				// Track the returned interval for the Merkle proofs
@@ -280,7 +285,7 @@ func handleMessage(backend Backend, peer *Peer) error {
 			// Generate the Merkle proofs for the first and last storage slot, but
 			// only if the response was capped. If the entire storage trie included
 			// in the response, no need for any proofs.
-			if origin != (common.Hash{}) || size >= hardLimit {
+			if origin != (common.Hash{}) || abort {
 				// Request started at a non-zero hash or was capped prematurely, add
 				// the endpoint Merkle proofs
 				accTrie, err := trie.New(req.Root, backend.Chain().StateCache().TrieDB())

@@ -1551,7 +1551,14 @@ func (s *Syncer) processAccountResponse(res *accountResponse) {
 	// Ensure that the response doesn't overflow into the subsequent task
 	last := res.task.Last.Big()
 	for i, hash := range res.hashes {
-		if hash.Big().Cmp(last) > 0 {
+		// Mark the range complete if the last is already included.
+		// Keep iteration to delete the extra states if exists.
+		cmp := hash.Big().Cmp(last)
+		if cmp == 0 {
+			res.cont = false
+			continue
+		}
+		if cmp > 0 {
 			// Chunk overflown, cut off excess, but also update the boundary nodes
 			for j := i; j < len(res.hashes); j++ {
 				if err := res.trie.Prove(res.hashes[j][:], 0, res.overflow); err != nil {
@@ -1758,7 +1765,14 @@ func (s *Syncer) processStorageResponse(res *storageResponse) {
 				// Ensure the response doesn't overflow into the subsequent task
 				last := res.subTask.Last.Big()
 				for k, hash := range res.hashes[i] {
-					if hash.Big().Cmp(last) > 0 {
+					// Mark the range complete if the last is already included.
+					// Keep iteration to delete the extra states if exists.
+					cmp := hash.Big().Cmp(last)
+					if cmp == 0 {
+						res.cont = false
+						continue
+					}
+					if cmp > 0 {
 						// Chunk overflown, cut off excess, but also update the boundary
 						for l := k; l < len(res.hashes[i]); l++ {
 							if err := res.tries[i].Prove(res.hashes[i][l][:], 0, res.overflow); err != nil {
@@ -1785,8 +1799,12 @@ func (s *Syncer) processStorageResponse(res *storageResponse) {
 		it := res.nodes[i].NewIterator(nil, nil)
 		for it.Next() {
 			// Boundary nodes are not written for the last result, since they are incomplete
-			if i == len(res.hashes)-1 {
+			if i == len(res.hashes)-1 && res.subTask != nil {
 				if _, ok := res.bounds[common.BytesToHash(it.Key())]; ok {
+					skipped++
+					continue
+				}
+				if _, err := res.overflow.Get(it.Key()); err == nil {
 					skipped++
 					continue
 				}
