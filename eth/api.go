@@ -544,7 +544,13 @@ func (api *PrivateDebugAPI) getModifiedAccounts(startBlock, endBlock *types.Bloc
 	return dirty, nil
 }
 
-func (api *PublicDebugAPI) CreateAccessList(blockNrOrHash rpc.BlockNumberOrHash, reexec uint64, args *ethapi.SendTxArgs) (*types.AccessList, error) {
+type AccessListResult struct {
+	Accesslist *types.AccessList
+	Error      string
+	GasUsed    uint64
+}
+
+func (api *PublicDebugAPI) CreateAccessList(blockNrOrHash rpc.BlockNumberOrHash, reexec uint64, args *ethapi.SendTxArgs) (*AccessListResult, error) {
 	ctx := context.Background()
 	var block *types.Block
 	if number, ok := blockNrOrHash.Number(); ok {
@@ -562,5 +568,9 @@ func (api *PublicDebugAPI) CreateAccessList(blockNrOrHash rpc.BlockNumberOrHash,
 	} else {
 		return nil, errors.New("either block number or block hash must be specified")
 	}
-	return api.eth.APIBackend.AccessList(ctx, block, reexec, args)
+	acl, gasUsed, vmerr, err := api.eth.APIBackend.AccessList(ctx, block, reexec, args)
+	if err != nil {
+		return nil, err
+	}
+	return &AccessListResult{Accesslist: acl, Error: vmerr.Error(), GasUsed: gasUsed}, nil
 }

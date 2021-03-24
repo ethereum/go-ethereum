@@ -24,6 +24,7 @@ import (
 
 	"github.com/ethereum/go-ethereum/accounts"
 	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/ethereum/go-ethereum/consensus"
 	"github.com/ethereum/go-ethereum/core"
 	"github.com/ethereum/go-ethereum/core/bloombits"
@@ -347,17 +348,23 @@ func (b *EthAPIBackend) StateAtTransaction(ctx context.Context, block *types.Blo
 	return b.eth.stateAtTransaction(block, txIndex, reexec)
 }
 
-func (b *EthAPIBackend) AccessList(ctx context.Context, block *types.Block, reexec uint64, args *ethapi.SendTxArgs) (*types.AccessList, error) {
+// AccessList creates an access list for the given transaction.
+// If the accesslist creation fails an error is returned.
+// If the transaction itself fails, an vmErr is returned.
+func (b *EthAPIBackend) AccessList(ctx context.Context, block *types.Block, reexec uint64, args *ethapi.SendTxArgs) (acl *types.AccessList, gasUsed uint64, vmErr error, err error) {
 	if block == nil {
 		block = b.CurrentBlock()
 	}
 	db, release, err := b.eth.stateAtBlock(block, reexec)
 	defer release()
 	if err != nil {
-		return nil, err
+		return nil, 0, nil, err
 	}
 	if err := args.SetDefaults(ctx, b); err != nil {
-		return nil, err
+		// most likely an error in gas estimation, set gas to max gas
+		log.Warn("Setting defaults failed", "error", err)
+		maxGas := hexutil.Uint64(b.RPCGasCap())
+		args.Gas = &maxGas
 	}
 	var (
 		gas        uint64
@@ -381,15 +388,15 @@ func (b *EthAPIBackend) AccessList(ctx context.Context, block *types.Block, reex
 		vmenv := vm.NewEVM(context, core.NewEVMTxContext(msg), statedb, b.eth.blockchain.Config(), config)
 		res, err := core.ApplyMessage(vmenv, msg, new(core.GasPool).AddGas(msg.Gas()))
 		if err != nil {
-			return nil, fmt.Errorf("failed to apply transaction: %v err: %v", args.ToTransaction().Hash(), err)
+			return nil, 0, nil, fmt.Errorf("failed to apply transaction: %v err: %v", args.ToTransaction().Hash(), err)
 		}
 		if res.UsedGas == gas {
 			acl := tracer.GetUnpreparedAccessList(args.From, args.To, vmenv.ActivePrecompiles())
-			return acl, nil
+			return acl, res.UsedGas, res.Err, nil
 		}
 		accessList = tracer.GetAccessList()
 		gas = res.UsedGas
 	}
 
-	return accessList, errors.New("failed to create accesslist")
+	return accessList, 0, nil, errors.New("failed to create accesslist")
 }
