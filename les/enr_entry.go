@@ -35,7 +35,7 @@ func (lesEntry) ENRKey() string { return "les" }
 // ethEntry is the "eth" ENR entry. This is redeclared here to avoid depending on package eth.
 type ethEntry struct {
 	ForkID forkid.ID
-	_      []rlp.RawValue `rlp:"tail"`
+	Tail   []rlp.RawValue `rlp:"tail"`
 }
 
 func (ethEntry) ENRKey() string { return "eth" }
