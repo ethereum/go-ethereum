@@ -296,17 +296,19 @@ func (n *nodeBalance) RequestServed(cost uint64) uint64 {
 	}
 	n.sumReqCost += cost
 	pos, _ := n.balance.value(now)
+
+	var callbacks []func()
+	if check {
+		callbacks = n.checkCallbacks(now)
+	}
 	n.lock.Unlock()
 
-	if check {
-		callbacks := n.checkCallbacks(now)
-		if callbacks != nil {
-			n.bt.ns.Operation(func() {
-				for _, cb := range callbacks {
-					cb()
-				}
-			})
-		}
+	if callbacks != nil {
+		n.bt.ns.Operation(func() {
+			for _, cb := range callbacks {
+				cb()
+			}
+		})
 	}
 	return pos
 }
