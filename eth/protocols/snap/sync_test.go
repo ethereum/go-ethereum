@@ -1493,7 +1493,7 @@ func makeAccountTrieWithStorage(accounts, slots int, code, boundary bool) (*trie
 func makeStorageTrieWithSeed(n, seed uint64, db *trie.Database) (*trie.Trie, entrySlice) {
 	trie, _ := trie.New(common.Hash{}, db)
 	var entries entrySlice
-	for i := uint64(1); i <= uint64(n); i++ {
+	for i := uint64(1); i <= n; i++ {
 		// store 'x' at slot 'x'
 		slotValue := key32(i + seed)
 		rlpSlotValue, _ := rlp.EncodeToBytes(common.TrimLeftZeroes(slotValue[:]))
