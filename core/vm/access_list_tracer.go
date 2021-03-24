@@ -22,11 +22,19 @@ import (
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/types"
+	"github.com/ethereum/go-ethereum/log"
 )
 
 type accessList struct {
 	addresses map[common.Address]int
 	slots     []map[common.Hash]struct{}
+}
+
+// newAccessList creates a new accessList.
+func newAccessList() *accessList {
+	return &accessList{
+		addresses: make(map[common.Address]int),
+	}
 }
 
 func (al *accessList) AddAddress(address common.Address) {
@@ -61,7 +69,7 @@ func (al *accessList) DeleteAddressIfNoSlotSet(address common.Address) {
 
 // Copy creates an independent copy of an accessList.
 func (a *accessList) Copy() *accessList {
-	cp := new(accessList)
+	cp := newAccessList()
 	for k, v := range a.addresses {
 		cp.addresses[k] = v
 	}
@@ -82,7 +90,7 @@ func (a *accessList) ToAccessList() *types.AccessList {
 		var tuple types.AccessTuple
 		tuple.Address = addr
 		// addresses without slots are saved as -1
-		if idx > 0 {
+		if idx >= 0 {
 			keys := make([]common.Hash, 0, len(a.slots[idx]))
 			for key := range a.slots[idx] {
 				keys = append(keys, key)
@@ -96,14 +104,15 @@ func (a *accessList) ToAccessList() *types.AccessList {
 }
 
 type AccessListTracer struct {
-	list accessList
-	err  error
+	list *accessList
 }
 
 func (a *AccessListTracer) CaptureStart(env *EVM, from common.Address, to common.Address, create bool, input []byte, gas uint64, value *big.Int) {
+	a.list = newAccessList()
 }
 
 func (a *AccessListTracer) CaptureState(env *EVM, pc uint64, op OpCode, gas, cost uint64, scope *ScopeContext, rData []byte, depth int, err error) {
+	log.Trace("Capturing State", "op", op)
 	stack := scope.Stack
 	if (op == SLOAD || op == SSTORE) && stack.len() >= 1 {
 		slot := common.Hash(stack.data[stack.len()-1].Bytes32())

@@ -36,6 +36,7 @@ import (
 	"github.com/ethereum/go-ethereum/ethdb"
 	"github.com/ethereum/go-ethereum/event"
 	"github.com/ethereum/go-ethereum/internal/ethapi"
+	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/miner"
 	"github.com/ethereum/go-ethereum/params"
 	"github.com/ethereum/go-ethereum/rpc"
@@ -355,13 +356,16 @@ func (b *EthAPIBackend) AccessList(ctx context.Context, block *types.Block, reex
 	if err != nil {
 		return nil, err
 	}
-	args.SetDefaults(ctx, b)
+	if err := args.SetDefaults(ctx, b); err != nil {
+		return nil, err
+	}
 	var (
 		gas        uint64
 		accessList = args.AccessList
 		msg        types.Message
 	)
 	for i := 0; i < 10; i++ {
+		log.Trace("Creating Access list", "accesslist", accessList)
 		// Copy the original db so we don't modify it
 		statedb := db.Copy()
 		// If we have an accesslist, use it
@@ -373,7 +377,7 @@ func (b *EthAPIBackend) AccessList(ctx context.Context, block *types.Block, reex
 		// Apply the transaction
 		context := core.NewEVMBlockContext(block.Header(), b.eth.blockchain, nil)
 		tracer := new(vm.AccessListTracer)
-		config := vm.Config{Tracer: tracer}
+		config := vm.Config{Tracer: tracer, Debug: true}
 		vmenv := vm.NewEVM(context, core.NewEVMTxContext(msg), statedb, b.eth.blockchain.Config(), config)
 		res, err := core.ApplyMessage(vmenv, msg, new(core.GasPool).AddGas(msg.Gas()))
 		if err != nil {
