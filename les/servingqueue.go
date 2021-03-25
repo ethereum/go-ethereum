@@ -123,7 +123,7 @@ func (t *servingTask) waitOrStop() bool {
 // newServingQueue returns a new servingQueue
 func newServingQueue(suspendBias int64, utilTarget float64) *servingQueue {
 	sq := &servingQueue{
-		queue:          prque.New(nil),
+		queue:          prque.NewWrapAround(nil),
 		suspendBias:    suspendBias,
 		queueAddCh:     make(chan *servingTask, 100),
 		queueBestCh:    make(chan *servingTask),
@@ -279,7 +279,7 @@ func (sq *servingQueue) updateRecentTime() {
 func (sq *servingQueue) addTask(task *servingTask) {
 	if sq.best == nil {
 		sq.best = task
-	} else if task.priority > sq.best.priority {
+	} else if task.priority-sq.best.priority > 0 {
 		sq.queue.Push(sq.best, sq.best.priority)
 		sq.best = task
 	} else {
