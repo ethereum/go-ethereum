@@ -351,7 +351,7 @@ func (b *EthAPIBackend) StateAtTransaction(ctx context.Context, block *types.Blo
 // AccessList creates an access list for the given transaction.
 // If the accesslist creation fails an error is returned.
 // If the transaction itself fails, an vmErr is returned.
-func (b *EthAPIBackend) AccessList(ctx context.Context, block *types.Block, reexec uint64, args *ethapi.SendTxArgs) (acl *types.AccessList, gasUsed uint64, vmErr error, err error) {
+func (b *EthAPIBackend) AccessList(ctx context.Context, block *types.Block, reexec uint64, args *ethapi.SendTxArgs) (acl types.AccessList, gasUsed uint64, vmErr error, err error) {
 	if block == nil {
 		block = b.CurrentBlock()
 	}
@@ -368,19 +368,17 @@ func (b *EthAPIBackend) AccessList(ctx context.Context, block *types.Block, reex
 	}
 	var (
 		gas        uint64
-		accessList = args.AccessList
+		accessList types.AccessList
 		msg        types.Message
 	)
+	if args.AccessList != nil {
+		accessList = *args.AccessList
+	}
 	for i := 0; i < 10; i++ {
 		log.Trace("Creating Access list", "accesslist", accessList)
 		// Copy the original db so we don't modify it
 		statedb := db.Copy()
-		// If we have an accesslist, use it
-		if accessList != nil {
-			msg = types.NewMessage(args.From, args.To, uint64(*args.Nonce), args.Value.ToInt(), uint64(*args.Gas), args.GasPrice.ToInt(), *args.Data, *accessList, false)
-		} else {
-			msg = types.NewMessage(args.From, args.To, uint64(*args.Nonce), args.Value.ToInt(), uint64(*args.Gas), args.GasPrice.ToInt(), *args.Data, nil, false)
-		}
+		msg = types.NewMessage(args.From, args.To, uint64(*args.Nonce), args.Value.ToInt(), uint64(*args.Gas), args.GasPrice.ToInt(), *args.Data, accessList, false)
 		// Apply the transaction
 		context := core.NewEVMBlockContext(block.Header(), b.eth.blockchain, nil)
 		tracer := vm.NewAccessListTracer(accessList)

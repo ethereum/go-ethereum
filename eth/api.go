@@ -572,7 +572,7 @@ func (api *PublicDebugAPI) CreateAccessList(blockNrOrHash rpc.BlockNumberOrHash,
 	if err != nil {
 		return nil, err
 	}
-	result := &AccessListResult{Accesslist: acl, GasUsed: hexutil.Uint64(gasUsed)}
+	result := &AccessListResult{Accesslist: &acl, GasUsed: hexutil.Uint64(gasUsed)}
 	if vmerr != nil {
 		result.Error = vmerr.Error()
 	}

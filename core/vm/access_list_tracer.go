@@ -85,8 +85,8 @@ func (a *accessList) Copy() *accessList {
 	return cp
 }
 
-func (a *accessList) ToAccessList() *types.AccessList {
-	acl := make([]types.AccessTuple, 0, len(a.addresses))
+func (a *accessList) ToAccessList() types.AccessList {
+	acl := make(types.AccessList, 0, len(a.addresses))
 	for addr, idx := range a.addresses {
 		var tuple types.AccessTuple
 		tuple.Address = addr
@@ -100,22 +100,19 @@ func (a *accessList) ToAccessList() *types.AccessList {
 		}
 		acl = append(acl, tuple)
 	}
-	cast := types.AccessList(acl)
-	return &cast
+	return acl
 }
 
 type AccessListTracer struct {
 	list *accessList
 }
 
-func NewAccessListTracer(acl *types.AccessList) *AccessListTracer {
+func NewAccessListTracer(acl types.AccessList) *AccessListTracer {
 	list := newAccessList()
-	if acl != nil {
-		for _, al := range *acl {
-			list.AddAddress(al.Address)
-			for _, slot := range al.StorageKeys {
-				list.AddSlot(al.Address, slot)
-			}
+	for _, al := range acl {
+		list.AddAddress(al.Address)
+		for _, slot := range al.StorageKeys {
+			list.AddSlot(al.Address, slot)
 		}
 	}
 	return &AccessListTracer{
@@ -150,11 +147,11 @@ func (*AccessListTracer) CaptureFault(env *EVM, pc uint64, op OpCode, gas, cost 
 
 func (*AccessListTracer) CaptureEnd(output []byte, gasUsed uint64, t time.Duration, err error) {}
 
-func (a *AccessListTracer) GetAccessList() *types.AccessList {
+func (a *AccessListTracer) GetAccessList() types.AccessList {
 	return a.list.ToAccessList()
 }
 
-func (a *AccessListTracer) GetUnpreparedAccessList(sender common.Address, dst *common.Address, precompiles []common.Address) *types.AccessList {
+func (a *AccessListTracer) GetUnpreparedAccessList(sender common.Address, dst *common.Address, precompiles []common.Address) types.AccessList {
 	copy := a.list.Copy()
 	copy.DeleteAddressIfNoSlotSet(sender)
 	if dst != nil {
