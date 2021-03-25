@@ -118,9 +118,14 @@ type balance struct {
 	posExp, negExp utils.ValueExpirer
 }
 
-// value returns the value of balance at a given timestamp.
-func (b balance) value(now mclock.AbsTime) (uint64, uint64) {
-	return b.pos.Value(b.posExp.LogOffset(now)), b.neg.Value(b.negExp.LogOffset(now))
+// posValue returns the value of positive balance at a given timestamp.
+func (b balance) posValue(now mclock.AbsTime) uint64 {
+	return b.pos.Value(b.posExp.LogOffset(now))
+}
+
+// negValue returns the value of negative balance at a given timestamp.
+func (b balance) negValue(now mclock.AbsTime) uint64 {
+	return b.neg.Value(b.negExp.LogOffset(now))
 }
 
 // add adds the value of a given amount to the balance. The original value and
@@ -182,7 +187,7 @@ func (n *nodeBalance) GetBalance() (uint64, uint64) {
 
 	now := n.bt.clock.Now()
 	n.updateBalance(now)
-	return n.balance.value(now)
+	return n.balance.posValue(now), n.balance.negValue(now)
 }
 
 // GetRawBalance returns the current positive and negative balance
@@ -282,7 +287,7 @@ func (n *nodeBalance) RequestServed(cost uint64) (newBalance uint64) {
 		posCost := -int64(fcost * n.posFactor.RequestFactor)
 		if posCost == 0 {
 			fcost = 0
-			newBalance, _ = n.balance.value(now)
+			newBalance = n.balance.posValue(now)
 		} else {
 			var net int64
 			_, newBalance, net, _ = n.balance.addPosValue(now, posCost, true, false)
@@ -597,11 +602,11 @@ func (n *nodeBalance) setCapacity(capacity uint64) {
 // first to disconnect. Positive balance translates to positive priority. If positive
 // balance is zero then negative balance translates to a negative priority.
 func (n *nodeBalance) balanceToPriority(now mclock.AbsTime, b balance, capacity uint64) int64 {
-	pos, neg := b.value(now)
+	pos := b.posValue(now)
 	if pos > 0 {
 		return int64(pos / capacity)
 	}
-	return -int64(neg)
+	return -int64(b.negValue(now))
 }
 
 // priorityToBalance converts a target priority to a requested balance value.
@@ -649,7 +654,7 @@ func (n *nodeBalance) reducedBalance(b balance, start mclock.AbsTime, dt time.Du
 func (n *nodeBalance) timeUntil(priority int64) (time.Duration, bool) {
 	var (
 		now                  = n.bt.clock.Now()
-		pos, neg             = n.balance.value(now)
+		pos                  = n.balance.posValue(now)
 		targetPos, targetNeg = n.priorityToBalance(priority, n.capacity)
 		diffTime             float64
 	)
@@ -672,6 +677,7 @@ func (n *nodeBalance) timeUntil(priority int64) (time.Duration, bool) {
 			return 0, true
 		}
 	}
+	neg := n.balance.negValue(now)
 	if targetNeg > neg {
 		timePrice := n.negFactor.connectionPrice(n.capacity, 0)
 		if timePrice < 1e-100 {
