@@ -642,7 +642,8 @@ func (n *nodeBalance) reducedBalance(b balance, start mclock.AbsTime, dt time.Du
 
 // timeUntil calculates the remaining time needed to reach a given priority level
 // assuming that no requests are processed until then. If the given level is never
-// reached then (0, false) is returned.
+// reached then (0, false) is returned. If it has already been reached then (0, true)
+// is returned.
 // Note: the function assumes that the balance has been recently updated and
 // calculates the time starting from the last update.
 func (n *nodeBalance) timeUntil(priority int64) (time.Duration, bool) {
@@ -659,7 +660,7 @@ func (n *nodeBalance) timeUntil(priority int64) (time.Duration, bool) {
 		}
 		if targetPos > 0 {
 			if targetPos > pos {
-				return 0, false
+				return 0, true
 			}
 			diffTime = float64(pos-targetPos) / timePrice
 			return time.Duration(diffTime), true
@@ -668,7 +669,7 @@ func (n *nodeBalance) timeUntil(priority int64) (time.Duration, bool) {
 		}
 	} else {
 		if targetPos > 0 {
-			return 0, false
+			return 0, true
 		}
 	}
 	if targetNeg > neg {
