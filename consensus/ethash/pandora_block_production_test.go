@@ -239,6 +239,7 @@ func TestCreateBlockByPandoraAndVanguard(t *testing.T) {
 				submittedWork.nonce,
 				submittedWork.hash,
 				submittedWork.mixDigest,
+				submittedWork.blsSeal,
 			)
 
 			//mixDigest := submittedWork.mixDigest

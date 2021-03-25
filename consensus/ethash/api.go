@@ -18,7 +18,6 @@ package ethash
 
 import (
 	"errors"
-
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/ethereum/go-ethereum/core/types"
@@ -63,7 +62,7 @@ func (api *API) GetWork() ([4]string, error) {
 // SubmitWork can be used by external miner to submit their POW solution.
 // It returns an indication if the work was accepted.
 // Note either an invalid solution, a stale work a non-existent work will return false.
-func (api *API) SubmitWork(nonce types.BlockNonce, hash, digest common.Hash) bool {
+func (api *API) SubmitWork(nonce types.BlockNonce, hash, digest common.Hash, signature *BlsSignatureBytes) bool {
 	if api.ethash.remote == nil {
 		return false
 	}
@@ -74,6 +73,7 @@ func (api *API) SubmitWork(nonce types.BlockNonce, hash, digest common.Hash) boo
 		nonce:     nonce,
 		mixDigest: digest,
 		hash:      hash,
+		blsSeal:   signature,
 		errc:      errc,
 	}:
 	case <-api.ethash.remote.exitCh:
