@@ -21,18 +21,8 @@ package main
 
 import (
 	"crypto/ecdsa"
-	crand "crypto/rand"
 	"encoding/json"
 	"fmt"
-	"io/ioutil"
-	"math/big"
-	"math/rand"
-	"net/http"
-	"os"
-	"path/filepath"
-	"time"
-	vbls "vuvuzela.io/crypto/bls"
-
 	"github.com/ethereum/go-ethereum/accounts/keystore"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/fdlimit"
@@ -51,8 +41,16 @@ import (
 	"github.com/ethereum/go-ethereum/p2p/enode"
 	"github.com/ethereum/go-ethereum/params"
 	"github.com/ethereum/go-ethereum/rlp"
+	common2 "github.com/silesiacoin/bls/common"
 	"github.com/silesiacoin/bls/herumi"
+	"io/ioutil"
+	"math/big"
+	"math/rand"
+	"net/http"
 	"net/http/httptest"
+	"os"
+	"path/filepath"
+	"time"
 )
 
 const (
@@ -71,12 +69,17 @@ func main() {
 	// Pre-generate the ethash mining DAG so we don't race
 	ethash.MakeDataset(1, filepath.Join(os.Getenv("HOME"), ".ethash"))
 
-	sealers := [32]*vbls.PublicKey{}
-	validatorPrivateList := [32]*vbls.PrivateKey{}
+	sealers := [32]common2.PublicKey{}
+	validatorPrivateList := [32]common2.SecretKey{}
 
 	for i := 0; i < len(sealers); i++ {
-		randomReader := crand.Reader
-		pubKey, privKey, err := herumi.GenerateKey(randomReader)
+		privKey, err := herumi.RandKey()
+
+		if nil != err {
+			panic(fmt.Sprintf("Error during creation of herumi keys: %s", err.Error()))
+		}
+
+		pubKey := privKey.PublicKey()
 
 		if nil != err {
 			panic(fmt.Sprintf("Error during creation of herumi keys: %s", err.Error()))
@@ -165,7 +168,7 @@ func main() {
 
 // makeGenesis creates a custom Ethash genesis block based on some pre-defined
 // faucet accounts.
-func makeGenesis(faucets []*ecdsa.PrivateKey, sealers [32]*vbls.PublicKey) *core.Genesis {
+func makeGenesis(faucets []*ecdsa.PrivateKey, sealers [32]common2.PublicKey) *core.Genesis {
 	genesis := core.DefaultPandoraGenesisBlock()
 	genesis.Difficulty = params.MinimumDifficulty
 	genesis.GasLimit = 25000000
@@ -217,7 +220,7 @@ func makeGenesis(faucets []*ecdsa.PrivateKey, sealers [32]*vbls.PublicKey) *core
 func makeMiner(
 	genesis *core.Genesis,
 	notify []string,
-	validators [32]*vbls.PublicKey,
+	validators [32]common2.PublicKey,
 ) (*node.Node, *eth.Ethereum, error) {
 	// Define the basic configurations for the Ethereum node
 	datadir, _ := ioutil.TempDir("", "")
@@ -273,8 +276,8 @@ func makeMiner(
 
 func makeSealerServer(
 	genesis *core.Genesis,
-	validators [32]*vbls.PublicKey,
-	privateKeys [32]*vbls.PrivateKey,
+	validators [32]common2.PublicKey,
+	privateKeys [32]common2.SecretKey,
 ) (url string, err error) {
 	vanguardServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, req *http.Request) {
 		blob, err := ioutil.ReadAll(req.Body)
@@ -305,8 +308,8 @@ func makeSealerServer(
 
 func makeRemoteSealer(
 	stack *node.Node,
-	validators [32]*vbls.PublicKey,
-	privateKeys [32]*vbls.PrivateKey,
+	validators [32]common2.PublicKey,
+	privateKeys [32]common2.SecretKey,
 	genesisInfo *core.Genesis,
 	nodeNumber int,
 ) {
@@ -372,13 +375,11 @@ func makeRemoteSealer(
 			fmt.Printf("\n extracted proposer index %d \n", extractedProposerIndex)
 		}
 
-		signature := herumi.Sign(privateKeys[extractedProposerIndex], signatureBytes)
-		compressedSignature := signature.Compress()
-		messages := make([][]byte, 0)
-		messages = append(messages, signatureBytes)
+		signature := privateKeys[extractedProposerIndex].Sign(signatureBytes)
 
 		// Cast to []byte from [32]byte. This should prevent cropping
-		header.MixDigest = common.BytesToHash(compressedSignature[:])
+		blsSignatureBytes := signature.Marshal()
+		header.MixDigest = common.BytesToHash(blsSignatureBytes)
 
 		var response bool
 
@@ -387,7 +388,7 @@ func makeRemoteSealer(
 			"eth_submitWork",
 			header.Nonce,
 			common.HexToHash(workInfo[0]),
-			header.MixDigest.Hex(),
+			blsSignatureBytes,
 		)
 
 		if nil != err {

@@ -8,9 +8,9 @@ import (
 	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/rlp"
+	common2 "github.com/silesiacoin/bls/common"
 	"github.com/silesiacoin/bls/herumi"
 	"time"
-	vbls "vuvuzela.io/crypto/bls"
 )
 
 const (
@@ -43,7 +43,7 @@ type MinimalEpochConsensusInfo struct {
 	// Epoch number
 	Epoch uint64 `json:"epoch"`
 	// Validators list 32 public bls keys. slot(n) in Epoch is represented by index(n) in MinimalConsensusInfo
-	ValidatorsList [32]*vbls.PublicKey `json:"validatorList"`
+	ValidatorsList [32]common2.PublicKey `json:"validatorList"`
 	// Unix timestamp of consensus start. This will be used to extract time slot
 	EpochTimeStart time.Time
 
@@ -188,7 +188,7 @@ func NewMinimalConsensusInfo(epoch uint64) (consensusInfo interface{}) {
 	return
 }
 
-func (pandoraMode *MinimalEpochConsensusInfo) AssignValidators(validatorsList [32]*vbls.PublicKey) {
+func (pandoraMode *MinimalEpochConsensusInfo) AssignValidators(validatorsList [32]common2.PublicKey) {
 	pandoraMode.ValidatorsList = validatorsList
 	return
 }
@@ -310,16 +310,17 @@ func (ethash *Ethash) verifyPandoraHeader(header *types.Header) (err error) {
 	}
 
 	publicKey := minimalConsensus.ValidatorsList[extractedProposerIndex]
-	mixDigest := header.MixDigest
+	blsSginatureBytes := BlsSignatureBytes{}
+	copy(blsSginatureBytes[:], header.Extra[len(header.Extra)-signatureSize:])
+	signature, err := herumi.SignatureFromBytes(blsSginatureBytes[:])
+
+	if nil != err {
+		return
+	}
+
 	// Check if signature of header is valid
-	messages := make([][]byte, 0)
 	sealHash := ethash.SealHash(header)
-	messages = append(messages, sealHash.Bytes())
-	signature := [32]byte{}
-	copy(signature[:], mixDigest.Bytes())
-	pubKeySet := make([]*vbls.PublicKey, 0)
-	pubKeySet = append(pubKeySet, publicKey)
-	signatureValid := herumi.VerifyCompressed(pubKeySet, messages, &signature)
+	signatureValid := signature.Verify(publicKey, sealHash[:])
 
 	// Seal signature verification has higher priority than integrity of the header itself
 	// TODO: this should be somehow distributed to slashing.
@@ -328,8 +329,8 @@ func (ethash *Ethash) verifyPandoraHeader(header *types.Header) (err error) {
 	// In my opinion if somebody looses the staked key he already lost his usefulness to the network
 	if !signatureValid {
 		err = fmt.Errorf(
-			"invalid mixDigest: %s in header hash: %s with sealHash: %s",
-			header.MixDigest.String(),
+			"invalid signature: %s in header hash: %s with sealHash: %s",
+			signature.Marshal(),
 			header.Hash().String(),
 			sealHash.String(),
 		)
@@ -357,6 +358,9 @@ func (ethash *Ethash) verifyPandoraHeader(header *types.Header) (err error) {
 	if nil != err {
 		return
 	}
+
+	// Add signature to expected extraData
+	copy(expectedRlp[:], signature.Marshal())
 
 	if !bytes.Equal(expectedRlp, header.Extra) {
 		err = fmt.Errorf("invalid extraData field, expected: %v, got %v", expectedExtra, extraData)
