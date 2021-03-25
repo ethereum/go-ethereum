@@ -493,6 +493,7 @@ func (pp *priorityPool) tryActivate() []capUpdate {
 		pp.enforceLimits()
 		if c.capacity > 0 {
 			commit = true
+			c.bias = 0
 		} else {
 			break
 		}
