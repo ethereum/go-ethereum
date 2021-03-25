@@ -20,6 +20,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"strconv"
 	"time"
 
 	"github.com/ethereum/go-ethereum/cmd/utils"
@@ -161,10 +162,10 @@ WARNING: This is a low-level operation which may cause database corruption!`,
 WARNING: This is a low-level operation which may cause database corruption!`,
 	}
 	dbGetSlotsCmd = cli.Command{
-		Action:    utils.MigrateFlags(dbGetSlots),
-		Name:      "getslots",
+		Action:    utils.MigrateFlags(dbDumpTrie),
+		Name:      "dumptrie",
 		Usage:     "Show the storage key/values of a given storage trie",
-		ArgsUsage: "<hex-encoded storage trie root>",
+		ArgsUsage: "<hex-encoded storage trie root> <hex-encoded start (optional)> <int max elements (optional)>",
 		Flags: []cli.Flag{
 			utils.DataDirFlag,
 			utils.SyncModeFlag,
@@ -399,9 +400,9 @@ func dbPut(ctx *cli.Context) error {
 	return db.Put(key, value)
 }
 
-// dbGetSlots shows the key-value slots of a given storage trie
-func dbGetSlots(ctx *cli.Context) error {
-	if ctx.NArg() != 1 {
+// dbDumpTrie shows the key-value slots of a given storage trie
+func dbDumpTrie(ctx *cli.Context) error {
+	if ctx.NArg() < 1 {
 		return fmt.Errorf("required arguments: %v", ctx.Command.ArgsUsage)
 	}
 	stack, _ := makeConfigNode(ctx)
@@ -409,23 +410,42 @@ func dbGetSlots(ctx *cli.Context) error {
 
 	db := utils.MakeChainDatabase(ctx, stack, true)
 	defer db.Close()
-
-	key, err := hexutil.Decode(ctx.Args().Get(0))
-	if err != nil {
-		log.Info("Could not decode the key", "error", err)
+	var (
+		root  []byte
+		start []byte
+		max   = int64(-1)
+		err   error
+	)
+	if root, err = hexutil.Decode(ctx.Args().Get(0)); err != nil {
+		log.Info("Could not decode the root", "error", err)
 		return err
 	}
-	stRoot := common.BytesToHash(key)
-	stTrie, err := trie.New(stRoot, trie.NewDatabase(db))
+	stRoot := common.BytesToHash(root)
+	if ctx.NArg() >= 2 {
+		if start, err = hexutil.Decode(ctx.Args().Get(1)); err != nil {
+			log.Info("Could not decode the seek position", "error", err)
+			return err
+		}
+	}
+	if ctx.NArg() >= 3 {
+		if max, err = strconv.ParseInt(ctx.Args().Get(2), 10, 64); err != nil {
+			log.Info("Could not decode the max count", "error", err)
+			return err
+		}
+	}
+	theTrie, err := trie.New(stRoot, trie.NewDatabase(db))
 	if err != nil {
 		return err
 	}
-	var count int
-	it := trie.NewIterator(stTrie.NodeIterator(nil))
+	var count int64
+	it := trie.NewIterator(theTrie.NodeIterator(start))
 	for it.Next() {
+		if max > 0 && count == max {
+			fmt.Printf("Exiting after %d values\n", count)
+			break
+		}
 		fmt.Printf("  %d. key %#x: %#x\n", count, it.Key, it.Value)
 		count++
 	}
-	fmt.Printf("\n%d slots found.\n", count)
 	return it.Err
 }
