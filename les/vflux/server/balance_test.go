@@ -24,6 +24,7 @@ import (
 	"time"
 
 	"github.com/ethereum/go-ethereum/common/mclock"
+	"github.com/ethereum/go-ethereum/ethdb"
 	"github.com/ethereum/go-ethereum/ethdb/memorydb"
 	"github.com/ethereum/go-ethereum/les/utils"
 	"github.com/ethereum/go-ethereum/p2p/enode"
@@ -31,53 +32,58 @@ import (
 	"github.com/ethereum/go-ethereum/p2p/nodestate"
 )
 
-var (
-	btClientField = testSetup.NewField("clientField", reflect.TypeOf(balanceTestClient{}))
-	btTestSetup   = newBalanceTrackerSetup(testSetup)
-)
-
-func init() {
-	btTestSetup.connect(btClientField, ppTestSetup.capacityField)
-}
-
 type zeroExpirer struct{}
 
 func (z zeroExpirer) SetRate(now mclock.AbsTime, rate float64)                 {}
 func (z zeroExpirer) SetLogOffset(now mclock.AbsTime, logOffset utils.Fixed64) {}
 func (z zeroExpirer) LogOffset(now mclock.AbsTime) utils.Fixed64               { return 0 }
 
+type balanceTestClient struct{}
+
+func (client balanceTestClient) FreeClientId() string { return "" }
+
 type balanceTestSetup struct {
 	clock *mclock.Simulated
+	db    ethdb.KeyValueStore
 	ns    *nodestate.NodeStateMachine
+	setup *serverSetup
 	bt    *balanceTracker
 }
 
-func newBalanceTestSetup() *balanceTestSetup {
+func newBalanceTestSetup(db ethdb.KeyValueStore, posExp, negExp utils.ValueExpirer) *balanceTestSetup {
+	// Initialize and customize the setup for the balance testing
 	clock := &mclock.Simulated{}
-	ns := nodestate.NewNodeStateMachine(nil, nil, clock, testSetup)
-	db := memorydb.New()
-	bt := newBalanceTracker(ns, btTestSetup, db, clock, zeroExpirer{}, zeroExpirer{})
+	setup := newServerSetup()
+	setup.clientField = setup.setup.NewField("balancTestClient", reflect.TypeOf(balanceTestClient{}))
+
+	ns := nodestate.NewNodeStateMachine(nil, nil, clock, setup.setup)
+	if posExp == nil {
+		posExp = zeroExpirer{}
+	}
+	if negExp == nil {
+		negExp = zeroExpirer{}
+	}
+	if db == nil {
+		db = memorydb.New()
+	}
+	bt := newBalanceTracker(ns, setup, db, clock, posExp, negExp)
 	ns.Start()
 	return &balanceTestSetup{
 		clock: clock,
+		db:    db,
 		ns:    ns,
+		setup: setup,
 		bt:    bt,
 	}
 }
 
-type balanceTestClient struct{}
-
-func (btc balanceTestClient) FreeClientId() string {
-	return ""
-}
-
 func (b *balanceTestSetup) newNode(capacity uint64) *nodeBalance {
 	node := enode.SignNull(&enr.Record{}, enode.ID{})
-	b.ns.SetField(node, btTestSetup.clientField, balanceTestClient{})
+	b.ns.SetField(node, b.setup.clientField, balanceTestClient{})
 	if capacity != 0 {
-		b.ns.SetField(node, ppTestSetup.capacityField, capacity)
+		b.ns.SetField(node, b.setup.capacityField, capacity)
 	}
-	n, _ := b.ns.GetField(node, btTestSetup.balanceField).(*nodeBalance)
+	n, _ := b.ns.GetField(node, b.setup.balanceField).(*nodeBalance)
 	return n
 }
 
@@ -101,7 +107,7 @@ func (b *balanceTestSetup) stop() {
 }
 
 func TestAddBalance(t *testing.T) {
-	b := newBalanceTestSetup()
+	b := newBalanceTestSetup(nil, nil, nil)
 	defer b.stop()
 
 	node := b.newNode(1000)
@@ -137,7 +143,7 @@ func TestAddBalance(t *testing.T) {
 }
 
 func TestSetBalance(t *testing.T) {
-	b := newBalanceTestSetup()
+	b := newBalanceTestSetup(nil, nil, nil)
 	defer b.stop()
 	node := b.newNode(1000)
 
@@ -161,11 +167,10 @@ func TestSetBalance(t *testing.T) {
 }
 
 func TestBalanceTimeCost(t *testing.T) {
-	b := newBalanceTestSetup()
+	b := newBalanceTestSetup(nil, nil, nil)
 	defer b.stop()
 	node := b.newNode(1000)
 
-	b.ns.SetField(node.node, ppTestSetup.capacityField, uint64(1))
 	node.SetPriceFactors(PriceFactors{1, 0, 1}, PriceFactors{1, 0, 1})
 	b.setBalance(node, uint64(time.Minute), 0) // 1 minute time allowance
 
@@ -202,12 +207,11 @@ func TestBalanceTimeCost(t *testing.T) {
 }
 
 func TestBalanceReqCost(t *testing.T) {
-	b := newBalanceTestSetup()
+	b := newBalanceTestSetup(nil, nil, nil)
 	defer b.stop()
 	node := b.newNode(1000)
 	node.SetPriceFactors(PriceFactors{1, 0, 1}, PriceFactors{1, 0, 1})
 
-	b.ns.SetField(node.node, ppTestSetup.capacityField, uint64(1))
 	b.setBalance(node, uint64(time.Minute), 0) // 1 minute time serving time allowance
 	var inputs = []struct {
 		reqCost uint64
@@ -231,7 +235,7 @@ func TestBalanceReqCost(t *testing.T) {
 }
 
 func TestBalanceToPriority(t *testing.T) {
-	b := newBalanceTestSetup()
+	b := newBalanceTestSetup(nil, nil, nil)
 	defer b.stop()
 	node := b.newNode(1000)
 	node.SetPriceFactors(PriceFactors{1, 0, 1}, PriceFactors{1, 0, 1})
@@ -256,7 +260,7 @@ func TestBalanceToPriority(t *testing.T) {
 }
 
 func TestEstimatedPriority(t *testing.T) {
-	b := newBalanceTestSetup()
+	b := newBalanceTestSetup(nil, nil, nil)
 	defer b.stop()
 	node := b.newNode(1000000000)
 	node.SetPriceFactors(PriceFactors{1, 0, 1}, PriceFactors{1, 0, 1})
@@ -295,7 +299,7 @@ func TestEstimatedPriority(t *testing.T) {
 }
 
 func TestPostiveBalanceCounting(t *testing.T) {
-	b := newBalanceTestSetup()
+	b := newBalanceTestSetup(nil, nil, nil)
 	defer b.stop()
 
 	var nodes []*nodeBalance
@@ -319,7 +323,7 @@ func TestPostiveBalanceCounting(t *testing.T) {
 	// Change client status
 	for i := 0; i < 100; i += 1 {
 		if rand.Intn(2) == 0 {
-			b.ns.SetField(nodes[i].node, ppTestSetup.capacityField, uint64(1))
+			b.ns.SetField(nodes[i].node, b.setup.capacityField, uint64(1))
 		}
 	}
 	if b.bt.TotalTokenAmount() != sum {
@@ -327,7 +331,7 @@ func TestPostiveBalanceCounting(t *testing.T) {
 	}
 	for i := 0; i < 100; i += 1 {
 		if rand.Intn(2) == 0 {
-			b.ns.SetField(nodes[i].node, ppTestSetup.capacityField, uint64(1))
+			b.ns.SetField(nodes[i].node, b.setup.capacityField, uint64(1))
 		}
 	}
 	if b.bt.TotalTokenAmount() != sum {
@@ -336,7 +340,7 @@ func TestPostiveBalanceCounting(t *testing.T) {
 }
 
 func TestCallbackChecking(t *testing.T) {
-	b := newBalanceTestSetup()
+	b := newBalanceTestSetup(nil, nil, nil)
 	defer b.stop()
 	node := b.newNode(1000000)
 	node.SetPriceFactors(PriceFactors{1, 0, 1}, PriceFactors{1, 0, 1})
@@ -359,11 +363,10 @@ func TestCallbackChecking(t *testing.T) {
 }
 
 func TestCallback(t *testing.T) {
-	b := newBalanceTestSetup()
+	b := newBalanceTestSetup(nil, nil, nil)
 	defer b.stop()
 	node := b.newNode(1000)
 	node.SetPriceFactors(PriceFactors{1, 0, 1}, PriceFactors{1, 0, 1})
-	b.ns.SetField(node.node, ppTestSetup.capacityField, uint64(1))
 
 	callCh := make(chan struct{}, 1)
 	b.setBalance(node, uint64(time.Minute), 0)
@@ -389,23 +392,14 @@ func TestCallback(t *testing.T) {
 }
 
 func TestBalancePersistence(t *testing.T) {
-	clock := &mclock.Simulated{}
-	ns := nodestate.NewNodeStateMachine(nil, nil, clock, testSetup)
-	db := memorydb.New()
 	posExp := &utils.Expirer{}
 	negExp := &utils.Expirer{}
-	posExp.SetRate(clock.Now(), math.Log(2)/float64(time.Hour*2)) // halves every two hours
-	negExp.SetRate(clock.Now(), math.Log(2)/float64(time.Hour))   // halves every hour
-	bt := newBalanceTracker(ns, btTestSetup, db, clock, posExp, negExp)
-	ns.Start()
-	bts := &balanceTestSetup{
-		clock: clock,
-		ns:    ns,
-		bt:    bt,
-	}
-	var nb *nodeBalance
-	exp := func(expPos, expNeg uint64) {
-		pos, neg := nb.GetBalance()
+	posExp.SetRate(0, math.Log(2)/float64(time.Hour*2)) // halves every two hours
+	negExp.SetRate(0, math.Log(2)/float64(time.Hour))   // halves every hour
+	setup := newBalanceTestSetup(nil, posExp, negExp)
+
+	exp := func(balance *nodeBalance, expPos, expNeg uint64) {
+		pos, neg := balance.GetBalance()
 		if pos != expPos {
 			t.Fatalf("Positive balance incorrect, want %v, got %v", expPos, pos)
 		}
@@ -414,44 +408,32 @@ func TestBalancePersistence(t *testing.T) {
 		}
 	}
 	expTotal := func(expTotal uint64) {
-		total := bt.TotalTokenAmount()
+		total := setup.bt.TotalTokenAmount()
 		if total != expTotal {
 			t.Fatalf("Total token amount incorrect, want %v, got %v", expTotal, total)
 		}
 	}
 
 	expTotal(0)
-	nb = bts.newNode(0)
+	balance := setup.newNode(0)
 	expTotal(0)
-	bts.setBalance(nb, 16000000000, 16000000000)
-	exp(16000000000, 16000000000)
+	setup.setBalance(balance, 16000000000, 16000000000)
+	exp(balance, 16000000000, 16000000000)
 	expTotal(16000000000)
-	clock.Run(time.Hour * 2)
-	exp(8000000000, 4000000000)
-	expTotal(8000000000)
-	bt.stop()
-	ns.Stop()
 
-	clock = &mclock.Simulated{}
-	ns = nodestate.NewNodeStateMachine(nil, nil, clock, testSetup)
-	posExp = &utils.Expirer{}
-	negExp = &utils.Expirer{}
-	posExp.SetRate(clock.Now(), math.Log(2)/float64(time.Hour*2)) // halves every two hours
-	negExp.SetRate(clock.Now(), math.Log(2)/float64(time.Hour))   // halves every hour
-	bt = newBalanceTracker(ns, btTestSetup, db, clock, posExp, negExp)
-	ns.Start()
-	bts = &balanceTestSetup{
-		clock: clock,
-		ns:    ns,
-		bt:    bt,
-	}
+	setup.clock.Run(time.Hour * 2)
+	exp(balance, 8000000000, 4000000000)
 	expTotal(8000000000)
-	nb = bts.newNode(0)
-	exp(8000000000, 4000000000)
+	setup.stop()
+
+	// Test the functionalities after restart
+	setup = newBalanceTestSetup(setup.db, posExp, negExp)
 	expTotal(8000000000)
-	clock.Run(time.Hour * 2)
-	exp(4000000000, 1000000000)
+	balance = setup.newNode(0)
+	exp(balance, 8000000000, 4000000000)
+	expTotal(8000000000)
+	setup.clock.Run(time.Hour * 2)
+	exp(balance, 4000000000, 1000000000)
 	expTotal(4000000000)
-	bt.stop()
-	ns.Stop()
+	setup.stop()
 }

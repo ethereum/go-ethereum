@@ -233,7 +233,7 @@ func (n *nodeBalance) AddBalance(amount int64) (uint64, uint64, error) {
 	}
 	if n.setFlags {
 		if setPriority {
-			n.bt.ns.SetStateSub(n.node, n.bt.priorityFlag, nodestate.Flags{}, 0)
+			n.bt.ns.SetStateSub(n.node, n.bt.setup.priorityFlag, nodestate.Flags{}, 0)
 		}
 		// Note: priority flag is automatically removed by the zero priority callback if necessary
 		n.signalPriorityUpdate()
@@ -265,7 +265,7 @@ func (n *nodeBalance) SetBalance(pos, neg uint64) error {
 	}
 	if n.setFlags {
 		if setPriority {
-			n.bt.ns.SetStateSub(n.node, n.bt.priorityFlag, nodestate.Flags{}, 0)
+			n.bt.ns.SetStateSub(n.node, n.bt.setup.priorityFlag, nodestate.Flags{}, 0)
 		}
 		// Note: priority flag is automatically removed by the zero priority callback if necessary
 		n.signalPriorityUpdate()
@@ -560,7 +560,7 @@ func (n *nodeBalance) balanceExhausted() {
 	n.hasPriority = false
 	n.lock.Unlock()
 	if n.setFlags {
-		n.bt.ns.SetStateSub(n.node, nodestate.Flags{}, n.bt.priorityFlag, 0)
+		n.bt.ns.SetStateSub(n.node, nodestate.Flags{}, n.bt.setup.priorityFlag, 0)
 	}
 }
 
@@ -579,8 +579,8 @@ func (n *nodeBalance) checkPriorityStatus() bool {
 // signalPriorityUpdate signals that the priority fell below the previous minimum estimate
 // Note: this function should run inside a NodeStateMachine operation
 func (n *nodeBalance) signalPriorityUpdate() {
-	n.bt.ns.SetStateSub(n.node, n.bt.updateFlag, nodestate.Flags{}, 0)
-	n.bt.ns.SetStateSub(n.node, nodestate.Flags{}, n.bt.updateFlag, 0)
+	n.bt.ns.SetStateSub(n.node, n.bt.setup.updateFlag, nodestate.Flags{}, 0)
+	n.bt.ns.SetStateSub(n.node, nodestate.Flags{}, n.bt.setup.updateFlag, 0)
 }
 
 // setCapacity updates the capacity value used for priority calculation

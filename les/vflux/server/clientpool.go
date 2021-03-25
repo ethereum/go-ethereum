@@ -18,7 +18,6 @@ package server
 
 import (
 	"errors"
-	"reflect"
 	"sync"
 	"time"
 
@@ -34,22 +33,10 @@ import (
 )
 
 var (
-	serverSetup = &nodestate.Setup{}
-	clientField = serverSetup.NewField("client", reflect.TypeOf(clientPeerInstance{}))
-	btSetup     = newBalanceTrackerSetup(serverSetup)
-	ppSetup     = newPriorityPoolSetup(serverSetup)
-)
-
-var (
 	ErrNotConnected    = errors.New("client not connected")
 	ErrNoPriority      = errors.New("priority too low to raise capacity")
 	ErrCantFindMaximum = errors.New("Unable to find maximum allowed capacity")
 )
-
-func init() {
-	btSetup.connect(clientField, ppSetup.capacityField)
-	ppSetup.connect(btSetup.balanceField, btSetup.updateFlag) // nodeBalance implements nodePriority
-}
 
 // ClientPool implements a client database that assigns a priority to each client
 // based on a positive and negative balance. Positive balance is externally assigned
@@ -58,7 +45,7 @@ func init() {
 // then negative balance is accumulated.
 //
 // Balance tracking and priority calculation for connected clients is done by
-// balanceTracker. activeQueue ensures that clients with the lowest positive or
+// balanceTracker. PriorityQueue ensures that clients with the lowest positive or
 // highest negative balance get evicted when the total capacity allowance is full
 // and new clients with a better balance want to connect.
 //
@@ -72,6 +59,8 @@ func init() {
 type ClientPool struct {
 	*priorityPool
 	*balanceTracker
+
+	setup  *serverSetup
 	clock  mclock.Clock
 	closed bool
 	ns     *nodestate.NodeStateMachine
@@ -96,65 +85,65 @@ type clientPeer interface {
 	Disconnect()                                  // initiates disconnection (Unregister should always be called)
 }
 
-type clientPeerInstance struct{ clientPeer } // the NodeStateMachine type system needs this wrapper
-
 // NewClientPool creates a new client pool
 func NewClientPool(balanceDb ethdb.KeyValueStore, minCap uint64, connectedBias time.Duration, clock mclock.Clock, synced func() bool) *ClientPool {
-	ns := nodestate.NewNodeStateMachine(nil, nil, clock, serverSetup)
+	setup := newServerSetup()
+	ns := nodestate.NewNodeStateMachine(nil, nil, clock, setup.setup)
 	cp := &ClientPool{
+		priorityPool:   newPriorityPool(ns, setup, clock, minCap, connectedBias, 4),
+		balanceTracker: newBalanceTracker(ns, setup, balanceDb, clock, &utils.Expirer{}, &utils.Expirer{}),
+		setup:          setup,
 		ns:             ns,
-		balanceTracker: newBalanceTracker(ns, btSetup, balanceDb, clock, &utils.Expirer{}, &utils.Expirer{}),
-		priorityPool:   newPriorityPool(ns, ppSetup, clock, minCap, connectedBias, 4),
 		clock:          clock,
 		minCap:         minCap,
 		connectedBias:  connectedBias,
 		synced:         synced,
 	}
 
-	ns.SubscribeState(nodestate.MergeFlags(ppSetup.activeFlag, ppSetup.inactiveFlag, btSetup.priorityFlag), func(node *enode.Node, oldState, newState nodestate.Flags) {
-		if newState.Equals(ppSetup.inactiveFlag) {
+	ns.SubscribeState(nodestate.MergeFlags(setup.activeFlag, setup.inactiveFlag, setup.priorityFlag), func(node *enode.Node, oldState, newState nodestate.Flags) {
+		if newState.Equals(setup.inactiveFlag) {
 			// set timeout for non-priority inactive client
 			var timeout time.Duration
-			if c, ok := ns.GetField(node, clientField).(clientPeer); ok {
+			if c, ok := ns.GetField(node, setup.clientField).(clientPeer); ok {
 				timeout = c.InactiveTimeout()
 			}
 			if timeout > 0 {
-				ns.AddTimeout(node, ppSetup.inactiveFlag, timeout)
+				ns.AddTimeout(node, setup.inactiveFlag, timeout)
 			} else {
 				// Note: if capacity is immediately available then priorityPool will set the active
 				// flag simultaneously with removing the inactive flag and therefore this will not
 				// initiate disconnection
-				ns.SetStateSub(node, nodestate.Flags{}, ppSetup.inactiveFlag, 0)
+				ns.SetStateSub(node, nodestate.Flags{}, setup.inactiveFlag, 0)
 			}
 		}
-		if oldState.Equals(ppSetup.inactiveFlag) && newState.Equals(ppSetup.inactiveFlag.Or(btSetup.priorityFlag)) {
-			ns.SetStateSub(node, ppSetup.inactiveFlag, nodestate.Flags{}, 0) // priority gained; remove timeout
+		if oldState.Equals(setup.inactiveFlag) && newState.Equals(setup.inactiveFlag.Or(setup.priorityFlag)) {
+			ns.SetStateSub(node, setup.inactiveFlag, nodestate.Flags{}, 0) // priority gained; remove timeout
 		}
-		if newState.Equals(ppSetup.activeFlag) {
+		if newState.Equals(setup.activeFlag) {
 			// active with no priority; limit capacity to minCap
-			cap, _ := ns.GetField(node, ppSetup.capacityField).(uint64)
+			cap, _ := ns.GetField(node, setup.capacityField).(uint64)
 			if cap > minCap {
 				cp.requestCapacity(node, minCap, 0, true)
 			}
 		}
 		if newState.Equals(nodestate.Flags{}) {
-			if c, ok := ns.GetField(node, clientField).(clientPeer); ok {
+			if c, ok := ns.GetField(node, setup.clientField).(clientPeer); ok {
 				c.Disconnect()
 			}
 		}
 	})
 
-	ns.SubscribeField(btSetup.balanceField, func(node *enode.Node, state nodestate.Flags, oldValue, newValue interface{}) {
+	ns.SubscribeField(setup.balanceField, func(node *enode.Node, state nodestate.Flags, oldValue, newValue interface{}) {
 		if newValue != nil {
-			ns.SetStateSub(node, ppSetup.inactiveFlag, nodestate.Flags{}, 0)
+			ns.SetStateSub(node, setup.inactiveFlag, nodestate.Flags{}, 0)
 			cp.lock.RLock()
 			newValue.(*nodeBalance).SetPriceFactors(cp.defaultPosFactors, cp.defaultNegFactors)
 			cp.lock.RUnlock()
 		}
 	})
 
-	ns.SubscribeField(ppSetup.capacityField, func(node *enode.Node, state nodestate.Flags, oldValue, newValue interface{}) {
-		if c, ok := ns.GetField(node, clientField).(clientPeer); ok {
+	ns.SubscribeField(setup.capacityField, func(node *enode.Node, state nodestate.Flags, oldValue, newValue interface{}) {
+		if c, ok := ns.GetField(node, setup.clientField).(clientPeer); ok {
 			newCap, _ := newValue.(uint64)
 			c.UpdateCapacity(newCap, node == cp.capReqNode)
 		}
@@ -167,17 +156,17 @@ func (cp *ClientPool) AddMetrics(totalConnectedGauge metrics.Gauge,
 	clientConnectedMeter, clientDisconnectedMeter, clientActivatedMeter, clientDeactivatedMeter,
 	capacityQueryZeroMeter, capacityQueryNonZeroMeter metrics.Meter) {
 
-	cp.ns.SubscribeState(nodestate.MergeFlags(ppSetup.activeFlag, ppSetup.inactiveFlag), func(node *enode.Node, oldState, newState nodestate.Flags) {
+	cp.ns.SubscribeState(nodestate.MergeFlags(cp.setup.activeFlag, cp.setup.inactiveFlag), func(node *enode.Node, oldState, newState nodestate.Flags) {
 		if oldState.IsEmpty() && !newState.IsEmpty() {
 			clientConnectedMeter.Mark(1)
 		}
 		if !oldState.IsEmpty() && newState.IsEmpty() {
 			clientDisconnectedMeter.Mark(1)
 		}
-		if oldState.HasNone(ppSetup.activeFlag) && oldState.HasAll(ppSetup.activeFlag) {
+		if oldState.HasNone(cp.setup.activeFlag) && oldState.HasAll(cp.setup.activeFlag) {
 			clientActivatedMeter.Mark(1)
 		}
-		if oldState.HasAll(ppSetup.activeFlag) && oldState.HasNone(ppSetup.activeFlag) {
+		if oldState.HasAll(cp.setup.activeFlag) && oldState.HasNone(cp.setup.activeFlag) {
 			clientDeactivatedMeter.Mark(1)
 		}
 		_, connected := cp.Active()
@@ -203,14 +192,14 @@ func (cp *ClientPool) Stop() {
 // priority and remains inactive for longer than the allowed timeout then it will be
 // disconnected by calling the Disconnect function of the clientPeer interface.
 func (cp *ClientPool) Register(peer clientPeer) ConnectedBalance {
-	cp.ns.SetField(peer.Node(), clientField, clientPeerInstance{peer})
-	balance, _ := cp.ns.GetField(peer.Node(), btSetup.balanceField).(*nodeBalance)
+	cp.ns.SetField(peer.Node(), cp.setup.clientField, peerWrapper{peer})
+	balance, _ := cp.ns.GetField(peer.Node(), cp.setup.balanceField).(*nodeBalance)
 	return balance
 }
 
 // Unregister removes the peer from the client pool
 func (cp *ClientPool) Unregister(peer clientPeer) {
-	cp.ns.SetField(peer.Node(), clientField, nil)
+	cp.ns.SetField(peer.Node(), cp.setup.clientField, nil)
 }
 
 // SetDefaultFactors sets the default price factors applied to subsequently connected clients
@@ -240,12 +229,12 @@ func (cp *ClientPool) SetCapacity(node *enode.Node, reqCap uint64, bias time.Dur
 	cp.lock.RUnlock()
 
 	cp.ns.Operation(func() {
-		balance, _ := cp.ns.GetField(node, btSetup.balanceField).(*nodeBalance)
+		balance, _ := cp.ns.GetField(node, cp.setup.balanceField).(*nodeBalance)
 		if balance == nil {
 			err = ErrNotConnected
 			return
 		}
-		capacity, _ = cp.ns.GetField(node, ppSetup.capacityField).(uint64)
+		capacity, _ = cp.ns.GetField(node, cp.setup.capacityField).(uint64)
 		if capacity == 0 {
 			// if the client is inactive then it has insufficient priority for the minimal capacity
 			// (will be activated automatically with minCap when possible)
@@ -257,7 +246,7 @@ func (cp *ClientPool) SetCapacity(node *enode.Node, reqCap uint64, bias time.Dur
 			reqCap = cp.minCap
 		}
 		if reqCap > cp.minCap {
-			if cp.ns.GetState(node).HasNone(btSetup.priorityFlag) && reqCap > cp.minCap {
+			if cp.ns.GetState(node).HasNone(cp.setup.priorityFlag) && reqCap > cp.minCap {
 				err = ErrNoPriority
 				return
 			}

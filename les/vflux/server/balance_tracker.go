@@ -17,7 +17,6 @@
 package server
 
 import (
-	"reflect"
 	"sync"
 	"time"
 
@@ -35,36 +34,6 @@ const (
 	persistExpirationRefresh = time.Minute * 5 // refresh period of the token expiration persistence
 )
 
-// balanceTrackerSetup contains node state flags and fields used by balanceTracker
-type balanceTrackerSetup struct {
-	// controlled by priorityPool
-	priorityFlag, updateFlag nodestate.Flags
-	balanceField             nodestate.Field
-	// external connections
-	clientField, capacityField nodestate.Field
-}
-
-// newBalanceTrackerSetup creates a new balanceTrackerSetup and initializes the fields
-// and flags controlled by balanceTracker
-func newBalanceTrackerSetup(setup *nodestate.Setup) balanceTrackerSetup {
-	return balanceTrackerSetup{
-		// priorityFlag is set if the node has a positive balance
-		priorityFlag: setup.NewFlag("priorityNode"),
-		// updateFlag set and then immediately reset if the balance has been updated and
-		// therefore priority is suddenly changed
-		updateFlag: setup.NewFlag("balanceUpdate"),
-		// balanceField contains the nodeBalance struct which implements nodePriority,
-		// allowing on-demand priority calculation and future priority estimation
-		balanceField: setup.NewField("balance", reflect.TypeOf(&nodeBalance{})),
-	}
-}
-
-// connect sets the fields used by balanceTracker as an input
-func (bts *balanceTrackerSetup) connect(clientField, capacityField nodestate.Field) {
-	bts.clientField = clientField
-	bts.capacityField = capacityField
-}
-
 // balanceTracker tracks positive and negative balances for connected nodes.
 // After clientField is set externally, a nodeBalance is created and previous
 // balance values are loaded from the database. Both balances are exponentially expired
@@ -74,7 +43,7 @@ func (bts *balanceTrackerSetup) connect(clientField, capacityField nodestate.Fie
 // The two balances are translated into a single priority value that also depends
 // on the actual capacity.
 type balanceTracker struct {
-	balanceTrackerSetup
+	setup              *serverSetup
 	clock              mclock.Clock
 	lock               sync.Mutex
 	ns                 *nodestate.NodeStateMachine
@@ -87,34 +56,32 @@ type balanceTracker struct {
 	quit             chan struct{}
 }
 
-type balancePeer interface {
-	FreeClientId() string
-}
-
 // newBalanceTracker creates a new balanceTracker
-func newBalanceTracker(ns *nodestate.NodeStateMachine, setup balanceTrackerSetup, db ethdb.KeyValueStore, clock mclock.Clock, posExp, negExp utils.ValueExpirer) *balanceTracker {
+func newBalanceTracker(ns *nodestate.NodeStateMachine, setup *serverSetup, db ethdb.KeyValueStore, clock mclock.Clock, posExp, negExp utils.ValueExpirer) *balanceTracker {
 	ndb := newNodeDB(db, clock)
 	bt := &balanceTracker{
-		ns:                  ns,
-		balanceTrackerSetup: setup,
-		ndb:                 ndb,
-		clock:               clock,
-		posExp:              posExp,
-		negExp:              negExp,
-		balanceTimer:        utils.NewUpdateTimer(clock, time.Second*10),
-		quit:                make(chan struct{}),
+		ns:           ns,
+		setup:        setup,
+		ndb:          ndb,
+		clock:        clock,
+		posExp:       posExp,
+		negExp:       negExp,
+		balanceTimer: utils.NewUpdateTimer(clock, time.Second*10),
+		quit:         make(chan struct{}),
 	}
 	posOffset, negOffset := bt.ndb.getExpiration()
 	posExp.SetLogOffset(clock.Now(), posOffset)
 	negExp.SetLogOffset(clock.Now(), negOffset)
 
+	// Load all persisted balance entries of priority nodes,
+	// calculate the total number of issued service tokens.
 	bt.ndb.forEachBalance(false, func(id enode.ID, balance utils.ExpiredValue) bool {
 		bt.inactive.AddExp(balance)
 		return true
 	})
 
-	ns.SubscribeField(bt.capacityField, func(node *enode.Node, state nodestate.Flags, oldValue, newValue interface{}) {
-		n, _ := ns.GetField(node, bt.balanceField).(*nodeBalance)
+	ns.SubscribeField(bt.setup.capacityField, func(node *enode.Node, state nodestate.Flags, oldValue, newValue interface{}) {
+		n, _ := ns.GetField(node, bt.setup.balanceField).(*nodeBalance)
 		if n == nil {
 			return
 		}
@@ -131,15 +98,18 @@ func newBalanceTracker(ns *nodestate.NodeStateMachine, setup balanceTrackerSetup
 			n.deactivate()
 		}
 	})
-	ns.SubscribeField(bt.clientField, func(node *enode.Node, state nodestate.Flags, oldValue, newValue interface{}) {
+	ns.SubscribeField(bt.setup.clientField, func(node *enode.Node, state nodestate.Flags, oldValue, newValue interface{}) {
+		type peer interface {
+			FreeClientId() string
+		}
 		if newValue != nil {
-			ns.SetFieldSub(node, bt.balanceField, bt.newNodeBalance(node, newValue.(balancePeer).FreeClientId(), true))
+			ns.SetFieldSub(node, bt.setup.balanceField, bt.newNodeBalance(node, newValue.(peer).FreeClientId(), true))
 		} else {
-			ns.SetStateSub(node, nodestate.Flags{}, bt.priorityFlag, 0)
-			if b, _ := ns.GetField(node, bt.balanceField).(*nodeBalance); b != nil {
+			ns.SetStateSub(node, nodestate.Flags{}, bt.setup.priorityFlag, 0)
+			if b, _ := ns.GetField(node, bt.setup.balanceField).(*nodeBalance); b != nil {
 				b.deactivate()
 			}
-			ns.SetFieldSub(node, bt.balanceField, nil)
+			ns.SetFieldSub(node, bt.setup.balanceField, nil)
 		}
 	})
 
@@ -168,11 +138,11 @@ func (bt *balanceTracker) stop() {
 	bt.ndb.setExpiration(bt.posExp.LogOffset(now), bt.negExp.LogOffset(now))
 	close(bt.quit)
 	bt.ns.ForEach(nodestate.Flags{}, nodestate.Flags{}, func(node *enode.Node, state nodestate.Flags) {
-		if n, ok := bt.ns.GetField(node, bt.balanceField).(*nodeBalance); ok {
+		if n, ok := bt.ns.GetField(node, bt.setup.balanceField).(*nodeBalance); ok {
 			n.lock.Lock()
 			n.storeBalance(true, true)
 			n.lock.Unlock()
-			bt.ns.SetField(node, bt.balanceField, nil)
+			bt.ns.SetField(node, bt.setup.balanceField, nil)
 		}
 	})
 	bt.ndb.close()
@@ -186,7 +156,7 @@ func (bt *balanceTracker) TotalTokenAmount() uint64 {
 	bt.balanceTimer.Update(func(_ time.Duration) bool {
 		bt.active = utils.ExpiredValue{}
 		bt.ns.ForEach(nodestate.Flags{}, nodestate.Flags{}, func(node *enode.Node, state nodestate.Flags) {
-			if n, ok := bt.ns.GetField(node, bt.balanceField).(*nodeBalance); ok && n.active {
+			if n, ok := bt.ns.GetField(node, bt.setup.balanceField).(*nodeBalance); ok && n.active {
 				pos, _ := n.GetRawBalance()
 				bt.active.AddExp(pos)
 			}
@@ -234,17 +204,14 @@ func (bt *balanceTracker) GetExpirationTCs() (pos, neg uint64) {
 
 // BalanceOperation allows atomic operations on the balance of a node regardless of whether
 // it is currently connected or not
-func (bt *balanceTracker) BalanceOperation(id enode.ID, negBalanceKey string, cb func(AtomicBalanceOperator)) {
+func (bt *balanceTracker) BalanceOperation(id enode.ID, connAddress string, cb func(AtomicBalanceOperator)) {
 	bt.ns.Operation(func() {
-		node := bt.ns.GetNode(id)
 		var nb *nodeBalance
-		if node != nil {
-			nb, _ = bt.ns.GetField(node, bt.balanceField).(*nodeBalance)
+		if node := bt.ns.GetNode(id); node != nil {
+			nb, _ = bt.ns.GetField(node, bt.setup.balanceField).(*nodeBalance)
 		} else {
 			node = enode.SignNull(&enr.Record{}, id)
-		}
-		if nb == nil {
-			nb = bt.newNodeBalance(node, negBalanceKey, false)
+			nb = bt.newNodeBalance(node, connAddress, false)
 		}
 		cb(nb)
 	})
@@ -254,14 +221,14 @@ func (bt *balanceTracker) BalanceOperation(id enode.ID, negBalanceKey string, cb
 // for the given node. It also sets the priorityFlag and adds balanceCallbackZero if
 // the node has a positive balance.
 // Note: this function should run inside a NodeStateMachine operation
-func (bt *balanceTracker) newNodeBalance(node *enode.Node, negBalanceKey string, setFlags bool) *nodeBalance {
+func (bt *balanceTracker) newNodeBalance(node *enode.Node, connAddress string, setFlags bool) *nodeBalance {
 	pb := bt.ndb.getOrNewBalance(node.ID().Bytes(), false)
-	nb := bt.ndb.getOrNewBalance([]byte(negBalanceKey), true)
+	nb := bt.ndb.getOrNewBalance([]byte(connAddress), true)
 	n := &nodeBalance{
 		bt:          bt,
 		node:        node,
 		setFlags:    setFlags,
-		connAddress: negBalanceKey,
+		connAddress: connAddress,
 		balance:     balance{pos: pb, neg: nb, posExp: bt.posExp, negExp: bt.negExp},
 		initTime:    bt.clock.Now(),
 		lastUpdate:  bt.clock.Now(),
@@ -270,7 +237,7 @@ func (bt *balanceTracker) newNodeBalance(node *enode.Node, negBalanceKey string,
 		n.callbackIndex[i] = -1
 	}
 	if setFlags && n.checkPriorityStatus() {
-		n.bt.ns.SetStateSub(n.node, n.bt.priorityFlag, nodestate.Flags{}, 0)
+		n.bt.ns.SetStateSub(n.node, n.bt.setup.priorityFlag, nodestate.Flags{}, 0)
 	}
 	return n
 }

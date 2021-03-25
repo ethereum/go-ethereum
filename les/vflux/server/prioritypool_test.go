@@ -28,16 +28,6 @@ import (
 	"github.com/ethereum/go-ethereum/p2p/nodestate"
 )
 
-var (
-	testSetup         = &nodestate.Setup{}
-	ppTestClientField = testSetup.NewField("ppTestClient", reflect.TypeOf(&ppTestClient{}))
-	ppTestSetup       = newPriorityPoolSetup(testSetup)
-)
-
-func init() {
-	ppTestSetup.connect(ppTestClientField, btTestSetup.updateFlag)
-}
-
 const (
 	testCapacityStepDiv      = 100
 	testCapacityToleranceDiv = 10
@@ -59,15 +49,17 @@ func (c *ppTestClient) estimatePriority(cap uint64, addBalance int64, future, bi
 
 func TestPriorityPool(t *testing.T) {
 	clock := &mclock.Simulated{}
-	ns := nodestate.NewNodeStateMachine(nil, nil, clock, testSetup)
+	setup := newServerSetup()
+	setup.balanceField = setup.setup.NewField("ppTestClient", reflect.TypeOf(&ppTestClient{}))
+	ns := nodestate.NewNodeStateMachine(nil, nil, clock, setup.setup)
 
-	ns.SubscribeField(ppTestSetup.capacityField, func(node *enode.Node, state nodestate.Flags, oldValue, newValue interface{}) {
-		if n := ns.GetField(node, ppTestSetup.priorityField); n != nil {
+	ns.SubscribeField(setup.capacityField, func(node *enode.Node, state nodestate.Flags, oldValue, newValue interface{}) {
+		if n := ns.GetField(node, setup.balanceField); n != nil {
 			c := n.(*ppTestClient)
 			c.cap = newValue.(uint64)
 		}
 	})
-	pp := newPriorityPool(ns, ppTestSetup, clock, testMinCap, 0, testCapacityStepDiv)
+	pp := newPriorityPool(ns, setup, clock, testMinCap, 0, testCapacityStepDiv)
 	ns.Start()
 	pp.SetLimits(100, 1000000)
 	clients := make([]*ppTestClient, 100)
@@ -99,8 +91,8 @@ func TestPriorityPool(t *testing.T) {
 		}
 		sumBalance += c.balance
 		clients[i] = c
-		ns.SetField(c.node, ppTestSetup.priorityField, c)
-		ns.SetState(c.node, ppTestSetup.inactiveFlag, nodestate.Flags{}, 0)
+		ns.SetField(c.node, setup.balanceField, c)
+		ns.SetState(c.node, setup.inactiveFlag, nodestate.Flags{}, 0)
 		raise(c)
 		check(c)
 	}
@@ -110,8 +102,8 @@ func TestPriorityPool(t *testing.T) {
 		oldBalance := c.balance
 		c.balance = uint64(rand.Int63n(100000000000) + 100000000000)
 		sumBalance += c.balance - oldBalance
-		pp.ns.SetState(c.node, btTestSetup.updateFlag, nodestate.Flags{}, 0)
-		pp.ns.SetState(c.node, nodestate.Flags{}, btTestSetup.updateFlag, 0)
+		pp.ns.SetState(c.node, setup.updateFlag, nodestate.Flags{}, 0)
+		pp.ns.SetState(c.node, nodestate.Flags{}, setup.updateFlag, 0)
 		if c.balance > oldBalance {
 			raise(c)
 		} else {
@@ -155,8 +147,8 @@ func TestPriorityPool(t *testing.T) {
 			}
 			c.balance -= add
 			sumBalance -= add
-			pp.ns.SetState(c.node, btTestSetup.updateFlag, nodestate.Flags{}, 0)
-			pp.ns.SetState(c.node, nodestate.Flags{}, btTestSetup.updateFlag, 0)
+			pp.ns.SetState(c.node, setup.updateFlag, nodestate.Flags{}, 0)
+			pp.ns.SetState(c.node, nodestate.Flags{}, setup.updateFlag, 0)
 			for _, c := range clients {
 				raise(c)
 			}
@@ -168,8 +160,11 @@ func TestPriorityPool(t *testing.T) {
 
 func TestCapacityCurve(t *testing.T) {
 	clock := &mclock.Simulated{}
-	ns := nodestate.NewNodeStateMachine(nil, nil, clock, testSetup)
-	pp := newPriorityPool(ns, ppTestSetup, clock, 400000, 0, 2)
+	setup := newServerSetup()
+	setup.balanceField = setup.setup.NewField("ppTestClient", reflect.TypeOf(&ppTestClient{}))
+	ns := nodestate.NewNodeStateMachine(nil, nil, clock, setup.setup)
+
+	pp := newPriorityPool(ns, setup, clock, 400000, 0, 2)
 	ns.Start()
 	pp.SetLimits(10, 10000000)
 	clients := make([]*ppTestClient, 10)
@@ -181,8 +176,8 @@ func TestCapacityCurve(t *testing.T) {
 			cap:     1000000,
 		}
 		clients[i] = c
-		ns.SetField(c.node, ppTestSetup.priorityField, c)
-		ns.SetState(c.node, ppTestSetup.inactiveFlag, nodestate.Flags{}, 0)
+		ns.SetField(c.node, setup.balanceField, c)
+		ns.SetState(c.node, setup.inactiveFlag, nodestate.Flags{}, 0)
 		ns.Operation(func() {
 			pp.requestCapacity(c.node, c.cap, 0, true)
 		})

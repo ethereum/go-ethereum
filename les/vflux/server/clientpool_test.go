@@ -582,8 +582,8 @@ func TestInactiveClient(t *testing.T) {
 	}
 	clock.Run(time.Second * 600)
 	// manually trigger a check to avoid a long real-time wait
-	pool.ns.SetState(p1.node, btSetup.updateFlag, nodestate.Flags{}, 0)
-	pool.ns.SetState(p1.node, nodestate.Flags{}, btSetup.updateFlag, 0)
+	pool.ns.SetState(p1.node, pool.setup.updateFlag, nodestate.Flags{}, 0)
+	pool.ns.SetState(p1.node, nodestate.Flags{}, pool.setup.updateFlag, 0)
 	// p1: 1000  p2: 500  p3: 2000  p4: 900
 	if p1.cap != 1 {
 		t.Fatalf("Failed to activate peer #1")
