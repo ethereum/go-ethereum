@@ -2154,7 +2154,7 @@ func (s *BundleAPI) CallBundle(ctx context.Context, encodedTxs []hexutil.Bytes, 
 	}
 	blockNumber := big.NewInt(int64(blockNr))
 
-	timestamp := parent.Time
+	timestamp := parent.Time + 1
 	if blockTimestamp != nil {
 		timestamp = *blockTimestamp
 	}
@@ -2205,6 +2205,8 @@ func (s *BundleAPI) CallBundle(ctx context.Context, encodedTxs []hexutil.Bytes, 
 	coinbaseBalanceBefore := evm.StateDB.GetBalance(coinbase)
 
 	bundleHash := sha3.NewLegacyKeccak256()
+	var totalGasUsed uint64
+	gasFees := new(big.Int)
 	for _, tx := range txs {
 		msg, err := tx.AsMessage(signer)
 		if err != nil {
@@ -2227,6 +2229,8 @@ func (s *BundleAPI) CallBundle(ctx context.Context, encodedTxs []hexutil.Bytes, 
 			"txHash":  txHash,
 			"gasUsed": result.UsedGas,
 		}
+		totalGasUsed += result.UsedGas
+		gasFees.Add(gasFees, new(big.Int).Mul(big.NewInt(int64(result.UsedGas)), tx.GasPrice()))
 		bundleHash.Write(tx.Hash().Bytes())
 		if result.Err != nil {
 			jsonResult["error"] = result.Err.Error()
@@ -2245,7 +2249,14 @@ func (s *BundleAPI) CallBundle(ctx context.Context, encodedTxs []hexutil.Bytes, 
 
 	ret := map[string]interface{}{}
 	ret["results"] = results
-	ret["coinbaseDiff"] = new(big.Int).Sub(evm.StateDB.GetBalance(coinbase), coinbaseBalanceBefore).String()
+	coinbaseDiff := new(big.Int).Sub(evm.StateDB.GetBalance(coinbase), coinbaseBalanceBefore)
+	ret["coinbaseDiff"] = coinbaseDiff.String()
+	ret["gasFees"] = gasFees.String()
+	ret["ethSentToCoinbase"] = new(big.Int).Sub(coinbaseDiff, gasFees).String()
+	ret["bundleGasPrice"] = new(big.Int).Div(coinbaseDiff, big.NewInt(int64(totalGasUsed))).String()
+	ret["totalGasUsed"] = totalGasUsed
+	ret["stateBlockNumber"] = parent.Number.Int64()
+
 	ret["bundleHash"] = "0x" + common.Bytes2Hex(bundleHash.Sum(nil))
 	return ret, nil
 }
