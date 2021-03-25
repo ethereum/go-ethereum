@@ -243,9 +243,9 @@ func TestCreateBlockByPandoraAndVanguard(t *testing.T) {
 
 			//mixDigest := submittedWork.mixDigest
 			blsSignatureBytes := submittedWork.blsSeal
-			// TODO: check why nil?
 			blsSignature, err := herumi.SignatureFromBytes(blsSignatureBytes[:])
 			assert.Nil(t, err)
+			assert.NotNil(t, blsSignature)
 
 			hash := submittedWork.hash
 			hashBytes := hash.Bytes()
