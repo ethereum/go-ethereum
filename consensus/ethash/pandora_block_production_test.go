@@ -71,12 +71,10 @@ func TestCreateBlockByPandoraAndVanguard(t *testing.T) {
 	lruCache := newlru("cache", 12, newCache)
 	lruDataset := newlru("dataset", 12, newDataset)
 
-	randomReader := rand.Reader
-	pubKey, privKey, err := herumi.GenerateKey(randomReader)
+	privKey, err := herumi.RandKey()
 	assert.Nil(t, err)
 
-	pubKeySet := make([]*vbls.PublicKey, 0)
-	pubKeySet = append(pubKeySet, pubKey)
+	pubKey := privKey.PublicKey()
 
 	workSubmittedLock := sync.WaitGroup{}
 	workSubmittedLock.Add(1)
@@ -118,18 +116,21 @@ func TestCreateBlockByPandoraAndVanguard(t *testing.T) {
 			// We sign hash
 			signatureBytes, err := hexutil.Decode(work[0])
 			assert.Nil(t, err)
-			signature := herumi.Sign(privKey, signatureBytes)
-			compressedSignature := signature.Compress()
-			messages := make([][]byte, 0)
-			messages = append(messages, signatureBytes)
-			isValidSignature := herumi.VerifyCompressed(pubKeySet, messages, compressedSignature)
+			signature := privKey.Sign(signatureBytes)
+
+			isValidSignature := signature.Verify(pubKey, signatureBytes)
 
 			if !isValidSignature {
 				t.Errorf("Invalid signature received")
 			}
 
+			blsSignatureBytes := BlsSignatureBytes{}
+			copy(blsSignatureBytes[:], signatureBytes)
+
+			//TODO: consider if it is needed
+			header.MixDigest = common.BytesToHash(blsSignatureBytes[:])
+
 			// Cast to []byte from [32]byte. This should prevent cropping
-			header.MixDigest = common.BytesToHash(compressedSignature[:])
 			workSubmittedLock.Done()
 
 			// This in test is using work channel to push sealed block to pandora back
@@ -137,6 +138,7 @@ func TestCreateBlockByPandoraAndVanguard(t *testing.T) {
 				nonce:     types.BlockNonce{},
 				mixDigest: header.MixDigest,
 				hash:      common.HexToHash(work[0]),
+				blsSeal:   &blsSignatureBytes,
 				errc:      nil,
 			}
 		}
@@ -232,19 +234,22 @@ func TestCreateBlockByPandoraAndVanguard(t *testing.T) {
 		// This is created by channel to remove network complexity for test scenario.
 		// Full E2E layer should be somewhere else, or we should consider stress test
 		case submittedWork := <-submitWorkChannel:
+			//TODO: change this API, extend it or provide another one like SubmitSeal?
 			submitted := ethashAPI.SubmitWork(
 				submittedWork.nonce,
 				submittedWork.hash,
 				submittedWork.mixDigest,
 			)
 
-			mixDigest := submittedWork.mixDigest
-			// Check if signature of header is valid
-			messages := make([][]byte, 0)
-			messages = append(messages, submittedWork.hash.Bytes())
-			signature := [32]byte{}
-			copy(signature[:], mixDigest.Bytes())
-			signatureValid := herumi.VerifyCompressed(pubKeySet, messages, &signature)
+			//mixDigest := submittedWork.mixDigest
+			blsSignatureBytes := submittedWork.blsSeal
+			// TODO: check why nil?
+			blsSignature, err := herumi.SignatureFromBytes(blsSignatureBytes[:])
+			assert.Nil(t, err)
+
+			hash := submittedWork.hash
+			hashBytes := hash.Bytes()
+			signatureValid := blsSignature.Verify(pubKey, hashBytes)
 			assert.True(t, signatureValid)
 
 			// This will return false, if anything goes wrong

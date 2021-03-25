@@ -235,6 +235,7 @@ type mineResult struct {
 	nonce     types.BlockNonce
 	mixDigest common.Hash
 	hash      common.Hash
+	blsSeal   *BlsSignatureBytes
 
 	errc chan error
 }
