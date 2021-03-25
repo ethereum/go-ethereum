@@ -311,7 +311,13 @@ func (ethash *Ethash) verifyPandoraHeader(header *types.Header) (err error) {
 
 	publicKey := minimalConsensus.ValidatorsList[extractedProposerIndex]
 	blsSginatureBytes := BlsSignatureBytes{}
-	copy(blsSginatureBytes[:], header.Extra[len(header.Extra)-signatureSize:])
+	signatureLocator := len(header.Extra) - signatureSize
+
+	if signatureLocator < 0 {
+		signatureLocator = 0
+	}
+
+	copy(blsSginatureBytes[:], header.Extra[signatureLocator:])
 	signature, err := herumi.SignatureFromBytes(blsSginatureBytes[:])
 
 	if nil != err {

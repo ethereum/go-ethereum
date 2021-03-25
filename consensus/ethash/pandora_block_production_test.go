@@ -1,7 +1,6 @@
 package ethash
 
 import (
-	"crypto/rand"
 	"encoding/json"
 	"fmt"
 	"github.com/ethereum/go-ethereum/common"
@@ -11,6 +10,7 @@ import (
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/params"
 	"github.com/ethereum/go-ethereum/rlp"
+	common2 "github.com/silesiacoin/bls/common"
 	"github.com/silesiacoin/bls/herumi"
 	"github.com/stretchr/testify/assert"
 	"io/ioutil"
@@ -21,7 +21,6 @@ import (
 	"sync"
 	"testing"
 	"time"
-	vbls "vuvuzela.io/crypto/bls"
 )
 
 type fakeReader struct {
@@ -239,7 +238,7 @@ func TestCreateBlockByPandoraAndVanguard(t *testing.T) {
 				submittedWork.nonce,
 				submittedWork.hash,
 				submittedWork.mixDigest,
-				submittedWork.blsSeal,
+				hexutil.Encode(submittedWork.blsSeal[:]),
 			)
 
 			//mixDigest := submittedWork.mixDigest
@@ -288,13 +287,13 @@ func TestEthash_Prepare_Pandora(t *testing.T) {
 	genesisEpoch := NewMinimalConsensusInfo(0).(*MinimalEpochConsensusInfo)
 	genesisStart := time.Now()
 
-	validatorPublicList := [32]*vbls.PublicKey{}
-	validatorPrivateList := [32]*vbls.PrivateKey{}
+	validatorPublicList := [32]common2.PublicKey{}
+	validatorPrivateList := [32]common2.SecretKey{}
 
 	for index, _ := range validatorPrivateList {
-		randomReader := rand.Reader
-		pubKey, privKey, err := herumi.GenerateKey(randomReader)
+		privKey, err := herumi.RandKey()
 		assert.Nil(t, err)
+		pubKey := privKey.PublicKey()
 		validatorPublicList[index] = pubKey
 		validatorPrivateList[index] = privKey
 	}
@@ -352,13 +351,13 @@ func TestVerifySeal(t *testing.T) {
 	lruCache := newlru("cache", 12, newCache)
 	lruDataset := newlru("dataset", 12, newDataset)
 	lruEpochSet := newlru("epochSet", 12, NewMinimalConsensusInfo)
-	validatorPublicList := [32]*vbls.PublicKey{}
-	validatorPrivateList := [32]*vbls.PrivateKey{}
+	validatorPublicList := [32]common2.PublicKey{}
+	validatorPrivateList := [32]common2.SecretKey{}
 
 	for index, _ := range validatorPrivateList {
-		randomReader := rand.Reader
-		pubKey, privKey, err := herumi.GenerateKey(randomReader)
+		privKey, err := herumi.RandKey()
 		assert.Nil(t, err)
+		pubKey := privKey.PublicKey()
 		validatorPublicList[index] = pubKey
 		validatorPrivateList[index] = privKey
 	}
@@ -442,8 +441,7 @@ func TestVerifySeal(t *testing.T) {
 
 	t.Run("Should discard invalid slot sealer in second epoch", func(t *testing.T) {
 		headers := make([]*types.Header, 0)
-		randomReader := rand.Reader
-		_, privateKey, err := herumi.GenerateKey(randomReader)
+		privateKey, err := herumi.RandKey()
 		assert.Nil(t, err)
 
 		for index, _ := range validatorPrivateList {
@@ -476,7 +474,7 @@ func TestVerifySeal(t *testing.T) {
 }
 
 func generatePandoraSealedHeaderByKey(
-	privKey *vbls.PrivateKey,
+	privKey common2.SecretKey,
 	headerNumber int64,
 	headerTime time.Time,
 	extraData *PandoraExtraData,
@@ -507,10 +505,11 @@ func generatePandoraSealedHeaderByKey(
 	}
 
 	headerHash = ethash.SealHash(header)
-	signature := herumi.Sign(privKey, headerHash.Bytes())
-	compressedSignature := signature.Compress()
+	signature := privKey.Sign(headerHash.Bytes())
+	compressedSignature := signature.Marshal()[:herumi.CompressedSize]
 	header.MixDigest = common.BytesToHash(compressedSignature[:])
 	mixDigest = header.MixDigest
+	header.Extra = append(header.Extra, signature.Marshal()...)
 
 	return
 }
