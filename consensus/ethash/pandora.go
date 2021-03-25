@@ -16,6 +16,7 @@ import (
 const (
 	// Time expressed in seconds
 	slotTimeDuration = 6
+	signatureSize    = 96
 )
 
 // Use decorator pattern to get there as fast as possible
@@ -24,10 +25,17 @@ type Pandora struct {
 	sealer *remoteSealer
 }
 
+type BlsSignatureBytes [signatureSize]byte
+
 type PandoraExtraData struct {
 	Slot          uint64
 	Epoch         uint64
 	ProposerIndex uint64
+}
+
+type PandoraExtraDataSealed struct {
+	PandoraExtraData
+	BlsSignatureBytes *BlsSignatureBytes
 }
 
 // This should be cached or retrieved in a handshake with vanguard
@@ -228,7 +236,12 @@ func (ethash *Ethash) getMinimalConsensus(header *types.Header) (
 	minimalConsensusCache, okDerived := cache.Get(derivedEpoch)
 
 	if !okDerived {
-		err = fmt.Errorf("missing minimal consensus info for epoch %d, relative: %d, start: %d", derivedEpoch, relativeTime, genesisStart.Unix())
+		err = fmt.Errorf(
+			"missing minimal consensus info for epoch %d, relative: %d, start: %d",
+			derivedEpoch,
+			relativeTime,
+			genesisStart.Unix(),
+		)
 
 		return
 	}
@@ -290,7 +303,7 @@ func (ethash *Ethash) verifyPandoraHeader(header *types.Header) (err error) {
 	extractedProposerIndex := (headerTime - uint64(epochTimeStart.Unix())) / slotTimeDuration
 
 	// Check to not overflow the index
-	if extractedProposerIndex > uint64(len(minimalConsensus.ValidatorsList)-1) {
+	if extractedProposerIndex > uint64(len(minimalConsensus.ValidatorsList)) {
 		err = fmt.Errorf("extracted validator index overflows validator length")
 
 		return
@@ -363,7 +376,7 @@ func NewPandoraExtraData(header *types.Header, minimalConsensus *MinimalEpochCon
 	extractedProposerIndex := (headerTime - uint64(epochTimeStart.Unix())) / slotTimeDuration
 
 	// Check to not overflow the index
-	if extractedProposerIndex > uint64(len(minimalConsensus.ValidatorsList)-1) {
+	if extractedProposerIndex > uint64(len(minimalConsensus.ValidatorsList)) {
 		err = fmt.Errorf("extracted validator index overflows validator length")
 
 		return
@@ -376,4 +389,20 @@ func NewPandoraExtraData(header *types.Header, minimalConsensus *MinimalEpochCon
 	}
 
 	return
+}
+
+func (pandoraExtraDataSealed *PandoraExtraDataSealed) FromExtraDataAndSignature(
+	pandoraExtraData PandoraExtraData,
+	signature herumi.Signature,
+) {
+	var blsSignatureBytes BlsSignatureBytes
+	signatureBytes := signature.Marshal()
+
+	if len(signatureBytes) != signatureSize {
+		panic("Incompatible bls mode detected")
+	}
+
+	copy(blsSignatureBytes[:], signatureBytes[:])
+	pandoraExtraDataSealed.PandoraExtraData = pandoraExtraData
+	pandoraExtraDataSealed.BlsSignatureBytes = &blsSignatureBytes
 }

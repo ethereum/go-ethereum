@@ -603,6 +603,14 @@ func (ethash *Ethash) FinalizeAndAssemble(chain consensus.ChainHeaderReader, hea
 func (ethash *Ethash) SealHash(header *types.Header) (hash common.Hash) {
 	hasher := sha3.NewLegacyKeccak256()
 
+	extraData := header.Extra
+	extraDataLen := len(extraData)
+
+	// Bls signature is 96 bytes long and will be inserted at the bottom of the extraData field
+	if ModePandora == ethash.config.PowMode && extraDataLen > signatureSize {
+		extraData = extraData[:extraDataLen-signatureSize]
+	}
+
 	rlp.Encode(hasher, []interface{}{
 		header.ParentHash,
 		header.UncleHash,
@@ -616,7 +624,7 @@ func (ethash *Ethash) SealHash(header *types.Header) (hash common.Hash) {
 		header.GasLimit,
 		header.GasUsed,
 		header.Time,
-		header.Extra,
+		extraData,
 	})
 	hasher.Sum(hash[:0])
 	return hash

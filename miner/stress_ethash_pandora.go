@@ -175,23 +175,27 @@ func makeGenesis(faucets []*ecdsa.PrivateKey, sealers [32]*vbls.PublicKey) *core
 	timeNow := time.Now()
 	genesisEpochStart := uint64(timeNow.Unix())
 
-	consensusInfos := [4]*params.MinimalEpochConsensusInfo{}
+	// Here stup how many minimal consensus infos you want to have
+	epochDuration := time.Duration(6) * time.Duration(32)
+	// Here: define how many epochs you want to define in upfront
+	// TODO: move to networking solution (endpoint to fill the consensus info into the cache)
+	consensusInfos := [2 ^ 6]*params.MinimalEpochConsensusInfo{}
 
 	for index, consensusInfo := range consensusInfos {
+		currentEpochStart := genesisEpochStart
+
+		if index > 0 {
+			currentEpochStart = currentEpochStart + (uint64(index) * uint64(epochDuration*time.Second))
+		}
+
 		consensusInfo = &params.MinimalEpochConsensusInfo{
 			Epoch:            uint64(index),
 			ValidatorsList:   sealers,
-			EpochTimeStart:   genesisEpochStart,
+			EpochTimeStart:   currentEpochStart,
 			SlotTimeDuration: 6,
 		}
 
 		consensusInfos[index] = consensusInfo
-
-		if index < 1 {
-			continue
-		}
-
-		consensusInfo.EpochTimeStart = genesisEpochStart + uint64(index*6)
 	}
 
 	pandoraConfig := params.PandoraConfig{
@@ -315,7 +319,7 @@ func makeRemoteSealer(
 	// This will panic if nil
 	consensusInfos := genesisInfo.Config.PandoraConfig.ConsensusInfo
 
-	signerFunc := func(workInfo [4]string) {
+	signerFunc := func(workInfo [4]string, epoch int) {
 		rlpHexHeader := workInfo[2]
 		rlpHeader, err := hexutil.Decode(rlpHexHeader)
 
@@ -339,9 +343,8 @@ func makeRemoteSealer(
 		}
 
 		// Try counted epoch..
-
-		epochTimeStart := consensusInfos[0].EpochTimeStart
-		slotTimeDuration := uint64(consensusInfos[0].SlotTimeDuration)
+		epochTimeStart := consensusInfos[epoch].EpochTimeStart
+		slotTimeDuration := uint64(consensusInfos[epoch].SlotTimeDuration)
 
 		// Derive privateKey..
 		headerTime := header.Time
@@ -351,19 +354,22 @@ func makeRemoteSealer(
 
 		if !shouldISign {
 			fmt.Printf(
-				"\n I am omiting the proposer index: %d for node: %d. ExtractedTurn: %d \n",
+				"\n I am omiting the proposer index: %d for node: %d. ExtractedTurn: %d HeaderTime: %d, EpochTimeStart: %d \n",
 				extractedProposerIndex,
 				nodeNumber,
 				extractedTurn,
+				headerTime,
+				epochTimeStart,
 			)
 
 			return
 		}
 
-		privateKeysLen := uint64(len(privateKeys))
-
-		if extractedProposerIndex >= privateKeysLen {
-			extractedProposerIndex = extractedProposerIndex % privateKeysLen - 1
+		// Epoch passed, try to fallback
+		// For now let it sign by default (0) to provide invalid mixDigest in epoch 1
+		if int(extractedProposerIndex) > len(privateKeys) {
+			extractedProposerIndex = extractedProposerIndex % uint64(len(privateKeys))
+			fmt.Printf("\n extracted proposer index %d \n", extractedProposerIndex)
 		}
 
 		signature := herumi.Sign(privateKeys[extractedProposerIndex], signatureBytes)
@@ -394,16 +400,26 @@ func makeRemoteSealer(
 	go func() {
 		ticker := time.NewTicker(timeout)
 		defer ticker.Stop()
+		turn := 0
+		epoch := 0
+
 		for {
 			<-ticker.C
 			var workInfo [4]string
 			err = rpcClient.Call(&workInfo, "eth_getWork")
 
+			// Increase the epoch
+			if 0 != turn && 0 == turn%32 {
+				fmt.Printf("I am increasing the epoch from: %d", epoch)
+				epoch++
+			}
+
 			if nil != err {
 				fmt.Printf("\n rpcClient got error: %v", err.Error())
 			}
 
-			signerFunc(workInfo)
+			signerFunc(workInfo, epoch)
+			turn++
 		}
 	}()
 }
