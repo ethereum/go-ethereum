@@ -125,7 +125,7 @@ func TestCreateBlockByPandoraAndVanguard(t *testing.T) {
 			}
 
 			blsSignatureBytes := BlsSignatureBytes{}
-			copy(blsSignatureBytes[:], signatureBytes)
+			copy(blsSignatureBytes[:], signature.Marshal())
 
 			//TODO: consider if it is needed
 			header.MixDigest = common.BytesToHash(blsSignatureBytes[:])
