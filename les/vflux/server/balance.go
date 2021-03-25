@@ -47,9 +47,9 @@ type PriceFactors struct {
 	TimeFactor, CapacityFactor, RequestFactor float64
 }
 
-// costPrice returns the price of connection per nanosecond at the given capacity
+// connectionPrice returns the price of connection per nanosecond at the given capacity
 // and the estimated average request cost.
-func (p PriceFactors) costPrice(cap uint64, avgReqCost float64) float64 {
+func (p PriceFactors) connectionPrice(cap uint64, avgReqCost float64) float64 {
 	return p.TimeFactor + float64(cap)*p.CapacityFactor/1000000 + p.RequestFactor*avgReqCost
 }
 
@@ -124,9 +124,9 @@ func (b balance) value(now mclock.AbsTime) (uint64, uint64) {
 }
 
 // add adds the value of a given amount to the balance. The original value and
-// updated value will also be returned if the addtion is successful.
+// updated value will also be returned if the addition is successful.
 // Returns the error if the given value is too large and the value overflows.
-func (b *balance) add(now mclock.AbsTime, amount int64, pos bool, force bool) (uint64, uint64, int64, error) {
+func (b *balance) addPosValue(now mclock.AbsTime, amount int64, pos bool, force bool) (uint64, uint64, int64, error) {
 	var (
 		val    utils.ExpiredValue
 		offset utils.Fixed64
@@ -212,7 +212,7 @@ func (n *nodeBalance) AddBalance(amount int64) (uint64, uint64, error) {
 	// Operation with holding the lock
 	n.bt.updateTotalBalance(n, func() bool {
 		n.updateBalance(now)
-		if old, new, _, err = n.balance.add(now, amount, true, false); err != nil {
+		if old, new, _, err = n.balance.addPosValue(now, amount, true, false); err != nil {
 			return false
 		}
 		callbacks, setPriority = n.checkCallbacks(now), n.checkPriorityStatus()
@@ -230,6 +230,7 @@ func (n *nodeBalance) AddBalance(amount int64) (uint64, uint64, error) {
 		if setPriority {
 			n.bt.ns.SetStateSub(n.node, n.bt.priorityFlag, nodestate.Flags{}, 0)
 		}
+		// Note: priority flag is automatically removed by the zero priority callback if necessary
 		n.signalPriorityUpdate()
 	}
 	return old, new, nil
@@ -261,13 +262,14 @@ func (n *nodeBalance) SetBalance(pos, neg uint64) error {
 		if setPriority {
 			n.bt.ns.SetStateSub(n.node, n.bt.priorityFlag, nodestate.Flags{}, 0)
 		}
+		// Note: priority flag is automatically removed by the zero priority callback if necessary
 		n.signalPriorityUpdate()
 	}
 	return nil
 }
 
 // RequestServed should be called after serving a request for the given peer
-func (n *nodeBalance) RequestServed(cost uint64) uint64 {
+func (n *nodeBalance) RequestServed(cost uint64) (newBalance uint64) {
 	n.lock.Lock()
 
 	var (
@@ -280,8 +282,10 @@ func (n *nodeBalance) RequestServed(cost uint64) uint64 {
 		posCost := -int64(fcost * n.posFactor.RequestFactor)
 		if posCost == 0 {
 			fcost = 0
+			newBalance, _ = n.balance.value(now)
 		} else {
-			_, _, net, _ := n.balance.add(now, posCost, true, false)
+			var net int64
+			_, newBalance, net, _ = n.balance.addPosValue(now, posCost, true, false)
 			if posCost == net {
 				fcost = 0
 			} else {
@@ -291,11 +295,10 @@ func (n *nodeBalance) RequestServed(cost uint64) uint64 {
 		}
 	}
 	if fcost > 0 && n.negFactor.RequestFactor != 0 {
-		n.balance.add(now, int64(fcost*n.negFactor.RequestFactor), false, false)
+		n.balance.addPosValue(now, int64(fcost*n.negFactor.RequestFactor), false, false)
 		check = true
 	}
 	n.sumReqCost += cost
-	pos, _ := n.balance.value(now)
 
 	var callbacks []func()
 	if check {
@@ -310,7 +313,7 @@ func (n *nodeBalance) RequestServed(cost uint64) uint64 {
 			}
 		})
 	}
-	return pos
+	return
 }
 
 // priority returns the actual priority based on the current balance
@@ -337,7 +340,7 @@ func (n *nodeBalance) estimatePriority(capacity uint64, addBalance int64, future
 
 	b := n.balance // copy the balance
 	if addBalance != 0 {
-		b.add(now, addBalance, true, true)
+		b.addPosValue(now, addBalance, true, true)
 	}
 	if future > 0 {
 		var avgReqCost float64
@@ -621,9 +624,9 @@ func (n *nodeBalance) reducedBalance(b balance, start mclock.AbsTime, dt time.Du
 		dtf = float64(dt)
 	)
 	if !b.pos.IsZero() {
-		factor := n.posFactor.costPrice(capacity, avgReqCost)
+		factor := n.posFactor.connectionPrice(capacity, avgReqCost)
 		diff := -int64(dtf * factor)
-		_, _, net, _ := b.add(at, diff, true, false)
+		_, _, net, _ := b.addPosValue(at, diff, true, false)
 		if net == diff {
 			dtf = 0
 		} else {
@@ -631,8 +634,8 @@ func (n *nodeBalance) reducedBalance(b balance, start mclock.AbsTime, dt time.Du
 		}
 	}
 	if dtf > 0 {
-		factor := n.negFactor.costPrice(capacity, avgReqCost)
-		b.add(at, int64(dtf*factor), false, false)
+		factor := n.negFactor.connectionPrice(capacity, avgReqCost)
+		b.addPosValue(at, int64(dtf*factor), false, false)
 	}
 	return b
 }
@@ -650,7 +653,7 @@ func (n *nodeBalance) timeUntil(priority int64) (time.Duration, bool) {
 		diffTime             float64
 	)
 	if pos > 0 {
-		timePrice := n.posFactor.costPrice(n.capacity, 0)
+		timePrice := n.posFactor.connectionPrice(n.capacity, 0)
 		if timePrice < 1e-100 {
 			return 0, false
 		}
@@ -669,7 +672,7 @@ func (n *nodeBalance) timeUntil(priority int64) (time.Duration, bool) {
 		}
 	}
 	if targetNeg > neg {
-		timePrice := n.negFactor.costPrice(n.capacity, 0)
+		timePrice := n.negFactor.connectionPrice(n.capacity, 0)
 		if timePrice < 1e-100 {
 			return 0, false
 		}
