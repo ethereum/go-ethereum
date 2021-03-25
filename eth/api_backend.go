@@ -383,7 +383,7 @@ func (b *EthAPIBackend) AccessList(ctx context.Context, block *types.Block, reex
 		}
 		// Apply the transaction
 		context := core.NewEVMBlockContext(block.Header(), b.eth.blockchain, nil)
-		tracer := new(vm.AccessListTracer)
+		tracer := vm.NewAccessListTracer(accessList)
 		config := vm.Config{Tracer: tracer, Debug: true}
 		vmenv := vm.NewEVM(context, core.NewEVMTxContext(msg), statedb, b.eth.blockchain.Config(), config)
 		res, err := core.ApplyMessage(vmenv, msg, new(core.GasPool).AddGas(msg.Gas()))

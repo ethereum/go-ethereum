@@ -51,6 +51,7 @@ func (al *accessList) AddSlot(address common.Address, slot common.Hash) {
 		al.addresses[address] = len(al.slots)
 		slotmap := map[common.Hash]struct{}{slot: {}}
 		al.slots = append(al.slots, slotmap)
+		return
 	}
 	// There is already an (address,slot) mapping
 	slotmap := al.slots[idx]
@@ -107,8 +108,22 @@ type AccessListTracer struct {
 	list *accessList
 }
 
+func NewAccessListTracer(acl *types.AccessList) *AccessListTracer {
+	list := newAccessList()
+	if acl != nil {
+		for _, al := range *acl {
+			list.AddAddress(al.Address)
+			for _, slot := range al.StorageKeys {
+				list.AddSlot(al.Address, slot)
+			}
+		}
+	}
+	return &AccessListTracer{
+		list: list,
+	}
+}
+
 func (a *AccessListTracer) CaptureStart(env *EVM, from common.Address, to common.Address, create bool, input []byte, gas uint64, value *big.Int) {
-	a.list = newAccessList()
 }
 
 func (a *AccessListTracer) CaptureState(env *EVM, pc uint64, op OpCode, gas, cost uint64, scope *ScopeContext, rData []byte, depth int, err error) {
