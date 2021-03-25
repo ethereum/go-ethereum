@@ -545,9 +545,9 @@ func (api *PrivateDebugAPI) getModifiedAccounts(startBlock, endBlock *types.Bloc
 }
 
 type AccessListResult struct {
-	Accesslist *types.AccessList
-	Error      string
-	GasUsed    uint64
+	Accesslist *types.AccessList `json:"accessList"`
+	Error      string            `json:"error,omitempty"`
+	GasUsed    hexutil.Uint64    `json:"gasUsed"`
 }
 
 func (api *PublicDebugAPI) CreateAccessList(blockNrOrHash rpc.BlockNumberOrHash, reexec uint64, args *ethapi.SendTxArgs) (*AccessListResult, error) {
@@ -572,5 +572,9 @@ func (api *PublicDebugAPI) CreateAccessList(blockNrOrHash rpc.BlockNumberOrHash,
 	if err != nil {
 		return nil, err
 	}
-	return &AccessListResult{Accesslist: acl, Error: vmerr.Error(), GasUsed: gasUsed}, nil
+	result := &AccessListResult{Accesslist: acl, GasUsed: hexutil.Uint64(gasUsed)}
+	if vmerr != nil {
+		result.Error = vmerr.Error()
+	}
+	return result, nil
 }
