@@ -131,7 +131,7 @@ func (c *route53Client) deploy(name string, t *dnsdisc.Tree) error {
 		}
 	}
 
-	// wait for all change batches to propagate
+	// Wait for all change batches to propagate.
 	for _, change := range changesToCheck {
 		log.Info(fmt.Sprintf("Waiting for change request %s", *change.ChangeInfo.Id))
 		wreq := &route53.GetChangeInput{Id: change.ChangeInfo.Id}
@@ -196,24 +196,29 @@ func (c *route53Client) computeChanges(name string, records map[string]string, e
 	records = lrecords
 
 	var changes []types.Change
-	for path, val := range records {
+	for path, newValue := range records {
+		prevRecords, exists := existing[path]
+		prevValue := strings.Join(prevRecords.values, "")
+
+		// prevValue contains quoted strings, encode newValue to compare.
+		newValue = splitTXT(newValue)
+
+		// Assign TTL.
 		ttl := int64(rootTTL)
 		if path != name {
 			ttl = int64(treeNodeTTL)
 		}
 
-		prevRecords, exists := existing[path]
-		prevValue := strings.Join(prevRecords.values, "")
 		if !exists {
 			// Entry is unknown, push a new one
-			log.Info(fmt.Sprintf("Creating %s = %q", path, val))
-			changes = append(changes, newTXTChange("CREATE", path, ttl, splitTXT(val)))
-		} else if prevValue != val || prevRecords.ttl != ttl {
+			log.Info(fmt.Sprintf("Creating %s = %s", path, newValue))
+			changes = append(changes, newTXTChange("CREATE", path, ttl, newValue))
+		} else if prevValue != newValue || prevRecords.ttl != ttl {
 			// Entry already exists, only change its content.
-			log.Info(fmt.Sprintf("Updating %s from %q to %q", path, prevValue, val))
-			changes = append(changes, newTXTChange("UPSERT", path, ttl, splitTXT(val)))
+			log.Info(fmt.Sprintf("Updating %s from %s to %s", path, prevValue, newValue))
+			changes = append(changes, newTXTChange("UPSERT", path, ttl, newValue))
 		} else {
-			log.Info(fmt.Sprintf("Skipping %s = %q", path, val))
+			log.Debug(fmt.Sprintf("Skipping %s = %s", path, newValue))
 		}
 	}
 
@@ -288,21 +293,19 @@ func changeCount(ch types.Change) int {
 
 // collectRecords collects all TXT records below the given name.
 func (c *route53Client) collectRecords(name string) (map[string]recordSet, error) {
-	log.Info(fmt.Sprintf("Retrieving existing TXT records on %s (%s)", name, c.zoneID))
 	var req route53.ListResourceRecordSetsInput
 	req.HostedZoneId = &c.zoneID
 	existing := make(map[string]recordSet)
-	for {
+	for page := 0; ; page++ {
+		log.Info("Loading existing TXT records", "name", name, "zone", c.zoneID, "page", page)
 		resp, err := c.api.ListResourceRecordSets(context.TODO(), &req)
 		if err != nil {
 			return existing, err
 		}
-
 		for _, set := range resp.ResourceRecordSets {
 			if !isSubdomain(*set.Name, name) || set.Type != types.RRTypeTxt {
 				continue
 			}
-
 			s := recordSet{ttl: *set.TTL}
 			for _, rec := range set.ResourceRecords {
 				s.values = append(s.values, *rec.Value)
@@ -314,14 +317,12 @@ func (c *route53Client) collectRecords(name string) (map[string]recordSet, error
 		if !resp.IsTruncated {
 			break
 		}
-
-		// Set the cursor to the next batc. From the AWS docs:
+		// Set the cursor to the next batch. From the AWS docs:
 		//
 		// To display the next page of results, get the values of NextRecordName,
 		// NextRecordType, and NextRecordIdentifier (if any) from the response. Then submit
 		// another ListResourceRecordSets request, and specify those values for
 		// StartRecordName, StartRecordType, and StartRecordIdentifier.
-
 		req.StartRecordIdentifier = resp.NextRecordIdentifier
 		req.StartRecordName = resp.NextRecordName
 		req.StartRecordType = resp.NextRecordType
