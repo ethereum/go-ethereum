@@ -196,28 +196,29 @@ func (c *route53Client) computeChanges(name string, records map[string]string, e
 	records = lrecords
 
 	var changes []types.Change
-	for path, val := range records {
+	for path, newValue := range records {
 		prevRecords, exists := existing[path]
 		prevValue := strings.Join(prevRecords.values, "")
+
+		// prevValue contains quoted strings, encode newValue to compare.
+		newValue = splitTXT(newValue)
 
 		// Assign TTL.
 		ttl := int64(rootTTL)
 		if path != name {
 			ttl = int64(treeNodeTTL)
 		}
-		// prevValue is quoted, encode value for to compare.
-		val = splitTXT(val)
 
 		if !exists {
 			// Entry is unknown, push a new one
-			log.Info(fmt.Sprintf("Creating %s = %s", path, val))
-			changes = append(changes, newTXTChange("CREATE", path, ttl, val))
-		} else if prevValue != val || prevRecords.ttl != ttl {
+			log.Info(fmt.Sprintf("Creating %s = %s", path, newValue))
+			changes = append(changes, newTXTChange("CREATE", path, ttl, newValue))
+		} else if prevValue != newValue || prevRecords.ttl != ttl {
 			// Entry already exists, only change its content.
-			log.Info(fmt.Sprintf("Updating %s from %s to %s", path, prevValue, val))
-			changes = append(changes, newTXTChange("UPSERT", path, ttl, val))
+			log.Info(fmt.Sprintf("Updating %s from %s to %s", path, prevValue, newValue))
+			changes = append(changes, newTXTChange("UPSERT", path, ttl, newValue))
 		} else {
-			log.Debug(fmt.Sprintf("Skipping %s = %s", path, val))
+			log.Debug(fmt.Sprintf("Skipping %s = %s", path, newValue))
 		}
 	}
 
