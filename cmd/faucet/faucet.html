@@ -177,7 +177,7 @@
 						}
 						// Iterate over our entire local collection and re-render the funding table
 						var content = "";
-						for (var i=0; i<requests.length; i++) {
+						for (var i=requests.length-1; i >= 0; i--) {
 							var done    = requests[i].time == "";
 							var elapsed = moment().unix()-moment(requests[i].time).unix();
 

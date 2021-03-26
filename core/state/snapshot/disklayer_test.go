@@ -482,7 +482,7 @@ func TestDiskGeneratorPersistence(t *testing.T) {
 	if !bytes.Equal(generator.Marker, genMarker) {
 		t.Fatalf("Generator marker is not matched")
 	}
-	// Test senario 2, the disk layer is fully generated
+	// Test scenario 2, the disk layer is fully generated
 	// Modify or delete some accounts, flatten everything onto disk
 	if err := snaps.Update(diffTwoRoot, diffRoot, nil, map[common.Hash][]byte{
 		accThree: accThree.Bytes(),

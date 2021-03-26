@@ -126,7 +126,12 @@ func connect(server *serverHandler, serverId enode.ID, client *clientHandler, pr
 
 // newTestServerPeer creates server peer.
 func newTestServerPeer(t *testing.T, blocks int, protocol int) (*testServer, *enode.Node, func()) {
-	s, teardown := newServerEnv(t, blocks, protocol, nil, false, false, 0)
+	netconfig := testnetConfig{
+		blocks:    blocks,
+		protocol:  protocol,
+		nopruning: true,
+	}
+	s, _, teardown := newClientServerEnv(t, netconfig)
 	key, err := crypto.GenerateKey()
 	if err != nil {
 		t.Fatal("generate key err:", err)
@@ -138,6 +143,12 @@ func newTestServerPeer(t *testing.T, blocks int, protocol int) (*testServer, *en
 
 // newTestLightPeer creates node with light sync mode
 func newTestLightPeer(t *testing.T, protocol int, ulcServers []string, ulcFraction int) (*testClient, func()) {
-	_, c, teardown := newClientServerEnv(t, 0, protocol, nil, ulcServers, ulcFraction, false, false, true)
+	netconfig := testnetConfig{
+		protocol:    protocol,
+		ulcServers:  ulcServers,
+		ulcFraction: ulcFraction,
+		nopruning:   true,
+	}
+	_, c, teardown := newClientServerEnv(t, netconfig)
 	return c, teardown
 }

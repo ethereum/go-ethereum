@@ -98,34 +98,3 @@ func (st *Stack) Print() {
 	}
 	fmt.Println("#############")
 }
-
-var rStackPool = sync.Pool{
-	New: func() interface{} {
-		return &ReturnStack{data: make([]uint32, 0, 10)}
-	},
-}
-
-// ReturnStack is an object for basic return stack operations.
-type ReturnStack struct {
-	data []uint32
-}
-
-func newReturnStack() *ReturnStack {
-	return rStackPool.Get().(*ReturnStack)
-}
-
-func returnRStack(rs *ReturnStack) {
-	rs.data = rs.data[:0]
-	rStackPool.Put(rs)
-}
-
-func (st *ReturnStack) push(d uint32) {
-	st.data = append(st.data, d)
-}
-
-// A uint32 is sufficient as for code below 4.2G
-func (st *ReturnStack) pop() (ret uint32) {
-	ret = st.data[len(st.data)-1]
-	st.data = st.data[:len(st.data)-1]
-	return
-}
