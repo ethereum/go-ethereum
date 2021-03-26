@@ -25,8 +25,17 @@ import (
 )
 
 const (
+	// ingressMeterName is the prefix of the per-packet inbound metrics.
 	ingressMeterName = "p2p/ingress"
-	egressMeterName  = "p2p/egress"
+
+	// egressMeterName is the prefix of the per-packet outbound metrics.
+	egressMeterName = "p2p/egress"
+
+	// HandleHistName is the prefix of the per-packet serving time histograms.
+	HandleHistName = "p2p/handle"
+
+	// WaitHistName is the prefix of the per-packet (req only) waiting time histograms.
+	WaitHistName = "p2p/wait"
 )
 
 var (
