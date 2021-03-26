@@ -102,11 +102,11 @@ func (a *accessList) ToAccessList() types.AccessList {
 	return acl
 }
 
-type AccessListTracer struct {
+type accessListTracer struct {
 	list *accessList
 }
 
-func NewAccessListTracer(acl types.AccessList) *AccessListTracer {
+func NewAccessListTracer(acl types.AccessList) *accessListTracer {
 	list := newAccessList()
 	for _, al := range acl {
 		list.AddAddress(al.Address)
@@ -114,15 +114,15 @@ func NewAccessListTracer(acl types.AccessList) *AccessListTracer {
 			list.AddSlot(al.Address, slot)
 		}
 	}
-	return &AccessListTracer{
+	return &accessListTracer{
 		list: list,
 	}
 }
 
-func (a *AccessListTracer) CaptureStart(env *EVM, from common.Address, to common.Address, create bool, input []byte, gas uint64, value *big.Int) {
+func (a *accessListTracer) CaptureStart(env *EVM, from common.Address, to common.Address, create bool, input []byte, gas uint64, value *big.Int) {
 }
 
-func (a *AccessListTracer) CaptureState(env *EVM, pc uint64, op OpCode, gas, cost uint64, scope *ScopeContext, rData []byte, depth int, err error) {
+func (a *accessListTracer) CaptureState(env *EVM, pc uint64, op OpCode, gas, cost uint64, scope *ScopeContext, rData []byte, depth int, err error) {
 	stack := scope.Stack
 	if (op == SLOAD || op == SSTORE) && stack.len() >= 1 {
 		slot := common.Hash(stack.data[stack.len()-1].Bytes32())
@@ -138,16 +138,16 @@ func (a *AccessListTracer) CaptureState(env *EVM, pc uint64, op OpCode, gas, cos
 	}
 }
 
-func (*AccessListTracer) CaptureFault(env *EVM, pc uint64, op OpCode, gas, cost uint64, scope *ScopeContext, depth int, err error) {
+func (*accessListTracer) CaptureFault(env *EVM, pc uint64, op OpCode, gas, cost uint64, scope *ScopeContext, depth int, err error) {
 }
 
-func (*AccessListTracer) CaptureEnd(output []byte, gasUsed uint64, t time.Duration, err error) {}
+func (*accessListTracer) CaptureEnd(output []byte, gasUsed uint64, t time.Duration, err error) {}
 
-func (a *AccessListTracer) GetAccessList() types.AccessList {
+func (a *accessListTracer) GetAccessList() types.AccessList {
 	return a.list.ToAccessList()
 }
 
-func (a *AccessListTracer) GetUnpreparedAccessList(sender common.Address, dst *common.Address, precompiles []common.Address) types.AccessList {
+func (a *accessListTracer) GetUnpreparedAccessList(sender common.Address, dst *common.Address, precompiles []common.Address) types.AccessList {
 	copy := a.list.Copy()
 	copy.DeleteAddressIfNoSlotSet(sender)
 	if dst != nil {
