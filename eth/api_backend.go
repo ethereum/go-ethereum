@@ -32,6 +32,7 @@ import (
 	"github.com/ethereum/go-ethereum/core/state"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/core/vm"
+	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/eth/downloader"
 	"github.com/ethereum/go-ethereum/eth/gasprice"
 	"github.com/ethereum/go-ethereum/ethdb"
@@ -389,7 +390,14 @@ func (b *EthAPIBackend) AccessList(ctx context.Context, block *types.Block, reex
 			return nil, 0, nil, fmt.Errorf("failed to apply transaction: %v err: %v", args.ToTransaction().Hash(), err)
 		}
 		if res.UsedGas == gas {
-			acl := tracer.GetUnpreparedAccessList(args.From, args.To, vmenv.ActivePrecompiles())
+			to := args.To
+			// if to is not defined -> create transaction
+			if to == nil {
+				// remove the created contract from the accesslist (if no storage access occured)
+				contractAddr := crypto.CreateAddress(msg.From(), uint64(*args.Nonce))
+				to = &contractAddr
+			}
+			acl := tracer.GetUnpreparedAccessList(args.From, to, vmenv.ActivePrecompiles())
 			return acl, res.UsedGas, res.Err, nil
 		}
 		accessList = tracer.GetAccessList()
