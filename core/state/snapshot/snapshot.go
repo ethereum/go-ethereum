@@ -484,8 +484,21 @@ func diffToDisk(bottom *diffLayer) *diskLayer {
 			if key := it.Key(); len(key) == 65 { // TODO(karalabe): Yuck, we should move this into the iterator
 				batch.Delete(key)
 				base.cache.Del(key[1:])
-
 				snapshotFlushStorageItemMeter.Mark(1)
+
+				// Ensure we don't delete too much data blindly (contract can be
+				// huge). It's ok to flush, the root will go missing in case of a
+				// crash and we'll detect and regenerate the snapshot.
+				if batch.ValueSize() > ethdb.IdealBatchSize {
+					if err := batch.Write(); err != nil {
+						log.Crit("Failed to write storage deletions", "err", err)
+					}
+					batch.Reset()
+
+					// Recreate the iterator to allow LevelDB to compact the data away
+					it.Release()
+					it = rawdb.IterateStorageSnapshots(base.diskdb, hash) // Ok to recreate with same hash, old slots deleted
+				}
 			}
 		}
 		it.Release()
@@ -503,6 +516,16 @@ func diffToDisk(bottom *diffLayer) *diskLayer {
 
 		snapshotFlushAccountItemMeter.Mark(1)
 		snapshotFlushAccountSizeMeter.Mark(int64(len(data)))
+
+		// Ensure we don't write too much data blindly. It's ok to flush, the
+		// root will go missing in case of a crash and we'll detect and regen
+		// the snapshot.
+		if batch.ValueSize() > ethdb.IdealBatchSize {
+			if err := batch.Write(); err != nil {
+				log.Crit("Failed to write storage deletions", "err", err)
+			}
+			batch.Reset()
+		}
 	}
 	// Push all the storage slots into the database
 	for accountHash, storage := range bottom.storageData {
