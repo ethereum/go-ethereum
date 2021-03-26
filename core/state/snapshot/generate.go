@@ -263,6 +263,12 @@ func (dl *diskLayer) proveRange(root common.Hash, prefix []byte, kind string, or
 		if len(key) != len(prefix)+common.HashLength {
 			continue
 		}
+		if len(keys) == max {
+			// Break if we've reached the max size, and signal that we're not
+			// done yet.
+			diskMore = true
+			break
+		}
 		keys = append(keys, common.CopyBytes(key[len(prefix):]))
 
 		if valueConvertFn == nil {
@@ -280,12 +286,6 @@ func (dl *diskLayer) proveRange(root common.Hash, prefix []byte, kind string, or
 			} else {
 				vals = append(vals, val)
 			}
-		}
-		// A trick is applied here, whenever the maximum items are reached,
-		// also check the database iterator is exhausted or not.
-		if len(keys) == max {
-			diskMore = iter.Next()
-			break
 		}
 	}
 	// Update metrics for database iteration and merkle proving
