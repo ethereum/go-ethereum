@@ -289,8 +289,8 @@ func (cs *chainSyncer) modeAndLocalHead() (downloader.SyncMode, *big.Int) {
 		}
 	}
 	// Nope, we're really full syncing
-	head := cs.pm.blockchain.CurrentBlock()
-	td := cs.pm.blockchain.GetTd(head.Hash(), head.NumberU64())
+	head := cs.handler.chain.CurrentBlock()
+	td := cs.handler.chain.GetTd(head.Hash(), head.NumberU64())
 	return downloader.FullSync, td
 }
 
