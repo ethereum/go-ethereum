@@ -20,12 +20,12 @@ package utils
 import (
 	"compress/gzip"
 	"fmt"
+	syscall "golang.org/x/sys/unix"
 	"io"
 	"os"
 	"os/signal"
 	"runtime"
 	"strings"
-	"syscall"
 	"time"
 
 	"github.com/ethereum/go-ethereum/common"

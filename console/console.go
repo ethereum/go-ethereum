@@ -18,6 +18,7 @@ package console
 
 import (
 	"fmt"
+	syscall "golang.org/x/sys/unix"
 	"io"
 	"io/ioutil"
 	"os"
@@ -26,7 +27,6 @@ import (
 	"regexp"
 	"sort"
 	"strings"
-	"syscall"
 
 	"github.com/dop251/goja"
 	"github.com/ethereum/go-ethereum/console/prompt"

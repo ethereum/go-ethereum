@@ -18,7 +18,7 @@
 
 package fdlimit
 
-import "syscall"
+import syscall "golang.org/x/sys/unix"
 
 // This file is largely identical to fdlimit_unix.go,
 // but Rlimit fields have type int64 on *BSD so it needs

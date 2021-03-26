@@ -16,7 +16,7 @@
 
 package fdlimit
 
-import "syscall"
+import syscall "golang.org/x/sys/unix"
 
 // hardlimit is the number of file descriptors allowed at max by the kernel.
 const hardlimit = 10240
