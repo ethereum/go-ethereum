@@ -185,12 +185,17 @@ func (s *Service) loop() {
 	// Subscribe to chain events to execute updates on
 	chainHeadCh := make(chan core.ChainHeadEvent, chainHeadChanSize)
 	headSub := s.backend.SubscribeChainHeadEvent(chainHeadCh)
-	defer headSub.Unsubscribe()
 
 	txEventCh := make(chan core.NewTxsEvent, txChanSize)
 	txSub := s.backend.SubscribeNewTxsEvent(txEventCh)
-	defer txSub.Unsubscribe()
 
+	if headSub == nil || txSub == nil {
+		log.Info("Stats daemon stopped due to nil subscription")
+		return
+	}
+
+	defer headSub.Unsubscribe()
+	defer txSub.Unsubscribe()
 	// Start a goroutine that exhausts the subscriptions to avoid events piling up
 	var (
 		quitCh = make(chan struct{})
