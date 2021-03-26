@@ -22,7 +22,6 @@ import (
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/types"
-	"github.com/ethereum/go-ethereum/log"
 )
 
 type accessList struct {
@@ -124,20 +123,17 @@ func (a *AccessListTracer) CaptureStart(env *EVM, from common.Address, to common
 }
 
 func (a *AccessListTracer) CaptureState(env *EVM, pc uint64, op OpCode, gas, cost uint64, scope *ScopeContext, rData []byte, depth int, err error) {
-	log.Trace("Capturing State", "op", op)
 	stack := scope.Stack
 	if (op == SLOAD || op == SSTORE) && stack.len() >= 1 {
 		slot := common.Hash(stack.data[stack.len()-1].Bytes32())
 		a.list.AddSlot(scope.Contract.Address(), slot)
 	}
 	if (op == EXTCODECOPY || op == EXTCODEHASH || op == EXTCODESIZE || op == BALANCE || op == SELFDESTRUCT) && stack.len() >= 1 {
-		stackElem := stack.data[stack.len()-1].Bytes32()
-		address := common.BytesToAddress(stackElem[:])
+		address := common.Address(stack.data[stack.len()-1].Bytes20())
 		a.list.AddAddress(address)
 	}
 	if (op == DELEGATECALL || op == CALL || op == STATICCALL || op == CALLCODE) && stack.len() >= 5 {
-		stackElem := stack.data[stack.len()-2].Bytes32()
-		address := common.BytesToAddress(stackElem[:])
+		address := common.Address(stack.data[stack.len()-2].Bytes20())
 		a.list.AddAddress(address)
 	}
 }
