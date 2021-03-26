@@ -203,14 +203,19 @@ func (api *ExternalSigner) SignTx(account accounts.Account, tx *types.Transactio
 		t := common.NewMixedcaseAddress(*tx.To())
 		to = &t
 	}
+	accessList := tx.AccessList()
 	args := &core.SendTxArgs{
-		Data:     &data,
-		Nonce:    hexutil.Uint64(tx.Nonce()),
-		Value:    hexutil.Big(*tx.Value()),
-		Gas:      hexutil.Uint64(tx.Gas()),
-		GasPrice: hexutil.Big(*tx.GasPrice()),
-		To:       to,
-		From:     common.NewMixedcaseAddress(account.Address),
+		Data:       &data,
+		Nonce:      hexutil.Uint64(tx.Nonce()),
+		Value:      hexutil.Big(*tx.Value()),
+		Gas:        hexutil.Uint64(tx.Gas()),
+		GasPrice:   hexutil.Big(*tx.GasPrice()),
+		To:         to,
+		From:       common.NewMixedcaseAddress(account.Address),
+		AccessList: &accessList,
+	}
+	if tx.ChainId() != nil {
+		args.ChainID = (*hexutil.Big)(tx.ChainId())
 	}
 	var res signTransactionResult
 	if err := api.client.Call(&res, "account_signTransaction", args); err != nil {
