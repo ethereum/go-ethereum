@@ -389,7 +389,6 @@ func makeRemoteSealer(
 			header.Nonce,
 			common.HexToHash(workInfo[0]),
 			common.BytesToHash(blsSignatureBytes[:]),
-			hexutil.Encode(blsSignatureBytes),
 		)
 
 		if nil != err {
