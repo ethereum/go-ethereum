@@ -22,6 +22,7 @@ var Modules = map[string]string{
 	"admin":      AdminJs,
 	"chequebook": ChequebookJs,
 	"clique":     CliqueJs,
+	"posa":   	  POSAJs,
 	"ethash":     EthashJs,
 	"debug":      DebugJs,
 	"eth":        EthJs,
@@ -113,6 +114,36 @@ web3._extend({
 		new web3._extend.Property({
 			name: 'proposals',
 			getter: 'clique_proposals'
+		}),
+	]
+});
+`
+
+const POSAJs = `
+web3._extend({
+	property: 'posa',
+	methods: [
+		new web3._extend.Method({
+			name: 'getSnapshot',
+			call: 'posa_getSnapshot',
+			params: 1,
+			inputFormatter: [web3._extend.formatters.inputBlockNumberFormatter]
+		}),
+		new web3._extend.Method({
+			name: 'getSnapshotAtHash',
+			call: 'posa_getSnapshotAtHash',
+			params: 1
+		}),
+		new web3._extend.Method({
+			name: 'getValidators',
+			call: 'posa_getValidators',
+			params: 1,
+			inputFormatter: [web3._extend.formatters.inputBlockNumberFormatter]
+		}),
+		new web3._extend.Method({
+			name: 'getValidatorsAtHash',
+			call: 'posa_getValidatorsAtHash',
+			params: 1
 		}),
 	]
 });

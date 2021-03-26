@@ -18,6 +18,7 @@
 package ethconfig
 
 import (
+	"github.com/ethereum/go-ethereum/consensus/posa"
 	"math/big"
 	"os"
 	"os/user"
@@ -208,6 +209,10 @@ func CreateConsensusEngine(stack *node.Node, chainConfig *params.ChainConfig, co
 	// If proof-of-authority is requested, set it up
 	if chainConfig.Clique != nil {
 		return clique.New(chainConfig.Clique, db)
+	}
+	// If proof-of-stake-authority is requested, set it up
+	if chainConfig.POSA != nil {
+		return posa.New(chainConfig, db)
 	}
 	// Otherwise assume proof-of-work
 	switch config.PowMode {

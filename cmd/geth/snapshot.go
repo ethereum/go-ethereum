@@ -57,9 +57,7 @@ var (
 				Category:  "MISCELLANEOUS COMMANDS",
 				Flags: []cli.Flag{
 					utils.DataDirFlag,
-					utils.RopstenFlag,
-					utils.RinkebyFlag,
-					utils.GoerliFlag,
+					utils.TestnetFlag,
 					utils.CacheTrieJournalFlag,
 					utils.BloomFilterSizeFlag,
 				},
@@ -86,9 +84,7 @@ the trie clean cache with default directory will be deleted.
 				Category:  "MISCELLANEOUS COMMANDS",
 				Flags: []cli.Flag{
 					utils.DataDirFlag,
-					utils.RopstenFlag,
-					utils.RinkebyFlag,
-					utils.GoerliFlag,
+					utils.TestnetFlag,
 				},
 				Description: `
 geth snapshot verify-state <state-root>
@@ -105,9 +101,7 @@ In other words, this command does the snapshot to trie conversion.
 				Category:  "MISCELLANEOUS COMMANDS",
 				Flags: []cli.Flag{
 					utils.DataDirFlag,
-					utils.RopstenFlag,
-					utils.RinkebyFlag,
-					utils.GoerliFlag,
+					utils.TestnetFlag,
 				},
 				Description: `
 geth snapshot traverse-state <state-root>
@@ -126,9 +120,7 @@ It's also usable without snapshot enabled.
 				Category:  "MISCELLANEOUS COMMANDS",
 				Flags: []cli.Flag{
 					utils.DataDirFlag,
-					utils.RopstenFlag,
-					utils.RinkebyFlag,
-					utils.GoerliFlag,
+					utils.TestnetFlag,
 				},
 				Description: `
 geth snapshot traverse-rawstate <state-root>

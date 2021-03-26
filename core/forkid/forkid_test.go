@@ -65,64 +65,6 @@ func TestCreation(t *testing.T) {
 				{20000000, ID{Hash: checksumToBytes(0x0eb440f6), Next: 0}},        // Future Berlin block
 			},
 		},
-		// Ropsten test cases
-		{
-			params.RopstenChainConfig,
-			params.RopstenGenesisHash,
-			[]testcase{
-				{0, ID{Hash: checksumToBytes(0x30c7ddbc), Next: 10}},            // Unsynced, last Frontier, Homestead and first Tangerine block
-				{9, ID{Hash: checksumToBytes(0x30c7ddbc), Next: 10}},            // Last Tangerine block
-				{10, ID{Hash: checksumToBytes(0x63760190), Next: 1700000}},      // First Spurious block
-				{1699999, ID{Hash: checksumToBytes(0x63760190), Next: 1700000}}, // Last Spurious block
-				{1700000, ID{Hash: checksumToBytes(0x3ea159c7), Next: 4230000}}, // First Byzantium block
-				{4229999, ID{Hash: checksumToBytes(0x3ea159c7), Next: 4230000}}, // Last Byzantium block
-				{4230000, ID{Hash: checksumToBytes(0x97b544f3), Next: 4939394}}, // First Constantinople block
-				{4939393, ID{Hash: checksumToBytes(0x97b544f3), Next: 4939394}}, // Last Constantinople block
-				{4939394, ID{Hash: checksumToBytes(0xd6e2149b), Next: 6485846}}, // First Petersburg block
-				{6485845, ID{Hash: checksumToBytes(0xd6e2149b), Next: 6485846}}, // Last Petersburg block
-				{6485846, ID{Hash: checksumToBytes(0x4bc66396), Next: 7117117}}, // First Istanbul block
-				{7117116, ID{Hash: checksumToBytes(0x4bc66396), Next: 7117117}}, // Last Istanbul block
-				{7117117, ID{Hash: checksumToBytes(0x6727ef90), Next: 9812189}}, // First Muir Glacier block
-				{9812188, ID{Hash: checksumToBytes(0x6727ef90), Next: 9812189}}, // Last Muir Glacier block
-				{9812189, ID{Hash: checksumToBytes(0xa157d377), Next: 0}},       // First Berlin block
-				{10000000, ID{Hash: checksumToBytes(0xa157d377), Next: 0}},      // Future Berlin block
-			},
-		},
-		// Rinkeby test cases
-		{
-			params.RinkebyChainConfig,
-			params.RinkebyGenesisHash,
-			[]testcase{
-				{0, ID{Hash: checksumToBytes(0x3b8e0691), Next: 1}},             // Unsynced, last Frontier block
-				{1, ID{Hash: checksumToBytes(0x60949295), Next: 2}},             // First and last Homestead block
-				{2, ID{Hash: checksumToBytes(0x8bde40dd), Next: 3}},             // First and last Tangerine block
-				{3, ID{Hash: checksumToBytes(0xcb3a64bb), Next: 1035301}},       // First Spurious block
-				{1035300, ID{Hash: checksumToBytes(0xcb3a64bb), Next: 1035301}}, // Last Spurious block
-				{1035301, ID{Hash: checksumToBytes(0x8d748b57), Next: 3660663}}, // First Byzantium block
-				{3660662, ID{Hash: checksumToBytes(0x8d748b57), Next: 3660663}}, // Last Byzantium block
-				{3660663, ID{Hash: checksumToBytes(0xe49cab14), Next: 4321234}}, // First Constantinople block
-				{4321233, ID{Hash: checksumToBytes(0xe49cab14), Next: 4321234}}, // Last Constantinople block
-				{4321234, ID{Hash: checksumToBytes(0xafec6b27), Next: 5435345}}, // First Petersburg block
-				{5435344, ID{Hash: checksumToBytes(0xafec6b27), Next: 5435345}}, // Last Petersburg block
-				{5435345, ID{Hash: checksumToBytes(0xcbdb8838), Next: 8290928}}, // First Istanbul block
-				{8290927, ID{Hash: checksumToBytes(0xcbdb8838), Next: 8290928}}, // Last Istanbul block
-				{8290928, ID{Hash: checksumToBytes(0x6910c8bd), Next: 0}},       // First Berlin block
-				{10000000, ID{Hash: checksumToBytes(0x6910c8bd), Next: 0}},      // Future Berlin block
-			},
-		},
-		// Goerli test cases
-		{
-			params.GoerliChainConfig,
-			params.GoerliGenesisHash,
-			[]testcase{
-				{0, ID{Hash: checksumToBytes(0xa3f5ab08), Next: 1561651}},       // Unsynced, last Frontier, Homestead, Tangerine, Spurious, Byzantium, Constantinople and first Petersburg block
-				{1561650, ID{Hash: checksumToBytes(0xa3f5ab08), Next: 1561651}}, // Last Petersburg block
-				{1561651, ID{Hash: checksumToBytes(0xc25efa5c), Next: 4460644}}, // First Istanbul block
-				{4460643, ID{Hash: checksumToBytes(0xc25efa5c), Next: 4460644}}, // Last Istanbul block
-				{4460644, ID{Hash: checksumToBytes(0x757a1c47), Next: 0}},       // First Berlin block
-				{5000000, ID{Hash: checksumToBytes(0x757a1c47), Next: 0}},       // Future Berlin block
-			},
-		},
 	}
 	for i, tt := range tests {
 		for j, ttt := range tt.cases {
