@@ -2010,9 +2010,6 @@ func (s *Syncer) forwardAccountTask(task *accountTask) {
 	// outdated during the sync, but it can be fixed later during the
 	// snapshot generation.
 	for i, hash := range res.hashes {
-		if task.needCode[i] || task.needState[i] {
-			break
-		}
 		blob := snapshot.SlimAccountRLP(res.accounts[i].Nonce, res.accounts[i].Balance, res.accounts[i].Root, res.accounts[i].CodeHash)
 		rawdb.WriteAccountSnapshot(batch, hash, blob)
 		bytes += common.StorageSize(1 + common.HashLength + len(blob))
