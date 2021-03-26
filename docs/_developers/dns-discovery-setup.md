@@ -18,13 +18,13 @@ cmd/devp2p is a developer utility and is not included in the Geth distribution. 
 install this command using `go get`:
 
 ```shell
-go get -u github.com/ethereum/go-ethereum/cmd/devp2p
+go get github.com/ethereum/go-ethereum/cmd/devp2p
 ```
 
 To create a signing key, you might also need the `ethkey` utility.
 
 ```shell
-go get -u github.com/ethereum/go-ethereum/cmd/ethkey
+go get github.com/ethereum/go-ethereum/cmd/ethkey
 ```
 
 ### Crawling the v4 DHT
