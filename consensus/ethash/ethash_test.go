@@ -62,7 +62,14 @@ func TestCacheFileEvict(t *testing.T) {
 		t.Fatal(err)
 	}
 	defer os.RemoveAll(tmpdir)
-	e := New(Config{CachesInMem: 3, CachesOnDisk: 10, CacheDir: tmpdir, PowMode: ModeTest}, nil, false)
+
+	config := Config{
+		CachesInMem:  3,
+		CachesOnDisk: 10,
+		CacheDir:     tmpdir,
+		PowMode:      ModeTest,
+	}
+	e := New(config, nil, false)
 	defer e.Close()
 
 	workers := 8

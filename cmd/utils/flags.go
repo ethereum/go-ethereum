@@ -427,6 +427,10 @@ var (
 		Name:  "miner.notify",
 		Usage: "Comma separated HTTP URL list to notify of new work packages",
 	}
+	MinerNotifyFullFlag = cli.BoolFlag{
+		Name:  "miner.notify.full",
+		Usage: "Notify with pending block headers instead of work packages",
+	}
 	MinerGasTargetFlag = cli.Uint64Flag{
 		Name:  "miner.gastarget",
 		Usage: "Target gas floor for mined blocks",
@@ -1359,6 +1363,7 @@ func setMiner(ctx *cli.Context, cfg *miner.Config) {
 	if ctx.GlobalIsSet(MinerNotifyFlag.Name) {
 		cfg.Notify = strings.Split(ctx.GlobalString(MinerNotifyFlag.Name), ",")
 	}
+	cfg.NotifyFull = ctx.GlobalBool(MinerNotifyFullFlag.Name)
 	if ctx.GlobalIsSet(MinerExtraDataFlag.Name) {
 		cfg.ExtraData = []byte(ctx.GlobalString(MinerExtraDataFlag.Name))
 	}

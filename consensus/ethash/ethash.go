@@ -48,7 +48,7 @@ var (
 	two256 = new(big.Int).Exp(big.NewInt(2), big.NewInt(256), big.NewInt(0))
 
 	// sharedEthash is a full instance that can be shared between multiple users.
-	sharedEthash = New(Config{"", 3, 0, false, "", 1, 0, false, ModeNormal, nil}, nil, false)
+	sharedEthash *Ethash
 
 	// algorithmRevision is the data structure version used for file naming.
 	algorithmRevision = 23
@@ -56,6 +56,15 @@ var (
 	// dumpMagic is a dataset dump header to sanity check a data dump.
 	dumpMagic = []uint32{0xbaddcafe, 0xfee1dead}
 )
+
+func init() {
+	sharedConfig := Config{
+		PowMode:       ModeNormal,
+		CachesInMem:   3,
+		DatasetsInMem: 1,
+	}
+	sharedEthash = New(sharedConfig, nil, false)
+}
 
 // isLittleEndian returns whether the local system is running in little or big
 // endian byte order.
@@ -411,6 +420,10 @@ type Config struct {
 	DatasetsLockMmap bool
 	PowMode          Mode
 
+	// When set, notifications sent by the remote sealer will
+	// be block header JSON objects instead of work package arrays.
+	NotifyFull bool
+
 	Log log.Logger `toml:"-"`
 }
 
@@ -462,6 +475,9 @@ func New(config Config, notify []string, noverify bool) *Ethash {
 		update:   make(chan struct{}),
 		hashrate: metrics.NewMeterForced(),
 	}
+	if config.PowMode == ModeShared {
+		ethash.shared = sharedEthash
+	}
 	ethash.remote = startRemoteSealer(ethash, notify, noverify)
 	return ethash
 }
@@ -469,15 +485,7 @@ func New(config Config, notify []string, noverify bool) *Ethash {
 // NewTester creates a small sized ethash PoW scheme useful only for testing
 // purposes.
 func NewTester(notify []string, noverify bool) *Ethash {
-	ethash := &Ethash{
-		config:   Config{PowMode: ModeTest, Log: log.Root()},
-		caches:   newlru("cache", 1, newCache),
-		datasets: newlru("dataset", 1, newDataset),
-		update:   make(chan struct{}),
-		hashrate: metrics.NewMeterForced(),
-	}
-	ethash.remote = startRemoteSealer(ethash, notify, noverify)
-	return ethash
+	return New(Config{PowMode: ModeTest}, notify, noverify)
 }
 
 // NewFaker creates a ethash consensus engine with a fake PoW scheme that accepts
