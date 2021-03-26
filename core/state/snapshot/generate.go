@@ -153,7 +153,7 @@ func generateSnapshot(diskdb ethdb.KeyValueStore, triedb *trie.Database, cache i
 	rawdb.WriteSnapshotRoot(batch, root)
 	journalProgress(batch, genMarker, stats)
 	if err := batch.Write(); err != nil {
-		log.Crit("Failed to write initialized state marker", "error", err)
+		log.Crit("Failed to write initialized state marker", "err", err)
 	}
 	base := &diskLayer{
 		diskdb:     diskdb,
@@ -348,10 +348,19 @@ func (dl *diskLayer) proveRange(root common.Hash, prefix []byte, kind string, or
 	return &proofResult{keys: keys, vals: vals, diskMore: diskMore, trieMore: cont, proofErr: err, tr: tr}, nil
 }
 
-// genRange generates the state segment with particular prefix. Generation can
+// onStateCallback is a function that is called by generateRange, when processing a range of
+// accounts or storage slots. For each element, the callback is invoked.
+// If 'delete' is true, then this element (and potential slots) needs to be deleted from the snapshot.
+// If 'write' is true, then this element needs to be updated with the 'val'.
+// If 'write' is false, then this element is already correct, and needs no update. However,
+// for accounts, the storage trie of the account needs to be checked.
+// The 'val' is the canonical encoding of the value (not the slim format for accounts)
+type onStateCallback func(key []byte, val []byte, write bool, delete bool) error
+
+// generateRange generates the state segment with particular prefix. Generation can
 // either verify the correctness of existing state through rangeproof and skip
 // generation, or iterate trie to regenerate state on demand.
-func (dl *diskLayer) genRange(root common.Hash, prefix []byte, kind string, origin []byte, max int, stats *generatorStats, onState func(key []byte, val []byte, write bool, delete bool) error, valueConvertFn func([]byte) ([]byte, error)) (bool, []byte, error) {
+func (dl *diskLayer) generateRange(root common.Hash, prefix []byte, kind string, origin []byte, max int, stats *generatorStats, onState onStateCallback, valueConvertFn func([]byte) ([]byte, error)) (bool, []byte, error) {
 	// Use range prover to check the validity of the flat state in the range
 	result, err := dl.proveRange(root, prefix, kind, origin, max, valueConvertFn)
 	if err != nil {
@@ -380,7 +389,7 @@ func (dl *diskLayer) genRange(root common.Hash, prefix []byte, kind string, orig
 		// Only abort the iteration when both database and trie are exhausted
 		return !result.diskMore && !result.trieMore, last, nil
 	}
-	logger.Trace("Detected outdated state range", "last", hexutil.Encode(last), "error", result.proofErr)
+	logger.Trace("Detected outdated state range", "last", hexutil.Encode(last), "err", result.proofErr)
 	snapFailedRangeProofMeter.Mark(1)
 
 	// Special case, the entire trie is missing. In the original trie scheme,
@@ -575,6 +584,12 @@ func (dl *diskLayer) generate(stats *generatorStats) {
 		if accMarker == nil || !bytes.Equal(accountHash[:], accMarker) {
 			dataLen := len(val) // Approximate size, saves us a round of RLP-encoding
 			if !write {
+				if bytes.Equal(acc.CodeHash, emptyCode[:]) {
+					dataLen -= 32
+				}
+				if acc.Root == emptyRoot {
+					dataLen -= 32
+				}
 				snapRecoveredAccountMeter.Mark(1)
 			} else {
 				data := SlimAccountRLP(acc.Nonce, acc.Balance, acc.Root, acc.CodeHash)
@@ -591,7 +606,20 @@ func (dl *diskLayer) generate(stats *generatorStats) {
 		}
 		// If the iterated account is the contract, create a further loop to
 		// verify or regenerate the contract storage.
-		if acc.Root != emptyRoot {
+		if acc.Root == emptyRoot {
+			// If the root is empty, we still need to ensure that any previous snapshot
+			// storage values are cleared
+			// TODO: investigate if this can be avoided, this will be very costly since it
+			// affects every single EOA account
+			//  - Perhaps we can avoid if where codeHash is emptyCode
+			prefix := append(rawdb.SnapshotStoragePrefix, accountHash.Bytes()...)
+			keyLen := len(rawdb.SnapshotStoragePrefix) + 2*common.HashLength
+			if err := wipeKeyRange(dl.diskdb, "storage", prefix, nil, nil, keyLen, snapWipedStorageMeter, false); err != nil {
+				return err
+			}
+			accountWrite += time.Since(start)
+			snapAccountWriteTimer.Update(int64(accountWrite))
+		} else {
 			accountWrite += time.Since(start)
 			snapAccountWriteTimer.Update(int64(accountWrite))
 
@@ -627,7 +655,7 @@ func (dl *diskLayer) generate(stats *generatorStats) {
 			}
 			var storeOrigin = common.CopyBytes(storeMarker)
 			for {
-				exhausted, last, err := dl.genRange(acc.Root, append(rawdb.SnapshotStoragePrefix, accountHash.Bytes()...), "storage", storeOrigin, storageCheckRange, stats, onStorage, nil)
+				exhausted, last, err := dl.generateRange(acc.Root, append(rawdb.SnapshotStoragePrefix, accountHash.Bytes()...), "storage", storeOrigin, storageCheckRange, stats, onStorage, nil)
 				if err != nil {
 					return err
 				}
@@ -638,19 +666,6 @@ func (dl *diskLayer) generate(stats *generatorStats) {
 					break // special case, the last is 0xffffffff...fff
 				}
 			}
-		} else {
-			// If the root is empty, we still need to ensure that any previous snapshot
-			// storage values are cleared
-			// TODO: investigate if this can be avoided, this will be very costly since it
-			// affects every single EOA account
-			//  - Perhaps we can avoid if where codeHash is emptyCode
-			prefix := append(rawdb.SnapshotStoragePrefix, accountHash.Bytes()...)
-			keyLen := len(rawdb.SnapshotStoragePrefix) + 2*common.HashLength
-			if err := wipeKeyRange(dl.diskdb, "storage", prefix, nil, nil, keyLen, snapWipedStorageMeter, false); err != nil {
-				return err
-			}
-			accountWrite += time.Since(start)
-			snapAccountWriteTimer.Update(int64(accountWrite))
 		}
 		// Some account processed, unmark the marker
 		accMarker = nil
@@ -659,7 +674,7 @@ func (dl *diskLayer) generate(stats *generatorStats) {
 
 	// Global loop for regerating the entire state trie + all layered storage tries.
 	for {
-		exhausted, last, err := dl.genRange(dl.root, rawdb.SnapshotAccountPrefix, "account", accOrigin, accountRange, stats, onAccount, FullAccountRLP)
+		exhausted, last, err := dl.generateRange(dl.root, rawdb.SnapshotAccountPrefix, "account", accOrigin, accountRange, stats, onAccount, FullAccountRLP)
 		// The procedure it aborted, either by external signal or internal error
 		if err != nil {
 			if abort == nil { // aborted by internal error, wait the signal
@@ -682,7 +697,7 @@ func (dl *diskLayer) generate(stats *generatorStats) {
 	// generator anyway to mark the snapshot is complete.
 	journalProgress(batch, nil, stats)
 	if err := batch.Write(); err != nil {
-		log.Error("Failed to flush batch", "error", err)
+		log.Error("Failed to flush batch", "err", err)
 
 		abort = <-dl.genAbort
 		abort <- stats

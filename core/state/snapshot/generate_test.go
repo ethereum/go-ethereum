@@ -667,7 +667,9 @@ func TestGenerateWithManyExtraAccounts(t *testing.T) {
 // But in the database, we still have the stale storage slots 0x04, 0x05. They are not iterated yet, but the procedure is finished.
 func TestGenerateWithExtraBeforeAndAfter(t *testing.T) {
 	accountCheckRange = 3
-	log.Root().SetHandler(log.LvlFilterHandler(log.LvlTrace, log.StreamHandler(os.Stderr, log.TerminalFormat(true))))
+	if false {
+		enableLogging()
+	}
 	var (
 		diskdb = memorydb.New()
 		triedb = trie.NewDatabase(diskdb)
@@ -711,7 +713,9 @@ func TestGenerateWithExtraBeforeAndAfter(t *testing.T) {
 // in the snapshot database, which cannot be parsed back to an account
 func TestGenerateWithMalformedSnapdata(t *testing.T) {
 	accountCheckRange = 3
-	log.Root().SetHandler(log.LvlFilterHandler(log.LvlTrace, log.StreamHandler(os.Stderr, log.TerminalFormat(true))))
+	if false {
+		enableLogging()
+	}
 	var (
 		diskdb = memorydb.New()
 		triedb = trie.NewDatabase(diskdb)
