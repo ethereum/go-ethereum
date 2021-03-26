@@ -30,7 +30,7 @@ import (
 	"github.com/ethereum/go-ethereum/console/prompt"
 	"github.com/ethereum/go-ethereum/p2p/dnsdisc"
 	"github.com/ethereum/go-ethereum/p2p/enode"
-	cli "gopkg.in/urfave/cli.v1"
+	"gopkg.in/urfave/cli.v1"
 )
 
 var (
@@ -77,7 +77,12 @@ var (
 		Usage:     "Deploy DNS TXT records to Amazon Route53",
 		ArgsUsage: "<tree-directory>",
 		Action:    dnsToRoute53,
-		Flags:     []cli.Flag{route53AccessKeyFlag, route53AccessSecretFlag, route53ZoneIDFlag},
+		Flags: []cli.Flag{
+			route53AccessKeyFlag,
+			route53AccessSecretFlag,
+			route53ZoneIDFlag,
+			route53RegionFlag,
+		},
 	}
 )
 

@@ -5,7 +5,7 @@ jobs:
   allow_failures:
     - stage: build
       os: osx
-      go: 1.14.x
+      go: 1.15.x
       env:
         - azure-osx
         - azure-ios
@@ -15,8 +15,8 @@ jobs:
     # This builder only tests code linters on latest version of Go
     - stage: lint
       os: linux
-      dist: xenial
-      go: 1.15.x
+      dist: bionic
+      go: 1.16.x
       env:
         - lint
       git:
@@ -24,75 +24,12 @@ jobs:
       script:
         - go run build/ci.go lint
 
-    - stage: build
-      os: linux
-      dist: xenial
-      go: 1.13.x
-      env:
-        - GO111MODULE=on
-      script:
-        - go run build/ci.go install
-        - go run build/ci.go test -coverage $TEST_PACKAGES
-
-    - stage: build
-      os: linux
-      dist: xenial
-      go: 1.14.x
-      env:
-        - GO111MODULE=on
-      script:
-        - go run build/ci.go install
-        - go run build/ci.go test -coverage $TEST_PACKAGES
-
-    # These are the latest Go versions.
-    - stage: build
-      os: linux
-      arch: amd64
-      dist: xenial
-      go: 1.15.x
-      env:
-        - GO111MODULE=on
-      script:
-        - go run build/ci.go install
-        - go run build/ci.go test -coverage $TEST_PACKAGES
-
-    - stage: build
-      if: type = pull_request
-      os: linux
-      arch: arm64
-      dist: xenial
-      go: 1.15.x
-      env:
-        - GO111MODULE=on
-      script:
-        - go run build/ci.go install
-        - go run build/ci.go test -coverage $TEST_PACKAGES
-
-    - stage: build
-      os: osx
-      osx_image: xcode11.3
-      go: 1.15.x
-      env:
-        - GO111MODULE=on
-      script:
-        - echo "Increase the maximum number of open file descriptors on macOS"
-        - NOFILE=20480
-        - sudo sysctl -w kern.maxfiles=$NOFILE
-        - sudo sysctl -w kern.maxfilesperproc=$NOFILE
-        - sudo launchctl limit maxfiles $NOFILE $NOFILE
-        - sudo launchctl limit maxfiles
-        - ulimit -S -n $NOFILE
-        - ulimit -n
-        - unset -f cd # workaround for https://github.com/travis-ci/travis-ci/issues/8703
-        - go run build/ci.go install
-        - go run build/ci.go test -coverage $TEST_PACKAGES
-
     # This builder does the Ubuntu PPA upload
     - stage: build
       if: type = push
       os: linux
-      dist: xenial
-      go: 1.15.x
+      dist: bionic
+      go: 1.16.x
       env:
         - ubuntu-ppa
         - GO111MODULE=on
@@ -109,15 +46,15 @@ jobs:
             - python-paramiko
       script:
         - echo '|1|7SiYPr9xl3uctzovOTj4gMwAC1M=|t6ReES75Bo/PxlOPJ6/GsGbTrM0= ssh-rsa AAAAB3NzaC1yc2EAAAABIwAAAQEA0aKz5UTUndYgIGG7dQBV+HaeuEZJ2xPHo2DS2iSKvUL4xNMSAY4UguNW+pX56nAQmZKIZZ8MaEvSj6zMEDiq6HFfn5JcTlM80UwlnyKe8B8p7Nk06PPQLrnmQt5fh0HmEcZx+JU9TZsfCHPnX7MNz4ELfZE6cFsclClrKim3BHUIGq//t93DllB+h4O9LHjEUsQ1Sr63irDLSutkLJD6RXchjROXkNirlcNVHH/jwLWR5RcYilNX7S5bIkK8NlWPjsn/8Ua5O7I9/YoE97PpO6i73DTGLh5H9JN/SITwCKBkgSDWUt61uPK3Y11Gty7o2lWsBjhBUm2Y38CBsoGmBw==' >> ~/.ssh/known_hosts
-        - go run build/ci.go debsrc -goversion 1.15 -upload ethereum/ethereum -sftp-user geth-ci -signer "Go Ethereum Linux Builder <geth-ci@ethereum.org>"
+        - go run build/ci.go debsrc -upload ethereum/ethereum -sftp-user geth-ci -signer "Go Ethereum Linux Builder <geth-ci@ethereum.org>"
 
     # This builder does the Linux Azure uploads
     - stage: build
       if: type = push
       os: linux
-      dist: xenial
+      dist: bionic
       sudo: required
-      go: 1.15.x
+      go: 1.16.x
       env:
         - azure-linux
         - GO111MODULE=on
@@ -129,32 +66,32 @@ jobs:
             - gcc-multilib
       script:
         # Build for the primary platforms that Trusty can manage
-        - go run build/ci.go install
-        - go run build/ci.go archive -type tar -signer LINUX_SIGNING_KEY -upload gethstore/builds
-        - go run build/ci.go install -arch 386
-        - go run build/ci.go archive -arch 386 -type tar -signer LINUX_SIGNING_KEY -upload gethstore/builds
+        - go run build/ci.go install -dlgo
+        - go run build/ci.go archive -type tar -signer LINUX_SIGNING_KEY -signify SIGNIFY_KEY -upload gethstore/builds
+        - go run build/ci.go install -dlgo -arch 386
+        - go run build/ci.go archive -arch 386 -type tar -signer LINUX_SIGNING_KEY -signify SIGNIFY_KEY -upload gethstore/builds
 
         # Switch over GCC to cross compilation (breaks 386, hence why do it here only)
         - sudo -E apt-get -yq --no-install-suggests --no-install-recommends --force-yes install gcc-arm-linux-gnueabi libc6-dev-armel-cross gcc-arm-linux-gnueabihf libc6-dev-armhf-cross gcc-aarch64-linux-gnu libc6-dev-arm64-cross
         - sudo ln -s /usr/include/asm-generic /usr/include/asm
 
-        - GOARM=5 go run build/ci.go install -arch arm -cc arm-linux-gnueabi-gcc
-        - GOARM=5 go run build/ci.go archive -arch arm -type tar -signer LINUX_SIGNING_KEY -upload gethstore/builds
-        - GOARM=6 go run build/ci.go install -arch arm -cc arm-linux-gnueabi-gcc
-        - GOARM=6 go run build/ci.go archive -arch arm -type tar -signer LINUX_SIGNING_KEY -upload gethstore/builds
-        - GOARM=7 go run build/ci.go install -arch arm -cc arm-linux-gnueabihf-gcc
-        - GOARM=7 go run build/ci.go archive -arch arm -type tar -signer LINUX_SIGNING_KEY -upload gethstore/builds
-        - go run build/ci.go install -arch arm64 -cc aarch64-linux-gnu-gcc
-        - go run build/ci.go archive -arch arm64 -type tar -signer LINUX_SIGNING_KEY -upload gethstore/builds
+        - GOARM=5 go run build/ci.go install -dlgo -arch arm -cc arm-linux-gnueabi-gcc
+        - GOARM=5 go run build/ci.go archive -arch arm -type tar -signer LINUX_SIGNING_KEY -signify SIGNIFY_KEY -upload gethstore/builds
+        - GOARM=6 go run build/ci.go install -dlgo -arch arm -cc arm-linux-gnueabi-gcc
+        - GOARM=6 go run build/ci.go archive -arch arm -type tar -signer LINUX_SIGNING_KEY -signify SIGNIFY_KEY -upload gethstore/builds
+        - GOARM=7 go run build/ci.go install -dlgo -arch arm -cc arm-linux-gnueabihf-gcc
+        - GOARM=7 go run build/ci.go archive -arch arm -type tar -signer LINUX_SIGNING_KEY -signify SIGNIFY_KEY -upload gethstore/builds
+        - go run build/ci.go install -dlgo -arch arm64 -cc aarch64-linux-gnu-gcc
+        - go run build/ci.go archive -arch arm64 -type tar -signer LINUX_SIGNING_KEY -signify SIGNIFY_KEY -upload gethstore/builds
 
     # This builder does the Linux Azure MIPS xgo uploads
     - stage: build
       if: type = push
       os: linux
-      dist: xenial
+      dist: bionic
       services:
         - docker
-      go: 1.15.x
+      go: 1.16.x
       env:
         - azure-linux-mips
         - GO111MODULE=on
@@ -163,38 +100,29 @@ jobs:
       script:
         - go run build/ci.go xgo --alltools -- --targets=linux/mips --ldflags '-extldflags "-static"' -v
         - for bin in build/bin/*-linux-mips; do mv -f "${bin}" "${bin/-linux-mips/}"; done
-        - go run build/ci.go archive -arch mips -type tar -signer LINUX_SIGNING_KEY -upload gethstore/builds
+        - go run build/ci.go archive -arch mips -type tar -signer LINUX_SIGNING_KEY -signify SIGNIFY_KEY -upload gethstore/builds
 
         - go run build/ci.go xgo --alltools -- --targets=linux/mipsle --ldflags '-extldflags "-static"' -v
         - for bin in build/bin/*-linux-mipsle; do mv -f "${bin}" "${bin/-linux-mipsle/}"; done
-        - go run build/ci.go archive -arch mipsle -type tar -signer LINUX_SIGNING_KEY -upload gethstore/builds
+        - go run build/ci.go archive -arch mipsle -type tar -signer LINUX_SIGNING_KEY -signify SIGNIFY_KEY -upload gethstore/builds
 
         - go run build/ci.go xgo --alltools -- --targets=linux/mips64 --ldflags '-extldflags "-static"' -v
         - for bin in build/bin/*-linux-mips64; do mv -f "${bin}" "${bin/-linux-mips64/}"; done
-        - go run build/ci.go archive -arch mips64 -type tar -signer LINUX_SIGNING_KEY -upload gethstore/builds
+        - go run build/ci.go archive -arch mips64 -type tar -signer LINUX_SIGNING_KEY signify SIGNIFY_KEY -upload gethstore/builds
 
         - go run build/ci.go xgo --alltools -- --targets=linux/mips64le --ldflags '-extldflags "-static"' -v
         - for bin in build/bin/*-linux-mips64le; do mv -f "${bin}" "${bin/-linux-mips64le/}"; done
-        - go run build/ci.go archive -arch mips64le -type tar -signer LINUX_SIGNING_KEY -upload gethstore/builds
+        - go run build/ci.go archive -arch mips64le -type tar -signer LINUX_SIGNING_KEY -signify SIGNIFY_KEY -upload gethstore/builds
 
     # This builder does the Android Maven and Azure uploads
     - stage: build
       if: type = push
       os: linux
-      dist: xenial
+      dist: bionic
       addons:
         apt:
           packages:
-            - oracle-java8-installer
-            - oracle-java8-set-default
-      language: android
-      android:
-        components:
-          - platform-tools
-          - tools
-          - android-15
-          - android-19
-          - android-24
+            - openjdk-8-jdk
       env:
         - azure-android
         - maven-android
@@ -202,25 +130,33 @@ jobs:
       git:
         submodules: false # avoid cloning ethereum/tests
       before_install:
-        - curl https://dl.google.com/go/go1.15.linux-amd64.tar.gz | tar -xz
+        # Install Android and it's dependencies manually, Travis is stale
+        - export JAVA_HOME=/usr/lib/jvm/java-8-openjdk-amd64
+        - curl https://dl.google.com/android/repository/commandlinetools-linux-6858069_latest.zip -o android.zip
+        - unzip -q android.zip -d $HOME/sdk && rm android.zip
+        - mv $HOME/sdk/cmdline-tools $HOME/sdk/latest && mkdir $HOME/sdk/cmdline-tools && mv $HOME/sdk/latest $HOME/sdk/cmdline-tools
+        - export PATH=$PATH:$HOME/sdk/cmdline-tools/latest/bin
+        - export ANDROID_HOME=$HOME/sdk
+
+        - yes | sdkmanager --licenses >/dev/null
+        - sdkmanager "platform-tools" "platforms;android-15" "platforms;android-19" "platforms;android-24" "ndk-bundle"
+
+        # Install Go to allow building with
+        - curl https://dl.google.com/go/go1.16.linux-amd64.tar.gz | tar -xz
         - export PATH=`pwd`/go/bin:$PATH
         - export GOROOT=`pwd`/go
         - export GOPATH=$HOME/go
       script:
         # Build the Android archive and upload it to Maven Central and Azure
-        - curl https://dl.google.com/android/repository/android-ndk-r19b-linux-x86_64.zip -o android-ndk-r19b.zip
-        - unzip -q android-ndk-r19b.zip && rm android-ndk-r19b.zip
-        - mv android-ndk-r19b $ANDROID_HOME/ndk-bundle
-
         - mkdir -p $GOPATH/src/github.com/ethereum
         - ln -s `pwd` $GOPATH/src/github.com/ethereum/go-ethereum
-        - go run build/ci.go aar -signer ANDROID_SIGNING_KEY -deploy https://oss.sonatype.org -upload gethstore/builds
+        - go run build/ci.go aar -signer ANDROID_SIGNING_KEY -signify SIGNIFY_KEY  -deploy https://oss.sonatype.org -upload gethstore/builds
 
     # This builder does the OSX Azure, iOS CocoaPods and iOS Azure uploads
     - stage: build
       if: type = push
       os: osx
-      go: 1.15.x
+      go: 1.16.x
       env:
         - azure-osx
         - azure-ios
@@ -229,8 +165,8 @@ jobs:
       git:
         submodules: false # avoid cloning ethereum/tests
       script:
-        - go run build/ci.go install
-        - go run build/ci.go archive -type tar -signer OSX_SIGNING_KEY -upload gethstore/builds
+        - go run build/ci.go install -dlgo
+        - go run build/ci.go archive -type tar -signer OSX_SIGNING_KEY -signify SIGNIFY_KEY -upload gethstore/builds
 
         # Build the iOS framework and upload it to CocoaPods and Azure
         - gem uninstall cocoapods -a -x
@@ -245,14 +181,45 @@ jobs:
 
         # Workaround for https://github.com/golang/go/issues/23749
         - export CGO_CFLAGS_ALLOW='-fmodules|-fblocks|-fobjc-arc'
-        - go run build/ci.go xcode -signer IOS_SIGNING_KEY -deploy trunk -upload gethstore/builds
+        - go run build/ci.go xcode -signer IOS_SIGNING_KEY -signify SIGNIFY_KEY -deploy trunk -upload gethstore/builds
+
+    # These builders run the tests
+    - stage: build
+      os: linux
+      arch: amd64
+      dist: bionic
+      go: 1.16.x
+      env:
+        - GO111MODULE=on
+      script:
+        - go run build/ci.go test -coverage $TEST_PACKAGES
+
+    - stage: build
+      if: type = pull_request
+      os: linux
+      arch: arm64
+      dist: bionic
+      go: 1.16.x
+      env:
+        - GO111MODULE=on
+      script:
+        - go run build/ci.go test -coverage $TEST_PACKAGES
+
+    - stage: build
+      os: linux
+      dist: bionic
+      go: 1.15.x
+      env:
+        - GO111MODULE=on
+      script:
+        - go run build/ci.go test -coverage $TEST_PACKAGES
 
     # This builder does the Azure archive purges to avoid accumulating junk
     - stage: build
       if: type = cron
       os: linux
-      dist: xenial
-      go: 1.15.x
+      dist: bionic
+      go: 1.16.x
       env:
         - azure-purge
         - GO111MODULE=on

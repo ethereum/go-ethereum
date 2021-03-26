@@ -19,7 +19,6 @@ package main
 import (
 	"fmt"
 	"net"
-	"os"
 
 	"github.com/ethereum/go-ethereum/cmd/devp2p/internal/ethtest"
 	"github.com/ethereum/go-ethereum/crypto"
@@ -47,9 +46,12 @@ var (
 	rlpxEthTestCommand = cli.Command{
 		Name:      "eth-test",
 		Usage:     "Runs tests against a node",
-		ArgsUsage: "<node> <path_to_chain.rlp_file>",
+		ArgsUsage: "<node> <chain.rlp> <genesis.json>",
 		Action:    rlpxEthTest,
-		Flags:     []cli.Flag{testPatternFlag},
+		Flags: []cli.Flag{
+			testPatternFlag,
+			testTAPFlag,
+		},
 	}
 )
 
@@ -88,22 +90,19 @@ func rlpxPing(ctx *cli.Context) error {
 	return nil
 }
 
+// rlpxEthTest runs the eth protocol test suite.
 func rlpxEthTest(ctx *cli.Context) error {
 	if ctx.NArg() < 3 {
 		exit("missing path to chain.rlp as command-line argument")
 	}
-
-	suite := ethtest.NewSuite(getNodeArg(ctx), ctx.Args()[1], ctx.Args()[2])
-
-	// Filter and run test cases.
-	tests := suite.AllTests()
-	if ctx.IsSet(testPatternFlag.Name) {
-		tests = utesting.MatchTests(tests, ctx.String(testPatternFlag.Name))
+	suite, err := ethtest.NewSuite(getNodeArg(ctx), ctx.Args()[1], ctx.Args()[2])
+	if err != nil {
+		exit(err)
 	}
-	results := utesting.RunTests(tests, os.Stdout)
-	if fails := utesting.CountFailures(results); fails > 0 {
-		return fmt.Errorf("%v of %v tests passed.", len(tests)-fails, len(tests))
+	// check if given node supports eth66, and if so, run eth66 protocol tests as well
+	is66Failed, _ := utesting.Run(utesting.Test{Name: "Is_66", Fn: suite.Is_66})
+	if is66Failed {
+		return runTests(ctx, suite.EthTests())
 	}
-	fmt.Printf("all tests passed\n")
-	return nil
+	return runTests(ctx, suite.AllEthTests())
 }

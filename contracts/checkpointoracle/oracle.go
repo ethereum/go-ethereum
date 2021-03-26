@@ -65,7 +65,7 @@ func (oracle *CheckpointOracle) LookupCheckpointEvents(blockLogs [][]*types.Log,
 			if err != nil {
 				continue
 			}
-			if event.Index == section && common.Hash(event.CheckpointHash) == hash {
+			if event.Index == section && event.CheckpointHash == hash {
 				votes = append(votes, event)
 			}
 		}

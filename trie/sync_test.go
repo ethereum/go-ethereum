@@ -377,7 +377,6 @@ func TestIncompleteSync(t *testing.T) {
 
 	nodes, _, codes := sched.Missing(1)
 	queue := append(append([]common.Hash{}, nodes...), codes...)
-
 	for len(queue) > 0 {
 		// Fetch a batch of trie nodes
 		results := make([]SyncResult, len(queue))
@@ -401,10 +400,8 @@ func TestIncompleteSync(t *testing.T) {
 		batch.Write()
 		for _, result := range results {
 			added = append(added, result.Hash)
-		}
-		// Check that all known sub-tries in the synced trie are complete
-		for _, root := range added {
-			if err := checkTrieConsistency(triedb, root); err != nil {
+			// Check that all known sub-tries in the synced trie are complete
+			if err := checkTrieConsistency(triedb, result.Hash); err != nil {
 				t.Fatalf("trie inconsistent: %v", err)
 			}
 		}

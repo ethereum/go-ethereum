@@ -19,6 +19,7 @@ package snapshot
 import (
 	"bytes"
 	"encoding/binary"
+	"fmt"
 	"math/big"
 	"time"
 
@@ -100,24 +101,67 @@ func generateSnapshot(diskdb ethdb.KeyValueStore, triedb *trie.Database, cache i
 		wiper = wipeSnapshot(diskdb, true)
 	}
 	// Create a new disk layer with an initialized state marker at zero
-	rawdb.WriteSnapshotRoot(diskdb, root)
-
+	var (
+		stats     = &generatorStats{wiping: wiper, start: time.Now()}
+		batch     = diskdb.NewBatch()
+		genMarker = []byte{} // Initialized but empty!
+	)
+	rawdb.WriteSnapshotRoot(batch, root)
+	journalProgress(batch, genMarker, stats)
+	if err := batch.Write(); err != nil {
+		log.Crit("Failed to write initialized state marker", "error", err)
+	}
 	base := &diskLayer{
 		diskdb:     diskdb,
 		triedb:     triedb,
 		root:       root,
 		cache:      fastcache.New(cache * 1024 * 1024),
-		genMarker:  []byte{}, // Initialized but empty!
+		genMarker:  genMarker,
 		genPending: make(chan struct{}),
 		genAbort:   make(chan chan *generatorStats),
 	}
-	go base.generate(&generatorStats{wiping: wiper, start: time.Now()})
+	go base.generate(stats)
+	log.Debug("Start snapshot generation", "root", root)
 	return base
+}
+
+// journalProgress persists the generator stats into the database to resume later.
+func journalProgress(db ethdb.KeyValueWriter, marker []byte, stats *generatorStats) {
+	// Write out the generator marker. Note it's a standalone disk layer generator
+	// which is not mixed with journal. It's ok if the generator is persisted while
+	// journal is not.
+	entry := journalGenerator{
+		Done:   marker == nil,
+		Marker: marker,
+	}
+	if stats != nil {
+		entry.Wiping = (stats.wiping != nil)
+		entry.Accounts = stats.accounts
+		entry.Slots = stats.slots
+		entry.Storage = uint64(stats.storage)
+	}
+	blob, err := rlp.EncodeToBytes(entry)
+	if err != nil {
+		panic(err) // Cannot happen, here to catch dev errors
+	}
+	var logstr string
+	switch {
+	case marker == nil:
+		logstr = "done"
+	case bytes.Equal(marker, []byte{}):
+		logstr = "empty"
+	case len(marker) == common.HashLength:
+		logstr = fmt.Sprintf("%#x", marker)
+	default:
+		logstr = fmt.Sprintf("%#x:%#x", marker[:common.HashLength], marker[common.HashLength:])
+	}
+	log.Debug("Journalled generator progress", "progress", logstr)
+	rawdb.WriteSnapshotGenerator(db, blob)
 }
 
 // generate is a background thread that iterates over the state and storage tries,
 // constructing the state snapshot. All the arguments are purely for statistics
-// gethering and logging, since the method surfs the blocks as they arrive, often
+// gathering and logging, since the method surfs the blocks as they arrive, often
 // being restarted.
 func (dl *diskLayer) generate(stats *generatorStats) {
 	// If a database wipe is in operation, wait until it's done
@@ -186,11 +230,15 @@ func (dl *diskLayer) generate(stats *generatorStats) {
 		if batch.ValueSize() > ethdb.IdealBatchSize || abort != nil {
 			// Only write and set the marker if we actually did something useful
 			if batch.ValueSize() > 0 {
+				// Ensure the generator entry is in sync with the data
+				marker := accountHash[:]
+				journalProgress(batch, marker, stats)
+
 				batch.Write()
 				batch.Reset()
 
 				dl.lock.Lock()
-				dl.genMarker = accountHash[:]
+				dl.genMarker = marker
 				dl.lock.Unlock()
 			}
 			if abort != nil {
@@ -203,7 +251,7 @@ func (dl *diskLayer) generate(stats *generatorStats) {
 		if acc.Root != emptyRoot {
 			storeTrie, err := trie.NewSecure(acc.Root, dl.triedb)
 			if err != nil {
-				log.Error("Generator failed to access storage trie", "accroot", dl.root, "acchash", common.BytesToHash(accIt.Key), "stroot", acc.Root, "err", err)
+				log.Error("Generator failed to access storage trie", "root", dl.root, "account", accountHash, "stroot", acc.Root, "err", err)
 				abort := <-dl.genAbort
 				abort <- stats
 				return
@@ -227,17 +275,25 @@ func (dl *diskLayer) generate(stats *generatorStats) {
 				if batch.ValueSize() > ethdb.IdealBatchSize || abort != nil {
 					// Only write and set the marker if we actually did something useful
 					if batch.ValueSize() > 0 {
+						// Ensure the generator entry is in sync with the data
+						marker := append(accountHash[:], storeIt.Key...)
+						journalProgress(batch, marker, stats)
+
 						batch.Write()
 						batch.Reset()
 
 						dl.lock.Lock()
-						dl.genMarker = append(accountHash[:], storeIt.Key...)
+						dl.genMarker = marker
 						dl.lock.Unlock()
 					}
 					if abort != nil {
 						stats.Log("Aborting state snapshot generation", dl.root, append(accountHash[:], storeIt.Key...))
 						abort <- stats
 						return
+					}
+					if time.Since(logged) > 8*time.Second {
+						stats.Log("Generating state snapshot", dl.root, append(accountHash[:], storeIt.Key...))
+						logged = time.Now()
 					}
 				}
 			}
@@ -261,10 +317,12 @@ func (dl *diskLayer) generate(stats *generatorStats) {
 		abort <- stats
 		return
 	}
-	// Snapshot fully generated, set the marker to nil
-	if batch.ValueSize() > 0 {
-		batch.Write()
-	}
+	// Snapshot fully generated, set the marker to nil.
+	// Note even there is nothing to commit, persist the
+	// generator anyway to mark the snapshot is complete.
+	journalProgress(batch, nil, stats)
+	batch.Write()
+
 	log.Info("Generated state snapshot", "accounts", stats.accounts, "slots", stats.slots,
 		"storage", stats.storage, "elapsed", common.PrettyDuration(time.Since(stats.start)))
 

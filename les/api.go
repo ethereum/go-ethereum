@@ -23,7 +23,7 @@ import (
 
 	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/ethereum/go-ethereum/common/mclock"
-	lps "github.com/ethereum/go-ethereum/les/lespay/server"
+	vfs "github.com/ethereum/go-ethereum/les/vflux/server"
 	"github.com/ethereum/go-ethereum/p2p/enode"
 )
 
@@ -37,7 +37,7 @@ var (
 // PrivateLightServerAPI provides an API to access the LES light server.
 type PrivateLightServerAPI struct {
 	server                               *LesServer
-	defaultPosFactors, defaultNegFactors lps.PriceFactors
+	defaultPosFactors, defaultNegFactors vfs.PriceFactors
 }
 
 // NewPrivateLightServerAPI creates a new LES light server API.
@@ -46,6 +46,18 @@ func NewPrivateLightServerAPI(server *LesServer) *PrivateLightServerAPI {
 		server:            server,
 		defaultPosFactors: server.clientPool.defaultPosFactors,
 		defaultNegFactors: server.clientPool.defaultNegFactors,
+	}
+}
+
+// parseNode parses either an enode address a raw hex node id
+func parseNode(node string) (enode.ID, error) {
+	if id, err := enode.ParseID(node); err == nil {
+		return id, nil
+	}
+	if node, err := enode.Parse(enode.ValidSchemes, node); err == nil {
+		return node.ID(), nil
+	} else {
+		return enode.ID{}, err
 	}
 }
 
@@ -59,7 +71,14 @@ func (api *PrivateLightServerAPI) ServerInfo() map[string]interface{} {
 }
 
 // ClientInfo returns information about clients listed in the ids list or matching the given tags
-func (api *PrivateLightServerAPI) ClientInfo(ids []enode.ID) map[enode.ID]map[string]interface{} {
+func (api *PrivateLightServerAPI) ClientInfo(nodes []string) map[enode.ID]map[string]interface{} {
+	var ids []enode.ID
+	for _, node := range nodes {
+		if id, err := parseNode(node); err == nil {
+			ids = append(ids, id)
+		}
+	}
+
 	res := make(map[enode.ID]map[string]interface{})
 	api.server.clientPool.forClients(ids, func(client *clientInfo) {
 		res[client.node.ID()] = api.clientInfo(client)
@@ -107,7 +126,7 @@ func (api *PrivateLightServerAPI) clientInfo(c *clientInfo) map[string]interface
 
 // setParams either sets the given parameters for a single connected client (if specified)
 // or the default parameters applicable to clients connected in the future
-func (api *PrivateLightServerAPI) setParams(params map[string]interface{}, client *clientInfo, posFactors, negFactors *lps.PriceFactors) (updateFactors bool, err error) {
+func (api *PrivateLightServerAPI) setParams(params map[string]interface{}, client *clientInfo, posFactors, negFactors *vfs.PriceFactors) (updateFactors bool, err error) {
 	defParams := client == nil
 	for name, value := range params {
 		errValue := func() error {
@@ -159,8 +178,18 @@ func (api *PrivateLightServerAPI) setParams(params map[string]interface{}, clien
 
 // SetClientParams sets client parameters for all clients listed in the ids list
 // or all connected clients if the list is empty
-func (api *PrivateLightServerAPI) SetClientParams(ids []enode.ID, params map[string]interface{}) error {
-	var err error
+func (api *PrivateLightServerAPI) SetClientParams(nodes []string, params map[string]interface{}) error {
+	var (
+		ids []enode.ID
+		err error
+	)
+	for _, node := range nodes {
+		if id, err := parseNode(node); err != nil {
+			return err
+		} else {
+			ids = append(ids, id)
+		}
+	}
 	api.server.clientPool.forClients(ids, func(client *clientInfo) {
 		if client.connected {
 			posFactors, negFactors := client.balance.GetPriceFactors()
@@ -201,7 +230,11 @@ func (api *PrivateLightServerAPI) SetConnectedBias(bias time.Duration) error {
 
 // AddBalance adds the given amount to the balance of a client if possible and returns
 // the balance before and after the operation
-func (api *PrivateLightServerAPI) AddBalance(id enode.ID, amount int64) (balance [2]uint64, err error) {
+func (api *PrivateLightServerAPI) AddBalance(node string, amount int64) (balance [2]uint64, err error) {
+	var id enode.ID
+	if id, err = parseNode(node); err != nil {
+		return
+	}
 	api.server.clientPool.forClients([]enode.ID{id}, func(c *clientInfo) {
 		balance[0], balance[1], err = c.balance.AddBalance(amount)
 	})
@@ -297,8 +330,14 @@ func NewPrivateDebugAPI(server *LesServer) *PrivateDebugAPI {
 }
 
 // FreezeClient forces a temporary client freeze which normally happens when the server is overloaded
-func (api *PrivateDebugAPI) FreezeClient(id enode.ID) error {
-	var err error
+func (api *PrivateDebugAPI) FreezeClient(node string) error {
+	var (
+		id  enode.ID
+		err error
+	)
+	if id, err = parseNode(node); err != nil {
+		return err
+	}
 	api.server.clientPool.forClients([]enode.ID{id}, func(c *clientInfo) {
 		if c.connected {
 			c.peer.freeze()

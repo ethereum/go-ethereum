@@ -35,7 +35,7 @@ var stPool = sync.Pool{
 	},
 }
 
-func stackTrieFromPool(db ethdb.KeyValueStore) *StackTrie {
+func stackTrieFromPool(db ethdb.KeyValueWriter) *StackTrie {
 	st := stPool.Get().(*StackTrie)
 	st.db = db
 	return st
@@ -50,24 +50,23 @@ func returnToPool(st *StackTrie) {
 // in order. Once it determines that a subtree will no longer be inserted
 // into, it will hash it and free up the memory it uses.
 type StackTrie struct {
-	nodeType  uint8          // node type (as in branch, ext, leaf)
-	val       []byte         // value contained by this node if it's a leaf
-	key       []byte         // key chunk covered by this (full|ext) node
-	keyOffset int            // offset of the key chunk inside a full key
-	children  [16]*StackTrie // list of children (for fullnodes and exts)
-
-	db ethdb.KeyValueStore // Pointer to the commit db, can be nil
+	nodeType  uint8                // node type (as in branch, ext, leaf)
+	val       []byte               // value contained by this node if it's a leaf
+	key       []byte               // key chunk covered by this (full|ext) node
+	keyOffset int                  // offset of the key chunk inside a full key
+	children  [16]*StackTrie       // list of children (for fullnodes and exts)
+	db        ethdb.KeyValueWriter // Pointer to the commit db, can be nil
 }
 
 // NewStackTrie allocates and initializes an empty trie.
-func NewStackTrie(db ethdb.KeyValueStore) *StackTrie {
+func NewStackTrie(db ethdb.KeyValueWriter) *StackTrie {
 	return &StackTrie{
 		nodeType: emptyNode,
 		db:       db,
 	}
 }
 
-func newLeaf(ko int, key, val []byte, db ethdb.KeyValueStore) *StackTrie {
+func newLeaf(ko int, key, val []byte, db ethdb.KeyValueWriter) *StackTrie {
 	st := stackTrieFromPool(db)
 	st.nodeType = leafNode
 	st.keyOffset = ko
@@ -76,7 +75,7 @@ func newLeaf(ko int, key, val []byte, db ethdb.KeyValueStore) *StackTrie {
 	return st
 }
 
-func newExt(ko int, key []byte, child *StackTrie, db ethdb.KeyValueStore) *StackTrie {
+func newExt(ko int, key []byte, child *StackTrie, db ethdb.KeyValueWriter) *StackTrie {
 	st := stackTrieFromPool(db)
 	st.nodeType = extNode
 	st.keyOffset = ko
@@ -113,7 +112,7 @@ func (st *StackTrie) Update(key, value []byte) {
 func (st *StackTrie) Reset() {
 	st.db = nil
 	st.key = st.key[:0]
-	st.val = st.val[:0]
+	st.val = nil
 	for i := range st.children {
 		st.children[i] = nil
 	}
@@ -314,19 +313,22 @@ func (st *StackTrie) hash() {
 			panic(err)
 		}
 	case extNode:
+		st.children[0].hash()
 		h = newHasher(false)
 		defer returnHasherToPool(h)
 		h.tmp.Reset()
-		st.children[0].hash()
-		// This is also possible:
-		//sz := hexToCompactInPlace(st.key)
-		//n := [][]byte{
-		//	st.key[:sz],
-		//	st.children[0].val,
-		//}
-		n := [][]byte{
-			hexToCompact(st.key),
-			st.children[0].val,
+		var valuenode node
+		if len(st.children[0].val) < 32 {
+			valuenode = rawNode(st.children[0].val)
+		} else {
+			valuenode = hashNode(st.children[0].val)
+		}
+		n := struct {
+			Key []byte
+			Val node
+		}{
+			Key: hexToCompact(st.key),
+			Val: valuenode,
 		}
 		if err := rlp.Encode(&h.tmp, n); err != nil {
 			panic(err)
@@ -406,6 +408,18 @@ func (st *StackTrie) Commit() (common.Hash, error) {
 		return common.Hash{}, ErrCommitDisabled
 	}
 	st.hash()
-	h := common.BytesToHash(st.val)
-	return h, nil
+	if len(st.val) != 32 {
+		// If the node's RLP isn't 32 bytes long, the node will not
+		// be hashed (and committed), and instead contain the  rlp-encoding of the
+		// node. For the top level node, we need to force the hashing+commit.
+		ret := make([]byte, 32)
+		h := newHasher(false)
+		defer returnHasherToPool(h)
+		h.sha.Reset()
+		h.sha.Write(st.val)
+		h.sha.Read(ret)
+		st.db.Put(ret, st.val)
+		return common.BytesToHash(ret), nil
+	}
+	return common.BytesToHash(st.val), nil
 }
