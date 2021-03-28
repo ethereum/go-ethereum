@@ -494,10 +494,6 @@ func diffToDisk(bottom *diffLayer) *diskLayer {
 						log.Crit("Failed to write storage deletions", "err", err)
 					}
 					batch.Reset()
-
-					// Recreate the iterator to allow LevelDB to compact the data away
-					it.Release()
-					it = rawdb.IterateStorageSnapshots(base.diskdb, hash) // Ok to recreate with same hash, old slots deleted
 				}
 			}
 		}
