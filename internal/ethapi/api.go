@@ -2186,7 +2186,7 @@ func (s *BundleAPI) CallBundle(ctx context.Context, encodedTxs []hexutil.Bytes, 
 	if err != nil {
 		return nil, err
 	}
-	evm, vmError, err := s.b.GetEVM(ctx, firstMsg, state, header)
+	evm, _, err := s.b.GetEVM(ctx, firstMsg, state, header)
 	if err != nil {
 		return nil, err
 	}
@@ -2212,6 +2212,18 @@ func (s *BundleAPI) CallBundle(ctx context.Context, encodedTxs []hexutil.Bytes, 
 		if err != nil {
 			return nil, err
 		}
+
+		evm, vmError, err := s.b.GetEVM(ctx, msg, state, header)
+		if err != nil {
+			return nil, err
+		}
+		// Wait for the context to be done and cancel the evm. Even if the
+		// EVM has finished, cancelling may be done (repeatedly)
+		go func() {
+			<-ctx.Done()
+			evm.Cancel()
+		}()
+
 		result, err := core.ApplyMessage(evm, msg, gp)
 		if err := vmError(); err != nil {
 			return nil, err
