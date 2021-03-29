@@ -611,7 +611,6 @@ func (ethash *Ethash) SealHash(header *types.Header) (hash common.Hash) {
 		//extraData = extraData[:extraDataLen-signatureSize]
 		pandoraExtraData := new(PandoraExtraDataSealed)
 		pandoraExtraData.FromHeader(header)
-
 		headerExtra := new(PandoraExtraData)
 		headerExtra.Epoch = pandoraExtraData.Epoch
 		headerExtra.ProposerIndex = pandoraExtraData.ProposerIndex

@@ -488,8 +488,7 @@ func (pandoraExtraDataSealed *PandoraExtraDataSealed) FromExtraDataAndSignature(
 }
 
 func (pandoraExtraDataSealed *PandoraExtraDataSealed) FromHeader(header *types.Header) {
-	pandoraExtraData := new(PandoraExtraDataSealed)
-	err := rlp.DecodeBytes(header.Extra, pandoraExtraData)
+	err := rlp.DecodeBytes(header.Extra, pandoraExtraDataSealed)
 
 	if nil != err {
 		panic(err.Error())
