@@ -23,10 +23,6 @@ import (
 	"time"
 )
 
-const (
-	invalidPandoraHeaderExtra = "0xc38080809935245cb6f12435372d2f122371cdf260efe3f887c8ea5b14daa238462ce68afb8832cfc8f10ded046307b252164611043bdd341901b49c2a20d443b5d660f5517529b55bac4d2964540937bbfc303f49fd454b2bc56b7126502116ab654c0e"
-)
-
 type fakeReader struct {
 	chainConfig *params.ChainConfig
 }
@@ -241,8 +237,7 @@ func TestCreateBlockByPandoraAndVanguard(t *testing.T) {
 			submitted := ethashAPI.SubmitWorkBLS(
 				submittedWork.nonce,
 				submittedWork.hash,
-				submittedWork.mixDigest,
-				submittedWork.blsSeal,
+				hexutil.Encode(submittedWork.blsSeal[:]),
 			)
 
 			//mixDigest := submittedWork.mixDigest
