@@ -404,5 +404,5 @@ func (b *EthAPIBackend) AccessList(ctx context.Context, block *types.Block, reex
 		gas = res.UsedGas
 	}
 
-	return accessList, 0, nil, errors.New("failed to create accesslist")
+	return accessList, gas, errors.New("accesslist creation stopped after 10 iterations"), nil
 }
