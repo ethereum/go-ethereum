@@ -534,6 +534,7 @@ func (pp *priorityPool) getCapacityCurve() *capacityCurve {
 	excludeFirst := pp.maxCount == pp.activeCount
 	// reduce node capacities or remove nodes until nothing is left in the queue;
 	// record the available capacity and the necessary priority after each step
+	lastPri := int64(math.MinInt64)
 	for pp.activeCap > 0 {
 		cp := curvePoint{}
 		if pp.activeCap > pp.maxCap {
@@ -548,6 +549,12 @@ func (pp *priorityPool) getCapacityCurve() *capacityCurve {
 		// enforceLimits removes the lowest priority node if it has minimal capacity,
 		// otherwise reduces its capacity
 		next, cp.nextPri = pp.enforceLimits()
+		if cp.nextPri < lastPri {
+			// enforce monotonicity which may be broken by continuously changing priorities
+			cp.nextPri = lastPri
+		} else {
+			lastPri = cp.nextPri
+		}
 		pp.activeCap -= tempCap
 		if next == nil {
 			log.Error("getCapacityCurve: cannot remove next element from the priority queue")
