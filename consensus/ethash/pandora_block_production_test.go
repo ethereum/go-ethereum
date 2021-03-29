@@ -234,14 +234,12 @@ func TestCreateBlockByPandoraAndVanguard(t *testing.T) {
 		// This is created by channel to remove network complexity for test scenario.
 		// Full E2E layer should be somewhere else, or we should consider stress test
 		case submittedWork := <-submitWorkChannel:
-			//TODO: change this API, extend it or provide another one like SubmitSeal?
 			submitted := ethashAPI.SubmitWorkBLS(
 				submittedWork.nonce,
 				submittedWork.hash,
 				hexutil.Encode(submittedWork.blsSeal[:]),
 			)
 
-			//mixDigest := submittedWork.mixDigest
 			blsSignatureBytes := submittedWork.blsSeal
 			blsSignature, err := herumi.SignatureFromBytes(blsSignatureBytes[:])
 			assert.Nil(t, err)

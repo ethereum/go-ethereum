@@ -149,6 +149,14 @@ func (api *API) InsertMinimalConsensusInfo(
 		consensusInfo.ValidatorsList[index] = pubKey
 	}
 
+	ethash.config.Log.Info(
+		"Inserting minimal consensus info for epoch",
+		"epoch",
+		epoch,
+		"timeStartUnix",
+		consensusInfo.EpochTimeStartUnix,
+	)
+
 	err := ethash.InsertMinimalConsensusInfo(epoch, consensusInfo)
 
 	return nil == err

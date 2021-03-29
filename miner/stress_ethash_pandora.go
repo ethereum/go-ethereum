@@ -58,7 +58,7 @@ const (
 )
 
 var (
-	consensusInfosList = [2 ^ 6]*params.MinimalEpochConsensusInfo{}
+	consensusInfosList = [256]*params.MinimalEpochConsensusInfo{}
 )
 
 func main() {
@@ -189,7 +189,7 @@ func makeGenesis(faucets []*ecdsa.PrivateKey, sealers [32]common2.PublicKey) *co
 		currentEpochStart := genesisEpochStart
 
 		if index > 0 {
-			currentEpochStart = currentEpochStart + (uint64(index) * uint64(epochDuration*time.Second))
+			currentEpochStart = currentEpochStart + (uint64(index) * uint64(epochDuration))
 		}
 
 		consensusInfo = &params.MinimalEpochConsensusInfo{
@@ -400,7 +400,14 @@ func makeRemoteSealer(
 		}
 	}
 
-	insertFunc := func(minimalConsensusInfo *params.MinimalEpochConsensusInfo, epoch int) {
+	insertFunc := func(epoch int) {
+		minimalConsensusInfo := &params.MinimalEpochConsensusInfo{
+			Epoch:            uint64(epoch),
+			ValidatorsList:   consensusInfosList[epoch+1].ValidatorsList,
+			EpochTimeStart:   consensusInfosList[epoch+1].EpochTimeStart,
+			SlotTimeDuration: consensusInfosList[epoch+1].SlotTimeDuration,
+		}
+
 		var response bool
 
 		validatorsListPayload := [32]string{}
@@ -412,7 +419,7 @@ func makeRemoteSealer(
 		err = rpcClient.Call(
 			&response,
 			"eth_insertMinimalConsensusInfo",
-			uint64(epoch),
+			uint64(epoch+1),
 			validatorsListPayload,
 			minimalConsensusInfo.EpochTimeStart,
 		)
@@ -440,14 +447,7 @@ func makeRemoteSealer(
 			// They were created on makeGenesis function
 			// This will panic when out consensusInfos
 			if 0 == turn%32 {
-				fmt.Printf("I am inserting minimal consenus info for epoch: %d, start: %d", epoch+1, consensusInfosList[epoch+1].EpochTimeStart)
-				minimalConsensusInfo := &params.MinimalEpochConsensusInfo{
-					Epoch:            uint64(epoch),
-					ValidatorsList:   consensusInfosList[epoch+1].ValidatorsList,
-					EpochTimeStart:   consensusInfosList[epoch+1].EpochTimeStart,
-					SlotTimeDuration: consensusInfosList[epoch+1].SlotTimeDuration,
-				}
-				insertFunc(minimalConsensusInfo, epoch)
+				insertFunc(epoch)
 			}
 
 			// Increase the epoch
