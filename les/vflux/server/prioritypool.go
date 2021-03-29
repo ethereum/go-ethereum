@@ -59,18 +59,18 @@ const (
 // nodes is reduced or they are demoted to "inactive" state if their priority is
 // insufficient even at minimal capacity.
 type priorityPool struct {
-	setup                  *serverSetup
-	ns                     *nodestate.NodeStateMachine
-	clock                  mclock.Clock
-	lock                   sync.Mutex
-	activeQueue            *prque.LazyQueue
-	inactiveQueue          *prque.Prque
-	changed                []*ppNodeInfo
-	activeCount, activeCap uint64
-	maxCount, maxCap       uint64
-	minCap                 uint64
-	activeBias             time.Duration
-	capacityStepDiv        uint64
+	setup                        *serverSetup
+	ns                           *nodestate.NodeStateMachine
+	clock                        mclock.Clock
+	lock                         sync.Mutex
+	activeQueue                  *prque.LazyQueue
+	inactiveQueue                *prque.Prque
+	changed                      []*ppNodeInfo
+	activeCount, activeCap       uint64
+	maxCount, maxCap             uint64
+	minCap                       uint64
+	activeBias                   time.Duration
+	capacityStepDiv, fineStepDiv uint64
 
 	cachedCurve    *capacityCurve
 	ccUpdatedAt    mclock.AbsTime
@@ -79,17 +79,17 @@ type priorityPool struct {
 
 // ppNodeInfo is the internal node descriptor of priorityPool
 type ppNodeInfo struct {
-	nodePriority               nodePriority
-	node                       *enode.Node
-	connected                  bool
-	capacity, origCap          uint64
-	bias                       time.Duration
-	changed                    bool
-	activeIndex, inactiveIndex int
+	nodePriority                          nodePriority
+	node                                  *enode.Node
+	connected                             bool
+	capacity, origCap, minTarget, stepDiv uint64
+	bias                                  time.Duration
+	changed                               bool
+	activeIndex, inactiveIndex            int
 }
 
 // newPriorityPool creates a new priorityPool
-func newPriorityPool(ns *nodestate.NodeStateMachine, setup *serverSetup, clock mclock.Clock, minCap uint64, activeBias time.Duration, capacityStepDiv uint64) *priorityPool {
+func newPriorityPool(ns *nodestate.NodeStateMachine, setup *serverSetup, clock mclock.Clock, minCap uint64, activeBias time.Duration, capacityStepDiv, fineStepDiv uint64) *priorityPool {
 	pp := &priorityPool{
 		setup:           setup,
 		ns:              ns,
@@ -98,6 +98,7 @@ func newPriorityPool(ns *nodestate.NodeStateMachine, setup *serverSetup, clock m
 		minCap:          minCap,
 		activeBias:      activeBias,
 		capacityStepDiv: capacityStepDiv,
+		fineStepDiv:     fineStepDiv,
 	}
 	if pp.activeBias < time.Duration(1) {
 		pp.activeBias = time.Duration(1)
@@ -111,6 +112,8 @@ func newPriorityPool(ns *nodestate.NodeStateMachine, setup *serverSetup, clock m
 				nodePriority:  newValue.(nodePriority),
 				activeIndex:   -1,
 				inactiveIndex: -1,
+				minTarget:     pp.minCap,
+				stepDiv:       pp.capacityStepDiv,
 			}
 			ns.SetFieldSub(node, pp.setup.queueField, c)
 		} else {
@@ -140,18 +143,12 @@ func newPriorityPool(ns *nodestate.NodeStateMachine, setup *serverSetup, clock m
 	return pp
 }
 
-// requestCapacity checks whether changing the capacity of a node to the given target
-// is possible (bias is applied in favor of other active nodes if the target is higher
-// than the current capacity).
-// If setCap is true then it also performs the change if possible. The function returns
-// the minimum priority needed to do the change and whether it is currently allowed.
-// If setCap and allowed are both true then the caller can assume that the change was
-// successful.
-// Note: priorityField should always be set before calling requestCapacity. If setCap
-// is false then both inactiveFlag and activeFlag can be unset and they are not changed
-// by this function call either.
-// Note 2: this function should run inside a NodeStateMachine operation
-func (pp *priorityPool) requestCapacity(node *enode.Node, targetCap uint64, bias time.Duration) bool {
+// requestCapacity tries to set the capacity of a connected node to the highest possible
+// value inside the given target range. If maxTarget is not reachable then the capacity is
+// iteratively reduced in fine steps based on the fineStepDiv parameter until minTarget is reached.
+// The function returns the new capacity if successful and the original capacity otherwise.
+// Note: this function should run inside a NodeStateMachine operation
+func (pp *priorityPool) requestCapacity(node *enode.Node, minTarget, maxTarget uint64, bias time.Duration) uint64 {
 	pp.lock.Lock()
 	pp.activeQueue.Refresh()
 	var updates []capUpdate
@@ -160,8 +157,11 @@ func (pp *priorityPool) requestCapacity(node *enode.Node, targetCap uint64, bias
 		pp.updateFlags(updates)
 	}()
 
-	if targetCap < pp.minCap {
-		targetCap = pp.minCap
+	if minTarget < pp.minCap {
+		minTarget = pp.minCap
+	}
+	if maxTarget < minTarget {
+		maxTarget = minTarget
 	}
 	if bias < pp.activeBias {
 		bias = pp.activeBias
@@ -169,20 +169,22 @@ func (pp *priorityPool) requestCapacity(node *enode.Node, targetCap uint64, bias
 	c, _ := pp.ns.GetField(node, pp.setup.queueField).(*ppNodeInfo)
 	if c == nil {
 		log.Error("requestCapacity called for unknown node", "id", node.ID())
-		return false
+		return 0
 	}
 	pp.markForChange(c)
-	pp.setCapacity(c, targetCap)
-	if targetCap > c.capacity {
+	if maxTarget > c.capacity {
 		c.bias = bias
+		c.stepDiv = pp.fineStepDiv
 	}
+	oldCapacity := c.capacity
+	pp.setCapacity(c, maxTarget)
+	c.minTarget = minTarget
 	pp.activeQueue.Remove(c.activeIndex)
 	pp.inactiveQueue.Remove(c.inactiveIndex)
 	pp.activeQueue.Push(c)
 	pp.enforceLimits()
-	success := c.capacity == targetCap
-	updates = pp.finalizeChanges(success)
-	return success
+	updates = pp.finalizeChanges(c.capacity >= minTarget && c.capacity <= maxTarget && c.capacity != oldCapacity)
+	return c.capacity
 }
 
 // SetLimits sets the maximum number and total capacity of simultaneously active nodes
@@ -368,12 +370,15 @@ func (pp *priorityPool) enforceLimits() (*ppNodeInfo, int64) {
 		c = data.(*ppNodeInfo)
 		pp.markForChange(c)
 		maxActivePriority = priority
-		if c.capacity == pp.minCap || pp.activeCount > pp.maxCount {
+		if c.capacity == c.minTarget || pp.activeCount > pp.maxCount {
 			pp.setCapacity(c, 0)
 		} else {
-			sub := c.capacity / pp.capacityStepDiv
-			if c.capacity-sub < pp.minCap {
-				sub = c.capacity - pp.minCap
+			sub := c.capacity / c.stepDiv
+			if sub == 0 {
+				sub = 1
+			}
+			if c.capacity-sub < c.minTarget {
+				sub = c.capacity - c.minTarget
 			}
 			pp.setCapacity(c, c.capacity-sub)
 			pp.activeQueue.Push(c)
@@ -392,6 +397,8 @@ func (pp *priorityPool) finalizeChanges(commit bool) (updates []capUpdate) {
 		pp.activeQueue.Remove(c.activeIndex)
 		pp.inactiveQueue.Remove(c.inactiveIndex)
 		c.bias = 0
+		c.stepDiv = pp.capacityStepDiv
+		c.minTarget = pp.minCap
 		c.changed = false
 		if !commit {
 			pp.setCapacity(c, c.origCap)

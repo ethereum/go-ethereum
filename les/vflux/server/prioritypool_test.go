@@ -59,7 +59,7 @@ func TestPriorityPool(t *testing.T) {
 			c.cap = newValue.(uint64)
 		}
 	})
-	pp := newPriorityPool(ns, setup, clock, testMinCap, 0, testCapacityStepDiv)
+	pp := newPriorityPool(ns, setup, clock, testMinCap, 0, testCapacityStepDiv, testCapacityStepDiv)
 	ns.Start()
 	pp.SetLimits(100, 1000000)
 	clients := make([]*ppTestClient, 100)
@@ -67,7 +67,8 @@ func TestPriorityPool(t *testing.T) {
 		for {
 			var ok bool
 			ns.Operation(func() {
-				ok = pp.requestCapacity(c.node, c.cap+c.cap/testCapacityStepDiv, 0)
+				newCap := c.cap + c.cap/testCapacityStepDiv
+				ok = pp.requestCapacity(c.node, newCap, newCap, 0) == newCap
 			})
 			if !ok {
 				return
@@ -132,14 +133,14 @@ func TestPriorityPool(t *testing.T) {
 				expFail = testMinCap
 			}
 			ns.Operation(func() {
-				ok = pp.requestCapacity(c.node, expFail, 0)
+				ok = pp.requestCapacity(c.node, expFail, expFail, 0) == expFail
 			})
 			if ok {
 				t.Errorf("Request for more than expected available capacity succeeded")
 			}
 			if expCap >= testMinCap {
 				ns.Operation(func() {
-					ok = pp.requestCapacity(c.node, expCap, 0)
+					ok = pp.requestCapacity(c.node, expCap, expCap, 0) == expCap
 				})
 				if !ok {
 					t.Errorf("Request for expected available capacity failed")
@@ -164,7 +165,7 @@ func TestCapacityCurve(t *testing.T) {
 	setup.balanceField = setup.setup.NewField("ppTestClient", reflect.TypeOf(&ppTestClient{}))
 	ns := nodestate.NewNodeStateMachine(nil, nil, clock, setup.setup)
 
-	pp := newPriorityPool(ns, setup, clock, 400000, 0, 2)
+	pp := newPriorityPool(ns, setup, clock, 400000, 0, 2, 2)
 	ns.Start()
 	pp.SetLimits(10, 10000000)
 	clients := make([]*ppTestClient, 10)
@@ -179,7 +180,7 @@ func TestCapacityCurve(t *testing.T) {
 		ns.SetField(c.node, setup.balanceField, c)
 		ns.SetState(c.node, setup.inactiveFlag, nodestate.Flags{}, 0)
 		ns.Operation(func() {
-			pp.requestCapacity(c.node, c.cap, 0)
+			pp.requestCapacity(c.node, c.cap, c.cap, 0)
 		})
 	}
 

@@ -90,7 +90,7 @@ func NewClientPool(balanceDb ethdb.KeyValueStore, minCap uint64, connectedBias t
 	setup := newServerSetup()
 	ns := nodestate.NewNodeStateMachine(nil, nil, clock, setup.setup)
 	cp := &ClientPool{
-		priorityPool:   newPriorityPool(ns, setup, clock, minCap, connectedBias, 4),
+		priorityPool:   newPriorityPool(ns, setup, clock, minCap, connectedBias, 4, 100),
 		balanceTracker: newBalanceTracker(ns, setup, balanceDb, clock, &utils.Expirer{}, &utils.Expirer{}),
 		setup:          setup,
 		ns:             ns,
@@ -123,7 +123,7 @@ func NewClientPool(balanceDb ethdb.KeyValueStore, minCap uint64, connectedBias t
 			// active with no priority; limit capacity to minCap
 			cap, _ := ns.GetField(node, setup.capacityField).(uint64)
 			if cap > minCap {
-				cp.requestCapacity(node, minCap, 0)
+				cp.requestCapacity(node, minCap, minCap, 0)
 			}
 		}
 		if newState.Equals(nodestate.Flags{}) {
@@ -254,7 +254,6 @@ func (cp *ClientPool) SetCapacity(node *enode.Node, reqCap uint64, bias time.Dur
 		if reqCap == capacity {
 			return
 		}
-		curveBias := bias
 		if requested {
 			// mark the requested node so that the UpdateCapacity callback can signal
 			// whether the update is the direct result of a SetCapacity call on the given node
@@ -264,29 +263,37 @@ func (cp *ClientPool) SetCapacity(node *enode.Node, reqCap uint64, bias time.Dur
 			}()
 		}
 
-		// estimate maximum available capacity at the current priority level and request
-		// the estimated amount; allow a limited number of retries because individual
-		// balances can change between the estimation and the request
-		for count := 0; count < 20; count++ {
-			// apply a small extra bias to ensure that the request won't fail because of rounding errors
-			curveBias += time.Second * 10
-			tryCap := reqCap
-			if reqCap > capacity {
-				curve := cp.getCapacityCurve().exclude(node.ID())
-				tryCap = curve.maxCapacity(func(capacity uint64) int64 {
-					return balance.estimatePriority(capacity, 0, 0, curveBias, false)
-				})
-				if tryCap <= capacity {
-					return
-				}
-				if tryCap > reqCap {
-					tryCap = reqCap
-				}
-			}
-			if cp.requestCapacity(node, tryCap, bias) {
-				capacity = tryCap
+		var minTarget, maxTarget uint64
+		if reqCap > capacity {
+			// Estimate maximum available capacity at the current priority level and request
+			// the estimated amount.
+			// Note: requestCapacity could find the highest available capacity between the
+			// current and the requested capacity but it could cost a lot of iterations with
+			// fine step adjustment if the requested capacity is very high. By doing a quick
+			// estimation of the maximum available capacity based on the capacity curve we
+			// can limit the number of required iterations.
+			curve := cp.getCapacityCurve().exclude(node.ID())
+			maxTarget = curve.maxCapacity(func(capacity uint64) int64 {
+				return balance.estimatePriority(capacity, 0, 0, bias, false)
+			})
+			if maxTarget <= capacity {
 				return
 			}
+			if maxTarget > reqCap {
+				maxTarget = reqCap
+			}
+			// Specify a narrow target range that allows a limited number of fine step
+			// iterations
+			minTarget = maxTarget - maxTarget/20
+			if minTarget < capacity {
+				minTarget = capacity
+			}
+		} else {
+			minTarget, maxTarget = reqCap, reqCap
+		}
+		if newCap := cp.requestCapacity(node, minTarget, maxTarget, bias); newCap >= minTarget && newCap <= maxTarget {
+			capacity = newCap
+			return
 		}
 		// we should be able to find the maximum allowed capacity in a few iterations
 		log.Error("Unable to find maximum allowed capacity")
