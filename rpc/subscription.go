@@ -320,7 +320,6 @@ func (sub *ClientSubscription) forward() (unsubscribeServer bool, err error) {
 		{Dir: reflect.SelectSend, Chan: sub.channel},
 	}
 	buffer := list.New()
-	defer buffer.Init()
 
 	for {
 		var chosen int
