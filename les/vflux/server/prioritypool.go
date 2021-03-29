@@ -116,6 +116,7 @@ func newPriorityPool(ns *nodestate.NodeStateMachine, setup *serverSetup, clock m
 				stepDiv:       pp.capacityStepDiv,
 			}
 			ns.SetFieldSub(node, pp.setup.queueField, c)
+			ns.SetStateSub(node, setup.inactiveFlag, nodestate.Flags{}, 0)
 		} else {
 			ns.SetStateSub(node, nodestate.Flags{}, pp.setup.activeFlag.Or(pp.setup.inactiveFlag), 0)
 			if n, _ := pp.ns.GetField(node, pp.setup.queueField).(*ppNodeInfo); n != nil {
