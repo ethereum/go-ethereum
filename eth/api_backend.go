@@ -403,6 +403,6 @@ func (b *EthAPIBackend) AccessList(ctx context.Context, block *types.Block, reex
 		accessList = tracer.GetAccessList()
 		gas = res.UsedGas
 	}
-
-	return accessList, gas, errors.New("accesslist creation stopped after 10 iterations"), nil
+	// If we didn't find the perfect accesslist after 10 iterations, return our best guess
+	return accessList, gas, errors.New("best guess after 10 iterations"), nil
 }
