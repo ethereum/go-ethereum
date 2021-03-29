@@ -203,7 +203,22 @@ func (pandora *Pandora) submitWork(nonce types.BlockNonce, mixDigest common.Hash
 	if signatureLocator < 0 {
 		signatureLocator = 0
 	}
-	copy(blsSignatureBytes[:], header.Extra[signatureLocator:])
+
+	extraDataWithSignature := new(PandoraExtraDataSealed)
+	blsSignature, err := herumi.SignatureFromBytes(blsSignatureBytes[:])
+
+	if nil != err {
+		return false
+	}
+
+	pandoraExtraData := new(PandoraExtraData)
+	err = rlp.DecodeBytes(header.Extra, pandoraExtraData)
+
+	if nil != err {
+		return false
+	}
+
+	extraDataWithSignature.FromExtraDataAndSignature(*pandoraExtraData, blsSignature)
 
 	start := time.Now()
 	if !sealer.noverify {
@@ -369,14 +384,14 @@ func (ethash *Ethash) verifyPandoraHeader(header *types.Header) (err error) {
 	}
 
 	publicKey := minimalConsensus.ValidatorsList[extractedProposerIndex]
-	blsSginatureBytes := BlsSignatureBytes{}
-	signatureLocator := len(header.Extra) - signatureSize
+	pandoraExtraDataSealed := new(PandoraExtraDataSealed)
+	err = rlp.DecodeBytes(header.Extra, pandoraExtraDataSealed)
 
-	if signatureLocator < 0 {
-		signatureLocator = 0
+	if nil != err {
+		return
 	}
 
-	copy(blsSginatureBytes[:], header.Extra[signatureLocator:])
+	blsSginatureBytes := pandoraExtraDataSealed.BlsSignatureBytes
 	signature, err := herumi.SignatureFromBytes(blsSginatureBytes[:])
 
 	if nil != err {
@@ -403,32 +418,28 @@ func (ethash *Ethash) verifyPandoraHeader(header *types.Header) (err error) {
 		return
 	}
 
-	// Verify extraData field (does they match derived one)
-	// to consider if we really want to do this here
-	extraData := &PandoraExtraData{}
-	err = rlp.DecodeBytes(header.Extra, extraData)
-
-	if nil != err {
-		return
-	}
-
 	expectedExtra, err := NewPandoraExtraData(header, minimalConsensus)
 
 	if nil != err {
 		return
 	}
 
-	expectedRlp, err := rlp.EncodeToBytes(expectedExtra)
+	expectedExtraDataSealed := new(PandoraExtraDataSealed)
+	commonSignature, err := herumi.SignatureFromBytes(pandoraExtraDataSealed.BlsSignatureBytes[:])
 
 	if nil != err {
 		return
 	}
 
-	// Add signature to expected extraData
-	copy(expectedRlp[:], signature.Marshal())
+	expectedExtraDataSealed.FromExtraDataAndSignature(*expectedExtra, commonSignature)
+	expectedRlp, err := rlp.EncodeToBytes(expectedExtraDataSealed)
+
+	if nil != err {
+		return
+	}
 
 	if !bytes.Equal(expectedRlp, header.Extra) {
-		err = fmt.Errorf("invalid extraData field, expected: %v, got %v", expectedExtra, extraData)
+		err = fmt.Errorf("invalid extraData field, expected: %v, got %v", expectedExtra, pandoraExtraDataSealed)
 	}
 
 	return
@@ -462,7 +473,7 @@ func NewPandoraExtraData(header *types.Header, minimalConsensus *MinimalEpochCon
 
 func (pandoraExtraDataSealed *PandoraExtraDataSealed) FromExtraDataAndSignature(
 	pandoraExtraData PandoraExtraData,
-	signature herumi.Signature,
+	signature common2.Signature,
 ) {
 	var blsSignatureBytes BlsSignatureBytes
 	signatureBytes := signature.Marshal()

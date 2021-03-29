@@ -23,6 +23,10 @@ import (
 	"time"
 )
 
+const (
+	invalidPandoraHeaderExtra = "0xc38080809935245cb6f12435372d2f122371cdf260efe3f887c8ea5b14daa238462ce68afb8832cfc8f10ded046307b252164611043bdd341901b49c2a20d443b5d660f5517529b55bac4d2964540937bbfc303f49fd454b2bc56b7126502116ab654c0e"
+)
+
 type fakeReader struct {
 	chainConfig *params.ChainConfig
 }
@@ -506,10 +510,21 @@ func generatePandoraSealedHeaderByKey(
 
 	headerHash = ethash.SealHash(header)
 	signature := privKey.Sign(headerHash.Bytes())
+
+	extraDataWithSignature := new(PandoraExtraDataSealed)
+	extraDataWithSignature.FromExtraDataAndSignature(*extraData, signature)
+
 	compressedSignature := signature.Marshal()[:herumi.CompressedSize]
 	header.MixDigest = common.BytesToHash(compressedSignature[:])
 	mixDigest = header.MixDigest
-	header.Extra = append(header.Extra, signature.Marshal()...)
+
+	extraDataBytes, err := rlp.EncodeToBytes(extraDataWithSignature)
+
+	if nil != err {
+		panic(err.Error())
+	}
+
+	header.Extra = extraDataBytes
 
 	return
 }
