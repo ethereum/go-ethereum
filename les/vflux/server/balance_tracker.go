@@ -43,13 +43,15 @@ const (
 // The two balances are translated into a single priority value that also depends
 // on the actual capacity.
 type balanceTracker struct {
-	setup              *serverSetup
-	clock              mclock.Clock
-	lock               sync.Mutex
-	ns                 *nodestate.NodeStateMachine
-	ndb                *nodeDB
-	posExp, negExp     utils.ValueExpirer
-	posExpTC, negExpTC uint64
+	setup          *serverSetup
+	clock          mclock.Clock
+	lock           sync.Mutex
+	ns             *nodestate.NodeStateMachine
+	ndb            *nodeDB
+	posExp, negExp utils.ValueExpirer
+
+	posExpTC, negExpTC                   uint64
+	defaultPosFactors, defaultNegFactors PriceFactors
 
 	active, inactive utils.ExpiredValue
 	balanceTimer     *utils.UpdateTimer
@@ -103,7 +105,11 @@ func newBalanceTracker(ns *nodestate.NodeStateMachine, setup *serverSetup, db et
 			FreeClientId() string
 		}
 		if newValue != nil {
-			ns.SetFieldSub(node, bt.setup.balanceField, bt.newNodeBalance(node, newValue.(peer).FreeClientId(), true))
+			n := bt.newNodeBalance(node, newValue.(peer).FreeClientId(), true)
+			bt.lock.Lock()
+			n.SetPriceFactors(bt.defaultPosFactors, bt.defaultNegFactors)
+			bt.lock.Unlock()
+			ns.SetFieldSub(node, bt.setup.balanceField, n)
 		} else {
 			ns.SetStateSub(node, nodestate.Flags{}, bt.setup.priorityFlag, 0)
 			if b, _ := ns.GetField(node, bt.setup.balanceField).(*nodeBalance); b != nil {
@@ -171,6 +177,14 @@ func (bt *balanceTracker) TotalTokenAmount() uint64 {
 // GetPosBalanceIDs lists node IDs with an associated positive balance
 func (bt *balanceTracker) GetPosBalanceIDs(start, stop enode.ID, maxCount int) (result []enode.ID) {
 	return bt.ndb.getPosBalanceIDs(start, stop, maxCount)
+}
+
+// SetDefaultFactors sets the default price factors applied to subsequently connected clients
+func (bt *balanceTracker) SetDefaultFactors(posFactors, negFactors PriceFactors) {
+	bt.lock.Lock()
+	bt.defaultPosFactors = posFactors
+	bt.defaultNegFactors = negFactors
+	bt.lock.Unlock()
 }
 
 // SetExpirationTCs sets positive and negative token expiration time constants.

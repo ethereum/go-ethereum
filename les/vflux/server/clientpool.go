@@ -66,9 +66,8 @@ type ClientPool struct {
 	ns     *nodestate.NodeStateMachine
 	synced func() bool
 
-	lock                                 sync.RWMutex
-	defaultPosFactors, defaultNegFactors PriceFactors
-	connectedBias                        time.Duration
+	lock          sync.RWMutex
+	connectedBias time.Duration
 
 	minCap     uint64      // the minimal capacity value allowed for any client
 	capReqNode *enode.Node // node that is requesting capacity change; only used inside NSM operation
@@ -136,9 +135,6 @@ func NewClientPool(balanceDb ethdb.KeyValueStore, minCap uint64, connectedBias t
 	ns.SubscribeField(setup.balanceField, func(node *enode.Node, state nodestate.Flags, oldValue, newValue interface{}) {
 		if newValue != nil {
 			ns.SetStateSub(node, setup.inactiveFlag, nodestate.Flags{}, 0)
-			cp.lock.RLock()
-			newValue.(*nodeBalance).SetPriceFactors(cp.defaultPosFactors, cp.defaultNegFactors)
-			cp.lock.RUnlock()
 		}
 	})
 
@@ -200,14 +196,6 @@ func (cp *ClientPool) Register(peer clientPeer) ConnectedBalance {
 // Unregister removes the peer from the client pool
 func (cp *ClientPool) Unregister(peer clientPeer) {
 	cp.ns.SetField(peer.Node(), cp.setup.clientField, nil)
-}
-
-// SetDefaultFactors sets the default price factors applied to subsequently connected clients
-func (cp *ClientPool) SetDefaultFactors(posFactors, negFactors PriceFactors) {
-	cp.lock.Lock()
-	cp.defaultPosFactors = posFactors
-	cp.defaultNegFactors = negFactors
-	cp.lock.Unlock()
 }
 
 // setConnectedBias sets the connection bias, which is applied to already connected clients
