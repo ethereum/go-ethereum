@@ -440,7 +440,7 @@ func makeRemoteSealer(
 			// They were created on makeGenesis function
 			// This will panic when out consensusInfos
 			if 0 == turn%32 {
-				fmt.Printf("I am inserting minimal consenus info for epoch: %d", epoch)
+				fmt.Printf("I am inserting minimal consenus info for epoch: %d, start: %d", epoch+1, consensusInfosList[epoch+1].EpochTimeStart)
 				minimalConsensusInfo := &params.MinimalEpochConsensusInfo{
 					Epoch:            uint64(epoch),
 					ValidatorsList:   consensusInfosList[epoch+1].ValidatorsList,
