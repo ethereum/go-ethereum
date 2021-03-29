@@ -458,16 +458,17 @@ func TestVerifySeal(t *testing.T) {
 			randMax := 5
 			randomInterval := mathRand.Intn(randMax-randMin) + randMin
 			headerTime = headerTime.Add(time.Second * time.Duration(randomInterval))
-			header, sealHash, mixDigest := generatePandoraSealedHeaderByKey(
+			header, sealHash, blsSignature := generatePandoraSealedHeaderByKey(
 				privateKey,
 				int64(index),
 				headerTime,
 				&PandoraExtraData{},
 			)
 			headers = append(headers, header)
+
 			expectedErr := fmt.Errorf(
-				"invalid mixDigest: %s in header hash: %s with sealHash: %s",
-				mixDigest.String(),
+				"invalid signature: %s in header hash: %s with sealHash: %s",
+				blsSignature.Marshal(),
 				header.Hash().String(),
 				sealHash.String(),
 			)
@@ -488,7 +489,7 @@ func generatePandoraSealedHeaderByKey(
 ) (
 	header *types.Header,
 	headerHash common.Hash,
-	mixDigest common.Hash,
+	blsSignature common2.Signature,
 ) {
 	ethash := NewTester(nil, true)
 	extraDataBytes, _ := rlp.EncodeToBytes(extraData)
@@ -522,11 +523,9 @@ func generatePandoraSealedHeaderByKey(
 		panic("Signature should be valid")
 	}
 
-	fmt.Printf("Generate pandora extra data sig: %v", hexutil.Encode(signature.Marshal()))
-
 	compressedSignature := signature.Marshal()[:herumi.CompressedSize]
 	header.MixDigest = common.BytesToHash(compressedSignature[:])
-	mixDigest = header.MixDigest
+	blsSignature = signature
 
 	extraDataBytes, err := rlp.EncodeToBytes(extraDataWithSignature)
 
