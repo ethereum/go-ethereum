@@ -16,6 +16,7 @@ import (
 const (
 	// Time expressed in seconds
 	slotTimeDuration = 6
+	validatorListLen = 32
 	signatureSize    = 96
 )
 
@@ -43,7 +44,7 @@ type MinimalEpochConsensusInfo struct {
 	// Epoch number
 	Epoch uint64 `json:"epoch"`
 	// Validators list 32 public bls keys. slot(n) in Epoch is represented by index(n) in MinimalConsensusInfo
-	ValidatorsList [32]common2.PublicKey `json:"validatorList"`
+	ValidatorsList [validatorListLen]common2.PublicKey `json:"validatorList"`
 	// Unix timestamp of consensus start. This will be used to extract time slot
 	EpochTimeStart time.Time
 
@@ -262,7 +263,7 @@ func NewMinimalConsensusInfo(epoch uint64) (consensusInfo interface{}) {
 	return
 }
 
-func (pandoraMode *MinimalEpochConsensusInfo) AssignValidators(validatorsList [32]common2.PublicKey) {
+func (pandoraMode *MinimalEpochConsensusInfo) AssignValidators(validatorsList [validatorListLen]common2.PublicKey) {
 	pandoraMode.ValidatorsList = validatorsList
 	return
 }
@@ -463,21 +464,8 @@ func (ethash *Ethash) InsertMinimalConsensusInfo(
 
 	convertedInfo := NewMinimalConsensusInfo(consensusInfo.Epoch)
 	pandoraConsensusInfo := convertedInfo.(*MinimalEpochConsensusInfo)
-	epochTimeStart := time.Now()
-	epochTimeStart = consensusInfo.EpochTimeStart
-	// IMHO just simply remove epochTimeStart and leave only epochTimeStartUnix
-	notNilCheck := pandoraConsensusInfo.EpochTimeStartUnix > 0
-	epochTimeStartUnixCheck := pandoraConsensusInfo.EpochTimeStartUnix > uint64(epochTimeStart.Unix())
-
-	if notNilCheck && epochTimeStartUnixCheck {
-		epochTimeStart = time.Unix(int64(pandoraConsensusInfo.EpochTimeStartUnix), 0)
-	}
-
-	// Insert epoch into mciCache
-	pandoraConsensusInfo.AssignEpochStartFromGenesis(time.Unix(
-		epochTimeStart.Unix(),
-		0,
-	))
+	pandoraConsensusInfo.EpochTimeStartUnix = consensusInfo.EpochTimeStartUnix
+	pandoraConsensusInfo.EpochTimeStart = consensusInfo.EpochTimeStart
 
 	// In this mode we do not invalidate the mciCache!
 	// This is hell risky, we should first get epoch from mciCache and check if it is already inserted.
@@ -485,7 +473,7 @@ func (ethash *Ethash) InsertMinimalConsensusInfo(
 	pandoraConsensusInfo.AssignValidators(consensusInfo.ValidatorsList)
 	mci := ethash.mci
 	mciCache := mci.cache
-	mciCache.Add(epoch, pandoraConsensusInfo)
+	mciCache.Add(int(epoch), pandoraConsensusInfo)
 
 	return
 }

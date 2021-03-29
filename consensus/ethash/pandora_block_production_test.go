@@ -12,6 +12,7 @@ import (
 	"github.com/ethereum/go-ethereum/rlp"
 	common2 "github.com/silesiacoin/bls/common"
 	"github.com/silesiacoin/bls/herumi"
+	"github.com/silesiacoin/bls/testutil/require"
 	"github.com/stretchr/testify/assert"
 	"io/ioutil"
 	"math/big"
@@ -272,7 +273,8 @@ func TestEthash_Prepare_Pandora(t *testing.T) {
 		datasets: lruDataset,
 		mci:      lruEpochSet,
 		config: Config{
-			// In pandora-vanguard implementation we do not need to increase nonce and mixHash is sealed/calculated on the Vanguard side
+			// In pandora-vanguard implementation we do not need to increase
+			// nonce and mixHash are sealed/calculated on the Vanguard side
 			PowMode: ModePandora,
 			Log:     log.Root(),
 		},
@@ -286,8 +288,8 @@ func TestEthash_Prepare_Pandora(t *testing.T) {
 	genesisEpoch := NewMinimalConsensusInfo(0).(*MinimalEpochConsensusInfo)
 	genesisStart := time.Now()
 
-	validatorPublicList := [32]common2.PublicKey{}
-	validatorPrivateList := [32]common2.SecretKey{}
+	validatorPublicList := [validatorListLen]common2.PublicKey{}
+	validatorPrivateList := [validatorListLen]common2.SecretKey{}
 
 	for index, _ := range validatorPrivateList {
 		privKey, err := herumi.RandKey()
@@ -329,6 +331,34 @@ func TestEthash_Prepare_Pandora(t *testing.T) {
 	assert.Nil(t, err)
 
 	assert.Equal(t, expectedDataBytes, header.Extra)
+
+	// InsertMinimalConsensusInfo function is temporary, this piece of code is just test for its behaviour
+	t.Run("Should insert minimal consensus info", func(t *testing.T) {
+		t.Run("Should return error when not in pandora mode", func(t *testing.T) {
+			ethashNoPandora := &Ethash{}
+			assert.Error(t, ethashNoPandora.InsertMinimalConsensusInfo(0, nil))
+		})
+
+		t.Run("Should insert consensus infos into cache", func(t *testing.T) {
+			for i := 0; i < 8; i++ {
+				index := i + 1
+				timePassed := uint64(index)*uint64(time.Duration(slotTimeDuration))*uint64(len(validatorPublicList)) + uint64(genesisStart.Unix())
+				minimalConsensusInterface := NewMinimalConsensusInfo(uint64(index))
+				minimalConsensus := minimalConsensusInterface.(*MinimalEpochConsensusInfo)
+				minimalConsensus.EpochTimeStart = time.Unix(int64(timePassed), 0)
+				minimalConsensus.EpochTimeStartUnix = timePassed
+				minimalConsensus.AssignValidators(validatorPublicList)
+				err = ethash.InsertMinimalConsensusInfo(uint64(index), minimalConsensus)
+				assert.NoError(t, err)
+
+				headerTime := timePassed + 6
+				consensusFromCache, err := ethash.getMinimalConsensus(&types.Header{Time: headerTime})
+				assert.NoError(t, err)
+				assert.Equal(t, consensusFromCache.Epoch, uint64(index))
+				require.DeepEqual(t, minimalConsensus, consensusFromCache)
+			}
+		})
+	})
 }
 
 func TestMinimalEpochConsensusInfo_AssignEpochStartFromGenesis(t *testing.T) {
@@ -350,8 +380,8 @@ func TestVerifySeal(t *testing.T) {
 	lruCache := newlru("cache", 12, newCache)
 	lruDataset := newlru("dataset", 12, newDataset)
 	lruEpochSet := newlru("epochSet", 12, NewMinimalConsensusInfo)
-	validatorPublicList := [32]common2.PublicKey{}
-	validatorPrivateList := [32]common2.SecretKey{}
+	validatorPublicList := [validatorListLen]common2.PublicKey{}
+	validatorPrivateList := [validatorListLen]common2.SecretKey{}
 
 	for index, _ := range validatorPrivateList {
 		privKey, err := herumi.RandKey()

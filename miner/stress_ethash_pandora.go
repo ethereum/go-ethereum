@@ -178,7 +178,7 @@ func makeGenesis(faucets []*ecdsa.PrivateKey, sealers [32]common2.PublicKey) *co
 	timeNow := time.Now()
 	genesisEpochStart := uint64(timeNow.Unix())
 
-	// Here stup how many minimal consensus infos you want to have
+	// Here set how many minimal consensus infos you want to have
 	epochDuration := time.Duration(6) * time.Duration(32)
 	// Here: define how many epochs you want to define in upfront
 	// TODO: move to networking solution (endpoint to fill the consensus info into the cache)
