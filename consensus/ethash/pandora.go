@@ -445,6 +445,51 @@ func (ethash *Ethash) verifyPandoraHeader(header *types.Header) (err error) {
 	return
 }
 
+// THIS IS DANGEROUS
+// If it will be exposed to anyone or used in malicious manner it will break whole ethereum engine
+// We need to find a better way to fill this data or be more secure
+func (ethash *Ethash) InsertMinimalConsensusInfo(
+	epoch uint64,
+	consensusInfo *MinimalEpochConsensusInfo,
+) (err error) {
+	config := ethash.config
+	powMode := config.PowMode
+
+	if ModePandora != powMode {
+		err = fmt.Errorf("ethash is not in pandora mode")
+
+		return
+	}
+
+	convertedInfo := NewMinimalConsensusInfo(consensusInfo.Epoch)
+	pandoraConsensusInfo := convertedInfo.(*MinimalEpochConsensusInfo)
+	epochTimeStart := time.Now()
+	epochTimeStart = consensusInfo.EpochTimeStart
+	// IMHO just simply remove epochTimeStart and leave only epochTimeStartUnix
+	notNilCheck := pandoraConsensusInfo.EpochTimeStartUnix > 0
+	epochTimeStartUnixCheck := pandoraConsensusInfo.EpochTimeStartUnix > uint64(epochTimeStart.Unix())
+
+	if notNilCheck && epochTimeStartUnixCheck {
+		epochTimeStart = time.Unix(int64(pandoraConsensusInfo.EpochTimeStartUnix), 0)
+	}
+
+	// Insert epoch into mciCache
+	pandoraConsensusInfo.AssignEpochStartFromGenesis(time.Unix(
+		epochTimeStart.Unix(),
+		0,
+	))
+
+	// In this mode we do not invalidate the mciCache!
+	// This is hell risky, we should first get epoch from mciCache and check if it is already inserted.
+	// If so, we need to resolve this conflict
+	pandoraConsensusInfo.AssignValidators(consensusInfo.ValidatorsList)
+	mci := ethash.mci
+	mciCache := mci.cache
+	mciCache.Add(epoch, pandoraConsensusInfo)
+
+	return
+}
+
 func NewPandoraExtraData(header *types.Header, minimalConsensus *MinimalEpochConsensusInfo) (
 	extraData *PandoraExtraData,
 	err error,

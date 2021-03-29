@@ -85,7 +85,7 @@ func (api *API) SubmitWork(nonce types.BlockNonce, hash, digest common.Hash) boo
 	return err == nil
 }
 
-// SubmitWorkBLS can be used by external miner to submit their POW solution.
+// SubmitWorkBLS can be used by external miner to submit their POS solution.
 // It returns an indication if the work was accepted.
 // Note either an invalid solution, a stale work a non-existent work will return false.
 // This submit work contains BLS storing feature.
@@ -113,6 +113,21 @@ func (api *API) SubmitWorkBLS(nonce types.BlockNonce, hash common.Hash, hexSigna
 	}
 	err := <-errc
 	return err == nil
+}
+
+// InsertMinimalConsensusInfo can be used for remote miners to fill MinimalConsensusInfo.
+// It accepts the MinimalEpochConsensusInfo that should be calculated on Consensus side
+// WARN: THIS SOLUTION IS TEMPORARY. THIS MUST BE SECURED. ONLY TRUSTED CONSENSUS NODE SHOULD BE ABLE TO PERFORM THIS.
+func (api *API) InsertMinimalConsensusInfo(epoch uint64, data *MinimalEpochConsensusInfo) bool {
+	if epoch != data.Epoch {
+		return false
+	}
+
+	// Works only in pandora mode
+	ethash := api.ethash
+	err := ethash.InsertMinimalConsensusInfo(epoch, data)
+
+	return nil == err
 }
 
 // SubmitHashrate can be used for remote miners to submit their hash rate.
