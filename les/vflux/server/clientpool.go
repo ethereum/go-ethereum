@@ -123,7 +123,7 @@ func NewClientPool(balanceDb ethdb.KeyValueStore, minCap uint64, connectedBias t
 			// active with no priority; limit capacity to minCap
 			cap, _ := ns.GetField(node, setup.capacityField).(uint64)
 			if cap > minCap {
-				cp.requestCapacity(node, minCap, 0, true)
+				cp.requestCapacity(node, minCap, 0)
 			}
 		}
 		if newState.Equals(nodestate.Flags{}) {
@@ -283,7 +283,7 @@ func (cp *ClientPool) SetCapacity(node *enode.Node, reqCap uint64, bias time.Dur
 					tryCap = reqCap
 				}
 			}
-			if _, allowed := cp.requestCapacity(node, tryCap, bias, true); allowed {
+			if cp.requestCapacity(node, tryCap, bias) {
 				capacity = tryCap
 				return
 			}

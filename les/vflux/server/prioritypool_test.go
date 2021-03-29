@@ -67,7 +67,7 @@ func TestPriorityPool(t *testing.T) {
 		for {
 			var ok bool
 			ns.Operation(func() {
-				_, ok = pp.requestCapacity(c.node, c.cap+c.cap/testCapacityStepDiv, 0, true)
+				ok = pp.requestCapacity(c.node, c.cap+c.cap/testCapacityStepDiv, 0)
 			})
 			if !ok {
 				return
@@ -132,14 +132,14 @@ func TestPriorityPool(t *testing.T) {
 				expFail = testMinCap
 			}
 			ns.Operation(func() {
-				_, ok = pp.requestCapacity(c.node, expFail, 0, true)
+				ok = pp.requestCapacity(c.node, expFail, 0)
 			})
 			if ok {
 				t.Errorf("Request for more than expected available capacity succeeded")
 			}
 			if expCap >= testMinCap {
 				ns.Operation(func() {
-					_, ok = pp.requestCapacity(c.node, expCap, 0, true)
+					ok = pp.requestCapacity(c.node, expCap, 0)
 				})
 				if !ok {
 					t.Errorf("Request for expected available capacity failed")
@@ -179,7 +179,7 @@ func TestCapacityCurve(t *testing.T) {
 		ns.SetField(c.node, setup.balanceField, c)
 		ns.SetState(c.node, setup.inactiveFlag, nodestate.Flags{}, 0)
 		ns.Operation(func() {
-			pp.requestCapacity(c.node, c.cap, 0, true)
+			pp.requestCapacity(c.node, c.cap, 0)
 		})
 	}
 

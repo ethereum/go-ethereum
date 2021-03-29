@@ -84,7 +84,7 @@ type ppNodeInfo struct {
 	connected                  bool
 	capacity, origCap          uint64
 	bias                       time.Duration
-	forced, changed            bool
+	changed                    bool
 	activeIndex, inactiveIndex int
 }
 
@@ -151,7 +151,7 @@ func newPriorityPool(ns *nodestate.NodeStateMachine, setup *serverSetup, clock m
 // is false then both inactiveFlag and activeFlag can be unset and they are not changed
 // by this function call either.
 // Note 2: this function should run inside a NodeStateMachine operation
-func (pp *priorityPool) requestCapacity(node *enode.Node, targetCap uint64, bias time.Duration, setCap bool) (minPriority int64, allowed bool) {
+func (pp *priorityPool) requestCapacity(node *enode.Node, targetCap uint64, bias time.Duration) bool {
 	pp.lock.Lock()
 	pp.activeQueue.Refresh()
 	var updates []capUpdate
@@ -169,26 +169,20 @@ func (pp *priorityPool) requestCapacity(node *enode.Node, targetCap uint64, bias
 	c, _ := pp.ns.GetField(node, pp.setup.queueField).(*ppNodeInfo)
 	if c == nil {
 		log.Error("requestCapacity called for unknown node", "id", node.ID())
-		return math.MaxInt64, false
-	}
-	var priority int64
-	if targetCap > c.capacity {
-		priority = c.nodePriority.estimatePriority(targetCap, 0, 0, bias, false)
-	} else {
-		priority = c.nodePriority.priority(targetCap)
+		return false
 	}
 	pp.markForChange(c)
 	pp.setCapacity(c, targetCap)
-	c.forced = true
+	if targetCap > c.capacity {
+		c.bias = bias
+	}
 	pp.activeQueue.Remove(c.activeIndex)
 	pp.inactiveQueue.Remove(c.inactiveIndex)
 	pp.activeQueue.Push(c)
-	_, minPriority = pp.enforceLimits()
-	// if capacity update is possible now then minPriority == math.MinInt64
-	// if it is not possible at all then minPriority == math.MaxInt64
-	allowed = priority >= minPriority
-	updates = pp.finalizeChanges(setCap && allowed)
-	return
+	pp.enforceLimits()
+	success := c.capacity == targetCap
+	updates = pp.finalizeChanges(success)
+	return success
 }
 
 // SetLimits sets the maximum number and total capacity of simultaneously active nodes
@@ -267,9 +261,6 @@ func invertPriority(p int64) int64 {
 // activePriority callback returns actual priority of ppNodeInfo item in activeQueue
 func activePriority(a interface{}) int64 {
 	c := a.(*ppNodeInfo)
-	if c.forced {
-		return math.MinInt64
-	}
 	if c.bias == 0 {
 		return invertPriority(c.nodePriority.priority(c.capacity))
 	} else {
@@ -280,9 +271,6 @@ func activePriority(a interface{}) int64 {
 // activeMaxPriority callback returns estimated maximum priority of ppNodeInfo item in activeQueue
 func (pp *priorityPool) activeMaxPriority(a interface{}, until mclock.AbsTime) int64 {
 	c := a.(*ppNodeInfo)
-	if c.forced {
-		return math.MinInt64
-	}
 	future := time.Duration(until - pp.clock.Now())
 	if future < 0 {
 		future = 0
@@ -400,11 +388,10 @@ func (pp *priorityPool) enforceLimits() (*ppNodeInfo, int64) {
 // they should be performed while the mutex is not held.
 func (pp *priorityPool) finalizeChanges(commit bool) (updates []capUpdate) {
 	for _, c := range pp.changed {
-		// always remove and push back in order to update biased/forced priority
+		// always remove and push back in order to update biased priority
 		pp.activeQueue.Remove(c.activeIndex)
 		pp.inactiveQueue.Remove(c.inactiveIndex)
 		c.bias = 0
-		c.forced = false
 		c.changed = false
 		if !commit {
 			pp.setCapacity(c, c.origCap)
