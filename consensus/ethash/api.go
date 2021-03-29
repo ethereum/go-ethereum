@@ -21,6 +21,9 @@ import (
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/ethereum/go-ethereum/core/types"
+	common2 "github.com/silesiacoin/bls/common"
+	"github.com/silesiacoin/bls/herumi"
+	"time"
 )
 
 var errEthashStopped = errors.New("ethash stopped")
@@ -117,15 +120,36 @@ func (api *API) SubmitWorkBLS(nonce types.BlockNonce, hash common.Hash, hexSigna
 
 // InsertMinimalConsensusInfo can be used for remote miners to fill MinimalConsensusInfo.
 // It accepts the MinimalEpochConsensusInfo that should be calculated on Consensus side
+// For now lets pass it as rlp-encoded hex string
 // WARN: THIS SOLUTION IS TEMPORARY. THIS MUST BE SECURED. ONLY TRUSTED CONSENSUS NODE SHOULD BE ABLE TO PERFORM THIS.
-func (api *API) InsertMinimalConsensusInfo(epoch uint64, data *MinimalEpochConsensusInfo) bool {
-	if epoch != data.Epoch {
+func (api *API) InsertMinimalConsensusInfo(
+	epoch uint64,
+	validatorsList []string,
+	epochTimeStartUnix uint64,
+) bool {
+	// Works only in pandora mode
+	ethash := api.ethash
+	consensusInfo := NewMinimalConsensusInfo(epoch).(*MinimalEpochConsensusInfo)
+	consensusInfo.EpochTimeStartUnix = epochTimeStartUnix
+	consensusInfo.EpochTimeStart = time.Unix(int64(epochTimeStartUnix), 0)
+	consensusInfo.ValidatorsList = [validatorListLen]common2.PublicKey{}
+
+	// Invalid payload
+	if len(validatorsList) != validatorListLen {
 		return false
 	}
 
-	// Works only in pandora mode
-	ethash := api.ethash
-	err := ethash.InsertMinimalConsensusInfo(epoch, data)
+	for index, validator := range validatorsList {
+		pubKey, err := herumi.PublicKeyFromBytes(hexutil.MustDecode(validator))
+
+		if nil != err {
+			return false
+		}
+
+		consensusInfo.ValidatorsList[index] = pubKey
+	}
+
+	err := ethash.InsertMinimalConsensusInfo(epoch, consensusInfo)
 
 	return nil == err
 }

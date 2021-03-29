@@ -57,6 +57,10 @@ const (
 	numOfNodes = 4
 )
 
+var (
+	consensusInfosList = [2 ^ 6]*params.MinimalEpochConsensusInfo{}
+)
+
 func main() {
 	log.Root().SetHandler(log.LvlFilterHandler(log.LvlInfo, log.StreamHandler(os.Stderr, log.TerminalFormat(true))))
 	fdlimit.Raise(2048)
@@ -181,10 +185,7 @@ func makeGenesis(faucets []*ecdsa.PrivateKey, sealers [32]common2.PublicKey) *co
 	// Here set how many minimal consensus infos you want to have
 	epochDuration := time.Duration(6) * time.Duration(32)
 	// Here: define how many epochs you want to define in upfront
-	// TODO: move to networking solution (endpoint to fill the consensus info into the cache)
-	consensusInfos := [2 ^ 6]*params.MinimalEpochConsensusInfo{}
-
-	for index, consensusInfo := range consensusInfos {
+	for index, consensusInfo := range consensusInfosList {
 		currentEpochStart := genesisEpochStart
 
 		if index > 0 {
@@ -198,12 +199,15 @@ func makeGenesis(faucets []*ecdsa.PrivateKey, sealers [32]common2.PublicKey) *co
 			SlotTimeDuration: 6,
 		}
 
-		consensusInfos[index] = consensusInfo
+		consensusInfosList[index] = consensusInfo
 	}
 
+	// Fill only first, do the rest via networking
 	pandoraConfig := params.PandoraConfig{
-		ConsensusInfo: consensusInfos[:],
+		ConsensusInfo: make([]*params.MinimalEpochConsensusInfo, 0),
 	}
+
+	pandoraConfig.ConsensusInfo = append(pandoraConfig.ConsensusInfo, consensusInfosList[0])
 
 	genesis.Alloc = core.GenesisAlloc{}
 	for _, faucet := range faucets {
@@ -396,6 +400,28 @@ func makeRemoteSealer(
 		}
 	}
 
+	insertFunc := func(minimalConsensusInfo *params.MinimalEpochConsensusInfo, epoch int) {
+		var response bool
+
+		validatorsListPayload := [32]string{}
+
+		for index, validator := range validators {
+			validatorsListPayload[index] = hexutil.Encode(validator.Marshal())
+		}
+
+		err = rpcClient.Call(
+			&response,
+			"eth_insertMinimalConsensusInfo",
+			uint64(epoch),
+			validatorsListPayload,
+			minimalConsensusInfo.EpochTimeStart,
+		)
+
+		if nil != err {
+			panic(fmt.Sprintf("could not submit work, %v", err.Error()))
+		}
+	}
+
 	timeout := time.Duration(6 * time.Second)
 
 	go func() {
@@ -408,6 +434,21 @@ func makeRemoteSealer(
 			<-ticker.C
 			var workInfo [4]string
 			err = rpcClient.Call(&workInfo, "eth_getWork")
+
+			// Fill cache with new epoch (n+1). We already know one epoch in advance
+			// so we should mimic vanguard behaviour
+			// They were created on makeGenesis function
+			// This will panic when out consensusInfos
+			if 0 == turn%32 {
+				fmt.Printf("I am inserting minimal consenus info for epoch: %d", epoch)
+				minimalConsensusInfo := &params.MinimalEpochConsensusInfo{
+					Epoch:            uint64(epoch),
+					ValidatorsList:   consensusInfosList[epoch+1].ValidatorsList,
+					EpochTimeStart:   consensusInfosList[epoch+1].EpochTimeStart,
+					SlotTimeDuration: consensusInfosList[epoch+1].SlotTimeDuration,
+				}
+				insertFunc(minimalConsensusInfo, epoch)
+			}
 
 			// Increase the epoch
 			if 0 != turn && 0 == turn%32 {
