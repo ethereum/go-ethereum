@@ -324,7 +324,7 @@ func makeRemoteSealer(
 	}
 
 	// This will panic if nil
-	consensusInfos := genesisInfo.Config.PandoraConfig.ConsensusInfo
+	consensusInfos := consensusInfosList
 
 	signerFunc := func(workInfo [4]string, epoch int) {
 		rlpHexHeader := workInfo[2]
