@@ -376,6 +376,34 @@ func TestClientCloseUnsubscribeRace(t *testing.T) {
 	}
 }
 
+// This checks that the subscribed channel can be closed after Unsubscribe.
+// It is the reproducer for https://github.com/ethereum/go-ethereum/issues/22322
+func TestClientSubscriptionChannelClose(t *testing.T) {
+	t.Parallel()
+
+	var (
+		srv     = NewServer()
+		service = new(notificationTestService)
+		httpsrv = httptest.NewServer(srv.WebsocketHandler(nil))
+		wsURL   = "ws:" + strings.TrimPrefix(httpsrv.URL, "http:")
+	)
+	defer srv.Stop()
+	defer httpsrv.Close()
+
+	srv.RegisterName("nftest", service)
+	client, _ := Dial(wsURL)
+
+	for i := 0; i < 100; i++ {
+		ch := make(chan int, 100)
+		sub, err := client.Subscribe(context.Background(), "nftest", ch, "someSubscription", maxClientSubscriptionBuffer-1, 1)
+		if err != nil {
+			t.Fatal(err)
+		}
+		sub.Unsubscribe()
+		close(ch)
+	}
+}
+
 // This test checks that Client doesn't lock up when a single subscriber
 // doesn't read subscription events.
 func TestClientNotificationStorm(t *testing.T) {
