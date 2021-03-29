@@ -26,7 +26,6 @@ import (
 	"github.com/ethereum/go-ethereum/les/utils"
 	"github.com/ethereum/go-ethereum/les/vflux"
 	"github.com/ethereum/go-ethereum/log"
-	"github.com/ethereum/go-ethereum/metrics"
 	"github.com/ethereum/go-ethereum/p2p/enode"
 	"github.com/ethereum/go-ethereum/p2p/nodestate"
 	"github.com/ethereum/go-ethereum/rlp"
@@ -71,8 +70,6 @@ type ClientPool struct {
 
 	minCap     uint64      // the minimal capacity value allowed for any client
 	capReqNode *enode.Node // node that is requesting capacity change; only used inside NSM operation
-
-	capacityQueryZeroMeter, capacityQueryNonZeroMeter metrics.Meter
 }
 
 // clientPeer represents a peer in the client pool. None of the callbacks should block.
@@ -138,14 +135,8 @@ func NewClientPool(balanceDb ethdb.KeyValueStore, minCap uint64, connectedBias t
 			c.UpdateCapacity(newCap, node == cp.capReqNode)
 		}
 	})
-	return cp
-}
 
-// AddMetrics adds metrics to the client pool. Should be called before Start().
-func (cp *ClientPool) AddMetrics(totalConnectedGauge metrics.Gauge,
-	clientConnectedMeter, clientDisconnectedMeter, clientActivatedMeter, clientDeactivatedMeter,
-	capacityQueryZeroMeter, capacityQueryNonZeroMeter metrics.Meter) {
-
+	// add metrics
 	cp.ns.SubscribeState(nodestate.MergeFlags(cp.setup.activeFlag, cp.setup.inactiveFlag), func(node *enode.Node, oldState, newState nodestate.Flags) {
 		if oldState.IsEmpty() && !newState.IsEmpty() {
 			clientConnectedMeter.Mark(1)
@@ -162,8 +153,7 @@ func (cp *ClientPool) AddMetrics(totalConnectedGauge metrics.Gauge,
 		_, connected := cp.Active()
 		totalConnectedGauge.Update(int64(connected))
 	})
-	cp.capacityQueryZeroMeter = capacityQueryZeroMeter
-	cp.capacityQueryNonZeroMeter = capacityQueryNonZeroMeter
+	return cp
 }
 
 // Start starts the client pool. Should be called before Register/Unregister.
@@ -295,9 +285,7 @@ func (cp *ClientPool) serveCapQuery(id enode.ID, freeID string, data []byte) []b
 	}
 	result := make(vflux.CapacityQueryReply, len(req.AddTokens))
 	if !cp.synced() {
-		if cp.capacityQueryZeroMeter != nil {
-			cp.capacityQueryZeroMeter.Mark(1)
-		}
+		capacityQueryZeroMeter.Mark(1)
 		reply, _ := rlp.EncodeToBytes(&result)
 		return reply
 	}
@@ -328,13 +316,9 @@ func (cp *ClientPool) serveCapQuery(id enode.ID, freeID string, data []byte) []b
 	})
 	// add first result to metrics (don't care about priority client multi-queries yet)
 	if result[0] == 0 {
-		if cp.capacityQueryZeroMeter != nil {
-			cp.capacityQueryZeroMeter.Mark(1)
-		}
+		capacityQueryZeroMeter.Mark(1)
 	} else {
-		if cp.capacityQueryNonZeroMeter != nil {
-			cp.capacityQueryNonZeroMeter.Mark(1)
-		}
+		capacityQueryNonZeroMeter.Mark(1)
 	}
 	reply, _ := rlp.EncodeToBytes(&result)
 	return reply
