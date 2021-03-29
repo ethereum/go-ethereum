@@ -212,17 +212,13 @@ func (pp *priorityPool) SetLimits(maxCount, maxCap uint64) {
 // setActiveBias sets the bias applied when trying to activate inactive nodes
 func (pp *priorityPool) setActiveBias(bias time.Duration) {
 	pp.lock.Lock()
-	var updates []capUpdate
-	defer func() {
-		pp.lock.Unlock()
-		pp.ns.Operation(func() { pp.updateFlags(updates) })
-	}()
-
 	pp.activeBias = bias
 	if pp.activeBias < time.Duration(1) {
 		pp.activeBias = time.Duration(1)
 	}
-	updates = pp.tryActivate()
+	updates := pp.tryActivate()
+	pp.lock.Unlock()
+	pp.ns.Operation(func() { pp.updateFlags(updates) })
 }
 
 // Active returns the number and total capacity of currently active nodes

@@ -930,8 +930,8 @@ func (p *clientPeer) sendAnnounce(request announceData) error {
 	return p2p.Send(p.rw, AnnounceMsg, request)
 }
 
-// InactiveTimeout implements vfs.clientPeer
-func (p *clientPeer) InactiveTimeout() time.Duration {
+// InactiveAllowance implements vfs.clientPeer
+func (p *clientPeer) InactiveAllowance() time.Duration {
 	return 0 // will return more than zero for les/5 clients
 }
 

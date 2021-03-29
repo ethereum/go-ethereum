@@ -81,7 +81,7 @@ func (i *poolTestPeer) FreeClientId() string {
 	return fmt.Sprintf("addr #%d", i.index)
 }
 
-func (i *poolTestPeer) InactiveTimeout() time.Duration {
+func (i *poolTestPeer) InactiveAllowance() time.Duration {
 	if i.inactiveAllowed {
 		return time.Second * 10
 	}

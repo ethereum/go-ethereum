@@ -128,10 +128,10 @@ func (b balance) negValue(now mclock.AbsTime) uint64 {
 	return b.neg.Value(b.negExp.LogOffset(now))
 }
 
-// add adds the value of a given amount to the balance. The original value and
+// addValue adds the value of a given amount to the balance. The original value and
 // updated value will also be returned if the addition is successful.
 // Returns the error if the given value is too large and the value overflows.
-func (b *balance) addPosValue(now mclock.AbsTime, amount int64, pos bool, force bool) (uint64, uint64, int64, error) {
+func (b *balance) addValue(now mclock.AbsTime, amount int64, pos bool, force bool) (uint64, uint64, int64, error) {
 	var (
 		val    utils.ExpiredValue
 		offset utils.Fixed64
@@ -217,7 +217,7 @@ func (n *nodeBalance) AddBalance(amount int64) (uint64, uint64, error) {
 	// Operation with holding the lock
 	n.bt.updateTotalBalance(n, func() bool {
 		n.updateBalance(now)
-		if old, new, _, err = n.balance.addPosValue(now, amount, true, false); err != nil {
+		if old, new, _, err = n.balance.addValue(now, amount, true, false); err != nil {
 			return false
 		}
 		callbacks, setPriority = n.checkCallbacks(now), n.checkPriorityStatus()
@@ -290,7 +290,7 @@ func (n *nodeBalance) RequestServed(cost uint64) (newBalance uint64) {
 			newBalance = n.balance.posValue(now)
 		} else {
 			var net int64
-			_, newBalance, net, _ = n.balance.addPosValue(now, posCost, true, false)
+			_, newBalance, net, _ = n.balance.addValue(now, posCost, true, false)
 			if posCost == net {
 				fcost = 0
 			} else {
@@ -300,7 +300,7 @@ func (n *nodeBalance) RequestServed(cost uint64) (newBalance uint64) {
 		}
 	}
 	if fcost > 0 && n.negFactor.RequestFactor != 0 {
-		n.balance.addPosValue(now, int64(fcost*n.negFactor.RequestFactor), false, false)
+		n.balance.addValue(now, int64(fcost*n.negFactor.RequestFactor), false, false)
 		check = true
 	}
 	n.sumReqCost += cost
@@ -345,7 +345,7 @@ func (n *nodeBalance) estimatePriority(capacity uint64, addBalance int64, future
 
 	b := n.balance // copy the balance
 	if addBalance != 0 {
-		b.addPosValue(now, addBalance, true, true)
+		b.addValue(now, addBalance, true, true)
 	}
 	if future > 0 {
 		var avgReqCost float64
@@ -631,7 +631,7 @@ func (n *nodeBalance) reducedBalance(b balance, start mclock.AbsTime, dt time.Du
 	if !b.pos.IsZero() {
 		factor := n.posFactor.connectionPrice(capacity, avgReqCost)
 		diff := -int64(dtf * factor)
-		_, _, net, _ := b.addPosValue(at, diff, true, false)
+		_, _, net, _ := b.addValue(at, diff, true, false)
 		if net == diff {
 			dtf = 0
 		} else {
@@ -640,7 +640,7 @@ func (n *nodeBalance) reducedBalance(b balance, start mclock.AbsTime, dt time.Du
 	}
 	if dtf > 0 {
 		factor := n.negFactor.connectionPrice(capacity, avgReqCost)
-		b.addPosValue(at, int64(dtf*factor), false, false)
+		b.addValue(at, int64(dtf*factor), false, false)
 	}
 	return b
 }

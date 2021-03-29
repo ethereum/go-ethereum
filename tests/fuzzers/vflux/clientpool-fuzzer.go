@@ -60,7 +60,7 @@ func (p *clientPeer) FreeClientId() string {
 	return p.freeID
 }
 
-func (p *clientPeer) InactiveTimeout() time.Duration {
+func (p *clientPeer) InactiveAllowance() time.Duration {
 	return p.timeout
 }
 

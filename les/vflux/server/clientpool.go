@@ -80,7 +80,7 @@ type ClientPool struct {
 type clientPeer interface {
 	Node() *enode.Node
 	FreeClientId() string                         // unique id for non-priority clients (typically a prefix of the network address)
-	InactiveTimeout() time.Duration               // disconnection timeout for inactive non-priority peers
+	InactiveAllowance() time.Duration             // disconnection timeout for inactive non-priority peers
 	UpdateCapacity(newCap uint64, requested bool) // signals a capacity update (requested is true if it is a result of a SetCapacity call on the given peer
 	Disconnect()                                  // initiates disconnection (Unregister should always be called)
 }
@@ -105,7 +105,7 @@ func NewClientPool(balanceDb ethdb.KeyValueStore, minCap uint64, connectedBias t
 			// set timeout for non-priority inactive client
 			var timeout time.Duration
 			if c, ok := ns.GetField(node, setup.clientField).(clientPeer); ok {
-				timeout = c.InactiveTimeout()
+				timeout = c.InactiveAllowance()
 			}
 			if timeout > 0 {
 				ns.AddTimeout(node, setup.inactiveFlag, timeout)
@@ -245,11 +245,9 @@ func (cp *ClientPool) SetCapacity(node *enode.Node, reqCap uint64, bias time.Dur
 			// performed by the server automatically as soon as necessary/possible
 			reqCap = cp.minCap
 		}
-		if reqCap > cp.minCap {
-			if cp.ns.GetState(node).HasNone(cp.setup.priorityFlag) && reqCap > cp.minCap {
-				err = ErrNoPriority
-				return
-			}
+		if reqCap > cp.minCap && cp.ns.GetState(node).HasNone(cp.setup.priorityFlag) {
+			err = ErrNoPriority
+			return
 		}
 		if reqCap == capacity {
 			return
