@@ -416,10 +416,13 @@ func TestVerifySeal(t *testing.T) {
 			}
 			header, _, _ := generatePandoraSealedHeaderByKey(privateKey, int64(index), headerTime, extraData)
 			headers = append(headers, header)
+
+			err := ethash.verifySeal(nil, header, false)
+
 			assert.Nil(
 				t,
-				ethash.verifySeal(nil, header, false),
-				fmt.Sprintf("failed on index: %d, with header: %v", index, header),
+				err,
+				fmt.Sprintf("failed on index: %d, with headerExtra: %v", index, header.Extra),
 			)
 		}
 
@@ -513,6 +516,13 @@ func generatePandoraSealedHeaderByKey(
 
 	extraDataWithSignature := new(PandoraExtraDataSealed)
 	extraDataWithSignature.FromExtraDataAndSignature(*extraData, signature)
+	verified := signature.Verify(privKey.PublicKey(), headerHash.Bytes())
+
+	if !verified {
+		panic("Signature should be valid")
+	}
+
+	fmt.Printf("Generate pandora extra data sig: %v", hexutil.Encode(signature.Marshal()))
 
 	compressedSignature := signature.Marshal()[:herumi.CompressedSize]
 	header.MixDigest = common.BytesToHash(compressedSignature[:])

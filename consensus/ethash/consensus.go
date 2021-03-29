@@ -608,7 +608,15 @@ func (ethash *Ethash) SealHash(header *types.Header) (hash common.Hash) {
 
 	// Bls signature is 96 bytes long and will be inserted at the bottom of the extraData field
 	if ModePandora == ethash.config.PowMode && extraDataLen > signatureSize {
-		extraData = extraData[:extraDataLen-signatureSize]
+		//extraData = extraData[:extraDataLen-signatureSize]
+		pandoraExtraData := new(PandoraExtraDataSealed)
+		pandoraExtraData.FromHeader(header)
+
+		headerExtra := new(PandoraExtraData)
+		headerExtra.Epoch = pandoraExtraData.Epoch
+		headerExtra.ProposerIndex = pandoraExtraData.ProposerIndex
+		headerExtra.Slot = pandoraExtraData.Slot
+		extraData, _ = rlp.EncodeToBytes(headerExtra)
 	}
 
 	rlp.Encode(hasher, []interface{}{
