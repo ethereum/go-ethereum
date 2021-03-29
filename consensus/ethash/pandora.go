@@ -198,12 +198,6 @@ func (pandora *Pandora) submitWork(nonce types.BlockNonce, mixDigest common.Hash
 	header := block.Header()
 	header.Nonce = nonce
 	header.MixDigest = mixDigest
-	signatureLocator := len(header.Extra) - signatureSize
-
-	if signatureLocator < 0 {
-		signatureLocator = 0
-	}
-
 	extraDataWithSignature := new(PandoraExtraDataSealed)
 	blsSignature, err := herumi.SignatureFromBytes(blsSignatureBytes[:])
 
@@ -219,6 +213,12 @@ func (pandora *Pandora) submitWork(nonce types.BlockNonce, mixDigest common.Hash
 	}
 
 	extraDataWithSignature.FromExtraDataAndSignature(*pandoraExtraData, blsSignature)
+	header.Extra, err = rlp.EncodeToBytes(extraDataWithSignature)
+
+	if nil != err {
+		sealer.ethash.config.Log.Warn("Invalid extraData in header", "sealhash", sealhash, "err", err)
+		return false
+	}
 
 	start := time.Now()
 	if !sealer.noverify {

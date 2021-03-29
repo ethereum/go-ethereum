@@ -89,18 +89,23 @@ func (api *API) SubmitWork(nonce types.BlockNonce, hash, digest common.Hash) boo
 // It returns an indication if the work was accepted.
 // Note either an invalid solution, a stale work a non-existent work will return false.
 // This submit work contains BLS storing feature.
-func (api *API) SubmitWorkBLS(nonce types.BlockNonce, hash, digest common.Hash, hexSignature *BlsSignatureBytes) bool {
+func (api *API) SubmitWorkBLS(nonce types.BlockNonce, hash common.Hash, hexSignatureString string) bool {
 	if api.ethash.remote == nil {
 		return false
 	}
 
+	signatureBytes := hexutil.MustDecode(hexSignatureString)
+	blsSignatureBytes := new(BlsSignatureBytes)
+	copy(blsSignatureBytes[:], signatureBytes[:])
+
 	var errc = make(chan error, 1)
+
 	select {
 	case api.ethash.remote.submitWorkCh <- &mineResult{
 		nonce:     nonce,
-		mixDigest: digest,
+		mixDigest: common.BytesToHash(blsSignatureBytes[:32]),
 		hash:      hash,
-		blsSeal:   hexSignature,
+		blsSeal:   blsSignatureBytes,
 		errc:      errc,
 	}:
 	case <-api.ethash.remote.exitCh:

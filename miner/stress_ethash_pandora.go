@@ -385,10 +385,10 @@ func makeRemoteSealer(
 
 		err = rpcClient.Call(
 			&response,
-			"eth_submitWork",
+			"eth_submitWorkBLS",
 			header.Nonce,
 			common.HexToHash(workInfo[0]),
-			common.BytesToHash(blsSignatureBytes[:]),
+			hexutil.Encode(blsSignatureBytes),
 		)
 
 		if nil != err {
