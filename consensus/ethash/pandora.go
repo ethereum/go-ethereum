@@ -113,7 +113,7 @@ func (pandora *Pandora) Loop() {
 
 		case result := <-s.submitWorkCh:
 			// Verify submitted PoS solution based on maintained mining blocks.
-			if s.submitWork(result.nonce, result.mixDigest, result.hash) {
+			if pandora.submitWork(result.nonce, result.mixDigest, result.hash, result.blsSeal) {
 				result.errc <- nil
 			} else {
 				result.errc <- errInvalidSealResult
@@ -177,6 +177,65 @@ func (pandora *Pandora) makeWork(block *types.Block) {
 	sealer.works[hash] = block
 
 	return
+}
+
+// submitWork verifies the submitted pow solution, returning
+// whether the solution was accepted or not (not can be both a bad pow as well as
+// any other error, like no pending work or stale mining result).
+func (pandora *Pandora) submitWork(nonce types.BlockNonce, mixDigest common.Hash, sealhash common.Hash, blsSignatureBytes *BlsSignatureBytes) bool {
+	sealer := pandora.sealer
+	if sealer.currentBlock == nil {
+		sealer.ethash.config.Log.Error("Pending work without block", "sealhash", sealhash)
+		return false
+	}
+	// Make sure the work submitted is present
+	block := sealer.works[sealhash]
+	if block == nil {
+		sealer.ethash.config.Log.Warn("Work submitted but none pending", "sealhash", sealhash, "curnumber", sealer.currentBlock.NumberU64())
+		return false
+	}
+	// Verify the correctness of submitted result.
+	header := block.Header()
+	header.Nonce = nonce
+	header.MixDigest = mixDigest
+	signatureLocator := len(header.Extra) - signatureSize
+
+	if signatureLocator < 0 {
+		signatureLocator = 0
+	}
+	copy(blsSignatureBytes[:], header.Extra[signatureLocator:])
+
+	start := time.Now()
+	if !sealer.noverify {
+		if err := sealer.ethash.verifySeal(nil, header, true); err != nil {
+			sealer.ethash.config.Log.Warn("Invalid proof-of-work submitted", "sealhash", sealhash, "elapsed", common.PrettyDuration(time.Since(start)), "err", err)
+			return false
+		}
+	}
+	// Make sure the result channel is assigned.
+	if sealer.results == nil {
+		sealer.ethash.config.Log.Warn("Ethash result channel is empty, submitted mining result is rejected")
+		return false
+	}
+	sealer.ethash.config.Log.Trace("Verified correct proof-of-work", "sealhash", sealhash, "elapsed", common.PrettyDuration(time.Since(start)))
+
+	// Solutions seems to be valid, return to the miner and notify acceptance.
+	solution := block.WithSeal(header)
+
+	// The submitted solution is within the scope of acceptance.
+	if solution.NumberU64()+staleThreshold > sealer.currentBlock.NumberU64() {
+		select {
+		case sealer.results <- solution:
+			sealer.ethash.config.Log.Debug("Work submitted is acceptable", "number", solution.NumberU64(), "sealhash", sealhash, "hash", solution.Hash())
+			return true
+		default:
+			sealer.ethash.config.Log.Warn("Sealing result is not read by miner", "mode", "remote", "sealhash", sealhash)
+			return false
+		}
+	}
+	// The submitted block is too old to accept, drop it.
+	sealer.ethash.config.Log.Warn("Work submitted is too old", "number", solution.NumberU64(), "sealhash", sealhash, "hash", solution.Hash())
+	return false
 }
 
 // NewMnimalConsensusInfo should be used to represent validator set for epoch

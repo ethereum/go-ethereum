@@ -85,6 +85,31 @@ func (api *API) SubmitWork(nonce types.BlockNonce, hash, digest common.Hash) boo
 	return err == nil
 }
 
+// SubmitWorkBLS can be used by external miner to submit their POW solution.
+// It returns an indication if the work was accepted.
+// Note either an invalid solution, a stale work a non-existent work will return false.
+// This submit work contains BLS storing feature.
+func (api *API) SubmitWorkBLS(nonce types.BlockNonce, hash, digest common.Hash, hexSignature *BlsSignatureBytes) bool {
+	if api.ethash.remote == nil {
+		return false
+	}
+
+	var errc = make(chan error, 1)
+	select {
+	case api.ethash.remote.submitWorkCh <- &mineResult{
+		nonce:     nonce,
+		mixDigest: digest,
+		hash:      hash,
+		blsSeal:   hexSignature,
+		errc:      errc,
+	}:
+	case <-api.ethash.remote.exitCh:
+		return false
+	}
+	err := <-errc
+	return err == nil
+}
+
 // SubmitHashrate can be used for remote miners to submit their hash rate.
 // This enables the node to report the combined hash rate of all miners
 // which submit work through this node.

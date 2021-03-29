@@ -234,10 +234,11 @@ func TestCreateBlockByPandoraAndVanguard(t *testing.T) {
 		// Full E2E layer should be somewhere else, or we should consider stress test
 		case submittedWork := <-submitWorkChannel:
 			//TODO: change this API, extend it or provide another one like SubmitSeal?
-			submitted := ethashAPI.SubmitWork(
+			submitted := ethashAPI.SubmitWorkBLS(
 				submittedWork.nonce,
 				submittedWork.hash,
 				submittedWork.mixDigest,
+				submittedWork.blsSeal,
 			)
 
 			//mixDigest := submittedWork.mixDigest
