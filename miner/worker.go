@@ -570,8 +570,8 @@ func (w *worker) taskLoop() {
 		stopCh chan struct{}
 		prev   common.Hash
 
-		prevNumber *big.Int
-		prevProfit *big.Int
+		prevParentHash common.Hash
+		prevProfit     *big.Int
 	)
 
 	// interrupt aborts the in-flight sealing task.
@@ -593,17 +593,19 @@ func (w *worker) taskLoop() {
 				continue
 			}
 
+			taskParentHash := task.block.Header().ParentHash
 			// reject new tasks which don't profit
-			if prevNumber != nil && prevProfit != nil &&
-				task.block.Number().Cmp(prevNumber) == 0 && task.profit.Cmp(prevProfit) < 0 {
+			if taskParentHash == prevParentHash &&
+				prevProfit != nil && task.profit.Cmp(prevProfit) < 0 {
 				continue
 			}
-			prevNumber, prevProfit = task.block.Number(), task.profit
+			prevParentHash = taskParentHash
+			prevProfit = task.profit
 
 			// Interrupt previous sealing operation
 			interrupt()
 			stopCh, prev = make(chan struct{}), sealHash
-			log.Info("Proposed miner block", "blockNumber", prevNumber, "profit", prevProfit, "isFlashbots", task.isFlashbots, "sealhash", sealHash)
+			log.Info("Proposed miner block", "blockNumber", task.block.Number(), "profit", prevProfit, "isFlashbots", task.isFlashbots, "sealhash", sealHash, "parentHash", prevParentHash)
 			if w.skipSealHook != nil && w.skipSealHook(task) {
 				continue
 			}
