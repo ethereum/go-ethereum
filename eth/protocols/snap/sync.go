@@ -85,7 +85,7 @@ const (
 var (
 	// requestTimeout is the maximum time a peer is allowed to spend on serving
 	// a single network request.
-	requestTimeout = 10 * time.Second // TODO(karalabe): Make it dynamic ala fast-sync?
+	requestTimeout = 15 * time.Second // TODO(karalabe): Make it dynamic ala fast-sync?
 )
 
 // ErrCancelled is returned from snap syncing if the operation was prematurely
