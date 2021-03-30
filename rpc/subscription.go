@@ -225,6 +225,9 @@ type ClientSubscription struct {
 	unsubDone   chan struct{}
 }
 
+// This is the sentinel value sent on sub.quit when Unsubscribe is called.
+var errUnsubscribed = errors.New("unsubscribed")
+
 func newClientSubscription(c *Client, namespace string, channel reflect.Value) *ClientSubscription {
 	sub := &ClientSubscription{
 		client:      c,
@@ -257,7 +260,7 @@ func (sub *ClientSubscription) Err() <-chan error {
 func (sub *ClientSubscription) Unsubscribe() {
 	sub.errOnce.Do(func() {
 		select {
-		case sub.quit <- nil:
+		case sub.quit <- errUnsubscribed:
 			<-sub.unsubDone
 		case <-sub.unsubDone:
 		}
@@ -303,8 +306,7 @@ func (sub *ClientSubscription) run() {
 	if err != nil {
 		if err == ErrClientQuit {
 			// ErrClientQuit gets here when Client.Close is called. This is reported as a
-			// nil error because it's not an error, but we can't close sub.err here, only
-			// Unsubscribe can.
+			// nil error because it's not an error, but we can't close sub.err here.
 			err = nil
 		}
 		sub.err <- err
@@ -335,9 +337,12 @@ func (sub *ClientSubscription) forward() (unsubscribeServer bool, err error) {
 
 		switch chosen {
 		case 0: // <-sub.quit
-			var err error
 			if !recv.IsNil() {
 				err = recv.Interface().(error)
+			}
+			if err == errUnsubscribed {
+				// Exiting because Unsubscribe was called, unsubscribe on server.
+				return true, nil
 			}
 			return false, err
 
