@@ -171,11 +171,9 @@ func New(node *node.Node, backend backend, engine consensus.Engine, url string) 
 func (s *Service) Start() error {
 	// Subscribe to chain events to execute updates on
 	chainHeadCh := make(chan core.ChainHeadEvent, chainHeadChanSize)
-	headSub := s.backend.SubscribeChainHeadEvent(chainHeadCh)
-	s.headSub = headSub
+	s.headSub = s.backend.SubscribeChainHeadEvent(chainHeadCh)
 	txEventCh := make(chan core.NewTxsEvent, txChanSize)
-	txSub := s.backend.SubscribeNewTxsEvent(txEventCh)
-	s.txSub = txSub
+	s.txSub = s.backend.SubscribeNewTxsEvent(txEventCh)
 	go s.loop(chainHeadCh, txEventCh)
 
 	log.Info("Stats daemon started")
