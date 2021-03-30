@@ -432,8 +432,7 @@ func TestClientSubscriptionUnsubscribeServer(t *testing.T) {
 	if !recorder.unsubscribes[sub.subid] {
 		t.Fatal("client did not call unsubscribe method")
 	}
-	err, open := <-sub.Err()
-	if open {
+	if _, open := <-sub.Err(); open {
 		t.Fatal("subscription error channel not closed after unsubscribe")
 	}
 }
