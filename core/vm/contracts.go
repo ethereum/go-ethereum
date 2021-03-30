@@ -118,7 +118,7 @@ func init() {
 		PrecompiledAddressesHomestead = append(PrecompiledAddressesHomestead, k)
 	}
 	for k := range PrecompiledContractsByzantium {
-		PrecompiledAddressesHomestead = append(PrecompiledAddressesByzantium, k)
+		PrecompiledAddressesByzantium = append(PrecompiledAddressesByzantium, k)
 	}
 	for k := range PrecompiledContractsIstanbul {
 		PrecompiledAddressesIstanbul = append(PrecompiledAddressesIstanbul, k)
