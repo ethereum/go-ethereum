@@ -203,19 +203,28 @@ func (api *ExternalSigner) SignTx(account accounts.Account, tx *types.Transactio
 		t := common.NewMixedcaseAddress(*tx.To())
 		to = &t
 	}
-	accessList := tx.AccessList()
 	args := &core.SendTxArgs{
-		Data:       &data,
-		Nonce:      hexutil.Uint64(tx.Nonce()),
-		Value:      hexutil.Big(*tx.Value()),
-		Gas:        hexutil.Uint64(tx.Gas()),
-		GasPrice:   hexutil.Big(*tx.GasPrice()),
-		To:         to,
-		From:       common.NewMixedcaseAddress(account.Address),
-		AccessList: &accessList,
+		Data:     &data,
+		Nonce:    hexutil.Uint64(tx.Nonce()),
+		Value:    hexutil.Big(*tx.Value()),
+		Gas:      hexutil.Uint64(tx.Gas()),
+		GasPrice: hexutil.Big(*tx.GasPrice()),
+		To:       to,
+		From:     common.NewMixedcaseAddress(account.Address),
 	}
-	if tx.ChainId() != nil {
+	// We should request the default chain id that we're operating with
+	// (the chain we're executing on)
+	if chainID != nil {
+		args.ChainID = (*hexutil.Big)(chainID)
+	}
+	// However, if the user asked for a particular chain id, then we should
+	// use that instead.
+	if tx.Type() != types.LegacyTxType && tx.ChainId() != nil {
 		args.ChainID = (*hexutil.Big)(tx.ChainId())
+	}
+	if tx.Type() == types.AccessListTxType {
+		accessList := tx.AccessList()
+		args.AccessList = &accessList
 	}
 	var res signTransactionResult
 	if err := api.client.Call(&res, "account_signTransaction", args); err != nil {
