@@ -36,14 +36,14 @@ func newAccessList() *accessList {
 	}
 }
 
-func (al *accessList) AddAddress(address common.Address) {
+func (al *accessList) addAddress(address common.Address) {
 	// Set address if not previously present
 	if _, present := al.addresses[address]; !present {
 		al.addresses[address] = -1
 	}
 }
 
-func (al *accessList) AddSlot(address common.Address, slot common.Hash) {
+func (al *accessList) addSlot(address common.Address, slot common.Hash) {
 	idx, addrPresent := al.addresses[address]
 	if !addrPresent || idx == -1 {
 		// Address not present, or addr present but no slots there
@@ -60,15 +60,15 @@ func (al *accessList) AddSlot(address common.Address, slot common.Hash) {
 	// No changes require
 }
 
-func (al *accessList) DeleteAddressIfNoSlotSet(address common.Address) {
+func (al *accessList) deleteAddressIfNoSlotSet(address common.Address) {
 	idx, addrPresent := al.addresses[address]
 	if !addrPresent || idx == -1 {
 		delete(al.addresses, address)
 	}
 }
 
-// Copy creates an independent copy of an accessList.
-func (a *accessList) Copy() *accessList {
+// copy creates an independent copy of an accessList.
+func (a *accessList) copy() *accessList {
 	cp := newAccessList()
 	for k, v := range a.addresses {
 		cp.addresses[k] = v
@@ -84,7 +84,10 @@ func (a *accessList) Copy() *accessList {
 	return cp
 }
 
-func (a *accessList) ToAccessList() types.AccessList {
+// toAccesslist converts the accesslist to a types.AccessList.
+// The accessList internally uses mappings which makes it
+// easier to add and remove values.
+func (a *accessList) toAccessList() types.AccessList {
 	acl := make(types.AccessList, 0, len(a.addresses))
 	for addr, idx := range a.addresses {
 		var tuple types.AccessTuple
@@ -106,12 +109,15 @@ type accessListTracer struct {
 	list *accessList
 }
 
+// NewAccessListTracer creates a new tracer that can generate AccessLists.
+// An optional AccessList can be specified to occupy slots and addresses in
+// the resulting accesslist.
 func NewAccessListTracer(acl types.AccessList) *accessListTracer {
 	list := newAccessList()
 	for _, al := range acl {
-		list.AddAddress(al.Address)
+		list.addAddress(al.Address)
 		for _, slot := range al.StorageKeys {
-			list.AddSlot(al.Address, slot)
+			list.addSlot(al.Address, slot)
 		}
 	}
 	return &accessListTracer{
@@ -126,15 +132,15 @@ func (a *accessListTracer) CaptureState(env *EVM, pc uint64, op OpCode, gas, cos
 	stack := scope.Stack
 	if (op == SLOAD || op == SSTORE) && stack.len() >= 1 {
 		slot := common.Hash(stack.data[stack.len()-1].Bytes32())
-		a.list.AddSlot(scope.Contract.Address(), slot)
+		a.list.addSlot(scope.Contract.Address(), slot)
 	}
 	if (op == EXTCODECOPY || op == EXTCODEHASH || op == EXTCODESIZE || op == BALANCE || op == SELFDESTRUCT) && stack.len() >= 1 {
 		address := common.Address(stack.data[stack.len()-1].Bytes20())
-		a.list.AddAddress(address)
+		a.list.addAddress(address)
 	}
 	if (op == DELEGATECALL || op == CALL || op == STATICCALL || op == CALLCODE) && stack.len() >= 5 {
 		address := common.Address(stack.data[stack.len()-2].Bytes20())
-		a.list.AddAddress(address)
+		a.list.addAddress(address)
 	}
 }
 
@@ -143,18 +149,23 @@ func (*accessListTracer) CaptureFault(env *EVM, pc uint64, op OpCode, gas, cost 
 
 func (*accessListTracer) CaptureEnd(output []byte, gasUsed uint64, t time.Duration, err error) {}
 
+// GetAccessList returns the current AccessList maintained by the tracer.
 func (a *accessListTracer) GetAccessList() types.AccessList {
-	return a.list.ToAccessList()
+	return a.list.toAccessList()
 }
 
+// GetUnpreparedAccessList removes the specified addresses from the
+// AccessList before returning it. The addresses are only removed
+// if no slot has been touched in them, since they are added for free
+// when executing a EIP2930 transaction.
 func (a *accessListTracer) GetUnpreparedAccessList(sender common.Address, dst *common.Address, precompiles []common.Address) types.AccessList {
-	copy := a.list.Copy()
-	copy.DeleteAddressIfNoSlotSet(sender)
+	copy := a.list.copy()
+	copy.deleteAddressIfNoSlotSet(sender)
 	if dst != nil {
-		copy.DeleteAddressIfNoSlotSet(*dst)
+		copy.deleteAddressIfNoSlotSet(*dst)
 	}
 	for _, addr := range precompiles {
-		copy.DeleteAddressIfNoSlotSet(addr)
+		copy.deleteAddressIfNoSlotSet(addr)
 	}
-	return copy.ToAccessList()
+	return copy.toAccessList()
 }

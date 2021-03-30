@@ -550,6 +550,10 @@ type AccessListResult struct {
 	GasUsed    hexutil.Uint64    `json:"gasUsed"`
 }
 
+// CreateAccessList creates a EIP-2930 type AccessList for the given transaction.
+// Its the result of the `debug_createAccessList` RPC call.
+// Reexec and BlockNrOrHash can be specified to create the accessList on top of a certain state.
+// The AccessListResult contains an error if the transaction failed.
 func (api *PublicDebugAPI) CreateAccessList(blockNrOrHash rpc.BlockNumberOrHash, reexec uint64, args *ethapi.SendTxArgs) (*AccessListResult, error) {
 	ctx := context.Background()
 	var block *types.Block
