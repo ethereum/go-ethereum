@@ -59,7 +59,7 @@ func (t *StackTrie) Update(key, value []byte) error {
 	if len(value) == 0 {
 		panic("deletion not supported")
 	}
-	t.insert(t.root, k[:len(k)-1], value, nil)
+	t.insert(t.root, k[:len(k)-1], value, nil, newLeaf)
 	return nil
 }
 
@@ -82,6 +82,16 @@ type stNode struct {
 	key      []byte      // key chunk covered by this (leaf|ext) node
 	val      []byte      // value contained by this node if it's a leaf
 	children [16]*stNode // list of children (for branch and exts)
+}
+
+// newHashed constructs a hashed-node with provided value. The key
+// will be ignored, thus safe to modify afterwards, but
+// value is not safe to modify afterwards.
+func newHashed(key, val []byte) *stNode {
+	st := stPool.Get().(*stNode)
+	st.typ = hashedNode
+	st.val = val
+	return st
 }
 
 // newLeaf constructs a leaf node with provided node key and value. The key
@@ -138,7 +148,7 @@ func (n *stNode) getDiffIndex(key []byte) int {
 
 // Helper function to that inserts a (key, value) pair into
 // the trie.
-func (t *StackTrie) insert(st *stNode, key, value []byte, prefix []byte) {
+func (t *StackTrie) insert(st *stNode, key, value []byte, prefix []byte, leafCtor func([]byte, []byte) *stNode) {
 	switch st.typ {
 	case branchNode: /* Branch */
 		idx := int(key[0])
@@ -155,9 +165,9 @@ func (t *StackTrie) insert(st *stNode, key, value []byte, prefix []byte) {
 
 		// Add new child
 		if st.children[idx] == nil {
-			st.children[idx] = newLeaf(key[1:], value)
+			st.children[idx] = leafCtor(key[1:], value)
 		} else {
-			t.insert(st.children[idx], key[1:], value, append(prefix, key[0]))
+			t.insert(st.children[idx], key[1:], value, append(prefix, key[0]), leafCtor)
 		}
 
 	case extNode: /* Ext */
@@ -172,7 +182,7 @@ func (t *StackTrie) insert(st *stNode, key, value []byte, prefix []byte) {
 		if diffidx == len(st.key) {
 			// Ext key and key segment are identical, recurse into
 			// the child node.
-			t.insert(st.children[0], key[diffidx:], value, append(prefix, key[:diffidx]...))
+			t.insert(st.children[0], key[diffidx:], value, append(prefix, key[:diffidx]...), leafCtor)
 			return
 		}
 		// Save the original part. Depending if the break is
@@ -211,7 +221,7 @@ func (t *StackTrie) insert(st *stNode, key, value []byte, prefix []byte) {
 			p = st.children[0]
 		}
 		// Create a leaf for the inserted part
-		o := newLeaf(key[diffidx+1:], value)
+		o := leafCtor(key[diffidx+1:], value)
 
 		// Insert both child leaves where they belong:
 		origIdx := st.key[diffidx]
@@ -260,7 +270,7 @@ func (t *StackTrie) insert(st *stNode, key, value []byte, prefix []byte) {
 		t.hash(p.children[origIdx], append(prefix, st.key[:diffidx+1]...))
 
 		newIdx := key[diffidx]
-		p.children[newIdx] = newLeaf(key[diffidx+1:], value)
+		p.children[newIdx] = leafCtor(key[diffidx+1:], value)
 
 		// Finally, cut off the key part that has been passed
 		// over to the children.
