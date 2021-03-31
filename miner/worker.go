@@ -1275,6 +1275,7 @@ func (w *worker) computeBundleGas(bundle types.Transactions, parent *types.Block
 
 	var totalGasUsed uint64 = 0
 	var tempGasUsed uint64
+	gasFees := new(big.Int)
 
 	coinbaseBalanceBefore := env.state.GetBalance(w.coinbase)
 
@@ -1284,13 +1285,12 @@ func (w *worker) computeBundleGas(bundle types.Transactions, parent *types.Block
 			return nil, 0, err
 		}
 		totalGasUsed += receipt.GasUsed
+		gasFees.Add(gasFees, new(big.Int).Mul(big.NewInt(int64(totalGasUsed)), tx.GasPrice()))
 	}
 	coinbaseBalanceAfter := env.state.GetBalance(w.coinbase)
-	coinbaseDiff := new(big.Int).Sub(coinbaseBalanceAfter, coinbaseBalanceBefore)
-	totalEth := new(big.Int)
-	totalEth.Add(totalEth, coinbaseDiff)
+	coinbaseDiff := new(big.Int).Sub(new(big.Int).Sub(coinbaseBalanceAfter, gasFees), coinbaseBalanceBefore)
 
-	return totalEth, totalGasUsed, nil
+	return coinbaseDiff, totalGasUsed, nil
 }
 
 // copyReceipts makes a deep copy of the given receipts.
