@@ -138,8 +138,8 @@ web3._extend({
 			params: 3,
 		}),
 		new web3._extend.Method({
-			name: 'submitHashRate',
-			call: 'ethash_submitHashRate',
+			name: 'submitHashrate',
+			call: 'ethash_submitHashrate',
 			params: 2,
 		}),
 	]
