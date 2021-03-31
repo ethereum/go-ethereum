@@ -1029,16 +1029,16 @@ func benchmarkVerifyRangeNoProof(b *testing.B, size int) {
 func randomTrie(n int) (*Trie, map[string]*kv) {
 	trie := new(Trie)
 	vals := make(map[string]*kv)
-	for i := byte(0); i < 100; i++ {
-		value := &kv{common.LeftPadBytes([]byte{i}, 32), []byte{i}, false}
-		value2 := &kv{common.LeftPadBytes([]byte{i + 10}, 32), []byte{i}, false}
-		trie.Update(value.k, value.v)
-		trie.Update(value2.k, value2.v)
-		vals[string(value.k)] = value
-		vals[string(value2.k)] = value2
-	}
+	//for i := byte(0); i < 100; i++ {
+	//	value := &kv{common.LeftPadBytes([]byte{i}, 64), []byte{i}, false}
+	//	value2 := &kv{common.LeftPadBytes([]byte{i + 10}, 64), []byte{i}, false}
+	//	trie.Update(value.k, value.v)
+	//	trie.Update(value2.k, value2.v)
+	//	vals[string(value.k)] = value
+	//	vals[string(value2.k)] = value2
+	//}
 	for i := 0; i < n; i++ {
-		value := &kv{randBytes(32), randBytes(20), false}
+		value := &kv{randBytes(32), randBytes(64), false}
 		trie.Update(value.k, value.v)
 		vals[string(value.k)] = value
 	}

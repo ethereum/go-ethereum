@@ -507,3 +507,32 @@ func (st *StackTrie) Commit() (h common.Hash, err error) {
 	st.db.Put(h[:], st.val)
 	return h, nil
 }
+
+func (st *StackTrie) dumpTrie(lvl int) {
+	var indent []byte
+	for i := 0; i < lvl; i++ {
+		indent = append(indent, ' ')
+	}
+	switch st.nodeType {
+	case branchNode:
+		fmt.Printf("\n%s FN (key=%#x)", string(indent), st.key)
+
+		for i := 0; i < 16; i++ {
+			if st.children[i] == nil {
+				continue
+			}
+			fmt.Printf("\n%s %#x. ", string(indent), i)
+			st.children[i].dumpTrie(lvl + 1)
+		}
+		fmt.Println("")
+	case extNode:
+		fmt.Printf("%s: sn(%#x)", string(indent), st.key)
+		st.children[0].dumpTrie(lvl + 1)
+	case leafNode:
+		fmt.Printf("%s: leaf(%#x): %x ", string(indent), st.key, st.val)
+	case hashedNode:
+		fmt.Printf("hash: %#x", st.val)
+	default:
+		fmt.Printf("Foo: %d ? ", st.nodeType)
+	}
+}
