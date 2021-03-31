@@ -55,6 +55,10 @@ var (
 	// value is too large, the failure rate of range prove will increase. Otherwise
 	// the the value is too small, the efficiency of the state recovery will decrease.
 	storageCheckRange = 1024
+
+	// errMissingTrie is returned if the target trie is missing while the generation
+	// is running. In this case the generation is aborted and wait the new signal.
+	errMissingTrie = errors.New("missing trie")
 )
 
 // Metrics in generation
@@ -247,7 +251,7 @@ func (result *proofResult) forEach(callback func(key []byte, val []byte) error) 
 //
 // The proof result will be returned if the range proving is finished, otherwise
 // the error will be returned to abort the entire procedure.
-func (dl *diskLayer) proveRange(root common.Hash, prefix []byte, kind string, origin []byte, max int, valueConvertFn func([]byte) ([]byte, error)) (*proofResult, error) {
+func (dl *diskLayer) proveRange(stats *generatorStats, root common.Hash, prefix []byte, kind string, origin []byte, max int, valueConvertFn func([]byte) ([]byte, error)) (*proofResult, error) {
 	var (
 		keys     [][]byte
 		vals     [][]byte
@@ -320,8 +324,8 @@ func (dl *diskLayer) proveRange(root common.Hash, prefix []byte, kind string, or
 	// Snap state is chunked, generate edge proofs for verification.
 	tr, err := trie.New(root, dl.triedb)
 	if err != nil {
-		log.Error("Missing trie", "root", root, "err", err)
-		return nil, err
+		stats.Log("Trie missing, state snapshotting paused", dl.root, dl.genMarker)
+		return nil, errMissingTrie
 	}
 	// Firstly find out the key of last iterated element.
 	var last []byte
@@ -362,7 +366,7 @@ type onStateCallback func(key []byte, val []byte, write bool, delete bool) error
 // generation, or iterate trie to regenerate state on demand.
 func (dl *diskLayer) generateRange(root common.Hash, prefix []byte, kind string, origin []byte, max int, stats *generatorStats, onState onStateCallback, valueConvertFn func([]byte) ([]byte, error)) (bool, []byte, error) {
 	// Use range prover to check the validity of the flat state in the range
-	result, err := dl.proveRange(root, prefix, kind, origin, max, valueConvertFn)
+	result, err := dl.proveRange(stats, root, prefix, kind, origin, max, valueConvertFn)
 	if err != nil {
 		return false, nil, err
 	}
@@ -408,7 +412,8 @@ func (dl *diskLayer) generateRange(root common.Hash, prefix []byte, kind string,
 	if tr == nil {
 		tr, err = trie.New(root, dl.triedb)
 		if err != nil {
-			return false, nil, err
+			stats.Log("Trie missing, state snapshotting paused", dl.root, dl.genMarker)
+			return false, nil, errMissingTrie
 		}
 	}
 	var (
