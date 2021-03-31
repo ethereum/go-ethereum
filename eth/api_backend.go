@@ -393,7 +393,7 @@ func (b *EthAPIBackend) AccessList(ctx context.Context, block *types.Block, reex
 			to := args.To
 			// if to is not defined -> create transaction
 			if to == nil {
-				// remove the created contract from the accesslist (if no storage access occured)
+				// remove the created contract from the accesslist (if no storage access occurred)
 				contractAddr := crypto.CreateAddress(msg.From(), uint64(*args.Nonce))
 				to = &contractAddr
 			}
