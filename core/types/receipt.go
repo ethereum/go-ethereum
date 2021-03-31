@@ -141,10 +141,6 @@ func (r *Receipt) EncodeRLP(w io.Writer) error {
 	if r.Type == LegacyTxType {
 		return rlp.Encode(w, data)
 	}
-	// It's an EIP-2718 typed TX receipt.
-	if r.Type != AccessListTxType {
-		return ErrTxTypeNotSupported
-	}
 	buf := encodeBufferPool.Get().(*bytes.Buffer)
 	defer encodeBufferPool.Put(buf)
 	buf.Reset()

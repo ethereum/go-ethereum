@@ -263,12 +263,15 @@ func (s eip2930Signer) Hash(tx *Transaction) common.Hash {
 		return prefixedRlpHash(
 			tx.Type(),
 			[]interface{}{
+				s.chainId,
 				tx.Nonce(),
-				tx.FeeCap(),
 				tx.Tip(),
+				tx.FeeCap(),
+				tx.Gas(),
 				tx.To(),
 				tx.Value(),
 				tx.Data(),
+				tx.AccessList(),
 			})
 	default:
 		// This _should_ not happen, but in case someone sends in a bad
