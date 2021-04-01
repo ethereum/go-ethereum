@@ -358,11 +358,11 @@ func (s *PrivateAccountAPI) signTransaction(ctx context.Context, args *SendTxArg
 		return nil, err
 	}
 	// Set some sanity defaults and terminate on failure
-	if err := args.SetDefaults(ctx, s.b); err != nil {
+	if err := args.setDefaults(ctx, s.b); err != nil {
 		return nil, err
 	}
 	// Assemble the transaction and sign with the wallet
-	tx := args.ToTransaction()
+	tx := args.toTransaction()
 
 	return wallet.SignTxWithPassphrase(account, passwd, tx, s.b.ChainConfig().ChainID)
 }
@@ -861,7 +861,7 @@ func DoCall(ctx context.Context, b Backend, args CallArgs, blockNrOrHash rpc.Blo
 
 	// Get a new instance of the EVM.
 	msg := args.ToMessage(globalGasCap)
-	evm, vmError, err := b.GetEVM(ctx, msg, state, header)
+	evm, vmError, err := b.GetEVM(ctx, msg, state, header, nil)
 	if err != nil {
 		return nil, err
 	}
@@ -1299,6 +1299,89 @@ func newRPCTransactionFromBlockHash(b *types.Block, hash common.Hash) *RPCTransa
 	return nil
 }
 
+// accessListResult returns an optional accesslist
+// Its the result of the `debug_createAccessList` RPC call.
+// It contains an error if the transaction itself failed.
+type accessListResult struct {
+	Accesslist *types.AccessList `json:"accessList"`
+	Error      string            `json:"error,omitempty"`
+	GasUsed    hexutil.Uint64    `json:"gasUsed"`
+}
+
+// CreateAccessList creates a EIP-2930 type AccessList for the given transaction.
+// Reexec and BlockNrOrHash can be specified to create the accessList on top of a certain state.
+func (s *PublicBlockChainAPI) CreateAccessList(ctx context.Context, args SendTxArgs, blockNrOrHash *rpc.BlockNumberOrHash, reexec uint64) (*accessListResult, error) {
+	bNrOrHash := rpc.BlockNumberOrHashWithNumber(rpc.PendingBlockNumber)
+	if blockNrOrHash != nil {
+		bNrOrHash = *blockNrOrHash
+	}
+	acl, gasUsed, vmerr, err := AccessList(ctx, s.b, bNrOrHash, reexec, args)
+	if err != nil {
+		return nil, err
+	}
+	result := &accessListResult{Accesslist: &acl, GasUsed: hexutil.Uint64(gasUsed)}
+	if vmerr != nil {
+		result.Error = vmerr.Error()
+	}
+	return result, nil
+}
+
+// AccessList creates an access list for the given transaction.
+// If the accesslist creation fails an error is returned.
+// If the transaction itself fails, an vmErr is returned.
+func AccessList(ctx context.Context, b Backend, blockNrOrHash rpc.BlockNumberOrHash, reexec uint64, args SendTxArgs) (acl types.AccessList, gasUsed uint64, vmErr error, err error) {
+	db, header, err := b.StateAndHeaderByNumberOrHash(ctx, blockNrOrHash)
+	if db == nil || err != nil {
+		return nil, 0, nil, err
+	}
+	if err := args.setDefaults(ctx, b); err != nil {
+		// most likely an error in gas estimation, set gas to max gas
+		log.Warn("Setting defaults failed", "error", err)
+		maxGas := hexutil.Uint64(b.RPCGasCap())
+		args.Gas = &maxGas
+	}
+	var (
+		gas        uint64
+		accessList types.AccessList
+		msg        types.Message
+	)
+	if args.AccessList != nil {
+		accessList = *args.AccessList
+	}
+	for i := 0; i < 10; i++ {
+		log.Trace("Creating Access list", "accesslist", accessList)
+		// Copy the original db so we don't modify it
+		statedb := db.Copy()
+		msg = types.NewMessage(args.From, args.To, uint64(*args.Nonce), args.Value.ToInt(), uint64(*args.Gas), args.GasPrice.ToInt(), *args.Data, accessList, false)
+		// Apply the transaction
+		tracer := vm.NewAccessListTracer(accessList)
+		config := vm.Config{Tracer: tracer, Debug: true}
+		vmenv, _, err := b.GetEVM(ctx, msg, statedb, header, &config)
+		if err != nil {
+			return nil, 0, nil, err
+		}
+		res, err := core.ApplyMessage(vmenv, msg, new(core.GasPool).AddGas(msg.Gas()))
+		if err != nil {
+			return nil, 0, nil, fmt.Errorf("failed to apply transaction: %v err: %v", args.toTransaction().Hash(), err)
+		}
+		if res.UsedGas == gas {
+			to := args.To
+			// if to is not defined -> create transaction
+			if to == nil {
+				// remove the created contract from the accesslist (if no storage access occurred)
+				contractAddr := crypto.CreateAddress(msg.From(), uint64(*args.Nonce))
+				to = &contractAddr
+			}
+			acl := tracer.AccessList(args.From, to, vmenv.ActivePrecompiles())
+			return acl, res.UsedGas, res.Err, nil
+		}
+		accessList = tracer.RawAccessList()
+		gas = res.UsedGas
+	}
+	// If we didn't find the perfect accesslist after 10 iterations, return our best guess
+	return accessList, gas, errors.New("best guess after 10 iterations"), nil
+}
+
 // PublicTransactionPoolAPI exposes methods for the RPC interface
 type PublicTransactionPoolAPI struct {
 	b         Backend
@@ -1501,8 +1584,8 @@ type SendTxArgs struct {
 	ChainID    *hexutil.Big      `json:"chainId,omitempty"`
 }
 
-// SetDefaults fills in default values for unspecified tx fields.
-func (args *SendTxArgs) SetDefaults(ctx context.Context, b Backend) error {
+// setDefaults fills in default values for unspecified tx fields.
+func (args *SendTxArgs) setDefaults(ctx context.Context, b Backend) error {
 	if args.GasPrice == nil {
 		price, err := b.SuggestPrice(ctx)
 		if err != nil {
@@ -1567,9 +1650,9 @@ func (args *SendTxArgs) SetDefaults(ctx context.Context, b Backend) error {
 	return nil
 }
 
-// ToTransaction converts the arguments to a transaction.
+// toTransaction converts the arguments to a transaction.
 // This assumes that setDefaults has been called.
-func (args *SendTxArgs) ToTransaction() *types.Transaction {
+func (args *SendTxArgs) toTransaction() *types.Transaction {
 	var input []byte
 	if args.Input != nil {
 		input = *args.Input
@@ -1651,11 +1734,11 @@ func (s *PublicTransactionPoolAPI) SendTransaction(ctx context.Context, args Sen
 	}
 
 	// Set some sanity defaults and terminate on failure
-	if err := args.SetDefaults(ctx, s.b); err != nil {
+	if err := args.setDefaults(ctx, s.b); err != nil {
 		return common.Hash{}, err
 	}
 	// Assemble the transaction and sign with the wallet
-	tx := args.ToTransaction()
+	tx := args.toTransaction()
 
 	signed, err := wallet.SignTx(account, tx, s.b.ChainConfig().ChainID)
 	if err != nil {
@@ -1668,11 +1751,11 @@ func (s *PublicTransactionPoolAPI) SendTransaction(ctx context.Context, args Sen
 // and returns it to the caller for further processing (signing + broadcast)
 func (s *PublicTransactionPoolAPI) FillTransaction(ctx context.Context, args SendTxArgs) (*SignTransactionResult, error) {
 	// Set some sanity defaults and terminate on failure
-	if err := args.SetDefaults(ctx, s.b); err != nil {
+	if err := args.setDefaults(ctx, s.b); err != nil {
 		return nil, err
 	}
 	// Assemble the transaction and obtain rlp
-	tx := args.ToTransaction()
+	tx := args.toTransaction()
 	data, err := tx.MarshalBinary()
 	if err != nil {
 		return nil, err
@@ -1734,14 +1817,14 @@ func (s *PublicTransactionPoolAPI) SignTransaction(ctx context.Context, args Sen
 	if args.Nonce == nil {
 		return nil, fmt.Errorf("nonce not specified")
 	}
-	if err := args.SetDefaults(ctx, s.b); err != nil {
+	if err := args.setDefaults(ctx, s.b); err != nil {
 		return nil, err
 	}
 	// Before actually sign the transaction, ensure the transaction fee is reasonable.
 	if err := checkTxFee(args.GasPrice.ToInt(), uint64(*args.Gas), s.b.RPCTxFeeCap()); err != nil {
 		return nil, err
 	}
-	tx, err := s.sign(args.From, args.ToTransaction())
+	tx, err := s.sign(args.From, args.toTransaction())
 	if err != nil {
 		return nil, err
 	}
@@ -1781,10 +1864,10 @@ func (s *PublicTransactionPoolAPI) Resend(ctx context.Context, sendArgs SendTxAr
 	if sendArgs.Nonce == nil {
 		return common.Hash{}, fmt.Errorf("missing transaction nonce in transaction spec")
 	}
-	if err := sendArgs.SetDefaults(ctx, s.b); err != nil {
+	if err := sendArgs.setDefaults(ctx, s.b); err != nil {
 		return common.Hash{}, err
 	}
-	matchTx := sendArgs.ToTransaction()
+	matchTx := sendArgs.toTransaction()
 
 	// Before replacing the old transaction, ensure the _new_ transaction fee is reasonable.
 	var price = matchTx.GasPrice()
@@ -1814,7 +1897,7 @@ func (s *PublicTransactionPoolAPI) Resend(ctx context.Context, sendArgs SendTxAr
 			if gasLimit != nil && *gasLimit != 0 {
 				sendArgs.Gas = gasLimit
 			}
-			signedTx, err := s.sign(sendArgs.From, sendArgs.ToTransaction())
+			signedTx, err := s.sign(sendArgs.From, sendArgs.toTransaction())
 			if err != nil {
 				return common.Hash{}, err
 			}

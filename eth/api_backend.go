@@ -19,12 +19,10 @@ package eth
 import (
 	"context"
 	"errors"
-	"fmt"
 	"math/big"
 
 	"github.com/ethereum/go-ethereum/accounts"
 	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/ethereum/go-ethereum/consensus"
 	"github.com/ethereum/go-ethereum/core"
 	"github.com/ethereum/go-ethereum/core/bloombits"
@@ -32,13 +30,10 @@ import (
 	"github.com/ethereum/go-ethereum/core/state"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/core/vm"
-	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/eth/downloader"
 	"github.com/ethereum/go-ethereum/eth/gasprice"
 	"github.com/ethereum/go-ethereum/ethdb"
 	"github.com/ethereum/go-ethereum/event"
-	"github.com/ethereum/go-ethereum/internal/ethapi"
-	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/miner"
 	"github.com/ethereum/go-ethereum/params"
 	"github.com/ethereum/go-ethereum/rpc"
@@ -197,12 +192,14 @@ func (b *EthAPIBackend) GetTd(ctx context.Context, hash common.Hash) *big.Int {
 	return b.eth.blockchain.GetTdByHash(hash)
 }
 
-func (b *EthAPIBackend) GetEVM(ctx context.Context, msg core.Message, state *state.StateDB, header *types.Header) (*vm.EVM, func() error, error) {
+func (b *EthAPIBackend) GetEVM(ctx context.Context, msg core.Message, state *state.StateDB, header *types.Header, vmConfig *vm.Config) (*vm.EVM, func() error, error) {
 	vmError := func() error { return nil }
-
+	if vmConfig == nil {
+		vmConfig = b.eth.blockchain.GetVMConfig()
+	}
 	txContext := core.NewEVMTxContext(msg)
 	context := core.NewEVMBlockContext(header, b.eth.BlockChain(), nil)
-	return vm.NewEVM(context, txContext, state, b.eth.blockchain.Config(), *b.eth.blockchain.GetVMConfig()), vmError, nil
+	return vm.NewEVM(context, txContext, state, b.eth.blockchain.Config(), *vmConfig), vmError, nil
 }
 
 func (b *EthAPIBackend) SubscribeRemovedLogsEvent(ch chan<- core.RemovedLogsEvent) event.Subscription {
@@ -347,62 +344,4 @@ func (b *EthAPIBackend) StatesInRange(ctx context.Context, fromBlock *types.Bloc
 
 func (b *EthAPIBackend) StateAtTransaction(ctx context.Context, block *types.Block, txIndex int, reexec uint64) (core.Message, vm.BlockContext, *state.StateDB, func(), error) {
 	return b.eth.stateAtTransaction(block, txIndex, reexec)
-}
-
-// AccessList creates an access list for the given transaction.
-// If the accesslist creation fails an error is returned.
-// If the transaction itself fails, an vmErr is returned.
-func (b *EthAPIBackend) AccessList(ctx context.Context, block *types.Block, reexec uint64, args *ethapi.SendTxArgs) (acl types.AccessList, gasUsed uint64, vmErr error, err error) {
-	if block == nil {
-		block = b.CurrentBlock()
-	}
-	db, release, err := b.eth.stateAtBlock(block, reexec)
-	defer release()
-	if err != nil {
-		return nil, 0, nil, err
-	}
-	if err := args.SetDefaults(ctx, b); err != nil {
-		// most likely an error in gas estimation, set gas to max gas
-		log.Warn("Setting defaults failed", "error", err)
-		maxGas := hexutil.Uint64(b.RPCGasCap())
-		args.Gas = &maxGas
-	}
-	var (
-		gas        uint64
-		accessList types.AccessList
-		msg        types.Message
-	)
-	if args.AccessList != nil {
-		accessList = *args.AccessList
-	}
-	for i := 0; i < 10; i++ {
-		log.Trace("Creating Access list", "accesslist", accessList)
-		// Copy the original db so we don't modify it
-		statedb := db.Copy()
-		msg = types.NewMessage(args.From, args.To, uint64(*args.Nonce), args.Value.ToInt(), uint64(*args.Gas), args.GasPrice.ToInt(), *args.Data, accessList, false)
-		// Apply the transaction
-		context := core.NewEVMBlockContext(block.Header(), b.eth.blockchain, nil)
-		tracer := vm.NewAccessListTracer(accessList)
-		config := vm.Config{Tracer: tracer, Debug: true}
-		vmenv := vm.NewEVM(context, core.NewEVMTxContext(msg), statedb, b.eth.blockchain.Config(), config)
-		res, err := core.ApplyMessage(vmenv, msg, new(core.GasPool).AddGas(msg.Gas()))
-		if err != nil {
-			return nil, 0, nil, fmt.Errorf("failed to apply transaction: %v err: %v", args.ToTransaction().Hash(), err)
-		}
-		if res.UsedGas == gas {
-			to := args.To
-			// if to is not defined -> create transaction
-			if to == nil {
-				// remove the created contract from the accesslist (if no storage access occurred)
-				contractAddr := crypto.CreateAddress(msg.From(), uint64(*args.Nonce))
-				to = &contractAddr
-			}
-			acl := tracer.GetUnpreparedAccessList(args.From, to, vmenv.ActivePrecompiles())
-			return acl, res.UsedGas, res.Err, nil
-		}
-		accessList = tracer.GetAccessList()
-		gas = res.UsedGas
-	}
-	// If we didn't find the perfect accesslist after 10 iterations, return our best guess
-	return accessList, gas, errors.New("best guess after 10 iterations"), nil
 }
