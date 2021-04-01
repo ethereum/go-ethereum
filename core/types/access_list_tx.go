@@ -42,6 +42,24 @@ func (al AccessList) StorageKeys() int {
 	return sum
 }
 
+// Equal returns true if two AccessLists are equal.
+func (al AccessList) Equal(other AccessList) bool {
+	if len(al) != len(other) {
+		return false
+	}
+	for t := range al {
+		if al[t].Address != other[t].Address || len(al[t].StorageKeys) != len(other[t].StorageKeys) {
+			return false
+		}
+		for k := range al[t].StorageKeys {
+			if al[t].StorageKeys[k] != other[t].StorageKeys[k] {
+				return false
+			}
+		}
+	}
+	return true
+}
+
 // AccessListTx is the data of EIP-2930 access list transactions.
 type AccessListTx struct {
 	ChainID    *big.Int        // destination chain ID

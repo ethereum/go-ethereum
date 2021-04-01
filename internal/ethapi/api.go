@@ -1364,7 +1364,8 @@ func AccessList(ctx context.Context, b Backend, blockNrOrHash rpc.BlockNumberOrH
 		if err != nil {
 			return nil, 0, nil, fmt.Errorf("failed to apply transaction: %v err: %v", args.toTransaction().Hash(), err)
 		}
-		if res.UsedGas == gas {
+		resList := tracer.RawAccessList()
+		if accessList.Equal(resList) {
 			to := args.To
 			// if to is not defined -> create transaction
 			if to == nil {
@@ -1375,7 +1376,7 @@ func AccessList(ctx context.Context, b Backend, blockNrOrHash rpc.BlockNumberOrH
 			acl := tracer.AccessList(args.From, to, vmenv.ActivePrecompiles())
 			return acl, res.UsedGas, res.Err, nil
 		}
-		accessList = tracer.RawAccessList()
+		accessList = resList
 		gas = res.UsedGas
 	}
 	// If we didn't find the perfect accesslist after 10 iterations, return our best guess
