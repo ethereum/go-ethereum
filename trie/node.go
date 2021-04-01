@@ -30,6 +30,7 @@ var indices = []string{"0", "1", "2", "3", "4", "5", "6", "7", "8", "9", "a", "b
 type node interface {
 	fstring(string) string
 	cache() (hashNode, bool)
+	commitSeq() int
 }
 
 type (
@@ -71,6 +72,7 @@ func (n *shortNode) copy() *shortNode { copy := *n; return &copy }
 type nodeFlag struct {
 	hash  hashNode // cached hash of the node (may be nil)
 	dirty bool     // whether the node has changes that must be written to the database
+	seq   int      // the commit order of trie node
 }
 
 func (n *fullNode) cache() (hashNode, bool)  { return n.flags.hash, n.flags.dirty }
@@ -104,6 +106,11 @@ func (n hashNode) fstring(ind string) string {
 func (n valueNode) fstring(ind string) string {
 	return fmt.Sprintf("%x ", []byte(n))
 }
+
+func (n *fullNode) commitSeq() int  { return n.flags.seq }
+func (n *shortNode) commitSeq() int { return n.flags.seq }
+func (n hashNode) commitSeq() int   { return 0 }
+func (n valueNode) commitSeq() int  { return 0 }
 
 func mustDecodeNode(hash, buf []byte) node {
 	n, err := decodeNode(hash, buf)

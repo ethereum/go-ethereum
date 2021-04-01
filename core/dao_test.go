@@ -58,10 +58,10 @@ func TestDAOForkRangeExtradata(t *testing.T) {
 	conBc, _ := NewBlockChain(conDb, nil, &conConf, ethash.NewFaker(), vm.Config{}, nil, nil)
 	defer conBc.Stop()
 
-	if _, err := proBc.InsertChain(prefix); err != nil {
+	if _, err := proBc.InsertChainAndWait(prefix); err != nil {
 		t.Fatalf("pro-fork: failed to import chain prefix: %v", err)
 	}
-	if _, err := conBc.InsertChain(prefix); err != nil {
+	if _, err := conBc.InsertChainAndWait(prefix); err != nil {
 		t.Fatalf("con-fork: failed to import chain prefix: %v", err)
 	}
 	// Try to expand both pro-fork and non-fork chains iteratively with other camp's blocks
@@ -76,7 +76,7 @@ func TestDAOForkRangeExtradata(t *testing.T) {
 		for j := 0; j < len(blocks)/2; j++ {
 			blocks[j], blocks[len(blocks)-1-j] = blocks[len(blocks)-1-j], blocks[j]
 		}
-		if _, err := bc.InsertChain(blocks); err != nil {
+		if _, err := bc.InsertChainAndWait(blocks); err != nil {
 			t.Fatalf("failed to import contra-fork chain for expansion: %v", err)
 		}
 		if err := bc.stateCache.TrieDB().Commit(bc.CurrentHeader().Root, true, nil); err != nil {
@@ -101,7 +101,7 @@ func TestDAOForkRangeExtradata(t *testing.T) {
 		for j := 0; j < len(blocks)/2; j++ {
 			blocks[j], blocks[len(blocks)-1-j] = blocks[len(blocks)-1-j], blocks[j]
 		}
-		if _, err := bc.InsertChain(blocks); err != nil {
+		if _, err := bc.InsertChainAndWait(blocks); err != nil {
 			t.Fatalf("failed to import pro-fork chain for expansion: %v", err)
 		}
 		if err := bc.stateCache.TrieDB().Commit(bc.CurrentHeader().Root, true, nil); err != nil {
@@ -127,7 +127,7 @@ func TestDAOForkRangeExtradata(t *testing.T) {
 	for j := 0; j < len(blocks)/2; j++ {
 		blocks[j], blocks[len(blocks)-1-j] = blocks[len(blocks)-1-j], blocks[j]
 	}
-	if _, err := bc.InsertChain(blocks); err != nil {
+	if _, err := bc.InsertChainAndWait(blocks); err != nil {
 		t.Fatalf("failed to import contra-fork chain for expansion: %v", err)
 	}
 	if err := bc.stateCache.TrieDB().Commit(bc.CurrentHeader().Root, true, nil); err != nil {
@@ -147,7 +147,7 @@ func TestDAOForkRangeExtradata(t *testing.T) {
 	for j := 0; j < len(blocks)/2; j++ {
 		blocks[j], blocks[len(blocks)-1-j] = blocks[len(blocks)-1-j], blocks[j]
 	}
-	if _, err := bc.InsertChain(blocks); err != nil {
+	if _, err := bc.InsertChainAndWait(blocks); err != nil {
 		t.Fatalf("failed to import pro-fork chain for expansion: %v", err)
 	}
 	if err := bc.stateCache.TrieDB().Commit(bc.CurrentHeader().Root, true, nil); err != nil {

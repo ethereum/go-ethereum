@@ -390,7 +390,7 @@ func testIteratorContinueAfterSeekError(t *testing.T, memonly bool) {
 	for _, val := range testdata1 {
 		ctr.Update([]byte(val.k), []byte(val.v))
 	}
-	root, _ := ctr.Commit(nil)
+	root := ctr.Commit(nil)
 	if !memonly {
 		triedb.Commit(root, true, nil)
 	}

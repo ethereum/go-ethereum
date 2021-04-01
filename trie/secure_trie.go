@@ -139,7 +139,7 @@ func (t *SecureTrie) GetKey(shaKey []byte) []byte {
 //
 // Committing flushes nodes from memory. Subsequent Get calls will load nodes
 // from the database.
-func (t *SecureTrie) Commit(onleaf LeafCallback) (root common.Hash, err error) {
+func (t *SecureTrie) Commit(onleaf LeafCallback) common.Hash {
 	// Write all the pre-images to the actual disk database
 	if len(t.getSecKeyCache()) > 0 {
 		t.trie.db.lock.Lock()
@@ -163,6 +163,15 @@ func (t *SecureTrie) Hash() common.Hash {
 // Copy returns a copy of SecureTrie.
 func (t *SecureTrie) Copy() *SecureTrie {
 	cpy := *t
+	return &cpy
+}
+
+// HashAndCopy returns a copy of SecureTrie. But the difference between
+// the Copy is the original trie will be hashed before copy. Also the returned
+// trie will have a bumped commit sequence if the trie is not committed yet.
+func (t *SecureTrie) HashAndCopy() *SecureTrie {
+	var cpy SecureTrie
+	cpy.trie = *(HashAndCopyTrie(&t.trie))
 	return &cpy
 }
 
