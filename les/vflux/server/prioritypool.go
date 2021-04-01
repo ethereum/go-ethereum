@@ -63,10 +63,7 @@ type priorityPool struct {
 	ns                           *nodestate.NodeStateMachine
 	clock                        mclock.Clock
 	lock                         sync.Mutex
-	activeQueue                  *prque.LazyQueue
 	inactiveQueue                *prque.Prque
-	changed                      []*ppNodeInfo
-	activeCount, activeCap       uint64
 	maxCount, maxCap             uint64
 	minCap                       uint64
 	activeBias                   time.Duration
@@ -75,17 +72,27 @@ type priorityPool struct {
 	cachedCurve    *capacityCurve
 	ccUpdatedAt    mclock.AbsTime
 	ccUpdateForced bool
+
+	tempState []*ppNodeInfo // nodes currently in temporary state
+	// the following fields represent the temporary state if tempState is not empty
+	activeCount, activeCap uint64
+	activeQueue            *prque.LazyQueue
 }
 
 // ppNodeInfo is the internal node descriptor of priorityPool
 type ppNodeInfo struct {
-	nodePriority                          nodePriority
-	node                                  *enode.Node
-	connected                             bool
-	capacity, origCap, minTarget, stepDiv uint64
-	bias                                  time.Duration
-	changed                               bool
-	activeIndex, inactiveIndex            int
+	nodePriority               nodePriority
+	node                       *enode.Node
+	connected                  bool
+	capacity                   uint64 // only changed when temporary state is committed
+	activeIndex, inactiveIndex int
+
+	tempState    bool   // should only be true while the priorityPool lock is held
+	tempCapacity uint64 // equals capacity when tempState is false
+	// the following fields only affect the temporary state and they are set to their
+	// default value when entering the temp state
+	minTarget, stepDiv uint64
+	bias               time.Duration
 }
 
 // newPriorityPool creates a new priorityPool
@@ -112,8 +119,6 @@ func newPriorityPool(ns *nodestate.NodeStateMachine, setup *serverSetup, clock m
 				nodePriority:  newValue.(nodePriority),
 				activeIndex:   -1,
 				inactiveIndex: -1,
-				minTarget:     pp.minCap,
-				stepDiv:       pp.capacityStepDiv,
 			}
 			ns.SetFieldSub(node, pp.setup.queueField, c)
 			ns.SetStateSub(node, setup.inactiveFlag, nodestate.Flags{}, 0)
@@ -172,19 +177,18 @@ func (pp *priorityPool) requestCapacity(node *enode.Node, minTarget, maxTarget u
 		log.Error("requestCapacity called for unknown node", "id", node.ID())
 		return 0
 	}
-	pp.markForChange(c)
+	pp.setTempState(c)
 	if maxTarget > c.capacity {
 		c.bias = bias
 		c.stepDiv = pp.fineStepDiv
 	}
-	oldCapacity := c.capacity
-	pp.setCapacity(c, maxTarget)
+	pp.setTempCapacity(c, maxTarget)
 	c.minTarget = minTarget
 	pp.activeQueue.Remove(c.activeIndex)
 	pp.inactiveQueue.Remove(c.inactiveIndex)
 	pp.activeQueue.Push(c)
 	pp.enforceLimits()
-	updates = pp.finalizeChanges(c.capacity >= minTarget && c.capacity <= maxTarget && c.capacity != oldCapacity)
+	updates = pp.finalizeChanges(c.tempCapacity >= minTarget && c.tempCapacity <= maxTarget && c.tempCapacity != c.capacity)
 	return c.capacity
 }
 
@@ -206,7 +210,7 @@ func (pp *priorityPool) SetLimits(maxCount, maxCap uint64) {
 		updates = pp.finalizeChanges(true)
 	}
 	if inc {
-		updates = append(updates, pp.tryActivate()...)
+		updates = append(updates, pp.tryActivate(false)...)
 	}
 }
 
@@ -217,7 +221,7 @@ func (pp *priorityPool) setActiveBias(bias time.Duration) {
 	if pp.activeBias < time.Duration(1) {
 		pp.activeBias = time.Duration(1)
 	}
-	updates := pp.tryActivate()
+	updates := pp.tryActivate(false)
 	pp.lock.Unlock()
 	pp.ns.Operation(func() { pp.updateFlags(updates) })
 }
@@ -261,9 +265,9 @@ func invertPriority(p int64) int64 {
 func activePriority(a interface{}) int64 {
 	c := a.(*ppNodeInfo)
 	if c.bias == 0 {
-		return invertPriority(c.nodePriority.priority(c.capacity))
+		return invertPriority(c.nodePriority.priority(c.tempCapacity))
 	} else {
-		return invertPriority(c.nodePriority.estimatePriority(c.capacity, 0, 0, c.bias, true))
+		return invertPriority(c.nodePriority.estimatePriority(c.tempCapacity, 0, 0, c.bias, true))
 	}
 }
 
@@ -274,7 +278,7 @@ func (pp *priorityPool) activeMaxPriority(a interface{}, until mclock.AbsTime) i
 	if future < 0 {
 		future = 0
 	}
-	return invertPriority(c.nodePriority.estimatePriority(c.capacity, 0, future, c.bias, false))
+	return invertPriority(c.nodePriority.estimatePriority(c.tempCapacity, 0, future, c.bias, false))
 }
 
 // inactivePriority callback returns actual priority of ppNodeInfo item in inactiveQueue
@@ -298,7 +302,7 @@ func (pp *priorityPool) connectedNode(c *ppNodeInfo) {
 	}
 	c.connected = true
 	pp.inactiveQueue.Push(c, pp.inactivePriority(c))
-	updates = pp.tryActivate()
+	updates = pp.tryActivate(false)
 }
 
 // disconnectedNode is called when a node has been removed from the pool (both inactiveFlag
@@ -320,36 +324,45 @@ func (pp *priorityPool) disconnectedNode(c *ppNodeInfo) {
 	pp.activeQueue.Remove(c.activeIndex)
 	pp.inactiveQueue.Remove(c.inactiveIndex)
 	if c.capacity != 0 {
-		pp.setCapacity(c, 0)
-		updates = pp.tryActivate()
+		pp.setTempState(c)
+		pp.setTempCapacity(c, 0)
+		updates = pp.tryActivate(true)
 	}
 }
 
-// markForChange internally puts a node in a temporary state that can either be reverted
+// setTempState internally puts a node in a temporary state that can either be reverted
 // or confirmed later. This temporary state allows changing the capacity of a node and
 // moving it between the active and inactive queue. activeFlag/inactiveFlag and
 // capacityField are not changed while the changes are still temporary.
-func (pp *priorityPool) markForChange(c *ppNodeInfo) {
-	if c.changed {
+func (pp *priorityPool) setTempState(c *ppNodeInfo) {
+	if c.tempState {
 		return
 	}
-	c.changed = true
-	c.origCap = c.capacity
-	pp.changed = append(pp.changed, c)
+	c.tempState = true
+	if c.tempCapacity != c.capacity { // should never happen
+		log.Crit("tempCapacity != capacity when entering tempState")
+	}
+	c.minTarget = pp.minCap
+	c.stepDiv = pp.capacityStepDiv
+	pp.tempState = append(pp.tempState, c)
 }
 
-// setCapacity changes the capacity of a node and adjusts activeCap and activeCount
-// accordingly. Note that this change is performed in the temporary state so it should
-// be called after markForChange and before finalizeChanges.
-func (pp *priorityPool) setCapacity(n *ppNodeInfo, cap uint64) {
-	pp.activeCap += cap - n.capacity
-	if n.capacity == 0 {
+// setTempCapacity changes the capacity of a node in the temporary state and adjusts
+// activeCap and activeCount accordingly. Since this change is performed in the temporary
+// state it should be called after setTempState and before finalizeChanges.
+func (pp *priorityPool) setTempCapacity(n *ppNodeInfo, cap uint64) {
+	if !n.tempState { // should never happen
+		log.Crit("Node is not in temporary state")
+		return
+	}
+	pp.activeCap += cap - n.tempCapacity
+	if n.tempCapacity == 0 {
 		pp.activeCount++
 	}
 	if cap == 0 {
 		pp.activeCount--
 	}
-	n.capacity = cap
+	n.tempCapacity = cap
 }
 
 // enforceLimits enforces active node count and total capacity limits. It returns the
@@ -365,19 +378,19 @@ func (pp *priorityPool) enforceLimits() (*ppNodeInfo, int64) {
 	)
 	pp.activeQueue.MultiPop(func(data interface{}, priority int64) bool {
 		c = data.(*ppNodeInfo)
-		pp.markForChange(c)
+		pp.setTempState(c)
 		maxActivePriority = priority
-		if c.capacity == c.minTarget || pp.activeCount > pp.maxCount {
-			pp.setCapacity(c, 0)
+		if c.tempCapacity == c.minTarget || pp.activeCount > pp.maxCount {
+			pp.setTempCapacity(c, 0)
 		} else {
-			sub := c.capacity / c.stepDiv
+			sub := c.tempCapacity / c.stepDiv
 			if sub == 0 {
 				sub = 1
 			}
-			if c.capacity-sub < c.minTarget {
-				sub = c.capacity - c.minTarget
+			if c.tempCapacity-sub < c.minTarget {
+				sub = c.tempCapacity - c.minTarget
 			}
-			pp.setCapacity(c, c.capacity-sub)
+			pp.setTempCapacity(c, c.tempCapacity-sub)
 			pp.activeQueue.Push(c)
 		}
 		return pp.activeCap > pp.maxCap || pp.activeCount > pp.maxCount
@@ -389,30 +402,32 @@ func (pp *priorityPool) enforceLimits() (*ppNodeInfo, int64) {
 // field and according flag updates are not performed here but returned in a list because
 // they should be performed while the mutex is not held.
 func (pp *priorityPool) finalizeChanges(commit bool) (updates []capUpdate) {
-	for _, c := range pp.changed {
+	for _, c := range pp.tempState {
 		// always remove and push back in order to update biased priority
 		pp.activeQueue.Remove(c.activeIndex)
 		pp.inactiveQueue.Remove(c.inactiveIndex)
+		oldCapacity := c.capacity
+		if commit {
+			c.capacity = c.tempCapacity
+		} else {
+			pp.setTempCapacity(c, c.capacity) // revert activeCount/activeCap
+		}
+		c.tempState = false
 		c.bias = 0
 		c.stepDiv = pp.capacityStepDiv
 		c.minTarget = pp.minCap
-		c.changed = false
-		if !commit {
-			pp.setCapacity(c, c.origCap)
-		}
 		if c.connected {
 			if c.capacity != 0 {
 				pp.activeQueue.Push(c)
 			} else {
 				pp.inactiveQueue.Push(c, pp.inactivePriority(c))
 			}
-			if c.capacity != c.origCap && commit {
-				updates = append(updates, capUpdate{c.node, c.origCap, c.capacity})
+			if c.capacity != oldCapacity {
+				updates = append(updates, capUpdate{c.node, oldCapacity, c.capacity})
 			}
 		}
-		c.origCap = 0
 	}
-	pp.changed = nil
+	pp.tempState = nil
 	if commit {
 		pp.ccUpdateForced = true
 	}
@@ -443,16 +458,15 @@ func (pp *priorityPool) updateFlags(updates []capUpdate) {
 }
 
 // tryActivate tries to activate inactive nodes if possible
-func (pp *priorityPool) tryActivate() []capUpdate {
-	var commit bool
+func (pp *priorityPool) tryActivate(commit bool) []capUpdate {
 	for pp.inactiveQueue.Size() > 0 {
 		c := pp.inactiveQueue.PopItem().(*ppNodeInfo)
-		pp.markForChange(c)
-		pp.setCapacity(c, pp.minCap)
+		pp.setTempState(c)
+		pp.setTempCapacity(c, pp.minCap)
 		c.bias = pp.activeBias
 		pp.activeQueue.Push(c)
 		pp.enforceLimits()
-		if c.capacity > 0 {
+		if c.tempCapacity > 0 {
 			commit = true
 			c.bias = 0
 		} else {
@@ -486,7 +500,7 @@ func (pp *priorityPool) updatePriority(node *enode.Node) {
 	} else {
 		pp.inactiveQueue.Push(c, pp.inactivePriority(c))
 	}
-	updates = pp.tryActivate()
+	updates = pp.tryActivate(false)
 }
 
 // capacityCurve is a snapshot of the priority pool contents in a format that can efficiently
