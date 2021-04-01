@@ -340,7 +340,7 @@ func (pp *priorityPool) setTempState(c *ppNodeInfo) {
 	}
 	c.tempState = true
 	if c.tempCapacity != c.capacity { // should never happen
-		log.Crit("tempCapacity != capacity when entering tempState")
+		log.Error("tempCapacity != capacity when entering tempState")
 	}
 	c.minTarget = pp.minCap
 	c.stepDiv = pp.capacityStepDiv
@@ -352,7 +352,7 @@ func (pp *priorityPool) setTempState(c *ppNodeInfo) {
 // state it should be called after setTempState and before finalizeChanges.
 func (pp *priorityPool) setTempCapacity(n *ppNodeInfo, cap uint64) {
 	if !n.tempState { // should never happen
-		log.Crit("Node is not in temporary state")
+		log.Error("Node is not in temporary state")
 		return
 	}
 	pp.activeCap += cap - n.tempCapacity
