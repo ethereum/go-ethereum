@@ -578,8 +578,8 @@ web3._extend({
 		new web3._extend.Method({
 			name: 'createAccessList',
 			call: 'eth_createAccessList',
-			params: 3,
-			inputFormatter: [web3._extend.formatters.inputBlockNumberFormatter, null, null],
+			params: 2,
+			inputFormatter: [null, web3._extend.formatters.inputBlockNumberFormatter],
 		}),
 	],
 	properties: [
