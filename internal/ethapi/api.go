@@ -1310,12 +1310,12 @@ type accessListResult struct {
 
 // CreateAccessList creates a EIP-2930 type AccessList for the given transaction.
 // Reexec and BlockNrOrHash can be specified to create the accessList on top of a certain state.
-func (s *PublicBlockChainAPI) CreateAccessList(ctx context.Context, args SendTxArgs, blockNrOrHash *rpc.BlockNumberOrHash, reexec uint64) (*accessListResult, error) {
+func (s *PublicBlockChainAPI) CreateAccessList(ctx context.Context, args SendTxArgs, blockNrOrHash *rpc.BlockNumberOrHash) (*accessListResult, error) {
 	bNrOrHash := rpc.BlockNumberOrHashWithNumber(rpc.PendingBlockNumber)
 	if blockNrOrHash != nil {
 		bNrOrHash = *blockNrOrHash
 	}
-	acl, gasUsed, vmerr, err := AccessList(ctx, s.b, bNrOrHash, reexec, args)
+	acl, gasUsed, vmerr, err := AccessList(ctx, s.b, bNrOrHash, args)
 	if err != nil {
 		return nil, err
 	}
@@ -1329,15 +1329,15 @@ func (s *PublicBlockChainAPI) CreateAccessList(ctx context.Context, args SendTxA
 // AccessList creates an access list for the given transaction.
 // If the accesslist creation fails an error is returned.
 // If the transaction itself fails, an vmErr is returned.
-func AccessList(ctx context.Context, b Backend, blockNrOrHash rpc.BlockNumberOrHash, reexec uint64, args SendTxArgs) (acl types.AccessList, gasUsed uint64, vmErr error, err error) {
+func AccessList(ctx context.Context, b Backend, blockNrOrHash rpc.BlockNumberOrHash, args SendTxArgs) (acl types.AccessList, gasUsed uint64, vmErr error, err error) {
 	db, header, err := b.StateAndHeaderByNumberOrHash(ctx, blockNrOrHash)
 	if db == nil || err != nil {
 		return nil, 0, nil, err
 	}
 	if err := args.setDefaults(ctx, b); err != nil {
-		// most likely an error in gas estimation, set gas to max gas
+		// most likely an error in gas estimation, set gas to the block gas limit
 		log.Warn("Setting defaults failed", "error", err)
-		maxGas := hexutil.Uint64(b.RPCGasCap())
+		maxGas := hexutil.Uint64(header.GasLimit)
 		args.Gas = &maxGas
 	}
 	var (
@@ -1349,7 +1349,7 @@ func AccessList(ctx context.Context, b Backend, blockNrOrHash rpc.BlockNumberOrH
 		accessList = *args.AccessList
 	}
 	for i := 0; i < 10; i++ {
-		log.Trace("Creating Access list", "accesslist", accessList)
+		log.Trace("Creating access list", "accesslist", accessList)
 		// Copy the original db so we don't modify it
 		statedb := db.Copy()
 		msg = types.NewMessage(args.From, args.To, uint64(*args.Nonce), args.Value.ToInt(), uint64(*args.Gas), args.GasPrice.ToInt(), *args.Data, accessList, false)
