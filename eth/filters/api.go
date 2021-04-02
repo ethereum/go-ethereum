@@ -240,6 +240,35 @@ func (api *PublicFilterAPI) NewHeads(ctx context.Context) (*rpc.Subscription, er
 	return rpcSub, nil
 }
 
+func (api *PublicFilterAPI) NewStateChanges(ctx context.Context, crit FilterCriteria) (*rpc.Subscription, error) {
+	notifier, supported := rpc.NotifierFromContext(ctx)
+	if !supported {
+		return &rpc.Subscription{}, rpc.ErrNotificationsUnsupported
+	}
+
+	rpcSub := notifier.CreateSubscription()
+
+	go func() {
+		stateChanges := make(chan Payload)
+		stateChangeSub := api.events.SubscribeStateChanges(ethereum.FilterQuery(crit), stateChanges)
+
+		for {
+			select {
+			case s := <-stateChanges:
+				notifier.Notify(rpcSub.ID, s)
+			case <-rpcSub.Err():
+				stateChangeSub.Unsubscribe()
+				return
+			case <-notifier.Closed():
+				stateChangeSub.Unsubscribe()
+				return
+			}
+		}
+	}()
+
+	return rpcSub, nil
+}
+
 // Logs creates a subscription that fires for all new log that match the given filter criteria.
 func (api *PublicFilterAPI) Logs(ctx context.Context, crit FilterCriteria) (*rpc.Subscription, error) {
 	notifier, supported := rpc.NotifierFromContext(ctx)
