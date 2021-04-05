@@ -116,6 +116,9 @@ func TestEIP1559BlockEncoding(t *testing.T) {
 	}
 	tx2 := NewTx(txdata)
 	tx2, err := tx2.WithSignature(LatestSignerForChainID(big.NewInt(1)), common.Hex2Bytes("fe38ca4e44a30002ac54af7cf922a6ac2ba11b7d22f548e8ecb3f51f41cb31b06de6a5cbae13c0c856e33acf021b51819636cfc009d39eafb9f606d546e305a800"))
+	if err != nil {
+		t.Fatal("invalid signature error: ", err)
+	}
 
 	check("len(Transactions)", len(block.Transactions()), 2)
 	check("Transactions[0].Hash", block.Transactions()[0].Hash(), tx1.Hash())

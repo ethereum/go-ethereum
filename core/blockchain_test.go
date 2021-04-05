@@ -3200,7 +3200,7 @@ func TestEIP1559Transition(t *testing.T) {
 
 	state, _ := chain.State()
 
-	// 3: Ensure that miner recieved only the tx's tip.
+	// 3: Ensure that miner received only the tx's tip.
 	actual := state.GetBalance(block.Coinbase())
 	expected := new(big.Int).Add(
 		new(big.Int).SetUint64(block.GasUsed()*block.Transactions()[0].Tip().Uint64()),
@@ -3234,7 +3234,7 @@ func TestEIP1559Transition(t *testing.T) {
 	state, _ = chain.State()
 	effectiveTip := block.Transactions()[0].Tip().Uint64() - block.BaseFee().Uint64()
 
-	// 6+5: Ensure that miner recieved only the tx's effective tip.
+	// 6+5: Ensure that miner received only the tx's effective tip.
 	actual = state.GetBalance(block.Coinbase())
 	expected = new(big.Int).Add(
 		new(big.Int).SetUint64(block.GasUsed()*effectiveTip),
