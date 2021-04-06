@@ -47,7 +47,7 @@ func (al AccessList) Equal(other AccessList) bool {
 	if len(al) != len(other) {
 		return false
 	}
-	const keyLen = 32 + 20
+	const keyLen = len(common.Address{}) + len(common.Hash{})
 	type keyStruct [keyLen]byte
 	mapping := make(map[keyStruct]struct{})
 	for _, a := range al {
