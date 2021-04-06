@@ -47,12 +47,23 @@ func (al AccessList) Equal(other AccessList) bool {
 	if len(al) != len(other) {
 		return false
 	}
-	for t := range al {
-		if al[t].Address != other[t].Address || len(al[t].StorageKeys) != len(other[t].StorageKeys) {
-			return false
+	const keyLen = 32 + 20
+	type keyStruct [keyLen]byte
+	mapping := make(map[keyStruct]struct{})
+	for _, a := range al {
+		for _, k := range a.StorageKeys {
+			var key keyStruct
+			copy(key[:], a.Address.Bytes())
+			copy(key[len(a.Address.Bytes()):], k.Bytes())
+			mapping[key] = struct{}{}
 		}
-		for k := range al[t].StorageKeys {
-			if al[t].StorageKeys[k] != other[t].StorageKeys[k] {
+	}
+	for _, b := range other {
+		for _, k := range b.StorageKeys {
+			var key keyStruct
+			copy(key[:], b.Address.Bytes())
+			copy(key[len(b.Address.Bytes()):], k.Bytes())
+			if _, ok := mapping[key]; !ok {
 				return false
 			}
 		}

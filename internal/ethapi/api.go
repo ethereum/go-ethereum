@@ -1341,14 +1341,13 @@ func AccessList(ctx context.Context, b Backend, blockNrOrHash rpc.BlockNumberOrH
 		args.Gas = &maxGas
 	}
 	var (
-		gas        uint64
 		accessList types.AccessList
 		msg        types.Message
 	)
 	if args.AccessList != nil {
 		accessList = *args.AccessList
 	}
-	for i := 0; i < 10; i++ {
+	for {
 		log.Trace("Creating access list", "accesslist", accessList)
 		// Copy the original db so we don't modify it
 		statedb := db.Copy()
@@ -1377,10 +1376,7 @@ func AccessList(ctx context.Context, b Backend, blockNrOrHash rpc.BlockNumberOrH
 			return acl, res.UsedGas, res.Err, nil
 		}
 		accessList = resList
-		gas = res.UsedGas
 	}
-	// If we didn't find the perfect accesslist after 10 iterations, return our best guess
-	return accessList, gas, errors.New("best guess after 10 iterations"), nil
 }
 
 // PublicTransactionPoolAPI exposes methods for the RPC interface
