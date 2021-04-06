@@ -620,7 +620,7 @@ func (w *worker) taskLoop() {
 			// Interrupt previous sealing operation
 			interrupt()
 			stopCh, prev = make(chan struct{}), sealHash
-			log.Info("Proposed miner block", "blockNumber", task.block.Number(), "profit", prevProfit, "isFlashbots", task.isFlashbots, "sealhash", sealHash, "parentHash", prevParentHash)
+			log.Info("Proposed miner block", "blockNumber", task.block.Number(), "profit", ethIntToFloat(prevProfit), "isFlashbots", task.isFlashbots, "sealhash", sealHash, "parentHash", prevParentHash)
 			if w.skipSealHook != nil && w.skipSealHook(task) {
 				continue
 			}
@@ -1183,9 +1183,16 @@ func (w *worker) commitNewWork(interrupt *int32, noempty bool, timestamp int64) 
 			log.Error("Failed to fetch pending transactions", "err", err)
 			return
 		}
-		maxBundle, bundlePrice, ethToCoinbase, gasUsed := w.findMostProfitableBundle(bundles, w.coinbase, parent, header)
-		log.Info("Flashbots bundle", "ethToCoinbase", ethToCoinbase, "gasUsed", gasUsed, "bundlePrice", bundlePrice, "bundleLength", len(maxBundle))
-		if w.commitBundle(maxBundle, w.coinbase, interrupt) {
+		bundle, err := w.findMostProfitableBundle(bundles, w.coinbase, parent, header, pending)
+		if err != nil {
+			log.Error("Failed to generate flashbots bundle", "err", err)
+			return
+		}
+		log.Info("Flashbots bundle", "ethToCoinbase", ethIntToFloat(bundle.totalEth), "gasUsed", bundle.totalGasUsed, "bundleScore", bundle.mevGasPrice, "bundleLength", len(bundle.txs))
+		if len(bundle.txs) == 0 {
+			return
+		}
+		if w.commitBundle(bundle.txs, w.coinbase, interrupt) {
 			return
 		}
 	}
@@ -1223,7 +1230,7 @@ func (w *worker) commit(uncles []*types.Header, interval func(), update bool, st
 			w.unconfirmed.Shift(block.NumberU64() - 1)
 			log.Info("Commit new mining work", "number", block.Number(), "sealhash", w.engine.SealHash(block.Header()),
 				"uncles", len(uncles), "txs", w.current.tcount,
-				"gas", block.GasUsed(), "fees", totalFees(block, receipts),
+				"gas", block.GasUsed(), "fees", totalFees(block, receipts), "profit", ethIntToFloat(w.current.profit),
 				"elapsed", common.PrettyDuration(time.Since(start)),
 				"isFlashbots", w.flashbots.isFlashbots)
 
@@ -1237,64 +1244,94 @@ func (w *worker) commit(uncles []*types.Header, interval func(), update bool, st
 	return nil
 }
 
-func (w *worker) findMostProfitableBundle(bundles []types.Transactions, coinbase common.Address, parent *types.Block, header *types.Header) (types.Transactions, *big.Int, *big.Int, uint64) {
-	maxBundlePrice := new(big.Int)
-	maxTotalEth := new(big.Int)
-	var maxTotalGasUsed uint64
-	maxBundle := types.Transactions{}
+type simulatedBundle struct {
+	txs          types.Transactions
+	mevGasPrice  *big.Int
+	totalEth     *big.Int
+	totalGasUsed uint64
+}
+
+func (w *worker) findMostProfitableBundle(bundles []types.Transactions, coinbase common.Address, parent *types.Block, header *types.Header, pendingTxs map[common.Address]types.Transactions) (simulatedBundle, error) {
+	maxBundle := simulatedBundle{mevGasPrice: new(big.Int)}
+
 	for _, bundle := range bundles {
+		state, err := w.chain.StateAt(parent.Root())
+		if err != nil {
+			return simulatedBundle{}, err
+		}
+		gasPool := new(core.GasPool).AddGas(header.GasLimit)
 		if len(bundle) == 0 {
 			continue
 		}
-		totalEth, totalGasUsed, err := w.computeBundleGas(bundle, parent, header)
+		simmed, err := w.computeBundleGas(bundle, parent, header, state, gasPool, pendingTxs)
 
 		if err != nil {
 			log.Debug("Error computing gas for a bundle", "error", err)
 			continue
 		}
 
-		mevGasPrice := new(big.Int).Div(totalEth, new(big.Int).SetUint64(totalGasUsed))
-		if mevGasPrice.Cmp(maxBundlePrice) > 0 {
-			maxBundle = bundle
-			maxBundlePrice = mevGasPrice
-			maxTotalEth = totalEth
-			maxTotalGasUsed = totalGasUsed
+		if simmed.mevGasPrice.Cmp(maxBundle.mevGasPrice) > 0 {
+			maxBundle = simmed
 		}
 	}
 
-	return maxBundle, maxBundlePrice, maxTotalEth, maxTotalGasUsed
+	return maxBundle, nil
 }
 
 // Compute the adjusted gas price for a whole bundle
 // Done by calculating all gas spent, adding transfers to the coinbase, and then dividing by gas used
-func (w *worker) computeBundleGas(bundle types.Transactions, parent *types.Block, header *types.Header) (*big.Int, uint64, error) {
-	env, err := w.generateEnv(parent, header)
-	if err != nil {
-		return nil, 0, err
-	}
-
+func (w *worker) computeBundleGas(bundle types.Transactions, parent *types.Block, header *types.Header, state *state.StateDB, gasPool *core.GasPool, pendingTxs map[common.Address]types.Transactions) (simulatedBundle, error) {
 	var totalGasUsed uint64 = 0
 	var tempGasUsed uint64
-	gasFees := new(big.Int)
-
-	coinbaseBalanceBefore := env.state.GetBalance(w.coinbase)
+	totalEth := new(big.Int)
 
 	for _, tx := range bundle {
-		receipt, err := core.ApplyTransaction(w.chainConfig, w.chain, &w.coinbase, env.gasPool, env.state, env.header, tx, &tempGasUsed, *w.chain.GetVMConfig())
+		coinbaseBalanceBefore := state.GetBalance(w.coinbase)
+
+		receipt, err := core.ApplyTransaction(w.chainConfig, w.chain, &w.coinbase, gasPool, state, header, tx, &tempGasUsed, *w.chain.GetVMConfig())
 		if err != nil {
-			return nil, 0, err
+			return simulatedBundle{}, err
 		}
 		if receipt.Status == types.ReceiptStatusFailed {
-			return nil, 0, errors.New("revert")
+			return simulatedBundle{}, errors.New("revert")
 		}
 
 		totalGasUsed += receipt.GasUsed
-		gasFees.Add(gasFees, new(big.Int).Mul(big.NewInt(int64(totalGasUsed)), tx.GasPrice()))
-	}
-	coinbaseBalanceAfter := env.state.GetBalance(w.coinbase)
-	coinbaseDiff := new(big.Int).Sub(new(big.Int).Sub(coinbaseBalanceAfter, gasFees), coinbaseBalanceBefore)
 
-	return coinbaseDiff, totalGasUsed, nil
+		from, err := types.Sender(w.current.signer, tx)
+		if err != nil {
+			return simulatedBundle{}, err
+		}
+
+		txInPendingPool := false
+		// check if tx is in pending pool
+		if accountTxs, ok := pendingTxs[from]; ok {
+			txNonce := tx.Nonce()
+
+			for _, accountTx := range accountTxs {
+				if accountTx.Nonce() == txNonce {
+					txInPendingPool = true
+					break
+				}
+			}
+		}
+
+		coinbaseBalanceAfter := state.GetBalance(w.coinbase)
+		totalEth = totalEth.Add(totalEth, coinbaseBalanceAfter.Sub(coinbaseBalanceAfter, coinbaseBalanceBefore))
+
+		if txInPendingPool {
+			// If tx is in pending pool, ignore the gas fees
+			gasUsed := new(big.Int).SetUint64(receipt.GasUsed)
+			totalEth.Sub(totalEth, gasUsed.Mul(gasUsed, tx.GasPrice()))
+		}
+	}
+
+	return simulatedBundle{
+		txs:          bundle,
+		mevGasPrice:  new(big.Int).Div(totalEth, new(big.Int).SetUint64(totalGasUsed)),
+		totalEth:     totalEth,
+		totalGasUsed: totalGasUsed,
+	}, nil
 }
 
 // copyReceipts makes a deep copy of the given receipts.
@@ -1315,12 +1352,20 @@ func (w *worker) postSideBlock(event core.ChainSideEvent) {
 	}
 }
 
-// totalFees computes total consumed miner fees in ETH. Block transactions and receipts have to have the same order.
+// ethIntToFloat is for formatting a big.Int in wei to eth
+func ethIntToFloat(eth *big.Int) *big.Float {
+	if eth == nil {
+		return big.NewFloat(0)
+	}
+	return new(big.Float).Quo(new(big.Float).SetInt(eth), new(big.Float).SetInt(big.NewInt(params.Ether)))
+}
+
+// totalFees computes total consumed fees in ETH. Block transactions and receipts have to have the same order.
 func totalFees(block *types.Block, receipts []*types.Receipt) *big.Float {
 	feesWei := new(big.Int)
 	for i, tx := range block.Transactions() {
 		minerFee, _ := tx.EffectiveGasTip(block.BaseFee())
 		feesWei.Add(feesWei, new(big.Int).Mul(new(big.Int).SetUint64(receipts[i].GasUsed), minerFee))
 	}
-	return new(big.Float).Quo(new(big.Float).SetInt(feesWei), new(big.Float).SetInt(big.NewInt(params.Ether)))
+	return ethIntToFloat(feesWei)
 }
