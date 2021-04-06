@@ -91,8 +91,9 @@ func (eth *Ethereum) stateAtBlock(block *types.Block, reexec uint64, base *state
 			logged = time.Now()
 		}
 		// Retrieve the next block to regenerate and process it
-		if current = eth.blockchain.GetBlockByNumber(current.NumberU64() + 1); current == nil {
-			return nil, fmt.Errorf("block #%d not found", current.NumberU64()+1)
+		next := current.NumberU64()+1
+		if current = eth.blockchain.GetBlockByNumber(next); current == nil {
+			return nil, fmt.Errorf("block #%d not found", next)
 		}
 		_, _, _, err := eth.blockchain.Processor().Process(current, statedb, vm.Config{})
 		if err != nil {
