@@ -38,25 +38,8 @@ func Fuzz(input []byte) int {
 	// second point
 	fuzzer.Fuzz(&dataP2)
 	x2, y2 := curveB.ScalarBaseMult(dataP2)
-	if curveA.IsOnCurve(x1, y1) {
-		fmt.Println("point 1 on curve")
-	}
-	if curveA.IsOnCurve(x2, y2) {
-		fmt.Println("point 2 on curve")
-	}
-	fmt.Printf("Input at 1: %v %v %v %v\n", x1, y1, x2, y2)
 	resAX, resAY := curveA.Add(x1, y1, x2, y2)
-	fmt.Printf("Input at 2: %v %v %v %v\n", x1, y1, x2, y2)
 	resBX, resBY := curveB.Add(x1, y1, x2, y2)
-	fmt.Printf("Input at 3: %v %v %v %v\n", x1, y1, x2, y2)
-	if curveA.IsOnCurve(resAX, resAY) {
-		fmt.Println("resA on curve")
-	}
-	if curveA.IsOnCurve(resBX, resBY) {
-		fmt.Println("resB on curve")
-	}
-	resDx, resDy := curveA.Double(x1, y1)
-	fmt.Printf("%s %s\n", resDx, resDy)
 	if resAX.Cmp(resBX) != 0 || resAY.Cmp(resBY) != 0 {
 		fmt.Printf("%s %s %s %s\n", x1, y1, x2, y2)
 		panic(fmt.Sprintf("Addition failed: geth: %s %s btcd: %s %s", resAX, resAY, resBX, resBY))
