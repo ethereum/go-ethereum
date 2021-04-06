@@ -181,7 +181,10 @@ func abigen(c *cli.Context) error {
 		}
 		// Gather all non-excluded contract for binding
 		for name, contract := range contracts {
-			if exclude[strings.ToLower(name)] {
+			// fully qualified name is of the form <solFilePath>:<type>
+			nameParts := strings.Split(name, ":")
+			typeName := nameParts[len(nameParts)-1]
+			if exclude[strings.ToLower(typeName)] {
 				continue
 			}
 			abi, err := json.Marshal(contract.Info.AbiDefinition) // Flatten the compiler parse
@@ -191,15 +194,14 @@ func abigen(c *cli.Context) error {
 			abis = append(abis, string(abi))
 			bins = append(bins, contract.Code)
 			sigs = append(sigs, contract.Hashes)
-			nameParts := strings.Split(name, ":")
-			types = append(types, nameParts[len(nameParts)-1])
+			types = append(types, typeName)
 
 			// Derive the library placeholder which is a 34 character prefix of the
 			// hex encoding of the keccak256 hash of the fully qualified library name.
 			// Note that the fully qualified library name is the path of its source
 			// file and the library name separated by ":".
 			libPattern := crypto.Keccak256Hash([]byte(name)).String()[2:36] // the first 2 chars are 0x
-			libs[libPattern] = nameParts[len(nameParts)-1]
+			libs[libPattern] = typeName
 		}
 	}
 	// Extract all aliases from the flags
