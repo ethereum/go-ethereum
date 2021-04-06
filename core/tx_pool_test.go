@@ -88,8 +88,18 @@ func pricedDataTransaction(nonce uint64, gaslimit uint64, gasprice *big.Int, key
 }
 
 func dynamicFeeTransaction(nonce uint64, gaslimit uint64, gasFee *big.Int, tip *big.Int, key *ecdsa.PrivateKey) *types.Transaction {
-	tx := types.NewDynamicFeeTransaction(params.AleutChainConfig.ChainID, nonce, common.Address{}, big.NewInt(100), gaslimit, gasFee, tip, nil, nil)
-	tx, _ = types.SignTx(tx, types.NewEIP2718Signer(params.AleutChainConfig.ChainID), key)
+	tx := types.NewTx(&types.DynamicFeeTransaction{
+		ChainID:    params.AleutChainConfig.ChainID,
+		Nonce:      nonce,
+		Tip:        tip,
+		FeeCap:     gasFee,
+		Gas:        gaslimit,
+		To:         &common.Address{},
+		Value:      big.NewInt(100),
+		Data:       nil,
+		AccessList: nil,
+	})
+	tx, _ = types.SignTx(tx, types.LatestSignerForChainID(params.AleutChainConfig.ChainID), key)
 	return tx
 }
 
@@ -347,21 +357,6 @@ func TestTransactionNegativeValue(t *testing.T) {
 	}
 }
 
-func TestTransactionTypeNotSupported(t *testing.T) {
-	t.Parallel()
-
-	pool, key := setupTxPool()
-	defer pool.Stop()
-
-	// cannot use dynamicFeeTransaction() here for now as it uses the Aleut testnet ChainID
-	tx := types.NewDynamicFeeTransaction(pool.chainconfig.ChainID, 0, common.Address{}, big.NewInt(100), 100, big.NewInt(1), big.NewInt(1), nil, nil)
-	tx, _ = types.SignTx(tx, types.NewEIP2718Signer(pool.chainconfig.ChainID), key)
-
-	if err := pool.AddRemote(tx); err != ErrTxTypeNotSupported {
-		t.Error("expected", ErrTxTypeNotSupported, "got", err)
-	}
-}
-
 func TestTransactionTipAboveFeeCap(t *testing.T) {
 	t.Parallel()
 
@@ -373,7 +368,7 @@ func TestTransactionTipAboveFeeCap(t *testing.T) {
 	defer pool.Stop()
 
 	tx := dynamicFeeTransaction(0, 100, big.NewInt(1), big.NewInt(2), key)
-	from, _ := types.Sender(types.NewEIP2718Signer(pool.chainconfig.ChainID), tx)
+	from, _ := types.Sender(types.LatestSignerForChainID(pool.chainconfig.ChainID), tx)
 	pool.currentState.AddBalance(from, big.NewInt(1))
 
 	if err := pool.AddRemote(tx); err != ErrTipAboveFeeCap {
@@ -1468,7 +1463,7 @@ func TestTransactionPoolRepricingDynamicFee(t *testing.T) {
 		t.Fatalf("pool internal state corrupted: %v", err)
 	}
 	// Reprice the pool and check that underpriced transactions get dropped
-	pool.SetMinMinerFee(big.NewInt(2))
+	pool.SetGasPrice(big.NewInt(2))
 
 	pending, queued = pool.Stats()
 	if pending != 2 {
