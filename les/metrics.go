@@ -73,12 +73,9 @@ var (
 	serverConnectionGauge = metrics.NewRegisteredGauge("les/connection/server", nil)
 	clientConnectionGauge = metrics.NewRegisteredGauge("les/connection/client", nil)
 
-	totalCapacityGauge        = metrics.NewRegisteredGauge("les/server/totalCapacity", nil)
-	totalRechargeGauge        = metrics.NewRegisteredGauge("les/server/totalRecharge", nil)
-	totalConnectedGauge       = metrics.NewRegisteredGauge("les/server/totalConnected", nil)
-	blockProcessingTimer      = metrics.NewRegisteredTimer("les/server/blockProcessingTime", nil)
-	capacityQueryZeroMeter    = metrics.NewRegisteredMeter("les/server/capQueryZero", nil)
-	capacityQueryNonZeroMeter = metrics.NewRegisteredMeter("les/server/capQueryNonZero", nil)
+	totalCapacityGauge   = metrics.NewRegisteredGauge("les/server/totalCapacity", nil)
+	totalRechargeGauge   = metrics.NewRegisteredGauge("les/server/totalRecharge", nil)
+	blockProcessingTimer = metrics.NewRegisteredTimer("les/server/blockProcessingTime", nil)
 
 	requestServedMeter               = metrics.NewRegisteredMeter("les/server/req/avgServedTime", nil)
 	requestServedTimer               = metrics.NewRegisteredTimer("les/server/req/servedTime", nil)
@@ -100,12 +97,8 @@ var (
 	sqServedGauge        = metrics.NewRegisteredGauge("les/server/servingQueue/served", nil)
 	sqQueuedGauge        = metrics.NewRegisteredGauge("les/server/servingQueue/queued", nil)
 
-	clientConnectedMeter    = metrics.NewRegisteredMeter("les/server/clientEvent/connected", nil)
-	clientActivatedMeter    = metrics.NewRegisteredMeter("les/server/clientEvent/activated", nil)
-	clientDeactivatedMeter  = metrics.NewRegisteredMeter("les/server/clientEvent/deactivated", nil)
-	clientDisconnectedMeter = metrics.NewRegisteredMeter("les/server/clientEvent/disconnected", nil)
-	clientFreezeMeter       = metrics.NewRegisteredMeter("les/server/clientEvent/freeze", nil)
-	clientErrorMeter        = metrics.NewRegisteredMeter("les/server/clientEvent/error", nil)
+	clientFreezeMeter = metrics.NewRegisteredMeter("les/server/clientEvent/freeze", nil)
+	clientErrorMeter  = metrics.NewRegisteredMeter("les/server/clientEvent/error", nil)
 
 	requestRTT       = metrics.NewRegisteredTimer("les/client/req/rtt", nil)
 	requestSendDelay = metrics.NewRegisteredTimer("les/client/req/sendDelay", nil)

@@ -858,6 +858,23 @@ func (ns *NodeStateMachine) GetField(n *enode.Node, field Field) interface{} {
 	return nil
 }
 
+// GetState retrieves the current state of the given node. Note that when used in a
+// subscription callback the result can be out of sync with the state change represented
+// by the callback parameters so extra safety checks might be necessary.
+func (ns *NodeStateMachine) GetState(n *enode.Node) Flags {
+	ns.lock.Lock()
+	defer ns.lock.Unlock()
+
+	ns.checkStarted()
+	if ns.closed {
+		return Flags{}
+	}
+	if _, node := ns.updateEnode(n); node != nil {
+		return Flags{mask: node.state, setup: ns.setup}
+	}
+	return Flags{}
+}
+
 // SetField sets the given field of the given node and blocks until the operation is finished
 func (ns *NodeStateMachine) SetField(n *enode.Node, field Field, value interface{}) error {
 	ns.lock.Lock()

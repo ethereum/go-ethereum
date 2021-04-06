@@ -31,7 +31,6 @@ var (
 	errNoCheckpoint         = errors.New("no local checkpoint provided")
 	errNotActivated         = errors.New("checkpoint registrar is not activated")
 	errUnknownBenchmarkType = errors.New("unknown benchmark type")
-	errNoPriority           = errors.New("priority too low to raise capacity")
 )
 
 // PrivateLightServerAPI provides an API to access the LES light server.
@@ -44,8 +43,8 @@ type PrivateLightServerAPI struct {
 func NewPrivateLightServerAPI(server *LesServer) *PrivateLightServerAPI {
 	return &PrivateLightServerAPI{
 		server:            server,
-		defaultPosFactors: server.clientPool.defaultPosFactors,
-		defaultNegFactors: server.clientPool.defaultNegFactors,
+		defaultPosFactors: defaultPosFactors,
+		defaultNegFactors: defaultNegFactors,
 	}
 }
 
@@ -66,7 +65,9 @@ func (api *PrivateLightServerAPI) ServerInfo() map[string]interface{} {
 	res := make(map[string]interface{})
 	res["minimumCapacity"] = api.server.minCapacity
 	res["maximumCapacity"] = api.server.maxCapacity
-	res["totalCapacity"], res["totalConnectedCapacity"], res["priorityConnectedCapacity"] = api.server.clientPool.capacityInfo()
+	_, res["totalCapacity"] = api.server.clientPool.Limits()
+	_, res["totalConnectedCapacity"] = api.server.clientPool.Active()
+	res["priorityConnectedCapacity"] = 0 //TODO connect when token sale module is added
 	return res
 }
 
@@ -80,9 +81,18 @@ func (api *PrivateLightServerAPI) ClientInfo(nodes []string) map[enode.ID]map[st
 	}
 
 	res := make(map[enode.ID]map[string]interface{})
-	api.server.clientPool.forClients(ids, func(client *clientInfo) {
-		res[client.node.ID()] = api.clientInfo(client)
-	})
+	if len(ids) == 0 {
+		ids = api.server.peers.ids()
+	}
+	for _, id := range ids {
+		if peer := api.server.peers.peer(id); peer != nil {
+			res[id] = api.clientInfo(peer, peer.balance)
+		} else {
+			api.server.clientPool.BalanceOperation(id, "", func(balance vfs.AtomicBalanceOperator) {
+				res[id] = api.clientInfo(nil, balance)
+			})
+		}
+	}
 	return res
 }
 
@@ -94,31 +104,35 @@ func (api *PrivateLightServerAPI) ClientInfo(nodes []string) map[enode.ID]map[st
 // assigned to it.
 func (api *PrivateLightServerAPI) PriorityClientInfo(start, stop enode.ID, maxCount int) map[enode.ID]map[string]interface{} {
 	res := make(map[enode.ID]map[string]interface{})
-	ids := api.server.clientPool.bt.GetPosBalanceIDs(start, stop, maxCount+1)
+	ids := api.server.clientPool.GetPosBalanceIDs(start, stop, maxCount+1)
 	if len(ids) > maxCount {
 		res[ids[maxCount]] = make(map[string]interface{})
 		ids = ids[:maxCount]
 	}
-	if len(ids) != 0 {
-		api.server.clientPool.forClients(ids, func(client *clientInfo) {
-			res[client.node.ID()] = api.clientInfo(client)
-		})
+	for _, id := range ids {
+		if peer := api.server.peers.peer(id); peer != nil {
+			res[id] = api.clientInfo(peer, peer.balance)
+		} else {
+			api.server.clientPool.BalanceOperation(id, "", func(balance vfs.AtomicBalanceOperator) {
+				res[id] = api.clientInfo(nil, balance)
+			})
+		}
 	}
 	return res
 }
 
 // clientInfo creates a client info data structure
-func (api *PrivateLightServerAPI) clientInfo(c *clientInfo) map[string]interface{} {
+func (api *PrivateLightServerAPI) clientInfo(peer *clientPeer, balance vfs.ReadOnlyBalance) map[string]interface{} {
 	info := make(map[string]interface{})
-	pb, nb := c.balance.GetBalance()
-	info["isConnected"] = c.connected
+	pb, nb := balance.GetBalance()
+	info["isConnected"] = peer != nil
 	info["pricing/balance"] = pb
 	info["priority"] = pb != 0
 	//		cb := api.server.clientPool.ndb.getCurrencyBalance(id)
 	//		info["pricing/currency"] = cb.amount
-	if c.connected {
-		info["connectionTime"] = float64(mclock.Now()-c.connectedAt) / float64(time.Second)
-		info["capacity"], _ = api.server.clientPool.ns.GetField(c.node, priorityPoolSetup.CapacityField).(uint64)
+	if peer != nil {
+		info["connectionTime"] = float64(mclock.Now()-peer.connectedAt) / float64(time.Second)
+		info["capacity"] = peer.getCapacity()
 		info["pricing/negBalance"] = nb
 	}
 	return info
@@ -126,7 +140,7 @@ func (api *PrivateLightServerAPI) clientInfo(c *clientInfo) map[string]interface
 
 // setParams either sets the given parameters for a single connected client (if specified)
 // or the default parameters applicable to clients connected in the future
-func (api *PrivateLightServerAPI) setParams(params map[string]interface{}, client *clientInfo, posFactors, negFactors *vfs.PriceFactors) (updateFactors bool, err error) {
+func (api *PrivateLightServerAPI) setParams(params map[string]interface{}, client *clientPeer, posFactors, negFactors *vfs.PriceFactors) (updateFactors bool, err error) {
 	defParams := client == nil
 	for name, value := range params {
 		errValue := func() error {
@@ -156,9 +170,8 @@ func (api *PrivateLightServerAPI) setParams(params map[string]interface{}, clien
 			setFactor(&negFactors.RequestFactor)
 		case !defParams && name == "capacity":
 			if capacity, ok := value.(float64); ok && uint64(capacity) >= api.server.minCapacity {
-				_, err = api.server.clientPool.setCapacity(client.node, client.address, uint64(capacity), 0, true)
-				// Don't have to call factor update explicitly. It's already done
-				// in setCapacity function.
+				_, err = api.server.clientPool.SetCapacity(client.Node(), uint64(capacity), 0, false)
+				// time factor recalculation is performed automatically by the balance tracker
 			} else {
 				err = errValue()
 			}
@@ -179,31 +192,25 @@ func (api *PrivateLightServerAPI) setParams(params map[string]interface{}, clien
 // SetClientParams sets client parameters for all clients listed in the ids list
 // or all connected clients if the list is empty
 func (api *PrivateLightServerAPI) SetClientParams(nodes []string, params map[string]interface{}) error {
-	var (
-		ids []enode.ID
-		err error
-	)
+	var err error
 	for _, node := range nodes {
-		if id, err := parseNode(node); err != nil {
+		var id enode.ID
+		if id, err = parseNode(node); err != nil {
 			return err
-		} else {
-			ids = append(ids, id)
 		}
-	}
-	api.server.clientPool.forClients(ids, func(client *clientInfo) {
-		if client.connected {
-			posFactors, negFactors := client.balance.GetPriceFactors()
-			update, e := api.setParams(params, client, &posFactors, &negFactors)
+		if peer := api.server.peers.peer(id); peer != nil {
+			posFactors, negFactors := peer.balance.GetPriceFactors()
+			update, e := api.setParams(params, peer, &posFactors, &negFactors)
 			if update {
-				client.balance.SetPriceFactors(posFactors, negFactors)
+				peer.balance.SetPriceFactors(posFactors, negFactors)
 			}
 			if e != nil {
 				err = e
 			}
 		} else {
-			err = fmt.Errorf("client %064x is not connected", client.node.ID())
+			err = fmt.Errorf("client %064x is not connected", id)
 		}
-	})
+	}
 	return err
 }
 
@@ -211,7 +218,7 @@ func (api *PrivateLightServerAPI) SetClientParams(nodes []string, params map[str
 func (api *PrivateLightServerAPI) SetDefaultParams(params map[string]interface{}) error {
 	update, err := api.setParams(params, nil, &api.defaultPosFactors, &api.defaultNegFactors)
 	if update {
-		api.server.clientPool.setDefaultFactors(api.defaultPosFactors, api.defaultNegFactors)
+		api.server.clientPool.SetDefaultFactors(api.defaultPosFactors, api.defaultNegFactors)
 	}
 	return err
 }
@@ -224,7 +231,7 @@ func (api *PrivateLightServerAPI) SetConnectedBias(bias time.Duration) error {
 	if bias < time.Duration(0) {
 		return fmt.Errorf("bias illegal: %v less than 0", bias)
 	}
-	api.server.clientPool.setConnectedBias(bias)
+	api.server.clientPool.SetConnectedBias(bias)
 	return nil
 }
 
@@ -235,8 +242,8 @@ func (api *PrivateLightServerAPI) AddBalance(node string, amount int64) (balance
 	if id, err = parseNode(node); err != nil {
 		return
 	}
-	api.server.clientPool.forClients([]enode.ID{id}, func(c *clientInfo) {
-		balance[0], balance[1], err = c.balance.AddBalance(amount)
+	api.server.clientPool.BalanceOperation(id, "", func(nb vfs.AtomicBalanceOperator) {
+		balance[0], balance[1], err = nb.AddBalance(amount)
 	})
 	return
 }
@@ -338,14 +345,12 @@ func (api *PrivateDebugAPI) FreezeClient(node string) error {
 	if id, err = parseNode(node); err != nil {
 		return err
 	}
-	api.server.clientPool.forClients([]enode.ID{id}, func(c *clientInfo) {
-		if c.connected {
-			c.peer.freeze()
-		} else {
-			err = fmt.Errorf("client %064x is not connected", id[:])
-		}
-	})
-	return err
+	if peer := api.server.peers.peer(id); peer != nil {
+		peer.freeze()
+		return nil
+	} else {
+		return fmt.Errorf("client %064x is not connected", id[:])
+	}
 }
 
 // PrivateLightAPI provides an API to access the LES light server or light client.
