@@ -37,18 +37,18 @@ var Memsize memsizeui.Handler
 
 var (
 	verbosityFlag = cli.IntFlag{
-		Name:  "log.verbosity",
+		Name:  "verbosity",
 		Usage: "Logging verbosity: 0=silent, 1=error, 2=warn, 3=info, 4=debug, 5=detail",
 		Value: 3,
+	}
+	vmoduleFlag = cli.StringFlag{
+		Name:  "vmodule",
+		Usage: "Per-module verbosity: comma-separated list of <pattern>=<level> (e.g. eth/*=5,p2p=4)",
+		Value: "",
 	}
 	logjsonFlag = cli.BoolFlag{
 		Name:  "log.json",
 		Usage: "Format logs with JSON",
-	}
-	vmoduleFlag = cli.StringFlag{
-		Name:  "log.vmodule",
-		Usage: "Per-module verbosity: comma-separated list of <pattern>=<level> (e.g. eth/*=5,p2p=4)",
-		Value: "",
 	}
 	backtraceAtFlag = cli.StringFlag{
 		Name:  "log.backtrace",
@@ -114,17 +114,6 @@ var (
 		Name:  "cpuprofile",
 		Usage: "Write CPU profile to the given file (deprecated, use --pprof.cpuprofile)",
 	}
-	// (Deprecated February 2021)
-	legacyVerbosityFlag = cli.IntFlag{
-		Name:  "verbosity",
-		Usage: "Logging verbosity: 0=silent, 1=error, 2=warn, 3=info, 4=debug, 5=detail (deprecated, use --log.verbosity)",
-		Value: 3,
-	}
-	legacyVmoduleFlag = cli.StringFlag{
-		Name:  "vmodule",
-		Usage: "Per-module verbosity: comma-separated list of <pattern>=<level> (e.g. eth/*=5,p2p=4) (deprecated, use --log.vmodule)",
-		Value: "",
-	}
 	legacyBacktraceAtFlag = cli.StringFlag{
 		Name:  "backtrace",
 		Usage: "Request a stack trace at a specific logging statement (e.g. \"block.go:271\") (deprecated, use --log.backtrace)",
@@ -138,15 +127,28 @@ var (
 
 // Flags holds all command-line flags required for debugging.
 var Flags = []cli.Flag{
-	verbosityFlag, logjsonFlag, vmoduleFlag, backtraceAtFlag, debugFlag,
-	pprofFlag, pprofAddrFlag, pprofPortFlag, memprofilerateFlag,
-	blockprofilerateFlag, cpuprofileFlag, traceFlag,
+	verbosityFlag,
+	vmoduleFlag,
+	logjsonFlag,
+	backtraceAtFlag,
+	debugFlag,
+	pprofFlag,
+	pprofAddrFlag,
+	pprofPortFlag,
+	memprofilerateFlag,
+	blockprofilerateFlag,
+	cpuprofileFlag,
+	traceFlag,
 }
 
+// This is the list of deprecated debugging flags.
 var DeprecatedFlags = []cli.Flag{
-	legacyPprofPortFlag, legacyPprofAddrFlag, legacyMemprofilerateFlag,
-	legacyBlockprofilerateFlag, legacyCpuprofileFlag,
-	legacyVerbosityFlag, legacyVmoduleFlag, legacyBacktraceAtFlag,
+	legacyPprofPortFlag,
+	legacyPprofAddrFlag,
+	legacyMemprofilerateFlag,
+	legacyBlockprofilerateFlag,
+	legacyCpuprofileFlag,
+	legacyBacktraceAtFlag,
 	legacyDebugFlag,
 }
 
@@ -175,6 +177,11 @@ func Setup(ctx *cli.Context) error {
 	glogger.SetHandler(ostream)
 
 	// logging
+	verbosity := ctx.GlobalInt(verbosityFlag.Name)
+	glogger.Verbosity(log.Lvl(verbosity))
+	vmodule := ctx.GlobalString(vmoduleFlag.Name)
+	glogger.Vmodule(vmodule)
+
 	debug := ctx.GlobalBool(debugFlag.Name)
 	if ctx.GlobalIsSet(legacyDebugFlag.Name) {
 		debug = ctx.GlobalBool(legacyDebugFlag.Name)
@@ -184,26 +191,6 @@ func Setup(ctx *cli.Context) error {
 		debug = ctx.GlobalBool(debugFlag.Name)
 	}
 	log.PrintOrigins(debug)
-
-	verbosity := ctx.GlobalInt(verbosityFlag.Name)
-	if ctx.GlobalIsSet(legacyVerbosityFlag.Name) {
-		verbosity = ctx.GlobalInt(legacyVerbosityFlag.Name)
-		log.Warn("The flag --verbosity is deprecated and will be removed in the future, please use --log.verbosity")
-	}
-	if ctx.GlobalIsSet(verbosityFlag.Name) {
-		verbosity = ctx.GlobalInt(verbosityFlag.Name)
-	}
-	glogger.Verbosity(log.Lvl(verbosity))
-
-	vmodule := ctx.GlobalString(vmoduleFlag.Name)
-	if v := ctx.GlobalString(legacyVmoduleFlag.Name); v != "" {
-		vmodule = v
-		log.Warn("The flag --vmodule is deprecated and will be removed in the future, please use --log.vmodule")
-	}
-	if v := ctx.GlobalString(vmoduleFlag.Name); v != "" {
-		vmodule = v
-	}
-	glogger.Vmodule(vmodule)
 
 	backtrace := ctx.GlobalString(backtraceAtFlag.Name)
 	if b := ctx.GlobalString(legacyBacktraceAtFlag.Name); b != "" {
