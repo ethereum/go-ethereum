@@ -136,7 +136,7 @@ func (api *API) InsertMinimalConsensusInfo(
 
 	// Invalid payload
 	if len(validatorsList) != validatorListLen {
-		ethash.config.Log.Info(
+		ethash.config.Log.Error(
 			"Invalid validators list for epoch",
 			"epoch",
 			epoch,
@@ -150,6 +150,17 @@ func (api *API) InsertMinimalConsensusInfo(
 		pubKey, err := herumi.PublicKeyFromBytes(hexutil.MustDecode(validator))
 
 		if nil != err {
+			ethash.config.Log.Error(
+				"Could not cast public key from bytes",
+				"epoch",
+				epoch,
+				"index",
+				index,
+				"validator",
+				validator,
+				"err",
+				err.Error(),
+			)
 			return false
 		}
 
@@ -165,6 +176,16 @@ func (api *API) InsertMinimalConsensusInfo(
 	)
 
 	err := ethash.InsertMinimalConsensusInfo(epoch, consensusInfo)
+
+	if nil != err {
+		ethash.config.Log.Error(
+			"Could not insert minimal consensus info",
+			"epoch",
+			epoch,
+			"err",
+			err.Error(),
+		)
+	}
 
 	return nil == err
 }
