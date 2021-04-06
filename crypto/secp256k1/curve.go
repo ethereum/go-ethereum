@@ -133,7 +133,18 @@ func (BitCurve *BitCurve) affineFromJacobian(x, y, z *big.Int) (xOut, yOut *big.
 
 // Add returns the sum of (x1,y1) and (x2,y2)
 func (BitCurve *BitCurve) Add(x1, y1, x2, y2 *big.Int) (*big.Int, *big.Int) {
+	// If one point is at infinity, return the other point.
+	// Adding the point at infinity to any point will preserve the other point.
+	if x1.Sign() == 0 && y1.Sign() == 0 {
+		return x2, y2
+	}
+	if x2.Sign() == 0 && y2.Sign() == 0 {
+		return x1, y1
+	}
 	z := new(big.Int).SetInt64(1)
+	if x1.Cmp(x2) == 0 && y1.Cmp(y2) == 0 {
+		return BitCurve.affineFromJacobian(BitCurve.doubleJacobian(x1, y1, z))
+	}
 	return BitCurve.affineFromJacobian(BitCurve.addJacobian(x1, y1, z, x2, y2, z))
 }
 
