@@ -217,7 +217,7 @@ var (
 	PandoraChainConfig = &ChainConfig{
 		ChainID:             big.NewInt(400589),
 		HomesteadBlock:      big.NewInt(0),
-		DAOForkBlock:        nil,
+		DAOForkBlock:        big.NewInt(0),
 		DAOForkSupport:      true,
 		EIP150Block:         big.NewInt(0),
 		EIP155Block:         big.NewInt(0),

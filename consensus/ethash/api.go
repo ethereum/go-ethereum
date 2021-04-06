@@ -136,6 +136,13 @@ func (api *API) InsertMinimalConsensusInfo(
 
 	// Invalid payload
 	if len(validatorsList) != validatorListLen {
+		ethash.config.Log.Info(
+			"Invalid validators list for epoch",
+			"epoch",
+			epoch,
+			"validatorLen",
+			len(validatorsList),
+		)
 		return false
 	}
 
