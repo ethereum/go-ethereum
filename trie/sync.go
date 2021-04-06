@@ -313,11 +313,15 @@ func (s *Sync) Commit(dbw ethdb.Batch) error {
 	// Dump the membatch into a database dbw
 	for key, value := range s.membatch.nodes {
 		rawdb.WriteTrieNode(dbw, key, value)
-		s.bloom.Add(key[:])
+		if s.bloom != nil {
+			s.bloom.Add(key[:])
+		}
 	}
 	for key, value := range s.membatch.codes {
 		rawdb.WriteCode(dbw, key, value)
-		s.bloom.Add(key[:])
+		if s.bloom != nil {
+			s.bloom.Add(key[:])
+		}
 	}
 	// Drop the membatch data and return
 	s.membatch = newSyncMemBatch()

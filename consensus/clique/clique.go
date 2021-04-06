@@ -434,12 +434,6 @@ func (c *Clique) VerifyUncles(chain consensus.ChainReader, block *types.Block) e
 	return nil
 }
 
-// VerifySeal implements consensus.Engine, checking whether the signature contained
-// in the header satisfies the consensus protocol requirements.
-func (c *Clique) VerifySeal(chain consensus.ChainHeaderReader, header *types.Header) error {
-	return c.verifySeal(chain, header, nil)
-}
-
 // verifySeal checks whether the signature contained in the header satisfies the
 // consensus protocol requirements. The method accepts an optional list of parent
 // headers that aren't yet part of the local blockchain to generate the snapshots
@@ -565,7 +559,7 @@ func (c *Clique) FinalizeAndAssemble(chain consensus.ChainHeaderReader, header *
 	c.Finalize(chain, header, state, txs, uncles)
 
 	// Assemble and return the final block for sealing
-	return types.NewBlock(header, txs, nil, receipts, new(trie.Trie)), nil
+	return types.NewBlock(header, txs, nil, receipts, trie.NewStackTrie(nil)), nil
 }
 
 // Authorize injects a private key into the consensus engine to mint new blocks

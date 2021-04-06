@@ -21,7 +21,7 @@ import (
 )
 
 type (
-	executionFunc func(pc *uint64, interpreter *EVMInterpreter, callContext *callCtx) ([]byte, error)
+	executionFunc func(pc *uint64, interpreter *EVMInterpreter, callContext *ScopeContext) ([]byte, error)
 	gasFunc       func(*EVM, *Contract, *Stack, *Memory, uint64) (uint64, error) // last parameter is the requested memory size as a uint64
 	// memorySizeFunc returns the required size, and whether the operation overflowed a uint64
 	memorySizeFunc func(*Stack) (size uint64, overflow bool)
@@ -56,24 +56,22 @@ var (
 	byzantiumInstructionSet        = newByzantiumInstructionSet()
 	constantinopleInstructionSet   = newConstantinopleInstructionSet()
 	istanbulInstructionSet         = newIstanbulInstructionSet()
-	yoloV2InstructionSet           = newYoloV2InstructionSet()
+	berlinInstructionSet           = newBerlinInstructionSet()
 )
 
 // JumpTable contains the EVM opcodes supported at a given fork.
 type JumpTable [256]*operation
 
-// newYoloV2InstructionSet creates an instructionset containing
-// - "EIP-2315: Simple Subroutines"
-// - "EIP-2929: Gas cost increases for state access opcodes"
-func newYoloV2InstructionSet() JumpTable {
+// newBerlinInstructionSet returns the frontier, homestead, byzantium,
+// contantinople, istanbul, petersburg and berlin instructions.
+func newBerlinInstructionSet() JumpTable {
 	instructionSet := newIstanbulInstructionSet()
-	enable2315(&instructionSet) // Subroutines - https://eips.ethereum.org/EIPS/eip-2315
 	enable2929(&instructionSet) // Access lists for trie accesses https://eips.ethereum.org/EIPS/eip-2929
 	return instructionSet
 }
 
-// newIstanbulInstructionSet returns the frontier, homestead
-// byzantium, contantinople and petersburg instructions.
+// newIstanbulInstructionSet returns the frontier, homestead, byzantium,
+// contantinople, istanbul and petersburg instructions.
 func newIstanbulInstructionSet() JumpTable {
 	instructionSet := newConstantinopleInstructionSet()
 
@@ -84,7 +82,7 @@ func newIstanbulInstructionSet() JumpTable {
 	return instructionSet
 }
 
-// newConstantinopleInstructionSet returns the frontier, homestead
+// newConstantinopleInstructionSet returns the frontier, homestead,
 // byzantium and contantinople instructions.
 func newConstantinopleInstructionSet() JumpTable {
 	instructionSet := newByzantiumInstructionSet()

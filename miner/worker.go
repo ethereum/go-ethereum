@@ -654,7 +654,7 @@ func (w *worker) makeCurrent(parent *types.Block, header *types.Header) error {
 	state.StartPrefetcher("miner")
 
 	env := &environment{
-		signer:    types.NewEIP155Signer(w.chainConfig.ChainID),
+		signer:    types.MakeSigner(w.chainConfig, header.Number),
 		state:     state,
 		ancestors: mapset.NewSet(),
 		family:    mapset.NewSet(),
@@ -728,7 +728,7 @@ func (w *worker) updateSnapshot() {
 		w.current.txs,
 		uncles,
 		w.current.receipts,
-		new(trie.Trie),
+		trie.NewStackTrie(nil),
 	)
 	w.snapshotState = w.current.state.Copy()
 }
@@ -828,6 +828,11 @@ func (w *worker) commitTransactions(txs *types.TransactionsByPriceAndNonce, coin
 			coalescedLogs = append(coalescedLogs, logs...)
 			w.current.tcount++
 			txs.Shift()
+
+		case errors.Is(err, core.ErrTxTypeNotSupported):
+			// Pop the unsupported transaction without shifting in the next from the account
+			log.Trace("Skipping unsupported transaction type", "sender", from, "type", tx.Type())
+			txs.Pop()
 
 		default:
 			// Strange error, discard the transaction and get the next in line (note, the

@@ -185,7 +185,7 @@ func makeSealer(genesis *core.Genesis) (*node.Node, *eth.Ethereum, error) {
 		return nil, nil, err
 	}
 	// Create and register the backend
-	ethBackend, err := eth.New(stack, &eth.Config{
+	ethBackend, err := eth.New(stack, &ethconfig.Config{
 		Genesis:         genesis,
 		NetworkId:       genesis.Config.ChainID.Uint64(),
 		SyncMode:        downloader.FullSync,

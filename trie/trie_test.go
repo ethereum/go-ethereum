@@ -322,7 +322,7 @@ func TestLargeValue(t *testing.T) {
 
 // TestRandomCases tests som cases that were found via random fuzzing
 func TestRandomCases(t *testing.T) {
-	var rt []randTestStep = []randTestStep{
+	var rt = []randTestStep{
 		{op: 6, key: common.Hex2Bytes(""), value: common.Hex2Bytes("")},                                                                                                 // step 0
 		{op: 6, key: common.Hex2Bytes(""), value: common.Hex2Bytes("")},                                                                                                 // step 1
 		{op: 0, key: common.Hex2Bytes("d51b182b95d677e5f1c82508c0228de96b73092d78ce78b2230cd948674f66fd1483bd"), value: common.Hex2Bytes("0000000000000002")},           // step 2
@@ -1060,7 +1060,7 @@ func tempDB() (string, *Database) {
 	if err != nil {
 		panic(fmt.Sprintf("can't create temporary directory: %v", err))
 	}
-	diskdb, err := leveldb.New(dir, 256, 0, "")
+	diskdb, err := leveldb.New(dir, 256, 0, "", false)
 	if err != nil {
 		panic(fmt.Sprintf("can't create temporary database: %v", err))
 	}

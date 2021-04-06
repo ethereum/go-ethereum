@@ -140,11 +140,6 @@ func (api *PrivateMinerAPI) SetRecommitInterval(interval int) {
 	api.e.Miner().SetRecommitInterval(time.Duration(interval) * time.Millisecond)
 }
 
-// GetHashrate returns the current hashrate of the miner.
-func (api *PrivateMinerAPI) GetHashrate() uint64 {
-	return api.e.miner.HashRate()
-}
-
 // PrivateAdminAPI is the collection of Ethereum full node-related APIs
 // exposed over the private admin endpoint.
 type PrivateAdminAPI struct {

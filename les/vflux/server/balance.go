@@ -243,11 +243,11 @@ func (n *NodeBalance) RequestServed(cost uint64) uint64 {
 }
 
 // Priority returns the actual priority based on the current balance
-func (n *NodeBalance) Priority(now mclock.AbsTime, capacity uint64) int64 {
+func (n *NodeBalance) Priority(capacity uint64) int64 {
 	n.lock.Lock()
 	defer n.lock.Unlock()
 
-	n.updateBalance(now)
+	n.updateBalance(n.bt.clock.Now())
 	return n.balanceToPriority(n.balance, capacity)
 }
 
@@ -256,16 +256,35 @@ func (n *NodeBalance) Priority(now mclock.AbsTime, capacity uint64) int64 {
 // in the current session.
 // If update is true then a priority callback is added that turns UpdateFlag on and off
 // in case the priority goes below the estimated minimum.
-func (n *NodeBalance) EstMinPriority(at mclock.AbsTime, capacity uint64, update bool) int64 {
+func (n *NodeBalance) EstimatePriority(capacity uint64, addBalance int64, future, bias time.Duration, update bool) int64 {
 	n.lock.Lock()
 	defer n.lock.Unlock()
 
-	var avgReqCost float64
-	dt := time.Duration(n.lastUpdate - n.initTime)
-	if dt > time.Second {
-		avgReqCost = float64(n.sumReqCost) * 2 / float64(dt)
+	now := n.bt.clock.Now()
+	n.updateBalance(now)
+	b := n.balance
+	if addBalance != 0 {
+		offset := n.bt.posExp.LogOffset(now)
+		old := n.balance.pos.Value(offset)
+		if addBalance > 0 && (addBalance > maxBalance || old > maxBalance-uint64(addBalance)) {
+			b.pos = utils.ExpiredValue{}
+			b.pos.Add(maxBalance, offset)
+		} else {
+			b.pos.Add(addBalance, offset)
+		}
 	}
-	pri := n.balanceToPriority(n.reducedBalance(at, capacity, avgReqCost), capacity)
+	if future > 0 {
+		var avgReqCost float64
+		dt := time.Duration(n.lastUpdate - n.initTime)
+		if dt > time.Second {
+			avgReqCost = float64(n.sumReqCost) * 2 / float64(dt)
+		}
+		b = n.reducedBalance(b, now, future, capacity, avgReqCost)
+	}
+	if bias > 0 {
+		b = n.reducedBalance(b, now+mclock.AbsTime(future), bias, capacity, 0)
+	}
+	pri := n.balanceToPriority(b, capacity)
 	if update {
 		n.addCallback(balanceCallbackUpdate, pri, n.signalPriorityUpdate)
 	}
@@ -366,7 +385,7 @@ func (n *NodeBalance) deactivate() {
 // updateBalance updates balance based on the time factor
 func (n *NodeBalance) updateBalance(now mclock.AbsTime) {
 	if n.active && now > n.lastUpdate {
-		n.balance = n.reducedBalance(now, n.capacity, 0)
+		n.balance = n.reducedBalance(n.balance, n.lastUpdate, time.Duration(now-n.lastUpdate), n.capacity, 0)
 		n.lastUpdate = now
 	}
 }
@@ -546,23 +565,25 @@ func (n *NodeBalance) balanceToPriority(b balance, capacity uint64) int64 {
 }
 
 // reducedBalance estimates the reduced balance at a given time in the fututre based
-// on the current balance, the time factor and an estimated average request cost per time ratio
-func (n *NodeBalance) reducedBalance(at mclock.AbsTime, capacity uint64, avgReqCost float64) balance {
-	dt := float64(at - n.lastUpdate)
-	b := n.balance
+// on the given balance, the time factor and an estimated average request cost per time ratio
+func (n *NodeBalance) reducedBalance(b balance, start mclock.AbsTime, dt time.Duration, capacity uint64, avgReqCost float64) balance {
+	// since the costs are applied continuously during the dt time period we calculate
+	// the expiration offset at the middle of the period
+	at := start + mclock.AbsTime(dt/2)
+	dtf := float64(dt)
 	if !b.pos.IsZero() {
 		factor := n.posFactor.timePrice(capacity) + n.posFactor.RequestFactor*avgReqCost
-		diff := -int64(dt * factor)
+		diff := -int64(dtf * factor)
 		dd := b.pos.Add(diff, n.bt.posExp.LogOffset(at))
 		if dd == diff {
-			dt = 0
+			dtf = 0
 		} else {
-			dt += float64(dd) / factor
+			dtf += float64(dd) / factor
 		}
 	}
 	if dt > 0 {
 		factor := n.negFactor.timePrice(capacity) + n.negFactor.RequestFactor*avgReqCost
-		b.neg.Add(int64(dt*factor), n.bt.negExp.LogOffset(at))
+		b.neg.Add(int64(dtf*factor), n.bt.negExp.LogOffset(at))
 	}
 	return b
 }
@@ -588,8 +609,9 @@ func (n *NodeBalance) timeUntil(priority int64) (time.Duration, bool) {
 			}
 			dt = float64(posBalance-newBalance) / timePrice
 			return time.Duration(dt), true
+		} else {
+			dt = float64(posBalance) / timePrice
 		}
-		dt = float64(posBalance) / timePrice
 	} else {
 		if priority > 0 {
 			return 0, false

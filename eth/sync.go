@@ -247,11 +247,11 @@ func (cs *chainSyncer) nextSyncOp() *chainSyncOp {
 	} else if minPeers > cs.handler.maxPeers {
 		minPeers = cs.handler.maxPeers
 	}
-	if cs.handler.peers.Len() < minPeers {
+	if cs.handler.peers.len() < minPeers {
 		return nil
 	}
 	// We have enough peers, check TD
-	peer := cs.handler.peers.ethPeerWithHighestTD()
+	peer := cs.handler.peers.peerWithHighestTD()
 	if peer == nil {
 		return nil
 	}
@@ -289,8 +289,8 @@ func (cs *chainSyncer) modeAndLocalHead() (downloader.SyncMode, *big.Int) {
 		}
 	}
 	// Nope, we're really full syncing
-	head := cs.handler.chain.CurrentHeader()
-	td := cs.handler.chain.GetTd(head.Hash(), head.Number.Uint64())
+	head := cs.handler.chain.CurrentBlock()
+	td := cs.handler.chain.GetTd(head.Hash(), head.NumberU64())
 	return downloader.FullSync, td
 }
 

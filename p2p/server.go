@@ -876,8 +876,8 @@ func (srv *Server) listenLoop() {
 		}
 
 		remoteIP := netutil.AddrIP(fd.RemoteAddr())
-		if err := srv.checkInboundConn(fd, remoteIP); err != nil {
-			srv.log.Debug("Rejected inbound connnection", "addr", fd.RemoteAddr(), "err", err)
+		if err := srv.checkInboundConn(remoteIP); err != nil {
+			srv.log.Debug("Rejected inbound connection", "addr", fd.RemoteAddr(), "err", err)
 			fd.Close()
 			slots <- struct{}{}
 			continue
@@ -897,7 +897,7 @@ func (srv *Server) listenLoop() {
 	}
 }
 
-func (srv *Server) checkInboundConn(fd net.Conn, remoteIP net.IP) error {
+func (srv *Server) checkInboundConn(remoteIP net.IP) error {
 	if remoteIP == nil {
 		return nil
 	}

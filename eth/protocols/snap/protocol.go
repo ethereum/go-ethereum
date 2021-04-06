@@ -30,13 +30,13 @@ const (
 	snap1 = 1
 )
 
-// protocolName is the official short name of the `snap` protocol used during
+// ProtocolName is the official short name of the `snap` protocol used during
 // devp2p capability negotiation.
-const protocolName = "snap"
+const ProtocolName = "snap"
 
-// protocolVersions are the supported versions of the `snap` protocol (first
+// ProtocolVersions are the supported versions of the `snap` protocol (first
 // is primary).
-var protocolVersions = []uint{snap1}
+var ProtocolVersions = []uint{snap1}
 
 // protocolLengths are the number of implemented message corresponding to
 // different protocol versions.
@@ -61,7 +61,6 @@ var (
 	errDecode         = errors.New("invalid message")
 	errInvalidMsgCode = errors.New("invalid message code")
 	errBadRequest     = errors.New("bad request")
-	errCancelled      = errors.New("sync cancelled")
 )
 
 // Packet represents a p2p message in the `snap` protocol.

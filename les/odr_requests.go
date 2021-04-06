@@ -116,7 +116,7 @@ func (r *BlockRequest) Validate(db ethdb.Database, msg *Msg) error {
 	if r.Header == nil {
 		return errHeaderUnavailable
 	}
-	if r.Header.TxHash != types.DeriveSha(types.Transactions(body.Transactions), new(trie.Trie)) {
+	if r.Header.TxHash != types.DeriveSha(types.Transactions(body.Transactions), trie.NewStackTrie(nil)) {
 		return errTxHashMismatch
 	}
 	if r.Header.UncleHash != types.CalcUncleHash(body.Uncles) {
@@ -174,7 +174,7 @@ func (r *ReceiptsRequest) Validate(db ethdb.Database, msg *Msg) error {
 	if r.Header == nil {
 		return errHeaderUnavailable
 	}
-	if r.Header.ReceiptHash != types.DeriveSha(receipt, new(trie.Trie)) {
+	if r.Header.ReceiptHash != types.DeriveSha(receipt, trie.NewStackTrie(nil)) {
 		return errReceiptHashMismatch
 	}
 	// Validations passed, store and return
@@ -487,7 +487,7 @@ func (r *TxStatusRequest) GetCost(peer *serverPeer) uint64 {
 
 // CanSend tells if a certain peer is suitable for serving the given request
 func (r *TxStatusRequest) CanSend(peer *serverPeer) bool {
-	return peer.serveTxLookup
+	return peer.txHistory != txIndexDisabled
 }
 
 // Request sends an ODR request to the LES network (implementation of LesOdrRequest)
@@ -496,13 +496,12 @@ func (r *TxStatusRequest) Request(reqID uint64, peer *serverPeer) error {
 	return peer.requestTxStatus(reqID, r.Hashes)
 }
 
-// Valid processes an ODR request reply message from the LES network
+// Validate processes an ODR request reply message from the LES network
 // returns true and stores results in memory if the message was a valid reply
 // to the request (implementation of LesOdrRequest)
 func (r *TxStatusRequest) Validate(db ethdb.Database, msg *Msg) error {
 	log.Debug("Validating transaction status", "count", len(r.Hashes))
 
-	// Ensure we have a correct message with a single block body
 	if msg.MsgType != MsgTxStatus {
 		return errInvalidMessageType
 	}

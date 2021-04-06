@@ -31,7 +31,6 @@ import (
 	"github.com/ethereum/go-ethereum/consensus"
 	"github.com/ethereum/go-ethereum/consensus/ethash"
 	"github.com/ethereum/go-ethereum/core/rawdb"
-	"github.com/ethereum/go-ethereum/core/state/snapshot"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/core/vm"
 	"github.com/ethereum/go-ethereum/ethdb"
@@ -66,7 +65,7 @@ func (basic *snapshotTestBasic) prepare(t *testing.T) (*BlockChain, []*types.Blo
 	}
 	os.RemoveAll(datadir)
 
-	db, err := rawdb.NewLevelDBDatabaseWithFreezer(datadir, 0, 0, datadir, "")
+	db, err := rawdb.NewLevelDBDatabaseWithFreezer(datadir, 0, 0, datadir, "", false)
 	if err != nil {
 		t.Fatalf("Failed to create persistent database: %v", err)
 	}
@@ -163,7 +162,7 @@ func (basic *snapshotTestBasic) verify(t *testing.T, chain *BlockChain, blocks [
 	}
 
 	// Check the snapshot, ensure it's integrated
-	if err := snapshot.VerifyState(chain.snaps, block.Root()); err != nil {
+	if err := chain.snaps.Verify(block.Root()); err != nil {
 		t.Errorf("The disk layer is not integrated %v", err)
 	}
 }
@@ -262,7 +261,7 @@ func (snaptest *crashSnapshotTest) test(t *testing.T) {
 	db.Close()
 
 	// Start a new blockchain back up and see where the repair leads us
-	newdb, err := rawdb.NewLevelDBDatabaseWithFreezer(snaptest.datadir, 0, 0, snaptest.datadir, "")
+	newdb, err := rawdb.NewLevelDBDatabaseWithFreezer(snaptest.datadir, 0, 0, snaptest.datadir, "", false)
 	if err != nil {
 		t.Fatalf("Failed to reopen persistent database: %v", err)
 	}

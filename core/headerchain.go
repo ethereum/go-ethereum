@@ -323,7 +323,7 @@ func (hc *HeaderChain) ValidateHeaderChain(chain []*types.Header, checkFreq int)
 	seals := make([]bool, len(chain))
 	if checkFreq != 0 {
 		// In case of checkFreq == 0 all seals are left false.
-		for i := 0; i < len(seals)/checkFreq; i++ {
+		for i := 0; i <= len(seals)/checkFreq; i++ {
 			index := i*checkFreq + hc.rand.Intn(checkFreq)
 			if index >= len(seals) {
 				index = len(seals) - 1

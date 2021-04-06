@@ -173,7 +173,7 @@ func ethFilter(args []string) (nodeFilter, error) {
 	f := func(n nodeJSON) bool {
 		var eth struct {
 			ForkID forkid.ID
-			_      []rlp.RawValue `rlp:"tail"`
+			Tail   []rlp.RawValue `rlp:"tail"`
 		}
 		if n.N.Load(enr.WithEntry("eth", &eth)) != nil {
 			return false
@@ -186,7 +186,7 @@ func ethFilter(args []string) (nodeFilter, error) {
 func lesFilter(args []string) (nodeFilter, error) {
 	f := func(n nodeJSON) bool {
 		var les struct {
-			_ []rlp.RawValue `rlp:"tail"`
+			Tail []rlp.RawValue `rlp:"tail"`
 		}
 		return n.N.Load(enr.WithEntry("les", &les)) == nil
 	}
@@ -196,7 +196,7 @@ func lesFilter(args []string) (nodeFilter, error) {
 func snapFilter(args []string) (nodeFilter, error) {
 	f := func(n nodeJSON) bool {
 		var snap struct {
-			_ []rlp.RawValue `rlp:"tail"`
+			Tail []rlp.RawValue `rlp:"tail"`
 		}
 		return n.N.Load(enr.WithEntry("snap", &snap)) == nil
 	}

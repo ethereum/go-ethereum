@@ -73,10 +73,12 @@ var (
 	serverConnectionGauge = metrics.NewRegisteredGauge("les/connection/server", nil)
 	clientConnectionGauge = metrics.NewRegisteredGauge("les/connection/client", nil)
 
-	totalCapacityGauge   = metrics.NewRegisteredGauge("les/server/totalCapacity", nil)
-	totalRechargeGauge   = metrics.NewRegisteredGauge("les/server/totalRecharge", nil)
-	totalConnectedGauge  = metrics.NewRegisteredGauge("les/server/totalConnected", nil)
-	blockProcessingTimer = metrics.NewRegisteredTimer("les/server/blockProcessingTime", nil)
+	totalCapacityGauge        = metrics.NewRegisteredGauge("les/server/totalCapacity", nil)
+	totalRechargeGauge        = metrics.NewRegisteredGauge("les/server/totalRecharge", nil)
+	totalConnectedGauge       = metrics.NewRegisteredGauge("les/server/totalConnected", nil)
+	blockProcessingTimer      = metrics.NewRegisteredTimer("les/server/blockProcessingTime", nil)
+	capacityQueryZeroMeter    = metrics.NewRegisteredMeter("les/server/capQueryZero", nil)
+	capacityQueryNonZeroMeter = metrics.NewRegisteredMeter("les/server/capQueryNonZero", nil)
 
 	requestServedMeter               = metrics.NewRegisteredMeter("les/server/req/avgServedTime", nil)
 	requestServedTimer               = metrics.NewRegisteredTimer("les/server/req/servedTime", nil)

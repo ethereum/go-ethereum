@@ -22,9 +22,12 @@ import (
 	"time"
 
 	"github.com/ethereum/go-ethereum/common/mclock"
-	"github.com/ethereum/go-ethereum/eth"
+	"github.com/ethereum/go-ethereum/core"
+	"github.com/ethereum/go-ethereum/eth/ethconfig"
+	"github.com/ethereum/go-ethereum/ethdb"
 	"github.com/ethereum/go-ethereum/les/flowcontrol"
-	lps "github.com/ethereum/go-ethereum/les/lespay/server"
+	"github.com/ethereum/go-ethereum/les/vflux"
+	vfs "github.com/ethereum/go-ethereum/les/vflux/server"
 	"github.com/ethereum/go-ethereum/light"
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/node"
@@ -41,13 +44,22 @@ var (
 	clientPeerField     = serverSetup.NewField("clientPeer", reflect.TypeOf(&clientPeer{}))
 	clientInfoField     = serverSetup.NewField("clientInfo", reflect.TypeOf(&clientInfo{}))
 	connAddressField    = serverSetup.NewField("connAddr", reflect.TypeOf(""))
-	balanceTrackerSetup = lps.NewBalanceTrackerSetup(serverSetup)
-	priorityPoolSetup   = lps.NewPriorityPoolSetup(serverSetup)
+	balanceTrackerSetup = vfs.NewBalanceTrackerSetup(serverSetup)
+	priorityPoolSetup   = vfs.NewPriorityPoolSetup(serverSetup)
 )
 
 func init() {
 	balanceTrackerSetup.Connect(connAddressField, priorityPoolSetup.CapacityField)
 	priorityPoolSetup.Connect(balanceTrackerSetup.BalanceField, balanceTrackerSetup.UpdateFlag) // NodeBalance implements nodePriority
+}
+
+type ethBackend interface {
+	ArchiveMode() bool
+	BlockChain() *core.BlockChain
+	BloomIndexer() *core.ChainIndexer
+	ChainDb() ethdb.Database
+	Synced() bool
+	TxPool() *core.TxPool
 }
 
 type LesServer struct {
@@ -57,6 +69,7 @@ type LesServer struct {
 	archiveMode bool // Flag whether the ethereum node runs in archive mode.
 	handler     *serverHandler
 	broadcaster *broadcaster
+	vfluxServer *vfs.Server
 	privateKey  *ecdsa.PrivateKey
 
 	// Flow control and capacity management
@@ -73,7 +86,11 @@ type LesServer struct {
 	p2pSrv *p2p.Server
 }
 
-func NewLesServer(node *node.Node, e *eth.Ethereum, config *eth.Config) (*LesServer, error) {
+func NewLesServer(node *node.Node, e ethBackend, config *ethconfig.Config) (*LesServer, error) {
+	lesDb, err := node.OpenDatabase("les.server", 0, 0, "eth/db/lesserver/", false)
+	if err != nil {
+		return nil, err
+	}
 	ns := nodestate.NewNodeStateMachine(nil, nil, mclock.System{}, serverSetup)
 	// Calculate the number of threads used to service the light client
 	// requests based on the user-specified value.
@@ -88,6 +105,7 @@ func NewLesServer(node *node.Node, e *eth.Ethereum, config *eth.Config) (*LesSer
 			chainConfig:      e.BlockChain().Config(),
 			iConfig:          light.DefaultServerIndexerConfig,
 			chainDb:          e.ChainDb(),
+			lesDb:            lesDb,
 			chainReader:      e.BlockChain(),
 			chtIndexer:       light.NewChtIndexer(e.ChainDb(), nil, params.CHTFrequency, params.HelperTrieProcessConfirmations, true),
 			bloomTrieIndexer: light.NewBloomTrieIndexer(e.ChainDb(), nil, params.BloomBitsBlocks, params.BloomTrieFrequency, true),
@@ -96,13 +114,19 @@ func NewLesServer(node *node.Node, e *eth.Ethereum, config *eth.Config) (*LesSer
 		ns:           ns,
 		archiveMode:  e.ArchiveMode(),
 		broadcaster:  newBroadcaster(ns),
+		vfluxServer:  vfs.NewServer(time.Millisecond * 10),
 		fcManager:    flowcontrol.NewClientManager(nil, &mclock.System{}),
 		servingQueue: newServingQueue(int64(time.Millisecond*10), float64(config.LightServ)/100),
 		threadsBusy:  config.LightServ/100 + 1,
 		threadsIdle:  threads,
 		p2pSrv:       node.Server(),
 	}
-	srv.handler = newServerHandler(srv, e.BlockChain(), e.ChainDb(), e.TxPool(), e.Synced)
+	srv.vfluxServer.Register(srv)
+	issync := e.Synced
+	if config.LightNoSyncServe {
+		issync = func() bool { return true }
+	}
+	srv.handler = newServerHandler(srv, e.BlockChain(), e.ChainDb(), e.TxPool(), issync)
 	srv.costTracker, srv.minCapacity = newCostTracker(e.ChainDb(), config)
 	srv.oracle = srv.setupOracle(node, e.BlockChain().Genesis().Hash(), config)
 
@@ -125,8 +149,8 @@ func NewLesServer(node *node.Node, e *eth.Ethereum, config *eth.Config) (*LesSer
 		srv.maxCapacity = totalRecharge
 	}
 	srv.fcManager.SetCapacityLimits(srv.minCapacity, srv.maxCapacity, srv.minCapacity*2)
-	srv.clientPool = newClientPool(ns, srv.chainDb, srv.minCapacity, defaultConnectedBias, mclock.System{}, srv.dropClient)
-	srv.clientPool.setDefaultFactors(lps.PriceFactors{TimeFactor: 0, CapacityFactor: 1, RequestFactor: 1}, lps.PriceFactors{TimeFactor: 0, CapacityFactor: 1, RequestFactor: 1})
+	srv.clientPool = newClientPool(ns, lesDb, srv.minCapacity, defaultConnectedBias, mclock.System{}, srv.dropClient, issync)
+	srv.clientPool.setDefaultFactors(vfs.PriceFactors{TimeFactor: 0, CapacityFactor: 1, RequestFactor: 1}, vfs.PriceFactors{TimeFactor: 0, CapacityFactor: 1, RequestFactor: 1})
 
 	checkpoint := srv.latestLocalCheckpoint()
 	if !checkpoint.Empty() {
@@ -181,7 +205,9 @@ func (s *LesServer) Protocols() []p2p.Protocol {
 	}, nil)
 	// Add "les" ENR entries.
 	for i := range ps {
-		ps[i].Attributes = []enr.Entry{&lesEntry{}}
+		ps[i].Attributes = []enr.Entry{&lesEntry{
+			VfxVersion: 1,
+		}}
 	}
 	return ps
 }
@@ -191,10 +217,11 @@ func (s *LesServer) Start() error {
 	s.privateKey = s.p2pSrv.PrivateKey
 	s.broadcaster.setSignerKey(s.privateKey)
 	s.handler.start()
-
 	s.wg.Add(1)
 	go s.capacityManagement()
-
+	if s.p2pSrv.DiscV5 != nil {
+		s.p2pSrv.DiscV5.RegisterTalkHandler("vfx", s.vfluxServer.ServeEncoded)
+	}
 	return nil
 }
 
@@ -208,9 +235,11 @@ func (s *LesServer) Stop() error {
 	s.costTracker.stop()
 	s.handler.stop()
 	s.servingQueue.stop()
+	s.vfluxServer.Stop()
 
 	// Note, bloom trie indexer is closed by parent bloombits indexer.
 	s.chtIndexer.Close()
+	s.lesDb.Close()
 	s.wg.Wait()
 	log.Info("Les server stopped")
 
@@ -288,5 +317,20 @@ func (s *LesServer) getClient(id enode.ID) *clientPeer {
 func (s *LesServer) dropClient(id enode.ID) {
 	if p := s.getClient(id); p != nil {
 		p.Peer.Disconnect(p2p.DiscRequested)
+	}
+}
+
+// ServiceInfo implements vfs.Service
+func (s *LesServer) ServiceInfo() (string, string) {
+	return "les", "Ethereum light client service"
+}
+
+// Handle implements vfs.Service
+func (s *LesServer) Handle(id enode.ID, address string, name string, data []byte) []byte {
+	switch name {
+	case vflux.CapacityQueryName:
+		return s.clientPool.serveCapQuery(id, address, data)
+	default:
+		return nil
 	}
 }

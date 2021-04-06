@@ -288,7 +288,7 @@ func (ethash *Ethash) verifyHeader(chain consensus.ChainHeaderReader, header, pa
 	}
 	// Verify the engine specific seal securing the block
 	if seal {
-		if err := ethash.VerifySeal(chain, header); err != nil {
+		if err := ethash.verifySeal(chain, header, false); err != nil {
 			return err
 		}
 	}
@@ -488,12 +488,6 @@ var FrontierDifficultyCalulator = calcDifficultyFrontier
 var HomesteadDifficultyCalulator = calcDifficultyHomestead
 var DynamicDifficultyCalculator = makeDifficultyCalculator
 
-// VerifySeal implements consensus.Engine, checking whether the given block satisfies
-// the PoW difficulty requirements.
-func (ethash *Ethash) VerifySeal(chain consensus.ChainHeaderReader, header *types.Header) error {
-	return ethash.verifySeal(chain, header, false)
-}
-
 // verifySeal checks whether a block satisfies the PoW difficulty requirements,
 // either using the usual ethash cache for it, or alternatively using a full DAG
 // to make remote mining fast.
@@ -586,7 +580,7 @@ func (ethash *Ethash) FinalizeAndAssemble(chain consensus.ChainHeaderReader, hea
 	ethash.Finalize(chain, header, state, txs, uncles)
 
 	// Header seems complete, assemble into a block and return
-	return types.NewBlock(header, txs, uncles, receipts, new(trie.Trie)), nil
+	return types.NewBlock(header, txs, uncles, receipts, trie.NewStackTrie(nil)), nil
 }
 
 // SealHash returns the hash of a block prior to it being sealed.

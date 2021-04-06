@@ -14,7 +14,7 @@
 // You should have received a copy of the GNU Lesser General Public License
 // along with the go-ethereum library. If not, see <http://www.gnu.org/licenses/>.
 
-package les
+package client
 
 import (
 	"errors"
@@ -26,9 +26,9 @@ import (
 
 	"github.com/ethereum/go-ethereum/common/mclock"
 	"github.com/ethereum/go-ethereum/ethdb"
-	lpc "github.com/ethereum/go-ethereum/les/lespay/client"
 	"github.com/ethereum/go-ethereum/les/utils"
 	"github.com/ethereum/go-ethereum/log"
+	"github.com/ethereum/go-ethereum/metrics"
 	"github.com/ethereum/go-ethereum/p2p/enode"
 	"github.com/ethereum/go-ethereum/p2p/enr"
 	"github.com/ethereum/go-ethereum/p2p/nodestate"
@@ -47,34 +47,38 @@ const (
 	nodeWeightThreshold = 100                    // minimum weight for keeping a node in the the known (valuable) set
 	minRedialWait       = 10                     // minimum redial wait time in seconds
 	preNegLimit         = 5                      // maximum number of simultaneous pre-negotiation queries
-	maxQueryFails       = 100                    // number of consecutive UDP query failures before we print a warning
+	warnQueryFails      = 20                     // number of consecutive UDP query failures before we print a warning
+	maxQueryFails       = 100                    // number of consecutive UDP query failures when then chance of skipping a query reaches 50%
 )
 
-// serverPool provides a node iterator for dial candidates. The output is a mix of newly discovered
+// ServerPool provides a node iterator for dial candidates. The output is a mix of newly discovered
 // nodes, a weighted random selection of known (previously valuable) nodes and trusted/paid nodes.
-type serverPool struct {
+type ServerPool struct {
 	clock    mclock.Clock
 	unixTime func() int64
 	db       ethdb.KeyValueStore
 
-	ns           *nodestate.NodeStateMachine
-	vt           *lpc.ValueTracker
-	mixer        *enode.FairMix
-	mixSources   []enode.Iterator
-	dialIterator enode.Iterator
-	validSchemes enr.IdentityScheme
-	trustedURLs  []string
-	fillSet      *lpc.FillSet
-	queryFails   uint32
+	ns                  *nodestate.NodeStateMachine
+	vt                  *ValueTracker
+	mixer               *enode.FairMix
+	mixSources          []enode.Iterator
+	dialIterator        enode.Iterator
+	validSchemes        enr.IdentityScheme
+	trustedURLs         []string
+	fillSet             *FillSet
+	started, queryFails uint32
 
 	timeoutLock      sync.RWMutex
 	timeout          time.Duration
-	timeWeights      lpc.ResponseTimeWeights
+	timeWeights      ResponseTimeWeights
 	timeoutRefreshed mclock.AbsTime
+
+	suggestedTimeoutGauge, totalValueGauge metrics.Gauge
+	sessionValueMeter                      metrics.Meter
 }
 
 // nodeHistory keeps track of dial costs which determine node weight together with the
-// service value calculated by lpc.ValueTracker.
+// service value calculated by ValueTracker.
 type nodeHistory struct {
 	dialCost                       utils.ExpiredValue
 	redialWaitStart, redialWaitEnd int64 // unix time (seconds)
@@ -88,21 +92,21 @@ type nodeHistoryEnc struct {
 // queryFunc sends a pre-negotiation query and blocks until a response arrives or timeout occurs.
 // It returns 1 if the remote node has confirmed that connection is possible, 0 if not
 // possible and -1 if no response arrived (timeout).
-type queryFunc func(*enode.Node) int
+type QueryFunc func(*enode.Node) int
 
 var (
-	serverPoolSetup    = &nodestate.Setup{Version: 1}
-	sfHasValue         = serverPoolSetup.NewPersistentFlag("hasValue")
-	sfQueried          = serverPoolSetup.NewFlag("queried")
-	sfCanDial          = serverPoolSetup.NewFlag("canDial")
-	sfDialing          = serverPoolSetup.NewFlag("dialed")
-	sfWaitDialTimeout  = serverPoolSetup.NewFlag("dialTimeout")
-	sfConnected        = serverPoolSetup.NewFlag("connected")
-	sfRedialWait       = serverPoolSetup.NewFlag("redialWait")
-	sfAlwaysConnect    = serverPoolSetup.NewFlag("alwaysConnect")
-	sfDisableSelection = nodestate.MergeFlags(sfQueried, sfCanDial, sfDialing, sfConnected, sfRedialWait)
+	clientSetup       = &nodestate.Setup{Version: 2}
+	sfHasValue        = clientSetup.NewPersistentFlag("hasValue")
+	sfQuery           = clientSetup.NewFlag("query")
+	sfCanDial         = clientSetup.NewFlag("canDial")
+	sfDialing         = clientSetup.NewFlag("dialed")
+	sfWaitDialTimeout = clientSetup.NewFlag("dialTimeout")
+	sfConnected       = clientSetup.NewFlag("connected")
+	sfRedialWait      = clientSetup.NewFlag("redialWait")
+	sfAlwaysConnect   = clientSetup.NewFlag("alwaysConnect")
+	sfDialProcess     = nodestate.MergeFlags(sfQuery, sfCanDial, sfDialing, sfConnected, sfRedialWait)
 
-	sfiNodeHistory = serverPoolSetup.NewPersistentField("nodeHistory", reflect.TypeOf(nodeHistory{}),
+	sfiNodeHistory = clientSetup.NewPersistentField("nodeHistory", reflect.TypeOf(nodeHistory{}),
 		func(field interface{}) ([]byte, error) {
 			if n, ok := field.(nodeHistory); ok {
 				ne := nodeHistoryEnc{
@@ -126,37 +130,48 @@ var (
 			return n, err
 		},
 	)
-	sfiNodeWeight     = serverPoolSetup.NewField("nodeWeight", reflect.TypeOf(uint64(0)))
-	sfiConnectedStats = serverPoolSetup.NewField("connectedStats", reflect.TypeOf(lpc.ResponseTimeStats{}))
+	sfiNodeWeight     = clientSetup.NewField("nodeWeight", reflect.TypeOf(uint64(0)))
+	sfiConnectedStats = clientSetup.NewField("connectedStats", reflect.TypeOf(ResponseTimeStats{}))
+	sfiLocalAddress   = clientSetup.NewPersistentField("localAddress", reflect.TypeOf(&enr.Record{}),
+		func(field interface{}) ([]byte, error) {
+			if enr, ok := field.(*enr.Record); ok {
+				enc, err := rlp.EncodeToBytes(enr)
+				return enc, err
+			}
+			return nil, errors.New("invalid field type")
+		},
+		func(enc []byte) (interface{}, error) {
+			var enr enr.Record
+			if err := rlp.DecodeBytes(enc, &enr); err != nil {
+				return nil, err
+			}
+			return &enr, nil
+		},
+	)
 )
 
-// newServerPool creates a new server pool
-func newServerPool(db ethdb.KeyValueStore, dbKey []byte, vt *lpc.ValueTracker, mixTimeout time.Duration, query queryFunc, clock mclock.Clock, trustedURLs []string) *serverPool {
-	s := &serverPool{
+// NewServerPool creates a new server pool
+func NewServerPool(db ethdb.KeyValueStore, dbKey []byte, mixTimeout time.Duration, query QueryFunc, clock mclock.Clock, trustedURLs []string, requestList []RequestInfo) (*ServerPool, enode.Iterator) {
+	s := &ServerPool{
 		db:           db,
 		clock:        clock,
 		unixTime:     func() int64 { return time.Now().Unix() },
 		validSchemes: enode.ValidSchemes,
 		trustedURLs:  trustedURLs,
-		vt:           vt,
-		ns:           nodestate.NewNodeStateMachine(db, []byte(string(dbKey)+"ns:"), clock, serverPoolSetup),
+		vt:           NewValueTracker(db, &mclock.System{}, requestList, time.Minute, 1/float64(time.Hour), 1/float64(time.Hour*100), 1/float64(time.Hour*1000)),
+		ns:           nodestate.NewNodeStateMachine(db, []byte(string(dbKey)+"ns:"), clock, clientSetup),
 	}
 	s.recalTimeout()
 	s.mixer = enode.NewFairMix(mixTimeout)
-	knownSelector := lpc.NewWrsIterator(s.ns, sfHasValue, sfDisableSelection, sfiNodeWeight)
-	alwaysConnect := lpc.NewQueueIterator(s.ns, sfAlwaysConnect, sfDisableSelection, true, nil)
+	knownSelector := NewWrsIterator(s.ns, sfHasValue, sfDialProcess, sfiNodeWeight)
+	alwaysConnect := NewQueueIterator(s.ns, sfAlwaysConnect, sfDialProcess, true, nil)
 	s.mixSources = append(s.mixSources, knownSelector)
 	s.mixSources = append(s.mixSources, alwaysConnect)
 
-	iter := enode.Iterator(s.mixer)
+	s.dialIterator = s.mixer
 	if query != nil {
-		iter = s.addPreNegFilter(iter, query)
+		s.dialIterator = s.addPreNegFilter(s.dialIterator, query)
 	}
-	s.dialIterator = enode.Filter(iter, func(node *enode.Node) bool {
-		s.ns.SetState(node, sfDialing, sfCanDial, 0)
-		s.ns.SetState(node, sfWaitDialTimeout, nodestate.Flags{}, time.Second*10)
-		return true
-	})
 
 	s.ns.SubscribeState(nodestate.MergeFlags(sfWaitDialTimeout, sfConnected), func(n *enode.Node, oldState, newState nodestate.Flags) {
 		if oldState.Equals(sfWaitDialTimeout) && newState.IsEmpty() {
@@ -166,14 +181,64 @@ func newServerPool(db ethdb.KeyValueStore, dbKey []byte, vt *lpc.ValueTracker, m
 		}
 	})
 
-	s.ns.AddLogMetrics(sfHasValue, sfDisableSelection, "selectable", nil, nil, serverSelectableGauge)
-	s.ns.AddLogMetrics(sfDialing, nodestate.Flags{}, "dialed", serverDialedMeter, nil, nil)
-	s.ns.AddLogMetrics(sfConnected, nodestate.Flags{}, "connected", nil, nil, serverConnectedGauge)
-	return s
+	return s, &serverPoolIterator{
+		dialIterator: s.dialIterator,
+		nextFn: func(node *enode.Node) {
+			s.ns.Operation(func() {
+				s.ns.SetStateSub(node, sfDialing, sfCanDial, 0)
+				s.ns.SetStateSub(node, sfWaitDialTimeout, nodestate.Flags{}, time.Second*10)
+			})
+		},
+		nodeFn: s.DialNode,
+	}
 }
 
-// addSource adds a node discovery source to the server pool (should be called before start)
-func (s *serverPool) addSource(source enode.Iterator) {
+type serverPoolIterator struct {
+	dialIterator enode.Iterator
+	nextFn       func(*enode.Node)
+	nodeFn       func(*enode.Node) *enode.Node
+}
+
+// Next implements enode.Iterator
+func (s *serverPoolIterator) Next() bool {
+	if s.dialIterator.Next() {
+		s.nextFn(s.dialIterator.Node())
+		return true
+	}
+	return false
+}
+
+// Node implements enode.Iterator
+func (s *serverPoolIterator) Node() *enode.Node {
+	return s.nodeFn(s.dialIterator.Node())
+}
+
+// Close implements enode.Iterator
+func (s *serverPoolIterator) Close() {
+	s.dialIterator.Close()
+}
+
+// AddMetrics adds metrics to the server pool. Should be called before Start().
+func (s *ServerPool) AddMetrics(
+	suggestedTimeoutGauge, totalValueGauge, serverSelectableGauge, serverConnectedGauge metrics.Gauge,
+	sessionValueMeter, serverDialedMeter metrics.Meter) {
+
+	s.suggestedTimeoutGauge = suggestedTimeoutGauge
+	s.totalValueGauge = totalValueGauge
+	s.sessionValueMeter = sessionValueMeter
+	if serverSelectableGauge != nil {
+		s.ns.AddLogMetrics(sfHasValue, sfDialProcess, "selectable", nil, nil, serverSelectableGauge)
+	}
+	if serverDialedMeter != nil {
+		s.ns.AddLogMetrics(sfDialing, nodestate.Flags{}, "dialed", serverDialedMeter, nil, nil)
+	}
+	if serverConnectedGauge != nil {
+		s.ns.AddLogMetrics(sfConnected, nodestate.Flags{}, "connected", nil, nil, serverConnectedGauge)
+	}
+}
+
+// AddSource adds a node discovery source to the server pool (should be called before start)
+func (s *ServerPool) AddSource(source enode.Iterator) {
 	if source != nil {
 		s.mixSources = append(s.mixSources, source)
 	}
@@ -182,46 +247,54 @@ func (s *serverPool) addSource(source enode.Iterator) {
 // addPreNegFilter installs a node filter mechanism that performs a pre-negotiation query.
 // Nodes that are filtered out and does not appear on the output iterator are put back
 // into redialWait state.
-func (s *serverPool) addPreNegFilter(input enode.Iterator, query queryFunc) enode.Iterator {
-	s.fillSet = lpc.NewFillSet(s.ns, input, sfQueried)
-	s.ns.SubscribeState(sfQueried, func(n *enode.Node, oldState, newState nodestate.Flags) {
-		if newState.Equals(sfQueried) {
-			fails := atomic.LoadUint32(&s.queryFails)
-			if fails == maxQueryFails {
-				log.Warn("UDP pre-negotiation query does not seem to work")
+func (s *ServerPool) addPreNegFilter(input enode.Iterator, query QueryFunc) enode.Iterator {
+	s.fillSet = NewFillSet(s.ns, input, sfQuery)
+	s.ns.SubscribeState(sfDialProcess, func(n *enode.Node, oldState, newState nodestate.Flags) {
+		if !newState.Equals(sfQuery) {
+			if newState.HasAll(sfQuery) {
+				// remove query flag if the node is already somewhere in the dial process
+				s.ns.SetStateSub(n, nodestate.Flags{}, sfQuery, 0)
 			}
-			if fails > maxQueryFails {
-				fails = maxQueryFails
-			}
-			if rand.Intn(maxQueryFails*2) < int(fails) {
-				// skip pre-negotiation with increasing chance, max 50%
-				// this ensures that the client can operate even if UDP is not working at all
-				s.ns.SetStateSub(n, sfCanDial, nodestate.Flags{}, time.Second*10)
-				// set canDial before resetting queried so that FillSet will not read more
-				// candidates unnecessarily
-				s.ns.SetStateSub(n, nodestate.Flags{}, sfQueried, 0)
-				return
-			}
-			go func() {
-				q := query(n)
-				if q == -1 {
-					atomic.AddUint32(&s.queryFails, 1)
-				} else {
-					atomic.StoreUint32(&s.queryFails, 0)
-				}
-				s.ns.Operation(func() {
-					// we are no longer running in the operation that the callback belongs to, start a new one because of setRedialWait
-					if q == 1 {
-						s.ns.SetStateSub(n, sfCanDial, nodestate.Flags{}, time.Second*10)
-					} else {
-						s.setRedialWait(n, queryCost, queryWaitStep)
-					}
-					s.ns.SetStateSub(n, nodestate.Flags{}, sfQueried, 0)
-				})
-			}()
+			return
 		}
+		fails := atomic.LoadUint32(&s.queryFails)
+		failMax := fails
+		if failMax > maxQueryFails {
+			failMax = maxQueryFails
+		}
+		if rand.Intn(maxQueryFails*2) < int(failMax) {
+			// skip pre-negotiation with increasing chance, max 50%
+			// this ensures that the client can operate even if UDP is not working at all
+			s.ns.SetStateSub(n, sfCanDial, nodestate.Flags{}, time.Second*10)
+			// set canDial before resetting queried so that FillSet will not read more
+			// candidates unnecessarily
+			s.ns.SetStateSub(n, nodestate.Flags{}, sfQuery, 0)
+			return
+		}
+		go func() {
+			q := query(n)
+			if q == -1 {
+				atomic.AddUint32(&s.queryFails, 1)
+				fails++
+				if fails%warnQueryFails == 0 {
+					// warn if a large number of consecutive queries have failed
+					log.Warn("UDP connection queries failed", "count", fails)
+				}
+			} else {
+				atomic.StoreUint32(&s.queryFails, 0)
+			}
+			s.ns.Operation(func() {
+				// we are no longer running in the operation that the callback belongs to, start a new one because of setRedialWait
+				if q == 1 {
+					s.ns.SetStateSub(n, sfCanDial, nodestate.Flags{}, time.Second*10)
+				} else {
+					s.setRedialWait(n, queryCost, queryWaitStep)
+				}
+				s.ns.SetStateSub(n, nodestate.Flags{}, sfQuery, 0)
+			})
+		}()
 	})
-	return lpc.NewQueueIterator(s.ns, sfCanDial, nodestate.Flags{}, false, func(waiting bool) {
+	return NewQueueIterator(s.ns, sfCanDial, nodestate.Flags{}, false, func(waiting bool) {
 		if waiting {
 			s.fillSet.SetTarget(preNegLimit)
 		} else {
@@ -231,7 +304,7 @@ func (s *serverPool) addPreNegFilter(input enode.Iterator, query queryFunc) enod
 }
 
 // start starts the server pool. Note that NodeStateMachine should be started first.
-func (s *serverPool) start() {
+func (s *ServerPool) Start() {
 	s.ns.Start()
 	for _, iter := range s.mixSources {
 		// add sources to mixer at startup because the mixer instantly tries to read them
@@ -261,11 +334,11 @@ func (s *serverPool) start() {
 			}
 		})
 	})
+	atomic.StoreUint32(&s.started, 1)
 }
 
 // stop stops the server pool
-func (s *serverPool) stop() {
-	s.dialIterator.Close()
+func (s *ServerPool) Stop() {
 	if s.fillSet != nil {
 		s.fillSet.Close()
 	}
@@ -276,32 +349,39 @@ func (s *serverPool) stop() {
 		})
 	})
 	s.ns.Stop()
+	s.vt.Stop()
 }
 
-// registerPeer implements serverPeerSubscriber
-func (s *serverPool) registerPeer(p *serverPeer) {
-	s.ns.SetState(p.Node(), sfConnected, sfDialing.Or(sfWaitDialTimeout), 0)
-	nvt := s.vt.Register(p.ID())
-	s.ns.SetField(p.Node(), sfiConnectedStats, nvt.RtStats())
-	p.setValueTracker(s.vt, nvt)
-	p.updateVtParams()
-}
-
-// unregisterPeer implements serverPeerSubscriber
-func (s *serverPool) unregisterPeer(p *serverPeer) {
+// RegisterNode implements serverPeerSubscriber
+func (s *ServerPool) RegisterNode(node *enode.Node) (*NodeValueTracker, error) {
+	if atomic.LoadUint32(&s.started) == 0 {
+		return nil, errors.New("server pool not started yet")
+	}
+	nvt := s.vt.Register(node.ID())
 	s.ns.Operation(func() {
-		s.setRedialWait(p.Node(), dialCost, dialWaitStep)
-		s.ns.SetStateSub(p.Node(), nodestate.Flags{}, sfConnected, 0)
-		s.ns.SetFieldSub(p.Node(), sfiConnectedStats, nil)
+		s.ns.SetStateSub(node, sfConnected, sfDialing.Or(sfWaitDialTimeout), 0)
+		s.ns.SetFieldSub(node, sfiConnectedStats, nvt.RtStats())
+		if node.IP().IsLoopback() {
+			s.ns.SetFieldSub(node, sfiLocalAddress, node.Record())
+		}
 	})
-	s.vt.Unregister(p.ID())
-	p.setValueTracker(nil, nil)
+	return nvt, nil
+}
+
+// UnregisterNode implements serverPeerSubscriber
+func (s *ServerPool) UnregisterNode(node *enode.Node) {
+	s.ns.Operation(func() {
+		s.setRedialWait(node, dialCost, dialWaitStep)
+		s.ns.SetStateSub(node, nodestate.Flags{}, sfConnected, 0)
+		s.ns.SetFieldSub(node, sfiConnectedStats, nil)
+	})
+	s.vt.Unregister(node.ID())
 }
 
 // recalTimeout calculates the current recommended timeout. This value is used by
 // the client as a "soft timeout" value. It also affects the service value calculation
 // of individual nodes.
-func (s *serverPool) recalTimeout() {
+func (s *ServerPool) recalTimeout() {
 	// Use cached result if possible, avoid recalculating too frequently.
 	s.timeoutLock.RLock()
 	refreshed := s.timeoutRefreshed
@@ -330,17 +410,21 @@ func (s *serverPool) recalTimeout() {
 	s.timeoutLock.Lock()
 	if s.timeout != timeout {
 		s.timeout = timeout
-		s.timeWeights = lpc.TimeoutWeights(s.timeout)
+		s.timeWeights = TimeoutWeights(s.timeout)
 
-		suggestedTimeoutGauge.Update(int64(s.timeout / time.Millisecond))
-		totalValueGauge.Update(int64(rts.Value(s.timeWeights, s.vt.StatsExpFactor())))
+		if s.suggestedTimeoutGauge != nil {
+			s.suggestedTimeoutGauge.Update(int64(s.timeout / time.Millisecond))
+		}
+		if s.totalValueGauge != nil {
+			s.totalValueGauge.Update(int64(rts.Value(s.timeWeights, s.vt.StatsExpFactor())))
+		}
 	}
 	s.timeoutRefreshed = now
 	s.timeoutLock.Unlock()
 }
 
-// getTimeout returns the recommended request timeout.
-func (s *serverPool) getTimeout() time.Duration {
+// GetTimeout returns the recommended request timeout.
+func (s *ServerPool) GetTimeout() time.Duration {
 	s.recalTimeout()
 	s.timeoutLock.RLock()
 	defer s.timeoutLock.RUnlock()
@@ -349,7 +433,7 @@ func (s *serverPool) getTimeout() time.Duration {
 
 // getTimeoutAndWeight returns the recommended request timeout as well as the
 // response time weight which is necessary to calculate service value.
-func (s *serverPool) getTimeoutAndWeight() (time.Duration, lpc.ResponseTimeWeights) {
+func (s *ServerPool) getTimeoutAndWeight() (time.Duration, ResponseTimeWeights) {
 	s.recalTimeout()
 	s.timeoutLock.RLock()
 	defer s.timeoutLock.RUnlock()
@@ -358,7 +442,7 @@ func (s *serverPool) getTimeoutAndWeight() (time.Duration, lpc.ResponseTimeWeigh
 
 // addDialCost adds the given amount of dial cost to the node history and returns the current
 // amount of total dial cost
-func (s *serverPool) addDialCost(n *nodeHistory, amount int64) uint64 {
+func (s *ServerPool) addDialCost(n *nodeHistory, amount int64) uint64 {
 	logOffset := s.vt.StatsExpirer().LogOffset(s.clock.Now())
 	if amount > 0 {
 		n.dialCost.Add(amount, logOffset)
@@ -371,7 +455,7 @@ func (s *serverPool) addDialCost(n *nodeHistory, amount int64) uint64 {
 }
 
 // serviceValue returns the service value accumulated in this session and in total
-func (s *serverPool) serviceValue(node *enode.Node) (sessionValue, totalValue float64) {
+func (s *ServerPool) serviceValue(node *enode.Node) (sessionValue, totalValue float64) {
 	nvt := s.vt.GetNode(node.ID())
 	if nvt == nil {
 		return 0, 0
@@ -381,11 +465,13 @@ func (s *serverPool) serviceValue(node *enode.Node) (sessionValue, totalValue fl
 	expFactor := s.vt.StatsExpFactor()
 
 	totalValue = currentStats.Value(timeWeights, expFactor)
-	if connStats, ok := s.ns.GetField(node, sfiConnectedStats).(lpc.ResponseTimeStats); ok {
+	if connStats, ok := s.ns.GetField(node, sfiConnectedStats).(ResponseTimeStats); ok {
 		diff := currentStats
 		diff.SubStats(&connStats)
 		sessionValue = diff.Value(timeWeights, expFactor)
-		sessionValueMeter.Mark(int64(sessionValue))
+		if s.sessionValueMeter != nil {
+			s.sessionValueMeter.Mark(int64(sessionValue))
+		}
 	}
 	return
 }
@@ -393,7 +479,7 @@ func (s *serverPool) serviceValue(node *enode.Node) (sessionValue, totalValue fl
 // updateWeight calculates the node weight and updates the nodeWeight field and the
 // hasValue flag. It also saves the node state if necessary.
 // Note: this function should run inside a NodeStateMachine operation
-func (s *serverPool) updateWeight(node *enode.Node, totalValue float64, totalDialCost uint64) {
+func (s *ServerPool) updateWeight(node *enode.Node, totalValue float64, totalDialCost uint64) {
 	weight := uint64(totalValue * nodeWeightMul / float64(totalDialCost))
 	if weight >= nodeWeightThreshold {
 		s.ns.SetStateSub(node, sfHasValue, nodestate.Flags{}, 0)
@@ -402,6 +488,7 @@ func (s *serverPool) updateWeight(node *enode.Node, totalValue float64, totalDia
 		s.ns.SetStateSub(node, nodestate.Flags{}, sfHasValue, 0)
 		s.ns.SetFieldSub(node, sfiNodeWeight, nil)
 		s.ns.SetFieldSub(node, sfiNodeHistory, nil)
+		s.ns.SetFieldSub(node, sfiLocalAddress, nil)
 	}
 	s.ns.Persist(node) // saved if node history or hasValue changed
 }
@@ -415,7 +502,7 @@ func (s *serverPool) updateWeight(node *enode.Node, totalValue float64, totalDia
 // to the minimum.
 // Note: node weight is also recalculated and updated by this function.
 // Note 2: this function should run inside a NodeStateMachine operation
-func (s *serverPool) setRedialWait(node *enode.Node, addDialCost int64, waitStep float64) {
+func (s *ServerPool) setRedialWait(node *enode.Node, addDialCost int64, waitStep float64) {
 	n, _ := s.ns.GetField(node, sfiNodeHistory).(nodeHistory)
 	sessionValue, totalValue := s.serviceValue(node)
 	totalDialCost := s.addDialCost(&n, addDialCost)
@@ -481,9 +568,39 @@ func (s *serverPool) setRedialWait(node *enode.Node, addDialCost int64, waitStep
 // This function should be called during startup and shutdown only, otherwise setRedialWait
 // will keep the weights updated as the underlying statistics are adjusted.
 // Note: this function should run inside a NodeStateMachine operation
-func (s *serverPool) calculateWeight(node *enode.Node) {
+func (s *ServerPool) calculateWeight(node *enode.Node) {
 	n, _ := s.ns.GetField(node, sfiNodeHistory).(nodeHistory)
 	_, totalValue := s.serviceValue(node)
 	totalDialCost := s.addDialCost(&n, 0)
 	s.updateWeight(node, totalValue, totalDialCost)
+}
+
+// API returns the vflux client API
+func (s *ServerPool) API() *PrivateClientAPI {
+	return NewPrivateClientAPI(s.vt)
+}
+
+type dummyIdentity enode.ID
+
+func (id dummyIdentity) Verify(r *enr.Record, sig []byte) error { return nil }
+func (id dummyIdentity) NodeAddr(r *enr.Record) []byte          { return id[:] }
+
+// DialNode replaces the given enode with a locally generated one containing the ENR
+// stored in the sfiLocalAddress field if present. This workaround ensures that nodes
+// on the local network can be dialed at the local address if a connection has been
+// successfully established previously.
+// Note that NodeStateMachine always remembers the enode with the latest version of
+// the remote signed ENR. ENR filtering should be performed on that version while
+// dialNode should be used for dialing the node over TCP or UDP.
+func (s *ServerPool) DialNode(n *enode.Node) *enode.Node {
+	if enr, ok := s.ns.GetField(n, sfiLocalAddress).(*enr.Record); ok {
+		n, _ := enode.New(dummyIdentity(n.ID()), enr)
+		return n
+	}
+	return n
+}
+
+// Persist immediately stores the state of a node in the node database
+func (s *ServerPool) Persist(n *enode.Node) {
+	s.ns.Persist(n)
 }

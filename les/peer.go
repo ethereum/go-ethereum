@@ -32,9 +32,9 @@ import (
 	"github.com/ethereum/go-ethereum/core/forkid"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/les/flowcontrol"
-	lpc "github.com/ethereum/go-ethereum/les/lespay/client"
-	lps "github.com/ethereum/go-ethereum/les/lespay/server"
 	"github.com/ethereum/go-ethereum/les/utils"
+	vfc "github.com/ethereum/go-ethereum/les/vflux/client"
+	vfs "github.com/ethereum/go-ethereum/les/vflux/server"
 	"github.com/ethereum/go-ethereum/light"
 	"github.com/ethereum/go-ethereum/p2p"
 	"github.com/ethereum/go-ethereum/params"
@@ -341,7 +341,7 @@ type serverPeer struct {
 	onlyAnnounce            bool   // The flag whether the server sends announcement only.
 	chainSince, chainRecent uint64 // The range of chain server peer can serve.
 	stateSince, stateRecent uint64 // The range of state server peer can serve.
-	serveTxLookup           bool   // The server peer can serve tx lookups.
+	txHistory               uint64 // The length of available tx history, 0 means all, 1 means disabled
 
 	// Advertised checkpoint fields
 	checkpointNumber uint64                   // The block height which the checkpoint is registered.
@@ -349,8 +349,7 @@ type serverPeer struct {
 
 	fcServer         *flowcontrol.ServerNode // Client side mirror token bucket.
 	vtLock           sync.Mutex
-	valueTracker     *lpc.ValueTracker
-	nodeValueTracker *lpc.NodeValueTracker
+	nodeValueTracker *vfc.NodeValueTracker
 	sentReqs         map[uint64]sentReqEntry
 
 	// Statistics
@@ -432,14 +431,14 @@ func (p *serverPeer) sendRequest(msgcode, reqID uint64, data interface{}, amount
 // specified header query, based on the hash of an origin block.
 func (p *serverPeer) requestHeadersByHash(reqID uint64, origin common.Hash, amount int, skip int, reverse bool) error {
 	p.Log().Debug("Fetching batch of headers", "count", amount, "fromhash", origin, "skip", skip, "reverse", reverse)
-	return p.sendRequest(GetBlockHeadersMsg, reqID, &getBlockHeadersData{Origin: hashOrNumber{Hash: origin}, Amount: uint64(amount), Skip: uint64(skip), Reverse: reverse}, amount)
+	return p.sendRequest(GetBlockHeadersMsg, reqID, &GetBlockHeadersData{Origin: hashOrNumber{Hash: origin}, Amount: uint64(amount), Skip: uint64(skip), Reverse: reverse}, amount)
 }
 
 // requestHeadersByNumber fetches a batch of blocks' headers corresponding to the
 // specified header query, based on the number of an origin block.
 func (p *serverPeer) requestHeadersByNumber(reqID, origin uint64, amount int, skip int, reverse bool) error {
 	p.Log().Debug("Fetching batch of headers", "count", amount, "fromnum", origin, "skip", skip, "reverse", reverse)
-	return p.sendRequest(GetBlockHeadersMsg, reqID, &getBlockHeadersData{Origin: hashOrNumber{Number: origin}, Amount: uint64(amount), Skip: uint64(skip), Reverse: reverse}, amount)
+	return p.sendRequest(GetBlockHeadersMsg, reqID, &GetBlockHeadersData{Origin: hashOrNumber{Number: origin}, Amount: uint64(amount), Skip: uint64(skip), Reverse: reverse}, amount)
 }
 
 // requestBodies fetches a batch of blocks' bodies corresponding to the hashes
@@ -634,13 +633,13 @@ func (p *serverPeer) Handshake(genesis common.Hash, forkid forkid.ID, forkFilter
 			if err := recv.get("recentTxLookup", &recentTx); err != nil {
 				return err
 			}
-			// Note: in the current version we only consider the tx index service useful
-			// if it is unlimited. This can be made configurable in the future.
-			p.serveTxLookup = recentTx == txIndexUnlimited
+			p.txHistory = uint64(recentTx)
 		} else {
-			p.serveTxLookup = true
+			// The weak assumption is held here that legacy les server(les2,3)
+			// has unlimited transaction history. The les serving in these legacy
+			// versions is disabled if the transaction is unindexed.
+			p.txHistory = txIndexUnlimited
 		}
-
 		if p.onlyAnnounce && !p.trusted {
 			return errResp(ErrUselessPeer, "peer cannot serve requests")
 		}
@@ -676,9 +675,8 @@ func (p *serverPeer) Handshake(genesis common.Hash, forkid forkid.ID, forkFilter
 
 // setValueTracker sets the value tracker references for connected servers. Note that the
 // references should be removed upon disconnection by setValueTracker(nil, nil).
-func (p *serverPeer) setValueTracker(vt *lpc.ValueTracker, nvt *lpc.NodeValueTracker) {
+func (p *serverPeer) setValueTracker(nvt *vfc.NodeValueTracker) {
 	p.vtLock.Lock()
-	p.valueTracker = vt
 	p.nodeValueTracker = nvt
 	if nvt != nil {
 		p.sentReqs = make(map[uint64]sentReqEntry)
@@ -705,7 +703,7 @@ func (p *serverPeer) updateVtParams() {
 			}
 		}
 	}
-	p.valueTracker.UpdateCosts(p.nodeValueTracker, reqCosts)
+	p.nodeValueTracker.UpdateCosts(reqCosts)
 }
 
 // sentReqEntry remembers sent requests and their sending times
@@ -732,27 +730,26 @@ func (p *serverPeer) answeredRequest(id uint64) {
 	}
 	e, ok := p.sentReqs[id]
 	delete(p.sentReqs, id)
-	vt := p.valueTracker
 	nvt := p.nodeValueTracker
 	p.vtLock.Unlock()
 	if !ok {
 		return
 	}
 	var (
-		vtReqs   [2]lpc.ServedRequest
+		vtReqs   [2]vfc.ServedRequest
 		reqCount int
 	)
 	m := requestMapping[e.reqType]
 	if m.rest == -1 || e.amount <= 1 {
 		reqCount = 1
-		vtReqs[0] = lpc.ServedRequest{ReqType: uint32(m.first), Amount: e.amount}
+		vtReqs[0] = vfc.ServedRequest{ReqType: uint32(m.first), Amount: e.amount}
 	} else {
 		reqCount = 2
-		vtReqs[0] = lpc.ServedRequest{ReqType: uint32(m.first), Amount: 1}
-		vtReqs[1] = lpc.ServedRequest{ReqType: uint32(m.rest), Amount: e.amount - 1}
+		vtReqs[0] = vfc.ServedRequest{ReqType: uint32(m.first), Amount: 1}
+		vtReqs[1] = vfc.ServedRequest{ReqType: uint32(m.rest), Amount: e.amount - 1}
 	}
 	dt := time.Duration(mclock.Now() - e.at)
-	vt.Served(nvt, vtReqs[:reqCount], dt)
+	nvt.Served(vtReqs[:reqCount], dt)
 }
 
 // clientPeer represents each node to which the les server is connected.
@@ -765,7 +762,7 @@ type clientPeer struct {
 	responseLock  sync.Mutex
 	responseCount uint64 // Counter to generate an unique id for request processing.
 
-	balance *lps.NodeBalance
+	balance *vfs.NodeBalance
 
 	// invalidLock is used for protecting invalidCount.
 	invalidLock  sync.RWMutex

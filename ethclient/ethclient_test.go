@@ -34,6 +34,7 @@ import (
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/eth"
+	"github.com/ethereum/go-ethereum/eth/ethconfig"
 	"github.com/ethereum/go-ethereum/node"
 	"github.com/ethereum/go-ethereum/params"
 	"github.com/ethereum/go-ethereum/rpc"
@@ -195,7 +196,7 @@ func newTestBackend(t *testing.T) (*node.Node, []*types.Block) {
 		t.Fatalf("can't create new node: %v", err)
 	}
 	// Create Ethereum Service
-	config := &eth.Config{Genesis: genesis}
+	config := &ethconfig.Config{Genesis: genesis}
 	config.Ethash.PowMode = ethash.ModeFake
 	ethservice, err := eth.New(n, config)
 	if err != nil {
@@ -287,8 +288,9 @@ func testHeader(t *testing.T, chain []*types.Block, client *rpc.Client) {
 			want:  chain[1].Header(),
 		},
 		"future_block": {
-			block: big.NewInt(1000000000),
-			want:  nil,
+			block:   big.NewInt(1000000000),
+			want:    nil,
+			wantErr: ethereum.NotFound,
 		},
 	}
 	for name, tt := range tests {
@@ -298,10 +300,10 @@ func testHeader(t *testing.T, chain []*types.Block, client *rpc.Client) {
 			defer cancel()
 
 			got, err := ec.HeaderByNumber(ctx, tt.block)
-			if tt.wantErr != nil && (err == nil || err.Error() != tt.wantErr.Error()) {
+			if !errors.Is(err, tt.wantErr) {
 				t.Fatalf("HeaderByNumber(%v) error = %q, want %q", tt.block, err, tt.wantErr)
 			}
-			if got != nil && got.Number.Sign() == 0 {
+			if got != nil && got.Number != nil && got.Number.Sign() == 0 {
 				got.Number = big.NewInt(0) // hack to make DeepEqual work
 			}
 			if !reflect.DeepEqual(got, tt.want) {
@@ -559,7 +561,7 @@ func sendTransaction(ec *Client) error {
 	}
 	// Create transaction
 	tx := types.NewTransaction(0, common.Address{1}, big.NewInt(1), 22000, big.NewInt(1), nil)
-	signer := types.NewEIP155Signer(chainID)
+	signer := types.LatestSignerForChainID(chainID)
 	signature, err := crypto.Sign(signer.Hash(tx).Bytes(), testKey)
 	if err != nil {
 		return err

@@ -574,11 +574,11 @@ func testCheckpointChallenge(t *testing.T, syncmode downloader.SyncMode, checkpo
 
 	// Verify that the remote peer is maintained or dropped
 	if drop {
-		if peers := handler.handler.peers.Len(); peers != 0 {
+		if peers := handler.handler.peers.len(); peers != 0 {
 			t.Fatalf("peer count mismatch: have %d, want %d", peers, 0)
 		}
 	} else {
-		if peers := handler.handler.peers.Len(); peers != 1 {
+		if peers := handler.handler.peers.len(); peers != 1 {
 			t.Fatalf("peer count mismatch: have %d, want %d", peers, 1)
 		}
 	}

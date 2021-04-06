@@ -33,7 +33,7 @@ var Modules = map[string]string{
 	"swarmfs":    SwarmfsJs,
 	"txpool":     TxpoolJs,
 	"les":        LESJs,
-	"lespay":     LESPayJs,
+	"vflux":      VfluxJs,
 }
 
 const ChequebookJs = `
@@ -138,8 +138,8 @@ web3._extend({
 			params: 3,
 		}),
 		new web3._extend.Method({
-			name: 'submitHashRate',
-			call: 'ethash_submitHashRate',
+			name: 'submitHashrate',
+			call: 'ethash_submitHashrate',
 			params: 2,
 		}),
 	]
@@ -187,11 +187,23 @@ web3._extend({
 			params: 2
 		}),
 		new web3._extend.Method({
+			name: 'startHTTP',
+			call: 'admin_startHTTP',
+			params: 5,
+			inputFormatter: [null, null, null, null, null]
+		}),
+		new web3._extend.Method({
+			name: 'stopHTTP',
+			call: 'admin_stopHTTP'
+		}),
+		// This method is deprecated.
+		new web3._extend.Method({
 			name: 'startRPC',
 			call: 'admin_startRPC',
-			params: 4,
-			inputFormatter: [null, null, null, null]
+			params: 5,
+			inputFormatter: [null, null, null, null, null]
 		}),
+		// This method is deprecated.
 		new web3._extend.Method({
 			name: 'stopRPC',
 			call: 'admin_stopRPC'
@@ -877,24 +889,24 @@ web3._extend({
 });
 `
 
-const LESPayJs = `
+const VfluxJs = `
 web3._extend({
-	property: 'lespay',
+	property: 'vflux',
 	methods:
 	[
 		new web3._extend.Method({
 			name: 'distribution',
-			call: 'lespay_distribution',
+			call: 'vflux_distribution',
 			params: 2
 		}),
 		new web3._extend.Method({
 			name: 'timeout',
-			call: 'lespay_timeout',
+			call: 'vflux_timeout',
 			params: 2
 		}),
 		new web3._extend.Method({
 			name: 'value',
-			call: 'lespay_value',
+			call: 'vflux_value',
 			params: 2
 		}),
 	],
@@ -902,7 +914,7 @@ web3._extend({
 	[
 		new web3._extend.Property({
 			name: 'requestStats',
-			getter: 'lespay_requestStats'
+			getter: 'vflux_requestStats'
 		}),
 	]
 });

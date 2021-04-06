@@ -33,7 +33,7 @@ import (
 	"github.com/ethereum/go-ethereum/core/rawdb"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/crypto"
-	"github.com/ethereum/go-ethereum/eth"
+	"github.com/ethereum/go-ethereum/eth/ethconfig"
 	"github.com/ethereum/go-ethereum/ethdb"
 	"github.com/ethereum/go-ethereum/internal/debug"
 	"github.com/ethereum/go-ethereum/log"
@@ -75,7 +75,7 @@ func StartNode(ctx *cli.Context, stack *node.Node) {
 		signal.Notify(sigc, syscall.SIGINT, syscall.SIGTERM)
 		defer signal.Stop(sigc)
 
-		minFreeDiskSpace := eth.DefaultConfig.TrieDirtyCache
+		minFreeDiskSpace := ethconfig.Defaults.TrieDirtyCache
 		if ctx.GlobalIsSet(MinFreeDiskSpaceFlag.Name) {
 			minFreeDiskSpace = ctx.GlobalInt(MinFreeDiskSpaceFlag.Name)
 		} else if ctx.GlobalIsSet(CacheFlag.Name) || ctx.GlobalIsSet(CacheGCFlag.Name) {
