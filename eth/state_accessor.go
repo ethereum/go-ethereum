@@ -135,7 +135,7 @@ func (eth *Ethereum) stateAtTransaction(block *types.Block, txIndex int, reexec 
 	// Lookup the statedb of parent block from the live database,
 	// otherwise regenerate it on the flight.
 	statedb, err := eth.blockchain.StateAt(parent.Root())
-	if err == nil {
+	if err != nil {
 		statedb, err = eth.stateAtBlock(parent, reexec, nil)
 		if err != nil {
 			return nil, vm.BlockContext{}, nil, err
