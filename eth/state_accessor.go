@@ -31,27 +31,29 @@ import (
 )
 
 // stateAtBlock retrieves the state database associated with a certain block.
-// If no state is locally available for the given block, a number of blocks are
-// attempted to be reexecuted to generate the desired state.
+// If no state is locally available for the given block, a number of blocks
+// are attempted to be reexecuted to generate the desired state. The optional
+// base layer statedb can be passed then it's regarded as the statedb of the
+// parent block.
 func (eth *Ethereum) stateAtBlock(block *types.Block, reexec uint64, base *state.StateDB) (statedb *state.StateDB, err error) {
-	// If we have the state fully available, use that
-	statedb, err = eth.blockchain.StateAt(block.Root())
-	if err == nil {
-		return statedb, nil
-	}
 	var (
-		origin   = block.NumberU64()
 		current  *types.Block
 		database state.Database
 		report   = true
+		origin   = block.NumberU64()
 	)
 	if base != nil {
+		// The optional base statedb is given, mark the start point as parent block
 		statedb, database, report = base, base.Database(), false
 		current = eth.blockchain.GetBlock(block.ParentHash(), block.NumberU64()-1)
 	} else {
 		// Otherwise try to reexec blocks until we find a state or reach our limit
 		current = block
+
+		// Create an ephemeral trie.Database for isolating the live one. Otherwise
+		// the internal junks created by tracing will be persisted into the disk.
 		database = state.NewDatabaseWithConfig(eth.chainDb, &trie.Config{Cache: 16})
+
 		for i := uint64(0); i < reexec; i++ {
 			if current.NumberU64() == 0 {
 				return nil, errors.New("genesis state is missing")
@@ -129,9 +131,14 @@ func (eth *Ethereum) stateAtTransaction(block *types.Block, txIndex int, reexec 
 	if parent == nil {
 		return nil, vm.BlockContext{}, nil, fmt.Errorf("parent %#x not found", block.ParentHash())
 	}
-	statedb, err := eth.stateAtBlock(parent, reexec, nil)
-	if err != nil {
-		return nil, vm.BlockContext{}, nil, err
+	// Lookup the statedb of parent block from the live database,
+	// otherwise regenerate it on the flight.
+	statedb, err := eth.blockchain.StateAt(parent.Root())
+	if err == nil {
+		statedb, err = eth.stateAtBlock(parent, reexec, nil)
+		if err != nil {
+			return nil, vm.BlockContext{}, nil, err
+		}
 	}
 	if txIndex == 0 && len(block.Transactions()) == 0 {
 		return nil, vm.BlockContext{}, statedb, nil
