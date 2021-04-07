@@ -417,12 +417,20 @@ func (w *worker) newWorkLoop(recommit time.Duration) {
 	defer timer.Stop()
 	<-timer.C // discard the initial tick
 
+	ethashEngine, isEthashEngine := w.engine.(*ethash.Ethash)
+
 	// commit aborts in-flight transaction execution with given signal and resubmits a new one.
 	commit := func(noempty bool, s int32) {
 		if interrupt != nil {
 			atomic.StoreInt32(interrupt, s)
 		}
 		interrupt = new(int32)
+
+
+		if isEthashEngine && ethashEngine.IsPandoraModeEnabled() {
+			timestamp = time.Now().Unix()
+		}
+
 		select {
 		case w.newWorkCh <- &newWorkReq{interrupt: interrupt, noempty: noempty, timestamp: timestamp}:
 		case <-w.exitCh:

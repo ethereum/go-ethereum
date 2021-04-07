@@ -180,10 +180,14 @@ func makeGenesis(faucets []*ecdsa.PrivateKey, sealers [32]common2.PublicKey) *co
 	genesis.Config.ChainID = big.NewInt(18)
 
 	timeNow := time.Now()
-	genesisEpochStart := uint64(timeNow.Unix())
+	epochDuration := time.Duration(6) * time.Duration(32)
 
 	// Here set how many minimal consensus infos you want to have
-	epochDuration := time.Duration(6) * time.Duration(32)
+
+
+	genesisEpochStart := uint64(timeNow.Unix())
+	genesisEpochStart = genesisEpochStart + uint64(epochDuration / 4)
+
 	// Here: define how many epochs you want to define in upfront
 	for index, consensusInfo := range consensusInfosList {
 		currentEpochStart := genesisEpochStart
@@ -207,7 +211,7 @@ func makeGenesis(faucets []*ecdsa.PrivateKey, sealers [32]common2.PublicKey) *co
 		ConsensusInfo: make([]*params.MinimalEpochConsensusInfo, 0),
 	}
 
-	pandoraConfig.ConsensusInfo = append(pandoraConfig.ConsensusInfo, consensusInfosList[0])
+	pandoraConfig.ConsensusInfo = append(pandoraConfig.ConsensusInfo, &params.MinimalEpochConsensusInfo{})
 
 	genesis.Alloc = core.GenesisAlloc{}
 	for _, faucet := range faucets {
@@ -331,7 +335,9 @@ func makeRemoteSealer(
 		rlpHeader, err := hexutil.Decode(rlpHexHeader)
 
 		if nil != err {
-			panic(fmt.Sprintf("could not decode rlpHexHeader, %s", err.Error()))
+			fmt.Printf("\n could not decode rlpHexHeader, %s", err.Error())
+
+			return
 		}
 
 		header := types.Header{}
@@ -436,6 +442,9 @@ func makeRemoteSealer(
 		defer ticker.Stop()
 		turn := 0
 		epoch := 0
+
+		time.Sleep(time.Second)
+		insertFunc(-1)
 
 		for {
 			<-ticker.C

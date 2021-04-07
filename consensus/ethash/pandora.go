@@ -278,6 +278,10 @@ func (pandoraMode *MinimalEpochConsensusInfo) AssignEpochStartFromGenesis(genesi
 	pandoraMode.EpochTimeStartUnix = genesisTimeUnix
 }
 
+func (ethash *Ethash) IsPandoraModeEnabled() (isPandora bool) {
+	return ModePandora == ethash.config.PowMode
+}
+
 func (ethash *Ethash) getMinimalConsensus(header *types.Header) (
 	minimalConsensus *MinimalEpochConsensusInfo,
 	err error,

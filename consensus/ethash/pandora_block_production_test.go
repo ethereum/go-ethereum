@@ -379,6 +379,18 @@ func TestEthash_Prepare_Pandora(t *testing.T) {
 	})
 }
 
+func TestAPI_InsertMinimalConsensusInfo(t *testing.T) {
+	validatorHexStr := "0x9035868e41619fa5ee9fc502f8b021559aac9a14e675f8bc101658be9975cbbaf6d67afbc847dc4171b9f4c32550c43a"
+	validatorHex := hexutil.MustDecode(validatorHexStr)
+	validator, err := herumi.PublicKeyFromBytes(validatorHex)
+	assert.NoError(t, err)
+	assert.Equal(
+		t,
+		"0x9035868e41619fa5ee9fc502f8b021559aac9a14e675f8bc101658be9975cbbaf6d67afbc847dc4171b9f4c32550c43a",
+		hexutil.Encode(validator.Marshal()),
+	)
+}
+
 func TestMinimalEpochConsensusInfo_AssignEpochStartFromGenesis(t *testing.T) {
 	maxIterations := 2 ^ 7
 	genesisTime := time.Now()
