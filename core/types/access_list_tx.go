@@ -42,35 +42,6 @@ func (al AccessList) StorageKeys() int {
 	return sum
 }
 
-// Equal returns true if two AccessLists are equal.
-func (al AccessList) Equal(other AccessList) bool {
-	if len(al) != len(other) {
-		return false
-	}
-	const keyLen = len(common.Address{}) + len(common.Hash{})
-	type keyStruct [keyLen]byte
-	mapping := make(map[keyStruct]struct{})
-	for _, a := range al {
-		for _, k := range a.StorageKeys {
-			var key keyStruct
-			copy(key[:], a.Address.Bytes())
-			copy(key[len(a.Address.Bytes()):], k.Bytes())
-			mapping[key] = struct{}{}
-		}
-	}
-	for _, b := range other {
-		for _, k := range b.StorageKeys {
-			var key keyStruct
-			copy(key[:], b.Address.Bytes())
-			copy(key[len(b.Address.Bytes()):], k.Bytes())
-			if _, ok := mapping[key]; !ok {
-				return false
-			}
-		}
-	}
-	return true
-}
-
 // AccessListTx is the data of EIP-2930 access list transactions.
 type AccessListTx struct {
 	ChainID    *big.Int        // destination chain ID

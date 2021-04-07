@@ -1330,30 +1330,59 @@ func (s *PublicBlockChainAPI) CreateAccessList(ctx context.Context, args SendTxA
 // If the accesslist creation fails an error is returned.
 // If the transaction itself fails, an vmErr is returned.
 func AccessList(ctx context.Context, b Backend, blockNrOrHash rpc.BlockNumberOrHash, args SendTxArgs) (acl types.AccessList, gasUsed uint64, vmErr error, err error) {
+	// Retrieve the execution context
 	db, header, err := b.StateAndHeaderByNumberOrHash(ctx, blockNrOrHash)
 	if db == nil || err != nil {
 		return nil, 0, nil, err
 	}
+	// If the gas amount is not set, extract this as it will depend on access
+	// lists and we'll need to reestimate every time
+	nogas := args.Gas == nil
+
+	// Ensure any missing fields are filled, extract the recipient and input data
 	if err := args.setDefaults(ctx, b); err != nil {
-		// most likely an error in gas estimation, set gas to the block gas limit
-		log.Warn("Setting defaults failed", "error", err)
-		maxGas := hexutil.Uint64(header.GasLimit)
-		args.Gas = &maxGas
+		return nil, 0, nil, err
 	}
-	var (
-		accessList types.AccessList
-		msg        types.Message
-	)
+	var to common.Address
+	if args.To != nil {
+		to = *args.To
+	} else {
+		to = crypto.CreateAddress(args.From, uint64(*args.Nonce))
+	}
+	var input []byte
+	if args.Input != nil {
+		input = *args.Input
+	} else if args.Data != nil {
+		input = *args.Data
+	}
+	// Retrieve the precompiles since they don't need to be added to the access list
+	precompiles := vm.ActivePrecompiles(b.ChainConfig().Rules(header.Number))
+
+	// Create an initial tracer
+	prevTracer := vm.NewAccessListTracer(nil, args.From, to, precompiles)
 	if args.AccessList != nil {
-		accessList = *args.AccessList
+		prevTracer = vm.NewAccessListTracer(*args.AccessList, args.From, to, precompiles)
 	}
 	for {
-		log.Trace("Creating access list", "accesslist", accessList)
+		// Retrieve the current access list to expand
+		accessList := prevTracer.AccessList()
+		log.Trace("Creating access list", "input", accessList)
+
+		// If no gas amount was specified, each unique access list needs it's own
+		// gas calculation. This is quite expensive, but we need to be accurate
+		// and it's convered by the sender only anyway.
+		if nogas {
+			args.Gas = nil
+			if err := args.setDefaults(ctx, b); err != nil {
+				return nil, 0, nil, err // shouldn't happen, just in case
+			}
+		}
 		// Copy the original db so we don't modify it
 		statedb := db.Copy()
-		msg = types.NewMessage(args.From, args.To, uint64(*args.Nonce), args.Value.ToInt(), uint64(*args.Gas), args.GasPrice.ToInt(), *args.Data, accessList, false)
-		// Apply the transaction
-		tracer := vm.NewAccessListTracer(accessList)
+		msg := types.NewMessage(args.From, args.To, uint64(*args.Nonce), args.Value.ToInt(), uint64(*args.Gas), args.GasPrice.ToInt(), input, accessList, false)
+
+		// Apply the transaction with the access list tracer
+		tracer := vm.NewAccessListTracer(accessList, args.From, to, precompiles)
 		config := vm.Config{Tracer: tracer, Debug: true}
 		vmenv, _, err := b.GetEVM(ctx, msg, statedb, header, &config)
 		if err != nil {
@@ -1363,19 +1392,10 @@ func AccessList(ctx context.Context, b Backend, blockNrOrHash rpc.BlockNumberOrH
 		if err != nil {
 			return nil, 0, nil, fmt.Errorf("failed to apply transaction: %v err: %v", args.toTransaction().Hash(), err)
 		}
-		resList := tracer.RawAccessList()
-		if accessList.Equal(resList) {
-			to := args.To
-			// if to is not defined -> create transaction
-			if to == nil {
-				// remove the created contract from the accesslist (if no storage access occurred)
-				contractAddr := crypto.CreateAddress(msg.From(), uint64(*args.Nonce))
-				to = &contractAddr
-			}
-			acl := tracer.AccessList(args.From, to, vmenv.ActivePrecompiles())
-			return acl, res.UsedGas, res.Err, nil
+		if tracer.Equal(prevTracer) {
+			return accessList, res.UsedGas, res.Err, nil
 		}
-		accessList = resList
+		prevTracer = tracer
 	}
 }
 
@@ -1615,7 +1635,6 @@ func (args *SendTxArgs) setDefaults(ctx context.Context, b Backend) error {
 			return errors.New(`contract creation without any data provided`)
 		}
 	}
-
 	// Estimate the gas usage if necessary.
 	if args.Gas == nil {
 		// For backwards-compatibility reason, we try both input and data
@@ -1656,7 +1675,6 @@ func (args *SendTxArgs) toTransaction() *types.Transaction {
 	} else if args.Data != nil {
 		input = *args.Data
 	}
-
 	var data types.TxData
 	if args.AccessList == nil {
 		data = &types.LegacyTx{

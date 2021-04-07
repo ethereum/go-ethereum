@@ -24,152 +24,154 @@ import (
 	"github.com/ethereum/go-ethereum/core/types"
 )
 
-// accessList stores all access to addresses and storage slots.
-type accessList struct {
-	addresses map[common.Address]int
-	slots     []map[common.Hash]struct{}
-}
+// accessList is an accumulator for the set of accounts and storage slots an EVM
+// contract execution touches.
+type accessList map[common.Address]accessListSlots
+
+// accessListSlots is an accumulator for the set of storage slots within a single
+// contract that an EVM contract execution touches.
+type accessListSlots map[common.Hash]struct{}
 
 // newAccessList creates a new accessList.
-func newAccessList() *accessList {
-	return &accessList{
-		addresses: make(map[common.Address]int),
-	}
+func newAccessList() accessList {
+	return make(map[common.Address]accessListSlots)
 }
 
 // addAddress adds an address to the accesslist.
-func (al *accessList) addAddress(address common.Address) {
+func (al accessList) addAddress(address common.Address) {
 	// Set address if not previously present
-	if _, present := al.addresses[address]; !present {
-		al.addresses[address] = -1
+	if _, present := al[address]; !present {
+		al[address] = make(map[common.Hash]struct{})
 	}
 }
 
 // addSlot adds a storage slot to the accesslist.
-func (al *accessList) addSlot(address common.Address, slot common.Hash) {
-	idx, addrPresent := al.addresses[address]
-	if !addrPresent || idx == -1 {
-		// Address not present, or addr present but no slots there
-		al.addresses[address] = len(al.slots)
-		slotmap := map[common.Hash]struct{}{slot: {}}
-		al.slots = append(al.slots, slotmap)
-		return
-	}
-	// There is already an (address,slot) mapping
-	slotmap := al.slots[idx]
-	slotmap[slot] = struct{}{}
-	// No changes require
+func (al accessList) addSlot(address common.Address, slot common.Hash) {
+	// Set address if not previously present
+	al.addAddress(address)
+
+	// Set the slot on the sutely existant storage set
+	al[address][slot] = struct{}{}
 }
 
-// deleteAddressIfNoSlotSet deletes an address from the accesslist if
-// no storage slot was accessed by this address.
-func (al *accessList) deleteAddressIfNoSlotSet(address common.Address) {
-	idx, addrPresent := al.addresses[address]
-	if !addrPresent || idx == -1 {
-		delete(al.addresses, address)
+// equal checks if the content of the current access list is the same as the
+// content of the other one.
+func (al accessList) equal(other accessList) bool {
+	// Cross reference the accounts first
+	if len(al) != len(other) {
+		return false
 	}
-}
-
-// copy creates an independent copy of an accessList.
-func (a *accessList) copy() *accessList {
-	cp := newAccessList()
-	for k, v := range a.addresses {
-		cp.addresses[k] = v
-	}
-	cp.slots = make([]map[common.Hash]struct{}, len(a.slots))
-	for i, slotMap := range a.slots {
-		newSlotmap := make(map[common.Hash]struct{}, len(slotMap))
-		for k := range slotMap {
-			newSlotmap[k] = struct{}{}
+	for addr := range al {
+		if _, ok := other[addr]; !ok {
+			return false
 		}
-		cp.slots[i] = newSlotmap
 	}
-	return cp
+	for addr := range other {
+		if _, ok := al[addr]; !ok {
+			return false
+		}
+	}
+	// Accounts match, cross reference the storage slots too
+	for addr, slots := range al {
+		otherslots := other[addr]
+
+		if len(slots) != len(otherslots) {
+			return false
+		}
+		for hash := range slots {
+			if _, ok := otherslots[hash]; !ok {
+				return false
+			}
+		}
+		for hash := range otherslots {
+			if _, ok := slots[hash]; !ok {
+				return false
+			}
+		}
+	}
+	return true
 }
 
 // accesslist converts the accesslist to a types.AccessList.
-// The accessList internally uses mappings which makes it
-// easier to add and remove values.
-func (a *accessList) accessList() types.AccessList {
-	acl := make(types.AccessList, 0, len(a.addresses))
-	for addr, idx := range a.addresses {
-		var tuple types.AccessTuple
-		tuple.Address = addr
-		// addresses without slots are saved as -1
-		if idx >= 0 {
-			keys := make([]common.Hash, 0, len(a.slots[idx]))
-			for key := range a.slots[idx] {
-				keys = append(keys, key)
-			}
-			tuple.StorageKeys = keys
+func (al accessList) accessList() types.AccessList {
+	acl := make(types.AccessList, 0, len(al))
+	for addr, slots := range al {
+		tuple := types.AccessTuple{Address: addr}
+		for slot := range slots {
+			tuple.StorageKeys = append(tuple.StorageKeys, slot)
 		}
 		acl = append(acl, tuple)
 	}
 	return acl
 }
 
-type accessListTracer struct {
-	list *accessList
+// AccessListTracer is a tracer that accumulates touched accounts and storage
+// slots into an internal set.
+type AccessListTracer struct {
+	excl map[common.Address]struct{} // Set of account to exclude from the list
+	list accessList                  // Set of accounts and storage slots touched
 }
 
 // NewAccessListTracer creates a new tracer that can generate AccessLists.
 // An optional AccessList can be specified to occupy slots and addresses in
 // the resulting accesslist.
-func NewAccessListTracer(acl types.AccessList) *accessListTracer {
+func NewAccessListTracer(acl types.AccessList, from, to common.Address, precompiles []common.Address) *AccessListTracer {
+	excl := map[common.Address]struct{}{
+		from: {}, to: {},
+	}
+	for _, addr := range precompiles {
+		excl[addr] = struct{}{}
+	}
 	list := newAccessList()
 	for _, al := range acl {
-		list.addAddress(al.Address)
+		if _, ok := excl[al.Address]; !ok {
+			list.addAddress(al.Address)
+		}
 		for _, slot := range al.StorageKeys {
 			list.addSlot(al.Address, slot)
 		}
 	}
-	return &accessListTracer{
+	return &AccessListTracer{
+		excl: excl,
 		list: list,
 	}
 }
 
-func (a *accessListTracer) CaptureStart(env *EVM, from common.Address, to common.Address, create bool, input []byte, gas uint64, value *big.Int) {
+func (a *AccessListTracer) CaptureStart(env *EVM, from common.Address, to common.Address, create bool, input []byte, gas uint64, value *big.Int) {
 }
 
 // CaptureState captures all opcodes that touch storage or addresses and adds them to the accesslist.
-func (a *accessListTracer) CaptureState(env *EVM, pc uint64, op OpCode, gas, cost uint64, scope *ScopeContext, rData []byte, depth int, err error) {
+func (a *AccessListTracer) CaptureState(env *EVM, pc uint64, op OpCode, gas, cost uint64, scope *ScopeContext, rData []byte, depth int, err error) {
 	stack := scope.Stack
 	if (op == SLOAD || op == SSTORE) && stack.len() >= 1 {
 		slot := common.Hash(stack.data[stack.len()-1].Bytes32())
 		a.list.addSlot(scope.Contract.Address(), slot)
 	}
 	if (op == EXTCODECOPY || op == EXTCODEHASH || op == EXTCODESIZE || op == BALANCE || op == SELFDESTRUCT) && stack.len() >= 1 {
-		address := common.Address(stack.data[stack.len()-1].Bytes20())
-		a.list.addAddress(address)
+		addr := common.Address(stack.data[stack.len()-1].Bytes20())
+		if _, ok := a.excl[addr]; !ok {
+			a.list.addAddress(addr)
+		}
 	}
 	if (op == DELEGATECALL || op == CALL || op == STATICCALL || op == CALLCODE) && stack.len() >= 5 {
-		address := common.Address(stack.data[stack.len()-2].Bytes20())
-		a.list.addAddress(address)
+		addr := common.Address(stack.data[stack.len()-2].Bytes20())
+		if _, ok := a.excl[addr]; !ok {
+			a.list.addAddress(addr)
+		}
 	}
 }
 
-func (*accessListTracer) CaptureFault(env *EVM, pc uint64, op OpCode, gas, cost uint64, scope *ScopeContext, depth int, err error) {
+func (*AccessListTracer) CaptureFault(env *EVM, pc uint64, op OpCode, gas, cost uint64, scope *ScopeContext, depth int, err error) {
 }
 
-func (*accessListTracer) CaptureEnd(output []byte, gasUsed uint64, t time.Duration, err error) {}
+func (*AccessListTracer) CaptureEnd(output []byte, gasUsed uint64, t time.Duration, err error) {}
 
-// RawAccessList returns the current accesslist maintained by the tracer.
-func (a *accessListTracer) RawAccessList() types.AccessList {
+// AccessList returns the current accesslist maintained by the tracer.
+func (a *AccessListTracer) AccessList() types.AccessList {
 	return a.list.accessList()
 }
 
-// AccessList removes the specified addresses from the
-// accesslist before returning it. The addresses are only removed
-// if no slot has been touched in them, since they are added for free
-// when executing a EIP2930 transaction.
-func (a *accessListTracer) AccessList(sender common.Address, dst *common.Address, precompiles []common.Address) types.AccessList {
-	copy := a.list.copy()
-	copy.deleteAddressIfNoSlotSet(sender)
-	if dst != nil {
-		copy.deleteAddressIfNoSlotSet(*dst)
-	}
-	for _, addr := range precompiles {
-		copy.deleteAddressIfNoSlotSet(addr)
-	}
-	return copy.accessList()
+// Equal returns if the content of two access list traces are equal.
+func (a *AccessListTracer) Equal(other *AccessListTracer) bool {
+	return a.list.equal(other.list)
 }
