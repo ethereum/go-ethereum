@@ -77,6 +77,35 @@ func (w *wizard) deployNode(boot bool) {
 			infos.ethashdir = w.readDefaultString(infos.ethashdir)
 		}
 	}
+	// Potentially use custom version of geth
+	fmt.Println()
+	fmt.Println("Which geth should be used? (default = latest)")
+	fmt.Println(" 1. Use latest release")
+	fmt.Println(" 2. Specify git repository")
+	choice := w.read()
+	switch {
+	case choice == "" || choice == "1":
+		break
+	case choice == "2":
+		fmt.Println()
+		fmt.Println("Where's the git repository? (http/https url)")
+		url := w.readURL()
+
+		switch url.Scheme {
+		case "http", "https":
+			infos.gitRepo = url.String()
+			fmt.Println()
+			fmt.Println("What branch? (default = repository default)")
+			infos.gitBranch = w.readString()
+		default:
+			log.Error("Unsupported git repository URL scheme", "scheme", url.Scheme)
+			return
+		}
+	default:
+		log.Error("That's not something I can do")
+		return
+	}
+
 	// Figure out which port to listen on
 	fmt.Println()
 	fmt.Printf("Which TCP/UDP port to listen on? (default = %d)\n", infos.port)
