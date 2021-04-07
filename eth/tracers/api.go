@@ -67,7 +67,7 @@ type Backend interface {
 	ChainConfig() *params.ChainConfig
 	Engine() consensus.Engine
 	ChainDb() ethdb.Database
-	StateAtBlock(ctx context.Context, block *types.Block, reexec uint64, base *state.StateDB) (*state.StateDB, error)
+	StateAtBlock(ctx context.Context, block *types.Block, reexec uint64, base *state.StateDB, checkLive bool) (*state.StateDB, error)
 	StateAtTransaction(ctx context.Context, block *types.Block, txIndex int, reexec uint64) (core.Message, vm.BlockContext, *state.StateDB, error)
 }
 
@@ -332,8 +332,9 @@ func (api *API) traceChain(ctx context.Context, start, end *types.Block, config 
 				failed = err
 				break
 			}
-			// Prepare the statedb for tracing
-			statedb, err = api.backend.StateAtBlock(localctx, block, reexec, statedb)
+			// Prepare the statedb for tracing. Don't use the live database for
+			// tracing to avoid persisting state junks into the database.
+			statedb, err = api.backend.StateAtBlock(localctx, block, reexec, statedb, false)
 			if err != nil {
 				failed = err
 				break
@@ -487,7 +488,7 @@ func (api *API) traceBlock(ctx context.Context, block *types.Block, config *Trac
 	if config != nil && config.Reexec != nil {
 		reexec = *config.Reexec
 	}
-	statedb, err := api.backend.StateAtBlock(ctx, parent, reexec, nil)
+	statedb, err := api.backend.StateAtBlock(ctx, parent, reexec, nil, false)
 	if err != nil {
 		return nil, err
 	}
@@ -576,7 +577,7 @@ func (api *API) standardTraceBlockToFile(ctx context.Context, block *types.Block
 	if config != nil && config.Reexec != nil {
 		reexec = *config.Reexec
 	}
-	statedb, err := api.backend.StateAtBlock(ctx, parent, reexec, nil)
+	statedb, err := api.backend.StateAtBlock(ctx, parent, reexec, nil, false)
 	if err != nil {
 		return nil, err
 	}
@@ -738,7 +739,7 @@ func (api *API) TraceCall(ctx context.Context, args ethapi.CallArgs, blockNrOrHa
 	if config != nil && config.Reexec != nil {
 		reexec = *config.Reexec
 	}
-	statedb, err := api.backend.StateAtBlock(ctx, block, reexec, nil)
+	statedb, err := api.backend.StateAtBlock(ctx, block, reexec, nil, false)
 	if err != nil {
 		return nil, err
 	}

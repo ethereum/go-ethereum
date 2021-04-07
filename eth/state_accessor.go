@@ -35,13 +35,20 @@ import (
 // are attempted to be reexecuted to generate the desired state. The optional
 // base layer statedb can be passed then it's regarded as the statedb of the
 // parent block.
-func (eth *Ethereum) stateAtBlock(block *types.Block, reexec uint64, base *state.StateDB) (statedb *state.StateDB, err error) {
+func (eth *Ethereum) stateAtBlock(block *types.Block, reexec uint64, base *state.StateDB, checkLive bool) (statedb *state.StateDB, err error) {
 	var (
 		current  *types.Block
 		database state.Database
 		report   = true
 		origin   = block.NumberU64()
 	)
+	// Check the live database first if we have the state fully available, use that.
+	if checkLive {
+		statedb, err = eth.blockchain.StateAt(block.Root())
+		if err == nil {
+			return statedb, nil
+		}
+	}
 	if base != nil {
 		// The optional base statedb is given, mark the start point as parent block
 		statedb, database, report = base, base.Database(), false
@@ -91,7 +98,7 @@ func (eth *Ethereum) stateAtBlock(block *types.Block, reexec uint64, base *state
 			logged = time.Now()
 		}
 		// Retrieve the next block to regenerate and process it
-		next := current.NumberU64()+1
+		next := current.NumberU64() + 1
 		if current = eth.blockchain.GetBlockByNumber(next); current == nil {
 			return nil, fmt.Errorf("block #%d not found", next)
 		}
@@ -134,12 +141,9 @@ func (eth *Ethereum) stateAtTransaction(block *types.Block, txIndex int, reexec 
 	}
 	// Lookup the statedb of parent block from the live database,
 	// otherwise regenerate it on the flight.
-	statedb, err := eth.blockchain.StateAt(parent.Root())
+	statedb, err := eth.stateAtBlock(parent, reexec, nil, true)
 	if err != nil {
-		statedb, err = eth.stateAtBlock(parent, reexec, nil)
-		if err != nil {
-			return nil, vm.BlockContext{}, nil, err
-		}
+		return nil, vm.BlockContext{}, nil, err
 	}
 	if txIndex == 0 && len(block.Transactions()) == 0 {
 		return nil, vm.BlockContext{}, statedb, nil
