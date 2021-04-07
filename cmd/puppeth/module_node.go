@@ -32,12 +32,12 @@ import (
 
 // nodeDockerfile is the Dockerfile required to run an Ethereum node.
 var nodeDockerfile = `
-{{if .Git}}
+{{if .GitRepo}}
 	FROM golang:1.16-alpine as builder
 
 	RUN apk add --no-cache make gcc musl-dev linux-headers git
 
-	RUN git clone {{.GitRepo}} --branch {{.GitBranch}} --single-branch /go-ethereum
+	RUN git clone {{.GitRepo}} {{if .GitBranch}}--branch {{.GitBranch}}{{end}} --depth=1 /go-ethereum
 	RUN cd /go-ethereum && make geth
 
 	FROM alpine:latest
@@ -46,8 +46,7 @@ var nodeDockerfile = `
 	COPY --from=builder /go-ethereum/build/bin/geth /usr/local/bin/
 
 	EXPOSE 8545 8546 30303 30303/udp
-{{end}}
-{{if not .Git}}
+{{else}}
 	FROM ethereum/client-go:latest
 {{end}}
 ADD genesis.json /genesis.json
@@ -128,7 +127,6 @@ func deployNode(client *sshClient, network string, bootnodes []string, config *n
 		"Unlock":    config.keyJSON != "",
 		"GitRepo":   config.gitRepo,
 		"GitBranch": config.gitBranch,
-		"Git":       config.gitRepo != "",
 	})
 	files[filepath.Join(workdir, "Dockerfile")] = dockerfile.Bytes()
 

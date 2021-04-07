@@ -96,7 +96,7 @@ func (w *wizard) deployNode(boot bool) {
 			infos.gitRepo = url.String()
 			fmt.Println()
 			fmt.Println("What branch? (default = repository default)")
-			infos.gitBranch = w.readString()
+			infos.gitBranch = w.readDefaultString("")
 		default:
 			log.Error("Unsupported git repository URL scheme", "scheme", url.Scheme)
 			return
