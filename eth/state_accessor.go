@@ -61,6 +61,16 @@ func (eth *Ethereum) stateAtBlock(block *types.Block, reexec uint64, base *state
 		// the internal junks created by tracing will be persisted into the disk.
 		database = state.NewDatabaseWithConfig(eth.chainDb, &trie.Config{Cache: 16})
 
+		// If we didn't check the dirty database, do check the clean one, otherwise
+		// we would rewind past a persisted block (specific corner case is chain
+		// tracing from the genesis).
+		if !checkLive {
+			statedb, err = state.New(current.Root(), database, nil)
+			if err == nil {
+				return statedb, nil
+			}
+		}
+		// Database does not have the state for the given block, try to regenerate
 		for i := uint64(0); i < reexec; i++ {
 			if current.NumberU64() == 0 {
 				return nil, errors.New("genesis state is missing")
