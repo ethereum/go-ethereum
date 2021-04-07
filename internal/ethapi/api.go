@@ -865,7 +865,7 @@ func DoCall(ctx context.Context, b Backend, args CallArgs, blockNrOrHash rpc.Blo
 
 	// Get a new instance of the EVM.
 	msg := args.ToMessage(globalGasCap)
-	evm, vmError, err := b.GetEVM(ctx, msg, state, header)
+	evm, vmError, err := b.GetEVM(ctx, msg, state, header, nil)
 	if err != nil {
 		return nil, err
 	}
@@ -1303,6 +1303,106 @@ func newRPCTransactionFromBlockHash(b *types.Block, hash common.Hash) *RPCTransa
 	return nil
 }
 
+// accessListResult returns an optional accesslist
+// Its the result of the `debug_createAccessList` RPC call.
+// It contains an error if the transaction itself failed.
+type accessListResult struct {
+	Accesslist *types.AccessList `json:"accessList"`
+	Error      string            `json:"error,omitempty"`
+	GasUsed    hexutil.Uint64    `json:"gasUsed"`
+}
+
+// CreateAccessList creates a EIP-2930 type AccessList for the given transaction.
+// Reexec and BlockNrOrHash can be specified to create the accessList on top of a certain state.
+func (s *PublicBlockChainAPI) CreateAccessList(ctx context.Context, args SendTxArgs, blockNrOrHash *rpc.BlockNumberOrHash) (*accessListResult, error) {
+	bNrOrHash := rpc.BlockNumberOrHashWithNumber(rpc.PendingBlockNumber)
+	if blockNrOrHash != nil {
+		bNrOrHash = *blockNrOrHash
+	}
+	acl, gasUsed, vmerr, err := AccessList(ctx, s.b, bNrOrHash, args)
+	if err != nil {
+		return nil, err
+	}
+	result := &accessListResult{Accesslist: &acl, GasUsed: hexutil.Uint64(gasUsed)}
+	if vmerr != nil {
+		result.Error = vmerr.Error()
+	}
+	return result, nil
+}
+
+// AccessList creates an access list for the given transaction.
+// If the accesslist creation fails an error is returned.
+// If the transaction itself fails, an vmErr is returned.
+func AccessList(ctx context.Context, b Backend, blockNrOrHash rpc.BlockNumberOrHash, args SendTxArgs) (acl types.AccessList, gasUsed uint64, vmErr error, err error) {
+	// Retrieve the execution context
+	db, header, err := b.StateAndHeaderByNumberOrHash(ctx, blockNrOrHash)
+	if db == nil || err != nil {
+		return nil, 0, nil, err
+	}
+	// If the gas amount is not set, extract this as it will depend on access
+	// lists and we'll need to reestimate every time
+	nogas := args.Gas == nil
+
+	// Ensure any missing fields are filled, extract the recipient and input data
+	if err := args.setDefaults(ctx, b); err != nil {
+		return nil, 0, nil, err
+	}
+	var to common.Address
+	if args.To != nil {
+		to = *args.To
+	} else {
+		to = crypto.CreateAddress(args.From, uint64(*args.Nonce))
+	}
+	var input []byte
+	if args.Input != nil {
+		input = *args.Input
+	} else if args.Data != nil {
+		input = *args.Data
+	}
+	// Retrieve the precompiles since they don't need to be added to the access list
+	precompiles := vm.ActivePrecompiles(b.ChainConfig().Rules(header.Number))
+
+	// Create an initial tracer
+	prevTracer := vm.NewAccessListTracer(nil, args.From, to, precompiles)
+	if args.AccessList != nil {
+		prevTracer = vm.NewAccessListTracer(*args.AccessList, args.From, to, precompiles)
+	}
+	for {
+		// Retrieve the current access list to expand
+		accessList := prevTracer.AccessList()
+		log.Trace("Creating access list", "input", accessList)
+
+		// If no gas amount was specified, each unique access list needs it's own
+		// gas calculation. This is quite expensive, but we need to be accurate
+		// and it's convered by the sender only anyway.
+		if nogas {
+			args.Gas = nil
+			if err := args.setDefaults(ctx, b); err != nil {
+				return nil, 0, nil, err // shouldn't happen, just in case
+			}
+		}
+		// Copy the original db so we don't modify it
+		statedb := db.Copy()
+		msg := types.NewMessage(args.From, args.To, uint64(*args.Nonce), args.Value.ToInt(), uint64(*args.Gas), args.GasPrice.ToInt(), input, accessList, false)
+
+		// Apply the transaction with the access list tracer
+		tracer := vm.NewAccessListTracer(accessList, args.From, to, precompiles)
+		config := vm.Config{Tracer: tracer, Debug: true}
+		vmenv, _, err := b.GetEVM(ctx, msg, statedb, header, &config)
+		if err != nil {
+			return nil, 0, nil, err
+		}
+		res, err := core.ApplyMessage(vmenv, msg, new(core.GasPool).AddGas(msg.Gas()))
+		if err != nil {
+			return nil, 0, nil, fmt.Errorf("failed to apply transaction: %v err: %v", args.toTransaction().Hash(), err)
+		}
+		if tracer.Equal(prevTracer) {
+			return accessList, res.UsedGas, res.Err, nil
+		}
+		prevTracer = tracer
+	}
+}
+
 // PublicTransactionPoolAPI exposes methods for the RPC interface
 type PublicTransactionPoolAPI struct {
 	b         Backend
@@ -1539,7 +1639,6 @@ func (args *SendTxArgs) setDefaults(ctx context.Context, b Backend) error {
 			return errors.New(`contract creation without any data provided`)
 		}
 	}
-
 	// Estimate the gas usage if necessary.
 	if args.Gas == nil {
 		// For backwards-compatibility reason, we try both input and data
@@ -1580,7 +1679,6 @@ func (args *SendTxArgs) toTransaction() *types.Transaction {
 	} else if args.Data != nil {
 		input = *args.Data
 	}
-
 	var data types.TxData
 	if args.AccessList == nil {
 		data = &types.LegacyTx{

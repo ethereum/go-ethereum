@@ -42,21 +42,6 @@ type (
 	GetHashFunc func(uint64) common.Hash
 )
 
-// ActivePrecompiles returns the addresses of the precompiles enabled with the current
-// configuration
-func (evm *EVM) ActivePrecompiles() []common.Address {
-	switch {
-	case evm.chainRules.IsBerlin:
-		return PrecompiledAddressesBerlin
-	case evm.chainRules.IsIstanbul:
-		return PrecompiledAddressesIstanbul
-	case evm.chainRules.IsByzantium:
-		return PrecompiledAddressesByzantium
-	default:
-		return PrecompiledAddressesHomestead
-	}
-}
-
 func (evm *EVM) precompile(addr common.Address) (PrecompiledContract, bool) {
 	var precompiles map[common.Address]PrecompiledContract
 	switch {
