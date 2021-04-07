@@ -402,6 +402,7 @@ type Mode uint
 
 const (
 	ModeNormal Mode = iota
+	ModeClassic
 	ModeShared
 	ModeTest
 	ModeFake

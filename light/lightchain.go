@@ -59,6 +59,7 @@ type LightChain struct {
 	chainHeadFeed event.Feed
 	scope         event.SubscriptionScope
 	genesisBlock  *types.Block
+	forker        *core.ForkChoicer
 
 	bodyCache    *lru.Cache // Cache for the most recent block bodies
 	bodyRLPCache *lru.Cache // Cache for the most recent block bodies in RLP encoded format
@@ -77,7 +78,7 @@ type LightChain struct {
 // NewLightChain returns a fully initialised light chain using information
 // available in the database. It initialises the default Ethereum header
 // validator.
-func NewLightChain(odr OdrBackend, config *params.ChainConfig, engine consensus.Engine, checkpoint *params.TrustedCheckpoint) (*LightChain, error) {
+func NewLightChain(odr OdrBackend, config *params.ChainConfig, engine consensus.Engine, checkpoint *params.TrustedCheckpoint, merger *core.Merger) (*LightChain, error) {
 	bodyCache, _ := lru.New(bodyCacheLimit)
 	bodyRLPCache, _ := lru.New(bodyCacheLimit)
 	blockCache, _ := lru.New(blockCacheLimit)
@@ -92,6 +93,10 @@ func NewLightChain(odr OdrBackend, config *params.ChainConfig, engine consensus.
 		blockCache:    blockCache,
 		engine:        engine,
 	}
+	bc.forker = core.NewForkChoicer(bc, merger.LeavedPoW(), nil)
+	merger.SubscribeLeavePoW(func() {
+		bc.forker.SetTransitioned()
+	})
 	var err error
 	bc.hc, err = core.NewHeaderChain(odr.Database(), config, bc.engine, bc.getProcInterrupt)
 	if err != nil {
@@ -396,7 +401,7 @@ func (lc *LightChain) InsertHeaderChain(chain []*types.Header, checkFreq int) (i
 	lc.wg.Add(1)
 	defer lc.wg.Done()
 
-	status, err := lc.hc.InsertHeaderChain(chain, start)
+	status, err := lc.hc.InsertHeaderChain(chain, start, lc.forker)
 	if err != nil || len(chain) == 0 {
 		return 0, err
 	}

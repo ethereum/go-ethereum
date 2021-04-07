@@ -53,7 +53,7 @@ func verifyUnbrokenCanonchain(hc *HeaderChain) error {
 func testInsert(t *testing.T, hc *HeaderChain, chain []*types.Header, wantStatus WriteStatus, wantErr error) {
 	t.Helper()
 
-	status, err := hc.InsertHeaderChain(chain, time.Now())
+	status, err := hc.InsertHeaderChain(chain, time.Now(), nil)
 	if status != wantStatus {
 		t.Errorf("wrong write status from InsertHeaderChain: got %v, want %v", status, wantStatus)
 	}
