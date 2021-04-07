@@ -488,7 +488,7 @@ func (api *API) traceBlock(ctx context.Context, block *types.Block, config *Trac
 	if config != nil && config.Reexec != nil {
 		reexec = *config.Reexec
 	}
-	statedb, err := api.backend.StateAtBlock(ctx, parent, reexec, nil, false)
+	statedb, err := api.backend.StateAtBlock(ctx, parent, reexec, nil, true)
 	if err != nil {
 		return nil, err
 	}
@@ -577,7 +577,7 @@ func (api *API) standardTraceBlockToFile(ctx context.Context, block *types.Block
 	if config != nil && config.Reexec != nil {
 		reexec = *config.Reexec
 	}
-	statedb, err := api.backend.StateAtBlock(ctx, parent, reexec, nil, false)
+	statedb, err := api.backend.StateAtBlock(ctx, parent, reexec, nil, true)
 	if err != nil {
 		return nil, err
 	}
@@ -739,7 +739,7 @@ func (api *API) TraceCall(ctx context.Context, args ethapi.CallArgs, blockNrOrHa
 	if config != nil && config.Reexec != nil {
 		reexec = *config.Reexec
 	}
-	statedb, err := api.backend.StateAtBlock(ctx, block, reexec, nil, false)
+	statedb, err := api.backend.StateAtBlock(ctx, block, reexec, nil, true)
 	if err != nil {
 		return nil, err
 	}
