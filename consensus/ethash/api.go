@@ -147,6 +147,16 @@ func (api *API) InsertMinimalConsensusInfo(
 	}
 
 	for index, validator := range validatorsList {
+		// For genesis slot 0 there is no validator, so we should just simply insert something
+		genesisCheck := index == 0 && epoch == 0
+
+		if genesisCheck {
+			secretKey, _ := herumi.RandKey()
+			consensusInfo.ValidatorsList[index] = secretKey.PublicKey()
+
+			continue
+		}
+
 		pubKey, err := herumi.PublicKeyFromBytes(hexutil.MustDecode(validator))
 
 		if nil != err {
