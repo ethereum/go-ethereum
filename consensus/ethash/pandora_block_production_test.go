@@ -299,7 +299,27 @@ func TestEthash_Prepare_Pandora(t *testing.T) {
 
 	genesisEpoch.AssignEpochStartFromGenesis(genesisStart)
 	genesisEpoch.AssignValidators(validatorPublicList)
-	lruEpochSet.cache.Add(0, genesisEpoch)
+
+	// Mimic payload of higher level api done by epoch extractor
+	ethashAPI := API{ethash: &ethash}
+	validatorsPayload := make([]string, 0)
+
+	for index, validator := range genesisEpoch.ValidatorsList {
+		marshaledKey := validator.Marshal()
+		encodedKey := hexutil.Encode(marshaledKey)
+
+		if 0 == index {
+			encodedKey = "0x"
+		}
+
+		validatorsPayload = append(validatorsPayload, encodedKey)
+	}
+
+	assert.True(t, ethashAPI.InsertMinimalConsensusInfo(0, validatorsPayload, genesisEpoch.EpochTimeStartUnix))
+	genesisFromCache, genesisFetched := lruEpochSet.cache.Get(0)
+	assert.True(t, genesisFetched)
+	minimalConsensusFromCache := genesisFromCache.(*MinimalEpochConsensusInfo)
+	assert.NotEqual(t, genesisEpoch.ValidatorsList[0], minimalConsensusFromCache.ValidatorsList[0])
 
 	header := &types.Header{
 		ParentHash:  common.Hash{},

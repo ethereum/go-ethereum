@@ -275,6 +275,7 @@ func (pandoraMode *MinimalEpochConsensusInfo) AssignEpochStartFromGenesis(genesi
 	slotDuration := pandoraMode.SlotTimeDuration * time.Second
 	timePassed := epochNumber*uint64(slotDuration.Seconds()) + genesisTimeUnix
 	pandoraMode.EpochTimeStart = time.Unix(int64(timePassed), 0)
+	pandoraMode.EpochTimeStartUnix = genesisTimeUnix
 }
 
 func (ethash *Ethash) getMinimalConsensus(header *types.Header) (
