@@ -50,7 +50,7 @@ func (al accessList) addSlot(address common.Address, slot common.Hash) {
 	// Set address if not previously present
 	al.addAddress(address)
 
-	// Set the slot on the sutely existant storage set
+	// Set the slot on the surely existent storage set
 	al[address][slot] = struct{}{}
 }
 
