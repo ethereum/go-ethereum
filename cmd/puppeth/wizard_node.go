@@ -91,16 +91,15 @@ func (w *wizard) deployNode(boot bool) {
 		fmt.Println("Where's the git repository? (http/https url)")
 		url := w.readURL()
 
-		switch url.Scheme {
-		case "http", "https":
-			infos.gitRepo = url.String()
-			fmt.Println()
-			fmt.Println("What branch? (default = repository default)")
-			infos.gitBranch = w.readDefaultString("")
-		default:
+		if url.Scheme != "http" && url.Scheme != "https" {
 			log.Error("Unsupported git repository URL scheme", "scheme", url.Scheme)
 			return
 		}
+		infos.gitRepo = url.String()
+
+		fmt.Println()
+		fmt.Println("What branch? (default = repository default)")
+		infos.gitBranch = w.readDefaultString("")
 	default:
 		log.Error("That's not something I can do")
 		return
