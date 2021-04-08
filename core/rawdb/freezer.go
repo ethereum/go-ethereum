@@ -118,7 +118,7 @@ func newFreezer(datadir string, namespace string, readonly bool) (*freezer, erro
 		trigger:      make(chan chan struct{}),
 		quit:         make(chan struct{}),
 	}
-	for name, disableSnappy := range freezerNoSnappy {
+	for name, disableSnappy := range FreezerNoSnappy {
 		table, err := newTable(datadir, name, readMeter, writeMeter, sizeGauge, disableSnappy)
 		if err != nil {
 			for _, table := range freezer.tables {

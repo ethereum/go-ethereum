@@ -20,6 +20,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"sort"
 	"strconv"
 	"time"
 
@@ -477,16 +478,13 @@ func freezerInspect(ctx *cli.Context) error {
 		return fmt.Errorf("required arguments: %v", ctx.Command.ArgsUsage)
 	}
 	kind := ctx.Args().Get(0)
-	kinds := map[string]bool{
-		"headers":  false,
-		"hashes":   true,
-		"bodies":   false,
-		"receipts": false,
-		"diffs":    true,
-	}
-	if noSnap, ok := kinds[kind]; !ok {
-		return fmt.Errorf("Could read freezer-type: one of 'headers', 'hashes', "+
-			"'bodies','receipts' or 'diffs': %v", kind)
+	if noSnap, ok := rawdb.FreezerNoSnappy[kind]; !ok {
+		var options []string
+		for opt, _ := range rawdb.FreezerNoSnappy {
+			options = append(options, opt)
+		}
+		sort.Strings(options)
+		return fmt.Errorf("Could read freezer-type '%v'. Available options: %v", kind, options)
 	} else {
 		disableSnappy = noSnap
 	}
@@ -495,7 +493,7 @@ func freezerInspect(ctx *cli.Context) error {
 		return err
 	}
 	if end, err = strconv.ParseInt(ctx.Args().Get(2), 10, 64); err != nil {
-		log.Info("Could read end-param", "error", err)
+		log.Info("Could read count param", "error", err)
 		return err
 	}
 	stack, _ := makeConfigNode(ctx)
