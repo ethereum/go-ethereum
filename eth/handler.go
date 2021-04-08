@@ -147,6 +147,9 @@ func newHandler(config *handlerConfig) (*handler, error) {
 		quitSync:   make(chan struct{}),
 		IsCatalyst: config.Catalyst,
 	}
+	if h.IsCatalyst {
+		h.acceptTxs = 1
+	}
 	if config.Sync == downloader.FullSync {
 		// The database seems empty as the current block is the genesis. Yet the fast
 		// block is ahead, so fast sync was enabled for this node at a certain point.
