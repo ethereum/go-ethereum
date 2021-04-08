@@ -152,6 +152,7 @@ func loadGenesis(genesisFile string) (core.Genesis, error) {
 	return gen, nil
 }
 
+
 func blocksFromFile(chainfile string, gblock *types.Block) ([]*types.Block, error) {
 	// Load chain.rlp.
 	fh, err := os.Open(chainfile)

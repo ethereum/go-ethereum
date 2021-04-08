@@ -111,6 +111,18 @@ func (c *Conn) read66() (uint64, Message) {
 		msg = new(Transactions)
 	case (NewPooledTransactionHashes{}).Code():
 		msg = new(NewPooledTransactionHashes)
+	case (GetPooledTransactions{}.Code()):
+		ethMsg := new(eth.GetPooledTransactionsPacket66)
+		if err := rlp.DecodeBytes(rawData, ethMsg); err != nil {
+			return 0, errorf("could not rlp decode message: %v", err)
+		}
+		return ethMsg.RequestId, GetPooledTransactions(ethMsg.GetPooledTransactionsPacket)
+	case (PooledTransactions{}.Code()):
+		ethMsg := new(eth.PooledTransactionsPacket66)
+		if err := rlp.DecodeBytes(rawData, ethMsg); err != nil {
+			return 0, errorf("could not rlp decode message: %v", err)
+		}
+		return ethMsg.RequestId, PooledTransactions(ethMsg.PooledTransactionsPacket)
 	default:
 		msg = errorf("invalid message code: %d", code)
 	}
@@ -122,6 +134,15 @@ func (c *Conn) read66() (uint64, Message) {
 		return 0, msg
 	}
 	return 0, errorf("invalid message: %s", string(rawData))
+}
+
+func (c *Conn) waitForResponse(chain *Chain, timeout time.Duration, requestID uint64) Message {
+	for {
+		id, msg := c.readAndServe66(chain, timeout)
+		if id == requestID {
+			return msg
+		}
+	}
 }
 
 // ReadAndServe serves GetBlockHeaders requests while waiting
@@ -173,27 +194,33 @@ func (s *Suite) testAnnounce66(t *utesting.T, sendConn, receiveConn *Conn, block
 }
 
 func (s *Suite) waitAnnounce66(t *utesting.T, conn *Conn, blockAnnouncement *NewBlock) {
-	timeout := 20 * time.Second
-	_, msg := conn.readAndServe66(s.chain, timeout)
-	switch msg := msg.(type) {
-	case *NewBlock:
-		t.Logf("received NewBlock message: %s", pretty.Sdump(msg.Block))
-		assert.Equal(t,
-			blockAnnouncement.Block.Header(), msg.Block.Header(),
-			"wrong block header in announcement",
-		)
-		assert.Equal(t,
-			blockAnnouncement.TD, msg.TD,
-			"wrong TD in announcement",
-		)
-	case *NewBlockHashes:
-		blockHashes := *msg
-		t.Logf("received NewBlockHashes message: %s", pretty.Sdump(blockHashes))
-		assert.Equal(t, blockAnnouncement.Block.Hash(), blockHashes[0].Hash,
-			"wrong block hash in announcement",
-		)
-	default:
-		t.Fatalf("unexpected: %s", pretty.Sdump(msg))
+	for {
+		_, msg := conn.readAndServe66(s.chain, timeout)
+		switch msg := msg.(type) {
+		case *NewBlock:
+			t.Logf("received NewBlock message: %s", pretty.Sdump(msg.Block))
+			assert.Equal(t,
+				blockAnnouncement.Block.Header(), msg.Block.Header(),
+				"wrong block header in announcement",
+			)
+			assert.Equal(t,
+				blockAnnouncement.TD, msg.TD,
+				"wrong TD in announcement",
+			)
+			return
+		case *NewBlockHashes:
+			blockHashes := *msg
+			t.Logf("received NewBlockHashes message: %s", pretty.Sdump(blockHashes))
+			assert.Equal(t, blockAnnouncement.Block.Hash(), blockHashes[0].Hash,
+				"wrong block hash in announcement",
+			)
+			return
+		case *NewPooledTransactionHashes:
+			// ignore old txs being propagated
+			continue
+		default:
+			t.Fatalf("unexpected: %s", pretty.Sdump(msg))
+		}
 	}
 }
 
@@ -266,5 +293,26 @@ func headersMatch(t *utesting.T, chain *Chain, headers BlockHeaders) {
 		num := header.Number.Uint64()
 		t.Logf("received header (%d): %s", num, pretty.Sdump(header.Hash()))
 		assert.Equal(t, chain.blocks[int(num)].Header(), header)
+	}
+}
+
+func (s *Suite) sendNextBlock66(t *utesting.T) {
+	sendConn, receiveConn := s.setupConnection66(t), s.setupConnection66(t)
+	defer sendConn.Close()
+	defer receiveConn.Close()
+
+	// create new block announcement
+	nextBlock := len(s.chain.blocks)
+	blockAnnouncement := &NewBlock{
+		Block: s.fullChain.blocks[nextBlock],
+		TD:    s.fullChain.TD(nextBlock + 1),
+	}
+	// send announcement and wait for node to request the header
+	s.testAnnounce66(t, sendConn, receiveConn, blockAnnouncement)
+	// update test suite chain
+	s.chain.blocks = append(s.chain.blocks, s.fullChain.blocks[nextBlock])
+	// wait for client to update its chain
+	if err := receiveConn.waitForBlock66(s.chain.Head()); err != nil {
+		t.Fatal(err)
 	}
 }

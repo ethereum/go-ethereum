@@ -19,6 +19,7 @@ package ethtest
 import (
 	"time"
 
+	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/eth/protocols/eth"
@@ -125,22 +126,7 @@ func (s *Suite) TestSimultaneousRequests_66(t *utesting.T) {
 // TestBroadcast_66 tests whether a block announcement is correctly
 // propagated to the given node's peer(s) on the eth66 protocol.
 func (s *Suite) TestBroadcast_66(t *utesting.T) {
-	sendConn, receiveConn := s.setupConnection66(t), s.setupConnection66(t)
-	defer sendConn.Close()
-	defer receiveConn.Close()
-
-	nextBlock := len(s.chain.blocks)
-	blockAnnouncement := &NewBlock{
-		Block: s.fullChain.blocks[nextBlock],
-		TD:    s.fullChain.TD(nextBlock + 1),
-	}
-	s.testAnnounce66(t, sendConn, receiveConn, blockAnnouncement)
-	// update test suite chain
-	s.chain.blocks = append(s.chain.blocks, s.fullChain.blocks[nextBlock])
-	// wait for client to update its chain
-	if err := receiveConn.waitForBlock66(s.chain.Head()); err != nil {
-		t.Fatal(err)
-	}
+	s.sendNextBlock66(t)
 }
 
 // TestGetBlockBodies_66 tests whether the given node can respond to
@@ -425,4 +411,83 @@ func (s *Suite) TestSameRequestID_66(t *utesting.T) {
 	}()
 	// check response from first request
 	headersMatch(t, s.chain, s.getBlockHeaders66(t, conn, req1, reqID))
+}
+
+// TestLargeTxRequest_66 tests whether a node can fulfill a large GetPooledTransactions
+// request.
+func (s *Suite) TestLargeTxRequest_66(t *utesting.T) {
+	// send the next block to ensure the node is no longer syncing and is able to accept
+	// txs
+	s.sendNextBlock66(t)
+	// send 2000 transactions to the node
+	hashMap, txs := generateTxs(t, s, 2000)
+	sendConn := s.setupConnection66(t)
+	defer sendConn.Close()
+
+	sendMultipleSuccessfulTxs(t, s, sendConn, txs)
+	// set up connection to receive to ensure node is peered with the receiving connection
+	// before tx request is sent
+	recvConn := s.setupConnection66(t)
+	defer recvConn.Close()
+	// create and send pooled tx request
+	hashes := make([]common.Hash, 0)
+	for _, hash := range hashMap {
+		hashes = append(hashes, hash)
+	}
+	getTxReq := &eth.GetPooledTransactionsPacket66{
+		RequestId:                   1234,
+		GetPooledTransactionsPacket: hashes,
+	}
+	if err := recvConn.write66(getTxReq, GetPooledTransactions{}.Code()); err != nil {
+		t.Fatalf("could not write to conn: %v", err)
+	}
+	// check that all received transactions match those that were sent to node
+	switch msg := recvConn.waitForResponse(s.chain, timeout, getTxReq.RequestId).(type) {
+	case PooledTransactions:
+		for _, gotTx := range msg {
+			if _, exists := hashMap[gotTx.Hash()]; !exists {
+				t.Fatalf("unexpected tx received: %v", gotTx.Hash())
+			}
+		}
+	default:
+		t.Fatalf("unexpected %s", pretty.Sdump(msg))
+	}
+}
+
+// TestNewPooledTxs_66 tests whether a node will do a GetPooledTransactions
+// request upon receiving a NewPooledTransactionHashes announcement.
+func (s *Suite) TestNewPooledTxs_66(t *utesting.T) {
+	// send the next block to ensure the node is no longer syncing and is able to accept
+	// txs
+	s.sendNextBlock66(t)
+	// generate 50 txs
+	hashMap, _ := generateTxs(t, s, 50)
+	// create new pooled tx hashes announcement
+	hashes := make([]common.Hash, 0)
+	for _, hash := range hashMap {
+		hashes = append(hashes, hash)
+	}
+	announce := NewPooledTransactionHashes(hashes)
+	// send announcement
+	conn := s.setupConnection66(t)
+	defer conn.Close()
+	if err := conn.Write(announce); err != nil {
+		t.Fatalf("could not write to connection: %v", err)
+	}
+	// wait for GetPooledTxs request
+	for {
+		_, msg := conn.readAndServe66(s.chain, timeout)
+		switch msg := msg.(type) {
+		case GetPooledTransactions:
+			if len(msg) != len(hashes) {
+				t.Fatalf("unexpected number of txs requested: wanted %d, got %d", len(hashes), len(msg))
+			}
+			return
+		case *NewPooledTransactionHashes:
+			// ignore propagated txs from old tests
+			continue
+		default:
+			t.Fatalf("unexpected %s", pretty.Sdump(msg))
+		}
+	}
 }
