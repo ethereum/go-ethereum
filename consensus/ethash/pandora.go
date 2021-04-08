@@ -15,7 +15,7 @@ import (
 
 const (
 	// Time expressed in seconds
-	slotTimeDuration = 6
+	SlotTimeDuration = 6
 	validatorListLen = 32
 	signatureSize    = 96
 )
@@ -51,7 +51,7 @@ type MinimalEpochConsensusInfo struct {
 	EpochTimeStartUnix uint64 `json:"epochTimeStart"`
 
 	// Slot time duration
-	SlotTimeDuration time.Duration `json:"slotTimeDuration"`
+	SlotTimeDuration time.Duration `json:"SlotTimeDuration"`
 }
 
 // This is done only to have vanguard spec done in minimal codebase to exchange informations with pandora.
@@ -258,7 +258,7 @@ func (pandora *Pandora) submitWork(nonce types.BlockNonce, mixDigest common.Hash
 func NewMinimalConsensusInfo(epoch uint64) (consensusInfo interface{}) {
 	consensusInfo = &MinimalEpochConsensusInfo{
 		Epoch:            epoch,
-		SlotTimeDuration: slotTimeDuration,
+		SlotTimeDuration: SlotTimeDuration,
 	}
 	return
 }
@@ -310,7 +310,7 @@ func (ethash *Ethash) getMinimalConsensus(header *types.Header) (
 	// Extract epoch
 	headerTime := header.Time
 	relativeTime := headerTime - uint64(genesisStart.Unix())
-	derivedEpoch := int(relativeTime / (pandoraEpochLength * slotTimeDuration))
+	derivedEpoch := int(relativeTime / (pandoraEpochLength * SlotTimeDuration))
 
 	// Get minimal consensus info for counted epoch
 	minimalConsensusCache, okDerived := cache.Get(derivedEpoch)
@@ -366,7 +366,7 @@ func (ethash *Ethash) verifyPandoraHeader(header *types.Header) (err error) {
 	// Check if time slot is within desired boundaries. To consider if needed.
 	// We could maybe have an assumption that cache should be invalidated before use.
 	epochTimeStart := minimalConsensus.EpochTimeStart
-	epochDuration := pandoraEpochLength * time.Duration(slotTimeDuration) * time.Second
+	epochDuration := pandoraEpochLength * time.Duration(SlotTimeDuration) * time.Second
 	epochTimeEnd := epochTimeStart.Add(epochDuration)
 
 	if headerTime < uint64(epochTimeStart.Unix()) || headerTime >= uint64(epochTimeEnd.Unix()) {
@@ -380,7 +380,7 @@ func (ethash *Ethash) verifyPandoraHeader(header *types.Header) (err error) {
 		return
 	}
 
-	extractedProposerIndex := (headerTime - uint64(epochTimeStart.Unix())) / slotTimeDuration
+	extractedProposerIndex := (headerTime - uint64(epochTimeStart.Unix())) / SlotTimeDuration
 
 	// Check to not overflow the index
 	if extractedProposerIndex > uint64(len(minimalConsensus.ValidatorsList)) {
@@ -483,6 +483,14 @@ func (ethash *Ethash) InsertMinimalConsensusInfo(
 	return
 }
 
+func (ethash *Ethash) IsMinimalConsensusPresentForTime(timestamp uint64) (present bool) {
+	header := &types.Header{Time: timestamp}
+	_, err := ethash.getMinimalConsensus(header)
+	present = nil == err
+
+	return
+}
+
 func NewPandoraExtraData(header *types.Header, minimalConsensus *MinimalEpochConsensusInfo) (
 	extraData *PandoraExtraData,
 	err error,
@@ -491,7 +499,7 @@ func NewPandoraExtraData(header *types.Header, minimalConsensus *MinimalEpochCon
 	epochTimeStart := minimalConsensus.EpochTimeStart
 	headerTime := header.Time
 
-	extractedProposerIndex := (headerTime - uint64(epochTimeStart.Unix())) / slotTimeDuration
+	extractedProposerIndex := (headerTime - uint64(epochTimeStart.Unix())) / SlotTimeDuration
 
 	// Check to not overflow the index
 	if extractedProposerIndex > uint64(len(minimalConsensus.ValidatorsList)) {

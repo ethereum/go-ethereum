@@ -106,6 +106,7 @@ const (
 	commitInterruptNone int32 = iota
 	commitInterruptNewHead
 	commitInterruptResubmit
+	commitInterruptNewSlot
 )
 
 // newWorkReq represents a request for new sealing work submitting with relative interrupt notifier.
@@ -416,8 +417,8 @@ func (w *worker) newWorkLoop(recommit time.Duration) {
 	timer := time.NewTimer(0)
 	defer timer.Stop()
 	<-timer.C // discard the initial tick
-
 	ethashEngine, isEthashEngine := w.engine.(*ethash.Ethash)
+	isPandora := isEthashEngine && ethashEngine.IsPandoraModeEnabled()
 
 	// commit aborts in-flight transaction execution with given signal and resubmits a new one.
 	commit := func(noempty bool, s int32) {
@@ -425,11 +426,6 @@ func (w *worker) newWorkLoop(recommit time.Duration) {
 			atomic.StoreInt32(interrupt, s)
 		}
 		interrupt = new(int32)
-
-
-		if isEthashEngine && ethashEngine.IsPandoraModeEnabled() {
-			timestamp = time.Now().Unix()
-		}
 
 		select {
 		case w.newWorkCh <- &newWorkReq{interrupt: interrupt, noempty: noempty, timestamp: timestamp}:
@@ -450,6 +446,45 @@ func (w *worker) newWorkLoop(recommit time.Duration) {
 		w.pendingMu.Unlock()
 	}
 
+	tryInvokePandoraSlotProgression := func() bool {
+		timeToCheck := time.Now().Unix()
+
+		if !isPandora {
+			return false
+		}
+
+		isPandoraReady := ethashEngine.IsMinimalConsensusPresentForTime(uint64(timeToCheck))
+		shouldContinueLoop := !isPandoraReady
+
+		if shouldContinueLoop {
+			log.Warn("Pandora is not ready yet, missing minimal consensus", "timestamp", timeToCheck)
+			return true
+		}
+
+		newTransactions := atomic.LoadInt32(&w.newTxs)
+		newTransactionsCheck := newTransactions == 0
+		timeNow := time.Now().Unix()
+		timestamp = timeNow
+
+		// If new transactions were pushed then try to handle it old way
+		if !newTransactionsCheck {
+			log.Debug("New transactions arrived", "transactionsCount", newTransactions)
+			return false
+		}
+
+		log.Info(
+			"Recommitting work for pandora mode",
+			"timestamp",
+			timestamp,
+			"newTransactions",
+			atomic.LoadInt32(&w.newTxs),
+		)
+
+		commit(true, commitInterruptNewSlot)
+
+		return true
+	}
+
 	for {
 		select {
 		case <-w.startCh:
@@ -463,14 +498,25 @@ func (w *worker) newWorkLoop(recommit time.Duration) {
 			commit(false, commitInterruptNewHead)
 
 		case <-timer.C:
+			// Increase timestamp and commit when no transactions arrived in pandora mode
+			// Ideally it should commit only on new slots
+			if tryInvokePandoraSlotProgression() {
+				log.Info("Skipping slot propagation")
+				timer.Reset(recommit)
+
+				continue
+			}
+
 			// If mining is running resubmit a new work cycle periodically to pull in
 			// higher priced transactions. Disable this overhead for pending blocks.
 			if w.isRunning() && (w.chainConfig.Clique == nil || w.chainConfig.Clique.Period > 0) {
 				// Short circuit if no new transaction arrives.
 				if atomic.LoadInt32(&w.newTxs) == 0 {
+					log.Info("I am skipping recommit, because no new transactions arrived")
 					timer.Reset(recommit)
 					continue
 				}
+
 				commit(true, commitInterruptResubmit)
 			}
 

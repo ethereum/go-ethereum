@@ -183,10 +183,8 @@ func makeGenesis(faucets []*ecdsa.PrivateKey, sealers [32]common2.PublicKey) *co
 	epochDuration := time.Duration(6) * time.Duration(32)
 
 	// Here set how many minimal consensus infos you want to have
-
-
 	genesisEpochStart := uint64(timeNow.Unix())
-	genesisEpochStart = genesisEpochStart + uint64(epochDuration / 4)
+	genesisEpochStart = genesisEpochStart + uint64(epochDuration / 8)
 
 	// Here: define how many epochs you want to define in upfront
 	for index, consensusInfo := range consensusInfosList {
@@ -268,7 +266,7 @@ func makeMiner(
 			GasFloor: genesis.GasLimit * 9 / 10,
 			GasCeil:  genesis.GasLimit * 11 / 10,
 			GasPrice: big.NewInt(1),
-			Recommit: time.Second,
+			Recommit: time.Second * 3,
 		},
 	}
 
@@ -306,7 +304,7 @@ func makeSealerServer(
 			panic(fmt.Sprintf("failed to encode hex header %v", rlpHexHeader))
 		}
 
-		fmt.Printf("\n\n\n\n Elooooo Hex header \n, %s", rlpHeader)
+		log.Info("hex header sent", "rlpHeader", rlpHeader)
 	}))
 
 	url = vanguardServer.URL
@@ -335,7 +333,7 @@ func makeRemoteSealer(
 		rlpHeader, err := hexutil.Decode(rlpHexHeader)
 
 		if nil != err {
-			fmt.Printf("\n could not decode rlpHexHeader, %s", err.Error())
+			log.Warn("could not decode rlpHexHeader", "err", err.Error())
 
 			return
 		}
@@ -366,12 +364,17 @@ func makeRemoteSealer(
 		shouldISign := extractedTurn == uint64(nodeNumber)
 
 		if !shouldISign {
-			fmt.Printf(
-				"\n I am omiting the proposer index: %d for node: %d. ExtractedTurn: %d HeaderTime: %d, EpochTimeStart: %d \n",
+			log.Info(
+				"I am omiting the proposer",
+				"index",
 				extractedProposerIndex,
+				"node",
 				nodeNumber,
+				"extractedTurn",
 				extractedTurn,
+				"headerTime",
 				headerTime,
+				"epochTimeStart",
 				epochTimeStart,
 			)
 
@@ -382,7 +385,7 @@ func makeRemoteSealer(
 		// For now let it sign by default (0) to provide invalid mixDigest in epoch 1
 		if int(extractedProposerIndex) > len(privateKeys) {
 			extractedProposerIndex = extractedProposerIndex % uint64(len(privateKeys))
-			fmt.Printf("\n extracted proposer index %d \n", extractedProposerIndex)
+			log.Info("extracted proposer index", "index", extractedProposerIndex)
 		}
 
 		signature := privateKeys[extractedProposerIndex].Sign(signatureBytes)
@@ -461,12 +464,12 @@ func makeRemoteSealer(
 
 			// Increase the epoch
 			if 0 != turn && 0 == turn%32 {
-				fmt.Printf("I am increasing the epoch from: %d", epoch)
+				log.Info("I am increasing the epoch", "from", epoch, "to", epoch + 1)
 				epoch++
 			}
 
 			if nil != err {
-				fmt.Printf("\n rpcClient got error: %v", err.Error())
+				log.Error("rpcClient got error", "err", err.Error())
 			}
 
 			signerFunc(workInfo, epoch)

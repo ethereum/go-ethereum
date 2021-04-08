@@ -261,6 +261,48 @@ func TestCreateBlockByPandoraAndVanguard(t *testing.T) {
 	})
 }
 
+func TestEthash_IsMinimalConsensusPresentForTime(t *testing.T) {
+	lruCache := newlru("cache", 12, newCache)
+	lruDataset := newlru("dataset", 12, newDataset)
+	lruEpochSet := newlru("epochSet", 12, NewMinimalConsensusInfo)
+
+	ethash := Ethash{
+		caches:   lruCache,
+		datasets: lruDataset,
+		mci:      lruEpochSet,
+		config: Config{
+			// In pandora-vanguard implementation we do not need to increase
+			// nonce and mixHash are sealed/calculated on the Vanguard side
+			PowMode: ModePandora,
+			Log:     log.Root(),
+		},
+		lock:      sync.Mutex{},
+		closeOnce: sync.Once{},
+	}
+	defer func() {
+		_ = ethash.Close()
+	}()
+
+	genesisEpoch := NewMinimalConsensusInfo(0).(*MinimalEpochConsensusInfo)
+	genesisStart := time.Now()
+
+	genesisEpoch.AssignEpochStartFromGenesis(genesisStart)
+	assert.NoError(t, ethash.InsertMinimalConsensusInfo(0, genesisEpoch))
+
+	// Time within an epoch
+	timeWithinAnEpoch := uint64(genesisStart.Add(time.Duration(1)).Unix())
+
+	// Very low unixTime
+	timeBeforeEpoch := uint64(1)
+	// Very high unix time
+	timeAfterEpoch := uint64(genesisStart.Add(time.Duration(6856585) * time.Millisecond).Unix())
+
+	assert.True(t, ethash.IsMinimalConsensusPresentForTime(uint64(genesisStart.Unix())))
+	assert.True(t, ethash.IsMinimalConsensusPresentForTime(timeWithinAnEpoch))
+	assert.False(t, ethash.IsMinimalConsensusPresentForTime(timeBeforeEpoch))
+	assert.False(t, ethash.IsMinimalConsensusPresentForTime(timeAfterEpoch))
+}
+
 func TestEthash_Prepare_Pandora(t *testing.T) {
 	lruCache := newlru("cache", 12, newCache)
 	lruDataset := newlru("dataset", 12, newDataset)
@@ -360,7 +402,7 @@ func TestEthash_Prepare_Pandora(t *testing.T) {
 		t.Run("Should insert consensus infos into cache", func(t *testing.T) {
 			for i := 0; i < 8; i++ {
 				index := i + 1
-				timePassed := uint64(index)*uint64(time.Duration(slotTimeDuration))*uint64(len(validatorPublicList)) + uint64(genesisStart.Unix())
+				timePassed := uint64(index)*uint64(time.Duration(SlotTimeDuration))*uint64(len(validatorPublicList)) + uint64(genesisStart.Unix())
 				minimalConsensusInterface := NewMinimalConsensusInfo(uint64(index))
 				minimalConsensus := minimalConsensusInterface.(*MinimalEpochConsensusInfo)
 				minimalConsensus.EpochTimeStart = time.Unix(int64(timePassed), 0)
@@ -400,7 +442,7 @@ func TestMinimalEpochConsensusInfo_AssignEpochStartFromGenesis(t *testing.T) {
 		consensusInfo := minimalEpochConsensusInfo.(*MinimalEpochConsensusInfo)
 		consensusInfo.AssignEpochStartFromGenesis(genesisTime)
 		epochTimeStart := consensusInfo.EpochTimeStart
-		seconds := time.Duration(slotTimeDuration) * time.Second * time.Duration(i)
+		seconds := time.Duration(SlotTimeDuration) * time.Second * time.Duration(i)
 		expectedEpochTime := genesisTime.Add(seconds)
 		assert.Equal(t, expectedEpochTime.Unix(), epochTimeStart.Unix())
 	}
@@ -458,7 +500,7 @@ func TestVerifySeal(t *testing.T) {
 	t.Run("Should increment over slots in first epoch", func(t *testing.T) {
 		headers := make([]*types.Header, 0)
 		for index, privateKey := range validatorPrivateList {
-			headerTime := genesisEpoch.EpochTimeStart.Add(slotTimeDuration * time.Second * time.Duration(index))
+			headerTime := genesisEpoch.EpochTimeStart.Add(SlotTimeDuration * time.Second * time.Duration(index))
 			// Add additional second to not be on start of the slot
 			randMin := 0
 			randMax := 5
@@ -485,7 +527,7 @@ func TestVerifySeal(t *testing.T) {
 			// Check next epoch
 			nextEpochHeaderNumber := len(validatorPrivateList) + 1
 			headerTime := genesisEpoch.EpochTimeStart.Add(
-				slotTimeDuration * time.Second * time.Duration(nextEpochHeaderNumber))
+				SlotTimeDuration * time.Second * time.Duration(nextEpochHeaderNumber))
 			header, _, _ := generatePandoraSealedHeaderByKey(
 				validatorPrivateList[0],
 				int64(nextEpochHeaderNumber),
@@ -507,7 +549,7 @@ func TestVerifySeal(t *testing.T) {
 		assert.Nil(t, err)
 
 		for index, _ := range validatorPrivateList {
-			headerTime := genesisEpoch.EpochTimeStart.Add(slotTimeDuration * time.Second * time.Duration(index))
+			headerTime := genesisEpoch.EpochTimeStart.Add(SlotTimeDuration * time.Second * time.Duration(index))
 			// Add additional second to not be on start of the slot
 			randMin := 0
 			randMax := 5
