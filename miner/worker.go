@@ -1026,13 +1026,10 @@ func (w *worker) commitNewWork(interrupt *int32, noempty bool, timestamp int64) 
 		return
 	}
 
-	log.Info(fmt.Sprintf("committing header sealhash: %s", w.engine.SealHash(header).String()),
-		"header", header,
-		"sealHash", w.engine.SealHash(header),
-	)
+	silesiaBlock := w.chainConfig.IsSilesia(header.Number)
 
 	// If we are care about TheDAO hard-fork check whether to override the extra-data or not
-	if daoBlock := w.chainConfig.DAOForkBlock; daoBlock != nil {
+	if daoBlock := w.chainConfig.DAOForkBlock; daoBlock != nil && !silesiaBlock {
 		// Check whether the block is among the fork extra-override range
 		limit := new(big.Int).Add(daoBlock, params.DAOForkExtraRange)
 		if header.Number.Cmp(daoBlock) >= 0 && header.Number.Cmp(limit) < 0 {
@@ -1044,6 +1041,12 @@ func (w *worker) commitNewWork(interrupt *int32, noempty bool, timestamp int64) 
 			}
 		}
 	}
+
+	log.Info(fmt.Sprintf("committing header sealhash: %s", w.engine.SealHash(header).String()),
+		"header", header,
+		"sealHash", w.engine.SealHash(header),
+	)
+
 	// Could potentially happen if starting to mine in an odd state.
 	err := w.makeCurrent(parent, header)
 	if err != nil {
@@ -1052,7 +1055,11 @@ func (w *worker) commitNewWork(interrupt *int32, noempty bool, timestamp int64) 
 	}
 	// Create the current work task and check any fork transitions needed
 	env := w.current
-	if w.chainConfig.DAOForkSupport && w.chainConfig.DAOForkBlock != nil && w.chainConfig.DAOForkBlock.Cmp(header.Number) == 0 {
+	isDaoForkSupported := w.chainConfig.DAOForkSupport
+	isDaoForkSupported = isDaoForkSupported && w.chainConfig.DAOForkBlock != nil
+	isDaoForkSupported = isDaoForkSupported && w.chainConfig.DAOForkBlock.Cmp(header.Number) == 0
+
+	if isDaoForkSupported && !silesiaBlock {
 		misc.ApplyDAOHardFork(env.state)
 	}
 	// Accumulate the uncles for the current block
