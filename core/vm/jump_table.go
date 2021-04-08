@@ -57,6 +57,7 @@ var (
 	constantinopleInstructionSet   = newConstantinopleInstructionSet()
 	istanbulInstructionSet         = newIstanbulInstructionSet()
 	berlinInstructionSet           = newBerlinInstructionSet()
+	catalystInstructionSet         = newCatalystInstructionSet()
 )
 
 // JumpTable contains the EVM opcodes supported at a given fork.
