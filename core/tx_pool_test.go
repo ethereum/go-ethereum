@@ -24,6 +24,7 @@ import (
 	"math/big"
 	"math/rand"
 	"os"
+	"sort"
 	"testing"
 	"time"
 
@@ -137,6 +138,10 @@ func validateEvents(events chan NewTxsEvent, count int) error {
 		select {
 		case ev := <-events:
 			received = append(received, ev.Txs...)
+			// Check that they are properly ordered in each batch
+			if !sort.IsSorted(types.TxByPriceAndTime(ev.Txs)) {
+				return fmt.Errorf("feed transcations not sorted")
+			}
 		case <-time.After(time.Second):
 			return fmt.Errorf("event #%d not fired", len(received))
 		}

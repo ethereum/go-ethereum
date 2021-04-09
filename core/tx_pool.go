@@ -1113,6 +1113,7 @@ func (pool *TxPool) runReorg(done chan struct{}, reset *txpoolResetRequest, dirt
 		for _, set := range events {
 			txs = append(txs, set.Flatten()...)
 		}
+		sort.Sort(types.TxByPriceAndTime(txs))
 		pool.txFeed.Send(NewTxsEvent{txs})
 	}
 }
