@@ -462,6 +462,14 @@ func (w *worker) newWorkLoop(recommit time.Duration) {
 			return true
 		}
 
+		isGenesisSlot := ethashEngine.IsInGenesisSlot(uint64(timeToCheck))
+
+		if isGenesisSlot {
+			log.Info("I am omitting genesis slot", "timestamp", timeToCheck)
+			return true
+
+		}
+
 		newTransactions := atomic.LoadInt32(&w.newTxs)
 		newTransactionsCheck := newTransactions == 0
 		timeNow := time.Now().Unix()
@@ -1042,7 +1050,7 @@ func (w *worker) commitNewWork(interrupt *int32, noempty bool, timestamp int64) 
 		}
 	}
 
-	log.Info(fmt.Sprintf("committing header sealhash: %s", w.engine.SealHash(header).String()),
+	log.Debug(fmt.Sprintf("committing header sealhash: %s", w.engine.SealHash(header).String()),
 		"header", header,
 		"sealHash", w.engine.SealHash(header),
 	)
@@ -1146,7 +1154,7 @@ func (w *worker) commit(uncles []*types.Header, interval func(), update bool, st
 		select {
 		case w.taskCh <- &task{receipts: receipts, state: s, block: block, createdAt: time.Now()}:
 			w.unconfirmed.Shift(block.NumberU64() - 1)
-			log.Info("Commit new mining work", "number", block.Number(), "sealhash", w.engine.SealHash(block.Header()),
+			log.Debug("Commit new mining work", "number", block.Number(), "sealhash", w.engine.SealHash(block.Header()),
 				"header", block.Header(),
 				"uncles", len(uncles), "txs", w.current.tcount,
 				"gas", block.GasUsed(), "fees", totalFees(block, receipts),

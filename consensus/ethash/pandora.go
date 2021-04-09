@@ -355,6 +355,40 @@ func (ethash *Ethash) PreparePandoraHeader(header *types.Header) (err error) {
 	return
 }
 
+func (pandoraMode *MinimalEpochConsensusInfo) extractValidator(timestamp uint64) (
+	err error,
+	extractedTurn uint64,
+	validator common2.PublicKey,
+) {
+	epochTimeStart := pandoraMode.EpochTimeStart
+	epochDuration := pandoraEpochLength * time.Duration(SlotTimeDuration) * time.Second
+	epochTimeEnd := epochTimeStart.Add(epochDuration)
+
+	if timestamp < uint64(epochTimeStart.Unix()) || timestamp >= uint64(epochTimeEnd.Unix()) {
+		err = fmt.Errorf(
+			"time not within expected boundary. Got: %d, and should be from: %d to: %d",
+			timestamp,
+			epochTimeStart.Unix(),
+			epochTimeEnd.Unix(),
+		)
+
+		return
+	}
+
+	extractedTurn = (timestamp - uint64(epochTimeStart.Unix())) / SlotTimeDuration
+
+	// Check to not overflow the index
+	if extractedTurn > uint64(len(pandoraMode.ValidatorsList)) {
+		err = fmt.Errorf("extracted validator index overflows validator length")
+
+		return
+	}
+
+	validator = pandoraMode.ValidatorsList[extractedTurn]
+
+	return
+}
+
 func (ethash *Ethash) verifyPandoraHeader(header *types.Header) (err error) {
 	headerTime := header.Time
 	minimalConsensus, err := ethash.getMinimalConsensus(header)
@@ -365,31 +399,12 @@ func (ethash *Ethash) verifyPandoraHeader(header *types.Header) (err error) {
 
 	// Check if time slot is within desired boundaries. To consider if needed.
 	// We could maybe have an assumption that cache should be invalidated before use.
-	epochTimeStart := minimalConsensus.EpochTimeStart
-	epochDuration := pandoraEpochLength * time.Duration(SlotTimeDuration) * time.Second
-	epochTimeEnd := epochTimeStart.Add(epochDuration)
+	err, _, publicKey := minimalConsensus.extractValidator(headerTime)
 
-	if headerTime < uint64(epochTimeStart.Unix()) || headerTime >= uint64(epochTimeEnd.Unix()) {
-		err = fmt.Errorf(
-			"header time not within expected boundary. Got: %d, and should be from: %d to: %d",
-			headerTime,
-			epochTimeStart.Unix(),
-			epochTimeEnd.Unix(),
-		)
-
+	if nil != err {
 		return
 	}
 
-	extractedProposerIndex := (headerTime - uint64(epochTimeStart.Unix())) / SlotTimeDuration
-
-	// Check to not overflow the index
-	if extractedProposerIndex > uint64(len(minimalConsensus.ValidatorsList)) {
-		err = fmt.Errorf("extracted validator index overflows validator length")
-
-		return
-	}
-
-	publicKey := minimalConsensus.ValidatorsList[extractedProposerIndex]
 	pandoraExtraDataSealed := new(PandoraExtraDataSealed)
 	err = rlp.DecodeBytes(header.Extra, pandoraExtraDataSealed)
 
@@ -491,6 +506,31 @@ func (ethash *Ethash) IsMinimalConsensusPresentForTime(timestamp uint64) (presen
 	return
 }
 
+func (ethash *Ethash) IsInGenesisSlot(timestamp uint64) (isGenesisSlot bool) {
+	mci := ethash.mci
+	mciCache := mci.cache
+	genesisInfo, present := mciCache.Get(0)
+
+	if !present {
+		return
+	}
+
+	minimalConsensusInfo := genesisInfo.(*MinimalEpochConsensusInfo)
+	epoch := minimalConsensusInfo.Epoch
+
+	if 0 != epoch {
+		return
+	}
+
+	err, index, _ := minimalConsensusInfo.extractValidator(timestamp)
+
+	if nil != err {
+		return
+	}
+
+	return index == 0
+}
+
 func NewPandoraExtraData(header *types.Header, minimalConsensus *MinimalEpochConsensusInfo) (
 	extraData *PandoraExtraData,
 	err error,
@@ -499,19 +539,19 @@ func NewPandoraExtraData(header *types.Header, minimalConsensus *MinimalEpochCon
 	epochTimeStart := minimalConsensus.EpochTimeStart
 	headerTime := header.Time
 
-	extractedProposerIndex := (headerTime - uint64(epochTimeStart.Unix())) / SlotTimeDuration
+	extractedTurn := (headerTime - uint64(epochTimeStart.Unix())) / SlotTimeDuration
 
 	// Check to not overflow the index
-	if extractedProposerIndex > uint64(len(minimalConsensus.ValidatorsList)) {
+	if extractedTurn > uint64(len(minimalConsensus.ValidatorsList)) {
 		err = fmt.Errorf("extracted validator index overflows validator length")
 
 		return
 	}
 
 	extraData = &PandoraExtraData{
-		Slot:          uint64(len(minimalConsensus.ValidatorsList))*derivedEpoch + extractedProposerIndex,
+		Slot:          uint64(len(minimalConsensus.ValidatorsList))*derivedEpoch + extractedTurn,
 		Epoch:         derivedEpoch,
-		ProposerIndex: extractedProposerIndex,
+		ProposerIndex: extractedTurn,
 	}
 
 	return
