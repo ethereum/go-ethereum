@@ -613,7 +613,7 @@ func (ethash *Ethash) SealHash(header *types.Header) (hash common.Hash) {
 		pandoraExtraData.FromHeader(header)
 		headerExtra := new(PandoraExtraData)
 		headerExtra.Epoch = pandoraExtraData.Epoch
-		headerExtra.ProposerIndex = pandoraExtraData.ProposerIndex
+		headerExtra.Turn = pandoraExtraData.Turn
 		headerExtra.Slot = pandoraExtraData.Slot
 		extraData, _ = rlp.EncodeToBytes(headerExtra)
 	}

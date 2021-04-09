@@ -184,7 +184,7 @@ func makeGenesis(faucets []*ecdsa.PrivateKey, sealers [32]common2.PublicKey) *co
 
 	// Here set how many minimal consensus infos you want to have
 	genesisEpochStart := uint64(timeNow.Unix())
-	genesisEpochStart = genesisEpochStart + uint64(epochDuration / 8)
+	genesisEpochStart = genesisEpochStart + uint64(epochDuration/8)
 
 	// Here: define how many epochs you want to define in upfront
 	for index, consensusInfo := range consensusInfosList {
@@ -359,19 +359,19 @@ func makeRemoteSealer(
 
 		// Derive privateKey..
 		headerTime := header.Time
-		extractedProposerIndex := (headerTime - epochTimeStart) / slotTimeDuration
-		extractedTurn := extractedProposerIndex % numOfNodes
-		shouldISign := extractedTurn == uint64(nodeNumber)
+		extractedTurn := (headerTime - epochTimeStart) / slotTimeDuration
+		extractedNodeTurn := extractedTurn % numOfNodes
+		shouldISign := extractedNodeTurn == uint64(nodeNumber)
 
 		if !shouldISign {
 			log.Info(
 				"I am omiting the proposer",
 				"index",
-				extractedProposerIndex,
+				extractedTurn,
 				"node",
 				nodeNumber,
-				"extractedTurn",
-				extractedTurn,
+				"extractedNodeTurn",
+				extractedNodeTurn,
 				"headerTime",
 				headerTime,
 				"epochTimeStart",
@@ -383,12 +383,12 @@ func makeRemoteSealer(
 
 		// Epoch passed, try to fallback
 		// For now let it sign by default (0) to provide invalid mixDigest in epoch 1
-		if int(extractedProposerIndex) > len(privateKeys) {
-			extractedProposerIndex = extractedProposerIndex % uint64(len(privateKeys))
-			log.Info("extracted proposer index", "index", extractedProposerIndex)
+		if int(extractedTurn) > len(privateKeys) {
+			extractedTurn = extractedTurn % uint64(len(privateKeys))
+			log.Info("extracted proposer index", "index", extractedTurn)
 		}
 
-		signature := privateKeys[extractedProposerIndex].Sign(signatureBytes)
+		signature := privateKeys[extractedTurn].Sign(signatureBytes)
 
 		// Cast to []byte from [32]byte. This should prevent cropping
 		blsSignatureBytes := signature.Marshal()
@@ -464,7 +464,7 @@ func makeRemoteSealer(
 
 			// Increase the epoch
 			if 0 != turn && 0 == turn%32 {
-				log.Info("I am increasing the epoch", "from", epoch, "to", epoch + 1)
+				log.Info("I am increasing the epoch", "from", epoch, "to", epoch+1)
 				epoch++
 			}
 

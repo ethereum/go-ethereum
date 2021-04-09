@@ -29,9 +29,9 @@ type Pandora struct {
 type BlsSignatureBytes [signatureSize]byte
 
 type PandoraExtraData struct {
-	Slot          uint64
-	Epoch         uint64
-	ProposerIndex uint64
+	Slot  uint64
+	Epoch uint64
+	Turn  uint64
 }
 
 type PandoraExtraDataSealed struct {
@@ -549,9 +549,9 @@ func NewPandoraExtraData(header *types.Header, minimalConsensus *MinimalEpochCon
 	}
 
 	extraData = &PandoraExtraData{
-		Slot:          uint64(len(minimalConsensus.ValidatorsList))*derivedEpoch + extractedTurn,
-		Epoch:         derivedEpoch,
-		ProposerIndex: extractedTurn,
+		Slot:  uint64(len(minimalConsensus.ValidatorsList))*derivedEpoch + extractedTurn,
+		Epoch: derivedEpoch,
+		Turn:  extractedTurn,
 	}
 
 	return

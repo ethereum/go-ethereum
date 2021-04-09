@@ -507,9 +507,9 @@ func TestVerifySeal(t *testing.T) {
 			randomInterval := mathRand.Intn(randMax-randMin) + randMin
 			headerTime = headerTime.Add(time.Second * time.Duration(randomInterval))
 			extraData := &PandoraExtraData{
-				Slot:          uint64(index),
-				Epoch:         uint64(0),
-				ProposerIndex: uint64(index),
+				Slot:  uint64(index),
+				Epoch: uint64(0),
+				Turn:  uint64(index),
 			}
 			header, _, _ := generatePandoraSealedHeaderByKey(privateKey, int64(index), headerTime, extraData)
 			headers = append(headers, header)
