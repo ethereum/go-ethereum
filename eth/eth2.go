@@ -51,7 +51,7 @@ type eth2bpenv struct {
 	receipts []*types.Receipt
 }
 
-func (api *Eth2API) commitTransaction(tx *types.Transaction, coinbase common.Address, bcParentRoots []common.Hash, randao common.Hash) error {
+func (api *Eth2API) commitTransaction(tx *types.Transaction, coinbase common.Address) error {
 	//snap := eth2rpc.current.state.Snapshot()
 
 	chain := api.eth.BlockChain()
@@ -80,12 +80,9 @@ func (api *Eth2API) makeEnv(parent *types.Block, header *types.Header) error {
 }
 
 // Structure described at https://hackmd.io/T9x2mMA4S7us8tJwEB3FDQ
-type ProduceBlockParams struct {
-	ParentHash             common.Hash   `json:"parent_hash"`
-	RandaoMix              common.Hash   `json:"randao_mix"`
-	Slot                   uint64        `json:"slot"`
-	Timestamp              uint64        `json:"timestamp"`
-	RecentBeaconBlockRoots []common.Hash `json:"recent_beacon_block_roots"`
+type AssembleBlockParams struct {
+	ParentHash common.Hash `json:"parent_hash"`
+	Timestamp  uint64      `json:"timestamp"`
 }
 
 // Structure described at https://ethresear.ch/t/executable-beacon-chain/8271
@@ -102,9 +99,9 @@ type ExecutableData struct {
 	Difficulty   *big.Int             `json:"difficulty"`
 }
 
-// ProduceBlock creates a new block, inserts it into the chain, and returns the "execution
+// AssembleBlock creates a new block, inserts it into the chain, and returns the "execution
 // data" required for eth2 clients to process the new block.
-func (api *Eth2API) ProduceBlock(params ProduceBlockParams) (*ExecutableData, error) {
+func (api *Eth2API) AssembleBlock(params AssembleBlockParams) (*ExecutableData, error) {
 	log.Info("Produce block", "parentHash", params.ParentHash)
 
 	bc := api.eth.BlockChain()
@@ -170,7 +167,7 @@ func (api *Eth2API) ProduceBlock(params ProduceBlockParams) (*ExecutableData, er
 
 		// Execute the transaction
 		api.env.state.Prepare(tx.Hash(), common.Hash{}, api.env.tcount)
-		err := api.commitTransaction(tx, coinbase, params.RecentBeaconBlockRoots, params.RandaoMix)
+		err := api.commitTransaction(tx, coinbase)
 		switch err {
 		case core.ErrGasLimitReached:
 			// Pop the current out-of-gas transaction without shifting in the next from the account
@@ -242,7 +239,7 @@ func (api *Eth2API) ProduceBlock(params ProduceBlockParams) (*ExecutableData, er
 }
 
 // Structure described at https://hackmd.io/T9x2mMA4S7us8tJwEB3FDQ
-type InsertBlockParams struct {
+type NewBlockParams struct {
 	RandaoMix              common.Hash    `json:"randao_mix"`
 	Slot                   uint64         `json:"slot"`
 	Timestamp              uint64         `json:"timestamp"`
@@ -252,7 +249,7 @@ type InsertBlockParams struct {
 
 var zeroNonce [8]byte
 
-func insertBlockParamsToBlock(params InsertBlockParams, number *big.Int) *types.Block {
+func insertBlockParamsToBlock(params NewBlockParams, number *big.Int) *types.Block {
 	header := &types.Header{
 		ParentHash:  params.ExecutableData.ParentHash,
 		UncleHash:   types.EmptyUncleHash,
@@ -275,10 +272,10 @@ func insertBlockParamsToBlock(params InsertBlockParams, number *big.Int) *types.
 	return block
 }
 
-// InsertBlock creates an Eth1 block, inserts it in the chain, and either returns true,
+// NewBlock creates an Eth1 block, inserts it in the chain, and either returns true,
 // or false + an error. This is a bit redundant for go, but simplifies things on the
 // eth2 side.
-func (api *Eth2API) InsertBlock(params InsertBlockParams) (bool, error) {
+func (api *Eth2API) NewBlock(params NewBlockParams) (bool, error) {
 	// compute block number as parent.number + 1
 	parent := api.eth.BlockChain().GetBlockByHash(params.ExecutableData.ParentHash)
 	if parent == nil {

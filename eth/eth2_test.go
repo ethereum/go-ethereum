@@ -81,7 +81,7 @@ func generateTestChainWithFork(n int, fork int) (*core.Genesis, []*types.Block, 
 	return genesis, blocks, forkedBlocks
 }
 
-func TestEth2ProduceBlock(t *testing.T) {
+func TestEth2AssembleBlock(t *testing.T) {
 	genesis, blocks := generateTestChain()
 
 	n, err := node.New(&node.Config{})
@@ -107,12 +107,11 @@ func TestEth2ProduceBlock(t *testing.T) {
 		t.Fatalf("error signing transaction, err=%v", err)
 	}
 	ethservice.txPool.AddLocal(tx)
-	blockParams := ProduceBlockParams{
+	blockParams := AssembleBlockParams{
 		ParentHash: blocks[8].ParentHash(),
-		Slot:       blocks[8].NumberU64(),
 		Timestamp:  blocks[8].Time(),
 	}
-	execData, err := api.ProduceBlock(blockParams)
+	execData, err := api.AssembleBlock(blockParams)
 
 	if err != nil {
 		t.Fatalf("error producing block, err=%v", err)
@@ -123,7 +122,7 @@ func TestEth2ProduceBlock(t *testing.T) {
 	}
 }
 
-func TestEth2ProduceBlockWithAnotherBlocksTxs(t *testing.T) {
+func TestEth2AssembleBlockWithAnotherBlocksTxs(t *testing.T) {
 	genesis, blocks := generateTestChain()
 
 	n, err := node.New(&node.Config{})
@@ -146,12 +145,11 @@ func TestEth2ProduceBlockWithAnotherBlocksTxs(t *testing.T) {
 
 	// Put the 10th block's tx in the pool and produce a new block
 	api.addBlockTxs(blocks[9])
-	blockParams := ProduceBlockParams{
+	blockParams := AssembleBlockParams{
 		ParentHash: blocks[9].ParentHash(),
-		Slot:       blocks[9].NumberU64(),
 		Timestamp:  blocks[9].Time(),
 	}
-	execData, err := api.ProduceBlock(blockParams)
+	execData, err := api.AssembleBlock(blockParams)
 	if err != nil {
 		t.Fatalf("error producing block, err=%v", err)
 	}
@@ -161,7 +159,7 @@ func TestEth2ProduceBlockWithAnotherBlocksTxs(t *testing.T) {
 	}
 }
 
-func TestEth2InsertBlock(t *testing.T) {
+func TestEth2NewBlock(t *testing.T) {
 	genesis, blocks, forkedBlocks := generateTestChainWithFork(10, 4)
 
 	n, err := node.New(&node.Config{})
@@ -181,7 +179,7 @@ func TestEth2InsertBlock(t *testing.T) {
 
 	api := NewEth2API(ethservice)
 	for i := 5; i < 10; i++ {
-		p := InsertBlockParams{
+		p := NewBlockParams{
 			Slot:      blocks[i].NumberU64(),
 			Timestamp: blocks[i].Time(),
 			ExecutableData: ExecutableData{
@@ -197,7 +195,7 @@ func TestEth2InsertBlock(t *testing.T) {
 				BlockHash:    blocks[i].Hash(),
 			},
 		}
-		success, err := api.InsertBlock(p)
+		success, err := api.NewBlock(p)
 		if err != nil || !success {
 			t.Fatalf("Failed to insert block: %v", err)
 		}
@@ -208,7 +206,7 @@ func TestEth2InsertBlock(t *testing.T) {
 	lastBlock := blocks[4]
 	for i := 0; i < 4; i++ {
 		lastBlockNum.Add(lastBlockNum, big.NewInt(1))
-		p := InsertBlockParams{
+		p := NewBlockParams{
 			Slot:      lastBlockNum.Uint64(),
 			Timestamp: forkedBlocks[i].Time(),
 			ExecutableData: ExecutableData{
@@ -224,7 +222,7 @@ func TestEth2InsertBlock(t *testing.T) {
 				BlockHash:    forkedBlocks[i].Hash(),
 			},
 		}
-		success, err := api.InsertBlock(p)
+		success, err := api.NewBlock(p)
 		if err != nil || !success {
 			t.Fatalf("Failed to insert forked block #%d: %v", i, err)
 		}
@@ -259,7 +257,7 @@ func TestEth2InsertBlock(t *testing.T) {
 //for i := 5; i < 10; i++ {
 //var blockRLP bytes.Buffer
 //rlp.Encode(&blockRLP, blocks[i])
-//err := api.InsertBlock(blockRLP.Bytes())
+//err := api.NewBlock(blockRLP.Bytes())
 //if err != nil {
 //t.Fatalf("Failed to insert block: %v", err)
 //}
@@ -273,7 +271,7 @@ func TestEth2InsertBlock(t *testing.T) {
 //for i := 0; i < 3; i++ {
 //var blockRLP bytes.Buffer
 //rlp.Encode(&blockRLP, forkedBlocks[i])
-//err := api.InsertBlock(blockRLP.Bytes())
+//err := api.NewBlock(blockRLP.Bytes())
 //if err != nil {
 //t.Fatalf("Failed to insert block: %v", err)
 //}
