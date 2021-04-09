@@ -558,6 +558,6 @@ func (pool *TxPool) MevBundles(blockNumber *big.Int, blockTimestamp uint64) ([]t
 }
 
 // AddMevBundle adds a mev bundle to the pool
-func (pool *TxPool) AddMevBundle(txs types.Transactions, blockNumber *big.Int, minTimestamp uint64, maxTimestamp uint64) error {
+func (pool *TxPool) AddMevBundle(txs types.Transactions, blockNumber *big.Int, minTimestamp uint64, maxTimestamp uint64, revertingTxHashes []common.Hash) error {
 	return nil
 }

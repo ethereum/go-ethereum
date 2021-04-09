@@ -254,7 +254,7 @@ type TxPool struct {
 	pending    map[common.Address]*txList   // All currently processable transactions
 	queue      map[common.Address]*txList   // Queued but non-processable transactions
 	beats      map[common.Address]time.Time // Last heartbeat from each known account
-	mevBundles []mevBundle
+	mevBundles []types.MevBundle
 	all        *txLookup     // All transactions to allow lookups
 	priced     *txPricedList // All transactions sorted by price
 
@@ -559,53 +559,54 @@ func (pool *TxPool) Pending(enforceTips bool) map[common.Address]types.Transacti
 }
 
 /// AllMevBundles returns all the MEV Bundles currently in the pool
-func (pool *TxPool) AllMevBundles() []mevBundle {
+func (pool *TxPool) AllMevBundles() []types.MevBundle {
 	return pool.mevBundles
 }
 
 // MevBundles returns a list of bundles valid for the given blockNumber/blockTimestamp
 // also prunes bundles that are outdated
-func (pool *TxPool) MevBundles(blockNumber *big.Int, blockTimestamp uint64) ([]types.Transactions, error) {
+func (pool *TxPool) MevBundles(blockNumber *big.Int, blockTimestamp uint64) ([]types.MevBundle, error) {
 	pool.mu.Lock()
 	defer pool.mu.Unlock()
 
 	// returned values
-	var txBundles []types.Transactions
+	var ret []types.MevBundle
 	// rolled over values
-	var bundles []mevBundle
+	var bundles []types.MevBundle
 
 	for _, bundle := range pool.mevBundles {
 		// Prune outdated bundles
-		if (bundle.maxTimestamp != 0 && blockTimestamp > bundle.maxTimestamp) || blockNumber.Cmp(bundle.blockNumber) > 0 {
+		if (bundle.MaxTimestamp != 0 && blockTimestamp > bundle.MaxTimestamp) || blockNumber.Cmp(bundle.BlockNumber) > 0 {
 			continue
 		}
 
 		// Roll over future bundles
-		if (bundle.minTimestamp != 0 && blockTimestamp < bundle.minTimestamp) || blockNumber.Cmp(bundle.blockNumber) < 0 {
+		if (bundle.MinTimestamp != 0 && blockTimestamp < bundle.MinTimestamp) || blockNumber.Cmp(bundle.BlockNumber) < 0 {
 			bundles = append(bundles, bundle)
 			continue
 		}
 
 		// return the ones which are in time
-		txBundles = append(txBundles, bundle.txs)
+		ret = append(ret, bundle)
 		// keep the bundles around internally until they need to be pruned
 		bundles = append(bundles, bundle)
 	}
 
 	pool.mevBundles = bundles
-	return txBundles, nil
+	return ret, nil
 }
 
 // AddMevBundle adds a mev bundle to the pool
-func (pool *TxPool) AddMevBundle(txs types.Transactions, blockNumber *big.Int, minTimestamp, maxTimestamp uint64) error {
+func (pool *TxPool) AddMevBundle(txs types.Transactions, blockNumber *big.Int, minTimestamp, maxTimestamp uint64, revertingTxHashes []common.Hash) error {
 	pool.mu.Lock()
 	defer pool.mu.Unlock()
 
-	pool.mevBundles = append(pool.mevBundles, mevBundle{
-		txs:          txs,
-		blockNumber:  blockNumber,
-		minTimestamp: minTimestamp,
-		maxTimestamp: maxTimestamp,
+	pool.mevBundles = append(pool.mevBundles, types.MevBundle{
+		Txs:               txs,
+		BlockNumber:       blockNumber,
+		MinTimestamp:      minTimestamp,
+		MaxTimestamp:      maxTimestamp,
+		RevertingTxHashes: revertingTxHashes,
 	})
 	return nil
 }

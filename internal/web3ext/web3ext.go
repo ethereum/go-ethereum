@@ -579,7 +579,7 @@ web3._extend({
 		new web3._extend.Method({
 			name: 'sendBundle',
 			call: 'eth_sendBundle',
-			params: 4
+			params: 1
 		}),
 	],
 	properties: [
