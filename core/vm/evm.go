@@ -76,11 +76,6 @@ func run(evm *EVM, contract *Contract, input []byte, readOnly bool) ([]byte, err
 	return nil, errors.New("no compatible interpreter")
 }
 
-type BeaconChainContext struct {
-	BeaconRoots []common.Hash // Provides information for BEACONSTATEROOT
-	RandaoMix   common.Hash   // Provides information for RANDAOMIX
-}
-
 // BlockContext provides the EVM with auxiliary information. Once provided
 // it shouldn't be modified.
 type BlockContext struct {
@@ -98,8 +93,6 @@ type BlockContext struct {
 	BlockNumber *big.Int       // Provides information for NUMBER
 	Time        *big.Int       // Provides information for TIME
 	Difficulty  *big.Int       // Provides information for DIFFICULTY
-
-	BeaconCtx *BeaconChainContext // Provides eth2-specific information
 }
 
 // TxContext provides the EVM with information about a transaction.

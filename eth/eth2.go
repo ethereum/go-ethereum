@@ -25,7 +25,6 @@ import (
 	"github.com/ethereum/go-ethereum/core"
 	"github.com/ethereum/go-ethereum/core/state"
 	"github.com/ethereum/go-ethereum/core/types"
-	"github.com/ethereum/go-ethereum/core/vm"
 	"github.com/ethereum/go-ethereum/log"
 	chainParams "github.com/ethereum/go-ethereum/params"
 	"github.com/ethereum/go-ethereum/trie"
@@ -56,7 +55,7 @@ func (api *Eth2API) commitTransaction(tx *types.Transaction, coinbase common.Add
 	//snap := eth2rpc.current.state.Snapshot()
 
 	chain := api.eth.BlockChain()
-	receipt, err := core.ApplyTransaction(chain.Config(), chain, &coinbase, api.env.gasPool, api.env.state, api.env.header, tx, &api.env.header.GasUsed, *chain.GetVMConfig(), &vm.BeaconChainContext{BeaconRoots: bcParentRoots, RandaoMix: randao})
+	receipt, err := core.ApplyTransaction(chain.Config(), chain, &coinbase, api.env.gasPool, api.env.state, api.env.header, tx, &api.env.header.GasUsed, *chain.GetVMConfig())
 	if err != nil {
 		//w.current.state.RevertToSnapshot(snap)
 		return err
@@ -162,6 +161,7 @@ func (api *Eth2API) ProduceBlock(params ProduceBlockParams) (*ExecutableData, er
 
 		tx := txs.Peek()
 		if tx == nil {
+			fmt.Println("no tx")
 			break
 		}
 
@@ -302,19 +302,27 @@ func (api *Eth2API) addBlockTxs(block *types.Block) error {
 	return nil
 }
 
-//func (api *Eth2API) SetHead(newHead common.Hash) error {
-//oldBlock := api.eth.BlockChain().CurrentBlock()
+// FinalizeBlock is called to mark a block as synchronized, so
+// that data that is no longer needed can be removed.
+func (api *Eth2API) FinalizeBlock(blockHash common.Hash) error {
+	// Stubbed for now, it's not critical
+	return nil
+}
 
-//if oldBlock.Hash() == newHead {
-//return nil
-//}
+// SetHead is called to perform a force choice.
+func (api *Eth2API) SetHead(newHead common.Hash) error {
+	//oldBlock := api.eth.BlockChain().CurrentBlock()
 
-//newBlock := api.eth.BlockChain().GetBlockByHash(newHead)
+	//if oldBlock.Hash() == newHead {
+	//return nil
+	//}
 
-//err := api.eth.BlockChain().Reorg(oldBlock, newBlock)
-//if err != nil {
-//return err
-//}
-//api.head = newHead
-//return nil
-//}
+	//newBlock := api.eth.BlockChain().GetBlockByHash(newHead)
+
+	//err := api.eth.BlockChain().Reorg(oldBlock, newBlock)
+	//if err != nil {
+	//return err
+	//}
+	//api.head = newHead
+	return nil
+}

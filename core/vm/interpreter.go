@@ -98,8 +98,6 @@ func NewEVMInterpreter(evm *EVM, cfg Config) *EVMInterpreter {
 	if cfg.JumpTable[STOP] == nil {
 		var jt JumpTable
 		switch {
-		case evm.chainRules.IsCatalyst:
-			jt = catalystInstructionSet
 		case evm.chainRules.IsBerlin:
 			jt = berlinInstructionSet
 		case evm.chainRules.IsIstanbul:
