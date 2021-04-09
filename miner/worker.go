@@ -1188,11 +1188,11 @@ func (w *worker) commitNewWork(interrupt *int32, noempty bool, timestamp int64) 
 			log.Error("Failed to generate flashbots bundle", "err", err)
 			return
 		}
-		log.Info("Flashbots bundle", "ethToCoinbase", ethIntToFloat(bundle.totalEth), "gasUsed", bundle.totalGasUsed, "bundleScore", bundle.mevGasPrice, "bundleLength", len(bundle.txs))
-		if len(bundle.txs) == 0 {
+		log.Info("Flashbots bundle", "ethToCoinbase", ethIntToFloat(bundle.totalEth), "gasUsed", bundle.totalGasUsed, "bundleScore", bundle.mevGasPrice, "bundleLength", len(bundle.originalBundle.Txs))
+		if len(bundle.originalBundle.Txs) == 0 {
 			return
 		}
-		if w.commitBundle(bundle.txs, w.coinbase, interrupt) {
+		if w.commitBundle(bundle.originalBundle.Txs, w.coinbase, interrupt) {
 			return
 		}
 	}
@@ -1245,13 +1245,13 @@ func (w *worker) commit(uncles []*types.Header, interval func(), update bool, st
 }
 
 type simulatedBundle struct {
-	txs          types.Transactions
-	mevGasPrice  *big.Int
-	totalEth     *big.Int
-	totalGasUsed uint64
+	mevGasPrice    *big.Int
+	totalEth       *big.Int
+	totalGasUsed   uint64
+	originalBundle types.MevBundle
 }
 
-func (w *worker) findMostProfitableBundle(bundles []types.Transactions, coinbase common.Address, parent *types.Block, header *types.Header, pendingTxs map[common.Address]types.Transactions) (simulatedBundle, error) {
+func (w *worker) findMostProfitableBundle(bundles []types.MevBundle, coinbase common.Address, parent *types.Block, header *types.Header, pendingTxs map[common.Address]types.Transactions) (simulatedBundle, error) {
 	maxBundle := simulatedBundle{mevGasPrice: new(big.Int)}
 
 	for _, bundle := range bundles {
@@ -1260,7 +1260,7 @@ func (w *worker) findMostProfitableBundle(bundles []types.Transactions, coinbase
 			return simulatedBundle{}, err
 		}
 		gasPool := new(core.GasPool).AddGas(header.GasLimit)
-		if len(bundle) == 0 {
+		if len(bundle.Txs) == 0 {
 			continue
 		}
 		simmed, err := w.computeBundleGas(bundle, parent, header, state, gasPool, pendingTxs)
@@ -1278,22 +1278,30 @@ func (w *worker) findMostProfitableBundle(bundles []types.Transactions, coinbase
 	return maxBundle, nil
 }
 
+func containsHash(arr []common.Hash, match common.Hash) bool {
+	for _, elem := range arr {
+		if elem == match {
+			return true
+		}
+	}
+	return false
+}
+
 // Compute the adjusted gas price for a whole bundle
 // Done by calculating all gas spent, adding transfers to the coinbase, and then dividing by gas used
-func (w *worker) computeBundleGas(bundle types.Transactions, parent *types.Block, header *types.Header, state *state.StateDB, gasPool *core.GasPool, pendingTxs map[common.Address]types.Transactions) (simulatedBundle, error) {
+func (w *worker) computeBundleGas(bundle types.MevBundle, parent *types.Block, header *types.Header, state *state.StateDB, gasPool *core.GasPool, pendingTxs map[common.Address]types.Transactions) (simulatedBundle, error) {
 	var totalGasUsed uint64 = 0
 	var tempGasUsed uint64
 	totalEth := new(big.Int)
 
-	for _, tx := range bundle {
+	for _, tx := range bundle.Txs {
 		coinbaseBalanceBefore := state.GetBalance(w.coinbase)
-
 		receipt, err := core.ApplyTransaction(w.chainConfig, w.chain, &w.coinbase, gasPool, state, header, tx, &tempGasUsed, *w.chain.GetVMConfig())
 		if err != nil {
 			return simulatedBundle{}, err
 		}
-		if receipt.Status == types.ReceiptStatusFailed {
-			return simulatedBundle{}, errors.New("revert")
+		if receipt.Status == types.ReceiptStatusFailed && !containsHash(bundle.RevertingTxHashes, receipt.TxHash) {
+			return simulatedBundle{}, errors.New("failed tx")
 		}
 
 		totalGasUsed += receipt.GasUsed
@@ -1327,10 +1335,10 @@ func (w *worker) computeBundleGas(bundle types.Transactions, parent *types.Block
 	}
 
 	return simulatedBundle{
-		txs:          bundle,
-		mevGasPrice:  new(big.Int).Div(totalEth, new(big.Int).SetUint64(totalGasUsed)),
-		totalEth:     totalEth,
-		totalGasUsed: totalGasUsed,
+		mevGasPrice:    new(big.Int).Div(totalEth, new(big.Int).SetUint64(totalGasUsed)),
+		totalEth:       totalEth,
+		totalGasUsed:   totalGasUsed,
+		originalBundle: bundle,
 	}, nil
 }
 
