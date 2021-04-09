@@ -55,7 +55,7 @@ type (
 // NewLazyQueue creates a new lazy queue
 func NewLazyQueue(setIndex SetIndexCallback, priority PriorityCallback, maxPriority MaxPriorityCallback, clock mclock.Clock, refreshPeriod time.Duration) *LazyQueue {
 	q := &LazyQueue{
-		popQueue:     newSstack(nil),
+		popQueue:     newSstack(nil, false),
 		setIndex:     setIndex,
 		priority:     priority,
 		maxPriority:  maxPriority,
@@ -71,8 +71,8 @@ func NewLazyQueue(setIndex SetIndexCallback, priority PriorityCallback, maxPrior
 
 // Reset clears the contents of the queue
 func (q *LazyQueue) Reset() {
-	q.queue[0] = newSstack(q.setIndex0)
-	q.queue[1] = newSstack(q.setIndex1)
+	q.queue[0] = newSstack(q.setIndex0, false)
+	q.queue[1] = newSstack(q.setIndex1, false)
 }
 
 // Refresh performs queue re-evaluation if necessary

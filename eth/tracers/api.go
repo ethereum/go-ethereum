@@ -67,9 +67,8 @@ type Backend interface {
 	ChainConfig() *params.ChainConfig
 	Engine() consensus.Engine
 	ChainDb() ethdb.Database
-	StateAtBlock(ctx context.Context, block *types.Block, reexec uint64) (*state.StateDB, func(), error)
-	StateAtTransaction(ctx context.Context, block *types.Block, txIndex int, reexec uint64) (core.Message, vm.BlockContext, *state.StateDB, func(), error)
-	StatesInRange(ctx context.Context, fromBlock *types.Block, toBlock *types.Block, reexec uint64) ([]*state.StateDB, func(), error)
+	StateAtBlock(ctx context.Context, block *types.Block, reexec uint64, base *state.StateDB, checkLive bool) (*state.StateDB, error)
+	StateAtTransaction(ctx context.Context, block *types.Block, txIndex int, reexec uint64) (core.Message, vm.BlockContext, *state.StateDB, error)
 }
 
 // API is the collection of tracing APIs exposed over the private debugging endpoint.
@@ -187,6 +186,7 @@ type txTraceResult struct {
 type blockTraceTask struct {
 	statedb *state.StateDB   // Intermediate state prepped for tracing
 	block   *types.Block     // Block to trace the transactions from
+	rootref common.Hash      // Trie root reference held for this task
 	results []*txTraceResult // Trace results procudes by the task
 }
 
@@ -233,33 +233,22 @@ func (api *API) traceChain(ctx context.Context, start, end *types.Block, config 
 	}
 	sub := notifier.CreateSubscription()
 
-	// Shift the border to a block ahead in order to get the states
-	// before these blocks.
-	endBlock, err := api.blockByNumberAndHash(ctx, rpc.BlockNumber(end.NumberU64()-1), end.ParentHash())
-	if err != nil {
-		return nil, err
-	}
 	// Prepare all the states for tracing. Note this procedure can take very
 	// long time. Timeout mechanism is necessary.
 	reexec := defaultTraceReexec
 	if config != nil && config.Reexec != nil {
 		reexec = *config.Reexec
 	}
-	states, release, err := api.backend.StatesInRange(ctx, start, endBlock, reexec)
-	if err != nil {
-		return nil, err
-	}
-	defer release() // Release all the resources in the last step.
-
 	blocks := int(end.NumberU64() - start.NumberU64())
 	threads := runtime.NumCPU()
 	if threads > blocks {
 		threads = blocks
 	}
 	var (
-		pend    = new(sync.WaitGroup)
-		tasks   = make(chan *blockTraceTask, threads)
-		results = make(chan *blockTraceTask, threads)
+		pend     = new(sync.WaitGroup)
+		tasks    = make(chan *blockTraceTask, threads)
+		results  = make(chan *blockTraceTask, threads)
+		localctx = context.Background()
 	)
 	for th := 0; th < threads; th++ {
 		pend.Add(1)
@@ -269,7 +258,7 @@ func (api *API) traceChain(ctx context.Context, start, end *types.Block, config 
 			// Fetch and execute the next block trace tasks
 			for task := range tasks {
 				signer := types.MakeSigner(api.backend.ChainConfig(), task.block.Number())
-				blockCtx := core.NewEVMBlockContext(task.block.Header(), api.chainContext(ctx), nil)
+				blockCtx := core.NewEVMBlockContext(task.block.Header(), api.chainContext(localctx), nil)
 				// Trace all the transactions contained within
 				for i, tx := range task.block.Transactions() {
 					msg, _ := tx.AsMessage(signer)
@@ -278,7 +267,7 @@ func (api *API) traceChain(ctx context.Context, start, end *types.Block, config 
 						hash:  tx.Hash(),
 						block: task.block.Hash(),
 					}
-					res, err := api.traceTx(ctx, msg, txctx, blockCtx, task.statedb, config)
+					res, err := api.traceTx(localctx, msg, txctx, blockCtx, task.statedb, config)
 					if err != nil {
 						task.results[i] = &txTraceResult{Error: err.Error()}
 						log.Warn("Tracing failed", "hash", tx.Hash(), "block", task.block.NumberU64(), "err", err)
@@ -302,10 +291,12 @@ func (api *API) traceChain(ctx context.Context, start, end *types.Block, config 
 
 	go func() {
 		var (
-			logged time.Time
-			number uint64
-			traced uint64
-			failed error
+			logged  time.Time
+			number  uint64
+			traced  uint64
+			failed  error
+			parent  common.Hash
+			statedb *state.StateDB
 		)
 		// Ensure everything is properly cleaned up on any exit path
 		defer func() {
@@ -323,7 +314,7 @@ func (api *API) traceChain(ctx context.Context, start, end *types.Block, config 
 			close(results)
 		}()
 		// Feed all the blocks both into the tracer, as well as fast process concurrently
-		for number = start.NumberU64() + 1; number <= end.NumberU64(); number++ {
+		for number = start.NumberU64(); number < end.NumberU64(); number++ {
 			// Stop tracing if interruption was requested
 			select {
 			case <-notifier.Closed():
@@ -335,16 +326,39 @@ func (api *API) traceChain(ctx context.Context, start, end *types.Block, config 
 				logged = time.Now()
 				log.Info("Tracing chain segment", "start", start.NumberU64(), "end", end.NumberU64(), "current", number, "transactions", traced, "elapsed", time.Since(begin))
 			}
-			// Retrieve the next block to trace
-			block, err := api.blockByNumber(ctx, rpc.BlockNumber(number))
+			// Retrieve the parent state to trace on top
+			block, err := api.blockByNumber(localctx, rpc.BlockNumber(number))
+			if err != nil {
+				failed = err
+				break
+			}
+			// Prepare the statedb for tracing. Don't use the live database for
+			// tracing to avoid persisting state junks into the database.
+			statedb, err = api.backend.StateAtBlock(localctx, block, reexec, statedb, false)
+			if err != nil {
+				failed = err
+				break
+			}
+			if statedb.Database().TrieDB() != nil {
+				// Hold the reference for tracer, will be released at the final stage
+				statedb.Database().TrieDB().Reference(block.Root(), common.Hash{})
+
+				// Release the parent state because it's already held by the tracer
+				if parent != (common.Hash{}) {
+					statedb.Database().TrieDB().Dereference(parent)
+				}
+			}
+			parent = block.Root()
+
+			next, err := api.blockByNumber(localctx, rpc.BlockNumber(number+1))
 			if err != nil {
 				failed = err
 				break
 			}
 			// Send the block over to the concurrent tracers (if not in the fast-forward phase)
-			txs := block.Transactions()
+			txs := next.Transactions()
 			select {
-			case tasks <- &blockTraceTask{statedb: states[int(number-start.NumberU64()-1)], block: block, results: make([]*txTraceResult, len(txs))}:
+			case tasks <- &blockTraceTask{statedb: statedb.Copy(), block: next, rootref: block.Root(), results: make([]*txTraceResult, len(txs))}:
 			case <-notifier.Closed():
 				return
 			}
@@ -367,6 +381,10 @@ func (api *API) traceChain(ctx context.Context, start, end *types.Block, config 
 			}
 			done[uint64(result.Block)] = result
 
+			// Dereference any parent tries held in memory by this task
+			if res.statedb.Database().TrieDB() != nil {
+				res.statedb.Database().TrieDB().Dereference(res.rootref)
+			}
 			// Stream completed traces to the user, aborting on the first error
 			for result, ok := done[next]; ok; result, ok = done[next] {
 				if len(result.Traces) > 0 || next == end.NumberU64() {
@@ -470,12 +488,10 @@ func (api *API) traceBlock(ctx context.Context, block *types.Block, config *Trac
 	if config != nil && config.Reexec != nil {
 		reexec = *config.Reexec
 	}
-	statedb, release, err := api.backend.StateAtBlock(ctx, parent, reexec)
+	statedb, err := api.backend.StateAtBlock(ctx, parent, reexec, nil, true)
 	if err != nil {
 		return nil, err
 	}
-	defer release()
-
 	// Execute all the transaction contained within the block concurrently
 	var (
 		signer  = types.MakeSigner(api.backend.ChainConfig(), block.Number())
@@ -561,12 +577,10 @@ func (api *API) standardTraceBlockToFile(ctx context.Context, block *types.Block
 	if config != nil && config.Reexec != nil {
 		reexec = *config.Reexec
 	}
-	statedb, release, err := api.backend.StateAtBlock(ctx, parent, reexec)
+	statedb, err := api.backend.StateAtBlock(ctx, parent, reexec, nil, true)
 	if err != nil {
 		return nil, err
 	}
-	defer release()
-
 	// Retrieve the tracing configurations, or use default values
 	var (
 		logConfig vm.LogConfig
@@ -690,12 +704,10 @@ func (api *API) TraceTransaction(ctx context.Context, hash common.Hash, config *
 	if err != nil {
 		return nil, err
 	}
-	msg, vmctx, statedb, release, err := api.backend.StateAtTransaction(ctx, block, int(index), reexec)
+	msg, vmctx, statedb, err := api.backend.StateAtTransaction(ctx, block, int(index), reexec)
 	if err != nil {
 		return nil, err
 	}
-	defer release()
-
 	txctx := &txTraceContext{
 		index: int(index),
 		hash:  hash,
@@ -727,12 +739,10 @@ func (api *API) TraceCall(ctx context.Context, args ethapi.CallArgs, blockNrOrHa
 	if config != nil && config.Reexec != nil {
 		reexec = *config.Reexec
 	}
-	statedb, release, err := api.backend.StateAtBlock(ctx, block, reexec)
+	statedb, err := api.backend.StateAtBlock(ctx, block, reexec, nil, true)
 	if err != nil {
 		return nil, err
 	}
-	defer release()
-
 	// Execute the trace
 	msg := args.ToMessage(api.backend.RPCGasCap())
 	vmctx := core.NewEVMBlockContext(block.Header(), api.chainContext(ctx), nil)
@@ -767,7 +777,9 @@ func (api *API) traceTx(ctx context.Context, message core.Message, txctx *txTrac
 		deadlineCtx, cancel := context.WithTimeout(ctx, timeout)
 		go func() {
 			<-deadlineCtx.Done()
-			tracer.(*Tracer).Stop(errors.New("execution timeout"))
+			if deadlineCtx.Err() == context.DeadlineExceeded {
+				tracer.(*Tracer).Stop(errors.New("execution timeout"))
+			}
 		}()
 		defer cancel()
 
