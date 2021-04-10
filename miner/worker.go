@@ -1284,6 +1284,10 @@ func (w *worker) computeBundleGas(bundle types.Transactions, parent *types.Block
 		if err != nil {
 			return nil, 0, err
 		}
+		if receipt.Status == types.ReceiptStatusFailed {
+			return nil, 0, errors.New("revert")
+		}
+
 		totalGasUsed += receipt.GasUsed
 		gasFees.Add(gasFees, new(big.Int).Mul(big.NewInt(int64(totalGasUsed)), tx.GasPrice()))
 	}
