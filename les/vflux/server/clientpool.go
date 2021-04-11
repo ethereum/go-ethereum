@@ -103,14 +103,7 @@ func NewClientPool(balanceDb ethdb.KeyValueStore, minCap uint64, connectedBias t
 			if c, ok := ns.GetField(node, setup.clientField).(clientPeer); ok {
 				timeout = c.InactiveAllowance()
 			}
-			if timeout > 0 {
-				ns.AddTimeout(node, setup.inactiveFlag, timeout)
-			} else {
-				// Note: if capacity is immediately available then priorityPool will set the active
-				// flag simultaneously with removing the inactive flag and therefore this will not
-				// initiate disconnection
-				ns.SetStateSub(node, nodestate.Flags{}, setup.inactiveFlag, 0)
-			}
+			ns.AddTimeout(node, setup.inactiveFlag, timeout)
 		}
 		if oldState.Equals(setup.inactiveFlag) && newState.Equals(setup.inactiveFlag.Or(setup.priorityFlag)) {
 			ns.SetStateSub(node, setup.inactiveFlag, nodestate.Flags{}, 0) // priority gained; remove timeout
