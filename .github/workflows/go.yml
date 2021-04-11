@@ -53,7 +53,6 @@ jobs:
       uses: actions/checkout@v2
       with:
         repository: flashbots/mev-geth-demo
-        ref: jason/v0.2
         path: e2e
 
     - run: cd e2e && yarn install
