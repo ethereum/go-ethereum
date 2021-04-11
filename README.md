@@ -67,6 +67,12 @@ The entire patch can be broken down into four modules:
 3. `eth_callBundle` simulation rpc (commits [9199d2e13d484df7a634fad12343ed2b46d5d4c3](https://github.com/flashbots/mev-geth/commit/9199d2e13d484df7a634fad12343ed2b46d5d4c3) and [a99dfc198817dd171128cc22439c81896e876619](https://github.com/flashbots/mev-geth/commit/a99dfc198817dd171128cc22439c81896e876619))
 4. Documentation (this file) and CI/infrastructure configuration (commit [035109807944f7a446467aa27ca8ec98d109a465](https://github.com/flashbots/mev-geth/commit/035109807944f7a446467aa27ca8ec98d109a465))
 
+followed by v0.1.1 and v0.2 changes
+
+5. v0.1.1 improvement to reorganizations handling (commit [a9204599292d21c7e3d61710bb3d53d49142255e](https://github.com/flashbots/mev-geth/commit/a9204599292d21c7e3d61710bb3d53d49142255e))
+6. v0.2 change to the MEV equivalent gas price when comparing bundles (commit [910d412be36a8c8ac53df717f4fa85863c7463fa](https://github.com/flashbots/mev-geth/commit/910d412be36a8c8ac53df717f4fa85863c7463fa))
+7. v0.2 discarding transactions with reverts (commit [1ca66fa1e422570729c44ed88df5261c22e5762a](https://github.com/flashbots/mev-geth/commit/df05284b80c23814e5033e8e1ef802fe251762a1))
+
 The entire changeset can be viewed inspecting the [diff](https://github.com/ethereum/go-ethereum/compare/master...flashbots:master).
 
 In summary:
@@ -77,14 +83,13 @@ In summary:
   - This API is a no-op when run in light mode
 - Geth’s miner is modified as follows:
   - While in the event loop, before adding all the pending txpool “normal” transactions to the block, it:
-    - Finds the most profitable bundle
-      - It picks the most profitable bundle by returning the one with the highest average gas price per unit of gas
-        - computeBundleGas: Returns average gas price (\sum{gasprice_i\*gasused_i + (coinbase_after - coinbase_before)) / \sum{gasused_i})
-    - Commits the bundle (remember: Bundle transactions are not ordered by nonce or gas price). For each transaction in the bundle, it:
+    - Finds the best bundles and merges them as long as they are more profitable than normal block transactions:
+      - It compares bundles by their coinbase payment per unit of gas
+        - computeBundleGas: Returns MEV equivalent gas price ((coinbase_after - coinbase_before)) / \sum{gasused_i})
+    - Commits the merged bundle (remember: Bundle transactions are not ordered by nonce or gas price). For each transaction in the merged bundle, it:
       - `Prepare`’s it against the state
       - CommitsTransaction with trackProfit = true
         w.current.profit += coinbase_after_tx - coinbase_before_tx
-        w.current.profit += gas \* gas_price
   - If a block is found where the w.current.profit is more than the previous profit, it switches mining to that block.
 - A new `eth_callBundle` API is exposed that enables simulation of transaction bundles.
 - Documentation and CI/infrastructure files are added.
@@ -98,11 +103,12 @@ While only the bundle worker and `eth_sendBundle` module (1) is necessary to min
 We issue and maintain [releases](https://github.com/flashbots/mev-geth/releases) for the recommended configuration for the current and immediately prior versions of geth.
 
 In order to see the diff of the recommended patch, run:
+
 ```
- git diff master~4..master~1
+ git diff master~8..master~1
 ```
 
-Alternatively, the `master-barebones` branch includes only modules (1) and (4), leaving the profit switching logic to miners. While this usage is discouraged, it entails a much smaller change in the code. 
+Alternatively, the `master-barebones` branch includes only modules (1) and (4), leaving the profit switching logic to miners. While this usage is discouraged, it entails a much smaller change in the code.
 
 At this stage, we recommend only receiving bundles via a relay, to prevent abuse via denial-of-service attacks. We have [implemented](https://github.com/flashbots/mev-relay) and currently run such relay. This relay performs basic rate limiting and miner profitability checks, but does otherwise not interfere with submitted bundles in any way, and is open for everybody to participate. We invite you to try the [Flashbots Alpha](https://github.com/flashbots/pm#flashbots-alpha) and start receiving MEV revenue by following these steps:
 
@@ -113,7 +119,7 @@ At this stage, we recommend only receiving bundles via a relay, to prevent abuse
 
 ### MEV-Geth for searchers
 
-You do _not_ need to run MEV-Geth as a searcher, but, instead, to monitor the Ethereum state and transaction pool for MEV opportunities and produce transaction bundles that extract that MEV. Anyone can become a searcher. In fact, the bundles produced by searchers don't need to extract MEV at all, but we expect the most valuable bundles will. 
+You do _not_ need to run MEV-Geth as a searcher, but, instead, to monitor the Ethereum state and transaction pool for MEV opportunities and produce transaction bundles that extract that MEV. Anyone can become a searcher. In fact, the bundles produced by searchers don't need to extract MEV at all, but we expect the most valuable bundles will.
 
 An MEV-Geth bundle is a standard message template composed of an array of valid ethereum transactions, a blockheight, and an optional timestamp range over which the bundle is valid.
 
@@ -132,9 +138,7 @@ The `blocknumber` defines the block height at which the bundle is to be included
 
 The `minTimestamp` and `maxTimestamp` are optional conditions to further restrict bundle validity within a time range.
 
-MEV-Geth miners select the most profitable bundle per unit of gas used and place it at the beginning of the list of transactions of the block template at a given blockheight. Miners determine the value of a bundle based on the following equation. _Note, the change in block.coinbase balance represents a direct transfer of ETH through a smart contract._
-
-<img width="544" src="https://hackmd.io/_uploads/Bk6iQmr5P.png">
+MEV-Geth miners select the most profitable bundle per unit of gas used and place it at the beginning of the list of transactions of the block template at a given blockheight. Miners determine the value of a bundle based on the following equation: the total eth sent to the coinbase divided by the total gas used by the bundle. This equation completely ignores gas fees from the transactions.
 
 To submit a bundle, the searcher sends the bundle directly to the miner using the rpc method `eth_sendBundle`. Since MEV-Geth requires direct communication between searchers and miners, a searcher can configure the list of miners where they want to send their bundle.
 
@@ -145,4 +149,3 @@ If you are a user of MEV-Geth and have suggestions on how to make integration wi
 ### Moving beyond proof of concept
 
 We provide the MEV-Geth proof of concept as a first milestone on the path to mitigating the negative externalities caused by MEV. We hope to discuss with the community the merits of adopting MEV-Geth in its current form. Our preliminary research indicates it could free at least 2.5% of the current chain congestion by eliminating the use of frontrunning and backrunning and provide uplift of up to 18% on miner rewards from Ethereum. That being said, we believe a sustainable solution to MEV existential risks requires complete privacy and finality, which the proof of concept does not address. We hope to engage community feedback throughout the development of this complete version of MEV-Geth.
-
