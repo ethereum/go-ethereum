@@ -2128,7 +2128,7 @@ func NewBundleAPI(b Backend) *BundleAPI {
 // a past block.
 // The sender is responsible for signing the transactions and using the correct
 // nonce and ensuring validity
-func (s *BundleAPI) CallBundle(ctx context.Context, encodedTxs []hexutil.Bytes, blockNr rpc.BlockNumber, stateBlockNumberOrHash rpc.BlockNumberOrHash, blockTimestamp *uint64, timeoutMilliSecondsPtr *int64) (map[string]interface{}, error) {
+func (s *BundleAPI) CallBundle(ctx context.Context, encodedTxs []hexutil.Bytes, blockNr rpc.BlockNumber, stateBlockNumberOrHash rpc.BlockNumberOrHash, coinbaseArg *string, blockTimestamp *uint64, timeoutMilliSecondsPtr *int64) (map[string]interface{}, error) {
 	if len(encodedTxs) == 0 {
 		return nil, nil
 	}
@@ -2159,6 +2159,9 @@ func (s *BundleAPI) CallBundle(ctx context.Context, encodedTxs []hexutil.Bytes, 
 		timestamp = *blockTimestamp
 	}
 	coinbase := parent.Coinbase
+	if coinbaseArg != nil {
+		coinbase = common.HexToAddress(*coinbaseArg)
+	}
 	header := &types.Header{
 		ParentHash: parent.Hash(),
 		Number:     blockNumber,
