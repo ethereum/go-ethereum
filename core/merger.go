@@ -65,10 +65,10 @@ func (m *Merger) LeavePoW() {
 	m.lock.Lock()
 	defer m.lock.Unlock()
 
-	if m.status != nil && m.status.LeavedPoW {
+	if m.status != nil && m.status.LeafPoW {
 		return
 	}
-	m.status = &rawdb.TransitionStatus{LeavedPoW: true}
+	m.status = &rawdb.TransitionStatus{LeafPoW: true}
 	rawdb.WriteTransitionStatus(m.db, m.status)
 	for _, call := range m.leavePoWCalls {
 		call()
@@ -84,22 +84,22 @@ func (m *Merger) EnterPoS() {
 	if m.status != nil && m.status.EnteredPoS {
 		return
 	}
-	m.status = &rawdb.TransitionStatus{LeavedPoW: true, EnteredPoS: true}
+	m.status = &rawdb.TransitionStatus{LeafPoW: true, EnteredPoS: true}
 	rawdb.WriteTransitionStatus(m.db, m.status)
 	for _, call := range m.enterPoSCalls {
 		call()
 	}
 }
 
-// LeavedPoW reports whether the chain has leaved the PoW stage.
-func (m *Merger) LeavedPoW() bool {
+// LeafPoW reports whether the chain has leaved the PoW stage.
+func (m *Merger) LeafPoW() bool {
 	m.lock.Lock()
 	defer m.lock.Unlock()
 
 	if m.status == nil {
 		return false
 	}
-	return m.status.LeavedPoW
+	return m.status.LeafPoW
 }
 
 // EnteredPoS reports whether the chain has entered the PoS stage.

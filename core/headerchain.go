@@ -174,6 +174,10 @@ func (hc *HeaderChain) reorgAfterInsert(headHeader *types.Header, headers []*typ
 	if err := batch.Write(); err != nil {
 		log.Crit("Failed to flush batch", "err", err)
 	}
+	// Last step update all in-memory head header markers
+	hc.currentHeaderHash = headHeader.Hash()
+	hc.currentHeader.Store(types.CopyHeader(headHeader))
+	headHeaderGauge.Update(headHeader.Number.Int64())
 }
 
 // Reorg reorgs the local canonical chain into the specified chain. The reorg
@@ -214,6 +218,10 @@ func (hc *HeaderChain) Reorg(headHeader *types.Header, headers []*types.Header) 
 	if err := batch.Write(); err != nil {
 		log.Crit("Failed to flush batch", "err", err)
 	}
+	// Last step update all in-memory head header markers
+	hc.currentHeaderHash = headHeader.Hash()
+	hc.currentHeader.Store(types.CopyHeader(headHeader))
+	headHeaderGauge.Update(headHeader.Number.Int64())
 }
 
 // WriteHeaders writes a chain of headers into the local chain, given that the
@@ -294,6 +302,15 @@ func (hc *HeaderChain) writeHeaders(headers []*types.Header, forker *ForkChoicer
 	}
 	// Apply the reorg operation
 	hc.Reorg(lastHeader, headers)
+
+	// Special case, nothing inserted(but the head may be updated)
+	if len(inserted) == 0 {
+		return &headerWriteResult{
+			status:   NonStatTy,
+			ignored:  len(headers),
+			imported: 0,
+		}, nil
+	}
 	return &headerWriteResult{
 		status:     CanonStatTy,
 		ignored:    len(headers) - len(inserted),

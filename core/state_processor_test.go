@@ -45,7 +45,7 @@ func TestStateProcessorErrors(t *testing.T) {
 			Config: params.TestChainConfig,
 		}
 		genesis       = gspec.MustCommit(db)
-		blockchain, _ = NewBlockChain(db, nil, gspec.Config, ethash.NewFaker(), vm.Config{}, nil, nil)
+		blockchain, _ = NewBlockChain(db, nil, gspec.Config, ethash.NewFaker(), vm.Config{}, nil, nil, NewMerger(rawdb.NewMemoryDatabase()))
 	)
 	defer blockchain.Stop()
 	var makeTx = func(nonce uint64, to common.Address, amount *big.Int, gasLimit uint64, gasPrice *big.Int, data []byte) *types.Transaction {

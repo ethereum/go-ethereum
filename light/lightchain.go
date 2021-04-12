@@ -93,7 +93,7 @@ func NewLightChain(odr OdrBackend, config *params.ChainConfig, engine consensus.
 		blockCache:    blockCache,
 		engine:        engine,
 	}
-	bc.forker = core.NewForkChoicer(bc, merger.LeavedPoW(), nil)
+	bc.forker = core.NewForkChoicer(bc, merger.LeafPoW(), nil)
 	merger.SubscribeLeavePoW(func() {
 		bc.forker.SetTransitioned()
 	})

@@ -213,6 +213,15 @@ func CreateConsensusEngine(stack *node.Node, chainConfig *params.ChainConfig, co
 	// Otherwise assume proof-of-work
 	var engine consensus.Engine
 	switch config.PowMode {
+	case ethash.ModeFake:
+		log.Warn("Ethash used in fake mode")
+		fallthrough
+	case ethash.ModeTest:
+		log.Warn("Ethash used in test mode")
+		fallthrough
+	case ethash.ModeShared:
+		log.Warn("Ethash used in shared mode")
+		fallthrough
 	case ethash.ModeClassic:
 		engine = ethash.New(ethash.Config{
 			PowMode:          config.PowMode,
@@ -227,12 +236,6 @@ func CreateConsensusEngine(stack *node.Node, chainConfig *params.ChainConfig, co
 			NotifyFull:       config.NotifyFull,
 		}, notify, noverify)
 		engine.(*ethash.Ethash).SetThreads(-1) // Disable CPU mining
-	case ethash.ModeFake:
-		log.Warn("Ethash used in fake mode")
-	case ethash.ModeTest:
-		log.Warn("Ethash used in test mode")
-	case ethash.ModeShared:
-		log.Warn("Ethash used in shared mode")
 	default:
 		engine = hybrid.NewHybrid(ethash.Config{
 			PowMode:          config.PowMode,

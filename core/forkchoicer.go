@@ -113,7 +113,7 @@ func (f *ForkChoicer) Reorg(header *types.Header) (bool, error) {
 			reorg = !currentPreserve && (externPreserve || mrand.Float64() < 0.5)
 		}
 	}
-	return true, nil
+	return reorg, nil
 }
 
 // SetTransitioned marks the transition has been done.

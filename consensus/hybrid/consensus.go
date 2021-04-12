@@ -118,15 +118,17 @@ func (hybrid *Hybrid) VerifyHeaders(chain consensus.ChainHeaderReader, headers [
 		for i, header := range headers {
 			var parent *types.Header
 			if i == 0 {
-				parent = chain.GetHeader(header.ParentHash, header.Number.Uint64()-1)
+				parent = chain.GetHeader(headers[0].ParentHash, headers[0].Number.Uint64()-1)
+			} else if headers[i-1].Hash() == headers[i].ParentHash {
+				parent = headers[i-1]
+			}
+			if parent == nil {
 				select {
 				case <-abort:
 					return
 				case results <- consensus.ErrUnknownAncestor:
 				}
 				continue
-			} else {
-				parent = headers[i-1]
 			}
 			err := hybrid.verifyHeader(chain, header, parent)
 			select {

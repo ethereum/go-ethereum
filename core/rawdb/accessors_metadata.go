@@ -143,7 +143,7 @@ func PopUncleanShutdownMarker(db ethdb.KeyValueStore) {
 // between modes is a one-way action which is triggered by corresponding
 // consensus-layer message.
 type TransitionStatus struct {
-	LeavedPoW  bool // The flag is set when the first NewHead message received
+	LeafPoW    bool // The flag is set when the first NewHead message received
 	EnteredPoS bool // The flag is set when the first FinaliseBlock message received
 }
 

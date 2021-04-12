@@ -245,7 +245,7 @@ func NewBlockChain(db ethdb.Database, cacheConfig *CacheConfig, chainConfig *par
 		engine:        engine,
 		vmConfig:      vmConfig,
 	}
-	bc.forker = NewForkChoicer(bc, merger.LeavedPoW(), shouldPreserve)
+	bc.forker = NewForkChoicer(bc, merger.LeafPoW(), shouldPreserve)
 	merger.SubscribeLeavePoW(func() {
 		bc.forker.SetTransitioned()
 	})
@@ -1748,12 +1748,15 @@ func (bc *BlockChain) insertChain(chain types.Blocks, verifySeals bool) (int, er
 		//   2. The block is stored as a sidechain, and is lying about it's stateroot, and passes a stateroot
 		// 	    from the canonical chain, which has not been verified.
 		// Skip all known blocks that are behind us
+		var reorg bool
 		for block != nil && err == ErrKnownBlock {
-			reorg, err := bc.forker.Reorg(block.Header())
+			reorg, err = bc.forker.Reorg(block.Header())
 			if err != nil {
 				return it.index, err
 			}
-			if reorg {
+			// Switch to import mode if the forker says the reorg is necessary
+			// and also the block is indeed not the canonical block right now.
+			if reorg && bc.GetCanonicalHash(block.NumberU64()) != block.Hash() {
 				break
 			}
 			log.Debug("Ignoring already known block", "number", block.Number(), "hash", block.Hash())
@@ -2011,8 +2014,9 @@ func (bc *BlockChain) insertChain(chain types.Blocks, verifySeals bool) (int, er
 // switch over to the new chain if the TD exceeded the current chain.
 func (bc *BlockChain) insertSideChain(block *types.Block, it *insertIterator) (int, error) {
 	var (
-		externTd *big.Int
-		current  = bc.CurrentBlock()
+		externTd  *big.Int
+		lastBlock = block
+		current   = bc.CurrentBlock()
 	)
 	// The first sidechain block error is already verified to be ErrPrunedAncestor.
 	// Since we don't import them here, we expect ErrUnknownAncestor for the remaining
@@ -2063,6 +2067,7 @@ func (bc *BlockChain) insertSideChain(block *types.Block, it *insertIterator) (i
 				"txs", len(block.Transactions()), "gas", block.GasUsed(), "uncles", len(block.Uncles()),
 				"root", block.Root())
 		}
+		lastBlock = block
 	}
 	// At this point, we've written all sidechain blocks to database. Loop ended
 	// either on some other error or all were processed. If there was some other
@@ -2070,11 +2075,11 @@ func (bc *BlockChain) insertSideChain(block *types.Block, it *insertIterator) (i
 	//
 	// If the externTd was larger than our local TD, we now need to reimport the previous
 	// blocks to regenerate the required state
-	reorg, err := bc.forker.Reorg(current.Header())
+	reorg, err := bc.forker.Reorg(lastBlock.Header())
 	if err != nil {
 		return it.index, err
 	}
-	if !reorg {
+	if !reorg || bc.GetCanonicalHash(lastBlock.NumberU64()) == lastBlock.Hash() {
 		localTd := bc.GetTd(current.Hash(), current.NumberU64())
 		log.Info("Sidechain written to disk", "start", it.first().NumberU64(), "end", it.previous().Number, "sidetd", externTd, "localtd", localTd)
 		return it.index, err

@@ -1982,7 +1982,7 @@ func testSetHead(t *testing.T, tt *rewindTest, snapshots bool) {
 		config.SnapshotLimit = 256
 		config.SnapshotWait = true
 	}
-	chain, err := NewBlockChain(db, config, params.AllEthashProtocolChanges, engine, vm.Config{}, nil, nil)
+	chain, err := NewBlockChain(db, config, params.AllEthashProtocolChanges, engine, vm.Config{}, nil, nil, NewMerger(rawdb.NewMemoryDatabase()))
 	if err != nil {
 		t.Fatalf("Failed to create chain: %v", err)
 	}
