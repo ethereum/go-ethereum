@@ -178,7 +178,7 @@ func TestEth66Messages(t *testing.T) {
 	// init the receipts
 	{
 		receipts = []*types.Receipt{
-			&types.Receipt{
+			{
 				Status:            types.ReceiptStatusFailed,
 				CumulativeGasUsed: 1,
 				Logs: []*types.Log{

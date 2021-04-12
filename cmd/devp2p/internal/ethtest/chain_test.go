@@ -35,7 +35,9 @@ func TestEthProtocolNegotiation(t *testing.T) {
 		expected uint32
 	}{
 		{
-			conn: &Conn{},
+			conn: &Conn{
+				ourHighestProtoVersion: 65,
+			},
 			caps: []p2p.Cap{
 				{Name: "eth", Version: 63},
 				{Name: "eth", Version: 64},
@@ -44,7 +46,42 @@ func TestEthProtocolNegotiation(t *testing.T) {
 			expected: uint32(65),
 		},
 		{
-			conn: &Conn{},
+			conn: &Conn{
+				ourHighestProtoVersion: 65,
+			},
+			caps: []p2p.Cap{
+				{Name: "eth", Version: 63},
+				{Name: "eth", Version: 64},
+				{Name: "eth", Version: 65},
+			},
+			expected: uint32(65),
+		},
+		{
+			conn: &Conn{
+				ourHighestProtoVersion: 65,
+			},
+			caps: []p2p.Cap{
+				{Name: "eth", Version: 63},
+				{Name: "eth", Version: 64},
+				{Name: "eth", Version: 65},
+			},
+			expected: uint32(65),
+		},
+		{
+			conn: &Conn{
+				ourHighestProtoVersion: 64,
+			},
+			caps: []p2p.Cap{
+				{Name: "eth", Version: 63},
+				{Name: "eth", Version: 64},
+				{Name: "eth", Version: 65},
+			},
+			expected: 64,
+		},
+		{
+			conn: &Conn{
+				ourHighestProtoVersion: 65,
+			},
 			caps: []p2p.Cap{
 				{Name: "eth", Version: 0},
 				{Name: "eth", Version: 89},
@@ -53,7 +90,20 @@ func TestEthProtocolNegotiation(t *testing.T) {
 			expected: uint32(65),
 		},
 		{
-			conn: &Conn{},
+			conn: &Conn{
+				ourHighestProtoVersion: 64,
+			},
+			caps: []p2p.Cap{
+				{Name: "eth", Version: 63},
+				{Name: "eth", Version: 64},
+				{Name: "wrongProto", Version: 65},
+			},
+			expected: uint32(64),
+		},
+		{
+			conn: &Conn{
+				ourHighestProtoVersion: 65,
+			},
 			caps: []p2p.Cap{
 				{Name: "eth", Version: 63},
 				{Name: "eth", Version: 64},
@@ -66,7 +116,7 @@ func TestEthProtocolNegotiation(t *testing.T) {
 	for i, tt := range tests {
 		t.Run(strconv.Itoa(i), func(t *testing.T) {
 			tt.conn.negotiateEthProtocol(tt.caps)
-			assert.Equal(t, tt.expected, uint32(tt.conn.ethProtocolVersion))
+			assert.Equal(t, tt.expected, uint32(tt.conn.negotiatedProtoVersion))
 		})
 	}
 }

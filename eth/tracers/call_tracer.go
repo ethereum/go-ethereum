@@ -61,7 +61,7 @@ func (tracer *CallTracer) GetResult() (interface{}, error) {
 	return tracer.callStack[0], nil
 }
 
-func (tracer *CallTracer) CaptureStart(from common.Address, to common.Address, create bool, input []byte, gas uint64, value *big.Int) error {
+func (tracer *CallTracer) CaptureStart(evm *vm.EVM, from common.Address, to common.Address, create bool, input []byte, gas uint64, value *big.Int) {
 	hvalue := hexutil.Big(*value)
 	tracer.callStack = []*call{&call{
 		From:  from,
@@ -71,13 +71,11 @@ func (tracer *CallTracer) CaptureStart(from common.Address, to common.Address, c
 		Input: hexutil.Bytes(input),
 		Calls: []*call{},
 	}}
-	return nil
 }
-func (tracer *CallTracer) CaptureEnd(output []byte, gasUsed uint64, t time.Duration, err error) error {
+func (tracer *CallTracer) CaptureEnd(output []byte, gasUsed uint64, t time.Duration, err error) {
 	tracer.callStack[tracer.i()].GasUsed = hexutil.Uint64(gasUsed)
 	tracer.callStack[tracer.i()].Time = fmt.Sprintf("%v", t)
 	tracer.callStack[tracer.i()].Output = hexutil.Bytes(output)
-	return nil
 }
 
 func (tracer *CallTracer) descend(newCall *call) {
@@ -90,70 +88,70 @@ func toAddress(value *uint256.Int) common.Address {
 	return common.BytesToAddress(value.Bytes())
 }
 
-func (tracer *CallTracer) CaptureState(env *vm.EVM, pc uint64, op vm.OpCode, gas, cost uint64, memory *vm.Memory, stack *vm.Stack, rData []byte, contract *vm.Contract, depth int, err error) error {
+func (tracer *CallTracer) CaptureState(env *vm.EVM, pc uint64, op vm.OpCode, gas, cost uint64, scope *vm.ScopeContext, rData []byte, depth int, err error) {
 	// for depth < len(tracer.callStack) {
 	//   c := tracer.callStack[tracer.i()]
 	//   c.GasUsed = c.Gas - gas
 	//   tracer.callStack = tracer.callStack[:tracer.i()]
 	// }
 	if op == vm.CREATE || op == vm.CREATE2 {
-		inOff := stack.Back(1).Uint64()
-		inLen := stack.Back(2).Uint64()
-		hvalue := hexutil.Big(*contract.Value())
+		inOff := scope.Stack.Back(1).Uint64()
+		inLen := scope.Stack.Back(2).Uint64()
+		hvalue := hexutil.Big(*scope.Contract.Value())
 		tracer.descend(&call{
 			Type:      op.String(),
-			From:      contract.Caller(),
-			Input:     memory.GetCopy(int64(inOff), int64(inLen)),
+			From:      scope.Contract.Caller(),
+			Input:     scope.Memory.GetCopy(int64(inOff), int64(inLen)),
 			gasIn:     gas,
 			gasCost:   cost,
 			Value:     &hvalue,
 			startTime: time.Now(),
 		})
-		return nil
+		return
 	}
 	if op == vm.SELFDESTRUCT {
-		hvalue := hexutil.Big(*tracer.statedb.GetBalance(contract.Caller()))
+		hvalue := hexutil.Big(*tracer.statedb.GetBalance(scope.Contract.Caller()))
 		tracer.descend(&call{
 			Type: op.String(),
-			From: contract.Caller(),
-			To:   toAddress(stack.Back(0)),
+			From: scope.Contract.Caller(),
+			To:   toAddress(scope.Stack.Back(0)),
 			// TODO: Is this input correct?
-			Input:     contract.Input,
+			Input:     scope.Contract.Input,
 			Value:     &hvalue,
 			gasIn:     gas,
 			gasCost:   cost,
 			startTime: time.Now(),
 		})
-		return nil
+		return
 	}
 	if op == vm.CALL || op == vm.CALLCODE || op == vm.DELEGATECALL || op == vm.STATICCALL {
-		toAddress := toAddress(stack.Back(1))
+		toAddress := toAddress(scope.Stack.Back(1))
 		if _, isPrecompile := vm.PrecompiledContractsIstanbul[toAddress]; isPrecompile {
-			return nil
+			return
 		}
 		off := 1
 		if op == vm.DELEGATECALL || op == vm.STATICCALL {
 			off = 0
 		}
-		inOff := stack.Back(2 + off).Uint64()
-		inLength := stack.Back(3 + off).Uint64()
+		inOff := scope.Stack.Back(2 + off).Uint64()
+		inLength := scope.Stack.Back(3 + off).Uint64()
 		newCall := &call{
 			Type:      op.String(),
-			From:      contract.Address(),
+			From:      scope.Contract.Address(),
 			To:        toAddress,
-			Input:     memory.GetCopy(int64(inOff), int64(inLength)),
+			Input:     scope.Memory.GetCopy(int64(inOff), int64(inLength)),
 			gasIn:     gas,
 			gasCost:   cost,
-			outOff:    stack.Back(4 + off).Uint64(),
-			outLen:    stack.Back(5 + off).Uint64(),
+			outOff:    scope.Stack.Back(4 + off).Uint64(),
+			outLen:    scope.Stack.Back(5 + off).Uint64(),
 			startTime: time.Now(),
 		}
 		if off == 1 {
-			value := hexutil.Big(*new(big.Int).SetBytes(stack.Back(2).Bytes()))
+			value := hexutil.Big(*new(big.Int).SetBytes(scope.Stack.Back(2).Bytes()))
 			newCall.Value = &value
 		}
 		tracer.descend(newCall)
-		return nil
+		return
 	}
 	if tracer.descended {
 		if depth >= len(tracer.callStack) {
@@ -163,7 +161,7 @@ func (tracer *CallTracer) CaptureState(env *vm.EVM, pc uint64, op vm.OpCode, gas
 	}
 	if op == vm.REVERT {
 		tracer.callStack[tracer.i()].Error = "execution reverted"
-		return nil
+		return
 	}
 	if depth == len(tracer.callStack)-1 {
 		c := tracer.callStack[tracer.i()]
@@ -171,7 +169,7 @@ func (tracer *CallTracer) CaptureState(env *vm.EVM, pc uint64, op vm.OpCode, gas
 		tracer.callStack = tracer.callStack[:len(tracer.callStack)-1]
 		if vm.StringToOp(c.Type) == vm.CREATE || vm.StringToOp(c.Type) == vm.CREATE2 {
 			c.GasUsed = hexutil.Uint64(c.gasIn - c.gasCost - gas)
-			ret := stack.Back(0)
+			ret := scope.Stack.Back(0)
 			if ret.Uint64() != 0 {
 				c.To = common.BytesToAddress(ret.Bytes())
 				c.Output = tracer.statedb.GetCode(c.To)
@@ -180,19 +178,17 @@ func (tracer *CallTracer) CaptureState(env *vm.EVM, pc uint64, op vm.OpCode, gas
 			}
 		} else {
 			c.GasUsed = hexutil.Uint64(c.gasIn - c.gasCost + uint64(c.Gas) - gas)
-			ret := stack.Back(0)
+			ret := scope.Stack.Back(0)
 			if ret.Uint64() != 0 {
-				c.Output = hexutil.Bytes(memory.GetCopy(int64(c.outOff), int64(c.outLen)))
+				c.Output = hexutil.Bytes(scope.Memory.GetCopy(int64(c.outOff), int64(c.outLen)))
 			} else if c.Error == "" {
 				c.Error = "internal failure"
 			}
 		}
 	}
-	return nil
+	return
 }
-func (tracer *CallTracer) CaptureFault(env *vm.EVM, pc uint64, op vm.OpCode, gas, cost uint64, memory *vm.Memory, stack *vm.Stack, contract *vm.Contract, depth int, err error) error {
-	return fmt.Errorf("Not implemented")
-}
+func (tracer *CallTracer) CaptureFault(env *vm.EVM, pc uint64, op vm.OpCode, gas, cost uint64, memory *vm.ScopeContext, depth int, err error) { }
 
 // 1/25: 3h
 // 1/26: 3h

@@ -37,9 +37,10 @@ import (
 
 // Client discovers nodes by querying DNS servers.
 type Client struct {
-	cfg     Config
-	clock   mclock.Clock
-	entries *lru.Cache
+	cfg       Config
+	clock     mclock.Clock
+	entries   *lru.Cache
+	ratelimit *rate.Limiter
 }
 
 // Config holds configuration options for the client.
@@ -97,8 +98,12 @@ func NewClient(cfg Config) *Client {
 		panic(err)
 	}
 	rlimit := rate.NewLimiter(rate.Limit(cfg.RateLimit), 10)
-	cfg.Resolver = &rateLimitResolver{cfg.Resolver, rlimit}
-	return &Client{cfg: cfg, entries: cache, clock: mclock.System{}}
+	return &Client{
+		cfg:       cfg,
+		entries:   cache,
+		clock:     mclock.System{},
+		ratelimit: rlimit,
+	}
 }
 
 // SyncTree downloads the entire node tree at the given URL.
@@ -157,6 +162,13 @@ func parseAndVerifyRoot(txt string, loc *linkEntry) (rootEntry, error) {
 // resolveEntry retrieves an entry from the cache or fetches it from the network
 // if it isn't cached.
 func (c *Client) resolveEntry(ctx context.Context, domain, hash string) (entry, error) {
+	// The rate limit always applies, even when the result might be cached. This is
+	// important because it avoids hot-spinning in consumers of node iterators created on
+	// this client.
+	if err := c.ratelimit.Wait(ctx); err != nil {
+		return nil, err
+	}
+
 	cacheKey := truncateHash(hash)
 	if e, ok := c.entries.Get(cacheKey); ok {
 		return e.(entry), nil
@@ -194,19 +206,6 @@ func (c *Client) doResolveEntry(ctx context.Context, domain, hash string) (entry
 		return e, err
 	}
 	return nil, nameError{name, errNoEntry}
-}
-
-// rateLimitResolver applies a rate limit to a Resolver.
-type rateLimitResolver struct {
-	r       Resolver
-	limiter *rate.Limiter
-}
-
-func (r *rateLimitResolver) LookupTXT(ctx context.Context, domain string) ([]string, error) {
-	if err := r.limiter.Wait(ctx); err != nil {
-		return nil, err
-	}
-	return r.r.LookupTXT(ctx, domain)
 }
 
 // randomIterator traverses a set of trees and returns nodes found in them.

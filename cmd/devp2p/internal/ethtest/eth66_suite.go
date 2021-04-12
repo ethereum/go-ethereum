@@ -26,6 +26,16 @@ import (
 	"github.com/ethereum/go-ethereum/p2p"
 )
 
+// Is_66 checks if the node supports the eth66 protocol version,
+// and if not, exists the test suite
+func (s *Suite) Is_66(t *utesting.T) {
+	conn := s.dial66(t)
+	conn.handshake(t)
+	if conn.negotiatedProtoVersion < 66 {
+		t.Fail()
+	}
+}
+
 // TestStatus_66 attempts to connect to the given node and exchange
 // a status message with it on the eth66 protocol, and then check to
 // make sure the chain head is correct.
@@ -203,6 +213,10 @@ func (s *Suite) TestLargeAnnounce_66(t *utesting.T) {
 	if err := receiveConn.waitForBlock66(s.fullChain.blocks[nextBlock]); err != nil {
 		t.Fatal(err)
 	}
+}
+
+func (s *Suite) TestOldAnnounce_66(t *utesting.T) {
+	s.oldAnnounce(t, s.setupConnection66(t), s.setupConnection66(t))
 }
 
 // TestMaliciousHandshake_66 tries to send malicious data during the handshake.
