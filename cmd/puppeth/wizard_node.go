@@ -87,19 +87,14 @@ func (w *wizard) deployNode(boot bool) {
 	case choice == "" || choice == "1":
 		break
 	case choice == "2":
-		fmt.Println()
-		fmt.Println("Where's the git repository? (http/https url)")
-		url := w.readURL()
-
-		if url.Scheme != "http" && url.Scheme != "https" {
-			log.Error("Unsupported git repository URL scheme", "scheme", url.Scheme)
+		infos.gitRepo, infos.gitCommit, err = w.readRepository()
+		if err != nil {
+			log.Error("Couldn't read remote repository", "err", err)
 			return
 		}
-		infos.gitRepo = url.String()
-
-		fmt.Println()
-		fmt.Println("What branch? (default = repository default)")
-		infos.gitBranch = w.readDefaultString("")
+		if infos.gitCommit != w.gitCommit {
+			log.Warn("Local puppeth compiled at different commit. This could have unintended consequences.", "local", w.gitCommit, "remote", infos.gitCommit)
+		}
 	default:
 		log.Error("That's not something I can do")
 		return

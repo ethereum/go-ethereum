@@ -30,9 +30,10 @@ import (
 )
 
 // makeWizard creates and returns a new puppeth wizard.
-func makeWizard(network string) *wizard {
+func makeWizard(network, gitCommit string) *wizard {
 	return &wizard{
-		network: network,
+		network:   network,
+		gitCommit: gitCommit,
 		conf: config{
 			Servers: make(map[string][]byte),
 		},

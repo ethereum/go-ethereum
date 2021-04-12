@@ -37,8 +37,13 @@ var nodeDockerfile = `
 
 	RUN apk add --no-cache make gcc musl-dev linux-headers git
 
-	RUN git clone {{.GitRepo}} {{if .GitBranch}}--branch {{.GitBranch}}{{end}} --depth=1 /go-ethereum
-	RUN cd /go-ethereum && make geth
+	RUN mkdir /go-ethereum
+	WORKDIR /go-ethereum
+	RUN git init -b main
+	RUN git remote add origin {{.GitRepo}}
+	RUN git fetch --depth 1 origin {{.GitCommit}}
+	RUN git checkout -b tmp FETCH_HEAD
+	RUN make geth
 
 	FROM alpine:latest
 
@@ -126,7 +131,7 @@ func deployNode(client *sshClient, network string, bootnodes []string, config *n
 		"GasPrice":  uint64(1000000000 * config.gasPrice),
 		"Unlock":    config.keyJSON != "",
 		"GitRepo":   config.gitRepo,
-		"GitBranch": config.gitBranch,
+		"GitCommit": config.gitCommit,
 	})
 	files[filepath.Join(workdir, "Dockerfile")] = dockerfile.Bytes()
 
@@ -171,7 +176,7 @@ func deployNode(client *sshClient, network string, bootnodes []string, config *n
 type nodeInfos struct {
 	genesis    []byte
 	gitRepo    string
-	gitBranch  string
+	gitCommit  string
 	network    int64
 	datadir    string
 	ethashdir  string

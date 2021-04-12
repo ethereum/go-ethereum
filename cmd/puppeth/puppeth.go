@@ -27,6 +27,8 @@ import (
 	"gopkg.in/urfave/cli.v1"
 )
 
+var gitCommit = ""
+
 // main is just a boring entry point to set up the CLI app.
 func main() {
 	app := cli.NewApp()
@@ -60,6 +62,6 @@ func runWizard(c *cli.Context) error {
 	if strings.Contains(network, " ") || strings.Contains(network, "-") || strings.ToLower(network) != network {
 		log.Crit("No spaces, hyphens or capital letters allowed in network name")
 	}
-	makeWizard(c.String("network")).run()
+	makeWizard(c.String("network"), gitCommit).run()
 	return nil
 }
