@@ -35,14 +35,7 @@ package secp256k1
 import (
 	"crypto/elliptic"
 	"math/big"
-	"unsafe"
 )
-
-/*
-#include "libsecp256k1/include/secp256k1.h"
-extern int secp256k1_ext_scalar_mul(const secp256k1_context* ctx, const unsigned char *point, const unsigned char *scalar);
-*/
-import "C"
 
 const (
 	// number of bits in a big.Word
@@ -254,38 +247,7 @@ func (BitCurve *BitCurve) doubleJacobian(x, y, z *big.Int) (*big.Int, *big.Int, 
 }
 
 func (BitCurve *BitCurve) ScalarMult(Bx, By *big.Int, scalar []byte) (*big.Int, *big.Int) {
-	// Ensure scalar is exactly 32 bytes. We pad always, even if
-	// scalar is 32 bytes long, to avoid a timing side channel.
-	if len(scalar) > 32 {
-		panic("can't handle scalars > 256 bits")
-	}
-	// NOTE: potential timing issue
-	padded := make([]byte, 32)
-	copy(padded[32-len(scalar):], scalar)
-	scalar = padded
-
-	// Do the multiplication in C, updating point.
-	point := make([]byte, 64)
-	readBits(Bx, point[:32])
-	readBits(By, point[32:])
-
-	pointPtr := (*C.uchar)(unsafe.Pointer(&point[0]))
-	scalarPtr := (*C.uchar)(unsafe.Pointer(&scalar[0]))
-	res := C.secp256k1_ext_scalar_mul(context, pointPtr, scalarPtr)
-
-	// Unpack the result and clear temporaries.
-	x := new(big.Int).SetBytes(point[:32])
-	y := new(big.Int).SetBytes(point[32:])
-	for i := range point {
-		point[i] = 0
-	}
-	for i := range padded {
-		scalar[i] = 0
-	}
-	if res != 1 {
-		return nil, nil
-	}
-	return x, y
+	return ScalarMult(Bx, By, scalar)
 }
 
 // ScalarBaseMult returns k*G, where G is the base point of the group and k is
