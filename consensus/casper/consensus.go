@@ -14,7 +14,7 @@
 // You should have received a copy of the GNU Lesser General Public License
 // along with the go-ethereum library. If not, see <http://www.gnu.org/licenses/>.
 
-package hybrid
+package casper
 
 import (
 	"errors"
@@ -24,7 +24,6 @@ import (
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/consensus"
-	"github.com/ethereum/go-ethereum/consensus/ethash"
 	"github.com/ethereum/go-ethereum/core/state"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/params"
@@ -35,7 +34,7 @@ import (
 // Casper proof-of-stake protocol constants.
 var (
 	casperDifficulty = common.Big1          // The default block difficulty in the casper
-	casperNonce      = types.EncodeNonce(1) // The default block nonce in the casper
+	casperNonce      = types.EncodeNonce(0) // The default block nonce in the casper
 )
 
 // Various error messages to mark blocks invalid. These should be private to
@@ -49,15 +48,16 @@ var (
 	errInvalidNonce      = errors.New("invalid nonce")
 )
 
-// Hybrid is a consensus engine combines the proof-of-work and proof-of-stake
-// implementing the ethash and casper algorithm. There is a special flag inside
-// to decide whether to use ethash rules or capser rules. The transition rule
-// is described in the eth1/2 merge spec.
+// Casper is a consensus engine combines the ethereum 1 consensus and proof-of-stake
+// implementing casper algorithm. There is a special flag inside to decide whether to
+// use classic consensus rules or capser rules. The transition rule is described in
+// the eth1/2 merge spec.
 // https://hackmd.io/@n0ble/ethereum_consensus_upgrade_mainnet_perspective#Transition-process
-// The casper here is a tailored consensus engine with partial functions which
-// is only used for necessary consensus checks.
-type Hybrid struct {
-	ethash *ethash.Ethash
+// The casper here is a tailored consensus engine with partial functions which is only
+// used for necessary consensus checks. The classic consensus engine can be any engine
+// implements the consensus interface(except the casper itself).
+type Casper struct {
+	ethone consensus.Engine // Classic consensus engine used in the ethereum 1
 
 	// transitioned is the flag whether the chain has finished the ethash->casper
 	// transition. It's triggered by receiving the first "FinaliseBlock" message
@@ -65,9 +65,9 @@ type Hybrid struct {
 	transitioned uint32
 }
 
-// NewHybrid creates a hybrid consensus engine.
-func NewHybrid(config ethash.Config, notify []string, noverify bool, transitioned bool) *Hybrid {
-	engine := &Hybrid{ethash: ethash.New(config, notify, noverify)}
+// New creates a casper consensus engine with the given embeded ethereum 1 engine.
+func New(ethone consensus.Engine, transitioned bool) *Casper {
+	engine := &Casper{ethone: ethone}
 	if transitioned {
 		engine.SetTransitioned()
 	}
@@ -75,18 +75,19 @@ func NewHybrid(config ethash.Config, notify []string, noverify bool, transitione
 }
 
 // Author implements consensus.Engine, returning the header's coinbase as the
-// verified author of the block. It's same in both ethash and casper.
-func (hybrid *Hybrid) Author(header *types.Header) (common.Address, error) {
+// verified author of the block.
+func (casper *Casper) Author(header *types.Header) (common.Address, error) {
+	if !casper.IsTransitioned() {
+		return casper.ethone.Author(header)
+	}
 	return header.Coinbase, nil
 }
 
 // VerifyHeader checks whether a header conforms to the consensus rules of the
-// stock Ethereum hybrid engine.
-func (hybrid *Hybrid) VerifyHeader(chain consensus.ChainHeaderReader, header *types.Header, seal bool) error {
-	// Delegate the verification to the ethash if the transition is
-	// still not finished yet.
-	if !hybrid.IsTransitioned() {
-		return hybrid.ethash.VerifyHeader(chain, header, seal)
+// stock Ethereum casper engine.
+func (casper *Casper) VerifyHeader(chain consensus.ChainHeaderReader, header *types.Header, seal bool) error {
+	if !casper.IsTransitioned() {
+		return casper.ethone.VerifyHeader(chain, header, seal)
 	}
 	// Short circuit if the header is known, or its parent not
 	number := header.Number.Uint64()
@@ -98,17 +99,15 @@ func (hybrid *Hybrid) VerifyHeader(chain consensus.ChainHeaderReader, header *ty
 		return consensus.ErrUnknownAncestor
 	}
 	// Sanity checks passed, do a proper verification
-	return hybrid.verifyHeader(chain, header, parent)
+	return casper.verifyHeader(chain, header, parent)
 }
 
 // VerifyHeaders is similar to VerifyHeader, but verifies a batch of headers
 // concurrently. The method returns a quit channel to abort the operations and
 // a results channel to retrieve the async verifications.
-func (hybrid *Hybrid) VerifyHeaders(chain consensus.ChainHeaderReader, headers []*types.Header, seals []bool) (chan<- struct{}, <-chan error) {
-	// Delegate the verification to the ethash if the transition is
-	// still not finished yet.
-	if !hybrid.IsTransitioned() {
-		return hybrid.ethash.VerifyHeaders(chain, headers, seals)
+func (casper *Casper) VerifyHeaders(chain consensus.ChainHeaderReader, headers []*types.Header, seals []bool) (chan<- struct{}, <-chan error) {
+	if !casper.IsTransitioned() {
+		return casper.ethone.VerifyHeaders(chain, headers, seals)
 	}
 	var (
 		abort   = make(chan struct{})
@@ -130,7 +129,7 @@ func (hybrid *Hybrid) VerifyHeaders(chain consensus.ChainHeaderReader, headers [
 				}
 				continue
 			}
-			err := hybrid.verifyHeader(chain, header, parent)
+			err := casper.verifyHeader(chain, header, parent)
 			select {
 			case <-abort:
 				return
@@ -142,12 +141,10 @@ func (hybrid *Hybrid) VerifyHeaders(chain consensus.ChainHeaderReader, headers [
 }
 
 // VerifyUncles verifies that the given block's uncles conform to the consensus
-// rules of the stock Ethereum hybrid engine.
-func (hybrid *Hybrid) VerifyUncles(chain consensus.ChainReader, block *types.Block) error {
-	// Delegate the verification to the ethash if the transition is
-	// still not finished yet.
-	if !hybrid.IsTransitioned() {
-		return hybrid.ethash.VerifyUncles(chain, block)
+// rules of the stock Ethereum casper engine.
+func (casper *Casper) VerifyUncles(chain consensus.ChainReader, block *types.Block) error {
+	if !casper.IsTransitioned() {
+		return casper.ethone.VerifyUncles(chain, block)
 	}
 	// Verify that there is no uncle block. It's explicitly disabled in the casper
 	if len(block.Uncles()) > 0 {
@@ -161,7 +158,7 @@ func (hybrid *Hybrid) VerifyUncles(chain consensus.ChainReader, block *types.Blo
 // (a) the difficulty, mixhash, nonce, extradata and unclehash are expected
 //     to be the desired constants
 // (b) the timestamp is not verified anymore
-func (hybrid *Hybrid) verifyHeader(chain consensus.ChainHeaderReader, header, parent *types.Header) error {
+func (casper *Casper) verifyHeader(chain consensus.ChainHeaderReader, header, parent *types.Header) error {
 	// Ensure that the header's extra-data section is of a reasonable size
 	if len(header.Extra) != 0 {
 		return fmt.Errorf("non-empty extra-data(%d)", len(header.Extra))
@@ -203,12 +200,10 @@ func (hybrid *Hybrid) verifyHeader(chain consensus.ChainHeaderReader, header, pa
 }
 
 // Prepare implements consensus.Engine, initializing the difficulty field of a
-// header to conform to the hybrid protocol. The changes are done inline.
-func (hybrid *Hybrid) Prepare(chain consensus.ChainHeaderReader, header *types.Header) error {
-	// Delegate the preparation to the ethash if the transition is
-	// still not finished yet.
-	if !hybrid.IsTransitioned() {
-		return hybrid.ethash.Prepare(chain, header)
+// header to conform to the casper protocol. The changes are done inline.
+func (casper *Casper) Prepare(chain consensus.ChainHeaderReader, header *types.Header) error {
+	if !casper.IsTransitioned() {
+		return casper.ethone.Prepare(chain, header)
 	}
 	parent := chain.GetHeader(header.ParentHash, header.Number.Uint64()-1)
 	if parent == nil {
@@ -219,11 +214,9 @@ func (hybrid *Hybrid) Prepare(chain consensus.ChainHeaderReader, header *types.H
 }
 
 // Finalize implements consensus.Engine, setting the final state on the header
-func (hybrid *Hybrid) Finalize(chain consensus.ChainHeaderReader, header *types.Header, state *state.StateDB, txs []*types.Transaction, uncles []*types.Header) {
-	// Delegate the finalization to the ethash if the transition is
-	// still not finished yet.
-	if !hybrid.IsTransitioned() {
-		hybrid.ethash.Finalize(chain, header, state, txs, uncles)
+func (casper *Casper) Finalize(chain consensus.ChainHeaderReader, header *types.Header, state *state.StateDB, txs []*types.Transaction, uncles []*types.Header) {
+	if !casper.IsTransitioned() {
+		casper.ethone.Finalize(chain, header, state, txs, uncles)
 		return
 	}
 	// The block reward is no longer handled here. It's done by the
@@ -233,14 +226,12 @@ func (hybrid *Hybrid) Finalize(chain consensus.ChainHeaderReader, header *types.
 
 // FinalizeAndAssemble implements consensus.Engine, setting the final state and
 // assembling the block.
-func (hybrid *Hybrid) FinalizeAndAssemble(chain consensus.ChainHeaderReader, header *types.Header, state *state.StateDB, txs []*types.Transaction, uncles []*types.Header, receipts []*types.Receipt) (*types.Block, error) {
-	// Delegate the finalization to the ethash if the transition is
-	// still not finished yet.
-	if !hybrid.IsTransitioned() {
-		return hybrid.ethash.FinalizeAndAssemble(chain, header, state, txs, uncles, receipts)
+func (casper *Casper) FinalizeAndAssemble(chain consensus.ChainHeaderReader, header *types.Header, state *state.StateDB, txs []*types.Transaction, uncles []*types.Header, receipts []*types.Receipt) (*types.Block, error) {
+	if !casper.IsTransitioned() {
+		return casper.ethone.FinalizeAndAssemble(chain, header, state, txs, uncles, receipts)
 	}
 	// Finalize and assemble the block
-	hybrid.Finalize(chain, header, state, txs, uncles)
+	casper.Finalize(chain, header, state, txs, uncles)
 	return types.NewBlock(header, txs, uncles, receipts, trie.NewStackTrie(nil)), nil
 }
 
@@ -249,62 +240,49 @@ func (hybrid *Hybrid) FinalizeAndAssemble(chain consensus.ChainHeaderReader, hea
 //
 // Note, the method returns immediately and will send the result async. More
 // than one result may also be returned depending on the consensus algorithm.
-func (hybrid *Hybrid) Seal(chain consensus.ChainHeaderReader, block *types.Block, results chan<- *types.Block, stop <-chan struct{}) error {
-	// Delegate the sealing to the ethash if the transition is
-	// still not finished yet.
-	if !hybrid.IsTransitioned() {
-		return hybrid.ethash.Seal(chain, block, results, stop)
+func (casper *Casper) Seal(chain consensus.ChainHeaderReader, block *types.Block, results chan<- *types.Block, stop <-chan struct{}) error {
+	if !casper.IsTransitioned() {
+		return casper.ethone.Seal(chain, block, results, stop)
 	}
 	// The seal verification is done by the external consensus engine,
-	// Return directly without pushing any block back.
+	// return directly without pushing any block back. In another word
+	// casper won't return any result by `results` channel which may
+	// blocks the receiver logic forever.
 	return nil
 }
 
 // SealHash returns the hash of a block prior to it being sealed. It's same in
 // both ethash and casper.
-func (hybrid *Hybrid) SealHash(header *types.Header) (hash common.Hash) {
-	return hybrid.ethash.SealHash(header)
+func (casper *Casper) SealHash(header *types.Header) common.Hash {
+	return casper.ethone.SealHash(header)
 }
 
 // CalcDifficulty is the difficulty adjustment algorithm. It returns
 // the difficulty that a new block should have when created at time
 // given the parent block's time and difficulty.
-func (hybrid *Hybrid) CalcDifficulty(chain consensus.ChainHeaderReader, time uint64, parent *types.Header) *big.Int {
-	// Delegate the calculation to the ethash if the transition is
-	// still not finished yet.
-	if !hybrid.IsTransitioned() {
-		return hybrid.ethash.CalcDifficulty(chain, time, parent)
+func (casper *Casper) CalcDifficulty(chain consensus.ChainHeaderReader, time uint64, parent *types.Header) *big.Int {
+	if !casper.IsTransitioned() {
+		return casper.ethone.CalcDifficulty(chain, time, parent)
 	}
 	return casperDifficulty
 }
 
 // APIs implements consensus.Engine, returning the user facing RPC APIs.
-func (hybrid *Hybrid) APIs(chain consensus.ChainHeaderReader) []rpc.API {
-	return hybrid.ethash.APIs(chain)
+func (casper *Casper) APIs(chain consensus.ChainHeaderReader) []rpc.API {
+	return casper.ethone.APIs(chain)
 }
 
 // Close shutdowns the consensus engine
-func (hybrid *Hybrid) Close() error {
-	return hybrid.ethash.Close()
-}
-
-// SetThreads updates the number of mining threads currently enabled. Calling
-// this method does not start mining, only sets the thread count. If zero is
-// specified, the miner will use all cores of the machine. Setting a thread
-// count below zero is allowed and will cause the miner to idle, without any
-// work being done.
-func (hybrid *Hybrid) SetThreads(threads int) {
-	if !hybrid.IsTransitioned() {
-		hybrid.ethash.SetThreads(threads)
-	}
+func (casper *Casper) Close() error {
+	return casper.ethone.Close()
 }
 
 // SetTransitioned marks the transition has been done.
-func (hybrid *Hybrid) SetTransitioned() {
-	atomic.StoreUint32(&hybrid.transitioned, 1)
+func (casper *Casper) SetTransitioned() {
+	atomic.StoreUint32(&casper.transitioned, 1)
 }
 
 // IsTransitioned reports whether the transition has finished.
-func (hybrid *Hybrid) IsTransitioned() bool {
-	return atomic.LoadUint32(&hybrid.transitioned) == 1
+func (casper *Casper) IsTransitioned() bool {
+	return atomic.LoadUint32(&casper.transitioned) == 1
 }

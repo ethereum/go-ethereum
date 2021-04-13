@@ -27,9 +27,9 @@ import (
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/consensus"
+	"github.com/ethereum/go-ethereum/consensus/casper"
 	"github.com/ethereum/go-ethereum/consensus/clique"
 	"github.com/ethereum/go-ethereum/consensus/ethash"
-	"github.com/ethereum/go-ethereum/consensus/hybrid"
 	"github.com/ethereum/go-ethereum/core"
 	"github.com/ethereum/go-ethereum/eth/downloader"
 	"github.com/ethereum/go-ethereum/eth/gasprice"
@@ -207,22 +207,18 @@ type Config struct {
 // CreateConsensusEngine creates a consensus engine for the given chain configuration.
 func CreateConsensusEngine(stack *node.Node, chainConfig *params.ChainConfig, config *ethash.Config, notify []string, noverify bool, db ethdb.Database, merger *core.Merger) consensus.Engine {
 	// If proof-of-authority is requested, set it up
-	if chainConfig.Clique != nil {
-		return clique.New(chainConfig.Clique, db)
-	}
-	// Otherwise assume proof-of-work
 	var engine consensus.Engine
-	switch config.PowMode {
-	case ethash.ModeFake:
-		log.Warn("Ethash used in fake mode")
-		fallthrough
-	case ethash.ModeTest:
-		log.Warn("Ethash used in test mode")
-		fallthrough
-	case ethash.ModeShared:
-		log.Warn("Ethash used in shared mode")
-		fallthrough
-	case ethash.ModeClassic:
+	if chainConfig.Clique != nil {
+		engine = clique.New(chainConfig.Clique, db)
+	} else {
+		switch config.PowMode {
+		case ethash.ModeFake:
+			log.Warn("Ethash used in fake mode")
+		case ethash.ModeTest:
+			log.Warn("Ethash used in test mode")
+		case ethash.ModeShared:
+			log.Warn("Ethash used in shared mode")
+		}
 		engine = ethash.New(ethash.Config{
 			PowMode:          config.PowMode,
 			CacheDir:         stack.ResolvePath(config.CacheDir),
@@ -236,23 +232,13 @@ func CreateConsensusEngine(stack *node.Node, chainConfig *params.ChainConfig, co
 			NotifyFull:       config.NotifyFull,
 		}, notify, noverify)
 		engine.(*ethash.Ethash).SetThreads(-1) // Disable CPU mining
-	default:
-		engine = hybrid.NewHybrid(ethash.Config{
-			PowMode:          config.PowMode,
-			CacheDir:         stack.ResolvePath(config.CacheDir),
-			CachesInMem:      config.CachesInMem,
-			CachesOnDisk:     config.CachesOnDisk,
-			CachesLockMmap:   config.CachesLockMmap,
-			DatasetDir:       config.DatasetDir,
-			DatasetsInMem:    config.DatasetsInMem,
-			DatasetsOnDisk:   config.DatasetsOnDisk,
-			DatasetsLockMmap: config.DatasetsLockMmap,
-			NotifyFull:       config.NotifyFull,
-		}, notify, noverify, merger.EnteredPoS())
-		merger.SubscribeEnterPoS(func() {
-			engine.(*hybrid.Hybrid).SetTransitioned()
-		})
-		engine.(*hybrid.Hybrid).SetThreads(-1) // Disable CPU mining
 	}
+	if merger == nil {
+		return engine
+	}
+	engine = casper.New(engine, merger.EnteredPoS())
+	merger.SubscribeEnterPoS(func() {
+		engine.(*casper.Casper).SetTransitioned()
+	})
 	return engine
 }

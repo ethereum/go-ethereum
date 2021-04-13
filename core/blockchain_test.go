@@ -201,6 +201,58 @@ func TestLastBlock(t *testing.T) {
 	}
 }
 
+// Test inserts the blocks/headers after the fork choice rule is changed.
+// The chain is reorged to whatever specified.
+func testInsertAfterMerge(t *testing.T, blockchain *BlockChain, i, n int, full bool) {
+	// Copy old chain up to #i into a new db
+	db, blockchain2, err := newCanonical(ethash.NewFaker(), i, full)
+	if err != nil {
+		t.Fatal("could not make new canonical in testFork", err)
+	}
+	defer blockchain2.Stop()
+
+	// Assert the chains have the same header/block at #i
+	var hash1, hash2 common.Hash
+	if full {
+		hash1 = blockchain.GetBlockByNumber(uint64(i)).Hash()
+		hash2 = blockchain2.GetBlockByNumber(uint64(i)).Hash()
+	} else {
+		hash1 = blockchain.GetHeaderByNumber(uint64(i)).Hash()
+		hash2 = blockchain2.GetHeaderByNumber(uint64(i)).Hash()
+	}
+	if hash1 != hash2 {
+		t.Errorf("chain content mismatch at %d: have hash %v, want hash %v", i, hash2, hash1)
+	}
+
+	// Trigger the transition explicitly
+	blockchain2.forker.SetTransitioned()
+
+	// Extend the newly created chain
+	if full {
+		blockChainB := makeBlockChain(blockchain2.CurrentBlock(), n, ethash.NewFaker(), db, forkSeed)
+		if _, err := blockchain2.InsertChain(blockChainB); err != nil {
+			t.Fatalf("failed to insert forking chain: %v", err)
+		}
+		if blockchain2.CurrentBlock().NumberU64() != blockChainB[len(blockChainB)-1].NumberU64() {
+			t.Fatalf("failed to reorg to the given chain")
+		}
+		if blockchain2.CurrentBlock().Hash() != blockChainB[len(blockChainB)-1].Hash() {
+			t.Fatalf("failed to reorg to the given chain")
+		}
+	} else {
+		headerChainB := makeHeaderChain(blockchain2.CurrentHeader(), n, ethash.NewFaker(), db, forkSeed)
+		if _, err := blockchain2.InsertHeaderChain(headerChainB, 1); err != nil {
+			t.Fatalf("failed to insert forking chain: %v", err)
+		}
+		if blockchain2.CurrentHeader().Number.Uint64() != headerChainB[len(headerChainB)-1].Number.Uint64() {
+			t.Fatalf("failed to reorg to the given chain")
+		}
+		if blockchain2.CurrentHeader().Hash() != headerChainB[len(headerChainB)-1].Hash() {
+			t.Fatalf("failed to reorg to the given chain")
+		}
+	}
+}
+
 // Tests that given a starting canonical chain of a given size, it can be extended
 // with various length chains.
 func TestExtendCanonicalHeaders(t *testing.T) { testExtendCanonical(t, false) }
@@ -227,6 +279,25 @@ func testExtendCanonical(t *testing.T, full bool) {
 	testFork(t, processor, length, 2, full, better)
 	testFork(t, processor, length, 5, full, better)
 	testFork(t, processor, length, 10, full, better)
+}
+
+// Tests that given a starting canonical chain of a given size, it can be extended
+// with various length chains.
+func TestExtendCanonicalHeadersAfterMerge(t *testing.T) { testExtendCanonicalAfterMerge(t, false) }
+func TestExtendCanonicalBlocksAfterMerge(t *testing.T)  { testExtendCanonicalAfterMerge(t, true) }
+
+func testExtendCanonicalAfterMerge(t *testing.T, full bool) {
+	length := 5
+
+	// Make first chain starting from genesis
+	_, processor, err := newCanonical(ethash.NewFaker(), length, full)
+	if err != nil {
+		t.Fatalf("failed to make new canonical chain: %v", err)
+	}
+	defer processor.Stop()
+
+	testInsertAfterMerge(t, processor, length, 1, full)
+	testInsertAfterMerge(t, processor, length, 10, full)
 }
 
 // Tests that given a starting canonical chain of a given size, creating shorter
@@ -259,6 +330,29 @@ func testShorterFork(t *testing.T, full bool) {
 	testFork(t, processor, 5, 4, full, worse)
 }
 
+// Tests that given a starting canonical chain of a given size, creating shorter
+// forks do not take canonical ownership.
+func TestShorterForkHeadersAfterMerge(t *testing.T) { testShorterForkAfterMerge(t, false) }
+func TestShorterForkBlocksAfterMerge(t *testing.T)  { testShorterForkAfterMerge(t, true) }
+
+func testShorterForkAfterMerge(t *testing.T, full bool) {
+	length := 10
+
+	// Make first chain starting from genesis
+	_, processor, err := newCanonical(ethash.NewFaker(), length, full)
+	if err != nil {
+		t.Fatalf("failed to make new canonical chain: %v", err)
+	}
+	defer processor.Stop()
+
+	testInsertAfterMerge(t, processor, 0, 3, full)
+	testInsertAfterMerge(t, processor, 0, 7, full)
+	testInsertAfterMerge(t, processor, 1, 1, full)
+	testInsertAfterMerge(t, processor, 1, 7, full)
+	testInsertAfterMerge(t, processor, 5, 3, full)
+	testInsertAfterMerge(t, processor, 5, 4, full)
+}
+
 // Tests that given a starting canonical chain of a given size, creating longer
 // forks do take canonical ownership.
 func TestLongerForkHeaders(t *testing.T) { testLongerFork(t, false) }
@@ -274,19 +368,35 @@ func testLongerFork(t *testing.T, full bool) {
 	}
 	defer processor.Stop()
 
-	// Define the difficulty comparator
-	better := func(td1, td2 *big.Int) {
-		if td2.Cmp(td1) <= 0 {
-			t.Errorf("total difficulty mismatch: have %v, expected more than %v", td2, td1)
-		}
+	testInsertAfterMerge(t, processor, 0, 11, full)
+	testInsertAfterMerge(t, processor, 0, 15, full)
+	testInsertAfterMerge(t, processor, 1, 10, full)
+	testInsertAfterMerge(t, processor, 1, 12, full)
+	testInsertAfterMerge(t, processor, 5, 6, full)
+	testInsertAfterMerge(t, processor, 5, 8, full)
+}
+
+// Tests that given a starting canonical chain of a given size, creating longer
+// forks do take canonical ownership.
+func TestLongerForkHeadersAfterMerge(t *testing.T) { testLongerForkAfterMerge(t, false) }
+func TestLongerForkBlocksAfterMerge(t *testing.T)  { testLongerForkAfterMerge(t, true) }
+
+func testLongerForkAfterMerge(t *testing.T, full bool) {
+	length := 10
+
+	// Make first chain starting from genesis
+	_, processor, err := newCanonical(ethash.NewFaker(), length, full)
+	if err != nil {
+		t.Fatalf("failed to make new canonical chain: %v", err)
 	}
-	// Sum of numbers must be greater than `length` for this to be a longer fork
-	testFork(t, processor, 0, 11, full, better)
-	testFork(t, processor, 0, 15, full, better)
-	testFork(t, processor, 1, 10, full, better)
-	testFork(t, processor, 1, 12, full, better)
-	testFork(t, processor, 5, 6, full, better)
-	testFork(t, processor, 5, 8, full, better)
+	defer processor.Stop()
+
+	testInsertAfterMerge(t, processor, 0, 11, full)
+	testInsertAfterMerge(t, processor, 0, 15, full)
+	testInsertAfterMerge(t, processor, 1, 10, full)
+	testInsertAfterMerge(t, processor, 1, 12, full)
+	testInsertAfterMerge(t, processor, 5, 6, full)
+	testInsertAfterMerge(t, processor, 5, 8, full)
 }
 
 // Tests that given a starting canonical chain of a given size, creating equal
@@ -317,6 +427,29 @@ func testEqualFork(t *testing.T, full bool) {
 	testFork(t, processor, 5, 5, full, equal)
 	testFork(t, processor, 6, 4, full, equal)
 	testFork(t, processor, 9, 1, full, equal)
+}
+
+// Tests that given a starting canonical chain of a given size, creating equal
+// forks do take canonical ownership.
+func TestEqualForkHeadersAfterMerge(t *testing.T) { testEqualForkAfterMerge(t, false) }
+func TestEqualForkBlocksAfterMerge(t *testing.T)  { testEqualForkAfterMerge(t, true) }
+
+func testEqualForkAfterMerge(t *testing.T, full bool) {
+	length := 10
+
+	// Make first chain starting from genesis
+	_, processor, err := newCanonical(ethash.NewFaker(), length, full)
+	if err != nil {
+		t.Fatalf("failed to make new canonical chain: %v", err)
+	}
+	defer processor.Stop()
+
+	testInsertAfterMerge(t, processor, 0, 10, full)
+	testInsertAfterMerge(t, processor, 1, 9, full)
+	testInsertAfterMerge(t, processor, 2, 8, full)
+	testInsertAfterMerge(t, processor, 5, 5, full)
+	testInsertAfterMerge(t, processor, 6, 4, full)
+	testInsertAfterMerge(t, processor, 9, 1, full)
 }
 
 // Tests that chains missing links do not get accepted by the processor.
