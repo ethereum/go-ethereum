@@ -242,11 +242,10 @@ func (hc *HeaderChain) writeHeaders(headers []*types.Header, forker *ForkChoicer
 		return &headerWriteResult{}, consensus.ErrUnknownAncestor
 	}
 	var (
-		lastHash = headers[0].ParentHash // Last imported header hash
-		newTD    = new(big.Int).Set(ptd) // Total difficulty of inserted chain
-
-		lastHeader *types.Header
-		inserted   []numberHash // Ephemeral lookup of number/hash for the chain
+		newTD      = new(big.Int).Set(ptd)   // Total difficulty of inserted chain
+		lastHeader = headers[len(headers)-1] // The last header scheduled for insertion
+		lastHash   = lastHeader.Hash()       // The shared last header hash
+		inserted   []numberHash              // Ephemeral lookup of number/hash for the chain
 	)
 
 	batch := hc.chainDb.NewBatch()
@@ -274,9 +273,7 @@ func (hc *HeaderChain) writeHeaders(headers []*types.Header, forker *ForkChoicer
 			hc.headerCache.Add(hash, header)
 			hc.numberCache.Add(hash, number)
 		}
-		lastHeader, lastHash = header, hash
 	}
-
 	// Skip the slow disk write of all headers if interrupted.
 	if hc.procInterrupt() {
 		log.Debug("Premature abort during headers import")
@@ -300,17 +297,19 @@ func (hc *HeaderChain) writeHeaders(headers []*types.Header, forker *ForkChoicer
 			lastHeader: lastHeader,
 		}, nil
 	}
-	// Apply the reorg operation
-	hc.Reorg(lastHeader, headers)
-
-	// Special case, nothing inserted(but the head may be updated)
-	if len(inserted) == 0 {
+	// Special case, all the inserted headers are already on the canonical
+	// header chain, skip the reorg operation.
+	if hc.GetCanonicalHash(lastHeader.Number.Uint64()) == lastHash && lastHeader.Number.Uint64() <= hc.CurrentHeader().Number.Uint64() {
 		return &headerWriteResult{
-			status:   NonStatTy,
-			ignored:  len(headers),
-			imported: 0,
+			status:     NonStatTy,
+			ignored:    len(headers) - len(inserted),
+			imported:   len(inserted),
+			lastHash:   lastHash,
+			lastHeader: lastHeader,
 		}, nil
 	}
+	// Apply the reorg operation
+	hc.Reorg(lastHeader, headers)
 	return &headerWriteResult{
 		status:     CanonStatTy,
 		ignored:    len(headers) - len(inserted),

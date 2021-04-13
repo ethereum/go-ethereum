@@ -1748,16 +1748,24 @@ func (bc *BlockChain) insertChain(chain types.Blocks, verifySeals bool) (int, er
 		//   2. The block is stored as a sidechain, and is lying about it's stateroot, and passes a stateroot
 		// 	    from the canonical chain, which has not been verified.
 		// Skip all known blocks that are behind us
-		var reorg bool
+		var (
+			reorg   bool
+			current = bc.CurrentBlock()
+		)
 		for block != nil && err == ErrKnownBlock {
 			reorg, err = bc.forker.Reorg(block.Header())
 			if err != nil {
 				return it.index, err
 			}
-			// Switch to import mode if the forker says the reorg is necessary
-			// and also the block is indeed not the canonical block right now.
-			if reorg && bc.GetCanonicalHash(block.NumberU64()) != block.Hash() {
-				break
+			if reorg {
+				// Switch to import mode if the forker says the reorg is necessary
+				// and also the block is not on the canonical chain.
+				// In casper the forker always returns True for reorg(blindly trust
+				// the external consensus engine), but in order to prevent the unnecessary
+				/// reorgs when importing known blocks, the special case is handled here.
+				if bc.GetCanonicalHash(block.NumberU64()) != block.Hash() || block.NumberU64() > current.NumberU64() {
+					break
+				}
 			}
 			log.Debug("Ignoring already known block", "number", block.Number(), "hash", block.Hash())
 			stats.ignored++
@@ -2079,7 +2087,7 @@ func (bc *BlockChain) insertSideChain(block *types.Block, it *insertIterator) (i
 	if err != nil {
 		return it.index, err
 	}
-	if !reorg || bc.GetCanonicalHash(lastBlock.NumberU64()) == lastBlock.Hash() {
+	if !reorg {
 		localTd := bc.GetTd(current.Hash(), current.NumberU64())
 		log.Info("Sidechain written to disk", "start", it.first().NumberU64(), "end", it.previous().Number, "sidetd", externTd, "localtd", localTd)
 		return it.index, err
