@@ -525,7 +525,7 @@ func TestOffset(t *testing.T) {
 
 		f.Append(4, getChunk(20, 0xbb))
 		f.Append(5, getChunk(20, 0xaa))
-		f.printIndex()
+		f.DumpIndex(0, 100)
 		f.Close()
 	}
 	// Now crop it.
@@ -572,7 +572,7 @@ func TestOffset(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		f.printIndex()
+		f.DumpIndex(0, 100)
 		// It should allow writing item 6
 		f.Append(numDeleted+2, getChunk(20, 0x99))
 
