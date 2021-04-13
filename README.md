@@ -60,6 +60,13 @@ The MEV-Geth proof of concept is compatible with any regular Ethereum client. Th
 
 ### Differences between MEV-Geth and [_vanilla_ geth](https://github.com/ethereum/go-ethereum)
 
+
+| Version | Spec |
+|----|----|
+| v0.2 | [MEV-Geth Spec v0.2](MEV_spec_v0_2.md) |
+| v0.1 | [MEV-Geth Spec v0.1](MEV_spec_v0_1.md) |
+
+
 The entire patch can be broken down into four modules:
 
 1. bundle worker and `eth_sendBundle` rpc (commits [8104d5d7b0a54bd98b3a08479a1fde685eb53c29](https://github.com/flashbots/mev-geth/commit/8104d5d7b0a54bd98b3a08479a1fde685eb53c29) and [c2b5b4029b2b748a6f1a9d5668f12096f096563d](https://github.com/flashbots/mev-geth/commit/c2b5b4029b2b748a6f1a9d5668f12096f096563d))
