@@ -335,7 +335,7 @@ func (f *BlockFetcher) loop() {
 		fetchTimer    = time.NewTimer(0)
 		completeTimer = time.NewTimer(0)
 	)
-	<-fetchTimer.C // clear out the channel	
+	<-fetchTimer.C // clear out the channel
 	<-completeTimer.C
 	defer fetchTimer.Stop()
 	defer completeTimer.Stop()
