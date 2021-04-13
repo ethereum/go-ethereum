@@ -273,8 +273,21 @@ func (c *Client) SetHeader(key, value string) {
 	conn.mu.Unlock()
 }
 
+// NewNamedParams is a qucick way to create NamedParams.
+func NewNamedParams(argsObject interface{}) NamedParams {
+	return NamedParams{Value: argsObject}
+}
+
+// NamedParams wraps a struct or map value to provide RPC params as an object.
+type NamedParams struct {
+	Value interface{}
+}
+
 // Call performs a JSON-RPC call with the given arguments and unmarshals into
 // result if no error occurred.
+//
+// Args are encoded into the RPC request as ordered array params by default,
+// but can be encoded as a named params object by passing a single NamedParams arg.
 //
 // The result must be a pointer so that package json can unmarshal into it. You
 // can also pass nil, in which case the result is ignored.
@@ -285,6 +298,9 @@ func (c *Client) Call(result interface{}, method string, args ...interface{}) er
 
 // CallContext performs a JSON-RPC call with the given arguments. If the context is
 // canceled before the call has successfully returned, CallContext returns immediately.
+//
+// Args are encoded into the RPC request as ordered array params by default,
+// but can be encoded as a named params object by passing a single NamedParams arg.
 //
 // The result must be a pointer so that package json can unmarshal into it. You
 // can also pass nil, in which case the result is ignored.
@@ -394,6 +410,10 @@ func (c *Client) BatchCallContext(ctx context.Context, b []BatchElem) error {
 }
 
 // Notify sends a notification, i.e. a method call that doesn't expect a response.
+//
+// Args are encoded into the RPC request as ordered array params by default,
+// but can be encoded as a named params object by passing a single NamedParams arg.
+//
 func (c *Client) Notify(ctx context.Context, method string, args ...interface{}) error {
 	op := new(requestOp)
 	msg, err := c.newMessage(method, args...)
@@ -409,11 +429,19 @@ func (c *Client) Notify(ctx context.Context, method string, args ...interface{})
 }
 
 // EthSubscribe registers a subscripion under the "eth" namespace.
+//
+// Args are encoded into the RPC request as ordered array params by default,
+// but can be encoded as a named params object by passing a single NamedParams arg.
+//
 func (c *Client) EthSubscribe(ctx context.Context, channel interface{}, args ...interface{}) (*ClientSubscription, error) {
 	return c.Subscribe(ctx, "eth", channel, args...)
 }
 
 // ShhSubscribe registers a subscripion under the "shh" namespace.
+//
+// Args are encoded into the RPC request as ordered array params by default,
+// but can be encoded as a named params object by passing a single NamedParams arg.
+//
 // Deprecated: use Subscribe(ctx, "shh", ...).
 func (c *Client) ShhSubscribe(ctx context.Context, channel interface{}, args ...interface{}) (*ClientSubscription, error) {
 	return c.Subscribe(ctx, "shh", channel, args...)
@@ -423,6 +451,9 @@ func (c *Client) ShhSubscribe(ctx context.Context, channel interface{}, args ...
 // registering a subscription. Server notifications for the subscription are
 // sent to the given channel. The element type of the channel must match the
 // expected type of content returned by the subscription.
+//
+// Args are encoded into the RPC request as ordered array params by default,
+// but can be encoded as a named params object by passing a single NamedParams arg.
 //
 // The context argument cancels the RPC request that sets up the subscription but has no
 // effect on the subscription after Subscribe has returned.
@@ -465,8 +496,12 @@ func (c *Client) Subscribe(ctx context.Context, namespace string, channel interf
 	return op.sub, nil
 }
 
-func (c *Client) newMessage(method string, paramsIn ...interface{}) (*jsonrpcMessage, error) {
+func (c *Client) newMessage(method string, args ...interface{}) (*jsonrpcMessage, error) {
 	msg := &jsonrpcMessage{Version: vsn, ID: c.nextID(), Method: method}
+	var paramsIn interface{} = args
+	if len(args) == 1 && reflect.TypeOf(args[0]) == reflect.TypeOf(NamedParams{}) {
+		paramsIn = args[0].(NamedParams).Value
+	}
 	if paramsIn != nil { // prevent sending "params":null
 		var err error
 		if msg.Params, err = json.Marshal(paramsIn); err != nil {
