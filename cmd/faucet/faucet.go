@@ -887,26 +887,16 @@ func authNoAuth(url string) (string, string, common.Address, error) {
 
 // Ensures that only one genesis flag is provided and returns the relevant genesis
 func getGenesis(genesisFlag *string, goerliFlag bool, rinkebyFlag bool) (*core.Genesis, error) {
-	if *genesisFlag != "" {
-		if goerliFlag || rinkebyFlag {
-			return new(core.Genesis), fmt.Errorf("Invalid argument, can not use `--genesis` with `--goerli` or `--rinkeby`")
-		}
-		blob, err := ioutil.ReadFile(*genesisFlag)
-		if err != nil {
-			return new(core.Genesis), err
-		}
-		genesis := new(core.Genesis)
-		if err = json.Unmarshal(blob, genesis); err != nil {
-			return new(core.Genesis), err
-		}
-		return genesis, nil
-	} else if goerliFlag {
-		if rinkebyFlag {
-			return new(core.Genesis), fmt.Errorf("Invalid argument, can not use `--goerli` with `--rinkeby`")
-		}
+	switch {
+	case genesisFlag != nil:
+		var genesis core.Genesis
+		err := common.LoadJSON(*genesisFlag, &genesis)
+		return &genesis, err
+	case goerliFlag:
 		return core.DefaultGoerliGenesisBlock(), nil
-	} else if rinkebyFlag {
+	case rinkebyFlag:
 		return core.DefaultRinkebyGenesisBlock(), nil
+	default:
+		return nil, fmt.Errorf("no genesis flag provided")
 	}
-	return new(core.Genesis), fmt.Errorf("No genesis flag provided")
 }
