@@ -480,7 +480,7 @@ func freezerInspect(ctx *cli.Context) error {
 	kind := ctx.Args().Get(0)
 	if noSnap, ok := rawdb.FreezerNoSnappy[kind]; !ok {
 		var options []string
-		for opt, _ := range rawdb.FreezerNoSnappy {
+		for opt := range rawdb.FreezerNoSnappy {
 			options = append(options, opt)
 		}
 		sort.Strings(options)
