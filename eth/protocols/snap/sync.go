@@ -51,7 +51,7 @@ const (
 	// maxRequestSize is the maximum number of bytes to request from a remote peer.
 	maxRequestSize = 512 * 1024
 
-	// maxStorageSetRequestCountis th maximum number of contracts to request the
+	// maxStorageSetRequestCount is the maximum number of contracts to request the
 	// storage of in a single query. If this number is too low, we're not filling
 	// responses fully and waste round trip times. If it's too high, we're capping
 	// responses and waste bandwidth.
@@ -80,6 +80,12 @@ const (
 	// storageConcurrency is the number of chunks to split the a large contract
 	// storage trie into to allow concurrent retrievals.
 	storageConcurrency = 16
+
+	// storageScratchSpace is the amount of storage data to buffer within a single
+	// chunk task before flushing to disk. The sync's memory usage will be at least
+	// storageScratchSpace * storageConcurrency, but in exchange significantly less
+	// healing tasks need to be run.
+	storageScratchSpace = 16 * 1024 * 1024
 )
 
 var (
@@ -205,9 +211,8 @@ type storageResponse struct {
 	tries  []*trie.Trie          // Reconstructed tries to reject overflown slots
 
 	// Fields relevant for the last account only
-	bounds   map[common.Hash]struct{} // Boundary nodes to avoid persisting (incomplete)
-	overflow *light.NodeSet           // Overflow nodes to avoid persisting across chunk boundaries
-	cont     bool                     // Whether the last storage range has a continuation
+	bounds *light.NodeSet // Boundary nodes to avoid persisting (incomplete)
+	cont   bool           // Whether the last storage range has a continuation
 }
 
 // trienodeHealRequest tracks a pending state trie request to ensure responses
@@ -301,7 +306,14 @@ type storageTask struct {
 	// These fields are internals used during runtime
 	root common.Hash     // Storage root hash for this instance
 	req  *storageRequest // Pending request to fill this task
-	done bool            // Flag whether the task can be removed
+
+	dirtyNext  common.Hash    // Next account to sync within the scratch space
+	dirtyKeys  [][]byte       // Slot keys being temporarilly buffered
+	dirtyVals  [][]byte       // Slot values being temporarilly buffered
+	dirtyProof *light.NodeSet // Proofs for various boundary nodes
+	dirtyData  uint64         // Number of bytes in the dirty datasets
+
+	done bool // Flag whether the task can be removed
 }
 
 // healTask represents the sync task for healing the snap-synced chunk boundaries.
@@ -348,7 +360,7 @@ type SyncPeer interface {
 	// trie, starting with the origin.
 	RequestAccountRange(id uint64, root, origin, limit common.Hash, bytes uint64) error
 
-	// RequestStorageRange fetches a batch of storage slots belonging to one or
+	// RequestStorageRanges fetches a batch of storage slots belonging to one or
 	// more accounts. If slots from only one accout is requested, an origin marker
 	// may also be used to retrieve from there.
 	RequestStorageRanges(id uint64, root common.Hash, accounts []common.Hash, origin, limit []byte, bytes uint64) error
@@ -1047,7 +1059,11 @@ func (s *Syncer) assignStorageTasks(cancel chan struct{}) {
 			subTask:  subtask,
 		}
 		if subtask != nil {
-			req.origin = subtask.Next
+			if subtask.dirtyNext != (common.Hash{}) {
+				req.origin = subtask.dirtyNext
+			} else {
+				req.origin = subtask.Next
+			}
 			req.limit = subtask.Last
 		}
 		req.timeout = time.AfterFunc(requestTimeout, func() {
@@ -1705,6 +1721,10 @@ func (s *Syncer) processStorageResponse(res *storageResponse) {
 		nodes   int
 		skipped int
 		bytes   common.StorageSize
+
+		dirtyNodes    ethdb.KeyValueStore
+		dirtyBounds   map[common.Hash]struct{}
+		dirtyOverflow *light.NodeSet
 	)
 	// Iterate over all the accounts and reconstruct their storage tries from the
 	// delivered slots
@@ -1772,7 +1792,26 @@ func (s *Syncer) processStorageResponse(res *storageResponse) {
 			}
 			// If we're in large contract delivery mode, forward the subtask
 			if res.subTask != nil {
+				// Storage chunks get buffered a bit in memory before flushing in
+				// order to reduce the number of healing requests after snap sync
+				for _, key := range res.hashes[i] {
+					res.subTask.dirtyKeys = append(res.subTask.dirtyKeys, common.CopyBytes(key[:]))
+				}
+				res.subTask.dirtyData += uint64(len(res.hashes[i])) * common.HashLength
+
+				res.subTask.dirtyVals = append(res.subTask.dirtyVals, res.slots[i]...)
+				for _, slot := range res.slots[i] {
+					res.subTask.dirtyData += uint64(len(slot))
+				}
+				if res.subTask.dirtyProof == nil {
+					res.subTask.dirtyProof = light.NewNodeSet()
+				}
+				res.bounds.Store(res.subTask.dirtyProof)
+				res.subTask.dirtyData += uint64(res.bounds.KeyCount()) * common.HashLength
+
 				// Ensure the response doesn't overflow into the subsequent task
+				cutoff := len(res.hashes[i]) // no trim by default
+
 				last := res.subTask.Last.Big()
 				for k, hash := range res.hashes[i] {
 					// Mark the range complete if the last is already included.
@@ -1783,49 +1822,96 @@ func (s *Syncer) processStorageResponse(res *storageResponse) {
 						continue
 					}
 					if cmp > 0 {
-						// Chunk overflown, cut off excess, but also update the boundary
-						for l := k; l < len(res.hashes[i]); l++ {
-							if err := res.tries[i].Prove(res.hashes[i][l][:], 0, res.overflow); err != nil {
-								panic(err) // Account range was already proven, what happened
-							}
-						}
-						res.hashes[i] = res.hashes[i][:k]
-						res.slots[i] = res.slots[i][:k]
 						res.cont = false // Mark range completed
+						cutoff = k
 						break
 					}
 				}
+				// If we've reached the end of a chunk or exceeded the scratch
+				// space allowance, prep the data for persisting
+				if !res.cont || res.subTask.dirtyData > storageScratchSpace {
+					// Chunk overflown, cut off excess, but also update the boundary
+					var end []byte
+					if n := len(res.subTask.dirtyKeys); n > 0 {
+						end = res.subTask.dirtyKeys[n-1]
+					}
+					db, tr, notary, _, err := trie.VerifyRangeProof(res.subTask.root, res.subTask.Next[:], end, res.subTask.dirtyKeys, res.subTask.dirtyVals, res.subTask.dirtyProof)
+					if err != nil {
+						panic(err) // We verified each chunk, the union can't fail
+					}
+					dirtyNodes = db
+					dirtyBounds := make(map[common.Hash]struct{})
+
+					it := notary.Accessed().NewIterator(nil, nil)
+					for it.Next() {
+						dirtyBounds[common.BytesToHash(it.Key())] = struct{}{}
+					}
+					it.Release()
+
+					dirtyOverflow = light.NewNodeSet()
+					for l := cutoff; l < len(res.hashes[i]); l++ {
+						if err := tr.Prove(res.hashes[i][l][:], 0, dirtyOverflow); err != nil {
+							panic(err) // Account range was already proven, what happened
+						}
+					}
+					res.subTask.dirtyKeys = res.subTask.dirtyKeys[:len(res.subTask.dirtyKeys)-len(res.hashes[i])+cutoff]
+					res.subTask.dirtyVals = res.subTask.dirtyVals[:len(res.subTask.dirtyVals)-len(res.slots[i])+cutoff]
+				}
 				// Forward the relevant storage chunk (even if created just now)
 				if res.cont {
-					res.subTask.Next = common.BigToHash(new(big.Int).Add(res.hashes[i][len(res.hashes[i])-1].Big(), big.NewInt(1)))
+					// If we've overflown the scratch space and are serializing,
+					// push the persistent marker. Otherwise only the scratch one.
+					next := common.BigToHash(new(big.Int).Add(res.hashes[i][len(res.hashes[i])-1].Big(), big.NewInt(1)))
+					if dirtyNodes != nil {
+						res.subTask.Next = next
+					} else {
+						res.subTask.dirtyNext = next
+					}
 				} else {
 					res.subTask.done = true
 				}
 			}
 		}
-		// Iterate over all the reconstructed trie nodes and push them to disk
-		slots += len(res.hashes[i])
+		// If we're writing a small contract, push it to disk naively
+		if i < len(res.hashes)-1 || res.subTask == nil {
+			slots += len(res.hashes[i])
 
-		it := res.nodes[i].NewIterator(nil, nil)
-		for it.Next() {
-			// Boundary nodes are not written for the last result, since they are incomplete
-			if i == len(res.hashes)-1 && res.subTask != nil {
-				if _, ok := res.bounds[common.BytesToHash(it.Key())]; ok {
-					skipped++
-					continue
-				}
-				if _, err := res.overflow.Get(it.Key()); err == nil {
-					skipped++
-					continue
-				}
+			it := res.nodes[i].NewIterator(nil, nil)
+			for it.Next() {
+				batch.Put(it.Key(), it.Value())
+				bytes += common.StorageSize(common.HashLength + len(it.Value()))
+				nodes++
 			}
-			// Node is not a boundary, persist to disk
-			batch.Put(it.Key(), it.Value())
+			it.Release()
+		} else if dirtyNodes != nil {
+			// Iterate over all the reconstructed trie nodes and push them to disk
+			slots += len(res.subTask.dirtyKeys)
 
-			bytes += common.StorageSize(common.HashLength + len(it.Value()))
-			nodes++
+			it := dirtyNodes.NewIterator(nil, nil)
+			for it.Next() {
+				if _, ok := dirtyBounds[common.BytesToHash(it.Key())]; ok {
+					skipped++
+					continue
+				}
+				if _, err := dirtyOverflow.Get(it.Key()); err == nil {
+					skipped++
+					continue
+				}
+				// Node is not a boundary, persist to disk
+				batch.Put(it.Key(), it.Value())
+
+				bytes += common.StorageSize(common.HashLength + len(it.Value()))
+				nodes++
+			}
+			it.Release()
+
+			// Clear out the scratch space
+			res.subTask.dirtyNext = common.Hash{}
+			res.subTask.dirtyKeys = nil
+			res.subTask.dirtyVals = nil
+			res.subTask.dirtyProof = nil
+			res.subTask.dirtyData = 0
 		}
-		it.Release()
 	}
 	if err := batch.Write(); err != nil {
 		log.Crit("Failed to persist storage slots", "err", err)
@@ -2352,12 +2438,12 @@ func (s *Syncer) OnStorage(peer SyncPeer, id uint64, hashes [][]common.Hash, slo
 		}
 	}
 	// Partial tries reconstructed, send them to the scheduler for storage filling
-	bounds := make(map[common.Hash]struct{})
+	bounds := light.NewNodeSet()
 
 	if notary != nil { // if all contract storages are delivered in full, no notary will be created
 		it := notary.Accessed().NewIterator(nil, nil)
 		for it.Next() {
-			bounds[common.BytesToHash(it.Key())] = struct{}{}
+			bounds.Put(it.Key(), it.Value())
 		}
 		it.Release()
 	}
@@ -2371,7 +2457,6 @@ func (s *Syncer) OnStorage(peer SyncPeer, id uint64, hashes [][]common.Hash, slo
 		nodes:    dbs,
 		tries:    tries,
 		bounds:   bounds,
-		overflow: light.NewNodeSet(),
 		cont:     cont,
 	}
 	select {
