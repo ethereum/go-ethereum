@@ -297,6 +297,7 @@ func (dl *diskLayer) proveRange(stats *generatorStats, root common.Hash, prefix 
 				// Here append the original value to ensure that the number of key and
 				// value are the same.
 				vals = append(vals, common.CopyBytes(iter.Value()))
+				log.Error("Failed to convert account state data", "err", err)
 			} else {
 				vals = append(vals, val)
 			}
