@@ -74,26 +74,22 @@ var (
 	snapSuccessfulRangeProofMeter = metrics.NewRegisteredMeter("state/snapshot/generation/proof/success", nil)
 	snapFailedRangeProofMeter     = metrics.NewRegisteredMeter("state/snapshot/generation/proof/failure", nil)
 
-	snapAccountProveTimer    = metrics.NewRegisteredGauge("state/snapshot/generation/duration/account/prove", nil)
-	snapAccountTrieReadTimer = metrics.NewRegisteredGauge("state/snapshot/generation/duration/account/trieread", nil)
-	snapAccountSnapReadTimer = metrics.NewRegisteredGauge("state/snapshot/generation/duration/account/snapread", nil)
-	snapAccountWriteTimer    = metrics.NewRegisteredGauge("state/snapshot/generation/duration/account/write", nil)
-	snapStorageProveTimer    = metrics.NewRegisteredGauge("state/snapshot/generation/duration/storage/prove", nil)
-	snapStorageTrieReadTimer = metrics.NewRegisteredGauge("state/snapshot/generation/duration/storage/trieread", nil)
-	snapStorageSnapReadTimer = metrics.NewRegisteredGauge("state/snapshot/generation/duration/storage/snapread", nil)
-	snapStorageWriteTimer    = metrics.NewRegisteredGauge("state/snapshot/generation/duration/storage/write", nil)
-)
-
-// Global timer for metrics
-var (
-	accountProving  time.Duration // The total time spent on the account proving
-	accountTrieRead time.Duration // The total time spent on the account trie iteration
-	accountSnapRead time.Duration // The total time spent on the snapshot account iteration
-	accountWrite    time.Duration // The total time spent on writing/updating/deleting accounts
-	storageProving  time.Duration // The total time spent on the storage proving
-	storageTrieRead time.Duration // The total time spent on the storage trie iteration
-	storageSnapRead time.Duration // The total time spent on the snapshot storage iteration
-	storageWrite    time.Duration // The total time spent on writing/updating/deleting storages
+	// snapAccountProveTimer measures time spent on the account proving
+	snapAccountProveTimer = metrics.NewRegisteredTimer("state/snapshot/generation/duration/account/prove", nil)
+	// snapAccountTrieReadTimer measures time spent on the account trie iteration
+	snapAccountTrieReadTimer = metrics.NewRegisteredTimer("state/snapshot/generation/duration/account/trieread", nil)
+	// snapAccountSnapReadTimer measues time spent on the snapshot account iteration
+	snapAccountSnapReadTimer = metrics.NewRegisteredTimer("state/snapshot/generation/duration/account/snapread", nil)
+	// snapAccountWriteTimer measures time spent on writing/updating/deleting accounts
+	snapAccountWriteTimer = metrics.NewRegisteredTimer("state/snapshot/generation/duration/account/write", nil)
+	// snapStorageProveTimer measures time spent on storage proving
+	snapStorageProveTimer = metrics.NewRegisteredTimer("state/snapshot/generation/duration/storage/prove", nil)
+	// snapStorageTrieReadTimer measures time spent on the storage trie iteration
+	snapStorageTrieReadTimer = metrics.NewRegisteredTimer("state/snapshot/generation/duration/storage/trieread", nil)
+	// snapStorageSnapReadTimer measures time spent on the snapshot storage iteration
+	snapStorageSnapReadTimer = metrics.NewRegisteredTimer("state/snapshot/generation/duration/storage/snapread", nil)
+	// snapStorageWriteTimer measures time spent on writing/updating/deleting storages
+	snapStorageWriteTimer = metrics.NewRegisteredTimer("state/snapshot/generation/duration/storage/write", nil)
 )
 
 // generatorStats is a collection of statistics gathered by the snapshot generator
@@ -305,19 +301,15 @@ func (dl *diskLayer) proveRange(stats *generatorStats, root common.Hash, prefix 
 	}
 	// Update metrics for database iteration and merkle proving
 	if kind == "storage" {
-		storageSnapRead += time.Since(start)
-		snapStorageSnapReadTimer.Update(int64(storageSnapRead))
+		snapStorageSnapReadTimer.Update(time.Since(start))
 	} else {
-		accountSnapRead += time.Since(start)
-		snapAccountSnapReadTimer.Update(int64(accountSnapRead))
+		snapAccountSnapReadTimer.Update(time.Since(start))
 	}
 	defer func(start time.Time) {
 		if kind == "storage" {
-			storageProving += time.Since(start)
-			snapStorageProveTimer.Update(int64(storageProving))
+			snapStorageProveTimer.Update(time.Since(start))
 		} else {
-			accountProving += time.Since(start)
-			snapAccountProveTimer.Update(int64(accountProving))
+			snapAccountProveTimer.Update(time.Since(start))
 		}
 	}(time.Now())
 
@@ -499,11 +491,9 @@ func (dl *diskLayer) generateRange(root common.Hash, prefix []byte, kind string,
 
 	// Update metrics for counting trie iteration
 	if kind == "storage" {
-		storageTrieRead += time.Since(start) - internal
-		snapStorageTrieReadTimer.Update(int64(storageTrieRead))
+		snapStorageTrieReadTimer.Update(time.Since(start) - internal)
 	} else {
-		accountTrieRead += time.Since(start) - internal
-		snapAccountTrieReadTimer.Update(int64(accountTrieRead))
+		snapAccountTrieReadTimer.Update(time.Since(start) - internal)
 	}
 	logger.Debug("Regenerated state range", "root", root, "last", hexutil.Encode(last),
 		"count", count, "created", created, "updated", updated, "untouched", untouched, "deleted", deleted)
@@ -582,8 +572,7 @@ func (dl *diskLayer) generate(stats *generatorStats) {
 			if err := wipeKeyRange(dl.diskdb, "storage", prefix, nil, nil, keyLen, snapWipedStorageMeter, false); err != nil {
 				return err
 			}
-			accountWrite += time.Since(start)
-			snapAccountWriteTimer.Update(int64(accountWrite))
+			snapAccountWriteTimer.Update(time.Since(start))
 			return nil
 		}
 		// Retrieve the current account and flatten it into the internal format
@@ -633,11 +622,9 @@ func (dl *diskLayer) generate(stats *generatorStats) {
 			if err := wipeKeyRange(dl.diskdb, "storage", prefix, nil, nil, keyLen, snapWipedStorageMeter, false); err != nil {
 				return err
 			}
-			accountWrite += time.Since(start)
-			snapAccountWriteTimer.Update(int64(accountWrite))
+			snapAccountWriteTimer.Update(time.Since(start))
 		} else {
-			accountWrite += time.Since(start)
-			snapAccountWriteTimer.Update(int64(accountWrite))
+			snapAccountWriteTimer.Update(time.Since(start))
 
 			var storeMarker []byte
 			if accMarker != nil && bytes.Equal(accountHash[:], accMarker) && len(dl.genMarker) > common.HashLength {
@@ -645,8 +632,7 @@ func (dl *diskLayer) generate(stats *generatorStats) {
 			}
 			onStorage := func(key []byte, val []byte, write bool, delete bool) error {
 				defer func(start time.Time) {
-					storageWrite += time.Since(start)
-					snapStorageWriteTimer.Update(int64(storageWrite))
+					snapStorageWriteTimer.Update(time.Since(start))
 				}(time.Now())
 
 				if delete {
