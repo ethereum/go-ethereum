@@ -137,10 +137,6 @@ type snapshot interface {
 	// flattening everything down (bad for reorgs).
 	Journal(buffer *bytes.Buffer) (common.Hash, error)
 
-	// LegacyJournal is basically identical to Journal. it's the legacy version for
-	// flushing legacy journal. Now the only purpose of this function is for testing.
-	LegacyJournal(buffer *bytes.Buffer) (common.Hash, error)
-
 	// Stale return whether this layer has become stale (was flattened across) or
 	// if it's still live.
 	Stale() bool
@@ -614,29 +610,6 @@ func (t *Tree) Journal(root common.Hash) (common.Hash, error) {
 	}
 	// Finally write out the journal of each layer in reverse order.
 	base, err := snap.(snapshot).Journal(journal)
-	if err != nil {
-		return common.Hash{}, err
-	}
-	// Store the journal into the database and return
-	rawdb.WriteSnapshotJournal(t.diskdb, journal.Bytes())
-	return base, nil
-}
-
-// LegacyJournal is basically identical to Journal. it's the legacy
-// version for flushing legacy journal. Now the only purpose of this
-// function is for testing.
-func (t *Tree) LegacyJournal(root common.Hash) (common.Hash, error) {
-	// Retrieve the head snapshot to journal from var snap snapshot
-	snap := t.Snapshot(root)
-	if snap == nil {
-		return common.Hash{}, fmt.Errorf("snapshot [%#x] missing", root)
-	}
-	// Run the journaling
-	t.lock.Lock()
-	defer t.lock.Unlock()
-
-	journal := new(bytes.Buffer)
-	base, err := snap.(snapshot).LegacyJournal(journal)
 	if err != nil {
 		return common.Hash{}, err
 	}

@@ -66,30 +66,6 @@ type journalStorage struct {
 	Vals [][]byte
 }
 
-// loadAndParseLegacyJournal tries to parse the snapshot journal in legacy format.
-func loadAndParseLegacyJournal(db ethdb.KeyValueStore, base *diskLayer) (snapshot, journalGenerator, error) {
-	// Retrieve the journal, for legacy journal it must exist since even for
-	// 0 layer it stores whether we've already generated the snapshot or are
-	// in progress only.
-	journal := rawdb.ReadSnapshotJournal(db)
-	if len(journal) == 0 {
-		return nil, journalGenerator{}, errors.New("missing or corrupted snapshot journal")
-	}
-	r := rlp.NewStream(bytes.NewReader(journal), 0)
-
-	// Read the snapshot generation progress for the disk layer
-	var generator journalGenerator
-	if err := r.Decode(&generator); err != nil {
-		return nil, journalGenerator{}, fmt.Errorf("failed to load snapshot progress marker: %v", err)
-	}
-	// Load all the snapshot diffs from the journal
-	snapshot, err := loadDiffLayer(base, r)
-	if err != nil {
-		return nil, generator, err
-	}
-	return snapshot, generator, nil
-}
-
 // loadAndParseJournal tries to parse the snapshot journal in latest format.
 func loadAndParseJournal(db ethdb.KeyValueStore, base *diskLayer) (snapshot, journalGenerator, error) {
 	// Retrieve the disk layer generator. It must exist, no matter the
@@ -163,14 +139,9 @@ func loadSnapshot(diskdb ethdb.KeyValueStore, triedb *trie.Database, cache int, 
 		cache:  fastcache.New(cache * 1024 * 1024),
 		root:   baseRoot,
 	}
-	var legacy bool
 	snapshot, generator, err := loadAndParseJournal(diskdb, base)
 	if err != nil {
 		log.Warn("Failed to load new-format journal", "error", err)
-		snapshot, generator, err = loadAndParseLegacyJournal(diskdb, base)
-		legacy = true
-	}
-	if err != nil {
 		return nil, err
 	}
 	// Entire snapshot journal loaded, sanity check the head. If the loaded
@@ -185,7 +156,7 @@ func loadSnapshot(diskdb ethdb.KeyValueStore, triedb *trie.Database, cache int, 
 		// If it's legacy snapshot, or it's new-format snapshot but
 		// it's not in recovery mode, returns the error here for
 		// rebuilding the entire snapshot forcibly.
-		if legacy || !recovery {
+		if !recovery {
 			return nil, fmt.Errorf("head doesn't match snapshot: have %#x, want %#x", head, root)
 		}
 		// It's in snapshot recovery, the assumption is held that
@@ -344,96 +315,5 @@ func (dl *diffLayer) Journal(buffer *bytes.Buffer) (common.Hash, error) {
 		return common.Hash{}, err
 	}
 	log.Debug("Journalled diff layer", "root", dl.root, "parent", dl.parent.Root())
-	return base, nil
-}
-
-// LegacyJournal writes the persistent layer generator stats into a buffer
-// to be stored in the database as the snapshot journal.
-//
-// Note it's the legacy version which is only used in testing right now.
-func (dl *diskLayer) LegacyJournal(buffer *bytes.Buffer) (common.Hash, error) {
-	// If the snapshot is currently being generated, abort it
-	var stats *generatorStats
-	if dl.genAbort != nil {
-		abort := make(chan *generatorStats)
-		dl.genAbort <- abort
-
-		if stats = <-abort; stats != nil {
-			stats.Log("Journalling in-progress snapshot", dl.root, dl.genMarker)
-		}
-	}
-	// Ensure the layer didn't get stale
-	dl.lock.RLock()
-	defer dl.lock.RUnlock()
-
-	if dl.stale {
-		return common.Hash{}, ErrSnapshotStale
-	}
-	// Write out the generator marker
-	entry := journalGenerator{
-		Done:   dl.genMarker == nil,
-		Marker: dl.genMarker,
-	}
-	if stats != nil {
-		entry.Accounts = stats.accounts
-		entry.Slots = stats.slots
-		entry.Storage = uint64(stats.storage)
-	}
-	log.Debug("Legacy journalled disk layer", "root", dl.root)
-	if err := rlp.Encode(buffer, entry); err != nil {
-		return common.Hash{}, err
-	}
-	return dl.root, nil
-}
-
-// Journal writes the memory layer contents into a buffer to be stored in the
-// database as the snapshot journal.
-//
-// Note it's the legacy version which is only used in testing right now.
-func (dl *diffLayer) LegacyJournal(buffer *bytes.Buffer) (common.Hash, error) {
-	// Journal the parent first
-	base, err := dl.parent.LegacyJournal(buffer)
-	if err != nil {
-		return common.Hash{}, err
-	}
-	// Ensure the layer didn't get stale
-	dl.lock.RLock()
-	defer dl.lock.RUnlock()
-
-	if dl.Stale() {
-		return common.Hash{}, ErrSnapshotStale
-	}
-	// Everything below was journalled, persist this layer too
-	if err := rlp.Encode(buffer, dl.root); err != nil {
-		return common.Hash{}, err
-	}
-	destructs := make([]journalDestruct, 0, len(dl.destructSet))
-	for hash := range dl.destructSet {
-		destructs = append(destructs, journalDestruct{Hash: hash})
-	}
-	if err := rlp.Encode(buffer, destructs); err != nil {
-		return common.Hash{}, err
-	}
-	accounts := make([]journalAccount, 0, len(dl.accountData))
-	for hash, blob := range dl.accountData {
-		accounts = append(accounts, journalAccount{Hash: hash, Blob: blob})
-	}
-	if err := rlp.Encode(buffer, accounts); err != nil {
-		return common.Hash{}, err
-	}
-	storage := make([]journalStorage, 0, len(dl.storageData))
-	for hash, slots := range dl.storageData {
-		keys := make([]common.Hash, 0, len(slots))
-		vals := make([][]byte, 0, len(slots))
-		for key, val := range slots {
-			keys = append(keys, key)
-			vals = append(vals, val)
-		}
-		storage = append(storage, journalStorage{Hash: hash, Keys: keys, Vals: vals})
-	}
-	if err := rlp.Encode(buffer, storage); err != nil {
-		return common.Hash{}, err
-	}
-	log.Debug("Legacy journalled diff layer", "root", dl.root, "parent", dl.parent.Root())
 	return base, nil
 }
