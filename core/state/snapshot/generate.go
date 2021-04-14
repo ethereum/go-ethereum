@@ -320,9 +320,13 @@ func (dl *diskLayer) proveRange(stats *generatorStats, root common.Hash, prefix 
 			stackTr.TryUpdate(key, common.CopyBytes(vals[i]))
 		}
 		if gotRoot := stackTr.Hash(); gotRoot != root {
-			return &proofResult{keys: keys, vals: vals, diskMore: false, trieMore: false, proofErr: errors.New("wrong root")}, nil
+			return &proofResult{
+				keys:     keys,
+				vals:     vals,
+				proofErr: fmt.Errorf("wrong root: have %#x want %#x", gotRoot, root),
+			}, nil
 		}
-		return &proofResult{keys: keys, vals: vals, diskMore: false, trieMore: false, proofErr: nil}, nil
+		return &proofResult{keys: keys, vals: vals}, nil
 	}
 	// Snap state is chunked, generate edge proofs for verification.
 	tr, err := trie.New(root, dl.triedb)
@@ -341,18 +345,37 @@ func (dl *diskLayer) proveRange(stats *generatorStats, root common.Hash, prefix 
 	}
 	if err := tr.Prove(origin, 0, proof); err != nil {
 		log.Debug("Failed to prove range", "kind", kind, "origin", origin, "err", err)
-		return &proofResult{keys: keys, vals: vals, diskMore: diskMore, trieMore: false, proofErr: err, tr: tr}, nil
+		return &proofResult{
+			keys:     keys,
+			vals:     vals,
+			diskMore: diskMore,
+			proofErr: err,
+			tr:       tr,
+		}, nil
 	}
 	if last != nil {
 		if err := tr.Prove(last, 0, proof); err != nil {
 			log.Debug("Failed to prove range", "kind", kind, "last", last, "err", err)
-			return &proofResult{keys: keys, vals: vals, diskMore: diskMore, trieMore: false, proofErr: err, tr: tr}, nil
+			return &proofResult{
+				keys:     keys,
+				vals:     vals,
+				diskMore: diskMore,
+				proofErr: err,
+				tr:       tr,
+			}, nil
 		}
 	}
 	// Verify the snapshot segment with range prover, ensure that all flat states
 	// in this range correspond to merkle trie.
 	_, _, _, cont, err := trie.VerifyRangeProof(root, origin, last, keys, vals, proof)
-	return &proofResult{keys: keys, vals: vals, diskMore: diskMore, trieMore: cont, proofErr: err, tr: tr}, nil
+	return &proofResult{
+			keys:     keys,
+			vals:     vals,
+			diskMore: diskMore,
+			trieMore: cont,
+			proofErr: err,
+			tr:       tr},
+		nil
 }
 
 // onStateCallback is a function that is called by generateRange, when processing a range of
@@ -433,7 +456,6 @@ func (dl *diskLayer) generateRange(root common.Hash, prefix []byte, kind string,
 
 		// timers
 		start    = time.Now()
-		istart   time.Time
 		internal time.Duration
 	)
 	for iter.Next() {
@@ -441,20 +463,19 @@ func (dl *diskLayer) generateRange(root common.Hash, prefix []byte, kind string,
 			trieMore = true
 			break
 		}
-		count += 1
-
+		count++
 		write := true
 		created++
 		for len(kvkeys) > 0 {
 			if cmp := bytes.Compare(kvkeys[0], iter.Key); cmp < 0 {
 				// delete the key
-				istart = time.Now()
+				istart := time.Now()
 				if err := onState(kvkeys[0], nil, false, true); err != nil {
 					return false, nil, err
 				}
 				kvkeys = kvkeys[1:]
 				kvvals = kvvals[1:]
-				deleted += 1
+				deleted++
 				internal += time.Since(istart)
 				continue
 			} else if cmp == 0 {
@@ -470,7 +491,7 @@ func (dl *diskLayer) generateRange(root common.Hash, prefix []byte, kind string,
 			}
 			break
 		}
-		istart = time.Now()
+		istart := time.Now()
 		if err := onState(iter.Key, iter.Value, write, false); err != nil {
 			return false, nil, err
 		}
@@ -480,7 +501,7 @@ func (dl *diskLayer) generateRange(root common.Hash, prefix []byte, kind string,
 		return false, nil, iter.Err
 	}
 	// Delete all stale snapshot states remaining
-	istart = time.Now()
+	istart := time.Now()
 	for _, key := range kvkeys {
 		if err := onState(key, nil, false, true); err != nil {
 			return false, nil, err
