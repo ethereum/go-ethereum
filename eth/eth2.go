@@ -145,7 +145,7 @@ func (api *Eth2API) AssembleBlock(params AssembleBlockParams) (*ExecutableData, 
 	if err != nil {
 		return nil, err
 	}
-	signer := types.NewEIP155Signer(bc.Config().ChainID)
+	signer := types.LatestSigner(bc.Config())
 	txs := types.NewTransactionsByPriceAndNonce(signer, pending)
 
 	var transactions []*types.Transaction
