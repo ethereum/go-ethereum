@@ -311,9 +311,8 @@ func (pandora *Pandora) SubscribeToMinimalConsensusInformation(epoch uint64) (
 
 	ctx := context.Background()
 	channel := make(chan *MinimalEpochConsensusInfo)
-	params := make([]interface{}, 2)
-	params[0] = "minimalConsensusInfo"
-	params[1] = struct {
+
+	params := struct {
 		FromEpoch uint64 `json:"fromEpoch"`
 	}{
 		FromEpoch: epoch,
@@ -323,7 +322,8 @@ func (pandora *Pandora) SubscribeToMinimalConsensusInformation(epoch uint64) (
 		ctx,
 		"orc",
 		channel,
-		params...,
+		"minimalConsensusInfo",
+		params,
 	)
 
 	if nil != err {

@@ -726,25 +726,37 @@ func (orchestratorService *OrchestratorService) MinimalConsensusInfo(ctx context
 	subscription rpc.Subscription,
 	err error,
 ) {
-	if orchestratorService.tick > len(orchestratorService.consensusInfo) {
-		err = fmt.Errorf(
-			"out of consensus infos, wanted: %d, got: %d",
-			orchestratorService.tick,
-			len(orchestratorService.consensusInfo),
-		)
+	tick := 0
+	notifier, supported := rpc.NotifierFromContext(ctx)
 
+	if !supported {
 		return
 	}
 
-	//rpcClient, ok := rpc.ClientFromContext(ctx)
-	//
-	//if !ok {
-	//	err = fmt.Errorf("could not create rpcClient from context")
-	//
-	//	return
-	//}
+	// For now use ticker, but this signal should come from vanguard
+	timer := time.NewTimer(500 * time.Millisecond)
+	rpcSub := notifier.CreateSubscription()
+	consensusInfo := orchestratorService.consensusInfo
 
-	//consensusInfo = orchestratorService.consensusInfo[orchestratorService.tick]
+	go func() {
+		select {
+		case <-timer.C:
+			if tick > len(consensusInfo) {
+				log.Info("Got enough ticks")
+				return
+			}
+
+			currentConsensus := consensusInfo[tick]
+			err := notifier.Notify(rpcSub.ID, currentConsensus)
+
+			if nil != err {
+				log.Error("got error during notification", "err", err)
+				return
+			}
+
+			tick++
+		}
+	}()
 
 	return
 }
