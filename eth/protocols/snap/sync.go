@@ -2374,9 +2374,8 @@ func (s *Syncer) OnStorage(peer SyncPeer, id uint64, hashes [][]common.Hash, slo
 
 	// Reconstruct the partial tries from the response and verify them
 	var (
-		dbs    = make([]ethdb.KeyValueStore, len(hashes))
-		notary *trie.KeyValueNotary
-		cont   bool
+		dbs  = make([]ethdb.KeyValueStore, len(hashes))
+		cont bool
 	)
 	for i := 0; i < len(hashes); i++ {
 		// Convert the keys and proofs into an internal format
@@ -2409,7 +2408,7 @@ func (s *Syncer) OnStorage(peer SyncPeer, id uint64, hashes [][]common.Hash, slo
 			if len(keys) > 0 {
 				end = keys[len(keys)-1]
 			}
-			dbs[i], _, notary, cont, err = trie.VerifyRangeProof(req.roots[i], req.origin[:], end, keys, slots[i], proofdb)
+			dbs[i], _, _, cont, err = trie.VerifyRangeProof(req.roots[i], req.origin[:], end, keys, slots[i], proofdb)
 			if err != nil {
 				s.scheduleRevertStorageRequest(req) // reschedule request
 				logger.Warn("Storage range failed proof", "err", err)
@@ -2418,15 +2417,6 @@ func (s *Syncer) OnStorage(peer SyncPeer, id uint64, hashes [][]common.Hash, slo
 		}
 	}
 	// Partial tries reconstructed, send them to the scheduler for storage filling
-	bounds := make(map[common.Hash]struct{})
-
-	if notary != nil { // if all contract storages are delivered in full, no notary will be created
-		it := notary.Accessed().NewIterator(nil, nil)
-		for it.Next() {
-			bounds[common.BytesToHash(it.Key())] = struct{}{}
-		}
-		it.Release()
-	}
 	response := &storageResponse{
 		mainTask: req.mainTask,
 		subTask:  req.subTask,
