@@ -37,7 +37,10 @@ const journalVersion uint64 = 0
 
 // journalGenerator is a disk layer entry containing the generator progress marker.
 type journalGenerator struct {
-	Wiping   bool // Whether the database was in progress of being wiped
+	// Indicator that whether the database was in progress of being wiped.
+	// It's deprecated but keep it here for background compatibility.
+	Wiping bool
+
 	Done     bool // Whether the generator finished creating the snapshot
 	Marker   []byte
 	Accounts uint64
@@ -193,14 +196,6 @@ func loadSnapshot(diskdb ethdb.KeyValueStore, triedb *trie.Database, cache int, 
 	}
 	// Everything loaded correctly, resume any suspended operations
 	if !generator.Done {
-		// If the generator was still wiping, restart one from scratch (fine for
-		// now as it's rare and the wiper deletes the stuff it touches anyway, so
-		// restarting won't incur a lot of extra database hops.
-		var wiper chan struct{}
-		if generator.Wiping {
-			log.Info("Resuming previous snapshot wipe")
-			wiper = wipeSnapshot(diskdb, false)
-		}
 		// Whether or not wiping was in progress, load any generator progress too
 		base.genMarker = generator.Marker
 		if base.genMarker == nil {
@@ -214,7 +209,6 @@ func loadSnapshot(diskdb ethdb.KeyValueStore, triedb *trie.Database, cache int, 
 			origin = binary.BigEndian.Uint64(generator.Marker)
 		}
 		go base.generate(&generatorStats{
-			wiping:   wiper,
 			origin:   origin,
 			start:    time.Now(),
 			accounts: generator.Accounts,
@@ -381,7 +375,6 @@ func (dl *diskLayer) LegacyJournal(buffer *bytes.Buffer) (common.Hash, error) {
 		Marker: dl.genMarker,
 	}
 	if stats != nil {
-		entry.Wiping = (stats.wiping != nil)
 		entry.Accounts = stats.accounts
 		entry.Slots = stats.slots
 		entry.Storage = uint64(stats.storage)

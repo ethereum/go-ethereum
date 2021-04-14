@@ -656,9 +656,6 @@ func (t *Tree) Rebuild(root common.Hash) {
 	// building a brand new snapshot.
 	rawdb.DeleteSnapshotRecoveryNumber(t.diskdb)
 
-	// Track whether there's a wipe currently running and keep it alive if so
-	var wiper chan struct{}
-
 	// Iterate over and mark all layers stale
 	for _, layer := range t.layers {
 		switch layer := layer.(type) {
@@ -667,10 +664,7 @@ func (t *Tree) Rebuild(root common.Hash) {
 			if layer.genAbort != nil {
 				abort := make(chan *generatorStats)
 				layer.genAbort <- abort
-
-				if stats := <-abort; stats != nil {
-					wiper = stats.wiping
-				}
+				<-abort
 			}
 			// Layer should be inactive now, mark it as stale
 			layer.lock.Lock()
@@ -691,7 +685,7 @@ func (t *Tree) Rebuild(root common.Hash) {
 	// generator will run a wiper first if there's not one running right now.
 	log.Info("Rebuilding state snapshot")
 	t.layers = map[common.Hash]snapshot{
-		root: generateSnapshot(t.diskdb, t.triedb, t.cache, root, wiper),
+		root: generateSnapshot(t.diskdb, t.triedb, t.cache, root),
 	}
 }
 
